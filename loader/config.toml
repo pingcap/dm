@@ -1,0 +1,52 @@
+# Loader log level
+log-level = "info"
+# Loader log file
+log-file = "loader.log"
+
+# Directory of the dump to import
+dir = "./"
+
+# Loader pprof addr
+pprof-addr = ":10084"
+
+# We saved checkpoint data to tidb, which schema name is defined here.
+checkpoint-schema = "tidb_loader"
+
+# Number of threads restoring concurrently for worker pool. Each worker restore one file at a time, increase this as TiKV nodes increase
+pool-size = 16
+
+# An alternative database to restore into
+#alternative-db = ""
+# Database to restore
+#source-db = ""
+
+##we support regular expression , start with '~' to declare using regular expression.
+#
+#do-db = ["~^b.*","s1"]
+#[[do-table]]
+#db-name ="test"
+#tbl-name = "log"
+
+#[[do-table]]
+#db-name ="test"
+#tbl-name = "~^a.*"
+
+#ignore-db = ["~^c.*","s2"]
+#[[ignore-table]]
+#db-name ="test"
+#tbl-name = "~^a.*"
+
+# DB config
+[to]
+host = "127.0.0.1"
+user = "root"
+password = ""
+port = 4000
+
+# [[route-rules]]
+# pattern-schema = "shard_db_*"
+# pattern-table = "shard_table_*"
+# target-schema = "shard_db"
+# target-table = "shard_table"
+
+

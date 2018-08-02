@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+package pb;
+
+import "dmworker.proto"; // refine if needed
+
+
+service Master {
+    rpc StartTask (StartTaskRequest) returns (StartTaskResponse) {}
+    rpc OperateTask (OperateTaskRequest) returns (OperateTaskResponse) {}
+    rpc UpdateTask (UpdateTaskRequest) returns (CommonTaskResponse) {}
+
+    rpc QueryStatus (QueryStatusListRequest) returns (QueryStatusListResponse) {}
+
+    // used by dm-worker, maybe should return response with DDL lock ID
+    rpc ApplyForDDLLock (ApplyForDDLLockRequest) returns (CommonTaskResponse) {}
+
+    // used by dmctl to manually unlock DDL lock
+    rpc UnlockDDLLock (UnlockDDLLockRequest) returns (CommonTaskResponse) {}
+
+    // refine to support specify dm-worker
+    rpc HandleSQLs (HandleSQLsRequest) returns (CommonTaskResponse) {}
+
+    // used by dmctl, to force refresh the task -> workers mapper
+    // it should be used rarely only when task -> workers mapper corrupted
+    rpc RefreshWorkerTasks (RefreshWorkerTasksRequest) returns (RefreshWorkerTasksResponse) {}
+}
+
+message StartTaskRequest {
+    string task = 1; // task's configuration, yaml format
+    repeated string workers = 2; // workers need to do start task, empty for all matched workers in deployment
+}
+
+message StartTaskResponse {
+    bool result = 1;
+    string msg = 2;
+    repeated CommonWorkerResponse workers = 3;
+}
+
+message OperateTaskRequest {
+    TaskOp op = 1; // Stop / Pause / Resume
+    string name = 2; // task's name
+    repeated string workers = 3; // workers need to do operation, empty for matched workers in processing the task
+}
+
+message OperateTaskResponse {
+    TaskOp op = 1;
+    bool result = 2;
+    string msg = 3;
+    repeated OperateSubTaskResponse workers = 4;
+}
+
+// refine when we refactor filter, column-mapping, etc.
+message UpdateTaskRequest {
+    string task = 1; // task's (partial) configuration
+    repeated string workers = 2; // workers need to do update, empty for all workers in processing the task
+}
+
+message QueryStatusListRequest {
+    string name = 1; // task's name, empty for all tasks
+    repeated string workers = 2; // workers need to query, empty for all workers
+}
+
+message QueryStatusListResponse {
+    bool result = 1;
+    string msg = 2;
+    repeated QueryStatusResponse workers = 3;
+}
+
+message ApplyForDDLLockRequest {
+    string name = 1; // task's name
+    string ddl = 2; // DDL query
+}
+
+message UnlockDDLLockRequest {
+    string name = 1; // task's name
+    string lockID = 2; // DDL lock ID
+}
+
+message CommonTaskResponse {
+    bool result = 1;
+    string msg = 2; // when result is true, msg is empty
+}
+
+message RefreshWorkerTasksRequest {
+}
+
+message RefreshWorkerTasksMsg {
+    string worker = 1;
+    string msg = 2;
+}
+
+message RefreshWorkerTasksResponse {
+    bool result = 1;
+    repeated RefreshWorkerTasksMsg workers = 2;
+}

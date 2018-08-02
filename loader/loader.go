@@ -1,0 +1,938 @@
+// Copyright 2016 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package loader
+
+import (
+	"bufio"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/juju/errors"
+	"github.com/ngaut/log"
+	"github.com/pingcap/tidb-enterprise-tools/dm/config"
+	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
+	"github.com/pingcap/tidb-enterprise-tools/dm/unit"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/tableroute"
+	"github.com/siddontang/go/sync2"
+	"golang.org/x/net/context"
+)
+
+var (
+	jobCount      = 1000
+	maxRetryCount = 10
+)
+
+// FilePosSet represents a set in mathematics.
+type FilePosSet map[string][]int64
+
+// DataFiles represent all data files for a single table
+type DataFiles []string
+
+// Tables2DataFiles represent all data files of a table collection as a map
+type Tables2DataFiles map[string]DataFiles
+
+type dataJob struct {
+	sql        string
+	schema     string
+	file       string
+	offset     int64
+	lastOffset int64
+}
+
+type fileJob struct {
+	schema   string
+	table    string
+	dataFile string
+	offset   int64
+}
+
+// Worker represents a worker.
+type Worker struct {
+	id          int
+	cfg         *config.SubTaskConfig
+	checkPoint  CheckPoint
+	conn        *Conn
+	wg          sync.WaitGroup
+	jobQueue    chan *dataJob
+	tableRouter route.TableRouter
+	loader      *Loader
+}
+
+// NewWorker returns a Worker.
+func NewWorker(loader *Loader, id int) (worker *Worker, err error) {
+	conn, err := createConn(loader.cfg.To)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return &Worker{
+		id:          id,
+		cfg:         loader.cfg,
+		checkPoint:  loader.checkPoint,
+		conn:        conn,
+		jobQueue:    make(chan *dataJob, jobCount),
+		tableRouter: loader.tableRouter,
+		loader:      loader,
+	}, nil
+}
+
+// Close closes worker
+func (w *Worker) Close() {
+	close(w.jobQueue)
+	w.wg.Wait()
+	closeConn(w.conn)
+}
+
+func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *sync.WaitGroup, runFatalChan chan *pb.ProcessError) {
+	defer workerWg.Done()
+
+	newCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	doJob := func() {
+		defer w.wg.Done()
+		for {
+			select {
+			case <-newCtx.Done():
+				log.Debugf("[loader] worker %d execution goroutine exits", w.id)
+				return
+			case job, ok := <-w.jobQueue:
+				if !ok || job == nil {
+					return
+				}
+				sqls := make([]string, 0, 3)
+				sqls = append(sqls, fmt.Sprintf("USE `%s`;", job.schema))
+				sqls = append(sqls, job.sql)
+
+				offsetSQL := w.checkPoint.GenSQL(job.file, job.offset)
+				sqls = append(sqls, offsetSQL)
+
+				if err := executeSQL(w.conn, sqls, true); err != nil {
+					// expect pause rather than exit
+					err = errors.Annotatef(err, "file %s", job.file)
+					runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, errors.ErrorStack(err))
+					return
+				}
+				w.loader.finishedDataSize.Add(job.offset - job.lastOffset)
+			}
+		}
+	}
+
+	// worker main routine
+	for {
+		select {
+		case <-newCtx.Done():
+			return
+		case job, ok := <-fileJobQueue:
+			if !ok {
+				log.Debugf("worker main routine %d exit.", w.id)
+				return
+			}
+
+			w.wg.Add(1)
+			go doJob()
+
+			// restore a table
+			if err := w.restoreDataFile(ctx, w.cfg.Dir, job.dataFile, job.offset, job.schema, job.table); err != nil {
+				// expect pause rather than exit
+				err = errors.Annotatef(err, "restore data file (%v) failed", job.dataFile)
+				runFatalChan <- unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err))
+				return
+			}
+		}
+	}
+}
+
+func (w *Worker) restoreDataFile(ctx context.Context, path, dataFile string, offset int64, schema, table string) error {
+	log.Infof("[loader][restore table data sql]%s/%s[start]", path, dataFile)
+	err := w.dispatchSQL(ctx, filepath.Join(w.cfg.Dir, dataFile), offset, schema, table)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	// dispatchSQL completed, send nil.
+	// we don't want to close and re-make chan frequently
+	// but if we need to re-call w.run, we need re-make jobQueue chan
+	w.jobQueue <- nil
+
+	w.wg.Wait()
+	log.Infof("[loader][restore table data sql]%s/%s[finished]", w.cfg.Dir, dataFile)
+	return nil
+}
+
+func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, schema, table string) error {
+	var (
+		f   *os.File
+		err error
+		cur int64
+	)
+
+	f, err = os.Open(file)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	defer f.Close()
+
+	finfo, err := f.Stat()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	baseFile := filepath.Base(file)
+	err = w.checkPoint.Init(baseFile, finfo.Size())
+	if err != nil {
+		log.Errorf("init %s checkpoint error:%s", baseFile, err)
+		return errors.Trace(err)
+	}
+
+	cur, err = f.Seek(offset, io.SeekStart)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	log.Debugf("read file:%s from offset %d compared to the beginning", file, offset)
+
+	lastOffset := cur
+
+	data := make([]byte, 0, 1024*1024)
+	br := bufio.NewReader(f)
+	for {
+		select {
+		case <-ctx.Done():
+			log.Infof("worker %d sql dispatcher is ready to quit.", w.id)
+			return nil
+		default:
+			// do nothing
+		}
+		line, err := br.ReadString('\n')
+		cur += int64(len(line))
+
+		if err == io.EOF {
+			log.Infof("data file %s scanned finished.", file)
+			break
+		} else {
+			realLine := strings.TrimSpace(line[:len(line)-1])
+			if len(realLine) == 0 {
+				continue
+			}
+
+			data = append(data, []byte(realLine)...)
+			if data[len(data)-1] == ';' {
+				query := string(data)
+				data = data[0:0]
+				if strings.HasPrefix(query, "/*") && strings.HasSuffix(query, "*/;") {
+					continue
+				}
+
+				idx := strings.Index(query, "INSERT INTO")
+				if idx < 0 {
+					return errors.Errorf("[invalid insert sql][sql]%s", query)
+				}
+
+				_, dstTable := fetchMatchedLiteral(w.tableRouter, schema, table)
+				query = renameShardingTable(query, table, dstTable)
+				log.Debugf("sql: %-.100v", query)
+
+				targetSchema, _ := fetchMatchedLiteral(w.tableRouter, schema, table)
+
+				j := &dataJob{
+					sql:        query,
+					schema:     targetSchema,
+					file:       baseFile,
+					offset:     cur,
+					lastOffset: lastOffset,
+				}
+				lastOffset = cur
+
+				w.jobQueue <- j
+			}
+		}
+	}
+
+	return nil
+}
+
+// Loader can load your mydumper data into TiDB database.
+type Loader struct {
+	sync.RWMutex
+
+	cfg        *config.SubTaskConfig
+	checkPoint CheckPoint
+
+	// db -> tables
+	// table -> data files
+	db2Tables map[string]Tables2DataFiles
+
+	// for every worker goroutine, not for every data file
+	workerWg *sync.WaitGroup
+
+	fileJobQueue       chan *fileJob
+	fileJobQueueClosed sync2.AtomicBool
+
+	tableRouter route.TableRouter
+	filter      *filter.Filter
+
+	pool   []*Worker
+	closed sync2.AtomicBool
+
+	totalDataSize    sync2.AtomicInt64
+	finishedDataSize sync2.AtomicInt64
+
+	unitType pb.UnitType
+
+	// record process error rather than log.Fatal
+	runFatalChan chan *pb.ProcessError
+}
+
+// NewLoader creates a new Loader.
+func NewLoader(cfg *config.SubTaskConfig) *Loader {
+	rules := &filter.Rules{
+		DoDBs:        cfg.DoDBs,
+		DoTables:     cfg.DoTables,
+		IgnoreDBs:    cfg.IgnoreDBs,
+		IgnoreTables: cfg.IgnoreTables,
+	}
+	loader := &Loader{
+		cfg:       cfg,
+		db2Tables: make(map[string]Tables2DataFiles),
+		workerWg:  new(sync.WaitGroup),
+		pool:      make([]*Worker, 0, cfg.PoolSize),
+		filter:    filter.New(rules),
+		unitType:  pb.UnitType_Load,
+	}
+	loader.fileJobQueueClosed.Set(true) // not open yet
+	return loader
+}
+
+// Type implements Unit.Type
+func (l *Loader) Type() pb.UnitType {
+	return l.unitType
+}
+
+// Init initializes loader for a load task, but not start Process.
+// if fail, it should not call l.Close.
+func (l *Loader) Init() error {
+	checkpoint, err := newRemoteCheckPoint(l.cfg)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	l.checkPoint = checkpoint
+
+	err = l.genRouter(l.cfg.RouteRules)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	l.checkPoint.CalcProgress(l.db2Tables)
+	l.loadFinishedSize()
+
+	return nil
+}
+
+func (l *Loader) Process(ctx context.Context, upr chan pb.ProcessResult) {
+	newCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	l.newFileJobQueue()
+
+	l.runFatalChan = make(chan *pb.ProcessError, 2*l.cfg.PoolSize)
+	errs := make([]*pb.ProcessError, 0, 2)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case err, ok := <-l.runFatalChan:
+				if !ok {
+					return
+				}
+				cancel() // cancel l.Restore
+				errs = append(errs, err)
+			}
+		}
+	}()
+
+	err := l.Restore(newCtx)
+	close(l.runFatalChan) // Restore returned, all potential fatal sent to l.runFatalChan
+	wg.Wait()             // wait for receive all fatal from l.runFatalChan
+
+	if err != nil {
+		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err)))
+	}
+
+	isCanceled := false
+	if len(errs) == 0 {
+		select {
+		case <-ctx.Done():
+			isCanceled = true
+		default:
+		}
+	} else {
+		// pause because of error occurred
+		l.Pause()
+	}
+	upr <- pb.ProcessResult{
+		IsCanceled: isCanceled,
+		Errors:     errs,
+	}
+}
+
+func (l *Loader) newFileJobQueue() {
+	l.closeFileJobQueue()
+	l.fileJobQueue = make(chan *fileJob, jobCount)
+	l.fileJobQueueClosed.Set(false)
+}
+
+func (l *Loader) closeFileJobQueue() {
+	if l.fileJobQueueClosed.Get() {
+		return
+	}
+	close(l.fileJobQueue)
+	l.fileJobQueueClosed.Set(true)
+}
+
+func (l *Loader) skipSchemaAndTable(table *filter.Table) bool {
+	if filter.IsSystemSchema(table.Schema) {
+		return true
+	}
+
+	tbs := []*filter.Table{table}
+	tbs = l.filter.WhiteFilter(tbs)
+	tbs = l.filter.BlackFilter(tbs)
+	return len(tbs) == 0
+}
+
+func (l *Loader) isClosed() bool {
+	return l.closed.Get()
+}
+
+// Restore begins the restore process.
+func (l *Loader) Restore(ctx context.Context) error {
+	if err := l.prepare(); err != nil {
+		log.Errorf("[loader] scan dir[%s] failed, err[%v]", l.cfg.Dir, err)
+		return errors.Trace(err)
+	}
+
+	if err := l.initAndStartWorkerPool(ctx); err != nil {
+		log.Errorf("[loader] init and start worker pools failed, err[%v]", err)
+		return errors.Trace(err)
+	}
+
+	go l.PrintStatus(ctx)
+
+	if err := l.restoreData(ctx); err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
+}
+
+func (l *Loader) loadFinishedSize() {
+	results := l.checkPoint.GetAllRestoringFileInfo()
+	for _, pos := range results {
+		l.finishedDataSize.Add(pos[0])
+	}
+}
+
+// Close do graceful shutdown
+func (l *Loader) Close() {
+	l.Lock()
+	defer l.Unlock()
+	if l.isClosed() {
+		return
+	}
+
+	l.stopLoad()
+
+	l.closed.Set(true)
+}
+
+// stopLoad stops loading, now it used by Close and Pause
+// maybe we can refine the workflow more clear
+func (l *Loader) stopLoad() {
+	// before re-write workflow, simply close all job queue and job workers
+	// when resuming, re-create them
+	l.closeFileJobQueue()
+	l.workerWg.Wait()
+
+	for _, worker := range l.pool {
+		worker.Close()
+	}
+	l.pool = l.pool[:0]
+	log.Debug("all workers has been closed")
+}
+
+// Pause pauses the process, and it can be resumed later
+// should cancel context from external
+func (l *Loader) Pause() {
+	if l.isClosed() {
+		log.Warn("[loader] try to pause, but already closed")
+		return
+	}
+
+	l.stopLoad()
+}
+
+// Resume resumes the paused process
+func (l *Loader) Resume(ctx context.Context, upr chan pb.ProcessResult) {
+	if l.isClosed() {
+		log.Warn("[loader] try to resume, but already closed")
+		return
+	}
+
+	// continue the processing
+	l.Process(ctx, upr)
+}
+
+func (l *Loader) genRouter(rules []*config.RouteRule) error {
+	l.tableRouter = route.NewTrieRouter()
+
+	for _, rule := range rules {
+		err := l.tableRouter.Insert(rule.PatternSchema, rule.PatternTable, rule.TargetSchema, rule.TargetTable)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+	log.Debugf("table_router rules:%+v", l.tableRouter.AllRules())
+	return nil
+}
+
+func (l *Loader) initAndStartWorkerPool(ctx context.Context) error {
+	for i := 0; i < l.cfg.PoolSize; i++ {
+		worker, err := NewWorker(l, i)
+		if err != nil {
+			return err
+		}
+
+		l.workerWg.Add(1) // for every worker goroutine, Add(1)
+		go worker.run(ctx, l.fileJobQueue, l.workerWg, l.runFatalChan)
+
+		l.pool = append(l.pool, worker)
+	}
+	return nil
+}
+
+func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
+	// reset some variables
+	l.db2Tables = make(map[string]Tables2DataFiles)
+	for file := range files {
+		if !strings.HasSuffix(file, "-schema-create.sql") {
+			continue
+		}
+
+		idx := strings.Index(file, "-schema-create.sql")
+		if idx > 0 {
+			db := file[:idx]
+			if l.skipSchemaAndTable(&filter.Table{Schema: db}) {
+				log.Warnf("ignore schema file %s", file)
+				continue
+			}
+
+			databaseCount.Inc() // NOTE: should we reset metrics counter?
+			l.db2Tables[db] = make(Tables2DataFiles)
+		}
+	}
+
+	if len(l.db2Tables) == 0 {
+		return errors.New("invalid mydumper files for there are no `-schema-create.sql` files found")
+	}
+
+	return nil
+}
+
+func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
+	for file := range files {
+		if !strings.HasSuffix(file, "-schema.sql") {
+			continue
+		}
+
+		idx := strings.Index(file, "-schema.sql")
+		name := file[:idx]
+		fields := strings.Split(name, ".")
+		if len(fields) != 2 {
+			log.Warnf("invalid table schema file - %s", file)
+			continue
+		}
+
+		db, table := fields[0], fields[1]
+		if l.skipSchemaAndTable(&filter.Table{Schema: db, Name: table}) {
+			log.Warnf("ignore table file %s", file)
+			continue
+		}
+		tables, ok := l.db2Tables[db]
+		if !ok {
+			return errors.Errorf("invalid table schema file, cannot find db - %s", file)
+		}
+
+		if _, ok := tables[table]; ok {
+			return errors.Errorf("invalid table schema file, duplicated item - %s", file)
+		}
+		tableCount.Inc()
+		tables[table] = make(DataFiles, 0, 16)
+	}
+
+	return nil
+}
+
+func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
+	for file := range files {
+		if !strings.HasSuffix(file, ".sql") || strings.Index(file, "-schema.sql") >= 0 ||
+			strings.Index(file, "-schema-create.sql") >= 0 {
+			continue
+		}
+
+		// ignore view / triggers
+		if strings.Index(file, "-schema-view.sql") >= 0 || strings.Index(file, "-schema-triggers.sql") >= 0 ||
+			strings.Index(file, "-schema-post.sql") >= 0 {
+			log.Warnf("[loader] ignore unsupport view/trigger: %s", file)
+			continue
+		}
+
+		idx := strings.Index(file, ".sql")
+		name := file[:idx]
+		fields := strings.Split(name, ".")
+		if len(fields) != 2 && len(fields) != 3 {
+			log.Warnf("invalid db table sql file - %s", file)
+			continue
+		}
+
+		db, table := fields[0], fields[1]
+		if l.skipSchemaAndTable(&filter.Table{Schema: db, Name: table}) {
+			log.Warnf("ignore data file %s", file)
+			continue
+		}
+		tables, ok := l.db2Tables[db]
+		if !ok {
+			return errors.Errorf("invalid data sql file, cannot find db - %s", file)
+		}
+
+		dataFiles, ok := tables[table]
+		if !ok {
+			return errors.Errorf("invalid data sql file, cannot find table - %s", file)
+		}
+
+		size, err := getFileSize(filepath.Join(l.cfg.Dir, file))
+		if err != nil {
+			return errors.Trace(err)
+		}
+		l.totalDataSize.Add(size)
+
+		dataFiles = append(dataFiles, file)
+		dataFileCount.Inc()
+		tables[table] = dataFiles
+	}
+
+	dataSizeCount.Add(float64(l.totalDataSize.Get()))
+	return nil
+}
+
+func (l *Loader) prepare() error {
+	begin := time.Now()
+	defer func() {
+		log.Infof("[loader] prepare takes %f seconds", time.Since(begin).Seconds())
+	}()
+
+	// check if mydumper dir data exists.
+	if !IsDirExists(l.cfg.Dir) {
+		return errors.Errorf("%s is not exists or it's not a dir", l.cfg.Dir)
+	}
+
+	// collect dir files.
+	files := CollectDirFiles(l.cfg.Dir)
+
+	log.Debugf("collected files:%+v", files)
+
+	/* Mydumper file names format
+	 * db    {db}-schema-create.sql
+	 * table {db}.{table}-schema.sql
+	 * sql   {db}.{table}.{part}.sql or {db}.{table}.sql
+	 */
+
+	// Sql file for create db
+	if err := l.prepareDbFiles(files); err != nil {
+		return err
+	}
+
+	// Sql file for create table
+	if err := l.prepareTableFiles(files); err != nil {
+		return err
+	}
+
+	// Sql file for restore data
+	return l.prepareDataFiles(files)
+}
+
+func (l *Loader) restoreSchema(conn *Conn, sqlFile string, schema string, table string) error {
+	f, err := os.Open(sqlFile)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	defer f.Close()
+
+	data := make([]byte, 0, 1024*1024)
+	br := bufio.NewReader(f)
+	for {
+		line, err := br.ReadString('\n')
+		if err == io.EOF {
+			break
+		} else {
+			realLine := strings.TrimSpace(line[:len(line)-1])
+			if len(realLine) == 0 {
+				continue
+			}
+
+			data = append(data, []byte(realLine)...)
+			if data[len(data)-1] == ';' {
+				query := string(data)
+				data = data[0:0]
+				if strings.HasPrefix(query, "/*") && strings.HasSuffix(query, "*/;") {
+					continue
+				}
+
+				var sqls []string
+				dstSchema, dstTable := fetchMatchedLiteral(l.tableRouter, schema, table)
+				// for table
+				if table != "" {
+					sqls = append(sqls, fmt.Sprintf("USE `%s`;", dstSchema))
+					query = renameShardingTable(query, table, dstTable)
+				} else {
+					query = renameShardingSchema(query, schema, dstSchema)
+				}
+
+				log.Debugf("query:%s", query)
+
+				sqls = append(sqls, query)
+				err = executeSQL(conn, sqls, false)
+				if err != nil {
+					return errors.Trace(err)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// renameShardingTable replaces srcTable with dstTable in query
+func renameShardingTable(query, srcTable, dstTable string) string {
+	return SQLReplace(query, srcTable, dstTable)
+}
+
+// renameShardingSchema replaces srcSchema with dstSchema in query
+func renameShardingSchema(query, srcSchema, dstSchema string) string {
+	return SQLReplace(query, srcSchema, dstSchema)
+}
+
+func fetchMatchedLiteral(router route.TableRouter, schema, table string) (targetSchema string, targetTable string) {
+	if schema == "" {
+		// nothing change
+		return schema, table
+	}
+	schemaL, tableL := toLower(schema, table)
+	targetSchema, targetTable = router.Match(schemaL, tableL)
+	if targetSchema == "" {
+		// nothing change
+		return schema, table
+	}
+	if targetTable == "" {
+		// table still same;
+		targetTable = table
+	}
+
+	return targetSchema, targetTable
+}
+
+func toLower(schema, table string) (string, string) {
+	return strings.ToLower(schema), strings.ToLower(table)
+}
+
+func causeErr(err error) error {
+	var e error
+	for {
+		e = errors.Cause(err)
+		if err == e {
+			break
+		} else {
+			err = e
+		}
+	}
+	return e
+}
+
+func (l *Loader) dispatchDataFileJob(job *fileJob) {
+	l.fileJobQueue <- job
+}
+
+func (l *Loader) restoreData(ctx context.Context) error {
+	begin := time.Now()
+
+	conn, err := createConn(l.cfg.To)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	defer conn.db.Close()
+
+	dispatchMap := make(map[string]*fileJob)
+
+	// restore db in sort
+	dbs := make([]string, 0, len(l.db2Tables))
+	for db := range l.db2Tables {
+		dstDB, _ := fetchMatchedLiteral(l.tableRouter, db, "")
+		if l.cfg.SourceDB != "" && dstDB != l.cfg.AlternativeDB {
+			continue
+		}
+		dbs = append(dbs, db)
+	}
+
+	for _, db := range dbs {
+		tables := l.db2Tables[db]
+
+		// create db
+		dbFile := fmt.Sprintf("%s/%s-schema-create.sql", l.cfg.Dir, db)
+		log.Infof("[loader][run db schema]%s[start]", dbFile)
+		err = l.restoreSchema(conn, dbFile, db, "")
+		if err != nil {
+			if isErrDBExists(err) {
+				log.Infof("[loader][database already exists, skip]%s", dbFile)
+			} else {
+				return errors.Annotatef(err, "run db schema failed - dbfile %s", dbFile)
+			}
+		}
+		log.Infof("[loader][run db schema]%s[finished]", dbFile)
+
+		tnames := make([]string, 0, len(tables))
+		for t := range tables {
+			tnames = append(tnames, t)
+		}
+		for _, table := range tnames {
+			dataFiles := tables[table]
+
+			if l.checkPoint.IsTableFinished(db, table) {
+				log.Infof("table (%s.%s) has finished, skip.", db, table)
+				continue
+			}
+
+			// create table
+			tableFile := fmt.Sprintf("%s/%s.%s-schema.sql", l.cfg.Dir, db, table)
+			err := l.restoreSchema(conn, tableFile, db, table)
+			if err != nil {
+				if isErrTableExists(err) {
+					log.Infof("[loader][table already exists, skip]%s", tableFile)
+				} else {
+					return errors.Annotatef(err, "run table schema failed - table_file %s", tableFile)
+				}
+			}
+			log.Infof("[loader][run table schema]%s[finished]", tableFile)
+
+			restoringFiles := l.checkPoint.GetRestoringFileInfo(db, table)
+			log.Debugf("restoring db %s table %s files:%+v", db, table, restoringFiles)
+
+			for _, file := range dataFiles {
+				select {
+				case <-ctx.Done():
+					log.Info("data file job dispatcher exits.")
+					return nil
+				default:
+					// do nothing
+				}
+
+				log.Debugf("dispatch data file:%s, schema:%s, table %s", file, db, table)
+
+				var offset int64
+				posSet, ok := restoringFiles[file]
+				if ok {
+					offset = posSet[0]
+				}
+
+				j := &fileJob{
+					schema:   db,
+					table:    table,
+					dataFile: file,
+					offset:   offset,
+				}
+				dispatchMap[fmt.Sprintf("%s_%s_%s", db, table, file)] = j
+			}
+		}
+	}
+	log.Infof("[loader] create tables takes %f seconds", time.Since(begin).Seconds())
+
+	// a simple and naive approach to dispatch files randomly based on the feature of golang map(range by random)
+	for _, j := range dispatchMap {
+		l.dispatchDataFileJob(j)
+	}
+	l.closeFileJobQueue() // all data file dispatched, close it
+
+	log.Info("[loader] all data files have been dispatched, waiting for them finished")
+	l.workerWg.Wait()
+
+	log.Infof("[loader] all data files has been finished, takes %f seconds", time.Since(begin).Seconds())
+	if l.cfg.RemoveCheckpoint {
+		l.CleanCheckpoint()
+	}
+	return nil
+}
+
+// CleanCheckpoint delete checkpoint records if the corresponding data file is finished.
+func (l *Loader) CleanCheckpoint() {
+	begin := time.Now()
+	var wg sync.WaitGroup
+
+	cleanFunc := func(dataFile string) error {
+		err := l.checkPoint.MarkAsDone(dataFile)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		log.Infof("[loader] cleaned checkpoint for %s ", dataFile)
+		return nil
+	}
+
+	fileChans := make(chan string, l.cfg.PoolSize)
+	for i := 0; i < l.cfg.PoolSize; i++ {
+		go func() {
+			for {
+				select {
+				case file, ok := <-fileChans:
+					if !ok {
+						return
+					}
+					err := cleanFunc(file)
+					if err != nil {
+						log.Errorf("[loader] clean checkpoint error %s", errors.ErrorStack(err))
+					}
+					wg.Done()
+				}
+			}
+		}()
+	}
+
+	for _, tables := range l.db2Tables {
+		for _, files := range tables {
+			for _, file := range files {
+				wg.Add(1)
+				fileChans <- file
+			}
+		}
+	}
+	close(fileChans)
+
+	wg.Wait()
+	log.Infof("[loader] all corresponding checkpoint records has been deleted, takes %f seconds", time.Since(begin).Seconds())
+}

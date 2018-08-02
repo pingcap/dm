@@ -1,0 +1,200 @@
+syntax = "proto3";
+
+package pb;
+
+
+service Worker {
+    rpc StartSubTask (StartSubTaskRequest) returns (CommonWorkerResponse) {}
+    rpc OperateSubTask (OperateSubTaskRequest) returns (OperateSubTaskResponse) {}
+    rpc UpdateSubTask (UpdateSubTaskRequest) returns (CommonWorkerResponse) {}
+
+    rpc QueryStatus (QueryStatusRequest) returns (QueryStatusResponse) {}
+
+    rpc HandleSQLs (HandleSQLsRequest) returns (CommonWorkerResponse) {}
+}
+
+message StartSubTaskRequest {
+    string task = 1; // (sub) task's configuration
+}
+
+enum TaskOp {
+    InvalidOp = 0;  // placeholder
+    Stop = 1;
+    Pause = 2;
+    Resume = 3;
+}
+
+message OperateSubTaskRequest {
+    TaskOp op = 1;
+    string name = 2; // sub task's name
+}
+
+message OperateSubTaskResponse {
+    TaskOp op = 1;
+    bool result = 2;
+    string worker = 3; // worker name, set by dm-master
+    string msg = 4;
+}
+
+message UpdateSubTaskRequest {
+    string task = 1; // (sub) task's new configuration parts
+}
+
+message QueryStatusRequest {
+    string name = 1; // sub task's name, empty for all sub tasks
+}
+
+enum SQLOp {
+    SKIP = 0; // skip the SQL
+    REPLACE = 1; // replace the SQL with a specified SQL
+}
+
+// NOTE: we can extract some common(optional) arguments from `args`, like `meta`
+message HandleSQLsRequest {
+    string name = 1; // sub task's name
+    SQLOp op = 2; // operation type
+    bytes args = 3; // args for operation
+}
+
+message CommonWorkerResponse {
+    bool result = 1;
+    string worker = 2; // worker name, set by dm-master
+    string msg = 3; // when result is true, msg is empty
+}
+
+// QueryStatusResponse represents status response for query on a dm-worker
+// status: dm-worker's current sub tasks' status
+message QueryStatusResponse {
+    bool result = 1;
+    string worker = 2; // worker name, set by dm-master
+    string msg = 3;
+    repeated SubTaskStatus status = 4;
+}
+
+// Stage represents current stage for a (sub) task
+// a (sub) task should be always in one stage of the following stages
+// (sub) task can transfer from on stage to some special other stages
+// New: initial stage when a sub task is created
+//      can not transfered from other stages
+//      transfer to Running when initialize with no error
+// Running: indicates the sub task is processing
+//          transfered from New when created successfully
+//          transfered from Paused when resuming is requested
+//          transfer to Paused when error occured or requested from external
+//          transfer to Stopped when requested from external
+//          transfer to Finished when sub task processing completed (no Syncer used)
+// Paused: indicates the processing is paused, and can be resume from external request
+//         transfered from Running when error occured or requested from external
+//         transfer to Running when resuming is requested from external
+//         transfer to Stopped when requested from external
+// Stopped: indicates the processing is stopped, and can not be resume (or re-run) again
+//          transfered from Running / Paused when requested from external
+//          can not transfer to any stages
+// Finished: indicates the processing is finished, and no need to re-run
+//           transfered from Running when processing completed
+//           should not transfer to any stages
+enum Stage {
+    InvalidStage = 0; // placeholder
+    New = 1;
+    Running = 2;
+    Paused = 3;
+    Stopped = 4;
+    Finished = 5;
+}
+
+// CheckStatus represents status for check unit
+// adds fields later
+message CheckStatus {
+    bool  passed = 1;
+    int32 Total = 2;
+    int32 Successful = 3;
+    int32 Failed = 4;
+    int32 Warning = 5;
+
+    bytes detail = 6;
+}
+
+// DumpStatus represents status for dump unit
+// add fields later
+message DumpStatus {
+}
+
+// LoadStatus represents status for load unit
+message LoadStatus {
+    int64 FinishedBytes = 1;
+    int64 TotalBytes = 2;
+    string Progress = 3;
+}
+
+// SyncStatus represents status for sync unit
+message SyncStatus {
+    int64 TotalEvents = 1;
+    int64 TotalTps = 2;
+    int64 RecentTps = 3;
+    string MasterBinlog = 4;
+    string MasterBinlogGtid = 5;
+    string SyncerBinlog = 6;
+    string SyncerBinlogGtid = 7;
+}
+
+// SubTaskStatus represents status for a sub task
+// name: sub task'name, when starting a sub task the name should be unique
+// stage: sub task's current stage
+// unit: sub task's current dm unit's UnitType
+// status: current unit's statistics
+//         for Load, includes total bytes, progress, etc.
+//         for Sync, includes TPS, binlog meta, etc.
+// result: current unit's process result, when the stage is Running, no result
+message SubTaskStatus {
+    string name = 1;
+    Stage stage = 2;
+    UnitType unit = 3;
+    ProcessResult result = 4;
+    oneof status {
+        string msg = 5; // message when error occurred
+        CheckStatus check = 6;
+        DumpStatus dump = 7;
+        LoadStatus load = 8;
+        SyncStatus sync = 9;
+    }
+}
+
+// SubTaskStatusList used for internal jsonpb marshal
+message SubTaskStatusList {
+    repeated SubTaskStatus status = 1;
+}
+
+// UnitType represents the dm unit's type
+enum UnitType {
+    InvalidUnit = 0; // placeholder
+    Check = 1;
+    Dump = 2;
+    Load = 3;
+    Sync = 4;
+    Relay = 100; // relay is a special unit
+}
+
+// ProcessResult represents results produced by a dm unit
+// isCanceled: indicates whether the process is canceled from external
+//             when Stop or Pause is requested from external, isCanceled will be true
+// errors: includes all (potential) errors occured when processing
+message ProcessResult {
+    bool isCanceled = 1;
+    repeated ProcessError errors = 2;
+    bytes detail = 3;
+}
+
+// ErrorType represents type of error produced by a dm unit
+// NOTE: add new if needed
+enum ErrorType {
+    UnknownError = 0;
+    ExecSQL = 1;
+    CheckFailed = 2;
+}
+
+// ProcessError represents error produced by a dm unit
+// NOTE: refine later, like add error scope field
+message ProcessError {
+    ErrorType Type = 1;
+    string msg = 2;
+}

@@ -1,0 +1,14 @@
+# Worker Configuration.
+
+log-level = "info"
+log-file = "dm-worker.log"
+log-rotate = "day"
+
+worker-addr = ":10081"
+status-addr = ":10082"
+
+[from]
+host = "127.0.0.1"
+user = "root"
+password = ""
+port = 3306
