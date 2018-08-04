@@ -86,13 +86,13 @@ func main() {
 		}
 	}()
 
-	upr := make(chan pb.ProcessResult, 1)
-	loader.Process(ctx, upr)
+	pr := make(chan pb.ProcessResult, 1)
+	loader.Process(ctx, pr)
 	loader.Close()
 
 	var errOccurred bool
-	for len(upr) > 0 {
-		r := <-upr
+	for len(pr) > 0 {
+		r := <-pr
 		for _, err := range r.Errors {
 			errOccurred = true
 			log.Errorf("process error with type %v:\n %v", err.Type, err.Msg)

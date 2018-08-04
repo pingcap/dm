@@ -20,41 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/juju/errors"
 )
-
-// IsFileExists checks if file exists.
-func IsFileExists(name string) bool {
-	f, err := os.Stat(name)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false
-		}
-	}
-
-	if f.IsDir() {
-		return false
-	}
-
-	return true
-}
-
-// IsDirExists checks if dir exists.
-func IsDirExists(name string) bool {
-	f, err := os.Stat(name)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false
-		}
-	}
-
-	if !f.IsDir() {
-		return false
-	}
-
-	return true
-}
 
 // CollectDirFiles gets files in path
 func CollectDirFiles(path string) map[string]struct{} {
@@ -101,19 +67,6 @@ func shortSha1(s string) string {
 	h := sha1.New()
 	h.Write([]byte(s))
 	return fmt.Sprintf("%x", h.Sum(nil))[:6]
-}
-
-func getFileSize(file string) (int64, error) {
-	fd, err := os.Open(file)
-	if err != nil {
-		return 0, errors.Trace(err)
-	}
-	defer fd.Close()
-	stat, err := fd.Stat()
-	if err != nil {
-		return 0, errors.Trace(err)
-	}
-	return stat.Size(), nil
 }
 
 // percent calculates percentage of a/b.

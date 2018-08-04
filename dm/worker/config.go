@@ -53,6 +53,14 @@ type Config struct {
 	WorkerAddr string `toml:"worker-addr" json:"worker-addr"`
 	StatusAddr string `toml:"status-addr" json:"status-addr"`
 
+	EnableGTID     bool   `toml:"enable-gtid" json:"enable-gtid"`
+	MetaFile       string `toml:"meta-file" json:"meta-file"`
+	RelayDir       string `toml:"relay-dir" json:"relay-dir"`
+	ServerID       int    `toml:"server-id" json:"server-id"`
+	Flavor         string `toml:"flavor" json:"flavor"`
+	Charset        string `toml:"charset" json:"charset"`
+	VerifyChecksum bool   `toml:"verify-checksum" json:"verify-checksum"`
+
 	From config.DBConfig `toml:"from" json:"from"`
 
 	ConfigFile string `json:"config-file"`

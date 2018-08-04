@@ -36,6 +36,7 @@ type Meta struct {
 type MySQLInstance struct {
 	Config             *DBConfig `yaml:"config"`
 	ServerID           int       `yaml:"server-id"`
+	RelayDir           string    `yaml:"relay-dir"`
 	Meta               *Meta     `yaml:"meta"`
 	FilterRules        []string  `yaml:"filter-rules"`
 	ColumnMappingRules []string  `yaml:"column-mapping-rules"`
@@ -57,6 +58,9 @@ func (m *MySQLInstance) Verify() error {
 	if m.ServerID < 1 {
 		return errors.NotValidf("server-id should from 1 to 2^32 − 1, but set with %d", m.ServerID)
 	}
+	// if m.RelayDir == "" {
+	// 	return errors.New("relay-dir must specify")
+	// }
 
 	if len(m.MydumperConfigName) > 0 && m.Mydumper != nil {
 		return errors.New("mydumper-config-name and mydumper should only specify one")
@@ -130,9 +134,10 @@ type SyncerConfig struct {
 type TaskConfig struct {
 	*flag.FlagSet `yaml:"-"`
 
-	Name     string `yaml:"name"`
-	TaskMode string `yaml:"task-mode"`
-	Flavor   string `yaml:"flavor"`
+	Name           string `yaml:"name"`
+	TaskMode       string `yaml:"task-mode"`
+	Flavor         string `yaml:"flavor"`
+	VerifyChecksum bool   `yaml:"verify-checksum"`
 
 	TargetDB *DBConfig `yaml:"target-database"`
 
@@ -274,6 +279,9 @@ func (c *TaskConfig) SubTaskConfigs() []*SubTaskConfig {
 		cfg.Name = c.Name
 		cfg.Mode = c.TaskMode
 		cfg.Flavor = c.Flavor
+		cfg.BinlogType = "local" // let's force syncer to replay local binlog.
+		cfg.RelayDir = inst.RelayDir
+		cfg.VerifyChecksum = c.VerifyChecksum
 
 		cfg.From = *inst.Config
 		cfg.To = *c.TargetDB

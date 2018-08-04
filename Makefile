@@ -13,7 +13,7 @@ PACKAGES := $$(go list ./... | grep -vE 'vendor')
 FILES     := $$(find . -name "*.go" | grep -vE "vendor")
 TOPDIRS   := $$(ls -d */ | grep -vE "vendor")
 
-.PHONY: build syncer loader test check deps dm-worker dm-master dmctl
+.PHONY: build syncer loader test check deps dm-worker dm-master dmctl 
 
 build: syncer loader check test
 

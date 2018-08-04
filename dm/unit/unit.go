@@ -20,7 +20,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-// Unit defines interface for sub task process units, like syncer, loader, etc.
+// Unit defines interface for sub task process units, like syncer, loader, relay, etc.
 type Unit interface {
 	// Init initializes the dm process unit
 	// every unit does base initialization in `Init`, and this must pass before start running the sub task
@@ -29,13 +29,13 @@ type Unit interface {
 	// Process processes sub task
 	// When ctx.Done, stops the process and returns
 	// When not in processing, call Process to continue or resume the process
-	Process(ctx context.Context, upr chan pb.ProcessResult)
+	Process(ctx context.Context, pr chan pb.ProcessResult)
 	// Close shuts down the process and closes the unit, after that can not call Process to resume
 	Close()
 	// Pause pauses the process, it can be resumed later
 	Pause()
 	// Resume resumes the paused process
-	Resume(ctx context.Context, upr chan pb.ProcessResult)
+	Resume(ctx context.Context, pr chan pb.ProcessResult)
 	// Status returns the unit's current status
 	Status() interface{}
 	// Type returns the unit's type

@@ -29,6 +29,7 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"github.com/pingcap/tidb-enterprise-tools/dm/unit"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go/sync2"
 	"golang.org/x/net/context"
@@ -346,7 +347,7 @@ func (l *Loader) Init() error {
 	return nil
 }
 
-func (l *Loader) Process(ctx context.Context, upr chan pb.ProcessResult) {
+func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	newCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -390,7 +391,7 @@ func (l *Loader) Process(ctx context.Context, upr chan pb.ProcessResult) {
 		// pause because of error occurred
 		l.Pause()
 	}
-	upr <- pb.ProcessResult{
+	pr <- pb.ProcessResult{
 		IsCanceled: isCanceled,
 		Errors:     errs,
 	}
@@ -493,14 +494,14 @@ func (l *Loader) Pause() {
 }
 
 // Resume resumes the paused process
-func (l *Loader) Resume(ctx context.Context, upr chan pb.ProcessResult) {
+func (l *Loader) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	if l.isClosed() {
 		log.Warn("[loader] try to resume, but already closed")
 		return
 	}
 
 	// continue the processing
-	l.Process(ctx, upr)
+	l.Process(ctx, pr)
 }
 
 func (l *Loader) genRouter(rules []*router.TableRule) error {
@@ -629,7 +630,7 @@ func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 			return errors.Errorf("invalid data sql file, cannot find table - %s", file)
 		}
 
-		size, err := getFileSize(filepath.Join(l.cfg.Dir, file))
+		size, err := utils.GetFileSize(filepath.Join(l.cfg.Dir, file))
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -651,7 +652,7 @@ func (l *Loader) prepare() error {
 	}()
 
 	// check if mydumper dir data exists.
-	if !IsDirExists(l.cfg.Dir) {
+	if !utils.IsDirExists(l.cfg.Dir) {
 		return errors.Errorf("%s is not exists or it's not a dir", l.cfg.Dir)
 	}
 

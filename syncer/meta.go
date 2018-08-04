@@ -31,6 +31,8 @@ var (
 	maxSaveTime = 30 * time.Second
 )
 
+// TODO: unify checkpoint with relay and loader?
+
 // Meta is the binlog meta information from sync source.
 // When syncer restarts, we should reload meta info to guarantee continuous transmission.
 type Meta interface {
@@ -108,7 +110,11 @@ func (lm *LocalMeta) Save(pos mysql.Position, gs GTIDSet, force bool) error {
 
 	lm.BinLogName = pos.Name
 	lm.BinLogPos = pos.Pos
-	lm.BinlogGTID = gs.String()
+	if gs == nil {
+		lm.BinlogGTID = ""
+	} else {
+		lm.BinlogGTID = gs.String()
+	}
 	lm.gset = gs
 
 	if force {
@@ -152,7 +158,7 @@ func (lm *LocalMeta) GTID() (GTIDSet, error) {
 	lm.RLock()
 	defer lm.RUnlock()
 
-	return lm.gset.clone(), nil
+	return lm.gset.Clone(), nil
 }
 
 // Check implements Meta.Check interface.

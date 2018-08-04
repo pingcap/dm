@@ -59,11 +59,14 @@ type SubTaskConfig struct {
 	// so we should not export flagSet
 	flagSet *flag.FlagSet
 
-	Name     string `toml:"name" json:"name"`
-	Mode     string `toml:"mode" json:"mode"`
-	ServerID int    `toml:"server-id" json:"server-id"`
-	Flavor   string `toml:"flavor" json:"flavor"`
+	Name           string `toml:"name" json:"name"`
+	Mode           string `toml:"mode" json:"mode"`
+	ServerID       int    `toml:"server-id" json:"server-id"`
+	Flavor         string `toml:"flavor" json:"flavor"`
+	VerifyChecksum bool   `toml:"verify-checksum" json:"verify-checksum"`
 
+	BinlogType string              `toml:"binlog-type" json:"binlog-type"`
+	RelayDir   string              `toml:"relay-dir" json:"relay-dir"`
 	From       DBConfig            `toml:"from" json:"from"`
 	To         DBConfig            `toml:"to" json:"to"`
 	RouteRules []*router.TableRule `toml:"route-rules" json:"route-rules"`

@@ -54,6 +54,7 @@ func NewConfig() *Config {
 }
 
 // DBConfig is the DB configuration.
+// TODO: use DBConfig from tidb-tools/pkg/dbutil/DBConfig
 type DBConfig struct {
 	Host     string `toml:"host" json:"host"`
 	User     string `toml:"user" json:"user"`

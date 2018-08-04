@@ -104,21 +104,21 @@ func (st *SubTask) Run() {
 	cu := st.CurrUnit()
 	log.Infof("[subtask] %s start running %s dm-unit", st.cfg.Name, cu.Type())
 	st.ctx, st.cancel = context.WithCancel(context.Background())
-	upr := make(chan pb.ProcessResult, 1)
+	pr := make(chan pb.ProcessResult, 1)
 	st.wg.Add(1)
-	go st.fetchResult(st.ctx, st.cancel, upr)
-	go cu.Process(st.ctx, upr)
+	go st.fetchResult(st.ctx, st.cancel, pr)
+	go cu.Process(st.ctx, pr)
 }
 
 // fetchResult fetches units process result
 // when dm-unit report an error, we need to re-Process the sub task
-func (st *SubTask) fetchResult(ctx context.Context, cancel context.CancelFunc, upr chan pb.ProcessResult) {
+func (st *SubTask) fetchResult(ctx context.Context, cancel context.CancelFunc, pr chan pb.ProcessResult) {
 	defer st.wg.Done()
 
 	select {
 	case <-ctx.Done():
 		return
-	case result := <-upr:
+	case result := <-pr:
 		st.setResult(&result) // save result
 		cancel()              // dm-unit finished, canceled or error occurred, always cancel processing
 
@@ -271,9 +271,9 @@ func (st *SubTask) Resume() error {
 	log.Infof("[subtask] %s resuming with %s dm-unit", st.cfg.Name, cu.Type())
 
 	st.ctx, st.cancel = context.WithCancel(context.Background())
-	upr := make(chan pb.ProcessResult, 1)
+	pr := make(chan pb.ProcessResult, 1)
 	st.wg.Add(1)
-	go st.fetchResult(st.ctx, st.cancel, upr)
-	go cu.Resume(st.ctx, upr)
+	go st.fetchResult(st.ctx, st.cancel, pr)
+	go cu.Resume(st.ctx, pr)
 	return nil
 }

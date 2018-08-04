@@ -60,7 +60,7 @@ type job struct {
 func newJob(tp opType, sql string, args []interface{}, key string, retry bool, pos mysql.Position, gtidSet GTIDSet) *job {
 	var gs GTIDSet
 	if gtidSet != nil {
-		gs = gtidSet.clone()
+		gs = gtidSet.Clone()
 	}
 	return &job{tp: tp, sql: sql, args: args, key: key, retry: retry, pos: pos, gtidSet: gs}
 }
@@ -68,7 +68,7 @@ func newJob(tp opType, sql string, args []interface{}, key string, retry bool, p
 func newXIDJob(pos mysql.Position, gtidSet GTIDSet) *job {
 	var gs GTIDSet
 	if gtidSet != nil {
-		gs = gtidSet.clone()
+		gs = gtidSet.Clone()
 	}
 	return &job{tp: xid, pos: pos, gtidSet: gs}
 }

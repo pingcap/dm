@@ -15,6 +15,7 @@ package syncer
 
 import (
 	"math"
+	"strings"
 
 	"github.com/siddontang/go-mysql/mysql"
 )
@@ -39,4 +40,16 @@ func compareBinlogPos(a, b mysql.Position, deviation float64) int {
 	}
 
 	return 1
+}
+
+func toBinlogType(bt string) BinlogType {
+	bt = strings.ToLower(bt)
+	switch bt {
+	case "local":
+		return LocalBinlog
+	case "remote":
+		return RemoteBinlog
+	default:
+		return RemoteBinlog
+	}
 }

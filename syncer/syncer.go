@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"github.com/pingcap/tidb-enterprise-tools/dm/unit"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go-mysql/mysql"
@@ -48,6 +49,13 @@ var (
 	maxDDLConnectionTimeout = "3h"
 )
 
+type BinlogType uint8
+
+const (
+	RemoteBinlog BinlogType = iota + 1
+	LocalBinlog
+)
+
 // safeMode makes syncer reentrant.
 // we make each operator reentrant to make syncer reentrant.
 // `replace` and `delete` are naturally reentrant.
@@ -62,11 +70,14 @@ type Syncer struct {
 	sync.RWMutex
 
 	cfg     *config.SubTaskConfig
-	syncCfg *replication.BinlogSyncerConfig
+	syncCfg replication.BinlogSyncerConfig
 
 	meta Meta
 
-	syncer *replication.BinlogSyncer
+	// TODO: extract to interface?
+	syncer      *replication.BinlogSyncer
+	localReader *streamer.BinlogReader
+	binlogType  BinlogType
 
 	wg    sync.WaitGroup
 	jobWg sync.WaitGroup
@@ -130,16 +141,18 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	}
 	syncer.filter = filter.New(rules)
 
-	syncer.syncCfg = &replication.BinlogSyncerConfig{
-		ServerID:   uint32(syncer.cfg.ServerID),
-		Flavor:     syncer.cfg.Flavor,
-		Host:       syncer.cfg.From.Host,
-		Port:       uint16(syncer.cfg.From.Port),
-		User:       syncer.cfg.From.User,
-		Password:   syncer.cfg.From.Password,
-		UseDecimal: true,
+	syncer.syncCfg = replication.BinlogSyncerConfig{
+		ServerID:       uint32(syncer.cfg.ServerID),
+		Flavor:         syncer.cfg.Flavor,
+		Host:           syncer.cfg.From.Host,
+		Port:           uint16(syncer.cfg.From.Port),
+		User:           syncer.cfg.From.User,
+		Password:       syncer.cfg.From.Password,
+		UseDecimal:     true,
+		VerifyChecksum: syncer.cfg.VerifyChecksum,
 	}
 
+	syncer.binlogType = toBinlogType(cfg.BinlogType)
 	return syncer
 }
 
@@ -195,15 +208,21 @@ func (s *Syncer) Init() error {
 	return nil
 }
 
-func (s *Syncer) Process(ctx context.Context, upr chan pb.ProcessResult) {
+// Process implements the dm.Unit interface.
+func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	newCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// create new binlog-syncer
-	if s.syncer != nil {
-		s.syncer.Close()
+	if s.binlogType == RemoteBinlog {
+		// create new binlog-syncer
+		if s.syncer != nil {
+			s.syncer.Close()
+		}
+
+		s.syncer = replication.NewBinlogSyncer(s.syncCfg)
+	} else if s.binlogType == LocalBinlog {
+		s.localReader = streamer.NewBinlogReader(&streamer.BinlogReaderConfig{BinlogDir: s.cfg.RelayDir})
 	}
-	s.syncer = replication.NewBinlogSyncer(*s.syncCfg)
 	// create new done chan
 	s.done = make(chan struct{})
 	// create new job chans
@@ -254,7 +273,7 @@ func (s *Syncer) Process(ctx context.Context, upr chan pb.ProcessResult) {
 		// pause because of error occurred
 		s.Pause()
 	}
-	upr <- pb.ProcessResult{
+	pr <- pb.ProcessResult{
 		IsCanceled: isCanceled,
 		Errors:     errs,
 	}
@@ -482,7 +501,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		close(s.done)
 	}()
 
-	streamer, isGTIDMode, err := s.getBinlogStreamer()
+	streamer, err := s.getBinlogStreamer()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -541,7 +560,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			log.Info("deadline exceeded.")
 			if s.needResync() {
 				log.Info("timeout, resync")
-				streamer, isGTIDMode, err = s.reopenWithRetry(*s.syncCfg)
+				streamer, err = s.reopenWithRetry(s.syncCfg)
 				if err != nil {
 					return errors.Trace(err)
 				}
@@ -552,9 +571,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		if err != nil {
 			log.Errorf("get binlog error %v", err)
 			// try to re-sync in gtid mode
-			if tryReSync && isGTIDMode && isBinlogPurgedError(err) && s.cfg.AutoFixGTID {
+			if tryReSync && s.cfg.EnableGTID && isBinlogPurgedError(err) && s.cfg.AutoFixGTID {
 				time.Sleep(retryTimeout)
-				streamer, isGTIDMode, err = s.reSyncBinlog(*s.syncCfg)
+				streamer, err = s.reSyncBinlog(s.syncCfg)
 				if err != nil {
 					return errors.Trace(err)
 				}
@@ -674,7 +693,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 
 			if len(sqls) > 0 {
-				gs.set(ev.GSet)
+				gs.Set(ev.GSet)
 				pos = nextPos
 			}
 			for _, sql := range sqls {
@@ -718,7 +737,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 		case *replication.XIDEvent:
 			pos.Pos = e.Header.LogPos
-			gs.set(ev.GSet)
+			gs.Set(ev.GSet)
 
 			log.Debugf("[XID event][pos]%v [gtid set]%v", pos, gs)
 
@@ -874,7 +893,18 @@ func (s *Syncer) printStatus(ctx context.Context) {
 	}
 }
 
-func (s *Syncer) getBinlogStreamer() (*replication.BinlogStreamer, bool, error) {
+func (s *Syncer) getBinlogStreamer() (streamer.Streamer, error) {
+	if s.binlogType == RemoteBinlog {
+		return s.getRemoteBinlogStreamer()
+	}
+	return s.getLocalBinlogStreamer()
+}
+
+func (s *Syncer) getLocalBinlogStreamer() (streamer.Streamer, error) {
+	return s.localReader.StartSync(s.meta.Pos())
+}
+
+func (s *Syncer) getRemoteBinlogStreamer() (streamer.Streamer, error) {
 	defer func() {
 		s.lastSlaveConnectionID = s.syncer.LastConnectionID()
 		log.Infof("[syncer] last slave connection id %d", s.lastSlaveConnectionID)
@@ -882,19 +912,20 @@ func (s *Syncer) getBinlogStreamer() (*replication.BinlogStreamer, bool, error) 
 	if s.cfg.EnableGTID {
 		gs, err := s.meta.GTID()
 		if err != nil {
-			return nil, false, errors.Trace(err)
+			return nil, errors.Trace(err)
 		}
 
-		streamer, err := s.syncer.StartSyncGTID(gs.origin())
+		streamer, err := s.syncer.StartSyncGTID(gs.Origin())
 		if err != nil {
 			log.Errorf("start sync in gtid mode error %v", err)
 			return s.startSyncByPosition()
 		}
 
-		return streamer, true, errors.Trace(err)
+		return streamer, errors.Trace(err)
 	}
 
 	return s.startSyncByPosition()
+
 }
 
 func (s *Syncer) createDBs() error {
@@ -933,18 +964,18 @@ func (s *Syncer) flushJobs() error {
 	return errors.Trace(err)
 }
 
-func (s *Syncer) reSyncBinlog(cfg replication.BinlogSyncerConfig) (*replication.BinlogStreamer, bool, error) {
+func (s *Syncer) reSyncBinlog(cfg replication.BinlogSyncerConfig) (streamer.Streamer, error) {
 	err := s.retrySyncGTIDs()
 	if err != nil {
-		return nil, false, errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 	// close still running sync
 	return s.reopenWithRetry(cfg)
 }
 
-func (s *Syncer) reopenWithRetry(cfg replication.BinlogSyncerConfig) (streamer *replication.BinlogStreamer, isGTIDMode bool, err error) {
+func (s *Syncer) reopenWithRetry(cfg replication.BinlogSyncerConfig) (streamer streamer.Streamer, err error) {
 	for i := 0; i < maxRetryCount; i++ {
-		streamer, isGTIDMode, err = s.reopen(cfg)
+		streamer, err = s.reopen(cfg)
 		if err == nil {
 			return
 		}
@@ -955,10 +986,10 @@ func (s *Syncer) reopenWithRetry(cfg replication.BinlogSyncerConfig) (streamer *
 		}
 		break
 	}
-	return nil, false, errors.Trace(err)
+	return nil, errors.Trace(err)
 }
 
-func (s *Syncer) reopen(cfg replication.BinlogSyncerConfig) (*replication.BinlogStreamer, bool, error) {
+func (s *Syncer) reopen(cfg replication.BinlogSyncerConfig) (streamer.Streamer, error) {
 	s.syncer.Close()
 	log.Infof("[syncer] killing connectionid %d", s.lastSlaveConnectionID)
 	// kill last slave connection by `KILL [id]`
@@ -966,7 +997,7 @@ func (s *Syncer) reopen(cfg replication.BinlogSyncerConfig) (*replication.Binlog
 		err := killConn(s.fromDB, s.lastSlaveConnectionID)
 		if err != nil {
 			if !isNoSuchThreadError(err) {
-				return nil, false, errors.Trace(err)
+				return nil, errors.Trace(err)
 			}
 		}
 	}
@@ -975,9 +1006,9 @@ func (s *Syncer) reopen(cfg replication.BinlogSyncerConfig) (*replication.Binlog
 	return s.getBinlogStreamer()
 }
 
-func (s *Syncer) startSyncByPosition() (*replication.BinlogStreamer, bool, error) {
+func (s *Syncer) startSyncByPosition() (streamer.Streamer, error) {
 	streamer, err := s.syncer.StartSync(s.meta.Pos())
-	return streamer, false, errors.Trace(err)
+	return streamer, errors.Trace(err)
 }
 
 // the result contains [source TableNames, target TableNames]
@@ -1066,10 +1097,14 @@ func (s *Syncer) stopSync() {
 		s.syncer.Close()
 		s.syncer = nil
 	}
+	if s.localReader != nil {
+		s.localReader.Close()
+	}
 }
 
 // Pause pauses the process, and it can be resumed later
 // should cancel context from external
+// TODO: it is not a true-meaning Pause because you can't stop it by calling Pause only.
 func (s *Syncer) Pause() {
 	if s.isClosed() {
 		log.Warn("[syncer] try to pause, but already closed")
@@ -1080,14 +1115,14 @@ func (s *Syncer) Pause() {
 }
 
 // Resume resumes the paused process
-func (s *Syncer) Resume(ctx context.Context, upr chan pb.ProcessResult) {
+func (s *Syncer) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	if s.isClosed() {
 		log.Warn("[syncer] try to resume, but already closed")
 		return
 	}
 
 	// continue the processing
-	s.Process(ctx, upr)
+	s.Process(ctx, pr)
 }
 
 func (s *Syncer) needResync() bool {

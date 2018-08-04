@@ -83,6 +83,7 @@ var (
 		})
 )
 
+// InitStatusAndMetrics register prometheus metrics and listen for status port.
 func InitStatusAndMetrics(addr string) {
 	prometheus.MustRegister(binlogEventsTotal)
 	prometheus.MustRegister(binlogSkippedEventsTotal)

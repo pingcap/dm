@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"fmt"
+
 	. "github.com/pingcap/check"
 )
 
@@ -41,10 +42,10 @@ func (s *testSyncerSuite) TestGTID(c *C) {
 		excepted, err := parserGTID(cs.flavor, cs.exepctedStr)
 		c.Assert(err, IsNil)
 
-		err = selfGTIDSet.replace(newGTIDSet, cs.masterIDs)
+		err = selfGTIDSet.Replace(newGTIDSet, cs.masterIDs)
 		c.Logf("%s %s %s", selfGTIDSet, newGTIDSet, excepted)
 		c.Assert(err, IsNil)
-		c.Assert(selfGTIDSet.origin().Equal(excepted.origin()), IsTrue)
-		c.Assert(newGTIDSet.origin().Equal(excepted.origin()), IsTrue)
+		c.Assert(selfGTIDSet.Origin().Equal(excepted.Origin()), IsTrue)
+		c.Assert(newGTIDSet.Origin().Equal(excepted.Origin()), IsTrue)
 	}
 }

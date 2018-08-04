@@ -21,7 +21,7 @@ import (
 
 // GTIDSet provide gtid operations for syncer
 type GTIDSet interface {
-	set(mysql.GTIDSet) error
+	Set(mysql.GTIDSet) error
 	// compute set of self and other gtid set
 	// 1. keep intersection of self and other gtid set
 	// 2. keep complementary set of other gtid set except master identifications that not in self gtid
@@ -29,9 +29,9 @@ type GTIDSet interface {
 	// example: self gtid set [xx:1-2, yy:1-3, xz:1-4], other gtid set [xx:1-4, yy:1-12, xy:1-3]. master ID set [xx]
 	// => [xx:1-2, yy:1-3, xy:1-3]
 	// more examples ref test cases
-	replace(other GTIDSet, masters []interface{}) error
-	clone() GTIDSet
-	origin() mysql.GTIDSet
+	Replace(other GTIDSet, masters []interface{}) error
+	Clone() GTIDSet
+	Origin() mysql.GTIDSet
 
 	String() string
 }
@@ -55,7 +55,7 @@ func parserGTID(flavor, gtidStr string) (GTIDSet, error) {
 	default:
 		return nil, errors.NotSupportedf("flavor %s and gtid %s", flavor, gtidStr)
 	}
-	err = m.set(gtid)
+	err = m.Set(gtid)
 	return m, errors.Trace(err)
 }
 
@@ -64,11 +64,11 @@ func parserGTID(flavor, gtidStr string) (GTIDSet, error) {
 // MySQLGTIDSet wraps mysql.MysqlGTIDSet to implement gtidSet interface
 // extend some functions to retrieve and compute an intersection with other MySQL GTID Set
 type mySQLGTIDSet struct {
-	*mysql.MysqlGTIDSet
+	set *mysql.MysqlGTIDSet
 }
 
 // replace g by other
-func (g *mySQLGTIDSet) set(other mysql.GTIDSet) error {
+func (g *mySQLGTIDSet) Set(other mysql.GTIDSet) error {
 	if other == nil {
 		return nil
 	}
@@ -78,11 +78,11 @@ func (g *mySQLGTIDSet) set(other mysql.GTIDSet) error {
 		return errors.Errorf("%s is not mysql GTID set", other)
 	}
 
-	g.MysqlGTIDSet = gs
+	g.set = gs
 	return nil
 }
 
-func (g *mySQLGTIDSet) replace(other GTIDSet, masters []interface{}) error {
+func (g *mySQLGTIDSet) Replace(other GTIDSet, masters []interface{}) error {
 	if other == nil {
 		return nil
 	}
@@ -100,47 +100,51 @@ func (g *mySQLGTIDSet) replace(other GTIDSet, masters []interface{}) error {
 
 		otherGS.delete(uuidStr)
 		if uuidSet, ok := g.get(uuidStr); ok {
-			otherGS.AddSet(uuidSet)
+			otherGS.set.AddSet(uuidSet)
 		}
 	}
 
-	for uuid, set := range g.Sets {
+	for uuid, set := range g.set.Sets {
 		if _, ok := otherGS.get(uuid); ok {
 			otherGS.delete(uuid)
-			otherGS.AddSet(set)
+			otherGS.set.AddSet(set)
 		}
 	}
 
-	g.MysqlGTIDSet = otherGS.Clone().(*mysql.MysqlGTIDSet)
+	g.set = otherGS.set.Clone().(*mysql.MysqlGTIDSet)
 	return nil
 }
 
 func (g *mySQLGTIDSet) delete(uuid string) {
-	delete(g.Sets, uuid)
+	delete(g.set.Sets, uuid)
 }
 
 func (g *mySQLGTIDSet) get(uuid string) (*mysql.UUIDSet, bool) {
-	uuidSet, ok := g.Sets[uuid]
+	uuidSet, ok := g.set.Sets[uuid]
 	return uuidSet, ok
 }
 
-func (g *mySQLGTIDSet) clone() GTIDSet {
+func (g *mySQLGTIDSet) Clone() GTIDSet {
 	return &mySQLGTIDSet{
-		MysqlGTIDSet: g.Clone().(*mysql.MysqlGTIDSet),
+		set: g.set.Clone().(*mysql.MysqlGTIDSet),
 	}
 }
 
-func (g *mySQLGTIDSet) origin() mysql.GTIDSet {
-	return g.Clone().(*mysql.MysqlGTIDSet)
+func (g *mySQLGTIDSet) Origin() mysql.GTIDSet {
+	return g.set.Clone().(*mysql.MysqlGTIDSet)
+}
+
+func (g *mySQLGTIDSet) String() string {
+	return g.set.String()
 }
 
 /************************ mariadb gtid set ***************************/
 type mariadbGTIDSet struct {
-	*mysql.MariadbGTIDSet
+	set *mysql.MariadbGTIDSet
 }
 
 // replace g by other
-func (m *mariadbGTIDSet) set(other mysql.GTIDSet) error {
+func (m *mariadbGTIDSet) Set(other mysql.GTIDSet) error {
 	if other == nil {
 		return nil
 	}
@@ -150,11 +154,11 @@ func (m *mariadbGTIDSet) set(other mysql.GTIDSet) error {
 		return errors.Errorf("%s is not mariadb GTID set", other)
 	}
 
-	m.MariadbGTIDSet = gs
+	m.set = gs
 	return nil
 }
 
-func (m *mariadbGTIDSet) replace(other GTIDSet, masters []interface{}) error {
+func (m *mariadbGTIDSet) Replace(other GTIDSet, masters []interface{}) error {
 	if other == nil {
 		return nil
 	}
@@ -172,38 +176,42 @@ func (m *mariadbGTIDSet) replace(other GTIDSet, masters []interface{}) error {
 
 		otherGS.delete(domainID)
 		if uuidSet, ok := m.get(domainID); ok {
-			otherGS.AddSet(uuidSet)
+			otherGS.set.AddSet(uuidSet)
 		}
 	}
 
-	for id, set := range m.Sets {
+	for id, set := range m.set.Sets {
 		if _, ok := otherGS.get(id); ok {
 			otherGS.delete(id)
-			otherGS.AddSet(set)
+			otherGS.set.AddSet(set)
 		}
 	}
 
-	m.MariadbGTIDSet = otherGS.Clone().(*mysql.MariadbGTIDSet)
+	m.set = otherGS.set.Clone().(*mysql.MariadbGTIDSet)
 	return nil
 }
 
 func (m *mariadbGTIDSet) delete(domainID uint32) {
-	delete(m.Sets, domainID)
+	delete(m.set.Sets, domainID)
 }
 
 func (m *mariadbGTIDSet) get(domainID uint32) (*mysql.MariadbGTID, bool) {
-	gtid, ok := m.Sets[domainID]
+	gtid, ok := m.set.Sets[domainID]
 	return gtid, ok
 }
 
-func (m *mariadbGTIDSet) clone() GTIDSet {
+func (m *mariadbGTIDSet) Clone() GTIDSet {
 	return &mariadbGTIDSet{
-		MariadbGTIDSet: m.Clone().(*mysql.MariadbGTIDSet),
+		set: m.set.Clone().(*mysql.MariadbGTIDSet),
 	}
 }
 
-func (m *mariadbGTIDSet) origin() mysql.GTIDSet {
-	return m.Clone().(*mysql.MariadbGTIDSet)
+func (m *mariadbGTIDSet) Origin() mysql.GTIDSet {
+	return m.set.Clone().(*mysql.MariadbGTIDSet)
+}
+
+func (m *mariadbGTIDSet) String() string {
+	return m.set.String()
 }
 
 // assume that reset master before switching to new master, and only the new master would write
@@ -235,7 +243,7 @@ func (s *Syncer) retrySyncGTIDs() error {
 	}
 	log.Infof("master uuid %s", masterUUID)
 
-	oldGTIDSet.replace(newGTIDSet, []interface{}{masterUUID})
+	oldGTIDSet.Replace(newGTIDSet, []interface{}{masterUUID})
 	// force to save in meta file
 	s.meta.Save(s.meta.Pos(), oldGTIDSet, true)
 	return nil

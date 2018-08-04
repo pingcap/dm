@@ -21,6 +21,8 @@ import (
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
+	"github.com/pingcap/tidb-enterprise-tools/dm/unit"
+	"github.com/pingcap/tidb-enterprise-tools/relay"
 	"github.com/siddontang/go/sync2"
 	"golang.org/x/net/context"
 )
@@ -37,6 +39,7 @@ type Worker struct {
 
 	cfg      *Config
 	subTasks map[string]*SubTask
+	relay    unit.Unit
 }
 
 // NewWorker creates a new Worker
@@ -47,6 +50,25 @@ func NewWorker(cfg *Config) *Worker {
 	}
 	w.closed.Set(true) // not start yet
 	w.ctx, w.cancel = context.WithCancel(context.Background())
+
+	relayCfg := &relay.Config{
+		EnableGTID:     cfg.EnableGTID,
+		AutoFixGTID:    false,
+		Flavor:         cfg.Flavor,
+		MetaFile:       cfg.MetaFile,
+		RelayDir:       cfg.RelayDir,
+		ServerID:       cfg.ServerID, // TODO: use auto-generated and unique server id?
+		Charset:        cfg.Charset,
+		VerifyChecksum: cfg.VerifyChecksum,
+		From: relay.DBConfig{
+			Host:     cfg.From.Host,
+			Port:     cfg.From.Port,
+			User:     cfg.From.User,
+			Password: cfg.From.Password,
+		},
+	}
+
+	w.relay = relay.NewRelay(relayCfg)
 	return &w
 }
 
@@ -57,6 +79,33 @@ func (w *Worker) Start() {
 	defer w.wg.Done()
 
 	log.Info("[worker] start running")
+
+	w.wg.Add(1)
+	go func() {
+		defer w.wg.Done()
+
+		err := w.relay.Init()
+		if err != nil {
+			log.Errorf("relay init err %v", errors.ErrorStack(err))
+			return
+		}
+
+		pr := make(chan pb.ProcessResult, 1)
+		w.relay.Process(w.ctx, pr)
+		w.relay.Close()
+
+		var errOccurred bool
+		for len(pr) > 0 {
+			r := <-pr
+			for _, err := range r.Errors {
+				errOccurred = true
+				log.Errorf("process error with type %v:\n %v", err.Type, err.Msg)
+			}
+		}
+		if errOccurred {
+			log.Errorf("relay exits with some errors")
+		}
+	}()
 
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -82,6 +131,10 @@ func (w *Worker) Close() {
 	for name, st := range w.subTasks {
 		st.Close()
 		delete(w.subTasks, name)
+	}
+
+	if w.relay != nil {
+		w.relay.Close()
 	}
 
 	// cancel status output ticker and wait for return

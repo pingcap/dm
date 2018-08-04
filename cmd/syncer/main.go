@@ -87,13 +87,13 @@ func main() {
 		syncer.InitStatusAndMetrics(cfg.StatusAddr)
 	}
 
-	upr := make(chan pb.ProcessResult, 1)
-	syncUnit.Process(ctx, upr)
+	pr := make(chan pb.ProcessResult, 1)
+	syncUnit.Process(ctx, pr)
 	syncUnit.Close()
 
 	var errOccurred bool
-	for len(upr) > 0 {
-		r := <-upr
+	for len(pr) > 0 {
+		r := <-pr
 		for _, err := range r.Errors {
 			errOccurred = true
 			log.Errorf("process error with type %v:\n %v", err.Type, err.Msg)
