@@ -29,7 +29,7 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"github.com/pingcap/tidb-enterprise-tools/dm/unit"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/tableroute"
+	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go/sync2"
 	"golang.org/x/net/context"
 )
@@ -71,7 +71,7 @@ type Worker struct {
 	conn        *Conn
 	wg          sync.WaitGroup
 	jobQueue    chan *dataJob
-	tableRouter route.TableRouter
+	tableRouter *router.Table
 	loader      *Loader
 }
 
@@ -285,7 +285,7 @@ type Loader struct {
 	fileJobQueue       chan *fileJob
 	fileJobQueueClosed sync2.AtomicBool
 
-	tableRouter route.TableRouter
+	tableRouter *router.Table
 	filter      *filter.Filter
 
 	pool   []*Worker
@@ -316,6 +316,7 @@ func NewLoader(cfg *config.SubTaskConfig) *Loader {
 		filter:    filter.New(rules),
 		unitType:  pb.UnitType_Load,
 	}
+	loader.tableRouter, _ = router.NewTableRouter([]*router.TableRule{})
 	loader.fileJobQueueClosed.Set(true) // not open yet
 	return loader
 }
@@ -502,16 +503,15 @@ func (l *Loader) Resume(ctx context.Context, upr chan pb.ProcessResult) {
 	l.Process(ctx, upr)
 }
 
-func (l *Loader) genRouter(rules []*config.RouteRule) error {
-	l.tableRouter = route.NewTrieRouter()
-
+func (l *Loader) genRouter(rules []*router.TableRule) error {
 	for _, rule := range rules {
-		err := l.tableRouter.Insert(rule.PatternSchema, rule.PatternTable, rule.TargetSchema, rule.TargetTable)
+		err := l.tableRouter.AddRule(rule)
 		if err != nil {
 			return errors.Trace(err)
 		}
 	}
-	log.Debugf("table_router rules:%+v", l.tableRouter.AllRules())
+	schemaRules, tableRules := l.tableRouter.AllRules()
+	log.Debugf("table_router rules:%+v, %+v", schemaRules, tableRules)
 	return nil
 }
 
@@ -741,13 +741,16 @@ func renameShardingSchema(query, srcSchema, dstSchema string) string {
 	return SQLReplace(query, srcSchema, dstSchema)
 }
 
-func fetchMatchedLiteral(router route.TableRouter, schema, table string) (targetSchema string, targetTable string) {
+func fetchMatchedLiteral(router *router.Table, schema, table string) (targetSchema string, targetTable string) {
 	if schema == "" {
 		// nothing change
 		return schema, table
 	}
 	schemaL, tableL := toLower(schema, table)
-	targetSchema, targetTable = router.Match(schemaL, tableL)
+	targetSchema, targetTable, err := router.Route(schemaL, tableL)
+	if err != nil {
+		log.Error(errors.ErrorStack(err)) // log the error, but still continue
+	}
 	if targetSchema == "" {
 		// nothing change
 		return schema, table
@@ -795,10 +798,6 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	// restore db in sort
 	dbs := make([]string, 0, len(l.db2Tables))
 	for db := range l.db2Tables {
-		dstDB, _ := fetchMatchedLiteral(l.tableRouter, db, "")
-		if l.cfg.SourceDB != "" && dstDB != l.cfg.AlternativeDB {
-			continue
-		}
 		dbs = append(dbs, db)
 	}
 

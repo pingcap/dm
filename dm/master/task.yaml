@@ -20,7 +20,7 @@ MySQL-instances:             # one or more source database, config more source d
     meta:
       binlog-name: binlog-00001
       binlog-pos: 4
-    route-rules: ["user-route-rules"]
+    route-rules: ["user-route-rules-schema", "user-route-rules"]
     filter-rules: ["user-filter-1", "user-filter-2"]
     column-mapping-rules: ["user-column-mapping"]
 
@@ -50,7 +50,7 @@ MySQL-instances:             # one or more source database, config more source d
     meta:
       binlog-name: binlog-00001
       binlog-pos: 320
-    route-rules: ["user-route-rules"]
+    route-rules: ["user-route-rules-schema", "user-route-rules"]
     filter-rules: ["user-filter-2"]
     column-mapping-rules: ["user-column-mapping"]
 
@@ -82,9 +82,12 @@ MySQL-instances:             # one or more source database, config more source d
 # other common configs shared by all instances
 
 routes:                      # schema/table route mapping
+  user-route-rules-schema:
+    schema-pattern: "user_*"
+    target-schema: "user"
   user-route-rules:
-    pattern-schema: "user_*"
-    pattern-table: "abc_*"
+    schema-pattern: "user_*"
+    table-pattern: "abc_*"
     target-schema: "user"
     target-table: "abc"
 

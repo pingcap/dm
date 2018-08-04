@@ -62,16 +62,21 @@ max-retry = 100
 #db-name ="test"
 #tbl-name = "~^a.*"
 
+# our Selector is a two level selector (schemal level, and table level)
+# in order to support `renameShardingSchema`, always need this extra rule
+# [[route-rules]]
+# schema-pattern = "route_*"
+# target-schema = "route"
 
 #[[route-rules]]
-#pattern-schema = "route_*"
-#pattern-table = "abc_*"
+#schema-pattern = "route_*"
+#table-pattern = "abc_*"
 #target-schema = "route"
 #target-table = "abc"
 
 #[[route-rules]]
-#pattern-schema = "route_*"
-#pattern-table = "xyz_*"
+#schema-pattern = "route_*"
+#table-pattern = "xyz_*"
 #target-schema = "route"
 #target-table = "xyz"
 

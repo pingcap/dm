@@ -54,8 +54,12 @@ password = ""
 port = 4000
 
 [[route-rules]]
-pattern-schema = "shard_db_*"
-pattern-table = "shard_table_*"
+schema-pattern = "shard_db_*"
+target-schema = "shard_db"
+
+[[route-rules]]
+schema-pattern = "shard_db_*"
+table-pattern = "shard_table_*"
 target-schema = "shard_db"
 target-table = "shard_table"
 

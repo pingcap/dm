@@ -27,8 +27,8 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"github.com/pingcap/tidb-enterprise-tools/dm/unit"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/tableroute"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
@@ -82,7 +82,7 @@ type Syncer struct {
 
 	c *causality
 
-	tableRouter route.TableRouter
+	tableRouter *router.Table
 
 	closed sync2.AtomicBool
 
@@ -119,6 +119,7 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.count.Set(0)
 	syncer.tables = make(map[string]*table)
 	syncer.c = newCausality()
+	syncer.tableRouter, _ = router.NewTableRouter([]*router.TableRule{})
 	syncer.done = make(chan struct{})
 	syncer.unitType = pb.UnitType_Sync
 	rules := &filter.Rules{
@@ -762,9 +763,8 @@ func (s *Syncer) resolveCasuality(keys []string) (string, error) {
 }
 
 func (s *Syncer) genRouter() error {
-	s.tableRouter = route.NewTrieRouter()
 	for _, rule := range s.cfg.RouteRules {
-		err := s.tableRouter.Insert(rule.PatternSchema, rule.PatternTable, rule.TargetSchema, rule.TargetTable)
+		err := s.tableRouter.AddRule(rule)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -1010,7 +1010,10 @@ func (s *Syncer) renameShardingSchema(schema, table string) (string, string) {
 	}
 	schemaL := strings.ToLower(schema)
 	tableL := strings.ToLower(table)
-	targetSchema, targetTable := s.tableRouter.Match(schemaL, tableL)
+	targetSchema, targetTable, err := s.tableRouter.Route(schemaL, tableL)
+	if err != nil {
+		log.Error(errors.ErrorStack(err)) // log the error, but still continue
+	}
 	if targetSchema == "" {
 		return schema, table
 	}

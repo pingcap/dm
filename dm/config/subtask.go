@@ -26,6 +26,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
+	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
@@ -41,14 +42,6 @@ type DBConfig struct {
 	Port     int    `toml:"port" json:"port" yaml:"port"`
 	User     string `toml:"user" json:"user" yaml:"user"`
 	Password string `toml:"password" json:"-" yaml:"password"` // omit it for privacy
-}
-
-// RouteRule is the route rule for loading schema and table into specified schema and table.
-type RouteRule struct {
-	PatternSchema string `toml:"pattern-schema" json:"pattern-schema" yaml:"pattern-schema"`
-	PatternTable  string `toml:"pattern-table" json:"pattern-table" yaml:"pattern-table"`
-	TargetSchema  string `toml:"target-schema" json:"target-schema" yaml:"target-schema"`
-	TargetTable   string `toml:"target-table" json:"target-table"  yaml:"target-table"`
 }
 
 // SkipDML defines config rule of skipping dml.
@@ -71,9 +64,9 @@ type SubTaskConfig struct {
 	ServerID int    `toml:"server-id" json:"server-id"`
 	Flavor   string `toml:"flavor" json:"flavor"`
 
-	From       DBConfig     `toml:"from" json:"from"`
-	To         DBConfig     `toml:"to" json:"to"`
-	RouteRules []*RouteRule `toml:"route-rules" json:"route-rules"`
+	From       DBConfig            `toml:"from" json:"from"`
+	To         DBConfig            `toml:"to" json:"to"`
+	RouteRules []*router.TableRule `toml:"route-rules" json:"route-rules"`
 
 	DoTables     []*filter.Table `toml:"do-table" json:"do-table"`
 	DoDBs        []string        `toml:"do-db" json:"do-db"`
@@ -113,8 +106,6 @@ func NewSubTaskConfig() *SubTaskConfig {
 	fs.IntVar(&cfg.PoolSize, "t", 16, "Number of threads restoring concurrently for worker pool. Each worker restore one file at a time, increase this as TiKV nodes increase")
 	fs.StringVar(&cfg.Dir, "d", "./", "Directory of the dump to import")
 	fs.StringVar(&cfg.CheckPointSchema, "checkpoint-schema", "tidb_loader", "schema name of checkpoint")
-	fs.StringVar(&cfg.AlternativeDB, "B", "", "An alternative database to restore into")
-	fs.StringVar(&cfg.SourceDB, "s", "", "Database to restore")
 	fs.BoolVar(&cfg.RemoveCheckpoint, "rm-checkpoint", false, "delete corresponding checkpoint records after the table is restored successfully")
 
 	// Syncer configuration
@@ -207,28 +198,12 @@ func (c *SubTaskConfig) adjust() error {
 		c.DoDBs[i] = strings.ToLower(db)
 	}
 
-	routeRules := make([]*RouteRule, 0, len(c.RouteRules))
-	if c.SourceDB != "" {
-		rule := &RouteRule{
-			PatternSchema: strings.ToLower(c.SourceDB),
-			TargetSchema:  c.AlternativeDB,
-		}
-		routeRules = append(routeRules, rule)
-	}
-
+	routeRules := make([]*router.TableRule, 0, len(c.RouteRules))
 	for _, rule := range c.RouteRules {
-		if c.SourceDB != "" {
-			if rule.TargetSchema == c.SourceDB {
-				rule.TargetSchema = c.AlternativeDB
-				routeRules = append(routeRules, rule)
-			}
-			continue
-		}
-		rule.PatternSchema = strings.ToLower(rule.PatternSchema)
-		rule.PatternTable = strings.ToLower(rule.PatternTable)
+		rule.SchemaPattern = strings.ToLower(rule.SchemaPattern)
+		rule.TablePattern = strings.ToLower(rule.TablePattern)
 		routeRules = append(routeRules, rule)
 	}
-
 	c.RouteRules = routeRules
 
 	c.SkipDDLs = append(c.SkipDDLs, c.SkipSQLs...)
@@ -298,10 +273,6 @@ func (c *SubTaskConfig) Parse(arguments []string) error {
 
 	if len(c.flagSet.Args()) != 0 {
 		return errors.Errorf("'%s' is an invalid flag", c.flagSet.Arg(0))
-	}
-
-	if c.AlternativeDB == "" && c.SourceDB != "" {
-		c.AlternativeDB = c.SourceDB
 	}
 
 	return errors.Trace(c.adjust())

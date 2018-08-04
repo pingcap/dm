@@ -19,6 +19,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go-mysql/mysql"
 	"gopkg.in/yaml.v2"
 )
@@ -107,8 +108,6 @@ type LoaderConfig struct {
 	PoolSize         int    `yaml:"pool-size" toml:"pool-size" json:"pool-size"`
 	Dir              string `yaml:"dir" toml:"dir" json:"dir"`
 	CheckPointSchema string `yaml:"checkpoint-schema" toml:"checkpoint-schema" json:"checkpoint-schema"`
-	AlternativeDB    string `yaml:"alternative-db" toml:"alternative-db" json:"alternative-db"`
-	SourceDB         string `yaml:"source-db" toml:"source-db" json:"source-db"`
 	RemoveCheckpoint bool   `yaml:"rm-checkpoint" toml:"rm-checkpoint" json:"rm-checkpoint"`
 }
 
@@ -139,7 +138,7 @@ type TaskConfig struct {
 
 	MySQLInstances []*MySQLInstance `yaml:"MySQL-instances"`
 
-	Routes         map[string]*RouteRule         `yaml:"routes"`
+	Routes         map[string]*router.TableRule  `yaml:"routes"`
 	Filters        map[string]*FilterRule        `yaml:"filters"`
 	ColumnMappings map[string]*ColumnMappingRule `yaml:"column-mappings"`
 
@@ -281,7 +280,7 @@ func (c *TaskConfig) SubTaskConfigs() []*SubTaskConfig {
 
 		cfg.ServerID = inst.ServerID
 
-		cfg.RouteRules = make([]*RouteRule, len(inst.RouteRules))
+		cfg.RouteRules = make([]*router.TableRule, len(inst.RouteRules))
 		for j, name := range inst.RouteRules {
 			cfg.RouteRules[j] = c.Routes[name]
 		}

@@ -24,6 +24,7 @@ import (
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
@@ -59,15 +60,6 @@ type DBConfig struct {
 	User     string `toml:"user" json:"user"`
 	Password string `toml:"password" json:"-"` // omit it for privacy
 	Port     int    `toml:"port" json:"port"`
-}
-
-// RouteRule is route rule that syncing
-// schema/table to specified schema/table
-type RouteRule struct {
-	PatternSchema string `toml:"pattern-schema" json:"pattern-schema"`
-	PatternTable  string `toml:"pattern-table" json:"pattern-table"`
-	TargetSchema  string `toml:"target-schema" json:"target-schema"`
-	TargertTable  string `toml:"target-table" json:"target-table"`
 }
 
 // SkipDML defines config rule of skipping dml.
@@ -110,7 +102,7 @@ type Config struct {
 	SkipEvents []string   `toml:"skip-events" json:"-"` // omit it since it's deprecated
 	SkipDMLs   []*SkipDML `toml:"skip-dmls" json:"skip-dmls"`
 
-	RouteRules []*RouteRule `toml:"route-rules" json:"route-rules"`
+	RouteRules []*router.TableRule `toml:"route-rules" json:"route-rules"`
 
 	From DBConfig `toml:"from" json:"from"`
 	To   DBConfig `toml:"to" json:"to"`
@@ -189,8 +181,8 @@ func (c *Config) adjust() {
 		c.DoDBs[i] = strings.ToLower(db)
 	}
 	for _, rule := range c.RouteRules {
-		rule.PatternSchema = strings.ToLower(rule.PatternSchema)
-		rule.PatternTable = strings.ToLower(rule.PatternTable)
+		rule.SchemaPattern = strings.ToLower(rule.SchemaPattern)
+		rule.TablePattern = strings.ToLower(rule.TablePattern)
 	}
 
 	c.SkipDDLs = append(c.SkipDDLs, c.SkipSQLs...)

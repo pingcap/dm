@@ -208,7 +208,9 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName string, tbInfo
 		return "", errors.Trace(err)
 	}
 	if !checksum.Valid {
-		return "", errors.Errorf("fail to get checksum from query %s", query)
+		// if don't have any data, the checksum will be `NULL`
+		log.Warnf("get empty checksum by query %s, args %v", query, args)
+		return "", nil
 	}
 
 	return checksum.String, nil

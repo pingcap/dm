@@ -23,7 +23,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/tableroute"
+	"github.com/pingcap/tidb-tools/pkg/table-router"
 	tmysql "github.com/pingcap/tidb/mysql"
 )
 
@@ -138,7 +138,7 @@ func executeSQLImp(db *sql.DB, sqls []string) error {
 	return nil
 }
 
-func hasUniqIndex(conn *Conn, schema string, table string, tableRouter route.TableRouter) (bool, error) {
+func hasUniqIndex(conn *Conn, schema string, table string, tableRouter *router.Table) (bool, error) {
 	if schema == "" || table == "" {
 		return false, errors.New("schema/table is empty")
 	}

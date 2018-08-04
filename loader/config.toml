@@ -43,9 +43,15 @@ user = "root"
 password = ""
 port = 4000
 
+# our Selector is a two level selector (schemal level, and table level)
+# in order to support `renameShardingSchema`, always need this extra rule
 # [[route-rules]]
-# pattern-schema = "shard_db_*"
-# pattern-table = "shard_table_*"
+# schema-pattern = "shard_db_*"
+# target-schema = "shard_db"
+
+# [[route-rules]]
+# schema-pattern = "shard_db_*"
+# table-pattern = "shard_table_*"
 # target-schema = "shard_db"
 # target-table = "shard_table"
 
