@@ -167,11 +167,14 @@ func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest
 // QueryStatus implements WorkerServer.QueryStatus
 func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*pb.QueryStatusResponse, error) {
 	log.Infof("[server] receive QueryStatus request %+v", req)
+
 	resp := &pb.QueryStatusResponse{
-		Result: true,
-		Status: s.worker.QueryStatus(req.Name),
+		Result:        true,
+		SubTaskStatus: s.worker.QueryStatus(req.Name),
+		RelayStatus:   s.worker.relay.Status().(*pb.RelayStatus),
 	}
-	if len(resp.Status) == 0 {
+
+	if len(resp.SubTaskStatus) == 0 {
 		resp.Msg = "no sub task started"
 	}
 	return resp, nil

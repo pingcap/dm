@@ -92,6 +92,7 @@ func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
 		}
 		status = append(status, &stStatus)
 	}
+
 	return status
 }
 

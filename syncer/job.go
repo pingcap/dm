@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
@@ -54,19 +55,19 @@ type job struct {
 	key     string
 	retry   bool
 	pos     mysql.Position
-	gtidSet GTIDSet
+	gtidSet gtid.GTIDSet
 }
 
-func newJob(tp opType, sql string, args []interface{}, key string, retry bool, pos mysql.Position, gtidSet GTIDSet) *job {
-	var gs GTIDSet
+func newJob(tp opType, sql string, args []interface{}, key string, retry bool, pos mysql.Position, gtidSet gtid.GTIDSet) *job {
+	var gs gtid.GTIDSet
 	if gtidSet != nil {
 		gs = gtidSet.Clone()
 	}
 	return &job{tp: tp, sql: sql, args: args, key: key, retry: retry, pos: pos, gtidSet: gs}
 }
 
-func newXIDJob(pos mysql.Position, gtidSet GTIDSet) *job {
-	var gs GTIDSet
+func newXIDJob(pos mysql.Position, gtidSet gtid.GTIDSet) *job {
+	var gs gtid.GTIDSet
 	if gtidSet != nil {
 		gs = gtidSet.Clone()
 	}

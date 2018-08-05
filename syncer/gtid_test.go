@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
 )
 
 func (s *testSyncerSuite) TestGTID(c *C) {
@@ -35,11 +36,11 @@ func (s *testSyncerSuite) TestGTID(c *C) {
 	}
 
 	for _, cs := range cases {
-		selfGTIDSet, err := parserGTID(cs.flavor, cs.selfGTIDstr)
+		selfGTIDSet, err := gtid.ParserGTID(cs.flavor, cs.selfGTIDstr)
 		c.Assert(err, IsNil)
-		newGTIDSet, err := parserGTID(cs.flavor, cs.masterGTIDStr)
+		newGTIDSet, err := gtid.ParserGTID(cs.flavor, cs.masterGTIDStr)
 		c.Assert(err, IsNil)
-		excepted, err := parserGTID(cs.flavor, cs.exepctedStr)
+		excepted, err := gtid.ParserGTID(cs.flavor, cs.exepctedStr)
 		c.Assert(err, IsNil)
 
 		err = selfGTIDSet.Replace(newGTIDSet, cs.masterIDs)

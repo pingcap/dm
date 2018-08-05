@@ -22,7 +22,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
-	gmysql "github.com/siddontang/go-mysql/mysql"
 )
 
 type column struct {
@@ -206,65 +205,6 @@ func getServerUUID(db *sql.DB) (string, error) {
 		return "", errors.Trace(rows.Err())
 	}
 	return masterUUID, nil
-}
-
-func getMasterStatus(db *sql.DB, flavor string) (gmysql.Position, GTIDSet, error) {
-	var (
-		binlogPos gmysql.Position
-		gs        GTIDSet
-	)
-
-	rows, err := db.Query(`SHOW MASTER STATUS`)
-	if err != nil {
-		return binlogPos, gs, errors.Trace(err)
-	}
-	defer rows.Close()
-
-	rowColumns, err := rows.Columns()
-	if err != nil {
-		return binlogPos, gs, errors.Trace(err)
-	}
-
-	// Show an example.
-	/*
-		MySQL [test]> SHOW MASTER STATUS;
-		+-----------+----------+--------------+------------------+--------------------------------------------+
-		| File      | Position | Binlog_Do_DB | Binlog_Ignore_DB | Executed_Gtid_Set                          |
-		+-----------+----------+--------------+------------------+--------------------------------------------+
-		| ON.000001 |     4822 |              |                  | 85ab69d1-b21f-11e6-9c5e-64006a8978d2:1-46
-		+-----------+----------+--------------+------------------+--------------------------------------------+
-	*/
-	var (
-		gtid       string
-		binlogName string
-		pos        uint32
-		nullPtr    interface{}
-	)
-	for rows.Next() {
-		if len(rowColumns) == 5 {
-			err = rows.Scan(&binlogName, &pos, &nullPtr, &nullPtr, &gtid)
-		} else {
-			err = rows.Scan(&binlogName, &pos, &nullPtr, &nullPtr)
-		}
-		if err != nil {
-			return binlogPos, gs, errors.Trace(err)
-		}
-
-		binlogPos = gmysql.Position{
-			Name: binlogName,
-			Pos:  pos,
-		}
-
-		gs, err = parserGTID(flavor, gtid)
-		if err != nil {
-			return binlogPos, gs, errors.Trace(err)
-		}
-	}
-	if rows.Err() != nil {
-		return binlogPos, gs, errors.Trace(rows.Err())
-	}
-
-	return binlogPos, gs, nil
 }
 
 func getTableIndex(db *sql.DB, table *table, maxRetry int) error {

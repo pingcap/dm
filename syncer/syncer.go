@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"github.com/pingcap/tidb-enterprise-tools/dm/unit"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
@@ -110,8 +111,7 @@ type Syncer struct {
 	filter       *filter.Filter
 	skipDMLRules *SkipDMLRules
 
-	lackOfReplClientPrivilege bool
-	lastSlaveConnectionID     uint32
+	lastSlaveConnectionID uint32
 
 	unitType pb.UnitType
 
@@ -283,8 +283,8 @@ func (s *Syncer) getServerUUID() (string, error) {
 	return getServerUUID(s.fromDB)
 }
 
-func (s *Syncer) getMasterStatus() (mysql.Position, GTIDSet, error) {
-	return getMasterStatus(s.fromDB, s.cfg.Flavor)
+func (s *Syncer) getMasterStatus() (mysql.Position, gtid.GTIDSet, error) {
+	return utils.GetMasterStatus(s.fromDB, s.cfg.Flavor)
 }
 
 func (s *Syncer) clearTables() {
@@ -747,7 +747,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	}
 }
 
-func (s *Syncer) commitJob(tp opType, sql string, args []interface{}, keys []string, retry bool, pos mysql.Position, gs GTIDSet) error {
+func (s *Syncer) commitJob(tp opType, sql string, args []interface{}, keys []string, retry bool, pos mysql.Position, gs gtid.GTIDSet) error {
 	key, err := s.resolveCasuality(keys)
 	if err != nil {
 		return errors.Errorf("resolve karam error %v", err)
@@ -848,7 +848,7 @@ func (s *Syncer) printStatus(ctx context.Context) {
 	var (
 		err                 error
 		latestMasterPos     mysql.Position
-		latestmasterGTIDSet GTIDSet
+		latestmasterGTIDSet gtid.GTIDSet
 	)
 
 	for {
@@ -869,17 +869,12 @@ func (s *Syncer) printStatus(ctx context.Context) {
 				totalTps = total / totalSeconds
 			}
 
-			if !s.lackOfReplClientPrivilege {
-				latestMasterPos, latestmasterGTIDSet, err = s.getMasterStatus()
-				if err != nil {
-					if isAccessDeniedError(err) {
-						s.lackOfReplClientPrivilege = true
-					}
-					log.Errorf("[syncer] get master status error %s", err)
-				} else {
-					binlogPos.WithLabelValues("master").Set(float64(latestMasterPos.Pos))
-					binlogFile.WithLabelValues("master").Set(getBinlogIndex(latestMasterPos.Name))
-				}
+			latestMasterPos, latestmasterGTIDSet, err = s.getMasterStatus()
+			if err != nil {
+				log.Errorf("[syncer] get master status error %s", err)
+			} else {
+				binlogPos.WithLabelValues("master").Set(float64(latestMasterPos.Pos))
+				binlogFile.WithLabelValues("master").Set(getBinlogIndex(latestMasterPos.Name))
 			}
 
 			log.Infof("[syncer]total events = %d, total tps = %d, recent tps = %d, master-binlog = %v, master-binlog-gtid=%v, %s",
@@ -951,7 +946,7 @@ func (s *Syncer) createDBs() error {
 
 // record skip ddl/dml sqls' position
 // make newJob's sql argument empty to distinguish normal sql and skips sql
-func (s *Syncer) recordSkipSQLsPos(op opType, pos mysql.Position, gtidSet GTIDSet) error {
+func (s *Syncer) recordSkipSQLsPos(op opType, pos mysql.Position, gtidSet gtid.GTIDSet) error {
 	job := newJob(op, "", nil, "", false, pos, gtidSet)
 	err := s.addJob(job)
 	return errors.Trace(err)
@@ -1126,9 +1121,6 @@ func (s *Syncer) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 }
 
 func (s *Syncer) needResync() bool {
-	if s.lackOfReplClientPrivilege {
-		return false
-	}
 	masterPos, _, err := s.getMasterStatus()
 	if err != nil {
 		log.Errorf("get master status err:%s", err)
@@ -1163,4 +1155,39 @@ func (s *Syncer) enableSafeModeInitializationPhase(ctx context.Context) {
 		case <-time.After(5 * time.Minute):
 		}
 	}()
+}
+
+// assume that reset master before switching to new master, and only the new master would write
+// it's a weak function to try best to fix gtid set while switching master/slave
+func (s *Syncer) retrySyncGTIDs() error {
+	// TODO: now we dont implement quering gtid from mariadb, implement it later
+	if s.cfg.Flavor != mysql.MySQLFlavor {
+		return nil
+	}
+	log.Info("start retry sync gtid, meta %v", s.meta)
+
+	// handle current gtid
+	oldGTIDSet, err := s.meta.GTID()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	log.Infof("old gtid set %v", oldGTIDSet)
+
+	_, newGTIDSet, err := s.getMasterStatus()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	log.Infof("new master gtid set %v", newGTIDSet)
+
+	// find master
+	masterUUID, err := s.getServerUUID()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	log.Infof("master uuid %s", masterUUID)
+
+	oldGTIDSet.Replace(newGTIDSet, []interface{}{masterUUID})
+	// force to save in meta file
+	s.meta.Save(s.meta.Pos(), oldGTIDSet, true)
+	return nil
 }

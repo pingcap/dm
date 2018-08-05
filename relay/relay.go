@@ -2,6 +2,8 @@ package relay
 
 import (
 	"bytes"
+	"database/sql"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -12,6 +14,7 @@ import (
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"github.com/pingcap/tidb-enterprise-tools/dm/unit"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	// TODO: unify syncer/loader/relay checkpoint
 	"github.com/pingcap/tidb-enterprise-tools/syncer"
 	"github.com/siddontang/go-mysql/mysql"
@@ -28,12 +31,14 @@ var (
 )
 
 const (
-	eventTimeout     = 1 * time.Hour
-	binlogHeaderSize = 4
+	eventTimeout                = 1 * time.Hour
+	binlogHeaderSize            = 4
+	showStatusConnectionTimeout = "1m"
 )
 
 // Relay relays mysql binlog to local file.
 type Relay struct {
+	db                    *sql.DB
 	cfg                   *Config
 	syncer                *replication.BinlogSyncer
 	syncerCfg             replication.BinlogSyncerConfig
@@ -70,6 +75,14 @@ func NewRelay(cfg *Config) *Relay {
 
 // Init implements the dm.Unit interface.
 func (r *Relay) Init() error {
+	cfg := r.cfg.From
+	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8&interpolateParams=true&readTimeout=%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, showStatusConnectionTimeout)
+	db, err := sql.Open("mysql", dbDSN)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	r.db = db
+
 	if err := r.meta.Load(); err != nil {
 		return errors.Trace(err)
 	}
@@ -291,6 +304,9 @@ func (r *Relay) Close() {
 	if r.fd != nil {
 		r.fd.Close()
 	}
+	if r.db != nil {
+		r.db.Close()
+	}
 	if err := r.meta.Flush(); err != nil {
 		log.Errorf("[relay] flush checkpoint error %v", errors.ErrorStack(err))
 	}
@@ -299,8 +315,22 @@ func (r *Relay) Close() {
 
 // Status implements the dm.Unit interface.
 func (r *Relay) Status() interface{} {
-	// TODO
-	return "not implemented yet"
+	masterPos, masterGTID, err := utils.GetMasterStatus(r.db, r.cfg.Flavor)
+	if err != nil {
+		log.Warnf("[relay] get master status %v", errors.ErrorStack(err))
+	}
+
+	relayPos := r.meta.Pos()
+	relayGTIDSet, err := r.meta.GTID()
+	if err != nil {
+		log.Warnf("[relay] get gtid err %v", errors.ErrorStack(err))
+	}
+	return &pb.RelayStatus{
+		MasterBinlog:     masterPos.String(),
+		MasterBinlogGtid: masterGTID.String(),
+		RelayBinlog:      relayPos.String(),
+		RelayBinlogGtid:  relayGTIDSet.String(),
+	}
 }
 
 // Type implements the dm.Unit interface.

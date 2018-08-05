@@ -23,6 +23,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/ioutil2"
 )
@@ -40,7 +41,7 @@ type Meta interface {
 	Load() error
 
 	// Save saves meta information.
-	Save(pos mysql.Position, gtid GTIDSet, force bool) error
+	Save(pos mysql.Position, gtid gtid.GTIDSet, force bool) error
 
 	// Flush write meta information
 	Flush() error
@@ -52,7 +53,7 @@ type Meta interface {
 	Pos() mysql.Position
 
 	// GTID() returns gtid information.
-	GTID() (GTIDSet, error)
+	GTID() (gtid.GTIDSet, error)
 }
 
 // LocalMeta is local meta struct.
@@ -60,7 +61,7 @@ type LocalMeta struct {
 	sync.RWMutex
 
 	flavor string
-	gset   GTIDSet
+	gset   gtid.GTIDSet
 
 	filename string
 	saveTime time.Time
@@ -79,7 +80,7 @@ func NewLocalMeta(filename, flavor string) *LocalMeta {
 func (lm *LocalMeta) Load() error {
 	// initialize gset
 	var err error
-	lm.gset, err = parserGTID(lm.flavor, "")
+	lm.gset, err = gtid.ParserGTID(lm.flavor, "")
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -99,12 +100,12 @@ func (lm *LocalMeta) Load() error {
 		return errors.Trace(err)
 	}
 
-	lm.gset, err = parserGTID(lm.flavor, lm.BinlogGTID)
+	lm.gset, err = gtid.ParserGTID(lm.flavor, lm.BinlogGTID)
 	return errors.Trace(err)
 }
 
 // Save implements Meta.Save interface.
-func (lm *LocalMeta) Save(pos mysql.Position, gs GTIDSet, force bool) error {
+func (lm *LocalMeta) Save(pos mysql.Position, gs gtid.GTIDSet, force bool) error {
 	lm.Lock()
 	defer lm.Unlock()
 
@@ -154,7 +155,7 @@ func (lm *LocalMeta) Pos() mysql.Position {
 }
 
 // GTID implements Meta.GTID interface
-func (lm *LocalMeta) GTID() (GTIDSet, error) {
+func (lm *LocalMeta) GTID() (gtid.GTIDSet, error) {
 	lm.RLock()
 	defer lm.RUnlock()
 

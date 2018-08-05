@@ -68,7 +68,8 @@ message QueryStatusResponse {
     bool result = 1;
     string worker = 2; // worker name, set by dm-master
     string msg = 3;
-    repeated SubTaskStatus status = 4;
+    repeated SubTaskStatus subTaskStatus = 4;
+    RelayStatus relayStatus = 5;
 }
 
 // Stage represents current stage for a (sub) task
@@ -135,6 +136,14 @@ message SyncStatus {
     string MasterBinlogGtid = 5;
     string SyncerBinlog = 6;
     string SyncerBinlogGtid = 7;
+}
+
+// RelayStatus represents status for relay unit.
+message RelayStatus {
+    string MasterBinlog = 1;
+    string MasterBinlogGtid = 2;
+    string RelayBinlog = 3;
+    string RelayBinlogGtid = 4;
 }
 
 // SubTaskStatus represents status for a sub task

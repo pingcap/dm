@@ -77,10 +77,6 @@ func isBinlogPurgedError(err error) bool {
 	return isMysqlError(err, tmysql.ErrMasterFatalErrorReadingBinlog)
 }
 
-func isAccessDeniedError(err error) bool {
-	return isMysqlError(err, tmysql.ErrSpecificAccessDenied)
-}
-
 func isNoSuchThreadError(err error) bool {
 	return isMysqlError(err, tmysql.ErrNoSuchThread)
 }

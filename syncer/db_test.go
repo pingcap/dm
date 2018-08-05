@@ -16,15 +16,7 @@ package syncer
 import (
 	. "github.com/pingcap/check"
 	gouuid "github.com/satori/go.uuid"
-	"github.com/siddontang/go-mysql/mysql"
 )
-
-func (s *testSyncerSuite) TestGetMasterStatus(c *C) {
-	binlogPos, _, err := getMasterStatus(s.db, mysql.MySQLFlavor)
-	c.Assert(err, IsNil)
-	c.Assert(binlogPos.Name, Not(Equals), "")
-	c.Assert(binlogPos.Pos, Not(Equals), 0)
-}
 
 func (s *testSyncerSuite) TestGetServerUUID(c *C) {
 	uuid, err := getServerUUID(s.db)

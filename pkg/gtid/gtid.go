@@ -11,11 +11,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package syncer
+package gtid
 
 import (
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
@@ -36,7 +35,7 @@ type GTIDSet interface {
 	String() string
 }
 
-func parserGTID(flavor, gtidStr string) (GTIDSet, error) {
+func ParserGTID(flavor, gtidStr string) (GTIDSet, error) {
 	var (
 		m   GTIDSet
 		err error
@@ -212,39 +211,4 @@ func (m *mariadbGTIDSet) Origin() mysql.GTIDSet {
 
 func (m *mariadbGTIDSet) String() string {
 	return m.set.String()
-}
-
-// assume that reset master before switching to new master, and only the new master would write
-// it's a weak function to try best to fix gtid set while switching master/slave
-func (s *Syncer) retrySyncGTIDs() error {
-	// TODO: now we dont implement quering gtid from mariadb, implement it later
-	if s.cfg.Flavor != mysql.MySQLFlavor {
-		return nil
-	}
-	log.Info("start retry sync gtid, meta %v", s.meta)
-
-	// handle current gtid
-	oldGTIDSet, err := s.meta.GTID()
-	if err != nil {
-		return errors.Trace(err)
-	}
-	log.Infof("old gtid set %v", oldGTIDSet)
-
-	_, newGTIDSet, err := s.getMasterStatus()
-	if err != nil {
-		return errors.Trace(err)
-	}
-	log.Infof("new master gtid set %v", newGTIDSet)
-
-	// find master
-	masterUUID, err := s.getServerUUID()
-	if err != nil {
-		return errors.Trace(err)
-	}
-	log.Infof("master uuid %s", masterUUID)
-
-	oldGTIDSet.Replace(newGTIDSet, []interface{}{masterUUID})
-	// force to save in meta file
-	s.meta.Save(s.meta.Pos(), oldGTIDSet, true)
-	return nil
 }

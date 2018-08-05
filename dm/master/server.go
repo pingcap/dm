@@ -554,10 +554,10 @@ func (s *Server) fetchTaskWorkers(ctx context.Context) (map[string][]string, map
 		} else if !workerResp.Result {
 			workerMsgMap[worker] = "got response but with failed result"
 		}
-		if workerResp.Status == nil {
+		if workerResp.SubTaskStatus == nil {
 			continue
 		}
-		for _, status := range workerResp.Status {
+		for _, status := range workerResp.SubTaskStatus {
 			if status.Stage == pb.Stage_InvalidStage {
 				continue // invalid status
 			}

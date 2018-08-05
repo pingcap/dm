@@ -34,6 +34,7 @@
 		DumpStatus
 		LoadStatus
 		SyncStatus
+		RelayStatus
 		SubTaskStatus
 		SubTaskStatusList
 		ProcessResult
@@ -48,12 +49,12 @@ import (
 
 	math "math"
 
-	context "golang.org/x/net/context"
-
 	grpc "google.golang.org/grpc"
-
-	io "io"
 )
+
+import context "golang.org/x/net/context"
+
+import io "io"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal

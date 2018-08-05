@@ -58,9 +58,6 @@ func (s *testSyncerSuite) TestSpecificError(c *C) {
 	err := newMysqlErr(tmysql.ErrNoSuchThread, "Unknown thread id: 111")
 	c.Assert(isNoSuchThreadError(err), Equals, true)
 
-	err = newMysqlErr(tmysql.ErrSpecificAccessDenied, "access denied")
-	c.Assert(isAccessDeniedError(err), Equals, true)
-
 	err = newMysqlErr(tmysql.ErrMasterFatalErrorReadingBinlog, "binlog purged error")
 	c.Assert(isBinlogPurgedError(err), Equals, true)
 }

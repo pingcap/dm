@@ -14,7 +14,10 @@
 package syncer
 
 import (
+	"github.com/juju/errors"
+	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
@@ -23,16 +26,21 @@ import (
 func (s *Syncer) Status() interface{} {
 	var (
 		masterPos     mysql.Position
-		masterGTIDSet GTIDSet
+		masterGTIDSet gtid.GTIDSet
 	)
 	total := s.count.Get()
 	totalTps := s.totalTps.Get()
 	tps := s.totalTps.Get()
-	if !s.lackOfReplClientPrivilege {
-		masterPos, masterGTIDSet, _ = s.getMasterStatus()
+	masterPos, masterGTIDSet, err := s.getMasterStatus()
+	if err != nil {
+		log.Warnf("[syncer] get master status err %v", errors.ErrorStack(err))
 	}
+
 	syncerPos := s.meta.Pos()
-	syncerGTIDSet, _ := s.meta.GTID()
+	syncerGTIDSet, err := s.meta.GTID()
+	if err != nil {
+		log.Warnf("[syncer] get gtid err %v", errors.ErrorStack(err))
+	}
 	st := &pb.SyncStatus{
 		TotalEvents:      total,
 		TotalTps:         totalTps,
