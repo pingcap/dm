@@ -10,7 +10,7 @@ status-addr = ":10082"
 
 server-id = 101
 flavor = "mysql"
-relay-dir = "./relay_binlog"
+relay-dir = "./relay_log"
 meta-file = "relay.meta"
 enable-gtid = false
 # charset= ""
