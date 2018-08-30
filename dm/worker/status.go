@@ -29,8 +29,8 @@ func (st *SubTask) Status() interface{} {
 	return st.CurrUnit().Status()
 }
 
-// StatusJson returns the status of the current sub task as json string
-func (st *SubTask) StatusJson() string {
+// StatusJSON returns the status of the current sub task as json string
+func (st *SubTask) StatusJSON() string {
 	sj, err := json.Marshal(st.Status())
 	if err != nil {
 		log.Errorf("[subtask] marshal status error %s", errors.ErrorStack(err))
@@ -96,8 +96,8 @@ func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
 	return status
 }
 
-// StatusJson returns the status of the worker as json string
-func (w *Worker) StatusJson(stName string) string {
+// StatusJSON returns the status of the worker as json string
+func (w *Worker) StatusJSON(stName string) string {
 	sl := &pb.SubTaskStatusList{Status: w.Status(stName)}
 	mar := jsonpb.Marshaler{EmitDefaults: true, Indent: "    "}
 	s, err := mar.MarshalToString(sl)

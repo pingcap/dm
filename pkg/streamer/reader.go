@@ -14,11 +14,13 @@ import (
 	"golang.org/x/net/context"
 )
 
+// errors used by reader
 var (
 	ErrReaderRunning          = errors.New("binlog reader is already running")
 	ErrBinlogFileNotSpecified = errors.New("binlog file must be specified")
 )
 
+// BinlogReaderConfig is the configuration for BinlogReader
 type BinlogReaderConfig struct {
 	BinlogDir      string
 	VerifyChecksum bool
@@ -34,6 +36,7 @@ type BinlogReader struct {
 	cancel  context.CancelFunc
 }
 
+// NewBinlogReader creates a new BinlogReader
 func NewBinlogReader(cfg *BinlogReaderConfig) *BinlogReader {
 	ctx, cancel := context.WithCancel(context.Background())
 	parser := replication.NewBinlogParser()

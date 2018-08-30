@@ -128,6 +128,8 @@ type SyncerConfig struct {
 
 	DisableCausality bool `yaml:"disable-detect" toml:"disable-detect" json:"disable-detect"`
 	SafeMode         bool `yaml:"safe-mode" toml:"safe-mode" json:"safe-mode"`
+
+	SyncerCheckPointSchema string `yaml:"syncer-checkpoint-schema" toml:"syncer-checkpoint-schema" json:"syncer-checkpoint-schema"`
 }
 
 // TaskConfig is the configuration for Task
@@ -292,7 +294,6 @@ func (c *TaskConfig) SubTaskConfigs() []*SubTaskConfig {
 		for j, name := range inst.RouteRules {
 			cfg.RouteRules[j] = c.Routes[name]
 		}
-		// TODO zxc: update meta file's content by `Meta`, or save(and update) meta in DB
 		// TODO zxc: add new filter rules
 		// TODO zxc: add column-mapping rules
 

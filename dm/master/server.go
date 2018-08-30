@@ -65,9 +65,9 @@ func (s *Server) Start() error {
 	}
 
 	for _, workerAddr := range s.cfg.DeployMap {
-		conn, err := grpc.Dial(workerAddr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
-		if err != nil {
-			return errors.Trace(err)
+		conn, err2 := grpc.Dial(workerAddr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
+		if err2 != nil {
+			return errors.Trace(err2)
 		}
 		s.workerClients[workerAddr] = pb.NewWorkerClient(conn)
 	}

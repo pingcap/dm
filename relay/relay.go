@@ -15,6 +15,7 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"github.com/pingcap/tidb-enterprise-tools/dm/unit"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+
 	// TODO: unify syncer/loader/relay checkpoint
 	"github.com/pingcap/tidb-enterprise-tools/syncer"
 	"github.com/siddontang/go-mysql/mysql"
@@ -26,6 +27,7 @@ import (
 // TODO: refine gtid-mode.
 // if support gtid mode fully, we should not use raw mode, because we need to parse all binlog event.
 
+// errors used by relay
 var (
 	ErrBinlogPosGreaterThanFileSize = errors.New("the specific position is greater than the local binlog file size")
 )
@@ -191,11 +193,11 @@ func (r *Relay) process(parentCtx context.Context) error {
 				}
 			}
 
-			eof, err := replication.NewBinlogParser().ParseSingleEvent(r.fd, func(e *replication.BinlogEvent) error {
+			eof, err2 := replication.NewBinlogParser().ParseSingleEvent(r.fd, func(e *replication.BinlogEvent) error {
 				return nil
 			})
-			if err != nil {
-				return errors.Trace(err)
+			if err2 != nil {
+				return errors.Trace(err2)
 			}
 			// FormateDescriptionEvent is the first event and only one FormateDescriptionEvent in a file.
 			if !eof {
@@ -206,8 +208,8 @@ func (r *Relay) process(parentCtx context.Context) error {
 		}
 
 		log.Debugf("write %v", e.Header)
-		if n, err := r.fd.Write(e.RawData); err != nil {
-			return errors.Trace(err)
+		if n, err2 := r.fd.Write(e.RawData); err2 != nil {
+			return errors.Trace(err2)
 		} else if n != len(e.RawData) {
 			// FIXME: should we panic here? it seems unreachable
 			return errors.Trace(io.ErrShortWrite)

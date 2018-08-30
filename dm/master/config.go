@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )
 
+// NewConfig creates a config for dm-master
 func NewConfig() *Config {
 	cfg := &Config{}
 	cfg.FlagSet = flag.NewFlagSet("dm-master", flag.ContinueOnError)
@@ -48,6 +49,7 @@ type DeployMapper struct {
 	Worker string `toml:"worker" json:"worker"`
 }
 
+// Config is the configuration for dm-master
 type Config struct {
 	*flag.FlagSet `json:"-"`
 

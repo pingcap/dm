@@ -114,7 +114,7 @@ func (w *Worker) Start() {
 		case <-w.ctx.Done():
 			return
 		case <-ticker.C:
-			log.Debugf("[worker] status \n%s", w.StatusJson(""))
+			log.Debugf("[worker] status \n%s", w.StatusJSON(""))
 		}
 	}
 }
@@ -159,8 +159,9 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 	cfg.LogFile = w.cfg.LogFile
 	cfg.LogRotate = w.cfg.LogRotate
 
-	// use worker's cfg.From
+	// NOTE: use worker's cfg.From, cfg.ServerID
 	cfg.From = w.cfg.From
+	cfg.ServerID = w.cfg.ServerID
 	st := NewSubTask(cfg)
 	err := st.Init()
 	if err != nil {

@@ -20,6 +20,7 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )
 
+// InitStatus initializes the HTTP status server
 func InitStatus(addr string) {
 	go func() {
 		http.HandleFunc("/status", func(w http.ResponseWriter, req *http.Request) {

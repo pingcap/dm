@@ -18,8 +18,8 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 )
 
-// GTIDSet provide gtid operations for syncer
-type GTIDSet interface {
+// Set provide gtid operations for syncer
+type Set interface {
 	Set(mysql.GTIDSet) error
 	// compute set of self and other gtid set
 	// 1. keep intersection of self and other gtid set
@@ -28,16 +28,17 @@ type GTIDSet interface {
 	// example: self gtid set [xx:1-2, yy:1-3, xz:1-4], other gtid set [xx:1-4, yy:1-12, xy:1-3]. master ID set [xx]
 	// => [xx:1-2, yy:1-3, xy:1-3]
 	// more examples ref test cases
-	Replace(other GTIDSet, masters []interface{}) error
-	Clone() GTIDSet
+	Replace(other Set, masters []interface{}) error
+	Clone() Set
 	Origin() mysql.GTIDSet
 
 	String() string
 }
 
-func ParserGTID(flavor, gtidStr string) (GTIDSet, error) {
+// ParserGTID parses GTID from string
+func ParserGTID(flavor, gtidStr string) (Set, error) {
 	var (
-		m   GTIDSet
+		m   Set
 		err error
 	)
 
@@ -81,7 +82,7 @@ func (g *mySQLGTIDSet) Set(other mysql.GTIDSet) error {
 	return nil
 }
 
-func (g *mySQLGTIDSet) Replace(other GTIDSet, masters []interface{}) error {
+func (g *mySQLGTIDSet) Replace(other Set, masters []interface{}) error {
 	if other == nil {
 		return nil
 	}
@@ -123,7 +124,7 @@ func (g *mySQLGTIDSet) get(uuid string) (*mysql.UUIDSet, bool) {
 	return uuidSet, ok
 }
 
-func (g *mySQLGTIDSet) Clone() GTIDSet {
+func (g *mySQLGTIDSet) Clone() Set {
 	return &mySQLGTIDSet{
 		set: g.set.Clone().(*mysql.MysqlGTIDSet),
 	}
@@ -157,7 +158,7 @@ func (m *mariadbGTIDSet) Set(other mysql.GTIDSet) error {
 	return nil
 }
 
-func (m *mariadbGTIDSet) Replace(other GTIDSet, masters []interface{}) error {
+func (m *mariadbGTIDSet) Replace(other Set, masters []interface{}) error {
 	if other == nil {
 		return nil
 	}
@@ -199,7 +200,7 @@ func (m *mariadbGTIDSet) get(domainID uint32) (*mysql.MariadbGTID, bool) {
 	return gtid, ok
 }
 
-func (m *mariadbGTIDSet) Clone() GTIDSet {
+func (m *mariadbGTIDSet) Clone() Set {
 	return &mariadbGTIDSet{
 		set: m.set.Clone().(*mysql.MariadbGTIDSet),
 	}

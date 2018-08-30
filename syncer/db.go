@@ -377,3 +377,66 @@ func killConn(db *sql.DB, connID uint32) error {
 	_, err := db.Exec(fmt.Sprintf("KILL %d", connID))
 	return errors.Trace(err)
 }
+
+func getSchemas(db *sql.DB, maxRetry int) ([]string, error) {
+	query := "SHOW DATABASES"
+	rows, err := querySQL(db, query, maxRetry)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer rows.Close()
+
+	// show an example.
+	/*
+		mysql> SHOW DATABASES;
+		+--------------------+
+		| Database           |
+		+--------------------+
+		| information_schema |
+		| mysql              |
+		| performance_schema |
+		| sys                |
+		| test_db            |
+		+--------------------+
+	*/
+	schemas := make([]string, 0, 10)
+	for rows.Next() {
+		var schema string
+		err = rows.Scan(&schema)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		schemas = append(schemas, schema)
+	}
+	return schemas, nil
+}
+
+func getTables(db *sql.DB, schema string, maxRetry int) ([]string, error) {
+	query := fmt.Sprintf("SHOW TABLES IN `%s`", schema)
+	rows, err := querySQL(db, query, maxRetry)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer rows.Close()
+
+	// show an example.
+	/*
+		mysql> SHOW TABLES IN test_db;
+		+---------------------------+
+		| Tables_in_test_db         |
+		+---------------------------+
+		| tbl_1                     |
+		| tbl_2                     |
+		+---------------------------+
+	*/
+	tables := make([]string, 0, 20)
+	for rows.Next() {
+		var table string
+		err = rows.Scan(&table)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		tables = append(tables, table)
+	}
+	return tables, nil
+}

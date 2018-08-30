@@ -26,7 +26,7 @@ import (
 func (s *Syncer) Status() interface{} {
 	var (
 		masterPos     mysql.Position
-		masterGTIDSet gtid.GTIDSet
+		masterGTIDSet gtid.Set
 	)
 	total := s.count.Get()
 	totalTps := s.totalTps.Get()
@@ -36,8 +36,7 @@ func (s *Syncer) Status() interface{} {
 		log.Warnf("[syncer] get master status err %v", errors.ErrorStack(err))
 	}
 
-	syncerPos := s.meta.Pos()
-	syncerGTIDSet, err := s.meta.GTID()
+	syncerPos := s.checkpoint.GlobalPoint()
 	if err != nil {
 		log.Warnf("[syncer] get gtid err %v", errors.ErrorStack(err))
 	}
@@ -48,7 +47,6 @@ func (s *Syncer) Status() interface{} {
 		MasterBinlog:     masterPos.String(),
 		MasterBinlogGtid: masterGTIDSet.String(),
 		SyncerBinlog:     syncerPos.String(),
-		SyncerBinlogGtid: syncerGTIDSet.String(),
 	}
 	return st
 }

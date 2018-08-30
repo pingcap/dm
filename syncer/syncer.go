@@ -16,7 +16,9 @@ package syncer
 import (
 	"database/sql"
 	"fmt"
+	"math"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +33,7 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
+	"github.com/pingcap/tidb/ast"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
@@ -50,8 +53,10 @@ var (
 	maxDDLConnectionTimeout = "3h"
 )
 
+// BinlogType represents binlog sync type
 type BinlogType uint8
 
+// binlog sync type
 const (
 	RemoteBinlog BinlogType = iota + 1
 	LocalBinlog
@@ -73,7 +78,7 @@ type Syncer struct {
 	cfg     *config.SubTaskConfig
 	syncCfg replication.BinlogSyncerConfig
 
-	meta Meta
+	shardingSyncCfg replication.BinlogSyncerConfig // used by sharding group to re-consume DMLs
 
 	// TODO: extract to interface?
 	syncer      *replication.BinlogSyncer
@@ -111,7 +116,8 @@ type Syncer struct {
 	filter       *filter.Filter
 	skipDMLRules *SkipDMLRules
 
-	lastSlaveConnectionID uint32
+	sgk        *ShardingGroupKeeper
+	checkpoint CheckPoint
 
 	unitType pb.UnitType
 
@@ -123,7 +129,6 @@ type Syncer struct {
 func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer := new(Syncer)
 	syncer.cfg = cfg
-	syncer.meta = NewLocalMeta(cfg.Meta, cfg.Flavor)
 	syncer.jobsClosed.Set(true) // not open yet
 	syncer.closed.Set(false)
 	syncer.lastCount.Set(0)
@@ -140,6 +145,8 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 		IgnoreTables: cfg.IgnoreTables,
 	}
 	syncer.filter = filter.New(rules)
+	syncer.sgk = NewShardingGroupKeeper()
+	syncer.checkpoint = NewRemoteCheckPoint(cfg, syncer.checkpointID())
 
 	syncer.syncCfg = replication.BinlogSyncerConfig{
 		ServerID:       uint32(syncer.cfg.ServerID),
@@ -151,6 +158,11 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 		UseDecimal:     true,
 		VerifyChecksum: syncer.cfg.VerifyChecksum,
 	}
+	// for sharding group's config, we should use a different ServerID
+	// now, use 2**32 -1 - config's ServerID simply
+	// maybe we can refactor to remove RemoteBinlog support in DM
+	syncer.shardingSyncCfg = syncer.syncCfg
+	syncer.shardingSyncCfg.ServerID = math.MaxUint32 - syncer.syncCfg.ServerID
 
 	syncer.binlogType = toBinlogType(cfg.BinlogType)
 	return syncer
@@ -184,12 +196,7 @@ func (s *Syncer) Type() pb.UnitType {
 // if fail, it should not call s.Close.
 // some check may move to checker later.
 func (s *Syncer) Init() error {
-	err := s.meta.Load()
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	err = s.createDBs()
+	err := s.createDBs()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -205,6 +212,64 @@ func (s *Syncer) Init() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+
+	err = s.initShardingGroups()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	err = s.checkpoint.Init(s.cfg)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
+}
+
+// initShardingGroups initializes sharding groups according to source MySQL, filter rules and router rules
+// NOTE: now we don't support modify router rules after task has started
+func (s *Syncer) initShardingGroups() error {
+	// fetch tables from source and filter them
+	sourceTables, err := s.fetchAllDoTables()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	// convert according to router rules
+	// target-schema -> target-table -> source-IDs
+	mapper := make(map[string]map[string][]string, len(sourceTables))
+	for schema, tables := range sourceTables {
+		for _, table := range tables {
+			targetSchema, targetTable := s.renameShardingSchema(schema, table)
+			if targetSchema == schema && targetTable == table {
+				continue // no need do sharding merge
+			}
+			mSchema, ok := mapper[targetSchema]
+			if !ok {
+				mapper[targetSchema] = make(map[string][]string, len(tables))
+				mSchema = mapper[targetSchema]
+			}
+			_, ok = mSchema[targetTable]
+			if !ok {
+				mSchema[targetTable] = make([]string, 0, len(tables))
+			}
+			ID, _ := GenTableID(schema, table)
+			mSchema[targetTable] = append(mSchema[targetTable], ID)
+		}
+	}
+
+	// add sharding group
+	for targetSchema, mSchema := range mapper {
+		for targetTable, sourceIDs := range mSchema {
+			err := s.sgk.AddGroup(targetSchema, targetTable, sourceIDs, false)
+			if err != nil {
+				return errors.Trace(err)
+			}
+		}
+	}
+
+	log.Debugf("[syncer] initial sharding groups(%d): %v", len(s.sgk.Groups()), s.sgk.Groups())
+
 	return nil
 }
 
@@ -216,9 +281,8 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	if s.binlogType == RemoteBinlog {
 		// create new binlog-syncer
 		if s.syncer != nil {
-			s.syncer.Close()
+			s.closeBinlogSyncer(s.syncer)
 		}
-
 		s.syncer = replication.NewBinlogSyncer(s.syncCfg)
 	} else if s.binlogType == LocalBinlog {
 		s.localReader = streamer.NewBinlogReader(&streamer.BinlogReaderConfig{BinlogDir: s.cfg.RelayDir})
@@ -283,7 +347,7 @@ func (s *Syncer) getServerUUID() (string, error) {
 	return getServerUUID(s.fromDB)
 }
 
-func (s *Syncer) getMasterStatus() (mysql.Position, gtid.GTIDSet, error) {
+func (s *Syncer) getMasterStatus() (mysql.Position, gtid.Set, error) {
 	return utils.GetMasterStatus(s.fromDB, s.cfg.Flavor)
 }
 
@@ -346,6 +410,8 @@ func (s *Syncer) addCount(tp opType, n int64) {
 		// ignore xid jobs
 	case flush:
 		sqlJobsTotal.WithLabelValues("flush").Add(float64(n))
+	case skip:
+		// ignore skip jobs
 	default:
 		log.Warnf("unknown optype %v", tp)
 	}
@@ -358,7 +424,7 @@ func (s *Syncer) checkWait(job *job) bool {
 		return true
 	}
 
-	if s.meta.Check() {
+	if s.checkpoint.CheckGlobalPoint() {
 		return true
 	}
 
@@ -368,7 +434,8 @@ func (s *Syncer) checkWait(job *job) bool {
 func (s *Syncer) addJob(job *job) error {
 	switch job.tp {
 	case xid:
-		return s.meta.Save(job.pos, job.gtidSet, false)
+		s.checkpoint.SaveGlobalPoint(s.sgk.AdjustGlobalPoint(job.pos))
+		return nil
 	case ddl:
 		// wait 3 seconds? refine it later
 		// while meet ddl, we should wait all dmls finished firstly
@@ -380,8 +447,8 @@ func (s *Syncer) addJob(job *job) error {
 			s.jobs[i] <- job
 		}
 		s.jobWg.Wait()
-		err := s.meta.Flush()
-		return errors.Trace(err)
+		// flush all checkpoints except tables which are in syncing for sharding group
+		return errors.Trace(s.checkpoint.FlushPointsExcept(s.sgk.InSyncingTables()))
 	}
 
 	if len(job.sql) > 0 {
@@ -396,12 +463,23 @@ func (s *Syncer) addJob(job *job) error {
 
 	wait := s.checkWait(job)
 	if wait {
+		// TODO: detect whether errors occurred, and rollback checkpoints if errors occurred
+		// when recovering the sync from error, safe-mode should be enabled
 		s.jobWg.Wait()
 		s.c.reset()
 	}
 
-	err := s.meta.Save(job.pos, job.gtidSet, wait)
-	return errors.Trace(err)
+	// save global and table's checkpoint of current job
+	s.checkpoint.SaveGlobalPoint(s.sgk.AdjustGlobalPoint(job.pos))
+	if job.tp != skip {
+		s.checkpoint.SaveTablePoint(job.sourceSchema, job.sourceTable, job.pos)
+	}
+
+	if wait {
+		// flush all checkpoints except tables which are in syncing for sharding group
+		return errors.Trace(s.checkpoint.FlushPointsExcept(s.sgk.InSyncingTables()))
+	}
+	return nil
 }
 
 func (s *Syncer) sync(ctx context.Context, db *sql.DB, jobChan chan *job) {
@@ -409,8 +487,7 @@ func (s *Syncer) sync(ctx context.Context, db *sql.DB, jobChan chan *job) {
 
 	idx := 0
 	count := s.cfg.Batch
-	sqls := make([]string, 0, count)
-	args := make([][]interface{}, 0, count)
+	jobs := make([]*job, 0, count)
 	lastSyncTime := time.Now()
 	tpCnt := make(map[opType]int64)
 
@@ -420,8 +497,7 @@ func (s *Syncer) sync(ctx context.Context, db *sql.DB, jobChan chan *job) {
 		}
 
 		idx = 0
-		sqls = sqls[0:0]
-		args = args[0:0]
+		jobs = jobs[0:0]
 		lastSyncTime = time.Now()
 		for tpName, v := range tpCnt {
 			s.addCount(tpName, v)
@@ -434,6 +510,20 @@ func (s *Syncer) sync(ctx context.Context, db *sql.DB, jobChan chan *job) {
 		s.runFatalChan <- unit.NewProcessError(errType, errors.ErrorStack(err))
 	}
 
+	executeSQLs := func() error {
+		if len(jobs) == 0 {
+			return nil
+		}
+		sqls := make([]string, 0, len(jobs))
+		args := make([][]interface{}, 0, len(jobs))
+		for _, job := range jobs {
+			sqls = append(sqls, job.sql)
+			args = append(args, job.args)
+		}
+		err := executeSQL(db, sqls, args, s.cfg.MaxRetry)
+		return errors.Trace(err)
+	}
+
 	var err error
 	for {
 		select {
@@ -444,34 +534,50 @@ func (s *Syncer) sync(ctx context.Context, db *sql.DB, jobChan chan *job) {
 			idx++
 
 			if job.tp == ddl {
-				err = executeSQL(db, sqls, args, s.cfg.MaxRetry)
+				err = executeSQLs()
 				if err != nil {
 					fatalF(err, pb.ErrorType_ExecSQL)
 					continue
 				}
 
-				// executes DDL SQL
-				err = executeSQL(db, []string{job.sql}, [][]interface{}{job.args}, s.cfg.MaxRetry)
+				// for DDL sharding group, executes DDL SQL, and update all tables' checkpoint in the sharding group in the same txn
+				sGroup := s.sgk.Group(job.targetSchema, job.targetTable)
+				cpSQLs, cpArgs := s.genUpdateCheckPointSQLs(sGroup)
+				sqls := make([]string, 0, len(cpSQLs)+1)
+				sqls = append(sqls, job.sql)
+				sqls = append(sqls, cpSQLs...)
+				args := make([][]interface{}, 0, len(cpArgs)+1)
+				args = append(args, job.args)
+				args = append(args, cpArgs...)
+				err = executeSQL(db, sqls, args, s.cfg.MaxRetry)
 				if err != nil {
 					if !ignoreDDLError(err) {
 						fatalF(err, pb.ErrorType_ExecSQL)
 						continue
-					} else {
+					} else if len(cpSQLs) > 0 {
 						log.Warnf("[ignore ddl error][sql]%s[args]%v[error]%v", job.sql, job.args, err)
+						// try update checkpoint again when some cases like: CREATE TABLE returns already exists
+						err = executeSQL(db, cpSQLs, cpArgs, s.cfg.MaxRetry)
+						if err != nil {
+							log.Warnf("[syncer] update checkpoint error %v", errors.ErrorStack(err))
+						}
 					}
+				}
+				if sGroup != nil {
+					s.checkpoint.UpdateFlushedPoint(sGroup.Tables()) // also need to update the flushed point
+					sGroup.Reset()                                   // reset for next round sharding DDL syncing
 				}
 
 				tpCnt[job.tp]++
 				clearF()
 
 			} else if job.tp != flush {
-				sqls = append(sqls, job.sql)
-				args = append(args, job.args)
+				jobs = append(jobs, job)
 				tpCnt[job.tp]++
 			}
 
 			if idx >= count || job.tp == flush {
-				err = executeSQL(db, sqls, args, s.cfg.MaxRetry)
+				err = executeSQLs()
 				if err != nil {
 					fatalF(err, pb.ErrorType_ExecSQL)
 					continue
@@ -482,7 +588,7 @@ func (s *Syncer) sync(ctx context.Context, db *sql.DB, jobChan chan *job) {
 		default:
 			now := time.Now()
 			if now.Sub(lastSyncTime) >= maxWaitTime {
-				err = executeSQL(db, sqls, args, s.cfg.MaxRetry)
+				err = executeSQLs()
 				if err != nil {
 					fatalF(err, pb.ErrorType_ExecSQL)
 					continue
@@ -495,19 +601,28 @@ func (s *Syncer) sync(ctx context.Context, db *sql.DB, jobChan chan *job) {
 	}
 }
 
+func (s *Syncer) genUpdateCheckPointSQLs(group *ShardingGroup) ([]string, [][]interface{}) {
+	if group == nil {
+		return []string{}, [][]interface{}{}
+	}
+	tables := group.Tables()
+	return s.checkpoint.GenUpdateForTableSQLs(tables)
+}
+
 // Run starts running for sync, we should guarantee it can rerun when paused.
 func (s *Syncer) Run(ctx context.Context) (err error) {
 	defer func() {
 		close(s.done)
 	}()
 
-	streamer, err := s.getBinlogStreamer()
-	if err != nil {
-		return errors.Trace(err)
+	pos := s.checkpoint.GlobalPoint()
+	var globalStreamer streamer.Streamer
+	if s.binlogType == RemoteBinlog {
+		globalStreamer, err = s.getBinlogStreamer(s.syncer, pos)
+	} else if s.binlogType == LocalBinlog {
+		globalStreamer, err = s.getBinlogStreamer(s.localReader, pos)
 	}
 
-	pos := s.meta.Pos()
-	gs, err := s.meta.GTID()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -515,21 +630,21 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	for i := 0; i < s.cfg.WorkerCount; i++ {
 		s.wg.Add(1)
 		go func(i int) {
-			ctx, cancel := context.WithCancel(ctx)
-			s.sync(ctx, s.toDBs[i], s.jobs[i])
+			ctx2, cancel := context.WithCancel(ctx)
+			s.sync(ctx2, s.toDBs[i], s.jobs[i])
 			cancel()
 		}(i)
 	}
 	s.wg.Add(1)
 	go func() {
-		ctx, cancel := context.WithCancel(ctx)
-		s.sync(ctx, s.ddlDB, s.jobs[s.cfg.WorkerCount])
+		ctx2, cancel := context.WithCancel(ctx)
+		s.sync(ctx2, s.ddlDB, s.jobs[s.cfg.WorkerCount])
 		cancel()
 	}()
 	s.wg.Add(1)
 	go func() {
-		ctx, cancel := context.WithCancel(ctx)
-		s.printStatus(ctx)
+		ctx2, cancel := context.WithCancel(ctx)
+		s.printStatus(ctx2)
 		cancel()
 	}()
 
@@ -548,9 +663,70 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	s.start = time.Now()
 	s.lastTime = s.start
 	tryReSync := true
+
+	// syncing progress with sharding DDL group
+	// 1. use the global streamer to sync regular binlog events
+	// 2. sharding DDL synced for some sharding groups
+	//    * record first pos, last pos, target schema, target table as re-sync info
+	// 3. use the re-sync info recorded in step.2 to create a new streamer
+	// 4. use the new streamer re-syncing for this sharding group
+	// 5. in sharding group's re-syncing
+	//    * ignore other tables' binlog events
+	//    * compare last pos with current binlog's pos to determine whether re-sync completed
+	// 6. use the global streamer to continue the syncing
+	var (
+		shardingSyncer   *replication.BinlogSyncer
+		shardingReader   *streamer.BinlogReader
+		shardingStreamer streamer.Streamer
+		shardingReSyncCh = make(chan *ShardingReSync, 10)
+		shardingReSync   *ShardingReSync
+	)
+
+	closeShardingSyncer := func() {
+		if shardingSyncer != nil {
+			s.closeBinlogSyncer(shardingSyncer)
+			shardingSyncer = nil
+		}
+		if shardingReader != nil {
+			shardingReader.Close()
+			shardingReader = nil
+		}
+		shardingStreamer = nil
+		shardingReSync = nil
+	}
+	defer func() {
+		// NOTE: maybe we can try to update global checkpoint here as an optimization
+		// NOTE: if DROP DATABASE / TABLE synced, we can remove the group as an optimization
+		closeShardingSyncer()
+	}()
+
 	for {
-		ctx, cancel := context.WithTimeout(ctx, eventTimeout)
-		e, err := streamer.GetEvent(ctx)
+		// if there are sharding groups need to re-sync previous ignored DMLs, we use another special streamer
+		if shardingStreamer == nil && len(shardingReSyncCh) > 0 {
+			// some sharding groups need to re-syncing
+			shardingReSync = <-shardingReSyncCh
+			if s.binlogType == RemoteBinlog {
+				shardingSyncer = replication.NewBinlogSyncer(s.shardingSyncCfg)
+				shardingStreamer, err = s.getBinlogStreamer(shardingSyncer, shardingReSync.currPos)
+			} else if s.binlogType == LocalBinlog {
+				shardingReader = streamer.NewBinlogReader(&streamer.BinlogReaderConfig{BinlogDir: s.cfg.RelayDir})
+				shardingStreamer, err = s.getBinlogStreamer(shardingReader, shardingReSync.currPos)
+			}
+			log.Debugf("[syncer] start using a sharding group special streamer %v to re-sync DMLs with info %v", shardingStreamer, shardingReSync)
+		}
+
+		var (
+			e   *replication.BinlogEvent
+			err error
+		)
+
+		ctx2, cancel := context.WithTimeout(ctx, eventTimeout)
+		if shardingStreamer != nil {
+			// use sharding group's special streamer to get binlog event
+			e, err = shardingStreamer.GetEvent(ctx2)
+		} else {
+			e, err = globalStreamer.GetEvent(ctx2)
+		}
 		cancel()
 
 		if err == context.Canceled {
@@ -560,7 +736,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			log.Info("deadline exceeded.")
 			if s.needResync() {
 				log.Info("timeout, resync")
-				streamer, err = s.reopenWithRetry(s.syncCfg)
+				if shardingStreamer != nil {
+					shardingStreamer, err = s.reopenWithRetry(s.shardingSyncCfg)
+				} else {
+					globalStreamer, err = s.reopenWithRetry(s.syncCfg)
+				}
 				if err != nil {
 					return errors.Trace(err)
 				}
@@ -573,7 +753,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			// try to re-sync in gtid mode
 			if tryReSync && s.cfg.EnableGTID && isBinlogPurgedError(err) && s.cfg.AutoFixGTID {
 				time.Sleep(retryTimeout)
-				streamer, err = s.reSyncBinlog(s.syncCfg)
+				if shardingStreamer != nil {
+					shardingStreamer, err = s.reSyncBinlog(s.shardingSyncCfg)
+				} else {
+					globalStreamer, err = s.reSyncBinlog(s.syncCfg)
+				}
 				if err != nil {
 					return errors.Trace(err)
 				}
@@ -586,37 +770,78 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		// get binlog event, reset tryReSync, so we can re-sync binlog while syncer meets errors next time
 		tryReSync = true
 		binlogPos.WithLabelValues("syncer").Set(float64(e.Header.LogPos))
-		binlogFile.WithLabelValues("syncer").Set(getBinlogIndex(s.meta.Pos().Name))
+		binlogFile.WithLabelValues("syncer").Set(getBinlogIndex(pos.Name))
 
 		switch ev := e.Event.(type) {
 		case *replication.RotateEvent:
-			binlogEventsTotal.WithLabelValues("rotate").Inc()
 			currentPos := mysql.Position{
 				Name: string(ev.NextLogName),
 				Pos:  uint32(ev.Position),
 			}
+			if shardingReSync != nil {
+				if currentPos.Name > shardingReSync.currPos.Name {
+					shardingReSync.currPos = currentPos
+				}
+				if shardingReSync.currPos.Compare(shardingReSync.lastPos) >= 0 {
+					log.Infof("[syncer] sharding group %v re-syncing completed", shardingReSync)
+					closeShardingSyncer()
+				} else {
+					log.Debugf("[syncer] rotate binlog to %v when re-syncing sharding group %v", currentPos, shardingReSync)
+				}
+				continue
+			}
+			binlogEventsTotal.WithLabelValues("rotate").Inc()
 			if currentPos.Name > pos.Name {
 				pos = currentPos
-				err = s.meta.Save(pos, gs, true)
-				if err != nil {
-					return errors.Trace(err)
-				}
 			}
 			log.Infof("rotate binlog to %v", currentPos)
 		case *replication.RowsEvent:
 			// binlogEventsTotal.WithLabelValues("type", "rows").Add(1)
 			schemaName, tableName := s.renameShardingSchema(string(ev.Table.Schema), string(ev.Table.Table))
-			log.Debugf("source-db:%s table:%s; target-db:%s table:%s, RowsEvent data: %v", ev.Table.Schema, ev.Table.Table, schemaName, tableName, ev.Rows)
+			// always add current event's pos to the job, and save it to DB combine with event data in the same txn
+			currentPos := mysql.Position{
+				Name: pos.Name,
+				Pos:  e.Header.LogPos,
+			}
+
+			if shardingReSync != nil {
+				shardingReSync.currPos.Pos = e.Header.LogPos
+				currentPos = shardingReSync.currPos
+				if shardingReSync.currPos.Compare(shardingReSync.lastPos) >= 0 {
+					log.Infof("[syncer] sharding group %v re-syncing completed", shardingReSync)
+					closeShardingSyncer()
+					continue
+				}
+				if shardingReSync.targetSchema != schemaName || shardingReSync.targetTable != tableName {
+					// in re-syncing, ignore non current sharding group's events
+					log.Debugf("[syncer] skip row event when re-syncing sharding group %v", shardingReSync)
+					continue
+				}
+				if !s.checkpoint.IsNewerTablePoint(string(ev.Table.Schema), string(ev.Table.Table), currentPos) {
+					log.Debugf("[syncer] skip obsolete row event when re-syncing sharding group %+v", shardingReSync)
+					continue
+				}
+			}
+
+			log.Debugf("source-db:%s table:%s; target-db:%s table:%s, pos: %v, RowsEvent data: %v", ev.Table.Schema, ev.Table.Table, schemaName, tableName, currentPos, ev.Rows)
 
 			table := &table{}
 			if s.skipRowEvent(schemaName, tableName, e.Header.EventType) {
 				binlogSkippedEventsTotal.WithLabelValues("rows").Inc()
-				if err = s.recordSkipSQLsPos(insert, pos, gs); err != nil {
+				if err = s.recordSkipSQLsPos(currentPos, nil); err != nil {
 					return errors.Trace(err)
 				}
 
 				continue
 			}
+
+			source, _ := GenTableID(string(ev.Table.Schema), string(ev.Table.Table))
+			if s.sgk.InSyncing(schemaName, tableName, source) {
+				// current source is in sharding DDL syncing, ignore DML
+				log.Debugf("[syncer] source %s is in sharding DDL syncing, ignore Rows event %v", source, currentPos)
+				continue
+			}
+
 			table, err = s.getTable(schemaName, tableName)
 			if err != nil {
 				return errors.Trace(err)
@@ -633,11 +858,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 				sqls, keys, args, err = genInsertSQLs(table.schema, table.name, ev.Rows, table.columns, table.indexColumns)
 				if err != nil {
-					return errors.Errorf("gen insert sqls failed: %v, schema: %s, table: %s", err, table.schema, table.name)
+					return errors.Errorf("gen insert sqls failed: %v, schema: %s, table: %s", errors.Trace(err), table.schema, table.name)
 				}
 
 				for i := range sqls {
-					err = s.commitJob(insert, sqls[i], args[i], keys[i], true, pos, gs)
+					err = s.commitJob(insert, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], args[i], keys[i], true, currentPos, nil)
 					if err != nil {
 						return errors.Trace(err)
 					}
@@ -651,7 +876,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 
 				for i := range sqls {
-					err = s.commitJob(update, sqls[i], args[i], keys[i], true, pos, gs)
+					err = s.commitJob(update, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], args[i], keys[i], true, currentPos, nil)
 					if err != nil {
 						return errors.Trace(err)
 					}
@@ -665,13 +890,25 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 
 				for i := range sqls {
-					err = s.commitJob(del, sqls[i], args[i], keys[i], true, pos, gs)
+					err = s.commitJob(del, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], args[i], keys[i], true, currentPos, nil)
 					if err != nil {
 						return errors.Trace(err)
 					}
 				}
 			}
 		case *replication.QueryEvent:
+			if shardingReSync != nil {
+				shardingReSync.currPos.Pos = e.Header.LogPos
+				if shardingReSync.currPos.Compare(shardingReSync.lastPos) >= 0 {
+					log.Infof("[syncer] sharding group %v re-syncing completed", shardingReSync)
+					closeShardingSyncer()
+				} else {
+					// in re-syncing, we can simply skip all DDLs
+					log.Debugf("[syncer] skip query event when re-syncing sharding group %v", shardingReSync)
+				}
+				continue
+			}
+
 			binlogEventsTotal.WithLabelValues("query").Inc()
 
 			sql := strings.TrimSpace(string(ev.Query))
@@ -680,7 +917,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				Pos:  e.Header.LogPos,
 			}
 
-			log.Infof("[query]%s [current pos]%v [next pos]%v [current gtid set]%v [next gtid set]%v", sql, pos, nextPos, gs, ev.GSet)
+			log.Infof("[query]%s [current pos]%v [next pos]%v [next gtid set]%v", sql, pos, nextPos, ev.GSet)
 			sqls, err := resolveDDLSQL(sql)
 			if err != nil {
 				if s.skipQueryEvent(sql) {
@@ -693,7 +930,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 
 			if len(sqls) > 0 {
-				gs.Set(ev.GSet)
 				pos = nextPos
 			}
 			for _, sql := range sqls {
@@ -710,7 +946,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 				if s.skipQueryDDL(sql, tableNames[1]) {
 					binlogSkippedEventsTotal.WithLabelValues("query_ddl").Inc()
-					if err = s.recordSkipSQLsPos(ddl, pos, gs); err != nil {
+					if err = s.recordSkipSQLsPos(pos, nil); err != nil {
 						return errors.Trace(err)
 					}
 
@@ -718,41 +954,112 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					continue
 				}
 
-				sql, err = genDDLSQL(sql, tableNames[0], tableNames[1])
+				// for DDL, we wait it to be executed, so we can check if event is newer in this syncer's main process goroutine
+				// ignore obsolete DDL here can avoid to try-sync again for already synced DDLs
+				if !s.checkpoint.IsNewerTablePoint(tableNames[0][0].Schema, tableNames[0][0].Name, pos) {
+					log.Debugf("[syncer] ignore obsolete DDL %s in pos %v", sql, pos)
+					continue
+				}
+
+				stmt, err := parseDDLSQL(sql)
+				if err != nil {
+					return errors.Trace(err)
+				}
+				sqlDDL, err := genDDLSQL(sql, stmt, tableNames[0], tableNames[1])
 				if err != nil {
 					return errors.Trace(err)
 				}
 
-				log.Infof("[ddl][schema]%s [start]%s", string(ev.Schema), sql)
+				switch stmt.(type) {
+				// TODO zxc: add RENAME TABLE support when online DDL can be solved
+				// TODO zxc: add DROP / CREATE SCHEMA support after RENAME TABLE solved
+				case *ast.CreateTableStmt:
+					if tableNames[0][0].Schema != tableNames[1][0].Schema || tableNames[0][0].Name != tableNames[1][0].Name {
+						// for CREATE TABLE, we add it to group
+						sourceID, _ := GenTableID(tableNames[0][0].Schema, tableNames[0][0].Name)
+						err = s.sgk.AddGroup(tableNames[1][0].Schema, tableNames[1][0].Name, []string{sourceID}, true)
+						if err != nil {
+							return errors.Trace(err)
+						}
+						log.Debugf("[syncer] add table %s to sharding group", sourceID)
+					}
+				case *ast.CreateDatabaseStmt:
+					// for CREATE DATABASE, we do nothing. when CREATE TABLE under this DATABASE, sharding groups will be added
+				default:
+					// try to handle sharding DDLs
+					source, _ := GenTableID(tableNames[0][0].Schema, tableNames[0][0].Name)
+					// for sharding DDL, the firstPos should be the `Pos` of the binlog, not the `End_log_pos`
+					// so when restarting before sharding DDLs synced, this binlog can be re-sync again to trigger the TrySync
+					startPos := mysql.Position{
+						Name: pos.Name,
+						Pos:  pos.Pos - e.Header.EventSize,
+					}
+					inSharding, group, synced, remain := s.sgk.TrySync(tableNames[1][0].Schema, tableNames[1][0].Name, source, startPos)
+					if inSharding {
+						log.Debugf("[syncer] query event %v for source %v is in sharding, synced: %v, remain: %d", startPos, source, synced, remain)
+						// save checkpoint in memory, don't worry, if error occurred, we can rollback it
+						// for non-last sharding DDL's table, this checkpoint will be used to skip binlog event when re-syncing
+						// NOTE: when last sharding DDL executed, all this checkpoints will be flushed in the same txn
+						s.checkpoint.SaveTablePoint(tableNames[0][0].Schema, tableNames[0][0].Name, pos)
+						if !synced {
+							log.Debugf("[syncer] source %s is in sharding DDL syncing, ignore DDL %v", source, startPos)
+							continue
+						}
+						log.Debugf("[syncer] source %s sharding group synced in pos %v", source, startPos)
+						// maybe multi-groups' sharding DDL synced in this for-loop (one query-event, multi tables)
+						if cap(shardingReSyncCh) < len(sqls) {
+							shardingReSyncCh = make(chan *ShardingReSync, len(sqls))
+						}
+						shardingReSyncCh <- &ShardingReSync{
+							currPos:      mysql.Position{Name: group.firstPos.Name, Pos: group.firstPos.Pos},
+							lastPos:      pos,
+							targetSchema: tableNames[1][0].Schema,
+							targetTable:  tableNames[1][0].Name,
+						}
+					}
+				}
 
-				job := newJob(ddl, sql, nil, "", false, pos, gs)
+				log.Infof("[ddl][schema]%s [start]%s", string(ev.Schema), sqlDDL)
+
+				job := newJob(ddl, tableNames[0][0].Schema, tableNames[0][0].Name, tableNames[1][0].Schema, tableNames[1][0].Name, sqlDDL, nil, "", false, pos, nil)
 				err = s.addJob(job)
 				if err != nil {
 					return errors.Trace(err)
 				}
 
-				log.Infof("[ddl][end]%s", sql)
+				log.Infof("[ddl][end]%s", sqlDDL)
 
 				s.clearTables()
 			}
 		case *replication.XIDEvent:
+			if shardingReSync != nil {
+				shardingReSync.currPos.Pos = e.Header.LogPos
+				if shardingReSync.currPos.Compare(shardingReSync.lastPos) >= 0 {
+					log.Infof("[syncer] sharding group %v re-syncing completed", shardingReSync)
+					closeShardingSyncer()
+				} else {
+					// in re-syncing, ignore xid event
+					log.Debugf("[syncer] skip xid event when re-syncing sharding group %v", shardingReSync)
+				}
+				continue
+			}
+
 			pos.Pos = e.Header.LogPos
-			gs.Set(ev.GSet)
 
-			log.Debugf("[XID event][pos]%v [gtid set]%v", pos, gs)
+			log.Debugf("[XID event][pos]%v [gtid set]%v", pos, ev.GSet)
 
-			job := newXIDJob(pos, gs)
+			job := newXIDJob(pos, nil)
 			s.addJob(job)
 		}
 	}
 }
 
-func (s *Syncer) commitJob(tp opType, sql string, args []interface{}, keys []string, retry bool, pos mysql.Position, gs gtid.GTIDSet) error {
+func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, retry bool, pos mysql.Position, gs gtid.Set) error {
 	key, err := s.resolveCasuality(keys)
 	if err != nil {
 		return errors.Errorf("resolve karam error %v", err)
 	}
-	job := newJob(tp, sql, args, key, retry, pos, gs)
+	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, retry, pos, gs)
 	err = s.addJob(job)
 	return errors.Trace(err)
 }
@@ -848,7 +1155,7 @@ func (s *Syncer) printStatus(ctx context.Context) {
 	var (
 		err                 error
 		latestMasterPos     mysql.Position
-		latestmasterGTIDSet gtid.GTIDSet
+		latestmasterGTIDSet gtid.Set
 	)
 
 	for {
@@ -877,8 +1184,8 @@ func (s *Syncer) printStatus(ctx context.Context) {
 				binlogFile.WithLabelValues("master").Set(getBinlogIndex(latestMasterPos.Name))
 			}
 
-			log.Infof("[syncer]total events = %d, total tps = %d, recent tps = %d, master-binlog = %v, master-binlog-gtid=%v, %s",
-				total, totalTps, tps, latestMasterPos, latestmasterGTIDSet, s.meta)
+			log.Infof("[syncer]total events = %d, total tps = %d, recent tps = %d, master-binlog = %v, master-binlog-gtid=%v, syncer-binlog =%v",
+				total, totalTps, tps, latestMasterPos, latestmasterGTIDSet, s.checkpoint.GlobalPoint())
 
 			s.lastCount.Set(total)
 			s.lastTime = time.Now()
@@ -888,39 +1195,37 @@ func (s *Syncer) printStatus(ctx context.Context) {
 	}
 }
 
-func (s *Syncer) getBinlogStreamer() (streamer.Streamer, error) {
+// NOTE: refactor with remote and local streamer later
+func (s *Syncer) getBinlogStreamer(syncerOrReader interface{}, pos mysql.Position) (streamer.Streamer, error) {
 	if s.binlogType == RemoteBinlog {
-		return s.getRemoteBinlogStreamer()
+		return s.getRemoteBinlogStreamer(syncerOrReader, pos)
 	}
-	return s.getLocalBinlogStreamer()
+	return s.getLocalBinlogStreamer(syncerOrReader, pos)
 }
 
-func (s *Syncer) getLocalBinlogStreamer() (streamer.Streamer, error) {
-	return s.localReader.StartSync(s.meta.Pos())
+func (s *Syncer) getLocalBinlogStreamer(syncerOrReader interface{}, pos mysql.Position) (streamer.Streamer, error) {
+	reader, ok := syncerOrReader.(*streamer.BinlogReader)
+	if !ok {
+		return nil, errors.NotValidf("BinlogReader %v", syncerOrReader)
+	}
+	return reader.StartSync(pos)
 }
 
-func (s *Syncer) getRemoteBinlogStreamer() (streamer.Streamer, error) {
+func (s *Syncer) getRemoteBinlogStreamer(syncerOrReader interface{}, pos mysql.Position) (streamer.Streamer, error) {
+	syncer, ok := syncerOrReader.(*replication.BinlogSyncer)
+	if !ok {
+		return nil, errors.NotValidf("replication.BinlogSyncer %v", syncerOrReader)
+	}
 	defer func() {
-		s.lastSlaveConnectionID = s.syncer.LastConnectionID()
-		log.Infof("[syncer] last slave connection id %d", s.lastSlaveConnectionID)
+		lastSlaveConnectionID := syncer.LastConnectionID()
+		log.Infof("[syncer] last slave connection id %d", lastSlaveConnectionID)
 	}()
 	if s.cfg.EnableGTID {
-		gs, err := s.meta.GTID()
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-
-		streamer, err := s.syncer.StartSyncGTID(gs.Origin())
-		if err != nil {
-			log.Errorf("start sync in gtid mode error %v", err)
-			return s.startSyncByPosition()
-		}
-
-		return streamer, errors.Trace(err)
+		// NOTE: our (per-table based) checkpoint does not support GTID yet
+		return nil, errors.New("[syncer] now support GTID mode yet")
 	}
 
-	return s.startSyncByPosition()
-
+	return s.startSyncByPosition(syncer, pos)
 }
 
 func (s *Syncer) createDBs() error {
@@ -946,14 +1251,14 @@ func (s *Syncer) createDBs() error {
 
 // record skip ddl/dml sqls' position
 // make newJob's sql argument empty to distinguish normal sql and skips sql
-func (s *Syncer) recordSkipSQLsPos(op opType, pos mysql.Position, gtidSet gtid.GTIDSet) error {
-	job := newJob(op, "", nil, "", false, pos, gtidSet)
+func (s *Syncer) recordSkipSQLsPos(pos mysql.Position, gtidSet gtid.Set) error {
+	job := newSkipJob(pos, gtidSet)
 	err := s.addJob(job)
 	return errors.Trace(err)
 }
 
 func (s *Syncer) flushJobs() error {
-	log.Infof("flush all jobs meta = %v", s.meta)
+	log.Infof("flush all jobs, global checkpoint = %v", s.checkpoint.GlobalPoint())
 	job := newFlushJob()
 	err := s.addJob(job)
 	return errors.Trace(err)
@@ -985,24 +1290,21 @@ func (s *Syncer) reopenWithRetry(cfg replication.BinlogSyncerConfig) (streamer s
 }
 
 func (s *Syncer) reopen(cfg replication.BinlogSyncerConfig) (streamer.Streamer, error) {
-	s.syncer.Close()
-	log.Infof("[syncer] killing connectionid %d", s.lastSlaveConnectionID)
-	// kill last slave connection by `KILL [id]`
-	if s.lastSlaveConnectionID > 0 {
-		err := killConn(s.fromDB, s.lastSlaveConnectionID)
+	if s.syncer != nil {
+		err := s.closeBinlogSyncer(s.syncer)
+		s.syncer = nil
 		if err != nil {
-			if !isNoSuchThreadError(err) {
-				return nil, errors.Trace(err)
-			}
+			return nil, errors.Trace(err)
 		}
 	}
 
+	// TODO: refactor to support relay
 	s.syncer = replication.NewBinlogSyncer(cfg)
-	return s.getBinlogStreamer()
+	return s.getBinlogStreamer(s.syncer, s.checkpoint.GlobalPoint())
 }
 
-func (s *Syncer) startSyncByPosition() (streamer.Streamer, error) {
-	streamer, err := s.syncer.StartSync(s.meta.Pos())
+func (s *Syncer) startSyncByPosition(syncer *replication.BinlogSyncer, pos mysql.Position) (streamer.Streamer, error) {
+	streamer, err := syncer.StartSync(pos)
 	return streamer, errors.Trace(err)
 }
 
@@ -1069,6 +1371,8 @@ func (s *Syncer) Close() {
 	closeDBs(s.toDBs...)
 	closeDBs(s.ddlDB)
 
+	s.checkpoint.Close()
+
 	s.closed.Set(true)
 }
 
@@ -1081,20 +1385,32 @@ func (s *Syncer) stopSync() {
 
 	// before re-write workflow for s.syncer, simply close it
 	// when resuming, re-create s.syncer
-	if s.lastSlaveConnectionID > 0 {
-		err := killConn(s.fromDB, s.lastSlaveConnectionID)
-		if err != nil {
-			log.Errorf("[syncer] kill last connection %d err %v", s.lastSlaveConnectionID, err)
-		}
-		s.lastSlaveConnectionID = 0
-	}
 	if s.syncer != nil {
-		s.syncer.Close()
+		s.closeBinlogSyncer(s.syncer)
 		s.syncer = nil
 	}
 	if s.localReader != nil {
 		s.localReader.Close()
 	}
+}
+
+func (s *Syncer) closeBinlogSyncer(syncer *replication.BinlogSyncer) error {
+	if syncer == nil {
+		return nil
+	}
+
+	lastSlaveConnectionID := syncer.LastConnectionID()
+	defer syncer.Close()
+	if lastSlaveConnectionID > 0 {
+		err := killConn(s.fromDB, lastSlaveConnectionID)
+		if err != nil {
+			log.Errorf("[syncer] kill last connection %d err %v", lastSlaveConnectionID, err)
+			if !isNoSuchThreadError(err) {
+				return errors.Trace(err)
+			}
+		}
+	}
+	return nil
 }
 
 // Pause pauses the process, and it can be resumed later
@@ -1137,21 +1453,21 @@ func (s *Syncer) needResync() bool {
 	// Currently, syncer doesn't handle Format_desc and Previous_gtids events. When binlog rotate to new file with only two events like above,
 	// syncer won't save pos to 194. Actually it save pos 4 to meta file. So We got a experience value of 194 - 4 = 190.
 	// If (mpos.Pos - spos.Pos) > 190, we could say that syncer is not up-to-date.
-	return compareBinlogPos(masterPos, s.meta.Pos(), 190) == 1
+	return compareBinlogPos(masterPos, s.checkpoint.GlobalPoint(), 190) == 1
 }
 
 func (s *Syncer) enableSafeModeInitializationPhase(ctx context.Context) {
 	safeMode.Set(true)
 
 	go func() {
-		ctx, cancel := context.WithCancel(ctx)
+		ctx2, cancel := context.WithCancel(ctx)
 		defer func() {
 			cancel()
 			safeMode.Set(s.cfg.SafeMode)
 		}()
 
 		select {
-		case <-ctx.Done():
+		case <-ctx2.Done():
 		case <-time.After(5 * time.Minute):
 		}
 	}()
@@ -1160,34 +1476,12 @@ func (s *Syncer) enableSafeModeInitializationPhase(ctx context.Context) {
 // assume that reset master before switching to new master, and only the new master would write
 // it's a weak function to try best to fix gtid set while switching master/slave
 func (s *Syncer) retrySyncGTIDs() error {
-	// TODO: now we dont implement quering gtid from mariadb, implement it later
-	if s.cfg.Flavor != mysql.MySQLFlavor {
-		return nil
-	}
-	log.Info("start retry sync gtid, meta %v", s.meta)
-
-	// handle current gtid
-	oldGTIDSet, err := s.meta.GTID()
-	if err != nil {
-		return errors.Trace(err)
-	}
-	log.Infof("old gtid set %v", oldGTIDSet)
-
-	_, newGTIDSet, err := s.getMasterStatus()
-	if err != nil {
-		return errors.Trace(err)
-	}
-	log.Infof("new master gtid set %v", newGTIDSet)
-
-	// find master
-	masterUUID, err := s.getServerUUID()
-	if err != nil {
-		return errors.Trace(err)
-	}
-	log.Infof("master uuid %s", masterUUID)
-
-	oldGTIDSet.Replace(newGTIDSet, []interface{}{masterUUID})
-	// force to save in meta file
-	s.meta.Save(s.meta.Pos(), oldGTIDSet, true)
+	// NOTE: our (per-table based) checkpoint does not support GTID yet, implement it if needed
+	log.Warn("[syncer] our (per-table based) checkpoint does not support GTID yet")
 	return nil
+}
+
+// checkpointID returns ID which used for checkpoint table
+func (s *Syncer) checkpointID() string {
+	return strconv.Itoa(s.cfg.ServerID)
 }

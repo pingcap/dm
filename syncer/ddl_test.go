@@ -81,7 +81,9 @@ func (s *testSyncerSuite) TestGenDDLSQL(c *C) {
 		{"DROP INDEX `idx1` on test", "DROP INDEX `idx1` ON `test`.`test`", "USE `titi`; DROP INDEX `idx1` ON `titi`.`titi`;"},
 	}
 	for _, t := range testCase {
-		sql, err := genDDLSQL(t[0], originTableNameSingle, targetTableNameSingle)
+		stmt, err := parseDDLSQL(t[0])
+		c.Assert(err, IsNil)
+		sql, err := genDDLSQL(t[0], stmt, originTableNameSingle, targetTableNameSingle)
 		c.Assert(err, IsNil)
 		c.Assert(sql, Equals, t[2])
 	}
@@ -92,7 +94,9 @@ func (s *testSyncerSuite) TestGenDDLSQL(c *C) {
 		{"create table test like test1", "create table `test`.`test` like `test1`.`test1`", "USE `titi`; create table `titi`.`titi` like `titi1`.`titi1`;"},
 	}
 	for _, t := range testCase {
-		sql, err := genDDLSQL(t[0], originTableNameDouble, targetTableNameDouble)
+		stmt, err := parseDDLSQL(t[0])
+		c.Assert(err, IsNil)
+		sql, err := genDDLSQL(t[0], stmt, originTableNameDouble, targetTableNameDouble)
 		c.Assert(err, IsNil)
 		c.Assert(sql, Equals, t[2])
 	}

@@ -25,6 +25,7 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/loader"
 	"github.com/pingcap/tidb-enterprise-tools/mydumper"
 	"github.com/pingcap/tidb-enterprise-tools/syncer"
+
 	// hack for glide update, remove it later
 	_ "github.com/pingcap/tidb-tools/pkg/check"
 	_ "github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -140,7 +141,7 @@ func (st *SubTask) fetchResult(ctx context.Context, cancel context.CancelFunc, p
 
 		cu := st.CurrUnit()
 
-		log.Infof("[subtask] %s dm-unit %s process returned with stage %s, status %s", st.cfg.Name, cu.Type(), stage.String(), st.StatusJson())
+		log.Infof("[subtask] %s dm-unit %s process returned with stage %s, status %s", st.cfg.Name, cu.Type(), stage.String(), st.StatusJSON())
 
 		switch stage {
 		case pb.Stage_Finished:
@@ -208,6 +209,7 @@ func (st *SubTask) setStage(stage pb.Stage) {
 	st.stage = stage
 }
 
+// Stage returns the stage of the sub task
 func (st *SubTask) Stage() pb.Stage {
 	st.RLock()
 	defer st.RUnlock()
@@ -220,6 +222,7 @@ func (st *SubTask) setResult(result *pb.ProcessResult) {
 	st.result = result
 }
 
+// Result returns the result of the sub task
 func (st *SubTask) Result() *pb.ProcessResult {
 	st.RLock()
 	defer st.RUnlock()

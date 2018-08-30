@@ -39,6 +39,7 @@ func Init(cfg *common.Config) error {
 	return errors.Trace(common.InitClient(cfg.ServerAddr, cfg.IsWorkerAddr))
 }
 
+// Start starts running a command
 func Start(args []string) {
 	rootCmd := &cobra.Command{
 		Use:   "dmctl",

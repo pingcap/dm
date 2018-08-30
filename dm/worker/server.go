@@ -122,6 +122,7 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 	}, nil
 }
 
+// OperateSubTask implements WorkerServer.OperateSubTask
 func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
 	log.Infof("[server] receive OperateSubTask request %+v", req)
 

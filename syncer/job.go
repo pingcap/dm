@@ -27,6 +27,7 @@ const (
 	ddl
 	xid
 	flush
+	skip // used by Syncer.recordSkipSQLsPos to record global pos, but not execute SQL
 )
 
 func (t opType) String() string {
@@ -43,31 +44,38 @@ func (t opType) String() string {
 		return "xid"
 	case flush:
 		return "flush"
+	case skip:
+		return "skip"
 	}
 
 	return ""
 }
 
 type job struct {
-	tp      opType
-	sql     string
-	args    []interface{}
-	key     string
-	retry   bool
-	pos     mysql.Position
-	gtidSet gtid.GTIDSet
+	tp           opType
+	sourceSchema string
+	sourceTable  string
+	targetSchema string
+	targetTable  string
+	sql          string
+	args         []interface{}
+	key          string
+	retry        bool
+	pos          mysql.Position
+	gtidSet      gtid.Set
 }
 
-func newJob(tp opType, sql string, args []interface{}, key string, retry bool, pos mysql.Position, gtidSet gtid.GTIDSet) *job {
-	var gs gtid.GTIDSet
+// TODO zxc: add RENAME TABLE support
+func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, retry bool, pos mysql.Position, gtidSet gtid.Set) *job {
+	var gs gtid.Set
 	if gtidSet != nil {
 		gs = gtidSet.Clone()
 	}
-	return &job{tp: tp, sql: sql, args: args, key: key, retry: retry, pos: pos, gtidSet: gs}
+	return &job{tp: tp, sourceSchema: sourceSchema, sourceTable: sourceTable, targetSchema: targetSchema, targetTable: targetTable, sql: sql, args: args, key: key, retry: retry, pos: pos, gtidSet: gs}
 }
 
-func newXIDJob(pos mysql.Position, gtidSet gtid.GTIDSet) *job {
-	var gs gtid.GTIDSet
+func newXIDJob(pos mysql.Position, gtidSet gtid.Set) *job {
+	var gs gtid.Set
 	if gtidSet != nil {
 		gs = gtidSet.Clone()
 	}
@@ -76,4 +84,8 @@ func newXIDJob(pos mysql.Position, gtidSet gtid.GTIDSet) *job {
 
 func newFlushJob() *job {
 	return &job{tp: flush}
+}
+
+func newSkipJob(pos mysql.Position, gtidSet gtid.Set) *job {
+	return &job{tp: skip, pos: pos, gtidSet: gtidSet}
 }

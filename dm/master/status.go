@@ -14,12 +14,16 @@
 package master
 
 import (
+	"net/http"
+
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
-	"net/http"
+
+	// used to enable pprof
 	_ "net/http/pprof"
 )
 
+// InitStatus initializes the HTTP status server
 func InitStatus(addr string) {
 	go func() {
 		http.HandleFunc("/status", func(w http.ResponseWriter, req *http.Request) {

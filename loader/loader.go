@@ -347,6 +347,7 @@ func (l *Loader) Init() error {
 	return nil
 }
 
+// Process implements Unit.Process
 func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	newCtx, cancel := context.WithCancel(ctx)
 	defer cancel()

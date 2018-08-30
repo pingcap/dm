@@ -57,7 +57,7 @@ func MasterClient() pb.MasterClient {
 
 // PrintLines adds a wrap to support `\n` within `chzyer/readline`
 func PrintLines(format string, a ...interface{}) {
-	fmt.Println(fmt.Sprintf(format, a))
+	fmt.Println(fmt.Sprintf(format, a...))
 }
 
 // PrettyPrintResponse prints a PRC response prettily

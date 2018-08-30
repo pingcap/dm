@@ -30,6 +30,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 )
 
+// task modes
 const (
 	ModeAll       = "all"
 	ModeFull      = "full"
@@ -243,10 +244,6 @@ func (c *SubTaskConfig) adjust() error {
 
 	if c.MaxRetry == 0 {
 		c.MaxRetry = 1
-	}
-
-	if len(c.Meta) < 1 {
-		c.Meta = fmt.Sprintf("syncer.%s.meta", c.Name)
 	}
 
 	return nil

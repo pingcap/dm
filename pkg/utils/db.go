@@ -3,15 +3,18 @@ package utils
 import (
 	"database/sql"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
+	tmysql "github.com/pingcap/tidb/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 )
 
-func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.GTIDSet, error) {
+// GetMasterStatus gets status from master
+func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, error) {
 	var (
 		binlogPos gmysql.Position
-		gs        gtid.GTIDSet
+		gs        gtid.Set
 	)
 
 	rows, err := db.Query(`SHOW MASTER STATUS`)
@@ -65,4 +68,21 @@ func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.GTIDSet, 
 	}
 
 	return binlogPos, gs, nil
+}
+
+// IsMySQLError checks whether err is IsMySQLError error
+func IsMySQLError(err error, code uint16) bool {
+	err = errors.Cause(err)
+	e, ok := err.(*mysql.MySQLError)
+	return ok && e.Number == code
+}
+
+// IsErrTableNotExists checks whether err is TableNotExists error
+func IsErrTableNotExists(err error) bool {
+	return IsMySQLError(err, tmysql.ErrNoSuchTable)
+}
+
+// IsErrDupEntry checks whether err is DupEntry error
+func IsErrDupEntry(err error) bool {
+	return IsMySQLError(err, tmysql.ErrDupEntry)
 }

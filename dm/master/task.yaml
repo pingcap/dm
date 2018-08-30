@@ -72,6 +72,7 @@ MySQL-instances:             # one or more source database, config more source d
 
     syncer:
       meta: "./data/syncer.meta"
+      syncer-checkpoint-schema: "checkpoint_syncer"
       worker-count: 32
       batch: 2000
       max-retry: 200
@@ -134,6 +135,7 @@ loaders:                     # loader process unit specific configs, mysql insta
 syncers:                     # syncer process unit specific configs, mysql instance can ref one config in it
   global:
     meta: "./syncer.meta"
+    syncer-checkpoint-schema: "checkpoint_syncer"
     worker-count: 16
     batch: 1000
     max-retry: 100

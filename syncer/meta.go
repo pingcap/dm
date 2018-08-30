@@ -41,7 +41,7 @@ type Meta interface {
 	Load() error
 
 	// Save saves meta information.
-	Save(pos mysql.Position, gtid gtid.GTIDSet, force bool) error
+	Save(pos mysql.Position, gtid gtid.Set, force bool) error
 
 	// Flush write meta information
 	Flush() error
@@ -53,7 +53,7 @@ type Meta interface {
 	Pos() mysql.Position
 
 	// GTID() returns gtid information.
-	GTID() (gtid.GTIDSet, error)
+	GTID() (gtid.Set, error)
 }
 
 // LocalMeta is local meta struct.
@@ -61,7 +61,7 @@ type LocalMeta struct {
 	sync.RWMutex
 
 	flavor string
-	gset   gtid.GTIDSet
+	gset   gtid.Set
 
 	filename string
 	saveTime time.Time
@@ -105,7 +105,7 @@ func (lm *LocalMeta) Load() error {
 }
 
 // Save implements Meta.Save interface.
-func (lm *LocalMeta) Save(pos mysql.Position, gs gtid.GTIDSet, force bool) error {
+func (lm *LocalMeta) Save(pos mysql.Position, gs gtid.Set, force bool) error {
 	lm.Lock()
 	defer lm.Unlock()
 
@@ -155,7 +155,7 @@ func (lm *LocalMeta) Pos() mysql.Position {
 }
 
 // GTID implements Meta.GTID interface
-func (lm *LocalMeta) GTID() (gtid.GTIDSet, error) {
+func (lm *LocalMeta) GTID() (gtid.Set, error) {
 	lm.RLock()
 	defer lm.RUnlock()
 

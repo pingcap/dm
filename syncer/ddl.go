@@ -95,15 +95,15 @@ func resolveDDLSQL(sql string) (sqls []string, err error) {
 	return sqls, nil
 }
 
+func parseDDLSQL(sql string) (ast.StmtNode, error) {
+	stmt, err := parser.New().ParseOneStmt(sql, "", "")
+	return stmt, errors.Trace(err)
+}
+
 // todo: fix the ugly code, use ast to rename table
-func genDDLSQL(sql string, originTableNames []*filter.Table, targetTableNames []*filter.Table) (string, error) {
+func genDDLSQL(sql string, stmt ast.StmtNode, originTableNames []*filter.Table, targetTableNames []*filter.Table) (string, error) {
 	addUseDatabase := func(sql string, dbName string) string {
 		return fmt.Sprintf("USE `%s`; %s;", dbName, sql)
-	}
-
-	stmt, err := parser.New().ParseOneStmt(sql, "", "")
-	if err != nil {
-		return "", errors.Trace(err)
 	}
 
 	if notNeedRoute(originTableNames, targetTableNames) {

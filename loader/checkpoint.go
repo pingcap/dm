@@ -58,7 +58,7 @@ func newRemoteCheckPoint(cfg *config.SubTaskConfig) (CheckPoint, error) {
 
 	dir, err := filepath.Abs(cfg.Dir)
 	if err != nil {
-		return nil, errors.Annotatef(err, "get abs of dir:", cfg.Dir)
+		return nil, errors.Annotatef(err, "get abs of dir: %v", cfg.Dir)
 	}
 
 	cp := &RemoteCheckPoint{

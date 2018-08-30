@@ -10,6 +10,7 @@ import (
 
 // TODO: maybe one day we can make a pull request to go-mysql to support LocalStreamer.
 
+// errors used by streamer
 var (
 	ErrNeedSyncAgain = errors.New("Last sync error or closed, try sync and get event again")
 	ErrSyncClosed    = errors.New("Sync was closed")
