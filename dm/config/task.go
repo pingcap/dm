@@ -141,9 +141,6 @@ type TaskConfig struct {
 	Flavor         string `yaml:"flavor"`
 	VerifyChecksum bool   `yaml:"verify-checksum"`
 
-	// whether we are using encrypted password for DBConfig
-	EncryptedPassword bool `yaml:"encrypted-password"`
-
 	TargetDB *DBConfig `yaml:"target-database"`
 
 	MySQLInstances []*MySQLInstance `yaml:"MySQL-instances"`
@@ -287,7 +284,6 @@ func (c *TaskConfig) SubTaskConfigs() []*SubTaskConfig {
 		cfg.BinlogType = "local" // let's force syncer to replay local binlog.
 		cfg.RelayDir = inst.RelayDir
 		cfg.VerifyChecksum = c.VerifyChecksum
-		cfg.EncryptedPassword = c.EncryptedPassword
 
 		cfg.From = *inst.Config
 		cfg.To = *c.TargetDB

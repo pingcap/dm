@@ -14,14 +14,12 @@
 package common
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
 
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/encrypt"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )
 
@@ -79,7 +77,12 @@ func (c *Config) Parse(arguments []string) error {
 	}
 
 	if len(c.encrypt) > 0 {
-		c.PrintEncrypt(c.encrypt)
+		ciphertext, err := utils.Encrypt(c.encrypt)
+		if err != nil {
+			fmt.Println(errors.ErrorStack(err))
+		} else {
+			fmt.Println(ciphertext)
+		}
 		return flag.ErrHelp
 	}
 
@@ -123,14 +126,4 @@ func (c *Config) adjust() error {
 		return errors.Errorf("MasterAddr or WorkerAddr must be specified")
 	}
 	return nil
-}
-
-// PrintEncrypt encrypts plaintext to ciphertext and print it in base64 format
-func (c *Config) PrintEncrypt(plaintext string) {
-	ciphertext, err := encrypt.Encrypt([]byte(plaintext))
-	if err != nil {
-		fmt.Println(errors.ErrorStack(err))
-	}
-
-	fmt.Println(base64.StdEncoding.EncodeToString(ciphertext))
 }

@@ -66,9 +66,6 @@ type SubTaskConfig struct {
 	Flavor         string `toml:"flavor" json:"flavor"`
 	VerifyChecksum bool   `toml:"verify-checksum" json:"verify-checksum"`
 
-	// whether we are using encrypted password for DBConfig
-	EncryptedPassword bool `toml:"encrypted-password" json:"encrypted-password"`
-
 	BinlogType string              `toml:"binlog-type" json:"binlog-type"`
 	RelayDir   string              `toml:"relay-dir" json:"relay-dir"`
 	From       DBConfig            `toml:"from" json:"from"`

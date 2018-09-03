@@ -3,7 +3,6 @@ name: unique-task-name
 task-mode: all  # full/incremental/all
 flavor: mysql  # mysql/mariadb
 verify-checksum: true
-#encrypted-password: false  # whether we are using encrypted password for DB
 
 target-database:
   host: "192.168.0.1"

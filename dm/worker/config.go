@@ -108,6 +108,13 @@ func (c *Config) Parse(arguments []string) error {
 		return errors.Errorf("'%s' is an invalid flag", c.FlagSet.Arg(0))
 	}
 
+	// try decrypt password
+	pswd, err := utils.Decrypt(c.From.Password)
+	if err != nil {
+		return errors.Annotatef(err, "can not decrypt password %s", c.From.Password)
+	}
+	c.From.Password = pswd
+
 	return nil
 }
 
