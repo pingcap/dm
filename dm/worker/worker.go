@@ -14,6 +14,7 @@
 package worker
 
 import (
+	"encoding/base64"
 	"sync"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"github.com/pingcap/tidb-enterprise-tools/dm/unit"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/encrypt"
 	"github.com/pingcap/tidb-enterprise-tools/relay"
 	"github.com/siddontang/go/sync2"
 	"golang.org/x/net/context"
@@ -162,6 +164,21 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 	// NOTE: use worker's cfg.From, cfg.ServerID
 	cfg.From = w.cfg.From
 	cfg.ServerID = w.cfg.ServerID
+
+	if cfg.EncryptedPassword {
+		// try decrypt password
+		pswdFrom, err := w.tryDecryptPswd(cfg.From.Password)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		pswdTo, err := w.tryDecryptPswd(cfg.To.Password)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		cfg.From.Password = pswdFrom
+		cfg.To.Password = pswdTo
+	}
+
 	st := NewSubTask(cfg)
 	err := st.Init()
 	if err != nil {
@@ -215,4 +232,18 @@ func (w *Worker) ResumeSubTask(name string) error {
 // QueryStatus implements Handler.QueryStatus
 func (w *Worker) QueryStatus(name string) []*pb.SubTaskStatus {
 	return w.Status(name)
+}
+
+// tryDecryptPswd tries to decrypt password
+func (w *Worker) tryDecryptPswd(password string) (string, error) {
+	ciphertext, err := base64.StdEncoding.DecodeString(password)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+
+	plaintext, err := encrypt.Decrypt(ciphertext)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	return string(plaintext), nil
 }

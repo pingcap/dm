@@ -14,12 +14,14 @@
 package common
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
 
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/encrypt"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )
 
@@ -32,6 +34,7 @@ func NewConfig() *Config {
 	fs.BoolVar(&cfg.printVersion, "V", false, "prints version and exit")
 	fs.StringVar(&cfg.ConfigFile, "config", "", "path to config file")
 	fs.StringVar(&cfg.MasterAddr, "master-addr", "", "master API server addr")
+	fs.StringVar(&cfg.encrypt, "encrypt", "", "encrypt plaintext to ciphertext")
 
 	return cfg
 }
@@ -51,6 +54,7 @@ type Config struct {
 	ConfigFile string `json:"config-file"`
 
 	printVersion bool
+	encrypt      string // string need to be encrypted
 }
 
 func (c *Config) String() string {
@@ -71,6 +75,11 @@ func (c *Config) Parse(arguments []string) error {
 
 	if c.printVersion {
 		fmt.Println(utils.GetRawInfo())
+		return flag.ErrHelp
+	}
+
+	if len(c.encrypt) > 0 {
+		c.PrintEncrypt(c.encrypt)
 		return flag.ErrHelp
 	}
 
@@ -114,4 +123,14 @@ func (c *Config) adjust() error {
 		return errors.Errorf("MasterAddr or WorkerAddr must be specified")
 	}
 	return nil
+}
+
+// PrintEncrypt encrypts plaintext to ciphertext and print it in base64 format
+func (c *Config) PrintEncrypt(plaintext string) {
+	ciphertext, err := encrypt.Encrypt([]byte(plaintext))
+	if err != nil {
+		fmt.Println(errors.ErrorStack(err))
+	}
+
+	fmt.Println(base64.StdEncoding.EncodeToString(ciphertext))
 }
