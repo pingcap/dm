@@ -1,10 +1,21 @@
+// Copyright 2018 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package check
 
 import (
 	"context"
 	"sync"
-
-	"github.com/ngaut/log"
 )
 
 // Checker is interface that defines checker to check configurations of system.
@@ -93,7 +104,6 @@ func Do(ctx context.Context, checkers []Checker) (*Results, error) {
 				finished = (total == successful+warning+failed)
 				results.Results = append(results.Results, result)
 
-				log.Debugf("check result:%+v", result)
 				if finished {
 					return
 				}
@@ -121,6 +131,5 @@ func Do(ctx context.Context, checkers []Checker) (*Results, error) {
 		Warning:    warning,
 	}
 
-	log.Infof("check finished, passed %v / total %v", passed, total)
 	return results, nil
 }

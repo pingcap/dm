@@ -1,3 +1,16 @@
+// Copyright 2018 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package check
 
 import (
@@ -6,7 +19,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ngaut/log"
+	"github.com/juju/errors"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 )
 
@@ -22,27 +35,26 @@ type MySQLVersion [3]uint
 // ref: https://dev.mysql.com/doc/refman/5.7/en/which-version.html
 
 // v is mysql version in string format.
-func toMySQLVersion(v string) MySQLVersion {
+func toMySQLVersion(v string) (MySQLVersion, error) {
+	version := MySQLVersion{0, 0, 0}
 	tmp := strings.Split(v, "-")
 	if len(tmp) == 0 {
-		return [3]uint{0, 0, 0}
+		return version, errors.NotValidf("version %s", v)
 	}
 
 	tmp = strings.Split(tmp[0], ".")
 	if len(tmp) != 3 {
-		log.Warnf("invalid version %s", v)
-		return [3]uint{0, 0, 0}
+		return version, errors.NotValidf("version %s", v)
 	}
-	version := [3]uint{}
+
 	for i := range tmp {
 		val, err := strconv.ParseUint(tmp[i], 10, 64)
 		if err != nil {
-			log.Warnf("invalid version %s", v)
-			return [3]uint{0, 0, 0}
+			return version, errors.NotValidf("version %s", v)
 		}
 		version[i] = uint(val)
 	}
-	return version
+	return version, nil
 }
 
 // IsAtLeast means v >= min

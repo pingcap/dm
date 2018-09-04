@@ -25,6 +25,9 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
+	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
+	"github.com/pingcap/tidb/ast"
+	"github.com/pingcap/tidb/parser"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"golang.org/x/net/context"
@@ -101,17 +104,10 @@ func (s *testSyncerSuite) resetMaster() {
 	s.db.Exec("reset master")
 }
 
-func (s *testSyncerSuite) clearRules() {
-	s.cfg.DoDBs = nil
-	s.cfg.DoTables = nil
-	s.cfg.IgnoreDBs = nil
-	s.cfg.IgnoreTables = nil
-	s.cfg.SkipEvents = nil
-	s.cfg.SkipDMLs = nil
-}
-
 func (s *testSyncerSuite) TestSelectDB(c *C) {
-	s.cfg.DoDBs = []string{"~^b.*", "s1", "stest"}
+	s.cfg.BWList = &filter.Rules{
+		DoDBs: []string{"~^b.*", "s1", "stest"},
+	}
 	sqls := []string{
 		"create database s1",
 		"drop database s1",
@@ -134,40 +130,42 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 
 	syncer := NewSyncer(s.cfg)
 	syncer.genRouter()
-	syncer.genSkipDMLRules()
-	i := 0
+	var i int
 	for {
-		if i >= len(sqls) {
+		if i == len(sqls) {
 			break
 		}
-
 		e, err := s.streamer.GetEvent(context.Background())
 		c.Assert(err, IsNil)
 		ev, ok := e.Event.(*replication.QueryEvent)
 		if !ok {
 			continue
 		}
-		sql := string(ev.Query)
-		if syncer.skipQueryEvent(sql) {
-			continue
-		}
 
-		tableNames, err := syncer.fetchDDLTableNames(sql, string(ev.Schema))
+		sql := string(ev.Query)
+		stmt, err := parser.New().ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
-		r := syncer.skipQueryDDL(sql, tableNames[1])
+
+		tableNames, err := fetchDDLTableNames(string(ev.Schema), stmt)
+		c.Assert(err, IsNil)
+
+		r, err := syncer.skipQuery(tableNames, sql)
+		c.Assert(err, IsNil)
 		c.Assert(r, Equals, res[i])
 		i++
 	}
-	s.clearRules()
 }
 
 func (s *testSyncerSuite) TestSelectTable(c *C) {
-	s.cfg.DoDBs = []string{"t2"}
-	s.cfg.DoTables = []*filter.Table{
-		{Schema: "stest", Name: "log"},
-		{Schema: "stest", Name: "~^t.*"},
-		{Schema: "~^ptest*", Name: "~^t.*"},
+	s.cfg.BWList = &filter.Rules{
+		DoDBs: []string{"t2", "stest", "~^ptest*"},
+		DoTables: []*filter.Table{
+			{Schema: "stest", Name: "log"},
+			{Schema: "stest", Name: "~^t.*"},
+			{Schema: "~^ptest*", Name: "~^t.*"},
+		},
 	}
+
 	sqls := []string{
 		"create database s1",
 		"create table s1.log(id int)",
@@ -192,6 +190,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 		"drop database t2",
 		"create database ptest1",
 		"create table ptest1.t1(id int)",
+		"drop database ptest1",
 	}
 	res := [][]bool{
 		{true},
@@ -211,8 +210,9 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 		{false},
 
 		{false},
-		{false},
-		{false},
+		{true},
+		{true},
+		{true},
 		{false},
 		{false},
 		{false},
@@ -225,54 +225,48 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 
 	syncer := NewSyncer(s.cfg)
 	syncer.genRouter()
-	syncer.genSkipDMLRules()
-	i := 0
+	var i int
 	for {
-		if i >= len(sqls) {
+		if i == len(sqls) {
 			break
 		}
-
 		e, err := s.streamer.GetEvent(context.Background())
-		if err != nil {
-			log.Fatal(err)
-		}
+		c.Assert(err, IsNil)
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
 			query := string(ev.Query)
-			if syncer.skipQueryEvent(query) {
-				continue
-			}
-
 			querys, err := resolveDDLSQL(query)
-			if err != nil {
-				log.Fatalf("ResolveDDlSQL failed %v", err)
-			}
+			c.Assert(err, IsNil)
 			if len(querys) == 0 {
 				continue
 			}
-			log.Debugf("querys:%+v", querys)
-			for j, q := range querys {
-				tableNames, err := syncer.fetchDDLTableNames(q, string(ev.Schema))
+
+			for j, sql := range querys {
+				stmt, err := parser.New().ParseOneStmt(sql, "", "")
 				c.Assert(err, IsNil)
-				r := syncer.skipQueryDDL(q, tableNames[1])
+
+				tableNames, err := fetchDDLTableNames(string(ev.Schema), stmt)
+				c.Assert(err, IsNil)
+				r, err := syncer.skipQuery(tableNames, sql)
+				c.Assert(err, IsNil)
 				c.Assert(r, Equals, res[i][j])
 			}
 		case *replication.RowsEvent:
-			r := syncer.skipRowEvent(string(ev.Table.Schema), string(ev.Table.Table), e.Header.EventType)
+			r, err := syncer.skipDMLEvent(string(ev.Table.Schema), string(ev.Table.Table), e.Header.EventType)
+			c.Assert(err, IsNil)
 			c.Assert(r, Equals, res[i][0])
-
 		default:
 			continue
 		}
-
 		i++
-
 	}
-	s.clearRules()
 }
 
 func (s *testSyncerSuite) TestIgnoreDB(c *C) {
-	s.cfg.IgnoreDBs = []string{"~^b.*", "s1", "stest"}
+	s.cfg.BWList = &filter.Rules{
+		IgnoreDBs: []string{"~^b.*", "s1", "stest"},
+	}
+
 	sqls := []string{
 		"create database s1",
 		"drop database s1",
@@ -295,40 +289,41 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 
 	syncer := NewSyncer(s.cfg)
 	syncer.genRouter()
-	syncer.genSkipDMLRules()
 	i := 0
 	for {
-		if i >= len(sqls) {
+		if i == len(sqls) {
 			break
 		}
 
 		e, err := s.streamer.GetEvent(context.Background())
-		if err != nil {
-			log.Fatal(err)
-		}
+		c.Assert(err, IsNil)
 		ev, ok := e.Event.(*replication.QueryEvent)
 		if !ok {
 			continue
 		}
+
 		sql := string(ev.Query)
-		if syncer.skipQueryEvent(sql) {
-			continue
-		}
-		tableNames, err := syncer.fetchDDLTableNames(sql, string(ev.Schema))
+		stmt, err := parser.New().ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
-		r := syncer.skipQueryDDL(sql, tableNames[1])
+
+		tableNames, err := fetchDDLTableNames(sql, stmt)
+		c.Assert(err, IsNil)
+		r, err := syncer.skipQuery(tableNames, sql)
+		c.Assert(err, IsNil)
 		c.Assert(r, Equals, res[i])
 		i++
 	}
-	s.clearRules()
 }
 
 func (s *testSyncerSuite) TestIgnoreTable(c *C) {
-	s.cfg.IgnoreDBs = []string{"t2"}
-	s.cfg.IgnoreTables = []*filter.Table{
-		{Schema: "stest", Name: "log"},
-		{Schema: "stest", Name: "~^t.*"},
+	s.cfg.BWList = &filter.Rules{
+		IgnoreDBs: []string{"t2"},
+		IgnoreTables: []*filter.Table{
+			{Schema: "stest", Name: "log"},
+			{Schema: "stest", Name: "~^t.*"},
+		},
 	}
+
 	sqls := []string{
 		"create database s1",
 		"create table s1.log(id int)",
@@ -359,7 +354,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 
 		{true},
 		{true},
-		{true},
+		{false},
 		{true},
 		{true},
 		{false},
@@ -367,7 +362,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 		{true},
 		{false},
 		{true, true, false},
-		{true},
+		{false},
 
 		{true},
 		{true},
@@ -382,39 +377,35 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 
 	syncer := NewSyncer(s.cfg)
 	syncer.genRouter()
-	syncer.genSkipDMLRules()
 	i := 0
 	for {
-		if i >= len(sqls) {
+		if i == len(sqls) {
 			break
 		}
 		e, err := s.streamer.GetEvent(context.Background())
-		if err != nil {
-			log.Fatal(err)
-		}
+		c.Assert(err, IsNil)
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
 			query := string(ev.Query)
-			if syncer.skipQueryEvent(query) {
-				continue
-			}
-
 			querys, err := resolveDDLSQL(query)
-			if err != nil {
-				log.Fatalf("ResolveDDlSQL failed %v", err)
-			}
+			c.Assert(err, IsNil)
 			if len(querys) == 0 {
 				continue
 			}
 
-			for j, q := range querys {
-				tableNames, err := syncer.fetchDDLTableNames(q, string(ev.Schema))
+			for j, sql := range querys {
+				stmt, err := parser.New().ParseOneStmt(sql, "", "")
 				c.Assert(err, IsNil)
-				r := syncer.skipQueryDDL(q, tableNames[1])
+
+				tableNames, err := fetchDDLTableNames(string(ev.Schema), stmt)
+				c.Assert(err, IsNil)
+				r, err := syncer.skipQuery(tableNames, sql)
+				c.Assert(err, IsNil)
 				c.Assert(r, Equals, res[i][j])
 			}
 		case *replication.RowsEvent:
-			r := syncer.skipRowEvent(string(ev.Table.Schema), string(ev.Table.Table), e.Header.EventType)
+			r, err := syncer.skipDMLEvent(string(ev.Table.Schema), string(ev.Table.Table), e.Header.EventType)
+			c.Assert(err, IsNil)
 			c.Assert(r, Equals, res[i][0])
 
 		default:
@@ -422,27 +413,30 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 		}
 
 		i++
-
 	}
-	s.clearRules()
+
 }
 
 func (s *testSyncerSuite) TestSkipDML(c *C) {
-	s.cfg.SkipDMLs = []*config.SkipDML{
+	s.cfg.FilterRules = []*bf.BinlogEventRule{
 		{
-			Schema: "",
-			Table:  "",
-			Type:   "update",
+			SchemaPattern: "*",
+			TablePattern:  "",
+			DMLEvent:      []bf.EventType{bf.UpdateEvent},
+			Action:        bf.Ignore,
 		}, {
-			Schema: "foo",
-			Table:  "",
-			Type:   "delete",
+			SchemaPattern: "foo",
+			TablePattern:  "",
+			DMLEvent:      []bf.EventType{bf.DeleteEvent},
+			Action:        bf.Ignore,
 		}, {
-			Schema: "foo1",
-			Table:  "bar1",
-			Type:   "delete",
+			SchemaPattern: "foo1",
+			TablePattern:  "bar1",
+			DMLEvent:      []bf.EventType{bf.DeleteEvent},
+			Action:        bf.Ignore,
 		},
 	}
+	s.cfg.BWList = nil
 
 	sqls := []struct {
 		sql     string
@@ -463,38 +457,40 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 		{"delete from foo1.bar1 where id=2", true, true},
 	}
 
-	res := make([]bool, 0, len(sqls))
-	for _, t := range sqls {
-		if t.isDML {
-			res = append(res, t.skipped)
-		}
-		s.db.Exec(t.sql)
+	for i := range sqls {
+		s.db.Exec(sqls[i].sql)
 	}
 
 	syncer := NewSyncer(s.cfg)
 	syncer.genRouter()
-	syncer.genSkipDMLRules()
 
-	c.Logf("skip rules %+v", syncer.skipDMLRules)
+	var err error
+	syncer.binlogFilter, err = bf.NewBinlogEvent(s.cfg.FilterRules)
+	c.Assert(err, IsNil)
 
 	i := 0
 	for {
-		if i >= len(res) {
+		if i >= len(sqls) {
 			break
 		}
 		e, err := s.streamer.GetEvent(context.Background())
-		if err != nil {
-			log.Fatal(err)
-		}
+		c.Assert(err, IsNil)
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
+			stmt, err := parser.New().ParseOneStmt(string(ev.Query), "", "")
+			c.Assert(err, IsNil)
+			_, isDDL := stmt.(ast.DDLNode)
+			if !isDDL {
+				continue
+			}
+
 		case *replication.RowsEvent:
-			r := syncer.skipRowEvent(string(ev.Table.Schema), string(ev.Table.Table), e.Header.EventType)
-			c.Logf("%s.%s, ev %v", string(ev.Table.Schema), string(ev.Table.Table), e.Header.EventType)
-			c.Assert(r, Equals, res[i])
-			i++
+			r, err := syncer.skipDMLEvent(string(ev.Table.Schema), string(ev.Table.Table), e.Header.EventType)
+			c.Assert(err, IsNil)
+			c.Assert(r, Equals, sqls[i].skipped)
 		default:
+			continue
 		}
+		i++
 	}
-	s.clearRules()
 }

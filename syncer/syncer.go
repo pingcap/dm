@@ -32,6 +32,7 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb/ast"
 	"github.com/siddontang/go-mysql/mysql"
@@ -99,7 +100,9 @@ type Syncer struct {
 
 	c *causality
 
-	tableRouter *router.Table
+	tableRouter  *router.Table
+	binlogFilter *bf.BinlogEvent
+	bwList       *filter.Filter
 
 	closed sync2.AtomicBool
 
@@ -112,9 +115,6 @@ type Syncer struct {
 	tps       sync2.AtomicInt64
 
 	done chan struct{}
-
-	filter       *filter.Filter
-	skipDMLRules *SkipDMLRules
 
 	sgk        *ShardingGroupKeeper
 	checkpoint CheckPoint
@@ -138,13 +138,7 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.tableRouter, _ = router.NewTableRouter([]*router.TableRule{})
 	syncer.done = make(chan struct{})
 	syncer.unitType = pb.UnitType_Sync
-	rules := &filter.Rules{
-		DoDBs:        cfg.DoDBs,
-		DoTables:     cfg.DoTables,
-		IgnoreDBs:    cfg.IgnoreDBs,
-		IgnoreTables: cfg.IgnoreTables,
-	}
-	syncer.filter = filter.New(rules)
+	syncer.bwList = filter.New(cfg.BWList)
 	syncer.sgk = NewShardingGroupKeeper()
 	syncer.checkpoint = NewRemoteCheckPoint(cfg, syncer.checkpointID())
 
@@ -201,13 +195,11 @@ func (s *Syncer) Init() error {
 		return errors.Trace(err)
 	}
 
-	err = checkBinlogFormat(s.fromDB)
+	s.binlogFilter, err = bf.NewBinlogEvent(s.cfg.FilterRules)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	// support regex
-	s.genSkipDMLRules()
 	err = s.genRouter()
 	if err != nil {
 		return errors.Trace(err)
@@ -797,7 +789,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			log.Infof("rotate binlog to %v", currentPos)
 		case *replication.RowsEvent:
 			// binlogEventsTotal.WithLabelValues("type", "rows").Add(1)
-			schemaName, tableName := s.renameShardingSchema(string(ev.Table.Schema), string(ev.Table.Table))
+			originSchema, originTable := string(ev.Table.Schema), string(ev.Table.Table)
+			schemaName, tableName := s.renameShardingSchema(originSchema, originTable)
 			// always add current event's pos to the job, and save it to DB combine with event data in the same txn
 			currentPos := mysql.Position{
 				Name: pos.Name,
@@ -823,10 +816,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 			}
 
-			log.Debugf("source-db:%s table:%s; target-db:%s table:%s, pos: %v, RowsEvent data: %v", ev.Table.Schema, ev.Table.Table, schemaName, tableName, currentPos, ev.Rows)
+			log.Debugf("source-db:%s table:%s; target-db:%s table:%s, pos: %v, RowsEvent data: %v", originSchema, originTable, schemaName, tableName, currentPos, ev.Rows)
 
-			table := &table{}
-			if s.skipRowEvent(schemaName, tableName, e.Header.EventType) {
+			ignore, err := s.skipDMLEvent(originSchema, originTable, e.Header.EventType)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			if ignore {
 				binlogSkippedEventsTotal.WithLabelValues("rows").Inc()
 				if err = s.recordSkipSQLsPos(currentPos, nil); err != nil {
 					return errors.Trace(err)
@@ -835,14 +831,14 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				continue
 			}
 
-			source, _ := GenTableID(string(ev.Table.Schema), string(ev.Table.Table))
+			source, _ := GenTableID(originSchema, originTable)
 			if s.sgk.InSyncing(schemaName, tableName, source) {
 				// current source is in sharding DDL syncing, ignore DML
 				log.Debugf("[syncer] source %s is in sharding DDL syncing, ignore Rows event %v", source, currentPos)
 				continue
 			}
 
-			table, err = s.getTable(schemaName, tableName)
+			table, err := s.getTable(schemaName, tableName)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -917,14 +913,22 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				Pos:  e.Header.LogPos,
 			}
 
+			ignore, err := s.skipQuery(nil, sql)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			if ignore {
+				binlogSkippedEventsTotal.WithLabelValues("query").Inc()
+				log.Warnf("[skip query-sql]%s [schema]:%s", sql, ev.Schema)
+				if err = s.recordSkipSQLsPos(pos, nil); err != nil {
+					return errors.Trace(err)
+				}
+				continue
+			}
+
 			log.Infof("[query]%s [current pos]%v [next pos]%v [next gtid set]%v", sql, pos, nextPos, ev.GSet)
 			sqls, err := resolveDDLSQL(sql)
 			if err != nil {
-				if s.skipQueryEvent(sql) {
-					binlogSkippedEventsTotal.WithLabelValues("query").Inc()
-					log.Warnf("[skip query-sql]%s  [schema]:%s", sql, ev.Schema)
-					continue
-				}
 				log.Errorf("fail to be parsed, error %v", err)
 				return errors.Trace(err)
 			}
@@ -933,24 +937,16 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				pos = nextPos
 			}
 			for _, sql := range sqls {
-				// refine skip later
-				if s.skipQueryEvent(sql) {
-					binlogSkippedEventsTotal.WithLabelValues("query").Inc()
-					log.Warnf("[skip query-sql]%s  [schema]:%s", sql, ev.Schema)
-					continue
-				}
-
-				tableNames, err := s.fetchDDLTableNames(sql, string(ev.Schema))
+				sqlDDL, tableNames, stmt, err := s.handleDDL(string(ev.Schema), sql)
 				if err != nil {
 					return errors.Trace(err)
 				}
-				if s.skipQueryDDL(sql, tableNames[1]) {
-					binlogSkippedEventsTotal.WithLabelValues("query_ddl").Inc()
+				if len(sqlDDL) == 0 {
+					binlogSkippedEventsTotal.WithLabelValues("query").Inc()
+					log.Warnf("[ query-sql]%s [schema]:%s", sql, string(ev.Schema))
 					if err = s.recordSkipSQLsPos(pos, nil); err != nil {
 						return errors.Trace(err)
 					}
-
-					log.Warnf("[skip query-ddl-sql]%s [schema]%s", sql, ev.Schema)
 					continue
 				}
 
@@ -959,15 +955,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				if !s.checkpoint.IsNewerTablePoint(tableNames[0][0].Schema, tableNames[0][0].Name, pos) {
 					log.Debugf("[syncer] ignore obsolete DDL %s in pos %v", sql, pos)
 					continue
-				}
-
-				stmt, err := parseDDLSQL(sql)
-				if err != nil {
-					return errors.Trace(err)
-				}
-				sqlDDL, err := genDDLSQL(sql, stmt, tableNames[0], tableNames[1])
-				if err != nil {
-					return errors.Trace(err)
 				}
 
 				switch stmt.(type) {
@@ -1096,54 +1083,6 @@ func (s *Syncer) genRouter() error {
 		}
 	}
 	return nil
-}
-
-func (s *Syncer) genSkipDMLRules() {
-	s.skipDMLRules = &SkipDMLRules{
-		skipByDML:    make(map[dmlType]struct{}),
-		skipBySchema: make(map[string]map[dmlType]struct{}),
-		skipByTable:  make(map[string]map[string]map[dmlType]struct{}),
-	}
-
-	// for backward compatibility
-	for _, dml := range s.cfg.SkipEvents {
-		dt := toDmlType(dml)
-		if dt == dmlInvalid {
-			continue
-		}
-		s.skipDMLRules.skipByDML[dt] = struct{}{}
-	}
-
-	for _, skipDML := range s.cfg.SkipDMLs {
-		dt := toDmlType(skipDML.Type)
-		if dt == dmlInvalid {
-			continue
-		}
-		if skipDML.Schema == "" && skipDML.Table == "" {
-			s.skipDMLRules.skipByDML[dt] = struct{}{}
-
-		} else if skipDML.Schema == "" && skipDML.Table != "" {
-			// it shouldn't have such rule since wo do precheck in config `adjust` function,
-			// but check it case we really have one.
-			log.Warnf("[syncer] invalid skip dml rule %+v and ignore it", skipDML)
-			continue
-
-		} else if skipDML.Schema != "" && skipDML.Table == "" {
-			if _, ok := s.skipDMLRules.skipBySchema[skipDML.Schema]; !ok {
-				s.skipDMLRules.skipBySchema[skipDML.Schema] = make(map[dmlType]struct{})
-			}
-			s.skipDMLRules.skipBySchema[skipDML.Schema][dt] = struct{}{}
-
-		} else {
-			if _, ok := s.skipDMLRules.skipByTable[skipDML.Schema]; !ok {
-				s.skipDMLRules.skipByTable[skipDML.Schema] = make(map[string]map[dmlType]struct{})
-			}
-			if _, ok := s.skipDMLRules.skipByTable[skipDML.Schema][skipDML.Table]; !ok {
-				s.skipDMLRules.skipByTable[skipDML.Schema][skipDML.Table] = make(map[dmlType]struct{})
-			}
-			s.skipDMLRules.skipByTable[skipDML.Schema][skipDML.Table][dt] = struct{}{}
-		}
-	}
 }
 
 func (s *Syncer) printStatus(ctx context.Context) {
@@ -1306,30 +1245,6 @@ func (s *Syncer) reopen(cfg replication.BinlogSyncerConfig) (streamer.Streamer, 
 func (s *Syncer) startSyncByPosition(syncer *replication.BinlogSyncer, pos mysql.Position) (streamer.Streamer, error) {
 	streamer, err := syncer.StartSync(pos)
 	return streamer, errors.Trace(err)
-}
-
-// the result contains [source TableNames, target TableNames]
-// the detail of TableNames refs `parserDDLTableNames()`
-func (s *Syncer) fetchDDLTableNames(sql string, schema string) ([][]*filter.Table, error) {
-	tableNames, err := parserDDLTableNames(sql)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	var targetTableNames []*filter.Table
-	for i := range tableNames {
-		if tableNames[i].Schema == "" {
-			tableNames[i].Schema = schema
-		}
-		schema, table := s.renameShardingSchema(tableNames[i].Schema, tableNames[i].Name)
-		tableName := &filter.Table{
-			Schema: schema,
-			Name:   table,
-		}
-		targetTableNames = append(targetTableNames, tableName)
-	}
-
-	return [][]*filter.Table{tableNames, targetTableNames}, nil
 }
 
 func (s *Syncer) renameShardingSchema(schema, table string) (string, string) {

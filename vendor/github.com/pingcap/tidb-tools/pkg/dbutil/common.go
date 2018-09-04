@@ -33,6 +33,11 @@ const (
 	ImplicitColID = -1
 )
 
+var (
+	// ErrVersionNotFound means can't get the database's version
+	ErrVersionNotFound = errors.New("can't get the database's version")
+)
+
 // DBConfig is database configuration.
 type DBConfig struct {
 	Host string `toml:"host" json:"host"`
@@ -184,26 +189,53 @@ func GetTables(ctx context.Context, db *sql.DB, schemaName string) ([]string, er
 // GetCRC32Checksum returns checksum code of some data by given condition
 func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName string, tbInfo *model.TableInfo, orderKeys []string, limitRange string, args []interface{}) (string, error) {
 	/*
+		TODO: use same sql to calculate CRC32 checksum in TiDB and MySQL when TiDB support ORDER BY in GROUP_CONTACT.
+
 		calculate CRC32 checksum example:
-		mysql> SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', a, b, c, d) SEPARATOR  ' + ')) AS checksum
-			> FROM (SELECT * FROM `test`.`test2` WHERE `a` >= 29100000 AND `a` < 29200000 AND true order by a) AS tmp;
+
+		in TiDB:
+		mysql> SELECT CRC32(GROUP_CONCAT(row SEPARATOR ' + ')) AS checksum
+			> FROM (SELECT CONCAT_WS(",",a,b,c) AS row
+			> FROM (SELECT * FROM test.test WHERE `a` >= 0 AND `a` < 10 AND true ORDER BY a) AS tmp) AS rows ORDER BY row;
 		+------------+
 		| checksum   |
 		+------------+
 		| 1171947116 |
 		+------------+
+
+		in MySQL:
+		mysql> SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', a, b, c ) ORDER BY a ASC SEPARATOR ' + ')) AS checksum
+			> FROM test.test WHERE `a` >= 0 AND `a` < 10 AND true;
+		+------------+
+		| checksum   |
+		+------------+
+		| 1171947116 |
+		+------------+
+
+		Notice: in the older tidb version, tidb will get different checksum with mysql, can see this issue pingcap/tidb#7446
 	*/
+	isTiDB, err := IsTiDB(ctx, db)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+
 	columnNames := make([]string, 0, len(tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
 		columnNames = append(columnNames, col.Name.O)
 	}
 
-	query := fmt.Sprintf("SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', %s) SEPARATOR  ' + ')) AS checksum FROM (SELECT * FROM `%s`.`%s` WHERE %s ORDER BY %s) AS tmp;",
-		strings.Join(columnNames, ", "), schemaName, tbInfo.Name.O, limitRange, strings.Join(orderKeys, ","))
+	var query string
+	if isTiDB {
+		query = fmt.Sprintf("SELECT CRC32(GROUP_CONCAT(row SEPARATOR ' + ')) AS checksum FROM (SELECT CONCAT_WS(',',%s) AS row FROM (SELECT * FROM `%s`.`%s` WHERE %s ORDER BY %s) AS tmp) AS rows ORDER BY row;",
+			strings.Join(columnNames, ", "), schemaName, tbInfo.Name.O, limitRange, strings.Join(orderKeys, ","))
+	} else {
+		query = fmt.Sprintf("SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',',%s) ORDER BY %s ASC SEPARATOR ' + ')) AS checksum FROM `%s`.`%s` WHERE %s;",
+			strings.Join(columnNames, ", "), strings.Join(orderKeys, ","), schemaName, tbInfo.Name.O, limitRange)
+	}
 	log.Debugf("checksum sql: %s, args: %v", query, args)
 
 	var checksum sql.NullString
-	err := db.QueryRowContext(ctx, query, args...).Scan(&checksum)
+	err = db.QueryRowContext(ctx, query, args...).Scan(&checksum)
 	if err != nil {
 		return "", errors.Trace(err)
 	}
@@ -234,7 +266,7 @@ func GetTidbLatestTSO(ctx context.Context, db *sql.DB) (int64, error) {
 	defer rows.Close()
 
 	for rows.Next() {
-		fields, err1 := ScanRow(rows)
+		fields, _, err1 := ScanRow(rows)
 		if err1 != nil {
 			return 0, errors.Trace(err1)
 		}
@@ -254,4 +286,64 @@ func SetSnapshot(ctx context.Context, db *sql.DB, snapshot string) error {
 	log.Infof("set history snapshot: %s", sql)
 	_, err := db.ExecContext(ctx, sql)
 	return errors.Trace(err)
+}
+
+// GetDBVersion returns the database's version
+func GetDBVersion(ctx context.Context, db *sql.DB) (string, error) {
+	/*
+		example in TiDB:
+		mysql> select version();
+		+--------------------------------------+
+		| version()                            |
+		+--------------------------------------+
+		| 5.7.10-TiDB-v2.1.0-beta-173-g7e48ab1 |
+		+--------------------------------------+
+
+		example in MySQL:
+		mysql> select version();
+		+-----------+
+		| version() |
+		+-----------+
+		| 5.7.21    |
+		+-----------+
+	*/
+	query := "SELECT version()"
+	result, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	var version sql.NullString
+	for result.Next() {
+		err := result.Scan(&version)
+		if err != nil {
+			return "", errors.Trace(err)
+		}
+		break
+	}
+
+	if version.Valid {
+		return version.String, nil
+	}
+
+	return "", ErrVersionNotFound
+}
+
+// IsTiDB returns true if this database is tidb
+func IsTiDB(ctx context.Context, db *sql.DB) (bool, error) {
+	version, err := GetDBVersion(ctx, db)
+	if err != nil {
+		log.Errorf("get database's version meets error %v", err)
+		return false, errors.Trace(err)
+	}
+
+	return strings.Contains(strings.ToLower(version), "tidb"), nil
+}
+
+// TableName returns `schema`.`table`
+func TableName(schema, table string) string {
+	return fmt.Sprintf("`%s`.`%s`", escapeName(schema), escapeName(table))
+}
+
+func escapeName(name string) string {
+	return strings.Replace(name, "`", "``", -1)
 }

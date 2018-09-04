@@ -41,7 +41,7 @@ func ShowIndex(ctx context.Context, db *sql.DB, schemaName string, table string)
 	defer rows.Close()
 
 	for rows.Next() {
-		fields, err1 := ScanRow(rows)
+		fields, _, err1 := ScanRow(rows)
 		if err1 != nil {
 			return nil, errors.Trace(err1)
 		}
@@ -120,6 +120,17 @@ func SelectUniqueOrderKey(tbInfo *model.TableInfo) ([]string, []*model.ColumnInf
 
 	for _, index := range tbInfo.Indices {
 		if index.Primary {
+			keys = keys[:0]
+			keyCols = keyCols[:0]
+			for _, indexCol := range index.Columns {
+				keys = append(keys, indexCol.Name.O)
+				keyCols = append(keyCols, tbInfo.Columns[indexCol.Offset])
+			}
+			break
+		}
+		if index.Unique {
+			keys = keys[:0]
+			keyCols = keyCols[:0]
 			for _, indexCol := range index.Columns {
 				keys = append(keys, indexCol.Name.O)
 				keyCols = append(keyCols, tbInfo.Columns[indexCol.Offset])
@@ -127,12 +138,14 @@ func SelectUniqueOrderKey(tbInfo *model.TableInfo) ([]string, []*model.ColumnInf
 		}
 	}
 
-	if len(keys) == 0 {
-		// no primary key found, use all fields as order by key
-		for _, col := range tbInfo.Columns {
-			keys = append(keys, col.Name.O)
-			keyCols = append(keyCols, col)
-		}
+	if len(keys) != 0 {
+		return keys, keyCols
+	}
+
+	// no primary key or unique found, use all fields as order by key
+	for _, col := range tbInfo.Columns {
+		keys = append(keys, col.Name.O)
+		keyCols = append(keyCols, col)
 	}
 
 	return keys, keyCols

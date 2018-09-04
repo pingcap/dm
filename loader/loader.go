@@ -287,7 +287,7 @@ type Loader struct {
 	fileJobQueueClosed sync2.AtomicBool
 
 	tableRouter *router.Table
-	filter      *filter.Filter
+	bwList      *filter.Filter
 
 	pool   []*Worker
 	closed sync2.AtomicBool
@@ -303,18 +303,11 @@ type Loader struct {
 
 // NewLoader creates a new Loader.
 func NewLoader(cfg *config.SubTaskConfig) *Loader {
-	rules := &filter.Rules{
-		DoDBs:        cfg.DoDBs,
-		DoTables:     cfg.DoTables,
-		IgnoreDBs:    cfg.IgnoreDBs,
-		IgnoreTables: cfg.IgnoreTables,
-	}
 	loader := &Loader{
 		cfg:       cfg,
 		db2Tables: make(map[string]Tables2DataFiles),
 		workerWg:  new(sync.WaitGroup),
 		pool:      make([]*Worker, 0, cfg.PoolSize),
-		filter:    filter.New(rules),
 		unitType:  pb.UnitType_Load,
 	}
 	loader.tableRouter, _ = router.NewTableRouter([]*router.TableRule{})
@@ -335,6 +328,8 @@ func (l *Loader) Init() error {
 		return errors.Trace(err)
 	}
 	l.checkPoint = checkpoint
+
+	l.bwList = filter.New(l.cfg.BWList)
 
 	err = l.genRouter(l.cfg.RouteRules)
 	if err != nil {
@@ -418,8 +413,7 @@ func (l *Loader) skipSchemaAndTable(table *filter.Table) bool {
 	}
 
 	tbs := []*filter.Table{table}
-	tbs = l.filter.WhiteFilter(tbs)
-	tbs = l.filter.BlackFilter(tbs)
+	tbs = l.bwList.ApplyOn(tbs)
 	return len(tbs) == 0
 }
 

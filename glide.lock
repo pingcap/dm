@@ -1,8 +1,8 @@
-hash: 4ab8c1c8f740c40c27f5795605dbd0d0b9194f02c4b3ad15d936ba059be1ab34
-updated: 2018-08-03T16:24:13.3843051+08:00
+hash: c29a69bd856b10971e58c9170fc047f4393d256c363afcc27cad42843b8521f4
+updated: 2018-09-03T15:15:08.729860733+08:00
 imports:
 - name: github.com/beorn7/perks
-  version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
+  version: 3a771d992973f24aa725d07868b467d1ddfceafb
   subpackages:
   - quantile
 - name: github.com/BurntSushi/toml
@@ -41,7 +41,7 @@ imports:
 - name: github.com/google/btree
   version: 316fb6d3f031ae8f4d457c6c5186b9e3ded70435
 - name: github.com/grpc-ecosystem/go-grpc-middleware
-  version: e9c5d9645c437ab1b204cff969a2c0fb16cd4276
+  version: 498ae206fc3cfe81cd82e48c1d4354026fa5f9ec
   subpackages:
   - tags
   - tracing/opentracing
@@ -100,7 +100,7 @@ imports:
   - pkg/raft_serverpb
   - pkg/tikvpb
 - name: github.com/pingcap/pd
-  version: 7e79908bc36ae32580f983c2e5636b2b734c8218
+  version: ea6597638eb7f3d7d50248b90e60888352ac8e85
   subpackages:
   - pd-client
 - name: github.com/pingcap/tidb
@@ -158,10 +158,14 @@ imports:
   - util/sqlexec
   - util/stringutil
 - name: github.com/pingcap/tidb-tools
-  version: 2cc33a29f6487554561064be719910b05af9d531
+  version: 069014c6623f576035e0a2579c01f80daded463a
   subpackages:
+  - pkg/binlog-filter
   - pkg/check
+  - pkg/column-mapping
   - pkg/dbutil
+  - pkg/table-router
+  - pkg/table-rule-selector
   - pkg/utils
 - name: github.com/pingcap/tipb
   version: 2d5073e5521a10f8db2adc0eaab2c46ca0a151d9
@@ -172,7 +176,7 @@ imports:
 - name: github.com/pkg/errors
   version: 645ef00459ed84a119197bfb8d8205042c6df63d
 - name: github.com/prometheus/client_golang
-  version: 967789050ba94deca04a5e84cce8ad472ce313c1
+  version: c5b7fccd204277076155f10851dad72b76a49317
   subpackages:
   - prometheus
   - prometheus/push
@@ -199,7 +203,7 @@ imports:
   - ioutil2
   - sync2
 - name: github.com/siddontang/go-log
-  version: 51543fe024e9b6aaff7e18873021bcb76888af3e
+  version: 8d05993dda0722163e59b0e79e8c6dda6c38d5c0
   subpackages:
   - log
   - loggers
@@ -211,17 +215,17 @@ imports:
   - packet
   - replication
 - name: github.com/sirupsen/logrus
-  version: d329d24db4313262a3b0a24d8aeb1dc4bd294fb0
+  version: 78fa2915c1fa231f62e0438da493688c21ca678e
 - name: github.com/spaolacci/murmur3
   version: f09979ecbc725b9e6d41a297405f65e7e8804acc
 - name: github.com/spf13/cobra
   version: ef82de70bb3f60c65fb8eebacbb2d122ef517385
 - name: github.com/spf13/pflag
-  version: 3ebe029320b2676d667ae88da602a5f854788a8a
+  version: 298182f68c66c05229eb03ac171abe6e309ee79a
 - name: github.com/twinj/uuid
   version: 7bbe408d339787c56ec15568c947c0959db1b275
 - name: github.com/uber/jaeger-client-go
-  version: 252d853b2a4f3cfc98bb89c3a8bb3d3aa50ed4d6
+  version: 12b4b58a7d8119c9f22db2745df843fca67a310a
   subpackages:
   - config
   - internal/baggage

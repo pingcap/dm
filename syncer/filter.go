@@ -16,58 +16,14 @@ package syncer
 import (
 	"regexp"
 	"strings"
-	"sync"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
+	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
+	"github.com/pingcap/tidb/ast"
 	"github.com/siddontang/go-mysql/replication"
 )
-
-type dmlType byte
-
-const (
-	dmlInvalid dmlType = iota
-	dmlInsert
-	dmlUpdate
-	dmlDelete
-)
-
-func (dt dmlType) String() string {
-	switch dt {
-	case dmlInvalid:
-		return "invalid dml type"
-	case dmlInsert:
-		return "insert"
-	case dmlUpdate:
-		return "update"
-	case dmlDelete:
-		return "delete"
-	default:
-		return "invalid dml type"
-	}
-}
-
-func toDmlType(dml string) dmlType {
-	dml = strings.ToLower(dml)
-	switch dml {
-	case "insert":
-		return dmlInsert
-	case "update":
-		return dmlUpdate
-	case "delete":
-		return dmlDelete
-	default:
-		return dmlInvalid
-	}
-}
-
-// SkipDMLRules contain rules about skipping DML.
-type SkipDMLRules struct {
-	skipByDML    map[dmlType]struct{}
-	skipBySchema map[string]map[dmlType]struct{}
-	skipByTable  map[string]map[string]map[dmlType]struct{}
-}
 
 /*
 CREATE [TEMPORARY] TABLE [IF NOT EXISTS] tbl_name
@@ -151,9 +107,6 @@ var (
 )
 
 var (
-	compileOnce     sync.Once
-	skipDDLPatterns *regexp.Regexp
-
 	builtInSkipDDLPatterns *regexp.Regexp
 )
 
@@ -161,109 +114,130 @@ func init() {
 	builtInSkipDDLPatterns = regexp.MustCompile("(?i)" + strings.Join(builtInSkipDDLs, "|"))
 }
 
-func (s *Syncer) skipQueryEvent(sql string) bool {
-	return skipQueryEvent(s.cfg.SkipDDLs, sql)
-}
-
-func skipQueryEvent(skipDDLs []string, sql string) bool {
+func (s *Syncer) skipQuery(tables []*filter.Table, sql string) (bool, error) {
 	if builtInSkipDDLPatterns.FindStringIndex(sql) != nil {
-		return true
+		return true, nil
 	}
 
-	if len(skipDDLs) == 0 {
-		return false
-	}
-
-	// compatibility with previous version of syncer
-	for _, skipSQL := range skipDDLs {
-		if strings.HasPrefix(strings.ToUpper(sql), strings.ToUpper(skipSQL)) {
-			return true
+	for _, table := range tables {
+		if filter.IsSystemSchema(table.Schema) {
+			return true, nil
 		}
 	}
 
-	compileOnce.Do(func() {
-		skipDDLPatterns = regexp.MustCompile("(?i)" + strings.Join(skipDDLs, "|"))
-	})
-
-	if skipDDLPatterns.FindStringIndex(sql) != nil {
-		return true
+	if len(tables) > 0 {
+		tbs := s.bwList.ApplyOn(tables)
+		if len(tbs) == 0 {
+			return true, nil
+		}
 	}
 
-	return false
+	if s.binlogFilter == nil {
+		return false, nil
+	}
+
+	if len(tables) == 0 {
+		action, err := s.binlogFilter.Filter("", "", bf.NullEvent, bf.NullEvent, sql)
+		if err != nil {
+			return false, errors.Annotatef(err, "skip query %s", sql)
+		}
+
+		if action == bf.Ignore {
+			return true, nil
+		}
+	}
+
+	for _, table := range tables {
+		action, err := s.binlogFilter.Filter(table.Schema, table.Name, bf.NullEvent, bf.NullEvent, sql)
+		if err != nil {
+			return false, errors.Annotatef(err, "skip query %s on `%s`.`%s`", sql, table.Schema, table.Name)
+		}
+
+		if action == bf.Ignore {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
-// skipRowEvent first whitelist filtering and then blacklist filtering
-func (s *Syncer) skipRowEvent(schema string, table string, eventType replication.EventType) bool {
-	if filter.IsSystemSchema(schema) {
-		return true
+func (s *Syncer) skipDDLEvent(tables []*filter.Table, stmt ast.StmtNode) (bool, error) {
+	for _, table := range tables {
+		if filter.IsSystemSchema(table.Schema) {
+			return true, nil
+		}
 	}
+
+	if len(tables) > 0 {
+		tbs := s.bwList.ApplyOn(tables)
+		if len(tbs) == 0 {
+			return true, nil
+		}
+	}
+	if s.binlogFilter == nil {
+		return false, nil
+	}
+
+	et := bf.AstToDDLEvent(stmt)
+	if len(tables) == 0 {
+		action, err := s.binlogFilter.Filter("", "", bf.NullEvent, et, "")
+		if err != nil {
+			return false, errors.Annotatef(err, "skip query event %s", et)
+		}
+
+		if action == bf.Ignore {
+			return true, nil
+		}
+	}
+
+	for _, table := range tables {
+		action, err := s.binlogFilter.Filter(table.Schema, table.Name, bf.NullEvent, et, "")
+		if err != nil {
+			return false, errors.Annotatef(err, "skip query event %s on `%s`.`%s`", et, table.Schema, table.Name)
+		}
+
+		if action == bf.Ignore {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (s *Syncer) skipDMLEvent(schema string, table string, eventType replication.EventType) (bool, error) {
+	if filter.IsSystemSchema(schema) {
+		return true, nil
+	}
+
 	schema = strings.ToLower(schema)
 	table = strings.ToLower(table)
-	tbs := []*filter.Table{
-		{
-			Schema: schema,
-			Name:   table,
-		},
-	}
-	tbs = s.filter.WhiteFilter(tbs)
-	tbs = s.filter.BlackFilter(tbs)
+	tbs := []*filter.Table{{schema, table}}
+	tbs = s.bwList.ApplyOn(tbs)
 	if len(tbs) == 0 {
-		return true
+		return true, nil
+	}
+	if s.binlogFilter == nil {
+		return false, nil
 	}
 
-	// skip specific dml by schema and table
-	return s.skipDML(schema, table, eventType)
-}
-
-// schema and table should be in lower case.
-func (s *Syncer) skipDML(schema string, table string, eventType replication.EventType) bool {
-	var dt dmlType
+	var et bf.EventType
 	switch eventType {
 	case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
-		dt = dmlInsert
+		et = bf.InsertEvent
 	case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
-		dt = dmlUpdate
+		et = bf.UpdateEvent
 	case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-		dt = dmlDelete
+		et = bf.DeleteEvent
 	default:
-		log.Warnf("[syncer] invalid replication event type %v", eventType)
-		return false
+		return false, errors.Errorf("[syncer] invalid replication event type %v", eventType)
 	}
 
-	// matched by dml rule firstly.
-	if _, ok := s.skipDMLRules.skipByDML[dt]; ok {
-		return true
+	action, err := s.binlogFilter.Filter(schema, table, et, bf.NullEvent, "")
+	if err != nil {
+		return false, errors.Annotatef(err, "skip row event %s on `%s`.`%s`", eventType, schema, table)
 	}
 
-	// then matched by db level
-	if dmlTypes, ok := s.skipDMLRules.skipBySchema[schema]; ok {
-		if _, ok := dmlTypes[dt]; ok {
-			return true
-		}
-	}
-	// finally matched by table level
-	if tables, ok := s.skipDMLRules.skipByTable[schema]; ok {
-		if dmlTypes, ok := tables[table]; ok {
-			if _, ok := dmlTypes[dt]; ok {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-// skipQueryDDL first whitelist filtering and then blacklist filtering
-func (s *Syncer) skipQueryDDL(sql string, tbs []*filter.Table) bool {
-	for i := range tbs {
-		if filter.IsSystemSchema(tbs[i].Schema) {
-			return true
-		}
-	}
-
-	tbs = s.filter.WhiteFilter(tbs)
-	tbs = s.filter.BlackFilter(tbs)
-	return len(tbs) == 0
+	return action == bf.Ignore, nil
 }
 
 // fetchAllDoTables returns all need to do tables after filtered (fetches from upstream MySQL)
@@ -284,8 +258,7 @@ func (s *Syncer) fetchAllDoTables() (map[string][]string, error) {
 			Name:   "", // schema level
 		})
 	}
-	ftSchemas = s.filter.WhiteFilter(ftSchemas)
-	ftSchemas = s.filter.BlackFilter(ftSchemas)
+	ftSchemas = s.bwList.ApplyOn(ftSchemas)
 	if len(ftSchemas) == 0 {
 		log.Warn("[syncer] no schema need to sync")
 		return nil, nil
@@ -305,8 +278,7 @@ func (s *Syncer) fetchAllDoTables() (map[string][]string, error) {
 				Name:   strings.ToLower(table),
 			})
 		}
-		ftTables = s.filter.WhiteFilter(ftTables)
-		ftTables = s.filter.BlackFilter(ftTables)
+		ftTables = s.bwList.ApplyOn(ftTables)
 		if len(ftTables) == 0 {
 			log.Infof("[syncer] schema %s no tables need to sync", schema)
 			continue // NOTE: should we still keep it as an empty elem?

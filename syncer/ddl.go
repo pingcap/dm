@@ -225,12 +225,7 @@ func genTableName(schema string, table string) *filter.Table {
 // the result contains [tableName] excepted create table like and rename table
 // for `create table like` DDL, result contains [sourceTableName, sourceRefTableName]
 // for rename table ddl, result contains [targetOldTableName, sourceNewTableName]
-func parserDDLTableNames(sql string) ([]*filter.Table, error) {
-	stmt, err := parser.New().ParseOneStmt(sql, "", "")
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
+func fetchDDLTableNames(schema string, stmt ast.StmtNode) ([]*filter.Table, error) {
 	var res []*filter.Table
 	switch v := stmt.(type) {
 	case *ast.CreateDatabaseStmt:
@@ -262,8 +257,55 @@ func parserDDLTableNames(sql string) ([]*filter.Table, error) {
 	case *ast.DropIndexStmt:
 		res = append(res, genTableName(v.Table.Schema.L, v.Table.Name.L))
 	default:
-		return res, errors.Errorf("unkown type ddl %s", sql)
+		return res, errors.Errorf("unkown type ddl %s", stmt)
+	}
+
+	for i := range res {
+		if res[i].Schema == "" {
+			res[i].Schema = schema
+		}
 	}
 
 	return res, nil
+}
+
+func (s *Syncer) handleDDL(schema, sql string) (string, [][]*filter.Table, ast.StmtNode, error) {
+	stmt, err := parser.New().ParseOneStmt(sql, "", "")
+	if err != nil {
+		return "", nil, nil, errors.Annotatef(err, "ddl %s", sql)
+	}
+
+	tableNames, err := fetchDDLTableNames(schema, stmt)
+	if err != nil {
+		return "", nil, nil, errors.Trace(err)
+	}
+
+	ignore, err := s.skipQuery(tableNames, sql)
+	if err != nil {
+		return "", nil, nil, errors.Trace(err)
+	}
+	if ignore {
+		return "", nil, stmt, nil
+	}
+
+	ignore, err = s.skipDDLEvent(tableNames, stmt)
+	if err != nil {
+		return "", nil, nil, errors.Trace(err)
+	}
+	if ignore {
+		return "", nil, stmt, nil
+	}
+
+	var targetTableNames []*filter.Table
+	for i := range tableNames {
+		schema, table := s.renameShardingSchema(tableNames[i].Schema, tableNames[i].Name)
+		tableName := &filter.Table{
+			Schema: schema,
+			Name:   table,
+		}
+		targetTableNames = append(targetTableNames, tableName)
+	}
+
+	ddl, err := genDDLSQL(sql, stmt, tableNames, targetTableNames)
+	return ddl, [][]*filter.Table{tableNames, targetTableNames}, stmt, errors.Trace(err)
 }

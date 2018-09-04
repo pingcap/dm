@@ -26,6 +26,8 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
+	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
+	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go-mysql/mysql"
 )
@@ -66,23 +68,15 @@ type SubTaskConfig struct {
 	Flavor         string `toml:"flavor" json:"flavor"`
 	VerifyChecksum bool   `toml:"verify-checksum" json:"verify-checksum"`
 
-	BinlogType string              `toml:"binlog-type" json:"binlog-type"`
-	RelayDir   string              `toml:"relay-dir" json:"relay-dir"`
-	From       DBConfig            `toml:"from" json:"from"`
-	To         DBConfig            `toml:"to" json:"to"`
-	RouteRules []*router.TableRule `toml:"route-rules" json:"route-rules"`
+	BinlogType string   `toml:"binlog-type" json:"binlog-type"`
+	RelayDir   string   `toml:"relay-dir" json:"relay-dir"`
+	From       DBConfig `toml:"from" json:"from"`
+	To         DBConfig `toml:"to" json:"to"`
 
-	DoTables     []*filter.Table `toml:"do-table" json:"do-table"`
-	DoDBs        []string        `toml:"do-db" json:"do-db"`
-	IgnoreTables []*filter.Table `toml:"ignore-table" json:"ignore-table"`
-	IgnoreDBs    []string        `toml:"ignore-db" json:"ignore-db"`
-
-	// SkipDDLs is deprecated, please use SkipSQLs instead.
-	SkipDDLs []string `toml:"skip-ddls" json:"-"` // omit it since it's deprecated
-	SkipSQLs []string `toml:"skip-sqls" json:"skip-sqls"`
-	// SkipEvents is deprecated, please use SkipDMLs instead.
-	SkipEvents []string   `toml:"skip-events" json:"-"` // omit it since it's deprecated
-	SkipDMLs   []*SkipDML `toml:"skip-dmls" json:"skip-dmls"`
+	RouteRules         []*router.TableRule   `toml:"route-rules" json:"route-rules"`
+	FilterRules        []*bf.BinlogEventRule `toml:"filter-rules" json:"filter-rules"`
+	ColumnMappingRules []*column.Rule        `toml:"mapping-rule" json:"mapping-rule"`
+	BWList             *filter.Rules         `toml:"black-white-list" json:"black-white-list"`
 
 	MydumperConfig // Mydumper configuration
 	LoaderConfig   // Loader configuration
@@ -187,59 +181,22 @@ func (c *SubTaskConfig) adjust() error {
 		return errors.Errorf("please specify right mysql version, support mysql, mariadb now")
 	}
 
-	for _, table := range c.DoTables {
-		table.Name = strings.ToLower(table.Name)
-		table.Schema = strings.ToLower(table.Schema)
-	}
-	for _, table := range c.IgnoreTables {
-		table.Name = strings.ToLower(table.Name)
-		table.Schema = strings.ToLower(table.Schema)
-	}
-	for i, db := range c.IgnoreDBs {
-		c.IgnoreDBs[i] = strings.ToLower(db)
-	}
-	for i, db := range c.DoDBs {
-		c.DoDBs[i] = strings.ToLower(db)
-	}
+	c.BWList.ToLower()
 
-	routeRules := make([]*router.TableRule, 0, len(c.RouteRules))
+	// add ToLower for other pkg later
 	for _, rule := range c.RouteRules {
 		rule.SchemaPattern = strings.ToLower(rule.SchemaPattern)
 		rule.TablePattern = strings.ToLower(rule.TablePattern)
-		routeRules = append(routeRules, rule)
 	}
-	c.RouteRules = routeRules
 
-	c.SkipDDLs = append(c.SkipDDLs, c.SkipSQLs...)
-	// ignore empty rule
-	skipDDLs := make([]string, 0, len(c.SkipDDLs))
-	for _, skipDDL := range c.SkipDDLs {
-		if strings.TrimSpace(skipDDL) == "" {
-			continue
-		}
-		skipDDLs = append(skipDDLs, skipDDL)
+	for _, rule := range c.FilterRules {
+		rule.SchemaPattern = strings.ToLower(rule.SchemaPattern)
+		rule.TablePattern = strings.ToLower(rule.TablePattern)
 	}
-	c.SkipDDLs = skipDDLs
 
-	skipEvents := make([]string, 0, len(c.SkipEvents))
-	for _, skipEvent := range c.SkipEvents {
-		if strings.TrimSpace(skipEvent) == "" {
-			continue
-		}
-		if toDmlType(skipEvent) == dmlInvalid {
-			return errors.Errorf("invalid dml type %s in skip-events", skipEvent)
-		}
-		skipEvents = append(skipEvents, skipEvent)
-	}
-	c.SkipEvents = skipEvents
-
-	for _, skipDML := range c.SkipDMLs {
-		skipDML.Schema = strings.ToLower(strings.TrimSpace(skipDML.Schema))
-		skipDML.Table = strings.ToLower(strings.TrimSpace(skipDML.Table))
-		skipDML.Type = strings.ToLower(strings.TrimSpace(skipDML.Type))
-		if skipDML.Schema == "" && skipDML.Table != "" {
-			return errors.Errorf("it's not allowed for schema empty and table not empty in skip-dmls. rule %+v", skipDML)
-		}
+	for _, rule := range c.ColumnMappingRules {
+		rule.PatternSchema = strings.ToLower(rule.PatternSchema)
+		rule.PatternTable = strings.ToLower(rule.PatternTable)
 	}
 
 	if c.MaxRetry == 0 {

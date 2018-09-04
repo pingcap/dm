@@ -19,9 +19,12 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
+	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
+	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go-mysql/mysql"
-	"gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v2"
 )
 
 // Meta represents binlog's meta pos
@@ -41,6 +44,7 @@ type MySQLInstance struct {
 	FilterRules        []string  `yaml:"filter-rules"`
 	ColumnMappingRules []string  `yaml:"column-mapping-rules"`
 	RouteRules         []string  `yaml:"route-rules"`
+	BWListName         string    `yaml:"black-white-list"`
 
 	MydumperConfigName string          `yaml:"mydumper-config-name"`
 	Mydumper           *MydumperConfig `yaml:"mydumper"`
@@ -72,28 +76,6 @@ func (m *MySQLInstance) Verify() error {
 		return errors.New("syncer-config-name and syncer should only specify one")
 	}
 	return nil
-}
-
-// FilterRule represents a filter rule
-// not used until refactor *filter*
-type FilterRule struct {
-	PatternSchema string   `yaml:"pattern-schema"`
-	PatternTable  string   `yaml:"pattern-table"`
-	DoStatement   []string `yaml:"do-statement"`
-	SkipStatement []string `yaml:"skip-statement"`
-}
-
-// ColumnMappingRule represents a column-mapping rule
-// not used until add *column-mapping*
-type ColumnMappingRule struct {
-	PatternSchema string   `yaml:"pattern-schema"`
-	PatternTable  string   `yaml:"pattern-table"`
-	Op            string   `yaml:"op"`
-	SourceColumn  string   `yaml:"source-column"`
-	TargetColumn  string   `yaml:"target-column"`
-	Expression    string   `yaml:"expression"`
-	Arguments     []string `yaml:"arguments"`
-	SQL           string   `yaml:"sql"`
 }
 
 // MydumperConfig represents mydumper process unit's specific config
@@ -145,9 +127,10 @@ type TaskConfig struct {
 
 	MySQLInstances []*MySQLInstance `yaml:"MySQL-instances"`
 
-	Routes         map[string]*router.TableRule  `yaml:"routes"`
-	Filters        map[string]*FilterRule        `yaml:"filters"`
-	ColumnMappings map[string]*ColumnMappingRule `yaml:"column-mappings"`
+	Routes         map[string]*router.TableRule   `yaml:"routes"`
+	Filters        map[string]*bf.BinlogEventRule `yaml:"filters"`
+	ColumnMappings map[string]*column.Rule        `yaml:"column-mappings"`
+	BWList         map[string]*filter.Rules       `yaml:"black-white-list"`
 
 	Mydumpers map[string]*MydumperConfig `yaml:"mydumpers"`
 	Loaders   map[string]*LoaderConfig   `yaml:"loaders"`
@@ -240,6 +223,9 @@ func (c *TaskConfig) adjust() error {
 				return errors.Errorf("MySQL-instance(%d)'s column-mapping-rules %s not exist in column-mapping", i, name)
 			}
 		}
+		if _, ok := c.BWList[inst.BWListName]; !ok {
+			return errors.Errorf("MySQL-instance(%d)'s list %s not exist in black white list", i, inst.BWListName)
+		}
 
 		if len(inst.MydumperConfigName) > 0 {
 			rule, ok := c.Mydumpers[inst.MydumperConfigName]
@@ -294,8 +280,18 @@ func (c *TaskConfig) SubTaskConfigs() []*SubTaskConfig {
 		for j, name := range inst.RouteRules {
 			cfg.RouteRules[j] = c.Routes[name]
 		}
-		// TODO zxc: add new filter rules
-		// TODO zxc: add column-mapping rules
+
+		cfg.FilterRules = make([]*bf.BinlogEventRule, len(inst.FilterRules))
+		for j, name := range inst.FilterRules {
+			cfg.FilterRules[j] = c.Filters[name]
+		}
+
+		cfg.ColumnMappingRules = make([]*column.Rule, len(inst.ColumnMappingRules))
+		for j, name := range inst.ColumnMappingRules {
+			cfg.ColumnMappingRules[j] = c.ColumnMappings[name]
+		}
+
+		cfg.BWList = c.BWList[inst.BWListName]
 
 		cfg.MydumperConfig = *inst.Mydumper
 		cfg.LoaderConfig = *inst.Loader

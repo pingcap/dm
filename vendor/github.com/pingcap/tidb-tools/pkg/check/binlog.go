@@ -1,3 +1,16 @@
+// Copyright 2018 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package check
 
 import (
@@ -6,7 +19,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
 
@@ -25,11 +37,10 @@ func NewMySQLBinlogEnableChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
 func (pc *MySQLBinlogEnableChecker) Check(ctx context.Context) *Result {
 	result := &Result{
 		Name:  pc.Name(),
-		Desc:  "checks whether mysql binlog is enable",
+		Desc:  "check whether mysql binlog is enable",
 		State: StateFailure,
-		Extra: fmt.Sprintf("%s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
+		Extra: fmt.Sprintf("address of db instance - %s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
 	}
-	defer log.Infof("check binlog enable, result %+v", result)
 
 	value, err := dbutil.ShowLogBin(ctx, pc.db)
 	if err != nil {
@@ -38,7 +49,7 @@ func (pc *MySQLBinlogEnableChecker) Check(ctx context.Context) *Result {
 	}
 	if strings.ToUpper(value) != "ON" {
 		result.ErrorMsg = fmt.Sprintf("log_bin is %s, and should be ON", value)
-		result.Instruction = "ref: https://dev.mysql.com/doc/refman/5.7/en/replication-howto-masterbaseconfig.html"
+		result.Instruction = "ref document: https://dev.mysql.com/doc/refman/5.7/en/replication-howto-masterbaseconfig.html"
 		return result
 	}
 	result.State = StateSuccess
@@ -67,11 +78,10 @@ func NewMySQLBinlogFormatChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
 func (pc *MySQLBinlogFormatChecker) Check(ctx context.Context) *Result {
 	result := &Result{
 		Name:  pc.Name(),
-		Desc:  "checks whether mysql binlog_format is ROW",
+		Desc:  "check whether mysql binlog_format is ROW",
 		State: StateFailure,
-		Extra: fmt.Sprintf("%s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
+		Extra: fmt.Sprintf("address of db instance - %s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
 	}
-	defer log.Infof("check binlog_format, result %+v", result)
 
 	value, err := dbutil.ShowBinlogFormat(ctx, pc.db)
 	if err != nil {
@@ -80,7 +90,7 @@ func (pc *MySQLBinlogFormatChecker) Check(ctx context.Context) *Result {
 	}
 	if strings.ToUpper(value) != "ROW" {
 		result.ErrorMsg = fmt.Sprintf("binlog_format is %s, and should be ROW", value)
-		result.Instruction = "set global binlog_format=ROW;"
+		result.Instruction = "please execute 'set global binlog_format=ROW;'"
 		return result
 	}
 	result.State = StateSuccess
@@ -121,11 +131,10 @@ func NewMySQLBinlogRowImageChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker 
 func (pc *MySQLBinlogRowImageChecker) Check(ctx context.Context) *Result {
 	result := &Result{
 		Name:  pc.Name(),
-		Desc:  "checks whether mysql binlog_row_image is FULL",
+		Desc:  "check whether mysql binlog_row_image is FULL",
 		State: StateFailure,
-		Extra: fmt.Sprintf("%s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
+		Extra: fmt.Sprintf("address of db instance - %s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
 	}
-	defer log.Infof("check binlog_row_image, result %+v", result)
 
 	// check version firstly
 	value, err := dbutil.ShowVersion(ctx, pc.db)
@@ -133,7 +142,11 @@ func (pc *MySQLBinlogRowImageChecker) Check(ctx context.Context) *Result {
 		markCheckError(result, err)
 		return result
 	}
-	version := toMySQLVersion(value)
+	version, err := toMySQLVersion(value)
+	if err != nil {
+		markCheckError(result, err)
+		return result
+	}
 
 	// for mysql.version < 5.6.2 || mariadb.version < 10.1.6,  we don't need to check binlog_row_image.
 	if (!IsMariaDB(value) && !version.IsAtLeast(mysqlBinlogRowImageRequired)) || (IsMariaDB(value) && !version.IsAtLeast(mariadbBinlogRowImageRequired)) {
@@ -148,7 +161,7 @@ func (pc *MySQLBinlogRowImageChecker) Check(ctx context.Context) *Result {
 	}
 	if strings.ToUpper(value) != "FULL" {
 		result.ErrorMsg = fmt.Sprintf("binlog_row_image is %s, and should be FULL", value)
-		result.Instruction = "set global binlog_row_image = FULL;"
+		result.Instruction = "please execute 'set global binlog_row_image = FULL;'"
 		return result
 	}
 	result.State = StateSuccess

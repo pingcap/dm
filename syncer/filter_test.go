@@ -2,6 +2,9 @@ package syncer
 
 import (
 	. "github.com/pingcap/check"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
+	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
+	"github.com/pingcap/tidb/parser"
 )
 
 func (s *testSyncerSuite) TestSkipQueryEvent(c *C) {
@@ -93,9 +96,91 @@ END`, true},
 		{"alter database foo collate=utf8_bin", true},
 	}
 
-	skipSQLs := []string{}
+	//filter, err := bf.NewBinlogEvent(nil)
+	//c.Assert(err, IsNil)
+	syncer := &Syncer{}
 	for _, t := range cases {
-		c.Logf("sql: %s", t.sql)
-		c.Assert(skipQueryEvent(skipSQLs, t.sql), Equals, t.expectSkipped)
+		skipped, err := syncer.skipQuery(nil, t.sql)
+		c.Assert(err, IsNil)
+		c.Assert(skipped, Equals, t.expectSkipped)
 	}
+
+	// system table
+	skipped, err := syncer.skipQuery([]*filter.Table{{"mysql", "test"}}, "create table mysql.test (id int)")
+	c.Assert(err, IsNil)
+	c.Assert(skipped, Equals, true)
+
+	// test binlog filter
+	filterRules := []*bf.BinlogEventRule{
+		{
+			SchemaPattern: "*",
+			TablePattern:  "",
+			DDLEvent:      []bf.EventType{bf.DropTable},
+			SQLPattern:    []string{"^drop\\s+table"},
+			Action:        bf.Ignore,
+		}, {
+			SchemaPattern: "foo*",
+			TablePattern:  "",
+			DDLEvent:      []bf.EventType{bf.CreateTable},
+			SQLPattern:    []string{"^create\\s+table"},
+			Action:        bf.Do,
+		}, {
+			SchemaPattern: "foo*",
+			TablePattern:  "bar*",
+			DDLEvent:      []bf.EventType{bf.CreateTable},
+			SQLPattern:    []string{"^create\\s+table"},
+			Action:        bf.Ignore,
+		},
+	}
+
+	syncer.binlogFilter, err = bf.NewBinlogEvent(filterRules)
+	c.Assert(err, IsNil)
+
+	// test global rule
+	skipped, err = syncer.skipQuery([]*filter.Table{{"tx", "test"}}, "drop table tx.test")
+	c.Assert(err, IsNil)
+	c.Assert(skipped, Equals, true)
+	stmt, err := parser.New().ParseOneStmt("drop table tx.test", "", "")
+	c.Assert(err, IsNil)
+	skipped, err = syncer.skipDDLEvent([]*filter.Table{{"tx", "test"}}, stmt)
+	c.Assert(err, IsNil)
+	c.Assert(skipped, Equals, true)
+
+	skipped, err = syncer.skipQuery([]*filter.Table{{"tx", "test"}}, "create table tx.test (id int)")
+	c.Assert(err, IsNil)
+	c.Assert(skipped, Equals, false)
+	stmt, err = parser.New().ParseOneStmt("create table tx.test (id int)", "", "")
+	c.Assert(err, IsNil)
+	skipped, err = syncer.skipDDLEvent([]*filter.Table{{"tx", "test"}}, stmt)
+	c.Assert(err, IsNil)
+	c.Assert(skipped, Equals, false)
+
+	// test schema rule
+	skipped, err = syncer.skipQuery([]*filter.Table{{"foo", "test"}}, "create table foo.test(id int)")
+	c.Assert(err, IsNil)
+	c.Assert(skipped, Equals, false)
+	stmt, err = parser.New().ParseOneStmt("create table foo.test(id int)", "", "")
+	c.Assert(err, IsNil)
+	skipped, err = syncer.skipDDLEvent([]*filter.Table{{"foo", "test"}}, stmt)
+	c.Assert(err, IsNil)
+	c.Assert(skipped, Equals, false)
+
+	skipped, err = syncer.skipQuery([]*filter.Table{{"foo", "test"}}, "rename table foo.test to foo.test1")
+	c.Assert(err, IsNil)
+	c.Assert(skipped, Equals, true)
+	stmt, err = parser.New().ParseOneStmt("rename table foo.test to foo.test1", "", "")
+	c.Assert(err, IsNil)
+	skipped, err = syncer.skipDDLEvent([]*filter.Table{{"foo", "test"}}, stmt)
+	c.Assert(err, IsNil)
+	c.Assert(skipped, Equals, true)
+
+	// test table rule
+	skipped, err = syncer.skipQuery([]*filter.Table{{"foo", "bar"}}, "create table foo.bar(id int)")
+	c.Assert(err, IsNil)
+	c.Assert(skipped, Equals, true)
+	stmt, err = parser.New().ParseOneStmt("create table foo.bar(id int)", "", "")
+	c.Assert(err, IsNil)
+	skipped, err = syncer.skipDDLEvent([]*filter.Table{{"foo", "bar"}}, stmt)
+	c.Assert(err, IsNil)
+	c.Assert(skipped, Equals, true)
 }
