@@ -401,3 +401,20 @@ func genKVs(columns []*column) string {
 
 	return kvs.String()
 }
+
+func (s *Syncer) mappingDML(schema, table string, columns []string, data [][]interface{}) ([][]interface{}, error) {
+	if s.columnMapping == nil {
+		return data, nil
+	}
+	var (
+		err  error
+		rows = make([][]interface{}, len(data))
+	)
+	for i := range data {
+		rows[i], _, err = s.columnMapping.HandleRowValue(schema, table, columns, data[i])
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+	}
+	return rows, nil
+}

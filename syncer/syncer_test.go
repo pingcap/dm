@@ -26,6 +26,7 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
+	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb/ast"
 	"github.com/pingcap/tidb/parser"
 	gmysql "github.com/siddontang/go-mysql/mysql"
@@ -488,6 +489,90 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 			r, err := syncer.skipDMLEvent(string(ev.Table.Schema), string(ev.Table.Table), e.Header.EventType)
 			c.Assert(err, IsNil)
 			c.Assert(r, Equals, sqls[i].skipped)
+		default:
+			continue
+		}
+		i++
+	}
+}
+
+func (s *testSyncerSuite) TestColumnMapping(c *C) {
+	rules := []*cm.Rule{
+		{
+			PatternSchema: "stest*",
+			PatternTable:  "log*",
+			TargetColumn:  "id",
+			Expression:    cm.AddPrefix,
+			Arguments:     []string{"test:"},
+		},
+		{
+			PatternSchema: "stest*",
+			PatternTable:  "t*",
+			TargetColumn:  "id",
+			Expression:    cm.PartitionID,
+			Arguments:     []string{"1", "stest_", "t_"},
+		},
+	}
+
+	createTableSQLs := []string{
+		"create database if not exists stest_3",
+		"create table if not exists stest_3.log(id varchar(45))",
+		"create table if not exists stest_3.t_2(name varchar(45), id bigint)",
+		"create table if not exists stest_3.a(id int)",
+	}
+
+	dmls := []struct {
+		sql    string
+		column []string
+		data   []interface{}
+	}{
+		{"insert into stest_3.t_2(name, id) values (\"ian\", 10)", []string{"name", "id"}, []interface{}{"ian", int64(1<<59 | 3<<52 | 2<<44 | 10)}},
+		{"insert into stest_3.log(id) values (\"10\")", []string{"id"}, []interface{}{"test:10"}},
+		{"insert into stest_3.a(id) values (10)", []string{"id"}, []interface{}{int32(10)}},
+	}
+
+	dropTableSQLs := []string{
+		"drop table stest_3.log,stest_3.t_2,stest_3.a",
+		"drop database stest_3",
+	}
+
+	for _, sql := range createTableSQLs {
+		s.db.Exec(sql)
+	}
+
+	for i := range dmls {
+		s.db.Exec(dmls[i].sql)
+	}
+
+	for _, sql := range dropTableSQLs {
+		s.db.Exec(sql)
+	}
+
+	mapping, err := cm.NewMapping(rules)
+	c.Assert(err, IsNil)
+
+	totalEvent := len(dmls) + len(createTableSQLs) + len(dropTableSQLs)
+	i := 0
+	dmlIndex := 0
+	for {
+		if i == totalEvent {
+			break
+		}
+		e, err := s.streamer.GetEvent(context.Background())
+		c.Assert(err, IsNil)
+		switch ev := e.Event.(type) {
+		case *replication.QueryEvent:
+			stmt, err := parser.New().ParseOneStmt(string(ev.Query), "", "")
+			c.Assert(err, IsNil)
+			_, isDDL := stmt.(ast.DDLNode)
+			if !isDDL {
+				continue
+			}
+		case *replication.RowsEvent:
+			r, _, err := mapping.HandleRowValue(string(ev.Table.Schema), string(ev.Table.Table), dmls[dmlIndex].column, ev.Rows[0])
+			c.Assert(err, IsNil)
+			c.Assert(r, DeepEquals, dmls[dmlIndex].data)
+			dmlIndex++
 		default:
 			continue
 		}

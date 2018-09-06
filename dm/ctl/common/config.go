@@ -77,9 +77,9 @@ func (c *Config) Parse(arguments []string) error {
 	}
 
 	if len(c.encrypt) > 0 {
-		ciphertext, err := utils.Encrypt(c.encrypt)
-		if err != nil {
-			fmt.Println(errors.ErrorStack(err))
+		ciphertext, err1 := utils.Encrypt(c.encrypt)
+		if err1 != nil {
+			fmt.Println(errors.ErrorStack(err1))
 		} else {
 			fmt.Println(ciphertext)
 		}

@@ -30,6 +30,7 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/dm/unit"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go/sync2"
 	"golang.org/x/net/context"
@@ -62,6 +63,7 @@ type fileJob struct {
 	table    string
 	dataFile string
 	offset   int64
+	info     *tableInfo
 }
 
 // Worker represents a worker.
@@ -151,7 +153,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *
 			go doJob()
 
 			// restore a table
-			if err := w.restoreDataFile(ctx, w.cfg.Dir, job.dataFile, job.offset, job.schema, job.table); err != nil {
+			if err := w.restoreDataFile(ctx, w.cfg.Dir, job.dataFile, job.offset, job.info); err != nil {
 				// expect pause rather than exit
 				err = errors.Annotatef(err, "restore data file (%v) failed", job.dataFile)
 				runFatalChan <- unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err))
@@ -161,9 +163,9 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *
 	}
 }
 
-func (w *Worker) restoreDataFile(ctx context.Context, path, dataFile string, offset int64, schema, table string) error {
+func (w *Worker) restoreDataFile(ctx context.Context, path, dataFile string, offset int64, table *tableInfo) error {
 	log.Infof("[loader][restore table data sql]%s/%s[start]", path, dataFile)
-	err := w.dispatchSQL(ctx, filepath.Join(w.cfg.Dir, dataFile), offset, schema, table)
+	err := w.dispatchSQL(ctx, filepath.Join(w.cfg.Dir, dataFile), offset, table)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -178,7 +180,7 @@ func (w *Worker) restoreDataFile(ctx context.Context, path, dataFile string, off
 	return nil
 }
 
-func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, schema, table string) error {
+func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, table *tableInfo) error {
 	var (
 		f   *os.File
 		err error
@@ -236,9 +238,19 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, sch
 			data = append(data, []byte(realLine)...)
 			if data[len(data)-1] == ';' {
 				query := string(data)
-				data = data[0:0]
 				if strings.HasPrefix(query, "/*") && strings.HasSuffix(query, "*/;") {
+					data = data[0:0]
 					continue
+				}
+
+				if w.loader.columnMapping != nil {
+					// column mapping and route table
+					query, err = reassemble(data, table, w.loader.columnMapping)
+					if err != nil {
+						return errors.Annotatef(err, "file %s", file)
+					}
+				} else if table.sourceTable != table.targetTable {
+					query = renameShardingTable(query, table.sourceTable, table.targetTable)
 				}
 
 				idx := strings.Index(query, "INSERT INTO")
@@ -246,15 +258,12 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, sch
 					return errors.Errorf("[invalid insert sql][sql]%s", query)
 				}
 
-				_, dstTable := fetchMatchedLiteral(w.tableRouter, schema, table)
-				query = renameShardingTable(query, table, dstTable)
 				log.Debugf("sql: %-.100v", query)
-
-				targetSchema, _ := fetchMatchedLiteral(w.tableRouter, schema, table)
+				data = data[0:0]
 
 				j := &dataJob{
 					sql:        query,
-					schema:     targetSchema,
+					schema:     table.targetSchema,
 					file:       baseFile,
 					offset:     cur,
 					lastOffset: lastOffset,
@@ -269,6 +278,15 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, sch
 	return nil
 }
 
+type tableInfo struct {
+	sourceSchema   string
+	sourceTable    string
+	targetSchema   string
+	targetTable    string
+	columnNameList []string
+	insertHeadStmt string
+}
+
 // Loader can load your mydumper data into TiDB database.
 type Loader struct {
 	sync.RWMutex
@@ -278,7 +296,8 @@ type Loader struct {
 
 	// db -> tables
 	// table -> data files
-	db2Tables map[string]Tables2DataFiles
+	db2Tables  map[string]Tables2DataFiles
+	tableInfos map[string]*tableInfo
 
 	// for every worker goroutine, not for every data file
 	workerWg *sync.WaitGroup
@@ -286,8 +305,9 @@ type Loader struct {
 	fileJobQueue       chan *fileJob
 	fileJobQueueClosed sync2.AtomicBool
 
-	tableRouter *router.Table
-	bwList      *filter.Filter
+	tableRouter   *router.Table
+	bwList        *filter.Filter
+	columnMapping *cm.Mapping
 
 	pool   []*Worker
 	closed sync2.AtomicBool
@@ -304,11 +324,12 @@ type Loader struct {
 // NewLoader creates a new Loader.
 func NewLoader(cfg *config.SubTaskConfig) *Loader {
 	loader := &Loader{
-		cfg:       cfg,
-		db2Tables: make(map[string]Tables2DataFiles),
-		workerWg:  new(sync.WaitGroup),
-		pool:      make([]*Worker, 0, cfg.PoolSize),
-		unitType:  pb.UnitType_Load,
+		cfg:        cfg,
+		db2Tables:  make(map[string]Tables2DataFiles),
+		tableInfos: make(map[string]*tableInfo),
+		workerWg:   new(sync.WaitGroup),
+		pool:       make([]*Worker, 0, cfg.PoolSize),
+		unitType:   pb.UnitType_Load,
 	}
 	loader.tableRouter, _ = router.NewTableRouter([]*router.TableRule{})
 	loader.fileJobQueueClosed.Set(true) // not open yet
@@ -334,6 +355,13 @@ func (l *Loader) Init() error {
 	err = l.genRouter(l.cfg.RouteRules)
 	if err != nil {
 		return errors.Trace(err)
+	}
+
+	if len(l.cfg.ColumnMappingRules) > 0 {
+		l.columnMapping, err = cm.NewMapping(l.cfg.ColumnMappingRules)
+		if err != nil {
+			return errors.Trace(err)
+		}
 	}
 
 	l.checkPoint.CalcProgress(l.db2Tables)
@@ -819,6 +847,13 @@ func (l *Loader) restoreData(ctx context.Context) error {
 		}
 		for _, table := range tnames {
 			dataFiles := tables[table]
+			tableFile := fmt.Sprintf("%s/%s.%s-schema.sql", l.cfg.Dir, db, table)
+			if _, ok := l.tableInfos[tableName(db, table)]; !ok {
+				l.tableInfos[tableName(db, table)], err = parseTable(l.tableRouter, db, table, tableFile)
+				if err != nil {
+					return errors.Annotatef(err, "parse table %s/%s", db, table)
+				}
+			}
 
 			if l.checkPoint.IsTableFinished(db, table) {
 				log.Infof("table (%s.%s) has finished, skip.", db, table)
@@ -826,7 +861,6 @@ func (l *Loader) restoreData(ctx context.Context) error {
 			}
 
 			// create table
-			tableFile := fmt.Sprintf("%s/%s.%s-schema.sql", l.cfg.Dir, db, table)
 			err := l.restoreSchema(conn, tableFile, db, table)
 			if err != nil {
 				if isErrTableExists(err) {
@@ -840,6 +874,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 			restoringFiles := l.checkPoint.GetRestoringFileInfo(db, table)
 			log.Debugf("restoring db %s table %s files:%+v", db, table, restoringFiles)
 
+			info := l.tableInfos[tableName(db, table)]
 			for _, file := range dataFiles {
 				select {
 				case <-ctx.Done():
@@ -862,6 +897,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 					table:    table,
 					dataFile: file,
 					offset:   offset,
+					info:     info,
 				}
 				dispatchMap[fmt.Sprintf("%s_%s_%s", db, table, file)] = j
 			}

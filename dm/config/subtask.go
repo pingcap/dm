@@ -47,13 +47,6 @@ type DBConfig struct {
 	Password string `toml:"password" json:"-" yaml:"password"` // omit it for privacy
 }
 
-// SkipDML defines config rule of skipping dml.
-type SkipDML struct {
-	Schema string `toml:"db-name" json:"db-name"`
-	Table  string `toml:"tbl-name" json:"tbl-name"`
-	Type   string `toml:"type" json:"type"`
-}
-
 // SubTaskConfig is the configuration for SubTask
 type SubTaskConfig struct {
 	// BurntSushi/toml seems have a bug for flag "-"

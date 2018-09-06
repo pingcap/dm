@@ -110,7 +110,7 @@ func executeSQLImp(db *sql.DB, sqls []string) error {
 			if isTiDBUnknownError(err) {
 				tidbUnknownErrorCount.Inc()
 			}
-			log.Warnf("[exec][sql]%-.100v[error]%v", sqls, err)
+			log.Warnf("[exec][sql]%-.100v[error]%v", sqls[i], err)
 			rerr := txn.Rollback()
 			if rerr != nil {
 				log.Errorf("[exec][sql]%-.100s[error]%v", sqls, rerr)

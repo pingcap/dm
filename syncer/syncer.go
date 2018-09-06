@@ -33,6 +33,7 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
+	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb/ast"
 	"github.com/siddontang/go-mysql/mysql"
@@ -89,7 +90,8 @@ type Syncer struct {
 	wg    sync.WaitGroup
 	jobWg sync.WaitGroup
 
-	tables map[string]*table
+	tables       map[string]*table
+	cacheColumns map[string][]string
 
 	fromDB *sql.DB
 	toDBs  []*sql.DB
@@ -100,9 +102,10 @@ type Syncer struct {
 
 	c *causality
 
-	tableRouter  *router.Table
-	binlogFilter *bf.BinlogEvent
-	bwList       *filter.Filter
+	tableRouter   *router.Table
+	binlogFilter  *bf.BinlogEvent
+	columnMapping *cm.Mapping
+	bwList        *filter.Filter
 
 	closed sync2.AtomicBool
 
@@ -134,6 +137,7 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.lastCount.Set(0)
 	syncer.count.Set(0)
 	syncer.tables = make(map[string]*table)
+	syncer.cacheColumns = make(map[string][]string)
 	syncer.c = newCausality()
 	syncer.tableRouter, _ = router.NewTableRouter([]*router.TableRule{})
 	syncer.done = make(chan struct{})
@@ -198,6 +202,13 @@ func (s *Syncer) Init() error {
 	s.binlogFilter, err = bf.NewBinlogEvent(s.cfg.FilterRules)
 	if err != nil {
 		return errors.Trace(err)
+	}
+
+	if len(s.cfg.ColumnMappingRules) > 0 {
+		s.columnMapping, err = cm.NewMapping(s.cfg.ColumnMappingRules)
+		if err != nil {
+			return errors.Trace(err)
+		}
 	}
 
 	err = s.genRouter()
@@ -345,6 +356,7 @@ func (s *Syncer) getMasterStatus() (mysql.Position, gtid.Set, error) {
 
 func (s *Syncer) clearTables() {
 	s.tables = make(map[string]*table)
+	s.cacheColumns = make(map[string][]string)
 }
 
 func (s *Syncer) getTableFromDB(db *sql.DB, schema string, name string) (*table, error) {
@@ -370,22 +382,29 @@ func (s *Syncer) getTableFromDB(db *sql.DB, schema string, name string) (*table,
 	return table, nil
 }
 
-func (s *Syncer) getTable(schema string, table string) (*table, error) {
+func (s *Syncer) getTable(schema string, table string) (*table, []string, error) {
 	key := fmt.Sprintf("%s.%s", schema, table)
 
 	value, ok := s.tables[key]
 	if ok {
-		return value, nil
+		return value, s.cacheColumns[key], nil
 	}
 
 	db := s.toDBs[len(s.toDBs)-1]
 	t, err := s.getTableFromDB(db, schema, table)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
+	}
+
+	// compute cache column list for column mapping
+	columns := make([]string, 0, len(t.columns))
+	for _, c := range t.columns {
+		columns = append(columns, c.name)
 	}
 
 	s.tables[key] = t
-	return t, nil
+	s.cacheColumns[key] = columns
+	return t, columns, nil
 }
 
 func (s *Syncer) addCount(tp opType, n int64) {
@@ -838,7 +857,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				continue
 			}
 
-			table, err := s.getTable(schemaName, tableName)
+			table, columns, err := s.getTable(schemaName, tableName)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			rows, err := s.mappingDML(originSchema, originTable, columns, ev.Rows)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -852,7 +875,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
 				binlogEventsTotal.WithLabelValues("write_rows").Inc()
 
-				sqls, keys, args, err = genInsertSQLs(table.schema, table.name, ev.Rows, table.columns, table.indexColumns)
+				sqls, keys, args, err = genInsertSQLs(table.schema, table.name, rows, table.columns, table.indexColumns)
 				if err != nil {
 					return errors.Errorf("gen insert sqls failed: %v, schema: %s, table: %s", errors.Trace(err), table.schema, table.name)
 				}
@@ -866,7 +889,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
 				binlogEventsTotal.WithLabelValues("update_rows").Inc()
 
-				sqls, keys, args, err = genUpdateSQLs(table.schema, table.name, ev.Rows, table.columns, table.indexColumns)
+				sqls, keys, args, err = genUpdateSQLs(table.schema, table.name, rows, table.columns, table.indexColumns)
 				if err != nil {
 					return errors.Errorf("gen update sqls failed: %v, schema: %s, table: %s", err, table.schema, table.name)
 				}
@@ -880,7 +903,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
 				binlogEventsTotal.WithLabelValues("delete_rows").Inc()
 
-				sqls, keys, args, err = genDeleteSQLs(table.schema, table.name, ev.Rows, table.columns, table.indexColumns)
+				sqls, keys, args, err = genDeleteSQLs(table.schema, table.name, rows, table.columns, table.indexColumns)
 				if err != nil {
 					return errors.Errorf("gen delete sqls failed: %v, schema: %s, table: %s", err, table.schema, table.name)
 				}
