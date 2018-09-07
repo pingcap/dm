@@ -23,6 +23,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/pingcap/tidb-enterprise-tools/checker"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
@@ -59,6 +60,14 @@ func main() {
 		log.Infof("config: %s", cfg)
 	})
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err = checker.CheckSyncConfig(ctx, []*config.SubTaskConfig{cfg})
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	syncUnit := syncer.NewSyncer(cfg)
 	err = syncUnit.Init()
 	if err != nil {
@@ -72,9 +81,6 @@ func main() {
 		syscall.SIGINT,
 		syscall.SIGTERM,
 		syscall.SIGQUIT)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	go func() {
 		sig := <-sc

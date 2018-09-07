@@ -7,26 +7,36 @@ import (
 	"sync"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql" // for mysql
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"github.com/pingcap/tidb-enterprise-tools/dm/unit"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/pkg/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go/sync2"
 	"golang.org/x/net/context"
 )
+
+type mysqlInstance struct {
+	cfg *config.SubTaskConfig
+
+	sourceDB     *sql.DB
+	sourceDBinfo *dbutil.DBConfig
+
+	targetDB     *sql.DB
+	targetDBInfo *dbutil.DBConfig
+}
 
 // Checker performs pre-check of data synchronization
 type Checker struct {
 	closed sync2.AtomicBool
 
-	sourceDB *sql.DB
-	targetDB *sql.DB
-
-	sourceDBinfo *dbutil.DBConfig
-	targetDBInfo *dbutil.DBConfig
+	instances []*mysqlInstance
 
 	checkList []check.Checker
 	result    struct {
@@ -36,40 +46,97 @@ type Checker struct {
 }
 
 // NewChecker returns a checker
-func NewChecker(cfg *config.SubTaskConfig) *Checker {
-	c := &Checker{}
-	c.sourceDBinfo = &dbutil.DBConfig{
-		Host:     cfg.From.Host,
-		Port:     cfg.From.Port,
-		User:     cfg.From.User,
-		Password: cfg.From.Password,
+func NewChecker(cfgs []*config.SubTaskConfig) *Checker {
+	c := &Checker{
+		instances: make([]*mysqlInstance, 0, len(cfgs)),
 	}
-	c.targetDBInfo = &dbutil.DBConfig{
-		Host:     cfg.To.Host,
-		Port:     cfg.To.Port,
-		User:     cfg.To.User,
-		Password: cfg.To.Password,
+
+	for _, cfg := range cfgs {
+		c.instances = append(c.instances, &mysqlInstance{
+			cfg: cfg,
+		})
 	}
+
 	return c
 }
 
 // Init implements Unit interface
 func (c *Checker) Init() error {
-	var err error
-	c.sourceDB, err = dbutil.OpenDB(*c.sourceDBinfo)
-	if err != nil {
-		return errors.Trace(err)
+
+	// target name => instance => schema => [tables]
+	sharding := make(map[string]map[string]map[string][]string)
+	shardingCounter := make(map[string]int)
+	dbs := make(map[string]*sql.DB)
+	for _, instance := range c.instances {
+		instanceID := fmt.Sprintf("%s:%d", instance.cfg.From.Host, instance.cfg.From.Port)
+		bw := filter.New(instance.cfg.BWList)
+		r, err := router.NewTableRouter(instance.cfg.RouteRules)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		instance.sourceDBinfo = &dbutil.DBConfig{
+			Host:     instance.cfg.From.Host,
+			Port:     instance.cfg.From.Port,
+			User:     instance.cfg.From.User,
+			Password: instance.cfg.From.Password,
+		}
+		instance.sourceDB, err = dbutil.OpenDB(*instance.sourceDBinfo)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		instance.targetDBInfo = &dbutil.DBConfig{
+			Host:     instance.cfg.To.Host,
+			Port:     instance.cfg.To.Port,
+			User:     instance.cfg.To.User,
+			Password: instance.cfg.To.Password,
+		}
+		instance.targetDB, err = dbutil.OpenDB(*instance.targetDBInfo)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		mapping, err := utils.FetchTargetDoTables(instance.sourceDB, bw, r)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		checkTables := make(map[string][]string)
+		for name, tables := range mapping {
+			for _, table := range tables {
+				checkTables[table.Schema] = append(checkTables[table.Schema], table.Name)
+				if _, ok := sharding[name]; !ok {
+					sharding[name] = make(map[string]map[string][]string)
+				}
+				if _, ok := sharding[name][instanceID]; !ok {
+					sharding[name][instanceID] = make(map[string][]string)
+				}
+				if _, ok := sharding[name][instanceID][table.Schema]; !ok {
+					sharding[name][instanceID][table.Schema] = make([]string, 0, 1)
+				}
+
+				sharding[name][instanceID][table.Schema] = append(sharding[name][instanceID][table.Schema], table.Name)
+				shardingCounter[name]++
+			}
+		}
+		dbs[instanceID] = instance.sourceDB
+
+		c.checkList = append(c.checkList, check.NewMySQLBinlogEnableChecker(instance.sourceDB, instance.sourceDBinfo))
+		c.checkList = append(c.checkList, check.NewMySQLBinlogFormatChecker(instance.sourceDB, instance.sourceDBinfo))
+		c.checkList = append(c.checkList, check.NewMySQLBinlogRowImageChecker(instance.sourceDB, instance.sourceDBinfo))
+		c.checkList = append(c.checkList, check.NewSourcePrivilegeChecker(instance.sourceDB, instance.sourceDBinfo))
+		c.checkList = append(c.checkList, check.NewTablesChecker(instance.sourceDB, instance.sourceDBinfo, checkTables))
 	}
 
-	c.targetDB, err = dbutil.OpenDB(*c.targetDBInfo)
-	if err != nil {
-		return errors.Trace(err)
+	for name, shardingSet := range sharding {
+		if shardingCounter[name] <= 1 {
+			continue
+		}
+
+		c.checkList = append(c.checkList, check.NewShardingTablesCheck(name, dbs, shardingSet))
 	}
 
-	c.checkList = append(c.checkList, check.NewMySQLBinlogEnableChecker(c.sourceDB, c.sourceDBinfo))
-	c.checkList = append(c.checkList, check.NewMySQLBinlogFormatChecker(c.sourceDB, c.sourceDBinfo))
-	c.checkList = append(c.checkList, check.NewMySQLBinlogRowImageChecker(c.sourceDB, c.sourceDBinfo))
-	c.checkList = append(c.checkList, check.NewSourcePrivilegeChecker(c.sourceDB, c.sourceDBinfo))
 	return nil
 }
 
@@ -94,7 +161,7 @@ func (c *Checker) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	rawResult, err := json.Marshal(result)
 	if err != nil {
-		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, fmt.Sprintf("marshal error %v", err)))
+		rawResult = []byte(fmt.Sprintf("marshal error %v", err))
 	}
 
 	c.result.Lock()
@@ -114,15 +181,17 @@ func (c *Checker) Close() {
 		return
 	}
 
-	if c.sourceDB != nil {
-		if err := dbutil.CloseDB(c.sourceDB); err != nil {
-			log.Infof("close source db %+v error %v", c.sourceDBinfo, err)
+	for _, instance := range c.instances {
+		if instance.sourceDB != nil {
+			if err := dbutil.CloseDB(instance.sourceDB); err != nil {
+				log.Errorf("close source db %+v error %v", instance.sourceDBinfo, err)
+			}
 		}
-	}
 
-	if c.targetDB != nil {
-		if err := dbutil.CloseDB(c.targetDB); err != nil {
-			log.Infof("close target db %+v error %v", c.targetDBInfo, err)
+		if instance.targetDB != nil {
+			if err := dbutil.CloseDB(instance.targetDB); err != nil {
+				log.Errorf("close target db %+v error %v", instance.targetDBInfo, err)
+			}
 		}
 	}
 

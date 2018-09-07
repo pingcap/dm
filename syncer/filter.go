@@ -18,7 +18,6 @@ import (
 	"strings"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb/ast"
@@ -238,57 +237,4 @@ func (s *Syncer) skipDMLEvent(schema string, table string, eventType replication
 	}
 
 	return action == bf.Ignore, nil
-}
-
-// fetchAllDoTables returns all need to do tables after filtered (fetches from upstream MySQL)
-func (s *Syncer) fetchAllDoTables() (map[string][]string, error) {
-	schemas, err := getSchemas(s.fromDB, maxRetryCount)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	// TODO zxc: replace when new filter is merged
-	ftSchemas := make([]*filter.Table, 0, len(schemas))
-	for _, schema := range schemas {
-		if filter.IsSystemSchema(schema) {
-			continue
-		}
-		ftSchemas = append(ftSchemas, &filter.Table{
-			Schema: strings.ToLower(schema),
-			Name:   "", // schema level
-		})
-	}
-	ftSchemas = s.bwList.ApplyOn(ftSchemas)
-	if len(ftSchemas) == 0 {
-		log.Warn("[syncer] no schema need to sync")
-		return nil, nil
-	}
-
-	schemaToTables := make(map[string][]string)
-	for _, ftSchema := range ftSchemas {
-		schema := ftSchema.Schema
-		tables, err := getTables(s.fromDB, schema, maxRetryCount)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		ftTables := make([]*filter.Table, 0, len(tables))
-		for _, table := range tables {
-			ftTables = append(ftTables, &filter.Table{
-				Schema: schema,
-				Name:   strings.ToLower(table),
-			})
-		}
-		ftTables = s.bwList.ApplyOn(ftTables)
-		if len(ftTables) == 0 {
-			log.Infof("[syncer] schema %s no tables need to sync", schema)
-			continue // NOTE: should we still keep it as an empty elem?
-		}
-		tables = tables[:0]
-		for _, ftTable := range ftTables {
-			tables = append(tables, ftTable.Name)
-		}
-		schemaToTables[schema] = tables
-	}
-
-	return schemaToTables, nil
 }

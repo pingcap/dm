@@ -18,24 +18,22 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb-enterprise-tools/dm/ctl/common"
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"github.com/spf13/cobra"
 	"golang.org/x/net/context"
 )
 
-// NewStartSubTaskCmd creates a StartSubTask command
-// refine it to talk to dm-master later
-func NewStartSubTaskCmd() *cobra.Command {
+// NewCheckSubTaskCmd creates a CheckSubTask command
+func NewCheckSubTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "start-sub-task <config_file>",
-		Short: "start a sub task with config file",
-		Run:   startSubTaskFunc,
+		Use:   "check-sub-task <config_file>",
+		Short: "check configuration of a sub task",
+		Run:   checkSubTaskFunc,
 	}
 	return cmd
 }
 
-// startSubTaskFunc does start sub task request
-func startSubTaskFunc(cmd *cobra.Command, args []string) {
+// checkSubTaskFunc does check sub task request
+func checkSubTaskFunc(cmd *cobra.Command, args []string) {
 	if len(args) != 1 {
 		fmt.Println(cmd.UsageString())
 		return
@@ -56,12 +54,5 @@ func startSubTaskFunc(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	cli := common.WorkerClient()
-	resp, err := cli.StartSubTask(ctx, &pb.StartSubTaskRequest{Task: string(content)})
-	if err != nil {
-		common.PrintLines("can not start sub task:\n%v", errors.ErrorStack(err))
-		return
-	}
-
-	common.PrettyPrintResponse(resp)
+	common.PrintLines("check pass!!!!")
 }

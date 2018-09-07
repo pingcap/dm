@@ -53,6 +53,7 @@ func Start(args []string) {
 			worker.NewPauseSubTaskCmd(),
 			worker.NewResumeSubTaskCmd(),
 			worker.NewQueryStatusCmd(),
+			worker.NewCheckSubTaskCmd(),
 		)
 	} else {
 		// --worker worker1 -w worker2 --worker=worker3,worker4 -w=worker5,worker6
@@ -64,6 +65,7 @@ func Start(args []string) {
 			master.NewResumeTaskCmd(),
 			master.NewQueryStatusCmd(),
 			master.NewRefreshWorkerTasks(),
+			master.NewCheckTaskCmd(),
 		)
 	}
 

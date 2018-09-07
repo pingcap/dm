@@ -18,7 +18,6 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-enterprise-tools/checker"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"github.com/pingcap/tidb-enterprise-tools/dm/unit"
@@ -38,7 +37,6 @@ func createUnits(cfg *config.SubTaskConfig) []unit.Unit {
 	us := make([]unit.Unit, 0, 5)
 	switch cfg.Mode {
 	case config.ModeAll:
-		us = append(us, checker.NewChecker(cfg))
 		us = append(us, mydumper.NewMydumper(cfg))
 		us = append(us, loader.NewLoader(cfg))
 		us = append(us, syncer.NewSyncer(cfg))
@@ -46,7 +44,6 @@ func createUnits(cfg *config.SubTaskConfig) []unit.Unit {
 		us = append(us, mydumper.NewMydumper(cfg))
 		us = append(us, loader.NewLoader(cfg))
 	case config.ModeIncrement:
-		us = append(us, checker.NewChecker(cfg))
 		us = append(us, syncer.NewSyncer(cfg))
 	default:
 		log.Errorf("[subtask] unsupported task mode %s", cfg.Mode)

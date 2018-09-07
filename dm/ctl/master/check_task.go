@@ -11,37 +11,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package worker
+package master
 
 import (
 	"fmt"
 
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb-enterprise-tools/dm/ctl/common"
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"github.com/spf13/cobra"
 	"golang.org/x/net/context"
 )
 
-// NewStartSubTaskCmd creates a StartSubTask command
-// refine it to talk to dm-master later
-func NewStartSubTaskCmd() *cobra.Command {
+// NewCheckTaskCmd creates a CheckTask command
+func NewCheckTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "start-sub-task <config_file>",
-		Short: "start a sub task with config file",
-		Run:   startSubTaskFunc,
+		Use:   "check-task <config_file>",
+		Short: "check a task with config file",
+		Run:   checkTaskFunc,
 	}
 	return cmd
 }
 
-// startSubTaskFunc does start sub task request
-func startSubTaskFunc(cmd *cobra.Command, args []string) {
-	if len(args) != 1 {
-		fmt.Println(cmd.UsageString())
+// checkTaskFunc does check task request
+func checkTaskFunc(cmd *cobra.Command, _ []string) {
+	if len(cmd.Flags().Args()) != 1 {
+		fmt.Println(cmd.Usage())
 		return
 	}
-
-	content, err := common.GetFileContent(args[0])
+	content, err := common.GetFileContent(cmd.Flags().Arg(0))
 	if err != nil {
 		common.PrintLines("get file content error:\n%v", errors.ErrorStack(err))
 		return
@@ -50,18 +47,12 @@ func startSubTaskFunc(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	err = checkSubTask(ctx, string(content))
+	// precheck task
+	err = checkTask(ctx, string(content))
 	if err != nil {
 		common.PrintLines("precheck failed %s", errors.ErrorStack(err))
 		return
 	}
 
-	cli := common.WorkerClient()
-	resp, err := cli.StartSubTask(ctx, &pb.StartSubTaskRequest{Task: string(content)})
-	if err != nil {
-		common.PrintLines("can not start sub task:\n%v", errors.ErrorStack(err))
-		return
-	}
-
-	common.PrettyPrintResponse(resp)
+	common.PrintLines("check pass!!!")
 }

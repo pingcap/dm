@@ -233,7 +233,7 @@ func (s *Syncer) Init() error {
 // NOTE: now we don't support modify router rules after task has started
 func (s *Syncer) initShardingGroups() error {
 	// fetch tables from source and filter them
-	sourceTables, err := s.fetchAllDoTables()
+	sourceTables, err := utils.FetchAllDoTables(s.fromDB, s.bwList)
 	if err != nil {
 		return errors.Trace(err)
 	}
