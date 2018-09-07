@@ -21,8 +21,7 @@ service Master {
     // including remove DDLLockInfo and/or execute/skip DDL
     rpc BreakWorkerDDLLock (BreakWorkerDDLLockRequest) returns (BreakWorkerDDLLockResponse) {}
 
-    // refine to support specify dm-worker
-    rpc HandleSQLs (HandleSQLsRequest) returns (CommonTaskResponse) {}
+    rpc HandleSQLs (HandleSQLsRequest) returns (HandleSQLsResponse) {}
 
     // used by dmctl, to force refresh the task -> workers mapper
     // it should be used rarely only when task -> workers mapper corrupted
@@ -52,6 +51,8 @@ message OperateTaskResponse {
     string msg = 3;
     repeated OperateSubTaskResponse workers = 4;
 }
+
+
 
 // refine when we refactor filter, column-mapping, etc.
 message UpdateTaskRequest {
@@ -158,4 +159,18 @@ message RefreshWorkerTasksMsg {
 message RefreshWorkerTasksResponse {
     bool result = 1;
     repeated RefreshWorkerTasksMsg workers = 2;
+}
+
+message HandleSQLsRequest {
+    string name = 1; // sub task's name
+    SQLOp op = 2; // operation type
+    repeated string args = 3; // args for operation
+    string binlog_pos = 4; // binlog position(that's file:pos format)
+    string worker = 5; // worker
+}
+
+message HandleSQLsResponse {
+    bool result = 1;
+    string msg = 2;
+    repeated CommonWorkerResponse workers = 3;
 }

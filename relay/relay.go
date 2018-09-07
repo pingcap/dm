@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/juju/errors"
@@ -48,6 +49,7 @@ type Relay struct {
 	lastSlaveConnectionID uint32
 	fd                    *os.File
 	closed                sync2.AtomicBool
+	sync.RWMutex
 }
 
 // NewRelay creates an instance of Relay.
@@ -107,7 +109,7 @@ func (r *Relay) Init() error {
 func (r *Relay) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	errs := make([]*pb.ProcessError, 0, 1)
 	err := r.process(ctx)
-	if err != nil {
+	if err != nil && errors.Cause(err) != replication.ErrSyncClosed {
 		log.Errorf("[relay] process exit with error %v", errors.ErrorStack(err))
 		// TODO: add specified error type instead of pb.ErrorType_UnknownError
 		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err)))
@@ -183,28 +185,25 @@ func (r *Relay) process(parentCtx context.Context) error {
 				return errors.Trace(err)
 			}
 
-			b := make([]byte, 4)
-			_, err = r.fd.Read(b)
-			if err == io.EOF || !bytes.Equal(b, replication.BinLogFileHeader) {
-				log.Info("write binlog header")
-				// write binlog header fe'bin'
-				if _, err = r.fd.Write(replication.BinLogFileHeader); err != nil {
-					return errors.Trace(err)
-				}
+			err = r.writeBinlogHeaderIfNotExists()
+			if err != nil {
+				return errors.Trace(err)
 			}
 
-			eof, err2 := replication.NewBinlogParser().ParseSingleEvent(r.fd, func(e *replication.BinlogEvent) error {
-				return nil
-			})
-			if err2 != nil {
-				return errors.Trace(err2)
+			exists, err := r.checkFormatDescriptionEventExists(filename)
+			if err != nil {
+				return errors.Trace(err)
 			}
-			// FormateDescriptionEvent is the first event and only one FormateDescriptionEvent in a file.
-			if !eof {
-				log.Infof("binlog file %s already has Format_desc event, so ignore it", filename)
+
+			ret, err := r.fd.Seek(0, io.SeekEnd)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			log.Infof("%s seek to end %d", filename, ret)
+
+			if exists {
 				continue
 			}
-
 		}
 
 		log.Debugf("write %v", e.Header)
@@ -224,6 +223,39 @@ func (r *Relay) process(parentCtx context.Context) error {
 			return errors.Trace(err)
 		}
 	}
+}
+
+func (r *Relay) writeBinlogHeaderIfNotExists() error {
+	b := make([]byte, 4)
+	_, err := r.fd.Read(b)
+	log.Debugf("the first 4 bytes are %v", b)
+	if err == io.EOF || !bytes.Equal(b, replication.BinLogFileHeader) {
+		_, err = r.fd.Seek(0, io.SeekStart)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		log.Info("write binlog header")
+		// write binlog header fe'bin'
+		if _, err = r.fd.Write(replication.BinLogFileHeader); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
+}
+
+func (r *Relay) checkFormatDescriptionEventExists(filename string) (exists bool, err error) {
+	eof, err2 := replication.NewBinlogParser().ParseSingleEvent(r.fd, func(e *replication.BinlogEvent) error {
+		return nil
+	})
+	if err2 != nil {
+		return false, errors.Trace(err2)
+	}
+	// FormateDescriptionEvent is the first event and only one FormateDescriptionEvent in a file.
+	if !eof {
+		log.Infof("binlog file %s already has Format_desc event, so ignore it", filename)
+		return true, nil
+	}
+	return false, nil
 }
 
 // TODO: master-slave switch ?
@@ -294,12 +326,19 @@ func (r *Relay) startSyncByPos() (*replication.BinlogStreamer, error) {
 	return streamer, errors.Trace(err)
 }
 
-func (r *Relay) isClosed() bool {
+// IsClosed tells whether Relay unit is closed or not.
+func (r *Relay) IsClosed() bool {
 	return r.closed.Get()
 }
 
 // Close implements the dm.Unit interface.
 func (r *Relay) Close() {
+	r.Lock()
+	defer r.Unlock()
+	if r.closed.Get() {
+		return
+	}
+	log.Info("relay closing")
 	if r.syncer != nil {
 		r.syncer.Close()
 	}
@@ -313,6 +352,7 @@ func (r *Relay) Close() {
 		log.Errorf("[relay] flush checkpoint error %v", errors.ErrorStack(err))
 	}
 	r.closed.Set(true)
+	log.Info("relay closed")
 }
 
 // Status implements the dm.Unit interface.

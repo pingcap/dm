@@ -53,6 +53,8 @@ func Start(args []string) {
 			worker.NewPauseSubTaskCmd(),
 			worker.NewResumeSubTaskCmd(),
 			worker.NewQueryStatusCmd(),
+			worker.NewSQLReplaceCmd(),
+			worker.NewSQLSkipCmd(),
 			worker.NewBreakDDLLockCmd(),
 			worker.NewCheckSubTaskCmd(),
 		)
@@ -66,6 +68,8 @@ func Start(args []string) {
 			master.NewResumeTaskCmd(),
 			master.NewQueryStatusCmd(),
 			master.NewRefreshWorkerTasks(),
+			master.NewSQLReplaceCmd(),
+			master.NewSQLSkipCmd(),
 			master.NewShowDDLLocksCmd(),
 			master.NewUnlockDDLLockCmd(),
 			master.NewBreakDDLLockCmd(),

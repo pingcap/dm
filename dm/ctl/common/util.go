@@ -16,7 +16,10 @@ package common
 import (
 	"fmt"
 	"io/ioutil"
+	"strings"
 	"time"
+
+	"github.com/pingcap/tidb/parser"
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
@@ -83,4 +86,35 @@ func GetFileContent(fpath string) ([]byte, error) {
 // GetWorkerArgs extracts workers from cmd
 func GetWorkerArgs(cmd *cobra.Command) ([]string, error) {
 	return cmd.Flags().GetStringSlice("worker")
+}
+
+// ExtractSQLsFromArgs extract multiple sql from args.
+func ExtractSQLsFromArgs(args []string) ([]string, error) {
+	if len(args) <= 0 {
+		return nil, errors.New("args is empty")
+	}
+
+	concat := strings.TrimSpace(strings.Join(args, " "))
+
+	parser := parser.New()
+	nodes, err := parser.Parse(concat, "", "")
+	if err != nil {
+		return nil, errors.Annotatef(err, "invalid sql %s", concat)
+	}
+	realSQLs := make([]string, 0, len(nodes))
+	for _, node := range nodes {
+		realSQLs = append(realSQLs, node.Text())
+	}
+	return realSQLs, nil
+}
+
+// CheckBinlogPos checks whether binlog pos is valid or not.
+func CheckBinlogPos(pos string) error {
+	if strings.TrimSpace(pos) == "" {
+		return errors.New("binlog is empty")
+	}
+	if len(strings.Split(pos, ":")) != 2 {
+		return errors.New("binlog_pos should in format of <binlog_file>:<pos>")
+	}
+	return nil
 }

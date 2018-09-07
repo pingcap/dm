@@ -10,6 +10,7 @@ service Worker {
 
     rpc QueryStatus (QueryStatusRequest) returns (QueryStatusResponse) {}
 
+    rpc HandleSQLs (HandleSubTaskSQLsRequest) returns (CommonWorkerResponse) {}
     // FetchDDLInfo fetches DDL info from dm-worker by dm-master
     // and sends the relevant DDL lock info back to dm-worker
     // NOTE: split to two RPCs if needed
@@ -21,8 +22,6 @@ service Worker {
     // BreakDDLLock request a dm-worker to break a DDL lock
     // including remove DDLLockInfo and/or execute/skip DDL
     rpc BreakDDLLock (BreakDDLLockRequest) returns (CommonWorkerResponse) {}
-
-    rpc HandleSQLs (HandleSQLsRequest) returns (CommonWorkerResponse) {}
 }
 
 message StartSubTaskRequest {
@@ -62,10 +61,11 @@ enum SQLOp {
 }
 
 // NOTE: we can extract some common(optional) arguments from `args`, like `meta`
-message HandleSQLsRequest {
+message HandleSubTaskSQLsRequest {
     string name = 1; // sub task's name
     SQLOp op = 2; // operation type
-    bytes args = 3; // args for operation
+    repeated string args = 3; // args for operation
+    string binlog_pos = 4; // binlog position(that's file:pos format)
 }
 
 message CommonWorkerResponse {
@@ -157,6 +157,7 @@ message RelayStatus {
     string MasterBinlogGtid = 2;
     string RelayBinlog = 3;
     string RelayBinlogGtid = 4;
+    bool Closed = 5;
 }
 
 // SubTaskStatus represents status for a sub task

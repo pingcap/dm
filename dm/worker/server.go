@@ -177,7 +177,13 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 	resp := &pb.QueryStatusResponse{
 		Result:        true,
 		SubTaskStatus: s.worker.QueryStatus(req.Name),
-		RelayStatus:   s.worker.relay.Status().(*pb.RelayStatus),
+	}
+	if !s.worker.relay.IsClosed() {
+		resp.RelayStatus = s.worker.relay.Status().(*pb.RelayStatus)
+	} else {
+		resp.RelayStatus = &pb.RelayStatus{
+			Closed: true,
+		}
 	}
 
 	if len(resp.SubTaskStatus) == 0 {
@@ -277,11 +283,21 @@ func (s *Server) BreakDDLLock(ctx context.Context, req *pb.BreakDDLLockRequest) 
 }
 
 // HandleSQLs implements WorkerServer.HandleSQLs
-// Note: zxc will implement it when the error-handle completed
-func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb.CommonWorkerResponse, error) {
+func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSubTaskSQLsRequest) (*pb.CommonWorkerResponse, error) {
 	log.Infof("[server] receive HandleSQLs request %+v", req)
-	return &pb.CommonWorkerResponse{
+
+	resp := &pb.CommonWorkerResponse{
 		Result: false,
-		Msg:    "not implement",
-	}, nil
+		Msg:    "",
+	}
+
+	err := s.worker.HandleSQLs(req.Name, req.Op, req.BinlogPos, req.Args)
+	if err != nil {
+		log.Errorf("[server] handle sqls %+v error %v", req, errors.ErrorStack(err))
+		resp.Msg = errors.ErrorStack(err)
+		return resp, nil
+	}
+
+	resp.Result = true
+	return resp, nil
 }

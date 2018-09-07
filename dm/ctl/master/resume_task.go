@@ -25,7 +25,7 @@ import (
 // NewResumeTaskCmd creates a ResumeTask command
 func NewResumeTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "resume-task [-w worker ...] <sub_task_name>",
+		Use:   "resume-task [-w worker ...] <task_name>",
 		Short: "resume a paused task with name",
 		Run:   resumeTaskFunc,
 	}

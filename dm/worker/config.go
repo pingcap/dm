@@ -109,9 +109,12 @@ func (c *Config) Parse(arguments []string) error {
 	}
 
 	// try decrypt password
-	pswd, err := utils.Decrypt(c.From.Password)
-	if err != nil {
-		return errors.Annotatef(err, "can not decrypt password %s", c.From.Password)
+	var pswd string
+	if len(c.From.Password) > 0 {
+		pswd, err = utils.Decrypt(c.From.Password)
+		if err != nil {
+			return errors.Annotatef(err, "can not decrypt password %s", c.From.Password)
+		}
 	}
 	c.From.Password = pswd
 

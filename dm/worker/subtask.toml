@@ -42,12 +42,6 @@ dir = "./"
 # We saved checkpoint data to tidb, which schema name is defined here.
 checkpoint-schema = "tidb_loader"
 
-# An alternative database to restore into
-alternative-db = ""
-
-# Database to restore
-source-db = ""
-
 
 # Syncer configuration
 

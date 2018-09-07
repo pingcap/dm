@@ -128,6 +128,11 @@ type Syncer struct {
 
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
+
+	operatorsMu struct {
+		sync.RWMutex
+		operators map[string]*Operator
+	}
 }
 
 // NewSyncer creates a new Syncer.
@@ -159,6 +164,7 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	}
 
 	syncer.binlogType = toBinlogType(cfg.BinlogType)
+	syncer.operatorsMu.operators = make(map[string]*Operator)
 
 	if cfg.InSharding {
 		// only need to sync DDL in sharding mode
@@ -467,7 +473,7 @@ func (s *Syncer) checkWait(job *job) bool {
 func (s *Syncer) addJob(job *job) error {
 	switch job.tp {
 	case xid:
-		s.saveGlobalPoint(job.pos)
+		s.saveGlobalPoint(job.currentPos)
 		return nil
 	case ddl, fakeDDL:
 		// wait 3 seconds? refine it later
@@ -502,9 +508,9 @@ func (s *Syncer) addJob(job *job) error {
 	}
 
 	// save global and table's checkpoint of current job
-	s.saveGlobalPoint(job.pos)
+	s.saveGlobalPoint(job.currentPos)
 	if job.tp != skip {
-		s.checkpoint.SaveTablePoint(job.sourceSchema, job.sourceTable, job.pos)
+		s.checkpoint.SaveTablePoint(job.sourceSchema, job.sourceTable, job.currentPos)
 	}
 
 	if wait {
@@ -561,28 +567,23 @@ func (s *Syncer) sync(ctx context.Context, db *sql.DB, jobChan chan *job) {
 		if len(jobs) == 0 {
 			return nil
 		}
-		sqls := make([]string, 0, len(jobs))
-		args := make([][]interface{}, 0, len(jobs))
-		for _, job := range jobs {
-			sqls = append(sqls, job.sql)
-			args = append(args, job.args)
-		}
-		err := executeSQL(db, sqls, args, s.cfg.MaxRetry)
+		err := executeSQLJob(db, jobs, s.cfg.MaxRetry)
 		return errors.Trace(err)
 	}
 
 	var err error
 	for {
 		select {
-		case job, ok := <-jobChan:
+		case sqlJob, ok := <-jobChan:
 			if !ok {
 				return
 			}
 			idx++
 
-			if job.tp == ddl || job.tp == fakeDDL {
+			if sqlJob.tp == ddl || sqlJob.tp == fakeDDL {
 				err = executeSQLs()
 				if err != nil {
+					// TODO: error then pause.
 					fatalF(err, pb.ErrorType_ExecSQL)
 					continue
 				}
@@ -594,27 +595,32 @@ func (s *Syncer) sync(ctx context.Context, db *sql.DB, jobChan chan *job) {
 				)
 				if s.cfg.InSharding {
 					// for DDL sharding group, executes DDL SQL, and update all tables' checkpoint in the sharding group in the same txn
-					sGroup = s.sgk.Group(job.targetSchema, job.targetTable)
+					sGroup = s.sgk.Group(sqlJob.targetSchema, sqlJob.targetTable)
 					cpSQLs, cpArgs = s.genUpdateCheckPointSQLs(sGroup)
 				}
-				sqls := make([]string, 0, len(cpSQLs)+1)
-				args := make([][]interface{}, 0, len(cpArgs)+1)
-				if job.tp == fakeDDL {
+
+				ddlJobs := make([]*job, 0, len(cpSQLs)+1)
+				if sqlJob.tp == fakeDDL {
 					// for fake DDL, no need to execute it
-					log.Infof("[syncer] ignore fake DDL [sql]%s [args]%v for sharding sync", job.sql, job.args)
+					log.Infof("[syncer] ignore fake DDL [sql]%s [args]%v for sharding sync", sqlJob.sql, sqlJob.args)
 				} else {
-					sqls = append(sqls, job.sql)
-					args = append(args, job.args)
+					ddlJobs = append(ddlJobs, sqlJob)
 				}
-				sqls = append(sqls, cpSQLs...)
-				args = append(args, cpArgs...)
-				err = executeSQL(db, sqls, args, s.cfg.MaxRetry)
+				for i, sql := range cpSQLs {
+					job := &job{
+						sql:  sql,
+						args: cpArgs[i],
+					}
+					ddlJobs = append(ddlJobs, job)
+				}
+				err = executeSQLJob(db, ddlJobs, s.cfg.MaxRetry)
 				if err != nil {
 					if !ignoreDDLError(err) {
+						// errro then pause.
 						fatalF(err, pb.ErrorType_ExecSQL)
 						continue
 					} else if len(cpSQLs) > 0 {
-						log.Warnf("[ignore ddl error][sql]%s[args]%v[error]%v", job.sql, job.args, err)
+						log.Warnf("[ignore ddl error][sql]%s[args]%v[error]%v", sqlJob.sql, sqlJob.args, err)
 						// try update checkpoint again when some cases like: CREATE TABLE returns already exists
 						err = executeSQL(db, cpSQLs, cpArgs, s.cfg.MaxRetry)
 						if err != nil {
@@ -627,15 +633,15 @@ func (s *Syncer) sync(ctx context.Context, db *sql.DB, jobChan chan *job) {
 					sGroup.Reset()                                   // reset for next round sharding DDL syncing
 				}
 
-				tpCnt[job.tp]++
+				tpCnt[sqlJob.tp]++
 				clearF()
 
-			} else if job.tp != flush {
-				jobs = append(jobs, job)
-				tpCnt[job.tp]++
+			} else if sqlJob.tp != flush {
+				jobs = append(jobs, sqlJob)
+				tpCnt[sqlJob.tp]++
 			}
 
-			if idx >= count || job.tp == flush {
+			if idx >= count || sqlJob.tp == flush {
 				err = executeSQLs()
 				if err != nil {
 					fatalF(err, pb.ErrorType_ExecSQL)
@@ -674,12 +680,16 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		close(s.done)
 	}()
 
-	pos := s.checkpoint.GlobalPoint()
+	// currentPos is the End_log_pos in `show binlog events` for mysql.
+	// lastPos the the last End_log_pos in `show binlog events` for mysql.
+	var currentPos mysql.Position
+	lastPos := s.checkpoint.GlobalPoint()
+	log.Debugf("initial lastpos %v", lastPos)
 	var globalStreamer streamer.Streamer
 	if s.binlogType == RemoteBinlog {
-		globalStreamer, err = s.getBinlogStreamer(s.syncer, pos)
+		globalStreamer, err = s.getBinlogStreamer(s.syncer, lastPos)
 	} else if s.binlogType == LocalBinlog {
-		globalStreamer, err = s.getBinlogStreamer(s.localReader, pos)
+		globalStreamer, err = s.getBinlogStreamer(s.localReader, lastPos)
 	}
 
 	if err != nil {
@@ -789,7 +799,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		cancel()
 
 		if err == context.Canceled {
-			log.Infof("ready to quit! [%v]", pos)
+			log.Infof("ready to quit! [%v]", lastPos)
 			return nil
 		} else if err == context.DeadlineExceeded {
 			log.Info("deadline exceeded.")
@@ -829,11 +839,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		// get binlog event, reset tryReSync, so we can re-sync binlog while syncer meets errors next time
 		tryReSync = true
 		binlogPos.WithLabelValues("syncer").Set(float64(e.Header.LogPos))
-		binlogFile.WithLabelValues("syncer").Set(getBinlogIndex(pos.Name))
+		binlogFile.WithLabelValues("syncer").Set(getBinlogIndex(lastPos.Name))
 
 		switch ev := e.Event.(type) {
 		case *replication.RotateEvent:
-			currentPos := mysql.Position{
+			currentPos = mysql.Position{
 				Name: string(ev.NextLogName),
 				Pos:  uint32(ev.Position),
 			}
@@ -850,8 +860,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				continue
 			}
 			binlogEventsTotal.WithLabelValues("rotate").Inc()
-			if currentPos.Name > pos.Name {
-				pos = currentPos
+			if currentPos.Name > lastPos.Name {
+				lastPos = currentPos
 			}
 			log.Infof("rotate binlog to %v", currentPos)
 		case *replication.RowsEvent:
@@ -859,8 +869,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			originSchema, originTable := string(ev.Table.Schema), string(ev.Table.Table)
 			schemaName, tableName := s.renameShardingSchema(originSchema, originTable)
 			// always add current event's pos to the job, and save it to DB combine with event data in the same txn
-			currentPos := mysql.Position{
-				Name: pos.Name,
+			currentPos = mysql.Position{
+				Name: lastPos.Name,
 				Pos:  e.Header.LogPos,
 			}
 
@@ -921,17 +931,39 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				keys [][]string
 				args [][]interface{}
 			)
+
+			operator := s.GetOperator(lastPos)
+
 			switch e.Header.EventType {
 			case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
 				binlogEventsTotal.WithLabelValues("write_rows").Inc()
 
-				sqls, keys, args, err = genInsertSQLs(table.schema, table.name, rows, table.columns, table.indexColumns)
-				if err != nil {
-					return errors.Errorf("gen insert sqls failed: %v, schema: %s, table: %s", errors.Trace(err), table.schema, table.name)
+				if operator != nil {
+					sqls, err = operator.Operate()
+					if err != nil {
+						return errors.Trace(err)
+					}
+					// operator only apply one time.
+					s.DelOperator(lastPos)
+					args = nil
+					keys = nil
+				} else {
+					sqls, keys, args, err = genInsertSQLs(table.schema, table.name, rows, table.columns, table.indexColumns)
+					if err != nil {
+						return errors.Errorf("gen insert sqls failed: %v, schema: %s, table: %s", errors.Trace(err), table.schema, table.name)
+					}
 				}
 
 				for i := range sqls {
-					err = s.commitJob(insert, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], args[i], keys[i], true, currentPos, nil)
+					var arg []interface{}
+					var key []string
+					if args != nil {
+						arg = args[i]
+					}
+					if keys != nil {
+						key = keys[i]
+					}
+					err = s.commitJob(insert, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, currentPos, nil, lastPos)
 					if err != nil {
 						return errors.Trace(err)
 					}
@@ -939,13 +971,32 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
 				binlogEventsTotal.WithLabelValues("update_rows").Inc()
 
-				sqls, keys, args, err = genUpdateSQLs(table.schema, table.name, rows, table.columns, table.indexColumns)
-				if err != nil {
-					return errors.Errorf("gen update sqls failed: %v, schema: %s, table: %s", err, table.schema, table.name)
+				if operator != nil {
+					sqls, err = operator.Operate()
+					if err != nil {
+						return errors.Trace(err)
+					}
+					// operator only apply one time.
+					s.DelOperator(lastPos)
+					args = nil
+					keys = nil
+				} else {
+					sqls, keys, args, err = genUpdateSQLs(table.schema, table.name, rows, table.columns, table.indexColumns)
+					if err != nil {
+						return errors.Errorf("gen update sqls failed: %v, schema: %s, table: %s", err, table.schema, table.name)
+					}
 				}
 
 				for i := range sqls {
-					err = s.commitJob(update, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], args[i], keys[i], true, currentPos, nil)
+					var arg []interface{}
+					var key []string
+					if args != nil {
+						arg = args[i]
+					}
+					if keys != nil {
+						key = keys[i]
+					}
+					err = s.commitJob(update, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, currentPos, nil, lastPos)
 					if err != nil {
 						return errors.Trace(err)
 					}
@@ -953,13 +1004,32 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
 				binlogEventsTotal.WithLabelValues("delete_rows").Inc()
 
-				sqls, keys, args, err = genDeleteSQLs(table.schema, table.name, rows, table.columns, table.indexColumns)
-				if err != nil {
-					return errors.Errorf("gen delete sqls failed: %v, schema: %s, table: %s", err, table.schema, table.name)
+				if operator != nil {
+					sqls, err = operator.Operate()
+					if err != nil {
+						return errors.Trace(err)
+					}
+					// operator only apply one time.
+					s.DelOperator(lastPos)
+					args = nil
+					keys = nil
+				} else {
+					sqls, keys, args, err = genDeleteSQLs(table.schema, table.name, rows, table.columns, table.indexColumns)
+					if err != nil {
+						return errors.Errorf("gen delete sqls failed: %v, schema: %s, table: %s", err, table.schema, table.name)
+					}
 				}
 
 				for i := range sqls {
-					err = s.commitJob(del, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], args[i], keys[i], true, currentPos, nil)
+					var arg []interface{}
+					var key []string
+					if args != nil {
+						arg = args[i]
+					}
+					if keys != nil {
+						key = keys[i]
+					}
+					err = s.commitJob(del, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, currentPos, nil, lastPos)
 					if err != nil {
 						return errors.Trace(err)
 					}
@@ -981,8 +1051,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			binlogEventsTotal.WithLabelValues("query").Inc()
 
 			sql := strings.TrimSpace(string(ev.Query))
-			nextPos := mysql.Position{
-				Name: pos.Name,
+			currentPos = mysql.Position{
+				Name: lastPos.Name,
 				Pos:  e.Header.LogPos,
 			}
 
@@ -993,22 +1063,31 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			if ignore {
 				binlogSkippedEventsTotal.WithLabelValues("query").Inc()
 				log.Warnf("[skip query-sql]%s [schema]:%s", sql, ev.Schema)
-				if err = s.recordSkipSQLsPos(pos, nil); err != nil {
+				if err = s.recordSkipSQLsPos(currentPos, nil); err != nil {
 					return errors.Trace(err)
 				}
 				continue
 			}
+			log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
 
-			log.Infof("[query]%s [current pos]%v [next pos]%v [next gtid set]%v", sql, pos, nextPos, ev.GSet)
-			sqls, err := resolveDDLSQL(sql)
-			if err != nil {
-				log.Errorf("fail to be parsed, error %v", err)
-				return errors.Trace(err)
+			var sqls []string
+			operator := s.GetOperator(lastPos)
+			if operator != nil {
+				sqls, err = operator.Operate()
+				if err != nil {
+					return errors.Trace(err)
+				}
+				// operator only apply one time.
+				s.DelOperator(lastPos)
+			} else {
+				sqls, err = resolveDDLSQL(sql)
+				if err != nil {
+					log.Errorf("fail to be parsed, error %v", err)
+					return errors.Trace(err)
+				}
 			}
+			// log.Infof("[query]%s [current pos]%v [next pos]%v [next gtid set]%v", sql, pos, nextPos, ev.GSet)
 
-			if len(sqls) > 0 {
-				pos = nextPos
-			}
 			for _, sql := range sqls {
 				sqlDDL, tableNames, stmt, err := s.handleDDL(string(ev.Schema), sql)
 				if err != nil {
@@ -1017,7 +1096,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				if len(sqlDDL) == 0 {
 					binlogSkippedEventsTotal.WithLabelValues("query").Inc()
 					log.Warnf("[ query-sql]%s [schema]:%s", sql, string(ev.Schema))
-					if err = s.recordSkipSQLsPos(pos, nil); err != nil {
+					if err = s.recordSkipSQLsPos(currentPos, nil); err != nil {
 						return errors.Trace(err)
 					}
 					continue
@@ -1025,8 +1104,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 				// for DDL, we wait it to be executed, so we can check if event is newer in this syncer's main process goroutine
 				// ignore obsolete DDL here can avoid to try-sync again for already synced DDLs
-				if !s.checkpoint.IsNewerTablePoint(tableNames[0][0].Schema, tableNames[0][0].Name, pos) {
-					log.Infof("[syncer] ignore obsolete DDL %s in pos %v", sql, pos)
+				if !s.checkpoint.IsNewerTablePoint(tableNames[0][0].Schema, tableNames[0][0].Name, currentPos) {
+					log.Infof("[syncer] ignore obsolete DDL %s in pos %v", sql, currentPos)
 					continue
 				}
 
@@ -1054,8 +1133,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 						// for sharding DDL, the firstPos should be the `Pos` of the binlog, not the `End_log_pos`
 						// so when restarting before sharding DDLs synced, this binlog can be re-sync again to trigger the TrySync
 						startPos := mysql.Position{
-							Name: pos.Name,
-							Pos:  pos.Pos - e.Header.EventSize,
+							Name: lastPos.Name,
+							Pos:  lastPos.Pos - e.Header.EventSize,
 						}
 						inSharding, group, synced, remain := s.sgk.TrySync(tableNames[1][0].Schema, tableNames[1][0].Name, source, startPos)
 						if inSharding {
@@ -1063,7 +1142,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 							// save checkpoint in memory, don't worry, if error occurred, we can rollback it
 							// for non-last sharding DDL's table, this checkpoint will be used to skip binlog event when re-syncing
 							// NOTE: when last sharding DDL executed, all this checkpoints will be flushed in the same txn
-							s.checkpoint.SaveTablePoint(tableNames[0][0].Schema, tableNames[0][0].Name, pos)
+							s.checkpoint.SaveTablePoint(tableNames[0][0].Schema, tableNames[0][0].Name, currentPos)
 							if !synced {
 								log.Infof("[syncer] source %s is in sharding DDL syncing, ignore DDL %v", source, startPos)
 								continue
@@ -1075,7 +1154,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 							}
 							shardingReSyncCh <- &ShardingReSync{
 								currPos:      mysql.Position{Name: group.firstPos.Name, Pos: group.firstPos.Pos},
-								lastPos:      pos,
+								lastPos:      lastPos,
 								targetSchema: tableNames[1][0].Schema,
 								targetTable:  tableNames[1][0].Name,
 							}
@@ -1110,7 +1189,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 				log.Infof("[ddl][schema]%s [start]%s", string(ev.Schema), sqlDDL)
 
-				job := newJob(jobTp, tableNames[0][0].Schema, tableNames[0][0].Name, tableNames[1][0].Schema, tableNames[1][0].Name, sqlDDL, nil, "", false, pos, nil)
+				job := newJob(jobTp, tableNames[0][0].Schema, tableNames[0][0].Name, tableNames[1][0].Schema, tableNames[1][0].Name, sqlDDL, nil, "", false, currentPos, nil, lastPos)
 				err = s.addJob(job)
 				if err != nil {
 					return errors.Trace(err)
@@ -1133,22 +1212,29 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				continue
 			}
 
-			pos.Pos = e.Header.LogPos
+			currentPos.Pos = e.Header.LogPos
+			log.Debugf("[XID event][last_pos]%v [current_pos]%v [gtid set]%v", lastPos, currentPos, ev.GSet)
 
-			log.Debugf("[XID event][pos]%v [gtid set]%v", pos, ev.GSet)
-
-			job := newXIDJob(pos, nil)
+			job := newXIDJob(currentPos, nil)
 			s.addJob(job)
+
+		default:
+			currentPos.Pos = e.Header.LogPos
+			if currentPos.Name == "" && lastPos.Name != "" {
+				currentPos.Name = lastPos.Name
+			}
 		}
+
+		lastPos = currentPos
 	}
 }
 
-func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, retry bool, pos mysql.Position, gs gtid.Set) error {
+func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, retry bool, currentPos mysql.Position, gs gtid.Set, lastPos mysql.Position) error {
 	key, err := s.resolveCasuality(keys)
 	if err != nil {
 		return errors.Errorf("resolve karam error %v", err)
 	}
-	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, retry, pos, gs)
+	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, retry, currentPos, gs, lastPos)
 	err = s.addJob(job)
 	return errors.Trace(err)
 }

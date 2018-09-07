@@ -74,6 +74,7 @@ func querySQL(db *sql.DB, query string, maxRetry int) (*sql.Rows, error) {
 	return nil, errors.Errorf("query sql[%s] failed", query)
 }
 
+// Note: keep it for later use?
 func executeSQL(db *sql.DB, sqls []string, args [][]interface{}, maxRetry int) error {
 	if len(sqls) == 0 {
 		return nil
@@ -102,6 +103,7 @@ func executeSQL(db *sql.DB, sqls []string, args [][]interface{}, maxRetry int) e
 	return errors.Errorf("exec sqls[%v] failed, err:%s", sqls, err.Error())
 }
 
+// Note: keep it for later use?
 func executeSQLImp(db *sql.DB, sqls []string, args [][]interface{}) error {
 	startTime := time.Now()
 	defer func() {
@@ -132,6 +134,70 @@ func executeSQLImp(db *sql.DB, sqls []string, args [][]interface{}) error {
 	err = txn.Commit()
 	if err != nil {
 		log.Errorf("exec sqls[%v] commit failed %v", sqls, errors.ErrorStack(err))
+		return errors.Trace(err)
+	}
+	return nil
+}
+
+func executeSQLJob(db *sql.DB, jobs []*job, maxRetry int) error {
+	if len(jobs) == 0 {
+		return nil
+	}
+
+	var err error
+
+	for i := 0; i < maxRetry; i++ {
+		if i > 0 {
+			sqlRetriesTotal.WithLabelValues("stmt_exec").Add(1)
+			log.Warnf("sql stmt_exec retry %d: %v", i, jobs)
+			time.Sleep(retryTimeout)
+		}
+
+		if err = executeSQLJobImp(db, jobs); err != nil {
+			if isRetryableError(err) {
+				continue
+			}
+			log.Errorf("[exec][sql]%v[error]%v", jobs, err)
+			return errors.Trace(err)
+		}
+
+		return nil
+	}
+
+	return errors.Errorf("exec jobs[%v] failed, err:%s", jobs, err.Error())
+
+}
+
+func executeSQLJobImp(db *sql.DB, jobs []*job) error {
+	startTime := time.Now()
+	defer func() {
+		cost := time.Since(startTime).Seconds()
+		txnCostGauge.Set(cost)
+	}()
+
+	txn, err := db.Begin()
+	if err != nil {
+		log.Errorf("exec sqls[%v] begin failed %v", jobs, errors.ErrorStack(err))
+		return errors.Trace(err)
+	}
+
+	for i := range jobs {
+		log.Debugf("[exec][pos]%s[sql]%s[args]%v", jobs[i].lastPos, jobs[i].sql, jobs[i].args)
+
+		_, err = txn.Exec(jobs[i].sql, jobs[i].args...)
+		if err != nil {
+			log.Warnf("[exec][pos]%s[sql]%s[args]%v[error]%v", jobs[i].lastPos, jobs[i].sql, jobs[i].args, err)
+			rerr := txn.Rollback()
+			if rerr != nil {
+				log.Errorf("[exec][pos]%s[sql]%s[args]%v[error]%v", jobs[i].lastPos, jobs[i].sql, jobs[i].args, rerr)
+			}
+			// we should return the exec err, instead of the rollback rerr.
+			return errors.Trace(err)
+		}
+	}
+	err = txn.Commit()
+	if err != nil {
+		log.Errorf("exec jobs[%v] commit failed %v", jobs, errors.ErrorStack(err))
 		return errors.Trace(err)
 	}
 	return nil

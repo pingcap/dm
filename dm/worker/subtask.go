@@ -14,7 +14,11 @@
 package worker
 
 import (
+	"strconv"
+	"strings"
 	"sync"
+
+	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
@@ -373,6 +377,35 @@ func (st *SubTask) SaveDDLLockInfo(info *pb.DDLLockInfo) error {
 		return errors.AlreadyExistsf("DDLLockInfo for task %s", info.Task)
 	}
 	st.ddlLockInfo = info
+	return nil
+}
+
+// SetSyncerOperator sets an operator to syncer.
+func (st *SubTask) SetSyncerOperator(op pb.SQLOp, pos string, args []string) error {
+	syncUnit, ok := st.currUnit.(*syncer.Syncer)
+	if !ok {
+		return errors.Errorf("such operation is only available for syncer, but now syncer is not running. current unit is %s", st.currUnit.Type())
+	}
+
+	// we have check len(parsed) == 2 in dmctl.
+	parsed := strings.Split(pos, ":")
+
+	posUint64, err := strconv.ParseUint(parsed[1], 10, 64)
+	if err != nil {
+		return errors.Errorf("invalid binlog position %v", pos)
+	}
+
+	binlogPos := mysql.Position{
+		Name: parsed[0],
+		Pos:  uint32(posUint64),
+	}
+
+	syncUnit.SetOperator(&syncer.Operator{
+		Pos:     binlogPos,
+		Op:      op,
+		Targets: args,
+	})
+
 	return nil
 }
 

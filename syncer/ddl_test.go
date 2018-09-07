@@ -51,18 +51,16 @@ func (s *testSyncerSuite) TestFindLastWord(c *C) {
 
 func (s *testSyncerSuite) TestGenDDLSQL(c *C) {
 	originTableNameSingle := []*filter.Table{
-		{"test", "test"},
+		{Schema: "test", Name: "test"},
 	}
 	originTableNameDouble := []*filter.Table{
-		{"test", "test"},
-		{"test1", "test1"},
+		{Schema: "test", Name: "test"},
+		{Schema: "test1", Name: "test1"},
 	}
-	targetTableNameSingle := []*filter.Table{
-		{"titi", "titi"},
-	}
+	targetTableNameSingle := []*filter.Table{{Schema: "titi", Name: "titi"}}
 	targetTableNameDouble := []*filter.Table{
-		{"titi", "titi"},
-		{"titi1", "titi1"},
+		{Schema: "titi", Name: "titi"},
+		{Schema: "titi1", Name: "titi1"},
 	}
 	testCase := [][]string{
 		{"CREATE DATABASE test", "CREATE DATABASE test", "CREATE DATABASE `titi`"},

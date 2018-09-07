@@ -14,6 +14,8 @@
 package syncer
 
 import (
+	"fmt"
+
 	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
 	"github.com/siddontang/go-mysql/mysql"
 )
@@ -64,31 +66,58 @@ type job struct {
 	args         []interface{}
 	key          string
 	retry        bool
-	pos          mysql.Position
+	lastPos      mysql.Position
+	currentPos   mysql.Position
 	gtidSet      gtid.Set
 }
 
-// TODO zxc: add RENAME TABLE support
-func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, retry bool, pos mysql.Position, gtidSet gtid.Set) *job {
-	var gs gtid.Set
-	if gtidSet != nil {
-		gs = gtidSet.Clone()
-	}
-	return &job{tp: tp, sourceSchema: sourceSchema, sourceTable: sourceTable, targetSchema: targetSchema, targetTable: targetTable, sql: sql, args: args, key: key, retry: retry, pos: pos, gtidSet: gs}
+func (j *job) String() string {
+	// only output some important information, maybe useful in execution.
+	return fmt.Sprintf("sql: %s, args: %v, key: %s, last_pos: %s, current_pos: %s, gtid:%v", j.sql, j.args, j.key, j.lastPos, j.currentPos, j.gtidSet)
 }
 
-func newXIDJob(pos mysql.Position, gtidSet gtid.Set) *job {
+// TODO zxc: add RENAME TABLE support
+func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, retry bool, currentPos mysql.Position, currentGtidSet gtid.Set, lastPos mysql.Position) *job {
 	var gs gtid.Set
-	if gtidSet != nil {
-		gs = gtidSet.Clone()
+	if currentGtidSet != nil {
+		gs = currentGtidSet.Clone()
 	}
-	return &job{tp: xid, pos: pos, gtidSet: gs}
+	return &job{
+		tp:           tp,
+		sourceSchema: sourceSchema,
+		sourceTable:  sourceTable,
+		targetSchema: targetSchema,
+		targetTable:  targetTable,
+		sql:          sql,
+		args:         args,
+		key:          key,
+		retry:        retry,
+		currentPos:   currentPos,
+		gtidSet:      gs,
+		lastPos:      lastPos,
+	}
+}
+
+func newXIDJob(currentPos mysql.Position, currentGtidSet gtid.Set) *job {
+	var gs gtid.Set
+	if currentGtidSet != nil {
+		gs = currentGtidSet.Clone()
+	}
+	return &job{
+		tp:         xid,
+		currentPos: currentPos,
+		gtidSet:    gs,
+	}
 }
 
 func newFlushJob() *job {
 	return &job{tp: flush}
 }
 
-func newSkipJob(pos mysql.Position, gtidSet gtid.Set) *job {
-	return &job{tp: skip, pos: pos, gtidSet: gtidSet}
+func newSkipJob(currentPos mysql.Position, currentGtidSet gtid.Set) *job {
+	return &job{
+		tp:         skip,
+		currentPos: currentPos,
+		gtidSet:    currentGtidSet,
+	}
 }

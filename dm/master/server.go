@@ -519,11 +519,40 @@ func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLL
 }
 
 // HandleSQLs implements MasterServer.HandleSQLs
-func (s *Server) HandleSQLs(context.Context, *pb.HandleSQLsRequest) (*pb.CommonTaskResponse, error) {
-	return &pb.CommonTaskResponse{
+func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb.HandleSQLsResponse, error) {
+	resp := &pb.HandleSQLsResponse{
 		Result: false,
-		Msg:    "not implement",
-	}, nil
+		Msg:    "",
+	}
+
+	if !s.checkTaskAndWorkerMatch(req.Name, req.Worker) {
+		resp.Msg = fmt.Sprintf("task %s and worker %s not match, can try `refresh-worker-tasks` cmd first", req.Name, req.Worker)
+		return resp, nil
+	}
+
+	// execute grpc call
+	subReq := &pb.HandleSubTaskSQLsRequest{
+		Name:      req.Name,
+		Op:        req.Op,
+		Args:      req.Args,
+		BinlogPos: req.BinlogPos,
+	}
+	cli, ok := s.workerClients[req.Worker]
+	if !ok {
+		resp.Msg = fmt.Sprintf("worker %s client not found in %v", req.Worker, s.workerClients)
+		return resp, nil
+	}
+	workerResp, err := cli.HandleSQLs(ctx, subReq)
+	if err != nil {
+		workerResp = &pb.CommonWorkerResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}
+	}
+
+	resp.Workers = []*pb.CommonWorkerResponse{workerResp}
+	resp.Result = true
+	return resp, nil
 }
 
 // RefreshWorkerTasks implements MasterServer.RefreshWorkerTasks
@@ -729,6 +758,21 @@ func (s *Server) fetchTaskWorkers(ctx context.Context) (map[string][]string, map
 	}
 
 	return taskWorkerMap, workerMsgMap
+}
+
+// return true means match, false means mismatch.
+func (s *Server) checkTaskAndWorkerMatch(taskname string, targetWorker string) bool {
+	// find worker
+	workers := s.getTaskWorkers(taskname)
+	if len(workers) == 0 {
+		return false
+	}
+	for _, worker := range workers {
+		if worker == targetWorker {
+			return true
+		}
+	}
+	return false
 }
 
 // fetchWorkerDDLInfo fetches DDL info from all dm-workers

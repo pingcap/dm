@@ -67,8 +67,6 @@ mysql-instances:             # one or more source database, config more source d
       pool-size: 32
       dir: "./dumped_data"
       checkpoint-schema: "tidb_loader"
-      alternative-db: ""
-      source-db: ""
       rm-checkpoint: false
 
     syncer:
@@ -129,8 +127,6 @@ loaders:                     # loader process unit specific configs, mysql insta
     pool-size: 16
     dir: "./dumped_data"
     checkpoint-schema: "tidb_loader"
-    alternative-db: ""
-    source-db: ""
     rm-checkpoint: false
 
 syncers:                     # syncer process unit specific configs, mysql instance can ref one config in it

@@ -22,7 +22,6 @@ import (
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
-	"github.com/pingcap/tidb-enterprise-tools/dm/unit"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	"github.com/pingcap/tidb-enterprise-tools/relay"
 	"github.com/siddontang/go/sync2"
@@ -46,7 +45,7 @@ type Worker struct {
 
 	cfg      *Config
 	subTasks map[string]*SubTask
-	relay    unit.Unit
+	relay    *relay.Relay
 }
 
 // NewWorker creates a new Worker
@@ -171,9 +170,15 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 	cfg.ServerID = w.cfg.ServerID
 
 	// try decrypt password for To DB
-	pswdTo, err := utils.Decrypt(cfg.To.Password)
-	if err != nil {
-		return errors.Trace(err)
+	var (
+		pswdTo string
+		err    error
+	)
+	if len(cfg.To.Password) > 0 {
+		pswdTo, err = utils.Decrypt(cfg.To.Password)
+		if err != nil {
+			return errors.Trace(err)
+		}
 	}
 	cfg.To.Password = pswdTo
 
@@ -226,6 +231,19 @@ func (w *Worker) ResumeSubTask(name string) error {
 // QueryStatus query worker's sub tasks' status
 func (w *Worker) QueryStatus(name string) []*pb.SubTaskStatus {
 	return w.Status(name)
+}
+
+// HandleSQLs implements Handler.HandleSQLs.
+func (w *Worker) HandleSQLs(name string, op pb.SQLOp, pos string, args []string) error {
+	w.Lock()
+	defer w.Unlock()
+	st, ok := w.subTasks[name]
+	if !ok {
+		return errors.NotFoundf("sub task with name %s", name)
+	}
+
+	err := st.SetSyncerOperator(op, pos, args)
+	return errors.Trace(err)
 }
 
 // findSubTask finds sub task by name

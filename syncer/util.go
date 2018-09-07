@@ -63,7 +63,7 @@ func maxJobForTables(jobs []*job) map[string]*job {
 		if !ok {
 			maxJobs[key] = job
 		} else {
-			if prev.pos.Compare(job.pos) < 0 {
+			if prev.currentPos.Compare(job.currentPos) < 0 {
 				maxJobs[key] = job
 			}
 		}
