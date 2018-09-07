@@ -12,11 +12,14 @@ service Master {
 
     rpc QueryStatus (QueryStatusListRequest) returns (QueryStatusListResponse) {}
 
-    // used by dm-worker, maybe should return response with DDL lock ID
-    rpc ApplyForDDLLock (ApplyForDDLLockRequest) returns (CommonTaskResponse) {}
-
+    // show un-resolved DDL locks
+    rpc ShowDDLLocks (ShowDDLLocksRequest) returns (ShowDDLLocksResponse) {}
     // used by dmctl to manually unlock DDL lock
-    rpc UnlockDDLLock (UnlockDDLLockRequest) returns (CommonTaskResponse) {}
+    rpc UnlockDDLLock (UnlockDDLLockRequest) returns (UnlockDDLLockResponse) {}
+
+    // BreakDDLLock request some dm-workers to break a DDL lock
+    // including remove DDLLockInfo and/or execute/skip DDL
+    rpc BreakWorkerDDLLock (BreakWorkerDDLLockRequest) returns (BreakWorkerDDLLockResponse) {}
 
     // refine to support specify dm-worker
     rpc HandleSQLs (HandleSQLsRequest) returns (CommonTaskResponse) {}
@@ -67,15 +70,77 @@ message QueryStatusListResponse {
     repeated QueryStatusResponse workers = 3;
 }
 
-message ApplyForDDLLockRequest {
-    string name = 1; // task's name
-    string ddl = 2; // DDL query
+// ShowDDLLocksRequest used to query DDL locks which are un-resolved
+// task: task's name, empty for all tasks
+// workers: worker need to query, empty for all workers
+//          any DDL lock in which the worker is synced or unsynced will return
+// if specify task and workers both, and workers not doing the task , it will return empty DDL locks
+message ShowDDLLocksRequest {
+    string task = 1;
+    repeated string workers = 2; // workers need to query, empty for all workers
 }
 
-message UnlockDDLLockRequest {
-    string name = 1; // task's name
-    string lockID = 2; // DDL lock ID
+// DDLLock represents a DDL lock info (I known the name confused with DDLLockInfo, any suggestion?)
+// it been sent from dm-master to dmctl
+// ID: DDL lock generated ID
+// task: lock's corresponding task name
+// owner: lock's owner, a dm-worker
+// synced: already synced dm-workers
+// unsynced: pending to sync dm-workers
+message DDLLock {
+    string ID = 1;
+    string task = 2;
+    string owner = 3;
+    repeated string synced = 4;
+    repeated string unsynced = 5;
 }
+
+message ShowDDLLocksResponse {
+    bool result = 1;
+    string msg = 2;
+    repeated DDLLock locks = 3; // all un-resolved DDL locks
+}
+
+// UnlockDDLLockRequest used to unlock (resolve) DDL lock manually
+// ID: DDL lock ID
+// replaceOwner: dm-worker used to replace the original DDL lock's owner
+// workers: dm-workers need to execute / skip DDL, empty for all dm-workers
+//   replaceOwner in or not in workers are both fine
+// forceRemove: force to remove the DDL lock even unlock fail
+message UnlockDDLLockRequest {
+    string ID = 1;
+    string replaceOwner = 2;
+    repeated string workers = 3;
+    bool forceRemove = 4;
+}
+
+message UnlockDDLLockResponse {
+    bool result = 1;
+    string msg = 2;
+    repeated CommonWorkerResponse workers = 3;
+}
+
+// BreakWorkerDDLLockRequest represents a reqeust for some dm-workers to force to break the DDL lock
+// workers: dm-workers need to break DDL lock
+// task: sub task's name
+// removeLockID: DDLLockInfo's ID which need to remove
+// execDDL: execute DDL which is blocking
+// skipDDL: skip DDL which is blocking
+//   execDDL and skipDDL can not specify both at the same time, but can specify neither
+message BreakWorkerDDLLockRequest {
+    repeated string workers = 1;
+    string task = 2;
+    string removeLockID = 3;
+    bool execDDL = 4;
+    bool skipDDL = 5;
+}
+
+message BreakWorkerDDLLockResponse {
+    bool result = 1;
+    string msg = 2;
+    repeated CommonWorkerResponse workers = 3;
+}
+
 
 message CommonTaskResponse {
     bool result = 1;

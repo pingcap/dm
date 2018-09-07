@@ -70,16 +70,23 @@ func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
 				Status: &pb.SubTaskStatus_Msg{Msg: fmt.Sprintf("no sub task with name %s has started", name)},
 			}
 		} else {
+			var lockID = ""
+			lockInfo := st.DDLLockInfo()
+			if lockInfo != nil {
+				lockID = lockInfo.ID
+			}
+			cu := st.CurrUnit()
 			stStatus = pb.SubTaskStatus{
-				Name:   name,
-				Stage:  st.Stage(),
-				Unit:   st.CurrUnit().Type(),
-				Result: st.Result(),
+				Name:                name,
+				Stage:               st.Stage(),
+				Unit:                cu.Type(),
+				Result:              st.Result(),
+				UnresolvedDDLLockID: lockID,
 			}
 
 			// oneof status
 			us := st.Status()
-			switch st.CurrUnit().Type() {
+			switch cu.Type() {
 			case pb.UnitType_Check:
 				stStatus.Status = &pb.SubTaskStatus_Check{Check: us.(*pb.CheckStatus)}
 			case pb.UnitType_Dump:

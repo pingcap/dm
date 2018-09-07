@@ -27,7 +27,8 @@ const (
 	ddl
 	xid
 	flush
-	skip // used by Syncer.recordSkipSQLsPos to record global pos, but not execute SQL
+	skip    // used by Syncer.recordSkipSQLsPos to record global pos, but not execute SQL
+	fakeDDL // fake DDL used to flush the processing for sharding DDL sync
 )
 
 func (t opType) String() string {
@@ -46,6 +47,8 @@ func (t opType) String() string {
 		return "flush"
 	case skip:
 		return "skip"
+	case fakeDDL:
+		return "fake_ddl"
 	}
 
 	return ""

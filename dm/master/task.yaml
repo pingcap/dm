@@ -3,6 +3,7 @@ name: unique-task-name
 task-mode: all  # full/incremental/all
 flavor: mysql  # mysql/mariadb
 verify-checksum: true
+in-sharding: true  # whether multi dm-worker do one sharding job
 
 target-database:
   host: "192.168.0.1"
@@ -10,7 +11,7 @@ target-database:
   user: "root"
   password: ""
 
-MySQL-instances:             # one or more source database, config more source database for sharding merge
+mysql-instances:             # one or more source database, config more source database for sharding merge
   -
     config:
       host: "192.168.0.2"
@@ -64,7 +65,7 @@ MySQL-instances:             # one or more source database, config more source d
 
     loader:                  # local loader rule
       pool-size: 32
-      dir: "./data/"
+      dir: "./dumped_data"
       checkpoint-schema: "tidb_loader"
       alternative-db: ""
       source-db: ""
@@ -126,7 +127,7 @@ mydumpers:                   # mydumper process unit specific configs, mysql ins
 loaders:                     # loader process unit specific configs, mysql instance can ref one config in it
   global:
     pool-size: 16
-    dir: "./"
+    dir: "./dumped_data"
     checkpoint-schema: "tidb_loader"
     alternative-db: ""
     source-db: ""

@@ -65,14 +65,19 @@ type SubTask struct {
 
 	stage  pb.Stage          // stage of current sub task
 	result *pb.ProcessResult // the process result, nil when is processing
+
+	// only support sync one DDL lock one time, refine if needed
+	DDLInfo     chan *pb.DDLInfo // DDL info pending to sync
+	ddlLockInfo *pb.DDLLockInfo  // DDL lock info which waiting other dm-workers to sync
 }
 
 // NewSubTask creates a new SubTask
 func NewSubTask(cfg *config.SubTaskConfig) *SubTask {
 	st := SubTask{
-		cfg:   cfg,
-		units: createUnits(cfg),
-		stage: pb.Stage_New,
+		cfg:     cfg,
+		units:   createUnits(cfg),
+		stage:   pb.Stage_New,
+		DDLInfo: make(chan *pb.DDLInfo, 1),
 	}
 	return &st
 }
@@ -106,6 +111,9 @@ func (st *SubTask) Run() {
 	st.wg.Add(1)
 	go st.fetchResult(st.ctx, st.cancel, pr)
 	go cu.Process(st.ctx, pr)
+
+	st.wg.Add(1)
+	go st.fetchUnitDDLInfo(st.ctx)
 }
 
 // fetchResult fetches units process result
@@ -206,6 +214,28 @@ func (st *SubTask) setStage(stage pb.Stage) {
 	st.stage = stage
 }
 
+// stageCAS sets stage to newStage if its current value is oldStage
+func (st *SubTask) stageCAS(oldStage, newStage pb.Stage) bool {
+	st.Lock()
+	defer st.Unlock()
+	if st.stage == oldStage {
+		st.stage = newStage
+		return true
+	}
+	return false
+}
+
+// setStageIfNot sets stage to newStage if its current value is not oldStage, similar to CAS
+func (st *SubTask) setStageIfNot(oldStage, newStage pb.Stage) bool {
+	st.Lock()
+	defer st.Unlock()
+	if st.stage != oldStage {
+		st.stage = newStage
+		return true
+	}
+	return false
+}
+
 // Stage returns the stage of the sub task
 func (st *SubTask) Stage() pb.Stage {
 	st.RLock()
@@ -233,20 +263,20 @@ func (st *SubTask) Close() {
 		log.Infof("[subtask] not run yet, no need to close")
 		return
 	}
+
 	st.cancel()
 	st.CurrUnit().Close()
-	if st.Stage() != pb.Stage_Finished {
-		st.setStage(pb.Stage_Paused)
-	}
+	st.setStageIfNot(pb.Stage_Finished, pb.Stage_Stopped)
 	st.wg.Wait()
+
+	close(st.DDLInfo)
 }
 
 // Pause pauses the running sub task
 func (st *SubTask) Pause() error {
-	if st.Stage() != pb.Stage_Running {
+	if !st.stageCAS(pb.Stage_Running, pb.Stage_Paused) {
 		return errors.NotValidf("current stage is not running")
 	}
-	st.setStage(pb.Stage_Paused)
 
 	st.cancel()
 	st.wg.Wait() // wait fetchResult return
@@ -261,10 +291,9 @@ func (st *SubTask) Pause() error {
 // Resume resumes the paused sub task
 // similar to Run
 func (st *SubTask) Resume() error {
-	if st.Stage() != pb.Stage_Paused {
+	if !st.stageCAS(pb.Stage_Paused, pb.Stage_Running) {
 		return errors.NotValidf("current stage is not paused")
 	}
-	st.setStage(pb.Stage_Running)
 
 	st.setResult(nil) // clear previous result
 	cu := st.CurrUnit()
@@ -275,5 +304,88 @@ func (st *SubTask) Resume() error {
 	st.wg.Add(1)
 	go st.fetchResult(st.ctx, st.cancel, pr)
 	go cu.Resume(st.ctx, pr)
+
+	st.wg.Add(1)
+	go st.fetchUnitDDLInfo(st.ctx)
 	return nil
+}
+
+// fetchUnitDDLInfo fetches DDL info from current processing unit
+// when unit switched, returns and starts fetching again for new unit
+func (st *SubTask) fetchUnitDDLInfo(ctx context.Context) {
+	defer st.wg.Done()
+
+	cu := st.CurrUnit()
+	syncer2, ok := cu.(*syncer.Syncer)
+	if !ok {
+		return
+	}
+
+	// discard previous saved DDLInfo
+	// when process unit resuming, un-resolved DDL will send again
+	for len(st.DDLInfo) > 0 {
+		<-st.DDLInfo
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case info, ok := <-syncer2.DDLInfo():
+			if !ok {
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case st.DDLInfo <- info:
+			}
+		}
+	}
+}
+
+// SendBackDDLInfo sends DDL info back for pending
+func (st *SubTask) SendBackDDLInfo(ctx context.Context, info *pb.DDLInfo) bool {
+	select {
+	case <-ctx.Done():
+		return false
+	case st.DDLInfo <- info:
+		return true
+	}
+}
+
+// ExecuteDDL requests current unit to execute a DDL
+func (st *SubTask) ExecuteDDL(ctx context.Context, req *pb.ExecDDLRequest) error {
+	// NOTE: check current stage?
+	cu := st.CurrUnit()
+	syncer2, ok := cu.(*syncer.Syncer)
+	if !ok {
+		return errors.Errorf("only syncer support ExecuteDDL, but current unit is %s", cu.Type().String())
+	}
+	return syncer2.ExecuteDDL(ctx, req)
+}
+
+// SaveDDLLockInfo saves a DDLLockInfo
+func (st *SubTask) SaveDDLLockInfo(info *pb.DDLLockInfo) error {
+	st.Lock()
+	defer st.Unlock()
+	if st.ddlLockInfo != nil {
+		return errors.AlreadyExistsf("DDLLockInfo for task %s", info.Task)
+	}
+	st.ddlLockInfo = info
+	return nil
+}
+
+// ClearDDLLockInfo clears current DDLLockInfo
+func (st *SubTask) ClearDDLLockInfo() {
+	st.Lock()
+	defer st.Unlock()
+	st.ddlLockInfo = nil
+}
+
+// DDLLockInfo returns current DDLLockInfo, maybe nil
+func (st *SubTask) DDLLockInfo() *pb.DDLLockInfo {
+	st.RLock()
+	defer st.RUnlock()
+	return st.ddlLockInfo
 }

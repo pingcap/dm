@@ -6,6 +6,9 @@ name = "sub-task-name"
 # sub task mode, can be `all`, `full`, `increment`
 mode = "all"
 
+# whether multi dm-worker do one sharding job
+#in-sharding = false
+
 # used for binlog replication
 server-id = 101
 

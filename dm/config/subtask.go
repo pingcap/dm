@@ -26,6 +26,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
@@ -37,6 +38,15 @@ const (
 	ModeAll       = "all"
 	ModeFull      = "full"
 	ModeIncrement = "incremental"
+)
+
+// CmdName represents name for binary
+type CmdName string
+
+// binary names
+const (
+	CmdLoader CmdName = "loader"
+	CmdSyncer CmdName = "syncer"
 )
 
 // DBConfig is the DB configuration.
@@ -54,6 +64,9 @@ type SubTaskConfig struct {
 	// and it will panic because of unsupported type (reflect.Func)
 	// so we should not export flagSet
 	flagSet *flag.FlagSet
+
+	// when in sharding, multi dm-workers do one task
+	InSharding bool `toml:"in-sharding" json:"in-sharding"`
 
 	Name           string `toml:"name" json:"name"`
 	Mode           string `toml:"mode" json:"mode"`
@@ -84,43 +97,54 @@ type SubTaskConfig struct {
 	StatusAddr string `toml:"status-addr" json:"status-addr"`
 
 	ConfigFile string `toml:"-" json:"config-file"`
+
+	// still needed by Syncer / Loader bin
+	printVersion bool
 }
 
 // NewSubTaskConfig creates a new SubTaskConfig
 func NewSubTaskConfig() *SubTaskConfig {
 	cfg := &SubTaskConfig{}
+	return cfg
+}
 
-	cfg.flagSet = flag.NewFlagSet("subtask", flag.ContinueOnError)
-	fs := cfg.flagSet
-
-	// Loader configuration
-	fs.IntVar(&cfg.PoolSize, "t", 16, "Number of threads restoring concurrently for worker pool. Each worker restore one file at a time, increase this as TiKV nodes increase")
-	fs.StringVar(&cfg.Dir, "d", "./", "Directory of the dump to import")
-	fs.StringVar(&cfg.CheckPointSchema, "checkpoint-schema", "tidb_loader", "schema name of checkpoint")
-	fs.BoolVar(&cfg.RemoveCheckpoint, "rm-checkpoint", false, "delete corresponding checkpoint records after the table is restored successfully")
-
-	// Syncer configuration
-	fs.IntVar(&cfg.ServerID, "server-id", 101, "MySQL slave server ID")
-	fs.StringVar(&cfg.Meta, "meta", "", "syncer meta info") // maybe refine to use target DB save checkpoint
-	fs.StringVar(&cfg.Flavor, "flavor", mysql.MySQLFlavor, "use flavor for different MySQL source versions; support \"mysql\", \"mariadb\" now; if you replicate from mariadb, please set it to \"mariadb\"")
-	fs.IntVar(&cfg.WorkerCount, "count", 16, "parallel worker count")
-	fs.IntVar(&cfg.Batch, "b", 10, "batch commit count")
-	fs.IntVar(&cfg.MaxRetry, "max-retry", 100, "maxinum retry when network interruption")
-	fs.BoolVar(&cfg.EnableGTID, "enable-gtid", false, "enable gtid mode")
-	fs.BoolVar(&cfg.AutoFixGTID, "auto-fix-gtid", false, "auto fix gtid while switch mysql master/slave")
-	fs.BoolVar(&cfg.DisableCausality, "disable-detect", false, "disbale detect causality")
-	fs.BoolVar(&cfg.SafeMode, "safe-mode", false, "enable safe mode to make syncer reentrant")
+// SetupFlags setups flags for binary
+func (c *SubTaskConfig) SetupFlags(name CmdName) {
+	c.Flavor = mysql.MySQLFlavor // default value event not from Syncer
+	c.flagSet = flag.NewFlagSet("subtask", flag.ContinueOnError)
+	fs := c.flagSet
 
 	// compatible with standalone dm unit
-	fs.StringVar(&cfg.PprofAddr, "pprof-addr", ":10084", "Loader pprof addr")
-	fs.StringVar(&cfg.StatusAddr, "status-addr", "", "Syncer status addr")
-	fs.StringVar(&cfg.LogLevel, "L", "info", "sub task log level: debug, info, warn, error, fatal")
-	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
-	fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
+	fs.StringVar(&c.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
+	fs.StringVar(&c.LogFile, "log-file", "", "log file path")
+	fs.StringVar(&c.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
 
-	fs.StringVar(&cfg.ConfigFile, "config", "", "config file")
+	fs.StringVar(&c.ConfigFile, "config", "", "config file")
 
-	return cfg
+	fs.BoolVar(&c.printVersion, "V", false, "prints version and exit")
+
+	switch name {
+	case CmdLoader:
+		// Loader configuration
+		fs.IntVar(&c.PoolSize, "t", 16, "Number of threads restoring concurrently for worker pool. Each worker restore one file at a time, increase this as TiKV nodes increase")
+		fs.StringVar(&c.Dir, "d", "./dumped_data", "Directory of the dump to import")
+		fs.StringVar(&c.CheckPointSchema, "checkpoint-schema", "tidb_loader", "schema name of checkpoint")
+		fs.BoolVar(&c.RemoveCheckpoint, "rm-checkpoint", false, "delete corresponding checkpoint records after the table is restored successfully")
+		fs.StringVar(&c.PprofAddr, "pprof-addr", ":10084", "Loader pprof addr")
+	case CmdSyncer:
+		// Syncer configuration
+		fs.IntVar(&c.ServerID, "server-id", 101, "MySQL slave server ID")
+		fs.StringVar(&c.Meta, "meta", "", "syncer meta info") // maybe refine to use target DB save checkpoint
+		fs.StringVar(&c.Flavor, "flavor", mysql.MySQLFlavor, "use flavor for different MySQL source versions; support \"mysql\", \"mariadb\" now; if you replicate from mariadb, please set it to \"mariadb\"")
+		fs.IntVar(&c.WorkerCount, "count", 16, "parallel worker count")
+		fs.IntVar(&c.Batch, "b", 10, "batch commit count")
+		fs.IntVar(&c.MaxRetry, "max-retry", 100, "maxinum retry when network interruption")
+		fs.BoolVar(&c.EnableGTID, "enable-gtid", false, "enable gtid mode")
+		fs.BoolVar(&c.AutoFixGTID, "auto-fix-gtid", false, "auto fix gtid while switch mysql master/slave")
+		fs.BoolVar(&c.DisableCausality, "disable-detect", false, "disbale detect causality")
+		fs.BoolVar(&c.SafeMode, "safe-mode", false, "enable safe mode to make syncer reentrant")
+		fs.StringVar(&c.StatusAddr, "status-addr", "", "Syncer status addr")
+	}
 }
 
 // MySQLInstanceID returns the relevant MySQL instance ID of config
@@ -205,6 +229,11 @@ func (c *SubTaskConfig) Parse(arguments []string) error {
 	err := c.flagSet.Parse(arguments)
 	if err != nil {
 		return errors.Trace(err)
+	}
+
+	if c.printVersion {
+		fmt.Println(utils.GetRawInfo())
+		return flag.ErrHelp
 	}
 
 	// Load config file if specified.

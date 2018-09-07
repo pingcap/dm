@@ -15,8 +15,10 @@ package worker
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
@@ -83,7 +85,10 @@ func (s *Server) Close() {
 	}
 
 	if s.svr != nil {
-		s.svr.GracefulStop()
+		// GracefulStop can not cancel active stream RPCs
+		// and the stream RPC may block on Recv or Send
+		// so we use Stop instead to cancel all active RPCs
+		s.svr.Stop()
 	}
 
 	// close worker and wait for return
@@ -178,6 +183,96 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 	if len(resp.SubTaskStatus) == 0 {
 		resp.Msg = "no sub task started"
 	}
+	return resp, nil
+}
+
+// FetchDDLInfo implements WorkerServer.FetchDDLInfo
+// we do ping-pong send-receive on stream for DDL (lock) info
+// if error occurred in Send / Recv, just retry in client
+func (s *Server) FetchDDLInfo(stream pb.Worker_FetchDDLInfoServer) error {
+	log.Infof("[server] receive FetchDDLInfo request")
+
+	var ddlInfo *pb.DDLInfo
+	defer func() {
+		if ddlInfo != nil {
+			// when sent DDLInfo to dm-master fail
+			// we must put it back to worker again to support retry (by dm-master request)
+			// so we must make sure it can be put back successfully when relevant sub task is still active
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			if !s.worker.SendBackDDLInfo(ctx, ddlInfo) {
+				log.Warnf("[server] send DDLInfo %v back to worker fail", ddlInfo)
+			}
+		}
+	}()
+
+	for {
+		// try fetch pending to sync DDL info from worker
+		ddlInfo = s.worker.FetchDDLInfo(stream.Context())
+		if ddlInfo == nil {
+			return nil // worker closed or context canceled
+		}
+		log.Infof("[server] fetched DDLInfo from worker %v", ddlInfo)
+
+		// send DDLInfo to dm-master
+		err := stream.Send(ddlInfo)
+		if err != nil {
+			log.Errorf("[server] send DDLInfo %v to RPC stream fail %v", ddlInfo, err)
+			return err
+		}
+
+		// receive DDLLockInfo from dm-master
+		in, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			log.Errorf("[server] receive DDLLockInfo from RPC stream fail %v", err)
+			return err
+		}
+		log.Infof("[server] receive DDLLockInfo %v", in)
+
+		ddlInfo = nil // clear and protect to put it back
+
+		err = s.worker.RecordDDLLockInfo(in)
+		if err != nil {
+			// if error occurred when recording DDLLockInfo, log an error
+			// user can handle this case using dmctl
+			log.Errorf("[server] record DDLLockInfo %v to worker fail %v", in, errors.ErrorStack(err))
+		}
+	}
+}
+
+// ExecuteDDL implements WorkerServer.ExecuteDDL
+func (s *Server) ExecuteDDL(ctx context.Context, req *pb.ExecDDLRequest) (*pb.CommonWorkerResponse, error) {
+	log.Infof("[server] receive ExecuteDDL request %+v", req)
+
+	resp := &pb.CommonWorkerResponse{
+		Result: true,
+	}
+	err := s.worker.ExecuteDDL(ctx, req)
+	if err != nil {
+		resp.Result = false
+		resp.Msg = errors.ErrorStack(err)
+		log.Errorf("[worker] %v ExecuteDDL error %v", req, errors.ErrorStack(err))
+	}
+	return resp, nil
+}
+
+// BreakDDLLock implements WorkerServer.BreakDDLLock
+func (s *Server) BreakDDLLock(ctx context.Context, req *pb.BreakDDLLockRequest) (*pb.CommonWorkerResponse, error) {
+	log.Infof("[server] receive BreakDDLLock request %+v", req)
+
+	resp := &pb.CommonWorkerResponse{
+		Result: true,
+	}
+	err := s.worker.BreakDDLLock(ctx, req)
+	if err != nil {
+		resp.Result = false
+		resp.Msg = errors.ErrorStack(err)
+		log.Errorf("[worker] %v BreakDDLLock error %v", req, errors.ErrorStack(err))
+	}
+
 	return resp, nil
 }
 

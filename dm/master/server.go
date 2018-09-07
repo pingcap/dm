@@ -15,6 +15,7 @@ package master
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"sort"
 	"strings"
@@ -28,6 +29,11 @@ import (
 	"github.com/siddontang/go/sync2"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+)
+
+var (
+	retryTimeout       = 5 * time.Second
+	tryResolveInterval = 30 * time.Second
 )
 
 // Server handles RPC requests for dm-master
@@ -44,6 +50,9 @@ type Server struct {
 	// task-name -> worker-list
 	taskWorkers map[string][]string
 
+	// DDL lock keeper
+	lockKeeper *LockKeeper
+
 	closed sync2.AtomicBool
 }
 
@@ -53,6 +62,7 @@ func NewServer(cfg *Config) *Server {
 		cfg:           cfg,
 		workerClients: make(map[string]pb.WorkerClient),
 		taskWorkers:   make(map[string][]string),
+		lockKeeper:    NewLockKeeper(),
 	}
 	return &server
 }
@@ -84,6 +94,28 @@ func (s *Server) Start() error {
 		case <-time.After(3 * time.Second):
 			// update task -> workers after started
 			s.updateTaskWorkers(ctx)
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// fetch DDL info from dm-workers to sync sharding DDL
+		s.fetchWorkerDDLInfo(ctx)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		timer := time.NewTicker(tryResolveInterval)
+		defer timer.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-timer.C:
+				s.tryResolveDDLLocks(ctx)
+			}
 		}
 	}()
 
@@ -357,19 +389,132 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 	return resp, nil
 }
 
-// ApplyForDDLLock implements MasterServer.ApplyForDDLLock
-func (s *Server) ApplyForDDLLock(context.Context, *pb.ApplyForDDLLockRequest) (*pb.CommonTaskResponse, error) {
-	return &pb.CommonTaskResponse{
-		Result: false,
-		Msg:    "not implement",
-	}, nil
+// ShowDDLLocks implements MasterServer.ShowDDLLocks
+func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) (*pb.ShowDDLLocksResponse, error) {
+	log.Infof("[server] receive ShowDDLLocks request %+v", req)
+
+	resp := &pb.ShowDDLLocksResponse{
+		Result: true,
+	}
+
+	locks := s.lockKeeper.Locks()
+	resp.Locks = make([]*pb.DDLLock, 0, len(locks))
+	for _, lock := range locks {
+		if len(req.Task) > 0 && req.Task != lock.Task {
+			continue // specify task and mismatch
+		}
+		ready := lock.Ready()
+		if len(req.Workers) > 0 {
+			for _, worker := range req.Workers {
+				if _, ok := ready[worker]; ok {
+					goto FOUND
+				}
+			}
+			continue // specify workers and mismatch
+		}
+	FOUND:
+		l := &pb.DDLLock{
+			ID:       lock.ID,
+			Task:     lock.Task,
+			Owner:    lock.Owner,
+			Synced:   make([]string, 0, len(ready)),
+			Unsynced: make([]string, 0, len(ready)),
+		}
+		for worker, synced := range ready {
+			if synced {
+				l.Synced = append(l.Synced, worker)
+			} else {
+				l.Unsynced = append(l.Unsynced, worker)
+			}
+		}
+		resp.Locks = append(resp.Locks, l)
+	}
+
+	if len(resp.Locks) == 0 {
+		resp.Msg = "no DDL lock exists"
+	}
+	return resp, nil
 }
 
 // UnlockDDLLock implements MasterServer.UnlockDDLLock
-func (s *Server) UnlockDDLLock(context.Context, *pb.UnlockDDLLockRequest) (*pb.CommonTaskResponse, error) {
-	return &pb.CommonTaskResponse{
-		Result: false,
-		Msg:    "not implement",
+func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest) (*pb.UnlockDDLLockResponse, error) {
+	log.Infof("[server] receive UnlockDDLLock request %+v", req)
+
+	workerResps, err := s.resolveDDLLock(ctx, req.ID, req.ReplaceOwner, req.Workers)
+	resp := &pb.UnlockDDLLockResponse{
+		Result:  true,
+		Workers: workerResps,
+	}
+	if err != nil {
+		resp.Result = false
+		resp.Msg = errors.ErrorStack(err)
+		log.Errorf("[sever] UnlockDDLLock %s error %v", req.ID, errors.ErrorStack(err))
+
+		if req.ForceRemove {
+			s.lockKeeper.RemoveLock(req.ID)
+			log.Warnf("[server] force to remove DDL lock %s because of `ForceRemove` set", req.ID)
+		}
+	} else {
+		log.Infof("[server] UnlockDDLLock %s successfully, remove it", req.ID)
+	}
+
+	return resp, nil
+}
+
+// BreakWorkerDDLLock implements MasterServer.BreakWorkerDDLLock
+func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLLockRequest) (*pb.BreakWorkerDDLLockResponse, error) {
+	log.Infof("[server] receive BreakWorkerDDLLock request %+v", req)
+
+	workerReq := &pb.BreakDDLLockRequest{
+		Task:         req.Task,
+		RemoveLockID: req.RemoveLockID,
+		ExecDDL:      req.ExecDDL,
+		SkipDDL:      req.SkipDDL,
+	}
+
+	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Workers))
+	var wg sync.WaitGroup
+	for _, worker := range req.Workers {
+		wg.Add(1)
+		go func(worker string) {
+			defer wg.Done()
+			cli, ok := s.workerClients[worker]
+			if !ok {
+				workerRespCh <- &pb.CommonWorkerResponse{
+					Result: false,
+					Worker: worker,
+					Msg:    fmt.Sprintf("worker %s relevant worker-client not found", worker),
+				}
+				return
+			}
+			workerResp, err := cli.BreakDDLLock(ctx, workerReq)
+			if err != nil {
+				workerResp = &pb.CommonWorkerResponse{
+					Result: false,
+					Msg:    errors.ErrorStack(err),
+				}
+			}
+			workerResp.Worker = worker
+			workerRespCh <- workerResp
+		}(worker)
+	}
+	wg.Wait()
+
+	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(req.Workers))
+	for len(workerRespCh) > 0 {
+		workerResp := <-workerRespCh
+		workerRespMap[workerResp.Worker] = workerResp
+	}
+
+	sort.Strings(req.Workers)
+	workerResps := make([]*pb.CommonWorkerResponse, 0, len(req.Workers))
+	for _, worker := range req.Workers {
+		workerResps = append(workerResps, workerRespMap[worker])
+	}
+
+	return &pb.BreakWorkerDDLLockResponse{
+		Result:  true,
+		Workers: workerResps,
 	}, nil
 }
 
@@ -493,7 +638,20 @@ func (s *Server) getTaskWorkers(task string) []string {
 	if !ok {
 		return []string{}
 	}
-	return workers
+	// do a copy
+	ret := make([]string, 0, len(workers))
+	ret = append(ret, workers...)
+	return ret
+}
+
+// containWorker checks whether worker in workers
+func (s *Server) containWorker(workers []string, worker string) bool {
+	for _, w := range workers {
+		if w == worker {
+			return true
+		}
+	}
+	return false
 }
 
 // getStatusFromWorkers does RPC request to get status from dm-workers
@@ -571,4 +729,269 @@ func (s *Server) fetchTaskWorkers(ctx context.Context) (map[string][]string, map
 	}
 
 	return taskWorkerMap, workerMsgMap
+}
+
+// fetchWorkerDDLInfo fetches DDL info from all dm-workers
+// and sends DDL lock info back to dm-workers
+func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
+	var wg sync.WaitGroup
+
+	for worker, cli := range s.workerClients {
+		wg.Add(1)
+		go func(worker string, cli pb.WorkerClient) {
+			defer wg.Done()
+			var doRetry bool
+
+			for {
+				if doRetry {
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(retryTimeout):
+					}
+				}
+				doRetry = false // reset
+
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					stream, err := cli.FetchDDLInfo(ctx)
+					if err != nil {
+						log.Errorf("[server] create FetchDDLInfo stream for worker %s fail %v", worker, err)
+						doRetry = true
+						continue
+					}
+					for {
+						in, err := stream.Recv()
+						if err == io.EOF {
+							doRetry = true
+							break
+						}
+						if err != nil {
+							log.Errorf("[server] receive DDLInfo from worker %s fail %v", worker, err)
+							doRetry = true
+							break
+						}
+						log.Infof("[server] receive DDLInfo %v from worker %s", in, worker)
+
+						workers := s.getTaskWorkers(in.Task)
+						if len(workers) == 0 {
+							// should happen only when starting and before updateTaskWorkers return
+							log.Errorf("[server] try to sync sharding DDL for task %s, but with no workers", in.Task)
+							doRetry = true
+							break
+						}
+						if !s.containWorker(workers, worker) {
+							// should not happen
+							log.Errorf("[server] try to sync sharding DDL for task %s, but worker %s not in workers %v", in.Task, worker, workers)
+							doRetry = true
+							break
+						}
+
+						lockID, synced, remain := s.lockKeeper.TrySync(in.Task, in.Schema, in.Table, worker, workers)
+
+						out := &pb.DDLLockInfo{
+							Task: in.Task,
+							ID:   lockID,
+						}
+						err = stream.Send(out)
+						if err != nil {
+							log.Errorf("[server] send DDLLockInfo %v to worker %s fail %v", out, worker, err)
+							doRetry = true
+							break
+						}
+
+						if !synced {
+							// still need wait other workers to sync
+							log.Infof("[server] sharding DDL %s in syncing, waiting %v workers to sync", lockID, remain)
+							continue
+						}
+
+						log.Infof("[server] sharding DDL %s synced", lockID)
+
+						// resolve DDL lock
+						wg.Add(1)
+						go func(lockID string) {
+							defer wg.Done()
+							resps, err := s.resolveDDLLock(ctx, lockID, "", nil)
+							if err == nil {
+								log.Infof("[server] resolve DDL lock %s successfully, remove it", lockID)
+							} else {
+								log.Errorf("[server] resolve DDL lock %s fail %v, responses is:\n%+v", lockID, errors.ErrorStack(err), resps)
+								lock := s.lockKeeper.FindLock(lockID)
+								if lock != nil {
+									lock.AutoRetry.Set(true) // need auto-retry resolve at intervals
+								}
+							}
+						}(lockID)
+					}
+					stream.CloseSend()
+				}
+			}
+
+		}(worker, cli)
+	}
+
+	wg.Wait()
+}
+
+// resolveDDLLock resolves DDL lock
+// requests DDL lock's owner to execute the DDL
+// requests DDL lock's non-owner dm-workers to ignore (skip) the DDL
+func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner string, prefWorkers []string) ([]*pb.CommonWorkerResponse, error) {
+	lock := s.lockKeeper.FindLock(lockID)
+	if lock == nil {
+		// should not happen even when dm-master restarted
+		return nil, errors.NotFoundf("lock with ID %s", lockID)
+	}
+
+	if lock.Resolving.Get() {
+		return nil, errors.Errorf("lock %s is resolving", lockID)
+	}
+	lock.Resolving.Set(true)
+	defer lock.Resolving.Set(false) //reset
+
+	ready := lock.Ready() // Ready contain all dm-workers and whether they were synced
+
+	// request the owner to execute DDL
+	owner := lock.Owner
+	if len(replaceOwner) > 0 {
+		owner = replaceOwner
+	}
+	cli, ok := s.workerClients[owner]
+	if !ok {
+		return nil, errors.NotFoundf("worker %s relevant worker-client", owner)
+	}
+	if _, ok := ready[owner]; !ok {
+		return nil, errors.Errorf("worker %s not waiting for DDL lock %s", owner, lockID)
+	}
+
+	log.Infof("[server] requesting %s to execute DDL (with ID %s)", owner, lockID)
+	ownerResp, err := cli.ExecuteDDL(ctx, &pb.ExecDDLRequest{
+		Task:   lock.Task,
+		LockID: lockID,
+		Exec:   true,
+	})
+	if err != nil {
+		ownerResp = &pb.CommonWorkerResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}
+	}
+	ownerResp.Worker = owner
+	if !ownerResp.Result {
+		// owner execute DDL fail, do not continue
+		return []*pb.CommonWorkerResponse{
+			ownerResp,
+		}, errors.Errorf("owner %s ExecuteDDL fail", owner)
+	}
+
+	// request other dm-workers to ignore DDL
+	workers := make([]string, 0, len(ready))
+	if len(prefWorkers) > 0 {
+		workers = prefWorkers
+	} else {
+		for worker := range ready {
+			workers = append(workers, worker)
+		}
+	}
+
+	req := &pb.ExecDDLRequest{
+		Task:   lock.Task,
+		LockID: lockID,
+		Exec:   false, // ignore and skip DDL
+	}
+
+	workerRespCh := make(chan *pb.CommonWorkerResponse, len(workers))
+	var wg sync.WaitGroup
+	for _, worker := range workers {
+		if worker == owner {
+			continue // owner has executed DDL
+		}
+
+		wg.Add(1)
+		go func(worker string) {
+			defer wg.Done()
+			cli, ok := s.workerClients[worker]
+			if !ok {
+				workerRespCh <- &pb.CommonWorkerResponse{
+					Result: false,
+					Worker: worker,
+					Msg:    fmt.Sprintf("worker %s relevant worker-client not found", worker),
+				}
+				return
+			}
+			if _, ok := ready[worker]; !ok {
+				workerRespCh <- &pb.CommonWorkerResponse{
+					Result: false,
+					Worker: worker,
+					Msg:    fmt.Sprintf("worker %s not waiting for DDL lock %s", owner, lockID),
+				}
+				return
+			}
+
+			log.Infof("[server] requesting %s to skip DDL (with ID %s)", worker, lockID)
+			workerResp, err2 := cli.ExecuteDDL(ctx, req)
+			if err2 != nil {
+				workerResp = &pb.CommonWorkerResponse{
+					Result: false,
+					Msg:    errors.ErrorStack(err2),
+				}
+			}
+			workerResp.Worker = worker
+			workerRespCh <- workerResp
+		}(worker)
+	}
+	wg.Wait()
+
+	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(workers))
+	var success = true
+	for len(workerRespCh) > 0 {
+		workerResp := <-workerRespCh
+		workerRespMap[workerResp.Worker] = workerResp
+		if !workerResp.Result {
+			success = false
+		}
+	}
+
+	sort.Strings(workers)
+	workerResps := make([]*pb.CommonWorkerResponse, 0, len(workers)+1)
+	workerResps = append(workerResps, ownerResp)
+	for _, worker := range workers {
+		workerResp, ok := workerRespMap[worker]
+		if ok {
+			workerResps = append(workerResps, workerResp)
+		}
+	}
+
+	// owner has ExecuteDDL successfully, we remove the Lock
+	// if some dm-workers ExecuteDDL occurred error, we should use dmctl to handle dm-worker directly
+	s.lockKeeper.RemoveLock(lockID)
+
+	if !success {
+		err = errors.Errorf("DDL lock %s owner ExecuteDDL successfully, so DDL lock removed. but some dm-workers ExecuteDDL fail, you should to handle dm-worker directly", lockID)
+	}
+	return workerResps, err
+}
+
+// tryResolveDDLLocks tries to resolve synced DDL locks
+// only when auto-triggered resolve by fetchWorkerDDLInfo fail, we need to auto-retry
+// this can only handle a few cases, like owner unreachable temporary
+// other cases need to handle by user to use dmctl manually
+func (s *Server) tryResolveDDLLocks(ctx context.Context) {
+	locks := s.lockKeeper.Locks()
+	for ID, lock := range locks {
+		isSynced, _ := lock.IsSync()
+		if !isSynced || !lock.AutoRetry.Get() {
+			continue
+		}
+		log.Infof("[server] try auto re-resolve DDL lock %s", ID)
+		s.resolveDDLLock(ctx, ID, "", nil)
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+	}
 }

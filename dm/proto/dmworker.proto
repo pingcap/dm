@@ -10,6 +10,18 @@ service Worker {
 
     rpc QueryStatus (QueryStatusRequest) returns (QueryStatusResponse) {}
 
+    // FetchDDLInfo fetches DDL info from dm-worker by dm-master
+    // and sends the relevant DDL lock info back to dm-worker
+    // NOTE: split to two RPCs if needed
+    rpc FetchDDLInfo (stream DDLLockInfo) returns (stream DDLInfo) {}
+
+    // ExecuteDDL request a dm-worker to execute or ignore (skip) a DDL
+    rpc ExecuteDDL (ExecDDLRequest) returns (CommonWorkerResponse) {}
+
+    // BreakDDLLock request a dm-worker to break a DDL lock
+    // including remove DDLLockInfo and/or execute/skip DDL
+    rpc BreakDDLLock (BreakDDLLockRequest) returns (CommonWorkerResponse) {}
+
     rpc HandleSQLs (HandleSQLsRequest) returns (CommonWorkerResponse) {}
 }
 
@@ -136,6 +148,7 @@ message SyncStatus {
     string MasterBinlogGtid = 5;
     string SyncerBinlog = 6;
     string SyncerBinlogGtid = 7;
+    string blockingDDL = 8; // sharding DDL which current is blocking
 }
 
 // RelayStatus represents status for relay unit.
@@ -150,21 +163,24 @@ message RelayStatus {
 // name: sub task'name, when starting a sub task the name should be unique
 // stage: sub task's current stage
 // unit: sub task's current dm unit's UnitType
+// result: current unit's process result, when the stage is Running, no result
+// unresolvedDDLLockID: un-resolved sharding DDL lock ID (ref DDLLockInfo)
+//                      if needed, we can put this to SyncStatus
 // status: current unit's statistics
 //         for Load, includes total bytes, progress, etc.
 //         for Sync, includes TPS, binlog meta, etc.
-// result: current unit's process result, when the stage is Running, no result
 message SubTaskStatus {
     string name = 1;
     Stage stage = 2;
     UnitType unit = 3;
     ProcessResult result = 4;
+    string unresolvedDDLLockID = 5;
     oneof status {
-        string msg = 5; // message when error occurred
-        CheckStatus check = 6;
-        DumpStatus dump = 7;
-        LoadStatus load = 8;
-        SyncStatus sync = 9;
+        string msg = 6; // message when error occurred
+        CheckStatus check = 7;
+        DumpStatus dump = 8;
+        LoadStatus load = 9;
+        SyncStatus sync = 10;
     }
 }
 
@@ -206,4 +222,42 @@ enum ErrorType {
 message ProcessError {
     ErrorType Type = 1;
     string msg = 2;
+}
+
+// DDLInfo represents a occurred DDL in a sub task
+// it been sent from dm-worker to dm-master
+// dm-master uses it to contruct a DDL lock and do syncing with other dm-workers
+// add more fields if needed
+message DDLInfo {
+    string task = 1; // sub task's name
+    string schema = 2; // DDL's schema
+    string table = 3; // DDL's table
+}
+
+// DDLLockInfo represents a DDL lock
+// it been sent from dm-master to dm-worker
+// add more fields if needed
+message DDLLockInfo {
+    string task = 1; // sub task's name
+    string ID = 2; // DDL lock ID
+}
+
+// ExecDDLRequest represents a reqeust for a dm-worker to execute (or ignore) a DDL
+message ExecDDLRequest {
+    string task = 1; // sub task's name
+    string lockID = 2; // DDL lock ID
+    bool exec = 3; // true for execute, false for ignore (skip)
+}
+
+// BreakDDLLockRequest represents a reqeust for a dm-worker to force to break the DDL lock
+// task: sub task's name
+// removeLockID: DDLLockInfo's ID which need to remove
+// execDDL: execute DDL which is blocking
+// skipDDL: skip DDL which is blocking
+// execDDL and skipDDL can not specify both at the same time, but can specify neither
+message BreakDDLLockRequest {
+    string task = 1;
+    string removeLockID = 2;
+    bool execDDL = 3;
+    bool skipDDL = 4;
 }

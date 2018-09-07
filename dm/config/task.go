@@ -125,7 +125,9 @@ type TaskConfig struct {
 
 	TargetDB *DBConfig `yaml:"target-database"`
 
-	MySQLInstances []*MySQLInstance `yaml:"MySQL-instances"`
+	MySQLInstances []*MySQLInstance `yaml:"mysql-instances"`
+
+	InSharding bool `yaml:"in-sharding" json:"in-sharding"`
 
 	Routes         map[string]*router.TableRule   `yaml:"routes"`
 	Filters        map[string]*bf.BinlogEventRule `yaml:"filters"`
@@ -195,7 +197,7 @@ func (c *TaskConfig) adjust() error {
 	}
 
 	if len(c.MySQLInstances) == 0 {
-		return errors.New("must specify at least one MySQL-instances")
+		return errors.New("must specify at least one mysql-instances")
 	}
 
 	sids := make(map[int]int) // server-id -> instance-index
@@ -204,7 +206,7 @@ func (c *TaskConfig) adjust() error {
 			return errors.Annotatef(err, "MySQL-instance: %d", i)
 		}
 		if sid, ok := sids[inst.ServerID]; ok {
-			return errors.Errorf("MySQL-instances (%d) and (%d) have same server-id (%d)", sid, i, inst.ServerID)
+			return errors.Errorf("mysql-instances (%d) and (%d) have same server-id (%d)", sid, i, inst.ServerID)
 		}
 		sids[inst.ServerID] = i
 
@@ -223,7 +225,7 @@ func (c *TaskConfig) adjust() error {
 				return errors.Errorf("MySQL-instance(%d)'s column-mapping-rules %s not exist in column-mapping", i, name)
 			}
 		}
-		if _, ok := c.BWList[inst.BWListName]; !ok {
+		if _, ok := c.BWList[inst.BWListName]; len(inst.BWListName) > 0 && !ok {
 			return errors.Errorf("MySQL-instance(%d)'s list %s not exist in black white list", i, inst.BWListName)
 		}
 
@@ -264,6 +266,7 @@ func (c *TaskConfig) SubTaskConfigs() []*SubTaskConfig {
 	cfgs := make([]*SubTaskConfig, len(c.MySQLInstances))
 	for i, inst := range c.MySQLInstances {
 		cfg := NewSubTaskConfig()
+		cfg.InSharding = c.InSharding
 		cfg.Name = c.Name
 		cfg.Mode = c.TaskMode
 		cfg.Flavor = c.Flavor

@@ -34,6 +34,7 @@ import (
 
 func main() {
 	cfg := config.NewSubTaskConfig()
+	cfg.SetupFlags(config.CmdLoader)
 	err := cfg.Parse(os.Args[1:])
 	switch errors.Cause(err) {
 	case nil:

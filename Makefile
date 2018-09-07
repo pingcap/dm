@@ -15,7 +15,7 @@ TOPDIRS   := $$(ls -d */ | grep -vE "vendor")
 
 .PHONY: build syncer loader test check deps dm-worker dm-master dmctl 
 
-build: syncer loader check test
+build: syncer loader check test dm-worker dm-master dmctl
 
 dm-worker:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/dm-worker ./cmd/dm-worker

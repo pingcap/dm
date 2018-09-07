@@ -53,6 +53,7 @@ func Start(args []string) {
 			worker.NewPauseSubTaskCmd(),
 			worker.NewResumeSubTaskCmd(),
 			worker.NewQueryStatusCmd(),
+			worker.NewBreakDDLLockCmd(),
 			worker.NewCheckSubTaskCmd(),
 		)
 	} else {
@@ -65,6 +66,9 @@ func Start(args []string) {
 			master.NewResumeTaskCmd(),
 			master.NewQueryStatusCmd(),
 			master.NewRefreshWorkerTasks(),
+			master.NewShowDDLLocksCmd(),
+			master.NewUnlockDDLLockCmd(),
+			master.NewBreakDDLLockCmd(),
 			master.NewCheckTaskCmd(),
 		)
 	}
