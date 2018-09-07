@@ -71,8 +71,8 @@ var Exprs = map[Expr]func(*mappingInfo, []interface{}) ([]interface{}, error){
 // Rule is a rule to map column
 // TODO: we will do it later, if we need to implement a real column mapping, we need table structure of source and target system
 type Rule struct {
-	PatternSchema    string   `yaml:"pattern-schema" json:"pattern-schema" toml:"pattern-schema"`
-	PatternTable     string   `yaml:"pattern-table" json:"pattern-table" toml:"pattern-table"`
+	PatternSchema    string   `yaml:"schema-pattern" json:"schema-pattern" toml:"schema-pattern"`
+	PatternTable     string   `yaml:"table-pattern" json:"table-pattern" toml:"table-pattern"`
 	SourceColumn     string   `yaml:"source-column" json:"source-column" toml:"source-column"` // modify, add refer column, ignore
 	TargetColumn     string   `yaml:"target-column" json:"target-column" toml:"target-column"` // add column, modify
 	Expression       Expr     `yaml:"expression" json:"expression" toml:"expression"`

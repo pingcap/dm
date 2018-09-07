@@ -61,14 +61,14 @@ const (
 
 // BinlogEventRule is a rule to filter binlog events
 type BinlogEventRule struct {
-	SchemaPattern string      `json:"schema-pattern" toml:"schema-pattern"`
-	TablePattern  string      `json:"table-pattern" toml:"table-pattern"`
-	DMLEvent      []EventType `json:"dml" toml:"dml"`
-	DDLEvent      []EventType `json:"ddl" toml:"ddl"`
-	SQLPattern    []string    `json:"sql-pattern" toml:"sql-pattern"` // regular expression
+	SchemaPattern string      `json:"schema-pattern" toml:"schema-pattern" yaml:"schema-pattern"`
+	TablePattern  string      `json:"table-pattern" toml:"table-pattern" yaml:"table-pattern"`
+	DMLEvent      []EventType `json:"dml" toml:"dml" yaml:"dml"`
+	DDLEvent      []EventType `json:"ddl" toml:"ddl" yaml:"ddl"`
+	SQLPattern    []string    `json:"sql-pattern" toml:"sql-pattern" yaml:"sql-pattern"` // regular expression
 	sqlRegularExp *regexp.Regexp
 
-	Action ActionType `json:"action" toml:"action"`
+	Action ActionType `json:"action" toml:"action" yaml:"action"`
 }
 
 // Valid checks validity of rule.

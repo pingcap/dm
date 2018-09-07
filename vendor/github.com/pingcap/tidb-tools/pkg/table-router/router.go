@@ -21,10 +21,10 @@ import (
 // TableRule is a rule to route schema/table to target schema/table
 // pattern format refers 'pkg/table-rule-selector'
 type TableRule struct {
-	SchemaPattern string `json:"schema-pattern" toml:"schema-pattern"`
-	TablePattern  string `json:"table-pattern" toml:"table-pattern"`
-	TargetSchema  string `json:"target-schema" toml:"target-schema"`
-	TargetTable   string `json:"target-table" toml:"target-table"`
+	SchemaPattern string `json:"schema-pattern" toml:"schema-pattern" yaml:"schema-pattern"`
+	TablePattern  string `json:"table-pattern" toml:"table-pattern" yaml:"table-pattern"`
+	TargetSchema  string `json:"target-schema" toml:"target-schema" yaml:"target-schema"`
+	TargetTable   string `json:"target-table" toml:"target-table" yaml:"target-table"`
 }
 
 // Valid checks validity of rule

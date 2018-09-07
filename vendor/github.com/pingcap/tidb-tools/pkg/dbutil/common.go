@@ -183,7 +183,41 @@ func GetTables(ctx context.Context, db *sql.DB, schemaName string) ([]string, er
 		}
 		tbls = append(tbls, name)
 	}
-	return tbls, nil
+	return tbls, errors.Trace(rs.Err())
+}
+
+// GetSchemas returns name of all schemas
+func GetSchemas(ctx context.Context, db *sql.DB) ([]string, error) {
+	query := "SHOW DATABASES"
+	rows, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer rows.Close()
+
+	// show an example.
+	/*
+		mysql> SHOW DATABASES;
+		+--------------------+
+		| Database           |
+		+--------------------+
+		| information_schema |
+		| mysql              |
+		| performance_schema |
+		| sys                |
+		| test_db            |
+		+--------------------+
+	*/
+	schemas := make([]string, 0, 10)
+	for rows.Next() {
+		var schema string
+		err = rows.Scan(&schema)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		schemas = append(schemas, schema)
+	}
+	return schemas, errors.Trace(rows.Err())
 }
 
 // GetCRC32Checksum returns checksum code of some data by given condition
