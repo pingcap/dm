@@ -1,0 +1,8 @@
+---
+
+# default configuration for dm-master
+
+dm_master_log_level: "info"
+dm_master_log_dir: "{{ deploy_dir }}/log"
+dm_master_log_file: "dm-master.log"
+dm_master_log_rotate: "day"

@@ -1,0 +1,12 @@
+# Worker Configuration.
+
+server-id = {{ server_id }}
+flavor = "{{ flavor }}"
+meta-file = "relay.meta"
+enable-gtid = {{ enable_gtid }}
+
+[from]
+host = "{{ mysql_host }}"
+user = "{{ mysql_user }}"
+password = "{{ mysql_password }}"
+port = {{ mysql_port }}

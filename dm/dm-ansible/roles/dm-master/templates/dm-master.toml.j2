@@ -1,0 +1,14 @@
+# Master Configuration.
+
+{% set worker_hosts = groups.dm_worker_servers %}
+{% for host in worker_hosts -%}
+  {% set worker_ip = hostvars[host].ansible_host | default(hostvars[host].inventory_hostname) -%}
+  {% set worker_port = hostvars[host].dm_worker_port -%}
+  {% set mysql_host = hostvars[host].mysql_host -%}
+  {% set mysql_port = hostvars[host].mysql_port -%}
+
+[[deploy]]
+mysql = "{{ mysql_host }}:{{ mysql_port }}"
+worker = "{{ worker_ip }}:{{ worker_port }}"
+
+{% endfor -%}

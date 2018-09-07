@@ -1,0 +1,18 @@
+#!/bin/bash
+set -e
+ulimit -n 1000000
+
+DEPLOY_DIR={{ deploy_dir }}
+cd "${DEPLOY_DIR}" || exit 1
+
+# WARNING: This file was auto-generated. Do not edit!
+#          All your edit might be overwritten!
+
+exec bin/dm-worker \
+    --worker-addr=":{{ dm_worker_port }}" \
+    --status-addr=":{{ dm_worker_status_port }}" \
+    -L="{{ dm_worker_log_level }}" \
+    --log-rotate="{{ dm_worker_log_rotate }}" \
+    --log-file="{{ dm_worker_log_dir }}/{{ dm_worker_log_file }}" \
+    --relay-dir="{{ dm_worker_relay_dir }}" \
+    --config="conf/dm-worker.toml"

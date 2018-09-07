@@ -1,0 +1,9 @@
+---
+
+dm_worker_port: "10081"
+dm_worker_status_port: "10082"
+flavor: "mysql"
+enable_gtid: "false"
+
+mysql_user: "root"
+mysql_port: 3306
