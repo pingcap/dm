@@ -221,6 +221,11 @@ func (c *Checker) Type() pb.UnitType {
 	return pb.UnitType_Check
 }
 
+// IsFreshTask implements Unit.IsFreshTask
+func (c *Checker) IsFreshTask() (bool, error) {
+	return true, nil
+}
+
 // Status implements Unit interface
 func (c *Checker) Status() interface{} {
 	c.result.RLock()

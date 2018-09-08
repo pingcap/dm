@@ -68,11 +68,14 @@ type SubTaskConfig struct {
 	// when in sharding, multi dm-workers do one task
 	InSharding bool `toml:"in-sharding" json:"in-sharding"`
 
-	Name           string `toml:"name" json:"name"`
-	Mode           string `toml:"mode" json:"mode"`
-	ServerID       int    `toml:"server-id" json:"server-id"`
-	Flavor         string `toml:"flavor" json:"flavor"`
-	VerifyChecksum bool   `toml:"verify-checksum" json:"verify-checksum"`
+	Name                     string `toml:"name" json:"name"`
+	Mode                     string `toml:"mode" json:"mode"`
+	ServerID                 int    `toml:"server-id" json:"server-id"`
+	Flavor                   string `toml:"flavor" json:"flavor"`
+	VerifyChecksum           bool   `toml:"verify-checksum" json:"verify-checksum"`
+	CheckpointSchemaPrefix   string `toml:"checkpoint-schema-prefix" json:"checkpoint-schema-prefix"`
+	RemovePreviousCheckpoint bool   `toml:"remove-previous-checkpoint" json:"remove-previous-checkpoint"`
+	Meta                     *Meta  `toml:"meta" json:"meta"`
 
 	BinlogType string   `toml:"binlog-type" json:"binlog-type"`
 	RelayDir   string   `toml:"relay-dir" json:"relay-dir"`
@@ -128,13 +131,11 @@ func (c *SubTaskConfig) SetupFlags(name CmdName) {
 		// Loader configuration
 		fs.IntVar(&c.PoolSize, "t", 16, "Number of threads restoring concurrently for worker pool. Each worker restore one file at a time, increase this as TiKV nodes increase")
 		fs.StringVar(&c.Dir, "d", "./dumped_data", "Directory of the dump to import")
-		fs.StringVar(&c.CheckPointSchema, "checkpoint-schema", "tidb_loader", "schema name of checkpoint")
-		fs.BoolVar(&c.RemoveCheckpoint, "rm-checkpoint", false, "delete corresponding checkpoint records after the table is restored successfully")
 		fs.StringVar(&c.PprofAddr, "pprof-addr", ":10084", "Loader pprof addr")
 	case CmdSyncer:
 		// Syncer configuration
 		fs.IntVar(&c.ServerID, "server-id", 101, "MySQL slave server ID")
-		fs.StringVar(&c.Meta, "meta", "", "syncer meta info") // maybe refine to use target DB save checkpoint
+		fs.StringVar(&c.MetaFile, "meta-file", "", "syncer meta info filename")
 		fs.StringVar(&c.Flavor, "flavor", mysql.MySQLFlavor, "use flavor for different MySQL source versions; support \"mysql\", \"mariadb\" now; if you replicate from mariadb, please set it to \"mariadb\"")
 		fs.IntVar(&c.WorkerCount, "count", 16, "parallel worker count")
 		fs.IntVar(&c.Batch, "b", 10, "batch commit count")

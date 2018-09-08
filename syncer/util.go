@@ -17,7 +17,6 @@ import (
 	"math"
 	"strings"
 
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
@@ -53,20 +52,4 @@ func toBinlogType(bt string) BinlogType {
 	default:
 		return RemoteBinlog
 	}
-}
-
-func maxJobForTables(jobs []*job) map[string]*job {
-	maxJobs := make(map[string]*job)
-	for _, job := range jobs {
-		key := utils.GenTableKey(job.sourceSchema, job.sourceTable)
-		prev, ok := maxJobs[key]
-		if !ok {
-			maxJobs[key] = job
-		} else {
-			if prev.currentPos.Compare(job.currentPos) < 0 {
-				maxJobs[key] = job
-			}
-		}
-	}
-	return maxJobs
 }

@@ -19,6 +19,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -315,8 +316,6 @@ type Loader struct {
 	totalDataSize    sync2.AtomicInt64
 	finishedDataSize sync2.AtomicInt64
 
-	unitType pb.UnitType
-
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
 }
@@ -329,7 +328,6 @@ func NewLoader(cfg *config.SubTaskConfig) *Loader {
 		tableInfos: make(map[string]*tableInfo),
 		workerWg:   new(sync.WaitGroup),
 		pool:       make([]*Worker, 0, cfg.PoolSize),
-		unitType:   pb.UnitType_Load,
 	}
 	loader.tableRouter, _ = router.NewTableRouter([]*router.TableRule{})
 	loader.fileJobQueueClosed.Set(true) // not open yet
@@ -338,19 +336,27 @@ func NewLoader(cfg *config.SubTaskConfig) *Loader {
 
 // Type implements Unit.Type
 func (l *Loader) Type() pb.UnitType {
-	return l.unitType
+	return pb.UnitType_Load
 }
 
 // Init initializes loader for a load task, but not start Process.
 // if fail, it should not call l.Close.
 func (l *Loader) Init() error {
-	checkpoint, err := newRemoteCheckPoint(l.cfg)
+	checkpoint, err := newRemoteCheckPoint(l.cfg, l.checkpointID())
 	if err != nil {
 		return errors.Trace(err)
 	}
 	l.checkPoint = checkpoint
 
 	l.bwList = filter.New(l.cfg.BWList)
+
+	if l.cfg.RemovePreviousCheckpoint {
+		err := l.checkPoint.Clear()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		log.Info("[loader] all previous checkpoints cleared")
+	}
 
 	err = l.genRouter(l.cfg.RouteRules)
 	if err != nil {
@@ -363,9 +369,6 @@ func (l *Loader) Init() error {
 			return errors.Trace(err)
 		}
 	}
-
-	l.checkPoint.CalcProgress(l.db2Tables)
-	l.loadFinishedSize()
 
 	return nil
 }
@@ -449,12 +452,23 @@ func (l *Loader) isClosed() bool {
 	return l.closed.Get()
 }
 
+// IsFreshTask implements Unit.IsFreshTask
+func (l *Loader) IsFreshTask() (bool, error) {
+	count, err := l.checkPoint.Count()
+	return count == 0, errors.Trace(err)
+}
+
 // Restore begins the restore process.
 func (l *Loader) Restore(ctx context.Context) error {
 	if err := l.prepare(); err != nil {
 		log.Errorf("[loader] scan dir[%s] failed, err[%v]", l.cfg.Dir, err)
 		return errors.Trace(err)
 	}
+
+	// not update checkpoint in memory when restoring, so when re-Restore, we need to load checkpoint from DB
+	l.checkPoint.Load()
+	l.checkPoint.CalcProgress(l.db2Tables)
+	l.loadFinishedSize()
 
 	if err := l.initAndStartWorkerPool(ctx); err != nil {
 		log.Errorf("[loader] init and start worker pools failed, err[%v]", err)
@@ -486,7 +500,7 @@ func (l *Loader) Close() {
 	}
 
 	l.stopLoad()
-
+	l.checkPoint.Close()
 	l.closed.Set(true)
 }
 
@@ -915,55 +929,18 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	l.workerWg.Wait()
 
 	log.Infof("[loader] all data files has been finished, takes %f seconds", time.Since(begin).Seconds())
-	if l.cfg.RemoveCheckpoint {
-		l.CleanCheckpoint()
-	}
 	return nil
 }
 
-// CleanCheckpoint delete checkpoint records if the corresponding data file is finished.
-func (l *Loader) CleanCheckpoint() {
-	begin := time.Now()
-	var wg sync.WaitGroup
-
-	cleanFunc := func(dataFile string) error {
-		err := l.checkPoint.MarkAsDone(dataFile)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		log.Infof("[loader] cleaned checkpoint for %s ", dataFile)
-		return nil
+// checkpointID returns ID which used for checkpoint table
+func (l *Loader) checkpointID() string {
+	if l.cfg.ServerID > 0 {
+		return strconv.Itoa(l.cfg.ServerID)
 	}
-
-	fileChans := make(chan string, l.cfg.PoolSize)
-	for i := 0; i < l.cfg.PoolSize; i++ {
-		go func() {
-			for {
-				select {
-				case file, ok := <-fileChans:
-					if !ok {
-						return
-					}
-					err := cleanFunc(file)
-					if err != nil {
-						log.Errorf("[loader] clean checkpoint error %s", errors.ErrorStack(err))
-					}
-					wg.Done()
-				}
-			}
-		}()
+	dir, err := filepath.Abs(l.cfg.Dir)
+	if err != nil {
+		log.Warnf("[loader] get abs dir for %s error %v", l.cfg.Dir, err)
+		return l.cfg.Dir
 	}
-
-	for _, tables := range l.db2Tables {
-		for _, files := range tables {
-			for _, file := range files {
-				wg.Add(1)
-				fileChans <- file
-			}
-		}
-	}
-	close(fileChans)
-
-	wg.Wait()
-	log.Infof("[loader] all corresponding checkpoint records has been deleted, takes %f seconds", time.Since(begin).Seconds())
+	return shortSha1(dir)
 }

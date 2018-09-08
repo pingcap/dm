@@ -124,10 +124,10 @@ type Syncer struct {
 
 	checkpoint CheckPoint
 
-	unitType pb.UnitType
-
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
+	// record whether error occurred when execute SQLs
+	execErrorDetected sync2.AtomicBool
 
 	operatorsMu struct {
 		sync.RWMutex
@@ -148,7 +148,6 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.c = newCausality()
 	syncer.tableRouter, _ = router.NewTableRouter([]*router.TableRule{})
 	syncer.done = make(chan struct{})
-	syncer.unitType = pb.UnitType_Sync
 	syncer.bwList = filter.New(cfg.BWList)
 	syncer.checkpoint = NewRemoteCheckPoint(cfg, syncer.checkpointID())
 
@@ -202,7 +201,7 @@ func (s *Syncer) closeJobChans() {
 
 // Type implements Unit.Type
 func (s *Syncer) Type() pb.UnitType {
-	return s.unitType
+	return pb.UnitType_Sync
 }
 
 // Init initializes syncer for a sync task, but not start Process.
@@ -238,7 +237,20 @@ func (s *Syncer) Init() error {
 		}
 	}
 
-	err = s.checkpoint.Init(s.cfg)
+	err = s.checkpoint.Init()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	if s.cfg.RemovePreviousCheckpoint {
+		err = s.checkpoint.Clear()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		log.Info("[syncer] all previous checkpoints cleared")
+	}
+
+	err = s.checkpoint.Load()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -293,6 +305,12 @@ func (s *Syncer) initShardingGroups() error {
 	return nil
 }
 
+// IsFreshTask implements Unit.IsFreshTask
+func (s *Syncer) IsFreshTask() (bool, error) {
+	globalPoint := s.checkpoint.GlobalPoint()
+	return globalPoint.Compare(minCheckpoint) <= 0, nil
+}
+
 // Process implements the dm.Unit interface.
 func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	newCtx, cancel := context.WithCancel(ctx)
@@ -313,6 +331,9 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	s.newJobChans(s.cfg.WorkerCount + 1)
 
 	s.runFatalChan = make(chan *pb.ProcessError, s.cfg.WorkerCount+1)
+	s.execErrorDetected.Set(false)
+	// rollback un-flushed checkpoints
+	s.checkpoint.Rollback()
 	errs := make([]*pb.ProcessError, 0, 2)
 
 	if s.cfg.InSharding {
@@ -501,10 +522,15 @@ func (s *Syncer) addJob(job *job) error {
 
 	wait := s.checkWait(job)
 	if wait {
-		// TODO: detect whether errors occurred, and rollback checkpoints if errors occurred
-		// when recovering the sync from error, safe-mode should be enabled
 		s.jobWg.Wait()
 		s.c.reset()
+
+		if s.execErrorDetected.Get() {
+			// detected errors for executing SQls, skip save checkpoints and return
+			// can not test len(runFatalChan), it's read by another goroutine
+			// when recovering the sync from error, checkpoints should be rollback and safe-mode should be enabled
+			return nil
+		}
 	}
 
 	// save global and table's checkpoint of current job
@@ -561,6 +587,7 @@ func (s *Syncer) sync(ctx context.Context, db *sql.DB, jobChan chan *job) {
 	fatalF := func(err error, errType pb.ErrorType) {
 		clearF()
 		s.runFatalChan <- unit.NewProcessError(errType, errors.ErrorStack(err))
+		s.execErrorDetected.Set(true)
 	}
 
 	executeSQLs := func() error {
@@ -744,11 +771,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	//    * compare last pos with current binlog's pos to determine whether re-sync completed
 	// 6. use the global streamer to continue the syncing
 	var (
-		shardingSyncer   *replication.BinlogSyncer
-		shardingReader   *streamer.BinlogReader
-		shardingStreamer streamer.Streamer
-		shardingReSyncCh = make(chan *ShardingReSync, 10)
-		shardingReSync   *ShardingReSync
+		shardingSyncer     *replication.BinlogSyncer
+		shardingReader     *streamer.BinlogReader
+		shardingStreamer   streamer.Streamer
+		shardingReSyncCh   = make(chan *ShardingReSync, 10)
+		shardingReSync     *ShardingReSync
+		savedGlobalLastPos mysql.Position
 	)
 
 	closeShardingSyncer := func() {
@@ -762,6 +790,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 		shardingStreamer = nil
 		shardingReSync = nil
+		lastPos = savedGlobalLastPos // restore global last pos
 	}
 	defer func() {
 		// NOTE: maybe we can try to update global checkpoint here as an optimization
@@ -774,6 +803,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		if shardingStreamer == nil && len(shardingReSyncCh) > 0 {
 			// some sharding groups need to re-syncing
 			shardingReSync = <-shardingReSyncCh
+			savedGlobalLastPos = lastPos // save global last pos
 			if s.binlogType == RemoteBinlog {
 				shardingSyncer = replication.NewBinlogSyncer(s.shardingSyncCfg)
 				shardingStreamer, err = s.getBinlogStreamer(shardingSyncer, shardingReSync.currPos)
@@ -849,6 +879,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 			if shardingReSync != nil {
 				if currentPos.Name > shardingReSync.currPos.Name {
+					lastPos = shardingReSync.currPos
 					shardingReSync.currPos = currentPos
 				}
 				if shardingReSync.currPos.Compare(shardingReSync.lastPos) >= 0 {
@@ -875,6 +906,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 
 			if shardingReSync != nil {
+				lastPos = shardingReSync.currPos
 				shardingReSync.currPos.Pos = e.Header.LogPos
 				currentPos = shardingReSync.currPos
 				if shardingReSync.currPos.Compare(shardingReSync.lastPos) >= 0 {
@@ -1037,6 +1069,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 		case *replication.QueryEvent:
 			if shardingReSync != nil {
+				lastPos = shardingReSync.currPos
 				shardingReSync.currPos.Pos = e.Header.LogPos
 				if shardingReSync.currPos.Compare(shardingReSync.lastPos) >= 0 {
 					log.Infof("[syncer] sharding group %v re-syncing completed", shardingReSync)
@@ -1133,8 +1166,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 						// for sharding DDL, the firstPos should be the `Pos` of the binlog, not the `End_log_pos`
 						// so when restarting before sharding DDLs synced, this binlog can be re-sync again to trigger the TrySync
 						startPos := mysql.Position{
-							Name: lastPos.Name,
-							Pos:  lastPos.Pos - e.Header.EventSize,
+							Name: currentPos.Name,
+							Pos:  currentPos.Pos - e.Header.EventSize,
 						}
 						inSharding, group, synced, remain := s.sgk.TrySync(tableNames[1][0].Schema, tableNames[1][0].Name, source, startPos)
 						if inSharding {
@@ -1154,7 +1187,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 							}
 							shardingReSyncCh <- &ShardingReSync{
 								currPos:      mysql.Position{Name: group.firstPos.Name, Pos: group.firstPos.Pos},
-								lastPos:      lastPos,
+								lastPos:      currentPos,
 								targetSchema: tableNames[1][0].Schema,
 								targetTable:  tableNames[1][0].Name,
 							}
@@ -1201,6 +1234,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 		case *replication.XIDEvent:
 			if shardingReSync != nil {
+				lastPos = shardingReSync.currPos
 				shardingReSync.currPos.Pos = e.Header.LogPos
 				if shardingReSync.currPos.Compare(shardingReSync.lastPos) >= 0 {
 					log.Infof("[syncer] sharding group %v re-syncing completed", shardingReSync)
@@ -1219,6 +1253,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			s.addJob(job)
 
 		default:
+			if shardingReSync != nil {
+				continue
+			}
 			currentPos.Pos = e.Header.LogPos
 			if currentPos.Name == "" && lastPos.Name != "" {
 				currentPos.Name = lastPos.Name

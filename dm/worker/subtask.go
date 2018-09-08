@@ -18,8 +18,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/siddontang/go-mysql/mysql"
-
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
@@ -28,6 +26,7 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/loader"
 	"github.com/pingcap/tidb-enterprise-tools/mydumper"
 	"github.com/pingcap/tidb-enterprise-tools/syncer"
+	"github.com/siddontang/go-mysql/mysql"
 
 	// hack for glide update, remove it later
 	_ "github.com/pingcap/tidb-tools/pkg/check"
@@ -45,6 +44,7 @@ func createUnits(cfg *config.SubTaskConfig) []unit.Unit {
 		us = append(us, loader.NewLoader(cfg))
 		us = append(us, syncer.NewSyncer(cfg))
 	case config.ModeFull:
+		// NOTE: maybe need another checker in the future?
 		us = append(us, mydumper.NewMydumper(cfg))
 		us = append(us, loader.NewLoader(cfg))
 	case config.ModeIncrement:
@@ -91,15 +91,47 @@ func (st *SubTask) Init() error {
 	if len(st.units) < 1 {
 		return errors.Errorf("sub task %s has no dm units for mode %s", st.cfg.Name, st.cfg.Mode)
 	}
+
+	// when error occurred, initialized units should be closed
+	// when continue sub task from loader / syncer, ahead units should be closed
+	var needCloseUnits []unit.Unit
+	defer func() {
+		for _, u := range needCloseUnits {
+			u.Close()
+		}
+	}()
+
 	// every unit does base initialization in `Init`, and this must pass before start running the sub task
 	// other setups can be done in `Process`, like Loader's prepare which depends on Mydumper's output
 	// but setups in `Process` should be treated carefully, let it's compatible with Pause / Resume
-	for _, u := range st.units {
+	for i, u := range st.units {
 		err := u.Init()
 		if err != nil {
+			// when init fail, other units initialized before should be closed
+			for j := 0; j < i; j++ {
+				needCloseUnits = append(needCloseUnits, st.units[j])
+			}
 			return errors.Errorf("sub task %s init dm-unit error %v", st.cfg.Name, errors.ErrorStack(err))
 		}
 	}
+
+	// if the sub task ran before, some units may be skipped
+	var skipIdx = 0
+	for i := len(st.units) - 1; i > 0; i-- {
+		u := st.units[i]
+		isFresh, err := u.IsFreshTask()
+		if err != nil {
+			log.Errorf("[subtask] %s check %s is fresh error %v", st.cfg.Name, u.Type(), errors.ErrorStack(err))
+		} else if !isFresh {
+			skipIdx = i
+			log.Infof("[subtask] %s run %s dm-unit before, continue with it", st.cfg.Name, u.Type())
+			break
+		}
+	}
+
+	needCloseUnits = st.units[:skipIdx]
+	st.units = st.units[skipIdx:]
+
 	st.setCurrUnit(st.units[0])
 	return nil
 }

@@ -16,7 +16,6 @@ package loader
 import (
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
@@ -249,55 +248,4 @@ func isMySQLError(err error, code uint16) bool {
 	err = causeErr(err)
 	e, ok := err.(*mysql.MySQLError)
 	return ok && e.Number == code
-}
-
-func createSchema(db *sql.DB, schema string) error {
-	if schema == "" {
-		schema = "loader"
-	}
-	sql := fmt.Sprintf("CREATE SCHEMA `%s`", schema)
-	_, err := querySQL(db, sql)
-	return errors.Trace(err)
-}
-
-func createCheckPointTable(db *sql.DB, schema, table string) error {
-	tableName := fmt.Sprintf("`%s`.`%s`", schema, table)
-	createTable := `CREATE TABLE %s (
-		id char(6) NOT NULL,
-		filename varchar(256) NOT NULL,
-		cp_schema varchar(128) NOT NULL,
-		cp_table varchar(128) NOT NULL,
-		offset bigint NOT NULL,
-		end_pos bigint NOT NULL,
-		create_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-		UNIQUE KEY uk_id_f (id,filename)
-	);
-`
-	sql := fmt.Sprintf(createTable, tableName)
-	_, err := querySQL(db, sql)
-	return errors.Trace(err)
-}
-
-func initCheckpoint(db *sql.DB, hashValue, schema, table, filename string, offset, endPos int64) error {
-	idx := strings.Index(filename, ".sql")
-	fname := filename[:idx]
-	fields := strings.Split(fname, ".")
-	if len(fields) != 2 && len(fields) != 3 {
-		return errors.Errorf("invalid db table sql file - %s", filename)
-	}
-
-	// fields[0] -> db name, fields[1] -> table name
-	sql := fmt.Sprintf("INSERT INTO `%s`.`%s` (`id`, `filename`, `cp_schema`, `cp_table`, `offset`, `end_pos`) VALUES(?,?,?,?,?,?)", schema, table)
-	log.Debugf("sql:%s, id:%s, filename:%s, cp_schema:%s, cp_table:%s, offset:%d, end_pos:%d", sql, hashValue, filename, fields[0], fields[1], offset, endPos)
-	_, err := db.Exec(sql, hashValue, filename, fields[0], fields[1], offset, endPos)
-	if err != nil {
-		if isErrDupEntry(err) {
-			log.Infof("checkpoint id:%s filename %s already exists, skip it.", hashValue, filename)
-			return nil
-		}
-		return errors.Annotatef(err, "initialize checkpoint")
-	}
-
-	return errors.Trace(err)
 }

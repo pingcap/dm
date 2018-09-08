@@ -36,7 +36,7 @@ dir = "$1"
 # Loader pprof addr
 pprof-addr = ":10085"
 # We saved checkpoint data to tidb, which schema name is defined here.
-checkpoint-schema = "tidb_loader_sharding"
+checkpoint-schema-prefix = "tidb_checkpoint_sharding"
 
 # for old checkpoint
 checkpoint = "$2"

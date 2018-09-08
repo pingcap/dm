@@ -69,6 +69,12 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 			Password: pswd,
 			Port:     port,
 		},
+		To: config.DBConfig{
+			Host:     host,
+			User:     user,
+			Password: pswd,
+			Port:     port,
+		},
 		ServerID: 101,
 	}
 

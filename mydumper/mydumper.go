@@ -122,6 +122,11 @@ func (m *Mydumper) Type() pb.UnitType {
 	return pb.UnitType_Dump
 }
 
+// IsFreshTask implements Unit.IsFreshTask
+func (m *Mydumper) IsFreshTask() (bool, error) {
+	return true, nil
+}
+
 // constructArgs constructs arguments for exec.Command
 func (m *Mydumper) constructArgs(cfg *config.SubTaskConfig) []string {
 	db := cfg.From

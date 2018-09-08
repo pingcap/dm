@@ -4,6 +4,8 @@ task-mode: all  # full/incremental/all
 flavor: mysql  # mysql/mariadb
 verify-checksum: true
 in-sharding: true  # whether multi dm-worker do one sharding job
+checkpoint-schema-prefix: "dm_checkpoint"  # checkpoint schema prefix for Syncer / Loader
+remove-previous-checkpoint: false  # whether to remove previous checkpoint, set to `true` to start a fresh task even if the task-name used before
 
 target-database:
   host: "192.168.0.1"
@@ -19,6 +21,14 @@ mysql-instances:             # one or more source database, config more source d
       user: "root"
       password: ""
     server-id: 101           # unique in all instances
+
+    # binlog pos used to as start pos for syncer, for different task-mode, this maybe used or not
+    # `full` / `all`:
+    #    never be used
+    # `incremental`:
+    #    if `remove-previous-checkpoint` is true, this will be used
+    #    else if checkpoints already exists in `checkpoint-schema`, this will not be used
+    #    otherwise, this will be used
     meta:
       binlog-name: binlog-00001
       binlog-pos: 4
@@ -40,7 +50,7 @@ mysql-instances:             # one or more source database, config more source d
 
     syncer-config-name: "global"    # ref `syncers` config
     #syncer:
-    #  meta: "./data/syncer.meta"
+    #  worker-count: 32
 
   -
     config:
@@ -66,12 +76,8 @@ mysql-instances:             # one or more source database, config more source d
     loader:                  # local loader rule
       pool-size: 32
       dir: "./dumped_data"
-      checkpoint-schema: "tidb_loader"
-      rm-checkpoint: false
 
     syncer:
-      meta: "./data/syncer.meta"
-      syncer-checkpoint-schema: "checkpoint_syncer"
       worker-count: 32
       batch: 2000
       max-retry: 200
@@ -94,19 +100,19 @@ routes:                      # schema/table route mapping
 
 filters:                     # filter rules, mysql instance can ref rules in it
   user-filter-1:
-    pattern-schema: "user_*"
-    pattern-table: "abc_*"
+    schema-pattern: "user_*"
+    table-pattern: "abc_*"
     do-statement: ["ALL"]               # white list
     skip-statement: ["TRUNCATE TABLE"]  # black list
   user-filter-2:
-    pattern-schema: "user_*"
-    pattern-table: "abc_*"
+    schema-pattern: "user_*"
+    table-pattern: "abc_*"
     do-statement: ["ALL"]               # white list
 
 column-mappings:             # column mapping rules, mysql instance can ref rules in it
   user-column-mapping:
-    pattern-schema: "test_*"
-    pattern-table: "abc_*"
+    schema-pattern: "test_*"
+    table-pattern: "abc_*"
     op: "add-column"       # add/ignore/modify -column
     source-column: "id"
     target-column: "id"
@@ -126,13 +132,8 @@ loaders:                     # loader process unit specific configs, mysql insta
   global:
     pool-size: 16
     dir: "./dumped_data"
-    checkpoint-schema: "tidb_loader"
-    rm-checkpoint: false
-
 syncers:                     # syncer process unit specific configs, mysql instance can ref one config in it
   global:
-    meta: "./syncer.meta"
-    syncer-checkpoint-schema: "checkpoint_syncer"
     worker-count: 16
     batch: 1000
     max-retry: 100

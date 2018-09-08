@@ -380,6 +380,11 @@ func (r *Relay) Type() pb.UnitType {
 	return pb.UnitType_Relay
 }
 
+// IsFreshTask implements Unit.IsFreshTask
+func (r *Relay) IsFreshTask() (bool, error) {
+	return true, nil
+}
+
 // Pause pauses the process, it can be resumed later
 func (r *Relay) Pause() {
 	// Note: will not implemented

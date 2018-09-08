@@ -14,23 +14,28 @@
 package syncer
 
 import (
+	"bufio"
 	"database/sql"
 	"fmt"
+	"io"
+	"os"
+	"path"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
 var (
-	defaultTable         = "_"                 // default table name task name is empty
-	defaultSchema        = "checkpoint_syncer" // default schema name (when not set through task config)
-	globalCpSchema       = ""                  // global checkpoint's cp_schema
-	globalCpTable        = ""                  // global checkpoint's cp_table
+	defaultTable         = "_"      // default table name task name is empty
+	defaultSchemaSuffix  = "syncer" // default schema name's suffix
+	globalCpSchema       = ""       // global checkpoint's cp_schema
+	globalCpTable        = ""       // global checkpoint's cp_table
 	maxCheckPointTimeout = "1m"
 	minCheckpoint        = mysql.Position{Pos: 4}
 
@@ -96,10 +101,16 @@ func (b *binlogPoint) MySQLPos() mysql.Position {
 // because, when restarting to continue the sync, all sharding DDLs must try-sync again
 type CheckPoint interface {
 	// Init initializes the CheckPoint
-	Init(cfg *config.SubTaskConfig) error
+	Init() error
 
 	// Close closes the CheckPoint
 	Close()
+
+	// Clear clears all checkpoints
+	Clear() error
+
+	// Load loads all checkpoints
+	Load() error
 
 	// SaveTablePoint saves checkpoint for specified table in memory
 	SaveTablePoint(sourceSchema, sourceTable string, pos mysql.Position)
@@ -170,14 +181,10 @@ type RemoteCheckPoint struct {
 func NewRemoteCheckPoint(cfg *config.SubTaskConfig, id string) CheckPoint {
 	cp := &RemoteCheckPoint{
 		cfg:         cfg,
+		schema:      fmt.Sprintf("%s_%s", cfg.CheckpointSchemaPrefix, defaultSchemaSuffix),
 		id:          id,
 		points:      make(map[string]map[string]*binlogPoint),
 		globalPoint: newBinlogPoint(minCheckpoint, minCheckpoint),
-	}
-	if len(cfg.SyncerCheckPointSchema) > 0 {
-		cp.schema = cfg.SyncerCheckPointSchema
-	} else {
-		cp.schema = defaultSchema
 	}
 	if len(cfg.Name) > 0 {
 		cp.table = cfg.Name
@@ -188,25 +195,17 @@ func NewRemoteCheckPoint(cfg *config.SubTaskConfig, id string) CheckPoint {
 }
 
 // Init implements CheckPoint.Init
-func (cp *RemoteCheckPoint) Init(cfg *config.SubTaskConfig) error {
-	db, err := createDB(cfg.To, maxCheckPointTimeout)
+func (cp *RemoteCheckPoint) Init() error {
+	db, err := createDB(cp.cfg.To, maxCheckPointTimeout)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	cp.db = db
 
-	if err = cp.load(); err != nil {
-		if !utils.IsErrTableNotExists(err) {
-			return errors.Trace(err)
-		}
-		err = cp.prepare()
-		if err != nil {
-			return errors.Trace(err)
-		}
+	err = cp.prepare()
+	if err != nil {
+		return errors.Trace(err)
 	}
-
-	// TODO zxc: refine to use meta data in config later
-	err = cp.loadMeta()
 
 	return errors.Trace(err)
 }
@@ -214,6 +213,26 @@ func (cp *RemoteCheckPoint) Init(cfg *config.SubTaskConfig) error {
 // Close implements CheckPoint.Close
 func (cp *RemoteCheckPoint) Close() {
 	closeDBs(cp.db)
+}
+
+// Clear implements CheckPoint.Clear
+func (cp *RemoteCheckPoint) Clear() error {
+	cp.Lock()
+	defer cp.Unlock()
+
+	// delete all checkpoints
+	sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s'", cp.schema, cp.table, cp.id)
+	args := make([]interface{}, 0)
+	err := executeSQL(cp.db, []string{sql2}, [][]interface{}{args}, maxRetryCount)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	cp.globalPoint = newBinlogPoint(minCheckpoint, minCheckpoint)
+
+	cp.points = make(map[string]map[string]*binlogPoint)
+
+	return nil
 }
 
 // SaveTablePoint implements CheckPoint.SaveTablePoint
@@ -256,11 +275,16 @@ func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, 
 
 // SaveGlobalPoint implements CheckPoint.SaveGlobalPoint
 func (cp *RemoteCheckPoint) SaveGlobalPoint(pos mysql.Position) {
+	cp.Lock()
+	defer cp.Unlock()
 	cp.globalPoint.save(pos)
 }
 
 // FlushPointsExcept implements CheckPoint.FlushPointsExcept
 func (cp *RemoteCheckPoint) FlushPointsExcept(exceptTables [][]string) error {
+	cp.RLock()
+	defer cp.RUnlock()
+
 	// convert slice to map
 	excepts := make(map[string]map[string]struct{})
 	for _, schemaTable := range exceptTables {
@@ -285,8 +309,6 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(exceptTables [][]string) error {
 
 	points := make([]*binlogPoint, 0, 100)
 
-	cp.RLock()
-	defer cp.RUnlock()
 	for schema, mSchema := range cp.points {
 		for table, point := range mSchema {
 			if _, ok1 := excepts[schema]; ok1 {
@@ -311,6 +333,7 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(exceptTables [][]string) error {
 		return errors.Trace(err)
 	}
 
+	cp.globalPoint.flush()
 	for _, point := range points {
 		point.flush()
 	}
@@ -323,6 +346,7 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(exceptTables [][]string) error {
 func (cp *RemoteCheckPoint) UpdateFlushedPoint(tables [][]string) {
 	cp.RLock()
 	defer cp.RUnlock()
+	cp.globalPoint.flush()
 	for _, schemaTable := range tables {
 		schema, table := schemaTable[0], schemaTable[1]
 		mSchema, ok := cp.points[schema]
@@ -398,43 +422,49 @@ func (cp *RemoteCheckPoint) prepare() error {
 	if err := cp.createTable(); err != nil {
 		return errors.Trace(err)
 	}
-
-	return errors.Trace(cp.initGlobalPoint())
+	return nil
 }
 
 func (cp *RemoteCheckPoint) createSchema() error {
-	query := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", cp.schema)
-	_, err := querySQL(cp.db, query, maxRetryCount)
+	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", cp.schema)
+	args := make([]interface{}, 0)
+	err := executeSQL(cp.db, []string{sql2}, [][]interface{}{args}, maxRetryCount)
 	return errors.Trace(err)
-}
-
-func (cp *RemoteCheckPoint) initGlobalPoint() error {
-	pos := cp.globalPoint.MySQLPos()
-	return cp.initCheckPoint(globalCpSchema, globalCpTable, pos.Name, pos.Pos, true)
 }
 
 func (cp *RemoteCheckPoint) createTable() error {
 	tableName := fmt.Sprintf("`%s`.`%s`", cp.schema, cp.table)
-	query := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
+	sql2 := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 			id VARCHAR(32) NOT NULL,
 			cp_schema VARCHAR(128) NOT NULL,
 			cp_table VARCHAR(128) NOT NULL,
 			binlog_name VARCHAR(128),
 			binlog_pos INT UNSIGNED,
 			is_global BOOLEAN,
+			create_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			UNIQUE KEY uk_id_schema_table (id, cp_schema, cp_table)
 		)`, tableName)
-	_, err := querySQL(cp.db, query, maxRetryCount)
+	args := make([]interface{}, 0)
+	err := executeSQL(cp.db, []string{sql2}, [][]interface{}{args}, maxRetryCount)
 	return errors.Trace(err)
 }
 
-func (cp *RemoteCheckPoint) load() error {
+func (cp *RemoteCheckPoint) Load() error {
+	err := cp.loadMeta()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	query := fmt.Sprintf("SELECT `cp_schema`, `cp_table`, `binlog_name`, `binlog_pos`, `is_global` FROM `%s`.`%s` WHERE `id`='%s'", cp.schema, cp.table, cp.id)
 	rows, err := querySQL(cp.db, query, maxRetryCount)
 	if err != nil {
 		return errors.Trace(err)
 	}
+	defer rows.Close()
 
+	// checkpoints in DB have higher priority
+	// if don't want to use checkpoint in DB, set `remove-previous-checkpoint` to `true`
 	var (
 		cpSchema   string
 		cpTable    string
@@ -452,8 +482,10 @@ func (cp *RemoteCheckPoint) load() error {
 			Pos:  binlogPos,
 		}
 		if isGlobal {
-			cp.globalPoint = newBinlogPoint(pos, pos)
-			log.Debugf("[checkpoint] get global checkpoint %+v from DB", cp.globalPoint)
+			if pos.Compare(minCheckpoint) > 0 {
+				cp.globalPoint = newBinlogPoint(pos, pos)
+				log.Infof("[checkpoint] get global checkpoint %+v from DB", cp.globalPoint)
+			}
 			continue // skip global checkpoint
 		}
 		mSchema, ok := cp.points[cpSchema]
@@ -467,47 +499,113 @@ func (cp *RemoteCheckPoint) load() error {
 }
 
 func (cp *RemoteCheckPoint) loadMeta() error {
-	if len(cp.cfg.Meta) == 0 {
-		return nil
-	}
-	meta := NewLocalMeta(cp.cfg.Meta, cp.cfg.Flavor)
-	err := meta.Load()
-	if err != nil {
-		return errors.Trace(err)
+	var (
+		pos *mysql.Position = nil
+		err error           = nil
+	)
+	switch cp.cfg.Mode {
+	case config.ModeAll:
+		// NOTE: syncer must continue the syncing follow loader's tail, so we parse mydumper's output
+		// refine when master / slave switching added and checkpoint mechanism refactored
+		pos, err = cp.parseMetaData()
+		if err != nil {
+			return errors.Trace(err)
+		}
+	case config.ModeFull:
+		// should not go here (syncer not be used in `full` mode)
+	case config.ModeIncrement:
+		// load meta from task config
+		if cp.cfg.Meta == nil {
+			log.Warn("[checkpoint] not set meta in increment task-mode")
+			return nil
+		}
+		pos = &mysql.Position{
+			Name: cp.cfg.Meta.BinLogName,
+			Pos:  cp.cfg.Meta.BinLogPos,
+		}
+	default:
+		// (only used by syncer singleton) load meta from meta-file
+		if len(cp.cfg.MetaFile) == 0 {
+			return nil
+		}
+		meta := NewLocalMeta(cp.cfg.MetaFile, cp.cfg.Flavor)
+		err := meta.Load()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		pos2 := meta.Pos()
+		pos = &pos2
 	}
 
 	// if meta loaded, we will start syncing from meta's pos
-	pos := meta.Pos()
-	cp.globalPoint = newBinlogPoint(pos, pos)
-	log.Infof("[checkpoint] loaded checkpoints %+v from meta", cp.globalPoint)
+	if pos != nil {
+		cp.globalPoint = newBinlogPoint(*pos, *pos)
+		log.Infof("[checkpoint] loaded checkpoints %+v from meta", cp.globalPoint)
+	}
 
 	return nil
 }
 
-func (cp *RemoteCheckPoint) initCheckPoint(cpSchema, cpTable string, binlogName string, binlogPos uint32, isGlobal bool) error {
-	sql2 := fmt.Sprintf("INSERT INTO `%s`.`%s` (`id`, `cp_schema`, `cp_table`, `binlog_name`, `binlog_pos`, `is_global`) VALUES(?,?,?,?,?,?)",
-		cp.schema, cp.table)
-	if isGlobal {
-		cpSchema = globalCpSchema
-		cpTable = globalCpTable
-	}
-	args := []interface{}{cp.id, cpSchema, cpTable, binlogName, binlogPos, isGlobal}
-	err := executeSQL(cp.db, []string{sql2}, [][]interface{}{args}, maxRetryCount)
-	if utils.IsErrDupEntry(err) {
-		log.Infof("[checkpoint] checkpoint id:%s, table:`%s`.`%s` already exists, skip it", cp.id, cpSchema, cpTable)
-		return nil
-	}
-	return errors.Trace(err)
-}
-
 // genUpdateSQL generates SQL and arguments for update checkpoint
 func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, binlogName string, binlogPos uint32, isGlobal bool) (string, []interface{}) {
-	sql2 := fmt.Sprintf("REPLACE INTO `%s`.`%s` (`id`, `cp_schema`, `cp_table`, `binlog_name`, `binlog_pos`, `is_global`) VALUES(?,?,?,?,?,?)",
+	// use `INSERT INTO ... ON DUPLICATE KEY UPDATE` rather than `REPLACE INTO`
+	// to keep `create_time`, `update_time` correctly
+	sql2 := fmt.Sprintf("INSERT INTO `%s`.`%s` (`id`, `cp_schema`, `cp_table`, `binlog_name`, `binlog_pos`, `is_global`) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE `binlog_name`=?, `binlog_pos`=?",
 		cp.schema, cp.table)
 	if isGlobal {
 		cpSchema = globalCpSchema
 		cpTable = globalCpTable
 	}
-	args := []interface{}{cp.id, cpSchema, cpTable, binlogName, binlogPos, isGlobal}
+	args := []interface{}{cp.id, cpSchema, cpTable, binlogName, binlogPos, isGlobal, binlogName, binlogPos}
 	return sql2, args
+}
+
+func (cp *RemoteCheckPoint) parseMetaData() (*mysql.Position, error) {
+	// `metadata` is mydumper's output meta file name
+	filename := path.Join(cp.cfg.Dir, "metadata")
+	log.Infof("parsing metadata from %s", filename)
+
+	fd, err := os.Open(filename)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer fd.Close()
+
+	var logName = ""
+	br := bufio.NewReader(fd)
+	for {
+		line, err := br.ReadString('\n')
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, errors.Trace(err)
+		}
+		line = strings.TrimSpace(line[:len(line)-1])
+		if len(line) == 0 {
+			continue
+		}
+		// ref: https://github.com/maxbube/mydumper/blob/master/mydumper.c#L434
+		if strings.Contains(line, "SHOW SLAVE STATUS") {
+			// now, we only parse log / pos for `SHOW MASTER STATUS`
+			break
+		}
+		parts := strings.Split(line, ": ")
+		if len(parts) != 2 {
+			continue
+		}
+		if parts[0] == "Log" {
+			logName = parts[1]
+		} else if parts[0] == "Pos" {
+			pos64, err := strconv.ParseUint(parts[1], 10, 32)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			if len(logName) > 0 {
+				return &mysql.Position{Name: logName, Pos: uint32(pos64)}, nil
+			}
+			break // Pos extracted, but no Log, error occurred
+		}
+	}
+
+	return nil, errors.Errorf("parse metadata for %s fail", filename)
 }

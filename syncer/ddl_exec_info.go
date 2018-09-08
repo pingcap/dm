@@ -98,7 +98,7 @@ func (i *DDLExecInfo) cancelAndWaitSending() {
 		select {
 		case <-timer.C:
 			if !i.status.CompareAndSwap(ddlExecSending, ddlExecSending) {
-				break
+				return // return from select and for
 			}
 		}
 	}

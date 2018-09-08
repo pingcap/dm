@@ -33,7 +33,7 @@ __EOF__
     cat > syncer_config_sharding.toml << __EOF__
 log-level = "info"
 server-id = 101
-meta = "$1"
+meta-file = "$1"
 worker-count = 16
 batch = 1000
 status-addr = ":$2"

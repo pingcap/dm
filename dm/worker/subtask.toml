@@ -12,6 +12,11 @@ mode = "all"
 # used for binlog replication
 server-id = 101
 
+# checkpoint schema prefix for Syncer / Loader
+checkpoint-schema-prefix = "dm_checkpoint"
+
+# whether to remove previous checkpoint, set to `true` to start a fresh task even if the task-name used before
+remove-previous-checkpoint = false
 
 # Mydumper configuration
 
@@ -37,16 +42,12 @@ mydumper-path = "./mydumper"
 pool-size = 16
 
 # Directory of the dump to import
-dir = "./"
-
-# We saved checkpoint data to tidb, which schema name is defined here.
-checkpoint-schema = "tidb_loader"
-
+dir = "./dumped_data"
 
 # Syncer configuration
 
 # different sub task should have different meta
-meta = "./syncer.subTaskA.meta"
+meta-file = "./syncer.subTaskA.meta"
 
 worker-count = 16
 batch = 1000

@@ -29,10 +29,10 @@ import (
 
 // Meta represents binlog's meta pos
 // NOTE: refine to put these config structs into pkgs
+// NOTE: now, syncer does not support GTID mode and which is supported by relay
 type Meta struct {
 	BinLogName string `yaml:"binlog-name"`
 	BinLogPos  uint32 `yaml:"binlog-pos"`
-	BinlogGTID string `yaml:"binlog-gtid"`
 }
 
 // MySQLInstance represents a sync config of a MySQL instance
@@ -91,15 +91,13 @@ type MydumperConfig struct {
 
 // LoaderConfig represents loader process unit's specific config
 type LoaderConfig struct {
-	PoolSize         int    `yaml:"pool-size" toml:"pool-size" json:"pool-size"`
-	Dir              string `yaml:"dir" toml:"dir" json:"dir"`
-	CheckPointSchema string `yaml:"checkpoint-schema" toml:"checkpoint-schema" json:"checkpoint-schema"`
-	RemoveCheckpoint bool   `yaml:"rm-checkpoint" toml:"rm-checkpoint" json:"rm-checkpoint"`
+	PoolSize int    `yaml:"pool-size" toml:"pool-size" json:"pool-size"`
+	Dir      string `yaml:"dir" toml:"dir" json:"dir"`
 }
 
 // SyncerConfig represents syncer process unit's specific config
 type SyncerConfig struct {
-	Meta        string `yaml:"meta" toml:"meta" json:"meta"` // meta filename
+	MetaFile    string `yaml:"meta-file" toml:"meta-file" json:"meta-file"` // meta filename, used only when load SubConfig directly
 	WorkerCount int    `yaml:"worker-count" toml:"worker-count" json:"worker-count"`
 	Batch       int    `yaml:"batch" toml:"batch" json:"batch"`
 	MaxRetry    int    `yaml:"max-retry" toml:"max-retry" json:"max-retry"`
@@ -110,24 +108,24 @@ type SyncerConfig struct {
 
 	DisableCausality bool `yaml:"disable-detect" toml:"disable-detect" json:"disable-detect"`
 	SafeMode         bool `yaml:"safe-mode" toml:"safe-mode" json:"safe-mode"`
-
-	SyncerCheckPointSchema string `yaml:"syncer-checkpoint-schema" toml:"syncer-checkpoint-schema" json:"syncer-checkpoint-schema"`
 }
 
 // TaskConfig is the configuration for Task
 type TaskConfig struct {
 	*flag.FlagSet `yaml:"-"`
 
-	Name           string `yaml:"name"`
-	TaskMode       string `yaml:"task-mode"`
-	Flavor         string `yaml:"flavor"`
-	VerifyChecksum bool   `yaml:"verify-checksum"`
+	Name                     string `yaml:"name"`
+	TaskMode                 string `yaml:"task-mode"`
+	Flavor                   string `yaml:"flavor"`
+	VerifyChecksum           bool   `yaml:"verify-checksum"`
+	CheckpointSchemaPrefix   string `yaml:"checkpoint-schema-prefix"`
+	RemovePreviousCheckpoint bool   `yaml:"remove-previous-checkpoint"`
 
 	TargetDB *DBConfig `yaml:"target-database"`
 
 	MySQLInstances []*MySQLInstance `yaml:"mysql-instances"`
 
-	InSharding bool `yaml:"in-sharding" json:"in-sharding"`
+	InSharding bool `yaml:"in-sharding"`
 
 	Routes         map[string]*router.TableRule   `yaml:"routes"`
 	Filters        map[string]*bf.BinlogEventRule `yaml:"filters"`
@@ -203,56 +201,63 @@ func (c *TaskConfig) adjust() error {
 	sids := make(map[int]int) // server-id -> instance-index
 	for i, inst := range c.MySQLInstances {
 		if err := inst.Verify(); err != nil {
-			return errors.Annotatef(err, "MySQL-instance: %d", i)
+			return errors.Annotatef(err, "mysql-instance: %d", i)
 		}
 		if sid, ok := sids[inst.ServerID]; ok {
 			return errors.Errorf("mysql-instances (%d) and (%d) have same server-id (%d)", sid, i, inst.ServerID)
 		}
 		sids[inst.ServerID] = i
 
+		if inst.Meta != nil && (c.TaskMode == ModeFull || c.TaskMode == ModeAll) {
+			log.Warnf("[config] mysql-instances(%d) set meta, but it will not be used for task-mode %s.\n for Full mode, incremental sync will never occur; for All mode, the meta dumped by MyDumper will be used", i, c.TaskMode)
+		}
+		if inst.Meta == nil && c.TaskMode == ModeIncrement {
+			return errors.Errorf("mysql-instance(%d) must set meta for task-mode %s", i, c.TaskMode)
+		}
+
 		for _, name := range inst.RouteRules {
 			if _, ok := c.Routes[name]; !ok {
-				return errors.Errorf("MySQL-instance(%d)'s route-rules %s not exist in routes", i, name)
+				return errors.Errorf("mysql-instance(%d)'s route-rules %s not exist in routes", i, name)
 			}
 		}
 		for _, name := range inst.FilterRules {
 			if _, ok := c.Filters[name]; !ok {
-				return errors.Errorf("MySQL-instance(%d)'s filter-rules %s not exist in filters", i, name)
+				return errors.Errorf("mysql-instance(%d)'s filter-rules %s not exist in filters", i, name)
 			}
 		}
 		for _, name := range inst.ColumnMappingRules {
 			if _, ok := c.ColumnMappings[name]; !ok {
-				return errors.Errorf("MySQL-instance(%d)'s column-mapping-rules %s not exist in column-mapping", i, name)
+				return errors.Errorf("mysql-instance(%d)'s column-mapping-rules %s not exist in column-mapping", i, name)
 			}
 		}
 		if _, ok := c.BWList[inst.BWListName]; len(inst.BWListName) > 0 && !ok {
-			return errors.Errorf("MySQL-instance(%d)'s list %s not exist in black white list", i, inst.BWListName)
+			return errors.Errorf("mysql-instance(%d)'s list %s not exist in black white list", i, inst.BWListName)
 		}
 
 		if len(inst.MydumperConfigName) > 0 {
 			rule, ok := c.Mydumpers[inst.MydumperConfigName]
 			if !ok {
-				return errors.Errorf("MySQL-instance(%d)'s mydumper config %s not exist in mydumpers", i, inst.MydumperConfigName)
+				return errors.Errorf("mysql-instance(%d)'s mydumper config %s not exist in mydumpers", i, inst.MydumperConfigName)
 			}
 			inst.Mydumper = rule // ref mydumper config
 		}
 
 		if (c.TaskMode == ModeFull || c.TaskMode == ModeAll) && len(inst.Mydumper.MydumperPath) == 0 {
 			// only verify if set, whether is valid can only be verify when we run it
-			return errors.Errorf("MySQL-instance(%d)'s mydumper-path must specify a valid path to mydumper binary when task-mode is all or full", i)
+			return errors.Errorf("mysql-instance(%d)'s mydumper-path must specify a valid path to mydumper binary when task-mode is all or full", i)
 		}
 
 		if len(inst.LoaderConfigName) > 0 {
 			rule, ok := c.Loaders[inst.LoaderConfigName]
 			if !ok {
-				return errors.Errorf("MySQL-instance(%d)'s loader config %s not exist in loaders", i, inst.LoaderConfigName)
+				return errors.Errorf("mysql-instance(%d)'s loader config %s not exist in loaders", i, inst.LoaderConfigName)
 			}
 			inst.Loader = rule // ref loader config
 		}
 		if len(inst.SyncerConfigName) > 0 {
 			rule, ok := c.Syncers[inst.SyncerConfigName]
 			if !ok {
-				return errors.Errorf("MySQL-instance(%d)'s syncer config %s not exist in syncer", i, inst.SyncerConfigName)
+				return errors.Errorf("mysql-instance(%d)'s syncer config %s not exist in syncer", i, inst.SyncerConfigName)
 			}
 			inst.Syncer = rule // ref syncer config
 		}
@@ -273,6 +278,9 @@ func (c *TaskConfig) SubTaskConfigs() []*SubTaskConfig {
 		cfg.BinlogType = "local" // let's force syncer to replay local binlog.
 		cfg.RelayDir = inst.RelayDir
 		cfg.VerifyChecksum = c.VerifyChecksum
+		cfg.CheckpointSchemaPrefix = c.CheckpointSchemaPrefix
+		cfg.RemovePreviousCheckpoint = c.RemovePreviousCheckpoint
+		cfg.Meta = inst.Meta
 
 		cfg.From = *inst.Config
 		cfg.To = *c.TargetDB

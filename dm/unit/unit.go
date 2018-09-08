@@ -40,6 +40,9 @@ type Unit interface {
 	Status() interface{}
 	// Type returns the unit's type
 	Type() pb.UnitType
+	// IsFreshTask return whether is a fresh task (not processed before)
+	// it will be used to decide where the task should become restoring
+	IsFreshTask() (bool, error)
 }
 
 // NewProcessError creates a new ProcessError
