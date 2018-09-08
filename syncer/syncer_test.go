@@ -156,7 +156,7 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 		tableNames, err := fetchDDLTableNames(string(ev.Schema), stmt)
 		c.Assert(err, IsNil)
 
-		r, err := syncer.skipQuery(tableNames, sql)
+		r, err := syncer.skipQuery(tableNames, stmt, sql)
 		c.Assert(err, IsNil)
 		c.Assert(r, Equals, res[i])
 		i++
@@ -254,7 +254,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 
 				tableNames, err := fetchDDLTableNames(string(ev.Schema), stmt)
 				c.Assert(err, IsNil)
-				r, err := syncer.skipQuery(tableNames, sql)
+				r, err := syncer.skipQuery(tableNames, stmt, sql)
 				c.Assert(err, IsNil)
 				c.Assert(r, Equals, res[i][j])
 			}
@@ -315,7 +315,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 
 		tableNames, err := fetchDDLTableNames(sql, stmt)
 		c.Assert(err, IsNil)
-		r, err := syncer.skipQuery(tableNames, sql)
+		r, err := syncer.skipQuery(tableNames, stmt, sql)
 		c.Assert(err, IsNil)
 		c.Assert(r, Equals, res[i])
 		i++
@@ -406,7 +406,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 
 				tableNames, err := fetchDDLTableNames(string(ev.Schema), stmt)
 				c.Assert(err, IsNil)
-				r, err := syncer.skipQuery(tableNames, sql)
+				r, err := syncer.skipQuery(tableNames, stmt, sql)
 				c.Assert(err, IsNil)
 				c.Assert(r, Equals, res[i][j])
 			}
@@ -429,17 +429,17 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 		{
 			SchemaPattern: "*",
 			TablePattern:  "",
-			DMLEvent:      []bf.EventType{bf.UpdateEvent},
+			Events:        []bf.EventType{bf.UpdateEvent},
 			Action:        bf.Ignore,
 		}, {
 			SchemaPattern: "foo",
 			TablePattern:  "",
-			DMLEvent:      []bf.EventType{bf.DeleteEvent},
+			Events:        []bf.EventType{bf.DeleteEvent},
 			Action:        bf.Ignore,
 		}, {
 			SchemaPattern: "foo1",
 			TablePattern:  "bar1",
-			DMLEvent:      []bf.EventType{bf.DeleteEvent},
+			Events:        []bf.EventType{bf.DeleteEvent},
 			Action:        bf.Ignore,
 		},
 	}

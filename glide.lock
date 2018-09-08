@@ -1,5 +1,5 @@
-hash: 43a804910c0383b4171f8b38baeaad7f4e3d3d477301d063c78478216fd1c15d
-updated: 2018-09-07T15:32:58.191740125+08:00
+hash: 7c01f18e8a15eebf5b18685e22bcd4a6ce053d5435e1c1515bb49c4cbc35cdcb
+updated: 2018-09-08T18:05:50.622398899+08:00
 imports:
 - name: github.com/beorn7/perks
   version: 3a771d992973f24aa725d07868b467d1ddfceafb
@@ -158,7 +158,7 @@ imports:
   - util/sqlexec
   - util/stringutil
 - name: github.com/pingcap/tidb-tools
-  version: af31f9c7751ad83edf5992224b17bbf37648df31
+  version: b4f5a10ae872e91064f4b83cb00e2480d505aa05
   subpackages:
   - pkg/binlog-filter
   - pkg/check
@@ -215,7 +215,7 @@ imports:
   - packet
   - replication
 - name: github.com/sirupsen/logrus
-  version: 3791101e143bf0f32515ac23e831475684f61229
+  version: f3df9aeffda7c12bd9f5a03f9251d75d35993165
 - name: github.com/spaolacci/murmur3
   version: f09979ecbc725b9e6d41a297405f65e7e8804acc
 - name: github.com/spf13/cobra

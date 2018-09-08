@@ -106,6 +106,6 @@ import:
 - package: gopkg.in/yaml.v2
   version: v2.2.1
 - package: github.com/pingcap/tidb-tools
-  version: af31f9c7751ad83edf5992224b17bbf37648df31
+  version: b4f5a10ae872e91064f4b83cb00e2480d505aa05
 - package: github.com/pingcap/kvproto
   version: 5e6e69a5ed381bd4a8afe7cb96cc47f955f6d160

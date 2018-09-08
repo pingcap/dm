@@ -113,7 +113,7 @@ func init() {
 	builtInSkipDDLPatterns = regexp.MustCompile("(?i)" + strings.Join(builtInSkipDDLs, "|"))
 }
 
-func (s *Syncer) skipQuery(tables []*filter.Table, sql string) (bool, error) {
+func (s *Syncer) skipQuery(tables []*filter.Table, stmt ast.StmtNode, sql string) (bool, error) {
 	if builtInSkipDDLPatterns.FindStringIndex(sql) != nil {
 		return true, nil
 	}
@@ -135,8 +135,12 @@ func (s *Syncer) skipQuery(tables []*filter.Table, sql string) (bool, error) {
 		return false, nil
 	}
 
+	et := bf.NullEvent
+	if stmt != nil {
+		et = bf.AstToDDLEvent(stmt)
+	}
 	if len(tables) == 0 {
-		action, err := s.binlogFilter.Filter("", "", bf.NullEvent, bf.NullEvent, sql)
+		action, err := s.binlogFilter.Filter("", "", et, sql)
 		if err != nil {
 			return false, errors.Annotatef(err, "skip query %s", sql)
 		}
@@ -147,52 +151,9 @@ func (s *Syncer) skipQuery(tables []*filter.Table, sql string) (bool, error) {
 	}
 
 	for _, table := range tables {
-		action, err := s.binlogFilter.Filter(table.Schema, table.Name, bf.NullEvent, bf.NullEvent, sql)
+		action, err := s.binlogFilter.Filter(table.Schema, table.Name, et, sql)
 		if err != nil {
 			return false, errors.Annotatef(err, "skip query %s on `%s`.`%s`", sql, table.Schema, table.Name)
-		}
-
-		if action == bf.Ignore {
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
-func (s *Syncer) skipDDLEvent(tables []*filter.Table, stmt ast.StmtNode) (bool, error) {
-	for _, table := range tables {
-		if filter.IsSystemSchema(table.Schema) {
-			return true, nil
-		}
-	}
-
-	if len(tables) > 0 {
-		tbs := s.bwList.ApplyOn(tables)
-		if len(tbs) == 0 {
-			return true, nil
-		}
-	}
-	if s.binlogFilter == nil {
-		return false, nil
-	}
-
-	et := bf.AstToDDLEvent(stmt)
-	if len(tables) == 0 {
-		action, err := s.binlogFilter.Filter("", "", bf.NullEvent, et, "")
-		if err != nil {
-			return false, errors.Annotatef(err, "skip query event %s", et)
-		}
-
-		if action == bf.Ignore {
-			return true, nil
-		}
-	}
-
-	for _, table := range tables {
-		action, err := s.binlogFilter.Filter(table.Schema, table.Name, bf.NullEvent, et, "")
-		if err != nil {
-			return false, errors.Annotatef(err, "skip query event %s on `%s`.`%s`", et, table.Schema, table.Name)
 		}
 
 		if action == bf.Ignore {
@@ -231,7 +192,7 @@ func (s *Syncer) skipDMLEvent(schema string, table string, eventType replication
 		return false, errors.Errorf("[syncer] invalid replication event type %v", eventType)
 	}
 
-	action, err := s.binlogFilter.Filter(schema, table, et, bf.NullEvent, "")
+	action, err := s.binlogFilter.Filter(schema, table, et, "")
 	if err != nil {
 		return false, errors.Annotatef(err, "skip row event %s on `%s`.`%s`", eventType, schema, table)
 	}

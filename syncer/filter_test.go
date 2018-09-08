@@ -100,13 +100,13 @@ END`, true},
 	//c.Assert(err, IsNil)
 	syncer := &Syncer{}
 	for _, t := range cases {
-		skipped, err := syncer.skipQuery(nil, t.sql)
+		skipped, err := syncer.skipQuery(nil, nil, t.sql)
 		c.Assert(err, IsNil)
 		c.Assert(skipped, Equals, t.expectSkipped)
 	}
 
 	// system table
-	skipped, err := syncer.skipQuery([]*filter.Table{{"mysql", "test"}}, "create table mysql.test (id int)")
+	skipped, err := syncer.skipQuery([]*filter.Table{{"mysql", "test"}}, nil, "create table mysql.test (id int)")
 	c.Assert(err, IsNil)
 	c.Assert(skipped, Equals, true)
 
@@ -115,19 +115,19 @@ END`, true},
 		{
 			SchemaPattern: "*",
 			TablePattern:  "",
-			DDLEvent:      []bf.EventType{bf.DropTable},
+			Events:        []bf.EventType{bf.DropTable},
 			SQLPattern:    []string{"^drop\\s+table"},
 			Action:        bf.Ignore,
 		}, {
 			SchemaPattern: "foo*",
 			TablePattern:  "",
-			DDLEvent:      []bf.EventType{bf.CreateTable},
+			Events:        []bf.EventType{bf.CreateTable},
 			SQLPattern:    []string{"^create\\s+table"},
 			Action:        bf.Do,
 		}, {
 			SchemaPattern: "foo*",
 			TablePattern:  "bar*",
-			DDLEvent:      []bf.EventType{bf.CreateTable},
+			Events:        []bf.EventType{bf.CreateTable},
 			SQLPattern:    []string{"^create\\s+table"},
 			Action:        bf.Ignore,
 		},
@@ -137,50 +137,40 @@ END`, true},
 	c.Assert(err, IsNil)
 
 	// test global rule
-	skipped, err = syncer.skipQuery([]*filter.Table{{"tx", "test"}}, "drop table tx.test")
+	sql := "drop table tx.test"
+	stmt, err := parser.New().ParseOneStmt(sql, "", "")
 	c.Assert(err, IsNil)
-	c.Assert(skipped, Equals, true)
-	stmt, err := parser.New().ParseOneStmt("drop table tx.test", "", "")
-	c.Assert(err, IsNil)
-	skipped, err = syncer.skipDDLEvent([]*filter.Table{{"tx", "test"}}, stmt)
+	skipped, err = syncer.skipQuery([]*filter.Table{{"tx", "test"}}, stmt, sql)
 	c.Assert(err, IsNil)
 	c.Assert(skipped, Equals, true)
 
-	skipped, err = syncer.skipQuery([]*filter.Table{{"tx", "test"}}, "create table tx.test (id int)")
+	sql = "create table tx.test (id int)"
+	stmt, err = parser.New().ParseOneStmt(sql, "", "")
 	c.Assert(err, IsNil)
-	c.Assert(skipped, Equals, false)
-	stmt, err = parser.New().ParseOneStmt("create table tx.test (id int)", "", "")
-	c.Assert(err, IsNil)
-	skipped, err = syncer.skipDDLEvent([]*filter.Table{{"tx", "test"}}, stmt)
+	skipped, err = syncer.skipQuery([]*filter.Table{{"tx", "test"}}, stmt, sql)
 	c.Assert(err, IsNil)
 	c.Assert(skipped, Equals, false)
 
 	// test schema rule
-	skipped, err = syncer.skipQuery([]*filter.Table{{"foo", "test"}}, "create table foo.test(id int)")
+	sql = "create table foo.test(id int)"
+	stmt, err = parser.New().ParseOneStmt(sql, "", "")
 	c.Assert(err, IsNil)
-	c.Assert(skipped, Equals, false)
-	stmt, err = parser.New().ParseOneStmt("create table foo.test(id int)", "", "")
-	c.Assert(err, IsNil)
-	skipped, err = syncer.skipDDLEvent([]*filter.Table{{"foo", "test"}}, stmt)
+	skipped, err = syncer.skipQuery([]*filter.Table{{"foo", "test"}}, stmt, sql)
 	c.Assert(err, IsNil)
 	c.Assert(skipped, Equals, false)
 
-	skipped, err = syncer.skipQuery([]*filter.Table{{"foo", "test"}}, "rename table foo.test to foo.test1")
+	sql = "rename table foo.test to foo.test1"
+	stmt, err = parser.New().ParseOneStmt(sql, "", "")
 	c.Assert(err, IsNil)
-	c.Assert(skipped, Equals, true)
-	stmt, err = parser.New().ParseOneStmt("rename table foo.test to foo.test1", "", "")
-	c.Assert(err, IsNil)
-	skipped, err = syncer.skipDDLEvent([]*filter.Table{{"foo", "test"}}, stmt)
+	skipped, err = syncer.skipQuery([]*filter.Table{{"foo", "test"}}, stmt, sql)
 	c.Assert(err, IsNil)
 	c.Assert(skipped, Equals, true)
 
 	// test table rule
-	skipped, err = syncer.skipQuery([]*filter.Table{{"foo", "bar"}}, "create table foo.bar(id int)")
+	sql = "create table foo.bar(id int)"
+	stmt, err = parser.New().ParseOneStmt(sql, "", "")
 	c.Assert(err, IsNil)
-	c.Assert(skipped, Equals, true)
-	stmt, err = parser.New().ParseOneStmt("create table foo.bar(id int)", "", "")
-	c.Assert(err, IsNil)
-	skipped, err = syncer.skipDDLEvent([]*filter.Table{{"foo", "bar"}}, stmt)
+	skipped, err = syncer.skipQuery([]*filter.Table{{"foo", "bar"}}, stmt, sql)
 	c.Assert(err, IsNil)
 	c.Assert(skipped, Equals, true)
 }

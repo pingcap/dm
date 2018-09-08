@@ -280,15 +280,7 @@ func (s *Syncer) handleDDL(schema, sql string) (string, [][]*filter.Table, ast.S
 		return "", nil, nil, errors.Trace(err)
 	}
 
-	ignore, err := s.skipQuery(tableNames, sql)
-	if err != nil {
-		return "", nil, nil, errors.Trace(err)
-	}
-	if ignore {
-		return "", nil, stmt, nil
-	}
-
-	ignore, err = s.skipDDLEvent(tableNames, stmt)
+	ignore, err := s.skipQuery(tableNames, stmt, sql)
 	if err != nil {
 		return "", nil, nil, errors.Trace(err)
 	}

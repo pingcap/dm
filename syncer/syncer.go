@@ -1089,7 +1089,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				Pos:  e.Header.LogPos,
 			}
 
-			ignore, err := s.skipQuery(nil, sql)
+			ignore, err := s.skipQuery(nil, nil, sql)
 			if err != nil {
 				return errors.Trace(err)
 			}
