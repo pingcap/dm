@@ -77,10 +77,11 @@ type SubTaskConfig struct {
 	RemovePreviousCheckpoint bool   `toml:"remove-previous-checkpoint" json:"remove-previous-checkpoint"`
 	Meta                     *Meta  `toml:"meta" json:"meta"`
 
-	BinlogType string   `toml:"binlog-type" json:"binlog-type"`
-	RelayDir   string   `toml:"relay-dir" json:"relay-dir"`
-	From       DBConfig `toml:"from" json:"from"`
-	To         DBConfig `toml:"to" json:"to"`
+	BinlogType string `toml:"binlog-type" json:"binlog-type"`
+	// RelayDir get value from dm-worker config
+	RelayDir string   `toml:"relay-dir" json:"relay-dir"`
+	From     DBConfig `toml:"from" json:"from"`
+	To       DBConfig `toml:"to" json:"to"`
 
 	RouteRules         []*router.TableRule   `toml:"route-rules" json:"route-rules"`
 	FilterRules        []*bf.BinlogEventRule `toml:"filter-rules" json:"filter-rules"`

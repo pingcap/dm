@@ -23,7 +23,7 @@ func CheckSyncConfig(ctx context.Context, cfgs []*config.SubTaskConfig) error {
 		r := <-pr
 		// we only want first error
 		if len(r.Errors) > 0 {
-			return errors.Errorf("fail to check synchronization configuration with type %v:\n %v\n detail: %v", r.Errors[0].Type, r.Errors[0].Msg, r.Detail)
+			return errors.Errorf("fail to check synchronization configuration with type %v:\n %v\n detail: %v", r.Errors[0].Type, r.Errors[0].Msg, string(r.Detail))
 		}
 	}
 

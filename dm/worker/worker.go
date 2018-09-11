@@ -168,6 +168,8 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 	// NOTE: use worker's cfg.From, cfg.ServerID
 	cfg.From = w.cfg.From
 	cfg.ServerID = w.cfg.ServerID
+	// syncer relay-dir should same with dm-worker relay-dir
+	cfg.RelayDir = w.cfg.RelayDir
 	log.Infof("[worker] starting sub task with config: %v", cfg)
 
 	// try decrypt password for To DB

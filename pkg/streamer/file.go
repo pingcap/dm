@@ -11,7 +11,17 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )
 
+var (
+	// ErrInvalidBinlogFilename means error about invalid binlog file name.
+	ErrInvalidBinlogFilename = errors.New("invalid binlog file name")
+	// ErrEmptyRelayDir means error about empty relay dir.
+	ErrEmptyRelayDir = errors.New("empty relay dir")
+)
+
 func collectBinlogFiles(dirpath string, firstFile string) ([]string, error) {
+	if dirpath == "" {
+		return nil, ErrEmptyRelayDir
+	}
 	files, err := readDir(dirpath)
 	if err != nil {
 		return nil, errors.Trace(err)
