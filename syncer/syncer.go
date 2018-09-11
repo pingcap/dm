@@ -707,6 +707,17 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		close(s.done)
 	}()
 
+	fresh, err := s.IsFreshTask()
+	if err != nil {
+		return errors.Trace(err)
+	} else if fresh {
+		// for fresh task, we try to load checkpoints from meta (file or config item)
+		err = s.checkpoint.LoadMeta()
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+
 	// currentPos is the End_log_pos in `show binlog events` for mysql.
 	// lastPos the the last End_log_pos in `show binlog events` for mysql.
 	var currentPos mysql.Position

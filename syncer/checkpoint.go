@@ -109,8 +109,11 @@ type CheckPoint interface {
 	// Clear clears all checkpoints
 	Clear() error
 
-	// Load loads all checkpoints
+	// Load loads all checkpoints saved by CheckPoint
 	Load() error
+
+	// LoadMeta loads checkpoints from meta config item or file
+	LoadMeta() error
 
 	// SaveTablePoint saves checkpoint for specified table in memory
 	SaveTablePoint(sourceSchema, sourceTable string, pos mysql.Position)
@@ -450,12 +453,8 @@ func (cp *RemoteCheckPoint) createTable() error {
 	return errors.Trace(err)
 }
 
+// Load implements CheckPoint.Load
 func (cp *RemoteCheckPoint) Load() error {
-	err := cp.loadMeta()
-	if err != nil {
-		return errors.Trace(err)
-	}
-
 	query := fmt.Sprintf("SELECT `cp_schema`, `cp_table`, `binlog_name`, `binlog_pos`, `is_global` FROM `%s`.`%s` WHERE `id`='%s'", cp.schema, cp.table, cp.id)
 	rows, err := querySQL(cp.db, query, maxRetryCount)
 	if err != nil {
@@ -498,10 +497,11 @@ func (cp *RemoteCheckPoint) Load() error {
 	return errors.Trace(rows.Err())
 }
 
-func (cp *RemoteCheckPoint) loadMeta() error {
+// LoadMeta implements CheckPoint.LoadMeta
+func (cp *RemoteCheckPoint) LoadMeta() error {
 	var (
-		pos *mysql.Position = nil
-		err error           = nil
+		pos *mysql.Position
+		err error
 	)
 	switch cp.cfg.Mode {
 	case config.ModeAll:
