@@ -243,7 +243,7 @@ dm-master ansible_host=172.16.10.71 deploy_dir=/data1/deploy
 以上游 MySQL 用户密码为 `123456` 为例，将生成的字符串配置到 dm-worker 的 `mysql_password` 变量中。
 
 ```
-$ cd /home/tidb/dm-ansible/dmctl
+$ cd /home/tidb/dm-ansible/resources/bin
 $ ./dmctl -encrypt 123456
 VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=
 ```
@@ -309,7 +309,7 @@ $ cd /home/tidb/dm-ansible
 $ rm -rf downloads
 ```
 
-2. 使用 playbook 下载最新的 DM binary，自动替换 binary 到 /home/tidb/dm-ansible/resource/bin/ 目录下，默认会更新  `/home/tidb/dm-ansible/dmctl/dmctl`。
+2. 使用 playbook 下载最新的 DM binary，自动替换 `/home/tidb/dm-ansible/resource/bin/` 目录下 binary 文件。
 
 ```
 $ ansible-playbook local_prepare.yml
@@ -326,7 +326,7 @@ ansible-playbook rolling_update.yml --tags=dm-worker
 - 滚动升级 dm-master 实例
 
 ```
-ansible-playbook rolling_update.yml --tags=dm-worker
+ansible-playbook rolling_update.yml --tags=dm-master
 ```
 
 - 升级 dmctl
@@ -361,4 +361,41 @@ ansible-playbook rolling_update.yml
 
 ```
 dm-master ansible_host=172.16.10.71 dm_master_port=12080 dm_master_status_port=12081
+```
+
+### 如何更新 dm-ansible
+
+以 tidb 用户登录中控机并进入 /home/tidb 目录，备份 dm-ansible 文件夹。
+
+```
+$ cd /home/tidb
+$ mv dm-ansible dm-ansible-bak
+```
+
+下载最新的 dm-ansible 并解压
+
+```
+$ cd /home/tidb
+$ wget http://download.pingcap.org/dm-ansible.tar.gz
+$ tar -xzvf dm-ansible.tar.gz
+```
+
+迁移 `inventory.ini` 配置文件
+
+```
+$ cd /home/tidb
+$ cp dm-ansible-bak/inventory.ini dm-ansible/inventory.ini
+```
+
+迁移 dmctl 配置
+
+```
+$ cd /home/tidb/dm-ansible-bak/dmctl
+$ cp * /home/tidb/dm-ansible/dmctl/
+```
+
+使用 playbook 下载最新的 DM binary，自动替换 `/home/tidb/dm-ansible/resource/bin/` 目录下 binary 文件。
+
+```
+$ ansible-playbook local_prepare.yml
 ```

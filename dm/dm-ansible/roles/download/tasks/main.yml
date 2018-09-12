@@ -78,9 +78,6 @@
     cp -v {{ downloads_dir }}/{{ item.name }}-{{ item.version}}*/bin/* "{{ resources_dir }}/bin/"
   with_items: "{{ dm_packages }}"
 
-- name: deploy dmctl binary
-  copy: src="{{ resources_dir }}/bin/dmctl" dest="{{ playbook_dir }}/dmctl/" mode=0755
-
 - name: cp monitoring modules binary
   shell: >
     cp -v {{ downloads_dir }}/{{ item }}-*/{{ item }} "{{ resources_dir }}/bin/{{ item }}"
