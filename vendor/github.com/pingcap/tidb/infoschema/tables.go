@@ -16,6 +16,7 @@ package infoschema
 import (
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb/kv"
@@ -63,6 +64,7 @@ const (
 	tableOptimizerTrace                     = "OPTIMIZER_TRACE"
 	tableTableSpaces                        = "TABLESPACES"
 	tableCollationCharacterSetApplicability = "COLLATION_CHARACTER_SET_APPLICABILITY"
+	tableProcesslist                        = "PROCESSLIST"
 )
 
 type columnInfo struct {
@@ -168,6 +170,7 @@ var columnsCols = []columnInfo{
 	{"EXTRA", mysql.TypeVarchar, 30, 0, nil, nil},
 	{"PRIVILEGES", mysql.TypeVarchar, 80, 0, nil, nil},
 	{"COLUMN_COMMENT", mysql.TypeVarchar, 1024, 0, nil, nil},
+	{"GENERATION_EXPRESSION", mysql.TypeBlob, 589779, mysql.NotNullFlag, nil, nil},
 }
 
 var statisticsCols = []columnInfo{
@@ -515,6 +518,17 @@ var tableCollationCharacterSetApplicabilityCols = []columnInfo{
 	{"CHARACTER_SET_NAME", mysql.TypeVarchar, 32, mysql.NotNullFlag, nil, nil},
 }
 
+var tableProcesslistCols = []columnInfo{
+	{"ID", mysql.TypeLonglong, 21, mysql.NotNullFlag, 0, nil},
+	{"USER", mysql.TypeVarchar, 16, mysql.NotNullFlag, "", nil},
+	{"HOST", mysql.TypeVarchar, 64, mysql.NotNullFlag, "", nil},
+	{"DB", mysql.TypeVarchar, 64, mysql.NotNullFlag, "", nil},
+	{"COMMAND", mysql.TypeVarchar, 16, mysql.NotNullFlag, "", nil},
+	{"TIME", mysql.TypeLong, 7, mysql.NotNullFlag, 0, nil},
+	{"STATE", mysql.TypeVarchar, 7, 0, nil, nil},
+	{"Info", mysql.TypeString, 512, 0, nil, nil},
+}
+
 func dataForCharacterSets() (records [][]types.Datum) {
 	records = append(records,
 		types.MakeDatums("ascii", "ascii_general_ci", "US ASCII", 1),
@@ -566,6 +580,34 @@ func dataForSessionVar(ctx sessionctx.Context) (records [][]types.Datum, err err
 func dataForUserPrivileges(ctx sessionctx.Context) [][]types.Datum {
 	pm := privilege.GetPrivilegeManager(ctx)
 	return pm.UserPrivilegesTable()
+}
+
+func dataForProcesslist(ctx sessionctx.Context) [][]types.Datum {
+	sm := ctx.GetSessionManager()
+	if sm == nil {
+		return nil
+	}
+
+	var records [][]types.Datum
+	pl := sm.ShowProcessList()
+	for _, pi := range pl {
+		var t uint64
+		if len(pi.Info) != 0 {
+			t = uint64(time.Since(pi.Time) / time.Second)
+		}
+		record := types.MakeDatums(
+			pi.ID,
+			pi.User,
+			pi.Host,
+			pi.DB,
+			pi.Command,
+			t,
+			fmt.Sprintf("%d", pi.State),
+			pi.Info,
+		)
+		records = append(records, record)
+	}
+	return records
 }
 
 func dataForEngines() (records [][]types.Datum) {
@@ -650,6 +692,29 @@ func getRowCountAllTable(ctx sessionctx.Context) (map[int64]uint64, error) {
 	return rowCountMap, nil
 }
 
+func getAutoIncrementID(ctx sessionctx.Context, schema *model.DBInfo, tblInfo *model.TableInfo) (int64, error) {
+	hasAutoIncID := false
+	for _, col := range tblInfo.Cols() {
+		if mysql.HasAutoIncrementFlag(col.Flag) {
+			hasAutoIncID = true
+			break
+		}
+	}
+	autoIncID := tblInfo.AutoIncID
+	if hasAutoIncID {
+		is := ctx.GetSessionVars().TxnCtx.InfoSchema.(InfoSchema)
+		tbl, err := is.TableByName(schema.Name, tblInfo.Name)
+		if err != nil {
+			return 0, errors.Trace(err)
+		}
+		autoIncID, err = tbl.Allocator(ctx).NextGlobalAutoID(tblInfo.ID)
+		if err != nil {
+			return 0, errors.Trace(err)
+		}
+	}
+	return autoIncID, nil
+}
+
 func dataForTables(ctx sessionctx.Context, schemas []*model.DBInfo) ([][]types.Datum, error) {
 	tableRowsMap, err := getRowCountAllTable(ctx)
 	if err != nil {
@@ -675,6 +740,10 @@ func dataForTables(ctx sessionctx.Context, schemas []*model.DBInfo) ([][]types.D
 				continue
 			}
 
+			autoIncID, err := getAutoIncrementID(ctx, schema, table)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
 			record := types.MakeDatums(
 				catalogVal,             // TABLE_CATALOG
 				schema.Name.O,          // TABLE_SCHEMA
@@ -689,7 +758,7 @@ func dataForTables(ctx sessionctx.Context, schemas []*model.DBInfo) ([][]types.D
 				uint64(0),              // MAX_DATA_LENGTH
 				uint64(0),              // INDEX_LENGTH
 				uint64(0),              // DATA_FREE
-				table.AutoIncID,        // AUTO_INCREMENT
+				autoIncID,              // AUTO_INCREMENT
 				createTime,             // CREATE_TIME
 				nil,                    // UPDATE_TIME
 				nil,                    // CHECK_TIME
@@ -723,13 +792,48 @@ func dataForColumns(ctx sessionctx.Context, schemas []*model.DBInfo) [][]types.D
 func dataForColumnsInTable(schema *model.DBInfo, tbl *model.TableInfo) [][]types.Datum {
 	var rows [][]types.Datum
 	for i, col := range tbl.Columns {
+		var charMaxLen, charOctLen, numericPrecision, numericScale, datetimePrecision interface{}
 		colLen, decimal := col.Flen, col.Decimal
 		defaultFlen, defaultDecimal := mysql.GetDefaultFieldLengthAndDecimal(col.Tp)
+		if decimal == types.UnspecifiedLength {
+			decimal = defaultDecimal
+		}
 		if colLen == types.UnspecifiedLength {
 			colLen = defaultFlen
 		}
-		if decimal == types.UnspecifiedLength {
-			decimal = defaultDecimal
+		if col.Tp == mysql.TypeSet {
+			// Example: In MySQL set('a','bc','def','ghij') has length 13, because
+			// len('a')+len('bc')+len('def')+len('ghij')+len(ThreeComma)=13
+			// Reference link: https://bugs.mysql.com/bug.php?id=22613
+			colLen = 0
+			for _, ele := range col.Elems {
+				colLen += len(ele)
+			}
+			if len(col.Elems) != 0 {
+				colLen += (len(col.Elems) - 1)
+			}
+			charMaxLen = colLen
+			charOctLen = colLen
+		} else if col.Tp == mysql.TypeEnum {
+			// Example: In MySQL enum('a', 'ab', 'cdef') has length 4, because
+			// the longest string in the enum is 'cdef'
+			// Reference link: https://bugs.mysql.com/bug.php?id=22613
+			colLen = 0
+			for _, ele := range col.Elems {
+				if len(ele) > colLen {
+					colLen = len(ele)
+				}
+			}
+			charMaxLen = colLen
+			charOctLen = colLen
+		} else if types.IsString(col.Tp) {
+			charMaxLen = colLen
+			charOctLen = colLen
+		} else if types.IsTypeFractionable(col.Tp) {
+			datetimePrecision = decimal
+		} else if types.IsTypeNumeric(col.Tp) {
+			numericPrecision = colLen
+			numericScale = decimal
 		}
 		columnType := col.FieldType.InfoSchemaStr()
 		columnDesc := table.NewColDesc(table.ToColumn(col))
@@ -746,18 +850,19 @@ func dataForColumnsInTable(schema *model.DBInfo, tbl *model.TableInfo) [][]types
 			columnDefault,                        // COLUMN_DEFAULT
 			columnDesc.Null,                      // IS_NULLABLE
 			types.TypeToStr(col.Tp, col.Charset), // DATA_TYPE
-			colLen,                            // CHARACTER_MAXIMUM_LENGTH
-			colLen,                            // CHARACTER_OCTET_LENGTH
-			decimal,                           // NUMERIC_PRECISION
-			0,                                 // NUMERIC_SCALE
-			0,                                 // DATETIME_PRECISION
-			col.Charset,                       // CHARACTER_SET_NAME
-			col.Collate,                       // COLLATION_NAME
-			columnType,                        // COLUMN_TYPE
-			columnDesc.Key,                    // COLUMN_KEY
-			columnDesc.Extra,                  // EXTRA
-			"select,insert,update,references", // PRIVILEGES
-			columnDesc.Comment,                // COLUMN_COMMENT
+			charMaxLen,                           // CHARACTER_MAXIMUM_LENGTH
+			charOctLen,                           // CHARACTER_OCTET_LENGTH
+			numericPrecision,                     // NUMERIC_PRECISION
+			numericScale,                         // NUMERIC_SCALE
+			datetimePrecision,                    // DATETIME_PRECISION
+			col.Charset,                          // CHARACTER_SET_NAME
+			col.Collate,                          // COLLATION_NAME
+			columnType,                           // COLUMN_TYPE
+			columnDesc.Key,                       // COLUMN_KEY
+			columnDesc.Extra,                     // EXTRA
+			"select,insert,update,references",    // PRIVILEGES
+			columnDesc.Comment,                   // COLUMN_COMMENT
+			col.GeneratedExprString,              // GENERATION_EXPRESSION
 		)
 		// In mysql, 'character_set_name' and 'collation_name' are setted to null when column type is non-varchar or non-blob in information_schema.
 		if col.Tp != mysql.TypeVarchar && col.Tp != mysql.TypeBlob {
@@ -901,24 +1006,24 @@ func dataForTableConstraints(schemas []*model.DBInfo) [][]types.Datum {
 func dataForPseudoProfiling() [][]types.Datum {
 	var rows [][]types.Datum
 	row := types.MakeDatums(
-		0,  // QUERY_ID
-		0,  // SEQ
-		"", // STATE
+		0,                      // QUERY_ID
+		0,                      // SEQ
+		"",                     // STATE
 		types.NewDecFromInt(0), // DURATION
 		types.NewDecFromInt(0), // CPU_USER
 		types.NewDecFromInt(0), // CPU_SYSTEM
-		0, // CONTEXT_VOLUNTARY
-		0, // CONTEXT_INVOLUNTARY
-		0, // BLOCK_OPS_IN
-		0, // BLOCK_OPS_OUT
-		0, // MESSAGES_SENT
-		0, // MESSAGES_RECEIVED
-		0, // PAGE_FAULTS_MAJOR
-		0, // PAGE_FAULTS_MINOR
-		0, // SWAPS
-		0, // SOURCE_FUNCTION
-		0, // SOURCE_FILE
-		0, // SOURCE_LINE
+		0,                      // CONTEXT_VOLUNTARY
+		0,                      // CONTEXT_INVOLUNTARY
+		0,                      // BLOCK_OPS_IN
+		0,                      // BLOCK_OPS_OUT
+		0,                      // MESSAGES_SENT
+		0,                      // MESSAGES_RECEIVED
+		0,                      // PAGE_FAULTS_MAJOR
+		0,                      // PAGE_FAULTS_MINOR
+		0,                      // SWAPS
+		0,                      // SOURCE_FUNCTION
+		0,                      // SOURCE_FILE
+		0,                      // SOURCE_LINE
 	)
 	rows = append(rows, row)
 	return rows
@@ -1050,6 +1155,7 @@ var tableNameToColumns = map[string][]columnInfo{
 	tableOptimizerTrace:                     tableOptimizerTraceCols,
 	tableTableSpaces:                        tableTableSpacesCols,
 	tableCollationCharacterSetApplicability: tableCollationCharacterSetApplicabilityCols,
+	tableProcesslist:                        tableProcesslistCols,
 }
 
 func createInfoSchemaTable(handle *Handle, meta *model.TableInfo) *infoschemaTable {
@@ -1087,7 +1193,7 @@ func (s schemasSorter) Less(i, j int) bool {
 }
 
 func (it *infoschemaTable) getRows(ctx sessionctx.Context, cols []*table.Column) (fullRows [][]types.Datum, err error) {
-	is := it.handle.Get()
+	is := ctx.GetSessionVars().TxnCtx.InfoSchema.(InfoSchema)
 	dbs := is.AllSchemas()
 	sort.Sort(schemasSorter(dbs))
 	switch it.meta.Name.O {
@@ -1136,6 +1242,8 @@ func (it *infoschemaTable) getRows(ctx sessionctx.Context, cols []*table.Column)
 	case tableTableSpaces:
 	case tableCollationCharacterSetApplicability:
 		fullRows = dataForCollationCharacterSetApplicability()
+	case tableProcesslist:
+		fullRows = dataForProcesslist(ctx)
 	}
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -1246,6 +1354,10 @@ func (it *infoschemaTable) RebaseAutoID(ctx sessionctx.Context, newBase int64, i
 
 func (it *infoschemaTable) Meta() *model.TableInfo {
 	return it.meta
+}
+
+func (it *infoschemaTable) GetPhysicalID() int64 {
+	return it.meta.ID
 }
 
 // Seek is the first method called for table scan, we lazy initialize it here.

@@ -45,8 +45,8 @@ func NewConfig() *Config {
 // source-db-host:ip -> dm-worker-host:ip
 // NOTE: we can refine it when new deployment function is available
 type DeployMapper struct {
-	MySQL  string `toml:"mysql" json:"mysql"`
-	Worker string `toml:"worker" json:"worker"`
+	MySQL  string `toml:"mysql-instance" json:"mysql-instance"`
+	Worker string `toml:"dm-worker" json:"dm-worker"`
 }
 
 // Config is the configuration for dm-master

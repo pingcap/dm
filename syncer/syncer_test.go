@@ -28,7 +28,6 @@ import (
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb/ast"
-	"github.com/pingcap/tidb/parser"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"golang.org/x/net/context"
@@ -100,7 +99,8 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 		log.Fatal(err)
 	}
 
-	s.db.Exec("SET GLOBAL binlog_format = 'ROW';")
+	_, err = s.db.Exec("SET GLOBAL binlog_format = 'ROW';")
+	c.Assert(err, IsNil)
 }
 
 func (s *testSyncerSuite) TearDownSuite(c *C) {
@@ -135,6 +135,9 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 		s.db.Exec(sql)
 	}
 
+	p, err := getParser(s.db)
+	c.Assert(err, IsNil)
+
 	syncer := NewSyncer(s.cfg)
 	syncer.genRouter()
 	var i int
@@ -150,7 +153,7 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 		}
 
 		sql := string(ev.Query)
-		stmt, err := parser.New().ParseOneStmt(sql, "", "")
+		stmt, err := p.ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
 
 		tableNames, err := fetchDDLTableNames(string(ev.Schema), stmt)
@@ -230,6 +233,9 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 		s.db.Exec(sql)
 	}
 
+	p, err := getParser(s.db)
+	c.Assert(err, IsNil)
+
 	syncer := NewSyncer(s.cfg)
 	syncer.genRouter()
 	var i int
@@ -242,14 +248,14 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
 			query := string(ev.Query)
-			querys, err := resolveDDLSQL(query)
+			querys, err := resolveDDLSQL(query, p)
 			c.Assert(err, IsNil)
 			if len(querys) == 0 {
 				continue
 			}
 
 			for j, sql := range querys {
-				stmt, err := parser.New().ParseOneStmt(sql, "", "")
+				stmt, err := p.ParseOneStmt(sql, "", "")
 				c.Assert(err, IsNil)
 
 				tableNames, err := fetchDDLTableNames(string(ev.Schema), stmt)
@@ -294,6 +300,9 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 		s.db.Exec(sql)
 	}
 
+	p, err := getParser(s.db)
+	c.Assert(err, IsNil)
+
 	syncer := NewSyncer(s.cfg)
 	syncer.genRouter()
 	i := 0
@@ -310,7 +319,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 		}
 
 		sql := string(ev.Query)
-		stmt, err := parser.New().ParseOneStmt(sql, "", "")
+		stmt, err := p.ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
 
 		tableNames, err := fetchDDLTableNames(sql, stmt)
@@ -382,6 +391,9 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 		s.db.Exec(sql)
 	}
 
+	p, err := getParser(s.db)
+	c.Assert(err, IsNil)
+
 	syncer := NewSyncer(s.cfg)
 	syncer.genRouter()
 	i := 0
@@ -394,14 +406,14 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
 			query := string(ev.Query)
-			querys, err := resolveDDLSQL(query)
+			querys, err := resolveDDLSQL(query, p)
 			c.Assert(err, IsNil)
 			if len(querys) == 0 {
 				continue
 			}
 
 			for j, sql := range querys {
-				stmt, err := parser.New().ParseOneStmt(sql, "", "")
+				stmt, err := p.ParseOneStmt(sql, "", "")
 				c.Assert(err, IsNil)
 
 				tableNames, err := fetchDDLTableNames(string(ev.Schema), stmt)
@@ -468,10 +480,12 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 		s.db.Exec(sqls[i].sql)
 	}
 
+	p, err := getParser(s.db)
+	c.Assert(err, IsNil)
+
 	syncer := NewSyncer(s.cfg)
 	syncer.genRouter()
 
-	var err error
 	syncer.binlogFilter, err = bf.NewBinlogEvent(s.cfg.FilterRules)
 	c.Assert(err, IsNil)
 
@@ -484,7 +498,7 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 		c.Assert(err, IsNil)
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
-			stmt, err := parser.New().ParseOneStmt(string(ev.Query), "", "")
+			stmt, err := p.ParseOneStmt(string(ev.Query), "", "")
 			c.Assert(err, IsNil)
 			_, isDDL := stmt.(ast.DDLNode)
 			if !isDDL {
@@ -554,6 +568,9 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 		s.db.Exec(sql)
 	}
 
+	p, err := getParser(s.db)
+	c.Assert(err, IsNil)
+
 	mapping, err := cm.NewMapping(rules)
 	c.Assert(err, IsNil)
 
@@ -568,7 +585,7 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 		c.Assert(err, IsNil)
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
-			stmt, err := parser.New().ParseOneStmt(string(ev.Query), "", "")
+			stmt, err := p.ParseOneStmt(string(ev.Query), "", "")
 			c.Assert(err, IsNil)
 			_, isDDL := stmt.(ast.DDLNode)
 			if !isDDL {

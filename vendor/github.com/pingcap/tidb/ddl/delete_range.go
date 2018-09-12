@@ -18,13 +18,12 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"sync"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/pools"
 	"github.com/pingcap/tidb/ddl/util"
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/model"
-	"github.com/pingcap/tidb/mysql"
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/store/tikv/oracle"
 	"github.com/pingcap/tidb/tablecodec"
@@ -49,19 +48,23 @@ type delRangeManager interface {
 }
 
 type delRange struct {
-	d            *ddl
-	ctxPool      *pools.ResourcePool
+	store        kv.Storage
+	sessPool     *sessionPool
 	storeSupport bool
 	emulatorCh   chan struct{}
 	keys         []kv.Key
+	quitCh       chan struct{}
+
+	wait sync.WaitGroup // wait is only used when storeSupport is false.
 }
 
 // newDelRangeManager returns a delRangeManager.
-func newDelRangeManager(d *ddl, ctxPool *pools.ResourcePool, supportDelRange bool) delRangeManager {
+func newDelRangeManager(store kv.Storage, sessPool *sessionPool) delRangeManager {
 	dr := &delRange{
-		d:            d,
-		ctxPool:      ctxPool,
-		storeSupport: supportDelRange,
+		store:        store,
+		sessPool:     sessPool,
+		storeSupport: store.SupportDeleteRange(),
+		quitCh:       make(chan struct{}),
 	}
 	if !dr.storeSupport {
 		dr.emulatorCh = make(chan struct{}, delBackLog)
@@ -72,14 +75,11 @@ func newDelRangeManager(d *ddl, ctxPool *pools.ResourcePool, supportDelRange boo
 
 // addDelRangeJob implements delRangeManager interface.
 func (dr *delRange) addDelRangeJob(job *model.Job) error {
-	resource, err := dr.ctxPool.Get()
+	ctx, err := dr.sessPool.get()
 	if err != nil {
 		return errors.Trace(err)
 	}
-	defer dr.ctxPool.Put(resource)
-	ctx := resource.(sessionctx.Context)
-	ctx.GetSessionVars().SetStatusFlag(mysql.ServerStatusAutocommit, true)
-	ctx.GetSessionVars().InRestrictedSQL = true
+	defer dr.sessPool.put(ctx)
 
 	err = insertJobIntoDeleteRangeTable(ctx, job)
 	if err != nil {
@@ -95,7 +95,7 @@ func (dr *delRange) addDelRangeJob(job *model.Job) error {
 // start implements delRangeManager interface.
 func (dr *delRange) start() {
 	if !dr.storeSupport {
-		dr.d.wait.Add(1)
+		dr.wait.Add(1)
 		go dr.startEmulator()
 	}
 }
@@ -103,19 +103,21 @@ func (dr *delRange) start() {
 // clear implements delRangeManager interface.
 func (dr *delRange) clear() {
 	log.Infof("[ddl] closing delRange session pool")
-	dr.ctxPool.Close()
+	close(dr.quitCh)
+	dr.wait.Wait()
+	dr.sessPool.close()
 }
 
 // startEmulator is only used for those storage engines which don't support
 // delete-range. The emulator fetches records from gc_delete_range table and
 // deletes all keys in each DelRangeTask.
 func (dr *delRange) startEmulator() {
-	defer dr.d.wait.Done()
+	defer dr.wait.Done()
 	log.Infof("[ddl] start delRange emulator")
 	for {
 		select {
 		case <-dr.emulatorCh:
-		case <-dr.d.quitCh:
+		case <-dr.quitCh:
 			return
 		}
 		err := dr.doDelRangeWork()
@@ -124,15 +126,12 @@ func (dr *delRange) startEmulator() {
 }
 
 func (dr *delRange) doDelRangeWork() error {
-	resource, err := dr.ctxPool.Get()
+	ctx, err := dr.sessPool.get()
 	if err != nil {
 		log.Errorf("[ddl] delRange emulator get session fail: %s", err)
 		return errors.Trace(err)
 	}
-	defer dr.ctxPool.Put(resource)
-	ctx := resource.(sessionctx.Context)
-	ctx.GetSessionVars().SetStatusFlag(mysql.ServerStatusAutocommit, true)
-	ctx.GetSessionVars().InRestrictedSQL = true
+	defer dr.sessPool.put(ctx)
 
 	ranges, err := util.LoadDeleteRanges(ctx, math.MaxInt64)
 	if err != nil {
@@ -155,7 +154,7 @@ func (dr *delRange) doTask(ctx sessionctx.Context, r util.DelRangeTask) error {
 	for {
 		finish := true
 		dr.keys = dr.keys[:0]
-		err := kv.RunInNewTxn(dr.d.store, false, func(txn kv.Transaction) error {
+		err := kv.RunInNewTxn(dr.store, false, func(txn kv.Transaction) error {
 			iter, err := txn.Seek(oldStartKey)
 			if err != nil {
 				return errors.Trace(err)
@@ -196,12 +195,11 @@ func (dr *delRange) doTask(ctx sessionctx.Context, r util.DelRangeTask) error {
 			}
 			log.Infof("[ddl] delRange emulator complete task: (%d, %d)", r.JobID, r.ElementID)
 			break
-		} else {
-			if err := util.UpdateDeleteRange(ctx, r, newStartKey, oldStartKey); err != nil {
-				log.Errorf("[ddl] delRange emulator update task fail: %s", err)
-			}
-			oldStartKey = newStartKey
 		}
+		if err := util.UpdateDeleteRange(ctx, r, newStartKey, oldStartKey); err != nil {
+			log.Errorf("[ddl] delRange emulator update task fail: %s", err)
+		}
+		oldStartKey = newStartKey
 	}
 	return nil
 }
@@ -231,29 +229,75 @@ func insertJobIntoDeleteRangeTable(ctx sessionctx.Context, job *model.Job) error
 		}
 	case model.ActionDropTable, model.ActionTruncateTable:
 		tableID := job.TableID
-		startKey := tablecodec.EncodeTablePrefix(tableID)
+		// The startKey here is for compatibility with previous versions, old version did not endKey so don't have to deal with.
+		var startKey kv.Key
+		var physicalTableIDs []int64
+		if err := job.DecodeArgs(startKey, &physicalTableIDs); err != nil {
+			return errors.Trace(err)
+		}
+		if len(physicalTableIDs) > 0 {
+			for _, pid := range physicalTableIDs {
+				startKey = tablecodec.EncodeTablePrefix(pid)
+				endKey := tablecodec.EncodeTablePrefix(pid + 1)
+				if err := doInsert(s, job.ID, pid, startKey, endKey, now); err != nil {
+					return errors.Trace(err)
+				}
+			}
+			return nil
+		}
+		startKey = tablecodec.EncodeTablePrefix(tableID)
 		endKey := tablecodec.EncodeTablePrefix(tableID + 1)
 		return doInsert(s, job.ID, tableID, startKey, endKey, now)
+	case model.ActionDropTablePartition:
+		var physicalTableID int64
+		if err := job.DecodeArgs(&physicalTableID); err != nil {
+			return errors.Trace(err)
+		}
+		startKey := tablecodec.EncodeTablePrefix(physicalTableID)
+		endKey := tablecodec.EncodeTablePrefix(physicalTableID + 1)
+		return doInsert(s, job.ID, physicalTableID, startKey, endKey, now)
 	// ActionAddIndex needs do it, because it needs to be rolled back when it's canceled.
 	case model.ActionAddIndex:
 		tableID := job.TableID
 		var indexID int64
-		if err := job.DecodeArgs(&indexID); err != nil {
+		var partitionIDs []int64
+		if err := job.DecodeArgs(&indexID, &partitionIDs); err != nil {
 			return errors.Trace(err)
 		}
-		startKey := tablecodec.EncodeTableIndexPrefix(tableID, indexID)
-		endKey := tablecodec.EncodeTableIndexPrefix(tableID, indexID+1)
-		return doInsert(s, job.ID, indexID, startKey, endKey, now)
+		if len(partitionIDs) > 0 {
+			for _, pid := range partitionIDs {
+				startKey := tablecodec.EncodeTableIndexPrefix(pid, indexID)
+				endKey := tablecodec.EncodeTableIndexPrefix(pid, indexID+1)
+				if err := doInsert(s, job.ID, indexID, startKey, endKey, now); err != nil {
+					return errors.Trace(err)
+				}
+			}
+		} else {
+			startKey := tablecodec.EncodeTableIndexPrefix(tableID, indexID)
+			endKey := tablecodec.EncodeTableIndexPrefix(tableID, indexID+1)
+			return doInsert(s, job.ID, indexID, startKey, endKey, now)
+		}
 	case model.ActionDropIndex:
 		tableID := job.TableID
 		var indexName interface{}
 		var indexID int64
-		if err := job.DecodeArgs(&indexName, &indexID); err != nil {
+		var partitionIDs []int64
+		if err := job.DecodeArgs(&indexName, &indexID, &partitionIDs); err != nil {
 			return errors.Trace(err)
 		}
-		startKey := tablecodec.EncodeTableIndexPrefix(tableID, indexID)
-		endKey := tablecodec.EncodeTableIndexPrefix(tableID, indexID+1)
-		return doInsert(s, job.ID, indexID, startKey, endKey, now)
+		if len(partitionIDs) > 0 {
+			for _, pid := range partitionIDs {
+				startKey := tablecodec.EncodeTableIndexPrefix(pid, indexID)
+				endKey := tablecodec.EncodeTableIndexPrefix(pid, indexID+1)
+				if err := doInsert(s, job.ID, indexID, startKey, endKey, now); err != nil {
+					return errors.Trace(err)
+				}
+			}
+		} else {
+			startKey := tablecodec.EncodeTableIndexPrefix(tableID, indexID)
+			endKey := tablecodec.EncodeTableIndexPrefix(tableID, indexID+1)
+			return doInsert(s, job.ID, indexID, startKey, endKey, now)
+		}
 	}
 	return nil
 }

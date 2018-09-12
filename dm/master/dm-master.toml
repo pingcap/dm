@@ -10,13 +10,13 @@ status-addr = ":11081"
 # mysql <-> Worker deployment, we'll refine it when new deployment function is available
 
 [[deploy]]
-mysql = "127.0.0.1:3306"
-worker = "127.0.0.1:10081"
+mysql-instance = "127.0.0.1:3306"
+dm-worker = "127.0.0.1:10081"
 
 [[deploy]]
-mysql = "127.0.0.1:3406"
-worker = "127.0.0.1:10181"
+mysql-instance = "127.0.0.1:3406"
+dm-worker = "127.0.0.1:10181"
 
 [[deploy]]
-mysql = "127.0.0.1:3506"
-worker = "127.0.0.1:10281"
+mysql-instance = "127.0.0.1:3506"
+dm-worker = "127.0.0.1:10281"

@@ -83,8 +83,7 @@ func (s *testSyncerSuite) testFailedCases(c *C) {
 
 		// cases parse failed and should be supported in the near future
 		// {"ALTER TABLE bar ENABLE KEYS, DISABLE KEYS", []string{"ALTER TABLE `bar` ENABLE KEYS", "ALTER TABLE `bar` DISABLE KEYS"}, false},
-		{"alter table bar rename index idx_1 to idx_2, rename key idx_3 to idx_4", []string{"alter table bar rename index idx_1 to idx_2, rename key idx_3 to idx_4"}, true}, // tidb not support rename index currently.
-		{"alter table bar ORDER BY id1, id2", []string{"alter table bar ORDER BY id1, id2"}, true},                                                                           // tidb not support ORDER BY.
+		{"alter table bar ORDER BY id1, id2", []string{"alter table bar ORDER BY id1, id2"}, true},                                                                                                                                                                                                                                               // tidb not support ORDER BY.
 		{"alter table bar add index (`name`), add FOREIGN KEY (product_category, product_id) REFERENCES product(category, id) ON UPDATE CASCADE ON DELETE RESTRICT", []string{"alter table bar add index (`name`), add FOREIGN KEY (product_category, product_id) REFERENCES product(category, id) ON UPDATE CASCADE ON DELETE RESTRICT"}, true}, // tidb not support ON UPDATE CASCADE ON DELETE RESTRICT
 	}
 
@@ -138,6 +137,13 @@ func (s *testSyncerSuite) testAlterTableOption(c *C) {
 
 func (s *testSyncerSuite) testAlterTableAddColumn(c *C) {
 	tests := []testCase{
+		{"alter table `bar` add column `id` int(11) not null default -1", []string{"ALTER TABLE `bar` ADD COLUMN `id` int(11) NOT NULL DEFAULT -1"}, false},
+		{"alter table `bar` add column `id` int(11) not null default +1", []string{"ALTER TABLE `bar` ADD COLUMN `id` int(11) NOT NULL DEFAULT +1"}, false},
+		{"alter table `bar` add column `id` int(11) not null default 1", []string{"ALTER TABLE `bar` ADD COLUMN `id` int(11) NOT NULL DEFAULT 1"}, false},
+		{"alter table `bar` add column `id` float not null default -1.1", []string{"ALTER TABLE `bar` ADD COLUMN `id` float NOT NULL DEFAULT -1.1"}, false},
+		{"alter table `bar` add column `id` float not null default +1.1", []string{"ALTER TABLE `bar` ADD COLUMN `id` float NOT NULL DEFAULT +1.1"}, false},
+		{"alter table `bar` add column `id` float not null default 1.1", []string{"ALTER TABLE `bar` ADD COLUMN `id` float NOT NULL DEFAULT 1.1"}, false},
+
 		{"alter table `bar` add column `id` int(11) unsigned zerofill not null", []string{"ALTER TABLE `bar` ADD COLUMN `id` int(11) UNSIGNED ZEROFILL NOT NULL"}, false},
 		{"alter table `bar` add column `id1` int(11) not null primary key comment 'id1', add column id2 int(11) primary key, add id3 int(11) unique, add id4 int(11) unique key", []string{"ALTER TABLE `bar` ADD COLUMN `id1` int(11) NOT NULL PRIMARY KEY COMMENT 'id1'", "ALTER TABLE `bar` ADD COLUMN `id2` int(11) PRIMARY KEY", "ALTER TABLE `bar` ADD COLUMN `id3` int(11) UNIQUE KEY", "ALTER TABLE `bar` ADD COLUMN `id4` int(11) UNIQUE KEY"}, false},
 		{"alter table `bar` add column `id1` int(11) not null, add column `id2` int(11) not null default 1", []string{"ALTER TABLE `bar` ADD COLUMN `id1` int(11) NOT NULL", "ALTER TABLE `bar` ADD COLUMN `id2` int(11) NOT NULL DEFAULT 1"}, false},
@@ -275,6 +281,9 @@ func (s *testSyncerSuite) testAlterTableRenameTable(c *C) {
 		{"alter table bar1 add index (cat1), add index (cat2), rename to bar", []string{"ALTER TABLE `bar1` ADD INDEX (`cat1`)", "ALTER TABLE `bar1` ADD INDEX (`cat2`)", "ALTER TABLE `bar1` RENAME TO `bar`"}, false},
 		{"rename table `t1` to `t2`, `t3` to `t4`", []string{"RENAME TABLE `t1` TO `t2`", "RENAME TABLE `t3` TO `t4`"}, false},
 		{"rename table `db`.`t1` to `db`.`t2`, `db`.`t3` to `db`.`t4`", []string{"RENAME TABLE `db`.`t1` TO `db`.`t2`", "RENAME TABLE `db`.`t3` TO `db`.`t4`"}, false},
+		{"alter table bar rename index idx_1 to idx_2, rename key idx_3 to idx_4", []string{"ALTER TABLE `bar` RENAME INDEX `idx_1` TO `idx_2`", "ALTER TABLE `bar` RENAME INDEX `idx_3` TO `idx_4`"}, false},
+		{"alter table bar rename index `idx_1` to `idx_2`, rename key `idx_3` to `idx_4`", []string{"ALTER TABLE `bar` RENAME INDEX `idx_1` TO `idx_2`", "ALTER TABLE `bar` RENAME INDEX `idx_3` TO `idx_4`"}, false},
+		{"alter table bar rename index idx_1 to idx_2", []string{"ALTER TABLE `bar` RENAME INDEX `idx_1` TO `idx_2`"}, false},
 	}
 	s.run(c, tests)
 }
@@ -282,6 +291,7 @@ func (s *testSyncerSuite) testAlterTableRenameTable(c *C) {
 func (s *testSyncerSuite) testAlterTableAlterColumn(c *C) {
 	tests := []testCase{
 		{"alter table bar alter `id` set default 1, alter `name` drop default", []string{"ALTER TABLE `bar` ALTER COLUMN `id` SET DEFAULT 1", "ALTER TABLE `bar` ALTER COLUMN `name` DROP DEFAULT"}, false},
+		{"alter table bar alter column `ctime` set default '2018-01-01 01:01:01'", []string{"ALTER TABLE `bar` ALTER COLUMN `ctime` SET DEFAULT '2018-01-01 01:01:01'"}, false},
 	}
 	s.run(c, tests)
 }
@@ -316,17 +326,19 @@ func (s *testSyncerSuite) testAlterTableConvert(c *C) {
 }
 
 func (s *testSyncerSuite) run(c *C, tests []testCase) {
+	parser, err := getParser(s.db)
+	c.Assert(err, IsNil)
+
 	for _, tt := range tests {
-		sqls, err := resolveDDLSQL(tt.sql)
+		sqls, err := resolveDDLSQL(tt.sql, parser)
 		if !tt.wantErr && err != nil {
 			fmt.Println(err)
 		}
-
-		c.Assert(sqls, DeepEquals, tt.wantSqls)
 		if tt.wantErr {
 			c.Assert(err, NotNil)
 		} else {
 			c.Assert(err, IsNil)
 		}
+		c.Assert(sqls, DeepEquals, tt.wantSqls)
 	}
 }

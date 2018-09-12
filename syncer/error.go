@@ -14,9 +14,6 @@
 package syncer
 
 import (
-	"database/sql/driver"
-	"net"
-
 	"github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	tddl "github.com/pingcap/tidb/ddl"
@@ -47,18 +44,12 @@ func ignoreDDLError(err error) bool {
 	}
 }
 
-func isRetryableError(err error) bool {
+func needRetryReplicate(err error) bool {
 	err = originError(err)
-	if err == driver.ErrBadConn || err == gmysql.ErrBadConn {
-		return true
-	}
+	return err == gmysql.ErrBadConn
+}
 
-	if nerr, ok := err.(net.Error); ok {
-		if nerr.Timeout() {
-			return true
-		}
-	}
-
+func isRetryableError(err error) bool {
 	mysqlErr, ok := err.(*mysql.MySQLError)
 	if ok {
 		switch mysqlErr.Number {
@@ -70,7 +61,7 @@ func isRetryableError(err error) bool {
 		}
 	}
 
-	return true
+	return false
 }
 
 func isBinlogPurgedError(err error) bool {

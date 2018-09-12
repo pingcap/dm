@@ -152,7 +152,11 @@ func (c *SubTaskConfig) SetupFlags(name CmdName) {
 
 // MySQLInstanceID returns the relevant MySQL instance ID of config
 func (c *SubTaskConfig) MySQLInstanceID() string {
-	return fmt.Sprintf("%s:%d", c.From.Host, c.From.Port)
+	if c.InstanceId == "" {
+		c.InstanceId = fmt.Sprintf("%s:%d", c.From.Host, c.From.Port)
+	}
+
+	return c.InstanceId
 }
 
 // String returns the config's json string
@@ -202,6 +206,10 @@ func (c *SubTaskConfig) adjust() error {
 	}
 
 	c.BWList.ToLower()
+
+	if c.InstanceId == "" {
+		c.InstanceId = fmt.Sprintf("%s:%d", c.From.Host, c.From.Port)
+	}
 
 	// add ToLower for other pkg later
 	for _, rule := range c.RouteRules {

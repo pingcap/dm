@@ -11,7 +11,7 @@ import:
 - package: github.com/pingcap/check
   version: 9b266636177e249ec28b0aeffe8e86bc272bb481
 - package: github.com/pingcap/tidb
-  version: v2.1.0-alpha
+  version: a18d27ea14e2122daf09fdaa6cb2cfbc00342c8c
   subpackages:
   - ast
   - ddl
@@ -76,7 +76,7 @@ import:
   - ioutil2
   - sync2
 - package: github.com/siddontang/go-mysql
-  version: 8939dbe3092047486e3c5161c1d9ac0470394cec
+  version: fd6fda8b01995b10a565430497d5ca6b18032c34
   subpackages:
   - client
   - mysql
@@ -95,6 +95,8 @@ import:
   - proto
 - package: github.com/golang/snappy
   version: 723cc1e459b8eea2dea4583200fd60757d40097a
+- package: github.com/pingcap/kvproto
+  version: 5ef8fa297ea3547b015ef5069cb500bba67b0d94
 - package: github.com/coreos/etcd
   version: v3.2.18
 - package: github.com/pingcap/tipb
@@ -107,5 +109,16 @@ import:
   version: v2.2.1
 - package: github.com/pingcap/tidb-tools
   version: b4f5a10ae872e91064f4b83cb00e2480d505aa05
-- package: github.com/pingcap/kvproto
-  version: 5e6e69a5ed381bd4a8afe7cb96cc47f955f6d160
+  # for building goyacc
+- package: github.com/cznic/golex
+  version: da5a7153a51074477ecac5c45a7e5182a0c72448
+- package: github.com/cznic/mathutil
+  version: 78ad7f262603437f0ecfebc835d80094f89c8f54
+- package: github.com/cznic/parser
+  version: 31edd927e5b19d1c4a260c41a397e7f81d6694d9
+- package: github.com/cznic/sortutil
+  version: 4c7342852e65c2088c981288f2c5610d10b9f7f4
+- package: github.com/cznic/strutil
+  version: 1eb03e3cc9d345307a45ec82bd3016cde4bd4464
+- package: github.com/cznic/y
+  version: 9fdf92d4aac058959f814606bb729ed50f5e4240

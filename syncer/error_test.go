@@ -36,10 +36,10 @@ func (s *testSyncerSuite) TestIsRetryableError(c *C) {
 		isRetryable bool
 	}{
 		{newMysqlErr(tmysql.ErrNoDB, "no db error"), false},
-		{errors.New("unknown error"), true},
+		{errors.New("unknown error"), false},
 		{newMysqlErr(tmysql.ErrUnknown, "i/o timeout"), true},
 		{newMysqlErr(tmysql.ErrDBCreateExists, "db already exists"), false},
-		{driver.ErrBadConn, true},
+		{driver.ErrBadConn, false},
 		{newMysqlErr(gmysql.ER_LOCK_DEADLOCK, "Deadlock found when trying to get lock; try restarting transaction"), true},
 		{newMysqlErr(tmysql.ErrPDServerTimeout, "pd server timeout"), true},
 		{newMysqlErr(tmysql.ErrTiKVServerTimeout, "tikv server timeout"), true},

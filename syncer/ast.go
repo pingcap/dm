@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
 	"strings"
@@ -27,28 +28,39 @@ import (
 )
 
 func defaultValueToSQL(opt *ast.ColumnOption) string {
-	sql := " DEFAULT "
-	datum := opt.Expr.GetDatum()
-	switch datum.Kind() {
-	case types.KindNull:
-		expr, ok := opt.Expr.(*ast.FuncCallExpr)
-		if ok {
-			sql += expr.FnName.O
-		} else {
-			sql += "NULL"
+	var value string
+
+	switch expr := opt.Expr.(type) {
+	case *ast.UnaryOperationExpr:
+		var str bytes.Buffer
+		expr.Format(&str)
+		value = str.String()
+
+	case *ast.FuncCallExpr:
+		value = expr.FnName.O
+
+	case *ast.ValueExpr:
+		datum := opt.Expr.GetDatum()
+		switch datum.Kind() {
+		case types.KindNull:
+			value = "NULL"
+
+		case types.KindInt64:
+			value = strconv.FormatInt(datum.GetInt64(), 10)
+
+		case types.KindString:
+			value = formatStringValue(datum.GetString())
+
+		default:
+			value = fmt.Sprintf("%v", datum.GetValue())
 		}
 
-	case types.KindInt64:
-		sql += strconv.FormatInt(datum.GetInt64(), 10)
-
-	case types.KindString:
-		sql += formatStringValue(datum.GetString())
-
 	default:
-		sql += fmt.Sprintf("%v", datum.GetValue())
+		log.Errorf("unhandle expression type: %v", opt.Expr)
+		value = "NULL"
 	}
 
-	return sql
+	return fmt.Sprintf(" DEFAULT %s", value)
 }
 
 func formatStringValue(s string) string {
@@ -453,7 +465,7 @@ func alterTableSpecToSQL(spec *ast.AlterTableSpec, ntable *ast.TableName) []stri
 	case ast.AlterTableAlterColumn:
 		suffix += fmt.Sprintf("ALTER COLUMN %s ", columnNameToSQL(spec.NewColumns[0].Name))
 		if options := spec.NewColumns[0].Options; options != nil {
-			suffix += fmt.Sprintf("SET DEFAULT %v", options[0].Expr.GetValue())
+			suffix += fmt.Sprintf("SET%s", defaultValueToSQL(options[0]))
 		} else {
 			suffix += "DROP DEFAULT"
 		}
@@ -465,9 +477,17 @@ func alterTableSpecToSQL(spec *ast.AlterTableSpec, ntable *ast.TableName) []stri
 
 	case ast.AlterTableLock:
 		// just ignore it
+	case ast.AlterTableRenameIndex:
+		suffix := fmt.Sprintf("RENAME INDEX %s TO %s", indexNameToSQL(spec.FromKey), indexNameToSQL(spec.ToKey))
+		suffixes = append(suffixes, suffix)
+
 	default:
 	}
 	return suffixes
+}
+
+func indexNameToSQL(name model.CIStr) string {
+	return fmt.Sprintf("`%s`", escapeName(name.String()))
 }
 
 func alterTableStmtToSQL(stmt *ast.AlterTableStmt, ntable *ast.TableName) []string {

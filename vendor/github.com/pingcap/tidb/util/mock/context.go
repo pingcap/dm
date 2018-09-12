@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
+	"github.com/pingcap/tidb/ast"
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/owner"
 	"github.com/pingcap/tidb/sessionctx"
@@ -27,11 +28,13 @@ import (
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util"
 	"github.com/pingcap/tidb/util/kvcache"
+	"github.com/pingcap/tidb/util/sqlexec"
 	binlog "github.com/pingcap/tipb/go-binlog"
 	"golang.org/x/net/context"
 )
 
 var _ sessionctx.Context = (*Context)(nil)
+var _ sqlexec.SQLExecutor = (*Context)(nil)
 
 // Context represents mocked sessionctx.Context.
 type Context struct {
@@ -44,6 +47,11 @@ type Context struct {
 	cancel      context.CancelFunc
 	sm          util.SessionManager
 	pcache      *kvcache.SimpleLRUCache
+}
+
+// Execute implements sqlexec.SQLExecutor Execute interface.
+func (c *Context) Execute(ctx context.Context, sql string) ([]ast.RecordSet, error) {
+	return nil, errors.Errorf("Not Support.")
 }
 
 // DDLOwnerChecker returns owner.DDLOwnerChecker.
@@ -156,7 +164,7 @@ func (c *Context) InitTxnWithStartTS(startTS uint64) error {
 	}
 	if c.Store != nil {
 		membufCap := kv.DefaultTxnMembufCap
-		if c.sessionVars.ImportingData {
+		if c.sessionVars.LightningMode {
 			membufCap = kv.ImportingTxnMembufCap
 		}
 		txn, err := c.Store.BeginWithStartTS(startTS)
@@ -225,6 +233,7 @@ func NewContext() *Context {
 	}
 	sctx.sessionVars.MaxChunkSize = 2
 	sctx.sessionVars.StmtCtx.TimeZone = time.UTC
+	sctx.sessionVars.GlobalVarsAccessor = variable.NewMockGlobalAccessor()
 	return sctx
 }
 

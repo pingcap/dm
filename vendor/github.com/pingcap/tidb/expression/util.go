@@ -26,6 +26,7 @@ import (
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/terror"
 	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/util/chunk"
 	"github.com/pingcap/tidb/util/hack"
 )
 
@@ -100,7 +101,7 @@ func ColumnSubstitute(expr Expression, schema *Schema, newExprs []Expression) Ex
 		if id == -1 {
 			return v
 		}
-		return newExprs[id].Clone()
+		return newExprs[id]
 	case *ScalarFunction:
 		if v.FuncName.L == ast.Cast {
 			newFunc := v.Clone().(*ScalarFunction)
@@ -172,7 +173,7 @@ func SubstituteCorCol2Constant(expr Expression) (Expression, error) {
 			allConstant = allConstant && ok
 		}
 		if allConstant {
-			val, err := x.Eval(nil)
+			val, err := x.Eval(chunk.Row{})
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
@@ -193,7 +194,7 @@ func SubstituteCorCol2Constant(expr Expression) (Expression, error) {
 			return &Constant{Value: newExpr.(*Constant).Value, RetType: x.GetType()}, nil
 		}
 	}
-	return expr.Clone(), nil
+	return expr, nil
 }
 
 // timeZone2Duration converts timezone whose format should satisfy the regular condition
@@ -403,7 +404,7 @@ func PopRowFirstArg(ctx sessionctx.Context, e Expression) (ret Expression, err e
 	if f, ok := e.(*ScalarFunction); ok && f.FuncName.L == ast.RowFunc {
 		args := f.GetArgs()
 		if len(args) == 2 {
-			return args[1].Clone(), nil
+			return args[1], nil
 		}
 		ret, err = NewFunction(ctx, ast.RowFunc, f.GetType(), args[1:]...)
 		return ret, errors.Trace(err)

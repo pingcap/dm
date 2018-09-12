@@ -15,13 +15,14 @@ package syncer
 
 import (
 	"database/sql"
-	"fmt"
 	"math"
 	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
@@ -47,7 +48,6 @@ var (
 
 	retryTimeout = 3 * time.Second
 	waitTime     = 10 * time.Millisecond
-	maxWaitTime  = 3 * time.Second
 	eventTimeout = 1 * time.Hour
 	statusTime   = 30 * time.Second
 
@@ -406,9 +406,10 @@ func (s *Syncer) getMasterStatus() (mysql.Position, gtid.Set, error) {
 	return utils.GetMasterStatus(s.fromDB, s.cfg.Flavor)
 }
 
-func (s *Syncer) clearTables() {
-	s.tables = make(map[string]*table)
-	s.cacheColumns = make(map[string][]string)
+func (s *Syncer) clearTables(schema, table string) {
+	key := dbutil.TableName(schema, table)
+	delete(s.tables, key)
+	delete(s.cacheColumns, key)
 }
 
 func (s *Syncer) getTableFromDB(db *sql.DB, schema string, name string) (*table, error) {
@@ -435,7 +436,7 @@ func (s *Syncer) getTableFromDB(db *sql.DB, schema string, name string) (*table,
 }
 
 func (s *Syncer) getTable(schema string, table string) (*table, []string, error) {
-	key := fmt.Sprintf("%s.%s", schema, table)
+	key := dbutil.TableName(schema, table)
 
 	value, ok := s.tables[key]
 	if ok {
@@ -570,7 +571,6 @@ func (s *Syncer) sync(ctx context.Context, db *sql.DB, jobChan chan *job) {
 	idx := 0
 	count := s.cfg.Batch
 	jobs := make([]*job, 0, count)
-	lastSyncTime := time.Now()
 	tpCnt := make(map[opType]int64)
 
 	clearF := func() {
@@ -580,7 +580,6 @@ func (s *Syncer) sync(ctx context.Context, db *sql.DB, jobChan chan *job) {
 
 		idx = 0
 		jobs = jobs[0:0]
-		lastSyncTime = time.Now()
 		for tpName, v := range tpCnt {
 			s.addCount(tpName, v)
 			tpCnt[tpName] = 0
@@ -681,17 +680,16 @@ func (s *Syncer) sync(ctx context.Context, db *sql.DB, jobChan chan *job) {
 			}
 
 		default:
-			now := time.Now()
-			if now.Sub(lastSyncTime) >= maxWaitTime {
+			if len(jobs) > 0 {
 				err = executeSQLs()
 				if err != nil {
 					fatalF(err, pb.ErrorType_ExecSQL)
 					continue
 				}
 				clearF()
+			} else {
+				time.Sleep(waitTime)
 			}
-
-			time.Sleep(waitTime)
 		}
 	}
 }
@@ -1118,6 +1116,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
 
 			var sqls []string
+			p, err := getParser(s.fromDB)
+			if err != nil {
+				return errors.Trace(err)
+			}
+
 			operator := s.GetOperator(lastPos)
 			if operator != nil {
 				sqls, err = operator.Operate()
@@ -1127,7 +1130,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				// operator only apply one time.
 				s.DelOperator(lastPos)
 			} else {
-				sqls, err = resolveDDLSQL(sql)
+				sqls, err = resolveDDLSQL(sql, p)
 				if err != nil {
 					log.Errorf("fail to be parsed, error %v", err)
 					return errors.Trace(err)
@@ -1136,7 +1139,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			// log.Infof("[query]%s [current pos]%v [next pos]%v [next gtid set]%v", sql, pos, nextPos, ev.GSet)
 
 			for _, sql := range sqls {
-				sqlDDL, tableNames, stmt, err := s.handleDDL(string(ev.Schema), sql)
+				sqlDDL, tableNames, stmt, err := s.handleDDL(p, string(ev.Schema), sql)
 				if err != nil {
 					return errors.Trace(err)
 				}
@@ -1244,7 +1247,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 				log.Infof("[ddl][end]%s", sqlDDL)
 
-				s.clearTables()
+				s.clearTables(tableNames[1][0].Schema, tableNames[1][0].Name)
 			}
 		case *replication.XIDEvent:
 			if shardingReSync != nil {
@@ -1457,7 +1460,7 @@ func (s *Syncer) reopenWithRetry(cfg replication.BinlogSyncerConfig) (streamer s
 		if err == nil {
 			return
 		}
-		if isRetryableError(err) {
+		if needRetryReplicate(err) {
 			log.Infof("[syncer] retry open binlog streamer %v", err)
 			time.Sleep(retryTimeout)
 			continue

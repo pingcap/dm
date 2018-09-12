@@ -8,14 +8,14 @@ import (
 	"sort"
 )
 
-// PermutationFirst generates the first permutation of data.
+// Generate the first permutation of data.
 func PermutationFirst(data sort.Interface) {
 	sort.Sort(data)
 }
 
-// PermutationNext generates the next permutation of data if possible and
-// return true.  Return false if there is no more permutation left.  Based on
-// the algorithm described here:
+// Generate the next permutation of data if possible and return true.
+// Return false if there is no more permutation left.
+// Based on the algorithm described here:
 // http://en.wikipedia.org/wiki/Permutation#Generation_in_lexicographic_order
 func PermutationNext(data sort.Interface) bool {
 	var k, l int

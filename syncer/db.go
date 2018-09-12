@@ -22,6 +22,12 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
+	tmysql "github.com/pingcap/tidb/mysql"
+)
+
+var (
+	// ErrNotRowFormat defines an error which means binlog format is not ROW format.
+	ErrNotRowFormat = errors.New("binlog format is not ROW format")
 )
 
 type column struct {
@@ -29,6 +35,7 @@ type column struct {
 	name     string
 	NotNull  bool
 	unsigned bool
+	tp       string
 }
 
 type table struct {
@@ -377,6 +384,7 @@ func getTableColumns(db *sql.DB, table *table, maxRetry int) error {
 		column := &column{}
 		column.idx = idx
 		column.name = string(data[0])
+		column.tp = string(data[1])
 
 		if strings.ToLower(string(data[2])) == "no" {
 			column.NotNull = true
@@ -398,10 +406,30 @@ func getTableColumns(db *sql.DB, table *table, maxRetry int) error {
 	return nil
 }
 
-func checkBinlogFormat(db *sql.DB) error {
-	rows, err := db.Query(`SHOW GLOBAL VARIABLES LIKE "binlog_format";`)
+func hasAnsiQuotesMode(db *sql.DB) (bool, error) {
+	mode, err := getSQLMode(db)
 	if err != nil {
-		return errors.Trace(err)
+		return false, errors.Trace(err)
+	}
+	return mode.HasANSIQuotesMode(), nil
+}
+
+// getSQLMode returns sql_mode.
+func getSQLMode(db *sql.DB) (tmysql.SQLMode, error) {
+	sqlMode, err := getGlobalVariable(db, "sql_mode")
+	if err != nil {
+		return tmysql.ModeNone, errors.Trace(err)
+	}
+
+	mode, err := tmysql.GetSQLMode(sqlMode)
+	return mode, errors.Trace(err)
+}
+
+func getGlobalVariable(db *sql.DB, variable string) (value string, err error) {
+	query := fmt.Sprintf("SHOW GLOBAL VARIABLES LIKE '%s'", variable)
+	rows, err := db.Query(query)
+	if err != nil {
+		return "", errors.Trace(err)
 	}
 	defer rows.Close()
 
@@ -414,29 +442,19 @@ func checkBinlogFormat(db *sql.DB) error {
 		| binlog_format | ROW   |
 		+---------------+-------+
 	*/
+
 	for rows.Next() {
-		var (
-			variable string
-			value    string
-		)
-
 		err = rows.Scan(&variable, &value)
-
 		if err != nil {
-			return errors.Trace(err)
-		}
-
-		if variable == "binlog_format" && value != "ROW" {
-			// return Init error rather than log.Fatal
-			return errors.Errorf("binlog_format is not 'ROW': %v", value)
+			return "", errors.Trace(err)
 		}
 	}
 
 	if rows.Err() != nil {
-		return errors.Trace(rows.Err())
+		return "", errors.Trace(rows.Err())
 	}
 
-	return nil
+	return value, nil
 }
 
 func killConn(db *sql.DB, connID uint32) error {

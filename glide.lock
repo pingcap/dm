@@ -1,5 +1,5 @@
-hash: 7c01f18e8a15eebf5b18685e22bcd4a6ce053d5435e1c1515bb49c4cbc35cdcb
-updated: 2018-09-08T18:05:50.622398899+08:00
+hash: 99dfde8606b1a1cdec2d46f3c6ff24478a48b2e990394b1d1e42d61607f5fe44
+updated: 2018-09-12T13:58:34.941253936+08:00
 imports:
 - name: github.com/beorn7/perks
   version: 3a771d992973f24aa725d07868b467d1ddfceafb
@@ -21,8 +21,18 @@ imports:
   - etcdserver/etcdserverpb
   - mvcc/mvccpb
   - pkg/types
+- name: github.com/cznic/golex
+  version: da5a7153a51074477ecac5c45a7e5182a0c72448
 - name: github.com/cznic/mathutil
-  version: c90ba19bea8927552cef4560ab888231566f049d
+  version: 78ad7f262603437f0ecfebc835d80094f89c8f54
+- name: github.com/cznic/parser
+  version: 31edd927e5b19d1c4a260c41a397e7f81d6694d9
+- name: github.com/cznic/sortutil
+  version: 4c7342852e65c2088c981288f2c5610d10b9f7f4
+- name: github.com/cznic/strutil
+  version: 1eb03e3cc9d345307a45ec82bd3016cde4bd4464
+- name: github.com/cznic/y
+  version: 9fdf92d4aac058959f814606bb729ed50f5e4240
 - name: github.com/go-sql-driver/mysql
   version: 4ac31a97ccff97de60ba3c630bfb4733c1bb6d0e
 - name: github.com/golang/protobuf
@@ -89,7 +99,7 @@ imports:
   - leveldb/table
   - leveldb/util
 - name: github.com/pingcap/kvproto
-  version: 5e6e69a5ed381bd4a8afe7cb96cc47f955f6d160
+  version: 5ef8fa297ea3547b015ef5069cb500bba67b0d94
   subpackages:
   - pkg/coprocessor
   - pkg/eraftpb
@@ -104,12 +114,13 @@ imports:
   subpackages:
   - pd-client
 - name: github.com/pingcap/tidb
-  version: 7f755cdf134691547cd5bf7993fa31a3cc0688d7
+  version: a18d27ea14e2122daf09fdaa6cb2cfbc00342c8c
   subpackages:
   - ast
   - config
   - ddl
   - ddl/util
+  - distsql
   - expression
   - infoschema
   - kv
@@ -127,6 +138,7 @@ imports:
   - sessionctx/binloginfo
   - sessionctx/stmtctx
   - sessionctx/variable
+  - statistics
   - store/tikv
   - store/tikv/latch
   - store/tikv/oracle
@@ -146,8 +158,8 @@ imports:
   - util/chunk
   - util/codec
   - util/encrypt
+  - util/execdetails
   - util/format
-  - util/goroutine_pool
   - util/hack
   - util/israce
   - util/kvcache
@@ -155,6 +167,7 @@ imports:
   - util/memory
   - util/mock
   - util/printer
+  - util/ranger
   - util/sqlexec
   - util/stringutil
 - name: github.com/pingcap/tidb-tools
@@ -208,7 +221,7 @@ imports:
   - log
   - loggers
 - name: github.com/siddontang/go-mysql
-  version: 8939dbe3092047486e3c5161c1d9ac0470394cec
+  version: fd6fda8b01995b10a565430497d5ca6b18032c34
   subpackages:
   - client
   - mysql

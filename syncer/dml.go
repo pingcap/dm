@@ -15,8 +15,8 @@ package syncer
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
-	"reflect"
 	"strconv"
 	"strings"
 
@@ -37,7 +37,7 @@ func genInsertSQLs(schema string, table string, dataSeq [][]interface{}, columns
 
 		value := make([]interface{}, 0, len(data))
 		for i := range data {
-			value = append(value, castUnsigned(data[i], columns[i].unsigned))
+			value = append(value, castUnsigned(data[i], columns[i].unsigned, columns[i].tp))
 		}
 
 		sql := fmt.Sprintf("REPLACE INTO `%s`.`%s` (%s) VALUES (%s);", schema, table, columnList, columnPlaceholders)
@@ -72,11 +72,11 @@ func genUpdateSQLs(schema string, table string, data [][]interface{}, columns []
 
 		oldValues := make([]interface{}, 0, len(oldData))
 		for i := range oldData {
-			oldValues = append(oldValues, castUnsigned(oldData[i], columns[i].unsigned))
+			oldValues = append(oldValues, castUnsigned(oldData[i], columns[i].unsigned, columns[i].tp))
 		}
 		changedValues := make([]interface{}, 0, len(changedData))
 		for i := range changedData {
-			changedValues = append(changedValues, castUnsigned(changedData[i], columns[i].unsigned))
+			changedValues = append(changedValues, castUnsigned(changedData[i], columns[i].unsigned, columns[i].tp))
 		}
 
 		if len(defaultIndexColumns) == 0 {
@@ -103,9 +103,6 @@ func genUpdateSQLs(schema string, table string, data [][]interface{}, columns []
 		updateColumns := make([]*column, 0, len(defaultIndexColumns))
 		updateValues := make([]interface{}, 0, len(defaultIndexColumns))
 		for j := range oldValues {
-			if reflect.DeepEqual(oldValues[j], changedValues[j]) {
-				continue
-			}
 			updateColumns = append(updateColumns, columns[j])
 			updateValues = append(updateValues, changedValues[j])
 		}
@@ -149,7 +146,7 @@ func genDeleteSQLs(schema string, table string, dataSeq [][]interface{}, columns
 
 		value := make([]interface{}, 0, len(data))
 		for i := range data {
-			value = append(value, castUnsigned(data[i], columns[i].unsigned))
+			value = append(value, castUnsigned(data[i], columns[i].unsigned, columns[i].tp))
 		}
 
 		if len(defaultIndexColumns) == 0 {
@@ -200,7 +197,7 @@ func genColumnPlaceholders(length int) string {
 	return strings.Join(values, ",")
 }
 
-func castUnsigned(data interface{}, unsigned bool) interface{} {
+func castUnsigned(data interface{}, unsigned bool, tp string) interface{} {
 	if !unsigned {
 		return data
 	}
@@ -213,6 +210,14 @@ func castUnsigned(data interface{}, unsigned bool) interface{} {
 	case int16:
 		return uint16(v)
 	case int32:
+		if strings.Contains(strings.ToLower(tp), "mediumint") {
+			// we use int32 to store MEDIUMINT, if the value is signed, it's fine
+			// but if the value is un-signed, simply convert it use `uint32` may out of the range
+			// like -4692783 converted to 4290274513 (2^32 - 4692783), but we expect 12084433 (2^24 - 4692783)
+			data := make([]byte, 4)
+			binary.LittleEndian.PutUint32(data, uint32(v))
+			return uint32(data[0]) | uint32(data[1])<<8 | uint32(data[2])<<16
+		}
 		return uint32(v)
 	case int64:
 		return strconv.FormatUint(uint64(v), 10)
@@ -221,8 +226,8 @@ func castUnsigned(data interface{}, unsigned bool) interface{} {
 	return data
 }
 
-func columnValue(value interface{}, unsigned bool) string {
-	castValue := castUnsigned(value, unsigned)
+func columnValue(value interface{}, unsigned bool, tp string) string {
+	castValue := castUnsigned(value, unsigned, tp)
 
 	var data string
 	switch v := castValue.(type) {
@@ -297,7 +302,7 @@ func findColumns(columns []*column, indexColumns map[string][]string) map[string
 func genKeyList(columns []*column, dataSeq []interface{}) string {
 	values := make([]string, 0, len(dataSeq))
 	for i, data := range dataSeq {
-		values = append(values, columnValue(data, columns[i].unsigned))
+		values = append(values, columnValue(data, columns[i].unsigned, columns[i].tp))
 	}
 
 	return strings.Join(values, ",")

@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -21,7 +22,21 @@ import (
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
 	"github.com/pingcap/tidb/ast"
+	"github.com/pingcap/tidb/mysql"
 	"github.com/pingcap/tidb/parser"
+)
+
+var (
+	// ErrDMLStatementFound defines an error which means we found unexpected dml statement found in query event.
+	ErrDMLStatementFound = errors.New("unexpected dml statement found in query event")
+	// IncompatibleDDLFormat is for incompatible ddl
+	IncompatibleDDLFormat = `encountered incompatible DDL in TiDB: %s
+	please confirm your DDL statement is correct and needed.
+	for TiDB compatible DDL, please see the docs:
+	  English version: https://github.com/pingcap/docs/blob/master/sql/ddl.md
+	  Chinese version: https://github.com/pingcap/docs-cn/blob/master/sql/ddl.md
+	if the DDL is not needed, you can use dm-ctl to skip it, otherwise u also can use dm-ctl to replace it.
+	 `
 )
 
 // trimCtrlChars returns a slice of the string s with all leading
@@ -39,13 +54,15 @@ func trimCtrlChars(s string) string {
 
 // resolveDDLSQL resolve to one ddl sql
 // example: drop table test.a,test2.b -> drop table test.a; drop table test2.b;
-func resolveDDLSQL(sql string) (sqls []string, err error) {
+func resolveDDLSQL(sql string, p *parser.Parser) (sqls []string, err error) {
 	sql = trimCtrlChars(sql)
 	// We use Parse not ParseOneStmt here, because sometimes we got a commented out ddl which can't be parsed
 	// by ParseOneStmt(it's a limitation of tidb parser.)
-	stmts, err := parser.New().Parse(sql, "", "")
+	stmts, err := p.Parse(sql, "", "")
 	if err != nil {
-		return []string{sql}, errors.Errorf("error while parsing sql: %s, err:%s", sql, err)
+		// log error rather than fatal, so other defer can be executed
+		log.Errorf(IncompatibleDDLFormat, sql)
+		return []string{sql}, errors.Annotatef(err, IncompatibleDDLFormat, sql)
 	}
 
 	if len(stmts) == 0 {
@@ -53,8 +70,13 @@ func resolveDDLSQL(sql string) (sqls []string, err error) {
 	}
 
 	stmt := stmts[0]
-	_, isDDL := stmt.(ast.DDLNode)
-	if !isDDL {
+	switch stmt.(type) {
+	case ast.DDLNode:
+		// do nothing
+	case ast.DMLNode:
+		return nil, errors.Annotatef(ErrDMLStatementFound, "query %s", sql)
+	default:
+		// BEGIN statement is included here.
 		// let sqls be empty
 		return sqls, nil
 	}
@@ -93,11 +115,6 @@ func resolveDDLSQL(sql string) (sqls []string, err error) {
 		sqls = append(sqls, sql)
 	}
 	return sqls, nil
-}
-
-func parseDDLSQL(sql string) (ast.StmtNode, error) {
-	stmt, err := parser.New().ParseOneStmt(sql, "", "")
-	return stmt, errors.Trace(err)
 }
 
 // todo: fix the ugly code, use ast to rename table
@@ -269,8 +286,8 @@ func fetchDDLTableNames(schema string, stmt ast.StmtNode) ([]*filter.Table, erro
 	return res, nil
 }
 
-func (s *Syncer) handleDDL(schema, sql string) (string, [][]*filter.Table, ast.StmtNode, error) {
-	stmt, err := parser.New().ParseOneStmt(sql, "", "")
+func (s *Syncer) handleDDL(p *parser.Parser, schema, sql string) (string, [][]*filter.Table, ast.StmtNode, error) {
+	stmt, err := p.ParseOneStmt(sql, "", "")
 	if err != nil {
 		return "", nil, nil, errors.Annotatef(err, "ddl %s", sql)
 	}
@@ -300,4 +317,16 @@ func (s *Syncer) handleDDL(schema, sql string) (string, [][]*filter.Table, ast.S
 
 	ddl, err := genDDLSQL(sql, stmt, tableNames, targetTableNames)
 	return ddl, [][]*filter.Table{tableNames, targetTableNames}, stmt, errors.Trace(err)
+}
+
+func getParser(db *sql.DB) (*parser.Parser, error) {
+	parser := parser.New()
+	ok, err := hasAnsiQuotesMode(db)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	if ok {
+		parser.SetSQLMode(mysql.ModeANSIQuotes)
+	}
+	return parser, nil
 }

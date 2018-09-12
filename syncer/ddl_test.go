@@ -18,7 +18,6 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
-	"github.com/pingcap/tidb/parser"
 )
 
 func (s *testSyncerSuite) TestFindTableDefineIndex(c *C) {
@@ -79,7 +78,9 @@ func (s *testSyncerSuite) TestGenDDLSQL(c *C) {
 		{"DROP INDEX `idx1` on test", "DROP INDEX `idx1` ON `test`.`test`", "USE `titi`; DROP INDEX `idx1` ON `titi`.`titi`;"},
 	}
 	for _, t := range testCase {
-		stmt, err := parseDDLSQL(t[0])
+		p, err := getParser(s.db)
+		c.Assert(err, IsNil)
+		stmt, err := p.ParseOneStmt(t[0], "", "")
 		c.Assert(err, IsNil)
 		sql, err := genDDLSQL(t[0], stmt, originTableNameSingle, targetTableNameSingle)
 		c.Assert(err, IsNil)
@@ -92,7 +93,9 @@ func (s *testSyncerSuite) TestGenDDLSQL(c *C) {
 		{"create table test like test1", "create table `test`.`test` like `test1`.`test1`", "USE `titi`; create table `titi`.`titi` like `titi1`.`titi1`;"},
 	}
 	for _, t := range testCase {
-		stmt, err := parseDDLSQL(t[0])
+		p, err := getParser(s.db)
+		c.Assert(err, IsNil)
+		stmt, err := p.ParseOneStmt(t[0], "", "")
 		c.Assert(err, IsNil)
 		sql, err := genDDLSQL(t[0], stmt, originTableNameDouble, targetTableNameDouble)
 		c.Assert(err, IsNil)
@@ -112,7 +115,8 @@ func (s *testSyncerSuite) TestTrimCtrlChars(c *C) {
 	controlChars = append(controlChars, 0x7f)
 
 	var buf bytes.Buffer
-	parser := parser.New()
+	p, err := getParser(s.db)
+	c.Assert(err, IsNil)
 
 	for _, char := range controlChars {
 		buf.WriteByte(char)
@@ -124,8 +128,44 @@ func (s *testSyncerSuite) TestTrimCtrlChars(c *C) {
 		newDDL := trimCtrlChars(buf.String())
 		c.Assert(len(newDDL), Equals, len(ddl))
 
-		_, err := parser.ParseOneStmt(newDDL, "", "")
+		_, err := p.ParseOneStmt(newDDL, "", "")
 		c.Assert(err, IsNil)
 		buf.Reset()
 	}
+}
+func (s *testSyncerSuite) TestAnsiQuotes(c *C) {
+	ansiQuotesCases := []string{
+		"create database `test`",
+		"create table `test`.`test`(id int)",
+		"create table `test`.\"test\" (id int)",
+		"create table \"test\".`test` (id int)",
+		"create table \"test\".\"test\"",
+		"create table test.test (\"id\" int)",
+		"insert into test.test (\"id\") values('a')",
+	}
+	_, err := s.db.Exec("set @@global.sql_mode='ANSI_QUOTES'")
+	c.Assert(err, IsNil)
+
+	parser, err := getParser(s.db)
+	c.Assert(err, IsNil)
+
+	for _, sql := range ansiQuotesCases {
+		_, err = parser.ParseOneStmt(sql, "", "")
+		c.Assert(err, IsNil)
+	}
+
+}
+
+func (s *testSyncerSuite) TestDDLWithDashComments(c *C) {
+	sql := `--
+-- this is a comment.
+--
+CREATE TABLE test.test_table_with_c (id int);
+`
+
+	parser, err := getParser(s.db)
+	c.Assert(err, IsNil)
+
+	_, err = parser.Parse(sql, "", "")
+	c.Assert(err, IsNil)
 }
