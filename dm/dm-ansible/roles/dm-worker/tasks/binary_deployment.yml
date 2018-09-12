@@ -15,6 +15,9 @@
 - name: deploy dm-worker binary
   copy: src="{{ resources_dir }}/bin/dm-worker" dest="{{ deploy_dir }}/bin/" mode=0755
 
+- name: deploy mydumper binary
+  copy: src="{{ resources_dir }}/bin/mydumper" dest="{{ deploy_dir }}/bin/" mode=0755
+
 - name: create dm-worker run script
   template:
     src: "run_{{ role_name }}.sh.j2"

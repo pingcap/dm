@@ -60,6 +60,13 @@ Ansible 是一款自动化运维工具，DM-Ansible 是 PingCAP 基于 Ansible P
 # passwd tidb
 ```
 
+配置 tidb 用户 sudo 免密码，将 tidb ALL=(ALL) NOPASSWD: ALL 添加到文件末尾即可。
+
+```
+# visudo
+tidb ALL=(ALL) NOPASSWD: ALL
+```
+
 生成 ssh key：执行 `su` 命令从 `root` 用户切换到 `tidb` 用户下，创建 `tidb` 用户 ssh key， 提示 `Enter passphrase` 时直接回车即可。
 
 执行成功后，ssh 私钥文件为 `/home/tidb/.ssh/id_rsa`， ssh 公钥文件为 `/home/tidb/.ssh/id_rsa.pub`。
@@ -103,10 +110,11 @@ $ wget http://download.pingcap.org/dm-ansible.tar.gz
 
 ## 在中控机器上安装 Ansible 及其依赖
 
-以 `tidb` 用户登录中控机，请务必按以下方式通过 pip 安装 Ansible 及其相关依赖的指定版本，否则会有兼容问题。安装完成后，可通过 `ansible --version` 查看 Ansible 版本。目前 DM-Ansible 兼容 Ansible 2.5 版本及以上版本，Ansible 及相关依赖版本记录在 `tidb-ansible/requirements.txt` 文件中。
+以 `tidb` 用户登录中控机，请务必按以下方式通过 pip 安装 Ansible 及其相关依赖的指定版本，否则会有兼容问题。安装完成后，可通过 `ansible --version` 查看 Ansible 版本。目前 DM-Ansible 兼容 Ansible 2.5 版本及以上版本，Ansible 及相关依赖版本记录在 `dm-ansible/requirements.txt` 文件中。
 
   ```bash
-  $ cd /home/tidb/tidb-ansible
+  $ tar -xzvf dm-ansible.tar.gz
+  $ cd /home/tidb/dm-ansible
   $ sudo pip install -r ./requirements.txt
   $ ansible --version
     ansible 2.5.0
@@ -117,7 +125,7 @@ $ wget http://download.pingcap.org/dm-ansible.tar.gz
 以 `tidb` 用户登录中控机，将你的部署目标机器 IP 添加到 `hosts.ini` 文件 `[servers]` 区块下。
 
 ```
-$ cd /home/tidb/tidb-ansible
+$ cd /home/tidb/dm-ansible
 $ vi hosts.ini
 [servers]
 172.16.10.71
@@ -225,7 +233,7 @@ dm-master ansible_host=172.16.10.71 deploy_dir=/data1/deploy
 | server_id | dm-worker 伪装成一个 mysql slave，即 slave 的 server_id, 需要在 mysql 集群中全局唯一，取值范围 0 - 4294967295 |
 | mysql_host | 上游 MySQL host | 
 | mysql_user | 上游 MySQL 用户名，默认为 root |
-| mysql_password | 上游 MySQL 用户名密码，密码需使用 dmctl 工具加密，参考[dmctl 加密上游 MySQL 密码](#dmctl-加密上游-MySQL-密码) |
+| mysql_password | 上游 MySQL 用户名密码，密码需使用 dmctl 工具加密，参考 [dmctl 加密上游 MySQL 密码](#dmctl-加密上游-mysql-用户密码) |
 | mysql_port | 上游 MySQL 端口号, 默认为 3306 |
 | enable_gtid | dm-worker 是否要用 gtid 形式的位置去拉取 binlog，前提是上游 mysql 已经开启 gtid 模式 |
 | flavor | flavor 表示 mysql 的发行版类型，官方版以及 percona、云 mysql 填写 mysql，mariadb 则填写 mariadb，默认为 mysql |
@@ -276,7 +284,7 @@ VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=
 
 ### 启动集群
 
-此操作会按顺序启动整个 DM 集群所有组件（包括 dm-master、dm-worker、dmctl 和监控组件）。
+此操作会按顺序启动整个 DM 集群所有组件（包括 dm-master、dm-worker 和监控组件）。
 
 ```
 $ ansible-playbook start.yml
@@ -284,10 +292,53 @@ $ ansible-playbook start.yml
 
 ### 关闭集群
 
-此操作会按顺序关闭整个 DM 集群所有组件（包括 dm-master、dm-worker、dmctl 和监控组件）。
+此操作会按顺序关闭整个 DM 集群所有组件（包括 dm-master、dm-worker 和监控组件）。
 
 ```
 $ ansible-playbook stop.yml
+```
+
+### 升级组件版本
+
+#### 下载 DM binary
+
+1. 删除原有的 downloads 目录下文件。
+
+```
+$ cd /home/tidb/dm-ansible
+$ rm -rf downloads
+```
+
+2. 使用 playbook 下载最新的 DM binary，自动替换 binary 到 /home/tidb/dm-ansible/resource/bin/ 目录下，默认会更新  `/home/tidb/dm-ansible/dmctl/dmctl`。
+
+```
+$ ansible-playbook local_prepare.yml
+```
+
+#### 使用 Ansible 滚动升级
+
+- 滚动升级 dm-worker 实例
+
+```
+ansible-playbook rolling_update.yml --tags=dm-worker
+```
+
+- 滚动升级 dm-master 实例
+
+```
+ansible-playbook rolling_update.yml --tags=dm-worker
+```
+
+- 升级 dmctl
+
+```
+ansible-playbook rolling_update.yml --tags=dmctl
+```
+
+- 滚动升级 dm-worker、dm-master 和 dmctl
+
+```
+ansible-playbook rolling_update.yml
 ```
 
 ## 常见部署问题
