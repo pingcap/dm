@@ -191,7 +191,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 			if !ok1 || !ok2 {
 				workerRespCh <- &pb.CommonWorkerResponse{
 					Result: false,
-					Worker: fmt.Sprintf("MySQL-Instance:%s", stCfg.MySQLInstanceID()),
+					Worker: fmt.Sprintf("mysql-instance:%s", stCfg.MySQLInstanceID()),
 					Msg:    fmt.Sprintf("%s relevant worker not found", stCfg.MySQLInstanceID()),
 				}
 				return
@@ -326,10 +326,100 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 }
 
 // UpdateTask implements MasterServer.UpdateTask
-func (s *Server) UpdateTask(context.Context, *pb.UpdateTaskRequest) (*pb.CommonTaskResponse, error) {
-	return &pb.CommonTaskResponse{
-		Result: false,
-		Msg:    "not implement",
+func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb.UpdateTaskResponse, error) {
+	log.Infof("[server] receive UpdateTask request %+v", req)
+
+	cfg := config.NewTaskConfig()
+	err := cfg.Decode(req.Task)
+	if err != nil {
+		return &pb.UpdateTaskResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}, nil
+	}
+	log.Infof("[server] updating task with config:\n%v", cfg)
+
+	stCfgs := cfg.SubTaskConfigs()
+	workerRespCh := make(chan *pb.CommonWorkerResponse, len(stCfgs)+len(req.Workers))
+	if len(req.Workers) > 0 {
+		// specify only update task on partial dm-workers
+		// filter sub-task-configs through user specified workers
+		// if worker not exist, an error message will return
+		workerCfg := make(map[string]*config.SubTaskConfig)
+		for _, stCfg := range stCfgs {
+			worker, ok := s.cfg.DeployMap[stCfg.MySQLInstanceID()]
+			if ok {
+				workerCfg[worker] = stCfg
+			} // only record existed workers
+		}
+		stCfgs = make([]*config.SubTaskConfig, 0, len(req.Workers))
+		for _, worker := range req.Workers {
+			if stCfg, ok := workerCfg[worker]; ok {
+				stCfgs = append(stCfgs, stCfg)
+			} else {
+				workerRespCh <- &pb.CommonWorkerResponse{
+					Result: false,
+					Worker: worker,
+					Msg:    "worker not found in task's config or deployment config",
+				}
+			}
+		}
+	}
+
+	var wg sync.WaitGroup
+	for _, stCfg := range stCfgs {
+		wg.Add(1)
+		go func(stCfg *config.SubTaskConfig) {
+			defer wg.Done()
+			worker, ok1 := s.cfg.DeployMap[stCfg.MySQLInstanceID()]
+			cli, ok2 := s.workerClients[worker]
+			if !ok1 || !ok2 {
+				workerRespCh <- &pb.CommonWorkerResponse{
+					Result: false,
+					Worker: fmt.Sprintf("mysql-instance:%s", stCfg.MySQLInstanceID()),
+					Msg:    fmt.Sprintf("%s relevant worker not found", stCfg.MySQLInstanceID()),
+				}
+				return
+			}
+			stCfgToml, err := stCfg.Toml() // convert to TOML format
+			if err != nil {
+				workerRespCh <- &pb.CommonWorkerResponse{
+					Result: false,
+					Worker: worker,
+					Msg:    errors.ErrorStack(err),
+				}
+				return
+			}
+			workerResp, err := cli.UpdateSubTask(ctx, &pb.UpdateSubTaskRequest{Task: stCfgToml})
+			if err != nil {
+				workerResp = &pb.CommonWorkerResponse{
+					Result: false,
+					Msg:    errors.ErrorStack(err),
+				}
+			}
+			workerResp.Worker = worker
+			workerRespCh <- workerResp
+		}(stCfg)
+	}
+	wg.Wait()
+
+	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(stCfgs))
+	workers := make([]string, 0, len(stCfgs))
+	for len(workerRespCh) > 0 {
+		workerResp := <-workerRespCh
+		workerRespMap[workerResp.Worker] = workerResp
+		workers = append(workers, workerResp.Worker)
+	}
+
+	sort.Strings(workers)
+	workerResps := make([]*pb.CommonWorkerResponse, 0, len(workers))
+	for _, worker := range workers {
+		workerResps = append(workerResps, workerRespMap[worker])
+	}
+
+	return &pb.UpdateTaskResponse{
+		Result:  true,
+		Workers: workerResps,
 	}, nil
 }
 

@@ -10,17 +10,23 @@ import (
 
 	math "math"
 
+	context "golang.org/x/net/context"
+
 	grpc "google.golang.org/grpc"
+
+	io "io"
 )
-
-import context "golang.org/x/net/context"
-
-import io "io"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
 var _ = fmt.Errorf
 var _ = math.Inf
+
+// This is a compile-time assertion to ensure that this generated file
+// is compatible with the proto package it is being compiled against.
+// A compilation error at this line likely means your copy of the
+// proto package needs to be updated.
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
 type TaskOp int32
 
@@ -47,7 +53,9 @@ var TaskOp_value = map[string]int32{
 func (x TaskOp) String() string {
 	return proto.EnumName(TaskOp_name, int32(x))
 }
-func (TaskOp) EnumDescriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{0} }
+func (TaskOp) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{0}
+}
 
 type SQLOp int32
 
@@ -68,7 +76,9 @@ var SQLOp_value = map[string]int32{
 func (x SQLOp) String() string {
 	return proto.EnumName(SQLOp_name, int32(x))
 }
-func (SQLOp) EnumDescriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{1} }
+func (SQLOp) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{1}
+}
 
 // Stage represents current stage for a (sub) task
 // a (sub) task should be always in one stage of the following stages
@@ -123,7 +133,9 @@ var Stage_value = map[string]int32{
 func (x Stage) String() string {
 	return proto.EnumName(Stage_name, int32(x))
 }
-func (Stage) EnumDescriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{2} }
+func (Stage) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{2}
+}
 
 // UnitType represents the dm unit's type
 type UnitType int32
@@ -157,7 +169,9 @@ var UnitType_value = map[string]int32{
 func (x UnitType) String() string {
 	return proto.EnumName(UnitType_name, int32(x))
 }
-func (UnitType) EnumDescriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{3} }
+func (UnitType) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{3}
+}
 
 // ErrorType represents type of error produced by a dm unit
 // NOTE: add new if needed
@@ -183,16 +197,49 @@ var ErrorType_value = map[string]int32{
 func (x ErrorType) String() string {
 	return proto.EnumName(ErrorType_name, int32(x))
 }
-func (ErrorType) EnumDescriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{4} }
-
-type StartSubTaskRequest struct {
-	Task string `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
+func (ErrorType) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{4}
 }
 
-func (m *StartSubTaskRequest) Reset()                    { *m = StartSubTaskRequest{} }
-func (m *StartSubTaskRequest) String() string            { return proto.CompactTextString(m) }
-func (*StartSubTaskRequest) ProtoMessage()               {}
-func (*StartSubTaskRequest) Descriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{0} }
+type StartSubTaskRequest struct {
+	Task                 string   `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *StartSubTaskRequest) Reset()         { *m = StartSubTaskRequest{} }
+func (m *StartSubTaskRequest) String() string { return proto.CompactTextString(m) }
+func (*StartSubTaskRequest) ProtoMessage()    {}
+func (*StartSubTaskRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{0}
+}
+func (m *StartSubTaskRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *StartSubTaskRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_StartSubTaskRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *StartSubTaskRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StartSubTaskRequest.Merge(dst, src)
+}
+func (m *StartSubTaskRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *StartSubTaskRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_StartSubTaskRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_StartSubTaskRequest proto.InternalMessageInfo
 
 func (m *StartSubTaskRequest) GetTask() string {
 	if m != nil {
@@ -202,14 +249,45 @@ func (m *StartSubTaskRequest) GetTask() string {
 }
 
 type OperateSubTaskRequest struct {
-	Op   TaskOp `protobuf:"varint,1,opt,name=op,proto3,enum=pb.TaskOp" json:"op,omitempty"`
-	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Op                   TaskOp   `protobuf:"varint,1,opt,name=op,proto3,enum=pb.TaskOp" json:"op,omitempty"`
+	Name                 string   `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *OperateSubTaskRequest) Reset()                    { *m = OperateSubTaskRequest{} }
-func (m *OperateSubTaskRequest) String() string            { return proto.CompactTextString(m) }
-func (*OperateSubTaskRequest) ProtoMessage()               {}
-func (*OperateSubTaskRequest) Descriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{1} }
+func (m *OperateSubTaskRequest) Reset()         { *m = OperateSubTaskRequest{} }
+func (m *OperateSubTaskRequest) String() string { return proto.CompactTextString(m) }
+func (*OperateSubTaskRequest) ProtoMessage()    {}
+func (*OperateSubTaskRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{1}
+}
+func (m *OperateSubTaskRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *OperateSubTaskRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_OperateSubTaskRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *OperateSubTaskRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_OperateSubTaskRequest.Merge(dst, src)
+}
+func (m *OperateSubTaskRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *OperateSubTaskRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_OperateSubTaskRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_OperateSubTaskRequest proto.InternalMessageInfo
 
 func (m *OperateSubTaskRequest) GetOp() TaskOp {
 	if m != nil {
@@ -226,16 +304,47 @@ func (m *OperateSubTaskRequest) GetName() string {
 }
 
 type OperateSubTaskResponse struct {
-	Op     TaskOp `protobuf:"varint,1,opt,name=op,proto3,enum=pb.TaskOp" json:"op,omitempty"`
-	Result bool   `protobuf:"varint,2,opt,name=result,proto3" json:"result,omitempty"`
-	Worker string `protobuf:"bytes,3,opt,name=worker,proto3" json:"worker,omitempty"`
-	Msg    string `protobuf:"bytes,4,opt,name=msg,proto3" json:"msg,omitempty"`
+	Op                   TaskOp   `protobuf:"varint,1,opt,name=op,proto3,enum=pb.TaskOp" json:"op,omitempty"`
+	Result               bool     `protobuf:"varint,2,opt,name=result,proto3" json:"result,omitempty"`
+	Worker               string   `protobuf:"bytes,3,opt,name=worker,proto3" json:"worker,omitempty"`
+	Msg                  string   `protobuf:"bytes,4,opt,name=msg,proto3" json:"msg,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *OperateSubTaskResponse) Reset()                    { *m = OperateSubTaskResponse{} }
-func (m *OperateSubTaskResponse) String() string            { return proto.CompactTextString(m) }
-func (*OperateSubTaskResponse) ProtoMessage()               {}
-func (*OperateSubTaskResponse) Descriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{2} }
+func (m *OperateSubTaskResponse) Reset()         { *m = OperateSubTaskResponse{} }
+func (m *OperateSubTaskResponse) String() string { return proto.CompactTextString(m) }
+func (*OperateSubTaskResponse) ProtoMessage()    {}
+func (*OperateSubTaskResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{2}
+}
+func (m *OperateSubTaskResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *OperateSubTaskResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_OperateSubTaskResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *OperateSubTaskResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_OperateSubTaskResponse.Merge(dst, src)
+}
+func (m *OperateSubTaskResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *OperateSubTaskResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_OperateSubTaskResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_OperateSubTaskResponse proto.InternalMessageInfo
 
 func (m *OperateSubTaskResponse) GetOp() TaskOp {
 	if m != nil {
@@ -266,13 +375,44 @@ func (m *OperateSubTaskResponse) GetMsg() string {
 }
 
 type UpdateSubTaskRequest struct {
-	Task string `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
+	Task                 string   `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *UpdateSubTaskRequest) Reset()                    { *m = UpdateSubTaskRequest{} }
-func (m *UpdateSubTaskRequest) String() string            { return proto.CompactTextString(m) }
-func (*UpdateSubTaskRequest) ProtoMessage()               {}
-func (*UpdateSubTaskRequest) Descriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{3} }
+func (m *UpdateSubTaskRequest) Reset()         { *m = UpdateSubTaskRequest{} }
+func (m *UpdateSubTaskRequest) String() string { return proto.CompactTextString(m) }
+func (*UpdateSubTaskRequest) ProtoMessage()    {}
+func (*UpdateSubTaskRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{3}
+}
+func (m *UpdateSubTaskRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *UpdateSubTaskRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_UpdateSubTaskRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *UpdateSubTaskRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_UpdateSubTaskRequest.Merge(dst, src)
+}
+func (m *UpdateSubTaskRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *UpdateSubTaskRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_UpdateSubTaskRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_UpdateSubTaskRequest proto.InternalMessageInfo
 
 func (m *UpdateSubTaskRequest) GetTask() string {
 	if m != nil {
@@ -282,13 +422,44 @@ func (m *UpdateSubTaskRequest) GetTask() string {
 }
 
 type QueryStatusRequest struct {
-	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Name                 string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *QueryStatusRequest) Reset()                    { *m = QueryStatusRequest{} }
-func (m *QueryStatusRequest) String() string            { return proto.CompactTextString(m) }
-func (*QueryStatusRequest) ProtoMessage()               {}
-func (*QueryStatusRequest) Descriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{4} }
+func (m *QueryStatusRequest) Reset()         { *m = QueryStatusRequest{} }
+func (m *QueryStatusRequest) String() string { return proto.CompactTextString(m) }
+func (*QueryStatusRequest) ProtoMessage()    {}
+func (*QueryStatusRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{4}
+}
+func (m *QueryStatusRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryStatusRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryStatusRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *QueryStatusRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryStatusRequest.Merge(dst, src)
+}
+func (m *QueryStatusRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryStatusRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryStatusRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryStatusRequest proto.InternalMessageInfo
 
 func (m *QueryStatusRequest) GetName() string {
 	if m != nil {
@@ -299,16 +470,47 @@ func (m *QueryStatusRequest) GetName() string {
 
 // NOTE: we can extract some common(optional) arguments from `args`, like `meta`
 type HandleSubTaskSQLsRequest struct {
-	Name      string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Op        SQLOp    `protobuf:"varint,2,opt,name=op,proto3,enum=pb.SQLOp" json:"op,omitempty"`
-	Args      []string `protobuf:"bytes,3,rep,name=args" json:"args,omitempty"`
-	BinlogPos string   `protobuf:"bytes,4,opt,name=binlog_pos,json=binlogPos,proto3" json:"binlog_pos,omitempty"`
+	Name                 string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Op                   SQLOp    `protobuf:"varint,2,opt,name=op,proto3,enum=pb.SQLOp" json:"op,omitempty"`
+	Args                 []string `protobuf:"bytes,3,rep,name=args" json:"args,omitempty"`
+	BinlogPos            string   `protobuf:"bytes,4,opt,name=binlog_pos,json=binlogPos,proto3" json:"binlog_pos,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *HandleSubTaskSQLsRequest) Reset()                    { *m = HandleSubTaskSQLsRequest{} }
-func (m *HandleSubTaskSQLsRequest) String() string            { return proto.CompactTextString(m) }
-func (*HandleSubTaskSQLsRequest) ProtoMessage()               {}
-func (*HandleSubTaskSQLsRequest) Descriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{5} }
+func (m *HandleSubTaskSQLsRequest) Reset()         { *m = HandleSubTaskSQLsRequest{} }
+func (m *HandleSubTaskSQLsRequest) String() string { return proto.CompactTextString(m) }
+func (*HandleSubTaskSQLsRequest) ProtoMessage()    {}
+func (*HandleSubTaskSQLsRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{5}
+}
+func (m *HandleSubTaskSQLsRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *HandleSubTaskSQLsRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_HandleSubTaskSQLsRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *HandleSubTaskSQLsRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_HandleSubTaskSQLsRequest.Merge(dst, src)
+}
+func (m *HandleSubTaskSQLsRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *HandleSubTaskSQLsRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_HandleSubTaskSQLsRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_HandleSubTaskSQLsRequest proto.InternalMessageInfo
 
 func (m *HandleSubTaskSQLsRequest) GetName() string {
 	if m != nil {
@@ -339,15 +541,46 @@ func (m *HandleSubTaskSQLsRequest) GetBinlogPos() string {
 }
 
 type CommonWorkerResponse struct {
-	Result bool   `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
-	Worker string `protobuf:"bytes,2,opt,name=worker,proto3" json:"worker,omitempty"`
-	Msg    string `protobuf:"bytes,3,opt,name=msg,proto3" json:"msg,omitempty"`
+	Result               bool     `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
+	Worker               string   `protobuf:"bytes,2,opt,name=worker,proto3" json:"worker,omitempty"`
+	Msg                  string   `protobuf:"bytes,3,opt,name=msg,proto3" json:"msg,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *CommonWorkerResponse) Reset()                    { *m = CommonWorkerResponse{} }
-func (m *CommonWorkerResponse) String() string            { return proto.CompactTextString(m) }
-func (*CommonWorkerResponse) ProtoMessage()               {}
-func (*CommonWorkerResponse) Descriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{6} }
+func (m *CommonWorkerResponse) Reset()         { *m = CommonWorkerResponse{} }
+func (m *CommonWorkerResponse) String() string { return proto.CompactTextString(m) }
+func (*CommonWorkerResponse) ProtoMessage()    {}
+func (*CommonWorkerResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{6}
+}
+func (m *CommonWorkerResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *CommonWorkerResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_CommonWorkerResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *CommonWorkerResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CommonWorkerResponse.Merge(dst, src)
+}
+func (m *CommonWorkerResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *CommonWorkerResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_CommonWorkerResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_CommonWorkerResponse proto.InternalMessageInfo
 
 func (m *CommonWorkerResponse) GetResult() bool {
 	if m != nil {
@@ -373,17 +606,48 @@ func (m *CommonWorkerResponse) GetMsg() string {
 // QueryStatusResponse represents status response for query on a dm-worker
 // status: dm-worker's current sub tasks' status
 type QueryStatusResponse struct {
-	Result        bool             `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
-	Worker        string           `protobuf:"bytes,2,opt,name=worker,proto3" json:"worker,omitempty"`
-	Msg           string           `protobuf:"bytes,3,opt,name=msg,proto3" json:"msg,omitempty"`
-	SubTaskStatus []*SubTaskStatus `protobuf:"bytes,4,rep,name=subTaskStatus" json:"subTaskStatus,omitempty"`
-	RelayStatus   *RelayStatus     `protobuf:"bytes,5,opt,name=relayStatus" json:"relayStatus,omitempty"`
+	Result               bool             `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
+	Worker               string           `protobuf:"bytes,2,opt,name=worker,proto3" json:"worker,omitempty"`
+	Msg                  string           `protobuf:"bytes,3,opt,name=msg,proto3" json:"msg,omitempty"`
+	SubTaskStatus        []*SubTaskStatus `protobuf:"bytes,4,rep,name=subTaskStatus" json:"subTaskStatus,omitempty"`
+	RelayStatus          *RelayStatus     `protobuf:"bytes,5,opt,name=relayStatus" json:"relayStatus,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}         `json:"-"`
+	XXX_unrecognized     []byte           `json:"-"`
+	XXX_sizecache        int32            `json:"-"`
 }
 
-func (m *QueryStatusResponse) Reset()                    { *m = QueryStatusResponse{} }
-func (m *QueryStatusResponse) String() string            { return proto.CompactTextString(m) }
-func (*QueryStatusResponse) ProtoMessage()               {}
-func (*QueryStatusResponse) Descriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{7} }
+func (m *QueryStatusResponse) Reset()         { *m = QueryStatusResponse{} }
+func (m *QueryStatusResponse) String() string { return proto.CompactTextString(m) }
+func (*QueryStatusResponse) ProtoMessage()    {}
+func (*QueryStatusResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{7}
+}
+func (m *QueryStatusResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *QueryStatusResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_QueryStatusResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *QueryStatusResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryStatusResponse.Merge(dst, src)
+}
+func (m *QueryStatusResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *QueryStatusResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_QueryStatusResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_QueryStatusResponse proto.InternalMessageInfo
 
 func (m *QueryStatusResponse) GetResult() bool {
 	if m != nil {
@@ -423,18 +687,49 @@ func (m *QueryStatusResponse) GetRelayStatus() *RelayStatus {
 // CheckStatus represents status for check unit
 // adds fields later
 type CheckStatus struct {
-	Passed     bool   `protobuf:"varint,1,opt,name=passed,proto3" json:"passed,omitempty"`
-	Total      int32  `protobuf:"varint,2,opt,name=Total,proto3" json:"Total,omitempty"`
-	Successful int32  `protobuf:"varint,3,opt,name=Successful,proto3" json:"Successful,omitempty"`
-	Failed     int32  `protobuf:"varint,4,opt,name=Failed,proto3" json:"Failed,omitempty"`
-	Warning    int32  `protobuf:"varint,5,opt,name=Warning,proto3" json:"Warning,omitempty"`
-	Detail     []byte `protobuf:"bytes,6,opt,name=detail,proto3" json:"detail,omitempty"`
+	Passed               bool     `protobuf:"varint,1,opt,name=passed,proto3" json:"passed,omitempty"`
+	Total                int32    `protobuf:"varint,2,opt,name=Total,proto3" json:"Total,omitempty"`
+	Successful           int32    `protobuf:"varint,3,opt,name=Successful,proto3" json:"Successful,omitempty"`
+	Failed               int32    `protobuf:"varint,4,opt,name=Failed,proto3" json:"Failed,omitempty"`
+	Warning              int32    `protobuf:"varint,5,opt,name=Warning,proto3" json:"Warning,omitempty"`
+	Detail               []byte   `protobuf:"bytes,6,opt,name=detail,proto3" json:"detail,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *CheckStatus) Reset()                    { *m = CheckStatus{} }
-func (m *CheckStatus) String() string            { return proto.CompactTextString(m) }
-func (*CheckStatus) ProtoMessage()               {}
-func (*CheckStatus) Descriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{8} }
+func (m *CheckStatus) Reset()         { *m = CheckStatus{} }
+func (m *CheckStatus) String() string { return proto.CompactTextString(m) }
+func (*CheckStatus) ProtoMessage()    {}
+func (*CheckStatus) Descriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{8}
+}
+func (m *CheckStatus) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *CheckStatus) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_CheckStatus.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *CheckStatus) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CheckStatus.Merge(dst, src)
+}
+func (m *CheckStatus) XXX_Size() int {
+	return m.Size()
+}
+func (m *CheckStatus) XXX_DiscardUnknown() {
+	xxx_messageInfo_CheckStatus.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_CheckStatus proto.InternalMessageInfo
 
 func (m *CheckStatus) GetPassed() bool {
 	if m != nil {
@@ -481,24 +776,86 @@ func (m *CheckStatus) GetDetail() []byte {
 // DumpStatus represents status for dump unit
 // add fields later
 type DumpStatus struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *DumpStatus) Reset()                    { *m = DumpStatus{} }
-func (m *DumpStatus) String() string            { return proto.CompactTextString(m) }
-func (*DumpStatus) ProtoMessage()               {}
-func (*DumpStatus) Descriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{9} }
+func (m *DumpStatus) Reset()         { *m = DumpStatus{} }
+func (m *DumpStatus) String() string { return proto.CompactTextString(m) }
+func (*DumpStatus) ProtoMessage()    {}
+func (*DumpStatus) Descriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{9}
+}
+func (m *DumpStatus) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *DumpStatus) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_DumpStatus.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *DumpStatus) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DumpStatus.Merge(dst, src)
+}
+func (m *DumpStatus) XXX_Size() int {
+	return m.Size()
+}
+func (m *DumpStatus) XXX_DiscardUnknown() {
+	xxx_messageInfo_DumpStatus.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_DumpStatus proto.InternalMessageInfo
 
 // LoadStatus represents status for load unit
 type LoadStatus struct {
-	FinishedBytes int64  `protobuf:"varint,1,opt,name=FinishedBytes,proto3" json:"FinishedBytes,omitempty"`
-	TotalBytes    int64  `protobuf:"varint,2,opt,name=TotalBytes,proto3" json:"TotalBytes,omitempty"`
-	Progress      string `protobuf:"bytes,3,opt,name=Progress,proto3" json:"Progress,omitempty"`
+	FinishedBytes        int64    `protobuf:"varint,1,opt,name=FinishedBytes,proto3" json:"FinishedBytes,omitempty"`
+	TotalBytes           int64    `protobuf:"varint,2,opt,name=TotalBytes,proto3" json:"TotalBytes,omitempty"`
+	Progress             string   `protobuf:"bytes,3,opt,name=Progress,proto3" json:"Progress,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *LoadStatus) Reset()                    { *m = LoadStatus{} }
-func (m *LoadStatus) String() string            { return proto.CompactTextString(m) }
-func (*LoadStatus) ProtoMessage()               {}
-func (*LoadStatus) Descriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{10} }
+func (m *LoadStatus) Reset()         { *m = LoadStatus{} }
+func (m *LoadStatus) String() string { return proto.CompactTextString(m) }
+func (*LoadStatus) ProtoMessage()    {}
+func (*LoadStatus) Descriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{10}
+}
+func (m *LoadStatus) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *LoadStatus) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_LoadStatus.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *LoadStatus) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_LoadStatus.Merge(dst, src)
+}
+func (m *LoadStatus) XXX_Size() int {
+	return m.Size()
+}
+func (m *LoadStatus) XXX_DiscardUnknown() {
+	xxx_messageInfo_LoadStatus.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_LoadStatus proto.InternalMessageInfo
 
 func (m *LoadStatus) GetFinishedBytes() int64 {
 	if m != nil {
@@ -523,20 +880,51 @@ func (m *LoadStatus) GetProgress() string {
 
 // SyncStatus represents status for sync unit
 type SyncStatus struct {
-	TotalEvents      int64  `protobuf:"varint,1,opt,name=TotalEvents,proto3" json:"TotalEvents,omitempty"`
-	TotalTps         int64  `protobuf:"varint,2,opt,name=TotalTps,proto3" json:"TotalTps,omitempty"`
-	RecentTps        int64  `protobuf:"varint,3,opt,name=RecentTps,proto3" json:"RecentTps,omitempty"`
-	MasterBinlog     string `protobuf:"bytes,4,opt,name=MasterBinlog,proto3" json:"MasterBinlog,omitempty"`
-	MasterBinlogGtid string `protobuf:"bytes,5,opt,name=MasterBinlogGtid,proto3" json:"MasterBinlogGtid,omitempty"`
-	SyncerBinlog     string `protobuf:"bytes,6,opt,name=SyncerBinlog,proto3" json:"SyncerBinlog,omitempty"`
-	SyncerBinlogGtid string `protobuf:"bytes,7,opt,name=SyncerBinlogGtid,proto3" json:"SyncerBinlogGtid,omitempty"`
-	BlockingDDL      string `protobuf:"bytes,8,opt,name=blockingDDL,proto3" json:"blockingDDL,omitempty"`
+	TotalEvents          int64    `protobuf:"varint,1,opt,name=TotalEvents,proto3" json:"TotalEvents,omitempty"`
+	TotalTps             int64    `protobuf:"varint,2,opt,name=TotalTps,proto3" json:"TotalTps,omitempty"`
+	RecentTps            int64    `protobuf:"varint,3,opt,name=RecentTps,proto3" json:"RecentTps,omitempty"`
+	MasterBinlog         string   `protobuf:"bytes,4,opt,name=MasterBinlog,proto3" json:"MasterBinlog,omitempty"`
+	MasterBinlogGtid     string   `protobuf:"bytes,5,opt,name=MasterBinlogGtid,proto3" json:"MasterBinlogGtid,omitempty"`
+	SyncerBinlog         string   `protobuf:"bytes,6,opt,name=SyncerBinlog,proto3" json:"SyncerBinlog,omitempty"`
+	SyncerBinlogGtid     string   `protobuf:"bytes,7,opt,name=SyncerBinlogGtid,proto3" json:"SyncerBinlogGtid,omitempty"`
+	BlockingDDL          string   `protobuf:"bytes,8,opt,name=blockingDDL,proto3" json:"blockingDDL,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *SyncStatus) Reset()                    { *m = SyncStatus{} }
-func (m *SyncStatus) String() string            { return proto.CompactTextString(m) }
-func (*SyncStatus) ProtoMessage()               {}
-func (*SyncStatus) Descriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{11} }
+func (m *SyncStatus) Reset()         { *m = SyncStatus{} }
+func (m *SyncStatus) String() string { return proto.CompactTextString(m) }
+func (*SyncStatus) ProtoMessage()    {}
+func (*SyncStatus) Descriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{11}
+}
+func (m *SyncStatus) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *SyncStatus) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_SyncStatus.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *SyncStatus) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SyncStatus.Merge(dst, src)
+}
+func (m *SyncStatus) XXX_Size() int {
+	return m.Size()
+}
+func (m *SyncStatus) XXX_DiscardUnknown() {
+	xxx_messageInfo_SyncStatus.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SyncStatus proto.InternalMessageInfo
 
 func (m *SyncStatus) GetTotalEvents() int64 {
 	if m != nil {
@@ -596,17 +984,48 @@ func (m *SyncStatus) GetBlockingDDL() string {
 
 // RelayStatus represents status for relay unit.
 type RelayStatus struct {
-	MasterBinlog     string `protobuf:"bytes,1,opt,name=MasterBinlog,proto3" json:"MasterBinlog,omitempty"`
-	MasterBinlogGtid string `protobuf:"bytes,2,opt,name=MasterBinlogGtid,proto3" json:"MasterBinlogGtid,omitempty"`
-	RelayBinlog      string `protobuf:"bytes,3,opt,name=RelayBinlog,proto3" json:"RelayBinlog,omitempty"`
-	RelayBinlogGtid  string `protobuf:"bytes,4,opt,name=RelayBinlogGtid,proto3" json:"RelayBinlogGtid,omitempty"`
-	Closed           bool   `protobuf:"varint,5,opt,name=Closed,proto3" json:"Closed,omitempty"`
+	MasterBinlog         string   `protobuf:"bytes,1,opt,name=MasterBinlog,proto3" json:"MasterBinlog,omitempty"`
+	MasterBinlogGtid     string   `protobuf:"bytes,2,opt,name=MasterBinlogGtid,proto3" json:"MasterBinlogGtid,omitempty"`
+	RelayBinlog          string   `protobuf:"bytes,3,opt,name=RelayBinlog,proto3" json:"RelayBinlog,omitempty"`
+	RelayBinlogGtid      string   `protobuf:"bytes,4,opt,name=RelayBinlogGtid,proto3" json:"RelayBinlogGtid,omitempty"`
+	Closed               bool     `protobuf:"varint,5,opt,name=Closed,proto3" json:"Closed,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *RelayStatus) Reset()                    { *m = RelayStatus{} }
-func (m *RelayStatus) String() string            { return proto.CompactTextString(m) }
-func (*RelayStatus) ProtoMessage()               {}
-func (*RelayStatus) Descriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{12} }
+func (m *RelayStatus) Reset()         { *m = RelayStatus{} }
+func (m *RelayStatus) String() string { return proto.CompactTextString(m) }
+func (*RelayStatus) ProtoMessage()    {}
+func (*RelayStatus) Descriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{12}
+}
+func (m *RelayStatus) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *RelayStatus) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_RelayStatus.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *RelayStatus) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RelayStatus.Merge(dst, src)
+}
+func (m *RelayStatus) XXX_Size() int {
+	return m.Size()
+}
+func (m *RelayStatus) XXX_DiscardUnknown() {
+	xxx_messageInfo_RelayStatus.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_RelayStatus proto.InternalMessageInfo
 
 func (m *RelayStatus) GetMasterBinlog() string {
 	if m != nil {
@@ -665,13 +1084,44 @@ type SubTaskStatus struct {
 	//	*SubTaskStatus_Dump
 	//	*SubTaskStatus_Load
 	//	*SubTaskStatus_Sync
-	Status isSubTaskStatus_Status `protobuf_oneof:"status"`
+	Status               isSubTaskStatus_Status `protobuf_oneof:"status"`
+	XXX_NoUnkeyedLiteral struct{}               `json:"-"`
+	XXX_unrecognized     []byte                 `json:"-"`
+	XXX_sizecache        int32                  `json:"-"`
 }
 
-func (m *SubTaskStatus) Reset()                    { *m = SubTaskStatus{} }
-func (m *SubTaskStatus) String() string            { return proto.CompactTextString(m) }
-func (*SubTaskStatus) ProtoMessage()               {}
-func (*SubTaskStatus) Descriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{13} }
+func (m *SubTaskStatus) Reset()         { *m = SubTaskStatus{} }
+func (m *SubTaskStatus) String() string { return proto.CompactTextString(m) }
+func (*SubTaskStatus) ProtoMessage()    {}
+func (*SubTaskStatus) Descriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{13}
+}
+func (m *SubTaskStatus) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *SubTaskStatus) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_SubTaskStatus.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *SubTaskStatus) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SubTaskStatus.Merge(dst, src)
+}
+func (m *SubTaskStatus) XXX_Size() int {
+	return m.Size()
+}
+func (m *SubTaskStatus) XXX_DiscardUnknown() {
+	xxx_messageInfo_SubTaskStatus.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SubTaskStatus proto.InternalMessageInfo
 
 type isSubTaskStatus_Status interface {
 	isSubTaskStatus_Status()
@@ -875,27 +1325,27 @@ func _SubTaskStatus_OneofSizer(msg proto.Message) (n int) {
 	// status
 	switch x := m.Status.(type) {
 	case *SubTaskStatus_Msg:
-		n += proto.SizeVarint(6<<3 | proto.WireBytes)
+		n += 1 // tag and wire
 		n += proto.SizeVarint(uint64(len(x.Msg)))
 		n += len(x.Msg)
 	case *SubTaskStatus_Check:
 		s := proto.Size(x.Check)
-		n += proto.SizeVarint(7<<3 | proto.WireBytes)
+		n += 1 // tag and wire
 		n += proto.SizeVarint(uint64(s))
 		n += s
 	case *SubTaskStatus_Dump:
 		s := proto.Size(x.Dump)
-		n += proto.SizeVarint(8<<3 | proto.WireBytes)
+		n += 1 // tag and wire
 		n += proto.SizeVarint(uint64(s))
 		n += s
 	case *SubTaskStatus_Load:
 		s := proto.Size(x.Load)
-		n += proto.SizeVarint(9<<3 | proto.WireBytes)
+		n += 1 // tag and wire
 		n += proto.SizeVarint(uint64(s))
 		n += s
 	case *SubTaskStatus_Sync:
 		s := proto.Size(x.Sync)
-		n += proto.SizeVarint(10<<3 | proto.WireBytes)
+		n += 1 // tag and wire
 		n += proto.SizeVarint(uint64(s))
 		n += s
 	case nil:
@@ -907,13 +1357,44 @@ func _SubTaskStatus_OneofSizer(msg proto.Message) (n int) {
 
 // SubTaskStatusList used for internal jsonpb marshal
 type SubTaskStatusList struct {
-	Status []*SubTaskStatus `protobuf:"bytes,1,rep,name=status" json:"status,omitempty"`
+	Status               []*SubTaskStatus `protobuf:"bytes,1,rep,name=status" json:"status,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}         `json:"-"`
+	XXX_unrecognized     []byte           `json:"-"`
+	XXX_sizecache        int32            `json:"-"`
 }
 
-func (m *SubTaskStatusList) Reset()                    { *m = SubTaskStatusList{} }
-func (m *SubTaskStatusList) String() string            { return proto.CompactTextString(m) }
-func (*SubTaskStatusList) ProtoMessage()               {}
-func (*SubTaskStatusList) Descriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{14} }
+func (m *SubTaskStatusList) Reset()         { *m = SubTaskStatusList{} }
+func (m *SubTaskStatusList) String() string { return proto.CompactTextString(m) }
+func (*SubTaskStatusList) ProtoMessage()    {}
+func (*SubTaskStatusList) Descriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{14}
+}
+func (m *SubTaskStatusList) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *SubTaskStatusList) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_SubTaskStatusList.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *SubTaskStatusList) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SubTaskStatusList.Merge(dst, src)
+}
+func (m *SubTaskStatusList) XXX_Size() int {
+	return m.Size()
+}
+func (m *SubTaskStatusList) XXX_DiscardUnknown() {
+	xxx_messageInfo_SubTaskStatusList.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_SubTaskStatusList proto.InternalMessageInfo
 
 func (m *SubTaskStatusList) GetStatus() []*SubTaskStatus {
 	if m != nil {
@@ -927,15 +1408,46 @@ func (m *SubTaskStatusList) GetStatus() []*SubTaskStatus {
 //             when Stop or Pause is requested from external, isCanceled will be true
 // errors: includes all (potential) errors occured when processing
 type ProcessResult struct {
-	IsCanceled bool            `protobuf:"varint,1,opt,name=isCanceled,proto3" json:"isCanceled,omitempty"`
-	Errors     []*ProcessError `protobuf:"bytes,2,rep,name=errors" json:"errors,omitempty"`
-	Detail     []byte          `protobuf:"bytes,3,opt,name=detail,proto3" json:"detail,omitempty"`
+	IsCanceled           bool            `protobuf:"varint,1,opt,name=isCanceled,proto3" json:"isCanceled,omitempty"`
+	Errors               []*ProcessError `protobuf:"bytes,2,rep,name=errors" json:"errors,omitempty"`
+	Detail               []byte          `protobuf:"bytes,3,opt,name=detail,proto3" json:"detail,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
+	XXX_unrecognized     []byte          `json:"-"`
+	XXX_sizecache        int32           `json:"-"`
 }
 
-func (m *ProcessResult) Reset()                    { *m = ProcessResult{} }
-func (m *ProcessResult) String() string            { return proto.CompactTextString(m) }
-func (*ProcessResult) ProtoMessage()               {}
-func (*ProcessResult) Descriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{15} }
+func (m *ProcessResult) Reset()         { *m = ProcessResult{} }
+func (m *ProcessResult) String() string { return proto.CompactTextString(m) }
+func (*ProcessResult) ProtoMessage()    {}
+func (*ProcessResult) Descriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{15}
+}
+func (m *ProcessResult) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ProcessResult) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ProcessResult.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *ProcessResult) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ProcessResult.Merge(dst, src)
+}
+func (m *ProcessResult) XXX_Size() int {
+	return m.Size()
+}
+func (m *ProcessResult) XXX_DiscardUnknown() {
+	xxx_messageInfo_ProcessResult.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ProcessResult proto.InternalMessageInfo
 
 func (m *ProcessResult) GetIsCanceled() bool {
 	if m != nil {
@@ -961,14 +1473,45 @@ func (m *ProcessResult) GetDetail() []byte {
 // ProcessError represents error produced by a dm unit
 // NOTE: refine later, like add error scope field
 type ProcessError struct {
-	Type ErrorType `protobuf:"varint,1,opt,name=Type,proto3,enum=pb.ErrorType" json:"Type,omitempty"`
-	Msg  string    `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
+	Type                 ErrorType `protobuf:"varint,1,opt,name=Type,proto3,enum=pb.ErrorType" json:"Type,omitempty"`
+	Msg                  string    `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
+	XXX_unrecognized     []byte    `json:"-"`
+	XXX_sizecache        int32     `json:"-"`
 }
 
-func (m *ProcessError) Reset()                    { *m = ProcessError{} }
-func (m *ProcessError) String() string            { return proto.CompactTextString(m) }
-func (*ProcessError) ProtoMessage()               {}
-func (*ProcessError) Descriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{16} }
+func (m *ProcessError) Reset()         { *m = ProcessError{} }
+func (m *ProcessError) String() string { return proto.CompactTextString(m) }
+func (*ProcessError) ProtoMessage()    {}
+func (*ProcessError) Descriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{16}
+}
+func (m *ProcessError) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ProcessError) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ProcessError.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *ProcessError) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ProcessError.Merge(dst, src)
+}
+func (m *ProcessError) XXX_Size() int {
+	return m.Size()
+}
+func (m *ProcessError) XXX_DiscardUnknown() {
+	xxx_messageInfo_ProcessError.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ProcessError proto.InternalMessageInfo
 
 func (m *ProcessError) GetType() ErrorType {
 	if m != nil {
@@ -989,15 +1532,46 @@ func (m *ProcessError) GetMsg() string {
 // dm-master uses it to contruct a DDL lock and do syncing with other dm-workers
 // add more fields if needed
 type DDLInfo struct {
-	Task   string `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
-	Schema string `protobuf:"bytes,2,opt,name=schema,proto3" json:"schema,omitempty"`
-	Table  string `protobuf:"bytes,3,opt,name=table,proto3" json:"table,omitempty"`
+	Task                 string   `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
+	Schema               string   `protobuf:"bytes,2,opt,name=schema,proto3" json:"schema,omitempty"`
+	Table                string   `protobuf:"bytes,3,opt,name=table,proto3" json:"table,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *DDLInfo) Reset()                    { *m = DDLInfo{} }
-func (m *DDLInfo) String() string            { return proto.CompactTextString(m) }
-func (*DDLInfo) ProtoMessage()               {}
-func (*DDLInfo) Descriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{17} }
+func (m *DDLInfo) Reset()         { *m = DDLInfo{} }
+func (m *DDLInfo) String() string { return proto.CompactTextString(m) }
+func (*DDLInfo) ProtoMessage()    {}
+func (*DDLInfo) Descriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{17}
+}
+func (m *DDLInfo) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *DDLInfo) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_DDLInfo.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *DDLInfo) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DDLInfo.Merge(dst, src)
+}
+func (m *DDLInfo) XXX_Size() int {
+	return m.Size()
+}
+func (m *DDLInfo) XXX_DiscardUnknown() {
+	xxx_messageInfo_DDLInfo.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_DDLInfo proto.InternalMessageInfo
 
 func (m *DDLInfo) GetTask() string {
 	if m != nil {
@@ -1024,14 +1598,45 @@ func (m *DDLInfo) GetTable() string {
 // it been sent from dm-master to dm-worker
 // add more fields if needed
 type DDLLockInfo struct {
-	Task string `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
-	ID   string `protobuf:"bytes,2,opt,name=ID,proto3" json:"ID,omitempty"`
+	Task                 string   `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
+	ID                   string   `protobuf:"bytes,2,opt,name=ID,proto3" json:"ID,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *DDLLockInfo) Reset()                    { *m = DDLLockInfo{} }
-func (m *DDLLockInfo) String() string            { return proto.CompactTextString(m) }
-func (*DDLLockInfo) ProtoMessage()               {}
-func (*DDLLockInfo) Descriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{18} }
+func (m *DDLLockInfo) Reset()         { *m = DDLLockInfo{} }
+func (m *DDLLockInfo) String() string { return proto.CompactTextString(m) }
+func (*DDLLockInfo) ProtoMessage()    {}
+func (*DDLLockInfo) Descriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{18}
+}
+func (m *DDLLockInfo) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *DDLLockInfo) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_DDLLockInfo.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *DDLLockInfo) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DDLLockInfo.Merge(dst, src)
+}
+func (m *DDLLockInfo) XXX_Size() int {
+	return m.Size()
+}
+func (m *DDLLockInfo) XXX_DiscardUnknown() {
+	xxx_messageInfo_DDLLockInfo.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_DDLLockInfo proto.InternalMessageInfo
 
 func (m *DDLLockInfo) GetTask() string {
 	if m != nil {
@@ -1049,15 +1654,46 @@ func (m *DDLLockInfo) GetID() string {
 
 // ExecDDLRequest represents a reqeust for a dm-worker to execute (or ignore) a DDL
 type ExecDDLRequest struct {
-	Task   string `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
-	LockID string `protobuf:"bytes,2,opt,name=lockID,proto3" json:"lockID,omitempty"`
-	Exec   bool   `protobuf:"varint,3,opt,name=exec,proto3" json:"exec,omitempty"`
+	Task                 string   `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
+	LockID               string   `protobuf:"bytes,2,opt,name=lockID,proto3" json:"lockID,omitempty"`
+	Exec                 bool     `protobuf:"varint,3,opt,name=exec,proto3" json:"exec,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *ExecDDLRequest) Reset()                    { *m = ExecDDLRequest{} }
-func (m *ExecDDLRequest) String() string            { return proto.CompactTextString(m) }
-func (*ExecDDLRequest) ProtoMessage()               {}
-func (*ExecDDLRequest) Descriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{19} }
+func (m *ExecDDLRequest) Reset()         { *m = ExecDDLRequest{} }
+func (m *ExecDDLRequest) String() string { return proto.CompactTextString(m) }
+func (*ExecDDLRequest) ProtoMessage()    {}
+func (*ExecDDLRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{19}
+}
+func (m *ExecDDLRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ExecDDLRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ExecDDLRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *ExecDDLRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ExecDDLRequest.Merge(dst, src)
+}
+func (m *ExecDDLRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *ExecDDLRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_ExecDDLRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ExecDDLRequest proto.InternalMessageInfo
 
 func (m *ExecDDLRequest) GetTask() string {
 	if m != nil {
@@ -1087,16 +1723,47 @@ func (m *ExecDDLRequest) GetExec() bool {
 // skipDDL: skip DDL which is blocking
 // execDDL and skipDDL can not specify both at the same time, but can specify neither
 type BreakDDLLockRequest struct {
-	Task         string `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
-	RemoveLockID string `protobuf:"bytes,2,opt,name=removeLockID,proto3" json:"removeLockID,omitempty"`
-	ExecDDL      bool   `protobuf:"varint,3,opt,name=execDDL,proto3" json:"execDDL,omitempty"`
-	SkipDDL      bool   `protobuf:"varint,4,opt,name=skipDDL,proto3" json:"skipDDL,omitempty"`
+	Task                 string   `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
+	RemoveLockID         string   `protobuf:"bytes,2,opt,name=removeLockID,proto3" json:"removeLockID,omitempty"`
+	ExecDDL              bool     `protobuf:"varint,3,opt,name=execDDL,proto3" json:"execDDL,omitempty"`
+	SkipDDL              bool     `protobuf:"varint,4,opt,name=skipDDL,proto3" json:"skipDDL,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *BreakDDLLockRequest) Reset()                    { *m = BreakDDLLockRequest{} }
-func (m *BreakDDLLockRequest) String() string            { return proto.CompactTextString(m) }
-func (*BreakDDLLockRequest) ProtoMessage()               {}
-func (*BreakDDLLockRequest) Descriptor() ([]byte, []int) { return fileDescriptorDmworker, []int{20} }
+func (m *BreakDDLLockRequest) Reset()         { *m = BreakDDLLockRequest{} }
+func (m *BreakDDLLockRequest) String() string { return proto.CompactTextString(m) }
+func (*BreakDDLLockRequest) ProtoMessage()    {}
+func (*BreakDDLLockRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_dmworker_a835733734923495, []int{20}
+}
+func (m *BreakDDLLockRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *BreakDDLLockRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_BreakDDLLockRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *BreakDDLLockRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_BreakDDLLockRequest.Merge(dst, src)
+}
+func (m *BreakDDLLockRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *BreakDDLLockRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_BreakDDLLockRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_BreakDDLLockRequest proto.InternalMessageInfo
 
 func (m *BreakDDLLockRequest) GetTask() string {
 	if m != nil {
@@ -1163,8 +1830,9 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// Client API for Worker service
-
+// WorkerClient is the client API for Worker service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type WorkerClient interface {
 	StartSubTask(ctx context.Context, in *StartSubTaskRequest, opts ...grpc.CallOption) (*CommonWorkerResponse, error)
 	OperateSubTask(ctx context.Context, in *OperateSubTaskRequest, opts ...grpc.CallOption) (*OperateSubTaskResponse, error)
@@ -1192,7 +1860,7 @@ func NewWorkerClient(cc *grpc.ClientConn) WorkerClient {
 
 func (c *workerClient) StartSubTask(ctx context.Context, in *StartSubTaskRequest, opts ...grpc.CallOption) (*CommonWorkerResponse, error) {
 	out := new(CommonWorkerResponse)
-	err := grpc.Invoke(ctx, "/pb.Worker/StartSubTask", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/pb.Worker/StartSubTask", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1201,7 +1869,7 @@ func (c *workerClient) StartSubTask(ctx context.Context, in *StartSubTaskRequest
 
 func (c *workerClient) OperateSubTask(ctx context.Context, in *OperateSubTaskRequest, opts ...grpc.CallOption) (*OperateSubTaskResponse, error) {
 	out := new(OperateSubTaskResponse)
-	err := grpc.Invoke(ctx, "/pb.Worker/OperateSubTask", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/pb.Worker/OperateSubTask", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1210,7 +1878,7 @@ func (c *workerClient) OperateSubTask(ctx context.Context, in *OperateSubTaskReq
 
 func (c *workerClient) UpdateSubTask(ctx context.Context, in *UpdateSubTaskRequest, opts ...grpc.CallOption) (*CommonWorkerResponse, error) {
 	out := new(CommonWorkerResponse)
-	err := grpc.Invoke(ctx, "/pb.Worker/UpdateSubTask", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/pb.Worker/UpdateSubTask", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1219,7 +1887,7 @@ func (c *workerClient) UpdateSubTask(ctx context.Context, in *UpdateSubTaskReque
 
 func (c *workerClient) QueryStatus(ctx context.Context, in *QueryStatusRequest, opts ...grpc.CallOption) (*QueryStatusResponse, error) {
 	out := new(QueryStatusResponse)
-	err := grpc.Invoke(ctx, "/pb.Worker/QueryStatus", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/pb.Worker/QueryStatus", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1228,7 +1896,7 @@ func (c *workerClient) QueryStatus(ctx context.Context, in *QueryStatusRequest, 
 
 func (c *workerClient) HandleSQLs(ctx context.Context, in *HandleSubTaskSQLsRequest, opts ...grpc.CallOption) (*CommonWorkerResponse, error) {
 	out := new(CommonWorkerResponse)
-	err := grpc.Invoke(ctx, "/pb.Worker/HandleSQLs", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/pb.Worker/HandleSQLs", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1236,7 +1904,7 @@ func (c *workerClient) HandleSQLs(ctx context.Context, in *HandleSubTaskSQLsRequ
 }
 
 func (c *workerClient) FetchDDLInfo(ctx context.Context, opts ...grpc.CallOption) (Worker_FetchDDLInfoClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_Worker_serviceDesc.Streams[0], c.cc, "/pb.Worker/FetchDDLInfo", opts...)
+	stream, err := c.cc.NewStream(ctx, &_Worker_serviceDesc.Streams[0], "/pb.Worker/FetchDDLInfo", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1268,7 +1936,7 @@ func (x *workerFetchDDLInfoClient) Recv() (*DDLInfo, error) {
 
 func (c *workerClient) ExecuteDDL(ctx context.Context, in *ExecDDLRequest, opts ...grpc.CallOption) (*CommonWorkerResponse, error) {
 	out := new(CommonWorkerResponse)
-	err := grpc.Invoke(ctx, "/pb.Worker/ExecuteDDL", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/pb.Worker/ExecuteDDL", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1277,15 +1945,14 @@ func (c *workerClient) ExecuteDDL(ctx context.Context, in *ExecDDLRequest, opts 
 
 func (c *workerClient) BreakDDLLock(ctx context.Context, in *BreakDDLLockRequest, opts ...grpc.CallOption) (*CommonWorkerResponse, error) {
 	out := new(CommonWorkerResponse)
-	err := grpc.Invoke(ctx, "/pb.Worker/BreakDDLLock", in, out, c.cc, opts...)
+	err := c.cc.Invoke(ctx, "/pb.Worker/BreakDDLLock", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// Server API for Worker service
-
+// WorkerServer is the server API for Worker service.
 type WorkerServer interface {
 	StartSubTask(context.Context, *StartSubTaskRequest) (*CommonWorkerResponse, error)
 	OperateSubTask(context.Context, *OperateSubTaskRequest) (*OperateSubTaskResponse, error)
@@ -1524,6 +2191,9 @@ func (m *StartSubTaskRequest) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Task)))
 		i += copy(dAtA[i:], m.Task)
 	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
 	return i, nil
 }
 
@@ -1552,6 +2222,9 @@ func (m *OperateSubTaskRequest) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Name)))
 		i += copy(dAtA[i:], m.Name)
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -1598,6 +2271,9 @@ func (m *OperateSubTaskResponse) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
 		i += copy(dAtA[i:], m.Msg)
 	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
 	return i, nil
 }
 
@@ -1622,6 +2298,9 @@ func (m *UpdateSubTaskRequest) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Task)))
 		i += copy(dAtA[i:], m.Task)
 	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
 	return i, nil
 }
 
@@ -1645,6 +2324,9 @@ func (m *QueryStatusRequest) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Name)))
 		i += copy(dAtA[i:], m.Name)
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -1696,6 +2378,9 @@ func (m *HandleSubTaskSQLsRequest) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.BinlogPos)))
 		i += copy(dAtA[i:], m.BinlogPos)
 	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
 	return i, nil
 }
 
@@ -1735,6 +2420,9 @@ func (m *CommonWorkerResponse) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
 		i += copy(dAtA[i:], m.Msg)
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -1798,6 +2486,9 @@ func (m *QueryStatusResponse) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n1
 	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
 	return i, nil
 }
 
@@ -1852,6 +2543,9 @@ func (m *CheckStatus) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Detail)))
 		i += copy(dAtA[i:], m.Detail)
 	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
 	return i, nil
 }
 
@@ -1870,6 +2564,9 @@ func (m *DumpStatus) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
 	return i, nil
 }
 
@@ -1903,6 +2600,9 @@ func (m *LoadStatus) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Progress)))
 		i += copy(dAtA[i:], m.Progress)
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -1967,6 +2667,9 @@ func (m *SyncStatus) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.BlockingDDL)))
 		i += copy(dAtA[i:], m.BlockingDDL)
 	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
 	return i, nil
 }
 
@@ -2018,6 +2721,9 @@ func (m *RelayStatus) MarshalTo(dAtA []byte) (int, error) {
 			dAtA[i] = 0
 		}
 		i++
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -2075,6 +2781,9 @@ func (m *SubTaskStatus) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err
 		}
 		i += nn3
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -2170,6 +2879,9 @@ func (m *SubTaskStatusList) MarshalTo(dAtA []byte) (int, error) {
 			i += n
 		}
 	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
 	return i, nil
 }
 
@@ -2216,6 +2928,9 @@ func (m *ProcessResult) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Detail)))
 		i += copy(dAtA[i:], m.Detail)
 	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
 	return i, nil
 }
 
@@ -2244,6 +2959,9 @@ func (m *ProcessError) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
 		i += copy(dAtA[i:], m.Msg)
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -2281,6 +2999,9 @@ func (m *DDLInfo) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Table)))
 		i += copy(dAtA[i:], m.Table)
 	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
 	return i, nil
 }
 
@@ -2310,6 +3031,9 @@ func (m *DDLLockInfo) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.ID)))
 		i += copy(dAtA[i:], m.ID)
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -2350,6 +3074,9 @@ func (m *ExecDDLRequest) MarshalTo(dAtA []byte) (int, error) {
 			dAtA[i] = 0
 		}
 		i++
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -2401,6 +3128,9 @@ func (m *BreakDDLLockRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i++
 	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
 	return i, nil
 }
 
@@ -2414,16 +3144,25 @@ func encodeVarintDmworker(dAtA []byte, offset int, v uint64) int {
 	return offset + 1
 }
 func (m *StartSubTaskRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	l = len(m.Task)
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
 	return n
 }
 
 func (m *OperateSubTaskRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	if m.Op != 0 {
@@ -2433,10 +3172,16 @@ func (m *OperateSubTaskRequest) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
 	return n
 }
 
 func (m *OperateSubTaskResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	if m.Op != 0 {
@@ -2453,30 +3198,48 @@ func (m *OperateSubTaskResponse) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
 	return n
 }
 
 func (m *UpdateSubTaskRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	l = len(m.Task)
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
 	return n
 }
 
 func (m *QueryStatusRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	l = len(m.Name)
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
 	return n
 }
 
 func (m *HandleSubTaskSQLsRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	l = len(m.Name)
@@ -2496,10 +3259,16 @@ func (m *HandleSubTaskSQLsRequest) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
 	return n
 }
 
 func (m *CommonWorkerResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	if m.Result {
@@ -2513,10 +3282,16 @@ func (m *CommonWorkerResponse) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
 	return n
 }
 
 func (m *QueryStatusResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	if m.Result {
@@ -2540,10 +3315,16 @@ func (m *QueryStatusResponse) Size() (n int) {
 		l = m.RelayStatus.Size()
 		n += 1 + l + sovDmworker(uint64(l))
 	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
 	return n
 }
 
 func (m *CheckStatus) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	if m.Passed {
@@ -2565,16 +3346,28 @@ func (m *CheckStatus) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
 	return n
 }
 
 func (m *DumpStatus) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
 	return n
 }
 
 func (m *LoadStatus) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	if m.FinishedBytes != 0 {
@@ -2587,10 +3380,16 @@ func (m *LoadStatus) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
 	return n
 }
 
 func (m *SyncStatus) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	if m.TotalEvents != 0 {
@@ -2622,10 +3421,16 @@ func (m *SyncStatus) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
 	return n
 }
 
 func (m *RelayStatus) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	l = len(m.MasterBinlog)
@@ -2647,10 +3452,16 @@ func (m *RelayStatus) Size() (n int) {
 	if m.Closed {
 		n += 2
 	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
 	return n
 }
 
 func (m *SubTaskStatus) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	l = len(m.Name)
@@ -2674,10 +3485,16 @@ func (m *SubTaskStatus) Size() (n int) {
 	if m.Status != nil {
 		n += m.Status.Size()
 	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
 	return n
 }
 
 func (m *SubTaskStatus_Msg) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	l = len(m.Msg)
@@ -2685,6 +3502,9 @@ func (m *SubTaskStatus_Msg) Size() (n int) {
 	return n
 }
 func (m *SubTaskStatus_Check) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	if m.Check != nil {
@@ -2694,6 +3514,9 @@ func (m *SubTaskStatus_Check) Size() (n int) {
 	return n
 }
 func (m *SubTaskStatus_Dump) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	if m.Dump != nil {
@@ -2703,6 +3526,9 @@ func (m *SubTaskStatus_Dump) Size() (n int) {
 	return n
 }
 func (m *SubTaskStatus_Load) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	if m.Load != nil {
@@ -2712,6 +3538,9 @@ func (m *SubTaskStatus_Load) Size() (n int) {
 	return n
 }
 func (m *SubTaskStatus_Sync) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	if m.Sync != nil {
@@ -2721,6 +3550,9 @@ func (m *SubTaskStatus_Sync) Size() (n int) {
 	return n
 }
 func (m *SubTaskStatusList) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	if len(m.Status) > 0 {
@@ -2729,10 +3561,16 @@ func (m *SubTaskStatusList) Size() (n int) {
 			n += 1 + l + sovDmworker(uint64(l))
 		}
 	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
 	return n
 }
 
 func (m *ProcessResult) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	if m.IsCanceled {
@@ -2748,10 +3586,16 @@ func (m *ProcessResult) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
 	return n
 }
 
 func (m *ProcessError) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	if m.Type != 0 {
@@ -2761,10 +3605,16 @@ func (m *ProcessError) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
 	return n
 }
 
 func (m *DDLInfo) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	l = len(m.Task)
@@ -2779,10 +3629,16 @@ func (m *DDLInfo) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
 	return n
 }
 
 func (m *DDLLockInfo) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	l = len(m.Task)
@@ -2793,10 +3649,16 @@ func (m *DDLLockInfo) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
 	return n
 }
 
 func (m *ExecDDLRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	l = len(m.Task)
@@ -2810,10 +3672,16 @@ func (m *ExecDDLRequest) Size() (n int) {
 	if m.Exec {
 		n += 2
 	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
 	return n
 }
 
 func (m *BreakDDLLockRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	l = len(m.Task)
@@ -2829,6 +3697,9 @@ func (m *BreakDDLLockRequest) Size() (n int) {
 	}
 	if m.SkipDDL {
 		n += 2
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -2916,6 +3787,7 @@ func (m *StartSubTaskRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -3014,6 +3886,7 @@ func (m *OperateSubTaskRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -3161,6 +4034,7 @@ func (m *OperateSubTaskResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -3240,6 +4114,7 @@ func (m *UpdateSubTaskRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -3319,6 +4194,7 @@ func (m *QueryStatusRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -3475,6 +4351,7 @@ func (m *HandleSubTaskSQLsRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -3603,6 +4480,7 @@ func (m *CommonWorkerResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -3795,6 +4673,7 @@ func (m *QueryStatusResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -3972,6 +4851,7 @@ func (m *CheckStatus) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4022,6 +4902,7 @@ func (m *DumpStatus) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4139,6 +5020,7 @@ func (m *LoadStatus) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4391,6 +5273,7 @@ func (m *SyncStatus) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4577,6 +5460,7 @@ func (m *RelayStatus) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4913,6 +5797,7 @@ func (m *SubTaskStatus) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4994,6 +5879,7 @@ func (m *SubTaskStatusList) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -5126,6 +6012,7 @@ func (m *ProcessResult) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -5224,6 +6111,7 @@ func (m *ProcessError) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -5361,6 +6249,7 @@ func (m *DDLInfo) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -5469,6 +6358,7 @@ func (m *DDLLockInfo) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -5597,6 +6487,7 @@ func (m *ExecDDLRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -5745,6 +6636,7 @@ func (m *BreakDDLLockRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -5859,9 +6751,9 @@ var (
 	ErrIntOverflowDmworker   = fmt.Errorf("proto: integer overflow")
 )
 
-func init() { proto.RegisterFile("dmworker.proto", fileDescriptorDmworker) }
+func init() { proto.RegisterFile("dmworker.proto", fileDescriptor_dmworker_a835733734923495) }
 
-var fileDescriptorDmworker = []byte{
+var fileDescriptor_dmworker_a835733734923495 = []byte{
 	// 1393 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x57, 0xcf, 0x6e, 0xdb, 0x46,
 	0x13, 0x17, 0xa9, 0x3f, 0x96, 0x46, 0xb2, 0xc3, 0xac, 0xf3, 0x39, 0x8c, 0x91, 0xcf, 0x9f, 0x3e,

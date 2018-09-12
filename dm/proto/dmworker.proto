@@ -48,7 +48,7 @@ message OperateSubTaskResponse {
 }
 
 message UpdateSubTaskRequest {
-    string task = 1; // (sub) task's new configuration parts
+    string task = 1; // (sub) task's new configuration
 }
 
 message QueryStatusRequest {

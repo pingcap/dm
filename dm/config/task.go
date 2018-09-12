@@ -38,6 +38,7 @@ type Meta struct {
 // MySQLInstance represents a sync config of a MySQL instance
 type MySQLInstance struct {
 	Config             *DBConfig `yaml:"config"`
+	InstanceId         string    `yaml:"instance-id"`
 	ServerID           int       `yaml:"server-id"`
 	Meta               *Meta     `yaml:"meta"`
 	FilterRules        []string  `yaml:"filter-rules"`
@@ -57,6 +58,9 @@ type MySQLInstance struct {
 func (m *MySQLInstance) Verify() error {
 	if m == nil || m.Config == nil {
 		return errors.New("config must specify")
+	}
+	if len(m.InstanceId) == 0 {
+		return errors.Errorf("instance-id must be set")
 	}
 	if m.ServerID < 1 {
 		return errors.NotValidf("server-id should from 1 to 2^32 − 1, but set with %d", m.ServerID)
@@ -194,18 +198,23 @@ func (c *TaskConfig) adjust() error {
 		return errors.New("must specify at least one mysql-instances")
 	}
 
-	sids := make(map[int]int) // server-id -> instance-index
+	iids := make(map[string]int) // instance-id -> instance-index
+	sids := make(map[int]int)    // server-id -> instance-index
 	for i, inst := range c.MySQLInstances {
 		if err := inst.Verify(); err != nil {
 			return errors.Annotatef(err, "mysql-instance: %d", i)
 		}
+		if iid, ok := iids[inst.InstanceId]; ok {
+			return errors.Errorf("mysql-instance (%d) and (%d) have same instance-id (%s)", iid, i, inst.InstanceId)
+		}
+		iids[inst.InstanceId] = i
 		if sid, ok := sids[inst.ServerID]; ok {
-			return errors.Errorf("mysql-instances (%d) and (%d) have same server-id (%d)", sid, i, inst.ServerID)
+			return errors.Errorf("mysql-instance (%d) and (%d) have same server-id (%d)", sid, i, inst.ServerID)
 		}
 		sids[inst.ServerID] = i
 
 		if inst.Meta != nil && (c.TaskMode == ModeFull || c.TaskMode == ModeAll) {
-			log.Warnf("[config] mysql-instances(%d) set meta, but it will not be used for task-mode %s.\n for Full mode, incremental sync will never occur; for All mode, the meta dumped by MyDumper will be used", i, c.TaskMode)
+			log.Warnf("[config] mysql-instance(%d) set meta, but it will not be used for task-mode %s.\n for Full mode, incremental sync will never occur; for All mode, the meta dumped by MyDumper will be used", i, c.TaskMode)
 		}
 		if inst.Meta == nil && c.TaskMode == ModeIncrement {
 			return errors.Errorf("mysql-instance(%d) must set meta for task-mode %s", i, c.TaskMode)
@@ -280,6 +289,7 @@ func (c *TaskConfig) SubTaskConfigs() []*SubTaskConfig {
 		cfg.From = *inst.Config
 		cfg.To = *c.TargetDB
 
+		cfg.InstanceId = inst.InstanceId
 		cfg.ServerID = inst.ServerID
 
 		cfg.RouteRules = make([]*router.TableRule, len(inst.RouteRules))

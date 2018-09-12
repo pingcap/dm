@@ -19,7 +19,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -69,14 +68,13 @@ type fileJob struct {
 
 // Worker represents a worker.
 type Worker struct {
-	id          int
-	cfg         *config.SubTaskConfig
-	checkPoint  CheckPoint
-	conn        *Conn
-	wg          sync.WaitGroup
-	jobQueue    chan *dataJob
-	tableRouter *router.Table
-	loader      *Loader
+	id         int
+	cfg        *config.SubTaskConfig
+	checkPoint CheckPoint
+	conn       *Conn
+	wg         sync.WaitGroup
+	jobQueue   chan *dataJob
+	loader     *Loader
 }
 
 // NewWorker returns a Worker.
@@ -87,13 +85,12 @@ func NewWorker(loader *Loader, id int) (worker *Worker, err error) {
 	}
 
 	return &Worker{
-		id:          id,
-		cfg:         loader.cfg,
-		checkPoint:  loader.checkPoint,
-		conn:        conn,
-		jobQueue:    make(chan *dataJob, jobCount),
-		tableRouter: loader.tableRouter,
-		loader:      loader,
+		id:         id,
+		cfg:        loader.cfg,
+		checkPoint: loader.checkPoint,
+		conn:       conn,
+		jobQueue:   make(chan *dataJob, jobCount),
+		loader:     loader,
 	}, nil
 }
 
@@ -541,6 +538,58 @@ func (l *Loader) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	l.Process(ctx, pr)
 }
 
+// Update implements Unit.Update
+// now, only support to update config for routes, filters, column-mappings, black-white-list
+// now no config diff implemented, so simply re-init use new config
+// no binlog filter for loader need to update
+func (l *Loader) Update(cfg *config.SubTaskConfig) error {
+	var (
+		err              error
+		oldBwList        *filter.Filter
+		oldTableRouter   *router.Table
+		oldColumnMapping *cm.Mapping
+	)
+
+	defer func() {
+		if err == nil {
+			return
+		}
+		if oldBwList != nil {
+			l.bwList = oldBwList
+		}
+		if oldTableRouter != nil {
+			l.tableRouter = oldTableRouter
+		}
+		if oldColumnMapping != nil {
+			l.columnMapping = oldColumnMapping
+		}
+	}()
+
+	// update black-white-list
+	oldBwList = l.bwList
+	l.bwList = filter.New(cfg.BWList)
+
+	// update route, for loader, this almost useless, because schemas often have been restored
+	oldTableRouter = l.tableRouter
+	l.tableRouter, err = router.NewTableRouter(cfg.RouteRules)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	// update column-mappings
+	oldColumnMapping = l.columnMapping
+	l.columnMapping, err = cm.NewMapping(cfg.ColumnMappingRules)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	// update l.cfg
+	l.cfg.BWList = cfg.BWList
+	l.cfg.RouteRules = cfg.RouteRules
+	l.cfg.ColumnMappingRules = cfg.ColumnMappingRules
+	return nil
+}
+
 func (l *Loader) genRouter(rules []*router.TableRule) error {
 	for _, rule := range rules {
 		err := l.tableRouter.AddRule(rule)
@@ -934,8 +983,8 @@ func (l *Loader) restoreData(ctx context.Context) error {
 
 // checkpointID returns ID which used for checkpoint table
 func (l *Loader) checkpointID() string {
-	if l.cfg.ServerID > 0 {
-		return strconv.Itoa(l.cfg.ServerID)
+	if len(l.cfg.InstanceId) > 0 {
+		return l.cfg.InstanceId
 	}
 	dir, err := filepath.Abs(l.cfg.Dir)
 	if err != nil {

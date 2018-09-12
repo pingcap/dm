@@ -81,6 +81,14 @@ func (c *Checker) Init() error {
 			User:     instance.cfg.From.User,
 			Password: instance.cfg.From.Password,
 		}
+		// NOTE: now, we use checker in dmctl, so we need to decrypt the password
+		if len(instance.sourceDBinfo.Password) > 0 {
+			pswd, err2 := utils.Decrypt(instance.sourceDBinfo.Password)
+			if err2 != nil {
+				return errors.Annotatef(err2, "can not decrypt password %s", instance.sourceDBinfo.Password)
+			}
+			instance.sourceDBinfo.Password = pswd
+		}
 		instance.sourceDB, err = dbutil.OpenDB(*instance.sourceDBinfo)
 		if err != nil {
 			return errors.Trace(err)
@@ -91,6 +99,13 @@ func (c *Checker) Init() error {
 			Port:     instance.cfg.To.Port,
 			User:     instance.cfg.To.User,
 			Password: instance.cfg.To.Password,
+		}
+		if len(instance.targetDBInfo.Password) > 0 {
+			pswd, err2 := utils.Decrypt(instance.targetDBInfo.Password)
+			if err2 != nil {
+				return errors.Annotatef(err2, "can not decrypt password %s", instance.targetDBInfo.Password)
+			}
+			instance.targetDBInfo.Password = pswd
 		}
 		instance.targetDB, err = dbutil.OpenDB(*instance.targetDBInfo)
 		if err != nil {
@@ -214,6 +229,12 @@ func (c *Checker) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	}
 
 	c.Process(ctx, pr)
+}
+
+// Update implements Unit.Update
+func (c *Checker) Update(cfg *config.SubTaskConfig) error {
+	// not support update configuration now
+	return nil
 }
 
 // Type implements Unit interface

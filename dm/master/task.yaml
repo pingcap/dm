@@ -20,6 +20,7 @@ mysql-instances:             # one or more source database, config more source d
       port: 3306
       user: "root"
       password: ""
+    instance-id: "192.168.0.2:3306" # unique in all instances, used as id when save checkpoints, configs, etc.
     server-id: 101           # unique in all instances
 
     # binlog pos used to as start pos for syncer, for different task-mode, this maybe used or not
@@ -58,6 +59,7 @@ mysql-instances:             # one or more source database, config more source d
       port: 3306
       user: "root"
       password: ""
+    instance-id: "192.168.0.3:3306"
     server-id: 102
     meta:
       binlog-name: binlog-00001

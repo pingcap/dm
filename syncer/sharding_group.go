@@ -278,6 +278,13 @@ func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceI
 	return nil
 }
 
+// Clear clears all sharding groups
+func (k *ShardingGroupKeeper) Clear() {
+	k.Lock()
+	defer k.Unlock()
+	k.groups = make(map[string]*ShardingGroup)
+}
+
 // TrySync tries to sync the sharding group
 // returns
 //   inSharding: whether the source table is in a sharding group

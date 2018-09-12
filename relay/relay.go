@@ -13,6 +13,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"github.com/pingcap/tidb-enterprise-tools/dm/unit"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
@@ -393,4 +394,10 @@ func (r *Relay) Pause() {
 // Resume resumes the paused process
 func (r *Relay) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	// Note: will not implementted
+}
+
+// Update implements Unit.Update
+func (r *Relay) Update(cfg *config.SubTaskConfig) error {
+	// not support update configuration now
+	return nil
 }

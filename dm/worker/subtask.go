@@ -346,6 +346,23 @@ func (st *SubTask) Resume() error {
 	return nil
 }
 
+// Update update the sub task's config
+func (st *SubTask) Update(cfg *config.SubTaskConfig) error {
+	if !st.stageCAS(pb.Stage_Paused, pb.Stage_Paused) { // only test for Paused
+		return errors.Errorf("can only update task on Paused stage, but current stage is %s", st.Stage().String())
+	}
+
+	// update all units' configuration, if SubTask itself has configuration need to update, do it later
+	for _, u := range st.units {
+		err := u.Update(cfg)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+
+	return nil
+}
+
 // fetchUnitDDLInfo fetches DDL info from current processing unit
 // when unit switched, returns and starts fetching again for new unit
 func (st *SubTask) fetchUnitDDLInfo(ctx context.Context) {

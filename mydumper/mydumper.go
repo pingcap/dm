@@ -111,6 +111,12 @@ func (m *Mydumper) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	m.Process(ctx, pr)
 }
 
+// Update implements Unit.Update
+func (m *Mydumper) Update(cfg *config.SubTaskConfig) error {
+	// not support update configuration now
+	return nil
+}
+
 // Status implements Unit.Status
 func (m *Mydumper) Status() interface{} {
 	// NOTE: try to add some status, like dumped file count

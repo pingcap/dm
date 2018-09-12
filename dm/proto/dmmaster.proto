@@ -8,7 +8,7 @@ import "dmworker.proto"; // refine if needed
 service Master {
     rpc StartTask (StartTaskRequest) returns (StartTaskResponse) {}
     rpc OperateTask (OperateTaskRequest) returns (OperateTaskResponse) {}
-    rpc UpdateTask (UpdateTaskRequest) returns (CommonTaskResponse) {}
+    rpc UpdateTask (UpdateTaskRequest) returns (UpdateTaskResponse) {}
 
     rpc QueryStatus (QueryStatusListRequest) returns (QueryStatusListResponse) {}
 
@@ -53,12 +53,22 @@ message OperateTaskResponse {
 }
 
 
-
-// refine when we refactor filter, column-mapping, etc.
+// UpdateTaskRequest used to update task after it has beed started
+// task: task's configuration, yaml format
+//       now, only support to update config for routes, filters, column-mappings, black-white-list
+//       support update partial config for syncer, loader, etc later
+// workers need to do update, empty for all workers in processing the task
 message UpdateTaskRequest {
-    string task = 1; // task's (partial) configuration
-    repeated string workers = 2; // workers need to do update, empty for all workers in processing the task
+    string task = 1;
+    repeated string workers = 2;
 }
+
+message UpdateTaskResponse {
+    bool result = 1;
+    string msg = 2;
+    repeated CommonWorkerResponse workers = 3;
+}
+
 
 message QueryStatusListRequest {
     string name = 1; // task's name, empty for all tasks
@@ -142,11 +152,6 @@ message BreakWorkerDDLLockResponse {
     repeated CommonWorkerResponse workers = 3;
 }
 
-
-message CommonTaskResponse {
-    bool result = 1;
-    string msg = 2; // when result is true, msg is empty
-}
 
 message RefreshWorkerTasksRequest {
 }

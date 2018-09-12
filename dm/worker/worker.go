@@ -231,6 +231,16 @@ func (w *Worker) ResumeSubTask(name string) error {
 	return st.Resume()
 }
 
+// UpdateSubTask update config for a sub task
+func (w *Worker) UpdateSubTask(cfg *config.SubTaskConfig) error {
+	st := w.findSubTask(cfg.Name)
+	if st == nil {
+		return errors.NotFoundf("sub task with name %s", cfg.Name)
+	}
+
+	return st.Update(cfg)
+}
+
 // QueryStatus query worker's sub tasks' status
 func (w *Worker) QueryStatus(name string) []*pb.SubTaskStatus {
 	return w.Status(name)

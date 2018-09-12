@@ -16,6 +16,7 @@
 package unit
 
 import (
+	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"golang.org/x/net/context"
 )
@@ -36,6 +37,9 @@ type Unit interface {
 	Pause()
 	// Resume resumes the paused process
 	Resume(ctx context.Context, pr chan pb.ProcessResult)
+	// Update updates the configuration
+	Update(cfg *config.SubTaskConfig) error
+
 	// Status returns the unit's current status
 	Status() interface{}
 	// Type returns the unit's type

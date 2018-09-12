@@ -267,6 +267,9 @@ func (s *Syncer) initShardingGroups() error {
 		return errors.Trace(err)
 	}
 
+	// clear old sharding group
+	s.sgk.Clear()
+
 	// convert according to router rules
 	// target-schema -> target-table -> source-IDs
 	mapper := make(map[string]map[string][]string, len(sourceTables))
@@ -1592,6 +1595,81 @@ func (s *Syncer) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	s.Process(ctx, pr)
 }
 
+// Update implements Unit.Update
+// now, only support to update config for routes, filters, column-mappings, black-white-list
+// now no config diff implemented, so simply re-init use new config
+func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
+	if s.cfg.InSharding {
+		tables := s.sgk.InSyncingTables()
+		if len(tables) > 0 {
+			return errors.NotSupportedf("try update config when some tables' (%v) sharding DDL not synced", tables)
+		}
+	}
+
+	var (
+		err              error
+		oldBwList        *filter.Filter
+		oldTableRouter   *router.Table
+		oldBinlogFilter  *bf.BinlogEvent
+		oldColumnMapping *cm.Mapping
+	)
+
+	defer func() {
+		if err == nil {
+			return
+		}
+		if oldBwList != nil {
+			s.bwList = oldBwList
+		}
+		if oldTableRouter != nil {
+			s.tableRouter = oldTableRouter
+		}
+		if oldBinlogFilter != nil {
+			s.binlogFilter = oldBinlogFilter
+		}
+		if oldColumnMapping != nil {
+			s.columnMapping = oldColumnMapping
+		}
+	}()
+
+	// update black-white-list
+	oldBwList = s.bwList
+	s.bwList = filter.New(cfg.BWList)
+
+	// update route
+	oldTableRouter = s.tableRouter
+	s.tableRouter, err = router.NewTableRouter(cfg.RouteRules)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	// update binlog filter
+	oldBinlogFilter = s.binlogFilter
+	s.binlogFilter, err = bf.NewBinlogEvent(cfg.FilterRules)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	// update column-mappings
+	oldColumnMapping = s.columnMapping
+	s.columnMapping, err = cm.NewMapping(cfg.ColumnMappingRules)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	if s.cfg.InSharding {
+		// re-init sharding group
+		s.initShardingGroups()
+	}
+
+	// update l.cfg
+	s.cfg.BWList = cfg.BWList
+	s.cfg.RouteRules = cfg.RouteRules
+	s.cfg.FilterRules = cfg.FilterRules
+	s.cfg.ColumnMappingRules = cfg.ColumnMappingRules
+	return nil
+}
+
 func (s *Syncer) needResync() bool {
 	masterPos, _, err := s.getMasterStatus()
 	if err != nil {
@@ -1639,6 +1717,9 @@ func (s *Syncer) retrySyncGTIDs() error {
 
 // checkpointID returns ID which used for checkpoint table
 func (s *Syncer) checkpointID() string {
+	if len(s.cfg.InstanceId) > 0 {
+		return s.cfg.InstanceId
+	}
 	return strconv.Itoa(s.cfg.ServerID)
 }
 

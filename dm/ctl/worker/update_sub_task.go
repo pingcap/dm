@@ -23,18 +23,18 @@ import (
 	"golang.org/x/net/context"
 )
 
-// NewStartSubTaskCmd creates a StartSubTask command
-func NewStartSubTaskCmd() *cobra.Command {
+// NewUpdateSubTaskCmd creates a UpdateSubTask command
+func NewUpdateSubTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "start-sub-task <config_file>",
-		Short: "start a sub task with config file",
-		Run:   startSubTaskFunc,
+		Use:   "update-sub-task <config_file>",
+		Short: "update a sub task's config for routes, filters, column-mappings, black-white-list",
+		Run:   updateSubTaskFunc,
 	}
 	return cmd
 }
 
-// startSubTaskFunc does start sub task request
-func startSubTaskFunc(cmd *cobra.Command, args []string) {
+// updateSubTaskFunc does update sub task request
+func updateSubTaskFunc(cmd *cobra.Command, args []string) {
 	if len(args) != 1 {
 		fmt.Println(cmd.UsageString())
 		return
@@ -49,6 +49,7 @@ func startSubTaskFunc(cmd *cobra.Command, args []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// NOTE: do whole check now, refine to do TablesChecker and ShardingTablesCheck ?
 	err = checkSubTask(ctx, string(content))
 	if err != nil {
 		common.PrintLines("precheck failed %s", errors.ErrorStack(err))
@@ -56,9 +57,9 @@ func startSubTaskFunc(cmd *cobra.Command, args []string) {
 	}
 
 	cli := common.WorkerClient()
-	resp, err := cli.StartSubTask(ctx, &pb.StartSubTaskRequest{Task: string(content)})
+	resp, err := cli.UpdateSubTask(ctx, &pb.UpdateSubTaskRequest{Task: string(content)})
 	if err != nil {
-		common.PrintLines("can not start sub task:\n%v", errors.ErrorStack(err))
+		common.PrintLines("can not update sub task:\n%v", errors.ErrorStack(err))
 		return
 	}
 

@@ -70,6 +70,7 @@ type SubTaskConfig struct {
 
 	Name                     string `toml:"name" json:"name"`
 	Mode                     string `toml:"mode" json:"mode"`
+	InstanceId               string `toml:"instance-id" json:"instance-id"`
 	ServerID                 int    `toml:"server-id" json:"server-id"`
 	Flavor                   string `toml:"flavor" json:"flavor"`
 	VerifyChecksum           bool   `toml:"verify-checksum" json:"verify-checksum"`

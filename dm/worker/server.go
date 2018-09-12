@@ -161,12 +161,31 @@ func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskReque
 }
 
 // UpdateSubTask implements WorkerServer.UpdateSubTask
-// Note: zxc will implement it when the master-worker-ctl framework completed
 func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest) (*pb.CommonWorkerResponse, error) {
 	log.Infof("[server] receive UpdateSubTask request %+v", req)
+
+	cfg := config.NewSubTaskConfig()
+	err := cfg.Decode(req.Task)
+	if err != nil {
+		log.Errorf("[server] decode config from request %+v error %v", req.Task, errors.ErrorStack(err))
+		return &pb.CommonWorkerResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}, nil
+	}
+
+	err = s.worker.UpdateSubTask(cfg)
+	if err != nil {
+		log.Errorf("[server] update sub task %s error %v", cfg.Name, errors.ErrorStack(err))
+		return &pb.CommonWorkerResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}, nil
+	}
+
 	return &pb.CommonWorkerResponse{
-		Result: false,
-		Msg:    "not implement",
+		Result: true,
+		Msg:    "",
 	}, nil
 }
 
