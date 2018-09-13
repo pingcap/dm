@@ -103,9 +103,8 @@ type SyncerConfig struct {
 	MaxRetry    int    `yaml:"max-retry" toml:"max-retry" json:"max-retry"`
 
 	// refine following configs to top level configs?
-	EnableGTID  bool `yaml:"enable-gtid" toml:"enable-gtid" json:"enable-gtid"`
-	AutoFixGTID bool `yaml:"auto-fix-gtid" toml:"auto-fix-gtid" json:"auto-fix-gtid"`
-
+	AutoFixGTID      bool `yaml:"auto-fix-gtid" toml:"auto-fix-gtid" json:"auto-fix-gtid"`
+	EnableGTID       bool `yaml:"enable-gtid" toml:"enable-gtid" json:"enable-gtid"`
 	DisableCausality bool `yaml:"disable-detect" toml:"disable-detect" json:"disable-detect"`
 	SafeMode         bool `yaml:"safe-mode" toml:"safe-mode" json:"safe-mode"`
 }
@@ -117,7 +116,6 @@ type TaskConfig struct {
 	Name                     string `yaml:"name"`
 	TaskMode                 string `yaml:"task-mode"`
 	Flavor                   string `yaml:"flavor"`
-	VerifyChecksum           bool   `yaml:"verify-checksum"`
 	CheckpointSchemaPrefix   string `yaml:"checkpoint-schema-prefix"`
 	RemovePreviousCheckpoint bool   `yaml:"remove-previous-checkpoint"`
 
@@ -281,7 +279,6 @@ func (c *TaskConfig) SubTaskConfigs() []*SubTaskConfig {
 		cfg.Mode = c.TaskMode
 		cfg.Flavor = c.Flavor
 		cfg.BinlogType = "local" // let's force syncer to replay local binlog.
-		cfg.VerifyChecksum = c.VerifyChecksum
 		cfg.CheckpointSchemaPrefix = c.CheckpointSchemaPrefix
 		cfg.RemovePreviousCheckpoint = c.RemovePreviousCheckpoint
 		cfg.Meta = inst.Meta

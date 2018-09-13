@@ -1,0 +1,176 @@
+task-name: test
+task-mode: all
+flavor: mysql
+checkpoint-schema-prefix: dm_checkpoint
+remove-previous-checkpoint: false
+target-database:
+  host: 192.168.0.1
+  port: 4000
+  user: root
+  password: ""
+mysql-instances:
+  instance118-4306:
+    config:
+      host: 192.168.199.118
+      port: 4306
+      user: root
+      password: "1234"
+    instance-id: instance118-4306
+    server-id: 101
+    meta:
+      binlog-name: binlog-00001
+      binlog-pos: 4
+    mydumper-config-name: global
+    mydumper: null
+    loader-config-name: global
+    loader: null
+    syncer-config-name: global
+    syncer: null
+  instance118-5306:
+    config:
+      host: 192.168.199.118
+      port: 5306
+      user: root
+      password: "1234"
+    instance-id: instance118-5306
+    server-id: 102
+    meta:
+      binlog-name: binlog-00001
+      binlog-pos: 320
+    filter-rules:
+    mydumper-config-name: ""
+    mydumper:
+      mydumper-path: ./mydumper
+      threads: 4
+      chunk-filesize: 8
+      skip-tz-utc: true
+      extra-args: ""
+    loader-config-name: ""
+    loader:
+      pool-size: 32
+      dir: ./dumped_data
+    syncer-config-name: ""
+    syncer:
+      meta-file: ""
+      worker-count: 32
+      batch: 2000
+      max-retry: 200
+      enable-gtid: false
+      disable-detect: false
+      safe-mode: false
+mydumpers:
+  global:
+    mydumper-path: ./mydumper
+    threads: 16
+    chunk-filesize: 64
+    skip-tz-utc: true
+    extra-args: "-B test -T t1,t2 --no-locks"
+loaders:
+  global:
+    pool-size: 16
+    dir: ./dumped_data
+syncers:
+  global:
+    meta-file: ""
+    worker-count: 16
+    batch: 1000
+    max-retry: 100
+    enable-gtid: false
+    disable-detect: false
+    safe-mode: false
+ignored-tables: {}
+do-tables:
+  instance118-4306:
+    instance-id: instance118-4306
+    tables:
+      test_1:
+      - t_1
+      - t_2
+      test_2:
+      - t_1
+      - t_2
+  instance118-5306:
+    instance-id: instance118-5306
+    tables:
+      do:
+      - do
+      test_1:
+      - t_1
+      - t_2
+      test_2:
+      - t_1
+      - t_2
+sharding-groups:
+- schema: test
+  table: t
+  source-tables:
+    instance118-4306:
+      instance-id: instance118-4306
+      column-mapping-rules:
+      - schema-pattern: test_*
+        table-pattern: t_*
+        source-column: id
+        target-column: id
+        expression: "partition id"
+        arguments:
+        - "1"
+        - test_
+        - t_
+        create-table-query: ""
+      tables:
+        test_1:
+        - t_1
+        - t_2
+        test_2:
+        - t_1
+        - t_2
+    instance118-5306:
+      instance-id: instance118-5306
+      column-mapping-rules:
+      - schema-pattern: test_*
+        table-pattern: t_*
+        source-column: id
+        target-column: id
+        expression: "partition id"
+        arguments:
+        - "2"
+        - test_
+        - t_
+        create-table-query: ""
+      tables:
+        test_1:
+        - t_1
+        - t_2
+        test_2:
+        - t_1
+        - t_2
+tables:
+  instance118-4306:
+    instance-id: instance118-4306
+    tables:
+      test_1:
+      - name: t_1
+        target-schema: test
+        target-table: t
+        ignored-binlog-events:
+        - truncate table
+        - drop table
+      - name: t_2
+        target-schema: test
+        target-table: t
+        ignored-binlog-events:
+        - truncate table
+        - drop table
+      test_2:
+      - name: t_1
+        target-schema: test
+        target-table: t
+        ignored-binlog-events:
+        - truncate table
+        - drop table
+      - name: t_2
+        target-schema: test
+        target-table: t
+        ignored-binlog-events:
+        - truncate table
+        - drop table

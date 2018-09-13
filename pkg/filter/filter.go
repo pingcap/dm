@@ -4,6 +4,16 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
+)
+
+// ActionType is do or ignore something
+type ActionType bool
+
+// builtin actiontype variable
+const (
+	Do     ActionType = true
+	Ignore ActionType = false
 )
 
 // Table represents a table.
@@ -14,7 +24,29 @@ type Table struct {
 
 // String implements the fmt.Stringer interface.
 func (t *Table) String() string {
-	return fmt.Sprintf("`%s`.`%s`", t.Schema, t.Name)
+	if len(t.Name) > 0 {
+		return fmt.Sprintf("`%s`.`%s`", t.Schema, t.Name)
+	}
+	return fmt.Sprintf("`%s`", t.Schema)
+}
+
+type cache struct {
+	sync.RWMutex
+	items map[string]ActionType // `schema`.`table` => do/ignore
+}
+
+func (c *cache) query(key string) (ActionType, bool) {
+	c.RLock()
+	action, exist := c.items[key]
+	c.RUnlock()
+
+	return action, exist
+}
+
+func (c *cache) set(key string, action ActionType) {
+	c.Lock()
+	c.items[key] = action
+	c.Unlock()
 }
 
 // Rules contains Filter rules.
@@ -52,6 +84,8 @@ func (r *Rules) ToLower() {
 type Filter struct {
 	patternMap map[string]*regexp.Regexp
 	rules      *Rules
+
+	c *cache
 }
 
 // New creates a filter use the rules.
@@ -59,6 +93,9 @@ func New(rules *Rules) *Filter {
 	f := &Filter{}
 	f.rules = rules
 	f.patternMap = make(map[string]*regexp.Regexp)
+	f.c = &cache{
+		items: make(map[string]ActionType),
+	}
 	f.genRegexMap()
 	return f
 }
@@ -110,7 +147,14 @@ func (f *Filter) ApplyOn(stbs []*Table) []*Table {
 
 	var tbs []*Table
 	for _, tb := range stbs {
-		if f.filterOnSchemas(tb) && f.filterOnTables(tb) {
+		name := tb.String()
+		do, exist := f.c.query(name)
+		if !exist {
+			do = ActionType(f.filterOnSchemas(tb) && f.filterOnTables(tb))
+			f.c.set(tb.String(), do)
+		}
+
+		if do {
 			tbs = append(tbs, tb)
 		}
 	}

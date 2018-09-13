@@ -63,9 +63,9 @@ func NewRelay(cfg *Config) *Relay {
 		User:           cfg.From.User,
 		Password:       cfg.From.Password,
 		Charset:        cfg.Charset,
-		VerifyChecksum: cfg.VerifyChecksum,
 		UseDecimal:     true, // must set true. ref: https://github.com/pingcap/tidb-enterprise-tools/pull/272
 		RawModeEnabled: true, // for rawMode(true), we only parse FormatDescriptionEvent and RotateEvent
+		VerifyChecksum: true,
 		// TODO: other config ?
 	}
 	meta := syncer.NewLocalMeta(path.Join(cfg.RelayDir, cfg.MetaFile), cfg.Flavor)

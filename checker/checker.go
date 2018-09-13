@@ -62,7 +62,6 @@ func NewChecker(cfgs []*config.SubTaskConfig) *Checker {
 
 // Init implements Unit interface
 func (c *Checker) Init() error {
-
 	// target name => instance => schema => [tables]
 	sharding := make(map[string]map[string]map[string][]string)
 	shardingCounter := make(map[string]int)

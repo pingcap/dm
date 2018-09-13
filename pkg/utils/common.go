@@ -22,6 +22,16 @@ const (
 	retryTimeout  = 3 * time.Second
 )
 
+// ExtractTable extracts schema and table from `schema`.`table`
+func ExtractTable(name string) (string, string, error) {
+	parts := strings.Split(name, "`.`")
+	if len(parts) != 2 {
+		return "", "", errors.NotValidf("table name %s", name)
+	}
+
+	return strings.TrimLeft(parts[0], "`"), strings.TrimRight(parts[1], "`"), nil
+}
+
 // FetchAllDoTables returns all need to do tables after filtered (fetches from upstream MySQL)
 func FetchAllDoTables(db *sql.DB, bw *filter.Filter) (map[string][]string, error) {
 	schemas, err := getSchemas(db, maxRetryCount)

@@ -76,6 +76,8 @@ func Start(args []string) {
 			master.NewUnlockDDLLockCmd(),
 			master.NewBreakDDLLockCmd(),
 			master.NewCheckTaskCmd(),
+			master.NewRestoreDataMigrationConfigCmd(),
+			master.NewGenerateTaskConfigCmd(),
 		)
 	}
 

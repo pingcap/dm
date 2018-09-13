@@ -159,7 +159,7 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 		User:           syncer.cfg.From.User,
 		Password:       syncer.cfg.From.Password,
 		UseDecimal:     true,
-		VerifyChecksum: syncer.cfg.VerifyChecksum,
+		VerifyChecksum: true,
 	}
 
 	syncer.binlogType = toBinlogType(cfg.BinlogType)

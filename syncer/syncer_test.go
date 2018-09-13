@@ -85,13 +85,14 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 	}
 
 	s.syncer = replication.NewBinlogSyncer(replication.BinlogSyncerConfig{
-		ServerID:   uint32(s.cfg.ServerID),
-		Flavor:     "mysql",
-		Host:       s.cfg.From.Host,
-		Port:       uint16(s.cfg.From.Port),
-		User:       s.cfg.From.User,
-		Password:   s.cfg.From.Password,
-		UseDecimal: true,
+		ServerID:       uint32(s.cfg.ServerID),
+		Flavor:         "mysql",
+		Host:           s.cfg.From.Host,
+		Port:           uint16(s.cfg.From.Port),
+		User:           s.cfg.From.User,
+		Password:       s.cfg.From.Password,
+		UseDecimal:     true,
+		VerifyChecksum: true,
 	})
 	s.resetMaster()
 	s.streamer, err = s.syncer.StartSync(gmysql.Position{Name: "", Pos: 4})

@@ -8,15 +8,14 @@ import (
 
 // Config is the configuration for Relay.
 type Config struct {
-	EnableGTID     bool     `toml:"enable-gtid" json:"enable-gtid"`
-	AutoFixGTID    bool     `toml:"auto-fix-gtid" json:"auto-fix-gtid"`
-	MetaFile       string   `toml:"meta-file" json:"meta-file"`
-	RelayDir       string   `toml:"relay-dir" json:"relay-dir"`
-	ServerID       int      `toml:"server-id" json:"server-id"`
-	Flavor         string   `toml:"flavor" json:"flavor"`
-	Charset        string   `toml:"charset" json:"charset"`
-	VerifyChecksum bool     `toml:"verify-checksum" json:"verify-checksum"`
-	From           DBConfig `toml:"data-source" json:"data-source"`
+	EnableGTID  bool     `toml:"enable-gtid" json:"enable-gtid"`
+	AutoFixGTID bool     `toml:"auto-fix-gtid" json:"auto-fix-gtid"`
+	MetaFile    string   `toml:"meta-file" json:"meta-file"`
+	RelayDir    string   `toml:"relay-dir" json:"relay-dir"`
+	ServerID    int      `toml:"server-id" json:"server-id"`
+	Flavor      string   `toml:"flavor" json:"flavor"`
+	Charset     string   `toml:"charset" json:"charset"`
+	From        DBConfig `toml:"data-source" json:"data-source"`
 }
 
 // DBConfig is the DB configuration.

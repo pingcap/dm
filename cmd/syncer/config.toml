@@ -1,57 +1,20 @@
 # Base Configuration.
 
-# sub task name as identifier, should be unique
-name = "sub-task-name"
-
-# sub task mode, can be `all`, `full`, `increment`
-mode = "all"
-
 # used for binlog replication 
 server-id = 101
 
-# which flavor mysql/mariadb
+# replicate from mysql/mariadb
 flavor = "mysql"
 
-# checkpoint schema prefix for Syncer / Loader
-checkpoint-schema-prefix = "dm_checkpoint"
 
-# whether to remove previous checkpoint, set to `true` to start a fresh task even if the task-name used before
-remove-previous-checkpoint = false
-
-# replicate from relay log or remote binlog
+# binlog type: remote/local
 binlog-type = "local"
-
-# Mydumper configuration
-
-# mydumper binary path
-mydumper-path = "./mydumper"
-
-# -t, --threads
-#threads = 16
-
-# -F, --chunk-filesize
-#chunk-filesize = 64
-
-# --skip-tz-utc
-#skip-tz-utc = true
-
-# other extra args
-#extra-args = "-B test -T t1,t2 --no-locks"
-
-
-# Loader configuration
-
-# Number of threads restoring concurrently for loader worker pool. Each worker restore one file at a time, increase this as TiKV nodes increase
-pool-size = 16
-
-# Directory of the dump to import
-dir = "./dumped_data"
 
 
 # Syncer configuration
 
 # different sub task should have different meta
-meta-file = "./syncer.subTaskA.meta"
+meta = "./syncer.subTaskA.meta"
 
 worker-count = 16
 batch = 1000
@@ -113,9 +76,16 @@ max-retry = 100
 # target-table = "shard_table"
 
 # to: the target db
-# from: the source db, not in this file, auto get it from worker's config
 [to]
 host = "127.0.0.1"
 user = "root"
 password = ""
 port = 4000
+
+# from: the source db
+[from]
+host = "127.0.0.1"
+user = "root"
+password = ""
+port = 3306
+

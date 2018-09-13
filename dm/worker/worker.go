@@ -58,14 +58,13 @@ func NewWorker(cfg *Config) *Worker {
 	w.ctx, w.cancel = context.WithCancel(context.Background())
 
 	relayCfg := &relay.Config{
-		EnableGTID:     cfg.EnableGTID,
-		AutoFixGTID:    false,
-		Flavor:         cfg.Flavor,
-		MetaFile:       cfg.MetaFile,
-		RelayDir:       cfg.RelayDir,
-		ServerID:       cfg.ServerID, // TODO: use auto-generated and unique server id?
-		Charset:        cfg.Charset,
-		VerifyChecksum: cfg.VerifyChecksum,
+		EnableGTID:  cfg.EnableGTID,
+		AutoFixGTID: false,
+		Flavor:      cfg.Flavor,
+		MetaFile:    cfg.MetaFile,
+		RelayDir:    cfg.RelayDir,
+		ServerID:    cfg.ServerID, // TODO: use auto-generated and unique server id?
+		Charset:     cfg.Charset,
 		From: relay.DBConfig{
 			Host:     cfg.From.Host,
 			Port:     cfg.From.Port,

@@ -22,8 +22,7 @@ var (
 
 // BinlogReaderConfig is the configuration for BinlogReader
 type BinlogReaderConfig struct {
-	BinlogDir      string
-	VerifyChecksum bool
+	BinlogDir string
 }
 
 // BinlogReader is a binlog reader.
@@ -40,7 +39,7 @@ type BinlogReader struct {
 func NewBinlogReader(cfg *BinlogReaderConfig) *BinlogReader {
 	ctx, cancel := context.WithCancel(context.Background())
 	parser := replication.NewBinlogParser()
-	parser.SetVerifyChecksum(cfg.VerifyChecksum)
+	parser.SetVerifyChecksum(true)
 	// useDecimal must set true.  ref: https://github.com/pingcap/tidb-enterprise-tools/pull/272
 	parser.SetUseDecimal(true)
 	return &BinlogReader{
