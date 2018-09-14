@@ -12,6 +12,8 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"golang.org/x/net/context"
+
+	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )
 
 // errors used by reader
@@ -68,9 +70,14 @@ func (r *BinlogReader) StartSync(pos mysql.Position) (Streamer, error) {
 		switch event.Header.EventType {
 		case replication.ROTATE_EVENT:
 			rotateEvent := event.Event.(*replication.RotateEvent)
-			filename := string(rotateEvent.NextLogName)
-			pos.Name = filename
-			log.Debugf("rotate event to %s", filename)
+			currentPos := mysql.Position{
+				Name: string(rotateEvent.NextLogName),
+				Pos:  uint32(rotateEvent.Position),
+			}
+			if currentPos.Name > pos.Name {
+				pos = currentPos // need update Name and Pos
+			}
+			log.Infof("rotate event to %v", pos)
 		default:
 			log.Debugf("original pos %v, current pos %v", pos.Pos, event.Header.LogPos)
 			if pos.Pos < event.Header.LogPos {
@@ -113,9 +120,12 @@ func (r *BinlogReader) onStream(s *LocalStreamer, pos mysql.Position, updatePos 
 		return errors.Trace(err)
 	}
 
+	var serverID uint32
+
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		//TODO: put the implementaion of updatepos here?
 		updatePos(e)
+		serverID = e.Header.ServerID // record server_id
 		select {
 		case s.ch <- e:
 		case <-r.ctx.Done():
@@ -141,7 +151,19 @@ func (r *BinlogReader) onStream(s *LocalStreamer, pos mysql.Position, updatePos 
 		if parsed.Equal(firstFile) {
 			offset = int64(pos.Pos)
 		} else {
-			offset = 0
+			offset = 4 // start read from pos 4
+			if serverID > 0 {
+				// serverID got, send a fake ROTATE_EVENT before parse binlog file
+				// ref: https://github.com/mysql/mysql-server/blob/4f1d7cf5fcb11a3f84cff27e37100d7295e7d5ca/sql/rpl_binlog_sender.cc#L248
+				e, err2 := utils.GenFakeRotateEvent(file, uint64(offset), serverID)
+				if err2 != nil {
+					return errors.Trace(err2)
+				}
+				err2 = onEventFunc(e)
+				if err2 != nil {
+					return errors.Trace(err2)
+				}
+			}
 		}
 		fullpath := filepath.Join(r.cfg.BinlogDir, file)
 		log.Infof("parse file %s from offset %d", fullpath, offset)
