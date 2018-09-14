@@ -101,7 +101,7 @@ func loop() {
 			continue
 		}
 
-		args := strings.Split(strings.TrimSpace(line), " ")
+		args := strings.Fields(line)
 		ctl.Start(args)
 	}
 }
