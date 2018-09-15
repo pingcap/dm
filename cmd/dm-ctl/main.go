@@ -24,6 +24,8 @@ import (
 
 	"github.com/chzyer/readline"
 	"github.com/juju/errors"
+	"github.com/ngaut/log"
+
 	"github.com/pingcap/tidb-enterprise-tools/dm/ctl"
 	"github.com/pingcap/tidb-enterprise-tools/dm/ctl/common"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
@@ -43,6 +45,12 @@ func main() {
 
 	utils.PrintInfo2("dmctl")
 	fmt.Println() // print a separater
+
+	// now, we use checker in dmctl while it using some pkg which log some thing when running
+	// to make dmctl output more clear, simply redirect log to file rather output to stdout
+	log.SetLevelByString("info")
+	log.SetOutputByName("dmctl.log")
+	log.SetHighlighting(false)
 
 	err = ctl.Init(cfg)
 	if err != nil {
