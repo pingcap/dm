@@ -144,33 +144,25 @@ sharding-groups:
         test_2:
         - t_1
         - t_2
-tables:
+filter:
   instance118-4306:
     instance-id: instance118-4306
     tables:
       test_1:
       - name: t_1
-        target-schema: test
-        target-table: t
         ignored-binlog-events:
         - truncate table
         - drop table
       - name: t_2
-        target-schema: test
-        target-table: t
         ignored-binlog-events:
         - truncate table
         - drop table
       test_2:
       - name: t_1
-        target-schema: test
-        target-table: t
         ignored-binlog-events:
         - truncate table
         - drop table
       - name: t_2
-        target-schema: test
-        target-table: t
         ignored-binlog-events:
         - truncate table
         - drop table

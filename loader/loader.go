@@ -233,9 +233,9 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 				continue
 			}
 
-			data = append(data, []byte(realLine)...)
-			if data[len(data)-1] == ';' {
-				query := string(data)
+			data = append(data, []byte(line)...)
+			if realLine[len(realLine)-1] == ';' {
+				query := strings.TrimSpace(string(data))
 				if strings.HasPrefix(query, "/*") && strings.HasSuffix(query, "*/;") {
 					data = data[0:0]
 					continue

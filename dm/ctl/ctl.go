@@ -17,6 +17,7 @@ import (
 	"fmt"
 
 	"github.com/juju/errors"
+	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/dm/ctl/common"
 	"github.com/pingcap/tidb-enterprise-tools/dm/ctl/master"
 	"github.com/pingcap/tidb-enterprise-tools/dm/ctl/worker"
@@ -35,6 +36,8 @@ type CommandMasterFlags struct {
 
 // Init initializes dm-control
 func Init(cfg *common.Config) error {
+	// set the log level temporarily
+	log.SetLevel(log.LOG_LEVEL_INFO)
 	isWorkerCtl = cfg.IsWorkerAddr
 	return errors.Trace(common.InitClient(cfg.ServerAddr, cfg.IsWorkerAddr))
 }

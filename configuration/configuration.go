@@ -40,10 +40,6 @@ func (table *Table) String() string {
 // * binlog events that need be ignored
 type TableConfig struct {
 	Name string `json:"name" toml:"name" yaml:"name"`
-
-	TargetSchema string `json:"target-schema" toml:"target-schema" yaml:"target-schema"`
-	TargetTable  string `json:"target-table" toml:"target-table" yaml:"target-table"`
-
 	// ignore binlog events dml/ddl
 	IgnoredEvents []bf.EventType `json:"ignored-binlog-events"  toml:"ignored-binlog-events" yaml:"ignored-binlog-events"`
 }
@@ -116,8 +112,7 @@ type DataMigrationConfig struct {
 
 	ShardingGroups []*ShardingGroup `json:"sharding-groups" toml:"sharding-groups" yaml:"sharding-groups"`
 
-	// configs for non-sharding tables
-	Tables map[string]*InstanceConfig `json:"tables" toml:"tables" yaml:"tables"`
+	BinlogEventsFilter map[string]*InstanceConfig `json:"filter" toml:"filter" yaml:"filter"`
 }
 
 // NewDataMigrationConfig creates a data migration config
@@ -239,7 +234,7 @@ func (c *DataMigrationConfig) GenerateDMTask() (*dm.TaskConfig, error) {
 		task.InSharding = true
 	}
 
-	err = c.handleTableConfig(task)
+	err = c.handleFilterConfig(task)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -296,7 +291,7 @@ func (c *DataMigrationConfig) DecodeFromTask(task *dm.TaskConfig) error {
 	c.DoTables = make(map[string]*InstanceTables)
 	c.IgnoredTables = make(map[string]*InstanceTables)
 	c.ShardingGroups = nil
-	c.Tables = make(map[string]*InstanceConfig)
+	c.BinlogEventsFilter = make(map[string]*InstanceConfig)
 	c.CheckpointSchemaPrefix = task.CheckpointSchemaPrefix
 	c.RemovePreviousCheckpoint = task.RemovePreviousCheckpoint
 
@@ -352,6 +347,7 @@ func (c *DataMigrationConfig) DecodeFromTask(task *dm.TaskConfig) error {
 						return errors.Trace(err)
 					}
 
+					// construct sharding group
 					if sg.TablesCount() > 1 {
 						_, ok := shardingGroup.Sources[id]
 						if !ok {
@@ -384,21 +380,11 @@ func (c *DataMigrationConfig) DecodeFromTask(task *dm.TaskConfig) error {
 								shardingGroup.Sources[id].ColumnMappingRules = append(shardingGroup.Sources[id].ColumnMappingRules, r)
 							}
 						}
-
 					}
 
-					if (sg.TablesCount() == 1 && (schema != targetSchema || table != targetTable)) || len(rules) > 0 {
+					if len(rules) > 0 {
 						st := &TableConfig{
-							Name:         table,
-							TargetSchema: targetSchema,
-							TargetTable:  targetTable,
-						}
-
-						if _, ok := c.Tables[id]; !ok {
-							c.Tables[id] = &InstanceConfig{
-								InstanceID: id,
-								Tables:     make(map[string][]*TableConfig),
-							}
+							Name: table,
 						}
 
 						for _, rs := range rules {
@@ -407,7 +393,14 @@ func (c *DataMigrationConfig) DecodeFromTask(task *dm.TaskConfig) error {
 							}
 						}
 
-						c.Tables[id].Tables[schema] = append(c.Tables[id].Tables[schema], st)
+						if _, ok := c.BinlogEventsFilter[id]; !ok {
+							c.BinlogEventsFilter[id] = &InstanceConfig{
+								InstanceID: id,
+								Tables:     make(map[string][]*TableConfig),
+							}
+						}
+
+						c.BinlogEventsFilter[id].Tables[schema] = append(c.BinlogEventsFilter[id].Tables[schema], st)
 					}
 
 					if _, ok := c.DoTables[id]; !ok {
@@ -430,6 +423,7 @@ func (c *DataMigrationConfig) DecodeFromTask(task *dm.TaskConfig) error {
 }
 
 func (c *DataMigrationConfig) handleBWList(task *dm.TaskConfig, tables map[string]*InstanceTables, fn func(bw *filter.Rules, t *Table)) error {
+
 	for instanceID, instanceTables := range tables {
 		if len(instanceID) == 0 {
 			return errors.NotValidf("empty instance ID in do/ignored tables")
@@ -442,12 +436,21 @@ func (c *DataMigrationConfig) handleBWList(task *dm.TaskConfig, tables map[strin
 		}
 
 		bw := &filter.Rules{}
-		task.BWList[instanceTables.InstanceID] = bw
+		if _, ok := task.BWList[instanceID]; ok {
+			bw = task.BWList[instanceID]
+		} else {
+			task.BWList[instanceID] = bw
+		}
 
 		for schema, tables := range instanceTables.Tables {
+			fn(bw, &Table{
+				InstanceID: instanceID,
+				S:          schema,
+			})
+
 			for _, table := range tables {
 				fn(bw, &Table{
-					InstanceID: instanceTables.InstanceID,
+					InstanceID: instanceID,
 					S:          schema,
 					T:          table,
 				})
@@ -474,13 +477,12 @@ func (c *DataMigrationConfig) handleShardingGroup(task *dm.TaskConfig) (map[stri
 		}
 		sharding[targetName] = sg
 
-		for _, source := range sg.Sources {
-			if len(source.InstanceID) == 0 {
-				return nil, errors.NotValidf("lack of instance id for source %+v in sharding group %s", source.InstanceID, targetName)
+		for instanceID, source := range sg.Sources {
+			if len(instanceID) == 0 {
+				return nil, errors.NotValidf("empty instance ID in sharding group")
 			}
-
-			if _, ok := c.MySQLInstances[source.InstanceID]; !ok {
-				return nil, errors.NotFoundf("mysql instance %s in sharding group %s", source.InstanceID, targetName)
+			if _, ok := c.MySQLInstances[instanceID]; !ok {
+				return nil, errors.NotFoundf("mysql instance %s in sharding group %s", instanceID, targetName)
 			}
 
 			if len(source.ColumnMappingRules) > 1 {
@@ -495,50 +497,29 @@ func (c *DataMigrationConfig) handleShardingGroup(task *dm.TaskConfig) (map[stri
 			for schema, tables := range source.Tables {
 				for _, table := range tables {
 					t := &Table{
-						InstanceID: source.InstanceID,
+						InstanceID: instanceID,
 						S:          schema,
 						T:          table,
 					}
-
 					name := t.String()
-					task.Routes[name] = &router.TableRule{
-						SchemaPattern: t.S,
-						TablePattern:  t.T,
-						TargetSchema:  sg.Schema,
-						TargetTable:   sg.Table,
-					}
 
-					exist := false
-					for _, n := range c.MySQLInstances[source.InstanceID].RouteRules {
-						if n == name {
-							exist = true
-							break
-						}
-					}
-					if !exist {
-						c.MySQLInstances[source.InstanceID].RouteRules = append(c.MySQLInstances[source.InstanceID].RouteRules, name)
+					err := c.genRouteRule(t, sg.Schema, sg.Table, task)
+					if err != nil {
+						return nil, errors.Trace(err)
 					}
 
 					if columnMapping != nil {
+						if _, ok := task.ColumnMappings[name]; ok {
+							return nil, errors.AlreadyExistsf("column mapping rule for %s, already exist one is %s, another one is %s", name, task.ColumnMappings[name].TargetColumn, columnMapping.TargetColumn)
+						}
 						mapping := new(column.Rule)
 						task.ColumnMappings[name] = mapping
 
 						*mapping = *columnMapping
 						mapping.PatternSchema = t.S
 						mapping.PatternTable = t.T
-
-						exist = false
-						for _, n := range c.MySQLInstances[source.InstanceID].ColumnMappingRules {
-							if n == name {
-								exist = true
-								break
-							}
-						}
-						if !exist {
-							c.MySQLInstances[source.InstanceID].ColumnMappingRules = append(c.MySQLInstances[source.InstanceID].ColumnMappingRules, name)
-						}
+						c.MySQLInstances[instanceID].ColumnMappingRules = append(c.MySQLInstances[instanceID].ColumnMappingRules, name)
 					}
-
 				}
 			}
 		}
@@ -553,63 +534,39 @@ func (c *DataMigrationConfig) handleShardingGroup(task *dm.TaskConfig) (map[stri
 	return sharding, nil
 }
 
-// handleTableConfig creates
+// handleFilterConfig creates
 // * route rule
 // * binlog event filter rule
 // for every table
-func (c *DataMigrationConfig) handleTableConfig(task *dm.TaskConfig) error {
-	for index, instance := range c.Tables {
-		if len(instance.InstanceID) == 0 {
-			return errors.NotValidf("lack of instance id for instance %d in table configs", index)
+func (c *DataMigrationConfig) handleFilterConfig(task *dm.TaskConfig) error {
+	for instanceID, instance := range c.BinlogEventsFilter {
+		if len(instanceID) == 0 {
+			return errors.NotValidf("empty instance ID in table config")
 		}
 
-		if _, ok := c.MySQLInstances[instance.InstanceID]; !ok {
-			return errors.NotFoundf("mysql instance %s in table configs", instance.InstanceID)
+		if _, ok := c.MySQLInstances[instanceID]; !ok {
+			return errors.NotFoundf("mysql instance %s in table configs", instanceID)
 		}
 
 		for schema, tables := range instance.Tables {
 			for _, table := range tables {
 				t := &Table{
-					InstanceID: instance.InstanceID,
+					InstanceID: instanceID,
 					S:          schema,
 					T:          table.Name,
 				}
 
 				name := t.String()
-				task.Routes[name] = &router.TableRule{
-					SchemaPattern: t.S,
-					TablePattern:  t.T,
-					TargetSchema:  table.TargetSchema,
-					TargetTable:   table.TargetTable,
+				if _, ok := task.Filters[name]; ok {
+					return errors.AlreadyExistsf("binlog event filyter rule for %s", name)
 				}
-
-				exist := false
-				for _, n := range c.MySQLInstances[instance.InstanceID].RouteRules {
-					if n == name {
-						exist = true
-						break
-					}
-				}
-				if !exist {
-					c.MySQLInstances[instance.InstanceID].RouteRules = append(c.MySQLInstances[instance.InstanceID].RouteRules, name)
-				}
-
 				task.Filters[name] = &bf.BinlogEventRule{
 					SchemaPattern: t.S,
 					TablePattern:  t.T,
 					Events:        table.IgnoredEvents,
 					Action:        bf.Ignore,
 				}
-				exist = false
-				for _, n := range c.MySQLInstances[instance.InstanceID].FilterRules {
-					if n == name {
-						exist = true
-						break
-					}
-				}
-				if !exist {
-					c.MySQLInstances[instance.InstanceID].FilterRules = append(c.MySQLInstances[instance.InstanceID].FilterRules, name)
-				}
+				c.MySQLInstances[instanceID].FilterRules = append(c.MySQLInstances[instanceID].FilterRules, name)
 			}
 		}
 	}
@@ -799,4 +756,35 @@ func (c *DataMigrationConfig) fetchFilterRules(instance *dm.MySQLInstance, schem
 	}
 
 	return res, nil
+}
+
+func (c *DataMigrationConfig) genRouteRule(t *Table, targetSchema string, targetTable string, task *dm.TaskConfig) error {
+	name := t.String()
+	if _, ok := task.Routes[name]; ok {
+		return errors.AlreadyExistsf("route rule for %s, already exist one is %s.%s, another one is %s.%s", name, task.Routes[name].TargetSchema, task.Routes[name].TargetTable, targetSchema, targetTable)
+	}
+	schemaRoute := &Table{
+		InstanceID: t.InstanceID,
+		S:          t.S,
+	}
+	schemaName := fmt.Sprintf("%s-`%s`.`%s`", schemaRoute.String(), targetSchema, targetTable)
+
+	task.Routes[name] = &router.TableRule{
+		SchemaPattern: t.S,
+		TablePattern:  t.T,
+		TargetSchema:  targetSchema,
+		TargetTable:   targetTable,
+	}
+
+	c.MySQLInstances[t.InstanceID].RouteRules = append(c.MySQLInstances[t.InstanceID].RouteRules, name)
+
+	if _, ok := task.Routes[schemaName]; !ok {
+		task.Routes[schemaName] = &router.TableRule{
+			SchemaPattern: t.S,
+			TargetSchema:  targetSchema,
+		}
+		c.MySQLInstances[t.InstanceID].RouteRules = append(c.MySQLInstances[t.InstanceID].RouteRules, schemaName)
+	}
+
+	return nil
 }

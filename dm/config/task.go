@@ -35,6 +35,19 @@ type Meta struct {
 	BinLogPos  uint32 `yaml:"binlog-pos"`
 }
 
+// Verify verifies meta
+func (m *Meta) Verify() error {
+	if m == nil {
+		return nil
+	}
+
+	if len(m.BinLogName) == 0 {
+		return errors.NotSupportedf("empty binlog name in meta")
+	}
+
+	return nil
+}
+
 // MySQLInstance represents a sync config of a MySQL instance
 type MySQLInstance struct {
 	Config             *DBConfig `yaml:"config"`
@@ -66,6 +79,10 @@ func (m *MySQLInstance) Verify() error {
 		return errors.NotValidf("server-id should from 1 to 2^32 − 1, but set with %d", m.ServerID)
 	}
 
+	if err := m.Meta.Verify(); err != nil {
+		return errors.Annotatef(err, "instance %s", m.InstanceId)
+	}
+
 	if len(m.MydumperConfigName) > 0 && m.Mydumper != nil {
 		return errors.New("mydumper-config-name and mydumper should only specify one")
 	}
@@ -75,6 +92,7 @@ func (m *MySQLInstance) Verify() error {
 	if len(m.SyncerConfigName) > 0 && m.Syncer != nil {
 		return errors.New("syncer-config-name and syncer should only specify one")
 	}
+
 	return nil
 }
 
@@ -215,7 +233,7 @@ func (c *TaskConfig) adjust() error {
 			log.Warnf("[config] mysql-instance(%d) set meta, but it will not be used for task-mode %s.\n for Full mode, incremental sync will never occur; for All mode, the meta dumped by MyDumper will be used", i, c.TaskMode)
 		}
 		if inst.Meta == nil && c.TaskMode == ModeIncrement {
-			return errors.Errorf("mysql-instance(%d) must set meta for task-mode %s", i, c.TaskMode)
+			return errors.Errorf("mysql-instance(%d) must set meta (specfied ) for task-mode %s", i, c.TaskMode)
 		}
 
 		for _, name := range inst.RouteRules {
