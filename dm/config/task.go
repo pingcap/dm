@@ -19,12 +19,33 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
-	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
+	"github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go-mysql/mysql"
-	yaml "gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v2"
+
+	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
+)
+
+// default config item values
+var (
+	// TaskConfig
+	defaultCheckpointSchemaPrefix   = "dm_checkpoint"
+	defaultRemovePreviousCheckpoint = false
+	defaultInSharding               = false
+	// MydumperConfig
+	defaultMydumperPath        = "./bin/mydumper"
+	defaultThreads             = 4
+	defaultChunkFilesize int64 = 64
+	defaultSkipTzUTC           = true
+	// LoaderConfig
+	defaultPoolSize = 16
+	defaultDir      = "./dumped_data"
+	// SyncerConfig
+	defaultWorkerCount = 16
+	defaultBatch       = 100
+	defaultMaxRetry    = 100
 )
 
 // Meta represents binlog's meta pos
@@ -35,14 +56,10 @@ type Meta struct {
 	BinLogPos  uint32 `yaml:"binlog-pos"`
 }
 
-// Verify verifies meta
+// Verify does verification on configs
 func (m *Meta) Verify() error {
-	if m == nil {
-		return nil
-	}
-
-	if len(m.BinLogName) == 0 {
-		return errors.NotSupportedf("empty binlog name in meta")
+	if m != nil && len(m.BinLogName) == 0 {
+		return errors.New("binlog-name must specify")
 	}
 
 	return nil
@@ -51,7 +68,7 @@ func (m *Meta) Verify() error {
 // MySQLInstance represents a sync config of a MySQL instance
 type MySQLInstance struct {
 	Config             *DBConfig `yaml:"config"`
-	InstanceId         string    `yaml:"instance-id"`
+	InstanceID         string    `yaml:"instance-id"`
 	ServerID           int       `yaml:"server-id"`
 	Meta               *Meta     `yaml:"meta"`
 	FilterRules        []string  `yaml:"filter-rules"`
@@ -72,7 +89,7 @@ func (m *MySQLInstance) Verify() error {
 	if m == nil || m.Config == nil {
 		return errors.New("config must specify")
 	}
-	if len(m.InstanceId) == 0 {
+	if len(m.InstanceID) == 0 {
 		return errors.Errorf("instance-id must be set")
 	}
 	if m.ServerID < 1 {
@@ -80,7 +97,7 @@ func (m *MySQLInstance) Verify() error {
 	}
 
 	if err := m.Meta.Verify(); err != nil {
-		return errors.Annotatef(err, "instance %s", m.InstanceId)
+		return errors.Annotatef(err, "instance %s", m.InstanceID)
 	}
 
 	if len(m.MydumperConfigName) > 0 && m.Mydumper != nil {
@@ -107,10 +124,52 @@ type MydumperConfig struct {
 	// TODO zxc: combine -B -T --regex with filter rules?
 }
 
+func defaultMydumperConfig() MydumperConfig {
+	return MydumperConfig{
+		MydumperPath:  defaultMydumperPath,
+		Threads:       defaultThreads,
+		ChunkFilesize: defaultChunkFilesize,
+		SkipTzUTC:     defaultSkipTzUTC,
+	}
+}
+
+// alias to avoid infinite recursion for UnmarshalYAML
+type rawMydumperConfig MydumperConfig
+
+// UnmarshalYAML implements Unmarshaler.UnmarshalYAML
+func (m *MydumperConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	raw := rawMydumperConfig(defaultMydumperConfig())
+	if err := unmarshal(&raw); err != nil {
+		return errors.Trace(err)
+	}
+	*m = MydumperConfig(raw) // raw used only internal, so no deep copy
+	return nil
+}
+
 // LoaderConfig represents loader process unit's specific config
 type LoaderConfig struct {
 	PoolSize int    `yaml:"pool-size" toml:"pool-size" json:"pool-size"`
 	Dir      string `yaml:"dir" toml:"dir" json:"dir"`
+}
+
+func defaultLoaderConfig() LoaderConfig {
+	return LoaderConfig{
+		PoolSize: defaultPoolSize,
+		Dir:      defaultDir,
+	}
+}
+
+// alias to avoid infinite recursion for UnmarshalYAML
+type rawLoaderConfig LoaderConfig
+
+// UnmarshalYAML implements Unmarshaler.UnmarshalYAML
+func (m *LoaderConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	raw := rawLoaderConfig(defaultLoaderConfig())
+	if err := unmarshal(&raw); err != nil {
+		return errors.Trace(err)
+	}
+	*m = LoaderConfig(raw) // raw used only internal, so no deep copy
+	return nil
 }
 
 // SyncerConfig represents syncer process unit's specific config
@@ -127,6 +186,27 @@ type SyncerConfig struct {
 	SafeMode         bool `yaml:"safe-mode" toml:"safe-mode" json:"safe-mode"`
 }
 
+func defaultSyncerConfig() SyncerConfig {
+	return SyncerConfig{
+		WorkerCount: defaultWorkerCount,
+		Batch:       defaultBatch,
+		MaxRetry:    defaultMaxRetry,
+	}
+}
+
+// alias to avoid infinite recursion for UnmarshalYAML
+type rawSyncerConfig SyncerConfig
+
+// UnmarshalYAML implements Unmarshaler.UnmarshalYAML
+func (m *SyncerConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	raw := rawSyncerConfig(defaultSyncerConfig())
+	if err := unmarshal(&raw); err != nil {
+		return errors.Trace(err)
+	}
+	*m = SyncerConfig(raw) // raw used only internal, so no deep copy
+	return nil
+}
+
 // TaskConfig is the configuration for Task
 type TaskConfig struct {
 	*flag.FlagSet `yaml:"-"`
@@ -134,14 +214,13 @@ type TaskConfig struct {
 	Name                     string `yaml:"name"`
 	TaskMode                 string `yaml:"task-mode"`
 	Flavor                   string `yaml:"flavor"`
+	InSharding               bool   `yaml:"in-sharding"`
 	CheckpointSchemaPrefix   string `yaml:"checkpoint-schema-prefix"`
 	RemovePreviousCheckpoint bool   `yaml:"remove-previous-checkpoint"`
 
 	TargetDB *DBConfig `yaml:"target-database"`
 
 	MySQLInstances []*MySQLInstance `yaml:"mysql-instances"`
-
-	InSharding bool `yaml:"in-sharding"`
 
 	Routes         map[string]*router.TableRule   `yaml:"routes"`
 	Filters        map[string]*bf.BinlogEventRule `yaml:"filters"`
@@ -155,7 +234,20 @@ type TaskConfig struct {
 
 // NewTaskConfig creates a TaskConfig
 func NewTaskConfig() *TaskConfig {
-	cfg := &TaskConfig{}
+	cfg := &TaskConfig{
+		// explicitly set default value
+		CheckpointSchemaPrefix:   defaultCheckpointSchemaPrefix,
+		RemovePreviousCheckpoint: defaultRemovePreviousCheckpoint,
+		MySQLInstances:           make([]*MySQLInstance, 0, 5),
+		InSharding:               defaultInSharding,
+		Routes:                   make(map[string]*router.TableRule),
+		Filters:                  make(map[string]*bf.BinlogEventRule),
+		ColumnMappings:           make(map[string]*column.Rule),
+		BWList:                   make(map[string]*filter.Rules),
+		Mydumpers:                make(map[string]*MydumperConfig),
+		Loaders:                  make(map[string]*LoaderConfig),
+		Syncers:                  make(map[string]*SyncerConfig),
+	}
 	cfg.FlagSet = flag.NewFlagSet("task", flag.ContinueOnError)
 	return cfg
 }
@@ -220,20 +312,28 @@ func (c *TaskConfig) adjust() error {
 		if err := inst.Verify(); err != nil {
 			return errors.Annotatef(err, "mysql-instance: %d", i)
 		}
-		if iid, ok := iids[inst.InstanceId]; ok {
-			return errors.Errorf("mysql-instance (%d) and (%d) have same instance-id (%s)", iid, i, inst.InstanceId)
+		if iid, ok := iids[inst.InstanceID]; ok {
+			return errors.Errorf("mysql-instance (%d) and (%d) have same instance-id (%s)", iid, i, inst.InstanceID)
 		}
-		iids[inst.InstanceId] = i
+		iids[inst.InstanceID] = i
 		if sid, ok := sids[inst.ServerID]; ok {
 			return errors.Errorf("mysql-instance (%d) and (%d) have same server-id (%d)", sid, i, inst.ServerID)
 		}
 		sids[inst.ServerID] = i
 
-		if inst.Meta != nil && (c.TaskMode == ModeFull || c.TaskMode == ModeAll) {
-			log.Warnf("[config] mysql-instance(%d) set meta, but it will not be used for task-mode %s.\n for Full mode, incremental sync will never occur; for All mode, the meta dumped by MyDumper will be used", i, c.TaskMode)
-		}
-		if inst.Meta == nil && c.TaskMode == ModeIncrement {
-			return errors.Errorf("mysql-instance(%d) must set meta (specfied ) for task-mode %s", i, c.TaskMode)
+		switch c.TaskMode {
+		case ModeFull, ModeAll:
+			if inst.Meta != nil {
+				log.Warnf("[config] mysql-instance(%d) set meta, but it will not be used for task-mode %s.\n for Full mode, incremental sync will never occur; for All mode, the meta dumped by MyDumper will be used", i, c.TaskMode)
+			}
+		case ModeIncrement:
+			if inst.Meta == nil {
+				return errors.Errorf("mysql-instance(%d) must set meta for task-mode %s", i, c.TaskMode)
+			}
+			err := inst.Meta.Verify()
+			if err != nil {
+				return errors.Annotatef(err, "mysql-instance: %d", i)
+			}
 		}
 
 		for _, name := range inst.RouteRules {
@@ -262,6 +362,10 @@ func (c *TaskConfig) adjust() error {
 			}
 			inst.Mydumper = rule // ref mydumper config
 		}
+		if inst.Mydumper == nil {
+			defaultCfg := defaultMydumperConfig()
+			inst.Mydumper = &defaultCfg
+		}
 
 		if (c.TaskMode == ModeFull || c.TaskMode == ModeAll) && len(inst.Mydumper.MydumperPath) == 0 {
 			// only verify if set, whether is valid can only be verify when we run it
@@ -275,12 +379,21 @@ func (c *TaskConfig) adjust() error {
 			}
 			inst.Loader = rule // ref loader config
 		}
+		if inst.Loader == nil {
+			defaultCfg := defaultLoaderConfig()
+			inst.Loader = &defaultCfg
+		}
+
 		if len(inst.SyncerConfigName) > 0 {
 			rule, ok := c.Syncers[inst.SyncerConfigName]
 			if !ok {
 				return errors.Errorf("mysql-instance(%d)'s syncer config %s not exist in syncer", i, inst.SyncerConfigName)
 			}
 			inst.Syncer = rule // ref syncer config
+		}
+		if inst.Syncer == nil {
+			defaultCfg := defaultSyncerConfig()
+			inst.Syncer = &defaultCfg
 		}
 	}
 
@@ -304,7 +417,7 @@ func (c *TaskConfig) SubTaskConfigs() []*SubTaskConfig {
 		cfg.From = *inst.Config
 		cfg.To = *c.TargetDB
 
-		cfg.InstanceId = inst.InstanceId
+		cfg.InstanceID = inst.InstanceID
 		cfg.ServerID = inst.ServerID
 
 		cfg.RouteRules = make([]*router.TableRule, len(inst.RouteRules))

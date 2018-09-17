@@ -70,7 +70,7 @@ type SubTaskConfig struct {
 
 	Name                     string `toml:"name" json:"name"`
 	Mode                     string `toml:"mode" json:"mode"`
-	InstanceId               string `toml:"instance-id" json:"instance-id"`
+	InstanceID               string `toml:"instance-id" json:"instance-id"`
 	ServerID                 int    `toml:"server-id" json:"server-id"`
 	Flavor                   string `toml:"flavor" json:"flavor"`
 	CheckpointSchemaPrefix   string `toml:"checkpoint-schema-prefix" json:"checkpoint-schema-prefix"`
@@ -149,11 +149,11 @@ func (c *SubTaskConfig) SetupFlags(name CmdName) {
 
 // MySQLInstanceID returns the relevant MySQL instance ID of config
 func (c *SubTaskConfig) MySQLInstanceID() string {
-	if c.InstanceId == "" {
-		c.InstanceId = fmt.Sprintf("%s:%d", c.From.Host, c.From.Port)
+	if c.InstanceID == "" {
+		c.InstanceID = fmt.Sprintf("%s:%d", c.From.Host, c.From.Port)
 	}
 
-	return c.InstanceId
+	return c.InstanceID
 }
 
 // String returns the config's json string
@@ -204,8 +204,8 @@ func (c *SubTaskConfig) adjust() error {
 
 	c.BWList.ToLower()
 
-	if c.InstanceId == "" {
-		c.InstanceId = fmt.Sprintf("%s:%d", c.From.Host, c.From.Port)
+	if c.InstanceID == "" {
+		c.InstanceID = fmt.Sprintf("%s:%d", c.From.Host, c.From.Port)
 	}
 
 	// add ToLower for other pkg later

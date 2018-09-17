@@ -194,7 +194,7 @@ func (c *DataMigrationConfig) GenerateDMTask() (*dm.TaskConfig, error) {
 		mysqlInstance.RouteRules = nil
 		mysqlInstance.FilterRules = nil
 		mysqlInstance.BWListName = ""
-		mysqlInstance.InstanceId = instanceID
+		mysqlInstance.InstanceID = instanceID
 	}
 
 	err := c.handleBWList(task, c.IgnoredTables, func(bw *filter.Rules, t *Table) {
@@ -263,7 +263,7 @@ func (c *DataMigrationConfig) GenerateDMTask() (*dm.TaskConfig, error) {
 	for instanceID, mysqlInstance := range c.MySQLInstances {
 		mysqlInstanceClone := new(dm.MySQLInstance)
 		*mysqlInstanceClone = *mysqlInstance
-		mysqlInstanceClone.InstanceId = instanceID
+		mysqlInstanceClone.InstanceID = instanceID
 		task.MySQLInstances = append(task.MySQLInstances, mysqlInstanceClone)
 	}
 
@@ -314,7 +314,7 @@ func (c *DataMigrationConfig) DecodeFromTask(task *dm.TaskConfig) error {
 
 	mysqlInstances := make(map[string]*dm.MySQLInstance)
 	for _, instance := range task.MySQLInstances {
-		id := instance.InstanceId
+		id := instance.InstanceID
 		mysqlInstances[id] = instance
 	}
 	c.MySQLInstances = mysqlInstances
@@ -429,11 +429,11 @@ func (c *DataMigrationConfig) handleBWList(task *dm.TaskConfig, tables map[strin
 			return errors.NotValidf("empty instance ID in do/ignored tables")
 		}
 
-		if instance, ok := c.MySQLInstances[instanceID]; !ok {
+		instance, ok := c.MySQLInstances[instanceID]
+		if !ok {
 			return errors.NotFoundf("mysql instance %s", instanceID)
-		} else {
-			instance.BWListName = instanceID
 		}
+		instance.BWListName = instanceID
 
 		bw := &filter.Rules{}
 		if _, ok := task.BWList[instanceID]; ok {

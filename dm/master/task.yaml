@@ -1,5 +1,5 @@
 ---
-name: test
+name: test # global unique
 task-mode: all  # full/incremental/all
 flavor: mysql  # mysql/mariadb
 in-sharding: true  # whether multi dm-worker do one sharding job
@@ -70,20 +70,20 @@ mysql-instances:             # one or more source database, config more source d
     black-white-list: "instance"
 
     mydumper:
-      mydumper-path: "./mydumper"
+      mydumper-path: "./bin/mydumper"
       threads: 4
-      chunk-filesize: 8
+      chunk-filesize: 0
       skip-tz-utc: true
 #      extra-args: "-B test -T t1,t2"
 
     loader:                  # local loader rule
-      pool-size: 32
-      dir: "./dumped_data"
+      pool-size: 16
+      dir: "./dumped_data"   # must be unique between tasks for the same instance
 
     syncer:
-      worker-count: 32
-      batch: 2000
-      max-retry: 200
+      worker-count: 16
+      batch: 100
+      max-retry: 100
 
 # other common configs shared by all instances
 
@@ -139,9 +139,9 @@ column-mappings:             # column mapping rules, mysql instance can ref rule
 
 mydumpers:                   # mydumper process unit specific configs, mysql instance can ref one config in it
   global:
-    mydumper-path: "./mydumper"
-    threads: 16
-    chunk-filesize: 64
+    mydumper-path: "./bin/mydumper"
+    threads: 4
+    chunk-filesize: 0
     skip-tz-utc: true
     extra-args: "-B test -T t1,t2 --no-locks"
 
@@ -153,5 +153,5 @@ loaders:                     # loader process unit specific configs, mysql insta
 syncers:                     # syncer process unit specific configs, mysql instance can ref one config in it
   global:
     worker-count: 16
-    batch: 1000
+    batch: 100
     max-retry: 100

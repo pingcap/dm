@@ -983,8 +983,8 @@ func (l *Loader) restoreData(ctx context.Context) error {
 
 // checkpointID returns ID which used for checkpoint table
 func (l *Loader) checkpointID() string {
-	if len(l.cfg.InstanceId) > 0 {
-		return l.cfg.InstanceId
+	if len(l.cfg.InstanceID) > 0 {
+		return l.cfg.InstanceID
 	}
 	dir, err := filepath.Abs(l.cfg.Dir)
 	if err != nil {
