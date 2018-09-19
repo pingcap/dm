@@ -72,7 +72,7 @@ mysql-instances:             # one or more source database, config more source d
     mydumper:
       mydumper-path: "./bin/mydumper"
       threads: 4
-      chunk-filesize: 0
+      chunk-filesize: 64
       skip-tz-utc: true
 #      extra-args: "-B test -T t1,t2"
 
@@ -141,7 +141,7 @@ mydumpers:                   # mydumper process unit specific configs, mysql ins
   global:
     mydumper-path: "./bin/mydumper"
     threads: 4
-    chunk-filesize: 0
+    chunk-filesize: 64
     skip-tz-utc: true
     extra-args: "-B test -T t1,t2 --no-locks"
 

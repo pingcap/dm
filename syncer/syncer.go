@@ -15,6 +15,7 @@ package syncer
 
 import (
 	"database/sql"
+	"fmt"
 	"math"
 	"runtime/debug"
 	"strconv"
@@ -51,8 +52,11 @@ var (
 	eventTimeout = 1 * time.Hour
 	statusTime   = 30 * time.Second
 
+	// MaxDDLConnectionTimeoutMinute also used by SubTask.ExecuteDDL
+	MaxDDLConnectionTimeoutMinute = 10
+
 	maxDMLConnectionTimeout = "1m"
-	maxDDLConnectionTimeout = "3h"
+	maxDDLConnectionTimeout = fmt.Sprintf("%dm", MaxDDLConnectionTimeoutMinute)
 )
 
 // BinlogType represents binlog sync type
@@ -643,6 +647,13 @@ func (s *Syncer) sync(ctx context.Context, db *sql.DB, jobChan chan *job) {
 					ddlJobs = append(ddlJobs, job)
 				}
 				err = executeSQLJob(db, ddlJobs, s.cfg.MaxRetry)
+				if s.cfg.InSharding {
+					// for sharding DDL syncing, send result back
+					if sqlJob.ddlExecItem != nil {
+						sqlJob.ddlExecItem.resp <- errors.Trace(err)
+					}
+					s.ddlExecInfo.ClearBlockingDDL()
+				}
 				if err != nil {
 					if !ignoreDDLError(err) {
 						// errro then pause.
@@ -1159,7 +1170,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					continue
 				}
 
-				var jobTp = ddl
+				var (
+					jobTp       = ddl
+					ddlExecItem *DDLExecItem
+				)
 
 				if s.cfg.InSharding {
 					switch stmt.(type) {
@@ -1220,17 +1234,17 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 							s.ddlInfoCh <- ddlInfo // save DDLInfo, and dm-worker will fetch it
 
 							// block and wait DDL lock to be synced
-							execReq, ok := <-s.ddlExecInfo.Chan(sqlDDL)
+							var ok bool
+							ddlExecItem, ok = <-s.ddlExecInfo.Chan(sqlDDL)
 							if !ok {
 								// chan closed
 								log.Info("[syncer] cancel to add DDL to job because of canceled from external")
 								return nil
 							}
-							s.ddlExecInfo.ClearBlockingDDL()
-							if execReq.Exec {
-								log.Infof("[syncer] add DDL to job, request is %v", execReq)
+							if ddlExecItem.req.Exec {
+								log.Infof("[syncer] add DDL to job, request is %v", ddlExecItem.req)
 							} else {
-								log.Infof("[syncer] ignore DDL, request is %v", execReq)
+								log.Infof("[syncer] ignore DDL, request is %v", ddlExecItem.req)
 								jobTp = fakeDDL // add a fake DDL job to flush the un-executed DMLs and checkpoints
 							}
 						}
@@ -1239,7 +1253,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 				log.Infof("[ddl][schema]%s [start]%s", string(ev.Schema), sqlDDL)
 
-				job := newJob(jobTp, tableNames[0][0].Schema, tableNames[0][0].Name, tableNames[1][0].Schema, tableNames[1][0].Name, sqlDDL, nil, "", false, currentPos, nil, lastPos)
+				job := newJob(jobTp, tableNames[0][0].Schema, tableNames[0][0].Name, tableNames[1][0].Schema, tableNames[1][0].Name, sqlDDL, nil, "", false, currentPos, nil, lastPos, ddlExecItem)
 				err = s.addJob(job)
 				if err != nil {
 					return errors.Trace(err)
@@ -1288,7 +1302,7 @@ func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, t
 	if err != nil {
 		return errors.Errorf("resolve karam error %v", err)
 	}
-	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, retry, currentPos, gs, lastPos)
+	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, retry, currentPos, gs, lastPos, nil)
 	err = s.addJob(job)
 	return errors.Trace(err)
 }
@@ -1732,9 +1746,14 @@ func (s *Syncer) DDLInfo() <-chan *pb.DDLInfo {
 }
 
 // ExecuteDDL executes or skips a hanging-up DDL when in sharding
-func (s *Syncer) ExecuteDDL(ctx context.Context, execReq *pb.ExecDDLRequest) error {
+func (s *Syncer) ExecuteDDL(ctx context.Context, execReq *pb.ExecDDLRequest) (<-chan error, error) {
 	if len(s.ddlExecInfo.BlockingDDL()) == 0 {
-		return errors.New("process unit not waiting for sharding DDL to sync")
+		return nil, errors.New("process unit not waiting for sharding DDL to sync")
 	}
-	return s.ddlExecInfo.Send(ctx, execReq)
+	item := newDDLExecItem(execReq)
+	err := s.ddlExecInfo.Send(ctx, item)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return item.resp, nil
 }

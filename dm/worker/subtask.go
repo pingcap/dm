@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
@@ -415,7 +416,23 @@ func (st *SubTask) ExecuteDDL(ctx context.Context, req *pb.ExecDDLRequest) error
 	if !ok {
 		return errors.Errorf("only syncer support ExecuteDDL, but current unit is %s", cu.Type().String())
 	}
-	return syncer2.ExecuteDDL(ctx, req)
+	chResp, err := syncer2.ExecuteDDL(ctx, req)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	// also any timeout
+	timeout := time.Duration(syncer.MaxDDLConnectionTimeoutMinute)*time.Minute + 30*time.Second
+	ctxTimeout, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	select {
+	case err = <-chResp: // block until complete ddl execution
+		return errors.Trace(err)
+	case <-ctx.Done():
+		return errors.Trace(ctx.Err())
+	case <-ctxTimeout.Done():
+		return errors.New("ExecuteDDL timeout, try use `query-status` to query whether the DDL is still blocking")
+	}
 }
 
 // SaveDDLLockInfo saves a DDLLockInfo

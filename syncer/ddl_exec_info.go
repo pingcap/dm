@@ -29,20 +29,35 @@ var (
 	ddlExecClosed  = "closed"
 )
 
+// DDLExecItem wraps request and response for a sharding DDL execution
+type DDLExecItem struct {
+	req  *pb.ExecDDLRequest
+	resp chan error
+}
+
+// newDDLExecItem creates a new DDLExecItem
+func newDDLExecItem(req *pb.ExecDDLRequest) *DDLExecItem {
+	item := &DDLExecItem{
+		req:  req,
+		resp: make(chan error, 1), // one elem buffered
+	}
+	return item
+}
+
 // DDLExecInfo used by syncer to execute or ignore sharding DDL
 // it's specific to syncer, and can not be used by other process unit
 type DDLExecInfo struct {
 	sync.RWMutex
 	status sync2.AtomicString
-	ch     chan *pb.ExecDDLRequest // item.Exec: true for exec, false for ignore
-	cancel chan struct{}           // chan used to cancel sending
-	ddl    string                  // DDL which is blocking
+	ch     chan *DDLExecItem // item.req.Exec: true for exec, false for ignore
+	cancel chan struct{}     // chan used to cancel sending
+	ddl    string            // DDL which is blocking
 }
 
 // NewDDLExecInfo creates a new DDLExecInfo
 func NewDDLExecInfo() *DDLExecInfo {
 	i := &DDLExecInfo{
-		ch:     make(chan *pb.ExecDDLRequest), // un-buffered
+		ch:     make(chan *DDLExecItem), // un-buffered
 		cancel: make(chan struct{}),
 		ddl:    "",
 	}
@@ -61,7 +76,7 @@ func (i *DDLExecInfo) Renew() {
 		close(i.ch)
 	}
 
-	i.ch = make(chan *pb.ExecDDLRequest)
+	i.ch = make(chan *DDLExecItem)
 	i.cancel = make(chan struct{})
 	i.ddl = ""
 	i.status.Set(ddlExecIdle)
@@ -104,8 +119,8 @@ func (i *DDLExecInfo) cancelAndWaitSending() {
 	}
 }
 
-// Send sends an item to the chan
-func (i *DDLExecInfo) Send(ctx context.Context, item *pb.ExecDDLRequest) error {
+// Send sends an item (with request) to the chan
+func (i *DDLExecInfo) Send(ctx context.Context, item *DDLExecItem) error {
 	i.RLock()
 	if !i.status.CompareAndSwap(ddlExecIdle, ddlExecSending) {
 		i.RUnlock()
@@ -124,8 +139,8 @@ func (i *DDLExecInfo) Send(ctx context.Context, item *pb.ExecDDLRequest) error {
 	}
 }
 
-// Chan returns a receive only chan
-func (i *DDLExecInfo) Chan(ddl string) <-chan *pb.ExecDDLRequest {
+// Chan returns a receive only DDLExecItem chan
+func (i *DDLExecInfo) Chan(ddl string) <-chan *DDLExecItem {
 	i.Lock()
 	i.ddl = ddl
 	i.Unlock()

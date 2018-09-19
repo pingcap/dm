@@ -69,6 +69,7 @@ type job struct {
 	lastPos      mysql.Position
 	currentPos   mysql.Position
 	gtidSet      gtid.Set
+	ddlExecItem  *DDLExecItem
 }
 
 func (j *job) String() string {
@@ -77,7 +78,7 @@ func (j *job) String() string {
 }
 
 // TODO zxc: add RENAME TABLE support
-func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, retry bool, currentPos mysql.Position, currentGtidSet gtid.Set, lastPos mysql.Position) *job {
+func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, retry bool, currentPos mysql.Position, currentGtidSet gtid.Set, lastPos mysql.Position, ddlExecItem *DDLExecItem) *job {
 	var gs gtid.Set
 	if currentGtidSet != nil {
 		gs = currentGtidSet.Clone()
@@ -95,6 +96,7 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 		currentPos:   currentPos,
 		gtidSet:      gs,
 		lastPos:      lastPos,
+		ddlExecItem:  ddlExecItem,
 	}
 }
 
