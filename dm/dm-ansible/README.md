@@ -155,25 +155,25 @@ ansible-playbook local_prepare.yml
 以 `tidb` 用户登录中控机，`inventory.ini` 文件路径为 `/home/tidb/dm-ansible/inventory.ini`。
 
 > **注：** 请使用内网 IP 来部署集群，如果部署目标机器 SSH 端口非默认 22 端口，需添加 `ansible_port` 变量，如：
-> `dm-worker1 ansible_host=172.16.10.72 ansible_port=5555`
+> `dm-worker1 ansible_host=172.16.10.72 ansible_port=5555 server_id=101 mysql_host=172.16.10.72 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306`
 
 ### 样例集群拓扑
 
 | Name | Host IP | Services |
 | ---- | ------- | -------- |
 | node1 | 172.16.10.71 | dm-master, prometheus, grafana, alertmanager |
-| node2 | 172.16.10.72 | dm-worker1 |
-| node3 | 172.16.10.73 | dm-worker2 |
+| node2 | 172.16.10.72 | dm-worker |
+| node3 | 172.16.10.73 | dm-worker |
 
 ```ini
 ## DM modules
 [dm_master_servers]
-dm-master ansible_host=172.16.10.71
+dm_master ansible_host=172.16.10.71
 
 [dm_worker_servers]
-dm-worker1 ansible_host=172.16.10.72 server_id=101 mysql_host=172.16.10.72 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+dm_worker1 ansible_host=172.16.10.72 server_id=101 mysql_host=172.16.10.81 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
 
-dm-worker2 ansible_host=172.16.10.73 server_id=102 mysql_host=172.16.10.73 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+dm_worker2 ansible_host=172.16.10.73 server_id=102 mysql_host=172.16.10.82 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
 
 ## Monitoring modules
 [prometheus_servers]
@@ -341,6 +341,61 @@ ansible-playbook rolling_update.yml --tags=dmctl
 ansible-playbook rolling_update.yml
 ```
 
+### 增加 dm-worker 实例
+
+假设在 172.16.10.74 上新增 dm-worker 实例，实例别名为 `dm_worker3`。
+
+#### 在中控机上配置部署机器 ssh 互信及 sudo 规则
+
+参考[在中控机上配置部署机器 ssh 互信及 sudo 规则](#在中控机上配置部署机器-ssh-互信及-sudo-规则)。以 `tidb` 用户登录中控机，将 `172.16.10.74` 添加到 `hosts.ini` 文件 `[servers]` 区块下。
+
+```
+$ cd /home/tidb/dm-ansible
+$ vi hosts.ini
+[servers]
+172.16.10.74
+
+[all:vars]
+username = tidb
+```
+
+执行以下命令，按提示输入部署 `172.16.10.74` `root` 用户密码。该步骤将在 `172.16.10.74` 上创建 `tidb` 用户，并配置 sudo 规则，配置中控机与 `172.16.10.74` 之间的 ssh 互信。
+
+```
+$ ansible-playbook -i hosts.ini create_users.yml -u root -k
+```
+
+#### 编辑 inventory.ini 文件, 添加新增 dm-worker 实例
+
+编辑 `inventory.ini` 文件，根据实际信息，添加新增 dm_worker 实例 dm_worker3。
+
+```
+[dm_worker_servers]
+dm_worker1 ansible_host=172.16.10.72 server_id=101 mysql_host=172.16.10.81 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+
+dm_worker2 ansible_host=172.16.10.73 server_id=102 mysql_host=172.16.10.82 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+
+dm_worker3 ansible_host=172.16.10.74 server_id=103 mysql_host=172.16.10.83 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+```
+
+#### 部署新增 dm-worker 实例
+
+```
+$ ansible-playbook deploy.yml --tags=dm-worker -l dm_worker3
+```
+
+#### 启动新增 dm-worker 实例
+
+```
+$ ansible-playbook start.yml --tags=dm-worker -l dm_worker3
+```
+
+#### 配置并重启 dm-master 服务
+
+```
+$ ansible-playbook rolling_update.yml --tags=dm-master
+```
+
 ## 常见部署问题
 
 ### 服务默认端口
@@ -350,7 +405,7 @@ ansible-playbook rolling_update.yml
 | dm-master | dm_master_port | 11080  | dm-master 服务通信端口 |
 | dm-master | dm_master_status_port | 11081  | dm-master 状态端口 |
 | dm-worker | dm_worker_port | 10081  | dm-worker 服务通信端口 |
-| dm-worker | dm_master_status_port | 10082  | dm-worker 状态端口 |
+| dm-worker | dm_worker_status_port | 10082  | dm-worker 状态端口 |
 | Prometheus | prometheus_port | 9090 | Prometheus 服务通信端口 |
 | Grafana | grafana_port |  3000 | Web 监控服务对外服务和客户端(浏览器)访问端口 |
 | Alertmanager | alertmanager_port |  9093 | Alertmanager 服务通信端口 |
@@ -398,4 +453,44 @@ $ cp * /home/tidb/dm-ansible/dmctl/
 
 ```
 $ ansible-playbook local_prepare.yml
+```
+
+### 单机部署多个 dm-worker 样例
+
+以下为单机部署多个 dm-worker `inventory.ini` 文件样例，配置时请注意区分 `server_id`， `deploy_dir`，`dm_worker_port` 和 `dm_worker_status_port` 变量。
+
+```ini
+## DM modules
+[dm_master_servers]
+dm-master ansible_host=172.16.10.71
+
+[dm_worker_servers]
+dm_worker1_1 ansible_host=172.16.10.72 server_id=101 deploy_dir=/data1/dm_worker dm_worker_port=10081 dm_worker_status_port=10082 mysql_host=172.16.10.81 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+dm_worker1_2 ansible_host=172.16.10.72 server_id=102 deploy_dir=/data2/dm_worker dm_worker_port=10083 dm_worker_status_port=10084 mysql_host=172.16.10.82 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+
+dm_worker2_1 ansible_host=172.16.10.73 server_id=103 deploy_dir=/data1/dm_worker dm_worker_port=10081 dm_worker_status_port=10082 mysql_host=172.16.10.83 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+dm_worker2_2 ansible_host=172.16.10.73 server_id=104 deploy_dir=/data2/dm_worker dm_worker_port=10083 dm_worker_status_port=10084 mysql_host=172.16.10.84 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+
+## Monitoring modules
+[prometheus_servers]
+prometheus ansible_host=172.16.10.71
+
+[grafana_servers]
+grafana ansible_host=172.16.10.71
+
+[alertmanager_servers]
+alertmanager ansible_host=172.16.10.71
+
+## Global variables
+[all:vars]
+cluster_name = test-cluster
+
+ansible_user = tidb
+
+dm_version = latest
+
+deploy_dir = /data1/dm
+
+grafana_admin_user = "admin"
+grafana_admin_password = "admin"
 ```
