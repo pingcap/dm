@@ -396,6 +396,175 @@ $ ansible-playbook start.yml --tags=dm-worker -l dm_worker3
 $ ansible-playbook rolling_update.yml --tags=dm-master
 ```
 
+#### 配置并重启 prometheus 服务
+
+```
+$ ansible-playbook rolling_update_monitor.yml --tags=prometheus
+```
+
+### 下线 dm-worker 实例
+
+假设下线 `dm_worker3` 实例。
+
+#### 关闭下线 dm-worker 实例
+
+```
+$ ansible-playbook stop.yml --tags=dm-worker -l dm_worker3
+```
+
+#### 编辑 inventory.ini 文件，移除下线 dm-worker 实例信息
+
+编辑 `inventory.ini` 文件，注释或删除 dm_worker3 实例所在行。
+
+```
+[dm_worker_servers]
+dm_worker1 ansible_host=172.16.10.72 server_id=101 mysql_host=172.16.10.81 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+
+dm_worker2 ansible_host=172.16.10.73 server_id=102 mysql_host=172.16.10.82 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+
+# dm_worker3 ansible_host=172.16.10.74 server_id=103 mysql_host=172.16.10.83 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306 # 注释或删除该行
+```
+
+#### 配置并重启 dm-master 服务
+
+```
+$ ansible-playbook rolling_update.yml --tags=dm-master
+```
+
+#### 配置并重启 prometheus 服务
+
+```
+$ ansible-playbook rolling_update_monitor.yml --tags=prometheus
+```
+
+### 替换 dm-master 实例
+
+假设 `172.16.10.71` 机器需要维护或故障，需要将 dm-master 实例从 `172.16.10.71` 机器迁移到 `172.16.10.80` 机器上。
+
+#### 在中控机上配置部署机器 ssh 互信及 sudo 规则
+
+参考[在中控机上配置部署机器 ssh 互信及 sudo 规则](#在中控机上配置部署机器-ssh-互信及-sudo-规则)。以 `tidb` 用户登录中控机，将 `172.16.10.80` 添加到 `hosts.ini` 文件 `[servers]` 区块下。
+
+```
+$ cd /home/tidb/dm-ansible
+$ vi hosts.ini
+[servers]
+172.16.10.80
+
+[all:vars]
+username = tidb
+```
+
+执行以下命令，按提示输入部署 `172.16.10.80` `root` 用户密码。该步骤将在 `172.16.10.80` 上创建 `tidb` 用户，并配置 sudo 规则，配置中控机与 `172.16.10.80` 之间的 ssh 互信。
+
+```
+$ ansible-playbook -i hosts.ini create_users.yml -u root -k
+```
+
+#### 关闭旧 dm-master 实例
+
+> 如果 `172.16.10.71` 机器故障，无法 SSH 登录，此步骤请忽略。
+
+```
+$ ansible-playbook stop.yml --tags=dm-master
+```
+
+#### 编辑 inventory.ini 文件，配置 dm-master 实例信息
+
+编辑 `inventory.ini` 文件，注释或删除旧 dm-master 实例所在行，增加新 dm-master 实例信息。
+
+```
+[dm_master_servers]
+# dm_master ansible_host=172.16.10.71
+dm_master ansible_host=172.16.10.80
+```
+
+#### 部署新 dm-master 实例
+
+```
+$ ansible-playbook deploy.yml --tags=dm-master
+```
+
+#### 启动新 dm-master 实例
+
+```
+$ ansible-playbook start.yml --tags=dm-master
+```
+
+#### 更新 dmctl 配置文件
+
+```
+ansible-playbook rolling_update.yml --tags=dmctl
+```
+
+### 替换 dm-worker 实例
+
+假设 `172.16.10.72` 机器需要维护或故障，需要将 dm-worker 实例 `dm_worker1` 从 `172.16.10.72` 机器迁移到 `172.16.10.75` 机器上。
+
+#### 在中控机上配置部署机器 ssh 互信及 sudo 规则
+
+参考[在中控机上配置部署机器 ssh 互信及 sudo 规则](#在中控机上配置部署机器-ssh-互信及-sudo-规则)。以 `tidb` 用户登录中控机，将 `172.16.10.75` 添加到 `hosts.ini` 文件 `[servers]` 区块下。
+
+```
+$ cd /home/tidb/dm-ansible
+$ vi hosts.ini
+[servers]
+172.16.10.75
+
+[all:vars]
+username = tidb
+```
+
+执行以下命令，按提示输入部署 `172.16.10.75` `root` 用户密码。该步骤将在 `172.16.10.75` 上创建 `tidb` 用户，并配置 sudo 规则，配置中控机与 `172.16.10.75` 之间的 ssh 互信。
+
+```
+$ ansible-playbook -i hosts.ini create_users.yml -u root -k
+```
+
+#### 关闭旧 dm-worker 实例
+
+> 如果 `172.16.10.72` 机器故障，无法 SSH 登录，此步骤请忽略。
+
+```
+$ ansible-playbook stop.yml --tags=dm-worker -l dm_worker1
+```
+
+#### 编辑 inventory.ini 文件, 添加新 dm-worker 实例
+
+编辑 `inventory.ini` 文件，根据实际信息，注释或删除旧 dm_worker1 实例 `172.16.10.72` 所在行，增加新 dm_worker1 实例 `172.16.10.75` 信息。
+
+```
+[dm_worker_servers]
+dm_worker1 ansible_host=172.16.10.75 server_id=101 mysql_host=172.16.10.81 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+# dm_worker1 ansible_host=172.16.10.72 server_id=101 mysql_host=172.16.10.81 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+
+dm_worker2 ansible_host=172.16.10.73 server_id=102 mysql_host=172.16.10.82 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+```
+
+#### 部署新 dm-worker 实例
+
+```
+$ ansible-playbook deploy.yml --tags=dm-worker -l dm_worker1
+```
+
+#### 启动新 dm-worker 实例
+
+```
+$ ansible-playbook start.yml --tags=dm-worker -l dm_worker1
+```
+
+#### 配置并重启 dm-master 服务
+
+```
+$ ansible-playbook rolling_update.yml --tags=dm-master
+```
+
+#### 配置并重启 prometheus 服务
+
+```
+$ ansible-playbook rolling_update_monitor.yml --tags=prometheus
+```
+
 ## 常见部署问题
 
 ### 服务默认端口
@@ -415,7 +584,7 @@ $ ansible-playbook rolling_update.yml --tags=dm-master
 修改 `inventory.ini` 文件，在相应服务 IP 后添加对应服务端口相关主机变量即可：
 
 ```
-dm-master ansible_host=172.16.10.71 dm_master_port=12080 dm_master_status_port=12081
+dm_master ansible_host=172.16.10.71 dm_master_port=12080 dm_master_status_port=12081
 ```
 
 ### 如何更新 dm-ansible
@@ -462,7 +631,7 @@ $ ansible-playbook local_prepare.yml
 ```ini
 ## DM modules
 [dm_master_servers]
-dm-master ansible_host=172.16.10.71
+dm_master ansible_host=172.16.10.71
 
 [dm_worker_servers]
 dm_worker1_1 ansible_host=172.16.10.72 server_id=101 deploy_dir=/data1/dm_worker dm_worker_port=10081 dm_worker_status_port=10082 mysql_host=172.16.10.81 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
