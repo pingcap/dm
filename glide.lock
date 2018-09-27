@@ -1,5 +1,5 @@
-hash: 99dfde8606b1a1cdec2d46f3c6ff24478a48b2e990394b1d1e42d61607f5fe44
-updated: 2018-09-12T13:58:34.941253936+08:00
+hash: 3f323de6bb1b3fcaf8e78625be3c8ee3a047f62b4cd5efc63787c97e587fe9fd
+updated: 2018-09-26T14:26:42.637093073+08:00
 imports:
 - name: github.com/beorn7/perks
   version: 3a771d992973f24aa725d07868b467d1ddfceafb
@@ -62,6 +62,8 @@ imports:
   version: 76626ae9c91c4f2a10f34cad8ce83ea42c93bb75
 - name: github.com/juju/errors
   version: 6f54ff6318409d31ff16261533ce2c8381a4fd5d
+- name: github.com/konsorten/go-windows-terminal-sequences
+  version: b729f2633dfe35f4d1d8a32385f6685610ce1cb5
 - name: github.com/matttproud/golang_protobuf_extensions
   version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
@@ -73,7 +75,7 @@ imports:
 - name: github.com/ngaut/sync2
   version: 7a24ed77b2efb460c1468b7dc917821c66e80e55
 - name: github.com/opentracing/opentracing-go
-  version: 1949ddbfd147afd4d964a9f00b24eb291e0e7c38
+  version: 6aa6febac7b98f836100ecaea478c04f30b6dbd0
   subpackages:
   - ext
   - log
@@ -171,7 +173,7 @@ imports:
   - util/sqlexec
   - util/stringutil
 - name: github.com/pingcap/tidb-tools
-  version: b4f5a10ae872e91064f4b83cb00e2480d505aa05
+  version: 75ce4766d891cd51dd93ede7cdfcb48fdca42f2c
   subpackages:
   - pkg/binlog-filter
   - pkg/check
@@ -189,7 +191,7 @@ imports:
 - name: github.com/pkg/errors
   version: 645ef00459ed84a119197bfb8d8205042c6df63d
 - name: github.com/prometheus/client_golang
-  version: c5b7fccd204277076155f10851dad72b76a49317
+  version: 967789050ba94deca04a5e84cce8ad472ce313c1
   subpackages:
   - prometheus
   - prometheus/push
@@ -228,7 +230,7 @@ imports:
   - packet
   - replication
 - name: github.com/sirupsen/logrus
-  version: f3df9aeffda7c12bd9f5a03f9251d75d35993165
+  version: a67f783a3814b8729bd2dac5780b5f78f8dbd64d
 - name: github.com/spaolacci/murmur3
   version: f09979ecbc725b9e6d41a297405f65e7e8804acc
 - name: github.com/spf13/cobra
@@ -238,7 +240,7 @@ imports:
 - name: github.com/twinj/uuid
   version: 7bbe408d339787c56ec15568c947c0959db1b275
 - name: github.com/uber/jaeger-client-go
-  version: 12b4b58a7d8119c9f22db2745df843fca67a310a
+  version: ab5afa7b97b7a16aa6ae001f1c80af61a880e5d9
   subpackages:
   - config
   - internal/baggage

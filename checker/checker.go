@@ -16,6 +16,7 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/pkg/check"
+	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go/sync2"
@@ -66,10 +67,17 @@ func (c *Checker) Init() error {
 	sharding := make(map[string]map[string]map[string][]string)
 	shardingCounter := make(map[string]int)
 	dbs := make(map[string]*sql.DB)
+	columnMapping := make(map[string]*column.Mapping)
+
 	for _, instance := range c.instances {
 		instanceID := fmt.Sprintf("%s:%d", instance.cfg.From.Host, instance.cfg.From.Port)
 		bw := filter.New(instance.cfg.BWList)
 		r, err := router.NewTableRouter(instance.cfg.RouteRules)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		columnMapping[instanceID], err = column.NewMapping(instance.cfg.ColumnMappingRules)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -148,7 +156,7 @@ func (c *Checker) Init() error {
 			continue
 		}
 
-		c.checkList = append(c.checkList, check.NewShardingTablesCheck(name, dbs, shardingSet))
+		c.checkList = append(c.checkList, check.NewShardingTablesCheck(name, dbs, shardingSet, columnMapping))
 	}
 
 	return nil
@@ -173,7 +181,7 @@ func (c *Checker) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	default:
 	}
 
-	rawResult, err := json.Marshal(result)
+	rawResult, err := json.MarshalIndent(result, "\t", "\t")
 	if err != nil {
 		rawResult = []byte(fmt.Sprintf("marshal error %v", err))
 	}

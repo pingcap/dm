@@ -20,9 +20,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pingcap/tidb-tools/pkg/column-mapping"
+
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/ast"
+	"github.com/pingcap/tidb/model"
+	"github.com/pingcap/tidb/mysql"
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/util/charset"
 )
@@ -246,16 +250,18 @@ func (c *TablesChecker) checkTableOption(opt *ast.TableOption) *incompatibilityO
 type ShardingTablesCheck struct {
 	name string
 
-	dbs    map[string]*sql.DB
-	tables map[string]map[string][]string // instance => {schema: [table1, table2, ...]}
+	dbs     map[string]*sql.DB
+	tables  map[string]map[string][]string // instance => {schema: [table1, table2, ...]}
+	mapping map[string]*column.Mapping
 }
 
 // NewShardingTablesCheck returns a Checker
-func NewShardingTablesCheck(name string, dbs map[string]*sql.DB, tables map[string]map[string][]string) Checker {
+func NewShardingTablesCheck(name string, dbs map[string]*sql.DB, tables map[string]map[string][]string, mapping map[string]*column.Mapping) Checker {
 	return &ShardingTablesCheck{
-		name:   name,
-		dbs:    dbs,
-		tables: tables,
+		name:    name,
+		dbs:     dbs,
+		tables:  tables,
+		mapping: mapping,
 	}
 }
 
@@ -269,9 +275,6 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 	}
 
 	var (
-		hasAutoIncrementKeyTableNum int
-		hasAutoIncrementKeyTables   = make(map[string][]string)
-
 		stmtNode  *ast.CreateTableStmt
 		tableName string
 	)
@@ -285,6 +288,13 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 		for schema, tables := range schemas {
 			for _, table := range tables {
 				statement, err := dbutil.GetCreateTableSQL(ctx, db, schema, table)
+				if err != nil {
+					markCheckError(r, err)
+					r.Extra = fmt.Sprintf("instance %s on sharding %s", instance, c.name)
+					return r
+				}
+
+				info, err := dbutil.GetTableInfoBySQL(statement)
 				if err != nil {
 					markCheckError(r, err)
 					r.Extra = fmt.Sprintf("instance %s on sharding %s", instance, c.name)
@@ -305,9 +315,9 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 					return r
 				}
 
-				if c.hashAutoIncrementKey(ctStmt) {
-					hasAutoIncrementKeyTableNum++
-					hasAutoIncrementKeyTables[instance] = append(hasAutoIncrementKeyTables[instance], dbutil.TableName(schema, table))
+				passed := c.checkAutoIncrementKey(instance, schema, table, ctStmt, info, r)
+				if !passed {
+					return r
 				}
 
 				if stmtNode == nil {
@@ -327,17 +337,52 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 		}
 	}
 
-	if hasAutoIncrementKeyTableNum > 1 {
-		r.State = StateWarning
-		r.ErrorMsg = fmt.Sprintf("(%d) tables %+v have auto-increment key, would conflict with each other to cause data corruption", hasAutoIncrementKeyTableNum, hasAutoIncrementKeyTables)
-		r.Instruction = "please set column mapping rules for them, or handle it by yourself"
-		r.Extra = AutoIncrementKeyChecking
-	}
-
 	return r
 }
 
-func (c *ShardingTablesCheck) hashAutoIncrementKey(stmt *ast.CreateTableStmt) bool {
+func (c *ShardingTablesCheck) checkAutoIncrementKey(instance, schema, table string, ctStmt *ast.CreateTableStmt, info *model.TableInfo, r *Result) bool {
+	autoIncrementKeys := c.findAutoIncrementKey(ctStmt, info)
+	for columnName, isBigInt := range autoIncrementKeys {
+		hasMatchedRule := false
+		if cm, ok1 := c.mapping[instance]; ok1 {
+			ruleSet := cm.Selector.Match(schema, table)
+			for _, rule := range ruleSet {
+				r, ok2 := rule.(*column.Rule)
+				if !ok2 {
+					continue
+				}
+
+				if r.Expression == column.PartitionID && r.TargetColumn == columnName {
+					hasMatchedRule = true
+					break
+				}
+			}
+
+			if hasMatchedRule && !isBigInt {
+				r.State = StateFailure
+				r.ErrorMsg = fmt.Sprintf("instance %s table `%s`.`%s` of sharding %s have auto-increment key %s and column mapping, but type of %s should be bigint", instance, schema, table, c.name, columnName, columnName)
+				r.Instruction = "please set auto-increment key type to bigint"
+				r.Extra = AutoIncrementKeyChecking
+				return false
+			}
+		}
+
+		if !hasMatchedRule {
+			r.State = StateFailure
+			r.ErrorMsg = fmt.Sprintf("instance %s table `%s`.`%s` of sharding %s have auto-increment key, would conflict with each other to cause data corruption", instance, schema, table, c.name)
+			r.Instruction = "please set column mapping rules for them, or handle it by yourself"
+			r.Extra = AutoIncrementKeyChecking
+			return false
+		}
+	}
+
+	return true
+}
+
+func (c *ShardingTablesCheck) findAutoIncrementKey(stmt *ast.CreateTableStmt, info *model.TableInfo) map[string]bool {
+	autoIncrementKeys := make(map[string]bool)
+	autoIncrementCols := make(map[string]bool)
+
 	for _, col := range stmt.Cols {
 		var (
 			hasAutoIncrementOpt bool
@@ -352,11 +397,26 @@ func (c *ShardingTablesCheck) hashAutoIncrementKey(stmt *ast.CreateTableStmt) bo
 			}
 		}
 
-		if hasAutoIncrementOpt && isUnique {
-			return true
+		if hasAutoIncrementOpt {
+			if isUnique {
+				autoIncrementKeys[col.Name.Name.O] = col.Tp.Tp == mysql.TypeLonglong
+			} else {
+				autoIncrementCols[col.Name.Name.O] = col.Tp.Tp == mysql.TypeLonglong
+			}
 		}
 	}
-	return false
+
+	for _, index := range info.Indices {
+		if index.Unique || index.Primary {
+			if len(index.Columns) == 1 {
+				if isBigInt, ok := autoIncrementCols[index.Columns[0].Name.O]; ok {
+					autoIncrementKeys[index.Columns[0].Name.O] = isBigInt
+				}
+			}
+		}
+	}
+
+	return autoIncrementKeys
 }
 
 type briefColumnInfo struct {
@@ -408,6 +468,7 @@ func (c *ShardingTablesCheck) checkConsistency(self, other *ast.CreateTableStmt,
 
 func getBriefColumnList(stmt *ast.CreateTableStmt) briefColumnInfos {
 	columnList := make(briefColumnInfos, 0, len(stmt.Cols))
+
 	for _, col := range stmt.Cols {
 		bc := &briefColumnInfo{
 			name: col.Name.Name.L,

@@ -61,7 +61,7 @@ func (c *DBConfig) String() string {
 
 // OpenDB opens a mysql connection FD
 func OpenDB(cfg DBConfig) (*sql.DB, error) {
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Schema)
+	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4", cfg.User, cfg.Password, cfg.Host, cfg.Port)
 	dbConn, err := sql.Open("mysql", dbDSN)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -140,12 +140,24 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 
 // GetRandomValues returns some random value of a column.
 func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int64, min, max interface{}, limitRange string) ([]interface{}, error) {
+	/*
+		example:
+		mysql> SELECT `id` FROM (SELECT `id` FROM `test`.`test` WHERE `id` > 0 AND `id` < 100 AND true ORDER BY RAND() LIMIT 3)rand_tmp ORDER BY `id`;
+		+----------+
+		| rand_tmp |
+		+----------+
+		|    15    |
+		|    58    |
+		|    67    |
+		+----------+
+	*/
+
 	if limitRange != "" {
 		limitRange = "true"
 	}
 
 	randomValue := make([]interface{}, 0, num)
-	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` >= ? AND `%s` <= ? AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
+	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` > ? AND `%s` < ? AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
 		column, column, schemaName, table, column, column, limitRange, num, column)
 	log.Debugf("get random values sql: %s, min: %v, max: %v", query, min, max)
 	rows, err := db.QueryContext(ctx, query, min, max)
@@ -167,23 +179,42 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 }
 
 // GetTables returns name of all tables in the specified schema
-func GetTables(ctx context.Context, db *sql.DB, schemaName string) ([]string, error) {
-	rs, err := db.QueryContext(ctx, fmt.Sprintf("SHOW TABLES IN `%s`;", schemaName))
+func GetTables(ctx context.Context, db *sql.DB, schemaName string) (tables []string, err error) {
+	/*
+		show tables without view: https://dev.mysql.com/doc/refman/5.7/en/show-tables.html
+
+		example:
+		mysql> show full tables in test where Table_Type != 'VIEW';
+		+----------------+------------+
+		| Tables_in_test | Table_type |
+		+----------------+------------+
+		| NTEST          | BASE TABLE |
+		+----------------+------------+
+	*/
+
+	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type != 'VIEW';", schemaName)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	defer rs.Close()
+	defer rows.Close()
 
-	var tbls []string
-	for rs.Next() {
-		var name string
-		err := rs.Scan(&name)
+	tables = make([]string, 0, 8)
+	for rows.Next() {
+		var table, tType sql.NullString
+		err = rows.Scan(&table, &tType)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		tbls = append(tbls, name)
+
+		if !table.Valid || !tType.Valid {
+			continue
+		}
+
+		tables = append(tables, table.String)
 	}
-	return tbls, errors.Trace(rs.Err())
+
+	return tables, errors.Trace(rows.Err())
 }
 
 // GetSchemas returns name of all schemas
@@ -221,65 +252,40 @@ func GetSchemas(ctx context.Context, db *sql.DB) ([]string, error) {
 }
 
 // GetCRC32Checksum returns checksum code of some data by given condition
-func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName string, tbInfo *model.TableInfo, orderKeys []string, limitRange string, args []interface{}) (string, error) {
+func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, error) {
 	/*
-		TODO: use same sql to calculate CRC32 checksum in TiDB and MySQL when TiDB support ORDER BY in GROUP_CONTACT.
-
 		calculate CRC32 checksum example:
-
-		in TiDB:
-		mysql> SELECT CRC32(GROUP_CONCAT(row SEPARATOR ' + ')) AS checksum
-			> FROM (SELECT CONCAT_WS(",",a,b,c) AS row
-			> FROM (SELECT * FROM test.test WHERE `a` >= 0 AND `a` < 10 AND true ORDER BY a) AS tmp) AS rows ORDER BY row;
+		mysql> SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', id, name, age, CONCAT(ISNULL(id), ISNULL(name), ISNULL(age))))AS UNSIGNED)) AS checksum FROM test.test WHERE id > 0 AND id < 10;
 		+------------+
 		| checksum   |
 		+------------+
-		| 1171947116 |
+		| 1466098199 |
 		+------------+
-
-		in MySQL:
-		mysql> SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', a, b, c ) ORDER BY a ASC SEPARATOR ' + ')) AS checksum
-			> FROM test.test WHERE `a` >= 0 AND `a` < 10 AND true;
-		+------------+
-		| checksum   |
-		+------------+
-		| 1171947116 |
-		+------------+
-
-		Notice: in the older tidb version, tidb will get different checksum with mysql, can see this issue pingcap/tidb#7446
 	*/
-	isTiDB, err := IsTiDB(ctx, db)
-	if err != nil {
-		return "", errors.Trace(err)
-	}
 
 	columnNames := make([]string, 0, len(tbInfo.Columns))
+	columnIsNull := make([]string, 0, len(tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
 		columnNames = append(columnNames, col.Name.O)
+		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", col.Name.O))
 	}
 
-	var query string
-	if isTiDB {
-		query = fmt.Sprintf("SELECT CRC32(GROUP_CONCAT(row SEPARATOR ' + ')) AS checksum FROM (SELECT CONCAT_WS(',',%s) AS row FROM (SELECT * FROM `%s`.`%s` WHERE %s ORDER BY %s) AS tmp) AS rows ORDER BY row;",
-			strings.Join(columnNames, ", "), schemaName, tbInfo.Name.O, limitRange, strings.Join(orderKeys, ","))
-	} else {
-		query = fmt.Sprintf("SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',',%s) ORDER BY %s ASC SEPARATOR ' + ')) AS checksum FROM `%s`.`%s` WHERE %s;",
-			strings.Join(columnNames, ", "), strings.Join(orderKeys, ","), schemaName, tbInfo.Name.O, limitRange)
-	}
+	query := fmt.Sprintf("SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED)) AS checksum FROM `%s`.`%s` WHERE %s;",
+		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), schemaName, tableName, limitRange)
 	log.Debugf("checksum sql: %s, args: %v", query, args)
 
-	var checksum sql.NullString
-	err = db.QueryRowContext(ctx, query, args...).Scan(&checksum)
+	var checksum sql.NullInt64
+	err := db.QueryRowContext(ctx, query, args...).Scan(&checksum)
 	if err != nil {
-		return "", errors.Trace(err)
+		return -1, errors.Trace(err)
 	}
 	if !checksum.Valid {
 		// if don't have any data, the checksum will be `NULL`
 		log.Warnf("get empty checksum by query %s, args %v", query, args)
-		return "", nil
+		return 0, nil
 	}
 
-	return checksum.String, nil
+	return checksum.Int64, nil
 }
 
 // GetTidbLatestTSO returns tidb's current TSO.
@@ -346,6 +352,8 @@ func GetDBVersion(ctx context.Context, db *sql.DB) (string, error) {
 	if err != nil {
 		return "", errors.Trace(err)
 	}
+	defer result.Close()
+
 	var version sql.NullString
 	for result.Next() {
 		err := result.Scan(&version)

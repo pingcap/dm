@@ -108,7 +108,19 @@ import:
 - package: gopkg.in/yaml.v2
   version: v2.2.1
 - package: github.com/pingcap/tidb-tools
-  version: b4f5a10ae872e91064f4b83cb00e2480d505aa05
+  version: 75ce4766d891cd51dd93ede7cdfcb48fdca42f2c
+  subpackages:
+  - pkg/binlog-filter
+  - pkg/check
+  - pkg/column-mapping
+  - pkg/dbutil
+  - pkg/table-router
+  - pkg/table-rule-selector
+  - pkg/utils
+- package: github.com/pingcap/pd
+  version: ea6597638eb7f3d7d50248b90e60888352ac8e85
+  subpackages:
+  - pd-client
   # for building goyacc
 - package: github.com/cznic/golex
   version: da5a7153a51074477ecac5c45a7e5182a0c72448
