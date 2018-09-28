@@ -171,7 +171,9 @@ func (m *Mydumper) constructArgs(cfg *config.SubTaskConfig) []string {
 func (m *Mydumper) logArgs(cfg *config.SubTaskConfig) []string {
 	args := make([]string, 0, 4)
 	if len(cfg.LogFile) > 0 {
-		args = append(args, "--logfile", cfg.LogFile)
+		// mydumper overwrite log file, ref: https://github.com/maxbube/mydumper/blob/a1ddcba64b6af807cf9de468b8ca59b54ca6a2a9/mydumper.c#L232
+		// so we need to use a different log file (mydumper-taskname.log) until we update mydumper to append log
+		args = append(args, "--logfile", fmt.Sprintf("mydumper-%s.log", cfg.Name))
 	}
 	switch strings.ToLower(cfg.LogLevel) {
 	case "fatal", "error":
