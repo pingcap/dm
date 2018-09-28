@@ -1,8 +1,8 @@
 package utils
 
 import (
+	"context"
 	"database/sql"
-	"fmt"
 	"strings"
 	"time"
 
@@ -58,7 +58,8 @@ func FetchAllDoTables(db *sql.DB, bw *filter.Filter) (map[string][]string, error
 	schemaToTables := make(map[string][]string)
 	for _, ftSchema := range ftSchemas {
 		schema := ftSchema.Schema
-		tables, err := getTables(db, schema, maxRetryCount)
+		// use `GetTables` from tidb-tools, no view included
+		tables, err := dbutil.GetTables(context.Background(), db, schema)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -142,36 +143,6 @@ func getSchemas(db *sql.DB, maxRetry int) ([]string, error) {
 		schemas = append(schemas, schema)
 	}
 	return schemas, errors.Trace(rows.Err())
-}
-
-func getTables(db *sql.DB, schema string, maxRetry int) ([]string, error) {
-	query := fmt.Sprintf("SHOW TABLES IN `%s`", schema)
-	rows, err := querySQL(db, query, maxRetry)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	defer rows.Close()
-
-	// show an example.
-	/*
-		mysql> SHOW TABLES IN test_db;
-		+---------------------------+
-		| Tables_in_test_db         |
-		+---------------------------+
-		| tbl_1                     |
-		| tbl_2                     |
-		+---------------------------+
-	*/
-	tables := make([]string, 0, 20)
-	for rows.Next() {
-		var table string
-		err = rows.Scan(&table)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		tables = append(tables, table)
-	}
-	return tables, errors.Trace(rows.Err())
 }
 
 func querySQL(db *sql.DB, query string, maxRetry int) (*sql.Rows, error) {
