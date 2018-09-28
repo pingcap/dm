@@ -75,6 +75,7 @@ type SubTaskConfig struct {
 	Flavor                   string `toml:"flavor" json:"flavor"`
 	CheckpointSchemaPrefix   string `toml:"checkpoint-schema-prefix" json:"checkpoint-schema-prefix"`
 	RemovePreviousCheckpoint bool   `toml:"remove-previous-checkpoint" json:"remove-previous-checkpoint"`
+	DisableHeartbeat         bool   `toml:"disable-heartbeat" json:"disable-heartbeat"`
 	Meta                     *Meta  `toml:"meta" json:"meta"`
 
 	BinlogType string `toml:"binlog-type" json:"binlog-type"`
@@ -144,6 +145,7 @@ func (c *SubTaskConfig) SetupFlags(name CmdName) {
 		fs.BoolVar(&c.EnableGTID, "enable-gtid", false, "enable gtid mode")
 		fs.BoolVar(&c.SafeMode, "safe-mode", false, "enable safe mode to make syncer reentrant")
 		fs.StringVar(&c.StatusAddr, "status-addr", "", "Syncer status addr")
+		fs.BoolVar(&c.DisableHeartbeat, "disable-heartbeat", false, "disable heartbeat between mysql and syncer")
 	}
 }
 
@@ -198,6 +200,10 @@ func (c *SubTaskConfig) Decode(data string) error {
 
 // adjust adjusts configs
 func (c *SubTaskConfig) adjust() error {
+	if c.Name == "" {
+		return errors.New("task name should not be empty")
+	}
+
 	if c.Flavor != mysql.MySQLFlavor && c.Flavor != mysql.MariaDBFlavor {
 		return errors.Errorf("please specify right mysql version, support mysql, mariadb now")
 	}

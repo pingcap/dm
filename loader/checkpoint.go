@@ -75,7 +75,7 @@ type RemoteCheckPoint struct {
 }
 
 func newRemoteCheckPoint(cfg *config.SubTaskConfig, id string) (CheckPoint, error) {
-	conn, err := createConn(cfg.To)
+	conn, err := createConn(cfg)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -115,7 +115,7 @@ func (cp *RemoteCheckPoint) prepare() error {
 
 func (cp *RemoteCheckPoint) createSchema() error {
 	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", cp.schema)
-	err := executeSQL(cp.conn, []string{sql2}, true)
+	err := cp.conn.executeSQL([]string{sql2}, true)
 	return errors.Trace(err)
 }
 
@@ -134,7 +134,7 @@ func (cp *RemoteCheckPoint) createTable() error {
 	);
 `
 	sql2 := fmt.Sprintf(createTable, tableName)
-	err := executeSQL(cp.conn, []string{sql2}, true)
+	err := cp.conn.executeSQL([]string{sql2}, true)
 	return errors.Trace(err)
 }
 
@@ -146,7 +146,7 @@ func (cp *RemoteCheckPoint) Load() error {
 	}()
 
 	query := fmt.Sprintf("SELECT `filename`,`cp_schema`,`cp_table`,`offset`,`end_pos` from `%s`.`%s` where `id`='%s'", cp.schema, cp.table, cp.id)
-	rows, err := querySQL(cp.conn.db, query)
+	rows, err := cp.conn.querySQL(query)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -302,14 +302,14 @@ func (cp *RemoteCheckPoint) GenSQL(filename string, offset int64) string {
 // Clear implements CheckPoint.Clear
 func (cp *RemoteCheckPoint) Clear() error {
 	sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s'", cp.schema, cp.table, cp.id)
-	err := executeSQL(cp.conn, []string{sql2}, true)
+	err := cp.conn.executeSQL([]string{sql2}, true)
 	return errors.Trace(err)
 }
 
 // Count implements CheckPoint.Count
 func (cp *RemoteCheckPoint) Count() (int, error) {
 	query := fmt.Sprintf("SELECT COUNT(id) FROM `%s`.`%s` WHERE `id` = '%s'", cp.schema, cp.table, cp.id)
-	rows, err := querySQL(cp.conn.db, query)
+	rows, err := cp.conn.querySQL(query)
 	if err != nil {
 		return 0, errors.Trace(err)
 	}

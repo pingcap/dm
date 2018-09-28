@@ -26,7 +26,7 @@ import (
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
-	"github.com/pingcap/tidb-enterprise-tools/loader"
+	loaderPkg "github.com/pingcap/tidb-enterprise-tools/loader"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/net/context"
@@ -55,7 +55,7 @@ func main() {
 		log.Infof("config: %s", cfg)
 	})
 
-	loader := loader.NewLoader(cfg)
+	loader := loaderPkg.NewLoader(cfg)
 	err = loader.Init()
 	if err != nil {
 		log.Error(errors.ErrorStack(err))
@@ -80,6 +80,12 @@ func main() {
 	}()
 
 	go func() {
+		registry := prometheus.NewRegistry()
+		registry.MustRegister(prometheus.NewProcessCollector(os.Getpid(), ""))
+		registry.MustRegister(prometheus.NewGoCollector())
+		loaderPkg.RegisterMetrics(registry)
+		prometheus.DefaultGatherer = registry
+
 		http.Handle("/metrics", prometheus.Handler())
 		err1 := http.ListenAndServe(cfg.PprofAddr, nil)
 		if err1 != nil {

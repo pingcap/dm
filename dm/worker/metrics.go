@@ -15,9 +15,15 @@ package worker
 
 import (
 	"net/http"
+	"os"
 
 	"github.com/ngaut/log"
+	"github.com/pingcap/tidb-enterprise-tools/loader"
+	"github.com/pingcap/tidb-enterprise-tools/mydumper"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/tidb-enterprise-tools/relay"
+	"github.com/pingcap/tidb-enterprise-tools/syncer"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // InitStatus initializes the HTTP status server
@@ -28,6 +34,18 @@ func InitStatus(addr string) {
 			text := utils.GetRawInfo()
 			w.Write([]byte(text))
 		})
+
+		registry := prometheus.NewRegistry()
+		registry.MustRegister(prometheus.NewProcessCollector(os.Getpid(), ""))
+		registry.MustRegister(prometheus.NewGoCollector())
+
+		relay.RegisterMetrics(registry)
+		mydumper.RegisterMetrics(registry)
+		loader.RegisterMetrics(registry)
+		syncer.RegisterMetrics(registry)
+		prometheus.DefaultGatherer = registry
+
+		http.Handle("/metrics", prometheus.Handler())
 
 		log.Infof("listening on %v for status report.", addr)
 		err := http.ListenAndServe(addr, nil)

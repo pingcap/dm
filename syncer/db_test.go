@@ -24,3 +24,9 @@ func (s *testSyncerSuite) TestGetServerUUID(c *C) {
 	_, err = gouuid.FromString(uuid)
 	c.Assert(err, IsNil)
 }
+
+func (s *testSyncerSuite) TestGetServerID(c *C) {
+	id, err := getServerID(s.db)
+	c.Assert(err, IsNil)
+	c.Assert(id, Greater, int64(0))
+}

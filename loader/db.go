@@ -22,24 +22,39 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
-	"github.com/pingcap/tidb-tools/pkg/table-router"
 	tmysql "github.com/pingcap/tidb/mysql"
 )
 
 // Conn represents a live DB connection
 type Conn struct {
+	cfg *config.SubTaskConfig
+
 	db *sql.DB
 }
 
-func querySQL(db *sql.DB, query string, args ...interface{}) (*sql.Rows, error) {
+func (conn *Conn) querySQL(query string, args ...interface{}) (*sql.Rows, error) {
+	if conn == nil || conn.db == nil {
+		return nil, errors.NotValidf("database connection")
+	}
+
 	var (
 		err  error
 		rows *sql.Rows
 	)
 
 	log.Debugf("[query][sql]%s, args %v", query, args)
+	startTime := time.Now()
+	defer func() {
+		if err == nil {
+			cost := time.Since(startTime).Seconds()
+			queryHistogram.WithLabelValues(conn.cfg.Name).Observe(cost)
+			if cost > 1 {
+				log.Warnf("query %s [args: %v] costs %f seconds", query, args, cost)
+			}
+		}
+	}()
 
-	rows, err = db.Query(query, args...)
+	rows, err = conn.db.Query(query, args...)
 	if err != nil {
 		if !(isErrTableNotExists(err) || isErrDBExists(err)) {
 			log.Errorf("query sql[%s] failed %v", query, errors.ErrorStack(err))
@@ -50,9 +65,13 @@ func querySQL(db *sql.DB, query string, args ...interface{}) (*sql.Rows, error) 
 	return rows, nil
 }
 
-func executeSQL(conn *Conn, sqls []string, enableRetry bool) error {
+func (conn *Conn) executeSQL(sqls []string, enableRetry bool) error {
 	if len(sqls) == 0 {
 		return nil
+	}
+
+	if conn == nil || conn.db == nil {
+		return errors.NotValidf("database connection")
 	}
 
 	var err error
@@ -68,10 +87,20 @@ func executeSQL(conn *Conn, sqls []string, enableRetry bool) error {
 			time.Sleep(2 * time.Duration(i) * time.Second)
 		}
 
-		if err = executeSQLImp(conn.db, sqls); err != nil {
+		startTime := time.Now()
+		err = executeSQLImp(conn.db, sqls)
+		if err != nil {
+			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
 			if isRetryableError(err) {
 				continue
 			}
+		}
+
+		// update metrics
+		cost := time.Since(startTime).Seconds()
+		txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost)
+		if cost > 1 {
+			log.Warnf("transaction execution costs %f seconds", cost)
 		}
 
 		return nil
@@ -87,15 +116,6 @@ func executeSQLImp(db *sql.DB, sqls []string) error {
 		res sql.Result
 	)
 
-	startTime := time.Now()
-	defer func() {
-		cost := time.Since(startTime).Seconds()
-		txnHistogram.Observe(cost)
-		if cost > 1 {
-			log.Warnf("transaction execution costs %f seconds", cost)
-		}
-	}()
-
 	txn, err = db.Begin()
 	if err != nil {
 		log.Errorf("exec sqls[%-.100v] begin failed %v", sqls, errors.ErrorStack(err))
@@ -106,9 +126,6 @@ func executeSQLImp(db *sql.DB, sqls []string) error {
 		log.Debugf("[exec][sql]%-.200v", sqls[i])
 		res, err = txn.Exec(sqls[i])
 		if err != nil {
-			if isTiDBUnknownError(err) {
-				tidbUnknownErrorCount.Inc()
-			}
 			log.Warnf("[exec][sql]%-.100v[error]%v", sqls[i], err)
 			rerr := txn.Rollback()
 			if rerr != nil {
@@ -137,72 +154,14 @@ func executeSQLImp(db *sql.DB, sqls []string) error {
 	return nil
 }
 
-func hasUniqIndex(conn *Conn, schema string, table string, tableRouter *router.Table) (bool, error) {
-	if schema == "" || table == "" {
-		return false, errors.New("schema/table is empty")
-	}
-
-	targetSchema, targetTable := fetchMatchedLiteral(tableRouter, schema, table)
-
-	query := fmt.Sprintf("show index from `%s`.`%s`", targetSchema, targetTable)
-	rows, err := querySQL(conn.db, query)
-	if err != nil {
-		return false, errors.Trace(err)
-	}
-	defer rows.Close()
-
-	rowColumns, err := rows.Columns()
-	if err != nil {
-		return false, errors.Trace(err)
-	}
-
-	// Show an example.
-	/*
-		mysql> show index from test.t;
-		+-------+------------+----------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
-		| Table | Non_unique | Key_name | Seq_in_index | Column_name | Collation | Cardinality | Sub_part | Packed | Null | Index_type | Comment | Index_comment |
-		+-------+------------+----------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
-		| t     |          0 | PRIMARY  |            1 | a           | A         |           0 |     NULL | NULL   |      | BTREE      |         |               |
-		| t     |          0 | PRIMARY  |            2 | b           | A         |           0 |     NULL | NULL   |      | BTREE      |         |               |
-		| t     |          0 | ucd      |            1 | c           | A         |           0 |     NULL | NULL   | YES  | BTREE      |         |               |
-		| t     |          0 | ucd      |            2 | d           | A         |           0 |     NULL | NULL   | YES  | BTREE      |         |               |
-		+-------+------------+----------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
-	*/
-
-	for rows.Next() {
-		datas := make([]sql.RawBytes, len(rowColumns))
-		values := make([]interface{}, len(rowColumns))
-
-		for i := range values {
-			values[i] = &datas[i]
-		}
-
-		err = rows.Scan(values...)
-		if err != nil {
-			return false, errors.Trace(err)
-		}
-
-		nonUnique := string(datas[1])
-		if nonUnique == "0" {
-			return true, nil
-		}
-	}
-
-	if rows.Err() != nil {
-		return false, errors.Trace(rows.Err())
-	}
-
-	return false, nil
-}
-
-func createConn(cfg config.DBConfig) (*Conn, error) {
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8", cfg.User, cfg.Password, cfg.Host, cfg.Port)
+func createConn(cfg *config.SubTaskConfig) (*Conn, error) {
+	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8", cfg.To.User, cfg.To.Password, cfg.To.Host, cfg.To.Port)
 	db, err := sql.Open("mysql", dbDSN)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	return &Conn{db: db}, nil
+	return &Conn{db: db, cfg: cfg}, nil
 }
 
 func closeConn(conn *Conn) error {

@@ -29,6 +29,7 @@ dump_data() {
 load_data_to_tidb() {
     cd "${LOADER_DIR}" || exit
     cat > loader_config_sharding.toml << __EOF__
+name = "test"
 log-level = "debug"
 log-file = "loader.log"
 # Directory of the dump to import

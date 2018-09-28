@@ -123,3 +123,8 @@ func newSkipJob(currentPos mysql.Position, currentGtidSet gtid.Set) *job {
 		gtidSet:    currentGtidSet,
 	}
 }
+
+// put queues into bucket to monitor them
+func queueBucketName(queueID int) string {
+	return fmt.Sprintf("q_%d", queueID%defaultBucketCount)
+}

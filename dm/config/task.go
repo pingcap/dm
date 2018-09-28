@@ -33,6 +33,7 @@ var (
 	// TaskConfig
 	defaultCheckpointSchemaPrefix   = "dm_checkpoint"
 	defaultRemovePreviousCheckpoint = false
+	defaultDisableHeartbeat         = false
 	defaultInSharding               = false
 	// MydumperConfig
 	defaultMydumperPath        = "./bin/mydumper"
@@ -217,6 +218,7 @@ type TaskConfig struct {
 	InSharding               bool   `yaml:"in-sharding"`
 	CheckpointSchemaPrefix   string `yaml:"checkpoint-schema-prefix"`
 	RemovePreviousCheckpoint bool   `yaml:"remove-previous-checkpoint"`
+	DisableHeartbeat         bool   `yaml:"disable-heartbeat"`
 
 	TargetDB *DBConfig `yaml:"target-database"`
 
@@ -238,6 +240,7 @@ func NewTaskConfig() *TaskConfig {
 		// explicitly set default value
 		CheckpointSchemaPrefix:   defaultCheckpointSchemaPrefix,
 		RemovePreviousCheckpoint: defaultRemovePreviousCheckpoint,
+		DisableHeartbeat:         defaultDisableHeartbeat,
 		MySQLInstances:           make([]*MySQLInstance, 0, 5),
 		InSharding:               defaultInSharding,
 		Routes:                   make(map[string]*router.TableRule),
@@ -412,6 +415,7 @@ func (c *TaskConfig) SubTaskConfigs() []*SubTaskConfig {
 		cfg.BinlogType = "local" // let's force syncer to replay local binlog.
 		cfg.CheckpointSchemaPrefix = c.CheckpointSchemaPrefix
 		cfg.RemovePreviousCheckpoint = c.RemovePreviousCheckpoint
+		cfg.DisableHeartbeat = c.DisableHeartbeat
 		cfg.Meta = inst.Meta
 
 		cfg.From = *inst.Config

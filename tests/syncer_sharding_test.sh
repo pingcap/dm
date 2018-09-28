@@ -31,6 +31,7 @@ binlog-gtid = ""
 __EOF__
 
     cat > syncer_config_sharding.toml << __EOF__
+name = "test"
 log-level = "info"
 server-id = 101
 meta-file = "$1"
@@ -60,7 +61,7 @@ table-pattern = "shard_table_*"
 target-schema = "shard_db"
 target-table = "shard_table"
 __EOF__
-    ./bin/syncer -config syncer_config_sharding.toml -log-file syncer_sharding_test.log &
+    ./bin/syncer -config syncer_config_sharding.toml -log-file syncer_sharding_test.log --disable-heartbeat=true &
 }
 
 check_syncer_complete_and_stop() {
@@ -76,8 +77,8 @@ check_syncer_complete_and_stop() {
             echo "syncer is not alive"
             exit 1
         fi 
-        m_file=$(curl "$1" | grep 'syncer_binlog_file{node="master"}' | awk '{print $2}')
-        s_file=$(curl "$1" | grep 'syncer_binlog_file{node="syncer"}' | awk '{print $2}')
+        m_file=$(curl "$1" | grep 'syncer_binlog_file' | grep 'node="master"' | awk '{print $2}')
+        s_file=$(curl "$1" | grep 'syncer_binlog_file' | grep 'node="syncer"' | awk '{print $2}')
         echo "$m_file"
         echo "$s_file"
         if [ -z "$m_file" ] || [ -z "$s_file" ];then
@@ -90,8 +91,8 @@ check_syncer_complete_and_stop() {
             continue
         fi
 
-        m_pos=$(curl "$1" | grep 'syncer_binlog_pos{node="master"}'| awk '{print $2}')
-        s_pos=$(curl "$1" | grep 'syncer_binlog_pos{node="syncer"}'| awk '{print $2}')
+        m_pos=$(curl "$1" | grep 'syncer_binlog_pos' | grep 'node="master"'| awk '{print $2}')
+        s_pos=$(curl "$1" | grep 'syncer_binlog_pos' | grep 'node="syncer"'| awk '{print $2}')
         if [ -z "$m_pos" ] || [ -z "$s_pos" ];then
             sleep 1
             continue 

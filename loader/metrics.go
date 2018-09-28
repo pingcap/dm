@@ -5,63 +5,83 @@ import (
 )
 
 var (
-	tidbUnknownErrorCount = prometheus.NewCounter(
+	// should error
+	tidbExecutionErrorCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Namespace: "loader",
-			Name:      "tidb_unknown_error",
-			Help:      "Total count of tidb unknown errors",
-		})
+			Namespace: "dm",
+			Subsystem: "loader",
+			Name:      "tidb_execution_error",
+			Help:      "Total count of tidb execution errors",
+		}, []string{"task"})
 
-	txnHistogram = prometheus.NewHistogram(
+	queryHistogram = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Namespace: "loader",
+			Namespace: "dm",
+			Subsystem: "loader",
+			Name:      "query_duration_time",
+			Help:      "Bucketed histogram of query time (s) of a txn.",
+			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 16),
+		}, []string{"task"})
+
+	txnHistogram = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "dm",
+			Subsystem: "loader",
 			Name:      "txn_duration_time",
 			Help:      "Bucketed histogram of processing time (s) of a txn.",
-			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 13),
-		})
+			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 16),
+		}, []string{"task"})
 
-	dataFileCount = prometheus.NewCounter(
+	dataFileCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Namespace: "loader",
+			Namespace: "dm",
+			Subsystem: "loader",
 			Name:      "data_file_count",
 			Help:      "data files in total",
-		})
+		}, []string{"task"})
 
-	databaseCount = prometheus.NewCounter(
+	tableCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Namespace: "loader",
-			Name:      "database_count",
-			Help:      "databases in total",
-		})
-
-	tableCount = prometheus.NewCounter(
-		prometheus.CounterOpts{
-			Namespace: "loader",
+			Namespace: "dm",
+			Subsystem: "loader",
 			Name:      "table_count",
 			Help:      "tables in total",
-		})
+		}, []string{"task"})
 
-	dataSizeCount = prometheus.NewCounter(
+	dataSizeCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Namespace: "loader",
+			Namespace: "dm",
+			Subsystem: "loader",
 			Name:      "data_size_count",
 			Help:      "data size in total",
-		})
+		}, []string{"task"})
 
-	progressGauge = prometheus.NewGauge(
+	progressGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Namespace: "loader",
+			Namespace: "dm",
+			Subsystem: "loader",
 			Name:      "progress",
 			Help:      "the processing progress of loader in percentage",
-		})
+		}, []string{"task"})
+
+	// should alert
+	loaderExitWithErrorCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "dm",
+			Subsystem: "loader",
+			Name:      "exit_with_error_count",
+			Help:      "counter for loader exits with error",
+		}, []string{"task"})
 )
 
-func init() {
-	prometheus.MustRegister(tidbUnknownErrorCount)
-	prometheus.MustRegister(txnHistogram)
-	prometheus.MustRegister(dataFileCount)
-	prometheus.MustRegister(databaseCount)
-	prometheus.MustRegister(tableCount)
-	prometheus.MustRegister(dataSizeCount)
-	prometheus.MustRegister(progressGauge)
+// RegisterMetrics registers metrics
+func RegisterMetrics(registry *prometheus.Registry) {
+	registry.MustRegister(tidbExecutionErrorCounter)
+	registry.MustRegister(txnHistogram)
+	registry.MustRegister(queryHistogram)
+	registry.MustRegister(dataFileCounter)
+	registry.MustRegister(tableCounter)
+	registry.MustRegister(dataSizeCounter)
+	registry.MustRegister(progressGauge)
+	registry.MustRegister(loaderExitWithErrorCounter)
 }

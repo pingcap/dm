@@ -14,7 +14,6 @@
 package syncer
 
 import (
-	"database/sql"
 	"fmt"
 	"math"
 	"runtime/debug"
@@ -57,6 +56,10 @@ var (
 
 	maxDMLConnectionTimeout = "1m"
 	maxDDLConnectionTimeout = fmt.Sprintf("%dm", MaxDDLConnectionTimeoutMinute)
+
+	adminQueueName     = "admin queue"
+	defaultBucketCount = 8
+	queueBucketMapping []string
 )
 
 // BinlogType represents binlog sync type
@@ -100,9 +103,9 @@ type Syncer struct {
 	tables       map[string]*table
 	cacheColumns map[string][]string
 
-	fromDB *sql.DB
-	toDBs  []*sql.DB
-	ddlDB  *sql.DB
+	fromDB *Conn
+	toDBs  []*Conn
+	ddlDB  *Conn
 
 	jobs       []chan *job
 	jobsClosed sync2.AtomicBool
@@ -118,6 +121,9 @@ type Syncer struct {
 
 	start    time.Time
 	lastTime time.Time
+
+	binlogSizeCount     sync2.AtomicInt64
+	lastBinlogSizeCount sync2.AtomicInt64
 
 	lastCount sync2.AtomicInt64
 	count     sync2.AtomicInt64
@@ -137,6 +143,8 @@ type Syncer struct {
 		sync.RWMutex
 		operators map[string]*Operator
 	}
+	heartbeat  *Heartbeat
+	currentPos mysql.Position
 }
 
 // NewSyncer creates a new Syncer.
@@ -145,6 +153,8 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.cfg = cfg
 	syncer.jobsClosed.Set(true) // not open yet
 	syncer.closed.Set(false)
+	syncer.lastBinlogSizeCount.Set(0)
+	syncer.binlogSizeCount.Set(0)
 	syncer.lastCount.Set(0)
 	syncer.count.Set(0)
 	syncer.tables = make(map[string]*table)
@@ -258,6 +268,18 @@ func (s *Syncer) Init() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+	if !s.cfg.DisableHeartbeat {
+		s.heartbeat, err = GetHeartbeat(&HeartbeatConfig{
+			serverID:  s.cfg.ServerID,
+			masterCfg: s.cfg.From})
+		if err != nil {
+			return errors.Trace(err)
+		}
+		err = s.heartbeat.AddTask(s.cfg.Name)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
 
 	return nil
 }
@@ -266,7 +288,7 @@ func (s *Syncer) Init() error {
 // NOTE: now we don't support modify router rules after task has started
 func (s *Syncer) initShardingGroups() error {
 	// fetch tables from source and filter them
-	sourceTables, err := utils.FetchAllDoTables(s.fromDB, s.bwList)
+	sourceTables, err := utils.FetchAllDoTables(s.fromDB.db, s.bwList)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -357,6 +379,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 				return
 			}
 			cancel() // cancel s.Run
+			syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name).Inc()
 			errs = append(errs, err)
 		}
 	}()
@@ -368,6 +391,12 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		if s.ddlExecInfo != nil {
 			s.ddlExecInfo.Close() // let Run can return
 		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		s.runBackgroundJob(newCtx)
+		wg.Done()
 	}()
 
 	err := s.Run(newCtx)
@@ -382,6 +411,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	wg.Wait()             // wait for receive all fatal from s.runFatalChan
 
 	if err != nil {
+		syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name).Inc()
 		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err)))
 	}
 
@@ -403,11 +433,11 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 }
 
 func (s *Syncer) getServerUUID() (string, error) {
-	return getServerUUID(s.fromDB)
+	return getServerUUID(s.fromDB.db)
 }
 
 func (s *Syncer) getMasterStatus() (mysql.Position, gtid.Set, error) {
-	return utils.GetMasterStatus(s.fromDB, s.cfg.Flavor)
+	return utils.GetMasterStatus(s.fromDB.db, s.cfg.Flavor)
 }
 
 func (s *Syncer) clearTables(schema, table string) {
@@ -416,7 +446,7 @@ func (s *Syncer) clearTables(schema, table string) {
 	delete(s.cacheColumns, key)
 }
 
-func (s *Syncer) getTableFromDB(db *sql.DB, schema string, name string) (*table, error) {
+func (s *Syncer) getTableFromDB(db *Conn, schema string, name string) (*table, error) {
 	table := &table{}
 	table.schema = schema
 	table.name = name
@@ -464,20 +494,25 @@ func (s *Syncer) getTable(schema string, table string) (*table, []string, error)
 	return t, columns, nil
 }
 
-func (s *Syncer) addCount(tp opType, n int64) {
+func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int64) {
+	m := addedJobsTotal
+	if isFinished {
+		m = finishedJobsTotal
+	}
+
 	switch tp {
 	case insert:
-		sqlJobsTotal.WithLabelValues("insert").Add(float64(n))
+		m.WithLabelValues("insert", s.cfg.Name, queueBucket).Add(float64(n))
 	case update:
-		sqlJobsTotal.WithLabelValues("update").Add(float64(n))
+		m.WithLabelValues("update", s.cfg.Name, queueBucket).Add(float64(n))
 	case del:
-		sqlJobsTotal.WithLabelValues("del").Add(float64(n))
-	case ddl:
-		sqlJobsTotal.WithLabelValues("ddl").Add(float64(n))
+		m.WithLabelValues("del", s.cfg.Name, queueBucket).Add(float64(n))
+	case ddl, fakeDDL:
+		m.WithLabelValues("ddl", s.cfg.Name, queueBucket).Add(float64(n))
 	case xid:
 		// ignore xid jobs
 	case flush:
-		sqlJobsTotal.WithLabelValues("flush").Add(float64(n))
+		m.WithLabelValues("flush", s.cfg.Name, queueBucket).Add(float64(n))
 	case skip:
 		// ignore skip jobs
 	default:
@@ -505,25 +540,28 @@ func (s *Syncer) addJob(job *job) error {
 		s.saveGlobalPoint(job.currentPos)
 		return nil
 	case ddl, fakeDDL:
-		// wait 3 seconds? refine it later
-		// while meet ddl, we should wait all dmls finished firstly
 		s.jobWg.Wait()
 	case flush:
+		addedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName).Inc()
 		// ugly code addJob and sync, refine it later
 		s.jobWg.Add(s.cfg.WorkerCount)
 		for i := 0; i < s.cfg.WorkerCount; i++ {
 			s.jobs[i] <- job
 		}
 		s.jobWg.Wait()
+		finishedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName).Inc()
+
 		return errors.Trace(s.flushCheckPoints())
 	}
 
 	if len(job.sql) > 0 {
 		s.jobWg.Add(1)
 		if job.tp == ddl || job.tp == fakeDDL {
+			addedJobsTotal.WithLabelValues("ddl", s.cfg.Name, adminQueueName).Inc()
 			s.jobs[s.cfg.WorkerCount] <- job
 		} else {
 			idx := int(utils.GenHashKey(job.key)) % s.cfg.WorkerCount
+			s.addCount(false, queueBucketMapping[idx], job.tp, 1)
 			s.jobs[idx] <- job
 		}
 	}
@@ -569,7 +607,7 @@ func (s *Syncer) flushCheckPoints() error {
 	return errors.Trace(s.checkpoint.FlushPointsExcept(exceptTables))
 }
 
-func (s *Syncer) sync(ctx context.Context, db *sql.DB, jobChan chan *job) {
+func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan chan *job) {
 	defer s.wg.Done()
 
 	idx := 0
@@ -585,7 +623,7 @@ func (s *Syncer) sync(ctx context.Context, db *sql.DB, jobChan chan *job) {
 		idx = 0
 		jobs = jobs[0:0]
 		for tpName, v := range tpCnt {
-			s.addCount(tpName, v)
+			s.addCount(true, queueBucket, tpName, v)
 			tpCnt[tpName] = 0
 		}
 	}
@@ -600,7 +638,7 @@ func (s *Syncer) sync(ctx context.Context, db *sql.DB, jobChan chan *job) {
 		if len(jobs) == 0 {
 			return nil
 		}
-		err := executeSQLJob(db, jobs, s.cfg.MaxRetry)
+		err := db.executeSQLJob(jobs, s.cfg.MaxRetry)
 		return errors.Trace(err)
 	}
 
@@ -646,7 +684,7 @@ func (s *Syncer) sync(ctx context.Context, db *sql.DB, jobChan chan *job) {
 					}
 					ddlJobs = append(ddlJobs, job)
 				}
-				err = executeSQLJob(db, ddlJobs, s.cfg.MaxRetry)
+				err = db.executeSQLJob(ddlJobs, s.cfg.MaxRetry)
 				if s.cfg.InSharding {
 					// for sharding DDL syncing, send result back
 					if sqlJob.ddlExecItem != nil {
@@ -662,7 +700,7 @@ func (s *Syncer) sync(ctx context.Context, db *sql.DB, jobChan chan *job) {
 					} else if len(cpSQLs) > 0 {
 						log.Warnf("[ignore ddl error][sql]%s[args]%v[error]%v", sqlJob.sql, sqlJob.args, err)
 						// try update checkpoint again when some cases like: CREATE TABLE returns already exists
-						err = executeSQL(db, cpSQLs, cpArgs, s.cfg.MaxRetry)
+						err = db.executeSQL(cpSQLs, cpArgs, s.cfg.MaxRetry)
 						if err != nil {
 							log.Warnf("[syncer] update checkpoint error %v", errors.ErrorStack(err))
 						}
@@ -748,18 +786,22 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 	for i := 0; i < s.cfg.WorkerCount; i++ {
 		s.wg.Add(1)
-		go func(i int) {
+		name := queueBucketName(i)
+		queueBucketMapping = append(queueBucketMapping, name)
+		go func(i int, n string) {
 			ctx2, cancel := context.WithCancel(ctx)
-			s.sync(ctx2, s.toDBs[i], s.jobs[i])
+			s.sync(ctx2, n, s.toDBs[i], s.jobs[i])
 			cancel()
-		}(i)
+		}(i, name)
 	}
+
 	s.wg.Add(1)
 	go func() {
 		ctx2, cancel := context.WithCancel(ctx)
-		s.sync(ctx2, s.ddlDB, s.jobs[s.cfg.WorkerCount])
+		s.sync(ctx2, adminQueueName, s.ddlDB, s.jobs[s.cfg.WorkerCount])
 		cancel()
 	}()
+
 	s.wg.Add(1)
 	go func() {
 		ctx2, cancel := context.WithCancel(ctx)
@@ -850,6 +892,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			e, err = globalStreamer.GetEvent(ctx2)
 		}
 		cancel()
+		startTime := time.Now()
 
 		if err == context.Canceled {
 			log.Infof("ready to quit! [%v]", lastPos)
@@ -891,8 +934,14 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 		// get binlog event, reset tryReSync, so we can re-sync binlog while syncer meets errors next time
 		tryReSync = true
-		binlogPos.WithLabelValues("syncer").Set(float64(e.Header.LogPos))
-		binlogFile.WithLabelValues("syncer").Set(getBinlogIndex(lastPos.Name))
+		binlogPosGauge.WithLabelValues("syncer", s.cfg.Name).Set(float64(e.Header.LogPos))
+		index, err := streamer.GetBinlogFileIndex(lastPos.Name)
+		if err != nil {
+			log.Errorf("parse binlog file err %v", err)
+		} else {
+			binlogFileGauge.WithLabelValues("syncer", s.cfg.Name).Set(index)
+		}
+		s.binlogSizeCount.Add(int64(e.Header.EventSize))
 
 		switch ev := e.Event.(type) {
 		case *replication.RotateEvent:
@@ -913,13 +962,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 				continue
 			}
-			binlogEventsTotal.WithLabelValues("rotate").Inc()
-			if currentPos.Name > lastPos.Name {
+			if currentPos.Compare(lastPos) == 1 {
 				lastPos = currentPos
 			}
 			log.Infof("rotate binlog to %v", currentPos)
 		case *replication.RowsEvent:
-			// binlogEventsTotal.WithLabelValues("type", "rows").Add(1)
 			originSchema, originTable := string(ev.Table.Schema), string(ev.Table.Table)
 			schemaName, tableName := s.renameShardingSchema(originSchema, originTable)
 			// always add current event's pos to the job, and save it to DB combine with event data in the same txn
@@ -950,12 +997,16 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			log.Debugf("source-db:%s table:%s; target-db:%s table:%s, pos: %v, RowsEvent data: %v", originSchema, originTable, schemaName, tableName, currentPos, ev.Rows)
 
+			if !s.cfg.DisableHeartbeat {
+				s.heartbeat.TryUpdateTaskTs(s.cfg.Name, originSchema, originTable, ev.Rows)
+			}
+
 			ignore, err := s.skipDMLEvent(originSchema, originTable, e.Header.EventType)
 			if err != nil {
 				return errors.Trace(err)
 			}
 			if ignore {
-				binlogSkippedEventsTotal.WithLabelValues("rows").Inc()
+				binlogSkippedEventsTotal.WithLabelValues("rows", s.cfg.Name).Inc()
 				if err = s.recordSkipSQLsPos(currentPos, nil); err != nil {
 					return errors.Trace(err)
 				}
@@ -991,8 +1042,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			switch e.Header.EventType {
 			case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
-				binlogEventsTotal.WithLabelValues("write_rows").Inc()
-
 				if operator != nil {
 					sqls, err = operator.Operate()
 					if err != nil {
@@ -1008,6 +1057,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 						return errors.Errorf("gen insert sqls failed: %v, schema: %s, table: %s", errors.Trace(err), table.schema, table.name)
 					}
 				}
+				binlogEvent.WithLabelValues("write_rows", s.cfg.Name).Observe(time.Since(startTime).Seconds())
 
 				for i := range sqls {
 					var arg []interface{}
@@ -1024,8 +1074,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					}
 				}
 			case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
-				binlogEventsTotal.WithLabelValues("update_rows").Inc()
-
 				if operator != nil {
 					sqls, err = operator.Operate()
 					if err != nil {
@@ -1041,6 +1089,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 						return errors.Errorf("gen update sqls failed: %v, schema: %s, table: %s", err, table.schema, table.name)
 					}
 				}
+				binlogEvent.WithLabelValues("update_rows", s.cfg.Name).Observe(time.Since(startTime).Seconds())
 
 				for i := range sqls {
 					var arg []interface{}
@@ -1057,8 +1106,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					}
 				}
 			case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-				binlogEventsTotal.WithLabelValues("delete_rows").Inc()
-
 				if operator != nil {
 					sqls, err = operator.Operate()
 					if err != nil {
@@ -1074,6 +1121,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 						return errors.Errorf("gen delete sqls failed: %v, schema: %s, table: %s", err, table.schema, table.name)
 					}
 				}
+				binlogEvent.WithLabelValues("delete_rows", s.cfg.Name).Observe(time.Since(startTime).Seconds())
 
 				for i := range sqls {
 					var arg []interface{}
@@ -1104,8 +1152,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				continue
 			}
 
-			binlogEventsTotal.WithLabelValues("query").Inc()
-
 			sql := strings.TrimSpace(string(ev.Query))
 			currentPos = mysql.Position{
 				Name: lastPos.Name,
@@ -1117,18 +1163,18 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				return errors.Trace(err)
 			}
 			if ignore {
-				binlogSkippedEventsTotal.WithLabelValues("query").Inc()
+				binlogSkippedEventsTotal.WithLabelValues("query", s.cfg.Name).Inc()
 				log.Warnf("[skip query-sql]%s [schema]:%s", sql, ev.Schema)
 				if err = s.recordSkipSQLsPos(currentPos, nil); err != nil {
 					return errors.Trace(err)
 				}
 				continue
 			}
-			log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
 
 			var sqls []string
-			p, err := getParser(s.fromDB)
+			p, err := getParser(s.fromDB.db)
 			if err != nil {
+				log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
 				return errors.Trace(err)
 			}
 
@@ -1136,6 +1182,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			if operator != nil {
 				sqls, err = operator.Operate()
 				if err != nil {
+					log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
 					return errors.Trace(err)
 				}
 				// operator only apply one time.
@@ -1143,19 +1190,24 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			} else {
 				sqls, err = resolveDDLSQL(sql, p)
 				if err != nil {
+					log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
 					log.Errorf("fail to be parsed, error %v", err)
 					return errors.Trace(err)
 				}
 			}
-			// log.Infof("[query]%s [current pos]%v [next pos]%v [next gtid set]%v", sql, pos, nextPos, ev.GSet)
+			if len(sqls) > 0 {
+				// only log real ddl, ignore BEGIN
+				log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
+			}
 
+			binlogEvent.WithLabelValues("query", s.cfg.Name).Observe(time.Since(startTime).Seconds())
 			for _, sql := range sqls {
 				sqlDDL, tableNames, stmt, err := s.handleDDL(p, string(ev.Schema), sql)
 				if err != nil {
 					return errors.Trace(err)
 				}
 				if len(sqlDDL) == 0 {
-					binlogSkippedEventsTotal.WithLabelValues("query").Inc()
+					binlogSkippedEventsTotal.WithLabelValues("query", s.cfg.Name).Inc()
 					log.Warnf("[ query-sql]%s [schema]:%s", sql, string(ev.Schema))
 					if err = s.recordSkipSQLsPos(currentPos, nil); err != nil {
 						return errors.Trace(err)
@@ -1294,6 +1346,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 
 		lastPos = currentPos
+		s.currentPos = currentPos
 	}
 }
 
@@ -1365,24 +1418,46 @@ func (s *Syncer) printStatus(ctx context.Context) {
 			last := s.lastCount.Get()
 			total := s.count.Get()
 
+			totalBinlogSize := s.binlogSizeCount.Get()
+			lastBinlogSize := s.lastBinlogSizeCount.Get()
+
 			tps, totalTps := int64(0), int64(0)
 			if seconds > 0 {
 				tps = (total - last) / seconds
 				totalTps = total / totalSeconds
+
+				remainingSize, err := countBinaryLogsSize(s.currentPos, s.fromDB.db)
+				if err != nil {
+					log.Errorf("count remaining binlog size err %v", errors.ErrorStack(err))
+					return
+				}
+
+				bytesPerSec := (totalBinlogSize - lastBinlogSize) / seconds
+				if bytesPerSec > 0 {
+					remainingSeconds := remainingSize / bytesPerSec
+					log.Infof("totalBinlogSize %d, lastBinlogSize %d, seconds %d,  bytesPerSec %d, remainingSize %d, remaining seconds %d", totalBinlogSize, lastBinlogSize, seconds, bytesPerSec, remainingSize, remainingSeconds)
+					remainingTimeGauge.WithLabelValues(s.cfg.Name).Set(float64(remainingSeconds))
+				}
 			}
 
 			latestMasterPos, latestmasterGTIDSet, err = s.getMasterStatus()
 			if err != nil {
 				log.Errorf("[syncer] get master status error %s", err)
 			} else {
-				binlogPos.WithLabelValues("master").Set(float64(latestMasterPos.Pos))
-				binlogFile.WithLabelValues("master").Set(getBinlogIndex(latestMasterPos.Name))
+				binlogPosGauge.WithLabelValues("master", s.cfg.Name).Set(float64(latestMasterPos.Pos))
+				index, err := streamer.GetBinlogFileIndex(latestMasterPos.Name)
+				if err != nil {
+					log.Errorf("[syncer] parse binlog file err %v", err)
+				} else {
+					binlogFileGauge.WithLabelValues("master", s.cfg.Name).Set(index)
+				}
 			}
 
 			log.Infof("[syncer]total events = %d, total tps = %d, recent tps = %d, master-binlog = %v, master-binlog-gtid=%v, syncer-binlog =%v",
 				total, totalTps, tps, latestMasterPos, latestmasterGTIDSet, s.checkpoint.GlobalPoint())
 
 			s.lastCount.Set(total)
+			s.lastBinlogSizeCount.Set(totalBinlogSize)
 			s.lastTime = time.Now()
 			s.totalTps.Set(totalTps)
 			s.tps.Set(tps)
@@ -1425,18 +1500,18 @@ func (s *Syncer) getRemoteBinlogStreamer(syncerOrReader interface{}, pos mysql.P
 
 func (s *Syncer) createDBs() error {
 	var err error
-	s.fromDB, err = createDB(s.cfg.From, maxDMLConnectionTimeout)
+	s.fromDB, err = createDB(s.cfg, s.cfg.From, maxDMLConnectionTimeout)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	s.toDBs = make([]*sql.DB, 0, s.cfg.WorkerCount)
-	s.toDBs, err = createDBs(s.cfg.To, s.cfg.WorkerCount, maxDMLConnectionTimeout)
+	s.toDBs = make([]*Conn, 0, s.cfg.WorkerCount)
+	s.toDBs, err = createDBs(s.cfg, s.cfg.To, s.cfg.WorkerCount, maxDMLConnectionTimeout)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	// db for ddl
-	s.ddlDB, err = createDB(s.cfg.To, maxDDLConnectionTimeout)
+	s.ddlDB, err = createDB(s.cfg, s.cfg.To, maxDDLConnectionTimeout)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -1536,6 +1611,10 @@ func (s *Syncer) Close() {
 		return
 	}
 
+	if !s.cfg.DisableHeartbeat {
+		s.heartbeat.RemoveTask(s.cfg.Name)
+	}
+
 	s.stopSync()
 
 	if s.ddlInfoCh != nil {
@@ -1578,7 +1657,7 @@ func (s *Syncer) closeBinlogSyncer(syncer *replication.BinlogSyncer) error {
 	lastSlaveConnectionID := syncer.LastConnectionID()
 	defer syncer.Close()
 	if lastSlaveConnectionID > 0 {
-		err := killConn(s.fromDB, lastSlaveConnectionID)
+		err := killConn(s.fromDB.db, lastSlaveConnectionID)
 		if err != nil {
 			log.Errorf("[syncer] kill last connection %d err %v", lastSlaveConnectionID, err)
 			if !isNoSuchThreadError(err) {

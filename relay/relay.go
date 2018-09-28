@@ -16,9 +16,8 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"github.com/pingcap/tidb-enterprise-tools/dm/unit"
+	pkgstreamer "github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
-
-	// TODO: unify syncer/loader/relay checkpoint
 	"github.com/pingcap/tidb-enterprise-tools/syncer"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
@@ -94,6 +93,11 @@ func (r *Relay) Init() error {
 	if err := os.MkdirAll(r.cfg.RelayDir, 0755); err != nil {
 		return errors.Trace(err)
 	}
+
+	if err := reportRelayLogSpaceInBackground(r.cfg.RelayDir); err != nil {
+		return errors.Trace(err)
+	}
+
 	go func() {
 		for {
 			time.Sleep(time.Second * 30)
@@ -111,6 +115,7 @@ func (r *Relay) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	errs := make([]*pb.ProcessError, 0, 1)
 	err := r.process(ctx)
 	if err != nil && errors.Cause(err) != replication.ErrSyncClosed {
+		relayExitWithErrorCounter.Inc()
 		log.Errorf("[relay] process exit with error %v", errors.ErrorStack(err))
 		// TODO: add specified error type instead of pb.ErrorType_UnknownError
 		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err)))
@@ -148,14 +153,23 @@ func (r *Relay) process(parentCtx context.Context) error {
 
 	for {
 		ctx, cancel := context.WithTimeout(parentCtx, eventTimeout)
+		readTimer := time.Now()
 		e, err := streamer.GetEvent(ctx)
 		cancel()
+		binlogReadDurationHistogram.Observe(time.Since(readTimer).Seconds())
 
-		if err == context.DeadlineExceeded {
-			log.Infof("after %s deadline exceeded", eventTimeout)
-			continue
-		}
 		if err != nil {
+			switch errors.Cause(err) {
+			case context.DeadlineExceeded:
+				log.Infof("after %s deadline exceeded", eventTimeout)
+				continue
+			case replication.ErrChecksumMismatch:
+				relayLogDataCorruptionCounter.Inc()
+			case replication.ErrSyncClosed, replication.ErrNeedSyncAgain:
+				// do nothing
+			default:
+				binlogReadErrorCounter.Inc()
+			}
 			return errors.Trace(err)
 		}
 
@@ -178,6 +192,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 			}
 
 			if len(filename) == 0 {
+				relayLogDataCorruptionCounter.Inc()
 				return errors.Errorf("empty binlog filename for FormateDescriptionEvent")
 			}
 
@@ -193,6 +208,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 
 			exists, err := r.checkFormatDescriptionEventExists(filename)
 			if err != nil {
+				relayLogDataCorruptionCounter.Inc()
 				return errors.Trace(err)
 			}
 
@@ -207,12 +223,24 @@ func (r *Relay) process(parentCtx context.Context) error {
 			}
 		}
 
+		writeTimer := time.Now()
 		log.Debugf("write %v", e.Header)
 		if n, err2 := r.fd.Write(e.RawData); err2 != nil {
+			relayLogWriteErrorCounter.Inc()
 			return errors.Trace(err2)
 		} else if n != len(e.RawData) {
+			relayLogWriteErrorCounter.Inc()
 			// FIXME: should we panic here? it seems unreachable
 			return errors.Trace(io.ErrShortWrite)
+		}
+
+		relayLogWriteDurationHistogram.Observe(time.Since(writeTimer).Seconds())
+		relayLogWriteSizeHistogram.Observe(float64(e.Header.EventSize))
+		relayLogPosGauge.Set(float64(offset))
+		if index, err := pkgstreamer.GetBinlogFileIndex(filename); err != nil {
+			log.Errorf("parse binlog file err %v", err)
+		} else {
+			relayLogFileGauge.Set(index)
 		}
 
 		// we don't need to save gtid for local checkpoint.
@@ -240,6 +268,10 @@ func (r *Relay) writeBinlogHeaderIfNotExists() error {
 		if _, err = r.fd.Write(replication.BinLogFileHeader); err != nil {
 			return errors.Trace(err)
 		}
+		// Note: it's trival to monitor the writing duration and size here. so ignore it.
+	} else if err != nil {
+		relayLogDataCorruptionCounter.Inc()
+		return errors.Trace(err)
 	}
 	return nil
 }

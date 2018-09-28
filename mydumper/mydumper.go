@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
@@ -52,6 +53,7 @@ func (m *Mydumper) Init() error {
 
 // Process implements Unit.Process
 func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
+	begin := time.Now()
 	errs := make([]*pb.ProcessError, 0, 1)
 	isCanceled := false
 
@@ -68,6 +70,7 @@ func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
+		mydumperExitWithErrorCounter.WithLabelValues(m.cfg.Name).Inc()
 		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, fmt.Sprintf("%s. %s", err.Error(), output)))
 	} else {
 		select {
@@ -76,6 +79,8 @@ func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		default:
 		}
 	}
+
+	log.Infof("[mydumper] dump data takes %v", time.Since(begin))
 
 	pr <- pb.ProcessResult{
 		IsCanceled: isCanceled,

@@ -15,7 +15,6 @@ package syncer
 
 import (
 	"bufio"
-	"database/sql"
 	"fmt"
 	"io"
 	"os"
@@ -161,7 +160,7 @@ type RemoteCheckPoint struct {
 
 	cfg *config.SubTaskConfig
 
-	db     *sql.DB
+	db     *Conn
 	schema string // schema name, set through task config
 	table  string // table name, now it's task name
 	id     string // checkpoint ID, now it is `server-id` used as MySQL slave
@@ -199,7 +198,7 @@ func NewRemoteCheckPoint(cfg *config.SubTaskConfig, id string) CheckPoint {
 
 // Init implements CheckPoint.Init
 func (cp *RemoteCheckPoint) Init() error {
-	db, err := createDB(cp.cfg.To, maxCheckPointTimeout)
+	db, err := createDB(cp.cfg, cp.cfg.To, maxCheckPointTimeout)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -226,7 +225,7 @@ func (cp *RemoteCheckPoint) Clear() error {
 	// delete all checkpoints
 	sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s'", cp.schema, cp.table, cp.id)
 	args := make([]interface{}, 0)
-	err := executeSQL(cp.db, []string{sql2}, [][]interface{}{args}, maxRetryCount)
+	err := cp.db.executeSQL([]string{sql2}, [][]interface{}{args}, maxRetryCount)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -331,7 +330,7 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(exceptTables [][]string) error {
 		}
 	}
 
-	err := executeSQL(cp.db, sqls, args, maxRetryCount)
+	err := cp.db.executeSQL(sqls, args, maxRetryCount)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -431,7 +430,8 @@ func (cp *RemoteCheckPoint) prepare() error {
 func (cp *RemoteCheckPoint) createSchema() error {
 	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", cp.schema)
 	args := make([]interface{}, 0)
-	err := executeSQL(cp.db, []string{sql2}, [][]interface{}{args}, maxRetryCount)
+	err := cp.db.executeSQL([]string{sql2}, [][]interface{}{args}, maxRetryCount)
+	log.Infof("[syncer] %s", sql2)
 	return errors.Trace(err)
 }
 
@@ -449,14 +449,15 @@ func (cp *RemoteCheckPoint) createTable() error {
 			UNIQUE KEY uk_id_schema_table (id, cp_schema, cp_table)
 		)`, tableName)
 	args := make([]interface{}, 0)
-	err := executeSQL(cp.db, []string{sql2}, [][]interface{}{args}, maxRetryCount)
+	err := cp.db.executeSQL([]string{sql2}, [][]interface{}{args}, maxRetryCount)
+	log.Infof("[syncer] %s", sql2)
 	return errors.Trace(err)
 }
 
 // Load implements CheckPoint.Load
 func (cp *RemoteCheckPoint) Load() error {
 	query := fmt.Sprintf("SELECT `cp_schema`, `cp_table`, `binlog_name`, `binlog_pos`, `is_global` FROM `%s`.`%s` WHERE `id`='%s'", cp.schema, cp.table, cp.id)
-	rows, err := querySQL(cp.db, query, maxRetryCount)
+	rows, err := cp.db.querySQL(query, maxRetryCount)
 	if err != nil {
 		return errors.Trace(err)
 	}

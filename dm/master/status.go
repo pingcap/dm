@@ -18,9 +18,6 @@ import (
 
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
-
-	// used to enable pprof
-	_ "net/http/pprof"
 )
 
 // InitStatus initializes the HTTP status server

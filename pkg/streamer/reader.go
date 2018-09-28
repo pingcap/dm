@@ -135,14 +135,19 @@ func (r *BinlogReader) onStream(s *LocalStreamer, pos mysql.Position, updatePos 
 	}
 
 	var offset int64
-	firstFile := parseBinlogFile(pos.Name)
+	firstFile, err := parseBinlogFile(pos.Name)
+	if err != nil {
+		s.closeWithError(err)
+		return errors.Trace(err)
+	}
 	for _, file := range files {
 		select {
 		case <-r.ctx.Done():
 			return nil
 		default:
 		}
-		parsed := parseBinlogFile(file)
+		// omit error here since we have validated filename above.
+		parsed, _ := parseBinlogFile(file)
 		if !parsed.BiggerOrEqualThan(firstFile) {
 			log.Debugf("ignore older binlog file %s", file)
 			continue

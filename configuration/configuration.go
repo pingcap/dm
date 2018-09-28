@@ -97,6 +97,7 @@ type DataMigrationConfig struct {
 	Flavor                   string `yaml:"flavor" toml:"flavor" json:"flavor"`
 	CheckpointSchemaPrefix   string `yaml:"checkpoint-schema-prefix" toml:"checkpoint-schema-prefix" json:"checkpoint-schema-prefix"`
 	RemovePreviousCheckpoint bool   `yaml:"remove-previous-checkpoint" toml:"remove-previous-checkpoint" json:"remove-previous-checkpoint"`
+	DisableHeartbeat         bool   `yaml:"disable-heartbeat" toml:"disable-heartbeat" json:"disable-heartbeat"`
 
 	TargetDB *dm.DBConfig `yaml:"target-database" toml:"target-database" json:"target-database"`
 
@@ -158,6 +159,7 @@ func (c *DataMigrationConfig) GenerateDMTask() (*dm.TaskConfig, error) {
 		Flavor:                   c.Flavor,
 		CheckpointSchemaPrefix:   c.CheckpointSchemaPrefix,
 		RemovePreviousCheckpoint: c.RemovePreviousCheckpoint,
+		DisableHeartbeat:         c.DisableHeartbeat,
 		TargetDB:                 new(dm.DBConfig),
 		MySQLInstances:           make([]*dm.MySQLInstance, 0, len(c.MySQLInstances)),
 
@@ -294,6 +296,7 @@ func (c *DataMigrationConfig) DecodeFromTask(task *dm.TaskConfig) error {
 	c.BinlogEventsFilter = make(map[string]*InstanceConfig)
 	c.CheckpointSchemaPrefix = task.CheckpointSchemaPrefix
 	c.RemovePreviousCheckpoint = task.RemovePreviousCheckpoint
+	c.DisableHeartbeat = task.DisableHeartbeat
 
 	*c.TargetDB = *task.TargetDB
 

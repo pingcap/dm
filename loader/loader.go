@@ -79,7 +79,7 @@ type Worker struct {
 
 // NewWorker returns a Worker.
 func NewWorker(loader *Loader, id int) (worker *Worker, err error) {
-	conn, err := createConn(loader.cfg.To)
+	conn, err := createConn(loader.cfg)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -125,7 +125,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *
 				offsetSQL := w.checkPoint.GenSQL(job.file, job.offset)
 				sqls = append(sqls, offsetSQL)
 
-				if err := executeSQL(w.conn, sqls, true); err != nil {
+				if err := w.conn.executeSQL(sqls, true); err != nil {
 					// expect pause rather than exit
 					err = errors.Annotatef(err, "file %s", job.file)
 					runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, errors.ErrorStack(err))
@@ -401,6 +401,7 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	wg.Wait()             // wait for receive all fatal from l.runFatalChan
 
 	if err != nil {
+		loaderExitWithErrorCounter.WithLabelValues(l.cfg.Name).Inc()
 		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err)))
 	}
 
@@ -633,7 +634,6 @@ func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
 				continue
 			}
 
-			databaseCount.Inc() // NOTE: should we reset metrics counter?
 			l.db2Tables[db] = make(Tables2DataFiles)
 		}
 	}
@@ -672,7 +672,7 @@ func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 		if _, ok := tables[table]; ok {
 			return errors.Errorf("invalid table schema file, duplicated item - %s", file)
 		}
-		tableCount.Inc()
+		tableCounter.WithLabelValues(l.cfg.Name).Inc()
 		tables[table] = make(DataFiles, 0, 16)
 	}
 
@@ -723,11 +723,11 @@ func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 		l.totalDataSize.Add(size)
 
 		dataFiles = append(dataFiles, file)
-		dataFileCount.Inc()
+		dataFileCounter.WithLabelValues(l.cfg.Name).Inc()
 		tables[table] = dataFiles
 	}
 
-	dataSizeCount.Add(float64(l.totalDataSize.Get()))
+	dataSizeCounter.WithLabelValues(l.cfg.Name).Add(float64(l.totalDataSize.Get()))
 	return nil
 }
 
@@ -807,7 +807,7 @@ func (l *Loader) restoreSchema(conn *Conn, sqlFile string, schema string, table 
 				log.Debugf("query:%s", query)
 
 				sqls = append(sqls, query)
-				err = executeSQL(conn, sqls, false)
+				err = conn.executeSQL(sqls, false)
 				if err != nil {
 					return errors.Trace(err)
 				}
@@ -874,7 +874,7 @@ func (l *Loader) dispatchDataFileJob(job *fileJob) {
 func (l *Loader) restoreData(ctx context.Context) error {
 	begin := time.Now()
 
-	conn, err := createConn(l.cfg.To)
+	conn, err := createConn(l.cfg)
 	if err != nil {
 		return errors.Trace(err)
 	}

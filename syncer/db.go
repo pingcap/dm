@@ -16,6 +16,7 @@ package syncer
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 	tmysql "github.com/pingcap/tidb/mysql"
+	"github.com/siddontang/go-mysql/mysql"
 )
 
 var (
@@ -46,7 +48,18 @@ type table struct {
 	indexColumns map[string][]*column
 }
 
-func querySQL(db *sql.DB, query string, maxRetry int) (*sql.Rows, error) {
+// Conn represents a live DB connection
+type Conn struct {
+	cfg *config.SubTaskConfig
+
+	db *sql.DB
+}
+
+func (conn *Conn) querySQL(query string, maxRetry int) (*sql.Rows, error) {
+	if conn == nil || conn.db == nil {
+		return nil, errors.NotValidf("database connection")
+	}
+
 	var (
 		err  error
 		rows *sql.Rows
@@ -54,14 +67,14 @@ func querySQL(db *sql.DB, query string, maxRetry int) (*sql.Rows, error) {
 
 	for i := 0; i < maxRetry; i++ {
 		if i > 0 {
-			sqlRetriesTotal.WithLabelValues("query").Add(1)
+			sqlRetriesTotal.WithLabelValues("query", conn.cfg.Name).Add(1)
 			log.Warnf("sql query retry %d: %s", i, query)
 			time.Sleep(retryTimeout)
 		}
 
 		log.Debugf("[query][sql]%s", query)
 
-		rows, err = db.Query(query)
+		rows, err = conn.db.Query(query)
 		if err != nil {
 			if !isRetryableError(err) {
 				return rows, errors.Trace(err)
@@ -82,21 +95,25 @@ func querySQL(db *sql.DB, query string, maxRetry int) (*sql.Rows, error) {
 }
 
 // Note: keep it for later use?
-func executeSQL(db *sql.DB, sqls []string, args [][]interface{}, maxRetry int) error {
+func (conn *Conn) executeSQL(sqls []string, args [][]interface{}, maxRetry int) error {
 	if len(sqls) == 0 {
 		return nil
+	}
+
+	if conn == nil || conn.db == nil {
+		return errors.NotValidf("database connection")
 	}
 
 	var err error
 
 	for i := 0; i < maxRetry; i++ {
 		if i > 0 {
-			sqlRetriesTotal.WithLabelValues("stmt_exec").Add(1)
+			sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
 			log.Warnf("sql stmt_exec retry %d: %v - %v", i, sqls, args)
 			time.Sleep(retryTimeout)
 		}
 
-		if err = executeSQLImp(db, sqls, args); err != nil {
+		if err = conn.executeSQLImp(sqls, args); err != nil {
 			if isRetryableError(err) {
 				continue
 			}
@@ -111,14 +128,17 @@ func executeSQL(db *sql.DB, sqls []string, args [][]interface{}, maxRetry int) e
 }
 
 // Note: keep it for later use?
-func executeSQLImp(db *sql.DB, sqls []string, args [][]interface{}) error {
+func (conn *Conn) executeSQLImp(sqls []string, args [][]interface{}) error {
+	if conn == nil || conn.db == nil {
+		return errors.NotValidf("database connection")
+	}
+
 	startTime := time.Now()
 	defer func() {
-		cost := time.Since(startTime).Seconds()
-		txnCostGauge.Set(cost)
+		txnHistogram.WithLabelValues(conn.cfg.Name).Observe(time.Since(startTime).Seconds())
 	}()
 
-	txn, err := db.Begin()
+	txn, err := conn.db.Begin()
 	if err != nil {
 		log.Errorf("exec sqls[%v] begin failed %v", sqls, errors.ErrorStack(err))
 		return errors.Trace(err)
@@ -146,7 +166,7 @@ func executeSQLImp(db *sql.DB, sqls []string, args [][]interface{}) error {
 	return nil
 }
 
-func executeSQLJob(db *sql.DB, jobs []*job, maxRetry int) error {
+func (conn *Conn) executeSQLJob(jobs []*job, maxRetry int) error {
 	if len(jobs) == 0 {
 		return nil
 	}
@@ -155,12 +175,12 @@ func executeSQLJob(db *sql.DB, jobs []*job, maxRetry int) error {
 
 	for i := 0; i < maxRetry; i++ {
 		if i > 0 {
-			sqlRetriesTotal.WithLabelValues("stmt_exec").Add(1)
+			sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
 			log.Warnf("sql stmt_exec retry %d: %v", i, jobs)
 			time.Sleep(retryTimeout)
 		}
 
-		if err = executeSQLJobImp(db, jobs); err != nil {
+		if err = conn.executeSQLJobImp(jobs); err != nil {
 			if isRetryableError(err) {
 				continue
 			}
@@ -175,14 +195,14 @@ func executeSQLJob(db *sql.DB, jobs []*job, maxRetry int) error {
 
 }
 
-func executeSQLJobImp(db *sql.DB, jobs []*job) error {
+func (conn *Conn) executeSQLJobImp(jobs []*job) error {
 	startTime := time.Now()
 	defer func() {
 		cost := time.Since(startTime).Seconds()
-		txnCostGauge.Set(cost)
+		txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost)
 	}()
 
-	txn, err := db.Begin()
+	txn, err := conn.db.Begin()
 	if err != nil {
 		log.Errorf("exec sqls[%v] begin failed %v", jobs, errors.ErrorStack(err))
 		return errors.Trace(err)
@@ -210,28 +230,28 @@ func executeSQLJobImp(db *sql.DB, jobs []*job) error {
 	return nil
 }
 
-func createDB(cfg config.DBConfig, timeout string) (*sql.DB, error) {
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8&interpolateParams=true&readTimeout=%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, timeout)
+func createDB(cfg *config.SubTaskConfig, dbCfg config.DBConfig, timeout string) (*Conn, error) {
+	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8&interpolateParams=true&readTimeout=%s", dbCfg.User, dbCfg.Password, dbCfg.Host, dbCfg.Port, timeout)
 	db, err := sql.Open("mysql", dbDSN)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	return db, nil
+	return &Conn{db: db, cfg: cfg}, nil
 }
 
-func closeDB(db *sql.DB) error {
-	if db == nil {
+func (conn *Conn) close() error {
+	if conn == nil || conn.db == nil {
 		return nil
 	}
 
-	return errors.Trace(db.Close())
+	return errors.Trace(conn.db.Close())
 }
 
-func createDBs(cfg config.DBConfig, count int, timeout string) ([]*sql.DB, error) {
-	dbs := make([]*sql.DB, 0, count)
+func createDBs(cfg *config.SubTaskConfig, dbCfg config.DBConfig, count int, timeout string) ([]*Conn, error) {
+	dbs := make([]*Conn, 0, count)
 	for i := 0; i < count; i++ {
-		db, err := createDB(cfg, timeout)
+		db, err := createDB(cfg, dbCfg, timeout)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -242,51 +262,22 @@ func createDBs(cfg config.DBConfig, count int, timeout string) ([]*sql.DB, error
 	return dbs, nil
 }
 
-func closeDBs(dbs ...*sql.DB) {
+func closeDBs(dbs ...*Conn) {
 	for _, db := range dbs {
-		err := closeDB(db)
+		err := db.close()
 		if err != nil {
 			log.Errorf("close db failed: %v", err)
 		}
 	}
 }
 
-func getServerUUID(db *sql.DB) (string, error) {
-	var masterUUID string
-	rows, err := db.Query(`select @@server_uuid;`)
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-	defer rows.Close()
-
-	// Show an example.
-	/*
-	   MySQL [test]> SHOW MASTER STATUS;
-	   +--------------------------------------+
-	   | @@server_uuid                        |
-	   +--------------------------------------+
-	   | 53ea0ed1-9bf8-11e6-8bea-64006a897c73 |
-	   +--------------------------------------+
-	*/
-	for rows.Next() {
-		err = rows.Scan(&masterUUID)
-		if err != nil {
-			return "", errors.Trace(err)
-		}
-	}
-	if rows.Err() != nil {
-		return "", errors.Trace(rows.Err())
-	}
-	return masterUUID, nil
-}
-
-func getTableIndex(db *sql.DB, table *table, maxRetry int) error {
+func getTableIndex(db *Conn, table *table, maxRetry int) error {
 	if table.schema == "" || table.name == "" {
 		return errors.New("schema/table is empty")
 	}
 
 	query := fmt.Sprintf("SHOW INDEX FROM `%s`.`%s`", table.schema, table.name)
-	rows, err := querySQL(db, query, maxRetry)
+	rows, err := db.querySQL(query, maxRetry)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -337,13 +328,13 @@ func getTableIndex(db *sql.DB, table *table, maxRetry int) error {
 	return nil
 }
 
-func getTableColumns(db *sql.DB, table *table, maxRetry int) error {
+func getTableColumns(db *Conn, table *table, maxRetry int) error {
 	if table.schema == "" || table.name == "" {
 		return errors.New("schema/table is empty")
 	}
 
 	query := fmt.Sprintf("SHOW COLUMNS FROM `%s`.`%s`", table.schema, table.name)
-	rows, err := querySQL(db, query, maxRetry)
+	rows, err := db.querySQL(query, maxRetry)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -425,6 +416,21 @@ func getSQLMode(db *sql.DB) (tmysql.SQLMode, error) {
 	return mode, errors.Trace(err)
 }
 
+func getServerUUID(db *sql.DB) (string, error) {
+	serverUUID, err := getGlobalVariable(db, "server_uuid")
+	return serverUUID, errors.Trace(err)
+}
+
+func getServerID(db *sql.DB) (int64, error) {
+	serverIDStr, err := getGlobalVariable(db, "server_id")
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+
+	serverID, err := strconv.ParseInt(serverIDStr, 10, 64)
+	return serverID, errors.Trace(err)
+}
+
 func getGlobalVariable(db *sql.DB, variable string) (value string, err error) {
 	query := fmt.Sprintf("SHOW GLOBAL VARIABLES LIKE '%s'", variable)
 	rows, err := db.Query(query)
@@ -455,6 +461,50 @@ func getGlobalVariable(db *sql.DB, variable string) (value string, err error) {
 	}
 
 	return value, nil
+}
+
+func countBinaryLogsSize(fromFile mysql.Position, db *sql.DB) (int64, error) {
+	files, err := getBinaryLogs(db)
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+
+	var total int64
+	for _, file := range files {
+		if file.Name < fromFile.Name {
+			continue
+		} else if file.Name > fromFile.Name {
+			total += int64(file.Pos)
+		} else if file.Name == fromFile.Name {
+			if file.Pos > fromFile.Pos {
+				total += int64(file.Pos - fromFile.Pos)
+			}
+		}
+	}
+
+	return total, nil
+}
+
+func getBinaryLogs(db *sql.DB) ([]mysql.Position, error) {
+	query := "SHOW BINARY LOGS"
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	files := make([]mysql.Position, 0, 10)
+	for rows.Next() {
+		var file string
+		var pos uint32
+		err = rows.Scan(&file, &pos)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		files = append(files, mysql.Position{Name: file, Pos: pos})
+	}
+	if rows.Err() != nil {
+		return nil, errors.Trace(rows.Err())
+	}
+	return files, nil
 }
 
 func killConn(db *sql.DB, connID uint32) error {

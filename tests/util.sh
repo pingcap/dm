@@ -11,6 +11,7 @@ wait_for_syncer_alive() {
             break
         fi 
         ((i++))
+        cat syncer_sharding_test.log
         sleep 1
     done 
 }

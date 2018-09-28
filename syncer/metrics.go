@@ -15,84 +15,159 @@ package syncer
 
 import (
 	"net/http"
-	"strings"
-	// For pprof
-	_ "net/http/pprof"
-	"strconv"
+	"os"
+	"time"
 
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	cpu "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/net/context"
 )
 
 var (
-	binlogEventsTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Namespace: "syncer",
-			Name:      "binlog_events_total",
-			Help:      "total number of binlog events",
-		}, []string{"type"})
+	binlogEvent = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "binlog_transform_cost",
+			Help:      "cost of binlog event transform",
+			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
+		}, []string{"type", "task"})
 
 	binlogSkippedEventsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Namespace: "syncer",
+			Namespace: "dm",
+			Subsystem: "syncer",
 			Name:      "binlog_skipped_events_total",
 			Help:      "total number of skipped binlog events",
-		}, []string{"type"})
+		}, []string{"type", "task"})
 
-	sqlJobsTotal = prometheus.NewCounterVec(
+	addedJobsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Namespace: "syncer",
-			Name:      "sql_jobs_total",
-			Help:      "total number of sql jobs",
-		}, []string{"type"})
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "added_jobs_total",
+			Help:      "total number of added jobs",
+		}, []string{"type", "task", "queueNo"})
+
+	finishedJobsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "finished_jobs_total",
+			Help:      "total number of finished jobs",
+		}, []string{"type", "task", "queueNo"})
+
+	binlogPosGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "binlog_pos",
+			Help:      "current binlog pos",
+		}, []string{"node", "task"})
+
+	binlogFileGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "binlog_file",
+			Help:      "current binlog file index",
+		}, []string{"node", "task"})
 
 	sqlRetriesTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Namespace: "syncer",
+			Namespace: "dm",
+			Subsystem: "syncer",
 			Name:      "sql_retries_total",
 			Help:      "total number of sql retryies",
-		}, []string{"type"})
+		}, []string{"type", "task"})
 
-	binlogPos = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: "syncer",
-			Name:      "binlog_pos",
-			Help:      "current binlog pos",
-		}, []string{"node"})
+	txnHistogram = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "txn_duration_time",
+			Help:      "Bucketed histogram of processing time (s) of a txn.",
+			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 18),
+		}, []string{"task"})
 
-	binlogFile = prometheus.NewGaugeVec(
+	// FIXME: should I move it to dm-worker?
+	cpuUsageGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Namespace: "syncer",
-			Name:      "binlog_file",
-			Help:      "current binlog file index",
-		}, []string{"node"})
-
-	binlogGTID = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: "syncer",
-			Name:      "gtid",
-			Help:      "current transaction id",
-		}, []string{"node"})
-
-	txnCostGauge = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Namespace: "syncer",
-			Name:      "txn_costs_gauge_in_second",
-			Help:      "transaction costs gauge in second",
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "cpu_usage",
+			Help:      "the cpu usage of syncer process",
 		})
+
+	// should alert
+	syncerExitWithErrorCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "exit_with_error_count",
+			Help:      "counter for syncer exits with error",
+		}, []string{"task"})
+
+	// some problems with it
+	replicationLagGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "replication_lag",
+			Help:      "replication lag in second between mysql and syncer",
+		}, []string{"task"})
+
+	remainingTimeGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "remaining_time",
+			Help:      "the remaining time in second to catch up master",
+		}, []string{"task"})
 )
+
+// RegisterMetrics registers metrics
+func RegisterMetrics(registry *prometheus.Registry) {
+	registry.MustRegister(binlogEvent)
+	registry.MustRegister(binlogSkippedEventsTotal)
+	registry.MustRegister(addedJobsTotal)
+	registry.MustRegister(finishedJobsTotal)
+	registry.MustRegister(sqlRetriesTotal)
+	registry.MustRegister(binlogPosGauge)
+	registry.MustRegister(binlogFileGauge)
+	registry.MustRegister(txnHistogram)
+	registry.MustRegister(cpuUsageGauge)
+	registry.MustRegister(syncerExitWithErrorCounter)
+	registry.MustRegister(replicationLagGauge)
+	registry.MustRegister(remainingTimeGauge)
+}
+
+func (s *Syncer) runBackgroundJob(ctx context.Context) {
+	ticker := time.NewTicker(time.Second * 10)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			s.collectMetrics()
+
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// Note: handle error inside the function with returning it.
+func (s *Syncer) collectMetrics() {
+	// CPU usage metric
+	cpuUsage := cpu.GetCPUPercentage()
+	cpuUsageGauge.Set(cpuUsage)
+}
 
 // InitStatusAndMetrics register prometheus metrics and listen for status port.
 func InitStatusAndMetrics(addr string) {
-	prometheus.MustRegister(binlogEventsTotal)
-	prometheus.MustRegister(binlogSkippedEventsTotal)
-	prometheus.MustRegister(sqlJobsTotal)
-	prometheus.MustRegister(sqlRetriesTotal)
-	prometheus.MustRegister(binlogPos)
-	prometheus.MustRegister(binlogFile)
-	prometheus.MustRegister(binlogGTID)
-	prometheus.MustRegister(txnCostGauge)
 
 	go func() {
 		http.HandleFunc("/status", func(w http.ResponseWriter, req *http.Request) {
@@ -100,6 +175,12 @@ func InitStatusAndMetrics(addr string) {
 			text := utils.GetRawInfo()
 			w.Write([]byte(text))
 		})
+
+		registry := prometheus.NewRegistry()
+		registry.MustRegister(prometheus.NewProcessCollector(os.Getpid(), ""))
+		registry.MustRegister(prometheus.NewGoCollector())
+		RegisterMetrics(registry)
+		prometheus.DefaultGatherer = registry
 
 		// HTTP path for prometheus.
 		http.Handle("/metrics", prometheus.Handler())
@@ -109,19 +190,4 @@ func InitStatusAndMetrics(addr string) {
 			log.Fatal(err)
 		}
 	}()
-}
-
-func getBinlogIndex(filename string) float64 {
-	spt := strings.Split(filename, ".")
-	if len(spt) == 1 {
-		return 0
-	}
-	idxStr := spt[len(spt)-1]
-
-	idx, err := strconv.ParseFloat(idxStr, 64)
-	if err != nil {
-		log.Warnf("[syncer] parse binlog index %s, error %s", filename, err)
-		return 0
-	}
-	return idx
 }

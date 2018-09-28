@@ -5,6 +5,7 @@ flavor: mysql  # mysql/mariadb
 in-sharding: true  # whether multi dm-worker do one sharding job
 checkpoint-schema-prefix: "dm_checkpoint"  # checkpoint schema prefix for Syncer / Loader
 remove-previous-checkpoint: false  # whether to remove previous checkpoint, set to `true` to start a fresh task even if the task-name used before
+disable-heartbeat: false  # whether to disable heartbeat for calculating lag between master and syncer
 
 target-database:
   host: "192.168.0.1"

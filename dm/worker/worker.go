@@ -184,6 +184,8 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 	}
 	cfg.To.Password = pswdTo
 
+	// syncer relay-dir should same with dm-worker relay-dir
+	cfg.RelayDir = w.cfg.RelayDir
 	st := NewSubTask(cfg)
 	err = st.Init()
 	if err != nil {

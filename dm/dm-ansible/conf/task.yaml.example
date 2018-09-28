@@ -1,25 +1,26 @@
 ---
-name: taskA
+name: test # global unique
 task-mode: all  # full/incremental/all
 flavor: mysql  # mysql/mariadb
 in-sharding: true  # whether multi dm-worker do one sharding job
-checkpoint-schema-prefix: "checkpoint" # checkpoint schema prefix for Syncer / Loader
-remove-previous-checkpoint: false # whether to remove previous checkpoint, set to `true` to start a fresh task even if the task-name used before
-
+checkpoint-schema-prefix: "dm_checkpoint"  # checkpoint schema prefix for Syncer / Loader
+remove-previous-checkpoint: false  # whether to remove previous checkpoint, set to `true` to start a fresh task even if the task-name used before
+disable-heartbeat: false
 
 target-database:
-  host: "127.0.0.1"
+  host: "192.168.0.1"
   port: 4000
   user: "root"
   password: ""
 
-MySQL-instances:             # one or more source database, config more source database for sharding merge
+mysql-instances:             # one or more source database, config more source database for sharding merge
   -
     config:
-      host: "127.0.0.1"
-      port: 3307
+      host: "192.168.199.118"
+      port: 4306
       user: "root"
-      password: "root"
+      password: "1234"
+    instance-id: "instance118-4306" # unique in all instances, used as id when save checkpoints, configs, etc.
     server-id: 101           # unique in all instances
 
     # binlog pos used to as start pos for syncer, for different task-mode, this maybe used or not
@@ -27,14 +28,15 @@ MySQL-instances:             # one or more source database, config more source d
     #    never be used
     # `incremental`:
     #    if `remove-previous-checkpoint` is true, this will be used
-    #    if checkpoints already exists in `checkpoint-schema`, this will not be used
+    #    else if checkpoints already exists in `checkpoint-schema`, this will not be used
     #    otherwise, this will be used
     meta:
       binlog-name: binlog-00001
       binlog-pos: 4
-#    route-rules: ["user-route-rules"]
+    route-rules: ["user-route-rules-schema", "user-route-rules"]
     filter-rules: ["user-filter-1", "user-filter-2"]
-    column-mapping-rules: ["user-column-mapping"]
+    column-mapping-rules: ["instance-1"]
+    black-white-list:  "instance"
 
     # `mydumper-config-name` and `mydumper` should only set one
     mydumper-config-name: "global"   # ref `mydumpers` config
@@ -42,7 +44,6 @@ MySQL-instances:             # one or more source database, config more source d
 #      mydumper-path: "./mydumper"
 #      threads: 16
 
-    # `loader-rule` and `loader` should only set one
     # `loader-config-name` and `loader` should only set one
     loader-config-name: "global"    # ref `loaders` config
     #loader:                  # local loader rule
@@ -55,98 +56,103 @@ MySQL-instances:             # one or more source database, config more source d
 
   -
     config:
-      host: "127.0.0.1"
-      port: 3308
+      host: "192.168.199.118"
+      port: 5306
       user: "root"
-      password: "root"
+      password: "1234"
+    instance-id: "instance118-5306"
     server-id: 102
     meta:
       binlog-name: binlog-00001
       binlog-pos: 320
-#    route-rules: ["user-route-rules"]
+    route-rules: ["user-route-rules-schema", "user-route-rules"]
     filter-rules: ["user-filter-2"]
-    column-mapping-rules: ["user-column-mapping"]
+    column-mapping-rules: ["instance-2"]
+    black-white-list: "instance"
 
     mydumper:
-      mydumper-path: "./mydumper"
+      mydumper-path: "./bin/mydumper"
       threads: 4
-      chunk-filesize: 8
+      chunk-filesize: 64
       skip-tz-utc: true
-      extra-args: "-B t1 -T tt10,tt14"
+#      extra-args: "-B test -T t1,t2"
 
     loader:                  # local loader rule
-      pool-size: 32
-      dir: "./examples/"
-      checkpoint-schema: "tidb_loader"
-      alternative-db: ""
-      source-db: ""
-      rm-checkpoint: false
+      pool-size: 16
+      dir: "./dumped_data"   # must be unique between tasks for the same instance
 
     syncer:
-      syncer-checkpoint-schema: "checkpoint_syncer"
-      worker-count: 32
-      batch: 2000
-      max-retry: 200
-      enable-gtid: false
-      auto-fix-gtid: false
-      disable-detect: false
-      safe-mode: false
+      worker-count: 16
+      batch: 100
+      max-retry: 100
 
 # other common configs shared by all instances
 
 routes:                      # schema/table route mapping
+  user-route-rules-schema:
+    schema-pattern: "test_*"
+    target-schema: "test"
   user-route-rules:
-    schema-pattern: "user_*"
-    table-pattern: "abc_*"
-    target-schema: "user"
-    target-table: "abc"
+    schema-pattern: "test_*"
+    table-pattern: "t_*"
+    target-schema: "test"
+    target-table: "t"
 
 filters:                     # filter rules, mysql instance can ref rules in it
   user-filter-1:
-    pattern-schema: "user_*"
-    pattern-table: "abc_*"
-    do-statement: ["ALL"]               # 白名单
-    skip-statement: ["TRUNCATE TABLE"]  # 黑名单
+    schema-pattern: "test_*"
+    table-pattern: "t_*"
+    events: ["truncate table", "drop table"]  # ignore truncate/drop table ddl
+    action: Ignore
   user-filter-2:
-    pattern-schema: "user_*"
-    pattern-table: "abc_*"
-    do-statement: ["ALL"]               # 白名单
+    schema-pattern: "test_*"
+    events: ["All DML"]             # only do all DML events
+    action: Do
+
+black-white-list:
+  instance:
+    do-dbs: ["~^test.*", "do"]
+    ignore-dbs: ["mysql", "ignored"]
+    do-tables:
+    - db-name: "~^test.*"
+      tbl-name: "~^t.*"
+    - db-name: "do"
+      tbl-name: "do"
+    - db-name: "do"
+      tbl-name: "do"
+
 
 column-mappings:             # column mapping rules, mysql instance can ref rules in it
-  user-column-mapping:
-    pattern-schema: "test_*"
-    pattern-table: "abc_*"
-    op: "add-column"       # add/ignore/modify -column
+  instance-1:
+    schema-pattern: "test_*"
+    table-pattern: "t_*"
+    expression: "partition id"       # handle sharding partition id
     source-column: "id"
     target-column: "id"
-    expression: "add prefix"
-    arguments: ["instance ID"]
-    sql: "alter table xx modify column xxx"
+    arguments: ["1", "test_", "t_"]
+  instance-2:
+    schema-pattern: "test_*"
+    table-pattern: "t_*"
+    expression: "partition id"       # handle sharding partition id
+    source-column: "id"
+    target-column: "id"
+    arguments: ["2", "test_", "t_"]
 
-mydumpers:
+mydumpers:                   # mydumper process unit specific configs, mysql instance can ref one config in it
   global:
-    mydumper-path: "./mydumper"
-    threads: 16
+    mydumper-path: "./bin/mydumper"
+    threads: 4
     chunk-filesize: 64
     skip-tz-utc: true
-#    extra-args: "-B test -T t1,t2 --no-locks"
+    extra-args: "-B test -T t1,t2 --no-locks"
 
 loaders:                     # loader process unit specific configs, mysql instance can ref one config in it
   global:
     pool-size: 16
-    dir: "./examples/"
-    checkpoint-schema: "tidb_loader"
-    alternative-db: ""
-    source-db: ""
-    rm-checkpoint: false
+    dir: "./dumped_data"
 
 syncers:                     # syncer process unit specific configs, mysql instance can ref one config in it
   global:
-    syncer-checkpoint-schema: "checkpoint_syncer"
     worker-count: 16
-    batch: 1000
+    batch: 100
     max-retry: 100
-    enable-gtid: false
-    auto-fix-gtid: false
-    disable-detect: false
-    safe-mode: false

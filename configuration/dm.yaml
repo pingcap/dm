@@ -3,6 +3,7 @@ task-mode: all
 flavor: mysql
 checkpoint-schema-prefix: dm_checkpoint
 remove-previous-checkpoint: false
+disable-heartbeat: true
 target-database:
   host: 192.168.0.1
   port: 4000
