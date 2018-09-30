@@ -117,6 +117,9 @@ type CheckPoint interface {
 	// SaveTablePoint saves checkpoint for specified table in memory
 	SaveTablePoint(sourceSchema, sourceTable string, pos mysql.Position)
 
+	// DeleteTablePoint deletes checkpoint for specified table in memory and storage
+	DeleteTablePoint(sourceSchema, sourceTable string) error
+
 	// IsNewerTablePoint checks whether job's checkpoint is newer than previous saved checkpoint
 	IsNewerTablePoint(sourceSchema, sourceTable string, pos mysql.Position) bool
 
@@ -257,6 +260,29 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, pos
 	} else {
 		point.save(pos)
 	}
+}
+
+// DeleteTablePoint implements CheckPoint.DeleteTablePoint
+func (cp *RemoteCheckPoint) DeleteTablePoint(sourceSchema, sourceTable string) error {
+	cp.Lock()
+	defer cp.Unlock()
+	mSchema, ok := cp.points[sourceSchema]
+	if !ok {
+		return nil
+	}
+	_, ok = mSchema[sourceTable]
+	if !ok {
+		return nil
+	}
+	// delete  checkpoint
+	sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s' AND `cp_schema` = '%s' AND `cp_table` = '%s'", cp.schema, cp.table, cp.id, sourceSchema, sourceTable)
+	args := make([]interface{}, 0)
+	err := cp.db.executeSQL([]string{sql2}, [][]interface{}{args}, maxRetryCount)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	delete(mSchema, sourceTable)
+	return nil
 }
 
 // IsNewerTablePoint implements CheckPoint.IsNewerTablePoint

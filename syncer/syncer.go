@@ -324,7 +324,7 @@ func (s *Syncer) initShardingGroups() error {
 	// add sharding group
 	for targetSchema, mSchema := range mapper {
 		for targetTable, sourceIDs := range mSchema {
-			err := s.sgk.AddGroup(targetSchema, targetTable, sourceIDs, false)
+			_, _, _, _, err := s.sgk.AddGroup(targetSchema, targetTable, sourceIDs, false)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -1243,31 +1243,61 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 				if s.cfg.IsSharding {
 					switch stmt.(type) {
-					// TODO zxc: add RENAME TABLE support when online DDL can be solved
-					// TODO zxc: add DROP / CREATE SCHEMA support after RENAME TABLE solved
-					case *ast.CreateTableStmt:
-						if tableNames[0][0].Schema != tableNames[1][0].Schema || tableNames[0][0].Name != tableNames[1][0].Name {
-							// for CREATE TABLE, we add it to group
-							sourceID, _ := GenTableID(tableNames[0][0].Schema, tableNames[0][0].Name)
-							err = s.sgk.AddGroup(tableNames[1][0].Schema, tableNames[1][0].Name, []string{sourceID}, true)
-							if err != nil {
-								return errors.Trace(err)
-							}
-							log.Infof("[syncer] add table %s to sharding group", sourceID)
-						}
 					case *ast.CreateDatabaseStmt:
-						// for CREATE DATABASE, we do nothing. when CREATE TABLE under this DATABASE, sharding groups will be added
+					// for CREATE DATABASE, we do nothing. when CREATE TABLE under this DATABASE, sharding groups will be added
+					case *ast.DropDatabaseStmt:
+						err := s.dropSchemaInSharding(tableNames[0][0].Schema)
+						if err != nil {
+							return errors.Trace(err)
+						}
+						jobTp = fakeDDL
+					case *ast.DropTableStmt:
+						sourceID, _ := GenTableID(tableNames[0][0].Schema, tableNames[0][0].Name)
+						err = s.sgk.LeaveGroup(tableNames[1][0].Schema, tableNames[1][0].Name, []string{sourceID})
+						if err != nil {
+							return errors.Trace(err)
+						}
+						err = s.checkpoint.DeleteTablePoint(tableNames[0][0].Schema, tableNames[0][0].Name)
+						if err != nil {
+							return errors.Trace(err)
+						}
+						jobTp = fakeDDL
+					case *ast.TruncateTableStmt:
+						log.Infof("[syncer] ignore truncate table statement %s in sharding group", sqlDDL)
+						jobTp = fakeDDL
+					// TODO zxc: add RENAME TABLE support when online DDL can be solved
 					default:
-						// try to handle sharding DDLs
-						source, _ := GenTableID(tableNames[0][0].Schema, tableNames[0][0].Name)
+						var (
+							needShardingHandle bool
+							group              *ShardingGroup
+							synced             bool
+							remain             int
+							err                error
+							source             string
+						)
 						// for sharding DDL, the firstPos should be the `Pos` of the binlog, not the `End_log_pos`
 						// so when restarting before sharding DDLs synced, this binlog can be re-sync again to trigger the TrySync
 						startPos := mysql.Position{
 							Name: currentPos.Name,
 							Pos:  currentPos.Pos - e.Header.EventSize,
 						}
-						isSharding, group, synced, remain := s.sgk.TrySync(tableNames[1][0].Schema, tableNames[1][0].Name, source, startPos, sqlDDL)
-						if isSharding {
+						source, _ = GenTableID(tableNames[0][0].Schema, tableNames[0][0].Name)
+
+						switch stmt.(type) {
+						case *ast.CreateTableStmt:
+							if tableNames[0][0].Schema != tableNames[1][0].Schema || tableNames[0][0].Name != tableNames[1][0].Name {
+								// for CREATE TABLE, we add it to group
+								needShardingHandle, group, synced, remain, err = s.sgk.AddGroup(tableNames[1][0].Schema, tableNames[1][0].Name, []string{source}, true)
+								if err != nil {
+									return errors.Trace(err)
+								}
+								log.Infof("[syncer] add table %s to sharding group (%v)", source, needShardingHandle)
+							}
+						default:
+							needShardingHandle, group, synced, remain = s.sgk.TrySync(tableNames[1][0].Schema, tableNames[1][0].Name, source, startPos, sqlDDL)
+						}
+
+						if needShardingHandle {
 							log.Infof("[syncer] query event %v for source %v is in sharding, synced: %v, remain: %d", startPos, source, synced, remain)
 							// save checkpoint in memory, don't worry, if error occurred, we can rollback it
 							// for non-last sharding DDL's table, this checkpoint will be used to skip binlog event when re-syncing

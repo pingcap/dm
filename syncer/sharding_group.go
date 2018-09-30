@@ -21,9 +21,10 @@ package syncer
  *   when the first staring of the task, same DDL for the whole sharding group should not in partial executed
  *      the startup point can not be in the middle of the first-pos and last-pos of a sharding group's DDL
  *   do not support to modify router-rules online (when unresolved)
- *   do not support to rename table or database in a sharding group
+ *   do not support to rename table or database in a sharding group, another solution for it
  *   do not support to sync using GTID mode (GTID is supported by relay unit now)
  *   do not support same <schema-name, table-name> pair for upstream and downstream when merging sharding group
+ *   ignore all drop schema/table and truncate table ddls
  *
  * checkpoint mechanism (ref: checkpoint.go):
  *   save checkpoint for every upstream table, and also global checkpoint
@@ -116,20 +117,46 @@ func NewShardingGroup(sources []string, isSchemaOnly bool) *ShardingGroup {
 // used cases
 //   * add a new database / table to exists sharding group
 //   * add new table(s) to parent database's sharding group
-func (sg *ShardingGroup) Merge(sources []string) error {
+//  if group is un-resolved, we add it in sources and set it true
+//  othereise add it in source, set it false and increment remain
+func (sg *ShardingGroup) Merge(sources []string) (bool, bool, int) {
 	sg.Lock()
 	defer sg.Unlock()
 
-	//  if group is un-resolved, we can't do merging (CREATE DATABASE / TABLE)
-	if sg.remain != len(sg.sources) {
-		return errors.NotSupportedf("group's sharding DDL %s is un-resolved, try merge sources %v", sg.ddl, sources)
-	}
+	// need to check whether source is exist? but we maybe re-sync more times
+	isResolving := sg.remain != len(sg.sources)
 
 	for _, source := range sources {
-		if _, ok := sg.sources[source]; !ok {
+		if isResolving {
+			sg.sources[source] = true
+		} else {
 			sg.remain++
 			sg.sources[source] = false
 		}
+	}
+
+	return isResolving, sg.remain <= 0, sg.remain
+}
+
+// Leave leaves from sharding group
+// it, doesn't affect in syncing process
+// used cases
+//   * drop a database
+//   * drop table
+func (sg *ShardingGroup) Leave(sources []string) error {
+	sg.Lock()
+	defer sg.Unlock()
+
+	//  if group is un-resolved, we can't do drop (DROP DATABASE / TABLE)
+	if sg.remain != len(sg.sources) {
+		return errors.NotSupportedf("group's sharding DDL %s is un-resolved, try drop sources %v", sg.ddl, sources)
+	}
+
+	for _, source := range sources {
+		if synced, ok := sg.sources[source]; ok && !synced {
+			sg.remain--
+		}
+		delete(sg.sources, source)
 	}
 
 	return nil
@@ -230,6 +257,14 @@ func (sg *ShardingGroup) Tables() [][]string {
 	return tables
 }
 
+// IsUnresolved return whether it's unresolved
+func (sg *ShardingGroup) IsUnresolved() bool {
+	sg.RLock()
+	defer sg.RUnlock()
+
+	return sg.remain != len(sg.sources)
+}
+
 // UnresolvedTables returns all source tables' <schema, table> pair if is unresolved, else returns nil
 func (sg *ShardingGroup) UnresolvedTables() [][]string {
 	sg.RLock()
@@ -297,7 +332,7 @@ func NewShardingGroupKeeper() *ShardingGroupKeeper {
 }
 
 // AddGroup adds new group(s) according to target schema, table and source IDs
-func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceIDs []string, merge bool) error {
+func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceIDs []string, merge bool) (needShardingHandle bool, group *ShardingGroup, synced bool, remain int, err error) {
 	// if need to support target table-level sharding DDL
 	// we also need to support target schema-level sharding DDL
 	schemaID, _ := GenTableID(targetSchema, "")
@@ -309,23 +344,21 @@ func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceI
 	if schemaGroup, ok := k.groups[schemaID]; !ok {
 		k.groups[schemaID] = NewShardingGroup(sourceIDs, true)
 	} else {
-		err := schemaGroup.Merge(sourceIDs)
-		if err != nil {
-			return errors.Annotatef(err, "for schema group %s", schemaID)
-		}
+		schemaGroup.Merge(sourceIDs)
 	}
 
-	if _, ok := k.groups[tableID]; !ok {
-		k.groups[tableID] = NewShardingGroup(sourceIDs, false)
+	var ok bool
+	if group, ok = k.groups[tableID]; !ok {
+		group = NewShardingGroup(sourceIDs, false)
+		k.groups[tableID] = group
 	} else if merge {
-		err := k.groups[tableID].Merge(sourceIDs)
-		if err != nil {
-			return errors.Annotatef(err, "for table group %s", tableID)
-		}
+		needShardingHandle, synced, remain = k.groups[tableID].Merge(sourceIDs)
 	} else {
-		return errors.AlreadyExistsf("table group %s", tableID)
+		err = errors.AlreadyExistsf("table group %s", tableID)
+		return
 	}
-	return nil
+
+	return
 }
 
 // Clear clears all sharding groups
@@ -335,13 +368,33 @@ func (k *ShardingGroupKeeper) Clear() {
 	k.groups = make(map[string]*ShardingGroup)
 }
 
+// LeaveGroup leaves group according to target schema, table and source IDs
+// LeaveGroup doesn't affect in syncing process
+func (k *ShardingGroupKeeper) LeaveGroup(targetSchema, targetTable string, sources []string) error {
+	schemaID, _ := GenTableID(targetSchema, "")
+	tableID, _ := GenTableID(targetSchema, targetTable)
+	k.Lock()
+	defer k.Unlock()
+	if group, ok := k.groups[tableID]; ok {
+		if err := group.Leave(sources); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	if schemaGroup, ok := k.groups[schemaID]; ok {
+		if err := schemaGroup.Leave(sources); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
+}
+
 // TrySync tries to sync the sharding group
 // returns
 //   isSharding: whether the source table is in a sharding group
 //   group: the sharding group
 //   synced: whether the source table's sharding group synced
 //   remain: remain un-synced source table's count
-func (k *ShardingGroupKeeper) TrySync(targetSchema, targetTable, source string, pos mysql.Position, ddl string) (isSharding bool, group *ShardingGroup, synced bool, remain int) {
+func (k *ShardingGroupKeeper) TrySync(targetSchema, targetTable, source string, pos mysql.Position, ddl string) (needShardingHandle bool, group *ShardingGroup, synced bool, remain int) {
 	tableID, schemaOnly := GenTableID(targetSchema, targetTable)
 	if schemaOnly {
 		// NOTE: now we don't support syncing for schema only sharding DDL

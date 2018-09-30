@@ -356,3 +356,41 @@ func fetchDDLSchema(stmt ast.StmtNode) string {
 		return ""
 	}
 }
+
+func (s *Syncer) dropSchemaInSharding(sourceSchema string) error {
+	sources := make(map[string][][]string)
+	sgs := s.sgk.Groups()
+	for name, sg := range sgs {
+		tables := sg.Tables()
+		for _, table := range tables {
+			if table[0] != sourceSchema {
+				continue
+			}
+			sources[name] = append(sources[name], table)
+		}
+	}
+	// delete from sharding group firstly
+	for name, tables := range sources {
+		targetSchema, targetTable := UnpackTableID(name)
+		sourceIDs := make([]string, 0, len(tables))
+		for _, table := range tables {
+			sourceID, _ := GenTableID(table[0], table[1])
+			sourceIDs = append(sourceIDs, sourceID)
+		}
+		err := s.sgk.LeaveGroup(targetSchema, targetTable, sourceIDs)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+	// delete from checkpoint
+	for _, tables := range sources {
+		for _, table := range tables {
+			// refine clear them later if failed
+			// now it doesn't have problems
+			if err1 := s.checkpoint.DeleteTablePoint(table[0], table[1]); err1 != nil {
+				log.Errorf("[syncer] fail to delete checkpoint %s.%s", table[0], table[1])
+			}
+		}
+	}
+	return nil
+}
