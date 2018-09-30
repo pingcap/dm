@@ -98,12 +98,19 @@ func (r *Relay) Init() error {
 		return errors.Trace(err)
 	}
 
+	// NOTE: I will refactor this in PR for master / slave switch
 	go func() {
+		ticker := time.NewTicker(time.Second * 30)
+		defer ticker.Stop()
 		for {
-			time.Sleep(time.Second * 30)
-			err := r.meta.Flush()
-			if err != nil {
-				log.Errorf("[relay] flush checkpoint error %v", errors.ErrorStack(err))
+			select {
+			case <-ticker.C:
+				if r.meta.Dirty() {
+					err := r.meta.Flush()
+					if err != nil {
+						log.Errorf("[relay] flush checkpoint error %v", errors.ErrorStack(err))
+					}
+				}
 			}
 		}
 	}()
@@ -247,7 +254,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 		err = r.meta.Save(mysql.Position{
 			Name: filename,
 			Pos:  offset,
-		}, nil, false)
+		}, nil)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -345,7 +352,7 @@ func (r *Relay) startSyncByPos() (*replication.BinlogStreamer, error) {
 			err := r.meta.Save(mysql.Position{
 				Name: pos.Name,
 				Pos:  pos.Pos,
-			}, nil, false)
+			}, nil)
 			if err != nil {
 				return nil, errors.Trace(err)
 			}

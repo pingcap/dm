@@ -134,3 +134,5 @@ import:
   version: 1eb03e3cc9d345307a45ec82bd3016cde4bd4464
 - package: github.com/cznic/y
   version: 9fdf92d4aac058959f814606bb729ed50f5e4240
+- package: github.com/fsnotify/fsnotify
+  version: ccc981bf80385c528a65fbfdd49bf2d8da22aa23

@@ -2,11 +2,12 @@ package streamer
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime/debug"
 	"sync"
-	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/siddontang/go-mysql/mysql"
@@ -31,6 +32,7 @@ type BinlogReaderConfig struct {
 type BinlogReader struct {
 	cfg     *BinlogReaderConfig
 	parser  *replication.BinlogParser
+	watcher *fsnotify.Watcher
 	running bool
 	wg      sync.WaitGroup
 	ctx     context.Context
@@ -61,6 +63,14 @@ func (r *BinlogReader) StartSync(pos mysql.Position) (Streamer, error) {
 	if r.running {
 		return nil, ErrReaderRunning
 	}
+
+	r.closeWatcher()
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	r.watcher = watcher
+
 	r.running = true
 
 	s := newLocalStreamer()
@@ -100,7 +110,6 @@ func (r *BinlogReader) StartSync(pos mysql.Position) (Streamer, error) {
 					log.Errorf("streaming error %v", errors.ErrorStack(err))
 					return
 				}
-				time.Sleep(time.Second * 1)
 			}
 		}
 	}()
@@ -114,18 +123,36 @@ func (r *BinlogReader) onStream(s *LocalStreamer, pos mysql.Position, updatePos 
 			s.closeWithError(fmt.Errorf("Err: %v\n Stack: %s", e, string(debug.Stack())))
 		}
 	}()
+
 	files, err := collectBinlogFiles(r.cfg.BinlogDir, pos.Name)
 	if err != nil {
 		s.closeWithError(err)
 		return errors.Trace(err)
 	}
 
-	var serverID uint32
+	firstFile, err := parseBinlogFile(pos.Name)
+	if err != nil {
+		s.closeWithError(err)
+		return errors.Trace(err)
+	}
+
+	var (
+		offset       int64
+		serverID     uint32
+		lastFilePath string    // last relay log file path
+		lastFilePos  = pos.Pos // last parsed pos for relay log file
+	)
 
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		//TODO: put the implementaion of updatepos here?
 		updatePos(e)
+
 		serverID = e.Header.ServerID // record server_id
+		if _, ok := e.Event.(*replication.FormatDescriptionEvent); !ok {
+			// ignore FORMAT_DESCRIPTION event, because go-mysql will send this fake event
+			lastFilePos = e.Header.LogPos
+		}
+
 		select {
 		case s.ch <- e:
 		case <-r.ctx.Done():
@@ -134,12 +161,6 @@ func (r *BinlogReader) onStream(s *LocalStreamer, pos mysql.Position, updatePos 
 		return nil
 	}
 
-	var offset int64
-	firstFile, err := parseBinlogFile(pos.Name)
-	if err != nil {
-		s.closeWithError(err)
-		return errors.Trace(err)
-	}
 	for _, file := range files {
 		select {
 		case <-r.ctx.Done():
@@ -177,6 +198,49 @@ func (r *BinlogReader) onStream(s *LocalStreamer, pos mysql.Position, updatePos 
 			s.closeWithError(err)
 			return errors.Trace(err)
 		}
+
+		lastFilePath = fullpath
+	}
+
+	// watch dir for whether file count changed (new file generated)
+	err = r.watcher.Add(r.cfg.BinlogDir)
+	if err != nil {
+		return errors.Annotatef(err, "add watch for relay log dir %s", r.cfg.BinlogDir)
+	}
+	defer r.watcher.Remove(r.cfg.BinlogDir)
+
+	if len(lastFilePath) > 0 {
+		// watch last relay log file for whether modified (appended)
+		err = r.watcher.Add(lastFilePath)
+		if err != nil {
+			return errors.Annotatef(err, "add watch for relay log %s", lastFilePath)
+		}
+		defer r.watcher.Remove(lastFilePath)
+
+		// check relay log whether updated since the last ParseFile returned
+		fi, err := os.Stat(lastFilePath)
+		if err != nil {
+			return errors.Annotatef(err, "get stat for relay log %s", lastFilePath)
+		}
+		if uint32(fi.Size()) > lastFilePos {
+			log.Infof("[relay] relay log file size has changed from %d to %d", lastFilePos, fi.Size())
+			return nil // already updated, we need to parse it again
+		}
+	}
+
+	select {
+	case <-r.ctx.Done():
+		return nil
+	case err, ok := <-r.watcher.Errors:
+		if !ok {
+			return errors.Errorf("watcher's errors chan for relay log dir %s closed", r.cfg.BinlogDir)
+		}
+		return errors.Annotatef(err, "relay log dir %s", r.cfg.BinlogDir)
+	case event, ok := <-r.watcher.Events:
+		if !ok {
+			return errors.Errorf("watcher's events chan for relay log dir %s closed", r.cfg.BinlogDir)
+		}
+		log.Debugf("watcher receive event %+v", event)
 	}
 
 	log.Debugf("[stream] onStream exits")
@@ -190,7 +254,14 @@ func (r *BinlogReader) Close() error {
 	r.cancel()
 	r.parser.Stop()
 	r.wg.Wait()
+	r.closeWatcher()
 	log.Info("binlog reader closed")
 	return nil
+}
 
+func (r *BinlogReader) closeWatcher() {
+	if r.watcher != nil {
+		r.watcher.Close()
+		r.watcher = nil
+	}
 }

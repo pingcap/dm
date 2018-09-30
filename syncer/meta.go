@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
@@ -28,12 +27,6 @@ import (
 	"github.com/siddontang/go/ioutil2"
 )
 
-var (
-	maxSaveTime = 30 * time.Second
-)
-
-// TODO: unify checkpoint with relay and loader?
-
 // Meta is the binlog meta information from sync source.
 // When syncer restarts, we should reload meta info to guarantee continuous transmission.
 type Meta interface {
@@ -41,13 +34,13 @@ type Meta interface {
 	Load() error
 
 	// Save saves meta information.
-	Save(pos mysql.Position, gtid gtid.Set, force bool) error
+	Save(pos mysql.Position, gtid gtid.Set) error
 
 	// Flush write meta information
 	Flush() error
 
-	// Check checks whether we should save meta.
-	Check() bool
+	// Dirty checks whether meta in memory is dirty (need to Flush)
+	Dirty() bool
 
 	// Pos gets position information.
 	Pos() mysql.Position
@@ -62,9 +55,9 @@ type LocalMeta struct {
 
 	flavor string
 	gset   gtid.Set
+	dirty  bool
 
 	filename string
-	saveTime time.Time
 
 	BinLogName string `toml:"binlog-name" json:"binlog-name"`
 	BinLogPos  uint32 `toml:"binlog-pos" json:"binlog-pos"`
@@ -105,7 +98,7 @@ func (lm *LocalMeta) Load() error {
 }
 
 // Save implements Meta.Save interface.
-func (lm *LocalMeta) Save(pos mysql.Position, gs gtid.Set, force bool) error {
+func (lm *LocalMeta) Save(pos mysql.Position, gs gtid.Set) error {
 	lm.Lock()
 	defer lm.Unlock()
 
@@ -118,14 +111,15 @@ func (lm *LocalMeta) Save(pos mysql.Position, gs gtid.Set, force bool) error {
 		lm.gset = gs
 	}
 
-	if force {
-		return lm.Flush()
-	}
+	lm.dirty = true
 	return nil
 }
 
 // Flush implements Meta.Flush interface.
 func (lm *LocalMeta) Flush() error {
+	lm.Lock()
+	defer lm.Unlock()
+
 	var buf bytes.Buffer
 	e := toml.NewEncoder(&buf)
 	err := e.Encode(lm)
@@ -140,10 +134,18 @@ func (lm *LocalMeta) Flush() error {
 		return errors.Trace(err)
 	}
 
-	lm.saveTime = time.Now()
 	log.Infof("save position to file, binlog-name:%s binlog-pos:%d binlog-gtid:%v", lm.BinLogName, lm.BinLogPos, lm.BinlogGTID)
 
+	lm.dirty = false
 	return nil
+}
+
+// Dirty implements Meta.Dirty
+func (lm *LocalMeta) Dirty() bool {
+	lm.RLock()
+	defer lm.RUnlock()
+
+	return lm.dirty
 }
 
 // Pos implements Meta.Pos interface.
@@ -160,18 +162,6 @@ func (lm *LocalMeta) GTID() (gtid.Set, error) {
 	defer lm.RUnlock()
 
 	return lm.gset.Clone(), nil
-}
-
-// Check implements Meta.Check interface.
-func (lm *LocalMeta) Check() bool {
-	lm.RLock()
-	defer lm.RUnlock()
-
-	if time.Since(lm.saveTime) >= maxSaveTime {
-		return true
-	}
-
-	return false
 }
 
 func (lm *LocalMeta) String() string {
