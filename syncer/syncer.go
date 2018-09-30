@@ -144,8 +144,13 @@ type Syncer struct {
 		sync.RWMutex
 		operators map[string]*Operator
 	}
-	heartbeat  *Heartbeat
-	currentPos mysql.Position
+
+	heartbeat *Heartbeat
+
+	currentPosMu struct {
+		sync.RWMutex
+		currentPos mysql.Position // use to calc remain binlog size
+	}
 }
 
 // NewSyncer creates a new Syncer.
@@ -771,10 +776,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 	}
 
-	// currentPos is the End_log_pos in `show binlog events` for mysql.
-	// lastPos the the last End_log_pos in `show binlog events` for mysql.
-	var currentPos mysql.Position
-	lastPos := s.checkpoint.GlobalPoint()
+	// currentPos is the pos for current received event (End_log_pos in `show binlog events` for mysql)
+	// lastPos is the pos for last received (ROTATE / QUERY / XID) event (End_log_pos in `show binlog events` for mysql)
+	var (
+		currentPos = s.checkpoint.GlobalPoint() // also init to global checkpoint
+		lastPos    = s.checkpoint.GlobalPoint()
+	)
 	log.Infof("initial lastpos %v", lastPos)
 	var globalStreamer streamer.Streamer
 	if s.binlogType == RemoteBinlog {
@@ -867,6 +874,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	}()
 
 	for {
+
+		s.currentPosMu.Lock()
+		s.currentPosMu.currentPos = currentPos
+		s.currentPosMu.Unlock()
+
 		// if there are sharding groups need to re-sync previous ignored DMLs, we use another special streamer
 		if shardingStreamer == nil && len(shardingReSyncCh) > 0 {
 			// some sharding groups need to re-syncing
@@ -1052,7 +1064,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				args [][]interface{}
 			)
 
-			operator := s.GetOperator(lastPos)
+			operator := s.GetOperator(currentPos)
 
 			switch e.Header.EventType {
 			case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
@@ -1062,7 +1074,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 						return errors.Trace(err)
 					}
 					// operator only apply one time.
-					s.DelOperator(lastPos)
+					s.DelOperator(currentPos)
 					args = nil
 					keys = nil
 				} else {
@@ -1094,7 +1106,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 						return errors.Trace(err)
 					}
 					// operator only apply one time.
-					s.DelOperator(lastPos)
+					s.DelOperator(currentPos)
 					args = nil
 					keys = nil
 				} else {
@@ -1126,7 +1138,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 						return errors.Trace(err)
 					}
 					// operator only apply one time.
-					s.DelOperator(lastPos)
+					s.DelOperator(currentPos)
 					args = nil
 					keys = nil
 				} else {
@@ -1192,7 +1204,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				return errors.Trace(err)
 			}
 
-			operator := s.GetOperator(lastPos)
+			operator := s.GetOperator(currentPos)
 			if operator != nil {
 				sqls, err = operator.Operate()
 				if err != nil {
@@ -1200,7 +1212,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					return errors.Trace(err)
 				}
 				// operator only apply one time.
-				s.DelOperator(lastPos)
+				s.DelOperator(currentPos)
 			} else {
 				sqls, err = resolveDDLSQL(sql, p)
 				if err != nil {
@@ -1209,9 +1221,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					return errors.Trace(err)
 				}
 			}
+
+			var realLastPos = lastPos // real last pos, used when addJob
 			if len(sqls) > 0 {
 				// only log real ddl, ignore BEGIN
 				log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
+				lastPos = currentPos // update lastPos
 			}
 
 			binlogEvent.WithLabelValues("query", s.cfg.Name).Observe(time.Since(startTime).Seconds())
@@ -1350,7 +1365,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 				log.Infof("[ddl][schema]%s [start]%s", string(ev.Schema), sqlDDL)
 
-				job := newJob(jobTp, tableNames[0][0].Schema, tableNames[0][0].Name, tableNames[1][0].Schema, tableNames[1][0].Name, sqlDDL, nil, "", false, currentPos, nil, lastPos, ddlExecItem)
+				job := newJob(jobTp, tableNames[0][0].Schema, tableNames[0][0].Name, tableNames[1][0].Schema, tableNames[1][0].Name, sqlDDL, nil, "", false, currentPos, nil, realLastPos, ddlExecItem)
 				err = s.addJob(job)
 				if err != nil {
 					return errors.Trace(err)
@@ -1376,22 +1391,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			currentPos.Pos = e.Header.LogPos
 			log.Debugf("[XID event][last_pos]%v [current_pos]%v [gtid set]%v", lastPos, currentPos, ev.GSet)
+			lastPos.Pos = e.Header.LogPos // update lastPos
 
 			job := newXIDJob(currentPos, nil)
 			s.addJob(job)
-
-		default:
-			if shardingReSync != nil {
-				continue
-			}
-			currentPos.Pos = e.Header.LogPos
-			if currentPos.Name == "" && lastPos.Name != "" {
-				currentPos.Name = lastPos.Name
-			}
 		}
-
-		lastPos = currentPos
-		s.currentPos = currentPos
 	}
 }
 
@@ -1471,7 +1475,11 @@ func (s *Syncer) printStatus(ctx context.Context) {
 				tps = (total - last) / seconds
 				totalTps = total / totalSeconds
 
-				remainingSize, err := countBinaryLogsSize(s.currentPos, s.fromDB.db)
+				s.currentPosMu.RLock()
+				currentPos := s.currentPosMu.currentPos
+				s.currentPosMu.RUnlock()
+
+				remainingSize, err := countBinaryLogsSize(currentPos, s.fromDB.db)
 				if err != nil {
 					log.Errorf("count remaining binlog size err %v", errors.ErrorStack(err))
 					return
