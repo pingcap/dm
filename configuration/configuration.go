@@ -233,7 +233,7 @@ func (c *DataMigrationConfig) GenerateDMTask() (*dm.TaskConfig, error) {
 	}
 
 	if len(sharding) > 0 {
-		task.InSharding = true
+		task.IsSharding = true
 	}
 
 	err = c.handleFilterConfig(task)

@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/siddontang/go-mysql/mysql"
+	"github.com/siddontang/go-mysql/replication"
 )
 
 // Compare binlog positions.
@@ -52,4 +53,22 @@ func toBinlogType(bt string) BinlogType {
 	default:
 		return RemoteBinlog
 	}
+}
+
+// generates an incomplete QueryEvent, only partial fields are valid
+// now, it only used to generate QueryEvent to force sharding group to be synced
+// NOTE: using only if you know want your are doing
+func genIncompleteQueryEvent(schema, query []byte) *replication.BinlogEvent {
+	header := &replication.EventHeader{
+		EventType: replication.QUERY_EVENT,
+	}
+	queryEvent := &replication.QueryEvent{
+		Schema: schema,
+		Query:  query,
+	}
+	e := &replication.BinlogEvent{
+		Header: header,
+		Event:  queryEvent,
+	}
+	return e
 }

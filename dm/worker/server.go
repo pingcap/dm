@@ -310,7 +310,7 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSubTaskSQLsReques
 		Msg:    "",
 	}
 
-	err := s.worker.HandleSQLs(req.Name, req.Op, req.BinlogPos, req.Args)
+	err := s.worker.HandleSQLs(ctx, req.Name, req.Op, req.BinlogPos, req.Args)
 	if err != nil {
 		log.Errorf("[server] handle sqls %+v error %v", req, errors.ErrorStack(err))
 		resp.Msg = errors.ErrorStack(err)

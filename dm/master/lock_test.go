@@ -27,7 +27,7 @@ func (t *testMaster) TestSyncLock(c *C) {
 		workers[i] = strconv.Itoa(i)
 	}
 
-	l := NewLock("test_id", "test_task", "test_owner", workers)
+	l := NewLock("test_id", "test_task", "test_owner", "stmt", workers)
 
 	synced, remain := l.IsSync()
 	c.Assert(synced, IsFalse)

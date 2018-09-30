@@ -14,6 +14,7 @@
 package worker
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/juju/errors"
@@ -34,6 +35,11 @@ func NewSQLReplaceCmd() *cobra.Command {
 }
 
 func sqlReplaceFunc(cmd *cobra.Command, _ []string) {
+	if len(cmd.Flags().Args()) < 3 {
+		fmt.Println(cmd.Usage())
+		return
+	}
+
 	subTaskName := cmd.Flags().Arg(0)
 	if strings.TrimSpace(subTaskName) == "" {
 		common.PrintLines("sub_task_name is empty")

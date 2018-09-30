@@ -23,6 +23,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
+	"github.com/pingcap/tidb/ast"
 	"github.com/pingcap/tidb/parser"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
@@ -98,13 +99,29 @@ func ExtractSQLsFromArgs(args []string) ([]string, error) {
 	parser := parser.New()
 	nodes, err := parser.Parse(concat, "", "")
 	if err != nil {
-		return nil, errors.Annotatef(err, "invalid sql %s", concat)
+		return nil, errors.Annotatef(err, "invalid sql '%s'", concat)
 	}
 	realSQLs := make([]string, 0, len(nodes))
 	for _, node := range nodes {
 		realSQLs = append(realSQLs, node.Text())
 	}
 	return realSQLs, nil
+}
+
+// IsDDL tests whether the input is a valid DDL statement
+func IsDDL(sql string) (bool, error) {
+	parser2 := parser.New()
+	node, err := parser2.ParseOneStmt(sql, "", "")
+	if err != nil {
+		return false, errors.Annotatef(err, "invalid sql '%s'", sql)
+	}
+
+	switch node.(type) {
+	case ast.DDLNode:
+		return true, nil
+	default:
+		return false, nil
+	}
 }
 
 // CheckBinlogPos checks whether binlog pos is valid or not.

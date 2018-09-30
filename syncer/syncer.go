@@ -22,8 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
-
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
@@ -35,8 +33,10 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb/ast"
+	"github.com/pingcap/tidb/parser"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
@@ -91,6 +91,7 @@ type Syncer struct {
 	sgk             *ShardingGroupKeeper           // keeper to keep all sharding (sub) group in this syncer
 	ddlInfoCh       chan *pb.DDLInfo               // DDL info pending to sync, only support sync one DDL lock one time, refine if needed
 	ddlExecInfo     *DDLExecInfo                   // DDL execute (ignore) info
+	extraEventCh    chan *replication.BinlogEvent  // extra binlog event chan, used to inject binlog event into the main for loop
 
 	// TODO: extract to interface?
 	syncer      *replication.BinlogSyncer
@@ -164,6 +165,7 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.done = make(chan struct{})
 	syncer.bwList = filter.New(cfg.BWList)
 	syncer.checkpoint = NewRemoteCheckPoint(cfg, syncer.checkpointID())
+	syncer.extraEventCh = make(chan *replication.BinlogEvent)
 
 	syncer.syncCfg = replication.BinlogSyncerConfig{
 		ServerID:       uint32(syncer.cfg.ServerID),
@@ -179,7 +181,7 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.binlogType = toBinlogType(cfg.BinlogType)
 	syncer.operatorsMu.operators = make(map[string]*Operator)
 
-	if cfg.InSharding {
+	if cfg.IsSharding {
 		// only need to sync DDL in sharding mode
 		// for sharding group's config, we should use a different ServerID
 		// now, use 2**32 -1 - config's ServerID simply
@@ -244,7 +246,7 @@ func (s *Syncer) Init() error {
 		return errors.Trace(err)
 	}
 
-	if s.cfg.InSharding {
+	if s.cfg.IsSharding {
 		err = s.initShardingGroups()
 		if err != nil {
 			return errors.Trace(err)
@@ -365,7 +367,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	s.checkpoint.Rollback()
 	errs := make([]*pb.ProcessError, 0, 2)
 
-	if s.cfg.InSharding {
+	if s.cfg.IsSharding {
 		s.ddlExecInfo.Renew()
 	}
 
@@ -592,7 +594,7 @@ func (s *Syncer) addJob(job *job) error {
 }
 
 func (s *Syncer) saveGlobalPoint(globalPoint mysql.Position) {
-	if s.cfg.InSharding {
+	if s.cfg.IsSharding {
 		globalPoint = s.sgk.AdjustGlobalPoint(globalPoint)
 	}
 	s.checkpoint.SaveGlobalPoint(globalPoint)
@@ -600,7 +602,7 @@ func (s *Syncer) saveGlobalPoint(globalPoint mysql.Position) {
 
 func (s *Syncer) flushCheckPoints() error {
 	var exceptTables [][]string
-	if s.cfg.InSharding {
+	if s.cfg.IsSharding {
 		// flush all checkpoints except tables which are in syncing for sharding group
 		exceptTables = s.sgk.InSyncingTables()
 	}
@@ -664,7 +666,7 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 					cpSQLs []string
 					cpArgs [][]interface{}
 				)
-				if s.cfg.InSharding {
+				if s.cfg.IsSharding {
 					// for DDL sharding group, executes DDL SQL, and update all tables' checkpoint in the sharding group in the same txn
 					sGroup = s.sgk.Group(sqlJob.targetSchema, sqlJob.targetTable)
 					cpSQLs, cpArgs = s.genUpdateCheckPointSQLs(sGroup)
@@ -685,7 +687,7 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 					ddlJobs = append(ddlJobs, job)
 				}
 				err = db.executeSQLJob(ddlJobs, s.cfg.MaxRetry)
-				if s.cfg.InSharding {
+				if s.cfg.IsSharding {
 					// for sharding DDL syncing, send result back
 					if sqlJob.ddlExecItem != nil {
 						sqlJob.ddlExecItem.resp <- errors.Trace(err)
@@ -772,7 +774,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	// lastPos the the last End_log_pos in `show binlog events` for mysql.
 	var currentPos mysql.Position
 	lastPos := s.checkpoint.GlobalPoint()
-	log.Debugf("initial lastpos %v", lastPos)
+	log.Infof("initial lastpos %v", lastPos)
 	var globalStreamer streamer.Streamer
 	if s.binlogType == RemoteBinlog {
 		globalStreamer, err = s.getBinlogStreamer(s.syncer, lastPos)
@@ -884,14 +886,23 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			err error
 		)
 
-		ctx2, cancel := context.WithTimeout(ctx, eventTimeout)
-		if shardingStreamer != nil {
-			// use sharding group's special streamer to get binlog event
-			e, err = shardingStreamer.GetEvent(ctx2)
-		} else {
-			e, err = globalStreamer.GetEvent(ctx2)
+		select {
+		case e = <-s.extraEventCh: // try receive from extra binlog event chan
+			// NOTE: now we simply set EventSize to 0, make event's start / end pos are the same
+			e.Header.LogPos = lastPos.Pos
+			e.Header.EventSize = 0
+			log.Infof("receive binlog event (header: %+v, event: %+v) from extra chan", e.Header, e.Event)
+		default:
+			ctx2, cancel := context.WithTimeout(ctx, eventTimeout)
+			if shardingStreamer != nil {
+				// use sharding group's special streamer to get binlog event
+				e, err = shardingStreamer.GetEvent(ctx2)
+			} else {
+				e, err = globalStreamer.GetEvent(ctx2)
+			}
+			cancel()
 		}
-		cancel()
+
 		startTime := time.Now()
 
 		if err == context.Canceled {
@@ -944,6 +955,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		s.binlogSizeCount.Add(int64(e.Header.EventSize))
 
 		switch ev := e.Event.(type) {
+		case *replication.FormatDescriptionEvent:
+			continue // TODO: remove this after lastPos update logic fixed
 		case *replication.RotateEvent:
 			currentPos = mysql.Position{
 				Name: string(ev.NextLogName),
@@ -1014,7 +1027,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				continue
 			}
 
-			if s.cfg.InSharding {
+			if s.cfg.IsSharding {
 				source, _ := GenTableID(string(ev.Table.Schema), string(ev.Table.Table))
 				if s.sgk.InSyncing(schemaName, tableName, source) {
 					// current source is in sharding DDL syncing, ignore DML
@@ -1227,7 +1240,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					ddlExecItem *DDLExecItem
 				)
 
-				if s.cfg.InSharding {
+				if s.cfg.IsSharding {
 					switch stmt.(type) {
 					// TODO zxc: add RENAME TABLE support when online DDL can be solved
 					// TODO zxc: add DROP / CREATE SCHEMA support after RENAME TABLE solved
@@ -1252,8 +1265,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 							Name: currentPos.Name,
 							Pos:  currentPos.Pos - e.Header.EventSize,
 						}
-						inSharding, group, synced, remain := s.sgk.TrySync(tableNames[1][0].Schema, tableNames[1][0].Name, source, startPos)
-						if inSharding {
+						isSharding, group, synced, remain := s.sgk.TrySync(tableNames[1][0].Schema, tableNames[1][0].Name, source, startPos, sqlDDL)
+						if isSharding {
 							log.Infof("[syncer] query event %v for source %v is in sharding, synced: %v, remain: %d", startPos, source, synced, remain)
 							// save checkpoint in memory, don't worry, if error occurred, we can rollback it
 							// for non-last sharding DDL's table, this checkpoint will be used to skip binlog event when re-syncing
@@ -1282,6 +1295,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 								Task:   s.cfg.Name,
 								Schema: tableNames[1][0].Schema, // use target schema / table name
 								Table:  tableNames[1][0].Name,
+								DDL:    sqlDDL,
 							}
 							s.ddlInfoCh <- ddlInfo // save DDLInfo, and dm-worker will fetch it
 
@@ -1695,7 +1709,7 @@ func (s *Syncer) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 // now, only support to update config for routes, filters, column-mappings, black-white-list
 // now no config diff implemented, so simply re-init use new config
 func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
-	if s.cfg.InSharding {
+	if s.cfg.IsSharding {
 		tables := s.sgk.InSyncingTables()
 		if len(tables) > 0 {
 			return errors.NotSupportedf("try update config when some tables' (%v) sharding DDL not synced", tables)
@@ -1753,7 +1767,7 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 		return errors.Trace(err)
 	}
 
-	if s.cfg.InSharding {
+	if s.cfg.IsSharding {
 		// re-init sharding group
 		s.initShardingGroups()
 	}
@@ -1835,4 +1849,48 @@ func (s *Syncer) ExecuteDDL(ctx context.Context, execReq *pb.ExecDDLRequest) (<-
 		return nil, errors.Trace(err)
 	}
 	return item.resp, nil
+}
+
+// InjectSQLs injects sqls into syncer as binlog events
+// now, we only support inject DDL for sharding group to be synced
+func (s *Syncer) InjectSQLs(ctx context.Context, sqls []string) error {
+	if !s.cfg.IsSharding {
+		return errors.New("only support inject DDL for sharding group to be synced currently, but not doing sharding syncing")
+	}
+
+	// verify and fetch schema name
+	schemas := make([]string, 0, len(sqls))
+	parser2 := parser.New()
+	for _, sql := range sqls {
+		node, err := parser2.ParseOneStmt(sql, "", "")
+		if err != nil {
+			return errors.Annotatef(err, "sql %s", sql)
+		}
+		ddlNode, ok := node.(ast.DDLNode)
+		if !ok {
+			return errors.Errorf("only support inject DDL for sharding group to be synced currently, but got %s", sql)
+		}
+		schema := fetchDDLSchema(ddlNode)
+		if len(schema) == 0 {
+			return errors.NotValidf("injected DDL %s without schema name", sql)
+		}
+		schemas = append(schemas, schema)
+	}
+
+	// inject binlog event
+	for i, sql := range sqls {
+		schema := schemas[i]
+		ev := genIncompleteQueryEvent([]byte(schema), []byte(sql))
+		newCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		log.Infof("injecting sql [%s] for schema [%s]", sql, schema)
+
+		select {
+		case s.extraEventCh <- ev:
+		case <-newCtx.Done():
+			cancel()
+			return newCtx.Err()
+		}
+		cancel()
+	}
+	return nil
 }

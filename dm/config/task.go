@@ -34,7 +34,7 @@ var (
 	defaultCheckpointSchemaPrefix   = "dm_checkpoint"
 	defaultRemovePreviousCheckpoint = false
 	defaultDisableHeartbeat         = false
-	defaultInSharding               = false
+	defaultIsSharding               = false
 	// MydumperConfig
 	defaultMydumperPath        = "./bin/mydumper"
 	defaultThreads             = 4
@@ -215,7 +215,7 @@ type TaskConfig struct {
 	Name                     string `yaml:"name"`
 	TaskMode                 string `yaml:"task-mode"`
 	Flavor                   string `yaml:"flavor"`
-	InSharding               bool   `yaml:"in-sharding"`
+	IsSharding               bool   `yaml:"is-sharding"`
 	CheckpointSchemaPrefix   string `yaml:"checkpoint-schema-prefix"`
 	RemovePreviousCheckpoint bool   `yaml:"remove-previous-checkpoint"`
 	DisableHeartbeat         bool   `yaml:"disable-heartbeat"`
@@ -242,7 +242,7 @@ func NewTaskConfig() *TaskConfig {
 		RemovePreviousCheckpoint: defaultRemovePreviousCheckpoint,
 		DisableHeartbeat:         defaultDisableHeartbeat,
 		MySQLInstances:           make([]*MySQLInstance, 0, 5),
-		InSharding:               defaultInSharding,
+		IsSharding:               defaultIsSharding,
 		Routes:                   make(map[string]*router.TableRule),
 		Filters:                  make(map[string]*bf.BinlogEventRule),
 		ColumnMappings:           make(map[string]*column.Rule),
@@ -408,7 +408,7 @@ func (c *TaskConfig) SubTaskConfigs() []*SubTaskConfig {
 	cfgs := make([]*SubTaskConfig, len(c.MySQLInstances))
 	for i, inst := range c.MySQLInstances {
 		cfg := NewSubTaskConfig()
-		cfg.InSharding = c.InSharding
+		cfg.IsSharding = c.IsSharding
 		cfg.Name = c.Name
 		cfg.Mode = c.TaskMode
 		cfg.Flavor = c.Flavor

@@ -330,3 +330,29 @@ func getParser(db *sql.DB) (*parser.Parser, error) {
 	}
 	return parser, nil
 }
+
+// fetchDDLSchema fetches schema name from StmtNode
+func fetchDDLSchema(stmt ast.StmtNode) string {
+	switch v := stmt.(type) {
+	case *ast.CreateDatabaseStmt:
+		return v.Name
+	case *ast.DropDatabaseStmt:
+		return v.Name
+	case *ast.CreateTableStmt:
+		return v.Table.Schema.O
+	case *ast.DropTableStmt:
+		return v.Tables[0].Schema.O
+	case *ast.TruncateTableStmt:
+		return v.Table.Schema.O
+	case *ast.AlterTableStmt:
+		return v.Table.Schema.O
+	case *ast.RenameTableStmt:
+		return v.OldTable.Schema.O
+	case *ast.CreateIndexStmt:
+		return v.Table.Schema.O
+	case *ast.DropIndexStmt:
+		return v.Table.Schema.O
+	default:
+		return ""
+	}
+}

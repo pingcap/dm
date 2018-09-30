@@ -248,7 +248,7 @@ func (w *Worker) QueryStatus(name string) []*pb.SubTaskStatus {
 }
 
 // HandleSQLs implements Handler.HandleSQLs.
-func (w *Worker) HandleSQLs(name string, op pb.SQLOp, pos string, args []string) error {
+func (w *Worker) HandleSQLs(ctx context.Context, name string, op pb.SQLOp, pos string, args []string) error {
 	w.Lock()
 	defer w.Unlock()
 	st, ok := w.subTasks[name]
@@ -256,7 +256,7 @@ func (w *Worker) HandleSQLs(name string, op pb.SQLOp, pos string, args []string)
 		return errors.NotFoundf("sub task with name %s", name)
 	}
 
-	err := st.SetSyncerOperator(op, pos, args)
+	err := st.SetSyncerOperator(ctx, op, pos, args)
 	return errors.Trace(err)
 }
 

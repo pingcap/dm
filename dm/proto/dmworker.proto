@@ -58,6 +58,7 @@ message QueryStatusRequest {
 enum SQLOp {
     SKIP = 0; // skip the SQL
     REPLACE = 1; // replace the SQL with a specified SQL
+    INJECT = 2; // inject the SQL to syncer as binlog event
 }
 
 // NOTE: we can extract some common(optional) arguments from `args`, like `meta`
@@ -119,10 +120,10 @@ enum Stage {
 // adds fields later
 message CheckStatus {
     bool  passed = 1;
-    int32 Total = 2;
-    int32 Successful = 3;
-    int32 Failed = 4;
-    int32 Warning = 5;
+    int32 total = 2;
+    int32 successful = 3;
+    int32 failed = 4;
+    int32 warning = 5;
 
     bytes detail = 6;
 }
@@ -134,30 +135,45 @@ message DumpStatus {
 
 // LoadStatus represents status for load unit
 message LoadStatus {
-    int64 FinishedBytes = 1;
-    int64 TotalBytes = 2;
-    string Progress = 3;
+    int64 finishedBytes = 1;
+    int64 totalBytes = 2;
+    string progress = 3;
+}
+
+// ShardingGroup represents a DDL sharding group, this is used by SyncStatus, and is differ from ShardingGroup in syncer pkg
+// target: target table name
+// DDL: in syncing DDL
+// firstPos: first DDL binlog pos for this group
+// synced: synced source tables
+// unsynced: unsynced source tables
+message ShardingGroup {
+    string target = 1;
+    string DDL = 2;
+    string firstPos = 3;
+    repeated string synced = 4;
+    repeated string unsynced = 5;
 }
 
 // SyncStatus represents status for sync unit
 message SyncStatus {
-    int64 TotalEvents = 1;
-    int64 TotalTps = 2;
-    int64 RecentTps = 3;
-    string MasterBinlog = 4;
-    string MasterBinlogGtid = 5;
-    string SyncerBinlog = 6;
-    string SyncerBinlogGtid = 7;
+    int64 totalEvents = 1;
+    int64 totalTps = 2;
+    int64 recentTps = 3;
+    string masterBinlog = 4;
+    string masterBinlogGtid = 5;
+    string syncerBinlog = 6;
+    string syncerBinlogGtid = 7;
     string blockingDDL = 8; // sharding DDL which current is blocking
+    repeated ShardingGroup unresolvedGroups = 9; // sharding groups which current are un-resolved
 }
 
 // RelayStatus represents status for relay unit.
 message RelayStatus {
-    string MasterBinlog = 1;
-    string MasterBinlogGtid = 2;
-    string RelayBinlog = 3;
-    string RelayBinlogGtid = 4;
-    bool Closed = 5;
+    string masterBinlog = 1;
+    string masterBinlogGtid = 2;
+    string relayBinlog = 3;
+    string relayBinlogGtid = 4;
+    bool closed = 5;
 }
 
 // SubTaskStatus represents status for a sub task
@@ -233,6 +249,7 @@ message DDLInfo {
     string task = 1; // sub task's name
     string schema = 2; // DDL's schema
     string table = 3; // DDL's table
+    string DDL = 4; // DDL statement
 }
 
 // DDLLockInfo represents a DDL lock

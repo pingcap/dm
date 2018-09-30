@@ -66,7 +66,7 @@ type SubTaskConfig struct {
 	flagSet *flag.FlagSet
 
 	// when in sharding, multi dm-workers do one task
-	InSharding bool `toml:"in-sharding" json:"in-sharding"`
+	IsSharding bool `toml:"is-sharding" json:"is-sharding"`
 
 	Name                     string `toml:"name" json:"name"`
 	Mode                     string `toml:"mode" json:"mode"`

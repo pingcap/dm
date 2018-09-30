@@ -96,14 +96,16 @@ message ShowDDLLocksRequest {
 // ID: DDL lock generated ID
 // task: lock's corresponding task name
 // owner: lock's owner, a dm-worker
+// DDL: DDL statement
 // synced: already synced dm-workers
 // unsynced: pending to sync dm-workers
 message DDLLock {
     string ID = 1;
     string task = 2;
     string owner = 3;
-    repeated string synced = 4;
-    repeated string unsynced = 5;
+    string DDL = 4;
+    repeated string synced = 5;
+    repeated string unsynced = 6;
 }
 
 message ShowDDLLocksResponse {

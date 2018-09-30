@@ -447,10 +447,15 @@ func (st *SubTask) SaveDDLLockInfo(info *pb.DDLLockInfo) error {
 }
 
 // SetSyncerOperator sets an operator to syncer.
-func (st *SubTask) SetSyncerOperator(op pb.SQLOp, pos string, args []string) error {
+func (st *SubTask) SetSyncerOperator(ctx context.Context, op pb.SQLOp, pos string, args []string) error {
 	syncUnit, ok := st.currUnit.(*syncer.Syncer)
 	if !ok {
 		return errors.Errorf("such operation is only available for syncer, but now syncer is not running. current unit is %s", st.currUnit.Type())
+	}
+
+	// special handle for INJECT
+	if op == pb.SQLOp_INJECT {
+		return syncUnit.InjectSQLs(ctx, args)
 	}
 
 	// we have check len(parsed) == 2 in dmctl.

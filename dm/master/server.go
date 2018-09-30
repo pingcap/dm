@@ -507,6 +507,7 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 			ID:       lock.ID,
 			Task:     lock.Task,
 			Owner:    lock.Owner,
+			DDL:      lock.Stmt,
 			Synced:   make([]string, 0, len(ready)),
 			Unsynced: make([]string, 0, len(ready)),
 		}
@@ -923,7 +924,7 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 							break
 						}
 
-						lockID, synced, remain := s.lockKeeper.TrySync(in.Task, in.Schema, in.Table, worker, workers)
+						lockID, synced, remain := s.lockKeeper.TrySync(in.Task, in.Schema, in.Table, worker, in.DDL, workers)
 
 						out := &pb.DDLLockInfo{
 							Task: in.Task,

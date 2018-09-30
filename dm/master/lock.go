@@ -25,6 +25,7 @@ type Lock struct {
 	ID        string           // lock's ID, constructed from task's name and SQL statement
 	Task      string           // lock's corresponding task name
 	Owner     string           // lock's Owner, a dm-worker
+	Stmt      string           // SQL statement
 	remain    int              // remain count needed to sync
 	ready     map[string]bool  // whether dm-worker is synced
 	AutoRetry sync2.AtomicBool // whether re-try resolve at intervals
@@ -32,11 +33,12 @@ type Lock struct {
 }
 
 // NewLock creates a new Lock
-func NewLock(id, task, owner string, workers []string) *Lock {
+func NewLock(id, task, owner, stmt string, workers []string) *Lock {
 	l := &Lock{
 		ID:     id,
 		Task:   task,
 		Owner:  owner,
+		Stmt:   stmt,
 		remain: len(workers),
 		ready:  make(map[string]bool),
 	}

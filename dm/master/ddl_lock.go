@@ -101,7 +101,7 @@ func NewLockKeeper() *LockKeeper {
 }
 
 // TrySync tries to sync the lock
-func (lk *LockKeeper) TrySync(task, schema, table, worker string, workers []string) (string, bool, int) {
+func (lk *LockKeeper) TrySync(task, schema, table, worker, stmt string, workers []string) (string, bool, int) {
 	lockID := genDDLLockID(task, schema, table)
 	var (
 		l  *Lock
@@ -112,7 +112,7 @@ func (lk *LockKeeper) TrySync(task, schema, table, worker string, workers []stri
 	defer lk.Unlock()
 
 	if l, ok = lk.locks[lockID]; !ok {
-		lk.locks[lockID] = NewLock(lockID, task, worker, workers)
+		lk.locks[lockID] = NewLock(lockID, task, worker, stmt, workers)
 		l = lk.locks[lockID]
 	}
 

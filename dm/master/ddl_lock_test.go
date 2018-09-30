@@ -48,7 +48,7 @@ func (t *testMaster) TestLockKeeper(c *C) {
 			wg.Add(1)
 			go func(cs Case, i int) {
 				defer wg.Done()
-				id, synced, remain := lk.TrySync(cs.task, cs.schema, cs.table, workers[i], workers)
+				id, synced, remain := lk.TrySync(cs.task, cs.schema, cs.table, workers[i], "stmt", workers)
 				c.Assert(synced, IsFalse)
 				c.Assert(remain, Greater, 0) // multi-goroutines TrySync concurrently, can only confirm remain > 0
 				c.Assert(lk.FindLock(id), NotNil)
@@ -58,7 +58,7 @@ func (t *testMaster) TestLockKeeper(c *C) {
 	wg.Wait()
 
 	for _, cs := range cases {
-		id, synced, remain := lk.TrySync(cs.task, cs.schema, cs.table, workers[len(workers)-1], workers)
+		id, synced, remain := lk.TrySync(cs.task, cs.schema, cs.table, workers[len(workers)-1], "stmt", workers)
 		c.Assert(synced, IsTrue)
 		c.Assert(remain, Equals, 0)
 		c.Assert(lk.FindLock(id), NotNil)

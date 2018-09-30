@@ -27,7 +27,7 @@ import (
 // NewSQLReplaceCmd creates a SQLReplace command
 func NewSQLReplaceCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "sql-replace [-w worker] <task_name> <binlog_pos> <sql1;sql2;>",
+		Use:   "sql-replace <-w worker> <task_name> <binlog_pos> <sql1;sql2;>",
 		Short: "sql-replace replaces sql in specific binlog_pos with other sqls, each sql must ends with semicolon;",
 		Run:   sqlReplaceFunc,
 	}

@@ -47,6 +47,11 @@ func (s *Syncer) Status() interface{} {
 		MasterBinlog:     masterPos.String(),
 		MasterBinlogGtid: masterGTIDSet.String(),
 		SyncerBinlog:     syncerPos.String(),
+		BlockingDDL:      s.ddlExecInfo.BlockingDDL(),
+	}
+
+	if s.cfg.IsSharding {
+		st.UnresolvedGroups = s.sgk.UnresolvedGroups()
 	}
 	return st
 }

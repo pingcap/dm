@@ -27,7 +27,7 @@ import (
 // NewSQLSkipCmd creates a SQLSkip command
 func NewSQLSkipCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "sql-skip [-w worker] <task_name> <binlog_pos>",
+		Use:   "sql-skip <-w worker> <task_name> <binlog_pos>",
 		Short: "sql-skip skips specified binlog position",
 		Run:   sqlSkipFunc,
 	}
