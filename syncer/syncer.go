@@ -603,8 +603,9 @@ func (s *Syncer) saveGlobalPoint(globalPoint mysql.Position) {
 func (s *Syncer) flushCheckPoints() error {
 	var exceptTables [][]string
 	if s.cfg.IsSharding {
-		// flush all checkpoints except tables which are in syncing for sharding group
-		exceptTables = s.sgk.InSyncingTables()
+		// flush all checkpoints except tables which are unresolved for sharding DDL
+		exceptTables = s.sgk.UnresolvedTables()
+		log.Infof("[syncer] flush checkpoints except for tables %v", exceptTables)
 	}
 	return errors.Trace(s.checkpoint.FlushPointsExcept(exceptTables))
 }
@@ -1710,7 +1711,7 @@ func (s *Syncer) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 // now no config diff implemented, so simply re-init use new config
 func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 	if s.cfg.IsSharding {
-		tables := s.sgk.InSyncingTables()
+		tables := s.sgk.UnresolvedTables()
 		if len(tables) > 0 {
 			return errors.NotSupportedf("try update config when some tables' (%v) sharding DDL not synced", tables)
 		}

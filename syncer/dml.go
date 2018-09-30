@@ -32,7 +32,7 @@ func genInsertSQLs(schema string, table string, dataSeq [][]interface{}, columns
 	columnPlaceholders := genColumnPlaceholders(len(columns))
 	for _, data := range dataSeq {
 		if len(data) != len(columns) {
-			return nil, nil, nil, errors.Errorf("insert columns and data mismatch in length: %d vs %d", len(columns), len(data))
+			return nil, nil, nil, errors.Errorf("insert columns and data mismatch in length: %d (columns) vs %d (data)", len(columns), len(data))
 		}
 
 		value := make([]interface{}, 0, len(data))

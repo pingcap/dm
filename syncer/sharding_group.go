@@ -20,7 +20,7 @@ package syncer
  *   all tables in a sharding group execute same DDLs in the same order
  *   when the first staring of the task, same DDL for the whole sharding group should not in partial executed
  *      the startup point can not be in the middle of the first-pos and last-pos of a sharding group's DDL
- *   do not support to modify router-rules online (when syncing)
+ *   do not support to modify router-rules online (when unresolved)
  *   do not support to rename table or database in a sharding group
  *   do not support to sync using GTID mode (GTID is supported by relay unit now)
  *   do not support same <schema-name, table-name> pair for upstream and downstream when merging sharding group
@@ -86,8 +86,8 @@ import (
 type ShardingGroup struct {
 	sync.RWMutex
 	// remain count waiting for syncing
-	// == len(sources):  DDL syncing not started
-	// == 0: all DDLs synced, will be reset to len(sources) later
+	// == len(sources):  DDL syncing not started or resolved
+	// == 0: all DDLs synced, will be reset to len(sources) after resolved combining with other dm-workers
 	// (0, len(sources)): waiting for syncing
 	// NOTE: we can make remain to be configurable if needed
 	remain       int
@@ -120,9 +120,9 @@ func (sg *ShardingGroup) Merge(sources []string) error {
 	sg.Lock()
 	defer sg.Unlock()
 
-	//  if group is in syncing, we can't do merging (CREATE DATABASE / TABLE)
-	if sg.remain < len(sg.sources) && sg.remain > 0 {
-		return errors.NotSupportedf("group is in syncing, try merge sources %v", sources)
+	//  if group is un-resolved, we can't do merging (CREATE DATABASE / TABLE)
+	if sg.remain != len(sg.sources) {
+		return errors.NotSupportedf("group's sharding DDL %s is un-resolved, try merge sources %v", sg.ddl, sources)
 	}
 
 	for _, source := range sources {
@@ -183,23 +183,8 @@ func (sg *ShardingGroup) InSyncing(source string) bool {
 	return sg.remain > 0 && synced
 }
 
-// GroupInSyncing returns whether the group is in syncing
-func (sg *ShardingGroup) GroupInSyncing() bool {
-	sg.RLock()
-	defer sg.RUnlock()
-	return sg.remain < len(sg.sources) && sg.remain > 0
-}
-
-// GroupUnResolved returns whether the group is un-resolved
-// including waiting for other tables in the group or waiting for other tables in other dm-workers
-func (sg *ShardingGroup) GroupUnResolved() bool {
-	sg.RLock()
-	defer sg.RUnlock()
-	return sg.remain < len(sg.sources)
-}
-
-// UnResolvedGroupInfo returns pb.ShardingGroup if is unresolved, else returns nil
-func (sg *ShardingGroup) UnResolvedGroupInfo() *pb.ShardingGroup {
+// UnresolvedGroupInfo returns pb.ShardingGroup if is unresolved, else returns nil
+func (sg *ShardingGroup) UnresolvedGroupInfo() *pb.ShardingGroup {
 	sg.RLock()
 	defer sg.RUnlock()
 
@@ -245,18 +230,21 @@ func (sg *ShardingGroup) Tables() [][]string {
 	return tables
 }
 
-// FirstPosInSyncing returns the first DDL pos if in syncing, else nil
-func (sg *ShardingGroup) FirstPosInSyncing() *mysql.Position {
+// UnresolvedTables returns all source tables' <schema, table> pair if is unresolved, else returns nil
+func (sg *ShardingGroup) UnresolvedTables() [][]string {
 	sg.RLock()
 	defer sg.RUnlock()
-	if sg.remain < len(sg.sources) && sg.remain > 0 && sg.firstPos != nil {
-		// create a new pos to return
-		return &mysql.Position{
-			Name: sg.firstPos.Name,
-			Pos:  sg.firstPos.Pos,
-		}
+
+	if sg.remain == len(sg.sources) {
+		return nil
 	}
-	return nil
+
+	tables := make([][]string, 0, len(sg.sources))
+	for id := range sg.sources {
+		schema, table := UnpackTableID(id)
+		tables = append(tables, []string{schema, table})
+	}
+	return tables
 }
 
 // FirstPosUnresolved returns the first DDL pos if un-resolved, else nil
@@ -271,16 +259,6 @@ func (sg *ShardingGroup) FirstPosUnresolved() *mysql.Position {
 		}
 	}
 	return nil
-}
-
-// DDLUnresolved returns the DDL if un-resolved, else empty string
-func (sg *ShardingGroup) DDLUnresolved() string {
-	sg.RLock()
-	defer sg.RUnlock()
-	if sg.remain < len(sg.sources) {
-		return sg.ddl
-	}
-	return ""
 }
 
 // String implements Stringer.String
@@ -393,18 +371,16 @@ func (k *ShardingGroupKeeper) InSyncing(targetSchema, targetTable, source string
 	return group.InSyncing(source)
 }
 
-// InSyncingTables returns all source tables which is waiting for sharding DDL syncing
-// NOTE: this func only ensure the returned tables are current in syncing
+// UnresolvedTables returns all source tables which with DDLs are un-resolved
+// NOTE: this func only ensure the returned tables are current un-resolved
 // if passing the returned tables to other func (like checkpoint),
 // must ensure their sync state not changed in this progress
-func (k *ShardingGroupKeeper) InSyncingTables() [][]string {
+func (k *ShardingGroupKeeper) UnresolvedTables() [][]string {
 	tables := make([][]string, 0, 10)
 	k.RLock()
 	defer k.RUnlock()
 	for _, group := range k.groups {
-		if group.GroupInSyncing() {
-			tables = append(tables, group.Tables()...)
-		}
+		tables = append(tables, group.UnresolvedTables()...)
 	}
 	return tables
 }
@@ -417,13 +393,13 @@ func (k *ShardingGroupKeeper) Group(targetSchema, targetTable string) *ShardingG
 	return k.groups[tableID]
 }
 
-// lowestFirstPosInGroups returns the lowest pos in all groups in syncing
+// lowestFirstPosInGroups returns the lowest pos in all groups which are unresolved
 func (k *ShardingGroupKeeper) lowestFirstPosInGroups() *mysql.Position {
 	k.RLock()
 	defer k.RUnlock()
 	var lowest *mysql.Position
 	for _, group := range k.groups {
-		pos := group.FirstPosInSyncing()
+		pos := group.FirstPosUnresolved()
 		if pos == nil {
 			continue
 		}
@@ -466,7 +442,7 @@ func (k *ShardingGroupKeeper) UnresolvedGroups() []*pb.ShardingGroup {
 	k.RLock()
 	defer k.RUnlock()
 	for target, group := range k.groups {
-		gi := group.UnResolvedGroupInfo()
+		gi := group.UnresolvedGroupInfo()
 		if gi != nil {
 			gi.Target = target // set target
 			groups = append(groups, gi)
