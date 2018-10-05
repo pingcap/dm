@@ -76,7 +76,7 @@ import:
   - ioutil2
   - sync2
 - package: github.com/siddontang/go-mysql
-  version: fd6fda8b01995b10a565430497d5ca6b18032c34
+  version: 17cd8859601e49bec4f46b09df65a9c297e881ab
   subpackages:
   - client
   - mysql

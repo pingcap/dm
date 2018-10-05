@@ -1,5 +1,5 @@
-hash: ad713037195c0b421cd41dc2bcd1a02d92dc5f117200c2e2e0f4bb2c109fe86b
-updated: 2018-09-29T17:52:06.130566+08:00
+hash: 9b0ab9dfcb179fbc03226abba5bfe51a5ddade19365559dcd2efd717a1ca89be
+updated: 2018-10-05T11:38:08.493875+08:00
 imports:
 - name: github.com/beorn7/perks
   version: 3a771d992973f24aa725d07868b467d1ddfceafb
@@ -65,7 +65,7 @@ imports:
 - name: github.com/juju/errors
   version: 6f54ff6318409d31ff16261533ce2c8381a4fd5d
 - name: github.com/konsorten/go-windows-terminal-sequences
-  version: b729f2633dfe35f4d1d8a32385f6685610ce1cb5
+  version: 5c8c8bd35d3832f5d134ae1e1e375b69a4d25242
 - name: github.com/matttproud/golang_protobuf_extensions
   version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
@@ -225,14 +225,14 @@ imports:
   - log
   - loggers
 - name: github.com/siddontang/go-mysql
-  version: fd6fda8b01995b10a565430497d5ca6b18032c34
+  version: 17cd8859601e49bec4f46b09df65a9c297e881ab
   subpackages:
   - client
   - mysql
   - packet
   - replication
 - name: github.com/sirupsen/logrus
-  version: a67f783a3814b8729bd2dac5780b5f78f8dbd64d
+  version: 1ed61965b9e594bf37539680d7f63eccd060314f
 - name: github.com/spaolacci/murmur3
   version: f09979ecbc725b9e6d41a297405f65e7e8804acc
 - name: github.com/spf13/cobra
