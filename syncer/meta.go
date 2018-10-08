@@ -46,7 +46,7 @@ type Meta interface {
 	Pos() mysql.Position
 
 	// GTID() returns gtid information.
-	GTID() (gtid.Set, error)
+	GTID() gtid.Set
 }
 
 // LocalMeta is local meta struct.
@@ -157,15 +157,18 @@ func (lm *LocalMeta) Pos() mysql.Position {
 }
 
 // GTID implements Meta.GTID interface
-func (lm *LocalMeta) GTID() (gtid.Set, error) {
+func (lm *LocalMeta) GTID() gtid.Set {
 	lm.RLock()
 	defer lm.RUnlock()
 
-	return lm.gset.Clone(), nil
+	if lm.gset == nil {
+		return nil
+	}
+	return lm.gset.Clone()
 }
 
 func (lm *LocalMeta) String() string {
 	pos := lm.Pos()
-	gs, _ := lm.GTID()
+	gs := lm.GTID()
 	return fmt.Sprintf("syncer-binlog = %v, syncer-binlog-gtid = %v", pos, gs)
 }

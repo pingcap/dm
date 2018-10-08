@@ -41,13 +41,15 @@ func (s *Syncer) Status() interface{} {
 		log.Warnf("[syncer] get gtid err %v", errors.ErrorStack(err))
 	}
 	st := &pb.SyncStatus{
-		TotalEvents:      total,
-		TotalTps:         totalTps,
-		RecentTps:        tps,
-		MasterBinlog:     masterPos.String(),
-		MasterBinlogGtid: masterGTIDSet.String(),
-		SyncerBinlog:     syncerPos.String(),
-		BlockingDDL:      s.ddlExecInfo.BlockingDDL(),
+		TotalEvents:  total,
+		TotalTps:     totalTps,
+		RecentTps:    tps,
+		MasterBinlog: masterPos.String(),
+		SyncerBinlog: syncerPos.String(),
+		BlockingDDL:  s.ddlExecInfo.BlockingDDL(),
+	}
+	if masterGTIDSet != nil { // masterGTIDSet maybe a nil interface
+		st.MasterBinlogGtid = masterGTIDSet.String()
 	}
 
 	if s.cfg.IsSharding {

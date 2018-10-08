@@ -135,6 +135,9 @@ func (g *mySQLGTIDSet) Origin() mysql.GTIDSet {
 }
 
 func (g *mySQLGTIDSet) String() string {
+	if g.set == nil {
+		return ""
+	}
 	return g.set.String()
 }
 
@@ -211,5 +214,8 @@ func (m *mariadbGTIDSet) Origin() mysql.GTIDSet {
 }
 
 func (m *mariadbGTIDSet) String() string {
+	if m.set == nil {
+		return ""
+	}
 	return m.set.String()
 }

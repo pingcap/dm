@@ -312,10 +312,7 @@ func (r *Relay) getBinlogStreamer() (*replication.BinlogStreamer, error) {
 }
 
 func (r *Relay) startSyncByGTID() (*replication.BinlogStreamer, error) {
-	gs, err := r.meta.GTID()
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
+	gs := r.meta.GTID()
 
 	streamer, err := r.syncer.StartSyncGTID(gs.Origin())
 	if err != nil {
@@ -403,16 +400,18 @@ func (r *Relay) Status() interface{} {
 	}
 
 	relayPos := r.meta.Pos()
-	relayGTIDSet, err := r.meta.GTID()
-	if err != nil {
-		log.Warnf("[relay] get gtid err %v", errors.ErrorStack(err))
+	relayGTIDSet := r.meta.GTID()
+	rs := &pb.RelayStatus{
+		MasterBinlog: masterPos.String(),
+		RelayBinlog:  relayPos.String(),
 	}
-	return &pb.RelayStatus{
-		MasterBinlog:     masterPos.String(),
-		MasterBinlogGtid: masterGTID.String(),
-		RelayBinlog:      relayPos.String(),
-		RelayBinlogGtid:  relayGTIDSet.String(),
+	if masterGTID != nil { // masterGTID maybe a nil interface
+		rs.MasterBinlogGtid = masterGTID.String()
 	}
+	if relayGTIDSet != nil {
+		rs.RelayBinlogGtid = relayGTIDSet.String()
+	}
+	return rs
 }
 
 // Type implements the dm.Unit interface.
