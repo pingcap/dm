@@ -30,6 +30,14 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 )
 
+/*
+variants about checkpoint:
+1. use position of rotate/ddl/xid event from any stream (global and sharding streaming) to update global/table checkpoint
+2. position of global/table checkpoint increases monotonically
+4. global checkpoint <= min checkpoint of all unsolved sharding table
+5. table checkpoint >= global checkpoint
+*/
+
 var (
 	defaultTable         = "_"      // default table name task name is empty
 	defaultSchemaSuffix  = "syncer" // default schema name's suffix
@@ -249,6 +257,10 @@ func (cp *RemoteCheckPoint) SaveTablePoint(sourceSchema, sourceTable string, pos
 
 // saveTablePoint saves single table's checkpoint without mutex.Lock
 func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, pos mysql.Position) {
+	if cp.globalPoint.Compare(pos) > 0 {
+		panic(fmt.Sprintf("table checkpoint %+v less than global checkpoint %+v", pos, cp.globalPoint))
+	}
+
 	mSchema, ok := cp.points[sourceSchema]
 	if !ok {
 		mSchema = make(map[string]*binlogPoint)

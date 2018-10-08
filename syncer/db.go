@@ -209,14 +209,14 @@ func (conn *Conn) executeSQLJobImp(jobs []*job) error {
 	}
 
 	for i := range jobs {
-		log.Debugf("[exec][pos]%s[sql]%s[args]%v", jobs[i].lastPos, jobs[i].sql, jobs[i].args)
+		log.Debugf("[exec][checkpoint]%s[sql]%s[args]%v", jobs[i].pos, jobs[i].sql, jobs[i].args)
 
 		_, err = txn.Exec(jobs[i].sql, jobs[i].args...)
 		if err != nil {
-			log.Warnf("[exec][pos]%s[sql]%s[args]%v[error]%v", jobs[i].lastPos, jobs[i].sql, jobs[i].args, err)
+			log.Warnf("[exec][checkpoint]%s[sql]%s[args]%v[error]%v", jobs[i].pos, jobs[i].sql, jobs[i].args, err)
 			rerr := txn.Rollback()
 			if rerr != nil {
-				log.Errorf("[exec][pos]%s[sql]%s[args]%v[error]%v", jobs[i].lastPos, jobs[i].sql, jobs[i].args, rerr)
+				log.Errorf("[exec][checkpoint]%s[sql]%s[args]%v[error]%v", jobs[i].pos, jobs[i].sql, jobs[i].args, rerr)
 			}
 			// we should return the exec err, instead of the rollback rerr.
 			return errors.Trace(err)
