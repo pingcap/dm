@@ -31,13 +31,16 @@ import (
 var (
 	// sub tasks may changed, so we re-FetchDDLInfo at intervals
 	reFetchInterval = 10 * time.Second
+
+	closedFalse int32
+	closedTrue  int32 = 1
 )
 
 // Worker manages sub tasks and process units for data migration
 type Worker struct {
 	sync.RWMutex
 	wg     sync.WaitGroup
-	closed sync2.AtomicBool
+	closed sync2.AtomicInt32
 
 	// context created when Worker created, and canceled when closing
 	ctx    context.Context
@@ -54,7 +57,7 @@ func NewWorker(cfg *Config) *Worker {
 		cfg:      cfg,
 		subTasks: make(map[string]*SubTask),
 	}
-	w.closed.Set(true) // not start yet
+	w.closed.Set(closedTrue) // not start yet
 	w.ctx, w.cancel = context.WithCancel(context.Background())
 
 	relayCfg := &relay.Config{
@@ -79,7 +82,7 @@ func NewWorker(cfg *Config) *Worker {
 
 // Start starts working
 func (w *Worker) Start() {
-	w.closed.Set(false)
+	w.closed.Set(closedFalse)
 	w.wg.Add(1)
 	defer w.wg.Done()
 
@@ -126,17 +129,17 @@ func (w *Worker) Start() {
 
 // Close stops working and releases resources
 func (w *Worker) Close() {
-	w.Lock()
-	defer w.Unlock()
-	if w.closed.Get() {
+	if !w.closed.CompareAndSwap(closedFalse, closedTrue) {
 		return
 	}
 
+	w.Lock()
 	// close all sub tasks
 	for name, st := range w.subTasks {
 		st.Close()
 		delete(w.subTasks, name)
 	}
+	w.Unlock()
 
 	if w.relay != nil {
 		w.relay.Close()
@@ -145,12 +148,14 @@ func (w *Worker) Close() {
 	// cancel status output ticker and wait for return
 	w.cancel()
 	w.wg.Wait()
-
-	w.closed.Set(true)
 }
 
 // StartSubTask creates a sub task an run it
 func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
+	if w.closed.Get() == closedTrue {
+		return errors.NotValidf("worker already closed")
+	}
+
 	w.Lock()
 	defer w.Unlock()
 
@@ -200,6 +205,10 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 
 // StopSubTask stops a running sub task
 func (w *Worker) StopSubTask(name string) error {
+	if w.closed.Get() == closedTrue {
+		return errors.NotValidf("worker already closed")
+	}
+
 	w.Lock()
 	defer w.Unlock()
 	st, ok := w.subTasks[name]
@@ -214,6 +223,10 @@ func (w *Worker) StopSubTask(name string) error {
 
 // PauseSubTask pauses a running sub task
 func (w *Worker) PauseSubTask(name string) error {
+	if w.closed.Get() == closedTrue {
+		return errors.NotValidf("worker already closed")
+	}
+
 	st := w.findSubTask(name)
 	if st == nil {
 		return errors.NotFoundf("sub task with name %s", name)
@@ -224,6 +237,10 @@ func (w *Worker) PauseSubTask(name string) error {
 
 // ResumeSubTask resumes a paused sub task
 func (w *Worker) ResumeSubTask(name string) error {
+	if w.closed.Get() == closedTrue {
+		return errors.NotValidf("worker already closed")
+	}
+
 	st := w.findSubTask(name)
 	if st == nil {
 		return errors.NotFoundf("sub task with name %s", name)
@@ -234,6 +251,10 @@ func (w *Worker) ResumeSubTask(name string) error {
 
 // UpdateSubTask update config for a sub task
 func (w *Worker) UpdateSubTask(cfg *config.SubTaskConfig) error {
+	if w.closed.Get() == closedTrue {
+		return errors.NotValidf("worker already closed")
+	}
+
 	st := w.findSubTask(cfg.Name)
 	if st == nil {
 		return errors.NotFoundf("sub task with name %s", cfg.Name)
@@ -244,15 +265,22 @@ func (w *Worker) UpdateSubTask(cfg *config.SubTaskConfig) error {
 
 // QueryStatus query worker's sub tasks' status
 func (w *Worker) QueryStatus(name string) []*pb.SubTaskStatus {
+	if w.closed.Get() == closedTrue {
+		log.Warn("[worker] querying status from a closed worker")
+		return nil
+	}
+
 	return w.Status(name)
 }
 
 // HandleSQLs implements Handler.HandleSQLs.
 func (w *Worker) HandleSQLs(ctx context.Context, name string, op pb.SQLOp, pos string, args []string) error {
-	w.Lock()
-	defer w.Unlock()
-	st, ok := w.subTasks[name]
-	if !ok {
+	if w.closed.Get() == closedTrue {
+		return errors.NotValidf("worker already closed")
+	}
+
+	st := w.findSubTask(name)
+	if st == nil {
 		return errors.NotFoundf("sub task with name %s", name)
 	}
 
@@ -269,7 +297,7 @@ func (w *Worker) findSubTask(name string) *SubTask {
 
 // FetchDDLInfo fetches all sub tasks' DDL info which pending to sync
 func (w *Worker) FetchDDLInfo(ctx context.Context) *pb.DDLInfo {
-	if w.closed.Get() {
+	if w.closed.Get() == closedTrue {
 		log.Warn("[worker] fetching DDLInfo from a closed worker")
 		return nil
 	}
@@ -334,7 +362,7 @@ func (w *Worker) doFetchDDLInfo(ctx context.Context, ch chan<- *pb.DDLInfo) {
 
 // SendBackDDLInfo sends sub tasks' DDL info back to pending
 func (w *Worker) SendBackDDLInfo(ctx context.Context, info *pb.DDLInfo) bool {
-	if w.closed.Get() {
+	if w.closed.Get() == closedTrue {
 		log.Warnf("[worker] sending DDLInfo %v back to a closed worker", info)
 		return false
 	}
@@ -348,6 +376,10 @@ func (w *Worker) SendBackDDLInfo(ctx context.Context, info *pb.DDLInfo) bool {
 
 // RecordDDLLockInfo records the current DDL lock info which pending to sync
 func (w *Worker) RecordDDLLockInfo(info *pb.DDLLockInfo) error {
+	if w.closed.Get() == closedTrue {
+		return errors.NotValidf("worker already closed")
+	}
+
 	st := w.findSubTask(info.Task)
 	if st == nil {
 		return errors.NotFoundf("sub task for DDLLockInfo %+v", info)
@@ -357,6 +389,10 @@ func (w *Worker) RecordDDLLockInfo(info *pb.DDLLockInfo) error {
 
 // ExecuteDDL executes (or ignores) DDL (in sharding DDL lock, requested by dm-master)
 func (w *Worker) ExecuteDDL(ctx context.Context, req *pb.ExecDDLRequest) error {
+	if w.closed.Get() == closedTrue {
+		return errors.NotValidf("worker already closed")
+	}
+
 	st := w.findSubTask(req.Task)
 	if st == nil {
 		return errors.NotFoundf("sub task %v", req.Task)
@@ -376,6 +412,10 @@ func (w *Worker) ExecuteDDL(ctx context.Context, req *pb.ExecDDLRequest) error {
 
 // BreakDDLLock breaks current blocking DDL lock and/or remove current DDLLockInfo
 func (w *Worker) BreakDDLLock(ctx context.Context, req *pb.BreakDDLLockRequest) error {
+	if w.closed.Get() == closedTrue {
+		return errors.NotValidf("worker already closed")
+	}
+
 	st := w.findSubTask(req.Task)
 	if st == nil {
 		return errors.NotFoundf("sub task %v", req.Task)
