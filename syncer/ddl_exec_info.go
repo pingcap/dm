@@ -146,7 +146,7 @@ func (i *DDLExecInfo) Chan(ddls []string) <-chan *DDLExecItem {
 	return i.ch
 }
 
-// BlockingDDL returns current blocking DDL
+// BlockingDDLs returns current blocking DDL
 func (i *DDLExecInfo) BlockingDDLs() []string {
 	i.RLock()
 	defer i.RUnlock()

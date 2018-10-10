@@ -210,13 +210,6 @@ func (r *BinlogReader) onStream(s *LocalStreamer, pos mysql.Position, updatePos 
 	defer r.watcher.Remove(r.cfg.BinlogDir)
 
 	if len(lastFilePath) > 0 {
-		// watch last relay log file for whether modified (appended)
-		err = r.watcher.Add(lastFilePath)
-		if err != nil {
-			return errors.Annotatef(err, "add watch for relay log %s", lastFilePath)
-		}
-		defer r.watcher.Remove(lastFilePath)
-
 		// check relay log whether updated since the last ParseFile returned
 		fi, err := os.Stat(lastFilePath)
 		if err != nil {
