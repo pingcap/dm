@@ -108,7 +108,7 @@ import:
 - package: gopkg.in/yaml.v2
   version: v2.2.1
 - package: github.com/pingcap/tidb-tools
-  version: 75ce4766d891cd51dd93ede7cdfcb48fdca42f2c
+  version: 8f63826813ad068532b888b065348cbc9ddcb4b2
   subpackages:
   - pkg/binlog-filter
   - pkg/check

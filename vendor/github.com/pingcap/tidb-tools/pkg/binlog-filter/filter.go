@@ -67,8 +67,8 @@ const (
 	NullEvent EventType = ""
 )
 
-// ClassifyEevent classify event into dml/ddl
-func ClassifyEevent(event EventType) (EventType, error) {
+// ClassifyEvent classify event into dml/ddl
+func ClassifyEvent(event EventType) (EventType, error) {
 	switch event {
 	case InsertEvent, UpdateEvent, DeleteEvent:
 		return dml, nil
@@ -92,6 +92,12 @@ type BinlogEventRule struct {
 	Action ActionType `json:"action" toml:"action" yaml:"action"`
 }
 
+// ToLower covert schema/table pattern to lower case
+func (b *BinlogEventRule) ToLower() {
+	b.SchemaPattern = strings.ToLower(b.SchemaPattern)
+	b.TablePattern = strings.ToLower(b.TablePattern)
+}
+
 // Valid checks validity of rule.
 // TODO: check validity of dml/ddl event.
 func (b *BinlogEventRule) Valid() error {
@@ -113,12 +119,15 @@ func (b *BinlogEventRule) Valid() error {
 // BinlogEvent filters binlog events by given rules
 type BinlogEvent struct {
 	selector.Selector
+
+	caseSensitive bool
 }
 
 // NewBinlogEvent returns a binlog event filter
-func NewBinlogEvent(rules []*BinlogEventRule) (*BinlogEvent, error) {
+func NewBinlogEvent(caseSensitive bool, rules []*BinlogEventRule) (*BinlogEvent, error) {
 	b := &BinlogEvent{
-		Selector: selector.NewTrieSelector(),
+		Selector:      selector.NewTrieSelector(),
+		caseSensitive: caseSensitive,
 	}
 
 	for _, rule := range rules {
@@ -135,10 +144,12 @@ func (b *BinlogEvent) AddRule(rule *BinlogEventRule) error {
 	if b == nil || rule == nil {
 		return nil
 	}
-
 	err := rule.Valid()
 	if err != nil {
 		return errors.Trace(err)
+	}
+	if !b.caseSensitive {
+		rule.ToLower()
 	}
 
 	err = b.Insert(rule.SchemaPattern, rule.TablePattern, rule, false)
@@ -154,10 +165,12 @@ func (b *BinlogEvent) UpdateRule(rule *BinlogEventRule) error {
 	if b == nil || rule == nil {
 		return nil
 	}
-
 	err := rule.Valid()
 	if err != nil {
 		return errors.Trace(err)
+	}
+	if !b.caseSensitive {
+		rule.ToLower()
 	}
 
 	err = b.Insert(rule.SchemaPattern, rule.TablePattern, rule, true)
@@ -172,6 +185,9 @@ func (b *BinlogEvent) UpdateRule(rule *BinlogEventRule) error {
 func (b *BinlogEvent) RemoveRule(rule *BinlogEventRule) error {
 	if b == nil || rule == nil {
 		return nil
+	}
+	if !b.caseSensitive {
+		rule.ToLower()
 	}
 
 	err := b.Remove(rule.SchemaPattern, rule.TablePattern)
@@ -189,12 +205,17 @@ func (b *BinlogEvent) Filter(schema, table string, event EventType, rawQuery str
 		return Do, nil
 	}
 
-	tp, err := ClassifyEevent(event)
+	tp, err := ClassifyEvent(event)
 	if err != nil {
 		return Ignore, errors.Trace(err)
 	}
 
-	rules := b.Match(schema, table)
+	schemaL, tableL := schema, table
+	if !b.caseSensitive {
+		schemaL, tableL = strings.ToLower(schema), strings.ToLower(table)
+	}
+
+	rules := b.Match(schemaL, tableL)
 	if len(rules) == 0 {
 		return Do, nil
 	}

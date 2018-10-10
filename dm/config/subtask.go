@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
@@ -67,6 +66,10 @@ type SubTaskConfig struct {
 
 	// when in sharding, multi dm-workers do one task
 	IsSharding bool `toml:"is-sharding" json:"is-sharding"`
+
+	// handle schema/table name mode, and only for schema/table name/pattern
+	// if case insensitive, we would convert schema/table name/pattern to lower case
+	CaseSensitive bool `toml:"case-sensitive" json:"case-sensitive"`
 
 	Name                     string `toml:"name" json:"name"`
 	Mode                     string `toml:"mode" json:"mode"`
@@ -208,26 +211,8 @@ func (c *SubTaskConfig) adjust() error {
 		return errors.Errorf("please specify right mysql version, support mysql, mariadb now")
 	}
 
-	c.BWList.ToLower()
-
 	if c.InstanceID == "" {
 		c.InstanceID = fmt.Sprintf("%s:%d", c.From.Host, c.From.Port)
-	}
-
-	// add ToLower for other pkg later
-	for _, rule := range c.RouteRules {
-		rule.SchemaPattern = strings.ToLower(rule.SchemaPattern)
-		rule.TablePattern = strings.ToLower(rule.TablePattern)
-	}
-
-	for _, rule := range c.FilterRules {
-		rule.SchemaPattern = strings.ToLower(rule.SchemaPattern)
-		rule.TablePattern = strings.ToLower(rule.TablePattern)
-	}
-
-	for _, rule := range c.ColumnMappingRules {
-		rule.PatternSchema = strings.ToLower(rule.PatternSchema)
-		rule.PatternTable = strings.ToLower(rule.PatternTable)
 	}
 
 	if c.MaxRetry == 0 {

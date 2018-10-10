@@ -11,6 +11,7 @@ var systemSchemas = map[string]struct{}{
 }
 
 // IsSystemSchema judge schema is system shema or not
+// case insensitive
 func IsSystemSchema(schema string) bool {
 	schema = strings.ToLower(schema)
 	_, ok := systemSchemas[schema]

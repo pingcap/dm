@@ -45,7 +45,7 @@ func FetchAllDoTables(db *sql.DB, bw *filter.Filter) (map[string][]string, error
 			continue
 		}
 		ftSchemas = append(ftSchemas, &filter.Table{
-			Schema: strings.ToLower(schema),
+			Schema: schema,
 			Name:   "", // schema level
 		})
 	}
@@ -67,7 +67,7 @@ func FetchAllDoTables(db *sql.DB, bw *filter.Filter) (map[string][]string, error
 		for _, table := range tables {
 			ftTables = append(ftTables, &filter.Table{
 				Schema: schema,
-				Name:   strings.ToLower(table),
+				Name:   table,
 			})
 		}
 		ftTables = bw.ApplyOn(ftTables)

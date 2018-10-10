@@ -326,7 +326,7 @@ func NewLoader(cfg *config.SubTaskConfig) *Loader {
 		workerWg:   new(sync.WaitGroup),
 		pool:       make([]*Worker, 0, cfg.PoolSize),
 	}
-	loader.tableRouter, _ = router.NewTableRouter([]*router.TableRule{})
+	loader.tableRouter, _ = router.NewTableRouter(cfg.CaseSensitive, []*router.TableRule{})
 	loader.fileJobQueueClosed.Set(true) // not open yet
 	return loader
 }
@@ -345,7 +345,7 @@ func (l *Loader) Init() error {
 	}
 	l.checkPoint = checkpoint
 
-	l.bwList = filter.New(l.cfg.BWList)
+	l.bwList = filter.New(l.cfg.CaseSensitive, l.cfg.BWList)
 
 	if l.cfg.RemovePreviousCheckpoint {
 		err := l.checkPoint.Clear()
@@ -361,7 +361,7 @@ func (l *Loader) Init() error {
 	}
 
 	if len(l.cfg.ColumnMappingRules) > 0 {
-		l.columnMapping, err = cm.NewMapping(l.cfg.ColumnMappingRules)
+		l.columnMapping, err = cm.NewMapping(l.cfg.CaseSensitive, l.cfg.ColumnMappingRules)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -568,18 +568,18 @@ func (l *Loader) Update(cfg *config.SubTaskConfig) error {
 
 	// update black-white-list
 	oldBwList = l.bwList
-	l.bwList = filter.New(cfg.BWList)
+	l.bwList = filter.New(cfg.CaseSensitive, cfg.BWList)
 
 	// update route, for loader, this almost useless, because schemas often have been restored
 	oldTableRouter = l.tableRouter
-	l.tableRouter, err = router.NewTableRouter(cfg.RouteRules)
+	l.tableRouter, err = router.NewTableRouter(cfg.CaseSensitive, cfg.RouteRules)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
 	// update column-mappings
 	oldColumnMapping = l.columnMapping
-	l.columnMapping, err = cm.NewMapping(cfg.ColumnMappingRules)
+	l.columnMapping, err = cm.NewMapping(cfg.CaseSensitive, cfg.ColumnMappingRules)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -833,8 +833,8 @@ func fetchMatchedLiteral(router *router.Table, schema, table string) (targetSche
 		// nothing change
 		return schema, table
 	}
-	schemaL, tableL := toLower(schema, table)
-	targetSchema, targetTable, err := router.Route(schemaL, tableL)
+
+	targetSchema, targetTable, err := router.Route(schema, table)
 	if err != nil {
 		log.Error(errors.ErrorStack(err)) // log the error, but still continue
 	}
@@ -848,10 +848,6 @@ func fetchMatchedLiteral(router *router.Table, schema, table string) (targetSche
 	}
 
 	return targetSchema, targetTable
-}
-
-func toLower(schema, table string) (string, string) {
-	return strings.ToLower(schema), strings.ToLower(table)
 }
 
 func causeErr(err error) error {

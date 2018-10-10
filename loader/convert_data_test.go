@@ -65,7 +65,7 @@ func (t *testConvertDataSuite) TestReassemble(c *C) {
 	}
 
 	for i, r := range rules {
-		columnMapping, err := cm.NewMapping([]*cm.Rule{r})
+		columnMapping, err := cm.NewMapping(false, []*cm.Rule{r})
 		c.Assert(err, IsNil)
 
 		query, err := reassemble([]byte(sql), table, columnMapping)
@@ -107,7 +107,7 @@ func (t *testConvertDataSuite) TestParseTable(c *C) {
 		insertHeadStmt: "INSERT INTO `t` VALUES",
 	}
 
-	r, err := router.NewTableRouter(rules)
+	r, err := router.NewTableRouter(false, rules)
 	c.Assert(err, IsNil)
 
 	tableInfo, err := parseTable(r, "test1", "t2", "./dumpfile/test1.t2-schema.sql")

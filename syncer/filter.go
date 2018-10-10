@@ -175,8 +175,6 @@ func (s *Syncer) skipDMLEvent(schema string, table string, eventType replication
 		return true, nil // skip heartbeat table
 	}
 
-	schema = strings.ToLower(schema)
-	table = strings.ToLower(table)
 	tbs := []*filter.Table{{schema, table}}
 	tbs = s.bwList.ApplyOn(tbs)
 	if len(tbs) == 0 {

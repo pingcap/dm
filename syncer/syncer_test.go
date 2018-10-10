@@ -487,7 +487,7 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 	syncer := NewSyncer(s.cfg)
 	syncer.genRouter()
 
-	syncer.binlogFilter, err = bf.NewBinlogEvent(s.cfg.FilterRules)
+	syncer.binlogFilter, err = bf.NewBinlogEvent(false, s.cfg.FilterRules)
 	c.Assert(err, IsNil)
 
 	i := 0
@@ -572,7 +572,7 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 	p, err := getParser(s.db)
 	c.Assert(err, IsNil)
 
-	mapping, err := cm.NewMapping(rules)
+	mapping, err := cm.NewMapping(false, rules)
 	c.Assert(err, IsNil)
 
 	totalEvent := len(dmls) + len(createTableSQLs) + len(dropTableSQLs)

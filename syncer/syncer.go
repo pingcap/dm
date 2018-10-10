@@ -152,9 +152,9 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.tables = make(map[string]*table)
 	syncer.cacheColumns = make(map[string][]string)
 	syncer.c = newCausality()
-	syncer.tableRouter, _ = router.NewTableRouter([]*router.TableRule{})
+	syncer.tableRouter, _ = router.NewTableRouter(cfg.CaseSensitive, []*router.TableRule{})
 	syncer.done = make(chan struct{})
-	syncer.bwList = filter.New(cfg.BWList)
+	syncer.bwList = filter.New(cfg.CaseSensitive, cfg.BWList)
 	syncer.checkpoint = NewRemoteCheckPoint(cfg, syncer.checkpointID())
 	syncer.injectEventCh = make(chan *replication.BinlogEvent)
 
@@ -220,13 +220,13 @@ func (s *Syncer) Init() error {
 		return errors.Trace(err)
 	}
 
-	s.binlogFilter, err = bf.NewBinlogEvent(s.cfg.FilterRules)
+	s.binlogFilter, err = bf.NewBinlogEvent(s.cfg.CaseSensitive, s.cfg.FilterRules)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
 	if len(s.cfg.ColumnMappingRules) > 0 {
-		s.columnMapping, err = cm.NewMapping(s.cfg.ColumnMappingRules)
+		s.columnMapping, err = cm.NewMapping(s.cfg.CaseSensitive, s.cfg.ColumnMappingRules)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -1643,9 +1643,7 @@ func (s *Syncer) renameShardingSchema(schema, table string) (string, string) {
 	if schema == "" {
 		return schema, table
 	}
-	schemaL := strings.ToLower(schema)
-	tableL := strings.ToLower(table)
-	targetSchema, targetTable, err := s.tableRouter.Route(schemaL, tableL)
+	targetSchema, targetTable, err := s.tableRouter.Route(schema, table)
 	if err != nil {
 		log.Error(errors.ErrorStack(err)) // log the error, but still continue
 	}
@@ -1791,25 +1789,25 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 
 	// update black-white-list
 	oldBwList = s.bwList
-	s.bwList = filter.New(cfg.BWList)
+	s.bwList = filter.New(cfg.CaseSensitive, cfg.BWList)
 
 	// update route
 	oldTableRouter = s.tableRouter
-	s.tableRouter, err = router.NewTableRouter(cfg.RouteRules)
+	s.tableRouter, err = router.NewTableRouter(cfg.CaseSensitive, cfg.RouteRules)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
 	// update binlog filter
 	oldBinlogFilter = s.binlogFilter
-	s.binlogFilter, err = bf.NewBinlogEvent(cfg.FilterRules)
+	s.binlogFilter, err = bf.NewBinlogEvent(cfg.CaseSensitive, cfg.FilterRules)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
 	// update column-mappings
 	oldColumnMapping = s.columnMapping
-	s.columnMapping, err = cm.NewMapping(cfg.ColumnMappingRules)
+	s.columnMapping, err = cm.NewMapping(cfg.CaseSensitive, cfg.ColumnMappingRules)
 	if err != nil {
 		return errors.Trace(err)
 	}

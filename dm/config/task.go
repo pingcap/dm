@@ -220,6 +220,10 @@ type TaskConfig struct {
 	RemovePreviousCheckpoint bool   `yaml:"remove-previous-checkpoint"`
 	DisableHeartbeat         bool   `yaml:"disable-heartbeat"`
 
+	// handle schema/table name mode, and only for schema/table name
+	// if case insensitive, we would convert schema/table name to lower case
+	CaseSensitive bool `yaml:"case-sensitive"`
+
 	TargetDB *DBConfig `yaml:"target-database"`
 
 	MySQLInstances []*MySQLInstance `yaml:"mysql-instances"`
@@ -412,6 +416,7 @@ func (c *TaskConfig) SubTaskConfigs() []*SubTaskConfig {
 		cfg.Name = c.Name
 		cfg.Mode = c.TaskMode
 		cfg.Flavor = c.Flavor
+		cfg.CaseSensitive = c.CaseSensitive
 		cfg.BinlogType = "local" // let's force syncer to replay local binlog.
 		cfg.CheckpointSchemaPrefix = c.CheckpointSchemaPrefix
 		cfg.RemovePreviousCheckpoint = c.RemovePreviousCheckpoint

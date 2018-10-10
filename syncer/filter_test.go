@@ -133,7 +133,7 @@ END`, true},
 		},
 	}
 
-	syncer.binlogFilter, err = bf.NewBinlogEvent(filterRules)
+	syncer.binlogFilter, err = bf.NewBinlogEvent(false, filterRules)
 	c.Assert(err, IsNil)
 
 	// test global rule

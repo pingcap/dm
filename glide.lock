@@ -1,5 +1,5 @@
-hash: 9b0ab9dfcb179fbc03226abba5bfe51a5ddade19365559dcd2efd717a1ca89be
-updated: 2018-10-05T11:38:08.493875+08:00
+hash: b3d1e2aae0993df46779ab5fde480b13c0b5dc3e4ed531e4b0fb29a24028007d
+updated: 2018-10-10T18:59:17.178605559+08:00
 imports:
 - name: github.com/beorn7/perks
   version: 3a771d992973f24aa725d07868b467d1ddfceafb
@@ -175,7 +175,7 @@ imports:
   - util/sqlexec
   - util/stringutil
 - name: github.com/pingcap/tidb-tools
-  version: 75ce4766d891cd51dd93ede7cdfcb48fdca42f2c
+  version: 8f63826813ad068532b888b065348cbc9ddcb4b2
   subpackages:
   - pkg/binlog-filter
   - pkg/check
@@ -193,7 +193,7 @@ imports:
 - name: github.com/pkg/errors
   version: 645ef00459ed84a119197bfb8d8205042c6df63d
 - name: github.com/prometheus/client_golang
-  version: 967789050ba94deca04a5e84cce8ad472ce313c1
+  version: c5b7fccd204277076155f10851dad72b76a49317
   subpackages:
   - prometheus
   - prometheus/push
@@ -232,7 +232,7 @@ imports:
   - packet
   - replication
 - name: github.com/sirupsen/logrus
-  version: 1ed61965b9e594bf37539680d7f63eccd060314f
+  version: ad15b42461921f1fb3529b058c6786c6a45d5162
 - name: github.com/spaolacci/murmur3
   version: f09979ecbc725b9e6d41a297405f65e7e8804acc
 - name: github.com/spf13/cobra
@@ -242,7 +242,7 @@ imports:
 - name: github.com/twinj/uuid
   version: 7bbe408d339787c56ec15568c947c0959db1b275
 - name: github.com/uber/jaeger-client-go
-  version: 40fb3b2c412003e8411b02a4964c0b1bf923c381
+  version: c85c97eae6e12843adee6a8a06872ff0969644ab
   subpackages:
   - config
   - internal/baggage

@@ -72,7 +72,7 @@ func (s *testFilterSuite) TestFilterOnSchema(c *C) {
 	}
 
 	for _, t := range cases {
-		ft := New(t.rules)
+		ft := New(false, t.rules)
 		got := ft.ApplyOn(t.Input)
 		c.Logf("got %+v, expected %+v", got, t.Output)
 		c.Assert(got, DeepEquals, t.Output)
@@ -89,7 +89,7 @@ func (s *testFilterSuite) TestMaxBox(c *C) {
 		},
 	}
 
-	r := New(rules)
+	r := New(false, rules)
 
 	x := &Table{"test1", ""}
 	res := r.ApplyOn([]*Table{x})

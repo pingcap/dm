@@ -251,29 +251,29 @@ func fetchDDLTableNames(schema string, stmt ast.StmtNode) ([]*filter.Table, erro
 	case *ast.DropDatabaseStmt:
 		res = append(res, genTableName(v.Name, ""))
 	case *ast.CreateTableStmt:
-		res = append(res, genTableName(v.Table.Schema.L, v.Table.Name.L))
+		res = append(res, genTableName(v.Table.Schema.O, v.Table.Name.O))
 		if v.ReferTable != nil {
-			res = append(res, genTableName(v.ReferTable.Schema.L, v.ReferTable.Name.L))
+			res = append(res, genTableName(v.ReferTable.Schema.O, v.ReferTable.Name.O))
 		}
 	case *ast.DropTableStmt:
 		if len(v.Tables) != 1 {
 			return res, errors.Errorf("drop table with multiple tables, may resovle ddl sql failed")
 		}
-		res = append(res, genTableName(v.Tables[0].Schema.L, v.Tables[0].Name.L))
+		res = append(res, genTableName(v.Tables[0].Schema.O, v.Tables[0].Name.O))
 	case *ast.TruncateTableStmt:
-		res = append(res, genTableName(v.Table.Schema.L, v.Table.Name.L))
+		res = append(res, genTableName(v.Table.Schema.O, v.Table.Name.O))
 	case *ast.AlterTableStmt:
-		res = append(res, genTableName(v.Table.Schema.L, v.Table.Name.L))
+		res = append(res, genTableName(v.Table.Schema.O, v.Table.Name.O))
 		if v.Specs[0].NewTable != nil {
-			res = append(res, genTableName(v.Specs[0].NewTable.Schema.L, v.Specs[0].NewTable.Name.L))
+			res = append(res, genTableName(v.Specs[0].NewTable.Schema.O, v.Specs[0].NewTable.Name.O))
 		}
 	case *ast.RenameTableStmt:
-		res = append(res, genTableName(v.OldTable.Schema.L, v.OldTable.Name.L))
-		res = append(res, genTableName(v.NewTable.Schema.L, v.NewTable.Name.L))
+		res = append(res, genTableName(v.OldTable.Schema.O, v.OldTable.Name.O))
+		res = append(res, genTableName(v.NewTable.Schema.O, v.NewTable.Name.O))
 	case *ast.CreateIndexStmt:
-		res = append(res, genTableName(v.Table.Schema.L, v.Table.Name.L))
+		res = append(res, genTableName(v.Table.Schema.O, v.Table.Name.O))
 	case *ast.DropIndexStmt:
-		res = append(res, genTableName(v.Table.Schema.L, v.Table.Name.L))
+		res = append(res, genTableName(v.Table.Schema.O, v.Table.Name.O))
 	default:
 		return res, errors.Errorf("unkown type ddl %s", stmt)
 	}

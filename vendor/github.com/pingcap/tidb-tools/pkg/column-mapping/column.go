@@ -16,6 +16,7 @@ package column
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/juju/errors"
@@ -80,6 +81,12 @@ type Rule struct {
 	CreateTableQuery string   `yaml:"create-table-query" json:"create-table-query" toml:"create-table-query"`
 }
 
+// ToLower covert schema/table parttern to lower case
+func (r *Rule) ToLower() {
+	r.PatternSchema = strings.ToLower(r.PatternSchema)
+	r.PatternTable = strings.ToLower(r.PatternTable)
+}
+
 // Valid checks validity of rule.
 // add prefix/suffix: it should have target column and one argument
 // partition id: it should have 3 arguments
@@ -132,6 +139,8 @@ type mappingInfo struct {
 type Mapping struct {
 	selector.Selector
 
+	caseSensitive bool
+
 	cache struct {
 		sync.RWMutex
 		infos map[string]*mappingInfo
@@ -139,9 +148,10 @@ type Mapping struct {
 }
 
 // NewMapping returns a column mapping
-func NewMapping(rules []*Rule) (*Mapping, error) {
+func NewMapping(caseSensitive bool, rules []*Rule) (*Mapping, error) {
 	m := &Mapping{
-		Selector: selector.NewTrieSelector(),
+		Selector:      selector.NewTrieSelector(),
+		caseSensitive: caseSensitive,
 	}
 	m.resetCache()
 
@@ -164,6 +174,9 @@ func (m *Mapping) AddRule(rule *Rule) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+	if !m.caseSensitive {
+		rule.ToLower()
+	}
 
 	m.resetCache()
 	err = m.Insert(rule.PatternSchema, rule.PatternTable, rule, false)
@@ -184,6 +197,9 @@ func (m *Mapping) UpdateRule(rule *Rule) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+	if !m.caseSensitive {
+		rule.ToLower()
+	}
 
 	m.resetCache()
 	err = m.Insert(rule.PatternSchema, rule.PatternTable, rule, true)
@@ -198,6 +214,9 @@ func (m *Mapping) UpdateRule(rule *Rule) error {
 func (m *Mapping) RemoveRule(rule *Rule) error {
 	if m == nil || rule == nil {
 		return nil
+	}
+	if !m.caseSensitive {
+		rule.ToLower()
 	}
 
 	m.resetCache()
@@ -215,7 +234,12 @@ func (m *Mapping) HandleRowValue(schema, table string, columns []string, vals []
 		return vals, nil, nil
 	}
 
-	info, err := m.queryColumnInfo(schema, table, columns)
+	schemaL, tableL := schema, table
+	if !m.caseSensitive {
+		schemaL, tableL = strings.ToLower(schema), strings.ToLower(table)
+	}
+
+	info, err := m.queryColumnInfo(schemaL, tableL, columns)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
@@ -242,7 +266,12 @@ func (m *Mapping) HandleDDL(schema, table string, columns []string, statement st
 		return statement, nil, nil
 	}
 
-	info, err := m.queryColumnInfo(schema, table, columns)
+	schemaL, tableL := schema, table
+	if !m.caseSensitive {
+		schemaL, tableL = strings.ToLower(schema), strings.ToLower(table)
+	}
+
+	info, err := m.queryColumnInfo(schemaL, tableL, columns)
 	if err != nil {
 		return statement, nil, errors.Trace(err)
 	}

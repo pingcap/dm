@@ -71,13 +71,13 @@ func (c *Checker) Init() error {
 
 	for _, instance := range c.instances {
 		instanceID := fmt.Sprintf("%s:%d", instance.cfg.From.Host, instance.cfg.From.Port)
-		bw := filter.New(instance.cfg.BWList)
-		r, err := router.NewTableRouter(instance.cfg.RouteRules)
+		bw := filter.New(instance.cfg.CaseSensitive, instance.cfg.BWList)
+		r, err := router.NewTableRouter(instance.cfg.CaseSensitive, instance.cfg.RouteRules)
 		if err != nil {
 			return errors.Trace(err)
 		}
 
-		columnMapping[instanceID], err = column.NewMapping(instance.cfg.ColumnMappingRules)
+		columnMapping[instanceID], err = column.NewMapping(instance.cfg.CaseSensitive, instance.cfg.ColumnMappingRules)
 		if err != nil {
 			return errors.Trace(err)
 		}

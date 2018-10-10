@@ -14,6 +14,8 @@
 package router
 
 import (
+	"strings"
+
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb-tools/pkg/table-rule-selector"
 )
@@ -40,15 +42,24 @@ func (t *TableRule) Valid() error {
 	return nil
 }
 
+// ToLower covert schema/table parttern to lower case
+func (t *TableRule) ToLower() {
+	t.SchemaPattern = strings.ToLower(t.SchemaPattern)
+	t.TablePattern = strings.ToLower(t.TablePattern)
+}
+
 // Table routes schema/table to target schema/table by given route rules
 type Table struct {
 	selector.Selector
+
+	caseSensitive bool
 }
 
 // NewTableRouter returns a table router
-func NewTableRouter(rules []*TableRule) (*Table, error) {
+func NewTableRouter(caseSensitive bool, rules []*TableRule) (*Table, error) {
 	r := &Table{
-		Selector: selector.NewTrieSelector(),
+		Selector:      selector.NewTrieSelector(),
+		caseSensitive: caseSensitive,
 	}
 
 	for _, rule := range rules {
@@ -66,6 +77,9 @@ func (r *Table) AddRule(rule *TableRule) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+	if !r.caseSensitive {
+		rule.ToLower()
+	}
 
 	err = r.Insert(rule.SchemaPattern, rule.TablePattern, rule, false)
 	if err != nil {
@@ -81,6 +95,9 @@ func (r *Table) UpdateRule(rule *TableRule) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+	if !r.caseSensitive {
+		rule.ToLower()
+	}
 
 	err = r.Insert(rule.SchemaPattern, rule.TablePattern, rule, true)
 	if err != nil {
@@ -92,6 +109,10 @@ func (r *Table) UpdateRule(rule *TableRule) error {
 
 // RemoveRule removes a rule from table router
 func (r *Table) RemoveRule(rule *TableRule) error {
+	if !r.caseSensitive {
+		rule.ToLower()
+	}
+
 	err := r.Remove(rule.SchemaPattern, rule.TablePattern)
 	if err != nil {
 		return errors.Annotatef(err, "remove rule %+v", rule)
@@ -103,7 +124,12 @@ func (r *Table) RemoveRule(rule *TableRule) error {
 // Route routes schema/table to target schema/table
 // don't support to route schema/table to multiple schema/table
 func (r *Table) Route(schema, table string) (string, string, error) {
-	rules := r.Match(schema, table)
+	schemaL, tableL := schema, table
+	if !r.caseSensitive {
+		schemaL, tableL = strings.ToLower(schema), strings.ToLower(table)
+	}
+
+	rules := r.Match(schemaL, tableL)
 	var (
 		schemaRules = make([]*TableRule, 0, len(rules))
 		tableRules  = make([]*TableRule, 0, len(rules))

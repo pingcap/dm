@@ -98,6 +98,7 @@ type DataMigrationConfig struct {
 	CheckpointSchemaPrefix   string `yaml:"checkpoint-schema-prefix" toml:"checkpoint-schema-prefix" json:"checkpoint-schema-prefix"`
 	RemovePreviousCheckpoint bool   `yaml:"remove-previous-checkpoint" toml:"remove-previous-checkpoint" json:"remove-previous-checkpoint"`
 	DisableHeartbeat         bool   `yaml:"disable-heartbeat" toml:"disable-heartbeat" json:"disable-heartbeat"`
+	CaseSensitive            bool   `yaml:"case-sensitive" toml:"case-sensitive" json:"case-sensitive"`
 
 	TargetDB *dm.DBConfig `yaml:"target-database" toml:"target-database" json:"target-database"`
 
@@ -650,13 +651,13 @@ func (c *DataMigrationConfig) checkShardingGroup(task *dm.TaskConfig, expectedSh
 func (c *DataMigrationConfig) fetchShardingGroup(instances map[string]*dm.MySQLInstance, task *dm.TaskConfig) (map[string]*ShardingGroup, error) {
 	sharding := make(map[string]*ShardingGroup)
 	for id, instance := range instances {
-		bw := filter.New(task.BWList[instance.BWListName])
+		bw := filter.New(c.CaseSensitive, task.BWList[instance.BWListName])
 		routeRules := make([]*router.TableRule, 0, len(instance.RouteRules))
 		for _, name := range instance.RouteRules {
 			routeRules = append(routeRules, task.Routes[name])
 		}
 
-		r, err := router.NewTableRouter(routeRules)
+		r, err := router.NewTableRouter(c.CaseSensitive, routeRules)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -709,7 +710,7 @@ func (c *DataMigrationConfig) fetchColumnMapping(instance *dm.MySQLInstance, sch
 		rules = append(rules, task.ColumnMappings[name])
 	}
 
-	m, err := column.NewMapping(rules)
+	m, err := column.NewMapping(c.CaseSensitive, rules)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -736,7 +737,7 @@ func (c *DataMigrationConfig) fetchFilterRules(instance *dm.MySQLInstance, schem
 		rules = append(rules, task.Filters[name])
 	}
 
-	b, err := bf.NewBinlogEvent(rules)
+	b, err := bf.NewBinlogEvent(c.CaseSensitive, rules)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

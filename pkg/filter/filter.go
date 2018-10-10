@@ -86,12 +86,20 @@ type Filter struct {
 	rules      *Rules
 
 	c *cache
+
+	caseSensitive bool
 }
 
 // New creates a filter use the rules.
-func New(rules *Rules) *Filter {
-	f := &Filter{}
-	f.rules = rules
+func New(caseSensitive bool, rules *Rules) *Filter {
+	f := &Filter{
+		caseSensitive: caseSensitive,
+		rules:         rules,
+	}
+	if !f.caseSensitive {
+		f.rules.ToLower()
+	}
+
 	f.patternMap = make(map[string]*regexp.Regexp)
 	f.c = &cache{
 		items: make(map[string]ActionType),
@@ -150,7 +158,12 @@ func (f *Filter) ApplyOn(stbs []*Table) []*Table {
 		name := tb.String()
 		do, exist := f.c.query(name)
 		if !exist {
-			do = ActionType(f.filterOnSchemas(tb) && f.filterOnTables(tb))
+			tbCopy := &Table{Schema: tb.Schema, Name: tb.Name}
+			if !f.caseSensitive {
+				tbCopy = &Table{Schema: strings.ToLower(tb.Schema), Name: strings.ToLower(tb.Name)}
+			}
+
+			do = ActionType(f.filterOnSchemas(tbCopy) && f.filterOnTables(tbCopy))
 			f.c.set(tb.String(), do)
 		}
 

@@ -139,10 +139,10 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 }
 
 // GetRandomValues returns some random value of a column.
-func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int64, min, max interface{}, limitRange string) ([]interface{}, error) {
+func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int64, min, max interface{}, limitRange string, collation string) ([]interface{}, error) {
 	/*
 		example:
-		mysql> SELECT `id` FROM (SELECT `id` FROM `test`.`test` WHERE `id` > 0 AND `id` < 100 AND true ORDER BY RAND() LIMIT 3)rand_tmp ORDER BY `id`;
+		mysql> SELECT `id` FROM (SELECT `id` FROM `test`.`test` WHERE `id` COLLATE "latin1_bin" > 0 AND `id` COLLATE "latin1_bin" < 100 AND true ORDER BY RAND() LIMIT 3)rand_tmp ORDER BY `id`;
 		+----------+
 		| rand_tmp |
 		+----------+
@@ -156,9 +156,13 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 		limitRange = "true"
 	}
 
+	if collation != "" {
+		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
+	}
+
 	randomValue := make([]interface{}, 0, num)
-	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` > ? AND `%s` < ? AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
-		column, column, schemaName, table, column, column, limitRange, num, column)
+	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s`%s > ? AND `%s`%s < ? AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
+		column, column, schemaName, table, column, collation, column, collation, limitRange, num, column)
 	log.Debugf("get random values sql: %s, min: %v, max: %v", query, min, max)
 	rows, err := db.QueryContext(ctx, query, min, max)
 	if err != nil {
@@ -252,7 +256,7 @@ func GetSchemas(ctx context.Context, db *sql.DB) ([]string, error) {
 }
 
 // GetCRC32Checksum returns checksum code of some data by given condition
-func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, error) {
+func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}, ignoreColumns map[string]interface{}) (int64, error) {
 	/*
 		calculate CRC32 checksum example:
 		mysql> SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', id, name, age, CONCAT(ISNULL(id), ISNULL(name), ISNULL(age))))AS UNSIGNED)) AS checksum FROM test.test WHERE id > 0 AND id < 10;
@@ -262,10 +266,12 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 		| 1466098199 |
 		+------------+
 	*/
-
 	columnNames := make([]string, 0, len(tbInfo.Columns))
 	columnIsNull := make([]string, 0, len(tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
+		if _, ok := ignoreColumns[col.Name.O]; ok {
+			continue
+		}
 		columnNames = append(columnNames, col.Name.O)
 		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", col.Name.O))
 	}
