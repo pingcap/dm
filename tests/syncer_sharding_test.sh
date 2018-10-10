@@ -108,6 +108,7 @@ check_syncer_complete_and_stop() {
     echo "syncer sync completes"
 
     stop_syncer
+    cat syncer_sharding_test.log
     echo "stopped syncer"
 }
 

@@ -34,8 +34,8 @@ import (
 variants about checkpoint:
 1. use position of rotate/ddl/xid event from any stream (global and sharding streaming) to update global/table checkpoint
 2. position of global/table checkpoint increases monotonically
-4. global checkpoint <= min checkpoint of all unsolved sharding table
-5. table checkpoint >= global checkpoint
+3. global checkpoint <= min checkpoint of all unsolved sharding table
+4. table checkpoint >= global checkpoint
 */
 
 var (

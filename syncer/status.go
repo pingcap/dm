@@ -46,7 +46,7 @@ func (s *Syncer) Status() interface{} {
 		RecentTps:    tps,
 		MasterBinlog: masterPos.String(),
 		SyncerBinlog: syncerPos.String(),
-		BlockingDDL:  s.ddlExecInfo.BlockingDDL(),
+		BlockingDDLs: s.ddlExecInfo.BlockingDDLs(),
 	}
 	if masterGTIDSet != nil { // masterGTIDSet maybe a nil interface
 		st.MasterBinlogGtid = masterGTIDSet.String()

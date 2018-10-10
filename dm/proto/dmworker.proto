@@ -148,7 +148,7 @@ message LoadStatus {
 // unsynced: unsynced source tables
 message ShardingGroup {
     string target = 1;
-    string DDL = 2;
+    repeated string DDLs = 2;
     string firstPos = 3;
     repeated string synced = 4;
     repeated string unsynced = 5;
@@ -163,7 +163,7 @@ message SyncStatus {
     string masterBinlogGtid = 5;
     string syncerBinlog = 6;
     string syncerBinlogGtid = 7;
-    string blockingDDL = 8; // sharding DDL which current is blocking
+    repeated string blockingDDLs = 8; // sharding DDL which current is blocking
     repeated ShardingGroup unresolvedGroups = 9; // sharding groups which current are un-resolved
 }
 
@@ -249,7 +249,7 @@ message DDLInfo {
     string task = 1; // sub task's name
     string schema = 2; // DDL's schema
     string table = 3; // DDL's table
-    string DDL = 4; // DDL statement
+    repeated string DDLs = 4; // DDL statement
 }
 
 // DDLLockInfo represents a DDL lock

@@ -30,8 +30,7 @@ const (
 	ddl
 	xid
 	flush
-	skip    // used by Syncer.recordSkipSQLsPos to record global pos, but not execute SQL
-	fakeDDL // fake DDL used to flush the processing for sharding DDL sync
+	skip // used by Syncer.recordSkipSQLsPos to record global pos, but not execute SQL
 )
 
 func (t opType) String() string {
@@ -50,8 +49,6 @@ func (t opType) String() string {
 		return "flush"
 	case skip:
 		return "skip"
-	case fakeDDL:
-		return "fake_ddl"
 	}
 
 	return ""
@@ -70,6 +67,7 @@ type job struct {
 	pos          mysql.Position
 	gtidSet      gtid.Set
 	ddlExecItem  *DDLExecItem
+	ddls         []string
 }
 
 func (j *job) String() string {
@@ -78,7 +76,7 @@ func (j *job) String() string {
 }
 
 // TODO zxc: add RENAME TABLE support
-func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, retry bool, pos mysql.Position, currentGtidSet gtid.Set, ddlExecItem *DDLExecItem) *job {
+func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, pos mysql.Position, currentGtidSet gtid.Set) *job {
 	var gs gtid.Set
 	if currentGtidSet != nil {
 		gs = currentGtidSet.Clone()
@@ -92,11 +90,33 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 		sql:          sql,
 		args:         args,
 		key:          key,
-		retry:        retry,
 		pos:          pos,
 		gtidSet:      gs,
-		ddlExecItem:  ddlExecItem,
+		retry:        true,
 	}
+}
+
+func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, pos mysql.Position, currentGtidSet gtid.Set, ddlExecItem *DDLExecItem) *job {
+	var gs gtid.Set
+	if currentGtidSet != nil {
+		gs = currentGtidSet.Clone()
+	}
+	j := &job{
+		tp:          ddl,
+		ddls:        ddls,
+		pos:         pos,
+		gtidSet:     gs,
+		ddlExecItem: ddlExecItem,
+	}
+
+	if ddlInfo != nil {
+		j.sourceSchema = ddlInfo.tableNames[0][0].Schema
+		j.sourceTable = ddlInfo.tableNames[0][0].Name
+		j.targetSchema = ddlInfo.tableNames[1][0].Schema
+		j.targetTable = ddlInfo.tableNames[1][0].Name
+	}
+
+	return j
 }
 
 func newXIDJob(pos mysql.Position, currentGtidSet gtid.Set) *job {

@@ -175,3 +175,24 @@ func querySQL(db *sql.DB, query string, maxRetry int) (*sql.Rows, error) {
 
 	return nil, errors.Errorf("query sql[%s] failed", query)
 }
+
+// CompareShardingDDLs compares s and t ddls
+// only concern in content, ignore order of ddl
+func CompareShardingDDLs(s, t []string) bool {
+	if len(s) != len(t) {
+		return false
+	}
+
+	ddls := make(map[string]struct{})
+	for _, ddl := range s {
+		ddls[ddl] = struct{}{}
+	}
+
+	for _, ddl := range t {
+		if _, ok := ddls[ddl]; !ok {
+			return false
+		}
+	}
+
+	return true
+}

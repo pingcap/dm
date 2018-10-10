@@ -27,7 +27,7 @@ func (t *testMaster) TestSyncLock(c *C) {
 		workers[i] = strconv.Itoa(i)
 	}
 
-	l := NewLock("test_id", "test_task", "test_owner", "stmt", workers)
+	l := NewLock("test_id", "test_task", "test_owner", []string{"stmt"}, workers)
 
 	synced, remain := l.IsSync()
 	c.Assert(synced, IsFalse)
@@ -46,12 +46,14 @@ func (t *testMaster) TestSyncLock(c *C) {
 			ready := l.Ready()
 			c.Assert(ready[worker], IsFalse)
 
-			synced2, remain1 := l.TrySync(worker, workers)
+			synced2, remain1, err := l.TrySync(worker, workers, []string{"stmts"})
+			c.Assert(err, IsNil)
 			c.Assert(synced2, IsFalse)
 			ready = l.Ready()
 			c.Assert(ready[worker], IsTrue)
 
-			synced2, remain2 := l.TrySync(worker, workers) //re-TrySync
+			synced2, remain2, err := l.TrySync(worker, workers, []string{"stmts"}) //re-TrySync
+			c.Assert(err, IsNil)
 			c.Assert(synced2, IsFalse)
 			c.Assert(remain2, LessEqual, remain1)
 
@@ -65,19 +67,25 @@ func (t *testMaster) TestSyncLock(c *C) {
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, 1)
 
-	synced, _ = l.TrySync(workers[len(workers)-1], workers)
+	synced, _, err := l.TrySync(workers[len(workers)-1], workers, []string{"stmts"})
+	c.Assert(err, IsNil)
 	c.Assert(synced, IsTrue)
 
 	synced, remain = l.IsSync()
 	c.Assert(synced, IsTrue)
 	c.Assert(remain, Equals, 0)
 
+	// add mismatch ddls
+	_, _, err = l.TrySync(workers[0], workers, []string{"mismatch ddls"})
+	c.Assert(err, NotNil)
 	// add new workers when in syncing
 	newWorker := "new-worker"
-	synced, remain = l.TrySync(workers[0], []string{newWorker})
+	synced, remain, err = l.TrySync(workers[0], []string{newWorker}, []string{"stmts"})
+	c.Assert(err, IsNil)
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, 1)
 
-	synced, _ = l.TrySync(newWorker, workers)
+	synced, _, err = l.TrySync(newWorker, workers, []string{"stmts"})
+	c.Assert(err, IsNil)
 	c.Assert(synced, IsTrue)
 }

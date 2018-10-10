@@ -78,6 +78,8 @@ package master
 import (
 	"fmt"
 	"sync"
+
+	"github.com/juju/errors"
 )
 
 // genDDLLockID generates a DDL lock ID
@@ -101,7 +103,7 @@ func NewLockKeeper() *LockKeeper {
 }
 
 // TrySync tries to sync the lock
-func (lk *LockKeeper) TrySync(task, schema, table, worker, stmt string, workers []string) (string, bool, int) {
+func (lk *LockKeeper) TrySync(task, schema, table, worker string, stmts []string, workers []string) (string, bool, int, error) {
 	lockID := genDDLLockID(task, schema, table)
 	var (
 		l  *Lock
@@ -112,12 +114,12 @@ func (lk *LockKeeper) TrySync(task, schema, table, worker, stmt string, workers 
 	defer lk.Unlock()
 
 	if l, ok = lk.locks[lockID]; !ok {
-		lk.locks[lockID] = NewLock(lockID, task, worker, stmt, workers)
+		lk.locks[lockID] = NewLock(lockID, task, worker, stmts, workers)
 		l = lk.locks[lockID]
 	}
 
-	synced, remain := l.TrySync(worker, workers)
-	return lockID, synced, remain
+	synced, remain, err := l.TrySync(worker, workers, stmts)
+	return lockID, synced, remain, errors.Trace(err)
 }
 
 // RemoveLock removes a lock

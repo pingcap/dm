@@ -114,6 +114,7 @@ func resolveDDLSQL(sql string, p *parser.Parser) (sqls []string, err error) {
 	default:
 		sqls = append(sqls, sql)
 	}
+
 	return sqls, nil
 }
 
@@ -393,4 +394,10 @@ func (s *Syncer) dropSchemaInSharding(sourceSchema string) error {
 		}
 	}
 	return nil
+}
+
+type shardingDDLInfo struct {
+	name       string
+	tableNames [][]*filter.Table
+	stmt       ast.StmtNode
 }

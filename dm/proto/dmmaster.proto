@@ -103,7 +103,7 @@ message DDLLock {
     string ID = 1;
     string task = 2;
     string owner = 3;
-    string DDL = 4;
+    repeated string DDLs = 4;
     repeated string synced = 5;
     repeated string unsynced = 6;
 }

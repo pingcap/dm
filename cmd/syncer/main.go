@@ -66,7 +66,7 @@ func main() {
 
 	err = checker.CheckSyncConfig(ctx, []*config.SubTaskConfig{cfg})
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(errors.ErrorStack(err))
 	}
 
 	syncUnit := syncer.NewSyncer(cfg)

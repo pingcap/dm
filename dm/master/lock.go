@@ -16,6 +16,8 @@ package master
 import (
 	"sync"
 
+	"github.com/juju/errors"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	"github.com/siddontang/go/sync2"
 )
 
@@ -25,20 +27,21 @@ type Lock struct {
 	ID        string           // lock's ID, constructed from task's name and SQL statement
 	Task      string           // lock's corresponding task name
 	Owner     string           // lock's Owner, a dm-worker
-	Stmt      string           // SQL statement
+	Stmts     []string         // SQL statement
 	remain    int              // remain count needed to sync
 	ready     map[string]bool  // whether dm-worker is synced
+	ddls      []string         // ddls of each dm-worker
 	AutoRetry sync2.AtomicBool // whether re-try resolve at intervals
 	Resolving sync2.AtomicBool // whether the lock is resolving
 }
 
 // NewLock creates a new Lock
-func NewLock(id, task, owner, stmt string, workers []string) *Lock {
+func NewLock(id, task, owner string, stmts []string, workers []string) *Lock {
 	l := &Lock{
 		ID:     id,
 		Task:   task,
 		Owner:  owner,
-		Stmt:   stmt,
+		Stmts:  stmts,
 		remain: len(workers),
 		ready:  make(map[string]bool),
 	}
@@ -51,7 +54,7 @@ func NewLock(id, task, owner, stmt string, workers []string) *Lock {
 // TrySync tries to sync the lock, does decrease on remain, reentrant
 // new workers may join after DDL lock is in syncing
 // so we need to merge these new workers
-func (l *Lock) TrySync(caller string, workers []string) (bool, int) {
+func (l *Lock) TrySync(caller string, workers []string, ddls []string) (bool, int, error) {
 	l.Lock()
 	defer l.Unlock()
 	for _, worker := range workers {
@@ -62,11 +65,19 @@ func (l *Lock) TrySync(caller string, workers []string) (bool, int) {
 		}
 	}
 
-	if synced, ok := l.ready[caller]; !synced && ok {
-		l.remain--
-		l.ready[caller] = true
+	if synced, ok := l.ready[caller]; ok {
+		if len(l.ddls) == 0 {
+			l.ddls = ddls
+		} else if !utils.CompareShardingDDLs(ddls, l.ddls) {
+			return l.remain <= 0, l.remain, errors.Errorf("sharding ddls in ddl lock %s is different with %s", l.ddls, ddls)
+		}
+
+		if !synced {
+			l.remain--
+			l.ready[caller] = true
+		}
 	}
-	return l.remain <= 0, l.remain
+	return l.remain <= 0, l.remain, nil
 }
 
 // IsSync returns whether the lock has synced

@@ -51,7 +51,7 @@ type DDLExecInfo struct {
 	status sync2.AtomicString
 	ch     chan *DDLExecItem // item.req.Exec: true for exec, false for ignore
 	cancel chan struct{}     // chan used to cancel sending
-	ddl    string            // DDL which is blocking
+	ddls   []string          // DDL which is blocking
 }
 
 // NewDDLExecInfo creates a new DDLExecInfo
@@ -59,7 +59,6 @@ func NewDDLExecInfo() *DDLExecInfo {
 	i := &DDLExecInfo{
 		ch:     make(chan *DDLExecItem), // un-buffered
 		cancel: make(chan struct{}),
-		ddl:    "",
 	}
 	i.status.Set(ddlExecIdle)
 	return i
@@ -78,7 +77,7 @@ func (i *DDLExecInfo) Renew() {
 
 	i.ch = make(chan *DDLExecItem)
 	i.cancel = make(chan struct{})
-	i.ddl = ""
+	i.ddls = nil
 	i.status.Set(ddlExecIdle)
 }
 
@@ -93,7 +92,7 @@ func (i *DDLExecInfo) Close() {
 	i.cancelAndWaitSending()
 
 	close(i.ch)
-	i.ddl = ""
+	i.ddls = nil
 	i.status.Set(ddlExecClosed)
 }
 
@@ -140,23 +139,23 @@ func (i *DDLExecInfo) Send(ctx context.Context, item *DDLExecItem) error {
 }
 
 // Chan returns a receive only DDLExecItem chan
-func (i *DDLExecInfo) Chan(ddl string) <-chan *DDLExecItem {
+func (i *DDLExecInfo) Chan(ddls []string) <-chan *DDLExecItem {
 	i.Lock()
-	i.ddl = ddl
+	i.ddls = ddls
 	i.Unlock()
 	return i.ch
 }
 
 // BlockingDDL returns current blocking DDL
-func (i *DDLExecInfo) BlockingDDL() string {
+func (i *DDLExecInfo) BlockingDDLs() []string {
 	i.RLock()
 	defer i.RUnlock()
-	return i.ddl
+	return i.ddls
 }
 
 // ClearBlockingDDL clears current blocking DDL
 func (i *DDLExecInfo) ClearBlockingDDL() {
 	i.Lock()
 	defer i.Unlock()
-	i.ddl = ""
+	i.ddls = nil
 }
