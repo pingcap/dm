@@ -122,9 +122,6 @@ func (s *Syncer) skipQuery(tables []*filter.Table, stmt ast.StmtNode, sql string
 		if filter.IsSystemSchema(table.Schema) {
 			return true, nil
 		}
-		if table.Schema == defaultHeartbeatSchema && (len(table.Name) == 0 || table.Name == defaultHeartbeatTable) {
-			return true, nil // skip heartbeat table
-		}
 	}
 
 	if len(tables) > 0 {
@@ -170,9 +167,6 @@ func (s *Syncer) skipQuery(tables []*filter.Table, stmt ast.StmtNode, sql string
 func (s *Syncer) skipDMLEvent(schema string, table string, eventType replication.EventType) (bool, error) {
 	if filter.IsSystemSchema(schema) {
 		return true, nil
-	}
-	if schema == defaultHeartbeatSchema && (len(table) == 0 || table == defaultHeartbeatTable) {
-		return true, nil // skip heartbeat table
 	}
 
 	tbs := []*filter.Table{{schema, table}}

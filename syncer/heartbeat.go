@@ -12,6 +12,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
 )
 
 // privileges: SELECT, UPDATE,  optionaly INSERT, optionaly CREATE.
@@ -23,12 +24,10 @@ const (
 )
 
 var (
-	heartbeat              *Heartbeat // singleton instance
-	defaultUpdateInterval  int64      = 1
-	defaultReportInterval  int64      = 10
-	defaultHeartbeatSchema            = "dm_heartbeat"
-	defaultHeartbeatTable             = "heartbeat"
-	once                   sync.Once
+	heartbeat             *Heartbeat // singleton instance
+	defaultUpdateInterval int64      = 1
+	defaultReportInterval int64      = 10
+	once                  sync.Once
 )
 
 // HeartbeatConfig represents Heartbeat configurations.
@@ -86,8 +85,8 @@ func GetHeartbeat(cfg *HeartbeatConfig) (*Heartbeat, error) {
 		}
 		heartbeat = &Heartbeat{
 			cfg:      cfg,
-			schema:   defaultHeartbeatSchema,
-			table:    defaultHeartbeatTable,
+			schema:   filter.DMHeartbeatSchema,
+			table:    filter.DMHeartbeatTable,
 			slavesTs: make(map[string]float64),
 		}
 	})
