@@ -2,6 +2,7 @@ package streamer
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -105,7 +106,7 @@ func (r *BinlogReader) StartSync(pos mysql.Position) (Streamer, error) {
 			case <-r.ctx.Done():
 				return
 			default:
-				log.Infof("onstream read from pos %v", pos)
+				log.Debugf("onstream read from pos %v", pos)
 				if err := r.onStream(s, pos, updatePosition); err != nil {
 					log.Errorf("streaming error %v", errors.ErrorStack(err))
 					return
@@ -125,12 +126,6 @@ func (r *BinlogReader) onStream(s *LocalStreamer, pos mysql.Position, updatePos 
 	}()
 
 	files, err := collectBinlogFiles(r.cfg.BinlogDir, pos.Name)
-	if err != nil {
-		s.closeWithError(err)
-		return errors.Trace(err)
-	}
-
-	firstFile, err := parseBinlogFile(pos.Name)
 	if err != nil {
 		s.closeWithError(err)
 		return errors.Trace(err)
@@ -161,20 +156,14 @@ func (r *BinlogReader) onStream(s *LocalStreamer, pos mysql.Position, updatePos 
 		return nil
 	}
 
-	for _, file := range files {
+	for i, file := range files {
 		select {
 		case <-r.ctx.Done():
 			return nil
 		default:
 		}
-		// omit error here since we have validated filename above.
-		parsed, _ := parseBinlogFile(file)
-		if !parsed.BiggerOrEqualThan(firstFile) {
-			log.Debugf("ignore older binlog file %s", file)
-			continue
-		}
 
-		if parsed.Equal(firstFile) {
+		if i == 0 {
 			offset = int64(pos.Pos)
 		} else {
 			offset = 4 // start read from pos 4
@@ -192,14 +181,20 @@ func (r *BinlogReader) onStream(s *LocalStreamer, pos mysql.Position, updatePos 
 			}
 		}
 		fullpath := filepath.Join(r.cfg.BinlogDir, file)
-		log.Infof("parse file %s from offset %d", fullpath, offset)
-		if err := r.parser.ParseFile(fullpath, offset, onEventFunc); err != nil {
+		log.Debugf("parse file %s from offset %d", fullpath, offset)
+		if i == len(files)-1 {
+			lastFilePath = fullpath
+		}
+
+		err = r.parser.ParseFile(fullpath, offset, onEventFunc)
+		if i == len(files)-1 && errors.Cause(err) == io.EOF {
+			log.Warnf("parse binlog file %s from offset %d got EOF %s", fullpath, offset, errors.ErrorStack(err))
+			break // wait for re-parse
+		} else if err != nil {
 			log.Errorf("parse binlog file %s from offset %d error %s", fullpath, offset, errors.ErrorStack(err))
 			s.closeWithError(err)
 			return errors.Trace(err)
 		}
-
-		lastFilePath = fullpath
 	}
 
 	// watch dir for whether file count changed (new file generated)

@@ -57,6 +57,11 @@ func collectBinlogFiles(dirpath string, firstFile string) ([]string, error) {
 			log.Warnf("collecting binlog file, ignore invalid file %s", f)
 			continue
 		}
+		if !parsed.BiggerOrEqualThan(ff) {
+			log.Debugf("ignore older binlog file %s", f)
+			continue
+		}
+
 		targetFiles = append(targetFiles, f)
 	}
 
