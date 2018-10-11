@@ -28,12 +28,13 @@ var (
 			Help:      "current binlog file index",
 		})
 
+	// should alert if avaiable space < 1G
 	relayLogSpaceGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "relay",
 			Name:      "space",
-			Help:      "the used or free space of relay log",
+			Help:      "the space of storge for relay component",
 		}, []string{"type"}) // type can be 'capacity' and 'available'.
 
 	// should alert
@@ -63,6 +64,7 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 18),
 		})
 
+	// should alert
 	relayLogWriteErrorCounter = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: "dm",

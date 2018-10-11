@@ -26,6 +26,16 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+var (
+	taskState = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "dm",
+			Subsystem: "worker",
+			Name:      "task_state",
+			Help:      "state of task, 0 - invalidStage, 1 - New, 2 - Running, 3 - Paused, 4 - Stopped, 5 - Finished",
+		}, []string{"task"})
+)
+
 // InitStatus initializes the HTTP status server
 func InitStatus(addr string) {
 	go func() {
@@ -38,6 +48,8 @@ func InitStatus(addr string) {
 		registry := prometheus.NewRegistry()
 		registry.MustRegister(prometheus.NewProcessCollector(os.Getpid(), ""))
 		registry.MustRegister(prometheus.NewGoCollector())
+
+		registry.MustRegister(taskState)
 
 		relay.RegisterMetrics(registry)
 		mydumper.RegisterMetrics(registry)
