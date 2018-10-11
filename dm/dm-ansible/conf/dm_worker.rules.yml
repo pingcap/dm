@@ -1,7 +1,7 @@
 groups:
 - name: alert.rules
   rules:
-  - alert: remain storage of relay log
+  - alert: DM_remain_storage_of_relay_log
     expr: dm_relay_space{instance="$instance", type="available"} < 10*1024*1024*1024
     labels:
       env: ENV_LABELS_ENV
@@ -10,9 +10,9 @@ groups:
     annotations:
       description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, values: {{ $value }}'
       value: '{{ $value }}'
-      summary: remain storage of relay log
+      summary: DM remain storage of relay log
 
-  - alert: relay process exits with error
+  - alert: DM_relay_process_exits_with_error
     expr: changes(dm_relay_exit_with_error_count{instance="$instance"}[1m]) > 0
     labels:
       env: ENV_LABELS_ENV
@@ -21,9 +21,9 @@ groups:
     annotations:
       description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, values: {{ $value }}'
       value: '{{ $value }}'
-      summary: relay process exits with error
+      summary: DM relay process exits with error
 
-  - alert: relay log data corruption
+  - alert: DM_relay_log_data_corruption
     expr: changes(dm_relay_data_corruption{instance="$instance"}[1m]) > 0
     labels:
       env: ENV_LABELS_ENV
@@ -32,9 +32,9 @@ groups:
     annotations:
       description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, values: {{ $value }}'
       value: '{{ $value }}'
-      summary: relay log data corruption
+      summary: DM relay log data corruption
 
-  - alert: fail to read binlog from master
+  - alert: DM_fail_to_read_binlog_from_master
     expr: changes(dm_relay_read_error_count{instance="$instance"}[1m]) > 0
     labels:
       env: ENV_LABELS_ENV
@@ -43,9 +43,9 @@ groups:
     annotations:
       description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, values: {{ $value }}'
       value: '{{ $value }}'
-      summary: fail to read binlog from master
+      summary: DM fail to read binlog from master
 
-  - alert: fail to write relay log
+  - alert: DM_fail_to_write_relay_log
     expr: changes(dm_relay_write_error_count{instance="$instance"}[1m]) > 0
     labels:
       env: ENV_LABELS_ENV
@@ -54,9 +54,9 @@ groups:
     annotations:
       description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, values: {{ $value }}'
       value: '{{ $value }}'
-      summary: fail to write relay log
+      summary: DM fail to write relay log
 
-  - alert: dump process exists with error
+  - alert: DM_dump_process_exists_with_error
     expr: changes(dm_mydumper_exit_with_error_count{task="$task",instance="$instance"}[1m]) > 0
     labels:
       env: ENV_LABELS_ENV
@@ -65,9 +65,9 @@ groups:
     annotations:
       description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, task: {{ $labels.task }}, values: {{ $value }}'
       value: '{{ $value }}'
-      summary: dump process exists with error
+      summary: DM dump process exists with error
 
-  - alert: load process exists with error
+  - alert: DM_load_process_exists_with_error
     expr: changes(dm_loader_exit_with_error_count{task="$task",instance="$instance"}[1m]) > 0
     labels:
       env: ENV_LABELS_ENV
@@ -76,9 +76,9 @@ groups:
     annotations:
       description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, task: {{ $labels.task }}, values: {{ $value }}'
       value: '{{ $value }}'
-      summary: load process exists with error
+      summary: DM load process exists with error
 
-  - alert: sync process exists with error
+  - alert: DM_sync_process_exists_with_error
     expr: changes(dm_syncer_exit_with_error_count{task="$task", instance="$instance"}[1m]) > 0
     labels:
       env: ENV_LABELS_ENV
@@ -87,4 +87,4 @@ groups:
     annotations:
       description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, task: {{ $labels.task }}, values: {{ $value }}'
       value: '{{ $value }}'
-      summary: sync process exists with error
+      summary: DM sync process exists with error
