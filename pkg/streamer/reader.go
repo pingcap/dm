@@ -2,10 +2,10 @@ package streamer
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"strings"
 	"sync"
 
 	"github.com/fsnotify/fsnotify"
@@ -187,7 +187,8 @@ func (r *BinlogReader) onStream(s *LocalStreamer, pos mysql.Position, updatePos 
 		}
 
 		err = r.parser.ParseFile(fullpath, offset, onEventFunc)
-		if i == len(files)-1 && errors.Cause(err) == io.EOF {
+		if i == len(files)-1 && strings.Contains(err.Error(), "err EOF") {
+			// NOTE: go-mysql returned err not includes caused err, but as message, ref: parser.go `parseSingleEvent`
 			log.Warnf("parse binlog file %s from offset %d got EOF %s", fullpath, offset, errors.ErrorStack(err))
 			break // wait for re-parse
 		} else if err != nil {
