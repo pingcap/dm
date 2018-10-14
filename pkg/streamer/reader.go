@@ -187,7 +187,7 @@ func (r *BinlogReader) onStream(s *LocalStreamer, pos mysql.Position, updatePos 
 		}
 
 		err = r.parser.ParseFile(fullpath, offset, onEventFunc)
-		if i == len(files)-1 && strings.Contains(err.Error(), "err EOF") {
+		if i == len(files)-1 && err != nil && strings.Contains(err.Error(), "err EOF") {
 			// NOTE: go-mysql returned err not includes caused err, but as message, ref: parser.go `parseSingleEvent`
 			log.Warnf("parse binlog file %s from offset %d got EOF %s", fullpath, offset, errors.ErrorStack(err))
 			break // wait for re-parse
