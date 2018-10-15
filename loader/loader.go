@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/juju/errors"
@@ -75,6 +76,8 @@ type Worker struct {
 	wg         sync.WaitGroup
 	jobQueue   chan *dataJob
 	loader     *Loader
+
+	closed int64
 }
 
 // NewWorker returns a Worker.
@@ -96,12 +99,17 @@ func NewWorker(loader *Loader, id int) (worker *Worker, err error) {
 
 // Close closes worker
 func (w *Worker) Close() {
+	if !atomic.CompareAndSwapInt64(&w.closed, 0, 1) {
+		return
+	}
+
 	close(w.jobQueue)
 	w.wg.Wait()
 	closeConn(w.conn)
 }
 
 func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *sync.WaitGroup, runFatalChan chan *pb.ProcessError) {
+	atomic.StoreInt64(&w.closed, 0)
 	defer workerWg.Done()
 
 	newCtx, cancel := context.WithCancel(ctx)
