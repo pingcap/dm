@@ -46,7 +46,6 @@ func (s *Syncer) Status() interface{} {
 		RecentTps:    tps,
 		MasterBinlog: masterPos.String(),
 		SyncerBinlog: syncerPos.String(),
-		BlockingDDLs: s.ddlExecInfo.BlockingDDLs(),
 	}
 	if masterGTIDSet != nil { // masterGTIDSet maybe a nil interface
 		st.MasterBinlogGtid = masterGTIDSet.String()
@@ -54,6 +53,7 @@ func (s *Syncer) Status() interface{} {
 
 	if s.cfg.IsSharding {
 		st.UnresolvedGroups = s.sgk.UnresolvedGroups()
+		st.BlockingDDLs = s.ddlExecInfo.BlockingDDLs()
 	}
 	return st
 }
