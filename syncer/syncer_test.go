@@ -74,7 +74,8 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 			Password: pswd,
 			Port:     port,
 		},
-		ServerID: 101,
+		ServerID:   101,
+		MetaSchema: "test",
 	}
 
 	var err error
@@ -249,7 +250,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
 			query := string(ev.Query)
-			querys, err := resolveDDLSQL(query, p)
+			querys, _, _, err := syncer.resolveDDLSQL(query, p, string(ev.Schema))
 			c.Assert(err, IsNil)
 			if len(querys) == 0 {
 				continue
@@ -407,7 +408,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
 			query := string(ev.Query)
-			querys, err := resolveDDLSQL(query, p)
+			querys, _, _, err := syncer.resolveDDLSQL(query, p, string(ev.Schema))
 			c.Assert(err, IsNil)
 			if len(querys) == 0 {
 				continue

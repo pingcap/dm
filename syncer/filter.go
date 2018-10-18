@@ -174,6 +174,14 @@ func (s *Syncer) skipDMLEvent(schema string, table string, eventType replication
 	if len(tbs) == 0 {
 		return true, nil
 	}
+	// filter ghost table
+	if s.onlineDDL != nil {
+		tp := s.onlineDDL.TableType(table)
+		if tp != realTable {
+			return true, nil
+		}
+	}
+
 	if s.binlogFilter == nil {
 		return false, nil
 	}

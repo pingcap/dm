@@ -1,8 +1,8 @@
 task-name: test
 task-mode: all
 flavor: mysql
-checkpoint-schema-prefix: dm_checkpoint
-remove-previous-checkpoint: false
+meta-schema: dm_meta
+remove-meta: false
 disable-heartbeat: true
 target-database:
   host: 192.168.0.1

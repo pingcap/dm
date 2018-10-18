@@ -1,16 +1,3 @@
-// Copyright 2018 PingCAP, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package config
 
 import (
@@ -28,13 +15,18 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
 )
 
+// Online DDL Scheme
+const (
+	GHOST = "gh-ost"
+	PT    = "pt"
+)
+
 // default config item values
 var (
 	// TaskConfig
-	defaultCheckpointSchemaPrefix   = "dm_checkpoint"
-	defaultRemovePreviousCheckpoint = false
-	defaultDisableHeartbeat         = false
-	defaultIsSharding               = false
+	defaultMetaSchema       = "dm_meta"
+	defaultDisableHeartbeat = false
+	defaultIsSharding       = false
 	// MydumperConfig
 	defaultMydumperPath        = "./bin/mydumper"
 	defaultThreads             = 4
@@ -213,13 +205,17 @@ func (m *SyncerConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 type TaskConfig struct {
 	*flag.FlagSet `yaml:"-"`
 
-	Name                     string `yaml:"name"`
-	TaskMode                 string `yaml:"task-mode"`
-	Flavor                   string `yaml:"flavor"`
-	IsSharding               bool   `yaml:"is-sharding"`
-	CheckpointSchemaPrefix   string `yaml:"checkpoint-schema-prefix"`
-	RemovePreviousCheckpoint bool   `yaml:"remove-previous-checkpoint"`
-	DisableHeartbeat         bool   `yaml:"disable-heartbeat"`
+	Name       string `yaml:"name"`
+	TaskMode   string `yaml:"task-mode"`
+	Flavor     string `yaml:"flavor"`
+	IsSharding bool   `yaml:"is-sharding"`
+	// we store detail status in meta
+	// don't save configuration into it
+	MetaSchema string `yaml:"meta-schema"`
+	// remove meta from downstreaming database
+	// now we delete checkpoint and online ddl information
+	RemoveMeta       bool `yaml:"remove-meta"`
+	DisableHeartbeat bool `yaml:"disable-heartbeat"`
 
 	// handle schema/table name mode, and only for schema/table name
 	// if case insensitive, we would convert schema/table name to lower case
@@ -228,6 +224,8 @@ type TaskConfig struct {
 	TargetDB *DBConfig `yaml:"target-database"`
 
 	MySQLInstances []*MySQLInstance `yaml:"mysql-instances"`
+
+	OnlineDDLScheme string `yaml:"online-ddl-scheme"`
 
 	Routes         map[string]*router.TableRule   `yaml:"routes"`
 	Filters        map[string]*bf.BinlogEventRule `yaml:"filters"`
@@ -243,18 +241,17 @@ type TaskConfig struct {
 func NewTaskConfig() *TaskConfig {
 	cfg := &TaskConfig{
 		// explicitly set default value
-		CheckpointSchemaPrefix:   defaultCheckpointSchemaPrefix,
-		RemovePreviousCheckpoint: defaultRemovePreviousCheckpoint,
-		DisableHeartbeat:         defaultDisableHeartbeat,
-		MySQLInstances:           make([]*MySQLInstance, 0, 5),
-		IsSharding:               defaultIsSharding,
-		Routes:                   make(map[string]*router.TableRule),
-		Filters:                  make(map[string]*bf.BinlogEventRule),
-		ColumnMappings:           make(map[string]*column.Rule),
-		BWList:                   make(map[string]*filter.Rules),
-		Mydumpers:                make(map[string]*MydumperConfig),
-		Loaders:                  make(map[string]*LoaderConfig),
-		Syncers:                  make(map[string]*SyncerConfig),
+		MetaSchema:       defaultMetaSchema,
+		DisableHeartbeat: defaultDisableHeartbeat,
+		MySQLInstances:   make([]*MySQLInstance, 0, 5),
+		IsSharding:       defaultIsSharding,
+		Routes:           make(map[string]*router.TableRule),
+		Filters:          make(map[string]*bf.BinlogEventRule),
+		ColumnMappings:   make(map[string]*column.Rule),
+		BWList:           make(map[string]*filter.Rules),
+		Mydumpers:        make(map[string]*MydumperConfig),
+		Loaders:          make(map[string]*LoaderConfig),
+		Syncers:          make(map[string]*SyncerConfig),
 	}
 	cfg.FlagSet = flag.NewFlagSet("task", flag.ContinueOnError)
 	return cfg
@@ -304,6 +301,10 @@ func (c *TaskConfig) adjust() error {
 	}
 	if c.Flavor != mysql.MySQLFlavor && c.Flavor != mysql.MariaDBFlavor {
 		return errors.New("please specify right mysql flavor version, support `mysql`, `mariadb`")
+	}
+
+	if c.OnlineDDLScheme != "" && c.OnlineDDLScheme != PT {
+		return errors.NotSupportedf("online scheme %s", c.OnlineDDLScheme)
 	}
 
 	if c.TargetDB == nil {
@@ -414,13 +415,14 @@ func (c *TaskConfig) SubTaskConfigs() []*SubTaskConfig {
 	for i, inst := range c.MySQLInstances {
 		cfg := NewSubTaskConfig()
 		cfg.IsSharding = c.IsSharding
+		cfg.OnlineDDLScheme = c.OnlineDDLScheme
 		cfg.Name = c.Name
 		cfg.Mode = c.TaskMode
 		cfg.Flavor = c.Flavor
 		cfg.CaseSensitive = c.CaseSensitive
 		cfg.BinlogType = "local" // let's force syncer to replay local binlog.
-		cfg.CheckpointSchemaPrefix = c.CheckpointSchemaPrefix
-		cfg.RemovePreviousCheckpoint = c.RemovePreviousCheckpoint
+		cfg.MetaSchema = c.MetaSchema
+		cfg.RemoveMeta = c.RemoveMeta
 		cfg.DisableHeartbeat = c.DisableHeartbeat
 		cfg.Meta = inst.Meta
 

@@ -355,7 +355,7 @@ func (l *Loader) Init() error {
 
 	l.bwList = filter.New(l.cfg.CaseSensitive, l.cfg.BWList)
 
-	if l.cfg.RemovePreviousCheckpoint {
+	if l.cfg.RemoveMeta {
 		err := l.checkPoint.Clear()
 		if err != nil {
 			return errors.Trace(err)

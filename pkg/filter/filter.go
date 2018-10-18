@@ -51,11 +51,11 @@ func (c *cache) set(key string, action ActionType) {
 
 // Rules contains Filter rules.
 type Rules struct {
-	DoTables []*Table `json:"do-tables" yaml:"do-tables"`
-	DoDBs    []string `json:"do-dbs" yaml:"do-dbs"`
+	DoTables []*Table `json:"do-tables" toml:"do-tables" yaml:"do-tables"`
+	DoDBs    []string `json:"do-dbs" toml:"do-dbs" yaml:"do-dbs"`
 
-	IgnoreTables []*Table `json:"ignore-tables" yaml:"ignore-tables"`
-	IgnoreDBs    []string `json:"ignore-dbs" yaml:"ignore-dbs"`
+	IgnoreTables []*Table `json:"ignore-tables" toml:"ignore-tables" yaml:"ignore-tables"`
+	IgnoreDBs    []string `json:"ignore-dbs" toml:"ignore-dbs" yaml:"ignore-dbs"`
 }
 
 // ToLower convert all entries to lowercase

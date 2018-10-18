@@ -82,7 +82,7 @@ func (s *testSyncerSuite) TestGenDDLSQL(c *C) {
 		c.Assert(err, IsNil)
 		stmt, err := p.ParseOneStmt(t[0], "", "")
 		c.Assert(err, IsNil)
-		sql, err := genDDLSQL(t[0], stmt, originTableNameSingle, targetTableNameSingle)
+		sql, err := genDDLSQL(t[0], stmt, originTableNameSingle, targetTableNameSingle, true)
 		c.Assert(err, IsNil)
 		c.Assert(sql, Equals, t[2])
 	}
@@ -97,7 +97,7 @@ func (s *testSyncerSuite) TestGenDDLSQL(c *C) {
 		c.Assert(err, IsNil)
 		stmt, err := p.ParseOneStmt(t[0], "", "")
 		c.Assert(err, IsNil)
-		sql, err := genDDLSQL(t[0], stmt, originTableNameDouble, targetTableNameDouble)
+		sql, err := genDDLSQL(t[0], stmt, originTableNameDouble, targetTableNameDouble, true)
 		c.Assert(err, IsNil)
 		c.Assert(sql, Equals, t[2])
 	}

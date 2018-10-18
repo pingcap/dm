@@ -92,13 +92,17 @@ func (s *ShardingGroup) TablesCount() int {
 // DataMigrationConfig is a simple data migration config for human
 // so it's tedious in the logical category.
 type DataMigrationConfig struct {
-	TaskName                 string `yaml:"task-name" toml:"task-name" json:"task-name"`
-	TaskMode                 string `yaml:"task-mode" toml:"task-mode" json:"task-mode"`
-	Flavor                   string `yaml:"flavor" toml:"flavor" json:"flavor"`
-	CheckpointSchemaPrefix   string `yaml:"checkpoint-schema-prefix" toml:"checkpoint-schema-prefix" json:"checkpoint-schema-prefix"`
-	RemovePreviousCheckpoint bool   `yaml:"remove-previous-checkpoint" toml:"remove-previous-checkpoint" json:"remove-previous-checkpoint"`
-	DisableHeartbeat         bool   `yaml:"disable-heartbeat" toml:"disable-heartbeat" json:"disable-heartbeat"`
-	CaseSensitive            bool   `yaml:"case-sensitive" toml:"case-sensitive" json:"case-sensitive"`
+	TaskName         string `yaml:"task-name" toml:"task-name" json:"task-name"`
+	TaskMode         string `yaml:"task-mode" toml:"task-mode" json:"task-mode"`
+	Flavor           string `yaml:"flavor" toml:"flavor" json:"flavor"`
+	MetaSchema       string `yaml:"meta-schema" toml:"meta-schema" json:"meta-schema"`
+	RemoveMeta       bool   `yaml:"remove-meta" toml:"remove-meta" json:"remove-meta"`
+	DisableHeartbeat bool   `yaml:"disable-heartbeat" toml:"disable-heartbeat" json:"disable-heartbeat"`
+	CaseSensitive    bool   `yaml:"case-sensitive" toml:"case-sensitive" json:"case-sensitive"`
+
+	// would add into exmaple after it's proven in read world
+	// now lete it be a hidden parameters
+	OnlineDDLScheme string `yaml:"online-ddl-scheme" toml:"online-ddl-scheme" json:"online-ddl-scheme"`
 
 	TargetDB *dm.DBConfig `yaml:"target-database" toml:"target-database" json:"target-database"`
 
@@ -155,14 +159,15 @@ func (c *DataMigrationConfig) GenerateDMTask() (*dm.TaskConfig, error) {
 	}
 
 	task := &dm.TaskConfig{
-		Name:                     c.TaskName,
-		TaskMode:                 c.TaskMode,
-		Flavor:                   c.Flavor,
-		CheckpointSchemaPrefix:   c.CheckpointSchemaPrefix,
-		RemovePreviousCheckpoint: c.RemovePreviousCheckpoint,
-		DisableHeartbeat:         c.DisableHeartbeat,
-		TargetDB:                 new(dm.DBConfig),
-		MySQLInstances:           make([]*dm.MySQLInstance, 0, len(c.MySQLInstances)),
+		Name:             c.TaskName,
+		TaskMode:         c.TaskMode,
+		Flavor:           c.Flavor,
+		MetaSchema:       c.MetaSchema,
+		RemoveMeta:       c.RemoveMeta,
+		DisableHeartbeat: c.DisableHeartbeat,
+		TargetDB:         new(dm.DBConfig),
+		OnlineDDLScheme:  c.OnlineDDLScheme,
+		MySQLInstances:   make([]*dm.MySQLInstance, 0, len(c.MySQLInstances)),
 
 		BWList:         make(map[string]*filter.Rules),
 		Routes:         make(map[string]*router.TableRule),
@@ -287,6 +292,7 @@ func (c *DataMigrationConfig) DecodeFromTask(task *dm.TaskConfig) error {
 	c.TaskMode = task.TaskMode
 	c.Flavor = task.Flavor
 	c.TargetDB = new(dm.DBConfig)
+	c.OnlineDDLScheme = task.OnlineDDLScheme
 	c.MySQLInstances = make(map[string]*dm.MySQLInstance, len(task.MySQLInstances))
 	c.Mydumpers = make(map[string]*dm.MydumperConfig)
 	c.Loaders = make(map[string]*dm.LoaderConfig)
@@ -295,8 +301,8 @@ func (c *DataMigrationConfig) DecodeFromTask(task *dm.TaskConfig) error {
 	c.IgnoredTables = make(map[string]*InstanceTables)
 	c.ShardingGroups = nil
 	c.BinlogEventsFilter = make(map[string]*InstanceConfig)
-	c.CheckpointSchemaPrefix = task.CheckpointSchemaPrefix
-	c.RemovePreviousCheckpoint = task.RemovePreviousCheckpoint
+	c.MetaSchema = task.MetaSchema
+	c.RemoveMeta = task.RemoveMeta
 	c.DisableHeartbeat = task.DisableHeartbeat
 
 	*c.TargetDB = *task.TargetDB

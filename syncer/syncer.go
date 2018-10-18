@@ -120,6 +120,7 @@ type Syncer struct {
 	done chan struct{}
 
 	checkpoint CheckPoint
+	onlineDDL  OnlinePlugin
 
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
@@ -232,6 +233,17 @@ func (s *Syncer) Init() error {
 		}
 	}
 
+	if s.cfg.OnlineDDLScheme != "" {
+		fn, ok := OnlineDDLSchemes[s.cfg.OnlineDDLScheme]
+		if !ok {
+			return errors.NotSupportedf("online ddl scheme (%s)", s.cfg.OnlineDDLScheme)
+		}
+		s.onlineDDL, err = fn(s.cfg)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+
 	err = s.genRouter()
 	if err != nil {
 		return errors.Trace(err)
@@ -249,12 +261,19 @@ func (s *Syncer) Init() error {
 		return errors.Trace(err)
 	}
 
-	if s.cfg.RemovePreviousCheckpoint {
+	if s.cfg.RemoveMeta {
 		err = s.checkpoint.Clear()
 		if err != nil {
-			return errors.Trace(err)
+			return errors.Annotate(err, "clear checkpoint in syncer")
 		}
-		log.Info("[syncer] all previous checkpoints cleared")
+
+		if s.onlineDDL != nil {
+			err = s.onlineDDL.Clear()
+			if err != nil {
+				return errors.Annotate(err, "clear online ddl in syncer")
+			}
+		}
+		log.Info("[syncer] all previous meta cleared")
 	}
 
 	err = s.checkpoint.Load()
@@ -1161,7 +1180,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				continue
 			}
 
-			var sqls []string
+			var (
+				sqls                []string
+				onlineDDLTableNames map[string]*filter.Table
+				isDDL               bool
+			)
+
 			operator := s.GetOperator(currentPos)
 			if operator != nil {
 				sqls, err = operator.Operate()
@@ -1172,22 +1196,25 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				// operator only apply one time.
 				s.DelOperator(currentPos)
 			} else {
-				sqls, err = resolveDDLSQL(sql, parser2)
+				sqls, onlineDDLTableNames, isDDL, err = s.resolveDDLSQL(sql, parser2, string(ev.Schema))
 				if err != nil {
 					log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
 					log.Errorf("fail to be parsed, error %v", err)
 					return errors.Trace(err)
 				}
+
+				if !isDDL {
+					continue
+				}
 			}
 
-			if len(sqls) > 0 {
-				// only log real ddl, ignore BEGIN
-				log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
-				lastPos = currentPos // update lastPos
-				binlogEvent.WithLabelValues("query", s.cfg.Name).Observe(time.Since(startTime).Seconds())
-			} else {
-				continue
+			if len(onlineDDLTableNames) > 1 {
+				return errors.NotSupportedf("online ddl changes on multiple table: %s", string(ev.Query))
 			}
+
+			log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
+			lastPos = currentPos // update lastPos
+			binlogEvent.WithLabelValues("query", s.cfg.Name).Observe(time.Since(startTime).Seconds())
 
 			/*
 				we construct a application transaction for ddl. we save checkpoint after we execute all ddls
@@ -1290,9 +1317,18 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					s.checkpoint.SaveTablePoint(tbl.Schema, tbl.Name, currentPos)
 				}
 
+				for _, table := range onlineDDLTableNames {
+					log.Infof("finish online ddl %v for table %s.%s", needHandleDDLs, table.Schema, table.Name)
+					err = s.onlineDDL.Finish(table.Schema, table.Name)
+					if err != nil {
+						return errors.Annotatef(err, "finish online ddl on %s.%s", table.Schema, table.Name)
+					}
+				}
+
 				continue
 			}
 
+			// handle sharding ddl
 			var (
 				needShardingHandle bool
 				group              *ShardingGroup
@@ -1378,6 +1414,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			if err != nil {
 				return errors.Trace(err)
 			}
+
+			if len(onlineDDLTableNames) > 0 {
+				s.clearOnlineDDL(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
+			}
+
 			log.Infof("[ddl][end]%v", needHandleDDLs)
 
 			s.clearTables(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
@@ -1685,6 +1726,7 @@ func (s *Syncer) Close() {
 	closeDBs(s.ddlDB)
 
 	s.checkpoint.Close()
+	s.onlineDDL.Close()
 
 	s.closed.Set(true)
 }

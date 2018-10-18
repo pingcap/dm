@@ -329,8 +329,10 @@ func (s *testSyncerSuite) run(c *C, tests []testCase) {
 	parser, err := getParser(s.db, false)
 	c.Assert(err, IsNil)
 
+	syncer := &Syncer{}
+
 	for _, tt := range tests {
-		sqls, err := resolveDDLSQL(tt.sql, parser)
+		sqls, _, _, err := syncer.resolveDDLSQL(tt.sql, parser, "")
 		if !tt.wantErr && err != nil {
 			fmt.Println(err)
 		}

@@ -24,11 +24,6 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 )
 
-var (
-	defaultTable        = "_"      // default table name if task name is empty
-	defaultSchemaSuffix = "loader" // default schema name's suffix
-)
-
 // CheckPoint represents checkpoint status
 type CheckPoint interface {
 	// Load loads all checkpoints recorded before.
@@ -85,12 +80,8 @@ func newRemoteCheckPoint(cfg *config.SubTaskConfig, id string) (CheckPoint, erro
 		id:             id,
 		restoringFiles: make(map[string]map[string]FilePosSet),
 		finishedTables: make(map[string]struct{}),
-		schema:         fmt.Sprintf("%s_%s", cfg.CheckpointSchemaPrefix, defaultSchemaSuffix),
-	}
-	if len(cfg.Name) > 0 {
-		cp.table = cfg.Name
-	} else {
-		cp.table = defaultTable
+		schema:         cfg.MetaSchema,
+		table:          fmt.Sprintf("%s_loader_checkpoint", cfg.Name),
 	}
 
 	err = cp.prepare()

@@ -39,10 +39,8 @@ variants about checkpoint:
 */
 
 var (
-	defaultTable         = "_"      // default table name task name is empty
-	defaultSchemaSuffix  = "syncer" // default schema name's suffix
-	globalCpSchema       = ""       // global checkpoint's cp_schema
-	globalCpTable        = ""       // global checkpoint's cp_table
+	globalCpSchema       = "" // global checkpoint's cp_schema
+	globalCpTable        = "" // global checkpoint's cp_table
 	maxCheckPointTimeout = "1m"
 	minCheckpoint        = mysql.Position{Pos: 4}
 
@@ -194,16 +192,13 @@ type RemoteCheckPoint struct {
 func NewRemoteCheckPoint(cfg *config.SubTaskConfig, id string) CheckPoint {
 	cp := &RemoteCheckPoint{
 		cfg:         cfg,
-		schema:      fmt.Sprintf("%s_%s", cfg.CheckpointSchemaPrefix, defaultSchemaSuffix),
+		schema:      cfg.MetaSchema,
+		table:       fmt.Sprintf("%s_syncer_checkpoint", cfg.Name),
 		id:          id,
 		points:      make(map[string]map[string]*binlogPoint),
 		globalPoint: newBinlogPoint(minCheckpoint, minCheckpoint),
 	}
-	if len(cfg.Name) > 0 {
-		cp.table = cfg.Name
-	} else {
-		cp.table = defaultTable
-	}
+
 	return cp
 }
 

@@ -28,11 +28,14 @@ func (s *Syncer) InjectSQLs(ctx context.Context, sqls []string) error {
 		if !ok {
 			return errors.Errorf("only support inject DDL for sharding group to be synced currently, but got %s", sql)
 		}
-		schema := fetchDDLSchema(ddlNode)
-		if len(schema) == 0 {
+		tableNames, err := fetchDDLTableNames("", ddlNode)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		if len(tableNames[0].Schema) == 0 {
 			return errors.NotValidf("injected DDL %s without schema name", sql)
 		}
-		schemas = append(schemas, schema)
+		schemas = append(schemas, tableNames[0].Schema)
 	}
 
 	for i, sql := range sqls {

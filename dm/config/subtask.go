@@ -65,21 +65,22 @@ type SubTaskConfig struct {
 	flagSet *flag.FlagSet
 
 	// when in sharding, multi dm-workers do one task
-	IsSharding bool `toml:"is-sharding" json:"is-sharding"`
+	IsSharding      bool   `toml:"is-sharding" json:"is-sharding"`
+	OnlineDDLScheme string `toml:"online-ddl-scheme" json:"online-ddl-scheme"`
 
 	// handle schema/table name mode, and only for schema/table name/pattern
 	// if case insensitive, we would convert schema/table name/pattern to lower case
 	CaseSensitive bool `toml:"case-sensitive" json:"case-sensitive"`
 
-	Name                     string `toml:"name" json:"name"`
-	Mode                     string `toml:"mode" json:"mode"`
-	InstanceID               string `toml:"instance-id" json:"instance-id"`
-	ServerID                 int    `toml:"server-id" json:"server-id"`
-	Flavor                   string `toml:"flavor" json:"flavor"`
-	CheckpointSchemaPrefix   string `toml:"checkpoint-schema-prefix" json:"checkpoint-schema-prefix"`
-	RemovePreviousCheckpoint bool   `toml:"remove-previous-checkpoint" json:"remove-previous-checkpoint"`
-	DisableHeartbeat         bool   `toml:"disable-heartbeat" json:"disable-heartbeat"`
-	Meta                     *Meta  `toml:"meta" json:"meta"`
+	Name             string `toml:"name" json:"name"`
+	Mode             string `toml:"mode" json:"mode"`
+	InstanceID       string `toml:"instance-id" json:"instance-id"`
+	ServerID         int    `toml:"server-id" json:"server-id"`
+	Flavor           string `toml:"flavor" json:"flavor"`
+	MetaSchema       string `toml:"meta-schema" json:"meta-schema"`
+	RemoveMeta       bool   `toml:"remove-meta" json:"remove-meta"`
+	DisableHeartbeat bool   `toml:"disable-heartbeat" json:"disable-heartbeat"`
+	Meta             *Meta  `toml:"meta" json:"meta"`
 
 	BinlogType string `toml:"binlog-type" json:"binlog-type"`
 	// RelayDir get value from dm-worker config
@@ -207,12 +208,24 @@ func (c *SubTaskConfig) adjust() error {
 		return errors.New("task name should not be empty")
 	}
 
+	if c.InstanceID == "" {
+		c.InstanceID = fmt.Sprintf("%s:%d", c.From.Host, c.From.Port)
+	}
+
 	if c.Flavor != mysql.MySQLFlavor && c.Flavor != mysql.MariaDBFlavor {
 		return errors.Errorf("please specify right mysql version, support mysql, mariadb now")
 	}
 
 	if c.InstanceID == "" {
 		c.InstanceID = fmt.Sprintf("%s:%d", c.From.Host, c.From.Port)
+	}
+
+	if c.OnlineDDLScheme != "" && c.OnlineDDLScheme != PT {
+		return errors.NotSupportedf("online scheme %s", c.OnlineDDLScheme)
+	}
+
+	if c.MetaSchema == "" {
+		c.MetaSchema = defaultMetaSchema
 	}
 
 	if c.MaxRetry == 0 {

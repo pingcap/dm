@@ -54,7 +54,7 @@ func trimCtrlChars(s string) string {
 
 // resolveDDLSQL resolve to one ddl sql
 // example: drop table test.a,test2.b -> drop table test.a; drop table test2.b;
-func resolveDDLSQL(sql string, p *parser.Parser) (sqls []string, err error) {
+func (s *Syncer) resolveDDLSQL(sql string, p *parser.Parser, schema string) (sqls []string, tables map[string]*filter.Table, isDDL bool, err error) {
 	sql = trimCtrlChars(sql)
 	// We use Parse not ParseOneStmt here, because sometimes we got a commented out ddl which can't be parsed
 	// by ParseOneStmt(it's a limitation of tidb parser.)
@@ -62,11 +62,11 @@ func resolveDDLSQL(sql string, p *parser.Parser) (sqls []string, err error) {
 	if err != nil {
 		// log error rather than fatal, so other defer can be executed
 		log.Errorf(IncompatibleDDLFormat, sql)
-		return []string{sql}, errors.Annotatef(err, IncompatibleDDLFormat, sql)
+		return []string{sql}, nil, false, errors.Annotatef(err, IncompatibleDDLFormat, sql)
 	}
 
 	if len(stmts) == 0 {
-		return nil, nil
+		return nil, nil, false, nil
 	}
 
 	stmt := stmts[0]
@@ -74,11 +74,11 @@ func resolveDDLSQL(sql string, p *parser.Parser) (sqls []string, err error) {
 	case ast.DDLNode:
 		// do nothing
 	case ast.DMLNode:
-		return nil, errors.Annotatef(ErrDMLStatementFound, "query %s", sql)
+		return nil, nil, false, errors.Annotatef(ErrDMLStatementFound, "query %s", sql)
 	default:
 		// BEGIN statement is included here.
 		// let sqls be empty
-		return sqls, nil
+		return nil, nil, false, nil
 	}
 
 	switch v := stmt.(type) {
@@ -115,13 +115,36 @@ func resolveDDLSQL(sql string, p *parser.Parser) (sqls []string, err error) {
 		sqls = append(sqls, sql)
 	}
 
-	return sqls, nil
+	if s.onlineDDL == nil {
+		return sqls, nil, true, nil
+	}
+
+	statements := make([]string, 0, len(sqls))
+	tables = make(map[string]*filter.Table)
+	for _, sql := range sqls {
+		// filter and store ghost table ddl, transform online ddl
+		ss, tableName, err := s.handleOnlineDDL(p, schema, sql)
+		if err != nil {
+			return statements, tables, true, errors.Trace(err)
+		}
+
+		if tableName != nil {
+			tables[tableName.String()] = tableName
+		}
+
+		statements = append(statements, ss...)
+	}
+	return statements, tables, true, nil
 }
 
 // todo: fix the ugly code, use ast to rename table
-func genDDLSQL(sql string, stmt ast.StmtNode, originTableNames []*filter.Table, targetTableNames []*filter.Table) (string, error) {
+func genDDLSQL(sql string, stmt ast.StmtNode, originTableNames []*filter.Table, targetTableNames []*filter.Table, addUseDatabasePrefix bool) (string, error) {
 	addUseDatabase := func(sql string, dbName string) string {
-		return fmt.Sprintf("USE `%s`; %s;", dbName, sql)
+		if addUseDatabasePrefix {
+			return fmt.Sprintf("USE `%s`; %s;", dbName, sql)
+		}
+
+		return sql
 	}
 
 	if notNeedRoute(originTableNames, targetTableNames) {
@@ -316,51 +339,49 @@ func (s *Syncer) handleDDL(p *parser.Parser, schema, sql string) (string, [][]*f
 		targetTableNames = append(targetTableNames, tableName)
 	}
 
-	ddl, err := genDDLSQL(sql, stmt, tableNames, targetTableNames)
+	ddl, err := genDDLSQL(sql, stmt, tableNames, targetTableNames, true)
 	return ddl, [][]*filter.Table{tableNames, targetTableNames}, stmt, errors.Trace(err)
 }
 
-func getParser(db *sql.DB, ansiQuotesMode bool) (*parser.Parser, error) {
-	if !ansiQuotesMode {
-		// try get from DB
-		var err error
-		ansiQuotesMode, err = hasAnsiQuotesMode(db)
+// handle online ddls
+// if sql is online ddls, we would find it's ghost table, and ghost ddls, then replay its table name by real table name
+func (s *Syncer) handleOnlineDDL(p *parser.Parser, schema, sql string) ([]string, *filter.Table, error) {
+	if s.onlineDDL == nil {
+		return []string{sql}, nil, nil
+	}
+
+	stmt, err := p.ParseOneStmt(sql, "", "")
+	if err != nil {
+		return nil, nil, errors.Annotatef(err, "ddl %s", sql)
+	}
+
+	tableNames, err := fetchDDLTableNames(schema, stmt)
+	if err != nil {
+		return nil, nil, errors.Trace(err)
+	}
+
+	sqls, originSchema, originTable, err := s.onlineDDL.Apply(tableNames[0].Schema, tableNames[0].Name, sql, stmt)
+	if err != nil {
+		return nil, nil, errors.Trace(err)
+	}
+
+	// skip or origin sqls
+	if len(sqls) == 0 || (len(sqls) == 1 && sqls[0] == sql) {
+		return sqls, nil, nil
+	}
+
+	// replace ghost table name by real table name
+	sourceTables := []*filter.Table{
+		{Schema: originSchema, Name: originTable},
+	}
+	for i := range sqls {
+		stmt, err := p.ParseOneStmt(sqls[i], "", "")
+		sqls[i], err = genDDLSQL(sqls[i], stmt, sourceTables, tableNames, false)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, nil, errors.Trace(err)
 		}
 	}
-
-	parser2 := parser.New()
-	if ansiQuotesMode {
-		parser2.SetSQLMode(mysql.ModeANSIQuotes)
-	}
-	return parser2, nil
-}
-
-// fetchDDLSchema fetches schema name from StmtNode
-func fetchDDLSchema(stmt ast.StmtNode) string {
-	switch v := stmt.(type) {
-	case *ast.CreateDatabaseStmt:
-		return v.Name
-	case *ast.DropDatabaseStmt:
-		return v.Name
-	case *ast.CreateTableStmt:
-		return v.Table.Schema.O
-	case *ast.DropTableStmt:
-		return v.Tables[0].Schema.O
-	case *ast.TruncateTableStmt:
-		return v.Table.Schema.O
-	case *ast.AlterTableStmt:
-		return v.Table.Schema.O
-	case *ast.RenameTableStmt:
-		return v.OldTable.Schema.O
-	case *ast.CreateIndexStmt:
-		return v.Table.Schema.O
-	case *ast.DropIndexStmt:
-		return v.Table.Schema.O
-	default:
-		return ""
-	}
+	return sqls, tableNames[0], nil
 }
 
 func (s *Syncer) dropSchemaInSharding(sourceSchema string) error {
@@ -399,6 +420,43 @@ func (s *Syncer) dropSchemaInSharding(sourceSchema string) error {
 		}
 	}
 	return nil
+}
+
+func (s *Syncer) clearOnlineDDL(targetSchema, targetTable string) error {
+	group := s.sgk.Group(targetSchema, targetTable)
+	if group == nil {
+		return nil
+	}
+
+	// return [[schema, table]...]
+	tables := group.Tables()
+
+	for _, table := range tables {
+		log.Infof("finish online ddl one %s.%s", table[0], table[1])
+		err := s.onlineDDL.Finish(table[0], table[1])
+		if err != nil {
+			return errors.Annotatef(err, "finish online ddl on %s.%s", table[0], table[1])
+		}
+	}
+
+	return nil
+}
+
+func getParser(db *sql.DB, ansiQuotesMode bool) (*parser.Parser, error) {
+	if !ansiQuotesMode {
+		// try get from DB
+		var err error
+		ansiQuotesMode, err = hasAnsiQuotesMode(db)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+	}
+
+	parser2 := parser.New()
+	if ansiQuotesMode {
+		parser2.SetSQLMode(mysql.ModeANSIQuotes)
+	}
+	return parser2, nil
 }
 
 type shardingDDLInfo struct {

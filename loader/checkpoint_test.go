@@ -36,6 +36,7 @@ func (t *testCheckPointSuite) SetUpSuite(c *C) {
 			Password: pswd,
 			Port:     port,
 		},
+		MetaSchema: "test",
 	}
 }
 

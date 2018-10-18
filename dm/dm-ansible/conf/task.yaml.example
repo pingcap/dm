@@ -3,8 +3,8 @@ name: test # global unique
 task-mode: all  # full/incremental/all
 flavor: mysql  # mysql/mariadb
 is-sharding: true  # whether multi dm-worker do one sharding job
-checkpoint-schema-prefix: "dm_checkpoint"  # checkpoint schema prefix for Syncer / Loader
-remove-previous-checkpoint: false  # whether to remove previous checkpoint, set to `true` to start a fresh task even if the task-name used before
+meta-schema: "dm_meta"  # meta schema in downstreaming database to store meta informaton of dm
+remove-meta: false  # remove meta from downstreaming database, now we delete checkpoint and online ddl information
 disable-heartbeat: false
 
 target-database:
@@ -27,8 +27,8 @@ mysql-instances:             # one or more source database, config more source d
     # `full` / `all`:
     #    never be used
     # `incremental`:
-    #    if `remove-previous-checkpoint` is true, this will be used
-    #    else if checkpoints already exists in `checkpoint-schema`, this will not be used
+    #    if `remove-meta` is true, this will be used
+    #    else if checkpoints already exists in `meta-schema`, this will not be used
     #    otherwise, this will be used
     meta:
       binlog-name: binlog-00001
