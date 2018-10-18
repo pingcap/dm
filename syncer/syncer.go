@@ -1174,6 +1174,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			if ignore {
 				binlogSkippedEventsTotal.WithLabelValues("query", s.cfg.Name).Inc()
 				log.Warnf("[skip query-sql]%s [schema]:%s", sql, ev.Schema)
+				lastPos = currentPos // before record skip pos, update lastPos
 				if err = s.recordSkipSQLsPos(currentPos, nil); err != nil {
 					return errors.Trace(err)
 				}
