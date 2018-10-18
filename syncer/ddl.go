@@ -320,16 +320,21 @@ func (s *Syncer) handleDDL(p *parser.Parser, schema, sql string) (string, [][]*f
 	return ddl, [][]*filter.Table{tableNames, targetTableNames}, stmt, errors.Trace(err)
 }
 
-func getParser(db *sql.DB) (*parser.Parser, error) {
-	parser := parser.New()
-	ok, err := hasAnsiQuotesMode(db)
-	if err != nil {
-		return nil, errors.Trace(err)
+func getParser(db *sql.DB, ansiQuotesMode bool) (*parser.Parser, error) {
+	if !ansiQuotesMode {
+		// try get from DB
+		var err error
+		ansiQuotesMode, err = hasAnsiQuotesMode(db)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
 	}
-	if ok {
-		parser.SetSQLMode(mysql.ModeANSIQuotes)
+
+	parser2 := parser.New()
+	if ansiQuotesMode {
+		parser2.SetSQLMode(mysql.ModeANSIQuotes)
 	}
-	return parser, nil
+	return parser2, nil
 }
 
 // fetchDDLSchema fetches schema name from StmtNode

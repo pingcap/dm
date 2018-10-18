@@ -725,6 +725,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		close(s.done)
 	}()
 
+	parser2, err := getParser(s.fromDB.db, s.cfg.EnableANSIQuotes)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	fresh, err := s.IsFreshTask()
 	if err != nil {
 		return errors.Trace(err)
@@ -1157,12 +1162,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 
 			var sqls []string
-			p, err := getParser(s.fromDB.db)
-			if err != nil {
-				log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
-				return errors.Trace(err)
-			}
-
 			operator := s.GetOperator(currentPos)
 			if operator != nil {
 				sqls, err = operator.Operate()
@@ -1173,7 +1172,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				// operator only apply one time.
 				s.DelOperator(currentPos)
 			} else {
-				sqls, err = resolveDDLSQL(sql, p)
+				sqls, err = resolveDDLSQL(sql, parser2)
 				if err != nil {
 					log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
 					log.Errorf("fail to be parsed, error %v", err)
@@ -1208,7 +1207,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				tbls           = make(map[string]*filter.Table)
 			)
 			for _, sql := range sqls {
-				sqlDDL, tableNames, stmt, err := s.handleDDL(p, string(ev.Schema), sql)
+				sqlDDL, tableNames, stmt, err := s.handleDDL(parser2, string(ev.Schema), sql)
 				if err != nil {
 					return errors.Trace(err)
 				}

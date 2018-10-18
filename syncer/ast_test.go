@@ -83,7 +83,7 @@ func (s *testSyncerSuite) testFailedCases(c *C) {
 
 		// cases parse failed and should be supported in the near future
 		// {"ALTER TABLE bar ENABLE KEYS, DISABLE KEYS", []string{"ALTER TABLE `bar` ENABLE KEYS", "ALTER TABLE `bar` DISABLE KEYS"}, false},
-		{"alter table bar ORDER BY id1, id2", []string{"alter table bar ORDER BY id1, id2"}, true},                                                                                                                                                                                                                                               // tidb not support ORDER BY.
+		{"alter table bar ORDER BY id1, id2", []string{"alter table bar ORDER BY id1, id2"}, true}, // tidb not support ORDER BY.
 		{"alter table bar add index (`name`), add FOREIGN KEY (product_category, product_id) REFERENCES product(category, id) ON UPDATE CASCADE ON DELETE RESTRICT", []string{"alter table bar add index (`name`), add FOREIGN KEY (product_category, product_id) REFERENCES product(category, id) ON UPDATE CASCADE ON DELETE RESTRICT"}, true}, // tidb not support ON UPDATE CASCADE ON DELETE RESTRICT
 	}
 
@@ -326,7 +326,7 @@ func (s *testSyncerSuite) testAlterTableConvert(c *C) {
 }
 
 func (s *testSyncerSuite) run(c *C, tests []testCase) {
-	parser, err := getParser(s.db)
+	parser, err := getParser(s.db, false)
 	c.Assert(err, IsNil)
 
 	for _, tt := range tests {

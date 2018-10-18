@@ -136,7 +136,7 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 		s.db.Exec(sql)
 	}
 
-	p, err := getParser(s.db)
+	p, err := getParser(s.db, false)
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
@@ -234,7 +234,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 		s.db.Exec(sql)
 	}
 
-	p, err := getParser(s.db)
+	p, err := getParser(s.db, false)
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
@@ -301,7 +301,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 		s.db.Exec(sql)
 	}
 
-	p, err := getParser(s.db)
+	p, err := getParser(s.db, false)
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
@@ -392,7 +392,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 		s.db.Exec(sql)
 	}
 
-	p, err := getParser(s.db)
+	p, err := getParser(s.db, false)
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
@@ -481,7 +481,7 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 		s.db.Exec(sqls[i].sql)
 	}
 
-	p, err := getParser(s.db)
+	p, err := getParser(s.db, false)
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
@@ -569,7 +569,7 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 		s.db.Exec(sql)
 	}
 
-	p, err := getParser(s.db)
+	p, err := getParser(s.db, false)
 	c.Assert(err, IsNil)
 
 	mapping, err := cm.NewMapping(false, rules)

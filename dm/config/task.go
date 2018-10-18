@@ -185,6 +185,7 @@ type SyncerConfig struct {
 	EnableGTID       bool `yaml:"enable-gtid" toml:"enable-gtid" json:"enable-gtid"`
 	DisableCausality bool `yaml:"disable-detect" toml:"disable-detect" json:"disable-detect"`
 	SafeMode         bool `yaml:"safe-mode" toml:"safe-mode" json:"safe-mode"`
+	EnableANSIQuotes bool `yaml:"enable-ansi-quotes" toml:"enable-ansi-quotes" json:"enable-ansi-quotes"`
 }
 
 func defaultSyncerConfig() SyncerConfig {
