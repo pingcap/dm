@@ -23,6 +23,9 @@ service Master {
 
     rpc HandleSQLs (HandleSQLsRequest) returns (HandleSQLsResponse) {}
 
+    // SwitchWorkerRelayMaster requests some dm-workers to switch relay unit's master server
+    rpc SwitchWorkerRelayMaster(SwitchWorkerRelayMasterRequest) returns (SwitchWorkerRelayMasterResponse) {}
+
     // used by dmctl, to force refresh the task -> workers mapper
     // it should be used rarely only when task -> workers mapper corrupted
     rpc RefreshWorkerTasks (RefreshWorkerTasksRequest) returns (RefreshWorkerTasksResponse) {}
@@ -133,7 +136,7 @@ message UnlockDDLLockResponse {
     repeated CommonWorkerResponse workers = 3;
 }
 
-// BreakWorkerDDLLockRequest represents a reqeust for some dm-workers to force to break the DDL lock
+// BreakWorkerDDLLockRequest represents a request for some dm-workers to force to break the DDL lock
 // workers: dm-workers need to break DDL lock
 // task: sub task's name
 // removeLockID: DDLLockInfo's ID which need to remove
@@ -149,6 +152,18 @@ message BreakWorkerDDLLockRequest {
 }
 
 message BreakWorkerDDLLockResponse {
+    bool result = 1;
+    string msg = 2;
+    repeated CommonWorkerResponse workers = 3;
+}
+
+// SwitchWorkerRelayMasterRequest represents a request for some dm-workers to switch relay unit's master server
+// workers: relay unit in these dm-workers need to switch master server
+message SwitchWorkerRelayMasterRequest {
+    repeated string workers = 1;
+}
+
+message SwitchWorkerRelayMasterResponse {
     bool result = 1;
     string msg = 2;
     repeated CommonWorkerResponse workers = 3;

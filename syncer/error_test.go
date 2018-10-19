@@ -19,6 +19,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	. "github.com/pingcap/check"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	tmysql "github.com/pingcap/tidb/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 )
@@ -56,7 +57,7 @@ func (s *testSyncerSuite) TestIsRetryableError(c *C) {
 
 func (s *testSyncerSuite) TestSpecificError(c *C) {
 	err := newMysqlErr(tmysql.ErrNoSuchThread, "Unknown thread id: 111")
-	c.Assert(isNoSuchThreadError(err), Equals, true)
+	c.Assert(utils.IsNoSuchThreadError(err), Equals, true)
 
 	err = newMysqlErr(tmysql.ErrMasterFatalErrorReadingBinlog, "binlog purged error")
 	c.Assert(isBinlogPurgedError(err), Equals, true)

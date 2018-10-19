@@ -16,13 +16,13 @@ package syncer
 import (
 	"database/sql"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	tmysql "github.com/pingcap/tidb/mysql"
 	"github.com/siddontang/go-mysql/mysql"
 )
@@ -407,60 +407,13 @@ func hasAnsiQuotesMode(db *sql.DB) (bool, error) {
 
 // getSQLMode returns sql_mode.
 func getSQLMode(db *sql.DB) (tmysql.SQLMode, error) {
-	sqlMode, err := getGlobalVariable(db, "sql_mode")
+	sqlMode, err := utils.GetGlobalVariable(db, "sql_mode")
 	if err != nil {
 		return tmysql.ModeNone, errors.Trace(err)
 	}
 
 	mode, err := tmysql.GetSQLMode(sqlMode)
 	return mode, errors.Trace(err)
-}
-
-func getServerUUID(db *sql.DB) (string, error) {
-	serverUUID, err := getGlobalVariable(db, "server_uuid")
-	return serverUUID, errors.Trace(err)
-}
-
-func getServerID(db *sql.DB) (int64, error) {
-	serverIDStr, err := getGlobalVariable(db, "server_id")
-	if err != nil {
-		return 0, errors.Trace(err)
-	}
-
-	serverID, err := strconv.ParseInt(serverIDStr, 10, 64)
-	return serverID, errors.Trace(err)
-}
-
-func getGlobalVariable(db *sql.DB, variable string) (value string, err error) {
-	query := fmt.Sprintf("SHOW GLOBAL VARIABLES LIKE '%s'", variable)
-	rows, err := db.Query(query)
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-	defer rows.Close()
-
-	// Show an example.
-	/*
-		mysql> SHOW GLOBAL VARIABLES LIKE "binlog_format";
-		+---------------+-------+
-		| Variable_name | Value |
-		+---------------+-------+
-		| binlog_format | ROW   |
-		+---------------+-------+
-	*/
-
-	for rows.Next() {
-		err = rows.Scan(&variable, &value)
-		if err != nil {
-			return "", errors.Trace(err)
-		}
-	}
-
-	if rows.Err() != nil {
-		return "", errors.Trace(rows.Err())
-	}
-
-	return value, nil
 }
 
 func countBinaryLogsSize(fromFile mysql.Position, db *sql.DB) (int64, error) {
@@ -505,9 +458,4 @@ func getBinaryLogs(db *sql.DB) ([]mysql.Position, error) {
 		return nil, errors.Trace(rows.Err())
 	}
 	return files, nil
-}
-
-func killConn(db *sql.DB, connID uint32) error {
-	_, err := db.Exec(fmt.Sprintf("KILL %d", connID))
-	return errors.Trace(err)
 }

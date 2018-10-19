@@ -1,6 +1,7 @@
 package streamer
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -17,6 +18,8 @@ var (
 	ErrInvalidBinlogFilename = errors.New("invalid binlog file name")
 	// ErrEmptyRelayDir means error about empty relay dir.
 	ErrEmptyRelayDir = errors.New("empty relay dir")
+	// binlog file name, base + `.` + seq
+	baseSeqSeparator = "."
 )
 
 func collectBinlogFiles(dirpath string, firstFile string) ([]string, error) {
@@ -42,19 +45,23 @@ func collectBinlogFiles(dirpath string, firstFile string) ([]string, error) {
 	}
 
 	for _, f := range files {
+		if f == utils.MetaFilename {
+			log.Debugf("[streamer] skip meta file %s", f)
+			continue
+		}
 		// check prefix
 		if !strings.HasPrefix(f, ff.baseName) {
-			log.Warnf("collecting binlog file, ignore invalid file %s", f)
+			log.Warnf("[streamer] collecting binlog file, ignore invalid file %s", f)
 			continue
 		}
 		parsed, err := parseBinlogFile(f)
 		if err != nil {
-			log.Warnf("collecting binlog file, ignore invalid file %s, err %v", f, err)
+			log.Warnf("[streamer] collecting binlog file, ignore invalid file %s, err %v", f, err)
 			continue
 		}
 		// check suffix
 		if !allAreDigits(parsed.seq) {
-			log.Warnf("collecting binlog file, ignore invalid file %s", f)
+			log.Warnf("[streamer] collecting binlog file, ignore invalid file %s", f)
 			continue
 		}
 		if !parsed.BiggerOrEqualThan(ff) {
@@ -84,9 +91,9 @@ func GetBinlogFileIndex(filename string) (float64, error) {
 
 func parseBinlogFile(filename string) (*binlogFile, error) {
 	// chendahui: I found there will always be only one dot in the mysql binlog name.
-	parts := strings.Split(filename, ".")
+	parts := strings.Split(filename, baseSeqSeparator)
 	if len(parts) != 2 {
-		log.Warnf("filename %s not valid", filename)
+		log.Warnf("[streamer] filename %s not valid", filename)
 		return nil, ErrInvalidBinlogFilename
 	}
 
@@ -94,6 +101,10 @@ func parseBinlogFile(filename string) (*binlogFile, error) {
 		baseName: parts[0],
 		seq:      parts[1],
 	}, nil
+}
+
+func constructBinlogFilename(baseName, seq string) string {
+	return fmt.Sprintf("%s%s%s", baseName, baseSeqSeparator, seq)
 }
 
 type binlogFile struct {

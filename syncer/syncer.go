@@ -364,7 +364,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		}
 		s.syncer = replication.NewBinlogSyncer(s.syncCfg)
 	} else if s.binlogType == LocalBinlog {
-		s.localReader = streamer.NewBinlogReader(&streamer.BinlogReaderConfig{BinlogDir: s.cfg.RelayDir})
+		s.localReader = streamer.NewBinlogReader(&streamer.BinlogReaderConfig{RelayDir: s.cfg.RelayDir})
 	}
 	// create new done chan
 	s.done = make(chan struct{})
@@ -442,10 +442,6 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		IsCanceled: isCanceled,
 		Errors:     errs,
 	}
-}
-
-func (s *Syncer) getServerUUID() (string, error) {
-	return getServerUUID(s.fromDB.db)
 }
 
 func (s *Syncer) getMasterStatus() (mysql.Position, gtid.Set, error) {
@@ -874,7 +870,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				shardingSyncer = replication.NewBinlogSyncer(s.shardingSyncCfg)
 				shardingStreamer, err = s.getBinlogStreamer(shardingSyncer, shardingReSync.currPos)
 			} else if s.binlogType == LocalBinlog {
-				shardingReader = streamer.NewBinlogReader(&streamer.BinlogReaderConfig{BinlogDir: s.cfg.RelayDir})
+				shardingReader = streamer.NewBinlogReader(&streamer.BinlogReaderConfig{RelayDir: s.cfg.RelayDir})
 				shardingStreamer, err = s.getBinlogStreamer(shardingReader, shardingReSync.currPos)
 			}
 			log.Debugf("[syncer] start using a  special streamer to re-sync DMLs for sharding group %+v", shardingReSync)
@@ -1758,10 +1754,10 @@ func (s *Syncer) closeBinlogSyncer(syncer *replication.BinlogSyncer) error {
 	lastSlaveConnectionID := syncer.LastConnectionID()
 	defer syncer.Close()
 	if lastSlaveConnectionID > 0 {
-		err := killConn(s.fromDB.db, lastSlaveConnectionID)
+		err := utils.KillConn(s.fromDB.db, lastSlaveConnectionID)
 		if err != nil {
 			log.Errorf("[syncer] kill last connection %d err %v", lastSlaveConnectionID, err)
-			if !isNoSuchThreadError(err) {
+			if !utils.IsNoSuchThreadError(err) {
 				return errors.Trace(err)
 			}
 		}

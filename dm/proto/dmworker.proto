@@ -22,6 +22,9 @@ service Worker {
     // BreakDDLLock request a dm-worker to break a DDL lock
     // including remove DDLLockInfo and/or execute/skip DDL
     rpc BreakDDLLock (BreakDDLLockRequest) returns (CommonWorkerResponse) {}
+
+    // SwitchRelayMaster request a dm-worker's relay unit switching to another master server
+    rpc SwitchRelayMaster (SwitchRelayMasterRequest) returns (CommonWorkerResponse) {}
 }
 
 message StartSubTaskRequest {
@@ -171,9 +174,11 @@ message SyncStatus {
 message RelayStatus {
     string masterBinlog = 1;
     string masterBinlogGtid = 2;
-    string relayBinlog = 3;
-    string relayBinlogGtid = 4;
-    bool closed = 5;
+    string relaySubDir = 3;
+    string relayBinlog = 4;
+    string relayBinlogGtid = 5;
+    bool relayCatchUpMaster = 6;
+    bool closed = 7;
 }
 
 // SubTaskStatus represents status for a sub task
@@ -260,14 +265,14 @@ message DDLLockInfo {
     string ID = 2; // DDL lock ID
 }
 
-// ExecDDLRequest represents a reqeust for a dm-worker to execute (or ignore) a DDL
+// ExecDDLRequest represents a request for a dm-worker to execute (or ignore) a DDL
 message ExecDDLRequest {
     string task = 1; // sub task's name
     string lockID = 2; // DDL lock ID
     bool exec = 3; // true for execute, false for ignore (skip)
 }
 
-// BreakDDLLockRequest represents a reqeust for a dm-worker to force to break the DDL lock
+// BreakDDLLockRequest represents a request for a dm-worker to force to break the DDL lock
 // task: sub task's name
 // removeLockID: DDLLockInfo's ID which need to remove
 // execDDL: execute DDL which is blocking
@@ -278,4 +283,8 @@ message BreakDDLLockRequest {
     string removeLockID = 2;
     bool execDDL = 3;
     bool skipDDL = 4;
+}
+
+// SwitchRelayMasterRequest represents a request for switching a dm-worker's relay unit to another master server
+message SwitchRelayMasterRequest {
 }

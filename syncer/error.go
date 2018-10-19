@@ -68,10 +68,6 @@ func isBinlogPurgedError(err error) bool {
 	return isMysqlError(err, tmysql.ErrMasterFatalErrorReadingBinlog)
 }
 
-func isNoSuchThreadError(err error) bool {
-	return isMysqlError(err, tmysql.ErrNoSuchThread)
-}
-
 func isMysqlError(err error, code uint16) bool {
 	err = originError(err)
 	mysqlErr, ok := err.(*mysql.MySQLError)

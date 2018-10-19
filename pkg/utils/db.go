@@ -2,6 +2,8 @@ package utils
 
 import (
 	"database/sql"
+	"fmt"
+	"strconv"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
@@ -70,11 +72,85 @@ func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, erro
 	return binlogPos, gs, nil
 }
 
-// IsMySQLError checks whether err is IsMySQLError error
+// GetGlobalVariable gets server's global variable
+func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
+	query := fmt.Sprintf("SHOW GLOBAL VARIABLES LIKE '%s'", variable)
+	rows, err := db.Query(query)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	defer rows.Close()
+
+	// Show an example.
+	/*
+		mysql> SHOW GLOBAL VARIABLES LIKE "binlog_format";
+		+---------------+-------+
+		| Variable_name | Value |
+		+---------------+-------+
+		| binlog_format | ROW   |
+		+---------------+-------+
+	*/
+
+	for rows.Next() {
+		err = rows.Scan(&variable, &value)
+		if err != nil {
+			return "", errors.Trace(err)
+		}
+	}
+
+	if rows.Err() != nil {
+		return "", errors.Trace(rows.Err())
+	}
+
+	return value, nil
+}
+
+// GetServerID gets server's `server_id`
+func GetServerID(db *sql.DB) (int64, error) {
+	serverIDStr, err := GetGlobalVariable(db, "server_id")
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+
+	serverID, err := strconv.ParseInt(serverIDStr, 10, 64)
+	return serverID, errors.Trace(err)
+}
+
+// GetMariaDBGtidDomainID gets MariaDB server's `gtid_domain_id`
+func GetMariaDBGtidDomainID(db *sql.DB) (uint32, error) {
+	domainIDStr, err := GetGlobalVariable(db, "gtid_domain_id")
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+
+	domainID, err := strconv.ParseUint(domainIDStr, 10, 32)
+	return uint32(domainID), errors.Trace(err)
+}
+
+// GetServerUUID gets server's `server_uuid`
+func GetServerUUID(db *sql.DB) (string, error) {
+	serverUUID, err := GetGlobalVariable(db, "server_uuid")
+	return serverUUID, errors.Trace(err)
+}
+
+// KillConn kills the DB connection (thread in mysqld)
+func KillConn(db *sql.DB, connID uint32) error {
+	_, err := db.Exec(fmt.Sprintf("KILL %d", connID))
+	return errors.Trace(err)
+}
+
+// IsMySQLError checks whether err is MySQLError error
 func IsMySQLError(err error, code uint16) bool {
 	err = errors.Cause(err)
 	e, ok := err.(*mysql.MySQLError)
 	return ok && e.Number == code
+}
+
+// IsErrBinlogPurged checks whether err is BinlogPurged error
+func IsErrBinlogPurged(err error) bool {
+	err = errors.Cause(err)
+	e, ok := err.(*gmysql.MyError)
+	return ok && e.Code == tmysql.ErrMasterFatalErrorReadingBinlog
 }
 
 // IsErrTableNotExists checks whether err is TableNotExists error
@@ -85,4 +161,9 @@ func IsErrTableNotExists(err error) bool {
 // IsErrDupEntry checks whether err is DupEntry error
 func IsErrDupEntry(err error) bool {
 	return IsMySQLError(err, tmysql.ErrDupEntry)
+}
+
+// IsNoSuchThreadError checks whether err is NoSuchThreadError
+func IsNoSuchThreadError(err error) bool {
+	return IsMySQLError(err, tmysql.ErrNoSuchThread)
 }

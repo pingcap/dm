@@ -646,6 +646,58 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb
 	return resp, nil
 }
 
+// SwitchWorkerRelayMaster implements MasterServer.SwitchWorkerRelayMaster
+func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWorkerRelayMasterRequest) (*pb.SwitchWorkerRelayMasterResponse, error) {
+	log.Infof("[server] receive SwitchWorkerRelayMaster request %+v", req)
+
+	workerReq := &pb.SwitchRelayMasterRequest{}
+
+	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Workers))
+	var wg sync.WaitGroup
+	for _, worker := range req.Workers {
+		wg.Add(1)
+		go func(worker string) {
+			defer wg.Done()
+			cli, ok := s.workerClients[worker]
+			if !ok {
+				workerRespCh <- &pb.CommonWorkerResponse{
+					Result: false,
+					Worker: worker,
+					Msg:    fmt.Sprintf("worker %s relevant worker-client not found", worker),
+				}
+				return
+			}
+			workerResp, err := cli.SwitchRelayMaster(ctx, workerReq)
+			if err != nil {
+				workerResp = &pb.CommonWorkerResponse{
+					Result: false,
+					Msg:    errors.ErrorStack(err),
+				}
+			}
+			workerResp.Worker = worker
+			workerRespCh <- workerResp
+		}(worker)
+	}
+	wg.Wait()
+
+	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(req.Workers))
+	for len(workerRespCh) > 0 {
+		workerResp := <-workerRespCh
+		workerRespMap[workerResp.Worker] = workerResp
+	}
+
+	sort.Strings(req.Workers)
+	workerResps := make([]*pb.CommonWorkerResponse, 0, len(req.Workers))
+	for _, worker := range req.Workers {
+		workerResps = append(workerResps, workerRespMap[worker])
+	}
+
+	return &pb.SwitchWorkerRelayMasterResponse{
+		Result:  true,
+		Workers: workerResps,
+	}, nil
+}
+
 // RefreshWorkerTasks implements MasterServer.RefreshWorkerTasks
 func (s *Server) RefreshWorkerTasks(ctx context.Context, req *pb.RefreshWorkerTasksRequest) (*pb.RefreshWorkerTasksResponse, error) {
 	log.Infof("[server] receive RefreshWorkerTasks request %+v", req)

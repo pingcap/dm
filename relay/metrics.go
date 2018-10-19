@@ -12,21 +12,21 @@ import (
 )
 
 var (
-	relayLogPosGauge = prometheus.NewGauge(
+	relayLogPosGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "relay",
 			Name:      "binlog_pos",
 			Help:      "current binlog pos in current binlog file",
-		})
+		}, []string{"node", "uuid"})
 
-	relayLogFileGauge = prometheus.NewGauge(
+	relayLogFileGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "relay",
 			Name:      "binlog_file",
 			Help:      "current binlog file index",
-		})
+		}, []string{"node", "uuid"})
 
 	// should alert if avaiable space < 1G
 	relayLogSpaceGauge = prometheus.NewGaugeVec(

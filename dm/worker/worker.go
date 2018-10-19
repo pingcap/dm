@@ -62,7 +62,7 @@ func NewWorker(cfg *Config) *Worker {
 
 	relayCfg := &relay.Config{
 		EnableGTID:  cfg.EnableGTID,
-		AutoFixGTID: false,
+		AutoFixGTID: cfg.AutoFixGTID,
 		Flavor:      cfg.Flavor,
 		MetaFile:    cfg.MetaFile,
 		RelayDir:    cfg.RelayDir,
@@ -447,4 +447,13 @@ func (w *Worker) BreakDDLLock(ctx context.Context, req *pb.BreakDDLLockRequest) 
 	}
 
 	return st.ExecuteDDL(ctx, execReq)
+}
+
+// SwitchRelayMaster switches relay unit's master server
+func (w *Worker) SwitchRelayMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) error {
+	if w.closed.Get() == closedTrue {
+		return errors.NotValidf("worker already closed")
+	}
+
+	return errors.Trace(w.relay.SwitchMaster(ctx, req))
 }

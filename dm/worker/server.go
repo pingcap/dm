@@ -320,3 +320,20 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSubTaskSQLsReques
 	resp.Result = true
 	return resp, nil
 }
+
+// SwitchRelayMaster implements WorkerServer.SwitchRelayMaster
+func (s *Server) SwitchRelayMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) (*pb.CommonWorkerResponse, error) {
+	log.Infof("[server] receive SwitchRelayMaster request %+v", req)
+
+	resp := &pb.CommonWorkerResponse{
+		Result: true,
+	}
+	err := s.worker.SwitchRelayMaster(ctx, req)
+	if err != nil {
+		resp.Result = false
+		resp.Msg = errors.ErrorStack(err)
+		log.Errorf("[worker] %v SwitchRelayMaster error %v", req, errors.ErrorStack(err))
+	}
+
+	return resp, nil
+}
