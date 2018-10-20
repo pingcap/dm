@@ -1,6 +1,5 @@
 task-name: test
 task-mode: all
-flavor: mysql
 meta-schema: dm_meta
 remove-meta: false
 disable-heartbeat: true
@@ -17,7 +16,6 @@ mysql-instances:
       user: root
       password: "1234"
     instance-id: instance118-4306
-    server-id: 101
     meta:
       binlog-name: binlog-00001
       binlog-pos: 4
@@ -34,7 +32,6 @@ mysql-instances:
       user: root
       password: "1234"
     instance-id: instance118-5306
-    server-id: 102
     meta:
       binlog-name: binlog-00001
       binlog-pos: 320
@@ -56,7 +53,6 @@ mysql-instances:
       worker-count: 32
       batch: 2000
       max-retry: 200
-      enable-gtid: false
       disable-detect: false
       safe-mode: false
 mydumpers:
@@ -76,7 +72,6 @@ syncers:
     worker-count: 16
     batch: 1000
     max-retry: 100
-    enable-gtid: false
     disable-detect: false
     safe-mode: false
 ignored-tables: {}

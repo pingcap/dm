@@ -94,7 +94,6 @@ func (s *ShardingGroup) TablesCount() int {
 type DataMigrationConfig struct {
 	TaskName         string `yaml:"task-name" toml:"task-name" json:"task-name"`
 	TaskMode         string `yaml:"task-mode" toml:"task-mode" json:"task-mode"`
-	Flavor           string `yaml:"flavor" toml:"flavor" json:"flavor"`
 	MetaSchema       string `yaml:"meta-schema" toml:"meta-schema" json:"meta-schema"`
 	RemoveMeta       bool   `yaml:"remove-meta" toml:"remove-meta" json:"remove-meta"`
 	DisableHeartbeat bool   `yaml:"disable-heartbeat" toml:"disable-heartbeat" json:"disable-heartbeat"`
@@ -161,7 +160,6 @@ func (c *DataMigrationConfig) GenerateDMTask() (*dm.TaskConfig, error) {
 	task := &dm.TaskConfig{
 		Name:             c.TaskName,
 		TaskMode:         c.TaskMode,
-		Flavor:           c.Flavor,
 		MetaSchema:       c.MetaSchema,
 		RemoveMeta:       c.RemoveMeta,
 		DisableHeartbeat: c.DisableHeartbeat,
@@ -290,7 +288,6 @@ func (c *DataMigrationConfig) DecodeFromTask(task *dm.TaskConfig) error {
 
 	c.TaskName = task.Name
 	c.TaskMode = task.TaskMode
-	c.Flavor = task.Flavor
 	c.TargetDB = new(dm.DBConfig)
 	c.OnlineDDLScheme = task.OnlineDDLScheme
 	c.MySQLInstances = make(map[string]*dm.MySQLInstance, len(task.MySQLInstances))

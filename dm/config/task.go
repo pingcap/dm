@@ -9,7 +9,6 @@ import (
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
-	"github.com/siddontang/go-mysql/mysql"
 	"gopkg.in/yaml.v2"
 
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
@@ -62,7 +61,6 @@ func (m *Meta) Verify() error {
 type MySQLInstance struct {
 	Config             *DBConfig `yaml:"config"`
 	InstanceID         string    `yaml:"instance-id"`
-	ServerID           int       `yaml:"server-id"`
 	Meta               *Meta     `yaml:"meta"`
 	FilterRules        []string  `yaml:"filter-rules"`
 	ColumnMappingRules []string  `yaml:"column-mapping-rules"`
@@ -84,9 +82,6 @@ func (m *MySQLInstance) Verify() error {
 	}
 	if len(m.InstanceID) == 0 {
 		return errors.Errorf("instance-id must be set")
-	}
-	if m.ServerID < 1 {
-		return errors.NotValidf("server-id should from 1 to 2^32 − 1, but set with %d", m.ServerID)
 	}
 
 	if err := m.Meta.Verify(); err != nil {
@@ -207,7 +202,6 @@ type TaskConfig struct {
 
 	Name       string `yaml:"name"`
 	TaskMode   string `yaml:"task-mode"`
-	Flavor     string `yaml:"flavor"`
 	IsSharding bool   `yaml:"is-sharding"`
 	// we store detail status in meta
 	// don't save configuration into it
@@ -299,9 +293,6 @@ func (c *TaskConfig) adjust() error {
 	if c.TaskMode != ModeFull && c.TaskMode != ModeIncrement && c.TaskMode != ModeAll {
 		return errors.New("please specify right task-mode, support `full`, `incremental`, `all`")
 	}
-	if c.Flavor != mysql.MySQLFlavor && c.Flavor != mysql.MariaDBFlavor {
-		return errors.New("please specify right mysql flavor version, support `mysql`, `mariadb`")
-	}
 
 	if c.OnlineDDLScheme != "" && c.OnlineDDLScheme != PT {
 		return errors.NotSupportedf("online scheme %s", c.OnlineDDLScheme)
@@ -316,7 +307,6 @@ func (c *TaskConfig) adjust() error {
 	}
 
 	iids := make(map[string]int) // instance-id -> instance-index
-	sids := make(map[int]int)    // server-id -> instance-index
 	for i, inst := range c.MySQLInstances {
 		if err := inst.Verify(); err != nil {
 			return errors.Annotatef(err, "mysql-instance: %d", i)
@@ -325,10 +315,6 @@ func (c *TaskConfig) adjust() error {
 			return errors.Errorf("mysql-instance (%d) and (%d) have same instance-id (%s)", iid, i, inst.InstanceID)
 		}
 		iids[inst.InstanceID] = i
-		if sid, ok := sids[inst.ServerID]; ok {
-			return errors.Errorf("mysql-instance (%d) and (%d) have same server-id (%d)", sid, i, inst.ServerID)
-		}
-		sids[inst.ServerID] = i
 
 		switch c.TaskMode {
 		case ModeFull, ModeAll:
@@ -418,7 +404,6 @@ func (c *TaskConfig) SubTaskConfigs() []*SubTaskConfig {
 		cfg.OnlineDDLScheme = c.OnlineDDLScheme
 		cfg.Name = c.Name
 		cfg.Mode = c.TaskMode
-		cfg.Flavor = c.Flavor
 		cfg.CaseSensitive = c.CaseSensitive
 		cfg.BinlogType = "local" // let's force syncer to replay local binlog.
 		cfg.MetaSchema = c.MetaSchema
@@ -430,7 +415,6 @@ func (c *TaskConfig) SubTaskConfigs() []*SubTaskConfig {
 		cfg.To = *c.TargetDB
 
 		cfg.InstanceID = inst.InstanceID
-		cfg.ServerID = inst.ServerID
 
 		cfg.RouteRules = make([]*router.TableRule, len(inst.RouteRules))
 		for j, name := range inst.RouteRules {

@@ -1,7 +1,6 @@
 ---
 name: test # global unique
 task-mode: all  # full/incremental/all
-flavor: mysql  # mysql/mariadb
 is-sharding: true  # whether multi dm-worker do one sharding job
 meta-schema: "dm_meta"  # meta schema in downstreaming database to store meta informaton of dm
 remove-meta: false  # remove meta from downstreaming database, now we delete checkpoint and online ddl information
@@ -21,7 +20,6 @@ mysql-instances:             # one or more source database, config more source d
       user: "root"
       password: "1234"
     instance-id: "instance118-4306" # unique in all instances, used as id when save checkpoints, configs, etc.
-    server-id: 101           # unique in all instances
 
     # binlog pos used to as start pos for syncer, for different task-mode, this maybe used or not
     # `full` / `all`:
@@ -61,7 +59,6 @@ mysql-instances:             # one or more source database, config more source d
       user: "root"
       password: "1234"
     instance-id: "instance118-5306"
-    server-id: 102
     meta:
       binlog-name: binlog-00001
       binlog-pos: 320

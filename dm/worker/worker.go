@@ -164,16 +164,9 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 		return errors.Errorf("sub task with name %v already started", cfg.Name)
 	}
 
-	// copy log configurations, mydumper unit use it
-	cfg.LogLevel = w.cfg.LogLevel
-	cfg.LogFile = w.cfg.LogFile
-	cfg.LogRotate = w.cfg.LogRotate
+	// copy some config item from dm-worker's config
+	w.copyConfigFromWorker(cfg)
 
-	// NOTE: use worker's cfg.From, cfg.ServerID
-	cfg.From = w.cfg.From
-	cfg.ServerID = w.cfg.ServerID
-	// syncer relay-dir should same with dm-worker relay-dir
-	cfg.RelayDir = w.cfg.RelayDir
 	log.Infof("[worker] starting sub task with config: %v", cfg)
 
 	// try decrypt password for To DB
@@ -189,8 +182,6 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 	}
 	cfg.To.Password = pswdTo
 
-	// syncer relay-dir should same with dm-worker relay-dir
-	cfg.RelayDir = w.cfg.RelayDir
 	st := NewSubTask(cfg)
 	err = st.Init()
 	if err != nil {
@@ -201,6 +192,24 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 
 	st.Run()
 	return nil
+}
+
+// copyConfigFromWorker copies config items from dm-worker to sub task
+func (w *Worker) copyConfigFromWorker(cfg *config.SubTaskConfig) {
+	cfg.From = w.cfg.From
+
+	cfg.Flavor = w.cfg.Flavor
+	cfg.ServerID = w.cfg.ServerID
+	cfg.RelayDir = w.cfg.RelayDir
+	cfg.EnableGTID = w.cfg.EnableGTID
+
+	// we can remove this from SubTaskConfig later, because syncer will always read from relay
+	cfg.AutoFixGTID = w.cfg.AutoFixGTID
+
+	// log config items, mydumper unit use it
+	cfg.LogLevel = w.cfg.LogLevel
+	cfg.LogFile = w.cfg.LogFile
+	cfg.LogRotate = w.cfg.LogRotate
 }
 
 // StopSubTask stops a running sub task
