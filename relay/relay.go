@@ -247,6 +247,41 @@ func (r *Relay) process(parentCtx context.Context) error {
 			// when RawModeEnabled not true, XIDEvent will be parsed
 			lastPos.Pos = e.Header.LogPos
 			lastGTID.Set(ev.GSet)
+		case *replication.GenericEvent:
+			// handle some un-parsed events
+			switch e.Header.EventType {
+			case replication.HEARTBEAT_EVENT:
+				// skip artificial heartbeat event
+				// ref: https://dev.mysql.com/doc/internals/en/heartbeat-event.html
+				continue
+			case replication.PREVIOUS_GTIDS_EVENT:
+				// when restarting the syncing (with GTID mode enabled), an obsolete `PreviousGTIDsEvent` event may received
+				// eg. the end_log_pos has reached `1190` previously, after restarted, a PreviousGTIDsEvent event with `194` end_log_pos may received
+				// I searched the docs and the code of MySQL, but got nothing
+				// when running, the observed events order is:
+				// 1. (fake) RotateEvent
+				// 2. FormatDescriptionEvent
+				// 3. (obsolete) PreviousGTIDsEvent
+				// 4. other events
+				if r.fd != nil {
+					fi, err := r.fd.Stat()
+					if err != nil {
+						relayLogWriteErrorCounter.Inc()
+						return errors.Annotatef(err, "compare relay log file size with PreviousGTIDsEvent %+v", e.Header)
+					}
+					if e.Header.LogPos < uint32(fi.Size()) {
+						log.Warnf("[relay] skip obsolete event %+v", e.Header)
+						continue
+					}
+				}
+			}
+		default:
+			if e.Header.Flags&0x0020 != 0 {
+				// skip events with LOG_EVENT_ARTIFICIAL_F flag set
+				// ref: https://dev.mysql.com/doc/internals/en/binlog-event-flag.html
+				log.Warnf("[relay] skip artificial event %+v", e.Header)
+				continue
+			}
 		}
 
 		if !r.cfg.EnableGTID {
