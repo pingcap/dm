@@ -75,7 +75,6 @@ func NewRelay(cfg *Config) *Relay {
 	}
 	return &Relay{
 		cfg:       cfg,
-		syncer:    replication.NewBinlogSyncer(syncerCfg),
 		syncerCfg: syncerCfg,
 		meta:      NewLocalMeta(cfg.Flavor, cfg.RelayDir),
 	}
@@ -109,6 +108,8 @@ func (r *Relay) Init() error {
 
 // Process implements the dm.Unit interface.
 func (r *Relay) Process(ctx context.Context, pr chan pb.ProcessResult) {
+	r.syncer = replication.NewBinlogSyncer(r.syncerCfg)
+
 	errs := make([]*pb.ProcessError, 0, 1)
 	err := r.process(ctx)
 	if err != nil && errors.Cause(err) != replication.ErrSyncClosed {
@@ -136,15 +137,14 @@ func (r *Relay) Process(ctx context.Context, pr chan pb.ProcessResult) {
 // before call this from dmctl, you must ensure that relay catches up previous master
 // we can not check this automatically in this func because master already changed
 // switch master server steps:
-//   1. use dmctl to pause relay, TODO zxc
+//   1. use dmctl to pause relay
 //   2. ensure relay catching up current master server (use `query-status`)
 //   3. switch master server for upstream
 //      * change relay's master config, TODO
 //      * change master behind VIP
 //   4. use dmctl to switch relay's master server (use `switch-relay-master`)
-//   5. use dmctl to resume relay, TODO zxc
+//   5. use dmctl to resume relay
 func (r *Relay) SwitchMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) error {
-	// TODO zxc: check relay's stage when Pause / Resume supported
 	if !r.cfg.EnableGTID {
 		return errors.New("can only switch relay's master server when GTID enabled")
 	}
@@ -586,6 +586,21 @@ func (r *Relay) IsClosed() bool {
 	return r.closed.Get()
 }
 
+// stopSync stops syncing, now it used by Close and Pause
+func (r *Relay) stopSync() {
+	if r.syncer != nil {
+		r.closeBinlogSyncer(r.syncer)
+		r.syncer = nil
+	}
+	if r.fd != nil {
+		r.fd.Close()
+		r.fd = nil
+	}
+	if err := r.meta.Flush(); err != nil {
+		log.Errorf("[relay] flush checkpoint error %v", errors.ErrorStack(err))
+	}
+}
+
 // Close implements the dm.Unit interface.
 func (r *Relay) Close() {
 	r.Lock()
@@ -594,19 +609,14 @@ func (r *Relay) Close() {
 		return
 	}
 	log.Info("[relay] relay unit is closing")
-	if r.syncer != nil {
-		r.closeBinlogSyncer(r.syncer)
-		r.syncer = nil
-	}
-	if r.fd != nil {
-		r.fd.Close()
-	}
+
+	r.stopSync()
+
 	if r.db != nil {
 		r.db.Close()
+		r.db = nil
 	}
-	if err := r.meta.Flush(); err != nil {
-		log.Errorf("[relay] flush checkpoint error %v", errors.ErrorStack(err))
-	}
+
 	r.closed.Set(true)
 	log.Info("[relay] relay unit closed")
 }
@@ -671,12 +681,17 @@ func (r *Relay) IsFreshTask() (bool, error) {
 
 // Pause pauses the process, it can be resumed later
 func (r *Relay) Pause() {
-	// Note: will not implemented
+	if r.IsClosed() {
+		log.Warn("[relay] try to pause, but already closed")
+		return
+	}
+
+	r.stopSync()
 }
 
 // Resume resumes the paused process
 func (r *Relay) Resume(ctx context.Context, pr chan pb.ProcessResult) {
-	// Note: will not implementted
+	// do nothing now, re-process called `Process` from outer directly
 }
 
 // Update implements Unit.Update

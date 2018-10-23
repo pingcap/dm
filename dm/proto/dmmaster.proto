@@ -26,6 +26,9 @@ service Master {
     // SwitchWorkerRelayMaster requests some dm-workers to switch relay unit's master server
     rpc SwitchWorkerRelayMaster(SwitchWorkerRelayMasterRequest) returns (SwitchWorkerRelayMasterResponse) {}
 
+    // OperateWorkerRelayTask requests some dm-workers to operate relay unit
+    rpc OperateWorkerRelayTask (OperateWorkerRelayRequest) returns (OperateWorkerRelayResponse) {}
+
     // used by dmctl, to force refresh the task -> workers mapper
     // it should be used rarely only when task -> workers mapper corrupted
     rpc RefreshWorkerTasks (RefreshWorkerTasksRequest) returns (RefreshWorkerTasksResponse) {}
@@ -167,6 +170,19 @@ message SwitchWorkerRelayMasterResponse {
     bool result = 1;
     string msg = 2;
     repeated CommonWorkerResponse workers = 3;
+}
+
+// OperateWorkerRelayRequest represents a request for some dm-workers to operate relay unit
+message OperateWorkerRelayRequest {
+    RelayOp op = 1; // Stop / Pause / Resume
+    repeated string workers = 2;
+}
+
+message OperateWorkerRelayResponse {
+    RelayOp op = 1;
+    bool result = 2;
+    string msg = 3;
+    repeated OperateRelayResponse workers = 4;
 }
 
 

@@ -279,6 +279,7 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 			cli, ok := s.workerClients[worker]
 			if !ok {
 				workerResp := &pb.OperateSubTaskResponse{
+					Op:     req.Op,
 					Result: false,
 					Worker: worker,
 					Msg:    fmt.Sprintf("%s relevant worker-client not found", worker),
@@ -293,6 +294,7 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 					Msg:    errors.ErrorStack(err),
 				}
 			}
+			workerResp.Op = req.Op
 			workerResp.Worker = worker
 			workerRespCh <- workerResp
 		}(worker)
@@ -693,6 +695,61 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 	}
 
 	return &pb.SwitchWorkerRelayMasterResponse{
+		Result:  true,
+		Workers: workerResps,
+	}, nil
+}
+
+// OperateWorkerRelayTask implements MasterServer.OperateWorkerRelayTask
+func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWorkerRelayRequest) (*pb.OperateWorkerRelayResponse, error) {
+	log.Infof("[server] receive OperateWorkerRelayTask request %+v", req)
+
+	workerReq := &pb.OperateRelayRequest{Op: req.Op}
+
+	workerRespCh := make(chan *pb.OperateRelayResponse, len(req.Workers))
+	var wg sync.WaitGroup
+	for _, worker := range req.Workers {
+		wg.Add(1)
+		go func(worker string) {
+			defer wg.Done()
+			cli, ok := s.workerClients[worker]
+			if !ok {
+				workerResp := &pb.OperateRelayResponse{
+					Op:     req.Op,
+					Result: false,
+					Worker: worker,
+					Msg:    fmt.Sprintf("%s relevant worker-client not found", worker),
+				}
+				workerRespCh <- workerResp
+				return
+			}
+			workerResp, err := cli.OperateRelay(ctx, workerReq)
+			if err != nil {
+				workerResp = &pb.OperateRelayResponse{
+					Result: false,
+					Msg:    errors.ErrorStack(err),
+				}
+			}
+			workerReq.Op = req.Op
+			workerResp.Worker = worker
+			workerRespCh <- workerResp
+		}(worker)
+	}
+	wg.Wait()
+
+	workerRespMap := make(map[string]*pb.OperateRelayResponse, len(req.Workers))
+	for len(workerRespCh) > 0 {
+		workerResp := <-workerRespCh
+		workerRespMap[workerResp.Worker] = workerResp
+	}
+
+	sort.Strings(req.Workers)
+	workerResps := make([]*pb.OperateRelayResponse, 0, len(req.Workers))
+	for _, worker := range req.Workers {
+		workerResps = append(workerResps, workerRespMap[worker])
+	}
+
+	return &pb.OperateWorkerRelayResponse{
 		Result:  true,
 		Workers: workerResps,
 	}, nil

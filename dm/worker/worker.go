@@ -23,7 +23,6 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
-	"github.com/pingcap/tidb-enterprise-tools/relay"
 	"github.com/siddontang/go/sync2"
 	"golang.org/x/net/context"
 )
@@ -46,38 +45,26 @@ type Worker struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	cfg      *Config
-	subTasks map[string]*SubTask
-	relay    *relay.Relay
+	cfg         *Config
+	subTasks    map[string]*SubTask
+	relayHolder *RelayHolder
 }
 
 // NewWorker creates a new Worker
 func NewWorker(cfg *Config) *Worker {
 	w := Worker{
-		cfg:      cfg,
-		subTasks: make(map[string]*SubTask),
+		cfg:         cfg,
+		subTasks:    make(map[string]*SubTask),
+		relayHolder: NewRelayHolder(cfg),
 	}
 	w.closed.Set(closedTrue) // not start yet
 	w.ctx, w.cancel = context.WithCancel(context.Background())
-
-	relayCfg := &relay.Config{
-		EnableGTID:  cfg.EnableGTID,
-		AutoFixGTID: cfg.AutoFixGTID,
-		Flavor:      cfg.Flavor,
-		MetaFile:    cfg.MetaFile,
-		RelayDir:    cfg.RelayDir,
-		ServerID:    cfg.ServerID, // TODO: use auto-generated and unique server id?
-		Charset:     cfg.Charset,
-		From: relay.DBConfig{
-			Host:     cfg.From.Host,
-			Port:     cfg.From.Port,
-			User:     cfg.From.User,
-			Password: cfg.From.Password,
-		},
-	}
-
-	w.relay = relay.NewRelay(relayCfg)
 	return &w
+}
+
+// Init initializes the worker
+func (w *Worker) Init() error {
+	return errors.Trace(w.relayHolder.Init())
 }
 
 // Start starts working
@@ -88,32 +75,8 @@ func (w *Worker) Start() {
 
 	log.Info("[worker] start running")
 
-	w.wg.Add(1)
-	go func() {
-		defer w.wg.Done()
-
-		err := w.relay.Init()
-		if err != nil {
-			log.Errorf("relay init err %v", errors.ErrorStack(err))
-			return
-		}
-
-		pr := make(chan pb.ProcessResult, 1)
-		w.relay.Process(w.ctx, pr)
-		w.relay.Close()
-
-		var errOccurred bool
-		for len(pr) > 0 {
-			r := <-pr
-			for _, err := range r.Errors {
-				errOccurred = true
-				log.Errorf("process error with type %v:\n %v", err.Type, err.Msg)
-			}
-		}
-		if errOccurred {
-			log.Errorf("relay exits with some errors")
-		}
-	}()
+	// start relay
+	w.relayHolder.Start()
 
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -141,9 +104,8 @@ func (w *Worker) Close() {
 	}
 	w.Unlock()
 
-	if w.relay != nil {
-		w.relay.Close()
-	}
+	// close relay
+	w.relayHolder.Close()
 
 	// cancel status output ticker and wait for return
 	w.cancel()
@@ -464,5 +426,14 @@ func (w *Worker) SwitchRelayMaster(ctx context.Context, req *pb.SwitchRelayMaste
 		return errors.NotValidf("worker already closed")
 	}
 
-	return errors.Trace(w.relay.SwitchMaster(ctx, req))
+	return errors.Trace(w.relayHolder.SwitchMaster(ctx, req))
+}
+
+// OperateRelay operates relay unit
+func (w *Worker) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) error {
+	if w.closed.Get() == closedTrue {
+		return errors.NotValidf("worker already closed")
+	}
+
+	return errors.Trace(w.relayHolder.Operate(ctx, req))
 }

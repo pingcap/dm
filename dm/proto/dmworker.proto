@@ -25,6 +25,10 @@ service Worker {
 
     // SwitchRelayMaster request a dm-worker's relay unit switching to another master server
     rpc SwitchRelayMaster (SwitchRelayMasterRequest) returns (CommonWorkerResponse) {}
+
+    // OperateRelay operates relay unit
+    // differ from SwitchRelayMaster which may add more args in the future
+    rpc OperateRelay (OperateRelayRequest) returns (OperateRelayResponse) {}
 }
 
 message StartSubTaskRequest {
@@ -178,7 +182,8 @@ message RelayStatus {
     string relayBinlog = 4;
     string relayBinlogGtid = 5;
     bool relayCatchUpMaster = 6;
-    bool closed = 7;
+    Stage stage = 7;
+    ProcessResult result = 8;
 }
 
 // SubTaskStatus represents status for a sub task
@@ -287,4 +292,24 @@ message BreakDDLLockRequest {
 
 // SwitchRelayMasterRequest represents a request for switching a dm-worker's relay unit to another master server
 message SwitchRelayMasterRequest {
+}
+
+// RelayOp differs from TaskOp
+enum RelayOp {
+    InvalidRelayOp = 0;  // placeholder
+    StopRelay = 1;
+    PauseRelay = 2;
+    ResumeRelay = 3;
+}
+
+// OperateRelayRequest represents a request for operate relay unit
+message OperateRelayRequest {
+    RelayOp op = 1;
+}
+
+message OperateRelayResponse {
+    RelayOp op = 1;
+    bool result = 2;
+    string worker = 3; // worker name, set by dm-master
+    string msg = 4;
 }

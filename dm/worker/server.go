@@ -60,6 +60,11 @@ func (s *Server) Start() error {
 		return errors.Trace(err)
 	}
 
+	err = s.worker.Init()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	s.closed.Set(false)
 
 	s.wg.Add(1)
@@ -196,13 +201,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 	resp := &pb.QueryStatusResponse{
 		Result:        true,
 		SubTaskStatus: s.worker.QueryStatus(req.Name),
-	}
-	if !s.worker.relay.IsClosed() {
-		resp.RelayStatus = s.worker.relay.Status().(*pb.RelayStatus)
-	} else {
-		resp.RelayStatus = &pb.RelayStatus{
-			Closed: true,
-		}
+		RelayStatus:   s.worker.relayHolder.Status(),
 	}
 
 	if len(resp.SubTaskStatus) == 0 {
@@ -335,5 +334,25 @@ func (s *Server) SwitchRelayMaster(ctx context.Context, req *pb.SwitchRelayMaste
 		log.Errorf("[worker] %v SwitchRelayMaster error %v", req, errors.ErrorStack(err))
 	}
 
+	return resp, nil
+}
+
+// OperateRelay implements WorkerServer.OperateRelay
+func (s *Server) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) (*pb.OperateRelayResponse, error) {
+	log.Infof("[server] receive OperateRelay request %+v", req)
+
+	resp := &pb.OperateRelayResponse{
+		Op:     req.Op,
+		Result: false,
+	}
+
+	err := s.worker.OperateRelay(ctx, req)
+	if err != nil {
+		log.Errorf("[server] operate(%s) relay unit error %v", req.Op.String(), errors.ErrorStack(err))
+		resp.Msg = errors.ErrorStack(err)
+		return resp, nil
+	}
+
+	resp.Result = true
 	return resp, nil
 }

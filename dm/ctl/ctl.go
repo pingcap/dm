@@ -62,6 +62,9 @@ func Start(args []string) {
 			worker.NewSQLInjectCmd(),
 			worker.NewBreakDDLLockCmd(),
 			worker.NewSwitchRelayMasterCmd(),
+			worker.NewPauseRelayCmd(),
+			worker.NewResumeRelayCmd(),
+			//worker.NewStopRelayCmd(),
 			worker.NewCheckSubTaskCmd(),
 		)
 	} else {
@@ -82,6 +85,9 @@ func Start(args []string) {
 			master.NewUnlockDDLLockCmd(),
 			master.NewBreakDDLLockCmd(),
 			master.NewSwitchRelayMasterCmd(),
+			master.NewPauseRelayCmd(),
+			master.NewResumeRelayCmd(),
+			//master.NewStopRelayCmd(),
 			master.NewCheckTaskCmd(),
 			master.NewRestoreDataMigrationConfigCmd(),
 			master.NewGenerateTaskConfigCmd(),
