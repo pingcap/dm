@@ -33,6 +33,8 @@ var (
 
 const (
 	eventTimeout                = 1 * time.Hour
+	slaveReadTimeout            = 1 * time.Minute  // slave read binlog data timeout, ref: https://dev.mysql.com/doc/refman/8.0/en/replication-options-slave.html#sysvar_slave_net_timeout
+	masterHeartbeatPeriod       = 30 * time.Second // master server send heartbeat period: ref: `MASTER_HEARTBEAT_PERIOD` in https://dev.mysql.com/doc/refman/8.0/en/change-master-to.html
 	flushMetaInterval           = 30 * time.Second
 	binlogHeaderSize            = 4
 	showStatusConnectionTimeout = "1m"
@@ -54,15 +56,17 @@ type Relay struct {
 // NewRelay creates an instance of Relay.
 func NewRelay(cfg *Config) *Relay {
 	syncerCfg := replication.BinlogSyncerConfig{
-		ServerID:       uint32(cfg.ServerID),
-		Flavor:         cfg.Flavor,
-		Host:           cfg.From.Host,
-		Port:           uint16(cfg.From.Port),
-		User:           cfg.From.User,
-		Password:       cfg.From.Password,
-		Charset:        cfg.Charset,
-		UseDecimal:     true, // must set true. ref: https://github.com/pingcap/tidb-enterprise-tools/pull/272
-		VerifyChecksum: true,
+		ServerID:        uint32(cfg.ServerID),
+		Flavor:          cfg.Flavor,
+		Host:            cfg.From.Host,
+		Port:            uint16(cfg.From.Port),
+		User:            cfg.From.User,
+		Password:        cfg.From.Password,
+		Charset:         cfg.Charset,
+		UseDecimal:      true, // must set true. ref: https://github.com/pingcap/tidb-enterprise-tools/pull/272
+		ReadTimeout:     slaveReadTimeout,
+		HeartbeatPeriod: masterHeartbeatPeriod,
+		VerifyChecksum:  true,
 	}
 	if !cfg.EnableGTID {
 		// for rawMode(true), we only parse FormatDescriptionEvent and RotateEvent
