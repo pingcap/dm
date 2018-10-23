@@ -87,13 +87,6 @@ func (r *BinlogReader) StartSync(pos mysql.Position) (Streamer, error) {
 	}
 	r.watcher = watcher
 
-	// watch meta index file
-	err = watcher.Add(r.indexPath)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	defer watcher.Remove(r.indexPath)
-
 	// load and update UUID list
 	err = r.updateUUIDs()
 	if err != nil {
@@ -176,6 +169,12 @@ func (r *BinlogReader) onStream(s *LocalStreamer, pos mysql.Position, updatePos 
 
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		//TODO: put the implementaion of updatepos here?
+
+		if e.Header.Flags&0x0040 != 0 {
+			// now LOG_EVENT_RELAY_LOG_F is only used for events which used to fill the gap in relay log file when switching the master server
+			log.Debugf("skip event %+v created by relay writer", e.Header)
+			return nil
+		}
 
 		serverID = e.Header.ServerID // record server_id
 
@@ -315,10 +314,6 @@ func (r *BinlogReader) onStream(s *LocalStreamer, pos mysql.Position, updatePos 
 		log.Debugf("[streamer] watcher receive event %+v", event)
 
 		// TODO zxc: refine to choose different re-parse strategy according to event.Name
-		if event.Name == r.indexPath {
-			// index file changed, update again
-			r.updateUUIDs()
-		}
 		log.Debugf("[streamer] watcher receive event %+v", event)
 	}
 

@@ -3,8 +3,10 @@ package relay
 import (
 	"bytes"
 	"database/sql"
+	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path"
 	"path/filepath"
@@ -46,6 +48,7 @@ type Relay struct {
 	cfg                   *Config
 	syncer                *replication.BinlogSyncer
 	syncerCfg             replication.BinlogSyncerConfig
+	gapSyncerCfg          replication.BinlogSyncerConfig
 	meta                  Meta
 	lastSlaveConnectionID uint32
 	fd                    *os.File
@@ -68,15 +71,21 @@ func NewRelay(cfg *Config) *Relay {
 		HeartbeatPeriod: masterHeartbeatPeriod,
 		VerifyChecksum:  true,
 	}
+
+	// use 2**32 -1 - ServerID as new ServerID to fill the gap in relay log file
+	gapSyncerCfg := syncerCfg
+	gapSyncerCfg.ServerID = math.MaxUint32 - syncerCfg.ServerID
+
 	if !cfg.EnableGTID {
 		// for rawMode(true), we only parse FormatDescriptionEvent and RotateEvent
 		// if not need to support GTID mode, we can enable rawMode
 		syncerCfg.RawModeEnabled = true
 	}
 	return &Relay{
-		cfg:       cfg,
-		syncerCfg: syncerCfg,
-		meta:      NewLocalMeta(cfg.Flavor, cfg.RelayDir),
+		cfg:          cfg,
+		syncerCfg:    syncerCfg,
+		gapSyncerCfg: gapSyncerCfg,
+		meta:         NewLocalMeta(cfg.Flavor, cfg.RelayDir),
 	}
 }
 
@@ -172,8 +181,28 @@ func (r *Relay) process(parentCtx context.Context) error {
 		masterNode  = r.masterNode()
 		masterUUID  = r.meta.UUID() // only change after switch
 		tryReSync   = true          // used to handle master-slave switch
+
+		// fill gap steps:
+		// 1. record the pos after the gap
+		// 2. create a special streamer to fill the gap
+		// 3. catchup pos after the gap
+		// 4. close the special streamer
+		gapSyncer     *replication.BinlogSyncer   // syncer used to fill the gap in relay log file
+		gapStreamer   *replication.BinlogStreamer // streamer used to fill the gap in relay log file
+		gapSyncEndPos *mysql.Position             // the pos of the event after the gap
 	)
+
+	closeGapSyncer := func() {
+		if gapSyncer != nil {
+			gapSyncer.Close()
+			gapSyncer = nil
+		}
+		gapStreamer = nil
+		gapSyncEndPos = nil
+	}
+
 	defer func() {
+		closeGapSyncer()
 		if r.fd != nil {
 			r.fd.Close()
 		}
@@ -182,9 +211,23 @@ func (r *Relay) process(parentCtx context.Context) error {
 	go r.flushMetaAtIntervals(parentCtx)
 
 	for {
+		if gapStreamer == nil && gapSyncEndPos != nil {
+			gapSyncer = replication.NewBinlogSyncer(r.gapSyncerCfg)
+			gapStreamer, err = gapSyncer.StartSync(lastPos)
+			if err != nil {
+				return errors.Annotatef(err, "start to fill gap in relay log file from %v", lastPos)
+			}
+			log.Infof("[relay] start to fill gap in relay log file from %v", lastPos)
+		}
+
 		ctx, cancel := context.WithTimeout(parentCtx, eventTimeout)
 		readTimer := time.Now()
-		e, err := streamer.GetEvent(ctx)
+		var e *replication.BinlogEvent
+		if gapStreamer != nil {
+			e, err = gapStreamer.GetEvent(ctx)
+		} else {
+			e, err = streamer.GetEvent(ctx)
+		}
 		cancel()
 		binlogReadDurationHistogram.Observe(time.Since(readTimer).Seconds())
 
@@ -201,6 +244,9 @@ func (r *Relay) process(parentCtx context.Context) error {
 				// do nothing
 			default:
 				if utils.IsErrBinlogPurged(err) {
+					if gapStreamer != nil {
+						return errors.Annotatef(err, "gap streamer")
+					}
 					if tryReSync && r.cfg.EnableGTID && r.cfg.AutoFixGTID {
 						streamer, err = r.reSyncBinlog(r.syncerCfg)
 						if err != nil {
@@ -216,7 +262,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 		}
 		tryReSync = true
 
-		log.Debugf("[relay] receive binlog event with header %v", e.Header)
+		log.Debugf("[relay] receive binlog event with header %+v", e.Header)
 		switch ev := e.Event.(type) {
 		case *replication.FormatDescriptionEvent:
 			// FormatDescriptionEvent is the first event in binlog, we will close old one and create a new
@@ -267,17 +313,27 @@ func (r *Relay) process(parentCtx context.Context) error {
 				// 2. FormatDescriptionEvent
 				// 3. (obsolete) PreviousGTIDsEvent
 				// 4. other events
-				if r.fd != nil {
-					fi, err := r.fd.Stat()
-					if err != nil {
-						relayLogWriteErrorCounter.Inc()
-						return errors.Annotatef(err, "compare relay log file size with PreviousGTIDsEvent %+v", e.Header)
-					}
-					if e.Header.LogPos < uint32(fi.Size()) {
-						log.Warnf("[relay] skip obsolete event %+v", e.Header)
-						continue
-					}
+				obsolete, err := r.isEventObsolete(e)
+				if err != nil {
+					relayLogWriteErrorCounter.Inc()
+					return errors.Trace(err)
 				}
+				if obsolete {
+					log.Warnf("[relay] skip obsolete event %+v", e.Header)
+					continue
+				}
+			}
+		case *replication.MariadbGTIDListEvent, *replication.MariadbBinlogCheckPointEvent:
+			// for MariaDB, more obsolete may send
+			// at least including MARIADB_GTID_LIST_EVENT, MARIADB_BINLOG_CHECKPOINT_EVENT
+			obsolete, err := r.isEventObsolete(e)
+			if err != nil {
+				relayLogWriteErrorCounter.Inc()
+				return errors.Trace(err)
+			}
+			if obsolete {
+				log.Warnf("[relay] skip obsolete event %+v", e.Header)
+				continue
 			}
 		default:
 			if e.Header.Flags&0x0020 != 0 {
@@ -293,8 +349,34 @@ func (r *Relay) process(parentCtx context.Context) error {
 			lastPos.Pos = e.Header.LogPos
 		}
 
+		if gapStreamer == nil {
+			gapDetected, fSize, err := r.detectGap(e)
+			if err != nil {
+				relayLogWriteErrorCounter.Inc()
+				return errors.Annotatef(err, "detect relay log file gap for event %+v", e.Header)
+			}
+			if gapDetected {
+				gapSyncEndPos = &mysql.Position{
+					Name: lastPos.Name,
+					Pos:  e.Header.LogPos,
+				}
+				lastPos.Pos = fSize // reset lastPos
+				log.Infof("[relay] gap detected from %d to %d in %s", fSize, e.Header.LogPos-e.Header.EventSize, lastPos.Name)
+				continue // skip this event after the gap
+			}
+		} else {
+			if gapSyncEndPos != nil && e.Header.LogPos >= gapSyncEndPos.Pos {
+				// catch up, after write this event, gap will be filled
+				log.Infof("[relay] fill gap reaching the end pos %v", gapSyncEndPos.String())
+				closeGapSyncer()
+			}
+			// add LOG_EVENT_RELAY_LOG_F flag to events which used to fill the gap
+			// ref: https://dev.mysql.com/doc/internals/en/binlog-event-flag.html
+			r.addFlagToEvent(e, 0x0040)
+		}
+
 		writeTimer := time.Now()
-		log.Debugf("[relay] writing binlog event with header %v", e.Header)
+		log.Debugf("[relay] writing binlog event with header %+v", e.Header)
 		if n, err2 := r.fd.Write(e.RawData); err2 != nil {
 			relayLogWriteErrorCounter.Inc()
 			return errors.Trace(err2)
@@ -318,6 +400,52 @@ func (r *Relay) process(parentCtx context.Context) error {
 			return errors.Trace(err)
 		}
 	}
+}
+
+// addFlagToEvent adds flag to binlog event
+func (r *Relay) addFlagToEvent(e *replication.BinlogEvent, f uint16) {
+	newF := e.Header.Flags | f
+	// header structure:
+	// 4 byte timestamp
+	// 1 byte event
+	// 4 byte server-id
+	// 4 byte event size
+	// 4 byte log pos
+	// 2 byte flags
+	startIdx := 4 + 1 + 4 + 4 + 4
+	binary.LittleEndian.PutUint16(e.RawData[startIdx:startIdx+2], newF)
+	e.Header.Flags = newF
+}
+
+// detectGap detects whether gap exists in relay log file
+func (r *Relay) detectGap(e *replication.BinlogEvent) (bool, uint32, error) {
+	if r.fd == nil {
+		return false, 0, nil
+	}
+	fi, err := r.fd.Stat()
+	if err != nil {
+		return false, 0, errors.Trace(err)
+	}
+
+	size := uint32(fi.Size())
+	if e.Header.LogPos-e.Header.EventSize > size {
+		return true, size, nil
+	}
+	return false, size, nil
+}
+
+// isEventObsolete checks whether the binlog event is obsolete
+func (r *Relay) isEventObsolete(e *replication.BinlogEvent) (bool, error) {
+	if r.fd != nil {
+		fi, err := r.fd.Stat()
+		if err != nil {
+			return false, errors.Annotatef(err, "compare relay log file size with %+v", e.Header)
+		}
+		if e.Header.LogPos <= uint32(fi.Size()) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // handleFormatDescriptionEvent tries to create new binlog file and write binlog header

@@ -212,9 +212,9 @@ func (c *SubTaskConfig) adjust() error {
 		c.InstanceID = fmt.Sprintf("%s:%d", c.From.Host, c.From.Port)
 	}
 
-	if c.Flavor != mysql.MySQLFlavor && c.Flavor != mysql.MariaDBFlavor {
-		return errors.Errorf("please specify right mysql version, support mysql, mariadb now")
-	}
+	//if c.Flavor != mysql.MySQLFlavor && c.Flavor != mysql.MariaDBFlavor {
+	//	return errors.Errorf("please specify right mysql version, support mysql, mariadb now")
+	//}
 
 	if c.InstanceID == "" {
 		c.InstanceID = fmt.Sprintf("%s:%d", c.From.Host, c.From.Port)

@@ -69,7 +69,28 @@ func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, erro
 		return binlogPos, gs, errors.Trace(rows.Err())
 	}
 
+	if flavor == gmysql.MariaDBFlavor && (gs == nil || gs.String() == "") {
+		gs, err = GetMariaDBGTID(db)
+		if err != nil {
+			return binlogPos, gs, errors.Trace(err)
+		}
+	}
+
 	return binlogPos, gs, nil
+}
+
+// GetMariaDBGTID gets MariaDB's `gtid_binlog_pos`
+// it can not get by `SHOW MASTER STATUS`
+func GetMariaDBGTID(db *sql.DB) (gtid.Set, error) {
+	gtidStr, err := GetGlobalVariable(db, "gtid_binlog_pos")
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	gs, err := gtid.ParserGTID(gmysql.MariaDBFlavor, gtidStr)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return gs, nil
 }
 
 // GetGlobalVariable gets server's global variable

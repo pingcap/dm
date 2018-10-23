@@ -1723,7 +1723,11 @@ func (s *Syncer) Close() {
 	closeDBs(s.ddlDB)
 
 	s.checkpoint.Close()
-	s.onlineDDL.Close()
+
+	if s.onlineDDL != nil {
+		s.onlineDDL.Close()
+		s.onlineDDL = nil
+	}
 
 	s.closed.Set(true)
 }
