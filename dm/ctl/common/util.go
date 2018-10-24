@@ -35,14 +35,15 @@ var (
 )
 
 // InitClient initializes dm-worker client or dm-master client
-func InitClient(addr string, isWorkerAddr bool) error {
+func InitClient(addr string, mode DmctlMode) error {
 	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	if err != nil {
 		return errors.Trace(err)
 	}
-	if isWorkerAddr {
+	switch mode {
+	case WorkerMode:
 		workerClient = pb.NewWorkerClient(conn)
-	} else {
+	case MasterMode:
 		masterClient = pb.NewMasterClient(conn)
 	}
 	return nil

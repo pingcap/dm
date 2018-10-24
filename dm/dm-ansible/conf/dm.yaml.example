@@ -2,32 +2,23 @@ task-name: test
 task-mode: all
 meta-schema: dm_meta
 remove-meta: false
-disable-heartbeat: false
+disable-heartbeat: true
 target-database:
   host: 192.168.0.1
   port: 4000
   user: root
   password: ""
 mysql-instances:
-  insrance118-4306:
+  instance118-4306:
     config:
       host: 192.168.199.118
       port: 4306
       user: root
       password: "1234"
-    instance-id: insrance118-4306
+    instance-id: instance118-4306
     meta:
       binlog-name: binlog-00001
       binlog-pos: 4
-    filter-rules:
-    - user-filter-1
-    - user-filter-2
-    column-mapping-rules:
-    - instance-1
-    route-rules:
-    - user-route-rules-schema
-    - user-route-rules
-    black-white-list: instance
     mydumper-config-name: global
     mydumper: null
     loader-config-name: global
@@ -45,13 +36,6 @@ mysql-instances:
       binlog-name: binlog-00001
       binlog-pos: 320
     filter-rules:
-    - user-filter-2
-    column-mapping-rules:
-    - instance-2
-    route-rules:
-    - user-route-rules-schema
-    - user-route-rules
-    black-white-list: instance
     mydumper-config-name: ""
     mydumper:
       mydumper-path: ./mydumper
@@ -77,7 +61,7 @@ mydumpers:
     threads: 16
     chunk-filesize: 64
     skip-tz-utc: true
-    extra-args: -B test -T t1,t2 --no-locks
+    extra-args: "-B test -T t1,t2 --no-locks"
 loaders:
   global:
     pool-size: 16
@@ -92,50 +76,50 @@ syncers:
     safe-mode: false
 ignored-tables: {}
 do-tables:
-  insrance118-4306:
-    instance-id: insrance118-4306
+  instance118-4306:
+    instance-id: instance118-4306
     tables:
-      test_1:
-      - t_1
-      - t_2
-      test_2:
-      - t_1
-      - t_2
+      schema_1:
+      - table_1
+      - table_2
+      schema_2:
+      - table_1
+      - table_2
   instance118-5306:
     instance-id: instance118-5306
     tables:
       do:
       - do
-      test_1:
-      - t_1
-      - t_2
-      test_2:
-      - t_1
-      - t_2
+      schema_1:
+      - table_1
+      - table_2
+      schema_2:
+      - table_1
+      - table_2
 sharding-groups:
 - schema: test
   table: t
   source-tables:
-    insrance118-4306:
-      instance-id: insrance118-4306
+    instance118-4306:
+      instance-id: instance118-4306
       column-mapping-rules:
       - schema-pattern: test_*
         table-pattern: t_*
         source-column: id
         target-column: id
-        expression: partition id
+        expression: "partition id"
         arguments:
         - "1"
-        - test_
-        - t_
+        - schema_
+        - table_
         create-table-query: ""
       tables:
-        test_1:
-        - t_1
-        - t_2
-        test_2:
-        - t_1
-        - t_2
+        schema_1:
+        - table_1
+        - table_2
+        schema_2:
+        - table_1
+        - table_2
     instance118-5306:
       instance-id: instance118-5306
       column-mapping-rules:
@@ -143,46 +127,38 @@ sharding-groups:
         table-pattern: t_*
         source-column: id
         target-column: id
-        expression: partition id
+        expression: "partition id"
         arguments:
         - "2"
-        - test_
-        - t_
+        - schema_
+        - table_
         create-table-query: ""
       tables:
-        test_1:
-        - t_1
-        - t_2
-        test_2:
-        - t_1
-        - t_2
-tables:
-  insrance118-4306:
-    instance-id: insrance118-4306
+        schema_1:
+        - table_1
+        - table_2
+        schema_2:
+        - table_1
+        - table_2
+filter:
+  instance118-4306:
+    instance-id: instance118-4306
     tables:
-      test_1:
-      - name: t_1
-        target-schema: test
-        target-table: t
+      schema_1:
+      - name: table_1
         ignored-binlog-events:
         - truncate table
         - drop table
-      - name: t_2
-        target-schema: test
-        target-table: t
+      - name: table_2
         ignored-binlog-events:
         - truncate table
         - drop table
-      test_2:
-      - name: t_1
-        target-schema: test
-        target-table: t
+      schema_2:
+      - name: table_1
         ignored-binlog-events:
         - truncate table
         - drop table
-      - name: t_2
-        target-schema: test
-        target-table: t
+      - name: table_2
         ignored-binlog-events:
         - truncate table
         - drop table

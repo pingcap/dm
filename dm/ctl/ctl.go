@@ -25,7 +25,7 @@ import (
 )
 
 var (
-	isWorkerCtl        bool
+	mode               common.DmctlMode
 	commandMasterFlags = CommandMasterFlags{}
 )
 
@@ -38,8 +38,8 @@ type CommandMasterFlags struct {
 func Init(cfg *common.Config) error {
 	// set the log level temporarily
 	log.SetLevel(log.LOG_LEVEL_INFO)
-	isWorkerCtl = cfg.IsWorkerAddr
-	return errors.Trace(common.InitClient(cfg.ServerAddr, cfg.IsWorkerAddr))
+	mode = cfg.Mode
+	return errors.Trace(common.InitClient(cfg.ServerAddr, cfg.Mode))
 }
 
 // Start starts running a command
@@ -49,7 +49,8 @@ func Start(args []string) {
 		Short: "DM control",
 	}
 
-	if isWorkerCtl {
+	switch mode {
+	case common.WorkerMode:
 		rootCmd.AddCommand(
 			worker.NewStartSubTaskCmd(),
 			worker.NewStopSubTaskCmd(),
@@ -65,9 +66,8 @@ func Start(args []string) {
 			worker.NewPauseRelayCmd(),
 			worker.NewResumeRelayCmd(),
 			//worker.NewStopRelayCmd(),
-			worker.NewCheckSubTaskCmd(),
 		)
-	} else {
+	case common.MasterMode:
 		// --worker worker1 -w worker2 --worker=worker3,worker4 -w=worker5,worker6
 		rootCmd.PersistentFlags().StringSliceVarP(&commandMasterFlags.workers, "worker", "w", []string{}, "dm-worker ID")
 		rootCmd.AddCommand(
@@ -88,9 +88,14 @@ func Start(args []string) {
 			master.NewPauseRelayCmd(),
 			master.NewResumeRelayCmd(),
 			//master.NewStopRelayCmd(),
+			master.NewGenerateTaskConfigCmd(),
+		)
+	case common.OfflineMode:
+		rootCmd.AddCommand(
 			master.NewCheckTaskCmd(),
 			master.NewRestoreDataMigrationConfigCmd(),
 			master.NewGenerateTaskConfigCmd(),
+			worker.NewCheckSubTaskCmd(),
 		)
 	}
 

@@ -23,6 +23,16 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )
 
+// DmctlMode works in which mode
+type DmctlMode string
+
+// three work mode
+var (
+	WorkerMode  DmctlMode = "worker mode"
+	MasterMode  DmctlMode = "master mode"
+	OfflineMode DmctlMode = "offline mode"
+)
+
 // NewConfig creates a new base config for dmctl.
 func NewConfig() *Config {
 	cfg := &Config{}
@@ -45,9 +55,9 @@ type Config struct {
 
 	// supporting dmctl connect to dm-worker directly, but not export to config
 	// now we don't add authentication in dm-worker's gRPC server
-	WorkerAddr   string `toml:"worker-addr" json:"-"`
-	ServerAddr   string `json:"-"` // MasterAddr or WorkerAddr
-	IsWorkerAddr bool   `json:"-"`
+	WorkerAddr string    `toml:"worker-addr" json:"-"`
+	ServerAddr string    `json:"-"` // MasterAddr or WorkerAddr
+	Mode       DmctlMode `json:"-"`
 
 	ConfigFile string `json:"config-file"`
 
@@ -104,7 +114,8 @@ func (c *Config) Parse(arguments []string) error {
 		return errors.Errorf("'%s' is an invalid flag", c.FlagSet.Arg(0))
 	}
 
-	return errors.Trace(c.adjust())
+	c.adjust()
+	return nil
 }
 
 // configFromFile loads config from file.
@@ -114,16 +125,14 @@ func (c *Config) configFromFile(path string) error {
 }
 
 // adjust adjusts configs
-func (c *Config) adjust() error {
+func (c *Config) adjust() {
 	if c.MasterAddr != "" {
 		c.ServerAddr = c.MasterAddr
-		c.IsWorkerAddr = false
-	} else {
+		c.Mode = MasterMode
+	} else if c.WorkerAddr != "" {
 		c.ServerAddr = c.WorkerAddr
-		c.IsWorkerAddr = true
+		c.Mode = WorkerMode
+	} else {
+		c.Mode = OfflineMode
 	}
-	if c.ServerAddr == "" {
-		return errors.Errorf("MasterAddr or WorkerAddr must be specified")
-	}
-	return nil
 }

@@ -79,23 +79,23 @@ do-tables:
   instance118-4306:
     instance-id: instance118-4306
     tables:
-      test_1:
-      - t_1
-      - t_2
-      test_2:
-      - t_1
-      - t_2
+      schema_1:
+      - table_1
+      - table_2
+      schema_2:
+      - table_1
+      - table_2
   instance118-5306:
     instance-id: instance118-5306
     tables:
       do:
       - do
-      test_1:
-      - t_1
-      - t_2
-      test_2:
-      - t_1
-      - t_2
+      schema_1:
+      - table_1
+      - table_2
+      schema_2:
+      - table_1
+      - table_2
 sharding-groups:
 - schema: test
   table: t
@@ -110,16 +110,16 @@ sharding-groups:
         expression: "partition id"
         arguments:
         - "1"
-        - test_
-        - t_
+        - schema_
+        - table_
         create-table-query: ""
       tables:
-        test_1:
-        - t_1
-        - t_2
-        test_2:
-        - t_1
-        - t_2
+        schema_1:
+        - table_1
+        - table_2
+        schema_2:
+        - table_1
+        - table_2
     instance118-5306:
       instance-id: instance118-5306
       column-mapping-rules:
@@ -130,35 +130,35 @@ sharding-groups:
         expression: "partition id"
         arguments:
         - "2"
-        - test_
-        - t_
+        - schema_
+        - table_
         create-table-query: ""
       tables:
-        test_1:
-        - t_1
-        - t_2
-        test_2:
-        - t_1
-        - t_2
+        schema_1:
+        - table_1
+        - table_2
+        schema_2:
+        - table_1
+        - table_2
 filter:
   instance118-4306:
     instance-id: instance118-4306
     tables:
-      test_1:
-      - name: t_1
+      schema_1:
+      - name: table_1
         ignored-binlog-events:
         - truncate table
         - drop table
-      - name: t_2
+      - name: table_2
         ignored-binlog-events:
         - truncate table
         - drop table
-      test_2:
-      - name: t_1
+      schema_2:
+      - name: table_1
         ignored-binlog-events:
         - truncate table
         - drop table
-      - name: t_2
+      - name: table_2
         ignored-binlog-events:
         - truncate table
         - drop table
