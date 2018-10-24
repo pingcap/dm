@@ -365,14 +365,16 @@ func (r *Relay) process(parentCtx context.Context) error {
 				continue // skip this event after the gap
 			}
 		} else {
+			// why check gapSyncEndPos != nil?
 			if gapSyncEndPos != nil && e.Header.LogPos >= gapSyncEndPos.Pos {
 				// catch up, after write this event, gap will be filled
 				log.Infof("[relay] fill gap reaching the end pos %v", gapSyncEndPos.String())
 				closeGapSyncer()
+			} else {
+				// add LOG_EVENT_RELAY_LOG_F flag to events which used to fill the gap
+				// ref: https://dev.mysql.com/doc/internals/en/binlog-event-flag.html
+				r.addFlagToEvent(e, 0x0040)
 			}
-			// add LOG_EVENT_RELAY_LOG_F flag to events which used to fill the gap
-			// ref: https://dev.mysql.com/doc/internals/en/binlog-event-flag.html
-			r.addFlagToEvent(e, 0x0040)
 		}
 
 		writeTimer := time.Now()
