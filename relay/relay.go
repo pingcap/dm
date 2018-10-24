@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -162,9 +163,13 @@ func (r *Relay) SwitchMaster(ctx context.Context, req *pb.SwitchRelayMasterReque
 }
 
 func (r *Relay) process(parentCtx context.Context) error {
-	if len(r.meta.UUID()) == 0 {
-		// no current UUID set, try set one (re-setup meta)
-		err := r.reSetupMeta()
+	isNew, err := r.isNewServer()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	if isNew {
+		// re-setup meta for new server
+		err = r.reSetupMeta()
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -488,6 +493,23 @@ func (r *Relay) handleFormatDescriptionEvent(filename string) (exist bool, err e
 	log.Infof("[relay] %s seek to end (%d)", filename, ret)
 
 	return exist, nil
+}
+
+// isNewServer checks whether switched to new server
+func (r *Relay) isNewServer() (bool, error) {
+	if len(r.meta.UUID()) == 0 {
+		// no sub dir exists before
+		return true, nil
+	}
+	uuid, err := r.getServerUUID()
+	if err != nil {
+		return false, errors.Trace(err)
+	}
+	if strings.HasPrefix(r.meta.UUID(), uuid) {
+		// same server as before
+		return false, nil
+	}
+	return true, nil
 }
 
 func (r *Relay) reSetupMeta() error {
