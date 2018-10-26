@@ -360,7 +360,7 @@ func (s *Syncer) handleOnlineDDL(p *parser.Parser, schema, sql string) ([]string
 		return nil, nil, errors.Trace(err)
 	}
 
-	sqls, originSchema, originTable, err := s.onlineDDL.Apply(tableNames[0].Schema, tableNames[0].Name, sql, stmt)
+	sqls, realSchema, realTable, err := s.onlineDDL.Apply(tableNames, sql, stmt)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
@@ -371,12 +371,12 @@ func (s *Syncer) handleOnlineDDL(p *parser.Parser, schema, sql string) ([]string
 	}
 
 	// replace ghost table name by real table name
-	sourceTables := []*filter.Table{
-		{Schema: originSchema, Name: originTable},
+	targetTables := []*filter.Table{
+		{Schema: realSchema, Name: realTable},
 	}
 	for i := range sqls {
 		stmt, err := p.ParseOneStmt(sqls[i], "", "")
-		sqls[i], err = genDDLSQL(sqls[i], stmt, sourceTables, tableNames, false)
+		sqls[i], err = genDDLSQL(sqls[i], stmt, tableNames[:1], targetTables, false)
 		if err != nil {
 			return nil, nil, errors.Trace(err)
 		}

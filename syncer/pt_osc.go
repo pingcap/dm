@@ -6,6 +6,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
 	"github.com/pingcap/tidb/ast"
 )
 
@@ -27,36 +28,82 @@ func NewPT(cfg *config.SubTaskConfig) (OnlinePlugin, error) {
 }
 
 // Apply implements interface.
-// returns ignored(bool), replaced(self) schema, repliaced(slef) table, error
-func (p *PT) Apply(schema, table, statement string, stmt ast.StmtNode) ([]string, string, string, error) {
+// returns ddls, real schema, real table, error
+func (p *PT) Apply(tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, string, string, error) {
+	if len(tables) < 1 {
+		return nil, "", "", errors.NotValidf("tables should not be empty!")
+	}
+
+	schema, table := tables[0].Schema, tables[0].Name
 	targetSchema, targetTable := p.RealName(schema, table)
 	tp := p.TableType(table)
 
 	switch tp {
 	case realTable:
-		// if rename ddl, we should find whether there are related ghost table
-		_, ok := stmt.(*ast.RenameTableStmt)
-		if ok {
-			ghostInfo := p.storge.Get(targetSchema, targetTable)
-			if ghostInfo != nil {
-				return ghostInfo.DDLs, ghostInfo.Schema, ghostInfo.Table, nil
+		switch stmt.(type) {
+		case *ast.RenameTableStmt:
+			if len(tables) != 2 {
+				return nil, "", "", errors.NotValidf("tables should contain old and new table name")
+			}
+
+			tp1 := p.TableType(tables[1].Name)
+			if tp1 == trashTable {
+				return nil, "", "", nil
+			} else if tp1 == ghostTable {
+				return nil, "", "", errors.NotSupportedf("rename table to ghost table %s", statement)
 			}
 		}
 		return []string{statement}, schema, table, nil
 	case trashTable:
 		// ignore trashTable
+		switch stmt.(type) {
+		case *ast.RenameTableStmt:
+			if len(tables) != 2 {
+				return nil, "", "", errors.NotValidf("tables should contain old and new table name")
+			}
+
+			tp1 := p.TableType(tables[1].Name)
+			if tp1 == ghostTable {
+				return nil, "", "", errors.NotSupportedf("rename ghost table to other ghost table %s", statement)
+			}
+		}
 	case ghostTable:
 		// record ghost table ddl changes
 		switch stmt.(type) {
 		case *ast.CreateTableStmt:
-			err := p.storge.Delete(targetSchema, targetTable)
+			err := p.storge.Delete(schema, table)
+			if err != nil {
+				return nil, "", "", errors.Trace(err)
+			}
+		case *ast.DropTableStmt:
+			err := p.storge.Delete(schema, table)
 			if err != nil {
 				return nil, "", "", errors.Trace(err)
 			}
 		case *ast.RenameTableStmt:
-			// not delete ddl changes
+			if len(tables) != 2 {
+				return nil, "", "", errors.NotValidf("tables should contain old and new table name")
+			}
+
+			tp1 := p.TableType(tables[1].Name)
+			if tp1 == realTable {
+				ghostInfo := p.storge.Get(schema, table)
+				if ghostInfo != nil {
+					return ghostInfo.DDLs, tables[1].Schema, tables[1].Name, nil
+				}
+				return nil, "", "", errors.NotFoundf("online ddls on ghost table `%s`.`%s`", schema, table)
+			} else if tp1 == ghostTable {
+				return nil, "", "", errors.NotSupportedf("rename ghost table to other ghost table %s", statement)
+			}
+
+			// rename ghost table to trash table
+			err := p.storge.Delete(schema, table)
+			if err != nil {
+				return nil, "", "", errors.Trace(err)
+			}
+
 		default:
-			err := p.storge.Save(targetSchema, targetTable, schema, table, statement)
+			err := p.storge.Save(schema, table, targetSchema, targetTable, statement)
 			if err != nil {
 				return nil, "", "", errors.Trace(err)
 			}
@@ -72,8 +119,7 @@ func (p *PT) InOnlineDDL(schema, table string) bool {
 		return false
 	}
 
-	targetSchema, targetTable := p.RealName(schema, table)
-	ghostInfo := p.storge.Get(targetSchema, targetTable)
+	ghostInfo := p.storge.Get(schema, table)
 	return ghostInfo != nil
 }
 
@@ -83,8 +129,7 @@ func (p *PT) Finish(schema, table string) error {
 		return nil
 	}
 
-	targetSchema, targetTable := p.RealName(schema, table)
-	return errors.Trace(p.storge.Delete(targetSchema, targetTable))
+	return errors.Trace(p.storge.Delete(schema, table))
 }
 
 // TableType implements interface

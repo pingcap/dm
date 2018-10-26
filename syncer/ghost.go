@@ -6,6 +6,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
 	"github.com/pingcap/tidb/ast"
 )
 
@@ -27,36 +28,82 @@ func NewGhost(cfg *config.SubTaskConfig) (OnlinePlugin, error) {
 }
 
 // Apply implements interface.
-// returns ignored(bool), replaced(self) schema, repliaced(slef) table, error
-func (g *Ghost) Apply(schema, table, statement string, stmt ast.StmtNode) ([]string, string, string, error) {
+// returns ddls, real schema, real table, error
+func (g *Ghost) Apply(tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, string, string, error) {
+	if len(tables) < 1 {
+		return nil, "", "", errors.NotValidf("tables should not be empty!")
+	}
+
+	schema, table := tables[0].Schema, tables[0].Name
 	targetSchema, targetTable := g.RealName(schema, table)
 	tp := g.TableType(table)
 
 	switch tp {
 	case realTable:
-		// if rename ddl, we should find whether there are related ghost table
-		_, ok := stmt.(*ast.RenameTableStmt)
-		if ok {
-			ghostInfo := g.storge.Get(targetSchema, targetTable)
-			if ghostInfo != nil {
-				return ghostInfo.DDLs, ghostInfo.Schema, ghostInfo.Table, nil
+		switch stmt.(type) {
+		case *ast.RenameTableStmt:
+			if len(tables) != 2 {
+				return nil, "", "", errors.NotValidf("tables should contain old and new table name")
+			}
+
+			tp1 := g.TableType(tables[1].Name)
+			if tp1 == trashTable {
+				return nil, "", "", nil
+			} else if tp1 == ghostTable {
+				return nil, "", "", errors.NotSupportedf("rename table to ghost table %s", statement)
 			}
 		}
 		return []string{statement}, schema, table, nil
 	case trashTable:
 		// ignore trashTable
+		switch stmt.(type) {
+		case *ast.RenameTableStmt:
+			if len(tables) != 2 {
+				return nil, "", "", errors.NotValidf("tables should contain old and new table name")
+			}
+
+			tp1 := g.TableType(tables[1].Name)
+			if tp1 == ghostTable {
+				return nil, "", "", errors.NotSupportedf("rename ghost table to other ghost table %s", statement)
+			}
+		}
 	case ghostTable:
 		// record ghost table ddl changes
 		switch stmt.(type) {
 		case *ast.CreateTableStmt:
-			err := g.storge.Delete(targetSchema, targetTable)
+			err := g.storge.Delete(schema, table)
+			if err != nil {
+				return nil, "", "", errors.Trace(err)
+			}
+		case *ast.DropTableStmt:
+			err := g.storge.Delete(schema, table)
 			if err != nil {
 				return nil, "", "", errors.Trace(err)
 			}
 		case *ast.RenameTableStmt:
-			// not delete ddl changes
+			if len(tables) != 2 {
+				return nil, "", "", errors.NotValidf("tables should contain old and new table name")
+			}
+
+			tp1 := g.TableType(tables[1].Name)
+			if tp1 == realTable {
+				ghostInfo := g.storge.Get(schema, table)
+				if ghostInfo != nil {
+					return ghostInfo.DDLs, tables[1].Schema, tables[1].Name, nil
+				}
+				return nil, "", "", errors.NotFoundf("online ddls on ghost table `%s`.`%s`", schema, table)
+			} else if tp1 == ghostTable {
+				return nil, "", "", errors.NotSupportedf("rename ghost table to other ghost table %s", statement)
+			}
+
+			// rename ghost table to trash table
+			err := g.storge.Delete(schema, table)
+			if err != nil {
+				return nil, "", "", errors.Trace(err)
+			}
+
 		default:
-			err := g.storge.Save(targetSchema, targetTable, schema, table, statement)
+			err := g.storge.Save(schema, table, targetSchema, targetTable, statement)
 			if err != nil {
 				return nil, "", "", errors.Trace(err)
 			}
@@ -72,8 +119,7 @@ func (g *Ghost) InOnlineDDL(schema, table string) bool {
 		return false
 	}
 
-	targetSchema, targetTable := g.RealName(schema, table)
-	ghostInfo := g.storge.Get(targetSchema, targetTable)
+	ghostInfo := g.storge.Get(schema, table)
 	return ghostInfo != nil
 }
 
@@ -83,8 +129,7 @@ func (g *Ghost) Finish(schema, table string) error {
 		return nil
 	}
 
-	targetSchema, targetTable := g.RealName(schema, table)
-	return errors.Trace(g.storge.Delete(targetSchema, targetTable))
+	return errors.Trace(g.storge.Delete(schema, table))
 }
 
 // TableType implements interface

@@ -7,8 +7,8 @@ import (
 	"sync"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
 	"github.com/pingcap/tidb/ast"
 )
 
@@ -26,7 +26,7 @@ type OnlinePlugin interface {
 	// * record changes
 	// * apply online ddl on real table
 	// returns sqls, replaced/self schema, repliaced/slef table, error
-	Apply(schema, table, statement string, stmt ast.StmtNode) ([]string, string, string, error)
+	Apply(tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, string, string, error)
 	// InOnlineDDL returns true if an online ddl is unresolved
 	InOnlineDDL(schema, table string) bool
 	// Finish would delete online ddl from memory and storage
@@ -73,6 +73,7 @@ type OnlineDDLStorage struct {
 	table  string // table name, now it's task name
 	id     string // now it is `server-id` used as MySQL slave
 
+	// map ghost schema => [ghost table => ghost ddl info, ...]
 	ddls map[string]map[string]*GhostDDLInfo
 }
 
@@ -110,7 +111,7 @@ func (s *OnlineDDLStorage) Load() error {
 	s.Lock()
 	defer s.Unlock()
 
-	query := fmt.Sprintf("SELECT `ol_schema`, `ol_table`, `ddls` FROM `%s`.`%s` WHERE `id`='%s'", s.schema, s.table, s.id)
+	query := fmt.Sprintf("SELECT `ghost_schema`, `ghost_table`, `ddls` FROM `%s`.`%s` WHERE `id`='%s'", s.schema, s.table, s.id)
 	rows, err := s.db.querySQL(query, maxRetryCount)
 	if err != nil {
 		return errors.Trace(err)
@@ -145,76 +146,72 @@ func (s *OnlineDDLStorage) Load() error {
 }
 
 // Get returns ddls by given schema/table
-func (s *OnlineDDLStorage) Get(schema, table string) *GhostDDLInfo {
+func (s *OnlineDDLStorage) Get(ghostSchema, ghostTable string) *GhostDDLInfo {
 	s.RLock()
 	defer s.RUnlock()
 
-	mSchema, ok := s.ddls[schema]
+	mSchema, ok := s.ddls[ghostSchema]
 	if !ok {
 		return nil
 	}
 
-	return mSchema[table]
+	clone := new(GhostDDLInfo)
+	*clone = *mSchema[ghostTable]
+
+	return clone
 }
 
 // Save saves online ddl information
-func (s *OnlineDDLStorage) Save(schema, table, ghostSchema, ghostTable, ddl string) error {
+func (s *OnlineDDLStorage) Save(ghostSchema, ghostTable, realSchema, realTable, ddl string) error {
 	s.Lock()
 	defer s.Unlock()
 
-	mSchema, ok := s.ddls[schema]
+	mSchema, ok := s.ddls[ghostSchema]
 	if !ok {
 		mSchema = make(map[string]*GhostDDLInfo)
-		s.ddls[schema] = mSchema
+		s.ddls[ghostSchema] = mSchema
 	}
 
-	info, ok := mSchema[table]
+	info, ok := mSchema[ghostTable]
 	if !ok {
 		info = &GhostDDLInfo{
-			Schema: ghostSchema,
-			Table:  ghostTable,
+			Schema: realSchema,
+			Table:  realTable,
 		}
-		mSchema[table] = info
-	} else if info.Schema != ghostSchema || info.Table != ghostTable {
-		// this is a risky operation
-		// we assume user can  execute only one online ddl changes in same time, so latest online ddl can overwrite older one
-		log.Warningf("replace %s.%s online ddl info by %s.%s", info.Schema, info.Table, ghostSchema, ghostTable)
-		info = &GhostDDLInfo{
-			Schema: ghostSchema,
-			Table:  ghostTable,
-		}
-		mSchema[table] = info
+		mSchema[ghostTable] = info
 	}
 
+	// maybe we meed more checks for it
+
 	info.DDLs = append(info.DDLs, ddl)
-	ddlsBytes, err := json.Marshal(mSchema[table])
+	ddlsBytes, err := json.Marshal(mSchema[ghostTable])
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	query := fmt.Sprintf("REPLACE INTO `%s`.`%s`(`id`,`ol_schema`, `ol_table`, `ddls`) VALUES ('%s', '%s', '%s', '%s')", s.schema, s.table, s.id, schema, table, string(ddlsBytes))
+	query := fmt.Sprintf("REPLACE INTO `%s`.`%s`(`id`,`ghost_schema`, `ghost_table`, `ddls`) VALUES ('%s', '%s', '%s', '%s')", s.schema, s.table, s.id, ghostSchema, ghostTable, string(ddlsBytes))
 	err = s.db.executeSQL([]string{query}, [][]interface{}{nil}, maxRetryCount)
 	return errors.Trace(err)
 }
 
 // Delete deletes online ddl informations
-func (s *OnlineDDLStorage) Delete(schema, table string) error {
+func (s *OnlineDDLStorage) Delete(ghostSchema, ghostTable string) error {
 	s.Lock()
 	defer s.Unlock()
 
-	mSchema, ok := s.ddls[schema]
+	mSchema, ok := s.ddls[ghostSchema]
 	if !ok {
 		return nil
 	}
 
 	// delete all checkpoints
-	sql := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s' and `ol_schema` = '%s' and `ol_table` = '%s'", s.schema, s.table, s.id, schema, table)
+	sql := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s' and `ghost_schema` = '%s' and `ghost_table` = '%s'", s.schema, s.table, s.id, ghostSchema, ghostTable)
 	err := s.db.executeSQL([]string{sql}, [][]interface{}{nil}, maxRetryCount)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	delete(mSchema, table)
+	delete(mSchema, ghostTable)
 	return nil
 }
 
@@ -263,11 +260,11 @@ func (s *OnlineDDLStorage) createTable() error {
 	tableName := fmt.Sprintf("`%s`.`%s`", s.schema, s.table)
 	sql := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 			id VARCHAR(32) NOT NULL,
-			ol_schema VARCHAR(128) NOT NULL,
-			ol_table VARCHAR(128) NOT NULL,
+			ghost_schema VARCHAR(128) NOT NULL,
+			ghost_table VARCHAR(128) NOT NULL,
 			ddls text,
 			update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-			UNIQUE KEY uk_id_schema_table (id, ol_schema, ol_table)
+			UNIQUE KEY uk_id_schema_table (id, ghost_schema, ghost_table)
 		)`, tableName)
 	err := s.db.executeSQL([]string{sql}, [][]interface{}{nil}, maxRetryCount)
 	return errors.Trace(err)
