@@ -309,36 +309,6 @@ func (r *Relay) process(parentCtx context.Context) error {
 				// skip artificial heartbeat event
 				// ref: https://dev.mysql.com/doc/internals/en/heartbeat-event.html
 				continue
-			case replication.PREVIOUS_GTIDS_EVENT:
-				// when restarting the syncing (with GTID mode enabled), an obsolete `PreviousGTIDsEvent` event may received
-				// eg. the end_log_pos has reached `1190` previously, after restarted, a PreviousGTIDsEvent event with `194` end_log_pos may received
-				// I searched the docs and the code of MySQL, but got nothing
-				// when running, the observed events order is:
-				// 1. (fake) RotateEvent
-				// 2. FormatDescriptionEvent
-				// 3. (obsolete) PreviousGTIDsEvent
-				// 4. other events
-				obsolete, err := r.isEventObsolete(e)
-				if err != nil {
-					relayLogWriteErrorCounter.Inc()
-					return errors.Trace(err)
-				}
-				if obsolete {
-					log.Warnf("[relay] skip obsolete event %+v", e.Header)
-					continue
-				}
-			}
-		case *replication.MariadbGTIDListEvent, *replication.MariadbBinlogCheckPointEvent:
-			// for MariaDB, more obsolete may send
-			// at least including MARIADB_GTID_LIST_EVENT, MARIADB_BINLOG_CHECKPOINT_EVENT
-			obsolete, err := r.isEventObsolete(e)
-			if err != nil {
-				relayLogWriteErrorCounter.Inc()
-				return errors.Trace(err)
-			}
-			if obsolete {
-				log.Warnf("[relay] skip obsolete event %+v", e.Header)
-				continue
 			}
 		default:
 			if e.Header.Flags&0x0020 != 0 {
@@ -347,11 +317,6 @@ func (r *Relay) process(parentCtx context.Context) error {
 				log.Warnf("[relay] skip artificial event %+v", e.Header)
 				continue
 			}
-		}
-
-		if !r.cfg.EnableGTID {
-			// not need support GTID mode (rawMode enabled), update pos for all events
-			lastPos.Pos = e.Header.LogPos
 		}
 
 		if gapStreamer == nil {
@@ -380,6 +345,24 @@ func (r *Relay) process(parentCtx context.Context) error {
 				// ref: https://dev.mysql.com/doc/internals/en/binlog-event-flag.html
 				r.addFlagToEvent(e, 0x0040)
 			}
+		}
+
+		cmp, fSize, err := r.compareEventWithFileSize(e)
+		if err != nil {
+			relayLogWriteErrorCounter.Inc()
+			return errors.Trace(err)
+		}
+		if cmp < 0 {
+			log.Warnf("[relay] skip obsolete event %+v (with relay file size %d)", e.Header, fSize)
+			continue
+		} else if cmp > 0 {
+			relayLogWriteErrorCounter.Inc()
+			return errors.Errorf("some events missing, current event %+v, lastPos %v, current GTID %v, relay file size %d", e.Header, lastPos, lastGTID, fSize)
+		}
+
+		if !r.cfg.EnableGTID {
+			// not need support GTID mode (rawMode enabled), update pos for all events
+			lastPos.Pos = e.Header.LogPos
 		}
 
 		writeTimer := time.Now()
@@ -441,18 +424,26 @@ func (r *Relay) detectGap(e *replication.BinlogEvent) (bool, uint32, error) {
 	return false, size, nil
 }
 
-// isEventObsolete checks whether the binlog event is obsolete
-func (r *Relay) isEventObsolete(e *replication.BinlogEvent) (bool, error) {
+// compareEventWithFileSize compares event's start pos with relay log file size
+// returns result:
+//   -1: less than file size
+//    0: equal file size
+//    1: greater than file size
+func (r *Relay) compareEventWithFileSize(e *replication.BinlogEvent) (result int, fSize uint32, err error) {
 	if r.fd != nil {
 		fi, err := r.fd.Stat()
 		if err != nil {
-			return false, errors.Annotatef(err, "compare relay log file size with %+v", e.Header)
+			return 0, 0, errors.Annotatef(err, "compare relay log file size with %+v", e.Header)
 		}
-		if e.Header.LogPos <= uint32(fi.Size()) {
-			return true, nil
+		fSize := uint32(fi.Size())
+		startPos := e.Header.LogPos - e.Header.EventSize
+		if startPos < fSize {
+			return -1, fSize, nil
+		} else if startPos > fSize {
+			return 1, fSize, nil
 		}
 	}
-	return false, nil
+	return 0, fSize, nil
 }
 
 // handleFormatDescriptionEvent tries to create new binlog file and write binlog header

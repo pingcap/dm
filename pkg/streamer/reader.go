@@ -98,7 +98,7 @@ func (r *BinlogReader) StartSync(pos mysql.Position) (Streamer, error) {
 	s := newLocalStreamer()
 
 	updatePosition := func(event *replication.BinlogEvent) {
-		log.Debugf("[streamer] read event %v", event.Header)
+		log.Debugf("[streamer] read event %+v", event.Header)
 		switch event.Header.EventType {
 		case replication.ROTATE_EVENT:
 			rotateEvent := event.Event.(*replication.RotateEvent)
