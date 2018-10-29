@@ -1,5 +1,5 @@
-hash: b3d1e2aae0993df46779ab5fde480b13c0b5dc3e4ed531e4b0fb29a24028007d
-updated: 2018-10-10T18:59:17.178605559+08:00
+hash: 823a0d0a512745f2eaa6080e56452df8c527ff7a5e99bdf2ece5bf0c18026e45
+updated: 2018-10-29T18:58:49.589492846+08:00
 imports:
 - name: github.com/beorn7/perks
   version: 3a771d992973f24aa725d07868b467d1ddfceafb
@@ -175,7 +175,7 @@ imports:
   - util/sqlexec
   - util/stringutil
 - name: github.com/pingcap/tidb-tools
-  version: 8f63826813ad068532b888b065348cbc9ddcb4b2
+  version: 9fba79d0f53995f2a63f9027e669b9c696c71ab1
   subpackages:
   - pkg/binlog-filter
   - pkg/check
@@ -238,7 +238,7 @@ imports:
 - name: github.com/spf13/cobra
   version: ef82de70bb3f60c65fb8eebacbb2d122ef517385
 - name: github.com/spf13/pflag
-  version: 298182f68c66c05229eb03ac171abe6e309ee79a
+  version: 082b515c9490f4eccc758469c3152b77d139f868
 - name: github.com/twinj/uuid
   version: 7bbe408d339787c56ec15568c947c0959db1b275
 - name: github.com/uber/jaeger-client-go

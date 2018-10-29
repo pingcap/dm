@@ -272,8 +272,8 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 		if _, ok := ignoreColumns[col.Name.O]; ok {
 			continue
 		}
-		columnNames = append(columnNames, col.Name.O)
-		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", col.Name.O))
+		columnNames = append(columnNames, fmt.Sprintf("`%s`", col.Name.O))
+		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(`%s`)", col.Name.O))
 	}
 
 	query := fmt.Sprintf("SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED)) AS checksum FROM `%s`.`%s` WHERE %s;",

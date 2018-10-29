@@ -51,7 +51,7 @@ import:
   - encoding/unicode
   - transform
 - package: github.com/prometheus/client_golang
-  version: ^0.8.0
+  version: c5b7fccd204277076155f10851dad72b76a49317
   subpackages:
   - prometheus
   - prometheus/push
@@ -108,7 +108,7 @@ import:
 - package: gopkg.in/yaml.v2
   version: v2.2.1
 - package: github.com/pingcap/tidb-tools
-  version: 8f63826813ad068532b888b065348cbc9ddcb4b2
+  version: 9fba79d0f53995f2a63f9027e669b9c696c71ab1
   subpackages:
   - pkg/binlog-filter
   - pkg/check
@@ -121,6 +121,27 @@ import:
   version: ea6597638eb7f3d7d50248b90e60888352ac8e85
   subpackages:
   - pd-client
+- package: github.com/sirupsen/logrus
+  version: ad15b42461921f1fb3529b058c6786c6a45d5162
+- package: github.com/uber/jaeger-client-go
+  version: c85c97eae6e12843adee6a8a06872ff0969644ab
+  subpackages:
+  - config
+  - internal/baggage
+  - internal/baggage/remote
+  - internal/spanlog
+  - internal/throttler
+  - internal/throttler/remote
+  - log
+  - rpcmetrics
+  - thrift
+  - thrift-gen/agent
+  - thrift-gen/baggage
+  - thrift-gen/jaeger
+  - thrift-gen/sampling
+  - thrift-gen/zipkincore
+  - transport
+  - utils
   # for building goyacc
 - package: github.com/cznic/golex
   version: da5a7153a51074477ecac5c45a7e5182a0c72448

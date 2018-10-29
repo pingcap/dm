@@ -66,6 +66,7 @@ var Exprs = map[Expr]func(*mappingInfo, []interface{}) ([]interface{}, error){
 	// others: schema = arguments[1] + schema suffix
 	//         table = arguments[2] + table suffix
 	//  example: schema = schema_1 table = t_1  => arguments[1] = "schema_", arguments[2] = "t_"
+	//  if arguments[1]/arguments[2] == "", it means we don't use schemaID/tableID to compute partition ID
 	PartitionID: partitionID,
 }
 
@@ -478,9 +479,10 @@ func partitionID(info *mappingInfo, vals []interface{}) ([]interface{}, error) {
 }
 
 func computePartitionID(schema, table string, rule *Rule) (instanceID int64, schemaID int64, tableID int64, err error) {
-	shiftCnt := uint(64 - instanceIDBitSize - 1)
-	if instanceIDBitSize > 0 {
+	shiftCnt := uint(63)
+	if instanceIDBitSize > 0 && len(rule.Arguments[0]) > 0 {
 		var instanceIDUnsign uint64
+		shiftCnt = shiftCnt - uint(instanceIDBitSize)
 		instanceIDUnsign, err = strconv.ParseUint(rule.Arguments[0], 10, instanceIDBitSize)
 		if err != nil {
 			return
@@ -488,7 +490,7 @@ func computePartitionID(schema, table string, rule *Rule) (instanceID int64, sch
 		instanceID = int64(instanceIDUnsign << shiftCnt)
 	}
 
-	if schemaIDBitSize > 0 {
+	if schemaIDBitSize > 0 && len(rule.Arguments[1]) > 0 {
 		shiftCnt = shiftCnt - uint(schemaIDBitSize)
 		schemaID, err = computeID(schema, rule.Arguments[1], schemaIDBitSize, shiftCnt)
 		if err != nil {
@@ -496,7 +498,7 @@ func computePartitionID(schema, table string, rule *Rule) (instanceID int64, sch
 		}
 	}
 
-	if tableIDBitSize > 0 {
+	if tableIDBitSize > 0 && len(rule.Arguments[2]) > 0 {
 		shiftCnt = shiftCnt - uint(tableIDBitSize)
 		tableID, err = computeID(table, rule.Arguments[2], tableIDBitSize, shiftCnt)
 	}
