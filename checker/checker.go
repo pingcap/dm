@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -120,6 +121,11 @@ func (c *Checker) Init() error {
 		}
 
 		mapping, err := utils.FetchTargetDoTables(instance.sourceDB, bw, r)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		err = sameTableNameDetection(mapping)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -277,4 +283,24 @@ func (c *Checker) Status() interface{} {
 		Warning:    int32(res.Summary.Warning),
 		Detail:     rawResult,
 	}
+}
+
+func sameTableNameDetection(tables map[string][]*filter.Table) error {
+	tableNameSets := make(map[string]string)
+	var messages []string
+
+	for name := range tables {
+		nameL := strings.ToLower(name)
+		if nameO, ok := tableNameSets[nameL]; !ok {
+			tableNameSets[nameL] = name
+		} else {
+			messages = append(messages, fmt.Sprintf("same target table %v vs %s", nameO, name))
+		}
+	}
+
+	if len(messages) > 0 {
+		return errors.Errorf("same table name in case-sensitive %v", messages)
+	}
+
+	return nil
 }
