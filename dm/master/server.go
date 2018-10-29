@@ -1224,6 +1224,123 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 	return workerResps, err
 }
 
+// UpdateMasterConfig implements MasterServer.UpdateConfig
+func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterConfigRequest) (*pb.UpdateMasterConfigResponse, error) {
+	log.Infof("[server] receive UpdateMasterConfig request %+v", req)
+	s.Lock()
+
+	err := s.cfg.UpdateConfigFile(req.Config)
+	if err != nil {
+		s.Unlock()
+		return &pb.UpdateMasterConfigResponse{
+			Result: false,
+			Msg:    "Failed to write config to local file. detail: " + errors.ErrorStack(err),
+		}, nil
+	}
+	log.Infof("[server] saving dm-master config file to local file %s", s.cfg.ConfigFile)
+
+	cfg := NewConfig()
+	cfg.ConfigFile = s.cfg.ConfigFile
+	err = cfg.Reload()
+	if err != nil {
+		s.Unlock()
+		return &pb.UpdateMasterConfigResponse{
+			Result: false,
+			Msg:    fmt.Sprintf("Failed to parse configure from file %s, detail: ", cfg.ConfigFile) + errors.ErrorStack(err),
+		}, nil
+	}
+	log.Infof("[server] updating dm-master config file with config:\n%+v", cfg)
+
+	// delete worker
+	wokerList := make([]string, 0, len(s.cfg.DeployMap))
+	for k, workerAddr := range s.cfg.DeployMap {
+		if _, ok := cfg.DeployMap[k]; !ok {
+			wokerList = append(wokerList, workerAddr)
+			DDLreq := &pb.ShowDDLLocksRequest{
+				Task:    "",
+				Workers: wokerList,
+			}
+			resp, err := s.ShowDDLLocks(ctx, DDLreq)
+			if err != nil {
+				s.Unlock()
+				return &pb.UpdateMasterConfigResponse{
+					Result: false,
+					Msg:    fmt.Sprintf("Failed to get DDL lock Info from %s, detail: ", workerAddr) + errors.ErrorStack(err),
+				}, nil
+			}
+			if len(resp.Locks) != 0 {
+				err = errors.Errorf("WokerID:%s exist ddl lock, please unlock ddl lock first!")
+				s.Unlock()
+				return &pb.UpdateMasterConfigResponse{
+					Result: false,
+					Msg:    errors.ErrorStack(err),
+				}, nil
+			}
+		}
+	}
+	for i := 0; i < len(wokerList); i++ {
+		delete(s.workerClients, wokerList[i])
+	}
+
+	// add new worker
+	for _, workerAddr := range cfg.DeployMap {
+		if _, ok := s.workerClients[workerAddr]; !ok {
+			conn, err2 := grpc.Dial(workerAddr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
+			if err2 != nil {
+				s.Unlock()
+				return &pb.UpdateMasterConfigResponse{
+					Result: false,
+					Msg:    fmt.Sprintf("Failed to add woker %s, detail: ", workerAddr) + errors.ErrorStack(err2),
+				}, nil
+			}
+			s.workerClients[workerAddr] = pb.NewWorkerClient(conn)
+		}
+	}
+
+	// update log configure
+	log.SetLevelByString(strings.ToLower(cfg.LogLevel))
+	if len(cfg.LogFile) > 0 {
+		log.SetOutputByName(cfg.LogFile)
+		log.SetHighlighting(false)
+
+		if cfg.LogRotate == "day" {
+			log.SetRotateByDay()
+		} else {
+			log.SetRotateByHour()
+		}
+	}
+
+	s.cfg = cfg
+	log.Infof("[server] update dm-master config file success")
+	s.Unlock()
+
+	workers := make([]string, 0, len(s.workerClients))
+	for worker := range s.workerClients {
+		workers = append(workers, worker)
+	}
+
+	workerRespCh := s.getStatusFromWorkers(ctx, workers, "")
+	log.Infof("[server] checking every dm-worker status...")
+
+	workerRespMap := make(map[string]*pb.QueryStatusResponse, len(workers))
+	for len(workerRespCh) > 0 {
+		workerResp := <-workerRespCh
+		workerRespMap[workerResp.Worker] = workerResp
+	}
+
+	sort.Strings(workers)
+	workerResps := make([]*pb.QueryStatusResponse, 0, len(workers))
+	for _, worker := range workers {
+		workerResps = append(workerResps, workerRespMap[worker])
+	}
+
+	return &pb.UpdateMasterConfigResponse{
+		Result:  true,
+		Msg:     "",
+		Workers: workerResps,
+	}, nil
+}
+
 // tryResolveDDLLocks tries to resolve synced DDL locks
 // only when auto-triggered resolve by fetchWorkerDDLInfo fail, we need to auto-retry
 // this can only handle a few cases, like owner unreachable temporary

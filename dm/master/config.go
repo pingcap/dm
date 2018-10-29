@@ -22,6 +22,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"io/ioutil"
 )
 
 // NewConfig creates a config for dm-master
@@ -123,4 +124,29 @@ func (c *Config) adjust() error {
 		c.DeployMap[item.MySQL] = item.Worker
 	}
 	return nil
+}
+
+// UpdateConfigFile write config to local file
+// if ConfigFile is nil, it will write to dm-master.toml
+func (c *Config) UpdateConfigFile(content string) error {
+	if c.ConfigFile != "" {
+		err := ioutil.WriteFile(c.ConfigFile, []byte(content), 0666)
+		return errors.Trace(err)
+	} else {
+		c.ConfigFile = "dm-master.toml"
+		err := ioutil.WriteFile(c.ConfigFile, []byte(content), 0666)
+		return errors.Trace(err)
+	}
+}
+
+// Reload load config from local file
+func (c *Config) Reload() error {
+	if c.ConfigFile != "" {
+		err := c.configFromFile(c.ConfigFile)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+
+	return c.adjust()
 }

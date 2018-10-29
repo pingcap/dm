@@ -17,6 +17,8 @@ service Master {
     // used by dmctl to manually unlock DDL lock
     rpc UnlockDDLLock (UnlockDDLLockRequest) returns (UnlockDDLLockResponse) {}
 
+    rpc UpdateMasterConfig (UpdateMasterConfigRequest) returns (UpdateMasterConfigResponse) {}
+
     // BreakDDLLock request some dm-workers to break a DDL lock
     // including remove DDLLockInfo and/or execute/skip DDL
     rpc BreakWorkerDDLLock (BreakWorkerDDLLockRequest) returns (BreakWorkerDDLLockResponse) {}
@@ -43,6 +45,16 @@ message StartTaskResponse {
     bool result = 1;
     string msg = 2;
     repeated CommonWorkerResponse workers = 3;
+}
+
+message UpdateMasterConfigRequest {
+    string config = 1;
+}
+
+message UpdateMasterConfigResponse {
+    bool result = 1;
+    string msg = 2;
+    repeated QueryStatusResponse workers = 3;
 }
 
 message OperateTaskRequest {
