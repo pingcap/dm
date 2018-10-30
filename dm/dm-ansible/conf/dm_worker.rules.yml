@@ -111,7 +111,7 @@ groups:
     annotations:
       description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, task: {{ $labels.task }}, values: {{ $value }}'
       value: '{{ $value }}'
-      summary: dm relay binlog file not catch up master server exceed 1 min
+      summary: dm relay binlog file not catch up master server exceed 10 min
 
   - alert: DM_binlog_file_gap_between_master_syncer
     expr: dm_syncer_binlog_file{node="master"} - ON(instance, task, job) dm_syncer_binlog_file{node="syncer"} > 1
@@ -123,7 +123,7 @@ groups:
     annotations:
       description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, task: {{ $labels.task }}, values: {{ $value }}'
       value: '{{ $value }}'
-      summary: dm syncer binlog file not catch up master server exceed 1 min
+      summary: dm syncer binlog file not catch up master server exceed 10 min
 
   - alert: DM_binlog_file_gap_between_relay_syncer
     expr: dm_relay_binlog_file{node="relay"} - ON(instance, job) dm_syncer_binlog_file{node="syncer"} > 1
@@ -135,4 +135,4 @@ groups:
     annotations:
       description: 'cluster: ENV_LABELS_ENV, instance: {{ $labels.instance }}, task: {{ $labels.task }}, values: {{ $value }}'
       value: '{{ $value }}'
-      summary: dm syncer binlog file not catch up relay exceed 1 min
+      summary: dm syncer binlog file not catch up relay exceed 10 min
