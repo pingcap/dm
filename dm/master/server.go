@@ -1269,7 +1269,7 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 				}, nil
 			}
 			if len(resp.Locks) != 0 {
-				err = errors.Errorf("WokerID:%s exist ddl lock, please unlock ddl lock first!")
+				err = errors.Errorf("worker %s exist ddl lock, please unlock ddl lock first!", workerAddr)
 				s.Unlock()
 				return &pb.UpdateMasterConfigResponse{
 					Result: false,

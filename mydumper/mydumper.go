@@ -53,6 +53,8 @@ func (m *Mydumper) Init() error {
 
 // Process implements Unit.Process
 func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
+	mydumperExitWithErrorCounter.WithLabelValues(m.cfg.Name).Add(0)
+
 	begin := time.Now()
 	errs := make([]*pb.ProcessError, 0, 1)
 	isCanceled := false

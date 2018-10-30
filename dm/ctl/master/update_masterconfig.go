@@ -23,6 +23,7 @@ import (
 	"golang.org/x/net/context"
 )
 
+// NewUpdateMasterConfigCmd creates a UpdateMasterConfig command
 func NewUpdateMasterConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update-master-config <config_file>",

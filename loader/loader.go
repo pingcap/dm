@@ -380,6 +380,8 @@ func (l *Loader) Init() error {
 
 // Process implements Unit.Process
 func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
+	loaderExitWithErrorCounter.WithLabelValues(l.cfg.Name).Add(0)
+
 	newCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 

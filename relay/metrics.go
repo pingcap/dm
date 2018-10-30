@@ -18,7 +18,7 @@ var (
 			Subsystem: "relay",
 			Name:      "binlog_pos",
 			Help:      "current binlog pos in current binlog file",
-		}, []string{"node", "uuid"})
+		}, []string{"node"})
 
 	relayLogFileGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -26,6 +26,16 @@ var (
 			Subsystem: "relay",
 			Name:      "binlog_file",
 			Help:      "current binlog file index",
+		}, []string{"node"})
+
+	// split sub directory info from relayLogPosGauge / relayLogFileGauge
+	// to make compare relayLogFileGauge for master / relay more easier
+	relaySubDirIndex = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "dm",
+			Subsystem: "relay",
+			Name:      "sub_dir_index",
+			Help:      "current relay sub directory index",
 		}, []string{"node", "uuid"})
 
 	// should alert if avaiable space < 1G
@@ -105,6 +115,7 @@ var (
 func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(relayLogPosGauge)
 	registry.MustRegister(relayLogFileGauge)
+	registry.MustRegister(relaySubDirIndex)
 	registry.MustRegister(relayLogSpaceGauge)
 	registry.MustRegister(relayLogDataCorruptionCounter)
 	registry.MustRegister(relayLogWriteSizeHistogram)

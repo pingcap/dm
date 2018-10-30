@@ -17,12 +17,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
-	"io/ioutil"
 )
 
 // NewConfig creates a config for dm-master
@@ -132,11 +132,10 @@ func (c *Config) UpdateConfigFile(content string) error {
 	if c.ConfigFile != "" {
 		err := ioutil.WriteFile(c.ConfigFile, []byte(content), 0666)
 		return errors.Trace(err)
-	} else {
-		c.ConfigFile = "dm-master.toml"
-		err := ioutil.WriteFile(c.ConfigFile, []byte(content), 0666)
-		return errors.Trace(err)
 	}
+	c.ConfigFile = "dm-master.toml"
+	err := ioutil.WriteFile(c.ConfigFile, []byte(content), 0666)
+	return errors.Trace(err)
 }
 
 // Reload load config from local file

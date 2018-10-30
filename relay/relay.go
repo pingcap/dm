@@ -39,6 +39,7 @@ const (
 	slaveReadTimeout            = 1 * time.Minute  // slave read binlog data timeout, ref: https://dev.mysql.com/doc/refman/8.0/en/replication-options-slave.html#sysvar_slave_net_timeout
 	masterHeartbeatPeriod       = 30 * time.Second // master server send heartbeat period: ref: `MASTER_HEARTBEAT_PERIOD` in https://dev.mysql.com/doc/refman/8.0/en/change-master-to.html
 	flushMetaInterval           = 30 * time.Second
+	getMasterStatusInterval     = 30 * time.Second
 	binlogHeaderSize            = 4
 	showStatusConnectionTimeout = "1m"
 )
@@ -173,6 +174,8 @@ func (r *Relay) process(parentCtx context.Context) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+	} else {
+		r.updateMetricsRelaySubDirIndex()
 	}
 
 	streamer, err := r.getBinlogStreamer()
@@ -183,9 +186,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 	var (
 		_, lastPos  = r.meta.Pos()
 		_, lastGTID = r.meta.GTID()
-		masterNode  = r.masterNode()
-		masterUUID  = r.meta.UUID() // only change after switch
-		tryReSync   = true          // used to handle master-slave switch
+		tryReSync   = true // used to handle master-slave switch
 
 		// fill gap steps:
 		// 1. record the pos after the gap
@@ -213,7 +214,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 		}
 	}()
 
-	go r.flushMetaAtIntervals(parentCtx)
+	go r.doIntervalOps(parentCtx)
 
 	for {
 		if gapStreamer == nil && gapSyncEndPos != nil {
@@ -378,11 +379,11 @@ func (r *Relay) process(parentCtx context.Context) error {
 
 		relayLogWriteDurationHistogram.Observe(time.Since(writeTimer).Seconds())
 		relayLogWriteSizeHistogram.Observe(float64(e.Header.EventSize))
-		relayLogPosGauge.WithLabelValues(masterNode, masterUUID).Set(float64(lastPos.Pos))
+		relayLogPosGauge.WithLabelValues("relay").Set(float64(lastPos.Pos))
 		if index, err := pkgstreamer.GetBinlogFileIndex(lastPos.Name); err != nil {
 			log.Errorf("[relay] parse binlog file name %s err %v", lastPos.Name, err)
 		} else {
-			relayLogFileGauge.WithLabelValues(masterNode, masterUUID).Set(index)
+			relayLogFileGauge.WithLabelValues("relay").Set(index)
 		}
 
 		err = r.meta.Save(lastPos, lastGTID)
@@ -517,7 +518,21 @@ func (r *Relay) reSetupMeta() error {
 		return errors.Trace(err)
 	}
 
+	r.updateMetricsRelaySubDirIndex()
+
 	return nil
+}
+
+func (r *Relay) updateMetricsRelaySubDirIndex() {
+	// when switching master server, update sub dir index metrics
+	node := r.masterNode()
+	uuidWithSuffix := r.meta.UUID() // only change after switch
+	_, suffix, err := utils.ParseSuffixForUUID(uuidWithSuffix)
+	if err != nil {
+		log.Errorf("parse suffix for UUID %s error %v", uuidWithSuffix, errors.Trace(err))
+		return
+	}
+	relaySubDirIndex.WithLabelValues(node, uuidWithSuffix).Set(float64(suffix))
 }
 
 // getServerUUID gets master server's UUID
@@ -538,12 +553,14 @@ func (r *Relay) getServerUUID() (string, error) {
 	return utils.GetServerUUID(r.db)
 }
 
-func (r *Relay) flushMetaAtIntervals(ctx context.Context) {
-	ticker := time.NewTicker(flushMetaInterval)
-	defer ticker.Stop()
+func (r *Relay) doIntervalOps(ctx context.Context) {
+	flushTicker := time.NewTicker(flushMetaInterval)
+	defer flushTicker.Stop()
+	masterStatusTicker := time.NewTicker(getMasterStatusInterval)
+	defer masterStatusTicker.Stop()
 	for {
 		select {
-		case <-ticker.C:
+		case <-flushTicker.C:
 			if r.meta.Dirty() {
 				err := r.meta.Flush()
 				if err != nil {
@@ -552,6 +569,19 @@ func (r *Relay) flushMetaAtIntervals(ctx context.Context) {
 					log.Infof("[relay] flush meta finished, %s", r.meta.String())
 				}
 			}
+		case <-masterStatusTicker.C:
+			pos, _, err := utils.GetMasterStatus(r.db, r.cfg.Flavor)
+			if err != nil {
+				log.Warnf("[relay] get master status error %v", errors.ErrorStack(err))
+				continue
+			}
+			index, err := pkgstreamer.GetBinlogFileIndex(pos.Name)
+			if err != nil {
+				log.Errorf("[relay] parse binlog file name %s error %v", pos.Name, err)
+				continue
+			}
+			relayLogFileGauge.WithLabelValues("master").Set(index)
+			relayLogPosGauge.WithLabelValues("master").Set(float64(pos.Pos))
 		case <-ctx.Done():
 			return
 		}
@@ -702,6 +732,8 @@ func (r *Relay) retrySyncGTIDs() error {
 	if err != nil {
 		return errors.Annotatef(err, "add sub relay directory for master server %s", masterUUID)
 	}
+
+	r.updateMetricsRelaySubDirIndex()
 
 	return nil
 }

@@ -354,6 +354,8 @@ func (s *Syncer) IsFreshTask() (bool, error) {
 
 // Process implements the dm.Unit interface.
 func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
+	syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name).Add(0)
+
 	newCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
