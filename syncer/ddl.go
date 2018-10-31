@@ -52,9 +52,7 @@ func trimCtrlChars(s string) string {
 	return strings.TrimFunc(s, f)
 }
 
-// resolveDDLSQL resolve to one ddl sql
-// example: drop table test.a,test2.b -> drop table test.a; drop table test2.b;
-func (s *Syncer) resolveDDLSQL(sql string, p *parser.Parser, schema string) (sqls []string, tables map[string]*filter.Table, isDDL bool, err error) {
+func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (ast.StmtNode, bool, error) {
 	sql = trimCtrlChars(sql)
 	// We use Parse not ParseOneStmt here, because sometimes we got a commented out ddl which can't be parsed
 	// by ParseOneStmt(it's a limitation of tidb parser.)
@@ -62,22 +60,36 @@ func (s *Syncer) resolveDDLSQL(sql string, p *parser.Parser, schema string) (sql
 	if err != nil {
 		// log error rather than fatal, so other defer can be executed
 		log.Errorf(IncompatibleDDLFormat, sql)
-		return []string{sql}, nil, false, errors.Annotatef(err, IncompatibleDDLFormat, sql)
+		return nil, false, errors.Annotatef(err, IncompatibleDDLFormat, sql)
 	}
 
 	if len(stmts) == 0 {
-		return nil, nil, false, nil
+		return nil, false, nil
 	}
 
 	stmt := stmts[0]
 	switch stmt.(type) {
 	case ast.DDLNode:
-		// do nothing
+		return stmt, true, nil
 	case ast.DMLNode:
-		return nil, nil, false, errors.Annotatef(ErrDMLStatementFound, "query %s", sql)
+		return nil, false, errors.Annotatef(ErrDMLStatementFound, "query %s", sql)
 	default:
 		// BEGIN statement is included here.
 		// let sqls be empty
+		return nil, false, nil
+	}
+}
+
+// resolveDDLSQL resolve to one ddl sql
+// example: drop table test.a,test2.b -> drop table test.a; drop table test2.b;
+func (s *Syncer) resolveDDLSQL(sql string, p *parser.Parser, schema string) (sqls []string, tables map[string]*filter.Table, isDDL bool, err error) {
+	// would remove it later
+	var stmt ast.StmtNode
+	stmt, isDDL, err = s.parseDDLSQL(sql, p, schema)
+	if err != nil {
+		return []string{sql}, nil, false, errors.Trace(err)
+	}
+	if !isDDL {
 		return nil, nil, false, nil
 	}
 

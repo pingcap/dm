@@ -1013,7 +1013,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 			if ignore {
 				binlogSkippedEventsTotal.WithLabelValues("rows", s.cfg.Name).Inc()
-				if err = s.recordSkipSQLsPos(currentPos, nil); err != nil {
+				// for RowsEvent, we should record lastPos rather than currentPos
+				if err = s.recordSkipSQLsPos(lastPos, nil); err != nil {
 					return errors.Trace(err)
 				}
 
@@ -1145,26 +1146,40 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 			}
 		case *replication.QueryEvent:
+			currentPos = mysql.Position{
+				Name: lastPos.Name,
+				Pos:  e.Header.LogPos,
+			}
+			sql := strings.TrimSpace(string(ev.Query))
+			_, isDDL, err := s.parseDDLSQL(sql, parser2, string(ev.Schema))
+			if err != nil {
+				log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
+				log.Errorf("fail to be parsed, error %v", err)
+				return errors.Trace(err)
+			}
+
+			if !isDDL {
+				// skipped sql maybe not a DDL (like `BEGIN`)
+				continue
+			}
+
 			if shardingReSync != nil {
 				shardingReSync.currPos.Pos = e.Header.LogPos
-				lastPos = shardingReSync.currPos
 				if shardingReSync.currPos.Compare(shardingReSync.latestPos) >= 0 {
 					log.Infof("[syncer] sharding group %v re-syncing completed", shardingReSync)
 					closeShardingSyncer()
 				} else {
 					// in re-syncing, we can simply skip all DDLs
-					log.Debugf("[syncer] skip query event when re-syncing sharding group %v", shardingReSync)
+					// only update lastPos when the query is a real DDL
+					lastPos = shardingReSync.currPos
+					log.Debugf("[syncer] skip query event when re-syncing sharding group %+v", shardingReSync)
 				}
 				continue
 			}
 
+			log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
+			lastPos = currentPos // update lastPos, and we have checked `isDDL`
 			latestOp = ddl
-			sql := strings.TrimSpace(string(ev.Query))
-			currentPos = mysql.Position{
-				Name: lastPos.Name,
-				Pos:  e.Header.LogPos,
-			}
-
 			ignore, err := s.skipQuery(nil, nil, sql)
 			if err != nil {
 				return errors.Trace(err)
@@ -1172,8 +1187,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			if ignore {
 				binlogSkippedEventsTotal.WithLabelValues("query", s.cfg.Name).Inc()
 				log.Warnf("[skip query-sql]%s [schema]:%s", sql, ev.Schema)
-				lastPos = currentPos // before record skip pos, update lastPos
-				if err = s.recordSkipSQLsPos(currentPos, nil); err != nil {
+				if err = s.recordSkipSQLsPos(lastPos, nil); err != nil {
 					return errors.Trace(err)
 				}
 				continue
@@ -1182,7 +1196,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			var (
 				sqls                []string
 				onlineDDLTableNames map[string]*filter.Table
-				isDDL               bool
 			)
 
 			operator := s.GetOperator(currentPos)
@@ -1201,18 +1214,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					log.Errorf("fail to be parsed, error %v", err)
 					return errors.Trace(err)
 				}
-
-				if !isDDL {
-					continue
-				}
 			}
 
 			if len(onlineDDLTableNames) > 1 {
 				return errors.NotSupportedf("online ddl changes on multiple table: %s", string(ev.Query))
 			}
 
-			log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
-			lastPos = currentPos // update lastPos
 			binlogEvent.WithLabelValues("query", s.cfg.Name).Observe(time.Since(startTime).Seconds())
 
 			/*
@@ -1295,7 +1302,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			log.Infof("need handled ddls %v in position %v", needHandleDDLs, currentPos)
 			if len(needHandleDDLs) == 0 {
 				log.Infof("skip query %s in position %v", string(ev.Query), currentPos)
-				if err = s.recordSkipSQLsPos(currentPos, nil); err != nil {
+				if err = s.recordSkipSQLsPos(lastPos, nil); err != nil {
 					return errors.Trace(err)
 				}
 				continue
