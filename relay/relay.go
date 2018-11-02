@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"math"
 	"os"
@@ -193,9 +194,10 @@ func (r *Relay) process(parentCtx context.Context) error {
 		// 2. create a special streamer to fill the gap
 		// 3. catchup pos after the gap
 		// 4. close the special streamer
-		gapSyncer     *replication.BinlogSyncer   // syncer used to fill the gap in relay log file
-		gapStreamer   *replication.BinlogStreamer // streamer used to fill the gap in relay log file
-		gapSyncEndPos *mysql.Position             // the pos of the event after the gap
+		gapSyncer     *replication.BinlogSyncer           // syncer used to fill the gap in relay log file
+		gapStreamer   *replication.BinlogStreamer         // streamer used to fill the gap in relay log file
+		gapSyncEndPos *mysql.Position                     // the pos of the event after the gap
+		eventFormat   *replication.FormatDescriptionEvent // latest FormatDescriptionEvent, used when re-calculate checksum
 	)
 
 	closeGapSyncer := func() {
@@ -272,6 +274,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 		switch ev := e.Event.(type) {
 		case *replication.FormatDescriptionEvent:
 			// FormatDescriptionEvent is the first event in binlog, we will close old one and create a new
+			eventFormat = ev // record FormatDescriptionEvent
 			exist, err := r.handleFormatDescriptionEvent(lastPos.Name)
 			if err != nil {
 				return errors.Trace(err)
@@ -344,7 +347,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 			} else {
 				// add LOG_EVENT_RELAY_LOG_F flag to events which used to fill the gap
 				// ref: https://dev.mysql.com/doc/internals/en/binlog-event-flag.html
-				r.addFlagToEvent(e, 0x0040)
+				r.addFlagToEvent(e, 0x0040, eventFormat)
 			}
 		}
 
@@ -394,7 +397,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 }
 
 // addFlagToEvent adds flag to binlog event
-func (r *Relay) addFlagToEvent(e *replication.BinlogEvent, f uint16) {
+func (r *Relay) addFlagToEvent(e *replication.BinlogEvent, f uint16, eventFormat *replication.FormatDescriptionEvent) {
 	newF := e.Header.Flags | f
 	// header structure:
 	// 4 byte timestamp
@@ -406,6 +409,14 @@ func (r *Relay) addFlagToEvent(e *replication.BinlogEvent, f uint16) {
 	startIdx := 4 + 1 + 4 + 4 + 4
 	binary.LittleEndian.PutUint16(e.RawData[startIdx:startIdx+2], newF)
 	e.Header.Flags = newF
+
+	// re-calculate checksum if needed
+	if eventFormat == nil || eventFormat.ChecksumAlgorithm != replication.BINLOG_CHECKSUM_ALG_CRC32 {
+		return
+	}
+	calculatedPart := e.RawData[0 : len(e.RawData)-replication.BinlogChecksumLength]
+	checksum := crc32.ChecksumIEEE(calculatedPart)
+	binary.LittleEndian.PutUint32(e.RawData[len(e.RawData)-replication.BinlogChecksumLength:], checksum)
 }
 
 // detectGap detects whether gap exists in relay log file

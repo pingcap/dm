@@ -93,7 +93,6 @@ func parseBinlogFile(filename string) (*binlogFile, error) {
 	// chendahui: I found there will always be only one dot in the mysql binlog name.
 	parts := strings.Split(filename, baseSeqSeparator)
 	if len(parts) != 2 {
-		log.Warnf("[streamer] filename %s not valid", filename)
 		return nil, ErrInvalidBinlogFilename
 	}
 

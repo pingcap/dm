@@ -375,8 +375,6 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	s.runFatalChan = make(chan *pb.ProcessError, s.cfg.WorkerCount+1)
 	s.execErrorDetected.Set(false)
-	// rollback un-flushed checkpoints
-	s.checkpoint.Rollback()
 	errs := make([]*pb.ProcessError, 0, 2)
 
 	if s.cfg.IsSharding {
@@ -440,6 +438,15 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		// pause because of error occurred
 		s.Pause()
 	}
+
+	// try to rollback checkpoints, if they already flushed, no effect
+	prePos := s.checkpoint.GlobalPoint()
+	s.checkpoint.Rollback()
+	currPos := s.checkpoint.GlobalPoint()
+	if prePos.Compare(currPos) != 0 {
+		log.Warnf("[syncer] rollback global checkpoint from %v to %v because error occurred", prePos, currPos)
+	}
+
 	pr <- pb.ProcessResult{
 		IsCanceled: isCanceled,
 		Errors:     errs,
@@ -586,17 +593,9 @@ func (s *Syncer) addJob(job *job) error {
 	if wait {
 		s.jobWg.Wait()
 		s.c.reset()
-
-		if s.execErrorDetected.Get() {
-			// detected errors for executing SQls, skip save checkpoints and return
-			// can not test len(runFatalChan), it's read by another goroutine
-			// when recovering the sync from error, checkpoints should be rollback and safe-mode should be enabled
-			return nil
-		}
-	}
-	if wait {
 		return errors.Trace(s.flushCheckPoints())
 	}
+
 	return nil
 }
 
@@ -607,7 +606,22 @@ func (s *Syncer) saveGlobalPoint(globalPoint mysql.Position) {
 	s.checkpoint.SaveGlobalPoint(globalPoint)
 }
 
+// flushCheckPoints flushes previous saved checkpoint in memory to persistent storage, like TiDB
+// we flush checkpoints in three cases:
+//   1. DDL executed
+//   2. at intervals (and job executed)
+//   3. pausing / stopping the sync (driven by `s.flushJobs`)
+// but when error occurred, we can not flush checkpoint, otherwise data may lost
+// and except rejecting to flush the checkpoint, we also need to rollback the checkpoint saved before
+//   this should be handled when `s.Run` returned
+//
+// we may need to refactor the concurrency model to make the work-flow more clearer later
 func (s *Syncer) flushCheckPoints() error {
+	if s.execErrorDetected.Get() {
+		log.Warnf("[syncer] error detected when executing SQL job, skip flush checkpoint (%v)", s.checkpoint.GlobalPoint())
+		return nil
+	}
+
 	var exceptTables [][]string
 	if s.cfg.IsSharding {
 		// flush all checkpoints except tables which are unresolved for sharding DDL
@@ -808,6 +822,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			log.Errorf("panic. err: %s, stack: %s", err1, debug.Stack())
 			err = errors.Errorf("panic error: %v", err1)
 		}
+		// flush the jobs channels, but if error occurred, we should not flush the checkpoints
 		if err1 := s.flushJobs(); err1 != nil {
 			log.Errorf("fail to finish all jobs error: %v", err1)
 		}
@@ -949,6 +964,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 		s.binlogSizeCount.Add(int64(e.Header.EventSize))
 
+		log.Debugf("[syncer] receive binlog event with header %+v", e.Header)
 		switch ev := e.Event.(type) {
 		case *replication.RotateEvent:
 			currentPos = mysql.Position{
