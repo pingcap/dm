@@ -98,6 +98,20 @@ func (b *binlogPoint) MySQLPos() mysql.Position {
 	return b.Position
 }
 
+// FlushedMySQLPos returns flushed point as mysql.Position
+func (b *binlogPoint) FlushedMySQLPos() mysql.Position {
+	b.RLock()
+	defer b.RUnlock()
+	return b.flushedPos
+}
+
+func (b *binlogPoint) String() string {
+	b.RLock()
+	defer b.RUnlock()
+
+	return fmt.Sprintf("%v(flushed %v)", b.Position, b.flushedPos)
+}
+
 // CheckPoint represents checkpoints status for syncer
 // including global binlog's checkpoint and every table's checkpoint
 // when save checkpoint, we must differ saving in memory from saving (flushing) to DB (or file) permanently
@@ -147,6 +161,10 @@ type CheckPoint interface {
 	// corresponding to to Meta.Pos
 	GlobalPoint() mysql.Position
 
+	// FlushedGlobalPoint returns the flushed global binlog stream's checkpoint
+	// corresponding to to Meta.Pos
+	FlushedGlobalPoint() mysql.Position
+
 	// CheckGlobalPoint checks whether we should save global checkpoint
 	// corresponding to Meta.Check
 	CheckGlobalPoint() bool
@@ -159,6 +177,9 @@ type CheckPoint interface {
 	// GenUpdateForTableSQLs generates REPLACE checkpoint SQLs for tables
 	// @tables: [[schema, table]... ]
 	GenUpdateForTableSQLs(tables [][]string) ([]string, [][]interface{})
+
+	// String return text of global position
+	String() string
 }
 
 // RemoteCheckPoint implements CheckPoint
@@ -401,6 +422,16 @@ func (cp *RemoteCheckPoint) UpdateFlushedPoint(tables [][]string) {
 // GlobalPoint implements CheckPoint.GlobalPoint
 func (cp *RemoteCheckPoint) GlobalPoint() mysql.Position {
 	return cp.globalPoint.MySQLPos()
+}
+
+// FlushedGlobalPoint implements CheckPoint.FlushedGlobalPoint
+func (cp *RemoteCheckPoint) FlushedGlobalPoint() mysql.Position {
+	return cp.globalPoint.FlushedMySQLPos()
+}
+
+// String implements CheckPoint.String
+func (cp *RemoteCheckPoint) String() string {
+	return cp.globalPoint.String()
 }
 
 // CheckGlobalPoint implements CheckPoint.CheckGlobalPoint

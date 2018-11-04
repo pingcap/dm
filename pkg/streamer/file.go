@@ -11,6 +11,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/siddontang/go-mysql/mysql"
 )
 
 var (
@@ -104,6 +105,21 @@ func parseBinlogFile(filename string) (*binlogFile, error) {
 
 func constructBinlogFilename(baseName, seq string) string {
 	return fmt.Sprintf("%s%s%s", baseName, baseSeqSeparator, seq)
+}
+
+// RealMySQLPos parses relay position and return mysql position
+// or return mysql position directly
+func RealMySQLPos(pos mysql.Position) mysql.Position {
+	parsed, _ := parseBinlogFile(pos.Name)
+	sepIdx := strings.Index(parsed.baseName, posUUIDSuffixSeparator)
+	if sepIdx > 0 && sepIdx+len(posUUIDSuffixSeparator) < len(parsed.baseName) {
+		return mysql.Position{
+			Name: fmt.Sprintf("%s%s%s", parsed.baseName[:sepIdx], baseSeqSeparator, parsed.seq),
+			Pos:  pos.Pos,
+		}
+	}
+
+	return pos
 }
 
 type binlogFile struct {

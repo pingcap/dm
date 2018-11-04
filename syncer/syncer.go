@@ -32,10 +32,11 @@ import (
 var (
 	maxRetryCount = 100
 
-	retryTimeout = 3 * time.Second
-	waitTime     = 10 * time.Millisecond
-	eventTimeout = 1 * time.Hour
-	statusTime   = 30 * time.Second
+	retryTimeout    = 3 * time.Second
+	waitTime        = 10 * time.Millisecond
+	eventTimeout    = 1 * time.Minute
+	maxEventTimeout = 1 * time.Hour
+	statusTime      = 30 * time.Second
 
 	// MaxDDLConnectionTimeoutMinute also used by SubTask.ExecuteDDL
 	MaxDDLConnectionTimeoutMinute = 10
@@ -618,7 +619,7 @@ func (s *Syncer) saveGlobalPoint(globalPoint mysql.Position) {
 // we may need to refactor the concurrency model to make the work-flow more clearer later
 func (s *Syncer) flushCheckPoints() error {
 	if s.execErrorDetected.Get() {
-		log.Warnf("[syncer] error detected when executing SQL job, skip flush checkpoint (%v)", s.checkpoint.GlobalPoint())
+		log.Warnf("[syncer] error detected when executing SQL job, skip flush checkpoint (%s)", s.checkpoint)
 		return nil
 	}
 
@@ -845,13 +846,14 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	//    * compare last pos with current binlog's pos to determine whether re-sync completed
 	// 6. use the global streamer to continue the syncing
 	var (
-		shardingSyncer     *replication.BinlogSyncer
-		shardingReader     *streamer.BinlogReader
-		shardingStreamer   streamer.Streamer
-		shardingReSyncCh   = make(chan *ShardingReSync, 10)
-		shardingReSync     *ShardingReSync
-		savedGlobalLastPos mysql.Position
-		latestOp           opType // latest job operation tp
+		shardingSyncer      *replication.BinlogSyncer
+		shardingReader      *streamer.BinlogReader
+		shardingStreamer    streamer.Streamer
+		shardingReSyncCh    = make(chan *ShardingReSync, 10)
+		shardingReSync      *ShardingReSync
+		savedGlobalLastPos  mysql.Position
+		latestOp            opType // latest job operation tp
+		eventTimeoutCounter time.Duration
 	)
 
 	closeShardingSyncer := func() {
@@ -920,6 +922,16 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			return nil
 		} else if err == context.DeadlineExceeded {
 			log.Info("deadline exceeded.")
+			eventTimeoutCounter += eventTimeout
+			if eventTimeoutCounter < maxEventTimeout {
+				err = s.flushJobs()
+				if err != nil {
+					return errors.Trace(err)
+				}
+				continue
+			}
+
+			eventTimeoutCounter = 0
 			if s.needResync() {
 				log.Info("timeout, resync")
 				if shardingStreamer != nil {
@@ -1576,8 +1588,8 @@ func (s *Syncer) printStatus(ctx context.Context) {
 				}
 			}
 
-			log.Infof("[syncer]total events = %d, total tps = %d, recent tps = %d, master-binlog = %v, master-binlog-gtid=%v, syncer-binlog =%v",
-				total, totalTps, tps, latestMasterPos, latestmasterGTIDSet, s.checkpoint.GlobalPoint())
+			log.Infof("[syncer]total events = %d, total tps = %d, recent tps = %d, master-binlog = %v, master-binlog-gtid=%v, syncer-binlog=%s",
+				total, totalTps, tps, latestMasterPos, latestmasterGTIDSet, s.checkpoint)
 
 			s.lastCount.Set(total)
 			s.lastBinlogSizeCount.Set(totalBinlogSize)
@@ -1651,7 +1663,7 @@ func (s *Syncer) recordSkipSQLsPos(pos mysql.Position, gtidSet gtid.Set) error {
 }
 
 func (s *Syncer) flushJobs() error {
-	log.Infof("flush all jobs, global checkpoint = %v", s.checkpoint.GlobalPoint())
+	log.Infof("flush all jobs, global checkpoint=%s", s.checkpoint)
 	job := newFlushJob()
 	err := s.addJob(job)
 	return errors.Trace(err)

@@ -5,12 +5,16 @@ package pb
 
 import (
 	"fmt"
-	io "io"
-	math "math"
 
 	proto "github.com/golang/protobuf/proto"
+
+	math "math"
+
 	context "golang.org/x/net/context"
+
 	grpc "google.golang.org/grpc"
+
+	io "io"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.

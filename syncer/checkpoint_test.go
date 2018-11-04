@@ -36,11 +36,13 @@ func (s *testSyncerSuite) testCheckPoint(c *C) {
 func (s *testSyncerSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	// global checkpoint init to min
 	c.Assert(cp.GlobalPoint(), Equals, minCheckpoint)
+	c.Assert(cp.FlushedGlobalPoint(), Equals, minCheckpoint)
 
 	// try load, but should load nothing
 	err := cp.Load()
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint(), Equals, minCheckpoint)
+	c.Assert(cp.FlushedGlobalPoint(), Equals, minCheckpoint)
 
 	oldMode := s.cfg.Mode
 	oldDir := s.cfg.Dir
@@ -68,6 +70,7 @@ func (s *testSyncerSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	err = cp.Load()
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint(), Equals, pos1)
+	c.Assert(cp.FlushedGlobalPoint(), Equals, pos1)
 
 	// try load from config
 	pos1.Pos = 2044
@@ -76,6 +79,7 @@ func (s *testSyncerSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	err = cp.Load()
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint(), Equals, pos1)
+	c.Assert(cp.FlushedGlobalPoint(), Equals, pos1)
 
 	s.cfg.Mode = oldMode
 	s.cfg.Meta = nil
@@ -87,19 +91,23 @@ func (s *testSyncerSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	}
 	cp.SaveGlobalPoint(pos2)
 	c.Assert(cp.GlobalPoint(), Equals, pos2)
+	c.Assert(cp.FlushedGlobalPoint(), Equals, pos1)
 
 	// test rollback
 	cp.Rollback()
 	c.Assert(cp.GlobalPoint(), Equals, pos1)
+	c.Assert(cp.FlushedGlobalPoint(), Equals, pos1)
 
 	// save again
 	cp.SaveGlobalPoint(pos2)
 	c.Assert(cp.GlobalPoint(), Equals, pos2)
+	c.Assert(cp.FlushedGlobalPoint(), Equals, pos1)
 
 	// flush + rollback
 	cp.FlushPointsExcept(nil)
 	cp.Rollback()
 	c.Assert(cp.GlobalPoint(), Equals, pos2)
+	c.Assert(cp.FlushedGlobalPoint(), Equals, pos2)
 
 	// try load from DB
 	pos3 := pos2
@@ -108,15 +116,18 @@ func (s *testSyncerSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	err = cp.Load()
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint(), Equals, pos2)
+	c.Assert(cp.FlushedGlobalPoint(), Equals, pos2)
 
 	// test clear
 	err = cp.Clear()
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint(), Equals, minCheckpoint)
+	c.Assert(cp.FlushedGlobalPoint(), Equals, minCheckpoint)
 
 	err = cp.Load()
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint(), Equals, minCheckpoint)
+	c.Assert(cp.FlushedGlobalPoint(), Equals, minCheckpoint)
 }
 
 func (s *testSyncerSuite) testTableCheckPoint(c *C, cp CheckPoint) {

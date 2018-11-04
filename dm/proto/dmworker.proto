@@ -172,6 +172,7 @@ message SyncStatus {
     string syncerBinlogGtid = 7;
     repeated string blockingDDLs = 8; // sharding DDL which current is blocking
     repeated ShardingGroup unresolvedGroups = 9; // sharding groups which current are un-resolved
+    bool synced = 10;  // whether sync is catched-up in this moment
 }
 
 // RelayStatus represents status for relay unit.

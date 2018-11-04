@@ -18,6 +18,7 @@ import (
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
@@ -36,7 +37,7 @@ func (s *Syncer) Status() interface{} {
 		log.Warnf("[syncer] get master status err %v", errors.ErrorStack(err))
 	}
 
-	syncerPos := s.checkpoint.GlobalPoint()
+	syncerPos := s.checkpoint.FlushedGlobalPoint()
 	if err != nil {
 		log.Warnf("[syncer] get gtid err %v", errors.ErrorStack(err))
 	}
@@ -50,6 +51,8 @@ func (s *Syncer) Status() interface{} {
 	if masterGTIDSet != nil { // masterGTIDSet maybe a nil interface
 		st.MasterBinlogGtid = masterGTIDSet.String()
 	}
+
+	st.Synced = compareBinlogPos(masterPos, streamer.RealMySQLPos(syncerPos), 0) == 0
 
 	if s.cfg.IsSharding {
 		st.UnresolvedGroups = s.sgk.UnresolvedGroups()
