@@ -1179,14 +1179,23 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				Pos:  e.Header.LogPos,
 			}
 			sql := strings.TrimSpace(string(ev.Query))
-			_, isDDL, err := s.parseDDLSQL(sql, parser2, string(ev.Schema))
+			parseResult, err := s.parseDDLSQL(sql, parser2, string(ev.Schema))
 			if err != nil {
 				log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
 				log.Errorf("fail to be parsed, error %v", err)
 				return errors.Trace(err)
 			}
 
-			if !isDDL {
+			if parseResult.ignore {
+				binlogSkippedEventsTotal.WithLabelValues("query", s.cfg.Name).Inc()
+				log.Warnf("[skip query-sql]%s [schema]:%s", sql, ev.Schema)
+				lastPos = currentPos // before record skip pos, update lastPos
+				if err = s.recordSkipSQLsPos(lastPos, nil); err != nil {
+					return errors.Trace(err)
+				}
+				continue
+			}
+			if !parseResult.isDDL {
 				// skipped sql maybe not a DDL (like `BEGIN`)
 				continue
 			}
@@ -1206,20 +1215,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 
 			log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
-			lastPos = currentPos // update lastPos, and we have checked `isDDL`
+			lastPos = currentPos // update lastPos, because we have checked `isDDL`
 			latestOp = ddl
-			ignore, err := s.skipQuery(nil, nil, sql)
-			if err != nil {
-				return errors.Trace(err)
-			}
-			if ignore {
-				binlogSkippedEventsTotal.WithLabelValues("query", s.cfg.Name).Inc()
-				log.Warnf("[skip query-sql]%s [schema]:%s", sql, ev.Schema)
-				if err = s.recordSkipSQLsPos(lastPos, nil); err != nil {
-					return errors.Trace(err)
-				}
-				continue
-			}
 
 			var (
 				sqls                []string
@@ -1236,7 +1233,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				// operator only apply one time.
 				s.DelOperator(currentPos)
 			} else {
-				sqls, onlineDDLTableNames, isDDL, err = s.resolveDDLSQL(sql, parser2, string(ev.Schema))
+				sqls, onlineDDLTableNames, _, err = s.resolveDDLSQL(sql, parser2, string(ev.Schema))
 				if err != nil {
 					log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
 					log.Errorf("fail to be parsed, error %v", err)

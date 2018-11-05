@@ -39,6 +39,13 @@ var (
 	 `
 )
 
+// parseDDLResult represents the result of parseDDLSQL
+type parseDDLResult struct {
+	stmt   ast.StmtNode
+	ignore bool
+	isDDL  bool
+}
+
 // trimCtrlChars returns a slice of the string s with all leading
 // and trailing control characters removed.
 func trimCtrlChars(s string) string {
@@ -52,31 +59,68 @@ func trimCtrlChars(s string) string {
 	return strings.TrimFunc(s, f)
 }
 
-func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (ast.StmtNode, bool, error) {
+func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (result parseDDLResult, err error) {
 	sql = trimCtrlChars(sql)
+
+	// check skip before parse (used to skip some un-supported DDLs)
+	ignore, err := s.skipQuery(nil, nil, sql)
+	if err != nil {
+		return parseDDLResult{
+			stmt:   nil,
+			ignore: false,
+			isDDL:  false,
+		}, errors.Trace(err)
+	} else if ignore {
+		return parseDDLResult{
+			stmt:   nil,
+			ignore: true,
+			isDDL:  false,
+		}, nil
+	}
+
 	// We use Parse not ParseOneStmt here, because sometimes we got a commented out ddl which can't be parsed
 	// by ParseOneStmt(it's a limitation of tidb parser.)
 	stmts, err := p.Parse(sql, "", "")
 	if err != nil {
 		// log error rather than fatal, so other defer can be executed
 		log.Errorf(IncompatibleDDLFormat, sql)
-		return nil, false, errors.Annotatef(err, IncompatibleDDLFormat, sql)
+		return parseDDLResult{
+			stmt:   nil,
+			ignore: false,
+			isDDL:  false,
+		}, errors.Annotatef(err, IncompatibleDDLFormat, sql)
 	}
 
 	if len(stmts) == 0 {
-		return nil, false, nil
+		return parseDDLResult{
+			stmt:   nil,
+			ignore: false,
+			isDDL:  false,
+		}, nil
 	}
 
 	stmt := stmts[0]
 	switch stmt.(type) {
 	case ast.DDLNode:
-		return stmt, true, nil
+		return parseDDLResult{
+			stmt:   stmt,
+			ignore: false,
+			isDDL:  true,
+		}, nil
 	case ast.DMLNode:
-		return nil, false, errors.Annotatef(ErrDMLStatementFound, "query %s", sql)
+		return parseDDLResult{
+			stmt:   nil,
+			ignore: false,
+			isDDL:  false,
+		}, errors.Annotatef(ErrDMLStatementFound, "query %s", sql)
 	default:
 		// BEGIN statement is included here.
 		// let sqls be empty
-		return nil, false, nil
+		return parseDDLResult{
+			stmt:   nil,
+			ignore: false,
+			isDDL:  false,
+		}, nil
 	}
 }
 
@@ -84,16 +128,15 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (ast.S
 // example: drop table test.a,test2.b -> drop table test.a; drop table test2.b;
 func (s *Syncer) resolveDDLSQL(sql string, p *parser.Parser, schema string) (sqls []string, tables map[string]*filter.Table, isDDL bool, err error) {
 	// would remove it later
-	var stmt ast.StmtNode
-	stmt, isDDL, err = s.parseDDLSQL(sql, p, schema)
+	parseResult, err := s.parseDDLSQL(sql, p, schema)
 	if err != nil {
 		return []string{sql}, nil, false, errors.Trace(err)
 	}
-	if !isDDL {
+	if !parseResult.isDDL {
 		return nil, nil, false, nil
 	}
 
-	switch v := stmt.(type) {
+	switch v := parseResult.stmt.(type) {
 	case *ast.DropTableStmt:
 		var ex string
 		if v.IfExists {
