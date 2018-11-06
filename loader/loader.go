@@ -873,10 +873,6 @@ func causeErr(err error) error {
 	return e
 }
 
-func (l *Loader) dispatchDataFileJob(job *fileJob) {
-	l.fileJobQueue <- job
-}
-
 func (l *Loader) restoreData(ctx context.Context) error {
 	begin := time.Now()
 
@@ -947,7 +943,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 			for _, file := range dataFiles {
 				select {
 				case <-ctx.Done():
-					log.Info("data file job dispatcher exits.")
+					log.Infof("stop generate data file job because %v", ctx.Err())
 					return nil
 				default:
 					// do nothing
@@ -976,7 +972,12 @@ func (l *Loader) restoreData(ctx context.Context) error {
 
 	// a simple and naive approach to dispatch files randomly based on the feature of golang map(range by random)
 	for _, j := range dispatchMap {
-		l.dispatchDataFileJob(j)
+		select {
+		case <-ctx.Done():
+			log.Infof("stop dispatch data file job because %v", ctx.Err())
+			break
+		case l.fileJobQueue <- j:
+		}
 	}
 	l.closeFileJobQueue() // all data file dispatched, close it
 
