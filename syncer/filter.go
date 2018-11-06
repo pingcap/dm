@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -29,21 +30,22 @@ CREATE [TEMPORARY] TABLE [IF NOT EXISTS] tbl_name
     { LIKE old_tbl_name | (LIKE old_tbl_name) }
 */
 var (
+	commentRegexStr = "(\\s*(/\\*.*\\*/)*\\s*)*"
 	// https://dev.mysql.com/doc/refman/5.7/en/create-database.html
-	createDatabaseRegex = regexp.MustCompile("(?i)CREATE\\s+(DATABASE|SCHEMA)\\s+(IF NOT EXISTS\\s+)?\\S+")
+	createDatabaseRegex = regexp.MustCompile(fmt.Sprintf("(?i)CREATE%s\\s+(DATABASE|SCHEMA)\\s+(IF NOT EXISTS\\s+)?\\S+", commentRegexStr))
 	// https://dev.mysql.com/doc/refman/5.7/en/drop-database.html
-	dropDatabaseRegex = regexp.MustCompile("(?i)DROP\\s+(DATABASE|SCHEMA)\\s+(IF EXISTS\\s+)?\\S+")
+	dropDatabaseRegex = regexp.MustCompile(fmt.Sprintf("(?i)DROP%s\\s+(DATABASE|SCHEMA)\\s+(IF EXISTS\\s+)?\\S+", commentRegexStr))
 	// https://dev.mysql.com/doc/refman/5.7/en/create-index.html
 	// https://dev.mysql.com/doc/refman/5.7/en/drop-index.html
 	createIndexDDLRegex = regexp.MustCompile("(?i)ON\\s+\\S+\\s*\\(")
 	dropIndexDDLRegex   = regexp.MustCompile("(?i)ON\\s+\\S+")
 	// https://dev.mysql.com/doc/refman/5.7/en/create-table.html
-	createTableRegex     = regexp.MustCompile("(?i)^CREATE\\s+(TEMPORARY\\s+)?TABLE\\s+(IF NOT EXISTS\\s+)?\\S+")
-	createTableLikeRegex = regexp.MustCompile("(?i)^CREATE\\s+(TEMPORARY\\s+)?TABLE\\s+(IF NOT EXISTS\\s+)?\\S+\\s*\\(?\\s*LIKE\\s+\\S+")
+	createTableRegex     = regexp.MustCompile(fmt.Sprintf("(?i)CREATE%s\\s+(TEMPORARY\\s+)?TABLE\\s+(IF NOT EXISTS\\s+)?\\S+", commentRegexStr))
+	createTableLikeRegex = regexp.MustCompile(fmt.Sprintf("(?i)CREATE%s\\s+(TEMPORARY\\s+)?TABLE\\s+(IF NOT EXISTS\\s+)?\\S+\\s*\\(?\\s*LIKE\\s+\\S+", commentRegexStr))
 	// https://dev.mysql.com/doc/refman/5.7/en/drop-table.html
-	dropTableRegex = regexp.MustCompile("^(?i)DROP\\s+(TEMPORARY\\s+)?TABLE\\s+(IF EXISTS\\s+)?\\S+")
+	dropTableRegex = regexp.MustCompile(fmt.Sprintf("^(?i)DROP%s\\s+(TEMPORARY\\s+)?TABLE\\s+(IF EXISTS\\s+)?\\S+", commentRegexStr))
 	// https://dev.mysql.com/doc/refman/5.7/en/alter-table.html
-	alterTableRegex = regexp.MustCompile("^(?i)ALTER\\s+TABLE\\s+\\S+")
+	alterTableRegex = regexp.MustCompile(fmt.Sprintf("^(?i)ALTER%s\\s+TABLE\\s+\\S+", commentRegexStr))
 	// https://dev.mysql.com/doc/refman/5.7/en/create-trigger.html
 	builtInSkipDDLs = []string{
 		// For mariadb, for query event, like `# Dumm`
