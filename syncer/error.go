@@ -50,6 +50,7 @@ func needRetryReplicate(err error) bool {
 }
 
 func isRetryableError(err error) bool {
+	err = errors.Cause(err) // check the original error
 	mysqlErr, ok := err.(*mysql.MySQLError)
 	if ok {
 		switch mysqlErr.Number {
