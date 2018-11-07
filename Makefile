@@ -46,7 +46,7 @@ loader:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/loader ./cmd/loader
 
 test:
-	sh -x ./wait_for_mysql.sh
+	bash -x ./wait_for_mysql.sh
 	@export log_level=error; \
 	$(GOTEST) -cover $(PACKAGES)
 
