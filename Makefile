@@ -13,6 +13,7 @@ PACKAGES := $$(go list ./... | grep -vE 'vendor')
 FILES    := $$(find . -name "*.go" | grep -vE "vendor")
 TOPDIRS  := $$(ls -d */ | grep -vE "vendor")
 TIDBDIR  := vendor/github.com/pingcap/tidb
+SHELL    := /usr/bin/env bash
 
 RACE_FLAG = 
 ifeq ("$(WITH_RACE)", "1")
@@ -67,7 +68,7 @@ lint:
 
 vet:
 	@echo "vet"
-	@ go tool vet -all -shadow $(TOPDIRS) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
+	@ go tool vet -all -shadow $(TOPDIRS) 2>&1 | tee /dev/stderr | awk '/shadows declaration/{next}{count+=1} END{if(count>0) {exit 1}}'
 	
 
 update: update_vendor parser clean_vendor

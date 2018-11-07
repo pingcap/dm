@@ -95,9 +95,9 @@ func (r *testRelaySuite) TestLocalMeta(c *C) {
 		err = lm.Save(cs.pos, cs.gset)
 		c.Assert(err, IsNil)
 
-		currentUUID, pos := lm.Pos()
+		currentUUID, pos2 := lm.Pos()
 		c.Assert(currentUUID, Equals, cs.uuidWithSuffix)
-		c.Assert(pos, DeepEquals, cs.pos)
+		c.Assert(pos2, DeepEquals, cs.pos)
 
 		currentUUID, gset = lm.GTID()
 		c.Assert(currentUUID, Equals, cs.uuidWithSuffix)

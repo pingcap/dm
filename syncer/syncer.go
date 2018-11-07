@@ -1558,9 +1558,9 @@ func (s *Syncer) printStatus(ctx context.Context) {
 				currentPos := s.currentPosMu.currentPos
 				s.currentPosMu.RUnlock()
 
-				remainingSize, err := countBinaryLogsSize(currentPos, s.fromDB.db)
-				if err != nil {
-					log.Errorf("count remaining binlog size err %v", errors.ErrorStack(err))
+				remainingSize, err2 := countBinaryLogsSize(currentPos, s.fromDB.db)
+				if err2 != nil {
+					log.Errorf("count remaining binlog size err %v", errors.ErrorStack(err2))
 					return
 				}
 

@@ -42,9 +42,9 @@ func sqlInjectFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 	for _, sql := range realSQLs {
-		isDDL, err := common.IsDDL(sql)
-		if err != nil {
-			common.PrintLines("check sql err %s", errors.ErrorStack(err))
+		isDDL, err2 := common.IsDDL(sql)
+		if err2 != nil {
+			common.PrintLines("check sql err %s", errors.ErrorStack(err2))
 			return
 		}
 		if !isDDL {

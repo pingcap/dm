@@ -102,8 +102,8 @@ func (r *Relay) Init() error {
 	}
 	r.db = db
 
-	if err := os.MkdirAll(r.cfg.RelayDir, 0755); err != nil {
-		return errors.Trace(err)
+	if err2 := os.MkdirAll(r.cfg.RelayDir, 0755); err2 != nil {
+		return errors.Trace(err2)
 	}
 
 	err = r.meta.Load()
@@ -447,7 +447,7 @@ func (r *Relay) compareEventWithFileSize(e *replication.BinlogEvent) (result int
 		if err != nil {
 			return 0, 0, errors.Annotatef(err, "compare relay log file size with %+v", e.Header)
 		}
-		fSize := uint32(fi.Size())
+		fSize = uint32(fi.Size())
 		startPos := e.Header.LogPos - e.Header.EventSize
 		if startPos < fSize {
 			return -1, fSize, nil

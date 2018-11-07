@@ -57,8 +57,8 @@ func sqlReplaceFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 	binlogPos := cmd.Flags().Arg(1)
-	if err := common.CheckBinlogPos(binlogPos); err != nil {
-		common.PrintLines("check binlog pos err %v", err)
+	if err2 := common.CheckBinlogPos(binlogPos); err2 != nil {
+		common.PrintLines("check binlog pos err %v", err2)
 	}
 
 	extraArgs := cmd.Flags().Args()[2:]
