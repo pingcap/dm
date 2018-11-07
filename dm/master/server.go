@@ -1361,3 +1361,25 @@ func (s *Server) tryResolveDDLLocks(ctx context.Context) {
 		}
 	}
 }
+
+func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWorkerRelayConfigRequest) (*pb.CommonWorkerResponse, error) {
+	worker := req.Worker
+	content := req.Config
+	cli, ok := s.workerClients[worker]
+	if !ok {
+		return &pb.CommonWorkerResponse{
+			Result: false,
+			Worker: worker,
+			Msg:    fmt.Sprintf("worker %s relevant worker-client not found", worker),
+		}, nil
+	}
+	log.Infof("[server] try to update %s relay configure", worker)
+	workerResp, err := cli.UpdateRelayConfig(ctx, &pb.UpdateRelayRequest{Content: content})
+	if err != nil {
+		return &pb.CommonWorkerResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}, nil
+	}
+	return workerResp, nil
+}

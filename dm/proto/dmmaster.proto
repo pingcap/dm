@@ -19,6 +19,8 @@ service Master {
 
     rpc UpdateMasterConfig (UpdateMasterConfigRequest) returns (UpdateMasterConfigResponse) {}
 
+    rpc UpdateWorkerRelayConfig(UpdateWorkerRelayConfigRequest) returns (CommonWorkerResponse) {}
+
     // BreakDDLLock request some dm-workers to break a DDL lock
     // including remove DDLLockInfo and/or execute/skip DDL
     rpc BreakWorkerDDLLock (BreakWorkerDDLLockRequest) returns (BreakWorkerDDLLockResponse) {}
@@ -34,6 +36,11 @@ service Master {
     // used by dmctl, to force refresh the task -> workers mapper
     // it should be used rarely only when task -> workers mapper corrupted
     rpc RefreshWorkerTasks (RefreshWorkerTasksRequest) returns (RefreshWorkerTasksResponse) {}
+}
+
+message UpdateWorkerRelayConfigRequest {
+    string config = 1;
+    string worker = 2;
 }
 
 message StartTaskRequest {

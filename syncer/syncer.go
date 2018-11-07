@@ -1954,3 +1954,19 @@ func (s *Syncer) ExecuteDDL(ctx context.Context, execReq *pb.ExecDDLRequest) (<-
 	}
 	return item.resp, nil
 }
+
+func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
+	s.Lock()
+	defer s.Unlock()
+	s.fromDB.close()
+
+	s.cfg.From = cfg.From
+
+	var err error
+	s.fromDB, err = createDB(s.cfg, s.cfg.From, maxDMLConnectionTimeout)
+	if err != nil {
+		log.Warnf("[syncer] %+v", err)
+		return err
+	}
+	return nil
+}

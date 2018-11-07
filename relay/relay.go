@@ -885,3 +885,53 @@ func (r *Relay) Update(cfg *config.SubTaskConfig) error {
 	// not support update configuration now
 	return nil
 }
+
+func (r *Relay) Reload(newCfg *Config) error {
+	r.Lock()
+	defer r.Unlock()
+	log.Info("[relay] relay unit is updating")
+
+	// Update From
+	r.cfg.From = newCfg.From
+
+	// Update AutoFixGTID
+	r.cfg.AutoFixGTID = newCfg.AutoFixGTID
+
+	// Update Charset
+	r.cfg.Charset = newCfg.Charset
+
+	r.db.Close()
+	cfg := r.cfg.From
+	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&readTimeout=%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, showStatusConnectionTimeout)
+	db, err := sql.Open("mysql", dbDSN)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	r.db = db
+
+	syncerCfg := replication.BinlogSyncerConfig{
+		ServerID:        uint32(r.cfg.ServerID),
+		Flavor:          r.cfg.Flavor,
+		Host:            newCfg.From.Host,
+		Port:            uint16(newCfg.From.Port),
+		User:            newCfg.From.User,
+		Password:        newCfg.From.Password,
+		Charset:         newCfg.Charset,
+		UseDecimal:      true, // must set true. ref: https://github.com/pingcap/tidb-enterprise-tools/pull/272
+		ReadTimeout:     slaveReadTimeout,
+		HeartbeatPeriod: masterHeartbeatPeriod,
+		VerifyChecksum:  true,
+	}
+
+	if !newCfg.EnableGTID {
+		// for rawMode(true), we only parse FormatDescriptionEvent and RotateEvent
+		// if not need to support GTID mode, we can enable rawMode
+		syncerCfg.RawModeEnabled = true
+	}
+
+	r.syncerCfg = syncerCfg
+
+	log.Info("[relay] relay unit is updated")
+
+	return nil
+}

@@ -14,6 +14,7 @@
 package worker
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -23,13 +24,14 @@ import (
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"io/ioutil"
 )
 
 // NewConfig creates a new base config for worker.
 func NewConfig() *Config {
 	cfg := &Config{}
-	cfg.FlagSet = flag.NewFlagSet("worker", flag.ContinueOnError)
-	fs := cfg.FlagSet
+	cfg.flagSet = flag.NewFlagSet("worker", flag.ContinueOnError)
+	fs := cfg.flagSet
 
 	fs.BoolVar(&cfg.printVersion, "V", false, "prints version and exit")
 	fs.StringVar(&cfg.ConfigFile, "config", "", "path to config file")
@@ -45,7 +47,7 @@ func NewConfig() *Config {
 
 // Config is the configuration.
 type Config struct {
-	*flag.FlagSet `json:"-"`
+	flagSet *flag.FlagSet
 
 	LogLevel  string `toml:"log-level" json:"log-level"`
 	LogFile   string `toml:"log-file" json:"log-file"`
@@ -77,10 +79,38 @@ func (c *Config) String() string {
 	return string(cfg)
 }
 
+func (c *Config) Toml() (string, error) {
+	var b bytes.Buffer
+	var pswd string
+	var err error
+
+	enc := toml.NewEncoder(&b)
+	if len(c.From.Password) > 0 {
+		pswd, err = utils.Encrypt(c.From.Password)
+		if err != nil {
+			return "", errors.Annotatef(err, "can not encrypt password %s", c.From.Password)
+		}
+	}
+	c.From.Password = pswd
+
+	err = enc.Encode(c)
+	if err != nil {
+		log.Errorf("[worker] marshal config to toml error %v", err)
+	}
+	if len(c.From.Password) > 0 {
+		pswd, err = utils.Decrypt(c.From.Password)
+		if err != nil {
+			return "", errors.Annotatef(err, "can not decrypt password %s", c.From.Password)
+		}
+	}
+	c.From.Password = pswd
+	return string(b.String()), nil
+}
+
 // Parse parses flag definitions from the argument list.
 func (c *Config) Parse(arguments []string) error {
 	// Parse first to get config file.
-	err := c.FlagSet.Parse(arguments)
+	err := c.flagSet.Parse(arguments)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -99,13 +129,13 @@ func (c *Config) Parse(arguments []string) error {
 	}
 
 	// Parse again to replace with command line options.
-	err = c.FlagSet.Parse(arguments)
+	err = c.flagSet.Parse(arguments)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	if len(c.FlagSet.Args()) != 0 {
-		return errors.Errorf("'%s' is an invalid flag", c.FlagSet.Arg(0))
+	if len(c.flagSet.Args()) != 0 {
+		return errors.Errorf("'%s' is an invalid flag", c.flagSet.Arg(0))
 	}
 
 	// try decrypt password
@@ -125,4 +155,41 @@ func (c *Config) Parse(arguments []string) error {
 func (c *Config) configFromFile(path string) error {
 	_, err := toml.DecodeFile(path, c)
 	return errors.Trace(err)
+}
+
+// UpdateConfigFile write configure to local file
+func (c *Config) UpdateConfigFile(content string) error {
+	if c.ConfigFile == "" {
+		c.ConfigFile = "dm-worker-config.bak"
+	}
+	err := ioutil.WriteFile(c.ConfigFile, []byte(content), 0666)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
+}
+
+// Reload reload configure from ConfigFile
+func (c *Config) Reload() error {
+	var pswd string
+	var err error
+
+	if c.ConfigFile == "" {
+		c.ConfigFile = "dm-worker-config.bak"
+	}
+
+	err = c.configFromFile(c.ConfigFile)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	if len(c.From.Password) > 0 {
+		pswd, err = utils.Decrypt(c.From.Password)
+		if err != nil {
+			return errors.Annotatef(err, "can not decrypt password %s", c.From.Password)
+		}
+	}
+	c.From.Password = pswd
+
+	return nil
 }

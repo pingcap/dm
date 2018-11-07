@@ -232,3 +232,43 @@ func (h *RelayHolder) Result() *pb.ProcessResult {
 	clone := *h.result
 	return &clone
 }
+
+// Update update relay config online
+func (h *RelayHolder) Update(ctx context.Context, cfg *Config) error {
+	relayCfg := &relay.Config{
+		AutoFixGTID: cfg.AutoFixGTID,
+		Charset:     cfg.Charset,
+		From: relay.DBConfig{
+			Host:     cfg.From.Host,
+			Port:     cfg.From.Port,
+			User:     cfg.From.User,
+			Password: cfg.From.Password,
+		},
+	}
+
+	stage := h.Stage()
+
+	if stage == pb.Stage_Paused {
+		err := h.relay.Reload(relayCfg)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	} else if stage == pb.Stage_Running {
+		err := h.Operate(ctx, &pb.OperateRelayRequest{Op: pb.RelayOp_PauseRelay})
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		err = h.relay.Reload(relayCfg)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		err = h.Operate(ctx, &pb.OperateRelayRequest{Op: pb.RelayOp_ResumeRelay})
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+
+	return nil
+}

@@ -29,6 +29,8 @@ service Worker {
     // OperateRelay operates relay unit
     // differ from SwitchRelayMaster which may add more args in the future
     rpc OperateRelay (OperateRelayRequest) returns (OperateRelayResponse) {}
+
+    rpc UpdateRelayConfig (UpdateRelayRequest) returns (CommonWorkerResponse) {}
 }
 
 message StartSubTaskRequest {
@@ -40,6 +42,10 @@ enum TaskOp {
     Stop = 1;
     Pause = 2;
     Resume = 3;
+}
+
+message UpdateRelayRequest {
+    string content = 1;
 }
 
 message OperateSubTaskRequest {

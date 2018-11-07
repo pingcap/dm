@@ -437,3 +437,93 @@ func (w *Worker) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) 
 
 	return errors.Trace(w.relayHolder.Operate(ctx, req))
 }
+
+// UpdateRelayConfig update subTask ans relay unit configure online
+func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
+	if w.closed.Get() == closedTrue {
+		return errors.NotValidf("worker already closed")
+	}
+	w.Lock()
+	defer w.Unlock()
+
+	stage := w.relayHolder.Stage()
+	if stage == pb.Stage_Finished || stage == pb.Stage_Stopped {
+		return errors.Errorf("Worker's subtask has already stoped.")
+	}
+
+	// Check whether subtask is running syncer unit
+	for _, st := range w.subTasks {
+		isRunning := st.CheckUnit()
+		if !isRunning {
+			return errors.Errorf("There is a subtask does not run syncer.")
+		}
+	}
+
+	// Save configure to local file.
+	newCfg := NewConfig()
+	err := newCfg.UpdateConfigFile(content)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	err = newCfg.Reload()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	log.Infof("[worker] update relay configure with config: %v", newCfg)
+
+	// Update SubTask configure
+	for _, st := range w.subTasks {
+		cfg := config.NewSubTaskConfig()
+
+		cfg.From = newCfg.From
+
+		stage := st.Stage()
+		if stage == pb.Stage_Paused {
+			err = st.UpdateFromConfig(cfg)
+			if err != nil {
+				return errors.Trace(err)
+			}
+		} else if stage == pb.Stage_Running {
+			err := st.Pause()
+			if err != nil {
+				return errors.Trace(err)
+			}
+			err = st.UpdateFromConfig(cfg)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			err = st.Resume()
+			if err != nil {
+				return errors.Trace(err)
+			}
+		}
+	}
+
+	log.Info("[worker] update relay configure in subtasks success.")
+
+	// Update relay unit configure
+	err = w.relayHolder.Update(ctx, newCfg)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	w.cfg.From = newCfg.From
+	w.cfg.AutoFixGTID = newCfg.AutoFixGTID
+	w.cfg.Charset = newCfg.Charset
+	if w.cfg.ConfigFile == "" {
+		w.cfg.ConfigFile = "dm-worker.toml"
+	}
+
+	content, err = w.cfg.Toml()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	w.cfg.UpdateConfigFile(content)
+
+	log.Infof("[worker] save config to local file: %s", w.cfg.ConfigFile)
+	log.Info("[worker] update relay configure in success.")
+
+	return nil
+}

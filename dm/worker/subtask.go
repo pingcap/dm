@@ -497,3 +497,32 @@ func (st *SubTask) DDLLockInfo() *pb.DDLLockInfo {
 	defer st.RUnlock()
 	return st.ddlLockInfo
 }
+
+func (st *SubTask) UpdateFromConfig(cfg *config.SubTaskConfig) error {
+	st.Lock()
+	defer st.Unlock()
+
+	if sync, ok := st.currUnit.(*syncer.Syncer); ok {
+		err := sync.UpdateFromConfig(cfg)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+
+	st.cfg.From = cfg.From
+
+	return nil
+}
+
+func (st *SubTask) CheckUnit() bool {
+	st.Lock()
+	defer st.Unlock()
+
+	flag := true
+
+	if _, ok := st.currUnit.(*syncer.Syncer); !ok {
+		flag = false
+	}
+
+	return flag
+}

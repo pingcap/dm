@@ -356,3 +356,20 @@ func (s *Server) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) 
 	resp.Result = true
 	return resp, nil
 }
+
+func (s *Server) UpdateRelayConfig(ctx context.Context, req *pb.UpdateRelayRequest) (*pb.CommonWorkerResponse, error) {
+	log.Infof("[server] receive UpdateRelayConfig request %+v", req)
+
+	resp := &pb.CommonWorkerResponse{
+		Result: true,
+		Msg:    "",
+	}
+	err := s.worker.UpdateRelayConfig(ctx, req.Content)
+	if err != nil {
+		resp.Result = false
+		resp.Msg = errors.ErrorStack(err)
+		log.Errorf("[worker] %v UpdateRelayConfig error %v", req, errors.ErrorStack(err))
+	}
+
+	return resp, nil
+}
