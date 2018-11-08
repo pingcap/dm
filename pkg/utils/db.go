@@ -9,6 +9,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
 	tmysql "github.com/pingcap/tidb/mysql"
+	"github.com/pingcap/tidb/parser"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 )
 
@@ -152,6 +153,44 @@ func GetMariaDBGtidDomainID(db *sql.DB) (uint32, error) {
 func GetServerUUID(db *sql.DB) (string, error) {
 	serverUUID, err := GetGlobalVariable(db, "server_uuid")
 	return serverUUID, errors.Trace(err)
+}
+
+// GetSQLMode returns sql_mode.
+func GetSQLMode(db *sql.DB) (tmysql.SQLMode, error) {
+	sqlMode, err := GetGlobalVariable(db, "sql_mode")
+	if err != nil {
+		return tmysql.ModeNone, errors.Trace(err)
+	}
+
+	mode, err := tmysql.GetSQLMode(sqlMode)
+	return mode, errors.Trace(err)
+}
+
+// HasAnsiQuotesMode checks whether database has `ANSI_QUOTES` set
+func HasAnsiQuotesMode(db *sql.DB) (bool, error) {
+	mode, err := GetSQLMode(db)
+	if err != nil {
+		return false, errors.Trace(err)
+	}
+	return mode.HasANSIQuotesMode(), nil
+}
+
+// GetParser gets a parser which maybe enabled `ANSI_QUOTES` sql_mode
+func GetParser(db *sql.DB, ansiQuotesMode bool) (*parser.Parser, error) {
+	if !ansiQuotesMode {
+		// try get from DB
+		var err error
+		ansiQuotesMode, err = HasAnsiQuotesMode(db)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+	}
+
+	parser2 := parser.New()
+	if ansiQuotesMode {
+		parser2.SetSQLMode(tmysql.ModeANSIQuotes)
+	}
+	return parser2, nil
 }
 
 // KillConn kills the DB connection (thread in mysqld)

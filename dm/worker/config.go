@@ -18,13 +18,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
-	"io/ioutil"
 )
 
 // NewConfig creates a new base config for worker.
@@ -79,6 +79,7 @@ func (c *Config) String() string {
 	return string(cfg)
 }
 
+// Toml returns TOML format representation of config
 func (c *Config) Toml() (string, error) {
 	var b bytes.Buffer
 	var pswd string

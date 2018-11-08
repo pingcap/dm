@@ -32,6 +32,19 @@ func ExtractTable(name string) (string, string, error) {
 	return strings.TrimLeft(parts[0], "`"), strings.TrimRight(parts[1], "`"), nil
 }
 
+// TrimCtrlChars returns a slice of the string s with all leading
+// and trailing control characters removed.
+func TrimCtrlChars(s string) string {
+	f := func(r rune) bool {
+		// All entries in the ASCII table below code 32 (technically the C0 control code set) are of this kind,
+		// including CR and LF used to separate lines of text. The code 127 (DEL) is also a control character.
+		// Reference: https://en.wikipedia.org/wiki/Control_character
+		return r < 32 || r == 127
+	}
+
+	return strings.TrimFunc(s, f)
+}
+
 // FetchAllDoTables returns all need to do tables after filtered (fetches from upstream MySQL)
 func FetchAllDoTables(db *sql.DB, bw *filter.Filter) (map[string][]string, error) {
 	schemas, err := getSchemas(db, maxRetryCount)

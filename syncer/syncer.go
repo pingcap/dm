@@ -556,6 +556,9 @@ func (s *Syncer) addJob(job *job) error {
 	switch job.tp {
 	case xid:
 		s.saveGlobalPoint(job.pos)
+		if len(job.sourceSchema) > 0 {
+			s.checkpoint.SaveTablePoint(job.sourceSchema, job.sourceTable, job.pos)
+		}
 		return nil
 	case ddl:
 		s.jobWg.Wait()
@@ -570,12 +573,6 @@ func (s *Syncer) addJob(job *job) error {
 		finishedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName).Inc()
 
 		return errors.Trace(s.flushCheckPoints())
-	}
-
-	// save global and table's checkpoint of current job
-	s.saveGlobalPoint(job.pos)
-	if job.tp != skip && len(job.sourceSchema) > 0 {
-		s.checkpoint.SaveTablePoint(job.sourceSchema, job.sourceTable, job.pos)
 	}
 
 	if len(job.sql) > 0 || len(job.ddls) > 0 {
@@ -594,6 +591,17 @@ func (s *Syncer) addJob(job *job) error {
 	if wait {
 		s.jobWg.Wait()
 		s.c.reset()
+	}
+
+	if job.tp == ddl {
+		// only save checkpoint for DDL and XID (see above)
+		s.saveGlobalPoint(job.pos)
+		if len(job.sourceSchema) > 0 {
+			s.checkpoint.SaveTablePoint(job.sourceSchema, job.sourceTable, job.pos)
+		}
+	}
+
+	if wait {
 		return errors.Trace(s.flushCheckPoints())
 	}
 
@@ -757,7 +765,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		close(s.done)
 	}()
 
-	parser2, err := getParser(s.fromDB.db, s.cfg.EnableANSIQuotes)
+	parser2, err := utils.GetParser(s.fromDB.db, s.cfg.EnableANSIQuotes)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -853,6 +861,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		shardingReSync      *ShardingReSync
 		savedGlobalLastPos  mysql.Position
 		latestOp            opType // latest job operation tp
+		latestSourceSchema  string
+		latestSourceTable   string
 		eventTimeoutCounter time.Duration
 	)
 
@@ -983,7 +993,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				Name: string(ev.NextLogName),
 				Pos:  uint32(ev.Position),
 			}
-			if currentPos.Compare(lastPos) == 1 {
+			if currentPos.Name > lastPos.Name {
 				lastPos = currentPos
 			}
 
@@ -1103,7 +1113,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					if keys != nil {
 						key = keys[i]
 					}
-					err = s.commitJob(insert, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, nil)
+					latestSourceSchema = string(ev.Table.Schema)
+					latestSourceTable = string(ev.Table.Table)
+					err = s.commitJob(insert, latestSourceSchema, latestSourceTable, table.schema, table.name, sqls[i], arg, key, true, lastPos, nil)
 					if err != nil {
 						return errors.Trace(err)
 					}
@@ -1135,7 +1147,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					if keys != nil {
 						key = keys[i]
 					}
-					err = s.commitJob(update, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, nil)
+					latestSourceSchema = string(ev.Table.Schema)
+					latestSourceTable = string(ev.Table.Table)
+					err = s.commitJob(update, latestSourceSchema, latestSourceTable, table.schema, table.name, sqls[i], arg, key, true, lastPos, nil)
 					if err != nil {
 						return errors.Trace(err)
 					}
@@ -1167,7 +1181,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					if keys != nil {
 						key = keys[i]
 					}
-					err = s.commitJob(del, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, nil)
+					latestSourceSchema = string(ev.Table.Schema)
+					latestSourceTable = string(ev.Table.Table)
+					err = s.commitJob(del, latestSourceSchema, latestSourceTable, table.schema, table.name, sqls[i], arg, key, true, lastPos, nil)
 					if err != nil {
 						return errors.Trace(err)
 					}
@@ -1472,7 +1488,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			log.Debugf("[XID event][last_pos]%v [current_pos]%v [gtid set]%v", lastPos, currentPos, ev.GSet)
 			lastPos.Pos = e.Header.LogPos // update lastPos
 
-			job := newXIDJob(currentPos, nil)
+			job := newXIDJob(currentPos, nil, latestSourceSchema, latestSourceTable)
 			s.addJob(job)
 		}
 	}
@@ -1955,6 +1971,7 @@ func (s *Syncer) ExecuteDDL(ctx context.Context, execReq *pb.ExecDDLRequest) (<-
 	return item.resp, nil
 }
 
+// UpdateFromConfig updates config for `From`
 func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 	s.Lock()
 	defer s.Unlock()

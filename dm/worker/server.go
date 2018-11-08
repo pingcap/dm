@@ -357,6 +357,7 @@ func (s *Server) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) 
 	return resp, nil
 }
 
+// UpdateRelayConfig updates config for relay and (dm-worker)
 func (s *Server) UpdateRelayConfig(ctx context.Context, req *pb.UpdateRelayRequest) (*pb.CommonWorkerResponse, error) {
 	log.Infof("[server] receive UpdateRelayConfig request %+v", req)
 

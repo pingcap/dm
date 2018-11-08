@@ -17,6 +17,8 @@ import (
 	"fmt"
 
 	. "github.com/pingcap/check"
+
+	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )
 
 type testCase struct {
@@ -329,7 +331,7 @@ func (s *testSyncerSuite) testAlterTableConvert(c *C) {
 }
 
 func (s *testSyncerSuite) run(c *C, tests []testCase) {
-	parser, err := getParser(s.db, false)
+	parser, err := utils.GetParser(s.db, false)
 	c.Assert(err, IsNil)
 
 	syncer := &Syncer{}

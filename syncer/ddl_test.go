@@ -17,7 +17,9 @@ import (
 	"bytes"
 
 	. "github.com/pingcap/check"
+
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )
 
 func (s *testSyncerSuite) TestFindTableDefineIndex(c *C) {
@@ -78,7 +80,7 @@ func (s *testSyncerSuite) TestGenDDLSQL(c *C) {
 		{"DROP INDEX `idx1` on test", "DROP INDEX `idx1` ON `test`.`test`", "USE `titi`; DROP INDEX `idx1` ON `titi`.`titi`;"},
 	}
 	for _, t := range testCase {
-		p, err := getParser(s.db, false)
+		p, err := utils.GetParser(s.db, false)
 		c.Assert(err, IsNil)
 		stmt, err := p.ParseOneStmt(t[0], "", "")
 		c.Assert(err, IsNil)
@@ -93,7 +95,7 @@ func (s *testSyncerSuite) TestGenDDLSQL(c *C) {
 		{"create table test like test1", "create table `test`.`test` like `test1`.`test1`", "USE `titi`; create table `titi`.`titi` like `titi1`.`titi1`;"},
 	}
 	for _, t := range testCase {
-		p, err := getParser(s.db, false)
+		p, err := utils.GetParser(s.db, false)
 		c.Assert(err, IsNil)
 		stmt, err := p.ParseOneStmt(t[0], "", "")
 		c.Assert(err, IsNil)
@@ -136,7 +138,7 @@ func (s *testSyncerSuite) TestComment(c *C) {
 		{"DROP /*gh-ost*/ INDEX `idx1` on test", "USE `titi`; DROP /*gh-ost*/ INDEX `idx1` ON `titi`.`titi`;"},
 	}
 
-	parser, err := getParser(s.db, false)
+	parser, err := utils.GetParser(s.db, false)
 	c.Assert(err, IsNil)
 
 	for _, t := range testCase {
@@ -172,7 +174,7 @@ func (s *testSyncerSuite) TestTrimCtrlChars(c *C) {
 	controlChars = append(controlChars, 0x7f)
 
 	var buf bytes.Buffer
-	p, err := getParser(s.db, false)
+	p, err := utils.GetParser(s.db, false)
 	c.Assert(err, IsNil)
 
 	for _, char := range controlChars {
@@ -182,7 +184,7 @@ func (s *testSyncerSuite) TestTrimCtrlChars(c *C) {
 		buf.WriteByte(char)
 		buf.WriteByte(char)
 
-		newDDL := trimCtrlChars(buf.String())
+		newDDL := utils.TrimCtrlChars(buf.String())
 		c.Assert(len(newDDL), Equals, len(ddl))
 
 		_, err := p.ParseOneStmt(newDDL, "", "")
@@ -203,7 +205,7 @@ func (s *testSyncerSuite) TestAnsiQuotes(c *C) {
 	_, err := s.db.Exec("set @@global.sql_mode='ANSI_QUOTES'")
 	c.Assert(err, IsNil)
 
-	parser, err := getParser(s.db, false)
+	parser, err := utils.GetParser(s.db, false)
 	c.Assert(err, IsNil)
 
 	for _, sql := range ansiQuotesCases {
@@ -220,7 +222,7 @@ func (s *testSyncerSuite) TestDDLWithDashComments(c *C) {
 CREATE TABLE test.test_table_with_c (id int);
 `
 
-	parser, err := getParser(s.db, false)
+	parser, err := utils.GetParser(s.db, false)
 	c.Assert(err, IsNil)
 
 	_, err = parser.Parse(sql, "", "")

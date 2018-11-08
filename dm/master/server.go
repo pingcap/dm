@@ -1362,6 +1362,7 @@ func (s *Server) tryResolveDDLLocks(ctx context.Context) {
 	}
 }
 
+// UpdateWorkerRelayConfig updates config for relay and (dm-worker)
 func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWorkerRelayConfigRequest) (*pb.CommonWorkerResponse, error) {
 	worker := req.Worker
 	content := req.Config

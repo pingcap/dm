@@ -165,6 +165,11 @@ func (r *Relay) SwitchMaster(ctx context.Context, req *pb.SwitchRelayMasterReque
 }
 
 func (r *Relay) process(parentCtx context.Context) error {
+	parser2, err := utils.GetParser(r.db, false) // refine to use user config later
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	isNew, err := r.isNewServer()
 	if err != nil {
 		return errors.Trace(err)
@@ -270,6 +275,8 @@ func (r *Relay) process(parentCtx context.Context) error {
 		}
 		tryReSync = true
 
+		needSavePos := false
+
 		log.Debugf("[relay] receive binlog event with header %+v", e.Header)
 		switch ev := e.Event.(type) {
 		case *replication.FormatDescriptionEvent:
@@ -289,7 +296,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 				Name: string(ev.NextLogName),
 				Pos:  uint32(ev.Position),
 			}
-			if currentPos.Compare(lastPos) == 1 {
+			if currentPos.Name > lastPos.Name {
 				lastPos = currentPos
 			}
 			log.Infof("[relay] rotate to %s", lastPos.String())
@@ -302,10 +309,15 @@ func (r *Relay) process(parentCtx context.Context) error {
 			// even for `BEGIN`, we still update pos / GTID
 			lastPos.Pos = e.Header.LogPos
 			lastGTID.Set(ev.GSet) // in order to call `ev.GSet`, can not combine QueryEvent and XIDEvent
+			isDDL := checkIsDDL(string(ev.Query), parser2)
+			if isDDL {
+				needSavePos = true // need save pos for DDL
+			}
 		case *replication.XIDEvent:
 			// when RawModeEnabled not true, XIDEvent will be parsed
 			lastPos.Pos = e.Header.LogPos
 			lastGTID.Set(ev.GSet)
+			needSavePos = true // need save pos for XID
 		case *replication.GenericEvent:
 			// handle some un-parsed events
 			switch e.Header.EventType {
@@ -365,8 +377,13 @@ func (r *Relay) process(parentCtx context.Context) error {
 		}
 
 		if !r.cfg.EnableGTID {
-			// not need support GTID mode (rawMode enabled), update pos for all events
+			// if go-mysql set RawModeEnabled to true
+			// then it will only parse FormatDescriptionEvent and RotateEvent
+			// then check `e.Event.(type)` for `QueryEvent` and `XIDEvent` will never be true
+			// so we need to update pos for all events
+			// and also save pos for all events
 			lastPos.Pos = e.Header.LogPos
+			needSavePos = true
 		}
 
 		writeTimer := time.Now()
@@ -389,9 +406,11 @@ func (r *Relay) process(parentCtx context.Context) error {
 			relayLogFileGauge.WithLabelValues("relay").Set(index)
 		}
 
-		err = r.meta.Save(lastPos, lastGTID)
-		if err != nil {
-			return errors.Trace(err)
+		if needSavePos {
+			err = r.meta.Save(lastPos, lastGTID)
+			if err != nil {
+				return errors.Trace(err)
+			}
 		}
 	}
 }
@@ -886,6 +905,7 @@ func (r *Relay) Update(cfg *config.SubTaskConfig) error {
 	return nil
 }
 
+// Reload updates config
 func (r *Relay) Reload(newCfg *Config) error {
 	r.Lock()
 	defer r.Unlock()

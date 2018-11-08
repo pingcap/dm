@@ -498,6 +498,7 @@ func (st *SubTask) DDLLockInfo() *pb.DDLLockInfo {
 	return st.ddlLockInfo
 }
 
+// UpdateFromConfig updates config for `From`
 func (st *SubTask) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 	st.Lock()
 	defer st.Unlock()
@@ -514,6 +515,7 @@ func (st *SubTask) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 	return nil
 }
 
+// CheckUnit checks whether current unit is sync unit
 func (st *SubTask) CheckUnit() bool {
 	st.Lock()
 	defer st.Unlock()

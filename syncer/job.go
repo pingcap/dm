@@ -119,15 +119,17 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, pos mysql.Position, curr
 	return j
 }
 
-func newXIDJob(pos mysql.Position, currentGtidSet gtid.Set) *job {
+func newXIDJob(pos mysql.Position, currentGtidSet gtid.Set, sourceSchema, sourceTable string) *job {
 	var gs gtid.Set
 	if currentGtidSet != nil {
 		gs = currentGtidSet.Clone()
 	}
 	return &job{
-		tp:      xid,
-		pos:     pos,
-		gtidSet: gs,
+		tp:           xid,
+		sourceSchema: sourceSchema,
+		sourceTable:  sourceTable,
+		pos:          pos,
+		gtidSet:      gs,
 	}
 }
 

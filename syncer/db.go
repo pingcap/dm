@@ -22,8 +22,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
-	tmysql "github.com/pingcap/tidb/mysql"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
@@ -395,25 +393,6 @@ func getTableColumns(db *Conn, table *table, maxRetry int) error {
 	}
 
 	return nil
-}
-
-func hasAnsiQuotesMode(db *sql.DB) (bool, error) {
-	mode, err := getSQLMode(db)
-	if err != nil {
-		return false, errors.Trace(err)
-	}
-	return mode.HasANSIQuotesMode(), nil
-}
-
-// getSQLMode returns sql_mode.
-func getSQLMode(db *sql.DB) (tmysql.SQLMode, error) {
-	sqlMode, err := utils.GetGlobalVariable(db, "sql_mode")
-	if err != nil {
-		return tmysql.ModeNone, errors.Trace(err)
-	}
-
-	mode, err := tmysql.GetSQLMode(sqlMode)
-	return mode, errors.Trace(err)
 }
 
 func countBinaryLogsSize(fromFile mysql.Position, db *sql.DB) (int64, error) {

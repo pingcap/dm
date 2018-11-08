@@ -14,16 +14,15 @@
 package syncer
 
 import (
-	"database/sql"
 	"fmt"
-	"strings"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
 	"github.com/pingcap/tidb/ast"
-	"github.com/pingcap/tidb/mysql"
 	"github.com/pingcap/tidb/parser"
+
+	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )
 
 var (
@@ -46,21 +45,8 @@ type parseDDLResult struct {
 	isDDL  bool
 }
 
-// trimCtrlChars returns a slice of the string s with all leading
-// and trailing control characters removed.
-func trimCtrlChars(s string) string {
-	f := func(r rune) bool {
-		// All entries in the ASCII table below code 32 (technically the C0 control code set) are of this kind,
-		// including CR and LF used to separate lines of text. The code 127 (DEL) is also a control character.
-		// Reference: https://en.wikipedia.org/wiki/Control_character
-		return r < 32 || r == 127
-	}
-
-	return strings.TrimFunc(s, f)
-}
-
 func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (result parseDDLResult, err error) {
-	sql = trimCtrlChars(sql)
+	sql = utils.TrimCtrlChars(sql)
 
 	// check skip before parse (used to skip some un-supported DDLs)
 	ignore, err := s.skipQuery(nil, nil, sql)
@@ -495,23 +481,6 @@ func (s *Syncer) clearOnlineDDL(targetSchema, targetTable string) error {
 	}
 
 	return nil
-}
-
-func getParser(db *sql.DB, ansiQuotesMode bool) (*parser.Parser, error) {
-	if !ansiQuotesMode {
-		// try get from DB
-		var err error
-		ansiQuotesMode, err = hasAnsiQuotesMode(db)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-	}
-
-	parser2 := parser.New()
-	if ansiQuotesMode {
-		parser2.SetSQLMode(mysql.ModeANSIQuotes)
-	}
-	return parser2, nil
 }
 
 type shardingDDLInfo struct {

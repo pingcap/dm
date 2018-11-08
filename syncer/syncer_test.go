@@ -23,14 +23,16 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/ngaut/log"
 	. "github.com/pingcap/check"
-	"github.com/pingcap/tidb-enterprise-tools/dm/config"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb/ast"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"golang.org/x/net/context"
+
+	"github.com/pingcap/tidb-enterprise-tools/dm/config"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )
 
 var _ = Suite(&testSyncerSuite{})
@@ -137,7 +139,7 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 		s.db.Exec(sql)
 	}
 
-	p, err := getParser(s.db, false)
+	p, err := utils.GetParser(s.db, false)
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
@@ -235,7 +237,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 		s.db.Exec(sql)
 	}
 
-	p, err := getParser(s.db, false)
+	p, err := utils.GetParser(s.db, false)
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
@@ -302,7 +304,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 		s.db.Exec(sql)
 	}
 
-	p, err := getParser(s.db, false)
+	p, err := utils.GetParser(s.db, false)
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
@@ -393,7 +395,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 		s.db.Exec(sql)
 	}
 
-	p, err := getParser(s.db, false)
+	p, err := utils.GetParser(s.db, false)
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
@@ -482,7 +484,7 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 		s.db.Exec(sqls[i].sql)
 	}
 
-	p, err := getParser(s.db, false)
+	p, err := utils.GetParser(s.db, false)
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
@@ -570,7 +572,7 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 		s.db.Exec(sql)
 	}
 
-	p, err := getParser(s.db, false)
+	p, err := utils.GetParser(s.db, false)
 	c.Assert(err, IsNil)
 
 	mapping, err := cm.NewMapping(false, rules)
