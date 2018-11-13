@@ -315,9 +315,6 @@ func (s *Syncer) initShardingGroups() error {
 	for schema, tables := range sourceTables {
 		for _, table := range tables {
 			targetSchema, targetTable := s.renameShardingSchema(schema, table)
-			if targetSchema == schema && targetTable == table {
-				continue // no need do sharding merge
-			}
 			mSchema, ok := mapper[targetSchema]
 			if !ok {
 				mapper[targetSchema] = make(map[string][]string, len(tables))
@@ -698,10 +695,14 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 					sGroup = s.sgk.Group(sqlJob.targetSchema, sqlJob.targetTable)
 				}
 
-				args := make([][]interface{}, len(sqlJob.ddls))
-				err = db.executeSQL(sqlJob.ddls, args, 1)
-				if err != nil && ignoreDDLError(err) {
-					err = nil
+				if sqlJob.ddlExecItem != nil && sqlJob.ddlExecItem.req != nil && !sqlJob.ddlExecItem.req.Exec {
+					log.Infof("[syncer] ignore sharding DDLs %v", sqlJob.ddls)
+				} else {
+					args := make([][]interface{}, len(sqlJob.ddls))
+					err = db.executeSQL(sqlJob.ddls, args, 1)
+					if err != nil && ignoreDDLError(err) {
+						err = nil
+					}
 				}
 				if s.cfg.IsSharding {
 					// for sharding DDL syncing, send result back
@@ -1448,10 +1449,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					return nil
 				}
 				if ddlExecItem.req.Exec {
-					log.Infof("[syncer] add DDL to job, request is %v", ddlExecItem.req)
+					log.Infof("[syncer] add DDL %v to job, request is %+v", ddlInfo.DDLs, ddlExecItem.req)
 				} else {
-					log.Infof("[syncer] ignore DDL %v, request is %v", ddlInfo.DDLs, ddlExecItem.req)
-					ddlInfo.DDLs = nil // ignore ddls
+					log.Infof("[syncer] ignore DDL %v, request is %+v", ddlInfo.DDLs, ddlExecItem.req)
 				}
 			}
 
