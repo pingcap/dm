@@ -72,8 +72,9 @@ type SubTask struct {
 	result *pb.ProcessResult // the process result, nil when is processing
 
 	// only support sync one DDL lock one time, refine if needed
-	DDLInfo     chan *pb.DDLInfo // DDL info pending to sync
-	ddlLockInfo *pb.DDLLockInfo  // DDL lock info which waiting other dm-workers to sync
+	DDLInfo      chan *pb.DDLInfo // DDL info pending to sync
+	ddlLockInfo  *pb.DDLLockInfo  // DDL lock info which waiting other dm-workers to sync
+	cacheDDLInfo *pb.DDLInfo
 }
 
 // NewSubTask creates a new SubTask
@@ -527,4 +528,29 @@ func (st *SubTask) CheckUnit() bool {
 	}
 
 	return flag
+}
+
+// SaveDDLInfo saves a CacheDDLInfo.
+func (st *SubTask) SaveDDLInfo(info *pb.DDLInfo) error {
+	st.Lock()
+	defer st.Unlock()
+	if st.cacheDDLInfo != nil {
+		return errors.AlreadyExistsf("CacheDDLInfo for task %s", info.Task)
+	}
+	st.cacheDDLInfo = info
+	return nil
+}
+
+// GetDDLInfo returns current CacheDDLInfo.
+func (st *SubTask) GetDDLInfo() *pb.DDLInfo {
+	st.RLock()
+	defer st.RUnlock()
+	return st.cacheDDLInfo
+}
+
+// ClearDDLInfo clears current CacheDDLInfo.
+func (st *SubTask) ClearDDLInfo() {
+	st.Lock()
+	defer st.Unlock()
+	st.cacheDDLInfo = nil
 }

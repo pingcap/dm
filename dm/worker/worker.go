@@ -319,13 +319,23 @@ func (w *Worker) doFetchDDLInfo(ctx context.Context, ch chan<- *pb.DDLInfo) {
 
 	_, value, ok := reflect.Select(cases)
 	if !ok {
-		return // canceled
+		for _, st := range w.subTasks {
+			// NOTE: Can you guarantee that each DDLInfo you get is different?
+			if st.GetDDLInfo() == nil {
+				continue
+			}
+			ch <- st.GetDDLInfo()
+			return
+		}
+		return
 	}
 
 	v, ok := value.Interface().(*pb.DDLInfo)
 	if !ok {
 		return // should not go here
 	}
+	w.subTasks[v.Task].SaveDDLInfo(v)
+	log.Infof("[worker] save DDLInfo into subTasks")
 
 	ch <- v
 	return
@@ -377,6 +387,8 @@ func (w *Worker) ExecuteDDL(ctx context.Context, req *pb.ExecDDLRequest) error {
 	err := st.ExecuteDDL(ctx, req)
 	if err == nil {
 		st.ClearDDLLockInfo() // remove DDL lock info
+		st.ClearDDLInfo()
+		log.Infof("[worker] ExecuteDDL remove cacheDDLInfo")
 	}
 	return err
 }
@@ -398,6 +410,8 @@ func (w *Worker) BreakDDLLock(ctx context.Context, req *pb.BreakDDLLockRequest) 
 			return errors.NotFoundf("DDLLockInfo with ID %s", req.RemoveLockID)
 		}
 		st.ClearDDLLockInfo() // remove DDL lock info
+		st.ClearDDLInfo()
+		log.Infof("[worker] BreakDDLLock remove cacheDDLInfo")
 	}
 
 	if req.ExecDDL && req.SkipDDL {
