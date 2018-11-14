@@ -65,6 +65,7 @@ type job struct {
 	key          string
 	retry        bool
 	pos          mysql.Position
+	cmdPos       mysql.Position // exactly binlog position of current SQL
 	gtidSet      gtid.Set
 	ddlExecItem  *DDLExecItem
 	ddls         []string
@@ -72,11 +73,11 @@ type job struct {
 
 func (j *job) String() string {
 	// only output some important information, maybe useful in execution.
-	return fmt.Sprintf("sql: %s, args: %v, key: %s, last_pos: %s, gtid:%v", j.sql, j.args, j.key, j.pos, j.gtidSet)
+	return fmt.Sprintf("sql: %s, args: %v, key: %s, last_pos: %s, cmd_pos: %s, gtid:%v", j.sql, j.args, j.key, j.pos, j.cmdPos, j.gtidSet)
 }
 
 // TODO zxc: add RENAME TABLE support
-func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, pos mysql.Position, currentGtidSet gtid.Set) *job {
+func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, pos, cmdPos mysql.Position, currentGtidSet gtid.Set) *job {
 	var gs gtid.Set
 	if currentGtidSet != nil {
 		gs = currentGtidSet.Clone()
@@ -91,12 +92,13 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 		args:         args,
 		key:          key,
 		pos:          pos,
+		cmdPos:       cmdPos,
 		gtidSet:      gs,
 		retry:        true,
 	}
 }
 
-func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, pos mysql.Position, currentGtidSet gtid.Set, ddlExecItem *DDLExecItem) *job {
+func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, pos, cmdPos mysql.Position, currentGtidSet gtid.Set, ddlExecItem *DDLExecItem) *job {
 	var gs gtid.Set
 	if currentGtidSet != nil {
 		gs = currentGtidSet.Clone()
@@ -105,6 +107,7 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, pos mysql.Position, curr
 		tp:          ddl,
 		ddls:        ddls,
 		pos:         pos,
+		cmdPos:      cmdPos,
 		gtidSet:     gs,
 		ddlExecItem: ddlExecItem,
 	}
@@ -119,7 +122,7 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, pos mysql.Position, curr
 	return j
 }
 
-func newXIDJob(pos mysql.Position, currentGtidSet gtid.Set, sourceSchema, sourceTable string) *job {
+func newXIDJob(pos, cmdPos mysql.Position, currentGtidSet gtid.Set, sourceSchema, sourceTable string) *job {
 	var gs gtid.Set
 	if currentGtidSet != nil {
 		gs = currentGtidSet.Clone()
@@ -129,6 +132,7 @@ func newXIDJob(pos mysql.Position, currentGtidSet gtid.Set, sourceSchema, source
 		sourceSchema: sourceSchema,
 		sourceTable:  sourceTable,
 		pos:          pos,
+		cmdPos:       cmdPos,
 		gtidSet:      gs,
 	}
 }

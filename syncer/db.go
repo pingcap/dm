@@ -103,7 +103,6 @@ func (conn *Conn) executeSQL(sqls []string, args [][]interface{}, maxRetry int) 
 	}
 
 	var err error
-
 	for i := 0; i < maxRetry; i++ {
 		if i > 0 {
 			sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
@@ -164,12 +163,12 @@ func (conn *Conn) executeSQLImp(sqls []string, args [][]interface{}) error {
 	return nil
 }
 
-func (conn *Conn) executeSQLJob(jobs []*job, maxRetry int) error {
+func (conn *Conn) executeSQLJob(jobs []*job, maxRetry int) *ExecErrorContext {
 	if len(jobs) == 0 {
 		return nil
 	}
 
-	var err error
+	var errCtx *ExecErrorContext
 
 	for i := 0; i < maxRetry; i++ {
 		if i > 0 {
@@ -178,22 +177,24 @@ func (conn *Conn) executeSQLJob(jobs []*job, maxRetry int) error {
 			time.Sleep(retryTimeout)
 		}
 
-		if err = conn.executeSQLJobImp(jobs); err != nil {
+		if errCtx = conn.executeSQLJobImp(jobs); errCtx != nil {
+			err := errCtx.err
 			if isRetryableError(err) {
 				continue
 			}
 			log.Errorf("[exec][sql]%v[error]%v", jobs, err)
-			return errors.Trace(err)
+			errCtx.err = errors.Trace(errCtx.err)
+			return errCtx
 		}
 
 		return nil
 	}
 
-	return errors.Errorf("exec jobs[%v] failed, err:%s", jobs, err.Error())
-
+	errCtx.err = errors.Errorf("exec jobs failed, err:%s", errCtx.err.Error())
+	return errCtx
 }
 
-func (conn *Conn) executeSQLJobImp(jobs []*job) error {
+func (conn *Conn) executeSQLJobImp(jobs []*job) *ExecErrorContext {
 	startTime := time.Now()
 	defer func() {
 		cost := time.Since(startTime).Seconds()
@@ -203,27 +204,27 @@ func (conn *Conn) executeSQLJobImp(jobs []*job) error {
 	txn, err := conn.db.Begin()
 	if err != nil {
 		log.Errorf("exec sqls[%v] begin failed %v", jobs, errors.ErrorStack(err))
-		return errors.Trace(err)
+		return &ExecErrorContext{err: errors.Trace(err), jobs: fmt.Sprintf("%v", jobs)}
 	}
 
 	for i := range jobs {
-		log.Debugf("[exec][checkpoint]%s[sql]%s[args]%v", jobs[i].pos, jobs[i].sql, jobs[i].args)
+		log.Debugf("[exec][checkpoint]%s[sql]%s[args]%v", jobs[i].cmdPos, jobs[i].sql, jobs[i].args)
 
 		_, err = txn.Exec(jobs[i].sql, jobs[i].args...)
 		if err != nil {
-			log.Warnf("[exec][checkpoint]%s[sql]%s[args]%v[error]%v", jobs[i].pos, jobs[i].sql, jobs[i].args, err)
+			log.Warnf("[exec][checkpoint]%s[sql]%s[args]%v[error]%v", jobs[i].cmdPos, jobs[i].sql, jobs[i].args, err)
 			rerr := txn.Rollback()
 			if rerr != nil {
-				log.Errorf("[exec][checkpoint]%s[sql]%s[args]%v[error]%v", jobs[i].pos, jobs[i].sql, jobs[i].args, rerr)
+				log.Errorf("[exec][checkpoint]%s[sql]%s[args]%v[error]%v", jobs[i].cmdPos, jobs[i].sql, jobs[i].args, rerr)
 			}
-			// we should return the exec err, instead of the rollback rerr.
-			return errors.Trace(err)
+			// error in ExecErrorContext should be the exec err, instead of the rollback rerr.
+			return &ExecErrorContext{err: errors.Trace(err), pos: jobs[i].cmdPos, jobs: fmt.Sprintf("%v", jobs)}
 		}
 	}
 	err = txn.Commit()
 	if err != nil {
 		log.Errorf("exec jobs[%v] commit failed %v", jobs, errors.ErrorStack(err))
-		return errors.Trace(err)
+		return &ExecErrorContext{err: errors.Trace(err), pos: jobs[0].cmdPos, jobs: fmt.Sprintf("%v", jobs)}
 	}
 	return nil
 }

@@ -285,6 +285,10 @@ func (c *Checker) Status() interface{} {
 	}
 }
 
+// Error implements Unit interface
+func (c *Checker) Error() interface{} {
+	return &pb.CheckError{}
+}
 func sameTableNameDetection(tables map[string][]*filter.Table) error {
 	tableNameSets := make(map[string]string)
 	var messages []string

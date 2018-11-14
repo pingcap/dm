@@ -25,6 +25,11 @@ func (l *Loader) Status() interface{} {
 	return s
 }
 
+// Error implements SubTaskUnit.Error
+func (l *Loader) Error() interface{} {
+	return &pb.LoadError{}
+}
+
 // PrintStatus prints status like progress percentage.
 func (l *Loader) PrintStatus(ctx context.Context) {
 	ticker := time.NewTicker(printStatusInterval)

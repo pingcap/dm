@@ -128,6 +128,11 @@ type Syncer struct {
 	// record whether error occurred when execute SQLs
 	execErrorDetected sync2.AtomicBool
 
+	execErrors struct {
+		sync.Mutex
+		errors []*ExecErrorContext
+	}
+
 	operatorsMu struct {
 		sync.RWMutex
 		operators map[string]*Operator
@@ -373,6 +378,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	s.runFatalChan = make(chan *pb.ProcessError, s.cfg.WorkerCount+1)
 	s.execErrorDetected.Set(false)
+	s.resetExecErrors()
 	errs := make([]*pb.ProcessError, 0, 2)
 
 	if s.cfg.IsSharding {
@@ -668,7 +674,12 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 		if len(jobs) == 0 {
 			return nil
 		}
-		err := db.executeSQLJob(jobs, s.cfg.MaxRetry)
+		errCtx := db.executeSQLJob(jobs, s.cfg.MaxRetry)
+		var err error
+		if errCtx != nil {
+			err = errCtx.err
+			s.appendExecErrors(errCtx)
+		}
 		return errors.Trace(err)
 	}
 
@@ -703,6 +714,13 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 					if err != nil && ignoreDDLError(err) {
 						err = nil
 					}
+				}
+				if err != nil {
+					s.appendExecErrors(&ExecErrorContext{
+						err:  err,
+						pos:  sqlJob.cmdPos,
+						jobs: fmt.Sprintf("%v", sqlJob.ddls),
+					})
 				}
 				if s.cfg.IsSharding {
 					// for sharding DDL syncing, send result back
@@ -1116,7 +1134,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					}
 					latestSourceSchema = string(ev.Table.Schema)
 					latestSourceTable = string(ev.Table.Table)
-					err = s.commitJob(insert, latestSourceSchema, latestSourceTable, table.schema, table.name, sqls[i], arg, key, true, lastPos, nil)
+					err = s.commitJob(insert, latestSourceSchema, latestSourceTable, table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil)
 					if err != nil {
 						return errors.Trace(err)
 					}
@@ -1150,7 +1168,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					}
 					latestSourceSchema = string(ev.Table.Schema)
 					latestSourceTable = string(ev.Table.Table)
-					err = s.commitJob(update, latestSourceSchema, latestSourceTable, table.schema, table.name, sqls[i], arg, key, true, lastPos, nil)
+					err = s.commitJob(update, latestSourceSchema, latestSourceTable, table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil)
 					if err != nil {
 						return errors.Trace(err)
 					}
@@ -1184,7 +1202,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					}
 					latestSourceSchema = string(ev.Table.Schema)
 					latestSourceTable = string(ev.Table.Table)
-					err = s.commitJob(del, latestSourceSchema, latestSourceTable, table.schema, table.name, sqls[i], arg, key, true, lastPos, nil)
+					err = s.commitJob(del, latestSourceSchema, latestSourceTable, table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil)
 					if err != nil {
 						return errors.Trace(err)
 					}
@@ -1352,7 +1370,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			if !s.cfg.IsSharding {
 				log.Infof("[start] execute need handled ddls %v in position %v", needHandleDDLs, currentPos)
-				job := newDDLJob(nil, needHandleDDLs, lastPos, nil, nil)
+				job := newDDLJob(nil, needHandleDDLs, lastPos, currentPos, nil, nil)
 				err = s.addJob(job)
 				if err != nil {
 					return errors.Trace(err)
@@ -1456,7 +1474,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 
 			log.Infof("[ddl][schema]%s [start] sql %s, need handled sqls %v", string(ev.Schema), string(ev.Query), needHandleDDLs)
-			job := newDDLJob(ddlInfo, needHandleDDLs, lastPos, nil, ddlExecItem)
+			job := newDDLJob(ddlInfo, needHandleDDLs, lastPos, currentPos, nil, ddlExecItem)
 			err = s.addJob(job)
 			if err != nil {
 				return errors.Trace(err)
@@ -1488,18 +1506,18 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			log.Debugf("[XID event][last_pos]%v [current_pos]%v [gtid set]%v", lastPos, currentPos, ev.GSet)
 			lastPos.Pos = e.Header.LogPos // update lastPos
 
-			job := newXIDJob(currentPos, nil, latestSourceSchema, latestSourceTable)
+			job := newXIDJob(currentPos, currentPos, nil, latestSourceSchema, latestSourceTable)
 			s.addJob(job)
 		}
 	}
 }
 
-func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, retry bool, pos mysql.Position, gs gtid.Set) error {
+func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, retry bool, pos, cmdPos mysql.Position, gs gtid.Set) error {
 	key, err := s.resolveCasuality(keys)
 	if err != nil {
 		return errors.Errorf("resolve karam error %v", err)
 	}
-	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, pos, gs)
+	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, pos, cmdPos, gs)
 	err = s.addJob(job)
 	return errors.Trace(err)
 }
@@ -1986,4 +2004,18 @@ func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 		return err
 	}
 	return nil
+}
+
+// appendExecErrors appends syncer execErrors with new value
+func (s *Syncer) appendExecErrors(errCtx *ExecErrorContext) {
+	s.execErrors.Lock()
+	defer s.execErrors.Unlock()
+	s.execErrors.errors = append(s.execErrors.errors, errCtx)
+}
+
+// resetExecErrors resets syncer execErrors
+func (s *Syncer) resetExecErrors() {
+	s.execErrors.Lock()
+	defer s.execErrors.Unlock()
+	s.execErrors.errors = make([]*ExecErrorContext, 0)
 }

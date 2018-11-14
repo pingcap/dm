@@ -9,6 +9,7 @@ service Worker {
     rpc UpdateSubTask (UpdateSubTaskRequest) returns (CommonWorkerResponse) {}
 
     rpc QueryStatus (QueryStatusRequest) returns (QueryStatusResponse) {}
+    rpc QueryError (QueryErrorRequest) returns (QueryErrorResponse) {}
 
     rpc HandleSQLs (HandleSubTaskSQLsRequest) returns (CommonWorkerResponse) {}
     // FetchDDLInfo fetches DDL info from dm-worker by dm-master
@@ -68,6 +69,10 @@ message QueryStatusRequest {
     string name = 1; // sub task's name, empty for all sub tasks
 }
 
+message QueryErrorRequest {
+    string name = 1; // sub task's name, empty for all sub tasks
+}
+
 enum SQLOp {
     SKIP = 0; // skip the SQL
     REPLACE = 1; // replace the SQL with a specified SQL
@@ -96,6 +101,15 @@ message QueryStatusResponse {
     string msg = 3;
     repeated SubTaskStatus subTaskStatus = 4;
     RelayStatus relayStatus = 5;
+}
+
+// QueryErrorResponse represents response for query on a dm-worker
+message QueryErrorResponse {
+    bool result = 1;
+    string worker = 2; // worker name, set by dm-master
+    string msg = 3;
+    repeated SubTaskError subTaskError = 4;
+    RelayError RelayError = 5;
 }
 
 // Stage represents current stage for a (sub) task
@@ -221,6 +235,64 @@ message SubTaskStatus {
 // SubTaskStatusList used for internal jsonpb marshal
 message SubTaskStatusList {
     repeated SubTaskStatus status = 1;
+}
+
+// CheckError represents error for check unit
+// adds fields later
+message CheckError {
+    string msg = 1;
+}
+
+// DumpError represents error for dump unit
+// add fields later
+message DumpError {
+    string msg = 1;
+}
+
+// LoadError represents error for load unit
+message LoadError {
+    string msg = 1;
+}
+
+// SyncSQLError represents a sql error in sync unit
+message SyncSQLError {
+    string msg = 1;
+    string failedBinlogPosition = 2;
+    string errorSQL = 3;
+}
+
+// SyncError represents error list for sync unit
+message SyncError {
+    repeated SyncSQLError errors = 1;
+}
+
+// RelayError represents error for relay unit.
+message RelayError {
+    string msg = 1;
+}
+
+// SubTaskError represents error for a sub task during running
+// name: sub task'name, when starting a sub task the name should be unique
+// stage: sub task's current stage
+// unit: sub task's current dm unit's UnitType
+// error: current unit's error information
+//         for Sync, includes failed sql, failed sql pos in binlog, etc.
+message SubTaskError {
+    string name = 1;
+    Stage stage = 2;
+    UnitType unit = 3;
+    oneof error {
+        string msg = 4; // message when error occurred
+        CheckError check = 5;
+        DumpError dump = 6;
+        LoadError load = 7;
+        SyncError sync = 8;
+    }
+}
+
+// SubTaskErrorList used for internal jsonpb marshal
+message SubTaskErrorList {
+    repeated SubTaskError error = 1;
 }
 
 // UnitType represents the dm unit's type

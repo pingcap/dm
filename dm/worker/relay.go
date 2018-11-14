@@ -116,6 +116,18 @@ func (h *RelayHolder) Status() *pb.RelayStatus {
 	return s
 }
 
+// Error returns relay unit's status
+func (h *RelayHolder) Error() *pb.RelayError {
+	if h.closed.Get() == closedTrue || h.relay.IsClosed() {
+		return &pb.RelayError{
+			Msg: "relay stopped",
+		}
+	}
+
+	s := h.relay.Error().(*pb.RelayError)
+	return s
+}
+
 // SwitchMaster requests relay unit to switch master server
 func (h *RelayHolder) SwitchMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) error {
 	h.RLock()

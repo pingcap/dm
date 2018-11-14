@@ -29,6 +29,11 @@ func (st *SubTask) Status() interface{} {
 	return st.CurrUnit().Status()
 }
 
+// Error returns the error of the current sub task
+func (st *SubTask) Error() interface{} {
+	return st.CurrUnit().Error()
+}
+
 // StatusJSON returns the status of the current sub task as json string
 func (st *SubTask) StatusJSON() string {
 	sj, err := json.Marshal(st.Status())
@@ -113,4 +118,60 @@ func (w *Worker) StatusJSON(stName string) string {
 		return ""
 	}
 	return s
+}
+
+// Error returns the error information of the worker (and sub tasks)
+// if stName is empty, all sub task's error information will be returned
+func (w *Worker) Error(stName string) []*pb.SubTaskError {
+	w.Lock()
+	defer w.Unlock()
+	if len(w.subTasks) == 0 {
+		return nil // no sub task started
+	}
+
+	error := make([]*pb.SubTaskError, 0, len(w.subTasks))
+
+	// return error order by name
+	names := make([]string, 0, len(w.subTasks))
+	if len(stName) > 0 {
+		names = append(names, stName)
+	} else {
+		for name := range w.subTasks {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		st, ok := w.subTasks[name]
+		var stError pb.SubTaskError
+		if !ok {
+			stError = pb.SubTaskError{
+				Error: &pb.SubTaskError_Msg{Msg: fmt.Sprintf("no sub task with name %s has started", name)},
+			}
+		} else {
+			cu := st.CurrUnit()
+			stError = pb.SubTaskError{
+				Name:  name,
+				Stage: st.Stage(),
+				Unit:  cu.Type(),
+			}
+
+			// oneof error
+			us := st.Error()
+			switch cu.Type() {
+			case pb.UnitType_Check:
+				stError.Error = &pb.SubTaskError_Check{Check: us.(*pb.CheckError)}
+			case pb.UnitType_Dump:
+				stError.Error = &pb.SubTaskError_Dump{Dump: us.(*pb.DumpError)}
+			case pb.UnitType_Load:
+				stError.Error = &pb.SubTaskError_Load{Load: us.(*pb.LoadError)}
+			case pb.UnitType_Sync:
+				stError.Error = &pb.SubTaskError_Sync{Sync: us.(*pb.SyncError)}
+			}
+		}
+		error = append(error, &stError)
+	}
+
+	return error
 }

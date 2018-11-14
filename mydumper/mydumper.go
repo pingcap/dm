@@ -130,6 +130,11 @@ func (m *Mydumper) Status() interface{} {
 	return &pb.DumpStatus{}
 }
 
+// Error implements Unit.Error
+func (m *Mydumper) Error() interface{} {
+	return &pb.DumpError{}
+}
+
 // Type implements Unit.Type
 func (m *Mydumper) Type() pb.UnitType {
 	return pb.UnitType_Dump

@@ -481,6 +481,62 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 	return resp, nil
 }
 
+// QueryError implements MasterServer.QueryError
+func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorListRequest) (*pb.QueryErrorListResponse, error) {
+	log.Infof("[server] receive QueryError request %+v", req)
+
+	workers := make([]string, 0, len(s.workerClients))
+	if len(req.Workers) > 0 {
+		// query specified dm-workers
+		invalidWorkers := make([]string, 0, len(req.Workers))
+		for _, worker := range req.Workers {
+			if _, ok := s.workerClients[worker]; !ok {
+				invalidWorkers = append(invalidWorkers, worker)
+			}
+		}
+		if len(invalidWorkers) > 0 {
+			return &pb.QueryErrorListResponse{
+				Result: false,
+				Msg:    fmt.Sprintf("%s relevant worker-client not found", strings.Join(invalidWorkers, ", ")),
+			}, nil
+		}
+		workers = req.Workers
+	} else if len(req.Name) > 0 {
+		// query specified task's workers
+		workers = s.getTaskWorkers(req.Name)
+		if len(workers) == 0 {
+			return &pb.QueryErrorListResponse{
+				Result: false,
+				Msg:    fmt.Sprintf("task %s has no workers or not exist, can try `refresh-worker-tasks` cmd first", req.Name),
+			}, nil
+		}
+	} else {
+		// query all workers
+		for worker := range s.workerClients {
+			workers = append(workers, worker)
+		}
+	}
+
+	workerRespCh := s.getErrorFromWorkers(ctx, workers, req.Name)
+
+	workerRespMap := make(map[string]*pb.QueryErrorResponse, len(workers))
+	for len(workerRespCh) > 0 {
+		workerResp := <-workerRespCh
+		workerRespMap[workerResp.Worker] = workerResp
+	}
+
+	sort.Strings(workers)
+	workerResps := make([]*pb.QueryErrorResponse, 0, len(workers))
+	for _, worker := range workers {
+		workerResps = append(workerResps, workerRespMap[worker])
+	}
+	resp := &pb.QueryErrorListResponse{
+		Result:  true,
+		Workers: workerResps,
+	}
+	return resp, nil
+}
+
 // ShowDDLLocks implements MasterServer.ShowDDLLocks
 func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) (*pb.ShowDDLLocksResponse, error) {
 	log.Infof("[server] receive ShowDDLLocks request %+v", req)
@@ -905,6 +961,34 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, workers []string, tas
 			}
 			workerStatus.Worker = worker
 			workerRespCh <- workerStatus
+		}(worker)
+	}
+	wg.Wait()
+	return workerRespCh
+}
+
+// getErrorFromWorkers does RPC request to get error information from dm-workers
+func (s *Server) getErrorFromWorkers(ctx context.Context, workers []string, taskName string) chan *pb.QueryErrorResponse {
+	workerReq := &pb.QueryErrorRequest{
+		Name: taskName,
+	}
+
+	workerRespCh := make(chan *pb.QueryErrorResponse, len(workers))
+	var wg sync.WaitGroup
+	for _, worker := range workers {
+		wg.Add(1)
+		go func(worker string) {
+			defer wg.Done()
+			cli := s.workerClients[worker]
+			workerError, err := cli.QueryError(ctx, workerReq)
+			if err != nil {
+				workerError = &pb.QueryErrorResponse{
+					Result: false,
+					Msg:    errors.ErrorStack(err),
+				}
+			}
+			workerError.Worker = worker
+			workerRespCh <- workerError
 		}(worker)
 	}
 	wg.Wait()

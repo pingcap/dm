@@ -42,6 +42,8 @@ type Unit interface {
 
 	// Status returns the unit's current status
 	Status() interface{}
+	// Error returns the unit's error information
+	Error() interface{}
 	// Type returns the unit's type
 	Type() pb.UnitType
 	// IsFreshTask return whether is a fresh task (not processed before)

@@ -874,6 +874,11 @@ func (r *Relay) Status() interface{} {
 	return rs
 }
 
+// Error implements the dm.Unit interface.
+func (r *Relay) Error() interface{} {
+	return &pb.RelayError{}
+}
+
 // Type implements the dm.Unit interface.
 func (r *Relay) Type() pb.UnitType {
 	return pb.UnitType_Relay

@@ -11,6 +11,7 @@ service Master {
     rpc UpdateTask (UpdateTaskRequest) returns (UpdateTaskResponse) {}
 
     rpc QueryStatus (QueryStatusListRequest) returns (QueryStatusListResponse) {}
+    rpc QueryError (QueryErrorListRequest) returns (QueryErrorListResponse) {}
 
     // show un-resolved DDL locks
     rpc ShowDDLLocks (ShowDDLLocksRequest) returns (ShowDDLLocksResponse) {}
@@ -104,6 +105,17 @@ message QueryStatusListResponse {
     bool result = 1;
     string msg = 2;
     repeated QueryStatusResponse workers = 3;
+}
+
+message QueryErrorListRequest {
+    string name = 1;             // task's name, empty for all tasks
+    repeated string workers = 2; // workers need to query, empty for all workers
+}
+
+message QueryErrorListResponse {
+    bool result = 1;
+    string msg = 2;
+    repeated QueryErrorResponse workers = 3;
 }
 
 // ShowDDLLocksRequest used to query DDL locks which are un-resolved

@@ -209,6 +209,19 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 	return resp, nil
 }
 
+// QueryError implements WorkerServer.QueryError
+func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorRequest) (*pb.QueryErrorResponse, error) {
+	log.Infof("[server] receive QueryError request %+v", req)
+
+	resp := &pb.QueryErrorResponse{
+		Result:       true,
+		SubTaskError: s.worker.QueryError(req.Name),
+		RelayError:   s.worker.relayHolder.Error(),
+	}
+
+	return resp, nil
+}
+
 // FetchDDLInfo implements WorkerServer.FetchDDLInfo
 // we do ping-pong send-receive on stream for DDL (lock) info
 // if error occurred in Send / Recv, just retry in client

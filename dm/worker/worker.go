@@ -244,6 +244,16 @@ func (w *Worker) QueryStatus(name string) []*pb.SubTaskStatus {
 	return w.Status(name)
 }
 
+// QueryError query worker's sub tasks' error
+func (w *Worker) QueryError(name string) []*pb.SubTaskError {
+	if w.closed.Get() == closedTrue {
+		log.Warn("[worker] querying error from a closed worker")
+		return nil
+	}
+
+	return w.Error(name)
+}
+
 // HandleSQLs implements Handler.HandleSQLs.
 func (w *Worker) HandleSQLs(ctx context.Context, name string, op pb.SQLOp, pos string, args []string) error {
 	if w.closed.Get() == closedTrue {
@@ -500,7 +510,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 				return errors.Trace(err)
 			}
 		} else if stage == pb.Stage_Running {
-			err := st.Pause()
+			err = st.Pause()
 			if err != nil {
 				return errors.Trace(err)
 			}
