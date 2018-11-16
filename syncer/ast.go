@@ -67,7 +67,7 @@ func formatStringValue(s string) string {
 	if s == "" {
 		return "''"
 	}
-	return fmt.Sprintf("'%s'", s)
+	return fmt.Sprintf("'%s'", escapeSingleQuote(s))
 }
 
 // for change/modify column use only.
@@ -124,7 +124,9 @@ func columnOptionsToSQL(options []*ast.ColumnOption) string {
 		case ast.ColumnOptionPrimaryKey:
 			sql += " PRIMARY KEY"
 		case ast.ColumnOptionComment:
-			sql += fmt.Sprintf(" COMMENT '%v'", opt.Expr.GetValue())
+			comment := fmt.Sprintf("%v", opt.Expr.GetValue())
+			comment = escapeSingleQuote(comment)
+			sql += fmt.Sprintf(" COMMENT '%s'", comment)
 		case ast.ColumnOptionOnUpdate: // For Timestamp and Datetime only.
 			sql += " ON UPDATE CURRENT_TIMESTAMP"
 		case ast.ColumnOptionFulltext:
@@ -294,7 +296,7 @@ func indexOptionToSQL(option *ast.IndexOption) string {
 	}
 
 	if option.Comment != "" {
-		return fmt.Sprintf(" COMMENT '%s'", option.Comment)
+		return fmt.Sprintf(" COMMENT '%s'", escapeSingleQuote(option.Comment))
 	}
 
 	return ""
@@ -325,7 +327,7 @@ func tableOptionsToSQL(options []*ast.TableOption) string {
 			sql += fmt.Sprintf(" AUTO_INCREMENT = %d", opt.UintValue)
 
 		case ast.TableOptionComment:
-			sql += fmt.Sprintf(" COMMENT '%s'", opt.StrValue)
+			sql += fmt.Sprintf(" COMMENT '%s'", escapeSingleQuote(opt.StrValue))
 
 		case ast.TableOptionAvgRowLength:
 			sql += fmt.Sprintf(" AVG_ROW_LENGTH = %d", opt.UintValue)
@@ -335,13 +337,13 @@ func tableOptionsToSQL(options []*ast.TableOption) string {
 
 		case ast.TableOptionCompression:
 			// In TiDB parser.y, the rule is "COMPRESSION" EqOpt Identifier. No single quote here.
-			sql += fmt.Sprintf(" COMPRESSION = '%s'", opt.StrValue)
+			sql += fmt.Sprintf(" COMPRESSION = '%s'", escapeSingleQuote(opt.StrValue))
 
 		case ast.TableOptionConnection:
-			sql += fmt.Sprintf(" CONNECTION = '%s'", opt.StrValue)
+			sql += fmt.Sprintf(" CONNECTION = '%s'", escapeSingleQuote(opt.StrValue))
 
 		case ast.TableOptionPassword:
-			sql += fmt.Sprintf(" PASSWORD = '%s'", opt.StrValue)
+			sql += fmt.Sprintf(" PASSWORD = '%s'", escapeSingleQuote(opt.StrValue))
 
 		case ast.TableOptionKeyBlockSize:
 			sql += fmt.Sprintf(" KEY_BLOCK_SIZE = %d", opt.UintValue)
@@ -370,6 +372,10 @@ func tableOptionsToSQL(options []*ast.TableOption) string {
 	// trim prefix space
 	sql = strings.TrimPrefix(sql, " ")
 	return sql
+}
+
+func escapeSingleQuote(str string) string {
+	return strings.Replace(str, "'", "''", -1)
 }
 
 func formatRowFormat(rf uint64) string {

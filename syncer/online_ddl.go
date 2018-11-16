@@ -189,7 +189,7 @@ func (s *OnlineDDLStorage) Save(ghostSchema, ghostTable, realSchema, realTable, 
 		return errors.Trace(err)
 	}
 
-	query := fmt.Sprintf("REPLACE INTO `%s`.`%s`(`id`,`ghost_schema`, `ghost_table`, `ddls`) VALUES ('%s', '%s', '%s', '%s')", s.schema, s.table, s.id, ghostSchema, ghostTable, string(ddlsBytes))
+	query := fmt.Sprintf("REPLACE INTO `%s`.`%s`(`id`,`ghost_schema`, `ghost_table`, `ddls`) VALUES ('%s', '%s', '%s', '%s')", s.schema, s.table, s.id, ghostSchema, ghostTable, escapeSingleQuote(string(ddlsBytes)))
 	err = s.db.executeSQL([]string{query}, [][]interface{}{nil}, maxRetryCount)
 	return errors.Trace(err)
 }
