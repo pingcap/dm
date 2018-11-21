@@ -1438,6 +1438,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					targetTable:  ddlInfo.tableNames[1][0].Name,
 				}
 
+				// Don't send new DDLInfo to dm-master until all local sql jobs finished
+				s.jobWg.Wait()
+
 				// NOTE: if we need singleton Syncer (without dm-master) to support sharding DDL sync
 				// we should add another config item to differ, and do not save DDLInfo, and not wait for ddlExecInfo
 
