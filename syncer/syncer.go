@@ -1444,13 +1444,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				// NOTE: if we need singleton Syncer (without dm-master) to support sharding DDL sync
 				// we should add another config item to differ, and do not save DDLInfo, and not wait for ddlExecInfo
 
-				ddlInfo := &pb.DDLInfo{
+				ddlInfo1 := &pb.DDLInfo{
 					Task:   s.cfg.Name,
 					Schema: ddlInfo.tableNames[1][0].Schema, // use target schema / table name
 					Table:  ddlInfo.tableNames[1][0].Name,
 					DDLs:   needHandleDDLs,
 				}
-				s.ddlInfoCh <- ddlInfo // save DDLInfo, and dm-worker will fetch it
+				s.ddlInfoCh <- ddlInfo1 // save DDLInfo, and dm-worker will fetch it
 
 				// block and wait DDL lock to be synced
 				var ok bool
@@ -1461,9 +1461,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					return nil
 				}
 				if ddlExecItem.req.Exec {
-					log.Infof("[syncer] add DDL %v to job, request is %+v", ddlInfo.DDLs, ddlExecItem.req)
+					log.Infof("[syncer] add DDL %v to job, request is %+v", ddlInfo1.DDLs, ddlExecItem.req)
 				} else {
-					log.Infof("[syncer] ignore DDL %v, request is %+v", ddlInfo.DDLs, ddlExecItem.req)
+					log.Infof("[syncer] ignore DDL %v, request is %+v", ddlInfo1.DDLs, ddlExecItem.req)
 				}
 			}
 

@@ -277,6 +277,8 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, pos
 		panic(fmt.Sprintf("table checkpoint %+v less than global checkpoint %+v", pos, cp.globalPoint))
 	}
 
+	// we only save table point while we meet ddl now, there wouldn't be many logs
+	log.Infof("save checkpoint %s for table %s.%s", pos, sourceSchema, sourceTable)
 	mSchema, ok := cp.points[sourceSchema]
 	if !ok {
 		mSchema = make(map[string]*binlogPoint)
@@ -449,8 +451,9 @@ func (cp *RemoteCheckPoint) Rollback() {
 	cp.RLock()
 	defer cp.RUnlock()
 	cp.globalPoint.rollback()
-	for _, mSchema := range cp.points {
-		for _, point := range mSchema {
+	for schema, mSchema := range cp.points {
+		for table, point := range mSchema {
+			log.Infof("rollback checkpoint %s for table %s.%s", point, schema, table)
 			point.rollback()
 		}
 	}
