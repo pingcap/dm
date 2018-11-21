@@ -559,9 +559,6 @@ func (s *Syncer) addJob(job *job) error {
 	switch job.tp {
 	case xid:
 		s.saveGlobalPoint(job.pos)
-		if len(job.sourceSchema) > 0 {
-			s.checkpoint.SaveTablePoint(job.sourceSchema, job.sourceTable, job.pos)
-		}
 		return nil
 	case ddl:
 		s.jobWg.Wait()
@@ -880,8 +877,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		shardingReSync      *ShardingReSync
 		savedGlobalLastPos  mysql.Position
 		latestOp            opType // latest job operation tp
-		latestSourceSchema  string
-		latestSourceTable   string
 		eventTimeoutCounter time.Duration
 	)
 
@@ -1132,9 +1127,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					if keys != nil {
 						key = keys[i]
 					}
-					latestSourceSchema = string(ev.Table.Schema)
-					latestSourceTable = string(ev.Table.Table)
-					err = s.commitJob(insert, latestSourceSchema, latestSourceTable, table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil)
+					err = s.commitJob(insert, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil)
 					if err != nil {
 						return errors.Trace(err)
 					}
@@ -1166,9 +1159,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					if keys != nil {
 						key = keys[i]
 					}
-					latestSourceSchema = string(ev.Table.Schema)
-					latestSourceTable = string(ev.Table.Table)
-					err = s.commitJob(update, latestSourceSchema, latestSourceTable, table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil)
+
+					err = s.commitJob(update, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil)
 					if err != nil {
 						return errors.Trace(err)
 					}
@@ -1200,9 +1192,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					if keys != nil {
 						key = keys[i]
 					}
-					latestSourceSchema = string(ev.Table.Schema)
-					latestSourceTable = string(ev.Table.Table)
-					err = s.commitJob(del, latestSourceSchema, latestSourceTable, table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil)
+
+					err = s.commitJob(del, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil)
 					if err != nil {
 						return errors.Trace(err)
 					}
@@ -1506,7 +1497,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			log.Debugf("[XID event][last_pos]%v [current_pos]%v [gtid set]%v", lastPos, currentPos, ev.GSet)
 			lastPos.Pos = e.Header.LogPos // update lastPos
 
-			job := newXIDJob(currentPos, currentPos, nil, latestSourceSchema, latestSourceTable)
+			job := newXIDJob(currentPos, currentPos, nil)
 			s.addJob(job)
 		}
 	}
