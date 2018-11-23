@@ -120,7 +120,7 @@ func parseRowValues(str []byte, table *tableInfo, columnMapping *cm.Mapping) ([]
 				return nil, errors.New("parse quote values error")
 			}
 
-			val := bytes.TrimSpace(str[i+1 : j])
+			val := str[i+1 : j]
 			values = append(values, bytes2str(val))
 			isChars = append(isChars, sch)
 
