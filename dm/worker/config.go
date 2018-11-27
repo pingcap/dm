@@ -23,7 +23,10 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
+
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )
 
@@ -63,6 +66,10 @@ type Config struct {
 	ServerID    int    `toml:"server-id" json:"server-id"`
 	Flavor      string `toml:"flavor" json:"flavor"`
 	Charset     string `toml:"charset" json:"charset"`
+
+	// relay synchronous starting point (if specified)
+	RelayBinLogName string `toml:"relay-binlog-name" json:"relay-binlog-name"`
+	RelayBinlogGTID string `toml:"relay-binlog-gtid" json:"relay-binlog-gtid"`
 
 	From config.DBConfig `toml:"from" json:"from"`
 
@@ -149,6 +156,23 @@ func (c *Config) Parse(arguments []string) error {
 	}
 	c.From.Password = pswd
 
+	return c.verify()
+}
+
+// verify verifies the config
+func (c *Config) verify() error {
+	if len(c.RelayBinLogName) > 0 {
+		_, err := streamer.GetBinlogFileIndex(c.RelayBinLogName)
+		if err != nil {
+			return errors.Annotatef(err, "relay-binlog-name %s", c.RelayBinLogName)
+		}
+	}
+	if len(c.RelayBinlogGTID) > 0 {
+		_, err := gtid.ParserGTID(c.Flavor, c.RelayBinlogGTID)
+		if err != nil {
+			return errors.Annotatef(err, "relay-binlog-gtid %s", c.RelayBinlogGTID)
+		}
+	}
 	return nil
 }
 

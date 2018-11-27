@@ -88,6 +88,28 @@ func (r *testRelaySuite) TestLocalMeta(c *C) {
 	dirty := lm.Dirty()
 	c.Assert(dirty, IsFalse)
 
+	// adjust to start pos
+	cs0 := cases[0]
+	adjusted, err := lm.AdjustWithStartPos(cs0.pos.Name, cs0.gset.String(), false)
+	c.Assert(err, IsNil)
+	c.Assert(adjusted, IsTrue)
+	uuid, pos = lm.Pos()
+	c.Assert(uuid, Equals, "")
+	c.Assert(pos.Name, Equals, cs0.pos.Name)
+	uuid, gset = lm.GTID()
+	c.Assert(uuid, Equals, "")
+	c.Assert(gset.String(), Equals, "")
+	// adjust to start pos with enableGTID
+	adjusted, err = lm.AdjustWithStartPos(cs0.pos.Name, cs0.gset.String(), true)
+	c.Assert(err, IsNil)
+	c.Assert(adjusted, IsTrue)
+	uuid, pos = lm.Pos()
+	c.Assert(uuid, Equals, "")
+	c.Assert(pos.Name, Equals, minCheckpoint.Name)
+	uuid, gset = lm.GTID()
+	c.Assert(uuid, Equals, "")
+	c.Assert(gset, DeepEquals, cs0.gset)
+
 	for _, cs := range cases {
 		err = lm.AddDir(cs.uuid, nil, nil)
 		c.Assert(err, IsNil)
@@ -115,6 +137,18 @@ func (r *testRelaySuite) TestLocalMeta(c *C) {
 
 	dirty = lm.Dirty()
 	c.Assert(dirty, IsFalse)
+
+	// try adjust to start pos again
+	csn1 := cases[len(cases)-1]
+	adjusted, err = lm.AdjustWithStartPos(cs0.pos.Name, cs0.gset.String(), false)
+	c.Assert(err, IsNil)
+	c.Assert(adjusted, IsFalse)
+	uuid, pos = lm.Pos()
+	c.Assert(uuid, Equals, csn1.uuidWithSuffix)
+	c.Assert(pos.Name, Equals, csn1.pos.Name)
+	uuid, gset = lm.GTID()
+	c.Assert(uuid, Equals, csn1.uuidWithSuffix)
+	c.Assert(gset, DeepEquals, csn1.gset)
 
 	// create a new LocalMeta, and load it
 	lm2 := NewLocalMeta("mysql", dir)

@@ -114,7 +114,7 @@ func (cp *RemoteCheckPoint) createTable() error {
 	tableName := fmt.Sprintf("`%s`.`%s`", cp.schema, cp.table)
 	createTable := `CREATE TABLE IF NOT EXISTS %s (
 		id char(32) NOT NULL,
-		filename varchar(256) NOT NULL,
+		filename varchar(255) NOT NULL,
 		cp_schema varchar(128) NOT NULL,
 		cp_table varchar(128) NOT NULL,
 		offset bigint NOT NULL,

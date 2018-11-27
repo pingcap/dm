@@ -548,6 +548,16 @@ func (r *Relay) reSetupMeta() error {
 		return errors.Trace(err)
 	}
 
+	// try adjust meta with start pos from config
+	if (r.cfg.EnableGTID && len(r.cfg.BinlogGTID) > 0) || len(r.cfg.BinLogName) > 0 {
+		adjusted, err := r.meta.AdjustWithStartPos(r.cfg.BinLogName, r.cfg.BinlogGTID, r.cfg.EnableGTID)
+		if err != nil {
+			return errors.Trace(err)
+		} else if adjusted {
+			log.Infof("[relay] adjusted meta to start pos with binlog-name (%s), binlog-gtid (%s)", r.cfg.BinLogName, r.cfg.BinlogGTID)
+		}
+	}
+
 	r.updateMetricsRelaySubDirIndex()
 
 	return nil

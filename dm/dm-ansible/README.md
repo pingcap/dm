@@ -203,7 +203,7 @@ grafana_admin_password = "admin"
 
 #### 部署目录调整
 
-部署目录通过 `deploy_dir` 变量控制，默认全局变量已设置为 `/home/tidb/deploy`，对所有服务生效。如数据盘挂载目录为 `/data1`，可设置为 `/data1/deploy`，样例如下:
+部署目录通过 `deploy_dir` 变量控制，默认全局变量已设置为 `/home/tidb/deploy`，对所有服务生效。如数据盘挂载目录为 `/data1`，可设置为 `/data1/dm`，样例如下:
 
 ```
 ## Global variables
@@ -235,7 +235,9 @@ dm-master ansible_host=172.16.10.71 deploy_dir=/data1/deploy
 | mysql_user | 上游 MySQL 用户名，默认为 root |
 | mysql_password | 上游 MySQL 用户名密码，密码需使用 dmctl 工具加密，参考 [dmctl 加密上游 MySQL 密码](#dmctl-加密上游-mysql-用户密码) |
 | mysql_port | 上游 MySQL 端口号, 默认为 3306 |
-| enable_gtid | dm-worker 是否要用 gtid 形式的位置去拉取 binlog，前提是上游 mysql 已经开启 gtid 模式 |
+| enable_gtid | dm-worker 是否要用 GTID 形式的位置去拉取 binlog，前提是上游 mysql 已经开启 GTID 模式 |
+| relay_binlog_name | dm-worker 是否要从该指定 binlog file 开始拉取 binlog，仅本地不存在有效 relay log 时使用 |
+| relay_binlog_gtid | dm-worker 是否要从该指定 GTID 开始拉取 binlog，仅本地不存在有效 relay log 且 enable_gtid 为 true 时使用 |
 | flavor | flavor 表示 mysql 的发行版类型，官方版以及 percona、云 mysql 填写 mysql，mariadb 则填写 mariadb，默认为 mysql |
 
 #### dmctl 加密上游 MySQL 用户密码

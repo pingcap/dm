@@ -43,6 +43,8 @@ func NewRelayHolder(cfg *Config) *RelayHolder {
 			User:     cfg.From.User,
 			Password: cfg.From.Password,
 		},
+		BinLogName: cfg.RelayBinLogName,
+		BinlogGTID: cfg.RelayBinlogGTID,
 	}
 
 	h := &RelayHolder{

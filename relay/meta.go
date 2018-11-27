@@ -13,10 +13,12 @@ import (
 	"github.com/siddontang/go/ioutil2"
 
 	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )
 
 var (
+	minUUIDSufix  = 1
 	minCheckpoint = mysql.Position{Pos: 4}
 )
 
@@ -27,6 +29,11 @@ var (
 type Meta interface {
 	// Load loads meta information for the recently active server
 	Load() error
+
+	// AdjustWithStartPos adjusts current pos / GTID with start pos
+	// if current pos / GTID is meaningless, update to start pos
+	// else do nothing
+	AdjustWithStartPos(binlogName string, binlogGTID string, enableGTID bool) (bool, error)
 
 	// Save saves meta information
 	Save(pos mysql.Position, gset gtid.Set) error
@@ -124,6 +131,52 @@ func (lm *LocalMeta) Load() error {
 	return nil
 }
 
+// AdjustWithStartPos implements Meta.AdjustWithStartPos, return whether adjusted
+func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, enableGTID bool) (bool, error) {
+	lm.Lock()
+	defer lm.Unlock()
+
+	// check whether already have meaningful pos
+	if len(lm.currentUUID) > 0 {
+		_, suffix, _ := utils.ParseSuffixForUUID(lm.currentUUID)
+		currPos := mysql.Position{Name: lm.BinLogName, Pos: lm.BinLogPos}
+		if suffix != minUUIDSufix || currPos.Compare(minCheckpoint) > 0 || len(lm.BinlogGTID) > 0 {
+			return false, nil // current pos is meaningful, do nothing
+		}
+	}
+
+	if (enableGTID && len(binlogGTID) == 0) || (!enableGTID && len(binlogName) == 0) {
+		return false, nil // no meaningful start pos specified
+	}
+
+	if !enableGTID && len(binlogName) > 0 {
+		_, err := streamer.GetBinlogFileIndex(binlogName)
+		if err != nil {
+			return false, errors.Annotatef(err, "relay-binlog-name %s", binlogName)
+		}
+	}
+	var gset = lm.emptyGSet.Clone()
+	if enableGTID && len(binlogGTID) > 0 {
+		var err error
+		gset, err = gtid.ParserGTID(lm.flavor, binlogGTID)
+		if err != nil {
+			return false, errors.Annotatef(err, "relay-binlog-gtid %s", binlogGTID)
+		}
+	}
+
+	// verified, update them
+	if enableGTID {
+		lm.BinLogName = minCheckpoint.Name
+	} else {
+		lm.BinLogName = binlogName
+	}
+	lm.BinLogPos = minCheckpoint.Pos // always set pos to 4
+	lm.BinlogGTID = gset.String()
+	lm.gset = gset
+
+	return true, nil
+}
+
 // Save implements Meta.Save
 func (lm *LocalMeta) Save(pos mysql.Position, gset gtid.Set) error {
 	lm.Lock()
@@ -204,7 +257,7 @@ func (lm *LocalMeta) AddDir(serverUUID string, newPos *mysql.Position, newGTID g
 
 	if len(lm.currentUUID) == 0 {
 		// no UUID exists yet, simply add it
-		newUUID = utils.AddSuffixForUUID(serverUUID, 1)
+		newUUID = utils.AddSuffixForUUID(serverUUID, minUUIDSufix)
 	} else {
 		_, suffix, err := utils.ParseSuffixForUUID(lm.currentUUID)
 		if err != nil {

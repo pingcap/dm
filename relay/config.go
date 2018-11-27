@@ -16,6 +16,11 @@ type Config struct {
 	Flavor      string   `toml:"flavor" json:"flavor"`
 	Charset     string   `toml:"charset" json:"charset"`
 	From        DBConfig `toml:"data-source" json:"data-source"`
+
+	// synchronous start point (if no meta saved before)
+	// do not need to specify binlog-pos, because relay will fetch the whole file
+	BinLogName string `toml:"binlog-name" json:"binlog-name"`
+	BinlogGTID string `toml:"binlog-gtid" json:"binlog-gtid"`
 }
 
 // DBConfig is the DB configuration.

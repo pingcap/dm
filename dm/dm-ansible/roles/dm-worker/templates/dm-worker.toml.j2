@@ -4,6 +4,8 @@ server-id = {{ server_id }}
 flavor = "{{ flavor }}"
 meta-file = "relay.meta"
 enable-gtid = {{ enable_gtid }}
+relay-binlog-name = {{ relay_binlog_name }}
+relay-binlog-gtid = {{ relay_binlog_gtid }}
 
 [from]
 host = "{{ mysql_host }}"
