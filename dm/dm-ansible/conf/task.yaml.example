@@ -4,7 +4,7 @@ task-mode: all  # full/incremental/all
 is-sharding: true  # whether multi dm-worker do one sharding job
 meta-schema: "dm_meta"  # meta schema in downstreaming database to store meta informaton of dm
 remove-meta: false  # remove meta from downstreaming database, now we delete checkpoint and online ddl information
-disable-heartbeat: false
+disable-heartbeat: true
 
 target-database:
   host: "192.168.0.1"

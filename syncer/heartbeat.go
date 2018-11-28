@@ -61,7 +61,7 @@ func (cfg *HeartbeatConfig) Equal(other *HeartbeatConfig) error {
 // Heartbeat represents a heartbeat mechanism to measures replication lag on mysql and tidb/mysql.
 // Learn from: https://www.percona.com/doc/percona-toolkit/LATEST/pt-heartbeat.html
 type Heartbeat struct {
-	mu sync.RWMutex
+	lock chan struct{} // use a chan to simulate the lock (mutex), because mutex do not support something like TryLock
 
 	cfg    *HeartbeatConfig
 	schema string // for which schema the heartbeat table belongs to
@@ -84,6 +84,7 @@ func GetHeartbeat(cfg *HeartbeatConfig) (*Heartbeat, error) {
 			cfg.reportInterval = defaultReportInterval
 		}
 		heartbeat = &Heartbeat{
+			lock:     make(chan struct{}, 1), // with buffer 1, no recursion supported
 			cfg:      cfg,
 			schema:   filter.DMHeartbeatSchema,
 			table:    filter.DMHeartbeatTable,
@@ -98,8 +99,10 @@ func GetHeartbeat(cfg *HeartbeatConfig) (*Heartbeat, error) {
 
 // AddTask adds a new task
 func (h *Heartbeat) AddTask(name string) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	h.lock <- struct{}{} // send to chan, acquire the lock
+	defer func() {
+		<-h.lock // read from the chan, release the lock
+	}()
 	if _, ok := h.slavesTs[name]; ok {
 		return errors.AlreadyExistsf("heartbeat slave record for task %s", name)
 	}
@@ -142,8 +145,10 @@ func (h *Heartbeat) AddTask(name string) error {
 
 // RemoveTask removes a previous added task
 func (h *Heartbeat) RemoveTask(name string) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	h.lock <- struct{}{}
+	defer func() {
+		<-h.lock
+	}()
 	if _, ok := h.slavesTs[name]; !ok {
 		return errors.NotFoundf("heartbeat slave record for task %s", name)
 	}
@@ -197,9 +202,15 @@ func (h *Heartbeat) TryUpdateTaskTs(taskName, schema, table string, data [][]int
 		return
 	}
 
-	h.mu.Lock()
-	h.slavesTs[taskName] = h.timeToSeconds(t)
-	h.mu.Unlock()
+	select {
+	case h.lock <- struct{}{}:
+		if _, ok := h.slavesTs[taskName]; ok {
+			h.slavesTs[taskName] = h.timeToSeconds(t)
+		}
+		<-h.lock
+	default:
+		// do nothing, because we can accept no update perform
+	}
 }
 
 func (h *Heartbeat) init() error {
@@ -235,7 +246,7 @@ func (h *Heartbeat) run(ctx context.Context) {
 			}
 
 		case <-reportTicker.C:
-			err := h.calculateLag()
+			err := h.calculateLag(ctx)
 			if err != nil {
 				log.Errorf("[syncer] calculate replication lag error %v", errors.ErrorStack(err))
 			}
@@ -277,18 +288,22 @@ func (h *Heartbeat) updateTS() error {
 	return errors.Trace(err)
 }
 
-func (h *Heartbeat) calculateLag() error {
+func (h *Heartbeat) calculateLag(ctx context.Context) error {
 	masterTS, err := h.getMasterTS()
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	h.mu.RLock()
-	for taskName, ts := range h.slavesTs {
-		lag := masterTS - ts
-		replicationLagGauge.WithLabelValues(taskName).Set(float64(lag))
+	select {
+	case h.lock <- struct{}{}:
+		for taskName, ts := range h.slavesTs {
+			lag := masterTS - ts
+			replicationLagGauge.WithLabelValues(taskName).Set(float64(lag))
+		}
+		<-h.lock
+	case <-ctx.Done():
+		// can be canceled by outer
 	}
-	h.mu.RUnlock()
 
 	return nil
 }

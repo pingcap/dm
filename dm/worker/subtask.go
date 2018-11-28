@@ -227,6 +227,31 @@ func (st *SubTask) CurrUnit() unit.Unit {
 	return st.currUnit
 }
 
+// closeUnits closes all un-closed units (current unit and all the subsequent units)
+func (st *SubTask) closeUnits() {
+	st.RLock()
+	defer st.RUnlock()
+	var (
+		cu  = st.currUnit
+		cui = -1
+	)
+
+	for i, u := range st.units {
+		if u == cu {
+			cui = i
+			break
+		}
+	}
+	if cui < 0 {
+		return
+	}
+	for i := cui; i < len(st.units); i++ {
+		u := st.units[i]
+		log.Infof("[syncer] closing process unit %s", u.Type())
+		u.Close()
+	}
+}
+
 // getNextUnit gets the next process unit from st.units
 // if no next unit, return nil
 func (st *SubTask) getNextUnit() unit.Unit {
@@ -307,7 +332,7 @@ func (st *SubTask) Close() {
 	}
 
 	st.cancel()
-	st.CurrUnit().Close()
+	st.closeUnits() // close all un-closed units
 	st.setStageIfNot(pb.Stage_Finished, pb.Stage_Stopped)
 	st.wg.Wait()
 

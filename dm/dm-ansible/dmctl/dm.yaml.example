@@ -2,7 +2,7 @@ task-name: test
 task-mode: all
 meta-schema: dm_meta
 remove-meta: false
-disable-heartbeat: false
+disable-heartbeat: true
 target-database:
   host: 192.168.0.1
   port: 4000

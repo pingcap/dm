@@ -149,7 +149,7 @@ func (c *SubTaskConfig) SetupFlags(name CmdName) {
 		fs.BoolVar(&c.EnableGTID, "enable-gtid", false, "enable gtid mode")
 		fs.BoolVar(&c.SafeMode, "safe-mode", false, "enable safe mode to make syncer reentrant")
 		fs.StringVar(&c.StatusAddr, "status-addr", "", "Syncer status addr")
-		fs.BoolVar(&c.DisableHeartbeat, "disable-heartbeat", false, "disable heartbeat between mysql and syncer")
+		fs.BoolVar(&c.DisableHeartbeat, "disable-heartbeat", true, "disable heartbeat between mysql and syncer")
 	}
 }
 

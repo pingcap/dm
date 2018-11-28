@@ -299,6 +299,11 @@ func (s *Syncer) Init() error {
 		}
 	}
 
+	// init successfully, close done chan to make Syncer can be closed
+	// when Process started, we will re-create done chan again
+	// NOTE: we should refactor the Concurrency Model some day
+	s.done = make(chan struct{})
+	close(s.done)
 	return nil
 }
 

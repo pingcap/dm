@@ -24,7 +24,7 @@ const (
 var (
 	// TaskConfig
 	defaultMetaSchema       = "dm_meta"
-	defaultDisableHeartbeat = false
+	defaultDisableHeartbeat = true
 	defaultIsSharding       = false
 	// MydumperConfig
 	defaultMydumperPath        = "./bin/mydumper"
