@@ -39,9 +39,8 @@ type BinlogReaderConfig struct {
 
 // BinlogReader is a binlog reader.
 type BinlogReader struct {
-	cfg     *BinlogReaderConfig
-	parser  *replication.BinlogParser
-	watcher *fsnotify.Watcher
+	cfg    *BinlogReaderConfig
+	parser *replication.BinlogParser
 
 	indexPath string   // relay server-uuid index file path
 	uuids     []string // master UUIDs (relay sub dir)
@@ -80,16 +79,8 @@ func (r *BinlogReader) StartSync(pos mysql.Position) (Streamer, error) {
 		return nil, ErrReaderRunning
 	}
 
-	// create fs notify watcher
-	r.closeWatcher()
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	r.watcher = watcher
-
 	// load and update UUID list
-	err = r.updateUUIDs()
+	err := r.updateUUIDs()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -384,11 +375,74 @@ func (r *BinlogReader) needSwitchSubDir(currentUUID string, latestFilePath strin
 // relaySubDirUpdated checks whether the relay sub directory updated
 // including file changed, created, removed, etc.
 func (r *BinlogReader) relaySubDirUpdated(ctx context.Context, dir string, latestFilePath string, latestFileSize int64) (updatedPath string, err error) {
-	err = r.watcher.Add(dir)
+	// create fs notify watcher
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	defer watcher.Close()
+
+	type watchResult struct {
+		eventName string
+		err       error
+	}
+
+	// dm-worker can trigger `kernel: NMI watchdog: BUG: soft lockup - CPU#19 stuck for 22s!` some time
+	// I guess this may because the thread running the watch is blocked and can not be scheduled
+	// so take the advise from https://github.com/howeyc/fsnotify/issues/7 and https://github.com/fsnotify/fsnotify/blob/master/example_test.go
+	// try split the watch to a separate goroutine
+	result := make(chan watchResult, 1) // buffered chan to ensure not block the sender even return in the halfway
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				result <- watchResult{
+					eventName: "",
+					err:       ctx.Err(),
+				}
+				return
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					result <- watchResult{
+						eventName: "",
+						err:       errors.Errorf("watcher's errors chan for relay log dir %s closed", dir),
+					}
+				} else {
+					result <- watchResult{
+						eventName: "",
+						err:       errors.Annotatef(err, "relay log dir %s", dir),
+					}
+				}
+				return
+			case event, ok := <-watcher.Events:
+				if !ok {
+					result <- watchResult{
+						eventName: "",
+						err:       errors.Errorf("watcher's events chan for relay log dir %s closed", dir),
+					}
+					return
+				}
+				log.Debugf("[streamer] watcher receive event %+v", event)
+				baseName := path.Base(event.Name)
+				_, err = GetBinlogFileIndex(baseName)
+				if err != nil {
+					log.Debugf("skip watcher event %+v", event)
+					continue // not valid binlog created, updated
+				}
+				result <- watchResult{
+					eventName: event.Name,
+					err:       nil,
+				}
+				return
+			}
+		}
+	}()
+
+	err = watcher.Add(dir)
 	if err != nil {
 		return "", errors.Annotatef(err, "add watch for relay log dir %s", dir)
 	}
-	defer r.watcher.Remove(dir)
+	defer watcher.Remove(dir)
 
 	// check the latest relay log file whether updated when adding watching
 	cmp, err := r.fileSizeUpdated(latestFilePath, latestFileSize)
@@ -401,29 +455,8 @@ func (r *BinlogReader) relaySubDirUpdated(ctx context.Context, dir string, lates
 		return latestFilePath, nil
 	}
 
-	for {
-		select {
-		case <-ctx.Done():
-			return "", ctx.Err()
-		case err, ok := <-r.watcher.Errors:
-			if !ok {
-				return "", errors.Errorf("watcher's errors chan for relay log dir %s closed", dir)
-			}
-			return "", errors.Annotatef(err, "relay log dir %s", dir)
-		case event, ok := <-r.watcher.Events:
-			if !ok {
-				return "", errors.Errorf("watcher's events chan for relay log dir %s closed", dir)
-			}
-			log.Debugf("[streamer] watcher receive event %+v", event)
-			baseName := path.Base(event.Name)
-			_, err = parseBinlogFile(baseName)
-			if err != nil {
-				log.Debugf("skip watcher event %+v", event)
-				continue // not valid binlog created, updated
-			}
-			return event.Name, nil
-		}
-	}
+	res := <-result
+	return res.eventName, res.err
 }
 
 // fileSizeUpdated checks whether the file's size has updated
@@ -544,14 +577,6 @@ func (r *BinlogReader) Close() error {
 	r.cancel()
 	r.parser.Stop()
 	r.wg.Wait()
-	r.closeWatcher()
 	log.Info("[streamer] binlog reader closed")
 	return nil
-}
-
-func (r *BinlogReader) closeWatcher() {
-	if r.watcher != nil {
-		r.watcher.Close()
-		r.watcher = nil
-	}
 }
