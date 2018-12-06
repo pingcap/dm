@@ -21,8 +21,8 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
-	tmysql "github.com/pingcap/tidb/mysql"
 )
 
 // Conn represents a live DB connection

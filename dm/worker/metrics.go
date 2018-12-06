@@ -15,7 +15,6 @@ package worker
 
 import (
 	"net/http"
-	"os"
 
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-enterprise-tools/loader"
@@ -46,7 +45,7 @@ func InitStatus(addr string) {
 		})
 
 		registry := prometheus.NewRegistry()
-		registry.MustRegister(prometheus.NewProcessCollector(os.Getpid(), ""))
+		registry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 		registry.MustRegister(prometheus.NewGoCollector())
 
 		registry.MustRegister(taskState)

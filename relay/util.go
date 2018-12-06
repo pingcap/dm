@@ -1,8 +1,8 @@
 package relay
 
 import (
-	"github.com/pingcap/tidb/ast"
-	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/ast"
 
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )

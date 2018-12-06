@@ -22,9 +22,9 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
+	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
-	"github.com/pingcap/tidb/ast"
-	"github.com/pingcap/tidb/parser"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 )

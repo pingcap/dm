@@ -81,7 +81,7 @@ func main() {
 
 	go func() {
 		registry := prometheus.NewRegistry()
-		registry.MustRegister(prometheus.NewProcessCollector(os.Getpid(), ""))
+		registry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 		registry.MustRegister(prometheus.NewGoCollector())
 		loaderPkg.RegisterMetrics(registry)
 		prometheus.DefaultGatherer = registry

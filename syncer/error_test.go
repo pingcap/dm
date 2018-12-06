@@ -19,8 +19,8 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	. "github.com/pingcap/check"
+	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
-	tmysql "github.com/pingcap/tidb/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 )
 

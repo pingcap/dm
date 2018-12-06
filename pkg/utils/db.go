@@ -7,9 +7,9 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
+	"github.com/pingcap/parser"
+	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
-	tmysql "github.com/pingcap/tidb/mysql"
-	"github.com/pingcap/tidb/parser"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 )
 

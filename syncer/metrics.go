@@ -15,7 +15,6 @@ package syncer
 
 import (
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/ngaut/log"
@@ -177,7 +176,7 @@ func InitStatusAndMetrics(addr string) {
 		})
 
 		registry := prometheus.NewRegistry()
-		registry.MustRegister(prometheus.NewProcessCollector(os.Getpid(), ""))
+		registry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 		registry.MustRegister(prometheus.NewGoCollector())
 		RegisterMetrics(registry)
 		prometheus.DefaultGatherer = registry

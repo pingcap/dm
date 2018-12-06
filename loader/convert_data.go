@@ -10,10 +10,10 @@ import (
 	"unsafe"
 
 	"github.com/juju/errors"
+	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/ast"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	"github.com/pingcap/tidb/ast"
-	"github.com/pingcap/tidb/parser"
 )
 
 const (

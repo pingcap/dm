@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	"github.com/juju/errors"
+	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
-	"github.com/pingcap/tidb/ast"
 )
 
 // PT handles pt online schema changes

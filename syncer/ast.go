@@ -16,15 +16,15 @@ package syncer
 import (
 	"bytes"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb/ast"
-	"github.com/pingcap/tidb/model"
-	"github.com/pingcap/tidb/mysql"
+	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/parser/charset"
+	"github.com/pingcap/parser/model"
+	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb/types"
-	"github.com/pingcap/tidb/util/charset"
+	_ "github.com/pingcap/tidb/types/parser_driver" // use value expression impl in TiDB
 )
 
 func defaultValueToSQL(opt *ast.ColumnOption) string {
@@ -39,20 +39,13 @@ func defaultValueToSQL(opt *ast.ColumnOption) string {
 	case *ast.FuncCallExpr:
 		value = expr.FnName.O
 
-	case *ast.ValueExpr:
-		datum := opt.Expr.GetDatum()
-		switch datum.Kind() {
-		case types.KindNull:
-			value = "NULL"
-
-		case types.KindInt64:
-			value = strconv.FormatInt(datum.GetInt64(), 10)
-
-		case types.KindString:
-			value = formatStringValue(datum.GetString())
-
-		default:
-			value = fmt.Sprintf("%v", datum.GetValue())
+	case ast.ValueExpr:
+		datum := opt.Expr.(ast.ValueExpr)
+		buf := new(bytes.Buffer)
+		datum.Format(buf)
+		value = buf.String()
+		if len(value) > 1 && value[0] == '"' && value[len(value)-1] == '"' {
+			value = formatStringValue(value[1 : len(value)-1])
 		}
 
 	default:
@@ -124,7 +117,7 @@ func columnOptionsToSQL(options []*ast.ColumnOption) string {
 		case ast.ColumnOptionPrimaryKey:
 			sql += " PRIMARY KEY"
 		case ast.ColumnOptionComment:
-			comment := fmt.Sprintf("%v", opt.Expr.GetValue())
+			comment := opt.Expr.(ast.ValueExpr).GetDatumString()
 			comment = escapeSingleQuote(comment)
 			sql += fmt.Sprintf(" COMMENT '%s'", comment)
 		case ast.ColumnOptionOnUpdate: // For Timestamp and Datetime only.
