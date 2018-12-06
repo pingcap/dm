@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
@@ -81,6 +82,7 @@ type SubTaskConfig struct {
 	RemoveMeta       bool   `toml:"remove-meta" json:"remove-meta"`
 	DisableHeartbeat bool   `toml:"disable-heartbeat" json:"disable-heartbeat"`
 	Meta             *Meta  `toml:"meta" json:"meta"`
+	Timezone         string `toml:"timezone" josn:"timezone"`
 
 	BinlogType string `toml:"binlog-type" json:"binlog-type"`
 	// RelayDir get value from dm-worker config
@@ -150,6 +152,7 @@ func (c *SubTaskConfig) SetupFlags(name CmdName) {
 		fs.BoolVar(&c.SafeMode, "safe-mode", false, "enable safe mode to make syncer reentrant")
 		fs.StringVar(&c.StatusAddr, "status-addr", "", "Syncer status addr")
 		fs.BoolVar(&c.DisableHeartbeat, "disable-heartbeat", true, "disable heartbeat between mysql and syncer")
+		fs.StringVar(&c.Timezone, "timezone", "", "target database timezone")
 	}
 }
 
@@ -230,6 +233,13 @@ func (c *SubTaskConfig) adjust() error {
 
 	if c.MaxRetry == 0 {
 		c.MaxRetry = 1
+	}
+
+	if c.Timezone != "" {
+		_, err := time.LoadLocation(c.Timezone)
+		if err != nil {
+			return errors.Annotatef(err, "invalid timezone string: %s", c.Timezone)
+		}
 	}
 
 	return nil

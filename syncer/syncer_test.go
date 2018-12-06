@@ -19,6 +19,7 @@ import (
 	"os"
 	"strconv"
 	"testing"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/ngaut/log"
@@ -87,7 +88,15 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 		log.Fatal(err)
 	}
 
-	s.syncer = replication.NewBinlogSyncer(replication.BinlogSyncerConfig{
+	s.resetBinlogSyncer()
+
+	_, err = s.db.Exec("SET GLOBAL binlog_format = 'ROW';")
+	c.Assert(err, IsNil)
+}
+
+func (s *testSyncerSuite) resetBinlogSyncer() {
+	var err error
+	cfg := replication.BinlogSyncerConfig{
 		ServerID:       uint32(s.cfg.ServerID),
 		Flavor:         "mysql",
 		Host:           s.cfg.From.Host,
@@ -96,15 +105,26 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 		Password:       s.cfg.From.Password,
 		UseDecimal:     true,
 		VerifyChecksum: true,
-	})
-	s.resetMaster()
-	s.streamer, err = s.syncer.StartSync(gmysql.Position{Name: "", Pos: 4})
+	}
+	if s.cfg.Timezone != "" {
+		timezone, err2 := time.LoadLocation(s.cfg.Timezone)
+		if err != nil {
+			log.Fatal(err2)
+		}
+		cfg.TimestampStringLocation = timezone
+	}
+	pos := gmysql.Position{Name: "", Pos: 4}
+	if s.syncer != nil {
+		pos = s.syncer.GetNextPosition()
+		s.syncer.Close()
+	} else {
+		s.resetMaster()
+	}
+	s.syncer = replication.NewBinlogSyncer(cfg)
+	s.streamer, err = s.syncer.StartSync(pos)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	_, err = s.db.Exec("SET GLOBAL binlog_format = 'ROW';")
-	c.Assert(err, IsNil)
 }
 
 func (s *testSyncerSuite) TearDownSuite(c *C) {
@@ -604,5 +624,94 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 			continue
 		}
 		i++
+	}
+}
+
+func (s *testSyncerSuite) TestTimezone(c *C) {
+	s.cfg.BWList = &filter.Rules{
+		DoDBs:     []string{"~^tztest_.*"},
+		IgnoreDBs: []string{"stest", "~^foo.*"},
+	}
+
+	createSQLs := []string{
+		"create database if not exists tztest_1",
+		"create table if not exists tztest_1.t_1(a timestamp)",
+	}
+
+	testCases := []struct {
+		sqls     []string
+		timezone string
+		expected []int64
+	}{
+		{
+			[]string{
+				"insert into tztest_1.t_1(a) values ('1990-04-15 01:30:12')",
+				"insert into tztest_1.t_1(a) values ('1990-04-15 02:30:12')",
+				"insert into tztest_1.t_1(a) values ('1990-04-15 03:30:12')",
+			},
+			"Asia/Shanghai",
+			[]int64{640110612, 640114212, 640117812},
+		},
+		{
+			[]string{
+				"insert into tztest_1.t_1(a) values ('1990-04-15 01:30:12')",
+				"insert into tztest_1.t_1(a) values ('1990-04-15 02:30:12')",
+				"insert into tztest_1.t_1(a) values ('1990-04-15 03:30:12')",
+			},
+			"America/Phoenix",
+			[]int64{640168212, 640171812, 640175412},
+		},
+	}
+
+	dropSQLs := []string{
+		"drop table tztest_1.t_1",
+		"drop database tztest_1",
+	}
+
+	for _, sql := range createSQLs {
+		s.db.Exec(sql)
+	}
+
+	for _, testCase := range testCases {
+		s.cfg.Timezone = testCase.timezone
+		syncer := NewSyncer(s.cfg)
+		syncer.genRouter()
+		s.resetBinlogSyncer()
+
+		s.db.Exec(fmt.Sprintf("set @@global.time_zone = '%s'", testCase.timezone))
+		s.db.Exec(fmt.Sprintf("set @@session.time_zone = '%s'", testCase.timezone))
+		for _, sql := range testCase.sqls {
+			s.db.Exec(sql)
+		}
+
+		idx := 0
+		for {
+			if idx >= len(testCase.sqls) {
+				break
+			}
+			e, err := s.streamer.GetEvent(context.Background())
+			c.Assert(err, IsNil)
+			switch ev := e.Event.(type) {
+			case *replication.RowsEvent:
+				skip, err := syncer.skipDMLEvent(string(ev.Table.Schema), string(ev.Table.Table), e.Header.EventType)
+				c.Assert(err, IsNil)
+				if skip {
+					continue
+				}
+				raw := ev.Rows[0][0].(string)
+				location, err := time.LoadLocation(testCase.timezone)
+				c.Assert(err, IsNil)
+				data, err := time.ParseInLocation("2006-01-02 15:04:05", raw, location)
+				c.Assert(err, IsNil)
+				c.Assert(data.Unix(), DeepEquals, testCase.expected[idx])
+				idx++
+			default:
+				continue
+			}
+		}
+	}
+
+	for _, sql := range dropSQLs {
+		s.db.Exec(sql)
 	}
 }

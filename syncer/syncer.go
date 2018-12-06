@@ -109,6 +109,7 @@ type Syncer struct {
 
 	start    time.Time
 	lastTime time.Time
+	timezone *time.Location
 
 	binlogSizeCount     sync2.AtomicInt64
 	lastBinlogSizeCount sync2.AtomicInt64
@@ -164,16 +165,18 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.bwList = filter.New(cfg.CaseSensitive, cfg.BWList)
 	syncer.checkpoint = NewRemoteCheckPoint(cfg, syncer.checkpointID())
 	syncer.injectEventCh = make(chan *replication.BinlogEvent)
+	syncer.setTimezone()
 
 	syncer.syncCfg = replication.BinlogSyncerConfig{
-		ServerID:       uint32(syncer.cfg.ServerID),
-		Flavor:         syncer.cfg.Flavor,
-		Host:           syncer.cfg.From.Host,
-		Port:           uint16(syncer.cfg.From.Port),
-		User:           syncer.cfg.From.User,
-		Password:       syncer.cfg.From.Password,
-		UseDecimal:     true,
-		VerifyChecksum: true,
+		ServerID:                uint32(syncer.cfg.ServerID),
+		Flavor:                  syncer.cfg.Flavor,
+		Host:                    syncer.cfg.From.Host,
+		Port:                    uint16(syncer.cfg.From.Port),
+		User:                    syncer.cfg.From.User,
+		Password:                syncer.cfg.From.Password,
+		UseDecimal:              true,
+		VerifyChecksum:          true,
+		TimestampStringLocation: syncer.timezone,
 	}
 
 	syncer.binlogType = toBinlogType(cfg.BinlogType)
@@ -374,7 +377,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		}
 		s.syncer = replication.NewBinlogSyncer(s.syncCfg)
 	} else if s.binlogType == LocalBinlog {
-		s.localReader = streamer.NewBinlogReader(&streamer.BinlogReaderConfig{RelayDir: s.cfg.RelayDir})
+		s.localReader = streamer.NewBinlogReader(&streamer.BinlogReaderConfig{RelayDir: s.cfg.RelayDir, Timezone: s.timezone})
 	}
 	// create new done chan
 	s.done = make(chan struct{})
@@ -918,7 +921,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				shardingSyncer = replication.NewBinlogSyncer(s.shardingSyncCfg)
 				shardingStreamer, err = s.getBinlogStreamer(shardingSyncer, shardingReSync.currPos)
 			} else if s.binlogType == LocalBinlog {
-				shardingReader = streamer.NewBinlogReader(&streamer.BinlogReaderConfig{RelayDir: s.cfg.RelayDir})
+				shardingReader = streamer.NewBinlogReader(&streamer.BinlogReaderConfig{RelayDir: s.cfg.RelayDir, Timezone: s.timezone})
 				shardingStreamer, err = s.getBinlogStreamer(shardingReader, shardingReSync.currPos)
 			}
 			log.Debugf("[syncer] start using a  special streamer to re-sync DMLs for sharding group %+v", shardingReSync)
@@ -1931,6 +1934,11 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 	s.cfg.RouteRules = cfg.RouteRules
 	s.cfg.FilterRules = cfg.FilterRules
 	s.cfg.ColumnMappingRules = cfg.ColumnMappingRules
+	s.cfg.Timezone = cfg.Timezone
+
+	// update timezone
+	s.setTimezone()
+
 	return nil
 }
 
@@ -2017,4 +2025,18 @@ func (s *Syncer) resetExecErrors() {
 	s.execErrors.Lock()
 	defer s.execErrors.Unlock()
 	s.execErrors.errors = make([]*ExecErrorContext, 0)
+}
+
+func (s *Syncer) setTimezone() {
+	var loc *time.Location
+
+	if s.cfg.Timezone != "" {
+		loc, _ = time.LoadLocation(s.cfg.Timezone)
+	}
+	if loc == nil {
+		loc = time.Now().Location()
+		log.Warnf("[syncer] use system default time location")
+	}
+	log.Infof("[syncer] use timezone: %s", loc)
+	s.timezone = loc
 }

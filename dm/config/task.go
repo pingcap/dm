@@ -3,6 +3,7 @@ package config
 import (
 	"flag"
 	"io/ioutil"
+	"time"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
@@ -208,8 +209,9 @@ type TaskConfig struct {
 	MetaSchema string `yaml:"meta-schema"`
 	// remove meta from downstreaming database
 	// now we delete checkpoint and online ddl information
-	RemoveMeta       bool `yaml:"remove-meta"`
-	DisableHeartbeat bool `yaml:"disable-heartbeat"`
+	RemoveMeta       bool   `yaml:"remove-meta"`
+	DisableHeartbeat bool   `yaml:"disable-heartbeat"`
+	Timezone         string `yaml:"timezone"`
 
 	// handle schema/table name mode, and only for schema/table name
 	// if case insensitive, we would convert schema/table name to lower case
@@ -392,6 +394,13 @@ func (c *TaskConfig) adjust() error {
 		}
 	}
 
+	if c.Timezone != "" {
+		_, err := time.LoadLocation(c.Timezone)
+		if err != nil {
+			return errors.Annotatef(err, "invalid timezone string: %s", c.Timezone)
+		}
+	}
+
 	return nil
 }
 
@@ -409,6 +418,7 @@ func (c *TaskConfig) SubTaskConfigs() []*SubTaskConfig {
 		cfg.MetaSchema = c.MetaSchema
 		cfg.RemoveMeta = c.RemoveMeta
 		cfg.DisableHeartbeat = c.DisableHeartbeat
+		cfg.Timezone = c.Timezone
 		cfg.Meta = inst.Meta
 
 		cfg.From = *inst.Config

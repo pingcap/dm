@@ -36,6 +36,7 @@ var (
 // BinlogReaderConfig is the configuration for BinlogReader
 type BinlogReaderConfig struct {
 	RelayDir string
+	Timezone *time.Location
 }
 
 // BinlogReader is a binlog reader.
@@ -61,6 +62,9 @@ func NewBinlogReader(cfg *BinlogReaderConfig) *BinlogReader {
 	parser.SetVerifyChecksum(true)
 	// useDecimal must set true.  ref: https://github.com/pingcap/tidb-enterprise-tools/pull/272
 	parser.SetUseDecimal(true)
+	if cfg.Timezone != nil {
+		parser.SetTimestampStringLocation(cfg.Timezone)
+	}
 	return &BinlogReader{
 		cfg:       cfg,
 		parser:    parser,
