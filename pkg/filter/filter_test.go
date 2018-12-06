@@ -69,6 +69,31 @@ func (s *testFilterSuite) TestFilterOnSchema(c *C) {
 			Input:  []*Table{{"foo", "sbtest"}, {"foo1", "sbtest-1"}, {"foo2", ""}, {"fff", "bar"}},
 			Output: []*Table{{"foo", "sbtest"}, {"foo2", ""}},
 		},
+		// ensure empty rules won't crash
+		{
+			rules: &Rules{
+				IgnoreDBs: []string{""},
+			},
+			Input:  []*Table{{"", "a"}, {"a", ""}},
+			Output: []*Table{{"a", ""}},
+		},
+		// ensure the patterns without `~` won't be accidentally parsed as regexp
+		{
+			rules: &Rules{
+				IgnoreDBs: []string{"foo[bar]", "foo?", "special\\"},
+			},
+			Input:  []*Table{{"foor", "a"}, {"foo[bar]", "b"}, {"fo", "c"}, {"foo?", "d"}, {"special\\", "e"}},
+			Output: []*Table{{"foor", "a"}, {"fo", "c"}},
+		},
+		// ensure the rules are really case-insensitive
+		{
+			rules: &Rules{
+				IgnoreDBs:    []string{"~^FOO"},
+				IgnoreTables: []*Table{{"~.*", "~FoO$"}},
+			},
+			Input:  []*Table{{"FOO1", "a"}, {"foo2", "b"}, {"BoO3", "cFoO"}, {"Foo4", "dfoo"}, {"5", "5"}},
+			Output: []*Table{{"5", "5"}},
+		},
 	}
 
 	for _, t := range cases {
@@ -95,4 +120,19 @@ func (s *testFilterSuite) TestMaxBox(c *C) {
 	res := r.ApplyOn([]*Table{x})
 	c.Assert(res, HasLen, 1)
 	c.Assert(res[0], DeepEquals, x)
+}
+
+func (s *testFilterSuite) TestCaseSensitive(c *C) {
+	// ensure case-sensitive rules are really case-sensitive
+	rules := &Rules{
+		IgnoreDBs:    []string{"~^FOO"},
+		IgnoreTables: []*Table{{"~.*", "~FoO$"}},
+	}
+	r := New(true, rules)
+
+	input := []*Table{{"FOO1", "a"}, {"foo2", "b"}, {"BoO3", "cFoO"}, {"Foo4", "dfoo"}, {"5", "5"}}
+	actual := r.ApplyOn(input)
+	expected := []*Table{{"foo2", "b"}, {"Foo4", "dfoo"}, {"5", "5"}}
+	c.Logf("got %+v, expected %+v", actual, expected)
+	c.Assert(actual, DeepEquals, expected)
 }

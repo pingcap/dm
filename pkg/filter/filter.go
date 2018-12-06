@@ -96,9 +96,6 @@ func New(caseSensitive bool, rules *Rules) *Filter {
 		caseSensitive: caseSensitive,
 		rules:         rules,
 	}
-	if !f.caseSensitive {
-		f.rules.ToLower()
-	}
 
 	f.patternMap = make(map[string]*regexp.Regexp)
 	f.c = &cache{
@@ -134,13 +131,16 @@ func (f *Filter) genRegexMap() {
 
 func (f *Filter) addOneRegex(originStr string) {
 	if _, ok := f.patternMap[originStr]; !ok {
-		var re *regexp.Regexp
-		if originStr[0] != '~' {
-			re = regexp.MustCompile(fmt.Sprintf("(?i)^%s$", originStr))
+		var pattern string
+		if strings.HasPrefix(originStr, "~") {
+			pattern = originStr[1:]
 		} else {
-			re = regexp.MustCompile(fmt.Sprintf("(?i)%s", originStr[1:]))
+			pattern = "^" + regexp.QuoteMeta(originStr) + "$"
 		}
-		f.patternMap[originStr] = re
+		if !f.caseSensitive {
+			pattern = "(?i)" + pattern
+		}
+		f.patternMap[originStr] = regexp.MustCompile(pattern)
 	}
 }
 
@@ -158,12 +158,7 @@ func (f *Filter) ApplyOn(stbs []*Table) []*Table {
 		name := tb.String()
 		do, exist := f.c.query(name)
 		if !exist {
-			tbCopy := &Table{Schema: tb.Schema, Name: tb.Name}
-			if !f.caseSensitive {
-				tbCopy = &Table{Schema: strings.ToLower(tb.Schema), Name: strings.ToLower(tb.Name)}
-			}
-
-			do = ActionType(f.filterOnSchemas(tbCopy) && f.filterOnTables(tbCopy))
+			do = ActionType(f.filterOnSchemas(tb) && f.filterOnTables(tb))
 			f.c.set(tb.String(), do)
 		}
 
