@@ -15,6 +15,7 @@ package syncer
 
 import (
 	"bytes"
+	"database/sql"
 
 	. "github.com/pingcap/check"
 
@@ -202,8 +203,21 @@ func (s *testSyncerSuite) TestAnsiQuotes(c *C) {
 		"create table test.test (\"id\" int)",
 		"insert into test.test (\"id\") values('a')",
 	}
-	_, err := s.db.Exec("set @@global.sql_mode='ANSI_QUOTES'")
+	result, err := s.db.Query("select @@global.sql_mode")
+	var sqlMode sql.NullString
 	c.Assert(err, IsNil)
+	defer result.Close()
+	for result.Next() {
+		err := result.Scan(&sqlMode)
+		c.Assert(err, IsNil)
+		break
+	}
+	c.Assert(sqlMode.Valid, IsTrue)
+
+	_, err = s.db.Exec("set @@global.sql_mode='ANSI_QUOTES'")
+	c.Assert(err, IsNil)
+	// recover original sql_mode
+	defer s.db.Exec("set @@global.sql_mode = ?", sqlMode)
 
 	parser, err := utils.GetParser(s.db, false)
 	c.Assert(err, IsNil)
