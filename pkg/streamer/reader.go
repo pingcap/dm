@@ -1,8 +1,6 @@
 package streamer
 
 import (
-	"fmt"
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -16,7 +14,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/watcher"
 )
 
 // errors used by reader
@@ -144,8 +141,9 @@ func (r *BinlogReader) parseRelay(ctx context.Context, s *LocalStreamer, pos mys
 		}
 
 		// update pos, so can switch to next sub directory
-		pos.Name = r.constructBinlogName(parsed, uuidSuffix)
+		pos.Name = constructBinlogName(parsed, uuidSuffix)
 		pos.Pos = 4 // start from pos 4 for next sub directory / file
+		log.Infof("[streamer] switching to next realy sub directory with UUID %s and pos %s", nextUUID, pos)
 	}
 }
 
@@ -158,6 +156,7 @@ func (r *BinlogReader) parseDirAsPossible(ctx context.Context, s *LocalStreamer,
 	pos = realPos         // use realPos to do syncing
 	var firstParse = true // the first parse time for the relay log file
 	var dir = path.Join(r.cfg.RelayDir, currentUUID)
+	log.Infof("[streamer] start to parse relay log files in sub directory %s with pos %s", dir, pos)
 
 	for {
 		select {
@@ -167,12 +166,12 @@ func (r *BinlogReader) parseDirAsPossible(ctx context.Context, s *LocalStreamer,
 		}
 		files, err := collectBinlogFiles(dir, pos.Name)
 		if err != nil {
-			return false, "", "", errors.Annotatef(err, "parse relay dir %s", dir)
+			return false, "", "", errors.Annotatef(err, "parse relay dir %s with pos %s", dir, pos)
 		} else if len(files) == 0 {
-			return false, "", "", errors.Errorf("no relay log files match pos %v", pos)
+			return false, "", "", errors.Errorf("no relay log files in dir %s match pos %s", dir, pos)
 		}
 
-		log.Debugf("[streamer] start read from directory %s", dir)
+		log.Debugf("[streamer] start read relay log files %v in directory %s with pos %s", files, dir, pos)
 
 		var (
 			latestPos  int64
@@ -196,7 +195,7 @@ func (r *BinlogReader) parseDirAsPossible(ctx context.Context, s *LocalStreamer,
 			needSwitch, latestPos, nextUUID, nextBinlogName, err = r.parseFileAsPossible(ctx, s, relayLogFile, offset, dir, firstParse, currentUUID, i == len(files)-1)
 			firstParse = false // already parsed
 			if err != nil {
-				return false, "", "", errors.Annotatef(err, "parse relay dir %s", dir)
+				return false, "", "", errors.Annotatef(err, "parse relay log file %s from offset %d in dir %s", relayLogFile, offset, dir)
 			}
 			if needSwitch {
 				// need switch to next relay sub directory
@@ -217,6 +216,8 @@ func (r *BinlogReader) parseFileAsPossible(ctx context.Context, s *LocalStreamer
 		needReParse bool
 	)
 	latestPos = offset
+	log.Debugf("[streamer] start to parse relay log file %s from offset %d in dir %s", relayLogFile, latestPos, relayLogDir)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -226,10 +227,10 @@ func (r *BinlogReader) parseFileAsPossible(ctx context.Context, s *LocalStreamer
 		needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(ctx, s, relayLogFile, latestPos, relayLogDir, firstParse, currentUUID, possibleLast)
 		firstParse = false // set to false to handle the `continue` below
 		if err != nil {
-			return false, 0, "", "", errors.Annotatef(err, "parse relay file %s", relayLogFile)
+			return false, 0, "", "", errors.Annotatef(err, "parse relay log file %s from offset %d in dir %s", relayLogFile, latestPos, relayLogDir)
 		}
 		if needReParse {
-			log.Debugf("[streamer] continue to re-parse relay log file %s", relayLogFile)
+			log.Debugf("[streamer] continue to re-parse relay log file %s in dir %s", relayLogFile, relayLogDir)
 			continue // should continue to parse this file
 		}
 		return needSwitch, latestPos, nextUUID, nextBinlogName, nil
@@ -263,12 +264,14 @@ func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLog
 			// add master UUID suffix to pos.Name
 			env := e.Event.(*replication.RotateEvent)
 			parsed, _ := parseBinlogFile(string(env.NextLogName))
-			nameWithSuffix := r.constructBinlogName(parsed, uuidSuffix)
+			nameWithSuffix := constructBinlogName(parsed, uuidSuffix)
 			env.NextLogName = []byte(nameWithSuffix)
 
 			if e.Header.Timestamp != 0 && e.Header.LogPos != 0 {
 				// not fake rotate event, update file pos
 				latestPos = int64(e.Header.LogPos)
+			} else {
+				log.Debugf("[streamer] skip fake rotate event %+v", e.Header)
 			}
 
 			currentPos := mysql.Position{
@@ -289,7 +292,6 @@ func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLog
 	}
 
 	fullPath := filepath.Join(relayLogDir, relayLogFile)
-	log.Debugf("[streamer] start read from relay log file %s", fullPath)
 
 	if firstParse {
 		// if the file is the first time to parse, send a fake ROTATE_EVENT before parse binlog file
@@ -302,20 +304,24 @@ func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLog
 		if err2 != nil {
 			return false, false, 0, "", "", errors.Annotatef(err2, "send event %+v", e.Header)
 		}
+		log.Infof("[streamer] start parse relay log file %s from offset %d", fullPath, offset)
+	} else {
+		log.Debugf("[streamer] start parse relay log file %s from offset %d", fullPath, offset)
 	}
 
 	err = r.parser.ParseFile(fullPath, offset, onEventFunc)
 	if possibleLast && err != nil && strings.Contains(err.Error(), "err EOF") {
 		// NOTE: go-mysql returned err not includes caused err, but as message, ref: parser.go `parseSingleEvent`
-		log.Warnf("[streamer] parse binlog file %s from offset %d got EOF %s", fullPath, offset, errors.ErrorStack(err))
+		log.Warnf("[streamer] parse relay log file %s from offset %d got EOF %s", fullPath, offset, errors.ErrorStack(err))
 	} else if err != nil {
-		log.Errorf("[streamer] parse binlog file %s from offset %d error %s", fullPath, offset, errors.ErrorStack(err))
-		return false, false, 0, "", "", errors.Trace(err)
+		log.Errorf("[streamer] parse relay log file %s from offset %d error %s", fullPath, offset, errors.ErrorStack(err))
+		return false, false, 0, "", "", errors.Annotatef(err, "relay log file %s", fullPath)
 	}
+	log.Debugf("[streamer] parse relay log file %s return with offset %d", fullPath, latestPos)
 
 	if !possibleLast {
 		// there are more relay log files in current sub directory, continue to re-collect them
-		log.Infof("[streamer] more relay log file need to parse in %s", relayLogDir)
+		log.Infof("[streamer] more relay log files need to parse in dir %s", relayLogDir)
 		return false, false, latestPos, "", "", nil
 	}
 
@@ -330,7 +336,7 @@ func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLog
 		return true, false, 0, nextUUID, nextBinlogName, nil
 	}
 
-	updatedPath, err := r.relaySubDirUpdated(ctx, relayLogDir, fullPath, int64(latestPos))
+	updatedPath, err := relaySubDirUpdated(ctx, watcherInterval, relayLogDir, fullPath, relayLogFile, int64(latestPos))
 	if err != nil {
 		return false, false, 0, "", "", errors.Trace(err)
 	}
@@ -353,7 +359,7 @@ func (r *BinlogReader) needSwitchSubDir(currentUUID string, latestFilePath strin
 	}
 
 	// try get the first binlog file in next sub directory
-	nextBinlogName, err = r.getFirstBinlogName(nextUUID)
+	nextBinlogName, err = getFirstBinlogName(r.cfg.RelayDir, nextUUID)
 	if err != nil {
 		// NOTE: current we can not handle `errors.IsNotFound(err)` easily
 		// because creating sub directory and writing relay log file are not atomic
@@ -362,7 +368,7 @@ func (r *BinlogReader) needSwitchSubDir(currentUUID string, latestFilePath strin
 	}
 
 	// check the latest relay log file whether updated when checking next sub directory
-	cmp, err := r.fileSizeUpdated(latestFilePath, latestFileSize)
+	cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
 	if err != nil {
 		return false, false, "", "", errors.Trace(err)
 	} else if cmp < 0 {
@@ -376,131 +382,15 @@ func (r *BinlogReader) needSwitchSubDir(currentUUID string, latestFilePath strin
 	return true, false, nextUUID, nextBinlogName, nil
 }
 
-// relaySubDirUpdated checks whether the relay sub directory updated
-// return updated file path
-// including file changed, created, removed, etc.
-func (r *BinlogReader) relaySubDirUpdated(ctx context.Context, dir string, latestFilePath string, latestFileSize int64) (string, error) {
-	// create polling watcher
-	watcher2 := watcher.NewWatcher()
-
-	// Add before Start
-	// no need to Remove, it will be closed and release when return
-	err := watcher2.Add(dir)
-	if err != nil {
-		return "", errors.Annotatef(err, "add watch for relay log dir %s", dir)
-	}
-
-	err = watcher2.Start(watcherInterval)
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-	defer watcher2.Close()
-
-	type watchResult struct {
-		updatePath string
-		err        error
-	}
-
-	result := make(chan watchResult, 1) // buffered chan to ensure not block the sender even return in the halfway
-	newCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	go func() {
-		for {
-			select {
-			case <-newCtx.Done():
-				result <- watchResult{
-					updatePath: "",
-					err:        newCtx.Err(),
-				}
-				return
-			case err2, ok := <-watcher2.Errors:
-				if !ok {
-					result <- watchResult{
-						updatePath: "",
-						err:        errors.Errorf("watcher's errors chan for relay log dir %s closed", dir),
-					}
-				} else {
-					result <- watchResult{
-						updatePath: "",
-						err:        errors.Annotatef(err2, "relay log dir %s", dir),
-					}
-				}
-				return
-			case event, ok := <-watcher2.Events:
-				if !ok {
-					result <- watchResult{
-						updatePath: "",
-						err:        errors.Errorf("watcher's events chan for relay log dir %s closed", dir),
-					}
-					return
-				}
-				log.Debugf("[streamer] watcher receive event %+v", event)
-				if event.IsDirEvent() {
-					log.Debugf("[streamer] skip watcher event %+v for directory", event)
-					continue
-				} else if !event.HasOps(watcher.Modify, watcher.Create) {
-					log.Debugf("[streamer] skip uninterested event op %s for file %s", event.Op, event.Path)
-					continue
-				}
-				baseName := path.Base(event.Path)
-				_, err2 := GetBinlogFileIndex(baseName)
-				if err2 != nil {
-					log.Debugf("skip watcher event %+v for invalid relay log file", event)
-					continue // not valid binlog created, updated
-				}
-				result <- watchResult{
-					updatePath: event.Path,
-					err:        nil,
-				}
-				return
-			}
-		}
-	}()
-
-	// check the latest relay log file whether updated when adding watching
-	cmp, err := r.fileSizeUpdated(latestFilePath, latestFileSize)
-	if err != nil {
-		return "", errors.Trace(err)
-	} else if cmp < 0 {
-		return "", errors.Errorf("file size of relay log %s become smaller", latestFilePath)
-	} else if cmp > 0 {
-		// the latest relay log file already updated, need to parse from it again (not need to re-collect relay log files)
-		return latestFilePath, nil
-	}
-
-	res := <-result
-	return res.updatePath, res.err
-}
-
-// fileSizeUpdated checks whether the file's size has updated
-// return
-//   0: not updated
-//   1: update to larger
-//  -1: update to smaller, should not happen
-func (r *BinlogReader) fileSizeUpdated(path string, latestSize int64) (int, error) {
-	fi, err := os.Stat(path)
-	if err != nil {
-		return 0, errors.Annotatef(err, "get stat for relay log %s", path)
-	}
-	currSize := fi.Size()
-	if currSize == latestSize {
-		return 0, nil
-	} else if currSize > latestSize {
-		log.Debugf("[streamer] relay log file size has changed from %d to %d", latestSize, currSize)
-		return 1, nil
-	} else {
-		panic(fmt.Sprintf("relay log file size has changed from %d to %d", latestSize, currSize))
-	}
-}
-
 // updateUUIDs re-parses UUID index file and updates UUID list
 func (r *BinlogReader) updateUUIDs() error {
 	uuids, err := utils.ParseUUIDIndex(r.indexPath)
 	if err != nil {
-		return errors.Trace(err)
+		return errors.Annotatef(err, "index file path %s", r.indexPath)
 	}
+	oldUUIDs := r.uuids
 	r.uuids = uuids
-	log.Infof("[streamer] update relay UUIDs to %v", uuids)
+	log.Infof("[streamer] update relay UUIDs from %v to %v", oldUUIDs, uuids)
 	return nil
 }
 
@@ -544,11 +434,6 @@ func (r *BinlogReader) extractPos(pos mysql.Position) (uuidWithSuffix string, uu
 	return
 }
 
-// constructPosName construct binlog file name with UUID suffix
-func (r *BinlogReader) constructBinlogName(originalName *binlogFile, uuidSuffix string) string {
-	return fmt.Sprintf("%s%s%s%s%s", originalName.baseName, posUUIDSuffixSeparator, uuidSuffix, baseSeqSeparator, originalName.seq)
-}
-
 func (r *BinlogReader) getNextUUID(uuid string) (string, string) {
 	for i := len(r.uuids) - 2; i >= 0; i-- {
 		if r.uuids[i] == uuid {
@@ -558,29 +443,6 @@ func (r *BinlogReader) getNextUUID(uuid string) (string, string) {
 		}
 	}
 	return "", ""
-}
-
-func (r *BinlogReader) getFirstBinlogName(uuid string) (string, error) {
-	fpath := path.Join(r.cfg.RelayDir, uuid)
-	files, err := readDir(fpath)
-	if err != nil {
-		return "", errors.Annotatef(err, "get binlog file for dir %s", fpath)
-	}
-
-	for _, f := range files {
-		if f == utils.MetaFilename {
-			log.Debugf("[streamer] skip meta file %s", f)
-			continue
-		}
-
-		_, err := parseBinlogFile(f)
-		if err != nil {
-			return "", errors.NotValidf("binlog file %s", f)
-		}
-		return f, nil
-	}
-
-	return "", errors.NotFoundf("binlog files in dir %s", fpath)
 }
 
 // Close closes BinlogReader.
