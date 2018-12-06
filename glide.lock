@@ -1,5 +1,5 @@
-hash: 823a0d0a512745f2eaa6080e56452df8c527ff7a5e99bdf2ece5bf0c18026e45
-updated: 2018-10-29T18:58:49.589492846+08:00
+hash: c71906d59b0a43a1be4fd26c4b01c2d40b9bb6a46e4438530f6d5b7fd6adb661
+updated: 2018-12-05T20:24:42.687965+08:00
 imports:
 - name: github.com/beorn7/perks
   version: 3a771d992973f24aa725d07868b467d1ddfceafb
@@ -33,8 +33,6 @@ imports:
   version: 1eb03e3cc9d345307a45ec82bd3016cde4bd4464
 - name: github.com/cznic/y
   version: 9fdf92d4aac058959f814606bb729ed50f5e4240
-- name: github.com/fsnotify/fsnotify
-  version: ccc981bf80385c528a65fbfdd49bf2d8da22aa23
 - name: github.com/go-sql-driver/mysql
   version: 4ac31a97ccff97de60ba3c630bfb4733c1bb6d0e
 - name: github.com/golang/protobuf
@@ -53,7 +51,7 @@ imports:
 - name: github.com/google/btree
   version: 316fb6d3f031ae8f4d457c6c5186b9e3ded70435
 - name: github.com/grpc-ecosystem/go-grpc-middleware
-  version: 498ae206fc3cfe81cd82e48c1d4354026fa5f9ec
+  version: 3304cc8863525cd0b328fbfd5bf745bbd38e7106
   subpackages:
   - tags
   - tracing/opentracing
@@ -238,7 +236,7 @@ imports:
 - name: github.com/spf13/cobra
   version: ef82de70bb3f60c65fb8eebacbb2d122ef517385
 - name: github.com/spf13/pflag
-  version: 082b515c9490f4eccc758469c3152b77d139f868
+  version: aea12ed6721610dc6ed40141676d7ab0a1dac9e9
 - name: github.com/twinj/uuid
   version: 7bbe408d339787c56ec15568c947c0959db1b275
 - name: github.com/uber/jaeger-client-go
@@ -281,9 +279,7 @@ imports:
   - lex/httplex
   - trace
 - name: golang.org/x/sys
-  version: 8d1157a435470616f975ff9bb013bea8d0962067
-  repo: https://github.com/golang/sys.git
-  vcs: git
+  version: a5c9d58dba9a56f97aaa86f55e638b718c5a6c42
   subpackages:
   - unix
 - name: golang.org/x/text

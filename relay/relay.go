@@ -400,8 +400,8 @@ func (r *Relay) process(parentCtx context.Context) error {
 		relayLogWriteDurationHistogram.Observe(time.Since(writeTimer).Seconds())
 		relayLogWriteSizeHistogram.Observe(float64(e.Header.EventSize))
 		relayLogPosGauge.WithLabelValues("relay").Set(float64(lastPos.Pos))
-		if index, err := pkgstreamer.GetBinlogFileIndex(lastPos.Name); err != nil {
-			log.Errorf("[relay] parse binlog file name %s err %v", lastPos.Name, err)
+		if index, err2 := pkgstreamer.GetBinlogFileIndex(lastPos.Name); err2 != nil {
+			log.Errorf("[relay] parse binlog file name %s err %v", lastPos.Name, err2)
 		} else {
 			relayLogFileGauge.WithLabelValues("relay").Set(index)
 		}

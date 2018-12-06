@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/siddontang/go-mysql/mysql"
@@ -16,6 +16,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/watcher"
 )
 
 // errors used by reader
@@ -30,6 +31,9 @@ var (
 	// eg. mysql-bin.000003 in c6ae5afe-c7a3-11e8-a19d-0242ac130006.000002 => mysql-bin|000002.000003
 	// where `000002` in `c6ae5afe-c7a3-11e8-a19d-0242ac130006.000002` is the UUIDSuffix
 	posUUIDSuffixSeparator = "|"
+
+	// polling interval for watcher
+	watcherInterval = 100 * time.Millisecond
 )
 
 // BinlogReaderConfig is the configuration for BinlogReader
@@ -373,76 +377,85 @@ func (r *BinlogReader) needSwitchSubDir(currentUUID string, latestFilePath strin
 }
 
 // relaySubDirUpdated checks whether the relay sub directory updated
+// return updated file path
 // including file changed, created, removed, etc.
-func (r *BinlogReader) relaySubDirUpdated(ctx context.Context, dir string, latestFilePath string, latestFileSize int64) (updatedPath string, err error) {
-	// create fs notify watcher
-	watcher, err := fsnotify.NewWatcher()
+func (r *BinlogReader) relaySubDirUpdated(ctx context.Context, dir string, latestFilePath string, latestFileSize int64) (string, error) {
+	// create polling watcher
+	watcher2 := watcher.NewWatcher()
+
+	// Add before Start
+	// no need to Remove, it will be closed and release when return
+	err := watcher2.Add(dir)
+	if err != nil {
+		return "", errors.Annotatef(err, "add watch for relay log dir %s", dir)
+	}
+
+	err = watcher2.Start(watcherInterval)
 	if err != nil {
 		return "", errors.Trace(err)
 	}
-	defer watcher.Close()
+	defer watcher2.Close()
 
 	type watchResult struct {
-		eventName string
-		err       error
+		updatePath string
+		err        error
 	}
 
-	// dm-worker can trigger `kernel: NMI watchdog: BUG: soft lockup - CPU#19 stuck for 22s!` some time
-	// I guess this may because the thread running the watch is blocked and can not be scheduled
-	// so take the advise from https://github.com/howeyc/fsnotify/issues/7 and https://github.com/fsnotify/fsnotify/blob/master/example_test.go
-	// try split the watch to a separate goroutine
 	result := make(chan watchResult, 1) // buffered chan to ensure not block the sender even return in the halfway
+	newCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	go func() {
 		for {
 			select {
-			case <-ctx.Done():
+			case <-newCtx.Done():
 				result <- watchResult{
-					eventName: "",
-					err:       ctx.Err(),
+					updatePath: "",
+					err:        newCtx.Err(),
 				}
 				return
-			case err, ok := <-watcher.Errors:
+			case err2, ok := <-watcher2.Errors:
 				if !ok {
 					result <- watchResult{
-						eventName: "",
-						err:       errors.Errorf("watcher's errors chan for relay log dir %s closed", dir),
+						updatePath: "",
+						err:        errors.Errorf("watcher's errors chan for relay log dir %s closed", dir),
 					}
 				} else {
 					result <- watchResult{
-						eventName: "",
-						err:       errors.Annotatef(err, "relay log dir %s", dir),
+						updatePath: "",
+						err:        errors.Annotatef(err2, "relay log dir %s", dir),
 					}
 				}
 				return
-			case event, ok := <-watcher.Events:
+			case event, ok := <-watcher2.Events:
 				if !ok {
 					result <- watchResult{
-						eventName: "",
-						err:       errors.Errorf("watcher's events chan for relay log dir %s closed", dir),
+						updatePath: "",
+						err:        errors.Errorf("watcher's events chan for relay log dir %s closed", dir),
 					}
 					return
 				}
 				log.Debugf("[streamer] watcher receive event %+v", event)
-				baseName := path.Base(event.Name)
-				_, err = GetBinlogFileIndex(baseName)
-				if err != nil {
-					log.Debugf("skip watcher event %+v", event)
+				if event.IsDirEvent() {
+					log.Debugf("[streamer] skip watcher event %+v for directory", event)
+					continue
+				} else if !event.HasOps(watcher.Modify, watcher.Create) {
+					log.Debugf("[streamer] skip uninterested event op %s for file %s", event.Op, event.Path)
+					continue
+				}
+				baseName := path.Base(event.Path)
+				_, err2 := GetBinlogFileIndex(baseName)
+				if err2 != nil {
+					log.Debugf("skip watcher event %+v for invalid relay log file", event)
 					continue // not valid binlog created, updated
 				}
 				result <- watchResult{
-					eventName: event.Name,
-					err:       nil,
+					updatePath: event.Path,
+					err:        nil,
 				}
 				return
 			}
 		}
 	}()
-
-	err = watcher.Add(dir)
-	if err != nil {
-		return "", errors.Annotatef(err, "add watch for relay log dir %s", dir)
-	}
-	defer watcher.Remove(dir)
 
 	// check the latest relay log file whether updated when adding watching
 	cmp, err := r.fileSizeUpdated(latestFilePath, latestFileSize)
@@ -456,7 +469,7 @@ func (r *BinlogReader) relaySubDirUpdated(ctx context.Context, dir string, lates
 	}
 
 	res := <-result
-	return res.eventName, res.err
+	return res.updatePath, res.err
 }
 
 // fileSizeUpdated checks whether the file's size has updated
