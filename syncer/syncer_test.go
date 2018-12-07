@@ -678,11 +678,20 @@ func (s *testSyncerSuite) TestTimezone(c *C) {
 		syncer.genRouter()
 		s.resetBinlogSyncer()
 
-		s.db.Exec(fmt.Sprintf("set @@global.time_zone = '%s'", testCase.timezone))
-		s.db.Exec(fmt.Sprintf("set @@session.time_zone = '%s'", testCase.timezone))
+		// we should not use `sql.DB.Exec` to do query which depends on session variables
+		// because `sql.DB.Exec` will choose a underlying Conn for every query from the connection pool
+		// and different Conn using different session
+		// ref: `sql.DB.Conn`
+		// and `set @@global` is also not reasonable, because it can not affect sessions already exist
+		// if we must ensure multi queries use the same session, we should use a transaction
+		txn, err := s.db.Begin()
+		c.Assert(err, IsNil)
+		txn.Exec("set @@session.time_zone = ?", testCase.timezone)
 		for _, sql := range testCase.sqls {
-			s.db.Exec(sql)
+			txn.Exec(sql)
 		}
+		err = txn.Commit()
+		c.Assert(err, IsNil)
 
 		idx := 0
 		for {
