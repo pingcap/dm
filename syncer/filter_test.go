@@ -106,7 +106,7 @@ END`, true},
 	}
 
 	// system table
-	skipped, err := syncer.skipQuery([]*filter.Table{{"mysql", "test"}}, nil, "create table mysql.test (id int)")
+	skipped, err := syncer.skipQuery([]*filter.Table{{Schema: "mysql", Name: "test"}}, nil, "create table mysql.test (id int)")
 	c.Assert(err, IsNil)
 	c.Assert(skipped, Equals, true)
 
@@ -140,14 +140,14 @@ END`, true},
 	sql := "drop table tx.test"
 	stmt, err := parser.New().ParseOneStmt(sql, "", "")
 	c.Assert(err, IsNil)
-	skipped, err = syncer.skipQuery([]*filter.Table{{"tx", "test"}}, stmt, sql)
+	skipped, err = syncer.skipQuery([]*filter.Table{{Schema: "tx", Name: "test"}}, stmt, sql)
 	c.Assert(err, IsNil)
 	c.Assert(skipped, Equals, true)
 
 	sql = "create table tx.test (id int)"
 	stmt, err = parser.New().ParseOneStmt(sql, "", "")
 	c.Assert(err, IsNil)
-	skipped, err = syncer.skipQuery([]*filter.Table{{"tx", "test"}}, stmt, sql)
+	skipped, err = syncer.skipQuery([]*filter.Table{{Schema: "tx", Name: "test"}}, stmt, sql)
 	c.Assert(err, IsNil)
 	c.Assert(skipped, Equals, false)
 
@@ -155,14 +155,14 @@ END`, true},
 	sql = "create table foo.test(id int)"
 	stmt, err = parser.New().ParseOneStmt(sql, "", "")
 	c.Assert(err, IsNil)
-	skipped, err = syncer.skipQuery([]*filter.Table{{"foo", "test"}}, stmt, sql)
+	skipped, err = syncer.skipQuery([]*filter.Table{{Schema: "foo", Name: "test"}}, stmt, sql)
 	c.Assert(err, IsNil)
 	c.Assert(skipped, Equals, false)
 
 	sql = "rename table foo.test to foo.test1"
 	stmt, err = parser.New().ParseOneStmt(sql, "", "")
 	c.Assert(err, IsNil)
-	skipped, err = syncer.skipQuery([]*filter.Table{{"foo", "test"}}, stmt, sql)
+	skipped, err = syncer.skipQuery([]*filter.Table{{Schema: "foo", Name: "test"}}, stmt, sql)
 	c.Assert(err, IsNil)
 	c.Assert(skipped, Equals, true)
 
@@ -170,7 +170,7 @@ END`, true},
 	sql = "create table foo.bar(id int)"
 	stmt, err = parser.New().ParseOneStmt(sql, "", "")
 	c.Assert(err, IsNil)
-	skipped, err = syncer.skipQuery([]*filter.Table{{"foo", "bar"}}, stmt, sql)
+	skipped, err = syncer.skipQuery([]*filter.Table{{Schema: "foo", Name: "bar"}}, stmt, sql)
 	c.Assert(err, IsNil)
 	c.Assert(skipped, Equals, true)
 }

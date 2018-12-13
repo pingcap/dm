@@ -171,7 +171,7 @@ func (s *Syncer) skipDMLEvent(schema string, table string, eventType replication
 		return true, nil
 	}
 
-	tbs := []*filter.Table{{schema, table}}
+	tbs := []*filter.Table{{Schema: schema, Name: table}}
 	tbs = s.bwList.ApplyOn(tbs)
 	if len(tbs) == 0 {
 		return true, nil

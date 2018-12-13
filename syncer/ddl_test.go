@@ -109,18 +109,18 @@ func (s *testSyncerSuite) TestGenDDLSQL(c *C) {
 
 func (s *testSyncerSuite) TestComment(c *C) {
 	originTableNameSingle := []*filter.Table{
-		{"test", "test"},
+		{Schema: "test", Name: "test"},
 	}
 	originTableNameDouble := []*filter.Table{
-		{"test", "test"},
-		{"test1", "test1"},
+		{Schema: "test", Name: "test"},
+		{Schema: "test1", Name: "test1"},
 	}
 	targetTableNameSingle := []*filter.Table{
-		{"titi", "titi"},
+		{Schema: "titi", Name: "titi"},
 	}
 	targetTableNameDouble := []*filter.Table{
-		{"titi", "titi"},
-		{"titi1", "titi1"},
+		{Schema: "titi", Name: "titi"},
+		{Schema: "titi1", Name: "titi1"},
 	}
 	testCase := [][]string{
 		{"CREATE /* gh-ost */ DATABASE test", "CREATE /* gh-ost */ DATABASE `titi`"},
@@ -208,7 +208,7 @@ func (s *testSyncerSuite) TestAnsiQuotes(c *C) {
 	c.Assert(err, IsNil)
 	defer result.Close()
 	for result.Next() {
-		err := result.Scan(&sqlMode)
+		err = result.Scan(&sqlMode)
 		c.Assert(err, IsNil)
 		break
 	}
