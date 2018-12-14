@@ -223,7 +223,7 @@ func (c *SubTaskConfig) adjust() error {
 		c.InstanceID = fmt.Sprintf("%s:%d", c.From.Host, c.From.Port)
 	}
 
-	if c.OnlineDDLScheme != "" && c.OnlineDDLScheme != PT {
+	if c.OnlineDDLScheme != "" && c.OnlineDDLScheme != PT && c.OnlineDDLScheme != GHOST {
 		return errors.NotSupportedf("online scheme %s", c.OnlineDDLScheme)
 	}
 

@@ -296,7 +296,7 @@ func (c *TaskConfig) adjust() error {
 		return errors.New("please specify right task-mode, support `full`, `incremental`, `all`")
 	}
 
-	if c.OnlineDDLScheme != "" && c.OnlineDDLScheme != PT {
+	if c.OnlineDDLScheme != "" && c.OnlineDDLScheme != PT && c.OnlineDDLScheme != GHOST {
 		return errors.NotSupportedf("online scheme %s", c.OnlineDDLScheme)
 	}
 

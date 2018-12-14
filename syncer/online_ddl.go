@@ -15,7 +15,8 @@ import (
 var (
 	// OnlineDDLSchemes is scheme name => online ddl handler
 	OnlineDDLSchemes = map[string]func(*config.SubTaskConfig) (OnlinePlugin, error){
-		config.PT: NewPT,
+		config.PT:    NewPT,
+		config.GHOST: NewGhost,
 	}
 )
 
