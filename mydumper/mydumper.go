@@ -42,7 +42,7 @@ func NewMydumper(cfg *config.SubTaskConfig) *Mydumper {
 	m := &Mydumper{
 		cfg: cfg,
 	}
-	m.args = m.constructArgs(cfg)
+	m.args = m.constructArgs()
 	return m
 }
 
@@ -146,7 +146,8 @@ func (m *Mydumper) IsFreshTask() (bool, error) {
 }
 
 // constructArgs constructs arguments for exec.Command
-func (m *Mydumper) constructArgs(cfg *config.SubTaskConfig) []string {
+func (m *Mydumper) constructArgs() []string {
+	cfg := m.cfg
 	db := cfg.From
 	ret := []string{
 		"--host",
@@ -174,7 +175,7 @@ func (m *Mydumper) constructArgs(cfg *config.SubTaskConfig) []string {
 	}
 	extraArgs := strings.Fields(cfg.ExtraArgs)
 	if len(extraArgs) > 0 {
-		ret = append(ret, extraArgs...)
+		ret = append(ret, ParseArgLikeBash(extraArgs)...)
 	}
 	return ret
 }
