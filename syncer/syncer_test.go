@@ -635,33 +635,31 @@ func (s *testSyncerSuite) TestTimezone(c *C) {
 
 	createSQLs := []string{
 		"create database if not exists tztest_1",
-		"create table if not exists tztest_1.t_1(a timestamp)",
+		"create table if not exists tztest_1.t_1(id int, a timestamp)",
 	}
 
 	testCases := []struct {
 		sqls     []string
 		timezone string
-		expected []int64
 	}{
 		{
 			[]string{
-				"insert into tztest_1.t_1(a) values ('1990-04-15 01:30:12')",
-				"insert into tztest_1.t_1(a) values ('1990-04-15 02:30:12')",
-				"insert into tztest_1.t_1(a) values ('1990-04-15 03:30:12')",
+				"insert into tztest_1.t_1(id, a) values (1, '1990-04-15 01:30:12')",
+				"insert into tztest_1.t_1(id, a) values (2, '1990-04-15 02:30:12')",
+				"insert into tztest_1.t_1(id, a) values (3, '1990-04-15 03:30:12')",
 			},
 			"Asia/Shanghai",
-			[]int64{640110612, 640114212, 640117812},
 		},
 		{
 			[]string{
-				"insert into tztest_1.t_1(a) values ('1990-04-15 01:30:12')",
-				"insert into tztest_1.t_1(a) values ('1990-04-15 02:30:12')",
-				"insert into tztest_1.t_1(a) values ('1990-04-15 03:30:12')",
+				"insert into tztest_1.t_1(id, a) values (4, '1990-04-15 01:30:12')",
+				"insert into tztest_1.t_1(id, a) values (5, '1990-04-15 02:30:12')",
+				"insert into tztest_1.t_1(id, a) values (6, '1990-04-15 03:30:12')",
 			},
 			"America/Phoenix",
-			[]int64{640168212, 640171812, 640175412},
 		},
 	}
+	queryTs := "select unix_timestamp(a) from `tztest_1`.`t_1` where id = ?"
 
 	dropSQLs := []string{
 		"drop table tztest_1.t_1",
@@ -693,6 +691,9 @@ func (s *testSyncerSuite) TestTimezone(c *C) {
 		err = txn.Commit()
 		c.Assert(err, IsNil)
 
+		location, err := time.LoadLocation(testCase.timezone)
+		c.Assert(err, IsNil)
+
 		idx := 0
 		for {
 			if idx >= len(testCase.sqls) {
@@ -707,12 +708,17 @@ func (s *testSyncerSuite) TestTimezone(c *C) {
 				if skip {
 					continue
 				}
-				raw := ev.Rows[0][0].(string)
-				location, err := time.LoadLocation(testCase.timezone)
-				c.Assert(err, IsNil)
+
+				rowid := ev.Rows[0][0].(int32)
+				var ts sql.NullInt64
+				err2 := s.db.QueryRow(queryTs, rowid).Scan(&ts)
+				c.Assert(err2, IsNil)
+				c.Assert(ts.Valid, IsTrue)
+
+				raw := ev.Rows[0][1].(string)
 				data, err := time.ParseInLocation("2006-01-02 15:04:05", raw, location)
 				c.Assert(err, IsNil)
-				c.Assert(data.Unix(), DeepEquals, testCase.expected[idx])
+				c.Assert(data.Unix(), DeepEquals, ts.Int64)
 				idx++
 			default:
 				continue
