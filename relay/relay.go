@@ -877,7 +877,7 @@ func (r *Relay) Status() interface{} {
 		rs.RelayBinlogGtid = relayGTIDSet.String()
 	}
 	if r.cfg.EnableGTID {
-		if rs.MasterBinlogGtid == rs.RelayBinlogGtid {
+		if masterGTID != nil && relayGTIDSet != nil && relayGTIDSet.Equal(masterGTID) {
 			rs.RelayCatchUpMaster = true
 		}
 	} else {

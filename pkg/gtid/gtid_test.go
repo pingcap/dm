@@ -1,13 +1,22 @@
-package syncer
+package gtid
 
 import (
 	"fmt"
+	"testing"
 
 	. "github.com/pingcap/check"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
 )
 
-func (s *testSyncerSuite) TestGTID(c *C) {
+var _ = Suite(&testGTIDSuite{})
+
+func TestSuite(t *testing.T) {
+	TestingT(t)
+}
+
+type testGTIDSuite struct {
+}
+
+func (s *testGTIDSuite) TestGTID(c *C) {
 	matserUUIDs := []string{
 		"53ea0ed1-9bf8-11e6-8bea-64006a897c73",
 		"53ea0ed1-9bf8-11e6-8bea-64006a897c72",
@@ -36,11 +45,11 @@ func (s *testSyncerSuite) TestGTID(c *C) {
 	}
 
 	for _, cs := range cases {
-		selfGTIDSet, err := gtid.ParserGTID(cs.flavor, cs.selfGTIDstr)
+		selfGTIDSet, err := ParserGTID(cs.flavor, cs.selfGTIDstr)
 		c.Assert(err, IsNil)
-		newGTIDSet, err := gtid.ParserGTID(cs.flavor, cs.masterGTIDStr)
+		newGTIDSet, err := ParserGTID(cs.flavor, cs.masterGTIDStr)
 		c.Assert(err, IsNil)
-		excepted, err := gtid.ParserGTID(cs.flavor, cs.exepctedStr)
+		excepted, err := ParserGTID(cs.flavor, cs.exepctedStr)
 		c.Assert(err, IsNil)
 
 		err = selfGTIDSet.Replace(newGTIDSet, cs.masterIDs)
@@ -49,4 +58,48 @@ func (s *testSyncerSuite) TestGTID(c *C) {
 		c.Assert(selfGTIDSet.Origin().Equal(excepted.Origin()), IsTrue)
 		c.Assert(newGTIDSet.Origin().Equal(excepted.Origin()), IsTrue)
 	}
+}
+
+func (s *testGTIDSuite) TestMySQLGTIDEqual(c *C) {
+	var (
+		g1     *mySQLGTIDSet
+		g2     *mySQLGTIDSet
+		gMaria *mariadbGTIDSet
+	)
+
+	c.Assert(g1.Equal(nil), IsTrue)
+	c.Assert(g1.Equal(g2), IsTrue)
+	c.Assert(g1.Equal(gMaria), IsFalse)
+
+	gSet, err := ParserGTID("mysql", "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,406a3f61-690d-11e7-87c5-6c92bf46f384:1-94321383,53bfca22-690d-11e7-8a62-18ded7a37b78:1-495,686e1ab6-c47e-11e7-a42c-6c92bf46f384:1-34981190,03fc0263-28c7-11e7-a653-6c0b84d59f30:1-7041423,05474d3c-28c7-11e7-8352-203db246dd3d:1-170,10b039fc-c843-11e7-8f6a-1866daf8d810:1-308290454")
+	c.Assert(err, IsNil)
+	g1 = gSet.(*mySQLGTIDSet)
+	c.Assert(g1.Equal(g2), IsFalse)
+
+	gSet, err = ParserGTID("mysql", "03fc0263-28c7-11e7-a653-6c0b84d59f30:1-7041423,05474d3c-28c7-11e7-8352-203db246dd3d:1-170,10b039fc-c843-11e7-8f6a-1866daf8d810:1-308290454,3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,406a3f61-690d-11e7-87c5-6c92bf46f384:1-94321383,53bfca22-690d-11e7-8a62-18ded7a37b78:1-495,686e1ab6-c47e-11e7-a42c-6c92bf46f384:1-34981190")
+	c.Assert(err, IsNil)
+	g2 = gSet.(*mySQLGTIDSet)
+	c.Assert(g1.Equal(g2), IsTrue)
+}
+
+func (s *testGTIDSuite) TestMariaGTIDEqual(c *C) {
+	var (
+		g1     *mariadbGTIDSet
+		g2     *mariadbGTIDSet
+		gMySQL *mySQLGTIDSet
+	)
+
+	c.Assert(g1.Equal(nil), IsTrue)
+	c.Assert(g1.Equal(g2), IsTrue)
+	c.Assert(g1.Equal(gMySQL), IsFalse)
+
+	gSet, err := ParserGTID("mariadb", "1-1-1,2-2-2")
+	c.Assert(err, IsNil)
+	g1 = gSet.(*mariadbGTIDSet)
+	c.Assert(g1.Equal(g2), IsFalse)
+
+	gSet, err = ParserGTID("mariadb", "2-2-2,1-1-1")
+	c.Assert(err, IsNil)
+	g2 = gSet.(*mariadbGTIDSet)
+	c.Assert(g1.Equal(g2), IsTrue)
 }

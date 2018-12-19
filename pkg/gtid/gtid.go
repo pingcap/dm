@@ -31,6 +31,7 @@ type Set interface {
 	Replace(other Set, masters []interface{}) error
 	Clone() Set
 	Origin() mysql.GTIDSet
+	Equal(other Set) bool
 
 	String() string
 }
@@ -134,6 +135,25 @@ func (g *mySQLGTIDSet) Origin() mysql.GTIDSet {
 	return g.set.Clone().(*mysql.MysqlGTIDSet)
 }
 
+func (g *mySQLGTIDSet) Equal(other Set) bool {
+	otherIsNil := other == nil
+	if !otherIsNil {
+		otherGS, ok := other.(*mySQLGTIDSet)
+		if !ok {
+			return false
+		}
+		otherIsNil = otherGS == nil
+	}
+
+	if g == nil && otherIsNil {
+		return true
+	} else if g == nil || otherIsNil {
+		return false
+	}
+
+	return g.set.Equal(other.Origin())
+}
+
 func (g *mySQLGTIDSet) String() string {
 	if g.set == nil {
 		return ""
@@ -211,6 +231,25 @@ func (m *mariadbGTIDSet) Clone() Set {
 
 func (m *mariadbGTIDSet) Origin() mysql.GTIDSet {
 	return m.set.Clone().(*mysql.MariadbGTIDSet)
+}
+
+func (m *mariadbGTIDSet) Equal(other Set) bool {
+	otherIsNil := other == nil
+	if !otherIsNil {
+		otherGS, ok := other.(*mariadbGTIDSet)
+		if !ok {
+			return false
+		}
+		otherIsNil = otherGS == nil
+	}
+
+	if m == nil && otherIsNil {
+		return true
+	} else if m == nil || otherIsNil {
+		return false
+	}
+
+	return m.set.Equal(other.Origin())
 }
 
 func (m *mariadbGTIDSet) String() string {
