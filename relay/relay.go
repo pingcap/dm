@@ -28,11 +28,11 @@ import (
 	"golang.org/x/net/context"
 )
 
-// errors used by relay
 var (
+	// errors used by relay
 	ErrBinlogPosGreaterThanFileSize = errors.New("the specific position is greater than the local binlog file size")
-	// for MariaDB, UUID set as `gtid_domain_id` + domainServerIDSeparator + `server_id`
-	domainServerIDSeparator = "-"
+	// used to fill RelayLogInfo
+	fakeTaskName = "relay"
 )
 
 const (
@@ -41,6 +41,7 @@ const (
 	masterHeartbeatPeriod       = 30 * time.Second // master server send heartbeat period: ref: `MASTER_HEARTBEAT_PERIOD` in https://dev.mysql.com/doc/refman/8.0/en/change-master-to.html
 	flushMetaInterval           = 30 * time.Second
 	getMasterStatusInterval     = 30 * time.Second
+	trimUUIDsInterval           = 1 * time.Hour
 	binlogHeaderSize            = 4
 	showStatusConnectionTimeout = "1m"
 )
@@ -57,6 +58,11 @@ type Relay struct {
 	fd                    *os.File
 	closed                sync2.AtomicBool
 	sync.RWMutex
+
+	activeRelayLog struct {
+		sync.RWMutex
+		info *pkgstreamer.RelayLogInfo
+	}
 }
 
 // NewRelay creates an instance of Relay.
@@ -497,6 +503,10 @@ func (r *Relay) handleFormatDescriptionEvent(filename string) (exist bool, err e
 	}
 	r.fd = fd
 
+	// record current active relay log file, and keep it until newer file opened
+	// when current file's fd closed, we should not reset this, because it may re-open again
+	r.setActiveRelayLog(filename)
+
 	err = r.writeBinlogHeaderIfNotExists()
 	if err != nil {
 		return false, errors.Annotatef(err, "file full path %s", fullPath)
@@ -523,7 +533,7 @@ func (r *Relay) isNewServer() (bool, error) {
 		// no sub dir exists before
 		return true, nil
 	}
-	uuid, err := r.getServerUUID()
+	uuid, err := utils.GetServerUUID(r.db, r.cfg.Flavor)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
@@ -535,7 +545,7 @@ func (r *Relay) isNewServer() (bool, error) {
 }
 
 func (r *Relay) reSetupMeta() error {
-	uuid, err := r.getServerUUID()
+	uuid, err := utils.GetServerUUID(r.db, r.cfg.Flavor)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -575,29 +585,14 @@ func (r *Relay) updateMetricsRelaySubDirIndex() {
 	relaySubDirIndex.WithLabelValues(node, uuidWithSuffix).Set(float64(suffix))
 }
 
-// getServerUUID gets master server's UUID
-// for MySQL，UUID is `server_uuid` system variable
-// for MariaDB, UUID is `gtid_domain_id` joined `server_id` with domainServerIDSeparator
-func (r *Relay) getServerUUID() (string, error) {
-	if r.cfg.Flavor == mysql.MariaDBFlavor {
-		domainID, err := utils.GetMariaDBGtidDomainID(r.db)
-		if err != nil {
-			return "", errors.Trace(err)
-		}
-		serverID, err := utils.GetServerID(r.db)
-		if err != nil {
-			return "", errors.Trace(err)
-		}
-		return fmt.Sprintf("%d%s%d", domainID, domainServerIDSeparator, serverID), nil
-	}
-	return utils.GetServerUUID(r.db)
-}
-
 func (r *Relay) doIntervalOps(ctx context.Context) {
 	flushTicker := time.NewTicker(flushMetaInterval)
 	defer flushTicker.Stop()
 	masterStatusTicker := time.NewTicker(getMasterStatusInterval)
 	defer masterStatusTicker.Stop()
+	trimUUIDsTicker := time.NewTicker(trimUUIDsInterval)
+	defer trimUUIDsTicker.Stop()
+
 	for {
 		select {
 		case <-flushTicker.C:
@@ -622,6 +617,13 @@ func (r *Relay) doIntervalOps(ctx context.Context) {
 			}
 			relayLogFileGauge.WithLabelValues("master").Set(index)
 			relayLogPosGauge.WithLabelValues("master").Set(float64(pos.Pos))
+		case <-trimUUIDsTicker.C:
+			trimmed, err := r.meta.TrimUUIDs()
+			if err != nil {
+				log.Errorf("[relay] trim UUIDs error %s", errors.ErrorStack(err))
+			} else if len(trimmed) > 0 {
+				log.Infof("[relay] trim UUIDs %s", strings.Join(trimmed, ";"))
+			}
 		case <-ctx.Done():
 			return
 		}
@@ -758,7 +760,7 @@ func (r *Relay) retrySyncGTIDs() error {
 	}
 	log.Infof("[relay] new master GTID set %v", newGTIDSet)
 
-	masterUUID, err := r.getServerUUID()
+	masterUUID, err := utils.GetServerUUID(r.db, r.cfg.Flavor)
 	if err != nil {
 		return errors.Annotatef(err, "get master UUID")
 	}
@@ -969,4 +971,26 @@ func (r *Relay) Reload(newCfg *Config) error {
 	log.Info("[relay] relay unit is updated")
 
 	return nil
+}
+
+// setActiveRelayLog sets or updates the current active relay log to file
+func (r *Relay) setActiveRelayLog(filename string) {
+	uuid := r.meta.UUID()
+	_, suffix, _ := utils.ParseSuffixForUUID(uuid)
+	rli := &pkgstreamer.RelayLogInfo{
+		TaskName:   fakeTaskName,
+		UUID:       uuid,
+		UUIDSuffix: suffix,
+		Filename:   filename,
+	}
+	r.activeRelayLog.Lock()
+	r.activeRelayLog.info = rli
+	r.activeRelayLog.Unlock()
+}
+
+// ActiveRelayLog returns the current active RelayLogInfo
+func (r *Relay) ActiveRelayLog() *pkgstreamer.RelayLogInfo {
+	r.activeRelayLog.RLock()
+	defer r.activeRelayLog.RUnlock()
+	return r.activeRelayLog.info
 }

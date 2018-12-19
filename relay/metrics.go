@@ -1,14 +1,13 @@
 package relay
 
 import (
-	"reflect"
 	"time"
 
-	"github.com/ngaut/log"
-
 	"github.com/juju/errors"
+	"github.com/ngaut/log"
 	"github.com/prometheus/client_golang/prometheus"
-	"golang.org/x/sys/unix"
+
+	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )
 
 var (
@@ -38,7 +37,7 @@ var (
 			Help:      "current relay sub directory index",
 		}, []string{"node", "uuid"})
 
-	// should alert if avaiable space < 1G
+	// should alert if avaiable space < 10G
 	relayLogSpaceGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
@@ -138,52 +137,16 @@ func reportRelayLogSpaceInBackground(dirpath string) error {
 		for {
 			select {
 			case <-ticker.C:
-				size, err := getStorageSize(dirpath)
+				size, err := utils.GetStorageSize(dirpath)
 				if err != nil {
 					log.Error("update sotrage size err: ", err)
 				} else {
-					relayLogSpaceGauge.WithLabelValues("capacity").Set(float64(size.capacity))
-					relayLogSpaceGauge.WithLabelValues("available").Set(float64(size.available))
+					relayLogSpaceGauge.WithLabelValues("capacity").Set(float64(size.Capacity))
+					relayLogSpaceGauge.WithLabelValues("available").Set(float64(size.Available))
 				}
 			}
 		}
 	}()
 
 	return nil
-}
-
-// Learn from tidb-binlog source code.
-type storageSize struct {
-	capacity  int
-	available int
-}
-
-func getStorageSize(dir string) (size storageSize, err error) {
-	var stat unix.Statfs_t
-
-	err = unix.Statfs(dir, &stat)
-	if err != nil {
-		return size, errors.Trace(err)
-	}
-
-	// When container is run in MacOS, `bsize` obtained by `statfs` syscall is not the fundamental block size,
-	// but the `iosize` (optimal transfer block size) instead, it's usually 1024 times larger than the `bsize`.
-	// for example `4096 * 1024`. To get the correct block size, we should use `frsize`. But `frsize` isn't
-	// guaranteed to be supported everywhere, so we need to check whether it's supported before use it.
-	// For more details, please refer to: https://github.com/docker/for-mac/issues/2136
-	bSize := uint64(stat.Bsize)
-	field := reflect.ValueOf(&stat).Elem().FieldByName("Frsize")
-	if field.IsValid() {
-		if field.Kind() == reflect.Uint64 {
-			bSize = field.Uint()
-		} else {
-			bSize = uint64(field.Int())
-		}
-	}
-
-	// Available blocks * size per block = available space in bytes
-	size.available = int(stat.Bavail) * int(bSize)
-	size.capacity = int(stat.Blocks) * int(bSize)
-
-	return
 }

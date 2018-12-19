@@ -28,6 +28,7 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/tidb-enterprise-tools/relay/purger"
 )
 
 // NewConfig creates a new base config for worker.
@@ -44,6 +45,9 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
 	fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
 	fs.StringVar(&cfg.RelayDir, "relay-dir", "./relay_log", "relay log directory")
+	fs.Int64Var(&cfg.Purge.Interval, "purge-interval", 60*60, "interval (seconds) try to check whether needing to purge relay log files")
+	fs.Int64Var(&cfg.Purge.Expires, "purge-expires", 0, "try to purge relay log files if their modified time is older than this (hours)")
+	fs.Int64Var(&cfg.Purge.RemainSpace, "purge-remain-space", 15, "try to purge relay log files if remain space is less than this (GB)")
 
 	return cfg
 }
@@ -73,6 +77,9 @@ type Config struct {
 
 	SourceID string          `toml:"source-id" json:"source-id"`
 	From     config.DBConfig `toml:"from" json:"from"`
+
+	// config items for purger
+	Purge purger.Config `toml:"purge" json:"purge"`
 
 	ConfigFile string `json:"config-file"`
 

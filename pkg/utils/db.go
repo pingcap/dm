@@ -13,6 +13,11 @@ import (
 	gmysql "github.com/siddontang/go-mysql/mysql"
 )
 
+var (
+	// for MariaDB, UUID set as `gtid_domain_id` + domainServerIDSeparator + `server_id`
+	domainServerIDSeparator = "-"
+)
+
 // GetMasterStatus gets status from master
 func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, error) {
 	var (
@@ -150,9 +155,26 @@ func GetMariaDBGtidDomainID(db *sql.DB) (uint32, error) {
 }
 
 // GetServerUUID gets server's `server_uuid`
-func GetServerUUID(db *sql.DB) (string, error) {
+func GetServerUUID(db *sql.DB, flavor string) (string, error) {
+	if flavor == gmysql.MariaDBFlavor {
+		return GetMariaDBUUID(db)
+	}
 	serverUUID, err := GetGlobalVariable(db, "server_uuid")
 	return serverUUID, errors.Trace(err)
+}
+
+// GetMariaDBUUID gets equivalent `server_uuid` for MariaDB
+// `gtid_domain_id` joined `server_id` with domainServerIDSeparator
+func GetMariaDBUUID(db *sql.DB) (string, error) {
+	domainID, err := GetMariaDBGtidDomainID(db)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	serverID, err := GetServerID(db)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	return fmt.Sprintf("%d%s%d", domainID, domainServerIDSeparator, serverID), nil
 }
 
 // GetSQLMode returns sql_mode.

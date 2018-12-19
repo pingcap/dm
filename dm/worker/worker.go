@@ -14,17 +14,21 @@
 package worker
 
 import (
+	"fmt"
 	"reflect"
 	"sync"
 	"time"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-enterprise-tools/dm/config"
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	"github.com/siddontang/go/sync2"
 	"golang.org/x/net/context"
+
+	"github.com/pingcap/tidb-enterprise-tools/dm/config"
+	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/tidb-enterprise-tools/relay/purger"
 )
 
 var (
@@ -48,6 +52,7 @@ type Worker struct {
 	cfg         *Config
 	subTasks    map[string]*SubTask
 	relayHolder *RelayHolder
+	relayPurger *purger.Purger
 }
 
 // NewWorker creates a new Worker
@@ -57,6 +62,16 @@ func NewWorker(cfg *Config) *Worker {
 		subTasks:    make(map[string]*SubTask),
 		relayHolder: NewRelayHolder(cfg),
 	}
+
+	operators := []purger.RelayOperator{
+		w.relayHolder,
+		streamer.GetReaderHub(),
+	}
+	interceptors := []purger.PurgeInterceptor{
+		&w,
+	}
+	w.relayPurger = purger.NewPurger(cfg.Purge, cfg.RelayDir, operators, interceptors)
+
 	w.closed.Set(closedTrue) // not start yet
 	w.ctx, w.cancel = context.WithCancel(context.Background())
 	return &w
@@ -77,6 +92,9 @@ func (w *Worker) Start() {
 
 	// start relay
 	w.relayHolder.Start()
+
+	// start purger
+	w.relayPurger.Start()
 
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -107,6 +125,9 @@ func (w *Worker) Close() {
 	// close relay
 	w.relayHolder.Close()
 
+	// close purger
+	w.relayPurger.Close()
+
 	// cancel status output ticker and wait for return
 	w.cancel()
 	w.wg.Wait()
@@ -120,6 +141,10 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 
 	w.Lock()
 	defer w.Unlock()
+
+	if w.relayPurger.Purging() {
+		return errors.Errorf("relay log purger is purging, cannot start sub task %s, please try again later", cfg.Name)
+	}
 
 	_, ok := w.subTasks[cfg.Name]
 	if ok {
@@ -460,6 +485,35 @@ func (w *Worker) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) 
 	}
 
 	return errors.Trace(w.relayHolder.Operate(ctx, req))
+}
+
+// PurgeRelay purges relay log files
+func (w *Worker) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) error {
+	if w.closed.Get() == closedTrue {
+		return errors.NotValidf("worker already closed")
+	}
+
+	return errors.Trace(w.relayPurger.Do(ctx, req))
+}
+
+// ForbidPurge implements PurgeInterceptor.ForbidPurge
+func (w *Worker) ForbidPurge() (bool, string) {
+	if w.closed.Get() == closedTrue {
+		return false, ""
+	}
+
+	w.RLock()
+	defer w.RUnlock()
+
+	// forbid purging if some sub tasks are paused
+	// so we can debug the system easily
+	for _, st := range w.subTasks {
+		stage := st.Stage()
+		if stage == pb.Stage_New || stage == pb.Stage_Paused {
+			return true, fmt.Sprintf("sub task %s current stage is %s", st.cfg.Name, stage.String())
+		}
+	}
+	return false, ""
 }
 
 // QueryConfig returns worker's config

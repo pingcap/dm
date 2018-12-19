@@ -141,6 +141,8 @@ type Syncer struct {
 
 	heartbeat *Heartbeat
 
+	readerHub *streamer.ReaderHub
+
 	currentPosMu struct {
 		sync.RWMutex
 		currentPos mysql.Position // use to calc remain binlog size
@@ -180,6 +182,7 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	}
 
 	syncer.binlogType = toBinlogType(cfg.BinlogType)
+	syncer.readerHub = streamer.GetReaderHub()
 	syncer.operatorsMu.operators = make(map[string]*Operator)
 
 	if cfg.IsSharding {
@@ -302,6 +305,12 @@ func (s *Syncer) Init() error {
 		}
 	}
 
+	// when Init syncer, set active relay log info
+	err = s.setInitActiveRelayLog()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	// init successfully, close done chan to make Syncer can be closed
 	// when Process started, we will re-create done chan again
 	// NOTE: we should refactor the Concurrency Model some day
@@ -377,7 +386,11 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		}
 		s.syncer = replication.NewBinlogSyncer(s.syncCfg)
 	} else if s.binlogType == LocalBinlog {
-		s.localReader = streamer.NewBinlogReader(&streamer.BinlogReaderConfig{RelayDir: s.cfg.RelayDir, Timezone: s.timezone})
+		s.localReader = streamer.NewBinlogReader(&streamer.BinlogReaderConfig{
+			RelayDir: s.cfg.RelayDir,
+			TaskName: s.cfg.Name,
+			Timezone: s.timezone,
+		})
 	}
 	// create new done chan
 	s.done = make(chan struct{})
@@ -921,7 +934,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				shardingSyncer = replication.NewBinlogSyncer(s.shardingSyncCfg)
 				shardingStreamer, err = s.getBinlogStreamer(shardingSyncer, shardingReSync.currPos)
 			} else if s.binlogType == LocalBinlog {
-				shardingReader = streamer.NewBinlogReader(&streamer.BinlogReaderConfig{RelayDir: s.cfg.RelayDir, Timezone: s.timezone})
+				shardingReader = streamer.NewBinlogReader(&streamer.BinlogReaderConfig{
+					RelayDir: s.cfg.RelayDir,
+					TaskName: s.cfg.Name,
+					Timezone: s.timezone,
+				})
 				shardingStreamer, err = s.getBinlogStreamer(shardingReader, shardingReSync.currPos)
 			}
 			log.Debugf("[syncer] start using a  special streamer to re-sync DMLs for sharding group %+v", shardingReSync)
@@ -1017,6 +1034,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 			if currentPos.Name > lastPos.Name {
 				lastPos = currentPos
+				err = s.updateActiveRelayLog(currentPos)
+				if err != nil {
+					return errors.Trace(err)
+				}
 			}
 
 			if shardingReSync != nil {
@@ -1798,6 +1819,9 @@ func (s *Syncer) Close() {
 		s.onlineDDL.Close()
 		s.onlineDDL = nil
 	}
+
+	// when closing syncer by `stop-task`, remove active relay log from hub
+	s.removeActiveRelayLog()
 
 	s.closed.Set(true)
 }

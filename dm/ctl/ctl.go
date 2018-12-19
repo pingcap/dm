@@ -93,6 +93,7 @@ func Start(args []string) {
 			//master.NewGenerateTaskConfigCmd(),
 			master.NewUpdateMasterConfigCmd(),
 			master.NewUpdateRelayCmd(),
+			master.NewPurgeRelayCmd(),
 		)
 	case common.OfflineMode:
 		rootCmd.AddCommand(

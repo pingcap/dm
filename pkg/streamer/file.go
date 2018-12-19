@@ -23,57 +23,97 @@ var (
 	baseSeqSeparator = "."
 )
 
-func collectBinlogFiles(dirpath string, firstFile string) ([]string, error) {
-	if dirpath == "" {
+// FileCmp is a compare condition used when collecting binlog files
+type FileCmp uint8
+
+// FileCmpLess represents a < FileCmp condition, others are similar
+const (
+	FileCmpLess FileCmp = iota + 1
+	FileCmpLessEqual
+	FileCmpEqual
+	FileCmpBiggerEqual
+	FileCmpBigger
+)
+
+// CollectAllBinlogFiles collects all valid binlog files in dir
+func CollectAllBinlogFiles(dir string) ([]string, error) {
+	if dir == "" {
 		return nil, ErrEmptyRelayDir
 	}
-	files, err := readDir(dirpath)
+	files, err := readDir(dir)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	if fp := filepath.Join(dirpath, firstFile); !utils.IsFileExists(fp) {
-		return nil, errors.Errorf("%s not exists", fp)
-	}
 
-	targetFiles := make([]string, 0, len(files))
-
-	ff, err := parseBinlogFile(firstFile)
-	if err != nil {
-		return nil, errors.Annotatef(err, "filename %s", firstFile)
-	}
-	if !allAreDigits(ff.seq) {
-		return nil, errors.Errorf("firstfile %s is invalid ", firstFile)
-	}
-
+	ret := make([]string, 0, len(files))
 	for _, f := range files {
-		if f == utils.MetaFilename {
+		if strings.HasPrefix(f, utils.MetaFilename) {
+			// skip meta file or temp meta file
 			log.Debugf("[streamer] skip meta file %s", f)
 			continue
 		}
-		// check prefix
-		if !strings.HasPrefix(f, ff.baseName) {
-			log.Warnf("[streamer] collecting binlog file, ignore invalid file %s", f)
-			continue
-		}
-		parsed, err := parseBinlogFile(f)
+		_, err := parseBinlogFile(f)
 		if err != nil {
 			log.Warnf("[streamer] collecting binlog file, ignore invalid file %s, err %v", f, err)
 			continue
 		}
-		// check suffix
-		if !allAreDigits(parsed.seq) {
-			log.Warnf("[streamer] collecting binlog file, ignore invalid file %s", f)
-			continue
-		}
-		if !parsed.BiggerOrEqualThan(ff) {
-			log.Debugf("ignore older binlog file %s", f)
-			continue
-		}
+		ret = append(ret, f)
+	}
+	return ret, nil
+}
 
-		targetFiles = append(targetFiles, f)
+// CollectBinlogFilesCmp collects valid binlog files with a compare condition
+func CollectBinlogFilesCmp(dir, baseFile string, cmp FileCmp) ([]string, error) {
+	if dir == "" {
+		return nil, ErrEmptyRelayDir
 	}
 
-	return targetFiles, nil
+	if bp := filepath.Join(dir, baseFile); !utils.IsFileExists(bp) {
+		return nil, errors.NotFoundf("base file %s in directory %s", baseFile, dir)
+	}
+
+	bf, err := parseBinlogFile(baseFile)
+	if err != nil {
+		return nil, errors.Annotatef(err, "filename %s", baseFile)
+	}
+
+	allFiles, err := CollectAllBinlogFiles(dir)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	results := make([]string, 0, len(allFiles))
+	for _, f := range allFiles {
+		// we have parse f in `CollectAllBinlogFiles`, may be we can refine this
+		parsed, err := parseBinlogFile(f)
+		if err != nil || parsed.baseName != bf.baseName {
+			log.Warnf("[streamer] collecting binlog file, ignore invalid file %s, err %v", f, err)
+			continue
+		}
+		switch cmp {
+		case FileCmpBigger:
+			if !parsed.BiggerThan(bf) {
+				log.Debugf("[streamer] ignore older or equal binlog file %s in dir %s", f, dir)
+				continue
+			}
+		case FileCmpBiggerEqual:
+			if !parsed.BiggerOrEqualThan(bf) {
+				log.Debugf("[streamer] ignore older binlog file %s in dir %s", f, dir)
+				continue
+			}
+		case FileCmpLess:
+			if !parsed.LessThan(bf) {
+				log.Debugf("[streamer] ignore newer or equal binlog file %s in dir %s", f, dir)
+				continue
+			}
+		default:
+			return nil, errors.NotSupportedf("cmp condition %v", cmp)
+		}
+
+		results = append(results, f)
+	}
+
+	return results, nil
 }
 
 // GetBinlogFileIndex return a float64 value of index.
@@ -93,7 +133,7 @@ func GetBinlogFileIndex(filename string) (float64, error) {
 func parseBinlogFile(filename string) (*binlogFile, error) {
 	// chendahui: I found there will always be only one dot in the mysql binlog name.
 	parts := strings.Split(filename, baseSeqSeparator)
-	if len(parts) != 2 {
+	if len(parts) != 2 || !allAreDigits(parts[1]) {
 		return nil, ErrInvalidBinlogFilename
 	}
 
@@ -131,12 +171,12 @@ func (f *binlogFile) BiggerThan(other *binlogFile) bool {
 	return f.baseName == other.baseName && f.seq > other.seq
 }
 
-func (f *binlogFile) Equal(other *binlogFile) bool {
-	return f.baseName == other.baseName && f.seq == other.seq
-}
-
 func (f *binlogFile) BiggerOrEqualThan(other *binlogFile) bool {
 	return f.baseName == other.baseName && f.seq >= other.seq
+}
+
+func (f *binlogFile) LessThan(other *binlogFile) bool {
+	return f.baseName == other.baseName && f.seq < other.seq
 }
 
 // [0-9] in string -> [48,57] in ascii

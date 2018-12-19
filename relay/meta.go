@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"path"
+	"path/filepath"
 	"sync"
 
 	"github.com/BurntSushi/toml"
@@ -61,6 +61,10 @@ type Meta interface {
 	// UUID returns current UUID (with suffix)
 	UUID() string
 
+	// TrimUUIDs trim invalid UUIDs from memory and update the server-uuid.index file
+	// return trimmed UUIDs
+	TrimUUIDs() ([]string, error)
+
 	// Dir returns current relay log (sub) directory
 	Dir() string
 
@@ -74,7 +78,8 @@ type LocalMeta struct {
 	flavor        string
 	baseDir       string
 	uuidIndexPath string
-	currentUUID   string // current UUID with suffix
+	currentUUID   string   // current UUID with suffix
+	uuids         []string // all valid UUIDs
 	gset          gtid.Set
 	emptyGSet     gtid.Set
 	dirty         bool
@@ -89,8 +94,9 @@ func NewLocalMeta(flavor, baseDir string) Meta {
 	lm := &LocalMeta{
 		flavor:        flavor,
 		baseDir:       baseDir,
-		uuidIndexPath: path.Join(baseDir, utils.UUIDIndexFilename),
+		uuidIndexPath: filepath.Join(baseDir, utils.UUIDIndexFilename),
 		currentUUID:   "",
+		uuids:         make([]string, 0),
 		dirty:         false,
 		BinLogName:    minCheckpoint.Name,
 		BinLogPos:     minCheckpoint.Pos,
@@ -122,6 +128,7 @@ func (lm *LocalMeta) Load() error {
 			return errors.Trace(err)
 		}
 	}
+	lm.uuids = uuids
 
 	err = lm.loadMetaData()
 	if err != nil {
@@ -221,7 +228,7 @@ func (lm *LocalMeta) doFlush() error {
 		return errors.Trace(err)
 	}
 
-	filename := path.Join(lm.baseDir, lm.currentUUID, utils.MetaFilename)
+	filename := filepath.Join(lm.baseDir, lm.currentUUID, utils.MetaFilename)
 	err = ioutil2.WriteFileAtomic(filename, buf.Bytes(), 0644)
 	if err != nil {
 		return errors.Trace(err)
@@ -245,7 +252,7 @@ func (lm *LocalMeta) Dir() string {
 	lm.RLock()
 	defer lm.RUnlock()
 
-	return path.Join(lm.baseDir, lm.currentUUID)
+	return filepath.Join(lm.baseDir, lm.currentUUID)
 }
 
 // AddDir implements Meta.AddDir
@@ -276,16 +283,18 @@ func (lm *LocalMeta) AddDir(serverUUID string, newPos *mysql.Position, newGTID g
 	}
 
 	// make sub dir for UUID
-	os.Mkdir(path.Join(lm.baseDir, newUUID), 0744)
+	os.Mkdir(filepath.Join(lm.baseDir, newUUID), 0744)
 
-	// append UUID to index file
-	err := lm.appendIndexFile(newUUID)
+	// update UUID index file
+	uuids := append(lm.uuids, newUUID)
+	err := lm.updateIndexFile(uuids)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
 	// update current UUID
 	lm.currentUUID = newUUID
+	lm.uuids = uuids
 
 	if newPos != nil {
 		lm.BinLogName = newPos.Name
@@ -331,6 +340,37 @@ func (lm *LocalMeta) UUID() string {
 	return lm.currentUUID
 }
 
+// TrimUUIDs implements Meta.TrimUUIDs
+func (lm *LocalMeta) TrimUUIDs() ([]string, error) {
+	lm.Lock()
+	defer lm.Unlock()
+
+	kept := make([]string, 0, len(lm.uuids))
+	trimmed := make([]string, 0)
+	for _, uuid := range lm.uuids {
+		// now, only check if the sub dir exists
+		fp := filepath.Join(lm.baseDir, uuid)
+		if utils.IsDirExists(fp) {
+			kept = append(kept, uuid)
+		} else {
+			trimmed = append(trimmed, uuid)
+		}
+	}
+
+	if len(trimmed) == 0 {
+		return nil, nil
+	}
+
+	err := lm.updateIndexFile(kept)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	// currentUUID should be not changed
+	lm.uuids = kept
+	return trimmed, nil
+}
+
 // String implements Meta.String
 func (lm *LocalMeta) String() string {
 	uuid, pos := lm.Pos()
@@ -338,20 +378,16 @@ func (lm *LocalMeta) String() string {
 	return fmt.Sprintf("master-uuid = %s, relay-binlog = %v, relay-binlog-gtid = %v", uuid, pos, gs)
 }
 
-// appendIndexFile appends uuid to index file
-func (lm *LocalMeta) appendIndexFile(uuid string) error {
-	fd, err := os.OpenFile(lm.uuidIndexPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	defer fd.Close()
-
-	_, err = fd.WriteString(fmt.Sprintf("%s\n", uuid))
-	if err != nil {
-		return errors.Trace(err)
+// updateIndexFile updates the content of server-uuid.index file
+func (lm *LocalMeta) updateIndexFile(uuids []string) error {
+	var buf bytes.Buffer
+	for _, uuid := range uuids {
+		buf.WriteString(uuid)
+		buf.WriteString("\n")
 	}
 
-	return nil
+	err := ioutil2.WriteFileAtomic(lm.uuidIndexPath, buf.Bytes(), 0644)
+	return errors.Annotatef(err, "update UUID index file %s", lm.uuidIndexPath)
 }
 
 func (lm *LocalMeta) verifyUUIDs(uuids []string) error {
@@ -401,7 +437,7 @@ func (lm *LocalMeta) loadMetaData() error {
 		return nil
 	}
 
-	filename := path.Join(lm.baseDir, lm.currentUUID, utils.MetaFilename)
+	filename := filepath.Join(lm.baseDir, lm.currentUUID, utils.MetaFilename)
 
 	fd, err := os.Open(filename)
 	if os.IsNotExist(err) {

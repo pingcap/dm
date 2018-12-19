@@ -733,6 +733,63 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb
 	return resp, nil
 }
 
+// PurgeWorkerRelay implements MasterServer.PurgeWorkerRelay
+func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayRequest) (*pb.PurgeWorkerRelayResponse, error) {
+	log.Infof("[server] receive PurgeWorkerRelay request %+v", req)
+
+	workerReq := &pb.PurgeRelayRequest{
+		Inactive: req.Inactive,
+		Time:     req.Time,
+		Filename: req.Filename,
+		SubDir:   req.SubDir,
+	}
+
+	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Workers))
+	var wg sync.WaitGroup
+	for _, worker := range req.Workers {
+		wg.Add(1)
+		go func(worker string) {
+			defer wg.Done()
+			cli, ok := s.workerClients[worker]
+			if !ok {
+				workerRespCh <- &pb.CommonWorkerResponse{
+					Result: false,
+					Worker: worker,
+					Msg:    fmt.Sprintf("worker %s relevant worker-client not found", worker),
+				}
+				return
+			}
+			workerResp, err := cli.PurgeRelay(ctx, workerReq)
+			if err != nil {
+				workerResp = &pb.CommonWorkerResponse{
+					Result: false,
+					Msg:    errors.ErrorStack(err),
+				}
+			}
+			workerResp.Worker = worker
+			workerRespCh <- workerResp
+		}(worker)
+	}
+	wg.Wait()
+
+	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(req.Workers))
+	for len(workerRespCh) > 0 {
+		workerResp := <-workerRespCh
+		workerRespMap[workerResp.Worker] = workerResp
+	}
+
+	sort.Strings(req.Workers)
+	workerResps := make([]*pb.CommonWorkerResponse, 0, len(req.Workers))
+	for _, worker := range req.Workers {
+		workerResps = append(workerResps, workerRespMap[worker])
+	}
+
+	return &pb.PurgeWorkerRelayResponse{
+		Result:  true,
+		Workers: workerResps,
+	}, nil
+}
+
 // SwitchWorkerRelayMaster implements MasterServer.SwitchWorkerRelayMaster
 func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWorkerRelayMasterRequest) (*pb.SwitchWorkerRelayMasterResponse, error) {
 	log.Infof("[server] receive SwitchWorkerRelayMaster request %+v", req)

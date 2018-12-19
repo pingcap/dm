@@ -36,6 +36,7 @@ var (
 // BinlogReaderConfig is the configuration for BinlogReader
 type BinlogReaderConfig struct {
 	RelayDir string
+	TaskName string
 	Timezone *time.Location
 }
 
@@ -153,7 +154,7 @@ func (r *BinlogReader) parseRelay(ctx context.Context, s *LocalStreamer, pos mys
 
 // parseDirAsPossible parses relay sub directory as far as possible
 func (r *BinlogReader) parseDirAsPossible(ctx context.Context, s *LocalStreamer, pos mysql.Position) (needSwitch bool, nextUUID string, nextBinlogName string, err error) {
-	currentUUID, _, realPos, err := r.extractPos(pos)
+	currentUUID, _, realPos, err := ExtractPos(pos, r.uuids)
 	if err != nil {
 		return false, "", "", errors.Annotatef(err, "parse relay dir with pos %v", pos)
 	}
@@ -168,7 +169,7 @@ func (r *BinlogReader) parseDirAsPossible(ctx context.Context, s *LocalStreamer,
 			return false, "", "", ctx.Err()
 		default:
 		}
-		files, err := collectBinlogFiles(dir, pos.Name)
+		files, err := CollectBinlogFilesCmp(dir, pos.Name, FileCmpBiggerEqual)
 		if err != nil {
 			return false, "", "", errors.Annotatef(err, "parse relay dir %s with pos %s", dir, pos)
 		} else if len(files) == 0 {
@@ -308,6 +309,7 @@ func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLog
 		if err2 != nil {
 			return false, false, 0, "", "", errors.Annotatef(err2, "send event %+v", e.Header)
 		}
+
 		log.Infof("[streamer] start parse relay log file %s from offset %d", fullPath, offset)
 	} else {
 		log.Debugf("[streamer] start parse relay log file %s from offset %d", fullPath, offset)
@@ -396,46 +398,6 @@ func (r *BinlogReader) updateUUIDs() error {
 	r.uuids = uuids
 	log.Infof("[streamer] update relay UUIDs from %v to %v", oldUUIDs, uuids)
 	return nil
-}
-
-// extractPos extracts (uuidWithSuffix, uuidSuffix, originalPos) from input pos (originalPos or convertedPos)
-func (r *BinlogReader) extractPos(pos mysql.Position) (uuidWithSuffix string, uuidSuffix string, realPos mysql.Position, err error) {
-	if len(r.uuids) == 0 {
-		return "", "", pos, errors.NotFoundf("relay sub dir with index file %s", r.indexPath)
-	}
-
-	parsed, _ := parseBinlogFile(pos.Name)
-	sepIdx := strings.Index(parsed.baseName, posUUIDSuffixSeparator)
-	if sepIdx > 0 && sepIdx+len(posUUIDSuffixSeparator) < len(parsed.baseName) {
-		realBaseName, masterUUIDSuffix := parsed.baseName[:sepIdx], parsed.baseName[sepIdx+len(posUUIDSuffixSeparator):]
-		uuid := utils.GetUUIDBySuffix(r.uuids, masterUUIDSuffix)
-
-		if len(uuid) > 0 {
-			// valid UUID found
-			uuidWithSuffix = uuid
-			uuidSuffix = masterUUIDSuffix
-			realPos = mysql.Position{
-				Name: constructBinlogFilename(realBaseName, parsed.seq),
-				Pos:  pos.Pos,
-			}
-		} else {
-			err = errors.NotFoundf("UUID suffix %s with UUIDs %v", masterUUIDSuffix, r.uuids)
-		}
-		return
-	}
-
-	// use the latest
-	var suffixInt = 0
-	uuid := r.uuids[len(r.uuids)-1]
-	_, suffixInt, err = utils.ParseSuffixForUUID(uuid)
-	if err != nil {
-		err = errors.Trace(err)
-		return
-	}
-	uuidWithSuffix = uuid
-	uuidSuffix = utils.SuffixIntToStr(suffixInt)
-	realPos = pos // pos is realPos
-	return
 }
 
 func (r *BinlogReader) getNextUUID(uuid string) (string, string) {

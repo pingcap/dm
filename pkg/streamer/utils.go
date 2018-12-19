@@ -6,14 +6,56 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/watcher"
 )
+
+// ExtractPos extracts (uuidWithSuffix, uuidSuffix, originalPos) from input pos (originalPos or convertedPos)
+func ExtractPos(pos mysql.Position, uuids []string) (uuidWithSuffix string, uuidSuffix string, realPos mysql.Position, err error) {
+	if len(uuids) == 0 {
+		return "", "", pos, errors.NotValidf("empty UUIDs")
+	}
+
+	parsed, _ := parseBinlogFile(pos.Name)
+	sepIdx := strings.Index(parsed.baseName, posUUIDSuffixSeparator)
+	if sepIdx > 0 && sepIdx+len(posUUIDSuffixSeparator) < len(parsed.baseName) {
+		realBaseName, masterUUIDSuffix := parsed.baseName[:sepIdx], parsed.baseName[sepIdx+len(posUUIDSuffixSeparator):]
+		uuid := utils.GetUUIDBySuffix(uuids, masterUUIDSuffix)
+
+		if len(uuid) > 0 {
+			// valid UUID found
+			uuidWithSuffix = uuid
+			uuidSuffix = masterUUIDSuffix
+			realPos = mysql.Position{
+				Name: constructBinlogFilename(realBaseName, parsed.seq),
+				Pos:  pos.Pos,
+			}
+		} else {
+			err = errors.NotFoundf("UUID suffix %s with UUIDs %v", masterUUIDSuffix, uuids)
+		}
+		return
+	}
+
+	// use the latest
+	var suffixInt = 0
+	uuid := uuids[len(uuids)-1]
+	_, suffixInt, err = utils.ParseSuffixForUUID(uuid)
+	if err != nil {
+		err = errors.Trace(err)
+		return
+	}
+	uuidWithSuffix = uuid
+	uuidSuffix = utils.SuffixIntToStr(suffixInt)
+	realPos = pos // pos is realPos
+	return
+}
 
 // getFirstBinlogName gets the first binlog file in relay sub directory
 func getFirstBinlogName(baseDir, uuid string) (string, error) {
@@ -120,8 +162,7 @@ func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir 
 	}()
 
 	// try collect newer relay log file to check whether newer exists before watching
-	// NOTE: I have refine `collectBinlogFiles` in zxc/purge-relay, update this later
-	newerFiles, err := collectBinlogFiles(dir, latestFile)
+	newerFiles, err := CollectBinlogFilesCmp(dir, latestFile, FileCmpBigger)
 	if err != nil {
 		return "", errors.Annotatef(err, "collect newer files from %s in dir %s", latestFile, dir)
 	}
@@ -137,8 +178,8 @@ func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir 
 		return latestFilePath, nil
 	} else {
 		// check whether newer relay log file exists
-		if len(newerFiles) > 1 {
-			nextFilePath := filepath.Join(dir, newerFiles[1])
+		if len(newerFiles) > 0 {
+			nextFilePath := filepath.Join(dir, newerFiles[0])
 			log.Infof("[streamer] newer relay log file %s already generated, start parse from it", nextFilePath)
 			return nextFilePath, nil
 		}

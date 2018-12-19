@@ -34,6 +34,9 @@ service Master {
     // OperateWorkerRelayTask requests some dm-workers to operate relay unit
     rpc OperateWorkerRelayTask (OperateWorkerRelayRequest) returns (OperateWorkerRelayResponse) {}
 
+    // PurgeWorkerRelay purges relay log files for some dm-workers
+    rpc PurgeWorkerRelay(PurgeWorkerRelayRequest) returns (PurgeWorkerRelayResponse) {}
+
     // used by dmctl, to force refresh the task -> workers mapper
     // it should be used rarely only when task -> workers mapper corrupted
     rpc RefreshWorkerTasks (RefreshWorkerTasksRequest) returns (RefreshWorkerTasksResponse) {}
@@ -239,6 +242,26 @@ message HandleSQLsRequest {
 }
 
 message HandleSQLsResponse {
+    bool result = 1;
+    string msg = 2;
+    repeated CommonWorkerResponse workers = 3;
+}
+
+// PurgeWorkerRelayRequest represents a request to purge relay log files for some dm-workers
+// workers: dm-workers need to purge relay log files
+// inactive: whether purge inactive relay log files
+// time: whether purge relay log files before this time, the number of seconds elapsed since January 1, 1970 UTC
+// filename: whether purge relay log files before this filename
+// subDir: specify relay sub directory for @filename
+message PurgeWorkerRelayRequest {
+    repeated string workers = 1;
+    bool inactive = 2;
+    int64 time = 3;
+    string filename = 4;
+    string subDir = 5;
+}
+
+message PurgeWorkerRelayResponse {
     bool result = 1;
     string msg = 2;
     repeated CommonWorkerResponse workers = 3;

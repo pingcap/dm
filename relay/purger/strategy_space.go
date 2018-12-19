@@ -1,0 +1,77 @@
+package purger
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/juju/errors"
+	"github.com/siddontang/go/sync2"
+
+	"github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+)
+
+// spaceArgs represents args needed by spaceStrategy
+type spaceArgs struct {
+	relayBaseDir   string
+	remainSpace    int64 // if remain space (GB) in @RelayBaseDir less than this, then it can be purged
+	uuids          []string
+	activeRelayLog *streamer.RelayLogInfo // earliest active relay log info
+}
+
+func (sa *spaceArgs) SetActiveRelayLog(active *streamer.RelayLogInfo) {
+	sa.activeRelayLog = active
+}
+
+func (sa *spaceArgs) String() string {
+	return fmt.Sprintf("(RelayBaseDir: %s, AllowMinRemainSpace: %dGB, UUIDs: %s, ActiveRelayLog: %s)",
+		sa.relayBaseDir, sa.remainSpace, strings.Join(sa.uuids, ";"), sa.activeRelayLog)
+}
+
+// spaceStrategy represents a relay purge strategy by remain space in dm-worker node
+type spaceStrategy struct {
+	purging sync2.AtomicInt32
+}
+
+func newSpaceStrategy() PurgeStrategy {
+	return &spaceStrategy{}
+}
+
+func (s *spaceStrategy) Check(args interface{}) (bool, error) {
+	sa, ok := args.(*spaceArgs)
+	if !ok {
+		return false, errors.NotValidf("args (%T) %+v", args, args)
+	}
+
+	storageSize, err := utils.GetStorageSize(sa.relayBaseDir)
+	if err != nil {
+		return false, errors.Annotatef(err, "get storage size for directory %s", sa.relayBaseDir)
+	}
+
+	requiredBytes := uint64(sa.remainSpace) * 1024 * 1024 * 1024
+	return storageSize.Available < requiredBytes, nil
+}
+
+func (s *spaceStrategy) Do(args interface{}) error {
+	if !s.purging.CompareAndSwap(0, 1) {
+		return ErrSelfPurging
+	}
+	defer s.purging.Set(0)
+
+	sa, ok := args.(*spaceArgs)
+	if !ok {
+		return errors.NotValidf("args (%T) %+v", args, args)
+	}
+
+	// NOTE: we purge all inactive relay log files when available space less than @remainSpace
+	// maybe we can refine this to purge only part of this files every time
+	return errors.Trace(purgeRelayFilesBeforeFile(sa.relayBaseDir, sa.uuids, sa.activeRelayLog))
+}
+
+func (s *spaceStrategy) Purging() bool {
+	return s.purging.Get() > 0
+}
+
+func (s *spaceStrategy) Type() strategyType {
+	return strategySpace
+}

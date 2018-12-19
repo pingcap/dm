@@ -21,7 +21,7 @@ import (
 )
 
 func (s *testSyncerSuite) TestGetServerUUID(c *C) {
-	uuid, err := utils.GetServerUUID(s.db)
+	uuid, err := utils.GetServerUUID(s.db, "mysql")
 	c.Assert(err, IsNil)
 	_, err = gouuid.FromString(uuid)
 	c.Assert(err, IsNil)

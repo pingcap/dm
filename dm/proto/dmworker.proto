@@ -31,6 +31,9 @@ service Worker {
     // differ from SwitchRelayMaster which may add more args in the future
     rpc OperateRelay (OperateRelayRequest) returns (OperateRelayResponse) {}
 
+    // PurgeRelay purges relay log files for this dm-worker
+    rpc PurgeRelay (PurgeRelayRequest) returns (CommonWorkerResponse) {}
+
     rpc UpdateRelayConfig (UpdateRelayRequest) returns (CommonWorkerResponse) {}
 
     rpc QueryWorkerConfig (QueryWorkerConfigRequest) returns (QueryWorkerConfigResponse) {}
@@ -393,6 +396,18 @@ message OperateRelayResponse {
     bool result = 2;
     string worker = 3; // worker name, set by dm-master
     string msg = 4;
+}
+
+// PurgeRelayRequest represents a request to purge relay log files for this dm-worker
+// inactive: whether purge inactive relay log files
+// time: whether purge relay log files before this time, the number of seconds elapsed since January 1, 1970 UTC
+// filename: whether purge relay log files before this filename
+// subDir: specify relay sub directory for @filename
+message PurgeRelayRequest {
+    bool inactive = 1;
+    int64 time = 2;
+    string filename = 3;
+    string subDir = 4;
 }
 
 message QueryWorkerConfigRequest {

@@ -276,7 +276,7 @@ func (s *Server) ExecuteDDL(ctx context.Context, req *pb.ExecDDLRequest) (*pb.Co
 	if err != nil {
 		resp.Result = false
 		resp.Msg = errors.ErrorStack(err)
-		log.Errorf("[worker] %v ExecuteDDL error %v", req, errors.ErrorStack(err))
+		log.Errorf("[server] %v ExecuteDDL error %v", req, errors.ErrorStack(err))
 	}
 	return resp, nil
 }
@@ -292,7 +292,7 @@ func (s *Server) BreakDDLLock(ctx context.Context, req *pb.BreakDDLLockRequest) 
 	if err != nil {
 		resp.Result = false
 		resp.Msg = errors.ErrorStack(err)
-		log.Errorf("[worker] %v BreakDDLLock error %v", req, errors.ErrorStack(err))
+		log.Errorf("[server] %v BreakDDLLock error %v", req, errors.ErrorStack(err))
 	}
 	return resp, nil
 }
@@ -328,7 +328,7 @@ func (s *Server) SwitchRelayMaster(ctx context.Context, req *pb.SwitchRelayMaste
 	if err != nil {
 		resp.Result = false
 		resp.Msg = errors.ErrorStack(err)
-		log.Errorf("[worker] %v SwitchRelayMaster error %v", req, errors.ErrorStack(err))
+		log.Errorf("[server] %v SwitchRelayMaster error %v", req, errors.ErrorStack(err))
 	}
 
 	return resp, nil
@@ -354,6 +354,23 @@ func (s *Server) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) 
 	return resp, nil
 }
 
+// PurgeRelay implements WorkerServer.PurgeRelay
+func (s *Server) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) (*pb.CommonWorkerResponse, error) {
+	log.Infof("[server] receive PurgeRelay request %+v", req)
+
+	resp := &pb.CommonWorkerResponse{
+		Result: true,
+	}
+	err := s.worker.PurgeRelay(ctx, req)
+	if err != nil {
+		resp.Result = false
+		resp.Msg = errors.ErrorStack(err)
+		log.Errorf("[server] %v PurgeRelay error %v", req, errors.ErrorStack(err))
+	}
+
+	return resp, nil
+}
+
 // UpdateRelayConfig updates config for relay and (dm-worker)
 func (s *Server) UpdateRelayConfig(ctx context.Context, req *pb.UpdateRelayRequest) (*pb.CommonWorkerResponse, error) {
 	log.Infof("[server] receive UpdateRelayConfig request %+v", req)
@@ -366,7 +383,7 @@ func (s *Server) UpdateRelayConfig(ctx context.Context, req *pb.UpdateRelayReque
 	if err != nil {
 		resp.Result = false
 		resp.Msg = errors.ErrorStack(err)
-		log.Errorf("[worker] %v UpdateRelayConfig error %v", req, errors.ErrorStack(err))
+		log.Errorf("[server] %v UpdateRelayConfig error %v", req, errors.ErrorStack(err))
 	}
 
 	return resp, nil
