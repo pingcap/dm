@@ -7,12 +7,11 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
-	"gopkg.in/yaml.v2"
-
-	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
+	yaml "gopkg.in/yaml.v2"
 )
 
 // Online DDL Scheme
@@ -60,13 +59,13 @@ func (m *Meta) Verify() error {
 
 // MySQLInstance represents a sync config of a MySQL instance
 type MySQLInstance struct {
-	Config             *DBConfig `yaml:"config"`
-	InstanceID         string    `yaml:"instance-id"`
-	Meta               *Meta     `yaml:"meta"`
-	FilterRules        []string  `yaml:"filter-rules"`
-	ColumnMappingRules []string  `yaml:"column-mapping-rules"`
-	RouteRules         []string  `yaml:"route-rules"`
-	BWListName         string    `yaml:"black-white-list"`
+	// it represents a MySQL/MariaDB instance or a replica group
+	SourceID           string   `yaml:"source-id"`
+	Meta               *Meta    `yaml:"meta"`
+	FilterRules        []string `yaml:"filter-rules"`
+	ColumnMappingRules []string `yaml:"column-mapping-rules"`
+	RouteRules         []string `yaml:"route-rules"`
+	BWListName         string   `yaml:"black-white-list"`
 
 	MydumperConfigName string          `yaml:"mydumper-config-name"`
 	Mydumper           *MydumperConfig `yaml:"mydumper"`
@@ -78,15 +77,16 @@ type MySQLInstance struct {
 
 // Verify does verification on configs
 func (m *MySQLInstance) Verify() error {
-	if m == nil || m.Config == nil {
-		return errors.New("config must specify")
+	if m == nil {
+		return errors.New("mysql instance config must specify")
 	}
-	if len(m.InstanceID) == 0 {
-		return errors.Errorf("instance-id must be set")
+
+	if m.SourceID == "" {
+		return errors.NotValidf("empty source-id")
 	}
 
 	if err := m.Meta.Verify(); err != nil {
-		return errors.Annotatef(err, "instance %s", m.InstanceID)
+		return errors.Annotatef(err, "source %s", m.SourceID)
 	}
 
 	if len(m.MydumperConfigName) > 0 && m.Mydumper != nil {
@@ -308,15 +308,15 @@ func (c *TaskConfig) adjust() error {
 		return errors.New("must specify at least one mysql-instances")
 	}
 
-	iids := make(map[string]int) // instance-id -> instance-index
+	iids := make(map[string]int) // source-id -> instance-index
 	for i, inst := range c.MySQLInstances {
 		if err := inst.Verify(); err != nil {
 			return errors.Annotatef(err, "mysql-instance: %d", i)
 		}
-		if iid, ok := iids[inst.InstanceID]; ok {
-			return errors.Errorf("mysql-instance (%d) and (%d) have same instance-id (%s)", iid, i, inst.InstanceID)
+		if iid, ok := iids[inst.SourceID]; ok {
+			return errors.Errorf("mysql-instance (%d) and (%d) have same source-id (%s)", iid, i, inst.SourceID)
 		}
-		iids[inst.InstanceID] = i
+		iids[inst.SourceID] = i
 
 		switch c.TaskMode {
 		case ModeFull, ModeAll:
@@ -405,9 +405,14 @@ func (c *TaskConfig) adjust() error {
 }
 
 // SubTaskConfigs generates sub task configs
-func (c *TaskConfig) SubTaskConfigs() []*SubTaskConfig {
+func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConfig, error) {
 	cfgs := make([]*SubTaskConfig, len(c.MySQLInstances))
 	for i, inst := range c.MySQLInstances {
+		dbCfg, exist := sources[inst.SourceID]
+		if !exist {
+			return nil, errors.NotFoundf("source %s in deployment configuration", inst.SourceID)
+		}
+
 		cfg := NewSubTaskConfig()
 		cfg.IsSharding = c.IsSharding
 		cfg.OnlineDDLScheme = c.OnlineDDLScheme
@@ -421,10 +426,10 @@ func (c *TaskConfig) SubTaskConfigs() []*SubTaskConfig {
 		cfg.Timezone = c.Timezone
 		cfg.Meta = inst.Meta
 
-		cfg.From = *inst.Config
+		cfg.From = dbCfg
 		cfg.To = *c.TargetDB
 
-		cfg.InstanceID = inst.InstanceID
+		cfg.SourceID = inst.SourceID
 
 		cfg.RouteRules = make([]*router.TableRule, len(inst.RouteRules))
 		for j, name := range inst.RouteRules {
@@ -449,5 +454,5 @@ func (c *TaskConfig) SubTaskConfigs() []*SubTaskConfig {
 
 		cfgs[i] = cfg
 	}
-	return cfgs
+	return cfgs, nil
 }

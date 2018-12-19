@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net"
 
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
@@ -114,6 +115,16 @@ func (c *Config) Parse(arguments []string) error {
 		return errors.Errorf("'%s' is an invalid flag", c.FlagSet.Arg(0))
 	}
 
+	if c.MasterAddr != "" {
+		if err = validateAddr(c.MasterAddr); err != nil {
+			return errors.Annotatef(err, "specify master addr %s", c.MasterAddr)
+		}
+	} else if c.WorkerAddr != "" {
+		if err = validateAddr(c.WorkerAddr); err != nil {
+			return errors.Annotatef(err, "specify worker addr %s", c.WorkerAddr)
+		}
+	}
+
 	c.adjust()
 	return nil
 }
@@ -135,4 +146,10 @@ func (c *Config) adjust() {
 	} else {
 		c.Mode = OfflineMode
 	}
+}
+
+// validate host:port format address
+func validateAddr(addr string) error {
+	_, _, err := net.SplitHostPort(addr)
+	return errors.Trace(err)
 }

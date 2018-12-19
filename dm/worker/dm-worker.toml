@@ -9,6 +9,7 @@ status-addr = ":10082"
 
 
 server-id = 101
+source-id = "127.0.0.1:3306"
 flavor = "mysql"
 relay-dir = "./relay_log"
 meta-file = "relay.meta"

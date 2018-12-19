@@ -73,9 +73,10 @@ type SubTaskConfig struct {
 	// if case insensitive, we would convert schema/table name/pattern to lower case
 	CaseSensitive bool `toml:"case-sensitive" json:"case-sensitive"`
 
-	Name             string `toml:"name" json:"name"`
-	Mode             string `toml:"mode" json:"mode"`
-	InstanceID       string `toml:"instance-id" json:"instance-id"`
+	Name string `toml:"name" json:"name"`
+	Mode string `toml:"mode" json:"mode"`
+	// it represents a MySQL/MariaDB instance or a replica group
+	SourceID         string `toml:"source-id" json:"source-id"`
 	ServerID         int    `toml:"server-id" json:"server-id"`
 	Flavor           string `toml:"flavor" json:"flavor"`
 	MetaSchema       string `toml:"meta-schema" json:"meta-schema"`
@@ -129,7 +130,7 @@ func (c *SubTaskConfig) SetupFlags(name CmdName) {
 	fs.StringVar(&c.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&c.LogFile, "log-file", "", "log file path")
 	fs.StringVar(&c.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
-
+	fs.StringVar(&c.SourceID, "source-id", "", "represent a MySQL/MariaDB instance or a replica group")
 	fs.StringVar(&c.ConfigFile, "config", "", "config file")
 
 	fs.BoolVar(&c.printVersion, "V", false, "prints version and exit")
@@ -154,15 +155,6 @@ func (c *SubTaskConfig) SetupFlags(name CmdName) {
 		fs.BoolVar(&c.DisableHeartbeat, "disable-heartbeat", true, "disable heartbeat between mysql and syncer")
 		fs.StringVar(&c.Timezone, "timezone", "", "target database timezone")
 	}
-}
-
-// MySQLInstanceID returns the relevant MySQL instance ID of config
-func (c *SubTaskConfig) MySQLInstanceID() string {
-	if c.InstanceID == "" {
-		c.InstanceID = fmt.Sprintf("%s:%d", c.From.Host, c.From.Port)
-	}
-
-	return c.InstanceID
 }
 
 // String returns the config's json string
@@ -211,17 +203,13 @@ func (c *SubTaskConfig) adjust() error {
 		return errors.New("task name should not be empty")
 	}
 
-	if c.InstanceID == "" {
-		c.InstanceID = fmt.Sprintf("%s:%d", c.From.Host, c.From.Port)
+	if c.SourceID == "" {
+		return errors.NotValidf("empty source-id")
 	}
 
 	//if c.Flavor != mysql.MySQLFlavor && c.Flavor != mysql.MariaDBFlavor {
 	//	return errors.Errorf("please specify right mysql version, support mysql, mariadb now")
 	//}
-
-	if c.InstanceID == "" {
-		c.InstanceID = fmt.Sprintf("%s:%d", c.From.Host, c.From.Port)
-	}
 
 	if c.OnlineDDLScheme != "" && c.OnlineDDLScheme != PT && c.OnlineDDLScheme != GHOST {
 		return errors.NotSupportedf("online scheme %s", c.OnlineDDLScheme)

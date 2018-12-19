@@ -230,6 +230,7 @@ dm-master ansible_host=172.16.10.71 deploy_dir=/data1/deploy
 
 | 变量 | 变量含义 |
 | ------------- | ------- |
+ | source_id | dm-worker 绑定到唯一的一个数据库实例/具有主从架构的复制组，当发生主从切换的时候，只需要更新 mysql_host/port 而不用更改该 ID 标识|
 | server_id | dm-worker 伪装成一个 mysql slave，即 slave 的 server_id, 需要在 mysql 集群中全局唯一，取值范围 0 - 4294967295 |
 | mysql_host | 上游 MySQL host | 
 | mysql_user | 上游 MySQL 用户名，默认为 root |

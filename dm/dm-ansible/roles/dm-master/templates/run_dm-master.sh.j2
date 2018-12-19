@@ -13,5 +13,5 @@ exec bin/dm-master \
     --status-addr=":{{ dm_master_status_port }}" \
     -L="{{ dm_master_log_level }}" \
     --log-rotate="{{ dm_master_log_rotate }}" \
-    --log-file="{{ dm_master_log_dir }}/{{ dm_master_log_file }}" \
-    --config="conf/dm-master.toml"
+    --config="conf/dm-master.toml" \
+    --log-file="{{ dm_master_log_dir }}/{{ dm_master_log_file }}" 2>> "{{ dm_master_log_dir }}/{{ dm_master_stderr_log_file }}"

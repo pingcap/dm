@@ -17,7 +17,6 @@ import (
 	"context"
 
 	"github.com/juju/errors"
-	"github.com/pingcap/tidb-enterprise-tools/checker"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 )
 
@@ -29,9 +28,10 @@ func checkTask(ctx context.Context, task string) error {
 		return errors.Annotatef(err, "decode config %s", task)
 	}
 
-	stCfgs := cfg.SubTaskConfigs()
+	/*stCfgs := cfg.SubTaskConfigs()
 	// poor man's precheck
 	// TODO: improve process and display
 	err = checker.CheckSyncConfig(ctx, stCfgs)
-	return errors.Trace(err)
+	return errors.Trace(err)*/
+	return nil
 }

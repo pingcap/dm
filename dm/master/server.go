@@ -14,6 +14,7 @@
 package master
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -155,13 +156,28 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 	}
 	log.Infof("[server] starting task with config:\n%v", cfg)
 
-	stCfgs := cfg.SubTaskConfigs()
+	sourceCfgs, err := s.allWorkerConfigs(ctx)
+	if err != nil {
+		return &pb.StartTaskResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}, nil
+	}
+
+	stCfgs, err := cfg.SubTaskConfigs(sourceCfgs)
+	if err != nil {
+		return &pb.StartTaskResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}, nil
+	}
+
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(stCfgs)+len(req.Workers))
 	if len(req.Workers) > 0 {
 		// specify only start task on partial dm-workers
 		workerCfg := make(map[string]*config.SubTaskConfig)
 		for _, stCfg := range stCfgs {
-			worker, ok := s.cfg.DeployMap[stCfg.MySQLInstanceID()]
+			worker, ok := s.cfg.DeployMap[stCfg.SourceID]
 			if ok {
 				workerCfg[worker] = stCfg
 			}
@@ -186,13 +202,12 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 		wg.Add(1)
 		go func(stCfg *config.SubTaskConfig) {
 			defer wg.Done()
-			worker, ok1 := s.cfg.DeployMap[stCfg.MySQLInstanceID()]
+			worker, ok1 := s.cfg.DeployMap[stCfg.SourceID]
 			cli, ok2 := s.workerClients[worker]
 			if !ok1 || !ok2 {
 				workerRespCh <- &pb.CommonWorkerResponse{
 					Result: false,
-					Worker: fmt.Sprintf("mysql-instance:%s", stCfg.MySQLInstanceID()),
-					Msg:    fmt.Sprintf("%s relevant worker not found", stCfg.MySQLInstanceID()),
+					Msg:    fmt.Sprintf("%s relevant worker not found", stCfg.SourceID),
 				}
 				return
 			}
@@ -341,7 +356,22 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 	}
 	log.Infof("[server] updating task with config:\n%v", cfg)
 
-	stCfgs := cfg.SubTaskConfigs()
+	sourceCfgs, err := s.allWorkerConfigs(ctx)
+	if err != nil {
+		return &pb.UpdateTaskResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}, nil
+	}
+
+	stCfgs, err := cfg.SubTaskConfigs(sourceCfgs)
+	if err != nil {
+		return &pb.UpdateTaskResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}, nil
+	}
+
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(stCfgs)+len(req.Workers))
 	if len(req.Workers) > 0 {
 		// specify only update task on partial dm-workers
@@ -349,7 +379,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 		// if worker not exist, an error message will return
 		workerCfg := make(map[string]*config.SubTaskConfig)
 		for _, stCfg := range stCfgs {
-			worker, ok := s.cfg.DeployMap[stCfg.MySQLInstanceID()]
+			worker, ok := s.cfg.DeployMap[stCfg.SourceID]
 			if ok {
 				workerCfg[worker] = stCfg
 			} // only record existed workers
@@ -373,13 +403,12 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 		wg.Add(1)
 		go func(stCfg *config.SubTaskConfig) {
 			defer wg.Done()
-			worker, ok1 := s.cfg.DeployMap[stCfg.MySQLInstanceID()]
+			worker, ok1 := s.cfg.DeployMap[stCfg.SourceID]
 			cli, ok2 := s.workerClients[worker]
 			if !ok1 || !ok2 {
 				workerRespCh <- &pb.CommonWorkerResponse{
 					Result: false,
-					Worker: fmt.Sprintf("mysql-instance:%s", stCfg.MySQLInstanceID()),
-					Msg:    fmt.Sprintf("%s relevant worker not found", stCfg.MySQLInstanceID()),
+					Msg:    fmt.Sprintf("%s relevant worker not found", stCfg.SourceID),
 				}
 				return
 			}
@@ -1467,4 +1496,81 @@ func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWork
 		}, nil
 	}
 	return workerResp, nil
+}
+
+func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConfig, error) {
+	var (
+		wg          sync.WaitGroup
+		workerMutex sync.Mutex
+		workerCfgs  = make(map[string]config.DBConfig)
+		err         error
+	)
+	handErr := func(err error) {
+		workerMutex.Lock()
+		if err != nil {
+			log.Error(err)
+		}
+		err = errors.Trace(err)
+		workerMutex.Unlock()
+	}
+
+	for id, worker := range s.workerClients {
+		wg.Add(1)
+		go Emit(func(args ...interface{}) {
+			defer wg.Done()
+			if len(args) != 2 {
+				handErr(errors.Errorf("fail to call emit to fetch worker config, miss some arguments %v", args))
+				return
+			}
+
+			id1, ok := args[0].(string)
+			if !ok {
+				handErr(errors.Errorf("fail to call emit to fetch worker config, can't get id from args[0], arguments %v", args))
+				return
+			}
+
+			worker1, ok := args[1].(pb.WorkerClient)
+			if !ok {
+				handErr(errors.Errorf("fail to call emit to fetch config of worker %s, can't get worker client from args[1], arguments %v", id1, args))
+				return
+			}
+
+			resp, err1 := worker1.QueryWorkerConfig(ctx, &pb.QueryWorkerConfigRequest{})
+			if err1 != nil {
+				handErr(errors.Annotatef(err1, "fetch config of worker %s", id1))
+				return
+			}
+
+			if !resp.Result {
+				handErr(errors.Errorf("fail to query config from worker %s, message %s", id1, resp.Msg))
+				return
+			}
+
+			if len(resp.Content) == 0 {
+				handErr(errors.Errorf("fail to query config from worker %s, config is empty", id1))
+				return
+			}
+
+			if len(resp.SourceID) == 0 {
+				handErr(errors.Errorf("fail to query config from worker %s, source ID is empty, it should be set in worker config", id1))
+				return
+			}
+
+			dbCfg := &config.DBConfig{}
+			err = json.Unmarshal([]byte(resp.Content), dbCfg)
+			if err != nil {
+				handErr(errors.Annotatef(err, "unmarshal worker %s config", id1))
+				return
+			}
+
+			workerMutex.Lock()
+			workerCfgs[resp.SourceID] = *dbCfg
+			workerMutex.Unlock()
+
+		}, []interface{}{id, worker}...)
+	}
+
+	wg.Wait()
+
+	return workerCfgs, errors.Trace(err)
 }

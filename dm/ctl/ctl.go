@@ -90,16 +90,16 @@ func Start(args []string) {
 			master.NewPauseRelayCmd(),
 			master.NewResumeRelayCmd(),
 			//master.NewStopRelayCmd(),
-			master.NewGenerateTaskConfigCmd(),
+			//master.NewGenerateTaskConfigCmd(),
 			master.NewUpdateMasterConfigCmd(),
 			master.NewUpdateRelayCmd(),
 		)
 	case common.OfflineMode:
 		rootCmd.AddCommand(
-			master.NewCheckTaskCmd(),
-			master.NewRestoreDataMigrationConfigCmd(),
-			master.NewGenerateTaskConfigCmd(),
-			worker.NewCheckSubTaskCmd(),
+		//master.NewCheckTaskCmd(),
+		//master.NewRestoreDataMigrationConfigCmd(),
+		//master.NewGenerateTaskConfigCmd(),
+		//worker.NewCheckSubTaskCmd(),
 		)
 	}
 

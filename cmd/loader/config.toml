@@ -6,6 +6,7 @@
 
 # Number of threads restoring concurrently for loader worker pool. Each worker restore one file at a time, increase this as TiKV nodes increase
 pool-size = 16
+source-id = "127.0.0.1:3306"
 
 # Directory of the dump to import
 dir = "./"

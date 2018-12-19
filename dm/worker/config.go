@@ -71,11 +71,19 @@ type Config struct {
 	RelayBinLogName string `toml:"relay-binlog-name" json:"relay-binlog-name"`
 	RelayBinlogGTID string `toml:"relay-binlog-gtid" json:"relay-binlog-gtid"`
 
-	From config.DBConfig `toml:"from" json:"from"`
+	SourceID string          `toml:"source-id" json:"source-id"`
+	From     config.DBConfig `toml:"from" json:"from"`
 
 	ConfigFile string `json:"config-file"`
 
 	printVersion bool
+}
+
+// Clone clones a config
+func (c *Config) Clone() *Config {
+	clone := &Config{}
+	*clone = *c
+	return clone
 }
 
 func (c *Config) String() string {
@@ -161,6 +169,10 @@ func (c *Config) Parse(arguments []string) error {
 
 // verify verifies the config
 func (c *Config) verify() error {
+	if len(c.SourceID) == 0 {
+		return errors.Errorf("dm-worker should bind a non-empty source ID which represents a MySQL/MariaDB instance or a replica group. \n notice: if you use old version dm-ansible, please update to newest version.")
+	}
+
 	if len(c.RelayBinLogName) > 0 {
 		_, err := streamer.GetBinlogFileIndex(c.RelayBinLogName)
 		if err != nil {

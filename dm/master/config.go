@@ -42,12 +42,20 @@ func NewConfig() *Config {
 	return cfg
 }
 
-// DeployMapper defines dm-worker's deploy mapper info
-// source-db-host:ip -> dm-worker-host:ip
-// NOTE: we can refine it when new deployment function is available
+// DeployMapper defines dm-worker's deploy mapper info: source id -> dm-worker ${host:ip}
 type DeployMapper struct {
-	MySQL  string `toml:"mysql-instance" json:"mysql-instance"`
+	MySQL  string `toml:"mysql-instance" json:"mysql-instance"` //  deprecated, use source-id instead
+	Source string `toml:"source-id" json:"source-id"`           // represents a MySQL/MariaDB instance or a replica group
 	Worker string `toml:"dm-worker" json:"dm-worker"`
+}
+
+// Verify verifies deploy configuration
+func (d *DeployMapper) Verify() error {
+	if d.MySQL == "" && d.Source == "" {
+		return errors.NotValidf("user should specify valid relation between source(mysql/mariadb) and dm-worker, config %+v", d)
+	}
+
+	return nil
 }
 
 // Config is the configuration for dm-master
@@ -121,7 +129,16 @@ func (c *Config) configFromFile(path string) error {
 func (c *Config) adjust() error {
 	c.DeployMap = make(map[string]string)
 	for _, item := range c.Deploy {
-		c.DeployMap[item.MySQL] = item.Worker
+		if err := item.Verify(); err != nil {
+			return errors.Trace(err)
+		}
+
+		// compatible with mysql instance which is deprecated
+		if item.Source == "" {
+			item.Source = item.MySQL
+		}
+
+		c.DeployMap[item.Source] = item.Worker
 	}
 	return nil
 }

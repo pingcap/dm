@@ -85,7 +85,7 @@ func (m *UpdateWorkerRelayConfigRequest) GetWorker() string {
 
 type StartTaskRequest struct {
 	Task                 string   `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
-	Workers              []string `protobuf:"bytes,2,rep,name=workers" json:"workers,omitempty"`
+	Workers              []string `protobuf:"bytes,2,rep,name=workers,proto3" json:"workers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -141,7 +141,7 @@ func (m *StartTaskRequest) GetWorkers() []string {
 type StartTaskResponse struct {
 	Result               bool                    `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
 	Msg                  string                  `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
-	Workers              []*CommonWorkerResponse `protobuf:"bytes,3,rep,name=workers" json:"workers,omitempty"`
+	Workers              []*CommonWorkerResponse `protobuf:"bytes,3,rep,name=workers,proto3" json:"workers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
 	XXX_unrecognized     []byte                  `json:"-"`
 	XXX_sizecache        int32                   `json:"-"`
@@ -251,7 +251,7 @@ func (m *UpdateMasterConfigRequest) GetConfig() string {
 type UpdateMasterConfigResponse struct {
 	Result               bool                   `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
 	Msg                  string                 `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
-	Workers              []*QueryStatusResponse `protobuf:"bytes,3,rep,name=workers" json:"workers,omitempty"`
+	Workers              []*QueryStatusResponse `protobuf:"bytes,3,rep,name=workers,proto3" json:"workers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}               `json:"-"`
 	XXX_unrecognized     []byte                 `json:"-"`
 	XXX_sizecache        int32                  `json:"-"`
@@ -314,7 +314,7 @@ func (m *UpdateMasterConfigResponse) GetWorkers() []*QueryStatusResponse {
 type OperateTaskRequest struct {
 	Op                   TaskOp   `protobuf:"varint,1,opt,name=op,proto3,enum=pb.TaskOp" json:"op,omitempty"`
 	Name                 string   `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Workers              []string `protobuf:"bytes,3,rep,name=workers" json:"workers,omitempty"`
+	Workers              []string `protobuf:"bytes,3,rep,name=workers,proto3" json:"workers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -378,7 +378,7 @@ type OperateTaskResponse struct {
 	Op                   TaskOp                    `protobuf:"varint,1,opt,name=op,proto3,enum=pb.TaskOp" json:"op,omitempty"`
 	Result               bool                      `protobuf:"varint,2,opt,name=result,proto3" json:"result,omitempty"`
 	Msg                  string                    `protobuf:"bytes,3,opt,name=msg,proto3" json:"msg,omitempty"`
-	Workers              []*OperateSubTaskResponse `protobuf:"bytes,4,rep,name=workers" json:"workers,omitempty"`
+	Workers              []*OperateSubTaskResponse `protobuf:"bytes,4,rep,name=workers,proto3" json:"workers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                  `json:"-"`
 	XXX_unrecognized     []byte                    `json:"-"`
 	XXX_sizecache        int32                     `json:"-"`
@@ -452,7 +452,7 @@ func (m *OperateTaskResponse) GetWorkers() []*OperateSubTaskResponse {
 // workers need to do update, empty for all workers in processing the task
 type UpdateTaskRequest struct {
 	Task                 string   `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
-	Workers              []string `protobuf:"bytes,2,rep,name=workers" json:"workers,omitempty"`
+	Workers              []string `protobuf:"bytes,2,rep,name=workers,proto3" json:"workers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -508,7 +508,7 @@ func (m *UpdateTaskRequest) GetWorkers() []string {
 type UpdateTaskResponse struct {
 	Result               bool                    `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
 	Msg                  string                  `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
-	Workers              []*CommonWorkerResponse `protobuf:"bytes,3,rep,name=workers" json:"workers,omitempty"`
+	Workers              []*CommonWorkerResponse `protobuf:"bytes,3,rep,name=workers,proto3" json:"workers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
 	XXX_unrecognized     []byte                  `json:"-"`
 	XXX_sizecache        int32                   `json:"-"`
@@ -570,7 +570,7 @@ func (m *UpdateTaskResponse) GetWorkers() []*CommonWorkerResponse {
 
 type QueryStatusListRequest struct {
 	Name                 string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Workers              []string `protobuf:"bytes,2,rep,name=workers" json:"workers,omitempty"`
+	Workers              []string `protobuf:"bytes,2,rep,name=workers,proto3" json:"workers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -626,7 +626,7 @@ func (m *QueryStatusListRequest) GetWorkers() []string {
 type QueryStatusListResponse struct {
 	Result               bool                   `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
 	Msg                  string                 `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
-	Workers              []*QueryStatusResponse `protobuf:"bytes,3,rep,name=workers" json:"workers,omitempty"`
+	Workers              []*QueryStatusResponse `protobuf:"bytes,3,rep,name=workers,proto3" json:"workers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}               `json:"-"`
 	XXX_unrecognized     []byte                 `json:"-"`
 	XXX_sizecache        int32                  `json:"-"`
@@ -688,7 +688,7 @@ func (m *QueryStatusListResponse) GetWorkers() []*QueryStatusResponse {
 
 type QueryErrorListRequest struct {
 	Name                 string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Workers              []string `protobuf:"bytes,2,rep,name=workers" json:"workers,omitempty"`
+	Workers              []string `protobuf:"bytes,2,rep,name=workers,proto3" json:"workers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -744,7 +744,7 @@ func (m *QueryErrorListRequest) GetWorkers() []string {
 type QueryErrorListResponse struct {
 	Result               bool                  `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
 	Msg                  string                `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
-	Workers              []*QueryErrorResponse `protobuf:"bytes,3,rep,name=workers" json:"workers,omitempty"`
+	Workers              []*QueryErrorResponse `protobuf:"bytes,3,rep,name=workers,proto3" json:"workers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
 	XXX_unrecognized     []byte                `json:"-"`
 	XXX_sizecache        int32                 `json:"-"`
@@ -811,7 +811,7 @@ func (m *QueryErrorListResponse) GetWorkers() []*QueryErrorResponse {
 // if specify task and workers both, and workers not doing the task , it will return empty DDL locks
 type ShowDDLLocksRequest struct {
 	Task                 string   `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
-	Workers              []string `protobuf:"bytes,2,rep,name=workers" json:"workers,omitempty"`
+	Workers              []string `protobuf:"bytes,2,rep,name=workers,proto3" json:"workers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -876,9 +876,9 @@ type DDLLock struct {
 	ID                   string   `protobuf:"bytes,1,opt,name=ID,proto3" json:"ID,omitempty"`
 	Task                 string   `protobuf:"bytes,2,opt,name=task,proto3" json:"task,omitempty"`
 	Owner                string   `protobuf:"bytes,3,opt,name=owner,proto3" json:"owner,omitempty"`
-	DDLs                 []string `protobuf:"bytes,4,rep,name=DDLs" json:"DDLs,omitempty"`
-	Synced               []string `protobuf:"bytes,5,rep,name=synced" json:"synced,omitempty"`
-	Unsynced             []string `protobuf:"bytes,6,rep,name=unsynced" json:"unsynced,omitempty"`
+	DDLs                 []string `protobuf:"bytes,4,rep,name=DDLs,proto3" json:"DDLs,omitempty"`
+	Synced               []string `protobuf:"bytes,5,rep,name=synced,proto3" json:"synced,omitempty"`
+	Unsynced             []string `protobuf:"bytes,6,rep,name=unsynced,proto3" json:"unsynced,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -962,7 +962,7 @@ func (m *DDLLock) GetUnsynced() []string {
 type ShowDDLLocksResponse struct {
 	Result               bool       `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
 	Msg                  string     `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
-	Locks                []*DDLLock `protobuf:"bytes,3,rep,name=locks" json:"locks,omitempty"`
+	Locks                []*DDLLock `protobuf:"bytes,3,rep,name=locks,proto3" json:"locks,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
 	XXX_unrecognized     []byte     `json:"-"`
 	XXX_sizecache        int32      `json:"-"`
@@ -1031,7 +1031,7 @@ func (m *ShowDDLLocksResponse) GetLocks() []*DDLLock {
 type UnlockDDLLockRequest struct {
 	ID                   string   `protobuf:"bytes,1,opt,name=ID,proto3" json:"ID,omitempty"`
 	ReplaceOwner         string   `protobuf:"bytes,2,opt,name=replaceOwner,proto3" json:"replaceOwner,omitempty"`
-	Workers              []string `protobuf:"bytes,3,rep,name=workers" json:"workers,omitempty"`
+	Workers              []string `protobuf:"bytes,3,rep,name=workers,proto3" json:"workers,omitempty"`
 	ForceRemove          bool     `protobuf:"varint,4,opt,name=forceRemove,proto3" json:"forceRemove,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -1102,7 +1102,7 @@ func (m *UnlockDDLLockRequest) GetForceRemove() bool {
 type UnlockDDLLockResponse struct {
 	Result               bool                    `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
 	Msg                  string                  `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
-	Workers              []*CommonWorkerResponse `protobuf:"bytes,3,rep,name=workers" json:"workers,omitempty"`
+	Workers              []*CommonWorkerResponse `protobuf:"bytes,3,rep,name=workers,proto3" json:"workers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
 	XXX_unrecognized     []byte                  `json:"-"`
 	XXX_sizecache        int32                   `json:"-"`
@@ -1170,7 +1170,7 @@ func (m *UnlockDDLLockResponse) GetWorkers() []*CommonWorkerResponse {
 // skipDDL: skip DDL which is blocking
 //   execDDL and skipDDL can not specify both at the same time, but can specify neither
 type BreakWorkerDDLLockRequest struct {
-	Workers              []string `protobuf:"bytes,1,rep,name=workers" json:"workers,omitempty"`
+	Workers              []string `protobuf:"bytes,1,rep,name=workers,proto3" json:"workers,omitempty"`
 	Task                 string   `protobuf:"bytes,2,opt,name=task,proto3" json:"task,omitempty"`
 	RemoveLockID         string   `protobuf:"bytes,3,opt,name=removeLockID,proto3" json:"removeLockID,omitempty"`
 	ExecDDL              bool     `protobuf:"varint,4,opt,name=execDDL,proto3" json:"execDDL,omitempty"`
@@ -1251,7 +1251,7 @@ func (m *BreakWorkerDDLLockRequest) GetSkipDDL() bool {
 type BreakWorkerDDLLockResponse struct {
 	Result               bool                    `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
 	Msg                  string                  `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
-	Workers              []*CommonWorkerResponse `protobuf:"bytes,3,rep,name=workers" json:"workers,omitempty"`
+	Workers              []*CommonWorkerResponse `protobuf:"bytes,3,rep,name=workers,proto3" json:"workers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
 	XXX_unrecognized     []byte                  `json:"-"`
 	XXX_sizecache        int32                   `json:"-"`
@@ -1314,7 +1314,7 @@ func (m *BreakWorkerDDLLockResponse) GetWorkers() []*CommonWorkerResponse {
 // SwitchWorkerRelayMasterRequest represents a request for some dm-workers to switch relay unit's master server
 // workers: relay unit in these dm-workers need to switch master server
 type SwitchWorkerRelayMasterRequest struct {
-	Workers              []string `protobuf:"bytes,1,rep,name=workers" json:"workers,omitempty"`
+	Workers              []string `protobuf:"bytes,1,rep,name=workers,proto3" json:"workers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1363,7 +1363,7 @@ func (m *SwitchWorkerRelayMasterRequest) GetWorkers() []string {
 type SwitchWorkerRelayMasterResponse struct {
 	Result               bool                    `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
 	Msg                  string                  `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
-	Workers              []*CommonWorkerResponse `protobuf:"bytes,3,rep,name=workers" json:"workers,omitempty"`
+	Workers              []*CommonWorkerResponse `protobuf:"bytes,3,rep,name=workers,proto3" json:"workers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
 	XXX_unrecognized     []byte                  `json:"-"`
 	XXX_sizecache        int32                   `json:"-"`
@@ -1426,7 +1426,7 @@ func (m *SwitchWorkerRelayMasterResponse) GetWorkers() []*CommonWorkerResponse {
 // OperateWorkerRelayRequest represents a request for some dm-workers to operate relay unit
 type OperateWorkerRelayRequest struct {
 	Op                   RelayOp  `protobuf:"varint,1,opt,name=op,proto3,enum=pb.RelayOp" json:"op,omitempty"`
-	Workers              []string `protobuf:"bytes,2,rep,name=workers" json:"workers,omitempty"`
+	Workers              []string `protobuf:"bytes,2,rep,name=workers,proto3" json:"workers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1483,7 +1483,7 @@ type OperateWorkerRelayResponse struct {
 	Op                   RelayOp                 `protobuf:"varint,1,opt,name=op,proto3,enum=pb.RelayOp" json:"op,omitempty"`
 	Result               bool                    `protobuf:"varint,2,opt,name=result,proto3" json:"result,omitempty"`
 	Msg                  string                  `protobuf:"bytes,3,opt,name=msg,proto3" json:"msg,omitempty"`
-	Workers              []*OperateRelayResponse `protobuf:"bytes,4,rep,name=workers" json:"workers,omitempty"`
+	Workers              []*OperateRelayResponse `protobuf:"bytes,4,rep,name=workers,proto3" json:"workers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
 	XXX_unrecognized     []byte                  `json:"-"`
 	XXX_sizecache        int32                   `json:"-"`
@@ -1646,7 +1646,7 @@ func (m *RefreshWorkerTasksMsg) GetMsg() string {
 
 type RefreshWorkerTasksResponse struct {
 	Result               bool                     `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
-	Workers              []*RefreshWorkerTasksMsg `protobuf:"bytes,2,rep,name=workers" json:"workers,omitempty"`
+	Workers              []*RefreshWorkerTasksMsg `protobuf:"bytes,2,rep,name=workers,proto3" json:"workers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                 `json:"-"`
 	XXX_unrecognized     []byte                   `json:"-"`
 	XXX_sizecache        int32                    `json:"-"`
@@ -1702,7 +1702,7 @@ func (m *RefreshWorkerTasksResponse) GetWorkers() []*RefreshWorkerTasksMsg {
 type HandleSQLsRequest struct {
 	Name                 string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Op                   SQLOp    `protobuf:"varint,2,opt,name=op,proto3,enum=pb.SQLOp" json:"op,omitempty"`
-	Args                 []string `protobuf:"bytes,3,rep,name=args" json:"args,omitempty"`
+	Args                 []string `protobuf:"bytes,3,rep,name=args,proto3" json:"args,omitempty"`
 	BinlogPos            string   `protobuf:"bytes,4,opt,name=binlog_pos,json=binlogPos,proto3" json:"binlog_pos,omitempty"`
 	Worker               string   `protobuf:"bytes,5,opt,name=worker,proto3" json:"worker,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -1781,7 +1781,7 @@ func (m *HandleSQLsRequest) GetWorker() string {
 type HandleSQLsResponse struct {
 	Result               bool                    `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
 	Msg                  string                  `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
-	Workers              []*CommonWorkerResponse `protobuf:"bytes,3,rep,name=workers" json:"workers,omitempty"`
+	Workers              []*CommonWorkerResponse `protobuf:"bytes,3,rep,name=workers,proto3" json:"workers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
 	XXX_unrecognized     []byte                  `json:"-"`
 	XXX_sizecache        int32                   `json:"-"`

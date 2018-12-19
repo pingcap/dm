@@ -36,6 +36,7 @@ log-file = "loader.log"
 dir = "$1"
 # Loader pprof addr
 pprof-addr = ":10085"
+source-id = "127.0.0.1:3306"
 # We saved checkpoint data to tidb, which schema name is defined here.
 checkpoint-schema-prefix = "tidb_checkpoint_sharding"
 

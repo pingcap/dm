@@ -8,6 +8,7 @@ mode = "all"
 
 # used for binlog replication 
 server-id = 101
+source-id = "127.0.0.1:3306"
 
 # which flavor mysql/mariadb
 flavor = "mysql"

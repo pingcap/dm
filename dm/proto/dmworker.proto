@@ -32,6 +32,8 @@ service Worker {
     rpc OperateRelay (OperateRelayRequest) returns (OperateRelayResponse) {}
 
     rpc UpdateRelayConfig (UpdateRelayRequest) returns (CommonWorkerResponse) {}
+
+    rpc QueryWorkerConfig (QueryWorkerConfigRequest) returns (QueryWorkerConfigResponse) {}
 }
 
 message StartSubTaskRequest {
@@ -391,4 +393,15 @@ message OperateRelayResponse {
     bool result = 2;
     string worker = 3; // worker name, set by dm-master
     string msg = 4;
+}
+
+message QueryWorkerConfigRequest {
+}
+
+message QueryWorkerConfigResponse {
+    bool result = 1;
+    string worker = 2; // worker name, set by dm-master
+    string msg = 3; // when result is true, msg is empty
+    string sourceID = 4; // source ID
+    string content = 5; // marshaled config content
 }

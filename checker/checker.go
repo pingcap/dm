@@ -64,21 +64,20 @@ func NewChecker(cfgs []*config.SubTaskConfig) *Checker {
 
 // Init implements Unit interface
 func (c *Checker) Init() error {
-	// target name => instance => schema => [tables]
+	// target name => source => schema => [tables]
 	sharding := make(map[string]map[string]map[string][]string)
 	shardingCounter := make(map[string]int)
 	dbs := make(map[string]*sql.DB)
 	columnMapping := make(map[string]*column.Mapping)
 
 	for _, instance := range c.instances {
-		instanceID := fmt.Sprintf("%s:%d", instance.cfg.From.Host, instance.cfg.From.Port)
 		bw := filter.New(instance.cfg.CaseSensitive, instance.cfg.BWList)
 		r, err := router.NewTableRouter(instance.cfg.CaseSensitive, instance.cfg.RouteRules)
 		if err != nil {
 			return errors.Trace(err)
 		}
 
-		columnMapping[instanceID], err = column.NewMapping(instance.cfg.CaseSensitive, instance.cfg.ColumnMappingRules)
+		columnMapping[instance.cfg.SourceID], err = column.NewMapping(instance.cfg.CaseSensitive, instance.cfg.ColumnMappingRules)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -137,18 +136,18 @@ func (c *Checker) Init() error {
 				if _, ok := sharding[name]; !ok {
 					sharding[name] = make(map[string]map[string][]string)
 				}
-				if _, ok := sharding[name][instanceID]; !ok {
-					sharding[name][instanceID] = make(map[string][]string)
+				if _, ok := sharding[name][instance.cfg.SourceID]; !ok {
+					sharding[name][instance.cfg.SourceID] = make(map[string][]string)
 				}
-				if _, ok := sharding[name][instanceID][table.Schema]; !ok {
-					sharding[name][instanceID][table.Schema] = make([]string, 0, 1)
+				if _, ok := sharding[name][instance.cfg.SourceID][table.Schema]; !ok {
+					sharding[name][instance.cfg.SourceID][table.Schema] = make([]string, 0, 1)
 				}
 
-				sharding[name][instanceID][table.Schema] = append(sharding[name][instanceID][table.Schema], table.Name)
+				sharding[name][instance.cfg.SourceID][table.Schema] = append(sharding[name][instance.cfg.SourceID][table.Schema], table.Name)
 				shardingCounter[name]++
 			}
 		}
-		dbs[instanceID] = instance.sourceDB
+		dbs[instance.cfg.SourceID] = instance.sourceDB
 
 		c.checkList = append(c.checkList, check.NewMySQLBinlogEnableChecker(instance.sourceDB, instance.sourceDBinfo))
 		c.checkList = append(c.checkList, check.NewMySQLBinlogFormatChecker(instance.sourceDB, instance.sourceDBinfo))

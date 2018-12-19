@@ -34,6 +34,7 @@ __EOF__
 name = "test"
 log-level = "info"
 server-id = 101
+source-id = "127.0.0.1:3306"
 meta-file = "$1"
 worker-count = 16
 batch = 1000

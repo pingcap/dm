@@ -4,7 +4,7 @@ task-mode: all  # full/incremental/all
 is-sharding: true  # whether multi dm-worker do one sharding job
 meta-schema: "dm_meta"  # meta schema in downstreaming database to store meta informaton of dm
 remove-meta: false  # remove meta from downstreaming database, now we delete checkpoint and online ddl information
-disable-heartbeat: true
+disable-heartbeat: true  # whether to disable heartbeat for calculating lag between master and syncer
 # timezone: "Asia/Shanghai" # target database timezone, all timestamp event in binlog will translate to format time based on this timezone, default use local timezone
 
 target-database:
@@ -15,12 +15,7 @@ target-database:
 
 mysql-instances:             # one or more source database, config more source database for sharding merge
   -
-    config:
-      host: "192.168.199.118"
-      port: 4306
-      user: "root"
-      password: "1234"
-    instance-id: "instance118-4306" # unique in all instances, used as id when save checkpoints, configs, etc.
+    source-id: "instance118-4306" # unique in all instances, used as id when save checkpoints, configs, etc.
 
     # binlog pos used to as start pos for syncer, for different task-mode, this maybe used or not
     # `full` / `all`:
@@ -54,12 +49,7 @@ mysql-instances:             # one or more source database, config more source d
     #  worker-count: 32
 
   -
-    config:
-      host: "192.168.199.118"
-      port: 5306
-      user: "root"
-      password: "1234"
-    instance-id: "instance118-5306"
+    source-id: "instance118-5306"
     meta:
       binlog-name: binlog-00001
       binlog-pos: 320

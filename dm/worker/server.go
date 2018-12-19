@@ -14,6 +14,7 @@
 package worker
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -368,5 +369,34 @@ func (s *Server) UpdateRelayConfig(ctx context.Context, req *pb.UpdateRelayReque
 		log.Errorf("[worker] %v UpdateRelayConfig error %v", req, errors.ErrorStack(err))
 	}
 
+	return resp, nil
+}
+
+// QueryWorkerConfig return worker config
+// worker config is defined in worker directory now,
+// to avoid circular import, we only return db config
+func (s *Server) QueryWorkerConfig(ctx context.Context, req *pb.QueryWorkerConfigRequest) (*pb.QueryWorkerConfigResponse, error) {
+	log.Infof("[server] receive query worker config request %+v", req)
+	resp := &pb.QueryWorkerConfigResponse{
+		Result: true,
+	}
+
+	workerCfg, err := s.worker.QueryConfig(ctx)
+	if err != nil {
+		resp.Result = false
+		resp.Msg = errors.ErrorStack(err)
+		log.Errorf("[worker] query worker config error %v", errors.ErrorStack(err))
+		return resp, nil
+	}
+
+	rawConfig, err := json.Marshal(workerCfg.From)
+	if err != nil {
+		resp.Result = false
+		resp.Msg = errors.ErrorStack(err)
+		log.Errorf("[worker] marshal worker config error %v", errors.ErrorStack(err))
+	}
+
+	resp.Content = string(rawConfig)
+	resp.SourceID = workerCfg.SourceID
 	return resp, nil
 }

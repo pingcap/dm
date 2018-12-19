@@ -462,6 +462,17 @@ func (w *Worker) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) 
 	return errors.Trace(w.relayHolder.Operate(ctx, req))
 }
 
+// QueryConfig returns worker's config
+func (w *Worker) QueryConfig(ctx context.Context) (*Config, error) {
+	if w.closed.Get() == closedTrue {
+		return nil, errors.NotValidf("worker already closed")
+	}
+	w.RLock()
+	defer w.RUnlock()
+
+	return w.cfg.Clone(), nil
+}
+
 // UpdateRelayConfig update subTask ans relay unit configure online
 func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	if w.closed.Get() == closedTrue {
@@ -472,7 +483,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 
 	stage := w.relayHolder.Stage()
 	if stage == pb.Stage_Finished || stage == pb.Stage_Stopped {
-		return errors.Errorf("Worker's subtask has already stoped.")
+		return errors.Errorf("Worker's relay log unit has already stoped.")
 	}
 
 	// Check whether subtask is running syncer unit
@@ -488,6 +499,10 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	err := newCfg.UpdateConfigFile(content)
 	if err != nil {
 		return errors.Trace(err)
+	}
+
+	if newCfg.SourceID != w.cfg.SourceID {
+		return errors.Errorf("update source ID is not allowed")
 	}
 
 	err = newCfg.Reload()
@@ -536,10 +551,10 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	w.cfg.From = newCfg.From
 	w.cfg.AutoFixGTID = newCfg.AutoFixGTID
 	w.cfg.Charset = newCfg.Charset
+
 	if w.cfg.ConfigFile == "" {
 		w.cfg.ConfigFile = "dm-worker.toml"
 	}
-
 	content, err = w.cfg.Toml()
 	if err != nil {
 		return errors.Trace(err)

@@ -1972,8 +1972,8 @@ func (s *Syncer) retrySyncGTIDs() error {
 
 // checkpointID returns ID which used for checkpoint table
 func (s *Syncer) checkpointID() string {
-	if len(s.cfg.InstanceID) > 0 {
-		return s.cfg.InstanceID
+	if len(s.cfg.SourceID) > 0 {
+		return s.cfg.SourceID
 	}
 	return strconv.Itoa(s.cfg.ServerID)
 }

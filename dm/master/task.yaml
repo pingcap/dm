@@ -15,12 +15,7 @@ target-database:
 
 mysql-instances:             # one or more source database, config more source database for sharding merge
   -
-    config:
-      host: "192.168.199.118"
-      port: 4306
-      user: "root"
-      password: "1234"
-    instance-id: "instance118-4306" # unique in all instances, used as id when save checkpoints, configs, etc.
+    source-id: "instance118-4306" # unique in all instances, used as id when save checkpoints, configs, etc.
 
     # binlog pos used to as start pos for syncer, for different task-mode, this maybe used or not
     # `full` / `all`:
@@ -54,12 +49,7 @@ mysql-instances:             # one or more source database, config more source d
     #  worker-count: 32
 
   -
-    config:
-      host: "192.168.199.118"
-      port: 5306
-      user: "root"
-      password: "1234"
-    instance-id: "instance118-5306"
+    source-id: "instance118-5306"
     meta:
       binlog-name: binlog-00001
       binlog-pos: 320

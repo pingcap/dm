@@ -13,6 +13,6 @@ exec bin/dm-worker \
     --status-addr=":{{ dm_worker_status_port }}" \
     -L="{{ dm_worker_log_level }}" \
     --log-rotate="{{ dm_worker_log_rotate }}" \
-    --log-file="{{ dm_worker_log_dir }}/{{ dm_worker_log_file }}" \
     --relay-dir="{{ dm_worker_relay_dir }}" \
-    --config="conf/dm-worker.toml"
+    --config="conf/dm-worker.toml" \
+    --log-file="{{ dm_worker_log_dir }}/{{ dm_worker_log_file }}"  2>> "{{ dm_worker_log_dir }}/{{ dm_worker_stderr_log_file }}"
