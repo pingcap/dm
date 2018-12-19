@@ -1617,15 +1617,15 @@ func (s *Syncer) printStatus(ctx context.Context) {
 
 				remainingSize, err2 := countBinaryLogsSize(currentPos, s.fromDB.db)
 				if err2 != nil {
-					log.Errorf("count remaining binlog size err %v", errors.ErrorStack(err2))
-					return
-				}
-
-				bytesPerSec := (totalBinlogSize - lastBinlogSize) / seconds
-				if bytesPerSec > 0 {
-					remainingSeconds := remainingSize / bytesPerSec
-					log.Infof("totalBinlogSize %d, lastBinlogSize %d, seconds %d,  bytesPerSec %d, remainingSize %d, remaining seconds %d", totalBinlogSize, lastBinlogSize, seconds, bytesPerSec, remainingSize, remainingSeconds)
-					remainingTimeGauge.WithLabelValues(s.cfg.Name).Set(float64(remainingSeconds))
+					// log the error, but still handle the rest operation
+					log.Errorf("[syncer] count remaining binlog size err %v", errors.ErrorStack(err2))
+				} else {
+					bytesPerSec := (totalBinlogSize - lastBinlogSize) / seconds
+					if bytesPerSec > 0 {
+						remainingSeconds := remainingSize / bytesPerSec
+						log.Infof("totalBinlogSize %d, lastBinlogSize %d, seconds %d,  bytesPerSec %d, remainingSize %d, remaining seconds %d", totalBinlogSize, lastBinlogSize, seconds, bytesPerSec, remainingSize, remainingSeconds)
+						remainingTimeGauge.WithLabelValues(s.cfg.Name).Set(float64(remainingSeconds))
+					}
 				}
 			}
 

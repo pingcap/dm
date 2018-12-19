@@ -46,6 +46,20 @@ type table struct {
 	indexColumns map[string][]*column
 }
 
+// in MySQL, we can set `max_binlog_size` to control the max size of a binlog file.
+// but this is not absolute:
+// > A transaction is written in one chunk to the binary log, so it is never split between several binary logs.
+// > Therefore, if you have big transactions, you might see binary log files larger than max_binlog_size.
+// ref: https://dev.mysql.com/doc/refman/5.7/en/replication-options-binary-log.html#sysvar_max_binlog_size
+// The max value of `max_binlog_size` is 1073741824 (1GB)
+// but the actual file size still can be larger, and it may exceed the range of an uint32
+// so, if we use go-mysql.Position(with uint32 Pos) to store the binlog size, it may become out of range.
+// ps, use go-mysql.Position to store a position of binlog event (position of the next event) is enough.
+type binlogSize struct {
+	name string
+	size int64
+}
+
 // Conn represents a live DB connection
 type Conn struct {
 	cfg *config.SubTaskConfig
@@ -404,13 +418,13 @@ func countBinaryLogsSize(fromFile mysql.Position, db *sql.DB) (int64, error) {
 
 	var total int64
 	for _, file := range files {
-		if file.Name < fromFile.Name {
+		if file.name < fromFile.Name {
 			continue
-		} else if file.Name > fromFile.Name {
-			total += int64(file.Pos)
-		} else if file.Name == fromFile.Name {
-			if file.Pos > fromFile.Pos {
-				total += int64(file.Pos - fromFile.Pos)
+		} else if file.name > fromFile.Name {
+			total += file.size
+		} else if file.name == fromFile.Name {
+			if file.size > int64(fromFile.Pos) {
+				total += file.size - int64(fromFile.Pos)
 			}
 		}
 	}
@@ -418,21 +432,23 @@ func countBinaryLogsSize(fromFile mysql.Position, db *sql.DB) (int64, error) {
 	return total, nil
 }
 
-func getBinaryLogs(db *sql.DB) ([]mysql.Position, error) {
+func getBinaryLogs(db *sql.DB) ([]binlogSize, error) {
 	query := "SHOW BINARY LOGS"
 	rows, err := db.Query(query)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	files := make([]mysql.Position, 0, 10)
+	defer rows.Close()
+
+	files := make([]binlogSize, 0, 10)
 	for rows.Next() {
 		var file string
-		var pos uint32
+		var pos int64
 		err = rows.Scan(&file, &pos)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		files = append(files, mysql.Position{Name: file, Pos: pos})
+		files = append(files, binlogSize{name: file, size: pos})
 	}
 	if rows.Err() != nil {
 		return nil, errors.Trace(rows.Err())
