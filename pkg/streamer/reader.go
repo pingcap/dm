@@ -36,7 +36,6 @@ var (
 // BinlogReaderConfig is the configuration for BinlogReader
 type BinlogReaderConfig struct {
 	RelayDir string
-	TaskName string
 	Timezone *time.Location
 }
 
@@ -309,7 +308,6 @@ func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLog
 		if err2 != nil {
 			return false, false, 0, "", "", errors.Annotatef(err2, "send event %+v", e.Header)
 		}
-
 		log.Infof("[streamer] start parse relay log file %s from offset %d", fullPath, offset)
 	} else {
 		log.Debugf("[streamer] start parse relay log file %s from offset %d", fullPath, offset)

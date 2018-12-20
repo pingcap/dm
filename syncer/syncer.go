@@ -388,7 +388,6 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	} else if s.binlogType == LocalBinlog {
 		s.localReader = streamer.NewBinlogReader(&streamer.BinlogReaderConfig{
 			RelayDir: s.cfg.RelayDir,
-			TaskName: s.cfg.Name,
 			Timezone: s.timezone,
 		})
 	}
@@ -936,7 +935,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			} else if s.binlogType == LocalBinlog {
 				shardingReader = streamer.NewBinlogReader(&streamer.BinlogReaderConfig{
 					RelayDir: s.cfg.RelayDir,
-					TaskName: s.cfg.Name,
 					Timezone: s.timezone,
 				})
 				shardingStreamer, err = s.getBinlogStreamer(shardingReader, shardingReSync.currPos)

@@ -25,7 +25,7 @@ mysql-instances:             # one or more source database, config more source d
     #    else if checkpoints already exists in `meta-schema`, this will not be used
     #    otherwise, this will be used
     meta:
-      binlog-name: binlog-00001
+      binlog-name: mysql-bin.000001
       binlog-pos: 4
     route-rules: ["user-route-rules-schema", "user-route-rules"]
     filter-rules: ["user-filter-1", "user-filter-2"]
@@ -51,7 +51,7 @@ mysql-instances:             # one or more source database, config more source d
   -
     source-id: "instance118-5306"
     meta:
-      binlog-name: binlog-00001
+      binlog-name: mysql-bin.000001
       binlog-pos: 320
     route-rules: ["user-route-rules-schema", "user-route-rules"]
     filter-rules: ["user-filter-2"]

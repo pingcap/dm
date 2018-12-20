@@ -150,7 +150,12 @@ func constructBinlogFilename(baseName, seq string) string {
 // RealMySQLPos parses relay position and return mysql position
 // or return mysql position directly
 func RealMySQLPos(pos mysql.Position) mysql.Position {
-	parsed, _ := parseBinlogFile(pos.Name)
+	parsed, err := parseBinlogFile(pos.Name)
+	if err != nil {
+		log.Errorf("[streamer] parse binlog file name %s error %s", pos.Name, errors.ErrorStack(err))
+		return pos
+	}
+
 	sepIdx := strings.Index(parsed.baseName, posUUIDSuffixSeparator)
 	if sepIdx > 0 && sepIdx+len(posUUIDSuffixSeparator) < len(parsed.baseName) {
 		return mysql.Position{
