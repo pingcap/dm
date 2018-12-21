@@ -23,9 +23,9 @@ const (
 // default config item values
 var (
 	// TaskConfig
-	defaultMetaSchema       = "dm_meta"
-	defaultDisableHeartbeat = true
-	defaultIsSharding       = false
+	defaultMetaSchema      = "dm_meta"
+	defaultEnableHeartbeat = false
+	defaultIsSharding      = false
 	// MydumperConfig
 	defaultMydumperPath        = "./bin/mydumper"
 	defaultThreads             = 4
@@ -210,7 +210,8 @@ type TaskConfig struct {
 	// remove meta from downstreaming database
 	// now we delete checkpoint and online ddl information
 	RemoveMeta       bool   `yaml:"remove-meta"`
-	DisableHeartbeat bool   `yaml:"disable-heartbeat"`
+	DisableHeartbeat bool   `yaml:"disable-heartbeat"` //  deprecated, use !enable-heartbeat instead
+	EnableHeartbeat  bool   `yaml:"enable-heartbeat"`
 	Timezone         string `yaml:"timezone"`
 
 	// handle schema/table name mode, and only for schema/table name
@@ -238,7 +239,8 @@ func NewTaskConfig() *TaskConfig {
 	cfg := &TaskConfig{
 		// explicitly set default value
 		MetaSchema:       defaultMetaSchema,
-		DisableHeartbeat: defaultDisableHeartbeat,
+		DisableHeartbeat: !defaultEnableHeartbeat,
+		EnableHeartbeat:  defaultEnableHeartbeat,
 		MySQLInstances:   make([]*MySQLInstance, 0, 5),
 		IsSharding:       defaultIsSharding,
 		Routes:           make(map[string]*router.TableRule),
@@ -423,6 +425,7 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.MetaSchema = c.MetaSchema
 		cfg.RemoveMeta = c.RemoveMeta
 		cfg.DisableHeartbeat = c.DisableHeartbeat
+		cfg.EnableHeartbeat = c.EnableHeartbeat || !c.DisableHeartbeat
 		cfg.Timezone = c.Timezone
 		cfg.Meta = inst.Meta
 

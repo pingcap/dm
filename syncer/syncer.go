@@ -292,7 +292,7 @@ func (s *Syncer) Init() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	if !s.cfg.DisableHeartbeat {
+	if s.cfg.EnableHeartbeat {
 		s.heartbeat, err = GetHeartbeat(&HeartbeatConfig{
 			serverID:  s.cfg.ServerID,
 			masterCfg: s.cfg.From})
@@ -1082,7 +1082,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			log.Debugf("source-db:%s table:%s; target-db:%s table:%s, pos: %v, RowsEvent data: %v", originSchema, originTable, schemaName, tableName, currentPos, ev.Rows)
 
-			if !s.cfg.DisableHeartbeat {
+			if s.cfg.EnableHeartbeat {
 				s.heartbeat.TryUpdateTaskTs(s.cfg.Name, originSchema, originTable, ev.Rows)
 			}
 
@@ -1796,7 +1796,7 @@ func (s *Syncer) Close() {
 		return
 	}
 
-	if !s.cfg.DisableHeartbeat {
+	if s.cfg.EnableHeartbeat {
 		s.heartbeat.RemoveTask(s.cfg.Name)
 	}
 

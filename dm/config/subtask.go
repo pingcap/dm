@@ -81,7 +81,8 @@ type SubTaskConfig struct {
 	Flavor           string `toml:"flavor" json:"flavor"`
 	MetaSchema       string `toml:"meta-schema" json:"meta-schema"`
 	RemoveMeta       bool   `toml:"remove-meta" json:"remove-meta"`
-	DisableHeartbeat bool   `toml:"disable-heartbeat" json:"disable-heartbeat"`
+	DisableHeartbeat bool   `toml:"disable-heartbeat" json:"disable-heartbeat"` //  deprecated, use !enable-heartbeat instead
+	EnableHeartbeat  bool   `toml:"enable-heartbeat" json:"enable-heartbeat"`
 	Meta             *Meta  `toml:"meta" json:"meta"`
 	Timezone         string `toml:"timezone" josn:"timezone"`
 
@@ -152,7 +153,8 @@ func (c *SubTaskConfig) SetupFlags(name CmdName) {
 		fs.BoolVar(&c.EnableGTID, "enable-gtid", false, "enable gtid mode")
 		fs.BoolVar(&c.SafeMode, "safe-mode", false, "enable safe mode to make syncer reentrant")
 		fs.StringVar(&c.StatusAddr, "status-addr", "", "Syncer status addr")
-		fs.BoolVar(&c.DisableHeartbeat, "disable-heartbeat", true, "disable heartbeat between mysql and syncer")
+		fs.BoolVar(&c.DisableHeartbeat, "disable-heartbeat", true, "deprecated!!! disable heartbeat between mysql and syncer")
+		fs.BoolVar(&c.EnableHeartbeat, "enable-heartbeat", false, "enable heartbeat between mysql and syncer")
 		fs.StringVar(&c.Timezone, "timezone", "", "target database timezone")
 	}
 }
@@ -221,6 +223,10 @@ func (c *SubTaskConfig) adjust() error {
 
 	if c.MaxRetry == 0 {
 		c.MaxRetry = 1
+	}
+
+	if !c.DisableHeartbeat {
+		c.EnableHeartbeat = true
 	}
 
 	if c.Timezone != "" {
