@@ -777,7 +777,34 @@ func (l *Loader) prepare() error {
 	return l.prepareDataFiles(files)
 }
 
-func (l *Loader) restoreSchema(conn *Conn, sqlFile string, schema string, table string) error {
+// restoreSchema creates schema
+func (l *Loader) restoreSchema(conn *Conn, sqlFile, schema string) error {
+	err := l.restoreStructure(conn, sqlFile, schema, "")
+	if err != nil {
+		if isErrDBExists(err) {
+			log.Infof("[loader][database already exists, skip]%s", sqlFile)
+		} else {
+			return errors.Annotatef(err, "run db schema failed - dbfile %s", sqlFile)
+		}
+	}
+	return nil
+}
+
+// restoreTable creates table
+func (l *Loader) restoreTable(conn *Conn, sqlFile, schema, table string) error {
+	err := l.restoreStructure(conn, sqlFile, schema, table)
+	if err != nil {
+		if isErrTableExists(err) {
+			log.Infof("[loader][table already exists, skip]%s", sqlFile)
+		} else {
+			return errors.Annotatef(err, "run table schema failed - dbfile %s", sqlFile)
+		}
+	}
+	return nil
+}
+
+// restoreStruture creates schema or table
+func (l *Loader) restoreStructure(conn *Conn, sqlFile string, schema string, table string) error {
 	f, err := os.Open(sqlFile)
 	if err != nil {
 		return errors.Trace(err)
@@ -817,7 +844,7 @@ func (l *Loader) restoreSchema(conn *Conn, sqlFile string, schema string, table 
 				log.Debugf("query:%s", query)
 
 				sqls = append(sqls, query)
-				err = conn.executeSQL(sqls, false)
+				err = conn.executeDDL(sqls, true)
 				if err != nil {
 					return errors.Trace(err)
 				}
@@ -896,13 +923,9 @@ func (l *Loader) restoreData(ctx context.Context) error {
 		// create db
 		dbFile := fmt.Sprintf("%s/%s-schema-create.sql", l.cfg.Dir, db)
 		log.Infof("[loader][run db schema]%s[start]", dbFile)
-		err = l.restoreSchema(conn, dbFile, db, "")
+		err = l.restoreSchema(conn, dbFile, db)
 		if err != nil {
-			if isErrDBExists(err) {
-				log.Infof("[loader][database already exists, skip]%s", dbFile)
-			} else {
-				return errors.Annotatef(err, "run db schema failed - dbfile %s", dbFile)
-			}
+			return errors.Trace(err)
 		}
 		log.Infof("[loader][run db schema]%s[finished]", dbFile)
 
@@ -926,13 +949,10 @@ func (l *Loader) restoreData(ctx context.Context) error {
 			}
 
 			// create table
-			err := l.restoreSchema(conn, tableFile, db, table)
+			log.Infof("[loader][run table schema]%s[start]", tableFile)
+			err := l.restoreTable(conn, tableFile, db, table)
 			if err != nil {
-				if isErrTableExists(err) {
-					log.Infof("[loader][table already exists, skip]%s", tableFile)
-				} else {
-					return errors.Annotatef(err, "run table schema failed - table_file %s", tableFile)
-				}
+				return errors.Trace(err)
 			}
 			log.Infof("[loader][run table schema]%s[finished]", tableFile)
 

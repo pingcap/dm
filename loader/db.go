@@ -66,6 +66,14 @@ func (conn *Conn) querySQL(query string, args ...interface{}) (*sql.Rows, error)
 }
 
 func (conn *Conn) executeSQL(sqls []string, enableRetry bool) error {
+	return conn.executeSQLCustomRetry(sqls, enableRetry, isRetryableError)
+}
+
+func (conn *Conn) executeDDL(sqls []string, enableRetry bool) error {
+	return conn.executeSQLCustomRetry(sqls, enableRetry, isDDLRetryableError)
+}
+
+func (conn *Conn) executeSQLCustomRetry(sqls []string, enableRetry bool, isRetryableFn func(err error) bool) error {
 	if len(sqls) == 0 {
 		return nil
 	}
@@ -91,9 +99,10 @@ func (conn *Conn) executeSQL(sqls []string, enableRetry bool) error {
 		err = executeSQLImp(conn.db, sqls)
 		if err != nil {
 			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
-			if isRetryableError(err) {
+			if isRetryableFn(err) {
 				continue
 			}
+			return errors.Trace(err)
 		}
 
 		// update metrics
@@ -197,6 +206,13 @@ func isRetryableError(err error) bool {
 		return false
 	}
 	return true
+}
+
+func isDDLRetryableError(err error) bool {
+	if isErrTableExists(err) || isErrDBExists(err) {
+		return false
+	}
+	return isRetryableError(err)
 }
 
 func isTiDBUnknownError(err error) bool {
