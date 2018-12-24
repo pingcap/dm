@@ -39,8 +39,8 @@ func (t *testMaster) TestSyncLock(c *C) {
 		go func(i int) {
 			defer wg.Done()
 
-			synced, _ = l.IsSync()
-			c.Assert(synced, IsFalse)
+			synced2, _ := l.IsSync()
+			c.Assert(synced2, IsFalse)
 
 			worker := workers[i]
 			ready := l.Ready()

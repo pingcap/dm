@@ -29,7 +29,7 @@ import (
 )
 
 var (
-	// errors used by relay
+	// ErrBinlogPosGreaterThanFileSize represents binlog pos greater than file size
 	ErrBinlogPosGreaterThanFileSize = errors.New("the specific position is greater than the local binlog file size")
 	// used to fill RelayLogInfo
 	fakeTaskName = "relay"

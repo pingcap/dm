@@ -47,7 +47,7 @@ loader:
 test:
 	bash -x ./wait_for_mysql.sh
 	@export log_level=error; \
-	$(GOTEST) -cover $(PACKAGES)
+	$(GOTEST) -cover -race $(PACKAGES)
 
 check: fmt lint vet
 

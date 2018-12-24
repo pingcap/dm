@@ -115,8 +115,8 @@ func (s *testSyncerSuite) resetBinlogSyncer() {
 	}
 	pos := gmysql.Position{Name: "", Pos: 4}
 	if s.syncer != nil {
-		pos = s.syncer.GetNextPosition()
 		s.syncer.Close()
+		pos = s.syncer.GetNextPosition()
 	} else {
 		s.resetMaster()
 	}
