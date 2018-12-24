@@ -657,7 +657,12 @@ func (s *Syncer) flushCheckPoints() error {
 		exceptTables = s.sgk.UnresolvedTables()
 		log.Infof("[syncer] flush checkpoints except for tables %v", exceptTables)
 	}
-	return errors.Trace(s.checkpoint.FlushPointsExcept(exceptTables))
+	err := s.checkpoint.FlushPointsExcept(exceptTables)
+	if err != nil {
+		return errors.Annotatef(err, "flush checkpoint %s", s.checkpoint)
+	}
+	log.Infof("[syncer] flushed checkpoint %s", s.checkpoint)
+	return nil
 }
 
 func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan chan *job) {
@@ -682,9 +687,9 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 	}
 
 	fatalF := func(err error, errType pb.ErrorType) {
-		clearF()
-		s.runFatalChan <- unit.NewProcessError(errType, errors.ErrorStack(err))
 		s.execErrorDetected.Set(true)
+		s.runFatalChan <- unit.NewProcessError(errType, errors.ErrorStack(err))
+		clearF()
 	}
 
 	executeSQLs := func() error {

@@ -152,11 +152,6 @@ type CheckPoint interface {
 	// corresponding to Meta.Flush
 	FlushPointsExcept(exceptTables [][]string) error
 
-	// UpdateFlushedPoint update the flushed checkpoints become the checkpoint in memory
-	// @tables: [[schema, table]... ]
-	// used after sharding group's checkpoints flushed permanently combine with DDL
-	UpdateFlushedPoint(tables [][]string)
-
 	// GlobalPoint returns the global binlog stream's checkpoint
 	// corresponding to to Meta.Pos
 	GlobalPoint() mysql.Position
@@ -398,27 +393,6 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(exceptTables [][]string) error {
 
 	cp.globalPointSaveTime = time.Now()
 	return nil
-}
-
-// UpdateFlushedPoint implements CheckPoint.UpdateFlushedPoint
-func (cp *RemoteCheckPoint) UpdateFlushedPoint(tables [][]string) {
-	cp.RLock()
-	defer cp.RUnlock()
-	cp.globalPoint.flush()
-	for _, schemaTable := range tables {
-		schema, table := schemaTable[0], schemaTable[1]
-		mSchema, ok := cp.points[schema]
-		if !ok {
-			log.Warnf("[checkpoint] try to update flushed point for not exist table `%s`.`%s`", schema, table)
-			continue
-		}
-		point, ok := mSchema[table]
-		if !ok {
-			log.Warnf("[checkpoint] try to update flushed point for not exist table `%s`.`%s`", schema, table)
-			continue
-		}
-		point.flush()
-	}
 }
 
 // GlobalPoint implements CheckPoint.GlobalPoint
