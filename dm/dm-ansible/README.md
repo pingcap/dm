@@ -2,7 +2,7 @@
 
 ## 概述
 
-Ansible 是一款自动化运维工具，DM-Ansible 是 PingCAP 基于 Ansible Playbook 功能编写的集群部署工具。使用 DM-Ansible 可以快速部署一个完整的 DM 集群。
+Ansible 是一款自动化运维工具，DM-ansible 是 PingCAP 基于 Ansible Playbook 功能编写的集群部署工具。使用 DM-Ansible 可以快速部署一个完整的 DM 集群。
 
 本部署工具可以通过配置文件设置集群拓扑，完成以下各项运维工作：
 
@@ -230,7 +230,7 @@ dm-master ansible_host=172.16.10.71 deploy_dir=/data1/deploy
 
 | 变量 | 变量含义 |
 | ------------- | ------- |
- | source_id | dm-worker 绑定到唯一的一个数据库实例/具有主从架构的复制组，当发生主从切换的时候，只需要更新 mysql_host/port 而不用更改该 ID 标识|
+| source_id | dm-worker 绑定到唯一的一个数据库实例/具有主从架构的复制组，当发生主从切换的时候，只需要更新 mysql_host/port 而不用更改该 ID 标识|
 | server_id | dm-worker 伪装成一个 mysql slave，即 slave 的 server_id, 需要在 mysql 集群中全局唯一，取值范围 0 - 4294967295 |
 | mysql_host | 上游 MySQL host | 
 | mysql_user | 上游 MySQL 用户名，默认为 root |
@@ -249,6 +249,36 @@ dm-master ansible_host=172.16.10.71 deploy_dir=/data1/deploy
 $ cd /home/tidb/dm-ansible/resources/bin
 $ ./dmctl -encrypt 123456
 VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=
+```
+
+#### 设置 relay log 同步位置
+
+第一次启动 DM-worker 需要为 DM-worker 设置 `relay_binlog_name` 来指定从对应上游 MySQL/MariaDB 拉取 binlog 的起始位置，
+如果不设置，则从上游 MySQL/MariaDB 存在的最早的 binlog 文件开始拉取，这样可能要等比较长的时间才能拉取到最新的 binlog 提供给同步任务使用。
+
+```yaml
+[dm_worker_servers]
+dm-worker1 ansible_host=172.16.10.72 source_id="mysql-replica-01" server_id=101 relay_binlog_name="binlog.000011" mysql_host=172.16.10.72 mysql_user=root mysql_port=3306
+
+dm-worker2 ansible_host=172.16.10.73 source_id="mysql-replica-02" server_id=102 relay_binlog_name="binlog.000002" mysql_host=172.16.10.73 mysql_user=root mysql_port=3306
+```
+
+#### 打开 relay log GTID 同步
+
+在 DM 集群中，DM-worker 的 relay log 处理单元负责跟上游 MySQL/MariaDB 通讯来拉取其 binlog 文件到本地文件系统。
+
+我们可以通过设置
+- `enable_gtid` 开启 relay log 的 GTID 同步模式来应对主从切换等场景；
+- `relay_binlog_gtid` 来指定从对应上游 MySQL/MariaDB 拉取 binlog 的起始位置。
+
+目前 DM 支持 MariaDB 和 MySQL GTID。
+
+```yaml
+[dm_worker_servers]
+dm-worker1 ansible_host=172.16.10.72 source_id="mysql-replica-01" server_id=101 enable_gtid=true relay_binlog_gtid="aae3683d-f77b-11e7-9e3b-02a495f8993c:1-282967971,cc97fa93-f5cf-11e7-ae19-02915c68ee2e
+:1-284361339" mysql_host=172.16.10.72 mysql_user=root mysql_port=3306
+
+dm-worker2 ansible_host=172.16.10.73 source_id="mysql-replica-02" server_id=102 relay_binlog_name=binlog.000002 mysql_host=172.16.10.73 mysql_user=root mysql_port=3306
 ```
 
 ## 部署任务
