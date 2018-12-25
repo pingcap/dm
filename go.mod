@@ -17,7 +17,7 @@ require (
 	github.com/pingcap/kvproto v0.0.0-20181206061346-54cf0a0dfe55 // indirect
 	github.com/pingcap/parser v0.0.0-20181205023950-c563561800a2
 	github.com/pingcap/tidb v0.0.0-20181206093020-98c72c6a8ee3
-	github.com/pingcap/tidb-tools v2.1.0+incompatible
+	github.com/pingcap/tidb-tools v2.1.3-0.20181224081527-305ee904ecbb+incompatible
 	github.com/pingcap/tipb v0.0.0-20181126132056-a7fd2aaa9719 // indirect
 	github.com/prometheus/client_golang v0.9.1
 	github.com/prometheus/common v0.0.0-20181126121408-4724e9255275 // indirect

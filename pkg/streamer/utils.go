@@ -14,7 +14,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/watcher"
+	"github.com/pingcap/tidb-tools/pkg/watcher"
 )
 
 // ExtractPos extracts (uuidWithSuffix, uuidSuffix, originalPos) from input pos (originalPos or convertedPos)
