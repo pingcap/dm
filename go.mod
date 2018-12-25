@@ -27,6 +27,7 @@ require (
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
 	github.com/siddontang/go-log v0.0.0-20180807004314-8d05993dda07 // indirect
 	github.com/siddontang/go-mysql v0.0.0-20181028041111-76c059e36c62
+	github.com/soheilhy/cmux v0.1.4
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.3 // indirect
 	golang.org/x/net v0.0.0-20181201002055-351d144fa1fc

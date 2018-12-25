@@ -4,8 +4,7 @@ log-level = "info"
 log-file = "dm-worker.log"
 log-rotate = "day"
 
-worker-addr = ":10081"
-status-addr = ":10082"
+worker-addr = ":8262"
 
 
 server-id = 101

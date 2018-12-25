@@ -14,15 +14,19 @@
 package worker
 
 import (
+	"net"
 	"net/http"
 
 	"github.com/ngaut/log"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/soheilhy/cmux"
+
+	"github.com/pingcap/tidb-enterprise-tools/dm/common"
 	"github.com/pingcap/tidb-enterprise-tools/loader"
 	"github.com/pingcap/tidb-enterprise-tools/mydumper"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	"github.com/pingcap/tidb-enterprise-tools/relay"
 	"github.com/pingcap/tidb-enterprise-tools/syncer"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 var (
@@ -35,33 +39,41 @@ var (
 		}, []string{"task"})
 )
 
+type statusHandler struct {
+}
+
+func (h *statusHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Content-Type", "text/plain")
+	text := utils.GetRawInfo()
+	_, err := w.Write([]byte(text))
+	if err != nil && !common.IsErrNetClosing(err) {
+		log.Errorf("[server] write status response error %s", err.Error())
+	}
+}
+
 // InitStatus initializes the HTTP status server
-func InitStatus(addr string) {
-	go func() {
-		http.HandleFunc("/status", func(w http.ResponseWriter, req *http.Request) {
-			w.Header().Set("Content-Type", "text/plain")
-			text := utils.GetRawInfo()
-			w.Write([]byte(text))
-		})
+func InitStatus(lis net.Listener) {
+	registry := prometheus.NewRegistry()
+	registry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+	registry.MustRegister(prometheus.NewGoCollector())
 
-		registry := prometheus.NewRegistry()
-		registry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
-		registry.MustRegister(prometheus.NewGoCollector())
+	registry.MustRegister(taskState)
 
-		registry.MustRegister(taskState)
+	relay.RegisterMetrics(registry)
+	mydumper.RegisterMetrics(registry)
+	loader.RegisterMetrics(registry)
+	syncer.RegisterMetrics(registry)
+	prometheus.DefaultGatherer = registry
 
-		relay.RegisterMetrics(registry)
-		mydumper.RegisterMetrics(registry)
-		loader.RegisterMetrics(registry)
-		syncer.RegisterMetrics(registry)
-		prometheus.DefaultGatherer = registry
+	mux := http.NewServeMux()
+	mux.Handle("/status", &statusHandler{})
+	mux.Handle("/metrics", prometheus.Handler())
 
-		http.Handle("/metrics", prometheus.Handler())
-
-		log.Infof("listening on %v for status report.", addr)
-		err := http.ListenAndServe(addr, nil)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}()
+	httpS := &http.Server{
+		Handler: mux,
+	}
+	err := httpS.Serve(lis)
+	if err != nil && !common.IsErrNetClosing(err) && err != cmux.ErrListenerClosed {
+		log.Errorf("[server] status server return with error %s", err.Error())
+	}
 }

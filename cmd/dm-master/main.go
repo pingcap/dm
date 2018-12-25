@@ -55,10 +55,6 @@ func main() {
 		log.Infof("config: %s", cfg)
 	})
 
-	if cfg.StatusAddr != "" {
-		master.InitStatus(cfg.StatusAddr)
-	}
-
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc,
 		syscall.SIGHUP,

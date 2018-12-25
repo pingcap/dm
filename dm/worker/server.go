@@ -19,14 +19,22 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-enterprise-tools/dm/config"
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"github.com/siddontang/go/sync2"
+	"github.com/soheilhy/cmux"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+
+	"github.com/pingcap/tidb-enterprise-tools/dm/common"
+	"github.com/pingcap/tidb-enterprise-tools/dm/config"
+	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
+)
+
+var (
+	cmuxReadTimeout = 10 * time.Second
 )
 
 // Server accepts RPC requests
@@ -39,8 +47,9 @@ type Server struct {
 
 	cfg *Config
 
-	svr    *grpc.Server
-	worker *Worker
+	rootLis net.Listener
+	svr     *grpc.Server
+	worker  *Worker
 }
 
 // NewServer creates a new Server
@@ -55,7 +64,8 @@ func NewServer(cfg *Config) *Server {
 
 // Start starts to serving
 func (s *Server) Start() error {
-	lis, err := net.Listen("tcp", s.cfg.WorkerAddr)
+	var err error
+	s.rootLis, err = net.Listen("tcp", s.cfg.WorkerAddr)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -74,11 +84,30 @@ func (s *Server) Start() error {
 		s.worker.Start()
 	}()
 
-	log.Infof("[server] listening on %v for API request", s.cfg.WorkerAddr)
+	// create a cmux
+	m := cmux.New(s.rootLis)
+	m.SetReadTimeout(cmuxReadTimeout) // set a timeout, ref: https://github.com/pingcap/tidb-binlog/pull/352
+
+	// match connections in order: first gRPC, then HTTP
+	grpcL := m.Match(cmux.HTTP2HeaderField("content-type", "application/grpc"))
+	httpL := m.Match(cmux.HTTP1Fast())
 
 	s.svr = grpc.NewServer()
 	pb.RegisterWorkerServer(s.svr, s)
-	return errors.Trace(s.svr.Serve(lis))
+	go func() {
+		err2 := s.svr.Serve(grpcL)
+		if err != nil && !common.IsErrNetClosing(err2) && err != cmux.ErrListenerClosed {
+			log.Errorf("[server] gRPC server return with error %s", err.Error())
+		}
+	}()
+	go InitStatus(httpL) // serve status
+
+	log.Infof("[server] listening on %v for gRPC API and status request", s.cfg.WorkerAddr)
+	err = m.Serve()
+	if err != nil && common.IsErrNetClosing(err) {
+		err = nil
+	}
+	return errors.Trace(err)
 }
 
 // Close close the RPC server
@@ -89,6 +118,10 @@ func (s *Server) Close() {
 		return
 	}
 
+	err := s.rootLis.Close()
+	if err != nil && !common.IsErrNetClosing(err) {
+		log.Errorf("[server] close net listener with error %s", err.Error())
+	}
 	if s.svr != nil {
 		// GracefulStop can not cancel active stream RPCs
 		// and the stream RPC may block on Recv or Send

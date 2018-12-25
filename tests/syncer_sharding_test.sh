@@ -7,6 +7,7 @@ shard_db_1="shard_db_01"
 shard_db_2="shard_db_02"
 shard_table_1="shard_table_01"
 shard_table_2="shard_table_02"
+syncer_status_port=8271
 
 import_data() {
     cd "${IMPORTER_DIR}" || exit
@@ -141,13 +142,13 @@ check_db_status "${MYSQL_HOST}" "${MYSQL_PORT}" mysql
 mysql -h "${MYSQL_HOST}" -P "${MYSQL_PORT}" -u root -e "select @@version"
 mysql -h "${MYSQL_HOST}" -P "${MYSQL_PORT}" -u root -e "drop database if exists test;drop database if exists ${shard_db_1};drop database if exists ${shard_db_2}; reset master;"
 read -r file pos <<< $(mysql -h "${MYSQL_HOST}" -P "${MYSQL_PORT}" -u root -Nse 'show master status' | awk '{print $1,$2}')
-start_syncer "syncer_sharding.meta" 10081 "${MYSQL_HOST}" "${MYSQL_PORT}"  "$file" "$pos"
+start_syncer "syncer_sharding.meta" ${syncer_status_port} "${MYSQL_HOST}" "${MYSQL_PORT}"  "$file" "$pos"
 mysql -h "${MYSQL_HOST}" -P "${MYSQL_PORT}" -u root -e "create database test; create database ${shard_db_1}; create database ${shard_db_2};"
 
 sleep 25
 import_data "${shard_db_1}" "${shard_table_1}"  "${shard_db_2}" "${shard_table_2}" 
 
-check_syncer_complete_and_stop "http://127.0.0.1:${STATUS_PORT}/metrics" 
+check_syncer_complete_and_stop "http://127.0.0.1:${syncer_status_port}/metrics"
 diff_mysql_and_tidb ${shard_db_1} ${shard_table_1} ${shard_db_2} ${shard_table_2} shard_db shard_table
 stop_tidb
 echo "syncer_sharding_test finished"

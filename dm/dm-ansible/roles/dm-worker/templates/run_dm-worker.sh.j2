@@ -10,7 +10,6 @@ cd "${DEPLOY_DIR}" || exit 1
 
 exec bin/dm-worker \
     --worker-addr=":{{ dm_worker_port }}" \
-    --status-addr=":{{ dm_worker_status_port }}" \
     -L="{{ dm_worker_log_level }}" \
     --log-rotate="{{ dm_worker_log_rotate }}" \
     --relay-dir="{{ dm_worker_relay_dir }}" \

@@ -34,8 +34,8 @@ alerting:
 {% set dm_worker_status_addrs = [] -%}
 {% for host in groups.dm_worker_servers -%}
   {% set dm_worker_ip = hostvars[host].ansible_host | default(hostvars[host].inventory_hostname) -%}
-  {% set dm_worker_status_port = hostvars[host].dm_worker_status_port -%}
-  {% set _ = dm_worker_status_addrs.append("%s:%s" % (dm_worker_ip, dm_worker_status_port)) -%}
+  {% set dm_worker_port = hostvars[host].dm_worker_port -%}
+  {% set _ = dm_worker_status_addrs.append("%s:%s" % (dm_worker_ip, dm_worker_port)) -%}
 {% endfor -%}
 
 scrape_configs:

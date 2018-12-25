@@ -35,7 +35,7 @@ log-file = "loader.log"
 # Directory of the dump to import
 dir = "$1"
 # Loader pprof addr
-pprof-addr = ":10085"
+pprof-addr = ":8272"
 source-id = "127.0.0.1:3306"
 # We saved checkpoint data to tidb, which schema name is defined here.
 checkpoint-schema-prefix = "tidb_checkpoint_sharding"

@@ -39,8 +39,7 @@ func NewConfig() *Config {
 
 	fs.BoolVar(&cfg.printVersion, "V", false, "prints version and exit")
 	fs.StringVar(&cfg.ConfigFile, "config", "", "path to config file")
-	fs.StringVar(&cfg.WorkerAddr, "worker-addr", "", "worker API server addr")
-	fs.StringVar(&cfg.StatusAddr, "status-addr", "", "status addr")
+	fs.StringVar(&cfg.WorkerAddr, "worker-addr", "", "worker API server and status addr")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
 	fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
@@ -61,7 +60,6 @@ type Config struct {
 	LogRotate string `toml:"log-rotate" json:"log-rotate"`
 
 	WorkerAddr string `toml:"worker-addr" json:"worker-addr"`
-	StatusAddr string `toml:"status-addr" json:"status-addr"`
 
 	EnableGTID  bool   `toml:"enable-gtid" json:"enable-gtid"`
 	AutoFixGTID bool   `toml:"auto-fix-gtid" json:"auto-fix-gtid"`

@@ -33,8 +33,7 @@ func NewConfig() *Config {
 
 	fs.BoolVar(&cfg.printVersion, "V", false, "prints version and exit")
 	fs.StringVar(&cfg.ConfigFile, "config", "", "path to config file")
-	fs.StringVar(&cfg.MasterAddr, "master-addr", "", "master API server addr")
-	fs.StringVar(&cfg.StatusAddr, "status-addr", "", "status addr")
+	fs.StringVar(&cfg.MasterAddr, "master-addr", "", "master API server and status addr")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
 	fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
@@ -67,7 +66,6 @@ type Config struct {
 	LogRotate string `toml:"log-rotate" json:"log-rotate"`
 
 	MasterAddr string `toml:"master-addr" json:"master-addr"`
-	StatusAddr string `toml:"status-addr" json:"status-addr"`
 
 	Deploy    []*DeployMapper   `toml:"deploy" json:"-"`
 	DeployMap map[string]string `json:"deploy"`

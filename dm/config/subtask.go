@@ -141,7 +141,7 @@ func (c *SubTaskConfig) SetupFlags(name CmdName) {
 		// Loader configuration
 		fs.IntVar(&c.PoolSize, "t", 16, "Number of threads restoring concurrently for worker pool. Each worker restore one file at a time, increase this as TiKV nodes increase")
 		fs.StringVar(&c.Dir, "d", "./dumped_data", "Directory of the dump to import")
-		fs.StringVar(&c.PprofAddr, "pprof-addr", ":10084", "Loader pprof addr")
+		fs.StringVar(&c.PprofAddr, "pprof-addr", ":8272", "Loader pprof addr")
 	case CmdSyncer:
 		// Syncer configuration
 		fs.IntVar(&c.ServerID, "server-id", 101, "MySQL slave server ID")
@@ -152,7 +152,7 @@ func (c *SubTaskConfig) SetupFlags(name CmdName) {
 		fs.IntVar(&c.MaxRetry, "max-retry", 100, "maxinum retry when network interruption")
 		fs.BoolVar(&c.EnableGTID, "enable-gtid", false, "enable gtid mode")
 		fs.BoolVar(&c.SafeMode, "safe-mode", false, "enable safe mode to make syncer reentrant")
-		fs.StringVar(&c.StatusAddr, "status-addr", "", "Syncer status addr")
+		fs.StringVar(&c.StatusAddr, "status-addr", ":8271", "Syncer status addr")
 		fs.BoolVar(&c.DisableHeartbeat, "disable-heartbeat", true, "deprecated!!! disable heartbeat between mysql and syncer")
 		fs.BoolVar(&c.EnableHeartbeat, "enable-heartbeat", false, "enable heartbeat between mysql and syncer")
 		fs.StringVar(&c.Timezone, "timezone", "", "target database timezone")

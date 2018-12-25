@@ -17,7 +17,7 @@ Loader has the following available options:
   -p string
     	User password
   -pprof-addr string
-    	Loader pprof addr (default ":10084")
+    	Loader pprof addr (default ":8272")
   -q int
     	Number of queries per transaction (default 1000)
   -t int
@@ -38,7 +38,7 @@ log-file = ""
 dir = "./"
 
 # Loader pprof addr
-pprof-addr = ":10084"
+pprof-addr = ":8272"
 
 # Number of threads to use
 worker = 4

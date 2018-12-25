@@ -574,10 +574,8 @@ $ ansible-playbook rolling_update_monitor.yml --tags=prometheus
 
 | 组件 | 端口变量 | 默认端口 | 说明 |
 | :-- | :-- | :-- | :-- |
-| dm-master | dm_master_port | 11080  | dm-master 服务通信端口 |
-| dm-master | dm_master_status_port | 11081  | dm-master 状态端口 |
-| dm-worker | dm_worker_port | 10081  | dm-worker 服务通信端口 |
-| dm-worker | dm_worker_status_port | 10082  | dm-worker 状态端口 |
+| dm-master | dm_master_port | 8261  | dm-master 服务通信端口 |
+| dm-worker | dm_worker_port | 8262  | dm-worker 服务通信端口 |
 | Prometheus | prometheus_port | 9090 | Prometheus 服务通信端口 |
 | Grafana | grafana_port |  3000 | Web 监控服务对外服务和客户端(浏览器)访问端口 |
 | Alertmanager | alertmanager_port |  9093 | Alertmanager 服务通信端口 |
@@ -587,7 +585,7 @@ $ ansible-playbook rolling_update_monitor.yml --tags=prometheus
 修改 `inventory.ini` 文件，在相应服务 IP 后添加对应服务端口相关主机变量即可：
 
 ```
-dm_master ansible_host=172.16.10.71 dm_master_port=12080 dm_master_status_port=12081
+dm_master ansible_host=172.16.10.71 dm_master_port=18261
 ```
 
 ### 如何更新 dm-ansible
@@ -629,7 +627,7 @@ $ ansible-playbook local_prepare.yml
 
 ### 单机部署多个 dm-worker 样例
 
-以下为单机部署多个 dm-worker `inventory.ini` 文件样例，配置时请注意区分 `server_id`， `deploy_dir`，`dm_worker_port` 和 `dm_worker_status_port` 变量。
+以下为单机部署多个 dm-worker `inventory.ini` 文件样例，配置时请注意区分 `server_id`， `deploy_dir`，`dm_worker_port` 变量。
 
 ```ini
 ## DM modules
@@ -637,11 +635,11 @@ $ ansible-playbook local_prepare.yml
 dm_master ansible_host=172.16.10.71
 
 [dm_worker_servers]
-dm_worker1_1 ansible_host=172.16.10.72 server_id=101 deploy_dir=/data1/dm_worker dm_worker_port=10081 dm_worker_status_port=10082 mysql_host=172.16.10.81 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
-dm_worker1_2 ansible_host=172.16.10.72 server_id=102 deploy_dir=/data2/dm_worker dm_worker_port=10083 dm_worker_status_port=10084 mysql_host=172.16.10.82 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+dm_worker1_1 ansible_host=172.16.10.72 server_id=101 deploy_dir=/data1/dm_worker dm_worker_port=8262 mysql_host=172.16.10.81 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+dm_worker1_2 ansible_host=172.16.10.72 server_id=102 deploy_dir=/data2/dm_worker dm_worker_port=8263 mysql_host=172.16.10.82 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
 
-dm_worker2_1 ansible_host=172.16.10.73 server_id=103 deploy_dir=/data1/dm_worker dm_worker_port=10081 dm_worker_status_port=10082 mysql_host=172.16.10.83 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
-dm_worker2_2 ansible_host=172.16.10.73 server_id=104 deploy_dir=/data2/dm_worker dm_worker_port=10083 dm_worker_status_port=10084 mysql_host=172.16.10.84 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+dm_worker2_1 ansible_host=172.16.10.73 server_id=103 deploy_dir=/data1/dm_worker dm_worker_port=8262 mysql_host=172.16.10.83 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+dm_worker2_2 ansible_host=172.16.10.73 server_id=104 deploy_dir=/data2/dm_worker dm_worker_port=8263 mysql_host=172.16.10.84 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
 
 ## Monitoring modules
 [prometheus_servers]

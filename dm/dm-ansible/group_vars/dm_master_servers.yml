@@ -1,4 +1,3 @@
 ---
 
-dm_master_port: "11080"
-dm_master_status_port: "11081"
+dm_master_port: "8261"

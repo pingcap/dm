@@ -1,7 +1,6 @@
 ---
 
-dm_worker_port: "10081"
-dm_worker_status_port: "10082"
+dm_worker_port: "8262"
 flavor: "mysql"
 enable_gtid: "false"
 relay_binlog_name: ""
