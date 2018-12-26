@@ -395,6 +395,8 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	s.done = make(chan struct{})
 	// create new job chans
 	s.newJobChans(s.cfg.WorkerCount + 1)
+	// clear tables info
+	s.clearAllTables()
 
 	s.runFatalChan = make(chan *pb.ProcessError, s.cfg.WorkerCount+1)
 	s.execErrorDetected.Set(false)
@@ -485,6 +487,11 @@ func (s *Syncer) clearTables(schema, table string) {
 	key := dbutil.TableName(schema, table)
 	delete(s.tables, key)
 	delete(s.cacheColumns, key)
+}
+
+func (s *Syncer) clearAllTables() {
+	s.tables = make(map[string]*table)
+	s.cacheColumns = make(map[string][]string)
 }
 
 func (s *Syncer) getTableFromDB(db *Conn, schema string, name string) (*table, error) {
@@ -619,6 +626,8 @@ func (s *Syncer) addJob(job *job) error {
 		if len(job.sourceSchema) > 0 {
 			s.checkpoint.SaveTablePoint(job.sourceSchema, job.sourceTable, job.pos)
 		}
+		// reset sharding group after checkpoint saved
+		s.resetShardingGroup(job.targetSchema, job.targetTable)
 	}
 
 	if wait {
@@ -633,6 +642,16 @@ func (s *Syncer) saveGlobalPoint(globalPoint mysql.Position) {
 		globalPoint = s.sgk.AdjustGlobalPoint(globalPoint)
 	}
 	s.checkpoint.SaveGlobalPoint(globalPoint)
+}
+
+func (s *Syncer) resetShardingGroup(schema, table string) {
+	if s.cfg.IsSharding {
+		// for DDL sharding group, reset group after checkpoint saved
+		group := s.sgk.Group(schema, table)
+		if group != nil {
+			group.Reset()
+		}
+	}
 }
 
 // flushCheckPoints flushes previous saved checkpoint in memory to persistent storage, like TiDB
@@ -722,12 +741,6 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 					continue
 				}
 
-				var sGroup *ShardingGroup
-				if s.cfg.IsSharding {
-					// for DDL sharding group, executes DDL SQL, and mark them resolved
-					sGroup = s.sgk.Group(sqlJob.targetSchema, sqlJob.targetTable)
-				}
-
 				if sqlJob.ddlExecItem != nil && sqlJob.ddlExecItem.req != nil && !sqlJob.ddlExecItem.req.Exec {
 					log.Infof("[syncer] ignore sharding DDLs %v", sqlJob.ddls)
 				} else {
@@ -755,9 +768,6 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 					// errro then pause.
 					fatalF(err, pb.ErrorType_ExecSQL)
 					continue
-				}
-				if sGroup != nil {
-					sGroup.Reset() // reset for next round sharding DDL syncing
 				}
 
 				tpCnt[sqlJob.tp] += int64(len(sqlJob.ddls))
@@ -1445,7 +1455,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 				log.Infof("[syncer] add table %s to sharding group (%v)", source, needShardingHandle)
 			default:
-				needShardingHandle, group, synced, remain, err = s.sgk.TrySync(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, source, startPos, needHandleDDLs)
+				needShardingHandle, group, synced, remain, err = s.sgk.TrySync(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, source, startPos, currentPos, needHandleDDLs)
 			}
 
 			if needShardingHandle {
@@ -1463,8 +1473,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				if cap(shardingReSyncCh) < len(sqls) {
 					shardingReSyncCh = make(chan *ShardingReSync, len(sqls))
 				}
+				firstEndPos := group.FirstEndPosUnresolved()
+				if firstEndPos == nil {
+					return errors.Errorf("no valid End_log_pos of the first DDL exists for sharding group with source %s", source)
+				}
 				shardingReSyncCh <- &ShardingReSync{
-					currPos:      mysql.Position{Name: group.firstPos.Name, Pos: group.firstPos.Pos},
+					currPos:      *firstEndPos,
 					latestPos:    currentPos,
 					targetSchema: ddlInfo.tableNames[1][0].Schema,
 					targetTable:  ddlInfo.tableNames[1][0].Name,

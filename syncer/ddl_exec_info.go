@@ -18,9 +18,10 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"github.com/siddontang/go/sync2"
 	"golang.org/x/net/context"
+
+	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 )
 
 var (

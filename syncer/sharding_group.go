@@ -96,7 +96,8 @@ type ShardingGroup struct {
 	sources      map[string]bool     // source table ID -> whether source table's DDL synced
 	sourceDDLs   map[string][]string // source table ID -> ddl text; detect multiple ddl for on table in a sharding ddl
 	IsSchemaOnly bool                // whether is a schema (database) only DDL TODO: zxc add schema-level syncing support later
-	firstPos     *mysql.Position     // first DDL's binlog pos, used to re-direct binlog streamer after synced
+	firstPos     *mysql.Position     // first DDL's binlog pos, used to restrain the global checkpoint when un-resolved
+	firstEndPos  *mysql.Position     // first DDL's binlog End_log_pos, used to re-direct binlog streamer after synced
 	ddls         []string            // DDL which current in syncing
 }
 
@@ -108,6 +109,7 @@ func NewShardingGroup(sources []string, isSchemaOnly bool) *ShardingGroup {
 		sourceDDLs:   make(map[string][]string),
 		IsSchemaOnly: isSchemaOnly,
 		firstPos:     nil,
+		firstEndPos:  nil,
 	}
 	for _, source := range sources {
 		sg.sources[source] = false
@@ -189,12 +191,13 @@ func (sg *ShardingGroup) Reset() {
 		sg.sources[source] = false
 	}
 	sg.firstPos = nil
+	sg.firstEndPos = nil
 	sg.ddls = nil
 }
 
 // TrySync tries to sync the sharding group
 // if source not in sharding group before, it will be added
-func (sg *ShardingGroup) TrySync(source string, pos mysql.Position, ddls []string) (bool, int, error) {
+func (sg *ShardingGroup) TrySync(source string, pos, endPos mysql.Position, ddls []string) (bool, int, error) {
 	sg.Lock()
 	defer sg.Unlock()
 
@@ -213,6 +216,7 @@ func (sg *ShardingGroup) TrySync(source string, pos mysql.Position, ddls []strin
 
 	if sg.firstPos == nil {
 		sg.firstPos = &pos // save first DDL's pos
+		sg.firstEndPos = &endPos
 		sg.ddls = ddls
 	}
 	return sg.remain <= 0, sg.remain, nil
@@ -317,6 +321,20 @@ func (sg *ShardingGroup) FirstPosUnresolved() *mysql.Position {
 	return nil
 }
 
+// FirstEndPosUnresolved returns the first DDL End_log_pos if un-resolved, else nil
+func (sg *ShardingGroup) FirstEndPosUnresolved() *mysql.Position {
+	sg.RLock()
+	defer sg.RUnlock()
+	if sg.remain < len(sg.sources) && sg.firstEndPos != nil {
+		// create a new pos to return
+		return &mysql.Position{
+			Name: sg.firstEndPos.Name,
+			Pos:  sg.firstEndPos.Pos,
+		}
+	}
+	return nil
+}
+
 // String implements Stringer.String
 func (sg *ShardingGroup) String() string {
 	return fmt.Sprintf("IsSchemaOnly:%v remain:%d, sources:%+v", sg.IsSchemaOnly, sg.remain, sg.sources)
@@ -415,7 +433,7 @@ func (k *ShardingGroupKeeper) LeaveGroup(targetSchema, targetTable string, sourc
 //   group: the sharding group
 //   synced: whether the source table's sharding group synced
 //   remain: remain un-synced source table's count
-func (k *ShardingGroupKeeper) TrySync(targetSchema, targetTable, source string, pos mysql.Position, ddls []string) (needShardingHandle bool, group *ShardingGroup, synced bool, remain int, err error) {
+func (k *ShardingGroupKeeper) TrySync(targetSchema, targetTable, source string, pos, endPos mysql.Position, ddls []string) (needShardingHandle bool, group *ShardingGroup, synced bool, remain int, err error) {
 	tableID, schemaOnly := GenTableID(targetSchema, targetTable)
 	if schemaOnly {
 		// NOTE: now we don't support syncing for schema only sharding DDL
@@ -429,7 +447,7 @@ func (k *ShardingGroupKeeper) TrySync(targetSchema, targetTable, source string, 
 	if !ok {
 		return false, group, true, 0, nil
 	}
-	synced, remain, err = group.TrySync(source, pos, ddls)
+	synced, remain, err = group.TrySync(source, pos, endPos, ddls)
 	return true, group, synced, remain, errors.Trace(err)
 }
 

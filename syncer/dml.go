@@ -63,11 +63,11 @@ func genUpdateSQLs(schema string, table string, data [][]interface{}, columns []
 		changedData := data[i+1]
 
 		if len(oldData) != len(changedData) {
-			return nil, nil, nil, errors.Errorf("update data mismatch in length: %d vs %d", len(oldData), len(changedData))
+			return nil, nil, nil, errors.Errorf("update data mismatch in length: %d (columns) vs %d (data)", len(oldData), len(changedData))
 		}
 
 		if len(oldData) != len(columns) {
-			return nil, nil, nil, errors.Errorf("update columns and data mismatch in length: %d vs %d", len(columns), len(oldData))
+			return nil, nil, nil, errors.Errorf("update columns and data mismatch in length: %d (columns) vs %d (data)", len(columns), len(oldData))
 		}
 
 		oldValues := make([]interface{}, 0, len(oldData))
@@ -141,7 +141,7 @@ func genDeleteSQLs(schema string, table string, dataSeq [][]interface{}, columns
 
 	for _, data := range dataSeq {
 		if len(data) != len(columns) {
-			return nil, nil, nil, errors.Errorf("delete columns and data mismatch in length: %d vs %d", len(columns), len(data))
+			return nil, nil, nil, errors.Errorf("delete columns and data mismatch in length: %d (columns) vs %d (data)", len(columns), len(data))
 		}
 
 		value := make([]interface{}, 0, len(data))
