@@ -12,13 +12,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/parser/ast"
-	"github.com/pingcap/tidb-enterprise-tools/dm/config"
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
-	"github.com/pingcap/tidb-enterprise-tools/dm/unit"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -27,6 +20,14 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
 	"golang.org/x/net/context"
+
+	"github.com/pingcap/tidb-enterprise-tools/dm/config"
+	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
+	"github.com/pingcap/tidb-enterprise-tools/dm/unit"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )
 
 var (
@@ -2000,7 +2001,7 @@ func (s *Syncer) needResync() bool {
 	// Currently, syncer doesn't handle Format_desc and Previous_gtids events. When binlog rotate to new file with only two events like above,
 	// syncer won't save pos to 194. Actually it save pos 4 to meta file. So We got a experience value of 194 - 4 = 190.
 	// If (mpos.Pos - spos.Pos) > 190, we could say that syncer is not up-to-date.
-	return compareBinlogPos(masterPos, s.checkpoint.GlobalPoint(), 190) == 1
+	return utils.CompareBinlogPos(masterPos, s.checkpoint.GlobalPoint(), 190) == 1
 }
 
 // assume that reset master before switching to new master, and only the new master would write

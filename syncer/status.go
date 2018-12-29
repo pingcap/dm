@@ -16,10 +16,12 @@ package syncer
 import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/siddontang/go-mysql/mysql"
+
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
-	"github.com/siddontang/go-mysql/mysql"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )
 
 // Status implements SubTaskUnit.Status
@@ -52,7 +54,7 @@ func (s *Syncer) Status() interface{} {
 		st.MasterBinlogGtid = masterGTIDSet.String()
 	}
 
-	st.Synced = compareBinlogPos(masterPos, streamer.RealMySQLPos(syncerPos), 0) == 0
+	st.Synced = utils.CompareBinlogPos(masterPos, streamer.RealMySQLPos(syncerPos), 0) == 0
 
 	if s.cfg.IsSharding {
 		st.UnresolvedGroups = s.sgk.UnresolvedGroups()

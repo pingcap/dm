@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"github.com/siddontang/go-mysql/mysql"
+
+	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )
 
 // ExecErrorContext records a failed exec SQL information
@@ -21,7 +23,7 @@ func (s *Syncer) Error() interface{} {
 	defer s.execErrors.Unlock()
 
 	sort.Slice(s.execErrors.errors, func(i, j int) bool {
-		return compareBinlogPos(s.execErrors.errors[i].pos, s.execErrors.errors[j].pos, 0) == -1
+		return utils.CompareBinlogPos(s.execErrors.errors[i].pos, s.execErrors.errors[j].pos, 0) == -1
 	})
 
 	errors := make([]*pb.SyncSQLError, 0, len(s.execErrors.errors))
