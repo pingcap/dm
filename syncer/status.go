@@ -31,7 +31,7 @@ func (s *Syncer) Status() interface{} {
 	)
 	total := s.count.Get()
 	totalTps := s.totalTps.Get()
-	tps := s.totalTps.Get()
+	tps := s.tps.Get()
 	masterPos, masterGTIDSet, err := s.getMasterStatus()
 	if err != nil {
 		log.Warnf("[syncer] get master status err %v", errors.ErrorStack(err))
