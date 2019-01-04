@@ -320,6 +320,7 @@ type Loader struct {
 
 	totalDataSize    sync2.AtomicInt64
 	finishedDataSize sync2.AtomicInt64
+	metaBinlog       sync2.AtomicString
 
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
@@ -386,6 +387,7 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	defer cancel()
 
 	l.newFileJobQueue()
+	l.getMydumpMetadata()
 
 	l.runFatalChan = make(chan *pb.ProcessError, 2*l.cfg.PoolSize)
 	errs := make([]*pb.ProcessError, 0, 2)
@@ -1019,4 +1021,14 @@ func (l *Loader) checkpointID() string {
 		return l.cfg.Dir
 	}
 	return shortSha1(dir)
+}
+
+func (l *Loader) getMydumpMetadata() {
+	metafile := filepath.Join(l.cfg.LoaderConfig.Dir, "metadata")
+	pos, err := utils.ParseMetaData(metafile)
+	if err != nil {
+		log.Errorf("[loader] parse metadata with error: %s", err)
+	} else {
+		l.metaBinlog.Set(pos.String())
+	}
 }

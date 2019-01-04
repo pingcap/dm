@@ -117,3 +117,49 @@ func (s *testStreamerSuite) TestRelaySubDirUpdated(c *C) {
 	}()
 	wg.Wait()
 }
+
+func (s *testStreamerSuite) TestFileSizeUpdatedError(c *C) {
+	var (
+		relayFile       = "mysql-bin.000001"
+		data            = []byte("meaningless file content")
+		watcherInterval = 100 * time.Millisecond
+	)
+
+	// create relay log dir
+	subDir, err := ioutil.TempDir("", "test_file_size_updated_error")
+	c.Assert(err, IsNil)
+	defer os.RemoveAll(subDir)
+
+	// create relay log
+	relayPath := path.Join(subDir, relayFile)
+	err = ioutil.WriteFile(relayPath, []byte(data), 0644)
+	c.Assert(err, IsNil)
+
+	// watcher, for file size decrease
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		latestFileSize := int64(len(data))
+		_, err2 := relaySubDirUpdated(context.Background(), watcherInterval, subDir, relayPath, relayFile, latestFileSize)
+		c.Assert(err2, NotNil)
+	}()
+
+	// truncate relay log
+	err = ioutil.WriteFile(relayPath, []byte(""), 0644)
+	c.Assert(err, IsNil)
+	wg.Wait()
+
+	// watcher, for file not found
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		latestFileSize := int64(0)
+		_, err2 := relaySubDirUpdated(context.Background(), watcherInterval, subDir, relayPath, relayFile, latestFileSize)
+		c.Assert(err2, NotNil)
+	}()
+
+	err = os.Remove(relayPath)
+	c.Assert(err, IsNil)
+	wg.Wait()
+}

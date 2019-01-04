@@ -5,6 +5,31 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 )
 
+func (t *testUtilsSuite) TestDecodeBinlogPosition(c *C) {
+	testCases := []struct {
+		pos      string
+		isErr    bool
+		expecetd *mysql.Position
+	}{
+		{"()", true, nil},
+		{"(,}", true, nil},
+		{"(,)", true, nil},
+		{"(mysql-bin.00001,154)", false, &mysql.Position{Name: "mysql-bin.00001", Pos: 154}},
+		{"(mysql-bin.00001, 154)", false, &mysql.Position{Name: "mysql-bin.00001", Pos: 154}},
+		{"(mysql-bin.00001\t,  154)", false, &mysql.Position{Name: "mysql-bin.00001", Pos: 154}},
+	}
+
+	for _, tc := range testCases {
+		pos, err := DecodeBinlogPosition(tc.pos)
+		if tc.isErr {
+			c.Assert(err, NotNil)
+		} else {
+			c.Assert(err, IsNil)
+			c.Assert(pos, DeepEquals, tc.expecetd)
+		}
+	}
+}
+
 func (t *testUtilsSuite) TestCompareBinlogPos(c *C) {
 	testCases := []struct {
 		pos1      mysql.Position

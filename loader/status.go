@@ -4,8 +4,9 @@ import (
 	"time"
 
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"golang.org/x/net/context"
+
+	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 )
 
 const (
@@ -21,6 +22,7 @@ func (l *Loader) Status() interface{} {
 		FinishedBytes: finishedSize,
 		TotalBytes:    totalSize,
 		Progress:      progress,
+		MetaBinlog:    l.metaBinlog.Get(),
 	}
 	return s
 }

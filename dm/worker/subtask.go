@@ -26,6 +26,7 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/dm/unit"
 	"github.com/pingcap/tidb-enterprise-tools/loader"
 	"github.com/pingcap/tidb-enterprise-tools/mydumper"
+	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	"github.com/pingcap/tidb-enterprise-tools/syncer"
 	"github.com/siddontang/go-mysql/mysql"
 
@@ -67,6 +68,7 @@ type SubTask struct {
 
 	units    []unit.Unit // units do job one by one
 	currUnit unit.Unit
+	prevUnit unit.Unit
 
 	stage  pb.Stage          // stage of current sub task
 	result *pb.ProcessResult // the process result, nil when is processing
@@ -141,6 +143,13 @@ func (st *SubTask) Init() error {
 
 // Run runs the sub task
 func (st *SubTask) Run() {
+	st.setStage(pb.Stage_Paused)
+	err := st.unitTransWaitCondition()
+	if err != nil {
+		log.Errorf("[subtask] wait condition error: %v", err)
+		return
+	}
+
 	st.setStage(pb.Stage_Running)
 	st.setResult(nil) // clear previous result
 	cu := st.CurrUnit()
@@ -217,6 +226,7 @@ func (st *SubTask) setCurrUnit(ut unit.Unit) unit.Unit {
 	defer st.Unlock()
 	pu := st.currUnit
 	st.currUnit = ut
+	st.prevUnit = pu
 	return pu
 }
 
@@ -225,6 +235,13 @@ func (st *SubTask) CurrUnit() unit.Unit {
 	st.RLock()
 	defer st.RUnlock()
 	return st.currUnit
+}
+
+// PrevUnit returns dm previous unit
+func (st *SubTask) PrevUnit() unit.Unit {
+	st.RLock()
+	defer st.RUnlock()
+	return st.prevUnit
 }
 
 // closeUnits closes all un-closed units (current unit and all the subsequent units)
@@ -358,6 +375,14 @@ func (st *SubTask) Pause() error {
 // Resume resumes the paused sub task
 // similar to Run
 func (st *SubTask) Resume() error {
+	// NOTE: this may block if user resume a task
+	err := st.unitTransWaitCondition()
+	if err != nil {
+		log.Errorf("[subtask] wait condition error: %v", err)
+		st.setStage(pb.Stage_Paused)
+		return errors.Trace(err)
+	}
+
 	if !st.stageCAS(pb.Stage_Paused, pb.Stage_Running) {
 		return errors.NotValidf("current stage is not paused")
 	}
@@ -578,4 +603,43 @@ func (st *SubTask) ClearDDLInfo() {
 	st.Lock()
 	defer st.Unlock()
 	st.cacheDDLInfo = nil
+}
+
+// unitTransWaitCondition waits when transferring from current unit to next unit.
+// Currently there is only one wait condition
+// from Load unit to Sync unit, wait for relay-log catched up with mydumper binlog position.
+func (st *SubTask) unitTransWaitCondition() error {
+	pu := st.PrevUnit()
+	cu := st.CurrUnit()
+	if pu != nil && pu.Type() == pb.UnitType_Load && cu.Type() == pb.UnitType_Sync {
+		log.Infof("[subtask] %s wait condition between %s and %s", st.cfg.Name, pu.Type(), cu.Type())
+		hub := GetConditionHub()
+		ctx, cancel := context.WithTimeout(hub.w.ctx, 5*time.Minute)
+		defer cancel()
+
+		loadStatus := pu.Status().(*pb.LoadStatus)
+		pos1, err := utils.DecodeBinlogPosition(loadStatus.MetaBinlog)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		for {
+			relayStatus := hub.w.relayHolder.Status()
+			pos2, err := utils.DecodeBinlogPosition(relayStatus.RelayBinlog)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			if pos1.Compare(*pos2) <= 0 {
+				break
+			}
+			log.Debugf("loader end binlog pos: %s, relay binlog pos: %s, wait for catchup", pos1, pos2)
+
+			select {
+			case <-ctx.Done():
+				return errors.Errorf("wait relay catchup timeout, loader end binlog pos: %s, relay binlog pos: %s", pos1, pos2)
+			case <-time.After(time.Millisecond * 50):
+			}
+		}
+		log.Info("relay binlog pos catchup loader end binlog pos")
+	}
+	return nil
 }

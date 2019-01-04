@@ -79,7 +79,14 @@ func NewWorker(cfg *Config) *Worker {
 
 // Init initializes the worker
 func (w *Worker) Init() error {
-	return errors.Trace(w.relayHolder.Init())
+	err := w.relayHolder.Init()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	InitConditionHub(w)
+
+	return nil
 }
 
 // Start starts working

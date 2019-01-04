@@ -206,7 +206,7 @@ func fileSizeUpdated(path string, latestSize int64) (int, error) {
 		log.Debugf("[streamer] size of relay log file %s has changed from %d to %d", path, latestSize, currSize)
 		return 1, nil
 	} else {
-		panic(fmt.Sprintf("size of relay log %s has changed from %d to %d", path, latestSize, currSize))
+		return 0, errors.Errorf("size of relay log %s has changed from %d to %d", path, latestSize, currSize)
 	}
 }
 
