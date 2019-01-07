@@ -89,8 +89,8 @@ type Syncer struct {
 	wg    sync.WaitGroup
 	jobWg sync.WaitGroup
 
-	tables       map[string]*table
-	cacheColumns map[string][]string
+	tables       map[string]*table   // table cache: `target-schema`.`target-table` -> table
+	cacheColumns map[string][]string // table columns cache: `target-schema`.`target-table` -> column names list
 
 	fromDB *Conn
 	toDBs  []*Conn
@@ -484,6 +484,8 @@ func (s *Syncer) getMasterStatus() (mysql.Position, gtid.Set, error) {
 	return utils.GetMasterStatus(s.fromDB.db, s.cfg.Flavor)
 }
 
+// clearTables is used for clear table cache of given table. this function must
+// be called when DDL is applied to this table.
 func (s *Syncer) clearTables(schema, table string) {
 	key := dbutil.TableName(schema, table)
 	delete(s.tables, key)
@@ -1331,7 +1333,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			var (
 				ddlInfo        *shardingDDLInfo
 				needHandleDDLs []string
-				tbls           = make(map[string]*filter.Table)
+				targetTbls     = make(map[string]*filter.Table)
 			)
 			for _, sql := range sqls {
 				sqlDDL, tableNames, stmt, err := s.handleDDL(parser2, string(ev.Schema), sql)
@@ -1390,7 +1392,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 
 				needHandleDDLs = append(needHandleDDLs, sqlDDL)
-				tbls[tableNames[0][0].String()] = tableNames[0][0]
+				targetTbls[tableNames[1][0].String()] = tableNames[1][0]
 			}
 
 			log.Infof("need handled ddls %v in position %v", needHandleDDLs, currentPos)
@@ -1411,7 +1413,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 				log.Infof("[end] execute need handled ddls %v in position %v", needHandleDDLs, currentPos)
 
-				for _, tbl := range tbls {
+				for _, tbl := range targetTbls {
 					s.clearTables(tbl.Schema, tbl.Name)
 					// save checkpoint of each table
 					s.checkpoint.SaveTablePoint(tbl.Schema, tbl.Name, currentPos)
