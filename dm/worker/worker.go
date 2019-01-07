@@ -361,14 +361,16 @@ func (w *Worker) doFetchDDLInfo(ctx context.Context, ch chan<- *pb.DDLInfo) {
 
 	_, value, ok := reflect.Select(cases)
 	if !ok {
+		w.RLock()
 		for _, st := range w.subTasks {
 			// NOTE: Can you guarantee that each DDLInfo you get is different?
 			if st.GetDDLInfo() == nil {
 				continue
 			}
 			ch <- st.GetDDLInfo()
-			return
+			break
 		}
+		w.RUnlock()
 		return
 	}
 
