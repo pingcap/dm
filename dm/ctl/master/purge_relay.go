@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/net/context"
 
+	"github.com/pingcap/tidb-enterprise-tools/dm/command"
 	"github.com/pingcap/tidb-enterprise-tools/dm/ctl/common"
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 )
@@ -111,7 +112,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 	if len(subDir) > 0 {
-		subDir = strings.Trim(subDir, "\"")
+		subDir = command.TrimQuoteMark(subDir)
 	}
 	if len(filename) > 0 && len(subDir) == 0 {
 		fmt.Println("[warn] no --sub-dir specify for --filename, the latest one will be used")

@@ -28,6 +28,7 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/tidb-enterprise-tools/syncer/sql-operator"
 )
 
 var (
@@ -135,10 +136,7 @@ type Syncer struct {
 		errors []*ExecErrorContext
 	}
 
-	operatorsMu struct {
-		sync.RWMutex
-		operators map[string]*Operator
-	}
+	sqlOperatorHolder *operator.Holder
 
 	heartbeat *Heartbeat
 
@@ -183,8 +181,8 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	}
 
 	syncer.binlogType = toBinlogType(cfg.BinlogType)
+	syncer.sqlOperatorHolder = operator.NewHolder()
 	syncer.readerHub = streamer.GetReaderHub()
-	syncer.operatorsMu.operators = make(map[string]*Operator)
 
 	if cfg.IsSharding {
 		// only need to sync DDL in sharding mode
@@ -405,6 +403,8 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	errs := make([]*pb.ProcessError, 0, 2)
 
 	if s.cfg.IsSharding {
+		// every time start to re-sync from resume, we reset status to make it like a fresh syncing
+		s.sgk.ResetGroups()
 		s.ddlExecInfo.Renew()
 	}
 
@@ -590,8 +590,6 @@ func (s *Syncer) addJob(job *job) error {
 	case xid:
 		s.saveGlobalPoint(job.pos)
 		return nil
-	case ddl:
-		s.jobWg.Wait()
 	case flush:
 		addedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName).Inc()
 		// ugly code addJob and sync, refine it later
@@ -601,20 +599,17 @@ func (s *Syncer) addJob(job *job) error {
 		}
 		s.jobWg.Wait()
 		finishedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName).Inc()
-
 		return errors.Trace(s.flushCheckPoints())
-	}
-
-	if len(job.sql) > 0 || len(job.ddls) > 0 {
+	case ddl:
+		s.jobWg.Wait()
+		addedJobsTotal.WithLabelValues("ddl", s.cfg.Name, adminQueueName).Inc()
 		s.jobWg.Add(1)
-		if job.tp == ddl {
-			addedJobsTotal.WithLabelValues("ddl", s.cfg.Name, adminQueueName).Inc()
-			s.jobs[s.cfg.WorkerCount] <- job
-		} else {
-			idx := int(utils.GenHashKey(job.key)) % s.cfg.WorkerCount
-			s.addCount(false, queueBucketMapping[idx], job.tp, 1)
-			s.jobs[idx] <- job
-		}
+		s.jobs[s.cfg.WorkerCount] <- job
+	case insert, update, del:
+		s.jobWg.Add(1)
+		idx := int(utils.GenHashKey(job.key)) % s.cfg.WorkerCount
+		s.addCount(false, queueBucketMapping[idx], job.tp, 1)
+		s.jobs[idx] <- job
 	}
 
 	wait := s.checkWait(job)
@@ -684,6 +679,12 @@ func (s *Syncer) flushCheckPoints() error {
 		return errors.Annotatef(err, "flush checkpoint %s", s.checkpoint)
 	}
 	log.Infof("[syncer] flushed checkpoint %s", s.checkpoint)
+
+	// update current active relay log after checkpoint flushed
+	err = s.updateActiveRelayLog(s.checkpoint.GlobalPoint())
+	if err != nil {
+		return errors.Trace(err)
+	}
 	return nil
 }
 
@@ -739,7 +740,6 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 			if sqlJob.tp == ddl {
 				err = executeSQLs()
 				if err != nil {
-					// TODO: error then pause.
 					fatalF(err, pb.ErrorType_ExecSQL)
 					continue
 				}
@@ -776,7 +776,7 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 				tpCnt[sqlJob.tp] += int64(len(sqlJob.ddls))
 				clearF()
 
-			} else if sqlJob.tp != flush {
+			} else if sqlJob.tp != flush && len(sqlJob.sql) > 0 {
 				jobs = append(jobs, sqlJob)
 				tpCnt[sqlJob.tp]++
 			}
@@ -1050,10 +1050,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 			if currentPos.Name > lastPos.Name {
 				lastPos = currentPos
-				err = s.updateActiveRelayLog(currentPos)
-				if err != nil {
-					return errors.Trace(err)
-				}
 			}
 
 			if shardingReSync != nil {
@@ -1137,25 +1133,23 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 
 			var (
-				sqls []string
-				keys [][]string
-				args [][]interface{}
+				applied bool
+				sqls    []string
+				keys    [][]string
+				args    [][]interface{}
 			)
 
-			operator := s.GetOperator(currentPos)
+			// for RowsEvent, one event may have multi SQLs and multi keys, (eg. INSERT INTO t1 VALUES (11, 12), (21, 22) )
+			// to cover them dispatched to different channels, we still apply operator here
+			// ugly, but I have no better solution yet.
+			applied, sqls, err = s.tryApplySQLOperator(currentPos, nil) // forbidden sql-pattern for DMLs
+			if err != nil {
+				return errors.Trace(err)
+			}
 
 			switch e.Header.EventType {
 			case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
-				if operator != nil {
-					sqls, err = operator.Operate()
-					if err != nil {
-						return errors.Trace(err)
-					}
-					// operator only apply one time.
-					s.DelOperator(currentPos)
-					args = nil
-					keys = nil
-				} else {
+				if !applied {
 					sqls, keys, args, err = genInsertSQLs(table.schema, table.name, rows, table.columns, table.indexColumns)
 					if err != nil {
 						return errors.Errorf("gen insert sqls failed: %v, schema: %s, table: %s", errors.Trace(err), table.schema, table.name)
@@ -1178,16 +1172,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					}
 				}
 			case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
-				if operator != nil {
-					sqls, err = operator.Operate()
-					if err != nil {
-						return errors.Trace(err)
-					}
-					// operator only apply one time.
-					s.DelOperator(currentPos)
-					args = nil
-					keys = nil
-				} else {
+				if !applied {
 					sqls, keys, args, err = genUpdateSQLs(table.schema, table.name, rows, table.columns, table.indexColumns)
 					if err != nil {
 						return errors.Errorf("gen update sqls failed: %v, schema: %s, table: %s", err, table.schema, table.name)
@@ -1211,16 +1196,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					}
 				}
 			case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-				if operator != nil {
-					sqls, err = operator.Operate()
-					if err != nil {
-						return errors.Trace(err)
-					}
-					// operator only apply one time.
-					s.DelOperator(currentPos)
-					args = nil
-					keys = nil
-				} else {
+				if !applied {
 					sqls, keys, args, err = genDeleteSQLs(table.schema, table.name, rows, table.columns, table.indexColumns)
 					if err != nil {
 						return errors.Errorf("gen delete sqls failed: %v, schema: %s, table: %s", err, table.schema, table.name)
@@ -1294,22 +1270,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				onlineDDLTableNames map[string]*filter.Table
 			)
 
-			operator := s.GetOperator(currentPos)
-			if operator != nil {
-				sqls, err = operator.Operate()
-				if err != nil {
-					log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
-					return errors.Trace(err)
-				}
-				// operator only apply one time.
-				s.DelOperator(currentPos)
-			} else {
-				sqls, onlineDDLTableNames, _, err = s.resolveDDLSQL(sql, parser2, string(ev.Schema))
-				if err != nil {
-					log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
-					log.Errorf("fail to be parsed, error %v", err)
-					return errors.Trace(err)
-				}
+			// for DDL, we don't apply operator until we try to execute it.
+			// so can handle sharding cases
+			sqls, onlineDDLTableNames, _, err = s.resolveDDLSQL(sql, parser2, string(ev.Schema))
+			if err != nil {
+				log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
+				log.Errorf("fail to be parsed, error %v", err)
+				return errors.Trace(err)
 			}
 
 			if len(onlineDDLTableNames) > 1 {
@@ -1406,6 +1373,15 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			if !s.cfg.IsSharding {
 				log.Infof("[start] execute need handled ddls %v in position %v", needHandleDDLs, currentPos)
+				// try apply SQL operator before addJob. now, one query event only has one DDL job, if updating to multi DDL jobs, refine this.
+				applied, appliedSQLs, err := s.tryApplySQLOperator(currentPos, needHandleDDLs)
+				if err != nil {
+					return errors.Annotatef(err, "try apply SQL operator on binlog-pos %s with DDLs %v", currentPos, needHandleDDLs)
+				}
+				if applied {
+					needHandleDDLs = appliedSQLs // maybe nil
+					log.Infof("[convert] execute need handled ddls converted to %v in position %s by sql operator", needHandleDDLs, currentPos)
+				}
 				job := newDDLJob(nil, needHandleDDLs, lastPos, currentPos, nil, nil)
 				err = s.addJob(job)
 				if err != nil {
@@ -1517,6 +1493,15 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 
 			log.Infof("[ddl][schema]%s [start] sql %s, need handled sqls %v", string(ev.Schema), string(ev.Query), needHandleDDLs)
+			// try apply SQL operator before addJob. now, one query event only has one DDL job, if updating to multi DDL jobs, refine this.
+			applied, appliedSQLs, err := s.tryApplySQLOperator(currentPos, needHandleDDLs)
+			if err != nil {
+				return errors.Annotatef(err, "try apply SQL operator on binlog-pos %s with DDLs %v", currentPos, needHandleDDLs)
+			}
+			if applied {
+				needHandleDDLs = appliedSQLs // maybe nil
+				log.Infof("[convert] execute need handled ddls converted to %v in position %s by sql operator", needHandleDDLs, currentPos)
+			}
 			job := newDDLJob(ddlInfo, needHandleDDLs, lastPos, currentPos, nil, ddlExecItem)
 			err = s.addJob(job)
 			if err != nil {

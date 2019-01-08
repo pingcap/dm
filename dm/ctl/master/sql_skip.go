@@ -27,37 +27,51 @@ import (
 // NewSQLSkipCmd creates a SQLSkip command
 func NewSQLSkipCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "sql-skip <-w worker> <task_name> <binlog_pos>",
-		Short: "sql-skip skips specified binlog position",
+		Use:   "sql-skip <-w worker> [-b binlog-pos] [-s sql-pattern] [--sharding] <task-name>",
+		Short: "sql-skip skips binlog event in specific binlog-pos or sql-pattern matched",
 		Run:   sqlSkipFunc,
 	}
+	cmd.Flags().StringP("binlog-pos", "b", "", "position used to match binlog event if matched the sql-skip operation will be applied. The format like \"mysql-bin|000001.000003:3270\"")
+	cmd.Flags().StringP("sql-pattern", "s", "", "SQL pattern used to match the DDL converted by optional router-rules if matched the sql-skip operation will be applied. The format like \"~(?i)ALTER\\s+TABLE\\s+`db1`.`tbl1`\\s+ADD\\s+COLUMN\\s+col1\\s+INT\". Whitespace is not supported, and must be replaced by \"\\s\". Staring with ~ as regular expression. This can only be used for DDL (converted by optional router-rules), and if multi DDLs in one binlog event, one of them matched is enough, but all of them will be skipped")
+	cmd.Flags().BoolP("sharding", "", false, "whether are handing sharding DDL, which will only take effect on DDL lock's owner")
 	return cmd
 }
 
 // sqlSkipFunc does sql skip request
 func sqlSkipFunc(cmd *cobra.Command, _ []string) {
-	if len(cmd.Flags().Args()) != 2 {
+	if len(cmd.Flags().Args()) != 1 {
 		fmt.Println(cmd.Usage())
 		return
 	}
+
+	binlogPos, sqlPattern, sharding, err := extractBinlogPosSQLPattern(cmd)
+	if err != nil {
+		common.PrintLines("%s", err.Error())
+		return
+	}
+
+	var worker string
 	workers, err := common.GetWorkerArgs(cmd)
 	if err != nil {
 		common.PrintLines("%s", errors.ErrorStack(err))
 		return
 	}
-	if len(workers) != 1 {
-		common.PrintLines("want only one worker, but got %v", workers)
-		return
+	if sharding {
+		if len(workers) != 0 {
+			common.PrintLines("--sharding operator always takes effect on DDL lock's owner, specified workers %v arguments will be ignored", workers)
+		}
+	} else {
+		if len(workers) != 1 {
+			common.PrintLines("should only specify one worker, but got %v", workers)
+			return
+		}
+		worker = workers[0]
 	}
 
-	taskname := cmd.Flags().Arg(0)
-	if strings.TrimSpace(taskname) == "" {
-		common.PrintLines("taskname is empty")
+	taskName := cmd.Flags().Arg(0)
+	if strings.TrimSpace(taskName) == "" {
+		common.PrintLines("must specify the task-name")
 		return
-	}
-	binlogPos := cmd.Flags().Arg(1)
-	if err2 := common.CheckBinlogPos(binlogPos); err2 != nil {
-		common.PrintLines("check binlog pos err %v", err2)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -65,13 +79,15 @@ func sqlSkipFunc(cmd *cobra.Command, _ []string) {
 	cli := common.MasterClient()
 
 	resp, err := cli.HandleSQLs(ctx, &pb.HandleSQLsRequest{
-		Name:      taskname,
-		Op:        pb.SQLOp_SKIP,
-		BinlogPos: binlogPos,
-		Worker:    workers[0],
+		Name:       taskName,
+		Worker:     worker,
+		Op:         pb.SQLOp_SKIP,
+		BinlogPos:  binlogPos,
+		SqlPattern: sqlPattern,
+		Sharding:   sharding,
 	})
 	if err != nil {
-		common.PrintLines("can not skip sql:\n%v", errors.ErrorStack(err))
+		common.PrintLines("can not skip SQL:\n%v", errors.ErrorStack(err))
 		return
 	}
 

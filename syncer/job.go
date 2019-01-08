@@ -76,7 +76,6 @@ func (j *job) String() string {
 	return fmt.Sprintf("sql: %s, args: %v, key: %s, last_pos: %s, cmd_pos: %s, gtid:%v", j.sql, j.args, j.key, j.pos, j.cmdPos, j.gtidSet)
 }
 
-// TODO zxc: add RENAME TABLE support
 func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, pos, cmdPos mysql.Position, currentGtidSet gtid.Set) *job {
 	var gs gtid.Set
 	if currentGtidSet != nil {

@@ -287,18 +287,17 @@ func (w *Worker) QueryError(name string) []*pb.SubTaskError {
 }
 
 // HandleSQLs implements Handler.HandleSQLs.
-func (w *Worker) HandleSQLs(ctx context.Context, name string, op pb.SQLOp, pos string, args []string) error {
+func (w *Worker) HandleSQLs(ctx context.Context, req *pb.HandleSubTaskSQLsRequest) error {
 	if w.closed.Get() == closedTrue {
 		return errors.NotValidf("worker already closed")
 	}
 
-	st := w.findSubTask(name)
+	st := w.findSubTask(req.Name)
 	if st == nil {
-		return errors.NotFoundf("sub task with name %s", name)
+		return errors.NotFoundf("sub task with name %s", req.Name)
 	}
 
-	err := st.SetSyncerOperator(ctx, op, pos, args)
-	return errors.Trace(err)
+	return errors.Trace(st.SetSyncerSQLOperator(ctx, req))
 }
 
 // findSubTask finds sub task by name

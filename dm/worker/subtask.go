@@ -14,8 +14,6 @@
 package worker
 
 import (
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -28,7 +26,6 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/mydumper"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	"github.com/pingcap/tidb-enterprise-tools/syncer"
-	"github.com/siddontang/go-mysql/mysql"
 
 	// hack for glide update, remove it later
 	_ "github.com/pingcap/tidb-tools/pkg/check"
@@ -501,38 +498,19 @@ func (st *SubTask) SaveDDLLockInfo(info *pb.DDLLockInfo) error {
 	return nil
 }
 
-// SetSyncerOperator sets an operator to syncer.
-func (st *SubTask) SetSyncerOperator(ctx context.Context, op pb.SQLOp, pos string, args []string) error {
+// SetSyncerSQLOperator sets an operator to syncer.
+func (st *SubTask) SetSyncerSQLOperator(ctx context.Context, req *pb.HandleSubTaskSQLsRequest) error {
 	syncUnit, ok := st.currUnit.(*syncer.Syncer)
 	if !ok {
 		return errors.Errorf("such operation is only available for syncer, but now syncer is not running. current unit is %s", st.currUnit.Type())
 	}
 
 	// special handle for INJECT
-	if op == pb.SQLOp_INJECT {
-		return syncUnit.InjectSQLs(ctx, args)
+	if req.Op == pb.SQLOp_INJECT {
+		return syncUnit.InjectSQLs(ctx, req.Args)
 	}
 
-	// we have check len(parsed) == 2 in dmctl.
-	parsed := strings.Split(pos, ":")
-
-	posUint64, err := strconv.ParseUint(parsed[1], 10, 64)
-	if err != nil {
-		return errors.Errorf("invalid binlog position %v", pos)
-	}
-
-	binlogPos := mysql.Position{
-		Name: parsed[0],
-		Pos:  uint32(posUint64),
-	}
-
-	syncUnit.SetOperator(&syncer.Operator{
-		Pos:     binlogPos,
-		Op:      op,
-		Targets: args,
-	})
-
-	return nil
+	return errors.Trace(syncUnit.SetSQLOperator(req))
 }
 
 // ClearDDLLockInfo clears current DDLLockInfo

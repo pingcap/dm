@@ -106,6 +106,10 @@ func ExtractSQLsFromArgs(args []string) ([]string, error) {
 	for _, node := range nodes {
 		realSQLs = append(realSQLs, node.Text())
 	}
+	if len(realSQLs) == 0 {
+		return nil, errors.New("no valid SQLs")
+	}
+
 	return realSQLs, nil
 }
 
@@ -123,15 +127,4 @@ func IsDDL(sql string) (bool, error) {
 	default:
 		return false, nil
 	}
-}
-
-// CheckBinlogPos checks whether binlog pos is valid or not.
-func CheckBinlogPos(pos string) error {
-	if strings.TrimSpace(pos) == "" {
-		return errors.New("binlog is empty")
-	}
-	if len(strings.Split(pos, ":")) != 2 {
-		return errors.New("binlog_pos should in format of <binlog_file>:<pos>")
-	}
-	return nil
 }

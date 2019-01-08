@@ -407,6 +407,15 @@ func (k *ShardingGroupKeeper) Clear() {
 	k.groups = make(map[string]*ShardingGroup)
 }
 
+// ResetGroups resets group's sync status
+func (k *ShardingGroupKeeper) ResetGroups() {
+	k.RLock()
+	defer k.RUnlock()
+	for _, group := range k.groups {
+		group.Reset()
+	}
+}
+
 // LeaveGroup leaves group according to target schema, table and source IDs
 // LeaveGroup doesn't affect in syncing process
 func (k *ShardingGroupKeeper) LeaveGroup(targetSchema, targetTable string, sources []string) error {

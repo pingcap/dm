@@ -23,7 +23,7 @@ import (
 
 // Lock used for process synchronization
 type Lock struct {
-	sync.Mutex
+	sync.RWMutex
 	ID        string           // lock's ID, constructed from task's name and SQL statement
 	Task      string           // lock's corresponding task name
 	Owner     string           // lock's Owner, a dm-worker
@@ -82,19 +82,26 @@ func (l *Lock) TrySync(caller string, workers []string, ddls []string) (bool, in
 
 // IsSync returns whether the lock has synced
 func (l *Lock) IsSync() (bool, int) {
-	l.Lock()
-	defer l.Unlock()
+	l.RLock()
+	defer l.RUnlock()
 	return l.remain <= 0, l.remain
 }
 
 // Ready returns the dm-workers and whether it's ready synced
 func (l *Lock) Ready() map[string]bool {
-	l.Lock()
-	defer l.Unlock()
+	l.RLock()
+	defer l.RUnlock()
 	// do a copy
 	ret := make(map[string]bool)
 	for k, v := range l.ready {
 		ret[k] = v
 	}
 	return ret
+}
+
+// DDLs returns the DDLs in syncing
+func (l *Lock) DDLs() []string {
+	l.RLock()
+	defer l.RUnlock()
+	return l.ddls // never modify elem in slice, no copy
 }

@@ -89,7 +89,8 @@ message HandleSubTaskSQLsRequest {
     string name = 1; // sub task's name
     SQLOp op = 2; // operation type
     repeated string args = 3; // args for operation
-    string binlog_pos = 4; // binlog position(that's file:pos format)
+    string binlogPos = 4; // binlog-pos (that's file:pos format)
+    string sqlPattern = 5; // sql-pattern (for regexp, starts with ~)
 }
 
 message CommonWorkerResponse {

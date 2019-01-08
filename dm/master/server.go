@@ -32,6 +32,7 @@ import (
 
 	"github.com/pingcap/tidb-enterprise-tools/dm/common"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
+	"github.com/pingcap/tidb-enterprise-tools/dm/master/sql-operator"
 	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 )
 
@@ -59,16 +60,20 @@ type Server struct {
 	// DDL lock keeper
 	lockKeeper *LockKeeper
 
+	// SQL operator holder
+	sqlOperatorHolder *operator.Holder
+
 	closed sync2.AtomicBool
 }
 
 // NewServer creates a new Server
 func NewServer(cfg *Config) *Server {
 	server := Server{
-		cfg:           cfg,
-		workerClients: make(map[string]pb.WorkerClient),
-		taskWorkers:   make(map[string][]string),
-		lockKeeper:    NewLockKeeper(),
+		cfg:               cfg,
+		workerClients:     make(map[string]pb.WorkerClient),
+		taskWorkers:       make(map[string][]string),
+		lockKeeper:        NewLockKeeper(),
+		sqlOperatorHolder: operator.NewHolder(),
 	}
 	return &server
 }
@@ -111,20 +116,21 @@ func (s *Server) Start() error {
 		s.fetchWorkerDDLInfo(ctx)
 	}()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		timer := time.NewTicker(tryResolveInterval)
-		defer timer.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-timer.C:
-				s.tryResolveDDLLocks(ctx)
-			}
-		}
-	}()
+	// auto resolve DDL lock is not very useful, comment it
+	//wg.Add(1)
+	//go func() {
+	//	defer wg.Done()
+	//	timer := time.NewTicker(tryResolveInterval)
+	//	defer timer.Stop()
+	//	for {
+	//		select {
+	//		case <-ctx.Done():
+	//			return
+	//		case <-timer.C:
+	//			s.tryResolveDDLLocks(ctx)
+	//		}
+	//	}
+	//}()
 
 	// create a cmux
 	m := cmux.New(s.rootLis)
@@ -728,6 +734,24 @@ func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLL
 
 // HandleSQLs implements MasterServer.HandleSQLs
 func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb.HandleSQLsResponse, error) {
+	log.Infof("[server] receive HandleSQLs request %+v", req)
+
+	// save request for --sharding operation
+	if req.Sharding {
+		err := s.sqlOperatorHolder.Set(req)
+		if err != nil {
+			return &pb.HandleSQLsResponse{
+				Result: false,
+				Msg:    fmt.Sprintf("save request with --sharding error:\n%s", errors.ErrorStack(err)),
+			}, nil
+		}
+		log.Infof("[server] saved handle --sharding SQLs request %v", req)
+		return &pb.HandleSQLsResponse{
+			Result: true,
+			Msg:    "request with --sharding saved and will be sent to DDL lock's owner when resolving DDL lock",
+		}, nil
+	}
+
 	resp := &pb.HandleSQLsResponse{
 		Result: false,
 		Msg:    "",
@@ -740,10 +764,11 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb
 
 	// execute grpc call
 	subReq := &pb.HandleSubTaskSQLsRequest{
-		Name:      req.Name,
-		Op:        req.Op,
-		Args:      req.Args,
-		BinlogPos: req.BinlogPos,
+		Name:       req.Name,
+		Op:         req.Op,
+		Args:       req.Args,
+		BinlogPos:  req.BinlogPos,
+		SqlPattern: req.SqlPattern,
 	}
 	cli, ok := s.workerClients[req.Worker]
 	if !ok {
@@ -1319,6 +1344,26 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 	}
 	if _, ok := ready[owner]; !ok {
 		return nil, errors.Errorf("worker %s not waiting for DDL lock %s", owner, lockID)
+	}
+
+	// try send handle SQLs request to owner if exists
+	key, oper := s.sqlOperatorHolder.Get(lock.Task, lock.DDLs())
+	if oper != nil {
+		ownerReq := &pb.HandleSubTaskSQLsRequest{
+			Name:       oper.Req.Name,
+			Op:         oper.Req.Op,
+			Args:       oper.Req.Args,
+			BinlogPos:  oper.Req.BinlogPos,
+			SqlPattern: oper.Req.SqlPattern,
+		}
+		ownerResp, err := cli.HandleSQLs(ctx, ownerReq)
+		if err != nil {
+			return nil, errors.Annotatef(err, "send handle SQLs request %s to DDL lock %s owner %s fail", ownerReq, lockID, owner)
+		} else if !ownerResp.Result {
+			return nil, errors.Errorf("request DDL lock %s owner %s handle SQLs request %s fail %s", lockID, owner, ownerReq, ownerResp.Msg)
+		}
+		log.Infof("[server] sent handle --sharding DDL request %s to owner %s for lock %s", ownerReq, owner, lockID)
+		s.sqlOperatorHolder.Remove(lock.Task, key) // remove SQL operator after sent to owner
 	}
 
 	log.Infof("[server] requesting %s to execute DDL (with ID %s)", owner, lockID)

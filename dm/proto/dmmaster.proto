@@ -237,8 +237,10 @@ message HandleSQLsRequest {
     string name = 1; // sub task's name
     SQLOp op = 2; // operation type
     repeated string args = 3; // args for operation
-    string binlog_pos = 4; // binlog position(that's file:pos format)
+    string binlogPos = 4; // binlog-pos (that's file:pos format)
     string worker = 5; // worker
+    string sqlPattern = 6; // sql-pattern (for regexp, starts with ~)
+    bool sharding = 7; // whether are handing sharding DDL, which will only take effect on DDL lock's owner
 }
 
 message HandleSQLsResponse {
