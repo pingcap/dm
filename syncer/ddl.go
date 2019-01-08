@@ -20,6 +20,7 @@ import (
 	"github.com/ngaut/log"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
+	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
@@ -27,14 +28,14 @@ import (
 
 var (
 	// ErrDMLStatementFound defines an error which means we found unexpected dml statement found in query event.
-	ErrDMLStatementFound = errors.New("unexpected dml statement found in query event")
+	ErrDMLStatementFound = errors.New("only support ROW format binlog, unexpected DML statement found in query event")
 	// IncompatibleDDLFormat is for incompatible ddl
 	IncompatibleDDLFormat = `encountered incompatible DDL in TiDB: %s
 	please confirm your DDL statement is correct and needed.
 	for TiDB compatible DDL, please see the docs:
 	  English version: https://github.com/pingcap/docs/blob/master/sql/ddl.md
 	  Chinese version: https://github.com/pingcap/docs-cn/blob/master/sql/ddl.md
-	if the DDL is not needed, you can use dm-ctl to skip it, otherwise u also can use dm-ctl to replace it.
+	if the DDL is not needed, you can use a filter rule with "*" schema-pattern to ignore it.
 	 `
 )
 
@@ -94,6 +95,22 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 			isDDL:  true,
 		}, nil
 	case ast.DMLNode:
+		// if DML can be ignored, we do not report an error
+		dml := stmt.(ast.DMLNode)
+		schema2, table, err2 := tableNameForDML(dml)
+		if err2 == nil {
+			if len(schema2) > 0 {
+				schema = schema2
+			}
+			ignore, err2 := s.skipDMLEvent(schema, table, replication.QUERY_EVENT)
+			if err2 == nil && ignore {
+				return parseDDLResult{
+					stmt:   nil,
+					ignore: true,
+					isDDL:  false,
+				}, nil
+			}
+		}
 		return parseDDLResult{
 			stmt:   nil,
 			ignore: false,

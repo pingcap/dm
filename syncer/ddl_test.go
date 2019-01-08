@@ -19,6 +19,7 @@ import (
 
 	. "github.com/pingcap/check"
 
+	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )
@@ -262,4 +263,78 @@ func (s *testSyncerSuite) TestCommentQuote(c *C) {
 	_, err = parser.ParseOneStmt(getSQL, "", "")
 	c.Assert(err, IsNil)
 	c.Assert(getSQL, Equals, expectedSQL)
+}
+
+func (s *testSyncerSuite) TestIgnoreDMLInQuery(c *C) {
+	cases := []struct {
+		sql      string
+		schema   string
+		ignore   bool
+		isDDL    bool
+		hasError bool
+	}{
+		{
+			sql:      "CREATE TABLE do_db.do_table (c1 INT)",
+			schema:   "",
+			ignore:   false,
+			isDDL:    true,
+			hasError: false,
+		},
+		{
+			sql:      "INSERT INTO do_db.do_table VALUES (1)",
+			schema:   "",
+			ignore:   false,
+			isDDL:    false,
+			hasError: true,
+		},
+		{
+			sql:      "INSERT INTO ignore_db.ignore_table VALUES (1)",
+			schema:   "",
+			ignore:   true,
+			isDDL:    false,
+			hasError: false,
+		},
+		{
+			sql:      "UPDATE `ignore_db`.`ignore_table` SET c1=2 WHERE c1=1",
+			schema:   "ignore_db",
+			ignore:   true,
+			isDDL:    false,
+			hasError: false,
+		},
+		{
+			sql:      "DELETE FROM `ignore_table` WHERE c1=2",
+			schema:   "ignore_db",
+			ignore:   true,
+			isDDL:    false,
+			hasError: false,
+		},
+		{
+			sql:      "SELECT * FROM ignore_db.ignore_table",
+			schema:   "",
+			ignore:   false,
+			isDDL:    false,
+			hasError: true,
+		},
+	}
+
+	cfg := &config.SubTaskConfig{
+		BWList: &filter.Rules{
+			IgnoreDBs: []string{"ignore_db"},
+		},
+	}
+	syncer := NewSyncer(cfg)
+
+	parser, err := utils.GetParser(s.db, false)
+	c.Assert(err, IsNil)
+
+	for _, cs := range cases {
+		pr, err := syncer.parseDDLSQL(cs.sql, parser, cs.schema)
+		if cs.hasError {
+			c.Assert(err, NotNil)
+		} else {
+			c.Assert(err, IsNil)
+		}
+		c.Assert(pr.ignore, Equals, cs.ignore)
+		c.Assert(pr.isDDL, Equals, cs.isDDL)
+	}
 }
