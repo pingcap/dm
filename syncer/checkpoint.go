@@ -29,10 +29,11 @@ import (
 
 /*
 variants about checkpoint:
-1. use position of rotate/ddl/xid event from any stream (global and sharding streaming) to update global/table checkpoint
-2. position of global/table checkpoint increases monotonically
-3. global checkpoint <= min checkpoint of all unsolved sharding table
-4. table checkpoint >= global checkpoint
+1. update global checkpoint for DDL/XID event from any stream (global and sharding streaming)
+2. update table checkpoint for DDL/DML event from any stream (global and sharding streaming)
+3. position of global/table checkpoint increases monotonically
+4. global checkpoint <= min checkpoint of all unsolved sharding tables
+5. max checkpoint of all tables >= global checkpoint
 */
 
 var (
@@ -269,8 +270,8 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, pos
 		panic(fmt.Sprintf("table checkpoint %+v less than global checkpoint %+v", pos, cp.globalPoint))
 	}
 
-	// we only save table point while we meet ddl now, there wouldn't be many logs
-	log.Infof("save checkpoint %s for table %s.%s", pos, sourceSchema, sourceTable)
+	// we save table checkpoint while we meet DDL or DML
+	log.Debugf("save checkpoint %s for table %s.%s", pos, sourceSchema, sourceTable)
 	mSchema, ok := cp.points[sourceSchema]
 	if !ok {
 		mSchema = make(map[string]*binlogPoint)

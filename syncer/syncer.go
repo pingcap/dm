@@ -28,6 +28,7 @@ import (
 	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	sm "github.com/pingcap/tidb-enterprise-tools/syncer/safe-mode"
 	"github.com/pingcap/tidb-enterprise-tools/syncer/sql-operator"
 )
 
@@ -59,15 +60,6 @@ const (
 	RemoteBinlog BinlogType = iota + 1
 	LocalBinlog
 )
-
-// safeMode makes syncer reentrant.
-// we make each operator reentrant to make syncer reentrant.
-// `replace` and `delete` are naturally reentrant.
-// use `delete`+`replace` to represent `update` can make `update`  reentrant.
-// but there are no ways to make `update` idempotent,
-// if we start syncer at an early position, database must bear a period of inconsistent state,
-// it's eventual consistency.
-var safeMode sync2.AtomicBool
 
 // Syncer can sync your MySQL data to another MySQL database.
 type Syncer struct {
@@ -618,7 +610,8 @@ func (s *Syncer) addJob(job *job) error {
 		s.c.reset()
 	}
 
-	if job.tp == ddl {
+	switch job.tp {
+	case ddl:
 		// only save checkpoint for DDL and XID (see above)
 		s.saveGlobalPoint(job.pos)
 		if len(job.sourceSchema) > 0 {
@@ -626,6 +619,11 @@ func (s *Syncer) addJob(job *job) error {
 		}
 		// reset sharding group after checkpoint saved
 		s.resetShardingGroup(job.targetSchema, job.targetTable)
+	case insert, update, del:
+		// save job's current pos for DML events
+		if len(job.sourceSchema) > 0 {
+			s.checkpoint.SaveTablePoint(job.sourceSchema, job.sourceTable, job.currentPos)
+		}
 	}
 
 	if wait {
@@ -756,7 +754,7 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 				if err != nil {
 					s.appendExecErrors(&ExecErrorContext{
 						err:  err,
-						pos:  sqlJob.cmdPos,
+						pos:  sqlJob.currentPos,
 						jobs: fmt.Sprintf("%v", sqlJob.ddls),
 					})
 				}
@@ -891,11 +889,19 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 	}()
 
-	s.enableSafeModeInitializationPhase(ctx)
-
 	s.start = time.Now()
 	s.lastTime = s.start
 	tryReSync := true
+
+	// safeMode makes syncer reentrant.
+	// we make each operator reentrant to make syncer reentrant.
+	// `replace` and `delete` are naturally reentrant.
+	// use `delete`+`replace` to represent `update` can make `update`  reentrant.
+	// but there are no ways to make `update` idempotent,
+	// if we start syncer at an early position, database must bear a period of inconsistent state,
+	// it's eventual consistency.
+	safeMode := sm.NewSafeMode()
+	s.enableSafeModeInitializationPhase(ctx, safeMode)
 
 	// syncing progress with sharding DDL group
 	// 1. use the global streamer to sync regular binlog events
@@ -1090,7 +1096,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 
 			if !s.checkpoint.IsNewerTablePoint(string(ev.Table.Schema), string(ev.Table.Table), currentPos) {
-				log.Debugf("[syncer] skip obsolete row event that is old than checkpoint of table %s.%s", string(ev.Table.Schema), string(ev.Table.Table))
+				log.Debugf("[syncer] ignore obsolete row event in %s that is old than checkpoint of table %s.%s", currentPos, string(ev.Table.Schema), string(ev.Table.Table))
 				continue
 			}
 
@@ -1173,7 +1179,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 			case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
 				if !applied {
-					sqls, keys, args, err = genUpdateSQLs(table.schema, table.name, rows, table.columns, table.indexColumns)
+					sqls, keys, args, err = genUpdateSQLs(table.schema, table.name, rows, table.columns, table.indexColumns, safeMode.Enable())
 					if err != nil {
 						return errors.Errorf("gen update sqls failed: %v, schema: %s, table: %s", err, table.schema, table.name)
 					}
@@ -1439,6 +1445,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			if needShardingHandle {
 				log.Infof("[syncer] query event %v for source %v is in sharding, synced: %v, remain: %d", startPos, source, synced, remain)
+				err = safeMode.IncrForTable(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try enable safe-mode when starting syncing for sharding group
+				if err != nil {
+					return errors.Trace(err)
+				}
+
 				// save checkpoint in memory, don't worry, if error occurred, we can rollback it
 				// for non-last sharding DDL's table, this checkpoint will be used to skip binlog event when re-syncing
 				// NOTE: when last sharding DDL executed, all this checkpoints will be flushed in the same txn
@@ -1447,7 +1458,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					log.Infof("[syncer] source %s is in sharding DDL syncing, ignore DDL %v", source, startPos)
 					continue
 				}
+
 				log.Infof("[syncer] source %s sharding group synced in pos %v", source, startPos)
+				err = safeMode.DescForTable(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try disable safe-mode after sharding group synced
+				if err != nil {
+					return errors.Trace(err)
+				}
 				// maybe multi-groups' sharding DDL synced in this for-loop (one query-event, multi tables)
 				if cap(shardingReSyncCh) < len(sqls) {
 					shardingReSyncCh = make(chan *ShardingReSync, len(sqls))
@@ -1522,11 +1538,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				if shardingReSync.currPos.Compare(shardingReSync.latestPos) >= 0 {
 					log.Infof("[syncer] sharding group %v re-syncing completed", shardingReSync)
 					closeShardingSyncer()
-				} else {
-					// in re-syncing, ignore xid event
-					log.Debugf("[syncer] skip xid event when re-syncing sharding group %v", shardingReSync)
+					continue
 				}
-				continue
 			}
 
 			latestOp = xid
@@ -1535,7 +1548,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			lastPos.Pos = e.Header.LogPos // update lastPos
 
 			job := newXIDJob(currentPos, currentPos, nil)
-			s.addJob(job)
+			err = s.addJob(job)
+			if err != nil {
+				return errors.Trace(err)
+			}
 		}
 	}
 }

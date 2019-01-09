@@ -16,8 +16,9 @@ package syncer
 import (
 	"fmt"
 
-	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
 	"github.com/siddontang/go-mysql/mysql"
+
+	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
 )
 
 type opType byte
@@ -65,7 +66,7 @@ type job struct {
 	key          string
 	retry        bool
 	pos          mysql.Position
-	cmdPos       mysql.Position // exactly binlog position of current SQL
+	currentPos   mysql.Position // exactly binlog position of current SQL
 	gtidSet      gtid.Set
 	ddlExecItem  *DDLExecItem
 	ddls         []string
@@ -73,7 +74,7 @@ type job struct {
 
 func (j *job) String() string {
 	// only output some important information, maybe useful in execution.
-	return fmt.Sprintf("sql: %s, args: %v, key: %s, last_pos: %s, cmd_pos: %s, gtid:%v", j.sql, j.args, j.key, j.pos, j.cmdPos, j.gtidSet)
+	return fmt.Sprintf("sql: %s, args: %v, key: %s, last_pos: %s, current_pos: %s, gtid:%v", j.sql, j.args, j.key, j.pos, j.currentPos, j.gtidSet)
 }
 
 func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, pos, cmdPos mysql.Position, currentGtidSet gtid.Set) *job {
@@ -91,7 +92,7 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 		args:         args,
 		key:          key,
 		pos:          pos,
-		cmdPos:       cmdPos,
+		currentPos:   cmdPos,
 		gtidSet:      gs,
 		retry:        true,
 	}
@@ -106,7 +107,7 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, pos, cmdPos mysql.Positi
 		tp:          ddl,
 		ddls:        ddls,
 		pos:         pos,
-		cmdPos:      cmdPos,
+		currentPos:  cmdPos,
 		gtidSet:     gs,
 		ddlExecItem: ddlExecItem,
 	}
@@ -127,10 +128,10 @@ func newXIDJob(pos, cmdPos mysql.Position, currentGtidSet gtid.Set) *job {
 		gs = currentGtidSet.Clone()
 	}
 	return &job{
-		tp:      xid,
-		pos:     pos,
-		cmdPos:  cmdPos,
-		gtidSet: gs,
+		tp:         xid,
+		pos:        pos,
+		currentPos: cmdPos,
+		gtidSet:    gs,
 	}
 }
 

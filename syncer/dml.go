@@ -50,7 +50,7 @@ func genInsertSQLs(schema string, table string, dataSeq [][]interface{}, columns
 	return sqls, keys, values, nil
 }
 
-func genUpdateSQLs(schema string, table string, data [][]interface{}, columns []*column, indexColumns map[string][]*column) ([]string, [][]string, [][]interface{}, error) {
+func genUpdateSQLs(schema string, table string, data [][]interface{}, columns []*column, indexColumns map[string][]*column, safeMode bool) ([]string, [][]string, [][]interface{}, error) {
 	sqls := make([]string, 0, len(data)/2)
 	keys := make([][]string, 0, len(data)/2)
 	values := make([][]interface{}, 0, len(data)/2)
@@ -86,7 +86,7 @@ func genUpdateSQLs(schema string, table string, data [][]interface{}, columns []
 		ks := genMultipleKeys(columns, oldValues, indexColumns)
 		ks = append(ks, genMultipleKeys(columns, changedValues, indexColumns)...)
 
-		if safeMode.Get() {
+		if safeMode {
 			// generate delete sql from old data
 			sql, value := genDeleteSQL(schema, table, oldValues, columns, defaultIndexColumns)
 			sqls = append(sqls, sql)
