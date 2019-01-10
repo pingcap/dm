@@ -36,7 +36,11 @@ service Worker {
 
     rpc UpdateRelayConfig (UpdateRelayRequest) returns (CommonWorkerResponse) {}
 
+
     rpc QueryWorkerConfig (QueryWorkerConfigRequest) returns (QueryWorkerConfigResponse) {}
+
+    rpc MigrateRelay(MigrateRelayRequest) returns (
+    CommonWorkerResponse) {}
 }
 
 message StartSubTaskRequest {
@@ -52,6 +56,11 @@ enum TaskOp {
 
 message UpdateRelayRequest {
     string content = 1;
+}
+
+message MigrateRelayRequest {
+    string BinlogName = 1;
+    uint32 BinlogPos = 2;
 }
 
 message OperateSubTaskRequest {

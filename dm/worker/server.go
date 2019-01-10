@@ -450,3 +450,20 @@ func (s *Server) QueryWorkerConfig(ctx context.Context, req *pb.QueryWorkerConfi
 	resp.SourceID = workerCfg.SourceID
 	return resp, nil
 }
+
+// MigrateRelay migrate relay to original binlog pos
+func (s *Server) MigrateRelay(ctx context.Context, req *pb.MigrateRelayRequest) (*pb.CommonWorkerResponse, error) {
+	log.Infof("[server] receive MigrateRelay request %+v", req)
+
+	resp := &pb.CommonWorkerResponse{
+		Result: true,
+		Msg:    "",
+	}
+	err := s.worker.MigrateRelay(ctx, req.BinlogName, req.BinlogPos)
+	if err != nil {
+		resp.Result = false
+		resp.Msg = errors.ErrorStack(err)
+		log.Errorf("[worker] %v MigrateRelay error %v", req, errors.ErrorStack(err))
+	}
+	return resp, nil
+}

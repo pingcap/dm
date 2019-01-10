@@ -40,6 +40,16 @@ service Master {
     // used by dmctl, to force refresh the task -> workers mapper
     // it should be used rarely only when task -> workers mapper corrupted
     rpc RefreshWorkerTasks (RefreshWorkerTasksRequest) returns (RefreshWorkerTasksResponse) {}
+
+    // MigrateRelay request migrate old dm-woker to a new one. 
+    rpc MigrateWorkerRelay(MigrateWorkerRelayRequest) returns (
+    CommonWorkerResponse) {}
+}
+
+message MigrateWorkerRelayRequest {
+    string BinlogName = 1;
+    uint32 BinlogPos = 2;
+    string worker = 3;
 }
 
 message UpdateWorkerRelayConfigRequest {

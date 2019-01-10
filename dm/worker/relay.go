@@ -288,7 +288,15 @@ func (h *RelayHolder) Update(ctx context.Context, cfg *Config) error {
 	return nil
 }
 
+
 // EarliestActiveRelayLog implements RelayOperator.EarliestActiveRelayLog
 func (h *RelayHolder) EarliestActiveRelayLog() *streamer.RelayLogInfo {
 	return h.relay.ActiveRelayLog()
+}
+
+// Migrate reset binlog name and binlog pos for relay unit
+func (h *RelayHolder) Migrate(ctx context.Context, binlogName string, binlogPos uint32) error {
+	h.Lock()
+	defer h.Unlock()
+	return h.relay.Migrate(ctx, binlogName, binlogPos)
 }

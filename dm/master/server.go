@@ -1639,7 +1639,7 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 	var (
 		wg          sync.WaitGroup
 		workerMutex sync.Mutex
-		workerCfgs  = make(map[string]config.DBConfig)
+		workerCfgs= make(map[string]config.DBConfig)
 		err         error
 	)
 	handErr := func(err error) {
@@ -1711,3 +1711,29 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 
 	return workerCfgs, errors.Trace(err)
 }
+
+// MigrateRelay migrate dm-woker relay unit
+func (s *Server) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRelayRequest) (*pb.CommonWorkerResponse, error) {
+	worker := req.Worker
+	binlogPos := req.BinlogPos
+	binlogName := req.BinlogName
+	cli, ok := s.workerClients[worker]
+	if !ok {
+		return &pb.CommonWorkerResponse{
+			Result: false,
+			Worker: worker,
+			Msg:    fmt.Sprintf("worker %s relevant worker-client not found", worker),
+		}, nil
+	}
+	log.Infof("[server] try to migrate %s relay", worker)
+	workerResp, err := cli.MigrateRelay(ctx, &pb.MigrateRelayRequest{BinlogName: binlogName, BinlogPos: binlogPos})
+	if err != nil {
+		return &pb.CommonWorkerResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}, nil
+	}
+	return workerResp, nil
+}
+
+

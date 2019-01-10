@@ -2,6 +2,8 @@ module github.com/pingcap/tidb-enterprise-tools
 
 require (
 	github.com/BurntSushi/toml v0.3.1
+	github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc // indirect
+	github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf // indirect
 	github.com/chzyer/logex v1.1.10 // indirect
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e
 	github.com/chzyer/test v0.0.0-20180213035817-a1ea475d72b1 // indirect
@@ -20,7 +22,7 @@ require (
 	github.com/pingcap/tidb-tools v2.1.3-0.20190104033906-883b07a04a73+incompatible
 	github.com/pingcap/tipb v0.0.0-20181126132056-a7fd2aaa9719 // indirect
 	github.com/prometheus/client_golang v0.9.1
-	github.com/prometheus/common v0.0.0-20181126121408-4724e9255275 // indirect
+	github.com/prometheus/common v0.0.0-20181126121408-4724e9255275
 	github.com/prometheus/procfs v0.0.0-20181204211112-1dc9a6cbc91a // indirect
 	github.com/satori/go.uuid v1.2.0
 	github.com/shopspring/decimal v0.0.0-20180709203117-cd690d0c9e24 // indirect
@@ -33,6 +35,7 @@ require (
 	golang.org/x/net v0.0.0-20181201002055-351d144fa1fc
 	golang.org/x/sys v0.0.0-20180909124046-d0be0721c37e
 	google.golang.org/grpc v1.17.0
+	gopkg.in/alecthomas/kingpin.v2 v2.2.6 // indirect
 	gopkg.in/mgo.v2 v2.0.0-20180705113604-9856a29383ce // indirect
 	gopkg.in/yaml.v2 v2.2.2
 )

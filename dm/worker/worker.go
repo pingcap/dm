@@ -628,3 +628,23 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 
 	return nil
 }
+
+// MigrateRelay migrate relay unit
+func (w *Worker) MigrateRelay(ctx context.Context, binlogName string, binlogPos uint32) error {
+	w.Lock()
+	defer w.Unlock()
+	stage := w.relayHolder.Stage()
+	if stage == pb.Stage_Running {
+		err := w.relayHolder.Operate(ctx, &pb.OperateRelayRequest{Op: pb.RelayOp_PauseRelay})
+		if err != nil {
+			return errors.Trace(err)
+		}
+	} else if stage == pb.Stage_Stopped {
+		return errors.New("relay unit has stopped, can not be migrated.")
+	}
+	err := w.relayHolder.Migrate(ctx, binlogName, binlogPos)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
+}
