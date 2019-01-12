@@ -1639,7 +1639,7 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 	var (
 		wg          sync.WaitGroup
 		workerMutex sync.Mutex
-		workerCfgs= make(map[string]config.DBConfig)
+		workerCfgs  = make(map[string]config.DBConfig)
 		err         error
 	)
 	handErr := func(err error) {
@@ -1712,7 +1712,7 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 	return workerCfgs, errors.Trace(err)
 }
 
-// MigrateRelay migrate dm-woker relay unit
+// MigrateWorkerRelay migrates dm-woker relay unit
 func (s *Server) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRelayRequest) (*pb.CommonWorkerResponse, error) {
 	worker := req.Worker
 	binlogPos := req.BinlogPos
@@ -1735,5 +1735,3 @@ func (s *Server) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRe
 	}
 	return workerResp, nil
 }
-
-

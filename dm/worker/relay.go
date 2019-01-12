@@ -288,7 +288,6 @@ func (h *RelayHolder) Update(ctx context.Context, cfg *Config) error {
 	return nil
 }
 
-
 // EarliestActiveRelayLog implements RelayOperator.EarliestActiveRelayLog
 func (h *RelayHolder) EarliestActiveRelayLog() *streamer.RelayLogInfo {
 	return h.relay.ActiveRelayLog()

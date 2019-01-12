@@ -640,7 +640,7 @@ func (w *Worker) MigrateRelay(ctx context.Context, binlogName string, binlogPos 
 			return errors.Trace(err)
 		}
 	} else if stage == pb.Stage_Stopped {
-		return errors.New("relay unit has stopped, can not be migrated.")
+		return errors.New("relay unit has stopped, can not be migrated")
 	}
 	err := w.relayHolder.Migrate(ctx, binlogName, binlogPos)
 	if err != nil {
