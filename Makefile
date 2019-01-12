@@ -61,9 +61,9 @@ errcheck:
 	@ errcheck -blank $(PACKAGES) | grep -v "_test\.go" | awk '{print} END{if(NR>0) {exit 1}}'
 
 lint:
-	GO111MODULE=off go get github.com/golang/lint/golint
+	@ GO111MODULE=off go build -o bin/golint github.com/golang/lint/golint
 	@echo "golint"
-	@ golint -set_exit_status $(PACKAGES)
+	@ ./bin/golint -set_exit_status $(PACKAGES)
 
 vet:
 	@echo "vet"
