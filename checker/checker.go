@@ -88,14 +88,7 @@ func (c *Checker) Init() error {
 			User:     instance.cfg.From.User,
 			Password: instance.cfg.From.Password,
 		}
-		// NOTE: now, we use checker in dmctl, so we need to decrypt the password
-		if len(instance.sourceDBinfo.Password) > 0 {
-			pswd, err2 := utils.Decrypt(instance.sourceDBinfo.Password)
-			if err2 != nil {
-				return errors.Annotatef(err2, "can not decrypt password %s", instance.sourceDBinfo.Password)
-			}
-			instance.sourceDBinfo.Password = pswd
-		}
+
 		instance.sourceDB, err = dbutil.OpenDB(*instance.sourceDBinfo)
 		if err != nil {
 			return errors.Trace(err)

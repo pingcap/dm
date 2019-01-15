@@ -14,7 +14,6 @@
 package worker
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -439,7 +438,7 @@ func (s *Server) QueryWorkerConfig(ctx context.Context, req *pb.QueryWorkerConfi
 		return resp, nil
 	}
 
-	rawConfig, err := json.Marshal(workerCfg.From)
+	rawConfig, err := workerCfg.From.Toml()
 	if err != nil {
 		resp.Result = false
 		resp.Msg = errors.ErrorStack(err)

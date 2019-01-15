@@ -42,8 +42,10 @@ service Master {
     rpc RefreshWorkerTasks (RefreshWorkerTasksRequest) returns (RefreshWorkerTasksResponse) {}
 
     // MigrateRelay request migrate old dm-woker to a new one. 
-    rpc MigrateWorkerRelay(MigrateWorkerRelayRequest) returns (
-    CommonWorkerResponse) {}
+    rpc MigrateWorkerRelay(MigrateWorkerRelayRequest) returns (CommonWorkerResponse) {}
+
+    // CheckTask checks legality of task configuration
+    rpc CheckTask(CheckTaskRequest) returns (CheckTaskResponse) {}
 }
 
 message MigrateWorkerRelayRequest {
@@ -277,4 +279,13 @@ message PurgeWorkerRelayResponse {
     bool result = 1;
     string msg = 2;
     repeated CommonWorkerResponse workers = 3;
+}
+
+message CheckTaskRequest {
+    string task = 1; // task's configuration, yaml format
+}
+
+message CheckTaskResponse {
+    bool result = 1;
+    string msg = 2;
 }

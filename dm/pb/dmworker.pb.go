@@ -54,7 +54,7 @@ func (x TaskOp) String() string {
 	return proto.EnumName(TaskOp_name, int32(x))
 }
 func (TaskOp) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{0}
+	return fileDescriptor_dmworker_1337b13408118623, []int{0}
 }
 
 type SQLOp int32
@@ -80,7 +80,7 @@ func (x SQLOp) String() string {
 	return proto.EnumName(SQLOp_name, int32(x))
 }
 func (SQLOp) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{1}
+	return fileDescriptor_dmworker_1337b13408118623, []int{1}
 }
 
 // Stage represents current stage for a (sub) task
@@ -137,7 +137,7 @@ func (x Stage) String() string {
 	return proto.EnumName(Stage_name, int32(x))
 }
 func (Stage) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{2}
+	return fileDescriptor_dmworker_1337b13408118623, []int{2}
 }
 
 // UnitType represents the dm unit's type
@@ -173,7 +173,7 @@ func (x UnitType) String() string {
 	return proto.EnumName(UnitType_name, int32(x))
 }
 func (UnitType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{3}
+	return fileDescriptor_dmworker_1337b13408118623, []int{3}
 }
 
 // ErrorType represents type of error produced by a dm unit
@@ -201,7 +201,7 @@ func (x ErrorType) String() string {
 	return proto.EnumName(ErrorType_name, int32(x))
 }
 func (ErrorType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{4}
+	return fileDescriptor_dmworker_1337b13408118623, []int{4}
 }
 
 // RelayOp differs from TaskOp
@@ -231,7 +231,7 @@ func (x RelayOp) String() string {
 	return proto.EnumName(RelayOp_name, int32(x))
 }
 func (RelayOp) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{5}
+	return fileDescriptor_dmworker_1337b13408118623, []int{5}
 }
 
 type StartSubTaskRequest struct {
@@ -245,7 +245,7 @@ func (m *StartSubTaskRequest) Reset()         { *m = StartSubTaskRequest{} }
 func (m *StartSubTaskRequest) String() string { return proto.CompactTextString(m) }
 func (*StartSubTaskRequest) ProtoMessage()    {}
 func (*StartSubTaskRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{0}
+	return fileDescriptor_dmworker_1337b13408118623, []int{0}
 }
 func (m *StartSubTaskRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -292,7 +292,7 @@ func (m *UpdateRelayRequest) Reset()         { *m = UpdateRelayRequest{} }
 func (m *UpdateRelayRequest) String() string { return proto.CompactTextString(m) }
 func (*UpdateRelayRequest) ProtoMessage()    {}
 func (*UpdateRelayRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{1}
+	return fileDescriptor_dmworker_1337b13408118623, []int{1}
 }
 func (m *UpdateRelayRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -340,7 +340,7 @@ func (m *MigrateRelayRequest) Reset()         { *m = MigrateRelayRequest{} }
 func (m *MigrateRelayRequest) String() string { return proto.CompactTextString(m) }
 func (*MigrateRelayRequest) ProtoMessage()    {}
 func (*MigrateRelayRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{2}
+	return fileDescriptor_dmworker_1337b13408118623, []int{2}
 }
 func (m *MigrateRelayRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -395,7 +395,7 @@ func (m *OperateSubTaskRequest) Reset()         { *m = OperateSubTaskRequest{} }
 func (m *OperateSubTaskRequest) String() string { return proto.CompactTextString(m) }
 func (*OperateSubTaskRequest) ProtoMessage()    {}
 func (*OperateSubTaskRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{3}
+	return fileDescriptor_dmworker_1337b13408118623, []int{3}
 }
 func (m *OperateSubTaskRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -452,7 +452,7 @@ func (m *OperateSubTaskResponse) Reset()         { *m = OperateSubTaskResponse{}
 func (m *OperateSubTaskResponse) String() string { return proto.CompactTextString(m) }
 func (*OperateSubTaskResponse) ProtoMessage()    {}
 func (*OperateSubTaskResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{4}
+	return fileDescriptor_dmworker_1337b13408118623, []int{4}
 }
 func (m *OperateSubTaskResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -520,7 +520,7 @@ func (m *UpdateSubTaskRequest) Reset()         { *m = UpdateSubTaskRequest{} }
 func (m *UpdateSubTaskRequest) String() string { return proto.CompactTextString(m) }
 func (*UpdateSubTaskRequest) ProtoMessage()    {}
 func (*UpdateSubTaskRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{5}
+	return fileDescriptor_dmworker_1337b13408118623, []int{5}
 }
 func (m *UpdateSubTaskRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -567,7 +567,7 @@ func (m *QueryStatusRequest) Reset()         { *m = QueryStatusRequest{} }
 func (m *QueryStatusRequest) String() string { return proto.CompactTextString(m) }
 func (*QueryStatusRequest) ProtoMessage()    {}
 func (*QueryStatusRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{6}
+	return fileDescriptor_dmworker_1337b13408118623, []int{6}
 }
 func (m *QueryStatusRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -614,7 +614,7 @@ func (m *QueryErrorRequest) Reset()         { *m = QueryErrorRequest{} }
 func (m *QueryErrorRequest) String() string { return proto.CompactTextString(m) }
 func (*QueryErrorRequest) ProtoMessage()    {}
 func (*QueryErrorRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{7}
+	return fileDescriptor_dmworker_1337b13408118623, []int{7}
 }
 func (m *QueryErrorRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -654,7 +654,7 @@ func (m *QueryErrorRequest) GetName() string {
 type HandleSubTaskSQLsRequest struct {
 	Name                 string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Op                   SQLOp    `protobuf:"varint,2,opt,name=op,proto3,enum=pb.SQLOp" json:"op,omitempty"`
-	Args                 []string `protobuf:"bytes,3,rep,name=args" json:"args,omitempty"`
+	Args                 []string `protobuf:"bytes,3,rep,name=args,proto3" json:"args,omitempty"`
 	BinlogPos            string   `protobuf:"bytes,4,opt,name=binlogPos,proto3" json:"binlogPos,omitempty"`
 	SqlPattern           string   `protobuf:"bytes,5,opt,name=sqlPattern,proto3" json:"sqlPattern,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -666,7 +666,7 @@ func (m *HandleSubTaskSQLsRequest) Reset()         { *m = HandleSubTaskSQLsReque
 func (m *HandleSubTaskSQLsRequest) String() string { return proto.CompactTextString(m) }
 func (*HandleSubTaskSQLsRequest) ProtoMessage()    {}
 func (*HandleSubTaskSQLsRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{8}
+	return fileDescriptor_dmworker_1337b13408118623, []int{8}
 }
 func (m *HandleSubTaskSQLsRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -743,7 +743,7 @@ func (m *CommonWorkerResponse) Reset()         { *m = CommonWorkerResponse{} }
 func (m *CommonWorkerResponse) String() string { return proto.CompactTextString(m) }
 func (*CommonWorkerResponse) ProtoMessage()    {}
 func (*CommonWorkerResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{9}
+	return fileDescriptor_dmworker_1337b13408118623, []int{9}
 }
 func (m *CommonWorkerResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -799,8 +799,8 @@ type QueryStatusResponse struct {
 	Result               bool             `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
 	Worker               string           `protobuf:"bytes,2,opt,name=worker,proto3" json:"worker,omitempty"`
 	Msg                  string           `protobuf:"bytes,3,opt,name=msg,proto3" json:"msg,omitempty"`
-	SubTaskStatus        []*SubTaskStatus `protobuf:"bytes,4,rep,name=subTaskStatus" json:"subTaskStatus,omitempty"`
-	RelayStatus          *RelayStatus     `protobuf:"bytes,5,opt,name=relayStatus" json:"relayStatus,omitempty"`
+	SubTaskStatus        []*SubTaskStatus `protobuf:"bytes,4,rep,name=subTaskStatus,proto3" json:"subTaskStatus,omitempty"`
+	RelayStatus          *RelayStatus     `protobuf:"bytes,5,opt,name=relayStatus,proto3" json:"relayStatus,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}         `json:"-"`
 	XXX_unrecognized     []byte           `json:"-"`
 	XXX_sizecache        int32            `json:"-"`
@@ -810,7 +810,7 @@ func (m *QueryStatusResponse) Reset()         { *m = QueryStatusResponse{} }
 func (m *QueryStatusResponse) String() string { return proto.CompactTextString(m) }
 func (*QueryStatusResponse) ProtoMessage()    {}
 func (*QueryStatusResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{10}
+	return fileDescriptor_dmworker_1337b13408118623, []int{10}
 }
 func (m *QueryStatusResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -879,8 +879,8 @@ type QueryErrorResponse struct {
 	Result               bool            `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
 	Worker               string          `protobuf:"bytes,2,opt,name=worker,proto3" json:"worker,omitempty"`
 	Msg                  string          `protobuf:"bytes,3,opt,name=msg,proto3" json:"msg,omitempty"`
-	SubTaskError         []*SubTaskError `protobuf:"bytes,4,rep,name=subTaskError" json:"subTaskError,omitempty"`
-	RelayError           *RelayError     `protobuf:"bytes,5,opt,name=RelayError" json:"RelayError,omitempty"`
+	SubTaskError         []*SubTaskError `protobuf:"bytes,4,rep,name=subTaskError,proto3" json:"subTaskError,omitempty"`
+	RelayError           *RelayError     `protobuf:"bytes,5,opt,name=RelayError,proto3" json:"RelayError,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -890,7 +890,7 @@ func (m *QueryErrorResponse) Reset()         { *m = QueryErrorResponse{} }
 func (m *QueryErrorResponse) String() string { return proto.CompactTextString(m) }
 func (*QueryErrorResponse) ProtoMessage()    {}
 func (*QueryErrorResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{11}
+	return fileDescriptor_dmworker_1337b13408118623, []int{11}
 }
 func (m *QueryErrorResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -972,7 +972,7 @@ func (m *CheckStatus) Reset()         { *m = CheckStatus{} }
 func (m *CheckStatus) String() string { return proto.CompactTextString(m) }
 func (*CheckStatus) ProtoMessage()    {}
 func (*CheckStatus) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{12}
+	return fileDescriptor_dmworker_1337b13408118623, []int{12}
 }
 func (m *CheckStatus) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1055,7 +1055,7 @@ func (m *DumpStatus) Reset()         { *m = DumpStatus{} }
 func (m *DumpStatus) String() string { return proto.CompactTextString(m) }
 func (*DumpStatus) ProtoMessage()    {}
 func (*DumpStatus) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{13}
+	return fileDescriptor_dmworker_1337b13408118623, []int{13}
 }
 func (m *DumpStatus) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1099,7 +1099,7 @@ func (m *LoadStatus) Reset()         { *m = LoadStatus{} }
 func (m *LoadStatus) String() string { return proto.CompactTextString(m) }
 func (*LoadStatus) ProtoMessage()    {}
 func (*LoadStatus) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{14}
+	return fileDescriptor_dmworker_1337b13408118623, []int{14}
 }
 func (m *LoadStatus) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1164,10 +1164,10 @@ func (m *LoadStatus) GetMetaBinlog() string {
 // unsynced: unsynced source tables
 type ShardingGroup struct {
 	Target               string   `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
-	DDLs                 []string `protobuf:"bytes,2,rep,name=DDLs" json:"DDLs,omitempty"`
+	DDLs                 []string `protobuf:"bytes,2,rep,name=DDLs,proto3" json:"DDLs,omitempty"`
 	FirstPos             string   `protobuf:"bytes,3,opt,name=firstPos,proto3" json:"firstPos,omitempty"`
-	Synced               []string `protobuf:"bytes,4,rep,name=synced" json:"synced,omitempty"`
-	Unsynced             []string `protobuf:"bytes,5,rep,name=unsynced" json:"unsynced,omitempty"`
+	Synced               []string `protobuf:"bytes,4,rep,name=synced,proto3" json:"synced,omitempty"`
+	Unsynced             []string `protobuf:"bytes,5,rep,name=unsynced,proto3" json:"unsynced,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -1177,7 +1177,7 @@ func (m *ShardingGroup) Reset()         { *m = ShardingGroup{} }
 func (m *ShardingGroup) String() string { return proto.CompactTextString(m) }
 func (*ShardingGroup) ProtoMessage()    {}
 func (*ShardingGroup) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{15}
+	return fileDescriptor_dmworker_1337b13408118623, []int{15}
 }
 func (m *ShardingGroup) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1250,8 +1250,8 @@ type SyncStatus struct {
 	MasterBinlogGtid     string           `protobuf:"bytes,5,opt,name=masterBinlogGtid,proto3" json:"masterBinlogGtid,omitempty"`
 	SyncerBinlog         string           `protobuf:"bytes,6,opt,name=syncerBinlog,proto3" json:"syncerBinlog,omitempty"`
 	SyncerBinlogGtid     string           `protobuf:"bytes,7,opt,name=syncerBinlogGtid,proto3" json:"syncerBinlogGtid,omitempty"`
-	BlockingDDLs         []string         `protobuf:"bytes,8,rep,name=blockingDDLs" json:"blockingDDLs,omitempty"`
-	UnresolvedGroups     []*ShardingGroup `protobuf:"bytes,9,rep,name=unresolvedGroups" json:"unresolvedGroups,omitempty"`
+	BlockingDDLs         []string         `protobuf:"bytes,8,rep,name=blockingDDLs,proto3" json:"blockingDDLs,omitempty"`
+	UnresolvedGroups     []*ShardingGroup `protobuf:"bytes,9,rep,name=unresolvedGroups,proto3" json:"unresolvedGroups,omitempty"`
 	Synced               bool             `protobuf:"varint,10,opt,name=synced,proto3" json:"synced,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}         `json:"-"`
 	XXX_unrecognized     []byte           `json:"-"`
@@ -1262,7 +1262,7 @@ func (m *SyncStatus) Reset()         { *m = SyncStatus{} }
 func (m *SyncStatus) String() string { return proto.CompactTextString(m) }
 func (*SyncStatus) ProtoMessage()    {}
 func (*SyncStatus) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{16}
+	return fileDescriptor_dmworker_1337b13408118623, []int{16}
 }
 func (m *SyncStatus) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1370,7 +1370,7 @@ type RelayStatus struct {
 	RelayBinlogGtid      string         `protobuf:"bytes,5,opt,name=relayBinlogGtid,proto3" json:"relayBinlogGtid,omitempty"`
 	RelayCatchUpMaster   bool           `protobuf:"varint,6,opt,name=relayCatchUpMaster,proto3" json:"relayCatchUpMaster,omitempty"`
 	Stage                Stage          `protobuf:"varint,7,opt,name=stage,proto3,enum=pb.Stage" json:"stage,omitempty"`
-	Result               *ProcessResult `protobuf:"bytes,8,opt,name=result" json:"result,omitempty"`
+	Result               *ProcessResult `protobuf:"bytes,8,opt,name=result,proto3" json:"result,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
 	XXX_unrecognized     []byte         `json:"-"`
 	XXX_sizecache        int32          `json:"-"`
@@ -1380,7 +1380,7 @@ func (m *RelayStatus) Reset()         { *m = RelayStatus{} }
 func (m *RelayStatus) String() string { return proto.CompactTextString(m) }
 func (*RelayStatus) ProtoMessage()    {}
 func (*RelayStatus) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{17}
+	return fileDescriptor_dmworker_1337b13408118623, []int{17}
 }
 func (m *RelayStatus) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1479,7 +1479,7 @@ type SubTaskStatus struct {
 	Name                string         `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Stage               Stage          `protobuf:"varint,2,opt,name=stage,proto3,enum=pb.Stage" json:"stage,omitempty"`
 	Unit                UnitType       `protobuf:"varint,3,opt,name=unit,proto3,enum=pb.UnitType" json:"unit,omitempty"`
-	Result              *ProcessResult `protobuf:"bytes,4,opt,name=result" json:"result,omitempty"`
+	Result              *ProcessResult `protobuf:"bytes,4,opt,name=result,proto3" json:"result,omitempty"`
 	UnresolvedDDLLockID string         `protobuf:"bytes,5,opt,name=unresolvedDDLLockID,proto3" json:"unresolvedDDLLockID,omitempty"`
 	// Types that are valid to be assigned to Status:
 	//	*SubTaskStatus_Msg
@@ -1497,7 +1497,7 @@ func (m *SubTaskStatus) Reset()         { *m = SubTaskStatus{} }
 func (m *SubTaskStatus) String() string { return proto.CompactTextString(m) }
 func (*SubTaskStatus) ProtoMessage()    {}
 func (*SubTaskStatus) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{18}
+	return fileDescriptor_dmworker_1337b13408118623, []int{18}
 }
 func (m *SubTaskStatus) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1536,16 +1536,16 @@ type SubTaskStatus_Msg struct {
 	Msg string `protobuf:"bytes,6,opt,name=msg,proto3,oneof"`
 }
 type SubTaskStatus_Check struct {
-	Check *CheckStatus `protobuf:"bytes,7,opt,name=check,oneof"`
+	Check *CheckStatus `protobuf:"bytes,7,opt,name=check,proto3,oneof"`
 }
 type SubTaskStatus_Dump struct {
-	Dump *DumpStatus `protobuf:"bytes,8,opt,name=dump,oneof"`
+	Dump *DumpStatus `protobuf:"bytes,8,opt,name=dump,proto3,oneof"`
 }
 type SubTaskStatus_Load struct {
-	Load *LoadStatus `protobuf:"bytes,9,opt,name=load,oneof"`
+	Load *LoadStatus `protobuf:"bytes,9,opt,name=load,proto3,oneof"`
 }
 type SubTaskStatus_Sync struct {
-	Sync *SyncStatus `protobuf:"bytes,10,opt,name=sync,oneof"`
+	Sync *SyncStatus `protobuf:"bytes,10,opt,name=sync,proto3,oneof"`
 }
 
 func (*SubTaskStatus_Msg) isSubTaskStatus_Status()   {}
@@ -1760,7 +1760,7 @@ func _SubTaskStatus_OneofSizer(msg proto.Message) (n int) {
 
 // SubTaskStatusList used for internal jsonpb marshal
 type SubTaskStatusList struct {
-	Status               []*SubTaskStatus `protobuf:"bytes,1,rep,name=status" json:"status,omitempty"`
+	Status               []*SubTaskStatus `protobuf:"bytes,1,rep,name=status,proto3" json:"status,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}         `json:"-"`
 	XXX_unrecognized     []byte           `json:"-"`
 	XXX_sizecache        int32            `json:"-"`
@@ -1770,7 +1770,7 @@ func (m *SubTaskStatusList) Reset()         { *m = SubTaskStatusList{} }
 func (m *SubTaskStatusList) String() string { return proto.CompactTextString(m) }
 func (*SubTaskStatusList) ProtoMessage()    {}
 func (*SubTaskStatusList) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{19}
+	return fileDescriptor_dmworker_1337b13408118623, []int{19}
 }
 func (m *SubTaskStatusList) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1819,7 +1819,7 @@ func (m *CheckError) Reset()         { *m = CheckError{} }
 func (m *CheckError) String() string { return proto.CompactTextString(m) }
 func (*CheckError) ProtoMessage()    {}
 func (*CheckError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{20}
+	return fileDescriptor_dmworker_1337b13408118623, []int{20}
 }
 func (m *CheckError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1868,7 +1868,7 @@ func (m *DumpError) Reset()         { *m = DumpError{} }
 func (m *DumpError) String() string { return proto.CompactTextString(m) }
 func (*DumpError) ProtoMessage()    {}
 func (*DumpError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{21}
+	return fileDescriptor_dmworker_1337b13408118623, []int{21}
 }
 func (m *DumpError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1916,7 +1916,7 @@ func (m *LoadError) Reset()         { *m = LoadError{} }
 func (m *LoadError) String() string { return proto.CompactTextString(m) }
 func (*LoadError) ProtoMessage()    {}
 func (*LoadError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{22}
+	return fileDescriptor_dmworker_1337b13408118623, []int{22}
 }
 func (m *LoadError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1966,7 +1966,7 @@ func (m *SyncSQLError) Reset()         { *m = SyncSQLError{} }
 func (m *SyncSQLError) String() string { return proto.CompactTextString(m) }
 func (*SyncSQLError) ProtoMessage()    {}
 func (*SyncSQLError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{23}
+	return fileDescriptor_dmworker_1337b13408118623, []int{23}
 }
 func (m *SyncSQLError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2018,7 +2018,7 @@ func (m *SyncSQLError) GetErrorSQL() string {
 
 // SyncError represents error list for sync unit
 type SyncError struct {
-	Errors               []*SyncSQLError `protobuf:"bytes,1,rep,name=errors" json:"errors,omitempty"`
+	Errors               []*SyncSQLError `protobuf:"bytes,1,rep,name=errors,proto3" json:"errors,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -2028,7 +2028,7 @@ func (m *SyncError) Reset()         { *m = SyncError{} }
 func (m *SyncError) String() string { return proto.CompactTextString(m) }
 func (*SyncError) ProtoMessage()    {}
 func (*SyncError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{24}
+	return fileDescriptor_dmworker_1337b13408118623, []int{24}
 }
 func (m *SyncError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2076,7 +2076,7 @@ func (m *RelayError) Reset()         { *m = RelayError{} }
 func (m *RelayError) String() string { return proto.CompactTextString(m) }
 func (*RelayError) ProtoMessage()    {}
 func (*RelayError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{25}
+	return fileDescriptor_dmworker_1337b13408118623, []int{25}
 }
 func (m *RelayError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2138,7 +2138,7 @@ func (m *SubTaskError) Reset()         { *m = SubTaskError{} }
 func (m *SubTaskError) String() string { return proto.CompactTextString(m) }
 func (*SubTaskError) ProtoMessage()    {}
 func (*SubTaskError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{26}
+	return fileDescriptor_dmworker_1337b13408118623, []int{26}
 }
 func (m *SubTaskError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2177,16 +2177,16 @@ type SubTaskError_Msg struct {
 	Msg string `protobuf:"bytes,4,opt,name=msg,proto3,oneof"`
 }
 type SubTaskError_Check struct {
-	Check *CheckError `protobuf:"bytes,5,opt,name=check,oneof"`
+	Check *CheckError `protobuf:"bytes,5,opt,name=check,proto3,oneof"`
 }
 type SubTaskError_Dump struct {
-	Dump *DumpError `protobuf:"bytes,6,opt,name=dump,oneof"`
+	Dump *DumpError `protobuf:"bytes,6,opt,name=dump,proto3,oneof"`
 }
 type SubTaskError_Load struct {
-	Load *LoadError `protobuf:"bytes,7,opt,name=load,oneof"`
+	Load *LoadError `protobuf:"bytes,7,opt,name=load,proto3,oneof"`
 }
 type SubTaskError_Sync struct {
-	Sync *SyncError `protobuf:"bytes,8,opt,name=sync,oneof"`
+	Sync *SyncError `protobuf:"bytes,8,opt,name=sync,proto3,oneof"`
 }
 
 func (*SubTaskError_Msg) isSubTaskError_Error()   {}
@@ -2387,7 +2387,7 @@ func _SubTaskError_OneofSizer(msg proto.Message) (n int) {
 
 // SubTaskErrorList used for internal jsonpb marshal
 type SubTaskErrorList struct {
-	Error                []*SubTaskError `protobuf:"bytes,1,rep,name=error" json:"error,omitempty"`
+	Error                []*SubTaskError `protobuf:"bytes,1,rep,name=error,proto3" json:"error,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
 	XXX_sizecache        int32           `json:"-"`
@@ -2397,7 +2397,7 @@ func (m *SubTaskErrorList) Reset()         { *m = SubTaskErrorList{} }
 func (m *SubTaskErrorList) String() string { return proto.CompactTextString(m) }
 func (*SubTaskErrorList) ProtoMessage()    {}
 func (*SubTaskErrorList) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{27}
+	return fileDescriptor_dmworker_1337b13408118623, []int{27}
 }
 func (m *SubTaskErrorList) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2439,7 +2439,7 @@ func (m *SubTaskErrorList) GetError() []*SubTaskError {
 // errors: includes all (potential) errors occured when processing
 type ProcessResult struct {
 	IsCanceled           bool            `protobuf:"varint,1,opt,name=isCanceled,proto3" json:"isCanceled,omitempty"`
-	Errors               []*ProcessError `protobuf:"bytes,2,rep,name=errors" json:"errors,omitempty"`
+	Errors               []*ProcessError `protobuf:"bytes,2,rep,name=errors,proto3" json:"errors,omitempty"`
 	Detail               []byte          `protobuf:"bytes,3,opt,name=detail,proto3" json:"detail,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
 	XXX_unrecognized     []byte          `json:"-"`
@@ -2450,7 +2450,7 @@ func (m *ProcessResult) Reset()         { *m = ProcessResult{} }
 func (m *ProcessResult) String() string { return proto.CompactTextString(m) }
 func (*ProcessResult) ProtoMessage()    {}
 func (*ProcessResult) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{28}
+	return fileDescriptor_dmworker_1337b13408118623, []int{28}
 }
 func (m *ProcessResult) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2514,7 +2514,7 @@ func (m *ProcessError) Reset()         { *m = ProcessError{} }
 func (m *ProcessError) String() string { return proto.CompactTextString(m) }
 func (*ProcessError) ProtoMessage()    {}
 func (*ProcessError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{29}
+	return fileDescriptor_dmworker_1337b13408118623, []int{29}
 }
 func (m *ProcessError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2565,7 +2565,7 @@ type DDLInfo struct {
 	Task                 string   `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
 	Schema               string   `protobuf:"bytes,2,opt,name=schema,proto3" json:"schema,omitempty"`
 	Table                string   `protobuf:"bytes,3,opt,name=table,proto3" json:"table,omitempty"`
-	DDLs                 []string `protobuf:"bytes,4,rep,name=DDLs" json:"DDLs,omitempty"`
+	DDLs                 []string `protobuf:"bytes,4,rep,name=DDLs,proto3" json:"DDLs,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -2575,7 +2575,7 @@ func (m *DDLInfo) Reset()         { *m = DDLInfo{} }
 func (m *DDLInfo) String() string { return proto.CompactTextString(m) }
 func (*DDLInfo) ProtoMessage()    {}
 func (*DDLInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{30}
+	return fileDescriptor_dmworker_1337b13408118623, []int{30}
 }
 func (m *DDLInfo) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2647,7 +2647,7 @@ func (m *DDLLockInfo) Reset()         { *m = DDLLockInfo{} }
 func (m *DDLLockInfo) String() string { return proto.CompactTextString(m) }
 func (*DDLLockInfo) ProtoMessage()    {}
 func (*DDLLockInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{31}
+	return fileDescriptor_dmworker_1337b13408118623, []int{31}
 }
 func (m *DDLLockInfo) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2704,7 +2704,7 @@ func (m *ExecDDLRequest) Reset()         { *m = ExecDDLRequest{} }
 func (m *ExecDDLRequest) String() string { return proto.CompactTextString(m) }
 func (*ExecDDLRequest) ProtoMessage()    {}
 func (*ExecDDLRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{32}
+	return fileDescriptor_dmworker_1337b13408118623, []int{32}
 }
 func (m *ExecDDLRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2774,7 +2774,7 @@ func (m *BreakDDLLockRequest) Reset()         { *m = BreakDDLLockRequest{} }
 func (m *BreakDDLLockRequest) String() string { return proto.CompactTextString(m) }
 func (*BreakDDLLockRequest) ProtoMessage()    {}
 func (*BreakDDLLockRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{33}
+	return fileDescriptor_dmworker_1337b13408118623, []int{33}
 }
 func (m *BreakDDLLockRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2842,7 +2842,7 @@ func (m *SwitchRelayMasterRequest) Reset()         { *m = SwitchRelayMasterReque
 func (m *SwitchRelayMasterRequest) String() string { return proto.CompactTextString(m) }
 func (*SwitchRelayMasterRequest) ProtoMessage()    {}
 func (*SwitchRelayMasterRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{34}
+	return fileDescriptor_dmworker_1337b13408118623, []int{34}
 }
 func (m *SwitchRelayMasterRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2883,7 +2883,7 @@ func (m *OperateRelayRequest) Reset()         { *m = OperateRelayRequest{} }
 func (m *OperateRelayRequest) String() string { return proto.CompactTextString(m) }
 func (*OperateRelayRequest) ProtoMessage()    {}
 func (*OperateRelayRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{35}
+	return fileDescriptor_dmworker_1337b13408118623, []int{35}
 }
 func (m *OperateRelayRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2933,7 +2933,7 @@ func (m *OperateRelayResponse) Reset()         { *m = OperateRelayResponse{} }
 func (m *OperateRelayResponse) String() string { return proto.CompactTextString(m) }
 func (*OperateRelayResponse) ProtoMessage()    {}
 func (*OperateRelayResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{36}
+	return fileDescriptor_dmworker_1337b13408118623, []int{36}
 }
 func (m *OperateRelayResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -3009,7 +3009,7 @@ func (m *PurgeRelayRequest) Reset()         { *m = PurgeRelayRequest{} }
 func (m *PurgeRelayRequest) String() string { return proto.CompactTextString(m) }
 func (*PurgeRelayRequest) ProtoMessage()    {}
 func (*PurgeRelayRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{37}
+	return fileDescriptor_dmworker_1337b13408118623, []int{37}
 }
 func (m *PurgeRelayRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -3076,7 +3076,7 @@ func (m *QueryWorkerConfigRequest) Reset()         { *m = QueryWorkerConfigReque
 func (m *QueryWorkerConfigRequest) String() string { return proto.CompactTextString(m) }
 func (*QueryWorkerConfigRequest) ProtoMessage()    {}
 func (*QueryWorkerConfigRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{38}
+	return fileDescriptor_dmworker_1337b13408118623, []int{38}
 }
 func (m *QueryWorkerConfigRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -3120,7 +3120,7 @@ func (m *QueryWorkerConfigResponse) Reset()         { *m = QueryWorkerConfigResp
 func (m *QueryWorkerConfigResponse) String() string { return proto.CompactTextString(m) }
 func (*QueryWorkerConfigResponse) ProtoMessage()    {}
 func (*QueryWorkerConfigResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_8dc9234a27b1e854, []int{39}
+	return fileDescriptor_dmworker_1337b13408118623, []int{39}
 }
 func (m *QueryWorkerConfigResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -12155,9 +12155,9 @@ var (
 	ErrIntOverflowDmworker   = fmt.Errorf("proto: integer overflow")
 )
 
-func init() { proto.RegisterFile("dmworker.proto", fileDescriptor_dmworker_8dc9234a27b1e854) }
+func init() { proto.RegisterFile("dmworker.proto", fileDescriptor_dmworker_1337b13408118623) }
 
-var fileDescriptor_dmworker_8dc9234a27b1e854 = []byte{
+var fileDescriptor_dmworker_1337b13408118623 = []byte{
 	// 2072 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x58, 0xcd, 0x73, 0xe3, 0x48,
 	0x15, 0xb7, 0xe4, 0x8f, 0xd8, 0xcf, 0x8e, 0x47, 0xe9, 0x64, 0xb3, 0x1e, 0xb3, 0x1b, 0x82, 0x66,

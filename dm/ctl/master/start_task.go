@@ -54,13 +54,6 @@ func startTaskFunc(cmd *cobra.Command, _ []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// precheck task
-	err = checkTask(ctx, string(content))
-	if err != nil {
-		common.PrintLines("precheck failed %s", errors.ErrorStack(err))
-		return
-	}
-
 	// start task
 	cli := common.MasterClient()
 	resp, err := cli.StartTask(ctx, &pb.StartTaskRequest{

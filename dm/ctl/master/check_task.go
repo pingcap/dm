@@ -18,6 +18,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb-enterprise-tools/dm/ctl/common"
+	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
 	"github.com/spf13/cobra"
 	"golang.org/x/net/context"
 )
@@ -47,12 +48,15 @@ func checkTaskFunc(cmd *cobra.Command, _ []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// precheck task
-	err = checkTask(ctx, string(content))
+	// start task
+	cli := common.MasterClient()
+	resp, err := cli.CheckTask(ctx, &pb.CheckTaskRequest{
+		Task: string(content),
+	})
 	if err != nil {
-		common.PrintLines("precheck failed %s", errors.ErrorStack(err))
+		common.PrintLines("fail to check task:\n%v", errors.ErrorStack(err))
 		return
 	}
 
-	common.PrintLines("check pass!!!")
+	common.PrettyPrintResponse(resp)
 }

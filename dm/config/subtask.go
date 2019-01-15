@@ -57,6 +57,23 @@ type DBConfig struct {
 	Password string `toml:"password" json:"-" yaml:"password"` // omit it for privacy
 }
 
+// Toml returns TOML format representation of config
+func (db *DBConfig) Toml() (string, error) {
+	var b bytes.Buffer
+	enc := toml.NewEncoder(&b)
+	err := enc.Encode(db)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	return b.String(), nil
+}
+
+// Decode loads config from file data
+func (db *DBConfig) Decode(data string) error {
+	_, err := toml.Decode(data, db)
+	return errors.Trace(err)
+}
+
 // SubTaskConfig is the configuration for SubTask
 type SubTaskConfig struct {
 	// BurntSushi/toml seems have a bug for flag "-"

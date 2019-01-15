@@ -14,7 +14,6 @@
 package master
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -30,6 +29,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
+	"github.com/pingcap/tidb-enterprise-tools/checker"
 	"github.com/pingcap/tidb-enterprise-tools/dm/common"
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 	"github.com/pingcap/tidb-enterprise-tools/dm/master/sql-operator"
@@ -182,8 +182,7 @@ func (s *Server) Close() {
 func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.StartTaskResponse, error) {
 	log.Infof("[server] receive StartTask request %+v", req)
 
-	cfg := config.NewTaskConfig()
-	err := cfg.Decode(req.Task)
+	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task)
 	if err != nil {
 		return &pb.StartTaskResponse{
 			Result: false,
@@ -191,22 +190,6 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 		}, nil
 	}
 	log.Infof("[server] starting task with config:\n%v", cfg)
-
-	sourceCfgs, err := s.allWorkerConfigs(ctx)
-	if err != nil {
-		return &pb.StartTaskResponse{
-			Result: false,
-			Msg:    errors.ErrorStack(err),
-		}, nil
-	}
-
-	stCfgs, err := cfg.SubTaskConfigs(sourceCfgs)
-	if err != nil {
-		return &pb.StartTaskResponse{
-			Result: false,
-			Msg:    errors.ErrorStack(err),
-		}, nil
-	}
 
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(stCfgs)+len(req.Workers))
 	if len(req.Workers) > 0 {
@@ -382,31 +365,14 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb.UpdateTaskResponse, error) {
 	log.Infof("[server] receive UpdateTask request %+v", req)
 
-	cfg := config.NewTaskConfig()
-	err := cfg.Decode(req.Task)
+	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task)
 	if err != nil {
 		return &pb.UpdateTaskResponse{
 			Result: false,
 			Msg:    errors.ErrorStack(err),
 		}, nil
 	}
-	log.Infof("[server] updating task with config:\n%v", cfg)
-
-	sourceCfgs, err := s.allWorkerConfigs(ctx)
-	if err != nil {
-		return &pb.UpdateTaskResponse{
-			Result: false,
-			Msg:    errors.ErrorStack(err),
-		}, nil
-	}
-
-	stCfgs, err := cfg.SubTaskConfigs(sourceCfgs)
-	if err != nil {
-		return &pb.UpdateTaskResponse{
-			Result: false,
-			Msg:    errors.ErrorStack(err),
-		}, nil
-	}
+	log.Infof("[server] update task with config:\n%v", cfg)
 
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(stCfgs)+len(req.Workers))
 	if len(req.Workers) > 0 {
@@ -1694,7 +1660,7 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 			}
 
 			dbCfg := &config.DBConfig{}
-			err = json.Unmarshal([]byte(resp.Content), dbCfg)
+			err = dbCfg.Decode(resp.Content)
 			if err != nil {
 				handErr(errors.Annotatef(err, "unmarshal worker %s config", id1))
 				return
@@ -1734,4 +1700,47 @@ func (s *Server) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRe
 		}, nil
 	}
 	return workerResp, nil
+}
+
+// CheckTask checks legality of task configuration
+func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.CheckTaskResponse, error) {
+	log.Infof("[server] check task request %+v", req)
+
+	_, _, err := s.generateSubTask(ctx, req.Task)
+	if err != nil {
+		return &pb.CheckTaskResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}, nil
+	}
+
+	return &pb.CheckTaskResponse{
+		Result: true,
+		Msg:    "check pass!!!",
+	}, nil
+}
+
+func (s *Server) generateSubTask(ctx context.Context, task string) (*config.TaskConfig, []*config.SubTaskConfig, error) {
+	cfg := config.NewTaskConfig()
+	err := cfg.Decode(task)
+	if err != nil {
+		return nil, nil, errors.Trace(err)
+	}
+
+	sourceCfgs, err := s.allWorkerConfigs(ctx)
+	if err != nil {
+		return nil, nil, errors.Trace(err)
+	}
+
+	stCfgs, err := cfg.SubTaskConfigs(sourceCfgs)
+	if err != nil {
+		return nil, nil, errors.Trace(err)
+	}
+
+	err = checker.CheckSyncConfig(ctx, stCfgs)
+	if err != nil {
+		return nil, nil, errors.Trace(err)
+	}
+
+	return cfg, stCfgs, nil
 }

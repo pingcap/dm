@@ -39,8 +39,7 @@ service Worker {
 
     rpc QueryWorkerConfig (QueryWorkerConfigRequest) returns (QueryWorkerConfigResponse) {}
 
-    rpc MigrateRelay(MigrateRelayRequest) returns (
-    CommonWorkerResponse) {}
+    rpc MigrateRelay(MigrateRelayRequest) returns (CommonWorkerResponse) {}
 }
 
 message StartSubTaskRequest {

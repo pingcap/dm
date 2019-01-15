@@ -54,13 +54,6 @@ func updateTaskFunc(cmd *cobra.Command, _ []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// NOTE: do whole check now, refine to do TablesChecker and ShardingTablesCheck ?
-	err = checkTask(ctx, string(content))
-	if err != nil {
-		common.PrintLines("precheck failed %s", errors.ErrorStack(err))
-		return
-	}
-
 	// update task
 	cli := common.MasterClient()
 	resp, err := cli.UpdateTask(ctx, &pb.UpdateTaskRequest{
