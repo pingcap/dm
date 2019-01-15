@@ -21,8 +21,9 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 	"github.com/siddontang/go-mysql/mysql"
+
+	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 )
 
 var (

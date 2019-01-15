@@ -7,8 +7,9 @@ import (
 	"path/filepath"
 
 	. "github.com/pingcap/check"
-	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 	"github.com/siddontang/go-mysql/mysql"
+
+	"github.com/pingcap/tidb-enterprise-tools/dm/config"
 )
 
 // NOTE: there are binlog events conflict with other test cases

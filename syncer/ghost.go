@@ -6,8 +6,9 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/tidb-tools/pkg/filter"
+
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
 )
 
 // Ghost handles gh-ost online ddls (not complete, don't need to review it)

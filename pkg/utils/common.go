@@ -12,7 +12,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 )
 
 // move to tidb-tools later

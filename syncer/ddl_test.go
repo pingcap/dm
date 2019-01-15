@@ -18,9 +18,9 @@ import (
 	"database/sql"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
 	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )
 

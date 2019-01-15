@@ -20,8 +20,8 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/pingcap/parser/ast"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/siddontang/go-mysql/replication"
 )
 

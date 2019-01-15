@@ -9,10 +9,10 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	"golang.org/x/net/context"
 
 	"github.com/pingcap/tidb-enterprise-tools/dm/config"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/filter"
 )
 
 // privileges: SELECT, UPDATE,  optionaly INSERT, optionaly CREATE.

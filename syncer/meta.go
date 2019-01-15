@@ -22,9 +22,10 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/ioutil2"
+
+	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
 )
 
 // Meta is the binlog meta information from sync source.

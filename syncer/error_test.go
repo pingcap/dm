@@ -20,8 +20,9 @@ import (
 	"github.com/juju/errors"
 	. "github.com/pingcap/check"
 	tmysql "github.com/pingcap/parser/mysql"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	gmysql "github.com/siddontang/go-mysql/mysql"
+
+	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )
 
 func newMysqlErr(number uint16, message string) *mysql.MySQLError {

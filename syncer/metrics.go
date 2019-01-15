@@ -18,10 +18,11 @@ import (
 	"time"
 
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 	cpu "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/net/context"
+
+	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )
 
 var (
