@@ -32,6 +32,7 @@ type Set interface {
 	Clone() Set
 	Origin() mysql.GTIDSet
 	Equal(other Set) bool
+	Contain(other Set) bool
 
 	String() string
 }
@@ -154,6 +155,23 @@ func (g *mySQLGTIDSet) Equal(other Set) bool {
 	return g.set.Equal(other.Origin())
 }
 
+func (g *mySQLGTIDSet) Contain(other Set) bool {
+	otherIsNil := other == nil
+	if !otherIsNil {
+		otherGs, ok := other.(*mySQLGTIDSet)
+		if !ok {
+			return false
+		}
+		otherIsNil = otherGs == nil
+	}
+	if otherIsNil {
+		return true // any set (including nil) contains nil
+	} else if g == nil {
+		return false // nil only contains nil
+	}
+	return g.set.Contain(other.Origin())
+}
+
 func (g *mySQLGTIDSet) String() string {
 	if g.set == nil {
 		return ""
@@ -250,6 +268,23 @@ func (m *mariadbGTIDSet) Equal(other Set) bool {
 	}
 
 	return m.set.Equal(other.Origin())
+}
+
+func (m *mariadbGTIDSet) Contain(other Set) bool {
+	otherIsNil := other == nil
+	if !otherIsNil {
+		otherGS, ok := other.(*mariadbGTIDSet)
+		if !ok {
+			return false
+		}
+		otherIsNil = otherGS == nil
+	}
+	if otherIsNil {
+		return true // any set (including nil) contains nil
+	} else if m == nil {
+		return false // nil only contains nil
+	}
+	return m.set.Contain(other.Origin())
 }
 
 func (m *mariadbGTIDSet) String() string {

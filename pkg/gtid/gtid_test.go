@@ -103,3 +103,65 @@ func (s *testGTIDSuite) TestMariaGTIDEqual(c *C) {
 	g2 = gSet.(*mariadbGTIDSet)
 	c.Assert(g1.Equal(g2), IsTrue)
 }
+
+func (s *testGTIDSuite) TestMySQLGTIDContain(c *C) {
+	var (
+		g1     *mySQLGTIDSet
+		g2     *mySQLGTIDSet
+		gMaria *mariadbGTIDSet
+	)
+	c.Assert(g1.Contain(g2), IsTrue)      // all nil
+	c.Assert(g1.Contain(gMaria), IsFalse) // incompatible
+
+	// one nil
+	gSet, err := ParserGTID("mysql", "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-10,406a3f61-690d-11e7-87c5-6c92bf46f384:1-10")
+	c.Assert(err, IsNil)
+	g1 = gSet.(*mySQLGTIDSet)
+	c.Assert(g1.Contain(g2), IsTrue)
+	c.Assert(g2.Contain(g1), IsFalse)
+
+	// contain
+	gSet, err = ParserGTID("mysql", "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-5,406a3f61-690d-11e7-87c5-6c92bf46f384:1-10")
+	c.Assert(err, IsNil)
+	g2 = gSet.(*mySQLGTIDSet)
+	c.Assert(g1.Contain(g2), IsTrue)
+	c.Assert(g2.Contain(g1), IsFalse)
+
+	// not contain
+	gSet, err = ParserGTID("mysql", "03fc0263-28c7-11e7-a653-6c0b84d59f30:1-5,406a3f61-690d-11e7-87c5-6c92bf46f384:1-10")
+	c.Assert(err, IsNil)
+	g2 = gSet.(*mySQLGTIDSet)
+	c.Assert(g1.Contain(g2), IsFalse)
+	c.Assert(g2.Contain(g1), IsFalse)
+}
+
+func (s *testGTIDSuite) TestMairaGTIDContain(c *C) {
+	var (
+		g1     *mariadbGTIDSet
+		g2     *mariadbGTIDSet
+		gMySQL *mySQLGTIDSet
+	)
+	c.Assert(g1.Contain(g2), IsTrue)      // all nil
+	c.Assert(g1.Contain(gMySQL), IsFalse) // incompatible
+
+	// one nil
+	gSet, err := ParserGTID("mariadb", "1-1-1,2-2-2")
+	c.Assert(err, IsNil)
+	g1 = gSet.(*mariadbGTIDSet)
+	c.Assert(g1.Contain(g2), IsTrue)
+	c.Assert(g2.Contain(g1), IsFalse)
+
+	// contain
+	gSet, err = ParserGTID("mariadb", "1-1-1,2-2-1")
+	c.Assert(err, IsNil)
+	g2 = gSet.(*mariadbGTIDSet)
+	c.Assert(g1.Contain(g2), IsTrue)
+	c.Assert(g2.Contain(g1), IsFalse)
+
+	// not contain
+	gSet, err = ParserGTID("mariadb", "1-1-2,2-2-1")
+	c.Assert(err, IsNil)
+	g2 = gSet.(*mariadbGTIDSet)
+	c.Assert(g1.Contain(g2), IsFalse)
+	c.Assert(g2.Contain(g1), IsFalse)
+}
