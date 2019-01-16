@@ -9,12 +9,13 @@ CURDIR   := $(shell pwd)
 GO       := GO111MODULE=on go
 GOBUILD  := CGO_ENABLED=0 $(GO) build
 GOTEST   := CGO_ENABLED=1 $(GO) test
-PACKAGES := $$(go list ./... | grep -vE 'vendor')
+PACKAGES := $$(go list ./... | grep -vE 'vendor|cmd|tests|tests2')
 FILES    := $$(find . -name "*.go" | grep -vE "vendor")
 TOPDIRS  := $$(ls -d */ | grep -vE "vendor")
 SHELL    := /usr/bin/env bash
+TEST_DIR := /tmp/dm_test
 
-RACE_FLAG = 
+RACE_FLAG =
 ifeq ("$(WITH_RACE)", "1")
 	RACE_FLAG = -race
 	GOBUILD   = CGO_ENABLED=1 $(GO) build
@@ -25,7 +26,8 @@ ARCH      := "`uname -s`"
 LINUX     := "Linux"
 MAC       := "Darwin"
 
-.PHONY: build syncer loader test check deps dm-worker dm-master dmctl 
+.PHONY: build syncer loader test dm_integration_test_build integration_test \
+	coverage check deps dm-worker dm-master dmctl
 
 build: syncer loader check test dm-worker dm-master dmctl
 
@@ -69,3 +71,23 @@ vet:
 	@echo "vet"
 	@ $(GO) tool vet -all -shadow $(TOPDIRS) 2>&1 | tee /dev/stderr | awk '/shadows declaration/{next}{count+=1} END{if(count>0) {exit 1}}'
 
+dm_integration_test_build:
+	$(GOTEST) -c -race -cover -covermode=atomic \
+		-coverpkg=github.com/pingcap/tidb-enterprise-tools/... \
+		-o bin/dm-worker.test github.com/pingcap/tidb-enterprise-tools/cmd/dm-worker
+	$(GOTEST) -c -race -cover -covermode=atomic \
+		-coverpkg=github.com/pingcap/tidb-enterprise-tools/... \
+		-o bin/dm-master.test github.com/pingcap/tidb-enterprise-tools/cmd/dm-master
+
+integration_test:
+	@which bin/tidb-server
+	@which bin/sync_diff_inspector
+	@which bin/mydumper
+	@which bin/dm-master.test
+	@which bin/dm-worker.test
+	tests2/run.sh
+
+coverage:
+	GO111MODULE=off go get github.com/wadey/gocovmerge
+	gocovmerge "$(TEST_DIR)"/cov.* > "$(TEST_DIR)/all_cov.out"
+	go tool cover -html "$(TEST_DIR)/all_cov.out" -o "$(TEST_DIR)/all_cov.html"

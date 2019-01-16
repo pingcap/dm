@@ -1,4 +1,4 @@
-/bin
+bin
 */*.iml
 */.idea
 deps.sh

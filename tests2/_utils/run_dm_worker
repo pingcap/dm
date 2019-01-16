@@ -1,0 +1,24 @@
+#!/bin/sh
+# parameter 1: work directory
+# parameter 2: worker-addr port
+# parameter 3: config file for DM-worker
+
+set -eu
+
+workdir=$1
+port=$2
+conf=$3
+
+mkdir -p $workdir/relay_log $workdir/dumped_data $workdir/log $workdir/bin
+
+PWD=$(pwd)
+binary=$PWD/bin/dm-worker.test
+ln -s $PWD/bin/mydumper $workdir/bin/mydumper
+
+echo "[$(date)] <<<<<< START DM-WORKER on port $port, config: $conf >>>>>>"
+cd $workdir
+$binary -test.coverprofile="$TEST_DIR/cov.$TEST_NAME.worker.$port.out" DEVEL \
+    --worker-addr=:$port --relay-dir="$workdir/relay_log" \
+    --log-file="$workdir/log/dm-worker.log" --config="$conf" \
+    > $workdir/log/stdout.log 2>&1 &
+cd $PWD

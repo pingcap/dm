@@ -1,0 +1,8 @@
+#!/bin/sh
+# parameter 1: sql command
+# parameter 2: port
+
+set -eu
+
+echo "[$(date)] Executing SQL: $1" > "$TEST_DIR/sql_res.$TEST_NAME.txt"
+mysql -uroot -h127.0.0.1 -P$2 --default-character-set utf8 -E -e "$1" >> "$TEST_DIR/sql_res.$TEST_NAME.txt"
