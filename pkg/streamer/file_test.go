@@ -5,9 +5,10 @@ import (
 	"os"
 	"path"
 
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
-
 	. "github.com/pingcap/check"
+	"github.com/siddontang/go-mysql/mysql"
+
+	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
 )
 
 func (s *testStreamerSuite) TestCollectBinlogFiles(c *C) {
@@ -95,4 +96,28 @@ func (s *testStreamerSuite) TestCollectBinlogFiles(c *C) {
 	files, err = CollectBinlogFilesCmp(dir, valid[len(valid)-1], FileCmpLess)
 	c.Assert(err, IsNil)
 	c.Assert(files, DeepEquals, valid[:len(valid)-1])
+}
+
+func (s *testStreamerSuite) TestRealMySQLPos(c *C) {
+	var (
+		testCases = []struct {
+			pos    mysql.Position
+			expect mysql.Position
+			hasErr bool
+		}{
+			{mysql.Position{"mysql-bin.000001", 154}, mysql.Position{"mysql-bin.000001", 154}, false},
+			{mysql.Position{"mysql-bin|000002.000003", 154}, mysql.Position{"mysql-bin.000003", 154}, false},
+			{mysql.Position{"", 154}, mysql.Position{"", 154}, true},
+		}
+	)
+
+	for _, tc := range testCases {
+		pos, err := RealMySQLPos(tc.pos)
+		if tc.hasErr {
+			c.Assert(err, NotNil)
+		} else {
+			c.Assert(err, IsNil)
+		}
+		c.Assert(pos, DeepEquals, tc.expect)
+	}
 }

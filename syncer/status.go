@@ -54,7 +54,14 @@ func (s *Syncer) Status() interface{} {
 		st.MasterBinlogGtid = masterGTIDSet.String()
 	}
 
-	st.Synced = utils.CompareBinlogPos(masterPos, streamer.RealMySQLPos(syncerPos), 0) == 0
+	// If a syncer unit is waiting for relay log catch up, it has not executed
+	// LoadMeta and will return a parsed binlog name error. As we can find mysql
+	// position in syncer status, we record this error only in debug level.
+	realPos, err := streamer.RealMySQLPos(syncerPos)
+	if err != nil {
+		log.Debugf("[syncer] parse real mysql position err %v", err)
+	}
+	st.Synced = utils.CompareBinlogPos(masterPos, realPos, 0) == 0
 
 	if s.cfg.IsSharding {
 		st.UnresolvedGroups = s.sgk.UnresolvedGroups()

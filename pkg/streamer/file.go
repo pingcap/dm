@@ -147,13 +147,14 @@ func constructBinlogFilename(baseName, seq string) string {
 	return fmt.Sprintf("%s%s%s", baseName, baseSeqSeparator, seq)
 }
 
-// RealMySQLPos parses relay position and return mysql position
-// or return mysql position directly
-func RealMySQLPos(pos mysql.Position) mysql.Position {
+// RealMySQLPos parses relay position and returns a mysql position and whether error occurs
+// if parsed successfully and `UUIDSuffix` exists, sets position Name to
+// `originalPos.NamePrefix + baseSeqSeparator + originalPos.NameSuffix`.
+// if parsed failed returns given position and the traced error.
+func RealMySQLPos(pos mysql.Position) (mysql.Position, error) {
 	parsed, err := parseBinlogFile(pos.Name)
 	if err != nil {
-		log.Errorf("[streamer] parse binlog file name %s error %s", pos.Name, errors.ErrorStack(err))
-		return pos
+		return pos, errors.Trace(err)
 	}
 
 	sepIdx := strings.Index(parsed.baseName, posUUIDSuffixSeparator)
@@ -161,10 +162,10 @@ func RealMySQLPos(pos mysql.Position) mysql.Position {
 		return mysql.Position{
 			Name: fmt.Sprintf("%s%s%s", parsed.baseName[:sepIdx], baseSeqSeparator, parsed.seq),
 			Pos:  pos.Pos,
-		}
+		}, nil
 	}
 
-	return pos
+	return pos, nil
 }
 
 type binlogFile struct {
