@@ -12,7 +12,6 @@
 2. The following programs must be installed:
 
     * `mysql` (the CLI client)
-    * `nc` (the netcat. use `yum install -y nmap-ncat` on CentOS or `apt-get install -y netcat` on Debian)
 
 3. The user executing the tests must have permission to create the folder `/tmp/dm_test`. All test artifacts will be written into this folder.
 
@@ -23,13 +22,13 @@
 2. Run `make integration_test` to execute the integration tests. This command will
 
     1. Check that all required executables exist.
-    2. Execute `tests2/run.sh`
+    2. Execute `tests/run.sh`
 
 3. After executing the tests, run `make coverage` to get a coverage report at `/tmp/dm_test/all_cov.html`.
 
 ## Writing new tests
 
-New integration tests can be written as shell scripts in `tests2/TEST_NAME/run.sh`. The script should exit with a nonzero error code on failure.
+New integration tests can be written as shell scripts in `tests/TEST_NAME/run.sh`. The script should exit with a nonzero error code on failure.
 
 Several convenient commands are provided:
 
@@ -39,5 +38,6 @@ Several convenient commands are provided:
 * `run_sql_file <path_to_SQL_file> <PORT>` — Executes all SQLs in given file to the database on port provided
 * `check_contains <TEXT>` — Checks if the previous `run_sql`/`run_sql_file` result contains the given text (in `-E` format)
 * `check_sync_diff <WORKDIR> <CONFIG>` - Runs `sync_diff_inspector` to check diff between databases, using config file provided
-* `check_port_alive <PORT>` - Checks a port is alive.
+* `check_port_alive <PORT>` - Wrapper to check a port is alive, at most 20 times.
+* `check_port <HOST> <PORT>` - Checks a host:port is alive.
 

@@ -9,7 +9,7 @@ CURDIR   := $(shell pwd)
 GO       := GO111MODULE=on go
 GOBUILD  := CGO_ENABLED=0 $(GO) build
 GOTEST   := CGO_ENABLED=1 $(GO) test
-PACKAGES := $$(go list ./... | grep -vE 'vendor|cmd|tests|tests2')
+PACKAGES := $$(go list ./... | grep -vE 'vendor|cmd|tests')
 FILES    := $$(find . -name "*.go" | grep -vE "vendor")
 TOPDIRS  := $$(ls -d */ | grep -vE "vendor")
 SHELL    := /usr/bin/env bash
@@ -21,15 +21,14 @@ ifeq ("$(WITH_RACE)", "1")
 	GOBUILD   = CGO_ENABLED=1 $(GO) build
 endif
 
-
 ARCH      := "`uname -s`"
 LINUX     := "Linux"
 MAC       := "Darwin"
 
-.PHONY: build syncer loader test dm_integration_test_build integration_test \
-	coverage check deps dm-worker dm-master dmctl
+.PHONY: build test dm_integration_test_build integration_test coverage check \
+	dm-worker dm-master dmctl
 
-build: syncer loader check test dm-worker dm-master dmctl
+build: check test dm-worker dm-master dmctl
 
 dm-worker:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dm-worker ./cmd/dm-worker
@@ -40,16 +39,11 @@ dm-master:
 dmctl:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dmctl ./cmd/dm-ctl
 
-syncer:
-	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/syncer ./cmd/syncer
-
-loader:
-	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/loader ./cmd/loader
-
 test:
 	bash -x ./wait_for_mysql.sh
+	mkdir -p $(TEST_DIR)
 	@export log_level=error; \
-	$(GOTEST) -cover -race $(PACKAGES)
+	$(GOTEST) -covermode=atomic -coverprofile="$(TEST_DIR)/cov.unit_test.out" -race $(PACKAGES)
 
 check: fmt lint vet
 
@@ -63,9 +57,9 @@ errcheck:
 	@ errcheck -blank $(PACKAGES) | grep -v "_test\.go" | awk '{print} END{if(NR>0) {exit 1}}'
 
 lint:
-	@ GO111MODULE=off go build -o bin/golint github.com/golang/lint/golint
+	GO111MODULE=off go get golang.org/x/lint/golint
 	@echo "golint"
-	@ ./bin/golint -set_exit_status $(PACKAGES)
+	@ golint -set_exit_status $(PACKAGES)
 
 vet:
 	@echo "vet"
@@ -85,7 +79,7 @@ integration_test:
 	@which bin/mydumper
 	@which bin/dm-master.test
 	@which bin/dm-worker.test
-	tests2/run.sh
+	tests/run.sh
 
 coverage:
 	GO111MODULE=off go get github.com/wadey/gocovmerge
