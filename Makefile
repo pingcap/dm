@@ -9,7 +9,7 @@ CURDIR   := $(shell pwd)
 GO       := GO111MODULE=on go
 GOBUILD  := CGO_ENABLED=0 $(GO) build
 GOTEST   := CGO_ENABLED=1 $(GO) test
-PACKAGES := $$(go list ./... | grep -vE 'vendor|cmd|tests|tests2')
+PACKAGES := $$(go list ./... | grep -vE 'vendor|cmd|tests|tests')
 FILES    := $$(find . -name "*.go" | grep -vE "vendor")
 TOPDIRS  := $$(ls -d */ | grep -vE "vendor")
 SHELL    := /usr/bin/env bash
@@ -49,7 +49,7 @@ loader:
 test:
 	bash -x ./wait_for_mysql.sh
 	@export log_level=error; \
-	$(GOTEST) -cover -race $(PACKAGES)
+	$(GOTEST) -covermode=atomic -coverprofile="$(TEST_DIR)/cov.unit_test.out" -race $(PACKAGES)
 
 check: fmt lint vet
 
@@ -85,7 +85,7 @@ integration_test:
 	@which bin/mydumper
 	@which bin/dm-master.test
 	@which bin/dm-worker.test
-	tests2/run.sh
+	tests/run.sh
 
 coverage:
 	GO111MODULE=off go get github.com/wadey/gocovmerge

@@ -23,13 +23,13 @@
 2. Run `make integration_test` to execute the integration tests. This command will
 
     1. Check that all required executables exist.
-    2. Execute `tests2/run.sh`
+    2. Execute `tests/run.sh`
 
 3. After executing the tests, run `make coverage` to get a coverage report at `/tmp/dm_test/all_cov.html`.
 
 ## Writing new tests
 
-New integration tests can be written as shell scripts in `tests2/TEST_NAME/run.sh`. The script should exit with a nonzero error code on failure.
+New integration tests can be written as shell scripts in `tests/TEST_NAME/run.sh`. The script should exit with a nonzero error code on failure.
 
 Several convenient commands are provided:
 

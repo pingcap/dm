@@ -57,10 +57,10 @@ start_services() {
 trap stop_services EXIT
 start_services
 
-for script in tests2/*/run.sh; do
+for script in tests/*/run.sh; do
     echo "Running test $script..."
     TEST_DIR="$TEST_DIR" \
-    PATH="tests2/_utils:$PATH" \
+    PATH="tests/_utils:$PATH" \
     TEST_NAME="$(basename "$(dirname "$script")")" \
     bash +x "$script"
 done
