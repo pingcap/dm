@@ -1,5 +1,6 @@
 #!groovy
 
+
 node {
     def TIDB_BINLOG_BRANCH = "master"
     def TIDB_TOOLS_BRANCH = "master"
