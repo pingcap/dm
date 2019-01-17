@@ -36,7 +36,7 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.MasterAddr, "master-addr", "", "master API server and status addr")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
-	fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
+	//fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
 
 	return cfg
 }
