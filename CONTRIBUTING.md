@@ -41,7 +41,7 @@ Run `./generate-dm.sh` to regenerate go code files.
 ### Updating dependencies
 
 DM uses [Go 1.11 module](https://github.com/golang/go/wiki/Modules) to manage dependencies.
-To add or update a dependency: Edit `go.mod` or use the `go mod edit` command to change the dependency.
+To add or update a dependency: use the `go mod edit` command to change the dependency.
 
 ## Contribution flow
 
