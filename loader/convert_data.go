@@ -29,10 +29,6 @@ import (
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 )
 
-const (
-	defReadBlockSize int64 = 1024 * 8
-)
-
 func bytes2str(bs []byte) string {
 	return *(*string)(unsafe.Pointer(&bs))
 }

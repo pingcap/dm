@@ -40,7 +40,7 @@ dmctl:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dmctl ./cmd/dm-ctl
 
 test:
-	bash -x ./wait_for_mysql.sh
+	bash -x ./tests//wait_for_mysql.sh
 	mkdir -p $(TEST_DIR)
 	@export log_level=error; \
 	$(GOTEST) -covermode=atomic -coverprofile="$(TEST_DIR)/cov.unit_test.out" -race $(PACKAGES)

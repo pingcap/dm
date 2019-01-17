@@ -68,7 +68,6 @@ func (t *testArgumentSuite) TestVerifySQLOperateArgs(c *C) {
 		shardingIn   bool
 		binlogPos    *mysql.Position
 		regNotNil    bool
-		shardingOut  bool
 		hasError     bool
 	}{
 		{
