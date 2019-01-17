@@ -24,10 +24,10 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-enterprise-tools/dm/config"
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
-	loaderPkg "github.com/pingcap/tidb-enterprise-tools/loader"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
+	loaderPkg "github.com/pingcap/dm/loader"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/net/context"
 )

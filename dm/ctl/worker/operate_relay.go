@@ -1,8 +1,8 @@
 package worker
 
 import (
-	"github.com/pingcap/tidb-enterprise-tools/dm/ctl/common"
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
+	"github.com/pingcap/dm/dm/ctl/common"
+	"github.com/pingcap/dm/dm/pb"
 	"golang.org/x/net/context"
 )
 

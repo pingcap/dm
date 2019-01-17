@@ -20,8 +20,8 @@ import (
 	"github.com/ngaut/log"
 	"github.com/soheilhy/cmux"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/common"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/dm/dm/common"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 type statusHandler struct {

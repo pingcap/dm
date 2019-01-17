@@ -24,11 +24,11 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/config"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
-	"github.com/pingcap/tidb-enterprise-tools/relay/purger"
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/relay/purger"
 )
 
 // NewConfig creates a new base config for worker.

@@ -7,9 +7,9 @@ import (
 	"github.com/ngaut/log"
 	"golang.org/x/net/context"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
-	"github.com/pingcap/tidb-enterprise-tools/dm/unit"
-	sm "github.com/pingcap/tidb-enterprise-tools/syncer/safe-mode"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/dm/unit"
+	sm "github.com/pingcap/dm/syncer/safe-mode"
 )
 
 func (s *Syncer) enableSafeModeInitializationPhase(ctx context.Context, safeMode *sm.SafeMode) {

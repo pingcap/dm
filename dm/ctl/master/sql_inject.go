@@ -8,8 +8,8 @@ import (
 	"github.com/juju/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/ctl/common"
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
+	"github.com/pingcap/dm/dm/ctl/common"
+	"github.com/pingcap/dm/dm/pb"
 )
 
 // NewSQLInjectCmd creates a SQLInject command

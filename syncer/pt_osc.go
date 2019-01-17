@@ -8,7 +8,7 @@ import (
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/config"
+	"github.com/pingcap/dm/dm/config"
 )
 
 // PT handles pt online schema changes

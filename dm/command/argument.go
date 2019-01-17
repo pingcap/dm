@@ -7,7 +7,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/siddontang/go-mysql/mysql"
 
-	"github.com/pingcap/tidb-enterprise-tools/pkg/binlog"
+	"github.com/pingcap/dm/pkg/binlog"
 )
 
 // TrimQuoteMark tries to trim leading and tailing quote(") mark if exists

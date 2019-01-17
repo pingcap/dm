@@ -22,12 +22,12 @@ import (
 	"github.com/siddontang/go/sync2"
 	"golang.org/x/net/context"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/config"
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
-	"github.com/pingcap/tidb-enterprise-tools/dm/unit"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
-	pkgstreamer "github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/gtid"
+	pkgstreamer "github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 var (
@@ -1006,7 +1006,7 @@ func (r *Relay) Reload(newCfg *Config) error {
 		User:            newCfg.From.User,
 		Password:        newCfg.From.Password,
 		Charset:         newCfg.Charset,
-		UseDecimal:      true, // must set true. ref: https://github.com/pingcap/tidb-enterprise-tools/pull/272
+		UseDecimal:      true, // must set true. ref: https://github.com/pingcap/dm/pull/272
 		ReadTimeout:     slaveReadTimeout,
 		HeartbeatPeriod: masterHeartbeatPeriod,
 		VerifyChecksum:  true,

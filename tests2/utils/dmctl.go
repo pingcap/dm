@@ -8,7 +8,7 @@ import (
 	"github.com/juju/errors"
 	"google.golang.org/grpc"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
+	"github.com/pingcap/dm/dm/pb"
 )
 
 func CreateDmCtl(addr string) (pb.MasterClient, error) {

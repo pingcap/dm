@@ -13,9 +13,9 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go/ioutil2"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 var _ = Suite(&testPurgerSuite{

@@ -19,13 +19,13 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-enterprise-tools/dm/config"
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
-	"github.com/pingcap/tidb-enterprise-tools/dm/unit"
-	"github.com/pingcap/tidb-enterprise-tools/loader"
-	"github.com/pingcap/tidb-enterprise-tools/mydumper"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
-	"github.com/pingcap/tidb-enterprise-tools/syncer"
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/loader"
+	"github.com/pingcap/dm/mydumper"
+	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/syncer"
 
 	// hack for glide update, remove it later
 	_ "github.com/pingcap/tidb-tools/pkg/check"

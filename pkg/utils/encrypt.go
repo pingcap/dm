@@ -17,7 +17,7 @@ import (
 	"encoding/base64"
 
 	"github.com/juju/errors"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/encrypt"
+	"github.com/pingcap/dm/pkg/encrypt"
 )
 
 // Encrypt tries to encrypt plaintext to base64 encoded ciphertext

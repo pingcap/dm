@@ -25,7 +25,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/ioutil2"
 
-	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
+	"github.com/pingcap/dm/pkg/gtid"
 )
 
 // Meta is the binlog meta information from sync source.

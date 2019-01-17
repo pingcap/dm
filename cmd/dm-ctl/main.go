@@ -26,9 +26,9 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/ctl"
-	"github.com/pingcap/tidb-enterprise-tools/dm/ctl/common"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/dm/dm/ctl"
+	"github.com/pingcap/dm/dm/ctl/common"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 func main() {

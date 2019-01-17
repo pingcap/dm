@@ -21,7 +21,7 @@ import (
 	"github.com/siddontang/go/sync2"
 	"golang.org/x/net/context"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
+	"github.com/pingcap/dm/dm/pb"
 )
 
 var (

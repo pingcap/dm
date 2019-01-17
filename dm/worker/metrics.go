@@ -21,12 +21,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/soheilhy/cmux"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/common"
-	"github.com/pingcap/tidb-enterprise-tools/loader"
-	"github.com/pingcap/tidb-enterprise-tools/mydumper"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
-	"github.com/pingcap/tidb-enterprise-tools/relay"
-	"github.com/pingcap/tidb-enterprise-tools/syncer"
+	"github.com/pingcap/dm/dm/common"
+	"github.com/pingcap/dm/loader"
+	"github.com/pingcap/dm/mydumper"
+	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/relay"
+	"github.com/pingcap/dm/syncer"
 )
 
 var (

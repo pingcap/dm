@@ -8,7 +8,7 @@ import (
 	"github.com/pingcap/parser/ast"
 	"github.com/siddontang/go-mysql/replication"
 
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // checkIsDDL checks input SQL whether is a valid DDL statement

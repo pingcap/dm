@@ -18,9 +18,9 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-enterprise-tools/dm/ctl/common"
-	"github.com/pingcap/tidb-enterprise-tools/dm/ctl/master"
-	"github.com/pingcap/tidb-enterprise-tools/dm/ctl/worker"
+	"github.com/pingcap/dm/dm/ctl/common"
+	"github.com/pingcap/dm/dm/ctl/master"
+	"github.com/pingcap/dm/dm/ctl/worker"
 	"github.com/spf13/cobra"
 )
 

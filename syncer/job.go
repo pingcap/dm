@@ -18,7 +18,7 @@ import (
 
 	"github.com/siddontang/go-mysql/mysql"
 
-	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
+	"github.com/pingcap/dm/pkg/gtid"
 )
 
 type opType byte

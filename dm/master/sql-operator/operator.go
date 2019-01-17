@@ -10,8 +10,8 @@ import (
 	"github.com/ngaut/log"
 	"github.com/satori/go.uuid"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/command"
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
+	"github.com/pingcap/dm/dm/command"
+	"github.com/pingcap/dm/dm/pb"
 )
 
 // Operator contains an operation for specified binlog pos

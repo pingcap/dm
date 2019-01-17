@@ -7,7 +7,7 @@ import (
 
 	"github.com/juju/errors"
 
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 var (

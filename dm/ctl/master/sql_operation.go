@@ -4,7 +4,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/command"
+	"github.com/pingcap/dm/dm/command"
 )
 
 // extractBinlogPosSQLPattern extracts binlog-pos and sql-pattern from command

@@ -21,7 +21,7 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
+	"github.com/pingcap/dm/dm/pb"
 )
 
 // Status returns the status of the current sub task

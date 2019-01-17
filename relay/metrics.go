@@ -7,7 +7,7 @@ import (
 	"github.com/ngaut/log"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 var (
