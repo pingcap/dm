@@ -24,7 +24,7 @@ import (
 
 	"github.com/chzyer/readline"
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
+	"github.com/pingcap/dm/pkg/log"
 
 	"github.com/pingcap/dm/dm/ctl"
 	"github.com/pingcap/dm/dm/ctl/common"
@@ -50,7 +50,6 @@ func main() {
 	// to make dmctl output more clear, simply redirect log to file rather output to stdout
 	log.SetLevelByString("info")
 	log.SetOutputByName("dmctl.log")
-	log.SetHighlighting(false)
 
 	err = ctl.Init(cfg)
 	if err != nil {

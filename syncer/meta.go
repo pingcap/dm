@@ -21,7 +21,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/ioutil2"
 

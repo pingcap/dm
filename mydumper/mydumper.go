@@ -21,10 +21,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ngaut/log"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/siddontang/go/sync2"
 	"golang.org/x/net/context"
 )

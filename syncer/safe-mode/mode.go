@@ -18,7 +18,7 @@ import (
 	"sync"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // SafeMode controls whether enable safe-mode through a mechanism similar to reference-count

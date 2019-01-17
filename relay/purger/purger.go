@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/siddontang/go/sync2"
 
 	"github.com/pingcap/dm/dm/pb"

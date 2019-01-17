@@ -17,7 +17,7 @@ import (
 	"os"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 func ExitWithError(err error) {
