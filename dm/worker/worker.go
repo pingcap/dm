@@ -381,7 +381,6 @@ func (w *Worker) doFetchDDLInfo(ctx context.Context, ch chan<- *pb.DDLInfo) {
 	log.Infof("[worker] save DDLInfo into subTasks")
 
 	ch <- v
-	return
 }
 
 // SendBackDDLInfo sends sub tasks' DDL info back to pending
