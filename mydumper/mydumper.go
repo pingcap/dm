@@ -63,7 +63,7 @@ func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	// every time re-dump, loader should re-prepare
 	err := os.RemoveAll(m.cfg.Dir)
 	if err != nil {
-		log.Error("[mydumper] remove output dir %s fail %v", m.cfg.Dir, err)
+		log.Errorf("[mydumper] remove output dir %s fail %v", m.cfg.Dir, err)
 	}
 
 	// Cmd cannot be reused, so we create a new cmd when begin processing
