@@ -21,15 +21,14 @@ ifeq ("$(WITH_RACE)", "1")
 	GOBUILD   = CGO_ENABLED=1 $(GO) build
 endif
 
-
 ARCH      := "`uname -s`"
 LINUX     := "Linux"
 MAC       := "Darwin"
 
-.PHONY: build syncer loader test dm_integration_test_build integration_test \
-	coverage check deps dm-worker dm-master dmctl
+.PHONY: build test dm_integration_test_build integration_test coverage check \
+	dm-worker dm-master dmctl
 
-build: syncer loader check test dm-worker dm-master dmctl
+build: check test dm-worker dm-master dmctl
 
 dm-worker:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dm-worker ./cmd/dm-worker
@@ -40,14 +39,9 @@ dm-master:
 dmctl:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dmctl ./cmd/dm-ctl
 
-syncer:
-	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/syncer ./cmd/syncer
-
-loader:
-	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/loader ./cmd/loader
-
 test:
 	bash -x ./wait_for_mysql.sh
+	mkdir -p $(TEST_DIR)
 	@export log_level=error; \
 	$(GOTEST) -covermode=atomic -coverprofile="$(TEST_DIR)/cov.unit_test.out" -race $(PACKAGES)
 
