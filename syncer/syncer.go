@@ -816,14 +816,6 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 	}
 }
 
-func (s *Syncer) genUpdateCheckPointSQLs(group *ShardingGroup) ([]string, [][]interface{}) {
-	if group == nil {
-		return []string{}, [][]interface{}{}
-	}
-	tables := group.Tables()
-	return s.checkpoint.GenUpdateForTableSQLs(tables)
-}
-
 // Run starts running for sync, we should guarantee it can rerun when paused.
 func (s *Syncer) Run(ctx context.Context) (err error) {
 	defer func() {

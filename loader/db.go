@@ -215,10 +215,6 @@ func isDDLRetryableError(err error) bool {
 	return isRetryableError(err)
 }
 
-func isTiDBUnknownError(err error) bool {
-	return isMySQLError(err, tmysql.ErrUnknown)
-}
-
 func isMySQLError(err error, code uint16) bool {
 	err = causeErr(err)
 	e, ok := err.(*mysql.MySQLError)
