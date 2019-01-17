@@ -8,7 +8,7 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/mysql"
 
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 func (s *testStreamerSuite) TestCollectBinlogFiles(c *C) {

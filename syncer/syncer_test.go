@@ -32,8 +32,8 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 	"golang.org/x/net/context"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/config"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 var _ = Suite(&testSyncerSuite{})

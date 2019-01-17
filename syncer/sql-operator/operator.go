@@ -11,8 +11,8 @@ import (
 	"github.com/satori/go.uuid"
 	"github.com/siddontang/go-mysql/mysql"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/command"
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
+	"github.com/pingcap/dm/dm/command"
+	"github.com/pingcap/dm/dm/pb"
 )
 
 // operator contains an operation for specified binlog pos or SQL pattern

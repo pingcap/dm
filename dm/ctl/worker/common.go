@@ -17,8 +17,8 @@ import (
 	"context"
 
 	"github.com/juju/errors"
-	"github.com/pingcap/tidb-enterprise-tools/checker"
-	"github.com/pingcap/tidb-enterprise-tools/dm/config"
+	"github.com/pingcap/dm/checker"
+	"github.com/pingcap/dm/dm/config"
 )
 
 func checkSubTask(ctx context.Context, task string) error {

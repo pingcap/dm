@@ -17,8 +17,8 @@ import (
 	"fmt"
 
 	"github.com/juju/errors"
-	"github.com/pingcap/tidb-enterprise-tools/dm/ctl/common"
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
+	"github.com/pingcap/dm/dm/ctl/common"
+	"github.com/pingcap/dm/dm/pb"
 	"github.com/spf13/cobra"
 )
 

@@ -17,7 +17,7 @@ import (
 	. "github.com/pingcap/check"
 	gouuid "github.com/satori/go.uuid"
 
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 func (s *testSyncerSuite) TestGetServerUUID(c *C) {

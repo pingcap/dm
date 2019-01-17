@@ -21,7 +21,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // DmctlMode works in which mode

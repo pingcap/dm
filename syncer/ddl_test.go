@@ -20,8 +20,8 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/config"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 func (s *testSyncerSuite) TestFindTableDefineIndex(c *C) {

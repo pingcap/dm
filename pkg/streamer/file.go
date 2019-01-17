@@ -10,7 +10,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/siddontang/go-mysql/mysql"
 )
 

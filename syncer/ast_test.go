@@ -18,7 +18,7 @@ import (
 
 	. "github.com/pingcap/check"
 
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 type testCase struct {

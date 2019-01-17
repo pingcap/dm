@@ -6,7 +6,7 @@ import (
 
 	. "github.com/pingcap/check"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/config"
+	"github.com/pingcap/dm/dm/config"
 )
 
 var _ = Suite(&testMydumperSuite{})

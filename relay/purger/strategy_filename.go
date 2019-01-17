@@ -7,8 +7,8 @@ import (
 	"github.com/juju/errors"
 	"github.com/siddontang/go/sync2"
 
-	"github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 var (

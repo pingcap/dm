@@ -16,8 +16,8 @@
 package unit
 
 import (
-	"github.com/pingcap/tidb-enterprise-tools/dm/config"
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
 	"golang.org/x/net/context"
 )
 

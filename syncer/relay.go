@@ -8,9 +8,9 @@ import (
 	"github.com/ngaut/log"
 	"github.com/siddontang/go-mysql/mysql"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/config"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 func (s *Syncer) setInitActiveRelayLog() error {

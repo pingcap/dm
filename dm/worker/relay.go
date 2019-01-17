@@ -8,9 +8,9 @@ import (
 	"github.com/ngaut/log"
 	"github.com/siddontang/go/sync2"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
-	"github.com/pingcap/tidb-enterprise-tools/relay"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/relay"
 )
 
 // RelayHolder used to hold the relay unit

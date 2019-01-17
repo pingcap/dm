@@ -1,6 +1,6 @@
 package purger
 
-import "github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
+import "github.com/pingcap/dm/pkg/streamer"
 
 type strategyType uint32
 

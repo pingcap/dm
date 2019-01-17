@@ -23,7 +23,7 @@ import (
 	"github.com/ngaut/log"
 	"github.com/siddontang/go-mysql/mysql"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/config"
+	"github.com/pingcap/dm/dm/config"
 )
 
 var (

@@ -12,9 +12,9 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/ioutil2"
 
-	"github.com/pingcap/tidb-enterprise-tools/pkg/gtid"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/streamer"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 var (

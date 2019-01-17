@@ -1,4 +1,4 @@
-module github.com/pingcap/tidb-enterprise-tools
+module github.com/pingcap/dm
 
 require (
 	github.com/BurntSushi/toml v0.3.1

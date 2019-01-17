@@ -22,7 +22,7 @@ import (
 	tmysql "github.com/pingcap/parser/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 func newMysqlErr(number uint16, message string) *mysql.MySQLError {

@@ -13,7 +13,7 @@ import (
 	"github.com/ngaut/log"
 	"github.com/siddontang/go-mysql/mysql"
 
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/tidb-tools/pkg/watcher"
 )
 

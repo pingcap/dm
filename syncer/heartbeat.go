@@ -12,7 +12,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"golang.org/x/net/context"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/config"
+	"github.com/pingcap/dm/dm/config"
 )
 
 // privileges: SELECT, UPDATE,  optionaly INSERT, optionaly CREATE.

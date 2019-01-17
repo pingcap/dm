@@ -1,8 +1,8 @@
-LDFLAGS += -X "github.com/pingcap/tidb-enterprise-tools/pkg/utils.ReleaseVersion=$(shell git describe --tags --dirty="-dev")"
-LDFLAGS += -X "github.com/pingcap/tidb-enterprise-tools/pkg/utils.BuildTS=$(shell date -u '+%Y-%m-%d %H:%M:%S')"
-LDFLAGS += -X "github.com/pingcap/tidb-enterprise-tools/pkg/utils.GitHash=$(shell git rev-parse HEAD)"
-LDFLAGS += -X "github.com/pingcap/tidb-enterprise-tools/pkg/utils.GitBranch=$(shell git rev-parse --abbrev-ref HEAD)"
-LDFLAGS += -X "github.com/pingcap/tidb-enterprise-tools/pkg/utils.GoVersion=$(shell go version)"
+LDFLAGS += -X "github.com/pingcap/dm/pkg/utils.ReleaseVersion=$(shell git describe --tags --dirty="-dev")"
+LDFLAGS += -X "github.com/pingcap/dm/pkg/utils.BuildTS=$(shell date -u '+%Y-%m-%d %H:%M:%S')"
+LDFLAGS += -X "github.com/pingcap/dm/pkg/utils.GitHash=$(shell git rev-parse HEAD)"
+LDFLAGS += -X "github.com/pingcap/dm/pkg/utils.GitBranch=$(shell git rev-parse --abbrev-ref HEAD)"
+LDFLAGS += -X "github.com/pingcap/dm/pkg/utils.GoVersion=$(shell go version)"
 
 
 CURDIR   := $(shell pwd)
@@ -73,11 +73,11 @@ vet:
 
 dm_integration_test_build:
 	$(GOTEST) -c -race -cover -covermode=atomic \
-		-coverpkg=github.com/pingcap/tidb-enterprise-tools/... \
-		-o bin/dm-worker.test github.com/pingcap/tidb-enterprise-tools/cmd/dm-worker
+		-coverpkg=github.com/pingcap/dm/... \
+		-o bin/dm-worker.test github.com/pingcap/dm/cmd/dm-worker
 	$(GOTEST) -c -race -cover -covermode=atomic \
-		-coverpkg=github.com/pingcap/tidb-enterprise-tools/... \
-		-o bin/dm-master.test github.com/pingcap/tidb-enterprise-tools/cmd/dm-master
+		-coverpkg=github.com/pingcap/dm/... \
+		-o bin/dm-master.test github.com/pingcap/dm/cmd/dm-master
 
 integration_test:
 	@which bin/tidb-server

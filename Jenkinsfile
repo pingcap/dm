@@ -6,6 +6,6 @@ node {
     def TIDB_BRANCH = "master"
    
     fileLoader.withGit('git@github.com:pingcap/SRE.git', 'master', 'github-iamxy-ssh', '') {
-        fileLoader.load('jenkins/ci/pingcap_tidb_enterprise_tools_branch.groovy').call(TIDB_BINLOG_BRANCH, TIDB_TOOLS_BRANCH, TIDB_BRANCH)
+        fileLoader.load('jenkins/ci/pingcap_dm_branch.groovy').call(TIDB_BINLOG_BRANCH, TIDB_TOOLS_BRANCH, TIDB_BRANCH)
     }
 }

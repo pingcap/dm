@@ -6,8 +6,8 @@ import (
 
 	"github.com/siddontang/go-mysql/mysql"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // ExecErrorContext records a failed exec SQL information

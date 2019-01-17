@@ -5,7 +5,7 @@ import (
 
 	. "github.com/pingcap/check"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
+	"github.com/pingcap/dm/dm/pb"
 )
 
 var _ = Suite(&testOperatorSuite{})

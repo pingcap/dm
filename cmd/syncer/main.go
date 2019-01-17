@@ -23,11 +23,11 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-enterprise-tools/checker"
-	"github.com/pingcap/tidb-enterprise-tools/dm/config"
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
-	"github.com/pingcap/tidb-enterprise-tools/syncer"
+	"github.com/pingcap/dm/checker"
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/syncer"
 	"golang.org/x/net/context"
 )
 

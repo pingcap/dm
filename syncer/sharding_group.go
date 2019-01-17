@@ -80,8 +80,8 @@ import (
 	"github.com/juju/errors"
 	"github.com/siddontang/go-mysql/mysql"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
-	"github.com/pingcap/tidb-enterprise-tools/pkg/utils"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // ShardingGroup represents a sharding DDL sync group

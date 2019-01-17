@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/pingcap/tidb-enterprise-tools/tests2/utils"
+	"github.com/pingcap/dm/tests2/utils"
 )
 
 func main() {

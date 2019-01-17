@@ -6,7 +6,7 @@ import (
 	"github.com/ngaut/log"
 	"golang.org/x/net/context"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
+	"github.com/pingcap/dm/dm/pb"
 )
 
 const (

@@ -21,7 +21,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-enterprise-tools/dm/config"
+	"github.com/pingcap/dm/dm/config"
 )
 
 // CheckPoint represents checkpoint status

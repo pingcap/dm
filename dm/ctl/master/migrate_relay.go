@@ -9,8 +9,8 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/net/context"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/ctl/common"
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
+	"github.com/pingcap/dm/dm/ctl/common"
+	"github.com/pingcap/dm/dm/pb"
 )
 
 // NewMigrateRelayCmd creates a MigrateRelay command

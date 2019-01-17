@@ -6,7 +6,7 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/mysql"
 
-	"github.com/pingcap/tidb-enterprise-tools/dm/pb"
+	"github.com/pingcap/dm/dm/pb"
 )
 
 var _ = Suite(&testOperatorSuite{})
