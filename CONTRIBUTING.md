@@ -40,11 +40,8 @@ Run `./generate-dm.sh` to regenerate go code files.
 
 ### Updating dependencies
 
-[Go 1.11 module](https://github.com/golang/go/wiki/Modules).
-To add or update a dependency,
-
-1. Edit `go.mod` or use the `go mod edit` command to change the dependency.
-2. Run `make update` to update the vendor directory.
+DM uses [Go 1.11 module](https://github.com/golang/go/wiki/Modules) to manage dependencies.
+To add or update a dependency: Edit `go.mod` or use the `go mod edit` command to change the dependency.
 
 ## Contribution flow
 
@@ -74,7 +71,7 @@ questions: what changed and why. The subject line should feature the what and
 the body of the commit should describe the why.
 
 ```
-restore: add comment for variable declaration
+dm-master: add comment for variable declaration
 
 Improve documentation.
 ```
@@ -94,7 +91,7 @@ second line is always blank, and other lines should be wrapped at 80 characters.
 This allows the message to be easier to read on GitHub as well as in various
 git tools.
 
-If the change affects more than one subsystem, you can use comma to separate them like `restore,mydump:`.
+If the change affects more than one subsystem, you can use comma to separate them like `dm-master,dm-worker:`.
 
 If the change affects many subsystems, you can use ```*``` instead, like ```*:```.
 
