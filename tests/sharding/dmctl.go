@@ -17,7 +17,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/pingcap/dm/tests2/utils"
+	"github.com/pingcap/dm/tests/utils"
 )
 
 func main() {
