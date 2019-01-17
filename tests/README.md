@@ -12,7 +12,6 @@
 2. The following programs must be installed:
 
     * `mysql` (the CLI client)
-    * `nc` (the netcat. use `yum install -y nmap-ncat` on CentOS or `apt-get install -y netcat` on Debian)
 
 3. The user executing the tests must have permission to create the folder `/tmp/dm_test`. All test artifacts will be written into this folder.
 
@@ -39,5 +38,6 @@ Several convenient commands are provided:
 * `run_sql_file <path_to_SQL_file> <PORT>` — Executes all SQLs in given file to the database on port provided
 * `check_contains <TEXT>` — Checks if the previous `run_sql`/`run_sql_file` result contains the given text (in `-E` format)
 * `check_sync_diff <WORKDIR> <CONFIG>` - Runs `sync_diff_inspector` to check diff between databases, using config file provided
-* `check_port_alive <PORT>` - Checks a port is alive.
+* `check_port_alive <PORT>` - Wrapper to check a port is alive, at most 20 times.
+* `check_port <HOST> <PORT>` - Checks a host:port is alive.
 
