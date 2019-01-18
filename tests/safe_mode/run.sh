@@ -71,12 +71,14 @@ function run() {
         # we can't determine which DM-worker is the sharding lock owner, so we try both of them
         # DM-worker1 is sharding lock owner and exits
         if [ "$(check_port_return $WORKER1_PORT)" == "0" ]; then
+            echo "DM-worker1 is sharding lock owner and detects it offline"
             run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
             check_port_alive $WORKER1_PORT
             break
         fi
         # DM-worker2 is sharding lock owner and exits
         if [ "$(check_port_return $WORKER2_PORT)" == "0" ]; then
+            echo "DM-worker2 is sharding lock owner and detects it offline"
             run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
             check_port_alive $WORKER2_PORT
             break
