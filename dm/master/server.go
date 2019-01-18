@@ -1601,12 +1601,12 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 		workerCfgs  = make(map[string]config.DBConfig)
 		err         error
 	)
-	handErr := func(err error) {
+	handErr := func(err2 error) {
 		workerMutex.Lock()
-		if err != nil {
-			log.Error(err)
+		if err2 != nil {
+			log.Error(err2)
 		}
-		err = errors.Trace(err)
+		err = errors.Trace(err2)
 		workerMutex.Unlock()
 	}
 
