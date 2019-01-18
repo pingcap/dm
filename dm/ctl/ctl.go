@@ -17,10 +17,10 @@ import (
 	"fmt"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/ctl/master"
 	"github.com/pingcap/dm/dm/ctl/worker"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/spf13/cobra"
 )
 
@@ -37,7 +37,7 @@ type CommandMasterFlags struct {
 // Init initializes dm-control
 func Init(cfg *common.Config) error {
 	// set the log level temporarily
-	log.SetLevel(log.LOG_LEVEL_INFO)
+	log.SetLevelByString("info")
 	mode = cfg.Mode
 	return errors.Trace(common.InitClient(cfg.ServerAddr, cfg.Mode))
 }

@@ -20,8 +20,8 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/log"
 	tmysql "github.com/pingcap/parser/mysql"
 )
 

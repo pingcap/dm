@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/config"
@@ -412,10 +412,7 @@ func (cp *RemoteCheckPoint) String() string {
 func (cp *RemoteCheckPoint) CheckGlobalPoint() bool {
 	cp.RLock()
 	defer cp.RUnlock()
-	if time.Since(cp.globalPointSaveTime) >= maxCheckPointSaveTime {
-		return true
-	}
-	return false
+	return time.Since(cp.globalPointSaveTime) >= maxCheckPointSaveTime
 }
 
 // Rollback implements CheckPoint.Rollback

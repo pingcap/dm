@@ -184,7 +184,7 @@ func (sg *ShardingGroup) Leave(sources []string) error {
 // when the previous sharding DDL synced and resolved, we need reset it
 func (sg *ShardingGroup) Reset() {
 	sg.Lock()
-	sg.Unlock()
+	defer sg.Unlock()
 
 	sg.remain = len(sg.sources)
 	for source := range sg.sources {

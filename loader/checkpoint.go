@@ -20,8 +20,8 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // CheckPoint represents checkpoint status

@@ -17,7 +17,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/ngaut/log"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/siddontang/go-mysql/replication"
 )
 

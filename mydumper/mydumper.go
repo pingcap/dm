@@ -21,10 +21,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ngaut/log"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/siddontang/go/sync2"
 	"golang.org/x/net/context"
 )
@@ -63,7 +63,7 @@ func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	// every time re-dump, loader should re-prepare
 	err := os.RemoveAll(m.cfg.Dir)
 	if err != nil {
-		log.Error("[mydumper] remove output dir %s fail %v", m.cfg.Dir, err)
+		log.Errorf("[mydumper] remove output dir %s fail %v", m.cfg.Dir, err)
 	}
 
 	// Cmd cannot be reused, so we create a new cmd when begin processing

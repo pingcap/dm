@@ -47,7 +47,7 @@ func updateRelayFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	workers, err := common.GetWorkerArgs(cmd)
+	workers, _ := common.GetWorkerArgs(cmd)
 	if len(workers) != 1 {
 		fmt.Println("must specify one dm-worker (`-w` / `--worker`)")
 		return

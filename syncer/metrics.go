@@ -17,7 +17,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ngaut/log"
+	"github.com/pingcap/dm/pkg/log"
 	cpu "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/net/context"
