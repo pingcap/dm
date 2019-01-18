@@ -64,13 +64,30 @@ function run() {
     run_sql_file $cur/data/db1.increment2.sql $DB1_PORT
     run_sql_file $cur/data/db2.increment2.sql $DB2_PORT
 
-    check_port_offline $WORKER1_PORT 20
-
     export GOFAIL_FAILPOINTS='github.com/pingcap/dm/syncer/ReSyncExit=return(false);github.com/pingcap/dm/syncer/WaitShardingSyncExit=return(false)'
-    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
-    check_port_alive $WORKER1_PORT
-    $cur/bin/dmctl "$cur/conf/dm-task.yaml"
 
+    i=0
+    while [ $i -lt 10 ]; do
+        # we can't determine which DM-worker is the sharding lock owner, so we try both of them
+        # DM-worker1 is sharding lock owner and exits
+        if [ "$(check_port_return $WORKER1_PORT)" == "0" ]; then
+            run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+            check_port_alive $WORKER1_PORT
+            break
+        fi
+        # DM-worker2 is sharding lock owner and exits
+        if [ "$(check_port_return $WORKER2_PORT)" == "0" ]; then
+            run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+            check_port_alive $WORKER2_PORT
+            break
+        fi
+    done
+    if [ $i -ge 10 ]; then
+        echo "wait DM-worker offline timeout"
+        exit 1
+    fi
+
+    $cur/bin/dmctl "$cur/conf/dm-task.yaml"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
