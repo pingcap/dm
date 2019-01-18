@@ -81,6 +81,8 @@ function run() {
             check_port_alive $WORKER2_PORT
             break
         fi
+
+        echo "wait for one of DM-worker offine failed, retry later" && sleep 1
     done
     if [ $i -ge 10 ]; then
         echo "wait DM-worker offline timeout"
