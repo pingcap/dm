@@ -16,7 +16,7 @@ package syncer
 import (
 	"strings"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
 )
 

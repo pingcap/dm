@@ -16,8 +16,8 @@ package utils
 import (
 	"os"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/errors"
 )
 
 func ExitWithError(err error) {

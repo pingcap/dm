@@ -12,10 +12,8 @@ require (
 	github.com/gogo/protobuf v1.1.1
 	github.com/golang/protobuf v1.2.0
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
-	github.com/juju/errors v0.0.0-20181118221551-089d3ea4e4d5
-	github.com/juju/loggo v0.0.0-20180524022052-584905176618 // indirect
-	github.com/juju/testing v0.0.0-20180920084828-472a3e8b2073 // indirect
 	github.com/pingcap/check v0.0.0-20171206051426-1c287c953996
+	github.com/pingcap/errors v0.11.0
 	github.com/pingcap/kvproto v0.0.0-20181206061346-54cf0a0dfe55 // indirect
 	github.com/pingcap/parser v0.0.0-20181205023950-c563561800a2
 	github.com/pingcap/tidb v0.0.0-20181206093020-98c72c6a8ee3
@@ -28,7 +26,7 @@ require (
 	github.com/shopspring/decimal v0.0.0-20180709203117-cd690d0c9e24 // indirect
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
 	github.com/siddontang/go-log v0.0.0-20180807004314-8d05993dda07 // indirect
-	github.com/siddontang/go-mysql v0.0.0-20181028041111-76c059e36c62
+	github.com/siddontang/go-mysql v0.0.0-20190118051307-00086da2c732
 	github.com/sirupsen/logrus v1.3.0
 	github.com/soheilhy/cmux v0.1.4
 	github.com/spf13/cobra v0.0.3
@@ -39,7 +37,6 @@ require (
 	golang.org/x/sys v0.0.0-20190116161447-11f53e031339
 	google.golang.org/grpc v1.17.0
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6 // indirect
-	gopkg.in/mgo.v2 v2.0.0-20180705113604-9856a29383ce // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.2.2
 )

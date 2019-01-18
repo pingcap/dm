@@ -19,9 +19,9 @@ import (
 	"sort"
 
 	"github.com/golang/protobuf/jsonpb"
-	"github.com/juju/errors"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/errors"
 )
 
 // Status returns the status of the current sub task

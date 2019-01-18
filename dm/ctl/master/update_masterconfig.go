@@ -16,9 +16,9 @@ package master
 import (
 	"fmt"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 	"golang.org/x/net/context"
 )

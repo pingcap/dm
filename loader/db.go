@@ -19,9 +19,9 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/juju/errors"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
 )
 

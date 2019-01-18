@@ -20,7 +20,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 )
 
 var (

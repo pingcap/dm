@@ -16,7 +16,7 @@ package relay
 import (
 	"strings"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/siddontang/go-mysql/replication"

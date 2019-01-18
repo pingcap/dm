@@ -14,7 +14,7 @@
 package master
 
 import (
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 
 	"github.com/pingcap/dm/dm/command"

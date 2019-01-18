@@ -23,8 +23,8 @@ import (
 
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 )
 
