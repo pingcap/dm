@@ -16,7 +16,7 @@ package relay
 import (
 	"encoding/json"
 
-	"github.com/ngaut/log"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // Config is the configuration for Relay.

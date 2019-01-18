@@ -16,7 +16,7 @@ package utils
 import (
 	"fmt"
 
-	"github.com/ngaut/log"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // Version information.
@@ -41,11 +41,11 @@ func GetRawInfo() string {
 
 // PrintInfo prints some information of the app, like git hash, binary build time, etc.
 func PrintInfo(app string, callback func()) {
-	oriLevel := log.GetLogLevel()
-	log.SetLevel(log.LOG_LEVEL_INFO)
+	oriLevel := log.GetLogLevelAsString()
+	log.SetLevelByString("info")
 	printInfo(app)
 	callback()
-	log.SetLevel(oriLevel)
+	log.SetLevelByString(oriLevel)
 }
 
 func printInfo(app string) {

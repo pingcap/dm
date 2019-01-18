@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
 	"golang.org/x/net/context"
@@ -1517,13 +1517,6 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 	log.SetLevelByString(strings.ToLower(cfg.LogLevel))
 	if len(cfg.LogFile) > 0 {
 		log.SetOutputByName(cfg.LogFile)
-		log.SetHighlighting(false)
-
-		if cfg.LogRotate == "day" {
-			log.SetRotateByDay()
-		} else {
-			log.SetRotateByHour()
-		}
 	}
 
 	s.cfg = cfg

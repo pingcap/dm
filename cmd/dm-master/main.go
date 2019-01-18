@@ -22,8 +22,8 @@ import (
 	"syscall"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
 	"github.com/pingcap/dm/dm/master"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -42,13 +42,6 @@ func main() {
 	log.SetLevelByString(strings.ToLower(cfg.LogLevel))
 	if len(cfg.LogFile) > 0 {
 		log.SetOutputByName(cfg.LogFile)
-		log.SetHighlighting(false)
-
-		if cfg.LogRotate == "day" {
-			log.SetRotateByDay()
-		} else {
-			log.SetRotateByHour()
-		}
 	}
 
 	utils.PrintInfo("dm-master", func() {

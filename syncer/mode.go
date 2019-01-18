@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
+	"github.com/pingcap/dm/pkg/log"
 	"golang.org/x/net/context"
 
 	"github.com/pingcap/dm/dm/pb"

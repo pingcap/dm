@@ -17,7 +17,7 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/ngaut/log"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/soheilhy/cmux"
 
