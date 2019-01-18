@@ -16,8 +16,8 @@ package master
 import (
 	"sync"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 )
 

@@ -16,11 +16,11 @@ package ctl
 import (
 	"fmt"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/ctl/master"
 	"github.com/pingcap/dm/dm/ctl/worker"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 )
 

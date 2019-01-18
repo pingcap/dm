@@ -16,8 +16,8 @@ package syncer
 import (
 	"time"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/errors"
 	"golang.org/x/net/context"
 
 	"github.com/pingcap/dm/dm/pb"

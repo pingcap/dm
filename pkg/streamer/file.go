@@ -21,9 +21,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 )
 

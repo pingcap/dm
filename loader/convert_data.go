@@ -22,7 +22,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"

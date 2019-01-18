@@ -16,9 +16,9 @@ package worker
 import (
 	"context"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/errors"
 )
 
 func checkSubTask(ctx context.Context, task string) error {

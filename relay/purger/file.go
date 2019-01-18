@@ -18,8 +18,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/errors"
 
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"

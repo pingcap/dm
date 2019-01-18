@@ -16,8 +16,8 @@ package relay
 import (
 	"time"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/errors"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/pingcap/dm/pkg/utils"

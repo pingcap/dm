@@ -13,7 +13,7 @@
 
 package syncer
 
-import "github.com/juju/errors"
+import "github.com/pingcap/errors"
 
 // causality provides a simple mechanism to improve the concurrency of SQLs execution under the premise of ensuring correctness.
 // causality groups sqls that maybe contain causal relationships, and syncer executes them linearly.

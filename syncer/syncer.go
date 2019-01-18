@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"

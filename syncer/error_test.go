@@ -17,8 +17,8 @@ import (
 	"database/sql/driver"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/juju/errors"
 	. "github.com/pingcap/check"
+	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 

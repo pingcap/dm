@@ -23,8 +23,8 @@ import (
 	"syscall"
 
 	"github.com/chzyer/readline"
-	"github.com/juju/errors"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/errors"
 
 	"github.com/pingcap/dm/dm/ctl"
 	"github.com/pingcap/dm/dm/ctl/common"

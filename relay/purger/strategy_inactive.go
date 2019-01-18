@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 
 	"github.com/pingcap/dm/pkg/streamer"

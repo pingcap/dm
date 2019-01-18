@@ -20,9 +20,9 @@ import (
 	"io/ioutil"
 
 	"github.com/BurntSushi/toml"
-	"github.com/juju/errors"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/errors"
 )
 
 // NewConfig creates a config for dm-master
