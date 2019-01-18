@@ -31,38 +31,46 @@ function run() {
     run_sql_file $cur/data/db2.prepare.sql $DB2_PORT
     check_contains 'Query OK, 3 rows affected'
 
-    export GOFAIL_FAILPOINTS='github.com/pingcap/dm/syncer/ReSyncExit=return(true)'
+    cd $cur && GO111MODULE=on go build -o bin/dmctl && cd -
+
+    export GOFAIL_FAILPOINTS='github.com/pingcap/dm/syncer/ReSyncExit=return(true);github.com/pingcap/dm/syncer/WaitShardingSyncExit=return(false)'
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
-
     check_port_alive $MASTER_PORT
     check_port_alive $WORKER1_PORT
     check_port_alive $WORKER2_PORT
 
-    cd $cur && GO111MODULE=on go build -o bin/dmctl && cd -
-    # start DM task only
     $cur/bin/dmctl "$cur/conf/dm-task.yaml"
-
-    # TODO: check sharding partition id
-    # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
+    # DM-worker exit during re-sync after sharding group synced
     run_sql_file $cur/data/db1.increment.sql $DB1_PORT
     run_sql_file $cur/data/db2.increment.sql $DB2_PORT
 
     check_port_offline $WORKER1_PORT
     check_port_offline $WORKER2_PORT
 
-    export GOFAIL_FAILPOINTS='github.com/pingcap/dm/syncer/ReSyncExit=return(true)'
+    export GOFAIL_FAILPOINTS='github.com/pingcap/dm/syncer/ReSyncExit=return(false);github.com/pingcap/dm/syncer/WaitShardingSyncExit=return(true)'
+
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_port_alive $WORKER1_PORT
     check_port_alive $WORKER2_PORT
     $cur/bin/dmctl "$cur/conf/dm-task.yaml"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    # TODO: check sharding partition id
-    # use sync_diff_inspector to check data now!
+    # DM-worker exit when waiting for sharding group synced
+    run_sql_file $cur/data/db1.increment2.sql $DB1_PORT
+    run_sql_file $cur/data/db2.increment2.sql $DB2_PORT
+
+    check_port_offline $WORKER1_PORT
+
+    export GOFAIL_FAILPOINTS='github.com/pingcap/dm/syncer/ReSyncExit=return(false);github.com/pingcap/dm/syncer/WaitShardingSyncExit=return(false)'
+    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+    check_port_alive $WORKER1_PORT
+    $cur/bin/dmctl "$cur/conf/dm-task.yaml"
+
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
@@ -70,6 +78,6 @@ cleanup1 $*
 # also cleanup dm processes in case of last run failed
 cleanup2 $*
 run $*
-# cleanup2 $*
+cleanup2 $*
 
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"

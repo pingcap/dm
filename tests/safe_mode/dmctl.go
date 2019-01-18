@@ -16,6 +16,7 @@ package main
 import (
 	"context"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/pingcap/dm/pkg/log"
@@ -34,6 +35,10 @@ func main() {
 	for i := 0; i < retry; i++ {
 		err = utils.StartTask(context.Background(), cli, conf, nil)
 		if err != nil {
+			if strings.Contains(err.Error(), "sub task with name test already started") {
+				err = nil
+				break
+			}
 			log.Infof("start task failed with error: %s, retry\n", err)
 			time.Sleep(time.Second)
 		} else {

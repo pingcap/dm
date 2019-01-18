@@ -972,7 +972,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			log.Debugf("[syncer] start using a special streamer to re-sync DMLs for sharding group %+v", shardingReSync)
 			// gofail: var ReSyncExit bool
 			// if ReSyncExit {
-			//   s.exit(0)
+			//   s.exit(1)
 			// }
 		}
 
@@ -1511,7 +1511,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					log.Info("[syncer] cancel to add DDL to job because of canceled from external")
 					return nil
 				}
+
 				if ddlExecItem.req.Exec {
+					// gofail: var WaitShardingSyncExit bool
+					// if WaitShardingSyncExit {
+					//   s.exit(1)
+					// }
 					log.Infof("[syncer] add DDL %v to job, request is %+v", ddlInfo1.DDLs, ddlExecItem.req)
 				} else {
 					log.Infof("[syncer] ignore DDL %v, request is %+v", ddlInfo1.DDLs, ddlExecItem.req)
