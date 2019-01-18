@@ -62,7 +62,7 @@ func (cfg *HeartbeatConfig) Equal(other *HeartbeatConfig) error {
 	if other.reportInterval != 0 && other.reportInterval != cfg.reportInterval {
 		return errors.Errorf("reportInterval not equal, self: %d, other: %d", cfg.reportInterval, other.reportInterval)
 	}
-	if other.serverID != other.serverID {
+	if cfg.serverID != other.serverID {
 		return errors.Errorf("serverID not equal, self: %d, other: %d", cfg.serverID, other.serverID)
 	}
 	if !reflect.DeepEqual(cfg.masterCfg, other.masterCfg) {
