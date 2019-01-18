@@ -1,10 +1,12 @@
 #!/bin/bash
 # parameter 1: port
+# parameter 2: retry count
 
 port=$1
+retry=$2
 
 i=0
-while [ $i -lt 20 ]
+while [ $i -lt $retry ]
 do
     check_port 127.0.0.1 $port > /dev/null 2>&1
     ret=$?
@@ -16,7 +18,7 @@ do
     sleep 1
 done
 
-if [ $i -ge 20 ]; then
+if [ $i -ge $retry ]; then
     echo "port $port check offline timeout"
     exit 1
 fi

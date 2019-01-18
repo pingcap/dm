@@ -48,8 +48,8 @@ function run() {
     run_sql_file $cur/data/db1.increment.sql $DB1_PORT
     run_sql_file $cur/data/db2.increment.sql $DB2_PORT
 
-    check_port_offline $WORKER1_PORT
-    check_port_offline $WORKER2_PORT
+    check_port_offline $WORKER1_PORT 20
+    check_port_offline $WORKER2_PORT 20
 
     export GOFAIL_FAILPOINTS='github.com/pingcap/dm/syncer/ReSyncExit=return(false);github.com/pingcap/dm/syncer/WaitShardingSyncExit=return(true)'
 
@@ -64,7 +64,7 @@ function run() {
     run_sql_file $cur/data/db1.increment2.sql $DB1_PORT
     run_sql_file $cur/data/db2.increment2.sql $DB2_PORT
 
-    check_port_offline $WORKER1_PORT
+    check_port_offline $WORKER1_PORT 20
 
     export GOFAIL_FAILPOINTS='github.com/pingcap/dm/syncer/ReSyncExit=return(false);github.com/pingcap/dm/syncer/WaitShardingSyncExit=return(false)'
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
