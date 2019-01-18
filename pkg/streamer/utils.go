@@ -57,7 +57,7 @@ func ExtractPos(pos mysql.Position, uuids []string) (uuidWithSuffix string, uuid
 	}
 
 	// use the latest
-	var suffixInt = 0
+	var suffixInt int
 	uuid := uuids[len(uuids)-1]
 	_, suffixInt, err = utils.ParseSuffixForUUID(uuid)
 	if err != nil {

@@ -78,7 +78,7 @@ func (s *testSyncerSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	err = ioutil.WriteFile(filename, []byte(
 		fmt.Sprintf("SHOW MASTER STATUS:\n\tLog: %s\n\tPos: %d\n\tGTID:\n\nSHOW SLAVE STATUS:\n\tHost: %s\n\tLog: %s\n\tPos: %d\n\tGTID:\n\n", pos1.Name, pos1.Pos, "slave_host", pos1.Name, pos1.Pos+1000)),
 		0644)
-
+	c.Assert(err, IsNil)
 	s.cfg.Mode = config.ModeAll
 	s.cfg.Dir = dir
 	err = cp.Load()

@@ -85,3 +85,10 @@ coverage:
 	GO111MODULE=off go get github.com/wadey/gocovmerge
 	gocovmerge "$(TEST_DIR)"/cov.* > "$(TEST_DIR)/all_cov.out"
 	go tool cover -html "$(TEST_DIR)/all_cov.out" -o "$(TEST_DIR)/all_cov.html"
+
+check-static:
+	@echo "gometalinter"
+	gometalinter --disable-all --deadline 120s \
+		--enable megacheck \
+		--enable ineffassign \
+		./...

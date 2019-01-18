@@ -434,6 +434,10 @@ func (s *Syncer) handleOnlineDDL(p *parser.Parser, schema, sql string) ([]string
 	}
 	for i := range sqls {
 		stmt, err := p.ParseOneStmt(sqls[i], "", "")
+		if err != nil {
+			return nil, nil, errors.Trace(err)
+		}
+
 		sqls[i], err = genDDLSQL(sqls[i], stmt, tableNames[:1], targetTables, false)
 		if err != nil {
 			return nil, nil, errors.Trace(err)

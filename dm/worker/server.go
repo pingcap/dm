@@ -286,7 +286,7 @@ func (s *Server) FetchDDLInfo(stream pb.Worker_FetchDDLInfoServer) error {
 		}
 		log.Infof("[server] receive DDLLockInfo %v", in)
 
-		ddlInfo = nil // clear and protect to put it back
+		//ddlInfo = nil // clear and protect to put it back
 
 		err = s.worker.RecordDDLLockInfo(in)
 		if err != nil {
