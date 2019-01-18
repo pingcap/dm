@@ -23,9 +23,6 @@ mysql-instances:
 
   - source-id: "mysql-replica-02"
     server-id: 102
-    meta:
-      binlog-name: binlog.000001
-      binlog-pos: 4
     black-white-list:  "instance"
     mydumper-config-name: "global"
     loader-config-name: "global"

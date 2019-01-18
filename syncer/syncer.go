@@ -16,6 +16,7 @@ package syncer
 import (
 	"fmt"
 	"math"
+	"os"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -968,7 +969,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				})
 				shardingStreamer, err = s.getBinlogStreamer(shardingReader, shardingReSync.currPos)
 			}
-			log.Debugf("[syncer] start using a  special streamer to re-sync DMLs for sharding group %+v", shardingReSync)
+			log.Debugf("[syncer] start using a special streamer to re-sync DMLs for sharding group %+v", shardingReSync)
+			// gofail: var ReSyncExit bool
+			// if ReSyncExit {
+			//   s.exit(0)
+			// }
 		}
 
 		var (
@@ -2089,4 +2094,9 @@ func (s *Syncer) setTimezone() {
 	}
 	log.Infof("[syncer] use timezone: %s", loc)
 	s.timezone = loc
+}
+
+// exit used in gofail test only, to simulate DM-worker exit
+func (s *Syncer) exit(exitcode int) {
+	os.Exit(exitcode)
 }
