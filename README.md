@@ -1,8 +1,12 @@
 # Data Migration Platform
 
-**DM** is an integrated platform, supports migrating data from MySQL to TiDB.
+**DM** is an integrated platform, supports migrating data from MySQL/MariaDB to TiDB.
 
-![](https://pingcap.com/images/docs/dm-architecture.png)
+## Architecture
+
+![architecture](https://pingcap.com/images/docs/dm-architecture.png)
+
+## Documentation
 
 * [Detailed documentation](https://pingcap.com/docs/tools/data-migration-overview/)
 * [简体中文文档](https://github.com/pingcap/tidb-tools/blob/docs/docs/dm/zh_CN/README.md)
