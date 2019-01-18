@@ -12,5 +12,5 @@ if __name__ == '__main__':
     s.settimeout(1)
     # if port is not alive, `socket.error` will be raised and exit with 1
     s.connect((sys.argv[1], int(sys.argv[2])))
-    if s.send('\n') != 1:
+    if s.send('\n'.encode()) != 1:
         raise Exception("failed to send")
