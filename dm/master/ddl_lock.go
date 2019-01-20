@@ -79,7 +79,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 )
 
 // genDDLLockID generates a DDL lock ID

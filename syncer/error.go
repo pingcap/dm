@@ -15,7 +15,7 @@ package syncer
 
 import (
 	"github.com/go-sql-driver/mysql"
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/parser/terror"
 	tddl "github.com/pingcap/tidb/ddl"

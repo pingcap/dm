@@ -22,12 +22,12 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql" // for mysql
-	"github.com/juju/errors"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/check"
 	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"

@@ -19,8 +19,8 @@ import (
 	"strconv"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/juju/errors"
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	tmysql "github.com/pingcap/parser/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"

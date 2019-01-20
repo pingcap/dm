@@ -16,7 +16,7 @@ package utils
 import (
 	"reflect"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"golang.org/x/sys/unix"
 )
 

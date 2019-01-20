@@ -16,8 +16,8 @@ package utils
 import (
 	"encoding/base64"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/dm/pkg/encrypt"
+	"github.com/pingcap/errors"
 )
 
 // Encrypt tries to encrypt plaintext to base64 encoded ciphertext

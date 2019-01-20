@@ -1,7 +1,7 @@
 
 ## Preparations
 
-1. The following five executables must be copied or generated or linked into these locations:
+1. The following five executables must be copied or generated or linked into these locations, `mydumper` and `sync_diff_inspector` can be downloaded from [tidb-enterprise-tools-latest-linux-amd64](http://download.pingcap.org/tidb-enterprise-tools-latest-linux-amd64.tar.gz):
 
     * `bin/tidb-server`
     * `bin/sync_diff_inspector`
@@ -12,10 +12,19 @@
 2. The following programs must be installed:
 
     * `mysql` (the CLI client)
+    * `python2.7` or `python3.x`
 
 3. The user executing the tests must have permission to create the folder `/tmp/dm_test`. All test artifacts will be written into this folder.
 
 ## Running
+
+### Unit Test
+
+1. Setup a MySQL server with binlog enabled first, export proper enviroment variable `MYSQL_HOST` and `MYSQL_PORT`
+
+2. Run `make test` to run unit test
+
+### Integration Test
 
 1. Run `make dm_integration_test_build` to generate DM related binary for integration test
 

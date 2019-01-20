@@ -16,7 +16,7 @@ package utils
 import (
 	"os"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 )
 
 // IsFileExists checks if file exists.

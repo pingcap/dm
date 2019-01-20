@@ -19,8 +19,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 
 	"github.com/pingcap/dm/dm/pb"

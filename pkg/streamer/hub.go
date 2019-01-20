@@ -18,7 +18,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 
 	"github.com/pingcap/dm/pkg/utils"
 )

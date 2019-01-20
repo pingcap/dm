@@ -17,7 +17,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
@@ -26,6 +25,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer"
+	"github.com/pingcap/errors"
 
 	// hack for glide update, remove it later
 	_ "github.com/pingcap/tidb-tools/pkg/check"

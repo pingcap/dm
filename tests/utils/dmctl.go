@@ -18,7 +18,7 @@ import (
 	"io/ioutil"
 	"time"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/pb"

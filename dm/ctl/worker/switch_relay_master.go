@@ -16,7 +16,7 @@ package worker
 import (
 	"fmt"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 	"golang.org/x/net/context"
 

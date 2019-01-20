@@ -20,8 +20,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
 	"golang.org/x/net/context"

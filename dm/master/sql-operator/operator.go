@@ -19,8 +19,8 @@ import (
 	"sync"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/juju/errors"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/errors"
 	"github.com/satori/go.uuid"
 
 	"github.com/pingcap/dm/dm/command"

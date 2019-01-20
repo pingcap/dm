@@ -17,7 +17,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 
 	"github.com/pingcap/dm/dm/ctl/common"
