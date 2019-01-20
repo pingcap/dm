@@ -34,7 +34,7 @@ Please answer these questions before submitting your issue. Thanks!
         (paste TiDB cluster version here)
         ```
 
-    - How did you deploy DM: DM-Ansible or via manually?
+    - How did you deploy DM: DM-Ansible or manually?
 
         ```
         (leave DM-Ansible or manually here)
