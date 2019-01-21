@@ -11,7 +11,7 @@ GOBUILD  := CGO_ENABLED=0 $(GO) build
 GOTEST   := CGO_ENABLED=1 $(GO) test
 PACKAGES  := $$(go list ./... | grep -vE 'tests|cmd|vendor')
 FILES    := $$(find . -name "*.go" | grep -vE "vendor")
-TOPDIRS  := $$(ls -d */ | grep -vE "vendor)
+TOPDIRS  := $$(ls -d */ | grep -vE "vendor")
 SHELL    := /usr/bin/env bash
 TEST_DIR := /tmp/dm_test
 
