@@ -1,5 +1,6 @@
 ---
 name: "\U0001F914 Question"
+labels: "question"
 about: Usage question that isn't answered in docs or discussion
 
 ---
