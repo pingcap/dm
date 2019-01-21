@@ -19,7 +19,7 @@ Please answer these questions before submitting your issue. Thanks!
     - DM version (run `dmctl -V` or `dm-worker -V` or `dm-master -V`):
 
         ```
-        (paste DM version here, and your must ensure versions of dmctl, DM-worker and DM-master are same)
+        (paste DM version here, and you must ensure versions of dmctl, DM-worker and DM-master are the same)
         ```
 
     - Upstream MySQL/MariaDB server version:
@@ -34,7 +34,7 @@ Please answer these questions before submitting your issue. Thanks!
         (paste TiDB cluster version here)
         ```
 
-    - How did you deploy DM: DM-Ansible or via manually?
+    - How did you deploy DM: DM-Ansible or manually?
 
         ```
         (leave DM-Ansible or manually here)
