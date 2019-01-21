@@ -271,13 +271,9 @@ func (c *Checker) Status() interface{} {
 	res := c.result.detail
 	c.result.RUnlock()
 
-	var errs []*pb.ProcessError
-	if !res.Summary.Passed {
-		errs = append(errs, unit.NewProcessError(pb.ErrorType_CheckFailed, "check was failed, please see detail"))
-	}
 	rawResult, err := json.Marshal(res)
 	if err != nil {
-		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, fmt.Sprintf("marshal error %v", err)))
+		rawResult = []byte(fmt.Sprintf("marshal %+v error %v", res, err))
 	}
 
 	return &pb.CheckStatus{

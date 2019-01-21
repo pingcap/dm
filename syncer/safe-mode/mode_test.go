@@ -38,31 +38,42 @@ func (t *testModeSuite) TestMode(c *C) {
 	c.Assert(m.Enable(), IsTrue)
 	err = m.Add(-1)
 	c.Assert(m.Enable(), IsFalse)
+	c.Assert(err, IsNil)
 
 	// Add n
 	err = m.Add(101)
 	c.Assert(m.Enable(), IsTrue)
+	c.Assert(err, IsNil)
 	err = m.Add(-1)
 	c.Assert(m.Enable(), IsTrue)
+	c.Assert(err, IsNil)
 	err = m.Add(-100)
 	c.Assert(m.Enable(), IsFalse)
+	c.Assert(err, IsNil)
 
 	// IncrForTable
 	schema := "schema"
 	table := "table"
 	err = m.IncrForTable(schema, table)
+	c.Assert(err, IsNil)
 	err = m.IncrForTable(schema, table) // re-Add
+	c.Assert(err, IsNil)
 	c.Assert(m.Enable(), IsTrue)
 	err = m.DescForTable(schema, table)
+	c.Assert(err, IsNil)
 	c.Assert(m.Enable(), IsFalse)
 
 	// Add n + IncrForTable
 	err = m.Add(100)
+	c.Assert(err, IsNil)
 	err = m.IncrForTable(schema, table)
+	c.Assert(err, IsNil)
 	c.Assert(m.Enable(), IsTrue)
 	err = m.Add(-100)
+	c.Assert(err, IsNil)
 	err = m.DescForTable(schema, table)
 	c.Assert(m.Enable(), IsFalse)
+	c.Assert(err, IsNil)
 
 	// Add becomes to negative
 	err = m.Add(-1)

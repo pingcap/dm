@@ -1443,9 +1443,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				if err != nil {
 					return errors.Trace(err)
 				}
-				log.Infof("[syncer] add table %s to sharding group (%v)", source, needShardingHandle)
+				log.Infof("[syncer] add table %s to shard group (%v)", source, needShardingHandle)
 			default:
 				needShardingHandle, group, synced, remain, err = s.sgk.TrySync(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, source, startPos, currentPos, needHandleDDLs)
+				if err != nil {
+					return errors.Trace(err)
+				}
+				log.Infof("[syncer] try to sync table %s to shard group (%v)", source, needShardingHandle)
 			}
 
 			if needShardingHandle {
