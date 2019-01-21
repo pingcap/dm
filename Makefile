@@ -83,7 +83,7 @@ integration_test:
 
 coverage:
 	GO111MODULE=off go get github.com/wadey/gocovmerge
-	gocovmerge "$(TEST_DIR)"/cov.* > "$(TEST_DIR)/all_cov.out"
+	gocovmerge "$(TEST_DIR)"/cov.* | grep -vE ".*.pb.go" > "$(TEST_DIR)/all_cov.out"
 ifeq ("$(JenkinsCI)", "1")
 	GO111MODULE=off go get github.com/mattn/goveralls
 	goveralls -coverprofile=$(TEST_DIR)/all_cov.out -service=jenkins-ci -repotoken $(COVERALLS_TOKEN)
