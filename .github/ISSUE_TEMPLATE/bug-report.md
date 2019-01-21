@@ -19,7 +19,7 @@ Please answer these questions before submitting your issue. Thanks!
     - DM version (run `dmctl -V` or `dm-worker -V` or `dm-master -V`):
 
         ```
-        (paste DM version here, and your must ensure versions of dmctl, DM-worker and DM-master are the same)
+        (paste DM version here, and your must ensure versions of dmctl, DM-worker and DM-master are same)
         ```
 
     - Upstream MySQL/MariaDB server version:
