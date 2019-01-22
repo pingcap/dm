@@ -17,7 +17,9 @@ package main
 
 import (
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -32,13 +34,19 @@ func TestRunMain(t *testing.T) {
 		}
 	}
 
-	waitCh := make(chan struct{}, 1)
-
+	waitCh := make(chan int, 1)
 	os.Args = args
 	go func() {
 		main()
 		close(waitCh)
 	}()
 
-	<-waitCh
+	signalCh := make(chan os.Signal, 1)
+	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGHUP)
+	select {
+	case <-signalCh:
+		return
+	case <-waitCh:
+		return
+	}
 }
