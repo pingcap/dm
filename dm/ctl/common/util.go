@@ -66,13 +66,83 @@ func PrintLines(format string, a ...interface{}) {
 
 // PrettyPrintResponse prints a PRC response prettily
 func PrettyPrintResponse(resp proto.Message) {
+	s, err := marshResponseToString(resp)
+	if err != nil {
+		PrintLines(errors.ErrorStack(err))
+	} else {
+		fmt.Println(s)
+	}
+}
+
+func marshResponseToString(resp proto.Message) (string, error) {
 	// encoding/json does not support proto Enum well
 	mar := jsonpb.Marshaler{EmitDefaults: true, Indent: "    "}
 	s, err := mar.MarshalToString(resp)
-	if err != nil {
-		PrintLines(errors.ErrorStack(err))
+	return s, errors.Trace(err)
+}
+
+// PrettyPrintResponseWithCheckTask prints a RPC response may contain response Msg with check-task's response prettily.
+// check-task's response may contain json-string when checking fail in `detail` field.
+// ugly code, but it is a little hard to refine this because needing to convert type.
+func PrettyPrintResponseWithCheckTask(resp proto.Message, subStr string) bool {
+	var (
+		err          error
+		found        bool
+		replacedStr  string
+		marshaledStr string
+		placeholder  = "PLACEHOLDER"
+	)
+	switch resp.(type) {
+	case *pb.StartTaskResponse:
+		sr := resp.(*pb.StartTaskResponse)
+		if strings.Contains(sr.Msg, subStr) {
+			found = true
+			rawMsg := sr.Msg
+			sr.Msg = placeholder // replace Msg with placeholder
+			marshaledStr, err = marshResponseToString(sr)
+			if err == nil {
+				replacedStr = strings.Replace(marshaledStr, placeholder, rawMsg, 1)
+			}
+		}
+	case *pb.UpdateTaskResponse:
+		sr := resp.(*pb.UpdateTaskResponse)
+		if strings.Contains(sr.Msg, subStr) {
+			found = true
+			rawMsg := sr.Msg
+			sr.Msg = placeholder // replace Msg with placeholder
+			marshaledStr, err = marshResponseToString(sr)
+			if err == nil {
+				replacedStr = strings.Replace(marshaledStr, placeholder, rawMsg, 1)
+			}
+		}
+	case *pb.CheckTaskResponse:
+		cr := resp.(*pb.CheckTaskResponse)
+		if strings.Contains(cr.Msg, subStr) {
+			found = true
+			rawMsg := cr.Msg
+			cr.Msg = placeholder // replace Msg with placeholder
+			marshaledStr, err = marshResponseToString(cr)
+			if err == nil {
+				replacedStr = strings.Replace(marshaledStr, placeholder, rawMsg, 1)
+			}
+		}
+
+	default:
+		return false
 	}
-	fmt.Println(s)
+
+	if !found {
+		return found
+	}
+
+	if err != nil {
+		fmt.Println(errors.ErrorStack(err))
+	} else {
+		// add indent to make it prettily.
+		replacedStr = strings.Replace(replacedStr, "detail: {", "   \tdetail: {", 1)
+		fmt.Println(replacedStr)
+	}
+	return found
 }
 
 // GetFileContent reads and returns file's content

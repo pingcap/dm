@@ -20,6 +20,11 @@ import (
 	"golang.org/x/net/context"
 )
 
+var (
+	// ErrorMsgHeader used as the header of the error message when checking config failed.
+	ErrorMsgHeader = "fail to check synchronization configuration with type"
+)
+
 // CheckSyncConfig checks synchronization configuration
 func CheckSyncConfig(ctx context.Context, cfgs []*config.SubTaskConfig) error {
 	c := NewChecker(cfgs)
@@ -36,7 +41,7 @@ func CheckSyncConfig(ctx context.Context, cfgs []*config.SubTaskConfig) error {
 		r := <-pr
 		// we only want first error
 		if len(r.Errors) > 0 {
-			return errors.Errorf("fail to check synchronization configuration with type %v:\n %v\n detail: %v", r.Errors[0].Type, r.Errors[0].Msg, string(r.Detail))
+			return errors.Errorf("%s %v: %v\n detail: %v", ErrorMsgHeader, r.Errors[0].Type, r.Errors[0].Msg, string(r.Detail))
 		}
 	}
 

@@ -73,6 +73,7 @@ func Start(args []string) {
 			master.NewStopTaskCmd(),
 			master.NewPauseTaskCmd(),
 			master.NewResumeTaskCmd(),
+			master.NewCheckTaskCmd(),
 			master.NewUpdateTaskCmd(),
 			master.NewQueryStatusCmd(),
 			master.NewQueryErrorCmd(),
@@ -92,9 +93,6 @@ func Start(args []string) {
 			master.NewPurgeRelayCmd(),
 		)
 	case common.OfflineMode:
-		rootCmd.AddCommand(
-			master.NewCheckTaskCmd(),
-		)
 	}
 
 	rootCmd.SetArgs(args)

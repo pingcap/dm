@@ -186,7 +186,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 	if err != nil {
 		return &pb.StartTaskResponse{
 			Result: false,
-			Msg:    errors.ErrorStack(err),
+			Msg:    errors.Cause(err).Error(),
 		}, nil
 	}
 	log.Infof("[server] starting task with config:\n%v", cfg)
@@ -369,7 +369,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 	if err != nil {
 		return &pb.UpdateTaskResponse{
 			Result: false,
-			Msg:    errors.ErrorStack(err),
+			Msg:    errors.Cause(err).Error(),
 		}, nil
 	}
 	log.Infof("[server] update task with config:\n%v", cfg)
@@ -1703,7 +1703,7 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 	if err != nil {
 		return &pb.CheckTaskResponse{
 			Result: false,
-			Msg:    errors.ErrorStack(err),
+			Msg:    errors.Cause(err).Error(),
 		}, nil
 	}
 

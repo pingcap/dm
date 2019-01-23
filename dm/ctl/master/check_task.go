@@ -16,11 +16,13 @@ package master
 import (
 	"fmt"
 
-	"github.com/pingcap/dm/dm/ctl/common"
-	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 	"golang.org/x/net/context"
+
+	"github.com/pingcap/dm/checker"
+	"github.com/pingcap/dm/dm/ctl/common"
+	"github.com/pingcap/dm/dm/pb"
 )
 
 // NewCheckTaskCmd creates a CheckTask command
@@ -58,5 +60,7 @@ func checkTaskFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	common.PrettyPrintResponse(resp)
+	if !common.PrettyPrintResponseWithCheckTask(resp, checker.ErrorMsgHeader) {
+		common.PrettyPrintResponse(resp)
+	}
 }
