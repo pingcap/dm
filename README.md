@@ -1,5 +1,9 @@
 # Data Migration Platform
 
+[![Build Status](https://internal.pingcap.net/idc-jenkins/job/build_dm_master/badge/icon)](https://internal.pingcap.net/idc-jenkins/job/build_dm_master/)
+[![Coverage Status](https://coveralls.io/repos/github/pingcap/dm/badge.svg)](https://coveralls.io/github/pingcap/dm)
+[![Go Report Card](https://goreportcard.com/badge/github.com/pingcap/dm)](https://goreportcard.com/report/github.com/pingcap/dm)
+
 **DM** is an integrated platform, supports migrating data from MySQL/MariaDB to TiDB.
 
 ## Architecture

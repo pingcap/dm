@@ -9,7 +9,7 @@ CURDIR   := $(shell pwd)
 GO       := GO111MODULE=on go
 GOBUILD  := CGO_ENABLED=0 $(GO) build
 GOTEST   := CGO_ENABLED=1 $(GO) test
-PACKAGES := $$(go list ./... | grep -vE 'vendor|cmd|tests')
+PACKAGES  := $$(go list ./... | grep -vE 'tests|cmd|vendor')
 FILES    := $$(find . -name "*.go" | grep -vE "vendor")
 TOPDIRS  := $$(ls -d */ | grep -vE "vendor")
 SHELL    := /usr/bin/env bash
@@ -83,5 +83,18 @@ integration_test:
 
 coverage:
 	GO111MODULE=off go get github.com/wadey/gocovmerge
-	gocovmerge "$(TEST_DIR)"/cov.* > "$(TEST_DIR)/all_cov.out"
+	gocovmerge "$(TEST_DIR)"/cov.* | grep -vE ".*.pb.go" > "$(TEST_DIR)/all_cov.out"
+ifeq ("$(JenkinsCI)", "1")
+	GO111MODULE=off go get github.com/mattn/goveralls
+	goveralls -coverprofile=$(TEST_DIR)/all_cov.out -service=jenkins-ci -repotoken $(COVERALLS_TOKEN)
+else
 	go tool cover -html "$(TEST_DIR)/all_cov.out" -o "$(TEST_DIR)/all_cov.html"
+endif
+
+check-static:
+	@echo "gometalinter"
+	gometalinter --disable-all --deadline 120s \
+	  --enable misspell \
+	  --enable megacheck \
+	  --enable ineffassign \
+	  ./...
