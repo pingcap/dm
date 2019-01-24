@@ -92,36 +92,33 @@ func PrettyPrintResponseWithCheckTask(resp proto.Message, subStr string) bool {
 		marshaledStr string
 		placeholder  = "PLACEHOLDER"
 	)
-	switch resp.(type) {
+	switch chr := resp.(type) {
 	case *pb.StartTaskResponse:
-		sr := resp.(*pb.StartTaskResponse)
-		if strings.Contains(sr.Msg, subStr) {
+		if strings.Contains(chr.Msg, subStr) {
 			found = true
-			rawMsg := sr.Msg
-			sr.Msg = placeholder // replace Msg with placeholder
-			marshaledStr, err = marshResponseToString(sr)
+			rawMsg := chr.Msg
+			chr.Msg = placeholder // replace Msg with placeholder
+			marshaledStr, err = marshResponseToString(chr)
 			if err == nil {
 				replacedStr = strings.Replace(marshaledStr, placeholder, rawMsg, 1)
 			}
 		}
 	case *pb.UpdateTaskResponse:
-		sr := resp.(*pb.UpdateTaskResponse)
-		if strings.Contains(sr.Msg, subStr) {
+		if strings.Contains(chr.Msg, subStr) {
 			found = true
-			rawMsg := sr.Msg
-			sr.Msg = placeholder // replace Msg with placeholder
-			marshaledStr, err = marshResponseToString(sr)
+			rawMsg := chr.Msg
+			chr.Msg = placeholder // replace Msg with placeholder
+			marshaledStr, err = marshResponseToString(chr)
 			if err == nil {
 				replacedStr = strings.Replace(marshaledStr, placeholder, rawMsg, 1)
 			}
 		}
 	case *pb.CheckTaskResponse:
-		cr := resp.(*pb.CheckTaskResponse)
-		if strings.Contains(cr.Msg, subStr) {
+		if strings.Contains(chr.Msg, subStr) {
 			found = true
-			rawMsg := cr.Msg
-			cr.Msg = placeholder // replace Msg with placeholder
-			marshaledStr, err = marshResponseToString(cr)
+			rawMsg := chr.Msg
+			chr.Msg = placeholder // replace Msg with placeholder
+			marshaledStr, err = marshResponseToString(chr)
 			if err == nil {
 				replacedStr = strings.Replace(marshaledStr, placeholder, rawMsg, 1)
 			}
