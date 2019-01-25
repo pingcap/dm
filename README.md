@@ -37,7 +37,7 @@ When DM is built successfully, you can find binaries in the `bin` directory.
 
 ## install DM
 
-* the best way to install DM, is via [dm-ansible](https://pingcap.com/docs/tools/data-migration-deployment/)
+* The best way to install DM is via [DM-Ansible](https://pingcap.com/docs/tools/data-migration-deployment/)
 * deploy DM manually
 ```
 # Download the DM package.
