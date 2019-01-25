@@ -31,6 +31,51 @@ import (
 	"github.com/pingcap/dm/relay/purger"
 )
 
+// SampleConfigFile is sample config file of dm-worker
+// later we can read it from dm/worker/dm-worker.toml
+// and assign it to SampleConfigFile while we build dm-worker
+var SampleConfigFile = `
+# Worker Configuration.
+
+// log configuration
+log-level = "info"
+log-file = "dm-worker.log"
+
+// worker listen address
+worker-addr = ":8262"
+
+// server id of slave for binlog replication
+// each instance (master and slave) in replication group should have different server id
+server-id = 101
+
+// represents a MySQL/MariaDB instance or a replication group
+source-id = "127.0.0.1:3306"
+
+// flavor: mysql/mariadb
+flavor = "mysql"
+
+// directory that used to store relay log
+relay-dir = "./relay_log"
+
+//  enable gtid in relay log unit
+enable-gtid = false
+
+// charset of DSN of source mysql/mariadb instance
+# charset= ""
+
+[from]
+host = "127.0.0.1"
+user = "root"
+password = ""
+port = 3306
+
+// relay log purge strategy
+#[purge]
+#interval = 3600
+#expires = 24
+#remain-space = 15
+`
+
 // NewConfig creates a new base config for worker.
 func NewConfig() *Config {
 	cfg := &Config{}
@@ -38,6 +83,7 @@ func NewConfig() *Config {
 	fs := cfg.flagSet
 
 	fs.BoolVar(&cfg.printVersion, "V", false, "prints version and exit")
+	fs.BoolVar(&cfg.printSampleConfig, "print-sample-config", false, "print sample config file of dm-worker")
 	fs.StringVar(&cfg.ConfigFile, "config", "", "path to config file")
 	fs.StringVar(&cfg.WorkerAddr, "worker-addr", "", "worker API server and status addr")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
@@ -63,7 +109,6 @@ type Config struct {
 
 	EnableGTID  bool   `toml:"enable-gtid" json:"enable-gtid"`
 	AutoFixGTID bool   `toml:"auto-fix-gtid" json:"auto-fix-gtid"`
-	MetaFile    string `toml:"meta-file" json:"meta-file"`
 	RelayDir    string `toml:"relay-dir" json:"relay-dir"`
 	ServerID    int    `toml:"server-id" json:"server-id"`
 	Flavor      string `toml:"flavor" json:"flavor"`
@@ -81,7 +126,8 @@ type Config struct {
 
 	ConfigFile string `json:"config-file"`
 
-	printVersion bool
+	printVersion      bool
+	printSampleConfig bool
 }
 
 // Clone clones a config
@@ -138,6 +184,11 @@ func (c *Config) Parse(arguments []string) error {
 
 	if c.printVersion {
 		fmt.Println(utils.GetRawInfo())
+		return flag.ErrHelp
+	}
+
+	if c.printSampleConfig {
+		fmt.Println(SampleConfigFile)
 		return flag.ErrHelp
 	}
 

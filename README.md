@@ -35,6 +35,13 @@ make dmctl      # build dmctl
 
 When DM is built successfully, you can find binaries in the `bin` directory.
 
+## Config File
+
+* all sample config file in conf directory of dm tarball
+* bin/dm-master -print-sample-config
+* bin/dm-worker -print-sample-config
+
+
 ## Contributing
 Contributions are welcomed and greatly appreciated. See [CONTRIBUTING.md](./CONTRIBUTING.md)
 for details on submitting patches and the contribution workflow.

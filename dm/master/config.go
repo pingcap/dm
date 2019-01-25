@@ -25,6 +25,29 @@ import (
 	"github.com/pingcap/errors"
 )
 
+// SampleConfigFile is sample config file of dm-master
+// later we can read it from dm/master/dm-master.toml
+// and assign it to SampleConfigFile while we build dm-master
+var SampleConfigFile = `
+# Master Configuration.
+
+// log configuration
+log-level = "info"
+log-file = "dm-master.log"
+
+// dm-master listen address
+master-addr = ":8261"
+
+# replication group <-> dm-Worker deployment, we'll refine it when new deployment function is available
+[[deploy]]
+source-id = "mysql-replica-01"
+dm-worker = "172.16.10.72:8262"
+
+[[deploy]]
+source-id = "mysql-replica-02"
+dm-worker = "172.16.10.73:8262"
+`
+
 // NewConfig creates a config for dm-master
 func NewConfig() *Config {
 	cfg := &Config{}
@@ -32,6 +55,7 @@ func NewConfig() *Config {
 	fs := cfg.FlagSet
 
 	fs.BoolVar(&cfg.printVersion, "V", false, "prints version and exit")
+	fs.BoolVar(&cfg.printSampleConfig, "print-sample-config", false, "print sample config file of dm-worker")
 	fs.StringVar(&cfg.ConfigFile, "config", "", "path to config file")
 	fs.StringVar(&cfg.MasterAddr, "master-addr", "", "master API server and status addr")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
@@ -72,7 +96,8 @@ type Config struct {
 
 	ConfigFile string `json:"config-file"`
 
-	printVersion bool
+	printVersion      bool
+	printSampleConfig bool
 }
 
 func (c *Config) String() string {
@@ -93,6 +118,11 @@ func (c *Config) Parse(arguments []string) error {
 
 	if c.printVersion {
 		fmt.Println(utils.GetRawInfo())
+		return flag.ErrHelp
+	}
+
+	if c.printSampleConfig {
+		fmt.Println(SampleConfigFile)
 		return flag.ErrHelp
 	}
 
