@@ -39,24 +39,24 @@ When DM is built successfully, you can find binaries in the `bin` directory.
 
 * The best way to install DM is via [DM-Ansible](https://pingcap.com/docs/tools/data-migration-deployment/)
 * deploy DM manually
-```
-# Download the DM package.
-wget http://download.pingcap.org/dm-latest-linux-amd64.tar.gz
-wget http://download.pingcap.org/dm-latest-linux-amd64.sha256
+  ```
+  # Download the DM package.
+  wget http://download.pingcap.org/dm-latest-linux-amd64.tar.gz
+  wget http://download.pingcap.org/dm-latest-linux-amd64.sha256
 
-# Check the file integrity. If the result is OK, the file is correct.
-sha256sum -c dm-latest-linux-amd64.sha256
+  # Check the file integrity. If the result is OK, the file is correct.
+  sha256sum -c dm-latest-linux-amd64.sha256
 
-# Extract the package.
-tar -xzf dm-latest-linux-amd64.tar.gz
-cd dm-latest-linux-amd64
-```
+  # Extract the package.
+  tar -xzf dm-latest-linux-amd64.tar.gz
+  cd dm-latest-linux-amd64
+  ```
 
 ## Config File
 
-* all sample config files can be found in conf directory of dm tarball
-* sample config file of dm-master: bin/dm-master -print-sample-config
-* sample config file of dm-worker: bin/dm-worker -print-sample-config
+* all sample config files can be found in directory `conf` of dm tarball
+* sample config file of dm-master: `bin/dm-master -print-sample-config`
+* sample config file of dm-worker: `bin/dm-worker -print-sample-config`
 
 
 ## Contributing
