@@ -33,7 +33,7 @@ make dm-master  # build DM-master
 make dmctl      # build dmctl
 ``` 
 
-When DM are built successfully, you can find binaries in the `bin` directory.
+When DM is built successfully, you can find binaries in the `bin` directory.
 
 ## Contributing
 Contributions are welcomed and greatly appreciated. See [CONTRIBUTING.md](./CONTRIBUTING.md)
