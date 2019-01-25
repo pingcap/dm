@@ -15,10 +15,12 @@ package worker
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/dm/pkg/log"
@@ -34,47 +36,7 @@ import (
 // SampleConfigFile is sample config file of dm-worker
 // later we can read it from dm/worker/dm-worker.toml
 // and assign it to SampleConfigFile while we build dm-worker
-var SampleConfigFile = `
-# Worker Configuration.
-
-// log configuration
-log-level = "info"
-log-file = "dm-worker.log"
-
-// worker listen address
-worker-addr = ":8262"
-
-// server id of slave for binlog replication
-// each instance (master and slave) in replication group should have different server id
-server-id = 101
-
-// represents a MySQL/MariaDB instance or a replication group
-source-id = "127.0.0.1:3306"
-
-// flavor: mysql/mariadb
-flavor = "mysql"
-
-// directory that used to store relay log
-relay-dir = "./relay_log"
-
-//  enable gtid in relay log unit
-enable-gtid = false
-
-// charset of DSN of source mysql/mariadb instance
-# charset= ""
-
-[from]
-host = "127.0.0.1"
-user = "root"
-password = ""
-port = 3306
-
-// relay log purge strategy
-#[purge]
-#interval = 3600
-#expires = 24
-#remain-space = 15
-`
+var SampleConfigFile string
 
 // NewConfig creates a new base config for worker.
 func NewConfig() *Config {
@@ -188,7 +150,16 @@ func (c *Config) Parse(arguments []string) error {
 	}
 
 	if c.printSampleConfig {
-		fmt.Println(SampleConfigFile)
+		if strings.TrimSpace(SampleConfigFile) == "" {
+			fmt.Println("sample config file of dm-worker is empty")
+		} else {
+			rawConfig, err := base64.StdEncoding.DecodeString(SampleConfigFile)
+			if err != nil {
+				fmt.Println("base64 decode config error:", err)
+			} else {
+				fmt.Println(string(rawConfig))
+			}
+		}
 		return flag.ErrHelp
 	}
 

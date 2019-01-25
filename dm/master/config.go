@@ -14,10 +14,12 @@
 package master
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/dm/pkg/log"
@@ -28,25 +30,7 @@ import (
 // SampleConfigFile is sample config file of dm-master
 // later we can read it from dm/master/dm-master.toml
 // and assign it to SampleConfigFile while we build dm-master
-var SampleConfigFile = `
-# Master Configuration.
-
-// log configuration
-log-level = "info"
-log-file = "dm-master.log"
-
-// dm-master listen address
-master-addr = ":8261"
-
-# replication group <-> dm-Worker deployment, we'll refine it when new deployment function is available
-[[deploy]]
-source-id = "mysql-replica-01"
-dm-worker = "172.16.10.72:8262"
-
-[[deploy]]
-source-id = "mysql-replica-02"
-dm-worker = "172.16.10.73:8262"
-`
+var SampleConfigFile string
 
 // NewConfig creates a config for dm-master
 func NewConfig() *Config {
@@ -122,7 +106,16 @@ func (c *Config) Parse(arguments []string) error {
 	}
 
 	if c.printSampleConfig {
-		fmt.Println(SampleConfigFile)
+		if strings.TrimSpace(SampleConfigFile) == "" {
+			fmt.Println("sample config file of dm-master is empty")
+		} else {
+			rawConfig, err := base64.StdEncoding.DecodeString(SampleConfigFile)
+			if err != nil {
+				fmt.Println("base64 decode config error:", err)
+			} else {
+				fmt.Println(string(rawConfig))
+			}
+		}
 		return flag.ErrHelp
 	}
 
