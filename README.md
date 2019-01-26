@@ -35,7 +35,7 @@ make dmctl      # build dmctl
 
 When DM is built successfully, you can find binaries in the `bin` directory.
 
-## install DM
+## Installing
 
 * The best way to install DM is via [DM-Ansible](https://pingcap.com/docs/tools/data-migration-deployment/)
 * deploy DM manually
