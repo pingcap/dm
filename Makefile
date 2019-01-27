@@ -3,8 +3,6 @@ LDFLAGS += -X "github.com/pingcap/dm/pkg/utils.BuildTS=$(shell date -u '+%Y-%m-%
 LDFLAGS += -X "github.com/pingcap/dm/pkg/utils.GitHash=$(shell git rev-parse HEAD)"
 LDFLAGS += -X "github.com/pingcap/dm/pkg/utils.GitBranch=$(shell git rev-parse --abbrev-ref HEAD)"
 LDFLAGS += -X "github.com/pingcap/dm/pkg/utils.GoVersion=$(shell go version)"
-LDFLAGS += -X "github.com/pingcap/dm/dm/worker.SampleConfigFile=$(shell cat dm/worker/dm-worker.toml | base64 -w 0)"
-LDFLAGS += -X "github.com/pingcap/dm/dm/master.SampleConfigFile=$(shell cat dm/master/dm-master.toml | base64 -w 0)" 
 
 CURDIR   := $(shell pwd)
 GO       := GO111MODULE=on go
@@ -22,14 +20,16 @@ ifeq ("$(WITH_RACE)", "1")
 	GOBUILD   = CGO_ENABLED=1 $(GO) build
 endif
 
-ARCH      := "`uname -s`"
+ARCH      := "$(shell uname -s)"
 LINUX     := "Linux"
 MAC       := "Darwin"
+SAMPLE_WORK_CONFIG := ""
+SAMPLE_WORK_CONFIG := ""
 
-ifeq ("$(ARCH)", "$(LINUX)")
+ifeq ($(ARCH), $(LINUX))
 	LDFLAGS += -X "github.com/pingcap/dm/dm/worker.SampleConfigFile=$(shell cat dm/worker/dm-worker.toml | base64 -w 0)"
 	LDFLAGS += -X "github.com/pingcap/dm/dm/master.SampleConfigFile=$(shell cat dm/master/dm-master.toml | base64 -w 0)"
-else ifeq ("$(ARCH)", "$(MAC)")
+else
 	LDFLAGS += -X "github.com/pingcap/dm/dm/worker.SampleConfigFile=$(shell cat dm/worker/dm-worker.toml | base64)"
 	LDFLAGS += -X "github.com/pingcap/dm/dm/master.SampleConfigFile=$(shell cat dm/master/dm-master.toml | base64)" 
 endif
