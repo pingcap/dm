@@ -47,7 +47,6 @@ func NewRelayHolder(cfg *Config) *RelayHolder {
 		EnableGTID:  cfg.EnableGTID,
 		AutoFixGTID: cfg.AutoFixGTID,
 		Flavor:      cfg.Flavor,
-		MetaFile:    cfg.MetaFile,
 		RelayDir:    cfg.RelayDir,
 		ServerID:    cfg.ServerID,
 		Charset:     cfg.Charset,

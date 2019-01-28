@@ -14,16 +14,23 @@
 package master
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/errors"
 )
+
+// SampleConfigFile is sample config file of dm-master
+// later we can read it from dm/master/dm-master.toml
+// and assign it to SampleConfigFile while we build dm-master
+var SampleConfigFile string
 
 // NewConfig creates a config for dm-master
 func NewConfig() *Config {
@@ -32,6 +39,7 @@ func NewConfig() *Config {
 	fs := cfg.FlagSet
 
 	fs.BoolVar(&cfg.printVersion, "V", false, "prints version and exit")
+	fs.BoolVar(&cfg.printSampleConfig, "print-sample-config", false, "print sample config file of dm-worker")
 	fs.StringVar(&cfg.ConfigFile, "config", "", "path to config file")
 	fs.StringVar(&cfg.MasterAddr, "master-addr", "", "master API server and status addr")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
@@ -72,7 +80,8 @@ type Config struct {
 
 	ConfigFile string `json:"config-file"`
 
-	printVersion bool
+	printVersion      bool
+	printSampleConfig bool
 }
 
 func (c *Config) String() string {
@@ -93,6 +102,20 @@ func (c *Config) Parse(arguments []string) error {
 
 	if c.printVersion {
 		fmt.Println(utils.GetRawInfo())
+		return flag.ErrHelp
+	}
+
+	if c.printSampleConfig {
+		if strings.TrimSpace(SampleConfigFile) == "" {
+			fmt.Println("sample config file of dm-master is empty")
+		} else {
+			rawConfig, err := base64.StdEncoding.DecodeString(SampleConfigFile)
+			if err != nil {
+				fmt.Println("base64 decode config error:", err)
+			} else {
+				fmt.Println(string(rawConfig))
+			}
+		}
 		return flag.ErrHelp
 	}
 
