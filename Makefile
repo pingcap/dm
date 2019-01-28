@@ -23,8 +23,6 @@ endif
 ARCH      := "$(shell uname -s)"
 LINUX     := "Linux"
 MAC       := "Darwin"
-SAMPLE_WORK_CONFIG := ""
-SAMPLE_WORK_CONFIG := ""
 
 ifeq ($(ARCH), $(LINUX))
 	LDFLAGS += -X "github.com/pingcap/dm/dm/worker.SampleConfigFile=$(shell cat dm/worker/dm-worker.toml | base64 -w 0)"
