@@ -203,7 +203,6 @@ func (w *Worker) copyConfigFromWorker(cfg *config.SubTaskConfig) {
 	// log config items, mydumper unit use it
 	cfg.LogLevel = w.cfg.LogLevel
 	cfg.LogFile = w.cfg.LogFile
-	cfg.LogRotate = w.cfg.LogRotate
 }
 
 // StopSubTask stops a running sub task

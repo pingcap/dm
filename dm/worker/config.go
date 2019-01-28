@@ -15,10 +15,12 @@ package worker
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/dm/pkg/log"
@@ -31,6 +33,11 @@ import (
 	"github.com/pingcap/dm/relay/purger"
 )
 
+// SampleConfigFile is sample config file of dm-worker
+// later we can read it from dm/worker/dm-worker.toml
+// and assign it to SampleConfigFile while we build dm-worker
+var SampleConfigFile string
+
 // NewConfig creates a new base config for worker.
 func NewConfig() *Config {
 	cfg := &Config{}
@@ -38,6 +45,7 @@ func NewConfig() *Config {
 	fs := cfg.flagSet
 
 	fs.BoolVar(&cfg.printVersion, "V", false, "prints version and exit")
+	fs.BoolVar(&cfg.printSampleConfig, "print-sample-config", false, "print sample config file of dm-worker")
 	fs.StringVar(&cfg.ConfigFile, "config", "", "path to config file")
 	fs.StringVar(&cfg.WorkerAddr, "worker-addr", "", "worker API server and status addr")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
@@ -63,7 +71,6 @@ type Config struct {
 
 	EnableGTID  bool   `toml:"enable-gtid" json:"enable-gtid"`
 	AutoFixGTID bool   `toml:"auto-fix-gtid" json:"auto-fix-gtid"`
-	MetaFile    string `toml:"meta-file" json:"meta-file"`
 	RelayDir    string `toml:"relay-dir" json:"relay-dir"`
 	ServerID    int    `toml:"server-id" json:"server-id"`
 	Flavor      string `toml:"flavor" json:"flavor"`
@@ -81,7 +88,8 @@ type Config struct {
 
 	ConfigFile string `json:"config-file"`
 
-	printVersion bool
+	printVersion      bool
+	printSampleConfig bool
 }
 
 // Clone clones a config
@@ -138,6 +146,20 @@ func (c *Config) Parse(arguments []string) error {
 
 	if c.printVersion {
 		fmt.Println(utils.GetRawInfo())
+		return flag.ErrHelp
+	}
+
+	if c.printSampleConfig {
+		if strings.TrimSpace(SampleConfigFile) == "" {
+			fmt.Println("sample config file of dm-worker is empty")
+		} else {
+			rawConfig, err := base64.StdEncoding.DecodeString(SampleConfigFile)
+			if err != nil {
+				fmt.Println("base64 decode config error:", err)
+			} else {
+				fmt.Println(string(rawConfig))
+			}
+		}
 		return flag.ErrHelp
 	}
 
