@@ -23,6 +23,8 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/replication"
+
+	"github.com/pingcap/dm/pkg/gtid"
 )
 
 const (
@@ -157,4 +159,56 @@ func GenFormatDescriptionEvent(timestamp uint32, serverID uint32, latestPos uint
 	}
 
 	return &replication.BinlogEvent{RawData: buf.Bytes(), Header: header, Event: event}, nil
+}
+
+// GenPreviousGTIDEvent generates a PreviousGTIDEvent.
+// go-mysql has no PreviousGTIDEvent struct defined, so return the event's raw data instead.
+// MySQL has no internal doc for PREVIOUS_GTIDS_EVENT.
+// we ref:
+//   a. https://github.com/vitessio/vitess/blob/28e7e5503a6c3d3b18d4925d95f23ebcb6f25c8e/go/mysql/binlog_event_mysql56.go#L56
+//   b. https://dev.mysql.com/doc/internals/en/com-binlog-dump-gtid.html
+func GenPreviousGTIDEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint16, gSet gtid.Set) ([]byte, error) {
+	if len(gSet.String()) == 0 {
+		return nil, errors.NotValidf("empty GTID set")
+	}
+
+	origin := gSet.Origin()
+	if origin == nil {
+		return nil, errors.NotValidf("GTID set string %s for MySQL", gSet.String())
+	}
+
+	// event body, GTID set encoded in it
+	body := origin.Encode()
+
+	// size of the event (header, body, CRC32)
+	eventSize := uint32(eventHeaderLen) + uint32(len(body)) + 4
+
+	// position of the next event
+	logPos := latestPos + eventSize
+
+	// generate header, `eventHeaderLen` bytes
+	_, headerData, err := GenEventHeader(timestamp, replication.PREVIOUS_GTIDS_EVENT, serverID, eventSize, logPos, flags)
+	if err != nil {
+		return nil, errors.Annotatef(err, "generate event header")
+	}
+
+	buf := new(bytes.Buffer)
+	err = binary.Write(buf, binary.LittleEndian, headerData)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write event header % X", headerData)
+	}
+
+	err = binary.Write(buf, binary.LittleEndian, body)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write event body % X", body)
+	}
+
+	// CRC32 checksum, 4 bytes
+	checksum := crc32.ChecksumIEEE(buf.Bytes())
+	err = binary.Write(buf, binary.LittleEndian, checksum)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write CRC32 % X", checksum)
+	}
+
+	return buf.Bytes(), nil
 }
