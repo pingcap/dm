@@ -423,3 +423,43 @@ func (s *Syncer) mappingDML(schema, table string, columns []string, data [][]int
 	}
 	return rows, nil
 }
+
+func (s *Syncer) pruneGenColumnDML(needPrune bool, genColumnFilter []bool, data [][]interface{}) [][]interface{} {
+	if !needPrune {
+		return data
+	}
+
+	rows := make([][]interface{}, 0, len(data))
+	for _, row := range data {
+		value := make([]interface{}, 0, len(row))
+		for i := range row {
+			if !genColumnFilter[i] {
+				value = append(value, row[i])
+			}
+		}
+		rows = append(rows, value)
+	}
+	return rows
+}
+
+// generatedColumnFilter iterates column list and returns
+// a bool indicates where one or more generated column exists
+// a bool slice indicates whether the i-th column is generated column
+// a new column slice without generated columns
+func generatedColumnFilter(columns []*column) (bool, []bool, []*column) {
+	var (
+		needPrune  bool
+		filters    = make([]bool, 0, len(columns))
+		filterCols = make([]*column, 0, len(columns))
+	)
+	for _, c := range columns {
+		isGenColumn := c.isGeneratedColumn()
+		filters = append(filters, isGenColumn)
+		if isGenColumn {
+			needPrune = true
+			continue
+		}
+		filterCols = append(filterCols, c)
+	}
+	return needPrune, filters, filterCols
+}

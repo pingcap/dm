@@ -40,6 +40,17 @@ func bytes2str(bs []byte) string {
 func parseInsertStmt(sql []byte, table *tableInfo, columnMapping *cm.Mapping) ([][]string, error) {
 	var s, e, size int
 	var rows = make([][]string, 0, 1024)
+	var VALUES = []byte("VALUES")
+
+	// If table has generated column, the dumped SQL file has a different `INSERT INTO` line,
+	// which provides column names except generated column. such as following:
+	//	INSERT INTO `t1` (`id`,`uid`,`name`,`info`) VALUES
+	//	(1,10001,"Gabriel García Márquez",NULL),
+	//	(2,10002,"Cien años de soledad",NULL);
+	// otherwise dumped SQL file has content like folloing:
+	//	INSERT INTO `t1` VALUES
+	//	(1,"hello"),
+	//	(2,"world");
 
 	for {
 		sql = sql[s:]
@@ -55,6 +66,10 @@ func parseInsertStmt(sql []byte, table *tableInfo, columnMapping *cm.Mapping) ([
 		for e = s + 3; e < size; e++ {
 			if sql[e] == '\n' && (sql[e-1] == ',' || sql[e-1] == ';') && sql[e-2] == ')' {
 				break
+			}
+			if sql[e] == '\n' && e-6 > s && bytes.Compare(sql[e-6:e], VALUES) == 0 {
+				s = e + 1
+				continue
 			}
 		}
 		if e == size {
@@ -236,9 +251,20 @@ func parseTable(r *router.Table, schema, table, file string) (*tableInfo, error)
 		return nil, errors.Errorf("statement %s for %s/%s is not create table statement", statement, schema, table)
 	}
 
-	columns := make([]string, 0, len(ct.Cols))
+	var (
+		columns          = make([]string, 0, len(ct.Cols))
+		hasGeneragedCols = false
+		columnNameFields = ""
+	)
 	for _, col := range ct.Cols {
+		if col.Options[0].Tp == ast.ColumnOptionGenerated {
+			hasGeneragedCols = true
+			continue
+		}
 		columns = append(columns, col.Name.Name.O)
+	}
+	if hasGeneragedCols {
+		columnNameFields = "(" + strings.Join(columns, ",") + ")"
 	}
 
 	dstSchema, dstTable := fetchMatchedLiteral(r, schema, table)
@@ -248,7 +274,7 @@ func parseTable(r *router.Table, schema, table, file string) (*tableInfo, error)
 		targetSchema:   dstSchema,
 		targetTable:    dstTable,
 		columnNameList: columns,
-		insertHeadStmt: fmt.Sprintf("INSERT INTO `%s` VALUES", dstTable),
+		insertHeadStmt: fmt.Sprintf("INSERT INTO `%s` %sVALUES", dstTable, columnNameFields),
 	}, nil
 }
 
