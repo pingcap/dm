@@ -666,15 +666,6 @@ func (s *testSyncerSuite) TestTimezone(c *C) {
 		"drop database tztest_1",
 	}
 
-	var sqlMode sql.NullString
-	row := s.db.QueryRow("select @@global.sql_mode")
-	c.Assert(row.Scan(&sqlMode), IsNil)
-	c.Assert(sqlMode.Valid, IsTrue)
-
-	_, err := s.db.Exec("set @@global.sql_mode=''")
-	c.Assert(err, IsNil)
-	defer s.db.Exec("set @@global.sql_mode = ?", sqlMode)
-
 	for _, sql := range createSQLs {
 		s.db.Exec(sql)
 	}
