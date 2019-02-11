@@ -13,7 +13,7 @@
 
 ## Documentation
 
-* [Detailed documentation](https://pingcap.com/docs/tools/data-migration-overview/)
+* [Detailed documentation](https://pingcap.com/docs/tools/dm/overview/)
 * [简体中文文档](https://github.com/pingcap/tidb-tools/blob/docs/docs/dm/zh_CN/README.md)
 
 ## Building
@@ -37,7 +37,7 @@ When DM is built successfully, you can find binaries in the `bin` directory.
 
 ## Installing
 
-* The best way to install DM is via [DM-Ansible](https://pingcap.com/docs/tools/data-migration-deployment/)
+* The best way to install DM is via [DM-Ansible](https://pingcap.com/docs/tools/dm/deployment/)
 * deploy DM manually
   ```
   # Download the DM package.
