@@ -790,9 +790,9 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				"REPLACE INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
 			},
 			[][]interface{}{
-				[]interface{}{int32(1), int32(18), "{}"},
-				[]interface{}{int32(2), int32(19), "{\"key\": \"value\", \"int\": 123}"},
-				[]interface{}{int32(3), int32(17), nil},
+				{int32(1), int32(18), "{}"},
+				{int32(2), int32(19), "{\"key\": \"value\", \"int\": 123}"},
+				{int32(3), int32(17), nil},
 			},
 		},
 		{
@@ -809,9 +809,9 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				"UPDATE `gctest_1`.`t_1` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? AND `age` = ? AND `cfg` IS ? LIMIT 1;",
 			},
 			[][]interface{}{
-				[]interface{}{int32(1), int32(21), "{\"a\": 12}", int32(1), int32(18), "{}"},
-				[]interface{}{int32(2), int32(19), "{}", int32(2), int32(19), "{\"key\": \"value\", \"int\": 123}"},
-				[]interface{}{int32(3), int32(20), nil, int32(3), int32(17), nil},
+				{int32(1), int32(21), "{\"a\": 12}", int32(1), int32(18), "{}"},
+				{int32(2), int32(19), "{}", int32(2), int32(19), "{\"key\": \"value\", \"int\": 123}"},
+				{int32(3), int32(20), nil, int32(3), int32(17), nil},
 			},
 		},
 	}
