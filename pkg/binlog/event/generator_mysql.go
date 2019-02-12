@@ -28,10 +28,15 @@ import (
 )
 
 const (
+	// GTIDFlagsCommitYes represents a GTID flag with [commit=yes].
+	// in `Row` binlog format, this will appear in GTID event before DDL query event.
+	GTIDFlagsCommitYes uint8 = 1
+
 	binlogVersion   uint16 = 4 // only binlog-version 4 supported now
 	mysqlVersion           = "5.7.22-log"
-	mysqlVersionLen        = 50 // fix-length
-	eventHeaderLen  uint8  = 19 // always 19
+	mysqlVersionLen        = 50                                 // fix-length
+	eventHeaderLen         = uint8(replication.EventHeaderSize) // always 19
+	crc32Len        uint32 = 4                                  // CRC32-length
 )
 
 var (
@@ -97,7 +102,7 @@ func GenFormatDescriptionEvent(timestamp uint32, serverID uint32, latestPos uint
 	buf := new(bytes.Buffer)
 
 	// size of the event (header, post-header, body, CRC32), 119 now
-	eventSize := uint32(eventHeaderLen) + 2 + 50 + 4 + 1 + 39 + 4
+	eventSize := uint32(eventHeaderLen) + 2 + 50 + 4 + 1 + 39 + crc32Len
 
 	// position of the next event
 	logPos := latestPos + eventSize
@@ -161,13 +166,13 @@ func GenFormatDescriptionEvent(timestamp uint32, serverID uint32, latestPos uint
 	return &replication.BinlogEvent{RawData: buf.Bytes(), Header: header, Event: event}, nil
 }
 
-// GenPreviousGTIDEvent generates a PreviousGTIDEvent.
-// go-mysql has no PreviousGTIDEvent struct defined, so return the event's raw data instead.
+// GenPreviousGTIDsEvent generates a PreviousGTIDsEvent.
+// go-mysql has no PreviousGTIDsEvent struct defined, so return the event's raw data instead.
 // MySQL has no internal doc for PREVIOUS_GTIDS_EVENT.
 // we ref:
 //   a. https://github.com/vitessio/vitess/blob/28e7e5503a6c3d3b18d4925d95f23ebcb6f25c8e/go/mysql/binlog_event_mysql56.go#L56
 //   b. https://dev.mysql.com/doc/internals/en/com-binlog-dump-gtid.html
-func GenPreviousGTIDEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint16, gSet gtid.Set) ([]byte, error) {
+func GenPreviousGTIDsEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint16, gSet gtid.Set) ([]byte, error) {
 	if len(gSet.String()) == 0 {
 		return nil, errors.NotValidf("empty GTID set")
 	}
@@ -181,7 +186,7 @@ func GenPreviousGTIDEvent(timestamp uint32, serverID uint32, latestPos uint32, f
 	body := origin.Encode()
 
 	// size of the event (header, body, CRC32)
-	eventSize := uint32(eventHeaderLen) + uint32(len(body)) + 4
+	eventSize := uint32(eventHeaderLen) + uint32(len(body)) + crc32Len
 
 	// position of the next event
 	logPos := latestPos + eventSize
@@ -211,4 +216,92 @@ func GenPreviousGTIDEvent(timestamp uint32, serverID uint32, latestPos uint32, f
 	}
 
 	return buf.Bytes(), nil
+}
+
+// GenGTIDEvent generates a GTIDEvent.
+// MySQL has no internal doc for GTID_EVENT.
+// we ref the `GTIDEvent.Decode` in go-mysql.
+// `uuid` is the UUID part of the GTID, like `9f61c5f9-1eef-11e9-b6cf-0242ac140003`.
+// `gno` is the GNO part of the GTID, like `6`.
+func GenGTIDEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint16, gtidFlags uint8, uuid string, gno int64, lastCommitted int64, sequenceNumber int64) (*replication.BinlogEvent, error) {
+	body := new(bytes.Buffer)
+
+	// GTID flags, 1 byte
+	err := binary.Write(body, binary.LittleEndian, gtidFlags)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write GTID flags % X", gtidFlags)
+	}
+
+	// SID, 16 bytes
+	sid, err := ParseSID(uuid)
+	if err != nil {
+		return nil, errors.Annotatef(err, "parse UUID %s to SID", uuid)
+	}
+	err = binary.Write(body, binary.LittleEndian, sid.Bytes())
+	if err != nil {
+		return nil, errors.Annotatef(err, "write SID % X", sid.Bytes())
+	}
+
+	// GNO, 8 bytes
+	err = binary.Write(body, binary.LittleEndian, gno)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write GNO %d", gno)
+	}
+
+	// length of TypeCode, 1 byte
+	err = binary.Write(body, binary.LittleEndian, uint8(replication.LogicalTimestampTypeCode))
+	if err != nil {
+		return nil, errors.Annotatef(err, "write length of TypeCode %d", replication.LogicalTimestampTypeCode)
+	}
+
+	// lastCommitted, 8 bytes
+	err = binary.Write(body, binary.LittleEndian, lastCommitted)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write last committed sequence number %d", lastCommitted)
+	}
+
+	// sequenceNumber, 8 bytes
+	err = binary.Write(body, binary.LittleEndian, sequenceNumber)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write sequence number %d", sequenceNumber)
+	}
+
+	// size of the event (header, body, CRC32)
+	eventSize := uint32(eventHeaderLen) + uint32(body.Len()) + crc32Len
+
+	// position of the next event
+	logPos := latestPos + eventSize
+
+	// generate header, `eventHeaderLen` bytes
+	header, headerData, err := GenEventHeader(timestamp, replication.GTID_EVENT, serverID, eventSize, logPos, flags)
+	if err != nil {
+		return nil, errors.Annotatef(err, "generate event header")
+	}
+
+	buf := new(bytes.Buffer)
+	err = binary.Write(buf, binary.LittleEndian, headerData)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write event header % X", headerData)
+	}
+
+	err = binary.Write(buf, binary.LittleEndian, body.Bytes())
+	if err != nil {
+		return nil, errors.Annotatef(err, "write event body % X", body.Bytes())
+	}
+
+	// CRC32 checksum, 4 bytes
+	checksum := crc32.ChecksumIEEE(buf.Bytes())
+	err = binary.Write(buf, binary.LittleEndian, checksum)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write CRC32 % X", checksum)
+	}
+
+	// decode event
+	event := &replication.GTIDEvent{}
+	err = event.Decode(buf.Bytes()[eventHeaderLen:])
+	if err != nil {
+		return nil, errors.Annotatef(err, "decode % X", buf.Bytes())
+	}
+
+	return &replication.BinlogEvent{RawData: buf.Bytes(), Header: header, Event: event}, nil
 }

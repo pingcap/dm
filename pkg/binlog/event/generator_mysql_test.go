@@ -134,7 +134,7 @@ func (t *testGeneratorMySQLSuite) TestGenFormatDescriptionEvent(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (t *testGeneratorMySQLSuite) TestGenPreviousGTIDEvent(c *C) {
+func (t *testGeneratorMySQLSuite) TestGenPreviousGTIDsEvent(c *C) {
 	var (
 		timestamp        = uint32(time.Now().Unix())
 		serverID  uint32 = 11
@@ -143,7 +143,7 @@ func (t *testGeneratorMySQLSuite) TestGenPreviousGTIDEvent(c *C) {
 		str              = "9f61c5f9-1eef-11e9-b6cf-0242ac140003:1-5"
 	)
 
-	// go-mysql has no PreviousGTIDEvent struct defined, so we try to parse a binlog file.
+	// go-mysql has no PreviousGTIDsEvent struct defined, so we try to parse a binlog file.
 	// always needing a FormatDescriptionEvent in the binlog file.
 	formatDescEv, err := GenFormatDescriptionEvent(timestamp, serverID, latestPos, flags)
 	c.Assert(err, IsNil)
@@ -151,11 +151,11 @@ func (t *testGeneratorMySQLSuite) TestGenPreviousGTIDEvent(c *C) {
 	// update latestPos
 	latestPos = formatDescEv.Header.LogPos
 
-	// generate a PreviousGTIDEvent
+	// generate a PreviousGTIDsEvent
 	gSet, err := gtid.ParserGTID(mysql.MySQLFlavor, str)
 	c.Assert(err, IsNil)
 
-	previousGTIDData, err := GenPreviousGTIDEvent(timestamp, serverID, latestPos, flags, gSet)
+	previousGTIDData, err := GenPreviousGTIDsEvent(timestamp, serverID, latestPos, flags, gSet)
 	c.Assert(err, IsNil)
 
 	dir := c.MkDir()
@@ -172,12 +172,11 @@ func (t *testGeneratorMySQLSuite) TestGenPreviousGTIDEvent(c *C) {
 	_, err = f1.Write(formatDescEv.RawData)
 	c.Assert(err, IsNil)
 
-	// write the PreviousGTIDEvent
+	// write the PreviousGTIDsEvent
 	_, err = f1.Write(previousGTIDData)
 	c.Assert(err, IsNil)
 
 	var count = 0
-	// should only receive one FormatDescriptionEvent
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		count++
 		switch count {
@@ -185,7 +184,7 @@ func (t *testGeneratorMySQLSuite) TestGenPreviousGTIDEvent(c *C) {
 			c.Assert(e.Header, DeepEquals, formatDescEv.Header)
 			c.Assert(e.Event, DeepEquals, formatDescEv.Event)
 			c.Assert(e.RawData, DeepEquals, formatDescEv.RawData)
-		case 2: // PreviousGTIDEvent
+		case 2: // PreviousGTIDsEvent
 			c.Assert(e.Header.EventType, Equals, replication.PREVIOUS_GTIDS_EVENT)
 			c.Assert(e.RawData, DeepEquals, previousGTIDData)
 		default:
@@ -204,7 +203,7 @@ func (t *testGeneratorMySQLSuite) TestGenPreviousGTIDEvent(c *C) {
 	gSet, err = gtid.ParserGTID(mysql.MySQLFlavor, str)
 	c.Assert(err, IsNil)
 
-	previousGTIDData, err = GenPreviousGTIDEvent(timestamp, serverID, latestPos, flags, gSet)
+	previousGTIDData, err = GenPreviousGTIDsEvent(timestamp, serverID, latestPos, flags, gSet)
 	c.Assert(err, IsNil)
 
 	// write another file
@@ -221,11 +220,101 @@ func (t *testGeneratorMySQLSuite) TestGenPreviousGTIDEvent(c *C) {
 	_, err = f2.Write(formatDescEv.RawData)
 	c.Assert(err, IsNil)
 
-	// write the PreviousGTIDEvent
+	// write the PreviousGTIDsEvent
 	_, err = f2.Write(previousGTIDData)
 	c.Assert(err, IsNil)
 
 	count = 0 // reset count
 	err = parser2.ParseFile(name2, 0, onEventFunc)
+	c.Assert(err, IsNil)
+}
+
+func (t *testGeneratorMySQLSuite) TestGenGTIDEvent(c *C) {
+	var (
+		timestamp            = uint32(time.Now().Unix())
+		serverID      uint32 = 11
+		latestPos     uint32 = 4
+		flags         uint16 = 0x01
+		gtidFlags            = GTIDFlagsCommitYes
+		prevGTIDsStr         = "9f61c5f9-1eef-11e9-b6cf-0242ac140003:1-5"
+		uuid                 = "9f61c5f9-1eef-11e9-b6cf-0242ac140003"
+		gno           int64  = 6
+		lastCommitted int64
+	)
+	sid, err := ParseSID(uuid)
+	c.Assert(err, IsNil)
+
+	// always needing a FormatDescriptionEvent in the binlog file.
+	formatDescEv, err := GenFormatDescriptionEvent(timestamp, serverID, latestPos, flags)
+	c.Assert(err, IsNil)
+	latestPos = formatDescEv.Header.LogPos // update latestPos
+
+	// also needing a PreviousGTIDsEvent after FormatDescriptionEvent
+	gSet, err := gtid.ParserGTID(mysql.MySQLFlavor, prevGTIDsStr)
+	c.Assert(err, IsNil)
+	previousGTIDData, err := GenPreviousGTIDsEvent(timestamp, serverID, latestPos, flags, gSet)
+	c.Assert(err, IsNil)
+	latestPos += uint32(len(previousGTIDData)) // update latestPos
+
+	gtidEv, err := GenGTIDEvent(timestamp, serverID, latestPos, flags, gtidFlags, uuid, gno, lastCommitted, lastCommitted+1)
+	c.Assert(err, IsNil)
+
+	// verify the header
+	c.Assert(gtidEv.Header.Timestamp, Equals, timestamp)
+	c.Assert(gtidEv.Header.ServerID, Equals, serverID)
+	c.Assert(gtidEv.Header.LogPos, Equals, latestPos+gtidEv.Header.EventSize)
+	c.Assert(gtidEv.Header.Flags, Equals, flags)
+
+	// verify the body
+	gtidEvBody, ok := gtidEv.Event.(*replication.GTIDEvent)
+	c.Assert(ok, IsTrue)
+	c.Assert(gtidEvBody, NotNil)
+	c.Assert(gtidEvBody.CommitFlag, Equals, gtidFlags)
+	c.Assert(gtidEvBody.SID, DeepEquals, sid.Bytes())
+	c.Assert(gtidEvBody.GNO, Equals, gno)
+	c.Assert(gtidEvBody.LastCommitted, Equals, lastCommitted)
+	c.Assert(gtidEvBody.SequenceNumber, Equals, lastCommitted+1)
+
+	// write a binlog file, then try to parse it
+	dir := c.MkDir()
+	name := filepath.Join(dir, "mysql-bin-test.000001")
+	f, err := os.Create(name)
+	c.Assert(err, IsNil)
+	defer f.Close()
+
+	// write a binlog file.
+	_, err = f.Write(replication.BinLogFileHeader)
+	c.Assert(err, IsNil)
+	_, err = f.Write(formatDescEv.RawData)
+	c.Assert(err, IsNil)
+	_, err = f.Write(previousGTIDData)
+	c.Assert(err, IsNil)
+
+	// write GTIDEvent.
+	_, err = f.Write(gtidEv.RawData)
+	c.Assert(err, IsNil)
+
+	var count = 0
+	onEventFunc := func(e *replication.BinlogEvent) error {
+		count++
+		switch count {
+		case 1: // FormatDescriptionEvent
+			c.Assert(e.Header, DeepEquals, formatDescEv.Header)
+			c.Assert(e.Event, DeepEquals, formatDescEv.Event)
+			c.Assert(e.RawData, DeepEquals, formatDescEv.RawData)
+		case 2: // PreviousGTIDsEvent
+			c.Assert(e.Header.EventType, Equals, replication.PREVIOUS_GTIDS_EVENT)
+			c.Assert(e.RawData, DeepEquals, previousGTIDData)
+		case 3: // GTIDEvent
+			c.Assert(e.Header.EventType, Equals, replication.GTID_EVENT)
+			c.Assert(e.RawData, DeepEquals, gtidEv.RawData)
+		default:
+			c.Fatalf("too many binlog events got, current is %+v", e.Header)
+		}
+		return nil
+	}
+	parser2 := replication.NewBinlogParser()
+	parser2.SetVerifyChecksum(true)
+	err = parser2.ParseFile(name, 0, onEventFunc)
 	c.Assert(err, IsNil)
 }
