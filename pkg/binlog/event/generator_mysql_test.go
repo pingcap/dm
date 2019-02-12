@@ -318,3 +318,72 @@ func (t *testGeneratorMySQLSuite) TestGenGTIDEvent(c *C) {
 	err = parser2.ParseFile(name, 0, onEventFunc)
 	c.Assert(err, IsNil)
 }
+
+func (t *testGeneratorMySQLSuite) TestGenQueryEvent(c *C) {
+	var (
+		timestamp            = uint32(time.Now().Unix())
+		serverID      uint32 = 11
+		latestPos     uint32 = 4
+		flags         uint16 = 0x01
+		slaveProxyID  uint32 = 2
+		executionTime uint32 = 12
+		errorCode     uint16 = 13
+		statusVars    []byte // nil
+		schema        []byte // nil
+		query         []byte // nil
+	)
+
+	// empty query, invalid
+	queryEv, err := GenQueryEvent(timestamp, serverID, latestPos, flags, slaveProxyID, executionTime, errorCode, statusVars, schema, query)
+	c.Assert(err, NotNil)
+	c.Assert(queryEv, IsNil)
+
+	// valid query
+	query = []byte("BEGIN")
+	queryEv, err = GenQueryEvent(timestamp, serverID, latestPos, flags, slaveProxyID, executionTime, errorCode, statusVars, schema, query)
+	c.Assert(err, IsNil)
+	c.Assert(queryEv, NotNil)
+
+	// verify the header
+	c.Assert(queryEv.Header.Timestamp, Equals, timestamp)
+	c.Assert(queryEv.Header.ServerID, Equals, serverID)
+	c.Assert(queryEv.Header.LogPos, Equals, latestPos+queryEv.Header.EventSize)
+	c.Assert(queryEv.Header.Flags, Equals, flags)
+
+	// verify the body
+	queryEvBody, ok := queryEv.Event.(*replication.QueryEvent)
+	c.Assert(ok, IsTrue)
+	c.Assert(queryEvBody, NotNil)
+	c.Assert(queryEvBody.SlaveProxyID, Equals, slaveProxyID)
+	c.Assert(queryEvBody.ExecutionTime, Equals, executionTime)
+	c.Assert(queryEvBody.ErrorCode, Equals, errorCode)
+	c.Assert(queryEvBody.StatusVars, DeepEquals, []byte{})
+	c.Assert(queryEvBody.Schema, DeepEquals, []byte{})
+	c.Assert(queryEvBody.Query, DeepEquals, query)
+
+	// non-empty schema
+	schema = []byte("db")
+	query = []byte("CREATE TABLE db.tbl (c1 int)")
+	queryEv, err = GenQueryEvent(timestamp, serverID, latestPos, flags, slaveProxyID, executionTime, errorCode, statusVars, schema, query)
+	c.Assert(err, IsNil)
+	c.Assert(queryEv, NotNil)
+
+	// verify the body
+	queryEvBody, ok = queryEv.Event.(*replication.QueryEvent)
+	c.Assert(ok, IsTrue)
+	c.Assert(queryEvBody, NotNil)
+	c.Assert(queryEvBody.Schema, DeepEquals, schema)
+	c.Assert(queryEvBody.Query, DeepEquals, query)
+
+	// non-empty statusVars
+	statusVars = []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x20, 0x00, 0xa0, 0x55, 0x00, 0x00, 0x00, 0x00, 0x06, 0x03, 0x73, 0x74, 0x64, 0x04, 0x21, 0x00, 0x21, 0x00, 0x08, 0x00, 0x0c, 0x01, 0x73, 0x68, 0x61, 0x72, 0x64, 0x5f, 0x64, 0x62, 0x5f, 0x31, 0x00}
+	queryEv, err = GenQueryEvent(timestamp, serverID, latestPos, flags, slaveProxyID, executionTime, errorCode, statusVars, schema, query)
+	c.Assert(err, IsNil)
+	c.Assert(queryEv, NotNil)
+
+	// verify the body
+	queryEvBody, ok = queryEv.Event.(*replication.QueryEvent)
+	c.Assert(ok, IsTrue)
+	c.Assert(queryEvBody, NotNil)
+	c.Assert(queryEvBody.StatusVars, DeepEquals, statusVars)
+}
