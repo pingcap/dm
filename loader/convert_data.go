@@ -257,7 +257,7 @@ func parseTable(r *router.Table, schema, table, file string) (*tableInfo, error)
 		columnNameFields = ""
 	)
 	for _, col := range ct.Cols {
-		if col.Options[0].Tp == ast.ColumnOptionGenerated {
+		if len(col.Options) > 0 && col.Options[0].Tp == ast.ColumnOptionGenerated {
 			hasGeneragedCols = true
 			continue
 		}
