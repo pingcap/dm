@@ -128,3 +128,28 @@ func (t *testConvertDataSuite) TestParseTable(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(tableInfo, DeepEquals, expectedTableInfo)
 }
+
+func (t *testConvertDataSuite) TestParseTableWithGeneratedColumn(c *C) {
+	rules := []*router.TableRule{
+		{"test*", "t*", "test", "t"},
+	}
+
+	expectedTableInfo := &tableInfo{
+		sourceSchema: "test1",
+		sourceTable:  "t3",
+		targetSchema: "test",
+		targetTable:  "t",
+		columnNameList: []string{
+			"id",
+			"t_json",
+		},
+		insertHeadStmt: "INSERT INTO `t` (`id`,`t_json`) VALUES",
+	}
+
+	r, err := router.NewTableRouter(false, rules)
+	c.Assert(err, IsNil)
+
+	tableInfo, err := parseTable(r, "test1", "t3", "./dumpfile/test1.t3-schema.sql")
+	c.Assert(err, IsNil)
+	c.Assert(tableInfo, DeepEquals, expectedTableInfo)
+}

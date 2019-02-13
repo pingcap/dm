@@ -264,7 +264,11 @@ func parseTable(r *router.Table, schema, table, file string) (*tableInfo, error)
 		columns = append(columns, col.Name.Name.O)
 	}
 	if hasGeneragedCols {
-		columnNameFields = "(" + strings.Join(columns, ",") + ")"
+		var escapeColumns []string
+		for _, column := range columns {
+			escapeColumns = append(escapeColumns, fmt.Sprintf("`%s`", column))
+		}
+		columnNameFields = "(" + strings.Join(escapeColumns, ",") + ") "
 	}
 
 	dstSchema, dstTable := fetchMatchedLiteral(r, schema, table)
