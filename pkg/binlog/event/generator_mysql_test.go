@@ -23,7 +23,7 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
-	"github.com/siddontang/go-mysql/mysql"
+	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/gtid"
@@ -152,7 +152,7 @@ func (t *testGeneratorMySQLSuite) TestGenPreviousGTIDsEvent(c *C) {
 	latestPos = formatDescEv.Header.LogPos
 
 	// generate a PreviousGTIDsEvent
-	gSet, err := gtid.ParserGTID(mysql.MySQLFlavor, str)
+	gSet, err := gtid.ParserGTID(gmysql.MySQLFlavor, str)
 	c.Assert(err, IsNil)
 
 	previousGTIDData, err := GenPreviousGTIDsEvent(timestamp, serverID, latestPos, flags, gSet)
@@ -200,7 +200,7 @@ func (t *testGeneratorMySQLSuite) TestGenPreviousGTIDsEvent(c *C) {
 
 	// multi GTID
 	str = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,406a3f61-690d-11e7-87c5-6c92bf46f384:1-94321383,53bfca22-690d-11e7-8a62-18ded7a37b78:1-495,686e1ab6-c47e-11e7-a42c-6c92bf46f384:1-34981190,03fc0263-28c7-11e7-a653-6c0b84d59f30:1-7041423,05474d3c-28c7-11e7-8352-203db246dd3d:1-170,10b039fc-c843-11e7-8f6a-1866daf8d810:1-308290454"
-	gSet, err = gtid.ParserGTID(mysql.MySQLFlavor, str)
+	gSet, err = gtid.ParserGTID(gmysql.MySQLFlavor, str)
 	c.Assert(err, IsNil)
 
 	previousGTIDData, err = GenPreviousGTIDsEvent(timestamp, serverID, latestPos, flags, gSet)
@@ -250,7 +250,7 @@ func (t *testGeneratorMySQLSuite) TestGenGTIDEvent(c *C) {
 	latestPos = formatDescEv.Header.LogPos // update latestPos
 
 	// also needing a PreviousGTIDsEvent after FormatDescriptionEvent
-	gSet, err := gtid.ParserGTID(mysql.MySQLFlavor, prevGTIDsStr)
+	gSet, err := gtid.ParserGTID(gmysql.MySQLFlavor, prevGTIDsStr)
 	c.Assert(err, IsNil)
 	previousGTIDData, err := GenPreviousGTIDsEvent(timestamp, serverID, latestPos, flags, gSet)
 	c.Assert(err, IsNil)
@@ -386,4 +386,76 @@ func (t *testGeneratorMySQLSuite) TestGenQueryEvent(c *C) {
 	c.Assert(ok, IsTrue)
 	c.Assert(queryEvBody, NotNil)
 	c.Assert(queryEvBody.StatusVars, DeepEquals, statusVars)
+}
+
+func (t *testGeneratorMySQLSuite) TestGenTableMapEvent(c *C) {
+	var (
+		timestamp         = uint32(time.Now().Unix())
+		serverID   uint32 = 11
+		latestPos  uint32 = 123
+		flags      uint16 = 0x01
+		tableID    uint64 = 108
+		schema     []byte // nil
+		table      []byte // nil
+		columnType []byte // nil
+	)
+
+	// invalid schema, table and columnType
+	tableMapEv, err := GenTableMapEvent(timestamp, serverID, latestPos, flags, tableID, schema, table, columnType)
+	c.Assert(err, NotNil)
+	c.Assert(tableMapEv, IsNil)
+
+	// valid schema, invalid table and columnType
+	schema = []byte("db")
+	tableMapEv, err = GenTableMapEvent(timestamp, serverID, latestPos, flags, tableID, schema, table, columnType)
+	c.Assert(err, NotNil)
+	c.Assert(tableMapEv, IsNil)
+
+	// valid schema and table, invalid columnType
+	table = []byte("tbl")
+	tableMapEv, err = GenTableMapEvent(timestamp, serverID, latestPos, flags, tableID, schema, table, columnType)
+	c.Assert(err, NotNil)
+	c.Assert(tableMapEv, IsNil)
+
+	// all valid
+	columnType = []byte{gmysql.MYSQL_TYPE_LONG}
+	tableMapEv, err = GenTableMapEvent(timestamp, serverID, latestPos, flags, tableID, schema, table, columnType)
+	c.Assert(err, IsNil)
+	c.Assert(tableMapEv, NotNil)
+
+	// verify the header
+	c.Assert(tableMapEv.Header.Timestamp, Equals, timestamp)
+	c.Assert(tableMapEv.Header.ServerID, Equals, serverID)
+	c.Assert(tableMapEv.Header.LogPos, Equals, latestPos+tableMapEv.Header.EventSize)
+	c.Assert(tableMapEv.Header.Flags, Equals, flags)
+
+	// verify the body
+	tableMapEvBody, ok := tableMapEv.Event.(*replication.TableMapEvent)
+	c.Assert(ok, IsTrue)
+	c.Assert(tableMapEvBody, NotNil)
+	c.Assert(tableMapEvBody.TableID, Equals, tableID)
+	c.Assert(tableMapEvBody.Flags, Equals, tableMapFlags)
+	c.Assert(tableMapEvBody.Schema, DeepEquals, schema)
+	c.Assert(tableMapEvBody.Table, DeepEquals, table)
+	c.Assert(tableMapEvBody.ColumnCount, Equals, uint64(len(columnType)))
+	c.Assert(tableMapEvBody.ColumnType, DeepEquals, columnType)
+
+	// multi column type
+	columnType = []byte{gmysql.MYSQL_TYPE_STRING, gmysql.MYSQL_TYPE_NEWDECIMAL, gmysql.MYSQL_TYPE_VAR_STRING, gmysql.MYSQL_TYPE_BLOB}
+	tableMapEv, err = GenTableMapEvent(timestamp, serverID, latestPos, flags, tableID, schema, table, columnType)
+	c.Assert(err, IsNil)
+	c.Assert(tableMapEv, NotNil)
+
+	// verify the body
+	tableMapEvBody, ok = tableMapEv.Event.(*replication.TableMapEvent)
+	c.Assert(ok, IsTrue)
+	c.Assert(tableMapEvBody, NotNil)
+	c.Assert(tableMapEvBody.ColumnCount, Equals, uint64(len(columnType)))
+	c.Assert(tableMapEvBody.ColumnType, DeepEquals, columnType)
+
+	// unsupported column type
+	columnType = []byte{gmysql.MYSQL_TYPE_NEWDATE}
+	tableMapEv, err = GenTableMapEvent(timestamp, serverID, latestPos, flags, tableID, schema, table, columnType)
+	c.Assert(err, NotNil)
+	c.Assert(tableMapEv, IsNil)
 }
