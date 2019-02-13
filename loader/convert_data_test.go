@@ -88,6 +88,50 @@ func (t *testConvertDataSuite) TestReassemble(c *C) {
 	}
 }
 
+func (t *testConvertDataSuite) TestReassembleWithGeneratedColumn(c *C) {
+	table := &tableInfo{
+		sourceSchema: "test2",
+		sourceTable:  "t3",
+		targetSchema: "test",
+		targetTable:  "t",
+		columnNameList: []string{
+			"id",
+			"t_json",
+		},
+		insertHeadStmt: "INSERT INTO t (`id`,`t_json`) VALUES",
+	}
+
+	sql := `INSERT INTO t1 (id,t_json) VALUES
+(10,'{}'),
+(9,NULL);
+(8,'{"a":123}');
+`
+
+	expected := []string{
+		"INSERT INTO t (`id`,`t_json`) VALUES(585520728116297738,'{}'),(585520728116297737,NULL),(585520728116297736,'{\"a\":123}');",
+		"INSERT INTO t (`id`,`t_json`) VALUES(10,'{}'),(9,NULL),(8,'{\"a\":123}');",
+	}
+
+	rules := []*cm.Rule{
+		{
+			PatternSchema: "test*",
+			PatternTable:  "t*",
+			TargetColumn:  "id",
+			Expression:    cm.PartitionID,
+			Arguments:     []string{"1", "test", "t"},
+		},
+	}
+
+	for i, r := range rules {
+		columnMapping, err := cm.NewMapping(false, []*cm.Rule{r})
+		c.Assert(err, IsNil)
+
+		query, err := reassemble([]byte(sql), table, columnMapping)
+		c.Assert(err, IsNil)
+		c.Assert(query, Equals, expected[i])
+	}
+}
+
 func (t *testConvertDataSuite) TestParseTable(c *C) {
 	rules := []*router.TableRule{
 		{"test*", "t*", "test", "t"},
