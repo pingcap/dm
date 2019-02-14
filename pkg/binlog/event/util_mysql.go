@@ -18,6 +18,7 @@ package event
 
 import (
 	"bytes"
+	"encoding/binary"
 
 	"github.com/pingcap/errors"
 	gmysql "github.com/siddontang/go-mysql/mysql"
@@ -57,4 +58,26 @@ func nullBytes(n int) []byte {
 		buf.WriteByte(0x00)
 	}
 	return buf.Bytes()
+}
+
+// combineHeaderPayload combines header, postHeader and payload together.
+func combineHeaderPayload(buf *bytes.Buffer, header, postHeader, payload []byte) error {
+	err := binary.Write(buf, binary.LittleEndian, header)
+	if err != nil {
+		return errors.Annotatef(err, "write event header % X", header)
+	}
+
+	if len(postHeader) > 0 { // postHeader maybe empty
+		err = binary.Write(buf, binary.LittleEndian, postHeader)
+		if err != nil {
+			return errors.Annotatef(err, "write event post-header % X", postHeader)
+		}
+	}
+
+	err = binary.Write(buf, binary.LittleEndian, payload)
+	if err != nil {
+		return errors.Annotatef(err, "write event payload % X", payload)
+	}
+
+	return nil
 }

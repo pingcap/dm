@@ -101,26 +101,10 @@ func GenEventHeader(timestamp uint32, eventType replication.EventType, serverID 
 // GenFormatDescriptionEvent generates a FormatDescriptionEvent.
 // ref: https://dev.mysql.com/doc/internals/en/format-description-event.html.
 func GenFormatDescriptionEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint16) (*replication.BinlogEvent, error) {
-	buf := new(bytes.Buffer)
-
-	// size of the event (header, post-header, payload, CRC32), 119 now
-	eventSize := uint32(eventHeaderLen) + 2 + 50 + 4 + 1 + 39 + crc32Len
-
-	// position of the next event
-	logPos := latestPos + eventSize
-
-	// generate header, `eventHeaderLen` bytes
-	header, headerData, err := GenEventHeader(timestamp, replication.FORMAT_DESCRIPTION_EVENT, serverID, eventSize, logPos, flags)
-	if err != nil {
-		return nil, errors.Annotatef(err, "generate event header")
-	}
-	err = binary.Write(buf, binary.LittleEndian, headerData)
-	if err != nil {
-		return nil, errors.Annotatef(err, "write event header % X", headerData)
-	}
+	payload := new(bytes.Buffer)
 
 	// binlog-version, 2 bytes
-	err = binary.Write(buf, binary.LittleEndian, binlogVersion)
+	err := binary.Write(payload, binary.LittleEndian, binlogVersion)
 	if err != nil {
 		return nil, errors.Annotatef(err, "write binlog-version %d", binlogVersion)
 	}
@@ -128,33 +112,46 @@ func GenFormatDescriptionEvent(timestamp uint32, serverID uint32, latestPos uint
 	// mysql-server version, 50 bytes
 	serverVer := make([]byte, mysqlVersionLen)
 	copy(serverVer, []byte(mysqlVersion))
-	err = binary.Write(buf, binary.LittleEndian, serverVer)
+	err = binary.Write(payload, binary.LittleEndian, serverVer)
 	if err != nil {
 		return nil, errors.Annotatef(err, "write mysql-server %v", serverVer)
 	}
 
 	// create_timestamp, 4 bytes
-	err = binary.Write(buf, binary.LittleEndian, timestamp)
+	err = binary.Write(payload, binary.LittleEndian, timestamp)
 	if err != nil {
 		return nil, errors.Annotatef(err, "write create_timestamp %d", timestamp)
 	}
 
 	// event_header_length, 1 byte
-	err = binary.Write(buf, binary.LittleEndian, eventHeaderLen)
+	err = binary.Write(payload, binary.LittleEndian, eventHeaderLen)
 	if err != nil {
 		return nil, errors.Annotatef(err, "write event_header_length %d", eventHeaderLen)
 	}
 
 	// event type header length, 38 bytes now
-	err = binary.Write(buf, binary.LittleEndian, eventTypeHeaderLen)
+	err = binary.Write(payload, binary.LittleEndian, eventTypeHeaderLen)
 	if err != nil {
 		return nil, errors.Annotatef(err, "write event type header length % X", eventTypeHeaderLen)
 	}
 
 	// checksum algorithm, 1 byte
-	err = binary.Write(buf, binary.LittleEndian, replication.BINLOG_CHECKSUM_ALG_CRC32)
+	err = binary.Write(payload, binary.LittleEndian, replication.BINLOG_CHECKSUM_ALG_CRC32)
 	if err != nil {
 		return nil, errors.Annotatef(err, "write checksum algorithm % X", replication.BINLOG_CHECKSUM_ALG_CRC32)
+	}
+
+	eventSize := uint32(eventHeaderLen) + uint32(payload.Len()) + crc32Len
+	logPos := latestPos + eventSize
+	header, headerData, err := GenEventHeader(timestamp, replication.FORMAT_DESCRIPTION_EVENT, serverID, eventSize, logPos, flags)
+	if err != nil {
+		return nil, errors.Annotatef(err, "generate event header")
+	}
+
+	buf := new(bytes.Buffer)
+	err = combineHeaderPayload(buf, headerData, nil, payload.Bytes())
+	if err != nil {
+		return nil, errors.Annotatef(err, "combine header and payload")
 	}
 
 	// CRC32 checksum, 4 bytes
@@ -193,27 +190,17 @@ func GenPreviousGTIDsEvent(timestamp uint32, serverID uint32, latestPos uint32, 
 	// event payload, GTID set encoded in it
 	payload := origin.Encode()
 
-	// size of the event (header, payload, CRC32)
 	eventSize := uint32(eventHeaderLen) + uint32(len(payload)) + crc32Len
-
-	// position of the next event
 	logPos := latestPos + eventSize
-
-	// generate header, `eventHeaderLen` bytes
 	_, headerData, err := GenEventHeader(timestamp, replication.PREVIOUS_GTIDS_EVENT, serverID, eventSize, logPos, flags)
 	if err != nil {
 		return nil, errors.Annotatef(err, "generate event header")
 	}
 
 	buf := new(bytes.Buffer)
-	err = binary.Write(buf, binary.LittleEndian, headerData)
+	err = combineHeaderPayload(buf, headerData, nil, payload)
 	if err != nil {
-		return nil, errors.Annotatef(err, "write event header % X", headerData)
-	}
-
-	err = binary.Write(buf, binary.LittleEndian, payload)
-	if err != nil {
-		return nil, errors.Annotatef(err, "write event payload % X", payload)
+		return nil, errors.Annotatef(err, "combine header and payload")
 	}
 
 	// CRC32 checksum, 4 bytes
@@ -274,27 +261,17 @@ func GenGTIDEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uin
 		return nil, errors.Annotatef(err, "write sequence number %d", sequenceNumber)
 	}
 
-	// size of the event (header, payload, CRC32)
 	eventSize := uint32(eventHeaderLen) + uint32(payload.Len()) + crc32Len
-
-	// position of the next event
 	logPos := latestPos + eventSize
-
-	// generate header, `eventHeaderLen` bytes
 	header, headerData, err := GenEventHeader(timestamp, replication.GTID_EVENT, serverID, eventSize, logPos, flags)
 	if err != nil {
 		return nil, errors.Annotatef(err, "generate event header")
 	}
 
 	buf := new(bytes.Buffer)
-	err = binary.Write(buf, binary.LittleEndian, headerData)
+	err = combineHeaderPayload(buf, headerData, nil, payload.Bytes())
 	if err != nil {
-		return nil, errors.Annotatef(err, "write event header % X", headerData)
-	}
-
-	err = binary.Write(buf, binary.LittleEndian, payload.Bytes())
-	if err != nil {
-		return nil, errors.Annotatef(err, "write event payload % X", payload.Bytes())
+		return nil, errors.Annotatef(err, "combine header and payload")
 	}
 
 	// decode event, before write checksum
@@ -390,32 +367,17 @@ func GenQueryEvent(timestamp uint32, serverID uint32, latestPos uint32, flags ui
 		return nil, errors.Annotatef(err, "write query % X", query)
 	}
 
-	// size of the event (header, post-header, payload, CRC32)
 	eventSize := uint32(eventHeaderLen) + uint32(postHeader.Len()) + uint32(payload.Len()) + crc32Len
-
-	// position of the next event
 	logPos := latestPos + eventSize
-
-	// generate header, `eventHeaderLen` bytes
 	header, headerData, err := GenEventHeader(timestamp, replication.QUERY_EVENT, serverID, eventSize, logPos, flags)
 	if err != nil {
 		return nil, errors.Annotatef(err, "generate event header")
 	}
 
 	buf := new(bytes.Buffer)
-	err = binary.Write(buf, binary.LittleEndian, headerData)
+	err = combineHeaderPayload(buf, headerData, postHeader.Bytes(), payload.Bytes())
 	if err != nil {
-		return nil, errors.Annotatef(err, "write event header % X", headerData)
-	}
-
-	err = binary.Write(buf, binary.LittleEndian, postHeader.Bytes())
-	if err != nil {
-		return nil, errors.Annotatef(err, "write event post header % X", postHeader.Bytes())
-	}
-
-	err = binary.Write(buf, binary.LittleEndian, payload.Bytes())
-	if err != nil {
-		return nil, errors.Annotatef(err, "write event payload % X", payload.Bytes())
+		return nil, errors.Annotatef(err, "combine header, post-header and payload")
 	}
 
 	// decode event, before write checksum
@@ -539,32 +501,17 @@ func GenTableMapEvent(timestamp uint32, serverID uint32, latestPos uint32, flags
 		return nil, errors.Annotatef(err, "write NULL-bitmask % X", bitMask)
 	}
 
-	// size of the event (header, post-header, payload, CRC32)
 	eventSize := uint32(eventHeaderLen) + uint32(postHeader.Len()) + uint32(payload.Len()) + crc32Len
-
-	// position of the next event
 	logPos := latestPos + eventSize
-
-	// generate header, `eventHeaderLen` bytes
 	_, headerData, err := GenEventHeader(timestamp, replication.TABLE_MAP_EVENT, serverID, eventSize, logPos, flags)
 	if err != nil {
 		return nil, errors.Annotatef(err, "generate event header")
 	}
 
 	buf := new(bytes.Buffer)
-	err = binary.Write(buf, binary.LittleEndian, headerData)
+	err = combineHeaderPayload(buf, headerData, postHeader.Bytes(), payload.Bytes())
 	if err != nil {
-		return nil, errors.Annotatef(err, "write event header % X", headerData)
-	}
-
-	err = binary.Write(buf, binary.LittleEndian, postHeader.Bytes())
-	if err != nil {
-		return nil, errors.Annotatef(err, "write event post header % X", postHeader.Bytes())
-	}
-
-	err = binary.Write(buf, binary.LittleEndian, payload.Bytes())
-	if err != nil {
-		return nil, errors.Annotatef(err, "write event payload % X", payload.Bytes())
+		return nil, errors.Annotatef(err, "combine header, post-header and payload")
 	}
 
 	// CRC32 checksum, 4 bytes
@@ -588,7 +535,7 @@ func GenTableMapEvent(timestamp uint32, serverID uint32, latestPos uint32, flags
 		switch count {
 		case 1: // FormatDescriptionEvent
 			if e.Header.EventType != replication.FORMAT_DESCRIPTION_EVENT {
-				return errors.New("the first event in binlog data is not FormatDescriptionEvent")
+				return errors.Errorf("expect FormatDescriptionEvent, but got %+v", e)
 			}
 		case 2: // TableMapEvent
 			if e.Header.EventType != replication.TABLE_MAP_EVENT {
