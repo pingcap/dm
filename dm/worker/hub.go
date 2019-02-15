@@ -15,6 +15,8 @@ package worker
 
 import (
 	"sync"
+
+	"github.com/pingcap/dm/pkg/tracing"
 )
 
 var (
@@ -39,4 +41,9 @@ func InitConditionHub(w *Worker) {
 // GetConditionHub returns singleton instance of ConditionHub
 func GetConditionHub() *ConditionHub {
 	return conditionHub
+}
+
+// GetConditionHub returns the tracer instance of this worker
+func GetTracer() *tracing.Tracer {
+	return conditionHub.w.tracer
 }

@@ -40,6 +40,7 @@ import (
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/pkg/utils"
 	sm "github.com/pingcap/dm/syncer/safe-mode"
 	"github.com/pingcap/dm/syncer/sql-operator"
@@ -153,6 +154,8 @@ type Syncer struct {
 		sync.RWMutex
 		currentPos mysql.Position // use to calc remain binlog size
 	}
+
+	tracer *tracing.Tracer
 }
 
 // NewSyncer creates a new Syncer.
@@ -1083,6 +1086,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 				continue
 			}
+			latestOp = rotate
 
 			log.Infof("rotate binlog to %v", currentPos)
 		case *replication.RowsEvent:
@@ -1178,6 +1182,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					}
 				}
 				binlogEvent.WithLabelValues("write_rows", s.cfg.Name).Observe(time.Since(startTime).Seconds())
+				latestOp = insert
 
 				for i := range sqls {
 					var arg []interface{}
@@ -1201,6 +1206,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					}
 				}
 				binlogEvent.WithLabelValues("update_rows", s.cfg.Name).Observe(time.Since(startTime).Seconds())
+				latestOp = update
 
 				for i := range sqls {
 					var arg []interface{}
@@ -1225,6 +1231,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					}
 				}
 				binlogEvent.WithLabelValues("delete_rows", s.cfg.Name).Observe(time.Since(startTime).Seconds())
+				latestOp = del
 
 				for i := range sqls {
 					var arg []interface{}
@@ -1569,6 +1576,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			job := newXIDJob(currentPos, currentPos, nil)
 			err = s.addJob(job)
+			if err != nil {
+				return errors.Trace(err)
+			}
+		}
+		if s.tracer.Enable() {
+			source := fmt.Sprintf("%s.%s", s.cfg.SourceID, s.cfg.Name)
+			err := s.tracer.CollectSyncerBinlogEvent(source, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
 			if err != nil {
 				return errors.Trace(err)
 			}

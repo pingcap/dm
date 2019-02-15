@@ -32,6 +32,7 @@ const (
 	xid
 	flush
 	skip // used by Syncer.recordSkipSQLsPos to record global pos, but not execute SQL
+	rotate
 )
 
 func (t opType) String() string {
@@ -50,6 +51,8 @@ func (t opType) String() string {
 		return "flush"
 	case skip:
 		return "skip"
+	case rotate:
+		return "rotate"
 	}
 
 	return ""

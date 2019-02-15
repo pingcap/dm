@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package pb;
+
+message BaseEvent {
+    string filename = 1;
+    int32 line = 2;
+    int64 tso = 3;
+    string traceID = 4;
+}
+
+message MySQLPosition {
+    string name = 1;
+    uint32 pos = 2;
+}
+
+message SyncerState {
+    bool safeMode = 1;
+    bool tryReSync = 2;
+    MySQLPosition lastPos = 3;
+}
+
+message SyncerBinlogEvent {
+    BaseEvent base = 1;
+    SyncerState state = 2;
+    int32 eventType = 3;
+    int32 opType = 4;
+    MySQLPosition currentPos = 5;
+}

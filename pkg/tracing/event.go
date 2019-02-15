@@ -1,0 +1,79 @@
+// Copyright 2019 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package tracing
+
+import (
+	"github.com/pingcap/dm/dm/pb"
+
+	"github.com/pingcap/errors"
+)
+
+// EventType represents trace event type
+type EventType byte
+
+const (
+	EventNull EventType = iota
+	EventSyncerBinlog
+	EventFlush // used to force upload tracing event
+)
+
+func (e EventType) String() string {
+	switch e {
+	case EventNull:
+		return "null"
+	case EventSyncerBinlog:
+		return "syncer binlog"
+	case EventFlush:
+		return "flush"
+	default:
+		return "unknown event"
+	}
+}
+
+type Job struct {
+	Tp    EventType
+	Event interface{}
+}
+
+// processTraceEvents upload trace events to tracing service. ensure all jobs
+// have same EventType
+func (t *Tracer) processTraceEvents(jobs []*Job) error {
+	if len(jobs) == 0 {
+		return nil
+	}
+	tp := jobs[0].Tp
+	switch tp {
+	case EventSyncerBinlog:
+		events := make([]*pb.SyncerBinlogEvent, 0, len(jobs))
+		for _, job := range jobs {
+			event, ok := job.Event.(*pb.SyncerBinlogEvent)
+			if !ok {
+				return errors.Errorf("invalid event data for type: %s", tp)
+			}
+			events = append(events, event)
+			req := &pb.UploadSyncerBinlogEventRequest{Events: events}
+			resp, err := t.cli.UploadSyncerBinlogEvent(t.ctx, req)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			if !resp.Result {
+				return errors.Errorf("upload syncer binlog event failed, msg: %s", resp.Msg)
+			}
+		}
+	default:
+		return errors.Errorf("invalid event type %s, will not process", tp)
+	}
+
+	return nil
+}
