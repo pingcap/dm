@@ -59,7 +59,7 @@ func NewGenColCache() *GenColCache {
 // status returns `NotFound` if a `schema`.`table` has no generated column
 // information cached, otherwise returns `hasGenColumn` if cache found and
 // it has generated column and returns `noGenColumn` if it has no generated column.
-func (c *GenColCache) status(key string) GenColumnCacheStatus {
+func (c *GenColCache) status(key string) genColumnCacheStatus {
 	val, ok := c.hasGenColumn[key]
 	if !ok {
 		return genColumnNoCache
