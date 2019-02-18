@@ -16,3 +16,7 @@ alter table t1 add unique (id_gen);
 alter table t2 add unique (id_gen);
 insert into t1 (uid, name, info) values (10005, 'Buenos Aires', '{"age": 100}');
 insert into t2 (uid, name, info) values (20007, 'Buenos Aires', '{"age": 200}');
+alter table t1 add key multi_col_idx(uid, id_gen);
+alter table t2 add key multi_col_idx(uid, id_gen);
+insert into t1 (uid, name, info) values (10006, 'Buenos Aires', '{"age": 100}');
+insert into t2 (uid, name, info) values (20008, 'Buenos Aires', '{"age": 200}');
