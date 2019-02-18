@@ -4,6 +4,6 @@
 CREATE TABLE `binlog_1` (
   `id` bigint(11) NOT NULL AUTO_INCREMENT,
   `t_json` VARCHAR(100),
-  `t_json_gen` json as (`t_json`) VIRTUAL,
+  `t_json_gen` json comment 'test comment' as (`t_json`) VIRTUAL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=latin1;

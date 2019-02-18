@@ -257,11 +257,17 @@ func parseTable(r *router.Table, schema, table, file string) (*tableInfo, error)
 		columnNameFields = ""
 	)
 	for _, col := range ct.Cols {
-		if len(col.Options) > 0 && col.Options[0].Tp == ast.ColumnOptionGenerated {
-			hasGeneragedCols = true
-			continue
+		skip := false
+		for _, opt := range col.Options {
+			if opt.Tp == ast.ColumnOptionGenerated {
+				hasGeneragedCols = true
+				skip = true
+				break
+			}
 		}
-		columns = append(columns, col.Name.Name.O)
+		if !skip {
+			columns = append(columns, col.Name.Name.O)
+		}
 	}
 	if hasGeneragedCols {
 		var escapeColumns []string
