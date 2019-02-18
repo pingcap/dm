@@ -441,7 +441,6 @@ func pruneGeneratedColumnDML(columns []*column, data [][]interface{}, index map[
 		if isGenColumn {
 			needPrune = true
 			genColumnNames[c.name] = true
-			continue
 		}
 	}
 
