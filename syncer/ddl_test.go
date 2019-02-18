@@ -350,7 +350,7 @@ func (s *testSyncerSuite) TestIgnoreDMLInQuery(c *C) {
 	}
 }
 
-func (s *testSyncerSuite) TestResolveSQL(c *C) {
+func (s *testSyncerSuite) TestResolveGeneratedColumnSQL(c *C) {
 	testCases := []struct {
 		sql      string
 		expected string
