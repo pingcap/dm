@@ -26,21 +26,30 @@ import (
 	"github.com/pingcap/errors"
 )
 
-type GenColumnCacheStatus uint8
+type genColumnCacheStatus uint8
 
 const (
-	NotFound GenColumnCacheStatus = iota
+	genColumnNoCache genColumnCacheStatus = iota
 	hasGenColumn
 	noGenColumn
 )
 
+// GenColCache stores generated column information for all tables
 type GenColCache struct {
+	// `schema`.`table` -> whether this table has generated column
 	hasGenColumn map[string]bool
-	columns      map[string][]*column
-	indexes      map[string]map[string][]*column
-	isGenColumn  map[string][]bool
+
+	// `schema`.`table` -> column list
+	columns map[string][]*column
+
+	// `schema`.`table` -> tableIndex information
+	indexes map[string]map[string][]*column
+
+	// `schema`.`table` -> a bool slice representing whether it is generated for each column
+	isGenColumn map[string][]bool
 }
 
+// NewGenColCache creates a GenColCache.
 func NewGenColCache() *GenColCache {
 	c := &GenColCache{}
 	c.reset()
@@ -51,12 +60,12 @@ func NewGenColCache() *GenColCache {
 // information cached, otherwise returns `hasGenColumn` if cache found and
 // it has generated column and returns `noGenColumn` if it has no generated column.
 func (c *GenColCache) status(key string) GenColumnCacheStatus {
-	if val, ok := c.hasGenColumn[key]; !ok {
-		return NotFound
-	} else {
-		if val {
-			return hasGenColumn
-		}
+	val, ok := c.hasGenColumn[key]
+	if !ok {
+		return genColumnNoCache
+	}
+	if val {
+		return hasGenColumn
 	}
 	return noGenColumn
 }
