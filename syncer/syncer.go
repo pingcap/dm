@@ -1143,7 +1143,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				return errors.Trace(err)
 			}
 			tblColumns, rowData, tblIndexColumns := pruneGeneratedColumnDML(table.columns, rows, table.indexColumns)
-			log.Infof("tblColumns %+v, rowData %+v tblIndexColumns %+v", tblColumns, rowData, tblIndexColumns)
 
 			var (
 				applied bool

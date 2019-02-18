@@ -424,7 +424,10 @@ func (s *Syncer) mappingDML(schema, table string, columns []string, data [][]int
 	return rows, nil
 }
 
-// pruneGeneratedColumnDML filters columns list, data and index removing all generated column
+// pruneGeneratedColumnDML filters columns list, data and index removing all
+// generated column. because generated column is not support setting value
+// directly in DML, we must remove generated column from DML, including column
+// list, data list and all indexes including generated columns.
 func pruneGeneratedColumnDML(columns []*column, data [][]interface{}, index map[string][]*column) ([]*column, [][]interface{}, map[string][]*column) {
 	var (
 		needPrune       bool
