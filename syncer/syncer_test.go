@@ -853,7 +853,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 					args [][]interface{}
 				)
 
-				tblColumns, rowData, tblIndexColumns := pruneGeneratedColumnDML(table.columns, ev.Rows, table.indexColumns)
+				tblColumns, rowData, tblIndexColumns, err := pruneGeneratedColumnDML(table.columns, ev.Rows, table.indexColumns, table.schema, table.name, syncer.genColsCache)
 				switch e.Header.EventType {
 				case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
 					sqls, _, args, err = genInsertSQLs(table.schema, table.name, rowData, tblColumns, tblIndexColumns)

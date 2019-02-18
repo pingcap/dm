@@ -97,6 +97,7 @@ type Syncer struct {
 
 	tables       map[string]*table   // table cache: `target-schema`.`target-table` -> table
 	cacheColumns map[string][]string // table columns cache: `target-schema`.`target-table` -> column names list
+	genColsCache *GenColCache
 
 	fromDB *Conn
 	toDBs  []*Conn
@@ -165,6 +166,7 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.count.Set(0)
 	syncer.tables = make(map[string]*table)
 	syncer.cacheColumns = make(map[string][]string)
+	syncer.genColsCache = NewGenColCache()
 	syncer.c = newCausality()
 	syncer.tableRouter, _ = router.NewTableRouter(cfg.CaseSensitive, []*router.TableRule{})
 	syncer.done = make(chan struct{})
@@ -495,11 +497,13 @@ func (s *Syncer) clearTables(schema, table string) {
 	key := dbutil.TableName(schema, table)
 	delete(s.tables, key)
 	delete(s.cacheColumns, key)
+	s.genColsCache.clearTable(schema, table)
 }
 
 func (s *Syncer) clearAllTables() {
 	s.tables = make(map[string]*table)
 	s.cacheColumns = make(map[string][]string)
+	s.genColsCache.reset()
 }
 
 func (s *Syncer) getTableFromDB(db *Conn, schema string, name string) (*table, error) {
@@ -1142,7 +1146,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			if err != nil {
 				return errors.Trace(err)
 			}
-			tblColumns, rowData, tblIndexColumns := pruneGeneratedColumnDML(table.columns, rows, table.indexColumns)
+			tblColumns, rowData, tblIndexColumns, err := pruneGeneratedColumnDML(table.columns, rows, table.indexColumns, schemaName, tableName, s.genColsCache)
+			if err != nil {
+				return errors.Trace(err)
+			}
 
 			var (
 				applied bool

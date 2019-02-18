@@ -20,9 +20,61 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
+
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 )
+
+type GenColumnCacheStatus uint8
+
+const (
+	NotFound GenColumnCacheStatus = iota
+	hasGenColumn
+	noGenColumn
+)
+
+type GenColCache struct {
+	hasGenColumn map[string]bool
+	columns      map[string][]*column
+	indexes      map[string]map[string][]*column
+	isGenColumn  map[string][]bool
+}
+
+func NewGenColCache() *GenColCache {
+	c := &GenColCache{}
+	c.reset()
+	return c
+}
+
+// status returns `NotFound` if a `schema`.`table` has no generated column
+// information cached, otherwise returns `hasGenColumn` if cache found and
+// it has generated column and returns `noGenColumn` if it has no generated column.
+func (c *GenColCache) status(key string) GenColumnCacheStatus {
+	if val, ok := c.hasGenColumn[key]; !ok {
+		return NotFound
+	} else {
+		if val {
+			return hasGenColumn
+		}
+	}
+	return noGenColumn
+}
+
+func (c *GenColCache) clearTable(schema, table string) {
+	key := dbutil.TableName(schema, table)
+	delete(c.hasGenColumn, key)
+	delete(c.columns, key)
+	delete(c.indexes, key)
+	delete(c.isGenColumn, key)
+}
+
+func (c *GenColCache) reset() {
+	c.hasGenColumn = make(map[string]bool)
+	c.columns = make(map[string][]*column)
+	c.indexes = make(map[string]map[string][]*column)
+	c.isGenColumn = make(map[string][]bool)
+}
 
 func genInsertSQLs(schema string, table string, dataSeq [][]interface{}, columns []*column, indexColumns map[string][]*column) ([]string, [][]string, [][]interface{}, error) {
 	sqls := make([]string, 0, len(dataSeq))
@@ -428,12 +480,35 @@ func (s *Syncer) mappingDML(schema, table string, columns []string, data [][]int
 // generated column. because generated column is not support setting value
 // directly in DML, we must remove generated column from DML, including column
 // list, data list and all indexes including generated columns.
-func pruneGeneratedColumnDML(columns []*column, data [][]interface{}, index map[string][]*column) ([]*column, [][]interface{}, map[string][]*column) {
+func pruneGeneratedColumnDML(columns []*column, data [][]interface{}, index map[string][]*column, schema, table string, cache *GenColCache) ([]*column, [][]interface{}, map[string][]*column, error) {
 	var (
 		needPrune       bool
 		colIndexfilters = make([]bool, 0, len(columns))
 		genColumnNames  = make(map[string]bool)
 	)
+
+	cacheKey := dbutil.TableName(schema, table)
+	cacheStatus := cache.status(cacheKey)
+	if cacheStatus == noGenColumn {
+		return columns, data, index, nil
+	}
+	if cacheStatus == hasGenColumn {
+		rows := make([][]interface{}, 0, len(data))
+		filters, ok := cache.isGenColumn[cacheKey]
+		if !ok {
+			return nil, nil, nil, errors.NotFoundf("cache key %s in isGenColumn", cacheKey)
+		}
+		for _, row := range data {
+			value := make([]interface{}, 0, len(row))
+			for i := range row {
+				if !filters[i] {
+					value = append(value, row[i])
+				}
+			}
+			rows = append(rows, value)
+		}
+		return cache.columns[cacheKey], rows, cache.indexes[cacheKey], nil
+	}
 
 	for _, c := range columns {
 		isGenColumn := c.isGeneratedColumn()
@@ -445,7 +520,8 @@ func pruneGeneratedColumnDML(columns []*column, data [][]interface{}, index map[
 	}
 
 	if !needPrune {
-		return columns, data, index
+		cache.hasGenColumn[cacheKey] = false
+		return columns, data, index, nil
 	}
 
 	var (
@@ -480,6 +556,10 @@ func pruneGeneratedColumnDML(columns []*column, data [][]interface{}, index map[
 			idxes[key] = keyCols
 		}
 	}
+	cache.hasGenColumn[cacheKey] = true
+	cache.columns[cacheKey] = cols
+	cache.indexes[cacheKey] = idxes
+	cache.isGenColumn[cacheKey] = colIndexfilters
 
-	return cols, rows, idxes
+	return cols, rows, idxes, nil
 }
