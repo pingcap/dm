@@ -363,14 +363,15 @@ func getTableColumns(db *Conn, table *table, maxRetry int) error {
 	// Show an example.
 	/*
 	   mysql> show columns from test.t;
-	   +-------+---------+------+-----+---------+-------+
-	   | Field | Type    | Null | Key | Default | Extra |
-	   +-------+---------+------+-----+---------+-------+
-	   | a     | int(11) | NO   | PRI | NULL    |       |
-	   | b     | int(11) | NO   | PRI | NULL    |       |
-	   | c     | int(11) | YES  | MUL | NULL    |       |
-	   | d     | int(11) | YES  |     | NULL    |       |
-	   +-------+---------+------+-----+---------+-------+
+	   +-------+---------+------+-----+---------+-------------------+
+	   | Field | Type    | Null | Key | Default | Extra             |
+	   +-------+---------+------+-----+---------+-------------------+
+	   | a     | int(11) | NO   | PRI | NULL    |                   |
+	   | b     | int(11) | NO   | PRI | NULL    |                   |
+	   | c     | int(11) | YES  | MUL | NULL    |                   |
+	   | d     | int(11) | YES  |     | NULL    |                   |
+	   | d     | json    | YES  |     | NULL    | VIRTUAL GENERATED |
+	   +-------+---------+------+-----+---------+-------------------+
 	*/
 
 	idx := 0
