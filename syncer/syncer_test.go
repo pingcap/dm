@@ -150,11 +150,10 @@ func (s *testSyncerSuite) catchUpBinlog() {
 	}()
 
 	for {
-		t := time.NewTimer(10 * time.Millisecond)
 		select {
 		case <-ch:
-			t.Stop()
-		case <-t.C:
+			// do nothing
+		case <-time.After(10 * time.Millisecond):
 			cancel()
 			return
 		}

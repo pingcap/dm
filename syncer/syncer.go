@@ -1138,12 +1138,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			if err != nil {
 				return errors.Trace(err)
 			}
-			needPrune, genColumnFilter, tblColumns := generatedColumnFilter(table.columns)
 			rows, err := s.mappingDML(originSchema, originTable, columns, ev.Rows)
 			if err != nil {
 				return errors.Trace(err)
 			}
-			rows = s.pruneGenColumnDML(needPrune, genColumnFilter, rows)
+			tblColumns, rowData, tblIndexColumns := pruneGeneratedColumnDML(table.columns, rows, table.indexColumns)
+			log.Infof("tblColumns %+v, rowData %+v tblIndexColumns %+v", tblColumns, rowData, tblIndexColumns)
 
 			var (
 				applied bool
@@ -1163,7 +1163,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			switch e.Header.EventType {
 			case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
 				if !applied {
-					sqls, keys, args, err = genInsertSQLs(table.schema, table.name, rows, tblColumns, table.indexColumns)
+					sqls, keys, args, err = genInsertSQLs(table.schema, table.name, rowData, tblColumns, tblIndexColumns)
 					if err != nil {
 						return errors.Errorf("gen insert sqls failed: %v, schema: %s, table: %s", errors.Trace(err), table.schema, table.name)
 					}
@@ -1186,7 +1186,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 			case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
 				if !applied {
-					sqls, keys, args, err = genUpdateSQLs(table.schema, table.name, rows, tblColumns, table.indexColumns, safeMode.Enable())
+					sqls, keys, args, err = genUpdateSQLs(table.schema, table.name, rowData, tblColumns, tblIndexColumns, safeMode.Enable())
 					if err != nil {
 						return errors.Errorf("gen update sqls failed: %v, schema: %s, table: %s", err, table.schema, table.name)
 					}
@@ -1210,7 +1210,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 			case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
 				if !applied {
-					sqls, keys, args, err = genDeleteSQLs(table.schema, table.name, rows, tblColumns, table.indexColumns)
+					sqls, keys, args, err = genDeleteSQLs(table.schema, table.name, rowData, tblColumns, tblIndexColumns)
 					if err != nil {
 						return errors.Errorf("gen delete sqls failed: %v, schema: %s, table: %s", err, table.schema, table.name)
 					}

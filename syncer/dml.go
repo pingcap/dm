@@ -424,42 +424,60 @@ func (s *Syncer) mappingDML(schema, table string, columns []string, data [][]int
 	return rows, nil
 }
 
-func (s *Syncer) pruneGenColumnDML(needPrune bool, genColumnFilter []bool, data [][]interface{}) [][]interface{} {
-	if !needPrune {
-		return data
+// pruneGeneratedColumnDML filters columns list, data and index removing all generated column
+func pruneGeneratedColumnDML(columns []*column, data [][]interface{}, index map[string][]*column) ([]*column, [][]interface{}, map[string][]*column) {
+	var (
+		needPrune       bool
+		colIndexfilters = make([]bool, 0, len(columns))
+		genColumnNames  = make(map[string]bool)
+	)
+
+	for _, c := range columns {
+		isGenColumn := c.isGeneratedColumn()
+		colIndexfilters = append(colIndexfilters, isGenColumn)
+		if isGenColumn {
+			needPrune = true
+			genColumnNames[c.name] = true
+			continue
+		}
 	}
 
-	rows := make([][]interface{}, 0, len(data))
+	if !needPrune {
+		return columns, data, index
+	}
+
+	var (
+		cols  = make([]*column, 0, len(columns))
+		rows  = make([][]interface{}, 0, len(data))
+		idxes = make(map[string][]*column)
+	)
+
+	for i := range columns {
+		if !colIndexfilters[i] {
+			cols = append(cols, columns[i])
+		}
+	}
 	for _, row := range data {
 		value := make([]interface{}, 0, len(row))
 		for i := range row {
-			if !genColumnFilter[i] {
+			if !colIndexfilters[i] {
 				value = append(value, row[i])
 			}
 		}
 		rows = append(rows, value)
 	}
-	return rows
-}
-
-// generatedColumnFilter iterates column list and returns
-// a bool indicates where one or more generated column exists
-// a bool slice indicates whether the i-th column is generated column
-// a new column slice without generated columns
-func generatedColumnFilter(columns []*column) (bool, []bool, []*column) {
-	var (
-		needPrune  bool
-		filters    = make([]bool, 0, len(columns))
-		filterCols = make([]*column, 0, len(columns))
-	)
-	for _, c := range columns {
-		isGenColumn := c.isGeneratedColumn()
-		filters = append(filters, isGenColumn)
-		if isGenColumn {
-			needPrune = true
-			continue
+	for key, keyCols := range index {
+		hasGenColumn := false
+		for _, col := range keyCols {
+			if _, ok := genColumnNames[col.name]; ok {
+				hasGenColumn = true
+				break
+			}
 		}
-		filterCols = append(filterCols, c)
+		if !hasGenColumn {
+			idxes[key] = keyCols
+		}
 	}
-	return needPrune, filters, filterCols
+
+	return cols, rows, idxes
 }
