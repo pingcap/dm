@@ -19,12 +19,19 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 )
 
 func TestRunMain(t *testing.T) {
-	var args []string
+	var (
+		args   []string
+		wg     sync.WaitGroup
+		waitCh = make(chan int, 1)
+		exitCh = make(chan struct{})
+	)
+
 	for _, arg := range os.Args {
 		switch {
 		case arg == "DEVEL":
@@ -34,10 +41,10 @@ func TestRunMain(t *testing.T) {
 		}
 	}
 
-	waitCh := make(chan int, 1)
-	exitCh := make(chan struct{})
 	os.Args = args
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		mainWrapper(exitCh)
 		close(waitCh)
 	}()
@@ -45,10 +52,9 @@ func TestRunMain(t *testing.T) {
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGHUP)
 	select {
+	case <-waitCh:
 	case <-signalCh:
 		close(exitCh)
-		return
-	case <-waitCh:
-		return
 	}
+	wg.Wait()
 }
