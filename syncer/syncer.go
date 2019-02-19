@@ -1283,7 +1283,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			// for DDL, we don't apply operator until we try to execute it.
 			// so can handle sharding cases
-			sqls, onlineDDLTableNames, _, err = s.resolveDDLSQL(sql, parser2, string(ev.Schema))
+			sqls, onlineDDLTableNames, err = s.resolveDDLSQL(parser2, parseResult.stmt, string(ev.Schema))
 			if err != nil {
 				log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
 				log.Errorf("fail to be parsed, error %v", err)
