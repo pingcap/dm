@@ -16,6 +16,7 @@ package syncer
 import (
 	"fmt"
 
+	ddlpkg "github.com/pingcap/dm/pkg/ddl"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
@@ -67,7 +68,7 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 
 	// We use Parse not ParseOneStmt here, because sometimes we got a commented out ddl which can't be parsed
 	// by ParseOneStmt(it's a limitation of tidb parser.)
-	stmts, err := p.Parse(sql, "", "")
+	stmts, err := ddlpkg.Parse(p, sql, "", "")
 	if err != nil {
 		// log error rather than fatal, so other defer can be executed
 		log.Errorf(IncompatibleDDLFormat, sql)

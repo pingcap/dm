@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/parser/ast"
 	"github.com/siddontang/go-mysql/replication"
 
+	"github.com/pingcap/dm/pkg/ddl"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -29,7 +30,7 @@ func checkIsDDL(sql string, p *parser.Parser) bool {
 	sql = utils.TrimCtrlChars(sql)
 
 	// if parse error, treat it as not a DDL
-	stmts, err := p.Parse(sql, "", "")
+	stmts, err := ddl.Parse(p, sql, "", "")
 	if err != nil || len(stmts) == 0 {
 		return false
 	}
