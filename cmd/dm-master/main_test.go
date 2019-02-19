@@ -35,9 +35,10 @@ func TestRunMain(t *testing.T) {
 	}
 
 	waitCh := make(chan int, 1)
+	exitCh := make(chan struct{})
 	os.Args = args
 	go func() {
-		main()
+		mainWrapper(exitCh)
 		close(waitCh)
 	}()
 
@@ -45,6 +46,7 @@ func TestRunMain(t *testing.T) {
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGHUP)
 	select {
 	case <-signalCh:
+		close(exitCh)
 		return
 	case <-waitCh:
 		return
