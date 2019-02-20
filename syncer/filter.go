@@ -110,7 +110,7 @@ func (s *Syncer) skipQuery(tables []*filter.Table, stmt ast.StmtNode, sql string
 
 	if len(tables) > 0 {
 		tbs := s.bwList.ApplyOn(tables)
-		if len(tbs) == 0 {
+		if len(tbs) != len(tables) {
 			return true, nil
 		}
 	}
