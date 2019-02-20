@@ -854,6 +854,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				)
 
 				tblColumns, rowData, tblIndexColumns, err := pruneGeneratedColumnDML(table.columns, ev.Rows, table.indexColumns, table.schema, table.name, syncer.genColsCache)
+				c.Assert(err, IsNil)
 				switch e.Header.EventType {
 				case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
 					sqls, _, args, err = genInsertSQLs(table.schema, table.name, rowData, tblColumns, tblIndexColumns)
