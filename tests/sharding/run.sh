@@ -61,7 +61,7 @@ cleanup2 $*
 run $*
 cleanup2 $*
 
-cat $WORK_DIR/worker1/log/dm-worker.log
-cat $WORK_DIR/worker2/log/stdout.log
+wait_process_exit dm-master.test
+wait_process_exit dm-worker.test
 
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"
