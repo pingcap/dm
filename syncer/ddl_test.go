@@ -18,12 +18,10 @@ import (
 	"database/sql"
 
 	. "github.com/pingcap/check"
-	"github.com/pingcap/tidb-tools/pkg/filter"
-
-	parsepkg "github.com/pingcap/dm/pkg/parser"
-
 	"github.com/pingcap/dm/dm/config"
+	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 )
 
 func (s *testSyncerSuite) TestTrimCtrlChars(c *C) {
@@ -102,7 +100,7 @@ CREATE TABLE test.test_table_with_c (id int);
 	parser, err := utils.GetParser(s.db, false)
 	c.Assert(err, IsNil)
 
-	_, err = parsepkg.Parse(sql, "", "")
+	_, err = parserpkg.Parse(parser, sql, "", "")
 	c.Assert(err, IsNil)
 }
 
@@ -113,11 +111,11 @@ func (s *testSyncerSuite) TestCommentQuote(c *C) {
 	parser, err := utils.GetParser(s.db, false)
 	c.Assert(err, IsNil)
 
-	stmt1, err = parser.ParseOneStmt(sql, "", "")
+	stmt, err = parser.ParseOneStmt(sql, "", "")
 	c.Assert(err, IsNil)
 
 	syncer := &Syncer{}
-	sqls, _, err := syncer.resolveDDLSQL(sql, parser, "")
+	sqls, _, err := syncer.resolveDDLSQL(parser, stmt, "schemadb")
 	c.Assert(err, IsNil)
 	c.Assert(len(sqls), Equals, 1)
 	c.Assert(sqls[0], Equals, expectedSQL)
