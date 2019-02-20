@@ -211,12 +211,14 @@ func (s *testSyncerSuite) TestresolveDDLSQL(c *C) {
 	}
 	syncer := NewSyncer(cfg)
 
-	syncer.tableRouter = router.NewTableRouter(false, []*router.TableRule{
+	var err error
+	syncer.tableRouter, err = router.NewTableRouter(false, []*router.TableRule{
 		{
 			SchemaPattern: "s1",
-			TargetPattern: "xs1",
+			TargetSchema:  "xs1",
 		},
 	})
+	c.Assert(err, IsNil)
 
 	for i, sql := range sqls {
 		result, err := syncer.parseDDLSQL(sql, p, "test")
