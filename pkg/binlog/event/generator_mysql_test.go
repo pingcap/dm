@@ -459,3 +459,60 @@ func (t *testGeneratorMySQLSuite) TestGenTableMapEvent(c *C) {
 	c.Assert(err, NotNil)
 	c.Assert(tableMapEv, IsNil)
 }
+
+func (t *testGeneratorMySQLSuite) TestGenRowsEvent(c *C) {
+	var (
+		timestamp         = uint32(time.Now().Unix())
+		serverID   uint32 = 11
+		latestPos  uint32 = 123
+		flags      uint16 = 0x01
+		tableID    uint64 = 108
+		eventType         = replication.TABLE_MAP_EVENT
+		rowsFlag          = RowFlagsEndOfStatement
+		rows       [][]interface{}
+		columnType []byte // nil
+	)
+
+	// invalid eventType, rows and columnType
+	rowsEv, err := GenRowsEvent(timestamp, serverID, latestPos, flags, eventType, tableID, rowsFlag, rows, columnType)
+	c.Assert(err, NotNil)
+	c.Assert(rowsEv, IsNil)
+
+	// valid eventType, invalid rows and columnType
+	eventType = replication.WRITE_ROWS_EVENTv0
+	rowsEv, err = GenRowsEvent(timestamp, serverID, latestPos, flags, eventType, tableID, rowsFlag, rows, columnType)
+	c.Assert(err, NotNil)
+	c.Assert(rowsEv, IsNil)
+
+	// valid eventType and rows, invalid columnType
+	row := []interface{}{int32(1)}
+	rows = append(rows, row)
+	rowsEv, err = GenRowsEvent(timestamp, serverID, latestPos, flags, eventType, tableID, rowsFlag, rows, columnType)
+	c.Assert(err, NotNil)
+	c.Assert(rowsEv, IsNil)
+
+	// all valid
+	columnType = []byte{gmysql.MYSQL_TYPE_LONG}
+	rowsEv, err = GenRowsEvent(timestamp, serverID, latestPos, flags, eventType, tableID, rowsFlag, rows, columnType)
+	c.Assert(err, IsNil)
+	c.Assert(rowsEv, NotNil)
+
+	// verify the header
+	c.Assert(rowsEv.Header.Timestamp, Equals, timestamp)
+	c.Assert(rowsEv.Header.ServerID, Equals, serverID)
+	c.Assert(rowsEv.Header.LogPos, Equals, latestPos+rowsEv.Header.EventSize)
+	c.Assert(rowsEv.Header.Flags, Equals, flags)
+	c.Assert(rowsEv.Header.EventType, Equals, eventType)
+
+	// verify the body
+	rowsEvBody, ok := rowsEv.Event.(*replication.RowsEvent)
+	c.Assert(ok, IsTrue)
+	c.Assert(rowsEvBody, NotNil)
+	c.Assert(rowsEvBody.Flags, Equals, rowsFlag)
+	c.Assert(rowsEvBody.TableID, Equals, tableID)
+	c.Assert(rowsEvBody.Table.TableID, Equals, tableID)
+	c.Assert(rowsEvBody.ColumnCount, Equals, uint64(len(rows[0])))
+	c.Assert(rowsEvBody.Version, Equals, 0) // WRITE_ROWS_EVENTv0
+	c.Assert(rowsEvBody.ExtraData, IsNil)
+	c.Assert(rowsEvBody.Rows, DeepEquals, rows)
+}

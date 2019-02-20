@@ -51,6 +51,45 @@ func encodeTableMapColumnMeta(columnType []byte) ([]byte, error) {
 	return gmysql.PutLengthEncodedString(buf.Bytes()), nil
 }
 
+// decodeTableMapColumnMeta generates the column_meta_def to uint16 slices.
+// ref: https://github.com/siddontang/go-mysql/blob/88e9cd7f6643b246b4dcc0e3206e9a169dd0ac96/replication/row_event.go#L100
+func decodeTableMapColumnMeta(data []byte, columnType []byte) ([]uint16, error) {
+	pos := 0
+	columnMeta := make([]uint16, len(columnType))
+	for i, t := range columnType {
+		switch t {
+		case gmysql.MYSQL_TYPE_STRING:
+			var x = uint16(data[pos]) << 8 //real type
+			x += uint16(data[pos+1])       //pack or field length
+			columnMeta[i] = x
+			pos += 2
+		case gmysql.MYSQL_TYPE_NEWDECIMAL:
+			var x = uint16(data[pos]) << 8 //precision
+			x += uint16(data[pos+1])       //decimals
+			columnMeta[i] = x
+			pos += 2
+		case gmysql.MYSQL_TYPE_VAR_STRING, gmysql.MYSQL_TYPE_VARCHAR, gmysql.MYSQL_TYPE_BIT:
+			columnMeta[i] = binary.LittleEndian.Uint16(data[pos:])
+			pos += 2
+		case gmysql.MYSQL_TYPE_BLOB, gmysql.MYSQL_TYPE_DOUBLE, gmysql.MYSQL_TYPE_FLOAT, gmysql.MYSQL_TYPE_GEOMETRY, gmysql.MYSQL_TYPE_JSON,
+			gmysql.MYSQL_TYPE_TIME2, gmysql.MYSQL_TYPE_DATETIME2, gmysql.MYSQL_TYPE_TIMESTAMP2:
+			columnMeta[i] = uint16(data[pos])
+			pos++
+		case gmysql.MYSQL_TYPE_NEWDATE, gmysql.MYSQL_TYPE_ENUM, gmysql.MYSQL_TYPE_SET, gmysql.MYSQL_TYPE_TINY_BLOB, gmysql.MYSQL_TYPE_MEDIUM_BLOB, gmysql.MYSQL_TYPE_LONG_BLOB:
+			return nil, errors.NotSupportedf("column type %d in binlog", t)
+		default:
+			columnMeta[i] = 0
+		}
+	}
+
+	return columnMeta, nil
+}
+
+// bitmapByteSize returns the byte length of bitmap for columnCount.
+func bitmapByteSize(columnCount int) int {
+	return int(columnCount+7) / 8
+}
+
 // nullBytes returns a n-length null bytes slice
 func nullBytes(n int) []byte {
 	buf := new(bytes.Buffer)
@@ -58,6 +97,30 @@ func nullBytes(n int) []byte {
 		buf.WriteByte(0x00)
 	}
 	return buf.Bytes()
+}
+
+// fullBytes returns a n-length full bytes slice (all bits are set)
+func fullBytes(n int) []byte {
+	buf := new(bytes.Buffer)
+	for i := 0; i < n; i++ {
+		buf.WriteByte(0xff)
+	}
+	return buf.Bytes()
+}
+
+// encodeColumnValue encodes value to bytes
+// ref: https://github.com/siddontang/go-mysql/blob/88e9cd7f6643b246b4dcc0e3206e9a169dd0ac96/replication/row_event.go#L368
+// TODO: add more tp support
+func encodeColumnValue(v interface{}, tp byte, meta uint16) ([]byte, error) {
+	var buf = new(bytes.Buffer)
+	switch tp {
+	case gmysql.MYSQL_TYPE_NULL:
+		return nil, nil
+	case gmysql.MYSQL_TYPE_LONG:
+		err := binary.Write(buf, binary.LittleEndian, v.(int32))
+		return buf.Bytes(), errors.Annotatef(err, "value %v with type %d", v, tp)
+	}
+	return nil, nil
 }
 
 // combineHeaderPayload combines header, postHeader and payload together.

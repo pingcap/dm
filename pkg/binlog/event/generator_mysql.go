@@ -28,6 +28,14 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 )
 
+// flags used in RowsEvent.
+const (
+	RowFlagsEndOfStatement     uint16 = 0x0001
+	RowFlagsNoForeignKeyChecks uint16 = 0x0002
+	RowFlagsNoUniqueKeyChecks  uint16 = 0x0004
+	RowFlagsRowHasAColumns     uint16 = 0x0008
+)
+
 const (
 	// GTIDFlagsCommitYes represents a GTID flag with [commit=yes].
 	// in `Row` binlog format, this will appear in GTID event before DDL query event.
@@ -494,7 +502,7 @@ func GenTableMapEvent(timestamp uint32, serverID uint32, latestPos uint32, flags
 	}
 
 	// NULL-bitmask, (column-count + 8) / 7 bytes
-	bitMaskLen := (len(columnType) + 8) / 7
+	bitMaskLen := bitmapByteSize(len(columnType))
 	bitMask := nullBytes(bitMaskLen)
 	err = binary.Write(payload, binary.LittleEndian, bitMask)
 	if err != nil {
@@ -563,4 +571,198 @@ func GenTableMapEvent(timestamp uint32, serverID uint32, latestPos uint32, flags
 	}
 
 	return tableMapEvent, nil
+}
+
+// GenRowsEvent generates a RowsEvent.
+// RowsEvent includes:
+//   WRITE_ROWS_EVENTv0, WRITE_ROWS_EVENTv1, WRITE_ROWS_EVENTv2
+//   UPDATE_ROWS_EVENTv0, UPDATE_ROWS_EVENTv1, UPDATE_ROWS_EVENTv2
+//   DELETE_ROWS_EVENTv0, DELETE_ROWS_EVENTv1, DELETE_ROWS_EVENTv2
+// ref: https://dev.mysql.com/doc/internals/en/rows-event.html
+// ref: http://blog.51cto.com/yanzongshuai/2090894
+func GenRowsEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint16, eventType replication.EventType, tableID uint64, rowsFlags uint16, rows [][]interface{}, columnType []byte) (*replication.BinlogEvent, error) {
+	switch eventType {
+	case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2,
+		replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2,
+		replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
+	default:
+		return nil, errors.NotValidf("event type %d", eventType)
+	}
+
+	if len(rows) == 0 {
+		return nil, errors.NotValidf("no rows")
+	}
+	for _, row := range rows {
+		if len(row) != len(columnType) {
+			// all rows have the same length (no nil), and equal to the length of column-type
+			return nil, errors.NotValidf("length of row (%d) not equal to length of column-type (%d)", len(row), len(columnType))
+		}
+	}
+
+	postHeader := new(bytes.Buffer)
+
+	var tableIDSize = 6
+	if eventTypeHeaderLen[eventType] == 6 {
+		tableIDSize = 4
+	}
+	// table id, tableIDSize bytes
+	err := binary.Write(postHeader, binary.LittleEndian, tableID)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write table id %d", tableID)
+	}
+	postHeader.Truncate(tableIDSize) // truncate the unwanted bytes
+
+	// flags, 2 bytes
+	err = binary.Write(postHeader, binary.LittleEndian, rowsFlags)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write flags %d", rowsFlags)
+	}
+
+	// extra-data
+	switch eventType {
+	case replication.WRITE_ROWS_EVENTv2, replication.UPDATE_ROWS_EVENTv2, replication.DELETE_ROWS_EVENTv2:
+		// if version=2, extra data exist.
+		// NOTE: we do not support to write any meaningful extra data yet.
+		var extraDataLen uint16 // two bytes, but with 0 value
+		err = binary.Write(postHeader, binary.LittleEndian, extraDataLen)
+		if err != nil {
+			return nil, errors.Annotatef(err, "write extra data length %d", extraDataLen)
+		}
+	default:
+	}
+
+	payload := new(bytes.Buffer)
+
+	// number of columns, lenenc-int
+	columnCount := gmysql.PutLengthEncodedInt(uint64(len(rows[0])))
+	err = binary.Write(payload, binary.LittleEndian, columnCount)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write number of columns % X", columnCount)
+	}
+
+	// columns-present-bitmap1, (num of columns+7)/8 bytes
+	byteCount := bitmapByteSize(len(rows[0]))
+	bitmap := fullBytes(byteCount) // NOTE: only support to write full columns now
+	err = binary.Write(payload, binary.LittleEndian, bitmap)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write columns-present-bitmap1 % X", bitmap)
+	}
+
+	isUpdateV1V2 := eventType == replication.UPDATE_ROWS_EVENTv1 || eventType == replication.UPDATE_ROWS_EVENTv2
+	if isUpdateV1V2 {
+		// NOTE: use columns-present-bitmap1 as columns-present-bitmap2 now
+		err = binary.Write(payload, binary.LittleEndian, bitmap)
+		if err != nil {
+			return nil, errors.Annotatef(err, "write columns-present-bitmap2 % X", bitmap)
+		}
+	}
+
+	columnMetaData, err := encodeTableMapColumnMeta(columnType)
+	if err != nil {
+		return nil, errors.Annotatef(err, "encode column-meta-def from column-type % X", columnType)
+	}
+	columnMeta, err := decodeTableMapColumnMeta(columnMetaData, columnType)
+	if err != nil {
+		return nil, errors.Annotatef(err, "decode column-meta-def %X", columnMetaData)
+	}
+
+	// for UPDATE, two rows for one statement
+	// currently, columns-present-bitmap2 is just columns-present-bitmap1
+	for _, row := range rows {
+		// nul-bitmap, (num of columns+7)/8 bytes
+		nulBitmap := nullBytes(byteCount) // NOTE: no column with nil value now
+		err = binary.Write(payload, binary.LittleEndian, nulBitmap)
+		if err != nil {
+			return nil, errors.Annotatef(err, "write nul-bitmap % X for row %v", nulBitmap, row)
+		}
+
+		for i, col := range row {
+			var colData []byte
+			colData, err = encodeColumnValue(col, columnType[i], columnMeta[i])
+			if err != nil {
+				return nil, errors.Annotatef(err, "encode column value %v to bytes", col)
+			}
+			err = binary.Write(payload, binary.LittleEndian, colData)
+			if err != nil {
+				return nil, errors.Annotatef(err, "write column data % X", colData)
+			}
+		}
+	}
+
+	eventSize := uint32(eventHeaderLen) + uint32(postHeader.Len()) + uint32(payload.Len()) + crc32Len
+	logPos := latestPos + eventSize
+	_, headerData, err := GenEventHeader(timestamp, eventType, serverID, eventSize, logPos, flags)
+	if err != nil {
+		return nil, errors.Annotatef(err, "generate event header")
+	}
+
+	buf := new(bytes.Buffer)
+	err = combineHeaderPayload(buf, headerData, postHeader.Bytes(), payload.Bytes())
+	if err != nil {
+		return nil, errors.Annotatef(err, "combine header, post-header and payload")
+	}
+
+	// CRC32 checksum, 4 bytes
+	checksum := crc32.ChecksumIEEE(buf.Bytes())
+	err = binary.Write(buf, binary.LittleEndian, checksum)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write CRC32 % X", checksum)
+	}
+
+	// in order to Decode RowsEvent, we need to set `tableIDSize` and `tables` first, but they are private fields.
+	// so we should parse a FormatDescriptionEvent and a TableMapEvent first.
+	var rowsEvent *replication.BinlogEvent
+	var count = 0
+	onEventFunc := func(e *replication.BinlogEvent) error {
+		count++
+		switch count {
+		case 1: // FormatDescriptionEvent
+			if e.Header.EventType != replication.FORMAT_DESCRIPTION_EVENT {
+				return errors.Errorf("expect FormatDescriptionEvent, but got %+v", e)
+			}
+		case 2: // TableMapEvent
+			if e.Header.EventType != replication.TABLE_MAP_EVENT {
+				return errors.Errorf("expect TableMapEvent, but got %+v", e)
+			}
+		case 3: // RowsEvent
+			if e.Header.EventType != eventType {
+				return errors.Errorf("expect event with type (%d), but got %+v", eventType, e)
+			}
+			rowsEvent = e
+		default:
+			return errors.Errorf("unexpected event %+v", e)
+		}
+		return nil
+	}
+
+	parse2 := replication.NewBinlogParser()
+	parse2.SetVerifyChecksum(true)
+
+	// parse FormatDescriptionEvent
+	formatDescEv, err := GenFormatDescriptionEvent(timestamp, serverID, 4, flags)
+	if err != nil {
+		return nil, errors.Annotatef(err, "generate FormatDescriptionEvent")
+	}
+	_, err = parse2.ParseSingleEvent(bytes.NewReader(formatDescEv.RawData), onEventFunc)
+	if err != nil {
+		return nil, errors.Annotatef(err, "parse FormatDescriptionEvent % X", formatDescEv.RawData)
+	}
+
+	// parse TableMapEvent
+	tableMapEv, err := GenTableMapEvent(timestamp, serverID, latestPos, flags, tableID, []byte("schema-placeholder"), []byte("table-placeholder"), columnType)
+	if err != nil {
+		return nil, errors.Annotatef(err, "generate TableMapEvent")
+	}
+	_, err = parse2.ParseSingleEvent(bytes.NewReader(tableMapEv.RawData), onEventFunc)
+	if err != nil {
+		return nil, errors.Annotatef(err, "parse TableMapEvent % x", tableMapEv.RawData)
+	}
+
+	// parse RowsEvent
+	_, err = parse2.ParseSingleEvent(bytes.NewReader(buf.Bytes()), onEventFunc)
+	if err != nil {
+		return nil, errors.Annotatef(err, "parse RowsEvent % X", buf.Bytes())
+	}
+
+	return rowsEvent, nil
 }
