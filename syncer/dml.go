@@ -491,13 +491,10 @@ func (s *Syncer) mappingDML(schema, table string, columns []string, data [][]int
 // list, data list and all indexes including generated columns.
 func pruneGeneratedColumnDML(columns []*column, data [][]interface{}, index map[string][]*column, schema, table string, cache *GenColCache) ([]*column, [][]interface{}, map[string][]*column, error) {
 	var (
-		needPrune       bool
-		colIndexfilters = make([]bool, 0, len(columns))
-		genColumnNames  = make(map[string]bool)
+		cacheKey    = dbutil.TableName(schema, table)
+		cacheStatus = cache.status(cacheKey)
 	)
 
-	cacheKey := dbutil.TableName(schema, table)
-	cacheStatus := cache.status(cacheKey)
 	if cacheStatus == noGenColumn {
 		return columns, data, index, nil
 	}
@@ -518,6 +515,12 @@ func pruneGeneratedColumnDML(columns []*column, data [][]interface{}, index map[
 		}
 		return cache.columns[cacheKey], rows, cache.indexes[cacheKey], nil
 	}
+
+	var (
+		needPrune       bool
+		colIndexfilters = make([]bool, 0, len(columns))
+		genColumnNames  = make(map[string]bool)
+	)
 
 	for _, c := range columns {
 		isGenColumn := c.isGeneratedColumn()
