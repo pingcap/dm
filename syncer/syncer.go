@@ -2034,6 +2034,8 @@ func (s *Syncer) checkpointID() string {
 
 // DDLInfo returns a chan from which can receive DDLInfo
 func (s *Syncer) DDLInfo() <-chan *pb.DDLInfo {
+	s.RLock()
+	defer s.RUnlock()
 	return s.ddlInfoCh
 }
 
