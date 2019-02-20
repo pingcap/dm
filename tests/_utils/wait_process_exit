@@ -7,7 +7,7 @@ while true
 do
     pgrep $process
     ret=$?
-    if [ "$ret" == "0" ]; then
+    if [ "$ret" != "0" ]; then
         echo "process $process already exit"
         break
     fi
