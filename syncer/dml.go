@@ -500,9 +500,17 @@ func pruneGeneratedColumnDML(columns []*column, data [][]interface{}, index map[
 	}
 	if cacheStatus == hasGenColumn {
 		rows := make([][]interface{}, 0, len(data))
-		filters, ok := cache.isGenColumn[cacheKey]
-		if !ok {
+		filters, ok1 := cache.isGenColumn[cacheKey]
+		if !ok1 {
 			return nil, nil, nil, errors.NotFoundf("cache key %s in isGenColumn", cacheKey)
+		}
+		cols, ok2 := cache.columns[cacheKey]
+		if !ok2 {
+			return nil, nil, nil, errors.NotFoundf("cache key %s in columns", cacheKey)
+		}
+		idxes, ok3 := cache.indexes[cacheKey]
+		if !ok3 {
+			return nil, nil, nil, errors.NotFoundf("cache key %s in indexes", cacheKey)
 		}
 		for _, row := range data {
 			value := make([]interface{}, 0, len(row))
@@ -513,7 +521,7 @@ func pruneGeneratedColumnDML(columns []*column, data [][]interface{}, index map[
 			}
 			rows = append(rows, value)
 		}
-		return cache.columns[cacheKey], rows, cache.indexes[cacheKey], nil
+		return cols, rows, idxes, nil
 	}
 
 	var (
