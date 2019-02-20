@@ -22,5 +22,3 @@ $binary -test.coverprofile="$TEST_DIR/cov.$TEST_NAME.worker.$port.out" DEVEL \
     --log-file="$workdir/log/dm-worker.log" --config="$conf" \
     > $workdir/log/stdout.log 2>&1 &
 cd $PWD
-cat $workdir/log/dm-worker.log
-cat $workdir/log/stdout.log

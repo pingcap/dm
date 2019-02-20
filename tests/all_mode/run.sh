@@ -51,6 +51,9 @@ function run() {
 
     # use sync_diff_inspector to check data now!
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    cat $WORK_DIR/worker1/log/dm-worker.log
+    cat $WORK_DIR/worker2/log/stdout.log
 }
 
 cleanup1 $*
