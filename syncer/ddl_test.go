@@ -111,7 +111,7 @@ func (s *testSyncerSuite) TestCommentQuote(c *C) {
 	parser, err := utils.GetParser(s.db, false)
 	c.Assert(err, IsNil)
 
-	stmt, err = parser.ParseOneStmt(sql, "", "")
+	stmt, err := parser.ParseOneStmt(sql, "", "")
 	c.Assert(err, IsNil)
 
 	syncer := &Syncer{}
