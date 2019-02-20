@@ -5,7 +5,7 @@ process=$1
 
 while true
 do
-    pidof $process
+    pgrep $process
     ret=$?
     if [ "$ret" == "0" ]; then
         echo "process $process already exit"
