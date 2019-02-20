@@ -21,8 +21,8 @@ function cleanup1() {
 }
 
 function cleanup2() {
-    killall dm-worker.test 2>/dev/null || true
-    killall dm-master.test 2>/dev/null || true
+    pkill -term dm-worker.test 2>/dev/null || true
+    pkill -term dm-master.test 2>/dev/null || true
 }
 
 function run() {
@@ -57,7 +57,7 @@ cleanup1 $*
 # also cleanup dm processes in case of last run failed
 cleanup2 $*
 run $*
-cleanup2 $*
+# cleanup2 $*
 
 cat $WORK_DIR/worker1/log/dm-worker.log
 cat $WORK_DIR/worker2/log/stdout.log
