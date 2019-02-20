@@ -21,8 +21,8 @@ function cleanup1() {
 }
 
 function cleanup2() {
-    pkill -term dm-worker.test 2>/dev/null || true
-    pkill -term dm-master.test 2>/dev/null || true
+    pkill -hup dm-worker.test 2>/dev/null || true
+    pkill -hup dm-master.test 2>/dev/null || true
 }
 
 function run() {
