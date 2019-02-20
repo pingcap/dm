@@ -102,8 +102,9 @@ type Syncer struct {
 	toDBs  []*Conn
 	ddlDB  *Conn
 
-	jobs       []chan *job
-	jobsClosed sync2.AtomicBool
+	jobs         []chan *job
+	jobsClosed   sync2.AtomicBool
+	jobsChanLock sync.Mutex
 
 	c *causality
 
@@ -217,9 +218,13 @@ func (s *Syncer) closeJobChans() {
 	if s.jobsClosed.Get() {
 		return
 	}
+
+	s.jobsChanLock.Lock()
 	for _, ch := range s.jobs {
 		close(ch)
 	}
+	s.jobsChanLock.Unlock()
+
 	s.jobsClosed.Set(true)
 }
 
