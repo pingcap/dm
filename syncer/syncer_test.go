@@ -273,10 +273,13 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
 			query := string(ev.Query)
-			stmt, err := p.ParseOneStmt(query, "", "")
+			result, err := syncer.parseDDLSQL(query, p, string(ev.Schema))
 			c.Assert(err, IsNil)
+			if !result.isDDL {
+				continue // BEGIN event
+			}
 
-			querys, _, err := syncer.resolveDDLSQL(p, stmt, string(ev.Schema))
+			querys, _, err := syncer.resolveDDLSQL(p, result.stmt, string(ev.Schema))
 			c.Assert(err, IsNil)
 			if len(querys) == 0 {
 				continue
@@ -434,10 +437,13 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
 			query := string(ev.Query)
-			stmt, err := p.ParseOneStmt(query, "", "")
+			result, err := syncer.parseDDLSQL(query, p, string(ev.Schema))
 			c.Assert(err, IsNil)
+			if !result.isDDL {
+				continue // BEGIN event
+			}
 
-			querys, _, err := syncer.resolveDDLSQL(p, stmt, string(ev.Schema))
+			querys, _, err := syncer.resolveDDLSQL(p, result.stmt, string(ev.Schema))
 			c.Assert(err, IsNil)
 			if len(querys) == 0 {
 				continue

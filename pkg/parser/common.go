@@ -23,7 +23,7 @@ import (
 	"github.com/pingcap/parser/format"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	_ "github.com/pingcap/tidb/types/parser_driver"
+	_ "github.com/pingcap/tidb/types/parser_driver" // for import parser driver
 )
 
 // Parse wraps parser.Parse(), makes `parser` suitable for dm
