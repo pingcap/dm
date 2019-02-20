@@ -685,8 +685,10 @@ func (s *testSyncerSuite) TestTimezone(c *C) {
 		txn, err := s.db.Begin()
 		c.Assert(err, IsNil)
 		txn.Exec("set @@session.time_zone = ?", testCase.timezone)
+		txn.Exec("set @@session.sql_mode = ''")
 		for _, sql := range testCase.sqls {
-			txn.Exec(sql)
+			_, err = txn.Exec(sql)
+			c.Assert(err, IsNil)
 		}
 		err = txn.Commit()
 		c.Assert(err, IsNil)
