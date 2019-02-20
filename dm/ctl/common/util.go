@@ -22,7 +22,7 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/ddl"
+	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
@@ -166,7 +166,7 @@ func ExtractSQLsFromArgs(args []string) ([]string, error) {
 	concat := strings.TrimSpace(strings.Join(args, " "))
 
 	parser := parser.New()
-	nodes, err := ddl.Parse(parser, concat, "", "")
+	nodes, err := parserpkg.Parse(parser, concat, "", "")
 	if err != nil {
 		return nil, errors.Annotatef(err, "invalid sql '%s'", concat)
 	}

@@ -24,6 +24,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/dm/pkg/log"
+	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/parser/ast"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
@@ -180,7 +181,7 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 		stmt, err := p.ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
 
-		tableNames, err := fetchDDLTableNames(string(ev.Schema), stmt)
+		tableNames, err := parserpkg.FetchDDLTableNames(string(ev.Schema), stmt)
 		c.Assert(err, IsNil)
 
 		r, err := syncer.skipQuery(tableNames, stmt, sql)
@@ -272,7 +273,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
 			query := string(ev.Query)
-			querys, _, _, err := syncer.resolveDDLSQL(query, p, string(ev.Schema))
+			querys, _, err := syncer.resolveDDLSQL(query, p, string(ev.Schema))
 			c.Assert(err, IsNil)
 			if len(querys) == 0 {
 				continue
@@ -282,7 +283,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 				stmt, err := p.ParseOneStmt(sql, "", "")
 				c.Assert(err, IsNil)
 
-				tableNames, err := fetchDDLTableNames(string(ev.Schema), stmt)
+				tableNames, err := parserpkg.FetchDDLTableNames(string(ev.Schema), stmt)
 				c.Assert(err, IsNil)
 				r, err := syncer.skipQuery(tableNames, stmt, sql)
 				c.Assert(err, IsNil)
@@ -346,7 +347,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 		stmt, err := p.ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
 
-		tableNames, err := fetchDDLTableNames(sql, stmt)
+		tableNames, err := parserpkg.FetchDDLTableNames(sql, stmt)
 		c.Assert(err, IsNil)
 		r, err := syncer.skipQuery(tableNames, stmt, sql)
 		c.Assert(err, IsNil)
@@ -430,7 +431,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
 			query := string(ev.Query)
-			querys, _, _, err := syncer.resolveDDLSQL(query, p, string(ev.Schema))
+			querys, _, err := syncer.resolveDDLSQL(query, p, string(ev.Schema))
 			c.Assert(err, IsNil)
 			if len(querys) == 0 {
 				continue
@@ -440,7 +441,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 				stmt, err := p.ParseOneStmt(sql, "", "")
 				c.Assert(err, IsNil)
 
-				tableNames, err := fetchDDLTableNames(string(ev.Schema), stmt)
+				tableNames, err := parserpkg.FetchDDLTableNames(string(ev.Schema), stmt)
 				c.Assert(err, IsNil)
 				r, err := syncer.skipQuery(tableNames, stmt, sql)
 				c.Assert(err, IsNil)

@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ddl
+package parser
 
 import (
 	"bytes"
@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/parser/format"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	_ "github.com/pingcap/tidb/types/parser_driver"
 )
 
 // Parse wraps parser.Parse(), makes `parser` suitable for dm
@@ -43,7 +44,7 @@ func Parse(p *parser.Parser, sql, charset, collation string) (stmt []ast.StmtNod
 // FetchDDLTableNames returns table names in ddl
 // the result contains [tableName] excepted create table like and rename table
 // for `create table like` DDL, result contains [sourceTableName, sourceRefTableName]
-// for rename table ddl, result contains [targetOldTableName, sourceNewTableName]
+// for rename table ddl, result contains [oldTableName, newTableName]
 func FetchDDLTableNames(schema string, stmt ast.StmtNode) ([]*filter.Table, error) {
 	var res []*filter.Table
 	switch v := stmt.(type) {
@@ -107,7 +108,7 @@ func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string
 		}
 
 	case *ast.DropTableStmt:
-		if len(v.Tables) > 0 {
+		if len(v.Tables) > 1 {
 			return "", errors.New("not allow operation: delete multiple tables in one statement")
 		}
 
@@ -125,7 +126,7 @@ func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string
 		v.Table.Schema = model.NewCIStr(targetTableNames[0].Schema)
 		v.Table.Name = model.NewCIStr(targetTableNames[0].Name)
 	case *ast.RenameTableStmt:
-		if len(v.TableToTables) > 0 {
+		if len(v.TableToTables) > 1 {
 			return "", errors.New("not allow operation: rename multiple tables in one statement")
 		}
 
@@ -135,12 +136,17 @@ func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string
 		v.TableToTables[0].NewTable.Name = model.NewCIStr(targetTableNames[1].Name)
 
 	case *ast.AlterTableStmt:
-		if len(v.Specs) > 0 {
+		if len(v.Specs) > 1 {
 			return "", errors.New("not allow operation: rename multiple tables in one statement")
 		}
 
 		v.Table.Schema = model.NewCIStr(targetTableNames[0].Schema)
 		v.Table.Name = model.NewCIStr(targetTableNames[0].Name)
+
+		if v.Specs[0].Tp == ast.AlterTableRenameTable {
+			v.Specs[0].NewTable.Schema = model.NewCIStr(targetTableNames[1].Schema)
+			v.Specs[0].NewTable.Name = model.NewCIStr(targetTableNames[1].Name)
+		}
 
 	default:
 		return "", errors.Errorf("unkown type ddl %+v", stmt)
@@ -178,11 +184,25 @@ func SplitDDL(stmt ast.StmtNode, schema string) (sqls []string, err error) {
 		v.IfExists = true
 	case *ast.DropTableStmt:
 		v.IfExists = true
-		for _, t := range v.Tables {
+
+		tables := v.Tables
+		for _, t := range tables {
 			if t.Schema.O == "" {
 				t.Schema = schemaName
 			}
+
+			v.Tables = []*ast.TableName{t}
+			bf.Reset()
+			err = stmt.Restore(ctx)
+			if err != nil {
+				return nil, errors.Annotate(err, "restore ast node")
+			}
+
+			sqls = append(sqls, bf.String())
 		}
+		v.Tables = tables
+
+		return sqls, nil
 	case *ast.CreateTableStmt:
 		v.IfNotExists = true
 		if v.Table.Schema.O == "" {

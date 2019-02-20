@@ -14,8 +14,8 @@
 package syncer
 
 import (
-	ddlpkg "github.com/pingcap/dm/pkg/ddl"
 	"github.com/pingcap/dm/pkg/log"
+	parsepkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
@@ -66,7 +66,7 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 
 	// We use Parse not ParseOneStmt here, because sometimes we got a commented out ddl which can't be parsed
 	// by ParseOneStmt(it's a limitation of tidb parser.)
-	stmts, err := ddlpkg.Parse(p, sql, "", "")
+	stmts, err := parsepkg.Parse(p, sql, "", "")
 	if err != nil {
 		// log error rather than fatal, so other defer can be executed
 		log.Errorf(IncompatibleDDLFormat, sql)
@@ -131,7 +131,7 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 // * try to apply online ddl by given online
 // return @spilted sqls, @online ddl table names, @error
 func (s *Syncer) resolveDDLSQL(p *parser.Parser, stmt ast.StmtNode, schema string) (sqls []string, tables map[string]*filter.Table, err error) {
-	sqls, err = ddlpkg.SplitDDL(stmt, schema)
+	sqls, err = parsepkg.SplitDDL(stmt, schema)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
@@ -163,7 +163,7 @@ func (s *Syncer) handleDDL(p *parser.Parser, schema, sql string) (string, [][]*f
 		return "", nil, nil, errors.Annotatef(err, "ddl %s", sql)
 	}
 
-	tableNames, err := ddlpkg.FetchDDLTableNames(schema, stmt)
+	tableNames, err := parsepkg.FetchDDLTableNames(schema, stmt)
 	if err != nil {
 		return "", nil, nil, errors.Trace(err)
 	}
@@ -186,7 +186,7 @@ func (s *Syncer) handleDDL(p *parser.Parser, schema, sql string) (string, [][]*f
 		targetTableNames = append(targetTableNames, tableName)
 	}
 
-	ddl, err := ddlpkg.RenameDDLTable(stmt, targetTableNames)
+	ddl, err := parsepkg.RenameDDLTable(stmt, targetTableNames)
 	return ddl, [][]*filter.Table{tableNames, targetTableNames}, stmt, errors.Trace(err)
 }
 
@@ -202,7 +202,7 @@ func (s *Syncer) handleOnlineDDL(p *parser.Parser, schema, sql string) ([]string
 		return nil, nil, errors.Annotatef(err, "ddl %s", sql)
 	}
 
-	tableNames, err := ddlpkg.FetchDDLTableNames(schema, stmt)
+	tableNames, err := parsepkg.FetchDDLTableNames(schema, stmt)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
@@ -227,7 +227,7 @@ func (s *Syncer) handleOnlineDDL(p *parser.Parser, schema, sql string) ([]string
 			return nil, nil, errors.Trace(err)
 		}
 
-		sqls[i], err = ddlpkg.RenameDDLTable(stmt, targetTables)
+		sqls[i], err = parsepkg.RenameDDLTable(stmt, targetTables)
 		if err != nil {
 			return nil, nil, errors.Trace(err)
 		}
