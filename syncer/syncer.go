@@ -215,16 +215,14 @@ func (s *Syncer) newJobChans(count int) {
 }
 
 func (s *Syncer) closeJobChans() {
+	s.jobsChanLock.Lock()
+	defer s.jobsChanLock.Unlock()
 	if s.jobsClosed.Get() {
 		return
 	}
-
-	s.jobsChanLock.Lock()
 	for _, ch := range s.jobs {
 		close(ch)
 	}
-	s.jobsChanLock.Unlock()
-
 	s.jobsClosed.Set(true)
 }
 
