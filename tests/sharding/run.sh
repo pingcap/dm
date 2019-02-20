@@ -59,7 +59,7 @@ cleanup1 $*
 # also cleanup dm processes in case of last run failed
 cleanup2 $*
 run $*
-# cleanup2 $*
+cleanup2 $*
 
 cat $WORK_DIR/worker1/log/dm-worker.log
 cat $WORK_DIR/worker2/log/stdout.log
