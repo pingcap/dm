@@ -53,9 +53,6 @@ function run() {
     # TODO: check sharding partition id
     # use sync_diff_inspector to check data now!
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-
-    cat $WORK_DIR/worker1/log/dm-worker.log
-    cat $WORK_DIR/worker2/log/stdout.log
 }
 
 cleanup1 $*
@@ -63,5 +60,8 @@ cleanup1 $*
 cleanup2 $*
 run $*
 cleanup2 $*
+
+cat $WORK_DIR/worker1/log/dm-worker.log
+cat $WORK_DIR/worker2/log/stdout.log
 
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"
