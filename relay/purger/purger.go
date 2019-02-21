@@ -54,7 +54,7 @@ const (
 
 // Purger purges relay log according to some strategies
 type Purger struct {
-	sync.RWMutex
+	lock            sync.RWMutex
 	wg              sync.WaitGroup
 	cancel          context.CancelFunc
 	running         sync2.AtomicInt32
@@ -109,14 +109,15 @@ func (p *Purger) Start() {
 }
 
 // run starts running the process
+// NOTE: ensure run is called at most once of a Purger
 func (p *Purger) run() {
 	ticker := time.NewTicker(time.Duration(p.cfg.Interval) * time.Second)
 	defer ticker.Stop()
 
 	var ctx context.Context
-	p.Lock()
+	p.lock.Lock()
 	ctx, p.cancel = context.WithCancel(context.Background())
-	p.Unlock()
+	p.lock.Unlock()
 	for {
 		select {
 		case <-ctx.Done():
@@ -135,11 +136,11 @@ func (p *Purger) Close() {
 
 	log.Info("[purger] closing relay log purger")
 
-	p.RLock()
+	p.lock.RLock()
 	if p.cancel != nil {
 		p.cancel()
 	}
-	p.RUnlock()
+	p.lock.RUnlock()
 	p.wg.Wait()
 }
 

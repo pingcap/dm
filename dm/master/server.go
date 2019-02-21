@@ -1603,12 +1603,10 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 		err         error
 	)
 	handErr := func(err2 error) {
-		workerMutex.Lock()
 		if err2 != nil {
 			log.Error(err2)
 		}
 		errCh <- errors.Trace(err2)
-		workerMutex.Unlock()
 	}
 
 	for id, worker := range s.workerClients {
