@@ -33,6 +33,7 @@ func (t *Tracer) CollectSyncerBinlogEvent(source string, safeMode, tryReSync boo
 		Line:     int32(line),
 		Tso:      tso,
 		TraceID:  traceID,
+		Type:     pb.TraceType_BinlogEvent,
 	}
 
 	syncerState := &pb.SyncerState{

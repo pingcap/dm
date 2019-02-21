@@ -2,11 +2,15 @@ syntax = "proto3";
 
 package pb;
 
+import "tracer_type.proto";
+
+
 message BaseEvent {
     string filename = 1;
     int32 line = 2;
     int64 tso = 3;
     string traceID = 4;
+    TraceType type = 5;
 }
 
 message MySQLPosition {

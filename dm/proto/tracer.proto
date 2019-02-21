@@ -11,11 +11,6 @@ service Tracer {
     rpc UploadSyncerBinlogEvent (UploadSyncerBinlogEventRequest) returns (CommonUploadResponse) {}
 }
 
-enum TraceType {
-    DummyEvent = 0;
-    BinlogEvent = 1;
-}
-
 message GetTSORequest {
     string id = 1;
 }

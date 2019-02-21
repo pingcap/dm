@@ -43,12 +43,15 @@ type Server struct {
 
 	rootLis net.Listener
 	svr     *grpc.Server
+
+	eventStore *EventStore
 }
 
 // NewServer creates a new Server
 func NewServer(cfg *Config) *Server {
 	s := Server{
-		cfg: cfg,
+		cfg:        cfg,
+		eventStore: NewEventStore(),
 	}
 	s.closed.Set(true)
 	return &s
@@ -74,8 +77,8 @@ func (s *Server) Start() error {
 	pb.RegisterTracerServer(s.svr, s)
 	go func() {
 		err2 := s.svr.Serve(grpcL)
-		if err != nil && !common.IsErrNetClosing(err2) && err != cmux.ErrListenerClosed {
-			log.Errorf("[server] gRPC server return with error %s", err.Error())
+		if err2 != nil && !common.IsErrNetClosing(err2) && err2 != cmux.ErrListenerClosed {
+			log.Errorf("[server] gRPC server return with error %s", err2.Error())
 		}
 	}()
 
@@ -122,6 +125,18 @@ func (s *Server) GetTSO(ctx context.Context, req *pb.GetTSORequest) (*pb.GetTSOR
 // UploadSyncerBinlogEvent implements TracerServer.UploadSyncerBinlogEvent
 func (s *Server) UploadSyncerBinlogEvent(ctx context.Context, req *pb.UploadSyncerBinlogEventRequest) (*pb.CommonUploadResponse, error) {
 	log.Debugf("[server] receive UploadSyncerBinlogEvent request %+v", req)
-
-	return nil, nil
+	events := req.Events
+	for _, e := range events {
+		err := s.eventStore.AddNewEvent(&TraceEvent{
+			t:     pb.TraceType_BinlogEvent,
+			event: e,
+		})
+		if err != nil {
+			return &pb.CommonUploadResponse{
+				Result: false,
+				Msg:    errors.ErrorStack(err),
+			}, nil
+		}
+	}
+	return &pb.CommonUploadResponse{Result: true}, nil
 }
