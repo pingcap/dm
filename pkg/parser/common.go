@@ -26,6 +26,15 @@ import (
 	_ "github.com/pingcap/tidb/types/parser_driver" // for import parser driver
 )
 
+var (
+	// ErrDropMultipleTables is error that don't allow to drop multiple tables in one statement
+	ErrDropMultipleTables = errors.New("not allow operation: drop multiple tables in one statement")
+	// ErrRenameMultipleTables is error that don't allow to rename multiple tables in one statement
+	ErrRenameMultipleTables = errors.New("not allow operation: rename multiple tables in one statement")
+	// ErrAlterMultipleTables is error that don't allow to alter multiple tables in one statement
+	ErrAlterMultipleTables = errors.New("not allow operation: rename multiple tables in one statement")
+)
+
 // Parse wraps parser.Parse(), makes `parser` suitable for dm
 func Parse(p *parser.Parser, sql, charset, collation string) (stmt []ast.StmtNode, err error) {
 	stmts, warnings, err := p.Parse(sql, charset, collation)
@@ -59,7 +68,7 @@ func FetchDDLTableNames(schema string, stmt ast.StmtNode) ([]*filter.Table, erro
 		}
 	case *ast.DropTableStmt:
 		if len(v.Tables) != 1 {
-			return res, errors.Errorf("drop table with multiple tables, may resovle ddl sql failed")
+			return res, ErrDropMultipleTables
 		}
 		res = append(res, genTableName(v.Tables[0].Schema.O, v.Tables[0].Name.O))
 	case *ast.TruncateTableStmt:
@@ -89,7 +98,8 @@ func FetchDDLTableNames(schema string, stmt ast.StmtNode) ([]*filter.Table, erro
 	return res, nil
 }
 
-// RenameDDLTable renames table names in ddl by given `targetNames`
+// RenameDDLTable renames table names in ddl by given `targetTableNames`
+// argument `targetTableNames` is same with return value of FetchDDLTableNames
 func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string, error) {
 	switch v := stmt.(type) {
 	case *ast.CreateDatabaseStmt:
@@ -109,7 +119,7 @@ func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string
 
 	case *ast.DropTableStmt:
 		if len(v.Tables) > 1 {
-			return "", errors.New("not allow operation: delete multiple tables in one statement")
+			return "", ErrDropMultipleTables
 		}
 
 		v.Tables[0].Schema = model.NewCIStr(targetTableNames[0].Schema)
@@ -127,7 +137,7 @@ func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string
 		v.Table.Name = model.NewCIStr(targetTableNames[0].Name)
 	case *ast.RenameTableStmt:
 		if len(v.TableToTables) > 1 {
-			return "", errors.New("not allow operation: rename multiple tables in one statement")
+			return "", ErrRenameMultipleTables
 		}
 
 		v.TableToTables[0].OldTable.Schema = model.NewCIStr(targetTableNames[0].Schema)
@@ -137,7 +147,7 @@ func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string
 
 	case *ast.AlterTableStmt:
 		if len(v.Specs) > 1 {
-			return "", errors.New("not allow operation: rename multiple tables in one statement")
+			return "", ErrAlterMultipleTables
 		}
 
 		v.Table.Schema = model.NewCIStr(targetTableNames[0].Schema)
@@ -165,7 +175,8 @@ func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string
 	return bf.String(), nil
 }
 
-// SplitDDL split multiple operations in one DDL statement into multiple DDL statements
+// SplitDDL splits multiple operations in one DDL statement into multiple DDL statements
+// if fail to restore, it would not restore the value of `stmt` (it changes it's values if `stmt` is one of  DropTableStmt, RenameTableStmt, AlterTableStmt)
 func SplitDDL(stmt ast.StmtNode, schema string) (sqls []string, err error) {
 	var (
 		b          []byte
