@@ -103,8 +103,9 @@ type Syncer struct {
 	toDBs  []*Conn
 	ddlDB  *Conn
 
-	jobs       []chan *job
-	jobsClosed sync2.AtomicBool
+	jobs         []chan *job
+	jobsClosed   sync2.AtomicBool
+	jobsChanLock sync.Mutex
 
 	c *causality
 
@@ -216,6 +217,8 @@ func (s *Syncer) newJobChans(count int) {
 }
 
 func (s *Syncer) closeJobChans() {
+	s.jobsChanLock.Lock()
+	defer s.jobsChanLock.Unlock()
 	if s.jobsClosed.Get() {
 		return
 	}
@@ -2042,6 +2045,8 @@ func (s *Syncer) checkpointID() string {
 
 // DDLInfo returns a chan from which can receive DDLInfo
 func (s *Syncer) DDLInfo() <-chan *pb.DDLInfo {
+	s.RLock()
+	defer s.RUnlock()
 	return s.ddlInfoCh
 }
 

@@ -95,8 +95,8 @@ func (s *Server) Start() error {
 	pb.RegisterWorkerServer(s.svr, s)
 	go func() {
 		err2 := s.svr.Serve(grpcL)
-		if err != nil && !common.IsErrNetClosing(err2) && err != cmux.ErrListenerClosed {
-			log.Errorf("[server] gRPC server return with error %s", err.Error())
+		if err2 != nil && !common.IsErrNetClosing(err2) && err2 != cmux.ErrListenerClosed {
+			log.Errorf("[server] gRPC server return with error %s", err2.Error())
 		}
 	}()
 	go InitStatus(httpL) // serve status
