@@ -5,7 +5,7 @@ process=$1
 
 while true
 do
-    pgrep $process
+    pgrep $process > /dev/null 2>&1
     ret=$?
     if [ "$ret" != "0" ]; then
         echo "process $process already exit"

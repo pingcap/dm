@@ -62,7 +62,4 @@ cleanup2 $*
 wait_process_exit dm-master.test
 wait_process_exit dm-worker.test
 
-cat $WORK_DIR/worker1/log/*.log
-cat $WORK_DIR/worker2/log/*.log
-
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"
