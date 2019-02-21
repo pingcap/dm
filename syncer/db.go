@@ -37,6 +37,7 @@ type column struct {
 	NotNull  bool
 	unsigned bool
 	tp       string
+	extra    string
 }
 
 type table struct {
@@ -362,14 +363,15 @@ func getTableColumns(db *Conn, table *table, maxRetry int) error {
 	// Show an example.
 	/*
 	   mysql> show columns from test.t;
-	   +-------+---------+------+-----+---------+-------+
-	   | Field | Type    | Null | Key | Default | Extra |
-	   +-------+---------+------+-----+---------+-------+
-	   | a     | int(11) | NO   | PRI | NULL    |       |
-	   | b     | int(11) | NO   | PRI | NULL    |       |
-	   | c     | int(11) | YES  | MUL | NULL    |       |
-	   | d     | int(11) | YES  |     | NULL    |       |
-	   +-------+---------+------+-----+---------+-------+
+	   +-------+---------+------+-----+---------+-------------------+
+	   | Field | Type    | Null | Key | Default | Extra             |
+	   +-------+---------+------+-----+---------+-------------------+
+	   | a     | int(11) | NO   | PRI | NULL    |                   |
+	   | b     | int(11) | NO   | PRI | NULL    |                   |
+	   | c     | int(11) | YES  | MUL | NULL    |                   |
+	   | d     | int(11) | YES  |     | NULL    |                   |
+	   | d     | json    | YES  |     | NULL    | VIRTUAL GENERATED |
+	   +-------+---------+------+-----+---------+-------------------+
 	*/
 
 	idx := 0
@@ -390,6 +392,7 @@ func getTableColumns(db *Conn, table *table, maxRetry int) error {
 		column.idx = idx
 		column.name = string(data[0])
 		column.tp = string(data[1])
+		column.extra = string(data[5])
 
 		if strings.ToLower(string(data[2])) == "no" {
 			column.NotNull = true
@@ -455,4 +458,8 @@ func getBinaryLogs(db *sql.DB) ([]binlogSize, error) {
 		return nil, errors.Trace(rows.Err())
 	}
 	return files, nil
+}
+
+func (c *column) isGeneratedColumn() bool {
+	return strings.Contains(c.extra, "VIRTUAL GENERATED") || strings.Contains(c.extra, "STORED GENERATED")
 }
