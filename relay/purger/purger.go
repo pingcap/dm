@@ -109,6 +109,7 @@ func (p *Purger) Start() {
 }
 
 // run starts running the process
+// NOTE: ensure run is called at most once of a Purger
 func (p *Purger) run() {
 	ticker := time.NewTicker(time.Duration(p.cfg.Interval) * time.Second)
 	defer ticker.Stop()
