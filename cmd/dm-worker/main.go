@@ -27,7 +27,7 @@ import (
 	"github.com/pingcap/errors"
 )
 
-func mainWrapper(exitCh chan struct{}) {
+func main() {
 	cfg := worker.NewConfig()
 	err := cfg.Parse(os.Args[1:])
 	switch errors.Cause(err) {
@@ -63,12 +63,6 @@ func mainWrapper(exitCh chan struct{}) {
 		s.Close()
 	}()
 
-	go func() {
-		<-exitCh
-		log.Info("got exit notify, exit")
-		s.Close()
-	}()
-
 	err = s.Start()
 	if err != nil {
 		log.Errorf("start dm-worker err %s", err)
@@ -76,9 +70,4 @@ func mainWrapper(exitCh chan struct{}) {
 	}
 	s.Close() // wait until closed
 	log.Info("dm-worker exit")
-}
-
-func main() {
-	exitCh := make(chan struct{})
-	mainWrapper(exitCh)
 }

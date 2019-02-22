@@ -11,6 +11,6 @@ do
         echo "process $process already exit"
         break
     fi
-    sleep 0.1
+    sleep 0.2
     echo "wait process $process exit..."
 done

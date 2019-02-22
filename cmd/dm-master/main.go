@@ -27,7 +27,7 @@ import (
 	"github.com/pingcap/errors"
 )
 
-func mainWrapper(exitCh chan struct{}) {
+func main() {
 	cfg := master.NewConfig()
 	err := cfg.Parse(os.Args[1:])
 	switch errors.Cause(err) {
@@ -63,12 +63,6 @@ func mainWrapper(exitCh chan struct{}) {
 		server.Close()
 	}()
 
-	go func() {
-		<-exitCh
-		log.Info("got exit notify, exit")
-		server.Close()
-	}()
-
 	err = server.Start()
 	if err != nil {
 		log.Errorf("dm-master start with error %v", errors.ErrorStack(err))
@@ -76,9 +70,4 @@ func mainWrapper(exitCh chan struct{}) {
 	server.Close()
 
 	log.Info("dm-master exit")
-}
-
-func main() {
-	exitCh := make(chan struct{})
-	mainWrapper(exitCh)
 }
