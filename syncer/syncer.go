@@ -150,12 +150,12 @@ type Syncer struct {
 
 	readerHub *streamer.ReaderHub
 
+	tracer *tracing.Tracer
+
 	currentPosMu struct {
 		sync.RWMutex
 		currentPos mysql.Position // use to calc remain binlog size
 	}
-
-	tracer *tracing.Tracer
 }
 
 // NewSyncer creates a new Syncer.
@@ -177,6 +177,7 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.bwList = filter.New(cfg.CaseSensitive, cfg.BWList)
 	syncer.checkpoint = NewRemoteCheckPoint(cfg, syncer.checkpointID())
 	syncer.injectEventCh = make(chan *replication.BinlogEvent)
+	syncer.tracer = tracing.GetTracer()
 	syncer.setTimezone()
 
 	syncer.syncCfg = replication.BinlogSyncerConfig{
@@ -1581,7 +1582,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 		}
 		if s.tracer.Enable() {
-			source := fmt.Sprintf("%s.%s", s.cfg.SourceID, s.cfg.Name)
+			source := fmt.Sprintf("%s.syncer.%s", s.cfg.SourceID, s.cfg.Name)
 			err := s.tracer.CollectSyncerBinlogEvent(source, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
 			if err != nil {
 				return errors.Trace(err)

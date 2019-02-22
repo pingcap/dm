@@ -45,7 +45,7 @@ type Tracer struct {
 	tso   *tsoGenerator
 	idGen *idGenerator
 
-	jobs       []chan *Job
+	jobs       map[EventType]chan *Job
 	jobsClosed sync2.AtomicBool
 }
 
@@ -117,7 +117,7 @@ func (t *Tracer) tsoProcessor(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(1 * time.Second):
+		case <-time.After(1 * time.Minute):
 			err := t.syncTS()
 			if err != nil {
 				log.Errorf("[tracer] sync timestamp error: %s", errors.ErrorStack(err))
@@ -127,12 +127,13 @@ func (t *Tracer) tsoProcessor(ctx context.Context) {
 }
 
 // Assume we send GetTSO with local timestamp t1, timestamp gap between local
-// and remote tso service is tx, remote tsl service get GetTSO at timestamp t2
+// and remote tso service is tx, remote tso service get GetTSO at timestamp t2
 // and send response back as soon as possible. We get RPC response at local
 // timestamp t3. then we have t1 + tx + ttl = t2; t2 - tx + ttl = t3
 // so the real sending RPC request timestamp is t1 + tx = t2 + t1/2 - t3/2
 func (t *Tracer) syncTS() error {
 	t.tso.Lock()
+	defer t.tso.Unlock()
 	t.tso.localTS = time.Now().UnixNano()
 	req := &pb.GetTSORequest{Id: t.cfg.Source}
 	resp, err := t.cli.GetTSO(t.ctx, req)
@@ -143,16 +144,17 @@ func (t *Tracer) syncTS() error {
 		return errors.Errorf("sync ts with error: %s", resp.Msg)
 	}
 	currentTS := time.Now().UnixNano()
+	oldSyncedTS := t.tso.syncedTS
 	t.tso.syncedTS = resp.Ts + t.tso.localTS/2 - currentTS/2
+	log.Debugf("[tracer] syncedTS from %d to %d, localTS %d", oldSyncedTS, t.tso.syncedTS, t.tso.localTS)
 	return nil
 }
 
 func (t *Tracer) newJobChans() {
-	count := int(EventFlush)
 	t.closeJobChans()
-	t.jobs = make([]chan *Job, 0, count)
-	for i := 0; i < count; i++ {
-		t.jobs = append(t.jobs, make(chan *Job, 2*t.cfg.BatchSize))
+	t.jobs = make(map[EventType]chan *Job)
+	for i := EventSyncerBinlog; i < EventFlush; i++ {
+		t.jobs[i] = make(chan *Job, t.cfg.BatchSize+1)
 	}
 	t.jobsClosed.Set(false)
 }
@@ -181,7 +183,6 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan chan *Job) {
 
 	processError := func(err error) {
 		log.Errorf("[tracer] processor error: %s", errors.ErrorStack(err))
-		clearJobs()
 	}
 
 	var err error
@@ -191,7 +192,10 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan chan *Job) {
 			return
 		case <-time.After(uploadInterval):
 			err = t.processTraceEvents(jobs)
-			processError(err)
+			if err != nil {
+				processError(err)
+			}
+			clearJobs()
 		case job, ok := <-jobChan:
 			if !ok {
 				return
@@ -205,7 +209,6 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan chan *Job) {
 				err = t.processTraceEvents(jobs)
 				if err != nil {
 					processError(err)
-					continue
 				}
 				clearJobs()
 			}
@@ -215,7 +218,7 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan chan *Job) {
 
 func (t *Tracer) AddJob(job *Job) {
 	if job.Tp == EventFlush {
-		for i := 1; i < int(EventFlush); i++ {
+		for i := EventSyncerBinlog; i < EventFlush; i++ {
 			t.jobs[i] <- job
 		}
 	} else {

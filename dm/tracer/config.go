@@ -14,12 +14,14 @@
 package tracer
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
 
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -90,6 +92,15 @@ func (c *Config) Parse(arguments []string) error {
 // verify verifies the config
 func (c *Config) verify() error {
 	return nil
+}
+
+// String returns format string of Config
+func (c *Config) String() string {
+	cfg, err := json.Marshal(c)
+	if err != nil {
+		log.Errorf("[tracer] marshal config to json error %v", err)
+	}
+	return string(cfg)
 }
 
 // configFromFile loads config from file.

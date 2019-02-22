@@ -73,7 +73,7 @@ func NewWorker(cfg *Config) *Worker {
 		&w,
 	}
 	w.relayPurger = purger.NewPurger(cfg.Purge, cfg.RelayDir, operators, interceptors)
-	w.tracer = tracing.NewTracer(cfg.Tracer)
+	w.tracer = tracing.InitTracerHub(cfg.Tracer)
 
 	w.closed.Set(closedTrue) // not start yet
 	w.ctx, w.cancel = context.WithCancel(context.Background())

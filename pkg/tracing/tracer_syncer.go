@@ -26,7 +26,6 @@ func (t *Tracer) CollectSyncerBinlogEvent(source string, safeMode, tryReSync boo
 		return errors.Trace(err)
 	}
 	tso := t.GetTSO()
-	// source := fmt.Sprintf("%s.%s", s.cfg.SourceID, s.cfg.Name)
 	traceID := t.GetTraceID(source)
 	base := &pb.BaseEvent{
 		Filename: file,
