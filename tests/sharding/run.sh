@@ -21,8 +21,8 @@ function cleanup1() {
 }
 
 function cleanup2() {
-    killall dm-worker.test 2>/dev/null || true
-    killall dm-master.test 2>/dev/null || true
+    pkill -hup dm-worker.test 2>/dev/null || true
+    pkill -hup dm-master.test 2>/dev/null || true
 }
 
 function run() {
@@ -60,5 +60,8 @@ cleanup1 $*
 cleanup2 $*
 run $*
 cleanup2 $*
+
+wait_process_exit dm-master.test
+wait_process_exit dm-worker.test
 
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"
