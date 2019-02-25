@@ -122,6 +122,14 @@ func columnOptionsToSQL(options []*ast.ColumnOption) string {
 			sql += fmt.Sprintf(" COMMENT '%s'", comment)
 		case ast.ColumnOptionOnUpdate: // For Timestamp and Datetime only.
 			sql += " ON UPDATE CURRENT_TIMESTAMP"
+		case ast.ColumnOptionGenerated:
+			var store string
+			if opt.Stored {
+				store = "STORED"
+			} else {
+				store = "VIRTUAL"
+			}
+			sql += fmt.Sprintf(" GENERATED ALWAYS AS (%s) %s", opt.Expr.Text(), store)
 		case ast.ColumnOptionFulltext:
 			panic("not implemented yet")
 		default:

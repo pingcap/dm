@@ -97,13 +97,15 @@ type Syncer struct {
 
 	tables       map[string]*table   // table cache: `target-schema`.`target-table` -> table
 	cacheColumns map[string][]string // table columns cache: `target-schema`.`target-table` -> column names list
+	genColsCache *GenColCache
 
 	fromDB *Conn
 	toDBs  []*Conn
 	ddlDB  *Conn
 
-	jobs       []chan *job
-	jobsClosed sync2.AtomicBool
+	jobs         []chan *job
+	jobsClosed   sync2.AtomicBool
+	jobsChanLock sync.Mutex
 
 	c *causality
 
@@ -165,6 +167,7 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.count.Set(0)
 	syncer.tables = make(map[string]*table)
 	syncer.cacheColumns = make(map[string][]string)
+	syncer.genColsCache = NewGenColCache()
 	syncer.c = newCausality()
 	syncer.tableRouter, _ = router.NewTableRouter(cfg.CaseSensitive, []*router.TableRule{})
 	syncer.done = make(chan struct{})
@@ -214,6 +217,8 @@ func (s *Syncer) newJobChans(count int) {
 }
 
 func (s *Syncer) closeJobChans() {
+	s.jobsChanLock.Lock()
+	defer s.jobsChanLock.Unlock()
 	if s.jobsClosed.Get() {
 		return
 	}
@@ -495,11 +500,13 @@ func (s *Syncer) clearTables(schema, table string) {
 	key := dbutil.TableName(schema, table)
 	delete(s.tables, key)
 	delete(s.cacheColumns, key)
+	s.genColsCache.clearTable(schema, table)
 }
 
 func (s *Syncer) clearAllTables() {
 	s.tables = make(map[string]*table)
 	s.cacheColumns = make(map[string][]string)
+	s.genColsCache.reset()
 }
 
 func (s *Syncer) getTableFromDB(db *Conn, schema string, name string) (*table, error) {
@@ -1142,6 +1149,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			if err != nil {
 				return errors.Trace(err)
 			}
+			tblColumns, rowData, tblIndexColumns, err := pruneGeneratedColumnDML(table.columns, rows, table.indexColumns, schemaName, tableName, s.genColsCache)
+			if err != nil {
+				return errors.Trace(err)
+			}
 
 			var (
 				applied bool
@@ -1161,7 +1172,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			switch e.Header.EventType {
 			case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
 				if !applied {
-					sqls, keys, args, err = genInsertSQLs(table.schema, table.name, rows, table.columns, table.indexColumns)
+					sqls, keys, args, err = genInsertSQLs(table.schema, table.name, rowData, tblColumns, tblIndexColumns)
 					if err != nil {
 						return errors.Errorf("gen insert sqls failed: %v, schema: %s, table: %s", errors.Trace(err), table.schema, table.name)
 					}
@@ -1184,7 +1195,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 			case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
 				if !applied {
-					sqls, keys, args, err = genUpdateSQLs(table.schema, table.name, rows, table.columns, table.indexColumns, safeMode.Enable())
+					sqls, keys, args, err = genUpdateSQLs(table.schema, table.name, rowData, tblColumns, tblIndexColumns, safeMode.Enable())
 					if err != nil {
 						return errors.Errorf("gen update sqls failed: %v, schema: %s, table: %s", err, table.schema, table.name)
 					}
@@ -1208,7 +1219,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 			case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
 				if !applied {
-					sqls, keys, args, err = genDeleteSQLs(table.schema, table.name, rows, table.columns, table.indexColumns)
+					sqls, keys, args, err = genDeleteSQLs(table.schema, table.name, rowData, tblColumns, tblIndexColumns)
 					if err != nil {
 						return errors.Errorf("gen delete sqls failed: %v, schema: %s, table: %s", err, table.schema, table.name)
 					}
@@ -2034,6 +2045,8 @@ func (s *Syncer) checkpointID() string {
 
 // DDLInfo returns a chan from which can receive DDLInfo
 func (s *Syncer) DDLInfo() <-chan *pb.DDLInfo {
+	s.RLock()
+	defer s.RUnlock()
 	return s.ddlInfoCh
 }
 

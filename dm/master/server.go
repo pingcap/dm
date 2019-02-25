@@ -144,8 +144,8 @@ func (s *Server) Start() error {
 	pb.RegisterMasterServer(s.svr, s)
 	go func() {
 		err2 := s.svr.Serve(grpcL)
-		if err != nil && !common.IsErrNetClosing(err2) && err != cmux.ErrListenerClosed {
-			log.Errorf("[server] gRPC server return with error %s", err.Error())
+		if err2 != nil && !common.IsErrNetClosing(err2) && err2 != cmux.ErrListenerClosed {
+			log.Errorf("[server] gRPC server return with error %s", err2.Error())
 		}
 	}()
 	go InitStatus(httpL) // serve status
@@ -186,7 +186,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 	if err != nil {
 		return &pb.StartTaskResponse{
 			Result: false,
-			Msg:    errors.ErrorStack(err),
+			Msg:    errors.Cause(err).Error(),
 		}, nil
 	}
 	log.Infof("[server] starting task with config:\n%v", cfg)
@@ -369,7 +369,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 	if err != nil {
 		return &pb.UpdateTaskResponse{
 			Result: false,
-			Msg:    errors.ErrorStack(err),
+			Msg:    errors.Cause(err).Error(),
 		}, nil
 	}
 	log.Infof("[server] update task with config:\n%v", cfg)
@@ -1599,15 +1599,14 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 		wg          sync.WaitGroup
 		workerMutex sync.Mutex
 		workerCfgs  = make(map[string]config.DBConfig)
+		errCh       = make(chan error, len(s.workerClients))
 		err         error
 	)
 	handErr := func(err2 error) {
-		workerMutex.Lock()
 		if err2 != nil {
 			log.Error(err2)
 		}
-		err = errors.Trace(err2)
-		workerMutex.Unlock()
+		errCh <- errors.Trace(err2)
 	}
 
 	for id, worker := range s.workerClients {
@@ -1653,9 +1652,9 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 			}
 
 			dbCfg := &config.DBConfig{}
-			err = dbCfg.Decode(resp.Content)
-			if err != nil {
-				handErr(errors.Annotatef(err, "unmarshal worker %s config", id1))
+			err2 := dbCfg.Decode(resp.Content)
+			if err2 != nil {
+				handErr(errors.Annotatef(err2, "unmarshal worker %s config", id1))
 				return
 			}
 
@@ -1667,6 +1666,10 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 	}
 
 	wg.Wait()
+
+	if len(errCh) > 0 {
+		err = <-errCh
+	}
 
 	return workerCfgs, errors.Trace(err)
 }
@@ -1703,7 +1706,7 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 	if err != nil {
 		return &pb.CheckTaskResponse{
 			Result: false,
-			Msg:    errors.ErrorStack(err),
+			Msg:    errors.Cause(err).Error(),
 		}, nil
 	}
 
