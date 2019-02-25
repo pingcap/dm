@@ -48,10 +48,6 @@ var (
 	alterTableRegex = regexp.MustCompile(fmt.Sprintf("^(?i)ALTER%s\\s+TABLE\\s+\\S+", commentRegexStr))
 	// https://dev.mysql.com/doc/refman/5.7/en/create-trigger.html
 	builtInSkipDDLs = []string{
-		// For mariadb, for query event, like `# Dumm`
-		// But i don't know what is the meaning of this event.
-		"^#",
-
 		// transaction
 		"^SAVEPOINT",
 
