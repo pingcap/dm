@@ -515,4 +515,38 @@ func (t *testGeneratorMySQLSuite) TestGenRowsEvent(c *C) {
 	c.Assert(rowsEvBody.Version, Equals, 0) // WRITE_ROWS_EVENTv0
 	c.Assert(rowsEvBody.ExtraData, IsNil)
 	c.Assert(rowsEvBody.Rows, DeepEquals, rows)
+
+	// multi rows, with different length, invalid
+	rows = append(rows, []interface{}{int32(1), int32(2)})
+	rowsEv, err = GenRowsEvent(timestamp, serverID, latestPos, flags, eventType, tableID, rowsFlag, rows, columnType)
+	c.Assert(err, NotNil)
+	c.Assert(rowsEv, IsNil)
+
+	// multi rows, multi columns, valid
+	rows = make([][]interface{}, 0, 2)
+	rows = append(rows, []interface{}{int32(1), int32(2)})
+	rows = append(rows, []interface{}{int32(3), int32(4)})
+	columnType = []byte{gmysql.MYSQL_TYPE_LONG, gmysql.MYSQL_TYPE_LONG}
+	rowsEv, err = GenRowsEvent(timestamp, serverID, latestPos, flags, eventType, tableID, rowsFlag, rows, columnType)
+	c.Assert(err, IsNil)
+	c.Assert(rowsEv, NotNil)
+	// verify the body
+	rowsEvBody, ok = rowsEv.Event.(*replication.RowsEvent)
+	c.Assert(ok, IsTrue)
+	c.Assert(rowsEvBody, NotNil)
+	c.Assert(rowsEvBody.ColumnCount, Equals, uint64(len(rows[0])))
+	c.Assert(rowsEvBody.Rows, DeepEquals, rows)
+
+	// all valid event-type
+	evTypes := []replication.EventType{
+		replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2,
+		replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2,
+		replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2,
+	}
+	for _, eventType = range evTypes {
+		rowsEv, err = GenRowsEvent(timestamp, serverID, latestPos, flags, eventType, tableID, rowsFlag, rows, columnType)
+		c.Assert(err, IsNil)
+		c.Assert(rowsEv, NotNil)
+		c.Assert(rowsEv.Header.EventType, Equals, eventType)
+	}
 }

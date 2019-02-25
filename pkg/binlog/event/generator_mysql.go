@@ -592,6 +592,9 @@ func GenRowsEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uin
 	if len(rows) == 0 {
 		return nil, errors.NotValidf("no rows")
 	}
+	if len(columnType) == 0 {
+		return nil, errors.NotValidf("no columns")
+	}
 	for _, row := range rows {
 		if len(row) != len(columnType) {
 			// all rows have the same length (no nil), and equal to the length of column-type
@@ -623,7 +626,7 @@ func GenRowsEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uin
 	case replication.WRITE_ROWS_EVENTv2, replication.UPDATE_ROWS_EVENTv2, replication.DELETE_ROWS_EVENTv2:
 		// if version=2, extra data exist.
 		// NOTE: we do not support to write any meaningful extra data yet.
-		var extraDataLen uint16 // two bytes, but with 0 value
+		var extraDataLen uint16 = 2 // two bytes, but with value `2` (no extra data, only this len variable)
 		err = binary.Write(postHeader, binary.LittleEndian, extraDataLen)
 		if err != nil {
 			return nil, errors.Annotatef(err, "write extra data length %d", extraDataLen)
