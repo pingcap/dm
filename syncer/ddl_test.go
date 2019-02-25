@@ -334,11 +334,11 @@ func (s *testSyncerSuite) TestResolveGeneratedColumnSQL(c *C) {
 	}{
 		{
 			"ALTER TABLE `test`.`test` ADD COLUMN d int(11) GENERATED ALWAYS AS (c + 1) VIRTUAL",
-			"ALTER TABLE `test`.`test` ADD COLUMN `d` int(11) GENERATED ALWAYS AS (c + 1) VIRTUAL",
+			"ALTER TABLE `test`.`test` ADD COLUMN `d` INT(11) GENERATED ALWAYS AS(`c`+1)",
 		},
 		{
 			"ALTER TABLE `test`.`test` ADD COLUMN d int(11) AS (1 + 1) STORED",
-			"ALTER TABLE `test`.`test` ADD COLUMN `d` int(11) GENERATED ALWAYS AS (1 + 1) STORED",
+			"ALTER TABLE `test`.`test` ADD COLUMN `d` INT(11) GENERATED ALWAYS AS(1+1)",
 		},
 	}
 
