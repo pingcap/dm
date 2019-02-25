@@ -350,7 +350,7 @@ func (s *testSyncerSuite) TestResolveGeneratedColumnSQL(c *C) {
 		ast1, err := parser.ParseOneStmt(tc.sql, "", "")
 		c.Assert(err, IsNil)
 
-		sqls, _, _, err := syncer.resolveDDLSQL(tc.sql, parser, "")
+		sqls, _, err := syncer.resolveDDLSQL(tc.sql, parser, "")
 		c.Assert(err, IsNil)
 
 		c.Assert(len(sqls), Equals, 1)
