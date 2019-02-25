@@ -18,6 +18,7 @@ import (
 	"database/sql"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 
 	"github.com/pingcap/dm/dm/config"
@@ -86,7 +87,12 @@ func (s *testSyncerSuite) TestGenDDLSQL(c *C) {
 		c.Assert(err, IsNil)
 		stmt, err := p.ParseOneStmt(t[0], "", "")
 		c.Assert(err, IsNil)
+
 		sql, err := genDDLSQL(t[0], stmt, originTableNameSingle, targetTableNameSingle, true)
+		c.Assert(err, IsNil)
+		c.Assert(sql, Equals, t[2])
+
+		sql, err = genDDLSQL(t[1], stmt, originTableNameSingle, targetTableNameSingle, true)
 		c.Assert(err, IsNil)
 		c.Assert(sql, Equals, t[2])
 	}
@@ -101,7 +107,12 @@ func (s *testSyncerSuite) TestGenDDLSQL(c *C) {
 		c.Assert(err, IsNil)
 		stmt, err := p.ParseOneStmt(t[0], "", "")
 		c.Assert(err, IsNil)
+
 		sql, err := genDDLSQL(t[0], stmt, originTableNameDouble, targetTableNameDouble, true)
+		c.Assert(err, IsNil)
+		c.Assert(sql, Equals, t[2])
+
+		sql, err = genDDLSQL(t[1], stmt, originTableNameDouble, targetTableNameDouble, true)
 		c.Assert(err, IsNil)
 		c.Assert(sql, Equals, t[2])
 	}
@@ -336,5 +347,48 @@ func (s *testSyncerSuite) TestIgnoreDMLInQuery(c *C) {
 		}
 		c.Assert(pr.ignore, Equals, cs.ignore)
 		c.Assert(pr.isDDL, Equals, cs.isDDL)
+	}
+}
+
+func (s *testSyncerSuite) TestResolveGeneratedColumnSQL(c *C) {
+	testCases := []struct {
+		sql      string
+		expected string
+	}{
+		{
+			"ALTER TABLE `test`.`test` ADD COLUMN d int(11) GENERATED ALWAYS AS (c + 1) VIRTUAL",
+			"ALTER TABLE `test`.`test` ADD COLUMN `d` int(11) GENERATED ALWAYS AS (c + 1) VIRTUAL",
+		},
+		{
+			"ALTER TABLE `test`.`test` ADD COLUMN d int(11) AS (1 + 1) STORED",
+			"ALTER TABLE `test`.`test` ADD COLUMN `d` int(11) GENERATED ALWAYS AS (1 + 1) STORED",
+		},
+	}
+
+	syncer := &Syncer{}
+	parser, err := utils.GetParser(s.db, false)
+	c.Assert(err, IsNil)
+
+	for _, tc := range testCases {
+		ast1, err := parser.ParseOneStmt(tc.sql, "", "")
+		c.Assert(err, IsNil)
+
+		sqls, _, _, err := syncer.resolveDDLSQL(tc.sql, parser, "")
+		c.Assert(err, IsNil)
+
+		c.Assert(len(sqls), Equals, 1)
+		getSQL := sqls[0]
+		c.Assert(getSQL, Equals, tc.expected)
+
+		ast2, err := parser.ParseOneStmt(getSQL, "", "")
+		c.Assert(err, IsNil)
+
+		// compare parsed ast of the resoved SQL with parsed ast of the origin SQL.
+		// because text fields are not always same, and the difference of text
+		// makes no sense to the semantics, we just ignore checking it.
+		atStmt1 := ast1.(*ast.AlterTableStmt)
+		atStmt2 := ast2.(*ast.AlterTableStmt)
+		c.Assert(atStmt1.Table, DeepEquals, atStmt2.Table)
+		c.Assert(atStmt1.Specs, DeepEquals, atStmt2.Specs)
 	}
 }

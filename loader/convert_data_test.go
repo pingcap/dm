@@ -88,6 +88,41 @@ func (t *testConvertDataSuite) TestReassemble(c *C) {
 	}
 }
 
+func (t *testConvertDataSuite) TestReassembleWithGeneratedColumn(c *C) {
+	table := &tableInfo{
+		sourceSchema: "test2",
+		sourceTable:  "t3",
+		targetSchema: "test",
+		targetTable:  "t",
+		columnNameList: []string{
+			"id",
+			"t_json",
+		},
+		insertHeadStmt: "INSERT INTO t (`id`,`t_json`) VALUES",
+	}
+	sql := `INSERT INTO t1 (id,t_json) VALUES
+(10,'{}'),
+(9,NULL);
+(8,'{"a":123}');
+`
+	expected := "INSERT INTO t (`id`,`t_json`) VALUES(585520728116297738,'{}'),(585520728116297737,NULL),(585520728116297736,'{\"a\":123}');"
+	rules := []*cm.Rule{
+		{
+			PatternSchema: "test*",
+			PatternTable:  "t*",
+			TargetColumn:  "id",
+			Expression:    cm.PartitionID,
+			Arguments:     []string{"1", "test", "t"},
+		},
+	}
+
+	columnMapping, err := cm.NewMapping(false, rules)
+	c.Assert(err, IsNil)
+	query, err := reassemble([]byte(sql), table, columnMapping)
+	c.Assert(err, IsNil)
+	c.Assert(query, Equals, expected)
+}
+
 func (t *testConvertDataSuite) TestParseTable(c *C) {
 	rules := []*router.TableRule{
 		{"test*", "t*", "test", "t"},
@@ -125,6 +160,31 @@ func (t *testConvertDataSuite) TestParseTable(c *C) {
 	c.Assert(err, IsNil)
 
 	tableInfo, err := parseTable(r, "test1", "t2", "./dumpfile/test1.t2-schema.sql")
+	c.Assert(err, IsNil)
+	c.Assert(tableInfo, DeepEquals, expectedTableInfo)
+}
+
+func (t *testConvertDataSuite) TestParseTableWithGeneratedColumn(c *C) {
+	rules := []*router.TableRule{
+		{"test*", "t*", "test", "t"},
+	}
+
+	expectedTableInfo := &tableInfo{
+		sourceSchema: "test1",
+		sourceTable:  "t3",
+		targetSchema: "test",
+		targetTable:  "t",
+		columnNameList: []string{
+			"id",
+			"t_json",
+		},
+		insertHeadStmt: "INSERT INTO `t` (`id`,`t_json`) VALUES",
+	}
+
+	r, err := router.NewTableRouter(false, rules)
+	c.Assert(err, IsNil)
+
+	tableInfo, err := parseTable(r, "test1", "t3", "./dumpfile/test1.t3-schema.sql")
 	c.Assert(err, IsNil)
 	c.Assert(tableInfo, DeepEquals, expectedTableInfo)
 }
