@@ -15,6 +15,7 @@ package tracer
 
 import (
 	"net"
+	"net/http"
 	"sync"
 	"time"
 
@@ -44,7 +45,8 @@ type Server struct {
 	rootLis net.Listener
 	svr     *grpc.Server
 
-	eventStore *EventStore
+	eventStore   *EventStore
+	statusServer *http.Server
 }
 
 // NewServer creates a new Server
@@ -72,6 +74,7 @@ func (s *Server) Start() error {
 	m.SetReadTimeout(cmuxReadTimeout) // set a timeout, ref: https://github.com/pingcap/tidb-binlog/pull/352
 
 	grpcL := m.Match(cmux.HTTP2HeaderField("content-type", "application/grpc"))
+	httpL := m.Match(cmux.HTTP1Fast())
 
 	s.svr = grpc.NewServer()
 	pb.RegisterTracerServer(s.svr, s)
@@ -81,6 +84,7 @@ func (s *Server) Start() error {
 			log.Errorf("[server] gRPC server return with error %s", err2.Error())
 		}
 	}()
+	go s.startHTTPServer(httpL)
 
 	log.Infof("[server] listening on %v for gRPC API and status request", s.cfg.TracerAddr)
 	err = m.Serve()
@@ -125,11 +129,10 @@ func (s *Server) GetTSO(ctx context.Context, req *pb.GetTSORequest) (*pb.GetTSOR
 // UploadSyncerBinlogEvent implements TracerServer.UploadSyncerBinlogEvent
 func (s *Server) UploadSyncerBinlogEvent(ctx context.Context, req *pb.UploadSyncerBinlogEventRequest) (*pb.CommonUploadResponse, error) {
 	log.Debugf("[server] receive UploadSyncerBinlogEvent request %+v", req)
-	events := req.Events
-	for _, e := range events {
-		err := s.eventStore.AddNewEvent(&TraceEvent{
-			t:     pb.TraceType_BinlogEvent,
-			event: e,
+	for _, e := range req.Events {
+		err := s.eventStore.addNewEvent(&TraceEvent{
+			Type:  pb.TraceType_BinlogEvent,
+			Event: e,
 		})
 		if err != nil {
 			return &pb.CommonUploadResponse{

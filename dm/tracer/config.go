@@ -34,9 +34,9 @@ func NewConfig() *Config {
 	fs.BoolVar(&cfg.printVersion, "V", false, "prints version and exit")
 	fs.StringVar(&cfg.ConfigFile, "config", "", "path to config file")
 	fs.BoolVar(&cfg.Enable, "enable", false, "whether to enable tracer")
-	fs.StringVar(&cfg.TracerAddr, "tracer-addr", "", "tracer API server and status addr")
+	fs.StringVar(&cfg.TracerAddr, "tracer-addr", ":8263", "tracer API server and status addr")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
-	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
+	fs.StringVar(&cfg.LogFile, "log-file", "log/dm-tracer.log", "log file path")
 
 	return cfg
 }

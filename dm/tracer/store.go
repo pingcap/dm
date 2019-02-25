@@ -14,6 +14,8 @@
 package tracer
 
 import (
+	"encoding/json"
+
 	"github.com/pingcap/errors"
 
 	"github.com/pingcap/dm/dm/pb"
@@ -21,8 +23,25 @@ import (
 
 // TraceEvent represents a sigle tracing event
 type TraceEvent struct {
-	t     pb.TraceType
-	event interface{}
+	Type  pb.TraceType `json:"type"`
+	Event interface{}  `json:"event"`
+}
+
+func (e *TraceEvent) jsonify() (string, error) {
+	switch e.Type {
+	case pb.TraceType_BinlogEvent:
+		sbe, ok := e.Event.(*pb.SyncerBinlogEvent)
+		if !ok {
+			return "", errors.NotValidf("trace event data")
+		}
+		js, err := json.MarshalIndent(sbe, "", " ")
+		if err != nil {
+			return "", errors.Trace(err)
+		}
+		return string(js), nil
+	default:
+		return "", errors.NotValidf("trace event type %d", e.Type)
+	}
 }
 
 // EventStore stores all tracing events, mapping from TraceID -> a list of TraceEvent
@@ -38,18 +57,17 @@ func NewEventStore() *EventStore {
 	}
 }
 
-// AddNewEvent adds new tracing event to store
-func (store *EventStore) AddNewEvent(e *TraceEvent) error {
+func (store *EventStore) addNewEvent(e *TraceEvent) error {
 	var traceID string
-	switch e.t {
+	switch e.Type {
 	case pb.TraceType_BinlogEvent:
-		sbe, ok := e.event.(*pb.SyncerBinlogEvent)
+		sbe, ok := e.Event.(*pb.SyncerBinlogEvent)
 		if !ok {
 			return errors.NotValidf("trace event data")
 		}
 		traceID = sbe.Base.TraceID
 	default:
-		return errors.NotValidf("trace event type %d", e.t)
+		return errors.NotValidf("trace event type %d", e.Type)
 	}
 
 	traceEvents, ok := store.events[traceID]
@@ -60,4 +78,9 @@ func (store *EventStore) AddNewEvent(e *TraceEvent) error {
 	}
 
 	return nil
+}
+
+// queryByTraceID queries trace event by given traceID
+func (store *EventStore) queryByTraceID(traceID string) []*TraceEvent {
+	return store.events[traceID]
 }
