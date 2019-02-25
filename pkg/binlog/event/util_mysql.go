@@ -19,6 +19,7 @@ package event
 import (
 	"bytes"
 	"encoding/binary"
+	"reflect"
 
 	"github.com/pingcap/errors"
 	gmysql "github.com/siddontang/go-mysql/mysql"
@@ -112,15 +113,36 @@ func fullBytes(n int) []byte {
 // ref: https://github.com/siddontang/go-mysql/blob/88e9cd7f6643b246b4dcc0e3206e9a169dd0ac96/replication/row_event.go#L368
 // TODO: add more tp support
 func encodeColumnValue(v interface{}, tp byte, meta uint16) ([]byte, error) {
-	var buf = new(bytes.Buffer)
+	var (
+		buf = new(bytes.Buffer)
+		err error
+	)
 	switch tp {
 	case gmysql.MYSQL_TYPE_NULL:
 		return nil, nil
 	case gmysql.MYSQL_TYPE_LONG:
-		err := binary.Write(buf, binary.LittleEndian, v.(int32))
-		return buf.Bytes(), errors.Annotatef(err, "value %v with type %d", v, tp)
+		err = writeNumericColumnValue(buf, v, reflect.TypeOf(int32(0)))
+	case gmysql.MYSQL_TYPE_TINY:
+		err = writeNumericColumnValue(buf, v, reflect.TypeOf(int8(0)))
+	case gmysql.MYSQL_TYPE_SHORT:
+		err = writeNumericColumnValue(buf, v, reflect.TypeOf(int16(0)))
+	case gmysql.MYSQL_TYPE_INT24:
+		err = writeNumericColumnValue(buf, v, reflect.TypeOf(int32(0)))
+		if err == nil {
+			buf.Truncate(3)
+		}
+	case gmysql.MYSQL_TYPE_LONGLONG:
+		err = writeNumericColumnValue(buf, v, reflect.TypeOf(int64(0)))
 	}
-	return nil, nil
+	return buf.Bytes(), errors.Annotatef(err, "go-mysql type %d", tp)
+}
+
+// writeNumericColumnValue writes numeric value to bytes buffer.
+func writeNumericColumnValue(buf *bytes.Buffer, value interface{}, valueType reflect.Type) error {
+	if reflect.TypeOf(value) != valueType {
+		return errors.NotValidf("value %+v (type %v) with column type %v", value, reflect.TypeOf(value), valueType)
+	}
+	return errors.Trace(binary.Write(buf, binary.LittleEndian, value))
 }
 
 // combineHeaderPayload combines header, postHeader and payload together.

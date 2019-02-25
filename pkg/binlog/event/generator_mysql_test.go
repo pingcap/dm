@@ -549,4 +549,24 @@ func (t *testGeneratorMySQLSuite) TestGenRowsEvent(c *C) {
 		c.Assert(rowsEv, NotNil)
 		c.Assert(rowsEv.Header.EventType, Equals, eventType)
 	}
+
+	// more column types
+	rows = make([][]interface{}, 0, 1)
+	rows = append(rows, []interface{}{int32(1), int8(2), int16(3), int32(4), int64(5)})
+	columnType = []byte{gmysql.MYSQL_TYPE_LONG, gmysql.MYSQL_TYPE_TINY, gmysql.MYSQL_TYPE_SHORT, gmysql.MYSQL_TYPE_INT24, gmysql.MYSQL_TYPE_LONGLONG}
+	rowsEv, err = GenRowsEvent(timestamp, serverID, latestPos, flags, eventType, tableID, rowsFlag, rows, columnType)
+	c.Assert(err, IsNil)
+	c.Assert(rowsEv, NotNil)
+	// verify the body
+	rowsEvBody, ok = rowsEv.Event.(*replication.RowsEvent)
+	c.Assert(ok, IsTrue)
+	c.Assert(rowsEvBody, NotNil)
+	c.Assert(rowsEvBody.ColumnCount, Equals, uint64(len(rows[0])))
+	c.Assert(rowsEvBody.Rows, DeepEquals, rows)
+
+	// column type mismatch
+	rows[0][0] = int8(1)
+	rowsEv, err = GenRowsEvent(timestamp, serverID, latestPos, flags, eventType, tableID, rowsFlag, rows, columnType)
+	c.Assert(err, NotNil)
+	c.Assert(rowsEv, IsNil)
 }
