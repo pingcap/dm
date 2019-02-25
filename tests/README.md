@@ -49,4 +49,5 @@ Several convenient commands are provided:
 * `check_sync_diff <WORKDIR> <CONFIG>` - Runs `sync_diff_inspector` to check diff between databases, using config file provided
 * `check_port_alive <PORT>` - Wrapper to check a port is alive, at most 20 times.
 * `check_port <HOST> <PORT>` - Checks a host:port is alive.
+* `wait_process_exit <process_name>` - Wait for one or more processes to exit by given process name.
 

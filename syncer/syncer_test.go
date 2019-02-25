@@ -136,6 +136,31 @@ func (s *testSyncerSuite) resetMaster() {
 	s.db.Exec("reset master")
 }
 
+func (s *testSyncerSuite) catchUpBinlog() {
+	ch := make(chan interface{})
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		for {
+			ev, _ := s.streamer.GetEvent(ctx)
+			if ev == nil {
+				return
+			}
+			ch <- struct{}{}
+		}
+	}()
+
+	for {
+		select {
+		case <-ch:
+			// do nothing
+		case <-time.After(10 * time.Millisecond):
+			cancel()
+			return
+		}
+	}
+}
+
 func (s *testSyncerSuite) TestSelectDB(c *C) {
 	s.cfg.BWList = &filter.Rules{
 		DoDBs: []string{"~^b.*", "s1", "stest"},
@@ -189,6 +214,7 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 		c.Assert(r, Equals, res[i])
 		i++
 	}
+	s.catchUpBinlog()
 }
 
 func (s *testSyncerSuite) TestSelectTable(c *C) {
@@ -304,6 +330,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 		}
 		i++
 	}
+	s.catchUpBinlog()
 }
 
 func (s *testSyncerSuite) TestIgnoreDB(c *C) {
@@ -360,6 +387,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 		c.Assert(r, Equals, res[i])
 		i++
 	}
+	s.catchUpBinlog()
 }
 
 func (s *testSyncerSuite) TestIgnoreTable(c *C) {
@@ -470,7 +498,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 
 		i++
 	}
-
+	s.catchUpBinlog()
 }
 
 func (s *testSyncerSuite) TestSkipDML(c *C) {
@@ -551,6 +579,7 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 		}
 		i++
 	}
+	s.catchUpBinlog()
 }
 
 func (s *testSyncerSuite) TestColumnMapping(c *C) {
@@ -638,6 +667,7 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 		}
 		i++
 	}
+	s.catchUpBinlog()
 }
 
 func (s *testSyncerSuite) TestTimezone(c *C) {
@@ -744,4 +774,121 @@ func (s *testSyncerSuite) TestTimezone(c *C) {
 	for _, sql := range dropSQLs {
 		s.db.Exec(sql)
 	}
+	s.catchUpBinlog()
+}
+
+func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
+	s.cfg.BWList = &filter.Rules{
+		DoDBs: []string{"~^gctest_.*"},
+	}
+
+	createSQLs := []string{
+		"create database if not exists gctest_1 DEFAULT CHARSET=utf8mb4",
+		"create table if not exists gctest_1.t_1(id int, age int, cfg varchar(40), cfg_json json as (cfg) virtual)",
+	}
+
+	testCases := []struct {
+		sqls     []string
+		expected []string
+		args     [][]interface{}
+	}{
+		{
+			[]string{
+				"insert into gctest_1.t_1(id, age, cfg) values (1, 18, '{}')",
+				"insert into gctest_1.t_1(id, age, cfg) values (2, 19, '{\"key\": \"value\", \"int\": 123}')",
+				"insert into gctest_1.t_1(id, age, cfg) values (3, 17, NULL)",
+			},
+			[]string{
+				"REPLACE INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
+				"REPLACE INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
+				"REPLACE INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
+			},
+			[][]interface{}{
+				{int32(1), int32(18), "{}"},
+				{int32(2), int32(19), "{\"key\": \"value\", \"int\": 123}"},
+				{int32(3), int32(17), nil},
+			},
+		},
+		{
+			[]string{
+				// This test case will trigger a go-mysql bug,
+				// will uncomment after go-mysql fixed
+				"update gctest_1.t_1 set cfg = '{\"a\": 12}', age = 21 where id = 1",
+				"update gctest_1.t_1 set cfg = '{}' where id = 2 and age = 19",
+				"update gctest_1.t_1 set age = 20 where cfg is NULL",
+			},
+			[]string{
+				"UPDATE `gctest_1`.`t_1` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? AND `age` = ? AND `cfg` = ? LIMIT 1;",
+				"UPDATE `gctest_1`.`t_1` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? AND `age` = ? AND `cfg` = ? LIMIT 1;",
+				"UPDATE `gctest_1`.`t_1` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? AND `age` = ? AND `cfg` IS ? LIMIT 1;",
+			},
+			[][]interface{}{
+				{int32(1), int32(21), "{\"a\": 12}", int32(1), int32(18), "{}"},
+				{int32(2), int32(19), "{}", int32(2), int32(19), "{\"key\": \"value\", \"int\": 123}"},
+				{int32(3), int32(20), nil, int32(3), int32(17), nil},
+			},
+		},
+	}
+
+	dropSQLs := []string{
+		"drop table gctest_1.t_1",
+		"drop database gctest_1",
+	}
+
+	for _, sql := range createSQLs {
+		_, err := s.db.Exec(sql)
+		c.Assert(err, IsNil)
+	}
+
+	syncer := NewSyncer(s.cfg)
+	syncer.cfg.MaxRetry = 1
+	// use upstream db as mock downstream
+	syncer.toDBs = []*Conn{{db: s.db}}
+
+	for _, testCase := range testCases {
+		for _, sql := range testCase.sqls {
+			_, err := s.db.Exec(sql)
+			c.Assert(err, IsNil)
+		}
+		idx := 0
+		for {
+			if idx >= len(testCase.sqls) {
+				break
+			}
+			e, err := s.streamer.GetEvent(context.Background())
+			c.Assert(err, IsNil)
+			switch ev := e.Event.(type) {
+			case *replication.RowsEvent:
+				table, _, err := syncer.getTable(string(ev.Table.Schema), string(ev.Table.Table))
+				c.Assert(err, IsNil)
+				var (
+					sqls []string
+					args [][]interface{}
+				)
+
+				tblColumns, rowData, tblIndexColumns, err := pruneGeneratedColumnDML(table.columns, ev.Rows, table.indexColumns, table.schema, table.name, syncer.genColsCache)
+				c.Assert(err, IsNil)
+				switch e.Header.EventType {
+				case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
+					sqls, _, args, err = genInsertSQLs(table.schema, table.name, rowData, tblColumns, tblIndexColumns)
+					c.Assert(err, IsNil)
+					c.Assert(sqls[0], Equals, testCase.expected[idx])
+					c.Assert(args[0], DeepEquals, testCase.args[idx])
+				case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
+					sqls, _, args, err = genUpdateSQLs(table.schema, table.name, rowData, tblColumns, tblIndexColumns, false)
+					c.Assert(err, IsNil)
+					c.Assert(sqls[0], Equals, testCase.expected[idx])
+					c.Assert(args[0], DeepEquals, testCase.args[idx])
+				}
+				idx++
+			default:
+				continue
+			}
+		}
+	}
+
+	for _, sql := range dropSQLs {
+		s.db.Exec(sql)
+	}
+	s.catchUpBinlog()
 }

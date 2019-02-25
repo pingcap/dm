@@ -1,0 +1,16 @@
+#!/bin/bash
+# parameter 1: process name
+
+process=$1
+
+while true
+do
+    pgrep $process > /dev/null 2>&1
+    ret=$?
+    if [ "$ret" != "0" ]; then
+        echo "process $process already exit"
+        break
+    fi
+    sleep 0.2
+    echo "wait process $process exit..."
+done
