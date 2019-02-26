@@ -769,3 +769,43 @@ func GenRowsEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uin
 
 	return rowsEvent, nil
 }
+
+// GenXIDEvent generates a XIDEvent.
+// ref: https://dev.mysql.com/doc/internals/en/xid-event.html
+func GenXIDEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint16, xid uint64) (*replication.BinlogEvent, error) {
+	// Payload
+	payload := new(bytes.Buffer)
+	err := binary.Write(payload, binary.LittleEndian, xid)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write XID %d", xid)
+	}
+
+	eventSize := uint32(eventHeaderLen) + uint32(payload.Len()) + crc32Len
+	logPos := latestPos + eventSize
+	header, headerData, err := GenEventHeader(timestamp, replication.XID_EVENT, serverID, eventSize, logPos, flags)
+	if err != nil {
+		return nil, errors.Annotatef(err, "generate event header")
+	}
+
+	buf := new(bytes.Buffer)
+	err = combineHeaderPayload(buf, headerData, nil, payload.Bytes())
+	if err != nil {
+		return nil, errors.Annotatef(err, "combine header, post-header and payload")
+	}
+
+	// decode event, before write checksum
+	event := &replication.XIDEvent{}
+	err = event.Decode(buf.Bytes()[eventHeaderLen:])
+	if err != nil {
+		return nil, errors.Annotatef(err, "decode % X", buf.Bytes())
+	}
+
+	// CRC32 checksum, 4 bytes
+	checksum := crc32.ChecksumIEEE(buf.Bytes())
+	err = binary.Write(buf, binary.LittleEndian, checksum)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write CRC32 % X", checksum)
+	}
+
+	return &replication.BinlogEvent{RawData: buf.Bytes(), Header: header, Event: event}, nil
+}

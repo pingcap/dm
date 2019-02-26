@@ -591,3 +591,29 @@ func (t *testGeneratorMySQLSuite) TestGenRowsEvent(c *C) {
 		c.Assert(rowsEv, IsNil)
 	}
 }
+
+func (t *testGeneratorMySQLSuite) TestGenXIDEvent(c *C) {
+	var (
+		timestamp        = uint32(time.Now().Unix())
+		serverID  uint32 = 11
+		latestPos uint32 = 4
+		flags     uint16 = 0x01
+		xid       uint64 = 123
+	)
+
+	xidEv, err := GenXIDEvent(timestamp, serverID, latestPos, flags, xid)
+	c.Assert(err, IsNil)
+	c.Assert(xidEv, NotNil)
+
+	// verify the header
+	c.Assert(xidEv.Header.Timestamp, Equals, timestamp)
+	c.Assert(xidEv.Header.ServerID, Equals, serverID)
+	c.Assert(xidEv.Header.LogPos, Equals, latestPos+xidEv.Header.EventSize)
+	c.Assert(xidEv.Header.Flags, Equals, flags)
+
+	// verify the body
+	xidEvBody, ok := xidEv.Event.(*replication.XIDEvent)
+	c.Assert(ok, IsTrue)
+	c.Assert(xidEvBody, NotNil)
+	c.Assert(xidEvBody.XID, Equals, xid)
+}
