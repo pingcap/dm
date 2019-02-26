@@ -618,6 +618,70 @@ func (t *testGeneratorSuite) TestGenXIDEvent(c *C) {
 	c.Assert(xidEvBody.XID, Equals, xid)
 }
 
+func (t *testGeneratorSuite) TestGenMariaDBGTIDListEvent(c *C) {
+	var (
+		timestamp          = uint32(time.Now().Unix())
+		serverID  uint32   = 11
+		latestPos uint32   = 4
+		flags     uint16   = 0x01
+		gSet      gtid.Set // invalid
+	)
+
+	// invalid gSet
+	gtidListEv, err := GenMariaDBGTIDListEvent(timestamp, serverID, latestPos, flags, gSet)
+	c.Assert(err, NotNil)
+	c.Assert(gtidListEv, IsNil)
+
+	// valid gSet with single GTID
+	gSet, err = gtid.ParserGTID(gmysql.MariaDBFlavor, "1-2-3")
+	c.Assert(err, IsNil)
+	c.Assert(gSet, NotNil)
+	mGSet, ok := gSet.Origin().(*gmysql.MariadbGTIDSet)
+	c.Assert(ok, IsTrue)
+	c.Assert(mGSet, NotNil)
+
+	gtidListEv, err = GenMariaDBGTIDListEvent(timestamp, serverID, latestPos, flags, gSet)
+	c.Assert(err, IsNil)
+	c.Assert(gtidListEv, NotNil)
+
+	// verify the header
+	c.Assert(gtidListEv.Header.Timestamp, Equals, timestamp)
+	c.Assert(gtidListEv.Header.ServerID, Equals, serverID)
+	c.Assert(gtidListEv.Header.LogPos, Equals, latestPos+gtidListEv.Header.EventSize)
+	c.Assert(gtidListEv.Header.Flags, Equals, flags)
+
+	// verify the body
+	gtidListEvBody, ok := gtidListEv.Event.(*replication.MariadbGTIDListEvent)
+	c.Assert(ok, IsTrue)
+	c.Assert(gtidListEvBody, NotNil)
+	c.Assert(len(gtidListEvBody.GTIDs), Equals, 1)
+	c.Assert(gtidListEvBody.GTIDs[0], DeepEquals, *mGSet.Sets[gtidListEvBody.GTIDs[0].DomainID])
+
+	/* we need to fix go-mysql first
+	// valid gSet with multi GTIDs
+	gSet, err = gtid.ParserGTID(gmysql.MariaDBFlavor, "1-2-12,2-2-3,3-3-8,4-4-4")
+	c.Assert(err, IsNil)
+	c.Assert(gSet, NotNil)
+	mGSet, ok = gSet.Origin().(*gmysql.MariadbGTIDSet)
+	c.Assert(ok, IsTrue)
+	c.Assert(mGSet, NotNil)
+
+	gtidListEv, err = GenMariaDBGTIDListEvent(timestamp, serverID, latestPos, flags, gSet)
+	c.Assert(err, IsNil)
+	c.Assert(gtidListEv, NotNil)
+
+	// verify the body
+	gtidListEvBody, ok = gtidListEv.Event.(*replication.MariadbGTIDListEvent)
+	c.Assert(ok, IsTrue)
+	c.Assert(gtidListEvBody, NotNil)
+	c.Assert(len(gtidListEvBody.GTIDs), Equals, 4)
+	for _, mGTID := range gtidListEvBody.GTIDs {
+		mGTID2, ok := mGSet.Sets[mGTID.DomainID]
+		c.Assert(ok, IsTrue)
+		c.Assert(mGTID, DeepEquals, *mGTID2)
+	}*/
+}
+
 func (t *testGeneratorSuite) TestGenMariaDBGTIDEvent(c *C) {
 	var (
 		timestamp        = uint32(time.Now().Unix())

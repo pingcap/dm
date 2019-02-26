@@ -186,7 +186,7 @@ func GenFormatDescriptionEvent(timestamp uint32, serverID uint32, latestPos uint
 //   a. https://github.com/vitessio/vitess/blob/28e7e5503a6c3d3b18d4925d95f23ebcb6f25c8e/go/mysql/binlog_event_mysql56.go#L56
 //   b. https://dev.mysql.com/doc/internals/en/com-binlog-dump-gtid.html
 func GenPreviousGTIDsEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint16, gSet gtid.Set) ([]byte, error) {
-	if len(gSet.String()) == 0 {
+	if gSet == nil || len(gSet.String()) == 0 {
 		return nil, errors.NotValidf("empty GTID set")
 	}
 
@@ -795,6 +795,79 @@ func GenXIDEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint
 
 	// decode event, before write checksum
 	event := &replication.XIDEvent{}
+	err = event.Decode(buf.Bytes()[eventHeaderLen:])
+	if err != nil {
+		return nil, errors.Annotatef(err, "decode % X", buf.Bytes())
+	}
+
+	// CRC32 checksum, 4 bytes
+	checksum := crc32.ChecksumIEEE(buf.Bytes())
+	err = binary.Write(buf, binary.LittleEndian, checksum)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write CRC32 % X", checksum)
+	}
+
+	return &replication.BinlogEvent{RawData: buf.Bytes(), Header: header, Event: event}, nil
+}
+
+// GenMariaDBGTIDListEvent generates a MariadbGTIDListEvent.
+// ref: https://mariadb.com/kb/en/library/gtid_list_event/
+func GenMariaDBGTIDListEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint16, gSet gtid.Set) (*replication.BinlogEvent, error) {
+	if gSet == nil || len(gSet.String()) == 0 {
+		return nil, errors.NotValidf("empty GTID set")
+	}
+
+	origin := gSet.Origin()
+	if origin == nil {
+		return nil, errors.NotValidf("GTID set string %s for MariaDB", gSet.String())
+	}
+	mariaDBGSet, ok := origin.(*gmysql.MariadbGTIDSet)
+	if !ok {
+		return nil, errors.NotValidf("GTID set string %s for MariaDB", gSet.String())
+	}
+
+	payload := new(bytes.Buffer)
+
+	// Number of GTIDs, 4 bytes
+	numOfGTIDs := uint32(len(mariaDBGSet.Sets))
+	err := binary.Write(payload, binary.LittleEndian, numOfGTIDs)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write Number of GTIDs %d", numOfGTIDs)
+	}
+
+	for _, mGTID := range mariaDBGSet.Sets {
+		// Replication Domain ID, 4 bytes
+		err = binary.Write(payload, binary.LittleEndian, mGTID.DomainID)
+		if err != nil {
+			return nil, errors.Annotatef(err, "write Replication Domain ID %d", mGTID.DomainID)
+		}
+		// Server_ID, 4 bytes
+		err = binary.Write(payload, binary.LittleEndian, mGTID.ServerID)
+		if err != nil {
+			return nil, errors.Annotatef(err, "write Server_ID %d", mGTID.ServerID)
+		}
+		// GTID sequence, 8 bytes
+		err = binary.Write(payload, binary.LittleEndian, mGTID.SequenceNumber)
+		if err != nil {
+			return nil, errors.Annotatef(err, "write GTID sequence %d", mGTID.SequenceNumber)
+		}
+	}
+
+	eventSize := uint32(eventHeaderLen) + uint32(payload.Len()) + crc32Len
+	logPos := latestPos + eventSize
+	header, headerData, err := GenEventHeader(timestamp, replication.MARIADB_GTID_LIST_EVENT, serverID, eventSize, logPos, flags)
+	if err != nil {
+		return nil, errors.Annotatef(err, "generate event header")
+	}
+
+	buf := new(bytes.Buffer)
+	err = combineHeaderPayload(buf, headerData, nil, payload.Bytes())
+	if err != nil {
+		return nil, errors.Annotatef(err, "combine header, post-header and payload")
+	}
+
+	// decode event, before write checksum
+	event := &replication.MariadbGTIDListEvent{}
 	err = event.Decode(buf.Bytes()[eventHeaderLen:])
 	if err != nil {
 		return nil, errors.Annotatef(err, "decode % X", buf.Bytes())
