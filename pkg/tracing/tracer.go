@@ -90,14 +90,15 @@ func (t *Tracer) Start() {
 
 	for _, ch := range t.jobs {
 		t.wg.Add(1)
-		go func() {
+		go func(c <-chan *Job) {
 			ctx2, cancel := context.WithCancel(t.ctx)
-			t.jobProcessor(ctx2, ch)
+			t.jobProcessor(ctx2, c)
 			cancel()
-		}()
+		}(ch)
 	}
 }
 
+// Stop stops tracer
 func (t *Tracer) Stop() {
 	t.Lock()
 	defer t.Unlock()
@@ -169,7 +170,7 @@ func (t *Tracer) closeJobChans() {
 	t.jobsClosed.Set(true)
 }
 
-func (t *Tracer) jobProcessor(ctx context.Context, jobChan chan *Job) {
+func (t *Tracer) jobProcessor(ctx context.Context, jobChan <-chan *Job) {
 	defer t.wg.Done()
 
 	var (
@@ -216,6 +217,7 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan chan *Job) {
 	}
 }
 
+// AddJob add a job to tracer
 func (t *Tracer) AddJob(job *Job) {
 	if job.Tp == EventFlush {
 		for i := EventSyncerBinlog; i < EventFlush; i++ {

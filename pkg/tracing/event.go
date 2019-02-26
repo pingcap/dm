@@ -22,6 +22,7 @@ import (
 // EventType represents trace event type
 type EventType byte
 
+// EventType list
 const (
 	EventNull EventType = iota
 	EventSyncerBinlog
@@ -42,6 +43,7 @@ func (e EventType) String() string {
 	}
 }
 
+// Job is used for tracing evnets collecting and batch uploading
 type Job struct {
 	Tp    EventType
 	Event interface{}

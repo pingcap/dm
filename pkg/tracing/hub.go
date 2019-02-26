@@ -37,7 +37,7 @@ func InitTracerHub(cfg Config) *Tracer {
 	return tracerHub.tracer
 }
 
-// GetTracerHub returns the tracer instance. If InitTracerHub is not called,
+// GetTracer returns the tracer instance. If InitTracerHub is not called,
 // returns a default disabled tracer.
 func GetTracer() *Tracer {
 	if tracerHub == nil {
