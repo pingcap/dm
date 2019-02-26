@@ -772,6 +772,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	createSQLs := []string{
 		"create database if not exists gctest_1 DEFAULT CHARSET=utf8mb4",
 		"create table if not exists gctest_1.t_1(id int, age int, cfg varchar(40), cfg_json json as (cfg) virtual)",
+		"create table if not exists gctest_1.t_2(id int primary key, age int, cfg varchar(40), cfg_json json as (cfg) virtual)",
 	}
 
 	testCases := []struct {
@@ -784,13 +785,22 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				"insert into gctest_1.t_1(id, age, cfg) values (1, 18, '{}')",
 				"insert into gctest_1.t_1(id, age, cfg) values (2, 19, '{\"key\": \"value\", \"int\": 123}')",
 				"insert into gctest_1.t_1(id, age, cfg) values (3, 17, NULL)",
+				"insert into gctest_1.t_2(id, age, cfg) values (1, 18, '{}')",
+				"insert into gctest_1.t_2(id, age, cfg) values (2, 19, '{\"key\": \"value\", \"int\": 123}')",
+				"insert into gctest_1.t_2(id, age, cfg) values (3, 17, NULL)",
 			},
 			[]string{
 				"REPLACE INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
 				"REPLACE INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
 				"REPLACE INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
+				"REPLACE INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?);",
+				"REPLACE INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?);",
+				"REPLACE INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?);",
 			},
 			[][]interface{}{
+				{int32(1), int32(18), "{}"},
+				{int32(2), int32(19), "{\"key\": \"value\", \"int\": 123}"},
+				{int32(3), int32(17), nil},
 				{int32(1), int32(18), "{}"},
 				{int32(2), int32(19), "{\"key\": \"value\", \"int\": 123}"},
 				{int32(3), int32(17), nil},
@@ -798,27 +808,61 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 		},
 		{
 			[]string{
-				// This test case will trigger a go-mysql bug,
-				// will uncomment after go-mysql fixed
 				"update gctest_1.t_1 set cfg = '{\"a\": 12}', age = 21 where id = 1",
 				"update gctest_1.t_1 set cfg = '{}' where id = 2 and age = 19",
 				"update gctest_1.t_1 set age = 20 where cfg is NULL",
+				"update gctest_1.t_2 set cfg = '{\"a\": 12}', age = 21 where id = 1",
+				"update gctest_1.t_2 set cfg = '{}' where id = 2 and age = 19",
+				"update gctest_1.t_2 set age = 20 where cfg is NULL",
 			},
 			[]string{
 				"UPDATE `gctest_1`.`t_1` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? AND `age` = ? AND `cfg` = ? LIMIT 1;",
 				"UPDATE `gctest_1`.`t_1` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? AND `age` = ? AND `cfg` = ? LIMIT 1;",
 				"UPDATE `gctest_1`.`t_1` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? AND `age` = ? AND `cfg` IS ? LIMIT 1;",
+				"UPDATE `gctest_1`.`t_2` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? LIMIT 1;",
+				"UPDATE `gctest_1`.`t_2` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? LIMIT 1;",
+				"UPDATE `gctest_1`.`t_2` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? LIMIT 1;",
 			},
 			[][]interface{}{
 				{int32(1), int32(21), "{\"a\": 12}", int32(1), int32(18), "{}"},
 				{int32(2), int32(19), "{}", int32(2), int32(19), "{\"key\": \"value\", \"int\": 123}"},
 				{int32(3), int32(20), nil, int32(3), int32(17), nil},
+				{int32(1), int32(21), "{\"a\": 12}", int32(1)},
+				{int32(2), int32(19), "{}", int32(2)},
+				{int32(3), int32(20), nil, int32(3)},
+			},
+		},
+		{
+			[]string{
+				"delete from gctest_1.t_1 where id = 1",
+				"delete from gctest_1.t_1 where id = 2 and age = 19",
+				"delete from gctest_1.t_1 where cfg is NULL",
+				"delete from gctest_1.t_2 where id = 1",
+				"delete from gctest_1.t_2 where id = 2 and age = 19",
+				"delete from gctest_1.t_2 where cfg is NULL",
+			},
+			[]string{
+				"DELETE FROM `gctest_1`.`t_1` WHERE `id` = ? AND `age` = ? AND `cfg` = ? LIMIT 1;",
+				"DELETE FROM `gctest_1`.`t_1` WHERE `id` = ? AND `age` = ? AND `cfg` = ? LIMIT 1;",
+				"DELETE FROM `gctest_1`.`t_1` WHERE `id` = ? AND `age` = ? AND `cfg` IS ? LIMIT 1;",
+				"DELETE FROM `gctest_1`.`t_2` WHERE `id` = ? LIMIT 1;",
+				"DELETE FROM `gctest_1`.`t_2` WHERE `id` = ? LIMIT 1;",
+				"DELETE FROM `gctest_1`.`t_2` WHERE `id` = ? LIMIT 1;",
+			},
+			[][]interface{}{
+				{int32(1), int32(21), "{\"a\": 12}"},
+				{int32(2), int32(19), "{}"},
+				{int32(3), int32(20), nil},
+				{int32(1)},
+				{int32(2)},
+				{int32(3)},
 			},
 		},
 	}
 
 	dropSQLs := []string{
 		"drop table gctest_1.t_1",
+		"drop table gctest_1.t_2",
 		"drop database gctest_1",
 	}
 
@@ -863,6 +907,11 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 					c.Assert(args[0], DeepEquals, testCase.args[idx])
 				case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
 					sqls, _, args, err = genUpdateSQLs(table.schema, table.name, rowData, rowData, tblColumns, tblColumns, tblIndexColumns, tblIndexColumns, false)
+					c.Assert(err, IsNil)
+					c.Assert(sqls[0], Equals, testCase.expected[idx])
+					c.Assert(args[0], DeepEquals, testCase.args[idx])
+				case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
+					sqls, _, args, err = genDeleteSQLs(table.schema, table.name, rowData, tblColumns, tblIndexColumns)
 					c.Assert(err, IsNil)
 					c.Assert(sqls[0], Equals, testCase.expected[idx])
 					c.Assert(args[0], DeepEquals, testCase.args[idx])
