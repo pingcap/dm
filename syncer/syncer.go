@@ -1195,7 +1195,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 			case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
 				if !applied {
-					sqls, keys, args, err = genUpdateSQLs(table.schema, table.name, rowData, tblColumns, tblIndexColumns, safeMode.Enable())
+					sqls, keys, args, err = genUpdateSQLs(table.schema, table.name, rowData, rows, tblColumns, table.columns, tblIndexColumns, table.indexColumns, safeMode.Enable())
 					if err != nil {
 						return errors.Errorf("gen update sqls failed: %v, schema: %s, table: %s", err, table.schema, table.name)
 					}
@@ -1219,7 +1219,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 			case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
 				if !applied {
-					sqls, keys, args, err = genDeleteSQLs(table.schema, table.name, rowData, tblColumns, tblIndexColumns)
+					// sqls, keys, args, err = genDeleteSQLs(table.schema, table.name, rowData, tblColumns, tblIndexColumns)
+					sqls, keys, args, err = genDeleteSQLs(table.schema, table.name, rows, table.columns, table.indexColumns)
 					if err != nil {
 						return errors.Errorf("gen delete sqls failed: %v, schema: %s, table: %s", err, table.schema, table.name)
 					}

@@ -111,17 +111,18 @@ func genInsertSQLs(schema string, table string, dataSeq [][]interface{}, columns
 	return sqls, keys, values, nil
 }
 
-func genUpdateSQLs(schema string, table string, data [][]interface{}, columns []*column, indexColumns map[string][]*column, safeMode bool) ([]string, [][]string, [][]interface{}, error) {
+func genUpdateSQLs(schema string, table string, data, originalData [][]interface{}, columns, originalColumns []*column, indexColumns, originalIndexColumns map[string][]*column, safeMode bool) ([]string, [][]string, [][]interface{}, error) {
 	sqls := make([]string, 0, len(data)/2)
 	keys := make([][]string, 0, len(data)/2)
 	values := make([][]interface{}, 0, len(data)/2)
 	columnList := genColumnList(columns)
 	columnPlaceholders := genColumnPlaceholders(len(columns))
-	defaultIndexColumns := findFitIndex(indexColumns)
+	defaultIndexColumns := findFitIndex(originalIndexColumns)
 
 	for i := 0; i < len(data); i += 2 {
 		oldData := data[i]
 		changedData := data[i+1]
+		oriOldData := originalData[i]
 
 		if len(oldData) != len(changedData) {
 			return nil, nil, nil, errors.Errorf("update data mismatch in length: %d (columns) vs %d (data)", len(oldData), len(changedData))
@@ -139,9 +140,13 @@ func genUpdateSQLs(schema string, table string, data [][]interface{}, columns []
 		for i := range changedData {
 			changedValues = append(changedValues, castUnsigned(changedData[i], columns[i].unsigned, columns[i].tp))
 		}
+		oriOldValues := make([]interface{}, 0, len(oriOldData))
+		for i := range oriOldData {
+			oriOldValues = append(oriOldValues, castUnsigned(oriOldData[i], originalColumns[i].unsigned, originalColumns[i].tp))
+		}
 
 		if len(defaultIndexColumns) == 0 {
-			defaultIndexColumns = getAvailableIndexColumn(indexColumns, oldValues)
+			defaultIndexColumns = getAvailableIndexColumn(originalIndexColumns, oriOldValues)
 		}
 
 		ks := genMultipleKeys(columns, oldValues, indexColumns)
@@ -149,7 +154,7 @@ func genUpdateSQLs(schema string, table string, data [][]interface{}, columns []
 
 		if safeMode {
 			// generate delete sql from old data
-			sql, value := genDeleteSQL(schema, table, oldValues, columns, defaultIndexColumns)
+			sql, value := genDeleteSQL(schema, table, oriOldValues, originalColumns, defaultIndexColumns)
 			sqls = append(sqls, sql)
 			values = append(values, value)
 			keys = append(keys, ks)
@@ -177,9 +182,9 @@ func genUpdateSQLs(schema string, table string, data [][]interface{}, columns []
 		kvs := genKVs(updateColumns)
 		value = append(value, updateValues...)
 
-		whereColumns, whereValues := columns, oldValues
+		whereColumns, whereValues := originalColumns, oriOldValues
 		if len(defaultIndexColumns) > 0 {
-			whereColumns, whereValues = getColumnData(columns, defaultIndexColumns, oldValues)
+			whereColumns, whereValues = getColumnData(originalColumns, defaultIndexColumns, oriOldValues)
 		}
 
 		where := genWhere(whereColumns, whereValues)
