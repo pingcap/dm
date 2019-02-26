@@ -19,7 +19,6 @@ package event
 import (
 	"bytes"
 	"encoding/binary"
-	"hash/crc32"
 
 	"github.com/pingcap/errors"
 	gmysql "github.com/siddontang/go-mysql/mysql"
@@ -149,34 +148,10 @@ func GenFormatDescriptionEvent(timestamp uint32, serverID uint32, latestPos uint
 		return nil, errors.Annotatef(err, "write checksum algorithm % X", replication.BINLOG_CHECKSUM_ALG_CRC32)
 	}
 
-	eventSize := uint32(eventHeaderLen) + uint32(payload.Len()) + crc32Len
-	logPos := latestPos + eventSize
-	header, headerData, err := GenEventHeader(timestamp, replication.FORMAT_DESCRIPTION_EVENT, serverID, eventSize, logPos, flags)
-	if err != nil {
-		return nil, errors.Annotatef(err, "generate event header")
-	}
-
 	buf := new(bytes.Buffer)
-	err = combineHeaderPayload(buf, headerData, nil, payload.Bytes())
-	if err != nil {
-		return nil, errors.Annotatef(err, "combine header and payload")
-	}
-
-	// CRC32 checksum, 4 bytes
-	checksum := crc32.ChecksumIEEE(buf.Bytes())
-	err = binary.Write(buf, binary.LittleEndian, checksum)
-	if err != nil {
-		return nil, errors.Annotatef(err, "write CRC32 % X", checksum)
-	}
-
-	// decode event
 	event := &replication.FormatDescriptionEvent{}
-	err = event.Decode(buf.Bytes()[eventHeaderLen:]) // checksum also needed
-	if err != nil {
-		return nil, errors.Annotatef(err, "decode % X", buf.Bytes())
-	}
-
-	return &replication.BinlogEvent{RawData: buf.Bytes(), Header: header, Event: event}, nil
+	ev, err := assembleEvent(buf, event, true, replication.FORMAT_DESCRIPTION_EVENT, timestamp, serverID, latestPos, flags, nil, payload.Bytes())
+	return ev, errors.Trace(err)
 }
 
 // GenPreviousGTIDsEvent generates a PreviousGTIDsEvent.
@@ -198,26 +173,11 @@ func GenPreviousGTIDsEvent(timestamp uint32, serverID uint32, latestPos uint32, 
 	// event payload, GTID set encoded in it
 	payload := origin.Encode()
 
-	eventSize := uint32(eventHeaderLen) + uint32(len(payload)) + crc32Len
-	logPos := latestPos + eventSize
-	_, headerData, err := GenEventHeader(timestamp, replication.PREVIOUS_GTIDS_EVENT, serverID, eventSize, logPos, flags)
-	if err != nil {
-		return nil, errors.Annotatef(err, "generate event header")
-	}
-
 	buf := new(bytes.Buffer)
-	err = combineHeaderPayload(buf, headerData, nil, payload)
+	_, err := assembleEvent(buf, nil, false, replication.PREVIOUS_GTIDS_EVENT, timestamp, serverID, latestPos, flags, nil, payload)
 	if err != nil {
-		return nil, errors.Annotatef(err, "combine header and payload")
+		return nil, errors.Trace(err)
 	}
-
-	// CRC32 checksum, 4 bytes
-	checksum := crc32.ChecksumIEEE(buf.Bytes())
-	err = binary.Write(buf, binary.LittleEndian, checksum)
-	if err != nil {
-		return nil, errors.Annotatef(err, "write CRC32 % X", checksum)
-	}
-
 	return buf.Bytes(), nil
 }
 
@@ -269,34 +229,10 @@ func GenGTIDEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uin
 		return nil, errors.Annotatef(err, "write sequence number %d", sequenceNumber)
 	}
 
-	eventSize := uint32(eventHeaderLen) + uint32(payload.Len()) + crc32Len
-	logPos := latestPos + eventSize
-	header, headerData, err := GenEventHeader(timestamp, replication.GTID_EVENT, serverID, eventSize, logPos, flags)
-	if err != nil {
-		return nil, errors.Annotatef(err, "generate event header")
-	}
-
 	buf := new(bytes.Buffer)
-	err = combineHeaderPayload(buf, headerData, nil, payload.Bytes())
-	if err != nil {
-		return nil, errors.Annotatef(err, "combine header and payload")
-	}
-
-	// decode event, before write checksum
 	event := &replication.GTIDEvent{}
-	err = event.Decode(buf.Bytes()[eventHeaderLen:])
-	if err != nil {
-		return nil, errors.Annotatef(err, "decode % X", buf.Bytes())
-	}
-
-	// CRC32 checksum, 4 bytes
-	checksum := crc32.ChecksumIEEE(buf.Bytes())
-	err = binary.Write(buf, binary.LittleEndian, checksum)
-	if err != nil {
-		return nil, errors.Annotatef(err, "write CRC32 % X", checksum)
-	}
-
-	return &replication.BinlogEvent{RawData: buf.Bytes(), Header: header, Event: event}, nil
+	ev, err := assembleEvent(buf, event, false, replication.GTID_EVENT, timestamp, serverID, latestPos, flags, nil, payload.Bytes())
+	return ev, errors.Trace(err)
 }
 
 // GenQueryEvent generates a QueryEvent.
@@ -375,34 +311,10 @@ func GenQueryEvent(timestamp uint32, serverID uint32, latestPos uint32, flags ui
 		return nil, errors.Annotatef(err, "write query % X", query)
 	}
 
-	eventSize := uint32(eventHeaderLen) + uint32(postHeader.Len()) + uint32(payload.Len()) + crc32Len
-	logPos := latestPos + eventSize
-	header, headerData, err := GenEventHeader(timestamp, replication.QUERY_EVENT, serverID, eventSize, logPos, flags)
-	if err != nil {
-		return nil, errors.Annotatef(err, "generate event header")
-	}
-
 	buf := new(bytes.Buffer)
-	err = combineHeaderPayload(buf, headerData, postHeader.Bytes(), payload.Bytes())
-	if err != nil {
-		return nil, errors.Annotatef(err, "combine header, post-header and payload")
-	}
-
-	// decode event, before write checksum
 	event := &replication.QueryEvent{}
-	err = event.Decode(buf.Bytes()[eventHeaderLen:])
-	if err != nil {
-		return nil, errors.Annotatef(err, "decode % X", buf.Bytes())
-	}
-
-	// CRC32 checksum, 4 bytes
-	checksum := crc32.ChecksumIEEE(buf.Bytes())
-	err = binary.Write(buf, binary.LittleEndian, checksum)
-	if err != nil {
-		return nil, errors.Annotatef(err, "write CRC32 % X", checksum)
-	}
-
-	return &replication.BinlogEvent{RawData: buf.Bytes(), Header: header, Event: event}, nil
+	ev, err := assembleEvent(buf, event, false, replication.QUERY_EVENT, timestamp, serverID, latestPos, flags, postHeader.Bytes(), payload.Bytes())
+	return ev, errors.Trace(err)
 }
 
 // GenTableMapEvent generates a TableMapEvent.
@@ -509,24 +421,10 @@ func GenTableMapEvent(timestamp uint32, serverID uint32, latestPos uint32, flags
 		return nil, errors.Annotatef(err, "write NULL-bitmask % X", bitMask)
 	}
 
-	eventSize := uint32(eventHeaderLen) + uint32(postHeader.Len()) + uint32(payload.Len()) + crc32Len
-	logPos := latestPos + eventSize
-	_, headerData, err := GenEventHeader(timestamp, replication.TABLE_MAP_EVENT, serverID, eventSize, logPos, flags)
-	if err != nil {
-		return nil, errors.Annotatef(err, "generate event header")
-	}
-
 	buf := new(bytes.Buffer)
-	err = combineHeaderPayload(buf, headerData, postHeader.Bytes(), payload.Bytes())
+	_, err = assembleEvent(buf, nil, false, replication.TABLE_MAP_EVENT, timestamp, serverID, latestPos, flags, postHeader.Bytes(), payload.Bytes())
 	if err != nil {
-		return nil, errors.Annotatef(err, "combine header, post-header and payload")
-	}
-
-	// CRC32 checksum, 4 bytes
-	checksum := crc32.ChecksumIEEE(buf.Bytes())
-	err = binary.Write(buf, binary.LittleEndian, checksum)
-	if err != nil {
-		return nil, errors.Annotatef(err, "write CRC32 % X", checksum)
+		return nil, errors.Annotatef(err, "combine event data")
 	}
 
 	// sad, in order to Decode a TableMapEvent, we need to set `tableIDSize` first, but it's a private field.
@@ -692,24 +590,10 @@ func GenRowsEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uin
 		}
 	}
 
-	eventSize := uint32(eventHeaderLen) + uint32(postHeader.Len()) + uint32(payload.Len()) + crc32Len
-	logPos := latestPos + eventSize
-	_, headerData, err := GenEventHeader(timestamp, eventType, serverID, eventSize, logPos, flags)
-	if err != nil {
-		return nil, errors.Annotatef(err, "generate event header")
-	}
-
 	buf := new(bytes.Buffer)
-	err = combineHeaderPayload(buf, headerData, postHeader.Bytes(), payload.Bytes())
+	_, err = assembleEvent(buf, nil, false, eventType, timestamp, serverID, latestPos, flags, postHeader.Bytes(), payload.Bytes())
 	if err != nil {
-		return nil, errors.Annotatef(err, "combine header, post-header and payload")
-	}
-
-	// CRC32 checksum, 4 bytes
-	checksum := crc32.ChecksumIEEE(buf.Bytes())
-	err = binary.Write(buf, binary.LittleEndian, checksum)
-	if err != nil {
-		return nil, errors.Annotatef(err, "write CRC32 % X", checksum)
+		return nil, errors.Trace(err)
 	}
 
 	// in order to Decode RowsEvent, we need to set `tableIDSize` and `tables` first, but they are private fields.
@@ -780,34 +664,10 @@ func GenXIDEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint
 		return nil, errors.Annotatef(err, "write XID %d", xid)
 	}
 
-	eventSize := uint32(eventHeaderLen) + uint32(payload.Len()) + crc32Len
-	logPos := latestPos + eventSize
-	header, headerData, err := GenEventHeader(timestamp, replication.XID_EVENT, serverID, eventSize, logPos, flags)
-	if err != nil {
-		return nil, errors.Annotatef(err, "generate event header")
-	}
-
 	buf := new(bytes.Buffer)
-	err = combineHeaderPayload(buf, headerData, nil, payload.Bytes())
-	if err != nil {
-		return nil, errors.Annotatef(err, "combine header, post-header and payload")
-	}
-
-	// decode event, before write checksum
 	event := &replication.XIDEvent{}
-	err = event.Decode(buf.Bytes()[eventHeaderLen:])
-	if err != nil {
-		return nil, errors.Annotatef(err, "decode % X", buf.Bytes())
-	}
-
-	// CRC32 checksum, 4 bytes
-	checksum := crc32.ChecksumIEEE(buf.Bytes())
-	err = binary.Write(buf, binary.LittleEndian, checksum)
-	if err != nil {
-		return nil, errors.Annotatef(err, "write CRC32 % X", checksum)
-	}
-
-	return &replication.BinlogEvent{RawData: buf.Bytes(), Header: header, Event: event}, nil
+	ev, err := assembleEvent(buf, event, false, replication.XID_EVENT, timestamp, serverID, latestPos, flags, nil, payload.Bytes())
+	return ev, errors.Trace(err)
 }
 
 // GenMariaDBGTIDListEvent generates a MariadbGTIDListEvent.
@@ -853,34 +713,10 @@ func GenMariaDBGTIDListEvent(timestamp uint32, serverID uint32, latestPos uint32
 		}
 	}
 
-	eventSize := uint32(eventHeaderLen) + uint32(payload.Len()) + crc32Len
-	logPos := latestPos + eventSize
-	header, headerData, err := GenEventHeader(timestamp, replication.MARIADB_GTID_LIST_EVENT, serverID, eventSize, logPos, flags)
-	if err != nil {
-		return nil, errors.Annotatef(err, "generate event header")
-	}
-
 	buf := new(bytes.Buffer)
-	err = combineHeaderPayload(buf, headerData, nil, payload.Bytes())
-	if err != nil {
-		return nil, errors.Annotatef(err, "combine header, post-header and payload")
-	}
-
-	// decode event, before write checksum
 	event := &replication.MariadbGTIDListEvent{}
-	err = event.Decode(buf.Bytes()[eventHeaderLen:])
-	if err != nil {
-		return nil, errors.Annotatef(err, "decode % X", buf.Bytes())
-	}
-
-	// CRC32 checksum, 4 bytes
-	checksum := crc32.ChecksumIEEE(buf.Bytes())
-	err = binary.Write(buf, binary.LittleEndian, checksum)
-	if err != nil {
-		return nil, errors.Annotatef(err, "write CRC32 % X", checksum)
-	}
-
-	return &replication.BinlogEvent{RawData: buf.Bytes(), Header: header, Event: event}, nil
+	ev, err := assembleEvent(buf, event, false, replication.MARIADB_GTID_LIST_EVENT, timestamp, serverID, latestPos, flags, nil, payload.Bytes())
+	return ev, errors.Trace(err)
 }
 
 // GenMariaDBGTIDEvent generates a MariadbGTIDEvent.
@@ -915,32 +751,8 @@ func GenMariaDBGTIDEvent(timestamp uint32, serverID uint32, latestPos uint32, fl
 	}
 	payload.Truncate(payload.Len() - 2) // len(uint64) - 2 == 6 bytes
 
-	eventSize := uint32(eventHeaderLen) + uint32(payload.Len()) + crc32Len
-	logPos := latestPos + eventSize
-	header, headerData, err := GenEventHeader(timestamp, replication.MARIADB_GTID_EVENT, serverID, eventSize, logPos, flags)
-	if err != nil {
-		return nil, errors.Annotatef(err, "generate event header")
-	}
-
 	buf := new(bytes.Buffer)
-	err = combineHeaderPayload(buf, headerData, nil, payload.Bytes())
-	if err != nil {
-		return nil, errors.Annotatef(err, "combine header, post-header and payload")
-	}
-
-	// decode event, before write checksum
 	event := &replication.MariadbGTIDEvent{}
-	err = event.Decode(buf.Bytes()[eventHeaderLen:])
-	if err != nil {
-		return nil, errors.Annotatef(err, "decode % X", buf.Bytes())
-	}
-
-	// CRC32 checksum, 4 bytes
-	checksum := crc32.ChecksumIEEE(buf.Bytes())
-	err = binary.Write(buf, binary.LittleEndian, checksum)
-	if err != nil {
-		return nil, errors.Annotatef(err, "write CRC32 % X", checksum)
-	}
-
-	return &replication.BinlogEvent{RawData: buf.Bytes(), Header: header, Event: event}, nil
+	ev, err := assembleEvent(buf, event, false, replication.MARIADB_GTID_EVENT, timestamp, serverID, latestPos, flags, nil, payload.Bytes())
+	return ev, errors.Trace(err)
 }

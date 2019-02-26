@@ -19,11 +19,13 @@ package event
 import (
 	"bytes"
 	"encoding/binary"
+	"hash/crc32"
 	"math"
 	"reflect"
 
 	"github.com/pingcap/errors"
 	gmysql "github.com/siddontang/go-mysql/mysql"
+	"github.com/siddontang/go-mysql/replication"
 )
 
 var (
@@ -112,6 +114,44 @@ func fullBytes(n int) []byte {
 		buf.WriteByte(0xff)
 	}
 	return buf.Bytes()
+}
+
+// assembleEvent assembles header fields, postHeader and payload together to an event.
+func assembleEvent(buf *bytes.Buffer, event replication.Event, decodeWithChecksum bool, eventType replication.EventType, timestamp uint32, serverID uint32, latestPos uint32, flags uint16, postHeader, payload []byte) (*replication.BinlogEvent, error) {
+	eventSize := uint32(eventHeaderLen) + uint32(len(postHeader)) + uint32(len(payload)) + crc32Len
+	logPos := latestPos + eventSize
+	header, headerData, err := GenEventHeader(timestamp, eventType, serverID, eventSize, logPos, flags)
+	if err != nil {
+		return nil, errors.Annotatef(err, "generate event header")
+	}
+
+	err = combineHeaderPayload(buf, headerData, postHeader, payload)
+	if err != nil {
+		return nil, errors.Annotatef(err, "combine header, post-header and payload")
+	}
+
+	// CRC32 checksum, 4 bytes
+	checksum := crc32.ChecksumIEEE(buf.Bytes())
+	err = binary.Write(buf, binary.LittleEndian, checksum)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write CRC32 % X", checksum)
+	}
+
+	if event == nil {
+		return nil, nil // not need to decode the event
+	}
+
+	// decode event, some implementations of `Decode` also need checksum
+	var endIdx = buf.Len()
+	if !decodeWithChecksum {
+		endIdx -= int(crc32Len)
+	}
+	err = event.Decode(buf.Bytes()[eventHeaderLen:endIdx])
+	if err != nil {
+		return nil, errors.Annotatef(err, "decode % X", buf.Bytes())
+	}
+
+	return &replication.BinlogEvent{RawData: buf.Bytes(), Header: header, Event: event}, nil
 }
 
 // combineHeaderPayload combines header, postHeader and payload together.
