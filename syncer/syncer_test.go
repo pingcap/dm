@@ -862,7 +862,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 					c.Assert(sqls[0], Equals, testCase.expected[idx])
 					c.Assert(args[0], DeepEquals, testCase.args[idx])
 				case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
-					sqls, _, args, err = genUpdateSQLs(table.schema, table.name, rowData, tblColumns, tblIndexColumns, false)
+					sqls, _, args, err = genUpdateSQLs(table.schema, table.name, rowData, rowData, tblColumns, tblColumns, tblIndexColumns, tblIndexColumns, false)
 					c.Assert(err, IsNil)
 					c.Assert(sqls[0], Equals, testCase.expected[idx])
 					c.Assert(args[0], DeepEquals, testCase.args[idx])
