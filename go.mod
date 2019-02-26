@@ -14,7 +14,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/pingcap/check v0.0.0-20190102082844-67f458068fc8
 	github.com/pingcap/errors v0.11.0
-	github.com/pingcap/parser v0.0.0-20190219084020-362712b5ab93
+	github.com/pingcap/parser v0.0.0-20190225125525-01444ee2a9c2
 	github.com/pingcap/tidb v0.0.0-20190219092241-45ee2058969c
 	github.com/pingcap/tidb-tools v2.1.3-0.20190218062145-515a74c8fb26+incompatible
 	github.com/prometheus/client_golang v0.9.1
