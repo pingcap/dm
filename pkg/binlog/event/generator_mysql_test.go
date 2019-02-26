@@ -19,6 +19,7 @@ package event
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -552,8 +553,10 @@ func (t *testGeneratorMySQLSuite) TestGenRowsEvent(c *C) {
 
 	// more column types
 	rows = make([][]interface{}, 0, 1)
-	rows = append(rows, []interface{}{int32(1), int8(2), int16(3), int32(4), int64(5)})
-	columnType = []byte{gmysql.MYSQL_TYPE_LONG, gmysql.MYSQL_TYPE_TINY, gmysql.MYSQL_TYPE_SHORT, gmysql.MYSQL_TYPE_INT24, gmysql.MYSQL_TYPE_LONGLONG}
+	rows = append(rows, []interface{}{int32(1), int8(2), int16(3), int32(4), int64(5),
+		float32(1.23), float64(4.56), "string with type STRING"})
+	columnType = []byte{gmysql.MYSQL_TYPE_LONG, gmysql.MYSQL_TYPE_TINY, gmysql.MYSQL_TYPE_SHORT, gmysql.MYSQL_TYPE_INT24, gmysql.MYSQL_TYPE_LONGLONG,
+		gmysql.MYSQL_TYPE_FLOAT, gmysql.MYSQL_TYPE_DOUBLE, gmysql.MYSQL_TYPE_STRING}
 	rowsEv, err = GenRowsEvent(timestamp, serverID, latestPos, flags, eventType, tableID, rowsFlag, rows, columnType)
 	c.Assert(err, IsNil)
 	c.Assert(rowsEv, NotNil)
@@ -569,4 +572,22 @@ func (t *testGeneratorMySQLSuite) TestGenRowsEvent(c *C) {
 	rowsEv, err = GenRowsEvent(timestamp, serverID, latestPos, flags, eventType, tableID, rowsFlag, rows, columnType)
 	c.Assert(err, NotNil)
 	c.Assert(rowsEv, IsNil)
+
+	// NotSupported column type
+	rows = make([][]interface{}, 0, 1)
+	rows = append(rows, []interface{}{int32(1)})
+	unsupportedTypes := []byte{gmysql.MYSQL_TYPE_VARCHAR, gmysql.MYSQL_TYPE_VAR_STRING,
+		gmysql.MYSQL_TYPE_NEWDECIMAL, gmysql.MYSQL_TYPE_BIT,
+		gmysql.MYSQL_TYPE_TIMESTAMP, gmysql.MYSQL_TYPE_TIMESTAMP2,
+		gmysql.MYSQL_TYPE_DATETIME, gmysql.MYSQL_TYPE_DATETIME2,
+		gmysql.MYSQL_TYPE_TIME, gmysql.MYSQL_TYPE_TIME2,
+		gmysql.MYSQL_TYPE_YEAR, gmysql.MYSQL_TYPE_ENUM, gmysql.MYSQL_TYPE_SET,
+		gmysql.MYSQL_TYPE_BLOB, gmysql.MYSQL_TYPE_JSON, gmysql.MYSQL_TYPE_GEOMETRY}
+	for i := range unsupportedTypes {
+		columnType = unsupportedTypes[i : i+1]
+		rowsEv, err = GenRowsEvent(timestamp, serverID, latestPos, flags, eventType, tableID, rowsFlag, rows, columnType)
+		c.Assert(err, NotNil)
+		c.Assert(strings.Contains(err.Error(), "not supported"), IsTrue)
+		c.Assert(rowsEv, IsNil)
+	}
 }

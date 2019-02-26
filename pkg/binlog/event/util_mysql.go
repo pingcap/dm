@@ -19,10 +19,15 @@ package event
 import (
 	"bytes"
 	"encoding/binary"
+	"math"
 	"reflect"
 
 	"github.com/pingcap/errors"
 	gmysql "github.com/siddontang/go-mysql/mysql"
+)
+
+var (
+	columnTypeMismatchErrFmt = "value %+v (type %v) with column type %v"
 )
 
 // encodeTableMapColumnMeta generates the column_meta_def according to the column_type_def.
@@ -109,42 +114,6 @@ func fullBytes(n int) []byte {
 	return buf.Bytes()
 }
 
-// encodeColumnValue encodes value to bytes
-// ref: https://github.com/siddontang/go-mysql/blob/88e9cd7f6643b246b4dcc0e3206e9a169dd0ac96/replication/row_event.go#L368
-// TODO: add more tp support
-func encodeColumnValue(v interface{}, tp byte, meta uint16) ([]byte, error) {
-	var (
-		buf = new(bytes.Buffer)
-		err error
-	)
-	switch tp {
-	case gmysql.MYSQL_TYPE_NULL:
-		return nil, nil
-	case gmysql.MYSQL_TYPE_LONG:
-		err = writeNumericColumnValue(buf, v, reflect.TypeOf(int32(0)))
-	case gmysql.MYSQL_TYPE_TINY:
-		err = writeNumericColumnValue(buf, v, reflect.TypeOf(int8(0)))
-	case gmysql.MYSQL_TYPE_SHORT:
-		err = writeNumericColumnValue(buf, v, reflect.TypeOf(int16(0)))
-	case gmysql.MYSQL_TYPE_INT24:
-		err = writeNumericColumnValue(buf, v, reflect.TypeOf(int32(0)))
-		if err == nil {
-			buf.Truncate(3)
-		}
-	case gmysql.MYSQL_TYPE_LONGLONG:
-		err = writeNumericColumnValue(buf, v, reflect.TypeOf(int64(0)))
-	}
-	return buf.Bytes(), errors.Annotatef(err, "go-mysql type %d", tp)
-}
-
-// writeNumericColumnValue writes numeric value to bytes buffer.
-func writeNumericColumnValue(buf *bytes.Buffer, value interface{}, valueType reflect.Type) error {
-	if reflect.TypeOf(value) != valueType {
-		return errors.NotValidf("value %+v (type %v) with column type %v", value, reflect.TypeOf(value), valueType)
-	}
-	return errors.Trace(binary.Write(buf, binary.LittleEndian, value))
-}
-
 // combineHeaderPayload combines header, postHeader and payload together.
 func combineHeaderPayload(buf *bytes.Buffer, header, postHeader, payload []byte) error {
 	err := binary.Write(buf, binary.LittleEndian, header)
@@ -165,4 +134,93 @@ func combineHeaderPayload(buf *bytes.Buffer, header, postHeader, payload []byte)
 	}
 
 	return nil
+}
+
+// encodeColumnValue encodes value to bytes
+// ref: https://github.com/siddontang/go-mysql/blob/88e9cd7f6643b246b4dcc0e3206e9a169dd0ac96/replication/row_event.go#L368
+// NOTE: we do not generate meaningful `meta` yet.
+func encodeColumnValue(v interface{}, tp byte, meta uint16) ([]byte, error) {
+	var (
+		buf = new(bytes.Buffer)
+		err error
+	)
+	switch tp {
+	case gmysql.MYSQL_TYPE_NULL:
+		return nil, nil
+	case gmysql.MYSQL_TYPE_LONG:
+		err = writeIntegerColumnValue(buf, v, reflect.TypeOf(int32(0)))
+	case gmysql.MYSQL_TYPE_TINY:
+		err = writeIntegerColumnValue(buf, v, reflect.TypeOf(int8(0)))
+	case gmysql.MYSQL_TYPE_SHORT:
+		err = writeIntegerColumnValue(buf, v, reflect.TypeOf(int16(0)))
+	case gmysql.MYSQL_TYPE_INT24:
+		err = writeIntegerColumnValue(buf, v, reflect.TypeOf(int32(0)))
+		if err == nil {
+			buf.Truncate(3)
+		}
+	case gmysql.MYSQL_TYPE_LONGLONG:
+		err = writeIntegerColumnValue(buf, v, reflect.TypeOf(int64(0)))
+	case gmysql.MYSQL_TYPE_FLOAT:
+		value, ok := v.(float32)
+		if !ok {
+			err = errors.NotValidf(columnTypeMismatchErrFmt, v, reflect.TypeOf(v), reflect.TypeOf(float32(0)))
+		} else {
+			bits := math.Float32bits(value)
+			err = writeIntegerColumnValue(buf, bits, reflect.TypeOf(uint32(0)))
+		}
+	case gmysql.MYSQL_TYPE_DOUBLE:
+		value, ok := v.(float64)
+		if !ok {
+			err = errors.NotValidf(columnTypeMismatchErrFmt, v, reflect.TypeOf(v), reflect.TypeOf(float64(0)))
+		} else {
+			bits := math.Float64bits(value)
+			err = writeIntegerColumnValue(buf, bits, reflect.TypeOf(uint64(0)))
+		}
+	case gmysql.MYSQL_TYPE_STRING:
+		err = writeStringColumnValue(buf, v)
+	case gmysql.MYSQL_TYPE_VARCHAR, gmysql.MYSQL_TYPE_VAR_STRING,
+		gmysql.MYSQL_TYPE_NEWDECIMAL, gmysql.MYSQL_TYPE_BIT,
+		gmysql.MYSQL_TYPE_TIMESTAMP, gmysql.MYSQL_TYPE_TIMESTAMP2,
+		gmysql.MYSQL_TYPE_DATETIME, gmysql.MYSQL_TYPE_DATETIME2,
+		gmysql.MYSQL_TYPE_TIME, gmysql.MYSQL_TYPE_TIME2,
+		gmysql.MYSQL_TYPE_YEAR, gmysql.MYSQL_TYPE_ENUM, gmysql.MYSQL_TYPE_SET,
+		gmysql.MYSQL_TYPE_BLOB, gmysql.MYSQL_TYPE_JSON, gmysql.MYSQL_TYPE_GEOMETRY:
+		// this generator is used for testing, so some types supporting can be added later.
+		err = errors.NotSupportedf("go-mysql type %d in event generator", tp)
+	default:
+		err = errors.NotValidf("go-mysql type %d in event generator", tp)
+	}
+	return buf.Bytes(), errors.Annotatef(err, "go-mysql type %d", tp)
+}
+
+// writeIntegerColumnValue writes integer value to bytes buffer.
+func writeIntegerColumnValue(buf *bytes.Buffer, value interface{}, valueType reflect.Type) error {
+	if reflect.TypeOf(value) != valueType {
+		return errors.NotValidf(columnTypeMismatchErrFmt, value, reflect.TypeOf(value), valueType)
+	}
+	return errors.Trace(binary.Write(buf, binary.LittleEndian, value))
+}
+
+// writeStringColumnValue writes string value to bytes buffer.
+func writeStringColumnValue(buf *bytes.Buffer, value interface{}) error {
+	str, ok := value.(string)
+	if !ok {
+		return errors.NotValidf(columnTypeMismatchErrFmt, value, reflect.TypeOf(value), reflect.TypeOf(""))
+	}
+	var (
+		err    error
+		length = len(str)
+	)
+	if length < 256 {
+		err = binary.Write(buf, binary.LittleEndian, uint8(length))
+		if err == nil {
+			err = binary.Write(buf, binary.LittleEndian, []byte(str))
+		}
+	} else {
+		err = binary.Write(buf, binary.LittleEndian, uint16(length))
+		if err != nil {
+			err = binary.Write(buf, binary.LittleEndian, []byte(str))
+		}
+	}
+	return errors.Trace(err)
 }
