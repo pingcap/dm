@@ -741,6 +741,14 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 		if len(jobs) == 0 {
 			return nil
 		}
+		if s.tracer.Enable() {
+			for _, job := range jobs {
+				_, err := s.tracer.CollectSyncerJobEvent(job.traceID, int32(job.tp), job.pos, job.currentPos, queueBucket, job.sql, job.ddls)
+				if err != nil {
+					return errors.Trace(err)
+				}
+			}
+		}
 		errCtx := db.executeSQLJob(jobs, s.cfg.MaxRetry)
 		var err error
 		if errCtx != nil {
@@ -938,6 +946,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		savedGlobalLastPos  mysql.Position
 		latestOp            opType // latest job operation tp
 		eventTimeoutCounter time.Duration
+		traceSource         = fmt.Sprintf("%s.syncer.%s", s.cfg.SourceID, s.cfg.Name)
+		traceID             string
 	)
 
 	closeShardingSyncer := func() {
@@ -1089,6 +1099,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 			latestOp = rotate
 
+			if s.tracer.Enable() {
+				_, err := s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
+				if err != nil {
+					return errors.Trace(err)
+				}
+			}
+
 			log.Infof("rotate binlog to %v", currentPos)
 		case *replication.RowsEvent:
 			originSchema, originTable := string(ev.Table.Schema), string(ev.Table.Table)
@@ -1185,6 +1202,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				binlogEvent.WithLabelValues("write_rows", s.cfg.Name).Observe(time.Since(startTime).Seconds())
 				latestOp = insert
 
+				if s.tracer.Enable() {
+					traceID, err = s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
+					if err != nil {
+						return errors.Trace(err)
+					}
+				}
+
 				for i := range sqls {
 					var arg []interface{}
 					var key []string
@@ -1194,7 +1218,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					if keys != nil {
 						key = keys[i]
 					}
-					err = s.commitJob(insert, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil)
+					err = s.commitJob(insert, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil, traceID)
 					if err != nil {
 						return errors.Trace(err)
 					}
@@ -1209,6 +1233,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				binlogEvent.WithLabelValues("update_rows", s.cfg.Name).Observe(time.Since(startTime).Seconds())
 				latestOp = update
 
+				if s.tracer.Enable() {
+					traceID, err = s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
+					if err != nil {
+						return errors.Trace(err)
+					}
+				}
+
 				for i := range sqls {
 					var arg []interface{}
 					var key []string
@@ -1219,7 +1250,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 						key = keys[i]
 					}
 
-					err = s.commitJob(update, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil)
+					err = s.commitJob(update, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil, traceID)
 					if err != nil {
 						return errors.Trace(err)
 					}
@@ -1234,6 +1265,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				binlogEvent.WithLabelValues("delete_rows", s.cfg.Name).Observe(time.Since(startTime).Seconds())
 				latestOp = del
 
+				if s.tracer.Enable() {
+					traceID, err = s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
+					if err != nil {
+						return errors.Trace(err)
+					}
+				}
+
 				for i := range sqls {
 					var arg []interface{}
 					var key []string
@@ -1244,7 +1282,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 						key = keys[i]
 					}
 
-					err = s.commitJob(del, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil)
+					err = s.commitJob(del, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil, traceID)
 					if err != nil {
 						return errors.Trace(err)
 					}
@@ -1401,6 +1439,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				continue
 			}
 
+			if s.tracer.Enable() {
+				traceID, err = s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
+				if err != nil {
+					return errors.Trace(err)
+				}
+			}
+
 			if !s.cfg.IsSharding {
 				log.Infof("[start] execute need handled ddls %v in position %v", needHandleDDLs, currentPos)
 				// try apply SQL operator before addJob. now, one query event only has one DDL job, if updating to multi DDL jobs, refine this.
@@ -1413,6 +1458,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					log.Infof("[convert] execute need handled ddls converted to %v in position %s by sql operator", needHandleDDLs, currentPos)
 				}
 				job := newDDLJob(nil, needHandleDDLs, lastPos, currentPos, nil, nil)
+				job.setTraceID(traceID)
 				err = s.addJob(job)
 				if err != nil {
 					return errors.Trace(err)
@@ -1547,6 +1593,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				log.Infof("[convert] execute need handled ddls converted to %v in position %s by sql operator", needHandleDDLs, currentPos)
 			}
 			job := newDDLJob(ddlInfo, needHandleDDLs, lastPos, currentPos, nil, ddlExecItem)
+			job.setTraceID(traceID)
 			err = s.addJob(job)
 			if err != nil {
 				return errors.Trace(err)
@@ -1576,14 +1623,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			lastPos.Pos = e.Header.LogPos // update lastPos
 
 			job := newXIDJob(currentPos, currentPos, nil)
+			job.setTraceID(traceID)
 			err = s.addJob(job)
-			if err != nil {
-				return errors.Trace(err)
-			}
-		}
-		if s.tracer.Enable() {
-			source := fmt.Sprintf("%s.syncer.%s", s.cfg.SourceID, s.cfg.Name)
-			err := s.tracer.CollectSyncerBinlogEvent(source, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -1591,12 +1632,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	}
 }
 
-func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, retry bool, pos, cmdPos mysql.Position, gs gtid.Set) error {
+func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, retry bool, pos, cmdPos mysql.Position, gs gtid.Set, traceID string) error {
 	key, err := s.resolveCasuality(keys)
 	if err != nil {
 		return errors.Errorf("resolve karam error %v", err)
 	}
 	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, pos, cmdPos, gs)
+	job.setTraceID(traceID)
 	err = s.addJob(job)
 	return errors.Trace(err)
 }

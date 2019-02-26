@@ -73,11 +73,16 @@ type job struct {
 	gtidSet      gtid.Set
 	ddlExecItem  *DDLExecItem
 	ddls         []string
+	traceID      string
 }
 
 func (j *job) String() string {
 	// only output some important information, maybe useful in execution.
 	return fmt.Sprintf("sql: %s, args: %v, key: %s, last_pos: %s, current_pos: %s, gtid:%v", j.sql, j.args, j.key, j.pos, j.currentPos, j.gtidSet)
+}
+
+func (j *job) setTraceID(traceID string) {
+	j.traceID = traceID
 }
 
 func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, pos, cmdPos mysql.Position, currentGtidSet gtid.Set) *job {

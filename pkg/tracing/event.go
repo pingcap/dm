@@ -25,6 +25,7 @@ type EventType byte
 const (
 	EventNull EventType = iota
 	EventSyncerBinlog
+	EventSyncerJob
 	EventFlush // used to force upload tracing event
 )
 

@@ -29,3 +29,7 @@ message CommonUploadResponse {
 message UploadSyncerBinlogEventRequest {
     repeated SyncerBinlogEvent events = 1;
 }
+
+message UploadSyncerJobRequest {
+    repeated SyncerJobEvent events = 1;
+}

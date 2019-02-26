@@ -20,21 +20,12 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
-func (t *Tracer) CollectSyncerBinlogEvent(source string, safeMode, tryReSync bool, globalPos, currentPos mysql.Position, eventType, opType int32) error {
-	file, line, err := GetTraceCode(2)
+// CollectSyncerBinlogEvent collects syncer binlog event and returns the trace event traceID
+func (t *Tracer) CollectSyncerBinlogEvent(source string, safeMode, tryReSync bool, globalPos, currentPos mysql.Position, eventType, opType int32) (string, error) {
+	base, err := t.collectBaseEvent(source, "", pb.TraceType_BinlogEvent)
 	if err != nil {
-		return errors.Trace(err)
+		return "", errors.Trace(err)
 	}
-	tso := t.GetTSO()
-	traceID := t.GetTraceID(source)
-	base := &pb.BaseEvent{
-		Filename: file,
-		Line:     int32(line),
-		Tso:      tso,
-		TraceID:  traceID,
-		Type:     pb.TraceType_BinlogEvent,
-	}
-
 	syncerState := &pb.SyncerState{
 		SafeMode:  safeMode,
 		TryReSync: tryReSync,
@@ -62,5 +53,37 @@ func (t *Tracer) CollectSyncerBinlogEvent(source string, safeMode, tryReSync boo
 	}
 	t.AddJob(job)
 
-	return nil
+	return base.TraceID, nil
+}
+
+// CollectSyncerJobEvent collects syncer job event and returns traceID
+func (t *Tracer) CollectSyncerJobEvent(traceID string, opType int32, pos, currentPos mysql.Position, queueBucket, sql string, ddls []string) (string, error) {
+	base, err := t.collectBaseEvent("", traceID, pb.TraceType_SyncerJob)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	pos2 := &pb.MySQLPosition{
+		Name: pos.Name,
+		Pos:  pos.Pos,
+	}
+	currentPos2 := &pb.MySQLPosition{
+		Name: currentPos.Name,
+		Pos:  currentPos.Pos,
+	}
+	event := &pb.SyncerJobEvent{
+		Base:        base,
+		OpType:      opType,
+		Pos:         pos2,
+		CurrentPos:  currentPos2,
+		Sql:         sql,
+		Ddls:        ddls,
+		QueueBucket: queueBucket,
+	}
+	job := &Job{
+		Tp:    EventSyncerJob,
+		Event: event,
+	}
+	t.AddJob(job)
+
+	return base.TraceID, nil
 }

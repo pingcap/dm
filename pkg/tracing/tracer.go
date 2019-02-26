@@ -225,3 +225,22 @@ func (t *Tracer) AddJob(job *Job) {
 		t.jobs[job.Tp] <- job
 	}
 }
+
+func (t *Tracer) collectBaseEvent(source, traceID string, traceType pb.TraceType) (*pb.BaseEvent, error) {
+	file, line, err := GetTraceCode(3)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	tso := t.GetTSO()
+	if traceID == "" {
+		traceID = t.GetTraceID(source)
+	}
+	return &pb.BaseEvent{
+		Filename: file,
+		Line:     int32(line),
+		Tso:      tso,
+		TraceID:  traceID,
+		Type:     traceType,
+	}, nil
+}

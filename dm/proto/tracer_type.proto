@@ -5,4 +5,5 @@ package pb;
 enum TraceType {
     DummyEvent = 0;
     BinlogEvent = 1;
+    SyncerJob = 2;
 }
