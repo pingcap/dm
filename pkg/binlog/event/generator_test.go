@@ -30,16 +30,16 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 )
 
-var _ = Suite(&testGeneratorMySQLSuite{})
+var _ = Suite(&testGeneratorSuite{})
 
 func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-type testGeneratorMySQLSuite struct {
+type testGeneratorSuite struct {
 }
 
-func (t *testGeneratorMySQLSuite) TestGenEventHeader(c *C) {
+func (t *testGeneratorSuite) TestGenEventHeader(c *C) {
 	var (
 		timestamp        = uint32(time.Now().Unix())
 		eventType        = replication.FORMAT_DESCRIPTION_EVENT
@@ -90,7 +90,7 @@ func (t *testGeneratorMySQLSuite) TestGenEventHeader(c *C) {
 	c.Assert(eh.Flags, Equals, flags)
 }
 
-func (t *testGeneratorMySQLSuite) TestGenFormatDescriptionEvent(c *C) {
+func (t *testGeneratorSuite) TestGenFormatDescriptionEvent(c *C) {
 	var (
 		timestamp        = uint32(time.Now().Unix())
 		serverID  uint32 = 11
@@ -135,7 +135,7 @@ func (t *testGeneratorMySQLSuite) TestGenFormatDescriptionEvent(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (t *testGeneratorMySQLSuite) TestGenPreviousGTIDsEvent(c *C) {
+func (t *testGeneratorSuite) TestGenPreviousGTIDsEvent(c *C) {
 	var (
 		timestamp        = uint32(time.Now().Unix())
 		serverID  uint32 = 11
@@ -230,7 +230,7 @@ func (t *testGeneratorMySQLSuite) TestGenPreviousGTIDsEvent(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (t *testGeneratorMySQLSuite) TestGenGTIDEvent(c *C) {
+func (t *testGeneratorSuite) TestGenGTIDEvent(c *C) {
 	var (
 		timestamp            = uint32(time.Now().Unix())
 		serverID      uint32 = 11
@@ -320,7 +320,7 @@ func (t *testGeneratorMySQLSuite) TestGenGTIDEvent(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (t *testGeneratorMySQLSuite) TestGenQueryEvent(c *C) {
+func (t *testGeneratorSuite) TestGenQueryEvent(c *C) {
 	var (
 		timestamp            = uint32(time.Now().Unix())
 		serverID      uint32 = 11
@@ -389,7 +389,7 @@ func (t *testGeneratorMySQLSuite) TestGenQueryEvent(c *C) {
 	c.Assert(queryEvBody.StatusVars, DeepEquals, statusVars)
 }
 
-func (t *testGeneratorMySQLSuite) TestGenTableMapEvent(c *C) {
+func (t *testGeneratorSuite) TestGenTableMapEvent(c *C) {
 	var (
 		timestamp         = uint32(time.Now().Unix())
 		serverID   uint32 = 11
@@ -461,7 +461,7 @@ func (t *testGeneratorMySQLSuite) TestGenTableMapEvent(c *C) {
 	c.Assert(tableMapEv, IsNil)
 }
 
-func (t *testGeneratorMySQLSuite) TestGenRowsEvent(c *C) {
+func (t *testGeneratorSuite) TestGenRowsEvent(c *C) {
 	var (
 		timestamp         = uint32(time.Now().Unix())
 		serverID   uint32 = 11
@@ -592,7 +592,7 @@ func (t *testGeneratorMySQLSuite) TestGenRowsEvent(c *C) {
 	}
 }
 
-func (t *testGeneratorMySQLSuite) TestGenXIDEvent(c *C) {
+func (t *testGeneratorSuite) TestGenXIDEvent(c *C) {
 	var (
 		timestamp        = uint32(time.Now().Unix())
 		serverID  uint32 = 11
@@ -616,4 +616,32 @@ func (t *testGeneratorMySQLSuite) TestGenXIDEvent(c *C) {
 	c.Assert(ok, IsTrue)
 	c.Assert(xidEvBody, NotNil)
 	c.Assert(xidEvBody.XID, Equals, xid)
+}
+
+func (t *testGeneratorSuite) TestGenMariaDBGTIDEvent(c *C) {
+	var (
+		timestamp        = uint32(time.Now().Unix())
+		serverID  uint32 = 11
+		latestPos uint32 = 4
+		flags     uint16 = 0x01
+		seqNum    uint64 = 123
+		domainID  uint32 = 456
+	)
+
+	gtidEv, err := GenMariaDBGTIDEvent(timestamp, serverID, latestPos, flags, seqNum, domainID)
+	c.Assert(err, IsNil)
+	c.Assert(gtidEv, NotNil)
+
+	// verify the header
+	c.Assert(gtidEv.Header.Timestamp, Equals, timestamp)
+	c.Assert(gtidEv.Header.ServerID, Equals, serverID)
+	c.Assert(gtidEv.Header.LogPos, Equals, latestPos+gtidEv.Header.EventSize)
+	c.Assert(gtidEv.Header.Flags, Equals, flags)
+
+	// verify the body
+	gtidEvBody, ok := gtidEv.Event.(*replication.MariadbGTIDEvent)
+	c.Assert(ok, IsTrue)
+	c.Assert(gtidEvBody, NotNil)
+	c.Assert(gtidEvBody.GTID.SequenceNumber, Equals, seqNum)
+	c.Assert(gtidEvBody.GTID.DomainID, Equals, domainID)
 }

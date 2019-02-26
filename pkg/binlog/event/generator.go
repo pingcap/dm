@@ -809,3 +809,65 @@ func GenXIDEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint
 
 	return &replication.BinlogEvent{RawData: buf.Bytes(), Header: header, Event: event}, nil
 }
+
+// GenMariaDBGTIDEvent generates a MariadbGTIDEvent.
+// ref: https://mariadb.com/kb/en/library/gtid_event/
+func GenMariaDBGTIDEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint16, sequenceNum uint64, domainID uint32) (*replication.BinlogEvent, error) {
+	payload := new(bytes.Buffer)
+
+	// GTID sequence, 8 bytes
+	err := binary.Write(payload, binary.LittleEndian, sequenceNum)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write GTID sequence %d", sequenceNum)
+	}
+
+	// Replication Domain ID, 4 bytes
+	err = binary.Write(payload, binary.LittleEndian, domainID)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write Replication Domain ID %d", domainID)
+	}
+
+	// Flags, 1 byte, keep zero now.
+	xidFlags := uint8(0x00)
+	err = binary.Write(payload, binary.LittleEndian, xidFlags)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write Flags %d", xidFlags)
+	}
+
+	// "if flag & FL_GROUP_COMMIT_ID" is FALSE
+	// commit_id, 6 bytes with zero value
+	err = binary.Write(payload, binary.LittleEndian, uint64(0x00))
+	if err != nil {
+		return nil, errors.Annotatef(err, "write 6 bytes commit_id with zero value")
+	}
+	payload.Truncate(payload.Len() - 2) // len(uint64) - 2 == 6 bytes
+
+	eventSize := uint32(eventHeaderLen) + uint32(payload.Len()) + crc32Len
+	logPos := latestPos + eventSize
+	header, headerData, err := GenEventHeader(timestamp, replication.MARIADB_GTID_EVENT, serverID, eventSize, logPos, flags)
+	if err != nil {
+		return nil, errors.Annotatef(err, "generate event header")
+	}
+
+	buf := new(bytes.Buffer)
+	err = combineHeaderPayload(buf, headerData, nil, payload.Bytes())
+	if err != nil {
+		return nil, errors.Annotatef(err, "combine header, post-header and payload")
+	}
+
+	// decode event, before write checksum
+	event := &replication.MariadbGTIDEvent{}
+	err = event.Decode(buf.Bytes()[eventHeaderLen:])
+	if err != nil {
+		return nil, errors.Annotatef(err, "decode % X", buf.Bytes())
+	}
+
+	// CRC32 checksum, 4 bytes
+	checksum := crc32.ChecksumIEEE(buf.Bytes())
+	err = binary.Write(buf, binary.LittleEndian, checksum)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write CRC32 % X", checksum)
+	}
+
+	return &replication.BinlogEvent{RawData: buf.Bytes(), Header: header, Event: event}, nil
+}
