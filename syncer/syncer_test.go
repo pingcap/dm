@@ -776,9 +776,9 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 		"create table if not exists gctest_1.t_3(id int, cfg varchar(40), gen_id int as (cfg->\"$.id\"), unique key gen_id_unique(`gen_id`))",
 	}
 
-	// if table has json typed  generated column but doesn't have primary key or unique key,
-	// update/delete operation will not replicated successfully because json field can't be
-	// used in where condition with `=` operator. In unit test we only check generated SQL
+	// if table has json typed generated column but doesn't have primary key or unique key,
+	// update/delete operation will not be replicated successfully because json field can't
+	// compared with raw value in where condition. In unit test we only check generated SQL
 	// and don't check the data replication to downstream.
 	testCases := []struct {
 		sqls     []string
