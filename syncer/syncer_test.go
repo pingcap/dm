@@ -773,8 +773,13 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 		"create database if not exists gctest_1 DEFAULT CHARSET=utf8mb4",
 		"create table if not exists gctest_1.t_1(id int, age int, cfg varchar(40), cfg_json json as (cfg) virtual)",
 		"create table if not exists gctest_1.t_2(id int primary key, age int, cfg varchar(40), cfg_json json as (cfg) virtual)",
+		"create table if not exists gctest_1.t_3(id int, cfg varchar(40), gen_id int as (cfg->\"$.id\"), unique key gen_id_unique(`gen_id`))",
 	}
 
+	// if table has json typed  generated column but doesn't have primary key or unique key,
+	// update/delete operation will not replicated successfully because json field can't be
+	// used in where condition with `=` operator. In unit test we only check generated SQL
+	// and don't check the data replication to downstream.
 	testCases := []struct {
 		sqls     []string
 		expected []string
@@ -783,11 +788,14 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 		{
 			[]string{
 				"insert into gctest_1.t_1(id, age, cfg) values (1, 18, '{}')",
-				"insert into gctest_1.t_1(id, age, cfg) values (2, 19, '{\"key\": \"value\", \"int\": 123}')",
+				"insert into gctest_1.t_1(id, age, cfg) values (2, 19, '{\"key\": \"value\"}')",
 				"insert into gctest_1.t_1(id, age, cfg) values (3, 17, NULL)",
 				"insert into gctest_1.t_2(id, age, cfg) values (1, 18, '{}')",
 				"insert into gctest_1.t_2(id, age, cfg) values (2, 19, '{\"key\": \"value\", \"int\": 123}')",
 				"insert into gctest_1.t_2(id, age, cfg) values (3, 17, NULL)",
+				"insert into gctest_1.t_3(id, cfg) values (1, '{\"id\": 1}')",
+				"insert into gctest_1.t_3(id, cfg) values (2, '{\"id\": 2}')",
+				"insert into gctest_1.t_3(id, cfg) values (3, '{\"id\": 3}')",
 			},
 			[]string{
 				"REPLACE INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
@@ -796,14 +804,20 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				"REPLACE INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?);",
 				"REPLACE INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?);",
 				"REPLACE INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?);",
+				"REPLACE INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?);",
+				"REPLACE INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?);",
+				"REPLACE INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?);",
 			},
 			[][]interface{}{
 				{int32(1), int32(18), "{}"},
-				{int32(2), int32(19), "{\"key\": \"value\", \"int\": 123}"},
+				{int32(2), int32(19), "{\"key\": \"value\"}"},
 				{int32(3), int32(17), nil},
 				{int32(1), int32(18), "{}"},
 				{int32(2), int32(19), "{\"key\": \"value\", \"int\": 123}"},
 				{int32(3), int32(17), nil},
+				{int32(1), "{\"id\": 1}"},
+				{int32(2), "{\"id\": 2}"},
+				{int32(3), "{\"id\": 3}"},
 			},
 		},
 		{
@@ -814,22 +828,28 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				"update gctest_1.t_2 set cfg = '{\"a\": 12}', age = 21 where id = 1",
 				"update gctest_1.t_2 set cfg = '{}' where id = 2 and age = 19",
 				"update gctest_1.t_2 set age = 20 where cfg is NULL",
+				"update gctest_1.t_3 set cfg = '{\"id\": 11}' where id = 1",
+				"update gctest_1.t_3 set cfg = '{\"id\": 12, \"old_id\": 2}' where gen_id = 2",
 			},
 			[]string{
-				"UPDATE `gctest_1`.`t_1` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? AND `age` = ? AND `cfg` = ? LIMIT 1;",
-				"UPDATE `gctest_1`.`t_1` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? AND `age` = ? AND `cfg` = ? LIMIT 1;",
-				"UPDATE `gctest_1`.`t_1` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? AND `age` = ? AND `cfg` IS ? LIMIT 1;",
+				"UPDATE `gctest_1`.`t_1` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? AND `age` = ? AND `cfg` = ? AND `cfg_json` = ? LIMIT 1;",
+				"UPDATE `gctest_1`.`t_1` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? AND `age` = ? AND `cfg` = ? AND `cfg_json` = ? LIMIT 1;",
+				"UPDATE `gctest_1`.`t_1` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? AND `age` = ? AND `cfg` IS ? AND `cfg_json` IS ? LIMIT 1;",
 				"UPDATE `gctest_1`.`t_2` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? LIMIT 1;",
 				"UPDATE `gctest_1`.`t_2` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? LIMIT 1;",
 				"UPDATE `gctest_1`.`t_2` SET `id` = ?, `age` = ?, `cfg` = ? WHERE `id` = ? LIMIT 1;",
+				"UPDATE `gctest_1`.`t_3` SET `id` = ?, `cfg` = ? WHERE `gen_id` = ? LIMIT 1;",
+				"UPDATE `gctest_1`.`t_3` SET `id` = ?, `cfg` = ? WHERE `gen_id` = ? LIMIT 1;",
 			},
 			[][]interface{}{
-				{int32(1), int32(21), "{\"a\": 12}", int32(1), int32(18), "{}"},
-				{int32(2), int32(19), "{}", int32(2), int32(19), "{\"key\": \"value\", \"int\": 123}"},
-				{int32(3), int32(20), nil, int32(3), int32(17), nil},
+				{int32(1), int32(21), "{\"a\": 12}", int32(1), int32(18), "{}", []uint8("{}")},
+				{int32(2), int32(19), "{}", int32(2), int32(19), "{\"key\": \"value\"}", []uint8("{\"key\":\"value\"}")},
+				{int32(3), int32(20), nil, int32(3), int32(17), nil, nil},
 				{int32(1), int32(21), "{\"a\": 12}", int32(1)},
 				{int32(2), int32(19), "{}", int32(2)},
 				{int32(3), int32(20), nil, int32(3)},
+				{int32(1), "{\"id\": 11}", int32(1)},
+				{int32(2), "{\"id\": 12, \"old_id\": 2}", int32(2)},
 			},
 		},
 		{
@@ -840,22 +860,28 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				"delete from gctest_1.t_2 where id = 1",
 				"delete from gctest_1.t_2 where id = 2 and age = 19",
 				"delete from gctest_1.t_2 where cfg is NULL",
+				"delete from gctest_1.t_3 where id = 1",
+				"delete from gctest_1.t_3 where gen_id = 12",
 			},
 			[]string{
-				"DELETE FROM `gctest_1`.`t_1` WHERE `id` = ? AND `age` = ? AND `cfg` = ? LIMIT 1;",
-				"DELETE FROM `gctest_1`.`t_1` WHERE `id` = ? AND `age` = ? AND `cfg` = ? LIMIT 1;",
-				"DELETE FROM `gctest_1`.`t_1` WHERE `id` = ? AND `age` = ? AND `cfg` IS ? LIMIT 1;",
+				"DELETE FROM `gctest_1`.`t_1` WHERE `id` = ? AND `age` = ? AND `cfg` = ? AND `cfg_json` = ? LIMIT 1;",
+				"DELETE FROM `gctest_1`.`t_1` WHERE `id` = ? AND `age` = ? AND `cfg` = ? AND `cfg_json` = ? LIMIT 1;",
+				"DELETE FROM `gctest_1`.`t_1` WHERE `id` = ? AND `age` = ? AND `cfg` IS ? AND `cfg_json` IS ? LIMIT 1;",
 				"DELETE FROM `gctest_1`.`t_2` WHERE `id` = ? LIMIT 1;",
 				"DELETE FROM `gctest_1`.`t_2` WHERE `id` = ? LIMIT 1;",
 				"DELETE FROM `gctest_1`.`t_2` WHERE `id` = ? LIMIT 1;",
+				"DELETE FROM `gctest_1`.`t_3` WHERE `gen_id` = ? LIMIT 1;",
+				"DELETE FROM `gctest_1`.`t_3` WHERE `gen_id` = ? LIMIT 1;",
 			},
 			[][]interface{}{
-				{int32(1), int32(21), "{\"a\": 12}"},
-				{int32(2), int32(19), "{}"},
-				{int32(3), int32(20), nil},
+				{int32(1), int32(21), "{\"a\": 12}", []uint8("{\"a\":12}")},
+				{int32(2), int32(19), "{}", []uint8("{}")},
+				{int32(3), int32(20), nil, nil},
 				{int32(1)},
 				{int32(2)},
 				{int32(3)},
+				{int32(11)},
+				{int32(12)},
 			},
 		},
 	}
@@ -863,6 +889,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	dropSQLs := []string{
 		"drop table gctest_1.t_1",
 		"drop table gctest_1.t_2",
+		"drop table gctest_1.t_3",
 		"drop database gctest_1",
 	}
 
@@ -906,12 +933,12 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 					c.Assert(sqls[0], Equals, testCase.expected[idx])
 					c.Assert(args[0], DeepEquals, testCase.args[idx])
 				case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
-					sqls, _, args, err = genUpdateSQLs(table.schema, table.name, rowData, rowData, tblColumns, tblColumns, tblIndexColumns, tblIndexColumns, false)
+					sqls, _, args, err = genUpdateSQLs(table.schema, table.name, rowData, ev.Rows, tblColumns, table.columns, tblIndexColumns, table.indexColumns, false)
 					c.Assert(err, IsNil)
 					c.Assert(sqls[0], Equals, testCase.expected[idx])
 					c.Assert(args[0], DeepEquals, testCase.args[idx])
 				case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-					sqls, _, args, err = genDeleteSQLs(table.schema, table.name, rowData, tblColumns, tblIndexColumns)
+					sqls, _, args, err = genDeleteSQLs(table.schema, table.name, ev.Rows, table.columns, table.indexColumns)
 					c.Assert(err, IsNil)
 					c.Assert(sqls[0], Equals, testCase.expected[idx])
 					c.Assert(args[0], DeepEquals, testCase.args[idx])
