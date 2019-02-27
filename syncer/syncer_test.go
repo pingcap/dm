@@ -924,21 +924,32 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 					args [][]interface{}
 				)
 
-				tblColumns, rowData, tblIndexColumns, err := pruneGeneratedColumnDML(table.columns, ev.Rows, table.indexColumns, table.schema, table.name, syncer.genColsCache)
+				prunedColumns, prunedRows, prunedIndexColumns, err := pruneGeneratedColumnDML(table.columns, ev.Rows, table.indexColumns, table.schema, table.name, syncer.genColsCache)
 				c.Assert(err, IsNil)
+				param := &genDMLParam{
+					schema:               table.schema,
+					table:                table.name,
+					data:                 prunedRows,
+					originalData:         ev.Rows,
+					columns:              prunedColumns,
+					originalColumns:      table.columns,
+					indexColumns:         prunedIndexColumns,
+					originalIndexColumns: table.indexColumns,
+				}
 				switch e.Header.EventType {
 				case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
-					sqls, _, args, err = genInsertSQLs(table.schema, table.name, rowData, tblColumns, tblIndexColumns)
+					sqls, _, args, err = genInsertSQLs(param)
 					c.Assert(err, IsNil)
 					c.Assert(sqls[0], Equals, testCase.expected[idx])
 					c.Assert(args[0], DeepEquals, testCase.args[idx])
 				case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
-					sqls, _, args, err = genUpdateSQLs(table.schema, table.name, rowData, ev.Rows, tblColumns, table.columns, tblIndexColumns, table.indexColumns, false)
+					// test with sql_mode = false only
+					sqls, _, args, err = genUpdateSQLs(param)
 					c.Assert(err, IsNil)
 					c.Assert(sqls[0], Equals, testCase.expected[idx])
 					c.Assert(args[0], DeepEquals, testCase.args[idx])
 				case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
-					sqls, _, args, err = genDeleteSQLs(table.schema, table.name, ev.Rows, table.columns, table.indexColumns)
+					sqls, _, args, err = genDeleteSQLs(param)
 					c.Assert(err, IsNil)
 					c.Assert(sqls[0], Equals, testCase.expected[idx])
 					c.Assert(args[0], DeepEquals, testCase.args[idx])

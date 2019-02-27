@@ -49,6 +49,20 @@ type GenColCache struct {
 	isGenColumn map[string][]bool
 }
 
+// genDMLParam stores pruned columns, data, index as well as the original
+// columns, data, index
+type genDMLParam struct {
+	schema               string
+	table                string
+	safeMode             bool                 // only used in update
+	data                 [][]interface{}      // pruned data
+	originalData         [][]interface{}      // all data
+	columns              []*column            // pruned columns
+	originalColumns      []*column            // all columns
+	indexColumns         map[string][]*column // pruned index information
+	originalIndexColumns map[string][]*column // all index information
+}
+
 // NewGenColCache creates a GenColCache.
 func NewGenColCache() *GenColCache {
 	c := &GenColCache{}
@@ -85,13 +99,22 @@ func (c *GenColCache) reset() {
 	c.isGenColumn = make(map[string][]bool)
 }
 
-func genInsertSQLs(schema string, table string, dataSeq [][]interface{}, columns []*column, indexColumns map[string][]*column) ([]string, [][]string, [][]interface{}, error) {
+func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, error) {
+	var (
+		schema               = param.schema
+		table                = param.table
+		dataSeq              = param.data
+		originalDataSeq      = param.originalData
+		columns              = param.columns
+		originalColumns      = param.originalColumns
+		originalIndexColumns = param.originalIndexColumns
+	)
 	sqls := make([]string, 0, len(dataSeq))
 	keys := make([][]string, 0, len(dataSeq))
 	values := make([][]interface{}, 0, len(dataSeq))
 	columnList := genColumnList(columns)
 	columnPlaceholders := genColumnPlaceholders(len(columns))
-	for _, data := range dataSeq {
+	for dataIdx, data := range dataSeq {
 		if len(data) != len(columns) {
 			return nil, nil, nil, errors.Errorf("insert columns and data mismatch in length: %d (columns) vs %d (data)", len(columns), len(data))
 		}
@@ -100,9 +123,14 @@ func genInsertSQLs(schema string, table string, dataSeq [][]interface{}, columns
 		for i := range data {
 			value = append(value, castUnsigned(data[i], columns[i].unsigned, columns[i].tp))
 		}
+		originalData := originalDataSeq[dataIdx]
+		originalValue := make([]interface{}, 0, len(originalData))
+		for i := range originalData {
+			originalValue = append(originalValue, castUnsigned(originalData[i], originalColumns[i].unsigned, originalColumns[i].tp))
+		}
 
 		sql := fmt.Sprintf("REPLACE INTO `%s`.`%s` (%s) VALUES (%s);", schema, table, columnList, columnPlaceholders)
-		ks := genMultipleKeys(columns, value, indexColumns)
+		ks := genMultipleKeys(originalColumns, originalValue, originalIndexColumns)
 		sqls = append(sqls, sql)
 		values = append(values, value)
 		keys = append(keys, ks)
@@ -111,7 +139,17 @@ func genInsertSQLs(schema string, table string, dataSeq [][]interface{}, columns
 	return sqls, keys, values, nil
 }
 
-func genUpdateSQLs(schema string, table string, data, originalData [][]interface{}, columns, originalColumns []*column, indexColumns, originalIndexColumns map[string][]*column, safeMode bool) ([]string, [][]string, [][]interface{}, error) {
+func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, error) {
+	var (
+		schema               = param.schema
+		table                = param.table
+		safeMode             = param.safeMode
+		data                 = param.data
+		originalData         = param.originalData
+		columns              = param.columns
+		originalColumns      = param.originalColumns
+		originalIndexColumns = param.originalIndexColumns
+	)
 	sqls := make([]string, 0, len(data)/2)
 	keys := make([][]string, 0, len(data)/2)
 	values := make([][]interface{}, 0, len(data)/2)
@@ -123,6 +161,7 @@ func genUpdateSQLs(schema string, table string, data, originalData [][]interface
 		oldData := data[i]
 		changedData := data[i+1]
 		oriOldData := originalData[i]
+		oriChangedData := originalData[i+1]
 
 		if len(oldData) != len(changedData) {
 			return nil, nil, nil, errors.Errorf("update data mismatch in length: %d (columns) vs %d (data)", len(oldData), len(changedData))
@@ -144,13 +183,17 @@ func genUpdateSQLs(schema string, table string, data, originalData [][]interface
 		for i := range oriOldData {
 			oriOldValues = append(oriOldValues, castUnsigned(oriOldData[i], originalColumns[i].unsigned, originalColumns[i].tp))
 		}
+		oriChangedValues := make([]interface{}, 0, len(oriChangedData))
+		for i := range oriChangedData {
+			oriChangedValues = append(oriChangedValues, castUnsigned(oriChangedData[i], originalColumns[i].unsigned, originalColumns[i].tp))
+		}
 
 		if len(defaultIndexColumns) == 0 {
 			defaultIndexColumns = getAvailableIndexColumn(originalIndexColumns, oriOldValues)
 		}
 
-		ks := genMultipleKeys(columns, oldValues, indexColumns)
-		ks = append(ks, genMultipleKeys(columns, changedValues, indexColumns)...)
+		ks := genMultipleKeys(originalColumns, oriOldValues, originalIndexColumns)
+		ks = append(ks, genMultipleKeys(originalColumns, oriChangedValues, originalIndexColumns)...)
 
 		if safeMode {
 			// generate delete sql from old data
@@ -199,7 +242,14 @@ func genUpdateSQLs(schema string, table string, data, originalData [][]interface
 	return sqls, keys, values, nil
 }
 
-func genDeleteSQLs(schema string, table string, dataSeq [][]interface{}, columns []*column, indexColumns map[string][]*column) ([]string, [][]string, [][]interface{}, error) {
+func genDeleteSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, error) {
+	var (
+		schema       = param.schema
+		table        = param.table
+		dataSeq      = param.originalData
+		columns      = param.originalColumns
+		indexColumns = param.originalIndexColumns
+	)
 	sqls := make([]string, 0, len(dataSeq))
 	keys := make([][]string, 0, len(dataSeq))
 	values := make([][]interface{}, 0, len(dataSeq))
