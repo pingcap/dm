@@ -16,6 +16,7 @@ package loader
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
@@ -24,6 +25,8 @@ import (
 	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
 )
+
+const txnRetryableMark = "[try again later]"
 
 // Conn represents a live DB connection
 type Conn struct {
@@ -119,48 +122,54 @@ func (conn *Conn) executeSQLCustomRetry(sqls []string, enableRetry bool, isRetry
 }
 
 func executeSQLImp(db *sql.DB, sqls []string) error {
-	var (
-		err error
-		txn *sql.Tx
-		res sql.Result
-	)
+	for {
+		var (
+			err error
+			txn *sql.Tx
+			res sql.Result
+		)
 
-	txn, err = db.Begin()
-	if err != nil {
-		log.Errorf("exec sqls[%-.100v] begin failed %v", sqls, errors.ErrorStack(err))
-		return err
-	}
-
-	for i := range sqls {
-		log.Debugf("[exec][sql]%-.200v", sqls[i])
-		res, err = txn.Exec(sqls[i])
+		txn, err = db.Begin()
 		if err != nil {
-			log.Warnf("[exec][sql]%-.100v[error]%v", sqls[i], err)
-			rerr := txn.Rollback()
-			if rerr != nil {
-				log.Errorf("[exec][sql]%-.100s[error]%v", sqls, rerr)
-			}
+			log.Errorf("exec sqls[%-.100v] begin failed %v", sqls, errors.ErrorStack(err))
 			return err
 		}
-		// check update checkpoint successful or not
-		if i == 2 {
-			row, err1 := res.RowsAffected()
-			if err1 != nil {
-				log.Warnf("exec sql %s get rows affected error %s", sqls[i], err1)
-				continue
+
+		for i := range sqls {
+			log.Debugf("[exec][sql]%-.200v", sqls[i])
+			res, err = txn.Exec(sqls[i])
+			if err != nil {
+				log.Warnf("[exec][sql]%-.100v[error]%v", sqls[i], err)
+				rerr := txn.Rollback()
+				if rerr != nil {
+					log.Errorf("[exec][sql]%-.100s[error]%v", sqls, rerr)
+				}
+				return err
 			}
-			if row != 1 {
-				log.Warnf("update checkpoint affected rows %d", row)
+			// check update checkpoint successful or not
+			if i == 2 {
+				row, err1 := res.RowsAffected()
+				if err1 != nil {
+					log.Warnf("exec sql %s get rows affected error %s", sqls[i], err1)
+					continue
+				}
+				if row != 1 {
+					log.Warnf("update checkpoint affected rows %d", row)
+				}
 			}
 		}
-	}
 
-	err = txn.Commit()
-	if err != nil {
-		return errors.Trace(err)
+		err = txn.Commit()
+		if err != nil {
+			if !strings.Contains(err.Error(), txnRetryableMark) {
+				return errors.Trace(err)
+			}
+			log.Errorf("Try run sqls[%-.100v] again in a second. Retryable Error: %v", sqls, err)
+			time.Sleep(time.Second)
+		} else {
+			return nil
+		}
 	}
-
-	return nil
 }
 
 func createConn(cfg *config.SubTaskConfig) (*Conn, error) {
