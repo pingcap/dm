@@ -598,6 +598,9 @@ func pruneGeneratedColumnDML(columns []*column, data [][]interface{}, schema, ta
 		}
 	}
 	for _, row := range data {
+		if len(row) != len(columns) {
+			return nil, nil, errors.Errorf("prune DML columns and data mismatch in length: %d (columns) %d (data)", len(columns), len(data))
+		}
 		value := make([]interface{}, 0, len(row))
 		for i := range row {
 			if !colIndexfilters[i] {
