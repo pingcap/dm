@@ -117,10 +117,14 @@ func fullBytes(n int) []byte {
 }
 
 // assembleEvent assembles header fields, postHeader and payload together to an event.
-func assembleEvent(buf *bytes.Buffer, event replication.Event, decodeWithChecksum bool, eventType replication.EventType, timestamp uint32, serverID uint32, latestPos uint32, flags uint16, postHeader, payload []byte) (*replication.BinlogEvent, error) {
+// header: pass as a struct to make a copy
+func assembleEvent(buf *bytes.Buffer, event replication.Event, decodeWithChecksum bool, header replication.EventHeader, eventType replication.EventType, latestPos uint32, postHeader, payload []byte) (*replication.BinlogEvent, error) {
 	eventSize := uint32(eventHeaderLen) + uint32(len(postHeader)) + uint32(len(payload)) + crc32Len
-	logPos := latestPos + eventSize
-	header, headerData, err := GenEventHeader(timestamp, eventType, serverID, eventSize, logPos, flags)
+	// update some fields in header
+	header.EventSize = eventSize
+	header.LogPos = latestPos + eventSize
+	header.EventType = eventType
+	headerData, err := GenEventHeader(&header)
 	if err != nil {
 		return nil, errors.Annotatef(err, "generate event header")
 	}
@@ -151,7 +155,7 @@ func assembleEvent(buf *bytes.Buffer, event replication.Event, decodeWithChecksu
 		return nil, errors.Annotatef(err, "decode % X", buf.Bytes())
 	}
 
-	return &replication.BinlogEvent{RawData: buf.Bytes(), Header: header, Event: event}, nil
+	return &replication.BinlogEvent{RawData: buf.Bytes(), Header: &header, Event: event}, nil
 }
 
 // combineHeaderPayload combines header, postHeader and payload together.

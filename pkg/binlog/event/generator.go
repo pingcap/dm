@@ -55,59 +55,60 @@ var (
 	eventTypeHeaderLen = []byte{0x38, 0x0d, 0x00, 0x08, 0x00, 0x12, 0x00, 0x04, 0x04, 0x04, 0x04, 0x12, 0x00, 0x00, 0x5f, 0x00, 0x04, 0x1a, 0x08, 0x00, 0x00, 0x00, 0x08, 0x08, 0x08, 0x02, 0x00, 0x00, 0x00, 0x0a, 0x0a, 0x0a, 0x2a, 0x2a, 0x00, 0x12, 0x34, 0x00}
 )
 
-// GenEventHeader generates a EventHeader.
+// GenEventHeader generates a EventHeader's raw data according to a passed-in EventHeader struct.
 // ref: https://dev.mysql.com/doc/internals/en/binlog-event-header.html
-func GenEventHeader(timestamp uint32, eventType replication.EventType, serverID uint32, eventSize uint32, logPos uint32, flags uint16) (*replication.EventHeader, []byte, error) {
+func GenEventHeader(header *replication.EventHeader) ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	// timestamp, 4 bytes
-	err := binary.Write(buf, binary.LittleEndian, timestamp)
+	err := binary.Write(buf, binary.LittleEndian, header.Timestamp)
 	if err != nil {
-		return nil, nil, errors.Annotatef(err, "write timestamp %d", timestamp)
+		return nil, errors.Annotatef(err, "write timestamp %d", header.Timestamp)
 	}
 
 	// event_type, 1 byte
-	err = binary.Write(buf, binary.LittleEndian, eventType)
+	err = binary.Write(buf, binary.LittleEndian, header.EventType)
 	if err != nil {
-		return nil, nil, errors.Annotatef(err, "write event_type %v", eventType)
+		return nil, errors.Annotatef(err, "write event_type %v", header.EventType)
 	}
 
 	// server_id, 4 bytes
-	err = binary.Write(buf, binary.LittleEndian, serverID)
+	err = binary.Write(buf, binary.LittleEndian, header.ServerID)
 	if err != nil {
-		return nil, nil, errors.Annotatef(err, "write server_id %d", serverID)
+		return nil, errors.Annotatef(err, "write server_id %d", header.ServerID)
 	}
 
 	// event_size, 4 bytes
-	err = binary.Write(buf, binary.LittleEndian, eventSize)
+	err = binary.Write(buf, binary.LittleEndian, header.EventSize)
 	if err != nil {
-		return nil, nil, errors.Annotatef(err, "write event_size %d", eventSize)
+		return nil, errors.Annotatef(err, "write event_size %d", header.EventSize)
 	}
 
 	// log_pos, 4 bytes
-	err = binary.Write(buf, binary.LittleEndian, logPos)
+	err = binary.Write(buf, binary.LittleEndian, header.LogPos)
 	if err != nil {
-		return nil, nil, errors.Annotatef(err, "write log_pos %d", logPos)
+		return nil, errors.Annotatef(err, "write log_pos %d", header.LogPos)
 	}
 
 	// flags, 2 bytes
-	err = binary.Write(buf, binary.LittleEndian, flags)
+	err = binary.Write(buf, binary.LittleEndian, header.Flags)
 	if err != nil {
-		return nil, nil, errors.Annotatef(err, "write flags % X", flags)
+		return nil, errors.Annotatef(err, "write flags % X", header.Flags)
 	}
 
+	// try to decode the data
 	eh := replication.EventHeader{}
 	err = eh.Decode(buf.Bytes())
 	if err != nil {
-		return nil, nil, errors.Annotatef(err, "decode % X", buf.Bytes())
+		return nil, errors.Annotatef(err, "decode % X", buf.Bytes())
 	}
 
-	return &eh, buf.Bytes(), nil
+	return buf.Bytes(), nil
 }
 
 // GenFormatDescriptionEvent generates a FormatDescriptionEvent.
 // ref: https://dev.mysql.com/doc/internals/en/format-description-event.html.
-func GenFormatDescriptionEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint16) (*replication.BinlogEvent, error) {
+func GenFormatDescriptionEvent(header *replication.EventHeader, latestPos uint32) (*replication.BinlogEvent, error) {
 	payload := new(bytes.Buffer)
 
 	// binlog-version, 2 bytes
@@ -125,9 +126,9 @@ func GenFormatDescriptionEvent(timestamp uint32, serverID uint32, latestPos uint
 	}
 
 	// create_timestamp, 4 bytes
-	err = binary.Write(payload, binary.LittleEndian, timestamp)
+	err = binary.Write(payload, binary.LittleEndian, header.Timestamp)
 	if err != nil {
-		return nil, errors.Annotatef(err, "write create_timestamp %d", timestamp)
+		return nil, errors.Annotatef(err, "write create_timestamp %d", header.Timestamp)
 	}
 
 	// event_header_length, 1 byte
@@ -150,7 +151,7 @@ func GenFormatDescriptionEvent(timestamp uint32, serverID uint32, latestPos uint
 
 	buf := new(bytes.Buffer)
 	event := &replication.FormatDescriptionEvent{}
-	ev, err := assembleEvent(buf, event, true, replication.FORMAT_DESCRIPTION_EVENT, timestamp, serverID, latestPos, flags, nil, payload.Bytes())
+	ev, err := assembleEvent(buf, event, true, *header, replication.FORMAT_DESCRIPTION_EVENT, latestPos, nil, payload.Bytes())
 	return ev, errors.Trace(err)
 }
 
@@ -160,7 +161,7 @@ func GenFormatDescriptionEvent(timestamp uint32, serverID uint32, latestPos uint
 // we ref:
 //   a. https://github.com/vitessio/vitess/blob/28e7e5503a6c3d3b18d4925d95f23ebcb6f25c8e/go/mysql/binlog_event_mysql56.go#L56
 //   b. https://dev.mysql.com/doc/internals/en/com-binlog-dump-gtid.html
-func GenPreviousGTIDsEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint16, gSet gtid.Set) ([]byte, error) {
+func GenPreviousGTIDsEvent(header *replication.EventHeader, latestPos uint32, gSet gtid.Set) ([]byte, error) {
 	if gSet == nil || len(gSet.String()) == 0 {
 		return nil, errors.NotValidf("empty GTID set")
 	}
@@ -174,7 +175,7 @@ func GenPreviousGTIDsEvent(timestamp uint32, serverID uint32, latestPos uint32, 
 	payload := origin.Encode()
 
 	buf := new(bytes.Buffer)
-	_, err := assembleEvent(buf, nil, false, replication.PREVIOUS_GTIDS_EVENT, timestamp, serverID, latestPos, flags, nil, payload)
+	_, err := assembleEvent(buf, nil, false, *header, replication.PREVIOUS_GTIDS_EVENT, latestPos, nil, payload)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -186,7 +187,7 @@ func GenPreviousGTIDsEvent(timestamp uint32, serverID uint32, latestPos uint32, 
 // we ref the `GTIDEvent.Decode` in go-mysql.
 // `uuid` is the UUID part of the GTID, like `9f61c5f9-1eef-11e9-b6cf-0242ac140003`.
 // `gno` is the GNO part of the GTID, like `6`.
-func GenGTIDEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint16, gtidFlags uint8, uuid string, gno int64, lastCommitted int64, sequenceNumber int64) (*replication.BinlogEvent, error) {
+func GenGTIDEvent(header *replication.EventHeader, latestPos uint32, gtidFlags uint8, uuid string, gno int64, lastCommitted int64, sequenceNumber int64) (*replication.BinlogEvent, error) {
 	payload := new(bytes.Buffer)
 
 	// GTID flags, 1 byte
@@ -231,7 +232,7 @@ func GenGTIDEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uin
 
 	buf := new(bytes.Buffer)
 	event := &replication.GTIDEvent{}
-	ev, err := assembleEvent(buf, event, false, replication.GTID_EVENT, timestamp, serverID, latestPos, flags, nil, payload.Bytes())
+	ev, err := assembleEvent(buf, event, false, *header, replication.GTID_EVENT, latestPos, nil, payload.Bytes())
 	return ev, errors.Trace(err)
 }
 
@@ -240,7 +241,7 @@ func GenGTIDEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uin
 // ref: http://blog.51cto.com/yanzongshuai/2087782
 // `statusVars` should be generated out of this function, we can implement it later.
 // `len(query)` must > 0.
-func GenQueryEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint16, slaveProxyID uint32, executionTime uint32, errorCode uint16, statusVars []byte, schema []byte, query []byte) (*replication.BinlogEvent, error) {
+func GenQueryEvent(header *replication.EventHeader, latestPos uint32, slaveProxyID uint32, executionTime uint32, errorCode uint16, statusVars []byte, schema []byte, query []byte) (*replication.BinlogEvent, error) {
 	if len(query) == 0 {
 		return nil, errors.NotValidf("empty query")
 	}
@@ -313,7 +314,7 @@ func GenQueryEvent(timestamp uint32, serverID uint32, latestPos uint32, flags ui
 
 	buf := new(bytes.Buffer)
 	event := &replication.QueryEvent{}
-	ev, err := assembleEvent(buf, event, false, replication.QUERY_EVENT, timestamp, serverID, latestPos, flags, postHeader.Bytes(), payload.Bytes())
+	ev, err := assembleEvent(buf, event, false, *header, replication.QUERY_EVENT, latestPos, postHeader.Bytes(), payload.Bytes())
 	return ev, errors.Trace(err)
 }
 
@@ -323,7 +324,7 @@ func GenQueryEvent(timestamp uint32, serverID uint32, latestPos uint32, flags ui
 // ref: http://blog.51cto.com/yanzongshuai/2090758
 // `len(schema)` must > 0, `len(table)` must > 0, `len(columnType)` must > 0.
 // `columnType` should be generated out of this function, we can implement it later.
-func GenTableMapEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint16, tableID uint64, schema []byte, table []byte, columnType []byte) (*replication.BinlogEvent, error) {
+func GenTableMapEvent(header *replication.EventHeader, latestPos uint32, tableID uint64, schema []byte, table []byte, columnType []byte) (*replication.BinlogEvent, error) {
 	if len(schema) == 0 || len(table) == 0 || len(columnType) == 0 {
 		return nil, errors.NotValidf("empty schema (% X) or table (% X) or column type (% X)", schema, table, columnType)
 	}
@@ -422,14 +423,14 @@ func GenTableMapEvent(timestamp uint32, serverID uint32, latestPos uint32, flags
 	}
 
 	buf := new(bytes.Buffer)
-	_, err = assembleEvent(buf, nil, false, replication.TABLE_MAP_EVENT, timestamp, serverID, latestPos, flags, postHeader.Bytes(), payload.Bytes())
+	_, err = assembleEvent(buf, nil, false, *header, replication.TABLE_MAP_EVENT, latestPos, postHeader.Bytes(), payload.Bytes())
 	if err != nil {
 		return nil, errors.Annotatef(err, "combine event data")
 	}
 
 	// sad, in order to Decode a TableMapEvent, we need to set `tableIDSize` first, but it's a private field.
 	// so, we need to use a BinlogParser to parse a FormatDescriptionEvent first.
-	formatDescEv, err := GenFormatDescriptionEvent(timestamp, serverID, 4, flags)
+	formatDescEv, err := GenFormatDescriptionEvent(header, 4)
 	if err != nil {
 		return nil, errors.Annotatef(err, "generate FormatDescriptionEvent")
 	}
@@ -478,7 +479,7 @@ func GenTableMapEvent(timestamp uint32, serverID uint32, latestPos uint32, flags
 //   DELETE_ROWS_EVENTv0, DELETE_ROWS_EVENTv1, DELETE_ROWS_EVENTv2
 // ref: https://dev.mysql.com/doc/internals/en/rows-event.html
 // ref: http://blog.51cto.com/yanzongshuai/2090894
-func GenRowsEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint16, eventType replication.EventType, tableID uint64, rowsFlags uint16, rows [][]interface{}, columnType []byte) (*replication.BinlogEvent, error) {
+func GenRowsEvent(header *replication.EventHeader, latestPos uint32, eventType replication.EventType, tableID uint64, rowsFlags uint16, rows [][]interface{}, columnType []byte) (*replication.BinlogEvent, error) {
 	switch eventType {
 	case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2,
 		replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2,
@@ -591,7 +592,7 @@ func GenRowsEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uin
 	}
 
 	buf := new(bytes.Buffer)
-	_, err = assembleEvent(buf, nil, false, eventType, timestamp, serverID, latestPos, flags, postHeader.Bytes(), payload.Bytes())
+	_, err = assembleEvent(buf, nil, false, *header, eventType, latestPos, postHeader.Bytes(), payload.Bytes())
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -626,7 +627,7 @@ func GenRowsEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uin
 	parse2.SetVerifyChecksum(true)
 
 	// parse FormatDescriptionEvent
-	formatDescEv, err := GenFormatDescriptionEvent(timestamp, serverID, 4, flags)
+	formatDescEv, err := GenFormatDescriptionEvent(header, 4)
 	if err != nil {
 		return nil, errors.Annotatef(err, "generate FormatDescriptionEvent")
 	}
@@ -636,7 +637,7 @@ func GenRowsEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uin
 	}
 
 	// parse TableMapEvent
-	tableMapEv, err := GenTableMapEvent(timestamp, serverID, latestPos, flags, tableID, []byte("schema-placeholder"), []byte("table-placeholder"), columnType)
+	tableMapEv, err := GenTableMapEvent(header, latestPos, tableID, []byte("schema-placeholder"), []byte("table-placeholder"), columnType)
 	if err != nil {
 		return nil, errors.Annotatef(err, "generate TableMapEvent")
 	}
@@ -656,7 +657,7 @@ func GenRowsEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uin
 
 // GenXIDEvent generates a XIDEvent.
 // ref: https://dev.mysql.com/doc/internals/en/xid-event.html
-func GenXIDEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint16, xid uint64) (*replication.BinlogEvent, error) {
+func GenXIDEvent(header *replication.EventHeader, latestPos uint32, xid uint64) (*replication.BinlogEvent, error) {
 	// Payload
 	payload := new(bytes.Buffer)
 	err := binary.Write(payload, binary.LittleEndian, xid)
@@ -666,13 +667,13 @@ func GenXIDEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint
 
 	buf := new(bytes.Buffer)
 	event := &replication.XIDEvent{}
-	ev, err := assembleEvent(buf, event, false, replication.XID_EVENT, timestamp, serverID, latestPos, flags, nil, payload.Bytes())
+	ev, err := assembleEvent(buf, event, false, *header, replication.XID_EVENT, latestPos, nil, payload.Bytes())
 	return ev, errors.Trace(err)
 }
 
 // GenMariaDBGTIDListEvent generates a MariadbGTIDListEvent.
 // ref: https://mariadb.com/kb/en/library/gtid_list_event/
-func GenMariaDBGTIDListEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint16, gSet gtid.Set) (*replication.BinlogEvent, error) {
+func GenMariaDBGTIDListEvent(header *replication.EventHeader, latestPos uint32, gSet gtid.Set) (*replication.BinlogEvent, error) {
 	if gSet == nil || len(gSet.String()) == 0 {
 		return nil, errors.NotValidf("empty GTID set")
 	}
@@ -715,13 +716,13 @@ func GenMariaDBGTIDListEvent(timestamp uint32, serverID uint32, latestPos uint32
 
 	buf := new(bytes.Buffer)
 	event := &replication.MariadbGTIDListEvent{}
-	ev, err := assembleEvent(buf, event, false, replication.MARIADB_GTID_LIST_EVENT, timestamp, serverID, latestPos, flags, nil, payload.Bytes())
+	ev, err := assembleEvent(buf, event, false, *header, replication.MARIADB_GTID_LIST_EVENT, latestPos, nil, payload.Bytes())
 	return ev, errors.Trace(err)
 }
 
 // GenMariaDBGTIDEvent generates a MariadbGTIDEvent.
 // ref: https://mariadb.com/kb/en/library/gtid_event/
-func GenMariaDBGTIDEvent(timestamp uint32, serverID uint32, latestPos uint32, flags uint16, sequenceNum uint64, domainID uint32) (*replication.BinlogEvent, error) {
+func GenMariaDBGTIDEvent(header *replication.EventHeader, latestPos uint32, sequenceNum uint64, domainID uint32) (*replication.BinlogEvent, error) {
 	payload := new(bytes.Buffer)
 
 	// GTID sequence, 8 bytes
@@ -753,6 +754,6 @@ func GenMariaDBGTIDEvent(timestamp uint32, serverID uint32, latestPos uint32, fl
 
 	buf := new(bytes.Buffer)
 	event := &replication.MariadbGTIDEvent{}
-	ev, err := assembleEvent(buf, event, false, replication.MARIADB_GTID_EVENT, timestamp, serverID, latestPos, flags, nil, payload.Bytes())
+	ev, err := assembleEvent(buf, event, false, *header, replication.MARIADB_GTID_EVENT, latestPos, nil, payload.Bytes())
 	return ev, errors.Trace(err)
 }

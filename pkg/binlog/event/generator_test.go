@@ -41,70 +41,50 @@ type testGeneratorSuite struct {
 
 func (t *testGeneratorSuite) TestGenEventHeader(c *C) {
 	var (
-		timestamp        = uint32(time.Now().Unix())
-		eventType        = replication.FORMAT_DESCRIPTION_EVENT
-		serverID  uint32 = 11
-		eventSize uint32 = 109
-		logPos    uint32 = 123
-		flags     uint16 = 0x01
+		latestPos uint32 = 4
+		header           = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			EventType: replication.FORMAT_DESCRIPTION_EVENT,
+			ServerID:  11,
+			Flags:     0x01,
+			LogPos:    latestPos + 109,
+			EventSize: 109, // current binlog version, 109,
+		}
 	)
 
-	eh, data, err := GenEventHeader(timestamp, eventType, serverID, eventSize, logPos, flags)
+	data, err := GenEventHeader(header)
 	c.Assert(err, IsNil)
 	c.Assert(uint8(len(data)), Equals, eventHeaderLen)
-	c.Assert(eh.EventType, Equals, eventType)
-	c.Assert(eh.ServerID, Equals, serverID)
-	c.Assert(eh.EventSize, Equals, eventSize)
-	c.Assert(eh.LogPos, Equals, logPos)
-	c.Assert(eh.Flags, Equals, flags)
-	c.Assert(eh.Timestamp, LessEqual, timestamp)
 
-	timestamp += 1000
-	eh, _, err = GenEventHeader(timestamp, eventType, serverID, eventSize, logPos, flags)
+	header2 := &replication.EventHeader{}
+	err = header2.Decode(data)
 	c.Assert(err, IsNil)
-	c.Assert(eh.Timestamp, Equals, timestamp)
+	verifyHeader(c, header2, header, header.EventType, latestPos, header.EventSize)
+}
 
-	eventType = replication.ROTATE_EVENT
-	eh, _, err = GenEventHeader(timestamp, eventType, serverID, eventSize, logPos, flags)
-	c.Assert(err, IsNil)
-	c.Assert(eh.EventType, Equals, eventType)
-
-	serverID = 22
-	eh, _, err = GenEventHeader(timestamp, eventType, serverID, eventSize, logPos, flags)
-	c.Assert(err, IsNil)
-	c.Assert(eh.ServerID, Equals, serverID)
-
-	eventSize = 100
-	eh, _, err = GenEventHeader(timestamp, eventType, serverID, eventSize, logPos, flags)
-	c.Assert(err, IsNil)
-	c.Assert(eh.EventSize, Equals, eventSize)
-
-	logPos = 456
-	eh, _, err = GenEventHeader(timestamp, eventType, serverID, eventSize, logPos, flags)
-	c.Assert(err, IsNil)
-	c.Assert(eh.LogPos, Equals, logPos)
-
-	flags |= 0x0040
-	eh, _, err = GenEventHeader(timestamp, eventType, serverID, eventSize, logPos, flags)
-	c.Assert(err, IsNil)
-	c.Assert(eh.Flags, Equals, flags)
+func verifyHeader(c *C, obtained, excepted *replication.EventHeader, eventType replication.EventType, latestPos, eventSize uint32) {
+	c.Assert(obtained.Timestamp, Equals, excepted.Timestamp)
+	c.Assert(obtained.ServerID, Equals, excepted.ServerID)
+	c.Assert(obtained.Flags, Equals, excepted.Flags)
+	c.Assert(obtained.EventType, Equals, eventType)
+	c.Assert(obtained.EventSize, Equals, eventSize)
+	c.Assert(obtained.LogPos, Equals, eventSize+latestPos)
 }
 
 func (t *testGeneratorSuite) TestGenFormatDescriptionEvent(c *C) {
 	var (
-		timestamp        = uint32(time.Now().Unix())
-		serverID  uint32 = 11
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+			Flags:     0x01,
+		}
 		latestPos uint32 = 4
-		flags     uint16 = 0x01
 	)
-	ev, err := GenFormatDescriptionEvent(timestamp, serverID, latestPos, flags)
+	ev, err := GenFormatDescriptionEvent(header, latestPos)
 	c.Assert(err, IsNil)
 
 	// verify the header
-	c.Assert(ev.Header.Timestamp, Equals, timestamp)
-	c.Assert(ev.Header.ServerID, Equals, serverID)
-	c.Assert(ev.Header.LogPos, Equals, latestPos+ev.Header.EventSize)
-	c.Assert(ev.Header.Flags, Equals, flags)
+	verifyHeader(c, ev.Header, header, replication.FORMAT_DESCRIPTION_EVENT, latestPos, uint32(len(ev.RawData)))
 
 	// some fields of FormatDescriptionEvent are a little hard to test, so we try to parse a binlog file.
 	dir := c.MkDir()
@@ -137,16 +117,18 @@ func (t *testGeneratorSuite) TestGenFormatDescriptionEvent(c *C) {
 
 func (t *testGeneratorSuite) TestGenPreviousGTIDsEvent(c *C) {
 	var (
-		timestamp        = uint32(time.Now().Unix())
-		serverID  uint32 = 11
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+			Flags:     0x01,
+		}
 		latestPos uint32 = 4
-		flags     uint16 = 0x01
 		str              = "9f61c5f9-1eef-11e9-b6cf-0242ac140003:1-5"
 	)
 
 	// go-mysql has no PreviousGTIDsEvent struct defined, so we try to parse a binlog file.
 	// always needing a FormatDescriptionEvent in the binlog file.
-	formatDescEv, err := GenFormatDescriptionEvent(timestamp, serverID, latestPos, flags)
+	formatDescEv, err := GenFormatDescriptionEvent(header, latestPos)
 	c.Assert(err, IsNil)
 
 	// update latestPos
@@ -156,7 +138,7 @@ func (t *testGeneratorSuite) TestGenPreviousGTIDsEvent(c *C) {
 	gSet, err := gtid.ParserGTID(gmysql.MySQLFlavor, str)
 	c.Assert(err, IsNil)
 
-	previousGTIDData, err := GenPreviousGTIDsEvent(timestamp, serverID, latestPos, flags, gSet)
+	previousGTIDData, err := GenPreviousGTIDsEvent(header, latestPos, gSet)
 	c.Assert(err, IsNil)
 
 	dir := c.MkDir()
@@ -204,7 +186,7 @@ func (t *testGeneratorSuite) TestGenPreviousGTIDsEvent(c *C) {
 	gSet, err = gtid.ParserGTID(gmysql.MySQLFlavor, str)
 	c.Assert(err, IsNil)
 
-	previousGTIDData, err = GenPreviousGTIDsEvent(timestamp, serverID, latestPos, flags, gSet)
+	previousGTIDData, err = GenPreviousGTIDsEvent(header, latestPos, gSet)
 	c.Assert(err, IsNil)
 
 	// write another file
@@ -232,10 +214,12 @@ func (t *testGeneratorSuite) TestGenPreviousGTIDsEvent(c *C) {
 
 func (t *testGeneratorSuite) TestGenGTIDEvent(c *C) {
 	var (
-		timestamp            = uint32(time.Now().Unix())
-		serverID      uint32 = 11
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+			Flags:     0x01,
+		}
 		latestPos     uint32 = 4
-		flags         uint16 = 0x01
 		gtidFlags            = GTIDFlagsCommitYes
 		prevGTIDsStr         = "9f61c5f9-1eef-11e9-b6cf-0242ac140003:1-5"
 		uuid                 = "9f61c5f9-1eef-11e9-b6cf-0242ac140003"
@@ -246,25 +230,22 @@ func (t *testGeneratorSuite) TestGenGTIDEvent(c *C) {
 	c.Assert(err, IsNil)
 
 	// always needing a FormatDescriptionEvent in the binlog file.
-	formatDescEv, err := GenFormatDescriptionEvent(timestamp, serverID, latestPos, flags)
+	formatDescEv, err := GenFormatDescriptionEvent(header, latestPos)
 	c.Assert(err, IsNil)
 	latestPos = formatDescEv.Header.LogPos // update latestPos
 
 	// also needing a PreviousGTIDsEvent after FormatDescriptionEvent
 	gSet, err := gtid.ParserGTID(gmysql.MySQLFlavor, prevGTIDsStr)
 	c.Assert(err, IsNil)
-	previousGTIDData, err := GenPreviousGTIDsEvent(timestamp, serverID, latestPos, flags, gSet)
+	previousGTIDData, err := GenPreviousGTIDsEvent(header, latestPos, gSet)
 	c.Assert(err, IsNil)
 	latestPos += uint32(len(previousGTIDData)) // update latestPos
 
-	gtidEv, err := GenGTIDEvent(timestamp, serverID, latestPos, flags, gtidFlags, uuid, gno, lastCommitted, lastCommitted+1)
+	gtidEv, err := GenGTIDEvent(header, latestPos, gtidFlags, uuid, gno, lastCommitted, lastCommitted+1)
 	c.Assert(err, IsNil)
 
 	// verify the header
-	c.Assert(gtidEv.Header.Timestamp, Equals, timestamp)
-	c.Assert(gtidEv.Header.ServerID, Equals, serverID)
-	c.Assert(gtidEv.Header.LogPos, Equals, latestPos+gtidEv.Header.EventSize)
-	c.Assert(gtidEv.Header.Flags, Equals, flags)
+	verifyHeader(c, gtidEv.Header, header, replication.GTID_EVENT, latestPos, uint32(len(gtidEv.RawData)))
 
 	// verify the body
 	gtidEvBody, ok := gtidEv.Event.(*replication.GTIDEvent)
@@ -322,10 +303,12 @@ func (t *testGeneratorSuite) TestGenGTIDEvent(c *C) {
 
 func (t *testGeneratorSuite) TestGenQueryEvent(c *C) {
 	var (
-		timestamp            = uint32(time.Now().Unix())
-		serverID      uint32 = 11
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+			Flags:     0x01,
+		}
 		latestPos     uint32 = 4
-		flags         uint16 = 0x01
 		slaveProxyID  uint32 = 2
 		executionTime uint32 = 12
 		errorCode     uint16 = 13
@@ -335,21 +318,18 @@ func (t *testGeneratorSuite) TestGenQueryEvent(c *C) {
 	)
 
 	// empty query, invalid
-	queryEv, err := GenQueryEvent(timestamp, serverID, latestPos, flags, slaveProxyID, executionTime, errorCode, statusVars, schema, query)
+	queryEv, err := GenQueryEvent(header, latestPos, slaveProxyID, executionTime, errorCode, statusVars, schema, query)
 	c.Assert(err, NotNil)
 	c.Assert(queryEv, IsNil)
 
 	// valid query
 	query = []byte("BEGIN")
-	queryEv, err = GenQueryEvent(timestamp, serverID, latestPos, flags, slaveProxyID, executionTime, errorCode, statusVars, schema, query)
+	queryEv, err = GenQueryEvent(header, latestPos, slaveProxyID, executionTime, errorCode, statusVars, schema, query)
 	c.Assert(err, IsNil)
 	c.Assert(queryEv, NotNil)
 
 	// verify the header
-	c.Assert(queryEv.Header.Timestamp, Equals, timestamp)
-	c.Assert(queryEv.Header.ServerID, Equals, serverID)
-	c.Assert(queryEv.Header.LogPos, Equals, latestPos+queryEv.Header.EventSize)
-	c.Assert(queryEv.Header.Flags, Equals, flags)
+	verifyHeader(c, queryEv.Header, header, replication.QUERY_EVENT, latestPos, uint32(len(queryEv.RawData)))
 
 	// verify the body
 	queryEvBody, ok := queryEv.Event.(*replication.QueryEvent)
@@ -365,7 +345,7 @@ func (t *testGeneratorSuite) TestGenQueryEvent(c *C) {
 	// non-empty schema
 	schema = []byte("db")
 	query = []byte("CREATE TABLE db.tbl (c1 int)")
-	queryEv, err = GenQueryEvent(timestamp, serverID, latestPos, flags, slaveProxyID, executionTime, errorCode, statusVars, schema, query)
+	queryEv, err = GenQueryEvent(header, latestPos, slaveProxyID, executionTime, errorCode, statusVars, schema, query)
 	c.Assert(err, IsNil)
 	c.Assert(queryEv, NotNil)
 
@@ -378,7 +358,7 @@ func (t *testGeneratorSuite) TestGenQueryEvent(c *C) {
 
 	// non-empty statusVars
 	statusVars = []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x20, 0x00, 0xa0, 0x55, 0x00, 0x00, 0x00, 0x00, 0x06, 0x03, 0x73, 0x74, 0x64, 0x04, 0x21, 0x00, 0x21, 0x00, 0x08, 0x00, 0x0c, 0x01, 0x73, 0x68, 0x61, 0x72, 0x64, 0x5f, 0x64, 0x62, 0x5f, 0x31, 0x00}
-	queryEv, err = GenQueryEvent(timestamp, serverID, latestPos, flags, slaveProxyID, executionTime, errorCode, statusVars, schema, query)
+	queryEv, err = GenQueryEvent(header, latestPos, slaveProxyID, executionTime, errorCode, statusVars, schema, query)
 	c.Assert(err, IsNil)
 	c.Assert(queryEv, NotNil)
 
@@ -391,10 +371,12 @@ func (t *testGeneratorSuite) TestGenQueryEvent(c *C) {
 
 func (t *testGeneratorSuite) TestGenTableMapEvent(c *C) {
 	var (
-		timestamp         = uint32(time.Now().Unix())
-		serverID   uint32 = 11
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+			Flags:     0x01,
+		}
 		latestPos  uint32 = 123
-		flags      uint16 = 0x01
 		tableID    uint64 = 108
 		schema     []byte // nil
 		table      []byte // nil
@@ -402,33 +384,30 @@ func (t *testGeneratorSuite) TestGenTableMapEvent(c *C) {
 	)
 
 	// invalid schema, table and columnType
-	tableMapEv, err := GenTableMapEvent(timestamp, serverID, latestPos, flags, tableID, schema, table, columnType)
+	tableMapEv, err := GenTableMapEvent(header, latestPos, tableID, schema, table, columnType)
 	c.Assert(err, NotNil)
 	c.Assert(tableMapEv, IsNil)
 
 	// valid schema, invalid table and columnType
 	schema = []byte("db")
-	tableMapEv, err = GenTableMapEvent(timestamp, serverID, latestPos, flags, tableID, schema, table, columnType)
+	tableMapEv, err = GenTableMapEvent(header, latestPos, tableID, schema, table, columnType)
 	c.Assert(err, NotNil)
 	c.Assert(tableMapEv, IsNil)
 
 	// valid schema and table, invalid columnType
 	table = []byte("tbl")
-	tableMapEv, err = GenTableMapEvent(timestamp, serverID, latestPos, flags, tableID, schema, table, columnType)
+	tableMapEv, err = GenTableMapEvent(header, latestPos, tableID, schema, table, columnType)
 	c.Assert(err, NotNil)
 	c.Assert(tableMapEv, IsNil)
 
 	// all valid
 	columnType = []byte{gmysql.MYSQL_TYPE_LONG}
-	tableMapEv, err = GenTableMapEvent(timestamp, serverID, latestPos, flags, tableID, schema, table, columnType)
+	tableMapEv, err = GenTableMapEvent(header, latestPos, tableID, schema, table, columnType)
 	c.Assert(err, IsNil)
 	c.Assert(tableMapEv, NotNil)
 
 	// verify the header
-	c.Assert(tableMapEv.Header.Timestamp, Equals, timestamp)
-	c.Assert(tableMapEv.Header.ServerID, Equals, serverID)
-	c.Assert(tableMapEv.Header.LogPos, Equals, latestPos+tableMapEv.Header.EventSize)
-	c.Assert(tableMapEv.Header.Flags, Equals, flags)
+	verifyHeader(c, tableMapEv.Header, header, replication.TABLE_MAP_EVENT, latestPos, uint32(len(tableMapEv.RawData)))
 
 	// verify the body
 	tableMapEvBody, ok := tableMapEv.Event.(*replication.TableMapEvent)
@@ -443,7 +422,7 @@ func (t *testGeneratorSuite) TestGenTableMapEvent(c *C) {
 
 	// multi column type
 	columnType = []byte{gmysql.MYSQL_TYPE_STRING, gmysql.MYSQL_TYPE_NEWDECIMAL, gmysql.MYSQL_TYPE_VAR_STRING, gmysql.MYSQL_TYPE_BLOB}
-	tableMapEv, err = GenTableMapEvent(timestamp, serverID, latestPos, flags, tableID, schema, table, columnType)
+	tableMapEv, err = GenTableMapEvent(header, latestPos, tableID, schema, table, columnType)
 	c.Assert(err, IsNil)
 	c.Assert(tableMapEv, NotNil)
 
@@ -456,17 +435,19 @@ func (t *testGeneratorSuite) TestGenTableMapEvent(c *C) {
 
 	// unsupported column type
 	columnType = []byte{gmysql.MYSQL_TYPE_NEWDATE}
-	tableMapEv, err = GenTableMapEvent(timestamp, serverID, latestPos, flags, tableID, schema, table, columnType)
+	tableMapEv, err = GenTableMapEvent(header, latestPos, tableID, schema, table, columnType)
 	c.Assert(err, NotNil)
 	c.Assert(tableMapEv, IsNil)
 }
 
 func (t *testGeneratorSuite) TestGenRowsEvent(c *C) {
 	var (
-		timestamp         = uint32(time.Now().Unix())
-		serverID   uint32 = 11
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+			Flags:     0x01,
+		}
 		latestPos  uint32 = 123
-		flags      uint16 = 0x01
 		tableID    uint64 = 108
 		eventType         = replication.TABLE_MAP_EVENT
 		rowsFlag          = RowFlagsEndOfStatement
@@ -475,35 +456,31 @@ func (t *testGeneratorSuite) TestGenRowsEvent(c *C) {
 	)
 
 	// invalid eventType, rows and columnType
-	rowsEv, err := GenRowsEvent(timestamp, serverID, latestPos, flags, eventType, tableID, rowsFlag, rows, columnType)
+	rowsEv, err := GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType)
 	c.Assert(err, NotNil)
 	c.Assert(rowsEv, IsNil)
 
 	// valid eventType, invalid rows and columnType
 	eventType = replication.WRITE_ROWS_EVENTv0
-	rowsEv, err = GenRowsEvent(timestamp, serverID, latestPos, flags, eventType, tableID, rowsFlag, rows, columnType)
+	rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType)
 	c.Assert(err, NotNil)
 	c.Assert(rowsEv, IsNil)
 
 	// valid eventType and rows, invalid columnType
 	row := []interface{}{int32(1)}
 	rows = append(rows, row)
-	rowsEv, err = GenRowsEvent(timestamp, serverID, latestPos, flags, eventType, tableID, rowsFlag, rows, columnType)
+	rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType)
 	c.Assert(err, NotNil)
 	c.Assert(rowsEv, IsNil)
 
 	// all valid
 	columnType = []byte{gmysql.MYSQL_TYPE_LONG}
-	rowsEv, err = GenRowsEvent(timestamp, serverID, latestPos, flags, eventType, tableID, rowsFlag, rows, columnType)
+	rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType)
 	c.Assert(err, IsNil)
 	c.Assert(rowsEv, NotNil)
 
 	// verify the header
-	c.Assert(rowsEv.Header.Timestamp, Equals, timestamp)
-	c.Assert(rowsEv.Header.ServerID, Equals, serverID)
-	c.Assert(rowsEv.Header.LogPos, Equals, latestPos+rowsEv.Header.EventSize)
-	c.Assert(rowsEv.Header.Flags, Equals, flags)
-	c.Assert(rowsEv.Header.EventType, Equals, eventType)
+	verifyHeader(c, rowsEv.Header, header, eventType, latestPos, uint32(len(rowsEv.RawData)))
 
 	// verify the body
 	rowsEvBody, ok := rowsEv.Event.(*replication.RowsEvent)
@@ -519,7 +496,7 @@ func (t *testGeneratorSuite) TestGenRowsEvent(c *C) {
 
 	// multi rows, with different length, invalid
 	rows = append(rows, []interface{}{int32(1), int32(2)})
-	rowsEv, err = GenRowsEvent(timestamp, serverID, latestPos, flags, eventType, tableID, rowsFlag, rows, columnType)
+	rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType)
 	c.Assert(err, NotNil)
 	c.Assert(rowsEv, IsNil)
 
@@ -528,7 +505,7 @@ func (t *testGeneratorSuite) TestGenRowsEvent(c *C) {
 	rows = append(rows, []interface{}{int32(1), int32(2)})
 	rows = append(rows, []interface{}{int32(3), int32(4)})
 	columnType = []byte{gmysql.MYSQL_TYPE_LONG, gmysql.MYSQL_TYPE_LONG}
-	rowsEv, err = GenRowsEvent(timestamp, serverID, latestPos, flags, eventType, tableID, rowsFlag, rows, columnType)
+	rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType)
 	c.Assert(err, IsNil)
 	c.Assert(rowsEv, NotNil)
 	// verify the body
@@ -545,7 +522,7 @@ func (t *testGeneratorSuite) TestGenRowsEvent(c *C) {
 		replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2,
 	}
 	for _, eventType = range evTypes {
-		rowsEv, err = GenRowsEvent(timestamp, serverID, latestPos, flags, eventType, tableID, rowsFlag, rows, columnType)
+		rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType)
 		c.Assert(err, IsNil)
 		c.Assert(rowsEv, NotNil)
 		c.Assert(rowsEv.Header.EventType, Equals, eventType)
@@ -557,7 +534,7 @@ func (t *testGeneratorSuite) TestGenRowsEvent(c *C) {
 		float32(1.23), float64(4.56), "string with type STRING"})
 	columnType = []byte{gmysql.MYSQL_TYPE_LONG, gmysql.MYSQL_TYPE_TINY, gmysql.MYSQL_TYPE_SHORT, gmysql.MYSQL_TYPE_INT24, gmysql.MYSQL_TYPE_LONGLONG,
 		gmysql.MYSQL_TYPE_FLOAT, gmysql.MYSQL_TYPE_DOUBLE, gmysql.MYSQL_TYPE_STRING}
-	rowsEv, err = GenRowsEvent(timestamp, serverID, latestPos, flags, eventType, tableID, rowsFlag, rows, columnType)
+	rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType)
 	c.Assert(err, IsNil)
 	c.Assert(rowsEv, NotNil)
 	// verify the body
@@ -569,7 +546,7 @@ func (t *testGeneratorSuite) TestGenRowsEvent(c *C) {
 
 	// column type mismatch
 	rows[0][0] = int8(1)
-	rowsEv, err = GenRowsEvent(timestamp, serverID, latestPos, flags, eventType, tableID, rowsFlag, rows, columnType)
+	rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType)
 	c.Assert(err, NotNil)
 	c.Assert(rowsEv, IsNil)
 
@@ -585,7 +562,7 @@ func (t *testGeneratorSuite) TestGenRowsEvent(c *C) {
 		gmysql.MYSQL_TYPE_BLOB, gmysql.MYSQL_TYPE_JSON, gmysql.MYSQL_TYPE_GEOMETRY}
 	for i := range unsupportedTypes {
 		columnType = unsupportedTypes[i : i+1]
-		rowsEv, err = GenRowsEvent(timestamp, serverID, latestPos, flags, eventType, tableID, rowsFlag, rows, columnType)
+		rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType)
 		c.Assert(err, NotNil)
 		c.Assert(strings.Contains(err.Error(), "not supported"), IsTrue)
 		c.Assert(rowsEv, IsNil)
@@ -594,22 +571,21 @@ func (t *testGeneratorSuite) TestGenRowsEvent(c *C) {
 
 func (t *testGeneratorSuite) TestGenXIDEvent(c *C) {
 	var (
-		timestamp        = uint32(time.Now().Unix())
-		serverID  uint32 = 11
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+			Flags:     0x01,
+		}
 		latestPos uint32 = 4
-		flags     uint16 = 0x01
 		xid       uint64 = 123
 	)
 
-	xidEv, err := GenXIDEvent(timestamp, serverID, latestPos, flags, xid)
+	xidEv, err := GenXIDEvent(header, latestPos, xid)
 	c.Assert(err, IsNil)
 	c.Assert(xidEv, NotNil)
 
 	// verify the header
-	c.Assert(xidEv.Header.Timestamp, Equals, timestamp)
-	c.Assert(xidEv.Header.ServerID, Equals, serverID)
-	c.Assert(xidEv.Header.LogPos, Equals, latestPos+xidEv.Header.EventSize)
-	c.Assert(xidEv.Header.Flags, Equals, flags)
+	verifyHeader(c, xidEv.Header, header, replication.XID_EVENT, latestPos, uint32(len(xidEv.RawData)))
 
 	// verify the body
 	xidEvBody, ok := xidEv.Event.(*replication.XIDEvent)
@@ -620,15 +596,17 @@ func (t *testGeneratorSuite) TestGenXIDEvent(c *C) {
 
 func (t *testGeneratorSuite) TestGenMariaDBGTIDListEvent(c *C) {
 	var (
-		timestamp          = uint32(time.Now().Unix())
-		serverID  uint32   = 11
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+			Flags:     0x01,
+		}
 		latestPos uint32   = 4
-		flags     uint16   = 0x01
 		gSet      gtid.Set // invalid
 	)
 
 	// invalid gSet
-	gtidListEv, err := GenMariaDBGTIDListEvent(timestamp, serverID, latestPos, flags, gSet)
+	gtidListEv, err := GenMariaDBGTIDListEvent(header, latestPos, gSet)
 	c.Assert(err, NotNil)
 	c.Assert(gtidListEv, IsNil)
 
@@ -640,15 +618,12 @@ func (t *testGeneratorSuite) TestGenMariaDBGTIDListEvent(c *C) {
 	c.Assert(ok, IsTrue)
 	c.Assert(mGSet, NotNil)
 
-	gtidListEv, err = GenMariaDBGTIDListEvent(timestamp, serverID, latestPos, flags, gSet)
+	gtidListEv, err = GenMariaDBGTIDListEvent(header, latestPos, gSet)
 	c.Assert(err, IsNil)
 	c.Assert(gtidListEv, NotNil)
 
 	// verify the header
-	c.Assert(gtidListEv.Header.Timestamp, Equals, timestamp)
-	c.Assert(gtidListEv.Header.ServerID, Equals, serverID)
-	c.Assert(gtidListEv.Header.LogPos, Equals, latestPos+gtidListEv.Header.EventSize)
-	c.Assert(gtidListEv.Header.Flags, Equals, flags)
+	verifyHeader(c, gtidListEv.Header, header, replication.MARIADB_GTID_LIST_EVENT, latestPos, uint32(len(gtidListEv.RawData)))
 
 	// verify the body
 	gtidListEvBody, ok := gtidListEv.Event.(*replication.MariadbGTIDListEvent)
@@ -666,7 +641,7 @@ func (t *testGeneratorSuite) TestGenMariaDBGTIDListEvent(c *C) {
 	c.Assert(ok, IsTrue)
 	c.Assert(mGSet, NotNil)
 
-	gtidListEv, err = GenMariaDBGTIDListEvent(timestamp, serverID, latestPos, flags, gSet)
+	gtidListEv, err = GenMariaDBGTIDListEvent(header, latestPos, gSet)
 	c.Assert(err, IsNil)
 	c.Assert(gtidListEv, NotNil)
 
@@ -684,23 +659,22 @@ func (t *testGeneratorSuite) TestGenMariaDBGTIDListEvent(c *C) {
 
 func (t *testGeneratorSuite) TestGenMariaDBGTIDEvent(c *C) {
 	var (
-		timestamp        = uint32(time.Now().Unix())
-		serverID  uint32 = 11
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+			Flags:     0x01,
+		}
 		latestPos uint32 = 4
-		flags     uint16 = 0x01
 		seqNum    uint64 = 123
 		domainID  uint32 = 456
 	)
 
-	gtidEv, err := GenMariaDBGTIDEvent(timestamp, serverID, latestPos, flags, seqNum, domainID)
+	gtidEv, err := GenMariaDBGTIDEvent(header, latestPos, seqNum, domainID)
 	c.Assert(err, IsNil)
 	c.Assert(gtidEv, NotNil)
 
 	// verify the header
-	c.Assert(gtidEv.Header.Timestamp, Equals, timestamp)
-	c.Assert(gtidEv.Header.ServerID, Equals, serverID)
-	c.Assert(gtidEv.Header.LogPos, Equals, latestPos+gtidEv.Header.EventSize)
-	c.Assert(gtidEv.Header.Flags, Equals, flags)
+	verifyHeader(c, gtidEv.Header, header, replication.MARIADB_GTID_EVENT, latestPos, uint32(len(gtidEv.RawData)))
 
 	// verify the body
 	gtidEvBody, ok := gtidEv.Event.(*replication.MariadbGTIDEvent)
