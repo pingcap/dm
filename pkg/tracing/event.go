@@ -36,6 +36,8 @@ func (e EventType) String() string {
 		return "null"
 	case EventSyncerBinlog:
 		return "syncer binlog"
+	case EventSyncerJob:
+		return "syncer job"
 	case EventFlush:
 		return "flush"
 	default:
@@ -65,14 +67,14 @@ func (t *Tracer) processTraceEvents(jobs []*Job) error {
 				return errors.Errorf("invalid event data for type: %s", tp)
 			}
 			events = append(events, event)
-			req := &pb.UploadSyncerBinlogEventRequest{Events: events}
-			resp, err := t.cli.UploadSyncerBinlogEvent(t.ctx, req)
-			if err != nil {
-				return errors.Trace(err)
-			}
-			if !resp.Result {
-				return errors.Errorf("upload syncer binlog event failed, msg: %s", resp.Msg)
-			}
+		}
+		req := &pb.UploadSyncerBinlogEventRequest{Events: events}
+		resp, err := t.cli.UploadSyncerBinlogEvent(t.ctx, req)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		if !resp.Result {
+			return errors.Errorf("upload syncer binlog event failed, msg: %s", resp.Msg)
 		}
 	case EventSyncerJob:
 		events := make([]*pb.SyncerJobEvent, 0, len(jobs))
@@ -82,14 +84,14 @@ func (t *Tracer) processTraceEvents(jobs []*Job) error {
 				return errors.Errorf("invalid event data for type: %s", tp)
 			}
 			events = append(events, event)
-			req := &pb.UploadSyncerJobEventRequest{Events: events}
-			resp, err := t.cli.UploadSyncerJobEvent(t.ctx, req)
-			if err != nil {
-				return errors.Trace(err)
-			}
-			if !resp.Result {
-				return errors.Errorf("upload syncer binlog event failed, msg: %s", resp.Msg)
-			}
+		}
+		req := &pb.UploadSyncerJobEventRequest{Events: events}
+		resp, err := t.cli.UploadSyncerJobEvent(t.ctx, req)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		if !resp.Result {
+			return errors.Errorf("upload syncer binlog event failed, msg: %s", resp.Msg)
 		}
 	default:
 		return errors.Errorf("invalid event type %s, will not process", tp)

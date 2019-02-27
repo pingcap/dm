@@ -179,7 +179,7 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan <-chan *Job) {
 	)
 
 	clearJobs := func() {
-		jobs = jobs[0:0]
+		jobs = jobs[:0]
 	}
 
 	processError := func(err error) {
