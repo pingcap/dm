@@ -42,15 +42,11 @@ type GenColCache struct {
 	// `schema`.`table` -> column list
 	columns map[string][]*column
 
-	// `schema`.`table` -> tableIndex information
-	indexes map[string]map[string][]*column
-
 	// `schema`.`table` -> a bool slice representing whether it is generated for each column
 	isGenColumn map[string][]bool
 }
 
-// genDMLParam stores pruned columns, data, index as well as the original
-// columns, data, index
+// genDMLParam stores pruned columns, data as well as the original columns, data, index
 type genDMLParam struct {
 	schema               string
 	table                string
@@ -59,7 +55,6 @@ type genDMLParam struct {
 	originalData         [][]interface{}      // all data
 	columns              []*column            // pruned columns
 	originalColumns      []*column            // all columns
-	indexColumns         map[string][]*column // pruned index information
 	originalIndexColumns map[string][]*column // all index information
 }
 
@@ -88,14 +83,12 @@ func (c *GenColCache) clearTable(schema, table string) {
 	key := dbutil.TableName(schema, table)
 	delete(c.hasGenColumn, key)
 	delete(c.columns, key)
-	delete(c.indexes, key)
 	delete(c.isGenColumn, key)
 }
 
 func (c *GenColCache) reset() {
 	c.hasGenColumn = make(map[string]bool)
 	c.columns = make(map[string][]*column)
-	c.indexes = make(map[string]map[string][]*column)
 	c.isGenColumn = make(map[string][]bool)
 }
 
@@ -125,8 +118,12 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		}
 		originalData := originalDataSeq[dataIdx]
 		originalValue := make([]interface{}, 0, len(originalData))
-		for i := range originalData {
-			originalValue = append(originalValue, castUnsigned(originalData[i], originalColumns[i].unsigned, originalColumns[i].tp))
+		if len(columns) == len(originalColumns) {
+			originalValue = value
+		} else {
+			for i := range originalData {
+				originalValue = append(originalValue, castUnsigned(originalData[i], originalColumns[i].unsigned, originalColumns[i].tp))
+			}
 		}
 
 		sql := fmt.Sprintf("REPLACE INTO `%s`.`%s` (%s) VALUES (%s);", schema, table, columnList, columnPlaceholders)
@@ -179,13 +176,19 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		for i := range changedData {
 			changedValues = append(changedValues, castUnsigned(changedData[i], columns[i].unsigned, columns[i].tp))
 		}
+
 		oriOldValues := make([]interface{}, 0, len(oriOldData))
-		for i := range oriOldData {
-			oriOldValues = append(oriOldValues, castUnsigned(oriOldData[i], originalColumns[i].unsigned, originalColumns[i].tp))
-		}
 		oriChangedValues := make([]interface{}, 0, len(oriChangedData))
-		for i := range oriChangedData {
-			oriChangedValues = append(oriChangedValues, castUnsigned(oriChangedData[i], originalColumns[i].unsigned, originalColumns[i].tp))
+		if len(columns) == len(originalColumns) {
+			oriOldValues = oldValues
+			oriChangedValues = changedValues
+		} else {
+			for i := range oriOldData {
+				oriOldValues = append(oriOldValues, castUnsigned(oriOldData[i], originalColumns[i].unsigned, originalColumns[i].tp))
+			}
+			for i := range oriChangedData {
+				oriChangedValues = append(oriChangedValues, castUnsigned(oriChangedData[i], originalColumns[i].unsigned, originalColumns[i].tp))
+			}
 		}
 
 		if len(defaultIndexColumns) == 0 {
@@ -543,29 +546,25 @@ func (s *Syncer) mappingDML(schema, table string, columns []string, data [][]int
 // pruneGeneratedColumnDML filters columns list, data and index removing all
 // generated column. because generated column is not support setting value
 // directly in DML, we must remove generated column from DML, including column
-// list, data list and all indexes including generated columns.
-func pruneGeneratedColumnDML(columns []*column, data [][]interface{}, index map[string][]*column, schema, table string, cache *GenColCache) ([]*column, [][]interface{}, map[string][]*column, error) {
+// list and data list including generated columns.
+func pruneGeneratedColumnDML(columns []*column, data [][]interface{}, schema, table string, cache *GenColCache) ([]*column, [][]interface{}, error) {
 	var (
 		cacheKey    = dbutil.TableName(schema, table)
 		cacheStatus = cache.status(cacheKey)
 	)
 
 	if cacheStatus == noGenColumn {
-		return columns, data, index, nil
+		return columns, data, nil
 	}
 	if cacheStatus == hasGenColumn {
 		rows := make([][]interface{}, 0, len(data))
 		filters, ok1 := cache.isGenColumn[cacheKey]
 		if !ok1 {
-			return nil, nil, nil, errors.NotFoundf("cache key %s in isGenColumn", cacheKey)
+			return nil, nil, errors.NotFoundf("cache key %s in isGenColumn", cacheKey)
 		}
 		cols, ok2 := cache.columns[cacheKey]
 		if !ok2 {
-			return nil, nil, nil, errors.NotFoundf("cache key %s in columns", cacheKey)
-		}
-		idxes, ok3 := cache.indexes[cacheKey]
-		if !ok3 {
-			return nil, nil, nil, errors.NotFoundf("cache key %s in indexes", cacheKey)
+			return nil, nil, errors.NotFoundf("cache key %s in columns", cacheKey)
 		}
 		for _, row := range data {
 			value := make([]interface{}, 0, len(row))
@@ -576,7 +575,7 @@ func pruneGeneratedColumnDML(columns []*column, data [][]interface{}, index map[
 			}
 			rows = append(rows, value)
 		}
-		return cols, rows, idxes, nil
+		return cols, rows, nil
 	}
 
 	var (
@@ -596,13 +595,12 @@ func pruneGeneratedColumnDML(columns []*column, data [][]interface{}, index map[
 
 	if !needPrune {
 		cache.hasGenColumn[cacheKey] = false
-		return columns, data, index, nil
+		return columns, data, nil
 	}
 
 	var (
-		cols  = make([]*column, 0, len(columns))
-		rows  = make([][]interface{}, 0, len(data))
-		idxes = make(map[string][]*column)
+		cols = make([]*column, 0, len(columns))
+		rows = make([][]interface{}, 0, len(data))
 	)
 
 	for i := range columns {
@@ -619,22 +617,9 @@ func pruneGeneratedColumnDML(columns []*column, data [][]interface{}, index map[
 		}
 		rows = append(rows, value)
 	}
-	for key, keyCols := range index {
-		hasGenColumn := false
-		for _, col := range keyCols {
-			if _, ok := genColumnNames[col.name]; ok {
-				hasGenColumn = true
-				break
-			}
-		}
-		if !hasGenColumn {
-			idxes[key] = keyCols
-		}
-	}
 	cache.hasGenColumn[cacheKey] = true
 	cache.columns[cacheKey] = cols
-	cache.indexes[cacheKey] = idxes
 	cache.isGenColumn[cacheKey] = colIndexfilters
 
-	return cols, rows, idxes, nil
+	return cols, rows, nil
 }

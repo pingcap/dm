@@ -1149,7 +1149,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			if err != nil {
 				return errors.Trace(err)
 			}
-			prunedColumns, prunedRows, prunedIndexColumns, err := pruneGeneratedColumnDML(table.columns, rows, table.indexColumns, schemaName, tableName, s.genColsCache)
+			prunedColumns, prunedRows, err := pruneGeneratedColumnDML(table.columns, rows, schemaName, tableName, s.genColsCache)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -1175,7 +1175,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				originalData:         rows,
 				columns:              prunedColumns,
 				originalColumns:      table.columns,
-				indexColumns:         prunedIndexColumns,
 				originalIndexColumns: table.indexColumns,
 			}
 			switch e.Header.EventType {

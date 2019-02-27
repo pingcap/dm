@@ -924,7 +924,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 					args [][]interface{}
 				)
 
-				prunedColumns, prunedRows, prunedIndexColumns, err := pruneGeneratedColumnDML(table.columns, ev.Rows, table.indexColumns, table.schema, table.name, syncer.genColsCache)
+				prunedColumns, prunedRows, err := pruneGeneratedColumnDML(table.columns, ev.Rows, table.schema, table.name, syncer.genColsCache)
 				c.Assert(err, IsNil)
 				param := &genDMLParam{
 					schema:               table.schema,
@@ -933,7 +933,6 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 					originalData:         ev.Rows,
 					columns:              prunedColumns,
 					originalColumns:      table.columns,
-					indexColumns:         prunedIndexColumns,
 					originalIndexColumns: table.indexColumns,
 				}
 				switch e.Header.EventType {
