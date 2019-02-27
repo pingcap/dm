@@ -143,3 +143,21 @@ func (s *Server) UploadSyncerBinlogEvent(ctx context.Context, req *pb.UploadSync
 	}
 	return &pb.CommonUploadResponse{Result: true}, nil
 }
+
+// UploadSyncerJobEvent implements TracerServer.UploadSyncerJobEvent
+func (s *Server) UploadSyncerJobEvent(ctx context.Context, req *pb.UploadSyncerJobEventRequest) (*pb.CommonUploadResponse, error) {
+	log.Debugf("[server] receive UploadSyncerJobEvent request %+v", req)
+	for _, e := range req.Events {
+		err := s.eventStore.addNewEvent(&TraceEvent{
+			Type:  pb.TraceType_JobEvent,
+			Event: e,
+		})
+		if err != nil {
+			return &pb.CommonUploadResponse{
+				Result: false,
+				Msg:    errors.ErrorStack(err),
+			}, nil
+		}
+	}
+	return &pb.CommonUploadResponse{Result: true}, nil
+}

@@ -56,7 +56,7 @@ func writeData(w http.ResponseWriter, data interface{}) {
 		writeError(w, err)
 		return
 	}
-	log.Info(string(js))
+	log.Debug(string(js))
 	w.Header().Set(headerContentType, contentTypeJSON)
 	w.WriteHeader(http.StatusOK)
 	_, err = w.Write(js)

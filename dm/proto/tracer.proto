@@ -9,6 +9,7 @@ service Tracer {
     rpc GetTSO (GetTSORequest) returns (GetTSOResponse) {}
 
     rpc UploadSyncerBinlogEvent (UploadSyncerBinlogEventRequest) returns (CommonUploadResponse) {}
+    rpc UploadSyncerJobEvent (UploadSyncerJobEventRequest) returns (CommonUploadResponse) {}
 }
 
 message GetTSORequest {
@@ -30,6 +31,6 @@ message UploadSyncerBinlogEventRequest {
     repeated SyncerBinlogEvent events = 1;
 }
 
-message UploadSyncerJobRequest {
+message UploadSyncerJobEventRequest {
     repeated SyncerJobEvent events = 1;
 }

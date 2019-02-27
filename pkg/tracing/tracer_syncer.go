@@ -58,7 +58,7 @@ func (t *Tracer) CollectSyncerBinlogEvent(source string, safeMode, tryReSync boo
 
 // CollectSyncerJobEvent collects syncer job event and returns traceID
 func (t *Tracer) CollectSyncerJobEvent(traceID string, opType int32, pos, currentPos mysql.Position, queueBucket, sql string, ddls []string) (string, error) {
-	base, err := t.collectBaseEvent("", traceID, pb.TraceType_SyncerJob)
+	base, err := t.collectBaseEvent("", traceID, pb.TraceType_JobEvent)
 	if err != nil {
 		return "", errors.Trace(err)
 	}
