@@ -92,6 +92,14 @@ func (c *GenColCache) reset() {
 	c.isGenColumn = make(map[string][]bool)
 }
 
+func extractValueFromData(data []interface{}, columns []*column) []interface{} {
+	value := make([]interface{}, 0, len(data))
+	for i := range data {
+		value = append(value, castUnsigned(data[i], columns[i].unsigned, columns[i].tp))
+	}
+	return value
+}
+
 func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, error) {
 	var (
 		schema               = param.schema
@@ -112,18 +120,13 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 			return nil, nil, nil, errors.Errorf("insert columns and data mismatch in length: %d (columns) vs %d (data)", len(columns), len(data))
 		}
 
-		value := make([]interface{}, 0, len(data))
-		for i := range data {
-			value = append(value, castUnsigned(data[i], columns[i].unsigned, columns[i].tp))
-		}
+		value := extractValueFromData(data, columns)
 		originalData := originalDataSeq[dataIdx]
-		originalValue := make([]interface{}, 0, len(originalData))
+		var originalValue []interface{}
 		if len(columns) == len(originalColumns) {
 			originalValue = value
 		} else {
-			for i := range originalData {
-				originalValue = append(originalValue, castUnsigned(originalData[i], originalColumns[i].unsigned, originalColumns[i].tp))
-			}
+			originalValue = extractValueFromData(originalData, originalColumns)
 		}
 
 		sql := fmt.Sprintf("REPLACE INTO `%s`.`%s` (%s) VALUES (%s);", schema, table, columnList, columnPlaceholders)
@@ -168,27 +171,16 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 			return nil, nil, nil, errors.Errorf("update columns and data mismatch in length: %d (columns) vs %d (data)", len(columns), len(oldData))
 		}
 
-		oldValues := make([]interface{}, 0, len(oldData))
-		for i := range oldData {
-			oldValues = append(oldValues, castUnsigned(oldData[i], columns[i].unsigned, columns[i].tp))
-		}
-		changedValues := make([]interface{}, 0, len(changedData))
-		for i := range changedData {
-			changedValues = append(changedValues, castUnsigned(changedData[i], columns[i].unsigned, columns[i].tp))
-		}
+		oldValues := extractValueFromData(oldData, columns)
+		changedValues := extractValueFromData(changedData, columns)
 
-		oriOldValues := make([]interface{}, 0, len(oriOldData))
-		oriChangedValues := make([]interface{}, 0, len(oriChangedData))
+		var oriOldValues, oriChangedValues []interface{}
 		if len(columns) == len(originalColumns) {
 			oriOldValues = oldValues
 			oriChangedValues = changedValues
 		} else {
-			for i := range oriOldData {
-				oriOldValues = append(oriOldValues, castUnsigned(oriOldData[i], originalColumns[i].unsigned, originalColumns[i].tp))
-			}
-			for i := range oriChangedData {
-				oriChangedValues = append(oriChangedValues, castUnsigned(oriChangedData[i], originalColumns[i].unsigned, originalColumns[i].tp))
-			}
+			oriOldValues = extractValueFromData(oriOldData, originalColumns)
+			oriChangedValues = extractValueFromData(oriChangedData, originalColumns)
 		}
 
 		if len(defaultIndexColumns) == 0 {
@@ -263,10 +255,7 @@ func genDeleteSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 			return nil, nil, nil, errors.Errorf("delete columns and data mismatch in length: %d (columns) vs %d (data)", len(columns), len(data))
 		}
 
-		value := make([]interface{}, 0, len(data))
-		for i := range data {
-			value = append(value, castUnsigned(data[i], columns[i].unsigned, columns[i].tp))
-		}
+		value := extractValueFromData(data, columns)
 
 		if len(defaultIndexColumns) == 0 {
 			defaultIndexColumns = getAvailableIndexColumn(indexColumns, value)
