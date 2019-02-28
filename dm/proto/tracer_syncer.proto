@@ -32,6 +32,13 @@ message SyncerBinlogEvent {
     MySQLPosition currentPos = 5;
 }
 
+enum SyncerJobState {
+    init = 0;
+    queued = 1;
+    success = 2;
+    error = 3;
+}
+
 message SyncerJobEvent {
     BaseEvent base = 1;
     int32 opType = 2;
@@ -40,4 +47,5 @@ message SyncerJobEvent {
     string sql = 5;
     repeated string ddls = 6;
     string queueBucket = 7;
+    SyncerJobState state = 8;
 }

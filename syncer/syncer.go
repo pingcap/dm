@@ -602,6 +602,7 @@ func (s *Syncer) checkWait(job *job) bool {
 }
 
 func (s *Syncer) addJob(job *job) error {
+	var queueBucket int
 	switch job.tp {
 	case xid:
 		s.saveGlobalPoint(job.pos)
@@ -620,13 +621,17 @@ func (s *Syncer) addJob(job *job) error {
 		s.jobWg.Wait()
 		addedJobsTotal.WithLabelValues("ddl", s.cfg.Name, adminQueueName).Inc()
 		s.jobWg.Add(1)
-		s.jobs[s.cfg.WorkerCount] <- job
+		queueBucket = s.cfg.WorkerCount
+		s.jobs[queueBucket] <- job
 	case insert, update, del:
 		s.jobWg.Add(1)
-		idx := int(utils.GenHashKey(job.key)) % s.cfg.WorkerCount
-		s.addCount(false, queueBucketMapping[idx], job.tp, 1)
-		s.jobs[idx] <- job
+		queueBucket = int(utils.GenHashKey(job.key)) % s.cfg.WorkerCount
+		s.addCount(false, queueBucketMapping[queueBucket], job.tp, 1)
+		s.jobs[queueBucket] <- job
 	}
+
+	_, err := s.tracer.CollectSyncerJobEvent(job.traceID, int32(job.tp), job.pos, job.currentPos, queueBucketMapping[queueBucket], job.sql, job.ddls, pb.SyncerJobState_queued)
+	log.Errorf("[syncer] trace error: %s", err)
 
 	wait := s.checkWait(job)
 	if wait {
@@ -741,19 +746,18 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 		if len(jobs) == 0 {
 			return nil
 		}
-		if s.tracer.Enable() {
-			for _, job := range jobs {
-				_, err := s.tracer.CollectSyncerJobEvent(job.traceID, int32(job.tp), job.pos, job.currentPos, queueBucket, job.sql, job.ddls)
-				if err != nil {
-					return errors.Trace(err)
-				}
-			}
-		}
 		errCtx := db.executeSQLJob(jobs, s.cfg.MaxRetry)
 		var err error
 		if errCtx != nil {
 			err = errCtx.err
 			s.appendExecErrors(errCtx)
+		}
+		if s.tracer.Enable() {
+			syncerJobState := s.tracer.FinishedSyncerJobState(err)
+			for _, job := range jobs {
+				_, err2 := s.tracer.CollectSyncerJobEvent(job.traceID, int32(job.tp), job.pos, job.currentPos, queueBucket, job.sql, job.ddls, syncerJobState)
+				log.Errorf("[syncer] trace error: %s", err2)
+			}
 		}
 		return errors.Trace(err)
 	}
@@ -1457,8 +1461,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					needHandleDDLs = appliedSQLs // maybe nil
 					log.Infof("[convert] execute need handled ddls converted to %v in position %s by sql operator", needHandleDDLs, currentPos)
 				}
-				job := newDDLJob(nil, needHandleDDLs, lastPos, currentPos, nil, nil)
-				job.setTraceID(traceID)
+				job := newDDLJob(nil, needHandleDDLs, lastPos, currentPos, nil, nil, traceID)
 				err = s.addJob(job)
 				if err != nil {
 					return errors.Trace(err)
@@ -1592,8 +1595,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				needHandleDDLs = appliedSQLs // maybe nil
 				log.Infof("[convert] execute need handled ddls converted to %v in position %s by sql operator", needHandleDDLs, currentPos)
 			}
-			job := newDDLJob(ddlInfo, needHandleDDLs, lastPos, currentPos, nil, ddlExecItem)
-			job.setTraceID(traceID)
+			job := newDDLJob(ddlInfo, needHandleDDLs, lastPos, currentPos, nil, ddlExecItem, traceID)
 			err = s.addJob(job)
 			if err != nil {
 				return errors.Trace(err)
@@ -1622,8 +1624,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			log.Debugf("[XID event][last_pos]%v [current_pos]%v [gtid set]%v", lastPos, currentPos, ev.GSet)
 			lastPos.Pos = e.Header.LogPos // update lastPos
 
-			job := newXIDJob(currentPos, currentPos, nil)
-			job.setTraceID(traceID)
+			job := newXIDJob(currentPos, currentPos, nil, traceID)
 			err = s.addJob(job)
 			if err != nil {
 				return errors.Trace(err)
@@ -1637,8 +1638,7 @@ func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, t
 	if err != nil {
 		return errors.Errorf("resolve karam error %v", err)
 	}
-	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, pos, cmdPos, gs)
-	job.setTraceID(traceID)
+	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, pos, cmdPos, gs, traceID)
 	err = s.addJob(job)
 	return errors.Trace(err)
 }

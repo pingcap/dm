@@ -81,11 +81,7 @@ func (j *job) String() string {
 	return fmt.Sprintf("sql: %s, args: %v, key: %s, last_pos: %s, current_pos: %s, gtid:%v", j.sql, j.args, j.key, j.pos, j.currentPos, j.gtidSet)
 }
 
-func (j *job) setTraceID(traceID string) {
-	j.traceID = traceID
-}
-
-func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, pos, cmdPos mysql.Position, currentGtidSet gtid.Set) *job {
+func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, pos, cmdPos mysql.Position, currentGtidSet gtid.Set, traceID string) *job {
 	var gs gtid.Set
 	if currentGtidSet != nil {
 		gs = currentGtidSet.Clone()
@@ -103,10 +99,11 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 		currentPos:   cmdPos,
 		gtidSet:      gs,
 		retry:        true,
+		traceID:      traceID,
 	}
 }
 
-func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, pos, cmdPos mysql.Position, currentGtidSet gtid.Set, ddlExecItem *DDLExecItem) *job {
+func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, pos, cmdPos mysql.Position, currentGtidSet gtid.Set, ddlExecItem *DDLExecItem, traceID string) *job {
 	var gs gtid.Set
 	if currentGtidSet != nil {
 		gs = currentGtidSet.Clone()
@@ -118,6 +115,7 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, pos, cmdPos mysql.Positi
 		currentPos:  cmdPos,
 		gtidSet:     gs,
 		ddlExecItem: ddlExecItem,
+		traceID:     traceID,
 	}
 
 	if ddlInfo != nil {
@@ -130,7 +128,7 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, pos, cmdPos mysql.Positi
 	return j
 }
 
-func newXIDJob(pos, cmdPos mysql.Position, currentGtidSet gtid.Set) *job {
+func newXIDJob(pos, cmdPos mysql.Position, currentGtidSet gtid.Set, traceID string) *job {
 	var gs gtid.Set
 	if currentGtidSet != nil {
 		gs = currentGtidSet.Clone()
@@ -140,6 +138,7 @@ func newXIDJob(pos, cmdPos mysql.Position, currentGtidSet gtid.Set) *job {
 		pos:        pos,
 		currentPos: cmdPos,
 		gtidSet:    gs,
+		traceID:    traceID,
 	}
 }
 
