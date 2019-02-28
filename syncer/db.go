@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 
@@ -151,32 +152,38 @@ func (conn *Conn) executeSQLImp(sqls []string, args [][]interface{}) error {
 		txnHistogram.WithLabelValues(conn.cfg.Name).Observe(time.Since(startTime).Seconds())
 	}()
 
-	txn, err := conn.db.Begin()
-	if err != nil {
-		log.Errorf("exec sqls[%v] begin failed %v", sqls, errors.ErrorStack(err))
-		return errors.Trace(err)
-	}
-
-	for i := range sqls {
-		log.Debugf("[exec][sql]%s[args]%v", sqls[i], args[i])
-
-		_, err = txn.Exec(sqls[i], args[i]...)
+	for {
+		txn, err := conn.db.Begin()
 		if err != nil {
-			log.Warnf("[exec][sql]%s[args]%v[error]%v", sqls[i], args[i], err)
-			rerr := txn.Rollback()
-			if rerr != nil {
-				log.Errorf("[exec][sql]%s[args]%v[error]%v", sqls[i], args[i], rerr)
-			}
-			// we should return the exec err, instead of the rollback rerr.
+			log.Errorf("exec sqls[%v] begin failed %v", sqls, errors.ErrorStack(err))
 			return errors.Trace(err)
 		}
+
+		for i := range sqls {
+			log.Debugf("[exec][sql]%s[args]%v", sqls[i], args[i])
+
+			_, err = txn.Exec(sqls[i], args[i]...)
+			if err != nil {
+				log.Warnf("[exec][sql]%s[args]%v[error]%v", sqls[i], args[i], err)
+				rerr := txn.Rollback()
+				if rerr != nil {
+					log.Errorf("[exec][sql]%s[args]%v[error]%v", sqls[i], args[i], rerr)
+				}
+				// we should return the exec err, instead of the rollback rerr.
+				return errors.Trace(err)
+			}
+		}
+		err = txn.Commit()
+		if err != nil {
+			if !utils.IsTiDBRetryableError(err) {
+				return errors.Trace(err)
+			}
+			log.Errorf("Try run sqls[%v] again in a second. retryable error: %v", sqls, err)
+			time.Sleep(time.Second)
+		} else {
+			return nil
+		}
 	}
-	err = txn.Commit()
-	if err != nil {
-		log.Errorf("exec sqls[%v] commit failed %v", sqls, errors.ErrorStack(err))
-		return errors.Trace(err)
-	}
-	return nil
 }
 
 func (conn *Conn) executeSQLJob(jobs []*job, maxRetry int) *ExecErrorContext {

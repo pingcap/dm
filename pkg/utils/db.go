@@ -241,6 +241,11 @@ func IsMySQLError(err error, code uint16) bool {
 	return ok && e.Number == code
 }
 
+// IsTiDBRetryableError checks whether err is a TiDB retryable error
+func IsTiDBRetryableError(err error) bool {
+	return IsMySQLError(err, tmysql.ErrTiKVServerBusy)
+}
+
 // IsErrBinlogPurged checks whether err is BinlogPurged error
 func IsErrBinlogPurged(err error) bool {
 	err = errors.Cause(err)

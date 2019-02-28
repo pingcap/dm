@@ -16,17 +16,15 @@ package loader
 import (
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
 )
-
-const txnRetryableMark = "[try again later]"
 
 // Conn represents a live DB connection
 type Conn struct {
@@ -161,10 +159,10 @@ func executeSQLImp(db *sql.DB, sqls []string) error {
 
 		err = txn.Commit()
 		if err != nil {
-			if !strings.Contains(err.Error(), txnRetryableMark) {
+			if !utils.IsTiDBRetryableError(err) {
 				return errors.Trace(err)
 			}
-			log.Errorf("Try run sqls[%-.100v] again in a second. Retryable Error: %v", sqls, err)
+			log.Errorf("Try run sqls[%-.100v] again in a second. retryable error: %v", sqls, err)
 			time.Sleep(time.Second)
 		} else {
 			return nil
