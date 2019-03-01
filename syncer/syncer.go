@@ -631,7 +631,9 @@ func (s *Syncer) addJob(job *job) error {
 	}
 
 	_, err := s.tracer.CollectSyncerJobEvent(job.traceID, int32(job.tp), job.pos, job.currentPos, queueBucketMapping[queueBucket], job.sql, job.ddls, pb.SyncerJobState_queued)
-	log.Errorf("[syncer] trace error: %s", err)
+	if err != nil {
+		log.Errorf("[syncer] trace error: %s", err)
+	}
 
 	wait := s.checkWait(job)
 	if wait {
@@ -892,6 +894,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}(i, name)
 	}
 
+	name := queueBucketName(s.cfg.WorkerCount)
+	queueBucketMapping = append(queueBucketMapping, name)
 	s.wg.Add(1)
 	go func() {
 		ctx2, cancel := context.WithCancel(ctx)

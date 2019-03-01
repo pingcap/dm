@@ -68,10 +68,6 @@ func (t *Tracer) Enable() bool {
 
 // Start starts tracing service
 func (t *Tracer) Start() {
-	if !t.cfg.Enable {
-		return
-	}
-
 	conn, err := grpc.Dial(t.cfg.TracerAddr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	if err != nil {
 		log.Errorf("[tracer] grpc dial error: %s", errors.ErrorStack(err))
@@ -190,6 +186,11 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan <-chan *Job) {
 	for {
 		select {
 		case <-ctx.Done():
+			err = t.processTraceEvents(jobs)
+			if err != nil {
+				processError(err)
+			}
+			clearJobs()
 			return
 		case <-time.After(uploadInterval):
 			err = t.processTraceEvents(jobs)
