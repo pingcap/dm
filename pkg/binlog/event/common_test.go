@@ -200,3 +200,30 @@ func (t *testCommonSuite) TestGenCommonGTIDEvent(c *C) {
 	c.Assert(gtidEvBody2.GTID.ServerID, Equals, serverID)
 	c.Assert(gtidEvBody2.GTID.SequenceNumber, Equals, uint64(3))
 }
+
+func (t *testCommonSuite) TestGTIDIncrease(c *C) {
+	var (
+		flavor  = gmysql.MySQLFlavor
+		gSetStr = "03fc0263-28c7-11e7-a653-6c0b84d59f30:123"
+		gSetIn  gtid.Set
+		gSetOut gtid.Set
+	)
+
+	// increase for MySQL
+	gSetIn, err := gtid.ParserGTID(flavor, gSetStr)
+	c.Assert(err, IsNil)
+	gSetOut, err = GTIDIncrease(flavor, gSetIn)
+	c.Assert(err, IsNil)
+	c.Assert(gSetOut, NotNil)
+	c.Assert(gSetOut.String(), Equals, "03fc0263-28c7-11e7-a653-6c0b84d59f30:124")
+
+	// increase for MariaDB
+	flavor = gmysql.MariaDBFlavor
+	gSetStr = "1-2-3"
+	gSetIn, err = gtid.ParserGTID(flavor, gSetStr)
+	c.Assert(err, IsNil)
+	gSetOut, err = GTIDIncrease(flavor, gSetIn)
+	c.Assert(err, IsNil)
+	c.Assert(gSetOut, NotNil)
+	c.Assert(gSetOut.String(), Equals, "1-2-4")
+}
