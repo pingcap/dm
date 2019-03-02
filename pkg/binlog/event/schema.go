@@ -27,7 +27,7 @@ func genDatabaseEvents(serverID uint32, latestPos uint32, schema string, templat
 	query := fmt.Sprintf(template, schema)
 	ev, err := GenQueryEvent(header, latestPos, defaultSlaveProxyID, defaultExecutionTime, defaultErrorCode, defaultStatusVars, []byte(schema), []byte(query))
 	if err != nil {
-		return nil, nil, errors.Annotatef(err, "generate QueryEvent for schema %s", schema)
+		return nil, nil, errors.Annotatef(err, "generate QueryEvent for schema %s, query %s", schema, query)
 	}
 	return []*replication.BinlogEvent{ev}, ev.RawData, nil
 }
