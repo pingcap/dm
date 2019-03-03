@@ -42,8 +42,20 @@ type eventHandler struct {
 	op string
 }
 
-func writeError(w http.ResponseWriter, err error) {
-	w.WriteHeader(http.StatusBadRequest)
+func writeInternalServerError(w http.ResponseWriter, err error) {
+	writeError(w, http.StatusInternalServerError, err)
+}
+
+func writeBadRequest(w http.ResponseWriter, err error) {
+	writeError(w, http.StatusBadRequest, err)
+}
+
+func writeNotFound(w http.ResponseWriter, err error) {
+	writeError(w, http.StatusNotFound, err)
+}
+
+func writeError(w http.ResponseWriter, statusCode int, err error) {
+	w.WriteHeader(statusCode)
 	_, err = w.Write([]byte(err.Error()))
 	if err != nil {
 		log.Error(errors.ErrorStack(err))
@@ -53,7 +65,7 @@ func writeError(w http.ResponseWriter, err error) {
 func writeData(w http.ResponseWriter, data interface{}) {
 	js, err := json.MarshalIndent(data, "", " ")
 	if err != nil {
-		writeError(w, err)
+		writeInternalServerError(w, err)
 		return
 	}
 	log.Debug(string(js))
@@ -76,11 +88,11 @@ func (h eventHandler) handleTraceEventQueryRequest(w http.ResponseWriter, req *h
 	if traceID := req.FormValue(qTraceID); len(traceID) > 0 {
 		events := h.queryByTraceID(traceID)
 		if events == nil {
-			writeError(w, errors.NotFoundf("trace event %s", traceID))
+			writeNotFound(w, errors.NotFoundf("trace event %s", traceID))
 			return
 		}
 		writeData(w, events)
 	} else {
-		writeError(w, errors.New("trace id not provided"))
+		writeBadRequest(w, errors.New("trace id not provided"))
 	}
 }

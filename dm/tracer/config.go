@@ -86,11 +86,6 @@ func (c *Config) Parse(arguments []string) error {
 		return errors.Errorf("'%s' is an invalid flag", c.flagSet.Arg(0))
 	}
 
-	return errors.Trace(c.verify())
-}
-
-// verify verifies the config
-func (c *Config) verify() error {
 	return nil
 }
 
