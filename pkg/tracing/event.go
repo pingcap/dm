@@ -51,7 +51,7 @@ type Job struct {
 	Event interface{}
 }
 
-// processTraceEvents upload trace events to tracing service. ensure all jobs
+// ProcessTraceEvents upload trace events to tracing service. ensure all jobs
 // have same EventType
 func (t *Tracer) ProcessTraceEvents(jobs []*Job) error {
 	if len(jobs) == 0 {

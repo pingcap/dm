@@ -109,7 +109,7 @@ func (ts *HTTPHandlerTestSuite) TestTraceEventQuery(c *C) {
 		{
 			traceIDs[0],
 			[]*tracing.Job{
-				&tracing.Job{
+				{
 					Tp: tracing.EventSyncerJob,
 					Event: &pb.SyncerJobEvent{
 						Base: &pb.BaseEvent{
@@ -133,7 +133,7 @@ func (ts *HTTPHandlerTestSuite) TestTraceEventQuery(c *C) {
 						State:       pb.SyncerJobState_queued,
 					},
 				},
-				&tracing.Job{
+				{
 					Tp: tracing.EventSyncerJob,
 					Event: &pb.SyncerJobEvent{
 						Base: &pb.BaseEvent{
@@ -163,7 +163,7 @@ func (ts *HTTPHandlerTestSuite) TestTraceEventQuery(c *C) {
 		{
 			traceIDs[1],
 			[]*tracing.Job{
-				&tracing.Job{
+				{
 					Tp: tracing.EventSyncerBinlog,
 					Event: &pb.SyncerBinlogEvent{
 						Base: &pb.BaseEvent{
