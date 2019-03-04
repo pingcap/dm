@@ -53,17 +53,19 @@ type Checker struct {
 
 	instances []*mysqlInstance
 
-	checkList []check.Checker
-	result    struct {
+	checkList     []check.Checker
+	checkingItems map[string]string
+	result        struct {
 		sync.RWMutex
 		detail *check.Results
 	}
 }
 
 // NewChecker returns a checker
-func NewChecker(cfgs []*config.SubTaskConfig) *Checker {
+func NewChecker(cfgs []*config.SubTaskConfig, checkingItems map[string]string) *Checker {
 	c := &Checker{
-		instances: make([]*mysqlInstance, 0, len(cfgs)),
+		instances:     make([]*mysqlInstance, 0, len(cfgs)),
+		checkingItems: checkingItems,
 	}
 
 	for _, cfg := range cfgs {
@@ -82,6 +84,9 @@ func (c *Checker) Init() error {
 	shardingCounter := make(map[string]int)
 	dbs := make(map[string]*sql.DB)
 	columnMapping := make(map[string]*column.Mapping)
+	_, checkingShardID := c.checkingItems[config.ShardAutoIncrementIDChecking]
+	_, checkingShard := c.checkingItems[config.ShardTableSchemaChecking]
+	_, checkSchema := c.checkingItems[config.TableSchemaChecking]
 
 	for _, instance := range c.instances {
 		bw := filter.New(instance.cfg.CaseSensitive, instance.cfg.BWList)
@@ -125,6 +130,29 @@ func (c *Checker) Init() error {
 			return errors.Trace(err)
 		}
 
+		if _, ok := c.checkingItems[config.VersionChecking]; ok {
+			c.checkList = append(c.checkList, check.NewMySQLVersionChecker(instance.sourceDB, instance.sourceDBinfo))
+		}
+		if _, ok := c.checkingItems[config.BinlogEnableChecking]; ok {
+			c.checkList = append(c.checkList, check.NewMySQLBinlogEnableChecker(instance.sourceDB, instance.sourceDBinfo))
+		}
+		if _, ok := c.checkingItems[config.BinlogFormatChecking]; ok {
+			c.checkList = append(c.checkList, check.NewMySQLBinlogFormatChecker(instance.sourceDB, instance.sourceDBinfo))
+		}
+		if _, ok := c.checkingItems[config.BinlogRowImageChecking]; ok {
+			c.checkList = append(c.checkList, check.NewMySQLBinlogRowImageChecker(instance.sourceDB, instance.sourceDBinfo))
+		}
+		if _, ok := c.checkingItems[config.DumpPrivilegeChecking]; ok {
+			c.checkList = append(c.checkList, check.NewSourceDumpPrivilegeChecker(instance.sourceDB, instance.sourceDBinfo))
+		}
+		if _, ok := c.checkingItems[config.ReplicationPrivilegeChecking]; ok {
+			c.checkList = append(c.checkList, check.NewSourceReplicationPrivilegeChecker(instance.sourceDB, instance.sourceDBinfo))
+		}
+
+		if !checkingShard && !checkSchema {
+			return nil
+		}
+
 		mapping, err := utils.FetchTargetDoTables(instance.sourceDB, bw, r)
 		if err != nil {
 			return errors.Trace(err)
@@ -155,11 +183,9 @@ func (c *Checker) Init() error {
 		}
 		dbs[instance.cfg.SourceID] = instance.sourceDB
 
-		c.checkList = append(c.checkList, check.NewMySQLBinlogEnableChecker(instance.sourceDB, instance.sourceDBinfo))
-		c.checkList = append(c.checkList, check.NewMySQLBinlogFormatChecker(instance.sourceDB, instance.sourceDBinfo))
-		c.checkList = append(c.checkList, check.NewMySQLBinlogRowImageChecker(instance.sourceDB, instance.sourceDBinfo))
-		c.checkList = append(c.checkList, check.NewSourcePrivilegeChecker(instance.sourceDB, instance.sourceDBinfo))
-		c.checkList = append(c.checkList, check.NewTablesChecker(instance.sourceDB, instance.sourceDBinfo, checkTables))
+		if checkSchema {
+			c.checkList = append(c.checkList, check.NewTablesChecker(instance.sourceDB, instance.sourceDBinfo, checkTables))
+		}
 	}
 
 	for name, shardingSet := range sharding {
@@ -167,7 +193,9 @@ func (c *Checker) Init() error {
 			continue
 		}
 
-		c.checkList = append(c.checkList, check.NewShardingTablesCheck(name, dbs, shardingSet, columnMapping))
+		if checkingShard {
+			c.checkList = append(c.checkList, check.NewShardingTablesCheck(name, dbs, shardingSet, columnMapping, checkingShardID))
+		}
 	}
 
 	return nil
