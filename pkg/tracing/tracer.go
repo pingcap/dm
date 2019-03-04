@@ -47,6 +47,7 @@ type Tracer struct {
 
 	jobs       map[EventType]chan *Job
 	jobsClosed sync2.AtomicBool
+	rpcWg      sync.WaitGroup
 }
 
 // NewTracer creates a new Tracer
@@ -79,17 +80,17 @@ func (t *Tracer) Start() {
 
 	t.wg.Add(1)
 	go func() {
-		ctx2, cancel := context.WithCancel(t.ctx)
+		ctx2, _ := context.WithCancel(t.ctx)
 		t.tsoProcessor(ctx2)
-		cancel()
+		// cancel()
 	}()
 
 	for _, ch := range t.jobs {
 		t.wg.Add(1)
 		go func(c <-chan *Job) {
-			ctx2, cancel := context.WithCancel(t.ctx)
+			ctx2, _ := context.WithCancel(t.ctx)
 			t.jobProcessor(ctx2, c)
-			cancel()
+			// cancel()
 		}(ch)
 	}
 }
@@ -108,6 +109,11 @@ func (t *Tracer) Stop() {
 	t.wg.Wait()
 }
 
+// PrepareRpc calls before each rpc request to tracing server
+func (t *Tracer) PrepareRpc() {
+	t.rpcWg.Add(1)
+}
+
 func (t *Tracer) tsoProcessor(ctx context.Context) {
 	defer t.wg.Done()
 	for {
@@ -115,6 +121,7 @@ func (t *Tracer) tsoProcessor(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-time.After(1 * time.Minute):
+			t.PrepareRpc()
 			err := t.syncTS()
 			if err != nil {
 				log.Errorf("[tracer] sync timestamp error: %s", errors.ErrorStack(err))
@@ -129,6 +136,7 @@ func (t *Tracer) tsoProcessor(ctx context.Context) {
 // timestamp t3. then we have t1 + tx + ttl = t2; t2 - tx + ttl = t3
 // so the real sending RPC request timestamp is t1 + tx = t2 + t1/2 - t3/2
 func (t *Tracer) syncTS() error {
+	defer t.rpcWg.Done()
 	t.tso.Lock()
 	defer t.tso.Unlock()
 	t.tso.localTS = time.Now().UnixNano()
@@ -186,6 +194,7 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan <-chan *Job) {
 	for {
 		select {
 		case <-ctx.Done():
+			t.PrepareRpc()
 			err = t.ProcessTraceEvents(jobs)
 			if err != nil {
 				processError(err)
@@ -193,6 +202,7 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan <-chan *Job) {
 			clearJobs()
 			return
 		case <-time.After(uploadInterval):
+			t.PrepareRpc()
 			err = t.ProcessTraceEvents(jobs)
 			if err != nil {
 				processError(err)
@@ -208,6 +218,7 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan <-chan *Job) {
 			}
 
 			if len(jobs) >= count || job.Tp == EventFlush {
+				t.PrepareRpc()
 				err = t.ProcessTraceEvents(jobs)
 				if err != nil {
 					processError(err)

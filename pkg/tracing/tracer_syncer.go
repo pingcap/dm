@@ -21,10 +21,10 @@ import (
 )
 
 // CollectSyncerBinlogEvent collects syncer binlog event and returns the trace event traceID
-func (t *Tracer) CollectSyncerBinlogEvent(source string, safeMode, tryReSync bool, globalPos, currentPos mysql.Position, eventType, opType int32) (string, error) {
+func (t *Tracer) CollectSyncerBinlogEvent(source string, safeMode, tryReSync bool, globalPos, currentPos mysql.Position, eventType, opType int32) (*pb.SyncerBinlogEvent, error) {
 	base, err := t.collectBaseEvent(source, "", pb.TraceType_BinlogEvent)
 	if err != nil {
-		return "", errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 	syncerState := &pb.SyncerState{
 		SafeMode:  safeMode,
@@ -53,7 +53,7 @@ func (t *Tracer) CollectSyncerBinlogEvent(source string, safeMode, tryReSync boo
 	}
 	t.AddJob(job)
 
-	return base.TraceID, nil
+	return event, nil
 }
 
 // FinishedSyncerJobState returns pb.SyncerJobState according to given error
@@ -65,10 +65,10 @@ func (t *Tracer) FinishedSyncerJobState(err error) pb.SyncerJobState {
 }
 
 // CollectSyncerJobEvent collects syncer job event and returns traceID
-func (t *Tracer) CollectSyncerJobEvent(traceID string, opType int32, pos, currentPos mysql.Position, queueBucket, sql string, ddls []string, state pb.SyncerJobState) (string, error) {
+func (t *Tracer) CollectSyncerJobEvent(traceID string, opType int32, pos, currentPos mysql.Position, queueBucket, sql string, ddls []string, state pb.SyncerJobState) (*pb.SyncerJobEvent, error) {
 	base, err := t.collectBaseEvent("", traceID, pb.TraceType_JobEvent)
 	if err != nil {
-		return "", errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 	pos2 := &pb.MySQLPosition{
 		Name: pos.Name,
@@ -94,5 +94,5 @@ func (t *Tracer) CollectSyncerJobEvent(traceID string, opType int32, pos, curren
 	}
 	t.AddJob(job)
 
-	return base.TraceID, nil
+	return event, nil
 }

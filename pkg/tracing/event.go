@@ -54,6 +54,7 @@ type Job struct {
 // ProcessTraceEvents upload trace events to tracing service. ensure all jobs
 // have same EventType
 func (t *Tracer) ProcessTraceEvents(jobs []*Job) error {
+	defer t.rpcWg.Done()
 	if len(jobs) == 0 {
 		return nil
 	}

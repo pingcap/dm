@@ -209,6 +209,7 @@ func (ts *HTTPHandlerTestSuite) TestTraceEventQuery(c *C) {
 		c.Assert(string(raw), Equals, fmt.Sprintf("trace event %s not found", tc.traceID))
 		resp.Body.Close()
 
+		ts.tracer.PrepareRpc()
 		err = ts.tracer.ProcessTraceEvents(tc.jobs)
 		c.Assert(err, IsNil)
 
@@ -236,7 +237,17 @@ func (ts *HTTPHandlerTestSuite) TestTraceEventQuery(c *C) {
 				c.Assert(data[idx].Event.String(), Equals, ev.String())
 			}
 		}
-
 		resp.Body.Close()
 	}
+
+	// test bad request error
+	var (
+		queryURL = fmt.Sprintf("http://127.0.0.1%s/events/query", ts.cfg.TracerAddr)
+		resp     *http.Response
+		err      error
+	)
+	resp, err = http.Get(queryURL)
+	c.Assert(err, IsNil, Commentf("url:%s", queryURL))
+	c.Assert(resp.StatusCode, Equals, http.StatusBadRequest)
+	resp.Body.Close()
 }

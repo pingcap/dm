@@ -955,6 +955,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		latestOp            opType // latest job operation tp
 		eventTimeoutCounter time.Duration
 		traceSource         = fmt.Sprintf("%s.syncer.%s", s.cfg.SourceID, s.cfg.Name)
+		traceEvent          *pb.SyncerBinlogEvent
 		traceID             string
 	)
 
@@ -1211,10 +1212,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				latestOp = insert
 
 				if s.tracer.Enable() {
-					traceID, err = s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
+					traceEvent, err = s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
 					if err != nil {
 						return errors.Trace(err)
 					}
+					traceID = traceEvent.Base.TraceID
 				}
 
 				for i := range sqls {
@@ -1242,10 +1244,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				latestOp = update
 
 				if s.tracer.Enable() {
-					traceID, err = s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
+					traceEvent, err = s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
 					if err != nil {
 						return errors.Trace(err)
 					}
+					traceID = traceEvent.Base.TraceID
 				}
 
 				for i := range sqls {
@@ -1274,10 +1277,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				latestOp = del
 
 				if s.tracer.Enable() {
-					traceID, err = s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
+					traceEvent, err = s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
 					if err != nil {
 						return errors.Trace(err)
 					}
+					traceID = traceEvent.Base.TraceID
 				}
 
 				for i := range sqls {
@@ -1448,10 +1452,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 
 			if s.tracer.Enable() {
-				traceID, err = s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
+				traceEvent, err = s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
 				if err != nil {
 					return errors.Trace(err)
 				}
+				traceID = traceEvent.Base.TraceID
 			}
 
 			if !s.cfg.IsSharding {
