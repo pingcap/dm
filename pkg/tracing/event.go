@@ -53,7 +53,7 @@ type Job struct {
 
 // processTraceEvents upload trace events to tracing service. ensure all jobs
 // have same EventType
-func (t *Tracer) processTraceEvents(jobs []*Job) error {
+func (t *Tracer) ProcessTraceEvents(jobs []*Job) error {
 	if len(jobs) == 0 {
 		return nil
 	}

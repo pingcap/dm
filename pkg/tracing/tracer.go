@@ -186,14 +186,14 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan <-chan *Job) {
 	for {
 		select {
 		case <-ctx.Done():
-			err = t.processTraceEvents(jobs)
+			err = t.ProcessTraceEvents(jobs)
 			if err != nil {
 				processError(err)
 			}
 			clearJobs()
 			return
 		case <-time.After(uploadInterval):
-			err = t.processTraceEvents(jobs)
+			err = t.ProcessTraceEvents(jobs)
 			if err != nil {
 				processError(err)
 			}
@@ -208,7 +208,7 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan <-chan *Job) {
 			}
 
 			if len(jobs) >= count || job.Tp == EventFlush {
-				err = t.processTraceEvents(jobs)
+				err = t.ProcessTraceEvents(jobs)
 				if err != nil {
 					processError(err)
 				}
