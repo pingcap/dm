@@ -109,8 +109,8 @@ func (t *Tracer) Stop() {
 	t.wg.Wait()
 }
 
-// PrepareRpc calls before each rpc request to tracing server
-func (t *Tracer) PrepareRpc() {
+// PrepareRPC calls before each rpc request to tracing server
+func (t *Tracer) PrepareRPC() {
 	t.rpcWg.Add(1)
 }
 
@@ -121,7 +121,7 @@ func (t *Tracer) tsoProcessor(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-time.After(1 * time.Minute):
-			t.PrepareRpc()
+			t.PrepareRPC()
 			err := t.syncTS()
 			if err != nil {
 				log.Errorf("[tracer] sync timestamp error: %s", errors.ErrorStack(err))
@@ -194,7 +194,7 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan <-chan *Job) {
 	for {
 		select {
 		case <-ctx.Done():
-			t.PrepareRpc()
+			t.PrepareRPC()
 			err = t.ProcessTraceEvents(jobs)
 			if err != nil {
 				processError(err)
@@ -202,7 +202,7 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan <-chan *Job) {
 			clearJobs()
 			return
 		case <-time.After(uploadInterval):
-			t.PrepareRpc()
+			t.PrepareRPC()
 			err = t.ProcessTraceEvents(jobs)
 			if err != nil {
 				processError(err)
@@ -218,7 +218,7 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan <-chan *Job) {
 			}
 
 			if len(jobs) >= count || job.Tp == EventFlush {
-				t.PrepareRpc()
+				t.PrepareRPC()
 				err = t.ProcessTraceEvents(jobs)
 				if err != nil {
 					processError(err)

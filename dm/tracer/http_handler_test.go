@@ -209,7 +209,7 @@ func (ts *HTTPHandlerTestSuite) TestTraceEventQuery(c *C) {
 		c.Assert(string(raw), Equals, fmt.Sprintf("trace event %s not found", tc.traceID))
 		resp.Body.Close()
 
-		ts.tracer.PrepareRpc()
+		ts.tracer.PrepareRPC()
 		err = ts.tracer.ProcessTraceEvents(tc.jobs)
 		c.Assert(err, IsNil)
 
