@@ -75,8 +75,13 @@ func FilterCheckingItems(ignoredItems []string) map[string]string {
 	for item, desc := range AllCheckingItems {
 		checkingItems[item] = desc
 	}
+	delete(checkingItems, AllChecking)
 
 	for _, item := range ignoredItems {
+		if item == AllChecking {
+			return nil
+		}
+
 		delete(checkingItems, item)
 	}
 
