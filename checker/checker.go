@@ -151,7 +151,7 @@ func (c *Checker) Init() error {
 		}
 
 		if !checkingShard && !checkSchema {
-			return nil
+			break
 		}
 
 		mapping, err := utils.FetchTargetDoTables(instance.sourceDB, bw, r)
@@ -190,14 +190,13 @@ func (c *Checker) Init() error {
 	}
 
 	if checkingShard {
-		return nil
-	}
+		for name, shardingSet := range sharding {
+			if shardingCounter[name] <= 1 {
+				continue
+			}
 
-	for name, shardingSet := range sharding {
-		if shardingCounter[name] <= 1 {
-			continue
+			c.checkList = append(c.checkList, check.NewShardingTablesCheck(name, dbs, shardingSet, columnMapping, checkingShardID))
 		}
-		c.checkList = append(c.checkList, check.NewShardingTablesCheck(name, dbs, shardingSet, columnMapping, checkingShardID))
 	}
 
 	log.Infof(c.displayCheckingItems())
@@ -206,15 +205,15 @@ func (c *Checker) Init() error {
 
 func (c *Checker) displayCheckingItems() string {
 	if len(c.checkList) == 0 {
-		return "please initial checker\n"
+		return "not found any checking items\n"
 	}
 
 	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "************ task %s checking items ************\n name:\t\tdescription\n", c.instances[0].cfg.Name)
+	fmt.Fprintf(&buf, "\n************ task %s checking items ************\n", c.instances[0].cfg.Name)
 	for _, checkFunc := range c.checkList {
 		fmt.Fprintf(&buf, "%s\n", checkFunc.Name())
 	}
-	fmt.Fprintf(&buf, "************ task %s checking items ************\n", c.instances[0].cfg.Name)
+	fmt.Fprintf(&buf, "************ task %s checking items ************", c.instances[0].cfg.Name)
 	return buf.String()
 }
 
