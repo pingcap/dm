@@ -14,6 +14,7 @@
 package checker
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -199,7 +200,22 @@ func (c *Checker) Init() error {
 		c.checkList = append(c.checkList, check.NewShardingTablesCheck(name, dbs, shardingSet, columnMapping, checkingShardID))
 	}
 
+	log.Infof(c.displayCheckingItems())
 	return nil
+}
+
+func (c *Checker) displayCheckingItems() string {
+	if len(c.checkList) == 0 {
+		return "please initial checker\n"
+	}
+
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "************ task %s checking items ************\n name:\t\tdescription\n", c.instances[0].cfg.Name)
+	for _, checkFunc := range c.checkList {
+		fmt.Fprintf(&buf, "%s\n", checkFunc.Name())
+	}
+	fmt.Fprintf(&buf, "************ task %s checking items ************\n", c.instances[0].cfg.Name)
+	return buf.String()
 }
 
 // Process implements Unit interface
