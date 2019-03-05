@@ -14,6 +14,7 @@
 package worker
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -166,6 +167,7 @@ func (st *SubTask) Run() {
 func (st *SubTask) fetchResult(ctx context.Context, cancel context.CancelFunc, pr chan pb.ProcessResult) {
 	defer st.wg.Done()
 
+retry:
 	select {
 	case <-ctx.Done():
 		return
@@ -177,7 +179,10 @@ func (st *SubTask) fetchResult(ctx context.Context, cancel context.CancelFunc, p
 			return // paused by external request
 		}
 
-		var stage pb.Stage
+		var (
+			cu    = st.CurrUnit()
+			stage pb.Stage
+		)
 		if len(result.Errors) == 0 {
 			if result.IsCanceled {
 				stage = pb.Stage_Stopped // canceled by user
@@ -185,11 +190,14 @@ func (st *SubTask) fetchResult(ctx context.Context, cancel context.CancelFunc, p
 				stage = pb.Stage_Finished // process finished with no error
 			}
 		} else {
+			if st.retryErrors(result.Errors, cu) {
+				go cu.Resume(ctx, pr)
+				goto retry
+			}
+
 			stage = pb.Stage_Paused // error occurred, paused
 		}
 		st.setStage(stage)
-
-		cu := st.CurrUnit()
 
 		log.Infof("[subtask] %s dm-unit %s process returned with stage %s, status %s", st.cfg.Name, cu.Type(), stage.String(), st.StatusJSON())
 
@@ -620,4 +628,21 @@ func (st *SubTask) unitTransWaitCondition() error {
 		log.Info("relay binlog pos catchup loader end binlog pos")
 	}
 	return nil
+}
+
+func (st *SubTask) retryErrors(errors []*pb.ProcessError, current unit.Unit) bool {
+	retry := true
+	switch current.Type() {
+	case pb.UnitType_Sync:
+		for _, err := range errors {
+			if err.Type == pb.ErrorType_UnknownError && strings.Contains(err.Msg, "invalid connection") {
+				continue
+			}
+			retry = false
+		}
+	default:
+		retry = false
+	}
+
+	return retry
 }
