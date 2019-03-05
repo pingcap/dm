@@ -638,7 +638,7 @@ func (st *SubTask) retryErrors(errors []*pb.ProcessError, current unit.Unit) boo
 	switch current.Type() {
 	case pb.UnitType_Sync:
 		for _, err := range errors {
-			if strings.Contains(err.Msg, "connection refused") {
+			if strings.Contains(err.Msg, "invalid connection") {
 				continue
 			}
 			retry = false
