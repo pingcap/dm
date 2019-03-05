@@ -188,14 +188,15 @@ func (c *Checker) Init() error {
 		}
 	}
 
+	if checkingShard {
+		return nil
+	}
+
 	for name, shardingSet := range sharding {
 		if shardingCounter[name] <= 1 {
 			continue
 		}
-
-		if checkingShard {
-			c.checkList = append(c.checkList, check.NewShardingTablesCheck(name, dbs, shardingSet, columnMapping, checkingShardID))
-		}
+		c.checkList = append(c.checkList, check.NewShardingTablesCheck(name, dbs, shardingSet, columnMapping, checkingShardID))
 	}
 
 	return nil
