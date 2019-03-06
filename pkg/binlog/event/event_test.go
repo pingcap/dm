@@ -30,16 +30,16 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 )
 
-var _ = Suite(&testGeneratorSuite{})
+var _ = Suite(&testEventSuite{})
 
 func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-type testGeneratorSuite struct {
+type testEventSuite struct {
 }
 
-func (t *testGeneratorSuite) TestGenEventHeader(c *C) {
+func (t *testEventSuite) TestGenEventHeader(c *C) {
 	var (
 		latestPos uint32 = 4
 		header           = &replication.EventHeader{
@@ -71,7 +71,7 @@ func verifyHeader(c *C, obtained, excepted *replication.EventHeader, eventType r
 	c.Assert(obtained.LogPos, Equals, eventSize+latestPos)
 }
 
-func (t *testGeneratorSuite) TestGenFormatDescriptionEvent(c *C) {
+func (t *testEventSuite) TestGenFormatDescriptionEvent(c *C) {
 	var (
 		header = &replication.EventHeader{
 			Timestamp: uint32(time.Now().Unix()),
@@ -115,7 +115,7 @@ func (t *testGeneratorSuite) TestGenFormatDescriptionEvent(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (t *testGeneratorSuite) TestGenPreviousGTIDsEvent(c *C) {
+func (t *testEventSuite) TestGenPreviousGTIDsEvent(c *C) {
 	var (
 		header = &replication.EventHeader{
 			Timestamp: uint32(time.Now().Unix()),
@@ -212,7 +212,7 @@ func (t *testGeneratorSuite) TestGenPreviousGTIDsEvent(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (t *testGeneratorSuite) TestGenGTIDEvent(c *C) {
+func (t *testEventSuite) TestGenGTIDEvent(c *C) {
 	var (
 		header = &replication.EventHeader{
 			Timestamp: uint32(time.Now().Unix()),
@@ -301,7 +301,7 @@ func (t *testGeneratorSuite) TestGenGTIDEvent(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (t *testGeneratorSuite) TestGenQueryEvent(c *C) {
+func (t *testEventSuite) TestGenQueryEvent(c *C) {
 	var (
 		header = &replication.EventHeader{
 			Timestamp: uint32(time.Now().Unix()),
@@ -369,7 +369,7 @@ func (t *testGeneratorSuite) TestGenQueryEvent(c *C) {
 	c.Assert(queryEvBody.StatusVars, DeepEquals, statusVars)
 }
 
-func (t *testGeneratorSuite) TestGenTableMapEvent(c *C) {
+func (t *testEventSuite) TestGenTableMapEvent(c *C) {
 	var (
 		header = &replication.EventHeader{
 			Timestamp: uint32(time.Now().Unix()),
@@ -440,7 +440,7 @@ func (t *testGeneratorSuite) TestGenTableMapEvent(c *C) {
 	c.Assert(tableMapEv, IsNil)
 }
 
-func (t *testGeneratorSuite) TestGenRowsEvent(c *C) {
+func (t *testEventSuite) TestGenRowsEvent(c *C) {
 	var (
 		header = &replication.EventHeader{
 			Timestamp: uint32(time.Now().Unix()),
@@ -569,7 +569,7 @@ func (t *testGeneratorSuite) TestGenRowsEvent(c *C) {
 	}
 }
 
-func (t *testGeneratorSuite) TestGenXIDEvent(c *C) {
+func (t *testEventSuite) TestGenXIDEvent(c *C) {
 	var (
 		header = &replication.EventHeader{
 			Timestamp: uint32(time.Now().Unix()),
@@ -594,7 +594,7 @@ func (t *testGeneratorSuite) TestGenXIDEvent(c *C) {
 	c.Assert(xidEvBody.XID, Equals, xid)
 }
 
-func (t *testGeneratorSuite) TestGenMariaDBGTIDListEvent(c *C) {
+func (t *testEventSuite) TestGenMariaDBGTIDListEvent(c *C) {
 	var (
 		header = &replication.EventHeader{
 			Timestamp: uint32(time.Now().Unix()),
@@ -657,7 +657,7 @@ func (t *testGeneratorSuite) TestGenMariaDBGTIDListEvent(c *C) {
 	}*/
 }
 
-func (t *testGeneratorSuite) TestGenMariaDBGTIDEvent(c *C) {
+func (t *testEventSuite) TestGenMariaDBGTIDEvent(c *C) {
 	var (
 		header = &replication.EventHeader{
 			Timestamp: uint32(time.Now().Unix()),

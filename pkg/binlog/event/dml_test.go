@@ -52,8 +52,8 @@ func (t *testDMLSuite) TestGenDMLEvent(c *C) {
 	insertDMLData := []*DMLData{
 		{
 			TableID:    11,
-			Schema:     []byte("db1"),
-			Table:      []byte("tbl1"),
+			Schema:     "db1",
+			Table:      "tbl1",
 			ColumnType: []byte{gmysql.MYSQL_TYPE_LONG, gmysql.MYSQL_TYPE_STRING},
 			Rows:       insertRows1,
 		},
@@ -77,8 +77,8 @@ func (t *testDMLSuite) TestGenDMLEvent(c *C) {
 	insertRows2 = append(insertRows2, []interface{}{int32(101), "string column value a"}, []interface{}{int32(102), "string column value b"})
 	insertDMLData = append(insertDMLData, &DMLData{
 		TableID:    12,
-		Schema:     []byte("db2"),
-		Table:      []byte("tbl2"),
+		Schema:     "db2",
+		Table:      "tbl2",
 		ColumnType: []byte{gmysql.MYSQL_TYPE_LONG, gmysql.MYSQL_TYPE_STRING},
 		Rows:       insertRows2,
 	})
@@ -100,8 +100,8 @@ func (t *testDMLSuite) TestGenDMLEvent(c *C) {
 	updateDMLData := []*DMLData{
 		{
 			TableID:    21,
-			Schema:     []byte("db3"),
-			Table:      []byte("tbl3"),
+			Schema:     "db3",
+			Table:      "tbl3",
 			ColumnType: []byte{gmysql.MYSQL_TYPE_LONG, gmysql.MYSQL_TYPE_STRING},
 			Rows:       updateRows,
 		},
@@ -131,8 +131,8 @@ func (t *testDMLSuite) TestGenDMLEvent(c *C) {
 	deleteDMLData := []*DMLData{
 		{
 			TableID:    31,
-			Schema:     []byte("db4"),
-			Table:      []byte("tbl4"),
+			Schema:     "db4",
+			Table:      "tbl4",
 			ColumnType: []byte{gmysql.MYSQL_TYPE_LONG, gmysql.MYSQL_TYPE_STRING},
 			Rows:       deleteRows,
 		},

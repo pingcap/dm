@@ -26,8 +26,8 @@ import (
 // DMLData represents data used to generate events for DML statements.
 type DMLData struct {
 	TableID    uint64
-	Schema     []byte
-	Table      []byte
+	Schema     string
+	Table      string
 	ColumnType []byte
 	Rows       [][]interface{}
 }
@@ -72,7 +72,7 @@ func GenDMLEvents(flavor string, serverID uint32, latestPos uint32, latestGTID g
 	// <TableMapEvent, RowsEvent> pairs
 	for _, data := range dmlData {
 		// TableMapEvent
-		tableMapEv, err2 := GenTableMapEvent(header, latestPos, data.TableID, data.Schema, data.Table, data.ColumnType)
+		tableMapEv, err2 := GenTableMapEvent(header, latestPos, data.TableID, []byte(data.Schema), []byte(data.Table), data.ColumnType)
 		if err2 != nil {
 			return nil, errors.Annotatef(err2, "generate TableMapEvent for `%s`.`%s`", string(data.Schema), string(data.Table))
 		}

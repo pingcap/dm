@@ -45,7 +45,7 @@ func (t *testDDLSuite) TestGenDDLEvent(c *C) {
 	c.Assert(err, IsNil)
 
 	// CREATE DATABASE
-	result, err := GenCreateDatabase(flavor, serverID, latestPos, latestGTID, schema)
+	result, err := GenCreateDatabaseEvents(flavor, serverID, latestPos, latestGTID, schema)
 	c.Assert(err, IsNil)
 	c.Assert(len(result.Events), Equals, 2)
 	// simply check here, more check did in `event_test.go`
@@ -58,7 +58,7 @@ func (t *testDDLSuite) TestGenDDLEvent(c *C) {
 	latestGTID = result.LatestGTID
 
 	// DROP DATABASE
-	result, err = GenDropDatabase(flavor, serverID, latestPos, latestGTID, schema)
+	result, err = GenDropDatabaseEvents(flavor, serverID, latestPos, latestGTID, schema)
 	c.Assert(err, IsNil)
 	c.Assert(len(result.Events), Equals, 2)
 	c.Assert(bytes.Contains(result.Data, []byte("DROP DATABASE")), IsTrue)
@@ -77,7 +77,7 @@ func (t *testDDLSuite) TestGenDDLEvent(c *C) {
 
 	// CREATE TABLE
 	query := fmt.Sprintf("CREATE TABLE `%s` (c1 int)", table)
-	result, err = GenCreateTable(flavor, serverID, latestPos, latestGTID, schema, query)
+	result, err = GenCreateTableEvents(flavor, serverID, latestPos, latestGTID, schema, query)
 	c.Assert(err, IsNil)
 	c.Assert(len(result.Events), Equals, 2)
 	c.Assert(bytes.Contains(result.Data, []byte("CREATE TABLE")), IsTrue)
@@ -89,7 +89,7 @@ func (t *testDDLSuite) TestGenDDLEvent(c *C) {
 	latestGTID = result.LatestGTID
 
 	// DROP DATABASE
-	result, err = GenDropTable(flavor, serverID, latestPos, latestGTID, schema, table)
+	result, err = GenDropTableEvents(flavor, serverID, latestPos, latestGTID, schema, table)
 	c.Assert(err, IsNil)
 	c.Assert(len(result.Events), Equals, 2)
 	c.Assert(bytes.Contains(result.Data, []byte("DROP TABLE")), IsTrue)

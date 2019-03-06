@@ -24,30 +24,30 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 )
 
-// GenCreateDatabase generates binlog events for `CREATE DATABASE`.
+// GenCreateDatabaseEvents generates binlog events for `CREATE DATABASE`.
 // events: [GTIDEvent, QueryEvent]
-func GenCreateDatabase(flavor string, serverID uint32, latestPos uint32, latestGTID gtid.Set, schema string) (*DDLDMLResult, error) {
+func GenCreateDatabaseEvents(flavor string, serverID uint32, latestPos uint32, latestGTID gtid.Set, schema string) (*DDLDMLResult, error) {
 	query := fmt.Sprintf("CREATE DATABASE `%s`", schema)
 	return genDDLEvents(flavor, serverID, latestPos, latestGTID, schema, query)
 }
 
-// GenDropDatabase generates binlog events for `DROP DATABASE`.
+// GenDropDatabaseEvents generates binlog events for `DROP DATABASE`.
 // events: [GTIDEvent, QueryEvent]
-func GenDropDatabase(flavor string, serverID uint32, latestPos uint32, latestGTID gtid.Set, schema string) (*DDLDMLResult, error) {
+func GenDropDatabaseEvents(flavor string, serverID uint32, latestPos uint32, latestGTID gtid.Set, schema string) (*DDLDMLResult, error) {
 	query := fmt.Sprintf("DROP DATABASE `%s`", schema)
 	return genDDLEvents(flavor, serverID, latestPos, latestGTID, schema, query)
 }
 
-// GenCreateTable generates binlog events for `CREATE TABLE`.
+// GenCreateTableEvents generates binlog events for `CREATE TABLE`.
 // events: [GTIDEvent, QueryEvent]
 // NOTE: we do not support all `column type` and `column meta` for DML now, so the caller should restrict the `query` statement.
-func GenCreateTable(flavor string, serverID uint32, latestPos uint32, latestGTID gtid.Set, schema string, query string) (*DDLDMLResult, error) {
+func GenCreateTableEvents(flavor string, serverID uint32, latestPos uint32, latestGTID gtid.Set, schema string, query string) (*DDLDMLResult, error) {
 	return genDDLEvents(flavor, serverID, latestPos, latestGTID, schema, query)
 }
 
-// GenDropTable generates binlog events for `DROP TABLE`.
+// GenDropTableEvents generates binlog events for `DROP TABLE`.
 // events: [GTIDEvent, QueryEvent]
-func GenDropTable(flavor string, serverID uint32, latestPos uint32, latestGTID gtid.Set, schema string, table string) (*DDLDMLResult, error) {
+func GenDropTableEvents(flavor string, serverID uint32, latestPos uint32, latestGTID gtid.Set, schema string, table string) (*DDLDMLResult, error) {
 	query := fmt.Sprintf("DROP TABLE `%s`.`%s`", schema, table)
 	return genDDLEvents(flavor, serverID, latestPos, latestGTID, schema, query)
 }
