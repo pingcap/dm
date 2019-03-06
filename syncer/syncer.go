@@ -602,7 +602,10 @@ func (s *Syncer) checkWait(job *job) bool {
 }
 
 func (s *Syncer) addJob(job *job) error {
-	var queueBucket int
+	var (
+		queueBucket int
+		execDDLReq  *pb.ExecDDLRequest
+	)
 	switch job.tp {
 	case xid:
 		s.saveGlobalPoint(job.pos)
@@ -623,6 +626,9 @@ func (s *Syncer) addJob(job *job) error {
 		s.jobWg.Add(1)
 		queueBucket = s.cfg.WorkerCount
 		s.jobs[queueBucket] <- job
+		if job.ddlExecItem != nil {
+			execDDLReq = job.ddlExecItem.req
+		}
 	case insert, update, del:
 		s.jobWg.Add(1)
 		queueBucket = int(utils.GenHashKey(job.key)) % s.cfg.WorkerCount
@@ -630,7 +636,7 @@ func (s *Syncer) addJob(job *job) error {
 		s.jobs[queueBucket] <- job
 	}
 
-	_, err := s.tracer.CollectSyncerJobEvent(job.traceID, int32(job.tp), job.pos, job.currentPos, queueBucketMapping[queueBucket], job.sql, job.ddls, pb.SyncerJobState_queued)
+	_, err := s.tracer.CollectSyncerJobEvent(job.traceID, int32(job.tp), job.pos, job.currentPos, queueBucketMapping[queueBucket], job.sql, job.ddls, execDDLReq, pb.SyncerJobState_queued)
 	if err != nil {
 		log.Errorf("[syncer] trace error: %s", err)
 	}
@@ -757,7 +763,7 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 		if s.tracer.Enable() {
 			syncerJobState := s.tracer.FinishedSyncerJobState(err)
 			for _, job := range jobs {
-				_, err2 := s.tracer.CollectSyncerJobEvent(job.traceID, int32(job.tp), job.pos, job.currentPos, queueBucket, job.sql, job.ddls, syncerJobState)
+				_, err2 := s.tracer.CollectSyncerJobEvent(job.traceID, int32(job.tp), job.pos, job.currentPos, queueBucket, job.sql, job.ddls, nil, syncerJobState)
 				log.Errorf("[syncer] trace error: %s", err2)
 			}
 		}
@@ -788,6 +794,18 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 					if err != nil && ignoreDDLError(err) {
 						err = nil
 					}
+
+					if s.tracer.Enable() {
+						syncerJobState := s.tracer.FinishedSyncerJobState(err)
+						var execDDLReq *pb.ExecDDLRequest
+						if sqlJob.ddlExecItem != nil {
+							execDDLReq = sqlJob.ddlExecItem.req
+						}
+						_, err := s.tracer.CollectSyncerJobEvent(sqlJob.traceID, int32(sqlJob.tp), sqlJob.pos, sqlJob.currentPos, queueBucket, sqlJob.sql, sqlJob.ddls, execDDLReq, syncerJobState)
+						if err != nil {
+							log.Errorf("[syncer] trace error: %s", err)
+						}
+					}
 				}
 				if err != nil {
 					s.appendExecErrors(&ExecErrorContext{
@@ -796,6 +814,7 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 						jobs: fmt.Sprintf("%v", sqlJob.ddls),
 					})
 				}
+
 				if s.cfg.IsSharding {
 					// for sharding DDL syncing, send result back
 					if sqlJob.ddlExecItem != nil {
@@ -894,8 +913,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}(i, name)
 	}
 
-	name := queueBucketName(s.cfg.WorkerCount)
-	queueBucketMapping = append(queueBucketMapping, name)
+	queueBucketMapping = append(queueBucketMapping, adminQueueName)
 	s.wg.Add(1)
 	go func() {
 		ctx2, cancel := context.WithCancel(ctx)

@@ -24,6 +24,11 @@ message SyncerState {
     MySQLPosition lastPos = 3;
 }
 
+message ExecDDLInfo {
+    string lockID = 1;
+    bool exec = 2;
+}
+
 message SyncerBinlogEvent {
     BaseEvent base = 1;
     SyncerState state = 2;
@@ -46,6 +51,7 @@ message SyncerJobEvent {
     MySQLPosition currentPos = 4;
     string sql = 5;
     repeated string ddls = 6;
-    string queueBucket = 7;
-    SyncerJobState state = 8;
+    ExecDDLInfo ddlInfo = 7;
+    string queueBucket = 8;
+    SyncerJobState state = 9;
 }

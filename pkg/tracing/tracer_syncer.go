@@ -65,7 +65,7 @@ func (t *Tracer) FinishedSyncerJobState(err error) pb.SyncerJobState {
 }
 
 // CollectSyncerJobEvent collects syncer job event and returns traceID
-func (t *Tracer) CollectSyncerJobEvent(traceID string, opType int32, pos, currentPos mysql.Position, queueBucket, sql string, ddls []string, state pb.SyncerJobState) (*pb.SyncerJobEvent, error) {
+func (t *Tracer) CollectSyncerJobEvent(traceID string, opType int32, pos, currentPos mysql.Position, queueBucket, sql string, ddls []string, req *pb.ExecDDLRequest, state pb.SyncerJobState) (*pb.SyncerJobEvent, error) {
 	base, err := t.collectBaseEvent("", traceID, pb.TraceType_JobEvent)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -87,6 +87,12 @@ func (t *Tracer) CollectSyncerJobEvent(traceID string, opType int32, pos, curren
 		Ddls:        ddls,
 		QueueBucket: queueBucket,
 		State:       state,
+	}
+	if req != nil {
+		event.DdlInfo = &pb.ExecDDLInfo{
+			LockID: req.LockID,
+			Exec:   req.Exec,
+		}
 	}
 	job := &Job{
 		Tp:    EventSyncerJob,
