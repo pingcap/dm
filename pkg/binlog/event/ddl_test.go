@@ -23,12 +23,12 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 )
 
-var _ = Suite(&testSchemaSuite{})
+var _ = Suite(&testDDLSuite{})
 
-type testSchemaSuite struct {
+type testDDLSuite struct {
 }
 
-func (t *testSchemaSuite) TestGenDatabaseEvent(c *C) {
+func (t *testDDLSuite) TestGenDDLEvent(c *C) {
 	var (
 		serverID  uint32 = 101
 		latestPos uint32 = 123
@@ -48,7 +48,7 @@ func (t *testSchemaSuite) TestGenDatabaseEvent(c *C) {
 	result, err := GenCreateDatabase(flavor, serverID, latestPos, latestGTID, schema)
 	c.Assert(err, IsNil)
 	c.Assert(len(result.Events), Equals, 2)
-	// simply check content, more check did in `generate_test.go`
+	// simply check here, more check did in `event_test.go`
 	c.Assert(bytes.Contains(result.Data, []byte("CREATE DATABASE")), IsTrue)
 	c.Assert(bytes.Contains(result.Data, []byte(schema)), IsTrue)
 	c.Assert(result.LatestPos, Equals, latestPos+uint32(len(result.Data)))

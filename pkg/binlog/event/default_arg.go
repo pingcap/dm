@@ -22,4 +22,5 @@ var (
 	defaultGTIDFlags      = GTIDFlagsCommitYes
 	defaultLastCommitted  int64
 	defaultSequenceNumber int64
+	defaultRowsFlag       = RowFlagsEndOfStatement
 )
