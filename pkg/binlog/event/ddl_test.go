@@ -1,3 +1,16 @@
+// Copyright 2019 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package event
 
 import (
@@ -32,7 +45,7 @@ func (t *testSchemaSuite) TestGenDatabaseEvent(c *C) {
 	c.Assert(err, IsNil)
 
 	// CREATE DATABASE
-	result, err := GenCreateDatabase(flavor, serverID, latestPos, schema, latestGTID)
+	result, err := GenCreateDatabase(flavor, serverID, latestPos, latestGTID, schema)
 	c.Assert(err, IsNil)
 	c.Assert(len(result.Events), Equals, 2)
 	// simply check content, more check did in `generate_test.go`
@@ -45,7 +58,7 @@ func (t *testSchemaSuite) TestGenDatabaseEvent(c *C) {
 	latestGTID = result.LatestGTID
 
 	// DROP DATABASE
-	result, err = GenDropDatabase(flavor, serverID, latestPos, schema, latestGTID)
+	result, err = GenDropDatabase(flavor, serverID, latestPos, latestGTID, schema)
 	c.Assert(err, IsNil)
 	c.Assert(len(result.Events), Equals, 2)
 	c.Assert(bytes.Contains(result.Data, []byte("DROP DATABASE")), IsTrue)
@@ -64,7 +77,7 @@ func (t *testSchemaSuite) TestGenDatabaseEvent(c *C) {
 
 	// CREATE TABLE
 	query := fmt.Sprintf("CREATE TABLE `%s` (c1 int)", table)
-	result, err = GenCreateTable(flavor, serverID, latestPos, schema, query, latestGTID)
+	result, err = GenCreateTable(flavor, serverID, latestPos, latestGTID, schema, query)
 	c.Assert(err, IsNil)
 	c.Assert(len(result.Events), Equals, 2)
 	c.Assert(bytes.Contains(result.Data, []byte("CREATE TABLE")), IsTrue)
@@ -76,7 +89,7 @@ func (t *testSchemaSuite) TestGenDatabaseEvent(c *C) {
 	latestGTID = result.LatestGTID
 
 	// DROP DATABASE
-	result, err = GenDropTable(flavor, serverID, latestPos, schema, table, latestGTID)
+	result, err = GenDropTable(flavor, serverID, latestPos, latestGTID, schema, table)
 	c.Assert(err, IsNil)
 	c.Assert(len(result.Events), Equals, 2)
 	c.Assert(bytes.Contains(result.Data, []byte("DROP TABLE")), IsTrue)
