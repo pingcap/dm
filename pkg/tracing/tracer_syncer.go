@@ -22,7 +22,7 @@ import (
 
 // CollectSyncerBinlogEvent collects syncer binlog event and returns the trace event traceID
 func (t *Tracer) CollectSyncerBinlogEvent(source string, safeMode, tryReSync bool, globalPos, currentPos mysql.Position, eventType, opType int32) (*pb.SyncerBinlogEvent, error) {
-	base, err := t.collectBaseEvent(source, "", pb.TraceType_BinlogEvent)
+	base, err := t.collectBaseEvent(source, "", "", pb.TraceType_BinlogEvent)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -65,8 +65,8 @@ func (t *Tracer) FinishedSyncerJobState(err error) pb.SyncerJobState {
 }
 
 // CollectSyncerJobEvent collects syncer job event and returns traceID
-func (t *Tracer) CollectSyncerJobEvent(traceID string, opType int32, pos, currentPos mysql.Position, queueBucket, sql string, ddls []string, req *pb.ExecDDLRequest, state pb.SyncerJobState) (*pb.SyncerJobEvent, error) {
-	base, err := t.collectBaseEvent("", traceID, pb.TraceType_JobEvent)
+func (t *Tracer) CollectSyncerJobEvent(traceID string, traceGID string, opType int32, pos, currentPos mysql.Position, queueBucket, sql string, ddls []string, req *pb.ExecDDLRequest, state pb.SyncerJobState) (*pb.SyncerJobEvent, error) {
+	base, err := t.collectBaseEvent("", traceID, traceGID, pb.TraceType_JobEvent)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

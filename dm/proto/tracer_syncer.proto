@@ -10,7 +10,8 @@ message BaseEvent {
     int32 line = 2;
     int64 tso = 3;
     string traceID = 4;
-    TraceType type = 5;
+    string groupID = 5;
+    TraceType type = 6;
 }
 
 message MySQLPosition {

@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
-	"time"
 
 	"github.com/pingcap/errors"
 )
@@ -29,8 +28,8 @@ type tsoGenerator struct {
 	syncedTS int64 // last synced ts from tso service
 }
 
-// idGenerator is a trace ID generator
-type idGenerator struct {
+// IDGenerator is a simple ID generator
+type IDGenerator struct {
 	sync.Mutex
 	m map[string]int64
 }
@@ -39,33 +38,20 @@ func newTsoGenerator() *tsoGenerator {
 	return &tsoGenerator{}
 }
 
-// newIDGen returns a new idGenerator
-func newIDGen() *idGenerator {
-	gen := &idGenerator{
+// NewIDGen returns a new IDGenerator
+func NewIDGen() *IDGenerator {
+	gen := &IDGenerator{
 		m: make(map[string]int64),
 	}
 	return gen
 }
 
-// nextTraceID returns a new TraceID under namespace of `source`, in the name of `source`-index
-func (g *idGenerator) nextTraceID(source string, offset int64) string {
+// NextID returns a new ID under namespace of `source`, in the name of `source`.index
+func (g *IDGenerator) NextID(source string, offset int64) string {
 	g.Lock()
 	defer g.Unlock()
 	g.m[source] += offset + 1
 	return fmt.Sprintf("%s.%d", source, g.m[source])
-}
-
-// GetTSO returns current tso
-func (t *Tracer) GetTSO() int64 {
-	t.tso.RLock()
-	defer t.tso.RUnlock()
-	currentTS := time.Now().UnixNano()
-	return t.tso.syncedTS + currentTS - t.tso.localTS
-}
-
-// GetTraceID returns a new traceID for tracing
-func (t *Tracer) GetTraceID(source string) string {
-	return t.idGen.nextTraceID(source, 0)
 }
 
 // GetTraceCode returns file and line number information about function

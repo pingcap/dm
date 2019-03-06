@@ -28,6 +28,7 @@ import (
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/tracing"
 )
 
 var (
@@ -46,6 +47,7 @@ type Server struct {
 	svr     *grpc.Server
 
 	eventStore   *EventStore
+	idGen        *tracing.IDGenerator
 	statusServer *http.Server
 }
 
@@ -54,6 +56,7 @@ func NewServer(cfg *Config) *Server {
 	s := Server{
 		cfg:        cfg,
 		eventStore: NewEventStore(),
+		idGen:      tracing.NewIDGen(),
 	}
 	s.closed.Set(true)
 	return &s
@@ -118,7 +121,7 @@ func (s *Server) Close() {
 
 // GetTSO implements TracerServer.GetTSO
 func (s *Server) GetTSO(ctx context.Context, req *pb.GetTSORequest) (*pb.GetTSOResponse, error) {
-	log.Debugf("[server] receive GetTSO request %+v", req)
+	log.Debugf("[server] receives GetTSO request %+v", req)
 	resp := &pb.GetTSOResponse{
 		Result: true,
 		Ts:     time.Now().UnixNano(),
@@ -128,7 +131,7 @@ func (s *Server) GetTSO(ctx context.Context, req *pb.GetTSORequest) (*pb.GetTSOR
 
 // UploadSyncerBinlogEvent implements TracerServer.UploadSyncerBinlogEvent
 func (s *Server) UploadSyncerBinlogEvent(ctx context.Context, req *pb.UploadSyncerBinlogEventRequest) (*pb.CommonUploadResponse, error) {
-	log.Debugf("[server] receive UploadSyncerBinlogEvent request %+v", req)
+	log.Debugf("[server] receives UploadSyncerBinlogEvent request %+v", req)
 	for _, e := range req.Events {
 		err := s.eventStore.addNewEvent(&TraceEvent{
 			Type:  pb.TraceType_BinlogEvent,
@@ -146,7 +149,7 @@ func (s *Server) UploadSyncerBinlogEvent(ctx context.Context, req *pb.UploadSync
 
 // UploadSyncerJobEvent implements TracerServer.UploadSyncerJobEvent
 func (s *Server) UploadSyncerJobEvent(ctx context.Context, req *pb.UploadSyncerJobEventRequest) (*pb.CommonUploadResponse, error) {
-	log.Debugf("[server] receive UploadSyncerJobEvent request %+v", req)
+	log.Debugf("[server] receives UploadSyncerJobEvent request %+v", req)
 	for _, e := range req.Events {
 		err := s.eventStore.addNewEvent(&TraceEvent{
 			Type:  pb.TraceType_JobEvent,

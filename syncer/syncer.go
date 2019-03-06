@@ -636,7 +636,7 @@ func (s *Syncer) addJob(job *job) error {
 		s.jobs[queueBucket] <- job
 	}
 
-	_, err := s.tracer.CollectSyncerJobEvent(job.traceID, int32(job.tp), job.pos, job.currentPos, queueBucketMapping[queueBucket], job.sql, job.ddls, execDDLReq, pb.SyncerJobState_queued)
+	_, err := s.tracer.CollectSyncerJobEvent(job.traceID, job.traceGID, int32(job.tp), job.pos, job.currentPos, queueBucketMapping[queueBucket], job.sql, job.ddls, execDDLReq, pb.SyncerJobState_queued)
 	if err != nil {
 		log.Errorf("[syncer] trace error: %s", err)
 	}
@@ -763,7 +763,7 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 		if s.tracer.Enable() {
 			syncerJobState := s.tracer.FinishedSyncerJobState(err)
 			for _, job := range jobs {
-				_, err2 := s.tracer.CollectSyncerJobEvent(job.traceID, int32(job.tp), job.pos, job.currentPos, queueBucket, job.sql, job.ddls, nil, syncerJobState)
+				_, err2 := s.tracer.CollectSyncerJobEvent(job.traceID, job.traceGID, int32(job.tp), job.pos, job.currentPos, queueBucket, job.sql, job.ddls, nil, syncerJobState)
 				log.Errorf("[syncer] trace error: %s", err2)
 			}
 		}
@@ -801,7 +801,7 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 						if sqlJob.ddlExecItem != nil {
 							execDDLReq = sqlJob.ddlExecItem.req
 						}
-						_, err := s.tracer.CollectSyncerJobEvent(sqlJob.traceID, int32(sqlJob.tp), sqlJob.pos, sqlJob.currentPos, queueBucket, sqlJob.sql, sqlJob.ddls, execDDLReq, syncerJobState)
+						_, err := s.tracer.CollectSyncerJobEvent(sqlJob.traceID, sqlJob.traceGID, int32(sqlJob.tp), sqlJob.pos, sqlJob.currentPos, queueBucket, sqlJob.sql, sqlJob.ddls, execDDLReq, syncerJobState)
 						if err != nil {
 							log.Errorf("[syncer] trace error: %s", err)
 						}
@@ -1129,7 +1129,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			if s.tracer.Enable() {
 				_, err := s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
 				if err != nil {
-					return errors.Trace(err)
+					log.Infof("[syncer] tracer collect syncer binlog error: %v", errors.ErrorStack(err))
 				}
 			}
 
@@ -1232,7 +1232,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				if s.tracer.Enable() {
 					traceEvent, err = s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
 					if err != nil {
-						return errors.Trace(err)
+						log.Infof("[syncer] tracer collect syncer binlog error: %v", errors.ErrorStack(err))
 					}
 					traceID = traceEvent.Base.TraceID
 				}
@@ -1264,7 +1264,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				if s.tracer.Enable() {
 					traceEvent, err = s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
 					if err != nil {
-						return errors.Trace(err)
+						log.Infof("[syncer] tracer collect syncer binlog error: %v", errors.ErrorStack(err))
 					}
 					traceID = traceEvent.Base.TraceID
 				}
@@ -1297,7 +1297,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				if s.tracer.Enable() {
 					traceEvent, err = s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
 					if err != nil {
-						return errors.Trace(err)
+						log.Infof("[syncer] tracer collect syncer binlog error: %v", errors.ErrorStack(err))
 					}
 					traceID = traceEvent.Base.TraceID
 				}
@@ -1472,7 +1472,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			if s.tracer.Enable() {
 				traceEvent, err = s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
 				if err != nil {
-					return errors.Trace(err)
+					log.Errorf("[syncer] tracer collect syncer binlog error: %v", errors.ErrorStack(err))
 				}
 				traceID = traceEvent.Base.TraceID
 			}

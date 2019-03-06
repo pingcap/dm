@@ -34,6 +34,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/master/sql-operator"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/tracing"
 )
 
 var (
@@ -63,6 +64,9 @@ type Server struct {
 	// SQL operator holder
 	sqlOperatorHolder *operator.Holder
 
+	// trace group id generator
+	idGen *tracing.IDGenerator
+
 	closed sync2.AtomicBool
 }
 
@@ -74,6 +78,7 @@ func NewServer(cfg *Config) *Server {
 		taskWorkers:       make(map[string][]string),
 		lockKeeper:        NewLockKeeper(),
 		sqlOperatorHolder: operator.NewHolder(),
+		idGen:             tracing.NewIDGen(),
 	}
 	return &server
 }
@@ -1312,6 +1317,8 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 		return nil, errors.Errorf("worker %s not waiting for DDL lock %s", owner, lockID)
 	}
 
+	traceGID := s.idGen.NextID("resolveDDLLock", 0)
+
 	// try send handle SQLs request to owner if exists
 	key, oper := s.sqlOperatorHolder.Get(lock.Task, lock.DDLs())
 	if oper != nil {
@@ -1334,9 +1341,10 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 
 	log.Infof("[server] requesting %s to execute DDL (with ID %s)", owner, lockID)
 	ownerResp, err := cli.ExecuteDDL(ctx, &pb.ExecDDLRequest{
-		Task:   lock.Task,
-		LockID: lockID,
-		Exec:   true,
+		Task:     lock.Task,
+		LockID:   lockID,
+		Exec:     true,
+		TraceGID: traceGID,
 	})
 	if err != nil {
 		ownerResp = &pb.CommonWorkerResponse{
@@ -1363,9 +1371,10 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 	}
 
 	req := &pb.ExecDDLRequest{
-		Task:   lock.Task,
-		LockID: lockID,
-		Exec:   false, // ignore and skip DDL
+		Task:     lock.Task,
+		LockID:   lockID,
+		Exec:     false, // ignore and skip DDL
+		TraceGID: traceGID,
 	}
 
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(workers))

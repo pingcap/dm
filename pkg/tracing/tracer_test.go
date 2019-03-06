@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/pingcap/check"
+	tc "github.com/pingcap/check"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
@@ -169,7 +169,7 @@ func (s *MockServer) UploadSyncerJobEvent(ctx context.Context, req *pb.UploadSyn
 }
 
 // CheckEvent checks mock server has received the specific event
-func (s *MockServer) CheckEvent(traceID string, e *TraceEvent, c *C) {
+func (s *MockServer) CheckEvent(traceID string, e *TraceEvent, c *tc.C) {
 	select {
 	case <-s.checkCh:
 	case <-time.After(time.Second):
@@ -212,10 +212,10 @@ type TracerTestSuite struct {
 	checkCh chan interface{}
 }
 
-var _ = Suite(new(TracerTestSuite))
+var _ = tc.Suite(new(TracerTestSuite))
 
 func TestSuite(t *testing.T) {
-	TestingT(t)
+	tc.TestingT(t)
 }
 
 const retryTime = 100
@@ -231,22 +231,22 @@ func (ts *TracerTestSuite) waitUntilServerOnline() error {
 	return errors.Errorf("failed to connect rpc port for %d retries in every 10ms", retryTime)
 }
 
-func (ts *TracerTestSuite) startServer(c *C) {
+func (ts *TracerTestSuite) startServer(c *tc.C) {
 	ts.prepare(c)
 	ts.server = NewMockServer(ts.bind, ts.checkCh)
 	go ts.server.Start()
 	err := ts.waitUntilServerOnline()
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 }
 
-func (ts *TracerTestSuite) stopServer(c *C) {
+func (ts *TracerTestSuite) stopServer(c *tc.C) {
 	ts.tracer.Stop()
 	if ts.server != nil {
 		ts.server.Close()
 	}
 }
 
-func (ts *TracerTestSuite) prepare(c *C) {
+func (ts *TracerTestSuite) prepare(c *tc.C) {
 	ts.bind = ":8263"
 	ts.checkCh = make(chan interface{}, 100)
 	ts.cfg = Config{
@@ -259,7 +259,7 @@ func (ts *TracerTestSuite) prepare(c *C) {
 	ts.tracer.Start()
 }
 
-func (ts *TracerTestSuite) TestCollectSyncerEvent(c *C) {
+func (ts *TracerTestSuite) TestCollectSyncerEvent(c *tc.C) {
 	ts.startServer(c)
 	defer ts.stopServer(c)
 
@@ -274,21 +274,21 @@ ForEnd:
 
 	source := fmt.Sprintf("%s.syncer.%s", ts.cfg.Source, "test-task")
 	event, err := ts.tracer.CollectSyncerBinlogEvent(source, true, false, mysql.Position{"bin|000001.000004", 1515}, mysql.Position{"bin|000001.000004", 1626}, 1, 2)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	ts.server.CheckEvent(event.Base.TraceID, &TraceEvent{Type: pb.TraceType_BinlogEvent, Event: event}, c)
 
 	event, err = ts.tracer.CollectSyncerBinlogEvent(source, true, false, mysql.Position{"bin|000001.000004", 1626}, mysql.Position{"bin|000001.000004", 1873}, 1, 2)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	ts.server.CheckEvent(event.Base.TraceID, &TraceEvent{Type: pb.TraceType_BinlogEvent, Event: event}, c)
 
-	event2, err2 := ts.tracer.CollectSyncerJobEvent(event.Base.TraceID, 1, mysql.Position{"bin|000001.000004", 1626}, mysql.Position{"bin|000001.000004", 1873},
+	event2, err2 := ts.tracer.CollectSyncerJobEvent(event.Base.TraceID, "", 1, mysql.Position{"bin|000001.000004", 1626}, mysql.Position{"bin|000001.000004", 1873},
 		"q_1", "REPLACE INTO `test`.`t_target` (`id`,`ct`,`name`) VALUES (?,?,?);", []string{}, nil, pb.SyncerJobState_queued)
-	c.Assert(err2, IsNil)
+	c.Assert(err2, tc.IsNil)
 	ts.server.CheckEvent(event2.Base.TraceID, &TraceEvent{Type: pb.TraceType_JobEvent, Event: event}, c)
 
-	event2, err2 = ts.tracer.CollectSyncerJobEvent(event.Base.TraceID, 1, mysql.Position{"bin|000001.000004", 1626}, mysql.Position{"bin|000001.000004", 1873},
+	event2, err2 = ts.tracer.CollectSyncerJobEvent(event.Base.TraceID, "", 1, mysql.Position{"bin|000001.000004", 1626}, mysql.Position{"bin|000001.000004", 1873},
 		"q_1", "REPLACE INTO `test`.`t_target` (`id`,`ct`,`name`) VALUES (?,?,?);", []string{}, nil, pb.SyncerJobState_success)
-	c.Assert(err2, IsNil)
+	c.Assert(err2, tc.IsNil)
 	ts.server.CheckEvent(event2.Base.TraceID, &TraceEvent{Type: pb.TraceType_JobEvent, Event: event}, c)
 
 	ts.tracer.rpcWg.Wait()

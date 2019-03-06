@@ -74,6 +74,7 @@ type job struct {
 	ddlExecItem  *DDLExecItem
 	ddls         []string
 	traceID      string
+	traceGID     string
 }
 
 func (j *job) String() string {
@@ -123,6 +124,10 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, pos, cmdPos mysql.Positi
 		j.sourceTable = ddlInfo.tableNames[0][0].Name
 		j.targetSchema = ddlInfo.tableNames[1][0].Schema
 		j.targetTable = ddlInfo.tableNames[1][0].Name
+	}
+
+	if ddlExecItem != nil && ddlExecItem.req != nil {
+		j.traceGID = ddlExecItem.req.TraceGID
 	}
 
 	return j

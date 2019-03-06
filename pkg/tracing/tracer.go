@@ -43,7 +43,7 @@ type Tracer struct {
 	cli pb.TracerClient
 
 	tso   *tsoGenerator
-	idGen *idGenerator
+	idGen *IDGenerator
 
 	jobs       map[EventType]chan *Job
 	jobsClosed sync2.AtomicBool
@@ -55,7 +55,7 @@ func NewTracer(cfg Config) *Tracer {
 	t := Tracer{
 		cfg:   cfg,
 		tso:   newTsoGenerator(),
-		idGen: newIDGen(),
+		idGen: NewIDGen(),
 	}
 	t.jobsClosed.Set(true)
 	t.ctx, t.cancel = context.WithCancel(context.Background())
@@ -240,7 +240,7 @@ func (t *Tracer) AddJob(job *Job) {
 	}
 }
 
-func (t *Tracer) collectBaseEvent(source, traceID string, traceType pb.TraceType) (*pb.BaseEvent, error) {
+func (t *Tracer) collectBaseEvent(source, traceID, traceGID string, traceType pb.TraceType) (*pb.BaseEvent, error) {
 	file, line, err := GetTraceCode(3)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -255,6 +255,20 @@ func (t *Tracer) collectBaseEvent(source, traceID string, traceType pb.TraceType
 		Line:     int32(line),
 		Tso:      tso,
 		TraceID:  traceID,
+		GroupID:  traceGID,
 		Type:     traceType,
 	}, nil
+}
+
+// GetTSO returns current tso
+func (t *Tracer) GetTSO() int64 {
+	t.tso.RLock()
+	defer t.tso.RUnlock()
+	currentTS := time.Now().UnixNano()
+	return t.tso.syncedTS + currentTS - t.tso.localTS
+}
+
+// GetTraceID returns a new traceID for tracing
+func (t *Tracer) GetTraceID(source string) string {
+	return t.idGen.NextID(source, 0)
 }
