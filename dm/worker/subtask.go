@@ -197,7 +197,7 @@ retry:
 			I will optimize the implementation of retry feature.
 			*/
 			if st.retryErrors(result.Errors, cu) {
-				log.Warnf("[subtask] %s (%s) retry on error %v, waiting 10 second!", st.cfg.Name, cu.Type(), result.Errors)
+				log.Warnf("[subtask] %s (%s) retry on error %v, waiting 10 seconds!", st.cfg.Name, cu.Type(), result.Errors)
 				st.ctx, st.cancel = context.WithCancel(context.Background())
 				time.Sleep(10 * time.Second)
 				go cu.Resume(st.ctx, pr)
