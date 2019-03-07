@@ -205,6 +205,7 @@ func SplitDDL(stmt ast.StmtNode, schema string) (sqls []string, err error) {
 			bf.Reset()
 			err = stmt.Restore(ctx)
 			if err != nil {
+				v.Tables = tables
 				return nil, errors.Annotate(err, "restore ast node")
 			}
 
@@ -250,6 +251,7 @@ func SplitDDL(stmt ast.StmtNode, schema string) (sqls []string, err error) {
 			bf.Reset()
 			err = stmt.Restore(ctx)
 			if err != nil {
+				v.TableToTables = t2ts
 				return nil, errors.Annotate(err, "restore ast node")
 			}
 
@@ -278,6 +280,8 @@ func SplitDDL(stmt ast.StmtNode, schema string) (sqls []string, err error) {
 			bf.Reset()
 			err = stmt.Restore(ctx)
 			if err != nil {
+				v.Specs = specs
+				v.Table = table
 				return nil, errors.Annotate(err, "restore ast node")
 			}
 			sqls = append(sqls, bf.String())
@@ -290,7 +294,6 @@ func SplitDDL(stmt ast.StmtNode, schema string) (sqls []string, err error) {
 		v.Table = table
 
 		return sqls, nil
-
 	default:
 		return nil, errors.Errorf("unknown type ddl %+v", stmt)
 	}
