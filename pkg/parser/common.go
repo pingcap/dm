@@ -32,7 +32,7 @@ var (
 	// ErrRenameMultipleTables is error that don't allow to rename multiple tables in one statement
 	ErrRenameMultipleTables = errors.New("not allow operation: rename multiple tables in one statement")
 	// ErrAlterMultipleTables is error that don't allow to alter multiple tables in one statement
-	ErrAlterMultipleTables = errors.New("not allow operation: rename multiple tables in one statement")
+	ErrAlterMultipleTables = errors.New("not allow operation: alter multiple tables in one statement")
 )
 
 // Parse wraps parser.Parse(), makes `parser` suitable for dm
@@ -40,11 +40,11 @@ func Parse(p *parser.Parser, sql, charset, collation string) (stmt []ast.StmtNod
 	stmts, warnings, err := p.Parse(sql, charset, collation)
 
 	for _, warning := range warnings {
-		log.Warnf("warning: parsing sql %s:%v", sql, warning)
+		log.Warnf("parsing sql %s:%v", sql, warning)
 	}
 
 	if err != nil {
-		log.Errorf("error: parsing sql %s:%v", sql, err)
+		log.Errorf("parsing sql %s:%v", sql, err)
 	}
 
 	return stmts, errors.Trace(err)
@@ -86,7 +86,7 @@ func FetchDDLTableNames(schema string, stmt ast.StmtNode) ([]*filter.Table, erro
 	case *ast.DropIndexStmt:
 		res = append(res, genTableName(v.Table.Schema.O, v.Table.Name.O))
 	default:
-		return res, errors.Errorf("unkown type ddl %s", stmt)
+		return res, errors.Errorf("unknown type ddl %s", stmt)
 	}
 
 	for i := range res {
@@ -179,9 +179,8 @@ func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string
 // if fail to restore, it would not restore the value of `stmt` (it changes it's values if `stmt` is one of  DropTableStmt, RenameTableStmt, AlterTableStmt)
 func SplitDDL(stmt ast.StmtNode, schema string) (sqls []string, err error) {
 	var (
-		b          []byte
 		schemaName = model.NewCIStr(schema) // fill schema name
-		bf         = bytes.NewBuffer(b)
+		bf         = new(bytes.Buffer)
 		ctx        = &format.RestoreCtx{
 			Flags: format.DefaultRestoreFlags,
 			In:    bf,
@@ -261,6 +260,7 @@ func SplitDDL(stmt ast.StmtNode, schema string) (sqls []string, err error) {
 		return sqls, nil
 	case *ast.AlterTableStmt:
 		specs := v.Specs
+		table := v.Table
 
 		if v.Table.Schema.O == "" {
 			v.Table.Schema = schemaName
@@ -287,11 +287,12 @@ func SplitDDL(stmt ast.StmtNode, schema string) (sqls []string, err error) {
 			}
 		}
 		v.Specs = specs
+		v.Table = table
 
 		return sqls, nil
 
 	default:
-		return nil, errors.Errorf("unkown type ddl %+v", stmt)
+		return nil, errors.Errorf("unknown type ddl %+v", stmt)
 	}
 
 	bf.Reset()
