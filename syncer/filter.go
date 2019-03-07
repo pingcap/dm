@@ -30,10 +30,6 @@ CREATE [TEMPORARY] TABLE [IF NOT EXISTS] tbl_name
 */
 var (
 	builtInSkipDDLs = []string{
-		// For mariadb, for query event, like `# Dumm`
-		// But i don't know what is the meaning of this event.
-		"^#",
-
 		// transaction
 		"^SAVEPOINT",
 

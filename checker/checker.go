@@ -14,6 +14,7 @@
 package checker
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -53,17 +54,19 @@ type Checker struct {
 
 	instances []*mysqlInstance
 
-	checkList []check.Checker
-	result    struct {
+	checkList     []check.Checker
+	checkingItems map[string]string
+	result        struct {
 		sync.RWMutex
 		detail *check.Results
 	}
 }
 
 // NewChecker returns a checker
-func NewChecker(cfgs []*config.SubTaskConfig) *Checker {
+func NewChecker(cfgs []*config.SubTaskConfig, checkingItems map[string]string) *Checker {
 	c := &Checker{
-		instances: make([]*mysqlInstance, 0, len(cfgs)),
+		instances:     make([]*mysqlInstance, 0, len(cfgs)),
+		checkingItems: checkingItems,
 	}
 
 	for _, cfg := range cfgs {
@@ -82,6 +85,9 @@ func (c *Checker) Init() error {
 	shardingCounter := make(map[string]int)
 	dbs := make(map[string]*sql.DB)
 	columnMapping := make(map[string]*column.Mapping)
+	_, checkingShardID := c.checkingItems[config.ShardAutoIncrementIDChecking]
+	_, checkingShard := c.checkingItems[config.ShardTableSchemaChecking]
+	_, checkSchema := c.checkingItems[config.TableSchemaChecking]
 
 	for _, instance := range c.instances {
 		bw := filter.New(instance.cfg.CaseSensitive, instance.cfg.BWList)
@@ -125,6 +131,29 @@ func (c *Checker) Init() error {
 			return errors.Trace(err)
 		}
 
+		if _, ok := c.checkingItems[config.VersionChecking]; ok {
+			c.checkList = append(c.checkList, check.NewMySQLVersionChecker(instance.sourceDB, instance.sourceDBinfo))
+		}
+		if _, ok := c.checkingItems[config.BinlogEnableChecking]; ok {
+			c.checkList = append(c.checkList, check.NewMySQLBinlogEnableChecker(instance.sourceDB, instance.sourceDBinfo))
+		}
+		if _, ok := c.checkingItems[config.BinlogFormatChecking]; ok {
+			c.checkList = append(c.checkList, check.NewMySQLBinlogFormatChecker(instance.sourceDB, instance.sourceDBinfo))
+		}
+		if _, ok := c.checkingItems[config.BinlogRowImageChecking]; ok {
+			c.checkList = append(c.checkList, check.NewMySQLBinlogRowImageChecker(instance.sourceDB, instance.sourceDBinfo))
+		}
+		if _, ok := c.checkingItems[config.DumpPrivilegeChecking]; ok {
+			c.checkList = append(c.checkList, check.NewSourceDumpPrivilegeChecker(instance.sourceDB, instance.sourceDBinfo))
+		}
+		if _, ok := c.checkingItems[config.ReplicationPrivilegeChecking]; ok {
+			c.checkList = append(c.checkList, check.NewSourceReplicationPrivilegeChecker(instance.sourceDB, instance.sourceDBinfo))
+		}
+
+		if !checkingShard && !checkSchema {
+			continue
+		}
+
 		mapping, err := utils.FetchTargetDoTables(instance.sourceDB, bw, r)
 		if err != nil {
 			return errors.Trace(err)
@@ -155,22 +184,37 @@ func (c *Checker) Init() error {
 		}
 		dbs[instance.cfg.SourceID] = instance.sourceDB
 
-		c.checkList = append(c.checkList, check.NewMySQLBinlogEnableChecker(instance.sourceDB, instance.sourceDBinfo))
-		c.checkList = append(c.checkList, check.NewMySQLBinlogFormatChecker(instance.sourceDB, instance.sourceDBinfo))
-		c.checkList = append(c.checkList, check.NewMySQLBinlogRowImageChecker(instance.sourceDB, instance.sourceDBinfo))
-		c.checkList = append(c.checkList, check.NewSourcePrivilegeChecker(instance.sourceDB, instance.sourceDBinfo))
-		c.checkList = append(c.checkList, check.NewTablesChecker(instance.sourceDB, instance.sourceDBinfo, checkTables))
-	}
-
-	for name, shardingSet := range sharding {
-		if shardingCounter[name] <= 1 {
-			continue
+		if checkSchema {
+			c.checkList = append(c.checkList, check.NewTablesChecker(instance.sourceDB, instance.sourceDBinfo, checkTables))
 		}
-
-		c.checkList = append(c.checkList, check.NewShardingTablesCheck(name, dbs, shardingSet, columnMapping))
 	}
 
+	if checkingShard {
+		for name, shardingSet := range sharding {
+			if shardingCounter[name] <= 1 {
+				continue
+			}
+
+			c.checkList = append(c.checkList, check.NewShardingTablesCheck(name, dbs, shardingSet, columnMapping, checkingShardID))
+		}
+	}
+
+	log.Infof(c.displayCheckingItems())
 	return nil
+}
+
+func (c *Checker) displayCheckingItems() string {
+	if len(c.checkList) == 0 {
+		return "not found any checking items\n"
+	}
+
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "\n************ task %s checking items ************\n", c.instances[0].cfg.Name)
+	for _, checkFunc := range c.checkList {
+		fmt.Fprintf(&buf, "%s\n", checkFunc.Name())
+	}
+	fmt.Fprintf(&buf, "************ task %s checking items ************", c.instances[0].cfg.Name)
+	return buf.String()
 }
 
 // Process implements Unit interface

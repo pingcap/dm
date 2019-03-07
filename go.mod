@@ -7,16 +7,15 @@ require (
 	github.com/chzyer/logex v1.1.10 // indirect
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e
 	github.com/chzyer/test v0.0.0-20180213035817-a1ea475d72b1 // indirect
-	github.com/cznic/mathutil v0.0.0-20181122101859-297441e03548 // indirect
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/gogo/protobuf v1.2.0
 	github.com/golang/protobuf v1.2.0
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/pingcap/check v0.0.0-20190102082844-67f458068fc8
 	github.com/pingcap/errors v0.11.0
-	github.com/pingcap/parser v0.0.0-20190225125525-01444ee2a9c2
-	github.com/pingcap/tidb v0.0.0-20190219092241-45ee2058969c
-	github.com/pingcap/tidb-tools v2.1.3-0.20190218062145-515a74c8fb26+incompatible
+	github.com/pingcap/parser v0.0.0-20190305083139-b478256a6451
+	github.com/pingcap/tidb v0.0.0-20190307110701-c00846001d44
+	github.com/pingcap/tidb-tools v2.1.3-0.20190305052038-e6c996e1e2ee+incompatible
 	github.com/prometheus/client_golang v0.9.1
 	github.com/prometheus/common v0.0.0-20181126121408-4724e9255275
 	github.com/prometheus/procfs v0.0.0-20181204211112-1dc9a6cbc91a // indirect

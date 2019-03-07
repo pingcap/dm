@@ -302,6 +302,34 @@ func (s *testSyncerSuite) TestParseDDLSQL(c *C) {
 			isDDL:    false,
 			hasError: true,
 		},
+		{
+			sql:      "#",
+			schema:   "",
+			ignore:   false,
+			isDDL:    false,
+			hasError: false,
+		},
+		{
+			sql:      "# this is a comment",
+			schema:   "",
+			ignore:   false,
+			isDDL:    false,
+			hasError: false,
+		},
+		{
+			sql:      "# a comment with DDL\nCREATE TABLE do_db.do_table (c1 INT)",
+			schema:   "",
+			ignore:   false,
+			isDDL:    true,
+			hasError: false,
+		},
+		{
+			sql:      "# a comment with DML\nUPDATE `ignore_db`.`ignore_table` SET c1=2 WHERE c1=1",
+			schema:   "ignore_db",
+			ignore:   true,
+			isDDL:    false,
+			hasError: false,
+		},
 	}
 
 	cfg := &config.SubTaskConfig{
