@@ -31,6 +31,7 @@ func CheckSyncConfig(ctx context.Context, cfgs []*config.SubTaskConfig) error {
 		return nil
 	}
 
+	// all `IgnoreCheckingItems` of sub-task are same, so we take first one
 	checkingItems := config.FilterCheckingItems(cfgs[0].IgnoreCheckingItems)
 	if len(checkingItems) == 0 {
 		return nil

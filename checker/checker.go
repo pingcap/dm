@@ -151,7 +151,7 @@ func (c *Checker) Init() error {
 		}
 
 		if !checkingShard && !checkSchema {
-			break
+			continue
 		}
 
 		mapping, err := utils.FetchTargetDoTables(instance.sourceDB, bw, r)
