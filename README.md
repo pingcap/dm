@@ -14,7 +14,7 @@
 ## Documentation
 
 * [Detailed documentation](https://pingcap.com/docs/tools/dm/overview/)
-* [简体中文文档](https://github.com/pingcap/tidb-tools/blob/docs/docs/dm/zh_CN/README.md)
+* [简体中文文档](https://pingcap.com/docs-cn/tools/dm/overview/)
 
 ## Building
 
