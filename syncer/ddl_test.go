@@ -18,163 +18,13 @@ import (
 	"database/sql"
 
 	. "github.com/pingcap/check"
-	"github.com/pingcap/parser/ast"
-	"github.com/pingcap/tidb-tools/pkg/filter"
-
 	"github.com/pingcap/dm/dm/config"
+	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/parser"
+	"github.com/pingcap/tidb-tools/pkg/filter"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
 )
-
-func (s *testSyncerSuite) TestFindTableDefineIndex(c *C) {
-	testCase := [][]string{
-		{"create table t (id", "(id"},
-		{"create table t(id", "(id"},
-		{"create table t ( id", "( id"},
-		{"create table t( id", "( id"},
-		{"create table t", ""},
-	}
-
-	for _, t := range testCase {
-		c.Assert(findTableDefineIndex(t[0]), Equals, t[1])
-	}
-}
-
-func (s *testSyncerSuite) TestFindLastWord(c *C) {
-	testCase := [][]interface{}{
-		{"create table t (id", 15},
-		{"create table t(id", 13},
-		{"create table t ( id", 17},
-		{"create table t( id", 16},
-		{"create table t", 13},
-	}
-
-	for _, t := range testCase {
-		c.Assert(findLastWord(t[0].(string)), Equals, t[1])
-	}
-}
-
-func (s *testSyncerSuite) TestGenDDLSQL(c *C) {
-	originTableNameSingle := []*filter.Table{
-		{Schema: "test", Name: "test"},
-	}
-	originTableNameDouble := []*filter.Table{
-		{Schema: "test", Name: "test"},
-		{Schema: "test1", Name: "test1"},
-	}
-	targetTableNameSingle := []*filter.Table{{Schema: "titi", Name: "titi"}}
-	targetTableNameDouble := []*filter.Table{
-		{Schema: "titi", Name: "titi"},
-		{Schema: "titi1", Name: "titi1"},
-	}
-	testCase := [][]string{
-		{"CREATE DATABASE test", "CREATE DATABASE test", "CREATE DATABASE `titi`"},
-		{"CREATE SCHEMA test", "CREATE SCHEMA test", "CREATE SCHEMA `titi`"},
-		{"CREATE DATABASE IF NOT EXISTS test", "CREATE DATABASE IF NOT EXISTS test", "CREATE DATABASE IF NOT EXISTS `titi`"},
-		{"DROP DATABASE test", "DROP DATABASE test", "DROP DATABASE `titi`"},
-		{"DROP SCHEMA test", "DROP SCHEMA test", "DROP SCHEMA `titi`"},
-		{"DROP DATABASE IF EXISTS test", "DROP DATABASE IF EXISTS test", "DROP DATABASE IF EXISTS `titi`"},
-		{"CREATE TABLE test(id int)", "CREATE TABLE `test`.`test`(id int)", "USE `titi`; CREATE TABLE `titi`.`titi`(id int);"},
-		{"CREATE TABLE test (id int)", "CREATE TABLE `test`.`test` (id int)", "USE `titi`; CREATE TABLE `titi`.`titi` (id int);"},
-		{"DROP TABLE test", "DROP TABLE `test`.`test`", "USE `titi`; DROP TABLE `titi`.`titi`;"},
-		{"TRUNCATE TABLE test", "TRUNCATE TABLE `test`.`test`", "USE `titi`; TRUNCATE TABLE `titi`.`titi`;"},
-		{"alter table test add column abc int", "ALTER TABLE `test`.`test` add column abc int", "USE `titi`; ALTER TABLE `titi`.`titi` add column abc int;"},
-		{"CREATE INDEX `idx1` on test(id)", "CREATE INDEX `idx1` ON `test`.`test` (id)", "USE `titi`; CREATE INDEX `idx1` ON `titi`.`titi` (id);"},
-		{"CREATE INDEX `idx1` on test (id)", "CREATE INDEX `idx1` ON `test`.`test` (id)", "USE `titi`; CREATE INDEX `idx1` ON `titi`.`titi` (id);"},
-		{"DROP INDEX `idx1` on test", "DROP INDEX `idx1` ON `test`.`test`", "USE `titi`; DROP INDEX `idx1` ON `titi`.`titi`;"},
-	}
-	for _, t := range testCase {
-		p, err := utils.GetParser(s.db, false)
-		c.Assert(err, IsNil)
-		stmt, err := p.ParseOneStmt(t[0], "", "")
-		c.Assert(err, IsNil)
-
-		sql, err := genDDLSQL(t[0], stmt, originTableNameSingle, targetTableNameSingle, true)
-		c.Assert(err, IsNil)
-		c.Assert(sql, Equals, t[2])
-
-		sql, err = genDDLSQL(t[1], stmt, originTableNameSingle, targetTableNameSingle, true)
-		c.Assert(err, IsNil)
-		c.Assert(sql, Equals, t[2])
-	}
-
-	testCase = [][]string{
-		{"rename table test to test1", "RENAME TABLE `test`.`test` TO `test1`.`test1`", "RENAME TABLE `titi`.`titi` TO `titi1`.`titi1`"},
-		{"alter table test rename as test1", "ALTER TABLE `test`.`test` rename as `test1`.`test1`", "USE `titi`; ALTER TABLE `titi`.`titi` rename as `titi1`.`titi1`;"},
-		{"create table test like test1", "create table `test`.`test` like `test1`.`test1`", "USE `titi`; create table `titi`.`titi` like `titi1`.`titi1`;"},
-	}
-	for _, t := range testCase {
-		p, err := utils.GetParser(s.db, false)
-		c.Assert(err, IsNil)
-		stmt, err := p.ParseOneStmt(t[0], "", "")
-		c.Assert(err, IsNil)
-
-		sql, err := genDDLSQL(t[0], stmt, originTableNameDouble, targetTableNameDouble, true)
-		c.Assert(err, IsNil)
-		c.Assert(sql, Equals, t[2])
-
-		sql, err = genDDLSQL(t[1], stmt, originTableNameDouble, targetTableNameDouble, true)
-		c.Assert(err, IsNil)
-		c.Assert(sql, Equals, t[2])
-	}
-
-}
-
-func (s *testSyncerSuite) TestComment(c *C) {
-	originTableNameSingle := []*filter.Table{
-		{Schema: "test", Name: "test"},
-	}
-	originTableNameDouble := []*filter.Table{
-		{Schema: "test", Name: "test"},
-		{Schema: "test1", Name: "test1"},
-	}
-	targetTableNameSingle := []*filter.Table{
-		{Schema: "titi", Name: "titi"},
-	}
-	targetTableNameDouble := []*filter.Table{
-		{Schema: "titi", Name: "titi"},
-		{Schema: "titi1", Name: "titi1"},
-	}
-	testCase := [][]string{
-		{"CREATE /* gh-ost */ DATABASE test", "CREATE /* gh-ost */ DATABASE `titi`"},
-		{"CREATE /* gh-ost */ SCHEMA test", "CREATE /* gh-ost */ SCHEMA `titi`"},
-		{"CREATE /* gh-ost */ DATABASE IF NOT EXISTS test", "CREATE /* gh-ost */ DATABASE IF NOT EXISTS `titi`"},
-		{"DROP /* gh-ost */ DATABASE test", "DROP /* gh-ost */ DATABASE `titi`"},
-		{"DROP /* gh-ost */ SCHEMA test", "DROP /* gh-ost */ SCHEMA `titi`"},
-		{"DROP /* gh-ost */ DATABASE IF EXISTS test", "DROP /* gh-ost */ DATABASE IF EXISTS `titi`"},
-		{"CREATE /* gh-ost */ TABLE test(id int)", "USE `titi`; CREATE /* gh-ost */ TABLE `titi`.`titi`(id int);"},
-		{"CREATE /* gh-ost */ TABLE test (id int)", "USE `titi`; CREATE /* gh-ost */ TABLE `titi`.`titi` (id int);"},
-		{"DROP /* gh-ost */ TABLE test", "USE `titi`; DROP /* gh-ost */ TABLE `titi`.`titi`;"},
-		{"TRUNCATE TABLE test", "USE `titi`; TRUNCATE TABLE `titi`.`titi`;"},
-		{"alter /* gh-ost */ table test add column abc int", "USE `titi`; ALTER TABLE `titi`.`titi` add column abc int;"},
-		{"CREATE /* gh-ost*/ INDEX `idx1` on test(id)", "USE `titi`; CREATE /* gh-ost*/ INDEX `idx1` ON `titi`.`titi` (id);"},
-		{"CREATE /*gh-ost */ INDEX `idx1` on test (id)", "USE `titi`; CREATE /*gh-ost */ INDEX `idx1` ON `titi`.`titi` (id);"},
-		{"DROP /*gh-ost*/ INDEX `idx1` on test", "USE `titi`; DROP /*gh-ost*/ INDEX `idx1` ON `titi`.`titi`;"},
-	}
-
-	parser, err := utils.GetParser(s.db, false)
-	c.Assert(err, IsNil)
-
-	for _, t := range testCase {
-		stmt, err := parser.ParseOneStmt(t[0], "", "")
-		c.Assert(err, IsNil)
-		sql, err := genDDLSQL(t[0], stmt, originTableNameSingle, targetTableNameSingle, true)
-		c.Assert(err, IsNil)
-		c.Assert(sql, Equals, t[1])
-	}
-
-	testCase = [][]string{
-		{"rename table test to test1", "RENAME TABLE `titi`.`titi` TO `titi1`.`titi1`"},
-		{"alter /* gh-ost */ table test rename as test1", "USE `titi`; ALTER TABLE `titi`.`titi` rename as `titi1`.`titi1`;"},
-		{"create /* gh-ost */ table test like test1", "USE `titi`; create /* gh-ost */ table `titi`.`titi` like `titi1`.`titi1`;"},
-	}
-	for _, t := range testCase {
-		stmt, err := parser.ParseOneStmt(t[0], "", "")
-		c.Assert(err, IsNil)
-		sql, err := genDDLSQL(t[0], stmt, originTableNameDouble, targetTableNameDouble, true)
-		c.Assert(err, IsNil)
-		c.Assert(sql, Equals, t[1])
-	}
-}
 
 func (s *testSyncerSuite) TestTrimCtrlChars(c *C) {
 	ddl := "create table if not exists foo.bar(id int)"
@@ -205,6 +55,7 @@ func (s *testSyncerSuite) TestTrimCtrlChars(c *C) {
 		buf.Reset()
 	}
 }
+
 func (s *testSyncerSuite) TestAnsiQuotes(c *C) {
 	ansiQuotesCases := []string{
 		"create database `test`",
@@ -251,32 +102,143 @@ CREATE TABLE test.test_table_with_c (id int);
 	parser, err := utils.GetParser(s.db, false)
 	c.Assert(err, IsNil)
 
-	_, err = parser.Parse(sql, "", "")
+	_, err = parserpkg.Parse(parser, sql, "", "")
 	c.Assert(err, IsNil)
 }
 
 func (s *testSyncerSuite) TestCommentQuote(c *C) {
 	sql := "ALTER TABLE schemadb.ep_edu_course_message_auto_reply MODIFY answer JSON COMMENT '回复的内容-格式为list，有两个字段：\"answerType\"：//''发送客服消息类型：1-文本消息，2-图片，3-图文链接''；  answer：回复内容';"
-	expectedSQL := "ALTER TABLE `schemadb`.`ep_edu_course_message_auto_reply` MODIFY COLUMN `answer` json COMMENT '回复的内容-格式为list，有两个字段：\"answerType\"：//''发送客服消息类型：1-文本消息，2-图片，3-图文链接''；  answer：回复内容'"
+	expectedSQL := "ALTER TABLE `schemadb`.`ep_edu_course_message_auto_reply` MODIFY COLUMN `answer` JSON COMMENT '回复的内容-格式为list，有两个字段：\"answerType\"：//''发送客服消息类型：1-文本消息，2-图片，3-图文链接''；  answer：回复内容'"
 
 	parser, err := utils.GetParser(s.db, false)
 	c.Assert(err, IsNil)
 
-	_, err = parser.ParseOneStmt(sql, "", "")
+	stmt, err := parser.ParseOneStmt(sql, "", "")
 	c.Assert(err, IsNil)
 
 	syncer := &Syncer{}
-	sqls, _, _, err := syncer.resolveDDLSQL(sql, parser, "")
+	sqls, _, err := syncer.resolveDDLSQL(parser, stmt, "schemadb")
 	c.Assert(err, IsNil)
 	c.Assert(len(sqls), Equals, 1)
-
-	getSQL := sqls[0]
-	_, err = parser.ParseOneStmt(getSQL, "", "")
-	c.Assert(err, IsNil)
-	c.Assert(getSQL, Equals, expectedSQL)
+	c.Assert(sqls[0], Equals, expectedSQL)
 }
 
-func (s *testSyncerSuite) TestIgnoreDMLInQuery(c *C) {
+func (s *testSyncerSuite) TestresolveDDLSQL(c *C) {
+	// duplicate with pkg/parser
+	sqls := []string{
+		"create schema `s1`",
+		"create schema if not exists `s1`",
+		"drop schema `s1`",
+		"drop schema if exists `s1`",
+		"drop table `s1`.`t1`",
+		"drop table `s1`.`t1`, `s2`.`t2`",
+		"drop table `s1`.`t1`, `s2`.`t2`, `xx`",
+		"create table `s1`.`t1` (id int)",
+		"create table `t1` (id int)",
+		"create table `t1` like `t2`",
+		"create table `s1`.`t1` like `t2`",
+		"create table `t1` like `xx`.`t2`",
+		"truncate table `t1`",
+		"truncate table `s1`.`t1`",
+		"rename table `s1`.`t1` to `s2`.`t2`",
+		"rename table `t1` to `t2`, `s1`.`t1` to `t2`",
+		"drop index i1 on `s1`.`t1`",
+		"drop index i1 on `t1`",
+		"create index i1 on `t1`(`c1`)",
+		"create index i1 on `s1`.`t1`(`c1`)",
+		"alter table `t1` add column c1 int, drop column c2",
+		"alter table `s1`.`t1` add column c1 int, rename to `t2`, drop column c2",
+		"alter table `s1`.`t1` add column c1 int, rename to `xx`.`t2`, drop column c2",
+	}
+
+	expectedSQLs := [][]string{
+		{"CREATE DATABASE IF NOT EXISTS `s1`"},
+		{"CREATE DATABASE IF NOT EXISTS `s1`"},
+		{"DROP DATABASE IF EXISTS `s1`"},
+		{"DROP DATABASE IF EXISTS `s1`"},
+		{"DROP TABLE IF EXISTS `s1`.`t1`"},
+		{"DROP TABLE IF EXISTS `s1`.`t1`", "DROP TABLE IF EXISTS `s2`.`t2`"},
+		{"DROP TABLE IF EXISTS `s1`.`t1`", "DROP TABLE IF EXISTS `s2`.`t2`", "DROP TABLE IF EXISTS `test`.`xx`"},
+		{"CREATE TABLE IF NOT EXISTS `s1`.`t1` (`id` INT)"},
+		{"CREATE TABLE IF NOT EXISTS `test`.`t1` (`id` INT)"},
+		{"CREATE TABLE IF NOT EXISTS `test`.`t1` LIKE `test`.`t2`"},
+		{"CREATE TABLE IF NOT EXISTS `s1`.`t1` LIKE `test`.`t2`"},
+		{"CREATE TABLE IF NOT EXISTS `test`.`t1` LIKE `xx`.`t2`"},
+		{"TRUNCATE TABLE `test`.`t1`"},
+		{"TRUNCATE TABLE `s1`.`t1`"},
+		{"RENAME TABLE `s1`.`t1` TO `s2`.`t2`"},
+		{"RENAME TABLE `test`.`t1` TO `test`.`t2`", "RENAME TABLE `s1`.`t1` TO `test`.`t2`"},
+		{"DROP INDEX IF EXISTS `i1` ON `s1`.`t1`"},
+		{"DROP INDEX IF EXISTS `i1` ON `test`.`t1`"},
+		{"CREATE INDEX `i1` ON `test`.`t1` (`c1`)"},
+		{"CREATE INDEX `i1` ON `s1`.`t1` (`c1`)"},
+		{"ALTER TABLE `test`.`t1` ADD COLUMN `c1` INT", "ALTER TABLE `test`.`t1` DROP COLUMN `c2`"},
+		{"ALTER TABLE `s1`.`t1` ADD COLUMN `c1` INT", "ALTER TABLE `s1`.`t1` RENAME AS `test`.`t2`", "ALTER TABLE `test`.`t2` DROP COLUMN `c2`"},
+		{"ALTER TABLE `s1`.`t1` ADD COLUMN `c1` INT", "ALTER TABLE `s1`.`t1` RENAME AS `xx`.`t2`", "ALTER TABLE `xx`.`t2` DROP COLUMN `c2`"},
+	}
+
+	targetSQLs := [][]string{
+		{"CREATE DATABASE IF NOT EXISTS `xs1`"},
+		{"CREATE DATABASE IF NOT EXISTS `xs1`"},
+		{"DROP DATABASE IF EXISTS `xs1`"},
+		{"DROP DATABASE IF EXISTS `xs1`"},
+		{"DROP TABLE IF EXISTS `xs1`.`t1`"},
+		{"DROP TABLE IF EXISTS `xs1`.`t1`", ""},
+		{"DROP TABLE IF EXISTS `xs1`.`t1`", "", ""},
+		{"CREATE TABLE IF NOT EXISTS `xs1`.`t1` (`id` INT)"},
+		{""},
+		{""},
+		{""},
+		{""},
+		{""},
+		{"TRUNCATE TABLE `xs1`.`t1`"},
+		{""},
+		{"", ""},
+		{"DROP INDEX IF EXISTS `i1` ON `xs1`.`t1`"},
+		{""},
+		{""},
+		{"CREATE INDEX `i1` ON `xs1`.`t1` (`c1`)"},
+		{"", ""},
+		{"ALTER TABLE `xs1`.`t1` ADD COLUMN `c1` INT", "", ""},
+		{"ALTER TABLE `xs1`.`t1` ADD COLUMN `c1` INT", "", ""},
+	}
+
+	p := parser.New()
+	cfg := &config.SubTaskConfig{
+		BWList: &filter.Rules{
+			DoDBs: []string{"s1"},
+		},
+	}
+	syncer := NewSyncer(cfg)
+
+	var err error
+	syncer.tableRouter, err = router.NewTableRouter(false, []*router.TableRule{
+		{
+			SchemaPattern: "s1",
+			TargetSchema:  "xs1",
+		},
+	})
+	c.Assert(err, IsNil)
+
+	for i, sql := range sqls {
+		result, err := syncer.parseDDLSQL(sql, p, "test")
+		c.Assert(err, IsNil)
+		c.Assert(result.ignore, IsFalse)
+		c.Assert(result.isDDL, IsTrue)
+
+		statements, _, err := syncer.resolveDDLSQL(p, result.stmt, "test")
+		c.Assert(err, IsNil)
+		c.Assert(statements, DeepEquals, expectedSQLs[i])
+
+		for j, statement := range statements {
+			s, _, _, err := syncer.handleDDL(p, "test", statement)
+			c.Assert(err, IsNil)
+			c.Assert(s, Equals, targetSQLs[i][j])
+		}
+	}
+}
+
+func (s *testSyncerSuite) TestParseDDLSQL(c *C) {
 	cases := []struct {
 		sql      string
 		schema   string
@@ -284,6 +246,20 @@ func (s *testSyncerSuite) TestIgnoreDMLInQuery(c *C) {
 		isDDL    bool
 		hasError bool
 	}{
+		{
+			sql:      "FLUSH",
+			schema:   "",
+			ignore:   true,
+			isDDL:    false,
+			hasError: false,
+		},
+		{
+			sql:      "BEGIN",
+			schema:   "",
+			ignore:   false,
+			isDDL:    false,
+			hasError: false,
+		},
 		{
 			sql:      "CREATE TABLE do_db.do_table (c1 INT)",
 			schema:   "",
@@ -385,11 +361,11 @@ func (s *testSyncerSuite) TestResolveGeneratedColumnSQL(c *C) {
 	}{
 		{
 			"ALTER TABLE `test`.`test` ADD COLUMN d int(11) GENERATED ALWAYS AS (c + 1) VIRTUAL",
-			"ALTER TABLE `test`.`test` ADD COLUMN `d` int(11) GENERATED ALWAYS AS (c + 1) VIRTUAL",
+			"ALTER TABLE `test`.`test` ADD COLUMN `d` INT(11) GENERATED ALWAYS AS(`c`+1) VIRTUAL",
 		},
 		{
 			"ALTER TABLE `test`.`test` ADD COLUMN d int(11) AS (1 + 1) STORED",
-			"ALTER TABLE `test`.`test` ADD COLUMN `d` int(11) GENERATED ALWAYS AS (1 + 1) STORED",
+			"ALTER TABLE `test`.`test` ADD COLUMN `d` INT(11) GENERATED ALWAYS AS(1+1) STORED",
 		},
 	}
 
@@ -401,22 +377,11 @@ func (s *testSyncerSuite) TestResolveGeneratedColumnSQL(c *C) {
 		ast1, err := parser.ParseOneStmt(tc.sql, "", "")
 		c.Assert(err, IsNil)
 
-		sqls, _, _, err := syncer.resolveDDLSQL(tc.sql, parser, "")
+		sqls, _, err := syncer.resolveDDLSQL(parser, ast1, "test")
 		c.Assert(err, IsNil)
 
 		c.Assert(len(sqls), Equals, 1)
 		getSQL := sqls[0]
 		c.Assert(getSQL, Equals, tc.expected)
-
-		ast2, err := parser.ParseOneStmt(getSQL, "", "")
-		c.Assert(err, IsNil)
-
-		// compare parsed ast of the resoved SQL with parsed ast of the origin SQL.
-		// because text fields are not always same, and the difference of text
-		// makes no sense to the semantics, we just ignore checking it.
-		atStmt1 := ast1.(*ast.AlterTableStmt)
-		atStmt2 := ast2.(*ast.AlterTableStmt)
-		c.Assert(atStmt1.Table, DeepEquals, atStmt2.Table)
-		c.Assert(atStmt1.Specs, DeepEquals, atStmt2.Specs)
 	}
 }
