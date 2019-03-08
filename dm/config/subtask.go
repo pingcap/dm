@@ -90,6 +90,8 @@ type SubTaskConfig struct {
 
 	Name string `toml:"name" json:"name"`
 	Mode string `toml:"mode" json:"mode"`
+	//  treat it as hidden configuration
+	IgnoreCheckingItems []string `toml:"ignore-checking-items" json:"ignore-checking-items"`
 	// it represents a MySQL/MariaDB instance or a replica group
 	SourceID         string `toml:"source-id" json:"source-id"`
 	ServerID         int    `toml:"server-id" json:"server-id"`
