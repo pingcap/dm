@@ -32,8 +32,9 @@ type testGeneratorSuite struct {
 
 func (t *testGeneratorSuite) TestGenerateForMySQL(c *C) {
 	var (
-		flavor          = gmysql.MySQLFlavor
-		serverID uint32 = 101
+		flavor           = gmysql.MySQLFlavor
+		serverID  uint32 = 101
+		latestXID uint64 = 10
 	)
 
 	previousGTIDSetStr := "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,406a3f61-690d-11e7-87c5-6c92bf46f384:1-94321383,53bfca22-690d-11e7-8a62-18ded7a37b78:1-495,686e1ab6-c47e-11e7-a42c-6c92bf46f384:1-34981190,03fc0263-28c7-11e7-a653-6c0b84d59f30:1-7041423,05474d3c-28c7-11e7-8352-203db246dd3d:1-170,10b039fc-c843-11e7-8f6a-1866daf8d810:1-308290454"
@@ -46,13 +47,14 @@ func (t *testGeneratorSuite) TestGenerateForMySQL(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(latestGTID, NotNil)
 
-	t.testGenerate(c, flavor, serverID, latestGTID, previousGTIDSet)
+	t.testGenerate(c, flavor, serverID, latestGTID, previousGTIDSet, latestXID)
 }
 
 func (t *testGeneratorSuite) TestGenerateForMariaDB(c *C) {
 	var (
-		flavor          = gmysql.MariaDBFlavor
-		serverID uint32 = 101
+		flavor           = gmysql.MariaDBFlavor
+		serverID  uint32 = 101
+		latestXID uint64 = 10
 	)
 
 	previousGTIDSetStr := "1-101-12,2-2-3,3-3-8,4-4-4"
@@ -65,10 +67,10 @@ func (t *testGeneratorSuite) TestGenerateForMariaDB(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(latestGTID, NotNil)
 
-	t.testGenerate(c, flavor, serverID, latestGTID, previousGTIDSet)
+	t.testGenerate(c, flavor, serverID, latestGTID, previousGTIDSet, latestXID)
 }
 
-func (t *testGeneratorSuite) testGenerate(c *C, flavor string, serverID uint32, latestGTID gtid.Set, previousGTIDSet gtid.Set) {
+func (t *testGeneratorSuite) testGenerate(c *C, flavor string, serverID uint32, latestGTID gtid.Set, previousGTIDSet gtid.Set, latestXID uint64) {
 	// write some events to file
 	dir := c.MkDir()
 	filename := filepath.Join(dir, "mysql-bin-test.000001")
@@ -76,7 +78,7 @@ func (t *testGeneratorSuite) testGenerate(c *C, flavor string, serverID uint32, 
 	c.Assert(err, IsNil)
 	defer f.Close()
 
-	g := NewGenerator(flavor, serverID, 0, latestGTID, previousGTIDSet)
+	g := NewGenerator(flavor, serverID, 0, latestGTID, previousGTIDSet, latestXID)
 	allEvents := make([]*replication.BinlogEvent, 0, 20)
 	allEventTypes := make([]replication.EventType, 0, 50)
 
@@ -109,7 +111,6 @@ func (t *testGeneratorSuite) testGenerate(c *C, flavor string, serverID uint32, 
 
 	// INSERT INTO `db`.`tbl` VALUES (1, "string 1")
 	var (
-		xid        uint64 = 100
 		tableID    uint64 = 8
 		columnType        = []byte{gmysql.MYSQL_TYPE_LONG, gmysql.MYSQL_TYPE_STRING}
 	)
@@ -125,11 +126,10 @@ func (t *testGeneratorSuite) testGenerate(c *C, flavor string, serverID uint32, 
 		},
 	}
 	eventType := replication.WRITE_ROWS_EVENTv2
-	currentEvents, data, err = g.GenDMLEvents(eventType, xid, dmlData)
+	currentEvents, data, err = g.GenDMLEvents(eventType, dmlData)
 	c.Assert(err, IsNil)
 	_, err = f.Write(data)
 	c.Assert(err, IsNil)
-	xid++ // increase XID
 	allEvents = append(allEvents, currentEvents...)
 	allEventTypes = append(allEventTypes, t.gtidEventType(c, flavor), replication.QUERY_EVENT, replication.TABLE_MAP_EVENT, eventType, replication.XID_EVENT)
 
@@ -155,11 +155,10 @@ func (t *testGeneratorSuite) testGenerate(c *C, flavor string, serverID uint32, 
 			Rows:       insertRows2,
 		},
 	}
-	currentEvents, data, err = g.GenDMLEvents(eventType, xid, dmlData)
+	currentEvents, data, err = g.GenDMLEvents(eventType, dmlData)
 	c.Assert(err, IsNil)
 	_, err = f.Write(data)
 	c.Assert(err, IsNil)
-	xid++
 	allEvents = append(allEvents, currentEvents...)
 	allEventTypes = append(allEventTypes, t.gtidEventType(c, flavor), replication.QUERY_EVENT, replication.TABLE_MAP_EVENT, eventType, replication.TABLE_MAP_EVENT, eventType, replication.XID_EVENT)
 
@@ -186,11 +185,10 @@ func (t *testGeneratorSuite) testGenerate(c *C, flavor string, serverID uint32, 
 		},
 	}
 	eventType = replication.UPDATE_ROWS_EVENTv2
-	currentEvents, data, err = g.GenDMLEvents(eventType, xid, dmlData)
+	currentEvents, data, err = g.GenDMLEvents(eventType, dmlData)
 	c.Assert(err, IsNil)
 	_, err = f.Write(data)
 	c.Assert(err, IsNil)
-	xid++
 	allEvents = append(allEvents, currentEvents...)
 	allEventTypes = append(allEventTypes, t.gtidEventType(c, flavor), replication.QUERY_EVENT, replication.TABLE_MAP_EVENT, eventType, replication.TABLE_MAP_EVENT, eventType, replication.XID_EVENT)
 
@@ -207,13 +205,21 @@ func (t *testGeneratorSuite) testGenerate(c *C, flavor string, serverID uint32, 
 		},
 	}
 	eventType = replication.DELETE_ROWS_EVENTv2
-	currentEvents, data, err = g.GenDMLEvents(eventType, xid, dmlData)
+	currentEvents, data, err = g.GenDMLEvents(eventType, dmlData)
 	c.Assert(err, IsNil)
 	_, err = f.Write(data)
 	c.Assert(err, IsNil)
-	xid++
 	allEvents = append(allEvents, currentEvents...)
 	allEventTypes = append(allEventTypes, t.gtidEventType(c, flavor), replication.QUERY_EVENT, replication.TABLE_MAP_EVENT, eventType, replication.XID_EVENT)
+
+	// ALTER TABLE
+	query = fmt.Sprintf("ALTER TABLE `%s`.`%s` ADD COLUMN c3 INT", schema, table)
+	currentEvents, data, err = g.GenDDLEvents(schema, query)
+	c.Assert(err, IsNil)
+	_, err = f.Write(data)
+	c.Assert(err, IsNil)
+	allEvents = append(allEvents, currentEvents...)
+	allEventTypes = append(allEventTypes, t.gtidEventType(c, flavor), replication.QUERY_EVENT)
 
 	// DROP TABLE `db`.`tbl`
 	currentEvents, data, err = g.GenDropTableEvents(schema, table)

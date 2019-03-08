@@ -28,31 +28,33 @@ import (
 // events: [GTIDEvent, QueryEvent]
 func GenCreateDatabaseEvents(flavor string, serverID uint32, latestPos uint32, latestGTID gtid.Set, schema string) (*DDLDMLResult, error) {
 	query := fmt.Sprintf("CREATE DATABASE `%s`", schema)
-	return genDDLEvents(flavor, serverID, latestPos, latestGTID, schema, query)
+	return GenDDLEvents(flavor, serverID, latestPos, latestGTID, schema, query)
 }
 
 // GenDropDatabaseEvents generates binlog events for `DROP DATABASE`.
 // events: [GTIDEvent, QueryEvent]
 func GenDropDatabaseEvents(flavor string, serverID uint32, latestPos uint32, latestGTID gtid.Set, schema string) (*DDLDMLResult, error) {
 	query := fmt.Sprintf("DROP DATABASE `%s`", schema)
-	return genDDLEvents(flavor, serverID, latestPos, latestGTID, schema, query)
+	return GenDDLEvents(flavor, serverID, latestPos, latestGTID, schema, query)
 }
 
 // GenCreateTableEvents generates binlog events for `CREATE TABLE`.
 // events: [GTIDEvent, QueryEvent]
 // NOTE: we do not support all `column type` and `column meta` for DML now, so the caller should restrict the `query` statement.
 func GenCreateTableEvents(flavor string, serverID uint32, latestPos uint32, latestGTID gtid.Set, schema string, query string) (*DDLDMLResult, error) {
-	return genDDLEvents(flavor, serverID, latestPos, latestGTID, schema, query)
+	return GenDDLEvents(flavor, serverID, latestPos, latestGTID, schema, query)
 }
 
 // GenDropTableEvents generates binlog events for `DROP TABLE`.
 // events: [GTIDEvent, QueryEvent]
 func GenDropTableEvents(flavor string, serverID uint32, latestPos uint32, latestGTID gtid.Set, schema string, table string) (*DDLDMLResult, error) {
 	query := fmt.Sprintf("DROP TABLE `%s`.`%s`", schema, table)
-	return genDDLEvents(flavor, serverID, latestPos, latestGTID, schema, query)
+	return GenDDLEvents(flavor, serverID, latestPos, latestGTID, schema, query)
 }
 
-func genDDLEvents(flavor string, serverID uint32, latestPos uint32, latestGTID gtid.Set, schema string, query string) (*DDLDMLResult, error) {
+// GenDDLEvents generates binlog events for DDL statements.
+// events: [GTIDEvent, QueryEvent]
+func GenDDLEvents(flavor string, serverID uint32, latestPos uint32, latestGTID gtid.Set, schema string, query string) (*DDLDMLResult, error) {
 	// GTIDEvent, increase GTID first
 	latestGTID, err := GTIDIncrease(flavor, latestGTID)
 	if err != nil {

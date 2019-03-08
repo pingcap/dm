@@ -62,7 +62,7 @@ func (t *testDMLSuite) TestGenDMLEvent(c *C) {
 	result, err = GenDMLEvents(flavor, serverID, latestPos, latestGTID, eventType, xid, insertDMLData)
 	c.Assert(err, IsNil)
 	c.Assert(result, NotNil)
-	c.Assert(len(result.Events), Equals, 3+2*len(insertDMLData))
+	c.Assert(result.Events, HasLen, 3+2*len(insertDMLData))
 	// simply check here, more check did in `event_test.go`
 	c.Assert(result.Events[3].Header.EventType, Equals, eventType)
 	c.Assert(result.LatestPos, Equals, latestPos+uint32(len(result.Data)))
@@ -85,7 +85,7 @@ func (t *testDMLSuite) TestGenDMLEvent(c *C) {
 	result, err = GenDMLEvents(flavor, serverID, latestPos, latestGTID, replication.WRITE_ROWS_EVENTv2, xid, insertDMLData)
 	c.Assert(err, IsNil)
 	c.Assert(result, NotNil)
-	c.Assert(len(result.Events), Equals, 3+2*len(insertDMLData)) // 2 more events for insertRows2
+	c.Assert(result.Events, HasLen, 3+2*len(insertDMLData)) // 2 more events for insertRows2
 	c.Assert(result.Events[3+2].Header.EventType, Equals, eventType)
 	c.Assert(result.LatestPos, Equals, latestPos+uint32(len(result.Data)))
 	c.Assert(result.LatestGTID.String(), Equals, "03fc0263-28c7-11e7-a653-6c0b84d59f30:125")
@@ -110,7 +110,7 @@ func (t *testDMLSuite) TestGenDMLEvent(c *C) {
 	result, err = GenDMLEvents(flavor, serverID, latestPos, latestGTID, eventType, xid, updateDMLData)
 	c.Assert(err, IsNil)
 	c.Assert(result, NotNil)
-	c.Assert(len(result.Events), Equals, 3+2*len(updateDMLData))
+	c.Assert(result.Events, HasLen, 3+2*len(updateDMLData))
 	c.Assert(result.Events[3].Header.EventType, Equals, eventType)
 	c.Assert(result.LatestPos, Equals, latestPos+uint32(len(result.Data)))
 	c.Assert(result.LatestGTID.String(), Equals, "03fc0263-28c7-11e7-a653-6c0b84d59f30:126")
@@ -141,7 +141,7 @@ func (t *testDMLSuite) TestGenDMLEvent(c *C) {
 	result, err = GenDMLEvents(flavor, serverID, latestPos, latestGTID, eventType, xid, deleteDMLData)
 	c.Assert(err, IsNil)
 	c.Assert(result, NotNil)
-	c.Assert(len(result.Events), Equals, 3+2*(len(deleteDMLData)))
+	c.Assert(result.Events, HasLen, 3+2*(len(deleteDMLData)))
 	c.Assert(result.Events[3].Header.EventType, Equals, eventType)
 	c.Assert(result.LatestPos, Equals, latestPos+uint32(len(result.Data)))
 	c.Assert(result.LatestGTID.String(), Equals, fmt.Sprintf("1-%d-4", serverID))

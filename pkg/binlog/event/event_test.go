@@ -629,7 +629,7 @@ func (t *testEventSuite) TestGenMariaDBGTIDListEvent(c *C) {
 	gtidListEvBody, ok := gtidListEv.Event.(*replication.MariadbGTIDListEvent)
 	c.Assert(ok, IsTrue)
 	c.Assert(gtidListEvBody, NotNil)
-	c.Assert(len(gtidListEvBody.GTIDs), Equals, 1)
+	c.Assert(gtidListEvBody.GTIDs, HasLen, 1)
 	c.Assert(gtidListEvBody.GTIDs[0], DeepEquals, *mGSet.Sets[gtidListEvBody.GTIDs[0].DomainID])
 
 	// valid gSet with multi GTIDs
@@ -648,7 +648,7 @@ func (t *testEventSuite) TestGenMariaDBGTIDListEvent(c *C) {
 	gtidListEvBody, ok = gtidListEv.Event.(*replication.MariadbGTIDListEvent)
 	c.Assert(ok, IsTrue)
 	c.Assert(gtidListEvBody, NotNil)
-	c.Assert(len(gtidListEvBody.GTIDs), Equals, 4)
+	c.Assert(gtidListEvBody.GTIDs, HasLen, 4)
 	for _, mGTID := range gtidListEvBody.GTIDs {
 		mGTID2, ok := mGSet.Sets[mGTID.DomainID]
 		c.Assert(ok, IsTrue)
