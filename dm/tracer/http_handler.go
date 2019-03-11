@@ -88,6 +88,8 @@ func (h eventHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		h.handleTraceEventQueryRequest(w, req)
 	case opScanEvents:
 		h.handleTraceEventScanRequest(w, req)
+	case opDelEvents:
+		h.handleTraceEventDeleteRequest(w, req)
 	}
 }
 
@@ -134,6 +136,10 @@ func (h eventHandler) handleTraceEventScanRequest(w http.ResponseWriter, req *ht
 }
 
 func (h eventHandler) handleTraceEventDeleteRequest(w http.ResponseWriter, req *http.Request) {
+	if req.Method != "POST" {
+		writeBadRequest(w, errors.New("post only"))
+		return
+	}
 	if traceID := req.FormValue(qTraceID); len(traceID) > 0 {
 		removed := h.removeByTraceID(traceID)
 		writeData(w, fmt.Sprintf("trace event %s removed result: %v", traceID, removed))

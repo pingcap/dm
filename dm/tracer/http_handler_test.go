@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"testing"
 	"time"
 
@@ -25,13 +26,11 @@ import (
 	"github.com/pingcap/errors"
 
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/tracing"
 )
 
 type HTTPHandlerTestSuite struct {
 	server *Server
 	cfg    *Config
-	tracer *tracing.Tracer
 }
 
 type SyncerJobEventResp struct {
@@ -50,11 +49,14 @@ func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-func (ts *HTTPHandlerTestSuite) startServer(c *C) {
+func (ts *HTTPHandlerTestSuite) startServer(c *C, offset int) {
 	ts.cfg = NewConfig()
+	ts.cfg.TracerAddr = fmt.Sprintf(":%d", 8263+offset)
+
 	ts.server = NewServer(ts.cfg)
 	go ts.server.Start()
-	err := waitUntilServerOnline(ts.cfg.TracerAddr)
+
+	err := ts.waitUntilServerOnline()
 	c.Assert(err, IsNil)
 }
 
@@ -62,29 +64,19 @@ func (ts *HTTPHandlerTestSuite) stopServer(c *C) {
 	if ts.server != nil {
 		ts.server.Close()
 	}
-	ts.tracer.Stop()
-}
-
-func (ts *HTTPHandlerTestSuite) prepare(c *C) {
-	cfg := tracing.Config{
-		Enable:     true,
-		Source:     "mysql-replica-01",
-		TracerAddr: fmt.Sprintf("127.0.0.1%s", ts.cfg.TracerAddr),
-	}
-	ts.tracer = tracing.InitTracerHub(cfg)
-	ts.tracer.Start()
 }
 
 const retryTime = 100
 
-func waitUntilServerOnline(bindAddr string) error {
-	statusURL := fmt.Sprintf("http://127.0.0.1%s/status", bindAddr)
+func (ts *HTTPHandlerTestSuite) waitUntilServerOnline() error {
+	statusURL := fmt.Sprintf("http://127.0.0.1%s/status", ts.cfg.TracerAddr)
 	for i := 0; i < retryTime; i++ {
 		resp, err := http.Get(statusURL)
 		if err == nil {
 			ioutil.ReadAll(resp.Body)
 			resp.Body.Close()
 			return nil
+			break
 		}
 		time.Sleep(time.Millisecond * 10)
 	}
@@ -92,9 +84,8 @@ func waitUntilServerOnline(bindAddr string) error {
 }
 
 func (ts *HTTPHandlerTestSuite) TestTraceEventQuery(c *C) {
-	ts.startServer(c)
+	ts.startServer(c, 1)
 	defer ts.stopServer(c)
-	ts.prepare(c)
 
 	traceIDs := []string{
 		"mysql-replica-01.syncer.test.1",
@@ -103,14 +94,14 @@ func (ts *HTTPHandlerTestSuite) TestTraceEventQuery(c *C) {
 
 	testCases := []struct {
 		traceID   string
-		jobs      []*tracing.Job
+		events    []*TraceEvent
 		traceType pb.TraceType
 	}{
 		{
 			traceIDs[0],
-			[]*tracing.Job{
+			[]*TraceEvent{
 				{
-					Tp: tracing.EventSyncerJob,
+					Type: pb.TraceType_JobEvent,
 					Event: &pb.SyncerJobEvent{
 						Base: &pb.BaseEvent{
 							Filename: "/path/to/test.go",
@@ -134,7 +125,7 @@ func (ts *HTTPHandlerTestSuite) TestTraceEventQuery(c *C) {
 					},
 				},
 				{
-					Tp: tracing.EventSyncerJob,
+					Type: pb.TraceType_JobEvent,
 					Event: &pb.SyncerJobEvent{
 						Base: &pb.BaseEvent{
 							Filename: "/path/to/test.go",
@@ -162,9 +153,9 @@ func (ts *HTTPHandlerTestSuite) TestTraceEventQuery(c *C) {
 		},
 		{
 			traceIDs[1],
-			[]*tracing.Job{
+			[]*TraceEvent{
 				{
-					Tp: tracing.EventSyncerBinlog,
+					Type: pb.TraceType_BinlogEvent,
 					Event: &pb.SyncerBinlogEvent{
 						Base: &pb.BaseEvent{
 							Filename: "/path/to/test.go",
@@ -205,13 +196,14 @@ func (ts *HTTPHandlerTestSuite) TestTraceEventQuery(c *C) {
 		c.Assert(err, IsNil, Commentf("url:%s", queryURL))
 		c.Assert(resp.StatusCode, Equals, http.StatusNotFound)
 		raw, err = ioutil.ReadAll(resp.Body)
+		resp.Body.Close()
 		c.Assert(err, IsNil)
 		c.Assert(string(raw), Equals, fmt.Sprintf("trace event %s not found", tc.traceID))
-		resp.Body.Close()
 
-		ts.tracer.PrepareRPC()
-		err = ts.tracer.ProcessTraceEvents(tc.jobs)
-		c.Assert(err, IsNil)
+		for _, ev := range tc.events {
+			err = ts.server.eventStore.addNewEvent(ev)
+			c.Assert(err, IsNil)
+		}
 
 		resp, err = http.Get(queryURL)
 		c.Assert(err, IsNil, Commentf("url:%s", queryURL))
@@ -222,18 +214,18 @@ func (ts *HTTPHandlerTestSuite) TestTraceEventQuery(c *C) {
 			data := make([]SyncerJobEventResp, 0)
 			err = decoder.Decode(&data)
 			c.Assert(err, IsNil)
-			c.Assert(len(data), Equals, len(tc.jobs))
+			c.Assert(len(data), Equals, len(tc.events))
 			for idx := range data {
-				ev, _ := tc.jobs[idx].Event.(*pb.SyncerJobEvent)
+				ev, _ := tc.events[idx].Event.(*pb.SyncerJobEvent)
 				c.Assert(data[idx].Event.String(), Equals, ev.String())
 			}
 		case pb.TraceType_BinlogEvent:
 			data := make([]SyncerBinlogEventResp, 0)
 			err = decoder.Decode(&data)
 			c.Assert(err, IsNil)
-			c.Assert(len(data), Equals, len(tc.jobs))
+			c.Assert(len(data), Equals, len(tc.events))
 			for idx := range data {
-				ev, _ := tc.jobs[idx].Event.(*pb.SyncerBinlogEvent)
+				ev, _ := tc.events[idx].Event.(*pb.SyncerBinlogEvent)
 				c.Assert(data[idx].Event.String(), Equals, ev.String())
 			}
 		}
@@ -250,4 +242,119 @@ func (ts *HTTPHandlerTestSuite) TestTraceEventQuery(c *C) {
 	c.Assert(err, IsNil, Commentf("url:%s", queryURL))
 	c.Assert(resp.StatusCode, Equals, http.StatusBadRequest)
 	resp.Body.Close()
+}
+
+func (ts *HTTPHandlerTestSuite) TestTraceEventScan(c *C) {
+	ts.startServer(c, 2)
+	defer ts.stopServer(c)
+
+	var (
+		traceIDFmt = "test.trace_id.%d"
+		err        error
+		count      = 15
+	)
+	for i := 0; i < count; i++ {
+		err = ts.server.eventStore.addNewEvent(&TraceEvent{
+			Type: pb.TraceType_BinlogEvent,
+			Event: &pb.SyncerBinlogEvent{
+				Base: &pb.BaseEvent{
+					Filename: "/path/to/test.go",
+					Line:     100,
+					Tso:      time.Now().UnixNano(),
+					TraceID:  fmt.Sprintf(traceIDFmt, i),
+					Type:     pb.TraceType_BinlogEvent,
+				},
+			},
+		})
+		c.Assert(err, IsNil)
+	}
+
+	testCases := []struct {
+		offset   int64
+		limit    int64
+		expected int
+	}{
+		{0, 0, 0},
+		{3, 5, 5},
+		{3, 20, 12},
+		{10, 10, 5},
+		{15, 10, 0},
+	}
+
+	for _, t := range testCases {
+		var (
+			scanURL = fmt.Sprintf("http://127.0.0.1%s/events/scan?offset=%d&limit=%d", ts.cfg.TracerAddr, t.offset, t.limit)
+			resp    *http.Response
+			err     error
+			data    [][]SyncerBinlogEventResp
+		)
+
+		resp, err = http.Get(scanURL)
+		c.Assert(err, IsNil, Commentf("url:%s", scanURL))
+		decoder := json.NewDecoder(resp.Body)
+
+		err = decoder.Decode(&data)
+		c.Assert(err, IsNil)
+		c.Assert(len(data), Equals, t.expected)
+		for idx, events := range data {
+			for _, event := range events {
+				c.Assert(event.Event.Base.TraceID, Equals, fmt.Sprintf(traceIDFmt, int(t.offset)+idx))
+			}
+		}
+		resp.Body.Close()
+	}
+}
+
+func (ts *HTTPHandlerTestSuite) TestTraceEventDelete(c *C) {
+	ts.startServer(c, 3)
+	defer ts.stopServer(c)
+
+	var (
+		traceID   = "test.delete.trace_id"
+		err       error
+		queryURL  = fmt.Sprintf("http://127.0.0.1%s/events/query?trace_id=%s", ts.cfg.TracerAddr, traceID)
+		deleteURL = fmt.Sprintf("http://127.0.0.1%s/events/delete", ts.cfg.TracerAddr)
+		resp      *http.Response
+		data      []SyncerBinlogEventResp
+		raw       []byte
+	)
+
+	err = ts.server.eventStore.addNewEvent(&TraceEvent{
+		Type: pb.TraceType_BinlogEvent,
+		Event: &pb.SyncerBinlogEvent{
+			Base: &pb.BaseEvent{
+				Filename: "/path/to/test.go",
+				Line:     100,
+				Tso:      time.Now().UnixNano(),
+				TraceID:  traceID,
+				Type:     pb.TraceType_BinlogEvent,
+			},
+		},
+	})
+	c.Assert(err, IsNil)
+
+	resp, err = http.Get(queryURL)
+	c.Assert(err, IsNil, Commentf("url:%s", queryURL))
+	decoder := json.NewDecoder(resp.Body)
+
+	err = decoder.Decode(&data)
+	resp.Body.Close()
+	c.Assert(err, IsNil)
+	for _, event := range data {
+		c.Assert(event.Event.Base.TraceID, Equals, traceID)
+	}
+
+	form := make(url.Values)
+	form.Set("trace_id", traceID)
+	resp, err = http.PostForm(deleteURL, form)
+	resp.Body.Close()
+	c.Assert(err, IsNil, Commentf("url:%s", deleteURL))
+
+	resp, err = http.Get(queryURL)
+	c.Assert(err, IsNil, Commentf("url:%s", queryURL))
+	c.Assert(resp.StatusCode, Equals, http.StatusNotFound)
+	raw, err = ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	c.Assert(err, IsNil)
+	c.Assert(string(raw), Equals, fmt.Sprintf("trace event %s not found", traceID))
 }

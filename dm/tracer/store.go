@@ -82,11 +82,16 @@ func (store *EventStore) queryByTraceID(traceID string) []*TraceEvent {
 }
 
 func (store *EventStore) scan(offset, limit int64) [][]*TraceEvent {
+	store.RLock()
+	defer store.RUnlock()
 	if offset > int64(len(store.ids)) {
 		return nil
 	}
 	result := make([][]*TraceEvent, 0, limit)
 	for idx := offset; idx < offset+limit; idx++ {
+		if idx >= int64(len(store.ids)) {
+			break
+		}
 		traceID := store.ids[idx]
 		if event, ok := store.events[traceID]; ok {
 			result = append(result, event)
