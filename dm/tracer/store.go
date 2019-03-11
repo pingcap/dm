@@ -14,6 +14,8 @@
 package tracer
 
 import (
+	"sync"
+
 	"github.com/pingcap/errors"
 
 	"github.com/pingcap/dm/dm/pb"
@@ -27,7 +29,10 @@ type TraceEvent struct {
 
 // EventStore stores all tracing events, mapping from TraceID -> a list of TraceEvent
 // TraceEvents with the same TraceID can have different TraceType
+// NOTE: this is a quick and dirty implement, we will refactor it later
 type EventStore struct {
+	sync.RWMutex
+	ids    []string
 	events map[string][]*TraceEvent
 }
 
@@ -57,16 +62,52 @@ func (store *EventStore) addNewEvent(e *TraceEvent) error {
 		return errors.NotValidf("trace event type %d", e.Type)
 	}
 
+	store.Lock()
 	_, ok := store.events[traceID]
 	if !ok {
+		store.ids = append(store.ids, traceID)
 		store.events[traceID] = make([]*TraceEvent, 0)
 	}
 	store.events[traceID] = append(store.events[traceID], e)
+	store.Unlock()
 
 	return nil
 }
 
 // queryByTraceID queries trace event by given traceID
 func (store *EventStore) queryByTraceID(traceID string) []*TraceEvent {
+	store.RLock()
+	defer store.RUnlock()
 	return store.events[traceID]
+}
+
+func (store *EventStore) scan(offset, limit int64) [][]*TraceEvent {
+	if offset > int64(len(store.ids)) {
+		return nil
+	}
+	result := make([][]*TraceEvent, 0, limit)
+	for idx := offset; idx < offset+limit; idx++ {
+		traceID := store.ids[idx]
+		if event, ok := store.events[traceID]; ok {
+			result = append(result, event)
+		} else {
+			// TODO: add lazy clean up mechanism
+		}
+	}
+	return result
+}
+
+func (store *EventStore) removeByTraceID(traceID string) (removed bool) {
+	store.Lock()
+	defer store.Unlock()
+	if _, ok := store.events[traceID]; ok {
+		delete(store.events, traceID)
+		removed = true
+		for idx := range store.ids {
+			if store.ids[idx] == traceID {
+				store.ids = append(store.ids[:idx], store.ids[idx+1:]...)
+			}
+		}
+	}
+	return
 }

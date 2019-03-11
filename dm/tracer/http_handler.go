@@ -15,7 +15,9 @@ package tracer
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/pingcap/errors"
 
@@ -26,10 +28,13 @@ const (
 	opQueryEvents = "query-events"
 	opScanEvents  = "scan-events"
 	opDelEvents   = "del-events"
+	defaultLimit  = 10
 )
 
 const (
 	qTraceID = "trace_id"
+	qLimit   = "limit"
+	qOffset  = "offset"
 )
 
 const (
@@ -81,6 +86,8 @@ func (h eventHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	switch h.op {
 	case opQueryEvents:
 		h.handleTraceEventQueryRequest(w, req)
+	case opScanEvents:
+		h.handleTraceEventScanRequest(w, req)
 	}
 }
 
@@ -92,6 +99,44 @@ func (h eventHandler) handleTraceEventQueryRequest(w http.ResponseWriter, req *h
 			return
 		}
 		writeData(w, events)
+	} else {
+		writeBadRequest(w, errors.New("trace id not provided"))
+	}
+}
+
+func (h eventHandler) handleTraceEventScanRequest(w http.ResponseWriter, req *http.Request) {
+	var (
+		limit  int64 = defaultLimit
+		offset int64
+		err    error
+	)
+	offsetStr := req.FormValue(qOffset)
+	if len(offsetStr) > 0 {
+		offset, err = strconv.ParseInt(offsetStr, 0, 64)
+		if err != nil {
+			writeBadRequest(w, errors.NotValidf("offset: %s", offsetStr))
+		}
+	}
+	limitStr := req.FormValue(qLimit)
+	if len(limitStr) > 0 {
+		limit, err = strconv.ParseInt(limitStr, 0, 64)
+		if err != nil {
+			writeBadRequest(w, errors.NotValidf("limit: %s", limitStr))
+		}
+	}
+
+	events := h.scan(offset, limit)
+	if events == nil {
+		writeNotFound(w, errors.NotFoundf("offset: %d, limit: %d", offset, limit))
+		return
+	}
+	writeData(w, events)
+}
+
+func (h eventHandler) handleTraceEventDeleteRequest(w http.ResponseWriter, req *http.Request) {
+	if traceID := req.FormValue(qTraceID); len(traceID) > 0 {
+		removed := h.removeByTraceID(traceID)
+		writeData(w, fmt.Sprintf("trace event %s removed result: %v", traceID, removed))
 	} else {
 		writeBadRequest(w, errors.New("trace id not provided"))
 	}
