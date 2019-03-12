@@ -69,8 +69,10 @@ lint:
 	@ golint -set_exit_status $(PACKAGES)
 
 vet:
+	$(GO) build -o bin/shadow golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow
 	@echo "vet"
-	@ $(GO) tool vet -all -shadow $(TOPDIRS) 2>&1 | tee /dev/stderr | awk '/shadows declaration/{next}{count+=1} END{if(count>0) {exit 1}}'
+	@$(GO) vet -composites=false $(PACKAGES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
+	@$(GO) vet -vettool=$(CURDIR)/bin/shadow $(PACKAGES) 2>&1 | tee /dev/stderr | awk '/shadows declaration|^#/{next}{count+=1} END{if(count>0) {exit 1}}'
 
 dm_integration_test_build:
 	$(GOTEST) -c -race -cover -covermode=atomic \

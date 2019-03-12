@@ -24,6 +24,8 @@ To check the source code, run test cases and build binaries, you can simply run:
 make build
 ```
 
+Notice DM supports building with Go version `Go >= 1.11.4`, and unit test preparation can be found in [Running/Unit Test](tests/README.md#Unit-Test)
+
 If you only want to build binaries, you can run:
 ```bash
 make dm-worker  # build DM-worker
