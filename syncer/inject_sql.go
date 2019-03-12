@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/pkg/log"
+	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
@@ -41,7 +42,7 @@ func (s *Syncer) InjectSQLs(ctx context.Context, sqls []string) error {
 		if !ok {
 			return errors.Errorf("only support inject DDL for sharding group to be synced currently, but got %s", sql)
 		}
-		tableNames, err := fetchDDLTableNames("", ddlNode)
+		tableNames, err := parserpkg.FetchDDLTableNames("", ddlNode)
 		if err != nil {
 			return errors.Trace(err)
 		}

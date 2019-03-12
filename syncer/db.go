@@ -444,11 +444,20 @@ func getBinaryLogs(db *sql.DB) ([]binlogSize, error) {
 	}
 	defer rows.Close()
 
+	rowColumns, err := rows.Columns()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 	files := make([]binlogSize, 0, 10)
 	for rows.Next() {
 		var file string
 		var pos int64
-		err = rows.Scan(&file, &pos)
+		var nullPtr interface{}
+		if len(rowColumns) == 2 {
+			err = rows.Scan(&file, &pos)
+		} else {
+			err = rows.Scan(&file, &pos, &nullPtr)
+		}
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

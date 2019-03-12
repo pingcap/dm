@@ -206,7 +206,8 @@ func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir 
 // return
 //   0: not updated
 //   1: update to larger
-//  -1: update to smaller, should not happen
+//  -1: update to smaller, only happens in special case, for example we change
+//      relay.meta manually and start task before relay log catches up.
 func fileSizeUpdated(path string, latestSize int64) (int, error) {
 	fi, err := os.Stat(path)
 	if err != nil {
@@ -219,7 +220,8 @@ func fileSizeUpdated(path string, latestSize int64) (int, error) {
 		log.Debugf("[streamer] size of relay log file %s has changed from %d to %d", path, latestSize, currSize)
 		return 1, nil
 	} else {
-		return 0, errors.Errorf("size of relay log %s has changed from %d to %d", path, latestSize, currSize)
+		log.Errorf("[streamer] size of relay log file %s has changed from %d to %d", path, latestSize, currSize)
+		return -1, nil
 	}
 }
 

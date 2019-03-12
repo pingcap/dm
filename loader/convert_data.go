@@ -22,6 +22,7 @@ import (
 	"strings"
 	"unsafe"
 
+	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
@@ -232,7 +233,7 @@ func parseTable(r *router.Table, schema, table, file string) (*tableInfo, error)
 		return nil, errors.Annotatef(err, "read table info from file %s", file)
 	}
 
-	stmts, err := parser.New().Parse(string(statement), "", "")
+	stmts, err := parserpkg.Parse(parser.New(), string(statement), "", "")
 	if err != nil {
 		return nil, errors.Annotatef(err, "parser statement %s", statement)
 	}

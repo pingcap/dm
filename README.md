@@ -14,7 +14,7 @@
 ## Documentation
 
 * [Detailed documentation](https://pingcap.com/docs/tools/dm/overview/)
-* [简体中文文档](https://github.com/pingcap/tidb-tools/blob/docs/docs/dm/zh_CN/README.md)
+* [简体中文文档](https://pingcap.com/docs-cn/tools/dm/overview/)
 
 ## Building
 
@@ -23,6 +23,8 @@ To check the source code, run test cases and build binaries, you can simply run:
 ```bash
 make build
 ```
+
+Notice DM supports building with Go version `Go >= 1.11.4`, and unit test preparation can be found in [Running/Unit Test](tests/README.md#Unit-Test)
 
 If you only want to build binaries, you can run:
 ```bash
