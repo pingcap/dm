@@ -4,7 +4,7 @@ task-mode: all
 is-sharding: true
 meta-schema: "dm_meta"
 remove-meta: false
-enable-heartbeat: true
+disable-heartbeat: true
 timezone: "Asia/Shanghai"
 
 target-database:
@@ -34,25 +34,25 @@ mysql-instances:
 
 black-white-list:
   instance:
-    do-dbs: ["sharding"]
+    do-dbs: ["safe_mode_test"]
     do-tables:
-    -  db-name: "sharding"
+    -  db-name: "safe_mode_test"
        tbl-name: "~^t[\\d]+"
 
 routes:
   sharding-route-rules-table:
-    schema-pattern: sharding
+    schema-pattern: safe_mode_test
     table-pattern: t*
     target-schema: db_target
     target-table: t_target
 
   sharding-route-rules-schema:
-    schema-pattern: sharding
+    schema-pattern: safe_mode_test
     target-schema: db_target
 
 column-mappings:
   instance-1:
-    schema-pattern: "sharding"
+    schema-pattern: "safe_mode_test"
     table-pattern: "t*"
     expression: "partition id"
     source-column: "id"
@@ -60,7 +60,7 @@ column-mappings:
     arguments: ["1", "", "t"]
 
   instance-2:
-    schema-pattern: "sharding"
+    schema-pattern: "safe_mode_test"
     table-pattern: "t*"
     expression: "partition id"
     source-column: "id"
@@ -78,7 +78,7 @@ loaders:
   global:
     pool-size: 16
     dir: "./dumped_data"
-    extra-args: "-B sharding"
+    extra-args: "-B safe_mode_test"
 
 syncers:
   global:

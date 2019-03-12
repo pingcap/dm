@@ -19,6 +19,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	_ "github.com/pingcap/gofail/runtime" // ensure go mod contains it
 )
 
 func TestRunMain(t *testing.T) {

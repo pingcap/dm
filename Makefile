@@ -13,12 +13,16 @@ FILES    := $$(find . -name "*.go" | grep -vE "vendor")
 TOPDIRS  := $$(ls -d */ | grep -vE "vendor")
 SHELL    := /usr/bin/env bash
 TEST_DIR := /tmp/dm_test
+GOFAIL_DIR := $$(for p in $(PACKAGES); do echo $${p\#"github.com/pingcap/dm/"}; done)
 
 RACE_FLAG =
 ifeq ("$(WITH_RACE)", "1")
 	RACE_FLAG = -race
 	GOBUILD   = CGO_ENABLED=1 $(GO) build
 endif
+
+GOFAIL_ENABLE  := $$(echo $(GOFAIL_DIR) | xargs gofail enable)
+GOFAIL_DISABLE := $$(find $(GOFAIL_DIR) | xargs gofail disable)
 
 ARCH      := "$(shell uname -s)"
 LINUX     := "Linux"
@@ -54,8 +58,12 @@ test: unit_test integration_test
 unit_test:
 	bash -x ./tests/wait_for_mysql.sh
 	mkdir -p $(TEST_DIR)
+	which gofail >/dev/null 2>&1 || GO111MODULE=off go get github.com/pingcap/gofail
+	$(GOFAIL_ENABLE)
 	@export log_level=error; \
-	$(GOTEST) -covermode=atomic -coverprofile="$(TEST_DIR)/cov.unit_test.out" -race $(PACKAGES)
+	$(GOTEST) -covermode=atomic -coverprofile="$(TEST_DIR)/cov.unit_test.out" -race $(PACKAGES) \
+	|| { $(GOFAIL_DISABLE); exit 1; }
+	$(GOFAIL_DISABLE)
 
 check: fmt lint vet
 
@@ -80,12 +88,17 @@ vet:
 	@$(GO) vet -vettool=$(CURDIR)/bin/shadow $(PACKAGES) || true
 
 dm_integration_test_build:
+	which gofail >/dev/null 2>&1 || GO111MODULE=off go get github.com/pingcap/gofail
+	$(GOFAIL_ENABLE)
 	$(GOTEST) -c -race -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
-		-o bin/dm-worker.test github.com/pingcap/dm/cmd/dm-worker
+		-o bin/dm-worker.test github.com/pingcap/dm/cmd/dm-worker \
+		|| { $(GOFAIL_DISABLE); exit 1; }
 	$(GOTEST) -c -race -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
-		-o bin/dm-master.test github.com/pingcap/dm/cmd/dm-master
+		-o bin/dm-master.test github.com/pingcap/dm/cmd/dm-master \
+		|| { $(GOFAIL_DISABLE); exit 1; }
+	$(GOFAIL_DISABLE)
 
 integration_test:
 	@which bin/tidb-server

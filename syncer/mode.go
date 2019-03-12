@@ -43,6 +43,10 @@ func (s *Syncer) enableSafeModeInitializationPhase(ctx context.Context, safeMode
 			}
 		}()
 
+		// gofail var SafeModeInitialDisable bool
+		// if SafeModeInitialDisable {
+		//   return
+		// }
 		select {
 		case <-ctx.Done():
 		case <-time.After(5 * time.Minute):

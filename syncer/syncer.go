@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -1037,7 +1038,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				})
 				shardingStreamer, err = s.getBinlogStreamer(shardingReader, shardingReSync.currPos)
 			}
-			log.Debugf("[syncer] start using a  special streamer to re-sync DMLs for sharding group %+v", shardingReSync)
+			log.Debugf("[syncer] start using a special streamer to re-sync DMLs for sharding group %+v", shardingReSync)
+			// gofail: var ReSyncExit bool
+			// if ReSyncExit {
+			//   s.exit(1)
+			// }
 		}
 
 		var (
@@ -1639,7 +1644,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					log.Info("[syncer] cancel to add DDL to job because of canceled from external")
 					return nil
 				}
+
 				if ddlExecItem.req.Exec {
+					// gofail: var WaitShardingSyncExit bool
+					// if WaitShardingSyncExit {
+					//   s.exit(1)
+					// }
 					log.Infof("[syncer] add DDL %v to job, request is %+v", ddlInfo1.DDLs, ddlExecItem.req)
 				} else {
 					log.Infof("[syncer] ignore DDL %v, request is %+v", ddlInfo1.DDLs, ddlExecItem.req)
@@ -2240,4 +2250,9 @@ func (s *Syncer) setTimezone() {
 	}
 	log.Infof("[syncer] use timezone: %s", loc)
 	s.timezone = loc
+}
+
+// exit used in gofail test only, to simulate DM-worker exit
+func (s *Syncer) exit(exitcode int) {
+	os.Exit(exitcode)
 }

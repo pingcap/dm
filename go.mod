@@ -13,6 +13,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/pingcap/check v0.0.0-20190102082844-67f458068fc8
 	github.com/pingcap/errors v0.11.0
+	github.com/pingcap/gofail v0.0.0-20181217135706-6a951c1e42c3
 	github.com/pingcap/parser v0.0.0-20190312024907-3f6280b08c8b
 	github.com/pingcap/tidb v0.0.0-20190313092439-09beefbe0450
 	github.com/pingcap/tidb-tools v2.1.3-0.20190305052038-e6c996e1e2ee+incompatible
