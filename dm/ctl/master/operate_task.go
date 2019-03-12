@@ -14,9 +14,10 @@
 package master
 
 import (
+	"context"
+
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-	"golang.org/x/net/context"
 )
 
 // operateTask does operation on task

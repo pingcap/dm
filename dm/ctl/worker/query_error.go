@@ -14,11 +14,12 @@
 package worker
 
 import (
+	"context"
+
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
-	"golang.org/x/net/context"
 )
 
 // NewQueryErrorCmd creates a QueryError command

@@ -14,16 +14,17 @@
 package syncer
 
 import (
+	"context"
 	"time"
 
-	"github.com/pingcap/dm/pkg/log"
-	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
-	"golang.org/x/net/context"
+
+	"github.com/pingcap/dm/pkg/log"
+	parserpkg "github.com/pingcap/dm/pkg/parser"
 )
 
 // InjectSQLs injects ddl into syncer as binlog events while meet xid/query event
