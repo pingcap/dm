@@ -72,7 +72,7 @@ func (conn *Conn) querySQL(query string, maxRetry int, args ...interface{}) (*sq
 	return nil, errors.Annotatef(err, "query sql [%s] args [%v] failed", query, args)
 }
 
-func (conn *Conn) executeSQL2(stmt string, args []interface{}, maxRetry int) error {
+func (conn *Conn) executeSQL2(stmt string, maxRetry int, args ...interface{}) error {
 	if conn == nil || conn.db == nil {
 		return errors.NotValidf("database connection")
 	}
