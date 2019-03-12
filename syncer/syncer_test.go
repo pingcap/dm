@@ -34,6 +34,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -165,56 +166,57 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 	s.cfg.BWList = &filter.Rules{
 		DoDBs: []string{"~^b.*", "s1", "stest"},
 	}
-	sqls := []string{
-		"create database s1",
-		"drop database s1",
-		"create database s2",
-		"drop database s2",
-		"create database btest",
-		"drop database btest",
-		"create database b1",
-		"drop database b1",
-		"create database stest",
-		"drop database stest",
-		"create database st",
-		"drop database st",
-	}
-	res := []bool{false, false, true, true, false, false, false, false, false, false, true, true}
 
-	for _, sql := range sqls {
-		s.db.Exec(sql)
+	schemas := [][]byte{[]byte("s1"), []byte("s2"), []byte("btest"), []byte("b1"), []byte("stest"), []byte("st")}
+	skips := []bool{false, true, false, false, false, true}
+	type Case struct {
+		schema []byte
+		query  []byte
+		skip   bool
+	}
+	cases := make([]Case, 0, 2*len(schemas))
+	for i, schema := range schemas {
+		cases = append(cases, Case{
+			schema: schema,
+			query:  append([]byte("create database "), schema...),
+			skip:   skips[i]})
+		cases = append(cases, Case{
+			schema: schema,
+			query:  append([]byte("drop database "), schema...),
+			skip:   skips[i]})
 	}
 
 	p, err := utils.GetParser(s.db, false)
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
-	syncer.genRouter()
-	var i int
-	for {
-		if i == len(sqls) {
-			break
-		}
-		e, err := s.streamer.GetEvent(context.Background())
-		c.Assert(err, IsNil)
-		ev, ok := e.Event.(*replication.QueryEvent)
-		if !ok {
-			continue
-		}
+	err = syncer.genRouter()
+	c.Assert(err, IsNil)
 
-		sql := string(ev.Query)
-		stmt, err := p.ParseOneStmt(sql, "", "")
+	header := &replication.EventHeader{
+		Timestamp: uint32(time.Now().Unix()),
+		ServerID:  101,
+		Flags:     0x01,
+	}
+
+	for _, cs := range cases {
+		e, err := event.GenQueryEvent(header, 123, 0, 0, 0, nil, cs.schema, cs.query)
+		c.Assert(err, IsNil)
+		c.Assert(e, NotNil)
+		ev, ok := e.Event.(*replication.QueryEvent)
+		c.Assert(ok, IsTrue)
+
+		query := string(ev.Query)
+		stmt, err := p.ParseOneStmt(query, "", "")
 		c.Assert(err, IsNil)
 
 		tableNames, err := parserpkg.FetchDDLTableNames(string(ev.Schema), stmt)
 		c.Assert(err, IsNil)
 
-		r, err := syncer.skipQuery(tableNames, stmt, sql)
+		r, err := syncer.skipQuery(tableNames, stmt, query)
 		c.Assert(err, IsNil)
-		c.Assert(r, Equals, res[i])
-		i++
+		c.Assert(r, Equals, cs.skip)
 	}
-	s.catchUpBinlog()
 }
 
 func (s *testSyncerSuite) TestSelectTable(c *C) {
