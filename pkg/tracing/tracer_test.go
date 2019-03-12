@@ -282,12 +282,12 @@ ForEnd:
 	ts.server.CheckEvent(event.Base.TraceID, &TraceEvent{Type: pb.TraceType_BinlogEvent, Event: event}, c)
 
 	event2, err2 := ts.tracer.CollectSyncerJobEvent(event.Base.TraceID, "", 1, mysql.Position{"bin|000001.000004", 1626}, mysql.Position{"bin|000001.000004", 1873},
-		"q_1", "REPLACE INTO `test`.`t_target` (`id`,`ct`,`name`) VALUES (?,?,?);", []string{}, nil, pb.SyncerJobState_queued)
+		"q_1", "REPLACE INTO `test`.`t_target` (`id`,`ct`,`name`) VALUES (?,?,?);", []string{}, []interface{}{1, "2019-03-12 12:13:00", "test"}, nil, pb.SyncerJobState_queued)
 	c.Assert(err2, tc.IsNil)
 	ts.server.CheckEvent(event2.Base.TraceID, &TraceEvent{Type: pb.TraceType_JobEvent, Event: event}, c)
 
 	event2, err2 = ts.tracer.CollectSyncerJobEvent(event.Base.TraceID, "", 1, mysql.Position{"bin|000001.000004", 1626}, mysql.Position{"bin|000001.000004", 1873},
-		"q_1", "REPLACE INTO `test`.`t_target` (`id`,`ct`,`name`) VALUES (?,?,?);", []string{}, nil, pb.SyncerJobState_success)
+		"q_1", "REPLACE INTO `test`.`t_target` (`id`,`ct`,`name`) VALUES (?,?,?);", []string{}, []interface{}{1, "2019-03-12 12:13:00", "test"}, nil, pb.SyncerJobState_success)
 	c.Assert(err2, tc.IsNil)
 	ts.server.CheckEvent(event2.Base.TraceID, &TraceEvent{Type: pb.TraceType_JobEvent, Event: event}, c)
 
