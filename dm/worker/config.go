@@ -59,6 +59,7 @@ func NewConfig() *Config {
 	fs.BoolVar(&cfg.Tracer.Enable, "tracer-enable", false, "whether to enable tracing")
 	fs.StringVar(&cfg.Tracer.TracerAddr, "tracer-tracer-addr", "", "tracing service rpc address")
 	fs.IntVar(&cfg.Tracer.BatchSize, "tracer-batch-size", 20, "upload to tracing service batch size")
+	fs.BoolVar(&cfg.Tracer.Checksum, "tracer-checksum", false, "whether to calculate checksum of some data")
 
 	return cfg
 }

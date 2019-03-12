@@ -52,7 +52,8 @@ message SyncerJobEvent {
     MySQLPosition currentPos = 4;
     string sql = 5;
     repeated string ddls = 6;
-    ExecDDLInfo ddlInfo = 7;
-    string queueBucket = 8;
-    SyncerJobState state = 9;
+    uint32 argsChecksum = 7;
+    ExecDDLInfo ddlInfo = 8;
+    string queueBucket = 9;
+    SyncerJobState state = 10;
 }

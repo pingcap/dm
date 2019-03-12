@@ -36,3 +36,20 @@ func (ts *TracerTestSuite) TestIDGenerator(c *tc.C) {
 		c.Assert(id, tc.Equals, t.expected)
 	}
 }
+
+func (ts *TracerTestSuite) TestDataChecksum(c *tc.C) {
+	testCases := []struct {
+		input    []interface{}
+		checksum uint32
+	}{
+		{[]interface{}{}, 0},
+		{[]interface{}{12, 301.5, true, "string", []byte("hello")}, 1247364640},
+		{[]interface{}{12, 301.5, true, "string", nil, []byte("hello")}, 3571728787},
+	}
+
+	for _, t := range testCases {
+		checksum, err := DataChecksum(t.input)
+		c.Assert(err, tc.IsNil)
+		c.Assert(checksum, tc.Equals, t.checksum)
+	}
+}

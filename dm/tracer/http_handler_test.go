@@ -76,7 +76,6 @@ func (ts *HTTPHandlerTestSuite) waitUntilServerOnline() error {
 			ioutil.ReadAll(resp.Body)
 			resp.Body.Close()
 			return nil
-			break
 		}
 		time.Sleep(time.Millisecond * 10)
 	}

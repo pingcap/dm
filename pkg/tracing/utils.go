@@ -14,7 +14,10 @@
 package tracing
 
 import (
+	"bytes"
+	"encoding/gob"
 	"fmt"
+	"hash/crc32"
 	"runtime"
 	"sync"
 
@@ -62,4 +65,31 @@ func GetTraceCode(skip int) (string, int, error) {
 		return file, line, nil
 	}
 	return "", 0, errors.New("failed to get code information from runtime.Caller")
+}
+
+// DataChecksum calculates the checksum of a given interface{} slice. each
+// interface{} is first converted to []byte via gob encoder, then combines all
+// of them in sequence, at last calculate the crc32 using IEEE polynomial.
+func DataChecksum(data []interface{}) (uint32, error) {
+	getBytes := func(val interface{}) ([]byte, error) {
+		var buf bytes.Buffer
+		enc := gob.NewEncoder(&buf)
+		err := enc.Encode(val)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		return buf.Bytes(), nil
+	}
+	sumup := []byte{}
+	for _, val := range data {
+		if val == nil {
+			val = []byte{}
+		}
+		b, err := getBytes(val)
+		if err != nil {
+			return 0, errors.Trace(err)
+		}
+		sumup = append(sumup, b...)
+	}
+	return crc32.ChecksumIEEE(sumup), nil
 }

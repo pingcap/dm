@@ -49,6 +49,7 @@ type Config struct {
 	LogFile    string `toml:"log-file" json:"log-file"`
 	TracerAddr string `toml:"tracer-addr" json:"tracer-addr"`
 	Enable     bool   `toml:"enable" json:"enable"`
+	Checksum   bool   `toml:"checksum" json:"checksum"`
 
 	ConfigFile string `json:"config-file"`
 
