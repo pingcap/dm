@@ -160,6 +160,10 @@ func assembleEvent(buf *bytes.Buffer, event replication.Event, decodeWithChecksu
 
 // combineHeaderPayload combines header, postHeader and payload together.
 func combineHeaderPayload(buf *bytes.Buffer, header, postHeader, payload []byte) error {
+	if len(header) != int(eventHeaderLen) {
+		return errors.NotValidf("header length should be %d, but got %d", eventHeaderLen, len(header))
+	}
+
 	err := binary.Write(buf, binary.LittleEndian, header)
 	if err != nil {
 		return errors.Annotatef(err, "write event header % X", header)
