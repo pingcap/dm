@@ -79,7 +79,16 @@ func NewChecker(cfgs []*config.SubTaskConfig, checkingItems map[string]string) *
 }
 
 // Init implements Unit interface
-func (c *Checker) Init() error {
+func (c *Checker) Init() (err error) {
+	rollbackHolder := unit.NewRollbackHolder("checker")
+	defer func() {
+		if err != nil {
+			rollbackHolder.RollbackReverseOrder()
+		}
+	}()
+
+	rollbackHolder.Add(unit.RollbackFunc{"close-DBs", c.closeDBs})
+
 	// target name => source => schema => [tables]
 	sharding := make(map[string]map[string]map[string][]string)
 	shardingCounter := make(map[string]int)
@@ -258,21 +267,27 @@ func (c *Checker) Close() {
 		return
 	}
 
+	c.closeDBs()
+
+	c.closed.Set(true)
+}
+
+func (c *Checker) closeDBs() {
 	for _, instance := range c.instances {
 		if instance.sourceDB != nil {
 			if err := dbutil.CloseDB(instance.sourceDB); err != nil {
 				log.Errorf("close source db %+v error %v", instance.sourceDBinfo, err)
 			}
+			instance.sourceDB = nil
 		}
 
 		if instance.targetDB != nil {
 			if err := dbutil.CloseDB(instance.targetDB); err != nil {
 				log.Errorf("close target db %+v error %v", instance.targetDBInfo, err)
 			}
+			instance.targetDB = nil
 		}
 	}
-
-	c.closed.Set(true)
 }
 
 // Pause implements Unit interface
