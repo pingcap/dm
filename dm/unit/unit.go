@@ -24,6 +24,8 @@ type Unit interface {
 	// Init initializes the dm process unit
 	// every unit does base initialization in `Init`, and this must pass before start running the sub task
 	// other setups can be done in `Process`, but this should be treated carefully, let it's compatible with Pause / Resume
+	// if Init successfully, the outer caller should call `Close` when the unit (or the task) finished, stopped or canceled (because other units Init fail).
+	// if Init fail, Init itself should release resources it acquired before (rolling itself back).
 	Init() error
 	// Process processes sub task
 	// When ctx.Done, stops the process and returns

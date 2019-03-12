@@ -347,12 +347,20 @@ func (l *Loader) Type() pb.UnitType {
 
 // Init initializes loader for a load task, but not start Process.
 // if fail, it should not call l.Close.
-func (l *Loader) Init() error {
+func (l *Loader) Init() (err error) {
+	rollbackHolder := unit.NewRollbackHolder("loader")
+	defer func() {
+		if err != nil {
+			rollbackHolder.RollbackReverseOrder()
+		}
+	}()
+
 	checkpoint, err := newRemoteCheckPoint(l.cfg, l.checkpointID())
 	if err != nil {
 		return errors.Trace(err)
 	}
 	l.checkPoint = checkpoint
+	rollbackHolder.Add(unit.RollbackFunc{"close-checkpoint", l.checkPoint.Close})
 
 	l.bwList = filter.New(l.cfg.CaseSensitive, l.cfg.BWList)
 

@@ -236,11 +236,19 @@ func (s *Syncer) Type() pb.UnitType {
 // Init initializes syncer for a sync task, but not start Process.
 // if fail, it should not call s.Close.
 // some check may move to checker later.
-func (s *Syncer) Init() error {
-	err := s.createDBs()
+func (s *Syncer) Init() (err error) {
+	rollbackHolder := unit.NewRollbackHolder("syncer")
+	defer func() {
+		if err != nil {
+			rollbackHolder.RollbackReverseOrder()
+		}
+	}()
+
+	err = s.createDBs()
 	if err != nil {
 		return errors.Trace(err)
 	}
+	rollbackHolder.Add(unit.RollbackFunc{"close-DBs", s.closeDBs})
 
 	s.binlogFilter, err = bf.NewBinlogEvent(s.cfg.CaseSensitive, s.cfg.FilterRules)
 	if err != nil {
@@ -263,6 +271,7 @@ func (s *Syncer) Init() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+		rollbackHolder.Add(unit.RollbackFunc{"close-onlineDDL", s.closeOnlineDDL})
 	}
 
 	err = s.genRouter()
@@ -281,6 +290,7 @@ func (s *Syncer) Init() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+	rollbackHolder.Add(unit.RollbackFunc{"close-checkpoint", s.checkpoint.Close})
 
 	if s.cfg.RemoveMeta {
 		err = s.checkpoint.Clear()
@@ -312,6 +322,7 @@ func (s *Syncer) Init() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+		rollbackHolder.Add(unit.RollbackFunc{"remove-heartbeat", s.removeHeartbeat})
 	}
 
 	// when Init syncer, set active relay log info
@@ -319,6 +330,7 @@ func (s *Syncer) Init() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+	rollbackHolder.Add(unit.RollbackFunc{"remove-active-realylog", s.removeActiveRelayLog})
 
 	// init successfully, close done chan to make Syncer can be closed
 	// when Process started, we will re-create done chan again
@@ -1747,15 +1759,25 @@ func (s *Syncer) createDBs() error {
 	s.toDBs = make([]*Conn, 0, s.cfg.WorkerCount)
 	s.toDBs, err = createDBs(s.cfg, s.cfg.To, s.cfg.WorkerCount, maxDMLConnectionTimeout)
 	if err != nil {
+		closeDBs(s.fromDB) // release resources acquired before return with error
 		return errors.Trace(err)
 	}
 	// db for ddl
 	s.ddlDB, err = createDB(s.cfg, s.cfg.To, maxDDLConnectionTimeout)
 	if err != nil {
+		closeDBs(s.fromDB)
+		closeDBs(s.toDBs...)
 		return errors.Trace(err)
 	}
 
 	return nil
+}
+
+// closeDBs closes all opened DBs, rollback for createDBs
+func (s *Syncer) closeDBs() {
+	closeDBs(s.fromDB)
+	closeDBs(s.toDBs...)
+	closeDBs(s.ddlDB)
 }
 
 // record skip ddl/dml sqls' position
@@ -1848,9 +1870,7 @@ func (s *Syncer) Close() {
 		return
 	}
 
-	if s.cfg.EnableHeartbeat {
-		s.heartbeat.RemoveTask(s.cfg.Name)
-	}
+	s.removeHeartbeat()
 
 	s.stopSync()
 
@@ -1859,16 +1879,11 @@ func (s *Syncer) Close() {
 		s.ddlInfoCh = nil
 	}
 
-	closeDBs(s.fromDB)
-	closeDBs(s.toDBs...)
-	closeDBs(s.ddlDB)
+	s.closeDBs()
 
 	s.checkpoint.Close()
 
-	if s.onlineDDL != nil {
-		s.onlineDDL.Close()
-		s.onlineDDL = nil
-	}
+	s.closeOnlineDDL()
 
 	// when closing syncer by `stop-task`, remove active relay log from hub
 	s.removeActiveRelayLog()
@@ -1891,6 +1906,19 @@ func (s *Syncer) stopSync() {
 	}
 	if s.localReader != nil {
 		s.localReader.Close()
+	}
+}
+
+func (s *Syncer) closeOnlineDDL() {
+	if s.onlineDDL != nil {
+		s.onlineDDL.Close()
+		s.onlineDDL = nil
+	}
+}
+
+func (s *Syncer) removeHeartbeat() {
+	if s.cfg.EnableHeartbeat {
+		s.heartbeat.RemoveTask(s.cfg.Name)
 	}
 }
 
