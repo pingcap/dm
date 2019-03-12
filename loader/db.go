@@ -32,7 +32,7 @@ type Conn struct {
 	db *sql.DB
 }
 
-func (conn *Conn) querySQL(query string, args ...interface{}) (*sql.Rows, error) {
+func (conn *Conn) querySQL(query string, maxRetry int, args ...interface{}) (*sql.Rows, error) {
 	if conn == nil || conn.db == nil {
 		return nil, errors.NotValidf("database connection")
 	}
@@ -54,15 +54,45 @@ func (conn *Conn) querySQL(query string, args ...interface{}) (*sql.Rows, error)
 		}
 	}()
 
-	rows, err = conn.db.Query(query, args...)
-	if err != nil {
-		if !(isErrTableNotExists(err) || isErrDBExists(err)) {
-			log.Errorf("query sql[%s] failed %v", query, errors.ErrorStack(err))
+	for i := 0; i < maxRetry; i++ {
+		if i > 0 {
+			time.Sleep(time.Duration(i) * time.Second)
+			log.Warnf("sql query retry: %d sql: [%s] args: [%s]", i, query, args)
 		}
-		return nil, errors.Trace(err)
+		rows, err = conn.db.Query(query, args...)
+		if err != nil {
+			if !isRetryableError(err) {
+				return nil, errors.Trace(err)
+			}
+			log.Warnf("sql: [%s] args: [%s] query error: [%v]", query, args, err)
+			continue
+		}
+		return rows, nil
+	}
+	return nil, errors.Annotatef(err, "query sql [%s] args [%v] failed", query, args)
+}
+
+func (conn *Conn) executeSQL2(stmt string, args []interface{}, maxRetry int) error {
+	if conn == nil || conn.db == nil {
+		return errors.NotValidf("database connection")
 	}
 
-	return rows, nil
+	var err error
+	for i := 0; i < maxRetry; i++ {
+		if i > 0 {
+			log.Warnf("sql exec retry %d: %s - %v", i, stmt, args)
+			time.Sleep(time.Duration(i) * time.Second)
+		}
+		_, err = conn.db.Exec(stmt, args...)
+		if err != nil {
+			if isRetryableError(err) {
+				continue
+			}
+			return errors.Trace(err)
+		}
+		return nil
+	}
+	return errors.Annotatef(err, "exec sql[%s] args[%v] failed", stmt, args)
 }
 
 func (conn *Conn) executeSQL(sqls []string, enableRetry bool) error {
