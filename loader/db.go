@@ -57,15 +57,15 @@ func (conn *Conn) querySQL(query string, maxRetry int, args ...interface{}) (*sq
 	for i := 0; i < maxRetry; i++ {
 		if i > 0 {
 			time.Sleep(time.Duration(i) * time.Second)
-			log.Warnf("sql query retry: %d sql: [%s] args: [%s]", i, query, args)
+			log.Warnf("sql query retry: %d sql: [%s] args: [%v]", i, query, args)
 		}
 		rows, err = conn.db.Query(query, args...)
 		if err != nil {
-			if !isRetryableError(err) {
-				return nil, errors.Trace(err)
+			if isRetryableError(err) {
+				log.Warnf("sql: [%s] args: [%v] query error: [%v]", query, args, err)
+				continue
 			}
-			log.Warnf("sql: [%s] args: [%s] query error: [%v]", query, args, err)
-			continue
+			return nil, errors.Trace(err)
 		}
 		return rows, nil
 	}
@@ -80,12 +80,13 @@ func (conn *Conn) executeSQL2(stmt string, maxRetry int, args ...interface{}) er
 	var err error
 	for i := 0; i < maxRetry; i++ {
 		if i > 0 {
-			log.Warnf("sql exec retry %d: %s - %v", i, stmt, args)
+			log.Warnf("sql exec retry %d: sql: [%s] args: [%v]", i, stmt, args)
 			time.Sleep(time.Duration(i) * time.Second)
 		}
 		_, err = conn.db.Exec(stmt, args...)
 		if err != nil {
 			if isRetryableError(err) {
+				log.Warnf("sql: [%s] args: [%v] query error: [%v]", stmt, args, err)
 				continue
 			}
 			return errors.Trace(err)
