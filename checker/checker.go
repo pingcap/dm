@@ -15,6 +15,7 @@ package checker
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -35,7 +36,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go/sync2"
-	"golang.org/x/net/context"
 )
 
 type mysqlInstance struct {

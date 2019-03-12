@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -31,7 +32,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
-	"golang.org/x/net/context"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/utils"

@@ -14,12 +14,12 @@
 package syncer
 
 import (
+	"context"
 	"sync"
 	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
-	"golang.org/x/net/context"
 
 	"github.com/pingcap/dm/dm/pb"
 )

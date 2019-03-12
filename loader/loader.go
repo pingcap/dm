@@ -15,6 +15,7 @@ package loader
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -24,17 +25,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/dm/unit"
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/errors"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go/sync2"
-	"golang.org/x/net/context"
+
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 var (

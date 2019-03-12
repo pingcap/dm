@@ -14,6 +14,7 @@
 package mydumper
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -26,7 +27,6 @@ import (
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/siddontang/go/sync2"
-	"golang.org/x/net/context"
 )
 
 // Mydumper is a simple wrapper for mydumper binary
