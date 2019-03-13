@@ -14,7 +14,7 @@ require (
 	github.com/pingcap/check v0.0.0-20190102082844-67f458068fc8
 	github.com/pingcap/errors v0.11.0
 	github.com/pingcap/parser v0.0.0-20190312024907-3f6280b08c8b
-	github.com/pingcap/tidb v0.0.0-20190307110701-c00846001d44
+	github.com/pingcap/tidb v0.0.0-20190313092439-09beefbe0450
 	github.com/pingcap/tidb-tools v2.1.3-0.20190305052038-e6c996e1e2ee+incompatible
 	github.com/prometheus/client_golang v0.9.1
 	github.com/prometheus/common v0.0.0-20181126121408-4724e9255275
