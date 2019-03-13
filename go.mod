@@ -13,17 +13,15 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/pingcap/check v0.0.0-20190102082844-67f458068fc8
 	github.com/pingcap/errors v0.11.0
-	github.com/pingcap/parser v0.0.0-20190305083139-b478256a6451
+	github.com/pingcap/parser v0.0.0-20190312024907-3f6280b08c8b
 	github.com/pingcap/tidb v0.0.0-20190307110701-c00846001d44
 	github.com/pingcap/tidb-tools v2.1.3-0.20190305052038-e6c996e1e2ee+incompatible
 	github.com/prometheus/client_golang v0.9.1
 	github.com/prometheus/common v0.0.0-20181126121408-4724e9255275
 	github.com/prometheus/procfs v0.0.0-20181204211112-1dc9a6cbc91a // indirect
 	github.com/satori/go.uuid v1.2.0
-	github.com/shopspring/decimal v0.0.0-20180709203117-cd690d0c9e24 // indirect
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
-	github.com/siddontang/go-log v0.0.0-20180807004314-8d05993dda07 // indirect
-	github.com/siddontang/go-mysql v0.0.0-20190118051307-00086da2c732
+	github.com/siddontang/go-mysql v0.0.0-20190312052122-c6ab05a85eb8
 	github.com/sirupsen/logrus v1.3.0
 	github.com/soheilhy/cmux v0.1.4
 	github.com/spf13/cobra v0.0.3
