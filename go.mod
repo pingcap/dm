@@ -10,7 +10,6 @@ require (
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/gogo/protobuf v1.2.0
 	github.com/golang/protobuf v1.2.0
-	github.com/gorilla/mux v1.6.2
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/pingcap/check v0.0.0-20190102082844-67f458068fc8
 	github.com/pingcap/errors v0.11.0

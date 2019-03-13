@@ -18,7 +18,6 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/gorilla/mux"
 	"github.com/pingcap/errors"
 	"github.com/soheilhy/cmux"
 
@@ -30,9 +29,9 @@ import (
 const defaultStatusAddr = ":8263"
 
 func (s *Server) startHTTPServer(lis net.Listener) {
-	router := mux.NewRouter()
+	router := http.NewServeMux()
 
-	router.HandleFunc("/status", s.handleStatus).Name("Status")
+	router.HandleFunc("/status", s.handleStatus)
 
 	router.Handle("/events/query", eventHandler{s.eventStore, opQueryEvents})
 	router.Handle("/events/scan", eventHandler{s.eventStore, opScanEvents})
