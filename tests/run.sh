@@ -56,7 +56,7 @@ start_services() {
 
 if [ "$#" -ge 1 ]; then
     test_case=$1
-    if [ "$test_case" -ne "*" ] && [ ! -d "tests/$test_case" ]; then
+    if [ "$test_case" != "*" ] && [ ! -d "tests/$test_case" ]; then
         echo "test case $test_case not found"
         exit 1
     fi
