@@ -33,7 +33,9 @@
     1. Check that all required executables exist.
     2. Execute `tests/run.sh`
 
-3. After executing the tests, run `make coverage` to get a coverage report at `/tmp/dm_test/all_cov.html`.
+    > If want to run one integration test case only, just pass the CASE parameter, such as `make integration_test CASE=sharding`
+
+4. After executing the tests, run `make coverage` to get a coverage report at `/tmp/dm_test/all_cov.html`.
 
 ## Writing new tests
 
