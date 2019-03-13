@@ -14,6 +14,7 @@
 package worker
 
 import (
+	"context"
 	"strings"
 	"sync"
 	"time"
@@ -32,7 +33,6 @@ import (
 	_ "github.com/pingcap/tidb-tools/pkg/check"
 	_ "github.com/pingcap/tidb-tools/pkg/dbutil"
 	_ "github.com/pingcap/tidb-tools/pkg/utils"
-	"golang.org/x/net/context"
 )
 
 // createUnits creates process units base on task mode

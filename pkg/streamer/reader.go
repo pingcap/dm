@@ -14,18 +14,18 @@
 package streamer
 
 import (
+	"context"
 	"path"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
-	"golang.org/x/net/context"
 
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
 

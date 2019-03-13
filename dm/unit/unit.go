@@ -14,9 +14,10 @@
 package unit
 
 import (
+	"context"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
-	"golang.org/x/net/context"
 )
 
 // Unit defines interface for sub task process units, like syncer, loader, relay, etc.

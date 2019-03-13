@@ -136,8 +136,8 @@ func (cp *RemoteCheckPoint) Load() error {
 		log.Infof("[checkpoint] load checkpoint takes %f seconds", time.Since(begin).Seconds())
 	}()
 
-	query := fmt.Sprintf("SELECT `filename`,`cp_schema`,`cp_table`,`offset`,`end_pos` from `%s`.`%s` where `id`='%s'", cp.schema, cp.table, cp.id)
-	rows, err := cp.conn.querySQL(query)
+	query := fmt.Sprintf("SELECT `filename`,`cp_schema`,`cp_table`,`offset`,`end_pos` from `%s`.`%s` where `id`=?", cp.schema, cp.table)
+	rows, err := cp.conn.querySQL(query, queryRetryCount, cp.id)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -266,7 +266,7 @@ func (cp *RemoteCheckPoint) Init(filename string, endPos int64) error {
 	// fields[0] -> db name, fields[1] -> table name
 	sql2 := fmt.Sprintf("INSERT INTO `%s`.`%s` (`id`, `filename`, `cp_schema`, `cp_table`, `offset`, `end_pos`) VALUES(?,?,?,?,?,?)", cp.schema, cp.table)
 	log.Debugf("[checkpoint] sql:%s, id:%s, filename:%s, cp_schema:%s, cp_table:%s, offset:%d, end_pos:%d", sql2, cp.id, filename, fields[0], fields[1], 0, endPos)
-	_, err := cp.conn.db.Exec(sql2, cp.id, filename, fields[0], fields[1], 0, endPos)
+	err := cp.conn.executeSQL2(sql2, maxRetryCount, cp.id, filename, fields[0], fields[1], 0, endPos)
 	if err != nil {
 		if isErrDupEntry(err) {
 			log.Infof("[checkpoint] id:%s filename %s already exists, skip it.", cp.id, filename)
@@ -299,8 +299,8 @@ func (cp *RemoteCheckPoint) Clear() error {
 
 // Count implements CheckPoint.Count
 func (cp *RemoteCheckPoint) Count() (int, error) {
-	query := fmt.Sprintf("SELECT COUNT(id) FROM `%s`.`%s` WHERE `id` = '%s'", cp.schema, cp.table, cp.id)
-	rows, err := cp.conn.querySQL(query)
+	query := fmt.Sprintf("SELECT COUNT(id) FROM `%s`.`%s` WHERE `id` = ?", cp.schema, cp.table)
+	rows, err := cp.conn.querySQL(query, queryRetryCount, cp.id)
 	if err != nil {
 		return 0, errors.Trace(err)
 	}
