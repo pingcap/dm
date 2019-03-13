@@ -42,8 +42,32 @@ func (t *testGeneratorSuite) TestGenerateForMySQL(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(previousGTIDSet, NotNil)
 
-	latestGTIDStr := "3ccc475b-2343-11e7-be21-6c0b84d59f30:14"
+	// mutil GTID in latestGTID
+	latestGTIDStr := "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14"
 	latestGTID, err := gtid.ParserGTID(flavor, latestGTIDStr)
+	c.Assert(err, IsNil)
+	c.Assert(latestGTID, NotNil)
+	_, err = NewGenerator(flavor, serverID, 0, latestGTID, previousGTIDSet, latestXID)
+	c.Assert(err, NotNil)
+
+	// latestGTID not one of the latest previousGTIDSet, UUID not found
+	latestGTIDStr = "11111111-2343-11e7-be21-6c0b84d59f30:14"
+	latestGTID, err = gtid.ParserGTID(flavor, latestGTIDStr)
+	c.Assert(err, IsNil)
+	c.Assert(latestGTID, NotNil)
+	_, err = NewGenerator(flavor, serverID, 0, latestGTID, previousGTIDSet, latestXID)
+	c.Assert(err, NotNil)
+
+	// latestGTID not one of the latest previousGTIDSet, interval mismatch
+	latestGTIDStr = "3ccc475b-2343-11e7-be21-6c0b84d59f30:13"
+	latestGTID, err = gtid.ParserGTID(flavor, latestGTIDStr)
+	c.Assert(err, IsNil)
+	c.Assert(latestGTID, NotNil)
+	_, err = NewGenerator(flavor, serverID, 0, latestGTID, previousGTIDSet, latestXID)
+	c.Assert(err, NotNil)
+
+	latestGTIDStr = "3ccc475b-2343-11e7-be21-6c0b84d59f30:14"
+	latestGTID, err = gtid.ParserGTID(flavor, latestGTIDStr)
 	c.Assert(err, IsNil)
 	c.Assert(latestGTID, NotNil)
 
@@ -62,10 +86,38 @@ func (t *testGeneratorSuite) TestGenerateForMariaDB(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(previousGTIDSet, NotNil)
 
-	latestGTIDStr := "1-101-12"
+	// multi GTID in latestGTID
+	latestGTIDStr := "1-101-12,2-2-23"
 	latestGTID, err := gtid.ParserGTID(flavor, latestGTIDStr)
 	c.Assert(err, IsNil)
 	c.Assert(latestGTID, NotNil)
+	_, err = NewGenerator(flavor, serverID, 0, latestGTID, previousGTIDSet, latestXID)
+	c.Assert(err, NotNil)
+
+	// latestGTID not one of previousGTIDSet, domain-id mismatch
+	latestGTIDStr = "5-101-12"
+	latestGTID, err = gtid.ParserGTID(flavor, latestGTIDStr)
+	c.Assert(err, IsNil)
+	c.Assert(latestGTID, NotNil)
+	_, err = NewGenerator(flavor, serverID, 0, latestGTID, previousGTIDSet, latestXID)
+	c.Assert(err, NotNil)
+
+	// latestGTID not one of previousGTIDSet, sequence-number not equal
+	latestGTIDStr = "1-101-13"
+	latestGTID, err = gtid.ParserGTID(flavor, latestGTIDStr)
+	c.Assert(err, IsNil)
+	c.Assert(latestGTID, NotNil)
+	_, err = NewGenerator(flavor, serverID, 0, latestGTID, previousGTIDSet, latestXID)
+	c.Assert(err, NotNil)
+
+	latestGTIDStr = "1-101-12"
+	latestGTID, err = gtid.ParserGTID(flavor, latestGTIDStr)
+	c.Assert(err, IsNil)
+	c.Assert(latestGTID, NotNil)
+
+	// server-id mismatch
+	_, err = NewGenerator(flavor, 100, 0, latestGTID, previousGTIDSet, latestXID)
+	c.Assert(err, NotNil)
 
 	t.testGenerate(c, flavor, serverID, latestGTID, previousGTIDSet, latestXID)
 }
@@ -78,7 +130,8 @@ func (t *testGeneratorSuite) testGenerate(c *C, flavor string, serverID uint32, 
 	c.Assert(err, IsNil)
 	defer f.Close()
 
-	g := NewGenerator(flavor, serverID, 0, latestGTID, previousGTIDSet, latestXID)
+	g, err := NewGenerator(flavor, serverID, 0, latestGTID, previousGTIDSet, latestXID)
+	c.Assert(err, IsNil)
 	allEvents := make([]*replication.BinlogEvent, 0, 20)
 	allEventTypes := make([]replication.EventType, 0, 50)
 

@@ -15,6 +15,7 @@ package event
 
 import (
 	"github.com/pingcap/errors"
+	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/gtid"
@@ -31,7 +32,47 @@ type Generator struct {
 }
 
 // NewGenerator creates a new instance of Generator.
-func NewGenerator(flavor string, serverID uint32, latestPos uint32, latestGTID gtid.Set, previousGTIDs gtid.Set, latestXID uint64) *Generator {
+func NewGenerator(flavor string, serverID uint32, latestPos uint32, latestGTID gtid.Set, previousGTIDs gtid.Set, latestXID uint64) (*Generator, error) {
+	prevOrigin := previousGTIDs.Origin()
+	if prevOrigin == nil {
+		return nil, errors.NotValidf("previousGTIDs %s", previousGTIDs)
+	}
+
+	singleGTID, err := verifySingleGTID(flavor, latestGTID)
+	if err != nil {
+		return nil, errors.Annotatef(err, "verify single latest GTID in set")
+	}
+	switch flavor {
+	case gmysql.MySQLFlavor:
+		uuidSet := singleGTID.(*gmysql.UUIDSet)
+		prevGSet, ok := prevOrigin.(*gmysql.MysqlGTIDSet)
+		if !ok || prevGSet == nil {
+			return nil, errors.NotValidf("GTID set string %s for MySQL", previousGTIDs)
+		}
+		// latestGTID should be one of the latest previousGTIDs
+		prevGTID, ok := prevGSet.Sets[uuidSet.SID.String()]
+		if !ok || prevGTID.Intervals.Len() != 1 || prevGTID.Intervals[0].Stop != uuidSet.Intervals[0].Stop {
+			return nil, errors.NotValidf("latest GTID %s is not one of the latest previousGTIDs %s", latestGTID, previousGTIDs)
+		}
+
+	case gmysql.MariaDBFlavor:
+		mariaGTID := singleGTID.(*gmysql.MariadbGTID)
+		if mariaGTID.ServerID != serverID {
+			return nil, errors.Errorf("server_id mismatch, in GTID (%d), in serverID (%d)", mariaGTID.ServerID, serverID)
+		}
+		// latestGTID should be one of previousGTIDs
+		prevGSet, ok := prevOrigin.(*gmysql.MariadbGTIDSet)
+		if !ok || prevGSet == nil {
+			return nil, errors.NotValidf("GTID set string %s for MariaDB", previousGTIDs)
+		}
+		prevGTID, ok := prevGSet.Sets[mariaGTID.DomainID]
+		if !ok || prevGTID.ServerID != mariaGTID.ServerID || prevGTID.SequenceNumber != mariaGTID.SequenceNumber {
+			return nil, errors.NotValidf("latest GTID %s is not one of previousGTIDs %s", latestGTID, previousGTIDs)
+		}
+	default:
+		return nil, errors.NotValidf("flavor %s", flavor)
+	}
+
 	return &Generator{
 		Flavor:        flavor,
 		ServerID:      serverID,
@@ -39,7 +80,7 @@ func NewGenerator(flavor string, serverID uint32, latestPos uint32, latestGTID g
 		LatestGTID:    latestGTID,
 		PreviousGTIDs: previousGTIDs,
 		LatestXID:     latestXID,
-	}
+	}, nil
 }
 
 // GenFileHeader generates a binlog file header, including to PreviousGTIDsEvent/MariadbGTIDListEvent.
