@@ -229,7 +229,7 @@ func isErrDupEntry(err error) bool {
 }
 
 func isRetryableError(err error) bool {
-	err = causeErr(err)
+	err = errors.Cause(err)
 	if isMySQLError(err, tmysql.ErrDupEntry) {
 		return false
 	}
@@ -247,7 +247,7 @@ func isDDLRetryableError(err error) bool {
 }
 
 func isMySQLError(err error, code uint16) bool {
-	err = causeErr(err)
+	err = errors.Cause(err)
 	e, ok := err.(*mysql.MySQLError)
 	return ok && e.Number == code
 }
