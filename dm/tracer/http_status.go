@@ -14,18 +14,13 @@
 package tracer
 
 import (
-	"encoding/json"
 	"net"
 	"net/http"
-
-	"github.com/pingcap/errors"
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
-
-const defaultStatusAddr = ":8263"
 
 func (s *Server) startHTTPServer(lis net.Listener) {
 	router := http.NewServeMux()
@@ -40,7 +35,7 @@ func (s *Server) startHTTPServer(lis net.Listener) {
 		Handler: router,
 	}
 	err := httpServer.Serve(lis)
-	if err != nil && common.IsErrNetClosing(err) && err != http.ErrServerClosed {
+	if err != nil && !common.IsErrNetClosing(err) && err != http.ErrServerClosed {
 		log.Errorf("[server] tracer server return with error %s", err.Error())
 	}
 }
@@ -52,20 +47,9 @@ type status struct {
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, req *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	st := status{
 		Version: utils.ReleaseVersion,
 		GitHash: utils.GitHash,
 	}
-	js, err := json.Marshal(st)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		log.Error("Encode json error", err)
-	} else {
-		_, err = w.Write(js)
-		if err != nil {
-			log.Error(errors.ErrorStack(err))
-		}
-	}
+	writeData(w, st)
 }
