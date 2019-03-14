@@ -14,14 +14,14 @@
 package syncer
 
 import (
+	"context"
 	"time"
 
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
-	"golang.org/x/net/context"
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/log"
 	sm "github.com/pingcap/dm/syncer/safe-mode"
 )
 

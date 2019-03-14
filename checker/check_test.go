@@ -11,22 +11,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package master
+package checker
 
 import (
 	"context"
+	"testing"
 
-	"github.com/pingcap/dm/dm/ctl/common"
-	"github.com/pingcap/dm/dm/pb"
+	tc "github.com/pingcap/check"
+	"github.com/pingcap/dm/dm/config"
 )
 
-// operateRelay does operation on relay unit
-func operateRelay(op pb.RelayOp, workers []string) (*pb.OperateWorkerRelayResponse, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cli := common.MasterClient()
-	return cli.OperateWorkerRelayTask(ctx, &pb.OperateWorkerRelayRequest{
-		Op:      op,
-		Workers: workers,
-	})
+func TestChecker(t *testing.T) {
+	tc.TestingT(t)
+}
+
+type testChecker struct{}
+
+var _ = tc.Suite(&testChecker{})
+
+func (t *testChecker) TestCheckSyncConfig(c *tc.C) {
+	c.Assert(CheckSyncConfig(context.Background(), nil), tc.IsNil)
+
+	cfgs := []*config.SubTaskConfig{
+		{
+			IgnoreCheckingItems: []string{config.AllChecking},
+		},
+	}
+	c.Assert(CheckSyncConfig(context.Background(), cfgs), tc.IsNil)
 }

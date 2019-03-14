@@ -217,6 +217,8 @@ type TaskConfig struct {
 	Name       string `yaml:"name"`
 	TaskMode   string `yaml:"task-mode"`
 	IsSharding bool   `yaml:"is-sharding"`
+	//  treat it as hidden configuration
+	IgnoreCheckingItems []string `yaml:"ignore-checking-items"`
 	// we store detail status in meta
 	// don't save configuration into it
 	MetaSchema string `yaml:"meta-schema"`
@@ -309,6 +311,12 @@ func (c *TaskConfig) adjust() error {
 	}
 	if c.TaskMode != ModeFull && c.TaskMode != ModeIncrement && c.TaskMode != ModeAll {
 		return errors.New("please specify right task-mode, support `full`, `incremental`, `all`")
+	}
+
+	for _, item := range c.IgnoreCheckingItems {
+		if err := ValidateCheckingItem(item); err != nil {
+			return errors.Trace(err)
+		}
 	}
 
 	if c.OnlineDDLScheme != "" && c.OnlineDDLScheme != PT && c.OnlineDDLScheme != GHOST {
@@ -431,6 +439,7 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg := NewSubTaskConfig()
 		cfg.IsSharding = c.IsSharding
 		cfg.OnlineDDLScheme = c.OnlineDDLScheme
+		cfg.IgnoreCheckingItems = c.IgnoreCheckingItems
 		cfg.Name = c.Name
 		cfg.Mode = c.TaskMode
 		cfg.CaseSensitive = c.CaseSensitive

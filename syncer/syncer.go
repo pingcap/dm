@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"runtime/debug"
@@ -22,7 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
@@ -33,12 +33,12 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
-	"golang.org/x/net/context"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
 	sm "github.com/pingcap/dm/syncer/safe-mode"
@@ -1149,7 +1149,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			if err != nil {
 				return errors.Trace(err)
 			}
-			tblColumns, rowData, tblIndexColumns, err := pruneGeneratedColumnDML(table.columns, rows, table.indexColumns, schemaName, tableName, s.genColsCache)
+			prunedColumns, prunedRows, err := pruneGeneratedColumnDML(table.columns, rows, schemaName, tableName, s.genColsCache)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -1168,11 +1168,19 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			if err != nil {
 				return errors.Trace(err)
 			}
-
+			param := &genDMLParam{
+				schema:               table.schema,
+				table:                table.name,
+				data:                 prunedRows,
+				originalData:         rows,
+				columns:              prunedColumns,
+				originalColumns:      table.columns,
+				originalIndexColumns: table.indexColumns,
+			}
 			switch e.Header.EventType {
 			case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
 				if !applied {
-					sqls, keys, args, err = genInsertSQLs(table.schema, table.name, rowData, tblColumns, tblIndexColumns)
+					sqls, keys, args, err = genInsertSQLs(param)
 					if err != nil {
 						return errors.Errorf("gen insert sqls failed: %v, schema: %s, table: %s", errors.Trace(err), table.schema, table.name)
 					}
@@ -1195,7 +1203,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 			case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
 				if !applied {
-					sqls, keys, args, err = genUpdateSQLs(table.schema, table.name, rowData, tblColumns, tblIndexColumns, safeMode.Enable())
+					param.safeMode = safeMode.Enable()
+					sqls, keys, args, err = genUpdateSQLs(param)
 					if err != nil {
 						return errors.Errorf("gen update sqls failed: %v, schema: %s, table: %s", err, table.schema, table.name)
 					}
@@ -1219,7 +1228,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 			case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
 				if !applied {
-					sqls, keys, args, err = genDeleteSQLs(table.schema, table.name, rowData, tblColumns, tblIndexColumns)
+					sqls, keys, args, err = genDeleteSQLs(param)
 					if err != nil {
 						return errors.Errorf("gen delete sqls failed: %v, schema: %s, table: %s", err, table.schema, table.name)
 					}
@@ -1294,7 +1303,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			// for DDL, we don't apply operator until we try to execute it.
 			// so can handle sharding cases
-			sqls, onlineDDLTableNames, _, err = s.resolveDDLSQL(sql, parser2, string(ev.Schema))
+			sqls, onlineDDLTableNames, err = s.resolveDDLSQL(parser2, parseResult.stmt, string(ev.Schema))
 			if err != nil {
 				log.Infof("[query]%s [last pos]%v [current pos]%v [current gtid set]%v", sql, lastPos, currentPos, ev.GSet)
 				log.Errorf("fail to be parsed, error %v", err)

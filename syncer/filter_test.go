@@ -25,7 +25,6 @@ func (s *testSyncerSuite) TestSkipQueryEvent(c *C) {
 		sql           string
 		expectSkipped bool
 	}{
-		{"#", true},
 		{"SAVEPOINT `a1`", true},
 
 		// flush

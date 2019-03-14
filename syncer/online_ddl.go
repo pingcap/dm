@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/pingcap/errors"
@@ -283,4 +284,8 @@ func (s *OnlineDDLStorage) createTable() error {
 		)`, tableName)
 	err := s.db.executeSQL([]string{sql}, [][]interface{}{nil}, maxRetryCount)
 	return errors.Trace(err)
+}
+
+func escapeSingleQuote(str string) string {
+	return strings.Replace(str, "'", "''", -1)
 }
