@@ -66,7 +66,6 @@ func main() {
 	err = s.Start()
 	if err != nil {
 		log.Errorf("start dm-tracer err %s", err)
-		os.Exit(2)
 	}
 	s.Close() // wait until closed
 	log.Info("dm-tracer exit")
