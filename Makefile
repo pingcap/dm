@@ -71,8 +71,8 @@ lint:
 vet:
 	$(GO) build -o bin/shadow golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow
 	@echo "vet"
-	@$(GO) vet -composites=false $(PACKAGES) 2>&1 | tee /dev/stderr | awk 'END{if(NR>0) {exit 1}}'
-	@$(GO) vet -vettool=$(CURDIR)/bin/shadow $(PACKAGES) 2>&1 | tee /dev/stderr | awk '/shadows declaration|^#/{next}{count+=1} END{if(count>0) {exit 1}}'
+	@$(GO) vet -composites=false $(PACKAGES)
+	@$(GO) vet -vettool=$(CURDIR)/bin/shadow $(PACKAGES) || true
 
 dm_integration_test_build:
 	$(GOTEST) -c -race -cover -covermode=atomic \
