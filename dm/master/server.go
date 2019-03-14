@@ -1317,8 +1317,6 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 		return nil, errors.Errorf("worker %s not waiting for DDL lock %s", owner, lockID)
 	}
 
-	traceGID := s.idGen.NextID("resolveDDLLock", 0)
-
 	// try send handle SQLs request to owner if exists
 	key, oper := s.sqlOperatorHolder.Get(lock.Task, lock.DDLs())
 	if oper != nil {
@@ -1339,6 +1337,11 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 		s.sqlOperatorHolder.Remove(lock.Task, key) // remove SQL operator after sent to owner
 	}
 
+	// If send ExecuteDDL request failed, we will generate more tracer group id,
+	// this is acceptable if each ExecuteDDL request successes at last.
+	// TODO: we need a better way to combine brain split tracing events into one
+	// single group.
+	traceGID := s.idGen.NextID("resolveDDLLock", 0)
 	log.Infof("[server] requesting %s to execute DDL (with ID %s)", owner, lockID)
 	ownerResp, err := cli.ExecuteDDL(ctx, &pb.ExecDDLRequest{
 		Task:     lock.Task,
