@@ -41,8 +41,8 @@ func (s *Server) startHTTPServer(lis net.Listener) {
 		Handler: router,
 	}
 	err := httpServer.Serve(lis)
-	if err != nil && common.IsErrNetClosing(err) && err != cmux.ErrListenerClosed {
-		log.Errorf("[server] status server return with error %s", err.Error())
+	if err != nil && common.IsErrNetClosing(err) && err != http.ErrServerClosed {
+		log.Errorf("[server] tracer server return with error %s", err.Error())
 	}
 }
 
