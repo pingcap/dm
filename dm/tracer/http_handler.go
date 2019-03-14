@@ -70,6 +70,7 @@ func writeError(w http.ResponseWriter, statusCode int, err error) {
 func writeData(w http.ResponseWriter, data interface{}) {
 	js, err := json.MarshalIndent(data, "", " ")
 	if err != nil {
+		log.Errorf("invalid json data: %v, error: %s", data, err)
 		writeInternalServerError(w, err)
 		return
 	}
