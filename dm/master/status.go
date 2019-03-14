@@ -18,7 +18,6 @@ import (
 	"net/http"
 
 	"github.com/pingcap/dm/pkg/log"
-	"github.com/soheilhy/cmux"
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/pkg/utils"

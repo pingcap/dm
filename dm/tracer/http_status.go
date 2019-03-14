@@ -19,7 +19,6 @@ import (
 	"net/http"
 
 	"github.com/pingcap/errors"
-	"github.com/soheilhy/cmux"
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/pkg/log"

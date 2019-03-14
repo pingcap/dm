@@ -170,13 +170,13 @@ func (ts *HTTPHandlerTestSuite) TestTraceEventQuery(c *C) {
 								Name: "bin|000001.000004",
 								Pos:  1626,
 							},
+							CurrentPos: &pb.MySQLPosition{
+								Name: "bin|000001.000004",
+								Pos:  1873,
+							},
 						},
 						OpType:    1,
 						EventType: 2,
-						CurrentPos: &pb.MySQLPosition{
-							Name: "bin|000001.000004",
-							Pos:  1873,
-						},
 					},
 				},
 			},

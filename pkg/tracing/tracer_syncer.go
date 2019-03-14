@@ -33,18 +33,17 @@ func (t *Tracer) CollectSyncerBinlogEvent(source string, safeMode, tryReSync boo
 			Name: globalPos.Name,
 			Pos:  globalPos.Pos,
 		},
-	}
-	currentPos2 := &pb.MySQLPosition{
-		Name: currentPos.Name,
-		Pos:  currentPos.Pos,
+		CurrentPos: &pb.MySQLPosition{
+			Name: currentPos.Name,
+			Pos:  currentPos.Pos,
+		},
 	}
 
 	event := &pb.SyncerBinlogEvent{
-		Base:       base,
-		State:      syncerState,
-		EventType:  eventType,
-		OpType:     opType,
-		CurrentPos: currentPos2,
+		Base:      base,
+		State:     syncerState,
+		EventType: eventType,
+		OpType:    opType,
 	}
 
 	job := &Job{

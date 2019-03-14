@@ -2,17 +2,8 @@ syntax = "proto3";
 
 package pb;
 
-import "tracer_type.proto";
+import "tracer_base.proto";
 
-
-message BaseEvent {
-    string filename = 1;
-    int32 line = 2;
-    int64 tso = 3;
-    string traceID = 4;
-    string groupID = 5;
-    TraceType type = 6;
-}
 
 message MySQLPosition {
     string name = 1;
@@ -23,6 +14,7 @@ message SyncerState {
     bool safeMode = 1;
     bool tryReSync = 2;
     MySQLPosition lastPos = 3;
+    MySQLPosition currentPos = 4;
 }
 
 message ExecDDLInfo {
@@ -35,7 +27,6 @@ message SyncerBinlogEvent {
     SyncerState state = 2;
     int32 eventType = 3;
     int32 opType = 4;
-    MySQLPosition currentPos = 5;
 }
 
 enum SyncerJobState {

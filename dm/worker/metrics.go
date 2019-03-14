@@ -19,7 +19,6 @@ import (
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/soheilhy/cmux"
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/loader"
