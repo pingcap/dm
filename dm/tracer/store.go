@@ -78,6 +78,7 @@ func (store *EventStore) addNewEvent(e *TraceEvent) error {
 func (store *EventStore) queryByTraceID(traceID string) []*TraceEvent {
 	store.RLock()
 	defer store.RUnlock()
+	// ensure read only
 	return store.events[traceID]
 }
 
@@ -100,6 +101,7 @@ func (store *EventStore) scan(offset, limit int64) [][]*TraceEvent {
 			// TODO: add lazy clean up mechanism
 		}
 	}
+	// ensure read only
 	return result
 }
 
