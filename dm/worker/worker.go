@@ -141,6 +141,9 @@ func (w *Worker) Close() {
 	// close purger
 	w.relayPurger.Close()
 
+	// close tracer
+	w.tracer.Stop()
+
 	// cancel status output ticker and wait for return
 	w.cancel()
 	w.wg.Wait()
