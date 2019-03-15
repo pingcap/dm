@@ -93,7 +93,7 @@ func (t *Tracer) ProcessTraceEvents(jobs []*Job) error {
 			return errors.Trace(err)
 		}
 		if !resp.Result {
-			return errors.Errorf("upload syncer binlog event failed, msg: %s", resp.Msg)
+			return errors.Errorf("upload syncer job event failed, msg: %s", resp.Msg)
 		}
 	default:
 		return errors.Errorf("invalid event type %s, will not process", tp)
