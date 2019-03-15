@@ -766,7 +766,9 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 			syncerJobState := s.tracer.FinishedSyncerJobState(err)
 			for _, job := range jobs {
 				_, err2 := s.tracer.CollectSyncerJobEvent(job.traceID, job.traceGID, int32(job.tp), job.pos, job.currentPos, queueBucket, job.sql, job.ddls, nil, nil, syncerJobState)
-				log.Errorf("[syncer] trace error: %s", err2)
+				if err2 != nil {
+					log.Errorf("[syncer] trace error: %s", err2)
+				}
 			}
 		}
 		return errors.Trace(err)
