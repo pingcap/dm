@@ -200,7 +200,6 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan <-chan *Job) {
 	for {
 		select {
 		case <-ctx.Done():
-			t.PrepareRPC()
 			err = t.ProcessTraceEvents(jobs)
 			if err != nil {
 				processError(err)
@@ -208,7 +207,6 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan <-chan *Job) {
 			clearJobs()
 			return
 		case <-time.After(uploadInterval):
-			t.PrepareRPC()
 			err = t.ProcessTraceEvents(jobs)
 			if err != nil {
 				processError(err)
@@ -224,7 +222,6 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan <-chan *Job) {
 			}
 
 			if len(jobs) >= count || job.Tp == EventFlush {
-				t.PrepareRPC()
 				err = t.ProcessTraceEvents(jobs)
 				if err != nil {
 					processError(err)

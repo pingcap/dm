@@ -636,9 +636,11 @@ func (s *Syncer) addJob(job *job) error {
 		s.jobs[queueBucket] <- job
 	}
 
-	_, err := s.tracer.CollectSyncerJobEvent(job.traceID, job.traceGID, int32(job.tp), job.pos, job.currentPos, queueBucketMapping[queueBucket], job.sql, job.ddls, job.args, execDDLReq, pb.SyncerJobState_queued)
-	if err != nil {
-		log.Errorf("[syncer] trace error: %s", err)
+	if s.tracer.Enable() {
+		_, err := s.tracer.CollectSyncerJobEvent(job.traceID, job.traceGID, int32(job.tp), job.pos, job.currentPos, queueBucketMapping[queueBucket], job.sql, job.ddls, job.args, execDDLReq, pb.SyncerJobState_queued)
+		if err != nil {
+			log.Errorf("[syncer] trace error: %s", err)
+		}
 	}
 
 	wait := s.checkWait(job)
