@@ -63,7 +63,6 @@ var (
 
 	adminQueueName     = "admin queue"
 	defaultBucketCount = 8
-	queueBucketMapping []string
 )
 
 // BinlogType represents binlog sync type
@@ -104,9 +103,10 @@ type Syncer struct {
 	toDBs  []*Conn
 	ddlDB  *Conn
 
-	jobs         []chan *job
-	jobsClosed   sync2.AtomicBool
-	jobsChanLock sync.Mutex
+	jobs               []chan *job
+	jobsClosed         sync2.AtomicBool
+	jobsChanLock       sync.Mutex
+	queueBucketMapping []string
 
 	c *causality
 
@@ -632,12 +632,12 @@ func (s *Syncer) addJob(job *job) error {
 	case insert, update, del:
 		s.jobWg.Add(1)
 		queueBucket = int(utils.GenHashKey(job.key)) % s.cfg.WorkerCount
-		s.addCount(false, queueBucketMapping[queueBucket], job.tp, 1)
+		s.addCount(false, s.queueBucketMapping[queueBucket], job.tp, 1)
 		s.jobs[queueBucket] <- job
 	}
 
 	if s.tracer.Enable() {
-		_, err := s.tracer.CollectSyncerJobEvent(job.traceID, job.traceGID, int32(job.tp), job.pos, job.currentPos, queueBucketMapping[queueBucket], job.sql, job.ddls, job.args, execDDLReq, pb.SyncerJobState_queued)
+		_, err := s.tracer.CollectSyncerJobEvent(job.traceID, job.traceGID, int32(job.tp), job.pos, job.currentPos, s.queueBucketMapping[queueBucket], job.sql, job.ddls, job.args, execDDLReq, pb.SyncerJobState_queued)
 		if err != nil {
 			log.Errorf("[syncer] trace error: %s", err)
 		}
@@ -904,10 +904,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		return errors.Trace(err)
 	}
 
+	s.queueBucketMapping = make([]string, 0, s.cfg.WorkerCount+1)
 	for i := 0; i < s.cfg.WorkerCount; i++ {
 		s.wg.Add(1)
 		name := queueBucketName(i)
-		queueBucketMapping = append(queueBucketMapping, name)
+		s.queueBucketMapping = append(s.queueBucketMapping, name)
 		go func(i int, n string) {
 			ctx2, cancel := context.WithCancel(ctx)
 			s.sync(ctx2, n, s.toDBs[i], s.jobs[i])
@@ -915,7 +916,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}(i, name)
 	}
 
-	queueBucketMapping = append(queueBucketMapping, adminQueueName)
+	s.queueBucketMapping = append(s.queueBucketMapping, adminQueueName)
 	s.wg.Add(1)
 	go func() {
 		ctx2, cancel := context.WithCancel(ctx)
