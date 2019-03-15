@@ -57,7 +57,7 @@ func NewConfig() *Config {
 	fs.Int64Var(&cfg.Purge.Expires, "purge-expires", 0, "try to purge relay log files if their modified time is older than this (hours)")
 	fs.Int64Var(&cfg.Purge.RemainSpace, "purge-remain-space", 15, "try to purge relay log files if remain space is less than this (GB)")
 	fs.BoolVar(&cfg.Tracer.Enable, "tracer-enable", false, "whether to enable tracing")
-	fs.StringVar(&cfg.Tracer.TracerAddr, "tracer-tracer-addr", "", "tracing service rpc address")
+	fs.StringVar(&cfg.Tracer.TracerAddr, "tracer-server-addr", "", "tracing service rpc address")
 	fs.IntVar(&cfg.Tracer.BatchSize, "tracer-batch-size", 20, "upload to tracing service batch size")
 	fs.BoolVar(&cfg.Tracer.Checksum, "tracer-checksum", false, "whether to calculate checksum of some data")
 
@@ -92,7 +92,7 @@ type Config struct {
 	Purge purger.Config `toml:"purge" json:"purge"`
 
 	// config items for tracer
-	Tracer tracing.Config
+	Tracer tracing.Config `toml:"tracer" json"tracer`
 
 	ConfigFile string `json:"config-file"`
 
