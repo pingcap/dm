@@ -115,11 +115,6 @@ func (t *Tracer) Stop() {
 	t.wg.Wait()
 }
 
-// PrepareRPC calls before each rpc request to tracing server
-func (t *Tracer) PrepareRPC() {
-	t.rpcWg.Add(1)
-}
-
 func (t *Tracer) tsoProcessor(ctx context.Context) {
 	defer t.wg.Done()
 	for {
@@ -127,7 +122,6 @@ func (t *Tracer) tsoProcessor(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-time.After(1 * time.Minute):
-			t.PrepareRPC()
 			err := t.syncTS()
 			if err != nil {
 				log.Errorf("[tracer] sync timestamp error: %s", errors.ErrorStack(err))
@@ -142,6 +136,7 @@ func (t *Tracer) tsoProcessor(ctx context.Context) {
 // timestamp t3. then we have t1 + tx + ttl = t2; t2 - tx + ttl = t3
 // so the real sending RPC request timestamp is t1 + tx = t2 + t1/2 - t3/2
 func (t *Tracer) syncTS() error {
+	t.rpcWg.Add(1)
 	defer t.rpcWg.Done()
 	t.tso.Lock()
 	defer t.tso.Unlock()
@@ -165,7 +160,7 @@ func (t *Tracer) newJobChans() {
 	t.closeJobChans()
 	t.jobs = make(map[EventType]chan *Job)
 	for i := EventSyncerBinlog; i < EventFlush; i++ {
-		t.jobs[i] = make(chan *Job, t.cfg.BatchSize+1)
+		t.jobs[i] = make(chan *Job, t.cfg.BatchSize)
 	}
 	t.jobsClosed.Set(false)
 }
