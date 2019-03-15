@@ -111,6 +111,7 @@ func (store *EventStore) removeByTraceID(traceID string) (removed bool) {
 		for idx := range store.ids {
 			if store.ids[idx] == traceID {
 				store.ids = append(store.ids[:idx], store.ids[idx+1:]...)
+				break
 			}
 		}
 	}
