@@ -92,7 +92,7 @@ type Config struct {
 	Purge purger.Config `toml:"purge" json:"purge"`
 
 	// config items for tracer
-	Tracer tracing.Config `toml:"tracer" json"tracer`
+	Tracer tracing.Config `toml:"tracer" json:"tracer"`
 
 	ConfigFile string `json:"config-file"`
 
