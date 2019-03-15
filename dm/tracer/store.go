@@ -49,13 +49,13 @@ func (store *EventStore) addNewEvent(e *TraceEvent) error {
 	case pb.TraceType_BinlogEvent:
 		ev, ok := e.Event.(*pb.SyncerBinlogEvent)
 		if !ok {
-			return errors.NotValidf("trace event data")
+			return errors.NotValidf("type %d event: %v", e.Type, e.Event)
 		}
 		traceID = ev.Base.TraceID
 	case pb.TraceType_JobEvent:
 		ev, ok := e.Event.(*pb.SyncerJobEvent)
 		if !ok {
-			return errors.NotValidf("trace event data")
+			return errors.NotValidf("type %d event: %v", e.Type, e.Event)
 		}
 		traceID = ev.Base.TraceID
 	default:
@@ -88,10 +88,11 @@ func (store *EventStore) scan(offset, limit int64) [][]*TraceEvent {
 		return nil
 	}
 	result := make([][]*TraceEvent, 0, limit)
-	for idx := offset; idx < offset+limit; idx++ {
-		if idx >= int64(len(store.ids)) {
-			break
-		}
+	end := offset + limit
+	if end > int64(len(store.ids)) {
+		end = int64(len(store.ids))
+	}
+	for idx := offset; idx < end; idx++ {
 		traceID := store.ids[idx]
 		if event, ok := store.events[traceID]; ok {
 			result = append(result, event)
