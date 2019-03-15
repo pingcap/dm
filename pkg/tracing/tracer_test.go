@@ -189,7 +189,7 @@ func (s *MockServer) CheckEvent(traceID string, e *TraceEvent, c *tc.C) {
 		switch e.Type {
 		case pb.TraceType_JobEvent:
 			e2, ok1 := e.Event.(*pb.SyncerJobEvent)
-			ev2, ok2 := e.Event.(*pb.SyncerJobEvent)
+			ev2, ok2 := ev.Event.(*pb.SyncerJobEvent)
 			c.Assert(ok1, tc.IsTrue)
 			c.Assert(ok2, tc.IsTrue)
 			if e2.String() == ev2.String() {
@@ -197,7 +197,7 @@ func (s *MockServer) CheckEvent(traceID string, e *TraceEvent, c *tc.C) {
 			}
 		case pb.TraceType_BinlogEvent:
 			e2, ok1 := e.Event.(*pb.SyncerBinlogEvent)
-			ev2, ok2 := e.Event.(*pb.SyncerBinlogEvent)
+			ev2, ok2 := ev.Event.(*pb.SyncerBinlogEvent)
 			c.Assert(ok1, tc.IsTrue)
 			c.Assert(ok2, tc.IsTrue)
 			if e2.String() == ev2.String() {
