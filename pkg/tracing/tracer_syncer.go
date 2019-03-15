@@ -20,6 +20,13 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
+func convertMySQLPos(pos mysql.Position) *pb.MySQLPosition {
+	return &pb.MySQLPosition{
+		Name: pos.Name,
+		Pos:  pos.Pos,
+	}
+}
+
 // CollectSyncerBinlogEvent collects syncer binlog event and returns the trace event traceID
 func (t *Tracer) CollectSyncerBinlogEvent(source string, safeMode, tryReSync bool, globalPos, currentPos mysql.Position, eventType, opType int32) (*pb.SyncerBinlogEvent, error) {
 	base, err := t.collectBaseEvent(source, "", "", pb.TraceType_BinlogEvent)
@@ -27,16 +34,10 @@ func (t *Tracer) CollectSyncerBinlogEvent(source string, safeMode, tryReSync boo
 		return nil, errors.Trace(err)
 	}
 	syncerState := &pb.SyncerState{
-		SafeMode:  safeMode,
-		TryReSync: tryReSync,
-		LastPos: &pb.MySQLPosition{
-			Name: globalPos.Name,
-			Pos:  globalPos.Pos,
-		},
-		CurrentPos: &pb.MySQLPosition{
-			Name: currentPos.Name,
-			Pos:  currentPos.Pos,
-		},
+		SafeMode:   safeMode,
+		TryReSync:  tryReSync,
+		LastPos:    convertMySQLPos(globalPos),
+		CurrentPos: convertMySQLPos(currentPos),
 	}
 
 	event := &pb.SyncerBinlogEvent{
@@ -69,19 +70,11 @@ func (t *Tracer) CollectSyncerJobEvent(traceID string, traceGID string, opType i
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	pos2 := &pb.MySQLPosition{
-		Name: pos.Name,
-		Pos:  pos.Pos,
-	}
-	currentPos2 := &pb.MySQLPosition{
-		Name: currentPos.Name,
-		Pos:  currentPos.Pos,
-	}
 	event := &pb.SyncerJobEvent{
 		Base:        base,
 		OpType:      opType,
-		Pos:         pos2,
-		CurrentPos:  currentPos2,
+		Pos:         convertMySQLPos(pos),
+		CurrentPos:  convertMySQLPos(currentPos),
 		Sql:         sql,
 		Ddls:        ddls,
 		QueueBucket: queueBucket,

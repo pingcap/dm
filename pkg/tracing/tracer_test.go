@@ -194,8 +194,8 @@ func (s *MockServer) CheckEvent(traceID string, e *TraceEvent, c *tc.C) {
 				return
 			}
 		case pb.TraceType_BinlogEvent:
-			e2, _ := e.Event.(*pb.SyncerJobEvent)
-			ev2, _ := e.Event.(*pb.SyncerJobEvent)
+			e2, _ := e.Event.(*pb.SyncerBinlogEvent)
+			ev2, _ := e.Event.(*pb.SyncerBinlogEvent)
 			if e2.String() == ev2.String() {
 				return
 			}
