@@ -3,27 +3,8 @@
 set -eu
 
 cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
-PWD=$(pwd)
-DB1_PORT=3306
-DB2_PORT=3307
-TIDB_PORT=4000
-MASTER_PORT=8261
-WORKER1_PORT=8262
-WORKER2_PORT=8263
-WORK_DIR=$TEST_DIR/sharding
-
-# we do clean staff at beginning of each run, so we can keep logs of the latset run
-function cleanup1() {
-    rm -rf $WORK_DIR
-    mkdir $WORK_DIR
-    run_sql "drop database if exists db_target" $TIDB_PORT
-    run_sql "drop database if exists dm_meta" $TIDB_PORT
-}
-
-function cleanup2() {
-    pkill -hup dm-worker.test 2>/dev/null || true
-    pkill -hup dm-master.test 2>/dev/null || true
-}
+source $cur/../_utils/test_prepare
+WORK_DIR=$TEST_DIR/$TEST_NAME
 
 function run() {
     run_sql_file $cur/data/db1.prepare.sql $DB1_PORT

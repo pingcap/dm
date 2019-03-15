@@ -1,7 +1,7 @@
 
 ## Preparations
 
-1. The following five executables must be copied or generated or linked into these locations, `mydumper` and `sync_diff_inspector` can be downloaded from [tidb-enterprise-tools-latest-linux-amd64](http://download.pingcap.org/tidb-enterprise-tools-latest-linux-amd64.tar.gz):
+1. The following executables must be copied or generated or linked into these locations, `mydumper` and `sync_diff_inspector` can be downloaded from [tidb-enterprise-tools-latest-linux-amd64](http://download.pingcap.org/tidb-enterprise-tools-latest-linux-amd64.tar.gz):
 
     * `bin/tidb-server`
     * `bin/sync_diff_inspector`
