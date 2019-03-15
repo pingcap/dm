@@ -69,6 +69,9 @@ func (t *Tracer) Enable() bool {
 
 // Start starts tracing service
 func (t *Tracer) Start() {
+	if !t.Enable() {
+		return
+	}
 	conn, err := grpc.Dial(t.cfg.TracerAddr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	if err != nil {
 		log.Errorf("[tracer] grpc dial error: %s", errors.ErrorStack(err))
@@ -97,6 +100,9 @@ func (t *Tracer) Start() {
 
 // Stop stops tracer
 func (t *Tracer) Stop() {
+	if !t.Enable() {
+		return
+	}
 	t.Lock()
 	defer t.Unlock()
 	if t.closed.Get() {
