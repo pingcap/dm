@@ -188,14 +188,18 @@ func (s *MockServer) CheckEvent(traceID string, e *TraceEvent, c *tc.C) {
 		}
 		switch e.Type {
 		case pb.TraceType_JobEvent:
-			e2, _ := e.Event.(*pb.SyncerJobEvent)
-			ev2, _ := e.Event.(*pb.SyncerJobEvent)
+			e2, ok1 := e.Event.(*pb.SyncerJobEvent)
+			ev2, ok2 := e.Event.(*pb.SyncerJobEvent)
+			c.Assert(ok1, tc.IsTrue)
+			c.Assert(ok2, tc.IsTrue)
 			if e2.String() == ev2.String() {
 				return
 			}
 		case pb.TraceType_BinlogEvent:
-			e2, _ := e.Event.(*pb.SyncerBinlogEvent)
-			ev2, _ := e.Event.(*pb.SyncerBinlogEvent)
+			e2, ok1 := e.Event.(*pb.SyncerBinlogEvent)
+			ev2, ok2 := e.Event.(*pb.SyncerBinlogEvent)
+			c.Assert(ok1, tc.IsTrue)
+			c.Assert(ok2, tc.IsTrue)
 			if e2.String() == ev2.String() {
 				return
 			}
@@ -284,12 +288,12 @@ ForEnd:
 	event2, err2 := ts.tracer.CollectSyncerJobEvent(event.Base.TraceID, "", 1, mysql.Position{"bin|000001.000004", 1626}, mysql.Position{"bin|000001.000004", 1873},
 		"q_1", "REPLACE INTO `test`.`t_target` (`id`,`ct`,`name`) VALUES (?,?,?);", []string{}, []interface{}{1, "2019-03-12 12:13:00", "test"}, nil, pb.SyncerJobState_queued)
 	c.Assert(err2, tc.IsNil)
-	ts.server.CheckEvent(event2.Base.TraceID, &TraceEvent{Type: pb.TraceType_JobEvent, Event: event}, c)
+	ts.server.CheckEvent(event2.Base.TraceID, &TraceEvent{Type: pb.TraceType_JobEvent, Event: event2}, c)
 
 	event2, err2 = ts.tracer.CollectSyncerJobEvent(event.Base.TraceID, "", 1, mysql.Position{"bin|000001.000004", 1626}, mysql.Position{"bin|000001.000004", 1873},
 		"q_1", "REPLACE INTO `test`.`t_target` (`id`,`ct`,`name`) VALUES (?,?,?);", []string{}, []interface{}{1, "2019-03-12 12:13:00", "test"}, nil, pb.SyncerJobState_success)
 	c.Assert(err2, tc.IsNil)
-	ts.server.CheckEvent(event2.Base.TraceID, &TraceEvent{Type: pb.TraceType_JobEvent, Event: event}, c)
+	ts.server.CheckEvent(event2.Base.TraceID, &TraceEvent{Type: pb.TraceType_JobEvent, Event: event2}, c)
 
 	ts.tracer.rpcWg.Wait()
 }
