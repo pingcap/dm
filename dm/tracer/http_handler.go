@@ -15,7 +15,6 @@ package tracer
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -143,7 +142,11 @@ func (h eventHandler) handleTraceEventDeleteRequest(w http.ResponseWriter, req *
 	}
 	if traceID := req.FormValue(qTraceID); len(traceID) > 0 {
 		removed := h.removeByTraceID(traceID)
-		writeData(w, fmt.Sprintf("trace event %s removed result: %v", traceID, removed))
+		data := map[string]interface{}{
+			"trace_id": traceID,
+			"result":   removed,
+		}
+		writeData(w, data)
 	} else {
 		writeBadRequest(w, errors.New("trace id not provided"))
 	}
