@@ -1,0 +1,42 @@
+#!/bin/bash
+# parameter 1: sql file
+# parameter 2: port
+# parameter 3: db
+# parameter 4: online ddl tool, pt-osc or gh-ost
+
+set -eu
+
+sql_file=$1
+port=$2
+schema=$3
+
+echo "[$(date)] Executing SQL: $sql_file" > "$TEST_DIR/sql_res.$TEST_NAME.txt"
+
+# we use lower case `alter table` in test sql, if want case insensetive,
+# just set `shopt -s nocasematch`
+ddl_regex="^alter table.*"
+while IFS= read -r line
+do
+    if [[ "$line" =~ $ddl_regex ]]; then
+        table=$(echo $line | cut -d " " -f3)
+        alter=$(echo $line | cut -d " " -f4-)
+        # gh-ost check connection port whether equals to `select @@global.port`.
+        # if we have test MySQL in container and port mapping, these two ports
+        # may different. So we cheat gh-ost that we are running on aliyun rds,
+        # on which will disable the port check.
+        if [ "$4" == "gh-ost" ]; then
+            gh-ost --user=root --host=127.0.0.1 --port=$port \
+                --database=$schema --table=$table --alter="$alter" \
+                --serve-socket-file="$TEST_DIR/gh-ost.$schema.$table.$port.sock" \
+                --allow-on-master --allow-master-master --initially-drop-ghost-table \
+                --initially-drop-old-table -ok-to-drop-table -aliyun-rds -execute \
+                >> $TEST_DIR/gh-ost.log
+        elif [ "$4" == "pt-osc" ]; then
+            pt-online-schema-change --user=root --host=127.0.0.1 --port=$port --alter="$alter" D=$schame,t=$table --print --execute
+        else
+            mysql -uroot -h127.0.0.1 -P$port --default-character-set utf8 -E -e "$use $schema; $line" >> "$TEST_DIR/sql_res.$TEST_NAME.txt"
+        fi
+    else
+        mysql -uroot -h127.0.0.1 -P$port --default-character-set utf8 -E -e "use $schema; $line" >> "$TEST_DIR/sql_res.$TEST_NAME.txt"
+    fi
+done <"$sql_file"
