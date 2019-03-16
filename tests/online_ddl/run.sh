@@ -7,9 +7,9 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
 function run() {
-    run_sql_file $cur/data/db1.prepare.sql $DB1_PORT
+    run_sql_file $cur/data/db1.prepare.sql $MYSQL_PORT1
     check_contains 'Query OK, 2 rows affected'
-    run_sql_file $cur/data/db2.prepare.sql $DB2_PORT
+    run_sql_file $cur/data/db2.prepare.sql $MYSQL_PORT2
     check_contains 'Query OK, 3 rows affected'
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
@@ -28,8 +28,8 @@ function run() {
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    run_sql_file_online_ddl $cur/data/db1.increment.sql $DB1_PORT $TEST_NAME gh-ost
-    run_sql_file_online_ddl $cur/data/db2.increment.sql $DB2_PORT $TEST_NAME gh-ost
+    run_sql_file_online_ddl $cur/data/db1.increment.sql $MYSQL_PORT1 $TEST_NAME gh-ost
+    run_sql_file_online_ddl $cur/data/db2.increment.sql $MYSQL_PORT2 $TEST_NAME gh-ost
 
     # TODO: check sharding partition id
     # use sync_diff_inspector to check data now!
