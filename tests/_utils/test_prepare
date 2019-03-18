@@ -11,7 +11,9 @@ WORKER2_PORT=8263
 function cleanup1() {
     rm -rf $WORK_DIR
     mkdir $WORK_DIR
-    run_sql "drop database if exists db_target" $TIDB_PORT
+    for target_db in "$@"; do
+        run_sql "drop database if exists ${target_db}" $TIDB_PORT
+    done
     run_sql "drop database if exists dm_meta" $TIDB_PORT
 }
 

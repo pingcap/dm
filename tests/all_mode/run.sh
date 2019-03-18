@@ -34,7 +34,7 @@ function run() {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
-cleanup1 $*
+cleanup1 all_mode
 # also cleanup dm processes in case of last run failed
 cleanup2 $*
 run $*

@@ -43,7 +43,7 @@ function run() {
     TEST_NAME=${BASE_TEST_NAME}_$online_ddl_scheme
     WORK_DIR=$TEST_DIR/$TEST_NAME
 
-    cleanup1 $*
+    cleanup1 online_ddl
     # also cleanup dm processes in case of last run failed
     cleanup2 $*
     real_run $*

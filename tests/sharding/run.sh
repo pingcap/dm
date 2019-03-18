@@ -36,7 +36,7 @@ function run() {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
-cleanup1 $*
+cleanup1 db_target
 # also cleanup dm processes in case of last run failed
 cleanup2 $*
 run $*
