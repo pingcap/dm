@@ -20,7 +20,7 @@
 
 ### Unit Test
 
-1. Setup a MySQL server with binlog enabled first, export proper enviroment variable `MYSQL_HOST` and `MYSQL_PORT`, default is `127.0.0.1` and `3306`
+1. Setup a MySQL server with binlog enabled first, export proper environment variable `MYSQL_HOST` and `MYSQL_PORT`, default is `127.0.0.1` and `3306`
 
 2. Run `make test` to run unit test
 
