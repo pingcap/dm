@@ -14,6 +14,7 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"sync"
@@ -22,7 +23,6 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
-	"golang.org/x/net/context"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"

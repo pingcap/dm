@@ -11,22 +11,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package master
+package event
 
-import (
-	"context"
-
-	"github.com/pingcap/dm/dm/ctl/common"
-	"github.com/pingcap/dm/dm/pb"
+var (
+	defaultHeaderFlags    uint16 = 0x01 // LOG_EVENT_BINLOG_IN_USE_F
+	defaultSlaveProxyID   uint32 = 2
+	defaultExecutionTime  uint32
+	defaultErrorCode      uint16
+	defaultStatusVars     []byte
+	defaultGTIDFlags      = GTIDFlagsCommitYes
+	defaultLastCommitted  int64
+	defaultSequenceNumber int64
+	defaultRowsFlag       = RowFlagsEndOfStatement
 )
-
-// operateRelay does operation on relay unit
-func operateRelay(op pb.RelayOp, workers []string) (*pb.OperateWorkerRelayResponse, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cli := common.MasterClient()
-	return cli.OperateWorkerRelayTask(ctx, &pb.OperateWorkerRelayRequest{
-		Op:      op,
-		Workers: workers,
-	})
-}

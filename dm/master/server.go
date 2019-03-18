@@ -14,6 +14,7 @@
 package master
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -26,7 +27,6 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/checker"
