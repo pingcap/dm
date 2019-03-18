@@ -307,7 +307,7 @@ func GenQueryEvent(header *replication.EventHeader, latestPos uint32, slaveProxy
 	// 0x00, 1 byte
 	err = binary.Write(payload, binary.LittleEndian, uint8(0x00))
 	if err != nil {
-		return nil, errors.Annotatef(err, "write 0x00")
+		return nil, errors.Annotate(err, "write 0x00")
 	}
 
 	// query, len(query) bytes
@@ -373,7 +373,7 @@ func GenTableMapEvent(header *replication.EventHeader, latestPos uint32, tableID
 	// 0x00, 1 byte
 	err = binary.Write(payload, binary.LittleEndian, uint8(0x00))
 	if err != nil {
-		return nil, errors.Annotatef(err, "write 0x00")
+		return nil, errors.Annotate(err, "write 0x00")
 	}
 
 	// table name length, 1 byte
@@ -392,7 +392,7 @@ func GenTableMapEvent(header *replication.EventHeader, latestPos uint32, tableID
 	// 0x00, 1 byte
 	err = binary.Write(payload, binary.LittleEndian, uint8(0x00))
 	if err != nil {
-		return nil, errors.Annotatef(err, "write 0x00")
+		return nil, errors.Annotate(err, "write 0x00")
 	}
 
 	// column-count, lenenc-int
@@ -429,14 +429,14 @@ func GenTableMapEvent(header *replication.EventHeader, latestPos uint32, tableID
 	buf := new(bytes.Buffer)
 	_, err = assembleEvent(buf, nil, false, *header, replication.TABLE_MAP_EVENT, latestPos, postHeader.Bytes(), payload.Bytes())
 	if err != nil {
-		return nil, errors.Annotatef(err, "combine event data")
+		return nil, errors.Annotate(err, "combine event data")
 	}
 
 	// sad, in order to Decode a TableMapEvent, we need to set `tableIDSize` first, but it's a private field.
 	// so, we need to use a BinlogParser to parse a FormatDescriptionEvent first.
 	formatDescEv, err := GenFormatDescriptionEvent(header, 4)
 	if err != nil {
-		return nil, errors.Annotatef(err, "generate FormatDescriptionEvent")
+		return nil, errors.Annotate(err, "generate FormatDescriptionEvent")
 	}
 
 	var tableMapEvent *replication.BinlogEvent
@@ -633,7 +633,7 @@ func GenRowsEvent(header *replication.EventHeader, latestPos uint32, eventType r
 	// parse FormatDescriptionEvent
 	formatDescEv, err := GenFormatDescriptionEvent(header, 4)
 	if err != nil {
-		return nil, errors.Annotatef(err, "generate FormatDescriptionEvent")
+		return nil, errors.Annotate(err, "generate FormatDescriptionEvent")
 	}
 	_, err = parse2.ParseSingleEvent(bytes.NewReader(formatDescEv.RawData), onEventFunc)
 	if err != nil {
@@ -643,7 +643,7 @@ func GenRowsEvent(header *replication.EventHeader, latestPos uint32, eventType r
 	// parse TableMapEvent
 	tableMapEv, err := GenTableMapEvent(header, latestPos, tableID, []byte("schema-placeholder"), []byte("table-placeholder"), columnType)
 	if err != nil {
-		return nil, errors.Annotatef(err, "generate TableMapEvent")
+		return nil, errors.Annotate(err, "generate TableMapEvent")
 	}
 	_, err = parse2.ParseSingleEvent(bytes.NewReader(tableMapEv.RawData), onEventFunc)
 	if err != nil {
@@ -752,7 +752,7 @@ func GenMariaDBGTIDEvent(header *replication.EventHeader, latestPos uint32, sequ
 	// commit_id, 6 bytes with zero value
 	err = binary.Write(payload, binary.LittleEndian, uint64(0x00))
 	if err != nil {
-		return nil, errors.Annotatef(err, "write 6 bytes commit_id with zero value")
+		return nil, errors.Annotate(err, "write 6 bytes commit_id with zero value")
 	}
 	payload.Truncate(payload.Len() - 2) // len(uint64) - 2 == 6 bytes
 

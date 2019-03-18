@@ -47,7 +47,7 @@ func GenDMLEvents(flavor string, serverID uint32, latestPos uint32, latestGTID g
 	}
 	gtidEv, err := GenCommonGTIDEvent(flavor, serverID, latestPos, latestGTID)
 	if err != nil {
-		return nil, errors.Annotatef(err, "generate GTIDEvent")
+		return nil, errors.Annotate(err, "generate GTIDEvent")
 	}
 	latestPos = gtidEv.Header.LogPos
 
@@ -60,7 +60,7 @@ func GenDMLEvents(flavor string, serverID uint32, latestPos uint32, latestGTID g
 	query := []byte("BEGIN")
 	queryEv, err := GenQueryEvent(header, latestPos, defaultSlaveProxyID, defaultExecutionTime, defaultErrorCode, defaultStatusVars, nil, query)
 	if err != nil {
-		return nil, errors.Annotatef(err, "generate QueryEvent for `BEGIN` statement")
+		return nil, errors.Annotate(err, "generate QueryEvent for `BEGIN` statement")
 	}
 	latestPos = queryEv.Header.LogPos
 

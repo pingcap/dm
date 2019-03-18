@@ -40,7 +40,7 @@ func NewGenerator(flavor string, serverID uint32, latestPos uint32, latestGTID g
 
 	singleGTID, err := verifySingleGTID(flavor, latestGTID)
 	if err != nil {
-		return nil, errors.Annotatef(err, "verify single latest GTID in set")
+		return nil, errors.Annotate(err, "verify single latest GTID in set")
 	}
 	switch flavor {
 	case gmysql.MySQLFlavor:

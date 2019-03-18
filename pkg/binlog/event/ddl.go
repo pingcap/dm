@@ -62,7 +62,7 @@ func GenDDLEvents(flavor string, serverID uint32, latestPos uint32, latestGTID g
 	}
 	gtidEv, err := GenCommonGTIDEvent(flavor, serverID, latestPos, latestGTID)
 	if err != nil {
-		return nil, errors.Annotatef(err, "generate GTIDEvent")
+		return nil, errors.Annotate(err, "generate GTIDEvent")
 	}
 	latestPos = gtidEv.Header.LogPos
 

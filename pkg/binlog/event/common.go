@@ -56,7 +56,7 @@ func GenCommonFileHeader(flavor string, serverID uint32, gSet gtid.Set) ([]*repl
 
 	formatDescEv, err := GenFormatDescriptionEvent(header, latestPos)
 	if err != nil {
-		return nil, nil, errors.Annotatef(err, "generate FormatDescriptionEvent")
+		return nil, nil, errors.Annotate(err, "generate FormatDescriptionEvent")
 	}
 	latestPos += uint32(len(formatDescEv.RawData)) // update latestPos
 
@@ -97,7 +97,7 @@ func GenCommonFileHeader(flavor string, serverID uint32, gSet gtid.Set) ([]*repl
 func GenCommonGTIDEvent(flavor string, serverID uint32, latestPos uint32, gSet gtid.Set) (*replication.BinlogEvent, error) {
 	singleGTID, err := verifySingleGTID(flavor, gSet)
 	if err != nil {
-		return nil, errors.Annotatef(err, "verify single GTID in set")
+		return nil, errors.Annotate(err, "verify single GTID in set")
 	}
 
 	var (
@@ -133,7 +133,7 @@ func GenCommonGTIDEvent(flavor string, serverID uint32, latestPos uint32, gSet g
 func GTIDIncrease(flavor string, gSet gtid.Set) (gtid.Set, error) {
 	singleGTID, err := verifySingleGTID(flavor, gSet)
 	if err != nil {
-		return nil, errors.Annotatef(err, "verify single GTID in set")
+		return nil, errors.Annotate(err, "verify single GTID in set")
 	}
 	clone := gSet.Clone()
 

@@ -100,11 +100,7 @@ func bitmapByteSize(columnCount int) int {
 
 // nullBytes returns a n-length null bytes slice
 func nullBytes(n int) []byte {
-	buf := new(bytes.Buffer)
-	for i := 0; i < n; i++ {
-		buf.WriteByte(0x00)
-	}
-	return buf.Bytes()
+	return make([]byte, n)
 }
 
 // fullBytes returns a n-length full bytes slice (all bits are set)
@@ -126,12 +122,12 @@ func assembleEvent(buf *bytes.Buffer, event replication.Event, decodeWithChecksu
 	header.EventType = eventType
 	headerData, err := GenEventHeader(&header)
 	if err != nil {
-		return nil, errors.Annotatef(err, "generate event header")
+		return nil, errors.Annotate(err, "generate event header")
 	}
 
 	err = combineHeaderPayload(buf, headerData, postHeader, payload)
 	if err != nil {
-		return nil, errors.Annotatef(err, "combine header, post-header and payload")
+		return nil, errors.Annotate(err, "combine header, post-header and payload")
 	}
 
 	// CRC32 checksum, 4 bytes
