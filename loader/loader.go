@@ -34,6 +34,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -351,7 +352,7 @@ func (l *Loader) Type() pb.UnitType {
 // Init initializes loader for a load task, but not start Process.
 // if fail, it should not call l.Close.
 func (l *Loader) Init() (err error) {
-	rollbackHolder := unit.NewRollbackHolder("loader")
+	rollbackHolder := fr.NewRollbackHolder("loader")
 	defer func() {
 		if err != nil {
 			rollbackHolder.RollbackReverseOrder()
@@ -363,7 +364,7 @@ func (l *Loader) Init() (err error) {
 		return errors.Trace(err)
 	}
 	l.checkPoint = checkpoint
-	rollbackHolder.Add(unit.RollbackFunc{"close-checkpoint", l.checkPoint.Close})
+	rollbackHolder.Add(fr.FuncRollback{"close-checkpoint", l.checkPoint.Close})
 
 	l.bwList = filter.New(l.cfg.CaseSensitive, l.cfg.BWList)
 

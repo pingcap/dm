@@ -37,6 +37,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
@@ -237,7 +238,7 @@ func (s *Syncer) Type() pb.UnitType {
 // if fail, it should not call s.Close.
 // some check may move to checker later.
 func (s *Syncer) Init() (err error) {
-	rollbackHolder := unit.NewRollbackHolder("syncer")
+	rollbackHolder := fr.NewRollbackHolder("syncer")
 	defer func() {
 		if err != nil {
 			rollbackHolder.RollbackReverseOrder()
@@ -248,7 +249,7 @@ func (s *Syncer) Init() (err error) {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	rollbackHolder.Add(unit.RollbackFunc{"close-DBs", s.closeDBs})
+	rollbackHolder.Add(fr.FuncRollback{"close-DBs", s.closeDBs})
 
 	s.binlogFilter, err = bf.NewBinlogEvent(s.cfg.CaseSensitive, s.cfg.FilterRules)
 	if err != nil {
@@ -271,7 +272,7 @@ func (s *Syncer) Init() (err error) {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		rollbackHolder.Add(unit.RollbackFunc{"close-onlineDDL", s.closeOnlineDDL})
+		rollbackHolder.Add(fr.FuncRollback{"close-onlineDDL", s.closeOnlineDDL})
 	}
 
 	err = s.genRouter()
@@ -290,7 +291,7 @@ func (s *Syncer) Init() (err error) {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	rollbackHolder.Add(unit.RollbackFunc{"close-checkpoint", s.checkpoint.Close})
+	rollbackHolder.Add(fr.FuncRollback{"close-checkpoint", s.checkpoint.Close})
 
 	if s.cfg.RemoveMeta {
 		err = s.checkpoint.Clear()
@@ -322,7 +323,7 @@ func (s *Syncer) Init() (err error) {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		rollbackHolder.Add(unit.RollbackFunc{"remove-heartbeat", s.removeHeartbeat})
+		rollbackHolder.Add(fr.FuncRollback{"remove-heartbeat", s.removeHeartbeat})
 	}
 
 	// when Init syncer, set active relay log info
@@ -330,7 +331,7 @@ func (s *Syncer) Init() (err error) {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	rollbackHolder.Add(unit.RollbackFunc{"remove-active-realylog", s.removeActiveRelayLog})
+	rollbackHolder.Add(fr.FuncRollback{"remove-active-realylog", s.removeActiveRelayLog})
 
 	// init successfully, close done chan to make Syncer can be closed
 	// when Process started, we will re-create done chan again

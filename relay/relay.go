@@ -37,6 +37,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	pkgstreamer "github.com/pingcap/dm/pkg/streamer"
@@ -130,7 +131,7 @@ func NewRelay(cfg *Config) *Relay {
 
 // Init implements the dm.Unit interface.
 func (r *Relay) Init() (err error) {
-	rollbackHolder := unit.NewRollbackHolder("relay")
+	rollbackHolder := fr.NewRollbackHolder("relay")
 	defer func() {
 		if err != nil {
 			rollbackHolder.RollbackReverseOrder()
@@ -144,7 +145,7 @@ func (r *Relay) Init() (err error) {
 		return errors.Trace(err)
 	}
 	r.db = db
-	rollbackHolder.Add(unit.RollbackFunc{"close-DB", r.closeDB})
+	rollbackHolder.Add(fr.FuncRollback{"close-DB", r.closeDB})
 
 	if err2 := os.MkdirAll(r.cfg.RelayDir, 0755); err2 != nil {
 		return errors.Trace(err2)

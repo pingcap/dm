@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package unit
+package rollback
 
 import (
 	"sync"
@@ -19,42 +19,42 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 )
 
-// RollbackFunc records function used to rolling back some operations.
+// FuncRollback records function used to rolling back some operations.
 // It is currently used by units' Init to release resources when failing in the half-way.
-type RollbackFunc struct {
+type FuncRollback struct {
 	Name string
 	Fn   func()
 }
 
-// RollbackFuncHolder holds some RollbackFuncs.
-type RollbackFuncHolder struct {
-	mu   sync.Mutex
-	name string // used to make log clearer
-	fns  []RollbackFunc
+// FuncRollbackHolder holds some RollbackFuncs.
+type FuncRollbackHolder struct {
+	mu    sync.Mutex
+	owner string // used to make log clearer
+	fns   []FuncRollback
 }
 
-// NewRollbackHolder creates a new RollbackFuncHolder instance.
-func NewRollbackHolder(name string) *RollbackFuncHolder {
-	return &RollbackFuncHolder{
-		name: name,
-		fns:  make([]RollbackFunc, 0),
+// NewRollbackHolder creates a new FuncRollbackHolder instance.
+func NewRollbackHolder(owner string) *FuncRollbackHolder {
+	return &FuncRollbackHolder{
+		owner: owner,
+		fns:   make([]FuncRollback, 0),
 	}
 }
 
 // Add adds a func to the holder.
-func (h *RollbackFuncHolder) Add(fn RollbackFunc) {
+func (h *FuncRollbackHolder) Add(fn FuncRollback) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.fns = append(h.fns, fn)
 }
 
 // RollbackReverseOrder executes rollback functions in reverse order
-func (h *RollbackFuncHolder) RollbackReverseOrder() {
+func (h *FuncRollbackHolder) RollbackReverseOrder() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for i := len(h.fns) - 1; i >= 0; i-- {
 		fn := h.fns[i]
-		log.Infof("[%s] rolling back %s", h.name, fn.Name)
+		log.Infof("[%s] rolling back %s", h.owner, fn.Name)
 		fn.Fn()
 	}
 }

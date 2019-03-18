@@ -24,11 +24,6 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql" // for mysql
-	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/dm/unit"
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/check"
 	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
@@ -36,6 +31,13 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go/sync2"
+
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/dm/unit"
+	fr "github.com/pingcap/dm/pkg/func-rollback"
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 type mysqlInstance struct {
@@ -80,14 +82,14 @@ func NewChecker(cfgs []*config.SubTaskConfig, checkingItems map[string]string) *
 
 // Init implements Unit interface
 func (c *Checker) Init() (err error) {
-	rollbackHolder := unit.NewRollbackHolder("checker")
+	rollbackHolder := fr.NewRollbackHolder("checker")
 	defer func() {
 		if err != nil {
 			rollbackHolder.RollbackReverseOrder()
 		}
 	}()
 
-	rollbackHolder.Add(unit.RollbackFunc{"close-DBs", c.closeDBs})
+	rollbackHolder.Add(fr.FuncRollback{"close-DBs", c.closeDBs})
 
 	// target name => source => schema => [tables]
 	sharding := make(map[string]map[string]map[string][]string)
