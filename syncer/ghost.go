@@ -14,7 +14,6 @@
 package syncer
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/pingcap/errors"
@@ -127,16 +126,6 @@ func (g *Ghost) Apply(tables []*filter.Table, statement string, stmt ast.StmtNod
 	return nil, schema, table, nil
 }
 
-// InOnlineDDL implements interface
-func (g *Ghost) InOnlineDDL(schema, table string) bool {
-	if g == nil {
-		return false
-	}
-
-	ghostInfo := g.storge.Get(schema, table)
-	return ghostInfo != nil
-}
-
 // Finish implements interface
 func (g *Ghost) Finish(schema, table string) error {
 	if g == nil {
@@ -170,25 +159,6 @@ func (g *Ghost) RealName(schema, table string) (string, string) {
 	}
 
 	return schema, table
-}
-
-// GhostName implements interface
-func (g *Ghost) GhostName(schema, table string) (string, string) {
-	tp := g.TableType(table)
-	if tp == ghostTable {
-		return schema, table
-	}
-
-	if tp == trashTable {
-		table = table[1 : len(table)-4]
-	}
-
-	return schema, fmt.Sprintf("_%s_gho", table)
-}
-
-// SchemeName implements interface
-func (g *Ghost) SchemeName() string {
-	return config.GHOST
 }
 
 // Clear clears online ddl information
