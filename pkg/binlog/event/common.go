@@ -72,7 +72,7 @@ func GenCommonFileHeader(flavor string, serverID uint32, gSet gtid.Set) ([]*repl
 		return nil, nil, errors.NotSupportedf("flavor %s", flavor)
 	}
 	if err != nil {
-		return nil, nil, errors.Annotatef(err, "generate PreviousGTIDsEvent/MariadbGTIDListEvent")
+		return nil, nil, errors.Annotate(err, "generate PreviousGTIDsEvent/MariadbGTIDListEvent")
 	}
 
 	var buf bytes.Buffer
