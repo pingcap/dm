@@ -153,9 +153,9 @@ func (c *Config) Parse(arguments []string) error {
 		if strings.TrimSpace(SampleConfigFile) == "" {
 			fmt.Println("sample config file of dm-worker is empty")
 		} else {
-			rawConfig, err := base64.StdEncoding.DecodeString(SampleConfigFile)
-			if err != nil {
-				fmt.Println("base64 decode config error:", err)
+			rawConfig, err2 := base64.StdEncoding.DecodeString(SampleConfigFile)
+			if err2 != nil {
+				fmt.Println("base64 decode config error:", err2)
 			} else {
 				fmt.Println(string(rawConfig))
 			}

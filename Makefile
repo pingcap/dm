@@ -88,7 +88,7 @@ integration_test:
 	@which bin/mydumper
 	@which bin/dm-master.test
 	@which bin/dm-worker.test
-	tests/run.sh
+	tests/run.sh $(CASE)
 
 coverage:
 	GO111MODULE=off go get github.com/zhouqiang-cl/gocovmerge

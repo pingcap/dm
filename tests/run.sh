@@ -54,10 +54,20 @@ start_services() {
     check_mysql $MYSQL_HOST2 $MYSQL_PORT2
 }
 
+if [ "$#" -ge 1 ]; then
+    test_case=$1
+    if [ "$test_case" != "*" ] && [ ! -d "tests/$test_case" ]; then
+        echo "test case $test_case not found"
+        exit 1
+    fi
+else
+    test_case="*"
+fi
+
 trap stop_services EXIT
 start_services
 
-for script in tests/*/run.sh; do
+for script in tests/$test_case/run.sh; do
     echo "Running test $script..."
     TEST_DIR="$TEST_DIR" \
     PATH="tests/_utils:$PATH" \

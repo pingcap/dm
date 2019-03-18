@@ -20,7 +20,7 @@
 
 ### Unit Test
 
-1. Setup a MySQL server with binlog enabled first, export proper enviroment variable `MYSQL_HOST` and `MYSQL_PORT`, default is `127.0.0.1` and `3306`
+1. Setup a MySQL server with binlog enabled first, export proper environment variable `MYSQL_HOST` and `MYSQL_PORT`, default is `127.0.0.1` and `3306`
 
 2. Run `make test` to run unit test
 
@@ -33,7 +33,9 @@
     1. Check that all required executables exist.
     2. Execute `tests/run.sh`
 
-3. After executing the tests, run `make coverage` to get a coverage report at `/tmp/dm_test/all_cov.html`.
+    > If want to run one integration test case only, just pass the CASE parameter, such as `make integration_test CASE=sharding`
+
+4. After executing the tests, run `make coverage` to get a coverage report at `/tmp/dm_test/all_cov.html`.
 
 ## Writing new tests
 
