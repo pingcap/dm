@@ -6,7 +6,7 @@ meta-schema: "dm_meta"
 remove-meta: false
 disable-heartbeat: true
 timezone: "Asia/Shanghai"
-online-ddl-scheme: gh-ost
+online-ddl-scheme: online-ddl-scheme-placeholder
 
 target-database:
   host: "127.0.0.1"

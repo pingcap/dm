@@ -4,12 +4,14 @@ set -eu
 
 cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 source $cur/../_utils/test_prepare
-WORK_DIR=$TEST_DIR/$TEST_NAME
+ONLINE_DDL_ENABLE=${ONLINE_DDL_ENABLE:-true}
+BASE_TEST_NAME=$TEST_NAME
 
-function run() {
-    run_sql_file $cur/data/db1.prepare.sql $MYSQL_PORT1
+function real_run() {
+    online_ddl_scheme=$1
+    run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
     check_contains 'Query OK, 2 rows affected'
-    run_sql_file $cur/data/db2.prepare.sql $MYSQL_PORT2
+    run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2
     check_contains 'Query OK, 3 rows affected'
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
@@ -22,27 +24,42 @@ function run() {
 
     cd $cur && GO111MODULE=on go build -o bin/dmctl && cd -
     # start DM task only
-    $cur/bin/dmctl "$cur/conf/dm-task.yaml"
+    cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task-${online_ddl_scheme}.yaml
+    sed -i "s/online-ddl-scheme-placeholder/${online_ddl_scheme}/g" $WORK_DIR/dm-task-${online_ddl_scheme}.yaml
+    $cur/bin/dmctl "$WORK_DIR/dm-task-${online_ddl_scheme}.yaml"
 
     # TODO: check sharding partition id
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    run_sql_file_online_ddl $cur/data/db1.increment.sql $MYSQL_PORT1 $TEST_NAME gh-ost
-    run_sql_file_online_ddl $cur/data/db2.increment.sql $MYSQL_PORT2 $TEST_NAME gh-ost
+    run_sql_file_online_ddl $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 online_ddl $online_ddl_scheme
+    run_sql_file_online_ddl $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 online_ddl $online_ddl_scheme
 
     # TODO: check sharding partition id
     # use sync_diff_inspector to check data now!
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
-cleanup1 $*
-# also cleanup dm processes in case of last run failed
-cleanup2 $*
-run $*
-cleanup2 $*
+function run() {
+    online_ddl_scheme=$1
+    TEST_NAME=${BASE_TEST_NAME}_$online_ddl_scheme
+    WORK_DIR=$TEST_DIR/$TEST_NAME
 
-wait_process_exit dm-master.test
-wait_process_exit dm-worker.test
+    cleanup1 $*
+    # also cleanup dm processes in case of last run failed
+    cleanup2 $*
+    real_run $*
+    cleanup2 $*
 
-echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"
+    wait_process_exit dm-master.test
+    wait_process_exit dm-worker.test
+
+    echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"
+}
+
+if [ "$ONLINE_DDL_ENABLE" == true ]; then
+    # run gh-ost
+    run pt
+else
+    echo "[$(date)] <<<<<< skip online ddl test! >>>>>>"
+fi
