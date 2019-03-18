@@ -1,7 +1,7 @@
 #!/bin/sh
 # parameter 1: sql file
-# parameter 3: host
-# parameter 2: port
+# parameter 2: host
+# parameter 3: port
 
 set -eu
 
