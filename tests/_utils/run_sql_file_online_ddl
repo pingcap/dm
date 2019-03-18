@@ -38,7 +38,8 @@ do
         elif [ "$5" == "pt" ]; then
             $ptosc_bin --user=root --host=$host --port=$port \
                 --alter="$alter" D=$schema,t=$table \
-                 --recursion-method=none --print --execute
+                 --recursion-method=none --print --execute \
+                 >> $TEST_DIR/pt-osc.log
         else
             mysql -uroot -h$host -P$port --default-character-set utf8 -E -e "use $schema; $line" >> "$TEST_DIR/sql_res.$TEST_NAME.txt"
         fi

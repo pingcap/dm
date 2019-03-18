@@ -28,14 +28,12 @@ function real_run() {
     sed -i "s/online-ddl-scheme-placeholder/${online_ddl_scheme}/g" $WORK_DIR/dm-task-${online_ddl_scheme}.yaml
     $cur/bin/dmctl "$WORK_DIR/dm-task-${online_ddl_scheme}.yaml"
 
-    # TODO: check sharding partition id
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     run_sql_file_online_ddl $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 online_ddl $online_ddl_scheme
     run_sql_file_online_ddl $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 online_ddl $online_ddl_scheme
 
-    # TODO: check sharding partition id
     # use sync_diff_inspector to check data now!
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
@@ -58,7 +56,7 @@ function run() {
 }
 
 if [ "$ONLINE_DDL_ENABLE" == true ]; then
-    # run gh-ost
+    run gh-ost
     run pt
 else
     echo "[$(date)] <<<<<< skip online ddl test! >>>>>>"
