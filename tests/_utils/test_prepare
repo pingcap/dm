@@ -1,0 +1,23 @@
+MYSQL_HOST1=${MYSQL_HOST1:-127.0.0.1}
+MYSQL_HOST2=${MYSQL_HOST2:-127.0.0.1}
+MYSQL_PORT1=${MYSQL_PORT1:-3306}
+MYSQL_PORT2=${MYSQL_PORT2:-3307}
+TIDB_PORT=4000
+MASTER_PORT=8261
+WORKER1_PORT=8262
+WORKER2_PORT=8263
+
+# we do clean staff at beginning of each run, so we can keep logs of the latset run
+function cleanup1() {
+    rm -rf $WORK_DIR
+    mkdir $WORK_DIR
+    for target_db in "$@"; do
+        run_sql "drop database if exists ${target_db}" $TIDB_PORT
+    done
+    run_sql "drop database if exists dm_meta" $TIDB_PORT
+}
+
+function cleanup2() {
+    pkill -hup dm-worker.test 2>/dev/null || true
+    pkill -hup dm-master.test 2>/dev/null || true
+}
