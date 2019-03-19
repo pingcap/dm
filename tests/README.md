@@ -37,7 +37,7 @@
 
     > If want to run one integration test case only, just pass the CASE parameter, such as `make integration_test CASE=sharding`.
 
-    > The online ddl test using pt-osc doesn't work if the upstream MySQL has different connect port and bind port (often caused by port forwarding via NAT). In this case you must specific the real ip and port of MySQL. Othersise you can skip online ddl test by `export ONLINE_DDL_ENABLE=false`.
+    > The online ddl test using pt-osc doesn't work if the upstream MySQL has different connect port and bind port (often caused by port forwarding via NAT). In this case, you must specify the real IP and port of MySQL. Otherwise you can skip online ddl test by `export ONLINE_DDL_ENABLE=false`.
 
 4. After executing the tests, run `make coverage` to get a coverage report at `/tmp/dm_test/all_cov.html`.
 
