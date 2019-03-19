@@ -83,16 +83,18 @@ func (t *Tracer) Start() {
 	t.wg.Add(1)
 	go func() {
 		defer t.wg.Done()
-		ctx2, _ := context.WithCancel(t.ctx)
+		ctx2, cancel := context.WithCancel(t.ctx)
 		t.tsoProcessor(ctx2)
+		cancel()
 	}()
 
 	for _, ch := range t.jobs {
 		t.wg.Add(1)
 		go func(c <-chan *Job) {
 			defer t.wg.Done()
-			ctx2, _ := context.WithCancel(t.ctx)
+			ctx2, cancel := context.WithCancel(t.ctx)
 			t.jobProcessor(ctx2, c)
+			cancel()
 		}(ch)
 	}
 }
