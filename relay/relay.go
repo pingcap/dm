@@ -15,6 +15,7 @@ package relay
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/binary"
 	"fmt"
@@ -28,17 +29,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
-	"golang.org/x/net/context"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/log"
 	pkgstreamer "github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -61,6 +61,9 @@ const (
 	trimUUIDsInterval           = 1 * time.Hour
 	binlogHeaderSize            = 4
 	showStatusConnectionTimeout = "1m"
+
+	// dumpFlagSendAnnotateRowsEvent (BINLOG_SEND_ANNOTATE_ROWS_EVENT) request the MariaDB master to send Annotate_rows_log_event back.
+	dumpFlagSendAnnotateRowsEvent uint16 = 0x02
 )
 
 // Relay relays mysql binlog to local file.
@@ -110,6 +113,13 @@ func NewRelay(cfg *Config) *Relay {
 		// if not need to support GTID mode, we can enable rawMode
 		syncerCfg.RawModeEnabled = true
 	}
+
+	if cfg.Flavor == mysql.MariaDBFlavor {
+		// ref: https://mariadb.com/kb/en/library/annotate_rows_log_event/#slave-option-replicate-annotate-row-events
+		// ref: https://github.com/MariaDB/server/blob/bf71d263621c90cbddc7bde9bf071dae503f333f/sql/sql_repl.cc#L1809
+		syncerCfg.DumpCommandFlag |= dumpFlagSendAnnotateRowsEvent
+	}
+
 	return &Relay{
 		cfg:          cfg,
 		syncerCfg:    syncerCfg,

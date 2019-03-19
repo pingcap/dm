@@ -14,12 +14,12 @@
 package master
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
-	"golang.org/x/net/context"
 
 	"github.com/pingcap/dm/dm/command"
 	"github.com/pingcap/dm/dm/ctl/common"

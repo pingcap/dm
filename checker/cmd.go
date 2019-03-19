@@ -14,10 +14,11 @@
 package checker
 
 import (
+	"context"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/errors"
-	"golang.org/x/net/context"
 )
 
 var (

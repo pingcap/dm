@@ -15,6 +15,7 @@ package loader
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -24,22 +25,23 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/dm/unit"
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/errors"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go/sync2"
-	"golang.org/x/net/context"
+
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 var (
-	jobCount      = 1000
-	maxRetryCount = 10
+	jobCount        = 1000
+	maxRetryCount   = 10
+	queryRetryCount = 3
 )
 
 // FilePosSet represents a set in mathematics.
@@ -235,50 +237,51 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 		if err == io.EOF {
 			log.Infof("data file %s scanned finished.", file)
 			break
-		} else {
-			realLine := strings.TrimSpace(line[:len(line)-1])
-			if len(realLine) == 0 {
+		}
+
+		realLine := strings.TrimSpace(line[:len(line)-1])
+		if len(realLine) == 0 {
+			continue
+		}
+
+		data = append(data, []byte(line)...)
+		if realLine[len(realLine)-1] == ';' {
+			query := strings.TrimSpace(string(data))
+			if strings.HasPrefix(query, "/*") && strings.HasSuffix(query, "*/;") {
+				data = data[0:0]
 				continue
 			}
 
-			data = append(data, []byte(line)...)
-			if realLine[len(realLine)-1] == ';' {
-				query := strings.TrimSpace(string(data))
-				if strings.HasPrefix(query, "/*") && strings.HasSuffix(query, "*/;") {
-					data = data[0:0]
-					continue
+			if w.loader.columnMapping != nil {
+				// column mapping and route table
+				query, err = reassemble(data, table, w.loader.columnMapping)
+				if err != nil {
+					return errors.Annotatef(err, "file %s", file)
 				}
-
-				if w.loader.columnMapping != nil {
-					// column mapping and route table
-					query, err = reassemble(data, table, w.loader.columnMapping)
-					if err != nil {
-						return errors.Annotatef(err, "file %s", file)
-					}
-				} else if table.sourceTable != table.targetTable {
-					query = renameShardingTable(query, table.sourceTable, table.targetTable)
-				}
-
-				idx := strings.Index(query, "INSERT INTO")
-				if idx < 0 {
-					return errors.Errorf("[invalid insert sql][sql]%s", query)
-				}
-
-				log.Debugf("sql: %-.100v", query)
-				data = data[0:0]
-
-				j := &dataJob{
-					sql:        query,
-					schema:     table.targetSchema,
-					file:       baseFile,
-					offset:     cur,
-					lastOffset: lastOffset,
-				}
-				lastOffset = cur
-
-				w.jobQueue <- j
+			} else if table.sourceTable != table.targetTable {
+				query = renameShardingTable(query, table.sourceTable, table.targetTable)
 			}
+
+			idx := strings.Index(query, "INSERT INTO")
+			if idx < 0 {
+				return errors.Errorf("[invalid insert sql][sql]%s", query)
+			}
+
+			log.Debugf("sql: %-.100v", query)
+			data = data[0:0]
+
+			j := &dataJob{
+				sql:        query,
+				schema:     table.targetSchema,
+				file:       baseFile,
+				offset:     cur,
+				lastOffset: lastOffset,
+			}
+			lastOffset = cur
+
+			w.jobQueue <- j
 		}
+
 	}
 
 	return nil
@@ -819,39 +822,40 @@ func (l *Loader) restoreStructure(conn *Conn, sqlFile string, schema string, tab
 		line, err := br.ReadString('\n')
 		if err == io.EOF {
 			break
-		} else {
-			realLine := strings.TrimSpace(line[:len(line)-1])
-			if len(realLine) == 0 {
+		}
+
+		realLine := strings.TrimSpace(line[:len(line)-1])
+		if len(realLine) == 0 {
+			continue
+		}
+
+		data = append(data, []byte(realLine)...)
+		if data[len(data)-1] == ';' {
+			query := string(data)
+			data = data[0:0]
+			if strings.HasPrefix(query, "/*") && strings.HasSuffix(query, "*/;") {
 				continue
 			}
 
-			data = append(data, []byte(realLine)...)
-			if data[len(data)-1] == ';' {
-				query := string(data)
-				data = data[0:0]
-				if strings.HasPrefix(query, "/*") && strings.HasSuffix(query, "*/;") {
-					continue
-				}
+			var sqls []string
+			dstSchema, dstTable := fetchMatchedLiteral(l.tableRouter, schema, table)
+			// for table
+			if table != "" {
+				sqls = append(sqls, fmt.Sprintf("USE `%s`;", dstSchema))
+				query = renameShardingTable(query, table, dstTable)
+			} else {
+				query = renameShardingSchema(query, schema, dstSchema)
+			}
 
-				var sqls []string
-				dstSchema, dstTable := fetchMatchedLiteral(l.tableRouter, schema, table)
-				// for table
-				if table != "" {
-					sqls = append(sqls, fmt.Sprintf("USE `%s`;", dstSchema))
-					query = renameShardingTable(query, table, dstTable)
-				} else {
-					query = renameShardingSchema(query, schema, dstSchema)
-				}
+			log.Debugf("query:%s", query)
 
-				log.Debugf("query:%s", query)
-
-				sqls = append(sqls, query)
-				err = conn.executeDDL(sqls, true)
-				if err != nil {
-					return errors.Trace(err)
-				}
+			sqls = append(sqls, query)
+			err = conn.executeDDL(sqls, true)
+			if err != nil {
+				return errors.Trace(err)
 			}
 		}
+
 	}
 
 	return nil
@@ -887,19 +891,6 @@ func fetchMatchedLiteral(router *router.Table, schema, table string) (targetSche
 	}
 
 	return targetSchema, targetTable
-}
-
-func causeErr(err error) error {
-	var e error
-	for {
-		e = errors.Cause(err)
-		if err == e {
-			break
-		} else {
-			err = e
-		}
-	}
-	return e
 }
 
 func (l *Loader) restoreData(ctx context.Context) error {
