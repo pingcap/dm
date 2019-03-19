@@ -225,8 +225,8 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan <-chan *Job) {
 // AddJob add a job to tracer
 func (t *Tracer) AddJob(job *Job) {
 	if job.Tp == EventFlush {
-		for i := range dispatchEventType {
-			t.jobs[i] <- job
+		for _, tp := range dispatchEventType {
+			t.jobs[tp] <- job
 		}
 	} else {
 		t.jobs[job.Tp] <- job
