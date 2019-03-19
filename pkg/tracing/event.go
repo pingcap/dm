@@ -30,6 +30,11 @@ const (
 	EventFlush // used to force upload tracing event
 )
 
+var dispatchEventType = []EventType{
+	EventSyncerBinlog,
+	EventSyncerJob,
+}
+
 func (e EventType) String() string {
 	switch e {
 	case EventNull:

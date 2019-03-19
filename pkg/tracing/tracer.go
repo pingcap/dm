@@ -64,14 +64,13 @@ func NewTracer(cfg Config) *Tracer {
 
 // Enable returns whether tracing is enabled
 func (t *Tracer) Enable() bool {
+	// current we don't support update `Enable` online, so we don't use any lock
+	// to avoid race condition
 	return t.cfg.Enable
 }
 
 // Start starts tracing service
 func (t *Tracer) Start() {
-	if !t.Enable() {
-		return
-	}
 	conn, err := grpc.Dial(t.cfg.TracerAddr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	if err != nil {
 		log.Errorf("[tracer] grpc dial error: %s", errors.ErrorStack(err))
@@ -83,26 +82,23 @@ func (t *Tracer) Start() {
 
 	t.wg.Add(1)
 	go func() {
+		defer t.wg.Done()
 		ctx2, _ := context.WithCancel(t.ctx)
 		t.tsoProcessor(ctx2)
-		// cancel()
 	}()
 
 	for _, ch := range t.jobs {
 		t.wg.Add(1)
 		go func(c <-chan *Job) {
+			defer t.wg.Done()
 			ctx2, _ := context.WithCancel(t.ctx)
 			t.jobProcessor(ctx2, c)
-			// cancel()
 		}(ch)
 	}
 }
 
 // Stop stops tracer
 func (t *Tracer) Stop() {
-	if !t.Enable() {
-		return
-	}
 	t.Lock()
 	defer t.Unlock()
 	if t.closed.Get() {
@@ -116,7 +112,6 @@ func (t *Tracer) Stop() {
 }
 
 func (t *Tracer) tsoProcessor(ctx context.Context) {
-	defer t.wg.Done()
 	for {
 		select {
 		case <-ctx.Done():
@@ -176,8 +171,6 @@ func (t *Tracer) closeJobChans() {
 }
 
 func (t *Tracer) jobProcessor(ctx context.Context, jobChan <-chan *Job) {
-	defer t.wg.Done()
-
 	var (
 		count = t.cfg.BatchSize
 		jobs  = make([]*Job, 0, count)
@@ -230,7 +223,7 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan <-chan *Job) {
 // AddJob add a job to tracer
 func (t *Tracer) AddJob(job *Job) {
 	if job.Tp == EventFlush {
-		for i := EventSyncerBinlog; i < EventFlush; i++ {
+		for i := range dispatchEventType {
 			t.jobs[i] <- job
 		}
 	} else {

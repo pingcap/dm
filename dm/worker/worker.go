@@ -107,7 +107,9 @@ func (w *Worker) Start() {
 	w.relayPurger.Start()
 
 	// start tracer
-	w.tracer.Start()
+	if w.tracer.Enable() {
+		w.tracer.Start()
+	}
 
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -142,7 +144,9 @@ func (w *Worker) Close() {
 	w.relayPurger.Close()
 
 	// close tracer
-	w.tracer.Stop()
+	if w.tracer.Enable() {
+		w.tracer.Stop()
+	}
 
 	// cancel status output ticker and wait for return
 	w.cancel()
