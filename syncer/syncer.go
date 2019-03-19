@@ -318,8 +318,11 @@ func (s *Syncer) Init() (err error) {
 	}
 	if s.cfg.EnableHeartbeat {
 		s.heartbeat, err = GetHeartbeat(&HeartbeatConfig{
-			serverID:  s.cfg.ServerID,
-			masterCfg: s.cfg.From})
+			serverID:       s.cfg.ServerID,
+			masterCfg:      s.cfg.From,
+			updateInterval: int64(s.cfg.HeartbeatUpdateInterval),
+			reportInterval: int64(s.cfg.HeartbeatReportInterval),
+		})
 		if err != nil {
 			return errors.Trace(err)
 		}

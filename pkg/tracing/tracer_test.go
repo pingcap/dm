@@ -14,6 +14,7 @@
 package tracing
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sync"
@@ -26,7 +27,6 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/common"

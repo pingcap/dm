@@ -224,10 +224,12 @@ type TaskConfig struct {
 	MetaSchema string `yaml:"meta-schema"`
 	// remove meta from downstreaming database
 	// now we delete checkpoint and online ddl information
-	RemoveMeta       bool   `yaml:"remove-meta"`
-	DisableHeartbeat bool   `yaml:"disable-heartbeat"` //  deprecated, use !enable-heartbeat instead
-	EnableHeartbeat  bool   `yaml:"enable-heartbeat"`
-	Timezone         string `yaml:"timezone"`
+	RemoveMeta              bool   `yaml:"remove-meta"`
+	DisableHeartbeat        bool   `yaml:"disable-heartbeat"` //  deprecated, use !enable-heartbeat instead
+	EnableHeartbeat         bool   `yaml:"enable-heartbeat"`
+	HeartbeatUpdateInterval int    `yaml:"heartbeat-update-interval"`
+	HeartbeatReportInterval int    `yaml:"heartbeat-report-interval"`
+	Timezone                string `yaml:"timezone"`
 
 	// handle schema/table name mode, and only for schema/table name
 	// if case insensitive, we would convert schema/table name to lower case
@@ -448,6 +450,8 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.RemoveMeta = c.RemoveMeta
 		cfg.DisableHeartbeat = c.DisableHeartbeat
 		cfg.EnableHeartbeat = c.EnableHeartbeat || !c.DisableHeartbeat
+		cfg.HeartbeatUpdateInterval = c.HeartbeatUpdateInterval
+		cfg.HeartbeatReportInterval = c.HeartbeatReportInterval
 		cfg.Timezone = c.Timezone
 		cfg.Meta = inst.Meta
 
