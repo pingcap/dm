@@ -39,6 +39,8 @@ var (
 	defaultMetaSchema      = "dm_meta"
 	defaultEnableHeartbeat = false
 	defaultIsSharding      = false
+	defaultUpdateInterval  = 1
+	defaultReportInterval  = 10
 	// MydumperConfig
 	defaultMydumperPath        = "./bin/mydumper"
 	defaultThreads             = 4
@@ -255,18 +257,20 @@ type TaskConfig struct {
 func NewTaskConfig() *TaskConfig {
 	cfg := &TaskConfig{
 		// explicitly set default value
-		MetaSchema:       defaultMetaSchema,
-		DisableHeartbeat: !defaultEnableHeartbeat,
-		EnableHeartbeat:  defaultEnableHeartbeat,
-		MySQLInstances:   make([]*MySQLInstance, 0, 5),
-		IsSharding:       defaultIsSharding,
-		Routes:           make(map[string]*router.TableRule),
-		Filters:          make(map[string]*bf.BinlogEventRule),
-		ColumnMappings:   make(map[string]*column.Rule),
-		BWList:           make(map[string]*filter.Rules),
-		Mydumpers:        make(map[string]*MydumperConfig),
-		Loaders:          make(map[string]*LoaderConfig),
-		Syncers:          make(map[string]*SyncerConfig),
+		MetaSchema:              defaultMetaSchema,
+		DisableHeartbeat:        !defaultEnableHeartbeat,
+		EnableHeartbeat:         defaultEnableHeartbeat,
+		HeartbeatUpdateInterval: defaultUpdateInterval,
+		HeartbeatReportInterval: defaultReportInterval,
+		MySQLInstances:          make([]*MySQLInstance, 0, 5),
+		IsSharding:              defaultIsSharding,
+		Routes:                  make(map[string]*router.TableRule),
+		Filters:                 make(map[string]*bf.BinlogEventRule),
+		ColumnMappings:          make(map[string]*column.Rule),
+		BWList:                  make(map[string]*filter.Rules),
+		Mydumpers:               make(map[string]*MydumperConfig),
+		Loaders:                 make(map[string]*LoaderConfig),
+		Syncers:                 make(map[string]*SyncerConfig),
 	}
 	cfg.FlagSet = flag.NewFlagSet("task", flag.ContinueOnError)
 	return cfg

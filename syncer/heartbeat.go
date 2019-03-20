@@ -37,10 +37,8 @@ const (
 )
 
 var (
-	heartbeat             *Heartbeat // singleton instance
-	defaultUpdateInterval int64      = 1
-	defaultReportInterval int64      = 10
-	once                  sync.Once
+	heartbeat *Heartbeat // singleton instance
+	once      sync.Once
 )
 
 // HeartbeatConfig represents Heartbeat configurations.
@@ -90,12 +88,6 @@ type Heartbeat struct {
 // GetHeartbeat gets singleton instance of Heartbeat
 func GetHeartbeat(cfg *HeartbeatConfig) (*Heartbeat, error) {
 	once.Do(func() {
-		if cfg.updateInterval == 0 {
-			cfg.updateInterval = defaultUpdateInterval
-		}
-		if cfg.reportInterval == 0 {
-			cfg.reportInterval = defaultReportInterval
-		}
 		heartbeat = &Heartbeat{
 			lock:     make(chan struct{}, 1), // with buffer 1, no recursion supported
 			cfg:      cfg,
