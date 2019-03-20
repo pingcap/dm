@@ -323,6 +323,7 @@ type Loader struct {
 	closed sync2.AtomicBool
 
 	totalDataSize    sync2.AtomicInt64
+	totalFileCount   sync2.AtomicInt64 // schema + table + data
 	finishedDataSize sync2.AtomicInt64
 	metaBinlog       sync2.AtomicString
 
@@ -645,6 +646,7 @@ func (l *Loader) initAndStartWorkerPool(ctx context.Context) error {
 func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
 	// reset some variables
 	l.db2Tables = make(map[string]Tables2DataFiles)
+	l.totalFileCount = 0 // reset
 	for file := range files {
 		if !strings.HasSuffix(file, "-schema-create.sql") {
 			continue
@@ -659,6 +661,7 @@ func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
 			}
 
 			l.db2Tables[db] = make(Tables2DataFiles)
+			l.totalFileCount++ // for schema
 		}
 	}
 
@@ -698,6 +701,7 @@ func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 		}
 		tableCounter.WithLabelValues(l.cfg.Name).Inc()
 		tables[table] = make(DataFiles, 0, 16)
+		l.totalFileCount++ // for table
 	}
 
 	return nil
@@ -745,6 +749,7 @@ func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 			return errors.Trace(err)
 		}
 		l.totalDataSize.Add(size)
+		l.totalFileCount++ // for data
 
 		dataFiles = append(dataFiles, file)
 		dataFileCounter.WithLabelValues(l.cfg.Name).Inc()
