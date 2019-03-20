@@ -29,6 +29,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay/purger"
 )
@@ -55,6 +56,10 @@ func NewConfig() *Config {
 	fs.Int64Var(&cfg.Purge.Interval, "purge-interval", 60*60, "interval (seconds) try to check whether needing to purge relay log files")
 	fs.Int64Var(&cfg.Purge.Expires, "purge-expires", 0, "try to purge relay log files if their modified time is older than this (hours)")
 	fs.Int64Var(&cfg.Purge.RemainSpace, "purge-remain-space", 15, "try to purge relay log files if remain space is less than this (GB)")
+	fs.BoolVar(&cfg.Tracer.Enable, "tracer-enable", false, "whether to enable tracing")
+	fs.StringVar(&cfg.Tracer.TracerAddr, "tracer-server-addr", "", "tracing service rpc address")
+	fs.IntVar(&cfg.Tracer.BatchSize, "tracer-batch-size", 20, "upload to tracing service batch size")
+	fs.BoolVar(&cfg.Tracer.Checksum, "tracer-checksum", false, "whether to calculate checksum of some data")
 
 	return cfg
 }
@@ -85,6 +90,9 @@ type Config struct {
 
 	// config items for purger
 	Purge purger.Config `toml:"purge" json:"purge"`
+
+	// config items for tracer
+	Tracer tracing.Config `toml:"tracer" json:"tracer"`
 
 	ConfigFile string `json:"config-file"`
 
@@ -153,9 +161,9 @@ func (c *Config) Parse(arguments []string) error {
 		if strings.TrimSpace(SampleConfigFile) == "" {
 			fmt.Println("sample config file of dm-worker is empty")
 		} else {
-			rawConfig, err := base64.StdEncoding.DecodeString(SampleConfigFile)
-			if err != nil {
-				fmt.Println("base64 decode config error:", err)
+			rawConfig, err2 := base64.StdEncoding.DecodeString(SampleConfigFile)
+			if err2 != nil {
+				fmt.Println("base64 decode config error:", err2)
 			} else {
 				fmt.Println(string(rawConfig))
 			}
@@ -190,6 +198,9 @@ func (c *Config) Parse(arguments []string) error {
 		}
 	}
 	c.From.Password = pswd
+
+	// assign tracer id to source id
+	c.Tracer.Source = c.SourceID
 
 	return c.verify()
 }

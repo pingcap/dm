@@ -14,9 +14,9 @@
 package worker
 
 import (
+	"context"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-	"golang.org/x/net/context"
 )
 
 // operateRelay does operation on relay unit

@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/pingcap/errors"
@@ -42,18 +43,12 @@ type OnlinePlugin interface {
 	// * apply online ddl on real table
 	// returns sqls, replaced/self schema, repliaced/slef table, error
 	Apply(tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, string, string, error)
-	// InOnlineDDL returns true if an online ddl is unresolved
-	InOnlineDDL(schema, table string) bool
 	// Finish would delete online ddl from memory and storage
 	Finish(schema, table string) error
 	// TableType returns ghhost/real table
 	TableType(table string) TableType
 	// RealName returns real table name that removed ghost suffix and handled by table router
 	RealName(schema, table string) (string, string)
-	// GhostName returns ghost table name of a table
-	GhostName(schema, table string) (string, string)
-	// SchemaName returns scheme name (gh-ost/pt)
-	SchemeName() string
 	// Clear clears all online information
 	Clear() error
 	// Close closes online ddl plugin
@@ -283,4 +278,8 @@ func (s *OnlineDDLStorage) createTable() error {
 		)`, tableName)
 	err := s.db.executeSQL([]string{sql}, [][]interface{}{nil}, maxRetryCount)
 	return errors.Trace(err)
+}
+
+func escapeSingleQuote(str string) string {
+	return strings.Replace(str, "'", "''", -1)
 }

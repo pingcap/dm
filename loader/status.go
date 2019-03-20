@@ -14,12 +14,11 @@
 package loader
 
 import (
+	"context"
 	"time"
 
-	"github.com/pingcap/dm/pkg/log"
-	"golang.org/x/net/context"
-
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 const (

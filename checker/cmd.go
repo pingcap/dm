@@ -14,10 +14,11 @@
 package checker
 
 import (
+	"context"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/errors"
-	"golang.org/x/net/context"
 )
 
 var (
@@ -27,7 +28,17 @@ var (
 
 // CheckSyncConfig checks synchronization configuration
 func CheckSyncConfig(ctx context.Context, cfgs []*config.SubTaskConfig) error {
-	c := NewChecker(cfgs)
+	if len(cfgs) == 0 {
+		return nil
+	}
+
+	// all `IgnoreCheckingItems` of sub-task are same, so we take first one
+	checkingItems := config.FilterCheckingItems(cfgs[0].IgnoreCheckingItems)
+	if len(checkingItems) == 0 {
+		return nil
+	}
+
+	c := NewChecker(cfgs, checkingItems)
 
 	err := c.Init()
 	if err != nil {

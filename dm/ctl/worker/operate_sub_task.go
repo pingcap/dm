@@ -14,9 +14,10 @@
 package worker
 
 import (
+	"context"
+
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-	"golang.org/x/net/context"
 )
 
 // operateSubTask does operation on sub task

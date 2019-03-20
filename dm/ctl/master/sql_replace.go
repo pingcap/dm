@@ -14,6 +14,7 @@
 package master
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -21,7 +22,6 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
-	"golang.org/x/net/context"
 )
 
 // NewSQLReplaceCmd creates a SQLReplace command

@@ -14,6 +14,8 @@
 package checker
 
 import (
+	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -22,11 +24,6 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql" // for mysql
-	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/dm/unit"
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/check"
 	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
@@ -34,7 +31,13 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go/sync2"
-	"golang.org/x/net/context"
+
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/dm/unit"
+	fr "github.com/pingcap/dm/pkg/func-rollback"
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 type mysqlInstance struct {
@@ -53,17 +56,19 @@ type Checker struct {
 
 	instances []*mysqlInstance
 
-	checkList []check.Checker
-	result    struct {
+	checkList     []check.Checker
+	checkingItems map[string]string
+	result        struct {
 		sync.RWMutex
 		detail *check.Results
 	}
 }
 
 // NewChecker returns a checker
-func NewChecker(cfgs []*config.SubTaskConfig) *Checker {
+func NewChecker(cfgs []*config.SubTaskConfig, checkingItems map[string]string) *Checker {
 	c := &Checker{
-		instances: make([]*mysqlInstance, 0, len(cfgs)),
+		instances:     make([]*mysqlInstance, 0, len(cfgs)),
+		checkingItems: checkingItems,
 	}
 
 	for _, cfg := range cfgs {
@@ -76,12 +81,24 @@ func NewChecker(cfgs []*config.SubTaskConfig) *Checker {
 }
 
 // Init implements Unit interface
-func (c *Checker) Init() error {
+func (c *Checker) Init() (err error) {
+	rollbackHolder := fr.NewRollbackHolder("checker")
+	defer func() {
+		if err != nil {
+			rollbackHolder.RollbackReverseOrder()
+		}
+	}()
+
+	rollbackHolder.Add(fr.FuncRollback{"close-DBs", c.closeDBs})
+
 	// target name => source => schema => [tables]
 	sharding := make(map[string]map[string]map[string][]string)
 	shardingCounter := make(map[string]int)
 	dbs := make(map[string]*sql.DB)
 	columnMapping := make(map[string]*column.Mapping)
+	_, checkingShardID := c.checkingItems[config.ShardAutoIncrementIDChecking]
+	_, checkingShard := c.checkingItems[config.ShardTableSchemaChecking]
+	_, checkSchema := c.checkingItems[config.TableSchemaChecking]
 
 	for _, instance := range c.instances {
 		bw := filter.New(instance.cfg.CaseSensitive, instance.cfg.BWList)
@@ -125,6 +142,29 @@ func (c *Checker) Init() error {
 			return errors.Trace(err)
 		}
 
+		if _, ok := c.checkingItems[config.VersionChecking]; ok {
+			c.checkList = append(c.checkList, check.NewMySQLVersionChecker(instance.sourceDB, instance.sourceDBinfo))
+		}
+		if _, ok := c.checkingItems[config.BinlogEnableChecking]; ok {
+			c.checkList = append(c.checkList, check.NewMySQLBinlogEnableChecker(instance.sourceDB, instance.sourceDBinfo))
+		}
+		if _, ok := c.checkingItems[config.BinlogFormatChecking]; ok {
+			c.checkList = append(c.checkList, check.NewMySQLBinlogFormatChecker(instance.sourceDB, instance.sourceDBinfo))
+		}
+		if _, ok := c.checkingItems[config.BinlogRowImageChecking]; ok {
+			c.checkList = append(c.checkList, check.NewMySQLBinlogRowImageChecker(instance.sourceDB, instance.sourceDBinfo))
+		}
+		if _, ok := c.checkingItems[config.DumpPrivilegeChecking]; ok {
+			c.checkList = append(c.checkList, check.NewSourceDumpPrivilegeChecker(instance.sourceDB, instance.sourceDBinfo))
+		}
+		if _, ok := c.checkingItems[config.ReplicationPrivilegeChecking]; ok {
+			c.checkList = append(c.checkList, check.NewSourceReplicationPrivilegeChecker(instance.sourceDB, instance.sourceDBinfo))
+		}
+
+		if !checkingShard && !checkSchema {
+			continue
+		}
+
 		mapping, err := utils.FetchTargetDoTables(instance.sourceDB, bw, r)
 		if err != nil {
 			return errors.Trace(err)
@@ -155,22 +195,37 @@ func (c *Checker) Init() error {
 		}
 		dbs[instance.cfg.SourceID] = instance.sourceDB
 
-		c.checkList = append(c.checkList, check.NewMySQLBinlogEnableChecker(instance.sourceDB, instance.sourceDBinfo))
-		c.checkList = append(c.checkList, check.NewMySQLBinlogFormatChecker(instance.sourceDB, instance.sourceDBinfo))
-		c.checkList = append(c.checkList, check.NewMySQLBinlogRowImageChecker(instance.sourceDB, instance.sourceDBinfo))
-		c.checkList = append(c.checkList, check.NewSourcePrivilegeChecker(instance.sourceDB, instance.sourceDBinfo))
-		c.checkList = append(c.checkList, check.NewTablesChecker(instance.sourceDB, instance.sourceDBinfo, checkTables))
-	}
-
-	for name, shardingSet := range sharding {
-		if shardingCounter[name] <= 1 {
-			continue
+		if checkSchema {
+			c.checkList = append(c.checkList, check.NewTablesChecker(instance.sourceDB, instance.sourceDBinfo, checkTables))
 		}
-
-		c.checkList = append(c.checkList, check.NewShardingTablesCheck(name, dbs, shardingSet, columnMapping))
 	}
 
+	if checkingShard {
+		for name, shardingSet := range sharding {
+			if shardingCounter[name] <= 1 {
+				continue
+			}
+
+			c.checkList = append(c.checkList, check.NewShardingTablesCheck(name, dbs, shardingSet, columnMapping, checkingShardID))
+		}
+	}
+
+	log.Infof(c.displayCheckingItems())
 	return nil
+}
+
+func (c *Checker) displayCheckingItems() string {
+	if len(c.checkList) == 0 {
+		return "not found any checking items\n"
+	}
+
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "\n************ task %s checking items ************\n", c.instances[0].cfg.Name)
+	for _, checkFunc := range c.checkList {
+		fmt.Fprintf(&buf, "%s\n", checkFunc.Name())
+	}
+	fmt.Fprintf(&buf, "************ task %s checking items ************", c.instances[0].cfg.Name)
+	return buf.String()
 }
 
 // Process implements Unit interface
@@ -214,21 +269,27 @@ func (c *Checker) Close() {
 		return
 	}
 
+	c.closeDBs()
+
+	c.closed.Set(true)
+}
+
+func (c *Checker) closeDBs() {
 	for _, instance := range c.instances {
 		if instance.sourceDB != nil {
 			if err := dbutil.CloseDB(instance.sourceDB); err != nil {
 				log.Errorf("close source db %+v error %v", instance.sourceDBinfo, err)
 			}
+			instance.sourceDB = nil
 		}
 
 		if instance.targetDB != nil {
 			if err := dbutil.CloseDB(instance.targetDB); err != nil {
 				log.Errorf("close target db %+v error %v", instance.targetDBInfo, err)
 			}
+			instance.targetDB = nil
 		}
 	}
-
-	c.closed.Set(true)
 }
 
 // Pause implements Unit interface

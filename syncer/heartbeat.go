@@ -14,18 +14,18 @@
 package syncer
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"reflect"
 	"sync"
 	"time"
 
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	"golang.org/x/net/context"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // privileges: SELECT, UPDATE,  optionaly INSERT, optionaly CREATE.

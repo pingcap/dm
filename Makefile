@@ -33,15 +33,18 @@ else
 endif
 
 .PHONY: build test dm_integration_test_build integration_test coverage check \
-	dm-worker dm-master dmctl
+	dm-worker dm-master dm-tracer dmctl
 
-build: check test dm-worker dm-master dmctl
+build: check test dm-worker dm-master dm-tracer dmctl
 
 dm-worker:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dm-worker ./cmd/dm-worker
 
 dm-master:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dm-master ./cmd/dm-master
+
+dm-tracer:
+	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dm-tracer ./cmd/dm-tracer
 
 dmctl:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dmctl ./cmd/dm-ctl
@@ -69,8 +72,10 @@ lint:
 	@ golint -set_exit_status $(PACKAGES)
 
 vet:
+	$(GO) build -o bin/shadow golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow
 	@echo "vet"
-	@ $(GO) tool vet -all -shadow $(TOPDIRS) 2>&1 | tee /dev/stderr | awk '/shadows declaration/{next}{count+=1} END{if(count>0) {exit 1}}'
+	@$(GO) vet -composites=false $(PACKAGES)
+	@$(GO) vet -vettool=$(CURDIR)/bin/shadow $(PACKAGES) || true
 
 dm_integration_test_build:
 	$(GOTEST) -c -race -cover -covermode=atomic \
@@ -86,7 +91,7 @@ integration_test:
 	@which bin/mydumper
 	@which bin/dm-master.test
 	@which bin/dm-worker.test
-	tests/run.sh
+	tests/run.sh $(CASE)
 
 coverage:
 	GO111MODULE=off go get github.com/zhouqiang-cl/gocovmerge

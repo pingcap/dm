@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package pb;
+
+enum TraceType {
+    DummyEvent = 0;
+    BinlogEvent = 1;
+    JobEvent = 2;
+}
+
+message BaseEvent {
+    string filename = 1;
+    int32 line = 2;
+    int64 tso = 3;
+    string traceID = 4;
+    string groupID = 5;
+    TraceType type = 6;
+}

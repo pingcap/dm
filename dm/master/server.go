@@ -14,6 +14,7 @@
 package master
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -26,7 +27,6 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/checker"
@@ -34,6 +34,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/master/sql-operator"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/tracing"
 )
 
 var (
@@ -63,6 +64,9 @@ type Server struct {
 	// SQL operator holder
 	sqlOperatorHolder *operator.Holder
 
+	// trace group id generator
+	idGen *tracing.IDGenerator
+
 	closed sync2.AtomicBool
 }
 
@@ -74,6 +78,7 @@ func NewServer(cfg *Config) *Server {
 		taskWorkers:       make(map[string][]string),
 		lockKeeper:        NewLockKeeper(),
 		sqlOperatorHolder: operator.NewHolder(),
+		idGen:             tracing.NewIDGen(),
 	}
 	return &server
 }
@@ -1332,11 +1337,17 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 		s.sqlOperatorHolder.Remove(lock.Task, key) // remove SQL operator after sent to owner
 	}
 
+	// If send ExecuteDDL request failed, we will generate more tracer group id,
+	// this is acceptable if each ExecuteDDL request successes at last.
+	// TODO: we need a better way to combine brain split tracing events into one
+	// single group.
+	traceGID := s.idGen.NextID("resolveDDLLock", 0)
 	log.Infof("[server] requesting %s to execute DDL (with ID %s)", owner, lockID)
 	ownerResp, err := cli.ExecuteDDL(ctx, &pb.ExecDDLRequest{
-		Task:   lock.Task,
-		LockID: lockID,
-		Exec:   true,
+		Task:     lock.Task,
+		LockID:   lockID,
+		Exec:     true,
+		TraceGID: traceGID,
 	})
 	if err != nil {
 		ownerResp = &pb.CommonWorkerResponse{
@@ -1363,9 +1374,10 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 	}
 
 	req := &pb.ExecDDLRequest{
-		Task:   lock.Task,
-		LockID: lockID,
-		Exec:   false, // ignore and skip DDL
+		Task:     lock.Task,
+		LockID:   lockID,
+		Exec:     false, // ignore and skip DDL
+		TraceGID: traceGID,
 	}
 
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(workers))

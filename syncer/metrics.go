@@ -14,13 +14,13 @@
 package syncer
 
 import (
+	"context"
 	"net/http"
 	"time"
 
 	"github.com/pingcap/dm/pkg/log"
 	cpu "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
-	"golang.org/x/net/context"
 
 	"github.com/pingcap/dm/pkg/utils"
 )
