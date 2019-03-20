@@ -646,7 +646,7 @@ func (l *Loader) initAndStartWorkerPool(ctx context.Context) error {
 func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
 	// reset some variables
 	l.db2Tables = make(map[string]Tables2DataFiles)
-	l.totalFileCount = 0 // reset
+	l.totalFileCount.Set(0) // reset
 	for file := range files {
 		if !strings.HasSuffix(file, "-schema-create.sql") {
 			continue
@@ -661,7 +661,7 @@ func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
 			}
 
 			l.db2Tables[db] = make(Tables2DataFiles)
-			l.totalFileCount++ // for schema
+			l.totalFileCount.Add(1) // for schema
 		}
 	}
 
@@ -701,7 +701,7 @@ func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 		}
 		tableCounter.WithLabelValues(l.cfg.Name).Inc()
 		tables[table] = make(DataFiles, 0, 16)
-		l.totalFileCount++ // for table
+		l.totalFileCount.Add(1) // for table
 	}
 
 	return nil
@@ -749,7 +749,7 @@ func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 			return errors.Trace(err)
 		}
 		l.totalDataSize.Add(size)
-		l.totalFileCount++ // for data
+		l.totalFileCount.Add(1) // for data
 
 		dataFiles = append(dataFiles, file)
 		dataFileCounter.WithLabelValues(l.cfg.Name).Inc()
