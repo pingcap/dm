@@ -150,10 +150,10 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 	}
 
 	if err = s.worker.meta.Set(cfg); err != nil {
-		log.Errorf("[server] insert task %+v into meta: %v", cfg, errors.ErrorStack(err))
+		log.Errorf("[server] insert task %s into meta: %v", cfg, errors.ErrorStack(err))
 		return &pb.CommonWorkerResponse{
 			Result: false,
-			Msg:    fmt.Sprintf("insert task %+v into meta: %v", cfg, errors.ErrorStack(err)),
+			Msg:    fmt.Sprintf("insert task %s into meta: %v", cfg, errors.ErrorStack(err)),
 		}, nil
 	}
 
@@ -225,10 +225,10 @@ func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest
 	}
 
 	if err = s.worker.meta.Set(cfg); err != nil {
-		log.Errorf("[server] update task %+v into meta: %v", cfg, errors.ErrorStack(err))
+		log.Errorf("[server] update task %s into meta: %v", cfg, errors.ErrorStack(err))
 		return &pb.CommonWorkerResponse{
 			Result: false,
-			Msg:    fmt.Sprintf("update task %+v into meta: %v", cfg, errors.ErrorStack(err)),
+			Msg:    fmt.Sprintf("update task %s into meta: %v", cfg, errors.ErrorStack(err)),
 		}, nil
 	}
 

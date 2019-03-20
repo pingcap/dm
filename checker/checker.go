@@ -126,6 +126,13 @@ func (c *Checker) Init() error {
 			}
 			instance.targetDBInfo.Password = pswd
 		}
+		if len(instance.sourceDBinfo.Password) > 0 {
+			pswd, err2 := utils.Decrypt(instance.sourceDBinfo.Password)
+			if err2 != nil {
+				return errors.Annotatef(err2, "can not decrypt password %s", instance.sourceDBinfo.Password)
+			}
+			instance.sourceDBinfo.Password = pswd
+		}
 		instance.targetDB, err = dbutil.OpenDB(*instance.targetDBInfo)
 		if err != nil {
 			return errors.Trace(err)

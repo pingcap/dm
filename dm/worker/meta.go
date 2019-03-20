@@ -14,11 +14,13 @@
 package worker
 
 import (
-	"encoding/json"
+	"bytes"
 	"io/ioutil"
+	"os"
 	"path"
 	"sync"
 
+	"github.com/BurntSushi/toml"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
@@ -27,7 +29,38 @@ import (
 // Meta information contains
 // * sub-task
 type Meta struct {
-	SubTasks map[string]*config.SubTaskConfig `json:"sub-tasks"`
+	SubTasks map[string]*config.SubTaskConfig `json:"sub-tasks" toml:"sub-tasks"`
+}
+
+// Toml returns TOML format representation of config
+func (m *Meta) Toml() (string, error) {
+	var b bytes.Buffer
+	enc := toml.NewEncoder(&b)
+	err := enc.Encode(m)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	return b.String(), nil
+}
+
+// DecodeFile loads and decodes config from file
+func (m *Meta) DecodeFile(fpath string) error {
+	_, err := toml.DecodeFile(fpath, m)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
+}
+
+// Decode loads config from file data
+func (m *Meta) Decode(data string) error {
+	_, err := toml.Decode(data, m)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
 }
 
 // FileMetaDB stores meta information in disk
@@ -45,15 +78,23 @@ func NewFileMetaDB(dir string) (*FileMetaDB, error) {
 			SubTasks: make(map[string]*config.SubTaskConfig),
 		},
 	}
-	// ignore all errors -- file maybe not created yet (and it is fine).
-	content, err := ioutil.ReadFile(metaDB.path)
-	if err == nil {
-		err1 := json.Unmarshal(content, metaDB.meta)
-		if err1 != nil {
-			return nil, errors.Annotatef(err1, "decode meta %s", content)
-		}
-	} else {
-		log.Warnf("failed to open meta file %s, going to create a new one: %v", dir, err)
+
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return nil, errors.Annotatef(err, "create meta directory")
+	}
+
+	fd, err := os.Open(metaDB.path)
+	if os.IsNotExist(err) {
+		log.Warnf("failed to open meta file %s, going to create a new one: %v", metaDB.path, err)
+		return metaDB, nil
+	} else if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer fd.Close()
+
+	err = metaDB.meta.DecodeFile(metaDB.path)
+	if err != nil {
+		return metaDB, errors.Trace(err)
 	}
 
 	return metaDB, nil
@@ -68,11 +109,12 @@ func (metaDB *FileMetaDB) Close() error {
 }
 
 func (metaDB *FileMetaDB) save() error {
-	serialized, err := json.Marshal(metaDB.meta)
+	serialized, err := metaDB.meta.Toml()
 	if err != nil {
 		return errors.Trace(err)
 	}
-	if err := ioutil.WriteFile(metaDB.path, serialized, 0644); err != nil {
+
+	if err := ioutil.WriteFile(metaDB.path, []byte(serialized), 0644); err != nil {
 		return errors.Trace(err)
 	}
 	return nil

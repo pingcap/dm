@@ -27,7 +27,6 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/streamer"
-	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay/purger"
 )
 
@@ -93,13 +92,6 @@ func (w *Worker) Init() error {
 		return errors.Trace(err)
 	}
 
-	meta := w.meta.Get()
-	for taskName, subtask := range meta.SubTasks {
-		if err = w.StartSubTask(subtask); err != nil {
-			return errors.Annotatef(err, "restore task %s (%+v) in worker starting", taskName, subtask)
-		}
-	}
-
 	return nil
 }
 
@@ -110,6 +102,14 @@ func (w *Worker) Start() {
 	defer w.wg.Done()
 
 	log.Info("[worker] start running")
+
+	// restore tasks
+	meta := w.meta.Get()
+	for taskName, subtask := range meta.SubTasks {
+		if err := w.StartSubTask(subtask); err != nil {
+			panic(fmt.Sprintf("restore task %s (%s) in worker starting: %v", taskName, subtask, err))
+		}
+	}
 
 	// start relay
 	w.relayHolder.Start()
@@ -177,21 +177,8 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 
 	log.Infof("[worker] starting sub task with config: %v", cfg)
 
-	// try decrypt password for To DB
-	var (
-		pswdTo string
-		err    error
-	)
-	if len(cfg.To.Password) > 0 {
-		pswdTo, err = utils.Decrypt(cfg.To.Password)
-		if err != nil {
-			return errors.Trace(err)
-		}
-	}
-	cfg.To.Password = pswdTo
-
 	st := NewSubTask(cfg)
-	err = st.Init()
+	err := st.Init()
 	if err != nil {
 		return errors.Trace(err)
 	}

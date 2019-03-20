@@ -111,29 +111,12 @@ func (c *Config) String() string {
 // Toml returns TOML format representation of config
 func (c *Config) Toml() (string, error) {
 	var b bytes.Buffer
-	var pswd string
-	var err error
 
-	enc := toml.NewEncoder(&b)
-	if len(c.From.Password) > 0 {
-		pswd, err = utils.Encrypt(c.From.Password)
-		if err != nil {
-			return "", errors.Annotatef(err, "can not encrypt password %s", c.From.Password)
-		}
-	}
-	c.From.Password = pswd
-
-	err = enc.Encode(c)
+	err := toml.NewEncoder(&b).Encode(c)
 	if err != nil {
 		log.Errorf("[worker] marshal config to toml error %v", err)
 	}
-	if len(c.From.Password) > 0 {
-		pswd, err = utils.Decrypt(c.From.Password)
-		if err != nil {
-			return "", errors.Annotatef(err, "can not decrypt password %s", c.From.Password)
-		}
-	}
-	c.From.Password = pswd
+
 	return string(b.String()), nil
 }
 
@@ -182,18 +165,8 @@ func (c *Config) Parse(arguments []string) error {
 		return errors.Errorf("'%s' is an invalid flag", c.flagSet.Arg(0))
 	}
 
-	// try decrypt password
-	var pswd string
-	if len(c.From.Password) > 0 {
-		pswd, err = utils.Decrypt(c.From.Password)
-		if err != nil {
-			return errors.Annotatef(err, "can not decrypt password %s", c.From.Password)
-		}
-	}
-	c.From.Password = pswd
-
 	if len(c.MetaDir) == 0 {
-		c.MetaDir = "./dm_worker"
+		c.MetaDir = "./dm_worker_meta"
 	}
 
 	return c.verify()
@@ -251,14 +224,6 @@ func (c *Config) Reload() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-
-	if len(c.From.Password) > 0 {
-		pswd, err = utils.Decrypt(c.From.Password)
-		if err != nil {
-			return errors.Annotatef(err, "can not decrypt password %s", c.From.Password)
-		}
-	}
-	c.From.Password = pswd
 
 	return nil
 }
