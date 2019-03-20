@@ -53,6 +53,8 @@ type Worker struct {
 	subTasks    map[string]*SubTask
 	relayHolder *RelayHolder
 	relayPurger *purger.Purger
+
+	meta *FileMetaDB
 }
 
 // NewWorker creates a new Worker
@@ -85,6 +87,18 @@ func (w *Worker) Init() error {
 	}
 
 	InitConditionHub(w)
+
+	w.meta, err = NewFileMetaDB(w.cfg.MetaDir)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	meta := w.meta.Get()
+	for taskName, subtask := range meta.SubTasks {
+		if err = w.StartSubTask(subtask); err != nil {
+			return errors.Annotatef(err, "restore task %s (%+v) in worker starting", taskName, subtask)
+		}
+	}
 
 	return nil
 }

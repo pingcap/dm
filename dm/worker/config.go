@@ -72,6 +72,7 @@ type Config struct {
 	EnableGTID  bool   `toml:"enable-gtid" json:"enable-gtid"`
 	AutoFixGTID bool   `toml:"auto-fix-gtid" json:"auto-fix-gtid"`
 	RelayDir    string `toml:"relay-dir" json:"relay-dir"`
+	MetaDir     string `toml:"meta-dir" json:"meta-dir"`
 	ServerID    int    `toml:"server-id" json:"server-id"`
 	Flavor      string `toml:"flavor" json:"flavor"`
 	Charset     string `toml:"charset" json:"charset"`
@@ -190,6 +191,10 @@ func (c *Config) Parse(arguments []string) error {
 		}
 	}
 	c.From.Password = pswd
+
+	if len(c.MetaDir) == 0 {
+		c.MetaDir = "./dm_worker"
+	}
 
 	return c.verify()
 }
