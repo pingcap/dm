@@ -26,6 +26,8 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 )
 
@@ -42,13 +44,19 @@ func NewMydumper(cfg *config.SubTaskConfig) *Mydumper {
 	m := &Mydumper{
 		cfg: cfg,
 	}
-	m.args = m.constructArgs()
+
 	return m
 }
 
 // Init implements Unit.Init
 func (m *Mydumper) Init() error {
-	return nil // always return nil
+	var err error
+	m.args, err = m.constructArgs()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
 }
 
 // Process implements Unit.Process
@@ -68,7 +76,6 @@ func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	// Cmd cannot be reused, so we create a new cmd when begin processing
 	cmd := exec.CommandContext(ctx, m.cfg.MydumperPath, m.args...)
-	log.Infof("[mydumper] starting mydumper using args %v", cmd.Args)
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -146,9 +153,21 @@ func (m *Mydumper) IsFreshTask() (bool, error) {
 }
 
 // constructArgs constructs arguments for exec.Command
-func (m *Mydumper) constructArgs() []string {
+func (m *Mydumper) constructArgs() ([]string, error) {
 	cfg := m.cfg
 	db := cfg.From
+
+	var (
+		password string
+		err      error
+	)
+	if len(db.Password) > 0 {
+		password, err = utils.Decrypt(password)
+		if err != nil {
+			return nil, errors.Annotatef(err, "can not decrypt password %s of db %+v", db)
+		}
+	}
+
 	ret := []string{
 		"--host",
 		db.Host,
@@ -156,8 +175,6 @@ func (m *Mydumper) constructArgs() []string {
 		strconv.Itoa(db.Port),
 		"--user",
 		db.User,
-		"--password",
-		db.Password,
 		"--outputdir",
 		cfg.Dir, // use LoaderConfig.Dir as --outputdir
 	}
@@ -177,7 +194,11 @@ func (m *Mydumper) constructArgs() []string {
 	if len(extraArgs) > 0 {
 		ret = append(ret, ParseArgLikeBash(extraArgs)...)
 	}
-	return ret
+
+	log.Infof("[mydumper] create mydumper using args %v", ret)
+
+	ret = append(ret, "--password", password)
+	return ret, nil
 }
 
 // logArgs constructs arguments for log from SubTaskConfig

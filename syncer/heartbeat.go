@@ -26,6 +26,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // privileges: SELECT, UPDATE,  optionaly INSERT, optionaly CREATE.
@@ -122,8 +123,7 @@ func (h *Heartbeat) AddTask(name string) error {
 	if h.master == nil {
 		// open DB
 		dbCfg := h.cfg.masterCfg
-		dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8&interpolateParams=true&readTimeout=1m", dbCfg.User, dbCfg.Password, dbCfg.Host, dbCfg.Port)
-		master, err := sql.Open("mysql", dbDSN)
+		master, err := utils.OpenDB(dbCfg.Host, dbCfg.Port, dbCfg.User, dbCfg.Password, "1m")
 		if err != nil {
 			return errors.Trace(err)
 		}

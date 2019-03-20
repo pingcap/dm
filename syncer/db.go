@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 
@@ -246,8 +247,8 @@ func (conn *Conn) executeSQLJobImp(jobs []*job) *ExecErrorContext {
 }
 
 func createDB(cfg *config.SubTaskConfig, dbCfg config.DBConfig, timeout string) (*Conn, error) {
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8&interpolateParams=true&readTimeout=%s", dbCfg.User, dbCfg.Password, dbCfg.Host, dbCfg.Port, timeout)
-	db, err := sql.Open("mysql", dbDSN)
+	db, err := utils.OpenDB(dbCfg.Host, dbCfg.Port, dbCfg.User, dbCfg.Password, timeout)
+
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

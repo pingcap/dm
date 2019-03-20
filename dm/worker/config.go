@@ -213,14 +213,11 @@ func (c *Config) UpdateConfigFile(content string) error {
 
 // Reload reload configure from ConfigFile
 func (c *Config) Reload() error {
-	var pswd string
-	var err error
-
 	if c.ConfigFile == "" {
 		c.ConfigFile = "dm-worker-config.bak"
 	}
 
-	err = c.configFromFile(c.ConfigFile)
+	err := c.configFromFile(c.ConfigFile)
 	if err != nil {
 		return errors.Trace(err)
 	}

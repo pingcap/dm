@@ -107,7 +107,13 @@ func (c *Checker) Init() error {
 			User:     instance.cfg.From.User,
 			Password: instance.cfg.From.Password,
 		}
-
+		if len(instance.sourceDBinfo.Password) > 0 {
+			pswd, err2 := utils.Decrypt(instance.sourceDBinfo.Password)
+			if err2 != nil {
+				return errors.Annotatef(err2, "can not decrypt password %s", instance.sourceDBinfo.Password)
+			}
+			instance.sourceDBinfo.Password = pswd
+		}
 		instance.sourceDB, err = dbutil.OpenDB(*instance.sourceDBinfo)
 		if err != nil {
 			return errors.Trace(err)
@@ -125,13 +131,6 @@ func (c *Checker) Init() error {
 				return errors.Annotatef(err2, "can not decrypt password %s", instance.targetDBInfo.Password)
 			}
 			instance.targetDBInfo.Password = pswd
-		}
-		if len(instance.sourceDBinfo.Password) > 0 {
-			pswd, err2 := utils.Decrypt(instance.sourceDBinfo.Password)
-			if err2 != nil {
-				return errors.Annotatef(err2, "can not decrypt password %s", instance.sourceDBinfo.Password)
-			}
-			instance.sourceDBinfo.Password = pswd
 		}
 		instance.targetDB, err = dbutil.OpenDB(*instance.targetDBInfo)
 		if err != nil {

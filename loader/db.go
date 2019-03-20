@@ -15,12 +15,12 @@ package loader
 
 import (
 	"database/sql"
-	"fmt"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
 )
@@ -195,8 +195,7 @@ func executeSQLImp(db *sql.DB, sqls []string) error {
 }
 
 func createConn(cfg *config.SubTaskConfig) (*Conn, error) {
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8", cfg.To.User, cfg.To.Password, cfg.To.Host, cfg.To.Port)
-	db, err := sql.Open("mysql", dbDSN)
+	db, err := utils.OpenDB(cfg.To.Host, cfg.To.Port, cfg.To.User, cfg.To.Password, "5m")
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

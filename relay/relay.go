@@ -131,8 +131,7 @@ func NewRelay(cfg *Config) *Relay {
 // Init implements the dm.Unit interface.
 func (r *Relay) Init() error {
 	cfg := r.cfg.From
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&readTimeout=%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, showStatusConnectionTimeout)
-	db, err := sql.Open("mysql", dbDSN)
+	db, err := utils.OpenDB(cfg.Host, cfg.Port, cfg.User, cfg.Password, showStatusConnectionTimeout)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -1014,8 +1013,7 @@ func (r *Relay) Reload(newCfg *Config) error {
 
 	r.db.Close()
 	cfg := r.cfg.From
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&readTimeout=%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, showStatusConnectionTimeout)
-	db, err := sql.Open("mysql", dbDSN)
+	db, err := utils.OpenDB(cfg.Host, cfg.Port, cfg.User, cfg.Password, showStatusConnectionTimeout)
 	if err != nil {
 		return errors.Trace(err)
 	}
