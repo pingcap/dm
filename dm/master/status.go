@@ -18,7 +18,6 @@ import (
 	"net/http"
 
 	"github.com/pingcap/dm/pkg/log"
-	"github.com/soheilhy/cmux"
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/pkg/utils"
@@ -44,7 +43,7 @@ func InitStatus(lis net.Listener) {
 		Handler: mux,
 	}
 	err := httpS.Serve(lis)
-	if err != nil && !common.IsErrNetClosing(err) && err != cmux.ErrListenerClosed {
+	if err != nil && !common.IsErrNetClosing(err) && err != http.ErrServerClosed {
 		log.Errorf("[server] status server return with error %s", err.Error())
 	}
 }

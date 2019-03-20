@@ -369,6 +369,7 @@ message ExecDDLRequest {
     string task = 1; // sub task's name
     string lockID = 2; // DDL lock ID
     bool exec = 3; // true for execute, false for ignore (skip)
+    string traceGID = 4; // trace group ID
 }
 
 // BreakDDLLockRequest represents a request for a dm-worker to force to break the DDL lock

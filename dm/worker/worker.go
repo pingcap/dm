@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay/purger"
 )
@@ -53,6 +54,7 @@ type Worker struct {
 	subTasks    map[string]*SubTask
 	relayHolder *RelayHolder
 	relayPurger *purger.Purger
+	tracer      *tracing.Tracer
 }
 
 // NewWorker creates a new Worker
@@ -71,6 +73,7 @@ func NewWorker(cfg *Config) *Worker {
 		&w,
 	}
 	w.relayPurger = purger.NewPurger(cfg.Purge, cfg.RelayDir, operators, interceptors)
+	w.tracer = tracing.InitTracerHub(cfg.Tracer)
 
 	w.closed.Set(closedTrue) // not start yet
 	w.ctx, w.cancel = context.WithCancel(context.Background())
@@ -103,6 +106,11 @@ func (w *Worker) Start() {
 	// start purger
 	w.relayPurger.Start()
 
+	// start tracer
+	if w.tracer.Enable() {
+		w.tracer.Start()
+	}
+
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -134,6 +142,11 @@ func (w *Worker) Close() {
 
 	// close purger
 	w.relayPurger.Close()
+
+	// close tracer
+	if w.tracer.Enable() {
+		w.tracer.Stop()
+	}
 
 	// cancel status output ticker and wait for return
 	w.cancel()

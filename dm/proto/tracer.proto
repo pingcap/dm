@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package pb;
+
+import "tracer_syncer.proto";
+
+
+service Tracer {
+    rpc GetTSO (GetTSORequest) returns (GetTSOResponse) {}
+
+    rpc UploadSyncerBinlogEvent (UploadSyncerBinlogEventRequest) returns (CommonUploadResponse) {}
+    rpc UploadSyncerJobEvent (UploadSyncerJobEventRequest) returns (CommonUploadResponse) {}
+}
+
+message GetTSORequest {
+    string id = 1;
+}
+
+message GetTSOResponse {
+    bool result = 1;
+    string msg = 2;
+    int64 ts = 3;
+}
+
+message CommonUploadResponse {
+    bool result = 1;
+    string msg = 2;
+}
+
+message UploadSyncerBinlogEventRequest {
+    repeated SyncerBinlogEvent events = 1;
+}
+
+message UploadSyncerJobEventRequest {
+    repeated SyncerJobEvent events = 1;
+}
