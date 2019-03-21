@@ -106,6 +106,12 @@ func (w *Worker) Start() {
 
 	log.Info("[worker] start running")
 
+	// start relay
+	w.relayHolder.Start()
+
+	// start purger
+	w.relayPurger.Start()
+
 	// restore tasks
 	meta := w.meta.Get()
 	for taskName, subtask := range meta.SubTasks {
@@ -113,12 +119,6 @@ func (w *Worker) Start() {
 			panic(fmt.Sprintf("restore task %s (%s) in worker starting: %v", taskName, subtask, err))
 		}
 	}
-
-	// start relay
-	w.relayHolder.Start()
-
-	// start purger
-	w.relayPurger.Start()
 
 	// start tracer
 	if w.tracer.Enable() {
@@ -189,13 +189,10 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 	w.copyConfigFromWorker(cfg)
 
 	log.Infof("[worker] starting sub task with config: %v", cfg)
-	err := cfg.DecryptPassword()
-	if err != nil {
-		return errors.Trace(err)
-	}
+	cloneCfg, _ := cfg.DecryptPassword()
 
-	st := NewSubTask(cfg)
-	err = st.Init()
+	st := NewSubTask(cloneCfg)
+	err := st.Init()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -588,18 +585,14 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		return errors.Trace(err)
 	}
 
-	err = newCfg.DecryptPassword()
-	if err != nil {
-		return errors.Trace(err)
-	}
-
 	log.Infof("[worker] update relay configure with config: %v", newCfg)
+	cloneCfg, _ := newCfg.DecryptPassword()
 
 	// Update SubTask configure
 	for _, st := range w.subTasks {
 		cfg := config.NewSubTaskConfig()
 
-		cfg.From = newCfg.From
+		cfg.From = cloneCfg.From
 
 		stage := st.Stage()
 		if stage == pb.Stage_Paused {

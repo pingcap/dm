@@ -189,25 +189,36 @@ func (c *Config) verify() error {
 		return errors.Errorf("dm-worker should bind a non-empty source ID which represents a MySQL/MariaDB instance or a replica group. \n notice: if you use old version dm-ansible, please update to newest version.")
 	}
 
+	var err error
 	if len(c.RelayBinLogName) > 0 {
-		_, err := streamer.GetBinlogFileIndex(c.RelayBinLogName)
+		_, err = streamer.GetBinlogFileIndex(c.RelayBinLogName)
 		if err != nil {
 			return errors.Annotatef(err, "relay-binlog-name %s", c.RelayBinLogName)
 		}
 	}
 	if len(c.RelayBinlogGTID) > 0 {
-		_, err := gtid.ParserGTID(c.Flavor, c.RelayBinlogGTID)
+		_, err = gtid.ParserGTID(c.Flavor, c.RelayBinlogGTID)
 		if err != nil {
 			return errors.Annotatef(err, "relay-binlog-gtid %s", c.RelayBinlogGTID)
 		}
 	}
-	return nil
+
+	_, err = c.DecryptPassword()
+	return err
 }
 
 // configFromFile loads config from file.
 func (c *Config) configFromFile(path string) error {
 	_, err := toml.DecodeFile(path, c)
-	return errors.Trace(err)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	err = c.verify()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
 }
 
 // UpdateConfigFile write configure to local file
@@ -236,20 +247,22 @@ func (c *Config) Reload() error {
 	return nil
 }
 
-// DecryptPassword tries to decrypt db password in config
-func (c *Config) DecryptPassword() error {
+// DecryptPassword return a decrypted config replica in config
+func (c *Config) DecryptPassword() (*Config, error) {
 	// try decrypt password for To DB
+
+	clone := c.Clone()
 	var (
 		pswdFrom string
 		err      error
 	)
-	if len(c.From.Password) > 0 {
-		pswdFrom, err = utils.Decrypt(c.From.Password)
+	if len(clone.From.Password) > 0 {
+		pswdFrom, err = utils.Decrypt(clone.From.Password)
 		if err != nil {
-			return errors.Trace(err)
+			return nil, errors.Annotatef(err, "can not decrypt password %s", clone.From.Password)
 		}
 	}
-	c.From.Password = pswdFrom
+	clone.From.Password = pswdFrom
 
-	return nil
+	return clone, nil
 }
