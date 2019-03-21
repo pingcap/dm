@@ -13,7 +13,7 @@ PWD=$(pwd)
 binary=$PWD/bin/dm-worker.test
 
 pkill -hup dm-worker.test 2>/dev/null || true
-source $cur/../_utils/wait_process_exit
+source ./wait_process_exit
 wait_process_exit dm-worker.test
 
 echo "[$(date)] <<<<<< START DM-WORKER on port $port, config: $conf >>>>>>"
