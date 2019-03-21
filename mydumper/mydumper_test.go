@@ -53,9 +53,10 @@ func (m *testMydumperSuite) SetUpSuite(c *C) {
 }
 
 func (m *testMydumperSuite) TestArgs(c *C) {
-	expected := strings.Fields("--host 127.0.0.1 --port 3306 --user root --password 123 " +
+	expected := strings.Fields("--host 127.0.0.1 --port 3306 --user root " +
 		"--outputdir ./dumped_data --threads 4 --chunk-filesize 64 --skip-tz-utc " +
-		"--regex ^(?!(mysql|information_schema|performance_schema))")
+		"--regex ^(?!(mysql|information_schema|performance_schema)) " +
+		"--password 123")
 	m.cfg.MydumperConfig.ExtraArgs = "--regex '^(?!(mysql|information_schema|performance_schema))'"
 	mydumper := NewMydumper(m.cfg)
 	args := mydumper.constructArgs()
