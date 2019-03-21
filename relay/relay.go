@@ -139,7 +139,8 @@ func (r *Relay) Init() (err error) {
 	}()
 
 	cfg := r.cfg.From
-	db, err := utils.OpenDBWithEncryptedPwd(cfg.Host, cfg.Port, cfg.User, cfg.Password, showStatusConnectionTimeout)
+	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&readTimeout=%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, showStatusConnectionTimeout)
+	db, err := sql.Open("mysql", dbDSN)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -1026,7 +1027,8 @@ func (r *Relay) Reload(newCfg *Config) error {
 
 	r.db.Close()
 	cfg := r.cfg.From
-	db, err := utils.OpenDBWithEncryptedPwd(cfg.Host, cfg.Port, cfg.User, cfg.Password, showStatusConnectionTimeout)
+	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&readTimeout=%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, showStatusConnectionTimeout)
+	db, err := sql.Open("mysql", dbDSN)
 	if err != nil {
 		return errors.Trace(err)
 	}

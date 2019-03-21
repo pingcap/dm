@@ -235,3 +235,21 @@ func (c *Config) Reload() error {
 
 	return nil
 }
+
+// DecryptPassword tries to decrypt db password in config
+func (c *Config) DecryptPassword() error {
+	// try decrypt password for To DB
+	var (
+		pswdFrom string
+		err      error
+	)
+	if len(c.From.Password) > 0 {
+		pswdFrom, err = utils.Decrypt(c.From.Password)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+	c.From.Password = pswdFrom
+
+	return nil
+}

@@ -189,9 +189,13 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 	w.copyConfigFromWorker(cfg)
 
 	log.Infof("[worker] starting sub task with config: %v", cfg)
+	err := cfg.DecryptPassword()
+	if err != nil {
+		return errors.Trace(err)
+	}
 
 	st := NewSubTask(cfg)
-	err := st.Init()
+	err = st.Init()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -580,6 +584,11 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	}
 
 	err = newCfg.Reload()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	err = newCfg.DecryptPassword()
 	if err != nil {
 		return errors.Trace(err)
 	}

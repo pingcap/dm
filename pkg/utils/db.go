@@ -264,7 +264,7 @@ func IsNoSuchThreadError(err error) bool {
 }
 
 // OpenDBWithEncryptedPwd returns a db fd with encrypted password
-func OpenDBWithEncryptedPwd(host string, port int, user, password, timeout string) (db *sql.DB, err error) {
+/*func OpenDBWithEncryptedPwd(host string, port int, user, password, timeout string) (db *sql.DB, err error) {
 	if len(password) > 0 {
 		password, err = Decrypt(password)
 		if err != nil {
@@ -279,4 +279,4 @@ func OpenDBWithEncryptedPwd(host string, port int, user, password, timeout strin
 	}
 
 	return
-}
+}*/

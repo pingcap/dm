@@ -26,8 +26,6 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/utils"
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 )
 
@@ -44,19 +42,13 @@ func NewMydumper(cfg *config.SubTaskConfig) *Mydumper {
 	m := &Mydumper{
 		cfg: cfg,
 	}
-
+	m.args = m.constructArgs()
 	return m
 }
 
 // Init implements Unit.Init
 func (m *Mydumper) Init() error {
-	var err error
-	m.args, err = m.constructArgs()
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	return nil
+	return nil // always return nil
 }
 
 // Process implements Unit.Process
@@ -153,20 +145,9 @@ func (m *Mydumper) IsFreshTask() (bool, error) {
 }
 
 // constructArgs constructs arguments for exec.Command
-func (m *Mydumper) constructArgs() ([]string, error) {
+func (m *Mydumper) constructArgs() []string {
 	cfg := m.cfg
 	db := cfg.From
-
-	var (
-		password string
-		err      error
-	)
-	if len(db.Password) > 0 {
-		password, err = utils.Decrypt(password)
-		if err != nil {
-			return nil, errors.Annotatef(err, "can not decrypt password %s of db %+v", db)
-		}
-	}
 
 	ret := []string{
 		"--host",
@@ -197,8 +178,8 @@ func (m *Mydumper) constructArgs() ([]string, error) {
 
 	log.Infof("[mydumper] create mydumper using args %v", ret)
 
-	ret = append(ret, "--password", password)
-	return ret, nil
+	ret = append(ret, "--password", db.Password)
+	return ret
 }
 
 // logArgs constructs arguments for log from SubTaskConfig

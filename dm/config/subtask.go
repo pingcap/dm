@@ -289,3 +289,29 @@ func (c *SubTaskConfig) Parse(arguments []string) error {
 
 	return errors.Trace(c.adjust())
 }
+
+// DecryptPassword tries to decrypt db password in config
+func (c *SubTaskConfig) DecryptPassword() error {
+	// try decrypt password for To DB
+	var (
+		pswdTo   string
+		pswdFrom string
+		err      error
+	)
+	if len(c.To.Password) > 0 {
+		pswdTo, err = utils.Decrypt(c.To.Password)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+	if len(c.From.Password) > 0 {
+		pswdFrom, err = utils.Decrypt(c.From.Password)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+	c.From.Password = pswdFrom
+	c.To.Password = pswdTo
+
+	return nil
+}
