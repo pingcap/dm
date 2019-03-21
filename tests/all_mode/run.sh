@@ -28,7 +28,7 @@ function run() {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     # kill dm-worker
-    killall dm-master.test
+    pkill -hup dm-worker.test 2>/dev/null || true
     wait_process_exit dm-worker.test
 
     # restart dm-worker
