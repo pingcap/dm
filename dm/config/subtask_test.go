@@ -11,20 +11,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package worker
+package config
 
 import (
 	. "github.com/pingcap/check"
 )
 
-func (t *testWorker) TestConfig(c *C) {
-	cfg := &Config{}
+func (t *testConfig) TestSubTask(c *C) {
+	cfg := &SubTaskConfig{
+		From: DBConfig{
+			Host:     "127.0.0.1",
+			Port:     3306,
+			User:     "root",
+			Password: "Up8156jArvIPymkVC+5LxkAT6rek",
+		},
+		To: DBConfig{
+			Host:     "127.0.0.1",
+			Port:     4306,
+			User:     "root",
+			Password: "",
+		},
+	}
 
-	err := cfg.configFromFile("./dm-worker.toml")
+	clone1, err := cfg.Clone()
 	c.Assert(err, IsNil)
-	c.Assert(cfg.SourceID, Equals, "mysql-replica-01")
-
-	clone1 := cfg.Clone()
 	c.Assert(cfg, DeepEquals, clone1)
 
 	clone1.From.Password = "1234"
