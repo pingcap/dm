@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package pb;
+
+import "tracer_base.proto";
+
+
+message MySQLPosition {
+    string name = 1;
+    uint32 pos = 2;
+}
+
+message SyncerState {
+    bool safeMode = 1;
+    bool tryReSync = 2;
+    MySQLPosition lastPos = 3;
+    MySQLPosition currentPos = 4;
+}
+
+message ExecDDLInfo {
+    string lockID = 1;
+    bool exec = 2;
+}
+
+message SyncerBinlogEvent {
+    BaseEvent base = 1;
+    SyncerState state = 2;
+    int32 eventType = 3;
+    int32 opType = 4;
+}
+
+enum SyncerJobState {
+    init = 0;
+    queued = 1;
+    success = 2;
+    error = 3;
+}
+
+message SyncerJobEvent {
+    BaseEvent base = 1;
+    int32 opType = 2;
+    MySQLPosition pos = 3;
+    MySQLPosition currentPos = 4;
+    string sql = 5;
+    repeated string ddls = 6;
+    uint32 argsChecksum = 7;
+    ExecDDLInfo ddlInfo = 8;
+    string queueBucket = 9;
+    SyncerJobState state = 10;
+}

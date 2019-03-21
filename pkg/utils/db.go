@@ -263,8 +263,8 @@ func IsNoSuchThreadError(err error) bool {
 	return IsMySQLError(err, tmysql.ErrNoSuchThread)
 }
 
-// OpenDB returns a db fd wih encrypted password
-func OpenDB(host string, port int, user, password, timeout string) (db *sql.DB, err error) {
+// OpenDBWithEncryptedPwd returns a db fd with encrypted password
+func OpenDBWithEncryptedPwd(host string, port int, user, password, timeout string) (db *sql.DB, err error) {
 	if len(password) > 0 {
 		password, err = Decrypt(password)
 		if err != nil {

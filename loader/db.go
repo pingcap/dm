@@ -195,7 +195,7 @@ func executeSQLImp(db *sql.DB, sqls []string) error {
 }
 
 func createConn(cfg *config.SubTaskConfig) (*Conn, error) {
-	db, err := utils.OpenDB(cfg.To.Host, cfg.To.Port, cfg.To.User, cfg.To.Password, "5m")
+	db, err := utils.OpenDBWithEncryptedPwd(cfg.To.Host, cfg.To.Port, cfg.To.User, cfg.To.Password, "5m")
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

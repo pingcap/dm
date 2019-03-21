@@ -247,7 +247,7 @@ func (conn *Conn) executeSQLJobImp(jobs []*job) *ExecErrorContext {
 }
 
 func createDB(cfg *config.SubTaskConfig, dbCfg config.DBConfig, timeout string) (*Conn, error) {
-	db, err := utils.OpenDB(dbCfg.Host, dbCfg.Port, dbCfg.User, dbCfg.Password, timeout)
+	db, err := utils.OpenDBWithEncryptedPwd(dbCfg.Host, dbCfg.Port, dbCfg.User, dbCfg.Password, timeout)
 
 	if err != nil {
 		return nil, errors.Trace(err)

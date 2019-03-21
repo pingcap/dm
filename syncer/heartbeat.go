@@ -123,7 +123,7 @@ func (h *Heartbeat) AddTask(name string) error {
 	if h.master == nil {
 		// open DB
 		dbCfg := h.cfg.masterCfg
-		master, err := utils.OpenDB(dbCfg.Host, dbCfg.Port, dbCfg.User, dbCfg.Password, "1m")
+		master, err := utils.OpenDBWithEncryptedPwd(dbCfg.Host, dbCfg.Port, dbCfg.User, dbCfg.Password, "1m")
 		if err != nil {
 			return errors.Trace(err)
 		}

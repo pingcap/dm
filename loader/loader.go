@@ -34,6 +34,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -322,6 +323,7 @@ type Loader struct {
 	closed sync2.AtomicBool
 
 	totalDataSize    sync2.AtomicInt64
+	totalFileCount   sync2.AtomicInt64 // schema + table + data
 	finishedDataSize sync2.AtomicInt64
 	metaBinlog       sync2.AtomicString
 
@@ -350,12 +352,20 @@ func (l *Loader) Type() pb.UnitType {
 
 // Init initializes loader for a load task, but not start Process.
 // if fail, it should not call l.Close.
-func (l *Loader) Init() error {
+func (l *Loader) Init() (err error) {
+	rollbackHolder := fr.NewRollbackHolder("loader")
+	defer func() {
+		if err != nil {
+			rollbackHolder.RollbackReverseOrder()
+		}
+	}()
+
 	checkpoint, err := newRemoteCheckPoint(l.cfg, l.checkpointID())
 	if err != nil {
 		return errors.Trace(err)
 	}
 	l.checkPoint = checkpoint
+	rollbackHolder.Add(fr.FuncRollback{"close-checkpoint", l.checkPoint.Close})
 
 	l.bwList = filter.New(l.cfg.CaseSensitive, l.cfg.BWList)
 
@@ -636,6 +646,7 @@ func (l *Loader) initAndStartWorkerPool(ctx context.Context) error {
 func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
 	// reset some variables
 	l.db2Tables = make(map[string]Tables2DataFiles)
+	l.totalFileCount.Set(0) // reset
 	for file := range files {
 		if !strings.HasSuffix(file, "-schema-create.sql") {
 			continue
@@ -650,6 +661,7 @@ func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
 			}
 
 			l.db2Tables[db] = make(Tables2DataFiles)
+			l.totalFileCount.Add(1) // for schema
 		}
 	}
 
@@ -689,6 +701,7 @@ func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 		}
 		tableCounter.WithLabelValues(l.cfg.Name).Inc()
 		tables[table] = make(DataFiles, 0, 16)
+		l.totalFileCount.Add(1) // for table
 	}
 
 	return nil
@@ -736,6 +749,7 @@ func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 			return errors.Trace(err)
 		}
 		l.totalDataSize.Add(size)
+		l.totalFileCount.Add(1) // for data
 
 		dataFiles = append(dataFiles, file)
 		dataFileCounter.WithLabelValues(l.cfg.Name).Inc()
