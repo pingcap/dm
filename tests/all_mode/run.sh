@@ -27,6 +27,14 @@ function run() {
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
+    # kill dm-worker
+    killall dm-master.test
+    wait_process_exit dm-worker.test
+
+    # restart dm-worker
+    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
 
