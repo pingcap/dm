@@ -37,6 +37,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	pkgstreamer "github.com/pingcap/dm/pkg/streamer"
@@ -129,7 +130,14 @@ func NewRelay(cfg *Config) *Relay {
 }
 
 // Init implements the dm.Unit interface.
-func (r *Relay) Init() error {
+func (r *Relay) Init() (err error) {
+	rollbackHolder := fr.NewRollbackHolder("relay")
+	defer func() {
+		if err != nil {
+			rollbackHolder.RollbackReverseOrder()
+		}
+	}()
+
 	cfg := r.cfg.From
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&readTimeout=%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, showStatusConnectionTimeout)
 	db, err := sql.Open("mysql", dbDSN)
@@ -137,6 +145,7 @@ func (r *Relay) Init() error {
 		return errors.Trace(err)
 	}
 	r.db = db
+	rollbackHolder.Add(fr.FuncRollback{"close-DB", r.closeDB})
 
 	if err2 := os.MkdirAll(r.cfg.RelayDir, 0755); err2 != nil {
 		return errors.Trace(err2)
@@ -893,6 +902,13 @@ func (r *Relay) stopSync() {
 	}
 }
 
+func (r *Relay) closeDB() {
+	if r.db != nil {
+		r.db.Close()
+		r.db = nil
+	}
+}
+
 // Close implements the dm.Unit interface.
 func (r *Relay) Close() {
 	r.Lock()
@@ -904,10 +920,7 @@ func (r *Relay) Close() {
 
 	r.stopSync()
 
-	if r.db != nil {
-		r.db.Close()
-		r.db = nil
-	}
+	r.closeDB()
 
 	r.closed.Set(true)
 	log.Info("[relay] relay unit closed")

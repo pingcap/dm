@@ -24,11 +24,6 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql" // for mysql
-	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/dm/unit"
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/check"
 	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
@@ -36,6 +31,13 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go/sync2"
+
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/dm/unit"
+	fr "github.com/pingcap/dm/pkg/func-rollback"
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 type mysqlInstance struct {
@@ -79,7 +81,16 @@ func NewChecker(cfgs []*config.SubTaskConfig, checkingItems map[string]string) *
 }
 
 // Init implements Unit interface
-func (c *Checker) Init() error {
+func (c *Checker) Init() (err error) {
+	rollbackHolder := fr.NewRollbackHolder("checker")
+	defer func() {
+		if err != nil {
+			rollbackHolder.RollbackReverseOrder()
+		}
+	}()
+
+	rollbackHolder.Add(fr.FuncRollback{"close-DBs", c.closeDBs})
+
 	// target name => source => schema => [tables]
 	sharding := make(map[string]map[string]map[string][]string)
 	shardingCounter := make(map[string]int)
@@ -258,21 +269,27 @@ func (c *Checker) Close() {
 		return
 	}
 
+	c.closeDBs()
+
+	c.closed.Set(true)
+}
+
+func (c *Checker) closeDBs() {
 	for _, instance := range c.instances {
 		if instance.sourceDB != nil {
 			if err := dbutil.CloseDB(instance.sourceDB); err != nil {
 				log.Errorf("close source db %+v error %v", instance.sourceDBinfo, err)
 			}
+			instance.sourceDB = nil
 		}
 
 		if instance.targetDB != nil {
 			if err := dbutil.CloseDB(instance.targetDB); err != nil {
 				log.Errorf("close target db %+v error %v", instance.targetDBInfo, err)
 			}
+			instance.targetDB = nil
 		}
 	}
-
-	c.closed.Set(true)
 }
 
 // Pause implements Unit interface

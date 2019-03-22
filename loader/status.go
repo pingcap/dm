@@ -62,7 +62,8 @@ func (l *Loader) PrintStatus(ctx context.Context) {
 
 		finishedSize := l.finishedDataSize.Get()
 		totalSize := l.totalDataSize.Get()
-		log.Infof("[loader] finished_bytes = %d, total_bytes = GetAllRestoringFiles%d, progress = %s", finishedSize, totalSize, percent(finishedSize, totalSize))
+		totalFileCount := l.totalFileCount.Get()
+		log.Infof("[loader] finished_bytes = %d, total_bytes = %d, total_file_count = %d, progress = %s", finishedSize, totalSize, totalFileCount, percent(finishedSize, totalSize))
 		progressGauge.WithLabelValues(l.cfg.Name).Set(float64(finishedSize) / float64(totalSize))
 		if done {
 			return

@@ -33,15 +33,18 @@ else
 endif
 
 .PHONY: build test dm_integration_test_build integration_test coverage check \
-	dm-worker dm-master dmctl
+	dm-worker dm-master dm-tracer dmctl
 
-build: check test dm-worker dm-master dmctl
+build: check test dm-worker dm-master dm-tracer dmctl
 
 dm-worker:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dm-worker ./cmd/dm-worker
 
 dm-master:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dm-master ./cmd/dm-master
+
+dm-tracer:
+	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dm-tracer ./cmd/dm-tracer
 
 dmctl:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dmctl ./cmd/dm-ctl

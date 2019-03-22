@@ -37,9 +37,11 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/pkg/utils"
 	sm "github.com/pingcap/dm/syncer/safe-mode"
 	"github.com/pingcap/dm/syncer/sql-operator"
@@ -62,7 +64,6 @@ var (
 
 	adminQueueName     = "admin queue"
 	defaultBucketCount = 8
-	queueBucketMapping []string
 )
 
 // BinlogType represents binlog sync type
@@ -103,9 +104,10 @@ type Syncer struct {
 	toDBs  []*Conn
 	ddlDB  *Conn
 
-	jobs         []chan *job
-	jobsClosed   sync2.AtomicBool
-	jobsChanLock sync.Mutex
+	jobs               []chan *job
+	jobsClosed         sync2.AtomicBool
+	jobsChanLock       sync.Mutex
+	queueBucketMapping []string
 
 	c *causality
 
@@ -149,6 +151,8 @@ type Syncer struct {
 
 	readerHub *streamer.ReaderHub
 
+	tracer *tracing.Tracer
+
 	currentPosMu struct {
 		sync.RWMutex
 		currentPos mysql.Position // use to calc remain binlog size
@@ -174,6 +178,7 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.bwList = filter.New(cfg.CaseSensitive, cfg.BWList)
 	syncer.checkpoint = NewRemoteCheckPoint(cfg, syncer.checkpointID())
 	syncer.injectEventCh = make(chan *replication.BinlogEvent)
+	syncer.tracer = tracing.GetTracer()
 	syncer.setTimezone()
 
 	syncer.syncCfg = replication.BinlogSyncerConfig{
@@ -236,11 +241,19 @@ func (s *Syncer) Type() pb.UnitType {
 // Init initializes syncer for a sync task, but not start Process.
 // if fail, it should not call s.Close.
 // some check may move to checker later.
-func (s *Syncer) Init() error {
-	err := s.createDBs()
+func (s *Syncer) Init() (err error) {
+	rollbackHolder := fr.NewRollbackHolder("syncer")
+	defer func() {
+		if err != nil {
+			rollbackHolder.RollbackReverseOrder()
+		}
+	}()
+
+	err = s.createDBs()
 	if err != nil {
 		return errors.Trace(err)
 	}
+	rollbackHolder.Add(fr.FuncRollback{"close-DBs", s.closeDBs})
 
 	s.binlogFilter, err = bf.NewBinlogEvent(s.cfg.CaseSensitive, s.cfg.FilterRules)
 	if err != nil {
@@ -263,6 +276,7 @@ func (s *Syncer) Init() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+		rollbackHolder.Add(fr.FuncRollback{"close-onlineDDL", s.closeOnlineDDL})
 	}
 
 	err = s.genRouter()
@@ -281,6 +295,7 @@ func (s *Syncer) Init() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+	rollbackHolder.Add(fr.FuncRollback{"close-checkpoint", s.checkpoint.Close})
 
 	if s.cfg.RemoveMeta {
 		err = s.checkpoint.Clear()
@@ -312,6 +327,7 @@ func (s *Syncer) Init() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+		rollbackHolder.Add(fr.FuncRollback{"remove-heartbeat", s.removeHeartbeat})
 	}
 
 	// when Init syncer, set active relay log info
@@ -319,6 +335,7 @@ func (s *Syncer) Init() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+	rollbackHolder.Add(fr.FuncRollback{"remove-active-realylog", s.removeActiveRelayLog})
 
 	// init successfully, close done chan to make Syncer can be closed
 	// when Process started, we will re-create done chan again
@@ -598,6 +615,10 @@ func (s *Syncer) checkWait(job *job) bool {
 }
 
 func (s *Syncer) addJob(job *job) error {
+	var (
+		queueBucket int
+		execDDLReq  *pb.ExecDDLRequest
+	)
 	switch job.tp {
 	case xid:
 		s.saveGlobalPoint(job.pos)
@@ -616,12 +637,23 @@ func (s *Syncer) addJob(job *job) error {
 		s.jobWg.Wait()
 		addedJobsTotal.WithLabelValues("ddl", s.cfg.Name, adminQueueName).Inc()
 		s.jobWg.Add(1)
-		s.jobs[s.cfg.WorkerCount] <- job
+		queueBucket = s.cfg.WorkerCount
+		s.jobs[queueBucket] <- job
+		if job.ddlExecItem != nil {
+			execDDLReq = job.ddlExecItem.req
+		}
 	case insert, update, del:
 		s.jobWg.Add(1)
-		idx := int(utils.GenHashKey(job.key)) % s.cfg.WorkerCount
-		s.addCount(false, queueBucketMapping[idx], job.tp, 1)
-		s.jobs[idx] <- job
+		queueBucket = int(utils.GenHashKey(job.key)) % s.cfg.WorkerCount
+		s.addCount(false, s.queueBucketMapping[queueBucket], job.tp, 1)
+		s.jobs[queueBucket] <- job
+	}
+
+	if s.tracer.Enable() {
+		_, err := s.tracer.CollectSyncerJobEvent(job.traceID, job.traceGID, int32(job.tp), job.pos, job.currentPos, s.queueBucketMapping[queueBucket], job.sql, job.ddls, job.args, execDDLReq, pb.SyncerJobState_queued)
+		if err != nil {
+			log.Errorf("[syncer] trace error: %s", err)
+		}
 	}
 
 	wait := s.checkWait(job)
@@ -743,6 +775,15 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 			err = errCtx.err
 			s.appendExecErrors(errCtx)
 		}
+		if s.tracer.Enable() {
+			syncerJobState := s.tracer.FinishedSyncerJobState(err)
+			for _, job := range jobs {
+				_, err2 := s.tracer.CollectSyncerJobEvent(job.traceID, job.traceGID, int32(job.tp), job.pos, job.currentPos, queueBucket, job.sql, job.ddls, nil, nil, syncerJobState)
+				if err2 != nil {
+					log.Errorf("[syncer] trace error: %s", err2)
+				}
+			}
+		}
 		return errors.Trace(err)
 	}
 
@@ -770,6 +811,18 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 					if err != nil && ignoreDDLError(err) {
 						err = nil
 					}
+
+					if s.tracer.Enable() {
+						syncerJobState := s.tracer.FinishedSyncerJobState(err)
+						var execDDLReq *pb.ExecDDLRequest
+						if sqlJob.ddlExecItem != nil {
+							execDDLReq = sqlJob.ddlExecItem.req
+						}
+						_, err := s.tracer.CollectSyncerJobEvent(sqlJob.traceID, sqlJob.traceGID, int32(sqlJob.tp), sqlJob.pos, sqlJob.currentPos, queueBucket, sqlJob.sql, sqlJob.ddls, nil, execDDLReq, syncerJobState)
+						if err != nil {
+							log.Errorf("[syncer] trace error: %s", err)
+						}
+					}
 				}
 				if err != nil {
 					s.appendExecErrors(&ExecErrorContext{
@@ -778,6 +831,7 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 						jobs: fmt.Sprintf("%v", sqlJob.ddls),
 					})
 				}
+
 				if s.cfg.IsSharding {
 					// for sharding DDL syncing, send result back
 					if sqlJob.ddlExecItem != nil {
@@ -865,10 +919,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		return errors.Trace(err)
 	}
 
+	s.queueBucketMapping = make([]string, 0, s.cfg.WorkerCount+1)
 	for i := 0; i < s.cfg.WorkerCount; i++ {
 		s.wg.Add(1)
 		name := queueBucketName(i)
-		queueBucketMapping = append(queueBucketMapping, name)
+		s.queueBucketMapping = append(s.queueBucketMapping, name)
 		go func(i int, n string) {
 			ctx2, cancel := context.WithCancel(ctx)
 			s.sync(ctx2, n, s.toDBs[i], s.jobs[i])
@@ -876,6 +931,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}(i, name)
 	}
 
+	s.queueBucketMapping = append(s.queueBucketMapping, adminQueueName)
 	s.wg.Add(1)
 	go func() {
 		ctx2, cancel := context.WithCancel(ctx)
@@ -934,6 +990,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		savedGlobalLastPos  mysql.Position
 		latestOp            opType // latest job operation tp
 		eventTimeoutCounter time.Duration
+		traceSource         = fmt.Sprintf("%s.syncer.%s", s.cfg.SourceID, s.cfg.Name)
+		traceEvent          *pb.SyncerBinlogEvent
+		traceID             string
 	)
 
 	closeShardingSyncer := func() {
@@ -1083,6 +1142,14 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 				continue
 			}
+			latestOp = rotate
+
+			if s.tracer.Enable() {
+				_, err := s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
+				if err != nil {
+					log.Infof("[syncer] tracer collect syncer binlog error: %v", errors.ErrorStack(err))
+				}
+			}
 
 			log.Infof("rotate binlog to %v", currentPos)
 		case *replication.RowsEvent:
@@ -1186,6 +1253,15 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					}
 				}
 				binlogEvent.WithLabelValues("write_rows", s.cfg.Name).Observe(time.Since(startTime).Seconds())
+				latestOp = insert
+
+				if s.tracer.Enable() {
+					traceEvent, err = s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
+					if err != nil {
+						log.Infof("[syncer] tracer collect syncer binlog error: %v", errors.ErrorStack(err))
+					}
+					traceID = traceEvent.Base.TraceID
+				}
 
 				for i := range sqls {
 					var arg []interface{}
@@ -1196,7 +1272,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					if keys != nil {
 						key = keys[i]
 					}
-					err = s.commitJob(insert, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil)
+					err = s.commitJob(insert, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil, traceID)
 					if err != nil {
 						return errors.Trace(err)
 					}
@@ -1210,6 +1286,15 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					}
 				}
 				binlogEvent.WithLabelValues("update_rows", s.cfg.Name).Observe(time.Since(startTime).Seconds())
+				latestOp = update
+
+				if s.tracer.Enable() {
+					traceEvent, err = s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
+					if err != nil {
+						log.Infof("[syncer] tracer collect syncer binlog error: %v", errors.ErrorStack(err))
+					}
+					traceID = traceEvent.Base.TraceID
+				}
 
 				for i := range sqls {
 					var arg []interface{}
@@ -1221,7 +1306,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 						key = keys[i]
 					}
 
-					err = s.commitJob(update, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil)
+					err = s.commitJob(update, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil, traceID)
 					if err != nil {
 						return errors.Trace(err)
 					}
@@ -1234,6 +1319,15 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					}
 				}
 				binlogEvent.WithLabelValues("delete_rows", s.cfg.Name).Observe(time.Since(startTime).Seconds())
+				latestOp = del
+
+				if s.tracer.Enable() {
+					traceEvent, err = s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
+					if err != nil {
+						log.Infof("[syncer] tracer collect syncer binlog error: %v", errors.ErrorStack(err))
+					}
+					traceID = traceEvent.Base.TraceID
+				}
 
 				for i := range sqls {
 					var arg []interface{}
@@ -1245,7 +1339,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 						key = keys[i]
 					}
 
-					err = s.commitJob(del, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil)
+					err = s.commitJob(del, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil, traceID)
 					if err != nil {
 						return errors.Trace(err)
 					}
@@ -1402,6 +1496,14 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				continue
 			}
 
+			if s.tracer.Enable() {
+				traceEvent, err = s.tracer.CollectSyncerBinlogEvent(traceSource, safeMode.Enable(), tryReSync, lastPos, currentPos, int32(e.Header.EventType), int32(latestOp))
+				if err != nil {
+					log.Errorf("[syncer] tracer collect syncer binlog error: %v", errors.ErrorStack(err))
+				}
+				traceID = traceEvent.Base.TraceID
+			}
+
 			if !s.cfg.IsSharding {
 				log.Infof("[start] execute need handled ddls %v in position %v", needHandleDDLs, currentPos)
 				// try apply SQL operator before addJob. now, one query event only has one DDL job, if updating to multi DDL jobs, refine this.
@@ -1413,7 +1515,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					needHandleDDLs = appliedSQLs // maybe nil
 					log.Infof("[convert] execute need handled ddls converted to %v in position %s by sql operator", needHandleDDLs, currentPos)
 				}
-				job := newDDLJob(nil, needHandleDDLs, lastPos, currentPos, nil, nil)
+				job := newDDLJob(nil, needHandleDDLs, lastPos, currentPos, nil, nil, traceID)
 				err = s.addJob(job)
 				if err != nil {
 					return errors.Trace(err)
@@ -1547,7 +1649,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				needHandleDDLs = appliedSQLs // maybe nil
 				log.Infof("[convert] execute need handled ddls converted to %v in position %s by sql operator", needHandleDDLs, currentPos)
 			}
-			job := newDDLJob(ddlInfo, needHandleDDLs, lastPos, currentPos, nil, ddlExecItem)
+			job := newDDLJob(ddlInfo, needHandleDDLs, lastPos, currentPos, nil, ddlExecItem, traceID)
 			err = s.addJob(job)
 			if err != nil {
 				return errors.Trace(err)
@@ -1576,7 +1678,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			log.Debugf("[XID event][last_pos]%v [current_pos]%v [gtid set]%v", lastPos, currentPos, ev.GSet)
 			lastPos.Pos = e.Header.LogPos // update lastPos
 
-			job := newXIDJob(currentPos, currentPos, nil)
+			job := newXIDJob(currentPos, currentPos, nil, traceID)
 			err = s.addJob(job)
 			if err != nil {
 				return errors.Trace(err)
@@ -1585,12 +1687,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	}
 }
 
-func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, retry bool, pos, cmdPos mysql.Position, gs gtid.Set) error {
+func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, retry bool, pos, cmdPos mysql.Position, gs gtid.Set, traceID string) error {
 	key, err := s.resolveCasuality(keys)
 	if err != nil {
 		return errors.Errorf("resolve karam error %v", err)
 	}
-	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, pos, cmdPos, gs)
+	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, pos, cmdPos, gs, traceID)
 	err = s.addJob(job)
 	return errors.Trace(err)
 }
@@ -1747,15 +1849,25 @@ func (s *Syncer) createDBs() error {
 	s.toDBs = make([]*Conn, 0, s.cfg.WorkerCount)
 	s.toDBs, err = createDBs(s.cfg, s.cfg.To, s.cfg.WorkerCount, maxDMLConnectionTimeout)
 	if err != nil {
+		closeDBs(s.fromDB) // release resources acquired before return with error
 		return errors.Trace(err)
 	}
 	// db for ddl
 	s.ddlDB, err = createDB(s.cfg, s.cfg.To, maxDDLConnectionTimeout)
 	if err != nil {
+		closeDBs(s.fromDB)
+		closeDBs(s.toDBs...)
 		return errors.Trace(err)
 	}
 
 	return nil
+}
+
+// closeDBs closes all opened DBs, rollback for createDBs
+func (s *Syncer) closeDBs() {
+	closeDBs(s.fromDB)
+	closeDBs(s.toDBs...)
+	closeDBs(s.ddlDB)
 }
 
 // record skip ddl/dml sqls' position
@@ -1848,9 +1960,7 @@ func (s *Syncer) Close() {
 		return
 	}
 
-	if s.cfg.EnableHeartbeat {
-		s.heartbeat.RemoveTask(s.cfg.Name)
-	}
+	s.removeHeartbeat()
 
 	s.stopSync()
 
@@ -1859,16 +1969,11 @@ func (s *Syncer) Close() {
 		s.ddlInfoCh = nil
 	}
 
-	closeDBs(s.fromDB)
-	closeDBs(s.toDBs...)
-	closeDBs(s.ddlDB)
+	s.closeDBs()
 
 	s.checkpoint.Close()
 
-	if s.onlineDDL != nil {
-		s.onlineDDL.Close()
-		s.onlineDDL = nil
-	}
+	s.closeOnlineDDL()
 
 	// when closing syncer by `stop-task`, remove active relay log from hub
 	s.removeActiveRelayLog()
@@ -1891,6 +1996,19 @@ func (s *Syncer) stopSync() {
 	}
 	if s.localReader != nil {
 		s.localReader.Close()
+	}
+}
+
+func (s *Syncer) closeOnlineDDL() {
+	if s.onlineDDL != nil {
+		s.onlineDDL.Close()
+		s.onlineDDL = nil
+	}
+}
+
+func (s *Syncer) removeHeartbeat() {
+	if s.cfg.EnableHeartbeat {
+		s.heartbeat.RemoveTask(s.cfg.Name)
 	}
 }
 
