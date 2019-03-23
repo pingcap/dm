@@ -483,6 +483,10 @@ func (l *Loader) IsFreshTask() (bool, error) {
 
 // Restore begins the restore process.
 func (l *Loader) Restore(ctx context.Context) error {
+	// reset some counter used to calculate progress
+	l.totalDataSize.Set(0)
+	l.finishedDataSize.Set(0) // reset before load from checkpoint
+
 	if err := l.prepare(); err != nil {
 		log.Errorf("[loader] scan dir[%s] failed, err[%v]", l.cfg.Dir, err)
 		return errors.Trace(err)
