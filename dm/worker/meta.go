@@ -80,7 +80,7 @@ func NewFileMetaDB(dir string) (*FileMetaDB, error) {
 	}
 
 	if err := os.MkdirAll(dir, 0700); err != nil {
-		return nil, errors.Annotatef(err, "create meta directory")
+		return nil, errors.Annotatef(err, "create meta directory %s", dir)
 	}
 
 	fd, err := os.Open(metaDB.path)

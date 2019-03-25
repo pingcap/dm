@@ -253,8 +253,6 @@ func (c *Config) Reload() error {
 
 // DecryptPassword returns a decrypted config replica in config
 func (c *Config) DecryptPassword() (*Config, error) {
-	// try decrypt password for To DB
-
 	clone := c.Clone()
 	var (
 		pswdFrom string
