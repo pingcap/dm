@@ -14,6 +14,7 @@
 package tracer
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"sync"
@@ -23,7 +24,6 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/common"

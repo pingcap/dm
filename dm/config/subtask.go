@@ -93,15 +93,17 @@ type SubTaskConfig struct {
 	//  treat it as hidden configuration
 	IgnoreCheckingItems []string `toml:"ignore-checking-items" json:"ignore-checking-items"`
 	// it represents a MySQL/MariaDB instance or a replica group
-	SourceID         string `toml:"source-id" json:"source-id"`
-	ServerID         int    `toml:"server-id" json:"server-id"`
-	Flavor           string `toml:"flavor" json:"flavor"`
-	MetaSchema       string `toml:"meta-schema" json:"meta-schema"`
-	RemoveMeta       bool   `toml:"remove-meta" json:"remove-meta"`
-	DisableHeartbeat bool   `toml:"disable-heartbeat" json:"disable-heartbeat"` //  deprecated, use !enable-heartbeat instead
-	EnableHeartbeat  bool   `toml:"enable-heartbeat" json:"enable-heartbeat"`
-	Meta             *Meta  `toml:"meta" json:"meta"`
-	Timezone         string `toml:"timezone" josn:"timezone"`
+	SourceID                string `toml:"source-id" json:"source-id"`
+	ServerID                int    `toml:"server-id" json:"server-id"`
+	Flavor                  string `toml:"flavor" json:"flavor"`
+	MetaSchema              string `toml:"meta-schema" json:"meta-schema"`
+	RemoveMeta              bool   `toml:"remove-meta" json:"remove-meta"`
+	DisableHeartbeat        bool   `toml:"disable-heartbeat" json:"disable-heartbeat"` //  deprecated, use !enable-heartbeat instead
+	HeartbeatUpdateInterval int    `toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
+	HeartbeatReportInterval int    `toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
+	EnableHeartbeat         bool   `toml:"enable-heartbeat" json:"enable-heartbeat"`
+	Meta                    *Meta  `toml:"meta" json:"meta"`
+	Timezone                string `toml:"timezone" josn:"timezone"`
 
 	BinlogType string `toml:"binlog-type" json:"binlog-type"`
 	// RelayDir get value from dm-worker config

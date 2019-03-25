@@ -50,10 +50,12 @@ Several convenient commands are provided:
 * `run_dm_master <WORKDIR> <PORT> <CONFIG>` — Starts `dm-master` using config provided, on given port, running in workdir.
 * `run_dm_worker <WORKDIR> <PORT> <CONFIG>` — Starts `dm-worker` using config provided, on given port, running in workdir.
 * `run_sql <SQL> <PORT>` — Executes an SQL query in database based on port provided
-* `run_sql_file <path_to_SQL_file> <PORT>` — Executes all SQLs in given file to the database on port provided
+* `run_sql_file <path_to_SQL_file> <HOST> <PORT>` — Executes all SQLs in given file to the database on port provided
+* `run_sql_file_online_ddl <path_to_SQL_file> <HOST> <PORT> <DB> <ONLINE DDL TOOL>` — Executes all SQLs in given file, will auto switch DDL to online DDL command.
 * `check_contains <TEXT>` — Checks if the previous `run_sql`/`run_sql_file` result contains the given text (in `-E` format)
 * `check_sync_diff <WORKDIR> <CONFIG>` - Runs `sync_diff_inspector` to check diff between databases, using config file provided
 * `check_port_alive <PORT>` - Wrapper to check a port is alive, at most 20 times.
 * `check_port <HOST> <PORT>` - Checks a host:port is alive.
 * `wait_process_exit <process_name>` - Wait for one or more processes to exit by given process name.
+* `check_metric <PORT> <METRIC_NAME> <VALUE PATTERN LIST>...` - check metric value from prometheus.
 

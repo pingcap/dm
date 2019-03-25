@@ -14,12 +14,12 @@
 package tracing
 
 import (
+	"context"
 	"sync"
 	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/pb"
