@@ -204,7 +204,11 @@ func (c *Config) verify() error {
 	}
 
 	_, err = c.DecryptPassword()
-	return err
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
 }
 
 // configFromFile loads config from file.
@@ -259,7 +263,7 @@ func (c *Config) DecryptPassword() (*Config, error) {
 	if len(clone.From.Password) > 0 {
 		pswdFrom, err = utils.Decrypt(clone.From.Password)
 		if err != nil {
-			return nil, errors.Annotatef(err, "can not decrypt password %s", clone.From.Password)
+			return nil, errors.Trace(err)
 		}
 	}
 	clone.From.Password = pswdFrom

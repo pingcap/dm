@@ -1718,7 +1718,7 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 	if err != nil {
 		return &pb.CheckTaskResponse{
 			Result: false,
-			Msg:    errors.Cause(err).Error(),
+			Msg:    errors.ErrorStack(err),
 		}, nil
 	}
 
