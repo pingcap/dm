@@ -251,7 +251,7 @@ func (c *Config) Reload() error {
 	return nil
 }
 
-// DecryptPassword return a decrypted config replica in config
+// DecryptPassword returns a decrypted config replica in config
 func (c *Config) DecryptPassword() (*Config, error) {
 	// try decrypt password for To DB
 
