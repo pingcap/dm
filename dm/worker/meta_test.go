@@ -53,4 +53,8 @@ func (t *testWorker) TestFileMetaDB(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(metaDB.meta.SubTasks, HasLen, 1)
 	c.Assert(meta.SubTasks["task1"], NotNil)
+
+	c.Assert(metaDB.Del("task1"), IsNil)
+	meta = metaDB.Get()
+	c.Assert(meta.SubTasks, HasLen, 0)
 }

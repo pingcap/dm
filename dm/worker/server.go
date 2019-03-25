@@ -186,8 +186,8 @@ func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskReque
 	switch req.Op {
 	case pb.TaskOp_Stop:
 		if err = s.worker.meta.Del(name); err != nil {
-			log.Errorf("update task %s into meta: %v", name, errors.ErrorStack(err))
 			resp.Msg = fmt.Sprintf("update task %s into meta: %v", name, errors.ErrorStack(err))
+			log.Errorf(resp.Msg)
 		} else {
 			err = s.worker.StopSubTask(name)
 		}
@@ -225,10 +225,11 @@ func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest
 	}
 
 	if err = s.worker.meta.Set(cfg); err != nil {
-		log.Errorf("[server] update task %s into meta: %v", cfg, errors.ErrorStack(err))
+		errMsg := fmt.Sprintf("[server] update task %s into meta: %v", cfg, errors.ErrorStack(err))
+		log.Errorf(errMsg)
 		return &pb.CommonWorkerResponse{
 			Result: false,
-			Msg:    fmt.Sprintf("update task %s into meta: %v", cfg, errors.ErrorStack(err)),
+			Msg:    errMsg,
 		}, nil
 	}
 
