@@ -4,7 +4,9 @@ task-mode: all
 is-sharding: false
 meta-schema: "dm_meta"
 remove-meta: false
-disable-heartbeat: true
+enable-heartbeat: true
+heartbeat-update-interval: 1
+heartbeat-report-interval: 1
 timezone: "Asia/Shanghai"
 
 target-database:
