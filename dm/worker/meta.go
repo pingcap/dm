@@ -70,7 +70,7 @@ type FileMetaDB struct {
 	path string
 }
 
-// NewFileMetaDB return a meta file db
+// NewFileMetaDB returns a meta file db
 func NewFileMetaDB(dir string) (*FileMetaDB, error) {
 	metaDB := &FileMetaDB{
 		path: path.Join(dir, "meta"),
