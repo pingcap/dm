@@ -72,8 +72,10 @@ func NewChecker(cfgs []*config.SubTaskConfig, checkingItems map[string]string) *
 	}
 
 	for _, cfg := range cfgs {
+		// we have verify it in subtask config
+		replica, _ := cfg.DecryptPassword()
 		c.instances = append(c.instances, &mysqlInstance{
-			cfg: cfg,
+			cfg: replica,
 		})
 	}
 
@@ -118,7 +120,6 @@ func (c *Checker) Init() (err error) {
 			User:     instance.cfg.From.User,
 			Password: instance.cfg.From.Password,
 		}
-
 		instance.sourceDB, err = dbutil.OpenDB(*instance.sourceDBinfo)
 		if err != nil {
 			return errors.Trace(err)
@@ -129,13 +130,6 @@ func (c *Checker) Init() (err error) {
 			Port:     instance.cfg.To.Port,
 			User:     instance.cfg.To.User,
 			Password: instance.cfg.To.Password,
-		}
-		if len(instance.targetDBInfo.Password) > 0 {
-			pswd, err2 := utils.Decrypt(instance.targetDBInfo.Password)
-			if err2 != nil {
-				return errors.Annotatef(err2, "can not decrypt password %s", instance.targetDBInfo.Password)
-			}
-			instance.targetDBInfo.Password = pswd
 		}
 		instance.targetDB, err = dbutil.OpenDB(*instance.targetDBInfo)
 		if err != nil {
