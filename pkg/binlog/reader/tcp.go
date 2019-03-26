@@ -16,6 +16,7 @@ package reader
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -24,17 +25,33 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
 // TCPReader is a binlog event reader which read binlog events from a TCP stream.
 type TCPReader struct {
 	stageMu sync.Mutex
-	stage   int
+	stage   readerStage
 
 	syncerCfg replication.BinlogSyncerConfig
 	syncer    *replication.BinlogSyncer
 	streamer  *replication.BinlogStreamer
+}
+
+// TCPReaderStatus represents the status of a TCPReader.
+type TCPReaderStatus struct {
+	Stage      string `json:"stage"`
+	Connection uint32 `json:"connection"`
+}
+
+// String implements Stringer.String.
+func (s *TCPReaderStatus) String() string {
+	data, err := json.Marshal(s)
+	if err != nil {
+		log.Errorf("[TCPReaderStatus] marshal status to json error %v", err)
+	}
+	return string(data)
 }
 
 // NewTCPReader creates a TCPReader instance.
@@ -127,4 +144,20 @@ func (r *TCPReader) GetEvent(ctx context.Context, checkStage bool) (*replication
 	}
 
 	return r.streamer.GetEvent(ctx)
+}
+
+// Status implements Reader.Status.
+func (r *TCPReader) Status() interface{} {
+	r.stageMu.Lock()
+	stage := r.stage
+	r.stageMu.Unlock()
+
+	var connID uint32
+	if stage != stageNew {
+		connID = r.syncer.LastConnectionID()
+	}
+	return &TCPReaderStatus{
+		Stage:      stage.String(),
+		Connection: connID,
+	}
 }

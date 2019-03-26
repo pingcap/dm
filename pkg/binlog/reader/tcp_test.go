@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -135,6 +136,15 @@ func (t *testTCPReaderSuite) TestSyncPos(c *C) {
 	// verify
 	t.verifyInitialEvents(c, r)
 
+	// check status, stagePrepared
+	status := r.Status()
+	trStatus, ok := status.(*TCPReaderStatus)
+	c.Assert(ok, IsTrue)
+	c.Assert(trStatus.Stage, Equals, stagePrepared.String())
+	c.Assert(trStatus.Connection, Greater, uint32(0))
+	trStatusStr := trStatus.String()
+	c.Assert(strings.Contains(trStatusStr, stagePrepared.String()), IsTrue)
+
 	// re-prepare is invalid
 	err = r.StartSyncByPos(pos)
 	c.Assert(err, NotNil)
@@ -201,6 +211,13 @@ func (t *testTCPReaderSuite) TestSyncGTID(c *C) {
 	r := NewTCPReader(cfg)
 	c.Assert(r, NotNil)
 
+	// check status, stageNew
+	status := r.Status()
+	trStatus, ok := status.(*TCPReaderStatus)
+	c.Assert(ok, IsTrue)
+	c.Assert(trStatus.Stage, Equals, stageNew.String())
+	c.Assert(trStatus.Connection, Equals, uint32(0))
+
 	// not prepared
 	e, err := r.GetEvent(context.Background(), true)
 	c.Assert(err, NotNil)
@@ -228,6 +245,13 @@ func (t *testTCPReaderSuite) TestSyncGTID(c *C) {
 	// close the reader
 	err = r.Close()
 	c.Assert(err, IsNil)
+
+	// check status, stageClosed
+	status = r.Status()
+	trStatus, ok = status.(*TCPReaderStatus)
+	c.Assert(ok, IsTrue)
+	c.Assert(trStatus.Stage, Equals, stageClosed.String())
+	c.Assert(trStatus.Connection, Greater, uint32(0))
 
 	// already closed
 	err = r.Close()

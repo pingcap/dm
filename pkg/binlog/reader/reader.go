@@ -22,11 +22,27 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 )
 
+type readerStage int
+
 const (
-	stageNew = iota
+	stageNew readerStage = iota
 	stagePrepared
 	stageClosed
 )
+
+// String implements Stringer.String.
+func (s readerStage) String() string {
+	switch s {
+	case stageNew:
+		return "new"
+	case stagePrepared:
+		return "prepared"
+	case stageClosed:
+		return "closed"
+	default:
+		return "unknown"
+	}
+}
 
 // Reader is a binlog event reader, it may read binlog events from a TCP stream, binlog files or any other in-memory buffer.
 // One reader should read binlog events either through position mode or GTID mode.
@@ -44,4 +60,7 @@ type Reader interface {
 	// You can pass a context (like Cancel or Timeout) to break the block.
 	// If you do not want to check the stage (for reducing the lock operation), you can set `checkStage` to false.
 	GetEvent(ctx context.Context, checkStage bool) (*replication.BinlogEvent, error)
+
+	// Status returns the status of the reader.
+	Status() interface{}
 }
