@@ -37,6 +37,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	binlogreader "github.com/pingcap/dm/pkg/binlog/reader"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
@@ -69,10 +70,11 @@ const (
 
 // Relay relays mysql binlog to local file.
 type Relay struct {
-	db                    *sql.DB
-	cfg                   *Config
-	syncer                *replication.BinlogSyncer
-	syncerCfg             replication.BinlogSyncerConfig
+	db        *sql.DB
+	cfg       *Config
+	syncerCfg replication.BinlogSyncerConfig
+	reader    binlogreader.Reader
+
 	gapSyncerCfg          replication.BinlogSyncerConfig
 	meta                  Meta
 	lastSlaveConnectionID uint32
@@ -165,7 +167,7 @@ func (r *Relay) Init() (err error) {
 
 // Process implements the dm.Unit interface.
 func (r *Relay) Process(ctx context.Context, pr chan pb.ProcessResult) {
-	r.syncer = replication.NewBinlogSyncer(r.syncerCfg)
+	r.reader = binlogreader.NewTCPReader(r.syncerCfg)
 
 	errs := make([]*pb.ProcessError, 0, 1)
 	err := r.process(ctx)
@@ -229,7 +231,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 		r.updateMetricsRelaySubDirIndex()
 	}
 
-	streamer, err := r.getBinlogStreamer()
+	err = r.setUpReader()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -300,7 +302,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 		if gapStreamer != nil {
 			e, err = gapStreamer.GetEvent(ctx)
 		} else {
-			e, err = streamer.GetEvent(ctx)
+			e, err = r.reader.GetEvent(ctx, false)
 		}
 		cancel()
 		binlogReadDurationHistogram.Observe(time.Since(readTimer).Seconds())
@@ -344,7 +346,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 						return errors.Annotatef(err, "gap streamer")
 					}
 					if tryReSync && r.cfg.EnableGTID && r.cfg.AutoFixGTID {
-						streamer, err = r.reSyncBinlog(r.syncerCfg)
+						err = r.reSetUpReader(r.syncerCfg)
 						if err != nil {
 							return errors.Annotatef(err, "try auto switch with GTID")
 						}
@@ -751,51 +753,44 @@ func (r *Relay) checkFormatDescriptionEventExists(filename string) (exists bool,
 	return false, nil
 }
 
-// NOTE: now, no online master-slave switching supported
-// when switching, user must Pause relay, update config, then Resume
-// so, will call `getBinlogStreamer` again on new master
-func (r *Relay) getBinlogStreamer() (*replication.BinlogStreamer, error) {
+func (r *Relay) setUpReader() error {
 	defer func() {
-		r.lastSlaveConnectionID = r.syncer.LastConnectionID()
-		log.Infof("[relay] last slave connection id %d", r.lastSlaveConnectionID)
+		status := r.reader.Status()
+		log.Infof("[relay] set up binlog reader with status %s", status)
 	}()
+
 	if r.cfg.EnableGTID {
-		return r.startSyncByGTID()
+		return r.setUpReaderByGTID()
 	}
-	return r.startSyncByPos()
+	return r.setUpReaderByPos()
 }
 
-func (r *Relay) startSyncByGTID() (*replication.BinlogStreamer, error) {
+func (r *Relay) setUpReaderByGTID() error {
 	uuid, gs := r.meta.GTID()
 	log.Infof("[relay] start sync for master(%s, %s) from GTID set %s", r.masterNode(), uuid, gs)
 
-	streamer, err := r.syncer.StartSyncGTID(gs.Origin())
+	err := r.reader.StartSyncByGTID(gs)
 	if err != nil {
 		log.Errorf("[relay] start sync in GTID mode from %s error %v", gs.String(), err)
-		return r.startSyncByPos()
+		return r.setUpReaderByPos()
 	}
 
-	return streamer, errors.Trace(err)
+	return nil
 }
 
-// TODO: exception handling.
-// e.g.
-// 1.relay connects to a difference MySQL
-// 2. upstream MySQL does a pure restart (removes all its' data, and then restart)
-
-func (r *Relay) startSyncByPos() (*replication.BinlogStreamer, error) {
+func (r *Relay) setUpReaderByPos() error {
 	// if the first binlog not exists in local, we should fetch from the first position, whatever the specific position is.
 	uuid, pos := r.meta.Pos()
 	log.Infof("[relay] start sync for master (%s, %s) from %s", r.masterNode(), uuid, pos.String())
 	if pos.Name == "" {
 		// let mysql decides
-		return r.syncer.StartSync(pos)
+		return r.reader.StartSyncByPos(pos)
 	}
 	if stat, err := os.Stat(filepath.Join(r.meta.Dir(), pos.Name)); os.IsNotExist(err) {
 		log.Infof("[relay] should sync from %s:4 instead of %s:%d because the binlog file not exists in local before and should sync from the very beginning", pos.Name, pos.Name, pos.Pos)
 		pos.Pos = 4
 	} else if err != nil {
-		return nil, errors.Trace(err)
+		return errors.Trace(err)
 	} else {
 		if stat.Size() > int64(pos.Pos) {
 			// it means binlog file already exists, and the local binlog file already contains the specific position
@@ -806,25 +801,24 @@ func (r *Relay) startSyncByPos() (*replication.BinlogStreamer, error) {
 			pos.Pos = uint32(stat.Size())
 			err := r.meta.Save(pos, nil)
 			if err != nil {
-				return nil, errors.Trace(err)
+				return errors.Trace(err)
 			}
 		} else if stat.Size() < int64(pos.Pos) {
 			// in such case, we should stop immediately and check
-			return nil, errors.Annotatef(ErrBinlogPosGreaterThanFileSize, "%s size=%d, specific pos=%d", pos.Name, stat.Size(), pos.Pos)
+			return errors.Annotatef(ErrBinlogPosGreaterThanFileSize, "%s size=%d, specific pos=%d", pos.Name, stat.Size(), pos.Pos)
 		}
 	}
 
-	streamer, err := r.syncer.StartSync(pos)
-	return streamer, errors.Trace(err)
+	return r.reader.StartSyncByPos(pos)
 }
 
 // reSyncBinlog re-tries sync binlog when master-slave switched
-func (r *Relay) reSyncBinlog(cfg replication.BinlogSyncerConfig) (*replication.BinlogStreamer, error) {
+func (r *Relay) reSyncBinlog(cfg replication.BinlogSyncerConfig) error {
 	err := r.retrySyncGTIDs()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return errors.Trace(err)
 	}
-	return r.reopenStreamer(cfg)
+	return r.reSetUpReader(cfg)
 }
 
 // retrySyncGTIDs try to auto fix GTID set
@@ -864,18 +858,15 @@ func (r *Relay) retrySyncGTIDs() error {
 	return nil
 }
 
-// reopenStreamer reopen a new streamer
-func (r *Relay) reopenStreamer(cfg replication.BinlogSyncerConfig) (*replication.BinlogStreamer, error) {
-	if r.syncer != nil {
-		err := r.closeBinlogSyncer(r.syncer)
-		r.syncer = nil
+func (r *Relay) reSetUpReader(cfg replication.BinlogSyncerConfig) error {
+	if r.reader != nil {
+		err := r.reader.Close()
+		r.reader = nil
 		if err != nil {
-			return nil, errors.Trace(err)
+			return errors.Trace(err)
 		}
 	}
-
-	r.syncer = replication.NewBinlogSyncer(cfg)
-	return r.getBinlogStreamer()
+	return r.setUpReader()
 }
 
 func (r *Relay) masterNode() string {
@@ -889,9 +880,9 @@ func (r *Relay) IsClosed() bool {
 
 // stopSync stops syncing, now it used by Close and Pause
 func (r *Relay) stopSync() {
-	if r.syncer != nil {
-		r.closeBinlogSyncer(r.syncer)
-		r.syncer = nil
+	if r.reader != nil {
+		r.reader.Close()
+		r.reader = nil
 	}
 	if r.fd != nil {
 		r.fd.Close()
