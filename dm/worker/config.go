@@ -77,6 +77,7 @@ type Config struct {
 	EnableGTID  bool   `toml:"enable-gtid" json:"enable-gtid"`
 	AutoFixGTID bool   `toml:"auto-fix-gtid" json:"auto-fix-gtid"`
 	RelayDir    string `toml:"relay-dir" json:"relay-dir"`
+	MetaDir     string `toml:"meta-dir" json:"meta-dir"`
 	ServerID    int    `toml:"server-id" json:"server-id"`
 	Flavor      string `toml:"flavor" json:"flavor"`
 	Charset     string `toml:"charset" json:"charset"`
@@ -118,29 +119,12 @@ func (c *Config) String() string {
 // Toml returns TOML format representation of config
 func (c *Config) Toml() (string, error) {
 	var b bytes.Buffer
-	var pswd string
-	var err error
 
-	enc := toml.NewEncoder(&b)
-	if len(c.From.Password) > 0 {
-		pswd, err = utils.Encrypt(c.From.Password)
-		if err != nil {
-			return "", errors.Annotatef(err, "can not encrypt password %s", c.From.Password)
-		}
-	}
-	c.From.Password = pswd
-
-	err = enc.Encode(c)
+	err := toml.NewEncoder(&b).Encode(c)
 	if err != nil {
 		log.Errorf("[worker] marshal config to toml error %v", err)
 	}
-	if len(c.From.Password) > 0 {
-		pswd, err = utils.Decrypt(c.From.Password)
-		if err != nil {
-			return "", errors.Annotatef(err, "can not decrypt password %s", c.From.Password)
-		}
-	}
-	c.From.Password = pswd
+
 	return string(b.String()), nil
 }
 
@@ -189,15 +173,9 @@ func (c *Config) Parse(arguments []string) error {
 		return errors.Errorf("'%s' is an invalid flag", c.flagSet.Arg(0))
 	}
 
-	// try decrypt password
-	var pswd string
-	if len(c.From.Password) > 0 {
-		pswd, err = utils.Decrypt(c.From.Password)
-		if err != nil {
-			return errors.Annotatef(err, "can not decrypt password %s", c.From.Password)
-		}
+	if len(c.MetaDir) == 0 {
+		c.MetaDir = "./dm_worker_meta"
 	}
-	c.From.Password = pswd
 
 	// assign tracer id to source id
 	c.Tracer.Source = c.SourceID
@@ -211,25 +189,40 @@ func (c *Config) verify() error {
 		return errors.Errorf("dm-worker should bind a non-empty source ID which represents a MySQL/MariaDB instance or a replica group. \n notice: if you use old version dm-ansible, please update to newest version.")
 	}
 
+	var err error
 	if len(c.RelayBinLogName) > 0 {
-		_, err := streamer.GetBinlogFileIndex(c.RelayBinLogName)
+		_, err = streamer.GetBinlogFileIndex(c.RelayBinLogName)
 		if err != nil {
 			return errors.Annotatef(err, "relay-binlog-name %s", c.RelayBinLogName)
 		}
 	}
 	if len(c.RelayBinlogGTID) > 0 {
-		_, err := gtid.ParserGTID(c.Flavor, c.RelayBinlogGTID)
+		_, err = gtid.ParserGTID(c.Flavor, c.RelayBinlogGTID)
 		if err != nil {
 			return errors.Annotatef(err, "relay-binlog-gtid %s", c.RelayBinlogGTID)
 		}
 	}
+
+	_, err = c.DecryptPassword()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	return nil
 }
 
 // configFromFile loads config from file.
 func (c *Config) configFromFile(path string) error {
 	_, err := toml.DecodeFile(path, c)
-	return errors.Trace(err)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	err = c.verify()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
 }
 
 // UpdateConfigFile write configure to local file
@@ -246,25 +239,32 @@ func (c *Config) UpdateConfigFile(content string) error {
 
 // Reload reload configure from ConfigFile
 func (c *Config) Reload() error {
-	var pswd string
-	var err error
-
 	if c.ConfigFile == "" {
 		c.ConfigFile = "dm-worker-config.bak"
 	}
 
-	err = c.configFromFile(c.ConfigFile)
+	err := c.configFromFile(c.ConfigFile)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	if len(c.From.Password) > 0 {
-		pswd, err = utils.Decrypt(c.From.Password)
+	return nil
+}
+
+// DecryptPassword returns a decrypted config replica in config
+func (c *Config) DecryptPassword() (*Config, error) {
+	clone := c.Clone()
+	var (
+		pswdFrom string
+		err      error
+	)
+	if len(clone.From.Password) > 0 {
+		pswdFrom, err = utils.Decrypt(clone.From.Password)
 		if err != nil {
-			return errors.Annotatef(err, "can not decrypt password %s", c.From.Password)
+			return nil, errors.Trace(err)
 		}
 	}
-	c.From.Password = pswd
+	clone.From.Password = pswdFrom
 
-	return nil
+	return clone, nil
 }

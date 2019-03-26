@@ -28,7 +28,6 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/tracing"
-	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay/purger"
 )
 
@@ -54,7 +53,9 @@ type Worker struct {
 	subTasks    map[string]*SubTask
 	relayHolder *RelayHolder
 	relayPurger *purger.Purger
-	tracer      *tracing.Tracer
+
+	meta   *FileMetaDB
+	tracer *tracing.Tracer
 }
 
 // NewWorker creates a new Worker
@@ -89,6 +90,11 @@ func (w *Worker) Init() error {
 
 	InitConditionHub(w)
 
+	w.meta, err = NewFileMetaDB(w.cfg.MetaDir)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	return nil
 }
 
@@ -105,6 +111,14 @@ func (w *Worker) Start() {
 
 	// start purger
 	w.relayPurger.Start()
+
+	// restore tasks
+	meta := w.meta.Get()
+	for taskName, subtask := range meta.SubTasks {
+		if err := w.StartSubTask(subtask); err != nil {
+			panic(fmt.Sprintf("restore task %s (%s) in worker starting: %v", taskName, subtask, err))
+		}
+	}
 
 	// start tracer
 	if w.tracer.Enable() {
@@ -175,22 +189,10 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 	w.copyConfigFromWorker(cfg)
 
 	log.Infof("[worker] starting sub task with config: %v", cfg)
+	cloneCfg, _ := cfg.DecryptPassword()
 
-	// try decrypt password for To DB
-	var (
-		pswdTo string
-		err    error
-	)
-	if len(cfg.To.Password) > 0 {
-		pswdTo, err = utils.Decrypt(cfg.To.Password)
-		if err != nil {
-			return errors.Trace(err)
-		}
-	}
-	cfg.To.Password = pswdTo
-
-	st := NewSubTask(cfg)
-	err = st.Init()
+	st := NewSubTask(cloneCfg)
+	err := st.Init()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -584,12 +586,13 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	}
 
 	log.Infof("[worker] update relay configure with config: %v", newCfg)
+	cloneCfg, _ := newCfg.DecryptPassword()
 
 	// Update SubTask configure
 	for _, st := range w.subTasks {
 		cfg := config.NewSubTaskConfig()
 
-		cfg.From = newCfg.From
+		cfg.From = cloneCfg.From
 
 		stage := st.Stage()
 		if stage == pb.Stage_Paused {

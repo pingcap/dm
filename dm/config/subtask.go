@@ -255,7 +255,8 @@ func (c *SubTaskConfig) adjust() error {
 		}
 	}
 
-	return nil
+	_, err := c.DecryptPassword()
+	return err
 }
 
 // Parse parses flag definitions from the argument list.
@@ -290,4 +291,49 @@ func (c *SubTaskConfig) Parse(arguments []string) error {
 	}
 
 	return errors.Trace(c.adjust())
+}
+
+// DecryptPassword tries to decrypt db password in config
+func (c *SubTaskConfig) DecryptPassword() (*SubTaskConfig, error) {
+	clone, err := c.Clone()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	var (
+		pswdTo   string
+		pswdFrom string
+	)
+	if len(clone.To.Password) > 0 {
+		pswdTo, err = utils.Decrypt(clone.To.Password)
+		if err != nil {
+			return nil, errors.Annotatef(err, "downstream DB")
+		}
+	}
+	if len(clone.From.Password) > 0 {
+		pswdFrom, err = utils.Decrypt(clone.From.Password)
+		if err != nil {
+			return nil, errors.Annotatef(err, "source DB")
+		}
+	}
+	clone.From.Password = pswdFrom
+	clone.To.Password = pswdTo
+
+	return clone, nil
+}
+
+// Clone returns a replica of SubTaskConfig
+func (c *SubTaskConfig) Clone() (*SubTaskConfig, error) {
+	content, err := c.Toml()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	clone := &SubTaskConfig{}
+	_, err = toml.Decode(content, clone)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return clone, nil
 }

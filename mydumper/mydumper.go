@@ -68,7 +68,6 @@ func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	// Cmd cannot be reused, so we create a new cmd when begin processing
 	cmd := exec.CommandContext(ctx, m.cfg.MydumperPath, m.args...)
-	log.Infof("[mydumper] starting mydumper using args %v", cmd.Args)
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -149,6 +148,7 @@ func (m *Mydumper) IsFreshTask() (bool, error) {
 func (m *Mydumper) constructArgs() []string {
 	cfg := m.cfg
 	db := cfg.From
+
 	ret := []string{
 		"--host",
 		db.Host,
@@ -156,8 +156,6 @@ func (m *Mydumper) constructArgs() []string {
 		strconv.Itoa(db.Port),
 		"--user",
 		db.User,
-		"--password",
-		db.Password,
 		"--outputdir",
 		cfg.Dir, // use LoaderConfig.Dir as --outputdir
 	}
@@ -177,6 +175,10 @@ func (m *Mydumper) constructArgs() []string {
 	if len(extraArgs) > 0 {
 		ret = append(ret, ParseArgLikeBash(extraArgs)...)
 	}
+
+	log.Infof("[mydumper] create mydumper using args %v", ret)
+
+	ret = append(ret, "--password", db.Password)
 	return ret
 }
 

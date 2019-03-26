@@ -34,12 +34,12 @@ func Encrypt(plaintext string) (string, error) {
 func Decrypt(ciphertextB64 string) (string, error) {
 	ciphertext, err := base64.StdEncoding.DecodeString(ciphertextB64)
 	if err != nil {
-		return "", errors.Trace(err)
+		return "", errors.Annotatef(err, "can not decrypt password %s", ciphertextB64)
 	}
 
 	plaintext, err := encrypt.Decrypt(ciphertext)
 	if err != nil {
-		return "", errors.Trace(err)
+		return "", errors.Annotatef(err, "can not decrypt password %s", ciphertextB64)
 	}
 	return string(plaintext), nil
 }
