@@ -247,8 +247,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 		// 2. create a special streamer to fill the gap
 		// 3. catchup pos after the gap
 		// 4. close the special streamer
-		gapSyncer       *replication.BinlogSyncer           // syncer used to fill the gap in relay log file
-		gapStreamer     *replication.BinlogStreamer         // streamer used to fill the gap in relay log file
+		gapReader       binlogreader.Reader
 		gapSyncStartPos *mysql.Position                     // the pos of the event starting to fill the gap
 		gapSyncEndPos   *mysql.Position                     // the pos of the event after the gap
 		eventFormat     *replication.FormatDescriptionEvent // latest FormatDescriptionEvent, used when re-calculate checksum
@@ -256,11 +255,10 @@ func (r *Relay) process(parentCtx context.Context) error {
 
 	closeGapSyncer := func() {
 		addRelayFlag = false // reset to false when closing the gap syncer
-		if gapSyncer != nil {
-			gapSyncer.Close()
-			gapSyncer = nil
+		if gapReader != nil {
+			gapReader.Close()
+			gapReader = nil
 		}
-		gapStreamer = nil
 		gapSyncStartPos = nil
 		gapSyncEndPos = nil
 	}
@@ -275,9 +273,9 @@ func (r *Relay) process(parentCtx context.Context) error {
 	go r.doIntervalOps(parentCtx)
 
 	for {
-		if gapStreamer == nil && gapSyncStartPos != nil && gapSyncEndPos != nil {
-			gapSyncer = replication.NewBinlogSyncer(r.gapSyncerCfg)
-			gapStreamer, err = gapSyncer.StartSync(*gapSyncStartPos)
+		if gapReader == nil && gapSyncStartPos != nil && gapSyncEndPos != nil {
+			gapReader = binlogreader.NewTCPReader(r.gapSyncerCfg)
+			err = gapReader.StartSyncByPos(*gapSyncStartPos)
 			if err != nil {
 				return errors.Annotatef(err, "start to fill gap in relay log file from %v", gapSyncStartPos)
 			}
@@ -299,8 +297,8 @@ func (r *Relay) process(parentCtx context.Context) error {
 		ctx, cancel := context.WithTimeout(parentCtx, eventTimeout)
 		readTimer := time.Now()
 		var e *replication.BinlogEvent
-		if gapStreamer != nil {
-			e, err = gapStreamer.GetEvent(ctx)
+		if gapReader != nil {
+			e, err = gapReader.GetEvent(ctx, false)
 		} else {
 			e, err = r.reader.GetEvent(ctx, false)
 		}
@@ -320,7 +318,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 				// do nothing
 			default:
 				if utils.IsErrBinlogPurged(err) {
-					if gapStreamer != nil {
+					if gapReader != nil {
 						pos, err2 := tryFindGapStartPos(err, r.fd.Name())
 						if err2 == nil {
 							log.Errorf("[relay] %s", err.Error())         // log the error
@@ -420,7 +418,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 			}
 		}
 
-		if gapStreamer == nil {
+		if gapReader == nil {
 			gapDetected, fSize, err := r.detectGap(e)
 			if err != nil {
 				relayLogWriteErrorCounter.Inc()
