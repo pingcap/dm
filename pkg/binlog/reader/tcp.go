@@ -144,9 +144,7 @@ func (r *TCPReader) GetEvent(ctx context.Context) (*replication.BinlogEvent, err
 
 // Status implements Reader.Status.
 func (r *TCPReader) Status() interface{} {
-	r.mu.Lock()
 	stage := r.stage.Get()
-	r.mu.Unlock()
 
 	var connID uint32
 	if stage != int32(stageNew) {
