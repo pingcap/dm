@@ -145,11 +145,11 @@ func (r *TCPReader) GetEvent(ctx context.Context) (*replication.BinlogEvent, err
 // Status implements Reader.Status.
 func (r *TCPReader) Status() interface{} {
 	r.mu.Lock()
-	stage := r.stage
+	stage := r.stage.Get()
 	r.mu.Unlock()
 
 	var connID uint32
-	if stage.Get() != int32(stageNew) {
+	if stage != int32(stageNew) {
 		connID = r.syncer.LastConnectionID()
 	}
 	return &TCPReaderStatus{
