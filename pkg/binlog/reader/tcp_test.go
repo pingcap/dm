@@ -141,7 +141,7 @@ func (t *testTCPReaderSuite) TestSyncPos(c *C) {
 	trStatus, ok := status.(*TCPReaderStatus)
 	c.Assert(ok, IsTrue)
 	c.Assert(trStatus.Stage, Equals, stagePrepared.String())
-	c.Assert(trStatus.Connection, Greater, uint32(0))
+	c.Assert(trStatus.ConnID, Greater, uint32(0))
 	trStatusStr := trStatus.String()
 	c.Assert(strings.Contains(trStatusStr, stagePrepared.String()), IsTrue)
 
@@ -216,7 +216,7 @@ func (t *testTCPReaderSuite) TestSyncGTID(c *C) {
 	trStatus, ok := status.(*TCPReaderStatus)
 	c.Assert(ok, IsTrue)
 	c.Assert(trStatus.Stage, Equals, stageNew.String())
-	c.Assert(trStatus.Connection, Equals, uint32(0))
+	c.Assert(trStatus.ConnID, Equals, uint32(0))
 
 	// not prepared
 	e, err := r.GetEvent(context.Background(), true)
@@ -251,7 +251,7 @@ func (t *testTCPReaderSuite) TestSyncGTID(c *C) {
 	trStatus, ok = status.(*TCPReaderStatus)
 	c.Assert(ok, IsTrue)
 	c.Assert(trStatus.Stage, Equals, stageClosed.String())
-	c.Assert(trStatus.Connection, Greater, uint32(0))
+	c.Assert(trStatus.ConnID, Greater, uint32(0))
 
 	// already closed
 	err = r.Close()
