@@ -298,9 +298,9 @@ func (r *Relay) process(parentCtx context.Context) error {
 		readTimer := time.Now()
 		var e *replication.BinlogEvent
 		if gapReader != nil {
-			e, err = gapReader.GetEvent(ctx, false)
+			e, err = gapReader.GetEvent(ctx)
 		} else {
-			e, err = r.reader.GetEvent(ctx, false)
+			e, err = r.reader.GetEvent(ctx)
 		}
 		cancel()
 		binlogReadDurationHistogram.Observe(time.Since(readTimer).Seconds())

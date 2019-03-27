@@ -125,7 +125,7 @@ func (t *testTCPReaderSuite) TestSyncPos(c *C) {
 	c.Assert(r, NotNil)
 
 	// not prepared
-	e, err := r.GetEvent(context.Background(), true)
+	e, err := r.GetEvent(context.Background())
 	c.Assert(err, NotNil)
 	c.Assert(e, IsNil)
 
@@ -168,7 +168,7 @@ func (t *testTCPReaderSuite) TestSyncPos(c *C) {
 	err = r.StartSyncByPos(pos)
 	c.Assert(err, IsNil)
 
-	_, err = r.GetEvent(context.Background(), true)
+	_, err = r.GetEvent(context.Background())
 	// ERROR 1236 (HY000): Could not find first log file name in binary log index file
 	// close connection automatically.
 	c.Assert(err, NotNil)
@@ -219,7 +219,7 @@ func (t *testTCPReaderSuite) TestSyncGTID(c *C) {
 	c.Assert(trStatus.ConnID, Equals, uint32(0))
 
 	// not prepared
-	e, err := r.GetEvent(context.Background(), true)
+	e, err := r.GetEvent(context.Background())
 	c.Assert(err, NotNil)
 	c.Assert(e, IsNil)
 
@@ -286,7 +286,7 @@ func (t *testTCPReaderSuite) verifyInitialEvents(c *C, reader Reader) {
 
 forLoop:
 	for {
-		e, err := reader.GetEvent(timeoutCtx, true)
+		e, err := reader.GetEvent(timeoutCtx)
 		c.Assert(err, IsNil)
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
@@ -315,7 +315,7 @@ func (t *testTCPReaderSuite) verifyOneDML(c *C, reader Reader) {
 
 forLoop:
 	for {
-		e, err := reader.GetEvent(timeoutCtx, false)
+		e, err := reader.GetEvent(timeoutCtx)
 		c.Assert(err, IsNil)
 		switch ev := e.Event.(type) {
 		case *replication.RowsEvent:

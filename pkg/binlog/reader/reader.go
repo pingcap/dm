@@ -22,7 +22,7 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 )
 
-type readerStage int
+type readerStage int32
 
 const (
 	stageNew readerStage = iota
@@ -58,8 +58,7 @@ type Reader interface {
 
 	// GetEvent gets the binlog event one by one, it will block if no event can be read.
 	// You can pass a context (like Cancel or Timeout) to break the block.
-	// If you do not want to check the stage (for reducing the lock operation), you can set `checkStage` to false.
-	GetEvent(ctx context.Context, checkStage bool) (*replication.BinlogEvent, error)
+	GetEvent(ctx context.Context) (*replication.BinlogEvent, error)
 
 	// Status returns the status of the reader.
 	Status() interface{}
