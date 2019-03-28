@@ -10,6 +10,7 @@ service Worker {
 
     rpc QueryStatus (QueryStatusRequest) returns (QueryStatusResponse) {}
     rpc QueryError (QueryErrorRequest) returns (QueryErrorResponse) {}
+    rpc QueryTaskConfig(QueryTaskConfigRequest) returns (QueryTaskConfigResponse) {}
 
     rpc HandleSQLs (HandleSubTaskSQLsRequest) returns (CommonWorkerResponse) {}
     // FetchDDLInfo fetches DDL info from dm-worker by dm-master
@@ -36,7 +37,6 @@ service Worker {
 
     rpc UpdateRelayConfig (UpdateRelayRequest) returns (CommonWorkerResponse) {}
 
-
     rpc QueryWorkerConfig (QueryWorkerConfigRequest) returns (QueryWorkerConfigResponse) {}
 
     rpc MigrateRelay(MigrateRelayRequest) returns (CommonWorkerResponse) {}
@@ -51,6 +51,8 @@ enum TaskOp {
     Stop = 1;
     Pause = 2;
     Resume = 3;
+    Start = 4;
+    Update = 5;
 }
 
 message UpdateRelayRequest {
@@ -65,6 +67,7 @@ message MigrateRelayRequest {
 message OperateSubTaskRequest {
     TaskOp op = 1;
     string name = 2; // sub task's name
+    string task = 3; // (sub) task's configuration
 }
 
 message OperateSubTaskResponse {
@@ -72,6 +75,14 @@ message OperateSubTaskResponse {
     bool result = 2;
     string worker = 3; // worker name, set by dm-master
     string msg = 4;
+}
+
+message QueryTaskConfigRequest {
+    repeated string names = 1; // sub task's name
+}
+
+message QueryTaskConfigResponse {
+    repeated string tasks = 1; // sub task's config
 }
 
 message UpdateSubTaskRequest {
