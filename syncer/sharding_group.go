@@ -138,7 +138,7 @@ func (sg *ShardingGroup) Merge(sources []string) (bool, bool, int, error) {
 				if !synced {
 					sg.remain--
 				} else if !utils.CompareShardingDDLs(sg.sourceDDLs[source], ddls) {
-					return isResolving, sg.remain <= 0, sg.remain, errors.NotSupportedf("execute multiple ddls: previous ddl %s and current ddl %s for source table %s", sg.sourceDDLs[source], ddl, source)
+					return isResolving, sg.remain <= 0, sg.remain, errors.NotSupportedf("execute multiple ddls: previous ddl %s and current ddls %q for source table %s", sg.sourceDDLs[source], ddls, source)
 				}
 			}
 
@@ -211,7 +211,7 @@ func (sg *ShardingGroup) TrySync(source string, pos, endPos mysql.Position, ddls
 		sg.sources[source] = true
 		sg.sourceDDLs[source] = ddls
 	} else if !utils.CompareShardingDDLs(sg.sourceDDLs[source], ddls) {
-		return sg.remain <= 0, sg.remain, errors.NotSupportedf("execute multiple ddls: previous ddl %s and current ddl %s for source table %s", sg.sourceDDLs[source], ddl, source)
+		return sg.remain <= 0, sg.remain, errors.NotSupportedf("execute multiple ddls: previous ddl %s and current ddls %q for source table %s", sg.sourceDDLs[source], ddls, source)
 	}
 
 	if sg.firstPos == nil {

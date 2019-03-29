@@ -262,3 +262,21 @@ func IsErrDupEntry(err error) bool {
 func IsNoSuchThreadError(err error) bool {
 	return IsMySQLError(err, tmysql.ErrNoSuchThread)
 }
+
+// OpenDBWithEncryptedPwd returns a db fd with encrypted password
+/*func OpenDBWithEncryptedPwd(host string, port int, user, password, timeout string) (db *sql.DB, err error) {
+	if len(password) > 0 {
+		password, err = Decrypt(password)
+		if err != nil {
+			return nil, errors.Annotatef(err, "can not decrypt password %s of user %s for db %s:%d", password, user, host, port)
+		}
+	}
+
+	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8&interpolateParams=true&readTimeout=%s", user, password, host, port, timeout)
+	db, err = sql.Open("mysql", dbDSN)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return
+}*/

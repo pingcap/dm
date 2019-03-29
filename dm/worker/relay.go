@@ -43,21 +43,22 @@ type RelayHolder struct {
 
 // NewRelayHolder creates a new RelayHolder
 func NewRelayHolder(cfg *Config) *RelayHolder {
+	clone, _ := cfg.DecryptPassword()
 	relayCfg := &relay.Config{
-		EnableGTID:  cfg.EnableGTID,
-		AutoFixGTID: cfg.AutoFixGTID,
-		Flavor:      cfg.Flavor,
-		RelayDir:    cfg.RelayDir,
-		ServerID:    cfg.ServerID,
-		Charset:     cfg.Charset,
+		EnableGTID:  clone.EnableGTID,
+		AutoFixGTID: clone.AutoFixGTID,
+		Flavor:      clone.Flavor,
+		RelayDir:    clone.RelayDir,
+		ServerID:    clone.ServerID,
+		Charset:     clone.Charset,
 		From: relay.DBConfig{
-			Host:     cfg.From.Host,
-			Port:     cfg.From.Port,
-			User:     cfg.From.User,
-			Password: cfg.From.Password,
+			Host:     clone.From.Host,
+			Port:     clone.From.Port,
+			User:     clone.From.User,
+			Password: clone.From.Password,
 		},
-		BinLogName: cfg.RelayBinLogName,
-		BinlogGTID: cfg.RelayBinlogGTID,
+		BinLogName: clone.RelayBinLogName,
+		BinlogGTID: clone.RelayBinlogGTID,
 	}
 
 	h := &RelayHolder{
