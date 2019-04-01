@@ -2614,7 +2614,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "waiting sharding DDL lock to be resolved, >0 means waiting",
+          "description": "waiting shard DDL lock to be resolved, >0 means waiting",
           "fill": 1,
           "id": 46,
           "legend": {

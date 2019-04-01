@@ -140,7 +140,7 @@ var (
 			Namespace: "dm",
 			Subsystem: "syncer",
 			Name:      "shard_lock_resolving",
-			Help:      "waiting sharding DDL lock to be resolved",
+			Help:      "waiting shard DDL lock to be resolved",
 		}, []string{"task"})
 )
 
