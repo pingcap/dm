@@ -485,6 +485,11 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.LoaderConfig = *inst.Loader
 		cfg.SyncerConfig = *inst.Syncer
 
+		err := cfg.adjust()
+		if err != nil {
+			return nil, errors.Annotatef(err, "source %s", inst.SourceID)
+		}
+
 		cfgs[i] = cfg
 	}
 	return cfgs, nil
