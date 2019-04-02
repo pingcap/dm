@@ -32,6 +32,8 @@ func (t *testConfig) TestSubTask(c *C) {
 			Password: "",
 		},
 	}
+	cfg.From.Adjust()
+	cfg.To.Adjust()
 
 	clone1, err := cfg.Clone()
 	c.Assert(err, IsNil)
