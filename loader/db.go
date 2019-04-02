@@ -195,7 +195,8 @@ func executeSQLImp(db *sql.DB, sqls []string) error {
 }
 
 func createConn(cfg *config.SubTaskConfig) (*Conn, error) {
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8", cfg.To.User, cfg.To.Password, cfg.To.Host, cfg.To.Port)
+	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&maxAllowedPacket=%d",
+		cfg.To.User, cfg.To.Password, cfg.To.Host, cfg.To.Port, *cfg.To.MaxAllowedPacket)
 	db, err := sql.Open("mysql", dbDSN)
 	if err != nil {
 		return nil, errors.Trace(err)

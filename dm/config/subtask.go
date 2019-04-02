@@ -47,12 +47,17 @@ const (
 	CmdSyncer CmdName = "syncer"
 )
 
+var (
+	defaultMaxAllowedPacket = 64 * 1024 * 1024 // 64MiB, equal to TiDB's default
+)
+
 // DBConfig is the DB configuration.
 type DBConfig struct {
-	Host     string `toml:"host" json:"host" yaml:"host"`
-	Port     int    `toml:"port" json:"port" yaml:"port"`
-	User     string `toml:"user" json:"user" yaml:"user"`
-	Password string `toml:"password" json:"-" yaml:"password"` // omit it for privacy
+	Host             string `toml:"host" json:"host" yaml:"host"`
+	Port             int    `toml:"port" json:"port" yaml:"port"`
+	User             string `toml:"user" json:"user" yaml:"user"`
+	Password         string `toml:"password" json:"-" yaml:"password"` // omit it for privacy
+	MaxAllowedPacket *int   `toml:"max-allowed-packet" json:"max-allowed-packet" yaml:"max-allowed-packet"`
 }
 
 // Toml returns TOML format representation of config
@@ -70,6 +75,14 @@ func (db *DBConfig) Toml() (string, error) {
 func (db *DBConfig) Decode(data string) error {
 	_, err := toml.Decode(data, db)
 	return errors.Trace(err)
+}
+
+// Adjust adjusts the config.
+func (db *DBConfig) Adjust() {
+	if db.MaxAllowedPacket == nil {
+		cloneV := defaultMaxAllowedPacket
+		db.MaxAllowedPacket = &cloneV
+	}
 }
 
 // SubTaskConfig is the configuration for SubTask
@@ -254,6 +267,9 @@ func (c *SubTaskConfig) adjust() error {
 			return errors.Annotatef(err, "invalid timezone string: %s", c.Timezone)
 		}
 	}
+
+	c.From.Adjust()
+	c.To.Adjust()
 
 	_, err := c.DecryptPassword()
 	return err

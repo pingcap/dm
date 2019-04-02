@@ -51,6 +51,7 @@ func (t *testCheckPointSuite) SetUpSuite(c *C) {
 		},
 		MetaSchema: "test",
 	}
+	t.cfg.To.Adjust()
 }
 
 func (t *testCheckPointSuite) TearDownSuite(c *C) {
