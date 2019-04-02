@@ -1578,6 +1578,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 
 			if needShardingHandle {
+				target, _ := GenTableID(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
+				unsyncedTableGauge.WithLabelValues(s.cfg.Name, target).Set(float64(remain))
 				log.Infof("[syncer] query event %v for source %v is in sharding, synced: %v, remain: %d", startPos, source, synced, remain)
 				err = safeMode.IncrForTable(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try enable safe-mode when starting syncing for sharding group
 				if err != nil {
@@ -1628,8 +1630,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				s.ddlInfoCh <- ddlInfo1 // save DDLInfo, and dm-worker will fetch it
 
 				// block and wait DDL lock to be synced
+				shardLockResolving.WithLabelValues(s.cfg.Name).Set(1)
 				var ok bool
 				ddlExecItem, ok = <-s.ddlExecInfo.Chan(needHandleDDLs)
+				shardLockResolving.WithLabelValues(s.cfg.Name).Set(0)
 				if !ok {
 					// chan closed
 					log.Info("[syncer] cancel to add DDL to job because of canceled from external")
