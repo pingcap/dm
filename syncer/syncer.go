@@ -1574,12 +1574,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				if err != nil {
 					return errors.Trace(err)
 				}
-				target, _ := GenTableID(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
-				unsyncedTableGauge.WithLabelValues(s.cfg.Name, target).Set(float64(remain))
 				log.Infof("[syncer] try to sync table %s to shard group (%v)", source, needShardingHandle)
 			}
 
 			if needShardingHandle {
+				target, _ := GenTableID(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
+				unsyncedTableGauge.WithLabelValues(s.cfg.Name, target).Set(float64(remain))
 				log.Infof("[syncer] query event %v for source %v is in sharding, synced: %v, remain: %d", startPos, source, synced, remain)
 				err = safeMode.IncrForTable(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try enable safe-mode when starting syncing for sharding group
 				if err != nil {
