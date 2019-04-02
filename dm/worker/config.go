@@ -180,6 +180,7 @@ func (c *Config) Parse(arguments []string) error {
 	// assign tracer id to source id
 	c.Tracer.Source = c.SourceID
 
+	c.From.Adjust()
 	return c.verify()
 }
 
