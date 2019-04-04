@@ -22,11 +22,12 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 )
 
-// Meta information contains
+// Meta information contains (deprecated, instead of proto.WorkMeta)
 // * sub-task
 type Meta struct {
 	SubTasks map[string]*config.SubTaskConfig `json:"sub-tasks" toml:"sub-tasks"`
@@ -43,16 +44,6 @@ func (m *Meta) Toml() (string, error) {
 	return b.String(), nil
 }
 
-// DecodeFile loads and decodes config from file
-func (m *Meta) DecodeFile(fpath string) error {
-	_, err := toml.DecodeFile(fpath, m)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	return nil
-}
-
 // Decode loads config from file data
 func (m *Meta) Decode(data string) error {
 	_, err := toml.Decode(data, m)
@@ -66,7 +57,7 @@ func (m *Meta) Decode(data string) error {
 // FileMetaDB stores meta information in disk
 type FileMetaDB struct {
 	lock sync.Mutex // we need to ensure only a thread can access to `metaDB` at a time
-	meta *Meta
+	meta *pb.WorkMeta
 	path string
 }
 
@@ -74,8 +65,8 @@ type FileMetaDB struct {
 func NewFileMetaDB(dir string) (*FileMetaDB, error) {
 	metaDB := &FileMetaDB{
 		path: path.Join(dir, "meta"),
-		meta: &Meta{
-			SubTasks: make(map[string]*config.SubTaskConfig),
+		meta: &pb.WorkMeta{
+			Tasks: make(map[string]*pb.TaskMeta),
 		},
 	}
 
@@ -90,11 +81,19 @@ func NewFileMetaDB(dir string) (*FileMetaDB, error) {
 	} else if err != nil {
 		return nil, errors.Trace(err)
 	}
-	defer fd.Close()
+	fd.Close()
 
-	err = metaDB.meta.DecodeFile(metaDB.path)
+	bs, err := ioutil.ReadFile(metaDB.path)
 	if err != nil {
-		return metaDB, errors.Trace(err)
+		return nil, errors.Annotatef(err, "read meta file %s", metaDB.path)
+	}
+
+	if err = metaDB.meta.Unmarshal(bs); err != nil {
+		// try to decode it using old toml definition
+		if err1 := metaDB.recoverMetaFromOldFashion(bs); err1 != nil {
+			log.Errorf("fail to recover meta from old fashion, meta file may be correuption, error message: %v", err1)
+			return nil, errors.Trace(err)
+		}
 	}
 
 	return metaDB, nil
@@ -109,49 +108,91 @@ func (metaDB *FileMetaDB) Close() error {
 }
 
 func (metaDB *FileMetaDB) save() error {
-	serialized, err := metaDB.meta.Toml()
+	serialized, err := metaDB.meta.Marshal()
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	if err := ioutil.WriteFile(metaDB.path, []byte(serialized), 0644); err != nil {
+	if err := ioutil.WriteFile(metaDB.path, serialized, 0644); err != nil {
 		return errors.Trace(err)
 	}
 	return nil
 }
 
-// Get returns `Meta` object
-func (metaDB *FileMetaDB) Get() *Meta {
+func (metaDB *FileMetaDB) recoverMetaFromOldFashion(data []byte) error {
+	oldMeta := &Meta{}
+
+	if err := oldMeta.Decode(string(data)); err != nil {
+		return err
+	}
+
+	for name, task := range oldMeta.SubTasks {
+		var b bytes.Buffer
+		enc := toml.NewEncoder(&b)
+		if err1 := enc.Encode(task); err1 != nil {
+			return errors.Annotatef(err1, "encode task %v", task)
+		}
+
+		metaDB.meta.Tasks[name] = &pb.TaskMeta{
+			Name: name,
+			Task: b.Bytes(),
+		}
+	}
+
+	return errors.Trace(metaDB.save())
+}
+
+// Load returns work meta
+func (metaDB *FileMetaDB) Load() *pb.WorkMeta {
 	metaDB.lock.Lock()
 	defer metaDB.lock.Unlock()
 
-	meta := &Meta{
-		SubTasks: make(map[string]*config.SubTaskConfig),
+	meta := &pb.WorkMeta{
+		Tasks: make(map[string]*pb.TaskMeta),
 	}
 
-	for name, task := range metaDB.meta.SubTasks {
-		meta.SubTasks[name] = task
+	for name, task := range metaDB.meta.Tasks {
+		meta.Tasks[name] = &pb.TaskMeta{
+			Op:   task.Op,
+			Name: task.Name,
+			Task: task.Task,
+		}
 	}
 
 	return meta
 }
 
-// Set sets subtask in Meta
-func (metaDB *FileMetaDB) Set(subTask *config.SubTaskConfig) error {
+// Get returns task meta by given name
+func (metaDB *FileMetaDB) Get(name string) *pb.TaskMeta {
 	metaDB.lock.Lock()
 	defer metaDB.lock.Unlock()
 
-	metaDB.meta.SubTasks[subTask.Name] = subTask
+	task, ok := metaDB.meta.Tasks[name]
+	if !ok {
+		return nil
+	}
 
+	return &pb.TaskMeta{
+		Op:   task.Op,
+		Name: task.Name,
+		Task: task.Task,
+	}
+}
+
+// Set sets task information in Meta
+func (metaDB *FileMetaDB) Set(subTask *pb.TaskMeta) error {
+	metaDB.lock.Lock()
+	defer metaDB.lock.Unlock()
+
+	metaDB.meta.Tasks[subTask.Name] = subTask
 	return errors.Trace(metaDB.save())
 }
 
-// Del deletes subtask in Meta
-func (metaDB *FileMetaDB) Del(name string) error {
+// Delete deletes task information in Meta
+func (metaDB *FileMetaDB) Delete(name string) error {
 	metaDB.lock.Lock()
 	defer metaDB.lock.Unlock()
 
-	delete(metaDB.meta.SubTasks, name)
-
+	delete(metaDB.meta.Tasks, name)
 	return errors.Trace(metaDB.save())
 }

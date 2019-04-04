@@ -14,10 +14,12 @@
 package worker
 
 import (
+	"io/ioutil"
 	"testing"
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
 )
 
 func TestWorker(t *testing.T) {
@@ -33,28 +35,65 @@ func (t *testWorker) TestFileMetaDB(c *C) {
 
 	metaDB, err := NewFileMetaDB(dir)
 	c.Assert(err, IsNil)
-	c.Assert(metaDB.meta.SubTasks, HasLen, 0)
+	c.Assert(metaDB.meta.Tasks, HasLen, 0)
+	c.Assert(metaDB.Close(), IsNil)
 
-	meta := metaDB.Get()
-	c.Assert(meta.SubTasks, HasLen, 0)
+	// write old fashion meta
+	oldMeta := &Meta{
+		SubTasks: map[string]*config.SubTaskConfig{
+			"task1": &config.SubTaskConfig{
+				Name: "task1",
+			},
+		},
+	}
+	data, err := oldMeta.Toml()
+	c.Assert(err, IsNil)
+	err = ioutil.WriteFile(metaDB.path, []byte(data), 0644)
+	c.Assert(err, IsNil)
 
-	err = metaDB.Set(&config.SubTaskConfig{
-		Name: "task1",
+	// recover from old fashion meta
+	metaDB, err = NewFileMetaDB(dir)
+	c.Assert(err, IsNil)
+	c.Assert(metaDB.meta.Tasks, HasLen, 1)
+
+	meta := metaDB.Load()
+	c.Assert(meta.Tasks, HasLen, 1)
+
+	err = metaDB.Set(&pb.TaskMeta{
+		Name: "task2",
 	})
 	c.Assert(err, IsNil)
 
-	meta = metaDB.Get()
-	c.Assert(meta.SubTasks, HasLen, 1)
-	c.Assert(meta.SubTasks["task1"], NotNil)
+	// test load
+	meta = metaDB.Load()
+	c.Assert(meta.Tasks, HasLen, 2)
+	c.Assert(meta.Tasks["task1"], NotNil)
+	c.Assert(meta.Tasks["task2"], NotNil)
+
+	// test get
+	task1 := metaDB.Get("task1")
+	c.Assert(task1, NotNil)
+	c.Assert(task1.Name, Equals, "task1")
+	task2 := metaDB.Get("task2")
+	c.Assert(task2, NotNil)
+	c.Assert(task2.Name, Equals, "task2")
 
 	c.Assert(metaDB.Close(), IsNil)
 
+	// reopen meta
 	metaDB, err = NewFileMetaDB(dir)
 	c.Assert(err, IsNil)
-	c.Assert(metaDB.meta.SubTasks, HasLen, 1)
-	c.Assert(meta.SubTasks["task1"], NotNil)
+	c.Assert(metaDB.meta.Tasks, HasLen, 2)
 
-	c.Assert(metaDB.Del("task1"), IsNil)
-	meta = metaDB.Get()
-	c.Assert(meta.SubTasks, HasLen, 0)
+	c.Assert(metaDB.Delete("task1"), IsNil)
+	meta = metaDB.Load()
+	c.Assert(meta.Tasks, HasLen, 1)
+
+	task1 = metaDB.Get("task1")
+	c.Assert(task1, IsNil)
+	task2 = metaDB.Get("task2")
+	c.Assert(task2, NotNil)
+	c.Assert(task2.Name, Equals, "task2")
+
+	c.Assert(metaDB.Close(), IsNil)
 }

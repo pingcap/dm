@@ -10,7 +10,7 @@ service Worker {
 
     rpc QueryStatus (QueryStatusRequest) returns (QueryStatusResponse) {}
     rpc QueryError (QueryErrorRequest) returns (QueryErrorResponse) {}
-    rpc QueryTaskConfig(QueryTaskConfigRequest) returns (QueryTaskConfigResponse) {}
+    rpc QueryTask(QueryTaskRequest) returns (QueryTaskResponse) {}
 
     rpc HandleSQLs (HandleSubTaskSQLsRequest) returns (CommonWorkerResponse) {}
     // FetchDDLInfo fetches DDL info from dm-worker by dm-master
@@ -67,7 +67,6 @@ message MigrateRelayRequest {
 message OperateSubTaskRequest {
     TaskOp op = 1;
     string name = 2; // sub task's name
-    string task = 3; // (sub) task's configuration
 }
 
 message OperateSubTaskResponse {
@@ -77,12 +76,12 @@ message OperateSubTaskResponse {
     string msg = 4;
 }
 
-message QueryTaskConfigRequest {
+message QueryTaskRequest {
     repeated string names = 1; // sub task's name
 }
 
-message QueryTaskConfigResponse {
-    repeated string tasks = 1; // sub task's config
+message QueryTaskResponse {
+    repeated TaskMeta tasks = 1; // sub task's config
 }
 
 message UpdateSubTaskRequest {
@@ -441,4 +440,16 @@ message QueryWorkerConfigResponse {
     string msg = 3; // when result is true, msg is empty
     string sourceID = 4; // source ID
     string content = 5; // marshaled config content
+}
+
+message TaskMeta {
+    TaskOp op = 1;
+    string name = 2; // sub task's name
+    bytes task = 3; // (sub) task's configuration
+}
+
+// meta of dm-worker
+// now it contains TaskMeta map
+message WorkMeta {
+    map<string, TaskMeta> tasks = 1;
 }

@@ -142,14 +142,17 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 	cfg := config.NewSubTaskConfig()
 	err := cfg.Decode(req.Task)
 	if err != nil {
-		log.Errorf("[server] decode config from request %+v error %v", req.Task, errors.ErrorStack(err))
+		log.Errorf("[server] decode subtask config from request %+v error %v", req.Task, errors.ErrorStack(err))
 		return &pb.CommonWorkerResponse{
 			Result: false,
 			Msg:    errors.ErrorStack(err),
 		}, nil
 	}
 
-	if err = s.worker.meta.Set(cfg); err != nil {
+	if err = s.worker.meta.Set(&pb.TaskMeta{
+		Name: cfg.Name,
+		Task: append([]byte{}, req.Task...),
+	}); err != nil {
 		log.Errorf("[server] insert task %s into meta: %v", cfg, errors.ErrorStack(err))
 		return &pb.CommonWorkerResponse{
 			Result: false,
@@ -185,7 +188,7 @@ func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskReque
 	var err error
 	switch req.Op {
 	case pb.TaskOp_Stop:
-		if err = s.worker.meta.Del(name); err != nil {
+		if err = s.worker.meta.Delete(name); err != nil {
 			resp.Msg = fmt.Sprintf("update task %s into meta: %v", name, errors.ErrorStack(err))
 			log.Errorf(resp.Msg)
 		} else {
@@ -224,7 +227,11 @@ func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest
 		}, nil
 	}
 
-	if err = s.worker.meta.Set(cfg); err != nil {
+	if err = s.worker.meta.Set(&pb.TaskMeta{
+		Op:   pb.TaskOp_Update,
+		Name: cfg.Name,
+		Task: append([]byte{}, req.Task...),
+	}); err != nil {
 		errMsg := fmt.Sprintf("[server] update task %s into meta: %v", cfg, errors.ErrorStack(err))
 		log.Errorf(errMsg)
 		return &pb.CommonWorkerResponse{
@@ -246,6 +253,11 @@ func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest
 		Result: true,
 		Msg:    "",
 	}, nil
+}
+
+// QueryTask implements WorkerServer.QueryTask
+func (s *Server) QueryTask(context.Context, *pb.QueryTaskRequest) (*pb.QueryTaskResponse, error) {
+	return nil, nil
 }
 
 // QueryStatus implements WorkerServer.QueryStatus

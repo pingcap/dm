@@ -113,10 +113,16 @@ func (w *Worker) Start() {
 	w.relayPurger.Start()
 
 	// restore tasks
-	meta := w.meta.Get()
-	for taskName, subtask := range meta.SubTasks {
-		if err := w.StartSubTask(subtask); err != nil {
-			panic(fmt.Sprintf("restore task %s (%s) in worker starting: %v", taskName, subtask, err))
+	meta := w.meta.Load()
+	for taskName, subtaskMeta := range meta.Tasks {
+		subTask := new(config.SubTaskConfig)
+
+		if err := subTask.Decode(string(subtaskMeta.Task)); err != nil {
+			panic(fmt.Sprintf("decode task %s (%s) from meta file: %v", taskName, subtaskMeta.Task, err))
+		}
+
+		if err := w.StartSubTask(subTask); err != nil {
+			panic(fmt.Sprintf("restore task %s (%s) in worker starting: %v", taskName, subTask, err))
 		}
 	}
 
