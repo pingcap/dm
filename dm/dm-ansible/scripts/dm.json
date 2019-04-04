@@ -70,6 +70,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The current state of the subtask in the instance",
           "format": "none",
           "gauge": {
             "maxValue": 100,
@@ -182,6 +183,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The storage capacity of the disk occupied by the relay log",
           "format": "bytes",
           "gauge": {
             "maxValue": 100,
@@ -257,6 +259,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The remaining storage capacity of the disk occupied by the relay log",
           "format": "bytes",
           "gauge": {
             "maxValue": 100,
@@ -310,7 +313,7 @@
             }
           ],
           "thresholds": "",
-          "title": "storage reamin",
+          "title": "storage remain",
           "type": "singlestat",
           "valueFontSize": "80%",
           "valueMaps": [
@@ -332,6 +335,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The relay log encounters an error within the DM-worker and exits",
           "format": "none",
           "gauge": {
             "maxValue": 100,
@@ -407,6 +411,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of corrupted relay log files",
           "format": "none",
           "gauge": {
             "maxValue": 100,
@@ -482,6 +487,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of errors encountered when the relay log reads the binlog from the upstream MySQL",
           "format": "none",
           "gauge": {
             "maxValue": 100,
@@ -557,6 +563,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of errors encountered when the relay log writes the binlog to disks",
           "format": "none",
           "gauge": {
             "maxValue": 100,
@@ -628,6 +635,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The largest index number of relay log files. E.g. \"value = 1\" indicates \"mysql-bin.000001\"",
           "fill": 1,
           "id": 5,
           "legend": {
@@ -703,6 +711,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of binlog files in the relay log that are behind the upstream master",
           "fill": 1,
           "id": 42,
           "legend": {
@@ -779,6 +788,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The write offset of the latest relay log file",
           "fill": 1,
           "id": 6,
           "legend": {
@@ -854,6 +864,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The duration that the relay log reads binlog from the upstream MySQL (in seconds)",
           "fill": 1,
           "id": 9,
           "legend": {
@@ -931,6 +942,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The duration that the relay log writes binlog into the disks each time (in seconds)",
           "fill": 1,
           "id": 12,
           "legend": {
@@ -1007,6 +1019,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The size of a single binlog event that the relay log writes into the disks",
           "fill": 1,
           "id": 25,
           "legend": {
@@ -1099,6 +1112,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The data import process percentage of Loader. The value range is 0% ~ 100%",
           "format": "percentunit",
           "gauge": {
             "maxValue": 100,
@@ -1174,6 +1188,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The total size of the data files in the full data imported by Loader (including the `INSERT INTO` statement)",
           "format": "bytes",
           "gauge": {
             "maxValue": 100,
@@ -1249,6 +1264,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "Dumper encounters an error within the DM-worker and exits",
           "format": "none",
           "gauge": {
             "maxValue": 100,
@@ -1324,6 +1340,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "Loader encounters an error within the DM-worker and exits",
           "format": "none",
           "gauge": {
             "maxValue": 100,
@@ -1399,6 +1416,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The total number of tables in the full data imported by Loader",
           "format": "none",
           "gauge": {
             "maxValue": 100,
@@ -1474,6 +1492,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The total number of data files in the full data imported by Loader (including the `INSERT INTO` statement)",
           "format": "none",
           "gauge": {
             "maxValue": 100,
@@ -1545,6 +1564,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The duration that Loader executes a transaction (in seconds)",
           "fill": 1,
           "id": 18,
           "legend": {
@@ -1620,6 +1640,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The duration that Loader executes a query (in seconds)",
           "fill": 1,
           "id": 34,
           "legend": {
@@ -1711,6 +1732,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The predicted remaining time it takes Syncer to be completely synchronized with the master (in minutes)",
           "format": "m",
           "gauge": {
             "maxValue": 100,
@@ -1786,6 +1808,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The latency time it takes to replicate the binlog from master to Syncer (in seconds)",
           "format": "s",
           "gauge": {
             "maxValue": 100,
@@ -1861,6 +1884,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The binlog replication process encounters an error within the DM-worker and exits",
           "format": "none",
           "gauge": {
             "maxValue": 100,
@@ -1932,6 +1956,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of binlog files in Syncer that are behind the master",
           "fill": 1,
           "id": 43,
           "legend": {
@@ -2008,6 +2033,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of binlog files in Syncer that are behind relay",
           "fill": 1,
           "id": 44,
           "legend": {
@@ -2084,6 +2110,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of binlog events received per unit of time (this number does not include the events that need to be skipped)",
           "fill": 1,
           "id": 4,
           "legend": {
@@ -2159,6 +2186,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of binlog events received per unit of time that need to be skipped",
           "fill": 1,
           "id": 35,
           "legend": {
@@ -2234,6 +2262,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The time it takes Syncer to parse and transform the binlog into SQL statements (in seconds)",
           "fill": 1,
           "id": 36,
           "legend": {
@@ -2310,6 +2339,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of newly added jobs per unit of time",
           "fill": 1,
           "id": 3,
           "legend": {
@@ -2385,6 +2415,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of finished jobs per unit of time",
           "fill": 1,
           "id": 2,
           "legend": {
@@ -2460,6 +2491,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The time it takes Syncer to execute the transaction to the downstream (in seconds)",
           "fill": 1,
           "id": 1,
           "legend": {
@@ -2536,7 +2568,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "number of unsynced tables in the subtask",
+          "description": "The number of unsynced tables in the subtask",
           "fill": 1,
           "id": 45,
           "legend": {
@@ -2614,7 +2646,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "waiting shard DDL lock to be resolved, >0 means waiting",
+          "description": "Is waiting shard DDL lock to be resolved, >0 means waiting",
           "fill": 1,
           "id": 46,
           "legend": {
