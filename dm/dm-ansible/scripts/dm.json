@@ -2730,7 +2730,7 @@
         "multi": false,
         "name": "instance",
         "options": [],
-        "query": "label_values(dm_relay_space, instance)",
+        "query": "label_values(dm_worker_task_state{task=\"$task\"}, instance)",
         "refresh": 2,
         "regex": "",
         "sort": 1,
