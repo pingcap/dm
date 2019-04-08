@@ -69,7 +69,7 @@ mysql-instances:             # one or more source database, config more source d
 
     loader:                  # local loader rule
       pool-size: 16
-      dir: "./dumped_data"   # must be unique between tasks for the same instance
+      dir: "./dumped_data"   # if not ends with `.name`, then `.name` will be appended
 
     syncer:
       worker-count: 16
