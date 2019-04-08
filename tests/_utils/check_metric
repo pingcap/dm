@@ -1,19 +1,28 @@
 #!/bin/bash
 # parameter 1: port
 # parameter 2: metric name
-# parameter 3...: valid value list
+# parameter 3: retry time
+# parameter 4...: valid value list
 
 set -eu
 
 port=$1
 metric_name=$2
+retry_time=$3
 
-metric=$(curl -s http://127.0.0.1:$port/metrics | grep $metric_name | awk '{print $2}')
-shift 2
-for pattern in "$@"; do
-    if [ "$metric" == "${pattern}" ]; then
-        exit 0
-    fi
+shift 3
+
+counter=0
+while [ $counter -lt $retry_time ]; do
+    metric=$(curl -s http://127.0.0.1:$port/metrics | grep $metric_name | awk '{print $2}')
+    for pattern in "$@"; do
+        if [ "$metric" == "${pattern}" ]; then
+            exit 0
+        fi
+    done
+    ((counter+=1))
+    echo "wait for valid metric for $counter-th time"
+    sleep 1
 done
 
 echo "metric $metric_name has invalid value $metric"

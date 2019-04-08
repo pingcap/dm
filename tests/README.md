@@ -57,5 +57,5 @@ Several convenient commands are provided:
 * `check_port_alive <PORT>` - Wrapper to check a port is alive, at most 20 times.
 * `check_port <HOST> <PORT>` - Checks a host:port is alive.
 * `wait_process_exit <process_name>` - Wait for one or more processes to exit by given process name.
-* `check_metric <PORT> <METRIC_NAME> <VALUE PATTERN LIST>...` - check metric value from prometheus.
+* `check_metric <PORT> <METRIC_NAME> <RETRY_TIME> <VALUE PATTERN LIST>...` - check metric value from prometheus.
 
