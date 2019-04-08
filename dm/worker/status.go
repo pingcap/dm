@@ -49,6 +49,7 @@ func (st *SubTask) StatusJSON() string {
 func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
 	w.Lock()
 	defer w.Unlock()
+
 	if len(w.subTasks) == 0 {
 		return nil // no sub task started
 	}

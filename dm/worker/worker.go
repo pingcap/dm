@@ -123,8 +123,13 @@ func (w *Worker) Start() {
 	w.wg.Add(2)
 	defer w.wg.Done()
 
+	go func() {
+		defer w.wg.Done()
+		w.handleTask()
+	}()
+
 	log.Info("[worker] start running")
-	// load tasks
+
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -175,8 +180,21 @@ func (w *Worker) Close() {
 
 // StartSubTask creates a sub task an run it
 func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
+	w.Lock()
+	defer w.Lock()
+
 	if w.closed.Get() == closedTrue {
 		return errors.NotValidf("worker already closed")
+	}
+
+	handle, ok := w.needHandled[cfg.Name]
+	if ok {
+		return errors.Errorf("%sing sub task %s right now", handle.Op, cfg.Name)
+	}
+
+	_, ok = w.subTasks[cfg.Name]
+	if ok {
+		return errors.AlreadyExistsf("sub task %s", cfg.Name)
 	}
 
 	// copy some config item from dm-worker's config
@@ -187,54 +205,35 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 		return errors.Annotatef(err, "[worker] encode subtask %+v into toml format", cfg)
 	}
 
-	taskMeta := &pb.TaskMeta{
+	err = w.operateSubTask(&pb.TaskMeta{
 		Op:   pb.TaskOp_Start,
 		Name: cfg.Name,
 		Task: append([]byte{}, cfgStr...),
-	}
-	if err := w.meta.Set(taskMeta); err != nil {
-		log.Errorf("[worker] starr task %s, something wrong with saving task meta: %v", cfg, err)
-		return errors.Annotatef(err, "start task %v, something wrong with saving task meta", cfg)
-	}
-
-	log.Infof("[worker] started task %v", cfg)
-
-	// put ino need handled queue
-	w.Lock()
-	w.needHandled[cfg.Name] = taskMeta
-	w.Unlock()
-
-	return nil
-}
-
-/*func (w *Worker) startSubTask(cfg *config.SubTaskConfig) error {
-	if w.relayPurger.Purging() {
-		return errors.Errorf("relay log purger is purging, cannot start sub task %s, please try again later", cfg.Name)
-	}
-
-	_, ok := w.subTasks[cfg.Name]
-	if ok {
-		return errors.Errorf("sub task with name %v already started", cfg.Name)
-	}
-
-	st := NewSubTask(cloneCfg)
-	err := st.Init()
+	})
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	w.tasks.Lock()
-	w.subTasks[cfg.Name] = st
-	w.tasks.Unlock()
-
-	st.Run()
 	return nil
-}*/
+}
 
 // UpdateSubTask update config for a sub task
 func (w *Worker) UpdateSubTask(cfg *config.SubTaskConfig) error {
+	w.Lock()
+	defer w.Lock()
+
 	if w.closed.Get() == closedTrue {
 		return errors.NotValidf("worker already closed")
+	}
+
+	handle, ok := w.needHandled[cfg.Name]
+	if ok {
+		return errors.Errorf("%sing sub task %s right now", handle.Op, cfg.Name)
+	}
+
+	_, ok = w.subTasks[cfg.Name]
+	if !ok {
+		return errors.NotFoundf("sub task %s", cfg.Name)
 	}
 
 	cfgStr, err := cfg.Toml()
@@ -242,37 +241,46 @@ func (w *Worker) UpdateSubTask(cfg *config.SubTaskConfig) error {
 		return errors.Annotatef(err, "[worker] encode subtask %+v into toml format", cfg)
 	}
 
-	taskMeta := &pb.TaskMeta{
+	err = w.operateSubTask(&pb.TaskMeta{
 		Op:   pb.TaskOp_Update,
 		Name: cfg.Name,
 		Task: append([]byte{}, cfgStr...),
+	})
+	if err != nil {
+		return errors.Trace(err)
 	}
-	if err := w.meta.Set(taskMeta); err != nil {
-		log.Errorf("[worker] update task %v, something wrong with saving task meta: %v", cfg, err)
-		return errors.Annotatef(err, "insert task %v, something wrong with saving task meta", cfg)
-	}
-
-	log.Infof("[worker] update task %v", cfg)
-
-	// put ino need handled queue
-	w.Lock()
-	w.needHandled[cfg.Name] = taskMeta
-	w.Unlock()
 
 	return nil
 }
 
-/*func (w *Worker) updateSubTask(cfg *config.SubTaskConfig) error {
-	st := w.findSubTask(cfg.Name)
-	if st == nil {
-		return errors.NotFoundf("sub task with name %s", cfg.Name)
-	}
-
-	return st.Update(cfg)
-}*/
-
 // StopSubTask stops a running sub task
 func (w *Worker) StopSubTask(name string) error {
+	w.Lock()
+	defer w.Lock()
+
+	if w.closed.Get() == closedTrue {
+		return errors.NotValidf("worker already closed")
+	}
+
+	if w.closed.Get() == closedTrue {
+		return errors.NotValidf("worker already closed")
+	}
+
+	handle, ok := w.needHandled[name]
+	if ok {
+		return errors.Errorf("%sing sub task %s right now", handle.Op, name)
+	}
+
+	_, ok = w.subTasks[name]
+	if !ok {
+		return errors.NotFoundf("sub task %s", name)
+	}
+
+	if err := w.meta.Delete(name); err != nil {
+		log.Errorf("[worker] stop task %s, something wrong with saving task meta: %v", name, err)
+		return errors.Annotatef(err, "stop task %s, something wrong with saving task meta", name)
+	}
+
 	err := w.operateSubTask(&pb.TaskMeta{
 		Name: name,
 		Op:   pb.TaskOp_Stop,
@@ -284,21 +292,35 @@ func (w *Worker) StopSubTask(name string) error {
 	return nil
 }
 
-/*func (w *Worker) stopSubTask(name string) error {
-	st := w.findSubTask(name)
+// ResumeSubTask resumes a paused sub task
+func (w *Worker) ResumeSubTask(name string) error {
+	w.Lock()
+	defer w.Lock()
+
+	if w.closed.Get() == closedTrue {
+		return errors.NotValidf("worker already closed")
+	}
+
+	handle, ok := w.needHandled[name]
+	if ok {
+		return errors.Errorf("%sing sub task %s right now", handle.Op, name)
+	}
+
+	_, ok = w.subTasks[name]
 	if !ok {
 		return errors.NotFoundf("sub task %s", name)
 	}
-	st.Close()
 
-	return nil
-}*/
+	meta := w.meta.Get(name)
+	if meta == nil {
+		log.Errorf("[worker] meta of sub task %s is NULL", name)
+		return errors.NotFoundf("[worker] meta of sub task %s is NULL", name)
+	}
 
-// ResumeSubTask resumes a paused sub task
-func (w *Worker) ResumeSubTask(name string) error {
 	err := w.operateSubTask(&pb.TaskMeta{
 		Name: name,
 		Op:   pb.TaskOp_Resume,
+		Task: meta.Task,
 	})
 	if err != nil {
 		return errors.Trace(err)
@@ -309,9 +331,33 @@ func (w *Worker) ResumeSubTask(name string) error {
 
 // PauseSubTask pauses a running sub task
 func (w *Worker) PauseSubTask(name string) error {
+	w.Lock()
+	defer w.Lock()
+
+	if w.closed.Get() == closedTrue {
+		return errors.NotValidf("worker already closed")
+	}
+
+	handle, ok := w.needHandled[name]
+	if ok {
+		return errors.Errorf("%sing sub task %s right now", handle.Op, name)
+	}
+
+	_, ok = w.subTasks[name]
+	if !ok {
+		return errors.NotFoundf("sub task %s", name)
+	}
+
+	meta := w.meta.Get(name)
+	if meta == nil {
+		log.Errorf("[worker] meta of sub task %s is NULL", name)
+		return errors.NotFoundf("[worker] meta of sub task %s is NULL", name)
+	}
+
 	err := w.operateSubTask(&pb.TaskMeta{
 		Name: name,
 		Op:   pb.TaskOp_Pause,
+		Task: meta.Task,
 	})
 	if err != nil {
 		return errors.Trace(err)
@@ -320,11 +366,8 @@ func (w *Worker) PauseSubTask(name string) error {
 	return nil
 }
 
+// not thread safe
 func (w *Worker) operateSubTask(task *pb.TaskMeta) error {
-	if w.closed.Get() == closedTrue {
-		return errors.NotValidf("worker already closed")
-	}
-
 	if err := w.meta.Set(task); err != nil {
 		log.Errorf("[worker] %s task %s, something wrong with saving task meta: %v", task.Op, task.Name, err)
 		return errors.Annotatef(err, "%s task %s, something wrong with saving task meta", task.Op, task.Name)
@@ -333,9 +376,7 @@ func (w *Worker) operateSubTask(task *pb.TaskMeta) error {
 	log.Infof("[worker] %s task %v", task.Op, task.Name)
 
 	// put ino need handled queue
-	w.Lock()
 	w.needHandled[task.Name] = task
-	w.Unlock()
 
 	return nil
 }
@@ -743,4 +784,70 @@ func (w *Worker) findSubTask(name string) *SubTask {
 	defer w.RUnlock()
 
 	return w.subTasks[name]
+}
+
+func (w *Worker) handleTask() {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-w.ctx.Done():
+			return
+		case <-ticker.C:
+			w.Lock()
+			if w.closed.Get() == closedTrue {
+				w.Unlock()
+				return
+			}
+
+			for name, task := range w.needHandled {
+				st, exist := w.subTasks[name]
+				if !exist {
+					taskCfg := new(config.SubTaskConfig)
+					taskCfg.Decode(string(task.Task))
+					st = NewSubTaskWithStage(taskCfg, opToStage(task.Op))
+				}
+
+				switch task.Op {
+				case pb.TaskOp_Start:
+					st.Run()
+				case pb.TaskOp_Update:
+					if !exist {
+						st.Run()
+					} else {
+						taskCfg := new(config.SubTaskConfig)
+						taskCfg.Decode(string(task.Task))
+						st.Update(taskCfg)
+					}
+				case pb.TaskOp_Stop:
+					st.Close()
+				case pb.TaskOp_Pause:
+					st.Pause()
+				case pb.TaskOp_Resume:
+					if !exist {
+						st.Run()
+					} else {
+						st.Resume()
+					}
+				}
+
+				delete(w.needHandled, name)
+				break
+			}
+			w.Unlock()
+		}
+	}
+}
+
+func opToStage(op pb.TaskOp) pb.Stage {
+	switch op {
+	case pb.TaskOp_Start, pb.TaskOp_Update, pb.TaskOp_Resume:
+		return pb.Stage_New
+	case pb.TaskOp_Pause:
+		return pb.Stage_Paused
+	case pb.TaskOp_Stop:
+		return pb.Stage_Stopped
+	default:
+		return pb.Stage_New
+	}
 }
