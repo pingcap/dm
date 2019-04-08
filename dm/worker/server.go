@@ -54,8 +54,7 @@ type Server struct {
 // NewServer creates a new Server
 func NewServer(cfg *Config) *Server {
 	s := Server{
-		cfg:    cfg,
-		worker: NewWorker(cfg),
+		cfg: cfg,
 	}
 	s.closed.Set(true) // not start yet
 	return &s
@@ -69,7 +68,7 @@ func (s *Server) Start() error {
 		return errors.Trace(err)
 	}
 
-	err = s.worker.Init()
+	s.worker, err = NewWorker(s.cfg)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -149,17 +148,6 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 		}, nil
 	}
 
-	if err = s.worker.meta.Set(&pb.TaskMeta{
-		Name: cfg.Name,
-		Task: append([]byte{}, req.Task...),
-	}); err != nil {
-		log.Errorf("[server] insert task %s into meta: %v", cfg, errors.ErrorStack(err))
-		return &pb.CommonWorkerResponse{
-			Result: false,
-			Msg:    fmt.Sprintf("insert task %s into meta: %v", cfg, errors.ErrorStack(err)),
-		}, nil
-	}
-
 	err = s.worker.StartSubTask(cfg)
 	if err != nil {
 		log.Errorf("[server] start sub task %s error %v", cfg.Name, errors.ErrorStack(err))
@@ -188,12 +176,7 @@ func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskReque
 	var err error
 	switch req.Op {
 	case pb.TaskOp_Stop:
-		if err = s.worker.meta.Delete(name); err != nil {
-			resp.Msg = fmt.Sprintf("update task %s into meta: %v", name, errors.ErrorStack(err))
-			log.Errorf(resp.Msg)
-		} else {
-			err = s.worker.StopSubTask(name)
-		}
+		err = s.worker.StopSubTask(name)
 	case pb.TaskOp_Pause:
 		err = s.worker.PauseSubTask(name)
 	case pb.TaskOp_Resume:
@@ -216,7 +199,6 @@ func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskReque
 // UpdateSubTask implements WorkerServer.UpdateSubTask
 func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest) (*pb.CommonWorkerResponse, error) {
 	log.Infof("[server] receive UpdateSubTask request %+v", req)
-
 	cfg := config.NewSubTaskConfig()
 	err := cfg.Decode(req.Task)
 	if err != nil {
@@ -224,19 +206,6 @@ func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest
 		return &pb.CommonWorkerResponse{
 			Result: false,
 			Msg:    errors.ErrorStack(err),
-		}, nil
-	}
-
-	if err = s.worker.meta.Set(&pb.TaskMeta{
-		Op:   pb.TaskOp_Update,
-		Name: cfg.Name,
-		Task: append([]byte{}, req.Task...),
-	}); err != nil {
-		errMsg := fmt.Sprintf("[server] update task %s into meta: %v", cfg, errors.ErrorStack(err))
-		log.Errorf(errMsg)
-		return &pb.CommonWorkerResponse{
-			Result: false,
-			Msg:    errMsg,
 		}, nil
 	}
 

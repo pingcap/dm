@@ -49,8 +49,11 @@ type Worker struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	cfg         *Config
+	cfg *Config
+
 	subTasks    map[string]*SubTask
+	needHandled map[string]*pb.TaskMeta
+
 	relayHolder *RelayHolder
 	relayPurger *purger.Purger
 
@@ -59,52 +62,37 @@ type Worker struct {
 }
 
 // NewWorker creates a new Worker
-func NewWorker(cfg *Config) *Worker {
-	w := Worker{
+func NewWorker(cfg *Config) (*Worker, error) {
+	w := &Worker{
 		cfg:         cfg,
-		subTasks:    make(map[string]*SubTask),
 		relayHolder: NewRelayHolder(cfg),
+		tracer:      tracing.InitTracerHub(cfg.Tracer),
+		subTasks:    make(map[string]*SubTask),
+		needHandled: make(map[string]*pb.TaskMeta),
 	}
 
+	// initial relay purger
 	operators := []purger.RelayOperator{
 		w.relayHolder,
 		streamer.GetReaderHub(),
 	}
 	interceptors := []purger.PurgeInterceptor{
-		&w,
+		w,
 	}
 	w.relayPurger = purger.NewPurger(cfg.Purge, cfg.RelayDir, operators, interceptors)
-	w.tracer = tracing.InitTracerHub(cfg.Tracer)
 
-	w.closed.Set(closedTrue) // not start yet
-	w.ctx, w.cancel = context.WithCancel(context.Background())
-	return &w
-}
-
-// Init initializes the worker
-func (w *Worker) Init() error {
+	// initial relay holder
 	err := w.relayHolder.Init()
 	if err != nil {
-		return errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
-
-	InitConditionHub(w)
 
 	w.meta, err = NewFileMetaDB(w.cfg.MetaDir)
 	if err != nil {
-		return errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 
-	return nil
-}
-
-// Start starts working
-func (w *Worker) Start() {
-	w.closed.Set(closedFalse)
-	w.wg.Add(1)
-	defer w.wg.Done()
-
-	log.Info("[worker] start running")
+	InitConditionHub(w)
 
 	// start relay
 	w.relayHolder.Start()
@@ -112,25 +100,31 @@ func (w *Worker) Start() {
 	// start purger
 	w.relayPurger.Start()
 
-	// restore tasks
-	meta := w.meta.Load()
-	for taskName, subtaskMeta := range meta.Tasks {
-		subTask := new(config.SubTaskConfig)
-
-		if err := subTask.Decode(string(subtaskMeta.Task)); err != nil {
-			panic(fmt.Sprintf("decode task %s (%s) from meta file: %v", taskName, subtaskMeta.Task, err))
-		}
-
-		if err := w.StartSubTask(subTask); err != nil {
-			panic(fmt.Sprintf("restore task %s (%s) in worker starting: %v", taskName, subTask, err))
-		}
-	}
-
 	// start tracer
 	if w.tracer.Enable() {
 		w.tracer.Start()
 	}
 
+	w.ctx, w.cancel = context.WithCancel(context.Background())
+	w.needHandled = w.meta.Load().Tasks
+
+	log.Info("[worker] initialzed")
+
+	return w, nil
+}
+
+// Start starts working
+func (w *Worker) Start() {
+	if w.closed.Get() == closedTrue {
+		log.Warn("worker already closed")
+		return
+	}
+
+	w.wg.Add(2)
+	defer w.wg.Done()
+
+	log.Info("[worker] start running")
+	// load tasks
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -145,23 +139,27 @@ func (w *Worker) Start() {
 
 // Close stops working and releases resources
 func (w *Worker) Close() {
-	if !w.closed.CompareAndSwap(closedFalse, closedTrue) {
-		return
+	w.Lock()
+	defer w.Unlock()
+
+	// close all sub tasks
+	for _, st := range w.subTasks {
+		st.Close()
 	}
 
-	w.Lock()
-	// close all sub tasks
-	for name, st := range w.subTasks {
-		st.Close()
-		delete(w.subTasks, name)
-	}
-	w.Unlock()
+	w.needHandled = nil
+	w.subTasks = nil
 
 	// close relay
 	w.relayHolder.Close()
 
 	// close purger
 	w.relayPurger.Close()
+
+	// close meta
+	if err := w.meta.Close(); err != nil {
+		log.Errorf("fail to close worker meta %v", err)
+	}
 
 	// close tracer
 	if w.tracer.Enable() {
@@ -171,6 +169,8 @@ func (w *Worker) Close() {
 	// cancel status output ticker and wait for return
 	w.cancel()
 	w.wg.Wait()
+
+	w.closed.Set(closedTrue)
 }
 
 // StartSubTask creates a sub task an run it
@@ -179,9 +179,35 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 		return errors.NotValidf("worker already closed")
 	}
 
-	w.Lock()
-	defer w.Unlock()
+	// copy some config item from dm-worker's config
+	w.copyConfigFromWorker(cfg)
+	cloneCfg, _ := cfg.DecryptPassword()
+	cfgStr, err := cloneCfg.Toml()
+	if err != nil {
+		return errors.Annotatef(err, "[worker] encode subtask %+v into toml format", cfg)
+	}
 
+	taskMeta := &pb.TaskMeta{
+		Op:   pb.TaskOp_Start,
+		Name: cfg.Name,
+		Task: append([]byte{}, cfgStr...),
+	}
+	if err := w.meta.Set(taskMeta); err != nil {
+		log.Errorf("[worker] starr task %s, something wrong with saving task meta: %v", cfg, err)
+		return errors.Annotatef(err, "start task %v, something wrong with saving task meta", cfg)
+	}
+
+	log.Infof("[worker] started task %v", cfg)
+
+	// put ino need handled queue
+	w.Lock()
+	w.needHandled[cfg.Name] = taskMeta
+	w.Unlock()
+
+	return nil
+}
+
+/*func (w *Worker) startSubTask(cfg *config.SubTaskConfig) error {
 	if w.relayPurger.Purging() {
 		return errors.Errorf("relay log purger is purging, cannot start sub task %s, please try again later", cfg.Name)
 	}
@@ -191,86 +217,19 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 		return errors.Errorf("sub task with name %v already started", cfg.Name)
 	}
 
-	// copy some config item from dm-worker's config
-	w.copyConfigFromWorker(cfg)
-
-	log.Infof("[worker] starting sub task with config: %v", cfg)
-	cloneCfg, _ := cfg.DecryptPassword()
-
 	st := NewSubTask(cloneCfg)
 	err := st.Init()
 	if err != nil {
 		return errors.Trace(err)
 	}
 
+	w.tasks.Lock()
 	w.subTasks[cfg.Name] = st
+	w.tasks.Unlock()
 
 	st.Run()
 	return nil
-}
-
-// copyConfigFromWorker copies config items from dm-worker to sub task
-func (w *Worker) copyConfigFromWorker(cfg *config.SubTaskConfig) {
-	cfg.From = w.cfg.From
-
-	cfg.Flavor = w.cfg.Flavor
-	cfg.ServerID = w.cfg.ServerID
-	cfg.RelayDir = w.cfg.RelayDir
-	cfg.EnableGTID = w.cfg.EnableGTID
-
-	// we can remove this from SubTaskConfig later, because syncer will always read from relay
-	cfg.AutoFixGTID = w.cfg.AutoFixGTID
-
-	// log config items, mydumper unit use it
-	cfg.LogLevel = w.cfg.LogLevel
-	cfg.LogFile = w.cfg.LogFile
-}
-
-// StopSubTask stops a running sub task
-func (w *Worker) StopSubTask(name string) error {
-	if w.closed.Get() == closedTrue {
-		return errors.NotValidf("worker already closed")
-	}
-
-	w.Lock()
-	defer w.Unlock()
-	st, ok := w.subTasks[name]
-	if !ok {
-		return errors.NotFoundf("sub task with name %s", name)
-	}
-
-	st.Close()
-	delete(w.subTasks, name)
-	return nil
-}
-
-// PauseSubTask pauses a running sub task
-func (w *Worker) PauseSubTask(name string) error {
-	if w.closed.Get() == closedTrue {
-		return errors.NotValidf("worker already closed")
-	}
-
-	st := w.findSubTask(name)
-	if st == nil {
-		return errors.NotFoundf("sub task with name %s", name)
-	}
-
-	return st.Pause()
-}
-
-// ResumeSubTask resumes a paused sub task
-func (w *Worker) ResumeSubTask(name string) error {
-	if w.closed.Get() == closedTrue {
-		return errors.NotValidf("worker already closed")
-	}
-
-	st := w.findSubTask(name)
-	if st == nil {
-		return errors.NotFoundf("sub task with name %s", name)
-	}
-
-	return st.Resume()
-}
+}*/
 
 // UpdateSubTask update config for a sub task
 func (w *Worker) UpdateSubTask(cfg *config.SubTaskConfig) error {
@@ -278,12 +237,107 @@ func (w *Worker) UpdateSubTask(cfg *config.SubTaskConfig) error {
 		return errors.NotValidf("worker already closed")
 	}
 
+	cfgStr, err := cfg.Toml()
+	if err != nil {
+		return errors.Annotatef(err, "[worker] encode subtask %+v into toml format", cfg)
+	}
+
+	taskMeta := &pb.TaskMeta{
+		Op:   pb.TaskOp_Update,
+		Name: cfg.Name,
+		Task: append([]byte{}, cfgStr...),
+	}
+	if err := w.meta.Set(taskMeta); err != nil {
+		log.Errorf("[worker] update task %v, something wrong with saving task meta: %v", cfg, err)
+		return errors.Annotatef(err, "insert task %v, something wrong with saving task meta", cfg)
+	}
+
+	log.Infof("[worker] update task %v", cfg)
+
+	// put ino need handled queue
+	w.Lock()
+	w.needHandled[cfg.Name] = taskMeta
+	w.Unlock()
+
+	return nil
+}
+
+/*func (w *Worker) updateSubTask(cfg *config.SubTaskConfig) error {
 	st := w.findSubTask(cfg.Name)
 	if st == nil {
 		return errors.NotFoundf("sub task with name %s", cfg.Name)
 	}
 
 	return st.Update(cfg)
+}*/
+
+// StopSubTask stops a running sub task
+func (w *Worker) StopSubTask(name string) error {
+	err := w.operateSubTask(&pb.TaskMeta{
+		Name: name,
+		Op:   pb.TaskOp_Stop,
+	})
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
+}
+
+/*func (w *Worker) stopSubTask(name string) error {
+	st := w.findSubTask(name)
+	if !ok {
+		return errors.NotFoundf("sub task %s", name)
+	}
+	st.Close()
+
+	return nil
+}*/
+
+// ResumeSubTask resumes a paused sub task
+func (w *Worker) ResumeSubTask(name string) error {
+	err := w.operateSubTask(&pb.TaskMeta{
+		Name: name,
+		Op:   pb.TaskOp_Resume,
+	})
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
+}
+
+// PauseSubTask pauses a running sub task
+func (w *Worker) PauseSubTask(name string) error {
+	err := w.operateSubTask(&pb.TaskMeta{
+		Name: name,
+		Op:   pb.TaskOp_Pause,
+	})
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
+}
+
+func (w *Worker) operateSubTask(task *pb.TaskMeta) error {
+	if w.closed.Get() == closedTrue {
+		return errors.NotValidf("worker already closed")
+	}
+
+	if err := w.meta.Set(task); err != nil {
+		log.Errorf("[worker] %s task %s, something wrong with saving task meta: %v", task.Op, task.Name, err)
+		return errors.Annotatef(err, "%s task %s, something wrong with saving task meta", task.Op, task.Name)
+	}
+
+	log.Infof("[worker] %s task %v", task.Op, task.Name)
+
+	// put ino need handled queue
+	w.Lock()
+	w.needHandled[task.Name] = task
+	w.Unlock()
+
+	return nil
 }
 
 // QueryStatus query worker's sub tasks' status
@@ -318,13 +372,6 @@ func (w *Worker) HandleSQLs(ctx context.Context, req *pb.HandleSubTaskSQLsReques
 	}
 
 	return errors.Trace(st.SetSyncerSQLOperator(ctx, req))
-}
-
-// findSubTask finds sub task by name
-func (w *Worker) findSubTask(name string) *SubTask {
-	w.RLock()
-	defer w.RUnlock()
-	return w.subTasks[name]
 }
 
 // FetchDDLInfo fetches all sub tasks' DDL info which pending to sync
@@ -397,7 +444,10 @@ func (w *Worker) doFetchDDLInfo(ctx context.Context, ch chan<- *pb.DDLInfo) {
 	if !ok {
 		return // should not go here
 	}
+
+	w.RLock()
 	w.subTasks[v.Task].SaveDDLInfo(v)
+	w.RUnlock()
 	log.Infof("[worker] save DDLInfo into subTasks")
 
 	ch <- v
@@ -556,11 +606,12 @@ func (w *Worker) QueryConfig(ctx context.Context) (*Config, error) {
 
 // UpdateRelayConfig update subTask ans relay unit configure online
 func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
+	w.Lock()
+	defer w.Unlock()
+
 	if w.closed.Get() == closedTrue {
 		return errors.NotValidf("worker already closed")
 	}
-	w.Lock()
-	defer w.Unlock()
 
 	stage := w.relayHolder.Stage()
 	if stage == pb.Stage_Finished || stage == pb.Stage_Stopped {
@@ -667,4 +718,29 @@ func (w *Worker) MigrateRelay(ctx context.Context, binlogName string, binlogPos 
 		return errors.Trace(err)
 	}
 	return nil
+}
+
+// copyConfigFromWorker copies config items from dm-worker to sub task
+func (w *Worker) copyConfigFromWorker(cfg *config.SubTaskConfig) {
+	cfg.From = w.cfg.From
+
+	cfg.Flavor = w.cfg.Flavor
+	cfg.ServerID = w.cfg.ServerID
+	cfg.RelayDir = w.cfg.RelayDir
+	cfg.EnableGTID = w.cfg.EnableGTID
+
+	// we can remove this from SubTaskConfig later, because syncer will always read from relay
+	cfg.AutoFixGTID = w.cfg.AutoFixGTID
+
+	// log config items, mydumper unit use it
+	cfg.LogLevel = w.cfg.LogLevel
+	cfg.LogFile = w.cfg.LogFile
+}
+
+// findSubTask finds sub task by name
+func (w *Worker) findSubTask(name string) *SubTask {
+	w.RLock()
+	defer w.RUnlock()
+
+	return w.subTasks[name]
 }
