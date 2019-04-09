@@ -18,7 +18,7 @@
 
 ## Building
 
-To check the source code, run test cases and build binaries, you can simply run:
+To check the code style and build binaries, you can simply run:
 
 ```bash
 make build
@@ -36,6 +36,14 @@ make dmctl      # build dmctl
 ``` 
 
 When DM is built successfully, you can find binaries in the `bin` directory.
+
+## Run Test
+
+Run all tests, including unit test and integration test
+
+```bash
+make test
+```
 
 ## Installing
 
