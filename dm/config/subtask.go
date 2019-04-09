@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -266,6 +267,12 @@ func (c *SubTaskConfig) adjust() error {
 		if err != nil {
 			return errors.Annotatef(err, "invalid timezone string: %s", c.Timezone)
 		}
+	}
+
+	dirSuffix := "." + c.Name
+	if !strings.HasSuffix(c.LoaderConfig.Dir, dirSuffix) { // check to support multiple times calling
+		// if not ends with the task name, we append the task name to the tail
+		c.LoaderConfig.Dir += dirSuffix
 	}
 
 	c.From.Adjust()
