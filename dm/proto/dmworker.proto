@@ -444,12 +444,7 @@ message QueryWorkerConfigResponse {
 
 message TaskMeta {
     TaskOp op = 1;
-    string name = 2; // sub task's name
-    bytes task = 3; // (sub) task's configuration
-}
-
-// meta of dm-worker
-// now it contains TaskMeta map
-message WorkMeta {
-    map<string, TaskMeta> tasks = 1;
+    Stage stage = 2;
+    string name = 3; // sub task's name
+    bytes task = 4; // (sub) task's configuration
 }
