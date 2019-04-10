@@ -114,8 +114,19 @@ func (r *reader) GetEvent(ctx context.Context) (*replication.BinlogEvent, error)
 		return nil, errors.Errorf("stage %s, expect %s", readerStage(r.stage.Get()), stagePrepared)
 	}
 
-	// TODO: handle errors and retry here
-	return r.in.GetEvent(ctx)
+	for {
+		ev, err := r.in.GetEvent(ctx)
+		if err == nil {
+			return ev, nil
+		} else if isRetryableError(err) {
+			log.Warnf("[relay] get event with retryable error %s", err)
+			continue // retry without sleep
+		} else if isIgnorableError(err) {
+			log.Warnf("[relay] get event with ignorable error %s", err)
+			return nil, nil // return without error and also without binlog event
+		}
+		return nil, errors.Trace(err)
+	}
 }
 
 func (r *reader) setUpReaderByGTID() error {

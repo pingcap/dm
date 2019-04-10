@@ -15,11 +15,11 @@ package reader
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/replication"
 
 	br "github.com/pingcap/dm/pkg/binlog/reader"
@@ -76,22 +76,22 @@ func (t *testReaderSuite) testInterfaceWithReader(c *C, r Reader, cases []*repli
 	// getEvent by pushing event to mock reader
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
+	concreteMR := mockR.(*br.MockReader)
 	go func() {
-		concreteMR := mockR.(*br.MockReader)
 		for _, cs := range cases {
 			c.Assert(concreteMR.PushEvent(ctx, cs), IsNil)
 		}
 	}()
-	got := make([]*replication.BinlogEvent, 0, len(cases))
+	obtained := make([]*replication.BinlogEvent, 0, len(cases))
 	for {
 		ev, err2 := r.GetEvent(ctx)
 		c.Assert(err2, IsNil)
-		got = append(got, ev)
-		if len(got) == len(cases) {
+		obtained = append(obtained, ev)
+		if len(obtained) == len(cases) {
 			break
 		}
 	}
-	c.Assert(got, DeepEquals, cases)
+	c.Assert(obtained, DeepEquals, cases)
 
 	// close reader
 	err = r.Close()
@@ -140,4 +140,55 @@ func (t *testReaderSuite) testBackOffWithReader(c *C, r Reader, errByPos error, 
 	concreteMR.ErrStartByGTID = errByGTID
 
 	return r.Start()
+}
+
+func (t *testReaderSuite) TestGetEventWithError(c *C) {
+	cfg := &Config{
+		SyncConfig: replication.BinlogSyncerConfig{
+			ServerID: 101,
+		},
+		MasterID: "test-master",
+	}
+
+	r := NewReader(cfg)
+	// replace underlying reader with a mock reader for testing
+	concreteR := r.(*reader)
+	c.Assert(concreteR, NotNil)
+	mockR := br.NewMockReader()
+	concreteR.in = mockR
+
+	errOther := errors.New("other error")
+	in := []error{
+		context.DeadlineExceeded, // retryable
+		context.Canceled,         // ignorable
+		errOther,
+	}
+	expected := []error{
+		nil, // from ignorable
+		errOther,
+	}
+
+	err := r.Start()
+	c.Assert(err, IsNil)
+
+	// getEvent by pushing event to mock reader
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	concreteMR := mockR.(*br.MockReader)
+	go func() {
+		for _, cs := range in {
+			c.Assert(concreteMR.PushError(ctx, cs), IsNil)
+		}
+	}()
+
+	obtained := make([]error, 0, len(expected))
+	for {
+		ev, err2 := r.GetEvent(ctx)
+		c.Assert(ev, IsNil)
+		obtained = append(obtained, err2)
+		if errors.Cause(err2) == errOther {
+			break // all received
+		}
+	}
+	c.Assert(obtained, DeepEquals, expected)
 }

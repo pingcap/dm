@@ -96,21 +96,21 @@ func (t *testMockReaderSuite) TestRead(c *C) {
 		}
 	}()
 
-	got := make([]testCase, 0, len(cases))
+	obtained := make([]testCase, 0, len(cases))
 	for {
 		ev, err := r.GetEvent(ctx)
 		if err != nil {
-			got = append(got, testCase{ev: nil, err: err})
+			obtained = append(obtained, testCase{ev: nil, err: err})
 		} else {
-			got = append(got, testCase{ev: ev, err: nil})
+			obtained = append(obtained, testCase{ev: ev, err: nil})
 		}
-		if len(got) == len(cases) || ctx.Err() != nil {
+		if len(obtained) == len(cases) || ctx.Err() != nil {
 			break
 		}
 	}
 
 	c.Assert(ctx.Err(), IsNil)
-	c.Assert(got, DeepEquals, cases)
+	c.Assert(obtained, DeepEquals, cases)
 
 	cancel() // cancel manually
 	c.Assert(mockR.PushError(ctx, cases[0].err), Equals, ctx.Err())
