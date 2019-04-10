@@ -86,10 +86,15 @@ func (r *reader) Start() error {
 		log.Infof("[relay] set up binlog reader for master %s with status %s", r.cfg.MasterID, status)
 	}()
 
+	var err error
 	if r.cfg.EnableGTID {
-		return r.setUpReaderByGTID()
+		err = r.setUpReaderByGTID()
+	} else {
+		err = r.setUpReaderByPos()
 	}
-	return r.setUpReaderByPos()
+
+	r.stage.Set(int32(stagePrepared))
+	return err
 }
 
 // Close implements Reader.Close.
