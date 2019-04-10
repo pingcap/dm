@@ -13,7 +13,8 @@ FILES    := $$(find . -name "*.go" | grep -vE "vendor")
 TOPDIRS  := $$(ls -d */ | grep -vE "vendor")
 SHELL    := /usr/bin/env bash
 TEST_DIR := /tmp/dm_test
-GOFAIL_DIR := $$(for p in $(PACKAGES); do echo $${p\#"github.com/pingcap/dm/"}; done)
+FAILPOINT_DIR := $$(for p in $(PACKAGES); do echo $${p\#"github.com/pingcap/dm/"}; done)
+FAILPOINT := failpoint-ctl
 
 RACE_FLAG =
 ifeq ("$(WITH_RACE)", "1")
@@ -21,8 +22,8 @@ ifeq ("$(WITH_RACE)", "1")
 	GOBUILD   = CGO_ENABLED=1 $(GO) build
 endif
 
-GOFAIL_ENABLE  := $$(echo $(GOFAIL_DIR) | xargs gofail enable)
-GOFAIL_DISABLE := $$(find $(GOFAIL_DIR) | xargs gofail disable)
+FAILPOINT_ENABLE  := $$(echo $(FAILPOINT_DIR) | xargs $(FAILPOINT) enable >/dev/null)
+FAILPOINT_DISABLE := $$(find $(FAILPOINT_DIR) | xargs $(FAILPOINT) disable >/dev/null)
 
 ARCH      := "$(shell uname -s)"
 LINUX     := "Linux"
@@ -58,12 +59,12 @@ test: unit_test integration_test
 unit_test:
 	bash -x ./tests/wait_for_mysql.sh
 	mkdir -p $(TEST_DIR)
-	which gofail >/dev/null 2>&1 || GO111MODULE=off go get github.com/pingcap/gofail
-	$(GOFAIL_ENABLE)
+	which $(FAILPOINT) >/dev/null 2>&1 || GO111MODULE=off go get github.com/pingcap/failpoint/failpoint-ctl
+	$(FAILPOINT_ENABLE)
 	@export log_level=error; \
 	$(GOTEST) -covermode=atomic -coverprofile="$(TEST_DIR)/cov.unit_test.out" -race $(PACKAGES) \
-	|| { $(GOFAIL_DISABLE); exit 1; }
-	$(GOFAIL_DISABLE)
+	|| { $(FAILPOINT_DISABLE); exit 1; }
+	$(FAILPOINT_DISABLE)
 
 check: fmt lint vet
 
@@ -88,17 +89,21 @@ vet:
 	@$(GO) vet -vettool=$(CURDIR)/bin/shadow $(PACKAGES) || true
 
 dm_integration_test_build:
-	which gofail >/dev/null 2>&1 || GO111MODULE=off go get github.com/pingcap/gofail
-	$(GOFAIL_ENABLE)
+	which $(FAILPOINT) >/dev/null 2>&1 || GO111MODULE=off go get github.com/pingcap/failpoint/failpoint-ctl
+	$(FAILPOINT_ENABLE)
 	$(GOTEST) -c -race -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-worker.test github.com/pingcap/dm/cmd/dm-worker \
-		|| { $(GOFAIL_DISABLE); exit 1; }
+		|| { $(FAILPOINT_DISABLE); exit 1; }
 	$(GOTEST) -c -race -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-master.test github.com/pingcap/dm/cmd/dm-master \
-		|| { $(GOFAIL_DISABLE); exit 1; }
-	$(GOFAIL_DISABLE)
+		|| { $(FAILPOINT_DISABLE); exit 1; }
+	$(GOTEST) -c -race -cover -covermode=atomic \
+		-coverpkg=github.com/pingcap/dm/... \
+		-o bin/dm-tracer.test github.com/pingcap/dm/cmd/dm-tracer \
+		|| { $(FAILPOINT_DISABLE); exit 1; }
+	$(FAILPOINT_DISABLE)
 
 integration_test:
 	@which bin/tidb-server
@@ -106,11 +111,12 @@ integration_test:
 	@which bin/mydumper
 	@which bin/dm-master.test
 	@which bin/dm-worker.test
+	@which bin/dm-tracer.test
 	tests/run.sh $(CASE)
 
 coverage:
 	GO111MODULE=off go get github.com/zhouqiang-cl/gocovmerge
-	gocovmerge "$(TEST_DIR)"/cov.* | grep -vE ".*.pb.go" > "$(TEST_DIR)/all_cov.out"
+	gocovmerge "$(TEST_DIR)"/cov.* | grep -vE ".*.pb.go|.*.__failpoint_binding__.go" > "$(TEST_DIR)/all_cov.out"
 ifeq ("$(JenkinsCI)", "1")
 	GO111MODULE=off go get github.com/mattn/goveralls
 	@goveralls -coverprofile=$(TEST_DIR)/all_cov.out -service=jenkins-ci -repotoken $(COVERALLS_TOKEN)
@@ -125,3 +131,9 @@ check-static:
 	  --enable megacheck \
 	  --enable ineffassign \
 	  ./...
+
+failpoint-enable:
+	$(FAILPOINT_ENABLE)
+
+failpoint-disable:
+	$(FAILPOINT_DISABLE)

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser/ast"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
@@ -1039,10 +1040,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				shardingStreamer, err = s.getBinlogStreamer(shardingReader, shardingReSync.currPos)
 			}
 			log.Debugf("[syncer] start using a special streamer to re-sync DMLs for sharding group %+v", shardingReSync)
-			// gofail: var ReSyncExit bool
-			// if ReSyncExit {
-			//   s.exit(1)
-			// }
+			failpoint.Inject("ReSyncExit", func() {
+				os.Exit(1)
+			})
 		}
 
 		var (
@@ -1287,6 +1287,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 			case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
 				if !applied {
+					// TODO: check safe mode with tracer
 					param.safeMode = safeMode.Enable()
 					sqls, keys, args, err = genUpdateSQLs(param)
 					if err != nil {
@@ -1646,10 +1647,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 
 				if ddlExecItem.req.Exec {
-					// gofail: var WaitShardingSyncExit bool
-					// if WaitShardingSyncExit {
-					//   s.exit(1)
-					// }
+					failpoint.Inject("WaitShardingSyncExit", func() {
+						os.Exit(1)
+					})
+
 					log.Infof("[syncer] add DDL %v to job, request is %+v", ddlInfo1.DDLs, ddlExecItem.req)
 				} else {
 					log.Infof("[syncer] ignore DDL %v, request is %+v", ddlInfo1.DDLs, ddlExecItem.req)
@@ -2250,9 +2251,4 @@ func (s *Syncer) setTimezone() {
 	}
 	log.Infof("[syncer] use timezone: %s", loc)
 	s.timezone = loc
-}
-
-// exit used in gofail test only, to simulate DM-worker exit
-func (s *Syncer) exit(exitcode int) {
-	os.Exit(exitcode)
 }

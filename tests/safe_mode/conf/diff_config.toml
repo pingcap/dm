@@ -16,11 +16,11 @@ fix-sql-file = "fix.sql"
 
 # tables need to check.
 [[check-tables]]
-schema = "db_target"
+schema = "safe_mode_target"
 tables = ["t_target"]
 
 [[table-config]]
-schema = "db_target"
+schema = "safe_mode_target"
 table = "t_target"
 ignore-columns = ["id"]
 is-sharding = true

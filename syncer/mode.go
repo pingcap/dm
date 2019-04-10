@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
@@ -43,13 +44,15 @@ func (s *Syncer) enableSafeModeInitializationPhase(ctx context.Context, safeMode
 			}
 		}()
 
-		// gofail var SafeModeInitialDisable bool
-		// if SafeModeInitialDisable {
-		//   return
-		// }
+		initPhaseSeconds := 300
+
+		failpoint.Inject("SafeModeInitPhaseSeconds", func(val failpoint.Value) {
+			seconds, _ := val.(int)
+			initPhaseSeconds = seconds
+		})
 		select {
 		case <-ctx.Done():
-		case <-time.After(5 * time.Minute):
+		case <-time.After(time.Duration(initPhaseSeconds) * time.Second):
 		}
 	}()
 }
