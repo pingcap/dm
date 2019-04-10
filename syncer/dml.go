@@ -117,7 +117,7 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 	columnPlaceholders := genColumnPlaceholders(len(columns))
 	for dataIdx, data := range dataSeq {
 		if len(data) != len(columns) {
-			return nil, nil, nil, errors.Errorf("insert columns and data mismatch in length: %d (columns) vs %d (data)", len(columns), len(data))
+			return nil, nil, nil, errors.Errorf("Column count doesn't match value count: %d (columns) vs %d (values)", len(columns), len(data))
 		}
 
 		value := extractValueFromData(data, columns)
@@ -164,11 +164,11 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		oriChangedData := originalData[i+1]
 
 		if len(oldData) != len(changedData) {
-			return nil, nil, nil, errors.Errorf("update data mismatch in length: %d (columns) vs %d (data)", len(oldData), len(changedData))
+			return nil, nil, nil, errors.Errorf("Old value count doesn't match new value count: %d (columns) vs %d (values)", len(oldData), len(changedData))
 		}
 
 		if len(oldData) != len(columns) {
-			return nil, nil, nil, errors.Errorf("update columns and data mismatch in length: %d (columns) vs %d (data)", len(columns), len(oldData))
+			return nil, nil, nil, errors.Errorf("Column count doesn't match value count: %d (columns) vs %d (values)", len(columns), len(oldData))
 		}
 
 		oldValues := extractValueFromData(oldData, columns)
