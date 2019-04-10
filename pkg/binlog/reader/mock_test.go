@@ -44,6 +44,16 @@ func (t *testMockReaderSuite) TestRead(c *C) {
 	c.Assert(r.Status(), IsNil)
 	c.Assert(r.Close(), IsNil)
 
+	// replace with special error
+	mockR := r.(*MockReader)
+	errSpecial := errors.New("special error for methods")
+	mockR.ErrStartByPos = errSpecial
+	mockR.ErrStartByGTID = errSpecial
+	mockR.ErrClose = errSpecial
+	c.Assert(r.StartSyncByPos(mysql.Position{}), Equals, errSpecial)
+	c.Assert(r.StartSyncByGTID(nil), Equals, errSpecial)
+	c.Assert(r.Close(), Equals, errSpecial)
+
 	cases := []testCase{
 		{
 			ev: &replication.BinlogEvent{
@@ -76,7 +86,6 @@ func (t *testMockReaderSuite) TestRead(c *C) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	mockR := r.(*MockReader)
 	go func() {
 		for _, cs := range cases {
 			if cs.err != nil {

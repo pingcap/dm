@@ -26,6 +26,11 @@ import (
 type MockReader struct {
 	ch  chan *replication.BinlogEvent
 	ech chan error
+
+	// returned error for methods
+	ErrStartByPos  error
+	ErrStartByGTID error
+	ErrClose       error
 }
 
 // NewMockReader creates a MockReader instance.
@@ -38,17 +43,17 @@ func NewMockReader() Reader {
 
 // StartSyncByPos implements Reader.StartSyncByPos.
 func (r *MockReader) StartSyncByPos(pos gmysql.Position) error {
-	return nil
+	return r.ErrStartByPos
 }
 
 // StartSyncByGTID implements Reader.StartSyncByGTID.
 func (r *MockReader) StartSyncByGTID(gSet gtid.Set) error {
-	return nil
+	return r.ErrStartByGTID
 }
 
 // Close implements Reader.Close.
 func (r *MockReader) Close() error {
-	return nil
+	return r.ErrClose
 }
 
 // GetEvent implements Reader.GetEvent.
