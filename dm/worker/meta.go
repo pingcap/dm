@@ -55,15 +55,19 @@ func (m *Meta) Decode(data string) error {
 	return nil
 }
 
-// Metadata stores metadata of task and operation log
-// it also provide append log and mark log features
+// Metadata stores metadata and log of task
+// it also provides logger feature
+// * append log
+// * forward to specified log location
 type Metadata struct {
 	sync.Mutex // we need to ensure only a thread can access to `metaDB` at a time
 
-	tasks         map[string]*pb.TaskMeta           // name: task
+	// cache
+	tasks map[string]*pb.TaskMeta
+	logs  []*pb.TaskLog
 
-	logs          map[string]map[int64]*pb.TaskMeta // name: [log id: task]
-	handlePointer *HandlePointer
+	// task operation log
+	log *Logger
 
 	dir string
 	db  *leveldb.DB
@@ -72,12 +76,8 @@ type Metadata struct {
 // NewMetadata returns a metadata object
 func NewMetadata(dir string, db *leveldb.DB) (*Metadata, error) {
 	meta := &Metadata{
-		dir:   dir,
-		db:    db,
-		handlePointer: new(HandlePointer),
-		maxLogEntries: defaultMaxLogEntries
-		tasks: make(map[string]*pb.TaskMeta),
-		logs:  make(map[string]map[int64]*pb.TaskMeta),
+		dir: dir,
+		db:  db,
 	}
 
 	// restore from old metadata

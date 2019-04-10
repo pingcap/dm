@@ -24,59 +24,63 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
+// Putter is interface which has Put method
 type Putter interface {
 	Put(key, value []byte, opts *opt.WriteOptions) error
 }
 
+// Deleter is interface which has Delete method
 type Deleter interface {
 	Delete(key []byte, wo *opt.WriteOptions) error
 }
 
+// Getter is interface which has Get method
 type Getter interface {
 	Get(key []byte, ro *opt.ReadOptions) ([]byte, error)
 }
 
-// HandlePointerKey is key of HandlePointerKey we should start to handle operation in log
-var HandlePointerKey = []byte("!DM!handlePointer")
+// HandledPointerKey is key of HandledPointer which point to the last handled log
+var HandledPointerKey = []byte("!DM!handledPointer")
 
+// Pointer is a logic pointer that point to a location of log
 type Pointer struct {
-	Offset int64
+	Location int64
 }
 
 // MarshalBinary never return not nil err now
-func (p *Pointer) MarshalBinary() (data []byte, err error) {
-	data = make([]byte, 8)
-	binary.LittleEndian.PutUint64(data, uint64(p.offset))
+func (p *Pointer) MarshalBinary() []byte {
+	data := make([]byte, 8)
+	binary.LittleEndian.PutUint64(data, uint64(p.Location))
 
-	return
+	return data
 }
 
 // UnmarshalBinary implement encoding.BinaryMarshal
 func (p *Pointer) UnmarshalBinary(data []byte) error {
 	if len(data) < 8 {
-		return errors.New("not enough data as pointer %v", data)
+		return errors.Errorf("not enough data as pointer %v", data)
 	}
 
-	p.Offset = int64(binary.LittleEndian.Uint64(data))
+	p.Location = int64(binary.LittleEndian.Uint64(data))
 	return nil
 }
 
-// LoadHandlePointer loads handle pointer value from kv DB
-func LoadHandlePointer(db *leveldb) (Pointer, error) {
-	value, err := db.Get(HandlePointerKey, nil)
+// LoadHandledPointer loads handled pointer value from kv DB
+func LoadHandledPointer(db *leveldb.DB) (Pointer, error) {
+	var p Pointer
+	value, err := db.Get(HandledPointerKey, nil)
 	if err != nil {
 		// return zero value when not found
 		if err == leveldb.ErrNotFound {
-			return nil, nil
+			return p, nil
 		}
 
-		return nil, errors.Trace(err)
+		return p, errors.Trace(err)
 	}
 
-	p := Pointer{}
 	err = p.UnmarshalBinary(value)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return p, errors.Trace(err)
 	}
 
 	return p, nil
@@ -90,16 +94,18 @@ var (
 	TaskLogPrefix = []byte("!DM!TaskLog")
 )
 
-// DecodeTaskLogKey decodes task operation log key and return log ID
-func DecodeTaskLogKey(key []byte) int64 {
-	idBytes := key[len(TaskLogPrefix):]
-	return int64(binary.LittleEndian.Uint64(idBytes))
+// DecodeTaskLogKey decodes task log key and returns its log ID
+func DecodeTaskLogKey(key []byte) (int64, error) {
+	if len(key) != len(TaskLogPrefix)+8 {
+		return 0, errors.Errorf("not enough data as task log key %v", key)
+	}
+
+	return int64(binary.LittleEndian.Uint64(key[len(TaskLogPrefix):])), nil
 }
 
-// EncodeTaskLogKey encodes task operation log key using given task name
+// EncodeTaskLogKey encodes log ID into a task log key
 func EncodeTaskLogKey(id int64) []byte {
 	key := make([]byte, 8+len(TaskLogPrefix))
-
 	copy(key[:len(TaskLogPrefix)], TaskLogPrefix)
 	binary.LittleEndian.PutUint64(key[len(TaskLogPrefix):], uint64(id))
 
@@ -108,13 +114,13 @@ func EncodeTaskLogKey(id int64) []byte {
 
 // Logger manage task operation logs
 type Logger struct {
-	endPointer    Pointer
-	handlePointer Pointer
+	endPointer     Pointer
+	handledPointer Pointer
 }
 
 // Initial initials Logger
-func (log *Logger) Initial(db *leveldb.DB) ([]*TaskLog, error) {
-	handlePointer, err := LoadHandlePointer(db)
+func (log *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
+	handledPointer, err := LoadHandledPointer(db)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -122,27 +128,30 @@ func (log *Logger) Initial(db *leveldb.DB) ([]*TaskLog, error) {
 	var (
 		endPointer Pointer
 		logs       = make([]*pb.TaskLog, 0, 4)
+		logID      int64
 	)
 	iter := db.NewIterator(nil, nil)
-	for ok := iter.Seek(EncodeTaskLogKey(handlePointer.Offset)); ok; ok = iter.Next() {
+	for ok := iter.Seek(EncodeTaskLogKey(handledPointer.Location)); ok; ok = iter.Next() {
 		logBytes := iter.Value()
 		log := &pb.TaskLog{}
-
 		err = log.Unmarshal(logBytes)
 		if err != nil {
 			err = errors.Annotatef(err, "unmarshal task meta %s", logBytes)
+			break
 		}
 
-		logID := DecodeTaskLogKey(iter.key())
-		if logID > endPointer.Offset {
-			endPointer.Offset = logID
+		logID, err = DecodeTaskLogKey(iter.Key())
+		if err != nil {
+			break
+		}
+		if logID > endPointer.Location {
+			endPointer.Location = logID
 		} else {
 			panic("out of sorted from level db")
 		}
 
 		logs = append(logs, log)
 	}
-
 	iter.Release()
 	if err == nil {
 		return nil, errors.Trace(err)
@@ -153,44 +162,41 @@ func (log *Logger) Initial(db *leveldb.DB) ([]*TaskLog, error) {
 		return nil, errors.Annotatef(err, "fetch logs from meta")
 	}
 
-	log.handlePointer = handlePointer
+	log.handledPointer = handledPointer
 	log.endPointer = endPointer
 
 	return logs, nil
 }
 
+// ForwardTo forward handled pointer to specified ID location
 // not thread safe
 func (log *Logger) ForwardTo(db Putter, ID int64) error {
-	handlePointer := &Pointer{
-		Offset: ID,
+	handledPointer := Pointer{
+		Location: ID,
 	}
 
-	handlePointerBytes, err := handlePointer.MarshalBinary()
+	err := db.Put(HandledPointerKey, handledPointer.MarshalBinary(), nil)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	err = db.Put(HandlePointerKey, handlePointerBytes, nil)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	log.handlePointer = HandlePointerKey
+	log.handledPointer = handledPointer
 	return nil
 }
 
-func (log *Logger) Append(db Putter, log *TaskLog) error {
-	var id int
+// Append appends a task log
+func (log *Logger) Append(db Putter, opLog *pb.TaskLog) error {
+	var id int64
 	for {
-		id = atomic.LoadInt64(&log.endPointer.Offset)
-		if atomic.CompareAndSwapInt64(&log.endPointer.Offset, id, id+1) {
+		id = atomic.LoadInt64(&log.endPointer.Location)
+		if atomic.CompareAndSwapInt64(&log.endPointer.Location, id, id+1) {
 			break
 		}
 	}
 
-	log.Id = id
-	log.Ts = time.Now().UnixNano()
-	logBytes, err := log.Marshal()
+	opLog.Id = id
+	opLog.Ts = time.Now().UnixNano()
+	logBytes, err := opLog.Marshal()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -206,14 +212,14 @@ func (log *Logger) Append(db Putter, log *TaskLog) error {
 // TaskMetaPrefix is prefix of task meta key
 var TaskMetaPrefix = []byte("!DM!TaskMeta")
 
-// DecodeTaskMetaKey decode task name from task meta key
+// DecodeTaskMetaKey decodes task meta key and returns task name
 func DecodeTaskMetaKey(key []byte) string {
 	return string(key[len(TaskMetaPrefix):])
 }
 
-// EncodeTaskMetaKey enable task meta key using given task name
+// EncodeTaskMetaKey encodes take name into a task meta key
 func EncodeTaskMetaKey(name string) []byte {
-	key := append([]byte, TaskMetaPrefix...)
+	key := append([]byte{}, TaskMetaPrefix...)
 	return append(key, name...)
 }
 
@@ -229,7 +235,7 @@ func (m *Metadata) SetTaskMeta(h Putter, task *pb.TaskMeta) error {
 		return errors.Annotatef(err, "marshal task %+v", task)
 	}
 
-	err = h.Put(EncodeTaskMetaKey(task.Name), taskBytes)
+	err = h.Put(EncodeTaskMetaKey(task.Name), taskBytes, nil)
 	if err != nil {
 		return errors.Annotatef(err, "save into kv db")
 	}
@@ -238,29 +244,24 @@ func (m *Metadata) SetTaskMeta(h Putter, task *pb.TaskMeta) error {
 }
 
 // GetTaskMeta returns task meta by given name
-func (m *Metadata) GetTaskMeta(h Getter, name string) error {
-	taskBytes, err := h.Get(EncodeTaskMetaKey(task.Name), nil)
+func (m *Metadata) GetTaskMeta(h Getter, name string) (*pb.TaskMeta, error) {
+	taskBytes, err := h.Get(EncodeTaskMetaKey(name), nil)
 	if err != nil {
-		return errors.Annotatef(err, "get task meta from leveldb")
+		return nil, errors.Annotatef(err, "get task meta from leveldb")
 	}
 
 	task := &pb.TaskMeta{}
-	err = task.UnmarshalBinary(taskBytes)
+	err = task.Unmarshal(taskBytes)
 	if err != nil {
-		return errors.Annotatef(err, "unmarshal binary %s", taskBytes)
+		return nil, errors.Annotatef(err, "unmarshal binary %s", taskBytes)
 	}
 
-	return task
+	return task, nil
 }
 
 // DeleteByTxn delete task meta from kv DB
-func (t *TaskMetas) DeleteByTxn(h Deleter, name string) error {
-	err := verifyTaskMeta(task)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	err = h.Delete(EncodeTaskMetaKey(task.Name))
+func (m *Metadata) DeleteByTxn(h Deleter, name string) error {
+	err := h.Delete(EncodeTaskMetaKey(name), nil)
 	if err != nil {
 		return errors.Annotatef(err, "save into kv db")
 	}
@@ -281,7 +282,7 @@ func verifyTaskMeta(task *pb.TaskMeta) error {
 		return errors.NotValidf("stage")
 	}
 
-	if task.Stage == pb.TaskOp_InvalidOp {
+	if task.Op == pb.TaskOp_InvalidOp {
 		return errors.NotValidf("task operation")
 	}
 
