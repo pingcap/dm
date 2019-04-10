@@ -16,6 +16,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"path"
 	"reflect"
 	"sync"
 	"time"
@@ -23,6 +24,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
+	"github.com/syndtr/goleveldb/leveldb"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -57,7 +59,8 @@ type Worker struct {
 	relayHolder *RelayHolder
 	relayPurger *purger.Purger
 
-	meta   *FileMetaDB
+	meta   *Metadata
+	db     *leveldb.DB
 	tracer *tracing.Tracer
 }
 
@@ -87,7 +90,15 @@ func NewWorker(cfg *Config) (*Worker, error) {
 		return nil, errors.Trace(err)
 	}
 
-	w.meta, err = NewFileMetaDB(w.cfg.MetaDir)
+	// open kv db
+	dbDir := path.Join(w.cfg.MetaDir, "kv")
+	w.db, err = openDB(dbDir, defaultKVConfig)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	// initial metadata
+	w.meta, err = NewMetadata(dbDir, db)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

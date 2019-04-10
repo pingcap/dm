@@ -448,3 +448,9 @@ message TaskMeta {
     string name = 3; // sub task's name
     bytes task = 4; // (sub) task's configuration
 }
+
+message TaskLog {
+    int64 id = 1;
+    TaskMeta task = 2;
+    int64 ts = 3;
+}

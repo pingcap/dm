@@ -26,7 +26,6 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 // Meta information contains (deprecated, instead of proto.WorkMeta)
@@ -56,61 +55,69 @@ func (m *Meta) Decode(data string) error {
 	return nil
 }
 
-// Metadata stores metadata of task
+// Metadata stores metadata of task and operation log
+// it also provide append log and mark log features
 type Metadata struct {
-	lock  sync.Mutex                        // we need to ensure only a thread can access to `metaDB` at a time
-	tasks map[string]*pb.TaskMeta           // name: task
-	logs  map[string]map[int64]*pb.TaskMeta // name: [log id: task]
+	sync.Mutex // we need to ensure only a thread can access to `metaDB` at a time
+
+	tasks         map[string]*pb.TaskMeta           // name: task
+
+	logs          map[string]map[int64]*pb.TaskMeta // name: [log id: task]
+	handlePointer *HandlePointer
 
 	dir string
 	db  *leveldb.DB
 }
 
-// NewMetaDB returns a meta file db
-func NewMetaDB(dir string) (*FileMetaDB, error) {
-	metaDB := &FileMetaDB{
+// NewMetadata returns a metadata object
+func NewMetadata(dir string, db *leveldb.DB) (*Metadata, error) {
+	meta := &Metadata{
 		dir:   dir,
+		db:    db,
+		handlePointer: new(HandlePointer),
+		maxLogEntries: defaultMaxLogEntries
 		tasks: make(map[string]*pb.TaskMeta),
 		logs:  make(map[string]map[int64]*pb.TaskMeta),
-	}
-
-	kvDir := path.Join(dir, "kv")
-	metadata, err := openMetadataDB(kvDir, defaultKVConfig)
-	if err != nil {
-		return nil, errors.Trace(err)
 	}
 
 	// restore from old metadata
 	oldPath = path.Join(dir, "meta")
 	fd, err := os.Open(oldPath)
-	if os.IsNotExist(err) {
-		return metaDB, nil
-	} else if err != nil {
+	// old metadata file exists, recover metadata from it
+	if err == nil {
+		fd.Close()
+		err = meta.recoverMetaFromOldFashion(oldPath)
+		if err != nil {
+			log.Errorf("fail to recover meta from old metadata file %s, meta file may be correuption, error message: %v", oldPath, err)
+			return nil, errors.Trace(err)
+		}
+		return meta, nil
+	}
+	// old metadata file exists, fail to open old metadata file
+	if !os.IsNotExist(err) {
 		return nil, errors.Trace(err)
 	}
-	fd.Close()
 
-	err1 = metaDB.recoverMetaFromOldFashion(oldPath)
+	err = meta.loadFromDB()
 	if err != nil {
-		log.Errorf("fail to recover meta from old metadata file %s, meta file may be correuption, error message: %v", oldPath, err)
 		return nil, errors.Trace(err)
 	}
 
-	return metaDB, nil
+	return meta, nil
 }
 
 // Close closes meta DB
-func (metaDB *Metadata) Close() error {
-	metaDB.lock.Lock()
-	defer metaDB.lock.Unlock()
+func (meta *Metadata) Close() error {
+	metaDB.Lock()
+	defer metaDB.Unlock()
 
 	return errors.Trace(metaDB.db.Close())
 }
 
-// Load returns work meta
-func (metaDB *Metadata) Load() *pb.WorkMeta {
-	metaDB.lock.Lock()
-	defer metaDB.lock.Unlock()
+// LoadTaskMeta returns meta of all tasks
+func (meta *Metadata) LoadTaskMeta() *pb.WorkMeta {
+	meta.Lock()
+	defer meta.Unlock()
 
 	meta := &pb.WorkMeta{
 		Tasks: make(map[string]*pb.TaskMeta),
@@ -127,12 +134,12 @@ func (metaDB *Metadata) Load() *pb.WorkMeta {
 	return meta
 }
 
-// Get returns task meta by given name
-func (metaDB *Metadata) Get(name string) *pb.TaskMeta {
-	metaDB.lock.Lock()
-	defer metaDB.lock.Unlock()
+// GetTask returns task meta by given name
+func (meta *Metadata) GetTask(name string) *pb.TaskMeta {
+	metaDB.Lock()
+	defer metaDB.Unlock()
 
-	task, ok := metaDB.meta.Tasks[name]
+	task, ok := meta.tasks[name]
 	if !ok {
 		return nil
 	}
@@ -144,39 +151,53 @@ func (metaDB *Metadata) Get(name string) *pb.TaskMeta {
 	}
 }
 
-// Set sets task information in Meta
-func (metaDB *Metadata) Set(subTask *pb.TaskMeta) error {
-	metaDB.lock.Lock()
-	defer metaDB.lock.Unlock()
+// SetTask sets task metadata in db
+func (meta *Metadata) SetTask(subTask *pb.TaskMeta) error {
+	meta.Lock()
+	defer meta.Unlock()
 
-	metaDB.meta.Tasks[subTask.Name] = subTask
-	return errors.Trace(metaDB.save())
+	meta.tasks[subTask.Name] = subTask
+	// todo: save in leveldb
+	return nil
 }
 
-// Delete deletes task information in Meta
-func (metaDB *Metadata) Delete(name string) error {
-	metaDB.lock.Lock()
-	defer metaDB.lock.Unlock()
+// DeleteTask deletes task meta in db
+func (meta *Metadata) DeleteTask(name string) error {
+	meta.Lock()
+	defer meta.Unlock()
 
-	delete(metaDB.meta.Tasks, name)
-	return errors.Trace(metaDB.save())
+	delete(meta.tasks, name)
+	// todo: delete from leveldb
+	return nil
 }
 
-func (metaDB *Metadata) recoverMetaFromOldFashion(path string) error {
-	oldMeta := &Meta{}
+func (meta *Metadata) loadFromDB() error {
+	err := meta.handlePointer.Load(meta.db)
+	if err != nil {
+		return errors.Trace(err)
+	}
 
+	return nil
+}
+
+// to be compatible with the old fashion meta
+func (meta *Metadata) recoverMetaFromOldFashion(path string) error {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, errors.Annotatef(err, "read old metadata file %s", path)
 	}
 
+	oldMeta := &Meta{}
 	err = oldMeta.Decode(string(data))
 	if err != nil {
 		return errors.Annotatef(err, "decode old metadata file %s", path)
 	}
 
+	log.Infof("find %d tasks from old metadata file", len(oldMeta.SubTasks))
+
 	batch := new(leveldb.Batch)
 	for name, task := range oldMeta.SubTasks {
+		log.Infof("[old metadata file] subtask %s => %+v", name, task)
 		var b bytes.Buffer
 		enc := toml.NewEncoder(&b)
 		err := enc.Encode(task)
@@ -184,18 +205,20 @@ func (metaDB *Metadata) recoverMetaFromOldFashion(path string) error {
 			return errors.Annotatef(err1, "encode task %v", task)
 		}
 
-		meta := &pb.TaskMeta{
+		taskMeta := &pb.TaskMeta{
 			Name: name,
 			Op:   pb.TaskOp_Start,
 			Stage, pb.Stage_New,
 			Task: b.Bytes(),
 		}
-		metaByte, err := meta.Marshal()
+
+		taskByte, err := taskMeta.Marshal()
 		if err != nil {
 			return errors.Annotatef(err1, "encode task meta %v", task)
 		}
 
 		batch.Put([]byte(name), metaByte)
+		meta.tasks[name] = taskMeta
 	}
 
 	err = metaDB.db.Write(batch, nil)
@@ -203,51 +226,5 @@ func (metaDB *Metadata) recoverMetaFromOldFashion(path string) error {
 		return errors.Annotatef(err, "save task meta into kv db")
 	}
 
-	return nil
-}
-
-// KVConfig is the configuration of goleveldb
-type KVConfig struct {
-	BlockCacheCapacity            int     `toml:"block-cache-capacity" json:"block-cache-capacity"`
-	BlockRestartInterval          int     `toml:"block-restart-interval" json:"block-restart-interval"`
-	BlockSize                     int     `toml:"block-size" json:"block-size"`
-	CompactionL0Trigger           int     `toml:"compaction-L0-trigger" json:"compaction-L0-trigger"`
-	CompactionTableSize           int     `toml:"compaction-table-size" json:"compaction-table-size"`
-	CompactionTotalSize           int     `toml:"compaction-total-size" json:"compaction-total-size"`
-	CompactionTotalSizeMultiplier float64 `toml:"compaction-total-size-multiplier" json:"compaction-total-size-multiplier"`
-	WriteBuffer                   int     `toml:"write-buffer" json:"write-buffer"`
-	WriteL0PauseTrigger           int     `toml:"write-L0-pause-trigger" json:"write-L0-pause-trigger"`
-	WriteL0SlowdownTrigger        int     `toml:"write-L0-slowdown-trigger" json:"write-L0-slowdown-trigger"`
-}
-
-// default leveldb config
-var defaultKVConfig = &KVConfig{
-	BlockCacheCapacity:            8388608,
-	BlockRestartInterval:          16,
-	BlockSize:                     4096,
-	CompactionL0Trigger:           8,
-	CompactionTableSize:           67108864,
-	CompactionTotalSize:           536870912,
-	CompactionTotalSizeMultiplier: 8,
-	WriteBuffer:                   67108864,
-	WriteL0PauseTrigger:           24,
-	WriteL0SlowdownTrigger:        17,
-}
-
-func openMetadataDB(kvDir string, config *KVConfig) (*leveldb.DB, error) {
-	log.Infof("metadat kvdbconfig: %+v", config)
-
-	var opt opt.Options
-	opt.BlockCacheCapacity = config.BlockCacheCapacity
-	opt.BlockRestartInterval = config.BlockRestartInterval
-	opt.BlockSize = config.BlockSize
-	opt.CompactionL0Trigger = config.CompactionL0Trigger
-	opt.CompactionTableSize = config.CompactionTableSize
-	opt.CompactionTotalSize = config.CompactionTotalSize
-	opt.CompactionTotalSizeMultiplier = config.CompactionTotalSizeMultiplier
-	opt.WriteBuffer = config.WriteBuffer
-	opt.WriteL0PauseTrigger = config.WriteL0PauseTrigger
-	opt.WriteL0SlowdownTrigger = config.WriteL0SlowdownTrigger
-
-	return leveldb.OpenFile(kvDir, &opt)
+	return errors.Trace(os.Remove(path))
 }
