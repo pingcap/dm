@@ -69,7 +69,7 @@ func (r *TCPReader) StartSyncByPos(pos gmysql.Position) error {
 	defer r.mu.Unlock()
 
 	if r.stage.Get() != int32(stageNew) {
-		return errors.Errorf("stage %s, expect %s", readerStage(r.stage), stageNew)
+		return errors.Errorf("stage %s, expect %s", readerStage(r.stage.Get()), stageNew)
 	}
 
 	streamer, err := r.syncer.StartSync(pos)
@@ -88,7 +88,7 @@ func (r *TCPReader) StartSyncByGTID(gSet gtid.Set) error {
 	defer r.mu.Unlock()
 
 	if r.stage.Get() != int32(stageNew) {
-		return errors.Errorf("stage %s, expect %s", readerStage(r.stage), stageNew)
+		return errors.Errorf("stage %s, expect %s", readerStage(r.stage.Get()), stageNew)
 	}
 
 	if gSet == nil {
@@ -136,7 +136,7 @@ func (r *TCPReader) Close() error {
 // GetEvent implements Reader.GetEvent.
 func (r *TCPReader) GetEvent(ctx context.Context) (*replication.BinlogEvent, error) {
 	if r.stage.Get() != int32(stagePrepared) {
-		return nil, errors.Errorf("stage %s, expect %s", readerStage(r.stage), stagePrepared)
+		return nil, errors.Errorf("stage %s, expect %s", readerStage(r.stage.Get()), stagePrepared)
 	}
 
 	return r.streamer.GetEvent(ctx)
