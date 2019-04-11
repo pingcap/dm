@@ -97,7 +97,7 @@ func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage) *SubTask {
 // Init initializes the sub task processing units
 func (st *SubTask) Init() error {
 	if len(st.units) < 1 {
-		return errors.Errorf("subtask %s has no dm units for mode %s", st.cfg.Name, st.cfg.Mode)
+		return errors.Errorf("sub task %s has no dm units for mode %s", st.cfg.Name, st.cfg.Mode)
 	}
 
 	// when error occurred, initialized units should be closed
@@ -119,7 +119,6 @@ func (st *SubTask) Init() error {
 			for j := 0; j < i; j++ {
 				needCloseUnits = append(needCloseUnits, st.units[j])
 			}
-
 			return errors.Errorf("sub task %s init dm-unit error %v", st.cfg.Name, errors.ErrorStack(err))
 		}
 	}
@@ -148,18 +147,9 @@ func (st *SubTask) Init() error {
 // Run runs the sub task
 func (st *SubTask) Run() {
 	st.setStage(pb.Stage_Paused)
-
-	err := st.Init()
-	if err != nil {
-		log.Errorf("[subtask] initial error %v", err)
-		st.fail(errors.ErrorStack(err))
-		return
-	}
-
-	err = st.unitTransWaitCondition()
+	err := st.unitTransWaitCondition()
 	if err != nil {
 		log.Errorf("[subtask] wait condition error: %v", err)
-		st.fail(errors.ErrorStack(err))
 		return
 	}
 
@@ -669,16 +659,4 @@ func (st *SubTask) retryErrors(errors []*pb.ProcessError, current unit.Unit) boo
 	}
 
 	return retry
-}
-
-func (st *SubTask) fail(message string) {
-	st.setStage(pb.Stage_Paused)
-	st.setResult(&pb.ProcessResult{
-		Errors: []*pb.ProcessError{
-			{
-				Type: pb.ErrorType_UnknownError,
-				Msg:  message,
-			},
-		},
-	})
 }

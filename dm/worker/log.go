@@ -22,6 +22,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 // Putter is interface which has Put method
@@ -130,27 +131,25 @@ func (log *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 		logs       = make([]*pb.TaskLog, 0, 4)
 		logID      int64
 	)
-	iter := db.NewIterator(nil, nil)
+	iter := db.NewIterator(util.BytesPrefix(TaskLogPrefix), nil)
 	for ok := iter.Seek(EncodeTaskLogKey(handledPointer.Location)); ok; ok = iter.Next() {
 		logBytes := iter.Value()
 		log := &pb.TaskLog{}
 		err = log.Unmarshal(logBytes)
 		if err != nil {
-			err = errors.Annotatef(err, "unmarshal task meta %s", logBytes)
+			err = errors.Annotatef(err, "unmarshal task log %s", logBytes)
 			break
 		}
 
-		logID, err = DecodeTaskLogKey(iter.Key())
-		if err != nil {
-			break
-		}
-		if logID > endPointer.Location {
-			endPointer.Location = logID
+		if log.Id > endPointer.Location {
+			endPointer.Location = log.Id
 		} else {
 			panic("out of sorted from level db")
 		}
 
-		logs = append(logs, log)
+		if log.Id > handledPointer.Location {
+			logs = append(logs, log)
+		}
 	}
 	iter.Release()
 	if err == nil {
@@ -168,6 +167,22 @@ func (log *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 	return logs, nil
 }
 
+// GetTaskLog returns task log by given log ID
+func (log *Logger) GetTaskLog(h Getter, id int64) (*pb.TaskLog, error) {
+	logBytes, err := h.Get(EncodeTaskLogKey(id), nil)
+	if err != nil {
+		return nil, errors.Annotatef(err, "get task meta from leveldb")
+	}
+
+	opLog := &pb.TaskLog{}
+	err = opLog.Unmarshal(logBytes)
+	if err != nil {
+		return nil, errors.Annotatef(err, "unmarshal task log binary %s", logBytes)
+	}
+
+	return opLog, nil
+}
+
 // ForwardTo forward handled pointer to specified ID location
 // not thread safe
 func (log *Logger) ForwardTo(db Putter, ID int64) error {
@@ -182,6 +197,21 @@ func (log *Logger) ForwardTo(db Putter, ID int64) error {
 
 	log.handledPointer = handledPointer
 	return nil
+}
+
+// MarkAndForwardLog marks result sucess or not in log, and forwards handledPointer
+func (log *Logger) MarkAndForwardLog(db Putter, opLog *pb.TaskLog) error {
+	logBytes, err := opLog.Marshal()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	err = db.Put(EncodeTaskLogKey(opLog.Id), logBytes, nil)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	return errors.Trace(log.ForwardTo(db, opLog.Id))
 }
 
 // Append appends a task log
@@ -209,6 +239,8 @@ func (log *Logger) Append(db Putter, opLog *pb.TaskLog) error {
 	return nil
 }
 
+// **************** task meta oepration *************** //
+
 // TaskMetaPrefix is prefix of task meta key
 var TaskMetaPrefix = []byte("!DM!TaskMeta")
 
@@ -223,9 +255,41 @@ func EncodeTaskMetaKey(name string) []byte {
 	return append(key, name...)
 }
 
+// LoadTaskMetas loads all task metas from kv db
+func LoadTaskMetas(db *leveldb.DB) (map[string]*pb.TaskMeta, error) {
+	var (
+		tasks = make(map[string]*pb.TaskMeta)
+		err   error
+	)
+
+	iter := db.NewIterator(util.BytesPrefix(TaskMetaPrefix), nil)
+	for iter.Next() {
+		taskBytes := iter.Value()
+		task := &pb.TaskMeta{}
+		err = task.Unmarshal(taskBytes)
+		if err != nil {
+			err = errors.Annotatef(err, "unmarshal task meta %s", taskBytes)
+			break
+		}
+
+		tasks[task.Name] = task
+	}
+	iter.Release()
+	if err == nil {
+		return nil, errors.Trace(err)
+	}
+
+	err = iter.Error()
+	if err != nil {
+		return nil, errors.Annotatef(err, "fetch tasks from meta")
+	}
+
+	return tasks, nil
+}
+
 // SetTaskMeta saves task meta into kv db
-func (m *Metadata) SetTaskMeta(h Putter, task *pb.TaskMeta) error {
-	err := verifyTaskMeta(task)
+func SetTaskMeta(h Putter, task *pb.TaskMeta) error {
+	err := VerifyTaskMeta(task)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -244,7 +308,7 @@ func (m *Metadata) SetTaskMeta(h Putter, task *pb.TaskMeta) error {
 }
 
 // GetTaskMeta returns task meta by given name
-func (m *Metadata) GetTaskMeta(h Getter, name string) (*pb.TaskMeta, error) {
+func GetTaskMeta(h Getter, name string) (*pb.TaskMeta, error) {
 	taskBytes, err := h.Get(EncodeTaskMetaKey(name), nil)
 	if err != nil {
 		return nil, errors.Annotatef(err, "get task meta from leveldb")
@@ -259,8 +323,8 @@ func (m *Metadata) GetTaskMeta(h Getter, name string) (*pb.TaskMeta, error) {
 	return task, nil
 }
 
-// DeleteByTxn delete task meta from kv DB
-func (m *Metadata) DeleteByTxn(h Deleter, name string) error {
+// DeleteTaskMeta delete task meta from kv DB
+func DeleteTaskMeta(h Deleter, name string) error {
 	err := h.Delete(EncodeTaskMetaKey(name), nil)
 	if err != nil {
 		return errors.Annotatef(err, "save into kv db")
@@ -269,7 +333,8 @@ func (m *Metadata) DeleteByTxn(h Deleter, name string) error {
 	return nil
 }
 
-func verifyTaskMeta(task *pb.TaskMeta) error {
+// VerifyTaskMeta verify legality of take meta
+func VerifyTaskMeta(task *pb.TaskMeta) error {
 	if len(task.Name) == 0 {
 		return errors.NotValidf("task name is empty")
 	}
@@ -287,4 +352,19 @@ func verifyTaskMeta(task *pb.TaskMeta) error {
 	}
 
 	return nil
+}
+
+// CloneTaskMeta returns a task meta copy
+func CloneTaskMeta(task *pb.TaskMeta) *pb.TaskMeta {
+	clone := new(pb.TaskMeta)
+	*clone = *task
+	return clone
+}
+
+// CloneTaskLog returns a task log copy
+func CloneTaskLog(log *pb.TaskLog) *pb.TaskLog {
+	clone := new(pb.TaskLog)
+	*clone = *log
+	clone.Task = CloneTaskMeta(log.Task)
+	return clone
 }

@@ -53,8 +53,7 @@ type Worker struct {
 
 	cfg *Config
 
-	subTasks    map[string]*SubTask
-	needHandled map[string]*pb.TaskMeta
+	subTasks map[string]*SubTask
 
 	relayHolder *RelayHolder
 	relayPurger *purger.Purger
@@ -71,7 +70,6 @@ func NewWorker(cfg *Config) (*Worker, error) {
 		relayHolder: NewRelayHolder(cfg),
 		tracer:      tracing.InitTracerHub(cfg.Tracer),
 		subTasks:    make(map[string]*SubTask),
-		needHandled: make(map[string]*pb.TaskMeta),
 	}
 
 	// initial relay purger
@@ -98,7 +96,7 @@ func NewWorker(cfg *Config) (*Worker, error) {
 	}
 
 	// initial metadata
-	w.meta, err = NewMetadata(dbDir, db)
+	w.meta, err = NewMetadata(dbDir, w.db)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -117,7 +115,6 @@ func NewWorker(cfg *Config) (*Worker, error) {
 	}
 
 	w.ctx, w.cancel = context.WithCancel(context.Background())
-	w.needHandled = w.meta.Load().Tasks
 
 	log.Info("[worker] initialzed")
 
@@ -163,7 +160,6 @@ func (w *Worker) Close() {
 		st.Close()
 	}
 
-	w.needHandled = nil
 	w.subTasks = nil
 
 	// close relay
@@ -198,16 +194,6 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 		return errors.NotValidf("worker already closed")
 	}
 
-	handle, ok := w.needHandled[cfg.Name]
-	if ok {
-		return errors.Errorf("%sing sub task %s right now", handle.Op, cfg.Name)
-	}
-
-	_, ok = w.subTasks[cfg.Name]
-	if ok {
-		return errors.AlreadyExistsf("sub task %s", cfg.Name)
-	}
-
 	// copy some config item from dm-worker's config
 	w.copyConfigFromWorker(cfg)
 	cloneCfg, _ := cfg.DecryptPassword()
@@ -237,16 +223,6 @@ func (w *Worker) UpdateSubTask(cfg *config.SubTaskConfig) error {
 		return errors.NotValidf("worker already closed")
 	}
 
-	handle, ok := w.needHandled[cfg.Name]
-	if ok {
-		return errors.Errorf("%sing sub task %s right now", handle.Op, cfg.Name)
-	}
-
-	_, ok = w.subTasks[cfg.Name]
-	if !ok {
-		return errors.NotFoundf("sub task %s", cfg.Name)
-	}
-
 	cfgStr, err := cfg.Toml()
 	if err != nil {
 		return errors.Annotatef(err, "[worker] encode subtask %+v into toml format", cfg)
@@ -273,25 +249,6 @@ func (w *Worker) StopSubTask(name string) error {
 		return errors.NotValidf("worker already closed")
 	}
 
-	if w.closed.Get() == closedTrue {
-		return errors.NotValidf("worker already closed")
-	}
-
-	handle, ok := w.needHandled[name]
-	if ok {
-		return errors.Errorf("%sing sub task %s right now", handle.Op, name)
-	}
-
-	_, ok = w.subTasks[name]
-	if !ok {
-		return errors.NotFoundf("sub task %s", name)
-	}
-
-	if err := w.meta.Delete(name); err != nil {
-		log.Errorf("[worker] stop task %s, something wrong with saving task meta: %v", name, err)
-		return errors.Annotatef(err, "stop task %s, something wrong with saving task meta", name)
-	}
-
 	err := w.operateSubTask(&pb.TaskMeta{
 		Name: name,
 		Op:   pb.TaskOp_Stop,
@@ -312,26 +269,9 @@ func (w *Worker) ResumeSubTask(name string) error {
 		return errors.NotValidf("worker already closed")
 	}
 
-	handle, ok := w.needHandled[name]
-	if ok {
-		return errors.Errorf("%sing sub task %s right now", handle.Op, name)
-	}
-
-	_, ok = w.subTasks[name]
-	if !ok {
-		return errors.NotFoundf("sub task %s", name)
-	}
-
-	meta := w.meta.Get(name)
-	if meta == nil {
-		log.Errorf("[worker] meta of sub task %s is NULL", name)
-		return errors.NotFoundf("[worker] meta of sub task %s is NULL", name)
-	}
-
 	err := w.operateSubTask(&pb.TaskMeta{
 		Name: name,
 		Op:   pb.TaskOp_Resume,
-		Task: meta.Task,
 	})
 	if err != nil {
 		return errors.Trace(err)
@@ -349,26 +289,9 @@ func (w *Worker) PauseSubTask(name string) error {
 		return errors.NotValidf("worker already closed")
 	}
 
-	handle, ok := w.needHandled[name]
-	if ok {
-		return errors.Errorf("%sing sub task %s right now", handle.Op, name)
-	}
-
-	_, ok = w.subTasks[name]
-	if !ok {
-		return errors.NotFoundf("sub task %s", name)
-	}
-
-	meta := w.meta.Get(name)
-	if meta == nil {
-		log.Errorf("[worker] meta of sub task %s is NULL", name)
-		return errors.NotFoundf("[worker] meta of sub task %s is NULL", name)
-	}
-
 	err := w.operateSubTask(&pb.TaskMeta{
 		Name: name,
 		Op:   pb.TaskOp_Pause,
-		Task: meta.Task,
 	})
 	if err != nil {
 		return errors.Trace(err)
@@ -379,16 +302,11 @@ func (w *Worker) PauseSubTask(name string) error {
 
 // not thread safe
 func (w *Worker) operateSubTask(task *pb.TaskMeta) error {
-	if err := w.meta.Set(task); err != nil {
-		log.Errorf("[worker] %s task %s, something wrong with saving task meta: %v", task.Op, task.Name, err)
-		return errors.Annotatef(err, "%s task %s, something wrong with saving task meta", task.Op, task.Name)
+	if err := w.meta.AppendOperation(task); err != nil {
+		return errors.Annotatef(err, "%s task %s, something wrong with saving operation log", task.Op, task.Name)
 	}
 
 	log.Infof("[worker] %s task %v", task.Op, task.Name)
-
-	// put ino need handled queue
-	w.needHandled[task.Name] = task
-
 	return nil
 }
 
