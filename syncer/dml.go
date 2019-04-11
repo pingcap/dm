@@ -287,9 +287,9 @@ func genColumnList(columns []*column) string {
 	var buf strings.Builder
 	for i, column := range columns {
 		if i != len(columns)-1 {
-			fmt.Fprintf(&buf, "`%s`,", column.name)
+			buf.WriteString("`" + column.name + "`,")
 		} else {
-			fmt.Fprintf(&buf, "`%s`", column.name)
+			buf.WriteString("`" + column.name + "`")
 		}
 	}
 
