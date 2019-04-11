@@ -191,12 +191,12 @@ func (w *Worker) Close() {
 }
 
 // StartSubTask creates a sub task an run it
-func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
+func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) (int64, error) {
 	w.Lock()
 	defer w.Lock()
 
 	if w.closed.Get() == closedTrue {
-		return errors.NotValidf("worker already closed")
+		return 0, errors.NotValidf("worker already closed")
 	}
 
 	// copy some config item from dm-worker's config
@@ -204,115 +204,120 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 	cloneCfg, _ := cfg.DecryptPassword()
 	cfgStr, err := cloneCfg.Toml()
 	if err != nil {
-		return errors.Annotatef(err, "[worker] encode subtask %+v into toml format", cfg)
+		return 0, errors.Annotatef(err, "[worker] encode subtask %+v into toml format", cfg)
 	}
 
-	err = w.operateSubTask(&pb.TaskMeta{
+	var opLogID int64
+	opLogID, err = w.operateSubTask(&pb.TaskMeta{
 		Op:   pb.TaskOp_Start,
 		Name: cfg.Name,
 		Task: append([]byte{}, cfgStr...),
 	})
 	if err != nil {
-		return errors.Trace(err)
+		return 0, errors.Trace(err)
 	}
 
-	return nil
+	return opLogID, nil
 }
 
 // UpdateSubTask update config for a sub task
-func (w *Worker) UpdateSubTask(cfg *config.SubTaskConfig) error {
+func (w *Worker) UpdateSubTask(cfg *config.SubTaskConfig) (int64, error) {
 	w.Lock()
 	defer w.Lock()
 
 	if w.closed.Get() == closedTrue {
-		return errors.NotValidf("worker already closed")
+		return 0, errors.NotValidf("worker already closed")
 	}
 
 	cfgStr, err := cfg.Toml()
 	if err != nil {
-		return errors.Annotatef(err, "[worker] encode subtask %+v into toml format", cfg)
+		return 0, errors.Annotatef(err, "[worker] encode subtask %+v into toml format", cfg)
 	}
-
-	err = w.operateSubTask(&pb.TaskMeta{
+	var opLogID int64
+	opLogID, err = w.operateSubTask(&pb.TaskMeta{
 		Op:   pb.TaskOp_Update,
 		Name: cfg.Name,
 		Task: append([]byte{}, cfgStr...),
 	})
 	if err != nil {
-		return errors.Trace(err)
+		return 0, errors.Trace(err)
 	}
 
-	return nil
+	return opLogID, nil
 }
 
 // StopSubTask stops a running sub task
-func (w *Worker) StopSubTask(name string) error {
+func (w *Worker) StopSubTask(name string) (int64, error) {
 	w.Lock()
 	defer w.Lock()
 
 	if w.closed.Get() == closedTrue {
-		return errors.NotValidf("worker already closed")
+		return 0, errors.NotValidf("worker already closed")
 	}
 
-	err := w.operateSubTask(&pb.TaskMeta{
+	var opLogID int64
+	opLogID, err := w.operateSubTask(&pb.TaskMeta{
 		Name: name,
 		Op:   pb.TaskOp_Stop,
 	})
 	if err != nil {
-		return errors.Trace(err)
+		return 0, errors.Trace(err)
 	}
 
-	return nil
+	return opLogID, nil
 }
 
 // ResumeSubTask resumes a paused sub task
-func (w *Worker) ResumeSubTask(name string) error {
+func (w *Worker) ResumeSubTask(name string) (int64, error) {
 	w.Lock()
 	defer w.Lock()
 
 	if w.closed.Get() == closedTrue {
-		return errors.NotValidf("worker already closed")
+		return 0, errors.NotValidf("worker already closed")
 	}
 
-	err := w.operateSubTask(&pb.TaskMeta{
+	var opLogID int64
+	opLogID, err := w.operateSubTask(&pb.TaskMeta{
 		Name: name,
 		Op:   pb.TaskOp_Resume,
 	})
 	if err != nil {
-		return errors.Trace(err)
+		return 0, errors.Trace(err)
 	}
 
-	return nil
+	return opLogID, nil
 }
 
 // PauseSubTask pauses a running sub task
-func (w *Worker) PauseSubTask(name string) error {
+func (w *Worker) PauseSubTask(name string) (int64, error) {
 	w.Lock()
 	defer w.Lock()
 
 	if w.closed.Get() == closedTrue {
-		return errors.NotValidf("worker already closed")
+		return 0, errors.NotValidf("worker already closed")
 	}
 
-	err := w.operateSubTask(&pb.TaskMeta{
+	var opLogID int64
+	opLogID, err := w.operateSubTask(&pb.TaskMeta{
 		Name: name,
 		Op:   pb.TaskOp_Pause,
 	})
 	if err != nil {
-		return errors.Trace(err)
+		return 0, errors.Trace(err)
 	}
 
-	return nil
+	return opLogID, nil
 }
 
 // not thread safe
-func (w *Worker) operateSubTask(task *pb.TaskMeta) error {
-	if err := w.meta.AppendOperation(task); err != nil {
-		return errors.Annotatef(err, "%s task %s, something wrong with saving operation log", task.Op, task.Name)
+func (w *Worker) operateSubTask(task *pb.TaskMeta) (int64, error) {
+	opLogID, err := w.meta.AppendOperation(task)
+	if err != nil {
+		return 0, errors.Annotatef(err, "%s task %s, something wrong with saving operation log", task.Op, task.Name)
 	}
 
 	log.Infof("[worker] %s task %v", task.Op, task.Name)
-	return nil
+	return opLogID, nil
 }
 
 // QueryStatus query worker's sub tasks' status

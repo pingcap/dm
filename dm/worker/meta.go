@@ -163,7 +163,7 @@ func (meta *Metadata) PeekLog() (log *pb.TaskLog) {
 }
 
 // AppendOperation appends operation into task log
-func (meta *Metadata) AppendOperation(subTask *pb.TaskMeta) error {
+func (meta *Metadata) AppendOperation(subTask *pb.TaskMeta) (int64, error) {
 	meta.Lock()
 	defer meta.Unlock()
 
@@ -172,11 +172,11 @@ func (meta *Metadata) AppendOperation(subTask *pb.TaskMeta) error {
 	}
 
 	if err := meta.log.Append(meta.db, opLog); err != nil {
-		return errors.Trace(err)
+		return 0, errors.Trace(err)
 	}
 
 	meta.logs = append(meta.logs, opLog)
-	return nil
+	return opLog.Id, nil
 }
 
 // MarkOperation marks operation result

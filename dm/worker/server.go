@@ -148,7 +148,7 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 		}, nil
 	}
 
-	err = s.worker.StartSubTask(cfg)
+	opLogID, err := s.worker.StartSubTask(cfg)
 	if err != nil {
 		log.Errorf("[server] start sub task %s error %v", cfg.Name, errors.ErrorStack(err))
 		return &pb.CommonWorkerResponse{
@@ -160,6 +160,7 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 	return &pb.CommonWorkerResponse{
 		Result: true,
 		Msg:    "",
+		LogID:  opLogID,
 	}, nil
 }
 
@@ -172,15 +173,18 @@ func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskReque
 		Result: false,
 	}
 
-	name := req.Name
+	var (
+		name    = req.Name
+		opLogID int64
+	)
 	var err error
 	switch req.Op {
 	case pb.TaskOp_Stop:
-		err = s.worker.StopSubTask(name)
+		opLogID, err = s.worker.StopSubTask(name)
 	case pb.TaskOp_Pause:
-		err = s.worker.PauseSubTask(name)
+		opLogID, err = s.worker.PauseSubTask(name)
 	case pb.TaskOp_Resume:
-		err = s.worker.ResumeSubTask(name)
+		opLogID, err = s.worker.ResumeSubTask(name)
 	default:
 		resp.Msg = fmt.Sprintf("invalid operate %s on sub task", req.Op.String())
 		return resp, nil
@@ -192,6 +196,7 @@ func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskReque
 		return resp, nil
 	}
 
+	resp.LogID = opLogID
 	resp.Result = true
 	return resp, nil
 }
@@ -209,7 +214,7 @@ func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest
 		}, nil
 	}
 
-	err = s.worker.UpdateSubTask(cfg)
+	opLogID, err := s.worker.UpdateSubTask(cfg)
 	if err != nil {
 		log.Errorf("[server] update sub task %s error %v", cfg.Name, errors.ErrorStack(err))
 		return &pb.CommonWorkerResponse{
@@ -221,6 +226,7 @@ func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest
 	return &pb.CommonWorkerResponse{
 		Result: true,
 		Msg:    "",
+		LogID:  opLogID,
 	}, nil
 }
 
