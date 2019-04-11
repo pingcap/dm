@@ -252,7 +252,7 @@ func genDeleteSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 
 	for _, data := range dataSeq {
 		if len(data) != len(columns) {
-			return nil, nil, nil, errors.Errorf("delete columns and data mismatch in length: %d (columns) vs %d (data)", len(columns), len(data))
+			return nil, nil, nil, errors.Errorf("Column count doesn't match value count: %d (columns) vs %d (values)", len(columns), len(data))
 		}
 
 		value := extractValueFromData(data, columns)
