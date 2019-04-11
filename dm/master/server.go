@@ -252,6 +252,14 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 					Msg:    errors.ErrorStack(err),
 				}
 			}
+			err = s.waitOperationOk(ctx, cli, stCfg.Name, workerResp.LogID)
+			if err != nil {
+				workerResp = &pb.CommonWorkerResponse{
+					Result: false,
+					Msg:    errors.ErrorStack(err),
+				}
+			}
+
 			workerResp.Worker = worker
 			workerRespCh <- workerResp
 		}(stCfg)
@@ -333,6 +341,14 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 					Msg:    errors.ErrorStack(err),
 				}
 			}
+			err = s.waitOperationOk(ctx, cli, req.Name, workerResp.LogID)
+			if err != nil {
+				workerResp = &pb.OperateSubTaskResponse{
+					Result: false,
+					Msg:    errors.ErrorStack(err),
+				}
+			}
+
 			workerResp.Op = req.Op
 			workerResp.Worker = worker
 			workerRespCh <- workerResp
@@ -429,6 +445,13 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 				return
 			}
 			workerResp, err := cli.UpdateSubTask(ctx, &pb.UpdateSubTaskRequest{Task: stCfgToml})
+			if err != nil {
+				workerResp = &pb.CommonWorkerResponse{
+					Result: false,
+					Msg:    errors.ErrorStack(err),
+				}
+			}
+			err = s.waitOperationOk(ctx, cli, stCfg.Name, workerResp.LogID)
 			if err != nil {
 				workerResp = &pb.CommonWorkerResponse{
 					Result: false,
@@ -1751,4 +1774,36 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 	}
 
 	return cfg, stCfgs, nil
+}
+
+var (
+	maxRetryNum   = 30
+	retryInterval = time.Second
+)
+
+func (s *Server) waitOperationOk(ctx context.Context, cli pb.WorkerClient, name string, opLogID int64) error {
+	num := 0
+	for num < maxRetryNum {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		res, err := cli.QueryTaskOperation(ctx, &pb.QueryTaskOperationRequest{
+			Name:  name,
+			LogID: opLogID,
+		})
+		if err != nil {
+			log.Errorf("fail to query task operation %v", err)
+		} else if res.Log.Success {
+			return nil
+		} else if len(res.Log.Message) != 0 {
+			return errors.New(res.Log.Message)
+		}
+
+		time.Sleep(retryInterval)
+	}
+
+	return errors.Errorf("request is timeout, but request may be successful")
 }
