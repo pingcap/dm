@@ -230,14 +230,24 @@ func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest
 	}, nil
 }
 
-// QueryTask implements WorkerServer.QueryTask
-func (s *Server) QueryTask(context.Context, *pb.QueryTaskRequest) (*pb.QueryTaskResponse, error) {
-	return nil, nil
-}
-
 // QueryTaskOperation implements WorkerServer.QueryTaskOperation
-func (s *Server) QueryTaskOperation(context.Context, *pb.QueryTaskOperationRequest) (*pb.QueryTaskOperationResponse, error) {
-	return nil, nil
+func (s *Server) QueryTaskOperation(ctx context.Context, req *pb.QueryTaskOperationRequest) (*pb.QueryTaskOperationResponse, error) {
+	taskName := req.Name
+	opLogID := req.LogID
+
+	opLog, err := s.worker.meta.GetTaskLog(opLogID)
+	if err != nil {
+		log.Errorf("fail to get operation log %s of task %s", opLogID, taskName)
+		return nil, errors.Trace(err)
+	}
+
+	return &pb.QueryTaskOperationResponse{
+		Log: opLog,
+		Meta: &pb.CommonWorkerResponse{
+			Result: true,
+			Msg:    "",
+		},
+	}, nil
 }
 
 // QueryStatus implements WorkerServer.QueryStatus

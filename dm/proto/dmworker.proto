@@ -10,7 +10,6 @@ service Worker {
 
     rpc QueryStatus (QueryStatusRequest) returns (QueryStatusResponse) {}
     rpc QueryError (QueryErrorRequest) returns (QueryErrorResponse) {}
-    rpc QueryTask(QueryTaskRequest) returns (QueryTaskResponse) {}
     rpc QueryTaskOperation(QueryTaskOperationRequest) returns (QueryTaskOperationResponse) {}
 
     rpc HandleSQLs (HandleSubTaskSQLsRequest) returns (CommonWorkerResponse) {}
@@ -78,18 +77,9 @@ message OperateSubTaskResponse {
     int64 logID = 5;
 }
 
-message QueryTaskRequest {
-    repeated string names = 1; // sub task's name
-}
-
-message QueryTaskResponse {
-    CommonWorkerResponse meta = 2;
-    repeated TaskMeta tasks = 1; // sub task's config
-}
-
 message QueryTaskOperationRequest {
-    string names = 1; // sub task's name
-	int32 logID = 2; // 对象操作 ID
+    string name = 1; // sub task's name
+	int64 logID = 2; // 对象操作 ID
 }
 
 message QueryTaskOperationResponse {
