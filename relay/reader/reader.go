@@ -28,7 +28,7 @@ import (
 )
 
 // Reader reads binlog events from a upstream master server.
-// A transformer should receive binlog events from this reader.
+// The read binlog events should be send to a transformer.
 // The reader should support:
 //   1. handle expected errors
 //   2. do retry if possible
@@ -109,6 +109,7 @@ func (r *reader) Close() error {
 }
 
 // GetEvent implements Reader.GetEvent.
+// If some ignorable error occurred, the returned event and error both are nil.
 func (r *reader) GetEvent(ctx context.Context) (*replication.BinlogEvent, error) {
 	if r.stage.Get() != int32(stagePrepared) {
 		return nil, errors.Errorf("stage %s, expect %s", readerStage(r.stage.Get()), stagePrepared)
