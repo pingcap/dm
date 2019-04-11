@@ -32,10 +32,10 @@ else
 	LDFLAGS += -X "github.com/pingcap/dm/dm/master.SampleConfigFile=$(shell cat dm/master/dm-master.toml | base64)" 
 endif
 
-.PHONY: build test dm_integration_test_build integration_test coverage check \
-	dm-worker dm-master dm-tracer dmctl
+.PHONY: build test unit_test dm_integration_test_build integration_test \
+	coverage check dm-worker dm-master dm-tracer dmctl
 
-build: check test dm-worker dm-master dm-tracer dmctl
+build: check dm-worker dm-master dm-tracer dmctl
 
 dm-worker:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dm-worker ./cmd/dm-worker
@@ -49,7 +49,9 @@ dm-tracer:
 dmctl:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dmctl ./cmd/dm-ctl
 
-test:
+test: unit_test integration_test
+
+unit_test:
 	bash -x ./tests/wait_for_mysql.sh
 	mkdir -p $(TEST_DIR)
 	@export log_level=error; \
