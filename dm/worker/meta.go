@@ -203,12 +203,22 @@ func (meta *Metadata) MarkOperation(log *pb.TaskLog) error {
 		return errors.Trace(err)
 	}
 
+	if log.Success {
+		err = SetTaskMeta(txn, log.Task)
+		if err != nil {
+			txn.Discard()
+			return errors.Trace(err)
+		}
+	}
+
 	err = txn.Commit()
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	meta.tasks[log.Task.Name] = log.Task
+	if log.Success {
+		meta.tasks[log.Task.Name] = log.Task
+	}
 	meta.logs = meta.logs[1:]
 	return nil
 }

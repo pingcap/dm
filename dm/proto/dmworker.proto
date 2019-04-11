@@ -11,6 +11,7 @@ service Worker {
     rpc QueryStatus (QueryStatusRequest) returns (QueryStatusResponse) {}
     rpc QueryError (QueryErrorRequest) returns (QueryErrorResponse) {}
     rpc QueryTask(QueryTaskRequest) returns (QueryTaskResponse) {}
+    rpc QueryTaskOperation(QueryTaskOperationRequest) returns (QueryTaskOperationResponse) {}
 
     rpc HandleSQLs (HandleSubTaskSQLsRequest) returns (CommonWorkerResponse) {}
     // FetchDDLInfo fetches DDL info from dm-worker by dm-master
@@ -74,6 +75,7 @@ message OperateSubTaskResponse {
     bool result = 2;
     string worker = 3; // worker name, set by dm-master
     string msg = 4;
+    int64 logID = 5;
 }
 
 message QueryTaskRequest {
@@ -81,7 +83,18 @@ message QueryTaskRequest {
 }
 
 message QueryTaskResponse {
+    CommonWorkerResponse meta = 2;
     repeated TaskMeta tasks = 1; // sub task's config
+}
+
+message QueryTaskOperationRequest {
+    string names = 1; // sub task's name
+	int32 logID = 2; // 对象操作 ID
+}
+
+message QueryTaskOperationResponse {
+    CommonWorkerResponse meta = 1;
+    TaskLog log = 2; // sub task's operation log
 }
 
 message UpdateSubTaskRequest {
@@ -115,6 +128,7 @@ message CommonWorkerResponse {
     bool result = 1;
     string worker = 2; // worker name, set by dm-master
     string msg = 3; // when result is true, msg is empty
+    int64 logID = 4;
 }
 
 // QueryStatusResponse represents status response for query on a dm-worker

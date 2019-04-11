@@ -103,6 +103,11 @@ func NewWorker(cfg *Config) (*Worker, error) {
 
 	InitConditionHub(w)
 
+	err = w.restoreSubTask()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
 	// start relay
 	w.relayHolder.Start()
 
@@ -715,9 +720,38 @@ func (w *Worker) findSubTask(name string) *SubTask {
 	return w.subTasks[name]
 }
 
+func (w *Worker) restoreSubTask() error {
+	tasks := w.meta.LoadTaskMeta()
+
+	w.Lock()
+	defer w.Unlock()
+	w.subTasks = make(map[string]*SubTask)
+	for name, task := range tasks {
+		taskCfg := new(config.SubTaskConfig)
+		if err := taskCfg.Decode(string(task.Task)); err != nil {
+			return errors.Annotatef(err, "decode subtask config error in restoreSubTask")
+		}
+
+		st := NewSubTaskWithStage(taskCfg, task.Stage)
+		w.subTasks[name] = st
+
+		if st.Stage() == pb.Stage_Running || st.Stage() == pb.Stage_New {
+			st.Run()
+		}
+	}
+
+	return nil
+}
+
+var maxRetryCount = 10
+
 func (w *Worker) handleTask() {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
+
+	retryCnt := 0
+
+Loop:
 	for {
 		select {
 		case <-w.ctx.Done():
@@ -729,54 +763,103 @@ func (w *Worker) handleTask() {
 				return
 			}
 
-			for name, task := range w.needHandled {
-				st, exist := w.subTasks[name]
-				if !exist {
-					taskCfg := new(config.SubTaskConfig)
-					taskCfg.Decode(string(task.Task))
-					st = NewSubTaskWithStage(taskCfg, opToStage(task.Op))
-				}
-
-				switch task.Op {
-				case pb.TaskOp_Start:
-					st.Run()
-				case pb.TaskOp_Update:
-					if !exist {
-						st.Run()
-					} else {
-						taskCfg := new(config.SubTaskConfig)
-						taskCfg.Decode(string(task.Task))
-						st.Update(taskCfg)
-					}
-				case pb.TaskOp_Stop:
-					st.Close()
-				case pb.TaskOp_Pause:
-					st.Pause()
-				case pb.TaskOp_Resume:
-					if !exist {
-						st.Run()
-					} else {
-						st.Resume()
-					}
-				}
-
-				delete(w.needHandled, name)
-				break
+			opLog := w.meta.PeekLog()
+			if opLog == nil {
+				w.Unlock()
+				continue
 			}
-			w.Unlock()
-		}
-	}
-}
 
-func opToStage(op pb.TaskOp) pb.Stage {
-	switch op {
-	case pb.TaskOp_Start, pb.TaskOp_Update, pb.TaskOp_Resume:
-		return pb.Stage_New
-	case pb.TaskOp_Pause:
-		return pb.Stage_Paused
-	case pb.TaskOp_Stop:
-		return pb.Stage_Stopped
-	default:
-		return pb.Stage_New
+			st, exist := w.subTasks[opLog.Task.Name]
+			var err error
+			switch opLog.Task.Op {
+			case pb.TaskOp_Start:
+				if exist {
+					err = errors.AlreadyExistsf("sub task %s", opLog.Task.Name)
+					break
+				}
+
+				if w.relayPurger.Purging() {
+					if retryCnt < maxRetryCount {
+						retryCnt++
+						log.Warn("relay log purger is purging, cannot start sub task %s, would try again later", opLog.Task.Name)
+						w.Unlock()
+						continue Loop
+					}
+
+					err = errors.Errorf("relay log purger is purging, cannot start sub task %s, please try again later", opLog.Task.Name)
+					break
+
+				}
+
+				taskCfg := new(config.SubTaskConfig)
+				if err1 := taskCfg.Decode(string(opLog.Task.Task)); err1 != nil {
+					err = errors.Annotatef(err1, "decode subtask config error in handleTask")
+					break
+				}
+
+				log.Infof("[worker] start sub task with config: %v", taskCfg)
+				st := NewSubTask(taskCfg)
+				w.subTasks[opLog.Task.Name] = st
+				st.Run()
+
+			case pb.TaskOp_Update:
+				if !exist {
+					err = errors.NotFoundf("sub task with name %s", opLog.Task.Name)
+					break
+				}
+
+				taskCfg := new(config.SubTaskConfig)
+				if err1 := taskCfg.Decode(string(opLog.Task.Task)); err1 != nil {
+					err = errors.Annotatef(err1, "decode subtask config error in handleTask")
+					break
+				}
+
+				log.Infof("[worker] update sub task %s with config: %v", opLog.Task.Name, taskCfg)
+				err = st.Update(taskCfg)
+			case pb.TaskOp_Stop:
+				if !exist {
+					err = errors.NotFoundf("sub task with name %s", opLog.Task.Name)
+					break
+				}
+
+				log.Infof("[worker] stop sub task %s", opLog.Task.Name)
+				st.Close()
+			case pb.TaskOp_Pause:
+				if !exist {
+					err = errors.NotFoundf("sub task with name %s", opLog.Task.Name)
+					break
+				}
+
+				log.Infof("[worker] pause sub task %s", opLog.Task.Name)
+				err = st.Pause()
+			case pb.TaskOp_Resume:
+				if !exist {
+					err = errors.NotFoundf("sub task with name %s", opLog.Task.Name)
+					break
+				}
+
+				log.Infof("[worker] resume sub task %s", opLog.Task.Name)
+				err = st.Resume()
+			}
+
+			if err != nil {
+				opLog.Message = err.Error()
+			} else {
+				opLog.Task.Stage = st.Stage()
+				opLog.Success = true
+			}
+
+			// fill current task config
+			if len(opLog.Task.Task) == 0 {
+				tm := w.meta.GetTask(opLog.Task.Name)
+				opLog.Task.Task = append([]byte{}, tm.Task...)
+			}
+
+			err = w.meta.MarkOperation(opLog)
+			w.Unlock()
+			if err != nil {
+				log.Errorf("failto mark subtask %s operation %+v", opLog.Task.Name, opLog)
+			}
+		}
 	}
 }

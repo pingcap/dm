@@ -129,7 +129,6 @@ func (log *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 	var (
 		endPointer Pointer
 		logs       = make([]*pb.TaskLog, 0, 4)
-		logID      int64
 	)
 	iter := db.NewIterator(util.BytesPrefix(TaskLogPrefix), nil)
 	for ok := iter.Seek(EncodeTaskLogKey(handledPointer.Location)); ok; ok = iter.Next() {

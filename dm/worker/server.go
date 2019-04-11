@@ -229,6 +229,11 @@ func (s *Server) QueryTask(context.Context, *pb.QueryTaskRequest) (*pb.QueryTask
 	return nil, nil
 }
 
+// QueryTaskOperation implements WorkerServer.QueryTaskOperation
+func (s *Server) QueryTaskOperation(context.Context, *pb.QueryTaskOperationRequest) (*pb.QueryTaskOperationResponse, error) {
+	return nil, nil
+}
+
 // QueryStatus implements WorkerServer.QueryStatus
 func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*pb.QueryStatusResponse, error) {
 	log.Infof("[server] receive QueryStatus request %+v", req)
