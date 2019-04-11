@@ -342,7 +342,7 @@ func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLog
 		return false, false, latestPos, "", "", nil
 	}
 
-	needSwitch, needReParse, nextUUID, nextBinlogName, err = r.needSwitchSubDir(currentUUID, fullPath, int64(latestPos))
+	needSwitch, needReParse, nextUUID, nextBinlogName, err = r.needSwitchSubDir(currentUUID, fullPath, latestPos)
 	if err != nil {
 		return false, false, 0, "", "", errors.Trace(err)
 	} else if needReParse {
@@ -353,7 +353,7 @@ func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLog
 		return true, false, 0, nextUUID, nextBinlogName, nil
 	}
 
-	updatedPath, err := relaySubDirUpdated(ctx, watcherInterval, relayLogDir, fullPath, relayLogFile, int64(latestPos))
+	updatedPath, err := relaySubDirUpdated(ctx, watcherInterval, relayLogDir, fullPath, relayLogFile, latestPos)
 	if err != nil {
 		return false, false, 0, "", "", errors.Trace(err)
 	}

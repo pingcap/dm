@@ -125,7 +125,7 @@ func (c *Config) Toml() (string, error) {
 		log.Errorf("[worker] marshal config to toml error %v", err)
 	}
 
-	return string(b.String()), nil
+	return b.String(), nil
 }
 
 // Parse parses flag definitions from the argument list.

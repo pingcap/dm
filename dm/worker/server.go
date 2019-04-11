@@ -467,7 +467,7 @@ func (s *Server) QueryWorkerConfig(ctx context.Context, req *pb.QueryWorkerConfi
 		log.Errorf("[worker] marshal worker config error %v", errors.ErrorStack(err))
 	}
 
-	resp.Content = string(rawConfig)
+	resp.Content = rawConfig
 	resp.SourceID = workerCfg.SourceID
 	return resp, nil
 }
