@@ -115,6 +115,40 @@ func (t *testEventSuite) TestGenFormatDescriptionEvent(c *C) {
 	c.Assert(err, IsNil)
 }
 
+func (t *testEventSuite) TestGenRotateEvent(c *C) {
+	var (
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+			Flags:     0x01,
+		}
+		latestPos   uint32 = 4
+		nextLogName []byte // nil
+		position    uint64 = 123
+	)
+
+	// empty nextLogName, invalid
+	rotateEv, err := GenRotateEvent(header, latestPos, nextLogName, position)
+	c.Assert(err, NotNil)
+	c.Assert(rotateEv, IsNil)
+
+	// valid nextLogName
+	nextLogName = []byte("mysql-bin.000010")
+	rotateEv, err = GenRotateEvent(header, latestPos, nextLogName, position)
+	c.Assert(err, IsNil)
+	c.Assert(rotateEv, NotNil)
+
+	// verify the header
+	verifyHeader(c, rotateEv.Header, header, replication.ROTATE_EVENT, latestPos, uint32(len(rotateEv.RawData)))
+
+	// verify the body
+	rotateEvBody, ok := rotateEv.Event.(*replication.RotateEvent)
+	c.Assert(ok, IsTrue)
+	c.Assert(rotateEvBody, NotNil)
+	c.Assert(rotateEvBody.NextLogName, DeepEquals, nextLogName)
+	c.Assert(rotateEvBody.Position, Equals, position)
+}
+
 func (t *testEventSuite) TestGenPreviousGTIDsEvent(c *C) {
 	var (
 		header = &replication.EventHeader{
