@@ -164,7 +164,7 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		oriChangedData := originalData[i+1]
 
 		if len(oldData) != len(changedData) {
-			return nil, nil, nil, errors.Errorf("Old value count doesn't match new value count: %d (columns) vs %d (values)", len(oldData), len(changedData))
+			return nil, nil, nil, errors.Errorf("Old value count doesn't match new value count: %d (old) vs %d (new)", len(oldData), len(changedData))
 		}
 
 		if len(oldData) != len(columns) {
