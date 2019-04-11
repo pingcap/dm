@@ -284,17 +284,16 @@ func genDeleteSQL(schema string, table string, value []interface{}, columns []*c
 }
 
 func genColumnList(columns []*column) string {
-	var columnList []byte
+	var buf strings.Builder
 	for i, column := range columns {
-		name := fmt.Sprintf("`%s`", column.name)
-		columnList = append(columnList, []byte(name)...)
-
 		if i != len(columns)-1 {
-			columnList = append(columnList, ',')
+			buf.WriteString("`" + column.name + "`,")
+		} else {
+			buf.WriteString("`" + column.name + "`")
 		}
 	}
 
-	return string(columnList)
+	return buf.String()
 }
 
 func genColumnPlaceholders(length int) string {
@@ -417,7 +416,7 @@ func genKeyList(columns []*column, dataSeq []interface{}) string {
 }
 
 func genMultipleKeys(columns []*column, value []interface{}, indexColumns map[string][]*column) []string {
-	var multipleKeys []string
+	multipleKeys := make([]string, 0, len(indexColumns))
 	for _, indexCols := range indexColumns {
 		cols, vals := getColumnData(columns, indexCols, value)
 		multipleKeys = append(multipleKeys, genKeyList(cols, vals))
