@@ -55,7 +55,7 @@ func migrateRelayFunc(cmd *cobra.Command, _ []string) {
 
 	cli := common.MasterClient()
 	resp, err := cli.MigrateWorkerRelay(ctx, &pb.MigrateWorkerRelayRequest{
-		BinlogName: string(binlogName),
+		BinlogName: binlogName,
 		BinlogPos:  uint32(binlogPos),
 		Worker:     worker,
 	})

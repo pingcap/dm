@@ -74,7 +74,7 @@ func GenDMLEvents(flavor string, serverID uint32, latestPos uint32, latestGTID g
 		// TableMapEvent
 		tableMapEv, err2 := GenTableMapEvent(header, latestPos, data.TableID, []byte(data.Schema), []byte(data.Table), data.ColumnType)
 		if err2 != nil {
-			return nil, errors.Annotatef(err2, "generate TableMapEvent for `%s`.`%s`", string(data.Schema), string(data.Table))
+			return nil, errors.Annotatef(err2, "generate TableMapEvent for `%s`.`%s`", data.Schema, data.Table)
 		}
 		latestPos = tableMapEv.Header.LogPos
 		events = append(events, tableMapEv)
@@ -82,7 +82,7 @@ func GenDMLEvents(flavor string, serverID uint32, latestPos uint32, latestGTID g
 		// RowsEvent
 		rowsEv, err2 := GenRowsEvent(header, latestPos, eventType, data.TableID, defaultRowsFlag, data.Rows, data.ColumnType)
 		if err2 != nil {
-			return nil, errors.Annotatef(err2, "generate RowsEvent for `%s`.`%s`", string(data.Schema), string(data.Table))
+			return nil, errors.Annotatef(err2, "generate RowsEvent for `%s`.`%s`", data.Schema, data.Table)
 		}
 		latestPos = rowsEv.Header.LogPos
 		events = append(events, rowsEv)

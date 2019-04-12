@@ -117,7 +117,7 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 	columnPlaceholders := genColumnPlaceholders(len(columns))
 	for dataIdx, data := range dataSeq {
 		if len(data) != len(columns) {
-			return nil, nil, nil, errors.Errorf("insert columns and data mismatch in length: %d (columns) vs %d (data)", len(columns), len(data))
+			return nil, nil, nil, errors.Errorf("Column count doesn't match value count: %d (columns) vs %d (values)", len(columns), len(data))
 		}
 
 		value := extractValueFromData(data, columns)
@@ -164,11 +164,11 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		oriChangedData := originalData[i+1]
 
 		if len(oldData) != len(changedData) {
-			return nil, nil, nil, errors.Errorf("update data mismatch in length: %d (columns) vs %d (data)", len(oldData), len(changedData))
+			return nil, nil, nil, errors.Errorf("Old value count doesn't match new value count: %d (old) vs %d (new)", len(oldData), len(changedData))
 		}
 
 		if len(oldData) != len(columns) {
-			return nil, nil, nil, errors.Errorf("update columns and data mismatch in length: %d (columns) vs %d (data)", len(columns), len(oldData))
+			return nil, nil, nil, errors.Errorf("Column count doesn't match value count: %d (columns) vs %d (values)", len(columns), len(oldData))
 		}
 
 		oldValues := extractValueFromData(oldData, columns)
@@ -252,7 +252,7 @@ func genDeleteSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 
 	for _, data := range dataSeq {
 		if len(data) != len(columns) {
-			return nil, nil, nil, errors.Errorf("delete columns and data mismatch in length: %d (columns) vs %d (data)", len(columns), len(data))
+			return nil, nil, nil, errors.Errorf("Column count doesn't match value count: %d (columns) vs %d (values)", len(columns), len(data))
 		}
 
 		value := extractValueFromData(data, columns)
@@ -284,17 +284,16 @@ func genDeleteSQL(schema string, table string, value []interface{}, columns []*c
 }
 
 func genColumnList(columns []*column) string {
-	var columnList []byte
+	var buf strings.Builder
 	for i, column := range columns {
-		name := fmt.Sprintf("`%s`", column.name)
-		columnList = append(columnList, []byte(name)...)
-
 		if i != len(columns)-1 {
-			columnList = append(columnList, ',')
+			buf.WriteString("`" + column.name + "`,")
+		} else {
+			buf.WriteString("`" + column.name + "`")
 		}
 	}
 
-	return string(columnList)
+	return buf.String()
 }
 
 func genColumnPlaceholders(length int) string {
@@ -417,7 +416,7 @@ func genKeyList(columns []*column, dataSeq []interface{}) string {
 }
 
 func genMultipleKeys(columns []*column, value []interface{}, indexColumns map[string][]*column) []string {
-	var multipleKeys []string
+	multipleKeys := make([]string, 0, len(indexColumns))
 	for _, indexCols := range indexColumns {
 		cols, vals := getColumnData(columns, indexCols, value)
 		multipleKeys = append(multipleKeys, genKeyList(cols, vals))

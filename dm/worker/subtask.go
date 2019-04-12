@@ -37,7 +37,7 @@ import (
 
 // createUnits creates process units base on task mode
 func createUnits(cfg *config.SubTaskConfig) []unit.Unit {
-	us := make([]unit.Unit, 0, 5)
+	us := make([]unit.Unit, 0, 3)
 	switch cfg.Mode {
 	case config.ModeAll:
 		us = append(us, mydumper.NewMydumper(cfg))
