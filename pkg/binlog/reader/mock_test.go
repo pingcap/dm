@@ -30,7 +30,7 @@ var (
 type testMockReaderSuite struct {
 }
 
-type testCase struct {
+type testMockCase struct {
 	ev  *replication.BinlogEvent
 	err error
 }
@@ -54,7 +54,7 @@ func (t *testMockReaderSuite) TestRead(c *C) {
 	c.Assert(r.StartSyncByGTID(nil), Equals, errSpecial)
 	c.Assert(r.Close(), Equals, errSpecial)
 
-	cases := []testCase{
+	cases := []testMockCase{
 		{
 			ev: &replication.BinlogEvent{
 				RawData: []byte{1},
@@ -96,13 +96,13 @@ func (t *testMockReaderSuite) TestRead(c *C) {
 		}
 	}()
 
-	obtained := make([]testCase, 0, len(cases))
+	obtained := make([]testMockCase, 0, len(cases))
 	for {
 		ev, err := r.GetEvent(ctx)
 		if err != nil {
-			obtained = append(obtained, testCase{ev: nil, err: err})
+			obtained = append(obtained, testMockCase{ev: nil, err: err})
 		} else {
-			obtained = append(obtained, testCase{ev: ev, err: nil})
+			obtained = append(obtained, testMockCase{ev: ev, err: nil})
 		}
 		if len(obtained) == len(cases) || ctx.Err() != nil {
 			break
