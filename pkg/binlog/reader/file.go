@@ -32,14 +32,15 @@ import (
 // FileReader is a binlog event reader which read binlog events from a file.
 type FileReader struct {
 	mu sync.Mutex
+	wg sync.WaitGroup
 
 	stage      sync2.AtomicInt32
 	readOffset sync2.AtomicUint32
 	sendOffset sync2.AtomicUint32
-	parser     *replication.BinlogParser
 
-	ch  chan *replication.BinlogEvent
-	ech chan error
+	parser *replication.BinlogParser
+	ch     chan *replication.BinlogEvent
+	ech    chan error
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -86,7 +87,9 @@ func (r *FileReader) StartSyncByPos(pos gmysql.Position) error {
 	}
 
 	r.ctx, r.cancel = context.WithCancel(context.Background())
+	r.wg.Add(1)
 	go func() {
+		defer r.wg.Done()
 		err := r.parser.ParseFile(pos.Name, int64(pos.Pos), r.onEvent)
 		if err != nil {
 			select {
@@ -117,6 +120,7 @@ func (r *FileReader) Close() error {
 
 	r.parser.Stop()
 	r.cancel()
+	r.wg.Wait()
 	r.stage.Set(int32(stageClosed))
 	return nil
 }
@@ -135,6 +139,8 @@ func (r *FileReader) GetEvent(ctx context.Context) (*replication.BinlogEvent, er
 		return nil, err
 	case <-ctx.Done():
 		return nil, ctx.Err()
+	case <-r.ctx.Done(): // Reader closed
+		return nil, r.ctx.Err()
 	}
 }
 
