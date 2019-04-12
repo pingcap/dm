@@ -385,14 +385,10 @@ func (st *SubTask) Update(cfg *config.SubTaskConfig) error {
 		return errors.Errorf("can only update task on Paused stage, but current stage is %s", st.Stage().String())
 	}
 
-	// update all units' configuration, if SubTask itself has configuration need to update, do it later
-	for _, u := range st.units {
-		err := u.Update(cfg)
-		if err != nil {
-			return errors.Trace(err)
-		}
-	}
+	st.Lock()
+	defer st.Unlock()
 
+	st.cfg, _ = cfg.Clone()
 	return nil
 }
 
@@ -509,15 +505,12 @@ func (st *SubTask) DDLLockInfo() *pb.DDLLockInfo {
 
 // UpdateFromConfig updates config for `From`
 func (st *SubTask) UpdateFromConfig(cfg *config.SubTaskConfig) error {
+	if !st.stageCAS(pb.Stage_Paused, pb.Stage_Paused) { // only test for Paused
+		return errors.Errorf("can only update task on Paused stage, but current stage is %s", st.Stage().String())
+	}
+
 	st.Lock()
 	defer st.Unlock()
-
-	if sync, ok := st.currUnit.(*syncer.Syncer); ok {
-		err := sync.UpdateFromConfig(cfg)
-		if err != nil {
-			return errors.Trace(err)
-		}
-	}
 
 	st.cfg.From = cfg.From
 

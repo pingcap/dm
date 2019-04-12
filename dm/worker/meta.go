@@ -15,6 +15,7 @@ package worker
 
 import (
 	"bytes"
+	"context"
 	"io/ioutil"
 	"os"
 	"path"
@@ -61,6 +62,9 @@ func (m *Meta) Decode(data string) error {
 // * forward to specified log location
 type Metadata struct {
 	sync.RWMutex // we need to ensure only a thread can access to `metaDB` at a time
+	wg           sync.WaitGroup
+	ctx          context.Context
+	cancel       context.CancelFunc
 
 	// cache
 	tasks map[string]*pb.TaskMeta
@@ -92,10 +96,8 @@ func NewMetadata(dir string, db *leveldb.DB) (*Metadata, error) {
 			log.Errorf("fail to recover meta from old metadata file %s, meta file may be correuption, error message: %v", oldPath, err)
 			return nil, errors.Trace(err)
 		}
-		return meta, nil
-	}
-	// old metadata file exists, fail to open old metadata file
-	if !os.IsNotExist(err) {
+	} else if !os.IsNotExist(err) {
+		// old metadata file exists, fail to open old metadata file
 		return nil, errors.Trace(err)
 	}
 
@@ -104,15 +106,24 @@ func NewMetadata(dir string, db *leveldb.DB) (*Metadata, error) {
 		return nil, errors.Trace(err)
 	}
 
+	meta.ctx, meta.cancel = context.WithCancel(context.Background())
+
+	meta.wg.Add(1)
+	go func() {
+		meta.wg.Done()
+		meta.log.GC(meta.ctx, meta.db)
+	}()
+
 	return meta, nil
 }
 
 // Close closes meta DB
-func (meta *Metadata) Close() error {
-	meta.Lock()
-	defer meta.Unlock()
+func (meta *Metadata) Close() {
+	if meta.cancel != nil {
+		meta.cancel()
+	}
 
-	return errors.Trace(meta.db.Close())
+	meta.wg.Wait()
 }
 
 // LoadTaskMeta returns meta of all tasks

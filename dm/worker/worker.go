@@ -174,9 +174,7 @@ func (w *Worker) Close() {
 	w.relayPurger.Close()
 
 	// close meta
-	if err := w.meta.Close(); err != nil {
-		log.Errorf("fail to close worker meta %v", err)
-	}
+	w.meta.Close()
 
 	// close tracer
 	if w.tracer.Enable() {

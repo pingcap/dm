@@ -14,11 +14,13 @@
 package worker
 
 import (
+	"context"
 	"encoding/binary"
 	"sync/atomic"
 	"time"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -120,7 +122,7 @@ type Logger struct {
 }
 
 // Initial initials Logger
-func (log *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
+func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 	handledPointer, err := LoadHandledPointer(db)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -160,14 +162,14 @@ func (log *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 		return nil, errors.Annotatef(err, "fetch logs from meta")
 	}
 
-	log.handledPointer = handledPointer
-	log.endPointer = endPointer
+	logger.handledPointer = handledPointer
+	logger.endPointer = endPointer
 
 	return logs, nil
 }
 
 // GetTaskLog returns task log by given log ID
-func (log *Logger) GetTaskLog(h Getter, id int64) (*pb.TaskLog, error) {
+func (logger *Logger) GetTaskLog(h Getter, id int64) (*pb.TaskLog, error) {
 	logBytes, err := h.Get(EncodeTaskLogKey(id), nil)
 	if err != nil {
 		return nil, errors.Annotatef(err, "get task meta from leveldb")
@@ -184,7 +186,7 @@ func (log *Logger) GetTaskLog(h Getter, id int64) (*pb.TaskLog, error) {
 
 // ForwardTo forward handled pointer to specified ID location
 // not thread safe
-func (log *Logger) ForwardTo(db Putter, ID int64) error {
+func (logger *Logger) ForwardTo(db Putter, ID int64) error {
 	handledPointer := Pointer{
 		Location: ID,
 	}
@@ -194,12 +196,12 @@ func (log *Logger) ForwardTo(db Putter, ID int64) error {
 		return errors.Trace(err)
 	}
 
-	log.handledPointer = handledPointer
+	logger.handledPointer = handledPointer
 	return nil
 }
 
 // MarkAndForwardLog marks result sucess or not in log, and forwards handledPointer
-func (log *Logger) MarkAndForwardLog(db Putter, opLog *pb.TaskLog) error {
+func (logger *Logger) MarkAndForwardLog(db Putter, opLog *pb.TaskLog) error {
 	logBytes, err := opLog.Marshal()
 	if err != nil {
 		return errors.Trace(err)
@@ -210,15 +212,15 @@ func (log *Logger) MarkAndForwardLog(db Putter, opLog *pb.TaskLog) error {
 		return errors.Trace(err)
 	}
 
-	return errors.Trace(log.ForwardTo(db, opLog.Id))
+	return errors.Trace(logger.ForwardTo(db, opLog.Id))
 }
 
 // Append appends a task log
-func (log *Logger) Append(db Putter, opLog *pb.TaskLog) error {
+func (logger *Logger) Append(db Putter, opLog *pb.TaskLog) error {
 	var id int64
 	for {
-		id = atomic.LoadInt64(&log.endPointer.Location)
-		if atomic.CompareAndSwapInt64(&log.endPointer.Location, id, id+1) {
+		id = atomic.LoadInt64(&logger.endPointer.Location)
+		if atomic.CompareAndSwapInt64(&logger.endPointer.Location, id, id+1) {
 			break
 		}
 	}
@@ -236,6 +238,49 @@ func (log *Logger) Append(db Putter, opLog *pb.TaskLog) error {
 	}
 
 	return nil
+}
+
+// GC deletes useless log
+func (logger *Logger) GC(ctx context.Context, db *leveldb.DB) {
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Infof("[worker] meta gc goroutine exist!")
+			return
+		case <-ticker.C:
+			// to find id
+			// log.doGCTS(db, 0)
+		}
+	}
+}
+
+func (logger *Logger) doGC(db *leveldb.DB, id int64) {
+	irange := &util.Range{
+		Start: EncodeTaskLogKey(0),
+		Limit: EncodeTaskLogKey(id + 1),
+	}
+	iter := db.NewIterator(irange, nil)
+	batch := new(leveldb.Batch)
+	for iter.Next() {
+		batch.Delete(iter.Key())
+		if batch.Len() == 1024 {
+			err := db.Write(batch, nil)
+			if err != nil {
+				log.Errorf("fail to delete keys from kv db %v", err)
+			}
+			batch.Reset()
+		}
+	}
+
+	if batch.Len() > 0 {
+		err := db.Write(batch, nil)
+		if err != nil {
+			log.Errorf("fail to delete keys from kv db %v", err)
+		}
+	}
 }
 
 // **************** task meta oepration *************** //
