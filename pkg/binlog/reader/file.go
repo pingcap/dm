@@ -33,8 +33,10 @@ import (
 type FileReader struct {
 	mu sync.Mutex
 
-	stage  sync2.AtomicInt32
-	parser *replication.BinlogParser
+	stage      sync2.AtomicInt32
+	readOffset sync2.AtomicUint32
+	sendOffset sync2.AtomicUint32
+	parser     *replication.BinlogParser
 
 	ch  chan *replication.BinlogEvent
 	ech chan error
@@ -45,14 +47,17 @@ type FileReader struct {
 
 // FileReaderConfig is the configuration used by a FileReader.
 type FileReaderConfig struct {
-	RawMode  bool
-	timezone *time.Location
+	EnableRawMode bool
+	Timezone      *time.Location
+	ChBufferSize  int // event channel's buffer size
+	EchBufferSize int // error channel's buffer size
 }
 
 // FileReaderStatus represents the status of a FileReader.
 type FileReaderStatus struct {
-	Stage  string `json:"stage"`
-	ConnID uint32 `json:"connection"`
+	Stage      string `json:"stage"`
+	ReadOffset uint32 `json:"read-offset"` // read event's offset in the file
+	SendOffset uint32 `json:"send-offset"` // sent event's offset in the file
 }
 
 // NewFileReader creates a FileReader instance.
@@ -60,14 +65,14 @@ func NewFileReader(cfg *FileReaderConfig) Reader {
 	parser := replication.NewBinlogParser()
 	parser.SetVerifyChecksum(true)
 	parser.SetUseDecimal(true)
-	parser.SetRawMode(cfg.RawMode)
-	if cfg.timezone != nil {
-		parser.SetTimestampStringLocation(cfg.timezone)
+	parser.SetRawMode(cfg.EnableRawMode)
+	if cfg.Timezone != nil {
+		parser.SetTimestampStringLocation(cfg.Timezone)
 	}
 	return &FileReader{
 		parser: parser,
-		ch:     make(chan *replication.BinlogEvent), // without buffer now
-		ech:    make(chan error),
+		ch:     make(chan *replication.BinlogEvent, cfg.ChBufferSize),
+		ech:    make(chan error, cfg.EchBufferSize),
 	}
 }
 
@@ -124,6 +129,7 @@ func (r *FileReader) GetEvent(ctx context.Context) (*replication.BinlogEvent, er
 
 	select {
 	case ev := <-r.ch:
+		r.sendOffset.Set(ev.Header.LogPos)
 		return ev, nil
 	case err := <-r.ech:
 		return nil, err
@@ -134,15 +140,17 @@ func (r *FileReader) GetEvent(ctx context.Context) (*replication.BinlogEvent, er
 
 // Status implements Reader.Status.
 func (r *FileReader) Status() interface{} {
-	stage := r.stage.Get()
-	return &TCPReaderStatus{
-		Stage: readerStage(stage).String(),
+	return &FileReaderStatus{
+		Stage:      readerStage(r.stage.Get()).String(),
+		ReadOffset: r.sendOffset.Get(),
+		SendOffset: r.readOffset.Get(),
 	}
 }
 
 func (r *FileReader) onEvent(ev *replication.BinlogEvent) error {
 	select {
 	case r.ch <- ev:
+		r.readOffset.Set(ev.Header.LogPos)
 		return nil
 	case <-r.ctx.Done():
 		return r.ctx.Err()
