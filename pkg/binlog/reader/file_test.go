@@ -229,3 +229,80 @@ func (t *testFileReaderSuite) TestGetEvent(c *C) {
 	c.Assert(err, NotNil)
 	c.Assert(strings.Contains(err.Error(), "EOF"), IsTrue)
 }
+
+func (t *testFileReaderSuite) TestWithChannelBuffer(c *C) {
+	var (
+		cfg                       = &FileReaderConfig{ChBufferSize: 10}
+		timeoutCtx, timeoutCancel = context.WithTimeout(context.Background(), 10*time.Second)
+	)
+	defer timeoutCancel()
+
+	// create a empty file
+	dir := c.MkDir()
+	filename := filepath.Join(dir, "mysql-bin-test.000001")
+	f, err := os.Create(filename)
+	c.Assert(err, IsNil)
+	defer f.Close()
+
+	// writer a binlog file header
+	_, err = f.Write(replication.BinLogFileHeader)
+	c.Assert(err, IsNil)
+
+	// writer a FormatDescriptionEvent
+	header := &replication.EventHeader{
+		Timestamp: uint32(time.Now().Unix()),
+		ServerID:  uint32(101),
+	}
+	latestPos := uint32(len(replication.BinLogFileHeader))
+	formatDescEv, err := event.GenFormatDescriptionEvent(header, latestPos)
+	c.Assert(err, IsNil)
+	c.Assert(formatDescEv, NotNil)
+	_, err = f.Write(formatDescEv.RawData)
+	c.Assert(err, IsNil)
+	latestPos = formatDescEv.Header.LogPos
+
+	// write channelBufferSize QueryEvent
+	var queryEv *replication.BinlogEvent
+	for i := 0; i < cfg.ChBufferSize; i++ {
+		queryEv, err = event.GenQueryEvent(
+			header, latestPos, 0, 0, 0, nil,
+			[]byte(fmt.Sprintf("schema-%d", i)), []byte(fmt.Sprintf("query-%d", i)))
+		c.Assert(err, IsNil)
+		c.Assert(queryEv, NotNil)
+		_, err = f.Write(queryEv.RawData)
+		c.Assert(err, IsNil)
+		latestPos = queryEv.Header.LogPos
+	}
+
+	r := NewFileReader(cfg)
+	c.Assert(r, NotNil)
+	c.Assert(r.StartSyncByPos(gmysql.Position{Name: filename}), IsNil)
+	time.Sleep(time.Second) // wait events to be read
+
+	// check status, stagePrepared
+	readOffset := latestPos - queryEv.Header.EventSize // an FormatDescriptionEvent in the channel buffer
+	status := r.Status()
+	frStatus, ok := status.(*FileReaderStatus)
+	c.Assert(ok, IsTrue)
+	c.Assert(frStatus.Stage, Equals, stagePrepared.String())
+	c.Assert(frStatus.ReadOffset, Equals, readOffset)
+	c.Assert(frStatus.SendOffset, Equals, uint32(0)) // no event sent yet
+
+	// get one event
+	e, err := r.GetEvent(timeoutCtx)
+	c.Assert(err, IsNil)
+	c.Assert(e, NotNil)
+	c.Assert(e.RawData, DeepEquals, formatDescEv.RawData)
+	time.Sleep(time.Second) // wait events to be read
+
+	// check status, again
+	readOffset = latestPos // reach the end
+	status = r.Status()
+	frStatus, ok = status.(*FileReaderStatus)
+	c.Assert(ok, IsTrue)
+	c.Assert(frStatus.Stage, Equals, stagePrepared.String())
+	c.Assert(frStatus.ReadOffset, Equals, readOffset)
+	c.Assert(frStatus.SendOffset, Equals, formatDescEv.Header.LogPos) // already get formatDescEv
+
+	c.Assert(r.Close(), IsNil)
+}

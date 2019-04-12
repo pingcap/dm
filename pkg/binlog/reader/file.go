@@ -148,8 +148,8 @@ func (r *FileReader) GetEvent(ctx context.Context) (*replication.BinlogEvent, er
 func (r *FileReader) Status() interface{} {
 	return &FileReaderStatus{
 		Stage:      readerStage(r.stage.Get()).String(),
-		ReadOffset: r.sendOffset.Get(),
-		SendOffset: r.readOffset.Get(),
+		ReadOffset: r.readOffset.Get(),
+		SendOffset: r.sendOffset.Get(),
 	}
 }
 
