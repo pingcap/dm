@@ -15,7 +15,6 @@ package worker
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -135,43 +134,37 @@ func (s *Server) Close() {
 }
 
 // StartSubTask implements WorkerServer.StartSubTask
-func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) (*pb.CommonWorkerResponse, error) {
+func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
 	log.Infof("[server] receive StartSubTask request %+v", req)
 
 	cfg := config.NewSubTaskConfig()
 	err := cfg.Decode(req.Task)
 	if err != nil {
-		log.Errorf("[server] decode subtask config from request %+v error %v", req.Task, errors.ErrorStack(err))
-		return &pb.CommonWorkerResponse{
-			Result: false,
-			Msg:    errors.ErrorStack(err),
-		}, nil
+		err = errors.Annotatef(err, "decode subtask config from request %+v", req.Task)
+		log.Errorf("[server] %s", errors.ErrorStack(err))
+		return nil, err
 	}
 
 	opLogID, err := s.worker.StartSubTask(cfg)
 	if err != nil {
-		log.Errorf("[server] start sub task %s error %v", cfg.Name, errors.ErrorStack(err))
-		return &pb.CommonWorkerResponse{
-			Result: false,
-			Msg:    errors.ErrorStack(err),
-		}, nil
+		err = errors.Annotatef(err, "start sub task %s", cfg.Name)
+		log.Errorf("[server] %s", errors.ErrorStack(err))
+		return nil, err
 	}
 
-	return &pb.CommonWorkerResponse{
-		Result: true,
-		Msg:    "",
-		LogID:  opLogID,
+	return &pb.OperateSubTaskResponse{
+		Meta: &pb.CommonWorkerResponse{
+			Result: true,
+			Msg:    "",
+		},
+		Op:    pb.TaskOp_Start,
+		LogID: opLogID,
 	}, nil
 }
 
 // OperateSubTask implements WorkerServer.OperateSubTask
 func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
 	log.Infof("[server] receive OperateSubTask request %+v", req)
-
-	resp := &pb.OperateSubTaskResponse{
-		Op:     req.Op,
-		Result: false,
-	}
 
 	var (
 		name    = req.Name
@@ -186,47 +179,49 @@ func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskReque
 	case pb.TaskOp_Resume:
 		opLogID, err = s.worker.ResumeSubTask(name)
 	default:
-		resp.Msg = fmt.Sprintf("invalid operate %s on sub task", req.Op.String())
-		return resp, nil
+		return nil, errors.Errorf("invalid operate %s on sub task", req.Op.String())
 	}
-
 	if err != nil {
-		log.Errorf("[server] operate(%s) sub task %s error %v", req.Op.String(), name, errors.ErrorStack(err))
-		resp.Msg = errors.ErrorStack(err)
-		return resp, nil
+		err = errors.Annotatef(err, "operate(%s) sub task %s", req.Op.String(), name)
+		log.Errorf("[server] %s", errors.ErrorStack(err))
+		return nil, err
 	}
 
-	resp.LogID = opLogID
-	resp.Result = true
-	return resp, nil
+	return &pb.OperateSubTaskResponse{
+		Meta: &pb.CommonWorkerResponse{
+			Result: true,
+			Msg:    "",
+		},
+		Op:    req.Op,
+		LogID: opLogID,
+	}, nil
 }
 
 // UpdateSubTask implements WorkerServer.UpdateSubTask
-func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest) (*pb.CommonWorkerResponse, error) {
+func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
 	log.Infof("[server] receive UpdateSubTask request %+v", req)
 	cfg := config.NewSubTaskConfig()
 	err := cfg.Decode(req.Task)
 	if err != nil {
-		log.Errorf("[server] decode config from request %+v error %v", req.Task, errors.ErrorStack(err))
-		return &pb.CommonWorkerResponse{
-			Result: false,
-			Msg:    errors.ErrorStack(err),
-		}, nil
+		err = errors.Annotatef(err, "decode config from request %+v", req.Task)
+		log.Errorf("[server] %s", errors.ErrorStack(err))
+		return nil, err
 	}
 
 	opLogID, err := s.worker.UpdateSubTask(cfg)
 	if err != nil {
-		log.Errorf("[server] update sub task %s error %v", cfg.Name, errors.ErrorStack(err))
-		return &pb.CommonWorkerResponse{
-			Result: false,
-			Msg:    errors.ErrorStack(err),
-		}, nil
+		err = errors.Annotatef(err, "update sub task %s", cfg.Name)
+		log.Errorf("[server] %s", errors.ErrorStack(err))
+		return nil, err
 	}
 
-	return &pb.CommonWorkerResponse{
-		Result: true,
-		Msg:    "",
-		LogID:  opLogID,
+	return &pb.OperateSubTaskResponse{
+		Meta: &pb.CommonWorkerResponse{
+			Result: true,
+			Msg:    "",
+		},
+		Op:    pb.TaskOp_Update,
+		LogID: opLogID,
 	}, nil
 }
 

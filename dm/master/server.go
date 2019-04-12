@@ -247,21 +247,25 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 			}
 			workerResp, err := cli.StartSubTask(ctx, &pb.StartSubTaskRequest{Task: stCfgToml})
 			if err != nil {
-				workerResp = &pb.CommonWorkerResponse{
-					Result: false,
-					Msg:    errors.ErrorStack(err),
+				workerResp = &pb.OperateSubTaskResponse{
+					Meta: &pb.CommonWorkerResponse{
+						Result: false,
+						Msg:    errors.ErrorStack(err),
+					},
 				}
 			}
 			err = s.waitOperationOk(ctx, cli, stCfg.Name, workerResp.LogID)
 			if err != nil {
-				workerResp = &pb.CommonWorkerResponse{
-					Result: false,
-					Msg:    errors.ErrorStack(err),
+				workerResp = &pb.OperateSubTaskResponse{
+					Meta: &pb.CommonWorkerResponse{
+						Result: false,
+						Msg:    errors.ErrorStack(err),
+					},
 				}
 			}
 
-			workerResp.Worker = worker
-			workerRespCh <- workerResp
+			workerResp.Meta.Worker = worker
+			workerRespCh <- workerResp.Meta
 		}(stCfg)
 	}
 	wg.Wait()
@@ -326,10 +330,12 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 			cli, ok := s.workerClients[worker]
 			if !ok {
 				workerResp := &pb.OperateSubTaskResponse{
-					Op:     req.Op,
-					Result: false,
-					Worker: worker,
-					Msg:    fmt.Sprintf("%s relevant worker-client not found", worker),
+					Meta: &pb.CommonWorkerResponse{
+						Result: false,
+						Worker: worker,
+						Msg:    fmt.Sprintf("%s relevant worker-client not found", worker),
+					},
+					Op: req.Op,
 				}
 				workerRespCh <- workerResp
 				return
@@ -337,20 +343,24 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 			workerResp, err := cli.OperateSubTask(ctx, subReq)
 			if err != nil {
 				workerResp = &pb.OperateSubTaskResponse{
-					Result: false,
-					Msg:    errors.ErrorStack(err),
+					Meta: &pb.CommonWorkerResponse{
+						Result: false,
+						Msg:    errors.ErrorStack(err),
+					},
 				}
 			}
 			err = s.waitOperationOk(ctx, cli, req.Name, workerResp.LogID)
 			if err != nil {
 				workerResp = &pb.OperateSubTaskResponse{
-					Result: false,
-					Msg:    errors.ErrorStack(err),
+					Meta: &pb.CommonWorkerResponse{
+						Result: false,
+						Msg:    errors.ErrorStack(err),
+					},
 				}
 			}
 
 			workerResp.Op = req.Op
-			workerResp.Worker = worker
+			workerResp.Meta.Worker = worker
 			workerRespCh <- workerResp
 		}(worker)
 	}
@@ -360,9 +370,9 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 	workerRespMap := make(map[string]*pb.OperateSubTaskResponse, len(workers))
 	for len(workerRespCh) > 0 {
 		workerResp := <-workerRespCh
-		workerRespMap[workerResp.Worker] = workerResp
-		if len(workerResp.Msg) == 0 { // no error occurred
-			validWorkers = append(validWorkers, workerResp.Worker)
+		workerRespMap[workerResp.Meta.Worker] = workerResp
+		if len(workerResp.Meta.Msg) == 0 { // no error occurred
+			validWorkers = append(validWorkers, workerResp.Meta.Worker)
 		}
 	}
 
@@ -446,20 +456,24 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 			}
 			workerResp, err := cli.UpdateSubTask(ctx, &pb.UpdateSubTaskRequest{Task: stCfgToml})
 			if err != nil {
-				workerResp = &pb.CommonWorkerResponse{
-					Result: false,
-					Msg:    errors.ErrorStack(err),
+				workerResp = &pb.OperateSubTaskResponse{
+					Meta: &pb.CommonWorkerResponse{
+						Result: false,
+						Msg:    errors.ErrorStack(err),
+					},
 				}
 			}
 			err = s.waitOperationOk(ctx, cli, stCfg.Name, workerResp.LogID)
 			if err != nil {
-				workerResp = &pb.CommonWorkerResponse{
-					Result: false,
-					Msg:    errors.ErrorStack(err),
+				workerResp = &pb.OperateSubTaskResponse{
+					Meta: &pb.CommonWorkerResponse{
+						Result: false,
+						Msg:    errors.ErrorStack(err),
+					},
 				}
 			}
-			workerResp.Worker = worker
-			workerRespCh <- workerResp
+			workerResp.Meta.Worker = worker
+			workerRespCh <- workerResp.Meta
 		}(stCfg)
 	}
 	wg.Wait()

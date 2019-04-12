@@ -4,9 +4,9 @@ package pb;
 
 
 service Worker {
-    rpc StartSubTask (StartSubTaskRequest) returns (CommonWorkerResponse) {}
+    rpc StartSubTask (StartSubTaskRequest) returns (OperateSubTaskResponse) {}
     rpc OperateSubTask (OperateSubTaskRequest) returns (OperateSubTaskResponse) {}
-    rpc UpdateSubTask (UpdateSubTaskRequest) returns (CommonWorkerResponse) {}
+    rpc UpdateSubTask (UpdateSubTaskRequest) returns (OperateSubTaskResponse) {}
 
     rpc QueryStatus (QueryStatusRequest) returns (QueryStatusResponse) {}
     rpc QueryError (QueryErrorRequest) returns (QueryErrorResponse) {}
@@ -70,20 +70,18 @@ message OperateSubTaskRequest {
 }
 
 message OperateSubTaskResponse {
-    TaskOp op = 1;
-    bool result = 2;
-    string worker = 3; // worker name, set by dm-master
-    string msg = 4;
-    int64 logID = 5;
+    CommonWorkerResponse meta = 1;
+    TaskOp op = 2;
+    int64 logID = 3;
 }
 
 message QueryTaskOperationRequest {
     string name = 1; // sub task's name
-	int64 logID = 2; // 对象操作 ID
+	int64 logID = 2; // operation log ID
 }
 
 message QueryTaskOperationResponse {
-    CommonWorkerResponse meta = 1;
+     CommonWorkerResponse meta = 1;
     TaskLog log = 2; // sub task's operation log
 }
 
@@ -118,7 +116,6 @@ message CommonWorkerResponse {
     bool result = 1;
     string worker = 2; // worker name, set by dm-master
     string msg = 3; // when result is true, msg is empty
-    int64 logID = 4;
 }
 
 // QueryStatusResponse represents status response for query on a dm-worker
@@ -448,7 +445,7 @@ message QueryWorkerConfigResponse {
 
 message TaskMeta {
     TaskOp op = 1;
-    Stage stage = 2;
+    Stage stage = 2; // the stage of sub-task after we apply some operations
     string name = 3; // sub task's name
     bytes task = 4; // (sub) task's configuration
 }
