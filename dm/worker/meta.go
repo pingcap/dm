@@ -204,7 +204,11 @@ func (meta *Metadata) MarkOperation(log *pb.TaskLog) error {
 	}
 
 	if log.Success {
-		err = SetTaskMeta(txn, log.Task)
+		if log.Task.Op == pb.TaskOp_Stop {
+			err = DeleteTaskMeta(txn, log.Task.Name)
+		} else {
+			err = SetTaskMeta(txn, log.Task)
+		}
 		if err != nil {
 			txn.Discard()
 			return errors.Trace(err)
