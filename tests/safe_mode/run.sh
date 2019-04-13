@@ -34,7 +34,7 @@ function run() {
     check_port_offline $WORKER1_PORT 20
     check_port_offline $WORKER2_PORT 20
 
-    export GO_FAILPOINTS='github.com/pingcap/dm/syncer/WaitShardingSyncExit=return(true);github.com/pingcap/dm/syncer/SafeModeInitPhaseSeconds=return(0);github.com/pingcap/dm/syncer/SafeModeCheck=return(true)'
+    export GO_FAILPOINTS='github.com/pingcap/dm/syncer/WaitShardingSyncExit=return(true);github.com/pingcap/dm/syncer/SafeModeInitPhaseSeconds=return(0)'
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
@@ -52,7 +52,7 @@ function run() {
         # DM-worker1 is sharding lock owner and exits
         if [ "$(check_port_return $WORKER1_PORT)" == "0" ]; then
             echo "DM-worker1 is sharding lock owner and detects it offline"
-            export GO_FAILPOINTS='github.com/pingcap/dm/syncer/SafeModeInitPhaseSeconds=return(0);github.com/pingcap/dm/syncer/SafeModeCheck=return(true)'
+            export GO_FAILPOINTS='github.com/pingcap/dm/syncer/SafeModeInitPhaseSeconds=return(0)'
             run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
             check_port_alive $WORKER1_PORT
             break
@@ -60,7 +60,7 @@ function run() {
         # DM-worker2 is sharding lock owner and exits
         if [ "$(check_port_return $WORKER2_PORT)" == "0" ]; then
             echo "DM-worker2 is sharding lock owner and detects it offline"
-            export GO_FAILPOINTS='github.com/pingcap/dm/syncer/SafeModeInitPhaseSeconds=return(0);github.com/pingcap/dm/syncer/SafeModeCheck=return(true)'
+            export GO_FAILPOINTS='github.com/pingcap/dm/syncer/SafeModeInitPhaseSeconds=return(0)'
             run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
             check_port_alive $WORKER2_PORT
             break
@@ -75,6 +75,7 @@ function run() {
     fi
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    python $cur/check_safe_mode.py
 }
 
 cleanup1 safe_mode_target

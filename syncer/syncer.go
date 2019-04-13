@@ -1287,7 +1287,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 			case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
 				if !applied {
-					// TODO: check safe mode with tracer
 					param.safeMode = safeMode.Enable()
 					sqls, keys, args, err = genUpdateSQLs(param)
 					if err != nil {
