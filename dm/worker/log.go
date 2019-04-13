@@ -90,7 +90,6 @@ func LoadHandledPointer(db *leveldb.DB) (Pointer, error) {
 }
 
 var (
-	defaultMaxLogEntries = 10 * 1024
 	defaultGCForwardTime = 72 * time.Hour
 
 	// TaskLogPrefix is  prefix of task log key
@@ -251,10 +250,43 @@ func (logger *Logger) GC(ctx context.Context, db *leveldb.DB) {
 			log.Infof("[worker] meta gc goroutine exist!")
 			return
 		case <-ticker.C:
-			// to find id
-			// log.doGCTS(db, 0)
+			id, err := logger.findNearestIDByTS(db, time.Now().UnixNano()-defaultGCForwardTime.Nanoseconds())
+			log.doGCTS(db, 0)
 		}
 	}
+}
+
+func (logger *Logger) findNearestIDByTS(db *leveldb.DB, ts int64) (int64, error) {
+	var (
+		step  = int64(20)
+		endID = logger.handledPointer.Location
+	)
+	for {
+		id := endID - step
+		logBytes, err := db.Get(EncodeTaskLogKey(id), nil)
+		if err != nil {
+			// return zero value when not found
+			if err == leveldb.ErrNotFound {
+				return id, nil
+			}
+
+			return 0, errors.Trace(err)
+		}
+
+		opLog := &pb.TaskLog{}
+		err = opLog.Unmarshal(logBytes)
+		if err != nil {
+			return nil, errors.Annotatef(err, "unmarshal task log binary %s", logBytes)
+		}
+
+		if opLog.Ts > ts {
+			endID = id
+		} else {
+			return 0, id
+		}
+	}
+
+	return 0, errors.Errorf("unreach code in findNearestIDByTS")
 }
 
 func (logger *Logger) doGC(db *leveldb.DB, id int64) {
@@ -273,6 +305,11 @@ func (logger *Logger) doGC(db *leveldb.DB, id int64) {
 			}
 			batch.Reset()
 		}
+	}
+	iter.Release()
+	err = iter.Error()
+	if err != nil {
+		return nil, errors.Annotatef(err, "delete logs from meta")
 	}
 
 	if batch.Len() > 0 {
