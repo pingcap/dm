@@ -83,7 +83,7 @@ func (r *FileReader) StartSyncByPos(pos gmysql.Position) error {
 	defer r.mu.Unlock()
 
 	if r.stage.Get() != int32(stageNew) {
-		return errors.Errorf("stage %s, expect %s", readerStage(r.stage.Get()), stageNew)
+		return errors.Errorf("stage %s, expect %s, already started", readerStage(r.stage.Get()), stageNew)
 	}
 
 	r.ctx, r.cancel = context.WithCancel(context.Background())
@@ -128,7 +128,7 @@ func (r *FileReader) Close() error {
 // GetEvent implements Reader.GetEvent.
 func (r *FileReader) GetEvent(ctx context.Context) (*replication.BinlogEvent, error) {
 	if r.stage.Get() != int32(stagePrepared) {
-		return nil, errors.Errorf("stage %s, expect %s", readerStage(r.stage.Get()), stagePrepared)
+		return nil, errors.Errorf("stage %s, expect %s, please start sync first", readerStage(r.stage.Get()), stagePrepared)
 	}
 
 	select {
@@ -138,9 +138,9 @@ func (r *FileReader) GetEvent(ctx context.Context) (*replication.BinlogEvent, er
 	case err := <-r.ech:
 		return nil, err
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, errors.Annotatef(ctx.Err(), "canceled from the caller")
 	case <-r.ctx.Done(): // Reader closed
-		return nil, r.ctx.Err()
+		return nil, errors.Annotatef(r.ctx.Err(), "the reader closed")
 	}
 }
 

@@ -104,12 +104,12 @@ func (t *testMockReaderSuite) TestRead(c *C) {
 		} else {
 			obtained = append(obtained, testMockCase{ev: ev, err: nil})
 		}
-		if len(obtained) == len(cases) || ctx.Err() != nil {
+		c.Assert(ctx.Err(), IsNil)
+		if len(obtained) == len(cases) {
 			break
 		}
 	}
 
-	c.Assert(ctx.Err(), IsNil)
 	c.Assert(obtained, DeepEquals, cases)
 
 	cancel() // cancel manually
