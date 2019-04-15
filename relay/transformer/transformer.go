@@ -38,7 +38,7 @@ type Result struct {
 //   1. extract binlog position, GTID info from the event.
 //   2. decide the event whether needed by a downstream writer.
 //     - the downstream writer may also drop some events according to its strategy.
-// NOTE: more works maybe moved from outer into Transformer later.
+// NOTE: more features maybe moved from outer into Transformer later.
 type Transformer interface {
 	// Transform transforms a binlog event.
 	Transform(e *replication.BinlogEvent) *Result
