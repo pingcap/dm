@@ -1646,7 +1646,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 
 				if ddlExecItem.req.Exec {
-					failpoint.Inject("WaitShardingSyncExit", func() {
+					failpoint.Inject("ShardSyncedExecutionExit", func() {
 						os.Exit(1)
 					})
 
