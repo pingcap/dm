@@ -97,10 +97,13 @@ var mydumperLogRegexp = regexp.MustCompile(
 )
 
 func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
-	var stdout bytes.Buffer
+	var (
+		stdout bytes.Buffer
+		stderr bytes.Buffer
+	)
 	cmd := exec.CommandContext(ctx, m.cfg.MydumperPath, m.args...)
 	cmd.Stdout = &stdout
-	stderr, err := cmd.StderrPipe()
+	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -114,7 +117,7 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 	// 2016-01-02 15:04:05 [DEBUG] - actual message
 	//
 	// so we parse all these lines and translate into our own logs.
-	scanner := bufio.NewScanner(stderr)
+	scanner := bufio.NewScanner(stderrPipe)
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if loc := mydumperLogRegexp.FindSubmatchIndex(line); len(loc) == 4 {
@@ -135,14 +138,16 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 				continue
 			}
 		}
-		stdout.Write(line)
-		stdout.WriteByte('\n')
+		stderr.Write(line)
+		stderr.WriteByte('\n')
 	}
 	if err := scanner.Err(); err != nil {
+		stdout.Write(stderr.Bytes())
 		return stdout.Bytes(), errors.Trace(err)
 	}
 
 	err = cmd.Wait()
+	stdout.Write(stderr.Bytes())
 	return stdout.Bytes(), errors.Trace(err)
 }
 
