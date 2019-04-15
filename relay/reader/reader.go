@@ -20,7 +20,6 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
-	"github.com/siddontang/go/sync2"
 
 	br "github.com/pingcap/dm/pkg/binlog/reader"
 	"github.com/pingcap/dm/pkg/gtid"
@@ -56,9 +55,10 @@ type Config struct {
 
 // reader implements Reader interface.
 type reader struct {
-	cfg   *Config
-	mu    sync.Mutex
-	stage sync2.AtomicInt32
+	cfg *Config
+
+	mu    sync.RWMutex
+	stage int32
 
 	in  br.Reader // the underlying reader used to read binlog events.
 	out chan *replication.BinlogEvent
@@ -78,8 +78,8 @@ func (r *reader) Start() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.stage.Get() != int32(stageNew) {
-		return errors.Errorf("stage %s, expect %s", readerStage(r.stage.Get()), stageNew)
+	if r.stage != int32(stageNew) {
+		return errors.Errorf("stage %s, expect %s", readerStage(r.stage), stageNew)
 	}
 
 	defer func() {
@@ -94,26 +94,33 @@ func (r *reader) Start() error {
 		err = r.setUpReaderByPos()
 	}
 
-	r.stage.Set(int32(stagePrepared))
+	r.stage = int32(stagePrepared)
 	return err
 }
 
 // Close implements Reader.Close.
 func (r *reader) Close() error {
-	if r.stage.Get() == int32(stageClosed) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.stage == int32(stageClosed) {
 		return errors.New("already closed")
 	}
 
 	err := r.in.Close()
-	r.stage.Set(int32(stageClosed))
+	r.stage = int32(stageClosed)
 	return errors.Trace(err)
 }
 
 // GetEvent implements Reader.GetEvent.
 // If some ignorable error occurred, the returned event and error both are nil.
+// NOTE: can only close the reader after this returned.
 func (r *reader) GetEvent(ctx context.Context) (*replication.BinlogEvent, error) {
-	if r.stage.Get() != int32(stagePrepared) {
-		return nil, errors.Errorf("stage %s, expect %s", readerStage(r.stage.Get()), stagePrepared)
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if r.stage != int32(stagePrepared) {
+		return nil, errors.Errorf("stage %s, expect %s", readerStage(r.stage), stagePrepared)
 	}
 
 	for {
@@ -132,13 +139,7 @@ func (r *reader) GetEvent(ctx context.Context) (*replication.BinlogEvent, error)
 func (r *reader) setUpReaderByGTID() error {
 	gs := r.cfg.GTIDs
 	log.Infof("[relay] start sync for master %s from GTID set %s", r.cfg.MasterID, gs)
-	err := r.in.StartSyncByGTID(gs)
-	if err != nil {
-		log.Errorf("[relay] start sync for master %s from GTID set %s error %v",
-			r.cfg.MasterID, gs, errors.ErrorStack(err))
-		return r.setUpReaderByPos()
-	}
-	return nil
+	return r.in.StartSyncByGTID(gs)
 }
 
 func (r *reader) setUpReaderByPos() error {

@@ -105,28 +105,6 @@ func (t *testReaderSuite) testInterfaceWithReader(c *C, r Reader, cases []*repli
 	c.Assert(ev, IsNil)
 }
 
-func (t *testReaderSuite) TestBackOffGTID(c *C) {
-	cfg := &Config{
-		SyncConfig: replication.BinlogSyncerConfig{
-			ServerID: 101,
-		},
-		MasterID: "test-master",
-	}
-	errByPos := errors.New("start sync by pos error")
-	errByGTID := errors.New("start sync by GTID error")
-
-	// test with position
-	r := NewReader(cfg)
-	err := t.testBackOffWithReader(c, r, errByPos, errByGTID)
-	c.Assert(err, Equals, errByPos)
-
-	// test with GTID
-	cfg.EnableGTID = true
-	r = NewReader(cfg)
-	err = t.testBackOffWithReader(c, r, errByPos, errByGTID)
-	c.Assert(err, Equals, errByPos) // also returned errByPos because backoff to position mode
-}
-
 func (t *testReaderSuite) testBackOffWithReader(c *C, r Reader, errByPos error, errByGTID error) error {
 	// replace underlying reader with a mock reader for testing
 	concreteR := r.(*reader)
