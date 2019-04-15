@@ -32,6 +32,7 @@ import (
 // The reader should support:
 //   1. handle expected errors
 //   2. do retry if possible
+// NOTE: some errors still need to be handled in the outer caller.
 type Reader interface {
 	// Start starts the reading process.
 	Start() error
@@ -119,13 +120,11 @@ func (r *reader) GetEvent(ctx context.Context) (*replication.BinlogEvent, error)
 		ev, err := r.in.GetEvent(ctx)
 		if err == nil {
 			return ev, nil
-		} else if isRetryableError(err) {
-			log.Warnf("[relay] get event with retryable error %s", err)
-			continue // retry without sleep
 		} else if isIgnorableError(err) {
 			log.Warnf("[relay] get event with ignorable error %s", err)
 			return nil, nil // return without error and also without binlog event
 		}
+		// NOTE: add retryable error support if needed later
 		return nil, errors.Trace(err)
 	}
 }

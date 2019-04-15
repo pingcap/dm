@@ -27,19 +27,6 @@ var (
 type testErrorSuite struct {
 }
 
-func (t *testErrorSuite) TestRetryable(c *C) {
-	err := errors.New("custom error")
-	c.Assert(isRetryableError(err), IsFalse)
-
-	cases := []error{
-		context.DeadlineExceeded,
-		errors.Annotate(context.DeadlineExceeded, "annotated"),
-	}
-	for _, cs := range cases {
-		c.Assert(isRetryableError(cs), IsTrue)
-	}
-}
-
 func (t *testErrorSuite) TestIgnorable(c *C) {
 	err := errors.New("custom error")
 	c.Assert(isIgnorableError(err), IsFalse)
