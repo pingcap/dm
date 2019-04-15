@@ -176,7 +176,7 @@ func (s *Syncer) handleDDL(p *parser.Parser, schema, sql string) (string, [][]*f
 		return "", nil, stmt, nil
 	}
 
-	var targetTableNames []*filter.Table
+	targetTableNames := make([]*filter.Table, 0, len(tableNames))
 	for i := range tableNames {
 		schema, table := s.renameShardingSchema(tableNames[i].Schema, tableNames[i].Name)
 		tableName := &filter.Table{

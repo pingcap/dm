@@ -145,7 +145,7 @@ func (s *testStreamerSuite) TestFileSizeUpdatedError(c *C) {
 
 	// create relay log
 	relayPath := path.Join(subDir, relayFile)
-	err = ioutil.WriteFile(relayPath, []byte(data), 0644)
+	err = ioutil.WriteFile(relayPath, data, 0644)
 	c.Assert(err, IsNil)
 
 	// watcher, for file size decrease
