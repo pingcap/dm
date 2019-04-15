@@ -32,10 +32,10 @@ import (
 
 // FileReader is a binlog event reader which read binlog events from a file.
 type FileReader struct {
-	mu sync.Mutex
+	mu sync.RWMutex
 	wg sync.WaitGroup
 
-	stage      sync2.AtomicInt32
+	stage      int32
 	readOffset sync2.AtomicUint32
 	sendOffset sync2.AtomicUint32
 
@@ -83,8 +83,8 @@ func (r *FileReader) StartSyncByPos(pos gmysql.Position) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.stage.Get() != int32(stageNew) {
-		return errors.Errorf("stage %s, expect %s, already started", readerStage(r.stage.Get()), stageNew)
+	if r.stage != int32(stageNew) {
+		return errors.Errorf("stage %s, expect %s, already started", readerStage(r.stage), stageNew)
 	}
 
 	r.ctx, r.cancel = context.WithCancel(context.Background())
@@ -101,7 +101,7 @@ func (r *FileReader) StartSyncByPos(pos gmysql.Position) error {
 		}
 	}()
 
-	r.stage.Set(int32(stagePrepared))
+	r.stage = int32(stagePrepared)
 	return nil
 }
 
@@ -116,21 +116,24 @@ func (r *FileReader) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.stage.Get() == int32(stageClosed) {
+	if r.stage == int32(stageClosed) {
 		return errors.New("already closed")
 	}
 
 	r.parser.Stop()
 	r.cancel()
 	r.wg.Wait()
-	r.stage.Set(int32(stageClosed))
+	r.stage = int32(stageClosed)
 	return nil
 }
 
 // GetEvent implements Reader.GetEvent.
 func (r *FileReader) GetEvent(ctx context.Context) (*replication.BinlogEvent, error) {
-	if r.stage.Get() != int32(stagePrepared) {
-		return nil, errors.Errorf("stage %s, expect %s, please start sync first", readerStage(r.stage.Get()), stagePrepared)
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if r.stage != int32(stagePrepared) {
+		return nil, errors.Errorf("stage %s, expect %s, please start sync first", readerStage(r.stage), stagePrepared)
 	}
 
 	select {
@@ -140,16 +143,18 @@ func (r *FileReader) GetEvent(ctx context.Context) (*replication.BinlogEvent, er
 	case err := <-r.ech:
 		return nil, err
 	case <-ctx.Done():
-		return nil, errors.Annotatef(ctx.Err(), "canceled from the caller")
-	case <-r.ctx.Done(): // Reader closed
-		return nil, errors.Annotatef(r.ctx.Err(), "the reader closed")
+		return nil, ctx.Err()
 	}
 }
 
 // Status implements Reader.Status.
 func (r *FileReader) Status() interface{} {
+	r.mu.RLock()
+	stage := r.stage
+	r.mu.RUnlock()
+
 	return &FileReaderStatus{
-		Stage:      readerStage(r.stage.Get()).String(),
+		Stage:      readerStage(stage).String(),
 		ReadOffset: r.readOffset.Get(),
 		SendOffset: r.sendOffset.Get(),
 	}

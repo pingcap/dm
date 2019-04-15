@@ -23,7 +23,6 @@ import (
 	"github.com/pingcap/errors"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
-	"github.com/siddontang/go/sync2"
 
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
@@ -32,12 +31,13 @@ import (
 
 // TCPReader is a binlog event reader which read binlog events from a TCP stream.
 type TCPReader struct {
-	mu sync.Mutex
-
-	stage     sync2.AtomicInt32
 	syncerCfg replication.BinlogSyncerConfig
-	syncer    *replication.BinlogSyncer
-	streamer  *replication.BinlogStreamer
+
+	mu    sync.RWMutex
+	stage int32
+
+	syncer   *replication.BinlogSyncer
+	streamer *replication.BinlogStreamer
 }
 
 // TCPReaderStatus represents the status of a TCPReader.
@@ -68,8 +68,8 @@ func (r *TCPReader) StartSyncByPos(pos gmysql.Position) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.stage.Get() != int32(stageNew) {
-		return errors.Errorf("stage %s, expect %s, already started", readerStage(r.stage.Get()), stageNew)
+	if r.stage != int32(stageNew) {
+		return errors.Errorf("stage %s, expect %s, already started", readerStage(r.stage), stageNew)
 	}
 
 	streamer, err := r.syncer.StartSync(pos)
@@ -78,7 +78,7 @@ func (r *TCPReader) StartSyncByPos(pos gmysql.Position) error {
 	}
 
 	r.streamer = streamer
-	r.stage.Set(int32(stagePrepared))
+	r.stage = int32(stagePrepared)
 	return nil
 }
 
@@ -87,8 +87,8 @@ func (r *TCPReader) StartSyncByGTID(gSet gtid.Set) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.stage.Get() != int32(stageNew) {
-		return errors.Errorf("stage %s, expect %s, already started", readerStage(r.stage.Get()), stageNew)
+	if r.stage != int32(stageNew) {
+		return errors.Errorf("stage %s, expect %s, already started", readerStage(r.stage), stageNew)
 	}
 
 	if gSet == nil {
@@ -101,7 +101,7 @@ func (r *TCPReader) StartSyncByGTID(gSet gtid.Set) error {
 	}
 
 	r.streamer = streamer
-	r.stage.Set(int32(stagePrepared))
+	r.stage = int32(stagePrepared)
 	return nil
 }
 
@@ -110,7 +110,7 @@ func (r *TCPReader) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.stage.Get() == int32(stageClosed) {
+	if r.stage == int32(stageClosed) {
 		return errors.New("already closed")
 	}
 
@@ -129,14 +129,17 @@ func (r *TCPReader) Close() error {
 		}
 	}
 
-	r.stage.Set(int32(stageClosed))
+	r.stage = int32(stageClosed)
 	return nil
 }
 
 // GetEvent implements Reader.GetEvent.
 func (r *TCPReader) GetEvent(ctx context.Context) (*replication.BinlogEvent, error) {
-	if r.stage.Get() != int32(stagePrepared) {
-		return nil, errors.Errorf("stage %s, expect %s, please start sync first", readerStage(r.stage.Get()), stagePrepared)
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if r.stage != int32(stagePrepared) {
+		return nil, errors.Errorf("stage %s, expect %s, please start sync first", readerStage(r.stage), stagePrepared)
 	}
 
 	return r.streamer.GetEvent(ctx)
@@ -144,7 +147,9 @@ func (r *TCPReader) GetEvent(ctx context.Context) (*replication.BinlogEvent, err
 
 // Status implements Reader.Status.
 func (r *TCPReader) Status() interface{} {
-	stage := r.stage.Get()
+	r.mu.RLock()
+	stage := r.stage
+	r.mu.RUnlock()
 
 	var connID uint32
 	if stage != int32(stageNew) {

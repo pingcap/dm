@@ -20,7 +20,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	. "github.com/pingcap/check"
@@ -141,22 +140,6 @@ func (t *testFileReaderSuite) TestGetEvent(c *C) {
 	c.Assert(errors.Cause(err), Equals, context.DeadlineExceeded)
 	c.Assert(e, IsNil)
 	c.Assert(r.Close(), IsNil) // close the reader
-
-	// no valid events can be read, but can cancel it by closing the reader
-	r = NewFileReader(&FileReaderConfig{})
-	c.Assert(r, NotNil)
-	c.Assert(r.StartSyncByPos(startPos), IsNil)
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		e2, err2 := r.GetEvent(timeoutCtx)
-		c.Assert(errors.Cause(err2), Equals, context.Canceled)
-		c.Assert(e2, IsNil)
-	}()
-	time.Sleep(time.Second)    // wait 1 second
-	c.Assert(r.Close(), IsNil) // close the reader
-	wg.Wait()
 
 	// writer a FormatDescriptionEvent
 	header := &replication.EventHeader{
