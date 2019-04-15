@@ -27,6 +27,7 @@ import (
 	"github.com/siddontang/go/sync2"
 
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // FileReader is a binlog event reader which read binlog events from a file.
@@ -92,6 +93,7 @@ func (r *FileReader) StartSyncByPos(pos gmysql.Position) error {
 		defer r.wg.Done()
 		err := r.parser.ParseFile(pos.Name, int64(pos.Pos), r.onEvent)
 		if err != nil {
+			log.Errorf("[file reader] parse binlog file with error %s", errors.ErrorStack(err))
 			select {
 			case r.ech <- err:
 			case <-r.ctx.Done():
