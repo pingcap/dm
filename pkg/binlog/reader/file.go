@@ -35,7 +35,7 @@ type FileReader struct {
 	mu sync.RWMutex
 	wg sync.WaitGroup
 
-	stage      int32
+	stage      readerStage
 	readOffset sync2.AtomicUint32
 	sendOffset sync2.AtomicUint32
 
@@ -83,8 +83,8 @@ func (r *FileReader) StartSyncByPos(pos gmysql.Position) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.stage != int32(stageNew) {
-		return errors.Errorf("stage %s, expect %s, already started", readerStage(r.stage), stageNew)
+	if r.stage != stageNew {
+		return errors.Errorf("stage %s, expect %s, already started", r.stage, stageNew)
 	}
 
 	r.ctx, r.cancel = context.WithCancel(context.Background())
@@ -101,7 +101,7 @@ func (r *FileReader) StartSyncByPos(pos gmysql.Position) error {
 		}
 	}()
 
-	r.stage = int32(stagePrepared)
+	r.stage = stagePrepared
 	return nil
 }
 
@@ -116,14 +116,14 @@ func (r *FileReader) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.stage == int32(stageClosed) {
+	if r.stage == stageClosed {
 		return errors.New("already closed")
 	}
 
 	r.parser.Stop()
 	r.cancel()
 	r.wg.Wait()
-	r.stage = int32(stageClosed)
+	r.stage = stageClosed
 	return nil
 }
 
@@ -132,8 +132,8 @@ func (r *FileReader) GetEvent(ctx context.Context) (*replication.BinlogEvent, er
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	if r.stage != int32(stagePrepared) {
-		return nil, errors.Errorf("stage %s, expect %s, please start sync first", readerStage(r.stage), stagePrepared)
+	if r.stage != stagePrepared {
+		return nil, errors.Errorf("stage %s, expect %s, please start sync first", r.stage, stagePrepared)
 	}
 
 	select {
@@ -154,7 +154,7 @@ func (r *FileReader) Status() interface{} {
 	r.mu.RUnlock()
 
 	return &FileReaderStatus{
-		Stage:      readerStage(stage).String(),
+		Stage:      stage.String(),
 		ReadOffset: r.readOffset.Get(),
 		SendOffset: r.sendOffset.Get(),
 	}

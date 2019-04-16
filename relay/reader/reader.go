@@ -58,7 +58,7 @@ type reader struct {
 	cfg *Config
 
 	mu    sync.RWMutex
-	stage int32
+	stage readerStage
 
 	in  br.Reader // the underlying reader used to read binlog events.
 	out chan *replication.BinlogEvent
@@ -78,8 +78,8 @@ func (r *reader) Start() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.stage != int32(stageNew) {
-		return errors.Errorf("stage %s, expect %s", readerStage(r.stage), stageNew)
+	if r.stage != stageNew {
+		return errors.Errorf("stage %s, expect %s", r.stage, stageNew)
 	}
 
 	defer func() {
@@ -94,7 +94,7 @@ func (r *reader) Start() error {
 		err = r.setUpReaderByPos()
 	}
 
-	r.stage = int32(stagePrepared)
+	r.stage = stagePrepared
 	return err
 }
 
@@ -103,12 +103,12 @@ func (r *reader) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.stage == int32(stageClosed) {
+	if r.stage == stageClosed {
 		return errors.New("already closed")
 	}
 
 	err := r.in.Close()
-	r.stage = int32(stageClosed)
+	r.stage = stageClosed
 	return errors.Trace(err)
 }
 
@@ -119,8 +119,8 @@ func (r *reader) GetEvent(ctx context.Context) (*replication.BinlogEvent, error)
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	if r.stage != int32(stagePrepared) {
-		return nil, errors.Errorf("stage %s, expect %s", readerStage(r.stage), stagePrepared)
+	if r.stage != stagePrepared {
+		return nil, errors.Errorf("stage %s, expect %s", r.stage, stagePrepared)
 	}
 
 	for {
