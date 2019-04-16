@@ -82,6 +82,8 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 		ServerID:   101,
 		MetaSchema: "test",
 	}
+	s.cfg.From.Adjust()
+	s.cfg.To.Adjust()
 
 	var err error
 	dbAddr := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8", s.cfg.From.User, s.cfg.From.Password, s.cfg.From.Host, s.cfg.From.Port)

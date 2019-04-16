@@ -42,7 +42,7 @@ func SetSecretKey(key []byte) error {
 
 // Encrypt encrypts plaintext to ciphertext
 func Encrypt(plaintext []byte) ([]byte, error) {
-	block, err := aes.NewCipher([]byte(secretKey))
+	block, err := aes.NewCipher(secretKey)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -65,7 +65,7 @@ func Encrypt(plaintext []byte) ([]byte, error) {
 
 // Decrypt decrypts ciphertext to plaintext
 func Decrypt(ciphertext []byte) ([]byte, error) {
-	block, err := aes.NewCipher([]byte(secretKey))
+	block, err := aes.NewCipher(secretKey)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
