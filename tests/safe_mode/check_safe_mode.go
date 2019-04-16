@@ -145,6 +145,10 @@ func main() {
 	for worker, events := range ddlEvents {
 		sort.Sort(BinlogEventSlice(events))
 		latestDDL[worker] = make([]*pb.SyncerBinlogEvent, 2)
+		// we have run two round of sharding DDL
+		if len(events) < 4 {
+			panic(fmt.Sprintf("invalid ddl events count, events: %v", events))
+		}
 		latestDDL[worker][1] = events[len(events)-1]
 		endPos := binlogPosition(latestDDL[worker][1])
 		for i := len(events) - 2; i >= 0; i-- {
@@ -153,6 +157,9 @@ func main() {
 				latestDDL[worker][0] = events[i]
 				break
 			}
+		}
+		if latestDDL[worker][0] == nil {
+			panic(fmt.Sprintf("first sharding DDL not found, events: %v", events))
 		}
 	}
 
