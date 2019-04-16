@@ -18,7 +18,7 @@ except:
 ############################################################
 
 src = dict(
-    dashboards={"dm_worker": 'dm.json'})
+    dashboards={"dm_worker": 'dm.json', "dm_worker_instances": 'dm_instances.json'})
 
 dests = [
 ]
