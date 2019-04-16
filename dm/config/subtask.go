@@ -219,7 +219,7 @@ func (c *SubTaskConfig) DecodeFile(fpath string) error {
 		return errors.Trace(err)
 	}
 
-	return errors.Trace(c.adjust())
+	return errors.Trace(c.Adjust())
 }
 
 // Decode loads config from file data
@@ -229,11 +229,11 @@ func (c *SubTaskConfig) Decode(data string) error {
 		return errors.Trace(err)
 	}
 
-	return errors.Trace(c.adjust())
+	return errors.Trace(c.Adjust())
 }
 
-// adjust adjusts configs
-func (c *SubTaskConfig) adjust() error {
+// Adjust adjusts configs
+func (c *SubTaskConfig) Adjust() error {
 	if c.Name == "" {
 		return errors.New("task name should not be empty")
 	}
@@ -313,7 +313,7 @@ func (c *SubTaskConfig) Parse(arguments []string) error {
 		return errors.Errorf("'%s' is an invalid flag", c.flagSet.Arg(0))
 	}
 
-	return errors.Trace(c.adjust())
+	return errors.Trace(c.Adjust())
 }
 
 // DecryptPassword tries to decrypt db password in config
