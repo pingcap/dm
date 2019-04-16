@@ -47,6 +47,17 @@ func (t *testEncryptSuite) TestSetSecretKey(c *C) {
 	c.Assert(err, NotNil)
 }
 
+func removeChar(input []byte, c byte) []byte {
+	i := 0
+	for _, x := range input {
+		if x != c {
+			input[i] = x
+			i++
+		}
+	}
+	return input[:i]
+}
+
 func (t *testEncryptSuite) TestEncrypt(c *C) {
 	plaintext := []byte("a plain text")
 
@@ -64,6 +75,6 @@ func (t *testEncryptSuite) TestEncrypt(c *C) {
 	c.Assert(err, NotNil)
 
 	// invalid content
-	_, err = Decrypt(ciphertext[1:])
+	_, err = Decrypt(removeChar(ciphertext, ivSep[0]))
 	c.Assert(err, NotNil)
 }
