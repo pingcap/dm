@@ -39,7 +39,8 @@ func (t *testWorker) TestFileMetaDB(c *C) {
 	c.Assert(meta.SubTasks, HasLen, 0)
 
 	err = metaDB.Set(&config.SubTaskConfig{
-		Name: "task1",
+		Name:     "task1",
+		SourceID: "source-1",
 	})
 	c.Assert(err, IsNil)
 
