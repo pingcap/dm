@@ -12,7 +12,7 @@ function run() {
     run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2
     check_contains 'Query OK, 3 rows affected'
 
-    cd $cur && GO111MODULE=on go build -o bin/dmctl && cd -
+    cd $cur && GO111MODULE=on go build -o bin/dmctl dmctl.go && cd -
 
     export GO_FAILPOINTS='github.com/pingcap/dm/syncer/ReSyncExit=return(true)'
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
@@ -75,7 +75,9 @@ function run() {
     fi
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-    python $cur/check_safe_mode.py
+
+    cd $cur && GO111MODULE=on go build -o bin/check_safe_mode check_safe_mode.go && cd -
+    $cur/bin/check_safe_mode
 }
 
 cleanup1 safe_mode_target
