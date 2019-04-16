@@ -24,6 +24,7 @@ function run() {
     cd $cur && GO111MODULE=on go build -o bin/dmctl dmctl.go && cd -
     cd $cur && GO111MODULE=on go build -o bin/dmctl_stop dmctl_stop.go && cd -
 
+    # start a task in `full` mode
     cat $cur/conf/dm-task.yaml > $WORK_DIR/dm-task.yaml
     sed -i "s/task-mode-placeholder/full/g" $WORK_DIR/dm-task.yaml
     # avoid cannot unmarshal !!str `binlog-...` into uint32 error
@@ -38,6 +39,7 @@ function run() {
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
 
+    # start a task in `incremental` mode
     cat $cur/conf/dm-task.yaml > $WORK_DIR/dm-task.yaml
     sed -i "s/task-mode-placeholder/incremental/g" $WORK_DIR/dm-task.yaml
     name1=$(grep "Log: " $WORK_DIR/worker1/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2}'|tr -d ' ')
