@@ -779,14 +779,13 @@ Loop:
 				if w.relayPurger.Purging() {
 					if retryCnt < maxRetryCount {
 						retryCnt++
-						log.Warn("relay log purger is purging, cannot start sub task %s, would try again later", opLog.Task.Name)
+						log.Warnf("relay log purger is purging, cannot start sub task %s, would try again later", opLog.Task.Name)
 						w.Unlock()
 						continue Loop
 					}
 
 					err = errors.Errorf("relay log purger is purging, cannot start sub task %s, please try again later", opLog.Task.Name)
 					break
-
 				}
 
 				taskCfg := new(config.SubTaskConfig)

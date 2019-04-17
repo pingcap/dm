@@ -232,7 +232,7 @@ func (s *Server) QueryTaskOperation(ctx context.Context, req *pb.QueryTaskOperat
 
 	opLog, err := s.worker.meta.GetTaskLog(opLogID)
 	if err != nil {
-		log.Errorf("fail to get operation log %s of task %s", opLogID, taskName)
+		log.Errorf("fail to get operation log %d of task %s", opLogID, taskName)
 		return nil, errors.Trace(err)
 	}
 

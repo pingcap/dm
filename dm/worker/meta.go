@@ -134,11 +134,7 @@ func (meta *Metadata) LoadTaskMeta() map[string]*pb.TaskMeta {
 	tasks := make(map[string]*pb.TaskMeta)
 
 	for name, task := range meta.tasks {
-		tasks[name] = &pb.TaskMeta{
-			Op:   task.Op,
-			Name: task.Name,
-			Task: task.Task,
-		}
+		tasks[name] = CloneTaskMeta(task)
 	}
 
 	return tasks
@@ -232,7 +228,11 @@ func (meta *Metadata) MarkOperation(log *pb.TaskLog) error {
 	}
 
 	if log.Success {
-		meta.tasks[log.Task.Name] = log.Task
+		if log.Task.Op == pb.TaskOp_Stop {
+			delete(meta.tasks, log.Task.Name)
+		} else {
+			meta.tasks[log.Task.Name] = log.Task
+		}
 	}
 	meta.logs = meta.logs[1:]
 	return nil
@@ -268,7 +268,6 @@ func (meta *Metadata) recoverMetaFromOldFashion(path string) error {
 	log.Infof("find %d tasks from old metadata file", len(oldMeta.SubTasks))
 
 	meta.tasks = make(map[string]*pb.TaskMeta)
-	batch := new(leveldb.Batch)
 	for name, task := range oldMeta.SubTasks {
 		log.Infof("[old metadata file] subtask %s => %+v", name, task)
 		var b bytes.Buffer
@@ -285,18 +284,11 @@ func (meta *Metadata) recoverMetaFromOldFashion(path string) error {
 			Task:  b.Bytes(),
 		}
 
-		taskByte, err := taskMeta.Marshal()
+		err := SetTaskMeta(meta.db, taskMeta)
 		if err != nil {
-			return errors.Annotatef(err, "encode task meta %v", task)
+			return errors.Errorf("fail to set task meta %s error message: %v", taskMeta.Name, err)
 		}
-
-		batch.Put([]byte(name), taskByte)
 		meta.tasks[name] = taskMeta
-	}
-
-	err = meta.db.Write(batch, nil)
-	if err != nil {
-		return errors.Annotatef(err, "save task meta into kv db")
 	}
 
 	return errors.Trace(os.Remove(path))

@@ -16,6 +16,7 @@ package worker
 import (
 	"context"
 	"encoding/binary"
+	"reflect"
 	"sync/atomic"
 	"time"
 
@@ -26,6 +27,9 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
+
+// ErrInValidHandler indicates we meet an invaild  Putter/Getter/Deleter
+var ErrInValidHandler = errors.New("handler is nil, please pass a leveldb.DB or leveldb.Transaction")
 
 // Putter is interface which has Put method
 type Putter interface {
@@ -122,6 +126,10 @@ type Logger struct {
 
 // Initial initials Logger
 func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
+	if db == nil {
+		return nil, errors.Trace(ErrInValidHandler)
+	}
+
 	handledPointer, err := LoadHandledPointer(db)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -169,8 +177,15 @@ func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 
 // GetTaskLog returns task log by given log ID
 func (logger *Logger) GetTaskLog(h Getter, id int64) (*pb.TaskLog, error) {
+	if reflect.ValueOf(h).IsNil() {
+		return nil, errors.Trace(ErrInValidHandler)
+	}
+
 	logBytes, err := h.Get(EncodeTaskLogKey(id), nil)
 	if err != nil {
+		if err == leveldb.ErrNotFound {
+			return nil, nil
+		}
 		return nil, errors.Annotatef(err, "get task meta from leveldb")
 	}
 
@@ -186,6 +201,10 @@ func (logger *Logger) GetTaskLog(h Getter, id int64) (*pb.TaskLog, error) {
 // ForwardTo forward handled pointer to specified ID location
 // not thread safe
 func (logger *Logger) ForwardTo(db Putter, ID int64) error {
+	if reflect.ValueOf(db).IsNil() {
+		return errors.Trace(ErrInValidHandler)
+	}
+
 	handledPointer := Pointer{
 		Location: ID,
 	}
@@ -201,6 +220,10 @@ func (logger *Logger) ForwardTo(db Putter, ID int64) error {
 
 // MarkAndForwardLog marks result sucess or not in log, and forwards handledPointer
 func (logger *Logger) MarkAndForwardLog(db Putter, opLog *pb.TaskLog) error {
+	if reflect.ValueOf(db).IsNil() {
+		return errors.Trace(ErrInValidHandler)
+	}
+
 	logBytes, err := opLog.Marshal()
 	if err != nil {
 		return errors.Trace(err)
@@ -216,6 +239,10 @@ func (logger *Logger) MarkAndForwardLog(db Putter, opLog *pb.TaskLog) error {
 
 // Append appends a task log
 func (logger *Logger) Append(db Putter, opLog *pb.TaskLog) error {
+	if reflect.ValueOf(db).IsNil() {
+		return errors.Trace(ErrInValidHandler)
+	}
+
 	var id int64
 	for {
 		id = atomic.LoadInt64(&logger.endPointer.Location)
@@ -251,12 +278,20 @@ func (logger *Logger) GC(ctx context.Context, db *leveldb.DB) {
 			return
 		case <-ticker.C:
 			id, err := logger.findNearestIDByTS(db, time.Now().UnixNano()-defaultGCForwardTime.Nanoseconds())
-			log.doGCTS(db, 0)
+			if err != nil {
+				log.Errorf("fail to find a ts to gc %v", err)
+			} else {
+				logger.doGC(db, id)
+			}
 		}
 	}
 }
 
 func (logger *Logger) findNearestIDByTS(db *leveldb.DB, ts int64) (int64, error) {
+	if db == nil {
+		return 0, errors.Trace(ErrInValidHandler)
+	}
+
 	var (
 		step  = int64(20)
 		endID = logger.handledPointer.Location
@@ -276,13 +311,13 @@ func (logger *Logger) findNearestIDByTS(db *leveldb.DB, ts int64) (int64, error)
 		opLog := &pb.TaskLog{}
 		err = opLog.Unmarshal(logBytes)
 		if err != nil {
-			return nil, errors.Annotatef(err, "unmarshal task log binary %s", logBytes)
+			return 0, errors.Annotatef(err, "unmarshal task log binary %s", logBytes)
 		}
 
 		if opLog.Ts > ts {
 			endID = id
 		} else {
-			return 0, id
+			return id, nil
 		}
 	}
 
@@ -290,6 +325,11 @@ func (logger *Logger) findNearestIDByTS(db *leveldb.DB, ts int64) (int64, error)
 }
 
 func (logger *Logger) doGC(db *leveldb.DB, id int64) {
+	if db == nil {
+		log.Error(ErrInValidHandler)
+		return
+	}
+
 	irange := &util.Range{
 		Start: EncodeTaskLogKey(0),
 		Limit: EncodeTaskLogKey(id + 1),
@@ -307,9 +347,9 @@ func (logger *Logger) doGC(db *leveldb.DB, id int64) {
 		}
 	}
 	iter.Release()
-	err = iter.Error()
+	err := iter.Error()
 	if err != nil {
-		return nil, errors.Annotatef(err, "delete logs from meta")
+		log.Errorf("query logs from meta error %v", err)
 	}
 
 	if batch.Len() > 0 {
@@ -338,6 +378,10 @@ func EncodeTaskMetaKey(name string) []byte {
 
 // LoadTaskMetas loads all task metas from kv db
 func LoadTaskMetas(db *leveldb.DB) (map[string]*pb.TaskMeta, error) {
+	if db == nil {
+		return nil, errors.Trace(ErrInValidHandler)
+	}
+
 	var (
 		tasks = make(map[string]*pb.TaskMeta)
 		err   error
@@ -356,7 +400,7 @@ func LoadTaskMetas(db *leveldb.DB) (map[string]*pb.TaskMeta, error) {
 		tasks[task.Name] = task
 	}
 	iter.Release()
-	if err == nil {
+	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
@@ -370,6 +414,10 @@ func LoadTaskMetas(db *leveldb.DB) (map[string]*pb.TaskMeta, error) {
 
 // SetTaskMeta saves task meta into kv db
 func SetTaskMeta(h Putter, task *pb.TaskMeta) error {
+	if reflect.ValueOf(h).IsNil() {
+		return errors.Trace(ErrInValidHandler)
+	}
+
 	err := VerifyTaskMeta(task)
 	if err != nil {
 		return errors.Trace(err)
@@ -390,6 +438,10 @@ func SetTaskMeta(h Putter, task *pb.TaskMeta) error {
 
 // GetTaskMeta returns task meta by given name
 func GetTaskMeta(h Getter, name string) (*pb.TaskMeta, error) {
+	if reflect.ValueOf(h).IsNil() {
+		return nil, errors.Trace(ErrInValidHandler)
+	}
+
 	taskBytes, err := h.Get(EncodeTaskMetaKey(name), nil)
 	if err != nil {
 		return nil, errors.Annotatef(err, "get task meta from leveldb")
@@ -406,6 +458,10 @@ func GetTaskMeta(h Getter, name string) (*pb.TaskMeta, error) {
 
 // DeleteTaskMeta delete task meta from kv DB
 func DeleteTaskMeta(h Deleter, name string) error {
+	if reflect.ValueOf(h).IsNil() {
+		return errors.Trace(ErrInValidHandler)
+	}
+
 	err := h.Delete(EncodeTaskMetaKey(name), nil)
 	if err != nil {
 		return errors.Annotatef(err, "save into kv db")
@@ -416,6 +472,10 @@ func DeleteTaskMeta(h Deleter, name string) error {
 
 // VerifyTaskMeta verify legality of take meta
 func VerifyTaskMeta(task *pb.TaskMeta) error {
+	if task == nil {
+		return errors.Errorf("task is empty")
+	}
+
 	if len(task.Name) == 0 {
 		return errors.NotValidf("task name is empty")
 	}
