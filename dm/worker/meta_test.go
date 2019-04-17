@@ -82,13 +82,13 @@ func (t *testWorker) setUpDB(c *C) (*leveldb.DB, string) {
 
 func (t *testWorker) TestNewMetaDB(c *C) {
 	db, dir := t.setUpDB(c)
+	defer db.Close()
 
 	metaDB, err := NewMetadata(dir, db)
 	c.Assert(err, IsNil)
 	c.Assert(metaDB.tasks, HasLen, 0)
 	c.Assert(metaDB.logs, HasLen, 0)
 	c.Assert(metaDB.log, NotNil)
-	metaDB.Close()
 
 	// test fail to recover from old fashion meta
 	err = ioutil.WriteFile(path.Join(dir, "meta"), []byte("xxxx"), 0644)
@@ -115,7 +115,6 @@ func (t *testWorker) TestNewMetaDB(c *C) {
 	c.Assert(len(metaDB.tasks), Equals, 2)
 	c.Assert(metaDB.logs, HasLen, 0)
 	c.Assert(metaDB.log, NotNil)
-	metaDB.Close()
 
 	// check old fashion meta file
 	_, err = os.Open(path.Join(dir, "meta"))
@@ -134,11 +133,12 @@ func (t *testWorker) TestNewMetaDB(c *C) {
 	c.Assert(len(metaDB.tasks), Equals, 2)
 	c.Assert(metaDB.logs, HasLen, 0)
 	c.Assert(metaDB.log, NotNil)
-	metaDB.Close()
 }
 
 func (t *testWorker) TestTaskMeta(c *C) {
 	db, dir := t.setUpDB(c)
+	defer db.Close()
+
 	meta, err := NewMetadata(dir, db)
 	c.Assert(err, IsNil)
 	c.Assert(len(meta.tasks), Equals, 0)
@@ -146,7 +146,6 @@ func (t *testWorker) TestTaskMeta(c *C) {
 	c.Assert(meta.log, NotNil)
 	c.Assert(meta.LoadTaskMeta(), HasLen, 0)
 	c.Assert(meta.GetTask("no exists"), IsNil)
-	meta.Close()
 
 	// recover from old fashion meta
 	oldMeta := &Meta{
@@ -190,11 +189,11 @@ func (t *testWorker) TestTaskMeta(c *C) {
 
 	task3 := meta.GetTask("no exists")
 	c.Assert(task3, IsNil)
-	meta.Close()
 }
 
-func (t *testWorker) TestTaskLog(c *C) {
+func (t *testWorker) TestTaskOperation(c *C) {
 	db, dir := t.setUpDB(c)
+	defer db.Close()
 
 	meta, err := NewMetadata(dir, db)
 	c.Assert(err, IsNil)
@@ -343,5 +342,31 @@ func (t *testWorker) TestTaskLog(c *C) {
 	c.Assert(task1, DeepEquals, testTask1Meta)
 	task2 = meta.GetTask(testTask2Meta.Name)
 	c.Assert(task2, IsNil)
+}
 
+func (t *testWorker) TestMetaClose(c *C) {
+	db, dir := t.setUpDB(c)
+	defer db.Close()
+
+	meta, err := NewMetadata(dir, db)
+	c.Assert(err, IsNil)
+	meta.Close()
+	meta.Close()
+
+	// recover from old fashion meta
+	oldMeta := &Meta{
+		SubTasks: map[string]*config.SubTaskConfig{
+			"task1": testTask1,
+			"task2": testTask2,
+		},
+	}
+	data, err := oldMeta.Toml()
+	c.Assert(err, IsNil)
+	err = ioutil.WriteFile(path.Join(dir, "meta"), []byte(data), 0644)
+	c.Assert(err, IsNil)
+
+	meta, err = NewMetadata(dir, db)
+	c.Assert(err, IsNil)
+	meta.Close()
+	meta.Close()
 }

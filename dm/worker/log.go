@@ -65,7 +65,7 @@ func (p *Pointer) MarshalBinary() []byte {
 // UnmarshalBinary implement encoding.BinaryMarshal
 func (p *Pointer) UnmarshalBinary(data []byte) error {
 	if len(data) < 8 {
-		return errors.Errorf("not enough data as pointer %v", data)
+		return errors.Errorf("no enough data as pointer %v", data)
 	}
 
 	p.Location = int64(binary.LittleEndian.Uint64(data))
@@ -75,6 +75,10 @@ func (p *Pointer) UnmarshalBinary(data []byte) error {
 // LoadHandledPointer loads handled pointer value from kv DB
 func LoadHandledPointer(db *leveldb.DB) (Pointer, error) {
 	var p Pointer
+	if db == nil {
+		return p, errors.Trace(ErrInValidHandler)
+	}
+
 	value, err := db.Get(HandledPointerKey, nil)
 	if err != nil {
 		// return zero value when not found
@@ -103,7 +107,7 @@ var (
 // DecodeTaskLogKey decodes task log key and returns its log ID
 func DecodeTaskLogKey(key []byte) (int64, error) {
 	if len(key) != len(TaskLogPrefix)+8 {
-		return 0, errors.Errorf("not enough data as task log key %v", key)
+		return 0, errors.Errorf("no enough data as task log key %v", key)
 	}
 
 	return int64(binary.LittleEndian.Uint64(key[len(TaskLogPrefix):])), nil
@@ -136,8 +140,10 @@ func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 	}
 
 	var (
-		endPointer Pointer
-		logs       = make([]*pb.TaskLog, 0, 4)
+		endPointer = Pointer{
+			Location: 1,
+		}
+		logs = make([]*pb.TaskLog, 0, 4)
 	)
 	iter := db.NewIterator(util.BytesPrefix(TaskLogPrefix), nil)
 	for ok := iter.Seek(EncodeTaskLogKey(handledPointer.Location)); ok; ok = iter.Next() {
@@ -149,18 +155,15 @@ func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 			break
 		}
 
-		if log.Id > endPointer.Location {
+		if log.Id == 0 || log.Id > endPointer.Location {
 			endPointer.Location = log.Id
+			logs = append(logs, log)
 		} else {
 			panic("out of sorted from level db")
 		}
-
-		if log.Id > handledPointer.Location {
-			logs = append(logs, log)
-		}
 	}
 	iter.Release()
-	if err == nil {
+	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
@@ -177,7 +180,7 @@ func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 
 // GetTaskLog returns task log by given log ID
 func (logger *Logger) GetTaskLog(h Getter, id int64) (*pb.TaskLog, error) {
-	if reflect.ValueOf(h).IsNil() {
+	if whetherNil(h) {
 		return nil, errors.Trace(ErrInValidHandler)
 	}
 
@@ -201,7 +204,7 @@ func (logger *Logger) GetTaskLog(h Getter, id int64) (*pb.TaskLog, error) {
 // ForwardTo forward handled pointer to specified ID location
 // not thread safe
 func (logger *Logger) ForwardTo(db Putter, ID int64) error {
-	if reflect.ValueOf(db).IsNil() {
+	if whetherNil(db) {
 		return errors.Trace(ErrInValidHandler)
 	}
 
@@ -220,7 +223,7 @@ func (logger *Logger) ForwardTo(db Putter, ID int64) error {
 
 // MarkAndForwardLog marks result sucess or not in log, and forwards handledPointer
 func (logger *Logger) MarkAndForwardLog(db Putter, opLog *pb.TaskLog) error {
-	if reflect.ValueOf(db).IsNil() {
+	if whetherNil(db) {
 		return errors.Trace(ErrInValidHandler)
 	}
 
@@ -239,7 +242,7 @@ func (logger *Logger) MarkAndForwardLog(db Putter, opLog *pb.TaskLog) error {
 
 // Append appends a task log
 func (logger *Logger) Append(db Putter, opLog *pb.TaskLog) error {
-	if reflect.ValueOf(db).IsNil() {
+	if whetherNil(db) {
 		return errors.Trace(ErrInValidHandler)
 	}
 
@@ -414,7 +417,7 @@ func LoadTaskMetas(db *leveldb.DB) (map[string]*pb.TaskMeta, error) {
 
 // SetTaskMeta saves task meta into kv db
 func SetTaskMeta(h Putter, task *pb.TaskMeta) error {
-	if reflect.ValueOf(h).IsNil() {
+	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
 
@@ -438,7 +441,7 @@ func SetTaskMeta(h Putter, task *pb.TaskMeta) error {
 
 // GetTaskMeta returns task meta by given name
 func GetTaskMeta(h Getter, name string) (*pb.TaskMeta, error) {
-	if reflect.ValueOf(h).IsNil() {
+	if whetherNil(h) {
 		return nil, errors.Trace(ErrInValidHandler)
 	}
 
@@ -458,7 +461,7 @@ func GetTaskMeta(h Getter, name string) (*pb.TaskMeta, error) {
 
 // DeleteTaskMeta delete task meta from kv DB
 func DeleteTaskMeta(h Deleter, name string) error {
-	if reflect.ValueOf(h).IsNil() {
+	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
 
@@ -508,4 +511,8 @@ func CloneTaskLog(log *pb.TaskLog) *pb.TaskLog {
 	*clone = *log
 	clone.Task = CloneTaskMeta(log.Task)
 	return clone
+}
+
+func whetherNil(handler interface{}) bool {
+	return handler == nil || reflect.ValueOf(handler).IsNil()
 }
