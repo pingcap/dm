@@ -95,7 +95,7 @@ func (r *reader) Start() error {
 	}
 
 	r.stage = stagePrepared
-	return err
+	return errors.Trace(err)
 }
 
 // Close implements Reader.Close.
