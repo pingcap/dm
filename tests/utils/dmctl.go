@@ -46,6 +46,10 @@ func StartTask(ctx context.Context, cli pb.MasterClient, configFile string, work
 		return errors.Trace(err)
 	}
 
+	if !resp.GetResult() {
+		return errors.Errorf("start task resp error: %s", resp.GetMsg())
+	}
+
 	for _, wp := range resp.GetWorkers() {
 		if !wp.GetResult() {
 			return errors.Errorf("fail to start task %v: %s", string(content), wp.GetMsg())
