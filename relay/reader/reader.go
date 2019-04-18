@@ -79,7 +79,7 @@ func (r *reader) Start() error {
 	defer r.mu.Unlock()
 
 	if r.stage != stageNew {
-		return errors.Errorf("stage %s, expect %s", r.stage, stageNew)
+		return errors.Errorf("stage %s, expect %s, already started", r.stage, stageNew)
 	}
 
 	defer func() {
@@ -120,7 +120,7 @@ func (r *reader) GetEvent(ctx context.Context) (*replication.BinlogEvent, error)
 	defer r.mu.RUnlock()
 
 	if r.stage != stagePrepared {
-		return nil, errors.Errorf("stage %s, expect %s", r.stage, stagePrepared)
+		return nil, errors.Errorf("stage %s, expect %s, please start the reader first", r.stage, stagePrepared)
 	}
 
 	for {
