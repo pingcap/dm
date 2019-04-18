@@ -126,6 +126,22 @@ var (
 			Name:      "remaining_time",
 			Help:      "the remaining time in second to catch up master",
 		}, []string{"task"})
+
+	unsyncedTableGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "unsynced_table_number",
+			Help:      "number of unsynced tables in the subtask",
+		}, []string{"task", "table"})
+
+	shardLockResolving = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "dm",
+			Subsystem: "syncer",
+			Name:      "shard_lock_resolving",
+			Help:      "waiting shard DDL lock to be resolved",
+		}, []string{"task"})
 )
 
 // RegisterMetrics registers metrics
@@ -142,6 +158,8 @@ func RegisterMetrics(registry *prometheus.Registry) {
 	registry.MustRegister(syncerExitWithErrorCounter)
 	registry.MustRegister(replicationLagGauge)
 	registry.MustRegister(remainingTimeGauge)
+	registry.MustRegister(unsyncedTableGauge)
+	registry.MustRegister(shardLockResolving)
 }
 
 func (s *Syncer) runBackgroundJob(ctx context.Context) {

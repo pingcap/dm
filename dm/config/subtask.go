@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -47,12 +48,17 @@ const (
 	CmdSyncer CmdName = "syncer"
 )
 
+var (
+	defaultMaxAllowedPacket = 64 * 1024 * 1024 // 64MiB, equal to TiDB's default
+)
+
 // DBConfig is the DB configuration.
 type DBConfig struct {
-	Host     string `toml:"host" json:"host" yaml:"host"`
-	Port     int    `toml:"port" json:"port" yaml:"port"`
-	User     string `toml:"user" json:"user" yaml:"user"`
-	Password string `toml:"password" json:"-" yaml:"password"` // omit it for privacy
+	Host             string `toml:"host" json:"host" yaml:"host"`
+	Port             int    `toml:"port" json:"port" yaml:"port"`
+	User             string `toml:"user" json:"user" yaml:"user"`
+	Password         string `toml:"password" json:"-" yaml:"password"` // omit it for privacy
+	MaxAllowedPacket *int   `toml:"max-allowed-packet" json:"max-allowed-packet" yaml:"max-allowed-packet"`
 }
 
 // Toml returns TOML format representation of config
@@ -70,6 +76,14 @@ func (db *DBConfig) Toml() (string, error) {
 func (db *DBConfig) Decode(data string) error {
 	_, err := toml.Decode(data, db)
 	return errors.Trace(err)
+}
+
+// Adjust adjusts the config.
+func (db *DBConfig) Adjust() {
+	if db.MaxAllowedPacket == nil {
+		cloneV := defaultMaxAllowedPacket
+		db.MaxAllowedPacket = &cloneV
+	}
 }
 
 // SubTaskConfig is the configuration for SubTask
@@ -205,7 +219,7 @@ func (c *SubTaskConfig) DecodeFile(fpath string) error {
 		return errors.Trace(err)
 	}
 
-	return errors.Trace(c.adjust())
+	return errors.Trace(c.Adjust())
 }
 
 // Decode loads config from file data
@@ -215,11 +229,11 @@ func (c *SubTaskConfig) Decode(data string) error {
 		return errors.Trace(err)
 	}
 
-	return errors.Trace(c.adjust())
+	return errors.Trace(c.Adjust())
 }
 
-// adjust adjusts configs
-func (c *SubTaskConfig) adjust() error {
+// Adjust adjusts configs
+func (c *SubTaskConfig) Adjust() error {
 	if c.Name == "" {
 		return errors.New("task name should not be empty")
 	}
@@ -254,6 +268,15 @@ func (c *SubTaskConfig) adjust() error {
 			return errors.Annotatef(err, "invalid timezone string: %s", c.Timezone)
 		}
 	}
+
+	dirSuffix := "." + c.Name
+	if !strings.HasSuffix(c.LoaderConfig.Dir, dirSuffix) { // check to support multiple times calling
+		// if not ends with the task name, we append the task name to the tail
+		c.LoaderConfig.Dir += dirSuffix
+	}
+
+	c.From.Adjust()
+	c.To.Adjust()
 
 	_, err := c.DecryptPassword()
 	return err
@@ -290,7 +313,7 @@ func (c *SubTaskConfig) Parse(arguments []string) error {
 		return errors.Errorf("'%s' is an invalid flag", c.flagSet.Arg(0))
 	}
 
-	return errors.Trace(c.adjust())
+	return errors.Trace(c.Adjust())
 }
 
 // DecryptPassword tries to decrypt db password in config

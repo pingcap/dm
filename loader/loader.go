@@ -772,7 +772,20 @@ func (l *Loader) prepare() error {
 
 	// check if mydumper dir data exists.
 	if !utils.IsDirExists(l.cfg.Dir) {
-		return errors.Errorf("%s is not exists or it's not a dir", l.cfg.Dir)
+		// compatibility with no `.name` suffix
+		dirSuffix := "." + l.cfg.Name
+		var trimmed bool
+		if strings.HasSuffix(l.cfg.Dir, dirSuffix) {
+			dirPrefix := strings.TrimSuffix(l.cfg.Dir, dirSuffix)
+			if utils.IsDirExists(dirPrefix) {
+				log.Warnf("[loader] %s is not exists, trying to load data from %s", l.cfg.Dir, dirPrefix)
+				l.cfg.Dir = dirPrefix
+				trimmed = true
+			}
+		}
+		if !trimmed {
+			return errors.Errorf("%s is not exists or it's not a dir", l.cfg.Dir)
+		}
 	}
 
 	// collect dir files.

@@ -33,13 +33,15 @@ func TestWorker(t *testing.T) {
 
 var (
 	testTask1 = &config.SubTaskConfig{
-		Name: "task1",
+		Name:     "task1",
+		SourceID: "replica-1",
 	}
 	testTask1Meta  *pb.TaskMeta
 	testTask1Bytes []byte
 
 	testTask2 = &config.SubTaskConfig{
-		Name: "task2",
+		Name:     "task2",
+		SourceID: "replica-1",
 	}
 	testTask2Meta  *pb.TaskMeta
 	testTask2Bytes []byte
@@ -50,6 +52,9 @@ type testWorker struct{}
 var _ = Suite(&testWorker{})
 
 func (t *testWorker) setUpDB(c *C) (*leveldb.DB, string) {
+	c.Assert(testTask1.Adjust(), IsNil)
+	c.Assert(testTask2.Adjust(), IsNil)
+
 	testTask1Str, err := testTask1.Toml()
 	c.Assert(err, IsNil)
 	testTask1Bytes = []byte(testTask1Str)

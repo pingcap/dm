@@ -46,6 +46,16 @@ func (m *Meta) Toml() (string, error) {
 	return b.String(), nil
 }
 
+// DecodeFile loads and decodes config from file
+func (m *Meta) DecodeFile(fpath string) error {
+	_, err := toml.DecodeFile(fpath, m)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	return m.adjust()
+}
+
 // Decode loads config from file data
 func (m *Meta) Decode(data string) error {
 	_, err := toml.Decode(data, m)
@@ -53,6 +63,17 @@ func (m *Meta) Decode(data string) error {
 		return errors.Trace(err)
 	}
 
+	return m.adjust()
+}
+
+func (m *Meta) adjust() error {
+	// adjust the config
+	for name, subTask := range m.SubTasks {
+		err := subTask.Adjust()
+		if err != nil {
+			return errors.Annotatef(err, "task %s", name)
+		}
+	}
 	return nil
 }
 

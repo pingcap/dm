@@ -61,6 +61,557 @@
       "height": 250,
       "panels": [
         {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The current state of subtasks in instances.\n\n0: Invalid\n\n1: New\n\n2: Running\n\n3: Paused\n\n4: Stopped\n\n5: Finished",
+          "fill": 1,
+          "id": 5,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "span": 4,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "dm_worker_task_state{task=\"$task\"}",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "task state",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transparent": true,
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": "5",
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ]
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The storage capacity of the disk occupied by the relay log",
+          "fill": 1,
+          "id": 47,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "span": 4,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "dm_relay_space{type=\"capacity\"}",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "storage capacity",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transparent": true,
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": null,
+              "format": "bytes",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ]
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The remaining storage capacity of the disk occupied by the relay log",
+          "fill": 1,
+          "id": 48,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "span": 4,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "dm_relay_space{type=\"available\"}",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "storage remain",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transparent": true,
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": null,
+              "format": "bytes",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ]
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of binlog files in the relay log that are behind the upstream master",
+          "fill": 1,
+          "id": 49,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "span": 3,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "dm_relay_binlog_file{node=\"master\"} - ON(instance, job) dm_relay_binlog_file{node=\"relay\"}",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "binlog file gap between master and relay",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transparent": true,
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ]
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The data import process percentage of Loader. The value range is 0% ~ 100%",
+          "fill": 1,
+          "id": 50,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "span": 3,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "dm_loader_progress{task=\"$task\"}",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "load progress",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transparent": true,
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": null,
+              "format": "percentunit",
+              "label": null,
+              "logBase": 1,
+              "max": "1",
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ]
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of binlog files in Syncer that are behind the master",
+          "fill": 1,
+          "id": 51,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "span": 3,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "dm_syncer_binlog_file{task=\"$task\", node=\"master\"} - ON(instance, task, job) dm_syncer_binlog_file{task=\"$task\", node=\"syncer\"}",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "binlog file gap between master and syncer",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transparent": true,
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ]
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "Is waiting shard DDL lock to be resolved, >0 means waiting",
+          "fill": 1,
+          "id": 52,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "span": 3,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "dm_syncer_shard_lock_resolving{task=\"$task\"}",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "shard lock resolving",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transparent": true,
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": "1",
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ]
+        }
+      ],
+      "repeat": null,
+      "repeatIteration": null,
+      "repeatRowId": null,
+      "showTitle": true,
+      "title": "overview (multiple instances)",
+      "titleSize": "h6"
+    },
+    {
+      "collapse": true,
+      "height": 250,
+      "panels": [
+        {
           "cacheTimeout": null,
           "colorBackground": false,
           "colorValue": false,
@@ -70,6 +621,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The current state of the subtask in the instance",
           "format": "none",
           "gauge": {
             "maxValue": 100,
@@ -169,7 +721,7 @@
       "titleSize": "h6"
     },
     {
-      "collapse": false,
+      "collapse": true,
       "height": 250,
       "panels": [
         {
@@ -182,6 +734,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The storage capacity of the disk occupied by the relay log",
           "format": "bytes",
           "gauge": {
             "maxValue": 100,
@@ -257,6 +810,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The remaining storage capacity of the disk occupied by the relay log",
           "format": "bytes",
           "gauge": {
             "maxValue": 100,
@@ -310,7 +864,7 @@
             }
           ],
           "thresholds": "",
-          "title": "storage reamin",
+          "title": "storage remain",
           "type": "singlestat",
           "valueFontSize": "80%",
           "valueMaps": [
@@ -332,6 +886,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The relay log encounters an error within the DM-worker and exits",
           "format": "none",
           "gauge": {
             "maxValue": 100,
@@ -407,6 +962,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of corrupted relay log files",
           "format": "none",
           "gauge": {
             "maxValue": 100,
@@ -482,6 +1038,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of errors encountered when the relay log reads the binlog from the upstream MySQL",
           "format": "none",
           "gauge": {
             "maxValue": 100,
@@ -557,6 +1114,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of errors encountered when the relay log writes the binlog to disks",
           "format": "none",
           "gauge": {
             "maxValue": 100,
@@ -628,6 +1186,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The largest index number of relay log files. E.g. \"value = 1\" indicates \"mysql-bin.000001\"",
           "fill": 1,
           "id": 5,
           "legend": {
@@ -680,6 +1239,7 @@
           },
           "yaxes": [
             {
+              "decimals": 0,
               "format": "short",
               "label": null,
               "logBase": 1,
@@ -693,7 +1253,7 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ]
         },
@@ -703,6 +1263,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of binlog files in the relay log that are behind the upstream master",
           "fill": 1,
           "id": 42,
           "legend": {
@@ -756,6 +1317,7 @@
           },
           "yaxes": [
             {
+              "decimals": 0,
               "format": "short",
               "label": null,
               "logBase": 1,
@@ -769,7 +1331,7 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ]
         },
@@ -779,6 +1341,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The write offset of the latest relay log file",
           "fill": 1,
           "id": 6,
           "legend": {
@@ -831,7 +1394,8 @@
           },
           "yaxes": [
             {
-              "format": "none",
+              "decimals": 0,
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -844,7 +1408,7 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ]
         },
@@ -854,6 +1418,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The duration that the relay log reads binlog from the upstream MySQL (in seconds)",
           "fill": 1,
           "id": 9,
           "legend": {
@@ -931,6 +1496,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The duration that the relay log writes binlog into the disks each time (in seconds)",
           "fill": 1,
           "id": 12,
           "legend": {
@@ -1007,6 +1573,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The size of a single binlog event that the relay log writes into the disks",
           "fill": 1,
           "id": 25,
           "legend": {
@@ -1086,7 +1653,7 @@
       "titleSize": "h6"
     },
     {
-      "collapse": false,
+      "collapse": true,
       "height": 250,
       "panels": [
         {
@@ -1099,6 +1666,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The data import process percentage of Loader. The value range is 0% ~ 100%",
           "format": "percentunit",
           "gauge": {
             "maxValue": 100,
@@ -1152,7 +1720,7 @@
             }
           ],
           "thresholds": "",
-          "title": "load  progress",
+          "title": "load progress",
           "type": "singlestat",
           "valueFontSize": "80%",
           "valueMaps": [
@@ -1174,6 +1742,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The total size of the data files in the full data imported by Loader (including the `INSERT INTO` statement)",
           "format": "bytes",
           "gauge": {
             "maxValue": 100,
@@ -1249,6 +1818,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "Dumper encounters an error within the DM-worker and exits",
           "format": "none",
           "gauge": {
             "maxValue": 100,
@@ -1324,6 +1894,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "Loader encounters an error within the DM-worker and exits",
           "format": "none",
           "gauge": {
             "maxValue": 100,
@@ -1399,6 +1970,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The total number of tables in the full data imported by Loader",
           "format": "none",
           "gauge": {
             "maxValue": 100,
@@ -1474,6 +2046,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The total number of data files in the full data imported by Loader (including the `INSERT INTO` statement)",
           "format": "none",
           "gauge": {
             "maxValue": 100,
@@ -1545,6 +2118,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The duration that Loader executes a transaction (in seconds)",
           "fill": 1,
           "id": 18,
           "legend": {
@@ -1620,6 +2194,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The duration that Loader executes a query (in seconds)",
           "fill": 1,
           "id": 34,
           "legend": {
@@ -1698,7 +2273,7 @@
       "titleSize": "h6"
     },
     {
-      "collapse": false,
+      "collapse": true,
       "height": "250px",
       "panels": [
         {
@@ -1711,6 +2286,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The predicted remaining time it takes Syncer to be completely synchronized with the master (in minutes)",
           "format": "m",
           "gauge": {
             "maxValue": 100,
@@ -1786,6 +2362,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The latency time it takes to replicate the binlog from master to Syncer (in seconds)",
           "format": "s",
           "gauge": {
             "maxValue": 100,
@@ -1861,6 +2438,7 @@
             "#d44a3a"
           ],
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The binlog replication process encounters an error within the DM-worker and exits",
           "format": "none",
           "gauge": {
             "maxValue": 100,
@@ -1932,6 +2510,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of binlog files in Syncer that are behind the master",
           "fill": 1,
           "id": 43,
           "legend": {
@@ -1985,6 +2564,7 @@
           },
           "yaxes": [
             {
+              "decimals": 0,
               "format": "short",
               "label": null,
               "logBase": 1,
@@ -1998,7 +2578,7 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ]
         },
@@ -2008,6 +2588,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of binlog files in Syncer that are behind relay",
           "fill": 1,
           "id": 44,
           "legend": {
@@ -2061,6 +2642,7 @@
           },
           "yaxes": [
             {
+              "decimals": 0,
               "format": "short",
               "label": null,
               "logBase": 1,
@@ -2074,7 +2656,7 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ]
         },
@@ -2084,6 +2666,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of binlog events received per unit of time (this number does not include the events that need to be skipped)",
           "fill": 1,
           "id": 4,
           "legend": {
@@ -2159,6 +2742,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of binlog events received per unit of time that need to be skipped",
           "fill": 1,
           "id": 35,
           "legend": {
@@ -2234,6 +2818,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The time it takes Syncer to parse and transform the binlog into SQL statements (in seconds)",
           "fill": 1,
           "id": 36,
           "legend": {
@@ -2310,6 +2895,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of newly added jobs per unit of time",
           "fill": 1,
           "id": 3,
           "legend": {
@@ -2385,6 +2971,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of finished jobs per unit of time",
           "fill": 1,
           "id": 2,
           "legend": {
@@ -2460,6 +3047,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The time it takes Syncer to execute the transaction to the downstream (in seconds)",
           "fill": 1,
           "id": 1,
           "legend": {
@@ -2529,6 +3117,162 @@
               "show": true
             }
           ]
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The number of unsynced tables in the subtask",
+          "fill": 1,
+          "id": 45,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "span": 6,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "dm_syncer_unsynced_table_number{instance=\"$instance\", task=\"$task\"}",
+              "format": "time_series",
+              "instant": false,
+              "intervalFactor": 2,
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "unsynced tables",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transparent": true,
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ]
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "Is waiting shard DDL lock to be resolved, >0 means waiting",
+          "fill": 1,
+          "id": 46,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "span": 6,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "dm_syncer_shard_lock_resolving{instance=\"$instance\", task=\"$task\"}",
+              "format": "time_series",
+              "instant": false,
+              "intervalFactor": 2,
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "shard lock resolving",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transparent": true,
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "short",
+              "label": "",
+              "logBase": 1,
+              "max": "1",
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
+            }
+          ]
         }
       ],
       "repeat": null,
@@ -2574,7 +3318,7 @@
         "multi": false,
         "name": "instance",
         "options": [],
-        "query": "label_values(dm_relay_space, instance)",
+        "query": "label_values(dm_worker_task_state{task=\"$task\"}, instance)",
         "refresh": 2,
         "regex": "",
         "sort": 1,

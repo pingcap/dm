@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -24,6 +25,7 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser/ast"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
@@ -1037,7 +1039,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				})
 				shardingStreamer, err = s.getBinlogStreamer(shardingReader, shardingReSync.currPos)
 			}
-			log.Debugf("[syncer] start using a  special streamer to re-sync DMLs for sharding group %+v", shardingReSync)
+			log.Debugf("[syncer] start using a special streamer to re-sync DMLs for sharding group %+v", shardingReSync)
+			failpoint.Inject("ReSyncExit", func() {
+				os.Exit(1)
+			})
 		}
 
 		var (
@@ -1578,6 +1583,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 
 			if needShardingHandle {
+				target, _ := GenTableID(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
+				unsyncedTableGauge.WithLabelValues(s.cfg.Name, target).Set(float64(remain))
 				log.Infof("[syncer] query event %v for source %v is in sharding, synced: %v, remain: %d", startPos, source, synced, remain)
 				err = safeMode.IncrForTable(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try enable safe-mode when starting syncing for sharding group
 				if err != nil {
@@ -1628,14 +1635,21 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				s.ddlInfoCh <- ddlInfo1 // save DDLInfo, and dm-worker will fetch it
 
 				// block and wait DDL lock to be synced
+				shardLockResolving.WithLabelValues(s.cfg.Name).Set(1)
 				var ok bool
 				ddlExecItem, ok = <-s.ddlExecInfo.Chan(needHandleDDLs)
+				shardLockResolving.WithLabelValues(s.cfg.Name).Set(0)
 				if !ok {
 					// chan closed
 					log.Info("[syncer] cancel to add DDL to job because of canceled from external")
 					return nil
 				}
+
 				if ddlExecItem.req.Exec {
+					failpoint.Inject("ShardSyncedExecutionExit", func() {
+						os.Exit(1)
+					})
+
 					log.Infof("[syncer] add DDL %v to job, request is %+v", ddlInfo1.DDLs, ddlExecItem.req)
 				} else {
 					log.Infof("[syncer] ignore DDL %v, request is %+v", ddlInfo1.DDLs, ddlExecItem.req)

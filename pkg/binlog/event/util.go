@@ -95,7 +95,7 @@ func decodeTableMapColumnMeta(data []byte, columnType []byte) ([]uint16, error) 
 
 // bitmapByteSize returns the byte length of bitmap for columnCount.
 func bitmapByteSize(columnCount int) int {
-	return int(columnCount+7) / 8
+	return (columnCount + 7) / 8
 }
 
 // nullBytes returns a n-length null bytes slice
