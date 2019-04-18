@@ -30,7 +30,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 )
 
-// FileReader is a binlog event reader which read binlog events from a file.
+// FileReader is a binlog event reader which reads binlog events from a file.
 type FileReader struct {
 	mu sync.RWMutex
 	wg sync.WaitGroup
