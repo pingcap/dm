@@ -14,6 +14,7 @@
 package writer
 
 import (
+	"path/filepath"
 	"sync"
 
 	"github.com/pingcap/errors"
@@ -25,6 +26,7 @@ import (
 // FileConfig is the configuration used by the FileWriter.
 type FileConfig struct {
 	RelayDir string // directory to store relay log files.
+	Filename string // the startup relay log filename.
 }
 
 // FileWriter implements Writer interface.
@@ -39,8 +41,14 @@ type FileWriter struct {
 
 // NewFileWriter creates a FileWriter instances.
 func NewFileWriter(cfg *FileConfig) Writer {
+	// create a underlying binlog writer for the startup relay log file.
+	outCfg := &bw.FileWriterConfig{
+		Filename: filepath.Join(cfg.RelayDir, cfg.Filename),
+	}
+
 	return &FileWriter{
 		cfg: cfg,
+		out: bw.NewFileWriter(outCfg),
 	}
 }
 
@@ -52,8 +60,13 @@ func (w *FileWriter) Start() error {
 	if w.stage != stageNew {
 		return errors.Errorf("stage %s, expect %s, already started", w.stage, stageNew)
 	}
-
 	w.stage = stagePrepared
+
+	err := w.out.Start()
+	if err != nil {
+		return errors.Annotatef(err, "start underlying binlog writer")
+	}
+
 	return nil
 }
 
@@ -65,9 +78,14 @@ func (w *FileWriter) Close() error {
 	if w.stage == stageClosed {
 		return errors.New("already closed")
 	}
-
 	w.stage = stageClosed
-	return nil
+
+	var err error
+	if w.out != nil {
+		err = w.out.Close()
+	}
+
+	return errors.Trace(err)
 }
 
 // WriteEvent implements Writer.WriteEvent.

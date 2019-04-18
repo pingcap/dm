@@ -37,7 +37,10 @@ type testFileWriterSuite struct {
 
 func (t *testFileWriterSuite) TestInterfaceMethods(c *check.C) {
 	var (
-		cfg    = &FileConfig{}
+		cfg = &FileConfig{
+			RelayDir: c.MkDir(),
+			Filename: "test-mysql-bin.000001",
+		}
 		header = &replication.EventHeader{
 			Timestamp: uint32(time.Now().Unix()),
 			ServerID:  11,
@@ -75,4 +78,38 @@ func (t *testFileWriterSuite) TestInterfaceMethods(c *check.C) {
 	// close the writer
 	c.Assert(w.Close(), check.IsNil)
 	c.Assert(w.Close(), check.NotNil) // re-close is invalid
+}
+
+func (t *testFileWriterSuite) TestRelayDir(c *check.C) {
+	cfg := &FileConfig{}
+
+	// no dir specified
+	w1 := NewFileWriter(cfg)
+	defer w1.Close()
+	err := w1.Start()
+	c.Assert(err, check.NotNil)
+	c.Assert(strings.Contains(err.Error(), "no such file or directory"), check.IsTrue)
+
+	// invalid dir
+	cfg.RelayDir = "invalid\x00path"
+	w2 := NewFileWriter(cfg)
+	defer w2.Close()
+	err = w2.Start()
+	c.Assert(err, check.NotNil)
+	c.Assert(strings.Contains(err.Error(), "invalid argument"), check.IsTrue)
+
+	// valid directory, but no filename specified
+	cfg.RelayDir = c.MkDir()
+	w3 := NewFileWriter(cfg)
+	defer w3.Close()
+	err = w3.Start()
+	c.Assert(err, check.NotNil)
+	c.Assert(strings.Contains(err.Error(), "is a directory"), check.IsTrue)
+
+	// valid directory, valid filename
+	cfg.Filename = "test-mysql-bin.000001"
+	w4 := NewFileWriter(cfg)
+	defer w4.Close()
+	err = w4.Start()
+	c.Assert(err, check.IsNil)
 }
