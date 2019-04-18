@@ -21,12 +21,13 @@ function prepare_datafile() {
 }
 
 function run() {
+    THRESHOLD=1024
     prepare_datafile
 
     run_sql_file $WORK_DIR/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $WORK_DIR/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2
 
-    export GO_FAILPOINTS='github.com/pingcap/dm/loader/LoadExceedOffsetExit=return(1024)'
+    export GO_FAILPOINTS="github.com/pingcap/dm/loader/LoadExceedOffsetExit=return($THRESHOLD)"
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
@@ -41,6 +42,9 @@ function run() {
 
     check_port_offline $WORKER1_PORT 20
     check_port_offline $WORKER2_PORT 20
+
+    run_sql "SELECT count(*) from dm_meta.test_loader_checkpoint where offset < $THRESHOLD" $TIDB_PORT
+    check_contains "count(*): 2"
 
     export GO_FAILPOINTS=''
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml

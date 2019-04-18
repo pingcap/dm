@@ -36,9 +36,9 @@ mydumpers:
   global:
     mydumper-path: "./bin/mydumper"
     threads: 4
-    chunk-filesize: 64
+    chunk-filesize: 0
     skip-tz-utc: true
-    extra-args: "-B load_interrupt -s 100"
+    extra-args: "-B load_interrupt --statement-size=100"
 
 loaders:
   global:
