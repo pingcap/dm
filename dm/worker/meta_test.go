@@ -135,7 +135,7 @@ func (t *testWorker) TestNewMetaDB(c *C) {
 	c.Assert(metaDB.log, NotNil)
 }
 
-func (t *testWorker) TestTaskMeta(c *C) {
+func (t *testWorker) TestTask(c *C) {
 	db, dir := t.setUpDB(c)
 	defer db.Close()
 
@@ -202,12 +202,12 @@ func (t *testWorker) TestTaskOperation(c *C) {
 	c.Assert(meta.log, NotNil)
 
 	// get log which doesn't exist
-	log0, err := meta.GetTaskLog(1)
+	log1, err := meta.GetTaskLog(1)
 	c.Assert(err, IsNil)
-	c.Assert(log0, IsNil)
+	c.Assert(log1, IsNil)
 
-	log0 = meta.PeekLog()
-	c.Assert(log0, IsNil)
+	log1 = meta.PeekLog()
+	c.Assert(log1, IsNil)
 
 	err = meta.MarkOperation(&pb.TaskLog{
 		Task: testTask1Meta,
@@ -219,62 +219,62 @@ func (t *testWorker) TestTaskOperation(c *C) {
 	/***  append two create operation ***/
 	id, err := meta.AppendOperation(testTask1Meta)
 	c.Assert(err, IsNil)
-	c.Assert(id, Equals, int64(0))
+	c.Assert(id, Equals, int64(1))
 
 	id, err = meta.AppendOperation(testTask2Meta)
 	c.Assert(err, IsNil)
-	c.Assert(id, Equals, int64(1))
+	c.Assert(id, Equals, int64(2))
 
 	/*** append two stop operation ***/
 	testTask1MetaC := CloneTaskMeta(testTask1Meta)
 	testTask1MetaC.Op = pb.TaskOp_Stop
 	id, err = meta.AppendOperation(testTask1MetaC)
 	c.Assert(err, IsNil)
-	c.Assert(id, Equals, int64(2))
+	c.Assert(id, Equals, int64(3))
 
 	testTask2MetaC := CloneTaskMeta(testTask2Meta)
 	testTask2MetaC.Op = pb.TaskOp_Stop
 	id, err = meta.AppendOperation(testTask2MetaC)
 	c.Assert(err, IsNil)
-	c.Assert(id, Equals, int64(3))
+	c.Assert(id, Equals, int64(4))
 
 	// test status
 	c.Assert(meta.logs, HasLen, 4)
 	c.Assert(meta.tasks, HasLen, 0)
 	c.Assert(meta.LoadTaskMeta(), HasLen, 0)
 
-	log0 = meta.PeekLog()
-	c.Assert(log0.Task, DeepEquals, testTask1Meta)
-	c.Assert(log0.Id, DeepEquals, int64(0))
-
-	log0C, err := meta.GetTaskLog(0)
-	c.Assert(err, IsNil)
-	c.Assert(log0C, DeepEquals, log0)
-
-	log1, err := meta.GetTaskLog(1)
-	c.Assert(log1.Task, DeepEquals, testTask2Meta)
+	log1 = meta.PeekLog()
+	c.Assert(log1.Task, DeepEquals, testTask1Meta)
 	c.Assert(log1.Id, DeepEquals, int64(1))
 
-	log0s, err := meta.GetTaskLog(2)
-	c.Assert(log0s.Task, DeepEquals, testTask1MetaC)
-	c.Assert(log0s.Id, DeepEquals, int64(2))
+	log1C, err := meta.GetTaskLog(1)
+	c.Assert(err, IsNil)
+	c.Assert(log1C, DeepEquals, log1)
+
+	log2, err := meta.GetTaskLog(2)
+	c.Assert(log2.Task, DeepEquals, testTask2Meta)
+	c.Assert(log2.Id, DeepEquals, int64(2))
 
 	log1s, err := meta.GetTaskLog(3)
-	c.Assert(log1s.Task, DeepEquals, testTask2MetaC)
+	c.Assert(log1s.Task, DeepEquals, testTask1MetaC)
 	c.Assert(log1s.Id, DeepEquals, int64(3))
+
+	log2s, err := meta.GetTaskLog(4)
+	c.Assert(log2s.Task, DeepEquals, testTask2MetaC)
+	c.Assert(log2s.Id, DeepEquals, int64(4))
 
 	/****** test mark operation *******/
 
 	// mark disorder log
 	err = meta.MarkOperation(&pb.TaskLog{
-		Id:   1,
-		Task: testTask1Meta,
+		Id:   2,
+		Task: testTask2Meta,
 	})
 	c.Assert(strings.Contains(err.Error(), "please handle task oepration order by log ID"), IsTrue)
 
 	// make sucessful  task1 create log
 	err = meta.MarkOperation(&pb.TaskLog{
-		Id:      0,
+		Id:      1,
 		Task:    testTask1Meta,
 		Success: true,
 	})
@@ -282,7 +282,7 @@ func (t *testWorker) TestTaskOperation(c *C) {
 
 	// check log and meta
 	logx := meta.PeekLog()
-	c.Assert(logx, DeepEquals, log1)
+	c.Assert(logx, DeepEquals, log2)
 	c.Assert(meta.logs, HasLen, 3)
 
 	c.Assert(meta.tasks, HasLen, 1)
@@ -292,7 +292,7 @@ func (t *testWorker) TestTaskOperation(c *C) {
 
 	// make sucessful  task2 create log
 	err = meta.MarkOperation(&pb.TaskLog{
-		Id:      1,
+		Id:      2,
 		Task:    testTask2Meta,
 		Success: true,
 	})
@@ -300,7 +300,7 @@ func (t *testWorker) TestTaskOperation(c *C) {
 
 	// check log and meta
 	logx = meta.PeekLog()
-	c.Assert(logx, DeepEquals, log0s)
+	c.Assert(logx, DeepEquals, log1s)
 	c.Assert(meta.logs, HasLen, 2)
 	c.Assert(meta.tasks, HasLen, 2)
 	c.Assert(meta.LoadTaskMeta(), HasLen, 2)
@@ -309,7 +309,7 @@ func (t *testWorker) TestTaskOperation(c *C) {
 
 	// make failed task1 stop log
 	err = meta.MarkOperation(&pb.TaskLog{
-		Id:      2,
+		Id:      3,
 		Task:    testTask1MetaC,
 		Success: false,
 	})
@@ -317,7 +317,7 @@ func (t *testWorker) TestTaskOperation(c *C) {
 
 	// check log and meta
 	logx = meta.PeekLog()
-	c.Assert(logx, DeepEquals, log1s)
+	c.Assert(logx, DeepEquals, log2s)
 	c.Assert(meta.logs, HasLen, 1)
 	c.Assert(meta.tasks, HasLen, 2)
 	c.Assert(meta.LoadTaskMeta(), HasLen, 2)
@@ -326,7 +326,7 @@ func (t *testWorker) TestTaskOperation(c *C) {
 
 	// make successful task2 stop log
 	err = meta.MarkOperation(&pb.TaskLog{
-		Id:      3,
+		Id:      4,
 		Task:    testTask2MetaC,
 		Success: true,
 	})
