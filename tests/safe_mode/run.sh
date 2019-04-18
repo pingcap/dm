@@ -12,8 +12,6 @@ function run() {
     run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2
     check_contains 'Query OK, 3 rows affected'
 
-    cd $cur && GO111MODULE=on go build -o bin/dmctl dmctl.go && cd -
-
     export GO_FAILPOINTS='github.com/pingcap/dm/syncer/ReSyncExit=return(true)'
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
@@ -24,7 +22,7 @@ function run() {
     check_port_alive $WORKER2_PORT
     check_port_alive $TRACER_PORT
 
-    $cur/bin/dmctl "$cur/conf/dm-task.yaml"
+    $cur/../bin/dmctl_start_task "$cur/conf/dm-task.yaml"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     # DM-worker exit during re-sync after sharding group synced
