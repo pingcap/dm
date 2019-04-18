@@ -15,19 +15,28 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/tests/utils"
 )
 
 func main() {
+	if len(os.Args) != 3 {
+		utils.ExitWithError(fmt.Errorf("invlid args: %v", os.Args))
+	}
 	cli, err := utils.CreateDmCtl("127.0.0.1:8261")
 	if err != nil {
 		utils.ExitWithError(err)
 	}
-	taskName := os.Args[1]
-	err = utils.OperateTask(context.Background(), cli, pb.TaskOp_Stop, taskName, nil)
+	op, err := strconv.ParseInt(os.Args[1], 10, 64)
+	if err != nil {
+		utils.ExitWithError(err)
+	}
+	taskName := os.Args[2]
+	err = utils.OperateTask(context.Background(), cli, pb.TaskOp(op), taskName, nil)
 	if err != nil {
 		utils.ExitWithError(err)
 	}
