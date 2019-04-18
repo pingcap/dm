@@ -125,13 +125,13 @@ func (r *reader) GetEvent(ctx context.Context) (*replication.BinlogEvent, error)
 
 	for {
 		ev, err := r.in.GetEvent(ctx)
+		// NOTE: add retryable error support if needed later
 		if err == nil {
 			return ev, nil
 		} else if isIgnorableError(err) {
 			log.Warnf("[relay] get event with ignorable error %s", err)
 			return nil, nil // return without error and also without binlog event
 		}
-		// NOTE: add retryable error support if needed later
 		return nil, errors.Trace(err)
 	}
 }

@@ -105,21 +105,6 @@ func (t *testReaderSuite) testInterfaceWithReader(c *C, r Reader, cases []*repli
 	c.Assert(ev, IsNil)
 }
 
-func (t *testReaderSuite) testBackOffWithReader(c *C, r Reader, errByPos error, errByGTID error) error {
-	// replace underlying reader with a mock reader for testing
-	concreteR := r.(*reader)
-	c.Assert(concreteR, NotNil)
-	mockR := br.NewMockReader()
-	concreteR.in = mockR
-
-	// specify an error for StartSyncByPos/StartSyncByGTID
-	concreteMR := mockR.(*br.MockReader)
-	concreteMR.ErrStartByPos = errByPos
-	concreteMR.ErrStartByGTID = errByGTID
-
-	return r.Start()
-}
-
 func (t *testReaderSuite) TestGetEventWithError(c *C) {
 	cfg := &Config{
 		SyncConfig: replication.BinlogSyncerConfig{

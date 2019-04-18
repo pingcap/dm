@@ -46,13 +46,15 @@ func (t *testMockReaderSuite) TestRead(c *C) {
 
 	// replace with special error
 	mockR := r.(*MockReader)
-	errSpecial := errors.New("special error for methods")
-	mockR.ErrStartByPos = errSpecial
-	mockR.ErrStartByGTID = errSpecial
-	mockR.ErrClose = errSpecial
-	c.Assert(r.StartSyncByPos(mysql.Position{}), Equals, errSpecial)
-	c.Assert(r.StartSyncByGTID(nil), Equals, errSpecial)
-	c.Assert(r.Close(), Equals, errSpecial)
+	errStartByPos := errors.New("special error for start by pos")
+	errStartByGTID := errors.New("special error for start by GTID")
+	errClose := errors.New("special error for close")
+	mockR.ErrStartByPos = errStartByPos
+	mockR.ErrStartByGTID = errStartByGTID
+	mockR.ErrClose = errClose
+	c.Assert(r.StartSyncByPos(mysql.Position{}), Equals, errStartByPos)
+	c.Assert(r.StartSyncByGTID(nil), Equals, errStartByGTID)
+	c.Assert(r.Close(), Equals, errClose)
 
 	cases := []testMockCase{
 		{
