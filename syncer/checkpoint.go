@@ -165,12 +165,6 @@ type CheckPoint interface {
 	// Rollback rolls global checkpoint and all table checkpoints back to flushed checkpoints
 	Rollback()
 
-	// NOTE: now we do not decoupling checkpoint in syncer, so we still need to generate SQLs
-
-	// GenUpdateForTableSQLs generates REPLACE checkpoint SQLs for tables
-	// @tables: [[schema, table]... ]
-	GenUpdateForTableSQLs(tables [][]string) ([]string, [][]interface{})
-
 	// String return text of global position
 	String() string
 }
@@ -428,30 +422,6 @@ func (cp *RemoteCheckPoint) Rollback() {
 	}
 }
 
-// GenUpdateForTableSQLs implements CheckPoint.GenUpdateForTableSQLs
-func (cp *RemoteCheckPoint) GenUpdateForTableSQLs(tables [][]string) ([]string, [][]interface{}) {
-	sqls := make([]string, 0, len(tables)-1)
-	args := make([][]interface{}, 0, len(tables)-1)
-	cp.RLock()
-	defer cp.RUnlock()
-	for _, pair := range tables {
-		schema, table := pair[0], pair[1]
-		mSchema, ok := cp.points[schema]
-		if !ok {
-			continue
-		}
-		point, ok := mSchema[table]
-		if !ok {
-			continue
-		}
-		pos := point.MySQLPos()
-		sql2, arg := cp.genUpdateSQL(schema, table, pos.Name, pos.Pos, false)
-		sqls = append(sqls, sql2)
-		args = append(args, arg)
-	}
-	return sqls, args
-}
-
 func (cp *RemoteCheckPoint) prepare() error {
 	if err := cp.createSchema(); err != nil {
 		return errors.Trace(err)
@@ -548,8 +518,6 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-	case config.ModeFull:
-		// should not go here (syncer not be used in `full` mode)
 	case config.ModeIncrement:
 		// load meta from task config
 		if cp.cfg.Meta == nil {
@@ -561,17 +529,8 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 			Pos:  cp.cfg.Meta.BinLogPos,
 		}
 	default:
-		// (only used by syncer singleton) load meta from meta-file
-		if len(cp.cfg.MetaFile) == 0 {
-			return nil
-		}
-		meta := NewLocalMeta(cp.cfg.MetaFile, cp.cfg.Flavor)
-		err := meta.Load()
-		if err != nil {
-			return errors.Trace(err)
-		}
-		pos2 := meta.Pos()
-		pos = &pos2
+		// should not go here (syncer is only used in `all` or `incremental` mode)
+		return errors.Errorf("invalid task mode: %s", cp.cfg.Mode)
 	}
 
 	// if meta loaded, we will start syncing from meta's pos
