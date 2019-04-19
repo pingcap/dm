@@ -19,7 +19,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	. "github.com/pingcap/check"
@@ -59,13 +58,12 @@ func (t *testFileReaderSuite) TestInterfaceMethods(c *C) {
 
 	// not prepared
 	e, err := r.GetEvent(timeoutCtx)
-	c.Assert(err, NotNil)
-	c.Assert(strings.Contains(err.Error(), stageNew.String()), IsTrue)
+	c.Assert(err, ErrorMatches, fmt.Sprintf(".*%s.*", stageNew))
 	c.Assert(e, IsNil)
 
 	// by GTID, not supported yet
 	err = r.StartSyncByGTID(gSet)
-	c.Assert(strings.Contains(err.Error(), "not supported"), IsTrue)
+	c.Assert(err, ErrorMatches, ".*not supported.*")
 
 	// by pos
 	err = r.StartSyncByPos(gmysql.Position{})
@@ -209,8 +207,7 @@ func (t *testFileReaderSuite) TestGetEvent(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(e.RawData, DeepEquals, formatDescEv.RawData) // always got a FormatDescriptionEvent first
 	e, err = r.GetEvent(timeoutCtx)
-	c.Assert(err, NotNil)
-	c.Assert(strings.Contains(err.Error(), "EOF"), IsTrue)
+	c.Assert(err, ErrorMatches, ".*EOF.*")
 }
 
 func (t *testFileReaderSuite) TestWithChannelBuffer(c *C) {

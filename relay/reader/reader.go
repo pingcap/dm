@@ -81,6 +81,7 @@ func (r *reader) Start() error {
 	if r.stage != stageNew {
 		return errors.Errorf("stage %s, expect %s, already started", r.stage, stageNew)
 	}
+	r.stage = stagePrepared
 
 	defer func() {
 		status := r.in.Status()
@@ -94,7 +95,6 @@ func (r *reader) Start() error {
 		err = r.setUpReaderByPos()
 	}
 
-	r.stage = stagePrepared
 	return errors.Trace(err)
 }
 
@@ -106,9 +106,9 @@ func (r *reader) Close() error {
 	if r.stage == stageClosed {
 		return errors.New("already closed")
 	}
+	r.stage = stageClosed
 
 	err := r.in.Close()
-	r.stage = stageClosed
 	return errors.Trace(err)
 }
 
