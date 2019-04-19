@@ -19,6 +19,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	. "github.com/pingcap/check"
@@ -56,6 +57,8 @@ func (t *testFileWriterSuite) TestWrite(c *C) {
 	c.Assert(fwStatus.Stage, Equals, stageNew.String())
 	c.Assert(fwStatus.Filename, Equals, filename)
 	c.Assert(fwStatus.Offset, Equals, int64(allData.Len()))
+	fwStatusStr := fwStatus.String()
+	c.Assert(strings.Contains(fwStatusStr, stageNew.String()), IsTrue)
 
 	// not prepared
 	data1 := []byte("test-data")

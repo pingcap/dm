@@ -14,6 +14,7 @@
 package writer
 
 import (
+	"encoding/json"
 	"os"
 	"sync"
 
@@ -39,6 +40,15 @@ type FileWriterStatus struct {
 	Stage    string `json:"stage"`
 	Filename string `json:"filename"`
 	Offset   int64  `json:"offset"`
+}
+
+// String implements Stringer.String.
+func (s *FileWriterStatus) String() string {
+	data, err := json.Marshal(s)
+	if err != nil {
+		log.Errorf("[FileWriterStatus] marshal status to json error %v", err)
+	}
+	return string(data)
 }
 
 // FileWriterConfig is the configuration used by a FileWriter.
@@ -67,6 +77,11 @@ func (w *FileWriter) Start() error {
 		return errors.Annotatef(err, "open file %s", w.cfg.Filename)
 	}
 	w.file = f
+	if fs, err := f.Stat(); err != nil {
+		return errors.Annotatef(err, "get stat for %s", f.Name())
+	} else {
+		w.offset.Set(fs.Size())
+	}
 
 	w.stage = stagePrepared
 	return nil

@@ -43,7 +43,7 @@ type Writer interface {
 	// Close closes the writer and release the resource.
 	Close() error
 
-	// Write writes a binlog event's rawData.
+	// Write writes/appends a binlog event's rawData.
 	Write(rawData []byte) error
 
 	// Flush flushes the buffered data to a stable storage or sends through the network.

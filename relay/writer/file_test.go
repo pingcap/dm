@@ -15,6 +15,7 @@ package writer
 
 import (
 	"fmt"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -79,32 +80,114 @@ func (t *testFileWriterSuite) TestInterfaceMethods(c *check.C) {
 }
 
 func (t *testFileWriterSuite) TestRelayDir(c *check.C) {
-	cfg := &FileConfig{}
+	var (
+		cfg    = &FileConfig{}
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+			Flags:     0x01,
+		}
+		latestPos uint32 = 4
+	)
+	ev, err := event.GenFormatDescriptionEvent(header, latestPos)
+	c.Assert(err, check.IsNil)
 
 	// no dir specified
 	w1 := NewFileWriter(cfg)
 	defer w1.Close()
-	err := w1.Start()
+	c.Assert(w1.Start(), check.IsNil)
+	result, err := w1.WriteEvent(ev)
 	c.Assert(err, check.ErrorMatches, ".*no such file or directory.*")
+	c.Assert(result, check.IsNil)
 
 	// invalid dir
 	cfg.RelayDir = "invalid\x00path"
 	w2 := NewFileWriter(cfg)
 	defer w2.Close()
-	err = w2.Start()
+	c.Assert(w2.Start(), check.IsNil)
+	result, err = w2.WriteEvent(ev)
 	c.Assert(err, check.ErrorMatches, ".*invalid argument.*")
+	c.Assert(result, check.IsNil)
 
 	// valid directory, but no filename specified
 	cfg.RelayDir = c.MkDir()
 	w3 := NewFileWriter(cfg)
 	defer w3.Close()
-	err = w3.Start()
+	c.Assert(w3.Start(), check.IsNil)
+	result, err = w3.WriteEvent(ev)
 	c.Assert(err, check.ErrorMatches, ".*is a directory.*")
+	c.Assert(result, check.IsNil)
 
 	// valid directory, valid filename
 	cfg.Filename = "test-mysql-bin.000001"
 	w4 := NewFileWriter(cfg)
 	defer w4.Close()
-	err = w4.Start()
+	c.Assert(w4.Start(), check.IsNil)
+	result, err = w4.WriteEvent(ev)
 	c.Assert(err, check.IsNil)
+	c.Assert(result, check.NotNil)
+}
+
+func (t *testFileWriterSuite) TestFormatDescriptionEvent(c *check.C) {
+	var (
+		cfg = &FileConfig{
+			RelayDir: c.MkDir(),
+			Filename: "test-mysql-bin.000001",
+		}
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+			Flags:     0x01,
+		}
+		latestPos uint32 = 4
+	)
+	formatDescEv, err := event.GenFormatDescriptionEvent(header, latestPos)
+	c.Assert(err, check.IsNil)
+
+	// write FormatDescriptionEvent to empty file
+	w := NewFileWriter(cfg)
+	defer w.Close()
+	c.Assert(w.Start(), check.IsNil)
+	result, err := w.WriteEvent(formatDescEv)
+	c.Assert(err, check.IsNil)
+	c.Assert(result, check.NotNil)
+	c.Assert(result.Ignore, check.IsFalse)
+
+	// write FormatDescriptionEvent again, ignore
+	result, err = w.WriteEvent(formatDescEv)
+	c.Assert(err, check.IsNil)
+	c.Assert(result, check.NotNil)
+	c.Assert(result.Ignore, check.IsTrue)
+
+	// write another event
+	queryEv, err := event.GenQueryEvent(header, latestPos, 0, 0, 0, nil, []byte("schema"), []byte("BEGIN"))
+	c.Assert(err, check.IsNil)
+	result, err = w.WriteEvent(queryEv)
+	c.Assert(err, check.IsNil)
+	c.Assert(result, check.NotNil)
+	c.Assert(result.Ignore, check.IsFalse)
+
+	// write FormatDescriptionEvent again, ignore
+	result, err = w.WriteEvent(formatDescEv)
+	c.Assert(err, check.IsNil)
+	c.Assert(result, check.NotNil)
+	c.Assert(result.Ignore, check.IsTrue)
+
+	// check events by reading them back
+	events := make([]*replication.BinlogEvent, 0, 2)
+	var count = 0
+	onEventFunc := func(e *replication.BinlogEvent) error {
+		count++
+		if count > 2 {
+			c.Fatalf("too many events received, %+v", e.Header)
+		}
+		events = append(events, e)
+		return nil
+	}
+	filename := filepath.Join(cfg.RelayDir, cfg.Filename)
+	err = replication.NewBinlogParser().ParseFile(filename, 0, onEventFunc)
+	c.Assert(err, check.IsNil)
+	c.Assert(events, check.HasLen, 2)
+	c.Assert(events[0], check.DeepEquals, formatDescEv)
+	c.Assert(events[1], check.DeepEquals, queryEv)
 }
