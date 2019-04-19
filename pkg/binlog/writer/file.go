@@ -77,11 +77,11 @@ func (w *FileWriter) Start() error {
 		return errors.Annotatef(err, "open file %s", w.cfg.Filename)
 	}
 	w.file = f
-	if fs, err := f.Stat(); err != nil {
+	fs, err := f.Stat()
+	if err != nil {
 		return errors.Annotatef(err, "get stat for %s", f.Name())
-	} else {
-		w.offset.Set(fs.Size())
 	}
+	w.offset.Set(fs.Size())
 
 	w.stage = stagePrepared
 	return nil
