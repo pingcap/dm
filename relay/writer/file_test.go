@@ -88,7 +88,7 @@ func (t *testFileWriterSuite) TestRelayDir(c *check.C) {
 	defer w1.Close()
 	err := w1.Start()
 	c.Assert(err, check.NotNil)
-	c.Assert(strings.Contains(err.Error(), "no such file or directory"), check.IsTrue)
+	c.Assert(err, check.ErrorMatches, ".*no such file or directory.*")
 
 	// invalid dir
 	cfg.RelayDir = "invalid\x00path"
