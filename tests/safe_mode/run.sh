@@ -86,4 +86,8 @@ cleanup2 $*
 run $*
 cleanup2 $*
 
+wait_process_exit dm-master.test
+wait_process_exit dm-worker.test
+wait_process_exit dm-tracer.test
+
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"
