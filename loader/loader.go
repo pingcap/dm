@@ -140,7 +140,8 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *
 				failpoint.Inject("LoadExceedOffsetExit", func(val failpoint.Value) {
 					threshold, _ := val.(int)
 					if job.offset >= int64(threshold) {
-						panic(fmt.Sprintf("load offset %d execeeds threshold %d", job.offset, threshold))
+						log.Warnf("[failpoint] load offset %d execeeds threshold %d, will panic", job.offset, threshold)
+						panic("LoadExceedOffsetExit")
 					}
 				})
 
