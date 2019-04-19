@@ -224,6 +224,10 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan <-chan *Job) {
 
 // AddJob add a job to tracer
 func (t *Tracer) AddJob(job *Job) {
+	if t.jobsClosed.Get() {
+		log.Warnf("[tracer] jobs channel already closed, add job %v failed", job)
+		return
+	}
 	if job.Tp == EventFlush {
 		for _, tp := range dispatchEventType {
 			t.jobs[tp] <- job
