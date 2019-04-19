@@ -15,10 +15,10 @@ package writer
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	. "github.com/pingcap/check"
@@ -60,11 +60,9 @@ func (t *testFileWriterSuite) TestWrite(c *C) {
 	// not prepared
 	data1 := []byte("test-data")
 	err := w.Write(data1)
-	c.Assert(err, NotNil)
-	c.Assert(strings.Contains(err.Error(), stageNew.String()), IsTrue)
+	c.Assert(err, ErrorMatches, fmt.Sprintf(".*%s.*", stageNew))
 	err = w.Flush()
-	c.Assert(err, NotNil)
-	c.Assert(strings.Contains(err.Error(), stageNew.String()), IsTrue)
+	c.Assert(err, ErrorMatches, fmt.Sprintf(".*%s.*", stageNew))
 
 	// start
 	err = w.Start()

@@ -14,7 +14,7 @@
 package writer
 
 import (
-	"strings"
+	"fmt"
 	"testing"
 	"time"
 
@@ -55,12 +55,10 @@ func (t *testFileWriterSuite) TestInterfaceMethods(c *check.C) {
 
 	// not prepared
 	res, err := w.WriteEvent(ev)
-	c.Assert(err, check.NotNil)
-	c.Assert(strings.Contains(err.Error(), stageNew.String()), check.IsTrue)
+	c.Assert(err, check.ErrorMatches, fmt.Sprintf(".*%s.*", stageNew))
 	c.Assert(res, check.IsNil)
 	err = w.Flush()
-	c.Assert(err, check.NotNil)
-	c.Assert(strings.Contains(err.Error(), stageNew.String()), check.IsTrue)
+	c.Assert(err, check.ErrorMatches, fmt.Sprintf(".*%s.*", stageNew))
 
 	// start writer
 	err = w.Start()
@@ -87,7 +85,6 @@ func (t *testFileWriterSuite) TestRelayDir(c *check.C) {
 	w1 := NewFileWriter(cfg)
 	defer w1.Close()
 	err := w1.Start()
-	c.Assert(err, check.NotNil)
 	c.Assert(err, check.ErrorMatches, ".*no such file or directory.*")
 
 	// invalid dir
@@ -95,16 +92,14 @@ func (t *testFileWriterSuite) TestRelayDir(c *check.C) {
 	w2 := NewFileWriter(cfg)
 	defer w2.Close()
 	err = w2.Start()
-	c.Assert(err, check.NotNil)
-	c.Assert(strings.Contains(err.Error(), "invalid argument"), check.IsTrue)
+	c.Assert(err, check.ErrorMatches, ".*invalid argument.*")
 
 	// valid directory, but no filename specified
 	cfg.RelayDir = c.MkDir()
 	w3 := NewFileWriter(cfg)
 	defer w3.Close()
 	err = w3.Start()
-	c.Assert(err, check.NotNil)
-	c.Assert(strings.Contains(err.Error(), "is a directory"), check.IsTrue)
+	c.Assert(err, check.ErrorMatches, ".*is a directory.*")
 
 	// valid directory, valid filename
 	cfg.Filename = "test-mysql-bin.000001"
