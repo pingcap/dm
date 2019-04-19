@@ -43,7 +43,7 @@ function run() {
     check_port_offline $WORKER1_PORT 20
     check_port_offline $WORKER2_PORT 20
 
-    run_sql "SELECT count(*) from dm_meta.test_loader_checkpoint where offset < $THRESHOLD" $TIDB_PORT
+    run_sql "SELECT count(*) from dm_meta.test_loader_checkpoint where cp_schema = '$TEST_NAME' and offset < $THRESHOLD" $TIDB_PORT
     check_contains "count(*): 2"
 
     export GO_FAILPOINTS=''
@@ -52,6 +52,9 @@ function run() {
     check_port_alive $WORKER1_PORT
     check_port_alive $WORKER2_PORT
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    run_sql "SELECT count(*) from dm_meta.test_loader_checkpoint where cp_schema = '$TEST_NAME' and offset = end_pos" $TIDB_PORT
+    check_contains "count(*): 2"
 }
 
 cleanup1 load_interrupt
