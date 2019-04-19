@@ -18,6 +18,7 @@ package reader
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 	"time"
 
@@ -60,6 +61,15 @@ type FileReaderStatus struct {
 	Stage      string `json:"stage"`
 	ReadOffset uint32 `json:"read-offset"` // read event's offset in the file
 	SendOffset uint32 `json:"send-offset"` // sent event's offset in the file
+}
+
+// String implements Stringer.String.
+func (s *FileReaderStatus) String() string {
+	data, err := json.Marshal(s)
+	if err != nil {
+		log.Errorf("[FileReaderStatus] marshal status to json error %v", err)
+	}
+	return string(data)
 }
 
 // NewFileReader creates a FileReader instance.

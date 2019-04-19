@@ -19,6 +19,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	. "github.com/pingcap/check"
@@ -55,6 +56,8 @@ func (t *testFileReaderSuite) TestInterfaceMethods(c *C) {
 	c.Assert(frStatus.Stage, Equals, stageNew.String())
 	c.Assert(frStatus.ReadOffset, Equals, uint32(0))
 	c.Assert(frStatus.SendOffset, Equals, uint32(0))
+	frStatusStr := frStatus.String()
+	c.Assert(strings.Contains(frStatusStr, stageNew.String()), IsTrue)
 
 	// not prepared
 	e, err := r.GetEvent(timeoutCtx)
