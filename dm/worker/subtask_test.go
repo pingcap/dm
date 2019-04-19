@@ -137,7 +137,7 @@ func (m *MockUnit) InjectUpdateError(err error) { m.errUpdate = err }
 
 func (m *MockUnit) InjectFreshError(isFresh bool, err error) { m.isFresh, m.errFresh = isFresh, err }
 
-func (t *testWorker) TestSubTaskNormalScene(c *C) {
+func (t *testWorker) TestSubTaskNormalUsage(c *C) {
 	cfg := &config.SubTaskConfig{
 		Name: "testSubtaskScene",
 		Mode: config.ModeFull,
@@ -209,13 +209,31 @@ func (t *testWorker) TestSubTaskNormalScene(c *C) {
 	st.Close()
 	c.Assert(st.Stage(), Equals, pb.Stage_Paused)
 	c.Assert(st.CurrUnit(), Equals, mockLoader)
-	c.Assert(st.Result(), IsNil)
+	if st.Result() != nil && (!st.Result().IsCanceled || len(st.Result().Errors) > 0) {
+		c.Fatalf("result %+v is not right after closing", st.Result())
+	}
 
 	// update again
 	c.Assert(st.Update(&config.SubTaskConfig{Name: "updateSubtask"}), IsNil)
 	c.Assert(st.Stage(), Equals, pb.Stage_Paused)
 	c.Assert(st.CurrUnit(), Equals, mockLoader)
+	if st.Result() != nil && (!st.Result().IsCanceled || len(st.Result().Errors) > 0) {
+		c.Fatalf("result %+v is not right after closing", st.Result())
+	}
+
+	// run again
+	st.Run()
+	c.Assert(st.CurrUnit(), Equals, mockLoader)
 	c.Assert(st.Result(), IsNil)
+	c.Assert(st.Stage(), Equals, pb.Stage_Running)
+
+	// Close again
+	st.Close()
+	c.Assert(st.Stage(), Equals, pb.Stage_Paused)
+	c.Assert(st.CurrUnit(), Equals, mockLoader)
+	if st.Result() != nil && (!st.Result().IsCanceled || len(st.Result().Errors) > 0) {
+		c.Fatalf("result %+v is not right after closing", st.Result())
+	}
 
 	// run again
 	st.Run()

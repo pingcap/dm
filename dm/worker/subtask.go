@@ -85,10 +85,9 @@ func NewSubTask(cfg *config.SubTaskConfig) *SubTask {
 // NewSubTaskWithStage creates a new SubTask with stage
 func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage) *SubTask {
 	st := SubTask{
-		cfg:     cfg,
-		units:   createUnits(cfg),
-		stage:   stage,
-		DDLInfo: make(chan *pb.DDLInfo, 1),
+		cfg:   cfg,
+		units: createUnits(cfg),
+		stage: stage,
 	}
 	taskState.WithLabelValues(st.cfg.Name).Set(float64(st.stage))
 	return &st
@@ -152,6 +151,8 @@ func (st *SubTask) Run() {
 		st.fail(errors.ErrorStack(err))
 		return
 	}
+
+	st.DDLInfo = make(chan *pb.DDLInfo, 1)
 
 	st.run()
 }
