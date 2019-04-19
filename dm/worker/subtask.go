@@ -119,7 +119,7 @@ func (st *SubTask) Init() error {
 			for j := 0; j < i; j++ {
 				needCloseUnits = append(needCloseUnits, st.units[j])
 			}
-			return errors.Errorf("sub task %s init dm-unit error %v", st.cfg.Name, errors.ErrorStack(err))
+			return errors.Errorf("subtask %s init dm-unit error %v", st.cfg.Name, errors.ErrorStack(err))
 		}
 	}
 
@@ -129,7 +129,7 @@ func (st *SubTask) Init() error {
 		u := st.units[i]
 		isFresh, err := u.IsFreshTask()
 		if err != nil {
-			log.Errorf("[subtask] %s check %s is fresh error %v", st.cfg.Name, u.Type(), errors.ErrorStack(err))
+			return errors.Errorf("fail to get fresh status of ubtask %s %s: %v", st.cfg.Name, u.Type(), errors.ErrorStack(err))
 		} else if !isFresh {
 			skipIdx = i
 			log.Infof("[subtask] %s run %s dm-unit before, continue with it", st.cfg.Name, u.Type())
@@ -146,16 +146,19 @@ func (st *SubTask) Init() error {
 
 // Run runs the sub task
 func (st *SubTask) Run() {
-	st.setStage(pb.Stage_Paused)
-
 	err := st.Init()
 	if err != nil {
-		log.Errorf("[subtask] initial error %v", err)
+		log.Errorf("[subtask] fail to initial %v", err)
 		st.fail(errors.ErrorStack(err))
 		return
 	}
 
-	err = st.unitTransWaitCondition()
+	st.run()
+}
+
+func (st *SubTask) run() {
+	st.setStage(pb.Stage_Paused)
+	err := st.unitTransWaitCondition()
 	if err != nil {
 		log.Errorf("[subtask] wait condition error: %v", err)
 		st.fail(errors.ErrorStack(err))
@@ -232,7 +235,7 @@ retry:
 				log.Infof("[subtask] %s switching to next dm-unit %s", st.cfg.Name, nu.Type())
 				st.setCurrUnit(nu)
 				// NOTE: maybe need a Lock mechanism for sharding scenario
-				st.Run() // re-run for next process unit
+				st.run() // re-run for next process unit
 			}
 		case pb.Stage_Paused:
 			for _, err := range result.Errors {
