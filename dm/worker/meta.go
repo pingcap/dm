@@ -50,7 +50,7 @@ func (m *Meta) DecodeFile(fpath string) error {
 		return errors.Trace(err)
 	}
 
-	return nil
+	return m.adjust()
 }
 
 // Decode loads config from file data
@@ -60,6 +60,17 @@ func (m *Meta) Decode(data string) error {
 		return errors.Trace(err)
 	}
 
+	return m.adjust()
+}
+
+func (m *Meta) adjust() error {
+	// adjust the config
+	for name, subTask := range m.SubTasks {
+		err := subTask.Adjust()
+		if err != nil {
+			return errors.Annotatef(err, "task %s", name)
+		}
+	}
 	return nil
 }
 
