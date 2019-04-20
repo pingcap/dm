@@ -730,12 +730,15 @@ func (w *Worker) restoreSubTask() error {
 			return errors.Annotatef(err, "decode subtask config error in restoreSubTask")
 		}
 
-		st := NewSubTaskWithStage(taskCfg, task.Stage)
-		w.subTasks[name] = st
-
+		var st *SubTask
 		if st.Stage() == pb.Stage_Running || st.Stage() == pb.Stage_New {
+			st = NewSubTaskWithStage(taskCfg, pb.Stage_New)
 			st.Run()
+		} else {
+			st = NewSubTaskWithStage(taskCfg, task.Stage)
 		}
+
+		w.subTasks[name] = st
 	}
 
 	return nil

@@ -145,6 +145,11 @@ func (st *SubTask) Init() error {
 
 // Run runs the sub task
 func (st *SubTask) Run() {
+	if st.Stage() == pb.Stage_Finished || st.Stage() == pb.Stage_Running {
+		log.Warnf("[subtask] %s is %s", st.cfg.Name, st.Stage())
+		return
+	}
+
 	err := st.Init()
 	if err != nil {
 		log.Errorf("[subtask] fail to initial %v", err)
@@ -379,8 +384,6 @@ func (st *SubTask) Close() {
 	st.closeUnits() // close all un-closed units
 	st.setStageIfNot(pb.Stage_Finished, pb.Stage_Paused)
 	st.wg.Wait()
-
-	close(st.DDLInfo)
 }
 
 // Update update the sub task's config

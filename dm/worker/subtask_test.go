@@ -243,13 +243,194 @@ func (t *testWorker) TestSubTaskNormalUsage(c *C) {
 
 	// finish loader
 	c.Assert(mockLoader.InjectProcessError(context.Background(), nil), IsNil)
-	for i := 0; i < 10; i++ {
-		if st.CurrUnit().Type() == pb.UnitType_Sync {
+	for i := 0; i < 1000; i++ {
+		if st.Stage() == pb.Stage_Finished {
 			break
 		}
 		time.Sleep(time.Millisecond)
 	}
 	c.Assert(st.CurrUnit(), Equals, mockLoader)
-	c.Assert(st.Result().Errors, HasLen, 0)
 	c.Assert(st.Stage(), Equals, pb.Stage_Finished)
+	c.Assert(st.Result().Errors, HasLen, 0)
+}
+
+func (t *testWorker) TestCloseSubtask(c *C) {
+	cfg := &config.SubTaskConfig{
+		Name: "testSubtaskScene",
+		Mode: config.ModeFull,
+	}
+
+	st := NewSubTask(cfg)
+	c.Assert(st.Stage(), DeepEquals, pb.Stage_New)
+
+	mockDumper := NewMockUnit(pb.UnitType_Dump)
+	mockLoader := NewMockUnit(pb.UnitType_Load)
+	st.units = []unit.Unit{mockDumper, mockLoader}
+
+	st.Run()
+	c.Assert(st.Stage(), Equals, pb.Stage_Running)
+	c.Assert(st.CurrUnit(), Equals, mockDumper)
+	c.Assert(st.Error(), IsNil)
+	c.Assert(st.Result(), IsNil)
+
+	// close again
+	st.Close()
+	c.Assert(st.Stage(), Equals, pb.Stage_Paused)
+	c.Assert(st.CurrUnit(), Equals, mockDumper)
+	if st.Result() != nil && (!st.Result().IsCanceled || len(st.Result().Errors) > 0) {
+		c.Fatalf("result %+v is not right after closing", st.Result())
+	}
+
+	st.Close()
+	c.Assert(st.Stage(), Equals, pb.Stage_Paused)
+	c.Assert(st.CurrUnit(), Equals, mockDumper)
+	if st.Result() != nil && (!st.Result().IsCanceled || len(st.Result().Errors) > 0) {
+		c.Fatalf("result %+v is not right after closing", st.Result())
+	}
+
+	// still running
+	st.Run()
+	c.Assert(st.Stage(), Equals, pb.Stage_Running)
+	c.Assert(st.CurrUnit(), Equals, mockDumper)
+	c.Assert(st.Error(), IsNil)
+	c.Assert(st.Result(), IsNil)
+
+	st.Close()
+	c.Assert(st.Stage(), Equals, pb.Stage_Paused)
+	c.Assert(st.CurrUnit(), Equals, mockDumper)
+	if st.Result() != nil && (!st.Result().IsCanceled || len(st.Result().Errors) > 0) {
+		c.Fatalf("result %+v is not right after closing", st.Result())
+	}
+
+	// still running
+	st.Run()
+	c.Assert(st.Stage(), Equals, pb.Stage_Running)
+	c.Assert(st.CurrUnit(), Equals, mockDumper)
+	c.Assert(st.Error(), IsNil)
+	c.Assert(st.Result(), IsNil)
+
+	// fail dumper
+	c.Assert(mockDumper.InjectProcessError(context.Background(), errors.New("dumper process error")), IsNil)
+	for i := 0; i < 1000; i++ {
+		res := st.Result()
+		if res != nil {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	c.Assert(st.CurrUnit(), Equals, mockDumper)
+	c.Assert(st.Result(), NotNil)
+	c.Assert(st.Result().Errors, HasLen, 1)
+	c.Assert(strings.Contains(st.Result().Errors[0].Msg, "dumper process error"), IsTrue)
+	c.Assert(st.Stage(), Equals, pb.Stage_Paused)
+
+	// close again
+	st.Close()
+	c.Assert(st.Stage(), Equals, pb.Stage_Paused)
+	c.Assert(st.CurrUnit(), Equals, mockDumper)
+	c.Assert(st.Result(), NotNil)
+	c.Assert(st.Result().Errors, HasLen, 1)
+	c.Assert(strings.Contains(st.Result().Errors[0].Msg, "dumper process error"), IsTrue)
+
+	// still running
+	st.Run()
+	c.Assert(st.Stage(), Equals, pb.Stage_Running)
+	c.Assert(st.CurrUnit(), Equals, mockDumper)
+	c.Assert(st.Error(), IsNil)
+	c.Assert(st.Result(), IsNil)
+
+	st.Run()
+	c.Assert(st.Stage(), Equals, pb.Stage_Running)
+	c.Assert(st.CurrUnit(), Equals, mockDumper)
+	c.Assert(st.Error(), IsNil)
+	c.Assert(st.Result(), IsNil)
+
+	// finish dump
+	c.Assert(mockDumper.InjectProcessError(context.Background(), nil), IsNil)
+	for i := 0; i < 1000; i++ {
+		if st.CurrUnit().Type() == pb.UnitType_Load {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	c.Assert(st.CurrUnit(), Equals, mockLoader)
+	c.Assert(st.Result(), IsNil)
+	c.Assert(st.Stage(), Equals, pb.Stage_Running)
+
+	// finish loader
+	c.Assert(mockLoader.InjectProcessError(context.Background(), nil), IsNil)
+	for i := 0; i < 1000; i++ {
+		if st.Stage() == pb.Stage_Finished {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	c.Assert(st.CurrUnit(), Equals, mockLoader)
+	c.Assert(st.Stage(), Equals, pb.Stage_Finished)
+	c.Assert(st.Result().Errors, HasLen, 0)
+
+	st.Close()
+	c.Assert(st.CurrUnit(), Equals, mockLoader)
+	c.Assert(st.Stage(), Equals, pb.Stage_Finished)
+	c.Assert(st.Result().Errors, HasLen, 0)
+
+	st.Run()
+	c.Assert(st.CurrUnit(), Equals, mockLoader)
+	c.Assert(st.Stage(), Equals, pb.Stage_Finished)
+	c.Assert(st.Result().Errors, HasLen, 0)
+}
+
+func (t *testWorker) TestSubtaskWithStage(c *C) {
+	cfg := &config.SubTaskConfig{
+		Name: "testSubtaskScene",
+		Mode: config.ModeFull,
+	}
+
+	st := NewSubTaskWithStage(cfg, pb.Stage_Paused)
+	c.Assert(st.Stage(), DeepEquals, pb.Stage_Paused)
+
+	mockDumper := NewMockUnit(pb.UnitType_Dump)
+	mockLoader := NewMockUnit(pb.UnitType_Load)
+	st.units = []unit.Unit{mockDumper, mockLoader}
+
+	// close again
+	st.Close()
+	c.Assert(st.Stage(), Equals, pb.Stage_Paused)
+	c.Assert(st.CurrUnit(), Equals, nil)
+	c.Assert(st.Result(), IsNil)
+
+	st.Run()
+	c.Assert(st.Stage(), Equals, pb.Stage_Running)
+	c.Assert(st.CurrUnit(), Equals, mockDumper)
+	c.Assert(st.Error(), IsNil)
+	c.Assert(st.Result(), IsNil)
+
+	// close again
+	st.Close()
+	c.Assert(st.Stage(), Equals, pb.Stage_Paused)
+	c.Assert(st.CurrUnit(), Equals, mockDumper)
+	if st.Result() != nil && (!st.Result().IsCanceled || len(st.Result().Errors) > 0) {
+		c.Fatalf("result %+v is not right after closing", st.Result())
+	}
+
+	st = NewSubTaskWithStage(cfg, pb.Stage_Finished)
+	c.Assert(st.Stage(), DeepEquals, pb.Stage_Finished)
+	st.units = []unit.Unit{mockDumper, mockLoader}
+
+	// close again
+	st.Close()
+	c.Assert(st.Stage(), Equals, pb.Stage_Finished)
+	c.Assert(st.CurrUnit(), Equals, nil)
+	c.Assert(st.Result(), IsNil)
+
+	st.Run()
+	c.Assert(st.Stage(), Equals, pb.Stage_Finished)
+	c.Assert(st.CurrUnit(), Equals, nil)
+	c.Assert(st.Result(), IsNil)
+
+	// close again
+	st.Close()
+	c.Assert(st.Stage(), Equals, pb.Stage_Finished)
+	c.Assert(st.CurrUnit(), Equals, nil)
+	c.Assert(st.Result(), IsNil)
 }
