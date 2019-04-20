@@ -196,7 +196,7 @@ func (w *Worker) Close() {
 // StartSubTask creates a sub task an run it
 func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) (int64, error) {
 	w.Lock()
-	defer w.Lock()
+	defer w.Unlock()
 
 	if w.closed.Get() == closedTrue {
 		return 0, errors.NotValidf("worker already closed")
@@ -204,8 +204,7 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) (int64, error) {
 
 	// copy some config item from dm-worker's config
 	w.copyConfigFromWorker(cfg)
-	cloneCfg, _ := cfg.DecryptPassword()
-	cfgStr, err := cloneCfg.Toml()
+	cfgStr, err := cfg.Toml()
 	if err != nil {
 		return 0, errors.Annotatef(err, "[worker] encode subtask %+v into toml format", cfg)
 	}
@@ -226,7 +225,7 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) (int64, error) {
 // UpdateSubTask update config for a sub task
 func (w *Worker) UpdateSubTask(cfg *config.SubTaskConfig) (int64, error) {
 	w.Lock()
-	defer w.Lock()
+	defer w.Unlock()
 
 	if w.closed.Get() == closedTrue {
 		return 0, errors.NotValidf("worker already closed")
@@ -252,7 +251,7 @@ func (w *Worker) UpdateSubTask(cfg *config.SubTaskConfig) (int64, error) {
 // StopSubTask stops a running sub task
 func (w *Worker) StopSubTask(name string) (int64, error) {
 	w.Lock()
-	defer w.Lock()
+	defer w.Unlock()
 
 	if w.closed.Get() == closedTrue {
 		return 0, errors.NotValidf("worker already closed")
@@ -273,7 +272,7 @@ func (w *Worker) StopSubTask(name string) (int64, error) {
 // ResumeSubTask resumes a paused sub task
 func (w *Worker) ResumeSubTask(name string) (int64, error) {
 	w.Lock()
-	defer w.Lock()
+	defer w.Unlock()
 
 	if w.closed.Get() == closedTrue {
 		return 0, errors.NotValidf("worker already closed")
@@ -294,7 +293,7 @@ func (w *Worker) ResumeSubTask(name string) (int64, error) {
 // PauseSubTask pauses a running sub task
 func (w *Worker) PauseSubTask(name string) (int64, error) {
 	w.Lock()
-	defer w.Lock()
+	defer w.Unlock()
 
 	if w.closed.Get() == closedTrue {
 		return 0, errors.NotValidf("worker already closed")
@@ -775,6 +774,8 @@ Loop:
 				continue
 			}
 
+			log.Infof("start to execute operation ID, %d detail %+v", opLog.Id, opLog)
+
 			st, exist := w.subTasks[opLog.Task.Name]
 			var err error
 			switch opLog.Task.Op {
@@ -847,6 +848,8 @@ Loop:
 				log.Infof("[worker] resume sub task %s", opLog.Task.Name)
 				st.Run()
 			}
+
+			log.Infof("end to execute operation %d result %v", opLog.Id, err)
 
 			if err != nil {
 				opLog.Message = err.Error()

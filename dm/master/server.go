@@ -1796,8 +1796,7 @@ var (
 )
 
 func (s *Server) waitOperationOk(ctx context.Context, cli pb.WorkerClient, name string, opLogID int64) error {
-	num := 0
-	for num < maxRetryNum {
+	for num := 0; num < maxRetryNum; num++ {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -1816,6 +1815,7 @@ func (s *Server) waitOperationOk(ctx context.Context, cli pb.WorkerClient, name 
 			return errors.New(res.Log.Message)
 		}
 
+		log.Infof("wait task %s op log %d, current res %+v", name, opLogID, res)
 		time.Sleep(retryInterval)
 	}
 
