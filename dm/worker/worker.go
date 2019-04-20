@@ -803,8 +803,13 @@ Loop:
 					break
 				}
 
+				cfgDecrypted, err := taskCfg.DecryptPassword()
+				if err != nil {
+					break
+				}
+
 				log.Infof("[worker] start sub task with config: %v", taskCfg)
-				st := NewSubTask(taskCfg)
+				st = NewSubTask(cfgDecrypted)
 				w.subTasks[opLog.Task.Name] = st
 				st.Run()
 
