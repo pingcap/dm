@@ -160,6 +160,11 @@ func (w *Worker) Close() {
 	w.Lock()
 	defer w.Unlock()
 
+	if w.closed.Get() == closedTrue {
+		log.Warn("worker already closed")
+		return
+	}
+
 	// close all sub tasks
 	for _, st := range w.subTasks {
 		st.Close()
