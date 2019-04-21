@@ -86,7 +86,6 @@ func NewSubTask(cfg *config.SubTaskConfig) *SubTask {
 func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage) *SubTask {
 	st := SubTask{
 		cfg:   cfg,
-		units: createUnits(cfg),
 		stage: stage,
 	}
 	taskState.WithLabelValues(st.cfg.Name).Set(float64(st.stage))
@@ -150,14 +149,15 @@ func (st *SubTask) Run() {
 		return
 	}
 
+	st.units = createUnits(st.cfg)
+	st.DDLInfo = make(chan *pb.DDLInfo, 1)
+
 	err := st.Init()
 	if err != nil {
 		log.Errorf("[subtask] fail to initial %v", err)
 		st.fail(errors.ErrorStack(err))
 		return
 	}
-
-	st.DDLInfo = make(chan *pb.DDLInfo, 1)
 
 	st.run()
 }

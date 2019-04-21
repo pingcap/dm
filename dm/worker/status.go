@@ -90,7 +90,7 @@ func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
 				UnresolvedDDLLockID: lockID,
 			}
 
-			if cu != nil {
+			if st.Stage() == pb.Stage_Running && cu != nil {
 				stStatus.Unit = cu.Type()
 				// oneof status
 				us := st.Status()
