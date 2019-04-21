@@ -142,7 +142,7 @@ func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 
 	var (
 		endPointer = Pointer{
-			Location: 1,
+			Location: handledPointer.Location + 1,
 		}
 		logs = make([]*pb.TaskLog, 0, 4)
 	)
@@ -177,6 +177,8 @@ func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 
 	logger.handledPointer = handledPointer
 	logger.endPointer = endPointer
+
+	log.Infof("handle pointer %+v, end pointer %+v", logger.handledPointer, logger.endPointer)
 
 	return logs, nil
 }

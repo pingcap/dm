@@ -90,19 +90,21 @@ func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
 				UnresolvedDDLLockID: lockID,
 			}
 
-			if st.Stage() == pb.Stage_Running && cu != nil {
+			if cu != nil {
 				stStatus.Unit = cu.Type()
-				// oneof status
-				us := st.Status()
-				switch stStatus.Unit {
-				case pb.UnitType_Check:
-					stStatus.Status = &pb.SubTaskStatus_Check{Check: us.(*pb.CheckStatus)}
-				case pb.UnitType_Dump:
-					stStatus.Status = &pb.SubTaskStatus_Dump{Dump: us.(*pb.DumpStatus)}
-				case pb.UnitType_Load:
-					stStatus.Status = &pb.SubTaskStatus_Load{Load: us.(*pb.LoadStatus)}
-				case pb.UnitType_Sync:
-					stStatus.Status = &pb.SubTaskStatus_Sync{Sync: us.(*pb.SyncStatus)}
+				if st.Stage() == pb.Stage_Running {
+					// oneof status
+					us := st.Status()
+					switch stStatus.Unit {
+					case pb.UnitType_Check:
+						stStatus.Status = &pb.SubTaskStatus_Check{Check: us.(*pb.CheckStatus)}
+					case pb.UnitType_Dump:
+						stStatus.Status = &pb.SubTaskStatus_Dump{Dump: us.(*pb.DumpStatus)}
+					case pb.UnitType_Load:
+						stStatus.Status = &pb.SubTaskStatus_Load{Load: us.(*pb.LoadStatus)}
+					case pb.UnitType_Sync:
+						stStatus.Status = &pb.SubTaskStatus_Sync{Sync: us.(*pb.SyncStatus)}
+					}
 				}
 			}
 		}

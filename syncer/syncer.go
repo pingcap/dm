@@ -175,7 +175,6 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.cacheColumns = make(map[string][]string)
 	syncer.genColsCache = NewGenColCache()
 	syncer.c = newCausality()
-	syncer.tableRouter, _ = router.NewTableRouter(cfg.CaseSensitive, []*router.TableRule{})
 	syncer.done = make(chan struct{})
 	syncer.bwList = filter.New(cfg.CaseSensitive, cfg.BWList)
 	syncer.checkpoint = NewRemoteCheckPoint(cfg, syncer.checkpointID())
@@ -1739,6 +1738,7 @@ func (s *Syncer) resolveCasuality(keys []string) (string, error) {
 }
 
 func (s *Syncer) genRouter() error {
+	s.tableRouter, _ = router.NewTableRouter(s.cfg.CaseSensitive, []*router.TableRule{})
 	for _, rule := range s.cfg.RouteRules {
 		err := s.tableRouter.AddRule(rule)
 		if err != nil {

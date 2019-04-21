@@ -86,6 +86,7 @@ func NewSubTask(cfg *config.SubTaskConfig) *SubTask {
 func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage) *SubTask {
 	st := SubTask{
 		cfg:   cfg,
+		units: createUnits(cfg),
 		stage: stage,
 	}
 	taskState.WithLabelValues(st.cfg.Name).Set(float64(st.stage))
@@ -97,6 +98,8 @@ func (st *SubTask) Init() error {
 	if len(st.units) < 1 {
 		return errors.Errorf("subtask %s has no dm units for mode %s", st.cfg.Name, st.cfg.Mode)
 	}
+
+	st.DDLInfo = make(chan *pb.DDLInfo, 1)
 
 	// when error occurred, initialized units should be closed
 	// when continue sub task from loader / syncer, ahead units should be closed
@@ -148,9 +151,6 @@ func (st *SubTask) Run() {
 		log.Warnf("[subtask] %s is %s", st.cfg.Name, st.Stage())
 		return
 	}
-
-	st.units = createUnits(st.cfg)
-	st.DDLInfo = make(chan *pb.DDLInfo, 1)
 
 	err := st.Init()
 	if err != nil {
