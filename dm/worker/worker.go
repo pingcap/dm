@@ -734,12 +734,19 @@ func (w *Worker) restoreSubTask() error {
 			return errors.Annotatef(err, "decode subtask config error in restoreSubTask")
 		}
 
+		cfgDecrypted, err := taskCfg.DecryptPassword()
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		log.Infof("[worker] start sub task with config: %v", cfgDecrypted)
+
 		var st *SubTask
-		if st.Stage() == pb.Stage_Running || st.Stage() == pb.Stage_New {
-			st = NewSubTaskWithStage(taskCfg, pb.Stage_New)
+		if task.GetStage() == pb.Stage_Running || task.GetStage() == pb.Stage_New {
+			st = NewSubTaskWithStage(cfgDecrypted, pb.Stage_New)
 			st.Run()
 		} else {
-			st = NewSubTaskWithStage(taskCfg, task.Stage)
+			st = NewSubTaskWithStage(cfgDecrypted, task.Stage)
 		}
 
 		w.subTasks[name] = st
@@ -808,7 +815,7 @@ Loop:
 					break
 				}
 
-				log.Infof("[worker] start sub task with config: %v", taskCfg)
+				log.Infof("[worker] start sub task with config: %v", cfgDecrypted)
 				st = NewSubTask(cfgDecrypted)
 				w.subTasks[opLog.Task.Name] = st
 				st.Run()
