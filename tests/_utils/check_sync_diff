@@ -4,7 +4,7 @@
 
 workdir=$1
 conf=$2
-check_time=100
+check_time=10
 
 PWD=$(pwd)
 binary=$PWD/bin/sync_diff_inspector
