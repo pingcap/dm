@@ -17,7 +17,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strconv"
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/tests/utils"
@@ -31,9 +30,9 @@ func main() {
 	if err != nil {
 		utils.ExitWithError(err)
 	}
-	op, err := strconv.ParseInt(os.Args[1], 10, 64)
-	if err != nil {
-		utils.ExitWithError(err)
+	op, ok := pb.TaskOp_value[os.Args[1]]
+	if !ok {
+		utils.ExitWithError(fmt.Errorf("invalid op: %s", op))
 	}
 	taskName := os.Args[2]
 	err = utils.OperateTask(context.Background(), cli, pb.TaskOp(op), taskName, nil)

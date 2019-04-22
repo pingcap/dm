@@ -31,8 +31,7 @@ function run() {
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    # TaskOp Stop = 1 defined in dm/proto/dmworker.proto
-    $cur/../bin/dmctl_operate_task 1 $TASK_NAME
+    $cur/../bin/dmctl_operate_task Stop $TASK_NAME
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
