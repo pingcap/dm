@@ -172,7 +172,7 @@ func (t *testEventSuite) TestGenPreviousGTIDsEvent(c *C) {
 	gSet, err := gtid.ParserGTID(gmysql.MySQLFlavor, str)
 	c.Assert(err, IsNil)
 
-	previousGTIDData, err := GenPreviousGTIDsEvent(header, latestPos, gSet)
+	previousGTIDsEv, err := GenPreviousGTIDsEvent(header, latestPos, gSet)
 	c.Assert(err, IsNil)
 
 	dir := c.MkDir()
@@ -190,7 +190,7 @@ func (t *testEventSuite) TestGenPreviousGTIDsEvent(c *C) {
 	c.Assert(err, IsNil)
 
 	// write the PreviousGTIDsEvent
-	_, err = f1.Write(previousGTIDData)
+	_, err = f1.Write(previousGTIDsEv.RawData)
 	c.Assert(err, IsNil)
 
 	var count = 0
@@ -203,7 +203,7 @@ func (t *testEventSuite) TestGenPreviousGTIDsEvent(c *C) {
 			c.Assert(e.RawData, DeepEquals, formatDescEv.RawData)
 		case 2: // PreviousGTIDsEvent
 			c.Assert(e.Header.EventType, Equals, replication.PREVIOUS_GTIDS_EVENT)
-			c.Assert(e.RawData, DeepEquals, previousGTIDData)
+			c.Assert(e.RawData, DeepEquals, previousGTIDsEv.RawData)
 		default:
 			c.Fatalf("too many binlog events got, current is %+v", e.Header)
 		}
@@ -220,7 +220,7 @@ func (t *testEventSuite) TestGenPreviousGTIDsEvent(c *C) {
 	gSet, err = gtid.ParserGTID(gmysql.MySQLFlavor, str)
 	c.Assert(err, IsNil)
 
-	previousGTIDData, err = GenPreviousGTIDsEvent(header, latestPos, gSet)
+	previousGTIDsEv, err = GenPreviousGTIDsEvent(header, latestPos, gSet)
 	c.Assert(err, IsNil)
 
 	// write another file
@@ -238,7 +238,7 @@ func (t *testEventSuite) TestGenPreviousGTIDsEvent(c *C) {
 	c.Assert(err, IsNil)
 
 	// write the PreviousGTIDsEvent
-	_, err = f2.Write(previousGTIDData)
+	_, err = f2.Write(previousGTIDsEv.RawData)
 	c.Assert(err, IsNil)
 
 	count = 0 // reset count
@@ -271,9 +271,9 @@ func (t *testEventSuite) TestGenGTIDEvent(c *C) {
 	// also needing a PreviousGTIDsEvent after FormatDescriptionEvent
 	gSet, err := gtid.ParserGTID(gmysql.MySQLFlavor, prevGTIDsStr)
 	c.Assert(err, IsNil)
-	previousGTIDData, err := GenPreviousGTIDsEvent(header, latestPos, gSet)
+	previousGTIDsEv, err := GenPreviousGTIDsEvent(header, latestPos, gSet)
 	c.Assert(err, IsNil)
-	latestPos += uint32(len(previousGTIDData)) // update latestPos
+	latestPos = previousGTIDsEv.Header.LogPos // update latestPos
 
 	gtidEv, err := GenGTIDEvent(header, latestPos, gtidFlags, uuid, gno, lastCommitted, lastCommitted+1)
 	c.Assert(err, IsNil)
@@ -303,7 +303,7 @@ func (t *testEventSuite) TestGenGTIDEvent(c *C) {
 	c.Assert(err, IsNil)
 	_, err = f.Write(formatDescEv.RawData)
 	c.Assert(err, IsNil)
-	_, err = f.Write(previousGTIDData)
+	_, err = f.Write(previousGTIDsEv.RawData)
 	c.Assert(err, IsNil)
 
 	// write GTIDEvent.
@@ -320,7 +320,7 @@ func (t *testEventSuite) TestGenGTIDEvent(c *C) {
 			c.Assert(e.RawData, DeepEquals, formatDescEv.RawData)
 		case 2: // PreviousGTIDsEvent
 			c.Assert(e.Header.EventType, Equals, replication.PREVIOUS_GTIDS_EVENT)
-			c.Assert(e.RawData, DeepEquals, previousGTIDData)
+			c.Assert(e.RawData, DeepEquals, previousGTIDsEv.RawData)
 		case 3: // GTIDEvent
 			c.Assert(e.Header.EventType, Equals, replication.GTID_EVENT)
 			c.Assert(e.RawData, DeepEquals, gtidEv.RawData)
