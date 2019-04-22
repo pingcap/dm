@@ -85,7 +85,8 @@ func (t *testEncryptSuite) TestEncrypt(c *C) {
 	block, err := aes.NewCipher(secretKey)
 	c.Assert(err, IsNil)
 	blockSize := block.BlockSize()
-	plaintext3, err := Decrypt(append(ciphertext[1:blockSize+1], append([]byte{ivSep[0]}, ciphertext[blockSize+1:]...)...))
+	c.Assert(len(ciphertext), Greater, blockSize+2)
+	plaintext3, err := Decrypt(append(ciphertext[1:blockSize+1], append([]byte{ivSep[0]}, ciphertext[blockSize+2:]...)...))
 	c.Assert(err, IsNil)
 	c.Assert(plaintext3, Not(DeepEquals), plaintext)
 }
