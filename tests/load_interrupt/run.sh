@@ -20,6 +20,19 @@ function prepare_datafile() {
     done
 }
 
+function check_row_count() {
+    index=$1
+    lines=$(($(wc -l $WORK_DIR/db$index.prepare.sql|awk '{print $1}') - 4))
+    # each line has two insert values
+    lines=$((lines * 2))
+    run_sql "SELECT FLOOR(offset / end_pos * $lines) as cnt from dm_meta.test_loader_checkpoint where cp_table = 't$index'" $TIDB_PORT
+    estimate=$(tail -n 1 "$TEST_DIR/sql_res.$TEST_NAME.txt")
+    run_sql "SELECT count(1) as cnt from $TEST_NAME.t$index" $TIDB_PORT
+    row_count=$(tail -n 1 "$TEST_DIR/sql_res.$TEST_NAME.txt")
+    echo "estimate row count: $estimate, real row count: $row_count"
+    [ "$estimate" == "$row_count" ]
+}
+
 function run() {
     THRESHOLD=1024
     prepare_datafile
@@ -45,6 +58,8 @@ function run() {
 
     run_sql "SELECT count(*) from dm_meta.test_loader_checkpoint where cp_schema = '$TEST_NAME' and offset < $THRESHOLD" $TIDB_PORT
     check_contains "count(*): 2"
+    check_row_count 1
+    check_row_count 2
 
     export GO_FAILPOINTS=''
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
