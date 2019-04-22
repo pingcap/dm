@@ -20,9 +20,8 @@ function run() {
     check_port_alive $WORKER1_PORT
     check_port_alive $WORKER2_PORT
 
-    cd $cur && GO111MODULE=on go build -o bin/dmctl && cd -
     # start DM task only
-    $cur/bin/dmctl "$cur/conf/dm-task.yaml"
+    $cur/../bin/dmctl_start_task "$cur/conf/dm-task.yaml"
 
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
