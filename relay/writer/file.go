@@ -28,7 +28,7 @@ import (
 // FileConfig is the configuration used by the FileWriter.
 type FileConfig struct {
 	RelayDir string // directory to store relay log files.
-	Filename string // the startup relay log filename.
+	Filename string // the startup relay log filename, if not set then a fake RotateEvent must be the first event.
 }
 
 // FileWriter implements Writer interface.
@@ -98,6 +98,8 @@ func (w *FileWriter) WriteEvent(ev *replication.BinlogEvent) (*Result, error) {
 	switch ev.Event.(type) {
 	case *replication.FormatDescriptionEvent:
 		return w.handleFormatDescriptionEvent(ev)
+	case *replication.RotateEvent:
+		return w.handleRotateEvent(ev)
 	default:
 		err := w.out.Write(ev.RawData)
 		return &Result{
@@ -167,11 +169,50 @@ func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (
 	} else if !exist {
 		err = w.out.Write(ev.RawData)
 		if err != nil {
-			return nil, errors.Annotatef(err, "write FormatDescriptionEvent for %s", filename)
+			return nil, errors.Annotatef(err, "write FormatDescriptionEvent %+v for %s", ev.Header, filename)
 		}
 	}
 
 	return &Result{
 		Ignore: exist, // ignore if exists
+	}, nil
+}
+
+// handle RotateEvent:
+//   1. update binlog filename if needed
+//   2. write the RotateEvent if not fake
+// NOTE: we do not create a new binlog file when received a RotateEvent,
+//       instead, we create a new binlog file when received a FormatDescriptionEvent.
+//       because a binlog file without any events has no meaning.
+func (w *FileWriter) handleRotateEvent(ev *replication.BinlogEvent) (*Result, error) {
+	rotateEv, ok := ev.Event.(*replication.RotateEvent)
+	if !ok {
+		return nil, errors.NotValidf("except RotateEvent, but got %+v", ev.Header)
+	}
+
+	// update binlog filename if needed
+	var currFile = w.filename.Get()
+	nextFile := string(rotateEv.NextLogName)
+	if nextFile > currFile {
+		w.filename.Set(nextFile) // record the next filename, but not create it.
+	}
+
+	// write the RotateEvent if not fake
+	var ignore bool
+	if ev.Header.Timestamp == 0 || ev.Header.LogPos == 0 {
+		// skip fake rotate event
+		ignore = true
+	} else if w.out == nil {
+		// if not open a binlog file yet, then non-fake RotateEvent can't be handled
+		return nil, errors.Errorf("non-fake RotateEvent %+v received, but no binlog file opened", ev.Header)
+	} else {
+		err := w.out.Write(ev.RawData)
+		if err != nil {
+			return nil, errors.Annotatef(err, "write RotateEvent %+v for %s", ev.Header, filepath.Join(w.cfg.RelayDir, currFile))
+		}
+	}
+
+	return &Result{
+		Ignore: ignore,
 	}, nil
 }
