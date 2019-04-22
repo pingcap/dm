@@ -15,6 +15,8 @@ package writer
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -190,4 +192,123 @@ func (t *testFileWriterSuite) TestFormatDescriptionEvent(c *check.C) {
 	c.Assert(events, check.HasLen, 2)
 	c.Assert(events[0], check.DeepEquals, formatDescEv)
 	c.Assert(events[1], check.DeepEquals, queryEv)
+}
+
+func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check.C) {
+	var (
+		cfg = &FileConfig{
+			RelayDir: c.MkDir(),
+			Filename: "test-mysql-bin.000001",
+		}
+		nextFilename        = "test-mysql-bin.000002"
+		nextFilePos  uint64 = 4
+		header              = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+			Flags:     0x01,
+		}
+		fakeHeader = &replication.EventHeader{
+			Timestamp: 0, // mark as fake
+			ServerID:  11,
+			Flags:     0x01,
+		}
+		latestPos uint32 = 4
+	)
+
+	rotateEv, err := event.GenRotateEvent(header, latestPos, []byte(nextFilename), nextFilePos)
+	c.Assert(err, check.IsNil)
+	c.Assert(rotateEv, check.NotNil)
+
+	fakeRotateEv, err := event.GenRotateEvent(fakeHeader, latestPos, []byte(nextFilename), nextFilePos)
+	c.Assert(err, check.IsNil)
+	c.Assert(fakeRotateEv, check.NotNil)
+
+	formatDescEv, err := event.GenFormatDescriptionEvent(header, latestPos)
+	c.Assert(err, check.IsNil)
+	c.Assert(formatDescEv, check.NotNil)
+
+	// 1: non-fake RotateEvent before FormatDescriptionEvent, invalid
+	w1 := NewFileWriter(cfg)
+	defer w1.Close()
+	c.Assert(w1.Start(), check.IsNil)
+	result, err := w1.WriteEvent(rotateEv)
+	c.Assert(err, check.ErrorMatches, ".*no binlog file opened.*")
+	c.Assert(result, check.IsNil)
+
+	// 2. fake RotateEvent before FormatDescriptionEvent
+	cfg.RelayDir = c.MkDir() // use a new relay directory
+	w2 := NewFileWriter(cfg)
+	defer w2.Close()
+	c.Assert(w2.Start(), check.IsNil)
+	result, err = w2.WriteEvent(fakeRotateEv)
+	c.Assert(err, check.IsNil)
+	c.Assert(result, check.NotNil)
+	c.Assert(result.Ignore, check.IsTrue) // ignore fake RotateEvent
+
+	result, err = w2.WriteEvent(formatDescEv)
+	c.Assert(err, check.IsNil)
+	c.Assert(result, check.NotNil)
+	c.Assert(result.Ignore, check.IsFalse)
+
+	// cfg.Filename should be empty, next file should contain only one FormatDescriptionEvent
+	filename1 := filepath.Join(cfg.RelayDir, cfg.Filename)
+	filename2 := filepath.Join(cfg.RelayDir, nextFilename)
+	_, err = os.Stat(filename1)
+	c.Assert(os.IsNotExist(err), check.IsTrue)
+	data, err := ioutil.ReadFile(filename2)
+	c.Assert(err, check.IsNil)
+	fileHeaderLen := len(replication.BinLogFileHeader)
+	c.Assert(len(data), check.Equals, fileHeaderLen+len(formatDescEv.RawData))
+	c.Assert(data[fileHeaderLen:], check.DeepEquals, formatDescEv.RawData)
+
+	// 3. FormatDescriptionEvent before fake RotateEvent
+	cfg.RelayDir = c.MkDir() // use a new relay directory
+	w3 := NewFileWriter(cfg)
+	defer w3.Close()
+	c.Assert(w3.Start(), check.IsNil)
+	result, err = w3.WriteEvent(formatDescEv)
+	c.Assert(err, check.IsNil)
+	c.Assert(result, check.NotNil)
+	c.Assert(result.Ignore, check.IsFalse)
+
+	result, err = w3.WriteEvent(fakeRotateEv)
+	c.Assert(err, check.IsNil)
+	c.Assert(result, check.NotNil)
+	c.Assert(result.Ignore, check.IsTrue)
+
+	// cfg.Filename should contain only one FormatDescriptionEvent, next file should be empty
+	filename1 = filepath.Join(cfg.RelayDir, cfg.Filename)
+	filename2 = filepath.Join(cfg.RelayDir, nextFilename)
+	_, err = os.Stat(filename2)
+	c.Assert(os.IsNotExist(err), check.IsTrue)
+	data, err = ioutil.ReadFile(filename1)
+	c.Assert(err, check.IsNil)
+	c.Assert(len(data), check.Equals, fileHeaderLen+len(formatDescEv.RawData))
+	c.Assert(data[fileHeaderLen:], check.DeepEquals, formatDescEv.RawData)
+
+	// 4. FormatDescriptionEvent before non-fake RotateEvent
+	cfg.RelayDir = c.MkDir() // use a new relay directory
+	w4 := NewFileWriter(cfg)
+	defer w4.Close()
+	c.Assert(w4.Start(), check.IsNil)
+	result, err = w4.WriteEvent(formatDescEv)
+	c.Assert(err, check.IsNil)
+	c.Assert(result, check.NotNil)
+	c.Assert(result.Ignore, check.IsFalse)
+
+	result, err = w4.WriteEvent(rotateEv)
+	c.Assert(err, check.IsNil)
+	c.Assert(result, check.NotNil)
+	c.Assert(result.Ignore, check.IsFalse)
+
+	// cfg.Filename should contain both one FormatDescriptionEvent and one RotateEvent, next file should be empty
+	filename1 = filepath.Join(cfg.RelayDir, cfg.Filename)
+	filename2 = filepath.Join(cfg.RelayDir, nextFilename)
+	_, err = os.Stat(filename2)
+	c.Assert(os.IsNotExist(err), check.IsTrue)
+	data, err = ioutil.ReadFile(filename1)
+	c.Assert(err, check.IsNil)
+	c.Assert(len(data), check.Equals, fileHeaderLen+len(formatDescEv.RawData)+len(rotateEv.RawData))
+	c.Assert(data[fileHeaderLen:fileHeaderLen+len(formatDescEv.RawData)], check.DeepEquals, formatDescEv.RawData)
+	c.Assert(data[fileHeaderLen+len(formatDescEv.RawData):], check.DeepEquals, rotateEv.RawData)
 }
