@@ -14,6 +14,7 @@
 package encrypt
 
 import (
+	"crypto/aes"
 	"crypto/rand"
 	"testing"
 
@@ -47,6 +48,17 @@ func (t *testEncryptSuite) TestSetSecretKey(c *C) {
 	c.Assert(err, NotNil)
 }
 
+func removeChar(input []byte, c byte) []byte {
+	i := 0
+	for _, x := range input {
+		if x != c {
+			input[i] = x
+			i++
+		}
+	}
+	return input[:i]
+}
+
 func (t *testEncryptSuite) TestEncrypt(c *C) {
 	plaintext := []byte("a plain text")
 
@@ -64,6 +76,17 @@ func (t *testEncryptSuite) TestEncrypt(c *C) {
 	c.Assert(err, NotNil)
 
 	// invalid content
-	_, err = Decrypt(ciphertext[1:])
+	_, err = Decrypt(removeChar(ciphertext, ivSep[0]))
 	c.Assert(err, NotNil)
+
+	// a special case, we construct a ciphertext that can be decrypted but the
+	// plaintext is not what we want. This is because currently encrypt mechanism
+	// doesn't keep enough information to decide whether the new ciphertext is valid
+	block, err := aes.NewCipher(secretKey)
+	c.Assert(err, IsNil)
+	blockSize := block.BlockSize()
+	c.Assert(len(ciphertext), Greater, blockSize+2)
+	plaintext3, err := Decrypt(append(ciphertext[1:blockSize+1], append([]byte{ivSep[0]}, ciphertext[blockSize+2:]...)...))
+	c.Assert(err, IsNil)
+	c.Assert(plaintext3, Not(DeepEquals), plaintext)
 }
