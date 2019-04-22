@@ -157,12 +157,15 @@ func (t *testFileWriterSuite) TestFormatDescriptionEvent(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsFalse)
+	fileSize := int64(len(replication.BinLogFileHeader) + len(formatDescEv.RawData))
+	t.verifyFilenameOffset(c, w, cfg.Filename, fileSize)
 
 	// write FormatDescriptionEvent again, ignore
 	result, err = w.WriteEvent(formatDescEv)
 	c.Assert(err, check.IsNil)
 	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsTrue)
+	t.verifyFilenameOffset(c, w, cfg.Filename, fileSize)
 
 	// write another event
 	queryEv, err := event.GenQueryEvent(header, latestPos, 0, 0, 0, nil, []byte("schema"), []byte("BEGIN"))
@@ -171,12 +174,15 @@ func (t *testFileWriterSuite) TestFormatDescriptionEvent(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsFalse)
+	fileSize += int64(len(queryEv.RawData))
+	t.verifyFilenameOffset(c, w, cfg.Filename, fileSize)
 
 	// write FormatDescriptionEvent again, ignore
 	result, err = w.WriteEvent(formatDescEv)
 	c.Assert(err, check.IsNil)
 	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsTrue)
+	t.verifyFilenameOffset(c, w, cfg.Filename, fileSize)
 
 	// check events by reading them back
 	events := make([]*replication.BinlogEvent, 0, 2)
@@ -195,6 +201,13 @@ func (t *testFileWriterSuite) TestFormatDescriptionEvent(c *check.C) {
 	c.Assert(events, check.HasLen, 2)
 	c.Assert(events[0], check.DeepEquals, formatDescEv)
 	c.Assert(events[1], check.DeepEquals, queryEv)
+}
+
+func (t *testFileWriterSuite) verifyFilenameOffset(c *check.C, w Writer, filename string, offset int64) {
+	wf, ok := w.(*FileWriter)
+	c.Assert(ok, check.IsTrue)
+	c.Assert(wf.filename.Get(), check.Equals, filename)
+	c.Assert(wf.offset.Get(), check.Equals, offset)
 }
 
 func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check.C) {
@@ -253,6 +266,9 @@ func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check
 	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsFalse)
 
+	fileSize := int64(len(replication.BinLogFileHeader) + len(formatDescEv.RawData))
+	t.verifyFilenameOffset(c, w2, nextFilename, fileSize)
+
 	// cfg.Filename should be empty, next file should contain only one FormatDescriptionEvent
 	filename1 := filepath.Join(cfg.RelayDir, cfg.Filename)
 	filename2 := filepath.Join(cfg.RelayDir, nextFilename)
@@ -279,6 +295,8 @@ func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check
 	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsTrue)
 
+	t.verifyFilenameOffset(c, w3, nextFilename, fileSize)
+
 	// cfg.Filename should contain only one FormatDescriptionEvent, next file should be empty
 	filename1 = filepath.Join(cfg.RelayDir, cfg.Filename)
 	filename2 = filepath.Join(cfg.RelayDir, nextFilename)
@@ -303,6 +321,9 @@ func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check
 	c.Assert(err, check.IsNil)
 	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsFalse)
+
+	fileSize += int64(len(rotateEv.RawData))
+	t.verifyFilenameOffset(c, w4, nextFilename, fileSize)
 
 	// cfg.Filename should contain both one FormatDescriptionEvent and one RotateEvent, next file should be empty
 	filename1 = filepath.Join(cfg.RelayDir, cfg.Filename)
@@ -378,6 +399,8 @@ func (t *testFileWriterSuite) TestWriteMultiEvents(c *check.C) {
 		c.Assert(result, check.NotNil)
 		c.Assert(result.Ignore, check.IsFalse) // no event is ignored
 	}
+
+	t.verifyFilenameOffset(c, w, cfg.Filename, int64(allData.Len()))
 
 	// read the data back from the file
 	filename := filepath.Join(cfg.RelayDir, cfg.Filename)

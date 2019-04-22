@@ -102,6 +102,9 @@ func (w *FileWriter) WriteEvent(ev *replication.BinlogEvent) (*Result, error) {
 		return w.handleRotateEvent(ev)
 	default:
 		err := w.out.Write(ev.RawData)
+		if err == nil {
+			w.offset.Add(int64(len(ev.RawData)))
+		}
 		return &Result{
 			Ignore: false,
 		}, errors.Annotatef(err, "write event %+v", ev.Header)
@@ -128,6 +131,7 @@ func (w *FileWriter) Flush() error {
 //   2. open/create a new binlog file
 //   3. write the binlog file header if not exists
 //   4. write the FormatDescriptionEvent if not exists one
+//   5. record the offset of the opened/created binlog file
 func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (*Result, error) {
 	// close the previous binlog file
 	if w.out != nil {
@@ -173,6 +177,14 @@ func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (
 		}
 	}
 
+	// record the offset of the opened/created binlog file
+	outF, ok := w.out.(*bw.FileWriter)
+	if !ok {
+		return nil, errors.New("underlying binlog writer must be a FileWriter now")
+	}
+	outFS := outF.Status().(*bw.FileWriterStatus)
+	w.offset.Set(outFS.Offset)
+
 	return &Result{
 		Ignore: exist, // ignore if exists
 	}, nil
@@ -181,6 +193,7 @@ func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (
 // handle RotateEvent:
 //   1. update binlog filename if needed
 //   2. write the RotateEvent if not fake
+//   3. update offset if the event is wrote
 // NOTE: we do not create a new binlog file when received a RotateEvent,
 //       instead, we create a new binlog file when received a FormatDescriptionEvent.
 //       because a binlog file without any events has no meaning.
@@ -210,6 +223,11 @@ func (w *FileWriter) handleRotateEvent(ev *replication.BinlogEvent) (*Result, er
 		if err != nil {
 			return nil, errors.Annotatef(err, "write RotateEvent %+v for %s", ev.Header, filepath.Join(w.cfg.RelayDir, currFile))
 		}
+	}
+
+	// update offset if the event is wrote
+	if !ignore {
+		w.offset.Add(int64(len(ev.RawData)))
 	}
 
 	return &Result{
