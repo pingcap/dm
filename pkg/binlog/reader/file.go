@@ -130,9 +130,9 @@ func (r *FileReader) Close() error {
 		return errors.New("already closed")
 	}
 
-	r.parser.Stop()
 	r.cancel()
 	r.wg.Wait()
+	r.parser.Stop()
 	r.stage = stageClosed
 	return nil
 }
