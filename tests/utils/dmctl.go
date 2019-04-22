@@ -16,6 +16,7 @@ package utils
 import (
 	"context"
 	"io/ioutil"
+	"strings"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -51,7 +52,7 @@ func StartTask(ctx context.Context, cli pb.MasterClient, configFile string, work
 	}
 
 	for _, wp := range resp.GetWorkers() {
-		if !wp.GetResult() {
+		if !wp.GetResult() && !strings.Contains(wp.GetMsg(), "request is timeout, but request may be successful") {
 			return errors.Errorf("fail to start task %v: %s", string(content), wp.GetMsg())
 		}
 	}
