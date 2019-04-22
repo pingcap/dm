@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
@@ -135,6 +136,14 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *
 
 				offsetSQL := w.checkPoint.GenSQL(job.file, job.offset)
 				sqls = append(sqls, offsetSQL)
+
+				failpoint.Inject("LoadExceedOffsetExit", func(val failpoint.Value) {
+					threshold, _ := val.(int)
+					if job.offset >= int64(threshold) {
+						log.Warnf("[failpoint] load offset %d execeeds threshold %d, will panic", job.offset, threshold)
+						panic("LoadExceedOffsetExit")
+					}
+				})
 
 				if err := w.conn.executeSQL(sqls, true); err != nil {
 					// expect pause rather than exit

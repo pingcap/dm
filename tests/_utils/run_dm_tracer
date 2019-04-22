@@ -18,5 +18,5 @@ echo "[$(date)] <<<<<< START DM-TRACER on port $port, config: $conf >>>>>>"
 cd $workdir
 $binary -test.coverprofile="$TEST_DIR/cov.$TEST_NAME.tracer.$port.out" DEVEL \
     --tracer-addr=:$port --log-file="$workdir/log/dm-tracer.log" --config="$conf" \
-    > $workdir/log/stdout.log 2>&1 &
+    >> $workdir/log/stdout.log 2>&1 &
 cd $PWD

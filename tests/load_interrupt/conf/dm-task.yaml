@@ -1,12 +1,10 @@
 ---
 name: test
-task-mode: all
+task-mode: full
 is-sharding: false
 meta-schema: "dm_meta"
 remove-meta: false
 enable-heartbeat: true
-heartbeat-update-interval: 1
-heartbeat-report-interval: 1
 timezone: "Asia/Shanghai"
 
 target-database:
@@ -32,15 +30,15 @@ mysql-instances:
 
 black-white-list:
   instance:
-    do-dbs: ["all_mode"]
+    do-dbs: ["load_interrupt"]
 
 mydumpers:
   global:
     mydumper-path: "./bin/mydumper"
     threads: 4
-    chunk-filesize: 64
+    chunk-filesize: 0
     skip-tz-utc: true
-    extra-args: "-B all_mode"
+    extra-args: "-B load_interrupt --statement-size=100"
 
 loaders:
   global:

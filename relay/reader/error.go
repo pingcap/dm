@@ -11,23 +11,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package reader
 
 import (
 	"context"
-	"os"
 
-	"github.com/pingcap/dm/tests/utils"
+	"github.com/pingcap/errors"
 )
 
-func main() {
-	cli, err := utils.CreateDmCtl("127.0.0.1:8261")
-	if err != nil {
-		utils.ExitWithError(err)
+// isIgnorableError checks whether the error is ignorable.
+func isIgnorableError(err error) bool {
+	err = errors.Cause(err)
+	switch err {
+	case context.Canceled:
+		return true
 	}
-	conf := os.Args[1]
-	err = utils.StartTask(context.Background(), cli, conf, nil)
-	if err != nil {
-		utils.ExitWithError(err)
-	}
+	return false
 }

@@ -159,6 +159,33 @@ func GenFormatDescriptionEvent(header *replication.EventHeader, latestPos uint32
 	return ev, errors.Trace(err)
 }
 
+// GenRotateEvent generates a RotateEvent.
+// ref: https://dev.mysql.com/doc/internals/en/rotate-event.html
+func GenRotateEvent(header *replication.EventHeader, latestPos uint32, nextLogName []byte, position uint64) (*replication.BinlogEvent, error) {
+	if len(nextLogName) == 0 {
+		return nil, errors.NotValidf("empty next binlog name")
+	}
+
+	// Post-header
+	postHeader := new(bytes.Buffer)
+	err := binary.Write(postHeader, binary.LittleEndian, position)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write position %d", position)
+	}
+
+	// Payload
+	payload := new(bytes.Buffer)
+	err = binary.Write(payload, binary.LittleEndian, nextLogName)
+	if err != nil {
+		return nil, errors.Annotatef(err, "write next binlog name % X", nextLogName)
+	}
+
+	buf := new(bytes.Buffer)
+	event := &replication.RotateEvent{}
+	ev, err := assembleEvent(buf, event, false, *header, replication.ROTATE_EVENT, latestPos, postHeader.Bytes(), payload.Bytes())
+	return ev, errors.Trace(err)
+}
+
 // GenPreviousGTIDsEvent generates a PreviousGTIDsEvent.
 // go-mysql has no PreviousGTIDsEvent struct defined, so return the event's raw data instead.
 // MySQL has no internal doc for PREVIOUS_GTIDS_EVENT.
