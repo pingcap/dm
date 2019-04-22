@@ -46,8 +46,11 @@ type Tracer struct {
 	idGen *IDGenerator
 
 	jobs       map[EventType]chan *Job
-	jobsClosed sync2.AtomicBool
-	rpcWg      sync.WaitGroup
+	jobsStatus struct {
+		sync.RWMutex
+		closed bool
+	}
+	rpcWg sync.WaitGroup
 }
 
 // NewTracer creates a new Tracer
@@ -57,7 +60,7 @@ func NewTracer(cfg Config) *Tracer {
 		tso:   newTsoGenerator(),
 		idGen: NewIDGen(),
 	}
-	t.jobsClosed.Set(true)
+	t.setJobChansClosed(true)
 	t.ctx, t.cancel = context.WithCancel(context.Background())
 	return &t
 }
@@ -159,17 +162,25 @@ func (t *Tracer) newJobChans() {
 	for i := EventSyncerBinlog; i < EventFlush; i++ {
 		t.jobs[i] = make(chan *Job, t.cfg.BatchSize)
 	}
-	t.jobsClosed.Set(false)
+	t.setJobChansClosed(false)
+}
+
+func (t *Tracer) setJobChansClosed(closed bool) {
+	t.jobsStatus.Lock()
+	t.jobsStatus.closed = closed
+	t.jobsStatus.Unlock()
 }
 
 func (t *Tracer) closeJobChans() {
-	if t.jobsClosed.Get() {
+	t.jobsStatus.Lock()
+	defer t.jobsStatus.Unlock()
+	if t.jobsStatus.closed {
 		return
 	}
 	for _, ch := range t.jobs {
 		close(ch)
 	}
-	t.jobsClosed.Set(true)
+	t.jobsStatus.closed = true
 }
 
 func (t *Tracer) jobProcessor(ctx context.Context, jobChan <-chan *Job) {
@@ -224,7 +235,9 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan <-chan *Job) {
 
 // AddJob add a job to tracer
 func (t *Tracer) AddJob(job *Job) {
-	if t.jobsClosed.Get() {
+	t.jobsStatus.RLock()
+	defer t.jobsStatus.RUnlock()
+	if t.jobsStatus.closed {
 		log.Warnf("[tracer] jobs channel already closed, add job %v failed", job)
 		return
 	}
