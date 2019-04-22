@@ -70,8 +70,8 @@ func OperateTask(ctx context.Context, cli pb.MasterClient, op pb.TaskOp, name st
 	}
 
 	for _, wp := range resp.GetWorkers() {
-		if !wp.GetResult() {
-			return errors.Errorf("fail to do %v operate on task %s: %s", op, name, wp.GetMsg())
+		if !wp.GetMeta().GetResult() {
+			return errors.Errorf("fail to do %v operate on task %s: %s", op, name, wp.Meta.GetMsg())
 		}
 	}
 
