@@ -1040,6 +1040,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 			log.Debugf("[syncer] start using a special streamer to re-sync DMLs for sharding group %+v", shardingReSync)
 			failpoint.Inject("ReSyncExit", func() {
+				log.Warn("[failpoint] exit triggered by ReSyncExit")
 				os.Exit(1)
 			})
 		}
@@ -1646,6 +1647,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 				if ddlExecItem.req.Exec {
 					failpoint.Inject("ShardSyncedExecutionExit", func() {
+						log.Warn("[failpoint] exit triggered by ShardSyncedExecutionExit")
 						os.Exit(1)
 					})
 

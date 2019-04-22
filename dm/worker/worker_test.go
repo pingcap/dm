@@ -11,23 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package worker
 
 import (
-	"context"
-	"os"
-
-	"github.com/pingcap/dm/tests/utils"
+	. "github.com/pingcap/check"
 )
 
-func main() {
-	cli, err := utils.CreateDmCtl("127.0.0.1:8261")
-	if err != nil {
-		utils.ExitWithError(err)
-	}
-	conf := os.Args[1]
-	err = utils.StartTask(context.Background(), cli, conf, nil)
-	if err != nil {
-		utils.ExitWithError(err)
-	}
+func (t *testWorker) TestOperateTask(c *C) {
 }

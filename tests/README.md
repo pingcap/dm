@@ -37,6 +37,8 @@
 
     > If want to run one integration test case only, just pass the CASE parameter, such as `make integration_test CASE=sharding`.
 
+    > There exists some environment variables that you can set by yourself, including `MYSQL_HOST1`, `MYSQL_PORT1`, `MYSQL_HOST2`, `MYSQL_PORT2`, `RESET_MASTER`. If `RESET_MASTER` is not set or set to true, `RESET MASTER` will be executed at upstream MySQL before each case.
+
     > The online DDL test using pt-osc doesn't work if the upstream MySQL has different connect port and bind port (often caused by port forwarding via NAT). In this case, you must specify the real IP and port of MySQL. Otherwise you can skip online DDL test by `export ONLINE_DDL_ENABLE=false`.
 
 4. After executing the tests, run `make coverage` to get a coverage report at `/tmp/dm_test/all_cov.html`.

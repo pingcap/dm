@@ -15,36 +15,27 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
-	"strings"
-	"time"
 
-	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/tests/utils"
 )
 
 func main() {
+	if len(os.Args) != 3 {
+		utils.ExitWithError(fmt.Errorf("invlid args: %v", os.Args))
+	}
 	cli, err := utils.CreateDmCtl("127.0.0.1:8261")
 	if err != nil {
 		utils.ExitWithError(err)
 	}
-	conf := os.Args[1]
-	// sometimes TCP port is available but RPC call to DM-worker is failed, we
-	// simply retry here.
-	retry := 5
-	for i := 0; i < retry; i++ {
-		err = utils.StartTask(context.Background(), cli, conf, nil)
-		if err != nil {
-			if strings.Contains(err.Error(), "sub task with name test already started") {
-				err = nil
-				break
-			}
-			log.Infof("start task failed with error: %s, retry\n", err)
-			time.Sleep(time.Second)
-		} else {
-			break
-		}
+	op, ok := pb.TaskOp_value[os.Args[1]]
+	if !ok {
+		utils.ExitWithError(fmt.Errorf("invalid op: %s", op))
 	}
+	taskName := os.Args[2]
+	err = utils.OperateTask(context.Background(), cli, pb.TaskOp(op), taskName, nil)
 	if err != nil {
 		utils.ExitWithError(err)
 	}
