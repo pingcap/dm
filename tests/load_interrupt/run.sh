@@ -50,8 +50,7 @@ function run() {
     check_port_alive $WORKER1_PORT
     check_port_alive $WORKER2_PORT
 
-    cd $cur && GO111MODULE=on go build -o bin/dmctl && cd -
-    $cur/bin/dmctl "$cur/conf/dm-task.yaml"
+    $cur/../bin/dmctl_start_task "$cur/conf/dm-task.yaml"
 
     check_port_offline $WORKER1_PORT 20
     check_port_offline $WORKER2_PORT 20
