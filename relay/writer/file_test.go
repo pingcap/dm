@@ -14,6 +14,7 @@
 package writer
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -22,9 +23,11 @@ import (
 	"time"
 
 	"github.com/pingcap/check"
+	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/binlog/event"
+	"github.com/pingcap/dm/pkg/gtid"
 )
 
 var (
@@ -311,4 +314,74 @@ func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check
 	c.Assert(len(data), check.Equals, fileHeaderLen+len(formatDescEv.RawData)+len(rotateEv.RawData))
 	c.Assert(data[fileHeaderLen:fileHeaderLen+len(formatDescEv.RawData)], check.DeepEquals, formatDescEv.RawData)
 	c.Assert(data[fileHeaderLen+len(formatDescEv.RawData):], check.DeepEquals, rotateEv.RawData)
+}
+
+func (t *testFileWriterSuite) TestWriteMultiEvents(c *check.C) {
+	var (
+		flavor                    = gmysql.MySQLFlavor
+		serverID           uint32 = 11
+		latestPos          uint32
+		previousGTIDSetStr        = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,406a3f61-690d-11e7-87c5-6c92bf46f384:1-94321383,53bfca22-690d-11e7-8a62-18ded7a37b78:1-495,686e1ab6-c47e-11e7-a42c-6c92bf46f384:1-34981190,03fc0263-28c7-11e7-a653-6c0b84d59f30:1-7041423,05474d3c-28c7-11e7-8352-203db246dd3d:1-170,10b039fc-c843-11e7-8f6a-1866daf8d810:1-308290454"
+		latestGTIDStr             = "3ccc475b-2343-11e7-be21-6c0b84d59f30:14"
+		latestXID          uint64 = 10
+
+		cfg = &FileConfig{
+			RelayDir: c.MkDir(),
+			Filename: "test-mysql-bin.000001",
+		}
+	)
+	previousGTIDSet, err := gtid.ParserGTID(flavor, previousGTIDSetStr)
+	c.Assert(err, check.IsNil)
+	latestGTID, err := gtid.ParserGTID(flavor, latestGTIDStr)
+	c.Assert(err, check.IsNil)
+
+	// use a binlog event generator to generate some binlog events.
+	allEvents := make([]*replication.BinlogEvent, 0, 10)
+	var allData bytes.Buffer
+	g, err := event.NewGenerator(flavor, serverID, latestPos, latestGTID, previousGTIDSet, latestXID)
+	c.Assert(err, check.IsNil)
+
+	// file header with FormatDescriptionEvent and PreviousGTIDsEvent
+	events, data, err := g.GenFileHeader()
+	c.Assert(err, check.IsNil)
+	allEvents = append(allEvents, events...)
+	allData.Write(data)
+
+	// CREATE DATABASE/TABLE
+	queries := []string{"CRATE DATABASE `db`", "CREATE TABLE `db`.`tbl` (c1 INT)"}
+	for _, query := range queries {
+		events, data, err = g.GenDDLEvents("db", query)
+		c.Assert(err, check.IsNil)
+		allEvents = append(allEvents, events...)
+		allData.Write(data)
+	}
+
+	// INSERT INTO `db`.`tbl` VALUES (1)
+	var (
+		tableID    uint64 = 8
+		columnType        = []byte{gmysql.MYSQL_TYPE_LONG}
+		insertRows        = make([][]interface{}, 1)
+	)
+	insertRows[0] = []interface{}{int32(1)}
+	events, data, err = g.GenDMLEvents(replication.WRITE_ROWS_EVENTv2, []*event.DMLData{
+		{TableID: tableID, Schema: "db", Table: "tbl", ColumnType: columnType, Rows: insertRows}})
+	c.Assert(err, check.IsNil)
+	allEvents = append(allEvents, events...)
+	allData.Write(data)
+
+	// write the events to the file
+	w := NewFileWriter(cfg)
+	c.Assert(w.Start(), check.IsNil)
+	for _, ev := range allEvents {
+		result, err2 := w.WriteEvent(ev)
+		c.Assert(err2, check.IsNil)
+		c.Assert(result, check.NotNil)
+		c.Assert(result.Ignore, check.IsFalse) // no event is ignored
+	}
+
+	// read the data back from the file
+	filename := filepath.Join(cfg.RelayDir, cfg.Filename)
+	obtainData, err := ioutil.ReadFile(filename)
+	c.Assert(err, check.IsNil)
+	c.Assert(obtainData, check.DeepEquals, allData.Bytes())
 }
