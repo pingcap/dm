@@ -46,9 +46,32 @@ func StartTask(ctx context.Context, cli pb.MasterClient, configFile string, work
 		return errors.Trace(err)
 	}
 
+	if !resp.GetResult() {
+		return errors.Errorf("start task resp error: %s", resp.GetMsg())
+	}
+
 	for _, wp := range resp.GetWorkers() {
 		if !wp.GetResult() {
 			return errors.Errorf("fail to start task %v: %s", string(content), wp.GetMsg())
+		}
+	}
+
+	return nil
+}
+
+func OperateTask(ctx context.Context, cli pb.MasterClient, op pb.TaskOp, name string, workers []string) error {
+	resp, err := cli.OperateTask(ctx, &pb.OperateTaskRequest{
+		Op:      op,
+		Name:    name,
+		Workers: workers,
+	})
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	for _, wp := range resp.GetWorkers() {
+		if !wp.GetResult() {
+			return errors.Errorf("fail to do %v operate on task %s: %s", op, name, wp.GetMsg())
 		}
 	}
 

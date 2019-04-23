@@ -3,6 +3,7 @@
 set -eu
 
 TEST_DIR=/tmp/dm_test
+CUR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 
 stop_services() {
     # killall -9 tidb-server || true
@@ -54,6 +55,14 @@ start_services() {
     check_mysql $MYSQL_HOST2 $MYSQL_PORT2
 }
 
+prepare_tools() {
+    mkdir -p $CUR/bin
+    cd $CUR
+    GO111MODULE=on go build -o bin/dmctl_start_task dmctl_tools/dmctl_start_task.go
+    GO111MODULE=on go build -o bin/dmctl_operate_task dmctl_tools/dmctl_operate_task.go
+    cd -
+}
+
 if [ "$#" -ge 1 ]; then
     test_case=$1
     if [ "$test_case" != "*" ] && [ ! -d "tests/$test_case" ]; then
@@ -66,6 +75,7 @@ fi
 
 trap stop_services EXIT
 start_services
+prepare_tools
 
 for script in tests/$test_case/run.sh; do
     echo "Running test $script..."

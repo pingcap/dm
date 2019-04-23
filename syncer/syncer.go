@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -24,6 +25,7 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser/ast"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
@@ -1037,7 +1039,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				})
 				shardingStreamer, err = s.getBinlogStreamer(shardingReader, shardingReSync.currPos)
 			}
-			log.Debugf("[syncer] start using a  special streamer to re-sync DMLs for sharding group %+v", shardingReSync)
+			log.Debugf("[syncer] start using a special streamer to re-sync DMLs for sharding group %+v", shardingReSync)
+			failpoint.Inject("ReSyncExit", func() {
+				log.Warn("[failpoint] exit triggered by ReSyncExit")
+				os.Exit(1)
+			})
 		}
 
 		var (
@@ -1639,7 +1645,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					log.Info("[syncer] cancel to add DDL to job because of canceled from external")
 					return nil
 				}
+
 				if ddlExecItem.req.Exec {
+					failpoint.Inject("ShardSyncedExecutionExit", func() {
+						log.Warn("[failpoint] exit triggered by ShardSyncedExecutionExit")
+						os.Exit(1)
+					})
+
 					log.Infof("[syncer] add DDL %v to job, request is %+v", ddlInfo1.DDLs, ddlExecItem.req)
 				} else {
 					log.Infof("[syncer] ignore DDL %v, request is %+v", ddlInfo1.DDLs, ddlExecItem.req)

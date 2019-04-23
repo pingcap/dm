@@ -112,17 +112,17 @@ func (w *Worker) Start() {
 	// start purger
 	w.relayPurger.Start()
 
+	// start tracer
+	if w.tracer.Enable() {
+		w.tracer.Start()
+	}
+
 	// restore tasks
 	meta := w.meta.Get()
 	for taskName, subtask := range meta.SubTasks {
 		if err := w.StartSubTask(subtask); err != nil {
 			panic(fmt.Sprintf("restore task %s (%s) in worker starting: %v", taskName, subtask, err))
 		}
-	}
-
-	// start tracer
-	if w.tracer.Enable() {
-		w.tracer.Start()
 	}
 
 	ticker := time.NewTicker(5 * time.Second)

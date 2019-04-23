@@ -1,0 +1,22 @@
+#!/bin/sh
+# parameter 1: work directory
+# parameter 2: tracer-addr port
+# parameter 3: config file for DM-tracer
+
+set -eu
+
+workdir=$1
+port=$2
+conf=$3
+
+mkdir -p $workdir/log $workdir/bin
+
+PWD=$(pwd)
+binary=$PWD/bin/dm-tracer.test
+
+echo "[$(date)] <<<<<< START DM-TRACER on port $port, config: $conf >>>>>>"
+cd $workdir
+$binary -test.coverprofile="$TEST_DIR/cov.$TEST_NAME.tracer.$port.out" DEVEL \
+    --tracer-addr=:$port --log-file="$workdir/log/dm-tracer.log" --config="$conf" \
+    >> $workdir/log/stdout.log 2>&1 &
+cd $PWD
