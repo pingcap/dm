@@ -42,7 +42,7 @@ function run() {
     printf "\n[[table-config.source-tables]]\ninstance-id = \"source-2\"\nschema = \"sharding2\"\ntable  = \"~t.*\"" >> $WORK_DIR/diff_config.toml
     check_sync_diff $WORK_DIR $WORK_DIR/diff_config.toml
 
-    # test drop table, drop database in sharding mode
+    # test drop table, drop database, truncate table in sharding mode
     run_sql_file $cur/data/db1.increment3.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.increment3.sql $MYSQL_HOST2 $MYSQL_PORT2
     cp $cur/conf/diff_config.toml $WORK_DIR/diff_config.toml
