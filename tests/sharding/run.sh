@@ -33,6 +33,22 @@ function run() {
     # TODO: check sharding partition id
     # use sync_diff_inspector to check data now!
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    # test create database, create table in sharding mode
+    run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1
+    run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2
+    cp $cur/conf/diff_config.toml $WORK_DIR/diff_config.toml
+    printf "\n[[table-config.source-tables]]\ninstance-id = \"source-1\"\nschema = \"sharding2\"\ntable  = \"~t.*\"" >> $WORK_DIR/diff_config.toml
+    printf "\n[[table-config.source-tables]]\ninstance-id = \"source-2\"\nschema = \"sharding2\"\ntable  = \"~t.*\"" >> $WORK_DIR/diff_config.toml
+    check_sync_diff $WORK_DIR $WORK_DIR/diff_config.toml
+
+    # test drop table, drop database in sharding mode
+    run_sql_file $cur/data/db1.increment3.sql $MYSQL_HOST1 $MYSQL_PORT1
+    run_sql_file $cur/data/db2.increment3.sql $MYSQL_HOST2 $MYSQL_PORT2
+    cp $cur/conf/diff_config.toml $WORK_DIR/diff_config.toml
+    printf "\n[[table-config.source-tables]]\ninstance-id = \"source-1\"\nschema = \"sharding2\"\ntable  = \"~t.*\"" >> $WORK_DIR/diff_config.toml
+    sed -i "s/^# range-placeholder/range = \"uid < 70000\"/g" $WORK_DIR/diff_config.toml
+    check_sync_diff $WORK_DIR $WORK_DIR/diff_config.toml
 }
 
 cleanup1 db_target
