@@ -49,6 +49,7 @@ type testSyncerSuite struct {
 	syncer   *replication.BinlogSyncer
 	streamer *replication.BinlogStreamer
 	cfg      *config.SubTaskConfig
+	cpCfg    *config.SubTaskConfig
 }
 
 func (s *testSyncerSuite) SetUpSuite(c *C) {
@@ -66,6 +67,20 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 	}
 	pswd := os.Getenv("MYSQL_PSWD")
 
+	tidbHost := os.Getenv("TIDB_HOST")
+	if tidbHost == "" {
+		tidbHost = "127.0.0.1"
+	}
+	tidbPort, _ := strconv.Atoi(os.Getenv("TIDB_PORT"))
+	if tidbPort == 0 {
+		tidbPort = 4000
+	}
+	tidbUser := os.Getenv("TIDB_USER")
+	if tidbUser == "" {
+		tidbUser = "root"
+	}
+	tidbPswd := os.Getenv("TIDB_PSWD")
+
 	s.cfg = &config.SubTaskConfig{
 		From: config.DBConfig{
 			Host:     host,
@@ -74,13 +89,14 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 			Port:     port,
 		},
 		To: config.DBConfig{
-			Host:     host,
-			User:     user,
-			Password: pswd,
-			Port:     port,
+			Host:     tidbHost,
+			User:     tidbUser,
+			Password: tidbPswd,
+			Port:     tidbPort,
 		},
 		ServerID:   101,
 		MetaSchema: "test",
+		Name:       "syncer_ut",
 	}
 	s.cfg.From.Adjust()
 	s.cfg.To.Adjust()

@@ -14,15 +14,18 @@
 package syncer
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // NOTE: there are binlog events conflict with other test cases
@@ -31,7 +34,7 @@ import (
 // and different SQLs in different txn may in different sessions
 // ref: https://github.com/go-sql-driver/mysql/issues/208
 // so disable checkpoint test now, TestCheckPoint => testCheckPoint
-func (s *testSyncerSuite) testCheckPoint(c *C) {
+func (s *testSyncerSuite) TestCheckPoint(c *C) {
 	id := "test_for_db"
 	cp := NewRemoteCheckPoint(s.cfg, id)
 	defer cp.Close()
@@ -83,6 +86,8 @@ func (s *testSyncerSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	s.cfg.Dir = dir
 	err = cp.Load()
 	c.Assert(err, IsNil)
+	cp.SaveGlobalPoint(pos1)
+	cp.FlushPointsExcept(nil)
 	c.Assert(cp.GlobalPoint(), Equals, pos1)
 	c.Assert(cp.FlushedGlobalPoint(), Equals, pos1)
 
@@ -90,7 +95,7 @@ func (s *testSyncerSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	pos1.Pos = 2044
 	s.cfg.Mode = config.ModeIncrement
 	s.cfg.Meta = &config.Meta{BinLogName: pos1.Name, BinLogPos: pos1.Pos}
-	err = cp.Load()
+	err = cp.LoadMeta()
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint(), Equals, pos1)
 	c.Assert(cp.FlushedGlobalPoint(), Equals, pos1)
@@ -131,6 +136,18 @@ func (s *testSyncerSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint(), Equals, pos2)
 	c.Assert(cp.FlushedGlobalPoint(), Equals, pos2)
+
+	// test save older point
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	cp.SaveGlobalPoint(pos1)
+	c.Assert(err, IsNil)
+	c.Assert(cp.GlobalPoint(), Equals, pos2)
+	c.Assert(cp.FlushedGlobalPoint(), Equals, pos2)
+	matchStr := fmt.Sprintf(".*try to save %s is older than current pos %s", pos1, pos2)
+	matchStr = strings.Replace(strings.Replace(matchStr, ")", "\\)", -1), "(", "\\(", -1)
+	c.Assert(strings.TrimSpace(buf.String()), Matches, matchStr)
+	log.SetOutput(os.Stdout)
 
 	// test clear
 	err = cp.Clear()

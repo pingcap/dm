@@ -22,9 +22,11 @@
 
 ### Unit Test
 
-1. Setup a MySQL server with binlog enabled first, export proper environment variable `MYSQL_HOST` and `MYSQL_PORT`, default is `127.0.0.1` and `3306`
+1. Setup a MySQL server with binlog enabled first, export proper environment variable `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PSWD`, default is `127.0.0.1`, `3306`, `root` and empty password.
 
-2. Run `make test` to run unit test
+2. Setup a TiDB server, export proper environment variable `TIDB_HOST`, `TIDB_PORT`, `TIDB_USER`, `TIDB_PSWD`, default is `127.0.0.1`, `4000`, `root` and empty password.
+
+3. Run `make test` to run unit test
 
 ### Integration Test
 
