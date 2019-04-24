@@ -24,7 +24,7 @@
 
 1. Setup a MySQL server with binlog enabled first, export proper environment variable `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PSWD`, default is `127.0.0.1`, `3306`, `root` and empty password.
 
-2. Setup a TiDB server, export proper environment variable `TIDB_HOST`, `TIDB_PORT`, `TIDB_USER`, `TIDB_PSWD`, default is `127.0.0.1`, `4000`, `root` and empty password.
+2. Setup anohter MySQL server used for checkpoint test, export proper environment variable `MYSQL_HOST2`, `MYSQL_PORT2`, `MYSQL_USER2`, `MYSQL_PSWD2`, default is `127.0.0.1`, `3307`, `root` and empty password.
 
 3. Run `make test` to run unit test
 

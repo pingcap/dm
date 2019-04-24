@@ -66,19 +66,19 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 	}
 	pswd := os.Getenv("MYSQL_PSWD")
 
-	tidbHost := os.Getenv("TIDB_HOST")
-	if tidbHost == "" {
-		tidbHost = "127.0.0.1"
+	host2 := os.Getenv("MYSQL_HOST2")
+	if host2 == "" {
+		host2 = "127.0.0.1"
 	}
-	tidbPort, _ := strconv.Atoi(os.Getenv("TIDB_PORT"))
-	if tidbPort == 0 {
-		tidbPort = 4000
+	port2, _ := strconv.Atoi(os.Getenv("MYSQL_PORT2"))
+	if port2 == 0 {
+		port2 = 3307
 	}
-	tidbUser := os.Getenv("TIDB_USER")
-	if tidbUser == "" {
-		tidbUser = "root"
+	user2 := os.Getenv("MYSQL_USER2")
+	if user2 == "" {
+		user2 = "root"
 	}
-	tidbPswd := os.Getenv("TIDB_PSWD")
+	pswd2 := os.Getenv("MYSQL_PSWD2")
 
 	s.cfg = &config.SubTaskConfig{
 		From: config.DBConfig{
@@ -88,10 +88,10 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 			Port:     port,
 		},
 		To: config.DBConfig{
-			Host:     tidbHost,
-			User:     tidbUser,
-			Password: tidbPswd,
-			Port:     tidbPort,
+			Host:     host2,
+			User:     user2,
+			Password: pswd2,
+			Port:     port2,
 		},
 		ServerID:   101,
 		MetaSchema: "test",

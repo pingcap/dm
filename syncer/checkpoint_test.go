@@ -33,7 +33,7 @@ import (
 // because go-sql-driver/mysql using connection pool for *sql.DB
 // and different SQLs in different txn may in different sessions
 // ref: https://github.com/go-sql-driver/mysql/issues/208
-// so disable checkpoint test now, TestCheckPoint => testCheckPoint
+// so we use different DB from other tests.
 func (s *testSyncerSuite) TestCheckPoint(c *C) {
 	id := "test_for_db"
 	cp := NewRemoteCheckPoint(s.cfg, id)
