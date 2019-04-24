@@ -49,7 +49,6 @@ type testSyncerSuite struct {
 	syncer   *replication.BinlogSyncer
 	streamer *replication.BinlogStreamer
 	cfg      *config.SubTaskConfig
-	cpCfg    *config.SubTaskConfig
 }
 
 func (s *testSyncerSuite) SetUpSuite(c *C) {
