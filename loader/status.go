@@ -17,11 +17,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/pingcap/failpoint"
+
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
 )
 
-const (
+var (
 	printStatusInterval = time.Second * 5
 )
 
@@ -46,6 +48,12 @@ func (l *Loader) Error() interface{} {
 
 // PrintStatus prints status like progress percentage.
 func (l *Loader) PrintStatus(ctx context.Context) {
+	failpoint.Inject("PrintStatusCheckSeconds", func(val failpoint.Value) {
+		seconds, _ := val.(int)
+		printStatusInterval = time.Duration(seconds) * time.Second
+		log.Infof("[failpoint] set printStatusInterval to %d", seconds)
+	})
+
 	ticker := time.NewTicker(printStatusInterval)
 	defer ticker.Stop()
 

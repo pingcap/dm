@@ -29,3 +29,7 @@ if [ "$RESET_MASTER" = true ]; then
     run_sql "RESET MASTER" $MYSQL_PORT1
     run_sql "RESET MASTER" $MYSQL_PORT2
 fi
+
+function join_string() {
+    local IFS="$1"; shift; echo "$*";
+}

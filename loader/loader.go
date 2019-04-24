@@ -145,6 +145,11 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *
 					}
 				})
 
+				failpoint.Inject("LoadDataSlowDown", func(val failpoint.Value) {
+					ms, _ := val.(int)
+					time.Sleep(time.Duration(ms) * time.Millisecond)
+				})
+
 				if err := w.conn.executeSQL(sqls, true); err != nil {
 					// expect pause rather than exit
 					err = errors.Annotatef(err, "file %s", job.file)

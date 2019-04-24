@@ -1127,6 +1127,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 		s.binlogSizeCount.Add(int64(e.Header.EventSize))
 
+		failpoint.Inject("ProcessBinlogSlowDown", func(val failpoint.Value) {
+			ms, _ := val.(int)
+			log.Infof("process binlog slow down: %s", time.Now())
+			time.Sleep(time.Duration(ms) * time.Millisecond)
+		})
+
 		log.Debugf("[syncer] receive binlog event with header %+v", e.Header)
 		switch ev := e.Event.(type) {
 		case *replication.RotateEvent:
@@ -1752,6 +1758,12 @@ func (s *Syncer) genRouter() error {
 
 func (s *Syncer) printStatus(ctx context.Context) {
 	defer s.wg.Done()
+
+	failpoint.Inject("PrintStatusCheckSeconds", func(val failpoint.Value) {
+		seconds, _ := val.(int)
+		statusTime = time.Duration(seconds) * time.Second
+		log.Infof("[failpoint] set printStatusInterval to %d", seconds)
+	})
 
 	timer := time.NewTicker(statusTime)
 	defer timer.Stop()
