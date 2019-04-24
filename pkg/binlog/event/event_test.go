@@ -716,3 +716,83 @@ func (t *testEventSuite) TestGenMariaDBGTIDEvent(c *C) {
 	c.Assert(gtidEvBody.GTID.SequenceNumber, Equals, seqNum)
 	c.Assert(gtidEvBody.GTID.DomainID, Equals, domainID)
 }
+
+func (t *testEventSuite) TestGenDummyEvent(c *C) {
+	var (
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+			Flags:     HeaderFlagSuppressUse | HeaderFlagRelayLog,
+		}
+		latestPos uint32 = 4
+	)
+
+	// too small event size
+	eventSize := MinUserVarEventLen - 1
+	userVarEv, err := GenDummyEvent(header, latestPos, eventSize)
+	c.Assert(err, ErrorMatches, ".*is too small.*")
+	c.Assert(userVarEv, IsNil)
+
+	// minimum event size, USER_VAR_EVENT with name-length==1
+	eventSize = MinUserVarEventLen
+	userVarEv, err = GenDummyEvent(header, latestPos, eventSize)
+	c.Assert(err, IsNil)
+	c.Assert(userVarEv, NotNil)
+	// verify the header
+	verifyHeader(c, userVarEv.Header, header, replication.USER_VAR_EVENT, latestPos, uint32(len(userVarEv.RawData)))
+	// verify the body
+	nameStart := uint32(eventHeaderLen + 4)
+	nameEnd := uint32(eventSize-1) - crc32Len
+	nameLen := nameEnd - nameStart
+	c.Assert(nameLen, Equals, uint32(1)) // name-length==1
+	c.Assert(userVarEv.RawData[nameStart:nameEnd], DeepEquals, dummyUserVarName[:nameLen])
+	c.Assert(userVarEv.RawData[nameEnd:nameEnd+1], DeepEquals, []byte{0x01}) // is-null always 1
+
+	// minimum, .., equal dummy query, longer, ...
+	dummyQueryLen := uint32(len(dummyQuery))
+	eventSizeList := []uint32{MinQueryEventLen, MinQueryEventLen + 5,
+		MinQueryEventLen + dummyQueryLen - 1, MinQueryEventLen + dummyQueryLen, MinQueryEventLen + dummyQueryLen + 10}
+	for _, eventSize = range eventSizeList {
+		queryEv, err := GenDummyEvent(header, latestPos, eventSize)
+		c.Assert(err, IsNil)
+		c.Assert(queryEv, NotNil)
+		// verify the header
+		verifyHeader(c, queryEv.Header, header, replication.QUERY_EVENT, latestPos, uint32(len(queryEv.RawData)))
+		// verify the body
+		queryEvBody, ok := queryEv.Event.(*replication.QueryEvent)
+		c.Assert(ok, IsTrue)
+		c.Assert(queryEvBody, NotNil)
+		c.Assert(queryEvBody.SlaveProxyID, Equals, uint32(0))
+		c.Assert(queryEvBody.ExecutionTime, Equals, uint32(0))
+		c.Assert(queryEvBody.ErrorCode, Equals, uint16(0))
+		c.Assert(queryEvBody.StatusVars, DeepEquals, []byte{})
+		c.Assert(queryEvBody.Schema, DeepEquals, []byte{})
+		queryStart := uint32(eventHeaderLen + 4 + 4 + 1 + 2 + 2 + 1)
+		queryEnd := uint32(eventSize) - crc32Len
+		queryLen := queryEnd - queryStart
+		c.Assert(queryEvBody.Query, HasLen, int(queryLen))
+		if queryLen <= dummyQueryLen {
+			c.Assert(queryEvBody.Query, DeepEquals, dummyQuery[:queryLen])
+		} else {
+			c.Assert(queryEvBody.Query[:dummyQueryLen], DeepEquals, dummyQuery)
+			zeroTail := make([]byte, queryLen-dummyQueryLen)
+			c.Assert(queryEvBody.Query[dummyQueryLen:], DeepEquals, zeroTail)
+		}
+	}
+
+	// use a special header to test flags
+	header = &replication.EventHeader{
+		Timestamp: uint32(time.Now().Unix()),
+		ServerID:  11,
+		Flags:     0, // no flags set
+	}
+	eventSizeList = append(eventSizeList, MinUserVarEventLen) // add a USER_VAR_EVENT
+	for _, eventSize = range eventSizeList {
+		ev, err2 := GenDummyEvent(header, latestPos, eventSize)
+		c.Assert(err2, IsNil)
+		c.Assert(ev, NotNil)
+		// verify the header flag
+		c.Assert(userVarEv.Header.Flags&HeaderFlagSuppressUse, Greater, uint16(0))
+		c.Assert(userVarEv.Header.Flags&HeaderFlagRelayLog, Greater, uint16(0))
+	}
+}
