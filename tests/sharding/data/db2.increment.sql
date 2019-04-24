@@ -1,4 +1,4 @@
-use sharding;
+use sharding1;
 delete from t3 where name = 'Santa Sofía de la Piedad';
 alter table t2 add column age int;
 update t2 set uid = uid + 10000;

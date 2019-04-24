@@ -239,6 +239,11 @@ func (s *Syncer) dropSchemaInSharding(sourceSchema string) error {
 	sources := make(map[string][][]string)
 	sgs := s.sgk.Groups()
 	for name, sg := range sgs {
+		if sg.IsSchemaOnly {
+			// in sharding group leave handling, we always process schema group,
+			// we can ignore schema only group here
+			continue
+		}
 		tables := sg.Tables()
 		for _, table := range tables {
 			if table[0] != sourceSchema {
