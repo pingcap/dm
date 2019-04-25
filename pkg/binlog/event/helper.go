@@ -28,7 +28,7 @@ func GTIDsFromPreviousGTIDsEvent(e *replication.BinlogEvent) (gtid.Set, error) {
 	case *replication.GenericEvent:
 		payload = ev.Data
 	default:
-		return nil, errors.Errorf("PreviousGTIDsEvent should be a GenericEvent in go-mysql")
+		return nil, errors.Errorf("PreviousGTIDsEvent should be a GenericEvent in go-mysql, but got %T", e.Event)
 	}
 
 	if e.Header.EventType != replication.PREVIOUS_GTIDS_EVENT {
@@ -48,6 +48,42 @@ func GTIDsFromPreviousGTIDsEvent(e *replication.BinlogEvent) (gtid.Set, error) {
 	err = gSet.Set(set)
 	if err != nil {
 		return nil, errors.Annotatef(err, "replace GTID set with set %v", set)
+	}
+
+	return gSet, nil
+}
+
+// GTIDsFromMariaDBGTIDListEvent get GTID set from a MariaDBGTIDListEvent.
+func GTIDsFromMariaDBGTIDListEvent(e *replication.BinlogEvent) (gtid.Set, error) {
+	var gtidListEv *replication.MariadbGTIDListEvent
+	switch ev := e.Event.(type) {
+	case *replication.MariadbGTIDListEvent:
+		gtidListEv = ev
+	default:
+		return nil, errors.Errorf("the event should be a MariadbGTIDListEvent, but got %T", e.Event)
+	}
+
+	ggSet, err := gmysql.ParseMariadbGTIDSet("")
+	if err != nil {
+		return nil, errors.Annotatef(err, "parse empty MariaDB GTID set")
+	}
+	mGSet := ggSet.(*gmysql.MariadbGTIDSet)
+	for _, set := range gtidListEv.GTIDs {
+		setClone := set
+		err = mGSet.AddSet(&setClone)
+		if err != nil {
+			return nil, errors.Annotatef(err, "add set %v to GTID set", set)
+		}
+	}
+
+	// always MariaDB for MariaDBGTIDListEvent
+	gSet, err := gtid.ParserGTID(gmysql.MariaDBFlavor, "")
+	if err != nil {
+		return nil, errors.Annotatef(err, "parse empty GTID set")
+	}
+	err = gSet.Set(ggSet)
+	if err != nil {
+		return nil, errors.Annotatef(err, "replace GTID set with set %v", ggSet)
 	}
 
 	return gSet, nil

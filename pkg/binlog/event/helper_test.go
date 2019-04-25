@@ -52,12 +52,39 @@ func (t *testHelperSuite) TestGTIDsFromPreviousGTIDsEvent(c *C) {
 	c.Assert(gSet, IsNil)
 
 	// valid MySQL GTIDs
-	gtidStr := "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,406a3f61-690d-11e7-87c5-6c92bf46f384:1-94321383,53bfca22-690d-11e7-8a62-18ded7a37b78:1-495,686e1ab6-c47e-11e7-a42c-6c92bf46f384:1-34981190,03fc0263-28c7-11e7-a653-6c0b84d59f30:1-7041423,05474d3c-28c7-11e7-8352-203db246dd3d:1-170,10b039fc-c843-11e7-8f6a-1866daf8d810:1-308290454"
+	gtidStr := "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,406a3f61-690d-11e7-87c5-6c92bf46f384:1-94321383"
 	gSetExpect, err := gtid.ParserGTID(gmysql.MySQLFlavor, gtidStr)
 	c.Assert(err, IsNil)
 	previousGTIDEv, err := GenPreviousGTIDsEvent(header, latestPos, gSetExpect)
 	c.Assert(err, IsNil)
 	gSet, err = GTIDsFromPreviousGTIDsEvent(previousGTIDEv)
 	c.Assert(err, IsNil)
-	c.Assert(gSetExpect, DeepEquals, gSet)
+	c.Assert(gSet, DeepEquals, gSetExpect)
+}
+
+func (t *testHelperSuite) TestGTIDsFromMariaDBGTIDListEvent(c *C) {
+	var (
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+		}
+		latestPos uint32 = 4
+	)
+
+	// invalid binlog type, QueryEvent
+	queryEv, err := GenQueryEvent(header, latestPos, 0, 0, 0, nil, []byte("schema"), []byte("BEGIN"))
+	c.Assert(err, IsNil)
+	gSet, err := GTIDsFromMariaDBGTIDListEvent(queryEv)
+	c.Assert(err, ErrorMatches, ".*should be a MariadbGTIDListEvent.*")
+	c.Assert(gSet, IsNil)
+
+	// valid MariaDB GTIDs
+	gtidStr := "1-1-1,2-2-2"
+	gSetExpect, err := gtid.ParserGTID(gmysql.MariaDBFlavor, gtidStr)
+	c.Assert(err, IsNil)
+	mariaGTIDListEv, err := GenMariaDBGTIDListEvent(header, latestPos, gSetExpect)
+	c.Assert(err, IsNil)
+	gSet, err = GTIDsFromMariaDBGTIDListEvent(mariaGTIDListEv)
+	c.Assert(err, IsNil)
+	c.Assert(gSet, DeepEquals, gSetExpect)
 }
