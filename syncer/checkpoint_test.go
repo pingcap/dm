@@ -46,12 +46,7 @@ func (s *testSyncerSuite) prepareCheckPointSQL() {
 	loadCheckPointSQL = fmt.Sprintf("SELECT .* FROM `%s`.`%s_syncer_checkpoint` WHERE `id`='%s'", s.cfg.MetaSchema, s.cfg.Name, cpid)
 }
 
-// NOTE: there are binlog events conflict with other test cases
-// and we can not simply disable `sql_log_bin` for this test case
-// because go-sql-driver/mysql using connection pool for *sql.DB
-// and different SQLs in different txn may in different sessions
-// ref: https://github.com/go-sql-driver/mysql/issues/208
-// so we use different DB from other tests.
+// this test case uses sqlmock to simulate all SQL operations in tests
 func (s *testSyncerSuite) TestCheckPoint(c *C) {
 	cp := NewRemoteCheckPoint(s.cfg, cpid)
 	defer func() {
@@ -76,6 +71,7 @@ func (s *testSyncerSuite) TestCheckPoint(c *C) {
 	mock.ExpectExec(clearCheckPointSQL).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
+	// pass sqlmock db directly
 	err = cp.Init(&Conn{cfg: s.cfg, db: db})
 	c.Assert(err, IsNil)
 	cp.Clear()
