@@ -239,7 +239,19 @@ func (w *FileWriter) handleEventDefault(ev *replication.BinlogEvent) (*Result, e
 	// handle a potential hole
 	err := w.handleFileHoleExist(ev)
 	if err != nil {
-		return nil, errors.Annotatef(err, "handle a potential hole in %s", w.filename.Get())
+		return nil, errors.Annotatef(err, "handle a potential hole in %s before %+v",
+			w.filename.Get(), ev.Header)
+	}
+
+	// handle any duplicate events if exist
+	result, err := w.handleDuplicateEventsExist(ev)
+	if err != nil {
+		return nil, errors.Annotatef(err, "handle a potential duplicate event %+v in %s",
+			ev.Header, w.filename.Get())
+	}
+	if result.Ignore {
+		// duplicate, and can ignore it. now, we assume duplicate events can all be ignored
+		return result, nil
 	}
 
 	// write the non-duplicate event and update the offset
@@ -279,10 +291,23 @@ func (w *FileWriter) handleFileHoleExist(ev *replication.BinlogEvent) error {
 		return errors.Annotatef(err, "generate dummy event at %d with size %d", latestPos, eventSize)
 	}
 
-	// 3. write the dummy event and udpate the offset
+	// 3. write the dummy event and update the offset
 	err = w.out.Write(dummyEv.RawData)
 	if err == nil {
 		w.offset.Add(holeSize)
 	}
 	return errors.Trace(err)
+}
+
+// handleDuplicateEventsExist tries to handle a potential duplicate event in the binlog file.
+func (w *FileWriter) handleDuplicateEventsExist(ev *replication.BinlogEvent) (*Result, error) {
+	filename := filepath.Join(w.cfg.RelayDir, w.filename.Get())
+	duplicate, err := checkIsDuplicateEvent(filename, ev)
+	if err != nil {
+		return nil, errors.Annotatef(err, "check event %+v is duplicate in %s", ev, filename)
+	}
+
+	return &Result{
+		Ignore: duplicate,
+	}, nil
 }

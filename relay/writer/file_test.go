@@ -159,6 +159,7 @@ func (t *testFileWriterSuite) TestFormatDescriptionEvent(c *check.C) {
 	c.Assert(result.Ignore, check.IsFalse)
 	fileSize := int64(len(replication.BinLogFileHeader) + len(formatDescEv.RawData))
 	t.verifyFilenameOffset(c, w, cfg.Filename, fileSize)
+	latestPos = formatDescEv.Header.LogPos
 
 	// write FormatDescriptionEvent again, ignore
 	result, err = w.WriteEvent(formatDescEv)
@@ -176,6 +177,7 @@ func (t *testFileWriterSuite) TestFormatDescriptionEvent(c *check.C) {
 	c.Assert(result.Ignore, check.IsFalse)
 	fileSize += int64(len(queryEv.RawData))
 	t.verifyFilenameOffset(c, w, cfg.Filename, fileSize)
+	latestPos = queryEv.Header.LogPos
 
 	// write FormatDescriptionEvent again, ignore
 	result, err = w.WriteEvent(formatDescEv)
@@ -409,7 +411,7 @@ func (t *testFileWriterSuite) TestWriteMultiEvents(c *check.C) {
 	c.Assert(obtainData, check.DeepEquals, allData.Bytes())
 }
 
-func (t *testFileWriterSuite) TestHandleFileHole(c *check.C) {
+func (t *testFileWriterSuite) TestHandleFileHoleExist(c *check.C) {
 	var (
 		cfg = &FileConfig{
 			RelayDir: c.MkDir(),
@@ -476,4 +478,54 @@ func (t *testFileWriterSuite) TestHandleFileHole(c *check.C) {
 	c.Assert(dummyEvent.Header.EventType, check.Equals, replication.USER_VAR_EVENT)
 	c.Assert(dummyEvent.Header.LogPos, check.Equals, latestPos)                               // start pos of the third event
 	c.Assert(dummyEvent.Header.EventSize, check.Equals, latestPos-formatDescEv.Header.LogPos) // hole size
+}
+
+func (t *testFileWriterSuite) TestHandleDuplicateEventsExist(c *check.C) {
+	// NOTE: not duplicate event already tested in other cases
+
+	var (
+		cfg = &FileConfig{
+			RelayDir: c.MkDir(),
+			Filename: "test-mysql-bin.000001",
+		}
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+		}
+		latestPos uint32 = 4
+	)
+	w := NewFileWriter(cfg)
+	defer w.Close()
+	c.Assert(w.Start(), check.IsNil)
+
+	// write a FormatDescriptionEvent, not duplicate
+	formatDescEv, err := event.GenFormatDescriptionEvent(header, latestPos)
+	c.Assert(err, check.IsNil)
+	result, err := w.WriteEvent(formatDescEv)
+	c.Assert(err, check.IsNil)
+	c.Assert(result, check.NotNil)
+	c.Assert(result.Ignore, check.IsFalse)
+	latestPos = formatDescEv.Header.LogPos
+
+	// write a QueryEvent, the first time, not duplicate
+	queryEv, err := event.GenQueryEvent(header, latestPos, 0, 0, 0, nil, []byte("schema"), []byte("BEGIN"))
+	c.Assert(err, check.IsNil)
+	result, err = w.WriteEvent(queryEv)
+	c.Assert(err, check.IsNil)
+	c.Assert(result, check.NotNil)
+	c.Assert(result.Ignore, check.IsFalse)
+
+	// write the QueryEvent again, duplicate
+	result, err = w.WriteEvent(queryEv)
+	c.Assert(err, check.IsNil)
+	c.Assert(result, check.NotNil)
+	c.Assert(result.Ignore, check.IsTrue)
+
+	// write a start/end pos mismatched event
+	latestPos--
+	queryEv, err = event.GenQueryEvent(header, latestPos, 0, 0, 0, nil, []byte("schema"), []byte("BEGIN"))
+	c.Assert(err, check.IsNil)
+	result, err = w.WriteEvent(queryEv)
+	c.Assert(err, check.ErrorMatches, ".*handle a potential duplicate event.*")
+	c.Assert(result, check.IsNil)
 }
