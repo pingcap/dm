@@ -125,6 +125,7 @@ func checkIsDuplicateEvent(filename string, ev *replication.BinlogEvent) (bool, 
 		EnableRawMode: true,
 	}
 	r := reader.NewFileReader(rCfg)
+	defer r.Close()
 	syncStartPos := gmysql.Position{Name: filename, Pos: uint32(evStartPos)}
 	err = r.StartSyncByPos(syncStartPos)
 	if err != nil {
