@@ -16,11 +16,13 @@ package writer
 import (
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
 
+	"github.com/pingcap/dm/pkg/binlog/event"
 	bw "github.com/pingcap/dm/pkg/binlog/writer"
 	"github.com/pingcap/dm/pkg/log"
 )
@@ -101,13 +103,7 @@ func (w *FileWriter) WriteEvent(ev *replication.BinlogEvent) (*Result, error) {
 	case *replication.RotateEvent:
 		return w.handleRotateEvent(ev)
 	default:
-		err := w.out.Write(ev.RawData)
-		if err == nil {
-			w.offset.Add(int64(len(ev.RawData)))
-		}
-		return &Result{
-			Ignore: false,
-		}, errors.Annotatef(err, "write event %+v", ev.Header)
+		return w.handleEventDefault(ev)
 	}
 }
 
@@ -233,4 +229,60 @@ func (w *FileWriter) handleRotateEvent(ev *replication.BinlogEvent) (*Result, er
 	return &Result{
 		Ignore: ignore,
 	}, nil
+}
+
+// handle non-special event:
+//   1. handle a potential hole if exists
+//   2. handle any duplicated events if exist
+//   3. write the non-duplicated event and update the offset
+func (w *FileWriter) handleEventDefault(ev *replication.BinlogEvent) (*Result, error) {
+	// handle a potential hole
+	err := w.handleFileHoleExist(ev)
+	if err != nil {
+		return nil, errors.Annotatef(err, "handle a potential hole in %s", w.filename.Get())
+	}
+
+	// write the non-duplicated event and update the offset
+	err = w.out.Write(ev.RawData)
+	if err == nil {
+		w.offset.Add(int64(len(ev.RawData)))
+	}
+	return &Result{
+		Ignore: false,
+	}, errors.Annotatef(err, "write event %+v", ev.Header)
+}
+
+// handleFileHoleExist tries to handle a potential hole after this event wrote.
+// A hole exists often because some binlog events not sent by the master.
+// NOTE: handle cases when file size > 4GB
+func (w *FileWriter) handleFileHoleExist(ev *replication.BinlogEvent) error {
+	// 1. detect whether a hole exists
+	evStartPos := int64(ev.Header.LogPos - ev.Header.EventSize)
+	fileOffset := w.offset.Get()
+	holeSize := evStartPos - fileOffset
+	if holeSize <= 0 {
+		// no hole exists, but duplicated events may exists, this should be handled in another place.
+		return nil
+	}
+
+	// 2. generate dummy event
+	var (
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  ev.Header.ServerID,
+		}
+		latestPos = uint32(fileOffset)
+		eventSize = uint32(holeSize)
+	)
+	dummyEv, err := event.GenDummyEvent(header, latestPos, eventSize)
+	if err != nil {
+		return errors.Annotatef(err, "generate dummy event at %d with size %d", latestPos, eventSize)
+	}
+
+	// 3. write the dummy event and udpate the offset
+	err = w.out.Write(dummyEv.RawData)
+	if err == nil {
+		w.offset.Add(holeSize)
+	}
+	return errors.Trace(err)
 }

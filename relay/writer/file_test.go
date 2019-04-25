@@ -408,3 +408,72 @@ func (t *testFileWriterSuite) TestWriteMultiEvents(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(obtainData, check.DeepEquals, allData.Bytes())
 }
+
+func (t *testFileWriterSuite) TestHandleFileHole(c *check.C) {
+	var (
+		cfg = &FileConfig{
+			RelayDir: c.MkDir(),
+			Filename: "test-mysql-bin.000001",
+		}
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+		}
+		latestPos uint32 = 4
+	)
+	formatDescEv, err := event.GenFormatDescriptionEvent(header, latestPos)
+	c.Assert(err, check.IsNil)
+	c.Assert(formatDescEv, check.NotNil)
+
+	w := NewFileWriter(cfg)
+	defer w.Close()
+	c.Assert(w.Start(), check.IsNil)
+
+	// write the FormatDescriptionEvent, no hole exists
+	result, err := w.WriteEvent(formatDescEv)
+	c.Assert(err, check.IsNil)
+	c.Assert(result, check.NotNil)
+	c.Assert(result.Ignore, check.IsFalse)
+
+	// hole exits, but the size is too small, invalid
+	latestPos = formatDescEv.Header.LogPos + event.MinUserVarEventLen - 1
+	queryEv, err := event.GenQueryEvent(header, latestPos, 0, 0, 0, nil, []byte("schema"), []byte("BEGIN"))
+	c.Assert(err, check.IsNil)
+	result, err = w.WriteEvent(queryEv)
+	c.Assert(err, check.ErrorMatches, ".*generate dummy event.*")
+	c.Assert(result, check.IsNil)
+
+	// hole exits, and the size is enough
+	latestPos = formatDescEv.Header.LogPos + event.MinUserVarEventLen
+	queryEv, err = event.GenQueryEvent(header, latestPos, 0, 0, 0, nil, []byte("schema"), []byte("BEGIN"))
+	c.Assert(err, check.IsNil)
+	result, err = w.WriteEvent(queryEv)
+	c.Assert(err, check.IsNil)
+	c.Assert(result, check.NotNil)
+	c.Assert(result.Ignore, check.IsFalse)
+	fileSize := int64(queryEv.Header.LogPos)
+	t.verifyFilenameOffset(c, w, cfg.Filename, fileSize)
+
+	// read events back from the file to check the dummy event
+	events := make([]*replication.BinlogEvent, 0, 3)
+	var count = 0
+	onEventFunc := func(e *replication.BinlogEvent) error {
+		count++
+		if count > 3 {
+			c.Fatalf("too many events received, %+v", e.Header)
+		}
+		events = append(events, e)
+		return nil
+	}
+	filename := filepath.Join(cfg.RelayDir, cfg.Filename)
+	err = replication.NewBinlogParser().ParseFile(filename, 0, onEventFunc)
+	c.Assert(err, check.IsNil)
+	c.Assert(events, check.HasLen, 3)
+	c.Assert(events[0], check.DeepEquals, formatDescEv)
+	c.Assert(events[2], check.DeepEquals, queryEv)
+	// the second event is the dummy event
+	dummyEvent := events[1]
+	c.Assert(dummyEvent.Header.EventType, check.Equals, replication.USER_VAR_EVENT)
+	c.Assert(dummyEvent.Header.LogPos, check.Equals, latestPos)                               // start pos of the third event
+	c.Assert(dummyEvent.Header.EventSize, check.Equals, latestPos-formatDescEv.Header.LogPos) // hole size
+}
