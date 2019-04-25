@@ -268,6 +268,18 @@ func (s *testSyncerSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	newer = cp.IsNewerTablePoint(schema, table, pos1)
 	c.Assert(newer, IsFalse)
 
+	// test save table point less than global point
+	func() {
+		defer func() {
+			r := recover()
+			matchStr := fmt.Sprintf("table checkpoint %+v less than global checkpoint %+v.*", pos1, cp.GlobalPoint())
+			matchStr = strings.ReplaceAll(strings.ReplaceAll(matchStr, "(", "\\("), ")", "\\)")
+			c.Assert(r, Matches, matchStr)
+		}()
+		cp.SaveGlobalPoint(pos2)
+		cp.SaveTablePoint(schema, table, pos1)
+	}()
+
 	// flush but except + rollback
 	s.cpMock.ExpectBegin()
 	s.cpMock.ExpectExec(flushCheckPointSQL).WithArgs(cpid, schema, table, pos2.Name, pos2.Pos, false, pos2.Name, pos2.Pos).WillReturnResult(sqlmock.NewResult(0, 1))
