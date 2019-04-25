@@ -233,8 +233,8 @@ func (w *FileWriter) handleRotateEvent(ev *replication.BinlogEvent) (*Result, er
 
 // handle non-special event:
 //   1. handle a potential hole if exists
-//   2. handle any duplicated events if exist
-//   3. write the non-duplicated event and update the offset
+//   2. handle any duplicate events if exist
+//   3. write the non-duplicate event and update the offset
 func (w *FileWriter) handleEventDefault(ev *replication.BinlogEvent) (*Result, error) {
 	// handle a potential hole
 	err := w.handleFileHoleExist(ev)
@@ -242,7 +242,7 @@ func (w *FileWriter) handleEventDefault(ev *replication.BinlogEvent) (*Result, e
 		return nil, errors.Annotatef(err, "handle a potential hole in %s", w.filename.Get())
 	}
 
-	// write the non-duplicated event and update the offset
+	// write the non-duplicate event and update the offset
 	err = w.out.Write(ev.RawData)
 	if err == nil {
 		w.offset.Add(int64(len(ev.RawData)))
@@ -261,7 +261,7 @@ func (w *FileWriter) handleFileHoleExist(ev *replication.BinlogEvent) error {
 	fileOffset := w.offset.Get()
 	holeSize := evStartPos - fileOffset
 	if holeSize <= 0 {
-		// no hole exists, but duplicated events may exists, this should be handled in another place.
+		// no hole exists, but duplicate events may exists, this should be handled in another place.
 		return nil
 	}
 
