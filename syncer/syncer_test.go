@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	_ "github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/dm/pkg/log"
@@ -49,6 +50,7 @@ type testSyncerSuite struct {
 	syncer   *replication.BinlogSyncer
 	streamer *replication.BinlogStreamer
 	cfg      *config.SubTaskConfig
+	cpMock   sqlmock.Sqlmock
 }
 
 func (s *testSyncerSuite) SetUpSuite(c *C) {
@@ -66,20 +68,6 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 	}
 	pswd := os.Getenv("MYSQL_PSWD")
 
-	host2 := os.Getenv("MYSQL_HOST2")
-	if host2 == "" {
-		host2 = "127.0.0.1"
-	}
-	port2, _ := strconv.Atoi(os.Getenv("MYSQL_PORT2"))
-	if port2 == 0 {
-		port2 = 3307
-	}
-	user2 := os.Getenv("MYSQL_USER2")
-	if user2 == "" {
-		user2 = "root"
-	}
-	pswd2 := os.Getenv("MYSQL_PSWD2")
-
 	s.cfg = &config.SubTaskConfig{
 		From: config.DBConfig{
 			Host:     host,
@@ -88,10 +76,10 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 			Port:     port,
 		},
 		To: config.DBConfig{
-			Host:     host2,
-			User:     user2,
-			Password: pswd2,
-			Port:     port2,
+			Host:     host,
+			User:     user,
+			Password: pswd,
+			Port:     port,
 		},
 		ServerID:   101,
 		MetaSchema: "test",
