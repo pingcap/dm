@@ -11,12 +11,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package transformer
+package common
 
 import (
+	"testing"
+
 	"github.com/pingcap/check"
 	"github.com/pingcap/parser"
 )
+
+func TestSuite(t *testing.T) {
+	check.TestingT(t)
+}
 
 var (
 	_ = check.Suite(&testUtilSuite{})
@@ -52,6 +58,6 @@ func (t *testUtilSuite) TestCheckIsDDL(c *check.C) {
 	)
 
 	for _, cs := range cases {
-		c.Assert(checkIsDDL(cs.sql, parser2), check.Equals, cs.isDDL)
+		c.Assert(CheckIsDDL(cs.sql, parser2), check.Equals, cs.isDDL)
 	}
 }
