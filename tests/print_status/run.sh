@@ -10,7 +10,7 @@ function run() {
     run_sql_file $cur/data/db.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
 
     # in load stage, the dumped file split into 14 insert segments, we slow down 14 * 100 ms
-    # in sync stage, there are approximately 500~500 binlog events, we slow down 3 * 500 ms
+    # in sync stage, there are approximately 530~550 binlog events, we slow down 3 * 500 ms
     inject_points=("github.com/pingcap/dm/loader/PrintStatusCheckSeconds=return(1)"
                    "github.com/pingcap/dm/syncer/PrintStatusCheckSeconds=return(1)"
                    "github.com/pingcap/dm/loader/LoadDataSlowDown=return(100)"
@@ -29,6 +29,7 @@ function run() {
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
+    # check load unit print status
     status_file=$WORK_DIR/worker1/log/loader_status.log
     grep -oP "loader.*\Kfinished_bytes = [0-9]+, total_bytes = [0-9]+, total_file_count = [0-9]+, progress = .*" $WORK_DIR/worker1/log/dm-worker.log > $status_file
     status_count=$(wc -l $status_file|awk '{print $1}')
@@ -46,9 +47,9 @@ function run() {
     done
 
     run_sql_file $cur/data/db.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
-
-    # use sync_diff_inspector to check data now!
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    # check sync unit print status
 }
 
 cleanup1 $TEST_NAME
