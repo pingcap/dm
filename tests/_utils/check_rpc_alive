@@ -1,0 +1,25 @@
+#!/bin/bash
+# parameter 1: check tool binary path
+# parameter 2: host:port
+
+check_tool=$1
+addr=$2
+
+i=0
+while [ $i -lt 10 ]
+do
+    bash -c "$check_tool $addr > /dev/null 2>&1"
+    ret=$?
+    if [ "$ret" == 0 ]; then
+        echo "rpc addr $addr is alive"
+        break
+    fi
+    ((i++))
+    echo "wait for rpc addr $addr alive the $i-th time"
+    sleep 1
+done
+
+if [ $i -ge 10 ]; then
+    echo "rpc addr $addr check alive timeout"
+    exit 1
+fi
