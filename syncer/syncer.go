@@ -1127,7 +1127,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 		s.binlogSizeCount.Add(int64(e.Header.EventSize))
 
-		failpoint.Inject("ProcessBinlogSlowDown", func() {})
+		failpoint.Inject("ProcessBinlogSlowDown", nil)
 
 		log.Debugf("[syncer] receive binlog event with header %+v", e.Header)
 		switch ev := e.Event.(type) {
