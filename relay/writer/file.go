@@ -22,7 +22,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
-	"github.com/siddontang/go-mysql/mysql"
+	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
 
@@ -344,7 +344,7 @@ func (w *FileWriter) doRecovering(p *parser.Parser) (*RecoverResult, error) {
 		EnableRawMode: false, // when recovering, we always disable RawMode.
 	}
 	filename := filepath.Join(w.cfg.RelayDir, w.filename.Get())
-	startPos := mysql.Position{Name: filename, Pos: 0} // // always start from the file header
+	startPos := gmysql.Position{Name: filename, Pos: 0} // // always start from the file header
 	r := reader.NewFileReader(rCfg)
 	err := r.StartSyncByPos(startPos) // we always parse the file by pos
 	if err != nil {
@@ -384,7 +384,23 @@ func (w *FileWriter) doRecovering(p *parser.Parser) (*RecoverResult, error) {
 	}
 	if fs.Size() == latestPos {
 		return &RecoverResult{}, nil // no recovering for the file.
+	} else if fs.Size() < latestPos {
+		return nil, errors.Errorf("latest pos %d greater than file size %d, should not happen", latestPos, fs.Size())
 	}
 
-	return &RecoverResult{}, nil
+	// truncate the file
+	f, err := os.OpenFile(filename, os.O_WRONLY, 0644)
+	if err != nil {
+		return nil, errors.Annotatef(err, "open %s", filename)
+	}
+	defer f.Close()
+	err = f.Truncate(latestPos)
+	if err != nil {
+		return nil, errors.Annotatef(err, "truncate %s to %d", filename, latestPos)
+	}
+
+	return &RecoverResult{
+		Recovered: true,
+		LatestPos: gmysql.Position{Name: w.filename.Get(), Pos: uint32(latestPos)},
+	}, nil
 }

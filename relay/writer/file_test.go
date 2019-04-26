@@ -566,11 +566,11 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	c.Assert(err, check.IsNil)
 
 	// generate binlog events
-	_, data := t.genBinlogEventsForRecover(c, flavor, previousGTIDSet, latestGTID1, latestGTID2)
+	g, _, baseData := t.genBinlogEventsForRecover(c, flavor, previousGTIDSet, latestGTID1, latestGTID2)
 
 	// write the events to a file
 	filename := filepath.Join(cfg.RelayDir, cfg.Filename)
-	err = ioutil.WriteFile(filename, data, 0644)
+	err = ioutil.WriteFile(filename, baseData, 0644)
 	c.Assert(err, check.IsNil)
 
 	// try recover, but in fact do nothing
@@ -582,10 +582,40 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	// check file size, whether no recovering operation applied
 	fs, err := os.Stat(filename)
 	c.Assert(err, check.IsNil)
-	c.Assert(fs.Size(), check.Equals, int64(len(data)))
+	c.Assert(fs.Size(), check.Equals, int64(len(baseData)))
+
+	// generate another transaction
+	events, _, err := g.GenDDLEvents("db2", "CREATE DATABASE db2")
+	c.Assert(err, check.IsNil)
+	c.Assert(events, check.HasLen, 2) // for DDL (one GTIDEvent, one QueryEvent)
+	// write an uncompleted event to the file
+	corruptData := events[0].RawData[:len(events[0].RawData)-2]
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_APPEND, 0644)
+	c.Assert(err, check.IsNil)
+	_, err = f.Write(corruptData)
+	c.Assert(err, check.IsNil)
+	c.Assert(f.Close(), check.IsNil)
+
+	// check file size, increased
+	fs, err = os.Stat(filename)
+	c.Assert(err, check.IsNil)
+	c.Assert(fs.Size(), check.Equals, int64(len(baseData)+len(corruptData)))
+
+	// try recover, truncate the uncompleted event
+	result, err = w.Recover(parser2)
+	c.Assert(err, check.IsNil)
+	c.Assert(result, check.NotNil)
+	c.Assert(result.Recovered, check.IsTrue)
+	c.Assert(result.LatestPos.Name, check.Equals, cfg.Filename)
+	c.Assert(result.LatestPos.Pos, check.Equals, uint32(len(baseData)))
+
+	// check file size, truncated
+	fs, err = os.Stat(filename)
+	c.Assert(err, check.IsNil)
+	c.Assert(fs.Size(), check.Equals, int64(len(baseData)))
 }
 
-func (t *testFileWriterSuite) genBinlogEventsForRecover(c *check.C, flavor string, previousGTIDSet, latestGTID1, latestGTID2 gtid.Set) ([]*replication.BinlogEvent, []byte) {
+func (t *testFileWriterSuite) genBinlogEventsForRecover(c *check.C, flavor string, previousGTIDSet, latestGTID1, latestGTID2 gtid.Set) (*event.Generator, []*replication.BinlogEvent, []byte) {
 	var (
 		serverID  uint32 = 11
 		latestPos uint32
@@ -645,5 +675,5 @@ func (t *testFileWriterSuite) genBinlogEventsForRecover(c *check.C, flavor strin
 		allData.Write(data)
 	}
 
-	return allEvents, allData.Bytes()
+	return g, allEvents, allData.Bytes()
 }
