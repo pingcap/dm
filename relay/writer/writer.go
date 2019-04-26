@@ -14,12 +14,26 @@
 package writer
 
 import (
+	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/parser"
+	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 )
 
 // Result represents a write result.
 type Result struct {
 	Ignore bool // whether the event ignored by the writer
+}
+
+// RecoverResult represents a result for a binlog recover operation.
+type RecoverResult struct {
+	// true if recover operation has done and successfully.
+	// false if no recover operation has done or unsuccessfully.
+	Recovered bool
+	// the latest binlog position after recover operation has done.
+	LatestPos gmysql.Position
+	// the latest binlog GTID set after recover operation has done.
+	LatestGTIDs gtid.Set
 }
 
 // Writer writes binlog events into disk or any other memory structure.
@@ -35,6 +49,12 @@ type Writer interface {
 
 	// Close closes the writer and release the resource.
 	Close() error
+
+	// Recover tries to recover the binlog file or any other memory structure associate with this writer.
+	// The parser often used to verify events's statement through parsing them.
+	// It is often used to recover a binlog file with some corrupt/un-finished binlog events/transactions at the end of the file.
+	// It is not safe for concurrent use by multiple goroutines.
+	Recover(p *parser.Parser) (*RecoverResult, error)
 
 	// WriteEvent writes an binlog event's data into disk or any other places.
 	// It is not safe for concurrent use by multiple goroutines.

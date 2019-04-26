@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/pingcap/check"
+	"github.com/pingcap/parser"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
@@ -60,6 +61,9 @@ func (t *testFileWriterSuite) TestInterfaceMethods(c *check.C) {
 	c.Assert(w, check.NotNil)
 
 	// not prepared
+	rres, err := w.Recover(parser.New())
+	c.Assert(err, check.ErrorMatches, fmt.Sprintf(".*%s.*", stageNew))
+	c.Assert(rres, check.IsNil)
 	res, err := w.WriteEvent(ev)
 	c.Assert(err, check.ErrorMatches, fmt.Sprintf(".*%s.*", stageNew))
 	c.Assert(res, check.IsNil)
@@ -70,6 +74,11 @@ func (t *testFileWriterSuite) TestInterfaceMethods(c *check.C) {
 	err = w.Start()
 	c.Assert(err, check.IsNil)
 	c.Assert(w.Start(), check.NotNil) // re-start is invalid
+
+	// recover
+	rres, err = w.Recover(parser.New())
+	c.Assert(err, check.ErrorMatches, ".*no such file or directory.*")
+	c.Assert(rres, check.IsNil)
 
 	// write event
 	res, err = w.WriteEvent(ev)
@@ -528,4 +537,113 @@ func (t *testFileWriterSuite) TestHandleDuplicateEventsExist(c *check.C) {
 	result, err = w.WriteEvent(queryEv)
 	c.Assert(err, check.ErrorMatches, ".*handle a potential duplicate event.*")
 	c.Assert(result, check.IsNil)
+}
+
+func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
+	var (
+		cfg = &FileConfig{
+			RelayDir: c.MkDir(),
+			Filename: "test-mysql-bin.000001",
+		}
+		parser2 = parser.New()
+
+		flavor             = gmysql.MySQLFlavor
+		previousGTIDSetStr = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456,53bfca22-690d-11e7-8a62-18ded7a37b78:1-495,686e1ab6-c47e-11e7-a42c-6c92bf46f384:234-567"
+		latestGTIDStr1     = "3ccc475b-2343-11e7-be21-6c0b84d59f30:14"
+		latestGTIDStr2     = "53bfca22-690d-11e7-8a62-18ded7a37b78:495"
+	)
+
+	w := NewFileWriter(cfg)
+	defer w.Close()
+	c.Assert(w.Start(), check.IsNil)
+
+	// different SIDs in GTID set
+	previousGTIDSet, err := gtid.ParserGTID(flavor, previousGTIDSetStr)
+	c.Assert(err, check.IsNil)
+	latestGTID1, err := gtid.ParserGTID(flavor, latestGTIDStr1)
+	c.Assert(err, check.IsNil)
+	latestGTID2, err := gtid.ParserGTID(flavor, latestGTIDStr2)
+	c.Assert(err, check.IsNil)
+
+	// generate binlog events
+	_, data := t.genBinlogEventsForRecover(c, flavor, previousGTIDSet, latestGTID1, latestGTID2)
+
+	// write the events to a file
+	filename := filepath.Join(cfg.RelayDir, cfg.Filename)
+	err = ioutil.WriteFile(filename, data, 0644)
+	c.Assert(err, check.IsNil)
+
+	// try recover, but in fact do nothing
+	result, err := w.Recover(parser2)
+	c.Assert(err, check.IsNil)
+	c.Assert(result, check.NotNil)
+	c.Assert(result.Recovered, check.IsFalse)
+
+	// check file size, whether no recovering operation applied
+	fs, err := os.Stat(filename)
+	c.Assert(err, check.IsNil)
+	c.Assert(fs.Size(), check.Equals, int64(len(data)))
+}
+
+func (t *testFileWriterSuite) genBinlogEventsForRecover(c *check.C, flavor string, previousGTIDSet, latestGTID1, latestGTID2 gtid.Set) ([]*replication.BinlogEvent, []byte) {
+	var (
+		serverID  uint32 = 11
+		latestPos uint32
+		latestXID uint64 = 10
+
+		allEvents = make([]*replication.BinlogEvent, 0, 50)
+		allData   bytes.Buffer
+	)
+
+	// use a binlog event generator to generate some binlog events.
+	g, err := event.NewGenerator(flavor, serverID, latestPos, latestGTID1, previousGTIDSet, latestXID)
+	c.Assert(err, check.IsNil)
+
+	// file header with FormatDescriptionEvent and PreviousGTIDsEvent
+	events, data, err := g.GenFileHeader()
+	c.Assert(err, check.IsNil)
+	allEvents = append(allEvents, events...)
+	allData.Write(data)
+
+	// CREATE DATABASE/TABLE, 3 DDL
+	queries := []string{
+		"CRATE DATABASE `db`",
+		"CREATE TABLE `db`.`tbl1` (c1 INT)",
+		"CREATE TABLE `db`.`tbl2` (c1 INT)",
+	}
+	for _, query := range queries {
+		events, data, err = g.GenDDLEvents("db", query)
+		c.Assert(err, check.IsNil)
+		allEvents = append(allEvents, events...)
+		allData.Write(data)
+	}
+
+	// DMLs, 10 DML
+	g.LatestGTID = latestGTID2 // use another latest GTID with different SID/DomainID
+	var (
+		tableID    uint64 = 8
+		columnType        = []byte{gmysql.MYSQL_TYPE_LONG}
+		eventType         = replication.WRITE_ROWS_EVENTv2
+		schema            = "db"
+		table             = "tbl1"
+	)
+	for i := 0; i < 10; i++ {
+		insertRows := make([][]interface{}, 0, 1)
+		insertRows = append(insertRows, []interface{}{int32(i)})
+		dmlData := []*event.DMLData{
+			{
+				TableID:    tableID,
+				Schema:     schema,
+				Table:      table,
+				ColumnType: columnType,
+				Rows:       insertRows,
+			},
+		}
+		events, data, err = g.GenDMLEvents(eventType, dmlData)
+		c.Assert(err, check.IsNil)
+		allEvents = append(allEvents, events...)
+		allData.Write(data)
+	}
+
+	return allEvents, allData.Bytes()
 }

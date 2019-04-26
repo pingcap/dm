@@ -14,17 +14,23 @@
 package writer
 
 import (
+	"context"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/parser"
+	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
 
 	"github.com/pingcap/dm/pkg/binlog/event"
+	"github.com/pingcap/dm/pkg/binlog/reader"
 	bw "github.com/pingcap/dm/pkg/binlog/writer"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/relay/common"
 )
 
 // FileConfig is the configuration used by the FileWriter.
@@ -86,6 +92,18 @@ func (w *FileWriter) Close() error {
 	}
 
 	return errors.Trace(err)
+}
+
+// Recover implements Writer.Recover.
+func (w *FileWriter) Recover(p *parser.Parser) (*RecoverResult, error) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	if w.stage != stagePrepared {
+		return nil, errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, stagePrepared)
+	}
+
+	return w.doRecovering(p)
 }
 
 // WriteEvent implements Writer.WriteEvent.
@@ -310,4 +328,63 @@ func (w *FileWriter) handleDuplicateEventsExist(ev *replication.BinlogEvent) (*R
 	return &Result{
 		Ignore: duplicate,
 	}, nil
+}
+
+// doRecovering tries to recover the current binlog file.
+// 1. read events from the file
+// 2.
+//    a. update the position with the event's position if the transaction finished
+//    b. update the GTID set with the event's GTID if the transaction finished
+// 3. truncate any un-finished events/transactions
+// now, we think a transaction finished if we received a XIDEvent or DDL in QueryEvent
+// NOTE: handle cases when file size > 4GB
+func (w *FileWriter) doRecovering(p *parser.Parser) (*RecoverResult, error) {
+	// use a FileReader to parse the binlog file.
+	rCfg := &reader.FileReaderConfig{
+		EnableRawMode: false, // when recovering, we always disable RawMode.
+	}
+	filename := filepath.Join(w.cfg.RelayDir, w.filename.Get())
+	startPos := mysql.Position{Name: filename, Pos: 0} // // always start from the file header
+	r := reader.NewFileReader(rCfg)
+	err := r.StartSyncByPos(startPos) // we always parse the file by pos
+	if err != nil {
+		r.Close()
+		return nil, errors.Annotatef(err, "start sync by pos %s for %s", startPos, filename)
+	}
+
+	var (
+		latestPos int64
+	)
+	for {
+		var e *replication.BinlogEvent
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		e, err = r.GetEvent(ctx)
+		cancel()
+		if err != nil {
+			break // now, we stop to parse for any errors
+		}
+
+		// only update pos/GTID set for DDL/XID to get an complete transaction.
+		switch ev := e.Event.(type) {
+		case *replication.QueryEvent:
+			isDDL := common.CheckIsDDL(string(ev.Query), p)
+			if isDDL {
+				latestPos = int64(e.Header.LogPos)
+			}
+		case *replication.XIDEvent:
+			latestPos = int64(e.Header.LogPos)
+		}
+	}
+	r.Close() // close the reader
+
+	// in most cases, we think the file is fine, so compare the size is simple.
+	fs, err := os.Stat(filename)
+	if err != nil {
+		return nil, errors.Annotatef(err, "get stat for %s", filename)
+	}
+	if fs.Size() == latestPos {
+		return &RecoverResult{}, nil // no recovering for the file.
+	}
+
+	return &RecoverResult{}, nil
 }
