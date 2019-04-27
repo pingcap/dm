@@ -16,15 +16,18 @@ package writer
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
+	uuid "github.com/satori/go.uuid"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
+	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/binlog/reader"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/relay/common"
@@ -180,7 +183,10 @@ func getTxnPosGTIDs(filename string, p *parser.Parser) (int64, gtid.Set, error) 
 	}
 
 	var (
-		latestPos int64
+		latestPos   int64
+		latestGSet  gmysql.GTIDSet
+		nextGTIDStr string // can be recorded if the coming transaction completed
+		flavor      string
 	)
 	for {
 		var e *replication.BinlogEvent
@@ -191,17 +197,56 @@ func getTxnPosGTIDs(filename string, p *parser.Parser) (int64, gtid.Set, error) 
 			break // now, we stop to parse for any errors
 		}
 
-		// only update pos/GTID set for DDL/XID to get an complete transaction.
+		// NOTE: only update pos/GTID set for DDL/XID to get an complete transaction.
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
 			isDDL := common.CheckIsDDL(string(ev.Query), p)
 			if isDDL {
+				if latestGSet != nil { // GTID may not be enabled in the binlog
+					err = latestGSet.Update(nextGTIDStr)
+					if err != nil {
+						return 0, nil, errors.Annotatef(err, "update GTID set %v with GTID %s", latestGSet, nextGTIDStr)
+					}
+				}
 				latestPos = int64(e.Header.LogPos)
 			}
 		case *replication.XIDEvent:
+			if latestGSet != nil { // GTID may not be enabled in the binlog
+				err = latestGSet.Update(nextGTIDStr)
+				if err != nil {
+					return 0, nil, errors.Annotatef(err, "update GTID set %v with GTID %s", latestGSet, nextGTIDStr)
+				}
+			}
 			latestPos = int64(e.Header.LogPos)
+		case *replication.GTIDEvent:
+			if latestGSet == nil {
+				return 0, nil, errors.Errorf("should have a PreviousGTIDsEvent before the GTIDEvent %+v", e.Header)
+			}
+			// learn from: https://github.com/siddontang/go-mysql/blob/c6ab05a85eb86dc51a27ceed6d2f366a32874a24/replication/binlogsyncer.go#L737
+			u, _ := uuid.FromBytes(ev.SID)
+			nextGTIDStr = fmt.Sprintf("%s:%d", u.String(), ev.GNO)
+		case *replication.GenericEvent:
+			if e.Header.EventType == replication.PREVIOUS_GTIDS_EVENT {
+				// if GTID enabled, we can get a PreviousGTIDEvent after the FormatDescriptionEvent
+				// ref: https://github.com/mysql/mysql-server/blob/8cc757da3d87bf4a1f07dcfb2d3c96fed3806870/sql/binlog.cc#L4549
+				// ref: https://github.com/mysql/mysql-server/blob/8cc757da3d87bf4a1f07dcfb2d3c96fed3806870/sql/binlog.cc#L5161
+				gSet, err2 := event.GTIDsFromPreviousGTIDsEvent(e)
+				if err2 != nil {
+					return 0, nil, errors.Annotatef(err2, "get GTID set from PreviousGTIDsEvent %+v", e.Header)
+				}
+				latestGSet = gSet.Origin()
+				flavor = gmysql.MySQLFlavor
+			}
 		}
 	}
 
-	return latestPos, nil, nil
+	var latestGTIDs gtid.Set
+	if latestGSet != nil {
+		latestGTIDs, err = gtid.ParserGTID(flavor, latestGSet.String())
+		if err != nil {
+			return 0, nil, errors.Annotatef(err, "parse GTID set %s with flavor %s", latestGSet.String(), flavor)
+		}
+	}
+
+	return latestPos, latestGTIDs, nil
 }

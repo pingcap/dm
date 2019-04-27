@@ -275,7 +275,7 @@ func (t *testFileUtilSuite) TestGetTxnPosGTIDs(c *check.C) {
 
 		filename           = filepath.Join(c.MkDir(), "test-mysql-bin.000001")
 		flavor             = gmysql.MySQLFlavor
-		previousGTIDSetStr = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456,53bfca22-690d-11e7-8a62-18ded7a37b78:1-495,686e1ab6-c47e-11e7-a42c-6c92bf46f384:234-567"
+		previousGTIDSetStr = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,53bfca22-690d-11e7-8a62-18ded7a37b78:1-495,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456,686e1ab6-c47e-11e7-a42c-6c92bf46f384:234-567"
 		latestGTIDStr1     = "3ccc475b-2343-11e7-be21-6c0b84d59f30:14"
 		latestGTIDStr2     = "53bfca22-690d-11e7-8a62-18ded7a37b78:495"
 	)
@@ -292,15 +292,19 @@ func (t *testFileUtilSuite) TestGetTxnPosGTIDs(c *check.C) {
 
 	// expected latest pos/GTID set
 	expectedPos := int64(len(baseData))
+	expectedGTIDsStr := "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-17,53bfca22-690d-11e7-8a62-18ded7a37b78:1-505,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456,686e1ab6-c47e-11e7-a42c-6c92bf46f384:234-567"
+	expectedGTIDs, err := gtid.ParserGTID(flavor, expectedGTIDsStr) // 3 DDL + 10 DML
+	c.Assert(err, check.IsNil)
 
 	// write the events to a file
 	err = ioutil.WriteFile(filename, baseData, 0644)
 	c.Assert(err, check.IsNil)
 
 	// not extra data exists
-	pos, _, err := getTxnPosGTIDs(filename, parser2)
+	pos, gSet, err := getTxnPosGTIDs(filename, parser2)
 	c.Assert(err, check.IsNil)
 	c.Assert(pos, check.DeepEquals, expectedPos)
+	c.Assert(gSet, check.DeepEquals, expectedGTIDs)
 
 	// generate another transaction, DML
 	var (
@@ -334,9 +338,10 @@ func (t *testFileUtilSuite) TestGetTxnPosGTIDs(c *check.C) {
 	c.Assert(f.Close(), check.IsNil)
 
 	// check again
-	pos, _, err = getTxnPosGTIDs(filename, parser2)
+	pos, gSet, err = getTxnPosGTIDs(filename, parser2)
 	c.Assert(err, check.IsNil)
 	c.Assert(pos, check.DeepEquals, expectedPos)
+	c.Assert(gSet, check.DeepEquals, expectedGTIDs)
 
 	// truncate extra data
 	f, err = os.OpenFile(filename, os.O_WRONLY, 0644)
@@ -353,9 +358,10 @@ func (t *testFileUtilSuite) TestGetTxnPosGTIDs(c *check.C) {
 		c.Assert(err, check.IsNil)
 		c.Assert(f.Close(), check.IsNil)
 		// check again
-		pos, _, err = getTxnPosGTIDs(filename, parser2)
+		pos, gSet, err = getTxnPosGTIDs(filename, parser2)
 		c.Assert(err, check.IsNil)
 		c.Assert(pos, check.DeepEquals, expectedPos)
+		c.Assert(gSet, check.DeepEquals, expectedGTIDs)
 	}
 
 	// write a completed event (and a completed transaction) to the file
@@ -365,9 +371,14 @@ func (t *testFileUtilSuite) TestGetTxnPosGTIDs(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(f.Close(), check.IsNil)
 	// check again
-	pos, _, err = getTxnPosGTIDs(filename, parser2)
+	expectedPos += int64(len(extraData))
+	expectedGTIDsStr = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-17,53bfca22-690d-11e7-8a62-18ded7a37b78:1-506,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456,686e1ab6-c47e-11e7-a42c-6c92bf46f384:234-567"
+	expectedGTIDs, err = gtid.ParserGTID(flavor, expectedGTIDsStr) // 3 DDL + 11 DML
 	c.Assert(err, check.IsNil)
-	c.Assert(pos, check.DeepEquals, expectedPos+int64(len(extraData)))
+	pos, gSet, err = getTxnPosGTIDs(filename, parser2)
+	c.Assert(err, check.IsNil)
+	c.Assert(pos, check.DeepEquals, expectedPos)
+	c.Assert(gSet, check.DeepEquals, expectedGTIDs)
 }
 
 // genBinlogEventsWithGTIDs generates some binlog events used by testFileUtilSuite and testFileWriterSuite.
