@@ -269,16 +269,41 @@ func (t *testFileUtilSuite) TestCheckIsDuplicateEvent(c *check.C) {
 	c.Assert(duplicate, check.IsFalse)
 }
 
-func (t *testFileUtilSuite) TestGetTxnPosGTIDs(c *check.C) {
+func (t *testFileUtilSuite) TestGetTxnPosGTIDsMySQL(c *check.C) {
 	var (
-		parser2 = parser.New()
-
 		filename           = filepath.Join(c.MkDir(), "test-mysql-bin.000001")
 		flavor             = gmysql.MySQLFlavor
 		previousGTIDSetStr = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,53bfca22-690d-11e7-8a62-18ded7a37b78:1-495,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456,686e1ab6-c47e-11e7-a42c-6c92bf46f384:234-567"
 		latestGTIDStr1     = "3ccc475b-2343-11e7-be21-6c0b84d59f30:14"
 		latestGTIDStr2     = "53bfca22-690d-11e7-8a62-18ded7a37b78:495"
+		// 3 DDL + 10 DML
+		expectedGTIDsStr1 = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-17,53bfca22-690d-11e7-8a62-18ded7a37b78:1-505,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456,686e1ab6-c47e-11e7-a42c-6c92bf46f384:234-567"
+		// 3 DDL + 11 DML
+		expectedGTIDsStr2 = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-17,53bfca22-690d-11e7-8a62-18ded7a37b78:1-506,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456,686e1ab6-c47e-11e7-a42c-6c92bf46f384:234-567"
 	)
+
+	t.testGetTxnPosGTIDs(c, filename, flavor, previousGTIDSetStr, latestGTIDStr1, latestGTIDStr2, expectedGTIDsStr1, expectedGTIDsStr2)
+}
+
+func (t *testFileUtilSuite) TestGetTxnPosGTIDMariaDB(c *check.C) {
+	var (
+		filename           = filepath.Join(c.MkDir(), "test-mysql-bin.000001")
+		flavor             = gmysql.MariaDBFlavor
+		previousGTIDSetStr = "1-11-1,2-11-2"
+		latestGTIDStr1     = "1-11-1"
+		latestGTIDStr2     = "2-11-2"
+		// 3 DDL + 10 DML
+		expectedGTIDsStr1 = "1-11-4,2-11-12"
+		// 3 DDL + 11 DML
+		expectedGTIDsStr2 = "1-11-4,2-11-13"
+	)
+
+	t.testGetTxnPosGTIDs(c, filename, flavor, previousGTIDSetStr, latestGTIDStr1, latestGTIDStr2, expectedGTIDsStr1, expectedGTIDsStr2)
+}
+
+func (t *testFileUtilSuite) testGetTxnPosGTIDs(c *check.C, filename, flavor, previousGTIDSetStr,
+	latestGTIDStr1, latestGTIDStr2, expectedGTIDsStr1, expectedGTIDsStr2 string) {
+	parser2 := parser.New()
 
 	// different SIDs in GTID set
 	previousGTIDSet, err := gtid.ParserGTID(flavor, previousGTIDSetStr)
@@ -292,8 +317,7 @@ func (t *testFileUtilSuite) TestGetTxnPosGTIDs(c *check.C) {
 
 	// expected latest pos/GTID set
 	expectedPos := int64(len(baseData))
-	expectedGTIDsStr := "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-17,53bfca22-690d-11e7-8a62-18ded7a37b78:1-505,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456,686e1ab6-c47e-11e7-a42c-6c92bf46f384:234-567"
-	expectedGTIDs, err := gtid.ParserGTID(flavor, expectedGTIDsStr) // 3 DDL + 10 DML
+	expectedGTIDs, err := gtid.ParserGTID(flavor, expectedGTIDsStr1) // 3 DDL + 10 DML
 	c.Assert(err, check.IsNil)
 
 	// write the events to a file
@@ -370,10 +394,10 @@ func (t *testFileUtilSuite) TestGetTxnPosGTIDs(c *check.C) {
 	_, err = f.Write(extraEvents[len(extraEvents)-1].RawData) // write the event
 	c.Assert(err, check.IsNil)
 	c.Assert(f.Close(), check.IsNil)
+
 	// check again
 	expectedPos += int64(len(extraData))
-	expectedGTIDsStr = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-17,53bfca22-690d-11e7-8a62-18ded7a37b78:1-506,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456,686e1ab6-c47e-11e7-a42c-6c92bf46f384:234-567"
-	expectedGTIDs, err = gtid.ParserGTID(flavor, expectedGTIDsStr) // 3 DDL + 11 DML
+	expectedGTIDs, err = gtid.ParserGTID(flavor, expectedGTIDsStr2) // 3 DDL + 11 DML
 	c.Assert(err, check.IsNil)
 	pos, gSet, err = getTxnPosGTIDs(filename, parser2)
 	c.Assert(err, check.IsNil)

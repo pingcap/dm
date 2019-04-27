@@ -222,9 +222,23 @@ func getTxnPosGTIDs(filename string, p *parser.Parser) (int64, gtid.Set, error) 
 			if latestGSet == nil {
 				return 0, nil, errors.Errorf("should have a PreviousGTIDsEvent before the GTIDEvent %+v", e.Header)
 			}
-			// learn from: https://github.com/siddontang/go-mysql/blob/c6ab05a85eb86dc51a27ceed6d2f366a32874a24/replication/binlogsyncer.go#L737
+			// learn from: https://github.com/siddontang/go-mysql/blob/c6ab05a85eb86dc51a27ceed6d2f366a32874a24/replication/binlogsyncer.go#L736
 			u, _ := uuid.FromBytes(ev.SID)
 			nextGTIDStr = fmt.Sprintf("%s:%d", u.String(), ev.GNO)
+		case *replication.MariadbGTIDEvent:
+			if latestGSet == nil {
+				return 0, nil, errors.Errorf("should have a MariadbGTIDListEvent before the MariadbGTIDEvent %+v", e.Header)
+			}
+			// learn from: https://github.com/siddontang/go-mysql/blob/c6ab05a85eb86dc51a27ceed6d2f366a32874a24/replication/binlogsyncer.go#L745
+			GTID := ev.GTID
+			nextGTIDStr = fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber)
+		case *replication.MariadbGTIDListEvent:
+			gSet, err2 := event.GTIDsFromMariaDBGTIDListEvent(e)
+			if err2 != nil {
+				return 0, nil, errors.Annotatef(err2, "get GTID set from MariadbGTIDListEvent %+v", e.Header)
+			}
+			latestGSet = gSet.Origin()
+			flavor = gmysql.MariaDBFlavor
 		case *replication.GenericEvent:
 			if e.Header.EventType == replication.PREVIOUS_GTIDS_EVENT {
 				// if GTID enabled, we can get a PreviousGTIDEvent after the FormatDescriptionEvent
