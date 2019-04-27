@@ -21,10 +21,13 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/parser"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/binlog/reader"
+	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/relay/common"
 )
 
 // checkBinlogHeaderExist checks if the file has a binlog file header.
@@ -159,4 +162,46 @@ func checkIsDuplicateEvent(filename string, ev *replication.BinlogEvent) (bool, 
 
 	// duplicate in the file
 	return true, nil
+}
+
+// getTxnPosGTIDs gets position/GTID set for all completed transactions from a binlog file.
+// NOTE: we use a int64 rather than a uint32 to represent the latest transaction's end log pos.
+func getTxnPosGTIDs(filename string, p *parser.Parser) (int64, gtid.Set, error) {
+	// use a FileReader to parse the binlog file.
+	rCfg := &reader.FileReaderConfig{
+		EnableRawMode: false, // in order to get GTID set, we always disable RawMode.
+	}
+	startPos := gmysql.Position{Name: filename, Pos: 0} // always start from the file header
+	r := reader.NewFileReader(rCfg)
+	defer r.Close()
+	err := r.StartSyncByPos(startPos) // we always parse the file by pos
+	if err != nil {
+		return 0, nil, errors.Annotatef(err, "start sync by pos %s for %s", startPos, filename)
+	}
+
+	var (
+		latestPos int64
+	)
+	for {
+		var e *replication.BinlogEvent
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		e, err = r.GetEvent(ctx)
+		cancel()
+		if err != nil {
+			break // now, we stop to parse for any errors
+		}
+
+		// only update pos/GTID set for DDL/XID to get an complete transaction.
+		switch ev := e.Event.(type) {
+		case *replication.QueryEvent:
+			isDDL := common.CheckIsDDL(string(ev.Query), p)
+			if isDDL {
+				latestPos = int64(e.Header.LogPos)
+			}
+		case *replication.XIDEvent:
+			latestPos = int64(e.Header.LogPos)
+		}
+	}
+
+	return latestPos, nil, nil
 }

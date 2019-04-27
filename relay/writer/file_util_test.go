@@ -17,11 +17,13 @@ import (
 	"bytes"
 	"io"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/pingcap/check"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/parser"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
@@ -265,4 +267,170 @@ func (t *testFileUtilSuite) TestCheckIsDuplicateEvent(c *check.C) {
 	duplicate, err = checkIsDuplicateEvent(filename, lastEvent)
 	c.Assert(err, check.ErrorMatches, ".*get stat for.*")
 	c.Assert(duplicate, check.IsFalse)
+}
+
+func (t *testFileUtilSuite) TestGetTxnPosGTIDs(c *check.C) {
+	var (
+		parser2 = parser.New()
+
+		filename           = filepath.Join(c.MkDir(), "test-mysql-bin.000001")
+		flavor             = gmysql.MySQLFlavor
+		previousGTIDSetStr = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456,53bfca22-690d-11e7-8a62-18ded7a37b78:1-495,686e1ab6-c47e-11e7-a42c-6c92bf46f384:234-567"
+		latestGTIDStr1     = "3ccc475b-2343-11e7-be21-6c0b84d59f30:14"
+		latestGTIDStr2     = "53bfca22-690d-11e7-8a62-18ded7a37b78:495"
+	)
+
+	// different SIDs in GTID set
+	previousGTIDSet, err := gtid.ParserGTID(flavor, previousGTIDSetStr)
+	c.Assert(err, check.IsNil)
+	latestGTID1, err := gtid.ParserGTID(flavor, latestGTIDStr1)
+	c.Assert(err, check.IsNil)
+	latestGTID2, err := gtid.ParserGTID(flavor, latestGTIDStr2)
+	c.Assert(err, check.IsNil)
+
+	g, _, baseData := genBinlogEventsWithGTIDs(c, flavor, previousGTIDSet, latestGTID1, latestGTID2)
+
+	// expected latest pos/GTID set
+	expectedPos := int64(len(baseData))
+
+	// write the events to a file
+	err = ioutil.WriteFile(filename, baseData, 0644)
+	c.Assert(err, check.IsNil)
+
+	// not extra data exists
+	pos, _, err := getTxnPosGTIDs(filename, parser2)
+	c.Assert(err, check.IsNil)
+	c.Assert(pos, check.DeepEquals, expectedPos)
+
+	// generate another transaction, DML
+	var (
+		tableID    uint64 = 9
+		columnType        = []byte{gmysql.MYSQL_TYPE_LONG}
+		eventType         = replication.UPDATE_ROWS_EVENTv2
+		schema            = "db"
+		table             = "tbl2"
+	)
+	updateRows := make([][]interface{}, 0, 2)
+	updateRows = append(updateRows, []interface{}{int32(1)}, []interface{}{int32(2)})
+	dmlData := []*event.DMLData{
+		{
+			TableID:    tableID,
+			Schema:     schema,
+			Table:      table,
+			ColumnType: columnType,
+			Rows:       updateRows,
+		},
+	}
+	extraEvents, extraData, err := g.GenDMLEvents(eventType, dmlData)
+	c.Assert(err, check.IsNil)
+	c.Assert(extraEvents, check.HasLen, 5) // [GTID, BEGIN, TableMap, UPDATE, XID]
+
+	// write an uncompleted event to the file
+	corruptData := extraEvents[0].RawData[:len(extraEvents[0].RawData)-2]
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_APPEND, 0644)
+	c.Assert(err, check.IsNil)
+	_, err = f.Write(corruptData)
+	c.Assert(err, check.IsNil)
+	c.Assert(f.Close(), check.IsNil)
+
+	// check again
+	pos, _, err = getTxnPosGTIDs(filename, parser2)
+	c.Assert(err, check.IsNil)
+	c.Assert(pos, check.DeepEquals, expectedPos)
+
+	// truncate extra data
+	f, err = os.OpenFile(filename, os.O_WRONLY, 0644)
+	c.Assert(err, check.IsNil)
+	err = f.Truncate(expectedPos)
+	c.Assert(err, check.IsNil)
+	c.Assert(f.Close(), check.IsNil)
+
+	// write an uncompleted transaction with some completed events
+	for i := 0; i < len(extraEvents)-1; i++ {
+		f, err = os.OpenFile(filename, os.O_WRONLY|os.O_APPEND, 0644)
+		c.Assert(err, check.IsNil)
+		_, err = f.Write(extraEvents[i].RawData) // write the event
+		c.Assert(err, check.IsNil)
+		c.Assert(f.Close(), check.IsNil)
+		// check again
+		pos, _, err = getTxnPosGTIDs(filename, parser2)
+		c.Assert(err, check.IsNil)
+		c.Assert(pos, check.DeepEquals, expectedPos)
+	}
+
+	// write a completed event (and a completed transaction) to the file
+	f, err = os.OpenFile(filename, os.O_WRONLY|os.O_APPEND, 0644)
+	c.Assert(err, check.IsNil)
+	_, err = f.Write(extraEvents[len(extraEvents)-1].RawData) // write the event
+	c.Assert(err, check.IsNil)
+	c.Assert(f.Close(), check.IsNil)
+	// check again
+	pos, _, err = getTxnPosGTIDs(filename, parser2)
+	c.Assert(err, check.IsNil)
+	c.Assert(pos, check.DeepEquals, expectedPos+int64(len(extraData)))
+}
+
+// genBinlogEventsWithGTIDs generates some binlog events used by testFileUtilSuite and testFileWriterSuite.
+// now, its generated events including 3 DDL and 10 DML.
+func genBinlogEventsWithGTIDs(c *check.C, flavor string, previousGTIDSet, latestGTID1, latestGTID2 gtid.Set) (*event.Generator, []*replication.BinlogEvent, []byte) {
+	var (
+		serverID  uint32 = 11
+		latestPos uint32
+		latestXID uint64 = 10
+
+		allEvents = make([]*replication.BinlogEvent, 0, 50)
+		allData   bytes.Buffer
+	)
+
+	// use a binlog event generator to generate some binlog events.
+	g, err := event.NewGenerator(flavor, serverID, latestPos, latestGTID1, previousGTIDSet, latestXID)
+	c.Assert(err, check.IsNil)
+
+	// file header with FormatDescriptionEvent and PreviousGTIDsEvent
+	events, data, err := g.GenFileHeader()
+	c.Assert(err, check.IsNil)
+	allEvents = append(allEvents, events...)
+	allData.Write(data)
+
+	// CREATE DATABASE/TABLE, 3 DDL
+	queries := []string{
+		"CREATE DATABASE `db`",
+		"CREATE TABLE `db`.`tbl1` (c1 INT)",
+		"CREATE TABLE `db`.`tbl2` (c1 INT)",
+	}
+	for _, query := range queries {
+		events, data, err = g.GenDDLEvents("db", query)
+		c.Assert(err, check.IsNil)
+		allEvents = append(allEvents, events...)
+		allData.Write(data)
+	}
+
+	// DMLs, 10 DML
+	g.LatestGTID = latestGTID2 // use another latest GTID with different SID/DomainID
+	var (
+		tableID    uint64 = 8
+		columnType        = []byte{gmysql.MYSQL_TYPE_LONG}
+		eventType         = replication.WRITE_ROWS_EVENTv2
+		schema            = "db"
+		table             = "tbl1"
+	)
+	for i := 0; i < 10; i++ {
+		insertRows := make([][]interface{}, 0, 1)
+		insertRows = append(insertRows, []interface{}{int32(i)})
+		dmlData := []*event.DMLData{
+			{
+				TableID:    tableID,
+				Schema:     schema,
+				Table:      table,
+				ColumnType: columnType,
+				Rows:       insertRows,
+			},
+		}
+		events, data, err = g.GenDMLEvents(eventType, dmlData)
+		c.Assert(err, check.IsNil)
+		allEvents = append(allEvents, events...)
+		allData.Write(data)
+	}
+
+	return g, allEvents, allData.Bytes()
 }

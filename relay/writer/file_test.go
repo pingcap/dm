@@ -566,7 +566,10 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	c.Assert(err, check.IsNil)
 
 	// generate binlog events
-	g, _, baseData := t.genBinlogEventsForRecover(c, flavor, previousGTIDSet, latestGTID1, latestGTID2)
+	g, _, baseData := genBinlogEventsWithGTIDs(c, flavor, previousGTIDSet, latestGTID1, latestGTID2)
+
+	// expected latest pos/GTID set
+	expectedPos := gmysql.Position{Name: cfg.Filename, Pos: uint32(len(baseData))}
 
 	// write the events to a file
 	filename := filepath.Join(cfg.RelayDir, cfg.Filename)
@@ -587,7 +590,8 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	// generate another transaction
 	events, _, err := g.GenDDLEvents("db2", "CREATE DATABASE db2")
 	c.Assert(err, check.IsNil)
-	c.Assert(events, check.HasLen, 2) // for DDL (one GTIDEvent, one QueryEvent)
+	c.Assert(events, check.HasLen, 2) // [GTID, Query]
+
 	// write an uncompleted event to the file
 	corruptData := events[0].RawData[:len(events[0].RawData)-2]
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_APPEND, 0644)
@@ -595,9 +599,6 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	_, err = f.Write(corruptData)
 	c.Assert(err, check.IsNil)
 	c.Assert(f.Close(), check.IsNil)
-
-	// expected latest pos/GTID set
-	expectedPos := gmysql.Position{Name: cfg.Filename, Pos: uint32(len(baseData))}
 
 	// check file size, increased
 	fs, err = os.Stat(filename)
@@ -639,67 +640,4 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	fs, err = os.Stat(filename)
 	c.Assert(err, check.IsNil)
 	c.Assert(fs.Size(), check.Equals, int64(len(baseData)))
-}
-
-func (t *testFileWriterSuite) genBinlogEventsForRecover(c *check.C, flavor string, previousGTIDSet, latestGTID1, latestGTID2 gtid.Set) (*event.Generator, []*replication.BinlogEvent, []byte) {
-	var (
-		serverID  uint32 = 11
-		latestPos uint32
-		latestXID uint64 = 10
-
-		allEvents = make([]*replication.BinlogEvent, 0, 50)
-		allData   bytes.Buffer
-	)
-
-	// use a binlog event generator to generate some binlog events.
-	g, err := event.NewGenerator(flavor, serverID, latestPos, latestGTID1, previousGTIDSet, latestXID)
-	c.Assert(err, check.IsNil)
-
-	// file header with FormatDescriptionEvent and PreviousGTIDsEvent
-	events, data, err := g.GenFileHeader()
-	c.Assert(err, check.IsNil)
-	allEvents = append(allEvents, events...)
-	allData.Write(data)
-
-	// CREATE DATABASE/TABLE, 3 DDL
-	queries := []string{
-		"CRATE DATABASE `db`",
-		"CREATE TABLE `db`.`tbl1` (c1 INT)",
-		"CREATE TABLE `db`.`tbl2` (c1 INT)",
-	}
-	for _, query := range queries {
-		events, data, err = g.GenDDLEvents("db", query)
-		c.Assert(err, check.IsNil)
-		allEvents = append(allEvents, events...)
-		allData.Write(data)
-	}
-
-	// DMLs, 10 DML
-	g.LatestGTID = latestGTID2 // use another latest GTID with different SID/DomainID
-	var (
-		tableID    uint64 = 8
-		columnType        = []byte{gmysql.MYSQL_TYPE_LONG}
-		eventType         = replication.WRITE_ROWS_EVENTv2
-		schema            = "db"
-		table             = "tbl1"
-	)
-	for i := 0; i < 10; i++ {
-		insertRows := make([][]interface{}, 0, 1)
-		insertRows = append(insertRows, []interface{}{int32(i)})
-		dmlData := []*event.DMLData{
-			{
-				TableID:    tableID,
-				Schema:     schema,
-				Table:      table,
-				ColumnType: columnType,
-				Rows:       insertRows,
-			},
-		}
-		events, data, err = g.GenDMLEvents(eventType, dmlData)
-		c.Assert(err, check.IsNil)
-		allEvents = append(allEvents, events...)
-		allData.Write(data)
-	}
-
-	return g, allEvents, allData.Bytes()
 }
