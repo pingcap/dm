@@ -52,7 +52,7 @@ type Writer interface {
 
 	// Recover tries to recover the binlog file or any other memory structure associate with this writer.
 	// The parser often used to verify events's statement through parsing them.
-	// It is often used to recover a binlog file with some corrupt/un-finished binlog events/transactions at the end of the file.
+	// It is often used to recover a binlog file with some corrupt/uncompleted binlog events/transactions at the end of the file.
 	// It is not safe for concurrent use by multiple goroutines.
 	Recover(p *parser.Parser) (*RecoverResult, error)
 

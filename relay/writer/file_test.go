@@ -90,7 +90,7 @@ func (t *testFileWriterSuite) TestInterfaceMethods(c *check.C) {
 
 	// close the writer
 	c.Assert(w.Close(), check.IsNil)
-	c.Assert(w.Close(), check.NotNil) // re-close is invalid
+	c.Assert(w.Close(), check.ErrorMatches, fmt.Sprintf(".*%s.*", stageClosed)) // re-close is invalid
 }
 
 func (t *testFileWriterSuite) TestRelayDir(c *check.C) {
@@ -570,6 +570,10 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 
 	// expected latest pos/GTID set
 	expectedPos := gmysql.Position{Name: cfg.Filename, Pos: uint32(len(baseData))}
+	// 3 DDL + 10 DML
+	expectedGTIDsStr := "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-17,53bfca22-690d-11e7-8a62-18ded7a37b78:1-505,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456,686e1ab6-c47e-11e7-a42c-6c92bf46f384:234-567"
+	expectedGTIDs, err := gtid.ParserGTID(flavor, expectedGTIDsStr)
+	c.Assert(err, check.IsNil)
 
 	// write the events to a file
 	filename := filepath.Join(cfg.RelayDir, cfg.Filename)
@@ -581,19 +585,21 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(result, check.NotNil)
 	c.Assert(result.Recovered, check.IsFalse)
+	c.Assert(result.LatestPos, check.DeepEquals, expectedPos)
+	c.Assert(result.LatestGTIDs, check.DeepEquals, expectedGTIDs)
 
 	// check file size, whether no recovering operation applied
 	fs, err := os.Stat(filename)
 	c.Assert(err, check.IsNil)
 	c.Assert(fs.Size(), check.Equals, int64(len(baseData)))
 
-	// generate another transaction
-	events, _, err := g.GenDDLEvents("db2", "CREATE DATABASE db2")
+	// generate another transaction, DDL
+	extraEvents, extraData, err := g.GenDDLEvents("db2", "CREATE DATABASE db2")
 	c.Assert(err, check.IsNil)
-	c.Assert(events, check.HasLen, 2) // [GTID, Query]
+	c.Assert(extraEvents, check.HasLen, 2) // [GTID, Query]
 
 	// write an uncompleted event to the file
-	corruptData := events[0].RawData[:len(events[0].RawData)-2]
+	corruptData := extraEvents[0].RawData[:len(extraEvents[0].RawData)-2]
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_APPEND, 0644)
 	c.Assert(err, check.IsNil)
 	_, err = f.Write(corruptData)
@@ -611,6 +617,7 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	c.Assert(result, check.NotNil)
 	c.Assert(result.Recovered, check.IsTrue)
 	c.Assert(result.LatestPos, check.DeepEquals, expectedPos)
+	c.Assert(result.LatestGTIDs, check.DeepEquals, expectedGTIDs)
 
 	// check file size, truncated
 	fs, err = os.Stat(filename)
@@ -620,14 +627,18 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	// write an uncompleted transaction
 	f, err = os.OpenFile(filename, os.O_WRONLY|os.O_APPEND, 0644)
 	c.Assert(err, check.IsNil)
-	_, err = f.Write(events[0].RawData)
-	c.Assert(err, check.IsNil)
+	var extraLen int64
+	for i := 0; i < len(extraEvents)-1; i++ {
+		_, err = f.Write(extraEvents[i].RawData)
+		c.Assert(err, check.IsNil)
+		extraLen += int64(len(extraEvents[i].RawData))
+	}
 	c.Assert(f.Close(), check.IsNil)
 
 	// check file size, increased
 	fs, err = os.Stat(filename)
 	c.Assert(err, check.IsNil)
-	c.Assert(fs.Size(), check.Equals, int64(len(baseData)+len(events[0].RawData)))
+	c.Assert(fs.Size(), check.Equals, int64(len(baseData))+extraLen)
 
 	// try recover, truncate the uncompleted transaction
 	result, err = w.Recover(parser2)
@@ -635,9 +646,45 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	c.Assert(result, check.NotNil)
 	c.Assert(result.Recovered, check.IsTrue)
 	c.Assert(result.LatestPos, check.DeepEquals, expectedPos)
+	c.Assert(result.LatestGTIDs, check.DeepEquals, expectedGTIDs)
 
 	// check file size, truncated
 	fs, err = os.Stat(filename)
 	c.Assert(err, check.IsNil)
 	c.Assert(fs.Size(), check.Equals, int64(len(baseData)))
+
+	// write an completed transaction
+	f, err = os.OpenFile(filename, os.O_WRONLY|os.O_APPEND, 0644)
+	c.Assert(err, check.IsNil)
+	for i := 0; i < len(extraEvents); i++ {
+		_, err = f.Write(extraEvents[i].RawData)
+		c.Assert(err, check.IsNil)
+	}
+	c.Assert(f.Close(), check.IsNil)
+
+	// check file size, increased
+	fs, err = os.Stat(filename)
+	c.Assert(err, check.IsNil)
+	c.Assert(fs.Size(), check.Equals, int64(len(baseData)+len(extraData)))
+
+	// try recover, no operation applied
+	expectedPos.Pos += uint32(len(extraData))
+	// 4 DDL + 10 DML
+	expectedGTIDsStr = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-17,53bfca22-690d-11e7-8a62-18ded7a37b78:1-506,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456,686e1ab6-c47e-11e7-a42c-6c92bf46f384:234-567"
+	expectedGTIDs, err = gtid.ParserGTID(flavor, expectedGTIDsStr)
+	c.Assert(err, check.IsNil)
+	result, err = w.Recover(parser2)
+	c.Assert(err, check.IsNil)
+	c.Assert(result, check.NotNil)
+	c.Assert(result.Recovered, check.IsFalse)
+	c.Assert(result.LatestPos, check.DeepEquals, expectedPos)
+	c.Assert(result.LatestGTIDs, check.DeepEquals, expectedGTIDs)
+
+	// compare file data
+	var allData bytes.Buffer
+	allData.Write(baseData)
+	allData.Write(extraData)
+	fileData, err := ioutil.ReadFile(filename)
+	c.Assert(err, check.IsNil)
+	c.Assert(fileData, check.DeepEquals, allData.Bytes())
 }

@@ -332,23 +332,28 @@ func (w *FileWriter) handleDuplicateEventsExist(ev *replication.BinlogEvent) (*R
 // 2.
 //    a. update the position with the event's position if the transaction finished
 //    b. update the GTID set with the event's GTID if the transaction finished
-// 3. truncate any un-finished events/transactions
+// 3. truncate any uncompleted events/transactions
 // now, we think a transaction finished if we received a XIDEvent or DDL in QueryEvent
 // NOTE: handle cases when file size > 4GB
 func (w *FileWriter) doRecovering(p *parser.Parser) (*RecoverResult, error) {
 	filename := filepath.Join(w.cfg.RelayDir, w.filename.Get())
-	latestPos, _, err := getTxnPosGTIDs(filename, p)
+	// get latest pos/GTID set for all completed transactions from the file
+	latestPos, latestGTIDs, err := getTxnPosGTIDs(filename, p)
 	if err != nil {
 		return nil, errors.Annotatef(err, "get latest pos/GTID set from %s", filename)
 	}
 
-	// in most cases, we think the file is fine, so compare the size is simple.
+	// in most cases, we think the file is fine, so compare the size is simpler.
 	fs, err := os.Stat(filename)
 	if err != nil {
 		return nil, errors.Annotatef(err, "get stat for %s", filename)
 	}
 	if fs.Size() == latestPos {
-		return &RecoverResult{}, nil // no recovering for the file.
+		return &RecoverResult{
+			Recovered:   false, // no recovering for the file
+			LatestPos:   gmysql.Position{Name: w.filename.Get(), Pos: uint32(latestPos)},
+			LatestGTIDs: latestGTIDs,
+		}, nil
 	} else if fs.Size() < latestPos {
 		return nil, errors.Errorf("latest pos %d greater than file size %d, should not happen", latestPos, fs.Size())
 	}
@@ -365,7 +370,8 @@ func (w *FileWriter) doRecovering(p *parser.Parser) (*RecoverResult, error) {
 	}
 
 	return &RecoverResult{
-		Recovered: true,
-		LatestPos: gmysql.Position{Name: w.filename.Get(), Pos: uint32(latestPos)},
+		Recovered:   true,
+		LatestPos:   gmysql.Position{Name: w.filename.Get(), Pos: uint32(latestPos)},
+		LatestGTIDs: latestGTIDs,
 	}, nil
 }
