@@ -596,6 +596,9 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(f.Close(), check.IsNil)
 
+	// expected latest pos/GTID set
+	expectedPos := gmysql.Position{Name: cfg.Filename, Pos: uint32(len(baseData))}
+
 	// check file size, increased
 	fs, err = os.Stat(filename)
 	c.Assert(err, check.IsNil)
@@ -606,8 +609,31 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(result, check.NotNil)
 	c.Assert(result.Recovered, check.IsTrue)
-	c.Assert(result.LatestPos.Name, check.Equals, cfg.Filename)
-	c.Assert(result.LatestPos.Pos, check.Equals, uint32(len(baseData)))
+	c.Assert(result.LatestPos, check.DeepEquals, expectedPos)
+
+	// check file size, truncated
+	fs, err = os.Stat(filename)
+	c.Assert(err, check.IsNil)
+	c.Assert(fs.Size(), check.Equals, int64(len(baseData)))
+
+	// write an uncompleted transaction
+	f, err = os.OpenFile(filename, os.O_WRONLY|os.O_APPEND, 0644)
+	c.Assert(err, check.IsNil)
+	_, err = f.Write(events[0].RawData)
+	c.Assert(err, check.IsNil)
+	c.Assert(f.Close(), check.IsNil)
+
+	// check file size, increased
+	fs, err = os.Stat(filename)
+	c.Assert(err, check.IsNil)
+	c.Assert(fs.Size(), check.Equals, int64(len(baseData)+len(events[0].RawData)))
+
+	// try recover, truncate the uncompleted transaction
+	result, err = w.Recover(parser2)
+	c.Assert(err, check.IsNil)
+	c.Assert(result, check.NotNil)
+	c.Assert(result.Recovered, check.IsTrue)
+	c.Assert(result.LatestPos, check.DeepEquals, expectedPos)
 
 	// check file size, truncated
 	fs, err = os.Stat(filename)
