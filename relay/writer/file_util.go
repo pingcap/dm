@@ -233,6 +233,8 @@ func getTxnPosGTIDs(filename string, p *parser.Parser) (int64, gtid.Set, error) 
 			GTID := ev.GTID
 			nextGTIDStr = fmt.Sprintf("%d-%d-%d", GTID.DomainID, GTID.ServerID, GTID.SequenceNumber)
 		case *replication.MariadbGTIDListEvent:
+			// a MariadbGTIDListEvent logged in every binlog to record the current replication state if GTID enabled
+			// ref: https://mariadb.com/kb/en/library/gtid_list_event/
 			gSet, err2 := event.GTIDsFromMariaDBGTIDListEvent(e)
 			if err2 != nil {
 				return 0, nil, errors.Annotatef(err2, "get GTID set from MariadbGTIDListEvent %+v", e.Header)
