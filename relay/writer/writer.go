@@ -54,6 +54,7 @@ type Writer interface {
 	// The parser often used to verify events's statement through parsing them.
 	// It is often used to recover a binlog file with some corrupt/uncompleted binlog events/transactions at the end of the file.
 	// It is not safe for concurrent use by multiple goroutines.
+	// It should be called before writing to the file.
 	Recover(p *parser.Parser) (*RecoverResult, error)
 
 	// WriteEvent writes an binlog event's data into disk or any other places.
