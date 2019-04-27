@@ -469,3 +469,109 @@ func genBinlogEventsWithGTIDs(c *check.C, flavor string, previousGTIDSet, latest
 
 	return g, allEvents, allData.Bytes()
 }
+
+func (t *testFileUtilSuite) TestGetTxnPosGTIDsNoGTID(c *check.C) {
+	// generate some events but without GTID enabled
+	var (
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+		}
+		latestPos uint32 = 4
+		filename         = filepath.Join(c.MkDir(), "test-mysql-bin.000001")
+	)
+
+	// FormatDescriptionEvent
+	formatDescEv, err := event.GenFormatDescriptionEvent(header, latestPos)
+	c.Assert(err, check.IsNil)
+	latestPos = formatDescEv.Header.LogPos
+
+	// QueryEvent, DDL
+	queryEv, err := event.GenQueryEvent(header, latestPos, 0, 0, 0, nil, []byte("db"), []byte("CREATE DATABASE db"))
+	c.Assert(err, check.IsNil)
+	latestPos = queryEv.Header.LogPos
+
+	// write events to the file
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE, 0644)
+	c.Assert(err, check.IsNil)
+	_, err = f.Write(replication.BinLogFileHeader)
+	c.Assert(err, check.IsNil)
+	_, err = f.Write(formatDescEv.RawData)
+	c.Assert(err, check.IsNil)
+	_, err = f.Write(queryEv.RawData)
+	c.Assert(err, check.IsNil)
+	c.Assert(f.Close(), check.IsNil)
+
+	// check latest pos/GTID set
+	pos, gSet, err := getTxnPosGTIDs(filename, parser.New())
+	c.Assert(err, check.IsNil)
+	c.Assert(pos, check.Equals, int64(latestPos))
+	c.Assert(gSet, check.IsNil) // GTID not enabled
+}
+
+func (t *testFileUtilSuite) TestGetTxnPosGTIDsIllegalGTIDMySQL(c *check.C) {
+	// generate some events with GTID enabled, but without PreviousGTIDEvent
+	var (
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+		}
+		latestPos uint32 = 4
+	)
+
+	// GTID event
+	gtidEv, err := event.GenGTIDEvent(header, latestPos, 0, "3ccc475b-2343-11e7-be21-6c0b84d59f30", 14, 10, 10)
+	c.Assert(err, check.IsNil)
+
+	t.testGetTxnPosGTIDsIllegalGTID(c, gtidEv, ".*should have a PreviousGTIDsEvent before the GTIDEvent.*")
+}
+
+func (t *testFileUtilSuite) TestGetTxnPosGTIDsIllegalGTIDMairaDB(c *check.C) {
+	// generate some events with GTID enabled, but without MariaDBGTIDEvent
+	var (
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+		}
+		latestPos uint32 = 4
+	)
+
+	// GTID event
+	mariaDBGTIDEv, err := event.GenMariaDBGTIDEvent(header, latestPos, 10, 10)
+	c.Assert(err, check.IsNil)
+
+	t.testGetTxnPosGTIDsIllegalGTID(c, mariaDBGTIDEv, ".*should have a MariadbGTIDListEvent before the MariadbGTIDEvent.*")
+}
+
+func (t *testFileUtilSuite) testGetTxnPosGTIDsIllegalGTID(c *check.C, gtidEv *replication.BinlogEvent, errRegStr string) {
+	var (
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+		}
+		latestPos uint32 = 4
+		filename         = filepath.Join(c.MkDir(), "test-mysql-bin.000001")
+	)
+
+	// FormatDescriptionEvent
+	formatDescEv, err := event.GenFormatDescriptionEvent(header, latestPos)
+	c.Assert(err, check.IsNil)
+	latestPos = formatDescEv.Header.LogPos
+
+	// write events to the file
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE, 0644)
+	c.Assert(err, check.IsNil)
+	_, err = f.Write(replication.BinLogFileHeader)
+	c.Assert(err, check.IsNil)
+	_, err = f.Write(formatDescEv.RawData)
+	c.Assert(err, check.IsNil)
+	_, err = f.Write(gtidEv.RawData)
+	c.Assert(err, check.IsNil)
+	c.Assert(f.Close(), check.IsNil)
+
+	// check latest pos/GTID set
+	pos, gSet, err := getTxnPosGTIDs(filename, parser.New())
+	c.Assert(err, check.ErrorMatches, errRegStr)
+	c.Assert(pos, check.Equals, int64(0))
+	c.Assert(gSet, check.IsNil)
+}
