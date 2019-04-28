@@ -598,7 +598,7 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(extraEvents, check.HasLen, 2) // [GTID, Query]
 
-	// write an uncompleted event to the file
+	// write an incomplete event to the file
 	corruptData := extraEvents[0].RawData[:len(extraEvents[0].RawData)-2]
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_APPEND, 0644)
 	c.Assert(err, check.IsNil)
@@ -611,7 +611,7 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(fs.Size(), check.Equals, int64(len(baseData)+len(corruptData)))
 
-	// try recover, truncate the uncompleted event
+	// try recover, truncate the incomplete event
 	result, err = w.Recover(parser2)
 	c.Assert(err, check.IsNil)
 	c.Assert(result, check.NotNil)
@@ -624,7 +624,7 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(fs.Size(), check.Equals, int64(len(baseData)))
 
-	// write an uncompleted transaction
+	// write an incomplete transaction
 	f, err = os.OpenFile(filename, os.O_WRONLY|os.O_APPEND, 0644)
 	c.Assert(err, check.IsNil)
 	var extraLen int64
@@ -640,7 +640,7 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(fs.Size(), check.Equals, int64(len(baseData))+extraLen)
 
-	// try recover, truncate the uncompleted transaction
+	// try recover, truncate the incomplete transaction
 	result, err = w.Recover(parser2)
 	c.Assert(err, check.IsNil)
 	c.Assert(result, check.NotNil)

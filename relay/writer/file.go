@@ -332,7 +332,7 @@ func (w *FileWriter) handleDuplicateEventsExist(ev *replication.BinlogEvent) (*R
 // 2.
 //    a. update the position with the event's position if the transaction finished
 //    b. update the GTID set with the event's GTID if the transaction finished
-// 3. truncate any uncompleted events/transactions
+// 3. truncate any incomplete events/transactions
 // now, we think a transaction finished if we received a XIDEvent or DDL in QueryEvent
 // NOTE: handle cases when file size > 4GB
 func (w *FileWriter) doRecovering(p *parser.Parser) (*RecoverResult, error) {

@@ -353,7 +353,7 @@ func (t *testFileUtilSuite) testGetTxnPosGTIDs(c *check.C, filename, flavor, pre
 	c.Assert(err, check.IsNil)
 	c.Assert(extraEvents, check.HasLen, 5) // [GTID, BEGIN, TableMap, UPDATE, XID]
 
-	// write an uncompleted event to the file
+	// write an incomplete event to the file
 	corruptData := extraEvents[0].RawData[:len(extraEvents[0].RawData)-2]
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_APPEND, 0644)
 	c.Assert(err, check.IsNil)
@@ -374,7 +374,7 @@ func (t *testFileUtilSuite) testGetTxnPosGTIDs(c *check.C, filename, flavor, pre
 	c.Assert(err, check.IsNil)
 	c.Assert(f.Close(), check.IsNil)
 
-	// write an uncompleted transaction with some completed events
+	// write an incomplete transaction with some completed events
 	for i := 0; i < len(extraEvents)-1; i++ {
 		f, err = os.OpenFile(filename, os.O_WRONLY|os.O_APPEND, 0644)
 		c.Assert(err, check.IsNil)
