@@ -49,7 +49,7 @@ func (s *testCheckpointSuite) SetUpSuite(c *C) {
 	s.cfg = &config.SubTaskConfig{
 		ServerID:   101,
 		MetaSchema: "test",
-		Name:       "syncer_ut",
+		Name:       "syncer_checkpoint_ut",
 	}
 }
 
