@@ -10,7 +10,7 @@ function run() {
     run_sql_file $cur/data/db.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
 
     # in load stage, the dumped file split into 14 insert segments, we slow down 14 * 100 ms
-    # in sync stage, there are approximately 530~550 binlog events, we slow down 3 * 530 ms
+    # in sync stage, there are approximately 530~550 binlog events, we slow down 530 * 3 ms
     inject_points=("github.com/pingcap/dm/loader/PrintStatusCheckSeconds=return(1)"
                    "github.com/pingcap/dm/syncer/PrintStatusCheckSeconds=return(1)"
                    "github.com/pingcap/dm/loader/LoadDataSlowDown=sleep(100)"
