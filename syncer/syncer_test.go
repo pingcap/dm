@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	_ "github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/dm/pkg/log"
@@ -50,7 +49,6 @@ type testSyncerSuite struct {
 	syncer   *replication.BinlogSyncer
 	streamer *replication.BinlogStreamer
 	cfg      *config.SubTaskConfig
-	cpMock   sqlmock.Sqlmock
 }
 
 func (s *testSyncerSuite) SetUpSuite(c *C) {
