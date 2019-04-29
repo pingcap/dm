@@ -293,7 +293,7 @@ func (s *Syncer) Init() (err error) {
 		}
 	}
 
-	err = s.checkpoint.Init()
+	err = s.checkpoint.Init(nil)
 	if err != nil {
 		return errors.Trace(err)
 	}

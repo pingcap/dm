@@ -16,6 +16,7 @@ package log
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"path"
 	"runtime"
 	"sort"
@@ -44,6 +45,11 @@ func SetLevelByString(level string) {
 // GetLogLevelAsString gets current log's level as a level string.
 func GetLogLevelAsString() string {
 	return log.GetLevel().String()
+}
+
+// SetOutput sets the standard logger output.
+func SetOutput(out io.Writer) {
+	log.SetOutput(out)
 }
 
 // SetOutputByName sets the filename for the log.
