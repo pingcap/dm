@@ -58,8 +58,10 @@ start_services() {
 prepare_tools() {
     mkdir -p $CUR/bin
     cd $CUR
-    GO111MODULE=on go build -o bin/dmctl_start_task dmctl_tools/dmctl_start_task.go
-    GO111MODULE=on go build -o bin/dmctl_operate_task dmctl_tools/dmctl_operate_task.go
+    for file in "dmctl_tools"/*; do
+        bin_name=$(echo $file|awk -F"/" '{print $(NF)}'|awk -F"." '{print $1}')
+        GO111MODULE=on go build -o bin/$bin_name $file
+    done
     cd -
 }
 
