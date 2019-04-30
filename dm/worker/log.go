@@ -93,7 +93,7 @@ func LoadHandledPointer(db *leveldb.DB) (Pointer, error) {
 
 	err = p.UnmarshalBinary(value)
 	if err != nil {
-		return p, errors.Annotatef(err, "unmarshal handle pointer %X", value)
+		return p, errors.Annotatef(err, "unmarshal handle pointer % X", value)
 	}
 
 	return p, nil
@@ -154,7 +154,7 @@ func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 		opLog := &pb.TaskLog{}
 		err = opLog.Unmarshal(logBytes)
 		if err != nil {
-			err = errors.Annotatef(err, "unmarshal task log %X", logBytes)
+			err = errors.Annotatef(err, "unmarshal task log % X", logBytes)
 			break
 		}
 
@@ -163,7 +163,7 @@ func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 			endPointer.Location = opLog.Id + 1
 			logs = append(logs, opLog)
 		} else {
-			panic(fmt.Sprintf("out of sorted order from level db for task log key %X (log ID %d)", iter.Key(), opLog.Id))
+			panic(fmt.Sprintf("out of sorted order from level db for task log key % X (log ID %d)", iter.Key(), opLog.Id))
 		}
 	}
 	iter.Release()
@@ -201,7 +201,7 @@ func (logger *Logger) GetTaskLog(h Getter, id int64) (*pb.TaskLog, error) {
 	opLog := &pb.TaskLog{}
 	err = opLog.Unmarshal(logBytes)
 	if err != nil {
-		return nil, errors.Annotatef(err, "unmarshal task log binary %X", logBytes)
+		return nil, errors.Annotatef(err, "unmarshal task log binary % X", logBytes)
 	}
 
 	return opLog, nil
@@ -326,7 +326,7 @@ func (logger *Logger) doGC(db *leveldb.DB, id int64) {
 			if err != nil {
 				log.Errorf("[task log gc] fail to delete keys from kv db %v", err)
 			}
-			log.Infof("[task log gc] delete range [%s(%X), %s(%X)]", firstKey, firstKey, iter.Key(), iter.Key())
+			log.Infof("[task log gc] delete range [%s(% X), %s(% X)]", firstKey, firstKey, iter.Key(), iter.Key())
 			firstKey = firstKey[:0]
 			batch.Reset()
 		}
@@ -338,7 +338,7 @@ func (logger *Logger) doGC(db *leveldb.DB, id int64) {
 	}
 
 	if batch.Len() > 0 {
-		log.Infof("[task log gc] delete range [%s(%X), %s(%X))", firstKey, firstKey, endKey, endKey)
+		log.Infof("[task log gc] delete range [%s(% X), %s(% X))", firstKey, firstKey, endKey, endKey)
 		err := db.Write(batch, nil)
 		if err != nil {
 			log.Errorf("[task log gc] fail to delete keys from kv db %v", err)
@@ -379,7 +379,7 @@ func LoadTaskMetas(db *leveldb.DB) (map[string]*pb.TaskMeta, error) {
 		task := &pb.TaskMeta{}
 		err = task.Unmarshal(taskBytes)
 		if err != nil {
-			err = errors.Annotatef(err, "unmarshal task meta %X", taskBytes)
+			err = errors.Annotatef(err, "unmarshal task meta % X", taskBytes)
 			break
 		}
 
@@ -436,7 +436,7 @@ func GetTaskMeta(h Getter, name string) (*pb.TaskMeta, error) {
 	task := &pb.TaskMeta{}
 	err = task.Unmarshal(taskBytes)
 	if err != nil {
-		return nil, errors.Annotatef(err, "unmarshal binary %X", taskBytes)
+		return nil, errors.Annotatef(err, "unmarshal binary % X", taskBytes)
 	}
 
 	return task, nil
