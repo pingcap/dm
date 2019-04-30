@@ -114,7 +114,7 @@ func NewMetadata(dir string, db *leveldb.DB) (*Metadata, error) {
 		fd.Close()
 		err = meta.recoverMetaFromOldFashion(oldPath)
 		if err != nil {
-			log.Errorf("fail to recover meta from old metadata file %s, meta file may be correuption, error message: %v", oldPath, err)
+			log.Errorf("[worker metadata]fail to recover from old metadata file %s, meta file may be correuption, error message: %v", oldPath, err)
 			return nil, errors.Trace(err)
 		}
 	} else if !os.IsNotExist(err) {
@@ -286,11 +286,11 @@ func (meta *Metadata) recoverMetaFromOldFashion(path string) error {
 		return errors.Annotatef(err, "decode old metadata file %s", path)
 	}
 
-	log.Infof("find %d tasks from old metadata file", len(oldMeta.SubTasks))
+	log.Infof("[worker metadata]find %d tasks from old metadata file", len(oldMeta.SubTasks))
 
 	meta.tasks = make(map[string]*pb.TaskMeta)
 	for name, task := range oldMeta.SubTasks {
-		log.Infof("[old metadata file] subtask %s => %+v", name, task)
+		log.Infof("[worker metadata] from old metadata file: subtask %s => %+v", name, task)
 		var b bytes.Buffer
 		enc := toml.NewEncoder(&b)
 		err = enc.Encode(task)

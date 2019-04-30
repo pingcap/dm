@@ -48,19 +48,19 @@ var defaultKVConfig = &KVConfig{
 }
 
 func openDB(kvDir string, config *KVConfig) (*leveldb.DB, error) {
-	log.Infof("metadat kvdbconfig: %+v", config)
+	log.Infof("kv db config: %+v", config)
 
-	var opt opt.Options
-	opt.BlockCacheCapacity = config.BlockCacheCapacity
-	opt.BlockRestartInterval = config.BlockRestartInterval
-	opt.BlockSize = config.BlockSize
-	opt.CompactionL0Trigger = config.CompactionL0Trigger
-	opt.CompactionTableSize = config.CompactionTableSize
-	opt.CompactionTotalSize = config.CompactionTotalSize
-	opt.CompactionTotalSizeMultiplier = config.CompactionTotalSizeMultiplier
-	opt.WriteBuffer = config.WriteBuffer
-	opt.WriteL0PauseTrigger = config.WriteL0PauseTrigger
-	opt.WriteL0SlowdownTrigger = config.WriteL0SlowdownTrigger
+	var opts opt.Options
+	opts.BlockCacheCapacity = config.BlockCacheCapacity
+	opts.BlockRestartInterval = config.BlockRestartInterval
+	opts.BlockSize = config.BlockSize
+	opts.CompactionL0Trigger = config.CompactionL0Trigger
+	opts.CompactionTableSize = config.CompactionTableSize
+	opts.CompactionTotalSize = config.CompactionTotalSize
+	opts.CompactionTotalSizeMultiplier = config.CompactionTotalSizeMultiplier
+	opts.WriteBuffer = config.WriteBuffer
+	opts.WriteL0PauseTrigger = config.WriteL0PauseTrigger
+	opts.WriteL0SlowdownTrigger = config.WriteL0SlowdownTrigger
 
-	return leveldb.OpenFile(kvDir, &opt)
+	return leveldb.OpenFile(kvDir, &opts)
 }

@@ -26,7 +26,9 @@ func (t *testWorker) TestPointer(c *C) {
 	}
 
 	np := new(Pointer)
-	c.Assert(np.UnmarshalBinary(p.MarshalBinary()), IsNil)
+
+	bs, _ := p.MarshalBinary()
+	c.Assert(np.UnmarshalBinary(bs), IsNil)
 	c.Assert(np, DeepEquals, p)
 	c.Assert(np.UnmarshalBinary([]byte("xx")), NotNil)
 }
@@ -46,14 +48,15 @@ func (t *testWorker) TestLoadHandledPointer(c *C) {
 		Location: 1,
 	}
 
-	c.Assert(db.Put(HandledPointerKey, p.MarshalBinary(), nil), IsNil)
+	bs, _ := p.MarshalBinary()
+	c.Assert(db.Put(HandledPointerKey, bs, nil), IsNil)
 	p, err = LoadHandledPointer(db)
 	c.Assert(err, IsNil)
 	c.Assert(p.Location, Equals, int64(1))
 
 	c.Assert(db.Put(HandledPointerKey, []byte("xx"), nil), IsNil)
 	_, err = LoadHandledPointer(db)
-	c.Assert(strings.Contains(err.Error(), "no enough data"), IsTrue)
+	c.Assert(strings.Contains(err.Error(), "not valid length data as"), IsTrue)
 }
 
 func (t *testWorker) TestTaskLogKey(c *C) {
@@ -63,7 +66,7 @@ func (t *testWorker) TestTaskLogKey(c *C) {
 	c.Assert(idc, DeepEquals, id)
 
 	_, err = DecodeTaskLogKey([]byte("xx"))
-	c.Assert(strings.Contains(err.Error(), "no enough data"), IsTrue)
+	c.Assert(strings.Contains(err.Error(), "not valid length data as"), IsTrue)
 }
 
 func (t *testWorker) TestTaskLog(c *C) {
