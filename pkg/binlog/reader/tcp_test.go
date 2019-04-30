@@ -204,7 +204,7 @@ func (t *testTCPReaderSuite) TestSyncGTID(c *C) {
 			UseDecimal:     true,
 			VerifyChecksum: true,
 		}
-		gSet gtid.Set // nit GTID set
+		gSet gtid.Set // nil GTID set
 	)
 
 	// the first reader

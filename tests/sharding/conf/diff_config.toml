@@ -2,7 +2,7 @@
 
 log-level = "info"
 
-chunk-size = 1000
+chunk-size = 10
 
 check-thread-count = 4
 
@@ -22,18 +22,20 @@ tables = ["t_target"]
 [[table-config]]
 schema = "db_target"
 table = "t_target"
-ignore-columns = ["id"]
+# currently sync_diff does not support json fields well
+remove-columns = ["id", "info_json"]
 is-sharding = true
-index-field = "uid"
+index-fields = "uid"
+# range-placeholder
 
 [[table-config.source-tables]]
 instance-id = "source-1"
-schema = "sharding"
+schema = "sharding1"
 table  = "~t.*"
 
 [[table-config.source-tables]]
 instance-id = "source-2"
-schema = "sharding"
+schema = "sharding1"
 table  = "~t.*"
 
 [[source-db]]

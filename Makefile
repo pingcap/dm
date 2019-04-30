@@ -14,7 +14,7 @@ TOPDIRS  := $$(ls -d */ | grep -vE "vendor")
 SHELL    := /usr/bin/env bash
 TEST_DIR := /tmp/dm_test
 FAILPOINT_DIR := $$(for p in $(PACKAGES); do echo $${p\#"github.com/pingcap/dm/"}; done)
-FAILPOINT := failpoint-ctl
+FAILPOINT := bin/failpoint-ctl
 
 RACE_FLAG =
 ifeq ("$(WITH_RACE)", "1")
@@ -59,7 +59,7 @@ test: unit_test integration_test
 unit_test:
 	bash -x ./tests/wait_for_mysql.sh
 	mkdir -p $(TEST_DIR)
-	which $(FAILPOINT) >/dev/null 2>&1 || GO111MODULE=off go get github.com/pingcap/failpoint/failpoint-ctl
+	which $(FAILPOINT) >/dev/null 2>&1 || $(GOBUILD) -o $(FAILPOINT) github.com/pingcap/failpoint/failpoint-ctl
 	$(FAILPOINT_ENABLE)
 	@export log_level=error; \
 	$(GOTEST) -covermode=atomic -coverprofile="$(TEST_DIR)/cov.unit_test.out" -race $(PACKAGES) \
@@ -89,7 +89,7 @@ vet:
 	@$(GO) vet -vettool=$(CURDIR)/bin/shadow $(PACKAGES) || true
 
 dm_integration_test_build:
-	which $(FAILPOINT) >/dev/null 2>&1 || GO111MODULE=off go get github.com/pingcap/failpoint/failpoint-ctl
+	which $(FAILPOINT) >/dev/null 2>&1 || $(GOBUILD) -o $(FAILPOINT) github.com/pingcap/failpoint/failpoint-ctl
 	$(FAILPOINT_ENABLE)
 	$(GOTEST) -c -race -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \

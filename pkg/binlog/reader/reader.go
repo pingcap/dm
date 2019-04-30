@@ -54,6 +54,7 @@ type Reader interface {
 	StartSyncByGTID(gSet gtid.Set) error
 
 	// Close closes the reader and release the resource.
+	// Close will be blocked if `GetEvent` has not returned.
 	Close() error
 
 	// GetEvent gets the binlog event one by one, it will block if no event can be read.
