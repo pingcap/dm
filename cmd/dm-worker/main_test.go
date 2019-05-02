@@ -19,6 +19,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 func TestRunMain(t *testing.T) {
@@ -30,6 +33,13 @@ func TestRunMain(t *testing.T) {
 		default:
 			args = append(args, arg)
 		}
+	}
+
+	oldOsExit := utils.OsExit
+	defer func() { utils.OsExit = oldOsExit }()
+	utils.OsExit = func(code int) {
+		log.Infof("[test] os.Exit with code %d", code)
+		os.Exit(0)
 	}
 
 	os.Args = args
