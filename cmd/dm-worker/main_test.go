@@ -25,7 +25,10 @@ import (
 )
 
 func TestRunMain(t *testing.T) {
-	var args []string
+	var (
+		args []string
+		exit chan int = make(chan int)
+	)
 	for _, arg := range os.Args {
 		switch {
 		case arg == "DEVEL":
@@ -35,11 +38,18 @@ func TestRunMain(t *testing.T) {
 		}
 	}
 
+	go func() {
+		select {
+		case code := <-exit:
+			os.Exit(code)
+		}
+	}()
+
 	oldOsExit := utils.OsExit
 	defer func() { utils.OsExit = oldOsExit }()
 	utils.OsExit = func(code int) {
 		log.Infof("[test] os.Exit with code %d", code)
-		os.Exit(0)
+		exit <- code
 	}
 
 	os.Args = args
