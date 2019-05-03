@@ -19,6 +19,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
@@ -40,8 +41,9 @@ func TestRunMain(t *testing.T) {
 
 	go func() {
 		select {
-		case <-exit:
-			os.Exit(0)
+		case code := <-exit:
+			time.Sleep(time.Second)
+			os.Exit(code)
 		}
 	}()
 
