@@ -40,8 +40,8 @@ func TestRunMain(t *testing.T) {
 
 	go func() {
 		select {
-		case code := <-exit:
-			os.Exit(code)
+		case <-exit:
+			os.Exit(0)
 		}
 	}()
 
