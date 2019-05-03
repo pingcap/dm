@@ -45,7 +45,7 @@ func TestRunMain(t *testing.T) {
 	utils.OsExit = func(code int) {
 		log.Infof("[test] os.Exit with code %d", code)
 		exit <- code
-		// sleep here to prevent following code execution
+		// sleep here to prevent following code execution in the caller routine
 		time.Sleep(time.Second * 60)
 	}
 
