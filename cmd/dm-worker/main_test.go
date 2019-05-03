@@ -27,8 +27,9 @@ import (
 
 func TestRunMain(t *testing.T) {
 	var (
-		args []string
-		exit chan int = make(chan int)
+		args   []string
+		exit   = make(chan int)
+		waitCh = make(chan interface{}, 1)
 	)
 	for _, arg := range os.Args {
 		switch {
@@ -39,21 +40,24 @@ func TestRunMain(t *testing.T) {
 		}
 	}
 
-	go func() {
-		select {
-		case code := <-exit:
-			time.Sleep(time.Second)
-			os.Exit(code)
-		}
-	}()
-
 	oldOsExit := utils.OsExit
 	defer func() { utils.OsExit = oldOsExit }()
 	utils.OsExit = func(code int) {
 		log.Infof("[test] os.Exit with code %d", code)
 		exit <- code
+		time.Sleep(time.Second * 60)
 	}
 
 	os.Args = args
-	main()
+	go func() {
+		main()
+		close(waitCh)
+	}()
+
+	select {
+	case <-waitCh:
+		return
+	case <-exit:
+		return
+	}
 }
