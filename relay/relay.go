@@ -147,7 +147,7 @@ func (r *Relay) Init() (err error) {
 		return errors.Trace(err)
 	}
 	r.db = db
-	rollbackHolder.Add(fr.FuncRollback{"close-DB", r.closeDB})
+	rollbackHolder.Add(fr.FuncRollback{Name: "close-DB", Fn: r.closeDB})
 
 	if err2 := os.MkdirAll(r.cfg.RelayDir, 0755); err2 != nil {
 		return errors.Trace(err2)

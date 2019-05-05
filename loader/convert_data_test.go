@@ -124,9 +124,12 @@ func (t *testConvertDataSuite) TestReassembleWithGeneratedColumn(c *C) {
 }
 
 func (t *testConvertDataSuite) TestParseTable(c *C) {
-	rules := []*router.TableRule{
-		{"test*", "t*", "test", "t"},
-	}
+	rules := []*router.TableRule{{
+		SchemaPattern: "test*",
+		TablePattern:  "t*",
+		TargetSchema:  "test",
+		TargetTable:   "t",
+	}}
 
 	expectedTableInfo := &tableInfo{
 		sourceSchema: "test1",
@@ -165,9 +168,12 @@ func (t *testConvertDataSuite) TestParseTable(c *C) {
 }
 
 func (t *testConvertDataSuite) TestParseTableWithGeneratedColumn(c *C) {
-	rules := []*router.TableRule{
-		{"test*", "t*", "test", "t"},
-	}
+	rules := []*router.TableRule{{
+		SchemaPattern: "test*",
+		TablePattern:  "t*",
+		TargetSchema:  "test",
+		TargetTable:   "t",
+	}}
 
 	expectedTableInfo := &tableInfo{
 		sourceSchema: "test1",

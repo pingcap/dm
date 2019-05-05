@@ -91,7 +91,7 @@ func (c *Checker) Init() (err error) {
 		}
 	}()
 
-	rollbackHolder.Add(fr.FuncRollback{"close-DBs", c.closeDBs})
+	rollbackHolder.Add(fr.FuncRollback{Name: "close-DBs", Fn: c.closeDBs})
 
 	// target name => source => schema => [tables]
 	sharding := make(map[string]map[string]map[string][]string)
