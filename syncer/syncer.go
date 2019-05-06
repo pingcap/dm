@@ -1139,7 +1139,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				safeMode,
 				tryReSync,
 			)
-			log.Infof("rotate binlog to %v", currentPos)
 		case *replication.RowsEvent:
 			err = s.handleRowsEvent(
 				ev,
@@ -1249,6 +1248,8 @@ func (s *Syncer) handleRotateEvent(
 			log.Infof("[syncer] tracer collect syncer binlog error: %v", errors.ErrorStack(err))
 		}
 	}
+
+	log.Infof("rotate binlog to %v", *currentPos)
 }
 
 func (s *Syncer) handleRowsEvent(
@@ -1384,6 +1385,10 @@ func (s *Syncer) handleRowsEvent(
 		}
 		binlogEvent.WithLabelValues("delete_rows", s.cfg.Name).Observe(time.Since(startTime).Seconds())
 		*latestOp = del
+
+	default:
+		log.Debugf("ignoring unrecognized RowsEvent type %d", header.EventType)
+		return nil
 	}
 
 	if s.tracer.Enable() {
@@ -1403,7 +1408,7 @@ func (s *Syncer) handleRowsEvent(
 		if keys != nil {
 			key = keys[i]
 		}
-		err = s.commitJob(insert, originSchema, originTable, table.schema, table.name, sqls[i], arg, key, true, *lastPos, *currentPos, nil, *traceID)
+		err = s.commitJob(*latestOp, originSchema, originTable, table.schema, table.name, sqls[i], arg, key, true, *lastPos, *currentPos, nil, *traceID)
 		if err != nil {
 			return err
 		}
