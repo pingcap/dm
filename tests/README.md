@@ -22,7 +22,7 @@
 
 ### Unit Test
 
-1. Setup a MySQL server with binlog enabled first, export proper environment variable `MYSQL_HOST` and `MYSQL_PORT`, default is `127.0.0.1` and `3306`
+1. Setup a MySQL server with binlog enabled first, export proper environment variable `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PSWD`, default is `127.0.0.1`, `3306`, `root` and empty password.
 
 2. Run `make test` to run unit test
 
@@ -56,6 +56,7 @@ Several convenient commands are provided:
 * `run_sql_file_online_ddl <path_to_SQL_file> <HOST> <PORT> <DB> <ONLINE DDL TOOL>` — Executes all SQLs in given file, will auto switch DDL to online DDL command.
 * `check_contains <TEXT>` — Checks if the previous `run_sql`/`run_sql_file` result contains the given text (in `-E` format)
 * `check_sync_diff <WORKDIR> <CONFIG>` - Runs `sync_diff_inspector` to check diff between databases, using config file provided
+* `check_rpc_alive <CHECK_TOOL> <ADDR>` - Wrapper to check a rpc address is available, at most 10 times.
 * `check_port_alive <PORT>` - Wrapper to check a port is alive, at most 20 times.
 * `check_port <HOST> <PORT>` - Checks a host:port is alive.
 * `wait_process_exit <process_name>` - Wait for one or more processes to exit by given process name.

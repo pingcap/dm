@@ -17,9 +17,9 @@ function run() {
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     run_dm_tracer $WORK_DIR/tracer $TRACER_PORT $cur/conf/dm-tracer.toml
-    check_port_alive $MASTER_PORT
-    check_port_alive $WORKER1_PORT
-    check_port_alive $WORKER2_PORT
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
     check_port_alive $TRACER_PORT
 
     $cur/../bin/dmctl_start_task "$cur/conf/dm-task.yaml"
@@ -36,8 +36,8 @@ function run() {
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
-    check_port_alive $WORKER1_PORT
-    check_port_alive $WORKER2_PORT
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     # DM-worker exit when waiting for sharding group synced
@@ -52,7 +52,7 @@ function run() {
             echo "DM-worker1 is sharding lock owner and detects it offline"
             export GO_FAILPOINTS='github.com/pingcap/dm/syncer/SafeModeInitPhaseSeconds=return(0)'
             run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
-            check_port_alive $WORKER1_PORT
+            check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
             break
         fi
         # DM-worker2 is sharding lock owner and exits
@@ -60,7 +60,7 @@ function run() {
             echo "DM-worker2 is sharding lock owner and detects it offline"
             export GO_FAILPOINTS='github.com/pingcap/dm/syncer/SafeModeInitPhaseSeconds=return(0)'
             run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
-            check_port_alive $WORKER2_PORT
+            check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
             break
         fi
 

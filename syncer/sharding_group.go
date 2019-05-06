@@ -506,7 +506,7 @@ func (k *ShardingGroupKeeper) lowestFirstPosInGroups() *mysql.Position {
 		}
 		if lowest == nil {
 			lowest = pos
-		} else if lowest.Compare(*pos) < 0 {
+		} else if lowest.Compare(*pos) > 0 {
 			lowest = pos
 		}
 	}
