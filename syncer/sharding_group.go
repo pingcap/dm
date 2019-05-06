@@ -122,7 +122,7 @@ func NewShardingGroup(sources []string, isSchemaOnly bool) *ShardingGroup {
 //   * add a new database / table to exists sharding group
 //   * add new table(s) to parent database's sharding group
 //  if group is un-resolved, we add it in sources and set it true
-//  othereise add it in source, set it false and increment remain
+//  otherwise add it in source, set it false and increment remain
 func (sg *ShardingGroup) Merge(sources []string) (bool, bool, int, error) {
 	sg.Lock()
 	defer sg.Unlock()
