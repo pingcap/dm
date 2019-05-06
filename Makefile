@@ -101,6 +101,10 @@ dm_integration_test_build:
 		|| { $(FAILPOINT_DISABLE); exit 1; }
 	$(GOTEST) -c -race -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
+		-o bin/dmctl.test github.com/pingcap/dm/cmd/dm-ctl \
+		|| { $(FAILPOINT_DISABLE); exit 1; }
+	$(GOTEST) -c -race -cover -covermode=atomic \
+		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-tracer.test github.com/pingcap/dm/cmd/dm-tracer \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
 	$(FAILPOINT_DISABLE)
@@ -116,7 +120,8 @@ integration_test:
 
 coverage:
 	GO111MODULE=off go get github.com/zhouqiang-cl/gocovmerge
-	gocovmerge "$(TEST_DIR)"/cov.* | grep -vE ".*.pb.go|.*.__failpoint_binding__.go" > "$(TEST_DIR)/all_cov.out"
+	# NOTE: remove the github.com/pingcap/dm/dm/ctl/worker filter after pr#133 is merged
+	gocovmerge "$(TEST_DIR)"/cov.* | grep -vE ".*.pb.go|.*.__failpoint_binding__.go|dm/dm/ctl/worker" > "$(TEST_DIR)/all_cov.out"
 ifeq ("$(JenkinsCI)", "1")
 	GO111MODULE=off go get github.com/mattn/goveralls
 	@goveralls -coverprofile=$(TEST_DIR)/all_cov.out -service=jenkins-ci -repotoken $(COVERALLS_TOKEN)

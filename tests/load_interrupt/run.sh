@@ -50,7 +50,7 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 
-    $cur/../bin/dmctl_start_task "$cur/conf/dm-task.yaml"
+    dmctl_start_task
 
     check_port_offline $WORKER1_PORT 20
     check_port_offline $WORKER2_PORT 20

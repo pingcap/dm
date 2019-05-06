@@ -13,21 +13,25 @@
 
 package main
 
-import (
-	"context"
-	"os"
+// Reference: https://dzone.com/articles/measuring-integration-test-coverage-rate-in-pouchc
 
-	"github.com/pingcap/dm/tests/utils"
+import (
+	"os"
+	"strings"
+	"testing"
 )
 
-func main() {
-	cli, err := utils.CreateDmCtl("127.0.0.1:8261")
-	if err != nil {
-		utils.ExitWithError(err)
+func TestRunMain(t *testing.T) {
+	var args []string
+	for _, arg := range os.Args {
+		switch {
+		case arg == "DEVEL":
+		case strings.HasPrefix(arg, "-test."):
+		default:
+			args = append(args, arg)
+		}
 	}
-	conf := os.Args[1]
-	err = utils.StartTask(context.Background(), cli, conf, nil)
-	if err != nil {
-		utils.ExitWithError(err)
-	}
+
+	os.Args = args
+	main()
 }

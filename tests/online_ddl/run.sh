@@ -25,7 +25,7 @@ function real_run() {
     # start DM task only
     cp $cur/conf/dm-task.yaml $WORK_DIR/dm-task-${online_ddl_scheme}.yaml
     sed -i "s/online-ddl-scheme-placeholder/${online_ddl_scheme}/g" $WORK_DIR/dm-task-${online_ddl_scheme}.yaml
-    $cur/../bin/dmctl_start_task "$WORK_DIR/dm-task-${online_ddl_scheme}.yaml"
+    dmctl_start_task "$WORK_DIR/dm-task-${online_ddl_scheme}.yaml"
 
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml

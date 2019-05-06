@@ -22,7 +22,7 @@ function run() {
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
     check_port_alive $TRACER_PORT
 
-    $cur/../bin/dmctl_start_task "$cur/conf/dm-task.yaml"
+    dmctl_start_task
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     # DM-worker exit during re-sync after sharding group synced
