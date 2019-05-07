@@ -81,6 +81,7 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 		},
 		ServerID:   101,
 		MetaSchema: "test",
+		Name:       "syncer_ut",
 	}
 	s.cfg.From.Adjust()
 	s.cfg.To.Adjust()
