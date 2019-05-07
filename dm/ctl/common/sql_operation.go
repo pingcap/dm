@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package master
+package common
 
 import (
 	"github.com/pingcap/errors"
@@ -20,9 +20,9 @@ import (
 	"github.com/pingcap/dm/dm/command"
 )
 
-// extractBinlogPosSQLPattern extracts binlog-pos and sql-pattern from command
+// ExtractBinlogPosSQLPattern extracts binlog-pos and sql-pattern from command
 // return binlog-pos, sql-pattern, sharding, error
-func extractBinlogPosSQLPattern(cmd *cobra.Command) (string, string, bool, error) {
+func ExtractBinlogPosSQLPattern(cmd *cobra.Command) (string, string, bool, error) {
 	binlogPos, err := cmd.Flags().GetString("binlog-pos")
 	if err != nil {
 		return "", "", false, errors.Trace(err)

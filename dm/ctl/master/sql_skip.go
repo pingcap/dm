@@ -18,10 +18,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pingcap/dm/dm/ctl/common"
-	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
+
+	"github.com/pingcap/dm/dm/ctl/common"
+	"github.com/pingcap/dm/dm/pb"
 )
 
 // NewSQLSkipCmd creates a SQLSkip command
@@ -44,7 +45,7 @@ func sqlSkipFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	binlogPos, sqlPattern, sharding, err := extractBinlogPosSQLPattern(cmd)
+	binlogPos, sqlPattern, sharding, err := common.ExtractBinlogPosSQLPattern(cmd)
 	if err != nil {
 		common.PrintLines("%s", err.Error())
 		return

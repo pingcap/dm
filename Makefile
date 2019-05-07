@@ -121,7 +121,7 @@ integration_test:
 coverage:
 	GO111MODULE=off go get github.com/zhouqiang-cl/gocovmerge
 	# NOTE: remove the github.com/pingcap/dm/dm/ctl/worker filter after pr#133 is merged
-	gocovmerge "$(TEST_DIR)"/cov.* | grep -vE ".*.pb.go|.*.__failpoint_binding__.go|dm/dm/ctl/worker" > "$(TEST_DIR)/all_cov.out"
+	gocovmerge "$(TEST_DIR)"/cov.* | grep -vE ".*.pb.go|.*.__failpoint_binding__.go|dm/dm/ctl/worker|dm/ctl/master/stop_relay.go" > "$(TEST_DIR)/all_cov.out"
 ifeq ("$(JenkinsCI)", "1")
 	GO111MODULE=off go get github.com/mattn/goveralls
 	@goveralls -coverprofile=$(TEST_DIR)/all_cov.out -service=jenkins-ci -repotoken $(COVERALLS_TOKEN)
