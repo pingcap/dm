@@ -51,7 +51,7 @@ Several convenient commands are provided:
 
 * `run_dm_master <WORKDIR> <PORT> <CONFIG>` — Starts `dm-master` using config provided, on given port, running in workdir.
 * `run_dm_worker <WORKDIR> <PORT> <CONFIG>` — Starts `dm-worker` using config provided, on given port, running in workdir.
-* `run_dm_ctl <WORKDIR> <MASTER_ADDR> <DMCTL_COMMAND>` - Runs `dmctl` with given command in inactivate mode.
+* `run_dm_ctl <WORKDIR> <MASTER_ADDR> <DMCTL_COMMAND>` - Runs `dmctl` with given command in non-interactive mode.
 * `run_sql <SQL> <PORT>` — Executes an SQL query in database based on port provided
 * `run_sql_file <path_to_SQL_file> <HOST> <PORT>` — Executes all SQLs in given file to the database on port provided
 * `run_sql_file_online_ddl <path_to_SQL_file> <HOST> <PORT> <DB> <ONLINE DDL TOOL>` — Executes all SQLs in given file, will auto switch DDL to online DDL command.
