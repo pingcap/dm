@@ -218,7 +218,11 @@ func (w *FileWriter) handleRotateEvent(ev *replication.BinlogEvent) (*Result, er
 	var currFile = w.filename.Get()
 	nextFile := string(rotateEv.NextLogName)
 	if nextFile > currFile {
-		w.filename.Set(nextFile) // record the next filename, but not create it.
+		// record the next filename, but not create it.
+		// even it's a fake RotateEvent, we still need to record it,
+		// because if we do not specify the filename when creating the writer (like Auto-Position),
+		// we can only receive a fake RotateEvent before the FormatDescriptionEvent.
+		w.filename.Set(nextFile)
 	}
 
 	// write the RotateEvent if not fake

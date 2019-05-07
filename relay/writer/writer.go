@@ -14,10 +14,11 @@
 package writer
 
 import (
-	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/parser"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
+
+	"github.com/pingcap/dm/pkg/gtid"
 )
 
 // Result represents a write result.

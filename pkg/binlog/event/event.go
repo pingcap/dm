@@ -27,12 +27,6 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 )
 
-// flags used in Header
-const (
-	HeaderFlagSuppressUse uint16 = 0x0008 // LOG_EVENT_SUPPRESS_USE_F
-	HeaderFlagRelayLog    uint16 = 0x0040 // LOG_EVENT_RELAY_LOG_F
-)
-
 // flags used in RowsEvent.
 const (
 	RowFlagsEndOfStatement     uint16 = 0x0001
@@ -814,8 +808,8 @@ func GenDummyEvent(header *replication.EventHeader, latestPos uint32, eventSize 
 
 	// modify flag in the header
 	headerClone := *header // do a copy
-	headerClone.Flags |= HeaderFlagSuppressUse
-	headerClone.Flags |= HeaderFlagRelayLog // now, the dummy event created by relay only
+	headerClone.Flags |= replication.LOG_EVENT_SUPPRESS_USE_F
+	headerClone.Flags |= replication.LOG_EVENT_RELAY_LOG_F // now, the dummy event created by relay only
 
 	if eventSize < MinQueryEventLen {
 		// generate a USER_VAR_EVENT

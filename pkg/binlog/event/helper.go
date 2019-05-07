@@ -69,7 +69,7 @@ func GTIDsFromMariaDBGTIDListEvent(e *replication.BinlogEvent) (gtid.Set, error)
 	}
 	mGSet := ggSet.(*gmysql.MariadbGTIDSet)
 	for _, set := range gtidListEv.GTIDs {
-		setClone := set
+		setClone := set // use another variable so we can get different pointer (&setClone below) when iterating
 		err = mGSet.AddSet(&setClone)
 		if err != nil {
 			return nil, errors.Annotatef(err, "add set %v to GTID set", set)

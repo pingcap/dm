@@ -722,7 +722,7 @@ func (t *testEventSuite) TestGenDummyEvent(c *C) {
 		header = &replication.EventHeader{
 			Timestamp: uint32(time.Now().Unix()),
 			ServerID:  11,
-			Flags:     HeaderFlagSuppressUse | HeaderFlagRelayLog,
+			Flags:     replication.LOG_EVENT_SUPPRESS_USE_F | replication.LOG_EVENT_RELAY_LOG_F,
 		}
 		latestPos uint32 = 4
 	)
@@ -792,7 +792,7 @@ func (t *testEventSuite) TestGenDummyEvent(c *C) {
 		c.Assert(err2, IsNil)
 		c.Assert(ev, NotNil)
 		// verify the header flag
-		c.Assert(userVarEv.Header.Flags&HeaderFlagSuppressUse, Greater, uint16(0))
-		c.Assert(userVarEv.Header.Flags&HeaderFlagRelayLog, Greater, uint16(0))
+		c.Assert(userVarEv.Header.Flags&replication.LOG_EVENT_SUPPRESS_USE_F, Greater, uint16(0))
+		c.Assert(userVarEv.Header.Flags&replication.LOG_EVENT_RELAY_LOG_F, Greater, uint16(0))
 	}
 }
