@@ -369,8 +369,10 @@ func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLog
 
 // needSwitchSubDir checks whether the reader need switch to next relay sub directory
 func (r *BinlogReader) needSwitchSubDir(currentUUID string, latestFilePath string, latestFileSize int64) (needSwitch, needReParse bool, nextUUID string, nextBinlogName string, err error) {
-	nextUUID, _ = r.getNextUUID(currentUUID)
-	if len(nextUUID) == 0 {
+	nextUUID, _, err = getNextUUID(currentUUID, r.uuids)
+	if err != nil {
+		return false, false, "", "", errors.Annotatef(err, "current UUID %s, UUIDs %v", currentUUID, r.uuids)
+	} else if len(nextUUID) == 0 {
 		// no next sub dir exists, not need to switch
 		return false, false, "", "", nil
 	}
@@ -409,17 +411,6 @@ func (r *BinlogReader) updateUUIDs() error {
 	r.uuids = uuids
 	log.Infof("[streamer] update relay UUIDs from %v to %v", oldUUIDs, uuids)
 	return nil
-}
-
-func (r *BinlogReader) getNextUUID(uuid string) (string, string) {
-	for i := len(r.uuids) - 2; i >= 0; i-- {
-		if r.uuids[i] == uuid {
-			nextUUID := r.uuids[i+1]
-			_, suffixInt, _ := utils.ParseSuffixForUUID(nextUUID)
-			return nextUUID, utils.SuffixIntToStr(suffixInt)
-		}
-	}
-	return "", ""
 }
 
 // Close closes BinlogReader.

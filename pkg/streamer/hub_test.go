@@ -17,7 +17,12 @@ import (
 	. "github.com/pingcap/check"
 )
 
-func (s *testStreamerSuite) TestRelayLogInfoHub(c *C) {
+var _ = Suite(&testHubSuite{})
+
+type testHubSuite struct {
+}
+
+func (t *testHubSuite) TestRelayLogInfoHub(c *C) {
 	var rlih = newRelayLogInfoHub()
 	taskName, earliest := rlih.earliest()
 	c.Assert(taskName, Equals, "")

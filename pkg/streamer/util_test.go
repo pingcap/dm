@@ -25,16 +25,16 @@ import (
 	. "github.com/pingcap/check"
 )
 
-var _ = Suite(&testStreamerSuite{})
+var _ = Suite(&testUtilSuite{})
 
 func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-type testStreamerSuite struct {
+type testUtilSuite struct {
 }
 
-func (s *testStreamerSuite) TestRelaySubDirUpdated(c *C) {
+func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 	var (
 		relayFiles = []string{
 			"mysql-bin.000001",
@@ -131,7 +131,7 @@ func (s *testStreamerSuite) TestRelaySubDirUpdated(c *C) {
 	wg.Wait()
 }
 
-func (s *testStreamerSuite) TestFileSizeUpdatedError(c *C) {
+func (t *testUtilSuite) TestFileSizeUpdatedError(c *C) {
 	var (
 		relayFile       = "mysql-bin.000001"
 		data            = []byte("meaningless file content")
@@ -175,4 +175,66 @@ func (s *testStreamerSuite) TestFileSizeUpdatedError(c *C) {
 	err = os.Remove(relayPath)
 	c.Assert(err, IsNil)
 	wg.Wait()
+}
+
+func (t *testUtilSuite) TestGetNextUUID(c *C) {
+	UUIDs := []string{
+		"b60868af-5a6f-11e9-9ea3-0242ac160006.000001",
+		"7acfedb5-3008-4fa2-9776-6bac42b025fe.000002",
+		"92ffd03b-813e-4391-b16a-177524e8d531.000003",
+		"338513ce-b24e-4ff8-9ded-9ac5aa8f4d74.000004",
+	}
+	cases := []struct {
+		currUUID       string
+		UUIDs          []string
+		nextUUID       string
+		nextUUIDSuffix string
+		errMsgReg      string
+	}{
+		{
+			// empty current and UUID list
+		},
+		{
+			// non-empty current UUID, but empty UUID list
+			currUUID: "b60868af-5a6f-11e9-9ea3-0242ac160006.000001",
+		},
+		{
+			// empty current UUID, but non-empty UUID list
+			UUIDs: UUIDs,
+		},
+		{
+			// current UUID in UUID list, has next UUID
+			currUUID:       UUIDs[0],
+			UUIDs:          UUIDs,
+			nextUUID:       UUIDs[1],
+			nextUUIDSuffix: UUIDs[1][len(UUIDs[1])-6:],
+		},
+		{
+			// current UUID in UUID list, but has no next UUID
+			currUUID: UUIDs[len(UUIDs)-1],
+			UUIDs:    UUIDs,
+		},
+		{
+			// current UUID not in UUID list
+			currUUID: "40ed16c1-f6f7-4012-aa9b-d360261d2b22.666666",
+			UUIDs:    UUIDs,
+		},
+		{
+			// invalid next UUID in UUID list
+			currUUID:  UUIDs[len(UUIDs)-1],
+			UUIDs:     append(UUIDs, "invalid-uuid"),
+			errMsgReg: ".*invalid-uuid.*",
+		},
+	}
+
+	for _, cs := range cases {
+		nu, nus, err := getNextUUID(cs.currUUID, cs.UUIDs)
+		if len(cs.errMsgReg) > 0 {
+			c.Assert(err, ErrorMatches, cs.errMsgReg)
+		} else {
+			c.Assert(err, IsNil)
+		}
+		c.Assert(nu, Equals, cs.nextUUID)
+		c.Assert(nus, Equals, cs.nextUUIDSuffix)
+	}
 }

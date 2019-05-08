@@ -24,7 +24,12 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-func (s *testStreamerSuite) TestCollectBinlogFiles(c *C) {
+var _ = Suite(&testFileSuite{})
+
+type testFileSuite struct {
+}
+
+func (t *testFileSuite) TestCollectBinlogFiles(c *C) {
 	var (
 		valid = []string{
 			"mysql-bin.000001",
@@ -111,7 +116,7 @@ func (s *testStreamerSuite) TestCollectBinlogFiles(c *C) {
 	c.Assert(files, DeepEquals, valid[:len(valid)-1])
 }
 
-func (s *testStreamerSuite) TestRealMySQLPos(c *C) {
+func (t *testFileSuite) TestRealMySQLPos(c *C) {
 	var (
 		testCases = []struct {
 			pos    mysql.Position

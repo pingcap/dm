@@ -229,3 +229,18 @@ func fileSizeUpdated(path string, latestSize int64) (int, error) {
 func constructBinlogName(originalName *binlogFile, uuidSuffix string) string {
 	return fmt.Sprintf("%s%s%s%s%s", originalName.baseName, posUUIDSuffixSeparator, uuidSuffix, baseSeqSeparator, originalName.seq)
 }
+
+// getNextUUID gets (the nextUUID and its suffix) after the current UUID.
+func getNextUUID(currUUID string, UUIDs []string) (string, string, error) {
+	for i := len(UUIDs) - 2; i >= 0; i-- {
+		if UUIDs[i] == currUUID {
+			nextUUID := UUIDs[i+1]
+			_, suffixInt, err := utils.ParseSuffixForUUID(nextUUID)
+			if err != nil {
+				return "", "", errors.Annotatef(err, "UUID %s", nextUUID)
+			}
+			return nextUUID, utils.SuffixIntToStr(suffixInt), nil
+		}
+	}
+	return "", "", nil
+}
