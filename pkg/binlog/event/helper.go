@@ -65,14 +65,14 @@ func GTIDsFromMariaDBGTIDListEvent(e *replication.BinlogEvent) (gtid.Set, error)
 
 	ggSet, err := gmysql.ParseMariadbGTIDSet("")
 	if err != nil {
-		return nil, errors.Annotatef(err, "parse empty MariaDB GTID set")
+		return nil, errors.Annotatef(err, "initial a MariaDB GTID set")
 	}
 	mGSet := ggSet.(*gmysql.MariadbGTIDSet)
-	for _, set := range gtidListEv.GTIDs {
-		setClone := set // use another variable so we can get different pointer (&setClone below) when iterating
-		err = mGSet.AddSet(&setClone)
+	for _, mGTID := range gtidListEv.GTIDs {
+		mgClone := mGTID // use another variable so we can get different pointer (&mgClone below) when iterating
+		err = mGSet.AddSet(&mgClone)
 		if err != nil {
-			return nil, errors.Annotatef(err, "add set %v to GTID set", set)
+			return nil, errors.Annotatef(err, "add set %v to GTID set", mGTID)
 		}
 	}
 

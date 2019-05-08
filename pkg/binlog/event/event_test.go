@@ -722,7 +722,12 @@ func (t *testEventSuite) TestGenDummyEvent(c *C) {
 		header = &replication.EventHeader{
 			Timestamp: uint32(time.Now().Unix()),
 			ServerID:  11,
-			Flags:     replication.LOG_EVENT_SUPPRESS_USE_F | replication.LOG_EVENT_RELAY_LOG_F,
+			Flags:     replication.LOG_EVENT_THREAD_SPECIFIC_F | replication.LOG_EVENT_BINLOG_IN_USE_F,
+		}
+		expectedHeader = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+			Flags:     replication.LOG_EVENT_SUPPRESS_USE_F | replication.LOG_EVENT_RELAY_LOG_F | replication.LOG_EVENT_BINLOG_IN_USE_F,
 		}
 		latestPos uint32 = 4
 	)
@@ -739,7 +744,7 @@ func (t *testEventSuite) TestGenDummyEvent(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(userVarEv, NotNil)
 	// verify the header
-	verifyHeader(c, userVarEv.Header, header, replication.USER_VAR_EVENT, latestPos, uint32(len(userVarEv.RawData)))
+	verifyHeader(c, userVarEv.Header, expectedHeader, replication.USER_VAR_EVENT, latestPos, uint32(len(userVarEv.RawData)))
 	// verify the body
 	nameStart := uint32(eventHeaderLen + 4)
 	nameEnd := uint32(eventSize-1) - crc32Len
@@ -757,7 +762,7 @@ func (t *testEventSuite) TestGenDummyEvent(c *C) {
 		c.Assert(err, IsNil)
 		c.Assert(queryEv, NotNil)
 		// verify the header
-		verifyHeader(c, queryEv.Header, header, replication.QUERY_EVENT, latestPos, uint32(len(queryEv.RawData)))
+		verifyHeader(c, queryEv.Header, expectedHeader, replication.QUERY_EVENT, latestPos, uint32(len(queryEv.RawData)))
 		// verify the body
 		queryEvBody, ok := queryEv.Event.(*replication.QueryEvent)
 		c.Assert(ok, IsTrue)
@@ -778,22 +783,5 @@ func (t *testEventSuite) TestGenDummyEvent(c *C) {
 			zeroTail := make([]byte, queryLen-dummyQueryLen)
 			c.Assert(queryEvBody.Query[dummyQueryLen:], DeepEquals, zeroTail)
 		}
-	}
-
-	// use a special header to test flags
-	header = &replication.EventHeader{
-		Timestamp: uint32(time.Now().Unix()),
-		ServerID:  11,
-		Flags:     replication.LOG_EVENT_THREAD_SPECIFIC_F,
-	}
-	eventSizeList = append(eventSizeList, MinUserVarEventLen) // add a USER_VAR_EVENT
-	for _, eventSize = range eventSizeList {
-		ev, err2 := GenDummyEvent(header, latestPos, eventSize)
-		c.Assert(err2, IsNil)
-		c.Assert(ev, NotNil)
-		// verify the header flag
-		c.Assert(userVarEv.Header.Flags&replication.LOG_EVENT_THREAD_SPECIFIC_F, Equals, uint16(0))
-		c.Assert(userVarEv.Header.Flags&replication.LOG_EVENT_SUPPRESS_USE_F, Greater, uint16(0))
-		c.Assert(userVarEv.Header.Flags&replication.LOG_EVENT_RELAY_LOG_F, Greater, uint16(0))
 	}
 }
