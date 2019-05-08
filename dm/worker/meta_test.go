@@ -174,13 +174,16 @@ func (t *testMeta) TestTask(c *C) {
 	c.Assert(tasks[testTask1.Name], DeepEquals, testTask1Meta)
 	c.Assert(tasks[testTask2.Name], DeepEquals, testTask2Meta)
 
+	// change previous loaded task set member
 	tasks[testTask1.Name] = &pb.TaskMeta{
 		Op:   pb.TaskOp_Stop,
 		Name: testTask1.Name,
 		Task: []byte("xxxxx"),
 	}
+	// change previous loaded task's field
+	tasks[testTask2.Name].Task = []byte("yyyyyy")
 
-	// test clone
+	// test clone again
 	tasks2 := meta.LoadTaskMeta()
 	c.Assert(tasks2[testTask1.Name], DeepEquals, testTask1Meta)
 

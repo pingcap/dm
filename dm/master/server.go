@@ -1813,7 +1813,6 @@ func (s *Server) waitOperationOk(ctx context.Context, cli pb.WorkerClient, name 
 		}
 
 		log.Infof("wait task %s op log %d, current result %+v", name, opLogID, res)
-		time.Sleep(retryInterval)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
