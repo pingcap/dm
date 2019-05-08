@@ -18,11 +18,14 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
 	. "github.com/pingcap/check"
+
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 var _ = Suite(&testUtilSuite{})
@@ -237,4 +240,56 @@ func (t *testUtilSuite) TestGetNextUUID(c *C) {
 		c.Assert(nu, Equals, cs.nextUUID)
 		c.Assert(nus, Equals, cs.nextUUIDSuffix)
 	}
+}
+
+func (t *testUtilSuite) TestGetFirstBinlogName(c *C) {
+	var (
+		baseDir = c.MkDir()
+		uuid    = "b60868af-5a6f-11e9-9ea3-0242ac160006.000001"
+		subDir  = filepath.Join(baseDir, uuid)
+	)
+
+	// sub directory not exist
+	name, err := getFirstBinlogName(baseDir, uuid)
+	c.Assert(err, ErrorMatches, ".*no such file or directory.*")
+	c.Assert(name, Equals, "")
+
+	// empty directory
+	err = os.MkdirAll(subDir, 0744)
+	c.Assert(err, IsNil)
+	name, err = getFirstBinlogName(baseDir, uuid)
+	c.Assert(err, ErrorMatches, ".*not found.*")
+	c.Assert(name, Equals, "")
+
+	// has file, but not valid binlog file
+	filename := "invalid.bin"
+	err = ioutil.WriteFile(filepath.Join(subDir, filename), nil, 0644)
+	c.Assert(err, IsNil)
+	name, err = getFirstBinlogName(baseDir, uuid)
+	c.Assert(err, ErrorMatches, ".*not valid.*")
+	err = os.Remove(filepath.Join(subDir, filename))
+	c.Assert(err, IsNil)
+
+	// has a valid binlog file
+	filename = "z-mysql-bin.000002" // z prefix, make it become not the _first_ if possible.
+	err = ioutil.WriteFile(filepath.Join(subDir, filename), nil, 0644)
+	c.Assert(err, IsNil)
+	name, err = getFirstBinlogName(baseDir, uuid)
+	c.Assert(err, IsNil)
+	c.Assert(name, Equals, filename)
+
+	// has one more earlier binlog file
+	filename = "z-mysql-bin.000001"
+	err = ioutil.WriteFile(filepath.Join(subDir, filename), nil, 0644)
+	c.Assert(err, IsNil)
+	name, err = getFirstBinlogName(baseDir, uuid)
+	c.Assert(err, IsNil)
+	c.Assert(name, Equals, filename)
+
+	// has a meta file
+	err = ioutil.WriteFile(filepath.Join(subDir, utils.MetaFilename), nil, 0644)
+	c.Assert(err, IsNil)
+	name, err = getFirstBinlogName(baseDir, uuid)
+	c.Assert(err, IsNil)
+	c.Assert(name, Equals, filename)
 }
