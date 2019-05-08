@@ -13,7 +13,7 @@ function check_task_wrong_config_file() {
 }
 
 # run this check if DM-master is not available
-function check_task_fail() {
+function check_task_with_master_down() {
     task_conf=$1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "check-task $task_conf" \

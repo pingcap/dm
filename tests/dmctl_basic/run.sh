@@ -19,11 +19,16 @@ function run() {
 
     check_task_wrong_arg
     check_task_wrong_config_file
-    check_task_fail $TASK_CONF
+    check_task_with_master_down $TASK_CONF
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status -w worker-x task-y" \
-        "can not query task-y task's status(in workers \[worker-x\]):" 1
+    pause_relay_wrong_arg
+    pause_relay_wihout_worker
+
+    resume_relay_wrong_arg
+    resume_relay_wihout_worker
+
+    query_status_wrong_arg
+    query_status_wrong_params
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
@@ -33,28 +38,20 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status wrong_args_count more_than_one" \
-        "query-status \[-w worker ...\] \[task_name\]" 1
-
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status" \
-        "\"result\": true" 3 \
-        "\"msg\": \"no sub task started\"" 2
+    pause_relay_success
+    query_status_stopped_relay
+    pause_relay_fail
+    resume_relay_success
+    query_status_with_no_tasks
 
     check_task_pass $TASK_CONF
     check_task_not_pass $cur/conf/dm-task2.yaml
 
-    # start DM task only
     dmctl_start_task
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status" \
-        "\"result\": true" 3 \
-        "\"unit\": \"Sync\"" 2 \
-        "\"stage\": \"Running\"" 4
+    query_status_with_tasks
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
