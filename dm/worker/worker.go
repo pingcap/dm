@@ -640,13 +640,20 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 				return errors.Trace(err)
 			}
 		} else if stage == pb.Stage_Running {
-			st.Close()
-			err = st.UpdateFromConfig(cfg)
-			st.Run()
+			err = st.Pause()
 			if err != nil {
 				return errors.Trace(err)
 			}
-			st.Run()
+
+			err = st.UpdateFromConfig(cfg)
+			if err != nil {
+				return errors.Trace(err)
+			}
+
+			err = st.Resume()
+			if err != nil {
+				return errors.Trace(err)
+			}
 		}
 	}
 
@@ -853,7 +860,7 @@ Loop:
 				}
 
 				log.Infof("[worker] pause sub task %s", opLog.Task.Name)
-				st.Close()
+				err = st.Pause()
 			case pb.TaskOp_Resume:
 				if !exist {
 					err = errors.NotFoundf("sub task with name %s", opLog.Task.Name)
@@ -861,7 +868,7 @@ Loop:
 				}
 
 				log.Infof("[worker] resume sub task %s", opLog.Task.Name)
-				st.Run()
+				err = st.Resume()
 			}
 
 			log.Infof("end to execute operation %d result %v", opLog.Id, err)

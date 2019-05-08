@@ -198,13 +198,17 @@ retry:
 		st.setResult(&result) // save result
 		st.cancel()           // dm-unit finished, canceled or error occurred, always cancel processing
 
+		if len(result.Errors) == 0 && st.Stage() == pb.Stage_Paused {
+			return // paused by external request
+		}
+
 		var (
 			cu    = st.CurrUnit()
 			stage pb.Stage
 		)
 		if len(result.Errors) == 0 {
 			if result.IsCanceled {
-				stage = pb.Stage_Paused // canceled by user
+				stage = pb.Stage_Stopped // canceled by user
 			} else {
 				stage = pb.Stage_Finished // process finished with no error
 			}
@@ -243,6 +247,7 @@ retry:
 				// NOTE: maybe need a Lock mechanism for sharding scenario
 				st.run() // re-run for next process unit
 			}
+		case pb.Stage_Stopped:
 		case pb.Stage_Paused:
 			for _, err := range result.Errors {
 				log.Errorf("[subtask] %s dm-unit %s process error with type %v:\n %v",
@@ -382,8 +387,54 @@ func (st *SubTask) Close() {
 
 	st.cancel()
 	st.closeUnits() // close all un-closed units
-	st.setStageIfNot(pb.Stage_Finished, pb.Stage_Paused)
+	st.setStageIfNot(pb.Stage_Finished, pb.Stage_Stopped)
 	st.wg.Wait()
+}
+
+// Pause pauses the running sub task
+func (st *SubTask) Pause() error {
+	if !st.stageCAS(pb.Stage_Running, pb.Stage_Paused) {
+		return errors.NotValidf("current stage is not running")
+	}
+
+	st.cancel()
+	st.wg.Wait() // wait fetchResult return
+
+	cu := st.CurrUnit()
+	cu.Pause()
+
+	log.Infof("[subtask] %s paused with %s dm-unit", st.cfg.Name, cu.Type())
+	return nil
+}
+
+// Resume resumes the paused sub task
+// similar to Run
+func (st *SubTask) Resume() error {
+	// NOTE: this may block if user resume a task
+	err := st.unitTransWaitCondition()
+	if err != nil {
+		log.Errorf("[subtask] wait condition error: %v", err)
+		st.setStage(pb.Stage_Paused)
+		return errors.Trace(err)
+	}
+
+	if !st.stageCAS(pb.Stage_Paused, pb.Stage_Running) {
+		return errors.NotValidf("current stage is not paused")
+	}
+
+	st.setResult(nil) // clear previous result
+	cu := st.CurrUnit()
+	log.Infof("[subtask] %s resuming with %s dm-unit", st.cfg.Name, cu.Type())
+
+	st.ctx, st.cancel = context.WithCancel(context.Background())
+	pr := make(chan pb.ProcessResult, 1)
+	st.wg.Add(1)
+	go st.fetchResult(pr)
+	go cu.Resume(st.ctx, pr)
+
+	st.wg.Add(1)
+	go st.fetchUnitDDLInfo(st.ctx)
+	return nil
 }
 
 // Update update the sub task's config
@@ -392,10 +443,14 @@ func (st *SubTask) Update(cfg *config.SubTaskConfig) error {
 		return errors.Errorf("can only update task on Paused stage, but current stage is %s", st.Stage().String())
 	}
 
-	st.Lock()
-	defer st.Unlock()
+	// update all units' configuration, if SubTask itself has configuration need to update, do it later
+	for _, u := range st.units {
+		err := u.Update(cfg)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
 
-	st.cfg, _ = cfg.Clone()
 	return nil
 }
 
@@ -512,12 +567,15 @@ func (st *SubTask) DDLLockInfo() *pb.DDLLockInfo {
 
 // UpdateFromConfig updates config for `From`
 func (st *SubTask) UpdateFromConfig(cfg *config.SubTaskConfig) error {
-	if !st.stageCAS(pb.Stage_Paused, pb.Stage_Paused) { // only test for Paused
-		return errors.Errorf("can only update task on Paused stage, but current stage is %s", st.Stage().String())
-	}
-
 	st.Lock()
 	defer st.Unlock()
+
+	if sync, ok := st.currUnit.(*syncer.Syncer); ok {
+		err := sync.UpdateFromConfig(cfg)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
 
 	st.cfg.From = cfg.From
 
