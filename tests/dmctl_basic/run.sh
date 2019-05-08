@@ -5,10 +5,21 @@ set -eu
 cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
+TASK_CONF=$cur/conf/dm-task.yaml
 
 function run() {
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2
+
+    cd $cur
+    for file in "check_list"/*; do
+        source $file
+    done
+    cd -
+
+    check_task_wrong_arg
+    check_task_wrong_config_file
+    check_task_fail $TASK_CONF
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status -w worker-x task-y" \
@@ -31,16 +42,19 @@ function run() {
         "\"result\": true" 3 \
         "\"msg\": \"no sub task started\"" 2
 
+    check_task_pass $TASK_CONF
+    check_task_not_pass $cur/conf/dm-task2.yaml
+
     # start DM task only
     dmctl_start_task
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status" \
         "\"result\": true" 3 \
         "\"unit\": \"Sync\"" 2 \
         "\"stage\": \"Running\"" 4
-
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
