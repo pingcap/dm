@@ -17,7 +17,7 @@
   when: groups['grafana_servers'] | length != 1
 
 - name: Ensure alertmanager host exists
-  fail: msg="One grafana host should be specified in inventory.ini file."
+  fail: msg="One alertmanager host should be specified in inventory.ini file."
   when: groups['alertmanager_servers'] | length != 1
 
 - name: Check ansible_user variable

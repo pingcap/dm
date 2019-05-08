@@ -31,28 +31,17 @@ import (
 )
 
 var (
-	workerClient pb.WorkerClient
 	masterClient pb.MasterClient
 )
 
 // InitClient initializes dm-worker client or dm-master client
-func InitClient(addr string, mode DmctlMode) error {
+func InitClient(addr string) error {
 	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	if err != nil {
 		return errors.Trace(err)
 	}
-	switch mode {
-	case WorkerMode:
-		workerClient = pb.NewWorkerClient(conn)
-	case MasterMode:
-		masterClient = pb.NewMasterClient(conn)
-	}
+	masterClient = pb.NewMasterClient(conn)
 	return nil
-}
-
-// WorkerClient returns dm-worker client
-func WorkerClient() pb.WorkerClient {
-	return workerClient
 }
 
 // MasterClient returns dm-master client
