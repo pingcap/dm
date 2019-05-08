@@ -40,6 +40,14 @@ func TestRunMain(t *testing.T) {
 		}
 	}
 
+	// golang cover tool rewrites ast with coverage annotations based on block.
+	// whenever the cover tool detects the first line of one block has runned,
+	// the coverage counter will be added. So we mock of `utils.OsExit` is able
+	// to collect the code run. While if we run `main()` in the main routine,
+	// when a code block from `main()` executes `utils.OsExit` and we forcedly
+	// exit the program by `os.Exit(0)` in other routine, the coverage counter
+	// fails to add for this block, the different behavior of these two scenarios
+	// comes from the difference between `os.Exit` and return from a function call.
 	oldOsExit := utils.OsExit
 	defer func() { utils.OsExit = oldOsExit }()
 	utils.OsExit = func(code int) {
