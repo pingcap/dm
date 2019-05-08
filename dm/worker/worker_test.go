@@ -14,8 +14,18 @@
 package worker
 
 import (
+	"testing"
+
 	. "github.com/pingcap/check"
 )
+
+func TestWorker(t *testing.T) {
+	TestingT(t)
+}
+
+type testWorker struct{}
+
+var _ = Suite(&testWorker{})
 
 func (t *testWorker) TestOperateTask(c *C) {
 }

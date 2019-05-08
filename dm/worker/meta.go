@@ -108,17 +108,9 @@ func NewMetadata(dir string, db *leveldb.DB) (*Metadata, error) {
 
 	// restore from old metadata
 	oldPath := path.Join(dir, "meta")
-	fd, err := os.Open(oldPath)
-	// old metadata file exists, recover metadata from it
-	if err == nil {
-		fd.Close()
-		err = meta.recoverMetaFromOldFashion(oldPath)
-		if err != nil {
-			log.Errorf("[worker metadata]fail to recover from old metadata file %s, meta file may be correuption, error message: %v", oldPath, err)
-			return nil, errors.Trace(err)
-		}
-	} else if !os.IsNotExist(err) {
-		// old metadata file exists, fail to open old metadata file
+	err := meta.tryToRecoverMetaFromOldFashion(oldPath)
+	if err != nil {
+		log.Errorf("[worker metadata]fail to recover from old metadata file %s, meta file may be corrupt, error message: %v", oldPath, err)
 		return nil, errors.Trace(err)
 	}
 
@@ -131,7 +123,7 @@ func NewMetadata(dir string, db *leveldb.DB) (*Metadata, error) {
 
 	meta.wg.Add(1)
 	go func() {
-		meta.wg.Done()
+		defer meta.wg.Done()
 		meta.log.GC(meta.ctx, meta.db)
 	}()
 
@@ -152,7 +144,7 @@ func (meta *Metadata) LoadTaskMeta() map[string]*pb.TaskMeta {
 	meta.Lock()
 	defer meta.Unlock()
 
-	tasks := make(map[string]*pb.TaskMeta)
+	tasks := make(map[string]*pb.TaskMeta, len(meta.tasks))
 
 	for name, task := range meta.tasks {
 		tasks[name] = CloneTaskMeta(task)
@@ -217,7 +209,7 @@ func (meta *Metadata) MarkOperation(log *pb.TaskLog) error {
 	}
 
 	if meta.logs[0].Id != log.Id {
-		return errors.Errorf("please handle task oepration order by log ID, the log need to be handled is %+v, not %+v", meta.logs[0], log)
+		return errors.Errorf("please handle task operation order by log ID, the log need to be handled is %+v, not %+v", meta.logs[0], log)
 	}
 
 	txn, err := meta.db.OpenTransaction()
@@ -274,7 +266,17 @@ func (meta *Metadata) loadFromDB() (err error) {
 }
 
 // to be compatible with the old fashion meta
-func (meta *Metadata) recoverMetaFromOldFashion(path string) error {
+func (meta *Metadata) tryToRecoverMetaFromOldFashion(path string) error {
+	fd, err := os.Open(path)
+	// old metadata file exists, recover metadata from it
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return errors.Trace(err)
+		}
+		return nil
+	}
+	fd.Close()
+
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return errors.Annotatef(err, "read old metadata file %s", path)
@@ -288,7 +290,6 @@ func (meta *Metadata) recoverMetaFromOldFashion(path string) error {
 
 	log.Infof("[worker metadata]find %d tasks from old metadata file", len(oldMeta.SubTasks))
 
-	meta.tasks = make(map[string]*pb.TaskMeta)
 	for name, task := range oldMeta.SubTasks {
 		log.Infof("[worker metadata] from old metadata file: subtask %s => %+v", name, task)
 		var b bytes.Buffer
@@ -309,7 +310,6 @@ func (meta *Metadata) recoverMetaFromOldFashion(path string) error {
 		if err != nil {
 			return errors.Errorf("fail to set task meta %s error message: %v", taskMeta.Name, err)
 		}
-		meta.tasks[name] = taskMeta
 	}
 
 	return errors.Trace(os.Remove(path))

@@ -206,7 +206,7 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) (int64, error) {
 	w.copyConfigFromWorker(cfg)
 	cfgStr, err := cfg.Toml()
 	if err != nil {
-		return 0, errors.Annotatef(err, "[worker] encode subtask %+v into toml format", cfg)
+		return 0, errors.Annotatef(err, "encode subtask %+v into toml format", cfg)
 	}
 
 	var opLogID int64
@@ -731,7 +731,7 @@ func (w *Worker) restoreSubTask() error {
 	for name, task := range tasks {
 		taskCfg := new(config.SubTaskConfig)
 		if err := taskCfg.Decode(string(task.Task)); err != nil {
-			return errors.Annotatef(err, "decode subtask config error in restoreSubTask")
+			return errors.Annotate(err, "decode subtask config error in restoreSubTask")
 		}
 
 		cfgDecrypted, err := taskCfg.DecryptPassword()
@@ -800,17 +800,20 @@ Loop:
 						continue Loop
 					}
 
+					retryCnt = 0
 					err = errors.Errorf("relay log purger is purging, cannot start sub task %s, please try again later", opLog.Task.Name)
 					break
 				}
 
+				retryCnt = 0
 				taskCfg := new(config.SubTaskConfig)
 				if err1 := taskCfg.Decode(string(opLog.Task.Task)); err1 != nil {
-					err = errors.Annotatef(err1, "decode subtask config error in handleTask")
+					err = errors.Annotate(err1, "decode subtask config error in handleTask")
 					break
 				}
 
-				cfgDecrypted, err := taskCfg.DecryptPassword()
+				var cfgDecrypted *config.SubTaskConfig
+				cfgDecrypted, err = taskCfg.DecryptPassword()
 				if err != nil {
 					break
 				}
@@ -828,7 +831,7 @@ Loop:
 
 				taskCfg := new(config.SubTaskConfig)
 				if err1 := taskCfg.Decode(string(opLog.Task.Task)); err1 != nil {
-					err = errors.Annotatef(err1, "decode subtask config error in handleTask")
+					err = errors.Annotate(err1, "decode subtask config error in handleTask")
 					break
 				}
 
@@ -879,7 +882,7 @@ Loop:
 			err = w.meta.MarkOperation(opLog)
 			w.Unlock()
 			if err != nil {
-				log.Errorf("failto mark subtask %s operation %+v", opLog.Task.Name, opLog)
+				log.Errorf("fail to mark subtask %s operation %+v", opLog.Task.Name, opLog)
 			}
 		}
 	}

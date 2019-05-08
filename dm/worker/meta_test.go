@@ -17,7 +17,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
-	"strings"
 	"testing"
 
 	. "github.com/pingcap/check"
@@ -27,7 +26,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-func TestWorker(t *testing.T) {
+func TestMeta(t *testing.T) {
 	TestingT(t)
 }
 
@@ -47,11 +46,11 @@ var (
 	testTask2Bytes []byte
 )
 
-type testWorker struct{}
+type testMeta struct{}
 
-var _ = Suite(&testWorker{})
+var _ = Suite(&testMeta{})
 
-func (t *testWorker) setUpDB(c *C) (*leveldb.DB, string) {
+func testSetUpDB(c *C) (*leveldb.DB, string) {
 	c.Assert(testTask1.Adjust(), IsNil)
 	c.Assert(testTask2.Adjust(), IsNil)
 
@@ -85,8 +84,8 @@ func (t *testWorker) setUpDB(c *C) (*leveldb.DB, string) {
 	return db, dir
 }
 
-func (t *testWorker) TestNewMetaDB(c *C) {
-	db, dir := t.setUpDB(c)
+func (t *testMeta) TestNewMetaDB(c *C) {
+	db, dir := testSetUpDB(c)
 	defer db.Close()
 
 	metaDB, err := NewMetadata(dir, db)
@@ -100,7 +99,7 @@ func (t *testWorker) TestNewMetaDB(c *C) {
 	c.Assert(err, IsNil)
 	metaDB, err = NewMetadata(dir, db)
 	c.Assert(err, NotNil)
-	c.Assert(strings.Contains(err.Error(), "decode old metadata"), IsTrue)
+	c.Assert(err, ErrorMatches, ".*decode old metadata.*")
 
 	// normal old fashion meta
 	oldMeta := &Meta{
@@ -140,8 +139,8 @@ func (t *testWorker) TestNewMetaDB(c *C) {
 	c.Assert(metaDB.log, NotNil)
 }
 
-func (t *testWorker) TestTask(c *C) {
-	db, dir := t.setUpDB(c)
+func (t *testMeta) TestTask(c *C) {
+	db, dir := testSetUpDB(c)
 	defer db.Close()
 
 	meta, err := NewMetadata(dir, db)
@@ -196,8 +195,8 @@ func (t *testWorker) TestTask(c *C) {
 	c.Assert(task3, IsNil)
 }
 
-func (t *testWorker) TestTaskOperation(c *C) {
-	db, dir := t.setUpDB(c)
+func (t *testMeta) TestTaskOperation(c *C) {
+	db, dir := testSetUpDB(c)
 	defer db.Close()
 
 	meta, err := NewMetadata(dir, db)
@@ -275,7 +274,7 @@ func (t *testWorker) TestTaskOperation(c *C) {
 		Id:   2,
 		Task: testTask2Meta,
 	})
-	c.Assert(strings.Contains(err.Error(), "please handle task oepration order by log ID"), IsTrue)
+	c.Assert(err, ErrorMatches, ".*please handle task operation order by log ID.*")
 
 	// make sucessful  task1 create log
 	err = meta.MarkOperation(&pb.TaskLog{
@@ -349,8 +348,8 @@ func (t *testWorker) TestTaskOperation(c *C) {
 	c.Assert(task2, IsNil)
 }
 
-func (t *testWorker) TestMetaClose(c *C) {
-	db, dir := t.setUpDB(c)
+func (t *testMeta) TestMetaClose(c *C) {
+	db, dir := testSetUpDB(c)
 	defer db.Close()
 
 	meta, err := NewMetadata(dir, db)

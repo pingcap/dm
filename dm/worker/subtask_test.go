@@ -16,6 +16,7 @@ package worker
 import (
 	"context"
 	"strings"
+	"testing"
 	"time"
 
 	. "github.com/pingcap/check"
@@ -28,7 +29,15 @@ import (
 	"github.com/pingcap/errors"
 )
 
-func (t *testWorker) TestCreateUnits(c *C) {
+func TestSunTask(t *testing.T) {
+	TestingT(t)
+}
+
+type testSubTask struct{}
+
+var _ = Suite(&testSubTask{})
+
+func (t *testSubTask) TestCreateUnits(c *C) {
 	cfg := &config.SubTaskConfig{
 		Mode: "xxx",
 	}
@@ -137,7 +146,7 @@ func (m *MockUnit) InjectUpdateError(err error) { m.errUpdate = err }
 
 func (m *MockUnit) InjectFreshError(isFresh bool, err error) { m.isFresh, m.errFresh = isFresh, err }
 
-func (t *testWorker) TestSubTaskNormalUsage(c *C) {
+func (t *testSubTask) TestSubTaskNormalUsage(c *C) {
 	cfg := &config.SubTaskConfig{
 		Name: "testSubtaskScene",
 		Mode: config.ModeFull,
@@ -254,7 +263,7 @@ func (t *testWorker) TestSubTaskNormalUsage(c *C) {
 	c.Assert(st.Result().Errors, HasLen, 0)
 }
 
-func (t *testWorker) TestCloseSubtask(c *C) {
+func (t *testSubTask) TestCloseSubtask(c *C) {
 	cfg := &config.SubTaskConfig{
 		Name: "testSubtaskScene",
 		Mode: config.ModeFull,
@@ -380,7 +389,7 @@ func (t *testWorker) TestCloseSubtask(c *C) {
 	c.Assert(st.Result().Errors, HasLen, 0)
 }
 
-func (t *testWorker) TestSubtaskWithStage(c *C) {
+func (t *testSubTask) TestSubtaskWithStage(c *C) {
 	cfg := &config.SubTaskConfig{
 		Name: "testSubtaskScene",
 		Mode: config.ModeFull,

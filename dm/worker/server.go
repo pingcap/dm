@@ -232,8 +232,9 @@ func (s *Server) QueryTaskOperation(ctx context.Context, req *pb.QueryTaskOperat
 
 	opLog, err := s.worker.meta.GetTaskLog(opLogID)
 	if err != nil {
-		log.Errorf("fail to get operation log %d of task %s", opLogID, taskName)
-		return nil, errors.Trace(err)
+		err = errors.Annotatef(err, "fail to get operation info of task %s", taskName)
+		log.Error(err)
+		return nil, err
 	}
 
 	return &pb.QueryTaskOperationResponse{

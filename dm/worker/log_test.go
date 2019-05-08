@@ -14,13 +14,21 @@
 package worker
 
 import (
-	"strings"
+	"testing"
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/dm/dm/pb"
 )
 
-func (t *testWorker) TestPointer(c *C) {
+func TestLog(t *testing.T) {
+	TestingT(t)
+}
+
+type testLog struct{}
+
+var _ = Suite(&testLog{})
+
+func (t *testLog) TestPointer(c *C) {
 	p := &Pointer{
 		Location: 2,
 	}
@@ -33,12 +41,12 @@ func (t *testWorker) TestPointer(c *C) {
 	c.Assert(np.UnmarshalBinary([]byte("xx")), NotNil)
 }
 
-func (t *testWorker) TestLoadHandledPointer(c *C) {
+func (t *testLog) TestLoadHandledPointer(c *C) {
 	p, err := LoadHandledPointer(nil)
 	c.Assert(err, Equals, ErrInValidHandler)
 	c.Assert(p.Location, Equals, int64(0))
 
-	db, _ := t.setUpDB(c)
+	db, _ := testSetUpDB(c)
 	defer db.Close()
 	p, err = LoadHandledPointer(db)
 	c.Assert(err, IsNil)
@@ -56,26 +64,26 @@ func (t *testWorker) TestLoadHandledPointer(c *C) {
 
 	c.Assert(db.Put(HandledPointerKey, []byte("xx"), nil), IsNil)
 	_, err = LoadHandledPointer(db)
-	c.Assert(strings.Contains(err.Error(), "not valid length data as"), IsTrue)
+	c.Assert(err, ErrorMatches, ".*not valid length data as.*")
 }
 
-func (t *testWorker) TestTaskLogKey(c *C) {
+func (t *testLog) TestTaskLogKey(c *C) {
 	var id int64 = 1
 	idc, err := DecodeTaskLogKey(EncodeTaskLogKey(id))
 	c.Assert(err, IsNil)
 	c.Assert(idc, DeepEquals, id)
 
 	_, err = DecodeTaskLogKey([]byte("xx"))
-	c.Assert(strings.Contains(err.Error(), "not valid length data as"), IsTrue)
+	c.Assert(err, ErrorMatches, ".*not valid length data as.*")
 }
 
-func (t *testWorker) TestTaskLog(c *C) {
+func (t *testLog) TestTaskLog(c *C) {
 	logger := new(Logger)
 
 	_, err := logger.Initial(nil)
 	c.Assert(err, Equals, ErrInValidHandler)
 
-	db, _ := t.setUpDB(c)
+	db, _ := testSetUpDB(c)
 	defer db.Close()
 	logs, err := logger.Initial(db)
 	c.Assert(logs, HasLen, 0)
@@ -188,10 +196,10 @@ func (t *testWorker) TestTaskLog(c *C) {
 	c.Assert(logger.endPointer.Location, Equals, int64(4))
 }
 
-func (t *testWorker) TestTaskLogGC(c *C) {
+func (t *testLog) TestTaskLogGC(c *C) {
 	logger := new(Logger)
 
-	db, _ := t.setUpDB(c)
+	db, _ := testSetUpDB(c)
 	defer db.Close()
 
 	// append logs
@@ -234,17 +242,17 @@ func (t *testWorker) TestTaskLogGC(c *C) {
 	c.Assert(logger.endPointer.Location, Equals, int64(61))
 }
 
-func (t *testWorker) TestTaskMeta(c *C) {
-	db, _ := t.setUpDB(c)
+func (t *testLog) TestTaskMeta(c *C) {
+	db, _ := testSetUpDB(c)
 	defer db.Close()
 
 	// set task meta
 	c.Assert(SetTaskMeta(nil, nil), Equals, ErrInValidHandler)
 	err := SetTaskMeta(db, nil)
-	c.Assert(strings.Contains(err.Error(), "task is empty"), IsTrue)
+	c.Assert(err, ErrorMatches, ".*empty task.*")
 
 	err = SetTaskMeta(db, &pb.TaskMeta{})
-	c.Assert(strings.Contains(err.Error(), "task name is empty"), IsTrue)
+	c.Assert(err, ErrorMatches, ".*empty task.*")
 
 	c.Assert(SetTaskMeta(db, testTask1Meta), IsNil)
 	c.Assert(SetTaskMeta(db, testTask2Meta), IsNil)

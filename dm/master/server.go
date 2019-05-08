@@ -253,14 +253,15 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 						Msg:    errors.ErrorStack(err),
 					},
 				}
-			}
-			err = s.waitOperationOk(ctx, cli, stCfg.Name, workerResp.LogID)
-			if err != nil {
-				workerResp = &pb.OperateSubTaskResponse{
-					Meta: &pb.CommonWorkerResponse{
-						Result: false,
-						Msg:    errors.ErrorStack(err),
-					},
+			} else {
+				err = s.waitOperationOk(ctx, cli, stCfg.Name, workerResp.LogID)
+				if err != nil {
+					workerResp = &pb.OperateSubTaskResponse{
+						Meta: &pb.CommonWorkerResponse{
+							Result: false,
+							Msg:    errors.ErrorStack(err),
+						},
+					}
 				}
 			}
 
@@ -348,14 +349,15 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 						Msg:    errors.ErrorStack(err),
 					},
 				}
-			}
-			err = s.waitOperationOk(ctx, cli, req.Name, workerResp.LogID)
-			if err != nil {
-				workerResp = &pb.OperateSubTaskResponse{
-					Meta: &pb.CommonWorkerResponse{
-						Result: false,
-						Msg:    errors.ErrorStack(err),
-					},
+			} else {
+				err = s.waitOperationOk(ctx, cli, req.Name, workerResp.LogID)
+				if err != nil {
+					workerResp = &pb.OperateSubTaskResponse{
+						Meta: &pb.CommonWorkerResponse{
+							Result: false,
+							Msg:    errors.ErrorStack(err),
+						},
+					}
 				}
 			}
 
@@ -462,14 +464,15 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 						Msg:    errors.ErrorStack(err),
 					},
 				}
-			}
-			err = s.waitOperationOk(ctx, cli, stCfg.Name, workerResp.LogID)
-			if err != nil {
-				workerResp = &pb.OperateSubTaskResponse{
-					Meta: &pb.CommonWorkerResponse{
-						Result: false,
-						Msg:    errors.ErrorStack(err),
-					},
+			} else {
+				err = s.waitOperationOk(ctx, cli, stCfg.Name, workerResp.LogID)
+				if err != nil {
+					workerResp = &pb.OperateSubTaskResponse{
+						Meta: &pb.CommonWorkerResponse{
+							Result: false,
+							Msg:    errors.ErrorStack(err),
+						},
+					}
 				}
 			}
 			workerResp.Meta.Worker = worker
@@ -1797,12 +1800,6 @@ var (
 
 func (s *Server) waitOperationOk(ctx context.Context, cli pb.WorkerClient, name string, opLogID int64) error {
 	for num := 0; num < maxRetryNum; num++ {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
 		res, err := cli.QueryTaskOperation(ctx, &pb.QueryTaskOperationRequest{
 			Name:  name,
 			LogID: opLogID,
@@ -1815,8 +1812,14 @@ func (s *Server) waitOperationOk(ctx context.Context, cli pb.WorkerClient, name 
 			return errors.New(res.Log.Message)
 		}
 
-		log.Infof("wait task %s op log %d, current res %+v", name, opLogID, res)
+		log.Infof("wait task %s op log %d, current result %+v", name, opLogID, res)
 		time.Sleep(retryInterval)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(retryInterval):
+		}
+
 	}
 
 	return errors.Errorf("request is timeout, but request may be successful")

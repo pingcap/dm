@@ -406,7 +406,7 @@ func SetTaskMeta(h Putter, task *pb.TaskMeta) error {
 
 	err := VerifyTaskMeta(task)
 	if err != nil {
-		return errors.Annotatef(err, "verify task meta")
+		return errors.Annotatef(err, "verify task meta %+v", task)
 	}
 
 	taskBytes, err := task.Marshal()
@@ -416,7 +416,7 @@ func SetTaskMeta(h Putter, task *pb.TaskMeta) error {
 
 	err = h.Put(EncodeTaskMetaKey(task.Name), taskBytes, nil)
 	if err != nil {
-		return errors.Annotatef(err, "save into kv db")
+		return errors.Annotatef(err, "save task meta %s into kv db", task.Name)
 	}
 
 	return nil
@@ -430,7 +430,7 @@ func GetTaskMeta(h Getter, name string) (*pb.TaskMeta, error) {
 
 	taskBytes, err := h.Get(EncodeTaskMetaKey(name), nil)
 	if err != nil {
-		return nil, errors.Annotatef(err, "get task meta from leveldb")
+		return nil, errors.Annotatef(err, "get task meta %s from leveldb", name)
 	}
 
 	task := &pb.TaskMeta{}
@@ -450,7 +450,7 @@ func DeleteTaskMeta(h Deleter, name string) error {
 
 	err := h.Delete(EncodeTaskMetaKey(name), nil)
 	if err != nil {
-		return errors.Annotatef(err, "save into kv db")
+		return errors.Annotatef(err, "delete task meta %s from kv db", name)
 	}
 
 	return nil
@@ -459,15 +459,15 @@ func DeleteTaskMeta(h Deleter, name string) error {
 // VerifyTaskMeta verify legality of take meta
 func VerifyTaskMeta(task *pb.TaskMeta) error {
 	if task == nil {
-		return errors.Errorf("task is empty")
+		return errors.Errorf("empty task")
 	}
 
 	if len(task.Name) == 0 {
-		return errors.NotValidf("task name is empty")
+		return errors.NotValidf("empty task name")
 	}
 
 	if len(task.Task) == 0 {
-		return errors.NotValidf("task config is empty")
+		return errors.NotValidf("empty task config")
 	}
 
 	if task.Stage == pb.Stage_InvalidStage {

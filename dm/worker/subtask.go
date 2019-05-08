@@ -120,7 +120,7 @@ func (st *SubTask) Init() error {
 			for j := 0; j < i; j++ {
 				needCloseUnits = append(needCloseUnits, st.units[j])
 			}
-			return errors.Errorf("subtask %s init dm-unit error %v", st.cfg.Name, errors.ErrorStack(err))
+			return errors.Annotatef(err, "fail to initial unit %s of subtask %s ", u.Type(), st.cfg.Name)
 		}
 	}
 
@@ -130,7 +130,7 @@ func (st *SubTask) Init() error {
 		u := st.units[i]
 		isFresh, err := u.IsFreshTask()
 		if err != nil {
-			return errors.Errorf("fail to get fresh status of ubtask %s %s: %v", st.cfg.Name, u.Type(), errors.ErrorStack(err))
+			return errors.Annotatef(err, "fail to get fresh status of subtask %s %s", st.cfg.Name, u.Type())
 		} else if !isFresh {
 			skipIdx = i
 			log.Infof("[subtask] %s run %s dm-unit before, continue with it", st.cfg.Name, u.Type())
