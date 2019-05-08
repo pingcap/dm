@@ -267,16 +267,15 @@ func (meta *Metadata) loadFromDB() (err error) {
 
 // to be compatible with the old fashion meta
 func (meta *Metadata) tryToRecoverMetaFromOldFashion(path string) error {
-	fd, err := os.Open(path)
-	// old metadata file exists, recover metadata from it
+	_, err := os.Stat(path)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return errors.Trace(err)
 		}
 		return nil
 	}
-	fd.Close()
 
+	// old metadata file exists, recover metadata from it
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return errors.Annotatef(err, "read old metadata file %s", path)
@@ -288,7 +287,7 @@ func (meta *Metadata) tryToRecoverMetaFromOldFashion(path string) error {
 		return errors.Annotatef(err, "decode old metadata file %s", path)
 	}
 
-	log.Infof("[worker metadata]find %d tasks from old metadata file", len(oldMeta.SubTasks))
+	log.Infof("[worker metadata] find %d tasks from old metadata file", len(oldMeta.SubTasks))
 
 	for name, task := range oldMeta.SubTasks {
 		log.Infof("[worker metadata] from old metadata file: subtask %s => %+v", name, task)
