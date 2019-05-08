@@ -808,6 +808,7 @@ func GenDummyEvent(header *replication.EventHeader, latestPos uint32, eventSize 
 
 	// modify flag in the header
 	headerClone := *header // do a copy
+	headerClone.Flags &= ^replication.LOG_EVENT_THREAD_SPECIFIC_F
 	headerClone.Flags |= replication.LOG_EVENT_SUPPRESS_USE_F
 	headerClone.Flags |= replication.LOG_EVENT_RELAY_LOG_F // now, the dummy event created by relay only
 

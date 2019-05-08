@@ -784,7 +784,7 @@ func (t *testEventSuite) TestGenDummyEvent(c *C) {
 	header = &replication.EventHeader{
 		Timestamp: uint32(time.Now().Unix()),
 		ServerID:  11,
-		Flags:     0, // no flags set
+		Flags:     replication.LOG_EVENT_THREAD_SPECIFIC_F,
 	}
 	eventSizeList = append(eventSizeList, MinUserVarEventLen) // add a USER_VAR_EVENT
 	for _, eventSize = range eventSizeList {
@@ -792,6 +792,7 @@ func (t *testEventSuite) TestGenDummyEvent(c *C) {
 		c.Assert(err2, IsNil)
 		c.Assert(ev, NotNil)
 		// verify the header flag
+		c.Assert(userVarEv.Header.Flags&replication.LOG_EVENT_THREAD_SPECIFIC_F, Equals, uint16(0))
 		c.Assert(userVarEv.Header.Flags&replication.LOG_EVENT_SUPPRESS_USE_F, Greater, uint16(0))
 		c.Assert(userVarEv.Header.Flags&replication.LOG_EVENT_RELAY_LOG_F, Greater, uint16(0))
 	}
