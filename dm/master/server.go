@@ -246,25 +246,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 				return
 			}
 			workerResp, err := cli.StartSubTask(ctx, &pb.StartSubTaskRequest{Task: stCfgToml})
-			if err != nil {
-				workerResp = &pb.OperateSubTaskResponse{
-					Meta: &pb.CommonWorkerResponse{
-						Result: false,
-						Msg:    errors.ErrorStack(err),
-					},
-				}
-			} else {
-				err = s.waitOperationOk(ctx, cli, stCfg.Name, workerResp.LogID)
-				if err != nil {
-					workerResp = &pb.OperateSubTaskResponse{
-						Meta: &pb.CommonWorkerResponse{
-							Result: false,
-							Msg:    errors.ErrorStack(err),
-						},
-					}
-				}
-			}
-
+			workerResp = s.handleOperationResult(ctx, cli, stCfg.Name, workerResp.LogID, err, workerResp)
 			workerResp.Meta.Worker = worker
 			workerRespCh <- workerResp.Meta
 		}(stCfg)
@@ -342,25 +324,7 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 				return
 			}
 			workerResp, err := cli.OperateSubTask(ctx, subReq)
-			if err != nil {
-				workerResp = &pb.OperateSubTaskResponse{
-					Meta: &pb.CommonWorkerResponse{
-						Result: false,
-						Msg:    errors.ErrorStack(err),
-					},
-				}
-			} else {
-				err = s.waitOperationOk(ctx, cli, req.Name, workerResp.LogID)
-				if err != nil {
-					workerResp = &pb.OperateSubTaskResponse{
-						Meta: &pb.CommonWorkerResponse{
-							Result: false,
-							Msg:    errors.ErrorStack(err),
-						},
-					}
-				}
-			}
-
+			workerResp = s.handleOperationResult(ctx, cli, req.Name, workerResp.LogID, err, workerResp)
 			workerResp.Op = req.Op
 			workerResp.Meta.Worker = worker
 			workerRespCh <- workerResp
@@ -475,6 +439,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 					}
 				}
 			}
+
 			workerResp.Meta.Worker = worker
 			workerRespCh <- workerResp.Meta
 		}(stCfg)
@@ -1821,5 +1786,28 @@ func (s *Server) waitOperationOk(ctx context.Context, cli pb.WorkerClient, name 
 
 	}
 
-	return errors.Errorf("request is timeout, but request may be successful")
+	return errors.New("request is timeout, but request may be successful")
+}
+
+func (s *Server) handleOperationResult(ctx context.Context, cli pb.WorkerClient, name string, opLogID int64, err error, response *pb.OperateSubTaskResponse) *pb.OperateSubTaskResponse {
+	if err != nil {
+		return &pb.OperateSubTaskResponse{
+			Meta: &pb.CommonWorkerResponse{
+				Result: false,
+				Msg:    errors.ErrorStack(err),
+			},
+		}
+	}
+
+	err = s.waitOperationOk(ctx, cli, name, opLogID)
+	if err != nil {
+		return &pb.OperateSubTaskResponse{
+			Meta: &pb.CommonWorkerResponse{
+				Result: false,
+				Msg:    errors.ErrorStack(err),
+			},
+		}
+	}
+
+	return response
 }
