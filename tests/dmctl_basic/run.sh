@@ -20,6 +20,7 @@ function usage_and_arg_test() {
 
     resume_relay_wrong_arg
     resume_relay_wihout_worker
+    resume_relay_while_master_down
 
     pause_task_wrong_arg
     pause_task_while_master_down
@@ -29,6 +30,13 @@ function usage_and_arg_test() {
 
     query_status_wrong_arg
     query_status_wrong_params
+
+    start_task_wrong_arg
+    start_task_wrong_config_file
+    start_task_while_master_down $TASK_CONF
+
+    stop_task_wrong_arg
+    stop_task_while_master_down
 }
 
 function run() {
