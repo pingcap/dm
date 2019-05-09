@@ -76,7 +76,7 @@ func (t *testReaderSuite) TestParseFile(c *C) {
 	c.Assert(err, ErrorMatches, ".*no such file or directory.*")
 
 	// empty relay log file, failed, got EOF
-	err = os.MkdirAll(relayDir, 7644)
+	err = os.MkdirAll(relayDir, 0644)
 	c.Assert(err, IsNil)
 	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0644)
 	c.Assert(err, IsNil)
