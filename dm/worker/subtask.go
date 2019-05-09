@@ -28,6 +28,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer"
 	"github.com/pingcap/errors"
+	"github.com/siddontang/go/sync2"
 
 	// hack for glide update, remove it later
 	_ "github.com/pingcap/tidb-tools/pkg/check"
@@ -58,6 +59,8 @@ func createUnits(cfg *config.SubTaskConfig) []unit.Unit {
 // SubTask represents a sub task of data migration
 type SubTask struct {
 	cfg *config.SubTaskConfig
+
+	initialized sync2.AtomicBool
 
 	sync.RWMutex
 	wg     sync.WaitGroup
@@ -108,6 +111,8 @@ func (st *SubTask) Init() error {
 		for _, u := range needCloseUnits {
 			u.Close()
 		}
+
+		st.initialized.Set(true)
 	}()
 
 	// every unit does base initialization in `Init`, and this must pass before start running the sub task
@@ -410,6 +415,11 @@ func (st *SubTask) Pause() error {
 // Resume resumes the paused sub task
 // similar to Run
 func (st *SubTask) Resume() error {
+	if !st.initialized.Get() {
+		st.Run()
+		return nil
+	}
+
 	// NOTE: this may block if user resume a task
 	err := st.unitTransWaitCondition()
 	if err != nil {
