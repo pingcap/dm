@@ -15,7 +15,7 @@ PWD=$(pwd)
 binary=$PWD/bin/dmctl.test
 ts=$(date +"%s")
 dmctl_log=$workdir/dmctl.$ts.log
-echo "dmctl test function: ${FUNCNAME[0]} cmd: \"$cmd\""
+echo "dmctl test cmd: \"$cmd\""
 echo "$cmd" | $binary -test.coverprofile="$TEST_DIR/cov.$TEST_NAME.dmctl.$ts.out" DEVEL -master-addr=$master_addr > $dmctl_log 2>&1
 
 for ((i=1; i<$#; i+=2)); do

@@ -7,6 +7,7 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 TASK_CONF=$cur/conf/dm-task.yaml
 TASK_NAME="test"
+WORKER1_CONF=$cur/conf/dm-worker1.toml
 
 # used to coverage wrong usage of dmctl command
 function usage_and_arg_test() {
@@ -40,6 +41,11 @@ function usage_and_arg_test() {
 
     show_ddl_locks_wrong_arg
     show_ddl_locks_while_master_down
+
+    update_relay_wrong_arg
+    update_relay_wrong_config_file
+    update_relay_wrong_params $WORKER1_CONF
+    update_relay_while_master_down $WORKER1_CONF
 }
 
 function run() {
