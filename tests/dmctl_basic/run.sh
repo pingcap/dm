@@ -37,6 +37,9 @@ function usage_and_arg_test() {
 
     stop_task_wrong_arg
     stop_task_while_master_down
+
+    show_ddl_locks_wrong_arg
+    show_ddl_locks_while_master_down
 }
 
 function run() {
@@ -72,15 +75,20 @@ function run() {
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
+    show_ddl_locks_no_locks $TASK_NAME
     query_status_with_tasks
     pause_task_success $TASK_NAME
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
-
     resume_task_success $TASK_NAME
-
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 20
+
+    run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1
+    show_ddl_locks_with_locks "$TASK_NAME-\`dmctl\`.\`t_target\`" "ALTER TABLE \`dmctl\`.\`t_target\` DROP COLUMN \`d\`"
+    run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 10
+    show_ddl_locks_no_locks $TASK_NAME
 }
 
 cleanup1 dmctl
