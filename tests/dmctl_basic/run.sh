@@ -6,6 +6,30 @@ cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 TASK_CONF=$cur/conf/dm-task.yaml
+TASK_NAME="test"
+
+# used to coverage wrong usage of dmctl command
+function usage_and_arg_test() {
+    check_task_wrong_arg
+    check_task_wrong_config_file
+    check_task_with_master_down $TASK_CONF
+
+    pause_relay_wrong_arg
+    pause_relay_wihout_worker
+    pause_relay_while_master_down
+
+    resume_relay_wrong_arg
+    resume_relay_wihout_worker
+
+    pause_task_wrong_arg
+    pause_task_while_master_down
+
+    resume_task_wrong_arg
+    resume_task_while_master_down
+
+    query_status_wrong_arg
+    query_status_wrong_params
+}
 
 function run() {
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
@@ -17,18 +41,7 @@ function run() {
     done
     cd -
 
-    check_task_wrong_arg
-    check_task_wrong_config_file
-    check_task_with_master_down $TASK_CONF
-
-    pause_relay_wrong_arg
-    pause_relay_wihout_worker
-
-    resume_relay_wrong_arg
-    resume_relay_wihout_worker
-
-    query_status_wrong_arg
-    query_status_wrong_params
+    usage_and_arg_test
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
@@ -52,13 +65,14 @@ function run() {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     query_status_with_tasks
+    pause_task_success $TASK_NAME
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
 
-    # TODO: check sharding partition id
-    # use sync_diff_inspector to check data now!
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    resume_task_success $TASK_NAME
+
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 20
 }
 
 cleanup1 dmctl
