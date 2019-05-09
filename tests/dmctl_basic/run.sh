@@ -48,7 +48,20 @@ function usage_and_arg_test() {
     update_relay_while_master_down $WORKER1_CONF
 }
 
+function recover_max_binlog_size() {
+    run_sql "set @@global.max_binlog_size = $1" $MYSQL_PORT1
+    run_sql "set @@global.max_binlog_size = $2" $MYSQL_PORT2
+}
+
 function run() {
+    run_sql "show variables like 'max_binlog_size'\G" $MYSQL_PORT1
+    max_binlog_size1=$(tail -n 1 "$TEST_DIR/sql_res.$TEST_NAME.txt" | awk '{print $NF}')
+    run_sql "show variables like 'max_binlog_size'\G" $MYSQL_PORT2
+    max_binlog_size2=$(tail -n 1 "$TEST_DIR/sql_res.$TEST_NAME.txt" | awk '{print $NF}')
+    run_sql "set @@global.max_binlog_size = 16384" $MYSQL_PORT1
+    run_sql "set @@global.max_binlog_size = 16384" $MYSQL_PORT2
+    trap "recover_max_binlog_size $max_binlog_size1 $max_binlog_size2" EXIT
+
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2
 
@@ -76,6 +89,7 @@ function run() {
 
     check_task_pass $TASK_CONF
     check_task_not_pass $cur/conf/dm-task2.yaml
+
 
     dmctl_start_task
 

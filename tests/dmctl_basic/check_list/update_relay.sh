@@ -25,3 +25,11 @@ function update_relay_while_master_down() {
         "update-relay $task_conf -w 127.0.0.1:$WORKER1_PORT" \
         "can not update relay config:" 1
 }
+
+function update_relay_success() {
+    task_conf=$1
+    worker_addr=$2
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "update-relay $task_conf -w $worker_addr" \
+        "can not update relay config:" 1
+}
