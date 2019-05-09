@@ -159,6 +159,8 @@ type Syncer struct {
 		sync.RWMutex
 		currentPos mysql.Position // use to calc remain binlog size
 	}
+
+	pipeline *Pipeline
 }
 
 // NewSyncer creates a new Syncer.
@@ -174,7 +176,7 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.tables = make(map[string]*table)
 	syncer.cacheColumns = make(map[string][]string)
 	syncer.genColsCache = NewGenColCache()
-	syncer.c = newCausality()
+	//syncer.c = newCausality()
 	syncer.tableRouter, _ = router.NewTableRouter(cfg.CaseSensitive, []*router.TableRule{})
 	syncer.done = make(chan struct{})
 	syncer.bwList = filter.New(cfg.CaseSensitive, cfg.BWList)
@@ -210,6 +212,8 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 		syncer.ddlInfoCh = make(chan *pb.DDLInfo, 1)
 		syncer.ddlExecInfo = NewDDLExecInfo()
 	}
+
+	syncer.pipeline = new(Pipeline)
 
 	return syncer
 }
@@ -347,6 +351,10 @@ func (s *Syncer) Init() (err error) {
 	// NOTE: we should refactor the Concurrency Model some day
 	s.done = make(chan struct{})
 	close(s.done)
+
+	syncPipe := new(SyncPipe)
+	s.pipeline.AddPipe(syncPipe)
+
 	return nil
 }
 
