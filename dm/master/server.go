@@ -421,25 +421,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 				return
 			}
 			workerResp, err := cli.UpdateSubTask(ctx, &pb.UpdateSubTaskRequest{Task: stCfgToml})
-			if err != nil {
-				workerResp = &pb.OperateSubTaskResponse{
-					Meta: &pb.CommonWorkerResponse{
-						Result: false,
-						Msg:    errors.ErrorStack(err),
-					},
-				}
-			} else {
-				err = s.waitOperationOk(ctx, cli, stCfg.Name, workerResp.LogID)
-				if err != nil {
-					workerResp = &pb.OperateSubTaskResponse{
-						Meta: &pb.CommonWorkerResponse{
-							Result: false,
-							Msg:    errors.ErrorStack(err),
-						},
-					}
-				}
-			}
-
+			workerResp = s.handleOperationResult(ctx, cli, stCfg.Name, workerResp.LogID, err, workerResp)
 			workerResp.Meta.Worker = worker
 			workerRespCh <- workerResp.Meta
 		}(stCfg)
