@@ -85,7 +85,24 @@ function run() {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 20
 
     run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1
-    show_ddl_locks_with_locks "$TASK_NAME-\`dmctl\`.\`t_target\`" "ALTER TABLE \`dmctl\`.\`t_target\` DROP COLUMN \`d\`"
+    set +e
+    i=0
+    while [ $i -lt 10 ]
+    do
+        show_ddl_locks_with_locks "$TASK_NAME-\`dmctl\`.\`t_target\`" "ALTER TABLE \`dmctl\`.\`t_target\` DROP COLUMN \`d\`"
+        ((i++))
+        if [ "$?" != 0 ]; then
+            echo "wait 1s and check for the $i-th time"
+            sleep 1
+        else
+            break
+        fi
+    done
+    set -e
+    if [ $i -ge 10 ]; then
+        echo "show_ddl_locks_with_locks check timeout"
+        exit 1
+    fi
     run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 10
     show_ddl_locks_no_locks $TASK_NAME
