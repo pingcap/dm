@@ -16,14 +16,12 @@ package writer
 import (
 	"bytes"
 	"fmt"
-	"io"
-	"os"
+	"io/ioutil"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	. "github.com/pingcap/check"
-	"github.com/pingcap/errors"
 )
 
 func TestSuite(t *testing.T) {
@@ -117,17 +115,7 @@ func (t *testFileWriterSuite) TestWrite(c *C) {
 	c.Assert(w.Flush(), NotNil)
 
 	// try to read the data back
-	f, err := os.Open(filename)
+	dataInFile, err := ioutil.ReadFile(filename)
 	c.Assert(err, IsNil)
-	defer f.Close()
-
-	dataLen := allData.Len()
-	buf := make([]byte, dataLen)
-	n, err := f.Read(buf)
-	c.Assert(err, IsNil)
-	c.Assert(n, Equals, dataLen)
-	c.Assert(buf, DeepEquals, allData.Bytes())
-
-	n, err = f.Read(buf)
-	c.Assert(errors.Cause(err), Equals, io.EOF)
+	c.Assert(dataInFile, DeepEquals, allData.Bytes())
 }
