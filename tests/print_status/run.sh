@@ -61,7 +61,7 @@ function run() {
             echo "all binlog events have been flushed to disk"
             break
         fi
-        ((i++))
+        i=$((i+=1))
         echo "wait for syncer log flushed for the $i-th time"
         sleep 1
     done
