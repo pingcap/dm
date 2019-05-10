@@ -15,6 +15,7 @@ package writer
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"sync"
 
@@ -46,7 +47,8 @@ type FileWriterStatus struct {
 func (s *FileWriterStatus) String() string {
 	data, err := json.Marshal(s)
 	if err != nil {
-		log.Errorf("[FileWriterStatus] marshal status to json error %v", err)
+		// do not use %v/%+v for `s`, it will call this `String` recursively
+		return fmt.Sprintf("marshal status %#v to json error %v", s, err)
 	}
 	return string(data)
 }
@@ -74,15 +76,19 @@ func (w *FileWriter) Start() error {
 
 	f, err := os.OpenFile(w.cfg.Filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		return errors.Annotatef(err, "open file %s", w.cfg.Filename)
+		return errors.Trace(err)
 	}
-	w.file = f
 	fs, err := f.Stat()
 	if err != nil {
+		err2 := f.Close() // close the file opened before
+		if err2 != nil {
+			log.Errorf("[file writer] close file error %s", err2)
+		}
 		return errors.Annotatef(err, "get stat for %s", f.Name())
 	}
-	w.offset.Set(fs.Size())
 
+	w.offset.Set(fs.Size())
+	w.file = f
 	w.stage = stagePrepared
 	return nil
 }
@@ -92,8 +98,8 @@ func (w *FileWriter) Close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	if w.stage == stageClosed {
-		return errors.New("already closed")
+	if w.stage != stagePrepared {
+		return errors.Errorf("stage %s, expect %s, can not close", w.stage, stagePrepared)
 	}
 
 	var err error

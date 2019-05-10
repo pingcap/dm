@@ -126,8 +126,8 @@ func (r *FileReader) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.stage == stageClosed {
-		return errors.New("already closed")
+	if r.stage != stagePrepared {
+		return errors.Errorf("stage %s, expect %s, can not close", r.stage, stagePrepared)
 	}
 
 	r.cancel()
