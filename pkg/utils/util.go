@@ -15,12 +15,22 @@ package utils
 
 import (
 	"math"
+	"os"
 	"strconv"
 	"strings"
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 )
+
+var (
+	// OsExit is function placeholder for os.Exit
+	OsExit func(int)
+)
+
+func init() {
+	OsExit = os.Exit
+}
 
 // DecodeBinlogPosition parses a mysql.Position from string format
 func DecodeBinlogPosition(pos string) (*mysql.Position, error) {
