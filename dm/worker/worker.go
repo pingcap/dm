@@ -565,7 +565,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	for _, st := range w.subTasks {
 		isRunning := st.CheckUnit()
 		if !isRunning {
-			return errors.New("There is a subtask does not run syncer.")
+			return errors.New("there is a subtask does not run syncer")
 		}
 	}
 
