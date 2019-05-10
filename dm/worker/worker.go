@@ -589,10 +589,12 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	cloneCfg, _ := newCfg.DecryptPassword()
 
 	// Update SubTask configure
+	// NOTE: we only update `DB.Config` in SubTaskConfig now
 	for _, st := range w.subTasks {
 		cfg := config.NewSubTaskConfig()
 
 		cfg.From = cloneCfg.From
+		cfg.From.Adjust()
 
 		stage := st.Stage()
 		if stage == pb.Stage_Paused {
@@ -619,7 +621,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	log.Info("[worker] update relay configure in subtasks success.")
 
 	// Update relay unit configure
-	err = w.relayHolder.Update(ctx, newCfg)
+	err = w.relayHolder.Update(ctx, cloneCfg)
 	if err != nil {
 		return errors.Trace(err)
 	}
