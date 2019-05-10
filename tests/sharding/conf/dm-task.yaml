@@ -34,38 +34,38 @@ mysql-instances:
 
 black-white-list:
   instance:
-    do-dbs: ["sharding"]
+    do-dbs: ["~^sharding[\\d]+"]
     do-tables:
-    -  db-name: "sharding"
+    -  db-name: "~^sharding[\\d]+"
        tbl-name: "~^t[\\d]+"
 
 routes:
   sharding-route-rules-table:
-    schema-pattern: sharding
+    schema-pattern: sharding*
     table-pattern: t*
     target-schema: db_target
     target-table: t_target
 
   sharding-route-rules-schema:
-    schema-pattern: sharding
+    schema-pattern: sharding*
     target-schema: db_target
 
 column-mappings:
   instance-1:
-    schema-pattern: "sharding"
+    schema-pattern: "sharding*"
     table-pattern: "t*"
     expression: "partition id"
     source-column: "id"
     target-column: "id"
-    arguments: ["1", "", "t"]
+    arguments: ["1", "sharding", "t"]
 
   instance-2:
-    schema-pattern: "sharding"
+    schema-pattern: "sharding*"
     table-pattern: "t*"
     expression: "partition id"
     source-column: "id"
     target-column: "id"
-    arguments: ["2", "", "t"]
+    arguments: ["2", "sharding", "t"]
 
 mydumpers:
   global:
@@ -73,7 +73,7 @@ mydumpers:
     threads: 4
     chunk-filesize: 64
     skip-tz-utc: true
-    extra-args: "-B sharding"
+    extra-args: "--regex '^sharding.*'"
 
 loaders:
   global:

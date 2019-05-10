@@ -141,9 +141,11 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *
 					threshold, _ := val.(int)
 					if job.offset >= int64(threshold) {
 						log.Warnf("[failpoint] load offset %d execeeds threshold %d, will panic", job.offset, threshold)
-						panic("LoadExceedOffsetExit")
+						utils.OsExit(1)
 					}
 				})
+
+				failpoint.Inject("LoadDataSlowDown", nil)
 
 				if err := w.conn.executeSQL(sqls, true); err != nil {
 					// expect pause rather than exit

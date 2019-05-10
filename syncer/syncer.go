@@ -17,7 +17,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"os"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -293,7 +292,7 @@ func (s *Syncer) Init() (err error) {
 		}
 	}
 
-	err = s.checkpoint.Init()
+	err = s.checkpoint.Init(nil)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -1042,7 +1041,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			log.Debugf("[syncer] start using a special streamer to re-sync DMLs for sharding group %+v", shardingReSync)
 			failpoint.Inject("ReSyncExit", func() {
 				log.Warn("[failpoint] exit triggered by ReSyncExit")
-				os.Exit(1)
+				utils.OsExit(1)
 			})
 		}
 
@@ -1126,6 +1125,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			binlogFileGauge.WithLabelValues("syncer", s.cfg.Name).Set(index)
 		}
 		s.binlogSizeCount.Add(int64(e.Header.EventSize))
+
+		failpoint.Inject("ProcessBinlogSlowDown", nil)
 
 		log.Debugf("[syncer] receive binlog event with header %+v", e.Header)
 		switch ev := e.Event.(type) {
@@ -1649,7 +1650,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				if ddlExecItem.req.Exec {
 					failpoint.Inject("ShardSyncedExecutionExit", func() {
 						log.Warn("[failpoint] exit triggered by ShardSyncedExecutionExit")
-						os.Exit(1)
+						utils.OsExit(1)
 					})
 
 					log.Infof("[syncer] add DDL %v to job, request is %+v", ddlInfo1.DDLs, ddlExecItem.req)
@@ -1752,6 +1753,13 @@ func (s *Syncer) genRouter() error {
 
 func (s *Syncer) printStatus(ctx context.Context) {
 	defer s.wg.Done()
+
+	failpoint.Inject("PrintStatusCheckSeconds", func(val failpoint.Value) {
+		if seconds, ok := val.(int); ok {
+			statusTime = time.Duration(seconds) * time.Second
+			log.Infof("[failpoint] set syncer printStatusInterval to %d", seconds)
+		}
+	})
 
 	timer := time.NewTicker(statusTime)
 	defer timer.Stop()

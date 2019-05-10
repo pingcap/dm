@@ -46,9 +46,9 @@ function run() {
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
 
-    check_port_alive $MASTER_PORT
-    check_port_alive $WORKER1_PORT
-    check_port_alive $WORKER2_PORT
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 
     $cur/../bin/dmctl_start_task "$cur/conf/dm-task.yaml"
 
@@ -63,8 +63,8 @@ function run() {
     export GO_FAILPOINTS=''
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
-    check_port_alive $WORKER1_PORT
-    check_port_alive $WORKER2_PORT
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     run_sql "SELECT count(*) from dm_meta.test_loader_checkpoint where cp_schema = '$TEST_NAME' and offset = end_pos" $TIDB_PORT

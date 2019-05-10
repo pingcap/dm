@@ -14,29 +14,83 @@
 package syncer
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/log"
 )
 
-// NOTE: there are binlog events conflict with other test cases
-// and we can not simply disable `sql_log_bin` for this test case
-// because go-sql-driver/mysql using connection pool for *sql.DB
-// and different SQLs in different txn may in different sessions
-// ref: https://github.com/go-sql-driver/mysql/issues/208
-// so disable checkpoint test now, TestCheckPoint => testCheckPoint
-func (s *testSyncerSuite) testCheckPoint(c *C) {
-	id := "test_for_db"
-	cp := NewRemoteCheckPoint(s.cfg, id)
-	defer cp.Close()
+var (
+	cpid               = "test_for_db"
+	schemaCreateSQL    = ""
+	tableCreateSQL     = ""
+	clearCheckPointSQL = ""
+	loadCheckPointSQL  = ""
+	flushCheckPointSQL = ""
+)
 
-	err := cp.Init()
+var _ = Suite(&testCheckpointSuite{})
+
+type testCheckpointSuite struct {
+	cfg  *config.SubTaskConfig
+	mock sqlmock.Sqlmock
+}
+
+func (s *testCheckpointSuite) SetUpSuite(c *C) {
+	s.cfg = &config.SubTaskConfig{
+		ServerID:   101,
+		MetaSchema: "test",
+		Name:       "syncer_checkpoint_ut",
+	}
+}
+
+func (s *testCheckpointSuite) TearDownSuite(c *C) {
+}
+
+func (s *testCheckpointSuite) prepareCheckPointSQL() {
+	schemaCreateSQL = fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", s.cfg.MetaSchema)
+	tableCreateSQL = fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_syncer_checkpoint` .*", s.cfg.MetaSchema, s.cfg.Name)
+	flushCheckPointSQL = fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint` .* VALUES.* ON DUPLICATE KEY UPDATE .*", s.cfg.MetaSchema, s.cfg.Name)
+	clearCheckPointSQL = fmt.Sprintf("DELETE FROM `%s`.`%s_syncer_checkpoint` WHERE `id` = '%s'", s.cfg.MetaSchema, s.cfg.Name, cpid)
+	loadCheckPointSQL = fmt.Sprintf("SELECT .* FROM `%s`.`%s_syncer_checkpoint` WHERE `id`='%s'", s.cfg.MetaSchema, s.cfg.Name, cpid)
+}
+
+// this test case uses sqlmock to simulate all SQL operations in tests
+func (s *testCheckpointSuite) TestCheckPoint(c *C) {
+	cp := NewRemoteCheckPoint(s.cfg, cpid)
+	defer func() {
+		s.mock.ExpectClose()
+		cp.Close()
+	}()
+
+	var err error
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	s.mock = mock
+
+	s.prepareCheckPointSQL()
+
+	mock.ExpectBegin()
+	mock.ExpectExec(schemaCreateSQL).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+	mock.ExpectBegin()
+	mock.ExpectExec(tableCreateSQL).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+	mock.ExpectBegin()
+	mock.ExpectExec(clearCheckPointSQL).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	// pass sqlmock db directly
+	err = cp.Init(&Conn{cfg: s.cfg, db: db})
 	c.Assert(err, IsNil)
 	cp.Clear()
 
@@ -47,12 +101,13 @@ func (s *testSyncerSuite) testCheckPoint(c *C) {
 	s.testTableCheckPoint(c, cp)
 }
 
-func (s *testSyncerSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
+func (s *testCheckpointSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	// global checkpoint init to min
 	c.Assert(cp.GlobalPoint(), Equals, minCheckpoint)
 	c.Assert(cp.FlushedGlobalPoint(), Equals, minCheckpoint)
 
 	// try load, but should load nothing
+	s.mock.ExpectQuery(loadCheckPointSQL).WillReturnRows(sqlmock.NewRows(nil))
 	err := cp.Load()
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint(), Equals, minCheckpoint)
@@ -81,7 +136,16 @@ func (s *testSyncerSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	c.Assert(err, IsNil)
 	s.cfg.Mode = config.ModeAll
 	s.cfg.Dir = dir
+
+	s.mock.ExpectQuery(loadCheckPointSQL).WillReturnRows(sqlmock.NewRows(nil))
 	err = cp.Load()
+	c.Assert(err, IsNil)
+	cp.SaveGlobalPoint(pos1)
+
+	s.mock.ExpectBegin()
+	s.mock.ExpectExec(flushCheckPointSQL).WithArgs(cpid, "", "", pos1.Name, pos1.Pos, true, pos1.Name, pos1.Pos).WillReturnResult(sqlmock.NewResult(0, 1))
+	s.mock.ExpectCommit()
+	err = cp.FlushPointsExcept(nil)
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint(), Equals, pos1)
 	c.Assert(cp.FlushedGlobalPoint(), Equals, pos1)
@@ -90,7 +154,7 @@ func (s *testSyncerSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	pos1.Pos = 2044
 	s.cfg.Mode = config.ModeIncrement
 	s.cfg.Meta = &config.Meta{BinLogName: pos1.Name, BinLogPos: pos1.Pos}
-	err = cp.Load()
+	err = cp.LoadMeta()
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint(), Equals, pos1)
 	c.Assert(cp.FlushedGlobalPoint(), Equals, pos1)
@@ -118,7 +182,11 @@ func (s *testSyncerSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	c.Assert(cp.FlushedGlobalPoint(), Equals, pos1)
 
 	// flush + rollback
-	cp.FlushPointsExcept(nil)
+	s.mock.ExpectBegin()
+	s.mock.ExpectExec(flushCheckPointSQL).WithArgs(cpid, "", "", pos2.Name, pos2.Pos, true, pos2.Name, pos2.Pos).WillReturnResult(sqlmock.NewResult(0, 1))
+	s.mock.ExpectCommit()
+	err = cp.FlushPointsExcept(nil)
+	c.Assert(err, IsNil)
 	cp.Rollback()
 	c.Assert(cp.GlobalPoint(), Equals, pos2)
 	c.Assert(cp.FlushedGlobalPoint(), Equals, pos2)
@@ -127,24 +195,41 @@ func (s *testSyncerSuite) testGlobalCheckPoint(c *C, cp CheckPoint) {
 	pos3 := pos2
 	pos3.Pos = pos2.Pos + 1000 // > pos2 to enable save
 	cp.SaveGlobalPoint(pos3)
+	columns := []string{"cp_schema", "cp_table", "binlog_name", "binlog_pos", "is_global"}
+	s.mock.ExpectQuery(loadCheckPointSQL).WillReturnRows(sqlmock.NewRows(columns).AddRow("", "", pos2.Name, pos2.Pos, true))
 	err = cp.Load()
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint(), Equals, pos2)
 	c.Assert(cp.FlushedGlobalPoint(), Equals, pos2)
 
+	// test save older point
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	cp.SaveGlobalPoint(pos1)
+	c.Assert(cp.GlobalPoint(), Equals, pos2)
+	c.Assert(cp.FlushedGlobalPoint(), Equals, pos2)
+	matchStr := fmt.Sprintf(".*try to save %s is older than current pos %s", pos1, pos2)
+	matchStr = strings.Replace(strings.Replace(matchStr, ")", "\\)", -1), "(", "\\(", -1)
+	c.Assert(strings.TrimSpace(buf.String()), Matches, matchStr)
+	log.SetOutput(os.Stdout)
+
 	// test clear
+	s.mock.ExpectBegin()
+	s.mock.ExpectExec(clearCheckPointSQL).WillReturnResult(sqlmock.NewResult(0, 1))
+	s.mock.ExpectCommit()
 	err = cp.Clear()
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint(), Equals, minCheckpoint)
 	c.Assert(cp.FlushedGlobalPoint(), Equals, minCheckpoint)
 
+	s.mock.ExpectQuery(loadCheckPointSQL).WillReturnRows(sqlmock.NewRows(nil))
 	err = cp.Load()
 	c.Assert(err, IsNil)
 	c.Assert(cp.GlobalPoint(), Equals, minCheckpoint)
 	c.Assert(cp.FlushedGlobalPoint(), Equals, minCheckpoint)
 }
 
-func (s *testSyncerSuite) testTableCheckPoint(c *C, cp CheckPoint) {
+func (s *testCheckpointSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	var (
 		schema = "test_db"
 		table  = "test_table"
@@ -156,6 +241,7 @@ func (s *testSyncerSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 			Name: "mysql-bin.000008",
 			Pos:  456,
 		}
+		err error
 	)
 
 	// not exist
@@ -178,13 +264,20 @@ func (s *testSyncerSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	c.Assert(newer, IsFalse)
 
 	// flush + rollback
-	cp.FlushPointsExcept(nil)
+	s.mock.ExpectBegin()
+	s.mock.ExpectExec(flushCheckPointSQL).WithArgs(cpid, schema, table, pos2.Name, pos2.Pos, false, pos2.Name, pos2.Pos).WillReturnResult(sqlmock.NewResult(0, 1))
+	s.mock.ExpectCommit()
+	err = cp.FlushPointsExcept(nil)
+	c.Assert(err, IsNil)
 	cp.Rollback()
 	newer = cp.IsNewerTablePoint(schema, table, pos1)
 	c.Assert(newer, IsFalse)
 
 	// clear, to min
-	err := cp.Clear()
+	s.mock.ExpectBegin()
+	s.mock.ExpectExec(clearCheckPointSQL).WillReturnResult(sqlmock.NewResult(0, 1))
+	s.mock.ExpectCommit()
+	err = cp.Clear()
 	c.Assert(err, IsNil)
 	newer = cp.IsNewerTablePoint(schema, table, pos1)
 	c.Assert(newer, IsTrue)
@@ -194,8 +287,24 @@ func (s *testSyncerSuite) testTableCheckPoint(c *C, cp CheckPoint) {
 	newer = cp.IsNewerTablePoint(schema, table, pos1)
 	c.Assert(newer, IsFalse)
 
+	// test save table point less than global point
+	func() {
+		defer func() {
+			r := recover()
+			matchStr := fmt.Sprintf("table checkpoint %+v less than global checkpoint %+v.*", pos1, cp.GlobalPoint())
+			matchStr = strings.ReplaceAll(strings.ReplaceAll(matchStr, "(", "\\("), ")", "\\)")
+			c.Assert(r, Matches, matchStr)
+		}()
+		cp.SaveGlobalPoint(pos2)
+		cp.SaveTablePoint(schema, table, pos1)
+	}()
+
 	// flush but except + rollback
-	cp.FlushPointsExcept([][]string{{schema, table}})
+	s.mock.ExpectBegin()
+	s.mock.ExpectExec(flushCheckPointSQL).WithArgs(cpid, "", "", pos2.Name, pos2.Pos, true, pos2.Name, pos2.Pos).WillReturnResult(sqlmock.NewResult(0, 1))
+	s.mock.ExpectCommit()
+	err = cp.FlushPointsExcept([][]string{{schema, table}})
+	c.Assert(err, IsNil)
 	cp.Rollback()
 	newer = cp.IsNewerTablePoint(schema, table, pos1)
 	c.Assert(newer, IsTrue)

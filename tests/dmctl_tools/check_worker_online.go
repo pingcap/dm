@@ -11,20 +11,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package worker
+package main
 
 import (
 	"context"
-	"github.com/pingcap/dm/dm/ctl/common"
+	"os"
+	"time"
+
+	"google.golang.org/grpc"
+
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/tests/utils"
 )
 
-// operateRelay does operation on relay unit
-func operateRelay(op pb.RelayOp) (*pb.OperateRelayResponse, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cli := common.WorkerClient()
-	return cli.OperateRelay(ctx, &pb.OperateRelayRequest{
-		Op: op,
-	})
+// use query status request to test DM-worker is online
+func main() {
+	addr := os.Args[1]
+	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(2*time.Second))
+	if err != nil {
+		utils.ExitWithError(err)
+	}
+	cli := pb.NewWorkerClient(conn)
+	req := &pb.QueryStatusRequest{}
+	_, err = cli.QueryStatus(context.Background(), req)
+	if err != nil {
+		utils.ExitWithError(err)
+	}
 }

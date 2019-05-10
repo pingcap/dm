@@ -11,26 +11,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package worker
+package main
 
 import (
 	"context"
+	"os"
+	"time"
 
-	"github.com/pingcap/dm/checker"
-	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/errors"
+	"google.golang.org/grpc"
+
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/tests/utils"
 )
 
-func checkSubTask(ctx context.Context, task string) error {
-	// precheck task
-	cfg := config.NewSubTaskConfig()
-	err := cfg.Decode(task)
+// use show-ddl-locks request to test DM-master is online
+func main() {
+	addr := os.Args[1]
+	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(2*time.Second))
 	if err != nil {
-		return errors.Annotatef(err, "decode task %s", task)
+		utils.ExitWithError(err)
 	}
-
-	// poor man's precheck
-	// TODO: improve process and display
-	err = checker.CheckSyncConfig(ctx, []*config.SubTaskConfig{cfg})
-	return errors.Trace(err)
+	cli := pb.NewMasterClient(conn)
+	req := &pb.ShowDDLLocksRequest{}
+	_, err = cli.ShowDDLLocks(context.Background(), req)
+	if err != nil {
+		utils.ExitWithError(err)
+	}
 }
