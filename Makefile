@@ -121,7 +121,7 @@ coverage:
 ifeq ("$(JenkinsCI)", "1")
 	GO111MODULE=off go get github.com/mattn/goveralls
 	@goveralls -coverprofile=$(TEST_DIR)/all_cov.out -service=jenkins-ci -repotoken $(COVERALLS_TOKEN)
-	@bash <(curl -s https://codecov.io/bash) -f $(TEST_DIR)/cov.unit_test.out -t $(CODECOV_TOKEN)
+	@bash <(curl -s https://codecov.io/bash) -f $(TEST_DIR)/unit_test.out -t $(CODECOV_TOKEN)
 else
 	go tool cover -html "$(TEST_DIR)/all_cov.out" -o "$(TEST_DIR)/all_cov.html"
 	go tool cover -html "$(TEST_DIR)/unit_test.out" -o "$(TEST_DIR)/unit_test_cov.html"
