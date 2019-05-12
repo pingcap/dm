@@ -228,7 +228,7 @@ func (t *testFileWriterSuite) verifyFilenameOffset(c *check.C, w Writer, filenam
 	wf, ok := w.(*FileWriter)
 	c.Assert(ok, check.IsTrue)
 	c.Assert(wf.filename.Get(), check.Equals, filename)
-	c.Assert(wf.offset.Get(), check.Equals, offset)
+	c.Assert(wf.offset(), check.Equals, offset)
 }
 
 func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check.C) {
