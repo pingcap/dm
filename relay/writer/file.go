@@ -25,6 +25,7 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
 
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/binlog/event"
 	bw "github.com/pingcap/dm/pkg/binlog/writer"
@@ -79,16 +80,16 @@ func (w *FileWriter) Close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	if w.stage == common.StageClosed {
-		return errors.New("already closed")
+	if w.stage != common.StagePrepared {
+		return errors.Errorf("stage %s, expect %s, can not close", w.stage, common.StagePrepared)
 	}
-	w.stage = common.StageClosed
 
 	var err error
 	if w.out != nil {
 		err = w.out.Close()
 	}
 
+	w.stage = common.StageClosed
 	return errors.Trace(err)
 }
 
@@ -154,13 +155,19 @@ func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (
 		}
 	}
 
+	// verify filename
+	err := binlog.VerifyBinlogFilename(w.filename.Get())
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
 	// open/create a new binlog file
 	filename := filepath.Join(w.cfg.RelayDir, w.filename.Get())
 	outCfg := &bw.FileWriterConfig{
 		Filename: filename,
 	}
 	out := bw.NewFileWriter(outCfg)
-	err := out.Start()
+	err = out.Start()
 	if err != nil {
 		return nil, errors.Annotatef(err, "start underlying binlog writer for %s", filename)
 	}

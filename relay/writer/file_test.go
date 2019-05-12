@@ -112,7 +112,7 @@ func (t *testFileWriterSuite) TestRelayDir(c *check.C) {
 	defer w1.Close()
 	c.Assert(w1.Start(), check.IsNil)
 	result, err := w1.WriteEvent(ev)
-	c.Assert(err, check.ErrorMatches, ".*no such file or directory.*")
+	c.Assert(err, check.ErrorMatches, ".*invalid binlog filename.*")
 	c.Assert(result, check.IsNil)
 
 	// invalid dir
@@ -121,7 +121,7 @@ func (t *testFileWriterSuite) TestRelayDir(c *check.C) {
 	defer w2.Close()
 	c.Assert(w2.Start(), check.IsNil)
 	result, err = w2.WriteEvent(ev)
-	c.Assert(err, check.ErrorMatches, ".*invalid argument.*")
+	c.Assert(err, check.ErrorMatches, ".*invalid binlog filename.*")
 	c.Assert(result, check.IsNil)
 
 	// valid directory, but no filename specified
@@ -130,15 +130,24 @@ func (t *testFileWriterSuite) TestRelayDir(c *check.C) {
 	defer w3.Close()
 	c.Assert(w3.Start(), check.IsNil)
 	result, err = w3.WriteEvent(ev)
-	c.Assert(err, check.ErrorMatches, ".*is a directory.*")
+	c.Assert(err, check.ErrorMatches, ".*invalid binlog filename.*")
 	c.Assert(result, check.IsNil)
 
-	// valid directory, valid filename
-	cfg.Filename = "test-mysql-bin.000001"
+	// valid directory, but invalid filename
+	cfg.Filename = "test-mysql-bin.666abc"
 	w4 := NewFileWriter(cfg)
 	defer w4.Close()
 	c.Assert(w4.Start(), check.IsNil)
 	result, err = w4.WriteEvent(ev)
+	c.Assert(err, check.ErrorMatches, ".*invalid binlog filename.*")
+	c.Assert(result, check.IsNil)
+
+	// valid directory, valid filename
+	cfg.Filename = "test-mysql-bin.000001"
+	w5 := NewFileWriter(cfg)
+	defer w5.Close()
+	c.Assert(w5.Start(), check.IsNil)
+	result, err = w5.WriteEvent(ev)
 	c.Assert(err, check.IsNil)
 	c.Assert(result, check.NotNil)
 }

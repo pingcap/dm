@@ -104,12 +104,12 @@ func (r *reader) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.stage == common.StageClosed {
-		return errors.New("already closed")
+	if r.stage != common.StagePrepared {
+		return errors.Errorf("stage %s, expect %s, can not close", r.stage, common.StagePrepared)
 	}
-	r.stage = common.StageClosed
 
 	err := r.in.Close()
+	r.stage = common.StageClosed
 	return errors.Trace(err)
 }
 
