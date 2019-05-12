@@ -41,38 +41,44 @@ func checkBinlogHeaderExist(filename string) (bool, error) {
 	}
 	defer f.Close()
 
+	return checkBinlogHeaderExistFd(f)
+}
+
+// checkBinlogHeaderExistFd checks if the file has a binlog file header.
+func checkBinlogHeaderExistFd(fd *os.File) (bool, error) {
 	fileHeaderLen := len(replication.BinLogFileHeader)
 	buff := make([]byte, fileHeaderLen)
-	n, err := f.Read(buff)
-	if n == 0 && err == io.EOF {
-		return false, nil // empty file
-	} else if n != fileHeaderLen {
-		return false, errors.Errorf("binlog file %s has no enough data, only got % X", filename, buff[:n])
-	} else if err != nil {
+	n, err := fd.Read(buff)
+	if err != nil {
+		if n == 0 && err == io.EOF {
+			return false, nil // empty file
+		}
 		return false, errors.Annotate(err, "read binlog header")
+	} else if n != fileHeaderLen {
+		return false, errors.Errorf("binlog file %s has no enough data, only got % X", fd.Name(), buff[:n])
 	}
 
 	if !bytes.Equal(buff, replication.BinLogFileHeader) {
-		return false, errors.Errorf("binlog file %s header not valid, got % X, expect % X", filename, buff, replication.BinLogFileHeader)
+		return false, errors.Errorf("binlog file %s header not valid, got % X, expect % X", fd.Name(), buff, replication.BinLogFileHeader)
 	}
 	return true, nil
 }
 
 // checkFormatDescriptionEventExist checks if the file has a valid FormatDescriptionEvent.
 func checkFormatDescriptionEventExist(filename string) (bool, error) {
-	// FormatDescriptionEvent always follows the binlog file header
-	exist, err := checkBinlogHeaderExist(filename)
-	if err != nil {
-		return false, errors.Annotatef(err, "check binlog file header for %s", filename)
-	} else if !exist {
-		return false, errors.Errorf("no binlog file header at the beginning for %s", filename)
-	}
-
 	f, err := os.Open(filename)
 	if err != nil {
 		return false, errors.Annotatef(err, "open file %s", filename)
 	}
 	defer f.Close()
+
+	// FormatDescriptionEvent always follows the binlog file header
+	exist, err := checkBinlogHeaderExistFd(f)
+	if err != nil {
+		return false, errors.Annotatef(err, "check binlog file header for %s", filename)
+	} else if !exist {
+		return false, errors.Errorf("no binlog file header at the beginning for %s", filename)
+	}
 
 	// check whether only the file header
 	fileHeaderLen := len(replication.BinLogFileHeader)
@@ -99,10 +105,14 @@ func checkFormatDescriptionEventExist(filename string) (bool, error) {
 		return nil
 	}
 
+	// only parse single event
 	eof, err := replication.NewBinlogParser().ParseSingleEvent(f, onEventFunc)
 	if err != nil {
 		return false, errors.Annotatef(err, "parse %s", filename)
 	} else if eof {
+		if found {
+			return false, errors.Errorf("ParseSingleEvent parsed too many events and got a FormatDescriptionEvent before reached EOF")
+		}
 		return false, errors.Annotatef(io.EOF, "parse %s", filename)
 	}
 	return found, nil
