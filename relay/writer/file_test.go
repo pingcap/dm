@@ -27,6 +27,7 @@ import (
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
+	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/gtid"
 )
@@ -62,13 +63,13 @@ func (t *testFileWriterSuite) TestInterfaceMethods(c *check.C) {
 
 	// not prepared
 	rres, err := w.Recover(parser.New())
-	c.Assert(err, check.ErrorMatches, fmt.Sprintf(".*%s.*", stageNew))
+	c.Assert(err, check.ErrorMatches, fmt.Sprintf(".*%s.*", common.StageNew))
 	c.Assert(rres, check.IsNil)
 	res, err := w.WriteEvent(ev)
-	c.Assert(err, check.ErrorMatches, fmt.Sprintf(".*%s.*", stageNew))
+	c.Assert(err, check.ErrorMatches, fmt.Sprintf(".*%s.*", common.StageNew))
 	c.Assert(res, check.IsNil)
 	err = w.Flush()
-	c.Assert(err, check.ErrorMatches, fmt.Sprintf(".*%s.*", stageNew))
+	c.Assert(err, check.ErrorMatches, fmt.Sprintf(".*%s.*", common.StageNew))
 
 	// start writer
 	err = w.Start()
@@ -90,7 +91,7 @@ func (t *testFileWriterSuite) TestInterfaceMethods(c *check.C) {
 
 	// close the writer
 	c.Assert(w.Close(), check.IsNil)
-	c.Assert(w.Close(), check.ErrorMatches, fmt.Sprintf(".*%s.*", stageClosed)) // re-close is invalid
+	c.Assert(w.Close(), check.ErrorMatches, fmt.Sprintf(".*%s.*", common.StageClosed)) // re-close is invalid
 }
 
 func (t *testFileWriterSuite) TestRelayDir(c *check.C) {

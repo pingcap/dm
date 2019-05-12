@@ -25,6 +25,7 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
 
+	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/binlog/event"
 	bw "github.com/pingcap/dm/pkg/binlog/writer"
 	"github.com/pingcap/dm/pkg/log"
@@ -41,7 +42,7 @@ type FileWriter struct {
 	cfg *FileConfig
 
 	mu    sync.RWMutex
-	stage writerStage
+	stage common.Stage
 
 	// underlying binlog writer,
 	// it will be created/started until needed.
@@ -65,10 +66,10 @@ func (w *FileWriter) Start() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	if w.stage != stageNew {
-		return errors.Errorf("stage %s, expect %s, already started", w.stage, stageNew)
+	if w.stage != common.StageNew {
+		return errors.Errorf("stage %s, expect %s, already started", w.stage, common.StageNew)
 	}
-	w.stage = stagePrepared
+	w.stage = common.StagePrepared
 
 	return nil
 }
@@ -78,10 +79,10 @@ func (w *FileWriter) Close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	if w.stage == stageClosed {
+	if w.stage == common.StageClosed {
 		return errors.New("already closed")
 	}
-	w.stage = stageClosed
+	w.stage = common.StageClosed
 
 	var err error
 	if w.out != nil {
@@ -96,8 +97,8 @@ func (w *FileWriter) Recover(p *parser.Parser) (*RecoverResult, error) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
-	if w.stage != stagePrepared {
-		return nil, errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, stagePrepared)
+	if w.stage != common.StagePrepared {
+		return nil, errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, common.StagePrepared)
 	}
 
 	return w.doRecovering(p)
@@ -108,8 +109,8 @@ func (w *FileWriter) WriteEvent(ev *replication.BinlogEvent) (*Result, error) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
-	if w.stage != stagePrepared {
-		return nil, errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, stagePrepared)
+	if w.stage != common.StagePrepared {
+		return nil, errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, common.StagePrepared)
 	}
 
 	switch ev.Event.(type) {
@@ -127,8 +128,8 @@ func (w *FileWriter) Flush() error {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
-	if w.stage != stagePrepared {
-		return errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, stagePrepared)
+	if w.stage != common.StagePrepared {
+		return errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, common.StagePrepared)
 	}
 
 	if w.out != nil {

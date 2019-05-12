@@ -29,6 +29,7 @@ import (
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
+	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -144,10 +145,10 @@ func (t *testTCPReaderSuite) TestSyncPos(c *C) {
 	status := r.Status()
 	trStatus, ok := status.(*TCPReaderStatus)
 	c.Assert(ok, IsTrue)
-	c.Assert(trStatus.Stage, Equals, stagePrepared.String())
+	c.Assert(trStatus.Stage, Equals, common.StagePrepared.String())
 	c.Assert(trStatus.ConnID, Greater, uint32(0))
 	trStatusStr := trStatus.String()
-	c.Assert(strings.Contains(trStatusStr, stagePrepared.String()), IsTrue)
+	c.Assert(strings.Contains(trStatusStr, common.StagePrepared.String()), IsTrue)
 
 	// re-prepare is invalid
 	err = r.StartSyncByPos(pos)
@@ -219,7 +220,7 @@ func (t *testTCPReaderSuite) TestSyncGTID(c *C) {
 	status := r.Status()
 	trStatus, ok := status.(*TCPReaderStatus)
 	c.Assert(ok, IsTrue)
-	c.Assert(trStatus.Stage, Equals, stageNew.String())
+	c.Assert(trStatus.Stage, Equals, common.StageNew.String())
 	c.Assert(trStatus.ConnID, Equals, uint32(0))
 
 	// not prepared
@@ -254,7 +255,7 @@ func (t *testTCPReaderSuite) TestSyncGTID(c *C) {
 	status = r.Status()
 	trStatus, ok = status.(*TCPReaderStatus)
 	c.Assert(ok, IsTrue)
-	c.Assert(trStatus.Stage, Equals, stageClosed.String())
+	c.Assert(trStatus.Stage, Equals, common.StageClosed.String())
 	c.Assert(trStatus.ConnID, Greater, uint32(0))
 
 	// already closed

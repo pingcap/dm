@@ -22,6 +22,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 
+	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/log"
 )
 
@@ -30,7 +31,7 @@ type FileWriter struct {
 	cfg *FileWriterConfig
 
 	mu     sync.RWMutex
-	stage  writerStage
+	stage  common.Stage
 	offset sync2.AtomicInt64
 
 	file *os.File
@@ -70,8 +71,8 @@ func (w *FileWriter) Start() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	if w.stage != stageNew {
-		return errors.Errorf("stage %s, expect %s, already started", w.stage, stageNew)
+	if w.stage != common.StageNew {
+		return errors.Errorf("stage %s, expect %s, already started", w.stage, common.StageNew)
 	}
 
 	f, err := os.OpenFile(w.cfg.Filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
@@ -89,7 +90,7 @@ func (w *FileWriter) Start() error {
 
 	w.offset.Set(fs.Size())
 	w.file = f
-	w.stage = stagePrepared
+	w.stage = common.StagePrepared
 	return nil
 }
 
@@ -98,8 +99,8 @@ func (w *FileWriter) Close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	if w.stage != stagePrepared {
-		return errors.Errorf("stage %s, expect %s, can not close", w.stage, stagePrepared)
+	if w.stage != common.StagePrepared {
+		return errors.Errorf("stage %s, expect %s, can not close", w.stage, common.StagePrepared)
 	}
 
 	var err error
@@ -112,7 +113,7 @@ func (w *FileWriter) Close() error {
 		w.file = nil
 	}
 
-	w.stage = stageClosed
+	w.stage = common.StageClosed
 	return err
 }
 
@@ -121,8 +122,8 @@ func (w *FileWriter) Write(rawData []byte) error {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
-	if w.stage != stagePrepared {
-		return errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, stagePrepared)
+	if w.stage != common.StagePrepared {
+		return errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, common.StagePrepared)
 	}
 
 	n, err := w.file.Write(rawData)
@@ -136,8 +137,8 @@ func (w *FileWriter) Flush() error {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
-	if w.stage != stagePrepared {
-		return errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, stagePrepared)
+	if w.stage != common.StagePrepared {
+		return errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, common.StagePrepared)
 	}
 
 	return w.flush()

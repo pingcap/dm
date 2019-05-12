@@ -27,6 +27,7 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
 
+	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 )
@@ -36,7 +37,7 @@ type FileReader struct {
 	mu sync.RWMutex
 	wg sync.WaitGroup
 
-	stage      readerStage
+	stage      common.Stage
 	readOffset sync2.AtomicUint32
 	sendOffset sync2.AtomicUint32
 
@@ -93,8 +94,8 @@ func (r *FileReader) StartSyncByPos(pos gmysql.Position) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.stage != stageNew {
-		return errors.Errorf("stage %s, expect %s, already started", r.stage, stageNew)
+	if r.stage != common.StageNew {
+		return errors.Errorf("stage %s, expect %s, already started", r.stage, common.StageNew)
 	}
 
 	r.ctx, r.cancel = context.WithCancel(context.Background())
@@ -111,7 +112,7 @@ func (r *FileReader) StartSyncByPos(pos gmysql.Position) error {
 		}
 	}()
 
-	r.stage = stagePrepared
+	r.stage = common.StagePrepared
 	return nil
 }
 
@@ -126,14 +127,14 @@ func (r *FileReader) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.stage != stagePrepared {
-		return errors.Errorf("stage %s, expect %s, can not close", r.stage, stagePrepared)
+	if r.stage != common.StagePrepared {
+		return errors.Errorf("stage %s, expect %s, can not close", r.stage, common.StagePrepared)
 	}
 
 	r.cancel()
 	r.wg.Wait()
 	r.parser.Stop()
-	r.stage = stageClosed
+	r.stage = common.StageClosed
 	return nil
 }
 
@@ -142,8 +143,8 @@ func (r *FileReader) GetEvent(ctx context.Context) (*replication.BinlogEvent, er
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	if r.stage != stagePrepared {
-		return nil, errors.Errorf("stage %s, expect %s, please start sync first", r.stage, stagePrepared)
+	if r.stage != common.StagePrepared {
+		return nil, errors.Errorf("stage %s, expect %s, please start sync first", r.stage, common.StagePrepared)
 	}
 
 	select {

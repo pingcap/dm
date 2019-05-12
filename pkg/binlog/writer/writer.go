@@ -13,28 +13,6 @@
 
 package writer
 
-type writerStage int32
-
-const (
-	stageNew writerStage = iota
-	stagePrepared
-	stageClosed
-)
-
-// String implements Stringer.String.
-func (s writerStage) String() string {
-	switch s {
-	case stageNew:
-		return "new"
-	case stagePrepared:
-		return "prepared"
-	case stageClosed:
-		return "closed"
-	default:
-		return "unknown"
-	}
-}
-
 // Writer is a binlog event writer, it may write binlog events to a binlog file, an in-memory structure or a TCP stream.
 type Writer interface {
 	// Start prepares the writer for writing binlog events.

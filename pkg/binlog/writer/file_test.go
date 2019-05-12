@@ -22,6 +22,8 @@ import (
 	"testing"
 
 	. "github.com/pingcap/check"
+
+	"github.com/pingcap/dm/pkg/binlog/common"
 )
 
 func TestSuite(t *testing.T) {
@@ -52,18 +54,18 @@ func (t *testFileWriterSuite) TestWrite(c *C) {
 	status := w.Status()
 	fwStatus, ok := status.(*FileWriterStatus)
 	c.Assert(ok, IsTrue)
-	c.Assert(fwStatus.Stage, Equals, stageNew.String())
+	c.Assert(fwStatus.Stage, Equals, common.StageNew.String())
 	c.Assert(fwStatus.Filename, Equals, filename)
 	c.Assert(fwStatus.Offset, Equals, int64(allData.Len()))
 	fwStatusStr := fwStatus.String()
-	c.Assert(strings.Contains(fwStatusStr, stageNew.String()), IsTrue)
+	c.Assert(strings.Contains(fwStatusStr, common.StageNew.String()), IsTrue)
 
 	// not prepared
 	data1 := []byte("test-data")
 	err := w.Write(data1)
-	c.Assert(err, ErrorMatches, fmt.Sprintf(".*%s.*", stageNew))
+	c.Assert(err, ErrorMatches, fmt.Sprintf(".*%s.*", common.StageNew))
 	err = w.Flush()
-	c.Assert(err, ErrorMatches, fmt.Sprintf(".*%s.*", stageNew))
+	c.Assert(err, ErrorMatches, fmt.Sprintf(".*%s.*", common.StageNew))
 
 	// start
 	err = w.Start()
@@ -73,7 +75,7 @@ func (t *testFileWriterSuite) TestWrite(c *C) {
 	status = w.Status()
 	fwStatus, ok = status.(*FileWriterStatus)
 	c.Assert(ok, IsTrue)
-	c.Assert(fwStatus.Stage, Equals, stagePrepared.String())
+	c.Assert(fwStatus.Stage, Equals, common.StagePrepared.String())
 	c.Assert(fwStatus.Filename, Equals, filename)
 	c.Assert(fwStatus.Offset, Equals, int64(allData.Len()))
 
@@ -103,7 +105,7 @@ func (t *testFileWriterSuite) TestWrite(c *C) {
 	status = w.Status()
 	fwStatus, ok = status.(*FileWriterStatus)
 	c.Assert(ok, IsTrue)
-	c.Assert(fwStatus.Stage, Equals, stageClosed.String())
+	c.Assert(fwStatus.Stage, Equals, common.StageClosed.String())
 	c.Assert(fwStatus.Filename, Equals, filename)
 	c.Assert(fwStatus.Offset, Equals, int64(allData.Len()))
 
