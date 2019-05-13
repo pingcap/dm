@@ -261,6 +261,10 @@ func (s *SyncPipe) Report() {
 	return
 }
 
+func (s *SyncPipe) Wait() {
+	s.jobWg.Wait()
+}
+
 func (s *SyncPipe) reportErr(err error) {
 	log.Warn("pipe %s meet error %v", s.Name(), err)
 	// TODO: send error to channel and stop sync
@@ -548,6 +552,13 @@ func (s *SyncPipe) runBackground() {
 		s.sync(ctx2, adminQueueName, s.ddlDB, s.jobs[s.workerCount])
 		cancel()
 	}()
+
+	defer func() {
+		// flush the jobs channels, but if error occurred, we should not flush the checkpoints
+		if err1 := s.flushJobs(); err1 != nil {
+			log.Errorf("fail to finish all jobs error: %v", err1)
+		}
+	}()
 }
 
 func (s *SyncPipe) sync(ctx context.Context, queueBucket string, db *Conn, jobChan chan *job) {
@@ -737,19 +748,6 @@ func (s *SyncPipe) Pause() {
 func (s *SyncPipe) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 }
 
-// ExecuteDDL executes or skips a hanging-up DDL when in sharding
-func (s *SyncPipe) ExecuteDDL(ctx context.Context, execReq *pb.ExecDDLRequest) (<-chan error, error) {
-	if len(s.ddlExecInfo.BlockingDDLs()) == 0 {
-		return nil, errors.New("process unit not waiting for sharding DDL to sync")
-	}
-	item := newDDLExecItem(execReq)
-	err := s.ddlExecInfo.Send(ctx, item)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	return item.resp, nil
-}
-
 // appendExecErrors appends syncer execErrors with new value
 func (s *SyncPipe) appendExecErrors(errCtx *ExecErrorContext) {
 	s.execErrors.Lock()
@@ -808,6 +806,11 @@ func (s *SyncPipe) commitJobs(pipeData *PipeData) error {
 			if err != nil {
 				return errors.Trace(err)
 			}
+		}
+	case ddl:
+		err := s.addJob(newDDLJob(nil, pipeData.ddls, s.lastPos, pipeData.currentPos, pipeData.gtidSet, nil, pipeData.traceID))
+		if err != nil {
+			return errors.Trace(err)
 		}
 	case xid:
 		err := s.addJob(newXIDJob(pipeData.currentPos, pipeData.currentPos, nil, pipeData.traceID))

@@ -49,6 +49,9 @@ type Pipe interface {
 	// Report ...
 	Report()
 
+	// Wait ...
+	Wait()
+
 	// Error ...
 	//SetErrorChan(chan error)
 }
@@ -74,6 +77,8 @@ type PipeData struct {
 	ddls         []string
 	traceID      string
 	traceGID     string
+
+	ddlInfo *shardingDDLInfo
 }
 
 // Pipeline ...
@@ -117,6 +122,18 @@ func (p *Pipeline) Input(data *PipeData) {
 	case <-p.ctx.Done():
 		log.Info("context is done")
 		return
+	}
+}
+
+func (p *Pipeline) Flush() {
+	p.Input(&PipeData{tp: flush})
+	p.Wait()
+}
+
+// Wait waits all pipes have no data to process
+func (p *Pipeline) Wait() {
+	for _, pipe := range p.pipes {
+		pipe.Wait()
 	}
 }
 
