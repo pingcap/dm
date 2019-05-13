@@ -42,7 +42,7 @@ type FileConfig struct {
 type FileWriter struct {
 	cfg *FileConfig
 
-	mu    sync.RWMutex
+	mu    sync.Mutex
 	stage common.Stage
 
 	// underlying binlog writer,
@@ -94,8 +94,8 @@ func (w *FileWriter) Close() error {
 
 // Recover implements Writer.Recover.
 func (w *FileWriter) Recover(p *parser.Parser) (*RecoverResult, error) {
-	w.mu.RLock()
-	defer w.mu.RUnlock()
+	w.mu.Lock()
+	defer w.mu.Unlock()
 
 	if w.stage != common.StagePrepared {
 		return nil, errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, common.StagePrepared)
@@ -106,8 +106,8 @@ func (w *FileWriter) Recover(p *parser.Parser) (*RecoverResult, error) {
 
 // WriteEvent implements Writer.WriteEvent.
 func (w *FileWriter) WriteEvent(ev *replication.BinlogEvent) (*Result, error) {
-	w.mu.RLock()
-	defer w.mu.RUnlock()
+	w.mu.Lock()
+	defer w.mu.Unlock()
 
 	if w.stage != common.StagePrepared {
 		return nil, errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, common.StagePrepared)
@@ -125,8 +125,8 @@ func (w *FileWriter) WriteEvent(ev *replication.BinlogEvent) (*Result, error) {
 
 // Flush implements Writer.Flush.
 func (w *FileWriter) Flush() error {
-	w.mu.RLock()
-	defer w.mu.RUnlock()
+	w.mu.Lock()
+	defer w.mu.Unlock()
 
 	if w.stage != common.StagePrepared {
 		return errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, common.StagePrepared)
