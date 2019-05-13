@@ -34,6 +34,7 @@ import (
 )
 
 // checkBinlogHeaderExist checks if the file has a binlog file header.
+// It is not safe if there other routine is writing the file.
 func checkBinlogHeaderExist(filename string) (bool, error) {
 	f, err := os.Open(filename)
 	if err != nil {
@@ -45,6 +46,7 @@ func checkBinlogHeaderExist(filename string) (bool, error) {
 }
 
 // checkBinlogHeaderExistFd checks if the file has a binlog file header.
+// It is not safe if there other routine is writing the file.
 func checkBinlogHeaderExistFd(fd *os.File) (bool, error) {
 	fileHeaderLen := len(replication.BinLogFileHeader)
 	buff := make([]byte, fileHeaderLen)
@@ -65,6 +67,7 @@ func checkBinlogHeaderExistFd(fd *os.File) (bool, error) {
 }
 
 // checkFormatDescriptionEventExist checks if the file has a valid FormatDescriptionEvent.
+// It is not safe if there other routine is writing the file.
 func checkFormatDescriptionEventExist(filename string) (bool, error) {
 	f, err := os.Open(filename)
 	if err != nil {
@@ -100,6 +103,8 @@ func checkFormatDescriptionEventExist(filename string) (bool, error) {
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		if e.Header.EventType != replication.FORMAT_DESCRIPTION_EVENT {
 			return errors.Errorf("got %+v, expect FormatDescriptionEvent", e.Header)
+		} else if (e.Header.LogPos - e.Header.EventSize) != uint32(fileHeaderLen) {
+			return errors.Errorf("wrong offset %d for FormatDescriptionEvent, should be %d", e.Header.LogPos, fileHeaderLen)
 		}
 		found = true
 		return nil
@@ -111,7 +116,7 @@ func checkFormatDescriptionEventExist(filename string) (bool, error) {
 		return false, errors.Annotatef(err, "parse %s", filename)
 	} else if eof {
 		if found {
-			return false, errors.Errorf("ParseSingleEvent parsed too many events and got a FormatDescriptionEvent before reached EOF")
+			return found, nil // if found is true, we return `true` even meet EOF, because FormatDescriptionEvent exists.
 		}
 		return false, errors.Annotatef(io.EOF, "parse %s", filename)
 	}
@@ -119,9 +124,10 @@ func checkFormatDescriptionEventExist(filename string) (bool, error) {
 }
 
 // checkIsDuplicateEvent checks if the event is a duplicate event in the file.
+// It is not safe if there other routine is writing the file.
 // NOTE: handle cases when file size > 4GB
 func checkIsDuplicateEvent(filename string, ev *replication.BinlogEvent) (bool, error) {
-	// 1. check event start/end pos with the file size
+	// 1. check event start/end pos with the file size, and it's enough for most cases
 	fs, err := os.Stat(filename)
 	if err != nil {
 		return false, errors.Annotatef(err, "get stat for %s", filename)
@@ -136,41 +142,18 @@ func checkIsDuplicateEvent(filename string, ev *replication.BinlogEvent) (bool, 
 			fs.Size(), evStartPos, evEndPos)
 	}
 
-	// 2. use a FileReader to read events from the start pos of the passed-in event
-	rCfg := &reader.FileReaderConfig{
-		EnableRawMode: true,
-	}
-	r := reader.NewFileReader(rCfg)
-	defer r.Close()
-	syncStartPos := gmysql.Position{Name: filename, Pos: uint32(evStartPos)}
-	err = r.StartSyncByPos(syncStartPos)
+	// 2. compare the file data with the raw data of the event
+	f, err := os.Open(filename)
 	if err != nil {
-		return false, errors.Annotatef(err, "start to reader event from %s", syncStartPos)
+		return false, errors.Annotate(err, "open binlog file")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second) // read the file should not be too slow.
-	defer cancel()
-	var ev2 *replication.BinlogEvent
-	for {
-		ev2, err = r.GetEvent(ctx)
-		if err != nil {
-			return false, errors.Annotatef(err, "get event from %s", syncStartPos)
-		} else if ev2 == nil {
-			// in fact, this should not happen
-			return false, errors.Errorf("get none event from %s", syncStartPos)
-		}
-		if evStartPos > int64(len(replication.BinLogFileHeader)) &&
-			ev2.Header.EventType == replication.FORMAT_DESCRIPTION_EVENT {
-			// a FORMAT_DESCRIPTION_EVENT is always got before other events
-			// skip it if we do need it
-			continue
-		}
-		// read one event (except FORMAT_DESCRIPTION_EVENT) is enough
-		// because we starting from the start pos of the passed-in event
-		break
-	}
-	if ev2.Header.LogPos != ev.Header.LogPos || bytes.Compare(ev2.RawData, ev.RawData) != 0 {
-		return false, errors.Errorf("event from %s is %+v, diff from passed-in event %+v",
-			syncStartPos, ev2.Header, ev.Header)
+	defer f.Close()
+	buf := make([]byte, ev.Header.EventSize)
+	_, err = f.ReadAt(buf, evStartPos)
+	if err != nil {
+		return false, errors.Annotatef(err, "read data from %d in %s with length %d", evStartPos, filename, len(buf))
+	} else if bytes.Compare(buf, ev.RawData) != 0 {
+		return false, errors.Errorf("event from %d in %s diff from passed-in event %+v", evStartPos, filename, ev.Header)
 	}
 
 	// duplicate in the file
@@ -178,6 +161,7 @@ func checkIsDuplicateEvent(filename string, ev *replication.BinlogEvent) (bool, 
 }
 
 // getTxnPosGTIDs gets position/GTID set for all completed transactions from a binlog file.
+// It is not safe if there other routine is writing the file.
 // NOTE: we use a int64 rather than a uint32 to represent the latest transaction's end log pos.
 func getTxnPosGTIDs(filename string, p *parser.Parser) (int64, gtid.Set, error) {
 	// use a FileReader to parse the binlog file.

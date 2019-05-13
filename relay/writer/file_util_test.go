@@ -250,7 +250,7 @@ func (t *testFileUtilSuite) TestCheckIsDuplicateEvent(c *check.C) {
 	dummyEv, err = event.GenDummyEvent(&header, latestPos, eventSize)
 	c.Assert(err, check.IsNil)
 	duplicate, err = checkIsDuplicateEvent(filename, dummyEv)
-	c.Assert(err, check.ErrorMatches, ".*get event from.*")
+	c.Assert(err, check.ErrorMatches, "*diff from passed-in event.*")
 	c.Assert(duplicate, check.IsFalse)
 
 	// event's start/end pos matched, but content mismatched, invalid
