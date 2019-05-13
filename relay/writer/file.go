@@ -135,7 +135,7 @@ func (w *FileWriter) Flush() error {
 	if w.out != nil {
 		return w.out.Flush()
 	}
-	return nil
+	return errors.Errorf("no underlying writer opened")
 }
 
 // offset returns the current offset of the binlog file.

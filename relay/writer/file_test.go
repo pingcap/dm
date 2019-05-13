@@ -76,6 +76,10 @@ func (t *testFileWriterSuite) TestInterfaceMethods(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(w.Start(), check.NotNil) // re-start is invalid
 
+	// flush without opened underlying writer
+	err = w.Flush()
+	c.Assert(err, check.ErrorMatches, ".*no underlying writer opened.*")
+
 	// recover
 	rres, err = w.Recover(parser.New())
 	c.Assert(err, check.ErrorMatches, ".*no such file or directory.*")
