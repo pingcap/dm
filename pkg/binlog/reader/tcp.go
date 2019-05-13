@@ -114,15 +114,6 @@ func (r *TCPReader) Close() error {
 		return errors.New("already closed")
 	}
 
-	setStageClosed := func() error {
-		r.stage = stageClosed
-		return nil
-	}
-
-	if r.syncer == nil {
-		return setStageClosed()
-	}
-
 	defer r.syncer.Close()
 	connID := r.syncer.LastConnectionID()
 	if connID > 0 {
@@ -138,8 +129,8 @@ func (r *TCPReader) Close() error {
 			return errors.Annotatef(err, "kill connection %d for master %s:%d", connID, r.syncerCfg.Host, r.syncerCfg.Port)
 		}
 	}
-
-	return setStageClosed()
+	r.stage = stageClosed
+	return nil
 }
 
 // GetEvent implements Reader.GetEvent.
