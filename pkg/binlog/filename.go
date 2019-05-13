@@ -36,7 +36,7 @@ func VerifyBinlogFilename(filename string) error {
 	parts := strings.Split(filename, binlogFilenameSep)
 	if len(parts) != 2 {
 		return errors.Annotatef(ErrInvalidBinlogFilename, "filename %s", filename)
-	} else if _, err := strconv.Atoi(parts[1]); err != nil {
+	} else if n, err := strconv.Atoi(parts[1]); err != nil || n <= 0 {
 		return errors.Annotatef(ErrInvalidBinlogFilename, "filename %s", filename)
 	}
 	return nil

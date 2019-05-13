@@ -38,6 +38,14 @@ func (t *testFilenameSuite) TestVerifyBinlogFilename(c *C) {
 			filename: "",
 		},
 		{
+			// negative seq number
+			filename: "mysql-bin.-666666",
+		},
+		{
+			// zero seq number
+			filename: "mysql-bin.000000",
+		},
+		{
 			// too many separators
 			filename: "mysql.bin.666666",
 		},
