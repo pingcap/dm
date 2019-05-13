@@ -19,7 +19,9 @@ import (
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/dm/config"
+	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
+	"github.com/pingcap/dm/pkg/gtid"
 )
 // Pipe ...
 type Pipe interface {
@@ -36,7 +38,7 @@ type Pipe interface {
 	Input() chan *PipeData
 
 	// Process ...
-	Process()
+	Process(*PipeData)
 
 	// SetNextPipe ...
 	SetNextPipe(Pipe)
@@ -63,7 +65,7 @@ type PipeData struct {
 	targetTable  string
 	sqls         []string
 	args         [][]interface{}
-	key          string
+	keys         [][]string
 	retry        bool
 	pos          mysql.Position
 	currentPos   mysql.Position // exactly binlog position of current SQL

@@ -81,10 +81,7 @@ type SyncPipe struct {
 	toDBs  []*Conn
 	ddlDB  *Conn
 
-	jobs               []chan *job
-	jobsClosed         sync2.AtomicBool
-	jobsChanLock       sync.Mutex
-	queueBucketMapping []string
+
 
 	closed sync2.AtomicBool
 
@@ -135,6 +132,20 @@ type SyncPipe struct {
 	disableCausality bool
 
 	c *causality
+
+	input chan *PipeData
+
+	once sync.Once
+
+	queueBucketMapping []string
+
+	jobs               []chan *job
+	jobsClosed         sync2.AtomicBool
+	jobsChanLock       sync.Mutex
+
+	lastPos mysql.Position
+
+	ctx  context.Context
 }
 
 /*
@@ -207,7 +218,6 @@ func (s *SyncPipe) Init(cfg *config.SubTaskConfig, initFuc func() error) error {
 
 	s.c = newCausality()
 
-
 	return initFuc()
 }
 
@@ -229,7 +239,14 @@ func (s *SyncPipe) Input() chan *PipeData {
 }
 
 // Process ...
-func (s *SyncPipe) Process() {
+func (s *SyncPipe) Process(pipeData *PipeData) {
+	once.Do(s.runBackground)
+	
+	// transform pipeData to jobs
+	if err := s.commitJobs(pipeData); err != nil {
+		s.reportErr(err)
+	}
+
 	return
 }
 
@@ -242,6 +259,11 @@ func (s *SyncPipe) SetNextPipe(pipe Pipe) {
 // Report ...
 func (s *SyncPipe) Report() {
 	return
+}
+
+func (s *SyncPipe) reportErr(err error) {
+	log.Warn("pipe %s meet error %v", s.Name(), err)
+	// TODO: send error to channel and stop sync
 }
 
 /*
@@ -506,6 +528,28 @@ func (s *SyncPipe) flushCheckPoints() error {
 	return nil
 }
 
+func (s *SyncPipe) runBackground() {
+	s.queueBucketMapping = make([]string, 0, s.workerCount+1)
+	for i := 0; i < s.workerCount; i++ {
+		s.wg.Add(1)
+		name := queueBucketName(i)
+		s.queueBucketMapping = append(s.queueBucketMapping, name)
+		go func(i int, n string) {
+			ctx1, cancel := context.WithCancel(s.ctx)
+			s.sync(ctx1, n, s.toDBs[i], s.jobs[i])
+			cancel()
+		}(i, name)
+	}
+
+	s.queueBucketMapping = append(s.queueBucketMapping, adminQueueName)
+	s.wg.Add(1)
+	go func() {
+		ctx2, cancel := context.WithCancel(s.ctx)
+		s.sync(ctx2, adminQueueName, s.ddlDB, s.jobs[s.workerCount])
+		cancel()
+	}()
+}
+
 func (s *SyncPipe) sync(ctx context.Context, queueBucket string, db *Conn, jobChan chan *job) {
 	defer s.wg.Done()
 
@@ -751,4 +795,38 @@ func (s *SyncPipe) enableSafeModeInitializationPhase(ctx context.Context, safeMo
 		case <-time.After(time.Duration(initPhaseSeconds) * time.Second):
 		}
 	}()
+}
+
+func (s *SyncPipe) commitJobs(pipeData *PipeData) error {
+	switch pipeData.tp {
+	case null:
+		return nil
+	case insert, update, del:
+		for i, sql := range pipeData.sqls {
+			// lastPos
+			err := s.commitJob(pipeData.tp, pipeData.sourceSchema, pipeData.sourceTable, pipeData.targetSchema, pipeData.targetTable, sql, pipeData.args[i], pipeData.keys[i], true, s.lastPos, pipeData.currentPos, pipeData.gtidSet, pipeData.traceID)
+			if err != nil {
+				return errors.Trace(err)
+			}
+		}
+	case xid:
+		err := s.addJob(newXIDJob(pipeData.currentPos, pipeData.currentPos, nil, pipeData.traceID))
+		if err != nil {
+			return errors.Trace(err)
+		}
+	case flush:
+		err := s.addJob(newFlushJob())
+		if err != nil {
+			return errors.Trace(err)
+		}
+	case skip:
+		err := s.addJob(newSkipJob(s.lastPos, nil))
+		if err != nil {
+			return errors.Trace(err)
+		}
+	case rotate:
+		return nil
+	}
+
+	return nil
 }
