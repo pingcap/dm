@@ -67,7 +67,7 @@ type SyncPipe struct {
 	// record whether error occurred when execute SQLs
 	execErrorDetected sync2.AtomicBool
 
-	execErrors struct {
+	execErrors *struct {
 		sync.Mutex
 		errors []*ExecErrorContext
 	}
@@ -167,7 +167,7 @@ func (s *SyncPipe) Wait() {
 }
 
 func (s *SyncPipe) reportErr(err error) {
-	log.Warn("pipe %s meet error %v", s.Name(), err)
+	log.Warnf("pipe %s meet error %v", s.Name(), err)
 	select {
 	case s.errCh <- err:
 	case <-s.ctx.Done():
@@ -340,6 +340,7 @@ func (s *SyncPipe) flushCheckPoints() error {
 	return nil
 }
 
+// Run implements Pipe interface
 func (s *SyncPipe) Run() {
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.input = make(chan *PipeData, 10)
@@ -559,13 +560,14 @@ func (s *SyncPipe) isClosed() bool {
 	return s.closed.Get()
 }
 
-// Close closes syncer.
+// Close implements Pipe interface
 func (s *SyncPipe) Close() {
 	s.cancel()
 	s.closeJobChans()
 	s.wg.Wait()
 }
 
+// SetErrorChan implements Pipe interface
 func (s *SyncPipe) SetErrorChan(errCh chan error) {
 	s.errCh = errCh
 }

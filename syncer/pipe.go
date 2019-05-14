@@ -131,8 +131,6 @@ func (p *Pipeline) Input(data *PipeData) error {
 	case <-p.ctx.Done():
 		return errors.New("pipeline's context is done")
 	}
-
-	return nil
 }
 
 // Flush sends a PipeData with flush type, all pipes should wait all received data is processed

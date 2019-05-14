@@ -133,7 +133,7 @@ type Syncer struct {
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
 
-	execErrors struct {
+	execErrors *struct {
 		sync.Mutex
 		errors []*ExecErrorContext
 	}
