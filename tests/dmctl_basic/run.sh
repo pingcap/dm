@@ -71,14 +71,19 @@ function run() {
     done
     cd -
 
-    usage_and_arg_test
+    # usage_and_arg_test
 
-    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
-    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
-    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+    mkdir -p $WORK_DIR/worker1 $WORK_DIR/worker2
+    dm_worker1_conf="$WORK_DIR/worker1/dm-worker.toml"
+    dm_worker2_conf="$WORK_DIR/worker2/dm-worker.toml"
+    cp $cur/conf/dm-worker1.toml $dm_worker1_conf
+    cp $cur/conf/dm-worker2.toml $dm_worker2_conf
 
+    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $dm_worker1_conf
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $dm_worker2_conf
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 
     pause_relay_success
@@ -89,7 +94,6 @@ function run() {
 
     check_task_pass $TASK_CONF
     check_task_not_pass $cur/conf/dm-task2.yaml
-
 
     dmctl_start_task
 
@@ -103,6 +107,19 @@ function run() {
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
     resume_task_success $TASK_NAME
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 20
+
+    update_relay_success $dm_worker1_conf 127.0.0.1:$WORKER1_PORT
+    update_relay_success $dm_worker2_conf 127.0.0.1:$WORKER2_PORT
+    # check worker config backup file is correct
+    [ -f $WORK_DIR/worker1/dm-worker-config.bak ] && cmp $WORK_DIR/worker1/dm-worker-config.bak $cur/conf/dm-worker1.toml
+    [ -f $WORK_DIR/worker2/dm-worker-config.bak ] && cmp $WORK_DIR/worker2/dm-worker-config.bak $cur/conf/dm-worker2.toml
+    # check worker config has been changed
+    md5_new_worker1=$(md5sum $dm_worker1_conf | awk '{print $1}')
+    md5_new_worker2=$(md5sum $dm_worker2_conf | awk '{print $1}')
+    md5_old_worker1=$(md5sum $cur/conf/dm-worker1.toml | awk '{print $1}')
+    md5_old_worker2=$(md5sum $cur/conf/dm-worker2.toml | awk '{print $1}')
+    [ "md5_new_worker1" != "md5_old_worker1" ]
+    [ "md5_new_worker2" != "md5_old_worker2" ]
 
     run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1
     set +e
