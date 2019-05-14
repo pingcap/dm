@@ -14,36 +14,18 @@
 package worker
 
 import (
-	"testing"
-
 	. "github.com/pingcap/check"
 )
 
-func TestWorker(t *testing.T) {
-	TestingT(t)
-}
+func (t *testWorker) TestHub(c *C) {
+	w1 := &Worker{}
+	w1.closed.Set(1)
 
-type testWorker struct{}
+	InitConditionHub(w1)
+	c.Assert(GetConditionHub(), NotNil)
+	c.Assert(GetConditionHub().w, DeepEquals, w1)
 
-var _ = Suite(&testWorker{})
-
-func (t *testWorker) TestNewWorker(c *C) {
-	cfg := NewConfig()
-	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
-
-	dir := c.MkDir()
-	cfg.RelayDir = dir
-	cfg.MetaDir = dir
-
-	NewRelayHolder = NewDummyRelayHolderWithInitError
-	defer func() {
-		NewRelayHolder = NewRealRelayHolder
-	}()
-
-	_, err := NewWorker(cfg)
-	c.Assert(err, ErrorMatches, "init error")
-
-	NewRelayHolder = NewDummyRelayHolder
-	_, err = NewWorker(cfg)
-	c.Assert(err, IsNil)
+	InitConditionHub(&Worker{})
+	c.Assert(GetConditionHub(), NotNil)
+	c.Assert(GetConditionHub().w, DeepEquals, w1)
 }

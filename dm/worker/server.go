@@ -166,23 +166,9 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
 	log.Infof("[server] receive OperateSubTask request %+v", req)
 
-	var (
-		name    = req.Name
-		opLogID int64
-	)
-	var err error
-	switch req.Op {
-	case pb.TaskOp_Stop:
-		opLogID, err = s.worker.StopSubTask(name)
-	case pb.TaskOp_Pause:
-		opLogID, err = s.worker.PauseSubTask(name)
-	case pb.TaskOp_Resume:
-		opLogID, err = s.worker.ResumeSubTask(name)
-	default:
-		return nil, errors.Errorf("invalid operate %s on sub task", req.Op.String())
-	}
+	opLogID, err := s.worker.OperateSubTask(req.Name, req.Op)
 	if err != nil {
-		err = errors.Annotatef(err, "operate(%s) sub task %s", req.Op.String(), name)
+		err = errors.Annotatef(err, "operate(%s) sub task %s", req.Op.String(), req.Name)
 		log.Errorf("[server] %s", errors.ErrorStack(err))
 		return nil, err
 	}

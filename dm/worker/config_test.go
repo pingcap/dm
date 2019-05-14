@@ -14,20 +14,49 @@
 package worker
 
 import (
+	"path"
+	"strings"
+
 	. "github.com/pingcap/check"
 )
 
 func (t *testWorker) TestConfig(c *C) {
-	cfg := &Config{}
+	cfg := NewConfig()
 
-	err := cfg.configFromFile("./dm-worker.toml")
+	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	c.Assert(cfg.SourceID, Equals, "mysql-replica-01")
+
+	dir := c.MkDir()
+	cfg.ConfigFile = path.Join(dir, "dm-worker.toml")
+
+	// test clone
+	clone1 := cfg.Clone()
+	c.Assert(cfg, DeepEquals, clone1)
+	clone1.SourceID = "xxx"
+	c.Assert(cfg.SourceID, Equals, "mysql-replica-01")
+
+	// test format
+	c.Assert(strings.Contains(cfg.String(), "mysql-replica-01"), IsTrue)
+	tomlStr, err := clone1.Toml()
+	c.Assert(err, IsNil)
+	c.Assert(strings.Contains(tomlStr, "xxx"), IsTrue)
+	originCfgStr, err := cfg.Toml()
+	c.Assert(err, IsNil)
+	c.Assert(strings.Contains(tomlStr, "mysql-replica-01"), IsTrue)
+
+	// test update config file and reload
+	c.Assert(cfg.UpdateConfigFile(tomlStr), IsNil)
+	cfg.Reload()
+	c.Assert(err, IsNil)
+	c.Assert(cfg.SourceID, Equals, "xxx")
+	c.Assert(cfg.UpdateConfigFile(originCfgStr), IsNil)
+	cfg.Reload()
 	c.Assert(err, IsNil)
 	c.Assert(cfg.SourceID, Equals, "mysql-replica-01")
 
-	clone1 := cfg.Clone()
-	c.Assert(cfg, DeepEquals, clone1)
-
+	// test decrypt password
 	clone1.From.Password = "1234"
+	clone1.SourceID = "mysql-replica-01"
 	clone2, err := cfg.DecryptPassword()
 	c.Assert(err, IsNil)
 	c.Assert(clone2, DeepEquals, clone1)
