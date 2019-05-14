@@ -18,14 +18,12 @@ import (
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/ctl/master"
-	"github.com/pingcap/dm/dm/ctl/worker"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 )
 
 var (
-	mode               common.DmctlMode
 	commandMasterFlags = CommandMasterFlags{}
 )
 
@@ -38,8 +36,7 @@ type CommandMasterFlags struct {
 func Init(cfg *common.Config) error {
 	// set the log level temporarily
 	log.SetLevelByString("info")
-	mode = cfg.Mode
-	return errors.Trace(common.InitClient(cfg.ServerAddr, cfg.Mode))
+	return errors.Trace(common.InitClient(cfg.MasterAddr))
 }
 
 // Start starts running a command
@@ -49,51 +46,32 @@ func Start(args []string) {
 		Short: "DM control",
 	}
 
-	switch mode {
-	case common.WorkerMode:
-		rootCmd.AddCommand(
-			worker.NewStartSubTaskCmd(),
-			worker.NewStopSubTaskCmd(),
-			worker.NewPauseSubTaskCmd(),
-			worker.NewResumeSubTaskCmd(),
-			worker.NewUpdateSubTaskCmd(),
-			worker.NewQueryStatusCmd(),
-			worker.NewQueryErrorCmd(),
-			worker.NewBreakDDLLockCmd(),
-			worker.NewSwitchRelayMasterCmd(),
-			worker.NewPauseRelayCmd(),
-			worker.NewResumeRelayCmd(),
-			//worker.NewStopRelayCmd(),
-		)
-	case common.MasterMode:
-		// --worker worker1 -w worker2 --worker=worker3,worker4 -w=worker5,worker6
-		rootCmd.PersistentFlags().StringSliceVarP(&commandMasterFlags.workers, "worker", "w", []string{}, "dm-worker ID")
-		rootCmd.AddCommand(
-			master.NewStartTaskCmd(),
-			master.NewStopTaskCmd(),
-			master.NewPauseTaskCmd(),
-			master.NewResumeTaskCmd(),
-			master.NewCheckTaskCmd(),
-			master.NewUpdateTaskCmd(),
-			master.NewQueryStatusCmd(),
-			master.NewQueryErrorCmd(),
-			master.NewRefreshWorkerTasks(),
-			master.NewSQLReplaceCmd(),
-			master.NewSQLSkipCmd(),
-			master.NewSQLInjectCmd(),
-			master.NewShowDDLLocksCmd(),
-			master.NewUnlockDDLLockCmd(),
-			master.NewBreakDDLLockCmd(),
-			master.NewSwitchRelayMasterCmd(),
-			master.NewPauseRelayCmd(),
-			master.NewResumeRelayCmd(),
-			//master.NewStopRelayCmd(),
-			master.NewUpdateMasterConfigCmd(),
-			master.NewUpdateRelayCmd(),
-			master.NewPurgeRelayCmd(),
-		)
-	case common.OfflineMode:
-	}
+	// --worker worker1 -w worker2 --worker=worker3,worker4 -w=worker5,worker6
+	rootCmd.PersistentFlags().StringSliceVarP(&commandMasterFlags.workers, "worker", "w", []string{}, "dm-worker ID")
+	rootCmd.AddCommand(
+		master.NewStartTaskCmd(),
+		master.NewStopTaskCmd(),
+		master.NewPauseTaskCmd(),
+		master.NewResumeTaskCmd(),
+		master.NewCheckTaskCmd(),
+		master.NewUpdateTaskCmd(),
+		master.NewQueryStatusCmd(),
+		master.NewQueryErrorCmd(),
+		master.NewRefreshWorkerTasks(),
+		master.NewSQLReplaceCmd(),
+		master.NewSQLSkipCmd(),
+		master.NewSQLInjectCmd(),
+		master.NewShowDDLLocksCmd(),
+		master.NewUnlockDDLLockCmd(),
+		master.NewBreakDDLLockCmd(),
+		master.NewSwitchRelayMasterCmd(),
+		master.NewPauseRelayCmd(),
+		master.NewResumeRelayCmd(),
+		//master.NewStopRelayCmd(),
+		master.NewUpdateMasterConfigCmd(),
+		master.NewUpdateRelayCmd(),
+		master.NewPurgeRelayCmd(),
+	)
 
 	rootCmd.SetArgs(args)
 

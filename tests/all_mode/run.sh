@@ -13,12 +13,11 @@ function run() {
     check_contains 'Query OK, 3 rows affected'
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
-
-    check_port_alive $MASTER_PORT
-    check_port_alive $WORKER1_PORT
-    check_port_alive $WORKER2_PORT
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 
     # start DM task only
     $cur/../bin/dmctl_start_task "$cur/conf/dm-task.yaml"

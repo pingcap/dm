@@ -24,16 +24,6 @@ import (
 	"github.com/pingcap/errors"
 )
 
-// DmctlMode works in which mode
-type DmctlMode string
-
-// three work mode
-var (
-	WorkerMode  DmctlMode = "worker mode"
-	MasterMode  DmctlMode = "master mode"
-	OfflineMode DmctlMode = "offline mode"
-)
-
 // NewConfig creates a new base config for dmctl.
 func NewConfig() *Config {
 	cfg := &Config{}
@@ -53,12 +43,6 @@ type Config struct {
 	*flag.FlagSet `json:"-"`
 
 	MasterAddr string `toml:"master-addr" json:"master-addr"`
-
-	// supporting dmctl connect to dm-worker directly, but not export to config
-	// now we don't add authentication in dm-worker's gRPC server
-	WorkerAddr string    `toml:"worker-addr" json:"-"`
-	ServerAddr string    `json:"-"` // MasterAddr or WorkerAddr
-	Mode       DmctlMode `json:"-"`
 
 	ConfigFile string `json:"config-file"`
 
@@ -115,14 +99,11 @@ func (c *Config) Parse(arguments []string) error {
 		return errors.Errorf("'%s' is an invalid flag", c.FlagSet.Arg(0))
 	}
 
-	if c.MasterAddr != "" {
-		if err = validateAddr(c.MasterAddr); err != nil {
-			return errors.Annotatef(err, "specify master addr %s", c.MasterAddr)
-		}
-	} else if c.WorkerAddr != "" {
-		if err = validateAddr(c.WorkerAddr); err != nil {
-			return errors.Annotatef(err, "specify worker addr %s", c.WorkerAddr)
-		}
+	if c.MasterAddr == "" {
+		return errors.New("--master-addr not provided")
+	}
+	if err = validateAddr(c.MasterAddr); err != nil {
+		return errors.Annotatef(err, "specify master addr %s", c.MasterAddr)
 	}
 
 	c.adjust()
@@ -137,15 +118,6 @@ func (c *Config) configFromFile(path string) error {
 
 // adjust adjusts configs
 func (c *Config) adjust() {
-	if c.MasterAddr != "" {
-		c.ServerAddr = c.MasterAddr
-		c.Mode = MasterMode
-	} else if c.WorkerAddr != "" {
-		c.ServerAddr = c.WorkerAddr
-		c.Mode = WorkerMode
-	} else {
-		c.Mode = OfflineMode
-	}
 }
 
 // validate host:port format address
