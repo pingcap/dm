@@ -576,13 +576,13 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		return errors.Trace(err)
 	}
 
-	if newCfg.SourceID != w.cfg.SourceID {
-		return errors.Errorf("update source ID is not allowed")
-	}
-
 	err = newCfg.Reload()
 	if err != nil {
 		return errors.Trace(err)
+	}
+
+	if newCfg.SourceID != w.cfg.SourceID {
+		return errors.Errorf("update source ID is not allowed")
 	}
 
 	log.Infof("[worker] update relay configure with config: %v", newCfg)
@@ -593,6 +593,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		cfg := config.NewSubTaskConfig()
 
 		cfg.From = cloneCfg.From
+		cfg.From.Adjust()
 
 		stage := st.Stage()
 		if stage == pb.Stage_Paused {
@@ -619,7 +620,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	log.Info("[worker] update relay configure in subtasks success.")
 
 	// Update relay unit configure
-	err = w.relayHolder.Update(ctx, newCfg)
+	err = w.relayHolder.Update(ctx, cloneCfg)
 	if err != nil {
 		return errors.Trace(err)
 	}

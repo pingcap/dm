@@ -114,6 +114,7 @@ func (r *TCPReader) Close() error {
 		return errors.New("already closed")
 	}
 
+	defer r.syncer.Close()
 	connID := r.syncer.LastConnectionID()
 	if connID > 0 {
 		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4",
