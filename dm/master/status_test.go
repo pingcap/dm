@@ -1,0 +1,75 @@
+// Copyright 2019 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package master
+
+import (
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"time"
+
+	"github.com/pingcap/check"
+	"github.com/pingcap/errors"
+)
+
+type testHttpServer struct {
+	server *Server
+	cfg    *Config
+}
+
+func (t *testHttpServer) startServer(c *check.C) {
+	t.cfg = NewConfig()
+	t.cfg.MasterAddr = ":8261"
+
+	t.server = NewServer(t.cfg)
+	go t.server.Start()
+
+	err := t.waitUntilServerOnline()
+	c.Assert(err, check.IsNil)
+}
+
+func (t *testHttpServer) stopServer(c *check.C) {
+	if t.server != nil {
+		t.server.Close()
+	}
+}
+
+const retryTime = 100
+
+func (t *testHttpServer) waitUntilServerOnline() error {
+	statusURL := fmt.Sprintf("http://127.0.0.1%s/status", t.cfg.MasterAddr)
+	for i := 0; i < retryTime; i++ {
+		resp, err := http.Get(statusURL)
+		if err == nil {
+			ioutil.ReadAll(resp.Body)
+			resp.Body.Close()
+			return nil
+		}
+		time.Sleep(time.Millisecond * 10)
+	}
+	return errors.Errorf("failed to connect http status for %d retries in every 10ms", retryTime)
+}
+
+func (ts *testHttpServer) TestStatus(c *check.C) {
+	ts.startServer(c)
+	defer ts.stopServer(c)
+
+	statusURL := fmt.Sprintf("http://127.0.0.1%s/status", ts.cfg.MasterAddr)
+	resp, err := http.Get(statusURL)
+	c.Assert(err, check.IsNil)
+	buf, err2 := ioutil.ReadAll(resp.Body)
+	c.Assert(err2, check.IsNil)
+	status := string(buf)
+	c.Assert(status, check.Matches, "Release Version:.*\nGit Commit Hash:.*\nGit Branch:.*\nUTC Build Time:.*\nGo Version:.*\n")
+}
