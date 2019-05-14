@@ -14,15 +14,18 @@
 package syncer
 
 import (
-	"sync"
 	"context"
+	"sync"
 
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
-	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/siddontang/go/sync2"
 )
+
 // Pipe ...
 type Pipe interface {
 	// Name is the pipe's name
@@ -32,13 +35,16 @@ type Pipe interface {
 	Init(*config.SubTaskConfig, func() error) error
 
 	// Update ...
-	Update()
+	Update(*config.SubTaskConfig)
 
 	// Input data
 	Input() chan *PipeData
 
-	// Process ...
-	Process(*PipeData)
+	// Run ...
+	Run()
+
+	// Close ...
+	Close()
 
 	// SetNextPipe ...
 	SetNextPipe(Pipe)
@@ -52,13 +58,12 @@ type Pipe interface {
 	// Wait ...
 	Wait()
 
-	// Error ...
-	//SetErrorChan(chan error)
+	// SetErrorChan ...
+	SetErrorChan(chan *pb.ProcessError)
 }
 
 // PipeData is the data processed in pipe
 type PipeData struct {
-
 	binlogEvent *replication.Event
 
 	tp           opType
@@ -87,9 +92,26 @@ type Pipeline struct {
 
 	// errCh chan error
 
-	ctx context.Context
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	pipes []Pipe
+
+	isClosed sync2.AtomicBool
+
+	errCh chan *pb.ProcessError
+	errChLen int
+}
+
+func NewPipeline(cfg *config.SubTaskConfig) *Pipeline {
+	//ctx, cancel := context.WithCancel(context.Background())
+	return &Pipeline{
+		//ctx:    ctx,
+		//cancel: cancel,
+		errChLen: cfg.WorkerCount+1,
+		pipes:  make([]Pipe, 0, 5),
+		//errCh:  make(chan *pb.ProcessError, cfg.WorkerCount+1),
+	}
 }
 
 // AddPipe adds a pipe to this pipeline
@@ -112,13 +134,20 @@ func (p *Pipeline) AddPipe(pipe Pipe) {
 
 // Input ...
 func (p *Pipeline) Input(data *PipeData) {
+	log.Infof("pipeline get pipedata %v", data)
 	if len(p.pipes) == 0 {
 		log.Warn("no pipes in this pipeline")
 		return
 	}
 
+	if p.isClosed.Get() {
+		log.Warn("pipeline is closed")
+		return
+	}
+
 	select {
 	case p.pipes[0].Input() <- data:
+		log.Info("send data to first pipe")
 	case <-p.ctx.Done():
 		log.Info("context is done")
 		return
@@ -137,10 +166,29 @@ func (p *Pipeline) Wait() {
 	}
 }
 
-/*
-func (p *Pipeline) Error() (chan error) {
-	select {
-
+func (p *Pipeline) Start() {
+	p.ctx, p.cancel = context.WithCancel(context.Background())
+	p.errCh =  make(chan *pb.ProcessError, p.errChLen)
+	
+	for _, pipe := range p.pipes {
+		pipe.SetErrorChan(p.errCh)
+		pipe.Run()
 	}
+
+	p.isClosed.Set(false)
 }
-*/
+
+func (p *Pipeline) Close() {
+	p.cancel()
+	p.isClosed.Set(true)
+
+	for _, pipe := range p.pipes {
+		pipe.Close()
+	}
+
+	close(p.errCh)
+}
+
+func (p *Pipeline) Errors() chan *pb.ProcessError {
+	return p.errCh
+}

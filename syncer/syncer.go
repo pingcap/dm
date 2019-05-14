@@ -95,8 +95,8 @@ type Syncer struct {
 	localReader *streamer.BinlogReader
 	binlogType  BinlogType
 
-	wg    sync.WaitGroup
-	jobWg sync.WaitGroup
+	wg sync.WaitGroup
+	//jobWg sync.WaitGroup
 
 	tables       map[string]*table   // table cache: `target-schema`.`target-table` -> table
 	cacheColumns map[string][]string // table columns cache: `target-schema`.`target-table` -> column names list
@@ -106,10 +106,10 @@ type Syncer struct {
 	toDBs  []*Conn
 	ddlDB  *Conn
 
-	jobs               []chan *job
-	jobsClosed         sync2.AtomicBool
-	jobsChanLock       sync.Mutex
-	queueBucketMapping []string
+	//jobs               []chan *job
+	//jobsClosed         sync2.AtomicBool
+	//jobsChanLock       sync.Mutex
+	//queueBucketMapping []string
 
 	c *causality
 
@@ -140,7 +140,7 @@ type Syncer struct {
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
 	// record whether error occurred when execute SQLs
-	execErrorDetected sync2.AtomicBool
+	//execErrorDetected sync2.AtomicBool
 
 	execErrors struct {
 		sync.Mutex
@@ -167,7 +167,7 @@ type Syncer struct {
 func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer := new(Syncer)
 	syncer.cfg = cfg
-	syncer.jobsClosed.Set(true) // not open yet
+	//syncer.jobsClosed.Set(true) // not open yet
 	syncer.closed.Set(false)
 	syncer.lastBinlogSizeCount.Set(0)
 	syncer.binlogSizeCount.Set(0)
@@ -213,11 +213,12 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 		syncer.ddlExecInfo = NewDDLExecInfo()
 	}
 
-	syncer.pipeline = new(Pipeline)
+	syncer.pipeline = NewPipeline(cfg)
 
 	return syncer
 }
 
+/*
 func (s *Syncer) newJobChans(count int) {
 	s.closeJobChans()
 	s.jobs = make([]chan *job, 0, count)
@@ -238,6 +239,7 @@ func (s *Syncer) closeJobChans() {
 	}
 	s.jobsClosed.Set(true)
 }
+*/
 
 // Type implements Unit.Type
 func (s *Syncer) Type() pb.UnitType {
@@ -353,6 +355,17 @@ func (s *Syncer) Init() (err error) {
 	close(s.done)
 
 	syncPipe := new(SyncPipe)
+	syncPipe.Init(s.cfg, func() error {
+		syncPipe.checkpoint = s.checkpoint
+		syncPipe.doAfterFlushCheckpoint = s.updateActiveRelayLog
+		syncPipe.execErrors = s.execErrors
+		syncPipe.tracer = s.tracer
+		syncPipe.fromDB = s.fromDB
+		syncPipe.toDBs = s.toDBs
+		syncPipe.ddlDB = s.ddlDB
+
+		return nil
+	})
 	s.pipeline.AddPipe(syncPipe)
 
 	return nil
@@ -413,6 +426,8 @@ func (s *Syncer) IsFreshTask() (bool, error) {
 
 // Process implements the dm.Unit interface.
 func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
+	s.pipeline.Start()
+	
 	syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name).Add(0)
 
 	newCtx, cancel := context.WithCancel(ctx)
@@ -433,13 +448,13 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	// create new done chan
 	s.done = make(chan struct{})
 	// create new job chans
-	s.newJobChans(s.cfg.WorkerCount + 1)
+	//s.newJobChans(s.cfg.WorkerCount + 1)
 	// clear tables info
 	s.clearAllTables()
 
-	s.runFatalChan = make(chan *pb.ProcessError, s.cfg.WorkerCount+1)
-	s.execErrorDetected.Set(false)
-	s.resetExecErrors()
+	//s.runFatalChan = make(chan *pb.ProcessError, s.cfg.WorkerCount+1)
+	//s.execErrorDetected.Set(false)
+	//s.resetExecErrors()
 	errs := make([]*pb.ProcessError, 0, 2)
 
 	if s.cfg.IsSharding {
@@ -451,15 +466,26 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		defer wg.Done()
-		for {
-			err, ok := <-s.runFatalChan
-			if !ok {
-				return
-			}
+		findErr := func(err *pb.ProcessError) {
 			cancel() // cancel s.Run
 			syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name).Inc()
 			errs = append(errs, err)
+		}
+
+		defer wg.Done()
+		for {
+			select {
+			case err, ok := <-s.pipeline.Errors():
+				if !ok {
+					return
+				}
+				findErr(err)
+			case err, ok := <-s.runFatalChan:
+				if !ok {
+					return
+				}
+				findErr(err)
+			}
 		}
 	}()
 
@@ -484,10 +510,11 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		// cancel goroutines created in s.Run
 		cancel()
 	}
-	s.closeJobChans()     // Run returned, all jobs sent, we can close s.jobs
-	s.wg.Wait()           // wait for sync goroutine to return
-	close(s.runFatalChan) // Run returned, all potential fatal sent to s.runFatalChan
-	wg.Wait()             // wait for receive all fatal from s.runFatalChan
+	//s.closeJobChans()     // Run returned, all jobs sent, we can close s.jobs
+	s.pipeline.Close()
+	s.wg.Wait() // wait for sync goroutine to return
+	//close(s.runFatalChan) // Run returned, all potential fatal sent to s.runFatalChan
+	wg.Wait() // wait for receive all fatal from s.runFatalChan
 
 	if err != nil {
 		syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name).Inc()
@@ -587,6 +614,7 @@ func (s *Syncer) getTable(schema string, table string) (*table, []string, error)
 	return t, columns, nil
 }
 
+/*
 func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int64) {
 	m := addedJobsTotal
 	if isFinished {
@@ -614,6 +642,7 @@ func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int6
 
 	s.count.Add(n)
 }
+*/
 
 /*
 func (s *Syncer) checkWait(job *job) bool {
@@ -719,6 +748,7 @@ func (s *Syncer) resetShardingGroup(schema, table string) {
 	}
 }
 
+/*
 // flushCheckPoints flushes previous saved checkpoint in memory to persistent storage, like TiDB
 // we flush checkpoints in three cases:
 //   1. DDL executed
@@ -754,6 +784,7 @@ func (s *Syncer) flushCheckPoints() error {
 	}
 	return nil
 }
+*/
 
 /*
 func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan chan *job) {
@@ -939,25 +970,25 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	}
 
 	/*
-	s.queueBucketMapping = make([]string, 0, s.cfg.WorkerCount+1)
-	for i := 0; i < s.cfg.WorkerCount; i++ {
-		s.wg.Add(1)
-		name := queueBucketName(i)
-		s.queueBucketMapping = append(s.queueBucketMapping, name)
-		go func(i int, n string) {
-			ctx2, cancel := context.WithCancel(ctx)
-			s.sync(ctx2, n, s.toDBs[i], s.jobs[i])
-			cancel()
-		}(i, name)
-	}
+		s.queueBucketMapping = make([]string, 0, s.cfg.WorkerCount+1)
+		for i := 0; i < s.cfg.WorkerCount; i++ {
+			s.wg.Add(1)
+			name := queueBucketName(i)
+			s.queueBucketMapping = append(s.queueBucketMapping, name)
+			go func(i int, n string) {
+				ctx2, cancel := context.WithCancel(ctx)
+				s.sync(ctx2, n, s.toDBs[i], s.jobs[i])
+				cancel()
+			}(i, name)
+		}
 
-	s.queueBucketMapping = append(s.queueBucketMapping, adminQueueName)
-	s.wg.Add(1)
-	go func() {
-		ctx2, cancel := context.WithCancel(ctx)
-		s.sync(ctx2, adminQueueName, s.ddlDB, s.jobs[s.cfg.WorkerCount])
-		cancel()
-	}()
+		s.queueBucketMapping = append(s.queueBucketMapping, adminQueueName)
+		s.wg.Add(1)
+		go func() {
+			ctx2, cancel := context.WithCancel(ctx)
+			s.sync(ctx2, adminQueueName, s.ddlDB, s.jobs[s.cfg.WorkerCount])
+			cancel()
+		}()
 	*/
 
 	s.wg.Add(1)
@@ -974,10 +1005,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 
 		/*
-		// flush the jobs channels, but if error occurred, we should not flush the checkpoints
-		if err1 := s.flushJobs(); err1 != nil {
-			log.Errorf("fail to finish all jobs error: %v", err1)
-		}
+			// flush the jobs channels, but if error occurred, we should not flush the checkpoints
+			if err1 := s.flushJobs(); err1 != nil {
+				log.Errorf("fail to finish all jobs error: %v", err1)
+			}
 		*/
 	}()
 
@@ -1096,10 +1127,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			if eventTimeoutCounter < maxEventTimeout {
 				s.pipeline.Flush()
 				/*
-				err = s.flushJobs()
-				if err != nil {
-					return errors.Trace(err)
-				}
+					err = s.flushJobs()
+					if err != nil {
+						return errors.Trace(err)
+					}
 				*/
 				continue
 			}
@@ -1224,17 +1255,17 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 			if ignore {
 				binlogSkippedEventsTotal.WithLabelValues("rows", s.cfg.Name).Inc()
-				
+
 				s.pipeline.Input(&PipeData{
-					tp: skip,
+					tp:  skip,
 					pos: lastPos,
 					//gtidSet: nil,
 				})
 				/*
-				// for RowsEvent, we should record lastPos rather than currentPos
-				if err = s.recordSkipSQLsPos(lastPos, nil); err != nil {
-					return errors.Trace(err)
-				}
+					// for RowsEvent, we should record lastPos rather than currentPos
+					if err = s.recordSkipSQLsPos(lastPos, nil); err != nil {
+						return errors.Trace(err)
+					}
 				*/
 
 				continue
@@ -1305,35 +1336,35 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 
 				s.pipeline.Input(&PipeData{
-					tp: insert,
+					tp:           insert,
 					sourceSchema: string(ev.Table.Schema),
-					sourceTable: string(ev.Table.Table),
+					sourceTable:  string(ev.Table.Table),
 					targetSchema: table.schema,
 					targetTable:  table.name,
-					sqls:        sqls,
-					args: args,
-					keys: keys,
-					retry: true,
-					pos: lastPos,
-					currentPos: currentPos,
-					gtidSet: nil,
-					traceID: traceID,
+					sqls:         sqls,
+					args:         args,
+					keys:         keys,
+					retry:        true,
+					pos:          lastPos,
+					currentPos:   currentPos,
+					gtidSet:      nil,
+					traceID:      traceID,
 				})
 				/*
-				for i := range sqls {
-					var arg []interface{}
-					var key []string
-					if args != nil {
-						arg = args[i]
+					for i := range sqls {
+						var arg []interface{}
+						var key []string
+						if args != nil {
+							arg = args[i]
+						}
+						if keys != nil {
+							key = keys[i]
+						}
+						err = s.commitJob(insert, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil, traceID)
+						if err != nil {
+							return errors.Trace(err)
+						}
 					}
-					if keys != nil {
-						key = keys[i]
-					}
-					err = s.commitJob(insert, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil, traceID)
-					if err != nil {
-						return errors.Trace(err)
-					}
-				}
 				*/
 			case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
 				if !applied {
@@ -1355,37 +1386,37 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 
 				s.pipeline.Input(&PipeData{
-					tp: update,
+					tp:           update,
 					sourceSchema: string(ev.Table.Schema),
-					sourceTable: string(ev.Table.Table),
+					sourceTable:  string(ev.Table.Table),
 					targetSchema: table.schema,
 					targetTable:  table.name,
-					sqls:        sqls,
-					args: args,
-					keys: keys,
-					retry: true,
-					pos: lastPos,
-					currentPos: currentPos,
-					gtidSet: nil,
-					traceID: traceID,
+					sqls:         sqls,
+					args:         args,
+					keys:         keys,
+					retry:        true,
+					pos:          lastPos,
+					currentPos:   currentPos,
+					gtidSet:      nil,
+					traceID:      traceID,
 				})
 
 				/*
-				for i := range sqls {
-					var arg []interface{}
-					var key []string
-					if args != nil {
-						arg = args[i]
-					}
-					if keys != nil {
-						key = keys[i]
-					}
+					for i := range sqls {
+						var arg []interface{}
+						var key []string
+						if args != nil {
+							arg = args[i]
+						}
+						if keys != nil {
+							key = keys[i]
+						}
 
-					err = s.commitJob(update, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil, traceID)
-					if err != nil {
-						return errors.Trace(err)
+						err = s.commitJob(update, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil, traceID)
+						if err != nil {
+							return errors.Trace(err)
+						}
 					}
-				}
 				*/
 			case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
 				if !applied {
@@ -1406,36 +1437,36 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 
 				s.pipeline.Input(&PipeData{
-					tp: del,
+					tp:           del,
 					sourceSchema: string(ev.Table.Schema),
-					sourceTable: string(ev.Table.Table),
+					sourceTable:  string(ev.Table.Table),
 					targetSchema: table.schema,
 					targetTable:  table.name,
-					sqls:        sqls,
-					args: args,
-					keys: keys,
-					retry: true,
-					pos: lastPos,
-					currentPos: currentPos,
-					gtidSet: nil,
-					traceID: traceID,
+					sqls:         sqls,
+					args:         args,
+					keys:         keys,
+					retry:        true,
+					pos:          lastPos,
+					currentPos:   currentPos,
+					gtidSet:      nil,
+					traceID:      traceID,
 				})
 				/*
-				for i := range sqls {
-					var arg []interface{}
-					var key []string
-					if args != nil {
-						arg = args[i]
-					}
-					if keys != nil {
-						key = keys[i]
-					}
+					for i := range sqls {
+						var arg []interface{}
+						var key []string
+						if args != nil {
+							arg = args[i]
+						}
+						if keys != nil {
+							key = keys[i]
+						}
 
-					err = s.commitJob(del, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil, traceID)
-					if err != nil {
-						return errors.Trace(err)
+						err = s.commitJob(del, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil, traceID)
+						if err != nil {
+							return errors.Trace(err)
+						}
 					}
-				}
 				*/
 			}
 		case *replication.QueryEvent:
@@ -1456,14 +1487,14 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				log.Warnf("[skip query-sql]%s [schema]:%s", sql, ev.Schema)
 				lastPos = currentPos // before record skip pos, update lastPos
 				s.pipeline.Input(&PipeData{
-					tp: skip,
+					tp:  skip,
 					pos: lastPos,
 					//gtidSet: nil,
 				})
 				/*
-				if err = s.recordSkipSQLsPos(lastPos, nil); err != nil {
-					return errors.Trace(err)
-				}
+					if err = s.recordSkipSQLsPos(lastPos, nil); err != nil {
+						return errors.Trace(err)
+					}
 				*/
 				continue
 			}
@@ -1591,17 +1622,17 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			if len(needHandleDDLs) == 0 {
 				log.Infof("skip query %s in position %v", string(ev.Query), currentPos)
 				s.pipeline.Input(&PipeData{
-					tp: skip,
+					tp:  skip,
 					pos: lastPos,
 					//gtidSet: nil,
 				})
-				
+
 				/*
-				if err = s.recordSkipSQLsPos(lastPos, nil); err != nil {
-					return errors.Trace(err)
-				}
+					if err = s.recordSkipSQLsPos(lastPos, nil); err != nil {
+						return errors.Trace(err)
+					}
 				*/
-				
+
 				continue
 			}
 
@@ -1624,21 +1655,20 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					needHandleDDLs = appliedSQLs // maybe nil
 					log.Infof("[convert] execute need handled ddls converted to %v in position %s by sql operator", needHandleDDLs, currentPos)
 				}
-				
 
 				s.pipeline.Input(&PipeData{
-					tp: ddl,
-					ddls: needHandleDDLs,
-					pos: lastPos,
+					tp:         ddl,
+					ddls:       needHandleDDLs,
+					pos:        lastPos,
 					currentPos: currentPos,
-					traceID: traceID,
+					traceID:    traceID,
 				})
 				/*
-				job := newDDLJob(nil, needHandleDDLs, lastPos, currentPos, nil, nil, traceID)
-				err = s.addJob(job)
-				if err != nil {
-					return errors.Trace(err)
-				}
+					job := newDDLJob(nil, needHandleDDLs, lastPos, currentPos, nil, nil, traceID)
+					err = s.addJob(job)
+					if err != nil {
+						return errors.Trace(err)
+					}
 				*/
 				log.Infof("[end] execute need handled ddls %v in position %v", needHandleDDLs, currentPos)
 
@@ -1733,7 +1763,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 
 				// Don't send new DDLInfo to dm-master until all local sql jobs finished
-				s.jobWg.Wait()
+				//s.jobWg.Wait()
+				s.pipeline.Wait()
 
 				// NOTE: if we need singleton Syncer (without dm-master) to support sharding DDL sync
 				// we should add another config item to differ, and do not save DDLInfo, and not wait for ddlExecInfo
@@ -1781,26 +1812,26 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 
 			s.pipeline.Input(&PipeData{
-				tp: ddl,
-				ddls: needHandleDDLs,
-				pos:  lastPos,
+				tp:         ddl,
+				ddls:       needHandleDDLs,
+				pos:        lastPos,
 				currentPos: currentPos,
-				traceID: traceID,
+				traceID:    traceID,
 
 				sourceSchema: ddlInfo.tableNames[0][0].Schema,
-				sourceTable: ddlInfo.tableNames[0][0].Name,
+				sourceTable:  ddlInfo.tableNames[0][0].Name,
 				targetSchema: ddlInfo.tableNames[1][0].Schema,
-				targetTable: ddlInfo.tableNames[1][0].Name,
+				targetTable:  ddlInfo.tableNames[1][0].Name,
 
 				traceGID: ddlExecItem.req.TraceGID,
 			})
 
 			/*
-			job := newDDLJob(ddlInfo, needHandleDDLs, lastPos, currentPos, nil, ddlExecItem, traceID)
-			err = s.addJob(job)
-			if err != nil {
-				return errors.Trace(err)
-			}
+				job := newDDLJob(ddlInfo, needHandleDDLs, lastPos, currentPos, nil, ddlExecItem, traceID)
+				err = s.addJob(job)
+				if err != nil {
+					return errors.Trace(err)
+				}
 			*/
 
 			if len(onlineDDLTableNames) > 0 {
@@ -1826,20 +1857,19 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			log.Debugf("[XID event][last_pos]%v [current_pos]%v [gtid set]%v", lastPos, currentPos, ev.GSet)
 			lastPos.Pos = e.Header.LogPos // update lastPos
 
-			
 			s.pipeline.Input(&PipeData{
-				tp: xid,
-				pos: currentPos,
+				tp:         xid,
+				pos:        currentPos,
 				currentPos: currentPos,
-				traceID:  traceID,
+				traceID:    traceID,
 			})
 
 			/*
-			job := newXIDJob(currentPos, currentPos, nil, traceID)
-			err = s.addJob(job)
-			if err != nil {
-				return errors.Trace(err)
-			}
+				job := newXIDJob(currentPos, currentPos, nil, traceID)
+				err = s.addJob(job)
+				if err != nil {
+					return errors.Trace(err)
+				}
 			*/
 		}
 	}
@@ -2158,7 +2188,7 @@ func (s *Syncer) Close() {
 // maybe we can refine the workflow more clear
 func (s *Syncer) stopSync() {
 	<-s.done // wait Run to return
-	s.closeJobChans()
+	//s.closeJobChans()
 	s.wg.Wait() // wait job workers to return
 
 	// before re-write workflow for s.syncer, simply close it
@@ -2380,6 +2410,7 @@ func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 	return nil
 }
 
+/*
 // appendExecErrors appends syncer execErrors with new value
 func (s *Syncer) appendExecErrors(errCtx *ExecErrorContext) {
 	s.execErrors.Lock()
@@ -2393,6 +2424,7 @@ func (s *Syncer) resetExecErrors() {
 	defer s.execErrors.Unlock()
 	s.execErrors.errors = make([]*ExecErrorContext, 0)
 }
+*/
 
 func (s *Syncer) setTimezone() {
 	var loc *time.Location
