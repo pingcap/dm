@@ -46,6 +46,10 @@ function usage_and_arg_test() {
     update_relay_wrong_config_file
     update_relay_wrong_params $WORKER1_CONF
     update_relay_while_master_down $WORKER1_CONF
+
+    update_task_wrong_arg
+    update_task_wrong_config_file
+    update_task_while_master_down $TASK_CONF
 }
 
 function recover_max_binlog_size() {
@@ -86,9 +90,16 @@ function run() {
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 
+    update_task_not_paused $TASK_CONF
+
     pause_relay_success
     query_status_stopped_relay
     pause_relay_fail
+
+    update_task_worker_not_found $TASK_CONF 127.0.0.1:9999
+    update_task_success_single_worker $TASK_CONF 127.0.0.1:$WORKER1_PORT
+    update_task_success
+
     resume_relay_success
     query_status_with_no_tasks
 
