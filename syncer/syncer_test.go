@@ -225,6 +225,8 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 }
 
 func (s *testSyncerSuite) TestSelectTable(c *C) {
+	s.resetBinlogSyncer()
+	
 	s.cfg.BWList = &filter.Rules{
 		DoDBs: []string{"t2", "stest", "~^ptest*"},
 		DoTables: []*filter.Table{
@@ -514,6 +516,8 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 }
 
 func (s *testSyncerSuite) TestSkipDML(c *C) {
+	s.resetBinlogSyncer()
+	
 	s.cfg.FilterRules = []*bf.BinlogEventRule{
 		{
 			SchemaPattern: "*",
@@ -1004,17 +1008,6 @@ func (s *testSyncerSuite) TestcheckpointID(c *C) {
 	c.Assert(syncer.fromDB, NotNil)
 	c.Assert(syncer.toDBs, NotNil)
 	c.Assert(syncer.ddlDB, NotNil)
-	//syncer.Close()
-	//c.Assert(syncer.isClosed(), IsTrue)
-	/*
-	err := syncer.Init()
-	c.Assert(err, IsNil)
-	c.Assert(syncer.checkpoint, NotNil)
-	c.Assert(syncer.binlogFilter, NotNil)
-	c.Assert(syncer.fromDB, NotNil)
-	c.Assert(syncer.toDBs, NotNil)
-	c.Assert(syncer.ddlDB, NotNil)
-	*/
 }
 
 func (s *testSyncerSuite) TestExecErrors(c *C) {
@@ -1050,3 +1043,16 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(key, Equals, "a")
 }
+
+func (s *testSyncerSuite) TestRun(c *C) {
+	syncer := NewSyncer(s.cfg)
+	err := syncer.Init()
+	c.Assert(err, IsNil)
+	
+	//ctx, _ := context.WithCancel(context.Background())
+	resultCh := make(chan pb.ProcessResult)
+
+	go syncer.Process(context.Background(), resultCh)
+
+	syncer.Close()
+} 
