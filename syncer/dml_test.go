@@ -20,6 +20,12 @@ import (
 	. "github.com/pingcap/check"
 )
 
+func (s *testSyncerSuite) TestGenDMLParam(c *C) {
+	genColCache := NewGenColCache()
+	c.Assert(genColCache, NotNil)
+
+}
+
 func (s *testSyncerSuite) TestCastUnsigned(c *C) {
 	// ref: https://dev.mysql.com/doc/refman/5.7/en/integer-types.html
 	cases := []struct {
@@ -43,4 +49,64 @@ func (s *testSyncerSuite) TestCastUnsigned(c *C) {
 		obtained := castUnsigned(cs.data, cs.unsigned, cs.Type)
 		c.Assert(obtained, Equals, cs.expected)
 	}
+}
+
+func (s *testSyncerSuite) TestGenColumnPlaceholders(c *C) {
+	placeholderStr := genColumnPlaceholders(3)
+	c.Assert(placeholderStr, Equals, "?,?,?")
+}
+
+func (s *testSyncerSuite) TestGenColumnList(c *C) {
+	columns := []*column{
+		{
+			name: "a",
+		}, {
+			name: "b",
+		}, {
+			name: "c",
+		},
+	}
+
+	columnList := genColumnList(columns)
+	c.Assert(columnList, Equals, "`a`,`b`,`c`")
+}
+
+func (s *testSyncerSuite) TestFindFitIndex(c *C) {
+	pkColumns := []*column{
+		{
+			name: "a",
+		}, {
+			name: "b",
+		},
+	}
+	indexColumns := []*column {
+		{
+			name: "c",
+		},
+	}
+	indexColumnsNotNull := []*column {
+		{
+			name: "d",
+			NotNull: true,
+		},
+	}
+
+	columns := findFitIndex(map[string][]*column{
+		"primary": pkColumns,
+		"index": indexColumns,
+	})
+	c.Assert(columns, HasLen, 2)
+	c.Assert(columns[0].name, Equals, "a")
+	c.Assert(columns[1].name, Equals, "b")
+
+	columns = findFitIndex(map[string][]*column{
+		"index": indexColumns,
+	})
+	c.Assert(columns, HasLen, 0)
+
+	columns = findFitIndex(map[string][]*column{
+		"index": indexColumnsNotNull,
+	})
+	c.Assert(columns, HasLen, 1)
+	c.Assert(columns[0].name, Equals, "d")
 }

@@ -1724,8 +1724,9 @@ func (s *Syncer) resolveCasuality(keys []string) (string, error) {
 		}
 		return "", nil
 	}
+	log.Infof("resolveCasuality keys %v, relations: %v", keys, s.c.relations)
 	if s.c.detectConflict(keys) {
-		log.Debug("[causality] meet causality key, will generate a flush job and wait all sqls executed")
+		log.Info("[causality] meet causality key, will generate a flush job and wait all sqls executed")
 		if err := s.flushJobs(); err != nil {
 			return "", errors.Trace(err)
 		}

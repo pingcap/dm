@@ -31,6 +31,7 @@ import (
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	gmysql "github.com/siddontang/go-mysql/mysql"
+	"github.com/pingcap/dm/dm/pb"
 	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/dm/config"
@@ -193,6 +194,7 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
+	//defer syncer.Close()
 	err = syncer.genRouter()
 	c.Assert(err, IsNil)
 
@@ -459,6 +461,11 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
+	c.Assert(syncer.Type(), Equals, pb.UnitType_Sync)
+
+	err = syncer.Init()
+	c.Assert(err, IsNil)
+
 	syncer.genRouter()
 	i := 0
 	for {
@@ -917,6 +924,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	}
 
 	syncer := NewSyncer(s.cfg)
+	//defer syncer.Close()
 	syncer.cfg.MaxRetry = 1
 	// use upstream db as mock downstream
 	syncer.toDBs = []*Conn{{db: s.db}}
@@ -982,4 +990,63 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 		s.db.Exec(sql)
 	}
 	s.catchUpBinlog()
+}
+
+func (s *testSyncerSuite) TestcheckpointID(c *C) {
+	syncer := NewSyncer(s.cfg)
+	checkpointID := syncer.checkpointID()
+	c.Assert(checkpointID, Equals, "101")
+
+	err := syncer.Init()
+	c.Assert(err, IsNil)
+	c.Assert(syncer.checkpoint, NotNil)
+	c.Assert(syncer.binlogFilter, NotNil)
+	c.Assert(syncer.fromDB, NotNil)
+	c.Assert(syncer.toDBs, NotNil)
+	c.Assert(syncer.ddlDB, NotNil)
+	//syncer.Close()
+	//c.Assert(syncer.isClosed(), IsTrue)
+	/*
+	err := syncer.Init()
+	c.Assert(err, IsNil)
+	c.Assert(syncer.checkpoint, NotNil)
+	c.Assert(syncer.binlogFilter, NotNil)
+	c.Assert(syncer.fromDB, NotNil)
+	c.Assert(syncer.toDBs, NotNil)
+	c.Assert(syncer.ddlDB, NotNil)
+	*/
+}
+
+func (s *testSyncerSuite) TestExecErrors(c *C) {
+	syncer := NewSyncer(s.cfg)
+	syncer.appendExecErrors(new(ExecErrorContext))
+	c.Assert(syncer.execErrors.errors, HasLen, 1)
+
+	syncer.resetExecErrors()
+	c.Assert(syncer.execErrors.errors, HasLen, 0)
+}
+
+func (s *testSyncerSuite) TestCasuality(c *C) {
+	s.cfg.WorkerCount = 1
+	syncer := NewSyncer(s.cfg)
+	syncer.jobs = []chan *job{make (chan *job, 1)}
+
+	go func (){
+		job := <-syncer.jobs[0]
+		c.Assert(job.tp, Equals, flush)
+		syncer.jobWg.Done()
+	}()
+
+	key, err := syncer.resolveCasuality([]string{"a"})
+	c.Assert(err, IsNil)
+	c.Assert(key, Equals, "a")
+
+	key, err = syncer.resolveCasuality([]string{"b"})
+	c.Assert(err, IsNil)
+	c.Assert(key, Equals, "b")
+
+	// will detect casuality and add a flush job
+	key, err = syncer.resolveCasuality([]string{"a", "b"})
+	c.Assert(err, IsNil)
+	c.Assert(key, Equals, "a")
 }

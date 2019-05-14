@@ -231,11 +231,13 @@ func (s *testSyncerSuite) TestresolveDDLSQL(c *C) {
 		c.Assert(statements, DeepEquals, expectedSQLs[i])
 
 		for j, statement := range statements {
-			s, _, _, err := syncer.handleDDL(p, "test", statement)
+			s, tables, _, err := syncer.handleDDL(p, "test", statement)
 			c.Assert(err, IsNil)
 			c.Assert(s, Equals, targetSQLs[i][j])
+			c.Log(tables)
 		}
 	}
+	//c.Assert(err, NotNil)
 }
 
 func (s *testSyncerSuite) TestParseDDLSQL(c *C) {
