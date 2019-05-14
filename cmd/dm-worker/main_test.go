@@ -19,10 +19,18 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 func TestRunMain(t *testing.T) {
-	var args []string
+	var (
+		args   []string
+		exit   = make(chan int)
+		waitCh = make(chan interface{}, 1)
+	)
 	for _, arg := range os.Args {
 		switch {
 		case arg == "DEVEL":
@@ -32,6 +40,33 @@ func TestRunMain(t *testing.T) {
 		}
 	}
 
+	// golang cover tool rewrites ast with coverage annotations based on block.
+	// whenever the cover tool detects the first line of one block has runned,
+	// the coverage counter will be added. So we mock of `utils.OsExit` is able
+	// to collect the code run. While if we run `main()` in the main routine,
+	// when a code block from `main()` executes `utils.OsExit` and we forcedly
+	// exit the program by `os.Exit(0)` in other routine, the coverage counter
+	// fails to add for this block, the different behavior of these two scenarios
+	// comes from the difference between `os.Exit` and return from a function call.
+	oldOsExit := utils.OsExit
+	defer func() { utils.OsExit = oldOsExit }()
+	utils.OsExit = func(code int) {
+		log.Infof("[test] os.Exit with code %d", code)
+		exit <- code
+		// sleep here to prevent following code execution in the caller routine
+		time.Sleep(time.Second * 60)
+	}
+
 	os.Args = args
-	main()
+	go func() {
+		main()
+		close(waitCh)
+	}()
+
+	select {
+	case <-waitCh:
+		return
+	case <-exit:
+		return
+	}
 }
