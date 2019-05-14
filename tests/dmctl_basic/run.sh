@@ -71,7 +71,7 @@ function run() {
     done
     cd -
 
-    # usage_and_arg_test
+    usage_and_arg_test
 
     mkdir -p $WORK_DIR/worker1 $WORK_DIR/worker2
     dm_worker1_conf="$WORK_DIR/worker1/dm-worker.toml"
