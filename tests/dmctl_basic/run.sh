@@ -50,6 +50,10 @@ function usage_and_arg_test() {
     update_task_wrong_arg
     update_task_wrong_config_file
     update_task_while_master_down $TASK_CONF
+
+    update_master_config_wrong_arg
+    update_master_config_wrong_config_file
+    update_master_config_while_master_down $cur/conf/dm-master.toml
 }
 
 function recover_max_binlog_size() {
@@ -75,7 +79,7 @@ function run() {
     done
     cd -
 
-    # usage_and_arg_test
+    usage_and_arg_test
 
     mkdir -p $WORK_DIR/worker1 $WORK_DIR/worker2
     dm_worker1_conf="$WORK_DIR/worker1/dm-worker.toml"
