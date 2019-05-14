@@ -53,7 +53,19 @@ const (
 )
 
 // Purger purges relay log according to some strategies
-type Purger struct {
+type Purger interface {
+	// Start starts strategies by config
+	Start()
+	// Close stops the started strategies
+	Close()
+	// Purging returns whether the purger is purging
+	Purging() bool
+	// Do does the purge process one time
+	Do(ctx context.Context, req *pb.PurgeRelayRequest) error
+}
+
+// RelayPurger purges relay log according to some strategies
+type RelayPurger struct {
 	lock            sync.RWMutex
 	wg              sync.WaitGroup
 	cancel          context.CancelFunc
@@ -68,9 +80,9 @@ type Purger struct {
 	strategies   map[strategyType]PurgeStrategy
 }
 
-// NewPurger creates a new purger
-func NewPurger(cfg Config, baseRelayDir string, operators []RelayOperator, interceptors []PurgeInterceptor) *Purger {
-	p := &Purger{
+// NewRelayPurger creates a new purger
+func NewRelayPurger(cfg Config, baseRelayDir string, operators []RelayOperator, interceptors []PurgeInterceptor) Purger {
+	p := &RelayPurger{
 		cfg:          cfg,
 		baseRelayDir: baseRelayDir,
 		indexPath:    filepath.Join(baseRelayDir, utils.UUIDIndexFilename),
@@ -89,7 +101,7 @@ func NewPurger(cfg Config, baseRelayDir string, operators []RelayOperator, inter
 }
 
 // Start starts strategies by config
-func (p *Purger) Start() {
+func (p *RelayPurger) Start() {
 	if !p.running.CompareAndSwap(stageNew, stageRunning) {
 		return
 	}
@@ -110,7 +122,7 @@ func (p *Purger) Start() {
 
 // run starts running the process
 // NOTE: ensure run is called at most once of a Purger
-func (p *Purger) run() {
+func (p *RelayPurger) run() {
 	ticker := time.NewTicker(time.Duration(p.cfg.Interval) * time.Second)
 	defer ticker.Stop()
 
@@ -129,7 +141,7 @@ func (p *Purger) run() {
 }
 
 // Close stops the started strategies
-func (p *Purger) Close() {
+func (p *RelayPurger) Close() {
 	if !p.running.CompareAndSwap(stageRunning, stageClosed) {
 		return
 	}
@@ -145,12 +157,12 @@ func (p *Purger) Close() {
 }
 
 // Purging returns whether the purger is purging
-func (p *Purger) Purging() bool {
+func (p *RelayPurger) Purging() bool {
 	return p.purgingStrategy.Get() != uint32(strategyNone)
 }
 
 // Do does the purge process one time
-func (p *Purger) Do(ctx context.Context, req *pb.PurgeRelayRequest) error {
+func (p *RelayPurger) Do(ctx context.Context, req *pb.PurgeRelayRequest) error {
 	uuids, err := utils.ParseUUIDIndex(p.indexPath)
 	if err != nil {
 		return errors.Annotatef(err, "parse UUID index file %s", p.indexPath)
@@ -185,7 +197,7 @@ func (p *Purger) Do(ctx context.Context, req *pb.PurgeRelayRequest) error {
 }
 
 // tryPurge tries to do purge by check condition first
-func (p *Purger) tryPurge() {
+func (p *RelayPurger) tryPurge() {
 	strategy, args, err := p.check()
 	if err != nil {
 		log.Errorf("[purger] check whether need to purge relay log files in background error %v", errors.ErrorStack(err))
@@ -201,7 +213,7 @@ func (p *Purger) tryPurge() {
 }
 
 // doPurge does the purging operation
-func (p *Purger) doPurge(ps PurgeStrategy, args StrategyArgs) error {
+func (p *RelayPurger) doPurge(ps PurgeStrategy, args StrategyArgs) error {
 	if !p.purgingStrategy.CompareAndSwap(uint32(strategyNone), uint32(ps.Type())) {
 		return errors.Errorf(MsgOtherPurging, ps.Type())
 	}
@@ -225,7 +237,7 @@ func (p *Purger) doPurge(ps PurgeStrategy, args StrategyArgs) error {
 	return errors.Trace(ps.Do(args))
 }
 
-func (p *Purger) check() (PurgeStrategy, StrategyArgs, error) {
+func (p *RelayPurger) check() (PurgeStrategy, StrategyArgs, error) {
 	log.Info("[purger] checking whether needing to purge relay log files")
 
 	uuids, err := utils.ParseUUIDIndex(p.indexPath)
@@ -276,7 +288,7 @@ func (p *Purger) check() (PurgeStrategy, StrategyArgs, error) {
 }
 
 // earliestActiveRelayLog returns the current earliest active relay log info
-func (p *Purger) earliestActiveRelayLog() *streamer.RelayLogInfo {
+func (p *RelayPurger) earliestActiveRelayLog() *streamer.RelayLogInfo {
 	var earliest *streamer.RelayLogInfo
 	for _, op := range p.operators {
 		info := op.EarliestActiveRelayLog()
@@ -287,4 +299,42 @@ func (p *Purger) earliestActiveRelayLog() *streamer.RelayLogInfo {
 		}
 	}
 	return earliest
+}
+
+/************ dummy purger **************/
+// Purger purges relay log according to some strategies
+/*type Purger interface {
+	// Start starts strategies by config
+	Start()
+	// Close stops the started strategies
+	Close()
+	// Purging returns whether the purger is purging
+	Purging() bool
+	// Do does the purge process one time
+	Do(ctx context.Context, req *pb.PurgeRelayRequest) error
+}
+*/
+
+type dummyPurger struct {
+}
+
+// NewDummyPurger return a dummy purger
+func NewDummyPurger(cfg Config, baseRelayDir string, operators []RelayOperator, interceptors []PurgeInterceptor) Purger {
+	return &dummyPurger{}
+}
+
+// Start implements interface of Purger
+func (d *dummyPurger) Start() {}
+
+// Close implements interface of Purger
+func (d *dummyPurger) Close() {}
+
+// Purging implements interface of Purger
+func (d *dummyPurger) Purging() bool {
+	return false
+}
+
+// Do implements interface of Purger
+func (d *dummyPurger) Do(ctx context.Context, req *pb.PurgeRelayRequest) error {
+	return nil
 }
