@@ -81,17 +81,19 @@ function run() {
 
     usage_and_arg_test
 
-    mkdir -p $WORK_DIR/worker1 $WORK_DIR/worker2
+    mkdir -p $WORK_DIR/master $WORK_DIR/worker1 $WORK_DIR/worker2
+    dm_master_conf="$WORK_DIR/master/dm-master.toml"
     dm_worker1_conf="$WORK_DIR/worker1/dm-worker.toml"
     dm_worker2_conf="$WORK_DIR/worker2/dm-worker.toml"
     cp $cur/conf/dm-worker1.toml $dm_worker1_conf
     cp $cur/conf/dm-worker2.toml $dm_worker2_conf
+    cp $cur/conf/dm-master.toml $dm_master_conf
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $dm_worker1_conf
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $dm_worker2_conf
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+    run_dm_master $WORK_DIR/master $MASTER_PORT $dm_master_conf
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 
     pause_relay_success
@@ -132,6 +134,9 @@ function run() {
     md5_old_worker2=$(md5sum $cur/conf/dm-worker2.toml | awk '{print $1}')
     [ "md5_new_worker1" != "md5_old_worker1" ]
     [ "md5_new_worker2" != "md5_old_worker2" ]
+
+    update_master_config_success $dm_master_conf
+    cmp $dm_master_conf $cur/conf/dm-master.toml
 
     run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1
     set +e
