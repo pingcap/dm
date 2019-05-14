@@ -67,7 +67,7 @@ func (p *Pointer) MarshalBinary() ([]byte, error) {
 // UnmarshalBinary implement encoding.BinaryMarshal
 func (p *Pointer) UnmarshalBinary(data []byte) error {
 	if len(data) != 8 {
-		return errors.Errorf("not valid length data as pointer %v", data)
+		return errors.Errorf("not valid length data as pointer % X", data)
 	}
 
 	p.Location = int64(binary.LittleEndian.Uint64(data))
@@ -109,7 +109,7 @@ var (
 // DecodeTaskLogKey decodes task log key and returns its log ID
 func DecodeTaskLogKey(key []byte) (int64, error) {
 	if len(key) != len(TaskLogPrefix)+8 {
-		return 0, errors.Errorf("not valid length data as task log key %v", key)
+		return 0, errors.Errorf("not valid length data as task log key % X", key)
 	}
 
 	return int64(binary.LittleEndian.Uint64(key[len(TaskLogPrefix):])), nil
@@ -271,7 +271,7 @@ func (logger *Logger) Append(db Putter, opLog *pb.TaskLog) error {
 
 	err = db.Put(EncodeTaskLogKey(id), logBytes, nil)
 	if err != nil {
-		return errors.Annotatef(err, "save task log %d", opLog.Id)
+		return errors.Annotatef(err, "save task log %+v", opLog)
 	}
 
 	return nil

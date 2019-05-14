@@ -71,7 +71,7 @@ func (t *testLog) TestTaskLogKey(c *C) {
 	var id int64 = 1
 	idc, err := DecodeTaskLogKey(EncodeTaskLogKey(id))
 	c.Assert(err, IsNil)
-	c.Assert(idc, DeepEquals, id)
+	c.Assert(idc, Equals, id)
 
 	_, err = DecodeTaskLogKey([]byte("xx"))
 	c.Assert(err, ErrorMatches, ".*not valid length data as.*")

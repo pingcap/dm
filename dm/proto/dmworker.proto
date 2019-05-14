@@ -81,7 +81,7 @@ message QueryTaskOperationRequest {
 }
 
 message QueryTaskOperationResponse {
-     CommonWorkerResponse meta = 1;
+    CommonWorkerResponse meta = 1;
     TaskLog log = 2; // sub task's operation log
 }
 

@@ -246,7 +246,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 				return
 			}
 			workerResp, err := cli.StartSubTask(ctx, &pb.StartSubTaskRequest{Task: stCfgToml})
-			workerResp = s.handleOperationResult(ctx, cli, stCfg.Name, workerResp.LogID, err, workerResp)
+			workerResp = s.handleOperationResult(ctx, cli, stCfg.Name, err, workerResp)
 			workerResp.Meta.Worker = worker
 			workerRespCh <- workerResp.Meta
 		}(stCfg)
@@ -324,7 +324,7 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 				return
 			}
 			workerResp, err := cli.OperateSubTask(ctx, subReq)
-			workerResp = s.handleOperationResult(ctx, cli, req.Name, workerResp.LogID, err, workerResp)
+			workerResp = s.handleOperationResult(ctx, cli, req.Name, err, workerResp)
 			workerResp.Op = req.Op
 			workerResp.Meta.Worker = worker
 			workerRespCh <- workerResp
@@ -421,7 +421,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 				return
 			}
 			workerResp, err := cli.UpdateSubTask(ctx, &pb.UpdateSubTaskRequest{Task: stCfgToml})
-			workerResp = s.handleOperationResult(ctx, cli, stCfg.Name, workerResp.LogID, err, workerResp)
+			workerResp = s.handleOperationResult(ctx, cli, stCfg.Name, err, workerResp)
 			workerResp.Meta.Worker = worker
 			workerRespCh <- workerResp.Meta
 		}(stCfg)
@@ -1746,11 +1746,13 @@ var (
 )
 
 func (s *Server) waitOperationOk(ctx context.Context, cli pb.WorkerClient, name string, opLogID int64) error {
+	request := &pb.QueryTaskOperationRequest{
+		Name:  name,
+		LogID: opLogID,
+	}
+
 	for num := 0; num < maxRetryNum; num++ {
-		res, err := cli.QueryTaskOperation(ctx, &pb.QueryTaskOperationRequest{
-			Name:  name,
-			LogID: opLogID,
-		})
+		res, err := cli.QueryTaskOperation(ctx, request)
 		if err != nil {
 			log.Errorf("fail to query task operation %v", err)
 		} else if res.Log.Success {
@@ -1771,7 +1773,7 @@ func (s *Server) waitOperationOk(ctx context.Context, cli pb.WorkerClient, name 
 	return errors.New("request is timeout, but request may be successful")
 }
 
-func (s *Server) handleOperationResult(ctx context.Context, cli pb.WorkerClient, name string, opLogID int64, err error, response *pb.OperateSubTaskResponse) *pb.OperateSubTaskResponse {
+func (s *Server) handleOperationResult(ctx context.Context, cli pb.WorkerClient, name string, err error, response *pb.OperateSubTaskResponse) *pb.OperateSubTaskResponse {
 	if err != nil {
 		return &pb.OperateSubTaskResponse{
 			Meta: &pb.CommonWorkerResponse{
@@ -1781,7 +1783,7 @@ func (s *Server) handleOperationResult(ctx context.Context, cli pb.WorkerClient,
 		}
 	}
 
-	err = s.waitOperationOk(ctx, cli, name, opLogID)
+	err = s.waitOperationOk(ctx, cli, name, response.LogID)
 	if err != nil {
 		return &pb.OperateSubTaskResponse{
 			Meta: &pb.CommonWorkerResponse{
