@@ -96,7 +96,6 @@ type Syncer struct {
 	binlogType  BinlogType
 
 	wg sync.WaitGroup
-	//jobWg sync.WaitGroup
 
 	tables       map[string]*table   // table cache: `target-schema`.`target-table` -> table
 	cacheColumns map[string][]string // table columns cache: `target-schema`.`target-table` -> column names list
@@ -105,11 +104,6 @@ type Syncer struct {
 	fromDB *Conn
 	toDBs  []*Conn
 	ddlDB  *Conn
-
-	//jobs               []chan *job
-	//jobsClosed         sync2.AtomicBool
-	//jobsChanLock       sync.Mutex
-	//queueBucketMapping []string
 
 	c *causality
 
@@ -139,8 +133,6 @@ type Syncer struct {
 
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
-	// record whether error occurred when execute SQLs
-	//execErrorDetected sync2.AtomicBool
 
 	execErrors struct {
 		sync.Mutex
@@ -167,7 +159,6 @@ type Syncer struct {
 func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer := new(Syncer)
 	syncer.cfg = cfg
-	//syncer.jobsClosed.Set(true) // not open yet
 	syncer.closed.Set(false)
 	syncer.lastBinlogSizeCount.Set(0)
 	syncer.binlogSizeCount.Set(0)
@@ -176,7 +167,6 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.tables = make(map[string]*table)
 	syncer.cacheColumns = make(map[string][]string)
 	syncer.genColsCache = NewGenColCache()
-	//syncer.c = newCausality()
 	syncer.tableRouter, _ = router.NewTableRouter(cfg.CaseSensitive, []*router.TableRule{})
 	syncer.done = make(chan struct{})
 	syncer.bwList = filter.New(cfg.CaseSensitive, cfg.BWList)
@@ -217,29 +207,6 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 
 	return syncer
 }
-
-/*
-func (s *Syncer) newJobChans(count int) {
-	s.closeJobChans()
-	s.jobs = make([]chan *job, 0, count)
-	for i := 0; i < count; i++ {
-		s.jobs = append(s.jobs, make(chan *job, 1000))
-	}
-	s.jobsClosed.Set(false)
-}
-
-func (s *Syncer) closeJobChans() {
-	s.jobsChanLock.Lock()
-	defer s.jobsChanLock.Unlock()
-	if s.jobsClosed.Get() {
-		return
-	}
-	for _, ch := range s.jobs {
-		close(ch)
-	}
-	s.jobsClosed.Set(true)
-}
-*/
 
 // Type implements Unit.Type
 func (s *Syncer) Type() pb.UnitType {
@@ -354,6 +321,7 @@ func (s *Syncer) Init() (err error) {
 	s.done = make(chan struct{})
 	close(s.done)
 
+	// initial pipes and add into pipeline
 	syncPipe := new(SyncPipe)
 	syncPipe.Init(s.cfg, func() error {
 		syncPipe.checkpoint = s.checkpoint
@@ -363,6 +331,9 @@ func (s *Syncer) Init() (err error) {
 		syncPipe.fromDB = s.fromDB
 		syncPipe.toDBs = s.toDBs
 		syncPipe.ddlDB = s.ddlDB
+		syncPipe.ddlExecInfo = s.ddlExecInfo
+		syncPipe.sgk = s.sgk
+		syncPipe.count = &s.count
 
 		return nil
 	})
@@ -427,7 +398,7 @@ func (s *Syncer) IsFreshTask() (bool, error) {
 // Process implements the dm.Unit interface.
 func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	s.pipeline.Start()
-	
+
 	syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name).Add(0)
 
 	newCtx, cancel := context.WithCancel(ctx)
@@ -447,14 +418,10 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	}
 	// create new done chan
 	s.done = make(chan struct{})
-	// create new job chans
-	//s.newJobChans(s.cfg.WorkerCount + 1)
 	// clear tables info
 	s.clearAllTables()
 
-	//s.runFatalChan = make(chan *pb.ProcessError, s.cfg.WorkerCount+1)
-	//s.execErrorDetected.Set(false)
-	//s.resetExecErrors()
+	s.runFatalChan = make(chan *pb.ProcessError, s.cfg.WorkerCount+1)
 	errs := make([]*pb.ProcessError, 0, 2)
 
 	if s.cfg.IsSharding {
@@ -479,7 +446,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 				if !ok {
 					return
 				}
-				findErr(err)
+				findErr(unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err)))
 			case err, ok := <-s.runFatalChan:
 				if !ok {
 					return
@@ -510,11 +477,11 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		// cancel goroutines created in s.Run
 		cancel()
 	}
-	//s.closeJobChans()     // Run returned, all jobs sent, we can close s.jobs
+
 	s.pipeline.Close()
-	s.wg.Wait() // wait for sync goroutine to return
-	//close(s.runFatalChan) // Run returned, all potential fatal sent to s.runFatalChan
-	wg.Wait() // wait for receive all fatal from s.runFatalChan
+	s.wg.Wait()           // wait for sync goroutine to return
+	close(s.runFatalChan) // Run returned, all potential fatal sent to s.runFatalChan
+	wg.Wait()             // wait for receive all fatal from s.runFatalChan
 
 	if err != nil {
 		syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name).Inc()
@@ -614,123 +581,6 @@ func (s *Syncer) getTable(schema string, table string) (*table, []string, error)
 	return t, columns, nil
 }
 
-/*
-func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int64) {
-	m := addedJobsTotal
-	if isFinished {
-		m = finishedJobsTotal
-	}
-
-	switch tp {
-	case insert:
-		m.WithLabelValues("insert", s.cfg.Name, queueBucket).Add(float64(n))
-	case update:
-		m.WithLabelValues("update", s.cfg.Name, queueBucket).Add(float64(n))
-	case del:
-		m.WithLabelValues("del", s.cfg.Name, queueBucket).Add(float64(n))
-	case ddl:
-		m.WithLabelValues("ddl", s.cfg.Name, queueBucket).Add(float64(n))
-	case xid:
-		// ignore xid jobs
-	case flush:
-		m.WithLabelValues("flush", s.cfg.Name, queueBucket).Add(float64(n))
-	case skip:
-		// ignore skip jobs
-	default:
-		log.Warnf("unknown optype %v", tp)
-	}
-
-	s.count.Add(n)
-}
-*/
-
-/*
-func (s *Syncer) checkWait(job *job) bool {
-	if job.tp == ddl {
-		return true
-	}
-
-	if s.checkpoint.CheckGlobalPoint() {
-		return true
-	}
-
-	return false
-}
-*/
-
-/*
-func (s *Syncer) addJob(job *job) error {
-	var (
-		queueBucket int
-		execDDLReq  *pb.ExecDDLRequest
-	)
-	switch job.tp {
-	case xid:
-		s.saveGlobalPoint(job.pos)
-		return nil
-	case flush:
-		addedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName).Inc()
-		// ugly code addJob and sync, refine it later
-		s.jobWg.Add(s.cfg.WorkerCount)
-		for i := 0; i < s.cfg.WorkerCount; i++ {
-			s.jobs[i] <- job
-		}
-		s.jobWg.Wait()
-		finishedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName).Inc()
-		return errors.Trace(s.flushCheckPoints())
-	case ddl:
-		s.jobWg.Wait()
-		addedJobsTotal.WithLabelValues("ddl", s.cfg.Name, adminQueueName).Inc()
-		s.jobWg.Add(1)
-		queueBucket = s.cfg.WorkerCount
-		s.jobs[queueBucket] <- job
-		if job.ddlExecItem != nil {
-			execDDLReq = job.ddlExecItem.req
-		}
-	case insert, update, del:
-		s.jobWg.Add(1)
-		queueBucket = int(utils.GenHashKey(job.key)) % s.cfg.WorkerCount
-		s.addCount(false, s.queueBucketMapping[queueBucket], job.tp, 1)
-		s.jobs[queueBucket] <- job
-	}
-
-	if s.tracer.Enable() {
-		_, err := s.tracer.CollectSyncerJobEvent(job.traceID, job.traceGID, int32(job.tp), job.pos, job.currentPos, s.queueBucketMapping[queueBucket], job.sql, job.ddls, job.args, execDDLReq, pb.SyncerJobState_queued)
-		if err != nil {
-			log.Errorf("[syncer] trace error: %s", err)
-		}
-	}
-
-	wait := s.checkWait(job)
-	if wait {
-		s.jobWg.Wait()
-		s.c.reset()
-	}
-
-	switch job.tp {
-	case ddl:
-		// only save checkpoint for DDL and XID (see above)
-		s.saveGlobalPoint(job.pos)
-		if len(job.sourceSchema) > 0 {
-			s.checkpoint.SaveTablePoint(job.sourceSchema, job.sourceTable, job.pos)
-		}
-		// reset sharding group after checkpoint saved
-		s.resetShardingGroup(job.targetSchema, job.targetTable)
-	case insert, update, del:
-		// save job's current pos for DML events
-		if len(job.sourceSchema) > 0 {
-			s.checkpoint.SaveTablePoint(job.sourceSchema, job.sourceTable, job.currentPos)
-		}
-	}
-
-	if wait {
-		return errors.Trace(s.flushCheckPoints())
-	}
-
-	return nil
-}
-*/
-
 func (s *Syncer) saveGlobalPoint(globalPoint mysql.Position) {
 	if s.cfg.IsSharding {
 		globalPoint = s.sgk.AdjustGlobalPoint(globalPoint)
@@ -747,185 +597,6 @@ func (s *Syncer) resetShardingGroup(schema, table string) {
 		}
 	}
 }
-
-/*
-// flushCheckPoints flushes previous saved checkpoint in memory to persistent storage, like TiDB
-// we flush checkpoints in three cases:
-//   1. DDL executed
-//   2. at intervals (and job executed)
-//   3. pausing / stopping the sync (driven by `s.flushJobs`)
-// but when error occurred, we can not flush checkpoint, otherwise data may lost
-// and except rejecting to flush the checkpoint, we also need to rollback the checkpoint saved before
-//   this should be handled when `s.Run` returned
-//
-// we may need to refactor the concurrency model to make the work-flow more clearer later
-func (s *Syncer) flushCheckPoints() error {
-	if s.execErrorDetected.Get() {
-		log.Warnf("[syncer] error detected when executing SQL job, skip flush checkpoint (%s)", s.checkpoint)
-		return nil
-	}
-
-	var exceptTables [][]string
-	if s.cfg.IsSharding {
-		// flush all checkpoints except tables which are unresolved for sharding DDL
-		exceptTables = s.sgk.UnresolvedTables()
-		log.Infof("[syncer] flush checkpoints except for tables %v", exceptTables)
-	}
-	err := s.checkpoint.FlushPointsExcept(exceptTables)
-	if err != nil {
-		return errors.Annotatef(err, "flush checkpoint %s", s.checkpoint)
-	}
-	log.Infof("[syncer] flushed checkpoint %s", s.checkpoint)
-
-	// update current active relay log after checkpoint flushed
-	err = s.updateActiveRelayLog(s.checkpoint.GlobalPoint())
-	if err != nil {
-		return errors.Trace(err)
-	}
-	return nil
-}
-*/
-
-/*
-func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan chan *job) {
-	defer s.wg.Done()
-
-	idx := 0
-	count := s.cfg.Batch
-	jobs := make([]*job, 0, count)
-	tpCnt := make(map[opType]int64)
-
-	clearF := func() {
-		for i := 0; i < idx; i++ {
-			s.jobWg.Done()
-		}
-
-		idx = 0
-		jobs = jobs[0:0]
-		for tpName, v := range tpCnt {
-			s.addCount(true, queueBucket, tpName, v)
-			tpCnt[tpName] = 0
-		}
-	}
-
-	fatalF := func(err error, errType pb.ErrorType) {
-		s.execErrorDetected.Set(true)
-		s.runFatalChan <- unit.NewProcessError(errType, errors.ErrorStack(err))
-		clearF()
-	}
-
-	executeSQLs := func() error {
-		if len(jobs) == 0 {
-			return nil
-		}
-		errCtx := db.executeSQLJob(jobs, s.cfg.MaxRetry)
-		var err error
-		if errCtx != nil {
-			err = errCtx.err
-			s.appendExecErrors(errCtx)
-		}
-		if s.tracer.Enable() {
-			syncerJobState := s.tracer.FinishedSyncerJobState(err)
-			for _, job := range jobs {
-				_, err2 := s.tracer.CollectSyncerJobEvent(job.traceID, job.traceGID, int32(job.tp), job.pos, job.currentPos, queueBucket, job.sql, job.ddls, nil, nil, syncerJobState)
-				if err2 != nil {
-					log.Errorf("[syncer] trace error: %s", err2)
-				}
-			}
-		}
-		return errors.Trace(err)
-	}
-
-	var err error
-	for {
-		select {
-		case sqlJob, ok := <-jobChan:
-			if !ok {
-				return
-			}
-			idx++
-
-			if sqlJob.tp == ddl {
-				err = executeSQLs()
-				if err != nil {
-					fatalF(err, pb.ErrorType_ExecSQL)
-					continue
-				}
-
-				if sqlJob.ddlExecItem != nil && sqlJob.ddlExecItem.req != nil && !sqlJob.ddlExecItem.req.Exec {
-					log.Infof("[syncer] ignore sharding DDLs %v", sqlJob.ddls)
-				} else {
-					args := make([][]interface{}, len(sqlJob.ddls))
-					err = db.executeSQL(sqlJob.ddls, args, 1)
-					if err != nil && ignoreDDLError(err) {
-						err = nil
-					}
-
-					if s.tracer.Enable() {
-						syncerJobState := s.tracer.FinishedSyncerJobState(err)
-						var execDDLReq *pb.ExecDDLRequest
-						if sqlJob.ddlExecItem != nil {
-							execDDLReq = sqlJob.ddlExecItem.req
-						}
-						_, err := s.tracer.CollectSyncerJobEvent(sqlJob.traceID, sqlJob.traceGID, int32(sqlJob.tp), sqlJob.pos, sqlJob.currentPos, queueBucket, sqlJob.sql, sqlJob.ddls, nil, execDDLReq, syncerJobState)
-						if err != nil {
-							log.Errorf("[syncer] trace error: %s", err)
-						}
-					}
-				}
-				if err != nil {
-					s.appendExecErrors(&ExecErrorContext{
-						err:  err,
-						pos:  sqlJob.currentPos,
-						jobs: fmt.Sprintf("%v", sqlJob.ddls),
-					})
-				}
-
-				if s.cfg.IsSharding {
-					// for sharding DDL syncing, send result back
-					if sqlJob.ddlExecItem != nil {
-						sqlJob.ddlExecItem.resp <- errors.Trace(err)
-					}
-					s.ddlExecInfo.ClearBlockingDDL()
-				}
-				if err != nil {
-					// errro then pause.
-					fatalF(err, pb.ErrorType_ExecSQL)
-					continue
-				}
-
-				tpCnt[sqlJob.tp] += int64(len(sqlJob.ddls))
-				clearF()
-
-			} else if sqlJob.tp != flush && len(sqlJob.sql) > 0 {
-				jobs = append(jobs, sqlJob)
-				tpCnt[sqlJob.tp]++
-			}
-
-			if idx >= count || sqlJob.tp == flush {
-				err = executeSQLs()
-				if err != nil {
-					fatalF(err, pb.ErrorType_ExecSQL)
-					continue
-				}
-				clearF()
-			}
-
-		default:
-			if len(jobs) > 0 {
-				err = executeSQLs()
-				if err != nil {
-					fatalF(err, pb.ErrorType_ExecSQL)
-					continue
-				}
-				clearF()
-			} else {
-				time.Sleep(waitTime)
-			}
-		}
-	}
-}
-*/
 
 // Run starts running for sync, we should guarantee it can rerun when paused.
 func (s *Syncer) Run(ctx context.Context) (err error) {
@@ -969,28 +640,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		return errors.Trace(err)
 	}
 
-	/*
-		s.queueBucketMapping = make([]string, 0, s.cfg.WorkerCount+1)
-		for i := 0; i < s.cfg.WorkerCount; i++ {
-			s.wg.Add(1)
-			name := queueBucketName(i)
-			s.queueBucketMapping = append(s.queueBucketMapping, name)
-			go func(i int, n string) {
-				ctx2, cancel := context.WithCancel(ctx)
-				s.sync(ctx2, n, s.toDBs[i], s.jobs[i])
-				cancel()
-			}(i, name)
-		}
-
-		s.queueBucketMapping = append(s.queueBucketMapping, adminQueueName)
-		s.wg.Add(1)
-		go func() {
-			ctx2, cancel := context.WithCancel(ctx)
-			s.sync(ctx2, adminQueueName, s.ddlDB, s.jobs[s.cfg.WorkerCount])
-			cancel()
-		}()
-	*/
-
 	s.wg.Add(1)
 	go func() {
 		ctx2, cancel := context.WithCancel(ctx)
@@ -1003,13 +652,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			log.Errorf("panic. err: %s, stack: %s", err1, debug.Stack())
 			err = errors.Errorf("panic error: %v", err1)
 		}
-
-		/*
-			// flush the jobs channels, but if error occurred, we should not flush the checkpoints
-			if err1 := s.flushJobs(); err1 != nil {
-				log.Errorf("fail to finish all jobs error: %v", err1)
-			}
-		*/
 	}()
 
 	s.start = time.Now()
@@ -1126,12 +768,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			eventTimeoutCounter += eventTimeout
 			if eventTimeoutCounter < maxEventTimeout {
 				s.pipeline.Flush()
-				/*
-					err = s.flushJobs()
-					if err != nil {
-						return errors.Trace(err)
-					}
-				*/
+
 				continue
 			}
 
@@ -1256,17 +893,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			if ignore {
 				binlogSkippedEventsTotal.WithLabelValues("rows", s.cfg.Name).Inc()
 
-				s.pipeline.Input(&PipeData{
+				// for RowsEvent, we should record lastPos rather than currentPos
+				if err = s.pipeline.Input(&PipeData{
 					tp:  skip,
 					pos: lastPos,
-					//gtidSet: nil,
-				})
-				/*
-					// for RowsEvent, we should record lastPos rather than currentPos
-					if err = s.recordSkipSQLsPos(lastPos, nil); err != nil {
-						return errors.Trace(err)
-					}
-				*/
+				}); err != nil {
+					return errors.Trace(err)
+				}
 
 				continue
 			}
@@ -1335,7 +968,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					traceID = traceEvent.Base.TraceID
 				}
 
-				s.pipeline.Input(&PipeData{
+				if err = s.pipeline.Input(&PipeData{
 					tp:           insert,
 					sourceSchema: string(ev.Table.Schema),
 					sourceTable:  string(ev.Table.Table),
@@ -1349,23 +982,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					currentPos:   currentPos,
 					gtidSet:      nil,
 					traceID:      traceID,
-				})
-				/*
-					for i := range sqls {
-						var arg []interface{}
-						var key []string
-						if args != nil {
-							arg = args[i]
-						}
-						if keys != nil {
-							key = keys[i]
-						}
-						err = s.commitJob(insert, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil, traceID)
-						if err != nil {
-							return errors.Trace(err)
-						}
-					}
-				*/
+				}); err != nil {
+					return errors.Trace(err)
+				}
 			case replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2:
 				if !applied {
 					param.safeMode = safeMode.Enable()
@@ -1385,7 +1004,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					traceID = traceEvent.Base.TraceID
 				}
 
-				s.pipeline.Input(&PipeData{
+				if err = s.pipeline.Input(&PipeData{
 					tp:           update,
 					sourceSchema: string(ev.Table.Schema),
 					sourceTable:  string(ev.Table.Table),
@@ -1399,25 +1018,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					currentPos:   currentPos,
 					gtidSet:      nil,
 					traceID:      traceID,
-				})
-
-				/*
-					for i := range sqls {
-						var arg []interface{}
-						var key []string
-						if args != nil {
-							arg = args[i]
-						}
-						if keys != nil {
-							key = keys[i]
-						}
-
-						err = s.commitJob(update, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil, traceID)
-						if err != nil {
-							return errors.Trace(err)
-						}
-					}
-				*/
+				}); err != nil {
+					return errors.Trace(err)
+				}
 			case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
 				if !applied {
 					sqls, keys, args, err = genDeleteSQLs(param)
@@ -1436,7 +1039,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					traceID = traceEvent.Base.TraceID
 				}
 
-				s.pipeline.Input(&PipeData{
+				if err = s.pipeline.Input(&PipeData{
 					tp:           del,
 					sourceSchema: string(ev.Table.Schema),
 					sourceTable:  string(ev.Table.Table),
@@ -1450,24 +1053,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					currentPos:   currentPos,
 					gtidSet:      nil,
 					traceID:      traceID,
-				})
-				/*
-					for i := range sqls {
-						var arg []interface{}
-						var key []string
-						if args != nil {
-							arg = args[i]
-						}
-						if keys != nil {
-							key = keys[i]
-						}
-
-						err = s.commitJob(del, string(ev.Table.Schema), string(ev.Table.Table), table.schema, table.name, sqls[i], arg, key, true, lastPos, currentPos, nil, traceID)
-						if err != nil {
-							return errors.Trace(err)
-						}
-					}
-				*/
+				}); err != nil {
+					return errors.Trace(err)
+				}
 			}
 		case *replication.QueryEvent:
 			currentPos = mysql.Position{
@@ -1486,16 +1074,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				binlogSkippedEventsTotal.WithLabelValues("query", s.cfg.Name).Inc()
 				log.Warnf("[skip query-sql]%s [schema]:%s", sql, ev.Schema)
 				lastPos = currentPos // before record skip pos, update lastPos
-				s.pipeline.Input(&PipeData{
+				if err = s.pipeline.Input(&PipeData{
 					tp:  skip,
 					pos: lastPos,
-					//gtidSet: nil,
-				})
-				/*
-					if err = s.recordSkipSQLsPos(lastPos, nil); err != nil {
-						return errors.Trace(err)
-					}
-				*/
+				}); err != nil {
+					return errors.Trace(err)
+				}
+
 				continue
 			}
 			if !parseResult.isDDL {
@@ -1621,17 +1206,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			log.Infof("need handled ddls %v in position %v", needHandleDDLs, currentPos)
 			if len(needHandleDDLs) == 0 {
 				log.Infof("skip query %s in position %v", string(ev.Query), currentPos)
-				s.pipeline.Input(&PipeData{
+				if err = s.pipeline.Input(&PipeData{
 					tp:  skip,
 					pos: lastPos,
-					//gtidSet: nil,
-				})
-
-				/*
-					if err = s.recordSkipSQLsPos(lastPos, nil); err != nil {
-						return errors.Trace(err)
-					}
-				*/
+				}); err != nil {
+					return errors.Trace(err)
+				}
 
 				continue
 			}
@@ -1656,20 +1236,15 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					log.Infof("[convert] execute need handled ddls converted to %v in position %s by sql operator", needHandleDDLs, currentPos)
 				}
 
-				s.pipeline.Input(&PipeData{
+				if err = s.pipeline.Input(&PipeData{
 					tp:         ddl,
 					ddls:       needHandleDDLs,
 					pos:        lastPos,
 					currentPos: currentPos,
 					traceID:    traceID,
-				})
-				/*
-					job := newDDLJob(nil, needHandleDDLs, lastPos, currentPos, nil, nil, traceID)
-					err = s.addJob(job)
-					if err != nil {
-						return errors.Trace(err)
-					}
-				*/
+				}); err != nil {
+					return errors.Trace(err)
+				}
 				log.Infof("[end] execute need handled ddls %v in position %v", needHandleDDLs, currentPos)
 
 				for _, tbl := range targetTbls {
@@ -1811,28 +1386,16 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				log.Infof("[convert] execute need handled ddls converted to %v in position %s by sql operator", needHandleDDLs, currentPos)
 			}
 
-			s.pipeline.Input(&PipeData{
-				tp:         ddl,
-				ddls:       needHandleDDLs,
-				pos:        lastPos,
-				currentPos: currentPos,
-				traceID:    traceID,
-
-				sourceSchema: ddlInfo.tableNames[0][0].Schema,
-				sourceTable:  ddlInfo.tableNames[0][0].Name,
-				targetSchema: ddlInfo.tableNames[1][0].Schema,
-				targetTable:  ddlInfo.tableNames[1][0].Name,
-
-				traceGID: ddlExecItem.req.TraceGID,
-			})
-
-			/*
-				job := newDDLJob(ddlInfo, needHandleDDLs, lastPos, currentPos, nil, ddlExecItem, traceID)
-				err = s.addJob(job)
-				if err != nil {
-					return errors.Trace(err)
-				}
-			*/
+			if err = s.pipeline.Input(&PipeData{
+				tp:          ddl,
+				ddls:        needHandleDDLs,
+				pos:         lastPos,
+				currentPos:  currentPos,
+				traceID:     traceID,
+				ddlExecItem: ddlExecItem,
+			}); err != nil {
+				return errors.Trace(err)
+			}
 
 			if len(onlineDDLTableNames) > 0 {
 				s.clearOnlineDDL(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
@@ -1857,61 +1420,17 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			log.Debugf("[XID event][last_pos]%v [current_pos]%v [gtid set]%v", lastPos, currentPos, ev.GSet)
 			lastPos.Pos = e.Header.LogPos // update lastPos
 
-			s.pipeline.Input(&PipeData{
+			if err = s.pipeline.Input(&PipeData{
 				tp:         xid,
 				pos:        currentPos,
 				currentPos: currentPos,
 				traceID:    traceID,
-			})
-
-			/*
-				job := newXIDJob(currentPos, currentPos, nil, traceID)
-				err = s.addJob(job)
-				if err != nil {
-					return errors.Trace(err)
-				}
-			*/
+			}); err != nil {
+				return errors.Trace(err)
+			}
 		}
 	}
 }
-
-/*
-func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, retry bool, pos, cmdPos mysql.Position, gs gtid.Set, traceID string) error {
-	key, err := s.resolveCasuality(keys)
-	if err != nil {
-		return errors.Errorf("resolve karam error %v", err)
-	}
-	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, pos, cmdPos, gs, traceID)
-	err = s.addJob(job)
-	return errors.Trace(err)
-}
-*/
-
-/*
-func (s *Syncer) resolveCasuality(keys []string) (string, error) {
-	if s.cfg.DisableCausality {
-		if len(keys) > 0 {
-			return keys[0], nil
-		}
-		return "", nil
-	}
-	if s.c.detectConflict(keys) {
-		log.Debug("[causality] meet causality key, will generate a flush job and wait all sqls executed")
-		if err := s.flushJobs(); err != nil {
-			return "", errors.Trace(err)
-		}
-		s.c.reset()
-	}
-	if err := s.c.add(keys); err != nil {
-		return "", errors.Trace(err)
-	}
-	var key string
-	if len(keys) > 0 {
-		key = keys[0]
-	}
-	return s.c.get(key), nil
-}
-*/
 
 func (s *Syncer) genRouter() error {
 	for _, rule := range s.cfg.RouteRules {
@@ -2069,25 +1588,6 @@ func (s *Syncer) closeDBs() {
 	closeDBs(s.ddlDB)
 }
 
-/*
-// record skip ddl/dml sqls' position
-// make newJob's sql argument empty to distinguish normal sql and skips sql
-func (s *Syncer) recordSkipSQLsPos(pos mysql.Position, gtidSet gtid.Set) error {
-	job := newSkipJob(pos, gtidSet)
-	err := s.addJob(job)
-	return errors.Trace(err)
-}
-*/
-
-/*
-func (s *Syncer) flushJobs() error {
-	log.Infof("flush all jobs, global checkpoint=%s", s.checkpoint)
-	job := newFlushJob()
-	err := s.addJob(job)
-	return errors.Trace(err)
-}
-*/
-
 func (s *Syncer) reSyncBinlog(cfg replication.BinlogSyncerConfig) (streamer.Streamer, error) {
 	err := s.retrySyncGTIDs()
 	if err != nil {
@@ -2187,8 +1687,7 @@ func (s *Syncer) Close() {
 // stopSync stops syncing, now it used by Close and Pause
 // maybe we can refine the workflow more clear
 func (s *Syncer) stopSync() {
-	<-s.done // wait Run to return
-	//s.closeJobChans()
+	<-s.done    // wait Run to return
 	s.wg.Wait() // wait job workers to return
 
 	// before re-write workflow for s.syncer, simply close it
@@ -2409,22 +1908,6 @@ func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 	}
 	return nil
 }
-
-/*
-// appendExecErrors appends syncer execErrors with new value
-func (s *Syncer) appendExecErrors(errCtx *ExecErrorContext) {
-	s.execErrors.Lock()
-	defer s.execErrors.Unlock()
-	s.execErrors.errors = append(s.execErrors.errors, errCtx)
-}
-
-// resetExecErrors resets syncer execErrors
-func (s *Syncer) resetExecErrors() {
-	s.execErrors.Lock()
-	defer s.execErrors.Unlock()
-	s.execErrors.errors = make([]*ExecErrorContext, 0)
-}
-*/
 
 func (s *Syncer) setTimezone() {
 	var loc *time.Location

@@ -25,30 +25,10 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/pkg/utils"
-	//sm "github.com/pingcap/dm/syncer/safe-mode"
-	//"github.com/pingcap/failpoint"
-)
-
-var (
-//retryTimeout    = 3 * time.Second
-//waitTime        = 10 * time.Millisecond
-//eventTimeout    = 1 * time.Minute
-//maxEventTimeout = 1 * time.Hour
-//statusTime      = 30 * time.Second
-
-// MaxDDLConnectionTimeoutMinute also used by SubTask.ExecuteDDL
-//MaxDDLConnectionTimeoutMinute = 10
-
-//maxDMLConnectionTimeout = "1m"
-//maxDDLConnectionTimeout = fmt.Sprintf("%dm", MaxDDLConnectionTimeoutMinute)
-
-//adminQueueName     = "admin queue"
-//defaultBucketCount = 8
 )
 
 var _ Pipe = &SyncPipe{}
@@ -57,22 +37,19 @@ var _ Pipe = &SyncPipe{}
 type SyncPipe struct {
 	sync.RWMutex
 
+	ctx    context.Context
+	cancel context.CancelFunc
+
 	taskName string
 
 	maxRetry int
 
-	//cfg     *config.SubTaskConfig
-
-	//syncer *Syncer
 	sgk *ShardingGroupKeeper // keeper to keep all sharding (sub) group in this syncer
 
-	ddlInfoCh   chan *pb.DDLInfo // DDL info pending to sync, only support sync one DDL lock one time, refine if needed
-	ddlExecInfo *DDLExecInfo     // DDL execute (ignore) info
+	ddlExecInfo *DDLExecInfo // DDL execute (ignore) info
 
 	wg    sync.WaitGroup
 	jobWg sync.WaitGroup
-
-	tables map[string]*table // table cache: `target-schema`.`target-table` -> table
 
 	fromDB *Conn
 	toDBs  []*Conn
@@ -80,21 +57,12 @@ type SyncPipe struct {
 
 	closed sync2.AtomicBool
 
-	//start    time.Time
-	//lastTime time.Time
-
-	//lastCount sync2.AtomicInt64
-	count sync2.AtomicInt64
-	//totalTps  sync2.AtomicInt64
-	//tps       sync2.AtomicInt64
-
-	//done chan struct{}
+	count *sync2.AtomicInt64
 
 	checkpoint CheckPoint
-	//onlineDDL  OnlinePlugin
 
 	// record process error rather than log.Fatal
-	errCh chan *pb.ProcessError
+	errCh chan error
 
 	// record whether error occurred when execute SQLs
 	execErrorDetected sync2.AtomicBool
@@ -104,20 +72,8 @@ type SyncPipe struct {
 		errors []*ExecErrorContext
 	}
 
-	//sqlOperatorHolder *operator.Holder
-
-	//heartbeat *Heartbeat
-
-	//readerHub *streamer.ReaderHub
-
 	tracer *tracing.Tracer
 
-	//currentPosMu struct {
-	//	sync.RWMutex
-	//	currentPos mysql.Position // use to calc remain binlog size
-	//}
-
-	//safeMode bool
 	flavor string
 
 	workerCount int
@@ -131,55 +87,14 @@ type SyncPipe struct {
 
 	input chan *PipeData
 
-	once sync.Once
-
 	queueBucketMapping []string
 
 	jobs         []chan *job
 	jobsClosed   sync2.AtomicBool
 	jobsChanLock sync.Mutex
 
-	lastPos mysql.Position
-
-	ctx context.Context
-	cancel context.CancelFunc
-
 	doAfterFlushCheckpoint func(pos mysql.Position) error
 }
-
-/*
-// NewSyncPipe creates a new SyncPipe.
-func NewSyncPipe(cfg *config.SubTaskConfig) *SyncPipe {
-	syncer := new(SyncPipe)
-	syncer.cfg = cfg
-	syncer.jobsClosed.Set(true) // not open yet
-	syncer.closed.Set(false)
-	syncer.lastCount.Set(0)
-	syncer.count.Set(0)
-	syncer.tables = make(map[string]*table)
-	syncer.c = newCausality()
-	syncer.done = make(chan struct{})
-	syncer.checkpoint = NewRemoteCheckPoint(cfg, syncer.checkpointID())
-	syncer.tracer = tracing.GetTracer()
-
-	syncer.sqlOperatorHolder = operator.NewHolder()
-	syncer.readerHub = streamer.GetReaderHub()
-
-	if cfg.isSharding {
-		// only need to sync DDL in sharding mode
-		// for sharding group's config, we should use a different ServerID
-		// now, use 2**32 -1 - config's ServerID simply
-		// maybe we can refactor to remove RemoteBinlog support in DM
-		//syncer.shardingSyncCfg = syncer.syncCfg
-		//syncer.shardingSyncCfg.ServerID = math.MaxUint32 - syncer.syncCfg.ServerID
-		syncer.sgk = NewShardingGroupKeeper()
-		syncer.ddlInfoCh = make(chan *pb.DDLInfo, 1)
-		syncer.ddlExecInfo = NewDDLExecInfo()
-	}
-
-	return syncer
-}
-*/
 
 func (s *SyncPipe) newJobChans(count int) {
 	s.closeJobChans()
@@ -203,203 +118,60 @@ func (s *SyncPipe) closeJobChans() {
 }
 
 // Init implements the Pipe interface
-// don't forget init checkpoint and sgk
+// don't forget do something in initFunc, like checkpoint
 func (s *SyncPipe) Init(cfg *config.SubTaskConfig, initFunc func() error) (err error) {
-	//s.cfg = cfg
-	ctx, cancel := context.WithCancel(context.Background())
-
-	s.ctx = ctx
-	s.cancel = cancel
-
-	s.input = make(chan *PipeData, 10)
-
 	s.taskName = cfg.Name
 	s.maxRetry = cfg.MaxRetry
 	s.flavor = cfg.Flavor
-
 	s.workerCount = cfg.WorkerCount
 	s.batch = cfg.Batch
-
 	s.isSharding = cfg.IsSharding
+	s.disableCausality = cfg.DisableCausality
 
-	s.c = newCausality()
-
-	s.newJobChans(s.workerCount + 1)
-	s.jobsClosed.Set(true)
-
-	s.execErrorDetected.Set(false)
-
-	//s.resetExecErrors()
 	if err := initFunc(); err != nil {
 		return errors.Trace(err)
 	}
 
-	/*
-	rollbackHolder := fr.NewRollbackHolder("syncer")
-	defer func() {
-		if err != nil {
-			rollbackHolder.RollbackReverseOrder()
-		}
-	}()
-
-	err = s.createDBs(cfg)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	rollbackHolder.Add(fr.FuncRollback{"close-DBs", s.closeDBs})
-
-	if err := s.createDBs(cfg); err != nil {
-		return errors.Trace(err)
-	}
-	*/
-
-	//s.Run()
 	return nil
 }
 
-// Name is the pipe's name
+// Name implements pipe interface
 func (s *SyncPipe) Name() string {
 	return "sync"
 }
 
-// Update ...
+// Update implements pipe interface
 func (s *SyncPipe) Update(cfg *config.SubTaskConfig) {
 	return
 }
 
-// Input data
+// Input implements pipe interface
 func (s *SyncPipe) Input() chan *PipeData {
 	return s.input
 }
 
-/*
-// Process ...
-func (s *SyncPipe) Process() {
-	once.Do(s.runBackground)
-
-	
-}
-*/
-
-// SetNextPipe ...
+// SetNextPipe implements pipe interface
 func (s *SyncPipe) SetNextPipe(pipe Pipe) {
-
+	// sync don't have next pipe
 	return
 }
 
-// Report ...
+// Report implements pipe interface
 func (s *SyncPipe) Report() {
 	return
 }
 
+// Wait implements pipe interface
 func (s *SyncPipe) Wait() {
 	s.jobWg.Wait()
 }
 
 func (s *SyncPipe) reportErr(err error) {
 	log.Warn("pipe %s meet error %v", s.Name(), err)
-	// TODO: send error to channel and stop sync
-}
-
-/*
-// Process implements the dm.Unit interface.
-func (s *SyncPipe) process(ctx context.Context, pr chan pb.ProcessResult) {
-	syncerExitWithErrorCounter.WithLabelValues(s.taskName).Add(0)
-
-	newCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	// create new done chan
-	s.done = make(chan struct{})
-	// create new job chans
-	s.newJobChans(s.s.workerCount + 1)
-
-	s.runFatalChan = make(chan *pb.ProcessError, s.s.workerCount+1)
-	s.execErrorDetected.Set(false)
-	s.resetExecErrors()
-	errs := make([]*pb.ProcessError, 0, 2)
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			err, ok := <-s.runFatalChan
-			if !ok {
-				return
-			}
-			cancel() // cancel s.Run
-			syncerExitWithErrorCounter.WithLabelValues(s.taskName).Inc()
-			errs = append(errs, err)
-		}
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		<-newCtx.Done() // ctx or newCtx
-		if s.ddlExecInfo != nil {
-			s.ddlExecInfo.Close() // let Run can return
-		}
-	}()
-
-	s.closeJobChans()     // Run returned, all jobs sent, we can close s.jobs
-	s.wg.Wait()           // wait for sync goroutine to return
-	close(s.runFatalChan) // Run returned, all potential fatal sent to s.runFatalChan
-	wg.Wait()             // wait for receive all fatal from s.runFatalChan
-
-	isCanceled := false
-	if len(errs) == 0 {
-		select {
-		case <-ctx.Done():
-			isCanceled = true
-		default:
-		}
-	} else {
-		// pause because of error occurred
-		s.Pause()
+	select {
+	case s.errCh <- err:
+	case <-s.ctx.Done():
 	}
-
-	// try to rollback checkpoints, if they already flushed, no effect
-	prePos := s.checkpoint.GlobalPoint()
-	s.checkpoint.Rollback()
-	currPos := s.checkpoint.GlobalPoint()
-	if prePos.Compare(currPos) != 0 {
-		log.Warnf("[syncer] rollback global checkpoint from %v to %v because error occurred", prePos, currPos)
-	}
-
-	pr <- pb.ProcessResult{
-		IsCanceled: isCanceled,
-		Errors:     errs,
-	}
-}
-*/
-
-func (s *SyncPipe) getMasterStatus() (mysql.Position, gtid.Set, error) {
-	return utils.GetMasterStatus(s.fromDB.db, s.flavor)
-}
-
-func (s *SyncPipe) getTableFromDB(db *Conn, schema string, name string) (*table, error) {
-	table := &table{}
-	table.schema = schema
-	table.name = name
-	table.indexColumns = make(map[string][]*column)
-
-	err := getTableColumns(db, table, s.maxRetry)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	err = getTableIndex(db, table, s.maxRetry)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	if len(table.columns) == 0 {
-		return nil, errors.Errorf("invalid table %s.%s", schema, name)
-	}
-
-	return table, nil
 }
 
 func (s *SyncPipe) addCount(isFinished bool, queueBucket string, tp opType, n int64) {
@@ -445,7 +217,7 @@ func (s *SyncPipe) checkWait(job *job) bool {
 func (s *SyncPipe) addJob(job *job) error {
 	var (
 		queueBucket int
-		//execDDLReq  *pb.ExecDDLRequest
+		execDDLReq  *pb.ExecDDLRequest
 	)
 	switch job.tp {
 	case xid:
@@ -467,16 +239,22 @@ func (s *SyncPipe) addJob(job *job) error {
 		s.jobWg.Add(1)
 		queueBucket = s.workerCount
 		s.jobs[queueBucket] <- job
-		/*
-			if job.ddlExecItem != nil {
-				execDDLReq = job.ddlExecItem.req
-			}
-		*/
+		if job.ddlExecItem != nil {
+			execDDLReq = job.ddlExecItem.req
+		}
+
 	case insert, update, del:
 		s.jobWg.Add(1)
 		queueBucket = int(utils.GenHashKey(job.key)) % s.workerCount
 		s.addCount(false, s.queueBucketMapping[queueBucket], job.tp, 1)
 		s.jobs[queueBucket] <- job
+	}
+
+	if s.tracer.Enable() {
+		_, err := s.tracer.CollectSyncerJobEvent(job.traceID, job.traceGID, int32(job.tp), job.pos, job.currentPos, s.queueBucketMapping[queueBucket], job.sql, job.ddls, job.args, execDDLReq, pb.SyncerJobState_queued)
+		if err != nil {
+			log.Errorf("[syncer] trace error: %s", err)
+		}
 	}
 
 	wait := s.checkWait(job)
@@ -553,10 +331,8 @@ func (s *SyncPipe) flushCheckPoints() error {
 	}
 	log.Infof("[syncer] flushed checkpoint %s", s.checkpoint)
 
-	log.Infof("checkpoint: name: %s, pos: %d", s.checkpoint.GlobalPoint().Name, s.checkpoint.GlobalPoint().Pos)
 	// update current active relay log after checkpoint flushed
 	err = s.doAfterFlushCheckpoint(s.checkpoint.GlobalPoint())
-	//err = s.updateActiveRelayLog(s.checkpoint.GlobalPoint())
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -565,8 +341,13 @@ func (s *SyncPipe) flushCheckPoints() error {
 }
 
 func (s *SyncPipe) Run() {
-	//safeMode := sm.NewSafeMode()
-	//s.enableSafeModeInitializationPhase(ctx, safeMode)
+	s.ctx, s.cancel = context.WithCancel(context.Background())
+	s.input = make(chan *PipeData, 10)
+	s.c = newCausality()
+	s.newJobChans(s.workerCount + 1)
+	s.jobsClosed.Set(true) // not open yet
+	s.execErrorDetected.Set(false)
+	s.resetExecErrors()
 
 	go func() {
 		for {
@@ -604,15 +385,6 @@ func (s *SyncPipe) Run() {
 		s.sync(ctx2, adminQueueName, s.ddlDB, s.jobs[s.workerCount])
 		cancel()
 	}()
-
-	/*
-	defer func() {
-		// flush the jobs channels, but if error occurred, we should not flush the checkpoints
-		if err1 := s.flushJobs(); err1 != nil {
-			log.Errorf("fail to finish all jobs error: %v", err1)
-		}
-	}()
-	*/
 }
 
 func (s *SyncPipe) sync(ctx context.Context, queueBucket string, db *Conn, jobChan chan *job) {
@@ -638,7 +410,7 @@ func (s *SyncPipe) sync(ctx context.Context, queueBucket string, db *Conn, jobCh
 
 	fatalF := func(err error, errType pb.ErrorType) {
 		s.execErrorDetected.Set(true)
-		s.errCh <- unit.NewProcessError(errType, errors.ErrorStack(err))
+		s.reportErr(err)
 		clearF()
 	}
 
@@ -791,11 +563,10 @@ func (s *SyncPipe) isClosed() bool {
 func (s *SyncPipe) Close() {
 	s.cancel()
 	s.closeJobChans()
-	//s.closeDBs()
-	s.Wait()
+	s.wg.Wait()
 }
 
-func (s *SyncPipe) SetErrorChan(errCh chan *pb.ProcessError) {
+func (s *SyncPipe) SetErrorChan(errCh chan error) {
 	s.errCh = errCh
 }
 
@@ -823,55 +594,19 @@ func (s *SyncPipe) resetExecErrors() {
 	s.execErrors.errors = make([]*ExecErrorContext, 0)
 }
 
-/*
-func (s *SyncPipe) enableSafeModeInitializationPhase(ctx context.Context, safeMode *sm.SafeMode) {
-	safeMode.Reset() // in initialization phase, reset first
-	safeMode.Add(1)  // try to enable
-
-	if s.safeMode {
-		safeMode.Add(1) // add 1 but should no corresponding -1
-		log.Info("[syncer] enable safe-mode by config")
-	}
-
-	go func() {
-		defer func() {
-			err := safeMode.Add(-1) // try to disable after 5 minutes
-			if err != nil {
-				// send error to the fatal chan to interrupt the process
-				s.runFatalChan <- unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err))
-			}
-		}()
-
-		initPhaseSeconds := 300
-
-		failpoint.Inject("SafeModeInitPhaseSeconds", func(val failpoint.Value) {
-			seconds, _ := val.(int)
-			initPhaseSeconds = seconds
-			log.Infof("[failpoint] set initPhaseSeconds to %d", seconds)
-		})
-
-		select {
-		case <-ctx.Done():
-		case <-time.After(time.Duration(initPhaseSeconds) * time.Second):
-		}
-	}()
-}
-*/
-
 func (s *SyncPipe) commitJobs(pipeData *PipeData) error {
 	switch pipeData.tp {
 	case null:
 		return nil
 	case insert, update, del:
 		for i, sql := range pipeData.sqls {
-			// lastPos
-			err := s.commitJob(pipeData.tp, pipeData.sourceSchema, pipeData.sourceTable, pipeData.targetSchema, pipeData.targetTable, sql, pipeData.args[i], pipeData.keys[i], true, s.lastPos, pipeData.currentPos, pipeData.gtidSet, pipeData.traceID)
+			err := s.commitJob(pipeData.tp, pipeData.sourceSchema, pipeData.sourceTable, pipeData.targetSchema, pipeData.targetTable, sql, pipeData.args[i], pipeData.keys[i], true, pipeData.pos, pipeData.currentPos, pipeData.gtidSet, pipeData.traceID)
 			if err != nil {
 				return errors.Trace(err)
 			}
 		}
 	case ddl:
-		err := s.addJob(newDDLJob(nil, pipeData.ddls, s.lastPos, pipeData.currentPos, pipeData.gtidSet, nil, pipeData.traceID))
+		err := s.addJob(newDDLJob(nil, pipeData.ddls, pipeData.pos, pipeData.currentPos, pipeData.gtidSet, pipeData.ddlExecItem, pipeData.traceID))
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -886,7 +621,7 @@ func (s *SyncPipe) commitJobs(pipeData *PipeData) error {
 			return errors.Trace(err)
 		}
 	case skip:
-		err := s.addJob(newSkipJob(s.lastPos, nil))
+		err := s.addJob(newSkipJob(pipeData.pos, nil))
 		if err != nil {
 			return errors.Trace(err)
 		}

@@ -15,51 +15,47 @@ package syncer
 
 import (
 	"context"
-	"sync"
 
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
 )
 
-// Pipe ...
+// Pipe is the littlest process unit in syncer
 type Pipe interface {
 	// Name is the pipe's name
 	Name() string
 
-	// Init ...
+	// Init initial the pipe
 	Init(*config.SubTaskConfig, func() error) error
 
-	// Update ...
+	// Update updates the pipe's config
 	Update(*config.SubTaskConfig)
 
-	// Input data
+	// Input receives data
 	Input() chan *PipeData
 
-	// Run ...
+	// Run start the pipe's process
 	Run()
 
-	// Close ...
+	// Close closes the pipe
 	Close()
 
-	// SetNextPipe ...
+	// SetNextPipe sets the pipe's next pipe, pipe will send data to the next pipe after process
 	SetNextPipe(Pipe)
 
-	// Output ...
-	//Output(*PipeData)
-
-	// Report ...
+	// Report reports the pipe's status to pipeline
 	Report()
 
-	// Wait ...
+	// Wait waits all the data in the pipe is processed
 	Wait()
 
-	// SetErrorChan ...
-	SetErrorChan(chan *pb.ProcessError)
+	// SetErrorChan set the error channel, send error to this channel when meet error
+	SetErrorChan(chan error)
 }
 
 // PipeData is the data processed in pipe
@@ -78,20 +74,15 @@ type PipeData struct {
 	pos          mysql.Position
 	currentPos   mysql.Position // exactly binlog position of current SQL
 	gtidSet      gtid.Set
-	ddlExecItem  *DDLExecItem
 	ddls         []string
 	traceID      string
 	traceGID     string
 
-	ddlInfo *shardingDDLInfo
+	ddlExecItem *DDLExecItem
 }
 
 // Pipeline ...
 type Pipeline struct {
-	sync.RWMutex
-
-	// errCh chan error
-
 	ctx    context.Context
 	cancel context.CancelFunc
 
@@ -99,26 +90,20 @@ type Pipeline struct {
 
 	isClosed sync2.AtomicBool
 
-	errCh chan *pb.ProcessError
+	errCh    chan error
 	errChLen int
 }
 
+// NewPipeline returns a new pipeline
 func NewPipeline(cfg *config.SubTaskConfig) *Pipeline {
-	//ctx, cancel := context.WithCancel(context.Background())
 	return &Pipeline{
-		//ctx:    ctx,
-		//cancel: cancel,
-		errChLen: cfg.WorkerCount+1,
-		pipes:  make([]Pipe, 0, 5),
-		//errCh:  make(chan *pb.ProcessError, cfg.WorkerCount+1),
+		errChLen: cfg.WorkerCount + 1,
+		pipes:    make([]Pipe, 0, 5),
 	}
 }
 
 // AddPipe adds a pipe to this pipeline
 func (p *Pipeline) AddPipe(pipe Pipe) {
-	p.Lock()
-	defer p.Unlock()
-
 	if len(p.pipes) == 0 {
 		p.pipes = []Pipe{pipe}
 		return
@@ -127,33 +112,30 @@ func (p *Pipeline) AddPipe(pipe Pipe) {
 	lastPipe := p.pipes[len(p.pipes)-1]
 	lastPipe.SetNextPipe(pipe)
 
-	//pipe.SetErrorChan(p.errCh)
-
 	p.pipes = append(p.pipes, pipe)
 }
 
-// Input ...
-func (p *Pipeline) Input(data *PipeData) {
-	log.Infof("pipeline get pipedata %v", data)
+// Input receives data
+func (p *Pipeline) Input(data *PipeData) error {
 	if len(p.pipes) == 0 {
-		log.Warn("no pipes in this pipeline")
-		return
+		return errors.New("no pipes in this pipeline")
 	}
 
 	if p.isClosed.Get() {
-		log.Warn("pipeline is closed")
-		return
+		return errors.New("pipeline is closed")
 	}
 
 	select {
 	case p.pipes[0].Input() <- data:
-		log.Info("send data to first pipe")
+		return nil
 	case <-p.ctx.Done():
-		log.Info("context is done")
-		return
+		return errors.New("pipeline's context is done")
 	}
+
+	return nil
 }
 
+// Flush sends a PipeData with flush type, all pipes should wait all received data is processed
 func (p *Pipeline) Flush() {
 	p.Input(&PipeData{tp: flush})
 	p.Wait()
@@ -166,10 +148,12 @@ func (p *Pipeline) Wait() {
 	}
 }
 
+// Start starts the pipeline's process, run all pipes
 func (p *Pipeline) Start() {
+	log.Info("start pipeline")
 	p.ctx, p.cancel = context.WithCancel(context.Background())
-	p.errCh =  make(chan *pb.ProcessError, p.errChLen)
-	
+	p.errCh = make(chan error, p.errChLen)
+
 	for _, pipe := range p.pipes {
 		pipe.SetErrorChan(p.errCh)
 		pipe.Run()
@@ -178,7 +162,9 @@ func (p *Pipeline) Start() {
 	p.isClosed.Set(false)
 }
 
+// Close closes the pipeline
 func (p *Pipeline) Close() {
+	log.Info("close pipeline")
 	p.cancel()
 	p.isClosed.Set(true)
 
@@ -189,6 +175,7 @@ func (p *Pipeline) Close() {
 	close(p.errCh)
 }
 
-func (p *Pipeline) Errors() chan *pb.ProcessError {
+// Errors returns a channel for receive this pipeline's error
+func (p *Pipeline) Errors() chan error {
 	return p.errCh
 }
