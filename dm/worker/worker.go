@@ -84,6 +84,9 @@ func NewWorker(cfg *Config) (*Worker, error) {
 
 	// initial relay holder
 	err := w.relayHolder.Init()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 
 	// open kv db
 	dbDir := path.Join(w.cfg.MetaDir, "kv")
