@@ -454,6 +454,7 @@ message TaskLog {
     int64 id = 1;
     TaskMeta task = 2;
     int64 ts = 3;
+    // true means this log is applied successfully
     bool success = 4;
     string message = 5;
 }
