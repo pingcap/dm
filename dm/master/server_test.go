@@ -27,4 +27,4 @@ type testMaster struct {
 }
 
 var _ = Suite(&testMaster{})
-var _ = Suite(&testHttpServer{})
+var _ = Suite(&testHTTPServer{})

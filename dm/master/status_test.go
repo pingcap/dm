@@ -23,12 +23,12 @@ import (
 	"github.com/pingcap/errors"
 )
 
-type testHttpServer struct {
+type testHTTPServer struct {
 	server *Server
 	cfg    *Config
 }
 
-func (t *testHttpServer) startServer(c *check.C) {
+func (t *testHTTPServer) startServer(c *check.C) {
 	t.cfg = NewConfig()
 	t.cfg.MasterAddr = ":8261"
 
@@ -39,7 +39,7 @@ func (t *testHttpServer) startServer(c *check.C) {
 	c.Assert(err, check.IsNil)
 }
 
-func (t *testHttpServer) stopServer(c *check.C) {
+func (t *testHTTPServer) stopServer(c *check.C) {
 	if t.server != nil {
 		t.server.Close()
 	}
@@ -47,7 +47,7 @@ func (t *testHttpServer) stopServer(c *check.C) {
 
 const retryTime = 100
 
-func (t *testHttpServer) waitUntilServerOnline() error {
+func (t *testHTTPServer) waitUntilServerOnline() error {
 	statusURL := fmt.Sprintf("http://127.0.0.1%s/status", t.cfg.MasterAddr)
 	for i := 0; i < retryTime; i++ {
 		resp, err := http.Get(statusURL)
@@ -61,11 +61,11 @@ func (t *testHttpServer) waitUntilServerOnline() error {
 	return errors.Errorf("failed to connect http status for %d retries in every 10ms", retryTime)
 }
 
-func (ts *testHttpServer) TestStatus(c *check.C) {
-	ts.startServer(c)
-	defer ts.stopServer(c)
+func (t *testHTTPServer) TestStatus(c *check.C) {
+	t.startServer(c)
+	defer t.stopServer(c)
 
-	statusURL := fmt.Sprintf("http://127.0.0.1%s/status", ts.cfg.MasterAddr)
+	statusURL := fmt.Sprintf("http://127.0.0.1%s/status", t.cfg.MasterAddr)
 	resp, err := http.Get(statusURL)
 	c.Assert(err, check.IsNil)
 	buf, err2 := ioutil.ReadAll(resp.Body)
