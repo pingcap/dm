@@ -75,7 +75,7 @@ function run() {
     done
     cd -
 
-    usage_and_arg_test
+    # usage_and_arg_test
 
     mkdir -p $WORK_DIR/worker1 $WORK_DIR/worker2
     dm_worker1_conf="$WORK_DIR/worker1/dm-worker.toml"
@@ -90,16 +90,9 @@ function run() {
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 
-    update_task_not_paused $TASK_CONF
-
     pause_relay_success
     query_status_stopped_relay
     pause_relay_fail
-
-    update_task_worker_not_found $TASK_CONF 127.0.0.1:9999
-    update_task_success_single_worker $TASK_CONF 127.0.0.1:$WORKER1_PORT
-    update_task_success
-
     resume_relay_success
     query_status_with_no_tasks
 
@@ -107,12 +100,16 @@ function run() {
     check_task_not_pass $cur/conf/dm-task2.yaml
 
     dmctl_start_task
-
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    update_task_not_paused $TASK_CONF
 
     show_ddl_locks_no_locks $TASK_NAME
     query_status_with_tasks
     pause_task_success $TASK_NAME
+
+    update_task_worker_not_found $TASK_CONF 127.0.0.1:9999
+    update_task_success_single_worker $TASK_CONF 127.0.0.1:$WORKER1_PORT
+    update_task_success $TASK_CONF
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2

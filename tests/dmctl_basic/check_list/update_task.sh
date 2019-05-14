@@ -16,7 +16,7 @@ function update_task_while_master_down() {
     task_conf=$1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "update-task $task_conf" \
-        "can not update task config:" 1
+        "can not update task:" 1
 }
 
 function update_task_worker_not_found() {
@@ -34,7 +34,7 @@ function update_task_worker_not_found() {
     task_conf=$1
     not_found_worker_addr=$2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "update-task $task_conf -w $worker_addr" \
+        "update-task $task_conf -w $not_found_worker_addr " \
         "\"result\": true" 1 \
         "\"result\": false" 1 \
         "\"worker\": \"$not_found_worker_addr\"" 1 \
