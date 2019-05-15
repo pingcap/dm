@@ -375,20 +375,6 @@ func (w *Worker) doFetchDDLInfo(ctx context.Context, ch chan<- *pb.DDLInfo) {
 	ch <- v
 }
 
-// SendBackDDLInfo sends sub tasks' DDL info back to pending
-func (w *Worker) SendBackDDLInfo(ctx context.Context, info *pb.DDLInfo) bool {
-	if w.closed.Get() == closedTrue {
-		log.Warnf("[worker] sending DDLInfo %v back to a closed worker", info)
-		return false
-	}
-
-	st := w.findSubTask(info.Task)
-	if st == nil {
-		return false
-	}
-	return st.SendBackDDLInfo(ctx, info)
-}
-
 // RecordDDLLockInfo records the current DDL lock info which pending to sync
 func (w *Worker) RecordDDLLockInfo(info *pb.DDLLockInfo) error {
 	if w.closed.Get() == closedTrue {

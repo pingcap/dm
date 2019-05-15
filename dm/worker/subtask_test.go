@@ -155,6 +155,12 @@ func (t *testSubTask) TestSubTaskNormalUsage(c *C) {
 	st := NewSubTask(cfg)
 	c.Assert(st.Stage(), DeepEquals, pb.Stage_New)
 
+	// test empty and fail
+	st.units = nil
+	st.Run()
+	c.Assert(st.Stage(), Equals, pb.Stage_Paused)
+	c.Assert(strings.Contains(st.Result().Errors[0].Msg, "has no dm units for mode"), IsTrue)
+
 	mockDumper := NewMockUnit(pb.UnitType_Dump)
 	mockLoader := NewMockUnit(pb.UnitType_Load)
 	st.units = []unit.Unit{mockDumper, mockLoader}
@@ -271,6 +277,18 @@ func (t *testSubTask) TestPauseAndResumeSubtask(c *C) {
 	c.Assert(st.CurrUnit(), Equals, mockDumper)
 	c.Assert(st.Error(), IsNil)
 	c.Assert(st.Result(), IsNil)
+	c.Assert(st.CheckUnit(), IsFalse)
+
+	cfg1 := &config.SubTaskConfig{
+		Name: "xxx",
+		Mode: config.ModeFull,
+		From: config.DBConfig{
+			Host: "127.0.0.1",
+		},
+	}
+	c.Assert(st.UpdateFromConfig(cfg1), IsNil)
+	c.Assert(st.cfg.From, DeepEquals, cfg1.From)
+	c.Assert(st.cfg.Name, Equals, "testSubtaskScene")
 
 	// pause twice
 	c.Assert(st.Pause(), IsNil)
@@ -431,4 +449,54 @@ func (t *testSubTask) TestSubtaskWithStage(c *C) {
 	c.Assert(st.Stage(), Equals, pb.Stage_Finished)
 	c.Assert(st.CurrUnit(), Equals, nil)
 	c.Assert(st.Result(), IsNil)
+}
+
+func (t *testSubTask) TestDDLLockInfo(c *C) {
+	cfg := &config.SubTaskConfig{
+		Name: "testSubtaskScene",
+		Mode: config.ModeFull,
+	}
+
+	st := NewSubTaskWithStage(cfg, pb.Stage_Paused)
+	c.Assert(st.Stage(), DeepEquals, pb.Stage_Paused)
+	c.Assert(st.DDLLockInfo(), IsNil)
+
+	ddlLock := &pb.DDLLockInfo{
+		ID: "xxx",
+	}
+
+	c.Assert(st.SaveDDLLockInfo(ddlLock), IsNil)
+	c.Assert(st.DDLLockInfo(), DeepEquals, ddlLock)
+	c.Assert(st.SaveDDLLockInfo(&pb.DDLLockInfo{}), ErrorMatches, ".*already exists.*")
+
+	st.ClearDDLLockInfo()
+	c.Assert(st.DDLLockInfo(), IsNil)
+
+	c.Assert(st.SaveDDLLockInfo(ddlLock), IsNil)
+	c.Assert(st.DDLLockInfo(), DeepEquals, ddlLock)
+}
+
+func (t *testSubTask) TestDDLInfo(c *C) {
+	cfg := &config.SubTaskConfig{
+		Name: "testSubtaskScene",
+		Mode: config.ModeFull,
+	}
+
+	st := NewSubTaskWithStage(cfg, pb.Stage_Paused)
+	c.Assert(st.Stage(), DeepEquals, pb.Stage_Paused)
+	c.Assert(st.GetDDLInfo(), IsNil)
+
+	ddlInfo := &pb.DDLInfo{
+		Task: "xxx",
+	}
+
+	c.Assert(st.SaveDDLInfo(ddlInfo), IsNil)
+	c.Assert(st.GetDDLInfo(), DeepEquals, ddlInfo)
+	c.Assert(st.SaveDDLInfo(&pb.DDLInfo{}), ErrorMatches, ".*already exists.*")
+
+	st.ClearDDLInfo()
+	c.Assert(st.GetDDLInfo(), IsNil)
+
+	c.Assert(st.SaveDDLInfo(ddlInfo), IsNil)
+	c.Assert(st.GetDDLInfo(), DeepEquals, ddlInfo)
 }
