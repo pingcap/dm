@@ -11,7 +11,7 @@ require (
 	github.com/gogo/protobuf v1.2.0
 	github.com/golang/protobuf v1.2.0
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
-	github.com/kami-zh/go-capturer v0.0.0-20171211120116-e492ea43421d // indirect
+	github.com/kami-zh/go-capturer v0.0.0-20171211120116-e492ea43421d
 	github.com/pingcap/check v0.0.0-20190102082844-67f458068fc8
 	github.com/pingcap/errors v0.11.0
 	github.com/pingcap/failpoint v0.0.0-20190422094118-d8535965f59b
