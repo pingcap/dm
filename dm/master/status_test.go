@@ -23,6 +23,8 @@ import (
 	"github.com/pingcap/errors"
 )
 
+var _ = check.Suite(&testHTTPServer{})
+
 type testHTTPServer struct {
 	server *Server
 	cfg    *Config
