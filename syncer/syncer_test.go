@@ -36,6 +36,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/binlog/event"
+	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -87,6 +88,7 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 	}
 	s.cfg.From.Adjust()
 	s.cfg.To.Adjust()
+	//s.cfg.Batch = 1
 
 	dir := c.MkDir()
 	s.cfg.RelayDir = dir
@@ -1068,7 +1070,8 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	s.cfg.BWList = &filter.Rules{
 		DoDBs:     []string{"run_test"},
 		DoTables: []*filter.Table{
-			{Schema: "run_test", Name: "test"},
+			{Schema: "run_test", Name: "test1"},
+			{Schema: "run_test", Name: "test2"},
 		},
 	}
 
@@ -1095,29 +1098,34 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			"CREATE DATABASE IF NOT EXISTS `run_test`",
 			nil,
 		}, {
-			"create table if not exists run_test.test(id int)",
+			"create table if not exists run_test.test1(id int)",
 			ddl,
-			"CREATE TABLE IF NOT EXISTS `run_test`.`test` (`id` INT)",
+			"CREATE TABLE IF NOT EXISTS `run_test`.`test1` (`id` INT)",
 			nil,
 		}, {
-			"insert into run_test.test values(1)",
+			"create table if not exists run_test.test2(id int)",
+			ddl,
+			"CREATE TABLE IF NOT EXISTS `run_test`.`test2` (`id` INT)",
+			nil,
+		}, {
+			"insert into run_test.test1 values(1)",
 			insert,
-			"REPLACE INTO `run_test`.`test` (`id`) VALUES (?);",
+			"REPLACE INTO `run_test`.`test1` (`id`) VALUES (?);",
 			int32(1),
 		}, {
-			"alter table run_test.test add index index1(id)",
+			"alter table run_test.test1 add index index1(id)",
 			ddl,
-			"ALTER TABLE `run_test`.`test` ADD INDEX `index1`(`id`)",
+			"ALTER TABLE `run_test`.`test1` ADD INDEX `index1`(`id`)",
 			nil,
 		}, {
-			"insert into run_test.test values(2)",
+			"insert into run_test.test1 values(2)",
 			insert,
-			"REPLACE INTO `run_test`.`test` (`id`) VALUES (?);",
+			"REPLACE INTO `run_test`.`test1` (`id`) VALUES (?);",
 			int32(2),
 		}, {
-			"delete from run_test.test where id = 1",
+			"delete from run_test.test1 where id = 1",
 			del,
-			"DELETE FROM `run_test`.`test` WHERE `id` = ? LIMIT 1;",
+			"DELETE FROM `run_test`.`test1` WHERE `id` = ? LIMIT 1;",
 			int32(1),
 		},
 	}
@@ -1128,6 +1136,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		c.Assert(err, IsNil)
 	}
 
+	time.Sleep(time.Second)
 	step := 0
 	for _, job := range testJobs {
 		if step == len(testCases) {
@@ -1143,10 +1152,86 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			step ++
 		}
 	}
+	c.Assert(step, Equals, len(testCases))
+
+	testJobs = testJobs[:0]
 	
 
+	/*
+	s.cfg.ColumnMappingRules =  []*cm.Rule {
+		{
+			PatternSchema: "run_test",
+			PatternTable: "test",
+			SourceColumn: "id",
+			TargetColumn: "id_1",
+			Expression:   cm.AddPrefix,
+			Arguments:    []string{"a"},
+		},
+	}
+	*/
+
+	s.cfg.RouteRules = []*router.TableRule {
+		{
+			SchemaPattern: "run_test",
+			TablePattern:  "test1",
+			TargetSchema:  "run_test",
+			TargetTable:   "test2",
+		},
+	}
+
+	syncer.Update(s.cfg)
+
+	testCases = []struct{
+		sql  string
+		tp       opType
+		sqlInJob string
+		arg      interface{}
+	} {
+		{
+			"insert into run_test.test1 values(3)",
+			insert,
+			"REPLACE INTO `run_test`.`test2` (`id`) VALUES (?);",
+			int32(3),
+		}, {
+			"delete from run_test.test1 where id = 3",
+			del,
+			"DELETE FROM `run_test`.`test2` WHERE `id` = ? LIMIT 1;",
+			int32(3),
+		},
+	}
+
+	for _, testCase := range testCases {
+		c.Log("exec sql: ", testCase.sql)
+		_, err := s.db.Exec(testCase.sql)
+		c.Assert(err, IsNil)
+	}
+
+	time.Sleep(time.Second)
+
+	for _, job := range testJobs {
+		c.Log(job)
+	}
+
+	step = 0
+	for _, job := range testJobs {
+		if step == len(testCases) {
+			break
+		}
+		if job.tp ==testCases[step].tp {
+			if job.tp == ddl {
+				c.Assert(job.ddls[0], Equals, testCases[step].sqlInJob)
+			} else {
+				c.Assert(job.sql, Equals, testCases[step].sqlInJob)
+				c.Assert(job.args[0], Equals, testCases[step].arg)
+			}
+			step ++
+		}
+	}
+	c.Assert(step, Equals, len(testCases))
+
 	
-	
+	//c.Assert(err, NotNil)
+
 
 	//syncer.Pause()
 
