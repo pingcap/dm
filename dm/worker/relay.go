@@ -62,7 +62,7 @@ type RealRelayHolder struct {
 	sync.RWMutex
 	wg sync.WaitGroup
 
-	relay *relay.Relay
+	relay relay.Process
 	cfg   *Config
 
 	ctx    context.Context
@@ -112,7 +112,7 @@ func (h *RealRelayHolder) Init(interceptors []purger.PurgeInterceptor) (purger.P
 		streamer.GetReaderHub(),
 	}
 
-	return purger.NewRelayPurger(h.cfg.Purge, h.cfg.RelayDir, operators, interceptors), errors.Trace(h.relay.Init())
+	return purger.NewPurger(h.cfg.Purge, h.cfg.RelayDir, operators, interceptors), errors.Trace(h.relay.Init())
 }
 
 // Start starts run the relay

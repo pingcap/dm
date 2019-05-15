@@ -64,6 +64,9 @@ type Purger interface {
 	Do(ctx context.Context, req *pb.PurgeRelayRequest) error
 }
 
+// NewPurger creates a new purger
+var NewPurger = NewRelayPurger
+
 // RelayPurger purges relay log according to some strategies
 type RelayPurger struct {
 	lock            sync.RWMutex
@@ -302,21 +305,7 @@ func (p *RelayPurger) earliestActiveRelayLog() *streamer.RelayLogInfo {
 }
 
 /************ dummy purger **************/
-// Purger purges relay log according to some strategies
-/*type Purger interface {
-	// Start starts strategies by config
-	Start()
-	// Close stops the started strategies
-	Close()
-	// Purging returns whether the purger is purging
-	Purging() bool
-	// Do does the purge process one time
-	Do(ctx context.Context, req *pb.PurgeRelayRequest) error
-}
-*/
-
-type dummyPurger struct {
-}
+type dummyPurger struct{}
 
 // NewDummyPurger return a dummy purger
 func NewDummyPurger(cfg Config, baseRelayDir string, operators []RelayOperator, interceptors []PurgeInterceptor) Purger {
