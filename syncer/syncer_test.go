@@ -88,7 +88,6 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 	}
 	s.cfg.From.Adjust()
 	s.cfg.To.Adjust()
-	//s.cfg.Batch = 1
 
 	dir := c.MkDir()
 	s.cfg.RelayDir = dir
@@ -418,6 +417,8 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 }
 
 func (s *testSyncerSuite) TestIgnoreTable(c *C) {
+	s.resetBinlogSyncer()
+	
 	s.cfg.BWList = &filter.Rules{
 		IgnoreDBs: []string{"t2"},
 		IgnoreTables: []*filter.Table{
@@ -1063,15 +1064,26 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 }
 
 func (s *testSyncerSuite) TestRun(c *C) {
-	defer s.db.Exec("drop database if exists run_test")
+	defer s.db.Exec("drop database if exists test_1")
 
 	s.resetBinlogSyncer()
 
 	s.cfg.BWList = &filter.Rules{
-		DoDBs:     []string{"run_test"},
+		DoDBs:     []string{"test_1"},
 		DoTables: []*filter.Table{
-			{Schema: "run_test", Name: "test1"},
-			{Schema: "run_test", Name: "test2"},
+			{Schema: "test_1", Name: "t_1"},
+			{Schema: "test_1", Name: "t_2"},
+		},
+	}
+
+	s.cfg.ColumnMappingRules =  []*cm.Rule {
+		{
+			PatternSchema: "test_*",
+			PatternTable: "t_*",
+			SourceColumn: "id",
+			TargetColumn: "id",
+			Expression:   cm.PartitionID,
+			Arguments:    []string{"1", "test_", "t_"},
 		},
 	}
 
@@ -1080,57 +1092,60 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer.addJobFunc = syncer.addJobToMemory
-	
+	defer func() {
+		syncer.addJobFunc = syncer.addJob
+	}()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	resultCh := make(chan pb.ProcessResult)
 
 	go syncer.Process(ctx, resultCh)
 
-	testCases := []struct{
+	testCases1 := []struct{
 		sql  string
 		tp       opType
 		sqlInJob string
 		arg      interface{}
 	} {
 		{
-			"create database if not exists run_test",
+			"create database if not exists test_1",
 			ddl,
-			"CREATE DATABASE IF NOT EXISTS `run_test`",
+			"CREATE DATABASE IF NOT EXISTS `test_1`",
 			nil,
 		}, {
-			"create table if not exists run_test.test1(id int)",
+			"create table if not exists test_1.t_1(id int)",
 			ddl,
-			"CREATE TABLE IF NOT EXISTS `run_test`.`test1` (`id` INT)",
+			"CREATE TABLE IF NOT EXISTS `test_1`.`t_1` (`id` INT)",
 			nil,
 		}, {
-			"create table if not exists run_test.test2(id int)",
+			"create table if not exists test_1.t_2(id int)",
 			ddl,
-			"CREATE TABLE IF NOT EXISTS `run_test`.`test2` (`id` INT)",
+			"CREATE TABLE IF NOT EXISTS `test_1`.`t_2` (`id` INT)",
 			nil,
 		}, {
-			"insert into run_test.test1 values(1)",
+			"insert into test_1.t_1 values(1)",
 			insert,
-			"REPLACE INTO `run_test`.`test1` (`id`) VALUES (?);",
-			int32(1),
+			"REPLACE INTO `test_1`.`t_1` (`id`) VALUES (?);",
+			int64(580981944116838401),
 		}, {
-			"alter table run_test.test1 add index index1(id)",
+			"alter table test_1.t_1 add index index1(id)",
 			ddl,
-			"ALTER TABLE `run_test`.`test1` ADD INDEX `index1`(`id`)",
+			"ALTER TABLE `test_1`.`t_1` ADD INDEX `index1`(`id`)",
 			nil,
 		}, {
-			"insert into run_test.test1 values(2)",
+			"insert into test_1.t_1 values(2)",
 			insert,
-			"REPLACE INTO `run_test`.`test1` (`id`) VALUES (?);",
-			int32(2),
+			"REPLACE INTO `test_1`.`t_1` (`id`) VALUES (?);",
+			int64(580981944116838402),
 		}, {
-			"delete from run_test.test1 where id = 1",
+			"delete from test_1.t_1 where id = 1",
 			del,
-			"DELETE FROM `run_test`.`test1` WHERE `id` = ? LIMIT 1;",
-			int32(1),
+			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1;",
+			int64(580981944116838401),
 		},
 	}
 
-	for _, testCase := range testCases {
+	for _, testCase := range testCases1 {
 		c.Log("exec sql: ", testCase.sql)
 		_, err := s.db.Exec(testCase.sql)
 		c.Assert(err, IsNil)
@@ -1138,65 +1153,49 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	time.Sleep(time.Second)
 
-	dmlCount := 0
-
 	for i, job := range testJobs {
-		c.Assert(job.tp, Equals, testCases[i].tp)
+		c.Assert(job.tp, Equals, testCases1[i].tp)
 		if job.tp == ddl {
-			c.Assert(job.ddls[0], Equals, testCases[i].sqlInJob)
+			c.Assert(job.ddls[0], Equals, testCases1[i].sqlInJob)
 		} else {
-			dmlCount ++
-			c.Assert(job.sql, Equals, testCases[i].sqlInJob)
-			c.Assert(job.args[0], Equals, testCases[i].arg)
+			c.Assert(job.sql, Equals, testCases1[i].sqlInJob)
+			c.Assert(job.args[0], Equals, testCases1[i].arg)
 		}
 	}
 	testJobs = testJobs[:0]
-	
 
-	/*
-	s.cfg.ColumnMappingRules =  []*cm.Rule {
-		{
-			PatternSchema: "run_test",
-			PatternTable: "test",
-			SourceColumn: "id",
-			TargetColumn: "id_1",
-			Expression:   cm.AddPrefix,
-			Arguments:    []string{"a"},
-		},
-	}
-	*/
-
+	s.cfg.ColumnMappingRules = nil
 	s.cfg.RouteRules = []*router.TableRule {
 		{
-			SchemaPattern: "run_test",
-			TablePattern:  "test1",
-			TargetSchema:  "run_test",
-			TargetTable:   "test2",
+			SchemaPattern: "test_1",
+			TablePattern:  "t_1",
+			TargetSchema:  "test_1",
+			TargetTable:   "t_2",
 		},
 	}
 
 	syncer.Update(s.cfg)
 
-	testCases = []struct{
+	testCases2 := []struct{
 		sql  string
 		tp       opType
 		sqlInJob string
 		arg      interface{}
 	} {
 		{
-			"insert into run_test.test1 values(3)",
+			"insert into test_1.t_1 values(3)",
 			insert,
-			"REPLACE INTO `run_test`.`test2` (`id`) VALUES (?);",
+			"REPLACE INTO `test_1`.`t_2` (`id`) VALUES (?);",
 			int32(3),
 		}, {
-			"delete from run_test.test1 where id = 3",
+			"delete from test_1.t_1 where id = 3",
 			del,
-			"DELETE FROM `run_test`.`test2` WHERE `id` = ? LIMIT 1;",
+			"DELETE FROM `test_1`.`t_2` WHERE `id` = ? LIMIT 1;",
 			int32(3),
 		},
 	}
 
-	for _, testCase := range testCases {
+	for _, testCase := range testCases2 {
 		c.Log("exec sql: ", testCase.sql)
 		_, err := s.db.Exec(testCase.sql)
 		c.Assert(err, IsNil)
@@ -1209,13 +1208,12 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	}
 
 	for i, job := range testJobs {
-		c.Assert(job.tp, Equals, testCases[i].tp)
+		c.Assert(job.tp, Equals, testCases2[i].tp)
 		if job.tp == ddl {
-			c.Assert(job.ddls[0], Equals, testCases[i].sqlInJob)
+			c.Assert(job.ddls[0], Equals, testCases2[i].sqlInJob)
 		} else {
-			dmlCount ++
-			c.Assert(job.sql, Equals, testCases[i].sqlInJob)
-			c.Assert(job.args[0], Equals, testCases[i].arg)
+			c.Assert(job.sql, Equals, testCases2[i].sqlInJob)
+			c.Assert(job.args[0], Equals, testCases2[i].arg)
 		}
 	}
 
@@ -1224,7 +1222,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	c.Log("status: total:, synced: ", status.TotalEvents, status.Synced)
 
-	c.Assert(status.TotalEvents, Equals, int64(dmlCount))
+	c.Assert(status.TotalEvents, Equals, int64(len(testCases1)+ len(testCases2)))
 
 
 	//syncer.Pause()
@@ -1238,13 +1236,43 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	c.Assert(syncer.isClosed(), IsTrue)
 }
 
+/*
+func (s *testSyncerSuite) TestEnableHeartBeat(c *C) {
+	s.cfg.EnableHeartbeat = true
+	s.cfg.HeartbeatUpdateInterval = 1
+	s.cfg.HeartbeatReportInterval = 1
+	syncer := NewSyncer(s.cfg)
+	err := syncer.Init()
+	c.Assert(err, IsNil)
+
+	syncer.removeHeartbeat()
+
+	syncer.addJobFunc = syncer.addJobToMemory
+	defer func () {
+		syncer.addJobFunc = syncer.addJob
+	}()
+	
+	ctx, cancel := context.WithCancel(context.Background())
+	resultCh := make(chan pb.ProcessResult)
+
+	go syncer.Process(ctx, resultCh)
+
+	time.Sleep(10*time.Second)
+
+	for _, job := range testJobs {
+		c.Log(job)
+	}
+
+	c.Assert(err, NotNil)
+	cancel()
+}
+*/
+
 var testJobs []*job
 
 func (s *Syncer) addJobToMemory(job *job) error {
 	switch job.tp {
-	case ddl:
-		testJobs = append(testJobs, job)
-	case insert, update, del:
+	case ddl, insert, update, del:
 		s.addCount(false, "test", job.tp, 1)
 		testJobs = append(testJobs, job)
 	}
