@@ -26,6 +26,97 @@ import (
 	"github.com/pingcap/dm/dm/pbmock"
 )
 
+// use task config from integration test `sharding`
+var taskConfig = `---
+name: test
+task-mode: all
+is-sharding: true
+meta-schema: "dm_meta"
+remove-meta: false
+enable-heartbeat: true
+timezone: "Asia/Shanghai"
+ignore-checking-items: ["all"]
+
+target-database:
+  host: "127.0.0.1"
+  port: 4000
+  user: "root"
+  password: ""
+
+mysql-instances:
+  - source-id: "mysql-replica-01"
+    server-id: 101
+    black-white-list:  "instance"
+    route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
+    column-mapping-rules: ["instance-1"]
+    mydumper-config-name: "global"
+    loader-config-name: "global"
+    syncer-config-name: "global"
+
+  - source-id: "mysql-replica-02"
+    server-id: 102
+    black-white-list:  "instance"
+    route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
+    column-mapping-rules: ["instance-2"]
+    mydumper-config-name: "global"
+    loader-config-name: "global"
+    syncer-config-name: "global"
+
+black-white-list:
+  instance:
+    do-dbs: ["~^sharding[\\d]+"]
+    do-tables:
+    -  db-name: "~^sharding[\\d]+"
+       tbl-name: "~^t[\\d]+"
+
+routes:
+  sharding-route-rules-table:
+    schema-pattern: sharding*
+    table-pattern: t*
+    target-schema: db_target
+    target-table: t_target
+
+  sharding-route-rules-schema:
+    schema-pattern: sharding*
+    target-schema: db_target
+
+column-mappings:
+  instance-1:
+    schema-pattern: "sharding*"
+    table-pattern: "t*"
+    expression: "partition id"
+    source-column: "id"
+    target-column: "id"
+    arguments: ["1", "sharding", "t"]
+
+  instance-2:
+    schema-pattern: "sharding*"
+    table-pattern: "t*"
+    expression: "partition id"
+    source-column: "id"
+    target-column: "id"
+    arguments: ["2", "sharding", "t"]
+
+mydumpers:
+  global:
+    mydumper-path: "./bin/mydumper"
+    threads: 4
+    chunk-filesize: 64
+    skip-tz-utc: true
+    extra-args: "--regex '^sharding.*'"
+
+loaders:
+  global:
+    pool-size: 16
+    dir: "./dumped_data"
+
+syncers:
+  global:
+    worker-count: 16
+    batch: 100
+    max-retry: 100
+`
+
 func TestMaster(t *testing.T) {
 	check.TestingT(t)
 }
@@ -42,6 +133,30 @@ func defaultMasterServer(c *check.C) *Server {
 	server := NewServer(cfg)
 
 	return server
+}
+
+func mockWorkerConfig(c *check.C, server *Server, ctrl *gomock.Controller, password string, result bool) {
+	// mock QueryWorkerConfig API to be used in s.allWorkerConfigs
+	for idx, deploy := range server.cfg.Deploy {
+		dbCfg := &config.DBConfig{
+			Host:     "127.0.0.1",
+			Port:     3306 + idx,
+			User:     "root",
+			Password: password,
+		}
+		rawConfig, err := dbCfg.Toml()
+		c.Assert(err, check.IsNil)
+		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+		mockWorkerClient.EXPECT().QueryWorkerConfig(
+			gomock.Any(),
+			&pb.QueryWorkerConfigRequest{},
+		).Return(&pb.QueryWorkerConfigResponse{
+			Result:   result,
+			SourceID: deploy.Source,
+			Content:  rawConfig,
+		}, nil)
+		server.workerClients[deploy.Worker] = mockWorkerClient
+	}
 }
 
 func (t *testMaster) TestQueryStatus(c *check.C) {
@@ -168,123 +283,8 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 
 	server := defaultMasterServer(c)
 
-	// use task config from integration test `sharding`
-	taskConfig := `---
-name: test
-task-mode: all
-is-sharding: true
-meta-schema: "dm_meta"
-remove-meta: false
-enable-heartbeat: true
-timezone: "Asia/Shanghai"
-ignore-checking-items: ["all"]
-
-target-database:
-  host: "127.0.0.1"
-  port: 4000
-  user: "root"
-  password: ""
-
-mysql-instances:
-  - source-id: "mysql-replica-01"
-    server-id: 101
-    black-white-list:  "instance"
-    route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
-    column-mapping-rules: ["instance-1"]
-    mydumper-config-name: "global"
-    loader-config-name: "global"
-    syncer-config-name: "global"
-
-  - source-id: "mysql-replica-02"
-    server-id: 102
-    black-white-list:  "instance"
-    route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
-    column-mapping-rules: ["instance-2"]
-    mydumper-config-name: "global"
-    loader-config-name: "global"
-    syncer-config-name: "global"
-
-black-white-list:
-  instance:
-    do-dbs: ["~^sharding[\\d]+"]
-    do-tables:
-    -  db-name: "~^sharding[\\d]+"
-       tbl-name: "~^t[\\d]+"
-
-routes:
-  sharding-route-rules-table:
-    schema-pattern: sharding*
-    table-pattern: t*
-    target-schema: db_target
-    target-table: t_target
-
-  sharding-route-rules-schema:
-    schema-pattern: sharding*
-    target-schema: db_target
-
-column-mappings:
-  instance-1:
-    schema-pattern: "sharding*"
-    table-pattern: "t*"
-    expression: "partition id"
-    source-column: "id"
-    target-column: "id"
-    arguments: ["1", "sharding", "t"]
-
-  instance-2:
-    schema-pattern: "sharding*"
-    table-pattern: "t*"
-    expression: "partition id"
-    source-column: "id"
-    target-column: "id"
-    arguments: ["2", "sharding", "t"]
-
-mydumpers:
-  global:
-    mydumper-path: "./bin/mydumper"
-    threads: 4
-    chunk-filesize: 64
-    skip-tz-utc: true
-    extra-args: "--regex '^sharding.*'"
-
-loaders:
-  global:
-    pool-size: 16
-    dir: "./dumped_data"
-
-syncers:
-  global:
-    worker-count: 16
-    batch: 100
-    max-retry: 100
-`
-
-	mockFunc := func(password string, result bool) {
-		// mock QueryWorkerConfig API to be used in s.allWorkerConfigs
-		for idx, deploy := range server.cfg.Deploy {
-			dbCfg := &config.DBConfig{
-				Host:     "127.0.0.1",
-				Port:     3306 + idx,
-				User:     "root",
-				Password: password,
-			}
-			rawConfig, err := dbCfg.Toml()
-			c.Assert(err, check.IsNil)
-			mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
-			mockWorkerClient.EXPECT().QueryWorkerConfig(
-				gomock.Any(),
-				&pb.QueryWorkerConfigRequest{},
-			).Return(&pb.QueryWorkerConfigResponse{
-				Result:   result,
-				SourceID: deploy.Source,
-				Content:  rawConfig,
-			}, nil)
-			server.workerClients[deploy.Worker] = mockWorkerClient
-		}
-	}
-
 	// check task successfully
-	mockFunc("", true)
+	mockWorkerConfig(c, server, ctrl, "", true)
 	resp, err := server.CheckTask(context.Background(), &pb.CheckTaskRequest{
 		Task: taskConfig,
 	})
@@ -299,7 +299,7 @@ syncers:
 	c.Assert(resp.Result, check.IsFalse)
 
 	// simulate invalid password returned from dm-workers, so cfg.SubTaskConfigs will fail
-	mockFunc("invalid-encrypt-password", true)
+	mockWorkerConfig(c, server, ctrl, "invalid-encrypt-password", true)
 	resp, err = server.CheckTask(context.Background(), &pb.CheckTaskRequest{
 		Task: taskConfig,
 	})
@@ -307,10 +307,96 @@ syncers:
 	c.Assert(resp.Result, check.IsFalse)
 
 	// test query worker config failed
-	mockFunc("", false)
+	mockWorkerConfig(c, server, ctrl, "", false)
 	resp, err = server.CheckTask(context.Background(), &pb.CheckTaskRequest{
 		Task: taskConfig,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
+}
+
+func (t *testMaster) TestStartTask(c *check.C) {
+	ctrl := gomock.NewController(c)
+	defer ctrl.Finish()
+
+	server := defaultMasterServer(c)
+
+	// s.generateSubTask with error
+	resp, err := server.StartTask(context.Background(), &pb.StartTaskRequest{
+		Task: "invalid toml config",
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsFalse)
+
+	// generate subtask configs, need to mock query worker configs RPC
+	mockWorkerConfig(c, server, ctrl, "", true)
+	workerCfg := make(map[string]*config.SubTaskConfig)
+	_, stCfgs, err := server.generateSubTask(context.Background(), taskConfig)
+	c.Assert(err, check.IsNil)
+	for _, stCfg := range stCfgs {
+		worker, ok := server.cfg.DeployMap[stCfg.SourceID]
+		c.Assert(ok, check.IsTrue)
+		workerCfg[worker] = stCfg
+	}
+
+	// test start task successfully
+	workers := make([]string, 0, len(server.cfg.DeployMap))
+	for idx, deploy := range server.cfg.Deploy {
+		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+		workers = append(workers, deploy.Worker)
+
+		dbCfg := &config.DBConfig{
+			Host:     "127.0.0.1",
+			Port:     3306 + idx,
+			User:     "root",
+			Password: "",
+		}
+		rawConfig, err := dbCfg.Toml()
+		c.Assert(err, check.IsNil)
+
+		// mock query worker config
+		mockWorkerClient.EXPECT().QueryWorkerConfig(
+			gomock.Any(),
+			&pb.QueryWorkerConfigRequest{},
+		).Return(&pb.QueryWorkerConfigResponse{
+			Result:   true,
+			SourceID: deploy.Source,
+			Content:  rawConfig,
+		}, nil)
+
+		stCfg, ok := workerCfg[deploy.Worker]
+		c.Assert(ok, check.IsTrue)
+		stCfgToml, err := stCfg.Toml()
+		c.Assert(err, check.IsNil)
+
+		// mock start sub task
+		mockWorkerClient.EXPECT().StartSubTask(
+			gomock.Any(),
+			&pb.StartSubTaskRequest{Task: stCfgToml},
+		).Return(&pb.CommonWorkerResponse{
+			Result: true,
+			Worker: deploy.Worker,
+		}, nil)
+
+		server.workerClients[deploy.Worker] = mockWorkerClient
+	}
+	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
+		Task:    taskConfig,
+		Workers: workers,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+
+	// check start-task with an invalid worker
+	invalidWorker := "invalid-worker"
+	mockWorkerConfig(c, server, ctrl, "", true)
+	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
+		Task:    taskConfig,
+		Workers: []string{invalidWorker},
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Workers, check.HasLen, 1)
+	c.Assert(resp.Workers[0].Result, check.IsFalse)
+	c.Assert(resp.Workers[0].Worker, check.Equals, invalidWorker)
 }
