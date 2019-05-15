@@ -30,7 +30,7 @@ import (
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	gmysql "github.com/siddontang/go-mysql/mysql"
+	//gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/siddontang/go-mysql/replication"
 
@@ -83,9 +83,13 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 		ServerID:   101,
 		MetaSchema: "test",
 		Name:       "syncer_ut",
+		Mode:       config.ModeIncrement,
 	}
 	s.cfg.From.Adjust()
 	s.cfg.To.Adjust()
+
+	dir := c.MkDir()
+	s.cfg.RelayDir = dir
 
 	var err error
 	dbAddr := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8", s.cfg.From.User, s.cfg.From.Password, s.cfg.From.Host, s.cfg.From.Port)
@@ -94,6 +98,7 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 		log.Fatal(err)
 	}
 
+	s.resetMaster()
 	s.resetBinlogSyncer()
 
 	_, err = s.db.Exec("SET GLOBAL binlog_format = 'ROW';")
@@ -119,6 +124,16 @@ func (s *testSyncerSuite) resetBinlogSyncer() {
 		}
 		cfg.TimestampStringLocation = timezone
 	}
+
+	if s.syncer != nil {
+		s.syncer.Close()
+	}
+
+	pos, _, err := utils.GetMasterStatus(s.db, "mysql")
+	if err != nil {
+		log.Fatal(err)
+	}
+	/*
 	pos := gmysql.Position{Name: "", Pos: 4}
 	if s.syncer != nil {
 		s.syncer.Close()
@@ -126,6 +141,7 @@ func (s *testSyncerSuite) resetBinlogSyncer() {
 	} else {
 		s.resetMaster()
 	}
+	*/
 	s.syncer = replication.NewBinlogSyncer(cfg)
 	s.streamer, err = s.syncer.StartSync(pos)
 	if err != nil {
@@ -1045,14 +1061,109 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 }
 
 func (s *testSyncerSuite) TestRun(c *C) {
+	defer s.db.Exec("drop database if exists run_test")
+
+	s.resetBinlogSyncer()
+
+	s.cfg.BWList = &filter.Rules{
+		DoDBs:     []string{"run_test"},
+		DoTables: []*filter.Table{
+			{Schema: "run_test", Name: "test"},
+		},
+	}
+
 	syncer := NewSyncer(s.cfg)
 	err := syncer.Init()
 	c.Assert(err, IsNil)
+
+	syncer.addJobFunc = addJobToMemory
 	
-	//ctx, _ := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 	resultCh := make(chan pb.ProcessResult)
 
-	go syncer.Process(context.Background(), resultCh)
+	go syncer.Process(ctx, resultCh)
 
+	testCases := []struct{
+		sql  string
+		tp       opType
+		sqlInJob string
+		arg      interface{}
+	} {
+		{
+			"create database if not exists run_test",
+			ddl,
+			"CREATE DATABASE IF NOT EXISTS `run_test`",
+			nil,
+		}, {
+			"create table if not exists run_test.test(id int)",
+			ddl,
+			"CREATE TABLE IF NOT EXISTS `run_test`.`test` (`id` INT)",
+			nil,
+		}, {
+			"insert into run_test.test values(1)",
+			insert,
+			"REPLACE INTO `run_test`.`test` (`id`) VALUES (?);",
+			int32(1),
+		}, {
+			"alter table run_test.test add index index1(id)",
+			ddl,
+			"ALTER TABLE `run_test`.`test` ADD INDEX `index1`(`id`)",
+			nil,
+		}, {
+			"insert into run_test.test values(2)",
+			insert,
+			"REPLACE INTO `run_test`.`test` (`id`) VALUES (?);",
+			int32(2),
+		}, {
+			"delete from run_test.test where id = 1",
+			del,
+			"DELETE FROM `run_test`.`test` WHERE `id` = ? LIMIT 1;",
+			int32(1),
+		},
+	}
+
+	for _, testCase := range testCases {
+		c.Log("exec sql: ", testCase.sql)
+		_, err := s.db.Exec(testCase.sql)
+		c.Assert(err, IsNil)
+	}
+
+	step := 0
+	for _, job := range testJobs {
+		if step == len(testCases) {
+			break
+		}
+		if job.tp ==testCases[step].tp {
+			if job.tp == ddl {
+				c.Assert(job.ddls[0], Equals, testCases[step].sqlInJob)
+			} else {
+				c.Assert(job.sql, Equals, testCases[step].sqlInJob)
+				c.Assert(job.args[0], Equals, testCases[step].arg)
+			}
+			step ++
+		}
+	}
+	
+
+	
+	
+
+	//syncer.Pause()
+
+	//syncer.Resume(context.Background(), resultCh)
+
+	
+	//time.Sleep(time.Second)
+	cancel()
 	syncer.Close()
-} 
+	c.Assert(syncer.isClosed(), IsTrue)
+
+	
+}
+
+var testJobs []*job
+
+func addJobToMemory(job *job) error {
+	testJobs = append(testJobs, job)
+	return nil
+}

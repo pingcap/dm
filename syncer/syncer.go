@@ -158,6 +158,8 @@ type Syncer struct {
 		sync.RWMutex
 		currentPos mysql.Position // use to calc remain binlog size
 	}
+
+	addJobFunc func(*job) error
 }
 
 // NewSyncer creates a new Syncer.
@@ -181,6 +183,7 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.injectEventCh = make(chan *replication.BinlogEvent)
 	syncer.tracer = tracing.GetTracer()
 	syncer.setTimezone()
+	syncer.addJobFunc = syncer.addJob
 
 	syncer.syncCfg = replication.BinlogSyncerConfig{
 		ServerID:                uint32(syncer.cfg.ServerID),
@@ -345,6 +348,7 @@ func (s *Syncer) Init() (err error) {
 	// when Process started, we will re-create done chan again
 	// NOTE: we should refactor the Concurrency Model some day
 	s.done = make(chan struct{})
+	log.Info("close done")
 	close(s.done)
 	return nil
 }
@@ -469,6 +473,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		wg.Done()
 	}()
 
+	log.Info("begin run")
 	err := s.Run(newCtx)
 	if err != nil {
 		// returned error rather than sent to runFatalChan
@@ -883,7 +888,10 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 
 // Run starts running for sync, we should guarantee it can rerun when paused.
 func (s *Syncer) Run(ctx context.Context) (err error) {
+	log.Info("begin run")
+	
 	defer func() {
+		log.Infof("close done, error %v", err)
 		close(s.done)
 	}()
 
@@ -1066,6 +1074,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			cancel()
 		}
 
+		log.Infof("get event %v", e)
+
 		startTime := time.Now()
 		if err == context.Canceled {
 			log.Infof("ready to quit! [%v]", lastPos)
@@ -1128,7 +1138,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 		failpoint.Inject("ProcessBinlogSlowDown", nil)
 
-		log.Debugf("[syncer] receive binlog event with header %+v", e.Header)
+		log.Infof("[syncer] receive binlog event with header %+v", e.Header)
 		switch ev := e.Event.(type) {
 		case *replication.RotateEvent:
 			currentPos = mysql.Position{
@@ -1526,7 +1536,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					log.Infof("[convert] execute need handled ddls converted to %v in position %s by sql operator", needHandleDDLs, currentPos)
 				}
 				job := newDDLJob(nil, needHandleDDLs, lastPos, currentPos, nil, nil, traceID)
-				err = s.addJob(job)
+				err = s.addJobFunc(job)
 				if err != nil {
 					return errors.Trace(err)
 				}
@@ -1670,7 +1680,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				log.Infof("[convert] execute need handled ddls converted to %v in position %s by sql operator", needHandleDDLs, currentPos)
 			}
 			job := newDDLJob(ddlInfo, needHandleDDLs, lastPos, currentPos, nil, ddlExecItem, traceID)
-			err = s.addJob(job)
+			err = s.addJobFunc(job)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -1699,7 +1709,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			lastPos.Pos = e.Header.LogPos // update lastPos
 
 			job := newXIDJob(currentPos, currentPos, nil, traceID)
-			err = s.addJob(job)
+			err = s.addJobFunc(job)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -1708,12 +1718,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 }
 
 func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, retry bool, pos, cmdPos mysql.Position, gs gtid.Set, traceID string) error {
+	log.Info("commit job")
 	key, err := s.resolveCasuality(keys)
 	if err != nil {
 		return errors.Errorf("resolve karam error %v", err)
 	}
 	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, pos, cmdPos, gs, traceID)
-	err = s.addJob(job)
+	err = s.addJobFunc(job)
 	return errors.Trace(err)
 }
 
@@ -1902,14 +1913,14 @@ func (s *Syncer) closeDBs() {
 // make newJob's sql argument empty to distinguish normal sql and skips sql
 func (s *Syncer) recordSkipSQLsPos(pos mysql.Position, gtidSet gtid.Set) error {
 	job := newSkipJob(pos, gtidSet)
-	err := s.addJob(job)
+	err := s.addJobFunc(job)
 	return errors.Trace(err)
 }
 
 func (s *Syncer) flushJobs() error {
 	log.Infof("flush all jobs, global checkpoint=%s", s.checkpoint)
 	job := newFlushJob()
-	err := s.addJob(job)
+	err := s.addJobFunc(job)
 	return errors.Trace(err)
 }
 
@@ -1990,7 +2001,10 @@ func (s *Syncer) Close() {
 
 	s.removeHeartbeat()
 
+	log.Info("stopSync")
 	s.stopSync()
+
+	log.Info("stopSync done")
 
 	if s.ddlInfoCh != nil {
 		close(s.ddlInfoCh)
