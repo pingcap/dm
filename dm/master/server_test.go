@@ -176,8 +176,8 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 		).Return(&pb.QueryStatusResponse{Result: true}, nil)
 		server.workerClients[workerAddr] = mockWorkerClient
 	}
-	resp, err2 := server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{})
-	c.Assert(err2, check.IsNil)
+	resp, err := server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{})
+	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 
 	// query specified dm-worker[s]
@@ -191,25 +191,25 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 		).Return(&pb.QueryStatusResponse{Result: true}, nil)
 		server.workerClients[workerAddr] = mockWorkerClient
 	}
-	resp, err2 = server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{
+	resp, err = server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{
 		Workers: workers,
 	})
-	c.Assert(err2, check.IsNil)
+	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 
 	// query with invalid dm-worker[s]
-	resp, err2 = server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{
+	resp, err = server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{
 		Workers: []string{"invalid-worker1", "invalid-worker2"},
 	})
-	c.Assert(err2, check.IsNil)
+	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
 	c.Assert(resp.Msg, check.Matches, ".*relevant worker-client not found")
 
 	// query with invalid task name
-	resp, err2 = server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{
+	resp, err = server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{
 		Name: "invalid-task-name",
 	})
-	c.Assert(err2, check.IsNil)
+	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
 	c.Assert(resp.Msg, check.Matches, "task .* has no workers or not exist, can try `refresh-worker-tasks` cmd first")
 
@@ -438,4 +438,58 @@ func (t *testMaster) TestStartTask(c *check.C) {
 		c.Assert(len(lines), check.Greater, 1)
 		c.Assert(lines[0], check.Equals, errGRPCFailed)
 	}
+}
+
+func (t *testMaster) TestQueryError(c *check.C) {
+	ctrl := gomock.NewController(c)
+	defer ctrl.Finish()
+	server := defaultMasterServer(c)
+
+	// test query all workers
+	for _, workerAddr := range server.cfg.DeployMap {
+		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+		mockWorkerClient.EXPECT().QueryError(
+			gomock.Any(),
+			&pb.QueryErrorRequest{},
+		).Return(&pb.QueryErrorResponse{Result: true}, nil)
+		server.workerClients[workerAddr] = mockWorkerClient
+	}
+	resp, err := server.QueryError(context.Background(), &pb.QueryErrorListRequest{})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+
+	// query specified dm-worker[s]
+	workers := make([]string, 0, len(server.cfg.DeployMap))
+	for _, workerAddr := range server.cfg.DeployMap {
+		workers = append(workers, workerAddr)
+		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+		mockWorkerClient.EXPECT().QueryError(
+			gomock.Any(),
+			&pb.QueryErrorRequest{},
+		).Return(&pb.QueryErrorResponse{Result: true}, nil)
+		server.workerClients[workerAddr] = mockWorkerClient
+	}
+	resp, err = server.QueryError(context.Background(), &pb.QueryErrorListRequest{
+		Workers: workers,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+
+	// query with invalid dm-worker[s]
+	resp, err = server.QueryError(context.Background(), &pb.QueryErrorListRequest{
+		Workers: []string{"invalid-worker1", "invalid-worker2"},
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsFalse)
+	c.Assert(resp.Msg, check.Matches, ".*relevant worker-client not found")
+
+	// query with invalid task name
+	resp, err = server.QueryError(context.Background(), &pb.QueryErrorListRequest{
+		Name: "invalid-task-name",
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsFalse)
+	c.Assert(resp.Msg, check.Matches, "task .* has no workers or not exist, can try `refresh-worker-tasks` cmd first")
+
+	// TODO: test query with correct task name, this needs to add task first
 }
