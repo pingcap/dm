@@ -1079,7 +1079,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	err := syncer.Init()
 	c.Assert(err, IsNil)
 
-	syncer.addJobFunc = addJobToMemory
+	syncer.addJobFunc = syncer.addJobToMemory
 	
 	ctx, cancel := context.WithCancel(context.Background())
 	resultCh := make(chan pb.ProcessResult)
@@ -1137,23 +1137,19 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	}
 
 	time.Sleep(time.Second)
-	step := 0
-	for _, job := range testJobs {
-		if step == len(testCases) {
-			break
-		}
-		if job.tp ==testCases[step].tp {
-			if job.tp == ddl {
-				c.Assert(job.ddls[0], Equals, testCases[step].sqlInJob)
-			} else {
-				c.Assert(job.sql, Equals, testCases[step].sqlInJob)
-				c.Assert(job.args[0], Equals, testCases[step].arg)
-			}
-			step ++
+
+	dmlCount := 0
+
+	for i, job := range testJobs {
+		c.Assert(job.tp, Equals, testCases[i].tp)
+		if job.tp == ddl {
+			c.Assert(job.ddls[0], Equals, testCases[i].sqlInJob)
+		} else {
+			dmlCount ++
+			c.Assert(job.sql, Equals, testCases[i].sqlInJob)
+			c.Assert(job.args[0], Equals, testCases[i].arg)
 		}
 	}
-	c.Assert(step, Equals, len(testCases))
-
 	testJobs = testJobs[:0]
 	
 
@@ -1212,25 +1208,23 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		c.Log(job)
 	}
 
-	step = 0
-	for _, job := range testJobs {
-		if step == len(testCases) {
-			break
-		}
-		if job.tp ==testCases[step].tp {
-			if job.tp == ddl {
-				c.Assert(job.ddls[0], Equals, testCases[step].sqlInJob)
-			} else {
-				c.Assert(job.sql, Equals, testCases[step].sqlInJob)
-				c.Assert(job.args[0], Equals, testCases[step].arg)
-			}
-			step ++
+	for i, job := range testJobs {
+		c.Assert(job.tp, Equals, testCases[i].tp)
+		if job.tp == ddl {
+			c.Assert(job.ddls[0], Equals, testCases[i].sqlInJob)
+		} else {
+			dmlCount ++
+			c.Assert(job.sql, Equals, testCases[i].sqlInJob)
+			c.Assert(job.args[0], Equals, testCases[i].arg)
 		}
 	}
-	c.Assert(step, Equals, len(testCases))
 
 	
-	//c.Assert(err, NotNil)
+	status := syncer.Status().(*pb.SyncStatus)
+
+	c.Log("status: total:, synced: ", status.TotalEvents, status.Synced)
+
+	c.Assert(status.TotalEvents, Equals, int64(dmlCount))
 
 
 	//syncer.Pause()
@@ -1242,13 +1236,18 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	cancel()
 	syncer.Close()
 	c.Assert(syncer.isClosed(), IsTrue)
-
-	
 }
 
 var testJobs []*job
 
-func addJobToMemory(job *job) error {
-	testJobs = append(testJobs, job)
+func (s *Syncer) addJobToMemory(job *job) error {
+	switch job.tp {
+	case ddl:
+		testJobs = append(testJobs, job)
+	case insert, update, del:
+		s.addCount(false, "test", job.tp, 1)
+		testJobs = append(testJobs, job)
+	}
+
 	return nil
 }
