@@ -1,0 +1,6 @@
+# Tracer Configuration.
+
+log-level = "info"
+log-file = "dm-tracer.log"
+tracer-addr = ":8263"
+enable = true
