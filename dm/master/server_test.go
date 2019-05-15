@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -33,14 +34,20 @@ type testMaster struct {
 
 var _ = check.Suite(&testMaster{})
 
-func (t *testMaster) TestQueryStatus(c *check.C) {
-	ctrl := gomock.NewController(c)
-	defer ctrl.Finish()
-
+func defaultMasterServer(c *check.C) *Server {
 	cfg := NewConfig()
 	err := cfg.Parse([]string{"-config=./dm-master.toml"})
 	c.Assert(err, check.IsNil)
 	server := NewServer(cfg)
+
+	return server
+}
+
+func (t *testMaster) TestQueryStatus(c *check.C) {
+	ctrl := gomock.NewController(c)
+	defer ctrl.Finish()
+
+	server := defaultMasterServer(c)
 
 	// test query all workers
 	for _, workerAddr := range server.cfg.DeployMap {
@@ -80,5 +87,76 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 	c.Assert(resp.Result, check.IsFalse)
 	c.Assert(resp.Msg, check.Matches, ".*relevant worker-client not found")
 
-	// TODO: test query with task name, this needs to add task first
+	// query with invalid task name
+	resp, err2 = server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{
+		Name: "invalid-task-name",
+	})
+	c.Assert(err2, check.IsNil)
+	c.Assert(resp.Result, check.IsFalse)
+	c.Assert(resp.Msg, check.Matches, "task .* has no workers or not exist, can try `refresh-worker-tasks` cmd first")
+
+	// TODO: test query with correct task name, this needs to add task first
+}
+
+func (t *testMaster) TestShowDDLLocks(c *check.C) {
+	server := defaultMasterServer(c)
+
+	resp, err := server.ShowDDLLocks(context.Background(), &pb.ShowDDLLocksRequest{})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Locks, check.HasLen, 0)
+
+	workers := make([]string, 0, len(server.cfg.DeployMap))
+	for _, workerAddr := range server.cfg.DeployMap {
+		workers = append(workers, workerAddr)
+	}
+
+	// prepare ddl lock keeper, mainly use code from ddl_lock_test.go
+	sqls := []string{"stmt"}
+	cases := []struct {
+		task   string
+		schema string
+		table  string
+	}{
+		{"testA", "test_db1", "test_tbl1"},
+		{"testB", "test_db2", "test_tbl2"},
+	}
+	lk := NewLockKeeper()
+	var wg sync.WaitGroup
+	for _, tc := range cases {
+		wg.Add(1)
+		go func(task, schema, table string) {
+			defer wg.Done()
+			id, synced, remain, err := lk.TrySync(task, schema, table, workers[0], sqls, workers)
+			c.Assert(err, check.IsNil)
+			c.Assert(synced, check.IsFalse)
+			c.Assert(remain, check.Greater, 0) // multi-goroutines TrySync concurrently, can only confirm remain > 0
+			c.Assert(lk.FindLock(id), check.NotNil)
+		}(tc.task, tc.schema, tc.table)
+	}
+	wg.Wait()
+	server.lockKeeper = lk
+
+	// test query with task name
+	resp, err = server.ShowDDLLocks(context.Background(), &pb.ShowDDLLocksRequest{
+		Task:    "testA",
+		Workers: workers,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Locks, check.HasLen, 1)
+
+	// test specify a mismatch worker
+	resp, err = server.ShowDDLLocks(context.Background(), &pb.ShowDDLLocksRequest{
+		Workers: []string{"invalid-worker"},
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Locks, check.HasLen, 0)
+
+	// test query all ddl locks
+	resp, err = server.ShowDDLLocks(context.Background(), &pb.ShowDDLLocksRequest{})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Locks, check.HasLen, 2)
 }
