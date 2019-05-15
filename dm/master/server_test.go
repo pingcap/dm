@@ -15,11 +15,13 @@ package master
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/pingcap/check"
+	"github.com/pingcap/errors"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -316,6 +318,9 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 }
 
 func (t *testMaster) TestStartTask(c *check.C) {
+	var (
+		errGRPCFailed = "test grpc request failed"
+	)
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
@@ -328,6 +333,11 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
 
+	workers := make([]string, 0, len(server.cfg.DeployMap))
+	for _, deploy := range server.cfg.Deploy {
+		workers = append(workers, deploy.Worker)
+	}
+
 	// generate subtask configs, need to mock query worker configs RPC
 	mockWorkerConfig(c, server, ctrl, "", true)
 	workerCfg := make(map[string]*config.SubTaskConfig)
@@ -339,47 +349,61 @@ func (t *testMaster) TestStartTask(c *check.C) {
 		workerCfg[worker] = stCfg
 	}
 
-	// test start task successfully
-	workers := make([]string, 0, len(server.cfg.DeployMap))
-	for idx, deploy := range server.cfg.Deploy {
-		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
-		workers = append(workers, deploy.Worker)
+	mockStartTask := func(rpcSuccess bool) {
+		for idx, deploy := range server.cfg.Deploy {
+			mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 
-		dbCfg := &config.DBConfig{
-			Host:     "127.0.0.1",
-			Port:     3306 + idx,
-			User:     "root",
-			Password: "",
+			dbCfg := &config.DBConfig{
+				Host:     "127.0.0.1",
+				Port:     3306 + idx,
+				User:     "root",
+				Password: "",
+			}
+			rawConfig, err := dbCfg.Toml()
+			c.Assert(err, check.IsNil)
+
+			// mock query worker config
+			mockWorkerClient.EXPECT().QueryWorkerConfig(
+				gomock.Any(),
+				&pb.QueryWorkerConfigRequest{},
+			).Return(&pb.QueryWorkerConfigResponse{
+				Result:   true,
+				SourceID: deploy.Source,
+				Content:  rawConfig,
+			}, nil)
+
+			stCfg, ok := workerCfg[deploy.Worker]
+			c.Assert(ok, check.IsTrue)
+			stCfgToml, err := stCfg.Toml()
+			c.Assert(err, check.IsNil)
+
+			// mock start sub task
+			rets := make([]interface{}, 0, 2)
+			if rpcSuccess {
+				rets = []interface{}{
+					&pb.CommonWorkerResponse{
+						Result: true,
+						Worker: deploy.Worker,
+					},
+					nil,
+				}
+			} else {
+				rets = []interface{}{
+					nil,
+					errors.New(errGRPCFailed),
+				}
+			}
+			mockWorkerClient.EXPECT().StartSubTask(
+				gomock.Any(),
+				&pb.StartSubTaskRequest{Task: stCfgToml},
+			).Return(rets...)
+
+			server.workerClients[deploy.Worker] = mockWorkerClient
 		}
-		rawConfig, err := dbCfg.Toml()
-		c.Assert(err, check.IsNil)
-
-		// mock query worker config
-		mockWorkerClient.EXPECT().QueryWorkerConfig(
-			gomock.Any(),
-			&pb.QueryWorkerConfigRequest{},
-		).Return(&pb.QueryWorkerConfigResponse{
-			Result:   true,
-			SourceID: deploy.Source,
-			Content:  rawConfig,
-		}, nil)
-
-		stCfg, ok := workerCfg[deploy.Worker]
-		c.Assert(ok, check.IsTrue)
-		stCfgToml, err := stCfg.Toml()
-		c.Assert(err, check.IsNil)
-
-		// mock start sub task
-		mockWorkerClient.EXPECT().StartSubTask(
-			gomock.Any(),
-			&pb.StartSubTaskRequest{Task: stCfgToml},
-		).Return(&pb.CommonWorkerResponse{
-			Result: true,
-			Worker: deploy.Worker,
-		}, nil)
-
-		server.workerClients[deploy.Worker] = mockWorkerClient
 	}
+
+	// test start task successfully
+	mockStartTask(true)
 	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
 		Task:    taskConfig,
 		Workers: workers,
@@ -399,4 +423,19 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	c.Assert(resp.Workers, check.HasLen, 1)
 	c.Assert(resp.Workers[0].Result, check.IsFalse)
 	c.Assert(resp.Workers[0].Worker, check.Equals, invalidWorker)
+
+	// test start sub task request to worker returns error
+	mockStartTask(false)
+	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
+		Task: taskConfig,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Workers, check.HasLen, 2)
+	for _, workerResp := range resp.Workers {
+		c.Assert(workerResp.Result, check.IsFalse)
+		lines := strings.Split(workerResp.Msg, "\n")
+		c.Assert(len(lines), check.Greater, 1)
+		c.Assert(lines[0], check.Equals, errGRPCFailed)
+	}
 }
