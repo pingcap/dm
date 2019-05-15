@@ -139,10 +139,10 @@ func (h *RealRelayHolder) Close() {
 }
 
 func (h *RealRelayHolder) run() {
-	h.setStage(pb.Stage_Running)
-	h.setResult(nil) // clear previous result
 	h.ctx, h.cancel = context.WithCancel(context.Background())
 	pr := make(chan pb.ProcessResult, 1)
+	h.setResult(nil) // clear previous result
+	h.setStage(pb.Stage_Running)
 
 	h.relay.Process(h.ctx, pr)
 
@@ -232,7 +232,6 @@ func (h *RealRelayHolder) resumeRelay(ctx context.Context, req *pb.OperateRelayR
 	if h.stage != pb.Stage_Paused {
 		return errors.Errorf("current stage is %s, Paused required", h.stage.String())
 	}
-	h.stage = pb.Stage_Running
 
 	h.wg.Add(1)
 	go func() {

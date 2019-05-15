@@ -1125,6 +1125,10 @@ func (r *Relay) Migrate(ctx context.Context, binlogName string, binlogPos uint32
 // DummyRelay is a dummy relay
 type DummyRelay struct {
 	initErr error
+
+	processResult pb.ProcessResult
+	errorInfo     *pb.RelayError
+	reloadErr     error
 }
 
 // NewDummyRelay creates an instance of dummy Relay.
@@ -1143,7 +1147,17 @@ func (d *DummyRelay) InjectInitError(err error) {
 }
 
 // Process implements Process interface
-func (d *DummyRelay) Process(ctx context.Context, pr chan pb.ProcessResult) {}
+func (d *DummyRelay) Process(ctx context.Context, pr chan pb.ProcessResult) {
+	select {
+	case <-ctx.Done():
+		pr <- d.processResult
+	}
+}
+
+// InjectProcessResult injects process result
+func (d *DummyRelay) InjectProcessResult(result pb.ProcessResult) {
+	d.processResult = result
+}
 
 // SwitchMaster implements Process interface
 func (d *DummyRelay) SwitchMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) error {
@@ -1162,7 +1176,12 @@ func (d *DummyRelay) ActiveRelayLog() *pkgstreamer.RelayLogInfo {
 
 // Reload implements Process interface
 func (d *DummyRelay) Reload(newCfg *Config) error {
-	return nil
+	return d.reloadErr
+}
+
+// InjectReloadError injects reload error
+func (d *DummyRelay) InjectReloadError(err error) {
+	d.reloadErr = err
 }
 
 // Update implements Process interface
@@ -1177,10 +1196,16 @@ func (d *DummyRelay) Resume(ctx context.Context, pr chan pb.ProcessResult) {}
 func (d *DummyRelay) Pause() {}
 
 // Error implements Process interface
-func (d *DummyRelay) Error() interface{} { return nil }
+func (d *DummyRelay) Error() interface{} {
+	return d.errorInfo
+}
 
 // Status implements Process interface
-func (d *DummyRelay) Status() interface{} { return nil }
+func (d *DummyRelay) Status() interface{} {
+	return &pb.RelayStatus{
+		Stage: pb.Stage_New,
+	}
+}
 
 // Close implements Process interface
 func (d *DummyRelay) Close() {}
