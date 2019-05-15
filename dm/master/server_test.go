@@ -21,6 +21,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/pingcap/check"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/pbmock"
 )
@@ -159,4 +160,157 @@ func (t *testMaster) TestShowDDLLocks(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 	c.Assert(resp.Locks, check.HasLen, 2)
+}
+
+func (t *testMaster) TestCheckTask(c *check.C) {
+	ctrl := gomock.NewController(c)
+	defer ctrl.Finish()
+
+	server := defaultMasterServer(c)
+
+	// use task config from integration test `sharding`
+	taskConfig := `---
+name: test
+task-mode: all
+is-sharding: true
+meta-schema: "dm_meta"
+remove-meta: false
+enable-heartbeat: true
+timezone: "Asia/Shanghai"
+ignore-checking-items: ["all"]
+
+target-database:
+  host: "127.0.0.1"
+  port: 4000
+  user: "root"
+  password: ""
+
+mysql-instances:
+  - source-id: "mysql-replica-01"
+    server-id: 101
+    black-white-list:  "instance"
+    route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
+    column-mapping-rules: ["instance-1"]
+    mydumper-config-name: "global"
+    loader-config-name: "global"
+    syncer-config-name: "global"
+
+  - source-id: "mysql-replica-02"
+    server-id: 102
+    black-white-list:  "instance"
+    route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
+    column-mapping-rules: ["instance-2"]
+    mydumper-config-name: "global"
+    loader-config-name: "global"
+    syncer-config-name: "global"
+
+black-white-list:
+  instance:
+    do-dbs: ["~^sharding[\\d]+"]
+    do-tables:
+    -  db-name: "~^sharding[\\d]+"
+       tbl-name: "~^t[\\d]+"
+
+routes:
+  sharding-route-rules-table:
+    schema-pattern: sharding*
+    table-pattern: t*
+    target-schema: db_target
+    target-table: t_target
+
+  sharding-route-rules-schema:
+    schema-pattern: sharding*
+    target-schema: db_target
+
+column-mappings:
+  instance-1:
+    schema-pattern: "sharding*"
+    table-pattern: "t*"
+    expression: "partition id"
+    source-column: "id"
+    target-column: "id"
+    arguments: ["1", "sharding", "t"]
+
+  instance-2:
+    schema-pattern: "sharding*"
+    table-pattern: "t*"
+    expression: "partition id"
+    source-column: "id"
+    target-column: "id"
+    arguments: ["2", "sharding", "t"]
+
+mydumpers:
+  global:
+    mydumper-path: "./bin/mydumper"
+    threads: 4
+    chunk-filesize: 64
+    skip-tz-utc: true
+    extra-args: "--regex '^sharding.*'"
+
+loaders:
+  global:
+    pool-size: 16
+    dir: "./dumped_data"
+
+syncers:
+  global:
+    worker-count: 16
+    batch: 100
+    max-retry: 100
+`
+
+	mockFunc := func(password string, result bool) {
+		// mock QueryWorkerConfig API to be used in s.allWorkerConfigs
+		for idx, deploy := range server.cfg.Deploy {
+			dbCfg := &config.DBConfig{
+				Host:     "127.0.0.1",
+				Port:     3306 + idx,
+				User:     "root",
+				Password: password,
+			}
+			rawConfig, err := dbCfg.Toml()
+			c.Assert(err, check.IsNil)
+			mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+			mockWorkerClient.EXPECT().QueryWorkerConfig(
+				gomock.Any(),
+				&pb.QueryWorkerConfigRequest{},
+			).Return(&pb.QueryWorkerConfigResponse{
+				Result:   result,
+				SourceID: deploy.Source,
+				Content:  rawConfig,
+			}, nil)
+			server.workerClients[deploy.Worker] = mockWorkerClient
+		}
+	}
+
+	// check task successfully
+	mockFunc("", true)
+	resp, err := server.CheckTask(context.Background(), &pb.CheckTaskRequest{
+		Task: taskConfig,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+
+	// decode task with error
+	resp, err = server.CheckTask(context.Background(), &pb.CheckTaskRequest{
+		Task: "invalid toml config",
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsFalse)
+
+	// simulate invalid password returned from dm-workers, so cfg.SubTaskConfigs will fail
+	mockFunc("invalid-encrypt-password", true)
+	resp, err = server.CheckTask(context.Background(), &pb.CheckTaskRequest{
+		Task: taskConfig,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsFalse)
+
+	// test query worker config failed
+	mockFunc("", false)
+	resp, err = server.CheckTask(context.Background(), &pb.CheckTaskRequest{
+		Task: taskConfig,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsFalse)
 }
