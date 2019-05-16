@@ -15,8 +15,8 @@ package syncer
 
 import (
 	"context"
-	"strconv"
 	"os"
+	"strconv"
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/dm/dm/config"
@@ -26,7 +26,7 @@ var _ = Suite(&testHeartbeatSuite{})
 
 type testHeartbeatSuite struct {
 	from config.DBConfig
-	lag float64
+	lag  float64
 }
 
 func (t *testHeartbeatSuite) SetUpSuite(c *C) {
@@ -57,7 +57,7 @@ func (t *testHeartbeatSuite) TestTearDown(c *C) {
 	reportLagFunc = reportLag
 }
 
-func (t *testHeartbeatSuite)reportLag(taskName string, lag float64) {
+func (t *testHeartbeatSuite) reportLag(taskName string, lag float64) {
 	t.lag = lag
 }
 
@@ -99,11 +99,11 @@ func (t *testHeartbeatSuite) TestHeartbeat(c *C) {
 
 	c.Assert(t.lag, Not(Equals), float64(0))
 	oldlag := t.lag
-	
+
 	heartbeat.TryUpdateTaskTs("heartbeat_test", "dm_heartbeat", "heartbeat", [][]interface{}{
 		{
-		"2019-05-15 15:25:42",
-		int32(123), 
+			"2019-05-15 15:25:42",
+			int32(123),
 		},
 	})
 
@@ -117,8 +117,3 @@ func (t *testHeartbeatSuite) TestHeartbeat(c *C) {
 	err = heartbeat.RemoveTask("heartbeat_test")
 	c.Assert(err, IsNil)
 }
-
-
-
-
-

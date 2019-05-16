@@ -20,12 +20,6 @@ import (
 	. "github.com/pingcap/check"
 )
 
-func (s *testSyncerSuite) TestGenDMLParam(c *C) {
-	genColCache := NewGenColCache()
-	c.Assert(genColCache, NotNil)
-
-}
-
 func (s *testSyncerSuite) TestCastUnsigned(c *C) {
 	// ref: https://dev.mysql.com/doc/refman/5.7/en/integer-types.html
 	cases := []struct {
@@ -79,21 +73,21 @@ func (s *testSyncerSuite) TestFindFitIndex(c *C) {
 			name: "b",
 		},
 	}
-	indexColumns := []*column {
+	indexColumns := []*column{
 		{
 			name: "c",
 		},
 	}
-	indexColumnsNotNull := []*column {
+	indexColumnsNotNull := []*column{
 		{
-			name: "d",
+			name:    "d",
 			NotNull: true,
 		},
 	}
 
 	columns := findFitIndex(map[string][]*column{
 		"primary": pkColumns,
-		"index": indexColumns,
+		"index":   indexColumns,
 	})
 	c.Assert(columns, HasLen, 2)
 	c.Assert(columns[0].name, Equals, "a")

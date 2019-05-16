@@ -92,7 +92,7 @@ func (t *testUtilSuite) TestToBinlogType(c *C) {
 	testCases := []struct {
 		tpStr string
 		tp    BinlogType
-	} {
+	}{
 		{
 			"local",
 			LocalBinlog,
@@ -112,10 +112,10 @@ func (t *testUtilSuite) TestToBinlogType(c *C) {
 }
 
 func (t *testUtilSuite) TestTableNameResultSet(c *C) {
-	rs := &ast.TableSource {
-		Source: &ast.TableName {
+	rs := &ast.TableSource{
+		Source: &ast.TableName{
 			Schema: model.NewCIStr("test"),
-			Name: model.NewCIStr("t1"),
+			Name:   model.NewCIStr("t1"),
 		},
 	}
 	schema, table, err := tableNameResultSet(rs)

@@ -14,8 +14,8 @@
 package syncer
 
 import (
-	"time"
 	"context"
+	"time"
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/dm/dm/pb"
@@ -39,7 +39,7 @@ func (t *testDDLExecInfoSuite) TestDDLExecItem(c *C) {
 		}
 	}()
 
-	time.Sleep(100*time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	c.Assert(ddlExecInfo.BlockingDDLs(), DeepEquals, ddls)
 
 	ddlExecInfo.ClearBlockingDDL()

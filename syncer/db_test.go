@@ -41,7 +41,7 @@ func (s *testSyncerSuite) TestBinaryLogs(c *C) {
 
 	pos := mysql.Position{
 		Name: files[len(files)-1].name,
-		Pos: 0,
+		Pos:  0,
 	}
 
 	remainingSize, err := countBinaryLogsSize(pos, s.db)

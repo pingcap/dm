@@ -473,7 +473,6 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		wg.Done()
 	}()
 
-	log.Info("begin run")
 	err := s.Run(newCtx)
 	if err != nil {
 		// returned error rather than sent to runFatalChan
@@ -888,10 +887,7 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 
 // Run starts running for sync, we should guarantee it can rerun when paused.
 func (s *Syncer) Run(ctx context.Context) (err error) {
-	log.Info("begin run")
-	
 	defer func() {
-		log.Infof("close done, error %v", err)
 		close(s.done)
 	}()
 
@@ -1074,8 +1070,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			cancel()
 		}
 
-		log.Infof("get event %v", e)
-
 		startTime := time.Now()
 		if err == context.Canceled {
 			log.Infof("ready to quit! [%v]", lastPos)
@@ -1138,7 +1132,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 		failpoint.Inject("ProcessBinlogSlowDown", nil)
 
-		log.Infof("[syncer] receive binlog event with header %+v", e.Header)
+		log.Debugf("[syncer] receive binlog event with header %+v", e.Header)
 		switch ev := e.Event.(type) {
 		case *replication.RotateEvent:
 			currentPos = mysql.Position{
@@ -1718,7 +1712,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 }
 
 func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, retry bool, pos, cmdPos mysql.Position, gs gtid.Set, traceID string) error {
-	log.Info("commit job")
 	key, err := s.resolveCasuality(keys)
 	if err != nil {
 		return errors.Errorf("resolve karam error %v", err)
@@ -1737,7 +1730,7 @@ func (s *Syncer) resolveCasuality(keys []string) (string, error) {
 	}
 	log.Infof("resolveCasuality keys %v, relations: %v", keys, s.c.relations)
 	if s.c.detectConflict(keys) {
-		log.Info("[causality] meet causality key, will generate a flush job and wait all sqls executed")
+		log.Debug("[causality] meet causality key, will generate a flush job and wait all sqls executed")
 		if err := s.flushJobs(); err != nil {
 			return "", errors.Trace(err)
 		}
@@ -2001,10 +1994,7 @@ func (s *Syncer) Close() {
 
 	s.removeHeartbeat()
 
-	log.Info("stopSync")
 	s.stopSync()
-
-	log.Info("stopSync done")
 
 	if s.ddlInfoCh != nil {
 		close(s.ddlInfoCh)

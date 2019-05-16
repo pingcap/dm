@@ -16,20 +16,20 @@ package syncer
 import (
 	. "github.com/pingcap/check"
 
-	"github.com/siddontang/go-mysql/mysql"
-	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/tidb-tools/pkg/filter"
+	"github.com/siddontang/go-mysql/mysql"
 )
 
 var _ = Suite(&testJobSuite{})
 
-type testJobSuite struct {}
+type testJobSuite struct{}
 
 func (t *testJobSuite) TestJobTypeString(c *C) {
 	testCases := []struct {
-		tp opType
+		tp  opType
 		str string
-	} {
+	}{
 		{
 			null,
 			"",
@@ -68,36 +68,36 @@ func (t *testJobSuite) TestJobTypeString(c *C) {
 
 func (t *testJobSuite) TestJob(c *C) {
 	ddlInfo := &shardingDDLInfo{
-		tableNames: [][]*filter.Table {
+		tableNames: [][]*filter.Table{
 			{
 				{
 					Schema: "test1",
-					Name: "t1",
+					Name:   "t1",
 				},
 			}, {
 				{
 					Schema: "test2",
-					Name: "t2",
+					Name:   "t2",
 				},
 			},
 		},
 	}
 
-	ddlExecItem := &DDLExecItem {
-		req: &pb.ExecDDLRequest {
+	ddlExecItem := &DDLExecItem{
+		req: &pb.ExecDDLRequest{
 			TraceGID: "abc",
 		},
 	}
-	
+
 	testCases := []struct {
-		job *job
+		job    *job
 		jobStr string
-	} {
+	}{
 		{
-			newJob(insert, "test", "t1", "test", "t1", "insert into test.t1 values(?)", []interface{}{1}, 	"1", mysql.Position{}, mysql.Position{}, nil, ""),
+			newJob(insert, "test", "t1", "test", "t1", "insert into test.t1 values(?)", []interface{}{1}, "1", mysql.Position{}, mysql.Position{}, nil, ""),
 			"tp: insert, sql: insert into test.t1 values(?), args: [1], key: 1, ddls: [], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
 		}, {
-			newDDLJob(ddlInfo, []string{"create database test",}, mysql.Position{}, mysql.Position{}, nil, ddlExecItem, ""),
+			newDDLJob(ddlInfo, []string{"create database test"}, mysql.Position{}, mysql.Position{}, nil, ddlExecItem, ""),
 			"tp: ddl, sql: , args: [], key: , ddls: [create database test], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
 		}, {
 			newXIDJob(mysql.Position{}, mysql.Position{}, nil, ""),

@@ -24,20 +24,19 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
+	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/parser/ast"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	//gmysql "github.com/siddontang/go-mysql/mysql"
-	"github.com/pingcap/dm/dm/pb"
 	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/binlog/event"
-	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/tidb-tools/pkg/table-router"
 )
 
 var _ = Suite(&testSyncerSuite{})
@@ -134,15 +133,7 @@ func (s *testSyncerSuite) resetBinlogSyncer() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	/*
-	pos := gmysql.Position{Name: "", Pos: 4}
-	if s.syncer != nil {
-		s.syncer.Close()
-		pos = s.syncer.GetNextPosition()
-	} else {
-		s.resetMaster()
-	}
-	*/
+
 	s.syncer = replication.NewBinlogSyncer(cfg)
 	s.streamer, err = s.syncer.StartSync(pos)
 	if err != nil {
@@ -211,7 +202,6 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
-	//defer syncer.Close()
 	err = syncer.genRouter()
 	c.Assert(err, IsNil)
 
@@ -243,7 +233,7 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 
 func (s *testSyncerSuite) TestSelectTable(c *C) {
 	s.resetBinlogSyncer()
-	
+
 	s.cfg.BWList = &filter.Rules{
 		DoDBs: []string{"t2", "stest", "~^ptest*"},
 		DoTables: []*filter.Table{
@@ -418,7 +408,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 
 func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 	s.resetBinlogSyncer()
-	
+
 	s.cfg.BWList = &filter.Rules{
 		IgnoreDBs: []string{"t2"},
 		IgnoreTables: []*filter.Table{
@@ -482,10 +472,6 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
-	c.Assert(syncer.Type(), Equals, pb.UnitType_Sync)
-
-	err = syncer.Init()
-	c.Assert(err, IsNil)
 
 	syncer.genRouter()
 	i := 0
@@ -536,7 +522,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 
 func (s *testSyncerSuite) TestSkipDML(c *C) {
 	s.resetBinlogSyncer()
-	
+
 	s.cfg.FilterRules = []*bf.BinlogEventRule{
 		{
 			SchemaPattern: "*",
@@ -947,7 +933,6 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	}
 
 	syncer := NewSyncer(s.cfg)
-	//defer syncer.Close()
 	syncer.cfg.MaxRetry = 1
 	// use upstream db as mock downstream
 	syncer.toDBs = []*Conn{{db: s.db}}
@@ -1019,14 +1004,6 @@ func (s *testSyncerSuite) TestcheckpointID(c *C) {
 	syncer := NewSyncer(s.cfg)
 	checkpointID := syncer.checkpointID()
 	c.Assert(checkpointID, Equals, "101")
-
-	err := syncer.Init()
-	c.Assert(err, IsNil)
-	c.Assert(syncer.checkpoint, NotNil)
-	c.Assert(syncer.binlogFilter, NotNil)
-	c.Assert(syncer.fromDB, NotNil)
-	c.Assert(syncer.toDBs, NotNil)
-	c.Assert(syncer.ddlDB, NotNil)
 }
 
 func (s *testSyncerSuite) TestExecErrors(c *C) {
@@ -1041,9 +1018,9 @@ func (s *testSyncerSuite) TestExecErrors(c *C) {
 func (s *testSyncerSuite) TestCasuality(c *C) {
 	s.cfg.WorkerCount = 1
 	syncer := NewSyncer(s.cfg)
-	syncer.jobs = []chan *job{make (chan *job, 1)}
+	syncer.jobs = []chan *job{make(chan *job, 1)}
 
-	go func (){
+	go func() {
 		job := <-syncer.jobs[0]
 		c.Assert(job.tp, Equals, flush)
 		syncer.jobWg.Done()
@@ -1064,32 +1041,36 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 }
 
 func (s *testSyncerSuite) TestRun(c *C) {
+	// 1. run syncer with column mapping
+	// 2. update config, add route rules, and update syncer
+
 	defer s.db.Exec("drop database if exists test_1")
 
 	s.resetBinlogSyncer()
 
 	s.cfg.BWList = &filter.Rules{
-		DoDBs:     []string{"test_1"},
+		DoDBs: []string{"test_1"},
 		DoTables: []*filter.Table{
 			{Schema: "test_1", Name: "t_1"},
 			{Schema: "test_1", Name: "t_2"},
 		},
 	}
 
-	s.cfg.ColumnMappingRules =  []*cm.Rule {
+	s.cfg.ColumnMappingRules = []*cm.Rule{
 		{
 			PatternSchema: "test_*",
-			PatternTable: "t_*",
-			SourceColumn: "id",
-			TargetColumn: "id",
-			Expression:   cm.PartitionID,
-			Arguments:    []string{"1", "test_", "t_"},
+			PatternTable:  "t_*",
+			SourceColumn:  "id",
+			TargetColumn:  "id",
+			Expression:    cm.PartitionID,
+			Arguments:     []string{"1", "test_", "t_"},
 		},
 	}
 
 	syncer := NewSyncer(s.cfg)
 	err := syncer.Init()
 	c.Assert(err, IsNil)
+	c.Assert(syncer.Type(), Equals, pb.UnitType_Sync)
 
 	syncer.addJobFunc = syncer.addJobToMemory
 	defer func() {
@@ -1101,12 +1082,12 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	go syncer.Process(ctx, resultCh)
 
-	testCases1 := []struct{
-		sql  string
+	testCases1 := []struct {
+		sql      string
 		tp       opType
 		sqlInJob string
 		arg      interface{}
-	} {
+	}{
 		{
 			"create database if not exists test_1",
 			ddl,
@@ -1151,7 +1132,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		c.Assert(err, IsNil)
 	}
 
-	time.Sleep(time.Second)
+	time.Sleep(100 * time.Millisecond)
 
 	for i, job := range testJobs {
 		c.Assert(job.tp, Equals, testCases1[i].tp)
@@ -1165,7 +1146,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	testJobs = testJobs[:0]
 
 	s.cfg.ColumnMappingRules = nil
-	s.cfg.RouteRules = []*router.TableRule {
+	s.cfg.RouteRules = []*router.TableRule{
 		{
 			SchemaPattern: "test_1",
 			TablePattern:  "t_1",
@@ -1176,12 +1157,12 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	syncer.Update(s.cfg)
 
-	testCases2 := []struct{
-		sql  string
+	testCases2 := []struct {
+		sql      string
 		tp       opType
 		sqlInJob string
 		arg      interface{}
-	} {
+	}{
 		{
 			"insert into test_1.t_1 values(3)",
 			insert,
@@ -1201,11 +1182,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		c.Assert(err, IsNil)
 	}
 
-	time.Sleep(time.Second)
-
-	for _, job := range testJobs {
-		c.Log(job)
-	}
+	time.Sleep(100 * time.Millisecond)
 
 	for i, job := range testJobs {
 		c.Assert(job.tp, Equals, testCases2[i].tp)
@@ -1217,56 +1194,13 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		}
 	}
 
-	
 	status := syncer.Status().(*pb.SyncStatus)
+	c.Assert(status.TotalEvents, Equals, int64(len(testCases1)+len(testCases2)))
 
-	c.Log("status: total:, synced: ", status.TotalEvents, status.Synced)
-
-	c.Assert(status.TotalEvents, Equals, int64(len(testCases1)+ len(testCases2)))
-
-
-	//syncer.Pause()
-
-	//syncer.Resume(context.Background(), resultCh)
-
-	
-	//time.Sleep(time.Second)
 	cancel()
 	syncer.Close()
 	c.Assert(syncer.isClosed(), IsTrue)
 }
-
-/*
-func (s *testSyncerSuite) TestEnableHeartBeat(c *C) {
-	s.cfg.EnableHeartbeat = true
-	s.cfg.HeartbeatUpdateInterval = 1
-	s.cfg.HeartbeatReportInterval = 1
-	syncer := NewSyncer(s.cfg)
-	err := syncer.Init()
-	c.Assert(err, IsNil)
-
-	syncer.removeHeartbeat()
-
-	syncer.addJobFunc = syncer.addJobToMemory
-	defer func () {
-		syncer.addJobFunc = syncer.addJob
-	}()
-	
-	ctx, cancel := context.WithCancel(context.Background())
-	resultCh := make(chan pb.ProcessResult)
-
-	go syncer.Process(ctx, resultCh)
-
-	time.Sleep(10*time.Second)
-
-	for _, job := range testJobs {
-		c.Log(job)
-	}
-
-	c.Assert(err, NotNil)
-	cancel()
-}
-*/
 
 var testJobs []*job
 
