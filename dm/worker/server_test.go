@@ -14,6 +14,8 @@
 package worker
 
 import (
+	"io/ioutil"
+	"net/http"
 	"testing"
 	"time"
 
@@ -55,6 +57,9 @@ func (t *testServer) TestServerStartAndClose(c *C) {
 	// test condition hub
 	t.testConidtionHub(c, s)
 
+	t.testHTTPInterface(c, "status")
+	t.testHTTPInterface(c, "metrics")
+
 	s.Close()
 
 	c.Assert(waitSomthing(10, func() bool {
@@ -63,6 +68,14 @@ func (t *testServer) TestServerStartAndClose(c *C) {
 
 	// test worker, just make sure testing sort
 	t.testWorker(c)
+}
+
+func (t *testServer) testHTTPInterface(c *C, uri string) {
+	resp, err := http.Get("http://127.0.0.1:8262/" + uri)
+	c.Assert(err, IsNil)
+	defer resp.Body.Close()
+	_, err = ioutil.ReadAll(resp.Body)
+	c.Assert(err, IsNil)
 }
 
 func waitSomthing(backoff int, fn func() bool) bool {
