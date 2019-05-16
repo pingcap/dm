@@ -627,3 +627,124 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	}
 	c.Assert(len(server.taskWorkers), check.Equals, 0)
 }
+
+func (t *testMaster) TestUpdateTask(c *check.C) {
+	ctrl := gomock.NewController(c)
+	defer ctrl.Finish()
+
+	server := defaultMasterServer(c)
+
+	// s.generateSubTask with error
+	resp, err := server.UpdateTask(context.Background(), &pb.UpdateTaskRequest{
+		Task: "invalid toml config",
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsFalse)
+
+	// prepare workers
+	workers := make([]string, 0, len(server.cfg.DeployMap))
+	for _, deploy := range server.cfg.Deploy {
+		workers = append(workers, deploy.Worker)
+	}
+
+	// generate subtask configs, need to mock query worker configs RPC
+	mockWorkerConfig(c, server, ctrl, "", true)
+	workerCfg := make(map[string]*config.SubTaskConfig)
+	_, stCfgs, err := server.generateSubTask(context.Background(), taskConfig)
+	c.Assert(err, check.IsNil)
+	for _, stCfg := range stCfgs {
+		worker, ok := server.cfg.DeployMap[stCfg.SourceID]
+		c.Assert(ok, check.IsTrue)
+		workerCfg[worker] = stCfg
+	}
+
+	mockUpdateTask := func(rpcSuccess bool) {
+		for idx, deploy := range server.cfg.Deploy {
+			mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+
+			dbCfg := &config.DBConfig{
+				Host:     "127.0.0.1",
+				Port:     3306 + idx,
+				User:     "root",
+				Password: "",
+			}
+			rawConfig, err := dbCfg.Toml()
+			c.Assert(err, check.IsNil)
+
+			// mock query worker config
+			mockWorkerClient.EXPECT().QueryWorkerConfig(
+				gomock.Any(),
+				&pb.QueryWorkerConfigRequest{},
+			).Return(&pb.QueryWorkerConfigResponse{
+				Result:   true,
+				SourceID: deploy.Source,
+				Content:  rawConfig,
+			}, nil)
+
+			stCfg, ok := workerCfg[deploy.Worker]
+			c.Assert(ok, check.IsTrue)
+			stCfgToml, err := stCfg.Toml()
+			c.Assert(err, check.IsNil)
+
+			// mock update sub task
+			rets := make([]interface{}, 0, 2)
+			if rpcSuccess {
+				rets = []interface{}{
+					&pb.CommonWorkerResponse{
+						Result: true,
+						Worker: deploy.Worker,
+					},
+					nil,
+				}
+			} else {
+				rets = []interface{}{
+					nil,
+					errors.New(errGRPCFailed),
+				}
+			}
+			mockWorkerClient.EXPECT().UpdateSubTask(
+				gomock.Any(),
+				&pb.UpdateSubTaskRequest{Task: stCfgToml},
+			).Return(rets...)
+
+			server.workerClients[deploy.Worker] = mockWorkerClient
+		}
+	}
+
+	// test update task successfully
+	mockUpdateTask(true)
+	resp, err = server.UpdateTask(context.Background(), &pb.UpdateTaskRequest{
+		Task:    taskConfig,
+		Workers: workers,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+
+	// check update-task with an invalid worker
+	invalidWorker := "invalid-worker"
+	mockWorkerConfig(c, server, ctrl, "", true)
+	resp, err = server.UpdateTask(context.Background(), &pb.UpdateTaskRequest{
+		Task:    taskConfig,
+		Workers: []string{invalidWorker},
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Workers, check.HasLen, 1)
+	c.Assert(resp.Workers[0].Result, check.IsFalse)
+	c.Assert(resp.Workers[0].Worker, check.Equals, invalidWorker)
+
+	// test update sub task request to worker returns error
+	mockUpdateTask(false)
+	resp, err = server.UpdateTask(context.Background(), &pb.UpdateTaskRequest{
+		Task: taskConfig,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Workers, check.HasLen, 2)
+	for _, workerResp := range resp.Workers {
+		c.Assert(workerResp.Result, check.IsFalse)
+		lines := strings.Split(workerResp.Msg, "\n")
+		c.Assert(len(lines), check.Greater, 1)
+		c.Assert(lines[0], check.Equals, errGRPCFailed)
+	}
+}
