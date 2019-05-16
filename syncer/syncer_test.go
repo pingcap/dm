@@ -1047,6 +1047,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	defer s.db.Exec("drop database if exists test_1")
 
+	s.resetMaster()
 	s.resetBinlogSyncer()
 
 	s.cfg.BWList = &filter.Rules{
