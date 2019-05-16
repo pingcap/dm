@@ -67,10 +67,7 @@ type SyncPipe struct {
 	// record whether error occurred when execute SQLs
 	execErrorDetected sync2.AtomicBool
 
-	execErrors *struct {
-		sync.Mutex
-		errors []*ExecErrorContext
-	}
+	execErrors *execErrors
 
 	tracer *tracing.Tracer
 
