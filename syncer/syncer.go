@@ -133,10 +133,7 @@ type Syncer struct {
 	// record process error rather than log.Fatal
 	runFatalChan chan *pb.ProcessError
 
-	execErrors *struct {
-		sync.Mutex
-		errors []*ExecErrorContext
-	}
+	execErrors *execErrors
 
 	sqlOperatorHolder *operator.Holder
 
@@ -319,6 +316,8 @@ func (s *Syncer) Init() (err error) {
 	// NOTE: we should refactor the Concurrency Model some day
 	s.done = make(chan struct{})
 	close(s.done)
+
+	s.execErrors = new(execErrors)
 
 	// initial pipes and add into pipeline
 	syncPipe := new(SyncPipe)
@@ -1920,4 +1919,9 @@ func (s *Syncer) setTimezone() {
 	}
 	log.Infof("[syncer] use timezone: %s", loc)
 	s.timezone = loc
+}
+
+type execErrors struct {
+	sync.Mutex
+	errors []*ExecErrorContext
 }
