@@ -45,7 +45,9 @@ func (t *testDDLExecInfoSuite) TestDDLExecItem(c *C) {
 	ddlExecInfo.ClearBlockingDDL()
 	c.Assert(ddlExecInfo.BlockingDDLs(), IsNil)
 
-	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
 	err := ddlExecInfo.Send(ctx, newDDLExecItem(new(pb.ExecDDLRequest)))
 	c.Assert(err, IsNil)
 
