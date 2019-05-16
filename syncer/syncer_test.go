@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -1134,16 +1135,20 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	for i, job := range testJobs {
-		c.Assert(job.tp, Equals, testCases1[i].tp)
-		if job.tp == ddl {
-			c.Assert(job.ddls[0], Equals, testCases1[i].sqlInJob)
+	testJobs.Lock()
+	c.Assert(testJobs.jobs, HasLen, len(testCases1))
+	for i, testCase := range testCases1 {
+		c.Assert(testJobs.jobs[i].tp, Equals, testCase.tp)
+		if testJobs.jobs[i].tp == ddl {
+			c.Assert(testJobs.jobs[i].ddls[0], Equals, testCase.sqlInJob)
 		} else {
-			c.Assert(job.sql, Equals, testCases1[i].sqlInJob)
-			c.Assert(job.args[0], Equals, testCases1[i].arg)
+			c.Assert(testJobs.jobs[i].sql, Equals, testCase.sqlInJob)
+			c.Assert(testJobs.jobs[i].args[0], Equals, testCase.arg)
 		}
 	}
-	testJobs = testJobs[:0]
+
+	testJobs.jobs = testJobs.jobs[:0]
+	testJobs.Unlock()
 
 	s.cfg.ColumnMappingRules = nil
 	s.cfg.RouteRules = []*router.TableRule{
@@ -1184,15 +1189,18 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	for i, job := range testJobs {
-		c.Assert(job.tp, Equals, testCases2[i].tp)
-		if job.tp == ddl {
-			c.Assert(job.ddls[0], Equals, testCases2[i].sqlInJob)
+	testJobs.RLock()
+	c.Assert(testJobs.jobs, HasLen, len(testCases2))
+	for i, testCase := range testCases2 {
+		c.Assert(testJobs.jobs[i].tp, Equals, testCase.tp)
+		if testJobs.jobs[i].tp == ddl {
+			c.Assert(testJobs.jobs[i].ddls[0], Equals, testCase.sqlInJob)
 		} else {
-			c.Assert(job.sql, Equals, testCases2[i].sqlInJob)
-			c.Assert(job.args[0], Equals, testCases2[i].arg)
+			c.Assert(testJobs.jobs[i].sql, Equals, testCase.sqlInJob)
+			c.Assert(testJobs.jobs[i].args[0], Equals, testCase.arg)
 		}
 	}
+	testJobs.RUnlock()
 
 	status := syncer.Status().(*pb.SyncStatus)
 	c.Assert(status.TotalEvents, Equals, int64(len(testCases1)+len(testCases2)))
@@ -1202,13 +1210,18 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	c.Assert(syncer.isClosed(), IsTrue)
 }
 
-var testJobs []*job
+var testJobs struct {
+	sync.RWMutex
+	jobs []*job
+}
 
 func (s *Syncer) addJobToMemory(job *job) error {
 	switch job.tp {
 	case ddl, insert, update, del:
 		s.addCount(false, "test", job.tp, 1)
-		testJobs = append(testJobs, job)
+		testJobs.Lock()
+		testJobs.jobs = append(testJobs.jobs, job)
+		testJobs.Unlock()
 	}
 
 	return nil
