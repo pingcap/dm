@@ -1042,7 +1042,6 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 }
 
 func (s *testSyncerSuite) TestRun(c *C) {
-	c.Log("test syncer run")
 	// 1. run syncer with column mapping
 	// 2. update config, add route rules, and update syncer
 

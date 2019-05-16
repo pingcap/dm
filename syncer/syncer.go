@@ -348,7 +348,6 @@ func (s *Syncer) Init() (err error) {
 	// when Process started, we will re-create done chan again
 	// NOTE: we should refactor the Concurrency Model some day
 	s.done = make(chan struct{})
-	log.Info("close done")
 	close(s.done)
 	return nil
 }
