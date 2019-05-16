@@ -71,6 +71,7 @@ func Start(args []string) {
 		master.NewUpdateMasterConfigCmd(),
 		master.NewUpdateRelayCmd(),
 		master.NewPurgeRelayCmd(),
+		master.NewMigrateRelayCmd(),
 	)
 
 	rootCmd.SetArgs(args)
