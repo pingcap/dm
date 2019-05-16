@@ -116,7 +116,7 @@ func (t *testJobSuite) TestJob(c *C) {
 	}
 }
 
-func (s *testJobSuite) TestqueueBucketName(c *C) {
+func (t *testJobSuite) TestQueueBucketName(c *C) {
 	name := queueBucketName(9)
 	c.Assert(name, Equals, "q_1")
 }
