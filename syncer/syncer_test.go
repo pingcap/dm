@@ -1074,9 +1074,6 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	c.Assert(syncer.Type(), Equals, pb.UnitType_Sync)
 
 	syncer.addJobFunc = syncer.addJobToMemory
-	defer func() {
-		syncer.addJobFunc = syncer.addJob
-	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	resultCh := make(chan pb.ProcessResult)
