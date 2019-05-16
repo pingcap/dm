@@ -14,15 +14,9 @@
 package worker
 
 import (
-	"testing"
-
 	. "github.com/pingcap/check"
 	"github.com/pingcap/dm/dm/pb"
 )
-
-func TestLog(t *testing.T) {
-	TestingT(t)
-}
 
 type testLog struct{}
 

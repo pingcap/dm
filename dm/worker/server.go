@@ -72,8 +72,6 @@ func (s *Server) Start() error {
 		return errors.Trace(err)
 	}
 
-	s.closed.Set(false)
-
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -98,6 +96,8 @@ func (s *Server) Start() error {
 		}
 	}()
 	go InitStatus(httpL) // serve status
+
+	s.closed.Set(false)
 
 	log.Infof("[server] listening on %v for gRPC API and status request", s.cfg.WorkerAddr)
 	err = m.Serve()

@@ -15,7 +15,6 @@ package worker
 
 import (
 	"context"
-	"testing"
 	"time"
 
 	. "github.com/pingcap/check"
@@ -25,10 +24,6 @@ import (
 	"github.com/pingcap/dm/relay/purger"
 	"github.com/pingcap/errors"
 )
-
-func TestRunRelay(t *testing.T) {
-	TestingT(t)
-}
 
 type testRelay struct{}
 

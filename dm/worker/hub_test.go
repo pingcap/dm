@@ -17,15 +17,12 @@ import (
 	. "github.com/pingcap/check"
 )
 
-func (t *testWorker) TestHub(c *C) {
-	w1 := &Worker{}
-	w1.closed.Set(1)
-
-	InitConditionHub(w1)
+func (t *testServer) testConidtionHub(c *C, s *Server) {
+	// test condition hub
 	c.Assert(GetConditionHub(), NotNil)
-	c.Assert(GetConditionHub().w, DeepEquals, w1)
+	c.Assert(GetConditionHub().w, DeepEquals, s.worker)
 
 	InitConditionHub(&Worker{})
 	c.Assert(GetConditionHub(), NotNil)
-	c.Assert(GetConditionHub().w, DeepEquals, w1)
+	c.Assert(GetConditionHub().w, DeepEquals, s.worker)
 }

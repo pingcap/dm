@@ -20,7 +20,7 @@ import (
 	. "github.com/pingcap/check"
 )
 
-func (t *testWorker) TestConfig(c *C) {
+func (t *testServer) TestConfig(c *C) {
 	cfg := NewConfig()
 
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)

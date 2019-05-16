@@ -14,24 +14,14 @@
 package worker
 
 import (
-	"testing"
-
 	. "github.com/pingcap/check"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 )
 
-func TestWorker(t *testing.T) {
-	TestingT(t)
-}
-
 var emptyWorkerStatusInfoJSONLength = 25
 
-type testWorker struct{}
-
-var _ = Suite(&testWorker{})
-
-func (t *testWorker) TestWorker(c *C) {
+func (t *testServer) testWorker(c *C) {
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
 

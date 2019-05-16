@@ -16,7 +16,6 @@ package worker
 import (
 	"context"
 	"strings"
-	"testing"
 	"time"
 
 	. "github.com/pingcap/check"
@@ -28,10 +27,6 @@ import (
 	"github.com/pingcap/dm/syncer"
 	"github.com/pingcap/errors"
 )
-
-func TestRunTask(t *testing.T) {
-	TestingT(t)
-}
 
 type testSubTask struct{}
 
