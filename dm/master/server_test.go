@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -118,6 +119,10 @@ syncers:
     batch: 100
     max-retry: 100
 `
+
+var (
+	errGRPCFailed = "test grpc request failed"
+)
 
 func TestMaster(t *testing.T) {
 	check.TestingT(t)
@@ -318,9 +323,6 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 }
 
 func (t *testMaster) TestStartTask(c *check.C) {
-	var (
-		errGRPCFailed = "test grpc request failed"
-	)
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
@@ -492,4 +494,136 @@ func (t *testMaster) TestQueryError(c *check.C) {
 	c.Assert(resp.Msg, check.Matches, "task .* has no workers or not exist, can try `refresh-worker-tasks` cmd first")
 
 	// TODO: test query with correct task name, this needs to add task first
+}
+
+func (t *testMaster) TestOperateTask(c *check.C) {
+	var (
+		taskName = "unit-test-task"
+		workers  = make([]string, 0, 2)
+	)
+
+	ctrl := gomock.NewController(c)
+	defer ctrl.Finish()
+	server := defaultMasterServer(c)
+	for _, workerAddr := range server.cfg.DeployMap {
+		workers = append(workers, workerAddr)
+	}
+
+	// test operate-task with invalid task name
+	resp, err := server.OperateTask(context.Background(), &pb.OperateTaskRequest{
+		Op:   pb.TaskOp_Pause,
+		Name: taskName,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsFalse)
+	c.Assert(resp.Msg, check.Equals, fmt.Sprintf("task %s has no workers or not exist, can try `refresh-worker-tasks` cmd first", taskName))
+
+	// test operate-task while worker clients not found
+	server.taskWorkers[taskName] = workers
+	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
+		Op:   pb.TaskOp_Pause,
+		Name: taskName,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Workers, check.HasLen, 2)
+	for _, opResp := range resp.Workers {
+		c.Assert(opResp.Result, check.IsFalse)
+		c.Assert(opResp.Msg, check.Matches, ".* relevant worker-client not found")
+	}
+
+	// test pause task successfully
+	for _, workerAddr := range server.cfg.DeployMap {
+		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+		mockWorkerClient.EXPECT().OperateSubTask(
+			gomock.Any(),
+			&pb.OperateSubTaskRequest{
+				Op:   pb.TaskOp_Pause,
+				Name: taskName,
+			},
+		).Return(&pb.OperateSubTaskResponse{Result: true}, nil)
+		server.workerClients[workerAddr] = mockWorkerClient
+	}
+	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
+		Op:   pb.TaskOp_Pause,
+		Name: taskName,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Workers, check.HasLen, 2)
+	for _, opResp := range resp.Workers {
+		c.Assert(opResp.Result, check.IsTrue)
+	}
+
+	// test operate sub task to worker returns error
+	for _, workerAddr := range server.cfg.DeployMap {
+		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+		mockWorkerClient.EXPECT().OperateSubTask(
+			gomock.Any(),
+			&pb.OperateSubTaskRequest{
+				Op:   pb.TaskOp_Pause,
+				Name: taskName,
+			},
+		).Return(nil, errors.New(errGRPCFailed))
+		server.workerClients[workerAddr] = mockWorkerClient
+	}
+	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
+		Op:      pb.TaskOp_Pause,
+		Name:    taskName,
+		Workers: workers,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Workers, check.HasLen, 2)
+	for _, opResp := range resp.Workers {
+		c.Assert(opResp.Result, check.IsFalse)
+		c.Assert(strings.Split(opResp.Msg, "\n")[0], check.Equals, errGRPCFailed)
+	}
+
+	// test stop task successfully, remove partial workers
+	mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+	mockWorkerClient.EXPECT().OperateSubTask(
+		gomock.Any(),
+		&pb.OperateSubTaskRequest{
+			Op:   pb.TaskOp_Stop,
+			Name: taskName,
+		},
+	).Return(&pb.OperateSubTaskResponse{Result: true}, nil)
+	server.workerClients[workers[0]] = mockWorkerClient
+	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
+		Op:      pb.TaskOp_Stop,
+		Name:    taskName,
+		Workers: []string{workers[0]},
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Workers, check.HasLen, 1)
+	c.Assert(resp.Workers[0].Result, check.IsTrue)
+	c.Assert(server.taskWorkers, check.HasKey, taskName)
+	c.Assert(server.taskWorkers[taskName], check.DeepEquals, []string{workers[1]})
+
+	// test stop task successfully, remove all workers
+	server.taskWorkers[taskName] = workers
+	for _, workerAddr := range server.cfg.DeployMap {
+		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+		mockWorkerClient.EXPECT().OperateSubTask(
+			gomock.Any(),
+			&pb.OperateSubTaskRequest{
+				Op:   pb.TaskOp_Stop,
+				Name: taskName,
+			},
+		).Return(&pb.OperateSubTaskResponse{Result: true}, nil)
+		server.workerClients[workerAddr] = mockWorkerClient
+	}
+	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
+		Op:   pb.TaskOp_Stop,
+		Name: taskName,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Workers, check.HasLen, 2)
+	for _, opResp := range resp.Workers {
+		c.Assert(opResp.Result, check.IsTrue)
+	}
+	c.Assert(len(server.taskWorkers), check.Equals, 0)
 }
