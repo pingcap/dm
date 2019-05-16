@@ -1042,6 +1042,7 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 }
 
 func (s *testSyncerSuite) TestRun(c *C) {
+	c.Log("test syncer run")
 	// 1. run syncer with column mapping
 	// 2. update config, add route rules, and update syncer
 
@@ -1131,7 +1132,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		c.Assert(err, IsNil)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(time.Second)
 
 	testJobs.Lock()
 	c.Assert(testJobs.jobs, HasLen, len(testCases1))
@@ -1185,7 +1186,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		c.Assert(err, IsNil)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(time.Second)
 
 	testJobs.RLock()
 	c.Assert(testJobs.jobs, HasLen, len(testCases2))
