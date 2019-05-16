@@ -35,6 +35,20 @@ function usage_and_arg_test() {
 
     query_error_wrong_arg
     query_error_while_master_down
+
+    sql_skip_wrong_arg
+    sql_skip_binlogpos_sqlpattern_conflict
+    sql_skip_invalid_binlog_pos
+    sql_skip_invalid_regex
+    sql_skip_sharding_with_binlogpos
+    sql_skip_non_sharding_without_one_worker
+    sql_skip_with_master_down
+
+    sql_replace_wrong_arg
+    sql_replace_invalid_binlog_pos
+    sql_replace_non_sharding_without_one_worker
+    # TODO: check SQLs error test
+    sql_replace_with_master_down
 }
 
 function run() {
