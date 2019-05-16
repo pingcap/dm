@@ -8,6 +8,7 @@ WORK_DIR=$TEST_DIR/$TEST_NAME
 TASK_CONF=$cur/conf/dm-task.yaml
 TASK_NAME="test"
 WORKER1_CONF=$cur/conf/dm-worker1.toml
+SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
 
 # used to coverage wrong usage of dmctl command
 function usage_and_arg_test() {
@@ -54,6 +55,11 @@ function usage_and_arg_test() {
     update_master_config_wrong_arg
     update_master_config_wrong_config_file
     update_master_config_while_master_down $cur/conf/dm-master.toml
+
+    purge_relay_wrong_arg
+    purge_relay_wihout_worker
+    purge_relay_filename_with_multi_workers
+    purge_relay_while_master_down
 }
 
 function recover_max_binlog_size() {
@@ -160,6 +166,16 @@ function run() {
     run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 10
     show_ddl_locks_no_locks $TASK_NAME
+
+    server_uuid=$(tail -n 1 $WORK_DIR/worker1/relay_log/server-uuid.index)
+    run_sql "show binary logs\G" $MYSQL_PORT1
+    max_binlog_name=$(grep Log_name "$SQL_RESULT_FILE"| tail -n 1 | awk -F":" '{print $NF}')
+    binlog_count=$(grep Log_name "$SQL_RESULT_FILE" | wc -l)
+    relay_log_count=$(($(ls $WORK_DIR/worker1/relay_log/$server_uuid | wc -l) - 1))
+    [ "$binlog_count" -eq "$relay_log_count" ]
+    purge_relay_success $max_binlog_name 127.0.0.1:$WORKER1_PORT
+    new_relay_log_count=$(($(ls $WORK_DIR/worker1/relay_log/$server_uuid | wc -l) - 1))
+    [ "$new_relay_log_count" -eq 1 ]
 }
 
 cleanup1 dmctl
