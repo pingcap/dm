@@ -16,6 +16,7 @@ package tracer
 import (
 	"net"
 	"net/http"
+	"net/http/pprof"
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/pkg/log"
@@ -26,6 +27,10 @@ func (s *Server) startHTTPServer(lis net.Listener) {
 	router := http.NewServeMux()
 
 	router.HandleFunc("/status", s.handleStatus)
+	router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	router.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	router.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	router.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
 	router.Handle("/events/query", eventHandler{s.eventStore, opQueryEvents})
 	router.Handle("/events/scan", eventHandler{s.eventStore, opScanEvents})
