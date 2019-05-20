@@ -189,13 +189,11 @@ func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir 
 	} else if cmp > 0 {
 		// the latest relay log file already updated, need to parse from it again (not need to re-collect relay log files)
 		return latestFilePath, nil
-	} else {
+	} else if len(newerFiles) > 0 {
 		// check whether newer relay log file exists
-		if len(newerFiles) > 0 {
-			nextFilePath := filepath.Join(dir, newerFiles[0])
-			log.Infof("[streamer] newer relay log file %s already generated, start parse from it", nextFilePath)
-			return nextFilePath, nil
-		}
+		nextFilePath := filepath.Join(dir, newerFiles[0])
+		log.Infof("[streamer] newer relay log file %s already generated, start parse from it", nextFilePath)
+		return nextFilePath, nil
 	}
 
 	res := <-result

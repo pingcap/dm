@@ -123,9 +123,9 @@ func (t *testFileSuite) TestRealMySQLPos(c *C) {
 			expect mysql.Position
 			hasErr bool
 		}{
-			{mysql.Position{"mysql-bin.000001", 154}, mysql.Position{"mysql-bin.000001", 154}, false},
-			{mysql.Position{"mysql-bin|000002.000003", 154}, mysql.Position{"mysql-bin.000003", 154}, false},
-			{mysql.Position{"", 154}, mysql.Position{"", 154}, true},
+			{mysql.Position{Name: "mysql-bin.000001", Pos: 154}, mysql.Position{Name: "mysql-bin.000001", Pos: 154}, false},
+			{mysql.Position{Name: "mysql-bin|000002.000003", Pos: 154}, mysql.Position{Name: "mysql-bin.000003", Pos: 154}, false},
+			{mysql.Position{Name: "", Pos: 154}, mysql.Position{Name: "", Pos: 154}, true},
 		}
 	)
 
