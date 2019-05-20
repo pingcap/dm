@@ -586,16 +586,6 @@ func (s *Syncer) saveGlobalPoint(globalPoint mysql.Position) {
 	s.checkpoint.SaveGlobalPoint(globalPoint)
 }
 
-func (s *Syncer) resetShardingGroup(schema, table string) {
-	if s.cfg.IsSharding {
-		// for DDL sharding group, reset group after checkpoint saved
-		group := s.sgk.Group(schema, table)
-		if group != nil {
-			group.Reset()
-		}
-	}
-}
-
 // Run starts running for sync, we should guarantee it can rerun when paused.
 func (s *Syncer) Run(ctx context.Context) (err error) {
 	defer func() {
@@ -1243,9 +1233,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}); err != nil {
 					return errors.Trace(err)
 				}
-				log.Infof("[end] execute need handled ddls %v in position %v", needHandleDDLs, currentPos)
+				s.pipeline.Wait()
 
-				s.pipeline.Flush()
+				log.Infof("[end] execute need handled ddls %v in position %v", needHandleDDLs, currentPos)
 
 				for _, tbl := range targetTbls {
 					s.clearTables(tbl.Schema, tbl.Name)
@@ -1396,13 +1386,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				return errors.Trace(err)
 			}
 
+			s.pipeline.Wait()
+
 			if len(onlineDDLTableNames) > 0 {
 				s.clearOnlineDDL(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
 			}
 
 			log.Infof("[ddl][end]%v", needHandleDDLs)
-
-			s.pipeline.Flush()
 
 			s.clearTables(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
 		case *replication.XIDEvent:
@@ -1429,6 +1419,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}); err != nil {
 				return errors.Trace(err)
 			}
+			s.pipeline.Wait()
 		}
 	}
 }
