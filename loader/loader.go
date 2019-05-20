@@ -375,7 +375,7 @@ func (l *Loader) Init() (err error) {
 		return errors.Trace(err)
 	}
 	l.checkPoint = checkpoint
-	rollbackHolder.Add(fr.FuncRollback{"close-checkpoint", l.checkPoint.Close})
+	rollbackHolder.Add(fr.FuncRollback{Name: "close-checkpoint", Fn: l.checkPoint.Close})
 
 	l.bwList = filter.New(l.cfg.CaseSensitive, l.cfg.BWList)
 
