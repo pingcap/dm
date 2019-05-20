@@ -43,40 +43,6 @@ func (t *testServer) testWorker(c *C) {
 	c.Assert(w.StatusJSON(""), HasLen, emptyWorkerStatusInfoJSONLength)
 	c.Assert(w.closed.Get(), Equals, closedFalse)
 
-	// start task
-	c.Assert(w.meta.LoadTaskMeta(), HasLen, 0)
-	c.Assert(w.meta.PeekLog(), IsNil)
-
-	id1, err := w.StartSubTask(&config.SubTaskConfig{
-		Name: "testStartTask",
-	})
-	c.Assert(err, IsNil)
-	c.Assert(w.meta.PeekLog(), NotNil)
-	c.Assert(w.meta.PeekLog().Id, Equals, id1)
-	c.Assert(id1, Equals, int64(1))
-
-	id2, err := w.UpdateSubTask(&config.SubTaskConfig{
-		Name: "testStartTask",
-	})
-	c.Assert(err, IsNil)
-	c.Assert(id2, Equals, int64(2))
-	c.Assert(w.meta.PeekLog(), NotNil)
-	c.Assert(w.meta.PeekLog().Id, Equals, id1)
-
-	log2, err := w.meta.GetTaskLog(id2)
-	c.Assert(err, IsNil)
-	c.Assert(log2, NotNil)
-
-	id3, err := w.OperateSubTask("testSubTask", pb.TaskOp_Stop)
-	c.Assert(err, IsNil)
-	c.Assert(id3, Equals, int64(3))
-	c.Assert(w.meta.PeekLog(), NotNil)
-	c.Assert(w.meta.PeekLog().Id, Equals, id1)
-
-	log3, err := w.meta.GetTaskLog(id3)
-	c.Assert(err, IsNil)
-	c.Assert(log3, NotNil)
-
 	// close twice
 	w.Close()
 	c.Assert(w.closed.Get(), Equals, closedTrue)
