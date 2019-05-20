@@ -12,7 +12,7 @@ function unlock_ddl_lock_invalid_force_remove() {
         "unlock-ddl-lock lock_id --force-remove=$force_remove_val" \
         "Error: invalid argument \"$force_remove_val\" for \"-f, --force-remove\"" 1
 }
-function unlock_ddl_lock_with_master_down() {
+function unlock_ddl_lock_while_master_down() {
     lock_id="test-\`shard_db\`.\`shard_table\`"
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "unlock-ddl-lock $lock_id" \

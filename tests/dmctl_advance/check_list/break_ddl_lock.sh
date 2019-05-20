@@ -24,7 +24,7 @@ function break_ddl_lock_exec_skip_conflict() {
         "\`exec\` and \`skip\` can not specify both at the same time" 1
 }
 
-function break_ddl_lock_with_master_down() {
+function break_ddl_lock_while_master_down() {
     worker_addr=$1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "break-ddl-lock test -w $worker_addr --exec" \

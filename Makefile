@@ -120,8 +120,8 @@ integration_test:
 
 coverage:
 	GO111MODULE=off go get github.com/zhouqiang-cl/gocovmerge
-	gocovmerge "$(TEST_DIR)"/cov.* | grep -vE ".*.pb.go|.*.__failpoint_binding__.go|dm/ctl/master/stop_relay.go" > "$(TEST_DIR)/all_cov.out"
-	grep -vE ".*.pb.go|.*.__failpoint_binding__.go|dm/ctl/master/stop_relay.go" $(TEST_DIR)/cov.unit_test.out > $(TEST_DIR)/unit_test.out
+	gocovmerge "$(TEST_DIR)"/cov.* | grep -vE ".*.pb.go|.*.__failpoint_binding__.go" > "$(TEST_DIR)/all_cov.out"
+	grep -vE ".*.pb.go|.*.__failpoint_binding__.go" $(TEST_DIR)/cov.unit_test.out > $(TEST_DIR)/unit_test.out
 ifeq ("$(JenkinsCI)", "1")
 	GO111MODULE=off go get github.com/mattn/goveralls
 	@goveralls -coverprofile=$(TEST_DIR)/all_cov.out -service=jenkins-ci -repotoken $(COVERALLS_TOKEN)

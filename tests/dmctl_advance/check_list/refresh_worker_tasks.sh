@@ -6,7 +6,7 @@ function refresh_worker_tasks_wrong_arg() {
         "refresh-worker-tasks \[flags\]" 1
 }
 
-function refresh_worker_tasks_with_master_down() {
+function refresh_worker_tasks_while_master_down() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "refresh-worker-tasks" \
         "can not refresh workerTasks:" 1

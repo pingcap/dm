@@ -16,22 +16,22 @@ function usage_and_arg_test() {
     break_ddl_lock_without_worker
     break_ddl_lock_shoud_specify_at_least_one
     break_ddl_lock_exec_skip_conflict
-    break_ddl_lock_with_master_down 127.0.0.1:$WORKER1_PORT
+    break_ddl_lock_while_master_down 127.0.0.1:$WORKER1_PORT
 
     migrate_relay_wrong_arg
     migrate_relay_without_worker
-    migrate_relay_with_master_down
+    migrate_relay_while_master_down
 
     refresh_worker_tasks_wrong_arg
-    refresh_worker_tasks_with_master_down
+    refresh_worker_tasks_while_master_down
 
     switch_relay_master_wrong_arg
     switch_relay_master_without_worker
-    switch_relay_master_with_master_down 127.0.0.1:$WORKER1_PORT
+    switch_relay_master_while_master_down 127.0.0.1:$WORKER1_PORT
 
     unlock_ddl_lock_wrong_arg
     unlock_ddl_lock_invalid_force_remove
-    unlock_ddl_lock_with_master_down
+    unlock_ddl_lock_while_master_down
 
     query_error_wrong_arg
     query_error_while_master_down
@@ -42,13 +42,13 @@ function usage_and_arg_test() {
     sql_skip_invalid_regex
     sql_skip_sharding_with_binlogpos
     sql_skip_non_sharding_without_one_worker
-    sql_skip_with_master_down
+    sql_skip_while_master_down
 
     sql_replace_wrong_arg
     sql_replace_invalid_binlog_pos
     sql_replace_non_sharding_without_one_worker
     # TODO: check SQLs error test
-    sql_replace_with_master_down
+    sql_replace_while_master_down
 }
 
 function run() {
