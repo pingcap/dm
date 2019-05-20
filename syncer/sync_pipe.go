@@ -359,7 +359,6 @@ func (s *SyncPipe) Run() {
 			select {
 			case pipeData, ok := <-s.input:
 				log.Debugf("sync_pipe get pipeData: %v", pipeData)
-				s.resolveFunc()
 				if !ok {
 					return
 				}
@@ -367,6 +366,7 @@ func (s *SyncPipe) Run() {
 					s.reportErr(err)
 					break
 				}
+				s.resolveFunc()
 			case <-s.ctx.Done():
 				break
 			}
