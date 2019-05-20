@@ -285,6 +285,7 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, pos
 
 // DeleteTablePoint implements CheckPoint.DeleteTablePoint
 func (cp *RemoteCheckPoint) DeleteTablePoint(sourceSchema, sourceTable string) error {
+	log.Infof("DeleteTablePoint, schema: %s, table: %s", sourceSchema, sourceTable)
 	cp.Lock()
 	defer cp.Unlock()
 	mSchema, ok := cp.points[sourceSchema]
@@ -312,14 +313,16 @@ func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, 
 	defer cp.RUnlock()
 	mSchema, ok := cp.points[sourceSchema]
 	if !ok {
+		log.Infof("IsNewerTablePoint, schema: %s, table: %s, pos: %v", sourceSchema, sourceTable, pos)
 		return true
 	}
 	point, ok := mSchema[sourceTable]
 	if !ok {
+		log.Infof("IsNewerTablePoint, schema: %s, table: %s, pos: %v", sourceSchema, sourceTable, pos)
 		return true
 	}
 	oldPos := point.MySQLPos()
-	log.Infof("IsNewerTablePoint, schema: %s, table: %s, pos: %v", sourceSchema, sourceTable, pos)
+	log.Infof("IsNewerTablePoint, schema: %s, table: %s, pos: %v, old pos: %v", sourceSchema, sourceTable, pos, oldPos)
 	return pos.Compare(oldPos) > 0
 }
 
