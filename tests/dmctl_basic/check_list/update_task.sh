@@ -23,17 +23,6 @@ function update_task_worker_not_found() {
     task_conf=$1
     not_found_worker_addr=$2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "update-task $task_conf -w $worker_addr" \
-        "\"result\": true" 1 \
-        "\"result\": false" 1 \
-        "\"worker\": \"$not_found_worker_addr\"" \
-        "\"msg\": \"worker not found in task's config or deployment config\"" 1
-}
-
-function update_task_worker_not_found() {
-    task_conf=$1
-    not_found_worker_addr=$2
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "update-task $task_conf -w $not_found_worker_addr " \
         "\"result\": true" 1 \
         "\"result\": false" 1 \
