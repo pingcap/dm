@@ -1338,7 +1338,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 
 				// Don't send new DDLInfo to dm-master until all local sql jobs finished
-				//s.jobWg.Wait()
 				s.pipeline.Wait()
 
 				// NOTE: if we need singleton Syncer (without dm-master) to support sharding DDL sync

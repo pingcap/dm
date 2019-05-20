@@ -143,12 +143,13 @@ func (p *Pipeline) Input(data *PipeData) error {
 // Flush sends a PipeData with flush type, all pipes should wait all received data is processed
 func (p *Pipeline) Flush() {
 	p.Input(&PipeData{tp: flush})
-	p.wg.Wait()
 	p.Wait()
 }
 
 // Wait waits all pipes have no data to process
 func (p *Pipeline) Wait() {
+	p.wg.Wait()
+
 	for _, pipe := range p.pipes {
 		pipe.Wait()
 	}
