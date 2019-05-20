@@ -269,7 +269,7 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, pos
 	}
 
 	// we save table checkpoint while we meet DDL or DML
-	log.Debugf("save checkpoint %s for table %s.%s", pos, sourceSchema, sourceTable)
+	log.Debugf("save checkpoint %s for table %s.%s, checkpoint: %v", pos, sourceSchema, sourceTable, cp.points)
 	mSchema, ok := cp.points[sourceSchema]
 	if !ok {
 		mSchema = make(map[string]*binlogPoint)
@@ -337,6 +337,9 @@ func (cp *RemoteCheckPoint) SaveGlobalPoint(pos mysql.Position) {
 func (cp *RemoteCheckPoint) FlushPointsExcept(exceptTables [][]string) error {
 	cp.RLock()
 	defer cp.RUnlock()
+	defer func() {
+		log.Infof("after FlushPointsExcept, checkpoint: %v", cp.points)
+	}()
 
 	// convert slice to map
 	excepts := make(map[string]map[string]struct{})
