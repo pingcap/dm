@@ -91,6 +91,8 @@ type SyncPipe struct {
 	jobsChanLock sync.Mutex
 
 	doAfterFlushCheckpoint func(pos mysql.Position) error
+
+	resolveFunc func()
 }
 
 func (s *SyncPipe) newJobChans(count int) {
@@ -151,6 +153,11 @@ func (s *SyncPipe) Input() chan *PipeData {
 func (s *SyncPipe) SetNextPipe(pipe Pipe) {
 	// sync don't have next pipe
 	return
+}
+
+// SetResolveFunc implements pipe interface
+func (s *SyncPipe) SetResolveFunc(resolveFunc func()) {
+	s.resolveFunc = resolveFunc
 }
 
 // Report implements pipe interface
@@ -352,6 +359,7 @@ func (s *SyncPipe) Run() {
 			select {
 			case pipeData, ok := <-s.input:
 				log.Debugf("sync_pipe get pipeData: %v", pipeData)
+				s.resolveFunc()
 				if !ok {
 					return
 				}

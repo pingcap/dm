@@ -1245,6 +1245,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 				log.Infof("[end] execute need handled ddls %v in position %v", needHandleDDLs, currentPos)
 
+				s.pipeline.Flush()
+
 				for _, tbl := range targetTbls {
 					s.clearTables(tbl.Schema, tbl.Name)
 					// save checkpoint of each table
@@ -1400,6 +1402,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 
 			log.Infof("[ddl][end]%v", needHandleDDLs)
+
+			s.pipeline.Flush()
 
 			s.clearTables(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
 		case *replication.XIDEvent:

@@ -15,6 +15,7 @@ package syncer
 
 import (
 	"context"
+	"sync"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/gtid"
@@ -56,6 +57,9 @@ type Pipe interface {
 
 	// SetErrorChan set the error channel, send error to this channel when meet error
 	SetErrorChan(chan error)
+
+	// SetResolveFunc set the resolveFunc, which used when data is resolved
+	SetResolveFunc(func())
 }
 
 // PipeData is the data processed in pipe
@@ -92,6 +96,8 @@ type Pipeline struct {
 
 	errCh    chan error
 	errChLen int
+
+	wg sync.WaitGroup
 }
 
 // NewPipeline returns a new pipeline
@@ -127,6 +133,7 @@ func (p *Pipeline) Input(data *PipeData) error {
 
 	select {
 	case p.pipes[0].Input() <- data:
+		p.wg.Add(1)
 		return nil
 	case <-p.ctx.Done():
 		return errors.New("pipeline's context is done")
@@ -136,6 +143,7 @@ func (p *Pipeline) Input(data *PipeData) error {
 // Flush sends a PipeData with flush type, all pipes should wait all received data is processed
 func (p *Pipeline) Flush() {
 	p.Input(&PipeData{tp: flush})
+	p.wg.Wait()
 	p.Wait()
 }
 
@@ -154,6 +162,9 @@ func (p *Pipeline) Start() {
 
 	for _, pipe := range p.pipes {
 		pipe.SetErrorChan(p.errCh)
+		pipe.SetResolveFunc(func() {
+			p.wg.Done()
+		})
 		pipe.Run()
 	}
 
