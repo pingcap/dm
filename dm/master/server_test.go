@@ -121,7 +121,8 @@ syncers:
 `
 
 var (
-	errGRPCFailed = "test grpc request failed"
+	errGRPCFailed    = "test grpc request failed"
+	errExecDDLFailed = "dm-worker exec ddl failed"
 )
 
 func TestMaster(t *testing.T) {
@@ -760,32 +761,120 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 		workers = append(workers, workerAddr)
 	}
 
-	// prepare ddl lock keeper, mainly use code from ddl_lock_test.go
-	sqls := []string{"stmt"}
-	info := struct {
-		task   string
-		schema string
-		table  string
-	}{
-		"testA", "test_db", "test_table",
-	}
-	lk := NewLockKeeper()
-	var wg sync.WaitGroup
-	for _, worker := range workers {
-		wg.Add(1)
-	}
-	for _, tc := range cases {
-		wg.Add(1)
-		go func(task, schema, table string) {
-			defer wg.Done()
-			id, synced, remain, err := lk.TrySync(task, schema, table, workers[0], sqls, workers)
-			c.Assert(err, check.IsNil)
-			c.Assert(synced, check.IsFalse)
-			c.Assert(remain, check.Greater, 0) // multi-goroutines TrySync concurrently, can only confirm remain > 0
-			c.Assert(lk.FindLock(id), check.NotNil)
-		}(tc.task, tc.schema, tc.table)
-	}
-	wg.Wait()
-	server.lockKeeper = lk
+	mockResolveDDLLock := func(task, lockID, owner, traceGID string, ownerFail, nonOwnerFail bool) {
+		for _, worker := range workers {
+			mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 
+			if ownerFail && worker != owner {
+				continue
+			}
+
+			exec := false
+			if owner == worker {
+				exec = true
+			}
+
+			ret := []interface{}{
+				&pb.CommonWorkerResponse{Result: true},
+				nil,
+			}
+			if (ownerFail && worker == owner) || (nonOwnerFail && worker != owner) {
+				ret[0] = &pb.CommonWorkerResponse{Result: false}
+				ret[1] = errors.New(errExecDDLFailed)
+			}
+
+			mockWorkerClient.EXPECT().ExecuteDDL(
+				gomock.Any(),
+				&pb.ExecDDLRequest{
+					Task:     task,
+					LockID:   lockID,
+					Exec:     exec,
+					TraceGID: traceGID,
+				},
+			).Return(ret...)
+
+			server.workerClients[worker] = mockWorkerClient
+		}
+	}
+
+	var (
+		sqls        = []string{"stmt"}
+		task        = "testA"
+		schema      = "test_db"
+		table       = "test_table"
+		traceGIDIdx = 1
+	)
+
+	prepareDDLLock := func() {
+		// prepare ddl lock keeper, mainly use code from ddl_lock_test.go
+		lk := NewLockKeeper()
+		var wg sync.WaitGroup
+		for _, w := range workers {
+			wg.Add(1)
+			go func(worker string) {
+				defer wg.Done()
+				id, _, _, err := lk.TrySync(task, schema, table, worker, sqls, workers)
+				c.Assert(err, check.IsNil)
+				c.Assert(lk.FindLock(id), check.NotNil)
+			}(w)
+		}
+		wg.Wait()
+		server.lockKeeper = lk
+	}
+
+	// test UnlockDDLLock successfully
+	prepareDDLLock()
+	lockID := genDDLLockID(task, schema, table)
+	traceGID := fmt.Sprintf("resolveDDLLock.%d", traceGIDIdx)
+	traceGIDIdx++
+	mockResolveDDLLock(task, lockID, workers[0], traceGID, false, false)
+	resp, err := server.UnlockDDLLock(context.Background(), &pb.UnlockDDLLockRequest{
+		ID:           lockID,
+		ReplaceOwner: workers[0],
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+
+	// test UnlockDDLLock but DDL owner executed failed
+	prepareDDLLock()
+	lockID = genDDLLockID(task, schema, table)
+	traceGID = fmt.Sprintf("resolveDDLLock.%d", traceGIDIdx)
+	traceGIDIdx++
+	mockResolveDDLLock(task, lockID, workers[0], traceGID, true, false)
+	resp, err = server.UnlockDDLLock(context.Background(), &pb.UnlockDDLLockRequest{
+		ID:           lockID,
+		ReplaceOwner: workers[0],
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsFalse)
+	c.Assert(server.lockKeeper.FindLock(lockID), check.NotNil)
+
+	// retry UnlockDDLLock with force remove, but still DDL owner executed failed
+	traceGID = fmt.Sprintf("resolveDDLLock.%d", traceGIDIdx)
+	traceGIDIdx++
+	mockResolveDDLLock(task, lockID, workers[0], traceGID, true, false)
+	resp, err = server.UnlockDDLLock(context.Background(), &pb.UnlockDDLLockRequest{
+		ID:           lockID,
+		ReplaceOwner: workers[0],
+		ForceRemove:  true,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsFalse)
+	c.Assert(server.lockKeeper.FindLock(lockID), check.IsNil)
+
+	// test UnlockDDLLock, DDL owner executed successfully but other workers failed
+	prepareDDLLock()
+	lockID = genDDLLockID(task, schema, table)
+	traceGID = fmt.Sprintf("resolveDDLLock.%d", traceGIDIdx)
+	traceGIDIdx++
+	mockResolveDDLLock(task, lockID, workers[0], traceGID, false, true)
+	resp, err = server.UnlockDDLLock(context.Background(), &pb.UnlockDDLLockRequest{
+		ID:           lockID,
+		ReplaceOwner: workers[0],
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsFalse)
+	c.Assert(server.lockKeeper.FindLock(lockID), check.IsNil)
+
+	// TODO: add SQL operator test
 }
