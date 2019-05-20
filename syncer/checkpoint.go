@@ -319,6 +319,7 @@ func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, 
 		return true
 	}
 	oldPos := point.MySQLPos()
+	log.Infof("IsNewerTablePoint, schema: %s, table: %s, pos: %v", sourceSchema, sourceTable, pos)
 	return pos.Compare(oldPos) > 0
 }
 

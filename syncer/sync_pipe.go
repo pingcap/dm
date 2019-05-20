@@ -272,6 +272,7 @@ func (s *SyncPipe) addJob(job *job) error {
 		// only save checkpoint for DDL and XID (see above)
 		s.saveGlobalPoint(job.pos)
 		if len(job.sourceSchema) > 0 {
+			log.Infof("save checkpoint %v, schema: %s, table: %s, pos: %v", s.checkpoint, job.sourceSchema, job.sourceTable, job.pos)
 			s.checkpoint.SaveTablePoint(job.sourceSchema, job.sourceTable, job.pos)
 		}
 		// reset sharding group after checkpoint saved
@@ -279,6 +280,7 @@ func (s *SyncPipe) addJob(job *job) error {
 	case insert, update, del:
 		// save job's current pos for DML events
 		if len(job.sourceSchema) > 0 {
+			log.Infof("save checkpoint %v, schema: %s, table: %s, pos: %v", s.checkpoint, job.sourceSchema, job.sourceTable, job.currentPos)
 			s.checkpoint.SaveTablePoint(job.sourceSchema, job.sourceTable, job.currentPos)
 		}
 	}
@@ -499,7 +501,7 @@ func (s *SyncPipe) sync(ctx context.Context, queueBucket string, db *Conn, jobCh
 			}
 
 		case <-ctx.Done():
-			log.Info("[sync_pipe] stop sync")
+			log.Infof("[sync_pipe] stop sync %s", queueBucket)
 			return
 
 		default:
