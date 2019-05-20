@@ -129,7 +129,6 @@ func (r *TCPReader) Close() error {
 			return errors.Annotatef(err, "kill connection %d for master %s:%d", connID, r.syncerCfg.Host, r.syncerCfg.Port)
 		}
 	}
-
 	r.stage = stageClosed
 	return nil
 }

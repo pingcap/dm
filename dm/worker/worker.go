@@ -558,14 +558,14 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 
 	stage := w.relayHolder.Stage()
 	if stage == pb.Stage_Finished || stage == pb.Stage_Stopped {
-		return errors.Errorf("Worker's relay log unit has already stoped.")
+		return errors.Errorf("Worker's relay log unit in invalid stage: %s", stage.String())
 	}
 
 	// Check whether subtask is running syncer unit
 	for _, st := range w.subTasks {
 		isRunning := st.CheckUnit()
 		if !isRunning {
-			return errors.Errorf("There is a subtask does not run syncer.")
+			return errors.New("there is a subtask does not run syncer")
 		}
 	}
 
@@ -582,13 +582,14 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	}
 
 	if newCfg.SourceID != w.cfg.SourceID {
-		return errors.Errorf("update source ID is not allowed")
+		return errors.New("update source ID is not allowed")
 	}
 
 	log.Infof("[worker] update relay configure with config: %v", newCfg)
 	cloneCfg, _ := newCfg.DecryptPassword()
 
 	// Update SubTask configure
+	// NOTE: we only update `DB.Config` in SubTaskConfig now
 	for _, st := range w.subTasks {
 		cfg := config.NewSubTaskConfig()
 
