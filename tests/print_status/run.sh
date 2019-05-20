@@ -61,6 +61,7 @@ function run() {
             break
         fi
         i=$((i+=1))
+        echo "event_count is $event_count"
         echo "wait for syncer log flushed for the $i-th time"
         sleep 1
     done
