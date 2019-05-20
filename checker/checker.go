@@ -122,7 +122,7 @@ func (c *Checker) Init() (err error) {
 		}
 		instance.sourceDB, err = dbutil.OpenDB(*instance.sourceDBinfo)
 		if err != nil {
-			return errors.Trace(err)
+			return errors.Annotatef(err, "failed to open source DSN %s:***@%s:%d", instance.cfg.From.User, instance.cfg.From.Host, instance.cfg.From.Port)
 		}
 
 		instance.targetDBInfo = &dbutil.DBConfig{
@@ -133,7 +133,7 @@ func (c *Checker) Init() (err error) {
 		}
 		instance.targetDB, err = dbutil.OpenDB(*instance.targetDBInfo)
 		if err != nil {
-			return errors.Trace(err)
+			return errors.Annotatef(err, "failed to open target DSN %s:***@%s:%d", instance.cfg.To.User, instance.cfg.To.Host, instance.cfg.To.Port)
 		}
 
 		if _, ok := c.checkingItems[config.VersionChecking]; ok {
