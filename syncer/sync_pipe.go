@@ -351,6 +351,7 @@ func (s *SyncPipe) Run() {
 		for {
 			select {
 			case pipeData, ok := <-s.input:
+				log.Debugf("sync_pipe get pipeData: %v", pipeData)
 				if !ok {
 					return
 				}
@@ -488,6 +489,10 @@ func (s *SyncPipe) sync(ctx context.Context, queueBucket string, db *Conn, jobCh
 				}
 				clearF()
 			}
+
+		case <-ctx.Done():
+			log.Info("[sync_pipe] stop sync")
+			return
 
 		default:
 			if len(jobs) > 0 {
