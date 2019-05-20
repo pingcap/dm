@@ -640,6 +640,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			log.Errorf("panic. err: %s, stack: %s", err1, debug.Stack())
 			err = errors.Errorf("panic error: %v", err1)
 		}
+
+		// flush the jobs channels, but if error occurred, we should not flush the checkpoints
+		s.pipeline.Flush()
 	}()
 
 	s.start = time.Now()
