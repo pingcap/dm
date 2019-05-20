@@ -117,6 +117,7 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 	columnPlaceholders := genColumnPlaceholders(len(columns))
 	for dataIdx, data := range dataSeq {
 		if len(data) != len(columns) {
+			log.Errorf("Column count doesn't match, columns: %s, data: %v", columnList, data)
 			return nil, nil, nil, errors.Errorf("Column count doesn't match value count: %d (columns) vs %d (values)", len(columns), len(data))
 		}
 
@@ -168,6 +169,7 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		}
 
 		if len(oldData) != len(columns) {
+			log.Errorf("Column count doesn't match, columns: %s, data: %v", columnList, oldData)
 			return nil, nil, nil, errors.Errorf("Column count doesn't match value count: %d (columns) vs %d (values)", len(columns), len(oldData))
 		}
 
@@ -252,6 +254,7 @@ func genDeleteSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 
 	for _, data := range dataSeq {
 		if len(data) != len(columns) {
+			log.Errorf("Column count doesn't match, columns: %s, data: %v", genColumnList(columns), data)
 			return nil, nil, nil, errors.Errorf("Column count doesn't match value count: %d (columns) vs %d (values)", len(columns), len(data))
 		}
 
