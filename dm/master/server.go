@@ -121,22 +121,6 @@ func (s *Server) Start() error {
 		s.fetchWorkerDDLInfo(ctx)
 	}()
 
-	// auto resolve DDL lock is not very useful, comment it
-	//wg.Add(1)
-	//go func() {
-	//	defer wg.Done()
-	//	timer := time.NewTicker(tryResolveInterval)
-	//	defer timer.Stop()
-	//	for {
-	//		select {
-	//		case <-ctx.Done():
-	//			return
-	//		case <-timer.C:
-	//			s.tryResolveDDLLocks(ctx)
-	//		}
-	//	}
-	//}()
-
 	// create a cmux
 	m := cmux.New(s.rootLis)
 	m.SetReadTimeout(cmuxReadTimeout) // set a timeout, ref: https://github.com/pingcap/tidb-binlog/pull/352
@@ -1560,27 +1544,6 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 		Msg:     "",
 		Workers: workerResps,
 	}, nil
-}
-
-// tryResolveDDLLocks tries to resolve synced DDL locks
-// only when auto-triggered resolve by fetchWorkerDDLInfo fail, we need to auto-retry
-// this can only handle a few cases, like owner unreachable temporary
-// other cases need to handle by user to use dmctl manually
-func (s *Server) tryResolveDDLLocks(ctx context.Context) {
-	locks := s.lockKeeper.Locks()
-	for ID, lock := range locks {
-		isSynced, _ := lock.IsSync()
-		if !isSynced || !lock.AutoRetry.Get() {
-			continue
-		}
-		log.Infof("[server] try auto re-resolve DDL lock %s", ID)
-		s.resolveDDLLock(ctx, ID, "", nil)
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-	}
 }
 
 // UpdateWorkerRelayConfig updates config for relay and (dm-worker)

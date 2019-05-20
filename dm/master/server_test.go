@@ -748,3 +748,44 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 		c.Assert(lines[0], check.Equals, errGRPCFailed)
 	}
 }
+
+func (t *testMaster) TestUnlockDDLLock(c *check.C) {
+	ctrl := gomock.NewController(c)
+	defer ctrl.Finish()
+
+	server := defaultMasterServer(c)
+
+	workers := make([]string, 0, len(server.cfg.DeployMap))
+	for _, workerAddr := range server.cfg.DeployMap {
+		workers = append(workers, workerAddr)
+	}
+
+	// prepare ddl lock keeper, mainly use code from ddl_lock_test.go
+	sqls := []string{"stmt"}
+	info := struct {
+		task   string
+		schema string
+		table  string
+	}{
+		"testA", "test_db", "test_table",
+	}
+	lk := NewLockKeeper()
+	var wg sync.WaitGroup
+	for _, worker := range workers {
+		wg.Add(1)
+	}
+	for _, tc := range cases {
+		wg.Add(1)
+		go func(task, schema, table string) {
+			defer wg.Done()
+			id, synced, remain, err := lk.TrySync(task, schema, table, workers[0], sqls, workers)
+			c.Assert(err, check.IsNil)
+			c.Assert(synced, check.IsFalse)
+			c.Assert(remain, check.Greater, 0) // multi-goroutines TrySync concurrently, can only confirm remain > 0
+			c.Assert(lk.FindLock(id), check.NotNil)
+		}(tc.task, tc.schema, tc.table)
+	}
+	wg.Wait()
+	server.lockKeeper = lk
+
+}
