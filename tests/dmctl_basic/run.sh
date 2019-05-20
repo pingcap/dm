@@ -14,7 +14,7 @@ SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
 function usage_and_arg_test() {
     check_task_wrong_arg
     check_task_wrong_config_file
-    check_task_with_master_down $TASK_CONF
+    check_task_while_master_down $TASK_CONF
 
     pause_relay_wrong_arg
     pause_relay_wihout_worker
@@ -45,7 +45,7 @@ function usage_and_arg_test() {
 
     update_relay_wrong_arg
     update_relay_wrong_config_file
-    update_relay_wrong_params $WORKER1_CONF
+    update_relay_should_specify_one_dm_worker $WORKER1_CONF
     update_relay_while_master_down $WORKER1_CONF
 
     update_task_wrong_arg

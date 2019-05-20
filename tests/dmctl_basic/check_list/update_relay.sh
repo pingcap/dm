@@ -12,7 +12,7 @@ function update_relay_wrong_config_file() {
         "get file content error" 1
 }
 
-function update_relay_wrong_params() {
+function update_relay_should_specify_one_dm_worker() {
     task_conf=$1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "update-relay $task_conf" \
