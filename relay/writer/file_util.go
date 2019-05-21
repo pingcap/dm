@@ -112,12 +112,11 @@ func checkFormatDescriptionEventExist(filename string) (bool, error) {
 
 	// only parse single event
 	eof, err := replication.NewBinlogParser().ParseSingleEvent(f, onEventFunc)
-	if err != nil {
+	if found {
+		return found, nil // if found is true, we return `true` even meet an error, because FormatDescriptionEvent exists.
+	} else if err != nil {
 		return false, errors.Annotatef(err, "parse %s", filename)
 	} else if eof {
-		if found {
-			return found, nil // if found is true, we return `true` even meet EOF, because FormatDescriptionEvent exists.
-		}
 		return false, errors.Annotatef(io.EOF, "parse %s", filename)
 	}
 	return found, nil
