@@ -133,12 +133,12 @@ func CollectBinlogFilesCmp(dir, baseFile string, cmp FileCmp) ([]string, error) 
 func GetBinlogFileIndex(filename string) (float64, error) {
 	f, err := parseBinlogFile(filename)
 	if err != nil {
-		return 0, errors.Errorf("parse binlog file name %s err %v", filename, err)
+		return 0, errors.Annotatef(err, "parse binlog file name %s", filename)
 	}
 
 	idx, err := strconv.ParseFloat(f.seq, 64)
 	if err != nil {
-		return 0, errors.Errorf("parse binlog index %s to float64, err %v", filename, err)
+		return 0, errors.Annotatef(err, "parse binlog file name %s", filename)
 	}
 	return idx, nil
 }

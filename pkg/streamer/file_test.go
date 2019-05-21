@@ -204,6 +204,55 @@ func (t *testFileSuite) TestCollectBinlogFilesCmp(c *C) {
 	}
 }
 
+func (t *testFileSuite) TestGetBinlogFileIndex(c *C) {
+	cases := []struct {
+		filename  string
+		index     float64
+		errMsgReg string
+	}{
+		{
+			filename:  "invalid-binlog-filename",
+			errMsgReg: ".*invalid binlog file name.*",
+		},
+		{
+			filename:  "mysql-bin.abcdef",
+			errMsgReg: ".*invalid binlog file name.*",
+		},
+		{
+			filename: "mysql-bin.000666",
+			index:    666,
+		},
+	}
+
+	for _, cs := range cases {
+		index, err := GetBinlogFileIndex(cs.filename)
+		if len(cs.errMsgReg) > 0 {
+			c.Assert(err, ErrorMatches, cs.errMsgReg)
+		} else {
+			c.Assert(err, IsNil)
+		}
+		c.Assert(index, Equals, cs.index)
+	}
+}
+
+func (t *testFileSuite) TestConstructBinlogFilename(c *C) {
+	cases := []struct {
+		baseName string
+		seq      string
+		filename string
+	}{
+		{
+			baseName: "mysql-bin",
+			seq:      "000666",
+			filename: "mysql-bin.000666",
+		},
+	}
+
+	for _, cs := range cases {
+		c.Assert(constructBinlogFilename(cs.baseName, cs.seq), Equals, cs.filename)
+	}
+}
+
 func (t *testFileSuite) TestRealMySQLPos(c *C) {
 	var (
 		testCases = []struct {
