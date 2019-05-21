@@ -448,6 +448,7 @@ func (s *SyncPipe) sync(ctx context.Context, queueBucket string, db *Conn, jobCh
 	}
 
 	var err error
+
 	for {
 		select {
 		case sqlJob, ok := <-jobChan:
@@ -460,7 +461,7 @@ func (s *SyncPipe) sync(ctx context.Context, queueBucket string, db *Conn, jobCh
 				err = executeSQLs()
 				if err != nil {
 					fatalF(err, pb.ErrorType_ExecSQL)
-					continue
+					break
 				}
 
 				if sqlJob.ddlExecItem != nil && sqlJob.ddlExecItem.req != nil && !sqlJob.ddlExecItem.req.Exec {
@@ -500,9 +501,9 @@ func (s *SyncPipe) sync(ctx context.Context, queueBucket string, db *Conn, jobCh
 					s.ddlExecInfo.ClearBlockingDDL()
 				}
 				if err != nil {
-					// errro then pause.
+					// error then pause.
 					fatalF(err, pb.ErrorType_ExecSQL)
-					continue
+					break
 				}
 
 				tpCnt[sqlJob.tp] += int64(len(sqlJob.ddls))
@@ -517,7 +518,7 @@ func (s *SyncPipe) sync(ctx context.Context, queueBucket string, db *Conn, jobCh
 				err = executeSQLs()
 				if err != nil {
 					fatalF(err, pb.ErrorType_ExecSQL)
-					continue
+					break
 				}
 				clearF()
 			}
@@ -531,7 +532,7 @@ func (s *SyncPipe) sync(ctx context.Context, queueBucket string, db *Conn, jobCh
 				err = executeSQLs()
 				if err != nil {
 					fatalF(err, pb.ErrorType_ExecSQL)
-					continue
+					break
 				}
 				clearF()
 			} else {
@@ -642,11 +643,7 @@ func (s *SyncPipe) commitJobs(pipeData *PipeData) error {
 			}
 		}
 	case ddl:
-		ddlJob := newDDLJob(nil, pipeData.ddls, pipeData.pos, pipeData.currentPos, pipeData.gtidSet, pipeData.ddlExecItem, pipeData.traceID)
-		ddlJob.sourceSchema = pipeData.sourceSchema
-		ddlJob.sourceTable = pipeData.sourceTable
-		ddlJob.targetSchema = pipeData.targetSchema
-		ddlJob.targetTable = pipeData.targetTable
+		ddlJob := newDDLJob(pipeData.sourceSchema, pipeData.sourceTable, pipeData.targetSchema, pipeData.targetTable, pipeData.ddls, pipeData.pos, pipeData.currentPos, pipeData.gtidSet, pipeData.ddlExecItem, pipeData.traceID)
 		err := s.addJob(ddlJob)
 		if err != nil {
 			return errors.Trace(err)

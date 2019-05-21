@@ -104,26 +104,23 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 	}
 }
 
-func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, pos, cmdPos mysql.Position, currentGtidSet gtid.Set, ddlExecItem *DDLExecItem, traceID string) *job {
+func newDDLJob(sourceSchema, sourceTable, targetSchema, targetTable string, ddls []string, pos, cmdPos mysql.Position, currentGtidSet gtid.Set, ddlExecItem *DDLExecItem, traceID string) *job {
 	var gs gtid.Set
 	if currentGtidSet != nil {
 		gs = currentGtidSet.Clone()
 	}
 	j := &job{
-		tp:          ddl,
-		ddls:        ddls,
-		pos:         pos,
-		currentPos:  cmdPos,
-		gtidSet:     gs,
-		ddlExecItem: ddlExecItem,
-		traceID:     traceID,
-	}
-
-	if ddlInfo != nil {
-		j.sourceSchema = ddlInfo.tableNames[0][0].Schema
-		j.sourceTable = ddlInfo.tableNames[0][0].Name
-		j.targetSchema = ddlInfo.tableNames[1][0].Schema
-		j.targetTable = ddlInfo.tableNames[1][0].Name
+		tp:           ddl,
+		sourceSchema: sourceSchema,
+		sourceTable:  sourceTable,
+		targetSchema: targetSchema,
+		targetTable:  targetTable,
+		ddls:         ddls,
+		pos:          pos,
+		currentPos:   cmdPos,
+		gtidSet:      gs,
+		ddlExecItem:  ddlExecItem,
+		traceID:      traceID,
 	}
 
 	if ddlExecItem != nil && ddlExecItem.req != nil {
