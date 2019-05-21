@@ -434,6 +434,16 @@ func (s *SyncPipe) sync(ctx context.Context, queueBucket string, db *Conn, jobCh
 			s.appendExecErrors(errCtx)
 		}
 
+		if s.tracer.Enable() {
+			syncerJobState := s.tracer.FinishedSyncerJobState(err)
+			for _, job := range jobs {
+				_, err2 := s.tracer.CollectSyncerJobEvent(job.traceID, job.traceGID, int32(job.tp), job.pos, job.currentPos, queueBucket, job.sql, job.ddls, nil, nil, syncerJobState)
+				if err2 != nil {
+					log.Errorf("[syncer] trace error: %s", err2)
+				}
+			}
+		}
+
 		return errors.Trace(err)
 	}
 
@@ -460,6 +470,18 @@ func (s *SyncPipe) sync(ctx context.Context, queueBucket string, db *Conn, jobCh
 					err = db.executeSQL(sqlJob.ddls, args, 1)
 					if err != nil && ignoreDDLError(err) {
 						err = nil
+					}
+
+					if s.tracer.Enable() {
+						syncerJobState := s.tracer.FinishedSyncerJobState(err)
+						var execDDLReq *pb.ExecDDLRequest
+						if sqlJob.ddlExecItem != nil {
+							execDDLReq = sqlJob.ddlExecItem.req
+						}
+						_, err := s.tracer.CollectSyncerJobEvent(sqlJob.traceID, sqlJob.traceGID, int32(sqlJob.tp), sqlJob.pos, sqlJob.currentPos, queueBucket, sqlJob.sql, sqlJob.ddls, nil, execDDLReq, syncerJobState)
+						if err != nil {
+							log.Errorf("[syncer] trace error: %s", err)
+						}
 					}
 				}
 				if err != nil {
@@ -620,7 +642,12 @@ func (s *SyncPipe) commitJobs(pipeData *PipeData) error {
 			}
 		}
 	case ddl:
-		err := s.addJob(newDDLJob(nil, pipeData.ddls, pipeData.pos, pipeData.currentPos, pipeData.gtidSet, pipeData.ddlExecItem, pipeData.traceID))
+		ddlJob := newDDLJob(nil, pipeData.ddls, pipeData.pos, pipeData.currentPos, pipeData.gtidSet, pipeData.ddlExecItem, pipeData.traceID)
+		ddlJob.sourceSchema = pipeData.sourceSchema
+		ddlJob.sourceTable = pipeData.sourceTable
+		ddlJob.targetSchema = pipeData.targetSchema
+		ddlJob.targetTable = pipeData.targetTable
+		err := s.addJob(ddlJob)
 		if err != nil {
 			return errors.Trace(err)
 		}
