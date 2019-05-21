@@ -25,12 +25,12 @@ var _ = Suite(&testHeartbeatSuite{})
 
 type testHeartbeatSuite struct {
 	from config.DBConfig
-	lag  float64
+	lag  map[string]float64
 }
 
 func (t *testHeartbeatSuite) SetUpSuite(c *C) {
 	t.from = getDBConfigFromEnv()
-
+	t.lag = make(map[string]float64)
 	reportLagFunc = t.reportLag
 }
 
@@ -39,7 +39,7 @@ func (t *testHeartbeatSuite) TestTearDown(c *C) {
 }
 
 func (t *testHeartbeatSuite) reportLag(taskName string, lag float64) {
-	t.lag = lag
+	t.lag[taskName] = lag
 }
 
 func (t *testHeartbeatSuite) TestHeartbeatConfig(c *C) {
@@ -69,7 +69,13 @@ func (t *testHeartbeatSuite) TestHeartbeat(c *C) {
 		reportInterval: int64(1),
 	})
 	c.Assert(err, IsNil)
-	err = heartbeat.AddTask("heartbeat_test")
+	err = heartbeat.AddTask("heartbeat_test_1")
+	c.Assert(err, IsNil)
+
+	err = heartbeat.AddTask("heartbeat_test_1")
+	c.Assert(err, ErrorMatches, ".*already exists.*")
+
+	err = heartbeat.AddTask("heartbeat_test_2")
 	c.Assert(err, IsNil)
 
 	err = heartbeat.updateTS()
@@ -79,9 +85,10 @@ func (t *testHeartbeatSuite) TestHeartbeat(c *C) {
 	c.Assert(err, IsNil)
 
 	c.Assert(t.lag, Not(Equals), float64(0))
-	oldlag := t.lag
+	oldlag1 := t.lag["heartbeat_test_1"]
+	oldlag2 := t.lag["heartbeat_test_2"]
 
-	heartbeat.TryUpdateTaskTs("heartbeat_test", "dm_heartbeat", "heartbeat", [][]interface{}{
+	heartbeat.TryUpdateTaskTs("heartbeat_test_1", "dm_heartbeat", "heartbeat", [][]interface{}{
 		{
 			"2019-05-15 15:25:42",
 			int32(123),
@@ -90,11 +97,15 @@ func (t *testHeartbeatSuite) TestHeartbeat(c *C) {
 
 	err = heartbeat.calculateLag(context.Background())
 	c.Assert(err, IsNil)
-	c.Assert(t.lag, Not(Equals), oldlag)
+	c.Assert(t.lag["heartbeat_test_1"], Not(Equals), oldlag1)
+	c.Assert(t.lag["heartbeat_test_2"], Equals, oldlag2)
 
 	err = heartbeat.RemoveTask("wrong")
 	c.Assert(err, ErrorMatches, ".*not found.*")
 
-	err = heartbeat.RemoveTask("heartbeat_test")
+	err = heartbeat.RemoveTask("heartbeat_test_1")
+	c.Assert(err, IsNil)
+
+	err = heartbeat.RemoveTask("heartbeat_test_2")
 	c.Assert(err, IsNil)
 }

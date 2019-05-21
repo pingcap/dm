@@ -120,9 +120,9 @@ func (t *testJobSuite) TestQueueBucketName(c *C) {
 	name := queueBucketName(0)
 	c.Assert(name, Equals, "q_0")
 
-	name := queueBucketName(8)
+	name = queueBucketName(8)
 	c.Assert(name, Equals, "q_0")
 
-	name := queueBucketName(9)
+	name = queueBucketName(9)
 	c.Assert(name, Equals, "q_1")
 }
