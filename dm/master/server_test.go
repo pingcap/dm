@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/pingcap/check"
@@ -1042,5 +1043,256 @@ func (t *testMaster) TestRefreshWorkerTasks(c *check.C) {
 	c.Assert(resp.Workers, check.HasLen, 2)
 	for _, w := range resp.Workers {
 		c.Assert(w.Msg, check.Equals, msgNoSubTask)
+	}
+}
+
+func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
+	ctrl := gomock.NewController(c)
+	defer ctrl.Finish()
+
+	server := defaultMasterServer(c)
+	var (
+		now      = time.Now().Unix()
+		filename = "mysql-bin.000005"
+		workers  = make([]string, 0, len(server.cfg.Deploy))
+	)
+
+	for _, deploy := range server.cfg.Deploy {
+		workers = append(workers, deploy.Worker)
+	}
+
+	// mock PurgeRelay request
+	mockPurgeRelay := func(rpcSuccess bool) {
+		for _, deploy := range server.cfg.Deploy {
+			rets := make([]interface{}, 0, 2)
+			if rpcSuccess {
+				rets = []interface{}{
+					&pb.CommonWorkerResponse{
+						Result: true,
+						Worker: deploy.Worker,
+					},
+					nil,
+				}
+			} else {
+				rets = []interface{}{
+					nil,
+					errors.New(errGRPCFailed),
+				}
+			}
+			mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+			mockWorkerClient.EXPECT().PurgeRelay(
+				gomock.Any(),
+				&pb.PurgeRelayRequest{
+					Time:     now,
+					Filename: filename,
+				},
+			).Return(rets...)
+			server.workerClients[deploy.Worker] = mockWorkerClient
+		}
+	}
+
+	// test PurgeWorkerRelay with invalid dm-worker[s]
+	resp, err := server.PurgeWorkerRelay(context.Background(), &pb.PurgeWorkerRelayRequest{
+		Workers:  []string{"invalid-worker1", "invalid-worker2"},
+		Time:     now,
+		Filename: filename,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Workers, check.HasLen, 2)
+	for _, w := range resp.Workers {
+		c.Assert(w.Result, check.IsFalse)
+		c.Assert(w.Msg, check.Matches, ".*relevant worker-client not found")
+	}
+
+	// test PurgeWorkerRelay successfully
+	mockPurgeRelay(true)
+	resp, err = server.PurgeWorkerRelay(context.Background(), &pb.PurgeWorkerRelayRequest{
+		Workers:  workers,
+		Time:     now,
+		Filename: filename,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Workers, check.HasLen, 2)
+	for _, w := range resp.Workers {
+		c.Assert(w.Result, check.IsTrue)
+	}
+
+	// test PurgeWorkerRelay with error response
+	mockPurgeRelay(false)
+	resp, err = server.PurgeWorkerRelay(context.Background(), &pb.PurgeWorkerRelayRequest{
+		Workers:  workers,
+		Time:     now,
+		Filename: filename,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Workers, check.HasLen, 2)
+	for _, w := range resp.Workers {
+		c.Assert(w.Result, check.IsFalse)
+		lines := strings.Split(w.Msg, "\n")
+		c.Assert(len(lines), check.Greater, 1)
+		c.Assert(lines[0], check.Equals, errGRPCFailed)
+	}
+}
+
+func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
+	ctrl := gomock.NewController(c)
+	defer ctrl.Finish()
+
+	server := defaultMasterServer(c)
+	workers := make([]string, 0, len(server.cfg.Deploy))
+
+	for _, deploy := range server.cfg.Deploy {
+		workers = append(workers, deploy.Worker)
+	}
+
+	// mock SwitchRelayMaster request
+	mockSwitchRelayMaster := func(rpcSuccess bool) {
+		for _, deploy := range server.cfg.Deploy {
+			rets := make([]interface{}, 0, 2)
+			if rpcSuccess {
+				rets = []interface{}{
+					&pb.CommonWorkerResponse{
+						Result: true,
+						Worker: deploy.Worker,
+					},
+					nil,
+				}
+			} else {
+				rets = []interface{}{
+					nil,
+					errors.New(errGRPCFailed),
+				}
+			}
+			mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+			mockWorkerClient.EXPECT().SwitchRelayMaster(
+				gomock.Any(),
+				&pb.SwitchRelayMasterRequest{},
+			).Return(rets...)
+			server.workerClients[deploy.Worker] = mockWorkerClient
+		}
+	}
+
+	// test SwitchWorkerRelayMaster with invalid dm-worker[s]
+	resp, err := server.SwitchWorkerRelayMaster(context.Background(), &pb.SwitchWorkerRelayMasterRequest{
+		Workers: []string{"invalid-worker1", "invalid-worker2"},
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Workers, check.HasLen, 2)
+	for _, w := range resp.Workers {
+		c.Assert(w.Result, check.IsFalse)
+		c.Assert(w.Msg, check.Matches, ".*relevant worker-client not found")
+	}
+
+	// test SwitchWorkerRelayMaster successfully
+	mockSwitchRelayMaster(true)
+	resp, err = server.SwitchWorkerRelayMaster(context.Background(), &pb.SwitchWorkerRelayMasterRequest{
+		Workers: workers,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Workers, check.HasLen, 2)
+	for _, w := range resp.Workers {
+		c.Assert(w.Result, check.IsTrue)
+	}
+
+	// test SwitchWorkerRelayMaster with error response
+	mockSwitchRelayMaster(false)
+	resp, err = server.SwitchWorkerRelayMaster(context.Background(), &pb.SwitchWorkerRelayMasterRequest{
+		Workers: workers,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Workers, check.HasLen, 2)
+	for _, w := range resp.Workers {
+		c.Assert(w.Result, check.IsFalse)
+		lines := strings.Split(w.Msg, "\n")
+		c.Assert(len(lines), check.Greater, 1)
+		c.Assert(lines[0], check.Equals, errGRPCFailed)
+	}
+}
+
+func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
+	ctrl := gomock.NewController(c)
+	defer ctrl.Finish()
+
+	server := defaultMasterServer(c)
+	workers := make([]string, 0, len(server.cfg.Deploy))
+
+	for _, deploy := range server.cfg.Deploy {
+		workers = append(workers, deploy.Worker)
+	}
+
+	// mock OperateRelay request
+	mockOperateRelay := func(rpcSuccess bool) {
+		for _, deploy := range server.cfg.Deploy {
+			rets := make([]interface{}, 0, 2)
+			if rpcSuccess {
+				rets = []interface{}{
+					&pb.OperateRelayResponse{
+						Result: true,
+						Worker: deploy.Worker,
+						Op:     pb.RelayOp_PauseRelay,
+					},
+					nil,
+				}
+			} else {
+				rets = []interface{}{
+					nil,
+					errors.New(errGRPCFailed),
+				}
+			}
+			mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+			mockWorkerClient.EXPECT().OperateRelay(
+				gomock.Any(),
+				&pb.OperateRelayRequest{Op: pb.RelayOp_PauseRelay},
+			).Return(rets...)
+			server.workerClients[deploy.Worker] = mockWorkerClient
+		}
+	}
+
+	// test OperateWorkerRelayTask with invalid dm-worker[s]
+	resp, err := server.OperateWorkerRelayTask(context.Background(), &pb.OperateWorkerRelayRequest{
+		Workers: []string{"invalid-worker1", "invalid-worker2"},
+		Op:      pb.RelayOp_PauseRelay,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Workers, check.HasLen, 2)
+	for _, w := range resp.Workers {
+		c.Assert(w.Result, check.IsFalse)
+		c.Assert(w.Msg, check.Matches, ".*relevant worker-client not found")
+	}
+
+	// test OperateWorkerRelayTask successfully
+	mockOperateRelay(true)
+	resp, err = server.OperateWorkerRelayTask(context.Background(), &pb.OperateWorkerRelayRequest{
+		Workers: workers,
+		Op:      pb.RelayOp_PauseRelay,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Workers, check.HasLen, 2)
+	for _, w := range resp.Workers {
+		c.Assert(w.Result, check.IsTrue)
+	}
+
+	// test OperateWorkerRelayTask with error response
+	mockOperateRelay(false)
+	resp, err = server.OperateWorkerRelayTask(context.Background(), &pb.OperateWorkerRelayRequest{
+		Workers: workers,
+		Op:      pb.RelayOp_PauseRelay,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Workers, check.HasLen, 2)
+	for _, w := range resp.Workers {
+		c.Assert(w.Result, check.IsFalse)
+		lines := strings.Split(w.Msg, "\n")
+		c.Assert(len(lines), check.Greater, 1)
+		c.Assert(lines[0], check.Equals, errGRPCFailed)
 	}
 }
