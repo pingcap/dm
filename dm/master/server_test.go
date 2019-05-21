@@ -16,6 +16,7 @@ package master
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"testing"
@@ -1296,4 +1297,85 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 		c.Assert(len(lines), check.Greater, 1)
 		c.Assert(lines[0], check.Equals, errGRPCFailed)
 	}
+}
+
+func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
+	ctrl := gomock.NewController(c)
+	defer ctrl.Finish()
+
+	server := defaultMasterServer(c)
+	workers := make([]string, 0, len(server.cfg.Deploy))
+	for _, deploy := range server.cfg.Deploy {
+		workers = append(workers, deploy.Worker)
+	}
+	server.taskWorkers = map[string][]string{"test": workers}
+	var (
+		task     = "test"
+		schema   = "test_db"
+		table    = "test_table"
+		ddls     = []string{"stmt"}
+		traceGID = fmt.Sprintf("resolveDDLLock.%d", 1)
+		lockID   = genDDLLockID(task, schema, table)
+		wg       sync.WaitGroup
+	)
+
+	// mock FetchDDLInfo stream API
+	for _, deploy := range server.cfg.Deploy {
+		stream := pbmock.NewMockWorker_FetchDDLInfoClient(ctrl)
+		stream.EXPECT().Recv().Return(&pb.DDLInfo{
+			Task:   task,
+			Schema: schema,
+			Table:  table,
+			DDLs:   ddls,
+		}, nil)
+		// This will lead to a select on ctx.Done and time.After(retryTimeout),
+		// so we have enough time to cancel the context.
+		stream.EXPECT().Recv().Return(nil, io.EOF).MaxTimes(1)
+		stream.EXPECT().Send(&pb.DDLLockInfo{Task: task, ID: lockID}).Return(nil)
+		stream.EXPECT().CloseSend().Return(nil)
+
+		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+		mockWorkerClient.EXPECT().FetchDDLInfo(gomock.Any()).Return(stream, nil)
+		// which worker is DDLLock owner is not determined, so we mock a exec/non-exec
+		// ExecDDLRequest to each worker client, with at most one time call.
+		mockWorkerClient.EXPECT().ExecuteDDL(
+			gomock.Any(),
+			&pb.ExecDDLRequest{
+				Task:     task,
+				LockID:   lockID,
+				Exec:     true,
+				TraceGID: traceGID,
+			},
+		).Return(&pb.CommonWorkerResponse{Result: true}, nil).MaxTimes(1)
+		mockWorkerClient.EXPECT().ExecuteDDL(
+			gomock.Any(),
+			&pb.ExecDDLRequest{
+				Task:     task,
+				LockID:   lockID,
+				Exec:     false,
+				TraceGID: traceGID,
+			},
+		).Return(&pb.CommonWorkerResponse{Result: true}, nil).MaxTimes(1)
+
+		server.workerClients[deploy.Worker] = mockWorkerClient
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		server.fetchWorkerDDLInfo(ctx)
+	}()
+	go func() {
+		for {
+			select {
+			case <-time.After(time.Millisecond * 10):
+				if server.lockKeeper.FindLock(lockID) == nil {
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+	wg.Wait()
 }
