@@ -912,9 +912,8 @@ func (s *Server) RefreshWorkerTasks(ctx context.Context, req *pb.RefreshWorkerTa
 	log.Infof("[server] receive RefreshWorkerTasks request %+v", req)
 
 	taskWorkers, workerMsgMap := s.fetchTaskWorkers(ctx)
-	if len(taskWorkers) > 0 {
-		s.replaceTaskWorkers(taskWorkers)
-	}
+	// always update task workers mapping in memory
+	s.replaceTaskWorkers(taskWorkers)
 	log.Infof("[server] update task workers to %v", taskWorkers)
 
 	workers := make([]string, 0, len(workerMsgMap))
