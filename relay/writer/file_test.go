@@ -261,6 +261,11 @@ func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check
 		latestPos uint32 = 4
 	)
 
+	formatDescEv, err := event.GenFormatDescriptionEvent(header, latestPos)
+	c.Assert(err, check.IsNil)
+	c.Assert(formatDescEv, check.NotNil)
+	latestPos = formatDescEv.Header.LogPos
+
 	rotateEv, err := event.GenRotateEvent(header, latestPos, []byte(nextFilename), nextFilePos)
 	c.Assert(err, check.IsNil)
 	c.Assert(rotateEv, check.NotNil)
@@ -269,9 +274,10 @@ func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check
 	c.Assert(err, check.IsNil)
 	c.Assert(fakeRotateEv, check.NotNil)
 
-	formatDescEv, err := event.GenFormatDescriptionEvent(header, latestPos)
+	// hole exists between formatDescEv and holeRotateEv, but the size is too small to fill
+	holeRotateEv, err := event.GenRotateEvent(header, latestPos+event.MinUserVarEventLen-1, []byte(nextFilename), nextFilePos)
 	c.Assert(err, check.IsNil)
-	c.Assert(formatDescEv, check.NotNil)
+	c.Assert(holeRotateEv, check.NotNil)
 
 	// 1: non-fake RotateEvent before FormatDescriptionEvent, invalid
 	w1 := NewFileWriter(cfg, t.parser)
@@ -347,6 +353,11 @@ func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check
 	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsFalse)
 
+	// try to write a rotateEv with hole exists
+	result, err = w4.WriteEvent(holeRotateEv)
+	c.Assert(err, check.ErrorMatches, ".*required dummy event size.*is too small.*")
+	c.Assert(result, check.IsNil)
+
 	result, err = w4.WriteEvent(rotateEv)
 	c.Assert(err, check.IsNil)
 	c.Assert(result, check.NotNil)
@@ -354,6 +365,11 @@ func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check
 
 	fileSize += int64(len(rotateEv.RawData))
 	t.verifyFilenameOffset(c, w4, nextFilename, fileSize)
+
+	// write again, duplicate, but we already rotated and new binlog file not created
+	result, err = w4.WriteEvent(rotateEv)
+	c.Assert(err, check.ErrorMatches, ".*no such file or directory.*")
+	c.Assert(result, check.IsNil)
 
 	// cfg.Filename should contain both one FormatDescriptionEvent and one RotateEvent, next file should be empty
 	filename1 = filepath.Join(cfg.RelayDir, cfg.Filename)
