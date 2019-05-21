@@ -1220,24 +1220,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					log.Infof("[convert] execute need handled ddls converted to %v in position %s by sql operator", needHandleDDLs, currentPos)
 				}
 
-				var sourceSchema, sourceTable, targetSchema, targetTable string
-				if ddlInfo != nil {
-					sourceSchema = ddlInfo.tableNames[0][0].Schema
-					sourceTable = ddlInfo.tableNames[0][0].Name
-					targetSchema = ddlInfo.tableNames[1][0].Schema
-					targetTable = ddlInfo.tableNames[1][0].Name
-				}
-
 				if err = s.pipeline.Input(&PipeData{
-					tp:           ddl,
-					sourceSchema: sourceSchema,
-					sourceTable:  sourceTable,
-					targetSchema: targetSchema,
-					targetTable:  targetTable,
-					ddls:         needHandleDDLs,
-					pos:          lastPos,
-					currentPos:   currentPos,
-					traceID:      traceID,
+					tp:         ddl,
+					ddls:       needHandleDDLs,
+					pos:        lastPos,
+					currentPos: currentPos,
+					traceID:    traceID,
 				}); err != nil {
 					return errors.Trace(err)
 				}
@@ -1383,13 +1371,25 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				log.Infof("[convert] execute need handled ddls converted to %v in position %s by sql operator", needHandleDDLs, currentPos)
 			}
 
+			var sourceSchema, sourceTable, targetSchema, targetTable string
+			if ddlInfo != nil {
+				sourceSchema = ddlInfo.tableNames[0][0].Schema
+				sourceTable = ddlInfo.tableNames[0][0].Name
+				targetSchema = ddlInfo.tableNames[1][0].Schema
+				targetTable = ddlInfo.tableNames[1][0].Name
+			}
+
 			if err = s.pipeline.Input(&PipeData{
-				tp:          ddl,
-				ddls:        needHandleDDLs,
-				pos:         lastPos,
-				currentPos:  currentPos,
-				traceID:     traceID,
-				ddlExecItem: ddlExecItem,
+				tp:           ddl,
+				sourceSchema: sourceSchema,
+				sourceTable:  sourceTable,
+				targetSchema: targetSchema,
+				targetTable:  targetTable,
+				ddls:         needHandleDDLs,
+				pos:          lastPos,
+				currentPos:   currentPos,
+				traceID:      traceID,
+				ddlExecItem:  ddlExecItem,
 			}); err != nil {
 				return errors.Trace(err)
 			}
