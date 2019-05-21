@@ -45,7 +45,7 @@ func sqlSkipFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	binlogPos, sqlPattern, sharding, err := common.ExtractBinlogPosSQLPattern(cmd)
+	binlogPos, sqlPattern, sharding, err := extractBinlogPosSQLPattern(cmd)
 	if err != nil {
 		common.PrintLines("%s", err.Error())
 		return
