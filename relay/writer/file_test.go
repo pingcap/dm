@@ -41,6 +41,11 @@ func TestSuite(t *testing.T) {
 }
 
 type testFileWriterSuite struct {
+	parser *parser.Parser
+}
+
+func (t *testFileWriterSuite) SetUpSuite(c *check.C) {
+	t.parser = parser.New()
 }
 
 func (t *testFileWriterSuite) TestInterfaceMethods(c *check.C) {
@@ -58,11 +63,11 @@ func (t *testFileWriterSuite) TestInterfaceMethods(c *check.C) {
 		ev, _            = event.GenFormatDescriptionEvent(header, latestPos)
 	)
 
-	w := NewFileWriter(cfg)
+	w := NewFileWriter(cfg, t.parser)
 	c.Assert(w, check.NotNil)
 
 	// not prepared
-	rres, err := w.Recover(parser.New())
+	rres, err := w.Recover()
 	c.Assert(err, check.ErrorMatches, fmt.Sprintf(".*%s.*", common.StageNew))
 	c.Assert(rres, check.IsNil)
 	res, err := w.WriteEvent(ev)
@@ -81,7 +86,7 @@ func (t *testFileWriterSuite) TestInterfaceMethods(c *check.C) {
 	c.Assert(err, check.ErrorMatches, ".*no underlying writer opened.*")
 
 	// recover
-	rres, err = w.Recover(parser.New())
+	rres, err = w.Recover()
 	c.Assert(err, check.ErrorMatches, ".*no such file or directory.*")
 	c.Assert(rres, check.IsNil)
 
@@ -112,7 +117,7 @@ func (t *testFileWriterSuite) TestRelayDir(c *check.C) {
 	c.Assert(err, check.IsNil)
 
 	// no dir specified
-	w1 := NewFileWriter(cfg)
+	w1 := NewFileWriter(cfg, t.parser)
 	defer w1.Close()
 	c.Assert(w1.Start(), check.IsNil)
 	result, err := w1.WriteEvent(ev)
@@ -121,7 +126,7 @@ func (t *testFileWriterSuite) TestRelayDir(c *check.C) {
 
 	// invalid dir
 	cfg.RelayDir = "invalid\x00path"
-	w2 := NewFileWriter(cfg)
+	w2 := NewFileWriter(cfg, t.parser)
 	defer w2.Close()
 	c.Assert(w2.Start(), check.IsNil)
 	result, err = w2.WriteEvent(ev)
@@ -130,7 +135,7 @@ func (t *testFileWriterSuite) TestRelayDir(c *check.C) {
 
 	// valid directory, but no filename specified
 	cfg.RelayDir = c.MkDir()
-	w3 := NewFileWriter(cfg)
+	w3 := NewFileWriter(cfg, t.parser)
 	defer w3.Close()
 	c.Assert(w3.Start(), check.IsNil)
 	result, err = w3.WriteEvent(ev)
@@ -139,7 +144,7 @@ func (t *testFileWriterSuite) TestRelayDir(c *check.C) {
 
 	// valid directory, but invalid filename
 	cfg.Filename = "test-mysql-bin.666abc"
-	w4 := NewFileWriter(cfg)
+	w4 := NewFileWriter(cfg, t.parser)
 	defer w4.Close()
 	c.Assert(w4.Start(), check.IsNil)
 	result, err = w4.WriteEvent(ev)
@@ -148,7 +153,7 @@ func (t *testFileWriterSuite) TestRelayDir(c *check.C) {
 
 	// valid directory, valid filename
 	cfg.Filename = "test-mysql-bin.000001"
-	w5 := NewFileWriter(cfg)
+	w5 := NewFileWriter(cfg, t.parser)
 	defer w5.Close()
 	c.Assert(w5.Start(), check.IsNil)
 	result, err = w5.WriteEvent(ev)
@@ -173,7 +178,7 @@ func (t *testFileWriterSuite) TestFormatDescriptionEvent(c *check.C) {
 	c.Assert(err, check.IsNil)
 
 	// write FormatDescriptionEvent to empty file
-	w := NewFileWriter(cfg)
+	w := NewFileWriter(cfg, t.parser)
 	defer w.Close()
 	c.Assert(w.Start(), check.IsNil)
 	result, err := w.WriteEvent(formatDescEv)
@@ -269,7 +274,7 @@ func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check
 	c.Assert(formatDescEv, check.NotNil)
 
 	// 1: non-fake RotateEvent before FormatDescriptionEvent, invalid
-	w1 := NewFileWriter(cfg)
+	w1 := NewFileWriter(cfg, t.parser)
 	defer w1.Close()
 	c.Assert(w1.Start(), check.IsNil)
 	result, err := w1.WriteEvent(rotateEv)
@@ -278,7 +283,7 @@ func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check
 
 	// 2. fake RotateEvent before FormatDescriptionEvent
 	cfg.RelayDir = c.MkDir() // use a new relay directory
-	w2 := NewFileWriter(cfg)
+	w2 := NewFileWriter(cfg, t.parser)
 	defer w2.Close()
 	c.Assert(w2.Start(), check.IsNil)
 	result, err = w2.WriteEvent(fakeRotateEv)
@@ -307,7 +312,7 @@ func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check
 
 	// 3. FormatDescriptionEvent before fake RotateEvent
 	cfg.RelayDir = c.MkDir() // use a new relay directory
-	w3 := NewFileWriter(cfg)
+	w3 := NewFileWriter(cfg, t.parser)
 	defer w3.Close()
 	c.Assert(w3.Start(), check.IsNil)
 	result, err = w3.WriteEvent(formatDescEv)
@@ -334,7 +339,7 @@ func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check
 
 	// 4. FormatDescriptionEvent before non-fake RotateEvent
 	cfg.RelayDir = c.MkDir() // use a new relay directory
-	w4 := NewFileWriter(cfg)
+	w4 := NewFileWriter(cfg, t.parser)
 	defer w4.Close()
 	c.Assert(w4.Start(), check.IsNil)
 	result, err = w4.WriteEvent(formatDescEv)
@@ -416,7 +421,7 @@ func (t *testFileWriterSuite) TestWriteMultiEvents(c *check.C) {
 	allData.Write(data)
 
 	// write the events to the file
-	w := NewFileWriter(cfg)
+	w := NewFileWriter(cfg, t.parser)
 	c.Assert(w.Start(), check.IsNil)
 	for _, ev := range allEvents {
 		result, err2 := w.WriteEvent(ev)
@@ -450,7 +455,7 @@ func (t *testFileWriterSuite) TestHandleFileHoleExist(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(formatDescEv, check.NotNil)
 
-	w := NewFileWriter(cfg)
+	w := NewFileWriter(cfg, t.parser)
 	defer w.Close()
 	c.Assert(w.Start(), check.IsNil)
 
@@ -517,7 +522,7 @@ func (t *testFileWriterSuite) TestHandleDuplicateEventsExist(c *check.C) {
 		}
 		latestPos uint32 = 4
 	)
-	w := NewFileWriter(cfg)
+	w := NewFileWriter(cfg, t.parser)
 	defer w.Close()
 	c.Assert(w.Start(), check.IsNil)
 
@@ -559,7 +564,6 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 			RelayDir: c.MkDir(),
 			Filename: "test-mysql-bin.000001",
 		}
-		parser2 = parser.New()
 
 		flavor             = gmysql.MySQLFlavor
 		previousGTIDSetStr = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456,53bfca22-690d-11e7-8a62-18ded7a37b78:1-495,686e1ab6-c47e-11e7-a42c-6c92bf46f384:234-567"
@@ -567,7 +571,7 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 		latestGTIDStr2     = "53bfca22-690d-11e7-8a62-18ded7a37b78:495"
 	)
 
-	w := NewFileWriter(cfg)
+	w := NewFileWriter(cfg, t.parser)
 	defer w.Close()
 	c.Assert(w.Start(), check.IsNil)
 
@@ -595,7 +599,7 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	c.Assert(err, check.IsNil)
 
 	// try recover, but in fact do nothing
-	result, err := w.Recover(parser2)
+	result, err := w.Recover()
 	c.Assert(err, check.IsNil)
 	c.Assert(result, check.NotNil)
 	c.Assert(result.Recovered, check.IsFalse)
@@ -626,7 +630,7 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	c.Assert(fs.Size(), check.Equals, int64(len(baseData)+len(corruptData)))
 
 	// try recover, truncate the incomplete event
-	result, err = w.Recover(parser2)
+	result, err = w.Recover()
 	c.Assert(err, check.IsNil)
 	c.Assert(result, check.NotNil)
 	c.Assert(result.Recovered, check.IsTrue)
@@ -655,7 +659,7 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	c.Assert(fs.Size(), check.Equals, int64(len(baseData))+extraLen)
 
 	// try recover, truncate the incomplete transaction
-	result, err = w.Recover(parser2)
+	result, err = w.Recover()
 	c.Assert(err, check.IsNil)
 	c.Assert(result, check.NotNil)
 	c.Assert(result.Recovered, check.IsTrue)
@@ -687,7 +691,7 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	expectedGTIDsStr = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-17,53bfca22-690d-11e7-8a62-18ded7a37b78:1-506,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456,686e1ab6-c47e-11e7-a42c-6c92bf46f384:234-567"
 	expectedGTIDs, err = gtid.ParserGTID(flavor, expectedGTIDsStr)
 	c.Assert(err, check.IsNil)
-	result, err = w.Recover(parser2)
+	result, err = w.Recover()
 	c.Assert(err, check.IsNil)
 	c.Assert(result, check.NotNil)
 	c.Assert(result.Recovered, check.IsFalse)

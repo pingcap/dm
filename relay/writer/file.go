@@ -49,13 +49,17 @@ type FileWriter struct {
 	// it will be created/started until needed.
 	out *bw.FileWriter
 
+	// the parser often used to verify events's statement through parsing them.
+	parser *parser.Parser
+
 	filename sync2.AtomicString // current binlog filename
 }
 
 // NewFileWriter creates a FileWriter instances.
-func NewFileWriter(cfg *FileConfig) Writer {
+func NewFileWriter(cfg *FileConfig, parser2 *parser.Parser) Writer {
 	w := &FileWriter{
-		cfg: cfg,
+		cfg:    cfg,
+		parser: parser2,
 	}
 	w.filename.Set(cfg.Filename) // set the startup filename
 	return w
@@ -93,7 +97,7 @@ func (w *FileWriter) Close() error {
 }
 
 // Recover implements Writer.Recover.
-func (w *FileWriter) Recover(p *parser.Parser) (*RecoverResult, error) {
+func (w *FileWriter) Recover() (*RecoverResult, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -101,7 +105,7 @@ func (w *FileWriter) Recover(p *parser.Parser) (*RecoverResult, error) {
 		return nil, errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, common.StagePrepared)
 	}
 
-	return w.doRecovering(p)
+	return w.doRecovering()
 }
 
 // WriteEvent implements Writer.WriteEvent.
@@ -342,10 +346,10 @@ func (w *FileWriter) handleDuplicateEventsExist(ev *replication.BinlogEvent) (*R
 // 3. truncate any incomplete events/transactions
 // now, we think a transaction finished if we received a XIDEvent or DDL in QueryEvent
 // NOTE: handle cases when file size > 4GB
-func (w *FileWriter) doRecovering(p *parser.Parser) (*RecoverResult, error) {
+func (w *FileWriter) doRecovering() (*RecoverResult, error) {
 	filename := filepath.Join(w.cfg.RelayDir, w.filename.Get())
 	// get latest pos/GTID set for all completed transactions from the file
-	latestPos, latestGTIDs, err := getTxnPosGTIDs(filename, p)
+	latestPos, latestGTIDs, err := getTxnPosGTIDs(filename, w.parser)
 	if err != nil {
 		return nil, errors.Annotatef(err, "get latest pos/GTID set from %s", filename)
 	}

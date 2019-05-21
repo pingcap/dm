@@ -14,7 +14,6 @@
 package writer
 
 import (
-	"github.com/pingcap/parser"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
@@ -52,11 +51,10 @@ type Writer interface {
 	Close() error
 
 	// Recover tries to recover the binlog file or any other memory structure associate with this writer.
-	// The parser often used to verify events's statement through parsing them.
 	// It is often used to recover a binlog file with some corrupt/incomplete binlog events/transactions at the end of the file.
 	// It is not safe for concurrent use by multiple goroutines.
 	// It should be called before writing to the file.
-	Recover(p *parser.Parser) (*RecoverResult, error)
+	Recover() (*RecoverResult, error)
 
 	// WriteEvent writes an binlog event's data into disk or any other places.
 	// It is not safe for concurrent use by multiple goroutines.
