@@ -46,7 +46,10 @@ func (s *testSyncerSuite) TestCastUnsigned(c *C) {
 }
 
 func (s *testSyncerSuite) TestGenColumnPlaceholders(c *C) {
-	placeholderStr := genColumnPlaceholders(3)
+	placeholderStr := genColumnPlaceholders(1)
+	c.Assert(placeholderStr, Equals, "?")
+
+	placeholderStr = genColumnPlaceholders(3)
 	c.Assert(placeholderStr, Equals, "?,?,?")
 }
 
@@ -61,7 +64,10 @@ func (s *testSyncerSuite) TestGenColumnList(c *C) {
 		},
 	}
 
-	columnList := genColumnList(columns)
+	columnList := genColumnList(columns[:1])
+	c.Assert(columnList, Equals, "`a`")
+
+	columnList = genColumnList(columns)
 	c.Assert(columnList, Equals, "`a`,`b`,`c`")
 }
 

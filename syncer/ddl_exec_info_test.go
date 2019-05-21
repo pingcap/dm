@@ -18,6 +18,7 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
+
 	"github.com/pingcap/dm/dm/pb"
 )
 
@@ -50,7 +51,11 @@ func (t *testDDLExecInfoSuite) TestDDLExecItem(c *C) {
 
 	err := ddlExecInfo.Send(ctx, newDDLExecItem(new(pb.ExecDDLRequest)))
 	c.Assert(err, IsNil)
+	c.Assert(ddlExecInfo.status.Get(), Equals, ddlExecIdle)
 
 	ddlExecInfo.Close()
 	c.Assert(ddlExecInfo.status.Get(), Equals, ddlExecClosed)
+
+	ddlExecInfo.Renew()
+	c.Assert(ddlExecInfo.status.Get(), Equals, ddlExecIdle)
 }

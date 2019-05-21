@@ -17,27 +17,25 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
-	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/log"
-	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/parser/ast"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/binlog/event"
+	"github.com/pingcap/dm/pkg/log"
+	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/utils"
-	"github.com/pingcap/tidb-tools/pkg/table-router"
 )
 
 var _ = Suite(&testSyncerSuite{})
@@ -54,33 +52,9 @@ type testSyncerSuite struct {
 }
 
 func (s *testSyncerSuite) SetUpSuite(c *C) {
-	host := os.Getenv("MYSQL_HOST")
-	if host == "" {
-		host = "127.0.0.1"
-	}
-	port, _ := strconv.Atoi(os.Getenv("MYSQL_PORT"))
-	if port == 0 {
-		port = 3306
-	}
-	user := os.Getenv("MYSQL_USER")
-	if user == "" {
-		user = "root"
-	}
-	pswd := os.Getenv("MYSQL_PSWD")
-
 	s.cfg = &config.SubTaskConfig{
-		From: config.DBConfig{
-			Host:     host,
-			User:     user,
-			Password: pswd,
-			Port:     port,
-		},
-		To: config.DBConfig{
-			Host:     host,
-			User:     user,
-			Password: pswd,
-			Port:     port,
-		},
+		From:       getDBConfigFromEnv(),
+		To:         getDBConfigFromEnv(),
 		ServerID:   101,
 		MetaSchema: "test",
 		Name:       "syncer_ut",

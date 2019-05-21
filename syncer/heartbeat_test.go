@@ -15,10 +15,9 @@ package syncer
 
 import (
 	"context"
-	"os"
-	"strconv"
 
 	. "github.com/pingcap/check"
+
 	"github.com/pingcap/dm/dm/config"
 )
 
@@ -30,25 +29,7 @@ type testHeartbeatSuite struct {
 }
 
 func (t *testHeartbeatSuite) SetUpSuite(c *C) {
-	host := os.Getenv("MYSQL_HOST")
-	if host == "" {
-		host = "127.0.0.1"
-	}
-	port, _ := strconv.Atoi(os.Getenv("MYSQL_PORT"))
-	if port == 0 {
-		port = 3306
-	}
-	user := os.Getenv("MYSQL_USER")
-	if user == "" {
-		user = "root"
-	}
-	pswd := os.Getenv("MYSQL_PSWD")
-	t.from = config.DBConfig{
-		Host:     host,
-		User:     user,
-		Password: pswd,
-		Port:     port,
-	}
+	t.from = getDBConfigFromEnv()
 
 	reportLagFunc = t.reportLag
 }

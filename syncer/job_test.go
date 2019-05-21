@@ -15,10 +15,10 @@ package syncer
 
 import (
 	. "github.com/pingcap/check"
-
-	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/siddontang/go-mysql/mysql"
+
+	"github.com/pingcap/dm/dm/pb"
 )
 
 var _ = Suite(&testJobSuite{})
@@ -117,6 +117,12 @@ func (t *testJobSuite) TestJob(c *C) {
 }
 
 func (t *testJobSuite) TestQueueBucketName(c *C) {
+	name := queueBucketName(0)
+	c.Assert(name, Equals, "q_0")
+
+	name := queueBucketName(8)
+	c.Assert(name, Equals, "q_0")
+
 	name := queueBucketName(9)
 	c.Assert(name, Equals, "q_1")
 }
