@@ -882,7 +882,7 @@ func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWork
 					Msg:    errors.ErrorStack(err),
 				}
 			}
-			workerReq.Op = req.Op
+			workerResp.Op = req.Op
 			workerResp.Worker = worker
 			workerRespCh <- workerResp
 		}(worker)

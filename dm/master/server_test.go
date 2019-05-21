@@ -1278,6 +1278,7 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 	c.Assert(resp.Workers, check.HasLen, 2)
 	for _, w := range resp.Workers {
 		c.Assert(w.Result, check.IsTrue)
+		c.Assert(w.Op, check.Equals, pb.RelayOp_PauseRelay)
 	}
 
 	// test OperateWorkerRelayTask with error response
