@@ -15,10 +15,10 @@ package streamer
 
 import (
 	"io/ioutil"
-	"os"
-	"path"
+	"path/filepath"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/pkg/utils"
@@ -51,15 +51,12 @@ func (t *testFileSuite) TestCollectBinlogFiles(c *C) {
 	c.Assert(err, NotNil)
 	c.Assert(files, IsNil)
 
-	dir, err := ioutil.TempDir("", "test_collect_binlog_files")
-	c.Assert(err, IsNil)
-	defer os.RemoveAll(dir)
+	dir := c.MkDir()
 
 	// create all valid binlog files
 	for _, fn := range valid {
-		f, err2 := os.Create(path.Join(dir, fn))
-		c.Assert(err2, IsNil)
-		f.Close()
+		err = ioutil.WriteFile(filepath.Join(dir, fn), nil, 0644)
+		c.Assert(err, IsNil)
 	}
 	files, err = CollectAllBinlogFiles(dir)
 	c.Assert(err, IsNil)
@@ -67,9 +64,8 @@ func (t *testFileSuite) TestCollectBinlogFiles(c *C) {
 
 	// create some invalid binlog files
 	for _, fn := range invalid {
-		f, err2 := os.Create(path.Join(dir, fn))
-		c.Assert(err2, IsNil)
-		f.Close()
+		err = ioutil.WriteFile(filepath.Join(dir, fn), nil, 0644)
+		c.Assert(err, IsNil)
 	}
 	files, err = CollectAllBinlogFiles(dir)
 	c.Assert(err, IsNil)
@@ -77,9 +73,8 @@ func (t *testFileSuite) TestCollectBinlogFiles(c *C) {
 
 	// create some invalid meta files
 	for _, fn := range meta {
-		f, err2 := os.Create(path.Join(dir, fn))
-		c.Assert(err2, IsNil)
-		f.Close()
+		err = ioutil.WriteFile(filepath.Join(dir, fn), nil, 0644)
+		c.Assert(err, IsNil)
 	}
 	files, err = CollectAllBinlogFiles(dir)
 	c.Assert(err, IsNil)
@@ -114,6 +109,99 @@ func (t *testFileSuite) TestCollectBinlogFiles(c *C) {
 	files, err = CollectBinlogFilesCmp(dir, valid[len(valid)-1], FileCmpLess)
 	c.Assert(err, IsNil)
 	c.Assert(files, DeepEquals, valid[:len(valid)-1])
+}
+
+func (t *testFileSuite) TestCollectBinlogFilesCmp(c *C) {
+	var (
+		dir         string
+		baseFile    string
+		cmp         = FileCmpEqual
+		binlogFiles = []string{
+			"mysql-bin.000001",
+			"mysql-bin.000002",
+			"mysql-bin.000003",
+			"mysql-bin.000004",
+		}
+	)
+
+	// empty dir
+	files, err := CollectBinlogFilesCmp(dir, baseFile, cmp)
+	c.Assert(err, Equals, ErrEmptyRelayDir)
+	c.Assert(files, IsNil)
+
+	// empty base filename, not found
+	dir = c.MkDir()
+	files, err = CollectBinlogFilesCmp(dir, baseFile, cmp)
+	c.Assert(errors.IsNotFound(err), IsTrue)
+	c.Assert(files, IsNil)
+
+	// base file not found
+	baseFile = utils.MetaFilename
+	files, err = CollectBinlogFilesCmp(dir, baseFile, cmp)
+	c.Assert(errors.IsNotFound(err), IsTrue)
+	c.Assert(files, IsNil)
+
+	// create a meta file
+	filename := filepath.Join(dir, utils.MetaFilename)
+	err = ioutil.WriteFile(filename, nil, 0644)
+	c.Assert(err, IsNil)
+
+	// invalid base filename, is a meta filename
+	files, err = CollectBinlogFilesCmp(dir, baseFile, cmp)
+	c.Assert(err, ErrorMatches, ".*invalid binlog file name.*")
+	c.Assert(files, IsNil)
+
+	// create some binlog files
+	for _, f := range binlogFiles {
+		filename = filepath.Join(dir, f)
+		err = ioutil.WriteFile(filename, nil, 0644)
+		c.Assert(err, IsNil)
+	}
+
+	// > base file
+	cmp = FileCmpBigger
+	var i int
+	for i, baseFile = range binlogFiles {
+		files, err = CollectBinlogFilesCmp(dir, baseFile, cmp)
+		c.Assert(err, IsNil)
+		c.Assert(files, DeepEquals, binlogFiles[i+1:])
+	}
+
+	// >= base file
+	cmp = FileCmpBiggerEqual
+	for i, baseFile = range binlogFiles {
+		files, err = CollectBinlogFilesCmp(dir, baseFile, cmp)
+		c.Assert(err, IsNil)
+		c.Assert(files, DeepEquals, binlogFiles[i:])
+	}
+
+	// < base file
+	cmp = FileCmpLess
+	for i, baseFile = range binlogFiles {
+		files, err = CollectBinlogFilesCmp(dir, baseFile, cmp)
+		c.Assert(err, IsNil)
+		c.Assert(files, DeepEquals, binlogFiles[:i])
+	}
+
+	// add a basename mismatch binlog file
+	filename = filepath.Join(dir, "bin-mysql.100000")
+	err = ioutil.WriteFile(filename, nil, 0644)
+	c.Assert(err, IsNil)
+
+	// test again, should ignore it
+	for i, baseFile = range binlogFiles {
+		files, err = CollectBinlogFilesCmp(dir, baseFile, cmp)
+		c.Assert(err, IsNil)
+		c.Assert(files, DeepEquals, binlogFiles[:i])
+	}
+
+	// other cmp not supported yet
+	cmps := []FileCmp{FileCmpLessEqual, FileCmpEqual}
+	for _, cmp = range cmps {
+		files, err = CollectBinlogFilesCmp(dir, baseFile, cmp)
+		c.Assert(err, ErrorMatches, ".*not supported.*")
+		c.Assert(files, IsNil)
+	}
 }
 
 func (t *testFileSuite) TestRealMySQLPos(c *C) {
