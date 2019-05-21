@@ -1785,11 +1785,9 @@ func (s *Server) handleOperationResult(ctx context.Context, cli pb.WorkerClient,
 
 	err = s.waitOperationOk(ctx, cli, name, response.LogID)
 	if err != nil {
-		return &pb.OperateSubTaskResponse{
-			Meta: &pb.CommonWorkerResponse{
-				Result: false,
-				Msg:    errors.ErrorStack(err),
-			},
+		response.Meta = &pb.CommonWorkerResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
 		}
 	}
 

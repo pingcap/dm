@@ -285,7 +285,7 @@ func (logger *Logger) GC(ctx context.Context, db *leveldb.DB) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof("[task log gc] goroutine exist!")
+			log.Infof("[task log gc] goroutine exits!")
 			return
 		case <-ticker.C:
 			var gcID int64
