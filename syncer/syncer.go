@@ -579,13 +579,6 @@ func (s *Syncer) getTable(schema string, table string) (*table, []string, error)
 	return t, columns, nil
 }
 
-func (s *Syncer) saveGlobalPoint(globalPoint mysql.Position) {
-	if s.cfg.IsSharding {
-		globalPoint = s.sgk.AdjustGlobalPoint(globalPoint)
-	}
-	s.checkpoint.SaveGlobalPoint(globalPoint)
-}
-
 // Run starts running for sync, we should guarantee it can rerun when paused.
 func (s *Syncer) Run(ctx context.Context) (err error) {
 	defer func() {
@@ -1227,12 +1220,24 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					log.Infof("[convert] execute need handled ddls converted to %v in position %s by sql operator", needHandleDDLs, currentPos)
 				}
 
+				var sourceSchema, sourceTable, targetSchema, targetTable string
+				if ddlInfo != nil {
+					sourceSchema = ddlInfo.tableNames[0][0].Schema
+					sourceTable = ddlInfo.tableNames[0][0].Name
+					targetSchema = ddlInfo.tableNames[1][0].Schema
+					targetTable = ddlInfo.tableNames[1][0].Name
+				}
+
 				if err = s.pipeline.Input(&PipeData{
-					tp:         ddl,
-					ddls:       needHandleDDLs,
-					pos:        lastPos,
-					currentPos: currentPos,
-					traceID:    traceID,
+					tp:           ddl,
+					sourceSchema: sourceSchema,
+					sourceTable:  sourceTable,
+					targetSchema: targetSchema,
+					targetTable:  targetTable,
+					ddls:         needHandleDDLs,
+					pos:          lastPos,
+					currentPos:   currentPos,
+					traceID:      traceID,
 				}); err != nil {
 					return errors.Trace(err)
 				}
