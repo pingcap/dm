@@ -148,6 +148,7 @@ func (w *Worker) Start() {
 	for {
 		select {
 		case <-w.ctx.Done():
+			log.Infof("[worker] status print process exits!")
 			return
 		case <-ticker.C:
 			log.Debugf("[worker] status \n%s", w.StatusJSON(""))
@@ -164,6 +165,10 @@ func (w *Worker) Close() {
 		log.Warn("worker already closed")
 		return
 	}
+
+	// cancel status output ticker and wait for return
+	w.cancel()
+	w.wg.Wait()
 
 	// close all sub tasks
 	for _, st := range w.subTasks {
@@ -185,10 +190,6 @@ func (w *Worker) Close() {
 	if w.tracer.Enable() {
 		w.tracer.Stop()
 	}
-
-	// cancel status output ticker and wait for return
-	w.cancel()
-	w.wg.Wait()
 
 	w.closed.Set(closedTrue)
 }
@@ -724,6 +725,7 @@ Loop:
 	for {
 		select {
 		case <-w.ctx.Done():
+			log.Infof("[worker] handle task process exits!")
 			return
 		case <-ticker.C:
 			w.Lock()
@@ -738,7 +740,7 @@ Loop:
 				continue
 			}
 
-			log.Infof("start to execute operation ID, %d detail %+v", opLog.Id, opLog)
+			log.Infof("start to execute operation ID = %d detail %+v", opLog.Id, opLog)
 
 			st, exist := w.subTasks[opLog.Task.Name]
 			var err error
