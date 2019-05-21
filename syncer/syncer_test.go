@@ -991,11 +991,14 @@ func (s *testSyncerSuite) TestExecErrors(c *C) {
 }
 
 func (s *testSyncerSuite) TestCasuality(c *C) {
+	var wg sync.WaitGroup
 	s.cfg.WorkerCount = 1
 	syncer := NewSyncer(s.cfg)
 	syncer.jobs = []chan *job{make(chan *job, 1)}
 
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		job := <-syncer.jobs[0]
 		c.Assert(job.tp, Equals, flush)
 		syncer.jobWg.Done()
@@ -1013,6 +1016,8 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	key, err = syncer.resolveCasuality([]string{"a", "b"})
 	c.Assert(err, IsNil)
 	c.Assert(key, Equals, "a")
+
+	wg.Wait()
 }
 
 func (s *testSyncerSuite) TestRun(c *C) {
