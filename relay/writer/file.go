@@ -258,21 +258,23 @@ func (w *FileWriter) handleRotateEvent(ev *replication.BinlogEvent) (*Result, er
 //   3. write the non-duplicate event
 func (w *FileWriter) handleEventDefault(ev *replication.BinlogEvent) (*Result, error) {
 	// handle a potential hole
-	err := w.handleFileHoleExist(ev)
+	mayDuplicate, err := w.handleFileHoleExist(ev)
 	if err != nil {
 		return nil, errors.Annotatef(err, "handle a potential hole in %s before %+v",
 			w.filename.Get(), ev.Header)
 	}
 
-	// handle any duplicate events if exist
-	result, err := w.handleDuplicateEventsExist(ev)
-	if err != nil {
-		return nil, errors.Annotatef(err, "handle a potential duplicate event %+v in %s",
-			ev.Header, w.filename.Get())
-	}
-	if result.Ignore {
-		// duplicate, and can ignore it. now, we assume duplicate events can all be ignored
-		return result, nil
+	if mayDuplicate {
+		// handle any duplicate events if exist
+		result, err2 := w.handleDuplicateEventsExist(ev)
+		if err2 != nil {
+			return nil, errors.Annotatef(err2, "handle a potential duplicate event %+v in %s",
+				ev.Header, w.filename.Get())
+		}
+		if result.Ignore {
+			// duplicate, and can ignore it. now, we assume duplicate events can all be ignored
+			return result, nil
+		}
 	}
 
 	// write the non-duplicate event
@@ -284,19 +286,20 @@ func (w *FileWriter) handleEventDefault(ev *replication.BinlogEvent) (*Result, e
 
 // handleFileHoleExist tries to handle a potential hole after this event wrote.
 // A hole exists often because some binlog events not sent by the master.
+// If no hole exists, then ev may be a duplicate event.
 // NOTE: handle cases when file size > 4GB
-func (w *FileWriter) handleFileHoleExist(ev *replication.BinlogEvent) error {
+func (w *FileWriter) handleFileHoleExist(ev *replication.BinlogEvent) (bool, error) {
 	// 1. detect whether a hole exists
 	evStartPos := int64(ev.Header.LogPos - ev.Header.EventSize)
 	outFs, ok := w.out.Status().(*bw.FileWriterStatus)
 	if !ok {
-		return errors.Errorf("invalid status type %T of the underlying writer", w.out.Status())
+		return false, errors.Errorf("invalid status type %T of the underlying writer", w.out.Status())
 	}
 	fileOffset := outFs.Offset
 	holeSize := evStartPos - fileOffset
 	if holeSize <= 0 {
 		// no hole exists, but duplicate events may exists, this should be handled in another place.
-		return nil
+		return holeSize < 0, nil
 	}
 
 	// 2. generate dummy event
@@ -310,12 +313,12 @@ func (w *FileWriter) handleFileHoleExist(ev *replication.BinlogEvent) error {
 	)
 	dummyEv, err := event.GenDummyEvent(header, latestPos, eventSize)
 	if err != nil {
-		return errors.Annotatef(err, "generate dummy event at %d with size %d", latestPos, eventSize)
+		return false, errors.Annotatef(err, "generate dummy event at %d with size %d", latestPos, eventSize)
 	}
 
 	// 3. write the dummy event
 	err = w.out.Write(dummyEv.RawData)
-	return errors.Trace(err)
+	return false, errors.Trace(err)
 }
 
 // handleDuplicateEventsExist tries to handle a potential duplicate event in the binlog file.
