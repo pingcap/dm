@@ -876,6 +876,103 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 	// TODO: add SQL operator test
 }
 
+func (t *testMaster) TestBreakWorkerDDLLock(c *check.C) {
+	ctrl := gomock.NewController(c)
+	defer ctrl.Finish()
+
+	server := defaultMasterServer(c)
+	var (
+		task    = "test"
+		schema  = "test_db"
+		table   = "test_table"
+		lockID  = genDDLLockID(task, schema, table)
+		workers = make([]string, 0, len(server.cfg.Deploy))
+	)
+
+	for _, deploy := range server.cfg.Deploy {
+		workers = append(workers, deploy.Worker)
+	}
+
+	// mock BreakDDLLock request
+	mockBreakDDLLock := func(rpcSuccess bool) {
+		for _, deploy := range server.cfg.Deploy {
+			rets := make([]interface{}, 0, 2)
+			if rpcSuccess {
+				rets = []interface{}{
+					&pb.CommonWorkerResponse{
+						Result: true,
+						Worker: deploy.Worker,
+					},
+					nil,
+				}
+			} else {
+				rets = []interface{}{
+					nil,
+					errors.New(errGRPCFailed),
+				}
+			}
+			mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+			mockWorkerClient.EXPECT().BreakDDLLock(
+				gomock.Any(),
+				&pb.BreakDDLLockRequest{
+					Task:         "test",
+					RemoveLockID: lockID,
+					SkipDDL:      true,
+				},
+			).Return(rets...)
+			server.workerClients[deploy.Worker] = mockWorkerClient
+		}
+	}
+
+	// test BreakWorkerDDLLock with invalid dm-worker[s]
+	resp, err := server.BreakWorkerDDLLock(context.Background(), &pb.BreakWorkerDDLLockRequest{
+		Task:         task,
+		Workers:      []string{"invalid-worker1", "invalid-worker2"},
+		RemoveLockID: lockID,
+		SkipDDL:      true,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Workers, check.HasLen, 2)
+	for _, w := range resp.Workers {
+		c.Assert(w.Result, check.IsFalse)
+		c.Assert(w.Msg, check.Matches, ".*relevant worker-client not found")
+	}
+
+	// test BreakWorkerDDLLock successfully
+	mockBreakDDLLock(true)
+	resp, err = server.BreakWorkerDDLLock(context.Background(), &pb.BreakWorkerDDLLockRequest{
+		Task:         task,
+		Workers:      workers,
+		RemoveLockID: lockID,
+		SkipDDL:      true,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Workers, check.HasLen, 2)
+	for _, w := range resp.Workers {
+		c.Assert(w.Result, check.IsTrue)
+	}
+
+	// test BreakWorkerDDLLock with error response
+	mockBreakDDLLock(false)
+	resp, err = server.BreakWorkerDDLLock(context.Background(), &pb.BreakWorkerDDLLockRequest{
+		Task:         task,
+		Workers:      workers,
+		RemoveLockID: lockID,
+		SkipDDL:      true,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Workers, check.HasLen, 2)
+	for _, w := range resp.Workers {
+		c.Assert(w.Result, check.IsFalse)
+		lines := strings.Split(w.Msg, "\n")
+		c.Assert(len(lines), check.Greater, 1)
+		c.Assert(lines[0], check.Equals, errGRPCFailed)
+	}
+}
+
 func (t *testMaster) TestRefreshWorkerTasks(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
