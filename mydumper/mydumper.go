@@ -107,7 +107,7 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	if err := cmd.Start(); err != nil {
+	if err = cmd.Start(); err != nil {
 		return nil, errors.Trace(err)
 	}
 
@@ -141,7 +141,7 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 		stderr.Write(line)
 		stderr.WriteByte('\n')
 	}
-	if err := scanner.Err(); err != nil {
+	if err = scanner.Err(); err != nil {
 		stdout.Write(stderr.Bytes())
 		return stdout.Bytes(), errors.Trace(err)
 	}

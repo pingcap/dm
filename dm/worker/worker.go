@@ -148,6 +148,7 @@ func (w *Worker) Start() {
 	for {
 		select {
 		case <-w.ctx.Done():
+			log.Infof("[worker] status print process exits!")
 			return
 		case <-ticker.C:
 			log.Debugf("[worker] status \n%s", w.StatusJSON(""))
@@ -164,6 +165,10 @@ func (w *Worker) Close() {
 		log.Warn("worker already closed")
 		return
 	}
+
+	// cancel status output ticker and wait for return
+	w.cancel()
+	w.wg.Wait()
 
 	// close all sub tasks
 	for _, st := range w.subTasks {
@@ -185,10 +190,6 @@ func (w *Worker) Close() {
 	if w.tracer.Enable() {
 		w.tracer.Stop()
 	}
-
-	// cancel status output ticker and wait for return
-	w.cancel()
-	w.wg.Wait()
 
 	w.closed.Set(closedTrue)
 }
@@ -545,14 +546,14 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 
 	stage := w.relayHolder.Stage()
 	if stage == pb.Stage_Finished || stage == pb.Stage_Stopped {
-		return errors.Errorf("Worker's relay log unit has already stoped.")
+		return errors.Errorf("Worker's relay log unit in invalid stage: %s", stage.String())
 	}
 
 	// Check whether subtask is running syncer unit
 	for _, st := range w.subTasks {
 		isRunning := st.CheckUnit()
 		if !isRunning {
-			return errors.Errorf("There is a subtask does not run syncer.")
+			return errors.New("there is a subtask does not run syncer")
 		}
 	}
 
@@ -563,23 +564,25 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		return errors.Trace(err)
 	}
 
-	if newCfg.SourceID != w.cfg.SourceID {
-		return errors.Errorf("update source ID is not allowed")
-	}
-
 	err = newCfg.Reload()
 	if err != nil {
 		return errors.Trace(err)
+	}
+
+	if newCfg.SourceID != w.cfg.SourceID {
+		return errors.New("update source ID is not allowed")
 	}
 
 	log.Infof("[worker] update relay configure with config: %v", newCfg)
 	cloneCfg, _ := newCfg.DecryptPassword()
 
 	// Update SubTask configure
+	// NOTE: we only update `DB.Config` in SubTaskConfig now
 	for _, st := range w.subTasks {
 		cfg := config.NewSubTaskConfig()
 
 		cfg.From = cloneCfg.From
+		cfg.From.Adjust()
 
 		stage := st.Stage()
 		if stage == pb.Stage_Paused {
@@ -608,7 +611,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	log.Info("[worker] update relay configure in subtasks success.")
 
 	// Update relay unit configure
-	err = w.relayHolder.Update(ctx, newCfg)
+	err = w.relayHolder.Update(ctx, cloneCfg)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -722,6 +725,7 @@ Loop:
 	for {
 		select {
 		case <-w.ctx.Done():
+			log.Infof("[worker] handle task process exits!")
 			return
 		case <-ticker.C:
 			w.Lock()
@@ -736,7 +740,7 @@ Loop:
 				continue
 			}
 
-			log.Infof("start to execute operation ID, %d detail %+v", opLog.Id, opLog)
+			log.Infof("start to execute operation ID = %d detail %+v", opLog.Id, opLog)
 
 			st, exist := w.subTasks[opLog.Task.Name]
 			var err error
