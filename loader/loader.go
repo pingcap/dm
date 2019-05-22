@@ -351,7 +351,6 @@ func NewLoader(cfg *config.SubTaskConfig) *Loader {
 		workerWg:   new(sync.WaitGroup),
 		pool:       make([]*Worker, 0, cfg.PoolSize),
 	}
-	loader.tableRouter, _ = router.NewTableRouter(cfg.CaseSensitive, []*router.TableRule{})
 	loader.fileJobQueueClosed.Set(true) // not open yet
 	return loader
 }
@@ -632,6 +631,7 @@ func (l *Loader) Update(cfg *config.SubTaskConfig) error {
 }
 
 func (l *Loader) genRouter(rules []*router.TableRule) error {
+	l.tableRouter, _ = router.NewTableRouter(l.cfg.CaseSensitive, []*router.TableRule{})
 	for _, rule := range rules {
 		err := l.tableRouter.AddRule(rule)
 		if err != nil {
