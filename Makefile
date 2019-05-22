@@ -101,6 +101,10 @@ dm_integration_test_build:
 		|| { $(FAILPOINT_DISABLE); exit 1; }
 	$(GOTEST) -c -race -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
+		-o bin/dmctl.test github.com/pingcap/dm/cmd/dm-ctl \
+		|| { $(FAILPOINT_DISABLE); exit 1; }
+	$(GOTEST) -c -race -cover -covermode=atomic \
+		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-tracer.test github.com/pingcap/dm/cmd/dm-tracer \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
 	$(FAILPOINT_DISABLE)

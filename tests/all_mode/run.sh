@@ -20,7 +20,7 @@ function run() {
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 
     # start DM task only
-    $cur/../bin/dmctl_start_task "$cur/conf/dm-task.yaml"
+    dmctl_start_task
 
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
