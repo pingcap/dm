@@ -26,6 +26,7 @@ import (
 	"github.com/pingcap/check"
 	"github.com/pingcap/errors"
 
+	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/pbmock"
@@ -123,9 +124,10 @@ syncers:
 `
 
 var (
-	errGRPCFailed    = "test grpc request failed"
-	errExecDDLFailed = "dm-worker exec ddl failed"
-	msgNoSubTask     = "no sub task started"
+	errGRPCFailed      = "test grpc request failed"
+	errExecDDLFailed   = "dm-worker exec ddl failed"
+	msgNoSubTask       = "no sub task started"
+	errCheckSyncConfig = "check sync config with error"
 )
 
 func TestMaster(t *testing.T) {
@@ -464,6 +466,25 @@ func (t *testMaster) TestStartTask(c *check.C) {
 		c.Assert(len(lines), check.Greater, 1)
 		c.Assert(lines[0], check.Equals, errGRPCFailed)
 	}
+
+	// test start task, but the first step check-task fails
+	bakCheckSyncConfigFunc := checker.CheckSyncConfigFunc
+	checker.CheckSyncConfigFunc = func(_ context.Context, _ []*config.SubTaskConfig) error {
+		return errors.New(errCheckSyncConfig)
+	}
+	defer func() {
+		checker.CheckSyncConfigFunc = bakCheckSyncConfigFunc
+	}()
+	testMockWorkerConfig(c, server, ctrl, "", true)
+	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
+		Task:    taskConfig,
+		Workers: workers,
+	})
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsFalse)
+	lines := strings.Split(resp.Msg, "\n")
+	c.Assert(len(lines), check.Greater, 1)
+	c.Assert(lines[0], check.Equals, errCheckSyncConfig)
 }
 
 func (t *testMaster) TestQueryError(c *check.C) {

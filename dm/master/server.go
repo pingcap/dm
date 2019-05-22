@@ -1694,7 +1694,7 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 		return nil, nil, errors.Trace(err)
 	}
 
-	err = checker.CheckSyncConfig(ctx, stCfgs)
+	err = checker.CheckSyncConfigFunc(ctx, stCfgs)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
