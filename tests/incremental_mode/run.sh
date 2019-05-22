@@ -26,11 +26,11 @@ function run() {
     # avoid cannot unmarshal !!str `binlog-...` into uint32 error
     sed -i "s/binlog-pos-placeholder-1/4/g" $WORK_DIR/dm-task.yaml
     sed -i "s/binlog-pos-placeholder-2/4/g" $WORK_DIR/dm-task.yaml
-    $cur/../bin/dmctl_start_task "$WORK_DIR/dm-task.yaml"
+    dmctl_start_task $WORK_DIR/dm-task.yaml
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    $cur/../bin/dmctl_operate_task Stop $TASK_NAME
+    dmctl_stop_task $TASK_NAME
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
@@ -46,7 +46,7 @@ function run() {
     sed -i "s/binlog-pos-placeholder-1/$pos1/g" $WORK_DIR/dm-task.yaml
     sed -i "s/binlog-name-placeholder-2/$name2/g" $WORK_DIR/dm-task.yaml
     sed -i "s/binlog-pos-placeholder-2/$pos2/g" $WORK_DIR/dm-task.yaml
-    $cur/../bin/dmctl_start_task "$WORK_DIR/dm-task.yaml"
+    dmctl_start_task $WORK_DIR/dm-task.yaml
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }

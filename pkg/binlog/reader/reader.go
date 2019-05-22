@@ -22,28 +22,6 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 )
 
-type readerStage int32
-
-const (
-	stageNew readerStage = iota
-	stagePrepared
-	stageClosed
-)
-
-// String implements Stringer.String.
-func (s readerStage) String() string {
-	switch s {
-	case stageNew:
-		return "new"
-	case stagePrepared:
-		return "prepared"
-	case stageClosed:
-		return "closed"
-	default:
-		return "unknown"
-	}
-}
-
 // Reader is a binlog event reader, it may read binlog events from a TCP stream, binlog files or any other in-memory buffer.
 // One reader should read binlog events either through position mode or GTID mode.
 type Reader interface {

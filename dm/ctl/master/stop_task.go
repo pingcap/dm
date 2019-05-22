@@ -16,10 +16,11 @@ package master
 import (
 	"fmt"
 
-	"github.com/pingcap/dm/dm/ctl/common"
-	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
+
+	"github.com/pingcap/dm/dm/ctl/common"
+	"github.com/pingcap/dm/dm/pb"
 )
 
 // NewStopTaskCmd creates a StopTask command
@@ -46,7 +47,7 @@ func stopTaskFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	resp, err := operateTask(pb.TaskOp_Stop, name, workers)
+	resp, err := common.OperateTask(pb.TaskOp_Stop, name, workers)
 	if err != nil {
 		common.PrintLines("can not stop task %s:\n%v", name, errors.ErrorStack(err))
 		return

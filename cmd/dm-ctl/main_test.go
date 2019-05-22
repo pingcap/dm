@@ -11,23 +11,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package master
+package main
+
+// Reference: https://dzone.com/articles/measuring-integration-test-coverage-rate-in-pouchc
 
 import (
-	"context"
-
-	"github.com/pingcap/dm/dm/ctl/common"
-	"github.com/pingcap/dm/dm/pb"
+	"os"
+	"strings"
+	"testing"
 )
 
-// operateTask does operation on task
-func operateTask(op pb.TaskOp, name string, workers []string) (*pb.OperateTaskResponse, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cli := common.MasterClient()
-	return cli.OperateTask(ctx, &pb.OperateTaskRequest{
-		Op:      op,
-		Name:    name,
-		Workers: workers,
-	})
+func TestRunMain(t *testing.T) {
+	var args []string
+	for _, arg := range os.Args {
+		switch {
+		case arg == "DEVEL":
+		case strings.HasPrefix(arg, "-test."):
+		default:
+			args = append(args, arg)
+		}
+	}
+
+	os.Args = args
+	main()
 }

@@ -67,10 +67,10 @@ func Start(args []string) {
 		master.NewSwitchRelayMasterCmd(),
 		master.NewPauseRelayCmd(),
 		master.NewResumeRelayCmd(),
-		//master.NewStopRelayCmd(),
 		master.NewUpdateMasterConfigCmd(),
 		master.NewUpdateRelayCmd(),
 		master.NewPurgeRelayCmd(),
+		master.NewMigrateRelayCmd(),
 	)
 
 	rootCmd.SetArgs(args)

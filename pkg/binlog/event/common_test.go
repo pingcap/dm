@@ -45,7 +45,7 @@ func (t *testCommonSuite) TestGenCommonFileHeader(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(len(events), Equals, 2)
 	c.Assert(events[0].Header.EventType, Equals, replication.FORMAT_DESCRIPTION_EVENT)
-	c.Assert(events[1], IsNil) // for MySQL, no real PreviousGTIDsEvent
+	c.Assert(events[1].Header.EventType, Equals, replication.PREVIOUS_GTIDS_EVENT)
 
 	// write to file then parse it
 	dir := c.MkDir()
