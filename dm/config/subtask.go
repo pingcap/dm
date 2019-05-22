@@ -330,13 +330,13 @@ func (c *SubTaskConfig) DecryptPassword() (*SubTaskConfig, error) {
 	if len(clone.To.Password) > 0 {
 		pswdTo, err = utils.Decrypt(clone.To.Password)
 		if err != nil {
-			return nil, errors.Annotatef(err, "downstream DB")
+			return nil, errors.Annotatef(err, "downstream DB password %s", clone.To.Password)
 		}
 	}
 	if len(clone.From.Password) > 0 {
 		pswdFrom, err = utils.Decrypt(clone.From.Password)
 		if err != nil {
-			return nil, errors.Annotatef(err, "source DB")
+			return nil, errors.Annotatef(err, "source DB password %s", clone.From.Password)
 		}
 	}
 	clone.From.Password = pswdFrom
