@@ -18,18 +18,17 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
+
+	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 var (
-	// ErrInvalidBinlogFilename means error about invalid binlog file name.
-	ErrInvalidBinlogFilename = errors.New("invalid binlog file name")
 	// ErrEmptyRelayDir means error about empty relay dir.
 	ErrEmptyRelayDir = errors.New("empty relay dir")
 	// binlog file name, base + `.` + seq
@@ -65,7 +64,7 @@ func CollectAllBinlogFiles(dir string) ([]string, error) {
 			log.Debugf("[streamer] skip meta file %s", f)
 			continue
 		}
-		_, err := parseBinlogFile(f)
+		err = binlog.VerifyFilename(f)
 		if err != nil {
 			log.Warnf("[streamer] collecting binlog file, ignore invalid file %s, err %v", f, err)
 			continue
@@ -85,7 +84,7 @@ func CollectBinlogFilesCmp(dir, baseFile string, cmp FileCmp) ([]string, error) 
 		return nil, errors.NotFoundf("base file %s in directory %s", baseFile, dir)
 	}
 
-	bf, err := parseBinlogFile(baseFile)
+	bf, err := binlog.ParseFilename(baseFile)
 	if err != nil {
 		return nil, errors.Annotatef(err, "filename %s", baseFile)
 	}
@@ -98,19 +97,19 @@ func CollectBinlogFilesCmp(dir, baseFile string, cmp FileCmp) ([]string, error) 
 	results := make([]string, 0, len(allFiles))
 	for _, f := range allFiles {
 		// we have parse f in `CollectAllBinlogFiles`, may be we can refine this
-		parsed, err := parseBinlogFile(f)
-		if err != nil || parsed.baseName != bf.baseName {
+		parsed, err := binlog.ParseFilename(f)
+		if err != nil || parsed.BaseName != bf.BaseName {
 			log.Warnf("[streamer] collecting binlog file, ignore invalid file %s, err %v", f, err)
 			continue
 		}
 		switch cmp {
 		case FileCmpBigger:
-			if !parsed.BiggerThan(bf) {
+			if !parsed.GreaterThan(bf) {
 				log.Debugf("[streamer] ignore older or equal binlog file %s in dir %s", f, dir)
 				continue
 			}
 		case FileCmpBiggerEqual:
-			if !parsed.BiggerOrEqualThan(bf) {
+			if !parsed.GreaterOrEqualThan(bf) {
 				log.Debugf("[streamer] ignore older binlog file %s in dir %s", f, dir)
 				continue
 			}
@@ -129,73 +128,25 @@ func CollectBinlogFilesCmp(dir, baseFile string, cmp FileCmp) ([]string, error) 
 	return results, nil
 }
 
-// GetBinlogFileIndex return a float64 value of index.
-func GetBinlogFileIndex(filename string) (float64, error) {
-	f, err := parseBinlogFile(filename)
-	if err != nil {
-		return 0, errors.Annotatef(err, "parse binlog file name %s", filename)
-	}
-
-	idx, err := strconv.ParseFloat(f.seq, 64)
-	if err != nil {
-		return 0, errors.Annotatef(err, "parse binlog file name %s", filename)
-	}
-	return idx, nil
-}
-
-func parseBinlogFile(filename string) (*binlogFile, error) {
-	// chendahui: I found there will always be only one dot in the mysql binlog name.
-	parts := strings.Split(filename, baseSeqSeparator)
-	if len(parts) != 2 || !allAreDigits(parts[1]) {
-		return nil, ErrInvalidBinlogFilename
-	}
-
-	return &binlogFile{
-		baseName: parts[0],
-		seq:      parts[1],
-	}, nil
-}
-
-func constructBinlogFilename(baseName, seq string) string {
-	return fmt.Sprintf("%s%s%s", baseName, baseSeqSeparator, seq)
-}
-
 // RealMySQLPos parses relay position and returns a mysql position and whether error occurs
 // if parsed successfully and `UUIDSuffix` exists, sets position Name to
 // `originalPos.NamePrefix + baseSeqSeparator + originalPos.NameSuffix`.
 // if parsed failed returns given position and the traced error.
 func RealMySQLPos(pos mysql.Position) (mysql.Position, error) {
-	parsed, err := parseBinlogFile(pos.Name)
+	parsed, err := binlog.ParseFilename(pos.Name)
 	if err != nil {
 		return pos, errors.Trace(err)
 	}
 
-	sepIdx := strings.Index(parsed.baseName, posUUIDSuffixSeparator)
-	if sepIdx > 0 && sepIdx+len(posUUIDSuffixSeparator) < len(parsed.baseName) {
+	sepIdx := strings.Index(parsed.BaseName, posUUIDSuffixSeparator)
+	if sepIdx > 0 && sepIdx+len(posUUIDSuffixSeparator) < len(parsed.BaseName) {
 		return mysql.Position{
-			Name: fmt.Sprintf("%s%s%s", parsed.baseName[:sepIdx], baseSeqSeparator, parsed.seq),
+			Name: fmt.Sprintf("%s%s%s", parsed.BaseName[:sepIdx], baseSeqSeparator, parsed.Seq),
 			Pos:  pos.Pos,
 		}, nil
 	}
 
 	return pos, nil
-}
-
-type binlogFile struct {
-	baseName string
-	seq      string
-}
-
-func (f *binlogFile) BiggerThan(other *binlogFile) bool {
-	return f.baseName == other.baseName && f.seq > other.seq
-}
-
-func (f *binlogFile) BiggerOrEqualThan(other *binlogFile) bool {
-	return f.baseName == other.baseName && f.seq >= other.seq
-}
-
-func (f *binlogFile) LessThan(other *binlogFile) bool {
-	return f.baseName == other.baseName && f.seq < other.seq
 }
 
 // [0-9] in string -> [48,57] in ascii

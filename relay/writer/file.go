@@ -168,7 +168,7 @@ func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (
 	}
 
 	// verify filename
-	err := binlog.VerifyBinlogFilename(w.filename.Get())
+	err := binlog.VerifyFilename(w.filename.Get())
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

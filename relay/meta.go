@@ -25,8 +25,8 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/ioutil2"
 
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/gtid"
-	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -170,7 +170,7 @@ func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, en
 	}
 
 	if !enableGTID && len(binlogName) > 0 {
-		_, err := streamer.GetBinlogFileIndex(binlogName)
+		err := binlog.VerifyFilename(binlogName)
 		if err != nil {
 			return false, errors.Annotatef(err, "relay-binlog-name %s", binlogName)
 		}

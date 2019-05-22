@@ -23,12 +23,12 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/gtid"
-	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay/purger"
@@ -192,7 +192,7 @@ func (c *Config) verify() error {
 
 	var err error
 	if len(c.RelayBinLogName) > 0 {
-		_, err = streamer.GetBinlogFileIndex(c.RelayBinLogName)
+		err = binlog.VerifyFilename(c.RelayBinLogName)
 		if err != nil {
 			return errors.Annotatef(err, "relay-binlog-name %s", c.RelayBinLogName)
 		}

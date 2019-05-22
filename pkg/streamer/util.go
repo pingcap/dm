@@ -26,6 +26,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/tidb-tools/pkg/watcher"
 )
@@ -36,10 +37,10 @@ func ExtractPos(pos mysql.Position, uuids []string) (uuidWithSuffix string, uuid
 		return "", "", pos, errors.NotValidf("empty UUIDs")
 	}
 
-	parsed, _ := parseBinlogFile(pos.Name)
-	sepIdx := strings.Index(parsed.baseName, posUUIDSuffixSeparator)
-	if sepIdx > 0 && sepIdx+len(posUUIDSuffixSeparator) < len(parsed.baseName) {
-		realBaseName, masterUUIDSuffix := parsed.baseName[:sepIdx], parsed.baseName[sepIdx+len(posUUIDSuffixSeparator):]
+	parsed, _ := binlog.ParseFilename(pos.Name)
+	sepIdx := strings.Index(parsed.BaseName, posUUIDSuffixSeparator)
+	if sepIdx > 0 && sepIdx+len(posUUIDSuffixSeparator) < len(parsed.BaseName) {
+		realBaseName, masterUUIDSuffix := parsed.BaseName[:sepIdx], parsed.BaseName[sepIdx+len(posUUIDSuffixSeparator):]
 		uuid := utils.GetUUIDBySuffix(uuids, masterUUIDSuffix)
 
 		if len(uuid) > 0 {
@@ -47,7 +48,7 @@ func ExtractPos(pos mysql.Position, uuids []string) (uuidWithSuffix string, uuid
 			uuidWithSuffix = uuid
 			uuidSuffix = masterUUIDSuffix
 			realPos = mysql.Position{
-				Name: constructBinlogFilename(realBaseName, parsed.seq),
+				Name: binlog.ConstructFilename(realBaseName, parsed.Seq),
 				Pos:  pos.Pos,
 			}
 		} else {
@@ -84,7 +85,7 @@ func getFirstBinlogName(baseDir, uuid string) (string, error) {
 			continue
 		}
 
-		_, err := parseBinlogFile(f)
+		err = binlog.VerifyFilename(f)
 		if err != nil {
 			return "", errors.NotValidf("binlog file %s", f)
 		}
@@ -160,7 +161,7 @@ func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir 
 					continue
 				}
 				baseName := path.Base(event.Path)
-				_, err2 := GetBinlogFileIndex(baseName)
+				err2 := binlog.VerifyFilename(baseName)
 				if err2 != nil {
 					log.Debugf("skip watcher event %+v for invalid relay log file", event)
 					continue // not valid binlog created, updated
@@ -224,8 +225,8 @@ func fileSizeUpdated(path string, latestSize int64) (int, error) {
 }
 
 // constructPosName construct binlog file name with UUID suffix
-func constructBinlogName(originalName *binlogFile, uuidSuffix string) string {
-	return fmt.Sprintf("%s%s%s%s%s", originalName.baseName, posUUIDSuffixSeparator, uuidSuffix, baseSeqSeparator, originalName.seq)
+func constructBinlogName(originalName binlog.Filename, uuidSuffix string) string {
+	return fmt.Sprintf("%s%s%s%s%s", originalName.BaseName, posUUIDSuffixSeparator, uuidSuffix, baseSeqSeparator, originalName.Seq)
 }
 
 // getNextUUID gets (the nextUUID and its suffix) after the current UUID.

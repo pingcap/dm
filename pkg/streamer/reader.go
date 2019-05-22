@@ -25,6 +25,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -152,7 +153,7 @@ func (r *BinlogReader) parseRelay(ctx context.Context, s *LocalStreamer, pos mys
 		}
 		uuidSuffix := utils.SuffixIntToStr(suffixInt)
 
-		parsed, err2 := parseBinlogFile(nextBinlogName)
+		parsed, err2 := binlog.ParseFilename(nextBinlogName)
 		if err2 != nil {
 			return errors.Annotatef(err2, "parse binlog file name %s", nextBinlogName)
 		}
@@ -280,7 +281,7 @@ func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLog
 		case replication.ROTATE_EVENT:
 			// add master UUID suffix to pos.Name
 			env := e.Event.(*replication.RotateEvent)
-			parsed, _ := parseBinlogFile(string(env.NextLogName))
+			parsed, _ := binlog.ParseFilename(string(env.NextLogName))
 			nameWithSuffix := constructBinlogName(parsed, uuidSuffix)
 			env.NextLogName = []byte(nameWithSuffix)
 
