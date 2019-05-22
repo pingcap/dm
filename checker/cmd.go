@@ -25,6 +25,7 @@ var (
 	// ErrorMsgHeader used as the header of the error message when checking config failed.
 	ErrorMsgHeader = "fail to check synchronization configuration with type"
 
+	// CheckSyncConfigFunc holds the CheckSyncConfig function
 	CheckSyncConfigFunc func(ctx context.Context, cfgs []*config.SubTaskConfig) error
 )
 

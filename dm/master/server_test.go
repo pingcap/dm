@@ -338,8 +338,8 @@ func (t *testMaster) TestShowDDLLocks(c *check.C) {
 		wg.Add(1)
 		go func(task, schema, table string) {
 			defer wg.Done()
-			id, synced, remain, err := lk.TrySync(task, schema, table, workers[0], sqls, workers)
-			c.Assert(err, check.IsNil)
+			id, synced, remain, err2 := lk.TrySync(task, schema, table, workers[0], sqls, workers)
+			c.Assert(err2, check.IsNil)
 			c.Assert(synced, check.IsFalse)
 			c.Assert(remain, check.Greater, 0) // multi-goroutines TrySync concurrently, can only confirm remain > 0
 			c.Assert(lk.FindLock(id), check.NotNil)
@@ -756,8 +756,8 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 				User:     "root",
 				Password: "",
 			}
-			rawConfig, err := dbCfg.Toml()
-			c.Assert(err, check.IsNil)
+			rawConfig, err2 := dbCfg.Toml()
+			c.Assert(err2, check.IsNil)
 
 			// mock query worker config
 			mockWorkerClient.EXPECT().QueryWorkerConfig(
@@ -771,8 +771,8 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 
 			stCfg, ok := workerCfg[deploy.Worker]
 			c.Assert(ok, check.IsTrue)
-			stCfgToml, err := stCfg.Toml()
-			c.Assert(err, check.IsNil)
+			stCfgToml, err3 := stCfg.Toml()
+			c.Assert(err3, check.IsNil)
 
 			// mock update sub task
 			rets := make([]interface{}, 0, 2)
