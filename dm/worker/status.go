@@ -49,6 +49,7 @@ func (st *SubTask) StatusJSON() string {
 func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
 	w.Lock()
 	defer w.Unlock()
+
 	if len(w.subTasks) == 0 {
 		return nil // no sub task started
 	}
@@ -81,25 +82,28 @@ func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
 				lockID = lockInfo.ID
 			}
 			cu := st.CurrUnit()
+
 			stStatus = pb.SubTaskStatus{
 				Name:                name,
 				Stage:               st.Stage(),
-				Unit:                cu.Type(),
 				Result:              st.Result(),
 				UnresolvedDDLLockID: lockID,
 			}
 
-			// oneof status
-			us := st.Status()
-			switch cu.Type() {
-			case pb.UnitType_Check:
-				stStatus.Status = &pb.SubTaskStatus_Check{Check: us.(*pb.CheckStatus)}
-			case pb.UnitType_Dump:
-				stStatus.Status = &pb.SubTaskStatus_Dump{Dump: us.(*pb.DumpStatus)}
-			case pb.UnitType_Load:
-				stStatus.Status = &pb.SubTaskStatus_Load{Load: us.(*pb.LoadStatus)}
-			case pb.UnitType_Sync:
-				stStatus.Status = &pb.SubTaskStatus_Sync{Sync: us.(*pb.SyncStatus)}
+			if cu != nil {
+				stStatus.Unit = cu.Type()
+				// oneof status
+				us := st.Status()
+				switch stStatus.Unit {
+				case pb.UnitType_Check:
+					stStatus.Status = &pb.SubTaskStatus_Check{Check: us.(*pb.CheckStatus)}
+				case pb.UnitType_Dump:
+					stStatus.Status = &pb.SubTaskStatus_Dump{Dump: us.(*pb.DumpStatus)}
+				case pb.UnitType_Load:
+					stStatus.Status = &pb.SubTaskStatus_Load{Load: us.(*pb.LoadStatus)}
+				case pb.UnitType_Sync:
+					stStatus.Status = &pb.SubTaskStatus_Sync{Sync: us.(*pb.SyncStatus)}
+				}
 			}
 		}
 		status = append(status, &stStatus)
