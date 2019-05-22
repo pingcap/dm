@@ -333,6 +333,7 @@ func (w *FileWriter) handleFileHoleExist(ev *replication.BinlogEvent) (bool, err
 		// no hole exists, but duplicate events may exists, this should be handled in another place.
 		return holeSize < 0, nil
 	}
+	log.Infof("[relay] hole exist from %d to %d in %s", fileOffset, evStartPos, w.filename.Get())
 
 	// 2. generate dummy event
 	var (
@@ -350,7 +351,7 @@ func (w *FileWriter) handleFileHoleExist(ev *replication.BinlogEvent) (bool, err
 
 	// 3. write the dummy event
 	err = w.out.Write(dummyEv.RawData)
-	return false, errors.Trace(err)
+	return false, errors.Annotatef(err, "write dummy event %+v to fill the hole", dummyEv.Header)
 }
 
 // handleDuplicateEventsExist tries to handle a potential duplicate event in the binlog file.
@@ -359,6 +360,8 @@ func (w *FileWriter) handleDuplicateEventsExist(ev *replication.BinlogEvent) (*R
 	duplicate, err := checkIsDuplicateEvent(filename, ev)
 	if err != nil {
 		return nil, errors.Annotatef(err, "check event %+v whether duplicate in %s", ev.Header, filename)
+	} else if duplicate {
+		log.Infof("[relay] event %+v is duplicate in %s", ev.Header, w.filename.Get())
 	}
 
 	return &Result{
