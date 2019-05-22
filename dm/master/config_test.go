@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"strings"
 
 	capturer "github.com/kami-zh/go-capturer"
@@ -123,14 +124,13 @@ func (t *testMaster) TestConfig(c *check.C) {
 
 func (t *testMaster) TestUpdateConfig(c *check.C) {
 	var (
-		f          *os.File
 		err        error
 		content    []byte
 		newContent []byte
+		newCfgPath string
 	)
-	f, err = ioutil.TempFile(".", "test_config.toml")
+	newCfgPath = path.Join(c.MkDir(), "test_config.toml")
 	c.Assert(err, check.IsNil)
-	defer os.Remove(f.Name())
 
 	cfg := &Config{}
 	cfg.configFromFile(defaultConfigFile)
@@ -139,10 +139,10 @@ func (t *testMaster) TestUpdateConfig(c *check.C) {
 	c.Assert(err, check.IsNil)
 
 	// update config to a new file
-	cfg.ConfigFile = f.Name()
+	cfg.ConfigFile = newCfgPath
 	err = cfg.UpdateConfigFile(string(content))
 	c.Assert(err, check.IsNil)
-	newContent, err = ioutil.ReadFile(f.Name())
+	newContent, err = ioutil.ReadFile(newCfgPath)
 	c.Assert(err, check.IsNil)
 	c.Assert(newContent, check.DeepEquals, content)
 

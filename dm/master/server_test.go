@@ -137,7 +137,7 @@ type testMaster struct {
 
 var _ = check.Suite(&testMaster{})
 
-func defaultMasterServer(c *check.C) *Server {
+func testDefaultMasterServer(c *check.C) *Server {
 	cfg := NewConfig()
 	err := cfg.Parse([]string{"-config=./dm-master.toml"})
 	c.Assert(err, check.IsNil)
@@ -146,9 +146,9 @@ func defaultMasterServer(c *check.C) *Server {
 	return server
 }
 
-func genSubTaskConfig(c *check.C, server *Server, ctrl *gomock.Controller) map[string]*config.SubTaskConfig {
+func testGenSubTaskConfig(c *check.C, server *Server, ctrl *gomock.Controller) map[string]*config.SubTaskConfig {
 	// generate subtask configs, need to mock query worker configs RPC
-	mockWorkerConfig(c, server, ctrl, "", true)
+	testMockWorkerConfig(c, server, ctrl, "", true)
 	workerCfg := make(map[string]*config.SubTaskConfig)
 	_, stCfgs, err := server.generateSubTask(context.Background(), taskConfig)
 	c.Assert(err, check.IsNil)
@@ -160,7 +160,7 @@ func genSubTaskConfig(c *check.C, server *Server, ctrl *gomock.Controller) map[s
 	return workerCfg
 }
 
-func mockWorkerConfig(c *check.C, server *Server, ctrl *gomock.Controller, password string, result bool) {
+func testMockWorkerConfig(c *check.C, server *Server, ctrl *gomock.Controller, password string, result bool) {
 	// mock QueryWorkerConfig API to be used in s.allWorkerConfigs
 	for idx, deploy := range server.cfg.Deploy {
 		dbCfg := &config.DBConfig{
@@ -184,7 +184,7 @@ func mockWorkerConfig(c *check.C, server *Server, ctrl *gomock.Controller, passw
 	}
 }
 
-func mockStartTask(c *check.C, server *Server, ctrl *gomock.Controller, workerCfg map[string]*config.SubTaskConfig, rpcSuccess bool) {
+func testMockStartTask(c *check.C, server *Server, ctrl *gomock.Controller, workerCfg map[string]*config.SubTaskConfig, rpcSuccess bool) {
 	for idx, deploy := range server.cfg.Deploy {
 		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 		logID := int64(idx + 1)
@@ -256,7 +256,7 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
-	server := defaultMasterServer(c)
+	server := testDefaultMasterServer(c)
 
 	// test query all workers
 	for _, workerAddr := range server.cfg.DeployMap {
@@ -308,7 +308,7 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 }
 
 func (t *testMaster) TestShowDDLLocks(c *check.C) {
-	server := defaultMasterServer(c)
+	server := testDefaultMasterServer(c)
 
 	resp, err := server.ShowDDLLocks(context.Background(), &pb.ShowDDLLocksRequest{})
 	c.Assert(err, check.IsNil)
@@ -374,10 +374,10 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
-	server := defaultMasterServer(c)
+	server := testDefaultMasterServer(c)
 
 	// check task successfully
-	mockWorkerConfig(c, server, ctrl, "", true)
+	testMockWorkerConfig(c, server, ctrl, "", true)
 	resp, err := server.CheckTask(context.Background(), &pb.CheckTaskRequest{
 		Task: taskConfig,
 	})
@@ -392,7 +392,7 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 	c.Assert(resp.Result, check.IsFalse)
 
 	// simulate invalid password returned from dm-workers, so cfg.SubTaskConfigs will fail
-	mockWorkerConfig(c, server, ctrl, "invalid-encrypt-password", true)
+	testMockWorkerConfig(c, server, ctrl, "invalid-encrypt-password", true)
 	resp, err = server.CheckTask(context.Background(), &pb.CheckTaskRequest{
 		Task: taskConfig,
 	})
@@ -400,7 +400,7 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 	c.Assert(resp.Result, check.IsFalse)
 
 	// test query worker config failed
-	mockWorkerConfig(c, server, ctrl, "", false)
+	testMockWorkerConfig(c, server, ctrl, "", false)
 	resp, err = server.CheckTask(context.Background(), &pb.CheckTaskRequest{
 		Task: taskConfig,
 	})
@@ -412,7 +412,7 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
-	server := defaultMasterServer(c)
+	server := testDefaultMasterServer(c)
 
 	// s.generateSubTask with error
 	resp, err := server.StartTask(context.Background(), &pb.StartTaskRequest{
@@ -426,10 +426,10 @@ func (t *testMaster) TestStartTask(c *check.C) {
 		workers = append(workers, deploy.Worker)
 	}
 
-	workerCfg := genSubTaskConfig(c, server, ctrl)
+	workerCfg := testGenSubTaskConfig(c, server, ctrl)
 
 	// test start task successfully
-	mockStartTask(c, server, ctrl, workerCfg, true)
+	testMockStartTask(c, server, ctrl, workerCfg, true)
 	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
 		Task:    taskConfig,
 		Workers: workers,
@@ -439,7 +439,7 @@ func (t *testMaster) TestStartTask(c *check.C) {
 
 	// check start-task with an invalid worker
 	invalidWorker := "invalid-worker"
-	mockWorkerConfig(c, server, ctrl, "", true)
+	testMockWorkerConfig(c, server, ctrl, "", true)
 	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
 		Task:    taskConfig,
 		Workers: []string{invalidWorker},
@@ -451,7 +451,7 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	c.Assert(resp.Workers[0].Worker, check.Equals, invalidWorker)
 
 	// test start sub task request to worker returns error
-	mockStartTask(c, server, ctrl, workerCfg, false)
+	testMockStartTask(c, server, ctrl, workerCfg, false)
 	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
 		Task: taskConfig,
 	})
@@ -469,7 +469,7 @@ func (t *testMaster) TestStartTask(c *check.C) {
 func (t *testMaster) TestQueryError(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
-	server := defaultMasterServer(c)
+	server := testDefaultMasterServer(c)
 
 	// test query all workers
 	for _, workerAddr := range server.cfg.DeployMap {
@@ -529,7 +529,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
-	server := defaultMasterServer(c)
+	server := testDefaultMasterServer(c)
 	for _, workerAddr := range server.cfg.DeployMap {
 		workers = append(workers, workerAddr)
 	}
@@ -707,7 +707,7 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
-	server := defaultMasterServer(c)
+	server := testDefaultMasterServer(c)
 
 	// s.generateSubTask with error
 	resp, err := server.UpdateTask(context.Background(), &pb.UpdateTaskRequest{
@@ -722,7 +722,7 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 		workers = append(workers, deploy.Worker)
 	}
 
-	workerCfg := genSubTaskConfig(c, server, ctrl)
+	workerCfg := testGenSubTaskConfig(c, server, ctrl)
 
 	mockUpdateTask := func(rpcSuccess bool) {
 		for idx, deploy := range server.cfg.Deploy {
@@ -803,7 +803,7 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 
 	// check update-task with an invalid worker
 	invalidWorker := "invalid-worker"
-	mockWorkerConfig(c, server, ctrl, "", true)
+	testMockWorkerConfig(c, server, ctrl, "", true)
 	resp, err = server.UpdateTask(context.Background(), &pb.UpdateTaskRequest{
 		Task:    taskConfig,
 		Workers: []string{invalidWorker},
@@ -834,7 +834,7 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
-	server := defaultMasterServer(c)
+	server := testDefaultMasterServer(c)
 
 	workers := make([]string, 0, len(server.cfg.DeployMap))
 	for _, workerAddr := range server.cfg.DeployMap {
@@ -963,7 +963,7 @@ func (t *testMaster) TestBreakWorkerDDLLock(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
-	server := defaultMasterServer(c)
+	server := testDefaultMasterServer(c)
 	var (
 		task    = "test"
 		schema  = "test_db"
@@ -1060,7 +1060,7 @@ func (t *testMaster) TestRefreshWorkerTasks(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
-	server := defaultMasterServer(c)
+	server := testDefaultMasterServer(c)
 
 	workers := make([]string, 0, len(server.cfg.DeployMap))
 
@@ -1132,7 +1132,7 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
-	server := defaultMasterServer(c)
+	server := testDefaultMasterServer(c)
 	var (
 		now      = time.Now().Unix()
 		filename = "mysql-bin.000005"
@@ -1223,7 +1223,7 @@ func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
-	server := defaultMasterServer(c)
+	server := testDefaultMasterServer(c)
 	workers := make([]string, 0, len(server.cfg.Deploy))
 
 	for _, deploy := range server.cfg.Deploy {
@@ -1301,7 +1301,7 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
-	server := defaultMasterServer(c)
+	server := testDefaultMasterServer(c)
 	workers := make([]string, 0, len(server.cfg.Deploy))
 
 	for _, deploy := range server.cfg.Deploy {
@@ -1384,7 +1384,7 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
-	server := defaultMasterServer(c)
+	server := testDefaultMasterServer(c)
 	workers := make([]string, 0, len(server.cfg.Deploy))
 	for _, deploy := range server.cfg.Deploy {
 		workers = append(workers, deploy.Worker)

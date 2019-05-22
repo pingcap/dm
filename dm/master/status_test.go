@@ -53,7 +53,7 @@ func (t *testHTTPServer) waitUntilServerOnline() error {
 	statusURL := fmt.Sprintf("http://127.0.0.1%s/status", t.cfg.MasterAddr)
 	for i := 0; i < retryTime; i++ {
 		resp, err := http.Get(statusURL)
-		if err == nil {
+		if err == nil && resp.StatusCode == http.StatusOK {
 			ioutil.ReadAll(resp.Body)
 			resp.Body.Close()
 			return nil
