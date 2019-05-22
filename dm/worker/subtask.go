@@ -28,6 +28,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer"
 	"github.com/pingcap/errors"
+	"github.com/siddontang/go/sync2"
 
 	// hack for glide update, remove it later
 	_ "github.com/pingcap/tidb-tools/pkg/check"
@@ -59,6 +60,8 @@ func createUnits(cfg *config.SubTaskConfig) []unit.Unit {
 type SubTask struct {
 	cfg *config.SubTaskConfig
 
+	initialized sync2.AtomicBool
+
 	sync.RWMutex
 	wg     sync.WaitGroup
 	ctx    context.Context
@@ -79,11 +82,15 @@ type SubTask struct {
 
 // NewSubTask creates a new SubTask
 func NewSubTask(cfg *config.SubTaskConfig) *SubTask {
+	return NewSubTaskWithStage(cfg, pb.Stage_New)
+}
+
+// NewSubTaskWithStage creates a new SubTask with stage
+func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage) *SubTask {
 	st := SubTask{
-		cfg:     cfg,
-		units:   createUnits(cfg),
-		stage:   pb.Stage_New,
-		DDLInfo: make(chan *pb.DDLInfo, 1),
+		cfg:   cfg,
+		units: createUnits(cfg),
+		stage: stage,
 	}
 	taskState.WithLabelValues(st.cfg.Name).Set(float64(st.stage))
 	return &st
@@ -92,8 +99,10 @@ func NewSubTask(cfg *config.SubTaskConfig) *SubTask {
 // Init initializes the sub task processing units
 func (st *SubTask) Init() error {
 	if len(st.units) < 1 {
-		return errors.Errorf("sub task %s has no dm units for mode %s", st.cfg.Name, st.cfg.Mode)
+		return errors.Errorf("subtask %s has no dm units for mode %s", st.cfg.Name, st.cfg.Mode)
 	}
+
+	st.DDLInfo = make(chan *pb.DDLInfo, 1)
 
 	// when error occurred, initialized units should be closed
 	// when continue sub task from loader / syncer, ahead units should be closed
@@ -102,6 +111,8 @@ func (st *SubTask) Init() error {
 		for _, u := range needCloseUnits {
 			u.Close()
 		}
+
+		st.initialized.Set(true)
 	}()
 
 	// every unit does base initialization in `Init`, and this must pass before start running the sub task
@@ -114,7 +125,7 @@ func (st *SubTask) Init() error {
 			for j := 0; j < i; j++ {
 				needCloseUnits = append(needCloseUnits, st.units[j])
 			}
-			return errors.Errorf("sub task %s init dm-unit error %v", st.cfg.Name, errors.ErrorStack(err))
+			return errors.Annotatef(err, "fail to initial unit %s of subtask %s ", u.Type(), st.cfg.Name)
 		}
 	}
 
@@ -124,7 +135,7 @@ func (st *SubTask) Init() error {
 		u := st.units[i]
 		isFresh, err := u.IsFreshTask()
 		if err != nil {
-			log.Errorf("[subtask] %s check %s is fresh error %v", st.cfg.Name, u.Type(), errors.ErrorStack(err))
+			return errors.Annotatef(err, "fail to get fresh status of subtask %s %s", st.cfg.Name, u.Type())
 		} else if !isFresh {
 			skipIdx = i
 			log.Infof("[subtask] %s run %s dm-unit before, continue with it", st.cfg.Name, u.Type())
@@ -141,10 +152,27 @@ func (st *SubTask) Init() error {
 
 // Run runs the sub task
 func (st *SubTask) Run() {
+	if st.Stage() == pb.Stage_Finished || st.Stage() == pb.Stage_Running {
+		log.Warnf("[subtask] %s is %s", st.cfg.Name, st.Stage())
+		return
+	}
+
+	err := st.Init()
+	if err != nil {
+		log.Errorf("[subtask] fail to initial %v", err)
+		st.fail(errors.ErrorStack(err))
+		return
+	}
+
+	st.run()
+}
+
+func (st *SubTask) run() {
 	st.setStage(pb.Stage_Paused)
 	err := st.unitTransWaitCondition()
 	if err != nil {
 		log.Errorf("[subtask] wait condition error: %v", err)
+		st.fail(errors.ErrorStack(err))
 		return
 	}
 
@@ -222,7 +250,7 @@ retry:
 				log.Infof("[subtask] %s switching to next dm-unit %s", st.cfg.Name, nu.Type())
 				st.setCurrUnit(nu)
 				// NOTE: maybe need a Lock mechanism for sharding scenario
-				st.Run() // re-run for next process unit
+				st.run() // re-run for next process unit
 			}
 		case pb.Stage_Stopped:
 		case pb.Stage_Paused:
@@ -366,8 +394,6 @@ func (st *SubTask) Close() {
 	st.closeUnits() // close all un-closed units
 	st.setStageIfNot(pb.Stage_Finished, pb.Stage_Stopped)
 	st.wg.Wait()
-
-	close(st.DDLInfo)
 }
 
 // Pause pauses the running sub task
@@ -389,6 +415,11 @@ func (st *SubTask) Pause() error {
 // Resume resumes the paused sub task
 // similar to Run
 func (st *SubTask) Resume() error {
+	if !st.initialized.Get() {
+		st.Run()
+		return nil
+	}
+
 	// NOTE: this may block if user resume a task
 	err := st.unitTransWaitCondition()
 	if err != nil {
@@ -654,4 +685,16 @@ func (st *SubTask) retryErrors(errors []*pb.ProcessError, current unit.Unit) boo
 	}
 
 	return retry
+}
+
+func (st *SubTask) fail(message string) {
+	st.setStage(pb.Stage_Paused)
+	st.setResult(&pb.ProcessResult{
+		Errors: []*pb.ProcessError{
+			{
+				Type: pb.ErrorType_UnknownError,
+				Msg:  message,
+			},
+		},
+	})
 }
