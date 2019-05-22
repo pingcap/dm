@@ -279,7 +279,7 @@ func (m *BaseEvent) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -307,7 +307,7 @@ func (m *BaseEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -317,9 +317,6 @@ func (m *BaseEvent) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerBase
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTracerBase
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -339,7 +336,7 @@ func (m *BaseEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Line |= int32(b&0x7F) << shift
+				m.Line |= (int32(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -358,7 +355,7 @@ func (m *BaseEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Tso |= int64(b&0x7F) << shift
+				m.Tso |= (int64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -377,7 +374,7 @@ func (m *BaseEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -387,9 +384,6 @@ func (m *BaseEvent) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerBase
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTracerBase
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -409,7 +403,7 @@ func (m *BaseEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -419,9 +413,6 @@ func (m *BaseEvent) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerBase
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTracerBase
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -441,7 +432,7 @@ func (m *BaseEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Type |= TraceType(b&0x7F) << shift
+				m.Type |= (TraceType(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -453,9 +444,6 @@ func (m *BaseEvent) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
-				return ErrInvalidLengthTracerBase
-			}
-			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthTracerBase
 			}
 			if (iNdEx + skippy) > l {
@@ -524,11 +512,8 @@ func skipTracerBase(dAtA []byte) (n int, err error) {
 					break
 				}
 			}
-			if length < 0 {
-				return 0, ErrInvalidLengthTracerBase
-			}
 			iNdEx += length
-			if iNdEx < 0 {
+			if length < 0 {
 				return 0, ErrInvalidLengthTracerBase
 			}
 			return iNdEx, nil
@@ -559,9 +544,6 @@ func skipTracerBase(dAtA []byte) (n int, err error) {
 					return 0, err
 				}
 				iNdEx = start + next
-				if iNdEx < 0 {
-					return 0, ErrInvalidLengthTracerBase
-				}
 			}
 			return iNdEx, nil
 		case 4:

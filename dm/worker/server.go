@@ -15,7 +15,6 @@ package worker
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -54,8 +53,7 @@ type Server struct {
 // NewServer creates a new Server
 func NewServer(cfg *Config) *Server {
 	s := Server{
-		cfg:    cfg,
-		worker: NewWorker(cfg),
+		cfg: cfg,
 	}
 	s.closed.Set(true) // not start yet
 	return &s
@@ -69,7 +67,7 @@ func (s *Server) Start() error {
 		return errors.Trace(err)
 	}
 
-	err = s.worker.Init()
+	s.worker, err = NewWorker(s.cfg)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -136,39 +134,31 @@ func (s *Server) Close() {
 }
 
 // StartSubTask implements WorkerServer.StartSubTask
-func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) (*pb.CommonWorkerResponse, error) {
+func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
 	log.Infof("[server] receive StartSubTask request %+v", req)
 
 	cfg := config.NewSubTaskConfig()
 	err := cfg.Decode(req.Task)
 	if err != nil {
-		log.Errorf("[server] decode config from request %+v error %v", req.Task, errors.ErrorStack(err))
-		return &pb.CommonWorkerResponse{
-			Result: false,
-			Msg:    errors.ErrorStack(err),
-		}, nil
+		err = errors.Annotatef(err, "decode subtask config from request %+v", req.Task)
+		log.Errorf("[server] %s", errors.ErrorStack(err))
+		return nil, err
 	}
 
-	if err = s.worker.meta.Set(cfg); err != nil {
-		log.Errorf("[server] insert task %s into meta: %v", cfg, errors.ErrorStack(err))
-		return &pb.CommonWorkerResponse{
-			Result: false,
-			Msg:    fmt.Sprintf("insert task %s into meta: %v", cfg, errors.ErrorStack(err)),
-		}, nil
-	}
-
-	err = s.worker.StartSubTask(cfg)
+	opLogID, err := s.worker.StartSubTask(cfg)
 	if err != nil {
-		log.Errorf("[server] start sub task %s error %v", cfg.Name, errors.ErrorStack(err))
-		return &pb.CommonWorkerResponse{
-			Result: false,
-			Msg:    errors.ErrorStack(err),
-		}, nil
+		err = errors.Annotatef(err, "start sub task %s", cfg.Name)
+		log.Errorf("[server] %s", errors.ErrorStack(err))
+		return nil, err
 	}
 
-	return &pb.CommonWorkerResponse{
-		Result: true,
-		Msg:    "",
+	return &pb.OperateSubTaskResponse{
+		Meta: &pb.CommonWorkerResponse{
+			Result: true,
+			Msg:    "",
+		},
+		Op:    pb.TaskOp_Start,
+		LogID: opLogID,
 	}, nil
 }
 
@@ -176,75 +166,69 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
 	log.Infof("[server] receive OperateSubTask request %+v", req)
 
-	resp := &pb.OperateSubTaskResponse{
-		Op:     req.Op,
-		Result: false,
-	}
-
-	name := req.Name
-	var err error
-	switch req.Op {
-	case pb.TaskOp_Stop:
-		if err = s.worker.meta.Del(name); err != nil {
-			resp.Msg = fmt.Sprintf("update task %s into meta: %v", name, errors.ErrorStack(err))
-			log.Errorf(resp.Msg)
-		} else {
-			err = s.worker.StopSubTask(name)
-		}
-	case pb.TaskOp_Pause:
-		err = s.worker.PauseSubTask(name)
-	case pb.TaskOp_Resume:
-		err = s.worker.ResumeSubTask(name)
-	default:
-		resp.Msg = fmt.Sprintf("invalid operate %s on sub task", req.Op.String())
-		return resp, nil
-	}
-
+	opLogID, err := s.worker.OperateSubTask(req.Name, req.Op)
 	if err != nil {
-		log.Errorf("[server] operate(%s) sub task %s error %v", req.Op.String(), name, errors.ErrorStack(err))
-		resp.Msg = errors.ErrorStack(err)
-		return resp, nil
+		err = errors.Annotatef(err, "operate(%s) sub task %s", req.Op.String(), req.Name)
+		log.Errorf("[server] %s", errors.ErrorStack(err))
+		return nil, err
 	}
 
-	resp.Result = true
-	return resp, nil
+	return &pb.OperateSubTaskResponse{
+		Meta: &pb.CommonWorkerResponse{
+			Result: true,
+			Msg:    "",
+		},
+		Op:    req.Op,
+		LogID: opLogID,
+	}, nil
 }
 
 // UpdateSubTask implements WorkerServer.UpdateSubTask
-func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest) (*pb.CommonWorkerResponse, error) {
+func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
 	log.Infof("[server] receive UpdateSubTask request %+v", req)
-
 	cfg := config.NewSubTaskConfig()
 	err := cfg.Decode(req.Task)
 	if err != nil {
-		log.Errorf("[server] decode config from request %+v error %v", req.Task, errors.ErrorStack(err))
-		return &pb.CommonWorkerResponse{
-			Result: false,
-			Msg:    errors.ErrorStack(err),
-		}, nil
+		err = errors.Annotatef(err, "decode config from request %+v", req.Task)
+		log.Errorf("[server] %s", errors.ErrorStack(err))
+		return nil, err
 	}
 
-	if err = s.worker.meta.Set(cfg); err != nil {
-		errMsg := fmt.Sprintf("[server] update task %s into meta: %v", cfg, errors.ErrorStack(err))
-		log.Errorf(errMsg)
-		return &pb.CommonWorkerResponse{
-			Result: false,
-			Msg:    errMsg,
-		}, nil
-	}
-
-	err = s.worker.UpdateSubTask(cfg)
+	opLogID, err := s.worker.UpdateSubTask(cfg)
 	if err != nil {
-		log.Errorf("[server] update sub task %s error %v", cfg.Name, errors.ErrorStack(err))
-		return &pb.CommonWorkerResponse{
-			Result: false,
-			Msg:    errors.ErrorStack(err),
-		}, nil
+		err = errors.Annotatef(err, "update sub task %s", cfg.Name)
+		log.Errorf("[server] %s", errors.ErrorStack(err))
+		return nil, err
 	}
 
-	return &pb.CommonWorkerResponse{
-		Result: true,
-		Msg:    "",
+	return &pb.OperateSubTaskResponse{
+		Meta: &pb.CommonWorkerResponse{
+			Result: true,
+			Msg:    "",
+		},
+		Op:    pb.TaskOp_Update,
+		LogID: opLogID,
+	}, nil
+}
+
+// QueryTaskOperation implements WorkerServer.QueryTaskOperation
+func (s *Server) QueryTaskOperation(ctx context.Context, req *pb.QueryTaskOperationRequest) (*pb.QueryTaskOperationResponse, error) {
+	taskName := req.Name
+	opLogID := req.LogID
+
+	opLog, err := s.worker.meta.GetTaskLog(opLogID)
+	if err != nil {
+		err = errors.Annotatef(err, "fail to get operation info of task %s", taskName)
+		log.Error(err)
+		return nil, err
+	}
+
+	return &pb.QueryTaskOperationResponse{
+		Log: opLog,
+		Meta: &pb.CommonWorkerResponse{
+			Result: true,
+			Msg:    "",
+		},
 	}, nil
 }
 

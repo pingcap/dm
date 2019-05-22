@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package transformer
+package common
 
 import (
 	"github.com/pingcap/parser"
@@ -21,8 +21,8 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-// checkIsDDL checks input SQL whether is a valid DDL statement
-func checkIsDDL(sql string, p *parser.Parser) bool {
+// CheckIsDDL checks input SQL whether is a valid DDL statement
+func CheckIsDDL(sql string, p *parser.Parser) bool {
 	sql = utils.TrimCtrlChars(sql)
 
 	// if parse error, treat it as not a DDL

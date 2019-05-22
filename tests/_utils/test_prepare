@@ -33,3 +33,40 @@ fi
 function join_string() {
     local IFS="$1"; shift; echo "$*";
 }
+
+# shortcut for start task on one DM-worker
+function dmctl_start_task_standalone() {
+    if [ $# -ge 1 ]; then
+        task_conf=$1
+    else
+        task_conf="$cur/conf/dm-task.yaml"
+    fi
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-task $task_conf" \
+        "\"result\": true" 2 \
+        "\"worker\": \"127.0.0.1:$WORKER1_PORT\"" 1
+}
+
+# shortcut for start task on two DM-workers
+function dmctl_start_task() {
+    if [ $# -ge 1 ]; then
+        task_conf=$1
+    else
+        task_conf="$cur/conf/dm-task.yaml"
+    fi
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-task $task_conf" \
+        "\"result\": true" 3 \
+        "\"worker\": \"127.0.0.1:$WORKER1_PORT\"" 1 \
+        "\"worker\": \"127.0.0.1:$WORKER2_PORT\"" 1
+}
+
+# shortcut for stop task on two DM-workers
+function dmctl_stop_task() {
+    task_name=$1
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "stop-task $task_name" \
+        "\"result\": true" 3 \
+        "\"worker\": \"127.0.0.1:$WORKER1_PORT\"" 1 \
+        "\"worker\": \"127.0.0.1:$WORKER2_PORT\"" 1
+}

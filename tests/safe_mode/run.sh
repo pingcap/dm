@@ -22,7 +22,7 @@ function run() {
     run_dm_tracer $WORK_DIR/tracer $TRACER_PORT $cur/conf/dm-tracer.toml
     check_port_alive $TRACER_PORT
 
-    $cur/../bin/dmctl_start_task "$cur/conf/dm-task.yaml"
+    dmctl_start_task
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     # DM-worker exit during re-sync after sharding group synced
