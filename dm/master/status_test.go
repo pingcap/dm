@@ -70,6 +70,7 @@ func (t *testHTTPServer) TestStatus(c *check.C) {
 	statusURL := fmt.Sprintf("http://127.0.0.1%s/status", t.cfg.MasterAddr)
 	resp, err := http.Get(statusURL)
 	c.Assert(err, check.IsNil)
+	c.Assert(resp.StatusCode, check.Equals, http.StatusOK)
 	buf, err2 := ioutil.ReadAll(resp.Body)
 	c.Assert(err2, check.IsNil)
 	status := string(buf)
