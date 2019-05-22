@@ -90,3 +90,8 @@ func GetFilenameIndex(filename string) (float64, error) {
 func ConstructFilename(baseName, seq string) string {
 	return fmt.Sprintf("%s%s%s", baseName, binlogFilenameSep, seq)
 }
+
+// ConstructFilenameWithUUIDSuffix constructs a binlog filename with UUID suffix.
+func ConstructFilenameWithUUIDSuffix(originalName Filename, uuidSuffix string) string {
+	return fmt.Sprintf("%s%s%s%s%s", originalName.BaseName, posUUIDSuffixSeparator, uuidSuffix, binlogFilenameSep, originalName.Seq)
+}

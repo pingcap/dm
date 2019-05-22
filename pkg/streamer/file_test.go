@@ -19,7 +19,6 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -148,7 +147,7 @@ func (t *testFileSuite) TestCollectBinlogFilesCmp(c *C) {
 
 	// invalid base filename, is a meta filename
 	files, err = CollectBinlogFilesCmp(dir, baseFile, cmp)
-	c.Assert(err, ErrorMatches, ".*invalid binlog file name.*")
+	c.Assert(err, ErrorMatches, ".*invalid binlog filename.*")
 	c.Assert(files, IsNil)
 
 	// create some binlog files
@@ -201,29 +200,5 @@ func (t *testFileSuite) TestCollectBinlogFilesCmp(c *C) {
 		files, err = CollectBinlogFilesCmp(dir, baseFile, cmp)
 		c.Assert(err, ErrorMatches, ".*not supported.*")
 		c.Assert(files, IsNil)
-	}
-}
-
-func (t *testFileSuite) TestRealMySQLPos(c *C) {
-	var (
-		testCases = []struct {
-			pos    mysql.Position
-			expect mysql.Position
-			hasErr bool
-		}{
-			{mysql.Position{Name: "mysql-bin.000001", Pos: 154}, mysql.Position{Name: "mysql-bin.000001", Pos: 154}, false},
-			{mysql.Position{Name: "mysql-bin|000002.000003", Pos: 154}, mysql.Position{Name: "mysql-bin.000003", Pos: 154}, false},
-			{mysql.Position{Name: "", Pos: 154}, mysql.Position{Name: "", Pos: 154}, true},
-		}
-	)
-
-	for _, tc := range testCases {
-		pos, err := RealMySQLPos(tc.pos)
-		if tc.hasErr {
-			c.Assert(err, NotNil)
-		} else {
-			c.Assert(err, IsNil)
-		}
-		c.Assert(pos, DeepEquals, tc.expect)
 	}
 }

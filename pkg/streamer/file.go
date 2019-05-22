@@ -14,14 +14,12 @@
 package streamer
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/log"
@@ -31,8 +29,6 @@ import (
 var (
 	// ErrEmptyRelayDir means error about empty relay dir.
 	ErrEmptyRelayDir = errors.New("empty relay dir")
-	// binlog file name, base + `.` + seq
-	baseSeqSeparator = "."
 )
 
 // FileCmp is a compare condition used when collecting binlog files
@@ -126,38 +122,6 @@ func CollectBinlogFilesCmp(dir, baseFile string, cmp FileCmp) ([]string, error) 
 	}
 
 	return results, nil
-}
-
-// RealMySQLPos parses relay position and returns a mysql position and whether error occurs
-// if parsed successfully and `UUIDSuffix` exists, sets position Name to
-// `originalPos.NamePrefix + baseSeqSeparator + originalPos.NameSuffix`.
-// if parsed failed returns given position and the traced error.
-func RealMySQLPos(pos mysql.Position) (mysql.Position, error) {
-	parsed, err := binlog.ParseFilename(pos.Name)
-	if err != nil {
-		return pos, errors.Trace(err)
-	}
-
-	sepIdx := strings.Index(parsed.BaseName, posUUIDSuffixSeparator)
-	if sepIdx > 0 && sepIdx+len(posUUIDSuffixSeparator) < len(parsed.BaseName) {
-		return mysql.Position{
-			Name: fmt.Sprintf("%s%s%s", parsed.BaseName[:sepIdx], baseSeqSeparator, parsed.Seq),
-			Pos:  pos.Pos,
-		}, nil
-	}
-
-	return pos, nil
-}
-
-// [0-9] in string -> [48,57] in ascii
-func allAreDigits(s string) bool {
-	for _, r := range s {
-		if r >= 48 && r <= 57 {
-			continue
-		}
-		return false
-	}
-	return true
 }
 
 // readDir reads and returns all file(sorted asc) and dir names from directory f

@@ -22,7 +22,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -67,7 +67,7 @@ func (s *Syncer) setInitActiveRelayLog() error {
 	}
 
 	if extractPos {
-		activeUUID, _, pos, err = streamer.ExtractPos(pos, uuids)
+		activeUUID, _, pos, err = binlog.ExtractPos(pos, uuids)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -104,7 +104,7 @@ func (s *Syncer) updateActiveRelayLog(pos mysql.Position) error {
 		return errors.New("no valid relay sub directory exists")
 	}
 
-	activeUUID, _, pos, err := streamer.ExtractPos(pos, uuids)
+	activeUUID, _, pos, err := binlog.ExtractPos(pos, uuids)
 	if err != nil {
 		return errors.Trace(err)
 	}

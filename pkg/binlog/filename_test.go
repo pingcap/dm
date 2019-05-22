@@ -243,3 +243,21 @@ func (t *testFilenameSuite) TestConstructFilename(c *C) {
 		c.Assert(ConstructFilename(cs.baseName, cs.seq), Equals, cs.filename)
 	}
 }
+
+func (t *testFilenameSuite) TestConstructFilenameWithUUIDSuffix(c *C) {
+	cases := []struct {
+		originalName   Filename
+		suffix         string
+		withSuffixName string
+	}{
+		{
+			originalName:   Filename{"mysql-bin", "000001"},
+			suffix:         "666666",
+			withSuffixName: "mysql-bin|666666.000001",
+		},
+	}
+
+	for _, cs := range cases {
+		c.Assert(ConstructFilenameWithUUIDSuffix(cs.originalName, cs.suffix), Equals, cs.withSuffixName)
+	}
+}

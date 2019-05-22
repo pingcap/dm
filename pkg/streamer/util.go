@@ -15,61 +15,18 @@ package streamer
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path"
 	"path/filepath"
-	"strings"
 	"time"
 
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
-	"github.com/siddontang/go-mysql/mysql"
+	"github.com/pingcap/tidb-tools/pkg/watcher"
 
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
-	"github.com/pingcap/tidb-tools/pkg/watcher"
 )
-
-// ExtractPos extracts (uuidWithSuffix, uuidSuffix, originalPos) from input pos (originalPos or convertedPos)
-func ExtractPos(pos mysql.Position, uuids []string) (uuidWithSuffix string, uuidSuffix string, realPos mysql.Position, err error) {
-	if len(uuids) == 0 {
-		return "", "", pos, errors.NotValidf("empty UUIDs")
-	}
-
-	parsed, _ := binlog.ParseFilename(pos.Name)
-	sepIdx := strings.Index(parsed.BaseName, posUUIDSuffixSeparator)
-	if sepIdx > 0 && sepIdx+len(posUUIDSuffixSeparator) < len(parsed.BaseName) {
-		realBaseName, masterUUIDSuffix := parsed.BaseName[:sepIdx], parsed.BaseName[sepIdx+len(posUUIDSuffixSeparator):]
-		uuid := utils.GetUUIDBySuffix(uuids, masterUUIDSuffix)
-
-		if len(uuid) > 0 {
-			// valid UUID found
-			uuidWithSuffix = uuid
-			uuidSuffix = masterUUIDSuffix
-			realPos = mysql.Position{
-				Name: binlog.ConstructFilename(realBaseName, parsed.Seq),
-				Pos:  pos.Pos,
-			}
-		} else {
-			err = errors.NotFoundf("UUID suffix %s with UUIDs %v", masterUUIDSuffix, uuids)
-		}
-		return
-	}
-
-	// use the latest
-	var suffixInt int
-	uuid := uuids[len(uuids)-1]
-	_, suffixInt, err = utils.ParseSuffixForUUID(uuid)
-	if err != nil {
-		err = errors.Trace(err)
-		return
-	}
-	uuidWithSuffix = uuid
-	uuidSuffix = utils.SuffixIntToStr(suffixInt)
-	realPos = pos // pos is realPos
-	return
-}
 
 // getFirstBinlogName gets the first binlog file in relay sub directory
 func getFirstBinlogName(baseDir, uuid string) (string, error) {
@@ -222,11 +179,6 @@ func fileSizeUpdated(path string, latestSize int64) (int, error) {
 		log.Errorf("[streamer] size of relay log file %s has changed from %d to %d", path, latestSize, currSize)
 		return -1, nil
 	}
-}
-
-// constructPosName construct binlog file name with UUID suffix
-func constructBinlogName(originalName binlog.Filename, uuidSuffix string) string {
-	return fmt.Sprintf("%s%s%s%s%s", originalName.BaseName, posUUIDSuffixSeparator, uuidSuffix, baseSeqSeparator, originalName.Seq)
 }
 
 // getNextUUID gets (the nextUUID and its suffix) after the current UUID.

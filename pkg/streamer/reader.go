@@ -35,14 +35,6 @@ var (
 	ErrReaderRunning          = errors.New("binlog reader is already running")
 	ErrBinlogFileNotSpecified = errors.New("binlog file must be specified")
 
-	// in order to differ binlog pos from multi (switched) masters, we added a UUID-suffix field into binlogPos.Name
-	// and we also need support: with UUIDSuffix's pos should always > without UUIDSuffix's pos, so we can update from @without to @with automatically
-	// conversion: originalPos.NamePrefix + posUUIDSuffixSeparator + UUIDSuffix + baseSeqSeparator + originalPos.NameSuffix => convertedPos.Name
-	// UUIDSuffix is the suffix of sub relay directory name, and when new sub directory created, UUIDSuffix is incremented
-	// eg. mysql-bin.000003 in c6ae5afe-c7a3-11e8-a19d-0242ac130006.000002 => mysql-bin|000002.000003
-	// where `000002` in `c6ae5afe-c7a3-11e8-a19d-0242ac130006.000002` is the UUIDSuffix
-	posUUIDSuffixSeparator = "|"
-
 	// polling interval for watcher
 	watcherInterval = 100 * time.Millisecond
 )
@@ -159,7 +151,7 @@ func (r *BinlogReader) parseRelay(ctx context.Context, s *LocalStreamer, pos mys
 		}
 
 		// update pos, so can switch to next sub directory
-		pos.Name = constructBinlogName(parsed, uuidSuffix)
+		pos.Name = binlog.ConstructFilenameWithUUIDSuffix(parsed, uuidSuffix)
 		pos.Pos = 4 // start from pos 4 for next sub directory / file
 		log.Infof("[streamer] switching to next realy sub directory with UUID %s and pos %s", nextUUID, pos)
 	}
@@ -167,7 +159,7 @@ func (r *BinlogReader) parseRelay(ctx context.Context, s *LocalStreamer, pos mys
 
 // parseDirAsPossible parses relay sub directory as far as possible
 func (r *BinlogReader) parseDirAsPossible(ctx context.Context, s *LocalStreamer, pos mysql.Position) (needSwitch bool, nextUUID string, nextBinlogName string, err error) {
-	currentUUID, _, realPos, err := ExtractPos(pos, r.uuids)
+	currentUUID, _, realPos, err := binlog.ExtractPos(pos, r.uuids)
 	if err != nil {
 		return false, "", "", errors.Annotatef(err, "parse relay dir with pos %v", pos)
 	}
@@ -282,7 +274,7 @@ func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLog
 			// add master UUID suffix to pos.Name
 			env := e.Event.(*replication.RotateEvent)
 			parsed, _ := binlog.ParseFilename(string(env.NextLogName))
-			nameWithSuffix := constructBinlogName(parsed, uuidSuffix)
+			nameWithSuffix := binlog.ConstructFilenameWithUUIDSuffix(parsed, uuidSuffix)
 			env.NextLogName = []byte(nameWithSuffix)
 
 			if e.Header.Timestamp != 0 && e.Header.LogPos != 0 {

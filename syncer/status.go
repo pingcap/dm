@@ -14,13 +14,13 @@
 package syncer
 
 import (
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/gtid"
-	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -57,7 +57,7 @@ func (s *Syncer) Status() interface{} {
 	// If a syncer unit is waiting for relay log catch up, it has not executed
 	// LoadMeta and will return a parsed binlog name error. As we can find mysql
 	// position in syncer status, we record this error only in debug level.
-	realPos, err := streamer.RealMySQLPos(syncerPos)
+	realPos, err := binlog.RealMySQLPos(syncerPos)
 	if err != nil {
 		log.Debugf("[syncer] parse real mysql position err %v", err)
 	}
