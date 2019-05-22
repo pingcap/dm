@@ -49,9 +49,8 @@ func GenCommonFileHeader(flavor string, serverID uint32, gSet gtid.Set) ([]*repl
 			ServerID:  serverID,
 			Flags:     defaultHeaderFlags,
 		}
-		latestPos       = uint32(len(replication.BinLogFileHeader))
-		prevGTIDsEv     *replication.BinlogEvent // for MySQL, this will be nil
-		prevGTIDsEvData []byte
+		latestPos   = uint32(len(replication.BinLogFileHeader))
+		prevGTIDsEv *replication.BinlogEvent // for MySQL, this will be a GenericEvent
 	)
 
 	formatDescEv, err := GenFormatDescriptionEvent(header, latestPos)
@@ -62,12 +61,9 @@ func GenCommonFileHeader(flavor string, serverID uint32, gSet gtid.Set) ([]*repl
 
 	switch flavor {
 	case gmysql.MySQLFlavor:
-		prevGTIDsEvData, err = GenPreviousGTIDsEvent(header, latestPos, gSet)
+		prevGTIDsEv, err = GenPreviousGTIDsEvent(header, latestPos, gSet)
 	case gmysql.MariaDBFlavor:
 		prevGTIDsEv, err = GenMariaDBGTIDListEvent(header, latestPos, gSet)
-		if err == nil {
-			prevGTIDsEvData = prevGTIDsEv.RawData
-		}
 	default:
 		return nil, nil, errors.NotSupportedf("flavor %s", flavor)
 	}
@@ -84,9 +80,9 @@ func GenCommonFileHeader(flavor string, serverID uint32, gSet gtid.Set) ([]*repl
 	if err != nil {
 		return nil, nil, errors.Annotatef(err, "write FormatDescriptionEvent % X", formatDescEv.RawData)
 	}
-	_, err = buf.Write(prevGTIDsEvData)
+	_, err = buf.Write(prevGTIDsEv.RawData)
 	if err != nil {
-		return nil, nil, errors.Annotatef(err, "write PreviousGTIDsEvent/MariadbGTIDListEvent % X", prevGTIDsEvData)
+		return nil, nil, errors.Annotatef(err, "write PreviousGTIDsEvent/MariadbGTIDListEvent % X", prevGTIDsEv.RawData)
 	}
 
 	events := []*replication.BinlogEvent{formatDescEv, prevGTIDsEv}

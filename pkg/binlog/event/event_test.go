@@ -172,7 +172,7 @@ func (t *testEventSuite) TestGenPreviousGTIDsEvent(c *C) {
 	gSet, err := gtid.ParserGTID(gmysql.MySQLFlavor, str)
 	c.Assert(err, IsNil)
 
-	previousGTIDData, err := GenPreviousGTIDsEvent(header, latestPos, gSet)
+	previousGTIDsEv, err := GenPreviousGTIDsEvent(header, latestPos, gSet)
 	c.Assert(err, IsNil)
 
 	dir := c.MkDir()
@@ -190,7 +190,7 @@ func (t *testEventSuite) TestGenPreviousGTIDsEvent(c *C) {
 	c.Assert(err, IsNil)
 
 	// write the PreviousGTIDsEvent
-	_, err = f1.Write(previousGTIDData)
+	_, err = f1.Write(previousGTIDsEv.RawData)
 	c.Assert(err, IsNil)
 
 	var count = 0
@@ -203,7 +203,7 @@ func (t *testEventSuite) TestGenPreviousGTIDsEvent(c *C) {
 			c.Assert(e.RawData, DeepEquals, formatDescEv.RawData)
 		case 2: // PreviousGTIDsEvent
 			c.Assert(e.Header.EventType, Equals, replication.PREVIOUS_GTIDS_EVENT)
-			c.Assert(e.RawData, DeepEquals, previousGTIDData)
+			c.Assert(e.RawData, DeepEquals, previousGTIDsEv.RawData)
 		default:
 			c.Fatalf("too many binlog events got, current is %+v", e.Header)
 		}
@@ -220,7 +220,7 @@ func (t *testEventSuite) TestGenPreviousGTIDsEvent(c *C) {
 	gSet, err = gtid.ParserGTID(gmysql.MySQLFlavor, str)
 	c.Assert(err, IsNil)
 
-	previousGTIDData, err = GenPreviousGTIDsEvent(header, latestPos, gSet)
+	previousGTIDsEv, err = GenPreviousGTIDsEvent(header, latestPos, gSet)
 	c.Assert(err, IsNil)
 
 	// write another file
@@ -238,7 +238,7 @@ func (t *testEventSuite) TestGenPreviousGTIDsEvent(c *C) {
 	c.Assert(err, IsNil)
 
 	// write the PreviousGTIDsEvent
-	_, err = f2.Write(previousGTIDData)
+	_, err = f2.Write(previousGTIDsEv.RawData)
 	c.Assert(err, IsNil)
 
 	count = 0 // reset count
@@ -271,9 +271,9 @@ func (t *testEventSuite) TestGenGTIDEvent(c *C) {
 	// also needing a PreviousGTIDsEvent after FormatDescriptionEvent
 	gSet, err := gtid.ParserGTID(gmysql.MySQLFlavor, prevGTIDsStr)
 	c.Assert(err, IsNil)
-	previousGTIDData, err := GenPreviousGTIDsEvent(header, latestPos, gSet)
+	previousGTIDsEv, err := GenPreviousGTIDsEvent(header, latestPos, gSet)
 	c.Assert(err, IsNil)
-	latestPos += uint32(len(previousGTIDData)) // update latestPos
+	latestPos = previousGTIDsEv.Header.LogPos // update latestPos
 
 	gtidEv, err := GenGTIDEvent(header, latestPos, gtidFlags, uuid, gno, lastCommitted, lastCommitted+1)
 	c.Assert(err, IsNil)
@@ -303,7 +303,7 @@ func (t *testEventSuite) TestGenGTIDEvent(c *C) {
 	c.Assert(err, IsNil)
 	_, err = f.Write(formatDescEv.RawData)
 	c.Assert(err, IsNil)
-	_, err = f.Write(previousGTIDData)
+	_, err = f.Write(previousGTIDsEv.RawData)
 	c.Assert(err, IsNil)
 
 	// write GTIDEvent.
@@ -320,7 +320,7 @@ func (t *testEventSuite) TestGenGTIDEvent(c *C) {
 			c.Assert(e.RawData, DeepEquals, formatDescEv.RawData)
 		case 2: // PreviousGTIDsEvent
 			c.Assert(e.Header.EventType, Equals, replication.PREVIOUS_GTIDS_EVENT)
-			c.Assert(e.RawData, DeepEquals, previousGTIDData)
+			c.Assert(e.RawData, DeepEquals, previousGTIDsEv.RawData)
 		case 3: // GTIDEvent
 			c.Assert(e.Header.EventType, Equals, replication.GTID_EVENT)
 			c.Assert(e.RawData, DeepEquals, gtidEv.RawData)
@@ -715,4 +715,73 @@ func (t *testEventSuite) TestGenMariaDBGTIDEvent(c *C) {
 	c.Assert(gtidEvBody, NotNil)
 	c.Assert(gtidEvBody.GTID.SequenceNumber, Equals, seqNum)
 	c.Assert(gtidEvBody.GTID.DomainID, Equals, domainID)
+}
+
+func (t *testEventSuite) TestGenDummyEvent(c *C) {
+	var (
+		header = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+			Flags:     replication.LOG_EVENT_THREAD_SPECIFIC_F | replication.LOG_EVENT_BINLOG_IN_USE_F,
+		}
+		expectedHeader = &replication.EventHeader{
+			Timestamp: uint32(time.Now().Unix()),
+			ServerID:  11,
+			Flags:     replication.LOG_EVENT_SUPPRESS_USE_F | replication.LOG_EVENT_RELAY_LOG_F | replication.LOG_EVENT_BINLOG_IN_USE_F,
+		}
+		latestPos uint32 = 4
+	)
+
+	// too small event size
+	eventSize := MinUserVarEventLen - 1
+	userVarEv, err := GenDummyEvent(header, latestPos, eventSize)
+	c.Assert(err, ErrorMatches, ".*is too small.*")
+	c.Assert(userVarEv, IsNil)
+
+	// minimum event size, USER_VAR_EVENT with name-length==1
+	eventSize = MinUserVarEventLen
+	userVarEv, err = GenDummyEvent(header, latestPos, eventSize)
+	c.Assert(err, IsNil)
+	c.Assert(userVarEv, NotNil)
+	// verify the header
+	verifyHeader(c, userVarEv.Header, expectedHeader, replication.USER_VAR_EVENT, latestPos, uint32(len(userVarEv.RawData)))
+	// verify the body
+	nameStart := uint32(eventHeaderLen + 4)
+	nameEnd := uint32(eventSize-1) - crc32Len
+	nameLen := nameEnd - nameStart
+	c.Assert(nameLen, Equals, uint32(1)) // name-length==1
+	c.Assert(userVarEv.RawData[nameStart:nameEnd], DeepEquals, dummyUserVarName[:nameLen])
+	c.Assert(userVarEv.RawData[nameEnd:nameEnd+1], DeepEquals, []byte{0x01}) // is-null always 1
+
+	// minimum, .., equal dummy query, longer, ...
+	dummyQueryLen := uint32(len(dummyQuery))
+	eventSizeList := []uint32{MinQueryEventLen, MinQueryEventLen + 5,
+		MinQueryEventLen + dummyQueryLen - 1, MinQueryEventLen + dummyQueryLen, MinQueryEventLen + dummyQueryLen + 10}
+	for _, eventSize = range eventSizeList {
+		queryEv, err := GenDummyEvent(header, latestPos, eventSize)
+		c.Assert(err, IsNil)
+		c.Assert(queryEv, NotNil)
+		// verify the header
+		verifyHeader(c, queryEv.Header, expectedHeader, replication.QUERY_EVENT, latestPos, uint32(len(queryEv.RawData)))
+		// verify the body
+		queryEvBody, ok := queryEv.Event.(*replication.QueryEvent)
+		c.Assert(ok, IsTrue)
+		c.Assert(queryEvBody, NotNil)
+		c.Assert(queryEvBody.SlaveProxyID, Equals, uint32(0))
+		c.Assert(queryEvBody.ExecutionTime, Equals, uint32(0))
+		c.Assert(queryEvBody.ErrorCode, Equals, uint16(0))
+		c.Assert(queryEvBody.StatusVars, DeepEquals, []byte{})
+		c.Assert(queryEvBody.Schema, DeepEquals, []byte{})
+		queryStart := uint32(eventHeaderLen + 4 + 4 + 1 + 2 + 2 + 1)
+		queryEnd := uint32(eventSize) - crc32Len
+		queryLen := queryEnd - queryStart
+		c.Assert(queryEvBody.Query, HasLen, int(queryLen))
+		if queryLen <= dummyQueryLen {
+			c.Assert(queryEvBody.Query, DeepEquals, dummyQuery[:queryLen])
+		} else {
+			c.Assert(queryEvBody.Query[:dummyQueryLen], DeepEquals, dummyQuery)
+			zeroTail := make([]byte, queryLen-dummyQueryLen)
+			c.Assert(queryEvBody.Query[dummyQueryLen:], DeepEquals, zeroTail)
+		}
+	}
 }

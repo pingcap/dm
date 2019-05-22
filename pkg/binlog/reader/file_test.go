@@ -26,6 +26,7 @@ import (
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
+	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/gtid"
 )
@@ -52,15 +53,15 @@ func (t *testFileReaderSuite) TestInterfaceMethods(c *C) {
 	status := r.Status()
 	frStatus, ok := status.(*FileReaderStatus)
 	c.Assert(ok, IsTrue)
-	c.Assert(frStatus.Stage, Equals, stageNew.String())
+	c.Assert(frStatus.Stage, Equals, common.StageNew.String())
 	c.Assert(frStatus.ReadOffset, Equals, uint32(0))
 	c.Assert(frStatus.SendOffset, Equals, uint32(0))
 	frStatusStr := frStatus.String()
-	c.Assert(frStatusStr, Matches, fmt.Sprintf(`.*"stage":"%s".*`, stageNew))
+	c.Assert(frStatusStr, Matches, fmt.Sprintf(`.*"stage":"%s".*`, common.StageNew))
 
 	// not prepared
 	e, err := r.GetEvent(timeoutCtx)
-	c.Assert(err, ErrorMatches, fmt.Sprintf(".*%s.*", stageNew))
+	c.Assert(err, ErrorMatches, fmt.Sprintf(".*%s.*", common.StageNew))
 	c.Assert(e, IsNil)
 
 	// by GTID, not supported yet
@@ -75,7 +76,7 @@ func (t *testFileReaderSuite) TestInterfaceMethods(c *C) {
 	status = r.Status()
 	frStatus, ok = status.(*FileReaderStatus)
 	c.Assert(ok, IsTrue)
-	c.Assert(frStatus.Stage, Equals, stagePrepared.String())
+	c.Assert(frStatus.Stage, Equals, common.StagePrepared.String())
 	c.Assert(frStatus.ReadOffset, Equals, uint32(0))
 	c.Assert(frStatus.SendOffset, Equals, uint32(0))
 
@@ -95,7 +96,7 @@ func (t *testFileReaderSuite) TestInterfaceMethods(c *C) {
 	status = r.Status()
 	frStatus, ok = status.(*FileReaderStatus)
 	c.Assert(ok, IsTrue)
-	c.Assert(frStatus.Stage, Equals, stageClosed.String())
+	c.Assert(frStatus.Stage, Equals, common.StageClosed.String())
 	c.Assert(frStatus.ReadOffset, Equals, uint32(0))
 	c.Assert(frStatus.SendOffset, Equals, uint32(0))
 
@@ -170,7 +171,7 @@ func (t *testFileReaderSuite) TestGetEvent(c *C) {
 	status := r.Status()
 	frStatus, ok := status.(*FileReaderStatus)
 	c.Assert(ok, IsTrue)
-	c.Assert(frStatus.Stage, Equals, stageClosed.String())
+	c.Assert(frStatus.Stage, Equals, common.StageClosed.String())
 	c.Assert(frStatus.ReadOffset, Equals, fSize)
 	c.Assert(frStatus.SendOffset, Equals, fSize)
 
@@ -266,7 +267,7 @@ func (t *testFileReaderSuite) TestWithChannelBuffer(c *C) {
 	status := r.Status()
 	frStatus, ok := status.(*FileReaderStatus)
 	c.Assert(ok, IsTrue)
-	c.Assert(frStatus.Stage, Equals, stagePrepared.String())
+	c.Assert(frStatus.Stage, Equals, common.StagePrepared.String())
 	c.Assert(frStatus.ReadOffset, Equals, readOffset)
 	c.Assert(frStatus.SendOffset, Equals, uint32(0)) // no event sent yet
 
@@ -282,7 +283,7 @@ func (t *testFileReaderSuite) TestWithChannelBuffer(c *C) {
 	status = r.Status()
 	frStatus, ok = status.(*FileReaderStatus)
 	c.Assert(ok, IsTrue)
-	c.Assert(frStatus.Stage, Equals, stagePrepared.String())
+	c.Assert(frStatus.Stage, Equals, common.StagePrepared.String())
 	c.Assert(frStatus.ReadOffset, Equals, readOffset)
 	c.Assert(frStatus.SendOffset, Equals, formatDescEv.Header.LogPos) // already get formatDescEv
 
