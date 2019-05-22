@@ -111,7 +111,7 @@ func (t *testRelay) testClose(c *C, holder *RealRelayHolder) {
 	processResult := &pb.ProcessResult{
 		IsCanceled: true,
 		Errors: []*pb.ProcessError{
-			&pb.ProcessError{
+			{
 				Msg: "process error",
 			},
 		},
