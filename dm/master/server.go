@@ -230,14 +230,9 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 				return
 			}
 			workerResp, err := cli.StartSubTask(ctx, &pb.StartSubTaskRequest{Task: stCfgToml})
-			if err != nil {
-				workerResp = &pb.CommonWorkerResponse{
-					Result: false,
-					Msg:    errors.ErrorStack(err),
-				}
-			}
-			workerResp.Worker = worker
-			workerRespCh <- workerResp
+			workerResp = s.handleOperationResult(ctx, cli, stCfg.Name, err, workerResp)
+			workerResp.Meta.Worker = worker
+			workerRespCh <- workerResp.Meta
 		}(stCfg)
 	}
 	wg.Wait()
@@ -302,23 +297,20 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 			cli, ok := s.workerClients[worker]
 			if !ok {
 				workerResp := &pb.OperateSubTaskResponse{
-					Op:     req.Op,
-					Result: false,
-					Worker: worker,
-					Msg:    fmt.Sprintf("%s relevant worker-client not found", worker),
+					Meta: &pb.CommonWorkerResponse{
+						Result: false,
+						Worker: worker,
+						Msg:    fmt.Sprintf("%s relevant worker-client not found", worker),
+					},
+					Op: req.Op,
 				}
 				workerRespCh <- workerResp
 				return
 			}
 			workerResp, err := cli.OperateSubTask(ctx, subReq)
-			if err != nil {
-				workerResp = &pb.OperateSubTaskResponse{
-					Result: false,
-					Msg:    errors.ErrorStack(err),
-				}
-			}
+			workerResp = s.handleOperationResult(ctx, cli, req.Name, err, workerResp)
 			workerResp.Op = req.Op
-			workerResp.Worker = worker
+			workerResp.Meta.Worker = worker
 			workerRespCh <- workerResp
 		}(worker)
 	}
@@ -328,9 +320,9 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 	workerRespMap := make(map[string]*pb.OperateSubTaskResponse, len(workers))
 	for len(workerRespCh) > 0 {
 		workerResp := <-workerRespCh
-		workerRespMap[workerResp.Worker] = workerResp
-		if len(workerResp.Msg) == 0 { // no error occurred
-			validWorkers = append(validWorkers, workerResp.Worker)
+		workerRespMap[workerResp.Meta.Worker] = workerResp
+		if len(workerResp.Meta.Msg) == 0 { // no error occurred
+			validWorkers = append(validWorkers, workerResp.Meta.Worker)
 		}
 	}
 
@@ -413,14 +405,9 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 				return
 			}
 			workerResp, err := cli.UpdateSubTask(ctx, &pb.UpdateSubTaskRequest{Task: stCfgToml})
-			if err != nil {
-				workerResp = &pb.CommonWorkerResponse{
-					Result: false,
-					Msg:    errors.ErrorStack(err),
-				}
-			}
-			workerResp.Worker = worker
-			workerRespCh <- workerResp
+			workerResp = s.handleOperationResult(ctx, cli, stCfg.Name, err, workerResp)
+			workerResp.Meta.Worker = worker
+			workerRespCh <- workerResp.Meta
 		}(stCfg)
 	}
 	wg.Wait()
@@ -1713,4 +1700,58 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 	}
 
 	return cfg, stCfgs, nil
+}
+
+var (
+	maxRetryNum   = 30
+	retryInterval = time.Second
+)
+
+func (s *Server) waitOperationOk(ctx context.Context, cli pb.WorkerClient, name string, opLogID int64) error {
+	request := &pb.QueryTaskOperationRequest{
+		Name:  name,
+		LogID: opLogID,
+	}
+
+	for num := 0; num < maxRetryNum; num++ {
+		res, err := cli.QueryTaskOperation(ctx, request)
+		if err != nil {
+			log.Errorf("fail to query task operation %v", err)
+		} else if res.Log.Success {
+			return nil
+		} else if len(res.Log.Message) != 0 {
+			return errors.New(res.Log.Message)
+		}
+
+		log.Infof("wait task %s op log %d, current result %+v", name, opLogID, res)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(retryInterval):
+		}
+
+	}
+
+	return errors.New("request is timeout, but request may be successful")
+}
+
+func (s *Server) handleOperationResult(ctx context.Context, cli pb.WorkerClient, name string, err error, response *pb.OperateSubTaskResponse) *pb.OperateSubTaskResponse {
+	if err != nil {
+		return &pb.OperateSubTaskResponse{
+			Meta: &pb.CommonWorkerResponse{
+				Result: false,
+				Msg:    errors.ErrorStack(err),
+			},
+		}
+	}
+
+	err = s.waitOperationOk(ctx, cli, name, response.LogID)
+	if err != nil {
+		response.Meta = &pb.CommonWorkerResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}
+	}
+
+	return response
 }

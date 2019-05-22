@@ -30,6 +30,8 @@ require (
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.3 // indirect
 	golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a
+	github.com/syndtr/goleveldb v1.0.0
+	golang.org/x/crypto v0.0.0-20190103213133-ff983b9c42bc // indirect
 	google.golang.org/grpc v1.17.0
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
