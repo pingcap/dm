@@ -41,7 +41,6 @@ func VerifySQLOperateArgs(binlogPosStr, sqlPattern string, sharding bool) (*mysq
 	var (
 		pos *mysql.Position
 		reg *regexp.Regexp
-		err error
 	)
 
 	if len(binlogPosStr) > 0 && len(sqlPattern) > 0 {
@@ -62,6 +61,7 @@ func VerifySQLOperateArgs(binlogPosStr, sqlPattern string, sharding bool) (*mysq
 			pattern = "^" + regexp.QuoteMeta(sqlPattern) + "$"
 		}
 
+		var err error
 		reg, err = regexp.Compile(pattern)
 		if err != nil {
 			return nil, nil, errors.Annotatef(err, "invalid --sql-pattern %s in sql operation", sqlPattern)

@@ -103,7 +103,7 @@ func (t *testLog) TestTaskLog(c *C) {
 
 	c.Assert(logger.Append(db, taskLog1), IsNil)
 	c.Assert(taskLog1.Id, Equals, int64(1))
-	c.Assert(taskLog1.Ts > 0, IsTrue)
+	c.Assert(taskLog1.Ts, Greater, int64(0))
 	c.Assert(taskLog1.Task.Name, Equals, "task1")
 
 	taskLog2 := &pb.TaskLog{
@@ -113,7 +113,7 @@ func (t *testLog) TestTaskLog(c *C) {
 
 	c.Assert(logger.Append(db, taskLog2), IsNil)
 	c.Assert(taskLog2.Id, Equals, int64(2))
-	c.Assert(taskLog2.Ts > 0, IsTrue)
+	c.Assert(taskLog2.Ts, Greater, int64(0))
 	c.Assert(taskLog2.Task.Name, Equals, "task1")
 
 	// try to get log
@@ -178,7 +178,7 @@ func (t *testLog) TestTaskLog(c *C) {
 
 	c.Assert(logger.Append(db, taskLog3), IsNil)
 	c.Assert(taskLog3.Id, Equals, int64(3))
-	c.Assert(taskLog3.Ts > 0, IsTrue)
+	c.Assert(taskLog3.Ts, Greater, int64(0))
 	c.Assert(taskLog3.Task.Name, Equals, "task1")
 	c.Assert(logger.endPointer.Location, Equals, int64(4))
 	c.Assert(logger.handledPointer.Location, Equals, int64(2))

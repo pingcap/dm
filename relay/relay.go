@@ -180,7 +180,7 @@ func (r *Relay) Init() (err error) {
 		return errors.Trace(err)
 	}
 	r.db = db
-	rollbackHolder.Add(fr.FuncRollback{"close-DB", r.closeDB})
+	rollbackHolder.Add(fr.FuncRollback{Name: "close-DB", Fn: r.closeDB})
 
 	if err2 := os.MkdirAll(r.cfg.RelayDir, 0755); err2 != nil {
 		return errors.Trace(err2)
@@ -948,24 +948,6 @@ func (r *Relay) Close() {
 	log.Info("[relay] relay unit closed")
 }
 
-func (r *Relay) closeBinlogSyncer(syncer *replication.BinlogSyncer) error {
-	if syncer == nil {
-		return nil
-	}
-
-	defer syncer.Close()
-	lastSlaveConnectionID := syncer.LastConnectionID()
-	if lastSlaveConnectionID > 0 {
-		err := utils.KillConn(r.db, lastSlaveConnectionID)
-		if err != nil {
-			if !utils.IsNoSuchThreadError(err) {
-				return errors.Annotatef(err, "connection ID %d", lastSlaveConnectionID)
-			}
-		}
-	}
-	return nil
-}
-
 // Status implements the dm.Unit interface.
 func (r *Relay) Status() interface{} {
 	masterPos, masterGTID, err := utils.GetMasterStatus(r.db, r.cfg.Flavor)
@@ -1047,7 +1029,7 @@ func (r *Relay) Reload(newCfg *Config) error {
 	// Update Charset
 	r.cfg.Charset = newCfg.Charset
 
-	r.db.Close()
+	r.closeDB()
 	cfg := r.cfg.From
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&readTimeout=%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, showStatusConnectionTimeout)
 	db, err := sql.Open("mysql", dbDSN)

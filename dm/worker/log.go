@@ -288,7 +288,6 @@ func (logger *Logger) Append(db Putter, opLog *pb.TaskLog) error {
 func (logger *Logger) GC(ctx context.Context, db *leveldb.DB) {
 	ticker := time.NewTicker(GCInterval)
 	defer ticker.Stop()
-
 	for {
 		select {
 		case <-ctx.Done():
