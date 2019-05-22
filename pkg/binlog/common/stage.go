@@ -11,24 +11,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package reader
+package common
 
-type readerStage int32
+// Stage represents a stage for some binlog related objects, like Writer.Reader.
+type Stage int32
 
+// valid stages for binlog related objects.
 const (
-	stageNew readerStage = iota
-	stagePrepared
-	stageClosed
+	StageNew Stage = iota
+	StagePrepared
+	StageClosed
 )
 
 // String implements Stringer.String.
-func (s readerStage) String() string {
+func (s Stage) String() string {
 	switch s {
-	case stageNew:
+	case StageNew:
 		return "new"
-	case stagePrepared:
+	case StagePrepared:
 		return "prepared"
-	case stageClosed:
+	case StageClosed:
 		return "closed"
 	default:
 		return "unknown"

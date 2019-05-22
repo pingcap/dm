@@ -21,6 +21,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
+	"github.com/pingcap/dm/pkg/binlog/common"
 	br "github.com/pingcap/dm/pkg/binlog/reader"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
@@ -58,7 +59,7 @@ type reader struct {
 	cfg *Config
 
 	mu    sync.RWMutex
-	stage readerStage
+	stage common.Stage
 
 	in  br.Reader // the underlying reader used to read binlog events.
 	out chan *replication.BinlogEvent
@@ -78,10 +79,10 @@ func (r *reader) Start() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.stage != stageNew {
-		return errors.Errorf("stage %s, expect %s, already started", r.stage, stageNew)
+	if r.stage != common.StageNew {
+		return errors.Errorf("stage %s, expect %s, already started", r.stage, common.StageNew)
 	}
-	r.stage = stagePrepared
+	r.stage = common.StagePrepared
 
 	defer func() {
 		status := r.in.Status()
@@ -103,12 +104,12 @@ func (r *reader) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.stage == stageClosed {
-		return errors.New("already closed")
+	if r.stage != common.StagePrepared {
+		return errors.Errorf("stage %s, expect %s, can not close", r.stage, common.StagePrepared)
 	}
-	r.stage = stageClosed
 
 	err := r.in.Close()
+	r.stage = common.StageClosed
 	return errors.Trace(err)
 }
 
@@ -119,8 +120,8 @@ func (r *reader) GetEvent(ctx context.Context) (*replication.BinlogEvent, error)
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	if r.stage != stagePrepared {
-		return nil, errors.Errorf("stage %s, expect %s, please start the reader first", r.stage, stagePrepared)
+	if r.stage != common.StagePrepared {
+		return nil, errors.Errorf("stage %s, expect %s, please start the reader first", r.stage, common.StagePrepared)
 	}
 
 	for {
