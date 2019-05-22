@@ -22,7 +22,9 @@ require (
 	github.com/soheilhy/cmux v0.1.4
 	github.com/spf13/cobra v0.0.4
 	github.com/syndtr/goleveldb v1.0.0
-	golang.org/x/sys v0.0.0-20190523142557-0e01d883c5c5
+	golang.org/x/crypto v0.0.0-20190103213133-ff983b9c42bc // indirect
+	golang.org/x/sys v0.0.0-20190422165155-953cdadca894
+	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 	google.golang.org/grpc v1.17.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.2.2

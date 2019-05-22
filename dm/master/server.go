@@ -80,6 +80,9 @@ func NewServer(cfg *Config) *Server {
 		sqlOperatorHolder: operator.NewHolder(),
 		idGen:             tracing.NewIDGen(),
 	}
+
+	InitAgentPool(&RateLimitConfig{rate: defalutRate, burst: defaultBurst})
+
 	return &server
 }
 
@@ -183,6 +186,14 @@ func (s *Server) Close() {
 	s.closed.Set(true)
 }
 
+func errorCommonWorkerResponse(msg string, worker string) *pb.CommonWorkerResponse {
+	return &pb.CommonWorkerResponse{
+		Result: false,
+		Worker: worker,
+		Msg:    msg,
+	}
+}
+
 // StartTask implements MasterServer.StartTask
 func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.StartTaskResponse, error) {
 	log.Infof("[server] receive StartTask request %+v", req)
@@ -211,11 +222,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 			if stCfg, ok := workerCfg[worker]; ok {
 				stCfgs = append(stCfgs, stCfg)
 			} else {
-				workerRespCh <- &pb.CommonWorkerResponse{
-					Result: false,
-					Worker: worker,
-					Msg:    "worker not found in task's config or deployment config",
-				}
+				workerRespCh <- errorCommonWorkerResponse("worker not found in task's config or deployment config", worker)
 			}
 		}
 	}
@@ -224,32 +231,27 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 	var wg sync.WaitGroup
 	for _, stCfg := range stCfgs {
 		wg.Add(1)
-		go func(stCfg *config.SubTaskConfig) {
+		go Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
-			worker, ok1 := s.cfg.DeployMap[stCfg.SourceID]
-			cli, ok2 := s.workerClients[worker]
-			if !ok1 || !ok2 {
-				workerRespCh <- &pb.CommonWorkerResponse{
-					Result: false,
-					Msg:    fmt.Sprintf("%s relevant worker not found", stCfg.SourceID),
-				}
+			cli, worker, stCfgToml, taskName, ok := s.taskConfigArgsExtractor(workerRespCh, args...)
+			if !ok {
 				return
 			}
 			validWorkerCh <- worker
-			stCfgToml, err := stCfg.Toml() // convert to TOML format
-			if err != nil {
-				workerRespCh <- &pb.CommonWorkerResponse{
-					Result: false,
-					Worker: worker,
-					Msg:    errors.ErrorStack(err),
-				}
-				return
-			}
-			workerResp, err := cli.StartSubTask(ctx, &pb.StartSubTaskRequest{Task: stCfgToml})
-			workerResp = s.handleOperationResult(ctx, cli, stCfg.Name, err, workerResp)
+			ctx2, cancel := context.WithTimeout(ctx, s.cfg.RPCTimeout)
+			defer cancel()
+			workerResp, err := cli.StartSubTask(ctx2, &pb.StartSubTaskRequest{Task: stCfgToml})
+			workerResp = s.handleOperationResult(ctx, cli, taskName, err, workerResp)
 			workerResp.Meta.Worker = worker
 			workerRespCh <- workerResp.Meta
-		}(stCfg)
+		}, func(args ...interface{}) {
+			defer wg.Done()
+			_, worker, _, _, ok := s.taskConfigArgsExtractor(workerRespCh, args...)
+			if !ok {
+				return
+			}
+			workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf(errorNoEmitToken, worker), worker)
+		}, stCfg)
 	}
 	wg.Wait()
 
@@ -299,36 +301,47 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 	if len(req.Workers) > 0 {
 		workers = req.Workers // specify only do operation on partial dm-workers
 	}
+	workerRespCh := make(chan *pb.OperateSubTaskResponse, len(workers))
+
+	handleErr := func(err error, worker string) {
+		log.Error(err)
+		workerResp := &pb.OperateSubTaskResponse{
+			Meta: errorCommonWorkerResponse(err.Error(), worker),
+			Op:   req.Op,
+		}
+		workerRespCh <- workerResp
+	}
 
 	subReq := &pb.OperateSubTaskRequest{
 		Op:   req.Op,
 		Name: req.Name,
 	}
-	workerRespCh := make(chan *pb.OperateSubTaskResponse, len(workers))
 	var wg sync.WaitGroup
 	for _, worker := range workers {
 		wg.Add(1)
-		go func(worker string) {
+		go Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
-			cli, ok := s.workerClients[worker]
-			if !ok {
-				workerResp := &pb.OperateSubTaskResponse{
-					Meta: &pb.CommonWorkerResponse{
-						Result: false,
-						Worker: worker,
-						Msg:    fmt.Sprintf("%s relevant worker-client not found", worker),
-					},
-					Op: req.Op,
-				}
-				workerRespCh <- workerResp
+			cli, worker1, err := s.workerArgsExtractor(args...)
+			if err != nil {
+				handleErr(err, worker1)
 				return
 			}
-			workerResp, err := cli.OperateSubTask(ctx, subReq)
+			ctx2, cancel := context.WithTimeout(ctx, s.cfg.RPCTimeout)
+			defer cancel()
+			workerResp, err := cli.OperateSubTask(ctx2, subReq)
 			workerResp = s.handleOperationResult(ctx, cli, req.Name, err, workerResp)
 			workerResp.Op = req.Op
-			workerResp.Meta.Worker = worker
+			workerResp.Meta.Worker = worker1
 			workerRespCh <- workerResp
-		}(worker)
+		}, func(args ...interface{}) {
+			defer wg.Done()
+			_, worker1, err := s.workerArgsExtractor(args...)
+			if err != nil {
+				handleErr(err, worker1)
+				return
+			}
+			handleErr(errors.Errorf(errorNoEmitToken, worker1), worker1)
+		}, worker)
 	}
 	wg.Wait()
 
@@ -388,11 +401,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 			if stCfg, ok := workerCfg[worker]; ok {
 				stCfgs = append(stCfgs, stCfg)
 			} else {
-				workerRespCh <- &pb.CommonWorkerResponse{
-					Result: false,
-					Worker: worker,
-					Msg:    "worker not found in task's config or deployment config",
-				}
+				workerRespCh <- errorCommonWorkerResponse("worker not found in task's config or deployment config", worker)
 			}
 		}
 	}
@@ -400,31 +409,26 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 	var wg sync.WaitGroup
 	for _, stCfg := range stCfgs {
 		wg.Add(1)
-		go func(stCfg *config.SubTaskConfig) {
+		go Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
-			worker, ok1 := s.cfg.DeployMap[stCfg.SourceID]
-			cli, ok2 := s.workerClients[worker]
-			if !ok1 || !ok2 {
-				workerRespCh <- &pb.CommonWorkerResponse{
-					Result: false,
-					Msg:    fmt.Sprintf("%s relevant worker not found", stCfg.SourceID),
-				}
+			cli, worker, stCfgToml, taskName, ok := s.taskConfigArgsExtractor(workerRespCh, args...)
+			if !ok {
 				return
 			}
-			stCfgToml, err := stCfg.Toml() // convert to TOML format
-			if err != nil {
-				workerRespCh <- &pb.CommonWorkerResponse{
-					Result: false,
-					Worker: worker,
-					Msg:    errors.ErrorStack(err),
-				}
-				return
-			}
-			workerResp, err := cli.UpdateSubTask(ctx, &pb.UpdateSubTaskRequest{Task: stCfgToml})
-			workerResp = s.handleOperationResult(ctx, cli, stCfg.Name, err, workerResp)
+			ctx2, cancel := context.WithTimeout(ctx, s.cfg.RPCTimeout)
+			defer cancel()
+			workerResp, err := cli.UpdateSubTask(ctx2, &pb.UpdateSubTaskRequest{Task: stCfgToml})
+			workerResp = s.handleOperationResult(ctx, cli, taskName, err, workerResp)
 			workerResp.Meta.Worker = worker
 			workerRespCh <- workerResp.Meta
-		}(stCfg)
+		}, func(args ...interface{}) {
+			defer wg.Done()
+			_, worker, _, _, ok := s.taskConfigArgsExtractor(workerRespCh, args...)
+			if !ok {
+				return
+			}
+			workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf(errorNoEmitToken, worker), worker)
+		}, stCfg)
 	}
 	wg.Wait()
 
@@ -652,19 +656,12 @@ func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLL
 			defer wg.Done()
 			cli, ok := s.workerClients[worker]
 			if !ok {
-				workerRespCh <- &pb.CommonWorkerResponse{
-					Result: false,
-					Worker: worker,
-					Msg:    fmt.Sprintf("worker %s relevant worker-client not found", worker),
-				}
+				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", worker), worker)
 				return
 			}
 			workerResp, err := cli.BreakDDLLock(ctx, workerReq)
 			if err != nil {
-				workerResp = &pb.CommonWorkerResponse{
-					Result: false,
-					Msg:    errors.ErrorStack(err),
-				}
+				workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), "")
 			}
 			workerResp.Worker = worker
 			workerRespCh <- workerResp
@@ -735,10 +732,7 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb
 	}
 	workerResp, err := cli.HandleSQLs(ctx, subReq)
 	if err != nil {
-		workerResp = &pb.CommonWorkerResponse{
-			Result: false,
-			Msg:    errors.ErrorStack(err),
-		}
+		workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), "")
 	}
 
 	resp.Workers = []*pb.CommonWorkerResponse{workerResp}
@@ -765,19 +759,12 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 			defer wg.Done()
 			cli, ok := s.workerClients[worker]
 			if !ok {
-				workerRespCh <- &pb.CommonWorkerResponse{
-					Result: false,
-					Worker: worker,
-					Msg:    fmt.Sprintf("worker %s relevant worker-client not found", worker),
-				}
+				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", worker), worker)
 				return
 			}
 			workerResp, err := cli.PurgeRelay(ctx, workerReq)
 			if err != nil {
-				workerResp = &pb.CommonWorkerResponse{
-					Result: false,
-					Msg:    errors.ErrorStack(err),
-				}
+				workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), "")
 			}
 			workerResp.Worker = worker
 			workerRespCh <- workerResp
@@ -810,30 +797,44 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 	workerReq := &pb.SwitchRelayMasterRequest{}
 
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Workers))
+
+	handleErr := func(err error, worker string) {
+		log.Error(err)
+		resp := &pb.CommonWorkerResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+			Worker: worker,
+		}
+		workerRespCh <- resp
+	}
+
 	var wg sync.WaitGroup
 	for _, worker := range req.Workers {
 		wg.Add(1)
-		go func(worker string) {
+		go Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
-			cli, ok := s.workerClients[worker]
-			if !ok {
-				workerRespCh <- &pb.CommonWorkerResponse{
-					Result: false,
-					Worker: worker,
-					Msg:    fmt.Sprintf("worker %s relevant worker-client not found", worker),
-				}
+			cli, worker1, err := s.workerArgsExtractor(args...)
+			if err != nil {
+				handleErr(err, worker1)
 				return
 			}
-			workerResp, err := cli.SwitchRelayMaster(ctx, workerReq)
+			ctx2, cancel := context.WithTimeout(ctx, s.cfg.RPCTimeout)
+			defer cancel()
+			workerResp, err := cli.SwitchRelayMaster(ctx2, workerReq)
 			if err != nil {
-				workerResp = &pb.CommonWorkerResponse{
-					Result: false,
-					Msg:    errors.ErrorStack(err),
-				}
+				workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), "")
 			}
-			workerResp.Worker = worker
+			workerResp.Worker = worker1
 			workerRespCh <- workerResp
-		}(worker)
+		}, func(args ...interface{}) {
+			defer wg.Done()
+			_, worker1, err := s.workerArgsExtractor(args...)
+			if err != nil {
+				handleErr(err, worker1)
+				return
+			}
+			workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf(errorNoEmitToken, worker1), worker1)
+		}, worker)
 	}
 	wg.Wait()
 
@@ -1043,24 +1044,49 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, workers []string, tas
 	workerReq := &pb.QueryStatusRequest{
 		Name: taskName,
 	}
-
 	workerRespCh := make(chan *pb.QueryStatusResponse, len(workers))
+
+	handleErr := func(err error, worker string) bool {
+		log.Error(err)
+		resp := &pb.QueryStatusResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+			Worker: worker,
+		}
+		workerRespCh <- resp
+		return false
+	}
+
 	var wg sync.WaitGroup
 	for _, worker := range workers {
 		wg.Add(1)
-		go func(worker string) {
+		go Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
-			cli := s.workerClients[worker]
-			workerStatus, err := cli.QueryStatus(ctx, workerReq)
+			cli, worker1, err := s.workerArgsExtractor(args...)
+			if err != nil {
+				handleErr(err, worker1)
+				return
+			}
+			ctx2, cancel := context.WithTimeout(ctx, s.cfg.RPCTimeout)
+			defer cancel()
+			workerStatus, err := cli.QueryStatus(ctx2, workerReq)
 			if err != nil {
 				workerStatus = &pb.QueryStatusResponse{
 					Result: false,
 					Msg:    errors.ErrorStack(err),
 				}
 			}
-			workerStatus.Worker = worker
+			workerStatus.Worker = worker1
 			workerRespCh <- workerStatus
-		}(worker)
+		}, func(args ...interface{}) {
+			defer wg.Done()
+			_, worker1, err := s.workerArgsExtractor(args...)
+			if err != nil {
+				handleErr(err, worker1)
+				return
+			}
+			handleErr(errors.Errorf(errorNoEmitToken, worker1), worker1)
+		}, worker)
 	}
 	wg.Wait()
 	return workerRespCh
@@ -1071,24 +1097,49 @@ func (s *Server) getErrorFromWorkers(ctx context.Context, workers []string, task
 	workerReq := &pb.QueryErrorRequest{
 		Name: taskName,
 	}
-
 	workerRespCh := make(chan *pb.QueryErrorResponse, len(workers))
+
+	handleErr := func(err error, worker string) bool {
+		log.Error(err)
+		resp := &pb.QueryErrorResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+			Worker: worker,
+		}
+		workerRespCh <- resp
+		return false
+	}
+
 	var wg sync.WaitGroup
 	for _, worker := range workers {
 		wg.Add(1)
-		go func(worker string) {
+		go Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
-			cli := s.workerClients[worker]
-			workerError, err := cli.QueryError(ctx, workerReq)
+			cli, worker1, err := s.workerArgsExtractor(args...)
+			if err != nil {
+				handleErr(err, worker1)
+				return
+			}
+			ctx2, cancel := context.WithTimeout(ctx, s.cfg.RPCTimeout)
+			defer cancel()
+			workerError, err := cli.QueryError(ctx2, workerReq)
 			if err != nil {
 				workerError = &pb.QueryErrorResponse{
 					Result: false,
 					Msg:    errors.ErrorStack(err),
 				}
 			}
-			workerError.Worker = worker
+			workerError.Worker = worker1
 			workerRespCh <- workerError
-		}(worker)
+		}, func(args ...interface{}) {
+			defer wg.Done()
+			_, worker1, err := s.workerArgsExtractor(args...)
+			if err != nil {
+				handleErr(err, worker1)
+				return
+			}
+			handleErr(errors.Errorf(errorNoEmitToken, worker1), worker1)
+		}, worker)
 	}
 	wg.Wait()
 	return workerRespCh
@@ -1337,10 +1388,7 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 		TraceGID: traceGID,
 	})
 	if err != nil {
-		ownerResp = &pb.CommonWorkerResponse{
-			Result: false,
-			Msg:    errors.ErrorStack(err),
-		}
+		ownerResp = errorCommonWorkerResponse(errors.ErrorStack(err), "")
 	}
 	ownerResp.Worker = owner
 	if !ownerResp.Result {
@@ -1379,29 +1427,18 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 			defer wg.Done()
 			cli, ok := s.workerClients[worker]
 			if !ok {
-				workerRespCh <- &pb.CommonWorkerResponse{
-					Result: false,
-					Worker: worker,
-					Msg:    fmt.Sprintf("worker %s relevant worker-client not found", worker),
-				}
+				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", worker), worker)
 				return
 			}
 			if _, ok := ready[worker]; !ok {
-				workerRespCh <- &pb.CommonWorkerResponse{
-					Result: false,
-					Worker: worker,
-					Msg:    fmt.Sprintf("worker %s not waiting for DDL lock %s", owner, lockID),
-				}
+				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s not waiting for DDL lock %s", owner, lockID), worker)
 				return
 			}
 
 			log.Infof("[server] requesting %s to skip DDL (with ID %s)", worker, lockID)
 			workerResp, err2 := cli.ExecuteDDL(ctx, req)
 			if err2 != nil {
-				workerResp = &pb.CommonWorkerResponse{
-					Result: false,
-					Msg:    errors.ErrorStack(err2),
-				}
+				workerResp = errorCommonWorkerResponse(errors.ErrorStack(err2), "")
 			}
 			workerResp.Worker = worker
 			workerRespCh <- workerResp
@@ -1576,19 +1613,12 @@ func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWork
 	content := req.Config
 	cli, ok := s.workerClients[worker]
 	if !ok {
-		return &pb.CommonWorkerResponse{
-			Result: false,
-			Worker: worker,
-			Msg:    fmt.Sprintf("worker %s relevant worker-client not found", worker),
-		}, nil
+		return errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", worker), worker), nil
 	}
 	log.Infof("[server] try to update %s relay configure", worker)
 	workerResp, err := cli.UpdateRelayConfig(ctx, &pb.UpdateRelayRequest{Content: content})
 	if err != nil {
-		return &pb.CommonWorkerResponse{
-			Result: false,
-			Msg:    errors.ErrorStack(err),
-		}, nil
+		return errorCommonWorkerResponse(errors.ErrorStack(err), worker), nil
 	}
 	return workerResp, nil
 }
@@ -1601,59 +1631,68 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 		errCh       = make(chan error, len(s.workerClients))
 		err         error
 	)
-	handErr := func(err2 error) {
-		if err2 != nil {
-			log.Error(err2)
-		}
+
+	handleErr := func(err2 error) bool {
+		log.Error(err2)
 		errCh <- errors.Trace(err2)
+		return false
+	}
+
+	argsExtractor := func(args ...interface{}) (string, pb.WorkerClient, bool) {
+		if len(args) != 2 {
+			return "", nil, handleErr(errors.Errorf("fail to call emit to fetch worker config, miss some arguments %v", args))
+		}
+
+		id, ok := args[0].(string)
+		if !ok {
+			return "", nil, handleErr(errors.Errorf("fail to call emit to fetch worker config, can't get id from args[0], arguments %v", args))
+		}
+
+		worker, ok := args[1].(pb.WorkerClient)
+		if !ok {
+			return "", nil, handleErr(errors.Errorf("fail to call emit to fetch config of worker %s, can't get worker client from args[1], arguments %v", id, args))
+		}
+
+		return id, worker, true
 	}
 
 	for id, worker := range s.workerClients {
 		wg.Add(1)
-		go Emit(func(args ...interface{}) {
+		go Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
-			if len(args) != 2 {
-				handErr(errors.Errorf("fail to call emit to fetch worker config, miss some arguments %v", args))
-				return
-			}
 
-			id1, ok := args[0].(string)
+			id1, worker1, ok := argsExtractor(args...)
 			if !ok {
-				handErr(errors.Errorf("fail to call emit to fetch worker config, can't get id from args[0], arguments %v", args))
 				return
 			}
 
-			worker1, ok := args[1].(pb.WorkerClient)
-			if !ok {
-				handErr(errors.Errorf("fail to call emit to fetch config of worker %s, can't get worker client from args[1], arguments %v", id1, args))
-				return
-			}
-
-			resp, err1 := worker1.QueryWorkerConfig(ctx, &pb.QueryWorkerConfigRequest{})
+			ctx2, cancel := context.WithTimeout(ctx, s.cfg.RPCTimeout)
+			defer cancel()
+			resp, err1 := worker1.QueryWorkerConfig(ctx2, &pb.QueryWorkerConfigRequest{})
 			if err1 != nil {
-				handErr(errors.Annotatef(err1, "fetch config of worker %s", id1))
+				handleErr(errors.Annotatef(err1, "fetch config of worker %s", id1))
 				return
 			}
 
 			if !resp.Result {
-				handErr(errors.Errorf("fail to query config from worker %s, message %s", id1, resp.Msg))
+				handleErr(errors.Errorf("fail to query config from worker %s, message %s", id1, resp.Msg))
 				return
 			}
 
 			if len(resp.Content) == 0 {
-				handErr(errors.Errorf("fail to query config from worker %s, config is empty", id1))
+				handleErr(errors.Errorf("fail to query config from worker %s, config is empty", id1))
 				return
 			}
 
 			if len(resp.SourceID) == 0 {
-				handErr(errors.Errorf("fail to query config from worker %s, source ID is empty, it should be set in worker config", id1))
+				handleErr(errors.Errorf("fail to query config from worker %s, source ID is empty, it should be set in worker config", id1))
 				return
 			}
 
 			dbCfg := &config.DBConfig{}
 			err2 := dbCfg.Decode(resp.Content)
 			if err2 != nil {
-				handErr(errors.Annotatef(err2, "unmarshal worker %s config", id1))
+				handleErr(errors.Annotatef(err2, "unmarshal worker %s config", id1))
 				return
 			}
 
@@ -1661,6 +1700,14 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 			workerCfgs[resp.SourceID] = *dbCfg
 			workerMutex.Unlock()
 
+		}, func(args ...interface{}) {
+			defer wg.Done()
+
+			_, worker1, ok := argsExtractor(args...)
+			if !ok {
+				return
+			}
+			handleErr(errors.Errorf("fail to get emit opporunity for worker %s", worker1))
 		}, []interface{}{id, worker}...)
 	}
 
@@ -1680,19 +1727,12 @@ func (s *Server) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRe
 	binlogName := req.BinlogName
 	cli, ok := s.workerClients[worker]
 	if !ok {
-		return &pb.CommonWorkerResponse{
-			Result: false,
-			Worker: worker,
-			Msg:    fmt.Sprintf("worker %s relevant worker-client not found", worker),
-		}, nil
+		return errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", worker), worker), nil
 	}
 	log.Infof("[server] try to migrate %s relay", worker)
 	workerResp, err := cli.MigrateRelay(ctx, &pb.MigrateRelayRequest{BinlogName: binlogName, BinlogPos: binlogPos})
 	if err != nil {
-		return &pb.CommonWorkerResponse{
-			Result: false,
-			Msg:    errors.ErrorStack(err),
-		}, nil
+		return errorCommonWorkerResponse(errors.ErrorStack(err), worker), nil
 	}
 	return workerResp, nil
 }
@@ -1776,20 +1816,64 @@ func (s *Server) waitOperationOk(ctx context.Context, cli pb.WorkerClient, name 
 func (s *Server) handleOperationResult(ctx context.Context, cli pb.WorkerClient, name string, err error, response *pb.OperateSubTaskResponse) *pb.OperateSubTaskResponse {
 	if err != nil {
 		return &pb.OperateSubTaskResponse{
-			Meta: &pb.CommonWorkerResponse{
-				Result: false,
-				Msg:    errors.ErrorStack(err),
-			},
+			Meta: errorCommonWorkerResponse(errors.ErrorStack(err), ""),
 		}
 	}
 
 	err = s.waitOperationOk(ctx, cli, name, response.LogID)
 	if err != nil {
-		response.Meta = &pb.CommonWorkerResponse{
-			Result: false,
-			Msg:    errors.ErrorStack(err),
-		}
+		response.Meta = errorCommonWorkerResponse(errors.ErrorStack(err), "")
 	}
 
 	return response
+}
+
+// taskConfigArgsExtractor extracts SubTaskConfig from args and returns its relevant
+// grpc client, worker id (host:port), subtask config in toml, task name and whether it is success.
+func (s *Server) taskConfigArgsExtractor(workerRespCh chan *pb.CommonWorkerResponse, args ...interface{}) (pb.WorkerClient, string, string, string, bool) {
+	handleErr := func(err error, worker string) bool {
+		log.Error(errors.ErrorStack(err))
+		workerRespCh <- errorCommonWorkerResponse(err.Error(), worker)
+		return false
+	}
+
+	if len(args) != 1 {
+		return nil, "", "", "", handleErr(errors.Errorf("miss argument %v", args), "")
+	}
+
+	cfg, ok := args[0].(*config.SubTaskConfig)
+	if !ok {
+		return nil, "", "", "", handleErr(errors.Errorf("args[0] is not SubTaskConfig: %v", args[0]), "")
+	}
+
+	worker, ok1 := s.cfg.DeployMap[cfg.SourceID]
+	cli, ok2 := s.workerClients[worker]
+	if !ok1 || !ok2 {
+		return nil, "", "", "", handleErr(errors.Errorf("%s relevant worker-client not found", worker), worker)
+	}
+
+	cfgToml, err := cfg.Toml()
+	if err != nil {
+		return nil, "", "", "", handleErr(err, worker)
+	}
+
+	return cli, worker, cfgToml, cfg.Name, true
+}
+
+// workerArgsExtractor extracts worker from args and returns its relevant
+// grpc client, worker id (host:port) and error
+func (s *Server) workerArgsExtractor(args ...interface{}) (pb.WorkerClient, string, error) {
+	if len(args) != 1 {
+		return nil, "", errors.Errorf("miss argument %v", args)
+	}
+	worker, ok := args[0].(string)
+	if !ok {
+		return nil, "", errors.Errorf("invalid argument, args[0] is not worker: %v", args[0])
+	}
+	cli, ok := s.workerClients[worker]
+	if !ok {
+		return nil, worker, errors.Errorf("%s relevant worker-client not found", worker)
+	}
+
+	return cli, worker, nil
 }

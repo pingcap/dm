@@ -1,5 +1,8 @@
 # Master Configuration.
 
+# rpc configuration
+rpc-timeout = "30s"
+
 #log configuration
 log-level = "info"
 log-file = "dm-master.log"

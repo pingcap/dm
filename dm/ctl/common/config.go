@@ -18,10 +18,15 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/errors"
+)
+
+var (
+	defaultRPCTimeout = "10m"
 )
 
 // NewConfig creates a new base config for dmctl.
@@ -33,6 +38,7 @@ func NewConfig() *Config {
 	fs.BoolVar(&cfg.printVersion, "V", false, "prints version and exit")
 	fs.StringVar(&cfg.ConfigFile, "config", "", "path to config file")
 	fs.StringVar(&cfg.MasterAddr, "master-addr", "", "master API server addr")
+	fs.StringVar(&cfg.RPCTimeoutStr, "rpc-timeout", defaultRPCTimeout, "rpc timeout, default is 10m")
 	fs.StringVar(&cfg.encrypt, "encrypt", "", "encrypt plaintext to ciphertext")
 
 	return cfg
@@ -43,6 +49,9 @@ type Config struct {
 	*flag.FlagSet `json:"-"`
 
 	MasterAddr string `toml:"master-addr" json:"master-addr"`
+
+	RPCTimeoutStr string        `toml:"rpc-timeout" json:"rpc-timeout"`
+	RPCTimeout    time.Duration `json:"-"`
 
 	ConfigFile string `json:"config-file"`
 
@@ -106,7 +115,11 @@ func (c *Config) Parse(arguments []string) error {
 		return errors.Annotatef(err, "specify master addr %s", c.MasterAddr)
 	}
 
-	c.adjust()
+	err = c.adjust()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	return nil
 }
 
@@ -117,7 +130,16 @@ func (c *Config) configFromFile(path string) error {
 }
 
 // adjust adjusts configs
-func (c *Config) adjust() {
+func (c *Config) adjust() error {
+	if c.RPCTimeoutStr == "" {
+		c.RPCTimeoutStr = defaultRPCTimeout
+	}
+	timeout, err := time.ParseDuration(c.RPCTimeoutStr)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	c.RPCTimeout = timeout
+	return nil
 }
 
 // validate host:port format address

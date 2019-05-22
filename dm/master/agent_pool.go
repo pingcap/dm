@@ -14,20 +14,38 @@
 package master
 
 import (
+	"context"
+	"math"
 	"sync"
+
+	"golang.org/x/time/rate"
 )
 
 var (
-	pool       *AgentPool // singleton instance
-	once       sync.Once
-	agentlimit = 20
+	pool             *AgentPool // singleton instance
+	once             sync.Once
+	defalutRate      float64 = 10
+	defaultBurst             = 40
+	errorNoEmitToken         = "fail to get emit opporunity for %s"
 )
 
+type emitFunc func(args ...interface{})
+
 // AgentPool is a pool to control communication with dm-workers
+// It provides rate limit control for agent acquire, including dispatch rate r
+// and permits bursts of at most b tokens.
 // caller shouldn't to hold agent to avoid deadlock
 type AgentPool struct {
-	limit  int
-	agents chan *Agent
+	requests chan int
+	agents   chan *Agent
+	cfg      *RateLimitConfig
+	limiter  *rate.Limiter
+}
+
+// RateLimitConfig holds rate limit config
+type RateLimitConfig struct {
+	rate  float64 // dispatch rate
+	burst int     // max permits bursts
 }
 
 // Agent communicate with dm-workers
@@ -36,42 +54,68 @@ type Agent struct {
 }
 
 // NewAgentPool returns a agent pool
-func NewAgentPool(limit int) *AgentPool {
-	agents := make(chan *Agent, limit)
-	for i := 0; i < limit; i++ {
-		agents <- &Agent{ID: i + 1}
-	}
+func NewAgentPool(cfg *RateLimitConfig) *AgentPool {
+	requests := make(chan int, int(math.Ceil(1/cfg.rate))+cfg.burst)
+	agents := make(chan *Agent, cfg.burst)
+	limiter := rate.NewLimiter(rate.Limit(cfg.rate), cfg.burst)
 
 	return &AgentPool{
-		limit:  limit,
-		agents: agents,
+		requests: requests,
+		agents:   agents,
+		cfg:      cfg,
+		limiter:  limiter,
 	}
 }
 
 // Apply applies for a agent
-func (pool *AgentPool) Apply() *Agent {
-	agent := <-pool.agents
-	return agent
+// if ctx is canceled before we get an agent, returns nil
+func (pool *AgentPool) Apply(ctx context.Context, id int) *Agent {
+	select {
+	case <-ctx.Done():
+		return nil
+	case pool.requests <- id:
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil
+	case agent := <-pool.agents:
+		return agent
+	}
 }
 
-// Recycle recycles agent
-func (pool *AgentPool) Recycle(agent *Agent) {
-	pool.agents <- agent
-}
-
-// GetAgentPool a singleton agent pool
-func GetAgentPool() *AgentPool {
+// InitAgentPool initials agent pool singleton
+func InitAgentPool(cfg *RateLimitConfig) *AgentPool {
 	once.Do(func() {
-		pool = NewAgentPool(agentlimit)
+		pool = NewAgentPool(&RateLimitConfig{rate: cfg.rate, burst: cfg.burst})
+		go pool.dispatch()
 	})
 	return pool
 }
 
-// Emit apply for a agent to communicates with dm-worker
-func Emit(fn func(args ...interface{}), args ...interface{}) {
-	ap := GetAgentPool()
-	agent := ap.Apply()
-	defer ap.Recycle(agent)
+func (pool *AgentPool) dispatch() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case id := <-pool.requests:
+			err := pool.limiter.Wait(ctx)
+			if err == context.Canceled {
+				return
+			}
+			pool.agents <- &Agent{ID: id}
+		}
+	}
+}
 
-	fn(args...)
+// Emit applies for an agent to communicates with dm-worker
+func Emit(ctx context.Context, id int, fn emitFunc, errFn emitFunc, args ...interface{}) {
+	agent := pool.Apply(ctx, id)
+	if agent == nil {
+		errFn(args...)
+	} else {
+		fn(args...)
+	}
 }

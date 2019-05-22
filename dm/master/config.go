@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/dm/pkg/log"
@@ -31,6 +32,8 @@ import (
 // later we can read it from dm/master/dm-master.toml
 // and assign it to SampleConfigFile while we build dm-master
 var SampleConfigFile string
+
+var defaultRPCTimeout = "30s"
 
 // NewConfig creates a config for dm-master
 func NewConfig() *Config {
@@ -72,6 +75,9 @@ type Config struct {
 	LogLevel  string `toml:"log-level" json:"log-level"`
 	LogFile   string `toml:"log-file" json:"log-file"`
 	LogRotate string `toml:"log-rotate" json:"log-rotate"`
+
+	RPCTimeoutStr string        `toml:"rpc-timeout" json:"rpc-timeout"`
+	RPCTimeout    time.Duration `json:"-"`
 
 	MasterAddr string `toml:"master-addr" json:"master-addr"`
 
@@ -161,6 +167,14 @@ func (c *Config) adjust() error {
 
 		c.DeployMap[item.Source] = item.Worker
 	}
+	if c.RPCTimeoutStr == "" {
+		c.RPCTimeoutStr = defaultRPCTimeout
+	}
+	timeout, err := time.ParseDuration(c.RPCTimeoutStr)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	c.RPCTimeout = timeout
 	return nil
 }
 

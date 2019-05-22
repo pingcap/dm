@@ -1,3 +1,6 @@
 # dmctl Configuration.
 
+# rpc configuration
+rpc-timeout = "5s"
+
 master-addr = ":8261"
