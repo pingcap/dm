@@ -58,7 +58,7 @@ type Pipe interface {
 	// SetErrorChan set the error channel, send error to this channel when meet error
 	SetErrorChan(chan error)
 
-	// SetResolveFunc set the resolveFunc, which used when data is resolved
+	// SetResolveFunc set the resolveFunc, which used when data is resolved, used in the last pipe, or data is skiped
 	SetResolveFunc(func())
 }
 
@@ -85,7 +85,7 @@ type PipeData struct {
 	ddlExecItem *DDLExecItem
 }
 
-// Pipeline ...
+// Pipeline contains many pipes, and resolve data by every pipe.
 type Pipeline struct {
 	ctx    context.Context
 	cancel context.CancelFunc
