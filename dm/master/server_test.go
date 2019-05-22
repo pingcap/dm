@@ -187,6 +187,7 @@ func mockWorkerConfig(c *check.C, server *Server, ctrl *gomock.Controller, passw
 func mockStartTask(c *check.C, server *Server, ctrl *gomock.Controller, workerCfg map[string]*config.SubTaskConfig, rpcSuccess bool) {
 	for idx, deploy := range server.cfg.Deploy {
 		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+		logID := int64(idx + 1)
 
 		dbCfg := &config.DBConfig{
 			Host:     "127.0.0.1",
@@ -216,9 +217,10 @@ func mockStartTask(c *check.C, server *Server, ctrl *gomock.Controller, workerCf
 		rets := make([]interface{}, 0, 2)
 		if rpcSuccess {
 			rets = []interface{}{
-				&pb.CommonWorkerResponse{
-					Result: true,
-					Worker: deploy.Worker,
+				&pb.OperateSubTaskResponse{
+					Meta:  &pb.CommonWorkerResponse{Result: true, Worker: deploy.Worker},
+					Op:    pb.TaskOp_Start,
+					LogID: logID,
 				},
 				nil,
 			}
@@ -232,6 +234,19 @@ func mockStartTask(c *check.C, server *Server, ctrl *gomock.Controller, workerCf
 			gomock.Any(),
 			&pb.StartSubTaskRequest{Task: stCfgToml},
 		).Return(rets...)
+
+		if rpcSuccess {
+			mockWorkerClient.EXPECT().QueryTaskOperation(
+				gomock.Any(),
+				&pb.QueryTaskOperationRequest{
+					Name:  stCfg.Name,
+					LogID: logID,
+				},
+			).Return(&pb.QueryTaskOperationResponse{
+				Meta: &pb.CommonWorkerResponse{Result: true, Worker: deploy.Worker},
+				Log:  &pb.TaskLog{Id: logID, Ts: time.Now().Unix(), Success: true},
+			}, nil).MaxTimes(maxRetryNum)
+		}
 
 		server.workerClients[deploy.Worker] = mockWorkerClient
 	}
@@ -509,6 +524,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	var (
 		taskName = "unit-test-task"
 		workers  = make([]string, 0, 2)
+		pauseOp  = pb.TaskOp_Pause
 	)
 
 	ctrl := gomock.NewController(c)
@@ -520,7 +536,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 
 	// test operate-task with invalid task name
 	resp, err := server.OperateTask(context.Background(), &pb.OperateTaskRequest{
-		Op:   pb.TaskOp_Pause,
+		Op:   pauseOp,
 		Name: taskName,
 	})
 	c.Assert(err, check.IsNil)
@@ -530,38 +546,57 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	// test operate-task while worker clients not found
 	server.taskWorkers[taskName] = workers
 	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
-		Op:   pb.TaskOp_Pause,
+		Op:   pauseOp,
 		Name: taskName,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, opResp := range resp.Workers {
-		c.Assert(opResp.Result, check.IsFalse)
-		c.Assert(opResp.Msg, check.Matches, ".* relevant worker-client not found")
+	for _, subtaskResp := range resp.Workers {
+		c.Assert(subtaskResp.Op, check.Equals, pauseOp)
+		c.Assert(subtaskResp.Meta.Msg, check.Matches, ".* relevant worker-client not found")
 	}
 
 	// test pause task successfully
-	for _, workerAddr := range server.cfg.DeployMap {
+	for idx, deploy := range server.cfg.Deploy {
 		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+		logID := int64(idx + 1)
 		mockWorkerClient.EXPECT().OperateSubTask(
 			gomock.Any(),
 			&pb.OperateSubTaskRequest{
-				Op:   pb.TaskOp_Pause,
+				Op:   pauseOp,
 				Name: taskName,
 			},
-		).Return(&pb.OperateSubTaskResponse{Result: true}, nil)
-		server.workerClients[workerAddr] = mockWorkerClient
+		).Return(&pb.OperateSubTaskResponse{
+			Op:    pauseOp,
+			LogID: logID,
+			Meta:  &pb.CommonWorkerResponse{Result: true},
+		}, nil)
+
+		mockWorkerClient.EXPECT().QueryTaskOperation(
+			gomock.Any(),
+			&pb.QueryTaskOperationRequest{
+				Name:  taskName,
+				LogID: logID,
+			},
+		).Return(&pb.QueryTaskOperationResponse{
+			Meta: &pb.CommonWorkerResponse{Result: true, Worker: deploy.Worker},
+			Log:  &pb.TaskLog{Id: logID, Ts: time.Now().Unix(), Success: true},
+		}, nil)
+
+		server.workerClients[deploy.Worker] = mockWorkerClient
 	}
 	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
-		Op:   pb.TaskOp_Pause,
+		Op:   pauseOp,
 		Name: taskName,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Op, check.Equals, pauseOp)
 	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, opResp := range resp.Workers {
-		c.Assert(opResp.Result, check.IsTrue)
+	for _, subtaskResp := range resp.Workers {
+		c.Assert(subtaskResp.Op, check.Equals, pauseOp)
+		c.Assert(subtaskResp.Meta.Result, check.IsTrue)
 	}
 
 	// test operate sub task to worker returns error
@@ -584,20 +619,35 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, opResp := range resp.Workers {
-		c.Assert(opResp.Result, check.IsFalse)
-		c.Assert(strings.Split(opResp.Msg, "\n")[0], check.Equals, errGRPCFailed)
+	for _, subtaskResp := range resp.Workers {
+		c.Assert(subtaskResp.Op, check.Equals, pauseOp)
+		c.Assert(strings.Split(subtaskResp.Meta.Msg, "\n")[0], check.Equals, errGRPCFailed)
 	}
 
 	// test stop task successfully, remove partial workers
 	mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+	logID := int64(42)
 	mockWorkerClient.EXPECT().OperateSubTask(
 		gomock.Any(),
 		&pb.OperateSubTaskRequest{
 			Op:   pb.TaskOp_Stop,
 			Name: taskName,
 		},
-	).Return(&pb.OperateSubTaskResponse{Result: true}, nil)
+	).Return(&pb.OperateSubTaskResponse{
+		Meta:  &pb.CommonWorkerResponse{Result: true},
+		LogID: logID,
+		Op:    pb.TaskOp_Stop,
+	}, nil)
+	mockWorkerClient.EXPECT().QueryTaskOperation(
+		gomock.Any(),
+		&pb.QueryTaskOperationRequest{
+			Name:  taskName,
+			LogID: logID,
+		},
+	).Return(&pb.QueryTaskOperationResponse{
+		Meta: &pb.CommonWorkerResponse{Result: true, Worker: workers[0]},
+		Log:  &pb.TaskLog{Id: logID, Ts: time.Now().Unix(), Success: true},
+	}, nil)
 	server.workerClients[workers[0]] = mockWorkerClient
 	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
 		Op:      pb.TaskOp_Stop,
@@ -607,22 +657,37 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 	c.Assert(resp.Workers, check.HasLen, 1)
-	c.Assert(resp.Workers[0].Result, check.IsTrue)
+	c.Assert(resp.Workers[0].Meta.Result, check.IsTrue)
 	c.Assert(server.taskWorkers, check.HasKey, taskName)
 	c.Assert(server.taskWorkers[taskName], check.DeepEquals, []string{workers[1]})
 
 	// test stop task successfully, remove all workers
 	server.taskWorkers[taskName] = workers
-	for _, workerAddr := range server.cfg.DeployMap {
+	for idx, deploy := range server.cfg.Deploy {
 		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+		logID := int64(idx + 100)
 		mockWorkerClient.EXPECT().OperateSubTask(
 			gomock.Any(),
 			&pb.OperateSubTaskRequest{
 				Op:   pb.TaskOp_Stop,
 				Name: taskName,
 			},
-		).Return(&pb.OperateSubTaskResponse{Result: true}, nil)
-		server.workerClients[workerAddr] = mockWorkerClient
+		).Return(&pb.OperateSubTaskResponse{
+			Meta:  &pb.CommonWorkerResponse{Result: true},
+			Op:    pb.TaskOp_Stop,
+			LogID: logID,
+		}, nil)
+		mockWorkerClient.EXPECT().QueryTaskOperation(
+			gomock.Any(),
+			&pb.QueryTaskOperationRequest{
+				Name:  taskName,
+				LogID: logID,
+			},
+		).Return(&pb.QueryTaskOperationResponse{
+			Meta: &pb.CommonWorkerResponse{Result: true, Worker: workers[0]},
+			Log:  &pb.TaskLog{Id: logID, Ts: time.Now().Unix(), Success: true},
+		}, nil)
+		server.workerClients[deploy.Worker] = mockWorkerClient
 	}
 	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
 		Op:   pb.TaskOp_Stop,
@@ -631,8 +696,9 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, opResp := range resp.Workers {
-		c.Assert(opResp.Result, check.IsTrue)
+	for _, subtaskResp := range resp.Workers {
+		c.Assert(subtaskResp.Op, check.Equals, pb.TaskOp_Stop)
+		c.Assert(subtaskResp.Meta.Result, check.IsTrue)
 	}
 	c.Assert(len(server.taskWorkers), check.Equals, 0)
 }
@@ -661,6 +727,7 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 	mockUpdateTask := func(rpcSuccess bool) {
 		for idx, deploy := range server.cfg.Deploy {
 			mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+			logID := int64(idx + 1)
 
 			dbCfg := &config.DBConfig{
 				Host:     "127.0.0.1",
@@ -690,9 +757,10 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 			rets := make([]interface{}, 0, 2)
 			if rpcSuccess {
 				rets = []interface{}{
-					&pb.CommonWorkerResponse{
-						Result: true,
-						Worker: deploy.Worker,
+					&pb.OperateSubTaskResponse{
+						Meta:  &pb.CommonWorkerResponse{Result: true, Worker: deploy.Worker},
+						Op:    pb.TaskOp_Start,
+						LogID: logID,
 					},
 					nil,
 				}
@@ -706,6 +774,19 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 				gomock.Any(),
 				&pb.UpdateSubTaskRequest{Task: stCfgToml},
 			).Return(rets...)
+
+			if rpcSuccess {
+				mockWorkerClient.EXPECT().QueryTaskOperation(
+					gomock.Any(),
+					&pb.QueryTaskOperationRequest{
+						Name:  stCfg.Name,
+						LogID: logID,
+					},
+				).Return(&pb.QueryTaskOperationResponse{
+					Meta: &pb.CommonWorkerResponse{Result: true, Worker: deploy.Worker},
+					Log:  &pb.TaskLog{Id: logID, Ts: time.Now().Unix(), Success: true},
+				}, nil)
+			}
 
 			server.workerClients[deploy.Worker] = mockWorkerClient
 		}

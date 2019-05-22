@@ -165,14 +165,14 @@ func (m *MockWorkerClient) EXPECT() *MockWorkerClientMockRecorder {
 }
 
 // StartSubTask mocks base method
-func (m *MockWorkerClient) StartSubTask(ctx context.Context, in *pb.StartSubTaskRequest, opts ...grpc.CallOption) (*pb.CommonWorkerResponse, error) {
+func (m *MockWorkerClient) StartSubTask(ctx context.Context, in *pb.StartSubTaskRequest, opts ...grpc.CallOption) (*pb.OperateSubTaskResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, in}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "StartSubTask", varargs...)
-	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
+	ret0, _ := ret[0].(*pb.OperateSubTaskResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -205,14 +205,14 @@ func (mr *MockWorkerClientMockRecorder) OperateSubTask(ctx, in interface{}, opts
 }
 
 // UpdateSubTask mocks base method
-func (m *MockWorkerClient) UpdateSubTask(ctx context.Context, in *pb.UpdateSubTaskRequest, opts ...grpc.CallOption) (*pb.CommonWorkerResponse, error) {
+func (m *MockWorkerClient) UpdateSubTask(ctx context.Context, in *pb.UpdateSubTaskRequest, opts ...grpc.CallOption) (*pb.OperateSubTaskResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, in}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "UpdateSubTask", varargs...)
-	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
+	ret0, _ := ret[0].(*pb.OperateSubTaskResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -262,6 +262,26 @@ func (mr *MockWorkerClientMockRecorder) QueryError(ctx, in interface{}, opts ...
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]interface{}{ctx, in}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryError", reflect.TypeOf((*MockWorkerClient)(nil).QueryError), varargs...)
+}
+
+// QueryTaskOperation mocks base method
+func (m *MockWorkerClient) QueryTaskOperation(ctx context.Context, in *pb.QueryTaskOperationRequest, opts ...grpc.CallOption) (*pb.QueryTaskOperationResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, in}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "QueryTaskOperation", varargs...)
+	ret0, _ := ret[0].(*pb.QueryTaskOperationResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// QueryTaskOperation indicates an expected call of QueryTaskOperation
+func (mr *MockWorkerClientMockRecorder) QueryTaskOperation(ctx, in interface{}, opts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, in}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryTaskOperation", reflect.TypeOf((*MockWorkerClient)(nil).QueryTaskOperation), varargs...)
 }
 
 // HandleSQLs mocks base method
@@ -625,10 +645,10 @@ func (m *MockWorkerServer) EXPECT() *MockWorkerServerMockRecorder {
 }
 
 // StartSubTask mocks base method
-func (m *MockWorkerServer) StartSubTask(arg0 context.Context, arg1 *pb.StartSubTaskRequest) (*pb.CommonWorkerResponse, error) {
+func (m *MockWorkerServer) StartSubTask(arg0 context.Context, arg1 *pb.StartSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "StartSubTask", arg0, arg1)
-	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
+	ret0, _ := ret[0].(*pb.OperateSubTaskResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -655,10 +675,10 @@ func (mr *MockWorkerServerMockRecorder) OperateSubTask(arg0, arg1 interface{}) *
 }
 
 // UpdateSubTask mocks base method
-func (m *MockWorkerServer) UpdateSubTask(arg0 context.Context, arg1 *pb.UpdateSubTaskRequest) (*pb.CommonWorkerResponse, error) {
+func (m *MockWorkerServer) UpdateSubTask(arg0 context.Context, arg1 *pb.UpdateSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateSubTask", arg0, arg1)
-	ret0, _ := ret[0].(*pb.CommonWorkerResponse)
+	ret0, _ := ret[0].(*pb.OperateSubTaskResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -697,6 +717,21 @@ func (m *MockWorkerServer) QueryError(arg0 context.Context, arg1 *pb.QueryErrorR
 func (mr *MockWorkerServerMockRecorder) QueryError(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryError", reflect.TypeOf((*MockWorkerServer)(nil).QueryError), arg0, arg1)
+}
+
+// QueryTaskOperation mocks base method
+func (m *MockWorkerServer) QueryTaskOperation(arg0 context.Context, arg1 *pb.QueryTaskOperationRequest) (*pb.QueryTaskOperationResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryTaskOperation", arg0, arg1)
+	ret0, _ := ret[0].(*pb.QueryTaskOperationResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// QueryTaskOperation indicates an expected call of QueryTaskOperation
+func (mr *MockWorkerServerMockRecorder) QueryTaskOperation(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryTaskOperation", reflect.TypeOf((*MockWorkerServer)(nil).QueryTaskOperation), arg0, arg1)
 }
 
 // HandleSQLs mocks base method
