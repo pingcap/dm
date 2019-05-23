@@ -15,6 +15,7 @@ package syncer
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	. "github.com/pingcap/check"
@@ -34,13 +35,28 @@ func (t *testDDLExecInfoSuite) TestDDLExecItem(c *C) {
 	c.Assert(ddlExecInfo.status.Get(), Equals, ddlExecIdle)
 
 	ddls := []string{"create database test"}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
+
 		select {
 		case _ = <-ddlExecInfo.Chan(ddls):
+		case <-time.After(time.Second):
+			c.Fatal("timeout")
 		}
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	for i := 0; i < 3; i++ {
+		if len(ddlExecInfo.BlockingDDLs()) == 0 {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		break
+	}
+
 	c.Assert(ddlExecInfo.BlockingDDLs(), DeepEquals, ddls)
 
 	ddlExecInfo.ClearBlockingDDL()
@@ -58,4 +74,6 @@ func (t *testDDLExecInfoSuite) TestDDLExecItem(c *C) {
 
 	ddlExecInfo.Renew()
 	c.Assert(ddlExecInfo.status.Get(), Equals, ddlExecIdle)
+
+	wg.Wait()
 }

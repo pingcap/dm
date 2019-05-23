@@ -39,15 +39,15 @@ func (s *testSyncerSuite) TestBinaryLogs(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(files, Not(HasLen), 0)
 
+	fileNum := len(files)
 	pos := mysql.Position{
-		Name: files[len(files)-1].name,
+		Name: files[fileNum-1].name,
 		Pos:  0,
 	}
 
 	remainingSize, err := countBinaryLogsSize(pos, s.db)
 	c.Assert(err, IsNil)
-	c.Assert(remainingSize, Equals, files[len(files)-1].size)
-	fileNum := len(files)
+	c.Assert(remainingSize, Equals, files[fileNum-1].size)
 
 	s.db.Exec("FLUSH BINARY LOGS")
 	files, err = getBinaryLogs(s.db)
@@ -55,12 +55,12 @@ func (s *testSyncerSuite) TestBinaryLogs(c *C) {
 	c.Assert(files, HasLen, fileNum+1)
 
 	pos = mysql.Position{
-		Name: files[len(files)-1].name,
+		Name: files[fileNum].name,
 		Pos:  0,
 	}
 
 	remainingSize, err = countBinaryLogsSize(pos, s.db)
 	c.Assert(err, IsNil)
-	c.Assert(remainingSize, Equals, files[len(files)-1].size)
+	c.Assert(remainingSize, Equals, files[fileNum].size)
 
 }
