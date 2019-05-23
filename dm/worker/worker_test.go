@@ -11,26 +11,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package reader
+package worker
 
-type readerStage int32
+import (
+	"testing"
 
-const (
-	stageNew readerStage = iota
-	stagePrepared
-	stageClosed
+	. "github.com/pingcap/check"
 )
 
-// String implements Stringer.String.
-func (s readerStage) String() string {
-	switch s {
-	case stageNew:
-		return "new"
-	case stagePrepared:
-		return "prepared"
-	case stageClosed:
-		return "closed"
-	default:
-		return "unknown"
-	}
+func TestWorker(t *testing.T) {
+	TestingT(t)
+}
+
+type testWorker struct{}
+
+var _ = Suite(&testWorker{})
+
+func (t *testWorker) TestOperateTask(c *C) {
 }

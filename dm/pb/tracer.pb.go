@@ -713,7 +713,7 @@ func (m *GetTSORequest) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -741,7 +741,7 @@ func (m *GetTSORequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -751,9 +751,6 @@ func (m *GetTSORequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracer
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTracer
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -766,9 +763,6 @@ func (m *GetTSORequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
-				return ErrInvalidLengthTracer
-			}
-			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthTracer
 			}
 			if (iNdEx + skippy) > l {
@@ -798,7 +792,7 @@ func (m *GetTSOResponse) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -826,7 +820,7 @@ func (m *GetTSOResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= int(b&0x7F) << shift
+				v |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -846,7 +840,7 @@ func (m *GetTSOResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -856,9 +850,6 @@ func (m *GetTSOResponse) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracer
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTracer
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -878,7 +869,7 @@ func (m *GetTSOResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Ts |= int64(b&0x7F) << shift
+				m.Ts |= (int64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -890,9 +881,6 @@ func (m *GetTSOResponse) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
-				return ErrInvalidLengthTracer
-			}
-			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthTracer
 			}
 			if (iNdEx + skippy) > l {
@@ -922,7 +910,7 @@ func (m *CommonUploadResponse) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -950,7 +938,7 @@ func (m *CommonUploadResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= int(b&0x7F) << shift
+				v |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -970,7 +958,7 @@ func (m *CommonUploadResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -980,9 +968,6 @@ func (m *CommonUploadResponse) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracer
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTracer
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -995,9 +980,6 @@ func (m *CommonUploadResponse) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
-				return ErrInvalidLengthTracer
-			}
-			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthTracer
 			}
 			if (iNdEx + skippy) > l {
@@ -1027,7 +1009,7 @@ func (m *UploadSyncerBinlogEventRequest) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -1055,7 +1037,7 @@ func (m *UploadSyncerBinlogEventRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= int(b&0x7F) << shift
+				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1064,9 +1046,6 @@ func (m *UploadSyncerBinlogEventRequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracer
 			}
 			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthTracer
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1082,9 +1061,6 @@ func (m *UploadSyncerBinlogEventRequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
-				return ErrInvalidLengthTracer
-			}
-			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthTracer
 			}
 			if (iNdEx + skippy) > l {
@@ -1114,7 +1090,7 @@ func (m *UploadSyncerJobEventRequest) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -1142,7 +1118,7 @@ func (m *UploadSyncerJobEventRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= int(b&0x7F) << shift
+				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1151,9 +1127,6 @@ func (m *UploadSyncerJobEventRequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracer
 			}
 			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthTracer
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1169,9 +1142,6 @@ func (m *UploadSyncerJobEventRequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
-				return ErrInvalidLengthTracer
-			}
-			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthTracer
 			}
 			if (iNdEx + skippy) > l {
@@ -1240,11 +1210,8 @@ func skipTracer(dAtA []byte) (n int, err error) {
 					break
 				}
 			}
-			if length < 0 {
-				return 0, ErrInvalidLengthTracer
-			}
 			iNdEx += length
-			if iNdEx < 0 {
+			if length < 0 {
 				return 0, ErrInvalidLengthTracer
 			}
 			return iNdEx, nil
@@ -1275,9 +1242,6 @@ func skipTracer(dAtA []byte) (n int, err error) {
 					return 0, err
 				}
 				iNdEx = start + next
-				if iNdEx < 0 {
-					return 0, ErrInvalidLengthTracer
-				}
 			}
 			return iNdEx, nil
 		case 4:

@@ -1,10 +1,15 @@
 #!/bin/bash
 # parameter 1: work directory
 # parameter 2: config file for sync_diff_inspector
+# parameter 3: max check times
 
 workdir=$1
 conf=$2
-check_time=10
+if [ $# -ge 3 ]; then
+    check_time=$3
+else
+    check_time=10
+fi
 
 PWD=$(pwd)
 binary=$PWD/bin/sync_diff_inspector

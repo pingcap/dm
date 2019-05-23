@@ -46,6 +46,11 @@ const (
 	eventHeaderLen         = uint8(replication.EventHeaderSize) // always 19
 	crc32Len        uint32 = 4                                  // CRC32-length
 	tableMapFlags   uint16 = 1                                  // flags in TableMapEvent's post-header, not used yet
+
+	// MinUserVarEventLen represents the minimum event length for a USER_VAR_EVENT with checksum
+	MinUserVarEventLen = uint32(eventHeaderLen+4+1+1) + crc32Len // 29 bytes
+	// MinQueryEventLen represents the minimum event length for a QueryEvent with checksum
+	MinQueryEventLen = uint32(eventHeaderLen+4+4+1+2+2+1+1) + crc32Len // 38 bytes
 )
 
 var (
@@ -57,6 +62,10 @@ var (
 		0x04, 0x1a, 0x08, 0x00, 0x00, 0x00, 0x08, 0x08, 0x08, 0x02, 0x00, 0x00, 0x00, 0x0a, 0x0a, 0x0a,
 		0x2a, 0x2a, 0x00, 0x12, 0x34, 0x00,
 	}
+	// user var name used in dummy USER_VAR_EVENT
+	dummyUserVarName = []byte("!dummyvar")
+	// dummy (commented) query in a QueryEvent
+	dummyQuery = []byte("# dummy query, often used to fill a hole in a binlog file")
 )
 
 // GenEventHeader generates a EventHeader's raw data according to a passed-in EventHeader struct.
@@ -187,12 +196,12 @@ func GenRotateEvent(header *replication.EventHeader, latestPos uint32, nextLogNa
 }
 
 // GenPreviousGTIDsEvent generates a PreviousGTIDsEvent.
-// go-mysql has no PreviousGTIDsEvent struct defined, so return the event's raw data instead.
+// go-mysql has no PreviousGTIDsEvent struct defined, so return a GenericEvent instead.
 // MySQL has no internal doc for PREVIOUS_GTIDS_EVENT.
 // we ref:
 //   a. https://github.com/vitessio/vitess/blob/28e7e5503a6c3d3b18d4925d95f23ebcb6f25c8e/go/mysql/binlog_event_mysql56.go#L56
 //   b. https://dev.mysql.com/doc/internals/en/com-binlog-dump-gtid.html
-func GenPreviousGTIDsEvent(header *replication.EventHeader, latestPos uint32, gSet gtid.Set) ([]byte, error) {
+func GenPreviousGTIDsEvent(header *replication.EventHeader, latestPos uint32, gSet gtid.Set) (*replication.BinlogEvent, error) {
 	if gSet == nil || len(gSet.String()) == 0 {
 		return nil, errors.NotValidf("empty GTID set")
 	}
@@ -206,11 +215,9 @@ func GenPreviousGTIDsEvent(header *replication.EventHeader, latestPos uint32, gS
 	payload := origin.Encode()
 
 	buf := new(bytes.Buffer)
-	_, err := assembleEvent(buf, nil, false, *header, replication.PREVIOUS_GTIDS_EVENT, latestPos, nil, payload)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	return buf.Bytes(), nil
+	event := &replication.GenericEvent{} // no PreviousGTIDsEvent struct defined, so use a GenericEvent instead.
+	ev, err := assembleEvent(buf, event, false, *header, replication.PREVIOUS_GTIDS_EVENT, latestPos, nil, payload)
+	return ev, errors.Trace(err)
 }
 
 // GenGTIDEvent generates a GTIDEvent.
@@ -786,5 +793,60 @@ func GenMariaDBGTIDEvent(header *replication.EventHeader, latestPos uint32, sequ
 	buf := new(bytes.Buffer)
 	event := &replication.MariadbGTIDEvent{}
 	ev, err := assembleEvent(buf, event, false, *header, replication.MARIADB_GTID_EVENT, latestPos, nil, payload.Bytes())
+	return ev, errors.Trace(err)
+}
+
+// GenDummyEvent generates a dummy QueryEvent or a dummy USER_VAR_EVENT.
+// Dummy events often used to fill the holes in a relay log file which lacking some events from the master.
+// The minimum size is 29 bytes (19 bytes header + 6 bytes body for a USER_VAR_EVENT + 4 bytes checksum).
+// ref: https://dev.mysql.com/doc/internals/en/user-var-event.html
+// ref: https://github.com/MariaDB/server/blob/a765b19e5ca31a3d866cdbc8bef3a6f4e5e44688/sql/log_event.cc#L4950
+func GenDummyEvent(header *replication.EventHeader, latestPos uint32, eventSize uint32) (*replication.BinlogEvent, error) {
+	if eventSize < MinUserVarEventLen {
+		return nil, errors.Errorf("required dummy event size (%d) is too small, the minimum supported size is %d", eventSize, MinUserVarEventLen)
+	}
+
+	// modify flag in the header
+	headerClone := *header // do a copy
+	headerClone.Flags &= ^replication.LOG_EVENT_THREAD_SPECIFIC_F
+	headerClone.Flags |= replication.LOG_EVENT_SUPPRESS_USE_F
+	headerClone.Flags |= replication.LOG_EVENT_RELAY_LOG_F // now, the dummy event created by relay only
+
+	if eventSize < MinQueryEventLen {
+		// generate a USER_VAR_EVENT
+		var (
+			payload   = new(bytes.Buffer)
+			buf       = new(bytes.Buffer)
+			event     = &replication.GenericEvent{}
+			eventType = replication.USER_VAR_EVENT
+			nameLen   = eventSize - (MinUserVarEventLen - 1)
+			nameBytes = make([]byte, nameLen)
+		)
+		copy(nameBytes, dummyUserVarName)
+		// name_length, 4 bytes
+		err := binary.Write(payload, binary.LittleEndian, uint32(nameLen))
+		if err != nil {
+			return nil, errors.Annotatef(err, "write USER_VAR_EVENT name length %d", nameLen)
+		}
+		// name, name_length bytes (now, at least 1 byte)
+		err = binary.Write(payload, binary.LittleEndian, nameBytes)
+		if err != nil {
+			return nil, errors.Annotatef(err, "write USER_VAR_EVENT name % X", nameBytes)
+		}
+		// is_null, 1 byte
+		isNull := byte(1) // always is null (no `value` part)
+		err = binary.Write(payload, binary.LittleEndian, isNull)
+		if err != nil {
+			return nil, errors.Annotatef(err, "write USER_VAR_EVENT is-null % X", isNull)
+		}
+		ev, err := assembleEvent(buf, event, false, headerClone, eventType, latestPos, nil, payload.Bytes())
+		return ev, errors.Trace(err)
+	}
+
+	// generate a QueryEvent
+	queryLen := eventSize - (MinQueryEventLen - 1)
+	queryBytes := make([]byte, queryLen)
+	copy(queryBytes, dummyQuery)
+	ev, err := GenQueryEvent(&headerClone, latestPos, 0, 0, 0, nil, nil, queryBytes)
 	return ev, errors.Trace(err)
 }

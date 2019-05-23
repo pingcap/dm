@@ -272,7 +272,7 @@ func (cp *RemoteCheckPoint) Init(filename string, endPos int64) error {
 			log.Infof("[checkpoint] id:%s filename %s already exists, skip it.", cp.id, filename)
 			return nil
 		}
-		return errors.Annotatef(err, "initialize checkpoint")
+		return errors.Annotate(err, "initialize checkpoint")
 	}
 
 	return errors.Trace(err)

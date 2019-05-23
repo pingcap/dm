@@ -16,10 +16,11 @@ package master
 import (
 	"fmt"
 
-	"github.com/pingcap/dm/dm/ctl/common"
-	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
+
+	"github.com/pingcap/dm/dm/ctl/common"
+	"github.com/pingcap/dm/dm/pb"
 )
 
 // NewResumeRelayCmd creates a ResumeRelay command
@@ -49,7 +50,7 @@ func resumeRelayFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	resp, err := operateRelay(pb.RelayOp_ResumeRelay, workers)
+	resp, err := common.OperateRelay(pb.RelayOp_ResumeRelay, workers)
 	if err != nil {
 		common.PrintLines("can not resume relay unit:\n%v", errors.ErrorStack(err))
 		return
