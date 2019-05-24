@@ -302,7 +302,7 @@ func (c *Checker) Pause() {
 // Resume resumes the paused process
 func (c *Checker) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	if c.closed.Get() {
-		c.logger.Warn("[checker] try to resume, but already closed")
+		c.logger.Warn("try to resume, but already closed")
 		return
 	}
 
