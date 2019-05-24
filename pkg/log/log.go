@@ -57,7 +57,7 @@ func (cfg *Config) Adjust() {
 }
 
 // Logger is a simple wrapper around *zap.Logger which provides some extra
-// methods to simplify Lightning's log usage.
+// methods to simplify DM's log usage.
 type Logger struct {
 	*zap.Logger
 }
@@ -68,7 +68,7 @@ var (
 	appLevel  zap.AtomicLevel
 )
 
-// InitLogger initializes Lightning's and also the TiDB library's loggers.
+// InitLogger initializes DM's and also the TiDB library's loggers.
 func InitLogger(cfg *Config) error {
 	logutil.InitLogger(&logutil.LogConfig{Config: pclog.Config{Level: cfg.Level}})
 
@@ -118,7 +118,7 @@ func ShortError(err error) zap.Field {
 	return zap.String("error", err.Error())
 }
 
-// L returns the current logger for Lightning.
+// L returns the current logger for DM.
 func L() Logger {
 	return appLogger
 }
