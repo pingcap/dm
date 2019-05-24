@@ -19,15 +19,12 @@ import (
 	"strings"
 	"time"
 
-	"go.uber.org/zap"
-
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
-
-	"github.com/pingcap/tidb-tools/pkg/table-router"
-
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"github.com/pingcap/tidb-tools/pkg/table-router"
+	"go.uber.org/zap"
 )
 
 // move to tidb-tools later
@@ -197,7 +194,7 @@ func querySQL(db *sql.DB, query string, maxRetry int) (*sql.Rows, error) {
 	}
 
 	if err != nil {
-		log.L().Error("query retry", zap.String("query", query), zap.Error(err))
+		log.L().Error("query retry", zap.String("query", query), log.ShortError(err))
 		return nil, errors.Trace(err)
 	}
 

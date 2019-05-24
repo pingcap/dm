@@ -16,8 +16,6 @@ package parser
 import (
 	"bytes"
 
-	"go.uber.org/zap"
-
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
@@ -26,6 +24,7 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	_ "github.com/pingcap/tidb/types/parser_driver" // for import parser driver
+	"go.uber.org/zap"
 )
 
 var (
