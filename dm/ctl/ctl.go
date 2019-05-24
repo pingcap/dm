@@ -16,6 +16,8 @@ package ctl
 import (
 	"fmt"
 
+	"go.uber.org/zap/zapcore"
+
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/ctl/master"
 	"github.com/pingcap/dm/pkg/log"
@@ -35,7 +37,7 @@ type CommandMasterFlags struct {
 // Init initializes dm-control
 func Init(cfg *common.Config) error {
 	// set the log level temporarily
-	log.SetLevelByString("info")
+	log.SetLevel(zapcore.InfoLevel)
 	return errors.Trace(common.InitClient(cfg.MasterAddr))
 }
 

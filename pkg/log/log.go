@@ -14,196 +14,111 @@
 package log
 
 import (
-	"bytes"
-	"fmt"
-	"io"
-	"path"
-	"runtime"
-	"sort"
-	"strings"
-
-	log "github.com/sirupsen/logrus"
-	"gopkg.in/natefinch/lumberjack.v2"
+	pclog "github.com/pingcap/log"
+	"github.com/pingcap/tidb/util/logutil"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 const (
-	defaultLogLevel      = log.InfoLevel
-	defaultLogTimeFormat = "2006/01/02 15:04:05.000"
+	defaultLogLevel   = "info"
+	defaultLogMaxDays = 7
+	defaultLogMaxSize = 512 // MB
 )
 
-func init() {
-	log.SetLevel(defaultLogLevel)
-	log.AddHook(&contextHook{})
-	log.SetFormatter(&textFormatter{})
+// Config serializes log related config in toml/json.
+type Config struct {
+	// Log level.
+	Level string `toml:"level" json:"level"`
+	// Log filename, leave empty to disable file log.
+	File string `toml:"file" json:"file"`
+	// Max size for a single file, in MB.
+	FileMaxSize int `toml:"max-size" json:"max-size"`
+	// Max log keep days, default is never deleting.
+	FileMaxDays int `toml:"max-days" json:"max-days"`
+	// Maximum number of old log files to retain.
+	FileMaxBackups int `toml:"max-backups" json:"max-backups"`
 }
 
-// SetLevelByString sets log's level by a level string.
-func SetLevelByString(level string) {
-	log.SetLevel(stringToLogLevel(level))
-}
-
-// GetLogLevelAsString gets current log's level as a level string.
-func GetLogLevelAsString() string {
-	return log.GetLevel().String()
-}
-
-// SetOutput sets the standard logger output.
-func SetOutput(out io.Writer) {
-	log.SetOutput(out)
-}
-
-// SetOutputByName sets the filename for the log.
-func SetOutputByName(filename string) {
-	output := &lumberjack.Logger{
-		Filename:  filename,
-		LocalTime: true, // use default `MaxSize` (100M) now.
+// Adjust adjusts config
+func (cfg *Config) Adjust() {
+	if len(cfg.Level) == 0 {
+		cfg.Level = defaultLogLevel
 	}
-	log.SetOutput(output)
-}
-
-// Info logs a message at level Info on the wrapped logger.
-func Info(v ...interface{}) {
-	log.Info(v...)
-}
-
-// Infof logs a message at level Info on the wrapped logger.
-func Infof(format string, v ...interface{}) {
-	log.Infof(format, v...)
-}
-
-// Debug logs a message at level Debug on the wrapped logger.
-func Debug(v ...interface{}) {
-	log.Debug(v...)
-}
-
-// Debugf logs a message at level Debug on the wrapped logger.
-func Debugf(format string, v ...interface{}) {
-	log.Debugf(format, v...)
-}
-
-// Warn logs a message at level Warn on the wrapped logger.
-func Warn(v ...interface{}) {
-	log.Warn(v...)
-}
-
-// Warnf logs a message at level Warn on the wrapped logger.
-func Warnf(format string, v ...interface{}) {
-	log.Warnf(format, v...)
-}
-
-// Error logs a message at level Error on the wrapped logger.
-func Error(v ...interface{}) {
-	log.Error(v...)
-}
-
-// Errorf logs a message at level Error on the wrapped logger.
-func Errorf(format string, v ...interface{}) {
-	log.Errorf(format, v...)
-}
-
-// Fatal logs a message at level Fatal on the wrapped logger then the process will exit with status set to 1.
-func Fatal(v ...interface{}) {
-	log.Fatal(v...)
-}
-
-// Fatalf logs a message at level Fatal on the wrapped logger then the process will exit with status set to 1.
-func Fatalf(format string, v ...interface{}) {
-	log.Fatalf(format, v...)
-}
-
-func stringToLogLevel(level string) log.Level {
-	switch strings.ToLower(level) {
-	case "fatal":
-		return log.FatalLevel
-	case "error":
-		return log.ErrorLevel
-	case "warn", "warning":
-		return log.WarnLevel
-	case "debug":
-		return log.DebugLevel
-	case "info":
-		return log.InfoLevel
+	if cfg.Level == "warning" {
+		cfg.Level = "warn"
 	}
-	return defaultLogLevel
+	if cfg.FileMaxSize == 0 {
+		cfg.FileMaxSize = defaultLogMaxSize
+	}
+	if cfg.FileMaxDays == 0 {
+		cfg.FileMaxDays = defaultLogMaxDays
+	}
 }
 
-// modifyHook injects file name and line pos into log entry.
-type contextHook struct{}
-
-// Fire implements logrus.Hook interface
-// https://github.com/sirupsen/logrus/issues/63
-func (hook *contextHook) Fire(entry *log.Entry) error {
-	// these two num are set by manually testing
-	pc := make([]uintptr, 4)
-	cnt := runtime.Callers(10, pc)
-
-	for i := 0; i < cnt; i++ {
-		fu := runtime.FuncForPC(pc[i] - 1)
-		name := fu.Name()
-		if !isSkippedPackageName(name) {
-			file, line := fu.FileLine(pc[i] - 1)
-			entry.Data["file"] = path.Base(file)
-			entry.Data["line"] = line
-			break
-		}
-	}
-	return nil
+// Logger is a simple wrapper around *zap.Logger which provides some extra
+// methods to simplify Lightning's log usage.
+type Logger struct {
+	*zap.Logger
 }
 
-// Levels implements logrus.Hook interface.
-func (hook *contextHook) Levels() []log.Level {
-	return log.AllLevels
+// logger for DM
+var (
+	appLogger = Logger{zap.NewNop()}
+	appLevel  zap.AtomicLevel
+)
+
+// InitLogger initializes Lightning's and also the TiDB library's loggers.
+func InitLogger(cfg *Config) error {
+	logutil.InitLogger(&logutil.LogConfig{Config: pclog.Config{Level: cfg.Level}})
+
+	logger, props, err := pclog.InitLogger(&pclog.Config{
+		Level: cfg.Level,
+		File: pclog.FileLogConfig{
+			Filename:   cfg.File,
+			LogRotate:  true,
+			MaxSize:    cfg.FileMaxSize,
+			MaxDays:    cfg.FileMaxDays,
+			MaxBackups: cfg.FileMaxBackups,
+		},
+	})
+	// Do not log stack traces at all, as we'll get the stack trace from the
+	// error itself.
+	appLogger = Logger{logger.WithOptions(zap.AddStacktrace(zap.DPanicLevel))}
+	appLevel = props.Level
+
+	return err
 }
 
-// isSKippedPackageName tests wether path name is on log library calling stack.
-func isSkippedPackageName(name string) bool {
-	return strings.Contains(name, "github.com/sirupsen/logrus") ||
-		strings.Contains(name, "github.com/pingcap/dm/pkg/log")
+// With creates a child logger from the global logger and adds structured
+// context to it.
+func With(fields ...zap.Field) Logger {
+	return Logger{appLogger.With(fields...)}
 }
 
-// textFormatter is for compatibility with ngaut/log
-type textFormatter struct {
-	DisableTimestamp bool
-	EnableEntryOrder bool
+// SetLevel modifies the log level of the global logger. Returns the previous
+// level.
+func SetLevel(level zapcore.Level) zapcore.Level {
+	oldLevel := appLevel.Level()
+	appLevel.SetLevel(level)
+	return oldLevel
 }
 
-// Format implements logrus.Formatter
-func (f *textFormatter) Format(entry *log.Entry) ([]byte, error) {
-	var b *bytes.Buffer
-	if entry.Buffer != nil {
-		b = entry.Buffer
-	} else {
-		b = &bytes.Buffer{}
+// ShortError contructs a field which only records the error message without the
+// verbose text (i.e. excludes the stack trace).
+//
+// In DM, all errors are almost always propagated back to `main()` where
+// the error stack is written. Including the stack in the middle thus usually
+// just repeats known information. You should almost always use `ShortError`
+// instead of `zap.Error`, unless the error is no longer propagated upwards.
+func ShortError(err error) zap.Field {
+	if err == nil {
+		return zap.Skip()
 	}
+	return zap.String("error", err.Error())
+}
 
-	if !f.DisableTimestamp {
-		fmt.Fprintf(b, "%s ", entry.Time.Format(defaultLogTimeFormat))
-	}
-	if file, ok := entry.Data["file"]; ok {
-		fmt.Fprintf(b, "%s:%v:", file, entry.Data["line"])
-	}
-	fmt.Fprintf(b, " [%s] %s", entry.Level.String(), entry.Message)
-
-	if f.EnableEntryOrder {
-		keys := make([]string, 0, len(entry.Data))
-		for k := range entry.Data {
-			if k != "file" && k != "line" {
-				keys = append(keys, k)
-			}
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			fmt.Fprintf(b, " %v=%v", k, entry.Data[k])
-		}
-	} else {
-		for k, v := range entry.Data {
-			if k != "file" && k != "line" {
-				fmt.Fprintf(b, " %v=%v", k, v)
-			}
-		}
-	}
-
-	b.WriteByte('\n')
-
-	return b.Bytes(), nil
+// L returns the current logger for Lightning.
+func L() Logger {
+	return appLogger
 }

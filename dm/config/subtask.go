@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
@@ -196,7 +198,7 @@ func (c *SubTaskConfig) SetupFlags(name CmdName) {
 func (c *SubTaskConfig) String() string {
 	cfg, err := json.Marshal(c)
 	if err != nil {
-		log.Errorf("[config] marshal sub task dm config to json error %v", err)
+		log.L().Error("marshal sub task dm config to json", zap.Reflect("subtask configuration", c), zap.Error(err))
 	}
 	return string(cfg)
 }
