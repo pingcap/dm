@@ -18,7 +18,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"path"
 	"strings"
 
@@ -127,18 +126,17 @@ func (t *testMaster) TestUpdateConfig(c *check.C) {
 		err        error
 		content    []byte
 		newContent []byte
-		newCfgPath string
 	)
-	newCfgPath = path.Join(c.MkDir(), "test_config.toml")
-	c.Assert(err, check.IsNil)
 
 	cfg := &Config{}
-	cfg.configFromFile(defaultConfigFile)
+	err = cfg.configFromFile(defaultConfigFile)
+	c.Assert(err, check.IsNil)
 
 	content, err = ioutil.ReadFile(defaultConfigFile)
 	c.Assert(err, check.IsNil)
 
 	// update config to a new file
+	newCfgPath := path.Join(c.MkDir(), "test_config.toml")
 	cfg.ConfigFile = newCfgPath
 	err = cfg.UpdateConfigFile(string(content))
 	c.Assert(err, check.IsNil)
@@ -157,30 +155,30 @@ func (t *testMaster) TestUpdateConfig(c *check.C) {
 
 func (t *testMaster) TestInvalidConfig(c *check.C) {
 	var (
-		f   *os.File
 		err error
 		cfg = NewConfig()
 	)
-	f, err = ioutil.TempFile(".", "test_invalid_config.toml")
-	c.Assert(err, check.IsNil)
-	defer os.Remove(f.Name())
 
 	// test config Verify failed
-	f.Write([]byte(`
+	configContent := []byte(`
 master-addr = ":8261"
 
 [[deploy]]
-dm-worker = "172.16.10.72:8262"`))
-	err = cfg.configFromFile(f.Name())
+dm-worker = "172.16.10.72:8262"`)
+	filepath := path.Join(c.MkDir(), "test_invalid_config.toml")
+	err = ioutil.WriteFile(filepath, configContent, 0644)
+	c.Assert(err, check.IsNil)
+	err = cfg.configFromFile(filepath)
 	c.Assert(err, check.IsNil)
 	err = cfg.adjust()
 	c.Assert(err, check.ErrorMatches, "user should specify valid relation between source\\(mysql/mariadb\\) and dm-worker.*")
 
 	// test invalid config file content
-	f.Write([]byte("invalid toml file"))
-	err = cfg.Parse([]string{fmt.Sprintf("-config=%s", f.Name())})
+	err = ioutil.WriteFile(filepath, []byte("invalid toml file"), 0644)
+	c.Assert(err, check.IsNil)
+	err = cfg.Parse([]string{fmt.Sprintf("-config=%s", filepath)})
 	c.Assert(err, check.NotNil)
-	cfg.ConfigFile = f.Name()
+	cfg.ConfigFile = filepath
 	err = cfg.Reload()
 	c.Assert(err, check.NotNil)
 }
