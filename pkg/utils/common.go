@@ -197,7 +197,7 @@ func querySQL(db *sql.DB, query string, maxRetry int) (*sql.Rows, error) {
 	}
 
 	if err != nil {
-		log.L().Error("query retry", zap.String("query", query), zap.Error(err))
+		log.L().Error("query failed", zap.String("query", query), zap.Error(err))
 		return nil, errors.Trace(err)
 	}
 

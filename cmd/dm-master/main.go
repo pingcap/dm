@@ -15,10 +15,13 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/master"
 	"github.com/pingcap/dm/pkg/log"
@@ -38,13 +41,17 @@ func main() {
 		os.Exit(2)
 	}
 
-	log.SetLevelByString(strings.ToLower(cfg.LogLevel))
-	if len(cfg.LogFile) > 0 {
-		log.SetOutputByName(cfg.LogFile)
+	err = log.InitLogger(&log.Config{
+		File:  cfg.LogFile,
+		Level: strings.ToLower(cfg.LogLevel),
+	})
+	if err != nil {
+		fmt.Printf("init logger error %v", errors.ErrorStack(err))
+		os.Exit(2)
 	}
 
 	utils.PrintInfo("dm-master", func() {
-		log.Infof("config: %s", cfg)
+		log.L().Infof("", zap.Stringer("server config", cfg))
 	})
 
 	sc := make(chan os.Signal, 1)
@@ -58,15 +65,23 @@ func main() {
 
 	go func() {
 		sig := <-sc
-		log.Infof("got signal [%v], exit", sig)
+		log.L().Infof("got signal to exit", zap.Stringer("signal", sig))
 		server.Close()
 	}()
 
 	err = server.Start()
 	if err != nil {
-		log.Errorf("dm-master start with error %v", errors.ErrorStack(err))
+		log.L().Errorf("fail to start dm-master", zap.Stringer(err))
 	}
 	server.Close()
 
+	syncErr := log.L().Sync()
+	if syncErr != nil {
+		fmt.Fprintln(os.Stderr, "sync log failed", syncErr)
+	}
+
 	log.Info("dm-master exit")
+	if err != nil || syncErr != nil {
+		os.Exit(1)
+	}
 }

@@ -198,7 +198,7 @@ func (c *SubTaskConfig) SetupFlags(name CmdName) {
 func (c *SubTaskConfig) String() string {
 	cfg, err := json.Marshal(c)
 	if err != nil {
-		log.L().Error("marshal sub task dm config to json", zap.Reflect("subtask configuration", c), zap.Error(err))
+		log.L().Error("marshal sub task dm config to json", zap.Reflect("subtask configuration", c), log.ShortError(err))
 	}
 	return string(cfg)
 }
