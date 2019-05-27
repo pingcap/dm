@@ -59,6 +59,9 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 		MetaSchema: "test",
 		Name:       "syncer_ut",
 		Mode:       config.ModeIncrement,
+
+		Batch:       10,
+		WorkerCount: 2,
 	}
 	s.cfg.From.Adjust()
 	s.cfg.To.Adjust()
@@ -1164,7 +1167,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		c.Assert(err, IsNil)
 	}
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		time.Sleep(time.Second)
 
 		testJobs.RLock()
