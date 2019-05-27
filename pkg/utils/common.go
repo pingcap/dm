@@ -19,15 +19,12 @@ import (
 	"strings"
 	"time"
 
-	"go.uber.org/zap"
-
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
-
-	"github.com/pingcap/tidb-tools/pkg/table-router"
-
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"github.com/pingcap/tidb-tools/pkg/table-router"
+	"go.uber.org/zap"
 )
 
 // move to tidb-tools later

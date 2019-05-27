@@ -23,8 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
-
 	_ "github.com/go-sql-driver/mysql" // for mysql
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/check"
@@ -33,6 +31,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go/sync2"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -302,7 +301,7 @@ func (c *Checker) Pause() {
 // Resume resumes the paused process
 func (c *Checker) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	if c.closed.Get() {
-		c.logger.Warn("[checker] try to resume, but already closed")
+		c.logger.Warn("try to resume, but already closed")
 		return
 	}
 
