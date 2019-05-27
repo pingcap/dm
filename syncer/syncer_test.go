@@ -59,9 +59,6 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 		MetaSchema: "test",
 		Name:       "syncer_ut",
 		Mode:       config.ModeIncrement,
-
-		Batch:       10,
-		WorkerCount: 2,
 	}
 	s.cfg.From.Adjust()
 	s.cfg.To.Adjust()
@@ -1050,6 +1047,9 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			Arguments:     []string{"1", "test_", "t_"},
 		},
 	}
+
+	s.cfg.Batch = 10
+	s.cfg.WorkerCount = 2
 
 	syncer := NewSyncer(s.cfg)
 	err := syncer.Init()
