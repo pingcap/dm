@@ -122,7 +122,11 @@ type Syncer struct {
 	closed sync2.AtomicBool
 
 	start    time.Time
-	lastTime time.Time
+	lastTime struct {
+		sync.RWMutex
+		t time.Time
+	}
+
 	timezone *time.Location
 
 	binlogSizeCount     sync2.AtomicInt64
@@ -966,7 +970,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	}()
 
 	s.start = time.Now()
-	s.lastTime = s.start
+	s.lastTime.Lock()
+	s.lastTime.t = s.start
+	s.lastTime.Unlock()
+
 	tryReSync := true
 
 	// safeMode makes syncer reentrant.
@@ -1785,7 +1792,9 @@ func (s *Syncer) printStatus(ctx context.Context) {
 			return
 		case <-timer.C:
 			now := time.Now()
-			seconds := now.Unix() - s.lastTime.Unix()
+			s.lastTime.RLock()
+			seconds := now.Unix() - s.lastTime.t.Unix()
+			s.lastTime.RUnlock()
 			totalSeconds := now.Unix() - s.start.Unix()
 			last := s.lastCount.Get()
 			total := s.count.Get()
@@ -1834,7 +1843,9 @@ func (s *Syncer) printStatus(ctx context.Context) {
 
 			s.lastCount.Set(total)
 			s.lastBinlogSizeCount.Set(totalBinlogSize)
-			s.lastTime = time.Now()
+			s.lastTime.Lock()
+			s.lastTime.t = time.Now()
+			s.lastTime.Unlock()
 			s.totalTps.Set(totalTps)
 			s.tps.Set(tps)
 		}

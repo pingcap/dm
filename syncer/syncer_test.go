@@ -1113,7 +1113,17 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		c.Assert(err, IsNil)
 	}
 
-	time.Sleep(time.Second)
+	for i := 0; i < 10; i++ {
+		time.Sleep(time.Second)
+
+		testJobs.RLock()
+		jobNum := len(testJobs.jobs)
+		testJobs.RUnlock()
+
+		if jobNum >= len(testCases1) {
+			break
+		}
+	}
 
 	testJobs.Lock()
 	c.Assert(testJobs.jobs, HasLen, len(testCases1))
@@ -1140,7 +1150,16 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		},
 	}
 
+	cancel()
+	syncer.Pause()
 	syncer.Update(s.cfg)
+
+	s.resetMaster()
+	s.resetBinlogSyncer()
+
+	ctx, cancel = context.WithCancel(context.Background())
+	resultCh = make(chan pb.ProcessResult)
+	go syncer.Resume(ctx, resultCh)
 
 	testCases2 := []struct {
 		sql      string
@@ -1167,14 +1186,14 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		c.Assert(err, IsNil)
 	}
 
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 10; i++ {
 		time.Sleep(time.Second)
 
 		testJobs.RLock()
 		jobNum := len(testJobs.jobs)
 		testJobs.RUnlock()
 
-		if jobNum > 0 {
+		if jobNum >= len(testCases2) {
 			break
 		}
 	}
@@ -1206,6 +1225,8 @@ var testJobs struct {
 }
 
 func (s *Syncer) addJobToMemory(job *job) error {
+	log.Infof("addJobToMemory: %v", job)
+
 	switch job.tp {
 	case ddl, insert, update, del:
 		s.addCount(false, "test", job.tp, 1)
