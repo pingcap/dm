@@ -17,6 +17,7 @@ import (
 	"sync"
 
 	"github.com/pingcap/dm/pkg/log"
+	"go.uber.org/zap"
 )
 
 // FuncRollback records function used to rolling back some operations.
@@ -54,7 +55,7 @@ func (h *FuncRollbackHolder) RollbackReverseOrder() {
 	defer h.mu.Unlock()
 	for i := len(h.fns) - 1; i >= 0; i-- {
 		fn := h.fns[i]
-		log.Infof("[%s] rolling back %s", h.owner, fn.Name)
+		log.L().Info("rolling back", zap.String("functon", fn.Name), zap.String("onwer", h.owner))
 		fn.Fn()
 	}
 }

@@ -31,6 +31,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go/sync2"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -54,6 +55,8 @@ type mysqlInstance struct {
 type Checker struct {
 	closed sync2.AtomicBool
 
+	logger log.Logger
+
 	instances []*mysqlInstance
 
 	checkList     []check.Checker
@@ -69,6 +72,7 @@ func NewChecker(cfgs []*config.SubTaskConfig, checkingItems map[string]string) *
 	c := &Checker{
 		instances:     make([]*mysqlInstance, 0, len(cfgs)),
 		checkingItems: checkingItems,
+		logger:        log.With(zap.String("unit", "checker")),
 	}
 
 	for _, cfg := range cfgs {
@@ -204,7 +208,7 @@ func (c *Checker) Init() (err error) {
 		}
 	}
 
-	log.Infof(c.displayCheckingItems())
+	c.logger.Info(c.displayCheckingItems())
 	return nil
 }
 
@@ -272,14 +276,14 @@ func (c *Checker) closeDBs() {
 	for _, instance := range c.instances {
 		if instance.sourceDB != nil {
 			if err := dbutil.CloseDB(instance.sourceDB); err != nil {
-				log.Errorf("close source db %+v error %v", instance.sourceDBinfo, err)
+				c.logger.Error("close source db", zap.Stringer("db", instance.sourceDBinfo), log.ShortError(err))
 			}
 			instance.sourceDB = nil
 		}
 
 		if instance.targetDB != nil {
 			if err := dbutil.CloseDB(instance.targetDB); err != nil {
-				log.Errorf("close target db %+v error %v", instance.targetDBInfo, err)
+				c.logger.Error("close target db", zap.Stringer("db", instance.targetDBInfo), log.ShortError(err))
 			}
 			instance.targetDB = nil
 		}
@@ -289,7 +293,7 @@ func (c *Checker) closeDBs() {
 // Pause implements Unit interface
 func (c *Checker) Pause() {
 	if c.closed.Get() {
-		log.Warn("[checker] try to pause, but already closed")
+		c.logger.Warn("try to pause, but already closed")
 		return
 	}
 }
@@ -297,7 +301,7 @@ func (c *Checker) Pause() {
 // Resume resumes the paused process
 func (c *Checker) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	if c.closed.Get() {
-		log.Warn("[checker] try to resume, but already closed")
+		c.logger.Warn("try to resume, but already closed")
 		return
 	}
 

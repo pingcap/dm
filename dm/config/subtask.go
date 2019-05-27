@@ -30,6 +30,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go-mysql/mysql"
+	"go.uber.org/zap"
 )
 
 // task modes
@@ -196,7 +197,7 @@ func (c *SubTaskConfig) SetupFlags(name CmdName) {
 func (c *SubTaskConfig) String() string {
 	cfg, err := json.Marshal(c)
 	if err != nil {
-		log.Errorf("[config] marshal sub task dm config to json error %v", err)
+		log.L().Error("marshal sub task dm config to json", zap.Reflect("subtask configuration", c), zap.Error(err))
 	}
 	return string(cfg)
 }
