@@ -1164,7 +1164,17 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		c.Assert(err, IsNil)
 	}
 
-	time.Sleep(time.Second)
+	for i := 0; i < 3; i++ {
+		time.Sleep(time.Second)
+
+		testJobs.RLock()
+		jobNum := len(testJobs.jobs)
+		testJobs.RUnlock()
+
+		if jobNum > 0 {
+			break
+		}
+	}
 
 	testJobs.RLock()
 	c.Assert(testJobs.jobs, HasLen, len(testCases2))
