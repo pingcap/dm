@@ -47,9 +47,9 @@ type RelayHolder interface {
 	Operate(ctx context.Context, req *pb.OperateRelayRequest) error
 	// Result returns the result of the relay
 	Result() *pb.ProcessResult
-	// Update update relay config online
+	// Update updates relay config online
 	Update(ctx context.Context, cfg *Config) error
-	// Migrate reset binlog name and binlog position for relay unit
+	// Migrate resets binlog name and binlog position for relay unit
 	Migrate(ctx context.Context, binlogName string, binlogPos uint32) error
 }
 

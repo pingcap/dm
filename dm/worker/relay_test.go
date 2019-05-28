@@ -95,7 +95,7 @@ func (t *testRelay) testStart(c *C, holder *RealRelayHolder) {
 
 	// test update and pause -> resume
 	t.testUpdate(c, holder)
-	c.Assert(holder.Stage(), DeepEquals, pb.Stage_Paused)
+	c.Assert(holder.Stage(), Equals, pb.Stage_Paused)
 	c.Assert(holder.closed.Get(), Equals, closedFalse)
 
 	err := holder.Operate(context.Background(), &pb.OperateRelayRequest{Op: pb.RelayOp_ResumeRelay})
@@ -121,7 +121,7 @@ func (t *testRelay) testClose(c *C, holder *RealRelayHolder) {
 
 	holder.Close()
 	c.Assert(waitRelayStage(holder, pb.Stage_Paused, 10), IsTrue)
-	c.Assert(holder.Result(), DeepEquals, processResult)
+	c.Assert(holder.Result(), Equals, processResult)
 	c.Assert(holder.closed.Get(), Equals, closedTrue)
 
 	holder.Close()
@@ -141,7 +141,7 @@ func (t *testRelay) testClose(c *C, holder *RealRelayHolder) {
 func (t *testRelay) testPauseAndResume(c *C, holder *RealRelayHolder) {
 	err := holder.Operate(context.Background(), &pb.OperateRelayRequest{Op: pb.RelayOp_PauseRelay})
 	c.Assert(err, IsNil)
-	c.Assert(holder.Stage(), DeepEquals, pb.Stage_Paused)
+	c.Assert(holder.Stage(), Equals, pb.Stage_Paused)
 	c.Assert(holder.closed.Get(), Equals, closedFalse)
 
 	err = holder.pauseRelay(context.Background(), &pb.OperateRelayRequest{Op: pb.RelayOp_PauseRelay})
