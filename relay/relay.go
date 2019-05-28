@@ -95,9 +95,9 @@ type Process interface {
 	Error() interface{}
 	// Status returns status of relay log process unit
 	Status() interface{}
-	// Close do some clean works
+	// Close does some clean works
 	Close()
-	// IsClosed return whether relay log process unit was closed
+	// IsClosed returns whether relay log process unit was closed
 	IsClosed() bool
 }
 

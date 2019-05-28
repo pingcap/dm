@@ -307,7 +307,7 @@ func (p *RelayPurger) earliestActiveRelayLog() *streamer.RelayLogInfo {
 /************ dummy purger **************/
 type dummyPurger struct{}
 
-// NewDummyPurger return a dummy purger
+// NewDummyPurger returns a dummy purger
 func NewDummyPurger(cfg Config, baseRelayDir string, operators []RelayOperator, interceptors []PurgeInterceptor) Purger {
 	return &dummyPurger{}
 }
