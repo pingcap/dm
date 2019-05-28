@@ -37,7 +37,7 @@ func main() {
 	case flag.ErrHelp:
 		os.Exit(0)
 	default:
-		log.Errorf("parse cmd flags err %s", err)
+		fmt.Printf("parse cmd flags err %s", err)
 		os.Exit(2)
 	}
 
@@ -51,7 +51,7 @@ func main() {
 	}
 
 	utils.PrintInfo("dm-master", func() {
-		log.L().Infof("", zap.Stringer("server config", cfg))
+		log.L().Info("", zap.Stringer("server config", cfg))
 	})
 
 	sc := make(chan os.Signal, 1)
@@ -65,22 +65,23 @@ func main() {
 
 	go func() {
 		sig := <-sc
-		log.L().Infof("got signal to exit", zap.Stringer("signal", sig))
+		log.L().Info("got signal to exit", zap.Stringer("signal", sig))
 		server.Close()
 	}()
 
 	err = server.Start()
 	if err != nil {
-		log.L().Errorf("fail to start dm-master", zap.Stringer(err))
+		log.L().Error("fail to start dm-master", zap.Error(err))
 	}
 	server.Close()
+
+	log.L().Info("dm-master exit")
 
 	syncErr := log.L().Sync()
 	if syncErr != nil {
 		fmt.Fprintln(os.Stderr, "sync log failed", syncErr)
 	}
 
-	log.Info("dm-master exit")
 	if err != nil || syncErr != nil {
 		os.Exit(1)
 	}
