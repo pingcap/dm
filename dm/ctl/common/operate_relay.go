@@ -11,23 +11,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package common
 
 import (
 	"context"
-	"os"
 
-	"github.com/pingcap/dm/tests/utils"
+	"github.com/pingcap/dm/dm/pb"
 )
 
-func main() {
-	cli, err := utils.CreateDmCtl("127.0.0.1:8261")
-	if err != nil {
-		utils.ExitWithError(err)
-	}
-	conf := os.Args[1]
-	err = utils.StartTask(context.Background(), cli, conf, nil)
-	if err != nil {
-		utils.ExitWithError(err)
-	}
+// OperateRelay does operation on relay unit
+func OperateRelay(op pb.RelayOp, workers []string) (*pb.OperateWorkerRelayResponse, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cli := MasterClient()
+	return cli.OperateWorkerRelayTask(ctx, &pb.OperateWorkerRelayRequest{
+		Op:      op,
+		Workers: workers,
+	})
 }
