@@ -22,8 +22,8 @@ import (
 func (t *testServer) TestConfig(c *C) {
 	cfg := NewConfig()
 
-	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
-	c.Assert(cfg.SourceID, Equals, "mysql-replica-01")
+	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml", "-relay-dir=./xx"}), IsNil)
+	c.Assert(cfg.RelayDir, Equals, "./xx")
 	c.Assert(cfg.ServerID, Equals, 101)
 
 	dir := c.MkDir()

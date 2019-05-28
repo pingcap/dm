@@ -121,7 +121,7 @@ func (t *testRelay) testClose(c *C, holder *RealRelayHolder) {
 
 	holder.Close()
 	c.Assert(waitRelayStage(holder, pb.Stage_Paused, 10), IsTrue)
-	c.Assert(holder.Result(), Equals, processResult)
+	c.Assert(holder.Result(), DeepEquals, processResult)
 	c.Assert(holder.closed.Get(), Equals, closedTrue)
 
 	holder.Close()
