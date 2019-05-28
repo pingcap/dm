@@ -311,7 +311,7 @@ func (s *Server) ExecuteDDL(ctx context.Context, req *pb.ExecDDLRequest) (*pb.Co
 	if err != nil {
 		log.Errorf("[server] %v ExecuteDDL error %v", req, errors.ErrorStack(err))
 	}
-	return mkResponse(err), nil
+	return makeCommonWorkerResponse(err), nil
 }
 
 // BreakDDLLock implements WorkerServer.BreakDDLLock
@@ -322,7 +322,7 @@ func (s *Server) BreakDDLLock(ctx context.Context, req *pb.BreakDDLLockRequest) 
 	if err != nil {
 		log.Errorf("[server] %v BreakDDLLock error %v", req, errors.ErrorStack(err))
 	}
-	return mkResponse(err), nil
+	return makeCommonWorkerResponse(err), nil
 }
 
 // HandleSQLs implements WorkerServer.HandleSQLs
@@ -333,7 +333,7 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSubTaskSQLsReques
 	if err != nil {
 		log.Errorf("[server] handle sqls %+v error %v", req, errors.ErrorStack(err))
 	}
-	return mkResponse(err), nil
+	return makeCommonWorkerResponse(err), nil
 }
 
 // SwitchRelayMaster implements WorkerServer.SwitchRelayMaster
@@ -344,7 +344,7 @@ func (s *Server) SwitchRelayMaster(ctx context.Context, req *pb.SwitchRelayMaste
 	if err != nil {
 		log.Errorf("[server] %v SwitchRelayMaster error %v", req, errors.ErrorStack(err))
 	}
-	return mkResponse(err), nil
+	return makeCommonWorkerResponse(err), nil
 }
 
 // OperateRelay implements WorkerServer.OperateRelay
@@ -375,7 +375,7 @@ func (s *Server) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) (*pb
 	if err != nil {
 		log.Errorf("[server] %v PurgeRelay error %v", req, errors.ErrorStack(err))
 	}
-	return mkResponse(err), nil
+	return makeCommonWorkerResponse(err), nil
 }
 
 // UpdateRelayConfig updates config for relay and (dm-worker)
@@ -386,7 +386,7 @@ func (s *Server) UpdateRelayConfig(ctx context.Context, req *pb.UpdateRelayReque
 	if err != nil {
 		log.Errorf("[server] %v UpdateRelayConfig error %v", req, errors.ErrorStack(err))
 	}
-	return mkResponse(err), nil
+	return makeCommonWorkerResponse(err), nil
 }
 
 // QueryWorkerConfig return worker config
@@ -426,10 +426,10 @@ func (s *Server) MigrateRelay(ctx context.Context, req *pb.MigrateRelayRequest) 
 	if err != nil {
 		log.Errorf("[worker] %v MigrateRelay error %v", req, errors.ErrorStack(err))
 	}
-	return mkResponse(err), nil
+	return makeCommonWorkerResponse(err), nil
 }
 
-func mkResponse(reqErr error) *pb.CommonWorkerResponse {
+func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {
 	resp := &pb.CommonWorkerResponse{
 		Result: true,
 	}
