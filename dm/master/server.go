@@ -33,6 +33,7 @@ import (
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/master/sql-operator"
+	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/tracing"
 )
@@ -55,6 +56,8 @@ type Server struct {
 	// dm-worker-ID(host:ip) -> dm-worker-client
 	workerClients map[string]pb.WorkerClient
 
+	workerClients2 map[string]workerrpc.Client
+
 	// task-name -> worker-list
 	taskWorkers map[string][]string
 
@@ -75,6 +78,7 @@ func NewServer(cfg *Config) *Server {
 	server := Server{
 		cfg:               cfg,
 		workerClients:     make(map[string]pb.WorkerClient),
+		workerClients2:    make(map[string]workerrpc.Client),
 		taskWorkers:       make(map[string][]string),
 		lockKeeper:        NewLockKeeper(),
 		sqlOperatorHolder: operator.NewHolder(),
@@ -100,6 +104,11 @@ func (s *Server) Start() error {
 			return errors.Trace(err2)
 		}
 		s.workerClients[workerAddr] = pb.NewWorkerClient(conn)
+
+		s.workerClients2[workerAddr], err2 = workerrpc.NewGRPCClient(workerAddr)
+		if err2 != nil {
+			return errors.Trace(err2)
+		}
 	}
 	s.closed.Set(false)
 
@@ -238,10 +247,12 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 				return
 			}
 			validWorkerCh <- worker
-			ctx2, cancel := context.WithTimeout(ctx, s.cfg.RPCTimeout)
-			defer cancel()
-			workerResp, err := cli.StartSubTask(ctx2, &pb.StartSubTaskRequest{Task: stCfgToml})
-			workerResp = s.handleOperationResult(ctx, cli, taskName, err, workerResp)
+			req := &workerrpc.Request{
+				Type:         workerrpc.CmdStartSubTask,
+				StartSubTask: &pb.StartSubTaskRequest{Task: stCfgToml},
+			}
+			resp, err := cli.SendRequest(ctx, req, s.cfg.RPCTimeout)
+			workerResp := s.handleOperationResult(ctx, cli, taskName, err, resp.StartSubTask)
 			workerResp.Meta.Worker = worker
 			workerRespCh <- workerResp.Meta
 		}, func(args ...interface{}) {
@@ -312,24 +323,26 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 		workerRespCh <- workerResp
 	}
 
-	subReq := &pb.OperateSubTaskRequest{
-		Op:   req.Op,
-		Name: req.Name,
+	subReq := &workerrpc.Request{
+		Type: workerrpc.CmdOperateSubTask,
+		OperateSubTask: &pb.OperateSubTaskRequest{
+			Op:   req.Op,
+			Name: req.Name,
+		},
 	}
+
 	var wg sync.WaitGroup
 	for _, worker := range workers {
 		wg.Add(1)
 		go Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
-			cli, worker1, err := s.workerArgsExtractor(args...)
+			cli, worker1, err := s.workerArgsExtractor2(args...)
 			if err != nil {
 				handleErr(err, worker1)
 				return
 			}
-			ctx2, cancel := context.WithTimeout(ctx, s.cfg.RPCTimeout)
-			defer cancel()
-			workerResp, err := cli.OperateSubTask(ctx2, subReq)
-			workerResp = s.handleOperationResult(ctx, cli, req.Name, err, workerResp)
+			resp, err := cli.SendRequest(ctx, subReq, s.cfg.RPCTimeout)
+			workerResp := s.handleOperationResult(ctx, cli, req.Name, err, resp.OperateSubTask)
 			workerResp.Op = req.Op
 			workerResp.Meta.Worker = worker1
 			workerRespCh <- workerResp
@@ -415,10 +428,13 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 			if !ok {
 				return
 			}
-			ctx2, cancel := context.WithTimeout(ctx, s.cfg.RPCTimeout)
-			defer cancel()
-			workerResp, err := cli.UpdateSubTask(ctx2, &pb.UpdateSubTaskRequest{Task: stCfgToml})
-			workerResp = s.handleOperationResult(ctx, cli, taskName, err, workerResp)
+
+			req := &workerrpc.Request{
+				Type:          workerrpc.CmdUpdateSubTask,
+				UpdateSubTask: &pb.UpdateSubTaskRequest{Task: stCfgToml},
+			}
+			resp, err := cli.SendRequest(ctx, req, s.cfg.RPCTimeout)
+			workerResp := s.handleOperationResult(ctx, cli, taskName, err, resp.UpdateSubTask)
 			workerResp.Meta.Worker = worker
 			workerRespCh <- workerResp.Meta
 		}, func(args ...interface{}) {
@@ -1785,35 +1801,40 @@ var (
 	retryInterval = time.Second
 )
 
-func (s *Server) waitOperationOk(ctx context.Context, cli pb.WorkerClient, name string, opLogID int64) error {
-	request := &pb.QueryTaskOperationRequest{
-		Name:  name,
-		LogID: opLogID,
+func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, name string, opLogID int64) error {
+	req := &workerrpc.Request{
+		Type: workerrpc.CmdQueryTaskOperation,
+		QueryTaskOperation: &pb.QueryTaskOperationRequest{
+			Name:  name,
+			LogID: opLogID,
+		},
 	}
 
 	for num := 0; num < maxRetryNum; num++ {
-		res, err := cli.QueryTaskOperation(ctx, request)
+		resp, err := cli.SendRequest(ctx, req, s.cfg.RPCTimeout)
 		if err != nil {
 			log.Errorf("fail to query task operation %v", err)
-		} else if res.Log.Success {
-			return nil
-		} else if len(res.Log.Message) != 0 {
-			return errors.New(res.Log.Message)
+		} else {
+			respLog := resp.QueryTaskOperation.Log
+			if respLog.Success {
+				return nil
+			} else if len(respLog.Message) != 0 {
+				return errors.New(respLog.Message)
+			}
 		}
 
-		log.Infof("wait task %s op log %d, current result %+v", name, opLogID, res)
+		log.Infof("wait task %s op log %d, current result %+v", name, opLogID, resp.QueryTaskOperation)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-time.After(retryInterval):
 		}
-
 	}
 
 	return errors.New("request is timeout, but request may be successful")
 }
 
-func (s *Server) handleOperationResult(ctx context.Context, cli pb.WorkerClient, name string, err error, response *pb.OperateSubTaskResponse) *pb.OperateSubTaskResponse {
+func (s *Server) handleOperationResult(ctx context.Context, cli workerrpc.Client, name string, err error, response *pb.OperateSubTaskResponse) *pb.OperateSubTaskResponse {
 	if err != nil {
 		return &pb.OperateSubTaskResponse{
 			Meta: errorCommonWorkerResponse(errors.ErrorStack(err), ""),
@@ -1830,7 +1851,7 @@ func (s *Server) handleOperationResult(ctx context.Context, cli pb.WorkerClient,
 
 // taskConfigArgsExtractor extracts SubTaskConfig from args and returns its relevant
 // grpc client, worker id (host:port), subtask config in toml, task name and whether it is success.
-func (s *Server) taskConfigArgsExtractor(workerRespCh chan *pb.CommonWorkerResponse, args ...interface{}) (pb.WorkerClient, string, string, string, bool) {
+func (s *Server) taskConfigArgsExtractor(workerRespCh chan *pb.CommonWorkerResponse, args ...interface{}) (workerrpc.Client, string, string, string, bool) {
 	handleErr := func(err error, worker string) bool {
 		log.Error(errors.ErrorStack(err))
 		workerRespCh <- errorCommonWorkerResponse(err.Error(), worker)
@@ -1847,7 +1868,7 @@ func (s *Server) taskConfigArgsExtractor(workerRespCh chan *pb.CommonWorkerRespo
 	}
 
 	worker, ok1 := s.cfg.DeployMap[cfg.SourceID]
-	cli, ok2 := s.workerClients[worker]
+	cli, ok2 := s.workerClients2[worker]
 	if !ok1 || !ok2 {
 		return nil, "", "", "", handleErr(errors.Errorf("%s relevant worker-client not found", worker), worker)
 	}
@@ -1871,6 +1892,24 @@ func (s *Server) workerArgsExtractor(args ...interface{}) (pb.WorkerClient, stri
 		return nil, "", errors.Errorf("invalid argument, args[0] is not worker: %v", args[0])
 	}
 	cli, ok := s.workerClients[worker]
+	if !ok {
+		return nil, worker, errors.Errorf("%s relevant worker-client not found", worker)
+	}
+
+	return cli, worker, nil
+}
+
+// workerArgsExtractor2 extracts worker from args and returns its relevant
+// grpc client, worker id (host:port) and error
+func (s *Server) workerArgsExtractor2(args ...interface{}) (workerrpc.Client, string, error) {
+	if len(args) != 1 {
+		return nil, "", errors.Errorf("miss argument %v", args)
+	}
+	worker, ok := args[0].(string)
+	if !ok {
+		return nil, "", errors.Errorf("invalid argument, args[0] is not worker: %v", args[0])
+	}
+	cli, ok := s.workerClients2[worker]
 	if !ok {
 		return nil, worker, errors.Errorf("%s relevant worker-client not found", worker)
 	}
