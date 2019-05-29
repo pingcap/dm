@@ -34,7 +34,7 @@ var _ = Suite(&testReaderSuite{})
 type testReaderSuite struct {
 }
 
-func (t *testReaderSuite) TestParseFile(c *C) {
+func (t *testReaderSuite) TestParseFileBase(c *C) {
 	var (
 		filename     = "test-mysql-bin.000001"
 		baseDir      = c.MkDir()
@@ -93,6 +93,8 @@ func (t *testReaderSuite) TestParseFile(c *C) {
 		c.Assert(err, IsNil)
 	}
 
+	t.purgeStreamer(c, s)
+
 	// base test with only one valid binlog file
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
 		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
@@ -103,12 +105,16 @@ func (t *testReaderSuite) TestParseFile(c *C) {
 	c.Assert(nextUUID, Equals, "")
 	c.Assert(nextBinlogName, Equals, "")
 
-	// try get events back
+	// try get events back, firstParse should have fake RotateEvent
+	var fakeRotateEventCount int
 	var i = 0
 	for {
-		ev, err := s.GetEvent(ctx)
-		c.Assert(err, IsNil)
+		ev, err2 := s.GetEvent(ctx)
+		c.Assert(err2, IsNil)
 		if ev.Header.Timestamp == 0 || ev.Header.LogPos == 0 {
+			if ev.Header.EventType == replication.ROTATE_EVENT {
+				fakeRotateEventCount++
+			}
 			continue // ignore fake event
 		}
 		c.Assert(ev, DeepEquals, baseEvents[i])
@@ -117,6 +123,54 @@ func (t *testReaderSuite) TestParseFile(c *C) {
 			break
 		}
 	}
+	c.Assert(fakeRotateEventCount, Equals, 1)
+	t.verifyNoEventsInStreamer(c, s)
+
+	// try get events back, not firstParse should have no fake RotateEvent
+	firstParse = false
+	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
+		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
+	c.Assert(err, IsNil)
+	c.Assert(needSwitch, IsFalse)
+	c.Assert(needReParse, IsFalse)
+	c.Assert(latestPos, Equals, int64(baseEvents[len(baseEvents)-1].Header.LogPos))
+	c.Assert(nextUUID, Equals, "")
+	c.Assert(nextBinlogName, Equals, "")
+	fakeRotateEventCount = 0
+	i = 0
+	for {
+		ev, err2 := s.GetEvent(ctx)
+		c.Assert(err2, IsNil)
+		if ev.Header.Timestamp == 0 || ev.Header.LogPos == 0 {
+			if ev.Header.EventType == replication.ROTATE_EVENT {
+				fakeRotateEventCount++
+			}
+			continue // ignore fake event
+		}
+		c.Assert(ev, DeepEquals, baseEvents[i])
+		i++
+		if i >= len(baseEvents) {
+			break
+		}
+	}
+	c.Assert(fakeRotateEventCount, Equals, 0)
+	t.verifyNoEventsInStreamer(c, s)
+
+	// generate another non-fake RotateEvent
+	rotateEv, err := event.GenRotateEvent(baseEvents[0].Header, uint32(latestPos), []byte("mysql-bin.888888"), 4)
+	c.Assert(err, IsNil)
+	_, err = f.Write(rotateEv.RawData)
+	c.Assert(err, IsNil)
+
+	// latest is still the end_log_pos of the last event, not the next relay file log file's position
+	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
+		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
+	c.Assert(err, IsNil)
+	c.Assert(needSwitch, IsFalse)
+	c.Assert(needReParse, IsFalse)
+	c.Assert(latestPos, Equals, int64(rotateEv.Header.LogPos))
+	c.Assert(nextUUID, Equals, "")
+	c.Assert(nextBinlogName, Equals, "")
 }
 
 func (t *testReaderSuite) genBinlogEvents(c *C, latestPos uint32) []*replication.BinlogEvent {
@@ -147,4 +201,30 @@ func (t *testReaderSuite) genBinlogEvents(c *C, latestPos uint32) []*replication
 	}
 
 	return events
+}
+
+func (t *testReaderSuite) purgeStreamer(c *C, s Streamer) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	for {
+		_, err := s.GetEvent(ctx)
+		if err == nil {
+			continue
+		} else if err == ctx.Err() {
+			return
+		} else {
+			c.Fatalf("purge streamer with error %v", err)
+		}
+	}
+}
+
+func (t *testReaderSuite) verifyNoEventsInStreamer(c *C, s Streamer) {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	ev, err := s.GetEvent(ctx)
+	if err != ctx.Err() {
+		c.Fatalf("got event %v with error %v from streamer", ev, err)
+	}
 }

@@ -248,7 +248,10 @@ func (r *BinlogReader) parseFileAsPossible(ctx context.Context, s *LocalStreamer
 }
 
 // parseFile parses single relay log file from specified offset
-func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLogFile string, offset int64, relayLogDir string, firstParse bool, currentUUID string, possibleLast bool) (needSwitch, needReParse bool, latestPos int64, nextUUID string, nextBinlogName string, err error) {
+func (r *BinlogReader) parseFile(
+	ctx context.Context, s *LocalStreamer, relayLogFile string, offset int64,
+	relayLogDir string, firstParse bool, currentUUID string, possibleLast bool) (
+	needSwitch, needReParse bool, latestPos int64, nextUUID string, nextBinlogName string, err error) {
 	_, suffixInt, err := utils.ParseSuffixForUUID(currentUUID)
 	if err != nil {
 		return false, false, 0, "", "", errors.Trace(err)
@@ -284,6 +287,10 @@ func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLog
 				log.Debugf("[streamer] skip fake rotate event %+v", e.Header)
 			}
 
+			// currently, we do not switch to the next relay log file when we receive the RotateEvent,
+			// because that next relay log file may not exists at this time,
+			// and we *try* to switch to the next when `needReParse` is false.
+			// so this `currentPos` only used for log now.
 			currentPos := mysql.Position{
 				Name: string(env.NextLogName),
 				Pos:  uint32(env.Position),
@@ -319,6 +326,7 @@ func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLog
 		log.Debugf("[streamer] start parse relay log file %s from offset %d", fullPath, offset)
 	}
 
+	// use parser.ParseFile directly now, if needed we can change to use FileReader.
 	err = r.parser.ParseFile(fullPath, offset, onEventFunc)
 	if possibleLast && err != nil && strings.Contains(err.Error(), "err EOF") {
 		// NOTE: go-mysql returned err not includes caused err, but as message, ref: parser.go `parseSingleEvent`
