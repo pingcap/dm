@@ -24,19 +24,20 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
-type grpcClient struct {
+// GRPCClient stores raw grpc connection and worker client
+type GRPCClient struct {
 	conn   *grpc.ClientConn
 	client pb.WorkerClient
 	closed int32
 }
 
 // NewGRPCClient returns a new grpc client
-func NewGRPCClient(addr string) (*grpcClient, error) {
+func NewGRPCClient(addr string) (*GRPCClient, error) {
 	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	c := &grpcClient{
+	c := &GRPCClient{
 		conn:   conn,
 		client: pb.NewWorkerClient(conn),
 		closed: 0,
@@ -45,14 +46,14 @@ func NewGRPCClient(addr string) (*grpcClient, error) {
 }
 
 // SendRequest implements Client.SendRequest
-func (c *grpcClient) SendRequest(ctx context.Context, req *Request, timeout time.Duration) (*Response, error) {
+func (c *GRPCClient) SendRequest(ctx context.Context, req *Request, timeout time.Duration) (*Response, error) {
 	ctx1, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	return callRPC(ctx1, c.client, req)
 }
 
 // Close implements Client.Close
-func (c *grpcClient) Close() error {
+func (c *GRPCClient) Close() error {
 	err := c.conn.Close()
 	if err != nil {
 		return errors.Annotatef(err, "close rpc client")
