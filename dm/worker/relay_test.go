@@ -48,7 +48,7 @@ func (t *testRelay) TestRelay(c *C) {
 	relayHolder := NewRealRelayHolder(cfg)
 	c.Assert(relayHolder, NotNil)
 
-	holder, ok := relayHolder.(*RealRelayHolder)
+	holder, ok := relayHolder.(*realRelayHolder)
 	c.Assert(ok, IsTrue)
 
 	t.testInit(c, holder)
@@ -58,7 +58,7 @@ func (t *testRelay) TestRelay(c *C) {
 	t.testStop(c, holder)
 }
 
-func (t *testRelay) testInit(c *C, holder *RealRelayHolder) {
+func (t *testRelay) testInit(c *C, holder *realRelayHolder) {
 	_, err := holder.Init(nil)
 	c.Assert(err, IsNil)
 
@@ -73,7 +73,7 @@ func (t *testRelay) testInit(c *C, holder *RealRelayHolder) {
 	c.Assert(err, ErrorMatches, ".*"+initErr.Error()+".*")
 }
 
-func (t *testRelay) testStart(c *C, holder *RealRelayHolder) {
+func (t *testRelay) testStart(c *C, holder *realRelayHolder) {
 	c.Assert(holder.Stage(), Equals, pb.Stage_New)
 	c.Assert(holder.closed.Get(), Equals, closedFalse)
 	c.Assert(holder.Result(), IsNil)
@@ -105,7 +105,7 @@ func (t *testRelay) testStart(c *C, holder *RealRelayHolder) {
 	c.Assert(holder.closed.Get(), Equals, closedFalse)
 }
 
-func (t *testRelay) testClose(c *C, holder *RealRelayHolder) {
+func (t *testRelay) testClose(c *C, holder *realRelayHolder) {
 	r, ok := holder.relay.(*relay.DummyRelay)
 	c.Assert(ok, IsTrue)
 	processResult := &pb.ProcessResult{
@@ -138,7 +138,7 @@ func (t *testRelay) testClose(c *C, holder *RealRelayHolder) {
 	c.Assert(errInfo.Msg, Equals, "relay stopped")
 }
 
-func (t *testRelay) testPauseAndResume(c *C, holder *RealRelayHolder) {
+func (t *testRelay) testPauseAndResume(c *C, holder *realRelayHolder) {
 	err := holder.Operate(context.Background(), &pb.OperateRelayRequest{Op: pb.RelayOp_PauseRelay})
 	c.Assert(err, IsNil)
 	c.Assert(holder.Stage(), Equals, pb.Stage_Paused)
@@ -176,7 +176,7 @@ func (t *testRelay) testPauseAndResume(c *C, holder *RealRelayHolder) {
 	c.Assert(err, ErrorMatches, ".*not supported.*")
 }
 
-func (t *testRelay) testUpdate(c *C, holder *RealRelayHolder) {
+func (t *testRelay) testUpdate(c *C, holder *realRelayHolder) {
 	cfg := &Config{
 		From: config.DBConfig{
 			Host:     "127.0.0.1",
@@ -200,7 +200,7 @@ func (t *testRelay) testUpdate(c *C, holder *RealRelayHolder) {
 	c.Assert(holder.Update(context.Background(), cfg), Equals, err)
 }
 
-func (t *testRelay) testStop(c *C, holder *RealRelayHolder) {
+func (t *testRelay) testStop(c *C, holder *realRelayHolder) {
 	err := holder.Operate(context.Background(), &pb.OperateRelayRequest{Op: pb.RelayOp_StopRelay})
 	c.Assert(err, IsNil)
 	c.Assert(holder.Stage(), Equals, pb.Stage_Stopped)
@@ -210,7 +210,7 @@ func (t *testRelay) testStop(c *C, holder *RealRelayHolder) {
 	c.Assert(err, ErrorMatches, ".*current stage is already stopped.*")
 }
 
-func waitRelayStage(holder *RealRelayHolder, expect pb.Stage, backoff int) bool {
+func waitRelayStage(holder *realRelayHolder, expect pb.Stage, backoff int) bool {
 	return waitSomething(backoff, func() bool {
 		return holder.Stage() == expect
 	})
