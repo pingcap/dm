@@ -17,24 +17,24 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
-	"strconv"
+	"sync"
 	"testing"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
-	"github.com/pingcap/dm/pkg/log"
-	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/parser/ast"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	gmysql "github.com/siddontang/go-mysql/mysql"
+	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/binlog/event"
+	"github.com/pingcap/dm/pkg/log"
+	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -52,39 +52,19 @@ type testSyncerSuite struct {
 }
 
 func (s *testSyncerSuite) SetUpSuite(c *C) {
-	host := os.Getenv("MYSQL_HOST")
-	if host == "" {
-		host = "127.0.0.1"
-	}
-	port, _ := strconv.Atoi(os.Getenv("MYSQL_PORT"))
-	if port == 0 {
-		port = 3306
-	}
-	user := os.Getenv("MYSQL_USER")
-	if user == "" {
-		user = "root"
-	}
-	pswd := os.Getenv("MYSQL_PSWD")
-
 	s.cfg = &config.SubTaskConfig{
-		From: config.DBConfig{
-			Host:     host,
-			User:     user,
-			Password: pswd,
-			Port:     port,
-		},
-		To: config.DBConfig{
-			Host:     host,
-			User:     user,
-			Password: pswd,
-			Port:     port,
-		},
+		From:       getDBConfigFromEnv(),
+		To:         getDBConfigFromEnv(),
 		ServerID:   101,
 		MetaSchema: "test",
 		Name:       "syncer_ut",
+		Mode:       config.ModeIncrement,
 	}
 	s.cfg.From.Adjust()
 	s.cfg.To.Adjust()
+
+	dir := c.MkDir()
+	s.cfg.RelayDir = dir
 
 	var err error
 	dbAddr := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8", s.cfg.From.User, s.cfg.From.Password, s.cfg.From.Host, s.cfg.From.Port)
@@ -93,6 +73,7 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 		log.Fatal(err)
 	}
 
+	s.resetMaster()
 	s.resetBinlogSyncer()
 
 	_, err = s.db.Exec("SET GLOBAL binlog_format = 'ROW';")
@@ -118,13 +99,16 @@ func (s *testSyncerSuite) resetBinlogSyncer() {
 		}
 		cfg.TimestampStringLocation = timezone
 	}
-	pos := gmysql.Position{Name: "", Pos: 4}
+
 	if s.syncer != nil {
 		s.syncer.Close()
-		pos = s.syncer.GetNextPosition()
-	} else {
-		s.resetMaster()
 	}
+
+	pos, _, err := utils.GetMasterStatus(s.db, "mysql")
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	s.syncer = replication.NewBinlogSyncer(cfg)
 	s.streamer, err = s.syncer.StartSync(pos)
 	if err != nil {
@@ -223,6 +207,8 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 }
 
 func (s *testSyncerSuite) TestSelectTable(c *C) {
+	s.resetBinlogSyncer()
+
 	s.cfg.BWList = &filter.Rules{
 		DoDBs: []string{"t2", "stest", "~^ptest*"},
 		DoTables: []*filter.Table{
@@ -396,6 +382,8 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 }
 
 func (s *testSyncerSuite) TestIgnoreTable(c *C) {
+	s.resetBinlogSyncer()
+
 	s.cfg.BWList = &filter.Rules{
 		IgnoreDBs: []string{"t2"},
 		IgnoreTables: []*filter.Table{
@@ -459,6 +447,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
+
 	syncer.genRouter()
 	i := 0
 	for {
@@ -507,6 +496,8 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 }
 
 func (s *testSyncerSuite) TestSkipDML(c *C) {
+	s.resetBinlogSyncer()
+
 	s.cfg.FilterRules = []*bf.BinlogEventRule{
 		{
 			SchemaPattern: "*",
@@ -982,4 +973,267 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 		s.db.Exec(sql)
 	}
 	s.catchUpBinlog()
+}
+
+func (s *testSyncerSuite) TestcheckpointID(c *C) {
+	syncer := NewSyncer(s.cfg)
+	checkpointID := syncer.checkpointID()
+	c.Assert(checkpointID, Equals, "101")
+}
+
+func (s *testSyncerSuite) TestExecErrors(c *C) {
+	syncer := NewSyncer(s.cfg)
+	syncer.appendExecErrors(new(ExecErrorContext))
+	c.Assert(syncer.execErrors.errors, HasLen, 1)
+
+	syncer.resetExecErrors()
+	c.Assert(syncer.execErrors.errors, HasLen, 0)
+}
+
+func (s *testSyncerSuite) TestCasuality(c *C) {
+	var wg sync.WaitGroup
+	s.cfg.WorkerCount = 1
+	syncer := NewSyncer(s.cfg)
+	syncer.jobs = []chan *job{make(chan *job, 1)}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		job := <-syncer.jobs[0]
+		c.Assert(job.tp, Equals, flush)
+		syncer.jobWg.Done()
+	}()
+
+	key, err := syncer.resolveCasuality([]string{"a"})
+	c.Assert(err, IsNil)
+	c.Assert(key, Equals, "a")
+
+	key, err = syncer.resolveCasuality([]string{"b"})
+	c.Assert(err, IsNil)
+	c.Assert(key, Equals, "b")
+
+	// will detect casuality and add a flush job
+	key, err = syncer.resolveCasuality([]string{"a", "b"})
+	c.Assert(err, IsNil)
+	c.Assert(key, Equals, "a")
+
+	wg.Wait()
+}
+
+func (s *testSyncerSuite) TestRun(c *C) {
+	// 1. run syncer with column mapping
+	// 2. update config, add route rules, and update syncer
+
+	defer s.db.Exec("drop database if exists test_1")
+
+	s.resetMaster()
+	s.resetBinlogSyncer()
+
+	s.cfg.BWList = &filter.Rules{
+		DoDBs: []string{"test_1"},
+		DoTables: []*filter.Table{
+			{Schema: "test_1", Name: "t_1"},
+			{Schema: "test_1", Name: "t_2"},
+		},
+	}
+
+	s.cfg.ColumnMappingRules = []*cm.Rule{
+		{
+			PatternSchema: "test_*",
+			PatternTable:  "t_*",
+			SourceColumn:  "id",
+			TargetColumn:  "id",
+			Expression:    cm.PartitionID,
+			Arguments:     []string{"1", "test_", "t_"},
+		},
+	}
+
+	s.cfg.Batch = 10
+	s.cfg.WorkerCount = 2
+
+	syncer := NewSyncer(s.cfg)
+	err := syncer.Init()
+	c.Assert(err, IsNil)
+	c.Assert(syncer.Type(), Equals, pb.UnitType_Sync)
+
+	syncer.addJobFunc = syncer.addJobToMemory
+
+	ctx, cancel := context.WithCancel(context.Background())
+	resultCh := make(chan pb.ProcessResult)
+
+	go syncer.Process(ctx, resultCh)
+
+	testCases1 := []struct {
+		sql      string
+		tp       opType
+		sqlInJob string
+		arg      interface{}
+	}{
+		{
+			"create database if not exists test_1",
+			ddl,
+			"CREATE DATABASE IF NOT EXISTS `test_1`",
+			nil,
+		}, {
+			"create table if not exists test_1.t_1(id int)",
+			ddl,
+			"CREATE TABLE IF NOT EXISTS `test_1`.`t_1` (`id` INT)",
+			nil,
+		}, {
+			"create table if not exists test_1.t_2(id int)",
+			ddl,
+			"CREATE TABLE IF NOT EXISTS `test_1`.`t_2` (`id` INT)",
+			nil,
+		}, {
+			"insert into test_1.t_1 values(1)",
+			insert,
+			"REPLACE INTO `test_1`.`t_1` (`id`) VALUES (?);",
+			int64(580981944116838401),
+		}, {
+			"alter table test_1.t_1 add index index1(id)",
+			ddl,
+			"ALTER TABLE `test_1`.`t_1` ADD INDEX `index1`(`id`)",
+			nil,
+		}, {
+			"insert into test_1.t_1 values(2)",
+			insert,
+			"REPLACE INTO `test_1`.`t_1` (`id`) VALUES (?);",
+			int64(580981944116838402),
+		}, {
+			"delete from test_1.t_1 where id = 1",
+			del,
+			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1;",
+			int64(580981944116838401),
+		},
+	}
+
+	for _, testCase := range testCases1 {
+		c.Log("exec sql: ", testCase.sql)
+		_, err := s.db.Exec(testCase.sql)
+		c.Assert(err, IsNil)
+	}
+
+	for i := 0; i < 10; i++ {
+		time.Sleep(time.Second)
+
+		testJobs.RLock()
+		jobNum := len(testJobs.jobs)
+		testJobs.RUnlock()
+
+		if jobNum >= len(testCases1) {
+			break
+		}
+	}
+
+	testJobs.Lock()
+	c.Assert(testJobs.jobs, HasLen, len(testCases1))
+	for i, testCase := range testCases1 {
+		c.Assert(testJobs.jobs[i].tp, Equals, testCase.tp)
+		if testJobs.jobs[i].tp == ddl {
+			c.Assert(testJobs.jobs[i].ddls[0], Equals, testCase.sqlInJob)
+		} else {
+			c.Assert(testJobs.jobs[i].sql, Equals, testCase.sqlInJob)
+			c.Assert(testJobs.jobs[i].args[0], Equals, testCase.arg)
+		}
+	}
+
+	testJobs.jobs = testJobs.jobs[:0]
+	testJobs.Unlock()
+
+	s.cfg.ColumnMappingRules = nil
+	s.cfg.RouteRules = []*router.TableRule{
+		{
+			SchemaPattern: "test_1",
+			TablePattern:  "t_1",
+			TargetSchema:  "test_1",
+			TargetTable:   "t_2",
+		},
+	}
+
+	cancel()
+	syncer.Pause()
+	syncer.Update(s.cfg)
+
+	s.resetMaster()
+	s.resetBinlogSyncer()
+
+	ctx, cancel = context.WithCancel(context.Background())
+	resultCh = make(chan pb.ProcessResult)
+	go syncer.Resume(ctx, resultCh)
+
+	testCases2 := []struct {
+		sql      string
+		tp       opType
+		sqlInJob string
+		arg      interface{}
+	}{
+		{
+			"insert into test_1.t_1 values(3)",
+			insert,
+			"REPLACE INTO `test_1`.`t_2` (`id`) VALUES (?);",
+			int32(3),
+		}, {
+			"delete from test_1.t_1 where id = 3",
+			del,
+			"DELETE FROM `test_1`.`t_2` WHERE `id` = ? LIMIT 1;",
+			int32(3),
+		},
+	}
+
+	for _, testCase := range testCases2 {
+		c.Log("exec sql: ", testCase.sql)
+		_, err := s.db.Exec(testCase.sql)
+		c.Assert(err, IsNil)
+	}
+
+	for i := 0; i < 10; i++ {
+		time.Sleep(time.Second)
+
+		testJobs.RLock()
+		jobNum := len(testJobs.jobs)
+		testJobs.RUnlock()
+
+		if jobNum >= len(testCases2) {
+			break
+		}
+	}
+
+	testJobs.RLock()
+	c.Assert(testJobs.jobs, HasLen, len(testCases2))
+	for i, testCase := range testCases2 {
+		c.Assert(testJobs.jobs[i].tp, Equals, testCase.tp)
+		if testJobs.jobs[i].tp == ddl {
+			c.Assert(testJobs.jobs[i].ddls[0], Equals, testCase.sqlInJob)
+		} else {
+			c.Assert(testJobs.jobs[i].sql, Equals, testCase.sqlInJob)
+			c.Assert(testJobs.jobs[i].args[0], Equals, testCase.arg)
+		}
+	}
+	testJobs.RUnlock()
+
+	status := syncer.Status().(*pb.SyncStatus)
+	c.Assert(status.TotalEvents, Equals, int64(len(testCases1)+len(testCases2)))
+
+	cancel()
+	syncer.Close()
+	c.Assert(syncer.isClosed(), IsTrue)
+}
+
+var testJobs struct {
+	sync.RWMutex
+	jobs []*job
+}
+
+func (s *Syncer) addJobToMemory(job *job) error {
+	log.Infof("addJobToMemory: %v", job)
+
+	switch job.tp {
+	case ddl, insert, update, del:
+		s.addCount(false, "test", job.tp, 1)
+		testJobs.Lock()
+		testJobs.jobs = append(testJobs.jobs, job)
+		testJobs.Unlock()
+	}
+
+	return nil
 }
