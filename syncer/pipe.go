@@ -31,7 +31,7 @@ type Pipe interface {
 	// Name is the pipe's name
 	Name() string
 
-	// Init initial the pipe
+	// Init initializes the pipe
 	Init(*config.SubTaskConfig, func() error) error
 
 	// Update updates the pipe's config
