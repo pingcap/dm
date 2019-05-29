@@ -112,7 +112,11 @@ func (h *RealRelayHolder) Init(interceptors []purger.PurgeInterceptor) (purger.P
 		streamer.GetReaderHub(),
 	}
 
-	return purger.NewPurger(h.cfg.Purge, h.cfg.RelayDir, operators, interceptors), errors.Trace(h.relay.Init())
+	if err := h.relay.Init(); err != nil {
+		return nil, errors.Annotate(err, "initial relay unit")
+	}
+
+	return purger.NewPurger(h.cfg.Purge, h.cfg.RelayDir, operators, interceptors), nil
 }
 
 // Start starts run the relay

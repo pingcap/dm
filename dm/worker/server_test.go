@@ -53,7 +53,7 @@ func (t *testServer) TestServer(c *C) {
 		c.Assert(err1, IsNil)
 	}()
 
-	c.Assert(waitSomthing(10, func() bool {
+	c.Assert(waitSomething(10, func() bool {
 		return !s.closed.Get()
 	}), IsTrue)
 
@@ -124,7 +124,7 @@ func (t *testServer) TestServer(c *C) {
 	// close
 	s.Close()
 
-	c.Assert(waitSomthing(10, func() bool {
+	c.Assert(waitSomething(10, func() bool {
 		return s.closed.Get()
 	}), IsTrue)
 
@@ -147,7 +147,7 @@ func (t *testServer) createClient(c *C) pb.WorkerClient {
 	return pb.NewWorkerClient(conn)
 }
 
-func waitSomthing(backoff int, fn func() bool) bool {
+func waitSomething(backoff int, fn func() bool) bool {
 	for i := 0; i < backoff; i++ {
 		if fn() {
 			return true

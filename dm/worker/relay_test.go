@@ -70,7 +70,7 @@ func (t *testRelay) testInit(c *C, holder *RealRelayHolder) {
 	defer r.InjectInitError(nil)
 
 	_, err = holder.Init(nil)
-	c.Assert(err, Equals, initErr)
+	c.Assert(err, ErrorMatches, ".*"+initErr.Error()+".*")
 }
 
 func (t *testRelay) testStart(c *C, holder *RealRelayHolder) {
@@ -211,7 +211,7 @@ func (t *testRelay) testStop(c *C, holder *RealRelayHolder) {
 }
 
 func waitRelayStage(holder *RealRelayHolder, expect pb.Stage, backoff int) bool {
-	return waitSomthing(backoff, func() bool {
+	return waitSomething(backoff, func() bool {
 		return holder.Stage() == expect
 	})
 }
