@@ -17,6 +17,7 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/parser/model"
 	_ "github.com/pingcap/tidb/types/parser_driver"
 )
 
@@ -85,4 +86,40 @@ func (t *testUtilSuite) TestTableNameForDML(c *C) {
 		c.Assert(schema, Equals, cs.schema)
 		c.Assert(table, Equals, cs.table)
 	}
+}
+
+func (t *testUtilSuite) TestToBinlogType(c *C) {
+	testCases := []struct {
+		tpStr string
+		tp    BinlogType
+	}{
+		{
+			"local",
+			LocalBinlog,
+		}, {
+			"remote",
+			RemoteBinlog,
+		}, {
+			"default",
+			RemoteBinlog,
+		},
+	}
+
+	for _, testCase := range testCases {
+		tp := toBinlogType(testCase.tpStr)
+		c.Assert(tp, Equals, testCase.tp)
+	}
+}
+
+func (t *testUtilSuite) TestTableNameResultSet(c *C) {
+	rs := &ast.TableSource{
+		Source: &ast.TableName{
+			Schema: model.NewCIStr("test"),
+			Name:   model.NewCIStr("t1"),
+		},
+	}
+	schema, table, err := tableNameResultSet(rs)
+	c.Assert(err, IsNil)
+	c.Assert(schema, Equals, "test")
+	c.Assert(table, Equals, "t1")
 }
