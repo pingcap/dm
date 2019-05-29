@@ -82,7 +82,8 @@ type SyncPipe struct {
 
 	c *causality
 
-	input chan *PipeData
+	input  chan *PipeData
+	output chan *PipeData
 
 	queueBucketMapping []string
 
@@ -149,20 +150,14 @@ func (s *SyncPipe) Input() chan *PipeData {
 	return s.input
 }
 
-// SetNextPipe implements pipe interface
-func (s *SyncPipe) SetNextPipe(pipe Pipe) {
-	// sync don't have next pipe
-	return
+// Output implements pipe interface
+func (s *SyncPipe) Output() chan *PipeData {
+	return s.output
 }
 
 // SetResolveFunc implements pipe interface
 func (s *SyncPipe) SetResolveFunc(resolveFunc func()) {
 	s.resolveFunc = resolveFunc
-}
-
-// Report implements pipe interface
-func (s *SyncPipe) Report() {
-	return
 }
 
 // Wait implements pipe interface

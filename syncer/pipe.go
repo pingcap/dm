@@ -40,17 +40,14 @@ type Pipe interface {
 	// Input receives data
 	Input() chan *PipeData
 
+	// Output exports data already be processed
+	Output() chan *PipeData
+
 	// Run starts the pipe's process
 	Run()
 
 	// Close closes the pipe
 	Close()
-
-	// SetNextPipe sets the pipe's next pipe, pipe will send data to the next pipe after process
-	SetNextPipe(Pipe)
-
-	// Report reports the pipe's status to pipeline
-	Report()
 
 	// Wait waits all the data in the pipe is processed
 	Wait()
@@ -97,7 +94,8 @@ type Pipeline struct {
 	errCh    chan error
 	errChLen int
 
-	wg sync.WaitGroup
+	wg     sync.WaitGroup
+	dataWg sync.WaitGroup
 }
 
 // NewPipeline returns a new pipeline
@@ -115,9 +113,6 @@ func (p *Pipeline) AddPipe(pipe Pipe) {
 		return
 	}
 
-	lastPipe := p.pipes[len(p.pipes)-1]
-	lastPipe.SetNextPipe(pipe)
-
 	p.pipes = append(p.pipes, pipe)
 }
 
@@ -133,7 +128,7 @@ func (p *Pipeline) Input(data *PipeData) error {
 
 	select {
 	case p.pipes[0].Input() <- data:
-		p.wg.Add(1)
+		p.dataWg.Add(1)
 		return nil
 	case <-p.ctx.Done():
 		return errors.New("pipeline's context is done")
@@ -148,7 +143,7 @@ func (p *Pipeline) Flush() {
 
 // Wait waits all pipes have no data to process
 func (p *Pipeline) Wait() {
-	p.wg.Wait()
+	p.dataWg.Wait()
 
 	for _, pipe := range p.pipes {
 		pipe.Wait()
@@ -164,12 +159,34 @@ func (p *Pipeline) Start() {
 	for _, pipe := range p.pipes {
 		pipe.SetErrorChan(p.errCh)
 		pipe.SetResolveFunc(func() {
-			p.wg.Done()
+			p.dataWg.Done()
 		})
 		pipe.Run()
 	}
 
+	for i := 0; i < len(p.pipes)-1; i++ {
+		if i+1 < len(p.pipes) {
+			p.wg.Add(1)
+			go p.link(p.pipes[i].Output(), p.pipes[i+1].Input())
+		}
+	}
+
 	p.isClosed.Set(false)
+}
+
+func (p *Pipeline) link(output, input chan *PipeData) {
+	defer p.wg.Done()
+
+	select {
+	case data := <-output:
+		select {
+		case input <- data:
+		case <-p.ctx.Done():
+			return
+		}
+	case <-p.ctx.Done():
+		return
+	}
 }
 
 // Close closes the pipeline
@@ -177,6 +194,8 @@ func (p *Pipeline) Close() {
 	log.Info("close pipeline")
 	p.cancel()
 	p.isClosed.Set(true)
+
+	p.wg.Wait()
 
 	for _, pipe := range p.pipes {
 		pipe.Close()
