@@ -32,28 +32,69 @@ const (
 	CmdQueryStatus
 	CmdQueryError
 	CmdQueryTaskOperation
+	CmdQueryWorkerConfig
+
+	CmdHandleSubTaskSQLs
+	CmdExecDDL
+	CmdBreakDDLLock
+
+	CmdSwitchRelayMaster
+	CmdOperateRelay
+	CmdPurgeRelay
+	CmdUpdateRelay
+	CmdMigrateRelay
+
+	CmdFetchDDLInfo
 )
 
 // Request wraps all dm-worker rpc requests.
 type Request struct {
-	Type               CmdType
-	StartSubTask       *pb.StartSubTaskRequest
-	OperateSubTask     *pb.OperateSubTaskRequest
-	UpdateSubTask      *pb.UpdateSubTaskRequest
+	Type CmdType
+
+	StartSubTask   *pb.StartSubTaskRequest
+	OperateSubTask *pb.OperateSubTaskRequest
+	UpdateSubTask  *pb.UpdateSubTaskRequest
+
 	QueryStatus        *pb.QueryStatusRequest
 	QueryError         *pb.QueryErrorRequest
 	QueryTaskOperation *pb.QueryTaskOperationRequest
+	QueryWorkerConfig  *pb.QueryWorkerConfigRequest
+
+	HandleSubTaskSQLs *pb.HandleSubTaskSQLsRequest
+	ExecDDL           *pb.ExecDDLRequest
+	BreakDDLLock      *pb.BreakDDLLockRequest
+
+	SwitchRelayMaster *pb.SwitchRelayMasterRequest
+	OperateRelay      *pb.OperateRelayRequest
+	PurgeRelay        *pb.PurgeRelayRequest
+	UpdateRelay       *pb.UpdateRelayRequest
+	MigrateRelay      *pb.MigrateRelayRequest
 }
 
 // Response wraps all dm-worker rpc responses.
 type Response struct {
-	Type               CmdType
-	StartSubTask       *pb.OperateSubTaskResponse
-	OperateSubTask     *pb.OperateSubTaskResponse
-	UpdateSubTask      *pb.OperateSubTaskResponse
+	Type CmdType
+
+	StartSubTask   *pb.OperateSubTaskResponse
+	OperateSubTask *pb.OperateSubTaskResponse
+	UpdateSubTask  *pb.OperateSubTaskResponse
+
 	QueryStatus        *pb.QueryStatusResponse
 	QueryError         *pb.QueryErrorResponse
 	QueryTaskOperation *pb.QueryTaskOperationResponse
+	QueryWorkerConfig  *pb.QueryWorkerConfigResponse
+
+	HandleSubTaskSQLs *pb.CommonWorkerResponse
+	ExecDDL           *pb.CommonWorkerResponse
+	BreakDDLLock      *pb.CommonWorkerResponse
+
+	SwitchRelayMaster *pb.CommonWorkerResponse
+	OperateRelay      *pb.OperateRelayResponse
+	PurgeRelay        *pb.CommonWorkerResponse
+	UpdateRelay       *pb.CommonWorkerResponse
+	MigrateRelay      *pb.CommonWorkerResponse
+
+	FetchDDLInfo pb.Worker_FetchDDLInfoClient
 }
 
 // Client is a client that sends RPC.

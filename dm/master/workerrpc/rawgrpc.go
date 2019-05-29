@@ -47,7 +47,12 @@ func NewGRPCClient(addr string) (*GRPCClient, error) {
 
 // SendRequest implements Client.SendRequest
 func (c *GRPCClient) SendRequest(ctx context.Context, req *Request, timeout time.Duration) (*Response, error) {
-	ctx1, cancel := context.WithTimeout(ctx, timeout)
+	if req.Type != CmdFetchDDLInfo {
+		ctx1, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		return callRPC(ctx1, c.client, req)
+	}
+	ctx1, cancel := context.WithCancel(ctx)
 	defer cancel()
 	return callRPC(ctx1, c.client, req)
 }
@@ -79,6 +84,24 @@ func callRPC(ctx context.Context, client pb.WorkerClient, req *Request) (*Respon
 		resp.QueryError, err = client.QueryError(ctx, req.QueryError)
 	case CmdQueryTaskOperation:
 		resp.QueryTaskOperation, err = client.QueryTaskOperation(ctx, req.QueryTaskOperation)
+	case CmdHandleSubTaskSQLs:
+		resp.HandleSubTaskSQLs, err = client.HandleSQLs(ctx, req.HandleSubTaskSQLs)
+	case CmdExecDDL:
+		resp.ExecDDL, err = client.ExecuteDDL(ctx, req.ExecDDL)
+	case CmdBreakDDLLock:
+		resp.BreakDDLLock, err = client.BreakDDLLock(ctx, req.BreakDDLLock)
+	case CmdSwitchRelayMaster:
+		resp.SwitchRelayMaster, err = client.SwitchRelayMaster(ctx, req.SwitchRelayMaster)
+	case CmdOperateRelay:
+		resp.OperateRelay, err = client.OperateRelay(ctx, req.OperateRelay)
+	case CmdPurgeRelay:
+		resp.PurgeRelay, err = client.PurgeRelay(ctx, req.PurgeRelay)
+	case CmdUpdateRelay:
+		resp.UpdateRelay, err = client.UpdateRelayConfig(ctx, req.UpdateRelay)
+	case CmdMigrateRelay:
+		resp.MigrateRelay, err = client.MigrateRelay(ctx, req.MigrateRelay)
+	case CmdFetchDDLInfo:
+		resp.FetchDDLInfo, err = client.FetchDDLInfo(ctx)
 	default:
 		return nil, errors.Errorf("invalid request type: %v", req.Type)
 	}
