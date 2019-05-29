@@ -40,7 +40,7 @@ type Pipe interface {
 	// Input receives data
 	Input() chan *PipeData
 
-	// Run start the pipe's process
+	// Run starts the pipe's process
 	Run()
 
 	// Close closes the pipe
