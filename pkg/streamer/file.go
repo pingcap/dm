@@ -194,7 +194,8 @@ func fileSizeUpdated(path string, latestSize int64) (int, error) {
 
 // relaySubDirUpdated checks whether the relay sub directory updated
 // including file changed, created, removed, etc.
-func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir string, latestFilePath, latestFile string, latestFileSize int64) (string, error) {
+func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir string,
+	latestFilePath, latestFile string, latestFileSize int64) (string, error) {
 	// create polling watcher
 	watcher2 := watcher.NewWatcher()
 
@@ -296,4 +297,39 @@ func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir 
 
 	res := <-result
 	return res.updatePath, res.err
+}
+
+// needSwitchSubDir checks whether the reader need to switch to next relay sub directory
+func needSwitchSubDir(relayDir, currentUUID, latestFilePath string, latestFileSize int64, UUIDs []string) (
+	needSwitch, needReParse bool, nextUUID string, nextBinlogName string, err error) {
+	nextUUID, _, err = getNextUUID(currentUUID, UUIDs)
+	if err != nil {
+		return false, false, "", "", errors.Annotatef(err, "current UUID %s, UUIDs %v", currentUUID, UUIDs)
+	} else if len(nextUUID) == 0 {
+		// no next sub dir exists, not need to switch
+		return false, false, "", "", nil
+	}
+
+	// try get the first binlog file in next sub directory
+	nextBinlogName, err = getFirstBinlogName(relayDir, nextUUID)
+	if err != nil {
+		// NOTE: current we can not handle `errors.IsNotFound(err)` easily
+		// because creating sub directory and writing relay log file are not atomic
+		// so we let user to pause syncing before switching relay's master server
+		return false, false, "", "", errors.Trace(err)
+	}
+
+	// check the latest relay log file whether updated when checking next sub directory
+	cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
+	if err != nil {
+		return false, false, "", "", errors.Trace(err)
+	} else if cmp < 0 {
+		return false, false, "", "", errors.Errorf("file size of relay log %s become smaller", latestFilePath)
+	} else if cmp > 0 {
+		// the latest relay log file already updated, need to parse from it again (not need to switch to sub directory)
+		return false, true, "", "", nil
+	}
+
+	// need to switch to next sub directory
+	return true, false, nextUUID, nextBinlogName, nil
 }

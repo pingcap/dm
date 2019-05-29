@@ -15,6 +15,7 @@ package streamer
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -446,4 +447,102 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 	err = ioutil.WriteFile(relayPaths[2], data, 0644)
 	c.Assert(err, IsNil)
 	wg.Wait()
+}
+
+func (t *testFileSuite) TestNeedSwitchSubDir(c *C) {
+	var (
+		relayDir = c.MkDir()
+		UUIDs    = []string{
+			"53ea0ed1-9bf8-11e6-8bea-64006a897c73.000001",
+			"53ea0ed1-9bf8-11e6-8bea-64006a897c72.000002",
+			"53ea0ed1-9bf8-11e6-8bea-64006a897c71.000003",
+		}
+		currentUUID    = UUIDs[len(UUIDs)-1] // no next UUID
+		latestFilePath string
+		latestFileSize int64
+		data           = []byte("binlog file data")
+	)
+
+	// invalid UUID in UUIDs, error
+	UUIDs = append(UUIDs, "invalid.uuid")
+	needSwitch, needReParse, nextUUID, nextBinlogName, err := needSwitchSubDir(
+		relayDir, currentUUID, latestFilePath, latestFileSize, UUIDs)
+	c.Assert(err, ErrorMatches, ".*not valid.*")
+	c.Assert(needSwitch, IsFalse)
+	c.Assert(needReParse, IsFalse)
+	c.Assert(nextUUID, Equals, "")
+	c.Assert(nextBinlogName, Equals, "")
+	UUIDs = UUIDs[:len(UUIDs)-1] // remove the invalid UUID
+
+	// no next UUID, no need switch
+	needSwitch, needReParse, nextUUID, nextBinlogName, err = needSwitchSubDir(
+		relayDir, currentUUID, latestFilePath, latestFileSize, UUIDs)
+	c.Assert(err, IsNil)
+	c.Assert(needSwitch, IsFalse)
+	c.Assert(needReParse, IsFalse)
+	c.Assert(nextUUID, Equals, "")
+	c.Assert(nextBinlogName, Equals, "")
+
+	// no binlog file in next sub directory, error
+	currentUUID = UUIDs[0]
+	needSwitch, needReParse, nextUUID, nextBinlogName, err = needSwitchSubDir(
+		relayDir, currentUUID, latestFilePath, latestFileSize, UUIDs)
+	c.Assert(err, ErrorMatches, fmt.Sprintf(".*%s.*no such file or directory.*", UUIDs[1]))
+	c.Assert(needSwitch, IsFalse)
+	c.Assert(needReParse, IsFalse)
+	c.Assert(nextUUID, Equals, "")
+	c.Assert(nextBinlogName, Equals, "")
+
+	// create a relay log file in the next sub directory
+	nextBinlogPath := filepath.Join(relayDir, UUIDs[1], "mysql-bin.000001")
+	err = os.MkdirAll(filepath.Dir(nextBinlogPath), 0744)
+	c.Assert(err, IsNil)
+	err = ioutil.WriteFile(nextBinlogPath, nil, 0644)
+	c.Assert(err, IsNil)
+
+	// latest relay log file not exists, error
+	latestFilePath = filepath.Join(relayDir, UUIDs[0], "mysql-bin.000001")
+	needSwitch, needReParse, nextUUID, nextBinlogName, err = needSwitchSubDir(
+		relayDir, currentUUID, latestFilePath, latestFileSize, UUIDs)
+	c.Assert(err, ErrorMatches, fmt.Sprintf(".*%s.*no such file or directory.*", latestFilePath))
+	c.Assert(needSwitch, IsFalse)
+	c.Assert(needReParse, IsFalse)
+	c.Assert(nextUUID, Equals, "")
+	c.Assert(nextBinlogName, Equals, "")
+
+	// create the latest relay log file
+	err = os.MkdirAll(filepath.Dir(latestFilePath), 0744)
+	c.Assert(err, IsNil)
+	err = ioutil.WriteFile(latestFilePath, data, 0644)
+	c.Assert(err, IsNil)
+
+	// file size not updated, switch to the next
+	latestFileSize = int64(len(data))
+	needSwitch, needReParse, nextUUID, nextBinlogName, err = needSwitchSubDir(
+		relayDir, currentUUID, latestFilePath, latestFileSize, UUIDs)
+	c.Assert(err, IsNil)
+	c.Assert(needSwitch, IsTrue)
+	c.Assert(needReParse, IsFalse)
+	c.Assert(nextUUID, Equals, UUIDs[1])
+	c.Assert(nextBinlogName, Equals, filepath.Base(nextBinlogPath))
+
+	// file size increased, parse it again
+	latestFileSize = 0
+	needSwitch, needReParse, nextUUID, nextBinlogName, err = needSwitchSubDir(
+		relayDir, currentUUID, latestFilePath, latestFileSize, UUIDs)
+	c.Assert(err, IsNil)
+	c.Assert(needSwitch, IsFalse)
+	c.Assert(needReParse, IsTrue)
+	c.Assert(nextUUID, Equals, "")
+	c.Assert(nextBinlogName, Equals, "")
+
+	// file size decreased, error
+	latestFileSize = int64(len(data)) + 1
+	needSwitch, needReParse, nextUUID, nextBinlogName, err = needSwitchSubDir(
+		relayDir, currentUUID, latestFilePath, latestFileSize, UUIDs)
+	c.Assert(err, ErrorMatches, ".*become smaller.*")
+	c.Assert(needSwitch, IsFalse)
+	c.Assert(needReParse, IsFalse)
+	c.Assert(nextUUID, Equals, "")
+	c.Assert(nextBinlogName, Equals, "")
 }

@@ -335,7 +335,7 @@ func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLog
 		return false, false, latestPos, "", "", nil
 	}
 
-	needSwitch, needReParse, nextUUID, nextBinlogName, err = r.needSwitchSubDir(currentUUID, fullPath, latestPos)
+	needSwitch, needReParse, nextUUID, nextBinlogName, err = needSwitchSubDir(r.cfg.RelayDir, currentUUID, fullPath, latestPos, r.uuids)
 	if err != nil {
 		return false, false, 0, "", "", errors.Trace(err)
 	} else if needReParse {
@@ -358,40 +358,6 @@ func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLog
 
 	// need parse next relay log file or re-collect files
 	return false, false, latestPos, "", "", nil
-}
-
-// needSwitchSubDir checks whether the reader need switch to next relay sub directory
-func (r *BinlogReader) needSwitchSubDir(currentUUID string, latestFilePath string, latestFileSize int64) (needSwitch, needReParse bool, nextUUID string, nextBinlogName string, err error) {
-	nextUUID, _, err = getNextUUID(currentUUID, r.uuids)
-	if err != nil {
-		return false, false, "", "", errors.Annotatef(err, "current UUID %s, UUIDs %v", currentUUID, r.uuids)
-	} else if len(nextUUID) == 0 {
-		// no next sub dir exists, not need to switch
-		return false, false, "", "", nil
-	}
-
-	// try get the first binlog file in next sub directory
-	nextBinlogName, err = getFirstBinlogName(r.cfg.RelayDir, nextUUID)
-	if err != nil {
-		// NOTE: current we can not handle `errors.IsNotFound(err)` easily
-		// because creating sub directory and writing relay log file are not atomic
-		// so we let user to pause syncing before switching relay's master server
-		return false, false, "", "", errors.Trace(err)
-	}
-
-	// check the latest relay log file whether updated when checking next sub directory
-	cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
-	if err != nil {
-		return false, false, "", "", errors.Trace(err)
-	} else if cmp < 0 {
-		return false, false, "", "", errors.Errorf("file size of relay log %s become smaller", latestFilePath)
-	} else if cmp > 0 {
-		// the latest relay log file already updated, need to parse from it again (not need to switch sub directory)
-		return false, true, "", "", nil
-	}
-
-	// need to switch to next sub directory
-	return true, false, nextUUID, nextBinlogName, nil
 }
 
 // updateUUIDs re-parses UUID index file and updates UUID list
