@@ -52,9 +52,7 @@ func (c *GRPCClient) SendRequest(ctx context.Context, req *Request, timeout time
 		defer cancel()
 		return callRPC(ctx1, c.client, req)
 	}
-	ctx1, cancel := context.WithCancel(ctx)
-	defer cancel()
-	return callRPC(ctx1, c.client, req)
+	return callRPC(ctx, c.client, req)
 }
 
 // Close implements Client.Close
@@ -84,6 +82,8 @@ func callRPC(ctx context.Context, client pb.WorkerClient, req *Request) (*Respon
 		resp.QueryError, err = client.QueryError(ctx, req.QueryError)
 	case CmdQueryTaskOperation:
 		resp.QueryTaskOperation, err = client.QueryTaskOperation(ctx, req.QueryTaskOperation)
+	case CmdQueryWorkerConfig:
+		resp.QueryWorkerConfig, err = client.QueryWorkerConfig(ctx, req.QueryWorkerConfig)
 	case CmdHandleSubTaskSQLs:
 		resp.HandleSubTaskSQLs, err = client.HandleSQLs(ctx, req.HandleSubTaskSQLs)
 	case CmdExecDDL:
