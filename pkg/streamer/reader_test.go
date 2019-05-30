@@ -258,8 +258,8 @@ func (t *testReaderSuite) TestParseFileRelaySubDirUpdated(c *C) {
 	go func() {
 		defer wg.Done()
 		time.Sleep(500 * time.Millisecond) // wait parseFile started
-		_, err = f.Write(extraEvents[0].RawData)
-		c.Assert(err, IsNil)
+		_, err2 := f.Write(extraEvents[0].RawData)
+		c.Assert(err2, IsNil)
 	}()
 	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Second)
 	defer cancel2()
@@ -279,8 +279,8 @@ func (t *testReaderSuite) TestParseFileRelaySubDirUpdated(c *C) {
 	go func() {
 		defer wg.Done()
 		time.Sleep(500 * time.Millisecond) // wait parseFile started
-		err = ioutil.WriteFile(nextPath, replication.BinLogFileHeader, 0644)
-		c.Assert(err, IsNil)
+		err2 := ioutil.WriteFile(nextPath, replication.BinLogFileHeader, 0644)
+		c.Assert(err2, IsNil)
 	}()
 	ctx3, cancel3 := context.WithTimeout(context.Background(), time.Second)
 	defer cancel3()
