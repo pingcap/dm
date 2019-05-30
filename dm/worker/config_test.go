@@ -14,20 +14,49 @@
 package worker
 
 import (
+	"path"
+
 	. "github.com/pingcap/check"
 )
 
-func (t *testWorker) TestConfig(c *C) {
-	cfg := &Config{}
+func (t *testServer) TestConfig(c *C) {
+	cfg := NewConfig()
 
-	err := cfg.configFromFile("./dm-worker.toml")
-	c.Assert(err, IsNil)
-	c.Assert(cfg.SourceID, Equals, "mysql-replica-01")
+	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml", "-relay-dir=./xx"}), IsNil)
+	c.Assert(cfg.RelayDir, Equals, "./xx")
+	c.Assert(cfg.ServerID, Equals, 101)
 
+	dir := c.MkDir()
+	cfg.ConfigFile = path.Join(dir, "dm-worker.toml")
+
+	// test clone
 	clone1 := cfg.Clone()
 	c.Assert(cfg, DeepEquals, clone1)
+	clone1.ServerID = 100
+	c.Assert(cfg.ServerID, Equals, 101)
 
+	// test format
+	c.Assert(cfg.String(), Matches, `.*"server-id":101.*`)
+	tomlStr, err := clone1.Toml()
+	c.Assert(err, IsNil)
+	c.Assert(tomlStr, Matches, `(.|\n)*server-id = 100(.|\n)*`)
+	originCfgStr, err := cfg.Toml()
+	c.Assert(err, IsNil)
+	c.Assert(originCfgStr, Matches, `(.|\n)*server-id = 101(.|\n)*`)
+
+	// test update config file and reload
+	c.Assert(cfg.UpdateConfigFile(tomlStr), IsNil)
+	cfg.Reload()
+	c.Assert(err, IsNil)
+	c.Assert(cfg.ServerID, Equals, 100)
+	c.Assert(cfg.UpdateConfigFile(originCfgStr), IsNil)
+	cfg.Reload()
+	c.Assert(err, IsNil)
+	c.Assert(cfg.ServerID, Equals, 101)
+
+	// test decrypt password
 	clone1.From.Password = "1234"
+	clone1.ServerID = 101
 	clone2, err := cfg.DecryptPassword()
 	c.Assert(err, IsNil)
 	c.Assert(clone2, DeepEquals, clone1)

@@ -1865,7 +1865,9 @@ func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, name
 			log.Errorf("fail to query task operation %v", err)
 		} else {
 			respLog := resp.QueryTaskOperation.Log
-			if respLog.Success {
+      if respLog == nil {
+        return errors.Errorf("operation %d of task %s not found, please execute `query-status` to check status", opLogID, name)
+      } else if respLog.Success {
 				return nil
 			} else if len(respLog.Message) != 0 {
 				return errors.New(respLog.Message)
@@ -1880,7 +1882,7 @@ func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, name
 		}
 	}
 
-	return errors.New("request is timeout, but request may be successful")
+	return errors.New("request is timeout, but request may be successful, please execute `query-status` to check status")
 }
 
 func (s *Server) handleOperationResult(ctx context.Context, cli workerrpc.Client, name string, err error, resp *workerrpc.Response) *pb.OperateSubTaskResponse {
