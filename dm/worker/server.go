@@ -72,8 +72,6 @@ func (s *Server) Start() error {
 		return errors.Trace(err)
 	}
 
-	s.closed.Set(false)
-
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -98,6 +96,8 @@ func (s *Server) Start() error {
 		}
 	}()
 	go InitStatus(httpL) // serve status
+
+	s.closed.Set(false)
 
 	log.Infof("[server] listening on %v for gRPC API and status request", s.cfg.WorkerAddr)
 	err = m.Serve()
@@ -218,7 +218,7 @@ func (s *Server) QueryTaskOperation(ctx context.Context, req *pb.QueryTaskOperat
 
 	opLog, err := s.worker.meta.GetTaskLog(opLogID)
 	if err != nil {
-		err = errors.Annotatef(err, "fail to get operation info of task %s", taskName)
+		err = errors.Annotatef(err, "fail to get operation %d of task %s", opLogID, taskName)
 		log.Error(err)
 		return nil, err
 	}
