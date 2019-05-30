@@ -16,6 +16,7 @@ package syncer
 import (
 	. "github.com/pingcap/check"
 	gouuid "github.com/satori/go.uuid"
+	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -31,4 +32,35 @@ func (s *testSyncerSuite) TestGetServerID(c *C) {
 	id, err := utils.GetServerID(s.db)
 	c.Assert(err, IsNil)
 	c.Assert(id, Greater, int64(0))
+}
+
+func (s *testSyncerSuite) TestBinaryLogs(c *C) {
+	files, err := getBinaryLogs(s.db)
+	c.Assert(err, IsNil)
+	c.Assert(files, Not(HasLen), 0)
+
+	fileNum := len(files)
+	pos := mysql.Position{
+		Name: files[fileNum-1].name,
+		Pos:  0,
+	}
+
+	remainingSize, err := countBinaryLogsSize(pos, s.db)
+	c.Assert(err, IsNil)
+	c.Assert(remainingSize, Equals, files[fileNum-1].size)
+
+	s.db.Exec("FLUSH BINARY LOGS")
+	files, err = getBinaryLogs(s.db)
+	c.Assert(err, IsNil)
+	c.Assert(files, HasLen, fileNum+1)
+
+	pos = mysql.Position{
+		Name: files[fileNum].name,
+		Pos:  0,
+	}
+
+	remainingSize, err = countBinaryLogsSize(pos, s.db)
+	c.Assert(err, IsNil)
+	c.Assert(remainingSize, Equals, files[fileNum].size)
+
 }

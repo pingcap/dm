@@ -39,6 +39,8 @@ const (
 var (
 	heartbeat *Heartbeat // singleton instance
 	once      sync.Once
+
+	reportLagFunc = reportLag
 )
 
 // HeartbeatConfig represents Heartbeat configurations.
@@ -303,7 +305,7 @@ func (h *Heartbeat) calculateLag(ctx context.Context) error {
 	case h.lock <- struct{}{}:
 		for taskName, ts := range h.slavesTs {
 			lag := masterTS - ts
-			replicationLagGauge.WithLabelValues(taskName).Set(float64(lag))
+			reportLagFunc(taskName, lag)
 		}
 		<-h.lock
 	case <-ctx.Done():
@@ -311,6 +313,10 @@ func (h *Heartbeat) calculateLag(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func reportLag(taskName string, lag float64) {
+	replicationLagGauge.WithLabelValues(taskName).Set(float64(lag))
 }
 
 func (h *Heartbeat) getMasterTS() (float64, error) {

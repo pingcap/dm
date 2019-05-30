@@ -14,15 +14,9 @@
 package worker
 
 import (
-	"testing"
-
 	. "github.com/pingcap/check"
 	"github.com/pingcap/dm/dm/pb"
 )
-
-func TestLog(t *testing.T) {
-	TestingT(t)
-}
 
 type testLog struct{}
 
@@ -222,22 +216,32 @@ func (t *testLog) TestTaskLogGC(c *C) {
 	c.Assert(db.Put(EncodeTaskLogKey(30), log2Bytes, nil), IsNil)
 
 	taskLog3 := &pb.TaskLog{
+		Id:   40,
+		Task: testTask1Meta,
+		Ts:   40,
+	}
+	log3Bytes, err := taskLog3.Marshal()
+	c.Assert(err, IsNil)
+	c.Assert(db.Put(EncodeTaskLogKey(40), log3Bytes, nil), IsNil)
+
+	taskLog4 := &pb.TaskLog{
 		Id:   60,
 		Task: testTask1Meta,
 		Ts:   60,
 	}
-	log3Bytes, err := taskLog3.Marshal()
+	log4Bytes, err := taskLog4.Marshal()
 	c.Assert(err, IsNil)
-	c.Assert(db.Put(EncodeTaskLogKey(60), log3Bytes, nil), IsNil)
+	c.Assert(db.Put(EncodeTaskLogKey(60), log4Bytes, nil), IsNil)
 
 	// forward
 	c.Assert(logger.ForwardTo(db, 59), IsNil)
 
 	// gc
+	GCBatchSize = 2
 	logger.doGC(db, 59)
 
 	logs, err := logger.Initial(db)
-	c.Assert(logs, DeepEquals, []*pb.TaskLog{taskLog3})
+	c.Assert(logs, DeepEquals, []*pb.TaskLog{taskLog4})
 	c.Assert(logger.handledPointer.Location, Equals, int64(59))
 	c.Assert(logger.endPointer.Location, Equals, int64(61))
 }
