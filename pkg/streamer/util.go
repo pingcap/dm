@@ -14,6 +14,9 @@
 package streamer
 
 import (
+	"io"
+	"strings"
+
 	"github.com/pingcap/errors"
 
 	"github.com/pingcap/dm/pkg/utils"
@@ -32,4 +35,20 @@ func getNextUUID(currUUID string, UUIDs []string) (string, string, error) {
 		}
 	}
 	return "", "", nil
+}
+
+// isIgnorableParseError checks whether is a ignorable error for `BinlogParser.ParseFile`.
+func isIgnorableParseError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	if strings.Contains(err.Error(), "err EOF") {
+		// NOTE: go-mysql returned err not includes caused err, but as message, ref: parser.go `parseSingleEvent`
+		return true
+	} else if errors.Cause(err) == io.EOF {
+		return true
+	}
+
+	return false
 }

@@ -367,6 +367,50 @@ func (t *testReaderSuite) TestParseFileRelayNeedSwitchSubDir(c *C) {
 	// then we need to mock `fileSizeUpdated` or inject some delay or delay.
 }
 
+func (t *testReaderSuite) TestParseFileRelayWithIgnorableError(c *C) {
+	var (
+		filename     = "test-mysql-bin.000001"
+		baseDir      = c.MkDir()
+		offset       int64
+		firstParse   = true
+		possibleLast = true
+		baseEvents   = t.genBinlogEvents(c, 0)
+		currentUUID  = "b60868af-5a6f-11e9-9ea3-0242ac160006.000001"
+		relayDir     = filepath.Join(baseDir, currentUUID)
+		fullPath     = filepath.Join(relayDir, filename)
+		s            = newLocalStreamer()
+		cfg          = &BinlogReaderConfig{RelayDir: baseDir}
+		r            = NewBinlogReader(cfg)
+	)
+
+	// create the current relay log file and write some events
+	err := os.MkdirAll(relayDir, 0744)
+	c.Assert(err, IsNil)
+	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0644)
+	c.Assert(err, IsNil)
+	defer f.Close()
+	_, err = f.Write(replication.BinLogFileHeader)
+	c.Assert(err, IsNil)
+	for _, ev := range baseEvents {
+		_, err = f.Write(ev.RawData)
+		c.Assert(err, IsNil)
+	}
+	_, err = f.Write([]byte("some invalid binlog event data"))
+	c.Assert(err, IsNil)
+
+	// EOF error ignored
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err := r.parseFile(
+		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
+	c.Assert(err, IsNil)
+	c.Assert(needSwitch, IsFalse)
+	c.Assert(needReParse, IsTrue)
+	c.Assert(latestPos, Equals, int64(baseEvents[len(baseEvents)-1].Header.LogPos))
+	c.Assert(nextUUID, Equals, "")
+	c.Assert(nextBinlogName, Equals, "")
+}
+
 func (t *testReaderSuite) genBinlogEvents(c *C, latestPos uint32) []*replication.BinlogEvent {
 	var (
 		header = &replication.EventHeader{

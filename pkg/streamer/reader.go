@@ -328,9 +328,8 @@ func (r *BinlogReader) parseFile(
 
 	// use parser.ParseFile directly now, if needed we can change to use FileReader.
 	err = r.parser.ParseFile(fullPath, offset, onEventFunc)
-	if possibleLast && err != nil && strings.Contains(err.Error(), "err EOF") {
-		// NOTE: go-mysql returned err not includes caused err, but as message, ref: parser.go `parseSingleEvent`
-		log.Warnf("[streamer] parse relay log file %s from offset %d got EOF %s", fullPath, offset, errors.ErrorStack(err))
+	if possibleLast && isIgnorableParseError(err) {
+		log.Warnf("[streamer] parse relay log file %s from offset %d got error %s", fullPath, offset, errors.ErrorStack(err))
 	} else if err != nil {
 		log.Errorf("[streamer] parse relay log file %s from offset %d error %s", fullPath, offset, errors.ErrorStack(err))
 		return false, false, 0, "", "", errors.Annotatef(err, "relay log file %s", fullPath)

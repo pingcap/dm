@@ -14,9 +14,11 @@
 package streamer
 
 import (
+	"io"
 	"testing"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/errors"
 )
 
 var _ = Suite(&testUtilSuite{})
@@ -87,5 +89,37 @@ func (t *testUtilSuite) TestGetNextUUID(c *C) {
 		}
 		c.Assert(nu, Equals, cs.nextUUID)
 		c.Assert(nus, Equals, cs.nextUUIDSuffix)
+	}
+}
+
+func (t *testUtilSuite) TestIsIgnorableParseError(c *C) {
+	cases := []struct {
+		err       error
+		ignorable bool
+	}{
+		{
+			err:       nil,
+			ignorable: false,
+		},
+		{
+			err:       io.EOF,
+			ignorable: true,
+		},
+		{
+			err:       errors.Annotate(io.EOF, "annotated end of file"),
+			ignorable: true,
+		},
+		{
+			err:       errors.New("get event header err EOF xxxx"),
+			ignorable: true,
+		},
+		{
+			err:       errors.New("some other error"),
+			ignorable: false,
+		},
+	}
+
+	for _, cs := range cases {
+		c.Assert(isIgnorableParseError(cs.err), Equals, cs.ignorable)
 	}
 }
