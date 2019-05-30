@@ -55,16 +55,6 @@ start_services() {
     check_mysql $MYSQL_HOST2 $MYSQL_PORT2
 }
 
-prepare_tools() {
-    mkdir -p $CUR/bin
-    cd $CUR
-    for file in "dmctl_tools"/*; do
-        bin_name=$(echo $file|awk -F"/" '{print $(NF)}'|awk -F"." '{print $1}')
-        GO111MODULE=on go build -o bin/$bin_name $file
-    done
-    cd -
-}
-
 if [ "$#" -ge 1 ]; then
     test_case=$1
     if [ "$test_case" != "*" ] && [ ! -d "tests/$test_case" ]; then
@@ -77,7 +67,6 @@ fi
 
 trap stop_services EXIT
 start_services
-prepare_tools
 
 for script in tests/$test_case/run.sh; do
     echo "Running test $script..."
