@@ -121,7 +121,7 @@ func (t *testMaster) TestConfig(c *check.C) {
 	}
 }
 
-func (t *testMaster) TestUpdateConfig(c *check.C) {
+func (t *testMaster) TestUpdateConfigFile(c *check.C) {
 	var (
 		err        error
 		content    []byte

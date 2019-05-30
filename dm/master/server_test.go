@@ -356,6 +356,7 @@ func (t *testMaster) TestShowDDLLocks(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 	c.Assert(resp.Locks, check.HasLen, 1)
+	c.Assert(resp.Locks[0].ID, check.Equals, genDDLLockID("testA", "test_db1", "test_tbl1"))
 
 	// test specify a mismatch worker
 	resp, err = server.ShowDDLLocks(context.Background(), &pb.ShowDDLLocksRequest{
