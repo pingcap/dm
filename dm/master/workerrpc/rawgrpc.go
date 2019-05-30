@@ -47,6 +47,9 @@ func NewGRPCClient(addr string) (*GRPCClient, error) {
 
 // SendRequest implements Client.SendRequest
 func (c *GRPCClient) SendRequest(ctx context.Context, req *Request, timeout time.Duration) (*Response, error) {
+	if atomic.LoadInt32(&c.closed) != 0 {
+		return nil, errors.New("send request on a closed client")
+	}
 	if req.Type != CmdFetchDDLInfo {
 		ctx1, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
