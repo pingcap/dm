@@ -14,7 +14,6 @@
 package syncer
 
 import (
-	"context"
 	"sync"
 
 	"github.com/pingcap/dm/dm/config"
@@ -84,25 +83,24 @@ type PipeData struct {
 
 // Pipeline contains many pipes, and resolve data by every pipe.
 type Pipeline struct {
-	ctx    context.Context
-	cancel context.CancelFunc
+	//ctx    context.Context
+	//cancel context.CancelFunc
 
 	pipes []Pipe
 
+	closeCh  chan interface{}
 	isClosed sync2.AtomicBool
 
-	errCh    chan error
-	errChLen int
+	errCh chan error
 
 	wg     sync.WaitGroup
 	dataWg sync.WaitGroup
 }
 
 // NewPipeline returns a new pipeline
-func NewPipeline(cfg *config.SubTaskConfig) *Pipeline {
+func NewPipeline() *Pipeline {
 	return &Pipeline{
-		errChLen: cfg.WorkerCount + 1,
-		pipes:    make([]Pipe, 0, 5),
+		pipes: make([]Pipe, 0, 5),
 	}
 }
 
@@ -130,7 +128,7 @@ func (p *Pipeline) Input(data *PipeData) error {
 	case p.pipes[0].Input() <- data:
 		p.dataWg.Add(1)
 		return nil
-	case <-p.ctx.Done():
+	case <-p.closeCh:
 		return errors.New("pipeline's context is done")
 	}
 }
@@ -153,8 +151,9 @@ func (p *Pipeline) Wait() {
 // Start starts the pipeline's process, run all pipes
 func (p *Pipeline) Start() {
 	log.Info("start pipeline")
-	p.ctx, p.cancel = context.WithCancel(context.Background())
-	p.errCh = make(chan error, p.errChLen)
+
+	p.closeCh = make(chan interface{})
+	p.errCh = make(chan error, 10)
 
 	for _, pipe := range p.pipes {
 		pipe.SetErrorChan(p.errCh)
@@ -181,10 +180,10 @@ func (p *Pipeline) link(output, input chan *PipeData) {
 	case data := <-output:
 		select {
 		case input <- data:
-		case <-p.ctx.Done():
+		case <-p.closeCh:
 			return
 		}
-	case <-p.ctx.Done():
+	case <-p.closeCh:
 		return
 	}
 }
@@ -192,9 +191,10 @@ func (p *Pipeline) link(output, input chan *PipeData) {
 // Close closes the pipeline
 func (p *Pipeline) Close() {
 	log.Info("close pipeline")
-	p.cancel()
+
 	p.isClosed.Set(true)
 
+	close(p.closeCh)
 	p.wg.Wait()
 
 	for _, pipe := range p.pipes {

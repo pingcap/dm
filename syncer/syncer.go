@@ -199,7 +199,7 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 		syncer.ddlExecInfo = NewDDLExecInfo()
 	}
 
-	syncer.pipeline = NewPipeline(cfg)
+	syncer.pipeline = NewPipeline()
 
 	return syncer
 }

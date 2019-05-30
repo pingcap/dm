@@ -37,8 +37,8 @@ var _ Pipe = &SyncPipe{}
 type SyncPipe struct {
 	sync.RWMutex
 
-	ctx    context.Context
-	cancel context.CancelFunc
+	//ctx    context.Context
+	//cancel context.CancelFunc
 
 	taskName string
 
@@ -94,6 +94,8 @@ type SyncPipe struct {
 	doAfterFlushCheckpoint func(pos mysql.Position) error
 
 	resolveFunc func()
+
+	closeCh chan interface{}
 }
 
 func (s *SyncPipe) newJobChans(count int) {
@@ -169,7 +171,7 @@ func (s *SyncPipe) reportErr(err error) {
 	log.Warnf("pipe %s meet error %v", s.Name(), err)
 	select {
 	case s.errCh <- err:
-	case <-s.ctx.Done():
+	case <-s.closeCh:
 	}
 }
 
@@ -343,7 +345,7 @@ func (s *SyncPipe) flushCheckPoints() error {
 
 // Run implements Pipe interface
 func (s *SyncPipe) Run() {
-	s.ctx, s.cancel = context.WithCancel(context.Background())
+	s.closeCh = make(chan interface{})
 	s.input = make(chan *PipeData, 10)
 	s.c = newCausality()
 	s.newJobChans(s.workerCount + 1)
@@ -364,7 +366,7 @@ func (s *SyncPipe) Run() {
 					break
 				}
 				s.resolveFunc()
-			case <-s.ctx.Done():
+			case <-s.closeCh:
 				break
 			}
 		}
@@ -376,22 +378,18 @@ func (s *SyncPipe) Run() {
 		name := queueBucketName(i)
 		s.queueBucketMapping = append(s.queueBucketMapping, name)
 		go func(i int, n string) {
-			ctx1, cancel := context.WithCancel(s.ctx)
-			s.sync(ctx1, n, s.toDBs[i], s.jobs[i])
-			cancel()
+			s.sync(n, s.toDBs[i], s.jobs[i])
 		}(i, name)
 	}
 
 	s.queueBucketMapping = append(s.queueBucketMapping, adminQueueName)
 	s.wg.Add(1)
 	go func() {
-		ctx2, cancel := context.WithCancel(s.ctx)
-		s.sync(ctx2, adminQueueName, s.ddlDB, s.jobs[s.workerCount])
-		cancel()
+		s.sync(adminQueueName, s.ddlDB, s.jobs[s.workerCount])
 	}()
 }
 
-func (s *SyncPipe) sync(ctx context.Context, queueBucket string, db *Conn, jobChan chan *job) {
+func (s *SyncPipe) sync(queueBucket string, db *Conn, jobChan chan *job) {
 	defer s.wg.Done()
 
 	idx := 0
@@ -518,7 +516,7 @@ func (s *SyncPipe) sync(ctx context.Context, queueBucket string, db *Conn, jobCh
 				clearF()
 			}
 
-		case <-ctx.Done():
+		case <-s.closeCh:
 			log.Infof("[sync_pipe] stop sync %s", queueBucket)
 			return
 
@@ -592,7 +590,7 @@ func (s *SyncPipe) isClosed() bool {
 
 // Close implements Pipe interface
 func (s *SyncPipe) Close() {
-	s.cancel()
+	close(s.closeCh)
 	s.closeJobChans()
 	s.wg.Wait()
 }
