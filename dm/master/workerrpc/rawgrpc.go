@@ -31,18 +31,22 @@ type GRPCClient struct {
 	closed int32
 }
 
-// NewGRPCClient returns a new grpc client
+// NewGRPCClientWrap initializes a new grpc client from given grpc connection and worker client
+func NewGRPCClientWrap(conn *grpc.ClientConn, client pb.WorkerClient) (*GRPCClient, error) {
+	return &GRPCClient{
+		conn:   conn,
+		client: client,
+		closed: 0,
+	}, nil
+}
+
+// NewGRPCClient initializes a new grpc client from worker address
 func NewGRPCClient(addr string) (*GRPCClient, error) {
 	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	c := &GRPCClient{
-		conn:   conn,
-		client: pb.NewWorkerClient(conn),
-		closed: 0,
-	}
-	return c, nil
+	return NewGRPCClientWrap(conn, pb.NewWorkerClient(conn))
 }
 
 // SendRequest implements Client.SendRequest
@@ -60,11 +64,14 @@ func (c *GRPCClient) SendRequest(ctx context.Context, req *Request, timeout time
 
 // Close implements Client.Close
 func (c *GRPCClient) Close() error {
+	defer atomic.CompareAndSwapInt32(&c.closed, 0, 1)
+	if c.conn == nil {
+		return nil
+	}
 	err := c.conn.Close()
 	if err != nil {
 		return errors.Annotatef(err, "close rpc client")
 	}
-	atomic.StoreInt32(&c.closed, 1)
 	return nil
 }
 
