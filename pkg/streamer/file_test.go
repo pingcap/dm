@@ -336,10 +336,9 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 	c.Assert(err, ErrorMatches, ".*no such file or directory.*")
 	c.Assert(upNotExist, Equals, "")
 
-	// increase watcherInterval to ensure file updated when adding watching
-	watcherInterval = time.Second
-
 	// 1. file increased when adding watching
+	err = ioutil.WriteFile(relayPaths[0], data, 0644)
+	c.Assert(err, IsNil)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -348,13 +347,11 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 		c.Assert(err2, IsNil)
 		c.Assert(up, Equals, relayPaths[0])
 	}()
-
-	// update the file
-	err = ioutil.WriteFile(relayPaths[0], data, 0644)
-	c.Assert(err, IsNil)
 	wg.Wait()
 
 	// 2. file decreased when adding watching
+	err = ioutil.WriteFile(relayPaths[0], nil, 0644)
+	c.Assert(err, IsNil)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -362,13 +359,11 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 		c.Assert(err2, ErrorMatches, ".*file size of relay log.*become smaller.*")
 		c.Assert(up, Equals, "")
 	}()
-
-	// truncate the file
-	err = ioutil.WriteFile(relayPaths[0], nil, 0644)
-	c.Assert(err, IsNil)
 	wg.Wait()
 
 	// 3. new file created when adding watching
+	err = ioutil.WriteFile(relayPaths[1], nil, 0644)
+	c.Assert(err, IsNil)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -376,14 +371,7 @@ func (t *testUtilSuite) TestRelaySubDirUpdated(c *C) {
 		c.Assert(err2, IsNil)
 		c.Assert(up, Equals, relayPaths[1])
 	}()
-
-	// create a new file
-	err = ioutil.WriteFile(relayPaths[1], nil, 0644)
-	c.Assert(err, IsNil)
 	wg.Wait()
-
-	// decrease watcherInterval to ensure file updated can be watched
-	watcherInterval = 100 * time.Millisecond
 
 	// 4. file updated
 	wg.Add(1)
