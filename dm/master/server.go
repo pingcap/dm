@@ -1865,9 +1865,9 @@ func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, name
 			log.Errorf("fail to query task operation %v", err)
 		} else {
 			respLog := resp.QueryTaskOperation.Log
-      if respLog == nil {
-        return errors.Errorf("operation %d of task %s not found, please execute `query-status` to check status", opLogID, name)
-      } else if respLog.Success {
+			if respLog == nil {
+				return errors.Errorf("operation %d of task %s not found, please execute `query-status` to check status", opLogID, name)
+			} else if respLog.Success {
 				return nil
 			} else if len(respLog.Message) != 0 {
 				return errors.New(respLog.Message)
