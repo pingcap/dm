@@ -17,7 +17,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
-	"testing"
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/dm/dm/config"
@@ -25,10 +24,6 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 )
-
-func TestMeta(t *testing.T) {
-	TestingT(t)
-}
 
 var (
 	testTask1 = &config.SubTaskConfig{

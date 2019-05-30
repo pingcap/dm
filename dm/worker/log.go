@@ -33,6 +33,13 @@ import (
 // ErrInValidHandler indicates we meet an invalid Putter/Getter/Deleter
 var ErrInValidHandler = errors.New("handler is nil, please pass a leveldb.DB or leveldb.Transaction")
 
+var (
+	// GCBatchSize is batch size for gc process
+	GCBatchSize = 1024
+	// GCInterval is the interval to gc
+	GCInterval = time.Hour
+)
+
 // Putter is interface which has Put method
 type Putter interface {
 	Put(key, value []byte, opts *opt.WriteOptions) error
@@ -279,13 +286,12 @@ func (logger *Logger) Append(db Putter, opLog *pb.TaskLog) error {
 
 // GC deletes useless log
 func (logger *Logger) GC(ctx context.Context, db *leveldb.DB) {
-	ticker := time.NewTicker(time.Hour)
+	ticker := time.NewTicker(GCInterval)
 	defer ticker.Stop()
-
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof("[task log gc] goroutine exits!")
+			log.Infof("[task log gc] goroutine exist!")
 			return
 		case <-ticker.C:
 			var gcID int64
@@ -321,7 +327,7 @@ func (logger *Logger) doGC(db *leveldb.DB, id int64) {
 		}
 
 		batch.Delete(iter.Key())
-		if batch.Len() == 1024 {
+		if batch.Len() == GCBatchSize {
 			err := db.Write(batch, nil)
 			if err != nil {
 				log.Errorf("[task log gc] fail to delete keys from kv db %v", err)
