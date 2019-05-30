@@ -123,22 +123,6 @@ func (s *Server) Start() error {
 		s.fetchWorkerDDLInfo(ctx)
 	}()
 
-	// auto resolve DDL lock is not very useful, comment it
-	//wg.Add(1)
-	//go func() {
-	//	defer wg.Done()
-	//	timer := time.NewTicker(tryResolveInterval)
-	//	defer timer.Stop()
-	//	for {
-	//		select {
-	//		case <-ctx.Done():
-	//			return
-	//		case <-timer.C:
-	//			s.tryResolveDDLLocks(ctx)
-	//		}
-	//	}
-	//}()
-
 	// create a cmux
 	m := cmux.New(s.rootLis)
 	m.SetReadTimeout(cmuxReadTimeout) // set a timeout, ref: https://github.com/pingcap/tidb-binlog/pull/352
@@ -887,7 +871,7 @@ func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWork
 					Msg:    errors.ErrorStack(err),
 				}
 			}
-			workerReq.Op = req.Op
+			workerResp.Op = req.Op
 			workerResp.Worker = worker
 			workerRespCh <- workerResp
 		}(worker)
@@ -917,9 +901,8 @@ func (s *Server) RefreshWorkerTasks(ctx context.Context, req *pb.RefreshWorkerTa
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "RefreshWorkerTasks"))
 
 	taskWorkers, workerMsgMap := s.fetchTaskWorkers(ctx)
-	if len(taskWorkers) > 0 {
-		s.replaceTaskWorkers(taskWorkers)
-	}
+	// always update task workers mapping in memory
+	s.replaceTaskWorkers(taskWorkers)
 	log.L().Info("refresh workers of task", zap.Reflect("workers of task", taskWorkers), zap.String("request", "RefreshWorkerTasks"))
 
 	workers := make([]string, 0, len(workerMsgMap))
@@ -1551,27 +1534,6 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 	}, nil
 }
 
-// tryResolveDDLLocks tries to resolve synced DDL locks
-// only when auto-triggered resolve by fetchWorkerDDLInfo fail, we need to auto-retry
-// this can only handle a few cases, like owner unreachable temporary
-// other cases need to handle by user to use dmctl manually
-func (s *Server) tryResolveDDLLocks(ctx context.Context) {
-	locks := s.lockKeeper.Locks()
-	for ID, lock := range locks {
-		isSynced, _ := lock.IsSync()
-		if !isSynced || !lock.AutoRetry.Get() {
-			continue
-		}
-		log.L().Info("try auto re-resolve DDL lock", zap.String("lock ID", ID))
-		s.resolveDDLLock(ctx, ID, "", nil)
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-	}
-}
-
 // UpdateWorkerRelayConfig updates config for relay and (dm-worker)
 func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWorkerRelayConfigRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "UpdateWorkerRelayConfig"))
@@ -1736,7 +1698,7 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 		return nil, nil, errors.Trace(err)
 	}
 
-	err = checker.CheckSyncConfig(ctx, stCfgs)
+	err = checker.CheckSyncConfigFunc(ctx, stCfgs)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
