@@ -79,13 +79,13 @@ type PipeData struct {
 	traceGID     string
 
 	ddlExecItem *DDLExecItem
+
+	// may have other data needed
+	additionalData interface{}
 }
 
 // Pipeline contains many pipes, and resolve data by every pipe.
 type Pipeline struct {
-	//ctx    context.Context
-	//cancel context.CancelFunc
-
 	pipes []Pipe
 
 	closeCh  chan interface{}

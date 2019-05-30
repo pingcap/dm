@@ -37,9 +37,6 @@ var _ Pipe = &SyncPipe{}
 type SyncPipe struct {
 	sync.RWMutex
 
-	//ctx    context.Context
-	//cancel context.CancelFunc
-
 	taskName string
 
 	maxRetry int
