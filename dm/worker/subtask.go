@@ -498,16 +498,6 @@ func (st *SubTask) fetchUnitDDLInfo(ctx context.Context) {
 	}
 }
 
-// SendBackDDLInfo sends DDL info back for pending
-func (st *SubTask) SendBackDDLInfo(ctx context.Context, info *pb.DDLInfo) bool {
-	select {
-	case <-ctx.Done():
-		return false
-	case st.DDLInfo <- info:
-		return true
-	}
-}
-
 // ExecuteDDL requests current unit to execute a DDL
 func (st *SubTask) ExecuteDDL(ctx context.Context, req *pb.ExecDDLRequest) error {
 	// NOTE: check current stage?

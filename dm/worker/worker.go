@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -55,8 +54,8 @@ type Worker struct {
 
 	subTasks map[string]*SubTask
 
-	relayHolder *RelayHolder
-	relayPurger *purger.Purger
+	relayHolder RelayHolder
+	relayPurger purger.Purger
 
 	meta   *Metadata
 	db     *leveldb.DB
@@ -72,21 +71,14 @@ func NewWorker(cfg *Config) (*Worker, error) {
 		subTasks:    make(map[string]*SubTask),
 	}
 
-	// initial relay purger
-	operators := []purger.RelayOperator{
-		w.relayHolder,
-		streamer.GetReaderHub(),
-	}
-	interceptors := []purger.PurgeInterceptor{
-		w,
-	}
-	w.relayPurger = purger.NewPurger(cfg.Purge, cfg.RelayDir, operators, interceptors)
-
 	// initial relay holder
-	err := w.relayHolder.Init()
+	purger, err := w.relayHolder.Init([]purger.PurgeInterceptor{
+		w,
+	})
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	w.relayPurger = purger
 
 	// open kv db
 	dbDir := path.Join(w.cfg.MetaDir, "kv")
@@ -382,20 +374,6 @@ func (w *Worker) doFetchDDLInfo(ctx context.Context, ch chan<- *pb.DDLInfo) {
 	log.Infof("[worker] save DDLInfo into subTasks")
 
 	ch <- v
-}
-
-// SendBackDDLInfo sends sub tasks' DDL info back to pending
-func (w *Worker) SendBackDDLInfo(ctx context.Context, info *pb.DDLInfo) bool {
-	if w.closed.Get() == closedTrue {
-		log.Warnf("[worker] sending DDLInfo %v back to a closed worker", info)
-		return false
-	}
-
-	st := w.findSubTask(info.Task)
-	if st == nil {
-		return false
-	}
-	return st.SendBackDDLInfo(ctx, info)
 }
 
 // RecordDDLLockInfo records the current DDL lock info which pending to sync
