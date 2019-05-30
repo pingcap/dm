@@ -54,7 +54,7 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 	currentUUID := "invalid-current-uuid"
 	relayDir := filepath.Join(baseDir, currentUUID)
 	fullPath := filepath.Join(relayDir, filename)
-	cfg := &BinlogReaderConfig{RelayDir: relayDir}
+	cfg := &BinlogReaderConfig{RelayDir: baseDir}
 	r := NewBinlogReader(cfg)
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err := r.parseFile(
 		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
@@ -69,7 +69,7 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 	currentUUID = "b60868af-5a6f-11e9-9ea3-0242ac160006.000001"
 	relayDir = filepath.Join(baseDir, currentUUID)
 	fullPath = filepath.Join(relayDir, filename)
-	cfg = &BinlogReaderConfig{RelayDir: relayDir}
+	cfg = &BinlogReaderConfig{RelayDir: baseDir}
 	r = NewBinlogReader(cfg)
 
 	// relay log file not exists, failed
@@ -221,7 +221,7 @@ func (t *testReaderSuite) TestParseFileRelaySubDirUpdated(c *C) {
 		fullPath     = filepath.Join(relayDir, filename)
 		nextPath     = filepath.Join(relayDir, nextFilename)
 		s            = newLocalStreamer()
-		cfg          = &BinlogReaderConfig{RelayDir: relayDir}
+		cfg          = &BinlogReaderConfig{RelayDir: baseDir}
 		r            = NewBinlogReader(cfg)
 	)
 
@@ -294,6 +294,77 @@ func (t *testReaderSuite) TestParseFileRelaySubDirUpdated(c *C) {
 	c.Assert(nextBinlogName, Equals, "")
 	wg.Wait()
 	t.purgeStreamer(c, s)
+}
+
+func (t *testReaderSuite) TestParseFileRelayNeedSwitchSubDir(c *C) {
+	var (
+		filename     = "test-mysql-bin.000001"
+		nextFilename = "test-mysql-bin.666888"
+		baseDir      = c.MkDir()
+		offset       int64
+		firstParse   = true
+		possibleLast = true
+		baseEvents   = t.genBinlogEvents(c, 0)
+		currentUUID  = "b60868af-5a6f-11e9-9ea3-0242ac160006.000001"
+		switchedUUID = "b60868af-5a6f-11e9-9ea3-0242ac160007.000002"
+		relayDir     = filepath.Join(baseDir, currentUUID)
+		nextRelayDir = filepath.Join(baseDir, switchedUUID)
+		fullPath     = filepath.Join(relayDir, filename)
+		nextFullPath = filepath.Join(nextRelayDir, nextFilename)
+		s            = newLocalStreamer()
+		cfg          = &BinlogReaderConfig{RelayDir: baseDir}
+		r            = NewBinlogReader(cfg)
+	)
+
+	// create the current relay log file and write some events
+	err := os.MkdirAll(relayDir, 0744)
+	c.Assert(err, IsNil)
+	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0644)
+	c.Assert(err, IsNil)
+	defer f.Close()
+	_, err = f.Write(replication.BinLogFileHeader)
+	c.Assert(err, IsNil)
+	for _, ev := range baseEvents {
+		_, err = f.Write(ev.RawData)
+		c.Assert(err, IsNil)
+	}
+
+	// invalid UUID in UUID list, error
+	r.uuids = []string{currentUUID, "invalid.uuid"}
+	ctx1, cancel1 := context.WithTimeout(context.Background(), time.Second)
+	defer cancel1()
+	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err := r.parseFile(
+		ctx1, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
+	c.Assert(err, ErrorMatches, ".*not valid.*")
+	c.Assert(needSwitch, IsFalse)
+	c.Assert(needReParse, IsFalse)
+	c.Assert(latestPos, Equals, int64(0))
+	c.Assert(nextUUID, Equals, "")
+	c.Assert(nextBinlogName, Equals, "")
+	t.purgeStreamer(c, s)
+
+	// next sub dir exits, need to switch
+	r.uuids = []string{currentUUID, switchedUUID}
+	err = os.MkdirAll(nextRelayDir, 0744)
+	c.Assert(err, IsNil)
+	err = ioutil.WriteFile(nextFullPath, replication.BinLogFileHeader, 0644)
+	c.Assert(err, IsNil)
+
+	// has relay log file in next sub directory, need to switch
+	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Second)
+	defer cancel2()
+	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
+		ctx2, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
+	c.Assert(err, IsNil)
+	c.Assert(needSwitch, IsTrue)
+	c.Assert(needReParse, IsFalse)
+	c.Assert(latestPos, Equals, int64(0))
+	c.Assert(nextUUID, Equals, switchedUUID)
+	c.Assert(nextBinlogName, Equals, nextFilename)
+	t.purgeStreamer(c, s)
+
+	// NOTE: if we want to test the returned `needReParse` of `needSwitchSubDir`,
+	// then we need to mock `fileSizeUpdated` or inject some delay or delay.
 }
 
 func (t *testReaderSuite) genBinlogEvents(c *C, latestPos uint32) []*replication.BinlogEvent {
