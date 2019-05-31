@@ -57,9 +57,12 @@ start_services() {
 
 if [ "$#" -ge 1 ]; then
     test_case=$1
-    if [ "$test_case" != "*" ] && [ ! -d "tests/$test_case" ]; then
-        echo "test case $test_case not found"
-        exit 1
+    if [ "$test_case" != "*" ]; then
+        if [ "$test_case" == "others" ]; then
+            test_case=$(cat $CUR/others_integration.txt)
+        elif [ ! -d "tests/$test_case" ]; then
+            exit 1
+        fi
     fi
 else
     test_case="*"
@@ -68,10 +71,22 @@ fi
 trap stop_services EXIT
 start_services
 
-for script in tests/$test_case/run.sh; do
+function run() {
+    script=$1
     echo "Running test $script..."
     TEST_DIR="$TEST_DIR" \
     PATH="tests/_utils:$PATH" \
     TEST_NAME="$(basename "$(dirname "$script")")" \
     bash +x "$script"
-done
+}
+
+if [ "$test_case" == "*" ]; then
+    for script in $CUR/$test_case/run.sh; do
+        run $script
+    done
+else
+    for name in $test_case; do
+        script="$CUR/$name/run.sh"
+        run $script
+    done
+fi
