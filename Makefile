@@ -8,7 +8,7 @@ CURDIR   := $(shell pwd)
 GO       := GO111MODULE=on go
 GOBUILD  := CGO_ENABLED=0 $(GO) build
 GOTEST   := CGO_ENABLED=1 $(GO) test
-PACKAGES  := $$(go list ./... | grep -vE 'tests|cmd|vendor')
+PACKAGES  := $$(go list ./... | grep -vE 'tests|cmd|vendor|pbmock')
 FILES    := $$(find . -name "*.go" | grep -vE "vendor")
 TOPDIRS  := $$(ls -d */ | grep -vE "vendor")
 SHELL    := /usr/bin/env bash
@@ -108,6 +108,7 @@ dm_integration_test_build:
 		-o bin/dm-tracer.test github.com/pingcap/dm/cmd/dm-tracer \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
 	$(FAILPOINT_DISABLE)
+	tests/prepare_tools.sh
 
 integration_test:
 	@which bin/tidb-server
