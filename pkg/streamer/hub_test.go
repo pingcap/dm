@@ -22,6 +22,36 @@ var _ = Suite(&testHubSuite{})
 type testHubSuite struct {
 }
 
+func (t *testHubSuite) TestRelayLogInfo(c *C) {
+	rli1 := RelayLogInfo{}
+	rli1.UUIDSuffix = 1
+	rli2 := RelayLogInfo{}
+	rli2.UUIDSuffix = 2
+
+	// compare by UUIDSuffix
+	c.Assert(rli1.Earlier(&rli1), IsFalse)
+	c.Assert(rli1.Earlier(&rli2), IsTrue)
+	c.Assert(rli2.Earlier(&rli1), IsFalse)
+	c.Assert(rli2.Earlier(&rli2), IsFalse)
+
+	// compare by filename
+	rli3 := RelayLogInfo{}
+	rli3.UUIDSuffix = 1
+
+	rli1.Filename = "mysql-bin.000001"
+	rli3.Filename = "mysql-bin.000001" // equal
+	c.Assert(rli1.Earlier(&rli3), IsFalse)
+	c.Assert(rli3.Earlier(&rli1), IsFalse)
+
+	rli3.Filename = "mysql-bin.000003"
+	c.Assert(rli1.Earlier(&rli3), IsTrue)
+	c.Assert(rli3.Earlier(&rli1), IsFalse)
+
+	// string representation
+	rli3.UUID = "c6ae5afe-c7a3-11e8-a19d-0242ac130006.000001"
+	c.Assert(rli3.String(), Equals, rli3.UUID+"/"+rli3.Filename)
+}
+
 func (t *testHubSuite) TestRelayLogInfoHub(c *C) {
 	var rlih = newRelayLogInfoHub()
 	taskName, earliest := rlih.earliest()
@@ -89,4 +119,49 @@ func (t *testHubSuite) TestRelayLogInfoHub(c *C) {
 	taskName, earliest = rlih.earliest()
 	c.Assert(taskName, Equals, "")
 	c.Assert(earliest, IsNil)
+}
+
+func (t *testHubSuite) TestReaderHub(c *C) {
+	h := GetReaderHub()
+	c.Assert(h, NotNil)
+
+	// no earliest
+	erli := h.EarliestActiveRelayLog()
+	c.Assert(erli, IsNil)
+
+	// update one
+	err := h.UpdateActiveRelayLog("task-1", "c6ae5afe-c7a3-11e8-a19d-0242ac130006.000004", "mysql-bin.000001")
+	c.Assert(err, IsNil)
+
+	// the only one is the earliest
+	erli = h.EarliestActiveRelayLog()
+	c.Assert(erli, NotNil)
+	c.Assert(erli.UUID, Equals, "c6ae5afe-c7a3-11e8-a19d-0242ac130006.000004")
+	c.Assert(erli.Filename, Equals, "mysql-bin.000001")
+
+	// update an earlier one
+	err = h.UpdateActiveRelayLog("task-2", "c6ae5afe-c7a3-11e8-a19d-0242ac130006.000002", "mysql-bin.000002")
+	c.Assert(err, IsNil)
+
+	// the earlier one is the earliest
+	erli = h.EarliestActiveRelayLog()
+	c.Assert(erli, NotNil)
+	c.Assert(erli.UUID, Equals, "c6ae5afe-c7a3-11e8-a19d-0242ac130006.000002")
+	c.Assert(erli.Filename, Equals, "mysql-bin.000002")
+
+	// remove the earlier one
+	h.RemoveActiveRelayLog("task-2")
+
+	// the only one is the earliest
+	erli = h.EarliestActiveRelayLog()
+	c.Assert(erli, NotNil)
+	c.Assert(erli.UUID, Equals, "c6ae5afe-c7a3-11e8-a19d-0242ac130006.000004")
+	c.Assert(erli.Filename, Equals, "mysql-bin.000001")
+
+	// remove the only one
+	h.RemoveActiveRelayLog("task-1")
+
+	// no earliest
+	erli = h.EarliestActiveRelayLog()
+	c.Assert(erli, IsNil)
 }
