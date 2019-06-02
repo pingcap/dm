@@ -432,14 +432,8 @@ func (t *testReaderSuite) TestUpdateUUIDs(c *C) {
 		"b60868af-5a6f-11e9-9ea3-0242ac160006.000001",
 		"b60868af-5a6f-11e9-9ea3-0242ac160007.000002",
 	}
-	var buf bytes.Buffer
-	for _, uuid := range UUIDs {
-		_, err = buf.WriteString(uuid)
-		c.Assert(err, IsNil)
-		_, err = buf.WriteString("\n")
-		c.Assert(err, IsNil)
-	}
-	err = ioutil.WriteFile(r.indexPath, buf.Bytes(), 0644)
+	uuidBytes := t.uuidListToBytes(c, UUIDs)
+	err = ioutil.WriteFile(r.indexPath, uuidBytes, 0644)
 	c.Assert(err, IsNil)
 
 	err = r.updateUUIDs()
@@ -458,7 +452,6 @@ func (t *testReaderSuite) TestStartSync(c *C) {
 			"b60868af-5a6f-11e9-9ea3-0242ac160007.000002",
 			"b60868af-5a6f-11e9-9ea3-0242ac160008.000003",
 		}
-		UUIDsBuf bytes.Buffer
 		cfg      = &BinlogReaderConfig{RelayDir: baseDir}
 		r        = NewBinlogReader(cfg)
 		startPos = gmysql.Position{Name: "test-mysql-bin|000001.000001"} // from the first relay log file in the first sub directory
@@ -472,15 +465,9 @@ func (t *testReaderSuite) TestStartSync(c *C) {
 		c.Assert(err, IsNil)
 	}
 
-	// prepare index file data
-	for _, uuid := range UUIDs {
-		_, err = UUIDsBuf.WriteString(uuid)
-		c.Assert(err, IsNil)
-		_, err = UUIDsBuf.WriteString("\n")
-		c.Assert(err, IsNil)
-	}
 	// create the index file
-	err = ioutil.WriteFile(r.indexPath, UUIDsBuf.Bytes(), 0644)
+	uuidBytes := t.uuidListToBytes(c, UUIDs)
+	err = ioutil.WriteFile(r.indexPath, uuidBytes, 0644)
 	c.Assert(err, IsNil)
 
 	// create sub directories
@@ -490,7 +477,7 @@ func (t *testReaderSuite) TestStartSync(c *C) {
 		c.Assert(err, IsNil)
 	}
 
-	// generate relay log files
+	// 1. generate relay log files
 	// 1 for the first sub directory, 2 for the second directory and 3 for the third directory
 	// so, write the same events data into (1+2+3) files.
 	for i := 0; i < 3; i++ {
@@ -508,28 +495,130 @@ func (t *testReaderSuite) TestStartSync(c *C) {
 	// get events from the streamer
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	obtainEvents := make([]*replication.BinlogEvent, 0, (1+2+3)*len(baseEvents))
+	obtainBaseEvents := make([]*replication.BinlogEvent, 0, (1+2+3)*len(baseEvents))
 	for {
 		ev, err2 := s.GetEvent(ctx)
 		c.Assert(err2, IsNil)
 		if ev.Header.Timestamp == 0 || ev.Header.LogPos == 0 {
 			continue // ignore fake event
 		}
-		obtainEvents = append(obtainEvents, ev)
-		if len(obtainEvents) == cap(obtainEvents) {
+		obtainBaseEvents = append(obtainBaseEvents, ev)
+		if len(obtainBaseEvents) == cap(obtainBaseEvents) {
 			break
 		}
 	}
 	t.verifyNoEventsInStreamer(c, s)
 
+	// verify obtain base events
+	for i := 0; i < len(obtainBaseEvents); i += len(baseEvents) {
+		c.Assert(obtainBaseEvents[i:i+len(baseEvents)], DeepEquals, baseEvents)
+	}
+
+	// 2. write more events to the last file
+	lastFilename := filepath.Join(baseDir, UUIDs[2], filenamePrefix+strconv.Itoa(3))
+	extraEvents := t.genBinlogEvents(c, baseEvents[len(baseEvents)-1].Header.LogPos)
+	lastF, err := os.OpenFile(lastFilename, os.O_WRONLY|os.O_APPEND, 0644)
+	c.Assert(err, IsNil)
+	defer lastF.Close()
+	for _, ev := range extraEvents {
+		_, err = lastF.Write(ev.RawData)
+		c.Assert(err, IsNil)
+	}
+
+	// read extra events back
+	obtainExtraEvents := make([]*replication.BinlogEvent, 0, len(extraEvents))
+	for {
+		ev, err2 := s.GetEvent(ctx)
+		c.Assert(err2, IsNil)
+		if ev.Header.Timestamp == 0 || ev.Header.LogPos == 0 || ev.Header.EventType == replication.FORMAT_DESCRIPTION_EVENT {
+			continue // ignore fake event and FormatDescriptionEvent, go-mysql may send extra FormatDescriptionEvent
+		}
+		obtainExtraEvents = append(obtainExtraEvents, ev)
+		if len(obtainExtraEvents) == cap(obtainExtraEvents) {
+			break
+		}
+	}
+	t.verifyNoEventsInStreamer(c, s)
+
+	// verify obtain extra events
+	c.Assert(obtainExtraEvents, DeepEquals, extraEvents)
+
+	// 3. create new file in the last directory
+	lastFilename = filepath.Join(baseDir, UUIDs[2], filenamePrefix+strconv.Itoa(4))
+	err = ioutil.WriteFile(lastFilename, eventsBuf.Bytes(), 0644)
+	c.Assert(err, IsNil)
+
+	obtainExtraEvents2 := make([]*replication.BinlogEvent, 0, len(baseEvents)-1)
+	for {
+		ev, err2 := s.GetEvent(ctx)
+		c.Assert(err2, IsNil)
+		if ev.Header.Timestamp == 0 || ev.Header.LogPos == 0 || ev.Header.EventType == replication.FORMAT_DESCRIPTION_EVENT {
+			continue // ignore fake event and FormatDescriptionEvent, go-mysql may send extra FormatDescriptionEvent
+		}
+		obtainExtraEvents2 = append(obtainExtraEvents2, ev)
+		if len(obtainExtraEvents2) == cap(obtainExtraEvents2) {
+			break
+		}
+	}
+	t.verifyNoEventsInStreamer(c, s)
+
+	// verify obtain extra events
+	c.Assert(obtainExtraEvents2, DeepEquals, baseEvents[1:])
+
+	// NOTE: load new UUIDs dynamically not supported yet
+
 	// close the reader
 	err = r.Close()
 	c.Assert(err, IsNil)
+}
 
-	// verify obtain events
-	for i := 0; i < len(obtainEvents); i += len(baseEvents) {
-		c.Assert(obtainEvents[i:i+len(baseEvents)], DeepEquals, baseEvents)
-	}
+func (t *testReaderSuite) TestStartSyncError(c *C) {
+	var (
+		baseDir = c.MkDir()
+		UUIDs   = []string{
+			"b60868af-5a6f-11e9-9ea3-0242ac160006.000001",
+		}
+		cfg      = &BinlogReaderConfig{RelayDir: baseDir}
+		startPos = gmysql.Position{Name: "test-mysql-bin|000001.000001"} // from the first relay log file in the first sub directory
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	r := NewBinlogReader(cfg)
+
+	// no startup pos specified
+	s, err := r.StartSync(gmysql.Position{})
+	c.Assert(errors.Cause(err), Equals, ErrBinlogFileNotSpecified)
+	c.Assert(s, IsNil)
+
+	// empty UUIDs
+	s, err = r.StartSync(startPos)
+	c.Assert(err, IsNil)
+	ev, err := s.GetEvent(ctx)
+	c.Assert(err, ErrorMatches, ".*empty UUIDs not valid.*")
+	c.Assert(ev, IsNil)
+	c.Assert(r.Close(), IsNil)
+
+	// write UUIDs into index file
+	r = NewBinlogReader(cfg) // create a new reader
+	uuidBytes := t.uuidListToBytes(c, UUIDs)
+	err = ioutil.WriteFile(r.indexPath, uuidBytes, 0644)
+	c.Assert(err, IsNil)
+
+	// the startup relay log file not found
+	s, err = r.StartSync(startPos)
+	c.Assert(err, IsNil)
+	ev, err = s.GetEvent(ctx)
+	c.Assert(err, ErrorMatches, fmt.Sprintf(".*%s.*not found.*", startPos.Name))
+
+	// can not re-start the reader
+	s, err = r.StartSync(startPos)
+	c.Assert(errors.Cause(err), Equals, ErrReaderRunning)
+	c.Assert(s, IsNil)
+
+	c.Assert(ev, IsNil)
+	c.Assert(r.Close(), IsNil)
 }
 
 func (t *testReaderSuite) genBinlogEvents(c *C, latestPos uint32) []*replication.BinlogEvent {
@@ -586,4 +675,15 @@ func (t *testReaderSuite) verifyNoEventsInStreamer(c *C, s Streamer) {
 	if err != ctx.Err() {
 		c.Fatalf("got event %v with error %v from streamer", ev, err)
 	}
+}
+
+func (t *testReaderSuite) uuidListToBytes(c *C, UUIDs []string) []byte {
+	var buf bytes.Buffer
+	for _, uuid := range UUIDs {
+		_, err := buf.WriteString(uuid)
+		c.Assert(err, IsNil)
+		_, err = buf.WriteString("\n")
+		c.Assert(err, IsNil)
+	}
+	return buf.Bytes()
 }
