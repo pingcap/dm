@@ -14,6 +14,7 @@
 package streamer
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -21,11 +22,13 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
+	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/binlog/event"
@@ -409,6 +412,124 @@ func (t *testReaderSuite) TestParseFileRelayWithIgnorableError(c *C) {
 	c.Assert(latestPos, Equals, int64(baseEvents[len(baseEvents)-1].Header.LogPos))
 	c.Assert(nextUUID, Equals, "")
 	c.Assert(nextBinlogName, Equals, "")
+}
+
+func (t *testReaderSuite) TestUpdateUUIDs(c *C) {
+	var (
+		baseDir = c.MkDir()
+		cfg     = &BinlogReaderConfig{RelayDir: baseDir}
+		r       = NewBinlogReader(cfg)
+	)
+	c.Assert(r.uuids, HasLen, 0)
+
+	// index file not exists, got nothing
+	err := r.updateUUIDs()
+	c.Assert(err, IsNil)
+	c.Assert(r.uuids, HasLen, 0)
+
+	// valid UUIDs in the index file, got them back
+	UUIDs := []string{
+		"b60868af-5a6f-11e9-9ea3-0242ac160006.000001",
+		"b60868af-5a6f-11e9-9ea3-0242ac160007.000002",
+	}
+	var buf bytes.Buffer
+	for _, uuid := range UUIDs {
+		_, err = buf.WriteString(uuid)
+		c.Assert(err, IsNil)
+		_, err = buf.WriteString("\n")
+		c.Assert(err, IsNil)
+	}
+	err = ioutil.WriteFile(r.indexPath, buf.Bytes(), 0644)
+	c.Assert(err, IsNil)
+
+	err = r.updateUUIDs()
+	c.Assert(err, IsNil)
+	c.Assert(r.uuids, DeepEquals, UUIDs)
+}
+
+func (t *testReaderSuite) TestStartSync(c *C) {
+	var (
+		filenamePrefix = "test-mysql-bin.00000"
+		baseDir        = c.MkDir()
+		baseEvents     = t.genBinlogEvents(c, 0)
+		eventsBuf      bytes.Buffer
+		UUIDs          = []string{
+			"b60868af-5a6f-11e9-9ea3-0242ac160006.000001",
+			"b60868af-5a6f-11e9-9ea3-0242ac160007.000002",
+			"b60868af-5a6f-11e9-9ea3-0242ac160008.000003",
+		}
+		UUIDsBuf bytes.Buffer
+		cfg      = &BinlogReaderConfig{RelayDir: baseDir}
+		r        = NewBinlogReader(cfg)
+		startPos = gmysql.Position{Name: "test-mysql-bin|000001.000001"} // from the first relay log file in the first sub directory
+	)
+
+	// prepare binlog data
+	_, err := eventsBuf.Write(replication.BinLogFileHeader)
+	c.Assert(err, IsNil)
+	for _, ev := range baseEvents {
+		_, err = eventsBuf.Write(ev.RawData)
+		c.Assert(err, IsNil)
+	}
+
+	// prepare index file data
+	for _, uuid := range UUIDs {
+		_, err = UUIDsBuf.WriteString(uuid)
+		c.Assert(err, IsNil)
+		_, err = UUIDsBuf.WriteString("\n")
+		c.Assert(err, IsNil)
+	}
+	// create the index file
+	err = ioutil.WriteFile(r.indexPath, UUIDsBuf.Bytes(), 0644)
+	c.Assert(err, IsNil)
+
+	// create sub directories
+	for _, uuid := range UUIDs {
+		subDir := filepath.Join(baseDir, uuid)
+		err = os.MkdirAll(subDir, 0744)
+		c.Assert(err, IsNil)
+	}
+
+	// generate relay log files
+	// 1 for the first sub directory, 2 for the second directory and 3 for the third directory
+	// so, write the same events data into (1+2+3) files.
+	for i := 0; i < 3; i++ {
+		for j := 1; j < i+2; j++ {
+			filename := filepath.Join(baseDir, UUIDs[i], filenamePrefix+strconv.Itoa(j))
+			err = ioutil.WriteFile(filename, eventsBuf.Bytes(), 0600)
+			c.Assert(err, IsNil)
+		}
+	}
+
+	// start the reader
+	s, err := r.StartSync(startPos)
+	c.Assert(err, IsNil)
+
+	// get events from the streamer
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	obtainEvents := make([]*replication.BinlogEvent, 0, (1+2+3)*len(baseEvents))
+	for {
+		ev, err2 := s.GetEvent(ctx)
+		c.Assert(err2, IsNil)
+		if ev.Header.Timestamp == 0 || ev.Header.LogPos == 0 {
+			continue // ignore fake event
+		}
+		obtainEvents = append(obtainEvents, ev)
+		if len(obtainEvents) == cap(obtainEvents) {
+			break
+		}
+	}
+	t.verifyNoEventsInStreamer(c, s)
+
+	// close the reader
+	err = r.Close()
+	c.Assert(err, IsNil)
+
+	// verify obtain events
+	for i := 0; i < len(obtainEvents); i += len(baseEvents) {
+		c.Assert(obtainEvents[i:i+len(baseEvents)], DeepEquals, baseEvents)
+	}
 }
 
 func (t *testReaderSuite) genBinlogEvents(c *C, latestPos uint32) []*replication.BinlogEvent {

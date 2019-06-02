@@ -91,6 +91,7 @@ func (r *BinlogReader) StartSync(pos mysql.Position) (Streamer, error) {
 	}
 
 	// load and update UUID list
+	// NOTE: if want to support auto master-slave switching, then needing to re-load UUIDs when parsing.
 	err := r.updateUUIDs()
 	if err != nil {
 		return nil, errors.Trace(err)
