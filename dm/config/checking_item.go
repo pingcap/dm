@@ -50,7 +50,7 @@ var AllCheckingItems = map[string]string{
 }
 
 // MaxSourceIDLength is the max length for dm-worker source id
-var MaxSourceIDLength = 32
+const MaxSourceIDLength = 32
 
 // ValidateCheckingItem validates checking item
 func ValidateCheckingItem(item string) error {

@@ -82,14 +82,12 @@ func (t *testServer) TestConfigVerify(c *C) {
 	}
 	testCases := []struct {
 		genFunc     func() *Config
-		hasError    bool
 		errorFormat string
 	}{
 		{
 			func() *Config {
 				return newConfig()
 			},
-			false,
 			"",
 		},
 		{
@@ -98,7 +96,6 @@ func (t *testServer) TestConfigVerify(c *C) {
 				cfg.SourceID = ""
 				return cfg
 			},
-			true,
 			"dm-worker should bind a non-empty source ID which represents a MySQL/MariaDB instance or a replica group.*",
 		},
 		{
@@ -107,7 +104,6 @@ func (t *testServer) TestConfigVerify(c *C) {
 				cfg.SourceID = "source-id-length-more-than-thirty-two"
 				return cfg
 			},
-			true,
 			fmt.Sprintf("the length of source ID .* is more than max allowed value %d", config.MaxSourceIDLength),
 		},
 		{
@@ -116,7 +112,6 @@ func (t *testServer) TestConfigVerify(c *C) {
 				cfg.RelayBinLogName = "mysql-binlog"
 				return cfg
 			},
-			true,
 			"relay-binlog-name mysql-binlog: parse binlog.*",
 		},
 		{
@@ -125,7 +120,6 @@ func (t *testServer) TestConfigVerify(c *C) {
 				cfg.RelayBinlogGTID = "9afe121c-40c2-11e9-9ec7-0242ac110002:1-rtc"
 				return cfg
 			},
-			true,
 			"relay-binlog-gtid 9afe121c-40c2-11e9-9ec7-0242ac110002:1-rtc:.*",
 		},
 		{
@@ -134,7 +128,6 @@ func (t *testServer) TestConfigVerify(c *C) {
 				cfg.From.Password = "not-encrypt"
 				return cfg
 			},
-			true,
 			"can not decrypt password.*",
 		},
 	}
@@ -142,7 +135,7 @@ func (t *testServer) TestConfigVerify(c *C) {
 	for _, tc := range testCases {
 		cfg := tc.genFunc()
 		err := cfg.verify()
-		if tc.hasError {
+		if tc.errorFormat != "" {
 			c.Assert(err, NotNil)
 			lines := strings.Split(err.Error(), "\n")
 			c.Assert(lines[0], Matches, tc.errorFormat)
