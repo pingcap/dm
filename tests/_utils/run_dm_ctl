@@ -29,3 +29,9 @@ for ((i=1; i<$#; i+=2)); do
         exit 1
     fi
 done
+
+# gocovmerge doesn't support merge profiles with different modes, however atomic
+# mode and count mode have the same profile format, so we forcely set profile mode
+# to atomic here
+
+sed -i "s/mode: count/mode: atomic/g" "$TEST_DIR/cov.$TEST_NAME.dmctl.$ts.out"
