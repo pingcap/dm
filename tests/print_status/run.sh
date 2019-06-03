@@ -31,6 +31,28 @@ function run() {
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
+    run_sql_file $cur/data/db.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+}
+
+function check_print_status() {
+    # wait for all dm-worker's log flushed to disk
+    i=0
+    while [ $i -lt 3 ]
+    do
+        exit_log=$(grep "dm-worker exit" $WORK_DIR/worker1/log/dm-worker.log || echo "not found")
+        if [ "$exit_log" == "not found" ]; then
+            echo "wait for dm-worker exit log for the $i-th time"
+            sleep 1
+        else
+            break
+        fi
+    done
+    if [ $i -ge 3 ]; then
+        echo "wait for dm-worker exit log timeout"
+        exit 1
+    fi
+
     # check load unit print status
     status_file=$WORK_DIR/worker1/log/loader_status.log
     grep -oP "loader.*\Kfinished_bytes = [0-9]+, total_bytes = [0-9]+, total_file_count = [0-9]+, progress = .*" $WORK_DIR/worker1/log/dm-worker.log > $status_file
@@ -40,39 +62,21 @@ function run() {
     cat $status_file|while read -r line; do
         total_file_count=$(echo "$line"|awk '{print $(NF-4)}'|tr -d ",")
         [ $total_file_count -eq 3 ]
-        ((count+=1))
+        count=$((count+1))
         if [ $count -eq $status_count ]; then
             finished_bytes=$(echo "$line"|awk '{print $3}'|tr -d ",")
             total_bytes=$(echo "$line"|awk '{print $6}'|tr -d ",")
             [[ "$finished_bytes" -eq "$total_bytes" ]]
         fi
     done
-
-    run_sql_file $cur/data/db.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    echo "check load unit print status success"
 
     # check sync unit print status
-    i=0
-    while [ $i -lt 3 ]
-    do
-        event_count=$(grep "receive binlog event with header" $WORK_DIR/worker1/log/dm-worker.log|grep -v relay|grep "XIDEvent"|wc -l)
-        if [ "$event_count" == "92" ]; then
-            echo "all binlog events have been flushed to disk"
-            break
-        fi
-        i=$((i+=1))
-        echo "wait for syncer log flushed for the $i-th time"
-        sleep 1
-    done
-
-    if [ $i -ge 3 ]; then
-        echo "wait for syncer log flushed timeout"
-        exit 1
-    fi
     status_file2=$WORK_DIR/worker1/log/syncer_status.log
     grep -oP "syncer.*\Ktotal events = [0-9]+, total tps = [0-9]+, recent tps = [0-9]+, master-binlog = .*" $WORK_DIR/worker1/log/dm-worker.log > $status_file2
     status_count2=$(wc -l $status_file2|awk '{print $1}')
     [ $status_count2 -ge 1 ]
+    echo "check sync unit print status success"
 }
 
 cleanup1 $TEST_NAME
@@ -83,5 +87,7 @@ cleanup2 $*
 
 wait_process_exit dm-master.test
 wait_process_exit dm-worker.test
+
+check_print_status $*
 
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"
