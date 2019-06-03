@@ -5,6 +5,7 @@
 # parameter 3: command
 # parameter 4...: check output content and count
 
+start=$(date +%s%N)
 workdir=$1
 master_addr=$2
 cmd=$3
@@ -29,3 +30,5 @@ for ((i=1; i<$#; i+=2)); do
         exit 1
     fi
 done
+end=$(date +%s%N)
+echo "execute time: $(((end-start) / 1000000)) ms"
