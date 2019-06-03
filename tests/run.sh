@@ -15,7 +15,7 @@ check_mysql() {
     port=$2
     while ! mysql -u root -h ${host} -P ${port} -e 'select version();'; do
         i=$((i+1))
-        if [ "$i" -gt 10 ]; then
+        if [ "$i" -gt 30 ]; then
             echo "wait for mysql ${host}:${port} timeout"
             exit 1
         fi
