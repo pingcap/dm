@@ -16,13 +16,14 @@ package syncer
 import (
 	"sync"
 
-	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/gtid"
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
+
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // Pipe is the littlest process unit in syncer
@@ -30,11 +31,11 @@ type Pipe interface {
 	// Name is the pipe's name
 	Name() string
 
-	// Init initializes the pipe
-	Init(*config.SubTaskConfig, func() error) error
+	// Init initializes the pipe, iFunc also do some initialize job.
+	Init(cfg *config.SubTaskConfig, iFunc func() error) error
 
 	// Update updates the pipe's config
-	Update(*config.SubTaskConfig)
+	Update(*config.SubTaskConfig) error
 
 	// Input receives data
 	Input() chan *PipeData
@@ -71,7 +72,7 @@ type PipeData struct {
 	args         [][]interface{}
 	keys         [][]string
 	retry        bool
-	pos          mysql.Position
+	lastPos      mysql.Position
 	currentPos   mysql.Position // exactly binlog position of current SQL
 	gtidSet      gtid.Set
 	ddls         []string
@@ -166,14 +167,14 @@ func (p *Pipeline) Start() {
 	for i := 0; i < len(p.pipes)-1; i++ {
 		if i+1 < len(p.pipes) {
 			p.wg.Add(1)
-			go p.link(p.pipes[i].Output(), p.pipes[i+1].Input())
+			go p.link(p.pipes[i].Name(), p.pipes[i+1].Name(), p.pipes[i].Output(), p.pipes[i+1].Input())
 		}
 	}
 
 	p.isClosed.Set(false)
 }
 
-func (p *Pipeline) link(output, input chan *PipeData) {
+func (p *Pipeline) link(pipeName1, pipeName2 string, output, input chan *PipeData) {
 	defer p.wg.Done()
 
 	select {
@@ -181,6 +182,7 @@ func (p *Pipeline) link(output, input chan *PipeData) {
 		select {
 		case input <- data:
 		case <-p.closeCh:
+			log.Info("pipeline closed, will stop link %s-%s, data %v is not processed", pipeName1, pipeName2, data)
 			return
 		}
 	case <-p.closeCh:
