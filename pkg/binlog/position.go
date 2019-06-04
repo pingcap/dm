@@ -78,7 +78,11 @@ func ExtractPos(pos gmysql.Position, uuids []string) (uuidWithSuffix string, uui
 		return
 	}
 
-	parsed, _ := ParseFilename(pos.Name)
+	parsed, err2 := ParseFilename(pos.Name)
+	if err2 != nil {
+		err = errors.Trace(err)
+		return
+	}
 	sepIdx := strings.Index(parsed.BaseName, posUUIDSuffixSeparator)
 	if sepIdx > 0 && sepIdx+len(posUUIDSuffixSeparator) < len(parsed.BaseName) {
 		realBaseName, masterUUIDSuffix := parsed.BaseName[:sepIdx], parsed.BaseName[sepIdx+len(posUUIDSuffixSeparator):]

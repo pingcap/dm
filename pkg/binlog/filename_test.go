@@ -104,6 +104,11 @@ func (t *testFilenameSuite) TestParseFilename(c *C) {
 			filenameStr: "mysql-bin.def666",
 			errMsgReg:   ".*invalid binlog filename.*",
 		},
+		{
+			// invalid seq number
+			filenameStr: "mysql.bin",
+			errMsgReg:   ".*invalid binlog filename.*",
+		},
 	}
 
 	for _, cs := range cases {
@@ -211,6 +216,11 @@ func (t *testFilenameSuite) TestGetFilenameIndex(c *C) {
 		{
 			// invalid seq number
 			filename:  "mysql-bin.def666",
+			errMsgReg: ".*invalid binlog filename.*",
+		},
+		{
+			// invalid seq number
+			filename:  "mysql.bin",
 			errMsgReg: ".*invalid binlog filename.*",
 		},
 	}

@@ -66,14 +66,14 @@ func ParseFilename(filename string) (Filename, error) {
 	return fn, nil
 }
 
-// VerifyFilename verify whether is a valid MySQL/MariaDB binlog filename.
+// VerifyFilename verifies whether is a valid MySQL/MariaDB binlog filename.
 // valid format is `base + '.' + seq`.
 func VerifyFilename(filename string) error {
 	_, err := ParseFilename(filename)
 	return errors.Trace(err)
 }
 
-// GetFilenameIndex return a float64 index value (seq number) of the filename.
+// GetFilenameIndex returns a float64 index value (seq number) of the filename.
 func GetFilenameIndex(filename string) (float64, error) {
 	fn, err := ParseFilename(filename)
 	if err != nil {
