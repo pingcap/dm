@@ -182,7 +182,7 @@ func (p *Pipeline) link(pipeName1, pipeName2 string, output, input chan *PipeDat
 		select {
 		case input <- data:
 		case <-p.closeCh:
-			log.Info("pipeline closed, will stop link %s-%s, data %v is not processed", pipeName1, pipeName2, data)
+			log.Infof("pipeline closed, will stop link %s-%s, data %v is not processed", pipeName1, pipeName2, data)
 			return
 		}
 	case <-p.closeCh:
