@@ -119,7 +119,10 @@ integration_test:
 	@which bin/dm-tracer.test
 	tests/run.sh $(CASE)
 
-coverage:
+coverage_fix_cover_mode:
+	sed -i "s/mode: count/mode: atomic/g" $(TEST_DIR)/cov.*.dmctl.*.out
+
+coverage: coverage_fix_cover_mode
 	GO111MODULE=off go get github.com/zhouqiang-cl/gocovmerge
 	gocovmerge "$(TEST_DIR)"/cov.* | grep -vE ".*.pb.go|.*.__failpoint_binding__.go" > "$(TEST_DIR)/all_cov.out"
 	grep -vE ".*.pb.go|.*.__failpoint_binding__.go" $(TEST_DIR)/cov.unit_test.out > $(TEST_DIR)/unit_test.out
