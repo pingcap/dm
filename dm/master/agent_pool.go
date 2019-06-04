@@ -82,6 +82,7 @@ func (ap *AgentPool) Apply(ctx context.Context, id int) *Agent {
 	}
 }
 
+// Start starts AgentPool background dispatcher
 func (ap *AgentPool) Start(ctx context.Context) {
 	for {
 		select {

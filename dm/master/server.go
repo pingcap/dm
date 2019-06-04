@@ -226,8 +226,9 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 		wg.Add(1)
 		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
-			cli, worker, stCfgToml, taskName, ok := s.taskConfigArgsExtractor(workerRespCh, args...)
-			if !ok {
+			cli, worker, stCfgToml, taskName, err := s.taskConfigArgsExtractor(args...)
+			if err != nil {
+				workerRespCh <- errorCommonWorkerResponse(err.Error(), worker)
 				return
 			}
 			validWorkerCh <- worker
@@ -241,8 +242,9 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 			workerRespCh <- workerResp.Meta
 		}, func(args ...interface{}) {
 			defer wg.Done()
-			_, worker, _, _, ok := s.taskConfigArgsExtractor(workerRespCh, args...)
-			if !ok {
+			_, worker, _, _, err := s.taskConfigArgsExtractor(args...)
+			if err != nil {
+				workerRespCh <- errorCommonWorkerResponse(err.Error(), worker)
 				return
 			}
 			workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf(ErrorNoEmitToken, worker), worker)
@@ -408,11 +410,11 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 		wg.Add(1)
 		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
-			cli, worker, stCfgToml, taskName, ok := s.taskConfigArgsExtractor(workerRespCh, args...)
-			if !ok {
+			cli, worker, stCfgToml, taskName, err := s.taskConfigArgsExtractor(args...)
+			if err != nil {
+				workerRespCh <- errorCommonWorkerResponse(err.Error(), worker)
 				return
 			}
-
 			request := &workerrpc.Request{
 				Type:          workerrpc.CmdUpdateSubTask,
 				UpdateSubTask: &pb.UpdateSubTaskRequest{Task: stCfgToml},
@@ -423,8 +425,9 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 			workerRespCh <- workerResp.Meta
 		}, func(args ...interface{}) {
 			defer wg.Done()
-			_, worker, _, _, ok := s.taskConfigArgsExtractor(workerRespCh, args...)
-			if !ok {
+			_, worker, _, _, err := s.taskConfigArgsExtractor(args...)
+			if err != nil {
+				workerRespCh <- errorCommonWorkerResponse(err.Error(), worker)
 				return
 			}
 			workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf(ErrorNoEmitToken, worker), worker)
@@ -1885,16 +1888,15 @@ func (s *Server) handleOperationResult(ctx context.Context, cli workerrpc.Client
 }
 
 // taskConfigArgsExtractor extracts SubTaskConfig from args and returns its relevant
-// grpc client, worker id (host:port), subtask config in toml, task name and whether it is success.
-func (s *Server) taskConfigArgsExtractor(workerRespCh chan *pb.CommonWorkerResponse, args ...interface{}) (workerrpc.Client, string, string, string, bool) {
-	handleErr := func(err error, worker string) bool {
+// grpc client, worker id (host:port), subtask config in toml, task name and error
+func (s *Server) taskConfigArgsExtractor(args ...interface{}) (workerrpc.Client, string, string, string, error) {
+	handleErr := func(err error, worker string) error {
 		log.Error(errors.ErrorStack(err))
-		workerRespCh <- errorCommonWorkerResponse(err.Error(), worker)
-		return false
+		return err
 	}
 
 	if len(args) != 1 {
-		return nil, "", "", "", handleErr(errors.Errorf("miss argument %v", args), "")
+		return nil, "", "", "", handleErr(errors.Errorf("miss task config %v", args), "")
 	}
 
 	cfg, ok := args[0].(*config.SubTaskConfig)
@@ -1913,18 +1915,18 @@ func (s *Server) taskConfigArgsExtractor(workerRespCh chan *pb.CommonWorkerRespo
 		return nil, "", "", "", handleErr(err, worker)
 	}
 
-	return cli, worker, cfgToml, cfg.Name, true
+	return cli, worker, cfgToml, cfg.Name, nil
 }
 
 // workerArgsExtractor extracts worker from args and returns its relevant
 // grpc client, worker id (host:port) and error
 func (s *Server) workerArgsExtractor(args ...interface{}) (workerrpc.Client, string, error) {
 	if len(args) != 1 {
-		return nil, "", errors.Errorf("miss argument %v", args)
+		return nil, "", errors.Errorf("miss worker id %v", args)
 	}
 	worker, ok := args[0].(string)
 	if !ok {
-		return nil, "", errors.Errorf("invalid argument, args[0] is not worker: %v", args[0])
+		return nil, "", errors.Errorf("invalid argument, args[0] is not valid worker id: %v", args[0])
 	}
 	cli, ok := s.workerClients[worker]
 	if !ok {
