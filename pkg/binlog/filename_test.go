@@ -58,16 +58,24 @@ func (t *testFilenameSuite) TestFilenameCmp(c *C) {
 	c.Assert(f1.GreaterThan(f4), IsFalse)
 }
 
-func (t *testFilenameSuite) TestParseFilename(c *C) {
+func (t *testFilenameSuite) TestParseFilenameAndGetFilenameIndex(c *C) {
 	cases := []struct {
 		filenameStr string
 		filename    Filename
+		index       float64
 		errMsgReg   string
 	}{
 		{
 			// valid
 			filenameStr: "mysql-bin.666666",
 			filename:    Filename{"mysql-bin", "666666"},
+			index:       666666,
+		},
+		{
+			// valid
+			filenameStr: "mysql-bin.000888",
+			filename:    Filename{"mysql-bin", "000888"},
+			index:       888,
 		},
 		{
 			// empty filename
@@ -119,6 +127,14 @@ func (t *testFilenameSuite) TestParseFilename(c *C) {
 			c.Assert(err, IsNil)
 		}
 		c.Assert(f, DeepEquals, cs.filename)
+
+		idx, err := GetFilenameIndex(cs.filenameStr)
+		if len(cs.errMsgReg) > 0 {
+			c.Assert(err, ErrorMatches, cs.errMsgReg)
+		} else {
+			c.Assert(err, IsNil)
+		}
+		c.Assert(idx, Equals, cs.index)
 	}
 }
 
@@ -169,70 +185,6 @@ func (t *testFilenameSuite) TestVerifyFilename(c *C) {
 		} else {
 			c.Assert(errors.Cause(err), Equals, ErrInvalidBinlogFilename)
 		}
-	}
-}
-
-func (t *testFilenameSuite) TestGetFilenameIndex(c *C) {
-	cases := []struct {
-		filename  string
-		index     float64
-		errMsgReg string
-	}{
-		{
-			// valid
-			filename: "mysql-bin.000666",
-			index:    666,
-		},
-		{
-			// empty filename
-			filename:  "",
-			errMsgReg: ".*invalid binlog filename.*",
-		},
-		{
-			// negative seq number
-			filename:  "mysql-bin.-666666",
-			errMsgReg: ".*invalid binlog filename.*",
-		},
-		{
-			// zero seq number
-			filename:  "mysql-bin.000000",
-			errMsgReg: ".*invalid binlog filename.*",
-		},
-		{
-			// too many separators
-			filename:  "mysql.bin.666666",
-			errMsgReg: ".*invalid binlog filename.*",
-		},
-		{
-			// too less separators
-			filename:  "mysql-bin",
-			errMsgReg: ".*invalid binlog filename.*",
-		},
-		{
-			// invalid seq number
-			filename:  "mysql-bin.666abc",
-			errMsgReg: ".*invalid binlog filename.*",
-		},
-		{
-			// invalid seq number
-			filename:  "mysql-bin.def666",
-			errMsgReg: ".*invalid binlog filename.*",
-		},
-		{
-			// invalid seq number
-			filename:  "mysql.bin",
-			errMsgReg: ".*invalid binlog filename.*",
-		},
-	}
-
-	for _, cs := range cases {
-		idx, err := GetFilenameIndex(cs.filename)
-		if len(cs.errMsgReg) > 0 {
-			c.Assert(err, ErrorMatches, cs.errMsgReg)
-		} else {
-			c.Assert(err, IsNil)
-		}
-		c.Assert(idx, Equals, cs.index)
 	}
 }
 
