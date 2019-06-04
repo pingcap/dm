@@ -60,8 +60,12 @@ func RealMySQLPos(pos gmysql.Position) (gmysql.Position, error) {
 		return pos, errors.Trace(err)
 	}
 
-	sepIdx := strings.Index(parsed.BaseName, posUUIDSuffixSeparator)
+	sepIdx := strings.LastIndex(parsed.BaseName, posUUIDSuffixSeparator)
 	if sepIdx > 0 && sepIdx+len(posUUIDSuffixSeparator) < len(parsed.BaseName) {
+		if !verifyUUIDSuffix(parsed.BaseName[sepIdx+len(posUUIDSuffixSeparator):]) {
+			// NOTE: still can't handle the case where `log-bin` has the format of `mysql-bin|666888`.
+			return pos, nil // pos is just the real pos
+		}
 		return gmysql.Position{
 			Name: ConstructFilename(parsed.BaseName[:sepIdx], parsed.Seq),
 			Pos:  pos.Pos,
@@ -83,9 +87,15 @@ func ExtractPos(pos gmysql.Position, uuids []string) (uuidWithSuffix string, uui
 		err = errors.Trace(err)
 		return
 	}
-	sepIdx := strings.Index(parsed.BaseName, posUUIDSuffixSeparator)
+	sepIdx := strings.LastIndex(parsed.BaseName, posUUIDSuffixSeparator)
 	if sepIdx > 0 && sepIdx+len(posUUIDSuffixSeparator) < len(parsed.BaseName) {
 		realBaseName, masterUUIDSuffix := parsed.BaseName[:sepIdx], parsed.BaseName[sepIdx+len(posUUIDSuffixSeparator):]
+		if !verifyUUIDSuffix(masterUUIDSuffix) {
+			err = errors.Errorf("invalid UUID suffix %s", masterUUIDSuffix)
+			return
+		}
+
+		// NOTE: still can't handle the case where `log-bin` has the format of `mysql-bin|666888` and UUID suffix `666888` exists.
 		uuid := utils.GetUUIDBySuffix(uuids, masterUUIDSuffix)
 
 		if len(uuid) > 0 {
@@ -114,4 +124,13 @@ func ExtractPos(pos gmysql.Position, uuids []string) (uuidWithSuffix string, uui
 	uuidSuffix = utils.SuffixIntToStr(suffixInt)
 	realPos = pos // pos is realPos
 	return
+}
+
+// verifyUUIDSuffix verifies suffix whether is a valid UUID suffix.
+func verifyUUIDSuffix(suffix string) bool {
+	v, err := strconv.ParseInt(suffix, 10, 64)
+	if err != nil || v <= 0 {
+		return false
+	}
+	return true
 }

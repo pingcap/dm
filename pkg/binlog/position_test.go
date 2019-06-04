@@ -93,6 +93,14 @@ func (t *testPositionSuite) TestRealMySQLPos(c *C) {
 			expect:    gmysql.Position{Name: "", Pos: 154},
 			errMsgReg: ".*invalid binlog filename.*",
 		},
+		{
+			pos:    gmysql.Position{Name: "mysql|bin|000002.000003", Pos: 154},
+			expect: gmysql.Position{Name: "mysql|bin.000003", Pos: 154},
+		},
+		{
+			pos:    gmysql.Position{Name: "mysql-bin|invalid-suffix.000003", Pos: 154},
+			expect: gmysql.Position{Name: "mysql-bin|invalid-suffix.000003", Pos: 154},
+		},
 	}
 
 	for _, cs := range cases {
@@ -106,7 +114,7 @@ func (t *testPositionSuite) TestRealMySQLPos(c *C) {
 	}
 }
 
-func (t *testFilenameSuite) TestExtractPos(c *C) {
+func (t *testPositionSuite) TestExtractPos(c *C) {
 	cases := []struct {
 		pos            gmysql.Position
 		uuids          []string
@@ -148,6 +156,20 @@ func (t *testFilenameSuite) TestExtractPos(c *C) {
 			uuids:     []string{"server-a-uuid.000001", "server-b-uuid.000002", "server-c-uuid.000003"},
 			errMsgReg: ".*UUID suffix.*with UUIDs.*",
 		},
+		{
+			// multi `|` exist
+			pos:            gmysql.Position{Name: "mysql|bin|000002.000006", Pos: 666},
+			uuids:          []string{"server-a-uuid.000001", "server-b-uuid.000002", "server-c-uuid.000003"},
+			uuidWithSuffix: "server-b-uuid.000002",
+			uuidSuffix:     "000002",
+			realPos:        gmysql.Position{Name: "mysql|bin.000006", Pos: 666},
+		},
+		{
+			// invalid UUID suffix
+			pos:       gmysql.Position{Name: "mysql-bin|abcdef.000007", Pos: 666},
+			uuids:     []string{"server-a-uuid.000001", "server-b-uuid.000002", "server-c-uuid.000003"},
+			errMsgReg: "invalid UUID suffix.*",
+		},
 	}
 
 	for _, cs := range cases {
@@ -160,5 +182,51 @@ func (t *testFilenameSuite) TestExtractPos(c *C) {
 		c.Assert(uuidWithSuffix, Equals, cs.uuidWithSuffix)
 		c.Assert(uuidSuffix, Equals, cs.uuidSuffix)
 		c.Assert(realPos, DeepEquals, cs.realPos)
+	}
+}
+
+func (t *testPositionSuite) TestVerifyUUIDSuffix(c *C) {
+	cases := []struct {
+		suffix string
+		valid  bool
+	}{
+		{
+
+			suffix: "000666",
+			valid:  true,
+		},
+		{
+			suffix: "666888",
+			valid:  true,
+		},
+		{
+			// == 0
+			suffix: "000000",
+		},
+		{
+			// < 0
+			suffix: "-123456",
+		},
+		{
+			// float
+			suffix: "123.456",
+		},
+		{
+			// empty
+			suffix: "",
+		},
+		{
+			suffix: "abc",
+		},
+		{
+			suffix: "abc666",
+		},
+		{
+			suffix: "666abc",
+		},
+	}
+
+	for _, cs := range cases {
+		c.Assert(verifyUUIDSuffix(cs.suffix), Equals, cs.valid)
 	}
 }
