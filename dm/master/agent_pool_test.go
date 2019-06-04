@@ -31,12 +31,13 @@ func (t *testMaster) testPool(c *C) {
 		burst = 100
 	)
 	// test limit
-	InitAgentPool(&RateLimitConfig{rate: float64(rate), burst: burst})
+	ap := NewAgentPool(&RateLimitConfig{rate: float64(rate), burst: burst})
+	go ap.Start(context.Background())
 	pc := make(chan *Agent)
 
 	go func() {
 		for i := 0; i < rate+burst; i++ {
-			pc <- pool.Apply(context.Background(), i)
+			pc <- ap.Apply(context.Background(), i)
 		}
 	}()
 
@@ -46,7 +47,7 @@ func (t *testMaster) testPool(c *C) {
 	}
 	select {
 	case <-pc:
-		c.FailNow()
+		c.Error("should not get agent now")
 	default:
 	}
 
@@ -56,7 +57,7 @@ func (t *testMaster) testPool(c *C) {
 			c.Assert(agent.ID, Equals, i+burst)
 		case <-time.After(time.Millisecond * 150):
 			// add 50ms time drift here
-			c.FailNow()
+			c.Error("get agent timeout")
 		}
 	}
 }
@@ -69,7 +70,10 @@ func (t *testMaster) testEmit(c *C) {
 		worker testWorkerType = 1
 	)
 
-	Emit(context.Background(), 1, func(args ...interface{}) {
+	ap := NewAgentPool(&RateLimitConfig{rate: DefaultRate, burst: DefaultBurst})
+	go ap.Start(context.Background())
+
+	ap.Emit(context.Background(), 1, func(args ...interface{}) {
 		if len(args) != 2 {
 			c.Fatalf("args count is not 2, args %v", args)
 		}
@@ -94,7 +98,7 @@ func (t *testMaster) testEmit(c *C) {
 	counter := 0
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	Emit(ctx, 1, func(args ...interface{}) {
+	ap.Emit(ctx, 1, func(args ...interface{}) {
 		c.FailNow()
 	}, func(args ...interface{}) {
 		if len(args) != 1 {

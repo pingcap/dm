@@ -25,7 +25,7 @@ import (
 	"github.com/pingcap/errors"
 )
 
-var (
+const (
 	defaultRPCTimeout = "10m"
 )
 
@@ -38,7 +38,7 @@ func NewConfig() *Config {
 	fs.BoolVar(&cfg.printVersion, "V", false, "prints version and exit")
 	fs.StringVar(&cfg.ConfigFile, "config", "", "path to config file")
 	fs.StringVar(&cfg.MasterAddr, "master-addr", "", "master API server addr")
-	fs.StringVar(&cfg.RPCTimeoutStr, "rpc-timeout", defaultRPCTimeout, "rpc timeout, default is 10m")
+	fs.StringVar(&cfg.RPCTimeoutStr, "rpc-timeout", defaultRPCTimeout, fmt.Sprintf("rpc timeout, default is %s", defaultRPCTimeout))
 	fs.StringVar(&cfg.encrypt, "encrypt", "", "encrypt plaintext to ciphertext")
 
 	return cfg
@@ -115,12 +115,7 @@ func (c *Config) Parse(arguments []string) error {
 		return errors.Annotatef(err, "specify master addr %s", c.MasterAddr)
 	}
 
-	err = c.adjust()
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	return nil
+	return errors.Trace(c.adjust())
 }
 
 // configFromFile loads config from file.
@@ -137,6 +132,9 @@ func (c *Config) adjust() error {
 	timeout, err := time.ParseDuration(c.RPCTimeoutStr)
 	if err != nil {
 		return errors.Trace(err)
+	}
+	if timeout <= time.Duration(0) {
+		return errors.Errorf("invalid time duration: %s", c.RPCTimeoutStr)
 	}
 	c.RPCTimeout = timeout
 	return nil

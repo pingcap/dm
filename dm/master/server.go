@@ -68,6 +68,9 @@ type Server struct {
 	// trace group id generator
 	idGen *tracing.IDGenerator
 
+	// agent pool
+	ap *AgentPool
+
 	closed sync2.AtomicBool
 }
 
@@ -80,9 +83,8 @@ func NewServer(cfg *Config) *Server {
 		lockKeeper:        NewLockKeeper(),
 		sqlOperatorHolder: operator.NewHolder(),
 		idGen:             tracing.NewIDGen(),
+		ap:                NewAgentPool(&RateLimitConfig{rate: cfg.RPCRateLimit, burst: cfg.RPCRateBurst}),
 	}
-
-	InitAgentPool(&RateLimitConfig{rate: defalutRate, burst: defaultBurst})
 
 	return &server
 }
@@ -105,6 +107,13 @@ func (s *Server) Start() error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s.ap.Start(ctx)
+	}()
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -215,7 +224,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 	var wg sync.WaitGroup
 	for _, stCfg := range stCfgs {
 		wg.Add(1)
-		go Emit(ctx, 0, func(args ...interface{}) {
+		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
 			cli, worker, stCfgToml, taskName, ok := s.taskConfigArgsExtractor(workerRespCh, args...)
 			if !ok {
@@ -236,7 +245,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 			if !ok {
 				return
 			}
-			workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf(errorNoEmitToken, worker), worker)
+			workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf(ErrorNoEmitToken, worker), worker)
 		}, stCfg)
 	}
 	wg.Wait()
@@ -309,7 +318,7 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 	var wg sync.WaitGroup
 	for _, worker := range workers {
 		wg.Add(1)
-		go Emit(ctx, 0, func(args ...interface{}) {
+		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
 			cli, worker1, err := s.workerArgsExtractor(args...)
 			if err != nil {
@@ -328,7 +337,7 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 				handleErr(err, worker1)
 				return
 			}
-			handleErr(errors.Errorf(errorNoEmitToken, worker1), worker1)
+			handleErr(errors.Errorf(ErrorNoEmitToken, worker1), worker1)
 		}, worker)
 	}
 	wg.Wait()
@@ -397,7 +406,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 	var wg sync.WaitGroup
 	for _, stCfg := range stCfgs {
 		wg.Add(1)
-		go Emit(ctx, 0, func(args ...interface{}) {
+		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
 			cli, worker, stCfgToml, taskName, ok := s.taskConfigArgsExtractor(workerRespCh, args...)
 			if !ok {
@@ -418,7 +427,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 			if !ok {
 				return
 			}
-			workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf(errorNoEmitToken, worker), worker)
+			workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf(ErrorNoEmitToken, worker), worker)
 		}, stCfg)
 	}
 	wg.Wait()
@@ -817,7 +826,7 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 	var wg sync.WaitGroup
 	for _, worker := range req.Workers {
 		wg.Add(1)
-		go Emit(ctx, 0, func(args ...interface{}) {
+		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
 			cli, worker1, err := s.workerArgsExtractor(args...)
 			if err != nil {
@@ -844,7 +853,7 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 				handleErr(err, worker1)
 				return
 			}
-			workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf(errorNoEmitToken, worker1), worker1)
+			workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf(ErrorNoEmitToken, worker1), worker1)
 		}, worker)
 	}
 	wg.Wait()
@@ -1076,7 +1085,7 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, workers []string, tas
 	var wg sync.WaitGroup
 	for _, worker := range workers {
 		wg.Add(1)
-		go Emit(ctx, 0, func(args ...interface{}) {
+		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
 			cli, worker1, err := s.workerArgsExtractor(args...)
 			if err != nil {
@@ -1102,7 +1111,7 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, workers []string, tas
 				handleErr(err, worker1)
 				return
 			}
-			handleErr(errors.Errorf(errorNoEmitToken, worker1), worker1)
+			handleErr(errors.Errorf(ErrorNoEmitToken, worker1), worker1)
 		}, worker)
 	}
 	wg.Wait()
@@ -1131,7 +1140,7 @@ func (s *Server) getErrorFromWorkers(ctx context.Context, workers []string, task
 	var wg sync.WaitGroup
 	for _, worker := range workers {
 		wg.Add(1)
-		go Emit(ctx, 0, func(args ...interface{}) {
+		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
 			cli, worker1, err := s.workerArgsExtractor(args...)
 			if err != nil {
@@ -1157,7 +1166,7 @@ func (s *Server) getErrorFromWorkers(ctx context.Context, workers []string, task
 				handleErr(err, worker1)
 				return
 			}
-			handleErr(errors.Errorf(errorNoEmitToken, worker1), worker1)
+			handleErr(errors.Errorf(ErrorNoEmitToken, worker1), worker1)
 		}, worker)
 	}
 	wg.Wait()
@@ -1682,7 +1691,7 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 	}
 	for worker, client := range s.workerClients {
 		wg.Add(1)
-		go Emit(ctx, 0, func(args ...interface{}) {
+		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
 
 			worker1, client1, ok := argsExtractor(args...)

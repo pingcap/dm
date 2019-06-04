@@ -78,6 +78,8 @@ type Config struct {
 
 	RPCTimeoutStr string        `toml:"rpc-timeout" json:"rpc-timeout"`
 	RPCTimeout    time.Duration `json:"-"`
+	RPCRateLimit  float64       `toml:"rpc-ratelimit" json:"rpc-rate-limit"`
+	RPCRateBurst  int           `toml:"rpc-rate-burst" json:"rpc-rate-burst"`
 
 	MasterAddr string `toml:"master-addr" json:"master-addr"`
 
@@ -167,6 +169,7 @@ func (c *Config) adjust() error {
 
 		c.DeployMap[item.Source] = item.Worker
 	}
+
 	if c.RPCTimeoutStr == "" {
 		c.RPCTimeoutStr = defaultRPCTimeout
 	}
@@ -175,6 +178,17 @@ func (c *Config) adjust() error {
 		return errors.Trace(err)
 	}
 	c.RPCTimeout = timeout
+
+	// for backward compatibility
+	if c.RPCRateLimit <= 0 {
+		log.Warnf("[dm-master] invalid rpc-rate-limit: %f, use default value: %f", c.RPCRateLimit, DefaultRate)
+		c.RPCRateLimit = DefaultRate
+	}
+	if c.RPCRateBurst <= 0 {
+		log.Warnf("[dm-master] invalid rpc-rate-burst: %d, use default value: %d", c.RPCRateBurst, DefaultBurst)
+		c.RPCRateBurst = DefaultBurst
+	}
+
 	return nil
 }
 

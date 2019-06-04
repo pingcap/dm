@@ -150,6 +150,7 @@ func testDefaultMasterServer(c *check.C) *Server {
 	err := cfg.Parse([]string{"-config=./dm-master.toml"})
 	c.Assert(err, check.IsNil)
 	server := NewServer(cfg)
+	go server.ap.Start(context.Background())
 
 	return server
 }

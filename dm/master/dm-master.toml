@@ -2,6 +2,8 @@
 
 # rpc configuration
 rpc-timeout = "30s"
+rpc-rate-limit = 10
+rpc-rate-burst = 40
 
 #log configuration
 log-level = "info"

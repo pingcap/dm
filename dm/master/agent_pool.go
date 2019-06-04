@@ -16,17 +16,15 @@ package master
 import (
 	"context"
 	"math"
-	"sync"
 
 	"golang.org/x/time/rate"
 )
 
-var (
-	pool             *AgentPool // singleton instance
-	once             sync.Once
-	defalutRate      float64 = 10
-	defaultBurst             = 40
-	errorNoEmitToken         = "fail to get emit opporunity for %s"
+// rate limit related constant value
+const (
+	DefaultRate      float64 = 10
+	DefaultBurst             = 40
+	ErrorNoEmitToken         = "fail to get emit opporunity for %s"
 )
 
 type emitFunc func(args ...interface{})
@@ -69,50 +67,43 @@ func NewAgentPool(cfg *RateLimitConfig) *AgentPool {
 
 // Apply applies for a agent
 // if ctx is canceled before we get an agent, returns nil
-func (pool *AgentPool) Apply(ctx context.Context, id int) *Agent {
+func (ap *AgentPool) Apply(ctx context.Context, id int) *Agent {
 	select {
 	case <-ctx.Done():
 		return nil
-	case pool.requests <- id:
+	case ap.requests <- id:
 	}
 
 	select {
 	case <-ctx.Done():
 		return nil
-	case agent := <-pool.agents:
+	case agent := <-ap.agents:
 		return agent
 	}
 }
 
-// InitAgentPool initials agent pool singleton
-func InitAgentPool(cfg *RateLimitConfig) *AgentPool {
-	once.Do(func() {
-		pool = NewAgentPool(&RateLimitConfig{rate: cfg.rate, burst: cfg.burst})
-		go pool.dispatch()
-	})
-	return pool
-}
-
-func (pool *AgentPool) dispatch() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+func (ap *AgentPool) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case id := <-pool.requests:
-			err := pool.limiter.Wait(ctx)
+		case id := <-ap.requests:
+			err := ap.limiter.Wait(ctx)
 			if err == context.Canceled {
 				return
 			}
-			pool.agents <- &Agent{ID: id}
+			select {
+			case <-ctx.Done():
+				return
+			case ap.agents <- &Agent{ID: id}:
+			}
 		}
 	}
 }
 
 // Emit applies for an agent to communicates with dm-worker
-func Emit(ctx context.Context, id int, fn emitFunc, errFn emitFunc, args ...interface{}) {
-	agent := pool.Apply(ctx, id)
+func (ap *AgentPool) Emit(ctx context.Context, id int, fn emitFunc, errFn emitFunc, args ...interface{}) {
+	agent := ap.Apply(ctx, id)
 	if agent == nil {
 		errFn(args...)
 	} else {
