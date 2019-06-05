@@ -125,6 +125,10 @@ func (t *testHubSuite) TestReaderHub(c *C) {
 	h := GetReaderHub()
 	c.Assert(h, NotNil)
 
+	h2 := GetReaderHub()
+	c.Assert(h2, NotNil)
+	c.Assert(h2, Equals, h)
+
 	// no earliest
 	erli := h.EarliestActiveRelayLog()
 	c.Assert(erli, IsNil)

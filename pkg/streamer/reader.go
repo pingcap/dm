@@ -329,11 +329,13 @@ func (r *BinlogReader) parseFile(
 
 	// use parser.ParseFile directly now, if needed we can change to use FileReader.
 	err = r.parser.ParseFile(fullPath, offset, onEventFunc)
-	if possibleLast && isIgnorableParseError(err) {
-		log.Warnf("[streamer] parse relay log file %s from offset %d got error %s", fullPath, offset, errors.ErrorStack(err))
-	} else if err != nil {
-		log.Errorf("[streamer] parse relay log file %s from offset %d error %s", fullPath, offset, errors.ErrorStack(err))
-		return false, false, 0, "", "", errors.Annotatef(err, "relay log file %s", fullPath)
+	if err != nil {
+		if possibleLast && isIgnorableParseError(err) {
+			log.Warnf("[streamer] parse relay log file %s from offset %d got error %s", fullPath, offset, errors.ErrorStack(err))
+		} else {
+			log.Errorf("[streamer] parse relay log file %s from offset %d error %s", fullPath, offset, errors.ErrorStack(err))
+			return false, false, 0, "", "", errors.Annotatef(err, "relay log file %s", fullPath)
+		}
 	}
 	log.Debugf("[streamer] parse relay log file %s return with offset %d", fullPath, latestPos)
 
