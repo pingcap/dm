@@ -54,13 +54,14 @@ func (c *GRPCClient) SendRequest(ctx context.Context, req *Request, timeout time
 	if atomic.LoadInt32(&c.closed) != 0 {
 		return nil, errors.New("send request on a closed client")
 	}
-	// handle streaming request and response
-	if req.Type != CmdFetchDDLInfo {
-		ctx1, cancel := context.WithTimeout(ctx, timeout)
-		defer cancel()
-		return callRPC(ctx1, c.client, req)
+	if req.IsStreamAPI() {
+		// call stream API and returns a grpc stream client
+		return callRPC(ctx, c.client, req)
 	}
-	return callRPC(ctx, c.client, req)
+	// call normal grpc request with a timeout
+	ctx1, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	return callRPC(ctx1, c.client, req)
 }
 
 // Close implements Client.Close
