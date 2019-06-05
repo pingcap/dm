@@ -81,9 +81,9 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 	c.Assert(err, ErrorMatches, ".*no such file or directory.*")
 
 	// empty relay log file, failed, got EOF
-	err = os.MkdirAll(relayDir, 0744)
+	err = os.MkdirAll(relayDir, 0700)
 	c.Assert(err, IsNil)
-	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0600)
 	c.Assert(err, IsNil)
 	defer f.Close()
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
@@ -229,9 +229,9 @@ func (t *testReaderSuite) TestParseFileRelaySubDirUpdated(c *C) {
 	)
 
 	// create the current relay log file and write some events
-	err := os.MkdirAll(relayDir, 0744)
+	err := os.MkdirAll(relayDir, 0700)
 	c.Assert(err, IsNil)
-	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0600)
 	c.Assert(err, IsNil)
 	defer f.Close()
 	_, err = f.Write(replication.BinLogFileHeader)
@@ -242,7 +242,7 @@ func (t *testReaderSuite) TestParseFileRelaySubDirUpdated(c *C) {
 	}
 
 	// no valid update for relay sub dir, timeout
-	ctx1, cancel1 := context.WithTimeout(context.Background(), time.Second)
+	ctx1, cancel1 := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel1()
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err := r.parseFile(
 		ctx1, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
@@ -282,7 +282,7 @@ func (t *testReaderSuite) TestParseFileRelaySubDirUpdated(c *C) {
 	go func() {
 		defer wg.Done()
 		time.Sleep(500 * time.Millisecond) // wait parseFile started
-		err2 := ioutil.WriteFile(nextPath, replication.BinLogFileHeader, 0644)
+		err2 := ioutil.WriteFile(nextPath, replication.BinLogFileHeader, 0600)
 		c.Assert(err2, IsNil)
 	}()
 	ctx3, cancel3 := context.WithTimeout(context.Background(), time.Second)
@@ -320,9 +320,9 @@ func (t *testReaderSuite) TestParseFileRelayNeedSwitchSubDir(c *C) {
 	)
 
 	// create the current relay log file and write some events
-	err := os.MkdirAll(relayDir, 0744)
+	err := os.MkdirAll(relayDir, 0700)
 	c.Assert(err, IsNil)
-	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0600)
 	c.Assert(err, IsNil)
 	defer f.Close()
 	_, err = f.Write(replication.BinLogFileHeader)
@@ -348,9 +348,9 @@ func (t *testReaderSuite) TestParseFileRelayNeedSwitchSubDir(c *C) {
 
 	// next sub dir exits, need to switch
 	r.uuids = []string{currentUUID, switchedUUID}
-	err = os.MkdirAll(nextRelayDir, 0744)
+	err = os.MkdirAll(nextRelayDir, 0700)
 	c.Assert(err, IsNil)
-	err = ioutil.WriteFile(nextFullPath, replication.BinLogFileHeader, 0644)
+	err = ioutil.WriteFile(nextFullPath, replication.BinLogFileHeader, 0600)
 	c.Assert(err, IsNil)
 
 	// has relay log file in next sub directory, need to switch
@@ -387,11 +387,24 @@ func (t *testReaderSuite) TestParseFileRelayWithIgnorableError(c *C) {
 	)
 
 	// create the current relay log file and write some events
-	err := os.MkdirAll(relayDir, 0744)
+	err := os.MkdirAll(relayDir, 0700)
 	c.Assert(err, IsNil)
-	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0600)
 	c.Assert(err, IsNil)
 	defer f.Close()
+
+	// file has no data, meet io.EOF error (when reading file header) and ignore it. but will get `context deadline exceeded` error
+	ctx1, cancel1 := context.WithTimeout(context.Background(), time.Second)
+	defer cancel1()
+	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err := r.parseFile(
+		ctx1, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
+	c.Assert(errors.Cause(err), Equals, context.DeadlineExceeded)
+	c.Assert(needSwitch, IsFalse)
+	c.Assert(needReParse, IsFalse)
+	c.Assert(latestPos, Equals, int64(0))
+	c.Assert(nextUUID, Equals, "")
+	c.Assert(nextBinlogName, Equals, "")
+
 	_, err = f.Write(replication.BinLogFileHeader)
 	c.Assert(err, IsNil)
 	for _, ev := range baseEvents {
@@ -401,11 +414,11 @@ func (t *testReaderSuite) TestParseFileRelayWithIgnorableError(c *C) {
 	_, err = f.Write([]byte("some invalid binlog event data"))
 	c.Assert(err, IsNil)
 
-	// EOF error ignored
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err := r.parseFile(
-		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
+	// meet `err EOF` error (when parsing binlog event) ignored
+	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Second)
+	defer cancel2()
+	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
+		ctx2, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
 	c.Assert(err, IsNil)
 	c.Assert(needSwitch, IsFalse)
 	c.Assert(needReParse, IsTrue)
@@ -433,7 +446,7 @@ func (t *testReaderSuite) TestUpdateUUIDs(c *C) {
 		"b60868af-5a6f-11e9-9ea3-0242ac160007.000002",
 	}
 	uuidBytes := t.uuidListToBytes(c, UUIDs)
-	err = ioutil.WriteFile(r.indexPath, uuidBytes, 0644)
+	err = ioutil.WriteFile(r.indexPath, uuidBytes, 0600)
 	c.Assert(err, IsNil)
 
 	err = r.updateUUIDs()
@@ -467,13 +480,13 @@ func (t *testReaderSuite) TestStartSync(c *C) {
 
 	// create the index file
 	uuidBytes := t.uuidListToBytes(c, UUIDs)
-	err = ioutil.WriteFile(r.indexPath, uuidBytes, 0644)
+	err = ioutil.WriteFile(r.indexPath, uuidBytes, 0600)
 	c.Assert(err, IsNil)
 
 	// create sub directories
 	for _, uuid := range UUIDs {
 		subDir := filepath.Join(baseDir, uuid)
-		err = os.MkdirAll(subDir, 0744)
+		err = os.MkdirAll(subDir, 0700)
 		c.Assert(err, IsNil)
 	}
 
@@ -517,7 +530,7 @@ func (t *testReaderSuite) TestStartSync(c *C) {
 	// 2. write more events to the last file
 	lastFilename := filepath.Join(baseDir, UUIDs[2], filenamePrefix+strconv.Itoa(3))
 	extraEvents := t.genBinlogEvents(c, baseEvents[len(baseEvents)-1].Header.LogPos)
-	lastF, err := os.OpenFile(lastFilename, os.O_WRONLY|os.O_APPEND, 0644)
+	lastF, err := os.OpenFile(lastFilename, os.O_WRONLY|os.O_APPEND, 0600)
 	c.Assert(err, IsNil)
 	defer lastF.Close()
 	for _, ev := range extraEvents {
@@ -545,7 +558,7 @@ func (t *testReaderSuite) TestStartSync(c *C) {
 
 	// 3. create new file in the last directory
 	lastFilename = filepath.Join(baseDir, UUIDs[2], filenamePrefix+strconv.Itoa(4))
-	err = ioutil.WriteFile(lastFilename, eventsBuf.Bytes(), 0644)
+	err = ioutil.WriteFile(lastFilename, eventsBuf.Bytes(), 0600)
 	c.Assert(err, IsNil)
 
 	obtainExtraEvents2 := make([]*replication.BinlogEvent, 0, len(baseEvents)-1)
@@ -603,7 +616,7 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 	// write UUIDs into index file
 	r = NewBinlogReader(cfg) // create a new reader
 	uuidBytes := t.uuidListToBytes(c, UUIDs)
-	err = ioutil.WriteFile(r.indexPath, uuidBytes, 0644)
+	err = ioutil.WriteFile(r.indexPath, uuidBytes, 0600)
 	c.Assert(err, IsNil)
 
 	// the startup relay log file not found
@@ -652,7 +665,7 @@ func (t *testReaderSuite) genBinlogEvents(c *C, latestPos uint32) []*replication
 }
 
 func (t *testReaderSuite) purgeStreamer(c *C, s Streamer) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
 	for {
@@ -668,7 +681,7 @@ func (t *testReaderSuite) purgeStreamer(c *C, s Streamer) {
 }
 
 func (t *testReaderSuite) verifyNoEventsInStreamer(c *C, s Streamer) {
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
 	ev, err := s.GetEvent(ctx)

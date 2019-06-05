@@ -42,8 +42,8 @@ func (f Filename) LessThan(other Filename) bool {
 	return f.BaseName == other.BaseName && f.Seq < other.Seq
 }
 
-// GreaterOrEqualThan checks whether this filename >= other filename.
-func (f Filename) GreaterOrEqualThan(other Filename) bool {
+// GreaterThanOrEqualTo checks whether this filename >= other filename.
+func (f Filename) GreaterThanOrEqualTo(other Filename) bool {
 	return f.BaseName == other.BaseName && f.Seq >= other.Seq
 }
 

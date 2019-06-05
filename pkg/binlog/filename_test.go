@@ -42,19 +42,19 @@ func (t *testFilenameSuite) TestFilenameCmp(c *C) {
 	}
 
 	c.Assert(f1.LessThan(f2), IsTrue)
-	c.Assert(f1.GreaterOrEqualThan(f2), IsFalse)
+	c.Assert(f1.GreaterThanOrEqualTo(f2), IsFalse)
 	c.Assert(f1.GreaterThan(f2), IsFalse)
 
 	c.Assert(f2.LessThan(f1), IsFalse)
-	c.Assert(f2.GreaterOrEqualThan(f1), IsTrue)
+	c.Assert(f2.GreaterThanOrEqualTo(f1), IsTrue)
 	c.Assert(f2.GreaterThan(f1), IsTrue)
 
 	c.Assert(f1.LessThan(f3), IsFalse)
-	c.Assert(f1.GreaterOrEqualThan(f3), IsTrue)
+	c.Assert(f1.GreaterThanOrEqualTo(f3), IsTrue)
 	c.Assert(f1.GreaterThan(f3), IsFalse)
 
 	c.Assert(f1.LessThan(f4), IsFalse)
-	c.Assert(f1.GreaterOrEqualThan(f4), IsFalse)
+	c.Assert(f1.GreaterThanOrEqualTo(f4), IsFalse)
 	c.Assert(f1.GreaterThan(f4), IsFalse)
 }
 

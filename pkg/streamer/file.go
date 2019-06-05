@@ -108,7 +108,7 @@ func CollectBinlogFilesCmp(dir, baseFile string, cmp FileCmp) ([]string, error) 
 				continue
 			}
 		case FileCmpBiggerEqual:
-			if !parsed.GreaterOrEqualThan(bf) {
+			if !parsed.GreaterThanOrEqualTo(bf) {
 				log.Debugf("[streamer] ignore older binlog file %s in dir %s", f, dir)
 				continue
 			}
