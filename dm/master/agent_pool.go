@@ -18,6 +18,8 @@ import (
 	"math"
 
 	"golang.org/x/time/rate"
+
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // rate limit related constant value
@@ -90,7 +92,10 @@ func (ap *AgentPool) Start(ctx context.Context) {
 			return
 		case id := <-ap.requests:
 			err := ap.limiter.Wait(ctx)
-			if err == context.Canceled {
+			if err != nil {
+				if err != context.Canceled {
+					log.Fatalf("agent limiter wait meets unexpected error: %v", err)
+				}
 				return
 			}
 			select {

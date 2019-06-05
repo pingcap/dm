@@ -1874,6 +1874,7 @@ func (s *Server) handleOperationResult(ctx context.Context, cli workerrpc.Client
 	case workerrpc.CmdUpdateSubTask:
 		response = resp.UpdateSubTask
 	default:
+		// this should not happen
 		return &pb.OperateSubTaskResponse{
 			Meta: errorCommonWorkerResponse(fmt.Sprintf("invalid operate task type %v", resp.Type), ""),
 		}
@@ -1890,29 +1891,29 @@ func (s *Server) handleOperationResult(ctx context.Context, cli workerrpc.Client
 // taskConfigArgsExtractor extracts SubTaskConfig from args and returns its relevant
 // grpc client, worker id (host:port), subtask config in toml, task name and error
 func (s *Server) taskConfigArgsExtractor(args ...interface{}) (workerrpc.Client, string, string, string, error) {
-	handleErr := func(err error, worker string) error {
+	handleErr := func(err error) error {
 		log.Error(errors.ErrorStack(err))
 		return err
 	}
 
 	if len(args) != 1 {
-		return nil, "", "", "", handleErr(errors.Errorf("miss task config %v", args), "")
+		return nil, "", "", "", handleErr(errors.Errorf("miss task config %v", args))
 	}
 
 	cfg, ok := args[0].(*config.SubTaskConfig)
 	if !ok {
-		return nil, "", "", "", handleErr(errors.Errorf("args[0] is not SubTaskConfig: %v", args[0]), "")
+		return nil, "", "", "", handleErr(errors.Errorf("args[0] is not SubTaskConfig: %v", args[0]))
 	}
 
 	worker, ok1 := s.cfg.DeployMap[cfg.SourceID]
 	cli, ok2 := s.workerClients[worker]
 	if !ok1 || !ok2 {
-		return nil, "", "", "", handleErr(errors.Errorf("%s relevant worker-client not found", worker), worker)
+		return nil, "", "", "", handleErr(errors.Errorf("%s relevant worker-client not found", worker))
 	}
 
 	cfgToml, err := cfg.Toml()
 	if err != nil {
-		return nil, "", "", "", handleErr(err, worker)
+		return nil, "", "", "", handleErr(err)
 	}
 
 	return cli, worker, cfgToml, cfg.Name, nil

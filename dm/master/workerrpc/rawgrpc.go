@@ -54,6 +54,7 @@ func (c *GRPCClient) SendRequest(ctx context.Context, req *Request, timeout time
 	if atomic.LoadInt32(&c.closed) != 0 {
 		return nil, errors.New("send request on a closed client")
 	}
+	// handle streaming request and response
 	if req.Type != CmdFetchDDLInfo {
 		ctx1, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
@@ -64,7 +65,10 @@ func (c *GRPCClient) SendRequest(ctx context.Context, req *Request, timeout time
 
 // Close implements Client.Close
 func (c *GRPCClient) Close() error {
-	defer atomic.CompareAndSwapInt32(&c.closed, 0, 1)
+	defer func() {
+		c.conn = nil
+		atomic.CompareAndSwapInt32(&c.closed, 0, 1)
+	}()
 	if c.conn == nil {
 		return nil
 	}
