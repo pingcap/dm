@@ -1875,9 +1875,8 @@ func (s *Server) handleOperationResult(ctx context.Context, cli workerrpc.Client
 		response = resp.UpdateSubTask
 	default:
 		// this should not happen
-		return &pb.OperateSubTaskResponse{
-			Meta: errorCommonWorkerResponse(fmt.Sprintf("invalid operate task type %v", resp.Type), ""),
-		}
+		response.Meta = errorCommonWorkerResponse(fmt.Sprintf("invalid operate task type %v", resp.Type), "")
+		return response
 	}
 
 	err = s.waitOperationOk(ctx, cli, name, response.LogID)

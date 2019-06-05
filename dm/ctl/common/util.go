@@ -32,7 +32,7 @@ import (
 
 var (
 	masterClient pb.MasterClient
-	globalConfig *Config
+	globalConfig = &Config{}
 )
 
 // InitUtils inits necessary dmctl utils
