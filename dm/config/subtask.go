@@ -22,14 +22,14 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/errors"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
-	"github.com/siddontang/go-mysql/mysql"
+
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // task modes
@@ -37,15 +37,6 @@ const (
 	ModeAll       = "all"
 	ModeFull      = "full"
 	ModeIncrement = "incremental"
-)
-
-// CmdName represents name for binary
-type CmdName string
-
-// binary names
-const (
-	CmdLoader CmdName = "loader"
-	CmdSyncer CmdName = "syncer"
 )
 
 var (
@@ -154,44 +145,6 @@ func NewSubTaskConfig() *SubTaskConfig {
 	return cfg
 }
 
-// SetupFlags setups flags for binary
-func (c *SubTaskConfig) SetupFlags(name CmdName) {
-	c.Flavor = mysql.MySQLFlavor // default value event not from Syncer
-	c.flagSet = flag.NewFlagSet("subtask", flag.ContinueOnError)
-	fs := c.flagSet
-
-	// compatible with standalone dm unit
-	fs.StringVar(&c.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
-	fs.StringVar(&c.LogFile, "log-file", "", "log file path")
-	fs.StringVar(&c.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
-	fs.StringVar(&c.SourceID, "source-id", "", "represent a MySQL/MariaDB instance or a replica group")
-	fs.StringVar(&c.ConfigFile, "config", "", "config file")
-
-	fs.BoolVar(&c.printVersion, "V", false, "prints version and exit")
-
-	switch name {
-	case CmdLoader:
-		// Loader configuration
-		fs.IntVar(&c.PoolSize, "t", 16, "Number of threads restoring concurrently for worker pool. Each worker restore one file at a time, increase this as TiKV nodes increase")
-		fs.StringVar(&c.Dir, "d", "./dumped_data", "Directory of the dump to import")
-		fs.StringVar(&c.PprofAddr, "pprof-addr", ":8272", "Loader pprof addr")
-	case CmdSyncer:
-		// Syncer configuration
-		fs.IntVar(&c.ServerID, "server-id", 101, "MySQL slave server ID")
-		fs.StringVar(&c.MetaFile, "meta-file", "", "syncer meta info filename")
-		fs.StringVar(&c.Flavor, "flavor", mysql.MySQLFlavor, "use flavor for different MySQL source versions; support \"mysql\", \"mariadb\" now; if you replicate from mariadb, please set it to \"mariadb\"")
-		fs.IntVar(&c.WorkerCount, "count", 16, "parallel worker count")
-		fs.IntVar(&c.Batch, "b", 10, "batch commit count")
-		fs.IntVar(&c.MaxRetry, "max-retry", 100, "maxinum retry when network interruption")
-		fs.BoolVar(&c.EnableGTID, "enable-gtid", false, "enable gtid mode")
-		fs.BoolVar(&c.SafeMode, "safe-mode", false, "enable safe mode to make syncer reentrant")
-		fs.StringVar(&c.StatusAddr, "status-addr", ":8271", "Syncer status addr")
-		fs.BoolVar(&c.DisableHeartbeat, "disable-heartbeat", true, "deprecated!!! disable heartbeat between mysql and syncer")
-		fs.BoolVar(&c.EnableHeartbeat, "enable-heartbeat", false, "enable heartbeat between mysql and syncer")
-		fs.StringVar(&c.Timezone, "timezone", "", "target database timezone")
-	}
-}
-
 // String returns the config's json string
 func (c *SubTaskConfig) String() string {
 	cfg, err := json.Marshal(c)
@@ -240,6 +193,9 @@ func (c *SubTaskConfig) Adjust() error {
 
 	if c.SourceID == "" {
 		return errors.NotValidf("empty source-id")
+	}
+	if len(c.SourceID) > MaxSourceIDLength {
+		return errors.NotValidf("too long source-id")
 	}
 
 	//if c.Flavor != mysql.MySQLFlavor && c.Flavor != mysql.MariaDBFlavor {
@@ -330,13 +286,13 @@ func (c *SubTaskConfig) DecryptPassword() (*SubTaskConfig, error) {
 	if len(clone.To.Password) > 0 {
 		pswdTo, err = utils.Decrypt(clone.To.Password)
 		if err != nil {
-			return nil, errors.Annotatef(err, "downstream DB")
+			return nil, errors.Annotatef(err, "downstream DB password %s", clone.To.Password)
 		}
 	}
 	if len(clone.From.Password) > 0 {
 		pswdFrom, err = utils.Decrypt(clone.From.Password)
 		if err != nil {
-			return nil, errors.Annotatef(err, "source DB")
+			return nil, errors.Annotatef(err, "source DB password %s", clone.From.Password)
 		}
 	}
 	clone.From.Password = pswdFrom

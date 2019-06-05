@@ -17,6 +17,8 @@ import (
 	"github.com/pingcap/parser"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
+
+	"github.com/pingcap/dm/relay/common"
 )
 
 var (
@@ -73,7 +75,7 @@ func (t *transformer) Transform(e *replication.BinlogEvent) *Result {
 		// when RawModeEnabled not true, QueryEvent will be parsed.
 		// even for `BEGIN`, we still update pos/GTID, but only save GTID for DDL.
 		result.GTIDSet = ev.GSet
-		isDDL := checkIsDDL(string(ev.Query), t.parser2)
+		isDDL := common.CheckIsDDL(string(ev.Query), t.parser2)
 		if isDDL {
 			result.CanSaveGTID = true
 		}

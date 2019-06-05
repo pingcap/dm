@@ -68,6 +68,39 @@ const (
 	dumpFlagSendAnnotateRowsEvent uint16 = 0x02
 )
 
+// NewRelay creates an instance of Relay.
+var NewRelay = NewRealRelay
+
+// Process defines mysql-like relay log process unit
+type Process interface {
+	// Init initial relat log unit
+	Init() (err error)
+	// Process run background logic of relay log unit
+	Process(ctx context.Context, pr chan pb.ProcessResult)
+	// SwitchMaster switches relay's master server
+	SwitchMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) error
+	// Migrate  resets  binlog position
+	Migrate(ctx context.Context, binlogName string, binlogPos uint32) error
+	// ActiveRelayLog returns the earliest active relay log info in this operator
+	ActiveRelayLog() *pkgstreamer.RelayLogInfo
+	// Reload reloads config
+	Reload(newCfg *Config) error
+	// Update updates config
+	Update(cfg *config.SubTaskConfig) error
+	// Resume resumes paused relay log process unit
+	Resume(ctx context.Context, pr chan pb.ProcessResult)
+	// Pause pauses a running relay log process unit
+	Pause()
+	// Error returns error message if having one
+	Error() interface{}
+	// Status returns status of relay log process unit
+	Status() interface{}
+	// Close does some clean works
+	Close()
+	// IsClosed returns whether relay log process unit was closed
+	IsClosed() bool
+}
+
 // Relay relays mysql binlog to local file.
 type Relay struct {
 	db        *sql.DB
@@ -89,8 +122,8 @@ type Relay struct {
 	}
 }
 
-// NewRelay creates an instance of Relay.
-func NewRelay(cfg *Config) *Relay {
+// NewRealRelay creates an instance of Relay.
+func NewRealRelay(cfg *Config) Process {
 	syncerCfg := replication.BinlogSyncerConfig{
 		ServerID:        uint32(cfg.ServerID),
 		Flavor:          cfg.Flavor,
@@ -147,7 +180,7 @@ func (r *Relay) Init() (err error) {
 		return errors.Trace(err)
 	}
 	r.db = db
-	rollbackHolder.Add(fr.FuncRollback{"close-DB", r.closeDB})
+	rollbackHolder.Add(fr.FuncRollback{Name: "close-DB", Fn: r.closeDB})
 
 	if err2 := os.MkdirAll(r.cfg.RelayDir, 0755); err2 != nil {
 		return errors.Trace(err2)
@@ -915,24 +948,6 @@ func (r *Relay) Close() {
 	log.Info("[relay] relay unit closed")
 }
 
-func (r *Relay) closeBinlogSyncer(syncer *replication.BinlogSyncer) error {
-	if syncer == nil {
-		return nil
-	}
-
-	defer syncer.Close()
-	lastSlaveConnectionID := syncer.LastConnectionID()
-	if lastSlaveConnectionID > 0 {
-		err := utils.KillConn(r.db, lastSlaveConnectionID)
-		if err != nil {
-			if !utils.IsNoSuchThreadError(err) {
-				return errors.Annotatef(err, "connection ID %d", lastSlaveConnectionID)
-			}
-		}
-	}
-	return nil
-}
-
 // Status implements the dm.Unit interface.
 func (r *Relay) Status() interface{} {
 	masterPos, masterGTID, err := utils.GetMasterStatus(r.db, r.cfg.Flavor)
@@ -1014,7 +1029,7 @@ func (r *Relay) Reload(newCfg *Config) error {
 	// Update Charset
 	r.cfg.Charset = newCfg.Charset
 
-	r.db.Close()
+	r.closeDB()
 	cfg := r.cfg.From
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&readTimeout=%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, showStatusConnectionTimeout)
 	db, err := sql.Open("mysql", dbDSN)
@@ -1086,3 +1101,96 @@ func (r *Relay) Migrate(ctx context.Context, binlogName string, binlogPos uint32
 	}
 	return nil
 }
+
+/*********** dummy relay log process unit *************/
+
+// DummyRelay is a dummy relay
+type DummyRelay struct {
+	initErr error
+
+	processResult pb.ProcessResult
+	errorInfo     *pb.RelayError
+	reloadErr     error
+}
+
+// NewDummyRelay creates an instance of dummy Relay.
+func NewDummyRelay(cfg *Config) Process {
+	return &DummyRelay{}
+}
+
+// Init implements Process interface
+func (d *DummyRelay) Init() error {
+	return d.initErr
+}
+
+// InjectInitError injects init error
+func (d *DummyRelay) InjectInitError(err error) {
+	d.initErr = err
+}
+
+// Process implements Process interface
+func (d *DummyRelay) Process(ctx context.Context, pr chan pb.ProcessResult) {
+	select {
+	case <-ctx.Done():
+		pr <- d.processResult
+	}
+}
+
+// InjectProcessResult injects process result
+func (d *DummyRelay) InjectProcessResult(result pb.ProcessResult) {
+	d.processResult = result
+}
+
+// SwitchMaster implements Process interface
+func (d *DummyRelay) SwitchMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) error {
+	return nil
+}
+
+// Migrate implements Process interface
+func (d *DummyRelay) Migrate(ctx context.Context, binlogName string, binlogPos uint32) error {
+	return nil
+}
+
+// ActiveRelayLog implements Process interface
+func (d *DummyRelay) ActiveRelayLog() *pkgstreamer.RelayLogInfo {
+	return nil
+}
+
+// Reload implements Process interface
+func (d *DummyRelay) Reload(newCfg *Config) error {
+	return d.reloadErr
+}
+
+// InjectReloadError injects reload error
+func (d *DummyRelay) InjectReloadError(err error) {
+	d.reloadErr = err
+}
+
+// Update implements Process interface
+func (d *DummyRelay) Update(cfg *config.SubTaskConfig) error {
+	return nil
+}
+
+// Resume implements Process interface
+func (d *DummyRelay) Resume(ctx context.Context, pr chan pb.ProcessResult) {}
+
+// Pause implements Process interface
+func (d *DummyRelay) Pause() {}
+
+// Error implements Process interface
+func (d *DummyRelay) Error() interface{} {
+	return d.errorInfo
+}
+
+// Status implements Process interface
+func (d *DummyRelay) Status() interface{} {
+	return &pb.RelayStatus{
+		Stage: pb.Stage_New,
+	}
+}
+
+// Close implements Process interface
+func (d *DummyRelay) Close() {}
+
+// IsClosed implements Process interface
+func (d *DummyRelay) IsClosed() bool { return false }

@@ -19,6 +19,10 @@ import (
 
 func (t *testConfig) TestSubTask(c *C) {
 	cfg := &SubTaskConfig{
+		Name:            "test-task",
+		SourceID:        "mysql-instance-01",
+		OnlineDDLScheme: "pt",
+		Timezone:        "Asia/Shanghai",
 		From: DBConfig{
 			Host:     "127.0.0.1",
 			Port:     3306,
@@ -51,4 +55,81 @@ func (t *testConfig) TestSubTask(c *C) {
 	cfg.From.Password = ""
 	clone3, err = cfg.DecryptPassword()
 	c.Assert(clone3, DeepEquals, cfg)
+
+	err = cfg.Adjust()
+	c.Assert(err, IsNil)
+}
+
+func (t *testConfig) TestSubTaskAdjustFail(c *C) {
+	newSubTaskConfig := func() *SubTaskConfig {
+		return &SubTaskConfig{
+			Name:            "test-task",
+			SourceID:        "mysql-instance-01",
+			OnlineDDLScheme: "pt",
+			Timezone:        "Asia/Shanghai",
+			From: DBConfig{
+				Host:     "127.0.0.1",
+				Port:     3306,
+				User:     "root",
+				Password: "Up8156jArvIPymkVC+5LxkAT6rek",
+			},
+			To: DBConfig{
+				Host:     "127.0.0.1",
+				Port:     4306,
+				User:     "root",
+				Password: "",
+			},
+		}
+	}
+	testCases := []struct {
+		genFunc     func() *SubTaskConfig
+		errorFormat string
+	}{
+		{
+			func() *SubTaskConfig {
+				cfg := newSubTaskConfig()
+				cfg.Name = ""
+				return cfg
+			},
+			"task name should not be empty",
+		},
+		{
+			func() *SubTaskConfig {
+				cfg := newSubTaskConfig()
+				cfg.SourceID = ""
+				return cfg
+			},
+			"empty source-id not valid",
+		},
+		{
+			func() *SubTaskConfig {
+				cfg := newSubTaskConfig()
+				cfg.SourceID = "source-id-length-more-than-thirty-two"
+				return cfg
+			},
+			"too long source-id not valid",
+		},
+		{
+			func() *SubTaskConfig {
+				cfg := newSubTaskConfig()
+				cfg.OnlineDDLScheme = "rtc"
+				return cfg
+			},
+			"online scheme rtc not supported",
+		},
+		{
+			func() *SubTaskConfig {
+				cfg := newSubTaskConfig()
+				cfg.Timezone = "my-house"
+				return cfg
+			},
+			"invalid timezone string: my-house:.*",
+		},
+	}
+
+	for _, tc := range testCases {
+		cfg := tc.genFunc()
+		err := cfg.Adjust()
+		c.Assert(err, ErrorMatches, tc.errorFormat)
+	}
 }

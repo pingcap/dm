@@ -47,10 +47,13 @@
 
 New integration tests can be written as shell scripts in `tests/TEST_NAME/run.sh`. The script should exit with a nonzero error code on failure.
 
+> Note the integration test runs in parallel, and new added test case is not listed in CI, so remember to add the `TEST_NAME` of new added test case to file `others_integration.txt` in a newline.
+
 Several convenient commands are provided:
 
 * `run_dm_master <WORKDIR> <PORT> <CONFIG>` — Starts `dm-master` using config provided, on given port, running in workdir.
 * `run_dm_worker <WORKDIR> <PORT> <CONFIG>` — Starts `dm-worker` using config provided, on given port, running in workdir.
+* `run_dm_ctl <WORKDIR> <MASTER_ADDR> <DMCTL_COMMAND>` - Runs `dmctl` with given command in non-interactive mode.
 * `run_sql <SQL> <PORT>` — Executes an SQL query in database based on port provided
 * `run_sql_file <path_to_SQL_file> <HOST> <PORT>` — Executes all SQLs in given file to the database on port provided
 * `run_sql_file_online_ddl <path_to_SQL_file> <HOST> <PORT> <DB> <ONLINE DDL TOOL>` — Executes all SQLs in given file, will auto switch DDL to online DDL command.

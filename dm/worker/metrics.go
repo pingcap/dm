@@ -16,6 +16,7 @@ package worker
 import (
 	"net"
 	"net/http"
+	"net/http/pprof"
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/prometheus/client_golang/prometheus"
@@ -67,6 +68,12 @@ func InitStatus(lis net.Listener) {
 	mux := http.NewServeMux()
 	mux.Handle("/status", &statusHandler{})
 	mux.Handle("/metrics", prometheus.Handler())
+
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
 	httpS := &http.Server{
 		Handler: mux,

@@ -351,7 +351,6 @@ func NewLoader(cfg *config.SubTaskConfig) *Loader {
 		workerWg:   new(sync.WaitGroup),
 		pool:       make([]*Worker, 0, cfg.PoolSize),
 	}
-	loader.tableRouter, _ = router.NewTableRouter(cfg.CaseSensitive, []*router.TableRule{})
 	loader.fileJobQueueClosed.Set(true) // not open yet
 	return loader
 }
@@ -376,7 +375,7 @@ func (l *Loader) Init() (err error) {
 		return errors.Trace(err)
 	}
 	l.checkPoint = checkpoint
-	rollbackHolder.Add(fr.FuncRollback{"close-checkpoint", l.checkPoint.Close})
+	rollbackHolder.Add(fr.FuncRollback{Name: "close-checkpoint", Fn: l.checkPoint.Close})
 
 	l.bwList = filter.New(l.cfg.CaseSensitive, l.cfg.BWList)
 
@@ -529,7 +528,7 @@ func (l *Loader) loadFinishedSize() {
 	}
 }
 
-// Close do graceful shutdown
+// Close does graceful shutdown
 func (l *Loader) Close() {
 	l.Lock()
 	defer l.Unlock()
@@ -632,6 +631,7 @@ func (l *Loader) Update(cfg *config.SubTaskConfig) error {
 }
 
 func (l *Loader) genRouter(rules []*router.TableRule) error {
+	l.tableRouter, _ = router.NewTableRouter(l.cfg.CaseSensitive, []*router.TableRule{})
 	for _, rule := range rules {
 		err := l.tableRouter.AddRule(rule)
 		if err != nil {

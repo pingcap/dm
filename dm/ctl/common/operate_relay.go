@@ -11,23 +11,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package master
+package common
 
 import (
 	"context"
 
-	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 )
 
-// operateTask does operation on task
-func operateTask(op pb.TaskOp, name string, workers []string) (*pb.OperateTaskResponse, error) {
+// OperateRelay does operation on relay unit
+func OperateRelay(op pb.RelayOp, workers []string) (*pb.OperateWorkerRelayResponse, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cli := common.MasterClient()
-	return cli.OperateTask(ctx, &pb.OperateTaskRequest{
+	cli := MasterClient()
+	return cli.OperateWorkerRelayTask(ctx, &pb.OperateWorkerRelayRequest{
 		Op:      op,
-		Name:    name,
 		Workers: workers,
 	})
 }
