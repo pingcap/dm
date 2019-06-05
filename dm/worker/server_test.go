@@ -53,7 +53,7 @@ func (t *testServer) TestServer(c *C) {
 		c.Assert(err1, IsNil)
 	}()
 
-	c.Assert(waitSomething(20, func() bool {
+	c.Assert(waitSomething(30, func() bool {
 		return !s.closed.Get()
 	}), IsTrue)
 
