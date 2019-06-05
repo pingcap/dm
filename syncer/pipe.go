@@ -63,21 +63,21 @@ type Pipe interface {
 type PipeData struct {
 	binlogEvent *replication.Event
 
-	tp           opType
-	sourceSchema string
-	sourceTable  string
-	targetSchema string
-	targetTable  string
-	sqls         []string
-	args         [][]interface{}
-	keys         [][]string
-	retry        bool
-	lastPos      mysql.Position
-	currentPos   mysql.Position // exactly binlog position of current SQL
-	gtidSet      gtid.Set
-	ddls         []string
-	traceID      string
-	traceGID     string
+	tp             opType
+	sourceSchema   string
+	sourceTable    string
+	targetSchema   string
+	targetTable    string
+	sqls           []string
+	args           [][]interface{}
+	keys           [][]string
+	retry          bool
+	lastPos        mysql.Position
+	currentPos     mysql.Position // exactly binlog position of current SQL
+	currentGTIDSet gtid.Set
+	ddls           []string
+	traceID        string
+	traceGID       string
 
 	ddlExecItem *DDLExecItem
 
