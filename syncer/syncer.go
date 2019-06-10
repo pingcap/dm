@@ -1128,7 +1128,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		if err != nil {
 			log.Errorf("parse binlog file err %v", err)
 		} else {
-			binlogFileGauge.WithLabelValues("syncer", s.cfg.Name).Set(index)
+			binlogFileGauge.WithLabelValues("syncer", s.cfg.Name).Set(float64(index))
 		}
 		s.binlogSizeCount.Add(int64(e.Header.EventSize))
 
@@ -1835,7 +1835,7 @@ func (s *Syncer) printStatus(ctx context.Context) {
 				if err != nil {
 					log.Errorf("[syncer] parse binlog file err %v", err)
 				} else {
-					binlogFileGauge.WithLabelValues("master", s.cfg.Name).Set(index)
+					binlogFileGauge.WithLabelValues("master", s.cfg.Name).Set(float64(index))
 				}
 			}
 

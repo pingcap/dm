@@ -69,9 +69,8 @@ func (h *relayLogInfoHub) update(taskName, uuid, filename string) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	err = binlog.VerifyFilename(filename)
-	if err != nil {
-		return errors.Trace(err)
+	if !binlog.VerifyFilename(filename) {
+		return errors.NotValidf("binlog filename %s", filename)
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()

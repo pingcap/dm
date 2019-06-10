@@ -170,9 +170,8 @@ func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, en
 	}
 
 	if !enableGTID && len(binlogName) > 0 {
-		err := binlog.VerifyFilename(binlogName)
-		if err != nil {
-			return false, errors.Annotatef(err, "relay-binlog-name %s", binlogName)
+		if !binlog.VerifyFilename(binlogName) {
+			return false, errors.NotValidf("relay-binlog-name %s", binlogName)
 		}
 	}
 	var gset = lm.emptyGSet.Clone()

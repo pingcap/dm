@@ -15,7 +15,6 @@ package binlog
 
 import (
 	. "github.com/pingcap/check"
-	"github.com/pingcap/errors"
 )
 
 var _ = Suite(&testFilenameSuite{})
@@ -62,19 +61,19 @@ func (t *testFilenameSuite) TestParseFilenameAndGetFilenameIndex(c *C) {
 	cases := []struct {
 		filenameStr string
 		filename    Filename
-		index       float64
+		index       int64
 		errMsgReg   string
 	}{
 		{
 			// valid
 			filenameStr: "mysql-bin.666666",
-			filename:    Filename{"mysql-bin", "666666"},
+			filename:    Filename{"mysql-bin", "666666", 666666},
 			index:       666666,
 		},
 		{
 			// valid
 			filenameStr: "mysql-bin.000888",
-			filename:    Filename{"mysql-bin", "000888"},
+			filename:    Filename{"mysql-bin", "000888", 888},
 			index:       888,
 		},
 		{
@@ -179,12 +178,7 @@ func (t *testFilenameSuite) TestVerifyFilename(c *C) {
 	}
 
 	for _, cs := range cases {
-		err := VerifyFilename(cs.filename)
-		if cs.valid {
-			c.Assert(err, IsNil)
-		} else {
-			c.Assert(errors.Cause(err), Equals, ErrInvalidBinlogFilename)
-		}
+		c.Assert(VerifyFilename(cs.filename), Equals, cs.valid)
 	}
 }
 
@@ -213,7 +207,7 @@ func (t *testFilenameSuite) TestConstructFilenameWithUUIDSuffix(c *C) {
 		withSuffixName string
 	}{
 		{
-			originalName:   Filename{"mysql-bin", "000001"},
+			originalName:   Filename{"mysql-bin", "000001", 1},
 			suffix:         "666666",
 			withSuffixName: "mysql-bin|666666.000001",
 		},

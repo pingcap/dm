@@ -63,9 +63,8 @@ func CollectAllBinlogFiles(dir string) ([]string, error) {
 			log.Debugf("[streamer] skip meta file %s", f)
 			continue
 		}
-		err = binlog.VerifyFilename(f)
-		if err != nil {
-			log.Warnf("[streamer] collecting binlog file, ignore invalid file %s, err %v", f, err)
+		if !binlog.VerifyFilename(f) {
+			log.Warnf("[streamer] collecting binlog file, ignore invalid file %s", f)
 			continue
 		}
 		ret = append(ret, f)
@@ -141,8 +140,7 @@ func getFirstBinlogName(baseDir, uuid string) (string, error) {
 			continue
 		}
 
-		err = binlog.VerifyFilename(f)
-		if err != nil {
+		if !binlog.VerifyFilename(f) {
 			return "", errors.NotValidf("binlog file %s", f)
 		}
 		return f, nil
@@ -259,8 +257,7 @@ func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir 
 					continue
 				}
 				baseName := filepath.Base(event.Path)
-				err2 := binlog.VerifyFilename(baseName)
-				if err2 != nil {
+				if !binlog.VerifyFilename(baseName) {
 					log.Debugf("skip watcher event %+v for invalid relay log file", event)
 					continue // not valid binlog created, updated
 				}

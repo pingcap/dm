@@ -35,6 +35,7 @@ var (
 type Filename struct {
 	BaseName string
 	Seq      string
+	SeqInt64 int64
 }
 
 // LessThan checks whether this filename < other filename.
@@ -58,32 +59,37 @@ func ParseFilename(filename string) (Filename, error) {
 	parts := strings.Split(filename, binlogFilenameSep)
 	if len(parts) != 2 {
 		return fn, errors.Annotatef(ErrInvalidBinlogFilename, "filename %s", filename)
-	} else if n, err := strconv.Atoi(parts[1]); err != nil || n <= 0 {
+	}
+
+	var (
+		seqInt64 int64
+		err      error
+	)
+	if seqInt64, err = strconv.ParseInt(parts[1], 10, 64); err != nil || seqInt64 <= 0 {
 		return fn, errors.Annotatef(ErrInvalidBinlogFilename, "filename %s", filename)
 	}
 	fn.BaseName = parts[0]
 	fn.Seq = parts[1]
+	fn.SeqInt64 = seqInt64
 	return fn, nil
 }
 
 // VerifyFilename verifies whether is a valid MySQL/MariaDB binlog filename.
 // valid format is `base + '.' + seq`.
-func VerifyFilename(filename string) error {
-	_, err := ParseFilename(filename)
-	return errors.Trace(err)
+func VerifyFilename(filename string) bool {
+	if _, err := ParseFilename(filename); err != nil {
+		return false
+	}
+	return true
 }
 
-// GetFilenameIndex returns a float64 index value (seq number) of the filename.
-func GetFilenameIndex(filename string) (float64, error) {
+// GetFilenameIndex returns a int64 index value (seq number) of the filename.
+func GetFilenameIndex(filename string) (int64, error) {
 	fn, err := ParseFilename(filename)
 	if err != nil {
 		return 0, errors.Trace(err)
 	}
-	idx, err := strconv.ParseFloat(fn.Seq, 64)
-	if err != nil {
-		return 0, errors.Annotatef(err, "binlog filename %s", filename)
-	}
-	return idx, nil
+	return fn.SeqInt64, nil
 }
 
 // ConstructFilename constructs a binlog filename from the basename and seq.

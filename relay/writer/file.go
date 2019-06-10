@@ -168,9 +168,8 @@ func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (
 	}
 
 	// verify filename
-	err := binlog.VerifyFilename(w.filename.Get())
-	if err != nil {
-		return nil, errors.Trace(err)
+	if !binlog.VerifyFilename(w.filename.Get()) {
+		return nil, errors.NotValidf("binlog filename %s", w.filename.Get())
 	}
 
 	// open/create a new binlog file
@@ -179,7 +178,7 @@ func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (
 		Filename: filename,
 	}
 	out := bw.NewFileWriter(outCfg)
-	err = out.Start()
+	err := out.Start()
 	if err != nil {
 		return nil, errors.Annotatef(err, "start underlying binlog writer for %s", filename)
 	}

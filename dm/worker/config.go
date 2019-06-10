@@ -195,9 +195,8 @@ func (c *Config) verify() error {
 
 	var err error
 	if len(c.RelayBinLogName) > 0 {
-		err = binlog.VerifyFilename(c.RelayBinLogName)
-		if err != nil {
-			return errors.Annotatef(err, "relay-binlog-name %s", c.RelayBinLogName)
+		if !binlog.VerifyFilename(c.RelayBinLogName) {
+			return errors.NotValidf("relay-binlog-name %s", c.RelayBinLogName)
 		}
 	}
 	if len(c.RelayBinlogGTID) > 0 {

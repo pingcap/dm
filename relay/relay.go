@@ -523,7 +523,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 		if index, err2 := binlog.GetFilenameIndex(lastPos.Name); err2 != nil {
 			log.Errorf("[relay] parse binlog file name %s err %v", lastPos.Name, err2)
 		} else {
-			relayLogFileGauge.WithLabelValues("relay").Set(index)
+			relayLogFileGauge.WithLabelValues("relay").Set(float64(index))
 		}
 
 		if needSavePos {
@@ -733,7 +733,7 @@ func (r *Relay) doIntervalOps(ctx context.Context) {
 				log.Errorf("[relay] parse binlog file name %s error %v", pos.Name, err)
 				continue
 			}
-			relayLogFileGauge.WithLabelValues("master").Set(index)
+			relayLogFileGauge.WithLabelValues("master").Set(float64(index))
 			relayLogPosGauge.WithLabelValues("master").Set(float64(pos.Pos))
 		case <-trimUUIDsTicker.C:
 			trimmed, err := r.meta.TrimUUIDs()

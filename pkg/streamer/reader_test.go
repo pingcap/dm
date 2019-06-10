@@ -624,13 +624,13 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 	c.Assert(err, IsNil)
 	ev, err = s.GetEvent(ctx)
 	c.Assert(err, ErrorMatches, fmt.Sprintf(".*%s.*not found.*", startPos.Name))
+	c.Assert(ev, IsNil)
 
 	// can not re-start the reader
 	s, err = r.StartSync(startPos)
 	c.Assert(errors.Cause(err), Equals, ErrReaderRunning)
 	c.Assert(s, IsNil)
 
-	c.Assert(ev, IsNil)
 	c.Assert(r.Close(), IsNil)
 }
 
