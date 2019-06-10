@@ -26,6 +26,12 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 )
 
+var (
+	pipelineCtxDoneErr = errors.New("pipeline's context is done")
+	noPipesErr         = errors.New("no pipes in this pipeline")
+	pipelineCloseErr   = errors.New("pipeline is closed")
+)
+
 // Pipe is the littlest process unit in syncer
 type Pipe interface {
 	// Name is the pipe's name
@@ -118,11 +124,11 @@ func (p *Pipeline) AddPipe(pipe Pipe) {
 // Input receives data
 func (p *Pipeline) Input(data *PipeData) error {
 	if len(p.pipes) == 0 {
-		return errors.New("no pipes in this pipeline")
+		return noPipesErr
 	}
 
 	if p.isClosed.Get() {
-		return errors.New("pipeline is closed")
+		return pipelineCloseErr
 	}
 
 	select {
@@ -130,7 +136,7 @@ func (p *Pipeline) Input(data *PipeData) error {
 		p.dataWg.Add(1)
 		return nil
 	case <-p.closeCh:
-		return errors.New("pipeline's context is done")
+		return pipelineCtxDoneErr
 	}
 }
 
@@ -165,10 +171,8 @@ func (p *Pipeline) Start() {
 	}
 
 	for i := 0; i < len(p.pipes)-1; i++ {
-		if i+1 < len(p.pipes) {
-			p.wg.Add(1)
-			go p.link(p.pipes[i].Name(), p.pipes[i+1].Name(), p.pipes[i].Output(), p.pipes[i+1].Input())
-		}
+		p.wg.Add(1)
+		go p.link(p.pipes[i].Name(), p.pipes[i+1].Name(), p.pipes[i].Output(), p.pipes[i+1].Input())
 	}
 
 	p.isClosed.Set(false)
