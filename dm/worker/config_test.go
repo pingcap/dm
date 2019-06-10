@@ -112,7 +112,7 @@ func (t *testServer) TestConfigVerify(c *C) {
 				cfg.RelayBinLogName = "mysql-binlog"
 				return cfg
 			},
-			".*invalid binlog filename.*",
+			".*not valid.*",
 		},
 		{
 			func() *Config {
