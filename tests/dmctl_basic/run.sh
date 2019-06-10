@@ -68,12 +68,15 @@ function recover_max_binlog_size() {
 }
 
 function run() {
+    inject_points=("github.com/pingcap/dm/syncer/SyncerEventTimeout=return(1)")
+    export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
+
     run_sql "show variables like 'max_binlog_size'\G" $MYSQL_PORT1
     max_binlog_size1=$(tail -n 1 "$TEST_DIR/sql_res.$TEST_NAME.txt" | awk '{print $NF}')
     run_sql "show variables like 'max_binlog_size'\G" $MYSQL_PORT2
     max_binlog_size2=$(tail -n 1 "$TEST_DIR/sql_res.$TEST_NAME.txt" | awk '{print $NF}')
-    run_sql "set @@global.max_binlog_size = 16384" $MYSQL_PORT1
-    run_sql "set @@global.max_binlog_size = 16384" $MYSQL_PORT2
+    run_sql "set @@global.max_binlog_size = 12288" $MYSQL_PORT1
+    run_sql "set @@global.max_binlog_size = 12288" $MYSQL_PORT2
     trap "recover_max_binlog_size $max_binlog_size1 $max_binlog_size2" EXIT
 
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
@@ -167,6 +170,9 @@ function run() {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 10
     show_ddl_locks_no_locks $TASK_NAME
 
+    # sleep 1s to ensure syncer unit has flushed global checkpoint and updates
+    # updated ActiveRelayLog
+    sleep 1
     server_uuid=$(tail -n 1 $WORK_DIR/worker1/relay_log/server-uuid.index)
     run_sql "show binary logs\G" $MYSQL_PORT1
     max_binlog_name=$(grep Log_name "$SQL_RESULT_FILE"| tail -n 1 | awk -F":" '{print $NF}')

@@ -1062,6 +1062,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			latestOp = null
 		}
 		if e == nil {
+			failpoint.Inject("SyncerEventTimeout", func(val failpoint.Value) {
+				if seconds, ok := val.(int); ok {
+					eventTimeout = time.Duration(seconds) * time.Second
+					log.Infof("[failpoint] set syncer eventTimeout to %d", seconds)
+				}
+			})
 			ctx2, cancel := context.WithTimeout(ctx, eventTimeout)
 			if shardingStreamer != nil {
 				// use sharding group's special streamer to get binlog event
