@@ -15,7 +15,6 @@ package binlog
 
 import (
 	. "github.com/pingcap/check"
-	"github.com/pingcap/errors"
 )
 
 var _ = Suite(&testFilenameSuite{})
@@ -23,7 +22,122 @@ var _ = Suite(&testFilenameSuite{})
 type testFilenameSuite struct {
 }
 
-func (t *testFilenameSuite) TestVerifyBinlogFilename(c *C) {
+func (t *testFilenameSuite) TestFilenameCmp(c *C) {
+	f1 := Filename{
+		BaseName: "mysql-bin",
+		Seq:      "000001",
+	}
+	f2 := Filename{
+		BaseName: "mysql-bin",
+		Seq:      "000002",
+	}
+	f3 := Filename{
+		BaseName: "mysql-bin",
+		Seq:      "000001", // == f1
+	}
+	f4 := Filename{
+		BaseName: "bin-mysq", // diff BaseName
+		Seq:      "000001",
+	}
+
+	c.Assert(f1.LessThan(f2), IsTrue)
+	c.Assert(f1.GreaterThanOrEqualTo(f2), IsFalse)
+	c.Assert(f1.GreaterThan(f2), IsFalse)
+
+	c.Assert(f2.LessThan(f1), IsFalse)
+	c.Assert(f2.GreaterThanOrEqualTo(f1), IsTrue)
+	c.Assert(f2.GreaterThan(f1), IsTrue)
+
+	c.Assert(f1.LessThan(f3), IsFalse)
+	c.Assert(f1.GreaterThanOrEqualTo(f3), IsTrue)
+	c.Assert(f1.GreaterThan(f3), IsFalse)
+
+	c.Assert(f1.LessThan(f4), IsFalse)
+	c.Assert(f1.GreaterThanOrEqualTo(f4), IsFalse)
+	c.Assert(f1.GreaterThan(f4), IsFalse)
+}
+
+func (t *testFilenameSuite) TestParseFilenameAndGetFilenameIndex(c *C) {
+	cases := []struct {
+		filenameStr string
+		filename    Filename
+		index       int64
+		errMsgReg   string
+	}{
+		{
+			// valid
+			filenameStr: "mysql-bin.666666",
+			filename:    Filename{"mysql-bin", "666666", 666666},
+			index:       666666,
+		},
+		{
+			// valid
+			filenameStr: "mysql-bin.000888",
+			filename:    Filename{"mysql-bin", "000888", 888},
+			index:       888,
+		},
+		{
+			// empty filename
+			filenameStr: "",
+			errMsgReg:   ".*invalid binlog filename.*",
+		},
+		{
+			// negative seq number
+			filenameStr: "mysql-bin.-666666",
+			errMsgReg:   ".*invalid binlog filename.*",
+		},
+		{
+			// zero seq number
+			filenameStr: "mysql-bin.000000",
+			errMsgReg:   ".*invalid binlog filename.*",
+		},
+		{
+			// too many separators
+			filenameStr: "mysql.bin.666666",
+			errMsgReg:   ".*invalid binlog filename.*",
+		},
+		{
+			// too less separators
+			filenameStr: "mysql-bin",
+			errMsgReg:   ".*invalid binlog filename.*",
+		},
+		{
+			// invalid seq number
+			filenameStr: "mysql-bin.666abc",
+			errMsgReg:   ".*invalid binlog filename.*",
+		},
+		{
+			// invalid seq number
+			filenameStr: "mysql-bin.def666",
+			errMsgReg:   ".*invalid binlog filename.*",
+		},
+		{
+			// invalid seq number
+			filenameStr: "mysql.bin",
+			errMsgReg:   ".*invalid binlog filename.*",
+		},
+	}
+
+	for _, cs := range cases {
+		f, err := ParseFilename(cs.filenameStr)
+		if len(cs.errMsgReg) > 0 {
+			c.Assert(err, ErrorMatches, cs.errMsgReg)
+		} else {
+			c.Assert(err, IsNil)
+		}
+		c.Assert(f, DeepEquals, cs.filename)
+
+		idx, err := GetFilenameIndex(cs.filenameStr)
+		if len(cs.errMsgReg) > 0 {
+			c.Assert(err, ErrorMatches, cs.errMsgReg)
+		} else {
+			c.Assert(err, IsNil)
+		}
+		c.Assert(idx, Equals, cs.index)
+	}
+}
+
+func (t *testFilenameSuite) TestVerifyFilename(c *C) {
 	cases := []struct {
 		filename string
 		valid    bool
@@ -64,11 +178,42 @@ func (t *testFilenameSuite) TestVerifyBinlogFilename(c *C) {
 	}
 
 	for _, cs := range cases {
-		err := VerifyBinlogFilename(cs.filename)
-		if cs.valid {
-			c.Assert(err, IsNil)
-		} else {
-			c.Assert(errors.Cause(err), Equals, ErrInvalidBinlogFilename)
-		}
+		c.Assert(VerifyFilename(cs.filename), Equals, cs.valid)
+	}
+}
+
+func (t *testFilenameSuite) TestConstructFilename(c *C) {
+	cases := []struct {
+		baseName string
+		seq      string
+		filename string
+	}{
+		{
+			baseName: "mysql-bin",
+			seq:      "000666",
+			filename: "mysql-bin.000666",
+		},
+	}
+
+	for _, cs := range cases {
+		c.Assert(ConstructFilename(cs.baseName, cs.seq), Equals, cs.filename)
+	}
+}
+
+func (t *testFilenameSuite) TestConstructFilenameWithUUIDSuffix(c *C) {
+	cases := []struct {
+		originalName   Filename
+		suffix         string
+		withSuffixName string
+	}{
+		{
+			originalName:   Filename{"mysql-bin", "000001", 1},
+			suffix:         "666666",
+			withSuffixName: "mysql-bin|666666.000001",
+		},
+	}
+
+	for _, cs := range cases {
+		c.Assert(ConstructFilenameWithUUIDSuffix(cs.originalName, cs.suffix), Equals, cs.withSuffixName)
 	}
 }
