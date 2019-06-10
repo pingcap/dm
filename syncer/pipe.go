@@ -206,7 +206,7 @@ func (p *Pipeline) Close() {
 	close(p.errCh)
 }
 
-// Errors returns a channel for receive this pipeline's error
+// Errors returns a channel for receiving this pipeline's error
 func (p *Pipeline) Errors() chan error {
 	return p.errCh
 }
