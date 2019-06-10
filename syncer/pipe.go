@@ -114,7 +114,7 @@ func NewPipeline() *Pipeline {
 
 // AddPipe adds a pipe to this pipeline
 func (p *Pipeline) AddPipe(pipe Pipe) {
-	if len(p.pipes) == 0 {
+	if p.pipes == nil {
 		p.pipes = []Pipe{pipe}
 		return
 	}
