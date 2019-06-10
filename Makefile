@@ -119,6 +119,7 @@ integration_test:
 	@which bin/dm-tracer.test
 	tests/run.sh $(CASE)
 
+# unify cover mode in coverage files, more details refer to tests/_utils/run_dm_ctl
 coverage_fix_cover_mode:
 	sed -i "s/mode: count/mode: atomic/g" $(TEST_DIR)/cov.*.dmctl.*.out
 
