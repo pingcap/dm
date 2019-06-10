@@ -27,9 +27,10 @@ import (
 )
 
 var (
-	pipelineCtxDoneErr = errors.New("pipeline's context is done")
-	noPipesErr         = errors.New("no pipes in this pipeline")
-	pipelineCloseErr   = errors.New("pipeline is closed")
+	
+	errPipelineCtxDone = errors.New("pipeline's context is done")
+	errNoPipes         = errors.New("no pipes in this pipeline")
+	errPipelineClose   = errors.New("pipeline is closed")
 )
 
 // Pipe is the littlest process unit in syncer
@@ -124,11 +125,11 @@ func (p *Pipeline) AddPipe(pipe Pipe) {
 // Input receives data
 func (p *Pipeline) Input(data *PipeData) error {
 	if len(p.pipes) == 0 {
-		return noPipesErr
+		return errNoPipes
 	}
 
 	if p.isClosed.Get() {
-		return pipelineCloseErr
+		return errPipelineClose
 	}
 
 	select {
@@ -136,7 +137,7 @@ func (p *Pipeline) Input(data *PipeData) error {
 		p.dataWg.Add(1)
 		return nil
 	case <-p.closeCh:
-		return pipelineCtxDoneErr
+		return errPipelineCtxDone
 	}
 }
 
