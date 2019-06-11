@@ -21,12 +21,13 @@ require (
 	github.com/satori/go.uuid v1.2.0
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
 	github.com/siddontang/go-mysql v0.0.0-20190312052122-c6ab05a85eb8
-	github.com/sirupsen/logrus v1.4.2 // indirect
+	github.com/sirupsen/logrus v1.4.2
 	github.com/soheilhy/cmux v0.1.4
 	github.com/spf13/cobra v0.0.4
 	github.com/syndtr/goleveldb v1.0.0
 	go.uber.org/zap v1.9.1
 	golang.org/x/sys v0.0.0-20190523142557-0e01d883c5c5
 	google.golang.org/grpc v1.17.0
+	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.2.2
 )
