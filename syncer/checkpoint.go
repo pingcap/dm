@@ -145,10 +145,11 @@ type CheckPoint interface {
 	// corresponding to Meta.Save
 	SaveGlobalPoint(pos mysql.Position)
 
-	// FlushGlobalPointsExcept flushes the global checkpoint and tables' checkpoints except exceptTables
+	// FlushGlobalPointsExcept flushes the global checkpoint and tables'
+	// checkpoints except exceptTables, it also flushes sharding meta infomation
 	// @exceptTables: [[schema, table]... ]
 	// corresponding to Meta.Flush
-	FlushPointsExcept(exceptTables [][]string) error
+	FlushPointsExcept(exceptTables [][]string, shardMetaSQLs []string, shardMetaArgs [][]interface{}) error
 
 	// GlobalPoint returns the global binlog stream's checkpoint
 	// corresponding to to Meta.Pos
@@ -330,7 +331,7 @@ func (cp *RemoteCheckPoint) SaveGlobalPoint(pos mysql.Position) {
 }
 
 // FlushPointsExcept implements CheckPoint.FlushPointsExcept
-func (cp *RemoteCheckPoint) FlushPointsExcept(exceptTables [][]string) error {
+func (cp *RemoteCheckPoint) FlushPointsExcept(exceptTables [][]string, shardMetaSQLs []string, shardMetaArgs [][]interface{}) error {
 	cp.RLock()
 	defer cp.RUnlock()
 
@@ -373,8 +374,11 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(exceptTables [][]string) error {
 
 				points = append(points, point)
 			}
-
 		}
+	}
+	for i := range shardMetaSQLs {
+		sqls = append(sqls, shardMetaSQLs[i])
+		args = append(args, shardMetaArgs[i])
 	}
 
 	err := cp.db.executeSQL(sqls, args, maxRetryCount)
