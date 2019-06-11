@@ -102,7 +102,7 @@ func NewWorker(loader *Loader, id int) (worker *Worker, err error) {
 		conn:       conn,
 		jobQueue:   make(chan *dataJob, jobCount),
 		loader:     loader,
-		logger:     log.With(zap.String("unit", "loader"), zap.Int("worker-id", id)),
+		logger:     log.With(zap.String("unit", "load"), zap.Int("worker-id", id)),
 	}, nil
 }
 
@@ -356,7 +356,7 @@ func NewLoader(cfg *config.SubTaskConfig) *Loader {
 		tableInfos: make(map[string]*tableInfo),
 		workerWg:   new(sync.WaitGroup),
 		pool:       make([]*Worker, 0, cfg.PoolSize),
-		logger:     log.With(zap.String("unit", "loader")),
+		logger:     log.With(zap.String("unit", "load")),
 	}
 	loader.fileJobQueueClosed.Set(true) // not open yet
 	return loader
