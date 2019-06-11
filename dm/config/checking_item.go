@@ -49,6 +49,9 @@ var AllCheckingItems = map[string]string{
 	ShardAutoIncrementIDChecking: "conflict auto increment ID of shard tables checking item",
 }
 
+// MaxSourceIDLength is the max length for dm-worker source id
+const MaxSourceIDLength = 32
+
 // ValidateCheckingItem validates checking item
 func ValidateCheckingItem(item string) error {
 	if _, ok := AllCheckingItems[item]; ok {

@@ -40,6 +40,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/binlog"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
@@ -1061,6 +1062,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			latestOp = null
 		}
 		if e == nil {
+			failpoint.Inject("SyncerEventTimeout", func(val failpoint.Value) {
+				if seconds, ok := val.(int); ok {
+					eventTimeout = time.Duration(seconds) * time.Second
+					log.Infof("[failpoint] set syncer eventTimeout to %d", seconds)
+				}
+			})
 			ctx2, cancel := context.WithTimeout(ctx, eventTimeout)
 			if shardingStreamer != nil {
 				// use sharding group's special streamer to get binlog event
@@ -1123,11 +1130,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		// get binlog event, reset tryReSync, so we can re-sync binlog while syncer meets errors next time
 		tryReSync = true
 		binlogPosGauge.WithLabelValues("syncer", s.cfg.Name).Set(float64(e.Header.LogPos))
-		index, err := streamer.GetBinlogFileIndex(lastPos.Name)
+		index, err := binlog.GetFilenameIndex(lastPos.Name)
 		if err != nil {
 			log.Errorf("parse binlog file err %v", err)
 		} else {
-			binlogFileGauge.WithLabelValues("syncer", s.cfg.Name).Set(index)
+			binlogFileGauge.WithLabelValues("syncer", s.cfg.Name).Set(float64(index))
 		}
 		s.binlogSizeCount.Add(int64(e.Header.EventSize))
 
@@ -1830,11 +1837,11 @@ func (s *Syncer) printStatus(ctx context.Context) {
 				log.Errorf("[syncer] get master status error %s", err)
 			} else {
 				binlogPosGauge.WithLabelValues("master", s.cfg.Name).Set(float64(latestMasterPos.Pos))
-				index, err := streamer.GetBinlogFileIndex(latestMasterPos.Name)
+				index, err := binlog.GetFilenameIndex(latestMasterPos.Name)
 				if err != nil {
 					log.Errorf("[syncer] parse binlog file err %v", err)
 				} else {
-					binlogFileGauge.WithLabelValues("master", s.cfg.Name).Set(index)
+					binlogFileGauge.WithLabelValues("master", s.cfg.Name).Set(float64(index))
 				}
 			}
 

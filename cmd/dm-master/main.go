@@ -51,7 +51,7 @@ func main() {
 	}
 
 	utils.PrintInfo("dm-master", func() {
-		log.L().Info("", zap.Stringer("server config", cfg))
+		log.L().Info("", zap.Stringer("dm-master config", cfg))
 	})
 
 	sc := make(chan os.Signal, 1)

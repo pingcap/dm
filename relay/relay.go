@@ -37,6 +37,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/binlog"
 	binlogreader "github.com/pingcap/dm/pkg/binlog/reader"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/gtid"
@@ -519,10 +520,10 @@ func (r *Relay) process(parentCtx context.Context) error {
 		relayLogWriteDurationHistogram.Observe(time.Since(writeTimer).Seconds())
 		relayLogWriteSizeHistogram.Observe(float64(e.Header.EventSize))
 		relayLogPosGauge.WithLabelValues("relay").Set(float64(lastPos.Pos))
-		if index, err2 := pkgstreamer.GetBinlogFileIndex(lastPos.Name); err2 != nil {
+		if index, err2 := binlog.GetFilenameIndex(lastPos.Name); err2 != nil {
 			log.Errorf("[relay] parse binlog file name %s err %v", lastPos.Name, err2)
 		} else {
-			relayLogFileGauge.WithLabelValues("relay").Set(index)
+			relayLogFileGauge.WithLabelValues("relay").Set(float64(index))
 		}
 
 		if needSavePos {
@@ -727,12 +728,12 @@ func (r *Relay) doIntervalOps(ctx context.Context) {
 				log.Warnf("[relay] get master status error %v", errors.ErrorStack(err))
 				continue
 			}
-			index, err := pkgstreamer.GetBinlogFileIndex(pos.Name)
+			index, err := binlog.GetFilenameIndex(pos.Name)
 			if err != nil {
 				log.Errorf("[relay] parse binlog file name %s error %v", pos.Name, err)
 				continue
 			}
-			relayLogFileGauge.WithLabelValues("master").Set(index)
+			relayLogFileGauge.WithLabelValues("master").Set(float64(index))
 			relayLogPosGauge.WithLabelValues("master").Set(float64(pos.Pos))
 		case <-trimUUIDsTicker.C:
 			trimmed, err := r.meta.TrimUUIDs()

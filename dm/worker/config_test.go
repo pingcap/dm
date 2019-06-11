@@ -14,9 +14,13 @@
 package worker
 
 import (
+	"fmt"
 	"path"
+	"strings"
 
 	. "github.com/pingcap/check"
+
+	"github.com/pingcap/dm/dm/config"
 )
 
 func (t *testServer) TestConfig(c *C) {
@@ -68,4 +72,76 @@ func (t *testServer) TestConfig(c *C) {
 	cfg.From.Password = ""
 	clone3, err = cfg.DecryptPassword()
 	c.Assert(clone3, DeepEquals, cfg)
+}
+
+func (t *testServer) TestConfigVerify(c *C) {
+	newConfig := func() *Config {
+		cfg := NewConfig()
+		c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml", "-relay-dir=./xx"}), IsNil)
+		return cfg
+	}
+	testCases := []struct {
+		genFunc     func() *Config
+		errorFormat string
+	}{
+		{
+			func() *Config {
+				return newConfig()
+			},
+			"",
+		},
+		{
+			func() *Config {
+				cfg := newConfig()
+				cfg.SourceID = ""
+				return cfg
+			},
+			"dm-worker should bind a non-empty source ID which represents a MySQL/MariaDB instance or a replica group.*",
+		},
+		{
+			func() *Config {
+				cfg := newConfig()
+				cfg.SourceID = "source-id-length-more-than-thirty-two"
+				return cfg
+			},
+			fmt.Sprintf("the length of source ID .* is more than max allowed value %d", config.MaxSourceIDLength),
+		},
+		{
+			func() *Config {
+				cfg := newConfig()
+				cfg.RelayBinLogName = "mysql-binlog"
+				return cfg
+			},
+			".*not valid.*",
+		},
+		{
+			func() *Config {
+				cfg := newConfig()
+				cfg.RelayBinlogGTID = "9afe121c-40c2-11e9-9ec7-0242ac110002:1-rtc"
+				return cfg
+			},
+			"relay-binlog-gtid 9afe121c-40c2-11e9-9ec7-0242ac110002:1-rtc:.*",
+		},
+		{
+			func() *Config {
+				cfg := newConfig()
+				cfg.From.Password = "not-encrypt"
+				return cfg
+			},
+			"can not decrypt password.*",
+		},
+	}
+
+	for _, tc := range testCases {
+		cfg := tc.genFunc()
+		err := cfg.verify()
+		if tc.errorFormat != "" {
+			c.Assert(err, NotNil)
+			lines := strings.Split(err.Error(), "\n")
+			c.Assert(lines[0], Matches, tc.errorFormat)
+		} else {
+			c.Assert(err, IsNil)
+		}
+	}
+
 }

@@ -23,3 +23,26 @@
 - name: Check ansible_user variable
   fail: msg="ansible_user == 'root' is not supported, please ssh via normal user"
   when: ansible_user == 'root'
+
+- name: Ensure source-id valid - Get invalid source-ids of all dm-workers in cluster
+  set_fact:
+    invalid_source_ids: |-
+      [
+      {% set all_dm_workers = groups['dm_worker_servers']|unique|sort -%}
+      {% for dm_worker in all_dm_workers -%}
+        {% set source_id = hostvars[dm_worker].source_id -%}
+          {% if source_id|length > 32 -%}
+          "{{ source_id }}",
+          {% endif %}
+      {% endfor %}
+      ]
+  run_once: true
+  when: groups['dm_worker_servers'] | length >= 1
+
+- name: Ensure length of each source_id is no more than 32
+  fail:
+    msg: 'invalid source_ids: {{ invalid_source_ids | to_yaml }}'
+  run_once: true
+  when:
+    - invalid_source_ids | length > 0
+
