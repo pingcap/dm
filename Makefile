@@ -8,7 +8,7 @@ CURDIR   := $(shell pwd)
 GO       := GO111MODULE=on go
 GOBUILD  := CGO_ENABLED=0 $(GO) build
 GOTEST   := CGO_ENABLED=1 $(GO) test
-PACKAGES  := $$(go list ./... | grep -vE 'tests|cmd|vendor')
+PACKAGES  := $$(go list ./... | grep -vE 'tests|cmd|vendor|pbmock')
 FILES    := $$(find . -name "*.go" | grep -vE "vendor")
 TOPDIRS  := $$(ls -d */ | grep -vE "vendor")
 SHELL    := /usr/bin/env bash
@@ -99,7 +99,7 @@ dm_integration_test_build:
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-master.test github.com/pingcap/dm/cmd/dm-master \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
-	$(GOTEST) -c -race -cover -covermode=atomic \
+	$(GOTEST) -c -cover -covermode=count \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dmctl.test github.com/pingcap/dm/cmd/dm-ctl \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
@@ -108,6 +108,7 @@ dm_integration_test_build:
 		-o bin/dm-tracer.test github.com/pingcap/dm/cmd/dm-tracer \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
 	$(FAILPOINT_DISABLE)
+	tests/prepare_tools.sh
 
 integration_test:
 	@which bin/tidb-server
@@ -118,7 +119,11 @@ integration_test:
 	@which bin/dm-tracer.test
 	tests/run.sh $(CASE)
 
-coverage:
+# unify cover mode in coverage files, more details refer to tests/_utils/run_dm_ctl
+coverage_fix_cover_mode:
+	sed -i "s/mode: count/mode: atomic/g" $(TEST_DIR)/cov.*.dmctl.*.out
+
+coverage: coverage_fix_cover_mode
 	GO111MODULE=off go get github.com/zhouqiang-cl/gocovmerge
 	gocovmerge "$(TEST_DIR)"/cov.* | grep -vE ".*.pb.go|.*.__failpoint_binding__.go" > "$(TEST_DIR)/all_cov.out"
 	grep -vE ".*.pb.go|.*.__failpoint_binding__.go" $(TEST_DIR)/cov.unit_test.out > $(TEST_DIR)/unit_test.out

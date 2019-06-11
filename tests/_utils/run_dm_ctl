@@ -15,8 +15,9 @@ PWD=$(pwd)
 binary=$PWD/bin/dmctl.test
 ts=$(date +"%s")
 dmctl_log=$workdir/dmctl.$ts.log
+pid=$$
 echo "dmctl test cmd: \"$cmd\""
-echo "$cmd" | $binary -test.coverprofile="$TEST_DIR/cov.$TEST_NAME.dmctl.$ts.out" DEVEL -master-addr=$master_addr > $dmctl_log 2>&1
+echo "$cmd" | $binary -test.coverprofile="$TEST_DIR/cov.$TEST_NAME.dmctl.$ts.$pid.out" DEVEL -master-addr=$master_addr > $dmctl_log 2>&1
 
 for ((i=1; i<$#; i+=2)); do
     j=$((i+1))
@@ -29,3 +30,8 @@ for ((i=1; i<$#; i+=2)); do
         exit 1
     fi
 done
+
+# gocovmerge doesn't support merge profiles with different modes, however atomic
+# mode and count mode have the same profile format, so we need to unify cover
+# mode before running gocovmerge. As coverage file is not generated synchronously,
+# we will patch covermode before `make coverage`

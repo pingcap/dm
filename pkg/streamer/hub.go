@@ -20,6 +20,7 @@ import (
 
 	"github.com/pingcap/errors"
 
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -68,9 +69,8 @@ func (h *relayLogInfoHub) update(taskName, uuid, filename string) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	_, err = parseBinlogFile(filename)
-	if err != nil {
-		return errors.Trace(err)
+	if !binlog.VerifyFilename(filename) {
+		return errors.NotValidf("binlog filename %s", filename)
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()

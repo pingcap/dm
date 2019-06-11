@@ -528,7 +528,7 @@ func (l *Loader) loadFinishedSize() {
 	}
 }
 
-// Close do graceful shutdown
+// Close does graceful shutdown
 func (l *Loader) Close() {
 	l.Lock()
 	defer l.Unlock()

@@ -14,10 +14,14 @@
 package syncer
 
 import (
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
+
+	"github.com/pingcap/dm/dm/config"
 )
 
 func toBinlogType(bt string) BinlogType {
@@ -70,4 +74,26 @@ func tableNameResultSet(rs ast.ResultSetNode) (schema, table string, err error) 
 		return "", "", errors.NotValidf("TableSource %s", ts.Text())
 	}
 	return tn.Schema.O, tn.Name.O, nil
+}
+
+func getDBConfigFromEnv() config.DBConfig {
+	host := os.Getenv("MYSQL_HOST")
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	port, _ := strconv.Atoi(os.Getenv("MYSQL_PORT"))
+	if port == 0 {
+		port = 3306
+	}
+	user := os.Getenv("MYSQL_USER")
+	if user == "" {
+		user = "root"
+	}
+	pswd := os.Getenv("MYSQL_PSWD")
+	return config.DBConfig{
+		Host:     host,
+		User:     user,
+		Password: pswd,
+		Port:     port,
+	}
 }
