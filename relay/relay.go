@@ -267,6 +267,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 		_, lastPos  = r.meta.Pos()
 		_, lastGTID = r.meta.GTID()
 		tryReSync   = true // used to handle master-slave switch
+		rResult     reader.Result
 	)
 
 	defer func() {
@@ -280,22 +281,23 @@ func (r *Relay) process(parentCtx context.Context) error {
 	for {
 		ctx, cancel := context.WithTimeout(parentCtx, eventTimeout)
 		readTimer := time.Now()
-		var e *replication.BinlogEvent
-		e, err = reader2.GetEvent(ctx)
+		rResult, err = reader2.GetEvent(ctx)
 		cancel()
 		binlogReadDurationHistogram.Observe(time.Since(readTimer).Seconds())
 
 		if err != nil {
-			switch errors.Cause(err) {
-			case context.Canceled:
+			if rResult.ErrIgnorable {
+				log.Infof("relay] get ignorable error %v when reading binlog event", err)
 				return nil
-			case context.DeadlineExceeded:
-				log.Infof("[relay] deadline %s exceeded, no binlog event received", eventTimeout)
+			} else if rResult.ErrRetryable {
+				log.Infof("relay] get retryable error %v when reading binlog event", err)
 				continue
+			}
+			switch err {
 			case replication.ErrChecksumMismatch:
 				relayLogDataCorruptionCounter.Inc()
 			case replication.ErrSyncClosed, replication.ErrNeedSyncAgain:
-				// do nothing
+				// do nothing, but the error will be returned
 			default:
 				if utils.IsErrBinlogPurged(err) {
 					if tryReSync && r.cfg.EnableGTID && r.cfg.AutoFixGTID {
@@ -310,6 +312,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 
 		needSavePos := false
 
+		e := rResult.Event
 		log.Debugf("[relay] receive binlog event with header %+v", e.Header)
 		switch ev := e.Event.(type) {
 		case *replication.FormatDescriptionEvent:

@@ -16,26 +16,39 @@ package reader
 import (
 	"context"
 
-	. "github.com/pingcap/check"
+	"github.com/pingcap/check"
 	"github.com/pingcap/errors"
 )
 
 var (
-	_ = Suite(&testErrorSuite{})
+	_ = check.Suite(&testErrorSuite{})
 )
 
 type testErrorSuite struct {
 }
 
-func (t *testErrorSuite) TestIgnorable(c *C) {
+func (t *testErrorSuite) TestIgnorable(c *check.C) {
 	err := errors.New("custom error")
-	c.Assert(isIgnorableError(err), IsFalse)
+	c.Assert(isIgnorableError(err), check.IsFalse)
 
 	cases := []error{
 		context.Canceled,
 		errors.Annotate(context.Canceled, "annotated"),
 	}
 	for _, cs := range cases {
-		c.Assert(isIgnorableError(cs), IsTrue)
+		c.Assert(isIgnorableError(cs), check.IsTrue)
+	}
+}
+
+func (t *testErrorSuite) TestRetryable(c *check.C) {
+	err := errors.New("custom error")
+	c.Assert(isRetryableError(err), check.IsFalse)
+
+	cases := []error{
+		context.DeadlineExceeded,
+		errors.Annotate(context.DeadlineExceeded, "annotated"),
+	}
+	for _, cs := range cases {
+		c.Assert(isRetryableError(cs), check.IsTrue)
 	}
 }

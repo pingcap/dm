@@ -27,6 +27,13 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 )
 
+// Result represents a read operation result.
+type Result struct {
+	Event        *replication.BinlogEvent
+	ErrIgnorable bool // the error is ignorable
+	ErrRetryable bool // the error is retryable
+}
+
 // Reader reads binlog events from a upstream master server.
 // The read binlog events should be send to a transformer.
 // The reader should support:
@@ -42,7 +49,7 @@ type Reader interface {
 
 	// GetEvent gets the binlog event one by one, it will block if no event can be read.
 	// You can pass a context (like Cancel or Timeout) to break the block.
-	GetEvent(ctx context.Context) (*replication.BinlogEvent, error)
+	GetEvent(ctx context.Context) (Result, error)
 }
 
 // Config is the configuration used by the Reader.
@@ -116,24 +123,26 @@ func (r *reader) Close() error {
 // GetEvent implements Reader.GetEvent.
 // If some ignorable error occurred, the returned event and error both are nil.
 // NOTE: can only close the reader after this returned.
-func (r *reader) GetEvent(ctx context.Context) (*replication.BinlogEvent, error) {
+func (r *reader) GetEvent(ctx context.Context) (Result, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
+	var result Result
 	if r.stage != common.StagePrepared {
-		return nil, errors.Errorf("stage %s, expect %s, please start the reader first", r.stage, common.StagePrepared)
+		return result, errors.Errorf("stage %s, expect %s, please start the reader first", r.stage, common.StagePrepared)
 	}
 
 	for {
 		ev, err := r.in.GetEvent(ctx)
 		// NOTE: add retryable error support if needed later
 		if err == nil {
-			return ev, nil
+			result.Event = ev
 		} else if isIgnorableError(err) {
-			log.Warnf("[relay] get event with ignorable error %s", err)
-			return nil, nil // return without error and also without binlog event
+			result.ErrIgnorable = true
+		} else if isRetryableError(err) {
+			result.ErrRetryable = true
 		}
-		return nil, errors.Trace(err)
+		return result, errors.Trace(err)
 	}
 }
 

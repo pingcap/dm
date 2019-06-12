@@ -28,3 +28,13 @@ func isIgnorableError(err error) bool {
 	}
 	return false
 }
+
+// isRetryableError checks whether the error is retryable.
+func isRetryableError(err error) bool {
+	err = errors.Cause(err)
+	switch err {
+	case context.DeadlineExceeded:
+		return true
+	}
+	return false
+}

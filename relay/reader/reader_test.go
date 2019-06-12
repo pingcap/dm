@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/pingcap/check"
+	"github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/replication"
 
@@ -26,17 +26,17 @@ import (
 )
 
 var (
-	_ = Suite(&testReaderSuite{})
+	_ = check.Suite(&testReaderSuite{})
 )
 
 func TestSuite(t *testing.T) {
-	TestingT(t)
+	check.TestingT(t)
 }
 
 type testReaderSuite struct {
 }
 
-func (t *testReaderSuite) TestInterface(c *C) {
+func (t *testReaderSuite) TestInterface(c *check.C) {
 	cases := []*replication.BinlogEvent{
 		{RawData: []byte{1}},
 		{RawData: []byte{2}},
@@ -60,18 +60,18 @@ func (t *testReaderSuite) TestInterface(c *C) {
 	t.testInterfaceWithReader(c, r, cases)
 }
 
-func (t *testReaderSuite) testInterfaceWithReader(c *C, r Reader, cases []*replication.BinlogEvent) {
+func (t *testReaderSuite) testInterfaceWithReader(c *check.C, r Reader, cases []*replication.BinlogEvent) {
 	// replace underlying reader with a mock reader for testing
 	concreteR := r.(*reader)
-	c.Assert(concreteR, NotNil)
+	c.Assert(concreteR, check.NotNil)
 	mockR := br.NewMockReader()
 	concreteR.in = mockR
 
 	// start reader
 	err := r.Start()
-	c.Assert(err, IsNil)
+	c.Assert(err, check.IsNil)
 	err = r.Start() // call multi times
-	c.Assert(err, NotNil)
+	c.Assert(err, check.NotNil)
 
 	// getEvent by pushing event to mock reader
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -79,33 +79,33 @@ func (t *testReaderSuite) testInterfaceWithReader(c *C, r Reader, cases []*repli
 	concreteMR := mockR.(*br.MockReader)
 	go func() {
 		for _, cs := range cases {
-			c.Assert(concreteMR.PushEvent(ctx, cs), IsNil)
+			c.Assert(concreteMR.PushEvent(ctx, cs), check.IsNil)
 		}
 	}()
 	obtained := make([]*replication.BinlogEvent, 0, len(cases))
 	for {
-		ev, err2 := r.GetEvent(ctx)
-		c.Assert(err2, IsNil)
-		obtained = append(obtained, ev)
+		result, err2 := r.GetEvent(ctx)
+		c.Assert(err2, check.IsNil)
+		obtained = append(obtained, result.Event)
 		if len(obtained) == len(cases) {
 			break
 		}
 	}
-	c.Assert(obtained, DeepEquals, cases)
+	c.Assert(obtained, check.DeepEquals, cases)
 
 	// close reader
 	err = r.Close()
-	c.Assert(err, IsNil)
+	c.Assert(err, check.IsNil)
 	err = r.Close()
-	c.Assert(err, NotNil) // call multi times
+	c.Assert(err, check.NotNil) // call multi times
 
 	// getEvent from a closed reader
-	ev, err := r.GetEvent(ctx)
-	c.Assert(err, NotNil)
-	c.Assert(ev, IsNil)
+	result, err := r.GetEvent(ctx)
+	c.Assert(err, check.NotNil)
+	c.Assert(result.Event, check.IsNil)
 }
 
-func (t *testReaderSuite) TestGetEventWithError(c *C) {
+func (t *testReaderSuite) TestGetEventWithError(c *check.C) {
 	cfg := &Config{
 		SyncConfig: replication.BinlogSyncerConfig{
 			ServerID: 101,
@@ -116,24 +116,28 @@ func (t *testReaderSuite) TestGetEventWithError(c *C) {
 	r := NewReader(cfg)
 	// replace underlying reader with a mock reader for testing
 	concreteR := r.(*reader)
-	c.Assert(concreteR, NotNil)
+	c.Assert(concreteR, check.NotNil)
 	mockR := br.NewMockReader()
 	concreteR.in = mockR
 
 	errOther := errors.New("other error")
 	in := []error{
-		context.DeadlineExceeded, // should be handled in the outer
 		context.Canceled,         // ignorable
+		context.DeadlineExceeded, // retryable
 		errOther,
 	}
-	expected := []error{
-		context.DeadlineExceeded,
-		nil, // from ignorable
-		errOther,
+	expected := []Result{
+		{
+			ErrIgnorable: true,
+		},
+		{
+			ErrRetryable: true,
+		},
+		{},
 	}
 
 	err := r.Start()
-	c.Assert(err, IsNil)
+	c.Assert(err, check.IsNil)
 
 	// getEvent by pushing event to mock reader
 	ctx, cancel := context.WithCancel(context.Background())
@@ -141,19 +145,18 @@ func (t *testReaderSuite) TestGetEventWithError(c *C) {
 	concreteMR := mockR.(*br.MockReader)
 	go func() {
 		for _, cs := range in {
-			c.Assert(concreteMR.PushError(ctx, cs), IsNil)
+			c.Assert(concreteMR.PushError(ctx, cs), check.IsNil)
 		}
 	}()
 
-	obtained := make([]error, 0, len(expected))
+	results := make([]Result, 0, len(expected))
 	for {
-		ev, err2 := r.GetEvent(ctx)
-		err2 = errors.Cause(err2)
-		c.Assert(ev, IsNil)
-		obtained = append(obtained, err2)
+		result, err2 := r.GetEvent(ctx)
+		c.Assert(err2, check.NotNil)
+		results = append(results, result)
 		if err2 == errOther {
 			break // all received
 		}
 	}
-	c.Assert(obtained, DeepEquals, expected)
+	c.Assert(results, check.DeepEquals, expected)
 }
