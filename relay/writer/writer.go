@@ -19,6 +19,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // // logger writes log start with `[component=relay]`

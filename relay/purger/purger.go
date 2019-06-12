@@ -19,12 +19,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -157,7 +157,7 @@ func (p *RelayPurger) Close() {
 		return
 	}
 
-	logger.Info("[purger] closing relay log purger")
+	logger.Info("closing relay log purger")
 
 	p.lock.RLock()
 	if p.cancel != nil {
@@ -211,7 +211,7 @@ func (p *RelayPurger) Do(ctx context.Context, req *pb.PurgeRelayRequest) error {
 func (p *RelayPurger) tryPurge() {
 	strategy, args, err := p.check()
 	if err != nil {
-		logger.Error("[purger] check whether need to purge relay log files in background", zap.Error(err))
+		logger.Error("check whether need to purge relay log files in background", zap.Error(err))
 		return
 	}
 	if strategy == nil {
@@ -244,12 +244,12 @@ func (p *RelayPurger) doPurge(ps PurgeStrategy, args StrategyArgs) error {
 	}
 	args.SetActiveRelayLog(earliest)
 
-	logger.Info("[purger] start purging relay log files", zap.String("type", ps.Type()), zap.Reflect("args", args))
+	logger.Info("start purging relay log files", zap.String("type", ps.Type()), zap.Reflect("args", args))
 	return errors.Trace(ps.Do(args))
 }
 
 func (p *RelayPurger) check() (PurgeStrategy, StrategyArgs, error) {
-	logger.Info("[purger] checking whether needing to purge relay log files")
+	logger.Info("checking whether needing to purge relay log files")
 
 	uuids, err := utils.ParseUUIDIndex(p.indexPath)
 	if err != nil {

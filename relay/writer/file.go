@@ -30,7 +30,6 @@ import (
 	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/binlog/event"
 	bw "github.com/pingcap/dm/pkg/binlog/writer"
-	"github.com/pingcap/dm/pkg/log"
 )
 
 // FileConfig is the configuration used by the FileWriter.

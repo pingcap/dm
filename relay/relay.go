@@ -329,7 +329,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 					logger.Info("binlog events in the gap for file already exists in previous sub directory, adding a LOG_EVENT_RELAY_LOG_F flag to them.", zap.String("file", r.fd.Name()), zap.Stringer("current GTID set", currentGtidSet))
 				} else if currentGtidSet.Contain(r.gSetWhenSwitch) {
 					// only after the first gap filled, currentGtidSet can be the superset of gSetWhenSwitch
-					logger.Info("binlog events in the gap for file not exists in previous sub directory, no need to add a LOG_EVENT_RELAY_LOG_F flag.", zap.String("file", r.fd.Name()), zap.Reflect("current GTID set", currentGtidSet), zap.Stringer("previous sub directory end GTID set", r.gSetWhenSwitch))
+					logger.Info("binlog events in the gap for file not exists in previous sub directory, no need to add a LOG_EVENT_RELAY_LOG_F flag.", zap.String("file", r.fd.Name()), zap.Stringer("current GTID set", currentGtidSet), zap.Stringer("previous sub directory end GTID set", r.gSetWhenSwitch))
 				} else {
 					return errors.Errorf("currnet GTID set %s is not equal or superset of previous sub directory end GTID set %s", currentGtidSet, r.gSetWhenSwitch)
 				}
@@ -738,7 +738,7 @@ func (r *Relay) doIntervalOps(ctx context.Context) {
 			}
 			index, err := binlog.GetFilenameIndex(pos.Name)
 			if err != nil {
-				logger.Error("parse binlog file name", zap.String("file name", pos.Name), zap.Error(err))
+				logger.Error("parse binlog file name", zap.String("file name", pos.Name), log.ShortError(err))
 				continue
 			}
 			relayLogFileGauge.WithLabelValues("master").Set(float64(index))

@@ -18,7 +18,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"go.uber.org/zap"
 
@@ -138,7 +137,7 @@ func collectRelayFilesBeforeFileAndTime(relayBaseDir string, uuids []string, saf
 				}
 				if fs.ModTime().After(safeTime) {
 					hasAll = false // newer found, reset to false
-					logger.Debug("[purger] ignore newer relay log file in dir", zap.String("file", f), zap.String("dir", dir))
+					logger.Debug("ignore newer relay log file in dir", zap.String("file", f), zap.String("dir", dir))
 					break
 				}
 			}
