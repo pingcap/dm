@@ -27,7 +27,6 @@ import (
 )
 
 var (
-	errPipelineCtxDone = errors.New("pipeline's context is done")
 	errNoPipes         = errors.New("no pipes in this pipeline")
 	errPipelineClose   = errors.New("pipeline is closed")
 )
@@ -136,7 +135,7 @@ func (p *Pipeline) Input(data *PipeData) error {
 		p.dataWg.Add(1)
 		return nil
 	case <-p.closeCh:
-		return errPipelineCtxDone
+		return errPipelineClose
 	}
 }
 
