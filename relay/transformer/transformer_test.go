@@ -39,7 +39,7 @@ type testTransformerSuite struct {
 
 type Case struct {
 	event  *replication.BinlogEvent
-	result *Result
+	result Result
 }
 
 func (t *testTransformerSuite) TestTransform(c *check.C) {
@@ -64,7 +64,7 @@ func (t *testTransformerSuite) TestTransform(c *check.C) {
 	c.Assert(err, check.IsNil)
 	cases = append(cases, Case{
 		event: ev,
-		result: &Result{
+		result: Result{
 			LogPos:      uint32(position),
 			NextLogName: nextLogName,
 		},
@@ -76,8 +76,7 @@ func (t *testTransformerSuite) TestTransform(c *check.C) {
 	c.Assert(err, check.IsNil)
 	cases = append(cases, Case{
 		event: ev,
-		result: &Result{
-			Ignore:      true, // ignore fake RotateEvent
+		result: Result{
 			LogPos:      uint32(position),
 			NextLogName: nextLogName,
 		},
@@ -92,8 +91,7 @@ func (t *testTransformerSuite) TestTransform(c *check.C) {
 	ev.Header.LogPos = 0 // set to zero
 	cases = append(cases, Case{
 		event: ev,
-		result: &Result{
-			Ignore:      true, // ignore fake RotateEvent
+		result: Result{
 			LogPos:      uint32(position),
 			NextLogName: nextLogName,
 		},
@@ -106,7 +104,7 @@ func (t *testTransformerSuite) TestTransform(c *check.C) {
 	ev.Event.(*replication.QueryEvent).GSet = gtidSet.Origin() // set GTIDs manually
 	cases = append(cases, Case{
 		event: ev,
-		result: &Result{
+		result: Result{
 			LogPos:      ev.Header.LogPos,
 			GTIDSet:     gtidSet.Origin(),
 			CanSaveGTID: true,
@@ -119,7 +117,7 @@ func (t *testTransformerSuite) TestTransform(c *check.C) {
 	c.Assert(err, check.IsNil)
 	cases = append(cases, Case{
 		event: ev,
-		result: &Result{
+		result: Result{
 			LogPos: ev.Header.LogPos,
 		},
 	})
@@ -131,7 +129,7 @@ func (t *testTransformerSuite) TestTransform(c *check.C) {
 	ev.Event.(*replication.XIDEvent).GSet = gtidSet.Origin() // set GTIDs manually
 	cases = append(cases, Case{
 		event: ev,
-		result: &Result{
+		result: Result{
 			LogPos:      ev.Header.LogPos,
 			GTIDSet:     gtidSet.Origin(),
 			CanSaveGTID: true,
@@ -142,7 +140,7 @@ func (t *testTransformerSuite) TestTransform(c *check.C) {
 	ev = &replication.BinlogEvent{Header: header, Event: &replication.GenericEvent{}}
 	cases = append(cases, Case{
 		event: ev,
-		result: &Result{
+		result: Result{
 			LogPos: ev.Header.LogPos,
 		},
 	})
@@ -154,7 +152,7 @@ func (t *testTransformerSuite) TestTransform(c *check.C) {
 	ev.Header.EventType = replication.HEARTBEAT_EVENT
 	cases = append(cases, Case{
 		event: ev,
-		result: &Result{
+		result: Result{
 			Ignore: true,
 			LogPos: ev.Header.LogPos,
 		},
@@ -165,7 +163,7 @@ func (t *testTransformerSuite) TestTransform(c *check.C) {
 	c.Assert(err, check.IsNil)
 	cases = append(cases, Case{
 		event: ev,
-		result: &Result{
+		result: Result{
 			LogPos: ev.Header.LogPos,
 		},
 	})
@@ -176,7 +174,7 @@ func (t *testTransformerSuite) TestTransform(c *check.C) {
 	ev.Header.Flags |= artificialFlag
 	cases = append(cases, Case{
 		event: ev,
-		result: &Result{
+		result: Result{
 			Ignore: true,
 			LogPos: ev.Header.LogPos,
 		},
