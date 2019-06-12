@@ -46,7 +46,7 @@ type DBConfig struct {
 func (c *Config) String() string {
 	cfg, err := json.Marshal(c)
 	if err != nil {
-		log.Errorf("[relay] marshal config to json error %v", err)
+		logger.Error("marshal config to json", log.ShortError(err))
 	}
 	return string(cfg)
 }

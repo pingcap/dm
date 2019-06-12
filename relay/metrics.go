@@ -152,7 +152,7 @@ func reportRelayLogSpaceInBackground(dirpath string) error {
 			case <-ticker.C:
 				size, err := utils.GetStorageSize(dirpath)
 				if err != nil {
-					log.Error("update sotrage size err: ", err)
+					logger.Error("update sotrage size", log.ShortError(err))
 				} else {
 					relayLogSpaceGauge.WithLabelValues("capacity").Set(float64(size.Capacity))
 					relayLogSpaceGauge.WithLabelValues("available").Set(float64(size.Available))

@@ -22,6 +22,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/streamer"
@@ -30,9 +31,16 @@ import (
 
 // errors created by Purger
 var (
+	// logger writes log start with `[component=purger]`
+	logger log.Logger
+
 	ErrSelfPurging  = errors.New("this strategy is purging")
 	MsgOtherPurging = "%s is purging"
 )
+
+func init() {
+	logger = log.With(zap.String("component", "purger"))
+}
 
 // RelayOperator represents an operator for relay log files, like writer, reader
 type RelayOperator interface {
@@ -98,7 +106,7 @@ func (p *Purger) Start() {
 		return // no need do purge in the background
 	}
 
-	log.Infof("[purger] starting relay log purger with config %+v", p.cfg)
+	logger.Info("starting relay log purger", zap.Reflect("config", p.cfg))
 
 	// Close will wait process to return
 	p.wg.Add(1)
@@ -134,7 +142,7 @@ func (p *Purger) Close() {
 		return
 	}
 
-	log.Info("[purger] closing relay log purger")
+	logger.Info("[purger] closing relay log purger")
 
 	p.lock.RLock()
 	if p.cancel != nil {
@@ -188,7 +196,7 @@ func (p *Purger) Do(ctx context.Context, req *pb.PurgeRelayRequest) error {
 func (p *Purger) tryPurge() {
 	strategy, args, err := p.check()
 	if err != nil {
-		log.Errorf("[purger] check whether need to purge relay log files in background error %v", errors.ErrorStack(err))
+		logger.Error("[purger] check whether need to purge relay log files in background", zap.Error(err))
 		return
 	}
 	if strategy == nil {
@@ -196,7 +204,7 @@ func (p *Purger) tryPurge() {
 	}
 	err = p.doPurge(strategy, args)
 	if err != nil {
-		log.Errorf("[purge] do purge with %s error %v", strategy.Type(), errors.ErrorStack(err))
+		logger.Error("do purge", zap.String("strategy", strategy.Type()), zap.Error(err))
 	}
 }
 
@@ -221,12 +229,12 @@ func (p *Purger) doPurge(ps PurgeStrategy, args StrategyArgs) error {
 	}
 	args.SetActiveRelayLog(earliest)
 
-	log.Infof("[purger] start purging relay log files with %s with args %v", ps.Type(), args)
+	logger.Info("[purger] start purging relay log files", zap.String("type", ps.Type()), zap.Reflect("args", args))
 	return errors.Trace(ps.Do(args))
 }
 
 func (p *Purger) check() (PurgeStrategy, StrategyArgs, error) {
-	log.Info("[purger] checking whether needing to purge relay log files")
+	logger.Info("[purger] checking whether needing to purge relay log files")
 
 	uuids, err := utils.ParseUUIDIndex(p.indexPath)
 	if err != nil {

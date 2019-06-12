@@ -20,6 +20,7 @@ import (
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
@@ -113,7 +114,7 @@ func collectRelayFilesBeforeFileAndTime(relayBaseDir string, uuids []string, saf
 			}
 		} else {
 			if !utils.IsDirExists(dir) {
-				log.Warnf("[purger] relay log directory %s not exists", dir)
+				logger.Warn("relay log directory not exists", zap.String("directory", dir))
 				continue
 			}
 			// earlier sub dir, collect all relay files
@@ -137,7 +138,7 @@ func collectRelayFilesBeforeFileAndTime(relayBaseDir string, uuids []string, saf
 				}
 				if fs.ModTime().After(safeTime) {
 					hasAll = false // newer found, reset to false
-					log.Debugf("[purger] ignore newer relay log file %s in dir %s", f, dir)
+					logger.Debug("[purger] ignore newer relay log file in dir", zap.String("file", f), zap.String("dir", dir))
 					break
 				}
 			}
@@ -162,12 +163,12 @@ func collectRelayFilesBeforeFileAndTime(relayBaseDir string, uuids []string, saf
 func purgeRelayFiles(files []*subRelayFiles) error {
 	startTime := time.Now()
 	defer func() {
-		log.Infof("[purger] purge relay log files takes %f seconds", time.Since(startTime).Seconds())
+		logger.Info("purge relay log files", zap.Float64("takes seconds", time.Since(startTime).Seconds()))
 	}()
 
 	for _, subRelay := range files {
 		for _, f := range subRelay.files {
-			log.Infof("[purger] purging relay log file %s", f)
+			logger.Info("purging relay log file", zap.String("file", f))
 			err := os.Remove(f)
 			if err != nil {
 				return errors.Annotatef(err, "relay log file %s", f)
@@ -175,7 +176,7 @@ func purgeRelayFiles(files []*subRelayFiles) error {
 		}
 		if subRelay.hasAll {
 			// if all relay log files removed, remove the directory and all other files (like relay.meta)
-			log.Infof("[purger] purging relay log directory %s", subRelay.dir)
+			logger.Info("purging relay log directory", zap.String("directory", subRelay.dir))
 			err := os.RemoveAll(subRelay.dir)
 			if err != nil {
 				return errors.Annotatef(err, "relay log dir %s", subRelay.dir)
