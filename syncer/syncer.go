@@ -324,7 +324,7 @@ func (s *Syncer) Init() (err error) {
 				return errors.Annotate(err, "clear online ddl in syncer")
 			}
 		}
-		log.Info("[syncer] all previous meta cleared")
+		s.logger.Info("all previous meta cleared")
 	}
 
 	err = s.checkpoint.Load()
@@ -405,7 +405,8 @@ func (s *Syncer) initShardingGroups() error {
 		}
 	}
 
-	log.Debugf("[syncer] initial sharding groups(%d): %v", len(s.sgk.Groups()), s.sgk.Groups())
+	shardGroup := s.sgk.Groups()
+	s.logger.Debug("initial sharding groups", zap.Int("shard group length", len(shardGroup)), zap.Reflect("shard group", shardGroup))
 
 	return nil
 }
@@ -516,7 +517,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	s.checkpoint.Rollback()
 	currPos := s.checkpoint.GlobalPoint()
 	if prePos.Compare(currPos) != 0 {
-		log.Warnf("[syncer] rollback global checkpoint from %v to %v because error occurred", prePos, currPos)
+		s.logger.Warn("something wrong with rollback global checkpoint", zap.Stringer("previous position", prePos), zap.Stringer("current position", currPos))
 	}
 
 	pr <- pb.ProcessResult{
@@ -614,7 +615,7 @@ func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int6
 	case skip:
 		// ignore skip jobs
 	default:
-		log.Warnf("unknown optype %v", tp)
+		s.logger.Warnf("unknown job operation type", zap.Stringer("type", tp))
 	}
 
 	s.count.Add(n)
@@ -670,7 +671,7 @@ func (s *Syncer) addJob(job *job) error {
 	if s.tracer.Enable() {
 		_, err := s.tracer.CollectSyncerJobEvent(job.traceID, job.traceGID, int32(job.tp), job.pos, job.currentPos, s.queueBucketMapping[queueBucket], job.sql, job.ddls, job.args, execDDLReq, pb.SyncerJobState_queued)
 		if err != nil {
-			log.Errorf("[syncer] trace error: %s", err)
+			s.logger.Error("fail to collect binlog replication job event", log.ShortError(err))
 		}
 	}
 
@@ -732,7 +733,7 @@ func (s *Syncer) resetShardingGroup(schema, table string) {
 // we may need to refactor the concurrency model to make the work-flow more clearer later
 func (s *Syncer) flushCheckPoints() error {
 	if s.execErrorDetected.Get() {
-		log.Warnf("[syncer] error detected when executing SQL job, skip flush checkpoint (%s)", s.checkpoint)
+		s.logger.Warn("error detected when executing SQL job, skip flush checkpoint", zap.Stringer("checkpoint", s.checkpoint))
 		return nil
 	}
 
@@ -740,13 +741,13 @@ func (s *Syncer) flushCheckPoints() error {
 	if s.cfg.IsSharding {
 		// flush all checkpoints except tables which are unresolved for sharding DDL
 		exceptTables = s.sgk.UnresolvedTables()
-		log.Infof("[syncer] flush checkpoints except for tables %v", exceptTables)
+		s.logger.Info("flush checkpoints except for these tables", zap.Reflect("tables", exceptTables))
 	}
 	err := s.checkpoint.FlushPointsExcept(exceptTables)
 	if err != nil {
 		return errors.Annotatef(err, "flush checkpoint %s", s.checkpoint)
 	}
-	log.Infof("[syncer] flushed checkpoint %s", s.checkpoint)
+	s.logger.Info("flushed checkpoint", zap.Striner("checkpoint", s.checkpoint))
 
 	// update current active relay log after checkpoint flushed
 	err = s.updateActiveRelayLog(s.checkpoint.GlobalPoint())
@@ -798,7 +799,7 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 			for _, job := range jobs {
 				_, err2 := s.tracer.CollectSyncerJobEvent(job.traceID, job.traceGID, int32(job.tp), job.pos, job.currentPos, queueBucket, job.sql, job.ddls, nil, nil, syncerJobState)
 				if err2 != nil {
-					log.Errorf("[syncer] trace error: %s", err2)
+					s.logger.Error("fail to collect binlog replication job event", log.ShortError(err2))
 				}
 			}
 		}
@@ -822,7 +823,7 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 				}
 
 				if sqlJob.ddlExecItem != nil && sqlJob.ddlExecItem.req != nil && !sqlJob.ddlExecItem.req.Exec {
-					log.Infof("[syncer] ignore sharding DDLs %v", sqlJob.ddls)
+					s.logger.Info("ignore sharding DDLs", zap.Reflect("ddls", sqlJob.ddls))
 				} else {
 					args := make([][]interface{}, len(sqlJob.ddls))
 					err = db.executeSQL(sqlJob.ddls, args, 1)
@@ -838,7 +839,7 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 						}
 						_, traceErr := s.tracer.CollectSyncerJobEvent(sqlJob.traceID, sqlJob.traceGID, int32(sqlJob.tp), sqlJob.pos, sqlJob.currentPos, queueBucket, sqlJob.sql, sqlJob.ddls, nil, execDDLReq, syncerJobState)
 						if traceErr != nil {
-							log.Errorf("[syncer] trace error: %s", traceErr)
+							s.logger.Error("fail to collect binlog replication job event", log.ShortError(traceErr))
 						}
 					}
 				}
@@ -925,7 +926,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		currentPos = s.checkpoint.GlobalPoint() // also init to global checkpoint
 		lastPos    = s.checkpoint.GlobalPoint()
 	)
-	log.Infof("replicate binlog from latest checkpoint %+v", lastPos)
+	s.logger.Info("replicate binlog from latest checkpoint", zap.Striner("checkpoint", lastPos))
 
 	var globalStreamer streamer.Streamer
 	if s.binlogType == RemoteBinlog {
@@ -966,12 +967,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 	defer func() {
 		if err1 := recover(); err1 != nil {
-			log.Errorf("panic. err: %s, stack: %s", err1, debug.Stack())
+			s.logger.Error("panic log", log.ShortError(err1), zap.ByteString("statck", debug.Stack()))
 			err = errors.Errorf("panic error: %v", err1)
 		}
 		// flush the jobs channels, but if error occurred, we should not flush the checkpoints
 		if err1 := s.flushJobs(); err1 != nil {
-			log.Errorf("fail to finish all jobs error: %v", err1)
+			s.logger.Error("fail to finish all jobs", log.ShortError(err1))
 		}
 	}()
 
@@ -1052,9 +1053,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				})
 				shardingStreamer, err = s.getBinlogStreamer(shardingReader, shardingReSync.currPos)
 			}
-			log.Debugf("[syncer] start using a special streamer to re-sync DMLs for sharding group %+v", shardingReSync)
+			s.logger.Debug("start using a special streamer to re-sync DMLs for sharding group", zap.Reflect("re-shard", shardingReSync))
 			failpoint.Inject("ReSyncExit", func() {
-				log.Warn("[failpoint] exit triggered by ReSyncExit")
+				s.logger.Warn("exit triggered by ReSyncExit", zap.String("feature", "failpoint"))
 				utils.OsExit(1)
 			})
 		}
@@ -1070,7 +1071,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			failpoint.Inject("SyncerEventTimeout", func(val failpoint.Value) {
 				if seconds, ok := val.(int); ok {
 					eventTimeout = time.Duration(seconds) * time.Second
-					log.Infof("[failpoint] set syncer eventTimeout to %d", seconds)
+					s.logger.Info("set syncer eventTimeout", zap.String("feature", "failpoint"), zap.Int("fetch binlog event timeout", seconds))
 				}
 			})
 			ctx2, cancel := context.WithTimeout(ctx, eventTimeout)
@@ -1085,10 +1086,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 		startTime := time.Now()
 		if err == context.Canceled {
-			log.Infof("ready to quit! [%v]", lastPos)
+			s.logger.Info("ready to quit!", zap.Stringer("last position", lastPos))
 			return nil
 		} else if err == context.DeadlineExceeded {
-			log.Info("deadline exceeded.")
+			s.logger.Info("deadline exceeded.")
 			eventTimeoutCounter += eventTimeout
 			if eventTimeoutCounter < maxEventTimeout {
 				err = s.flushJobs()
@@ -1100,7 +1101,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			eventTimeoutCounter = 0
 			if s.needResync() {
-				log.Info("timeout, resync")
+				s.logger.Info("timeout, resync")
 				if shardingStreamer != nil {
 					shardingStreamer, err = s.reopenWithRetry(s.shardingSyncCfg)
 				} else {
@@ -1114,7 +1115,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 
 		if err != nil {
-			log.Errorf("get binlog error %v", err)
+			s.logger.Error("fail to fetch binlog", log.ShortError(err))
 			// try to re-sync in gtid mode
 			if tryReSync && s.cfg.EnableGTID && isBinlogPurgedError(err) && s.cfg.AutoFixGTID {
 				time.Sleep(retryTimeout)
@@ -1137,7 +1138,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		binlogPosGauge.WithLabelValues("syncer", s.cfg.Name).Set(float64(e.Header.LogPos))
 		index, err := binlog.GetFilenameIndex(lastPos.Name)
 		if err != nil {
-			log.Errorf("parse binlog file err %v", err)
+			s.logger.Error("fail to parse binlog file", log.ShortError(err))
 		} else {
 			binlogFileGauge.WithLabelValues("syncer", s.cfg.Name).Set(float64(index))
 		}
@@ -1145,7 +1146,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 		failpoint.Inject("ProcessBinlogSlowDown", nil)
 
-		log.Debugf("[syncer] receive binlog event with header %+v", e.Header)
+		s.logger.Debug("receive binlog event", zap.Reflect("header", e.Header))
 		ec := eventContext{
 			header:              e.Header,
 			currentPos:          &currentPos,
