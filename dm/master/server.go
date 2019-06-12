@@ -136,12 +136,12 @@ func (s *Server) Start() error {
 	go func() {
 		err2 := s.svr.Serve(grpcL)
 		if err2 != nil && !common.IsErrNetClosing(err2) && err2 != cmux.ErrListenerClosed {
-			log.L().Error("fail to start gRPC server", zap.Error(err2))
+			log.L().Error("fail to start gRPC server", log.ShortError(err2))
 		}
 	}()
 	go InitStatus(httpL) // serve status
 
-	log.L().Info(" listening gRPC API and status request", zap.String("address", s.cfg.MasterAddr))
+	log.L().Info("listening gRPC API and status request", zap.String("address", s.cfg.MasterAddr))
 	err = m.Serve() // start serving, block
 	if err != nil && common.IsErrNetClosing(err) {
 		err = nil
@@ -161,7 +161,7 @@ func (s *Server) Close() {
 	}
 	err := s.rootLis.Close()
 	if err != nil && !common.IsErrNetClosing(err) {
-		log.L().Error("close net listener", zap.Error(err))
+		log.L().Error("close net listener", log.ShortError(err))
 	}
 	if s.svr != nil {
 		s.svr.GracefulStop()
