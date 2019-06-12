@@ -529,7 +529,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 		relayLogWriteSizeHistogram.Observe(float64(e.Header.EventSize))
 		relayLogPosGauge.WithLabelValues("relay").Set(float64(lastPos.Pos))
 		if index, err2 := binlog.GetFilenameIndex(lastPos.Name); err2 != nil {
-			logger.Error("parse binlog file name", zap.String("file name", lastPos.Name), zap.Error(err2))
+			logger.Error("parse binlog file name", zap.String("file name", lastPos.Name), log.ShortError(err2))
 		} else {
 			relayLogFileGauge.WithLabelValues("relay").Set(float64(index))
 		}
