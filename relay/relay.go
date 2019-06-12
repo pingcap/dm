@@ -21,10 +21,8 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
-	"math"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -38,17 +36,16 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/binlog"
-	binlogreader "github.com/pingcap/dm/pkg/binlog/reader"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	pkgstreamer "github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/relay/common"
+	"github.com/pingcap/dm/relay/reader"
 )
 
 var (
-	// ErrBinlogPosGreaterThanFileSize represents binlog pos greater than file size
-	ErrBinlogPosGreaterThanFileSize = errors.New("the specific position is greater than the local binlog file size")
 	// ErrNoIncompleteEventFound represents no incomplete event found in relay log file
 	ErrNoIncompleteEventFound = errors.New("no incomplete event found in relay log file")
 	// used to fill RelayLogInfo
@@ -107,9 +104,7 @@ type Relay struct {
 	db        *sql.DB
 	cfg       *Config
 	syncerCfg replication.BinlogSyncerConfig
-	reader    binlogreader.Reader
 
-	gapSyncerCfg          replication.BinlogSyncerConfig
 	meta                  Meta
 	lastSlaveConnectionID uint32
 	fd                    *os.File
@@ -139,12 +134,6 @@ func NewRealRelay(cfg *Config) Process {
 		VerifyChecksum:  true,
 	}
 
-	// use 2**32 -1 - ServerID as new ServerID to fill the gap in relay log file
-	gapSyncerCfg := syncerCfg
-	gapSyncerCfg.ServerID = math.MaxUint32 - syncerCfg.ServerID
-	// for gap streamer, we always use rawMode to avoid `invalid table id, no corresponding table map event` error event starting sync from a RowsEvent
-	gapSyncerCfg.RawModeEnabled = true
-
 	if !cfg.EnableGTID {
 		// for rawMode(true), we only parse FormatDescriptionEvent and RotateEvent
 		// if not need to support GTID mode, we can enable rawMode
@@ -158,10 +147,9 @@ func NewRealRelay(cfg *Config) Process {
 	}
 
 	return &Relay{
-		cfg:          cfg,
-		syncerCfg:    syncerCfg,
-		gapSyncerCfg: gapSyncerCfg,
-		meta:         NewLocalMeta(cfg.Flavor, cfg.RelayDir),
+		cfg:       cfg,
+		syncerCfg: syncerCfg,
+		meta:      NewLocalMeta(cfg.Flavor, cfg.RelayDir),
 	}
 }
 
@@ -201,8 +189,6 @@ func (r *Relay) Init() (err error) {
 
 // Process implements the dm.Unit interface.
 func (r *Relay) Process(ctx context.Context, pr chan pb.ProcessResult) {
-	r.reader = binlogreader.NewTCPReader(r.syncerCfg)
-
 	errs := make([]*pb.ProcessError, 0, 1)
 	err := r.process(ctx)
 	if err != nil && errors.Cause(err) != replication.ErrSyncClosed {
@@ -265,40 +251,25 @@ func (r *Relay) process(parentCtx context.Context) error {
 		r.updateMetricsRelaySubDirIndex()
 	}
 
-	err = r.setUpReader()
+	// TODO: do recover before reading from upstream.
+	reader2, err := r.setUpReader()
 	if err != nil {
 		return errors.Trace(err)
 	}
+	defer func() {
+		err = reader2.Close()
+		if err != nil {
+			log.Errorf("[relay] close binlog event reader error %v", err)
+		}
+	}()
 
 	var (
-		_, lastPos   = r.meta.Pos()
-		_, lastGTID  = r.meta.GTID()
-		tryReSync    = true  // used to handle master-slave switch
-		addRelayFlag = false // whether needing to add a LOG_EVENT_RELAY_LOG_F flag to the event
-
-		// fill gap steps:
-		// 1. record the pos after the gap
-		// 2. create a special streamer to fill the gap
-		// 3. catchup pos after the gap
-		// 4. close the special streamer
-		gapReader       binlogreader.Reader
-		gapSyncStartPos *mysql.Position                     // the pos of the event starting to fill the gap
-		gapSyncEndPos   *mysql.Position                     // the pos of the event after the gap
-		eventFormat     *replication.FormatDescriptionEvent // latest FormatDescriptionEvent, used when re-calculate checksum
+		_, lastPos  = r.meta.Pos()
+		_, lastGTID = r.meta.GTID()
+		tryReSync   = true // used to handle master-slave switch
 	)
 
-	closeGapSyncer := func() {
-		addRelayFlag = false // reset to false when closing the gap syncer
-		if gapReader != nil {
-			gapReader.Close()
-			gapReader = nil
-		}
-		gapSyncStartPos = nil
-		gapSyncEndPos = nil
-	}
-
 	defer func() {
-		closeGapSyncer()
 		if r.fd != nil {
 			r.fd.Close()
 		}
@@ -307,35 +278,10 @@ func (r *Relay) process(parentCtx context.Context) error {
 	go r.doIntervalOps(parentCtx)
 
 	for {
-		if gapReader == nil && gapSyncStartPos != nil && gapSyncEndPos != nil {
-			gapReader = binlogreader.NewTCPReader(r.gapSyncerCfg)
-			err = gapReader.StartSyncByPos(*gapSyncStartPos)
-			if err != nil {
-				return errors.Annotatef(err, "start to fill gap in relay log file from %v", gapSyncStartPos)
-			}
-			log.Infof("[relay] start to fill gap in relay log file from %v", gapSyncStartPos)
-			if r.cfg.EnableGTID {
-				_, currentGtidSet := r.meta.GTID()
-				if currentGtidSet.Equal(r.gSetWhenSwitch) {
-					addRelayFlag = true
-					log.Infof("[relay] binlog events in the gap for file %s already exists in previous sub directory, adding a LOG_EVENT_RELAY_LOG_F flag to them. current GTID set %s", r.fd.Name(), currentGtidSet)
-				} else if currentGtidSet.Contain(r.gSetWhenSwitch) {
-					// only after the first gap filled, currentGtidSet can be the superset of gSetWhenSwitch
-					log.Infof("[relay] binlog events in the gap for file %s not exists in previous sub directory, no need to add a LOG_EVENT_RELAY_LOG_F flag. current GTID set %s, previous sub directory end GTID set %s", r.fd.Name(), currentGtidSet, r.gSetWhenSwitch)
-				} else {
-					return errors.Errorf("currnet GTID set %s is not equal or superset of previous sub directory end GTID set %s", currentGtidSet, r.gSetWhenSwitch)
-				}
-			}
-		}
-
 		ctx, cancel := context.WithTimeout(parentCtx, eventTimeout)
 		readTimer := time.Now()
 		var e *replication.BinlogEvent
-		if gapReader != nil {
-			e, err = gapReader.GetEvent(ctx)
-		} else {
-			e, err = r.reader.GetEvent(ctx)
-		}
+		e, err = reader2.GetEvent(ctx)
 		cancel()
 		binlogReadDurationHistogram.Observe(time.Since(readTimer).Seconds())
 
@@ -352,38 +298,8 @@ func (r *Relay) process(parentCtx context.Context) error {
 				// do nothing
 			default:
 				if utils.IsErrBinlogPurged(err) {
-					if gapReader != nil {
-						pos, err2 := tryFindGapStartPos(err, r.fd.Name())
-						if err2 == nil {
-							log.Errorf("[relay] %s", err.Error())         // log the error
-							gapSyncEndPos2 := *gapSyncEndPos              // save the endPos
-							closeGapSyncer()                              // close the previous gap streamer
-							_, err2 = r.fd.Seek(int64(pos), io.SeekStart) // seek to a valid pos
-							if err2 != nil {
-								return errors.Annotatef(err, "seek %s to pos %d", r.fd.Name(), pos)
-							}
-							err2 = r.fd.Truncate(int64(pos)) // truncate the incomplete event part
-							if err2 != nil {
-								return errors.Annotatef(err, "truncate %s to size %d", r.fd.Name(), pos)
-							}
-							log.Infof("[relay] truncate %s to size %d", r.fd.Name(), pos)
-							gapSyncStartPos = &mysql.Position{
-								Name: lastPos.Name,
-								Pos:  pos,
-							}
-							gapSyncEndPos = &gapSyncEndPos2 // reset the endPos
-							log.Infof("[relay] adjust gap streamer's start pos to %d", pos)
-							continue
-						}
-						return errors.Annotatef(err, "gap streamer")
-					}
 					if tryReSync && r.cfg.EnableGTID && r.cfg.AutoFixGTID {
-						err = r.reSetUpReader(r.syncerCfg)
-						if err != nil {
-							return errors.Annotatef(err, "try auto switch with GTID")
-						}
-						tryReSync = false // do not support repeat try re-sync
-						continue
+						// TODO: try auto fix GTID
 					}
 				}
 				binlogReadErrorCounter.Inc()
@@ -398,7 +314,6 @@ func (r *Relay) process(parentCtx context.Context) error {
 		switch ev := e.Event.(type) {
 		case *replication.FormatDescriptionEvent:
 			// FormatDescriptionEvent is the first event in binlog, we will close old one and create a new
-			eventFormat = ev // record FormatDescriptionEvent
 			exist, err := r.handleFormatDescriptionEvent(lastPos.Name)
 			if err != nil {
 				return errors.Trace(err)
@@ -426,7 +341,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 			// even for `BEGIN`, we still update pos / GTID
 			lastPos.Pos = e.Header.LogPos
 			lastGTID.Set(ev.GSet) // in order to call `ev.GSet`, can not combine QueryEvent and XIDEvent
-			isDDL := checkIsDDL(string(ev.Query), parser2)
+			isDDL := common.CheckIsDDL(string(ev.Query), parser2)
 			if isDDL {
 				needSavePos = true // need save pos for DDL
 			}
@@ -449,37 +364,6 @@ func (r *Relay) process(parentCtx context.Context) error {
 				// ref: https://dev.mysql.com/doc/internals/en/binlog-event-flag.html
 				log.Warnf("[relay] skip artificial event %+v", e.Header)
 				continue
-			}
-		}
-
-		if gapReader == nil {
-			gapDetected, fSize, err := r.detectGap(e)
-			if err != nil {
-				relayLogWriteErrorCounter.Inc()
-				return errors.Annotatef(err, "detect relay log file gap for event %+v", e.Header)
-			}
-			if gapDetected {
-				gapSyncStartPos = &mysql.Position{
-					Name: lastPos.Name,
-					Pos:  fSize,
-				}
-				gapSyncEndPos = &mysql.Position{
-					Name: lastPos.Name,
-					Pos:  e.Header.LogPos,
-				}
-				log.Infof("[relay] gap detected from %d to %d in %s, current event %+v", fSize, e.Header.LogPos-e.Header.EventSize, lastPos.Name, e.Header)
-				continue // skip this event after the gap, it will be wrote to the file when filling the gap
-			}
-		} else {
-			// why check gapSyncEndPos != nil?
-			if gapSyncEndPos != nil && e.Header.LogPos >= gapSyncEndPos.Pos {
-				// catch up, after write this event, gap will be filled
-				log.Infof("[relay] fill gap reaching the end pos %v, current event %+v", gapSyncEndPos.String(), e.Header)
-				closeGapSyncer()
-			} else if addRelayFlag {
-				// add LOG_EVENT_RELAY_LOG_F flag to events which used to fill the gap
-				// ref: https://dev.mysql.com/doc/internals/en/binlog-event-flag.html
-				r.addFlagToEvent(e, 0x0040, eventFormat)
 			}
 		}
 
@@ -785,120 +669,28 @@ func (r *Relay) checkFormatDescriptionEventExists(filename string) (exists bool,
 	return false, nil
 }
 
-func (r *Relay) setUpReader() error {
-	defer func() {
-		status := r.reader.Status()
-		log.Infof("[relay] set up binlog reader with status %s", status)
-	}()
-
-	if r.cfg.EnableGTID {
-		return r.setUpReaderByGTID()
-	}
-	return r.setUpReaderByPos()
-}
-
-func (r *Relay) setUpReaderByGTID() error {
-	uuid, gs := r.meta.GTID()
-	log.Infof("[relay] start sync for master(%s, %s) from GTID set %s", r.masterNode(), uuid, gs)
-
-	err := r.reader.StartSyncByGTID(gs)
-	if err != nil {
-		log.Errorf("[relay] start sync in GTID mode from %s error %v", gs.String(), err)
-		return r.setUpReaderByPos()
-	}
-
-	return nil
-}
-
-func (r *Relay) setUpReaderByPos() error {
-	// if the first binlog not exists in local, we should fetch from the first position, whatever the specific position is.
+// setUpReader setups the underlying reader used to read binlog events from the upstream master server.
+func (r *Relay) setUpReader() (reader.Reader, error) {
 	uuid, pos := r.meta.Pos()
-	log.Infof("[relay] start sync for master (%s, %s) from %s", r.masterNode(), uuid, pos.String())
-	if pos.Name == "" {
-		// let mysql decides
-		return r.reader.StartSyncByPos(pos)
-	}
-	if stat, err := os.Stat(filepath.Join(r.meta.Dir(), pos.Name)); os.IsNotExist(err) {
-		log.Infof("[relay] should sync from %s:4 instead of %s:%d because the binlog file not exists in local before and should sync from the very beginning", pos.Name, pos.Name, pos.Pos)
-		pos.Pos = 4
-	} else if err != nil {
-		return errors.Trace(err)
-	} else {
-		if stat.Size() > int64(pos.Pos) {
-			// it means binlog file already exists, and the local binlog file already contains the specific position
-			//  so we can just fetch from the biggest position, that's the stat.Size()
-			//
-			// NOTE: is it possible the data from pos.Pos to stat.Size corrupt
-			log.Infof("[relay] the binlog file %s already contains position %d, so we should sync from %d", pos.Name, pos.Pos, stat.Size())
-			pos.Pos = uint32(stat.Size())
-			err := r.meta.Save(pos, nil)
-			if err != nil {
-				return errors.Trace(err)
-			}
-		} else if stat.Size() < int64(pos.Pos) {
-			// in such case, we should stop immediately and check
-			return errors.Annotatef(ErrBinlogPosGreaterThanFileSize, "%s size=%d, specific pos=%d", pos.Name, stat.Size(), pos.Pos)
-		}
+	_, gs := r.meta.GTID()
+	cfg := &reader.Config{
+		SyncConfig: r.syncerCfg,
+		Pos:        pos,
+		GTIDs:      gs,
+		MasterID:   r.masterNode(),
+		EnableGTID: r.cfg.EnableGTID,
 	}
 
-	return r.reader.StartSyncByPos(pos)
-}
-
-// reSyncBinlog re-tries sync binlog when master-slave switched
-func (r *Relay) reSyncBinlog(cfg replication.BinlogSyncerConfig) error {
-	err := r.retrySyncGTIDs()
+	reader2 := reader.NewReader(cfg)
+	err := reader2.Start()
 	if err != nil {
-		return errors.Trace(err)
-	}
-	return r.reSetUpReader(cfg)
-}
-
-// retrySyncGTIDs try to auto fix GTID set
-// assume that reset master before switching to new master, and only the new master would write
-// it's a weak function to try best to fix GTID set while switching master/slave
-func (r *Relay) retrySyncGTIDs() error {
-	// TODO: now we don't implement quering GTID from MariaDB, implement it later
-	if r.cfg.Flavor != mysql.MySQLFlavor {
-		return nil
-	}
-	_, oldGTIDSet := r.meta.GTID()
-	log.Infof("[relay] start retry sync with old GTID %s", oldGTIDSet.String())
-
-	_, newGTIDSet, err := utils.GetMasterStatus(r.db, r.cfg.Flavor)
-	if err != nil {
-		return errors.Annotatef(err, "get master status")
-	}
-	log.Infof("[relay] new master GTID set %v", newGTIDSet)
-
-	masterUUID, err := utils.GetServerUUID(r.db, r.cfg.Flavor)
-	if err != nil {
-		return errors.Annotatef(err, "get master UUID")
-	}
-	log.Infof("master UUID %s", masterUUID)
-
-	oldGTIDSet.Replace(newGTIDSet, []interface{}{masterUUID})
-
-	// add sub relay dir for new master server
-	// save and flush meta for new master server
-	err = r.meta.AddDir(masterUUID, nil, oldGTIDSet)
-	if err != nil {
-		return errors.Annotatef(err, "add sub relay directory for master server %s", masterUUID)
+		// do not log the whole config to protect the password in `SyncConfig`.
+		// and other config items should already logged before or included in `err`.
+		return nil, errors.Annotatef(err, "start reader for UUID %s", uuid)
 	}
 
-	r.updateMetricsRelaySubDirIndex()
-
-	return nil
-}
-
-func (r *Relay) reSetUpReader(cfg replication.BinlogSyncerConfig) error {
-	if r.reader != nil {
-		err := r.reader.Close()
-		r.reader = nil
-		if err != nil {
-			return errors.Trace(err)
-		}
-	}
-	return r.setUpReader()
+	log.Infof("[relay] started underlying reader for UUID %s ", uuid)
+	return reader2, nil
 }
 
 func (r *Relay) masterNode() string {
@@ -912,10 +704,6 @@ func (r *Relay) IsClosed() bool {
 
 // stopSync stops syncing, now it used by Close and Pause
 func (r *Relay) stopSync() {
-	if r.reader != nil {
-		r.reader.Close()
-		r.reader = nil
-	}
 	if r.fd != nil {
 		r.fd.Close()
 		r.fd = nil

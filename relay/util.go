@@ -17,33 +17,10 @@ import (
 	"strings"
 
 	"github.com/pingcap/errors"
-	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/ast"
 	"github.com/siddontang/go-mysql/replication"
 
-	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/utils"
 )
-
-// checkIsDDL checks input SQL whether is a valid DDL statement
-func checkIsDDL(sql string, p *parser.Parser) bool {
-	sql = utils.TrimCtrlChars(sql)
-
-	// if parse error, treat it as not a DDL
-	stmts, err := parserpkg.Parse(p, sql, "", "")
-	if err != nil || len(stmts) == 0 {
-		return false
-	}
-
-	stmt := stmts[0]
-	switch stmt.(type) {
-	case ast.DDLNode:
-		return true
-	default:
-		// some this like `BEGIN`
-		return false
-	}
-}
 
 // searchLastCompleteEventPos searches the last complete event (end) pos with an incomplete event at the end of the file.
 // NOTE: test this when we can generate various types of binlog events
