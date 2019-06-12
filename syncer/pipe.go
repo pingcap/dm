@@ -27,8 +27,8 @@ import (
 )
 
 var (
-	errNoPipes         = errors.New("no pipes in this pipeline")
-	errPipelineClose   = errors.New("pipeline is closed")
+	errNoPipes       = errors.New("no pipes in this pipeline")
+	errPipelineClose = errors.New("pipeline is closed")
 )
 
 // Pipe is the littlest process unit in syncer
