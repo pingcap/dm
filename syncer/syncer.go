@@ -40,6 +40,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/binlog"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
@@ -122,7 +123,11 @@ type Syncer struct {
 	closed sync2.AtomicBool
 
 	start    time.Time
-	lastTime time.Time
+	lastTime struct {
+		sync.RWMutex
+		t time.Time
+	}
+
 	timezone *time.Location
 
 	binlogSizeCount     sync2.AtomicInt64
@@ -160,6 +165,8 @@ type Syncer struct {
 		sync.RWMutex
 		currentPos mysql.Position // use to calc remain binlog size
 	}
+
+	addJobFunc func(*job) error
 }
 
 // NewSyncer creates a new Syncer.
@@ -182,6 +189,7 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.injectEventCh = make(chan *replication.BinlogEvent)
 	syncer.tracer = tracing.GetTracer()
 	syncer.setTimezone()
+	syncer.addJobFunc = syncer.addJob
 
 	syncer.syncCfg = replication.BinlogSyncerConfig{
 		ServerID:                uint32(syncer.cfg.ServerID),
@@ -963,7 +971,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	}()
 
 	s.start = time.Now()
-	s.lastTime = s.start
+	s.lastTime.Lock()
+	s.lastTime.t = s.start
+	s.lastTime.Unlock()
+
 	tryReSync := true
 
 	// safeMode makes syncer reentrant.
@@ -1051,6 +1062,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			latestOp = null
 		}
 		if e == nil {
+			failpoint.Inject("SyncerEventTimeout", func(val failpoint.Value) {
+				if seconds, ok := val.(int); ok {
+					eventTimeout = time.Duration(seconds) * time.Second
+					log.Infof("[failpoint] set syncer eventTimeout to %d", seconds)
+				}
+			})
 			ctx2, cancel := context.WithTimeout(ctx, eventTimeout)
 			if shardingStreamer != nil {
 				// use sharding group's special streamer to get binlog event
@@ -1113,11 +1130,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		// get binlog event, reset tryReSync, so we can re-sync binlog while syncer meets errors next time
 		tryReSync = true
 		binlogPosGauge.WithLabelValues("syncer", s.cfg.Name).Set(float64(e.Header.LogPos))
-		index, err := streamer.GetBinlogFileIndex(lastPos.Name)
+		index, err := binlog.GetFilenameIndex(lastPos.Name)
 		if err != nil {
 			log.Errorf("parse binlog file err %v", err)
 		} else {
-			binlogFileGauge.WithLabelValues("syncer", s.cfg.Name).Set(index)
+			binlogFileGauge.WithLabelValues("syncer", s.cfg.Name).Set(float64(index))
 		}
 		s.binlogSizeCount.Add(int64(e.Header.EventSize))
 
@@ -1171,7 +1188,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			lastPos.Pos = e.Header.LogPos // update lastPos
 
 			job := newXIDJob(currentPos, currentPos, nil, traceID)
-			err = s.addJob(job)
+			err = s.addJobFunc(job)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -1551,7 +1568,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			log.Infof("[convert] execute need handled ddls converted to %v in position %s by sql operator", needHandleDDLs, ec.currentPos)
 		}
 		job := newDDLJob(nil, needHandleDDLs, *ec.lastPos, *ec.currentPos, nil, nil, *ec.traceID)
-		err = s.addJob(job)
+		err = s.addJobFunc(job)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -1695,7 +1712,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		log.Infof("[convert] execute need handled ddls converted to %v in position %s by sql operator", needHandleDDLs, ec.currentPos)
 	}
 	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastPos, *ec.currentPos, nil, ddlExecItem, *ec.traceID)
-	err = s.addJob(job)
+	err = s.addJobFunc(job)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -1716,7 +1733,7 @@ func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, t
 		return errors.Errorf("resolve karam error %v", err)
 	}
 	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, pos, cmdPos, gs, traceID)
-	err = s.addJob(job)
+	err = s.addJobFunc(job)
 	return errors.Trace(err)
 }
 
@@ -1727,6 +1744,7 @@ func (s *Syncer) resolveCasuality(keys []string) (string, error) {
 		}
 		return "", nil
 	}
+
 	if s.c.detectConflict(keys) {
 		log.Debug("[causality] meet causality key, will generate a flush job and wait all sqls executed")
 		if err := s.flushJobs(); err != nil {
@@ -1781,7 +1799,9 @@ func (s *Syncer) printStatus(ctx context.Context) {
 			return
 		case <-timer.C:
 			now := time.Now()
-			seconds := now.Unix() - s.lastTime.Unix()
+			s.lastTime.RLock()
+			seconds := now.Unix() - s.lastTime.t.Unix()
+			s.lastTime.RUnlock()
 			totalSeconds := now.Unix() - s.start.Unix()
 			last := s.lastCount.Get()
 			total := s.count.Get()
@@ -1817,11 +1837,11 @@ func (s *Syncer) printStatus(ctx context.Context) {
 				log.Errorf("[syncer] get master status error %s", err)
 			} else {
 				binlogPosGauge.WithLabelValues("master", s.cfg.Name).Set(float64(latestMasterPos.Pos))
-				index, err := streamer.GetBinlogFileIndex(latestMasterPos.Name)
+				index, err := binlog.GetFilenameIndex(latestMasterPos.Name)
 				if err != nil {
 					log.Errorf("[syncer] parse binlog file err %v", err)
 				} else {
-					binlogFileGauge.WithLabelValues("master", s.cfg.Name).Set(index)
+					binlogFileGauge.WithLabelValues("master", s.cfg.Name).Set(float64(index))
 				}
 			}
 
@@ -1830,7 +1850,9 @@ func (s *Syncer) printStatus(ctx context.Context) {
 
 			s.lastCount.Set(total)
 			s.lastBinlogSizeCount.Set(totalBinlogSize)
-			s.lastTime = time.Now()
+			s.lastTime.Lock()
+			s.lastTime.t = time.Now()
+			s.lastTime.Unlock()
 			s.totalTps.Set(totalTps)
 			s.tps.Set(tps)
 		}
@@ -1905,14 +1927,14 @@ func (s *Syncer) closeDBs() {
 // make newJob's sql argument empty to distinguish normal sql and skips sql
 func (s *Syncer) recordSkipSQLsPos(pos mysql.Position, gtidSet gtid.Set) error {
 	job := newSkipJob(pos, gtidSet)
-	err := s.addJob(job)
+	err := s.addJobFunc(job)
 	return errors.Trace(err)
 }
 
 func (s *Syncer) flushJobs() error {
 	log.Infof("flush all jobs, global checkpoint=%s", s.checkpoint)
 	job := newFlushJob()
-	err := s.addJob(job)
+	err := s.addJobFunc(job)
 	return errors.Trace(err)
 }
 

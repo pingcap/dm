@@ -121,7 +121,7 @@ func (t *testFileWriterSuite) TestRelayDir(c *check.C) {
 	defer w1.Close()
 	c.Assert(w1.Start(), check.IsNil)
 	result, err := w1.WriteEvent(ev)
-	c.Assert(err, check.ErrorMatches, ".*invalid binlog filename.*")
+	c.Assert(err, check.ErrorMatches, ".*not valid.*")
 	c.Assert(result, check.IsNil)
 
 	// invalid dir
@@ -130,7 +130,7 @@ func (t *testFileWriterSuite) TestRelayDir(c *check.C) {
 	defer w2.Close()
 	c.Assert(w2.Start(), check.IsNil)
 	result, err = w2.WriteEvent(ev)
-	c.Assert(err, check.ErrorMatches, ".*invalid binlog filename.*")
+	c.Assert(err, check.ErrorMatches, ".*not valid.*")
 	c.Assert(result, check.IsNil)
 
 	// valid directory, but no filename specified
@@ -139,7 +139,7 @@ func (t *testFileWriterSuite) TestRelayDir(c *check.C) {
 	defer w3.Close()
 	c.Assert(w3.Start(), check.IsNil)
 	result, err = w3.WriteEvent(ev)
-	c.Assert(err, check.ErrorMatches, ".*invalid binlog filename.*")
+	c.Assert(err, check.ErrorMatches, ".*not valid.*")
 	c.Assert(result, check.IsNil)
 
 	// valid directory, but invalid filename
@@ -148,7 +148,7 @@ func (t *testFileWriterSuite) TestRelayDir(c *check.C) {
 	defer w4.Close()
 	c.Assert(w4.Start(), check.IsNil)
 	result, err = w4.WriteEvent(ev)
-	c.Assert(err, check.ErrorMatches, ".*invalid binlog filename.*")
+	c.Assert(err, check.ErrorMatches, ".*not valid.*")
 	c.Assert(result, check.IsNil)
 
 	// valid directory, valid filename

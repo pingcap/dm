@@ -23,12 +23,12 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/gtid"
-	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay/purger"
@@ -189,12 +189,14 @@ func (c *Config) verify() error {
 	if len(c.SourceID) == 0 {
 		return errors.Errorf("dm-worker should bind a non-empty source ID which represents a MySQL/MariaDB instance or a replica group. \n notice: if you use old version dm-ansible, please update to newest version.")
 	}
+	if len(c.SourceID) > config.MaxSourceIDLength {
+		return errors.Errorf("the length of source ID %s is more than max allowed value %d", c.SourceID, config.MaxSourceIDLength)
+	}
 
 	var err error
 	if len(c.RelayBinLogName) > 0 {
-		_, err = streamer.GetBinlogFileIndex(c.RelayBinLogName)
-		if err != nil {
-			return errors.Annotatef(err, "relay-binlog-name %s", c.RelayBinLogName)
+		if !binlog.VerifyFilename(c.RelayBinLogName) {
+			return errors.NotValidf("relay-binlog-name %s", c.RelayBinLogName)
 		}
 	}
 	if len(c.RelayBinlogGTID) > 0 {
