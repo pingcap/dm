@@ -36,6 +36,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -82,6 +83,8 @@ const (
 // Syncer can sync your MySQL data to another MySQL database.
 type Syncer struct {
 	sync.RWMutex
+
+	logger log.Logger
 
 	cfg     *config.SubTaskConfig
 	syncCfg replication.BinlogSyncerConfig
@@ -190,6 +193,8 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.tracer = tracing.GetTracer()
 	syncer.setTimezone()
 	syncer.addJobFunc = syncer.addJob
+
+	syncer.logger = log.With(zap.String("unit", "binlog replication"))
 
 	syncer.syncCfg = replication.BinlogSyncerConfig{
 		ServerID:                uint32(syncer.cfg.ServerID),
