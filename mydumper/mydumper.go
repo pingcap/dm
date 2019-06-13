@@ -48,7 +48,7 @@ type Mydumper struct {
 func NewMydumper(cfg *config.SubTaskConfig) *Mydumper {
 	m := &Mydumper{
 		cfg:    cfg,
-		logger: log.With(zap.String("unit", "dump")),
+		logger: log.With(zap.String("task", cfg.Name), zap.String("unit", "dump")),
 	}
 	m.args = m.constructArgs()
 	return m
