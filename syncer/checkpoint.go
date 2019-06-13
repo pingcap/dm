@@ -273,7 +273,7 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, pos
 	}
 
 	// we save table checkpoint while we meet DDL or DML
-	cp.logger.Errorf("save checkpoint", zap.Stringer("position", pos), zap.String("schema", sourceSchema), zap.String("table", sourceTable))
+	cp.logger.Error("save checkpoint", zap.Stringer("position", pos), zap.String("schema", sourceSchema), zap.String("table", sourceTable))
 	mSchema, ok := cp.points[sourceSchema]
 	if !ok {
 		mSchema = make(map[string]*binlogPoint)
@@ -428,7 +428,7 @@ func (cp *RemoteCheckPoint) Rollback() {
 	cp.globalPoint.rollback()
 	for schema, mSchema := range cp.points {
 		for table, point := range mSchema {
-			log.Infof("rollback checkpoint %s for table %s.%s", point, schema, table)
+			cp.logger.Info("rollback checkpoint", zap.Stringer("checkpoint", point), zap.String("schema", schema), zap.String("table", table))
 			point.rollback()
 		}
 	}
@@ -449,7 +449,7 @@ func (cp *RemoteCheckPoint) createSchema() error {
 	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", cp.schema)
 	args := make([]interface{}, 0)
 	err := cp.db.executeSQL([]string{sql2}, [][]interface{}{args}, maxRetryCount)
-	log.Infof("[syncer] %s", sql2)
+	cp.logger.Info("create checkpoint schema", zap.String("statement", sql2))
 	return errors.Trace(err)
 }
 
@@ -468,7 +468,7 @@ func (cp *RemoteCheckPoint) createTable() error {
 		)`, tableName)
 	args := make([]interface{}, 0)
 	err := cp.db.executeSQL([]string{sql2}, [][]interface{}{args}, maxRetryCount)
-	log.Infof("[syncer] %s", sql2)
+	cp.logger.Info("create checkpoint table", zap.String("statement", sql2))
 	return errors.Trace(err)
 }
 
@@ -502,7 +502,7 @@ func (cp *RemoteCheckPoint) Load() error {
 		if isGlobal {
 			if pos.Compare(minCheckpoint) > 0 {
 				cp.globalPoint = newBinlogPoint(pos, pos)
-				log.Infof("[checkpoint] get global checkpoint %+v from DB", cp.globalPoint)
+				cp.logger.Info("fetch global checkpoint from DB", zap.Stringer("global checkpoint", cp.globalPoint))
 			}
 			continue // skip global checkpoint
 		}
@@ -533,7 +533,7 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 	case config.ModeIncrement:
 		// load meta from task config
 		if cp.cfg.Meta == nil {
-			log.Warn("[checkpoint] not set meta in increment task-mode")
+			cp.logger.Warn("don't set meta in increment task-mode")
 			return nil
 		}
 		pos = &mysql.Position{
@@ -548,7 +548,7 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 	// if meta loaded, we will start syncing from meta's pos
 	if pos != nil {
 		cp.globalPoint = newBinlogPoint(*pos, *pos)
-		log.Infof("[checkpoint] loaded checkpoints %+v from meta", cp.globalPoint)
+		cp.logger.Info("loaded checkpoints from meta", zap.Stringer("global checkpoint", cp.globalPoint))
 	}
 
 	return nil
@@ -571,6 +571,6 @@ func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, binlogName st
 func (cp *RemoteCheckPoint) parseMetaData() (*mysql.Position, error) {
 	// `metadata` is mydumper's output meta file name
 	filename := path.Join(cp.cfg.Dir, "metadata")
-	log.Infof("parsing metadata from %s", filename)
+	cp.logger.Info("parsing metadata from file", zap.String("file", filename))
 	return utils.ParseMetaData(filename)
 }

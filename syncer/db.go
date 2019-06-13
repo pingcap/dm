@@ -22,6 +22,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
 )
@@ -66,7 +67,8 @@ type binlogSize struct {
 type Conn struct {
 	cfg *config.SubTaskConfig
 
-	db *sql.DB
+	db     *sql.DB
+	logger log.Logger
 }
 
 func (conn *Conn) querySQL(query string, maxRetry int) (*sql.Rows, error) {
@@ -78,22 +80,20 @@ func (conn *Conn) querySQL(query string, maxRetry int) (*sql.Rows, error) {
 		err  error
 		rows *sql.Rows
 	)
-
+	conn.logger.Debug("query statement", zap.String("sql", query))
 	for i := 0; i < maxRetry; i++ {
 		if i > 0 {
 			sqlRetriesTotal.WithLabelValues("query", conn.cfg.Name).Add(1)
-			log.Warnf("sql query retry %d: %s", i, query)
+			conn.logger.Warn("query statement", zap.Int("retry", i), zap.String("sql", query))
 			time.Sleep(retryTimeout)
 		}
-
-		log.Debugf("[query][sql]%s", query)
 
 		rows, err = conn.db.Query(query)
 		if err != nil {
 			if !isRetryableError(err) {
 				return rows, errors.Trace(err)
 			}
-			log.Warnf("[query][sql]%s[error]%v", query, err)
+			conn.logger.Warn("query statement failed and retry", zap.String("sql", query), log.ShortError(err))
 			continue
 		}
 
@@ -101,7 +101,7 @@ func (conn *Conn) querySQL(query string, maxRetry int) (*sql.Rows, error) {
 	}
 
 	if err != nil {
-		log.Errorf("query sql[%s] failed %v", query, errors.ErrorStack(err))
+		conn.logger.Error("query statement failed", zap.String("sql", query), log.ShortError(err))
 		return nil, errors.Trace(err)
 	}
 
@@ -122,7 +122,7 @@ func (conn *Conn) executeSQL(sqls []string, args [][]interface{}, maxRetry int) 
 	for i := 0; i < maxRetry; i++ {
 		if i > 0 {
 			sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
-			log.Warnf("sql stmt_exec retry %d: %v - %v", i, sqls, args)
+			conn.logger.Warn("execute statements", zap.Int("retry", i), zap.Strings("sqls", sqls), zap.Reflect("arguments", args))
 			time.Sleep(retryTimeout)
 		}
 
@@ -130,7 +130,7 @@ func (conn *Conn) executeSQL(sqls []string, args [][]interface{}, maxRetry int) 
 			if isRetryableError(err) {
 				continue
 			}
-			log.Errorf("[exec][sql]%s[args]%v[error]%v", sqls, args, err)
+			conn.logger.Error("execute statements", zap.Strings("sqls", sqls), zap.Reflect("arguments", args), log.ShortError(err))
 			return errors.Trace(err)
 		}
 
@@ -153,19 +153,19 @@ func (conn *Conn) executeSQLImp(sqls []string, args [][]interface{}) error {
 
 	txn, err := conn.db.Begin()
 	if err != nil {
-		log.Errorf("exec sqls[%v] begin failed %v", sqls, errors.ErrorStack(err))
+		conn.logger.Error("begin transaction", zap.Strings("sqls", sqls), zap.Reflect("arguments", args), zap.Error(err))
 		return errors.Trace(err)
 	}
 
 	for i := range sqls {
-		log.Debugf("[exec][sql]%s[args]%v", sqls[i], args[i])
+		conn.logger.Debug("execute statement", zap.String("sql", sqls[i]), zap.Reflect("argument", args[i]))
 
 		_, err = txn.Exec(sqls[i], args[i]...)
 		if err != nil {
-			log.Warnf("[exec][sql]%s[args]%v[error]%v", sqls[i], args[i], err)
+			conn.logger.Error("execute statement failed", zap.String("sql", sqls[i]), zap.Reflect("argument", args[i]), log.ShortError(err))
 			rerr := txn.Rollback()
 			if rerr != nil {
-				log.Errorf("[exec][sql]%s[args]%v[error]%v", sqls[i], args[i], rerr)
+				conn.logger.Error("rollback failed", zap.String("sql", sqls[i]), zap.Reflect("argument", args[i]), log.ShortError(rerr))
 			}
 			// we should return the exec err, instead of the rollback rerr.
 			return errors.Trace(err)
@@ -173,7 +173,7 @@ func (conn *Conn) executeSQLImp(sqls []string, args [][]interface{}) error {
 	}
 	err = txn.Commit()
 	if err != nil {
-		log.Errorf("exec sqls[%v] commit failed %v", sqls, errors.ErrorStack(err))
+		conn.logger.Error("transaction commit failed", zap.Strings("sqls", sqls), zap.Reflect("arguments", args), zap.Error(err))
 		return errors.Trace(err)
 	}
 	return nil
