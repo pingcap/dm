@@ -958,7 +958,7 @@ func (s *Server) addTaskWorkers(task string, workers []string, replace bool) {
 
 	sort.Strings(valid)
 	s.taskWorkers[task] = valid
-	log.L().Info("update workers of task", zap.String("task", task), zap.Reflect("workers", valid))
+	log.L().Info("update workers of task", zap.String("task", task), zap.Strings("workers", valid))
 }
 
 // replaceTaskWorkers replaces the whole task-workers mapper
