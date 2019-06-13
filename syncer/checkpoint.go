@@ -22,6 +22,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/utils"
@@ -60,15 +61,15 @@ func newBinlogPoint(pos mysql.Position, flushedPos mysql.Position) *binlogPoint 
 	}
 }
 
-func (b *binlogPoint) save(pos mysql.Position) {
+func (b *binlogPoint) save(pos mysql.Position) error {
 	b.Lock()
 	defer b.Unlock()
 	if pos.Compare(b.Position) < 0 {
 		// support to save equal pos, but not older pos
-		log.Warnf("[binlogPoint] try to save %v is older than current pos %v", pos, b.Position)
-		return
+		return errors.Errorf("%v is older than current pos %v", pos, b.Position)
 	}
 	b.Position = pos
+	return nil
 }
 
 func (b *binlogPoint) flush() {
@@ -194,10 +195,12 @@ type RemoteCheckPoint struct {
 	//   this global checkpoint is next-binlog-pos
 	globalPoint         *binlogPoint
 	globalPointSaveTime time.Time
+
+	logger log.Logger
 }
 
 // NewRemoteCheckPoint creates a new RemoteCheckPoint
-func NewRemoteCheckPoint(cfg *config.SubTaskConfig, id string) CheckPoint {
+func NewRemoteCheckPoint(logger log.Logger, cfg *config.SubTaskConfig, id string) CheckPoint {
 	cp := &RemoteCheckPoint{
 		cfg:         cfg,
 		schema:      cfg.MetaSchema,
@@ -205,6 +208,7 @@ func NewRemoteCheckPoint(cfg *config.SubTaskConfig, id string) CheckPoint {
 		id:          id,
 		points:      make(map[string]map[string]*binlogPoint),
 		globalPoint: newBinlogPoint(minCheckpoint, minCheckpoint),
+		logger:      logger,
 	}
 
 	return cp
@@ -269,7 +273,7 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, pos
 	}
 
 	// we save table checkpoint while we meet DDL or DML
-	log.Debugf("save checkpoint %s for table %s.%s", pos, sourceSchema, sourceTable)
+	cp.logger.Errorf("save checkpoint", zap.Stringer("position", pos), zap.String("schema", sourceSchema), zap.String("table", sourceTable))
 	mSchema, ok := cp.points[sourceSchema]
 	if !ok {
 		mSchema = make(map[string]*binlogPoint)
@@ -279,7 +283,9 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, pos
 	if !ok {
 		mSchema[sourceTable] = newBinlogPoint(pos, minCheckpoint)
 	} else {
-		point.save(pos)
+		if err := point.save(pos); err != nil {
+			cp.logger.Error("fail to save table point", zap.String("schema", sourceSchema), zap.String("table", sourceTable), log.ShortError(err))
+		}
 	}
 }
 
@@ -326,7 +332,9 @@ func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, 
 func (cp *RemoteCheckPoint) SaveGlobalPoint(pos mysql.Position) {
 	cp.Lock()
 	defer cp.Unlock()
-	cp.globalPoint.save(pos)
+	if err := cp.globalPoint.save(pos); err != nil {
+		cp.logger.Error("fail to save global checkpoint", log.ShortError(err))
+	}
 }
 
 // FlushPointsExcept implements CheckPoint.FlushPointsExcept

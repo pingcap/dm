@@ -1442,7 +1442,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			// in re-syncing, we can simply skip all DDLs
 			// only update lastPos when the query is a real DDL
 			*ec.lastPos = ec.shardingReSync.currPos
-			s.logger.Debug("skip event in re-replicating sharding group", zap.String("event", "query"), , zap.String("statement", sql), zap.Refelct("re-shard", ec.shardingReSync))
+			s.logger.Debug("skip event in re-replicating sharding group", zap.String("event", "query"), zap.String("statement", sql), zap.Refelct("re-shard", ec.shardingReSync))
 		}
 		return nil
 	}
@@ -1463,7 +1463,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		s.logger.Error("fail to resolve statement", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stinrger("last position", ec.lastPos), zap.Stringer("position", ec.currentPos), zap.Stringer("gtid set", ev.GSet), log.ShortError(err))
 		return errors.Trace(err)
 	}
-	s.logger.Info("resolve sql", zap.String("event", "query"), zap.String("raw statement", sql), zap.Strings("statements", sqls)， zap.String("schema", usedSchema), zap.Stinrger("last position", ec.lastPos), zap.Stringer("position", ec.currentPos), zap.Stringer("gtid set", ev.GSet), log.ShortError(err))
+	s.logger.Info("resolve sql", zap.String("event", "query"), zap.String("raw statement", sql), zap.Strings("statements", sqls), zap.String("schema", usedSchema), zap.Stinrger("last position", ec.lastPos), zap.Stringer("position", ec.currentPos), zap.Stringer("gtid set", ev.GSet), log.ShortError(err))
 
 	if len(onlineDDLTableNames) > 1 {
 		return errors.NotSupportedf("online ddl changes on multiple table: %s", string(ev.Query))
@@ -1646,14 +1646,14 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		// save checkpoint in memory, don't worry, if error occurred, we can rollback it
 		// for non-last sharding DDL's table, this checkpoint will be used to skip binlog event when re-syncing
 		// NOTE: when last sharding DDL executed, all this checkpoints will be flushed in the same txn
-		s.logger.Infof("save table checkpoint for source", zap.String("event", "query"), zap.String("source", source),  zap.Stringer("start position", startPos), zap.Stringer("end position", ec.currentPos))
+		s.logger.Infof("save table checkpoint for source", zap.String("event", "query"), zap.String("source", source), zap.Stringer("start position", startPos), zap.Stringer("end position", ec.currentPos))
 		s.checkpoint.SaveTablePoint(ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name, *ec.currentPos)
 		if !synced {
-			s.logger.Infof("source shard group is not synced", zap.String("event", "query"), zap.String("source", source),  zap.Stringer("start position", startPos), zap.Stringer("end position", ec.currentPos))
+			s.logger.Infof("source shard group is not synced", zap.String("event", "query"), zap.String("source", source), zap.Stringer("start position", startPos), zap.Stringer("end position", ec.currentPos))
 			return nil
 		}
 
-		s.logger.Infof("source shard group is synced", zap.String("event", "query"), zap.String("source", source),  zap.Stringer("start position", startPos), zap.Stringer("end position", ec.currentPos))
+		s.logger.Infof("source shard group is synced", zap.String("event", "query"), zap.String("source", source), zap.Stringer("start position", startPos), zap.Stringer("end position", ec.currentPos))
 		err = ec.safeMode.DescForTable(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try disable safe-mode after sharding group synced
 		if err != nil {
 			return errors.Trace(err)
@@ -1694,7 +1694,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		shardLockResolving.WithLabelValues(s.cfg.Name).Set(0)
 		if !ok {
 			// chan closed
-			s.logger.warn("canceled frin exrernal", zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query),  zap.Stringer("start position", startPos), zap.Stringer("end position", ec.currentPos))
+			s.logger.warn("canceled frin exrernal", zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start position", startPos), zap.Stringer("end position", ec.currentPos))
 			return nil
 		}
 
@@ -1704,9 +1704,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 				os.Exit(1)
 			})
 
-			s.logger.Info("execute DDL job", zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", ddlInfo1.DDLs), zap.ByteString("raw statement", ev.Query),  zap.Stringer("start position", startPos), zap.Stringer("end position", ec.currentPos), zap.Reflect("request", ddlExecItem.req))
+			s.logger.Info("execute DDL job", zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", ddlInfo1.DDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start position", startPos), zap.Stringer("end position", ec.currentPos), zap.Reflect("request", ddlExecItem.req))
 		} else {
-			s.logger.Info("ignore DDL job",  zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", ddlInfo1.DDLs), zap.ByteString("raw statement", ev.Query),  zap.Stringer("start position", startPos), zap.Stringer("end position", ec.currentPos), zap.Reflect("request", ddlExecItem.req))
+			s.logger.Info("ignore DDL job", zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", ddlInfo1.DDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start position", startPos), zap.Stringer("end position", ec.currentPos), zap.Reflect("request", ddlExecItem.req))
 		}
 	}
 
@@ -1836,13 +1836,13 @@ func (s *Syncer) printStatus(ctx context.Context) {
 					bytesPerSec := (totalBinlogSize - lastBinlogSize) / seconds
 					if bytesPerSec > 0 {
 						remainingSeconds := remainingSize / bytesPerSec
-						s.logger.Info("binlog replication progress", 
-						zap.Int("total binlog size", totalBinlogSize), 
-						zap.Int("last binlog size", lastBinlogSize), 
-						zap.Int("cost time", seconds, 
-						zap.Int("bytes/Second", bytesPerSec),
-						zap.Int("unsynced binlog size", remainingSize),
-						zap.Int("estimate time to catch up" remainingSeconds))
+						s.logger.Info("binlog replication progress",
+							zap.Int("total binlog size", totalBinlogSize),
+							zap.Int("last binlog size", lastBinlogSize),
+							zap.Int("cost time", seconds),
+							zap.Int("bytes/Second", bytesPerSec),
+							zap.Int("unsynced binlog size", remainingSize),
+							zap.Int("estimate time to catch up", remainingSeconds))
 						remainingTimeGauge.WithLabelValues(s.cfg.Name).Set(float64(remainingSeconds))
 					}
 				}
@@ -1862,11 +1862,11 @@ func (s *Syncer) printStatus(ctx context.Context) {
 			}
 
 			s.logger.Info("binlog replication status",
-				zap.Int("total events", total), 
-				zap.Int("total tps", totalTps), 
-				zap.Int("tps", tps), 
+				zap.Int("total events", total),
+				zap.Int("total tps", totalTps),
+				zap.Int("tps", tps),
 				zap.Stringer("master position", latestMasterPos),
-				zap.Stringer("master gtid", latestmasterGTIDSet), 
+				zap.Stringer("master gtid", latestmasterGTIDSet),
 				zap.Stringer("checkpoint", s.checkpoint))
 
 			s.lastCount.Set(total)
@@ -1903,7 +1903,7 @@ func (s *Syncer) getRemoteBinlogStreamer(syncerOrReader interface{}, pos mysql.P
 	}
 	defer func() {
 		lastSlaveConnectionID := syncer.LastConnectionID()
-		s.logger.Info("last slave connection", zap.Int("connection ID",lastSlaveConnectionID))
+		s.logger.Info("last slave connection", zap.Int("connection ID", lastSlaveConnectionID))
 	}()
 	if s.cfg.EnableGTID {
 		// NOTE: our (per-table based) checkpoint does not support GTID yet
@@ -2303,7 +2303,7 @@ func (s *Syncer) setTimezone() {
 	}
 	if loc == nil {
 		loc = time.Now().Location()
-		s.logger..Warn("use system default time location")
+		s.logger.Warn("use system default time location")
 	}
 	s.logger.Info("use timezone", zap.Stringer("localtion", loc))
 	s.timezone = loc
