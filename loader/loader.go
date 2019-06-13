@@ -89,7 +89,7 @@ type Worker struct {
 }
 
 // NewWorker returns a Worker.
-func NewWorker(loader *Loader, id int) (worker *Worker, err error) {
+func NewWorker(loader *Loader, id int, logger log.Logger) (worker *Worker, err error) {
 	conn, err := createConn(loader.cfg)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -102,7 +102,7 @@ func NewWorker(loader *Loader, id int) (worker *Worker, err error) {
 		conn:       conn,
 		jobQueue:   make(chan *dataJob, jobCount),
 		loader:     loader,
-		logger:     log.With(zap.String("unit", "load"), zap.Int("worker-id", id)),
+		logger:     logger,
 	}, nil
 }
 
@@ -356,7 +356,7 @@ func NewLoader(cfg *config.SubTaskConfig) *Loader {
 		tableInfos: make(map[string]*tableInfo),
 		workerWg:   new(sync.WaitGroup),
 		pool:       make([]*Worker, 0, cfg.PoolSize),
-		logger:     log.With(zap.String("unit", "load")),
+		logger:     log.With(zap.String("task", cfg.Name), zap.String("unit", "load")),
 	}
 	loader.fileJobQueueClosed.Set(true) // not open yet
 	return loader
@@ -377,7 +377,7 @@ func (l *Loader) Init() (err error) {
 		}
 	}()
 
-	checkpoint, err := newRemoteCheckPoint(l.cfg, l.checkpointID())
+	checkpoint, err := newRemoteCheckPoint(log.With(zap.String("task", l.cfg.Name), zap.String("unit", "load"), zap.String("component", "checkpoint")), l.cfg, l.checkpointID())
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -652,7 +652,7 @@ func (l *Loader) genRouter(rules []*router.TableRule) error {
 
 func (l *Loader) initAndStartWorkerPool(ctx context.Context) error {
 	for i := 0; i < l.cfg.PoolSize; i++ {
-		worker, err := NewWorker(l, i)
+		worker, err := NewWorker(l, i, log.With(zap.String("task", l.cfg.Name), zap.String("unit", "load"), zap.Int("worker-id", i)))
 		if err != nil {
 			return err
 		}

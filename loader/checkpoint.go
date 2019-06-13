@@ -71,7 +71,7 @@ type RemoteCheckPoint struct {
 	logger         log.Logger
 }
 
-func newRemoteCheckPoint(cfg *config.SubTaskConfig, id string) (CheckPoint, error) {
+func newRemoteCheckPoint(logger log.Logger, cfg *config.SubTaskConfig, id string) (CheckPoint, error) {
 	conn, err := createConn(cfg)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -84,7 +84,7 @@ func newRemoteCheckPoint(cfg *config.SubTaskConfig, id string) (CheckPoint, erro
 		finishedTables: make(map[string]struct{}),
 		schema:         cfg.MetaSchema,
 		table:          fmt.Sprintf("%s_loader_checkpoint", cfg.Name),
-		logger:         log.With(zap.String("unit", "load"), zap.String("component", "checkpoint")),
+		logger:         logger,
 	}
 
 	err = cp.prepare()
