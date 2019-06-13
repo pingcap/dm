@@ -20,6 +20,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/pb"
@@ -27,6 +28,9 @@ import (
 )
 
 var (
+	// logger writes log start with `[component=tracer]`
+	logger log.Logger
+
 	uploadInterval = 1 * time.Minute
 )
 
@@ -76,7 +80,7 @@ func (t *Tracer) Enable() bool {
 func (t *Tracer) Start() {
 	conn, err := grpc.Dial(t.cfg.TracerAddr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	if err != nil {
-		log.Errorf("[tracer] grpc dial error: %s", errors.ErrorStack(err))
+		logger.Error("grpc dial", zap.Error(err))
 		return
 	}
 	t.cli = pb.NewTracerClient(conn)
@@ -124,7 +128,7 @@ func (t *Tracer) tsoProcessor(ctx context.Context) {
 		case <-time.After(1 * time.Minute):
 			err := t.syncTS()
 			if err != nil {
-				log.Errorf("[tracer] sync timestamp error: %s", errors.ErrorStack(err))
+				logger.Error("sync timestamp", zap.Error(err))
 			}
 		}
 	}
@@ -152,7 +156,7 @@ func (t *Tracer) syncTS() error {
 	currentTS := time.Now().UnixNano()
 	oldSyncedTS := t.tso.syncedTS
 	t.tso.syncedTS = resp.Ts + t.tso.localTS/2 - currentTS/2
-	log.Debugf("[tracer] syncedTS from %d to %d, localTS %d", oldSyncedTS, t.tso.syncedTS, t.tso.localTS)
+	logger.Debug("syncedTS from ts1 to ts2", zap.Int64("ts1", oldSyncedTS), zap.Int64("ts2", t.tso.syncedTS), zap.Int64("localTS", t.tso.localTS))
 	return nil
 }
 
@@ -194,7 +198,7 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan <-chan *Job) {
 	}
 
 	processError := func(err error) {
-		log.Errorf("[tracer] processor error: %s", errors.ErrorStack(err))
+		logger.Error("processor", zap.Error(err))
 	}
 
 	var err error
@@ -238,7 +242,7 @@ func (t *Tracer) AddJob(job *Job) {
 	t.jobsStatus.RLock()
 	defer t.jobsStatus.RUnlock()
 	if t.jobsStatus.closed {
-		log.Warnf("[tracer] jobs channel already closed, add job %v failed", job)
+		logger.Warn("jobs channel already closed, add job failed", zap.Reflect("job", job))
 		return
 	}
 	if job.Tp == EventFlush {

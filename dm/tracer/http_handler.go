@@ -19,6 +19,7 @@ import (
 	"strconv"
 
 	"github.com/pingcap/errors"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
 )
@@ -62,23 +63,23 @@ func writeError(w http.ResponseWriter, statusCode int, err error) {
 	w.WriteHeader(statusCode)
 	_, err = w.Write([]byte(err.Error()))
 	if err != nil {
-		log.Error(errors.ErrorStack(err))
+		log.L().Error("write error", zap.Error(err))
 	}
 }
 
 func writeData(w http.ResponseWriter, data interface{}) {
 	js, err := json.MarshalIndent(data, "", " ")
 	if err != nil {
-		log.Errorf("invalid json data: %v, error: %s", data, err)
+		logger.Error("invalid json data: %v, error: %s", data, err)
 		writeInternalServerError(w, err)
 		return
 	}
-	log.Debug(string(js))
+	log.L().Debug("write data", zap.ByteString("writeData json bytes", js))
 	w.Header().Set(headerContentType, contentTypeJSON)
 	w.WriteHeader(http.StatusOK)
 	_, err = w.Write(js)
 	if err != nil {
-		log.Error(errors.ErrorStack(err))
+		log.L().Error("write data", zap.Error(err))
 	}
 }
 

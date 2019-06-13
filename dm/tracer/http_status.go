@@ -41,7 +41,7 @@ func (s *Server) startHTTPServer(lis net.Listener) {
 	}
 	err := httpServer.Serve(lis)
 	if err != nil && !common.IsErrNetClosing(err) && err != http.ErrServerClosed {
-		log.Errorf("[server] tracer server return with error %s", err.Error())
+		logger.Error("tracer server return with error", log.ShortError(err))
 	}
 }
 
