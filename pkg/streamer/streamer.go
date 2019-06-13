@@ -67,7 +67,7 @@ func (s *LocalStreamer) closeWithError(err error) {
 	if err == nil {
 		err = ErrSyncClosed
 	}
-	log.Errorf("close sync with err: %v", err)
+	log.L().Error("local streamer close", log.ShortError(err))
 	select {
 	case s.ech <- err:
 	default:
