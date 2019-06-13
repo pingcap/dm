@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/satori/go.uuid"
 	"github.com/siddontang/go-mysql/mysql"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/command"
 	"github.com/pingcap/dm/dm/pb"
@@ -37,14 +38,15 @@ type operator struct {
 	reg     *regexp.Regexp
 	op      pb.SQLOp
 	args    []string // if op == SQLOp_REPLACE, it has arguments
+	logger  log.Logger
 }
 
 // newOperator creates a new Operator with a random UUID
-func newOperator(pos *mysql.Position, pattern string, reg *regexp.Regexp, op pb.SQLOp, args []string) *operator {
+func newOperator(logger log.Logger, pos *mysql.Position, pattern string, reg *regexp.Regexp, op pb.SQLOp, args []string) *operator {
 	switch op {
 	case pb.SQLOp_SKIP:
 		if len(args) > 0 {
-			log.Warnf("[sql-operator] for op %s, args %s ignored", op, strings.Join(args, ";"))
+			logger.Warn("ignore operation", zap.Stringer("operation", op), zap.Strings("arguments", args))
 			args = nil
 		}
 	}
@@ -56,6 +58,7 @@ func newOperator(pos *mysql.Position, pattern string, reg *regexp.Regexp, op pb.
 		reg:     reg,
 		op:      op,
 		args:    args,
+		logger:  logger,
 	}
 }
 
@@ -90,12 +93,15 @@ func (o *operator) String() string {
 type Holder struct {
 	mu        sync.Mutex
 	operators map[string]*operator
+
+	logger log.Logger
 }
 
 // NewHolder creates a new Holder
-func NewHolder() *Holder {
+func NewHolder(logger log.Logger) *Holder {
 	return &Holder{
 		operators: make(map[string]*operator),
+		logger:    logger,
 	}
 }
 
@@ -125,13 +131,13 @@ func (h *Holder) Set(req *pb.HandleSubTaskSQLsRequest) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	oper := newOperator(binlogPos, req.SqlPattern, sqlReg, req.Op, req.Args)
+	oper := newOperator(h.logger, binlogPos, req.SqlPattern, sqlReg, req.Op, req.Args)
 	prev, ok := h.operators[key]
 	if ok {
-		log.Warnf("[sql-operator] overwrite previous operator %s by operator %s", prev, oper)
+		h.logger.Warn("overwrite operator", zap.Stringer("old operator", prev), zap.Stringer("new operator", oper))
 	}
 	h.operators[key] = oper
-	log.Infof("[sql-operator] set a new operator %s on replication unit", oper)
+	h.logger.Info("set a new operator", zap.Stringer("new operator", oper))
 	return nil
 }
 
@@ -168,6 +174,6 @@ func (h *Holder) Apply(pos mysql.Position, sqls []string) (bool, []string, error
 		return false, nil, errors.Annotatef(err, "operator %s", oper)
 	}
 
-	log.Infof("[sql-operator] %s, applying operator %s", cause, oper)
+	h.logger.Info("applying operator", zap.String("chance", cause), zap.Stringer("operation", oper))
 	return true, args, nil
 }

@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 var _ = Suite(&testModeSuite{})
@@ -29,7 +30,7 @@ type testModeSuite struct {
 }
 
 func (t *testModeSuite) TestMode(c *C) {
-	m := NewSafeMode()
+	m := NewSafeMode(log.L())
 	c.Assert(m.Enable(), IsFalse)
 
 	// Add 1

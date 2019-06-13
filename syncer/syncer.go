@@ -194,7 +194,7 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.setTimezone()
 	syncer.addJobFunc = syncer.addJob
 
-	syncer.logger = log.With(zap.String("unit", "binlog replication"))
+	syncer.logger = log.With(zap.String("task", cfg.Name), zap.String("unit", "binlog replication"))
 
 	syncer.syncCfg = replication.BinlogSyncerConfig{
 		ServerID:                uint32(syncer.cfg.ServerID),
@@ -209,7 +209,7 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	}
 
 	syncer.binlogType = toBinlogType(cfg.BinlogType)
-	syncer.sqlOperatorHolder = operator.NewHolder()
+	syncer.sqlOperatorHolder = operator.NewHolder(log.With(zap.String("task", cfg.Name), zap.String("unit", "binlog replication"), zap.String("component", "operator holder")))
 	syncer.readerHub = streamer.GetReaderHub()
 
 	if cfg.IsSharding {
@@ -990,7 +990,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	// but there are no ways to make `update` idempotent,
 	// if we start syncer at an early position, database must bear a period of inconsistent state,
 	// it's eventual consistency.
-	safeMode := sm.NewSafeMode()
+	safeMode := sm.NewSafeMode(log.With(zap.String("task", cfg.Name), zap.String("unit", "binlog replication"), zap.String("component", "safe-mode")))
 	s.enableSafeModeInitializationPhase(ctx, safeMode)
 
 	// syncing progress with sharding DDL group
@@ -1380,7 +1380,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		*ec.latestOp = del
 
 	default:
-		log.Debug("ignoring unrecognized event", zap.String("event", "row"), zap.Int("type", ec.header.EventType))
+		s.logger.Debug("ignoring unrecognized event", zap.String("event", "row"), zap.Int("type", ec.header.EventType))
 		return nil
 	}
 
@@ -1436,13 +1436,13 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	if ec.shardingReSync != nil {
 		ec.shardingReSync.currPos.Pos = ec.header.LogPos
 		if ec.shardingReSync.currPos.Compare(ec.shardingReSync.latestPos) >= 0 {
-			s.logger.Info("re-repliate shard group was completed", zap.String("event", "query"), zap.Refelct("re-shard", ec.shardingReSync))
+			s.logger.Info("re-repliate shard group was completed", zap.String("event", "query"), zap.String("statement", sql), zap.Refelct("re-shard", ec.shardingReSync))
 			ec.closeShardingSyncer()
 		} else {
 			// in re-syncing, we can simply skip all DDLs
 			// only update lastPos when the query is a real DDL
 			*ec.lastPos = ec.shardingReSync.currPos
-			s.logger.Debug("skip event in re-replicating sharding group", zap.String("event", "query"), zap.Refelct("re-shard", ec.shardingReSync))
+			s.logger.Debug("skip event in re-replicating sharding group", zap.String("event", "query"), , zap.String("statement", sql), zap.Refelct("re-shard", ec.shardingReSync))
 		}
 		return nil
 	}
@@ -1463,6 +1463,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		s.logger.Error("fail to resolve statement", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stinrger("last position", ec.lastPos), zap.Stringer("position", ec.currentPos), zap.Stringer("gtid set", ev.GSet), log.ShortError(err))
 		return errors.Trace(err)
 	}
+	s.logger.Info("resolve sql", zap.String("event", "query"), zap.String("raw statement", sql), zap.Strings("statements", sqls)， zap.String("schema", usedSchema), zap.Stinrger("last position", ec.lastPos), zap.Stringer("position", ec.currentPos), zap.Stringer("gtid set", ev.GSet), log.ShortError(err))
 
 	if len(onlineDDLTableNames) > 1 {
 		return errors.NotSupportedf("online ddl changes on multiple table: %s", string(ev.Query))
@@ -1501,7 +1502,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		// for DDL, we wait it to be executed, so we can check if event is newer in this syncer's main process goroutine
 		// ignore obsolete DDL here can avoid to try-sync again for already synced DDLs
 		if !s.checkpoint.IsNewerTablePoint(tableNames[0][0].Schema, tableNames[0][0].Name, *ec.currentPos) {
-			s.logger.Info("ignore obsolete DDL", ap.String("event", "query"), zap.String("statement", sql), zap.Stringer("position", ec.currentPos))
+			s.logger.Info("ignore obsolete DDL", zap.String("event", "query"), zap.String("statement", sql), zap.Stringer("position", ec.currentPos))
 			continue
 		}
 
@@ -1525,7 +1526,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 				}
 				continue
 			case *ast.TruncateTableStmt:
-				log.Infof("[syncer] ignore truncate table statement %s in sharding group", sqlDDL)
+				s.logger.Info("ignore truncate table statement in shard group", zap.String("event", "query"), zap.String("statement", sqlDDL))
 				continue
 			}
 
@@ -1547,37 +1548,37 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		targetTbls[tableNames[1][0].String()] = tableNames[1][0]
 	}
 
-	log.Infof("need handled ddls %v in position %v", needHandleDDLs, ec.currentPos)
+	s.logger.Info("prepare to handl ddls", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("position", ec.currentPos))
 	if len(needHandleDDLs) == 0 {
-		log.Infof("skip query %s in position %v", string(ev.Query), ec.currentPos)
+		s.logger.Info("skip event, need hanled ddls is empty", zap.String("event", "query"), zap.ByteString("raw statement", ev.Query), zap.Stringer("position", ec.currentPos))
 		return s.recordSkipSQLsPos(*ec.lastPos, nil)
 	}
 
 	if s.tracer.Enable() {
 		traceEvent, traceErr := s.tracer.CollectSyncerBinlogEvent(ec.traceSource, ec.safeMode.Enable(), ec.tryReSync, *ec.lastPos, *ec.currentPos, int32(ec.header.EventType), int32(*ec.latestOp))
 		if traceErr != nil {
-			s.logger.Error("fail to collect binlog replication job event", log.ShortError(traceErr))
+			s.logger.Error("fail to collect binlog replication job event", zap.String("event", "query"), log.ShortError(traceErr))
 		}
 		*ec.traceID = traceEvent.Base.TraceID
 	}
 
 	if !s.cfg.IsSharding {
-		log.Infof("[start] execute need handled ddls %v in position %v", needHandleDDLs, ec.currentPos)
+		s.logger.Info("start to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("position", ec.currentPos))
 		// try apply SQL operator before addJob. now, one query event only has one DDL job, if updating to multi DDL jobs, refine this.
 		applied, appliedSQLs, applyErr := s.tryApplySQLOperator(*ec.currentPos, needHandleDDLs)
 		if applyErr != nil {
 			return errors.Annotatef(applyErr, "try apply SQL operator on binlog-pos %s with DDLs %v", ec.currentPos, needHandleDDLs)
 		}
 		if applied {
+			s.logger.Info("replace ddls to preset ddls by sql operator in normal mode", zap.String("event", "query"), zap.Strings("preset ddls", appliedSQLs), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("position", ec.currentPos))
 			needHandleDDLs = appliedSQLs // maybe nil
-			log.Infof("[convert] execute need handled ddls converted to %v in position %s by sql operator", needHandleDDLs, ec.currentPos)
 		}
 		job := newDDLJob(nil, needHandleDDLs, *ec.lastPos, *ec.currentPos, nil, nil, *ec.traceID)
 		err = s.addJobFunc(job)
 		if err != nil {
 			return errors.Trace(err)
 		}
-		log.Infof("[end] execute need handled ddls %v in position %v", needHandleDDLs, ec.currentPos)
+		s.logger.Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("position", ec.currentPos))
 
 		for _, tbl := range targetTbls {
 			s.clearTables(tbl.Schema, tbl.Name)
@@ -1586,7 +1587,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 
 		for _, table := range onlineDDLTableNames {
-			log.Infof("finish online ddl %v for table %s.%s", needHandleDDLs, table.Schema, table.Name)
+			s.logger.Info("finish online ddl and clear online ddl metadata in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.String("schema", table.Schema), zap.String("table", table.Name))
 			err = s.onlineDDL.Finish(table.Schema, table.Name)
 			if err != nil {
 				return errors.Annotatef(err, "finish online ddl on %s.%s", table.Schema, table.Name)
@@ -1613,6 +1614,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	}
 	source, _ = GenTableID(ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name)
 
+	var annotate string
 	switch ddlInfo.stmt.(type) {
 	case *ast.CreateDatabaseStmt:
 		// for CREATE DATABASE, we do nothing. when CREATE TABLE under this DATABASE, sharding groups will be added
@@ -1622,19 +1624,20 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		if err != nil {
 			return errors.Trace(err)
 		}
-		log.Infof("[syncer] add table %s to shard group (%v)", source, needShardingHandle)
+		annotate = "add table to shard group"
 	default:
 		needShardingHandle, group, synced, remain, err = s.sgk.TrySync(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, source, startPos, *ec.currentPos, needHandleDDLs)
 		if err != nil {
 			return errors.Trace(err)
 		}
-		log.Infof("[syncer] try to sync table %s to shard group (%v)", source, needShardingHandle)
+		annotate = "try to sync table in shard group"
 	}
+
+	s.logger.Info(annotate, zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Bool("in-sharding", needShardingHandle), zap.Stringer("start position", startPos), zap.Bool("is-synced", synced), zap.Int("unsynced", remain))
 
 	if needShardingHandle {
 		target, _ := GenTableID(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
 		unsyncedTableGauge.WithLabelValues(s.cfg.Name, target).Set(float64(remain))
-		log.Infof("[syncer] query event %v for source %v is in sharding, synced: %v, remain: %d", startPos, source, synced, remain)
 		err = ec.safeMode.IncrForTable(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try enable safe-mode when starting syncing for sharding group
 		if err != nil {
 			return errors.Trace(err)
@@ -1643,13 +1646,14 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		// save checkpoint in memory, don't worry, if error occurred, we can rollback it
 		// for non-last sharding DDL's table, this checkpoint will be used to skip binlog event when re-syncing
 		// NOTE: when last sharding DDL executed, all this checkpoints will be flushed in the same txn
+		s.logger.Infof("save table checkpoint for source", zap.String("event", "query"), zap.String("source", source),  zap.Stringer("start position", startPos), zap.Stringer("end position", ec.currentPos))
 		s.checkpoint.SaveTablePoint(ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name, *ec.currentPos)
 		if !synced {
-			log.Infof("[syncer] source %s is in sharding DDL syncing, ignore DDL %v", source, startPos)
+			s.logger.Infof("source shard group is not synced", zap.String("event", "query"), zap.String("source", source),  zap.Stringer("start position", startPos), zap.Stringer("end position", ec.currentPos))
 			return nil
 		}
 
-		log.Infof("[syncer] source %s sharding group synced in pos %v", source, startPos)
+		s.logger.Infof("source shard group is synced", zap.String("event", "query"), zap.String("source", source),  zap.Stringer("start position", startPos), zap.Stringer("end position", ec.currentPos))
 		err = ec.safeMode.DescForTable(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name) // try disable safe-mode after sharding group synced
 		if err != nil {
 			return errors.Trace(err)
@@ -1690,31 +1694,32 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		shardLockResolving.WithLabelValues(s.cfg.Name).Set(0)
 		if !ok {
 			// chan closed
-			log.Info("[syncer] cancel to add DDL to job because of canceled from external")
+			s.logger.warn("canceled frin exrernal", zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query),  zap.Stringer("start position", startPos), zap.Stringer("end position", ec.currentPos))
 			return nil
 		}
 
 		if ddlExecItem.req.Exec {
 			failpoint.Inject("ShardSyncedExecutionExit", func() {
-				log.Warn("[failpoint] exit triggered by ShardSyncedExecutionExit")
+				s.logger.Warn("exit triggered by ShardSyncedExecutionExit", zap.String("feature", "failpoint"))
 				os.Exit(1)
 			})
 
-			log.Infof("[syncer] add DDL %v to job, request is %+v", ddlInfo1.DDLs, ddlExecItem.req)
+			s.logger.Info("execute DDL job", zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", ddlInfo1.DDLs), zap.ByteString("raw statement", ev.Query),  zap.Stringer("start position", startPos), zap.Stringer("end position", ec.currentPos), zap.Reflect("request", ddlExecItem.req))
 		} else {
-			log.Infof("[syncer] ignore DDL %v, request is %+v", ddlInfo1.DDLs, ddlExecItem.req)
+			s.logger.Info("ignore DDL job",  zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", ddlInfo1.DDLs), zap.ByteString("raw statement", ev.Query),  zap.Stringer("start position", startPos), zap.Stringer("end position", ec.currentPos), zap.Reflect("request", ddlExecItem.req))
 		}
 	}
 
-	log.Infof("[ddl][schema]%s [start] sql %s, need handled sqls %v", usedSchema, string(ev.Query), needHandleDDLs)
+	s.logger.Info("start to handle ddls in shard mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start position", startPos), zap.Stringer("end position", ec.currentPos))
+
 	// try apply SQL operator before addJob. now, one query event only has one DDL job, if updating to multi DDL jobs, refine this.
 	applied, appliedSQLs, err := s.tryApplySQLOperator(*ec.currentPos, needHandleDDLs)
 	if err != nil {
 		return errors.Annotatef(err, "try apply SQL operator on binlog-pos %s with DDLs %v", ec.currentPos, needHandleDDLs)
 	}
 	if applied {
+		s.logger.Info("replace ddls to preset ddls by sql operator in shard mode", zap.String("event", "query"), zap.Strings("preset ddls", appliedSQLs), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start position", startPos), zap.Stringer("end position", ec.currentPos))
 		needHandleDDLs = appliedSQLs // maybe nil
-		log.Infof("[convert] execute need handled ddls converted to %v in position %s by sql operator", needHandleDDLs, ec.currentPos)
 	}
 	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastPos, *ec.currentPos, nil, ddlExecItem, *ec.traceID)
 	err = s.addJobFunc(job)
@@ -1726,7 +1731,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		s.clearOnlineDDL(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
 	}
 
-	log.Infof("[ddl][end]%v", needHandleDDLs)
+	s.logger.Info("finish to handle ddls in shard mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start position", startPos), zap.Stringer("end position", ec.currentPos))
 
 	s.clearTables(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
 	return nil
@@ -1751,7 +1756,7 @@ func (s *Syncer) resolveCasuality(keys []string) (string, error) {
 	}
 
 	if s.c.detectConflict(keys) {
-		log.Debug("[causality] meet causality key, will generate a flush job and wait all sqls executed")
+		s.logger.Debug("meet causality key, will generate a flush job and wait all sqls executed", zap.String("feature", "conflict detect"))
 		if err := s.flushJobs(); err != nil {
 			return "", errors.Trace(err)
 		}
@@ -1784,7 +1789,7 @@ func (s *Syncer) printStatus(ctx context.Context) {
 	failpoint.Inject("PrintStatusCheckSeconds", func(val failpoint.Value) {
 		if seconds, ok := val.(int); ok {
 			statusTime = time.Duration(seconds) * time.Second
-			log.Infof("[failpoint] set syncer printStatusInterval to %d", seconds)
+			s.logger.Infof("set printStatusInterval", zap.Int("printStatusInterval", seconds), zap.String("feature", "failpoint"))
 		}
 	})
 
@@ -1800,7 +1805,7 @@ func (s *Syncer) printStatus(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof("print status exits, err:%s", ctx.Err())
+			s.logger.Info("print status routine exits", log.ShortError(ctx.Err()))
 			return
 		case <-timer.C:
 			now := time.Now()
@@ -1826,12 +1831,18 @@ func (s *Syncer) printStatus(ctx context.Context) {
 				remainingSize, err2 := countBinaryLogsSize(currentPos, s.fromDB.db)
 				if err2 != nil {
 					// log the error, but still handle the rest operation
-					log.Errorf("[syncer] count remaining binlog size err %v", errors.ErrorStack(err2))
+					s.logger.Error("fail to estimate unreplicated binlog size", zap.Error(err2))
 				} else {
 					bytesPerSec := (totalBinlogSize - lastBinlogSize) / seconds
 					if bytesPerSec > 0 {
 						remainingSeconds := remainingSize / bytesPerSec
-						log.Infof("totalBinlogSize %d, lastBinlogSize %d, seconds %d,  bytesPerSec %d, remainingSize %d, remaining seconds %d", totalBinlogSize, lastBinlogSize, seconds, bytesPerSec, remainingSize, remainingSeconds)
+						s.logger.Info("binlog replication progress", 
+						zap.Int("total binlog size", totalBinlogSize), 
+						zap.Int("last binlog size", lastBinlogSize), 
+						zap.Int("cost time", seconds, 
+						zap.Int("bytes/Second", bytesPerSec),
+						zap.Int("unsynced binlog size", remainingSize),
+						zap.Int("estimate time to catch up" remainingSeconds))
 						remainingTimeGauge.WithLabelValues(s.cfg.Name).Set(float64(remainingSeconds))
 					}
 				}
@@ -1839,19 +1850,24 @@ func (s *Syncer) printStatus(ctx context.Context) {
 
 			latestMasterPos, latestmasterGTIDSet, err = s.getMasterStatus()
 			if err != nil {
-				log.Errorf("[syncer] get master status error %s", err)
+				s.logger.Error("fail to get master status", log.ShortError(err))
 			} else {
 				binlogPosGauge.WithLabelValues("master", s.cfg.Name).Set(float64(latestMasterPos.Pos))
 				index, err := binlog.GetFilenameIndex(latestMasterPos.Name)
 				if err != nil {
-					log.Errorf("[syncer] parse binlog file err %v", err)
+					s.logger.Error("fail to parse binlog file", log.ShortError(err))
 				} else {
 					binlogFileGauge.WithLabelValues("master", s.cfg.Name).Set(float64(index))
 				}
 			}
 
-			log.Infof("[syncer]total events = %d, total tps = %d, recent tps = %d, master-binlog = %v, master-binlog-gtid=%v, syncer-binlog=%s",
-				total, totalTps, tps, latestMasterPos, latestmasterGTIDSet, s.checkpoint)
+			s.logger.Info("binlog replication status",
+				zap.Int("total events", total), 
+				zap.Int("total tps", totalTps), 
+				zap.Int("tps", tps), 
+				zap.Stringer("master position", latestMasterPos),
+				zap.Stringer("master gtid", latestmasterGTIDSet), 
+				zap.Stringer("checkpoint", s.checkpoint))
 
 			s.lastCount.Set(total)
 			s.lastBinlogSizeCount.Set(totalBinlogSize)
@@ -1887,7 +1903,7 @@ func (s *Syncer) getRemoteBinlogStreamer(syncerOrReader interface{}, pos mysql.P
 	}
 	defer func() {
 		lastSlaveConnectionID := syncer.LastConnectionID()
-		log.Infof("[syncer] last slave connection id %d", lastSlaveConnectionID)
+		s.logger.Info("last slave connection", zap.Int("connection ID",lastSlaveConnectionID))
 	}()
 	if s.cfg.EnableGTID {
 		// NOTE: our (per-table based) checkpoint does not support GTID yet
@@ -1937,7 +1953,7 @@ func (s *Syncer) recordSkipSQLsPos(pos mysql.Position, gtidSet gtid.Set) error {
 }
 
 func (s *Syncer) flushJobs() error {
-	log.Infof("flush all jobs, global checkpoint=%s", s.checkpoint)
+	s.logger.Info("flush all jobs", zap.Stringer("global checkpoint", s.checkpoint))
 	job := newFlushJob()
 	err := s.addJobFunc(job)
 	return errors.Trace(err)
@@ -1959,7 +1975,7 @@ func (s *Syncer) reopenWithRetry(cfg replication.BinlogSyncerConfig) (streamer s
 			return
 		}
 		if needRetryReplicate(err) {
-			log.Infof("[syncer] retry open binlog streamer %v", err)
+			s.logger.Info("fail to retry open binlog streamer", log.ShortError(err))
 			time.Sleep(retryTimeout)
 			continue
 		}
@@ -2080,7 +2096,7 @@ func (s *Syncer) closeBinlogSyncer(syncer *replication.BinlogSyncer) error {
 	if lastSlaveConnectionID > 0 {
 		err := utils.KillConn(s.fromDB.db, lastSlaveConnectionID)
 		if err != nil {
-			log.Errorf("[syncer] kill last connection %d err %v", lastSlaveConnectionID, err)
+			s.logger.Error("fail to kill last connection", zap.Int("connection ID", lastSlaveConnectionID), log.ShortError(err))
 			if !utils.IsNoSuchThreadError(err) {
 				return errors.Trace(err)
 			}
@@ -2094,7 +2110,7 @@ func (s *Syncer) closeBinlogSyncer(syncer *replication.BinlogSyncer) error {
 // TODO: it is not a true-meaning Pause because you can't stop it by calling Pause only.
 func (s *Syncer) Pause() {
 	if s.isClosed() {
-		log.Warn("[syncer] try to pause, but already closed")
+		s.logger.Warn("try to pause, but already closed")
 		return
 	}
 
@@ -2104,7 +2120,7 @@ func (s *Syncer) Pause() {
 // Resume resumes the paused process
 func (s *Syncer) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	if s.isClosed() {
-		log.Warn("[syncer] try to resume, but already closed")
+		s.logger.Warn("try to resume, but already closed")
 		return
 	}
 
@@ -2195,7 +2211,7 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 func (s *Syncer) needResync() bool {
 	masterPos, _, err := s.getMasterStatus()
 	if err != nil {
-		log.Errorf("get master status err:%s", err)
+		s.logger.Error("fail to get master status", log.ShortError(err))
 		return false
 	}
 
@@ -2216,7 +2232,7 @@ func (s *Syncer) needResync() bool {
 // it's a weak function to try best to fix gtid set while switching master/slave
 func (s *Syncer) retrySyncGTIDs() error {
 	// NOTE: our (per-table based) checkpoint does not support GTID yet, implement it if needed
-	log.Warn("[syncer] our (per-table based) checkpoint does not support GTID yet")
+	s.logger.Warn("our (per-table based) checkpoint does not support GTID yet")
 	return nil
 }
 
@@ -2259,7 +2275,7 @@ func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 	var err error
 	s.fromDB, err = createDB(s.cfg, s.cfg.From, maxDMLConnectionTimeout)
 	if err != nil {
-		log.Warnf("[syncer] %+v", err)
+		s.logger.Error("fail to create db connection", log.ShortError(err))
 		return err
 	}
 	return nil
@@ -2287,8 +2303,8 @@ func (s *Syncer) setTimezone() {
 	}
 	if loc == nil {
 		loc = time.Now().Location()
-		log.Warnf("[syncer] use system default time location")
+		s.logger..Warn("use system default time location")
 	}
-	log.Infof("[syncer] use timezone: %s", loc)
+	s.logger.Info("use timezone", zap.Stringer("localtion", loc))
 	s.timezone = loc
 }

@@ -17,6 +17,8 @@ import (
 	"fmt"
 	"sync"
 
+	"go.uber.org/zap"
+
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 )
@@ -27,12 +29,15 @@ type SafeMode struct {
 	mu     sync.RWMutex
 	count  int32
 	tables map[string]struct{}
+
+	logger log.Logger
 }
 
 // NewSafeMode creates a new SafeMode instance
-func NewSafeMode() *SafeMode {
+func NewSafeMode(logger log.Logger) *SafeMode {
 	return &SafeMode{
 		tables: make(map[string]struct{}),
+		logger: logger,
 	}
 }
 
@@ -94,7 +99,7 @@ func (m *SafeMode) setCount(n int32) error {
 
 	prev := m.count
 	m.count = n
-	log.Infof("[safe-mode] change the count from %d to %d", prev, m.count)
+	m.logger.Info("change count", zap.Int32("previous count", prev), zap.Int32("new count", m.count))
 	return nil
 }
 
