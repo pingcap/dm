@@ -353,6 +353,11 @@ func (r *Relay) process(parentCtx context.Context) error {
 
 		// 4. update meta and metrics
 		needSavePos := tResult.CanSaveGTID
+		lastPos.Pos = tResult.LogPos
+		err = lastGTID.Set(tResult.GTIDSet)
+		if err != nil {
+			log.Errorf("[relay] update last GTID set to %v error %v", tResult.GTIDSet, err)
+		}
 		if !r.cfg.EnableGTID {
 			// if go-mysql set RawModeEnabled to true
 			// then it will only parse FormatDescriptionEvent and RotateEvent
@@ -360,7 +365,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 			// so we need to update pos for all events
 			// and also save pos for all events
 			if e.Header.EventType != replication.ROTATE_EVENT {
-				lastPos.Pos = e.Header.LogPos // for RotateEvent, lastPos updated to the next binlog file's position.
+				lastPos.Pos = e.Header.LogPos // makfor RotateEvent, lastPos updated to the next binlog file's position.
 			}
 			needSavePos = true
 		}
