@@ -28,6 +28,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
+	"go.uber.org/zap"
 )
 
 // ErrInValidHandler indicates we meet an invalid Putter/Getter/Deleter
@@ -135,6 +136,8 @@ func EncodeTaskLogKey(id int64) []byte {
 type Logger struct {
 	endPointer     Pointer
 	handledPointer Pointer
+
+	l log.Logger
 }
 
 // Initial initials Logger
@@ -186,7 +189,7 @@ func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 	logger.handledPointer = handledPointer
 	logger.endPointer = endPointer
 
-	log.Infof("[task log] initialized, handle pointer %+v, end pointer %+v", logger.handledPointer, logger.endPointer)
+	logger.l.Info("finish initialization", zap.Reflect("handle pointer", logger.handledPointer), zap.Reflect("end pointer", logger.endPointer))
 
 	return logs, nil
 }
@@ -291,7 +294,7 @@ func (logger *Logger) GC(ctx context.Context, db *leveldb.DB) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof("[task log gc] goroutine exist!")
+			logger.l.Info("gc routine exist!")
 			return
 		case <-ticker.C:
 			var gcID int64
@@ -306,7 +309,7 @@ func (logger *Logger) GC(ctx context.Context, db *leveldb.DB) {
 
 func (logger *Logger) doGC(db *leveldb.DB, id int64) {
 	if db == nil {
-		log.Error(ErrInValidHandler)
+		logger.l.Error(ErrInValidHandler.Error(), zap.String("feature", "gc"))
 		return
 	}
 
@@ -330,9 +333,9 @@ func (logger *Logger) doGC(db *leveldb.DB, id int64) {
 		if batch.Len() == GCBatchSize {
 			err := db.Write(batch, nil)
 			if err != nil {
-				log.Errorf("[task log gc] fail to delete keys from kv db %v", err)
+				logger.l.Error("fail to delete keys from kv db", zap.String("feature", "gc"), log.ShortError(err))
 			}
-			log.Infof("[task log gc] delete range [%s(% X), %s(% X)]", firstKey, firstKey, iter.Key(), iter.Key())
+			logger.l.Info("delete range", zap.String("feature", "gc"), zap.ByteString("first key", firstKey), zap.Binary("raw first key", firstKey), zap.ByteString("end key", iter.Key()), zap.Binary("raw end key", iter.Key()))
 			firstKey = firstKey[:0]
 			batch.Reset()
 		}
@@ -340,14 +343,14 @@ func (logger *Logger) doGC(db *leveldb.DB, id int64) {
 	iter.Release()
 	err := iter.Error()
 	if err != nil {
-		log.Errorf("[task log gc] query logs from meta error %v", err)
+		logger.l.Error("query logs from meta", zap.String("feature", "gc"), log.ShortError(err))
 	}
 
 	if batch.Len() > 0 {
-		log.Infof("[task log gc] delete range [%s(% X), %s(% X))", firstKey, firstKey, endKey, endKey)
+		logger.l.Info("delete range", zap.String("feature", "gc"), zap.ByteString("first key", firstKey), zap.Binary("raw first key", firstKey), zap.ByteString("< end key", endKey), zap.Binary("< raw end key", endKey))
 		err := db.Write(batch, nil)
 		if err != nil {
-			log.Errorf("[task log gc] fail to delete keys from kv db %v", err)
+			logger.l.Error("fail to delete keys from kv db", log.ShortError(err))
 		}
 	}
 }

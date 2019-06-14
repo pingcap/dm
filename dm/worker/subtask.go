@@ -29,6 +29,7 @@ import (
 	"github.com/pingcap/dm/syncer"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
+	"go.uber.org/zap"
 
 	// hack for glide update, remove it later
 	_ "github.com/pingcap/tidb-tools/pkg/check"
@@ -51,7 +52,7 @@ func createUnits(cfg *config.SubTaskConfig) []unit.Unit {
 	case config.ModeIncrement:
 		us = append(us, syncer.NewSyncer(cfg))
 	default:
-		log.Errorf("[subtask] unsupported task mode %s", cfg.Mode)
+		log.L().Error("unsupported task mode", zap.String("subtask", cfg.Name), zap.String("task mode", cfg.Mode))
 	}
 	return us
 }
@@ -61,6 +62,8 @@ type SubTask struct {
 	cfg *config.SubTaskConfig
 
 	initialized sync2.AtomicBool
+
+	l log.Logger
 
 	sync.RWMutex
 	wg     sync.WaitGroup
@@ -91,6 +94,7 @@ func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage) *SubTask {
 		cfg:   cfg,
 		units: createUnits(cfg),
 		stage: stage,
+		l:     log.With(zap.String("subtask", cfg.Name)),
 	}
 	taskState.WithLabelValues(st.cfg.Name).Set(float64(st.stage))
 	return &st
@@ -138,7 +142,7 @@ func (st *SubTask) Init() error {
 			return errors.Annotatef(err, "fail to get fresh status of subtask %s %s", st.cfg.Name, u.Type())
 		} else if !isFresh {
 			skipIdx = i
-			log.Infof("[subtask] %s run %s dm-unit before, continue with it", st.cfg.Name, u.Type())
+			st.l.Info("continue unit", zap.Stringer("unit", u.Type()))
 			break
 		}
 	}
@@ -153,13 +157,13 @@ func (st *SubTask) Init() error {
 // Run runs the sub task
 func (st *SubTask) Run() {
 	if st.Stage() == pb.Stage_Finished || st.Stage() == pb.Stage_Running {
-		log.Warnf("[subtask] %s is %s", st.cfg.Name, st.Stage())
+		st.l.Warn("prepare to run", zap.Stringer("stage", st.Stage()))
 		return
 	}
 
 	err := st.Init()
 	if err != nil {
-		log.Errorf("[subtask] fail to initial %v", err)
+		st.l.Error("fail to initial subtask", log.ShortError(err))
 		st.fail(errors.ErrorStack(err))
 		return
 	}
@@ -171,7 +175,7 @@ func (st *SubTask) run() {
 	st.setStage(pb.Stage_Paused)
 	err := st.unitTransWaitCondition()
 	if err != nil {
-		log.Errorf("[subtask] wait condition error: %v", err)
+		st.l.Error("wait condition", log.ShortError(err))
 		st.fail(errors.ErrorStack(err))
 		return
 	}
@@ -179,7 +183,7 @@ func (st *SubTask) run() {
 	st.setStage(pb.Stage_Running)
 	st.setResult(nil) // clear previous result
 	cu := st.CurrUnit()
-	log.Infof("[subtask] %s start running %s dm-unit", st.cfg.Name, cu.Type())
+	st.l.Info("start to run", zap.Stringer("unit", cu.Type()))
 	st.ctx, st.cancel = context.WithCancel(context.Background())
 	pr := make(chan pb.ProcessResult, 1)
 	st.wg.Add(1)
@@ -225,7 +229,7 @@ retry:
 			I will optimize the implementation of retry feature.
 			*/
 			if st.retryErrors(result.Errors, cu) {
-				log.Warnf("[subtask] %s (%s) retry on error %v, waiting 10 seconds!", st.cfg.Name, cu.Type(), result.Errors)
+				st.l.Warn("unit retry on error, waiting 10 seconds!", zap.Stringer("unit", cu.Type()), zap.Reflect("errors", result.Errors))
 				st.ctx, st.cancel = context.WithCancel(context.Background())
 				time.Sleep(10 * time.Second)
 				go cu.Resume(st.ctx, pr)
@@ -236,7 +240,7 @@ retry:
 		}
 		st.setStage(stage)
 
-		log.Infof("[subtask] %s dm-unit %s process returned with stage %s, status %s", st.cfg.Name, cu.Type(), stage.String(), st.StatusJSON())
+		st.l.Info("unit process returned", zap.Stringer("unit", cu.Type()), zap.Stringer("stage", stage), zap.String("status", st.StatusJSON()))
 
 		switch stage {
 		case pb.Stage_Finished:
@@ -245,9 +249,9 @@ retry:
 			if nu == nil {
 				// Now, when finished, it only stops the process
 				// if needed, we can refine to Close it
-				log.Infof("[subtask] %s all process units finished", st.cfg.Name)
+				st.l.Info("all process units finished")
 			} else {
-				log.Infof("[subtask] %s switching to next dm-unit %s", st.cfg.Name, nu.Type())
+				st.l.Info("switching to next unit", zap.Stringer("unit", cu.Type()))
 				st.setCurrUnit(nu)
 				// NOTE: maybe need a Lock mechanism for sharding scenario
 				st.run() // re-run for next process unit
@@ -255,8 +259,7 @@ retry:
 		case pb.Stage_Stopped:
 		case pb.Stage_Paused:
 			for _, err := range result.Errors {
-				log.Errorf("[subtask] %s dm-unit %s process error with type %v:\n %v",
-					st.cfg.Name, cu.Type(), err.Type, err.Msg)
+				st.l.Error("unit process error", zap.Stringer("unit", cu.Type()), zap.Reflect("error", err))
 			}
 		}
 	}
@@ -306,7 +309,7 @@ func (st *SubTask) closeUnits() {
 	}
 	for i := cui; i < len(st.units); i++ {
 		u := st.units[i]
-		log.Infof("[syncer] closing process unit %s", u.Type())
+		st.l.Info("closing unit process", zap.Stringer("unit", cu.Type()))
 		u.Close()
 	}
 }
@@ -384,9 +387,9 @@ func (st *SubTask) Result() *pb.ProcessResult {
 
 // Close stops the sub task
 func (st *SubTask) Close() {
-	log.Infof("[subtask] %s is closing", st.cfg.Name)
+	st.l.Info("closing")
 	if st.cancel == nil {
-		log.Infof("[subtask] not run yet, no need to close")
+		st.l.Info("not run yet, no need to close")
 		return
 	}
 
@@ -408,7 +411,7 @@ func (st *SubTask) Pause() error {
 	cu := st.CurrUnit()
 	cu.Pause()
 
-	log.Infof("[subtask] %s paused with %s dm-unit", st.cfg.Name, cu.Type())
+	st.l.Info("paused", zap.Stringer("unit", cu.Type()))
 	return nil
 }
 
@@ -423,7 +426,7 @@ func (st *SubTask) Resume() error {
 	// NOTE: this may block if user resume a task
 	err := st.unitTransWaitCondition()
 	if err != nil {
-		log.Errorf("[subtask] wait condition error: %v", err)
+		st.l.Error("wait condition", log.ShortError(err))
 		st.setStage(pb.Stage_Paused)
 		return errors.Trace(err)
 	}
@@ -434,7 +437,7 @@ func (st *SubTask) Resume() error {
 
 	st.setResult(nil) // clear previous result
 	cu := st.CurrUnit()
-	log.Infof("[subtask] %s resuming with %s dm-unit", st.cfg.Name, cu.Type())
+	st.l.Info("resume with unit", zap.Stringer("unit", cu.Type()))
 
 	st.ctx, st.cancel = context.WithCancel(context.Background())
 	pr := make(chan pb.ProcessResult, 1)
@@ -628,7 +631,7 @@ func (st *SubTask) unitTransWaitCondition() error {
 	pu := st.PrevUnit()
 	cu := st.CurrUnit()
 	if pu != nil && pu.Type() == pb.UnitType_Load && cu.Type() == pb.UnitType_Sync {
-		log.Infof("[subtask] %s wait condition between %s and %s", st.cfg.Name, pu.Type(), cu.Type())
+		st.l.Info("wait condition between two units", zap.Stringer("previous unit", pu.Type()), zap.Stringer("unit", cu.Type()))
 		hub := GetConditionHub()
 		ctx, cancel := context.WithTimeout(hub.w.ctx, 5*time.Minute)
 		defer cancel()
@@ -647,7 +650,7 @@ func (st *SubTask) unitTransWaitCondition() error {
 			if pos1.Compare(*pos2) <= 0 {
 				break
 			}
-			log.Debugf("loader end binlog pos: %s, relay binlog pos: %s, wait for catchup", pos1, pos2)
+			st.l.Debug("wait relay to catchup", zap.Stringer("load end position", pos1), zap.Stringer("relay position", pos2))
 
 			select {
 			case <-ctx.Done():
@@ -655,7 +658,7 @@ func (st *SubTask) unitTransWaitCondition() error {
 			case <-time.After(time.Millisecond * 50):
 			}
 		}
-		log.Info("relay binlog pos catchup loader end binlog pos")
+		st.l.Info("relay binlog pos catchup loader end binlog pos")
 	}
 	return nil
 }

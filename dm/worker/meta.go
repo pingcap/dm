@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/syndtr/goleveldb/leveldb"
+	"go.uber.org/zap"
 )
 
 // Meta information contains (deprecated, instead of proto.WorkMeta)
@@ -94,6 +95,9 @@ type Metadata struct {
 	// task operation log
 	log *Logger
 
+	// record log
+	l log.Logger
+
 	dir string
 	db  *leveldb.DB
 }
@@ -103,14 +107,17 @@ func NewMetadata(dir string, db *leveldb.DB) (*Metadata, error) {
 	meta := &Metadata{
 		dir: dir,
 		db:  db,
-		log: new(Logger),
+		log: &Logger{
+			l: log.With(zap.String("component", "operator log")),
+		},
+		l: log.With(zap.String("component", "metadata")),
 	}
 
 	// restore from old metadata
 	oldPath := path.Join(dir, "meta")
 	err := meta.tryToRecoverMetaFromOldFashion(oldPath)
 	if err != nil {
-		log.Errorf("[worker metadata]fail to recover from old metadata file %s, meta file may be corrupt, error message: %v", oldPath, err)
+		meta.l.Error("fail to recover from old metadata file, meta file may be corrupt", zap.String("old meta file", oldPath), log.ShortError(err))
 		return nil, errors.Trace(err)
 	}
 
@@ -287,10 +294,10 @@ func (meta *Metadata) tryToRecoverMetaFromOldFashion(path string) error {
 		return errors.Annotatef(err, "decode old metadata file %s", path)
 	}
 
-	log.Infof("[worker metadata] find %d tasks from old metadata file", len(oldMeta.SubTasks))
+	meta.l.Info("find tasks from old metadata file", zap.Int("task number", len(oldMeta.SubTasks)))
 
 	for name, task := range oldMeta.SubTasks {
-		log.Infof("[worker metadata] from old metadata file: subtask %s => %+v", name, task)
+		meta.l.Info("from old metadata file", zap.String("task name", name), zap.Reflect("task config", task))
 		var b bytes.Buffer
 		enc := toml.NewEncoder(&b)
 		err = enc.Encode(task)

@@ -24,6 +24,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/binlog"
@@ -111,7 +112,7 @@ func (c *Config) Clone() *Config {
 func (c *Config) String() string {
 	cfg, err := json.Marshal(c)
 	if err != nil {
-		log.Errorf("[worker] marshal config to json error %v", err)
+		log.L().Error("fail to marshal config to json", zap.Reflect("config", c), log.ShortError(err))
 	}
 	return string(cfg)
 }
@@ -122,7 +123,7 @@ func (c *Config) Toml() (string, error) {
 
 	err := toml.NewEncoder(&b).Encode(c)
 	if err != nil {
-		log.Errorf("[worker] marshal config to toml error %v", err)
+		log.L().Error("fail to marshal config to toml", zap.Reflect("config", c), log.ShortError(err))
 	}
 
 	return b.String(), nil

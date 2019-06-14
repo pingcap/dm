@@ -20,8 +20,7 @@ import (
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/errors"
+	"go.uber.org/zap"
 )
 
 // Status returns the status of the current sub task
@@ -38,7 +37,7 @@ func (st *SubTask) Error() interface{} {
 func (st *SubTask) StatusJSON() string {
 	sj, err := json.Marshal(st.Status())
 	if err != nil {
-		log.Errorf("[subtask] marshal status error %s", errors.ErrorStack(err))
+		st.l.Error("fail to marshal status", zap.Reflect("status", st.Status()), zap.Error(err))
 		return ""
 	}
 	return string(sj)
@@ -118,7 +117,7 @@ func (w *Worker) StatusJSON(stName string) string {
 	mar := jsonpb.Marshaler{EmitDefaults: true, Indent: "    "}
 	s, err := mar.MarshalToString(sl)
 	if err != nil {
-		log.Errorf("[worker] marshal status error %s", errors.ErrorStack(err))
+		w.l.Error("fail to marshal status", zap.Reflect("status", sl), zap.Error(err))
 		return ""
 	}
 	return s

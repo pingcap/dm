@@ -17,6 +17,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"go.uber.org/zap"
 )
 
 // KVConfig is the configuration of goleveldb
@@ -48,7 +49,7 @@ var defaultKVConfig = &KVConfig{
 }
 
 func openDB(kvDir string, config *KVConfig) (*leveldb.DB, error) {
-	log.Infof("kv db config: %+v", config)
+	log.L().Info("", zap.Reflect("kv config", config))
 
 	var opts opt.Options
 	opts.BlockCacheCapacity = config.BlockCacheCapacity

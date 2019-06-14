@@ -25,6 +25,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"github.com/syndtr/goleveldb/leveldb"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -51,6 +52,7 @@ type Worker struct {
 	cancel context.CancelFunc
 
 	cfg *Config
+	l   log.Logger
 
 	subTasks map[string]*SubTask
 
@@ -69,6 +71,7 @@ func NewWorker(cfg *Config) (*Worker, error) {
 		relayHolder: NewRelayHolder(cfg),
 		tracer:      tracing.InitTracerHub(cfg.Tracer),
 		subTasks:    make(map[string]*SubTask),
+		l:           log.With(zap.String("component", "worker controller")),
 	}
 
 	// initial relay holder
@@ -113,7 +116,7 @@ func NewWorker(cfg *Config) (*Worker, error) {
 
 	w.ctx, w.cancel = context.WithCancel(context.Background())
 
-	log.Info("[worker] initialzed")
+	w.l.Info("initialzed")
 
 	return w, nil
 }
@@ -121,7 +124,7 @@ func NewWorker(cfg *Config) (*Worker, error) {
 // Start starts working
 func (w *Worker) Start() {
 	if w.closed.Get() == closedTrue {
-		log.Warn("worker already closed")
+		w.l.Warn("already closed")
 		return
 	}
 
@@ -133,17 +136,17 @@ func (w *Worker) Start() {
 		w.handleTask()
 	}()
 
-	log.Info("[worker] start running")
+	w.l.Info("start running")
 
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-w.ctx.Done():
-			log.Infof("[worker] status print process exits!")
+			w.l.Info("status print process exits!")
 			return
 		case <-ticker.C:
-			log.Debugf("[worker] status \n%s", w.StatusJSON(""))
+			w.l.Debug("runtime status", zap.String("status", w.StatusJSON("")))
 		}
 	}
 }
@@ -154,7 +157,7 @@ func (w *Worker) Close() {
 	defer w.Unlock()
 
 	if w.closed.Get() == closedTrue {
-		log.Warn("worker already closed")
+		w.l.Warn("already closed")
 		return
 	}
 
@@ -259,14 +262,14 @@ func (w *Worker) operateSubTask(task *pb.TaskMeta) (int64, error) {
 		return 0, errors.Annotatef(err, "%s task %s, something wrong with saving operation log", task.Op, task.Name)
 	}
 
-	log.Infof("[worker] %s task %v", task.Op, task.Name)
+	w.l.Info("operate subtask", zap.Stringer("operation", task.Op), zap.String("task", task.Name))
 	return opLogID, nil
 }
 
 // QueryStatus query worker's sub tasks' status
 func (w *Worker) QueryStatus(name string) []*pb.SubTaskStatus {
 	if w.closed.Get() == closedTrue {
-		log.Warn("[worker] querying status from a closed worker")
+		w.l.Warn("querying status from a closed worker")
 		return nil
 	}
 
@@ -276,7 +279,7 @@ func (w *Worker) QueryStatus(name string) []*pb.SubTaskStatus {
 // QueryError query worker's sub tasks' error
 func (w *Worker) QueryError(name string) []*pb.SubTaskError {
 	if w.closed.Get() == closedTrue {
-		log.Warn("[worker] querying error from a closed worker")
+		w.l.Warn("querying error from a closed worker")
 		return nil
 	}
 
@@ -300,7 +303,7 @@ func (w *Worker) HandleSQLs(ctx context.Context, req *pb.HandleSubTaskSQLsReques
 // FetchDDLInfo fetches all sub tasks' DDL info which pending to sync
 func (w *Worker) FetchDDLInfo(ctx context.Context) *pb.DDLInfo {
 	if w.closed.Get() == closedTrue {
-		log.Warn("[worker] fetching DDLInfo from a closed worker")
+		w.l.Warn("fetching DDLInfo from a closed worker")
 		return nil
 	}
 
@@ -371,7 +374,7 @@ func (w *Worker) doFetchDDLInfo(ctx context.Context, ch chan<- *pb.DDLInfo) {
 	w.RLock()
 	w.subTasks[v.Task].SaveDDLInfo(v)
 	w.RUnlock()
-	log.Infof("[worker] save DDLInfo into subTasks")
+	w.l.Info("save DDLInfo into subTasks")
 
 	ch <- v
 }
@@ -409,7 +412,7 @@ func (w *Worker) ExecuteDDL(ctx context.Context, req *pb.ExecDDLRequest) error {
 	if err == nil {
 		st.ClearDDLLockInfo() // remove DDL lock info
 		st.ClearDDLInfo()
-		log.Infof("[worker] ExecuteDDL remove cacheDDLInfo")
+		w.l.Info("ExecuteDDL remove cacheDDLInfo")
 	}
 	return err
 }
@@ -432,7 +435,7 @@ func (w *Worker) BreakDDLLock(ctx context.Context, req *pb.BreakDDLLockRequest) 
 		}
 		st.ClearDDLLockInfo() // remove DDL lock info
 		st.ClearDDLInfo()
-		log.Infof("[worker] BreakDDLLock remove cacheDDLInfo")
+		w.l.Info("BreakDDLLock remove cacheDDLInfo")
 	}
 
 	if req.ExecDDL && req.SkipDDL {
@@ -551,7 +554,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		return errors.New("update source ID is not allowed")
 	}
 
-	log.Infof("[worker] update relay configure with config: %v", newCfg)
+	w.l.Info("update relay configure", zap.Stringer("new config", newCfg))
 	cloneCfg, _ := newCfg.DecryptPassword()
 
 	// Update SubTask configure
@@ -586,7 +589,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		}
 	}
 
-	log.Info("[worker] update relay configure in subtasks success.")
+	w.l.Info("[worker] update relay configure in subtasks success.")
 
 	// Update relay unit configure
 	err = w.relayHolder.Update(ctx, cloneCfg)
@@ -607,8 +610,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	}
 	w.cfg.UpdateConfigFile(content)
 
-	log.Infof("[worker] save config to local file: %s", w.cfg.ConfigFile)
-	log.Info("[worker] update relay configure in success.")
+	w.l.Info("update relay configure in success, save config to local file", zap.String("local file", w.cfg.ConfigFile))
 
 	return nil
 }
@@ -675,7 +677,7 @@ func (w *Worker) restoreSubTask() error {
 			return errors.Trace(err)
 		}
 
-		log.Infof("[worker] start sub task with config: %v", cfgDecrypted)
+		w.l.Info("prepare to restore sub task", zap.Stringer("config", cfgDecrypted))
 
 		var st *SubTask
 		if task.GetStage() == pb.Stage_Running || task.GetStage() == pb.Stage_New {
@@ -703,7 +705,7 @@ Loop:
 	for {
 		select {
 		case <-w.ctx.Done():
-			log.Infof("[worker] handle task process exits!")
+			w.l.Info("handle task process exits!")
 			return
 		case <-ticker.C:
 			w.Lock()
@@ -718,7 +720,7 @@ Loop:
 				continue
 			}
 
-			log.Infof("start to execute operation ID = %d detail %+v", opLog.Id, opLog)
+			w.l.Info("start to execute operation", zap.Reflect("oplog", opLog))
 
 			st, exist := w.subTasks[opLog.Task.Name]
 			var err error
@@ -732,7 +734,7 @@ Loop:
 				if w.relayPurger.Purging() {
 					if retryCnt < maxRetryCount {
 						retryCnt++
-						log.Warnf("relay log purger is purging, cannot start sub task %s, would try again later", opLog.Task.Name)
+						w.l.Warn("relay log purger is purging, cannot start subtask, would try again later", zap.String("task", opLog.Task.Name))
 						w.Unlock()
 						continue Loop
 					}
@@ -755,7 +757,7 @@ Loop:
 					break
 				}
 
-				log.Infof("[worker] start sub task with config: %v", cfgDecrypted)
+				w.l.Info("started sub task", zap.Stringer("config", cfgDecrypted))
 				st = NewSubTask(cfgDecrypted)
 				w.subTasks[opLog.Task.Name] = st
 				st.Run()
@@ -772,7 +774,7 @@ Loop:
 					break
 				}
 
-				log.Infof("[worker] update sub task %s with config: %v", opLog.Task.Name, taskCfg)
+				w.l.Info("updateed sub task", zap.String("task", opLog.Task.Name), zap.Stringer("new config", taskCfg))
 				err = st.Update(taskCfg)
 			case pb.TaskOp_Stop:
 				if !exist {
@@ -780,7 +782,7 @@ Loop:
 					break
 				}
 
-				log.Infof("[worker] stop sub task %s", opLog.Task.Name)
+				w.l.Info(" stopped sub task", zap.String("task", opLog.Task.Name))
 				st.Close()
 				delete(w.subTasks, opLog.Task.Name)
 			case pb.TaskOp_Pause:
@@ -789,7 +791,7 @@ Loop:
 					break
 				}
 
-				log.Infof("[worker] pause sub task %s", opLog.Task.Name)
+				w.l.Info("paused sub task", zap.String("task", opLog.Task.Name))
 				err = st.Pause()
 			case pb.TaskOp_Resume:
 				if !exist {
@@ -797,11 +799,11 @@ Loop:
 					break
 				}
 
-				log.Infof("[worker] resume sub task %s", opLog.Task.Name)
+				w.l.Info("resume sub task", zap.String("task", opLog.Task.Name))
 				err = st.Resume()
 			}
 
-			log.Infof("end to execute operation %d result %v", opLog.Id, err)
+			w.l.Info("end to execute operation", zap.Int64("oplog ID", opLog.Id), log.ShortError(err))
 
 			if err != nil {
 				opLog.Message = err.Error()
@@ -819,7 +821,7 @@ Loop:
 			err = w.meta.MarkOperation(opLog)
 			w.Unlock()
 			if err != nil {
-				log.Errorf("fail to mark subtask %s operation %+v", opLog.Task.Name, opLog)
+				w.l.Error("fail to mark subtask operation", zap.Reflect("oplog", opLog))
 			}
 		}
 	}
