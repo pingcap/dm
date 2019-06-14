@@ -58,6 +58,12 @@ var sqls = []string{
 	"alter table `t1` drop index if exists i1",
 	"alter table `t1` drop foreign key if exists fk_t2_id",
 	"alter table `t1` drop partition if exists p2",
+	"alter table `t1` partition by hash(a)",
+	"alter table `t1` partition by key(a)",
+	"alter table `t1` partition by range(a) (partition x values less than (75))",
+	"alter table `t1` partition by list columns (a, b) (partition x values in ((10, 20)))",
+	"alter table `t1` partition by list (a) (partition x default)",
+	"alter table `t1` partition by system_time (partition x history, partition y current)",
 }
 
 func TestSuite(t *testing.T) {
@@ -126,6 +132,12 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 		{"ALTER TABLE `test`.`t1` DROP INDEX IF EXISTS `i1`"},
 		{"ALTER TABLE `test`.`t1` DROP FOREIGN KEY IF EXISTS `fk_t2_id`"},
 		{"ALTER TABLE `test`.`t1` DROP PARTITION IF EXISTS `p2`"},
+		{"ALTER TABLE `test`.`t1` PARTITION BY HASH (`a`) PARTITIONS 1"},
+		{"ALTER TABLE `test`.`t1` PARTITION BY KEY (`a`) PARTITIONS 1"},
+		{"ALTER TABLE `test`.`t1` PARTITION BY RANGE (`a`) (PARTITION `x` VALUES LESS THAN (75))"},
+		{"ALTER TABLE `test`.`t1` PARTITION BY LIST COLUMNS (`a`,`b`) (PARTITION `x` VALUES IN ((10, 20)))"},
+		{"ALTER TABLE `test`.`t1` PARTITION BY LIST (`a`) (PARTITION `x` DEFAULT)"},
+		{"ALTER TABLE `test`.`t1` PARTITION BY SYSTEM_TIME (PARTITION `x` HISTORY,PARTITION `y` CURRENT)"},
 	}
 
 	expectedTableName := [][][]*filter.Table{
@@ -152,6 +164,12 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 		{{genTableName("test", "t1")}, {genTableName("test", "t1")}},
 		{{genTableName("s1", "t1")}, {genTableName("s1", "t1"), genTableName("test", "t2")}, {genTableName("test", "t2")}},
 		{{genTableName("s1", "t1")}, {genTableName("s1", "t1"), genTableName("xx", "t2")}, {genTableName("xx", "t2")}},
+		{{genTableName("test", "t1")}},
+		{{genTableName("test", "t1")}},
+		{{genTableName("test", "t1")}},
+		{{genTableName("test", "t1")}},
+		{{genTableName("test", "t1")}},
+		{{genTableName("test", "t1")}},
 		{{genTableName("test", "t1")}},
 		{{genTableName("test", "t1")}},
 		{{genTableName("test", "t1")}},
@@ -200,6 +218,12 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 		{{genTableName("xtest", "xt1")}},
 		{{genTableName("xtest", "xt1")}},
 		{{genTableName("xtest", "xt1")}},
+		{{genTableName("xtest", "xt1")}},
+		{{genTableName("xtest", "xt1")}},
+		{{genTableName("xtest", "xt1")}},
+		{{genTableName("xtest", "xt1")}},
+		{{genTableName("xtest", "xt1")}},
+		{{genTableName("xtest", "xt1")}},
 	}
 
 	targetSQLs := [][]string{
@@ -237,6 +261,12 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 		{"ALTER TABLE `xtest`.`xt1` DROP INDEX IF EXISTS `i1`"},
 		{"ALTER TABLE `xtest`.`xt1` DROP FOREIGN KEY IF EXISTS `fk_t2_id`"},
 		{"ALTER TABLE `xtest`.`xt1` DROP PARTITION IF EXISTS `p2`"},
+		{"ALTER TABLE `xtest`.`xt1` PARTITION BY HASH (`a`) PARTITIONS 1"},
+		{"ALTER TABLE `xtest`.`xt1` PARTITION BY KEY (`a`) PARTITIONS 1"},
+		{"ALTER TABLE `xtest`.`xt1` PARTITION BY RANGE (`a`) (PARTITION `x` VALUES LESS THAN (75))"},
+		{"ALTER TABLE `xtest`.`xt1` PARTITION BY LIST COLUMNS (`a`,`b`) (PARTITION `x` VALUES IN ((10, 20)))"},
+		{"ALTER TABLE `xtest`.`xt1` PARTITION BY LIST (`a`) (PARTITION `x` DEFAULT)"},
+		{"ALTER TABLE `xtest`.`xt1` PARTITION BY SYSTEM_TIME (PARTITION `x` HISTORY,PARTITION `y` CURRENT)"},
 	}
 
 	for i, sql := range sqls {
