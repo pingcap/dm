@@ -17,10 +17,11 @@ import (
 	"context"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/pingcap/failpoint"
 
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/log"
 )
 
 var (
@@ -51,7 +52,7 @@ func (l *Loader) PrintStatus(ctx context.Context) {
 	failpoint.Inject("PrintStatusCheckSeconds", func(val failpoint.Value) {
 		if seconds, ok := val.(int); ok {
 			printStatusInterval = time.Duration(seconds) * time.Second
-			log.Infof("[failpoint] set loader printStatusInterval to %d", seconds)
+			l.logger.Info("set loader printStatusInterval", zap.String("feature", "failpoint"), zap.Int("printStatusInterval", seconds))
 		}
 	})
 
@@ -72,7 +73,11 @@ func (l *Loader) PrintStatus(ctx context.Context) {
 		finishedSize := l.finishedDataSize.Get()
 		totalSize := l.totalDataSize.Get()
 		totalFileCount := l.totalFileCount.Get()
-		log.Infof("[loader] finished_bytes = %d, total_bytes = %d, total_file_count = %d, progress = %s", finishedSize, totalSize, totalFileCount, percent(finishedSize, totalSize))
+		l.logger.Info("progress status of load",
+			zap.Int64("finished_bytes", finishedSize),
+			zap.Int64("total_bytes", totalSize),
+			zap.Int64("total_file_count", totalFileCount),
+			zap.String("progress", percent(finishedSize, totalSize)))
 		progressGauge.WithLabelValues(l.cfg.Name).Set(float64(finishedSize) / float64(totalSize))
 		if done {
 			return
