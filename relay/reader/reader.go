@@ -20,12 +20,20 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog/common"
 	br "github.com/pingcap/dm/pkg/binlog/reader"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 )
+
+// // logger writes log start with `[component=relay]`
+var logger log.Logger
+
+func init() {
+	logger = log.With(zap.String("component", "relay"))
+}
 
 // Reader reads binlog events from a upstream master server.
 // The read binlog events should be send to a transformer.
@@ -86,7 +94,7 @@ func (r *reader) Start() error {
 
 	defer func() {
 		status := r.in.Status()
-		log.Infof("[relay] set up binlog reader for master %s with status %s", r.cfg.MasterID, status)
+		logger.Info("set up binlog reader", zap.String("master", r.cfg.MasterID), zap.String("status", status))
 	}()
 
 	var err error
@@ -130,7 +138,7 @@ func (r *reader) GetEvent(ctx context.Context) (*replication.BinlogEvent, error)
 		if err == nil {
 			return ev, nil
 		} else if isIgnorableError(err) {
-			log.Warnf("[relay] get event with ignorable error %s", err)
+			logger.Warn("get event with ignorable error", log.ShortError(err))
 			return nil, nil // return without error and also without binlog event
 		}
 		return nil, errors.Trace(err)
@@ -139,12 +147,12 @@ func (r *reader) GetEvent(ctx context.Context) (*replication.BinlogEvent, error)
 
 func (r *reader) setUpReaderByGTID() error {
 	gs := r.cfg.GTIDs
-	log.Infof("[relay] start sync for master %s from GTID set %s", r.cfg.MasterID, gs)
+	logger.Info("start sync", zap.String("master", r.cfg.MasterID), zap.String("from GTID set", gs))
 	return r.in.StartSyncByGTID(gs)
 }
 
 func (r *reader) setUpReaderByPos() error {
 	pos := r.cfg.Pos
-	log.Infof("[relay] start sync for master %s from position %s", r.cfg.MasterID, pos)
+	logger.Info("start sync", zap.String("master", r.cfg.MasterID), zap.String("from position", pos))
 	return r.in.StartSyncByPos(pos)
 }

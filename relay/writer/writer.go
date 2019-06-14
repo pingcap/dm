@@ -16,9 +16,18 @@ package writer
 import (
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/log"
 )
+
+// // logger writes log start with `[component=relay]`
+var logger log.Logger
+
+func init() {
+	logger = log.With(zap.String("component", "relay"))
+}
 
 // Result represents a write result.
 type Result struct {

@@ -16,10 +16,10 @@ package relay
 import (
 	"time"
 
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -152,7 +152,7 @@ func reportRelayLogSpaceInBackground(dirpath string) error {
 			case <-ticker.C:
 				size, err := utils.GetStorageSize(dirpath)
 				if err != nil {
-					log.Error("update sotrage size err: ", err)
+					logger.Error("update sotrage size", log.ShortError(err))
 				} else {
 					relayLogSpaceGauge.WithLabelValues("capacity").Set(float64(size.Capacity))
 					relayLogSpaceGauge.WithLabelValues("available").Set(float64(size.Available))

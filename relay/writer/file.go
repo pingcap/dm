@@ -24,12 +24,12 @@ import (
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/binlog/event"
 	bw "github.com/pingcap/dm/pkg/binlog/writer"
-	"github.com/pingcap/dm/pkg/log"
 )
 
 // FileConfig is the configuration used by the FileWriter.
@@ -160,7 +160,7 @@ func (w *FileWriter) offset() int64 {
 func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (*Result, error) {
 	// close the previous binlog file
 	if w.out != nil {
-		log.Infof("[relay] closing previous underlying binlog writer with status %v", w.out.Status())
+		logger.Info("closing previous underlying binlog writer", zap.Reflect("status", w.out.Status()))
 		err := w.out.Close()
 		if err != nil {
 			return nil, errors.Annotate(err, "close previous underlying binlog writer")
@@ -183,7 +183,7 @@ func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (
 		return nil, errors.Annotatef(err, "start underlying binlog writer for %s", filename)
 	}
 	w.out = out.(*bw.FileWriter)
-	log.Infof("[relay] open underlying binlog writer with status %v", w.out.Status())
+	logger.Info("open underlying binlog writer", zap.Reflect("status", w.out.Status()))
 
 	// write the binlog file header if not exists
 	exist, err := checkBinlogHeaderExist(filename)
@@ -332,7 +332,7 @@ func (w *FileWriter) handleFileHoleExist(ev *replication.BinlogEvent) (bool, err
 		// no hole exists, but duplicate events may exists, this should be handled in another place.
 		return holeSize < 0, nil
 	}
-	log.Infof("[relay] hole exist from %d to %d in %s", fileOffset, evStartPos, w.filename.Get())
+	logger.Info("hole exist from pos1 to pos2", zap.Int64("pos1", fileOffset), zap.Int64("pos2", evStartPos), zap.String("file", w.filename.Get()))
 
 	// 2. generate dummy event
 	var (
@@ -360,7 +360,7 @@ func (w *FileWriter) handleDuplicateEventsExist(ev *replication.BinlogEvent) (*R
 	if err != nil {
 		return nil, errors.Annotatef(err, "check event %+v whether duplicate in %s", ev.Header, filename)
 	} else if duplicate {
-		log.Infof("[relay] event %+v is duplicate in %s", ev.Header, w.filename.Get())
+		logger.Info("event is duplicate", zap.Reflect("event header", ev.Header), zap.String("file name", w.filename.Get()))
 	}
 
 	return &Result{
