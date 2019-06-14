@@ -22,8 +22,8 @@ import (
 	"github.com/pingcap/parser/ast"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
+	"go.uber.org/zap"
 
-	"github.com/pingcap/dm/pkg/log"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 )
 
@@ -57,7 +57,7 @@ func (s *Syncer) InjectSQLs(ctx context.Context, sqls []string) error {
 		schema := schemas[i]
 		ev := genIncompleteQueryEvent([]byte(schema), []byte(sql))
 		newCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		log.Infof("injecting sql [%s] for schema [%s]", sql, schema)
+		s.logger.Info("injecting sql", zap.String("sql", sql), zap.String("schema", schema))
 
 		select {
 		case s.injectEventCh <- ev:
@@ -81,7 +81,7 @@ func (s *Syncer) tryInject(op opType, pos mysql.Position) *replication.BinlogEve
 		// NOTE: now we simply set EventSize to 0, make event's start / end pos are the same
 		e.Header.LogPos = pos.Pos
 		e.Header.EventSize = 0
-		log.Infof("inject binlog event (header: %+v, event: %+v) from inject chan", e.Header, e.Event)
+		s.logger.Info("inject binlog event from inject chan", zap.Reflect("header", e.Header), zap.Reflect("event", e.Event))
 		return e
 	default:
 		return nil

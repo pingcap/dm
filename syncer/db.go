@@ -189,7 +189,7 @@ func (conn *Conn) executeSQLJob(jobs []*job, maxRetry int) *ExecErrorContext {
 	for i := 0; i < maxRetry; i++ {
 		if i > 0 {
 			sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
-			log.Warnf("sql stmt_exec retry %d: %v", i, jobs)
+			conn.logger.Warn("execute jobs", zap.Int("retry", i))
 			time.Sleep(retryTimeout)
 		}
 
@@ -198,7 +198,7 @@ func (conn *Conn) executeSQLJob(jobs []*job, maxRetry int) *ExecErrorContext {
 			if isRetryableError(err) {
 				continue
 			}
-			log.Errorf("[exec][sql]%v[error]%v", jobs, err)
+			conn.logger.Error("execute jobs", log.ShortError(err))
 			errCtx.err = errors.Trace(errCtx.err)
 			return errCtx
 		}
@@ -219,19 +219,19 @@ func (conn *Conn) executeSQLJobImp(jobs []*job) *ExecErrorContext {
 
 	txn, err := conn.db.Begin()
 	if err != nil {
-		log.Errorf("exec sqls[%v] begin failed %v", jobs, errors.ErrorStack(err))
+		conn.logger.Error("begin transaction in executing job", zap.Error(err))
 		return &ExecErrorContext{err: errors.Trace(err), jobs: fmt.Sprintf("%v", jobs)}
 	}
 
 	for i := range jobs {
-		log.Debugf("[exec][checkpoint]%s[sql]%s[args]%v", jobs[i].currentPos, jobs[i].sql, jobs[i].args)
+		conn.logger.Debug("execute job", zap.Stringer("position", jobs[i].currentPos), zap.String("sql", jobs[i].sql), zap.Reflect("arguments", jobs[i].args))
 
 		_, err = txn.Exec(jobs[i].sql, jobs[i].args...)
 		if err != nil {
-			log.Warnf("[exec][checkpoint]%s[sql]%s[args]%v[error]%v", jobs[i].currentPos, jobs[i].sql, jobs[i].args, err)
+			conn.logger.Error("execute job", zap.Stringer("position", jobs[i].currentPos), zap.String("sql", jobs[i].sql), zap.Reflect("arguments", jobs[i].args), log.ShortError(err))
 			rerr := txn.Rollback()
 			if rerr != nil {
-				log.Errorf("[exec][checkpoint]%s[sql]%s[args]%v[error]%v", jobs[i].currentPos, jobs[i].sql, jobs[i].args, rerr)
+				conn.logger.Error("execute job", zap.Stringer("position", jobs[i].currentPos), zap.String("sql", jobs[i].sql), zap.Reflect("arguments", jobs[i].args), log.ShortError(rerr))
 			}
 			// error in ExecErrorContext should be the exec err, instead of the rollback rerr.
 			return &ExecErrorContext{err: errors.Trace(err), pos: jobs[i].currentPos, jobs: fmt.Sprintf("%v", jobs)}
@@ -239,7 +239,7 @@ func (conn *Conn) executeSQLJobImp(jobs []*job) *ExecErrorContext {
 	}
 	err = txn.Commit()
 	if err != nil {
-		log.Errorf("exec jobs[%v] commit failed %v", jobs, errors.ErrorStack(err))
+		conn.logger.Error("commit in executing job", zap.Error(err))
 		return &ExecErrorContext{err: errors.Trace(err), pos: jobs[0].currentPos, jobs: fmt.Sprintf("%v", jobs)}
 	}
 	return nil
@@ -282,7 +282,7 @@ func closeDBs(dbs ...*Conn) {
 	for _, db := range dbs {
 		err := db.close()
 		if err != nil {
-			log.Errorf("close db failed: %v", err)
+			db.logger.Error("fail to close db connection", log.ShortError(err))
 		}
 	}
 }

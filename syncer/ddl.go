@@ -14,13 +14,13 @@
 package syncer
 
 import (
-	"github.com/pingcap/dm/pkg/log"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/siddontang/go-mysql/replication"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -29,7 +29,7 @@ var (
 	// ErrDMLStatementFound defines an error which means we found unexpected dml statement found in query event.
 	ErrDMLStatementFound = errors.New("only support ROW format binlog, unexpected DML statement found in query event")
 	// IncompatibleDDLFormat is for incompatible ddl
-	IncompatibleDDLFormat = `encountered incompatible DDL in TiDB: %s
+	IncompatibleDDLFormat = `encountered incompatible DDL in TiDB:
 	please confirm your DDL statement is correct and needed.
 	for TiDB compatible DDL, please see the docs:
 	  English version: https://github.com/pingcap/docs/blob/master/sql/ddl.md
@@ -69,7 +69,7 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 	stmts, err := parserpkg.Parse(p, sql, "", "")
 	if err != nil {
 		// log error rather than fatal, so other defer can be executed
-		log.Errorf(IncompatibleDDLFormat, sql)
+		s.logger.Error(IncompatibleDDLFormat, zap.String("sql", sql))
 		return parseDDLResult{
 			stmt:   nil,
 			ignore: false,
@@ -271,7 +271,7 @@ func (s *Syncer) dropSchemaInSharding(sourceSchema string) error {
 			// refine clear them later if failed
 			// now it doesn't have problems
 			if err1 := s.checkpoint.DeleteTablePoint(table[0], table[1]); err1 != nil {
-				log.Errorf("[syncer] fail to delete checkpoint %s.%s", table[0], table[1])
+				s.logger.Error("fail to delete checkpoint", zap.String("schema", table[0]), zap.String("table", table[1]))
 			}
 		}
 	}
@@ -288,7 +288,7 @@ func (s *Syncer) clearOnlineDDL(targetSchema, targetTable string) error {
 	tables := group.Tables()
 
 	for _, table := range tables {
-		log.Infof("finish online ddl one %s.%s", table[0], table[1])
+		s.logger.Info("finish online ddl", zap.String("schema", table[0]), zap.String("table", table[1]))
 		err := s.onlineDDL.Finish(table[0], table[1])
 		if err != nil {
 			return errors.Annotatef(err, "finish online ddl on %s.%s", table[0], table[1])

@@ -20,9 +20,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 )
 
@@ -428,7 +428,7 @@ func findFitIndex(indexColumns map[string][]*column) []*column {
 	cols, ok := indexColumns["primary"]
 	if ok {
 		if len(cols) == 0 {
-			log.Error("cols is empty")
+			log.L().Error("cols is empty")
 		} else {
 			return cols
 		}
