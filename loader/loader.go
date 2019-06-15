@@ -377,7 +377,7 @@ func (l *Loader) Init() (err error) {
 		}
 	}()
 
-	checkpoint, err := newRemoteCheckPoint(log.With(zap.String("task", l.cfg.Name), zap.String("unit", "load"), zap.String("component", "checkpoint")), l.cfg, l.checkpointID())
+	checkpoint, err := newRemoteCheckPoint(l.logger.WithFields(zap.String("component", "checkpoint")), l.cfg, l.checkpointID())
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -652,7 +652,7 @@ func (l *Loader) genRouter(rules []*router.TableRule) error {
 
 func (l *Loader) initAndStartWorkerPool(ctx context.Context) error {
 	for i := 0; i < l.cfg.PoolSize; i++ {
-		worker, err := NewWorker(l, i, log.With(zap.String("task", l.cfg.Name), zap.String("unit", "load"), zap.Int("worker-id", i)))
+		worker, err := NewWorker(l, i, l.logger.WithFields(zap.Int("worker-id", i)))
 		if err != nil {
 			return err
 		}
