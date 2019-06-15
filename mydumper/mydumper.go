@@ -242,7 +242,7 @@ func (m *Mydumper) constructArgs() []string {
 		ret = append(ret, ParseArgLikeBash(extraArgs)...)
 	}
 
-	m.logger.Info("create mydumper", zap.Reflect("argument", ret))
+	m.logger.Info("create mydumper", zap.Strings("argument", ret))
 
 	ret = append(ret, "--password", db.Password)
 	return ret
