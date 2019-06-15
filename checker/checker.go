@@ -72,7 +72,7 @@ func NewChecker(cfgs []*config.SubTaskConfig, checkingItems map[string]string) *
 	c := &Checker{
 		instances:     make([]*mysqlInstance, 0, len(cfgs)),
 		checkingItems: checkingItems,
-		logger:        log.With(zap.String("unit", "checker")),
+		logger:        log.With(zap.String("unit", "task checker")),
 	}
 
 	for _, cfg := range cfgs {
