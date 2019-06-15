@@ -823,7 +823,7 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 				}
 
 				if sqlJob.ddlExecItem != nil && sqlJob.ddlExecItem.req != nil && !sqlJob.ddlExecItem.req.Exec {
-					s.logger.Info("ignore sharding DDLs", zap.Reflect("ddls", sqlJob.ddls))
+					s.logger.Info("ignore sharding DDLs", zap.Strings("ddls", sqlJob.ddls))
 				} else {
 					args := make([][]interface{}, len(sqlJob.ddls))
 					err = db.executeSQL(s.logger, sqlJob.ddls, args, 1)

@@ -244,7 +244,7 @@ func (cp *RemoteCheckPoint) CalcProgress(allFiles map[string]Tables2DataFiles) e
 func (cp *RemoteCheckPoint) allFilesFinished(files map[string][]int64) bool {
 	for file, pos := range files {
 		if len(pos) != 2 {
-			cp.logger.Error("unexpected checkpoint record", zap.String("data file", file), zap.Reflect("position", pos))
+			cp.logger.Error("unexpected checkpoint record", zap.String("data file", file), zap.Int64s("position", pos))
 			return false
 		}
 		if pos[0] != pos[1] {
