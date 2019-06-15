@@ -377,7 +377,7 @@ func (l *Loader) Init() (err error) {
 		}
 	}()
 
-	checkpoint, err := newRemoteCheckPoint(l.WithField(zap.String("component", "checkpoint")), l.cfg, l.checkpointID())
+	checkpoint, err := newRemoteCheckPoint(l.logger.WithFields(zap.String("component", "checkpoint")), l.cfg, l.checkpointID())
 	if err != nil {
 		return errors.Trace(err)
 	}
