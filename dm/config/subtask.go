@@ -52,6 +52,14 @@ type DBConfig struct {
 	MaxAllowedPacket *int   `toml:"max-allowed-packet" json:"max-allowed-packet" yaml:"max-allowed-packet"`
 }
 
+func (db *DBConfig) String() string {
+	cfg, err := json.Marshal(db)
+	if err != nil {
+		log.L().Error("fail to marshal config to json", log.ShortError(err))
+	}
+	return string(cfg)
+}
+
 // Toml returns TOML format representation of config
 func (db *DBConfig) Toml() (string, error) {
 	var b bytes.Buffer

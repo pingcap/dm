@@ -413,7 +413,7 @@ func (s *Server) QueryWorkerConfig(ctx context.Context, req *pb.QueryWorkerConfi
 	if err != nil {
 		resp.Result = false
 		resp.Msg = errors.ErrorStack(err)
-		log.L().Error("fail to marshal worker config", zap.String("request", "query worker config"), zap.Stringer("wotker from config", workerCfg.From), zap.Error(err))
+		log.L().Error("fail to marshal worker config", zap.String("request", "query worker config"), zap.Stringer("wotker from config", &workerCfg.From), zap.Error(err))
 	}
 
 	resp.Content = rawConfig
