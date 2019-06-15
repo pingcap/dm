@@ -74,7 +74,7 @@ const (
 )
 
 func init() {
-	logger = log.With(zap.String("component", "relay"))
+	logger = log.With(zap.String("component", "relay holder"))
 }
 
 // NewRelay creates an instance of Relay.
