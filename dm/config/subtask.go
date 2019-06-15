@@ -149,7 +149,7 @@ func NewSubTaskConfig() *SubTaskConfig {
 func (c *SubTaskConfig) String() string {
 	cfg, err := json.Marshal(c)
 	if err != nil {
-		log.L().Error("marshal sub task dm config to json", zap.Reflect("subtask configuration", c), log.ShortError(err))
+		log.L().Error("marshal sub task dm config to json", zap.String("task", c.Name), log.ShortError(err))
 	}
 	return string(cfg)
 }

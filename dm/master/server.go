@@ -958,7 +958,7 @@ func (s *Server) addTaskWorkers(task string, workers []string, replace bool) {
 
 	sort.Strings(valid)
 	s.taskWorkers[task] = valid
-	log.L().Info("update workers of task", zap.String("task", task), zap.Reflect("workers", valid))
+	log.L().Info("update workers of task", zap.String("task", task), zap.Strings("workers", valid))
 }
 
 // replaceTaskWorkers replaces the whole task-workers mapper
@@ -995,7 +995,7 @@ func (s *Server) removeTaskWorkers(task string, workers []string) {
 		log.L().Info("remove task from taskWorker", zap.String("task", task))
 	} else {
 		s.taskWorkers[task] = remain
-		log.L().Info("update workers of task", zap.String("task", task), zap.Reflect("reamin workers", remain))
+		log.L().Info("update workers of task", zap.String("task", task), zap.Strings("reamin workers", remain))
 	}
 }
 
@@ -1201,7 +1201,7 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 						}
 						if !s.containWorker(workers, worker) {
 							// should not happen
-							log.L().Error("try to sync shard DDL, but worker is not in workers", zap.String("task", in.Task), zap.String("worker", worker), zap.Reflect("workers", workers))
+							log.L().Error("try to sync shard DDL, but worker is not in workers", zap.String("task", in.Task), zap.String("worker", worker), zap.Strings("workers", workers))
 							doRetry = true
 							break
 						}
@@ -1305,7 +1305,7 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 		} else if !ownerResp.Result {
 			return nil, errors.Errorf("request DDL lock %s owner %s handle SQLs request %s fail %s", lockID, owner, ownerReq, ownerResp.Msg)
 		}
-		log.L().Info("sent handle --sharding DDL request", zap.Reflect("payload", ownerReq), zap.String("owner", owner), zap.String("lock ID", lockID))
+		log.L().Info("sent handle --sharding DDL request", zap.Stringer("payload", ownerReq), zap.String("owner", owner), zap.String("lock ID", lockID))
 		s.sqlOperatorHolder.Remove(lock.Task, key) // remove SQL operator after sent to owner
 	}
 
@@ -1449,7 +1449,7 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 			Msg:    fmt.Sprintf("Failed to parse configure from file %s, detail: ", cfg.ConfigFile) + errors.ErrorStack(err),
 		}, nil
 	}
-	log.L().Info("update dm-master config", zap.Reflect("config", cfg), zap.String("request", "UpdateMasterConfig"))
+	log.L().Info("update dm-master config", zap.Stringer("config", cfg), zap.String("request", "UpdateMasterConfig"))
 
 	// delete worker
 	wokerList := make([]string, 0, len(s.cfg.DeployMap))
