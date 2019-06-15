@@ -25,11 +25,12 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 var (
 	// OnlineDDLSchemes is scheme name => online ddl handler
-	OnlineDDLSchemes = map[string]func(*config.SubTaskConfig) (OnlinePlugin, error){
+	OnlineDDLSchemes = map[string]func(log.Logger, *config.SubTaskConfig) (OnlinePlugin, error){
 		config.PT:    NewPT,
 		config.GHOST: NewGhost,
 	}
@@ -85,16 +86,19 @@ type OnlineDDLStorage struct {
 
 	// map ghost schema => [ghost table => ghost ddl info, ...]
 	ddls map[string]map[string]*GhostDDLInfo
+
+	logger log.Logger
 }
 
 // NewOnlineDDLStorage creates a new online ddl storager
-func NewOnlineDDLStorage(cfg *config.SubTaskConfig) *OnlineDDLStorage {
+func NewOnlineDDLStorage(logger log.Logger, cfg *config.SubTaskConfig) *OnlineDDLStorage {
 	s := &OnlineDDLStorage{
 		cfg:    cfg,
 		schema: cfg.MetaSchema,
 		table:  fmt.Sprintf("%s_onlineddl", cfg.Name),
 		id:     strconv.Itoa(cfg.ServerID),
 		ddls:   make(map[string]map[string]*GhostDDLInfo),
+		logger: logger,
 	}
 
 	return s
@@ -122,7 +126,7 @@ func (s *OnlineDDLStorage) Load() error {
 	defer s.Unlock()
 
 	query := fmt.Sprintf("SELECT `ghost_schema`, `ghost_table`, `ddls` FROM `%s`.`%s` WHERE `id`='%s'", s.schema, s.table, s.id)
-	rows, err := s.db.querySQL(query, maxRetryCount)
+	rows, err := s.db.querySQL(s.logger, query, maxRetryCount)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -200,7 +204,7 @@ func (s *OnlineDDLStorage) Save(ghostSchema, ghostTable, realSchema, realTable, 
 	}
 
 	query := fmt.Sprintf("REPLACE INTO `%s`.`%s`(`id`,`ghost_schema`, `ghost_table`, `ddls`) VALUES ('%s', '%s', '%s', '%s')", s.schema, s.table, s.id, ghostSchema, ghostTable, escapeSingleQuote(string(ddlsBytes)))
-	err = s.db.executeSQL([]string{query}, [][]interface{}{nil}, maxRetryCount)
+	err = s.db.executeSQL(s.logger, []string{query}, [][]interface{}{nil}, maxRetryCount)
 	return errors.Trace(err)
 }
 
@@ -216,7 +220,7 @@ func (s *OnlineDDLStorage) Delete(ghostSchema, ghostTable string) error {
 
 	// delete all checkpoints
 	sql := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s' and `ghost_schema` = '%s' and `ghost_table` = '%s'", s.schema, s.table, s.id, ghostSchema, ghostTable)
-	err := s.db.executeSQL([]string{sql}, [][]interface{}{nil}, maxRetryCount)
+	err := s.db.executeSQL(s.logger, []string{sql}, [][]interface{}{nil}, maxRetryCount)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -232,7 +236,7 @@ func (s *OnlineDDLStorage) Clear() error {
 
 	// delete all checkpoints
 	sql := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s'", s.schema, s.table, s.id)
-	err := s.db.executeSQL([]string{sql}, [][]interface{}{nil}, maxRetryCount)
+	err := s.db.executeSQL(s.logger, []string{sql}, [][]interface{}{nil}, maxRetryCount)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -246,7 +250,7 @@ func (s *OnlineDDLStorage) Close() {
 	s.Lock()
 	defer s.Unlock()
 
-	closeDBs(s.db)
+	closeDBs(s.logger, s.db)
 }
 
 func (s *OnlineDDLStorage) prepare() error {
@@ -262,7 +266,7 @@ func (s *OnlineDDLStorage) prepare() error {
 
 func (s *OnlineDDLStorage) createSchema() error {
 	sql := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", s.schema)
-	err := s.db.executeSQL([]string{sql}, [][]interface{}{nil}, maxRetryCount)
+	err := s.db.executeSQL(s.logger, []string{sql}, [][]interface{}{nil}, maxRetryCount)
 	return errors.Trace(err)
 }
 
@@ -276,7 +280,7 @@ func (s *OnlineDDLStorage) createTable() error {
 			update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			UNIQUE KEY uk_id_schema_table (id, ghost_schema, ghost_table)
 		)`, tableName)
-	err := s.db.executeSQL([]string{sql}, [][]interface{}{nil}, maxRetryCount)
+	err := s.db.executeSQL(s.logger, []string{sql}, [][]interface{}{nil}, maxRetryCount)
 	return errors.Trace(err)
 }
 

@@ -19,8 +19,10 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // Ghost handles gh-ost online ddls (not complete, don't need to review it)
@@ -32,9 +34,9 @@ type Ghost struct {
 }
 
 // NewGhost returns gh-oat online plugin
-func NewGhost(cfg *config.SubTaskConfig) (OnlinePlugin, error) {
+func NewGhost(parent log.Logger, cfg *config.SubTaskConfig) (OnlinePlugin, error) {
 	g := &Ghost{
-		storge: NewOnlineDDLStorage(cfg),
+		storge: NewOnlineDDLStorage(parent.WithFields(zap.String("online ddl", "ghost osc")), cfg),
 	}
 
 	return g, errors.Trace(g.storge.Init())
