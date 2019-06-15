@@ -60,32 +60,17 @@ func (cfg *Config) Adjust() {
 // methods to simplify DM's log usage.
 type Logger struct {
 	*zap.Logger
-
-	pLogger *Logger
 }
 
 // WithFields return new Logger with specified fields
 func (l *Logger) WithFields(fields ...zap.Field) Logger {
-	return Logger{
-		Logger:  l.With(fields...),
-		pLogger: l,
-	}
-}
-
-// Parent return parent logger of Logger
-// if parent logger is nil return sentineLogger
-func (l *Logger) Parent() Logger {
-	if l.pLogger == nil {
-		return Logger{Logger: sentinelLogger}
-	}
-	return *l.pLogger
+	return Logger{l.With(fields...)}
 }
 
 // logger for DM
 var (
-	sentinelLogger = zap.NewNop()
-	appLogger      = Logger{Logger: sentinelLogger}
-	appLevel       zap.AtomicLevel
+	appLogger = Logger{zap.NewNop()}
+	appLevel  zap.AtomicLevel
 )
 
 // InitLogger initializes DM's and also the TiDB library's loggers.
@@ -104,7 +89,7 @@ func InitLogger(cfg *Config) error {
 	})
 	// Do not log stack traces at all, as we'll get the stack trace from the
 	// error itself.
-	appLogger = Logger{Logger: logger.WithOptions(zap.AddStacktrace(zap.DPanicLevel))}
+	appLogger = Logger{logger.WithOptions(zap.AddStacktrace(zap.DPanicLevel))}
 	appLevel = props.Level
 
 	return err
@@ -113,9 +98,7 @@ func InitLogger(cfg *Config) error {
 // With creates a child logger from the global logger and adds structured
 // context to it.
 func With(fields ...zap.Field) Logger {
-	return Logger{
-		Logger: appLogger.With(fields...),
-	}
+	return Logger{appLogger.With(fields...)}
 }
 
 // SetLevel modifies the log level of the global logger. Returns the previous
