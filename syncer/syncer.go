@@ -188,13 +188,13 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.c = newCausality()
 	syncer.done = make(chan struct{})
 	syncer.bwList = filter.New(cfg.CaseSensitive, cfg.BWList)
-	syncer.checkpoint = NewRemoteCheckPoint(log.With(zap.String("task", cfg.Name), zap.String("unit", "binlog replication"), zap.String("component", "checkpoint")), cfg, syncer.checkpointID())
 	syncer.injectEventCh = make(chan *replication.BinlogEvent)
 	syncer.tracer = tracing.GetTracer()
 	syncer.setTimezone()
 	syncer.addJobFunc = syncer.addJob
 
 	syncer.logger = log.With(zap.String("task", cfg.Name), zap.String("unit", "binlog replication"))
+	syncer.checkpoint = NewRemoteCheckPoint(syncer.logger.WithFields(zap.String("component", "checkpoint")), cfg, syncer.checkpointID())
 
 	syncer.syncCfg = replication.BinlogSyncerConfig{
 		ServerID:                uint32(syncer.cfg.ServerID),
@@ -209,7 +209,7 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	}
 
 	syncer.binlogType = toBinlogType(cfg.BinlogType)
-	syncer.sqlOperatorHolder = operator.NewHolder(log.With(zap.String("task", cfg.Name), zap.String("unit", "binlog replication"), zap.String("component", "operator holder")))
+	syncer.sqlOperatorHolder = operator.NewHolder(syncer.logger.WithFields(zap.String("component", "operator holder")))
 	syncer.readerHub = streamer.GetReaderHub()
 
 	if cfg.IsSharding {
@@ -431,7 +431,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		}
 		s.syncer = replication.NewBinlogSyncer(s.syncCfg)
 	} else if s.binlogType == LocalBinlog {
-		s.localReader = streamer.NewBinlogReader(log.With(zap.String("task", s.cfg.Name), zap.String("unit", "binlog replication"), zap.String("component", "local reader")), &streamer.BinlogReaderConfig{
+		s.localReader = streamer.NewBinlogReader(s.logger.WithFields(zap.String("component", "local reader")), &streamer.BinlogReaderConfig{
 			RelayDir: s.cfg.RelayDir,
 			Timezone: s.timezone,
 		})
@@ -990,7 +990,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	// but there are no ways to make `update` idempotent,
 	// if we start syncer at an early position, database must bear a period of inconsistent state,
 	// it's eventual consistency.
-	safeMode := sm.NewSafeMode(log.With(zap.String("task", s.cfg.Name), zap.String("unit", "binlog replication"), zap.String("component", "safe-mode")))
+	safeMode := sm.NewSafeMode(s.logger.WithFields(zap.String("component", "safe-mode")))
 	s.enableSafeModeInitializationPhase(ctx, safeMode)
 
 	// syncing progress with sharding DDL group
@@ -1047,7 +1047,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				shardingSyncer = replication.NewBinlogSyncer(s.shardingSyncCfg)
 				shardingStreamer, err = s.getBinlogStreamer(shardingSyncer, shardingReSync.currPos)
 			} else if s.binlogType == LocalBinlog {
-				shardingReader = streamer.NewBinlogReader(log.With(zap.String("task", s.cfg.Name), zap.String("unit", "binlog replication"), zap.String("component", "shard binlog reader")), &streamer.BinlogReaderConfig{
+				shardingReader = streamer.NewBinlogReader(s.logger.WithFields(zap.String("component", "shard binlog reader")), &streamer.BinlogReaderConfig{
 					RelayDir: s.cfg.RelayDir,
 					Timezone: s.timezone,
 				})
