@@ -297,7 +297,7 @@ func (meta *Metadata) tryToRecoverMetaFromOldFashion(path string) error {
 	meta.l.Info("find tasks from old metadata file", zap.Int("task number", len(oldMeta.SubTasks)))
 
 	for name, task := range oldMeta.SubTasks {
-		meta.l.Info("from old metadata file", zap.String("task name", name), zap.Reflect("task config", task))
+		meta.l.Info("from old metadata file", zap.String("task name", name), zap.Stringer("task config", task))
 		var b bytes.Buffer
 		enc := toml.NewEncoder(&b)
 		err = enc.Encode(task)
