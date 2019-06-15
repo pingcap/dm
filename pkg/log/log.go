@@ -62,6 +62,11 @@ type Logger struct {
 	*zap.Logger
 }
 
+// WithFields return new Logger with specified fields
+func (l *Logger) WithFields(fields ...zap.Field) Logger {
+	return Logger{l.With(fields...)}
+}
+
 // logger for DM
 var (
 	appLogger = Logger{zap.NewNop()}
