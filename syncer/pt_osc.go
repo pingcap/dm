@@ -19,8 +19,10 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // PT handles pt online schema changes
@@ -32,9 +34,9 @@ type PT struct {
 }
 
 // NewPT returns pt online schema changes plugin
-func NewPT(cfg *config.SubTaskConfig) (OnlinePlugin, error) {
+func NewPT(parent log.Logger, cfg *config.SubTaskConfig) (OnlinePlugin, error) {
 	g := &PT{
-		storge: NewOnlineDDLStorage(cfg),
+		storge: NewOnlineDDLStorage(parent.WithFields(zap.String("online ddl", "pt osc")), cfg),
 	}
 
 	return g, errors.Trace(g.storge.Init())

@@ -287,7 +287,7 @@ func (s *Syncer) Init() (err error) {
 		if !ok {
 			return errors.NotSupportedf("online ddl scheme (%s)", s.cfg.OnlineDDLScheme)
 		}
-		s.onlineDDL, err = fn(s.cfg)
+		s.onlineDDL, err = fn(s.logger, s.cfg)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -551,12 +551,12 @@ func (s *Syncer) getTableFromDB(db *Conn, schema string, name string) (*table, e
 	table.name = name
 	table.indexColumns = make(map[string][]*column)
 
-	err := getTableColumns(db, table, s.cfg.MaxRetry)
+	err := getTableColumns(s.logger, db, table, s.cfg.MaxRetry)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	err = getTableIndex(db, table, s.cfg.MaxRetry)
+	err = getTableIndex(s.logger, db, table, s.cfg.MaxRetry)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -788,7 +788,7 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 		if len(jobs) == 0 {
 			return nil
 		}
-		errCtx := db.executeSQLJob(jobs, s.cfg.MaxRetry)
+		errCtx := db.executeSQLJob(s.logger, jobs, s.cfg.MaxRetry)
 		var err error
 		if errCtx != nil {
 			err = errCtx.err
@@ -826,7 +826,7 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 					s.logger.Info("ignore sharding DDLs", zap.Reflect("ddls", sqlJob.ddls))
 				} else {
 					args := make([][]interface{}, len(sqlJob.ddls))
-					err = db.executeSQL(sqlJob.ddls, args, 1)
+					err = db.executeSQL(s.logger, sqlJob.ddls, args, 1)
 					if err != nil && ignoreDDLError(err) {
 						err = nil
 					}
@@ -1923,14 +1923,14 @@ func (s *Syncer) createDBs() error {
 	s.toDBs = make([]*Conn, 0, s.cfg.WorkerCount)
 	s.toDBs, err = createDBs(s.cfg, s.cfg.To, s.cfg.WorkerCount, maxDMLConnectionTimeout)
 	if err != nil {
-		closeDBs(s.fromDB) // release resources acquired before return with error
+		closeDBs(s.logger, s.fromDB) // release resources acquired before return with error
 		return errors.Trace(err)
 	}
 	// db for ddl
 	s.ddlDB, err = createDB(s.cfg, s.cfg.To, maxDDLConnectionTimeout)
 	if err != nil {
-		closeDBs(s.fromDB)
-		closeDBs(s.toDBs...)
+		closeDBs(s.logger, s.fromDB)
+		closeDBs(s.logger, s.toDBs...)
 		return errors.Trace(err)
 	}
 
@@ -1939,9 +1939,9 @@ func (s *Syncer) createDBs() error {
 
 // closeDBs closes all opened DBs, rollback for createDBs
 func (s *Syncer) closeDBs() {
-	closeDBs(s.fromDB)
-	closeDBs(s.toDBs...)
-	closeDBs(s.ddlDB)
+	closeDBs(s.logger, s.fromDB)
+	closeDBs(s.logger, s.toDBs...)
+	closeDBs(s.logger, s.ddlDB)
 }
 
 // record skip ddl/dml sqls' position
