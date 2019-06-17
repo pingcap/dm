@@ -475,7 +475,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 					Name: lastPos.Name,
 					Pos:  e.Header.LogPos,
 				}
-				logger.Info("gap detected from size1 to size2", zap.Uint32("size1", zap.fSize), zap.Uint32("size2", e.Header.LogPos-e.Header.EventSize), zap.String("file", lastPos.Name), zap.Reflect("current event", e.Header))
+				logger.Info("gap detected from size1 to size2", zap.Uint32("size1", fSize), zap.Uint32("size2", e.Header.LogPos-e.Header.EventSize), zap.String("file", lastPos.Name), zap.Reflect("current event", e.Header))
 				continue // skip this event after the gap, it will be wrote to the file when filling the gap
 			}
 		} else {
@@ -827,7 +827,7 @@ func (r *Relay) setUpReaderByPos() error {
 		return r.reader.StartSyncByPos(pos)
 	}
 	if stat, err := os.Stat(filepath.Join(r.meta.Dir(), pos.Name)); os.IsNotExist(err) {
-		logger.Info("should sync from pos1 instead of pos2 because the binlog file not exists in local before and should sync from the very beginning", zap.String("pos1 name", pos.Name), zap.Int64("pos1 pos", 4), zap.String("pos2 name", pos.Name), zap.Int64("pos2 pos", pos.Pos))
+		logger.Info("should sync from pos1 instead of pos2 because the binlog file not exists in local before and should sync from the very beginning", zap.String("pos1 name", pos.Name), zap.Int64("pos1 pos", 4), zap.String("pos2 name", pos.Name), zap.Uint32("pos2 pos", pos.Pos))
 		pos.Pos = 4
 	} else if err != nil {
 		return errors.Trace(err)
@@ -870,7 +870,7 @@ func (r *Relay) retrySyncGTIDs() error {
 		return nil
 	}
 	_, oldGTIDSet := r.meta.GTID()
-	logger.Info("start retry sync with old GTID", zap.Stringer(oldGTIDSet))
+	logger.Info("start retry sync with old GTID", zap.Stringer("GTID", oldGTIDSet))
 
 	_, newGTIDSet, err := utils.GetMasterStatus(r.db, r.cfg.Flavor)
 	if err != nil {
