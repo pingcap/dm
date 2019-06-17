@@ -358,7 +358,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 			// so we need to update pos for all events
 			// and also save pos for all events
 			if e.Header.EventType != replication.ROTATE_EVENT {
-				lastPos.Pos = e.Header.LogPos // makfor RotateEvent, lastPos updated to the next binlog file's position.
+				lastPos.Pos = e.Header.LogPos // for RotateEvent, lastPos updated to the next binlog file's position.
 			}
 			needSavePos = true
 		}

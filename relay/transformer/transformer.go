@@ -21,10 +21,6 @@ import (
 	"github.com/pingcap/dm/relay/common"
 )
 
-var (
-	artificialFlag = uint16(0x0020) // LOG_EVENT_ARTIFICIAL_F
-)
-
 // Result represents a transform result.
 type Result struct {
 	Ignore      bool          // whether the event should be ignored
@@ -90,7 +86,7 @@ func (t *transformer) Transform(e *replication.BinlogEvent) Result {
 			result.Ignore = true
 		}
 	default:
-		if e.Header.Flags&artificialFlag != 0 {
+		if e.Header.Flags&replication.LOG_EVENT_ARTIFICIAL_F != 0 {
 			// ignore events with LOG_EVENT_ARTIFICIAL_F flag(0x0020) set
 			// ref: https://dev.mysql.com/doc/internals/en/binlog-event-flag.html
 			result.Ignore = true

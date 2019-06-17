@@ -171,7 +171,7 @@ func (t *testTransformerSuite) TestTransform(c *check.C) {
 	// other event type with LOG_EVENT_ARTIFICIAL_F
 	ev, err = event.GenCommonGTIDEvent(mysql.MySQLFlavor, header.ServerID, latestPos, gtidSet)
 	c.Assert(err, check.IsNil)
-	ev.Header.Flags |= artificialFlag
+	ev.Header.Flags |= replication.LOG_EVENT_ARTIFICIAL_F
 	cases = append(cases, Case{
 		event: ev,
 		result: Result{
