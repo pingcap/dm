@@ -33,7 +33,6 @@ import (
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/binlog"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
-	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	pkgstreamer "github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
@@ -102,11 +101,8 @@ type Relay struct {
 	cfg       *Config
 	syncerCfg replication.BinlogSyncerConfig
 
-	meta                  Meta
-	lastSlaveConnectionID uint32
-	fd                    *os.File
-	closed                sync2.AtomicBool
-	gSetWhenSwitch        gtid.Set // GTID set when master-slave switching or the first startup
+	meta   Meta
+	closed sync2.AtomicBool
 	sync.RWMutex
 
 	activeRelayLog struct {
@@ -273,28 +269,28 @@ func (r *Relay) process(parentCtx context.Context) error {
 
 	transformer2 := transformer.NewTransformer(parser2)
 
+	go r.doIntervalOps(parentCtx)
+
+	return errors.Trace(r.handleEvents(parentCtx, reader2, transformer2, writer2))
+}
+
+// handleEvents handles binlog events, including:
+//   1. read events from upstream
+//   2. transform events
+//   3. write events into relay log files
+//   4. update metadata if needed
+func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transformer2 transformer.Transformer, writer2 writer.Writer) error {
 	var (
 		_, lastPos  = r.meta.Pos()
 		_, lastGTID = r.meta.GTID()
-		tryReSync   = true // used to handle master-slave switch
-		rResult     reader.Result
-		wResult     *writer.Result
 	)
-
-	defer func() {
-		if r.fd != nil {
-			r.fd.Close()
-		}
-	}()
-
-	go r.doIntervalOps(parentCtx)
 
 	for {
 		// 1. reader events from upstream server
-		ctx, cancel := context.WithTimeout(parentCtx, eventTimeout)
+		ctx2, cancel2 := context.WithTimeout(ctx, eventTimeout)
 		readTimer := time.Now()
-		rResult, err = reader2.GetEvent(ctx)
-		cancel()
+		rResult, err := reader2.GetEvent(ctx2)
+		cancel2()
 		binlogReadDurationHistogram.Observe(time.Since(readTimer).Seconds())
 
 		if err != nil {
@@ -312,15 +308,12 @@ func (r *Relay) process(parentCtx context.Context) error {
 				// do nothing, but the error will be returned
 			default:
 				if utils.IsErrBinlogPurged(err) {
-					if tryReSync && r.cfg.EnableGTID && r.cfg.AutoFixGTID {
-						// TODO: try auto fix GTID
-					}
+					// TODO: try auto fix GTID, and can support auto switching between upstream server later.
 				}
 				binlogReadErrorCounter.Inc()
 			}
 			return errors.Trace(err)
 		}
-		tryReSync = true
 		e := rResult.Event
 		log.Debugf("[relay] receive binlog event with header %+v", e.Header)
 
@@ -341,7 +334,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 		// 3. save events into file
 		writeTimer := time.Now()
 		log.Debugf("[relay] writing binlog event with header %+v", e.Header)
-		wResult, err = writer2.WriteEvent(e)
+		wResult, err := writer2.WriteEvent(e)
 		if err != nil {
 			relayLogWriteErrorCounter.Inc()
 			return errors.Trace(err)
@@ -427,10 +420,6 @@ func (r *Relay) reSetupMeta() error {
 			log.Infof("[relay] adjusted meta to start pos with binlog-name (%s), binlog-gtid (%s)", r.cfg.BinLogName, r.cfg.BinlogGTID)
 		}
 	}
-
-	// record GTID set when switching or the first startup
-	_, r.gSetWhenSwitch = r.meta.GTID()
-	log.Infof("[relay] record previous sub directory end GTID or first startup GTID %s", r.gSetWhenSwitch)
 
 	r.updateMetricsRelaySubDirIndex()
 
@@ -546,10 +535,6 @@ func (r *Relay) IsClosed() bool {
 
 // stopSync stops syncing, now it used by Close and Pause
 func (r *Relay) stopSync() {
-	if r.fd != nil {
-		r.fd.Close()
-		r.fd = nil
-	}
 	if err := r.meta.Flush(); err != nil {
 		log.Errorf("[relay] flush checkpoint error %v", errors.ErrorStack(err))
 	}
