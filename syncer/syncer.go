@@ -17,7 +17,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"os"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -394,17 +393,21 @@ func (s *Syncer) initShardingGroups() error {
 		}
 	}
 
+	loadMeta, err2 := s.sgk.LoadShardMeta()
+	if err2 != nil {
+		return errors.Trace(err2)
+	}
+
 	// add sharding group
 	for targetSchema, mSchema := range mapper {
 		for targetTable, sourceIDs := range mSchema {
-			_, _, _, _, err := s.sgk.AddGroup(targetSchema, targetTable, sourceIDs, false)
+			tableID, _ := GenTableID(targetSchema, targetTable)
+			_, _, _, _, err := s.sgk.AddGroup(targetSchema, targetTable, sourceIDs, loadMeta[tableID], false)
 			if err != nil {
 				return errors.Trace(err)
 			}
 		}
 	}
-
-	// TODO: diff load sharding meta from DB
 
 	log.Debugf("[syncer] initial sharding groups(%d): %v", len(s.sgk.Groups()), s.sgk.Groups())
 
@@ -1666,7 +1669,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		// for CREATE DATABASE, we do nothing. when CREATE TABLE under this DATABASE, sharding groups will be added
 	case *ast.CreateTableStmt:
 		// for CREATE TABLE, we add it to group
-		needShardingHandle, group, synced, remain, err = s.sgk.AddGroup(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, []string{source}, true)
+		needShardingHandle, group, synced, remain, err = s.sgk.AddGroup(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, []string{source}, nil, true)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -1755,7 +1758,17 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		if ddlExecItem.req.Exec {
 			failpoint.Inject("ShardSyncedExecutionExit", func() {
 				log.Warn("[failpoint] exit triggered by ShardSyncedExecutionExit")
-				os.Exit(1)
+				utils.OsExit(1)
+			})
+			failpoint.Inject("SequenceShardSyncedExecutionExit", func() {
+				group := s.sgk.Group(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
+				if group != nil {
+					// exit in the first round sequence sharding DDL only
+					if group.meta.ActiveIdx() == 1 {
+						log.Warn("[failpoint] exit triggered by SequenceShardSyncedExecutionExit")
+						utils.OsExit(1)
+					}
+				}
 			})
 
 			log.Infof("[syncer] add DDL %v to job, request is %+v", ddlInfo1.DDLs, ddlExecItem.req)

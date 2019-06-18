@@ -88,6 +88,27 @@ func NewShardingMeta() *ShardingMeta {
 	}
 }
 
+// LoadData loads data into ShardingMeta
+func (meta *ShardingMeta) LoadData(source string, activeIdx int, isGlobal bool, data []byte) error {
+	items := make([]*DDLItem, 0)
+	err := json.Unmarshal([]byte(data), &items)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	if isGlobal {
+		meta.global = &ShardingSequence{Items: items}
+	} else {
+		meta.sources[source] = &ShardingSequence{Items: items}
+	}
+	meta.activeIdx = activeIdx
+	return nil
+}
+
+// ActiveIdx returns the activeIdx of sharding meta
+func (meta *ShardingMeta) ActiveIdx() int {
+	return meta.activeIdx
+}
+
 func (meta *ShardingMeta) reinitialize() {
 	meta.activeIdx = 0
 	meta.global = &ShardingSequence{make([]*DDLItem, 0)}

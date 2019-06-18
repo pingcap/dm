@@ -1,2 +1,3 @@
 all_mode
 sequence_sharding
+sequence_safe_mode

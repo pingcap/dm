@@ -110,7 +110,7 @@ type ShardingGroup struct {
 }
 
 // NewShardingGroup creates a new ShardingGroup
-func NewShardingGroup(cfg *config.SubTaskConfig, sources []string, isSchemaOnly bool) *ShardingGroup {
+func NewShardingGroup(cfg *config.SubTaskConfig, sources []string, meta *shardmeta.ShardingMeta, isSchemaOnly bool) *ShardingGroup {
 	sg := &ShardingGroup{
 		remain:       len(sources),
 		sources:      make(map[string]bool, len(sources)),
@@ -118,9 +118,13 @@ func NewShardingGroup(cfg *config.SubTaskConfig, sources []string, isSchemaOnly 
 		sourceID:     cfg.SourceID,
 		schema:       cfg.MetaSchema,
 		table:        fmt.Sprintf(shardmeta.MetaTableFormat, cfg.Name),
-		meta:         shardmeta.NewShardingMeta(),
 		firstPos:     nil,
 		firstEndPos:  nil,
+	}
+	if meta != nil {
+		sg.meta = meta
+	} else {
+		sg.meta = shardmeta.NewShardingMeta()
 	}
 	for _, source := range sources {
 		sg.sources[source] = false
@@ -419,7 +423,7 @@ func NewShardingGroupKeeper(cfg *config.SubTaskConfig) *ShardingGroupKeeper {
 }
 
 // AddGroup adds new group(s) according to target schema, table and source IDs
-func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceIDs []string, merge bool) (needShardingHandle bool, group *ShardingGroup, synced bool, remain int, err error) {
+func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceIDs []string, meta *shardmeta.ShardingMeta, merge bool) (needShardingHandle bool, group *ShardingGroup, synced bool, remain int, err error) {
 	// if need to support target table-level sharding DDL
 	// we also need to support target schema-level sharding DDL
 	schemaID, _ := GenTableID(targetSchema, "")
@@ -429,14 +433,14 @@ func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceI
 	defer k.Unlock()
 
 	if schemaGroup, ok := k.groups[schemaID]; !ok {
-		k.groups[schemaID] = NewShardingGroup(k.cfg, sourceIDs, true)
+		k.groups[schemaID] = NewShardingGroup(k.cfg, sourceIDs, meta, true)
 	} else {
 		schemaGroup.Merge(sourceIDs)
 	}
 
 	var ok bool
 	if group, ok = k.groups[tableID]; !ok {
-		group = NewShardingGroup(k.cfg, sourceIDs, false)
+		group = NewShardingGroup(k.cfg, sourceIDs, meta, false)
 		k.groups[tableID] = group
 	} else if merge {
 		needShardingHandle, synced, remain, err = k.groups[tableID].Merge(sourceIDs)
@@ -728,6 +732,39 @@ func (k *ShardingGroupKeeper) createTable() error {
 	err := k.db.executeSQL([]string{sql2}, [][]interface{}{{}}, maxRetryCount)
 	log.Infof("[ShardingGroupKeeper] execute sql %s", sql2)
 	return errors.Trace(err)
+}
+
+// LoadShardMeta implements CheckPoint.LoadShardMeta
+func (k *ShardingGroupKeeper) LoadShardMeta() (map[string]*shardmeta.ShardingMeta, error) {
+	query := fmt.Sprintf("SELECT `table_id`, `source`, `active`, `is_global`, `data` FROM `%s`.`%s` WHERE `source_id`='%s'", k.schema, k.table, k.cfg.SourceID)
+	rows, err := k.db.querySQL(query, maxRetryCount)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer rows.Close()
+
+	var (
+		tableID  string
+		source   string
+		active   int
+		isGlobal bool
+		data     string
+		meta     = make(map[string]*shardmeta.ShardingMeta)
+	)
+	for rows.Next() {
+		err := rows.Scan(&tableID, &source, &active, &isGlobal, &data)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		if _, ok := meta[tableID]; !ok {
+			meta[tableID] = shardmeta.NewShardingMeta()
+		}
+		err = meta[tableID].LoadData(source, active, isGlobal, []byte(data))
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+	}
+	return meta, errors.Trace(rows.Err())
 }
 
 // ShardingReSync represents re-sync info for a sharding DDL group

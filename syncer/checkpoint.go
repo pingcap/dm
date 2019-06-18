@@ -181,7 +181,7 @@ type RemoteCheckPoint struct {
 	db     *Conn
 	schema string // schema name, set through task config
 	table  string // table name, now it's task name
-	id     string // checkpoint ID, now it is `server-id` used as MySQL slave
+	id     string // checkpoint ID, now it is `source-id` used as MySQL slave
 
 	// source-schema -> source-table -> checkpoint
 	// used to filter the synced binlog when re-syncing for sharding group
