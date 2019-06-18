@@ -14,8 +14,8 @@
 package relay
 
 import (
-	"database/sql"
 	"fmt"
+
 	. "github.com/pingcap/check"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 
@@ -25,32 +25,29 @@ import (
 var _ = Suite(&testUtilSuite{})
 
 type testUtilSuite struct {
-	db *sql.DB
-}
-
-func (t *testUtilSuite) SetUpSuite(c *C) {
-	db, err := openDBForTest()
-	c.Assert(err, IsNil)
-	t.db = db
 }
 
 func (t *testUtilSuite) TestIsNewServer(c *C) {
+	db, err := openDBForTest()
+	c.Assert(err, IsNil)
+	defer db.Close()
+
 	flavor := gmysql.MySQLFlavor
 
 	// no prevUUID, is new server.
-	isNew, err := isNewServer("", t.db, flavor)
+	isNew, err := isNewServer("", db, flavor)
 	c.Assert(err, IsNil)
 	c.Assert(isNew, IsTrue)
 
 	// different server
-	isNew, err = isNewServer("not-exists-uuid.000001", t.db, flavor)
+	isNew, err = isNewServer("not-exists-uuid.000001", db, flavor)
 	c.Assert(err, IsNil)
 	c.Assert(isNew, IsTrue)
 
 	// the same server
-	currUUID, err := utils.GetServerUUID(t.db, flavor)
+	currUUID, err := utils.GetServerUUID(db, flavor)
 	c.Assert(err, IsNil)
-	isNew, err = isNewServer(fmt.Sprintf("%s.000001", currUUID), t.db, flavor)
+	isNew, err = isNewServer(fmt.Sprintf("%s.000001", currUUID), db, flavor)
 	c.Assert(err, IsNil)
 	c.Assert(isNew, IsFalse)
 }

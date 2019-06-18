@@ -17,9 +17,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -29,6 +31,8 @@ import (
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay/reader"
@@ -45,7 +49,7 @@ func TestSuite(t *testing.T) {
 type testRelaySuite struct {
 }
 
-func openDBForTest() (*sql.DB, error) {
+func getDBConfigForTest() config.DBConfig {
 	host := os.Getenv("MYSQL_HOST")
 	if host == "" {
 		host = "127.0.0.1"
@@ -59,8 +63,18 @@ func openDBForTest() (*sql.DB, error) {
 		user = "root"
 	}
 	password := os.Getenv("MYSQL_PSWD")
+	return config.DBConfig{
+		Host:     host,
+		Port:     port,
+		User:     user,
+		Password: password,
+	}
+}
 
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4", user, password, host, port)
+func openDBForTest() (*sql.DB, error) {
+	cfg := getDBConfigForTest()
+
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4", cfg.User, cfg.Password, cfg.Host, cfg.Port)
 	return sql.Open("mysql", dsn)
 }
 
@@ -263,6 +277,10 @@ func (t *testRelaySuite) TestReSetupMeta(c *C) {
 	db, err := openDBForTest()
 	c.Assert(err, IsNil)
 	r.db = db
+	defer func() {
+		r.db.Close()
+		r.db = nil
+	}()
 	uuid, err := utils.GetServerUUID(r.db, r.cfg.Flavor)
 	c.Assert(err, IsNil)
 
@@ -293,4 +311,57 @@ func (t *testRelaySuite) verifyMetadata(c *C, r *Relay, uuidExpected string,
 	UUIDs, err := utils.ParseUUIDIndex(indexFile)
 	c.Assert(err, IsNil)
 	c.Assert(UUIDs, DeepEquals, UUIDsExpected)
+}
+
+func (t *testRelaySuite) TestProcess(c *C) {
+	var (
+		dbCfg    = getDBConfigForTest()
+		relayCfg = &Config{
+			EnableGTID: true,
+			Flavor:     gmysql.MySQLFlavor,
+			RelayDir:   c.MkDir(),
+			ServerID:   12321,
+			From: DBConfig{
+				Host:     dbCfg.Host,
+				Port:     dbCfg.Port,
+				User:     dbCfg.User,
+				Password: dbCfg.Password,
+			},
+		}
+		r = NewRelay(relayCfg).(*Relay)
+	)
+	db, err := openDBForTest()
+	c.Assert(err, IsNil)
+	r.db = db
+	defer func() {
+		r.db.Close()
+		r.db = nil
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err = r.process(ctx)
+		c.Assert(err, IsNil)
+	}()
+
+	time.Sleep(3 * time.Second) // waiting for get events from upstream
+	cancel()                    // stop processing
+	wg.Wait()
+
+	// check whether have binlog file in relay directory
+	// and check for events already done in `TestHandleEvent`
+	uuid, err := utils.GetServerUUID(r.db, r.cfg.Flavor)
+	c.Assert(err, IsNil)
+	files, err := ioutil.ReadDir(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid)))
+	c.Assert(err, IsNil)
+	var binlogFileCount int
+	for _, f := range files {
+		if binlog.VerifyFilename(f.Name()) {
+			binlogFileCount++
+		}
+	}
+	c.Assert(binlogFileCount, Greater, 0)
 }
