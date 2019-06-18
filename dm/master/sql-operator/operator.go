@@ -135,7 +135,7 @@ func (h *Holder) Get(taskName string, sqls []string) (string, *Operator) {
 	for _, sql := range sqls {
 		for key, oper := range operators {
 			if oper.matchPattern(sql) { // matched one SQL of all is enough
-				h.logger.Info("get an matched operator", zap.Stringer("operation", oper), zap.String("key", key), zap.String("sql", sql))
+				h.logger.Info("get a matched operator", zap.Stringer("operation", oper), zap.String("key", key), zap.String("sql", sql))
 				return key, oper.clone()
 			}
 		}
