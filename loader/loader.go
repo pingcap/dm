@@ -849,7 +849,7 @@ func (l *Loader) restoreTable(conn *Conn, sqlFile, schema, table string) error {
 	err := l.restoreStructure(conn, sqlFile, schema, table)
 	if err != nil {
 		if isErrTableExists(err) {
-			l.logger.Info("able already exists, skip it", zap.String("sql", sqlFile))
+			l.logger.Info("table already exists, skip it", zap.String("sql", sqlFile))
 		} else {
 			return errors.Annotatef(err, "run table schema failed - dbfile %s", sqlFile)
 		}

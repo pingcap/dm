@@ -141,7 +141,7 @@ func (s *Server) Start() error {
 	}()
 	go InitStatus(httpL) // serve status
 
-	log.L().Info(" listening gRPC API and status request", zap.String("address", s.cfg.MasterAddr))
+	log.L().Info("listening gRPC API and status request", zap.String("address", s.cfg.MasterAddr))
 	err = m.Serve() // start serving, block
 	if err != nil && common.IsErrNetClosing(err) {
 		err = nil
