@@ -928,7 +928,7 @@ func fetchMatchedLiteral(logger log.Logger, router *router.Table, schema, table 
 
 	targetSchema, targetTable, err := router.Route(schema, table)
 	if err != nil {
-		logger.Error("fail to route table", zap.String("unit", "loader")) // log the error, but still continue
+		logger.Error("fail to route table", zap.String("unit", "loader"), zap.Error(err)) // log the error, but still continue
 	}
 	if targetSchema == "" {
 		// nothing change

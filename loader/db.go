@@ -170,7 +170,7 @@ func executeSQLImp(logger log.Logger, db *sql.DB, sqls []string) error {
 			logger.Warn("execute statement", zap.String("sqls", fmt.Sprintf("%-.200v", sqls[i])), log.ShortError(err))
 			rerr := txn.Rollback()
 			if rerr != nil {
-				logger.Error("fail rollback", zap.Error(rerr))
+				logger.Error("fail rollback", log.ShortError(rerr))
 			}
 			return err
 		}
