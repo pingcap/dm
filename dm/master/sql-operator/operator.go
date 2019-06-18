@@ -111,7 +111,7 @@ func (h *Holder) Set(req *pb.HandleSQLsRequest) error {
 	if ok1 {
 		prev, ok2 := operators[key]
 		if ok2 {
-			h.logger.Warn(" overwrite operation", zap.Stringer("previous operation", prev), zap.Stringer("current operation", oper))
+			h.logger.Warn("overwrite operation", zap.Stringer("previous operation", prev), zap.Stringer("current operation", oper))
 		}
 	} else {
 		operators = make(map[string]*Operator)
