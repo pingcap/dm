@@ -317,7 +317,7 @@ func (t *testRelaySuite) TestProcess(c *C) {
 	var (
 		dbCfg    = getDBConfigForTest()
 		relayCfg = &Config{
-			EnableGTID: true,
+			EnableGTID: false, // position mode, so auto-positioning can work
 			Flavor:     gmysql.MySQLFlavor,
 			RelayDir:   c.MkDir(),
 			ServerID:   12321,
