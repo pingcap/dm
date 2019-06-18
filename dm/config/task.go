@@ -281,7 +281,7 @@ func NewTaskConfig() *TaskConfig {
 func (c *TaskConfig) String() string {
 	cfg, err := yaml.Marshal(c)
 	if err != nil {
-		log.L().Error("marshal task config to yaml", zap.Reflect("subtask configuration", c), zap.Error(err))
+		log.L().Error("marshal task config to yaml", zap.Reflect("subtask configuration", c), log.ShortError(err))
 	}
 	return string(cfg)
 }
