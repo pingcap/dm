@@ -230,7 +230,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 		return errors.Trace(err)
 	}
 
-	isNew, err := r.isNewServer()
+	isNew, err := isNewServer(r.meta.UUID(), r.db, r.cfg.Flavor)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -378,23 +378,6 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 			}
 		}
 	}
-}
-
-// isNewServer checks whether switched to new server
-func (r *Relay) isNewServer() (bool, error) {
-	if len(r.meta.UUID()) == 0 {
-		// no sub dir exists before
-		return true, nil
-	}
-	uuid, err := utils.GetServerUUID(r.db, r.cfg.Flavor)
-	if err != nil {
-		return false, errors.Trace(err)
-	}
-	if strings.HasPrefix(r.meta.UUID(), uuid) {
-		// same server as before
-		return false, nil
-	}
-	return true, nil
 }
 
 func (r *Relay) reSetupMeta() error {
