@@ -83,8 +83,7 @@ function run() {
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    # cd $cur && GO111MODULE=on go build -o bin/check_safe_mode check_safe_mode.go && cd -
-    $cur/bin/check_safe_mode
+    $cur/../bin/check_safe_mode
 }
 
 cleanup1 sequence_safe_mode_target
