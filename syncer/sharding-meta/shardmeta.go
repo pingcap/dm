@@ -49,11 +49,6 @@ type ShardingMeta struct {
 	sources   map[string]*ShardingSequence // source table ID -> its sharding sequence
 }
 
-// Compare compares the first DDL binlog position of DDLItem with given position
-func (item *DDLItem) Compare(pos mysql.Position) int {
-	return item.FirstPos.Compare(pos)
-}
-
 // IsSubsequence checks whether a ShardingSequence is the sub sequence of other.
 func (seq *ShardingSequence) IsSubsequence(other *ShardingSequence) bool {
 	if len(seq.Items) > len(other.Items) {
@@ -146,10 +141,6 @@ func (meta *ShardingMeta) AddItem(item *DDLItem) (active bool, err error) {
 	}
 
 	global, source := meta.global, meta.sources[item.Source]
-	if len(global.Items) < len(source.Items) {
-		// should not happen
-		return false, errors.Errorf("global sharding ddl Items %v less than source %v", global.Items, source.Items)
-	}
 	if !source.IsSubsequence(global) {
 		return false, errors.Errorf("wrong sql sequence of source %+v, global is %+v", source.Items, global.Items)
 	}
@@ -207,14 +198,14 @@ func (meta *ShardingMeta) FlushData(schema, table, sourceID, tableID string) ([]
 	var (
 		sqls    = make([]string, 1+len(meta.sources))
 		args    = make([][]interface{}, 0, 1+len(meta.sources))
-		baseSQL = fmt.Sprintf("INSERT INTO `%s`.`%s` (`source_id`, `table_id`, `source`, `is_global`, `data`) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE `data`=?", schema, table)
+		baseSQL = fmt.Sprintf("INSERT INTO `%s`.`%s` (`source_id`, `table_id`, `source`, `active`, `is_global`, `data`) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE `data`=?, `active`=?", schema, table)
 	)
 	for i := range sqls {
 		sqls[i] = baseSQL
 	}
-	args = append(args, []interface{}{sourceID, tableID, "", true, meta.global.String(), meta.global.String()})
+	args = append(args, []interface{}{sourceID, tableID, "", meta.activeIdx, true, meta.global.String(), meta.global.String(), meta.activeIdx})
 	for source, seq := range meta.sources {
-		args = append(args, []interface{}{sourceID, tableID, source, false, seq.String(), seq.String()})
+		args = append(args, []interface{}{sourceID, tableID, source, meta.activeIdx, false, seq.String(), seq.String(), meta.activeIdx})
 	}
 	return sqls, args
 }

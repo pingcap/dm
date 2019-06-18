@@ -243,7 +243,7 @@ func (sg *ShardingGroup) CheckSyncing(source string, pos mysql.Position) (before
 	if activeDDLItem == nil {
 		return true
 	}
-	return activeDDLItem.Compare(pos) > 0
+	return activeDDLItem.FirstPos.Compare(pos) > 0
 }
 
 // UnresolvedGroupInfo returns pb.ShardingGroup if is unresolved, else returns nil
@@ -718,6 +718,7 @@ func (k *ShardingGroupKeeper) createTable() error {
 		source_id VARCHAR(32) NOT NULL,
 		table_id VARCHAR(128) NOT NULL,
 		source  VARCHAR(128) NOT NULL,
+		active INT,
 		is_global BOOLEAN,
 		data JSON,
 		create_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
