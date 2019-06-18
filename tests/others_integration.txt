@@ -1,2 +1,2 @@
 all_mode
-sharding2
+sequence_sharding

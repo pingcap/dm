@@ -1,5 +1,5 @@
 ---
-name: sharding2
+name: sequence_sharding
 task-mode: all
 is-sharding: true
 meta-schema: "dm_meta"

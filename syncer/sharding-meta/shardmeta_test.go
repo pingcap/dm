@@ -30,7 +30,7 @@ func TestSuite(t *testing.T) {
 type testShardMetaSuite struct {
 }
 
-func (o *testShardMetaSuite) TestShardingMeta(c *check.C) {
+func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	var (
 		active     bool
 		err        error
@@ -182,7 +182,7 @@ func (o *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(args[0], check.DeepEquals, []interface{}{sourceID, tableID})
 }
 
-func (o *testShardMetaSuite) TestShardingMetaWrongSequence(c *check.C) {
+func (t *testShardMetaSuite) TestShardingMetaWrongSequence(c *check.C) {
 	var (
 		active   bool
 		err      error
