@@ -16,9 +16,6 @@ package relay
 import (
 	"database/sql"
 	"fmt"
-	"os"
-	"strconv"
-
 	. "github.com/pingcap/check"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 
@@ -28,30 +25,11 @@ import (
 var _ = Suite(&testUtilSuite{})
 
 type testUtilSuite struct {
-	host     string
-	port     int
-	user     string
-	password string
-	db       *sql.DB
+	db *sql.DB
 }
 
 func (t *testUtilSuite) SetUpSuite(c *C) {
-	t.host = os.Getenv("MYSQL_HOST")
-	if t.host == "" {
-		t.host = "127.0.0.1"
-	}
-	t.port, _ = strconv.Atoi(os.Getenv("MYSQL_PORT"))
-	if t.port == 0 {
-		t.port = 3306
-	}
-	t.user = os.Getenv("MYSQL_USER")
-	if t.user == "" {
-		t.user = "root"
-	}
-	t.password = os.Getenv("MYSQL_PSWD")
-
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4", t.user, t.password, t.host, t.port)
-	db, err := sql.Open("mysql", dsn)
+	db, err := openDBForTest()
 	c.Assert(err, IsNil)
 	t.db = db
 }

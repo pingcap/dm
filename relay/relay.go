@@ -380,6 +380,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 	}
 }
 
+// reSetupMeta re-setup the metadata when switching to a new upstream master server.
 func (r *Relay) reSetupMeta() error {
 	uuid, err := utils.GetServerUUID(r.db, r.cfg.Flavor)
 	if err != nil {

@@ -15,6 +15,11 @@ package relay
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -25,6 +30,7 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/binlog/event"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay/reader"
 	"github.com/pingcap/dm/relay/transformer"
 	"github.com/pingcap/dm/relay/writer"
@@ -37,6 +43,25 @@ func TestSuite(t *testing.T) {
 }
 
 type testRelaySuite struct {
+}
+
+func openDBForTest() (*sql.DB, error) {
+	host := os.Getenv("MYSQL_HOST")
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	port, _ := strconv.Atoi(os.Getenv("MYSQL_PORT"))
+	if port == 0 {
+		port = 3306
+	}
+	user := os.Getenv("MYSQL_USER")
+	if user == "" {
+		user = "root"
+	}
+	password := os.Getenv("MYSQL_PSWD")
+
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4", user, password, host, port)
+	return sql.Open("mysql", dsn)
 }
 
 // mockReader is used only for relay testing.
@@ -220,4 +245,52 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 	default:
 		c.Fatalf("ignorable event for writer not ignored")
 	}
+}
+
+func (t *testRelaySuite) TestReSetupMeta(c *C) {
+	var (
+		relayCfg = &Config{
+			RelayDir: c.MkDir(),
+			Flavor:   gmysql.MySQLFlavor,
+		}
+		r = NewRelay(relayCfg).(*Relay)
+	)
+	// empty metadata
+	c.Assert(r.meta.Load(), IsNil)
+	t.verifyMetadata(c, r, "", minCheckpoint, "", nil)
+
+	// open connected DB and get its UUID
+	db, err := openDBForTest()
+	c.Assert(err, IsNil)
+	r.db = db
+	uuid, err := utils.GetServerUUID(r.db, r.cfg.Flavor)
+	c.Assert(err, IsNil)
+
+	// re-setup meta with start pos adjusted
+	r.cfg.EnableGTID = true
+	r.cfg.BinlogGTID = "24ecd093-8cec-11e9-aa0d-0242ac170002:1-23"
+	r.cfg.BinLogName = "mysql-bin.000005"
+	c.Assert(r.reSetupMeta(), IsNil)
+	uuid001 := fmt.Sprintf("%s.000001", uuid)
+	t.verifyMetadata(c, r, uuid001, minCheckpoint, r.cfg.BinlogGTID, []string{uuid001})
+
+	// re-setup meta again, often happen when connecting a server behind a VIP.
+	c.Assert(r.reSetupMeta(), IsNil)
+	uuid002 := fmt.Sprintf("%s.000002", uuid)
+	t.verifyMetadata(c, r, uuid002, minCheckpoint, r.cfg.BinlogGTID, []string{uuid001, uuid002})
+
+}
+
+func (t *testRelaySuite) verifyMetadata(c *C, r *Relay, uuidExpected string,
+	posExpected gmysql.Position, gsStrExpected string, UUIDsExpected []string) {
+	uuid, pos := r.meta.Pos()
+	_, gs := r.meta.GTID()
+	c.Assert(uuid, Equals, uuidExpected)
+	c.Assert(pos, DeepEquals, posExpected)
+	c.Assert(gs.String(), Equals, gsStrExpected)
+
+	indexFile := filepath.Join(r.cfg.RelayDir, utils.UUIDIndexFilename)
+	UUIDs, err := utils.ParseUUIDIndex(indexFile)
+	c.Assert(err, IsNil)
+	c.Assert(UUIDs, DeepEquals, UUIDsExpected)
 }
