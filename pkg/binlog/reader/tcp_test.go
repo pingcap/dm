@@ -53,8 +53,6 @@ type testTCPReaderSuite struct {
 	user     string
 	password string
 	db       *sql.DB
-	initPos  gmysql.Position
-	initGs   gtid.Set
 }
 
 func (t *testTCPReaderSuite) SetUpSuite(c *C) {
@@ -92,13 +90,23 @@ func (t *testTCPReaderSuite) setUpData(c *C) {
 	query := fmt.Sprintf("DROP DATABASE `%s`", dbName)
 	_, err := t.db.Exec(query)
 
-	// delete previous binlog files/events.
-	query = "RESET MASTER"
-	_, err = t.db.Exec(query)
-	c.Assert(err, IsNil)
+	maxRetryCount := 5
+	for i := 0; i < maxRetryCount; i++ {
+		// delete previous binlog files/events. if other test cases writing events, they may be failed.
+		query = "RESET MASTER"
+		_, err = t.db.Exec(query)
+		c.Assert(err, IsNil)
 
-	// save init position and GTID sets
-	t.initPos, t.initGs, err = utils.GetMasterStatus(t.db, flavor)
+		// check whether other test cases have wrote any events.
+		time.Sleep(time.Second)
+		_, gs, err2 := utils.GetMasterStatus(t.db, flavor)
+		c.Assert(err2, IsNil)
+		if len(gs.String()) > 0 {
+			time.Sleep(5 * time.Second) // some events exist now, try again later.
+		} else {
+			break
+		}
+	}
 
 	// execute some SQL statements to generate binlog events.
 	query = fmt.Sprintf("CREATE DATABASE `%s`", dbName)
@@ -127,7 +135,7 @@ func (t *testTCPReaderSuite) TestSyncPos(c *C) {
 			UseDecimal:     true,
 			VerifyChecksum: true,
 		}
-		pos = t.initPos // use the initial position
+		pos gmysql.Position // empty position
 	)
 
 	// the first reader
@@ -237,8 +245,9 @@ func (t *testTCPReaderSuite) TestSyncGTID(c *C) {
 	err = r.StartSyncByGTID(gSet)
 	c.Assert(err, NotNil)
 
-	// use the initial position
-	gSet = t.initGs
+	// empty GTID set
+	gSet, err = gtid.ParserGTID(flavor, "")
+	c.Assert(err, IsNil)
 
 	// prepare
 	err = r.StartSyncByGTID(gSet)
