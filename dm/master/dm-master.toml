@@ -1,7 +1,14 @@
 # Master Configuration.
 
 # rpc configuration
+#
+# rpc timeout is a positive number plus time unit. we use golang standard time
+# units including: "ns", "us", "ms", "s", "m", "h". You should provide a proper
+# rpc timeout according to your use scenario.
 rpc-timeout = "30s"
+# rpc limiter controls how frequently events are allowed to happen.
+# It implements a "token bucket" of size `rpc-rate-limit`, initially full and
+# refilled at rate `rpc-rate-limit` tokens per second.
 rpc-rate-limit = 10
 rpc-rate-burst = 40
 

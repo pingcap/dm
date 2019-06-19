@@ -78,7 +78,7 @@ type Config struct {
 
 	RPCTimeoutStr string        `toml:"rpc-timeout" json:"rpc-timeout"`
 	RPCTimeout    time.Duration `json:"-"`
-	RPCRateLimit  float64       `toml:"rpc-ratelimit" json:"rpc-rate-limit"`
+	RPCRateLimit  float64       `toml:"rpc-rate-limit" json:"rpc-rate-limit"`
 	RPCRateBurst  int           `toml:"rpc-rate-burst" json:"rpc-rate-burst"`
 
 	MasterAddr string `toml:"master-addr" json:"master-addr"`
