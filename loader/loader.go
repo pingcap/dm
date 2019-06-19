@@ -686,7 +686,7 @@ func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
 		return errors.New("invalid mydumper files for there are no `-schema-create.sql` files found")
 	}
 	if len(l.db2Tables) == 0 {
-		return errors.New("no available `-schema-create.sql` files, check mydumper parameters and bwlist config")
+		return errors.New("no available `-schema-create.sql` files, check mydumper parameter matches black-white-list in task config")
 	}
 
 	return nil
