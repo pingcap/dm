@@ -91,7 +91,7 @@ func NewShardingMeta() *ShardingMeta {
 // LoadData loads data into ShardingMeta
 func (meta *ShardingMeta) LoadData(source string, activeIdx int, isGlobal bool, data []byte) error {
 	items := make([]*DDLItem, 0)
-	err := json.Unmarshal([]byte(data), &items)
+	err := json.Unmarshal(data, &items)
 	if err != nil {
 		return errors.Trace(err)
 	}

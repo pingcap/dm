@@ -173,7 +173,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(meta.GetActiveDDLItem(table3), check.IsNil)
 	c.Assert(meta.InSequenceSharding(), check.IsFalse)
 	pos, err = meta.NextShardingDDLFirstPos()
-	c.Assert(err, check.ErrorMatches, fmt.Sprintf("activeIdx %d larger than global DDLItems:.*", meta.activeIdx))
+	c.Assert(err, check.ErrorMatches, fmt.Sprintf("activeIdx %d larger than global DDLItems:.*", meta.ActiveIdx()))
 
 	sqls, args = meta.FlushData(metaSchema, metaTable, sourceID, tableID)
 	c.Assert(sqls, check.HasLen, 1)
@@ -229,4 +229,37 @@ func (t *testShardMetaSuite) TestShardingMetaWrongSequence(c *check.C) {
 	active, err = meta.AddItem(items[4])
 	c.Assert(active, check.IsFalse)
 	c.Assert(err, check.ErrorMatches, "wrong sql sequence of source .*, global is .*")
+}
+
+func (t *testShardMetaSuite) TestFlushLoadMeta(c *check.C) {
+	var (
+		active     bool
+		err        error
+		filename   = "mysql-bin.000001"
+		table1     = "table1"
+		table2     = "table2"
+		metaSchema = "dm_meta"
+		metaTable  = "test_syncer_sharding_meta"
+		sourceID   = "mysql-replica-01"
+		tableID    = "`target_db`.`target_table`"
+		meta       = NewShardingMeta()
+		loadedMeta = NewShardingMeta()
+		items      = []*DDLItem{
+			NewDDLItem(mysql.Position{filename, 1000}, []string{"ddl1"}, table1),
+			NewDDLItem(mysql.Position{filename, 1200}, []string{"ddl1"}, table2),
+		}
+	)
+	for _, item := range items {
+		active, err = meta.AddItem(item)
+		c.Assert(err, check.IsNil)
+		c.Assert(active, check.IsTrue)
+	}
+	sqls, args := meta.FlushData(metaSchema, metaTable, sourceID, tableID)
+	c.Assert(sqls, check.HasLen, 3)
+	c.Assert(args, check.HasLen, 3)
+	for _, arg := range args {
+		c.Assert(arg, check.HasLen, 8)
+		loadedMeta.LoadData(arg[2].(string), arg[3].(int), arg[4].(bool), []byte(arg[5].(string)))
+	}
+	c.Assert(loadedMeta, check.DeepEquals, meta)
 }
