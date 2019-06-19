@@ -53,6 +53,8 @@ type testTCPReaderSuite struct {
 	user     string
 	password string
 	db       *sql.DB
+	initPos  gmysql.Position
+	initGs   gtid.Set
 }
 
 func (t *testTCPReaderSuite) SetUpSuite(c *C) {
@@ -95,6 +97,9 @@ func (t *testTCPReaderSuite) setUpData(c *C) {
 	_, err = t.db.Exec(query)
 	c.Assert(err, IsNil)
 
+	// save init position and GTID sets
+	t.initPos, t.initGs, err = utils.GetMasterStatus(t.db, flavor)
+
 	// execute some SQL statements to generate binlog events.
 	query = fmt.Sprintf("CREATE DATABASE `%s`", dbName)
 	_, err = t.db.Exec(query)
@@ -122,7 +127,7 @@ func (t *testTCPReaderSuite) TestSyncPos(c *C) {
 			UseDecimal:     true,
 			VerifyChecksum: true,
 		}
-		pos gmysql.Position // empty position
+		pos = t.initPos // use the initial position
 	)
 
 	// the first reader
@@ -232,9 +237,8 @@ func (t *testTCPReaderSuite) TestSyncGTID(c *C) {
 	err = r.StartSyncByGTID(gSet)
 	c.Assert(err, NotNil)
 
-	// empty GTID set
-	gSet, err = gtid.ParserGTID(flavor, "")
-	c.Assert(err, IsNil)
+	// use the initial position
+	gSet = t.initGs
 
 	// prepare
 	err = r.StartSyncByGTID(gSet)
