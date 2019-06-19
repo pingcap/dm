@@ -344,7 +344,10 @@ func (t *testRelaySuite) TestProcess(c *C) {
 	go func() {
 		defer wg.Done()
 		err = r.process(ctx)
-		c.Assert(err, IsNil)
+		if !utils.IsErrBinlogPurged(err) {
+			// we can tolerate `ERROR 1236` caused by `RESET MASTER` in other test cases.
+			c.Assert(err, IsNil)
+		}
 	}()
 
 	time.Sleep(3 * time.Second) // waiting for get events from upstream
