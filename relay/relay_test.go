@@ -116,13 +116,13 @@ func (w *mockWriter) Close() error {
 	return nil
 }
 
-func (w *mockWriter) Recover() (*writer.RecoverResult, error) {
-	return nil, nil
+func (w *mockWriter) Recover() (writer.RecoverResult, error) {
+	return writer.RecoverResult{}, nil
 }
 
-func (w *mockWriter) WriteEvent(ev *replication.BinlogEvent) (*writer.Result, error) {
+func (w *mockWriter) WriteEvent(ev *replication.BinlogEvent) (writer.Result, error) {
 	w.latestEvent = ev // hold it
-	return &w.result, w.err
+	return w.result, w.err
 }
 
 func (w *mockWriter) Flush() error {
