@@ -242,9 +242,13 @@ func (r *Relay) process(parentCtx context.Context) error {
 		}
 	} else {
 		r.updateMetricsRelaySubDirIndex()
+		// if not a new server, try to recover the latest relay log file.
+		err = r.tryRecoverLatestFile(parser2)
+		if err != nil {
+			return errors.Trace(err)
+		}
 	}
 
-	// TODO: do recover before reading from upstream.
 	reader2, err := r.setUpReader()
 	if err != nil {
 		return errors.Trace(err)
@@ -272,6 +276,55 @@ func (r *Relay) process(parentCtx context.Context) error {
 	go r.doIntervalOps(parentCtx)
 
 	return errors.Trace(r.handleEvents(parentCtx, reader2, transformer2, writer2))
+}
+
+// tryRecoverLatestFile tries to recover latest relay log file with corrupt/incomplete binlog events/transactions.
+func (r *Relay) tryRecoverLatestFile(parser2 *parser.Parser) error {
+	var (
+		uuid, latestPos = r.meta.Pos()
+		_, latestGTID   = r.meta.GTID()
+	)
+
+	if r.cfg.EnableGTID && latestPos.Compare(minCheckpoint) <= 0 {
+		log.Warnf("[relay] no corresponding position specified for GTID sets %s, skip recovering", latestGTID)
+		return nil
+	}
+
+	// setup a special writer to do the recovering
+	cfg := &writer.FileConfig{
+		RelayDir: r.meta.Dir(),
+		Filename: latestPos.Name,
+	}
+	writer2 := writer.NewFileWriter(cfg, parser2)
+	err := writer2.Start()
+	if err != nil {
+		return errors.Annotatef(err, "start recover writer for UUID %s with config %+v", uuid, cfg)
+	}
+	defer func() {
+		err2 := writer2.Close()
+		if err2 != nil {
+			log.Errorf("[relay] close recover writer for UUID %s with config %+v error %v", uuid, cfg, err2)
+		}
+	}()
+	log.Infof("[relay] started recover writer for UUID %s with config %+v", uuid, cfg)
+
+	result, err := writer2.Recover()
+	if err == nil {
+		if result.Recovered {
+			log.Warnf("[relay] relay log file recovered from position %s to %s, GTID sets %v to %v",
+				latestPos, result.LatestPos, latestGTID, result.LatestGTIDs)
+			err = r.meta.Save(result.LatestPos, result.LatestGTIDs)
+			if err != nil {
+				return errors.Annotate(err, "save meta after recovered")
+			}
+		} else if result.LatestPos.Compare(latestPos) > 0 ||
+			(result.LatestGTIDs != nil && result.LatestGTIDs.Contain(latestGTID)) {
+			log.Warnf("[relay] relay log file have more events after position %s (until %s), GTID sets %v (until %v)",
+				latestPos, result.LatestPos, latestGTID, result.LatestGTIDs)
+		}
+
+	}
+	return errors.Annotatef(err, "recover for UUID %s with config %+v", uuid, cfg)
 }
 
 // handleEvents handles binlog events, including:

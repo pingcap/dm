@@ -14,6 +14,7 @@
 package relay
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
@@ -34,6 +35,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/binlog/event"
+	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay/reader"
 	"github.com/pingcap/dm/relay/transformer"
@@ -127,6 +129,141 @@ func (w *mockWriter) WriteEvent(ev *replication.BinlogEvent) (writer.Result, err
 
 func (w *mockWriter) Flush() error {
 	return nil
+}
+
+func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
+	var (
+		uuid               = "24ecd093-8cec-11e9-aa0d-0242ac170002"
+		uuidWithSuffix     = fmt.Sprintf("%s.000001", uuid)
+		previousGTIDSetStr = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,53bfca22-690d-11e7-8a62-18ded7a37b78:1-495,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456"
+		latestGTIDStr1     = "3ccc475b-2343-11e7-be21-6c0b84d59f30:14"
+		latestGTIDStr2     = "53bfca22-690d-11e7-8a62-18ded7a37b78:495"
+		filename           = "mysql-bin.000001"
+		startPos           = gmysql.Position{Name: filename, Pos: 123}
+
+		parser2  = parser.New()
+		relayCfg = &Config{
+			RelayDir: c.MkDir(),
+			Flavor:   gmysql.MySQLFlavor,
+		}
+		r = NewRelay(relayCfg).(*Relay)
+	)
+	c.Assert(r.meta.Load(), IsNil)
+
+	// no file specified, no need to recover
+	c.Assert(r.tryRecoverLatestFile(parser2), IsNil)
+
+	// save position into meta
+	c.Assert(r.meta.AddDir(uuid, &startPos, nil), IsNil)
+
+	// relay log file does not exists, no need to recover
+	c.Assert(r.tryRecoverLatestFile(parser2), IsNil)
+
+	// use a generator to generate some binlog events
+	previousGTIDSet, err := gtid.ParserGTID(relayCfg.Flavor, previousGTIDSetStr)
+	c.Assert(err, IsNil)
+	latestGTID1, err := gtid.ParserGTID(relayCfg.Flavor, latestGTIDStr1)
+	c.Assert(err, IsNil)
+	latestGTID2, err := gtid.ParserGTID(relayCfg.Flavor, latestGTIDStr2)
+	c.Assert(err, IsNil)
+	g, _, data := genBinlogEventsWithGTIDs(c, relayCfg.Flavor, previousGTIDSet, latestGTID1, latestGTID2)
+
+	// write events into relay log file
+	err = ioutil.WriteFile(filepath.Join(r.meta.Dir(), filename), data, 0600)
+	c.Assert(err, IsNil)
+
+	// all events/transactions are complete, no need to recover
+	c.Assert(r.tryRecoverLatestFile(parser2), IsNil)
+	// now, we do not update position/GTID set in meta if not recovered
+	t.verifyMetadata(c, r, uuidWithSuffix, startPos, "", []string{uuidWithSuffix})
+
+	// write some invalid data into the relay log file
+	f, err := os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0600)
+	c.Assert(err, IsNil)
+	defer f.Close()
+	_, err = f.Write([]byte("invalid event data"))
+	c.Assert(err, IsNil)
+
+	// invalid data truncated, meta updated
+	c.Assert(r.tryRecoverLatestFile(parser2), IsNil)
+	_, latestPos := r.meta.Pos()
+	c.Assert(latestPos, DeepEquals, gmysql.Position{Name: filename, Pos: g.LatestPos})
+	_, latestGTIDs := r.meta.GTID()
+	c.Assert(latestGTIDs.Contain(g.LatestGTID), IsTrue) // verifyMetadata is not enough
+
+	// in GTID mode and without filename specified, we can not do real recovering now.
+	c.Assert(r.meta.Save(minCheckpoint, latestGTIDs), IsNil)
+	r.cfg.EnableGTID = true
+	c.Assert(r.tryRecoverLatestFile(parser2), IsNil)
+	_, latestPos = r.meta.Pos()
+	c.Assert(latestPos, DeepEquals, minCheckpoint)
+	_, latestGTIDs = r.meta.GTID()
+	c.Assert(latestGTIDs.Contain(g.LatestGTID), IsTrue)
+}
+
+// genBinlogEventsWithGTIDs generates some binlog events used by testFileUtilSuite and testFileWriterSuite.
+// now, its generated events including 3 DDL and 10 DML.
+func genBinlogEventsWithGTIDs(c *C, flavor string, previousGTIDSet, latestGTID1, latestGTID2 gtid.Set) (*event.Generator, []*replication.BinlogEvent, []byte) {
+	var (
+		serverID  uint32 = 11
+		latestPos uint32
+		latestXID uint64 = 10
+
+		allEvents = make([]*replication.BinlogEvent, 0, 50)
+		allData   bytes.Buffer
+	)
+
+	// use a binlog event generator to generate some binlog events.
+	g, err := event.NewGenerator(flavor, serverID, latestPos, latestGTID1, previousGTIDSet, latestXID)
+	c.Assert(err, IsNil)
+
+	// file header with FormatDescriptionEvent and PreviousGTIDsEvent
+	events, data, err := g.GenFileHeader()
+	c.Assert(err, IsNil)
+	allEvents = append(allEvents, events...)
+	allData.Write(data)
+
+	// CREATE DATABASE/TABLE, 3 DDL
+	queries := []string{
+		"CREATE DATABASE `db`",
+		"CREATE TABLE `db`.`tbl1` (c1 INT)",
+		"CREATE TABLE `db`.`tbl2` (c1 INT)",
+	}
+	for _, query := range queries {
+		events, data, err = g.GenDDLEvents("db", query)
+		c.Assert(err, IsNil)
+		allEvents = append(allEvents, events...)
+		allData.Write(data)
+	}
+
+	// DMLs, 10 DML
+	g.LatestGTID = latestGTID2 // use another latest GTID with different SID/DomainID
+	var (
+		tableID    uint64 = 8
+		columnType        = []byte{gmysql.MYSQL_TYPE_LONG}
+		eventType         = replication.WRITE_ROWS_EVENTv2
+		schema            = "db"
+		table             = "tbl1"
+	)
+	for i := 0; i < 10; i++ {
+		insertRows := make([][]interface{}, 0, 1)
+		insertRows = append(insertRows, []interface{}{int32(i)})
+		dmlData := []*event.DMLData{
+			{
+				TableID:    tableID,
+				Schema:     schema,
+				Table:      table,
+				ColumnType: columnType,
+				Rows:       insertRows,
+			},
+		}
+		events, data, err = g.GenDMLEvents(eventType, dmlData)
+		c.Assert(err, IsNil)
+		allEvents = append(allEvents, events...)
+		allData.Write(data)
+	}
+
+	return g, allEvents, allData.Bytes()
 }
 
 func (t *testRelaySuite) TestHandleEvent(c *C) {

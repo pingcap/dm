@@ -84,8 +84,9 @@ func (t *testFileWriterSuite) TestInterfaceMethods(c *check.C) {
 	c.Assert(err, check.ErrorMatches, ".*no underlying writer opened.*")
 
 	// recover
-	_, err = w.Recover()
-	c.Assert(err, check.ErrorMatches, ".*no such file or directory.*")
+	rres, err := w.Recover()
+	c.Assert(err, check.IsNil)
+	c.Assert(rres.Recovered, check.IsFalse)
 
 	// write event
 	res, err := w.WriteEvent(ev)
@@ -689,4 +690,31 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	fileData, err := ioutil.ReadFile(filename)
 	c.Assert(err, check.IsNil)
 	c.Assert(fileData, check.DeepEquals, allData.Bytes())
+}
+
+func (t *testFileWriterSuite) TestRecoverMySQLNone(c *check.C) {
+	var (
+		cfg = &FileConfig{
+			RelayDir: c.MkDir(),
+		}
+	)
+
+	w1 := NewFileWriter(cfg, t.parser)
+	defer w1.Close()
+	c.Assert(w1.Start(), check.IsNil)
+
+	// no file specified to recover
+	result, err := w1.Recover()
+	c.Assert(err, check.IsNil)
+	c.Assert(result.Recovered, check.IsFalse)
+
+	cfg.Filename = "mysql-bin.000001"
+	w2 := NewFileWriter(cfg, t.parser)
+	defer w2.Close()
+	c.Assert(w2.Start(), check.IsNil)
+
+	// file not exist, no need to recover
+	result, err = w2.Recover()
+	c.Assert(err, check.IsNil)
+	c.Assert(result.Recovered, check.IsFalse)
 }

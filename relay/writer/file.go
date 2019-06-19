@@ -378,6 +378,13 @@ func (w *FileWriter) handleDuplicateEventsExist(ev *replication.BinlogEvent) (Re
 // NOTE: handle cases when file size > 4GB
 func (w *FileWriter) doRecovering() (RecoverResult, error) {
 	filename := filepath.Join(w.cfg.RelayDir, w.filename.Get())
+	fs, err := os.Stat(filename)
+	if (err != nil && os.IsNotExist(err)) || (err == nil && len(w.filename.Get()) == 0) {
+		return RecoverResult{}, nil // no file need to recover
+	} else if err != nil {
+		return RecoverResult{}, errors.Annotatef(err, "get stat for %s", filename)
+	}
+
 	// get latest pos/GTID set for all completed transactions from the file
 	latestPos, latestGTIDs, err := getTxnPosGTIDs(filename, w.parser)
 	if err != nil {
@@ -385,10 +392,6 @@ func (w *FileWriter) doRecovering() (RecoverResult, error) {
 	}
 
 	// in most cases, we think the file is fine, so compare the size is simpler.
-	fs, err := os.Stat(filename)
-	if err != nil {
-		return RecoverResult{}, errors.Annotatef(err, "get stat for %s", filename)
-	}
 	if fs.Size() == latestPos {
 		return RecoverResult{
 			Recovered:   false, // no recovering for the file
