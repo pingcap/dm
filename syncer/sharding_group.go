@@ -144,7 +144,6 @@ func (sg *ShardingGroup) Merge(sources []string) (bool, bool, int, error) {
 
 	// need to check whether source is exist? but we maybe re-sync more times
 	isResolving := sg.remain != len(sg.sources)
-	// ddls := []string{"create table"}
 
 	for _, source := range sources {
 		synced, exist := sg.sources[source]
@@ -153,15 +152,9 @@ func (sg *ShardingGroup) Merge(sources []string) (bool, bool, int, error) {
 				if !synced {
 					sg.remain--
 				}
-				/*
-					else if !utils.CompareShardingDDLs(sg.sourceDDLs[source], ddls) {
-						return isResolving, sg.remain <= 0, sg.remain, errors.NotSupportedf("execute multiple ddls: previous ddl %s and current ddls %q for source table %s", sg.sourceDDLs[source], ddls, source)
-					}
-				*/
 			}
 
 			sg.sources[source] = true
-			// sg.sourceDDLs[source] = ddls // fake create table ddl
 		} else {
 			if !exist {
 				sg.remain++

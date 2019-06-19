@@ -49,8 +49,8 @@ type ShardingMeta struct {
 	sources   map[string]*ShardingSequence // source table ID -> its sharding sequence
 }
 
-// IsSubsequence checks whether a ShardingSequence is the sub sequence of other.
-func (seq *ShardingSequence) IsSubsequence(other *ShardingSequence) bool {
+// IsPrefixSequence checks whether a ShardingSequence is the prefix sequence of other.
+func (seq *ShardingSequence) IsPrefixSequence(other *ShardingSequence) bool {
 	if len(seq.Items) > len(other.Items) {
 		return false
 	}
@@ -132,10 +132,10 @@ func (meta *ShardingMeta) checkItemExists(item *DDLItem) (int, bool) {
 }
 
 // AddItem adds a new comming DDLItem into ShardingMeta
-// 1. if DDLItem already exists in source sequence, does nothing
+// 1. if DDLItem already exists in source sequence, check whether it is active DDL only
 // 2. add the DDLItem into its related source sequence
 // 3. if it is a new DDL in global sequence, add it into global sequence
-// 4. check the source sequence is the subsequence of global sequence, if not, return an error
+// 4. check the source sequence is the prefix-sequence of global sequence, if not, return an error
 // returns:
 //   active: whether the DDL will be processed in this round
 func (meta *ShardingMeta) AddItem(item *DDLItem) (active bool, err error) {
@@ -162,7 +162,7 @@ func (meta *ShardingMeta) AddItem(item *DDLItem) (active bool, err error) {
 	}
 
 	global, source := meta.global, meta.sources[item.Source]
-	if !source.IsSubsequence(global) {
+	if !source.IsPrefixSequence(global) {
 		return false, errors.Errorf("wrong sql sequence of source %+v, global is %+v", source.Items, global.Items)
 	}
 
