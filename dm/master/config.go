@@ -21,6 +21,8 @@ import (
 	"io/ioutil"
 	"strings"
 
+	"go.uber.org/zap"
+
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
@@ -87,7 +89,7 @@ type Config struct {
 func (c *Config) String() string {
 	cfg, err := json.Marshal(c)
 	if err != nil {
-		log.Errorf("[dm-master] marshal config to json error %v", err)
+		log.L().Error("marshal to json", zap.Reflect("master config", c), log.ShortError(err))
 	}
 	return string(cfg)
 }

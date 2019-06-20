@@ -32,7 +32,7 @@ func (h *statusHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	text := utils.GetRawInfo()
 	_, err := w.Write([]byte(text))
 	if err != nil && !common.IsErrNetClosing(err) {
-		log.Errorf("[server] write status response error %s", err.Error())
+		log.L().Error("write status response", log.ShortError(err))
 	}
 }
 
@@ -51,6 +51,6 @@ func InitStatus(lis net.Listener) {
 	}
 	err := httpS.Serve(lis)
 	if err != nil && !common.IsErrNetClosing(err) && err != http.ErrServerClosed {
-		log.Errorf("[server] status server return with error %s", err.Error())
+		log.L().Error("initial status server", log.ShortError(err))
 	}
 }

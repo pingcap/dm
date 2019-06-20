@@ -22,15 +22,14 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/errors"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"go.uber.org/zap"
-
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/utils"
 )
 
 // task modes
@@ -150,7 +149,7 @@ func NewSubTaskConfig() *SubTaskConfig {
 func (c *SubTaskConfig) String() string {
 	cfg, err := json.Marshal(c)
 	if err != nil {
-		log.L().Error("marshal sub task dm config to json", zap.Reflect("subtask configuration", c), zap.Error(err))
+		log.L().Error("marshal sub task dm config to json", zap.Reflect("subtask configuration", c), log.ShortError(err))
 	}
 	return string(cfg)
 }

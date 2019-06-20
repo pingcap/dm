@@ -46,6 +46,8 @@ type Tracer struct {
 	cfg Config
 	cli pb.TracerClient
 
+	logger log.Logger
+
 	tso   *tsoGenerator
 	idGen *IDGenerator
 
@@ -60,9 +62,10 @@ type Tracer struct {
 // NewTracer creates a new Tracer
 func NewTracer(cfg Config) *Tracer {
 	t := Tracer{
-		cfg:   cfg,
-		tso:   newTsoGenerator(),
-		idGen: NewIDGen(),
+		cfg:    cfg,
+		tso:    newTsoGenerator(),
+		idGen:  NewIDGen(),
+		logger: log.With(zap.String("component", "tracer client")),
 	}
 	t.setJobChansClosed(true)
 	t.ctx, t.cancel = context.WithCancel(context.Background())
@@ -80,7 +83,7 @@ func (t *Tracer) Enable() bool {
 func (t *Tracer) Start() {
 	conn, err := grpc.Dial(t.cfg.TracerAddr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	if err != nil {
-		logger.Error("grpc dial", zap.Error(err))
+		t.logger.Error("grpc dial failed", log.ShortError(err))
 		return
 	}
 	t.cli = pb.NewTracerClient(conn)
@@ -128,7 +131,7 @@ func (t *Tracer) tsoProcessor(ctx context.Context) {
 		case <-time.After(1 * time.Minute):
 			err := t.syncTS()
 			if err != nil {
-				logger.Error("sync timestamp", zap.Error(err))
+				t.logger.Error("sync timestamp failed", log.ShortError(err))
 			}
 		}
 	}
@@ -156,7 +159,7 @@ func (t *Tracer) syncTS() error {
 	currentTS := time.Now().UnixNano()
 	oldSyncedTS := t.tso.syncedTS
 	t.tso.syncedTS = resp.Ts + t.tso.localTS/2 - currentTS/2
-	logger.Debug("syncedTS from ts1 to ts2", zap.Int64("ts1", oldSyncedTS), zap.Int64("ts2", t.tso.syncedTS), zap.Int64("localTS", t.tso.localTS))
+	t.logger.Debug("sync TS", zap.Int64("old synced TS", oldSyncedTS), zap.Int64("current synced TS", t.tso.syncedTS), zap.Int64("local TS", t.tso.localTS))
 	return nil
 }
 
@@ -198,7 +201,7 @@ func (t *Tracer) jobProcessor(ctx context.Context, jobChan <-chan *Job) {
 	}
 
 	processError := func(err error) {
-		logger.Error("processor", zap.Error(err))
+		t.logger.Error("problem with job processor", log.ShortError(err))
 	}
 
 	var err error
@@ -242,7 +245,7 @@ func (t *Tracer) AddJob(job *Job) {
 	t.jobsStatus.RLock()
 	defer t.jobsStatus.RUnlock()
 	if t.jobsStatus.closed {
-		logger.Warn("jobs channel already closed, add job failed", zap.Reflect("job", job))
+		t.logger.Warn("jobs channel already closed, add job failed", zap.Reflect("job", job))
 		return
 	}
 	if job.Tp == EventFlush {
