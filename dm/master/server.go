@@ -260,6 +260,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 		workers = append(workers, workerResp.Worker)
 	}
 
+	// TODO: simplify logic of response sort
 	sort.Strings(workers)
 	workerResps := make([]*pb.CommonWorkerResponse, 0, len(workers))
 	for _, worker := range workers {
