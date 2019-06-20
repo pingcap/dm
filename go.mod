@@ -57,11 +57,11 @@ require (
 	go.etcd.io/bbolt v1.3.3 // indirect
 	go.uber.org/atomic v1.4.0 // indirect
 	go.uber.org/zap v1.10.0 // indirect
-	golang.org/x/crypto v0.0.0-20190611184440-5c40567a22f8 // indirect
 	golang.org/x/net v0.0.0-20190613194153-d28f0bde5980 // indirect
 	golang.org/x/sys v0.0.0-20190613124609-5ed2794edfdc
+	golang.org/x/text v0.3.2 // indirect
+	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 	golang.org/x/tools v0.0.0-20190613204242-ed0dc450797f // indirect
-	google.golang.org/appengine v1.6.1 // indirect
 	google.golang.org/genproto v0.0.0-20190611190212-a7e196e89fd3 // indirect
 	google.golang.org/grpc v1.21.1
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
