@@ -1703,12 +1703,12 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 			}
 
 			response, err1 := client1.SendRequest(ctx, request, s.cfg.RPCTimeout)
-			resp := response.QueryWorkerConfig
 			if err1 != nil {
 				handleErr(errors.Annotatef(err1, "fetch config of worker %s", worker1))
 				return
 			}
 
+			resp := response.QueryWorkerConfig
 			if !resp.Result {
 				handleErr(errors.Errorf("fail to query config from worker %s, message %s", worker1, resp.Msg))
 				return
@@ -1835,10 +1835,12 @@ func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, name
 
 	for num := 0; num < maxRetryNum; num++ {
 		resp, err := cli.SendRequest(ctx, req, s.cfg.RPCTimeout)
+		var queryResp *pb.QueryTaskOperationResponse
 		if err != nil {
 			log.Errorf("fail to query task operation %v", err)
 		} else {
-			respLog := resp.QueryTaskOperation.Log
+			queryResp = resp.QueryTaskOperation
+			respLog := queryResp.Log
 			if respLog == nil {
 				return errors.Errorf("operation %d of task %s not found, please execute `query-status` to check status", opLogID, name)
 			} else if respLog.Success {
@@ -1848,7 +1850,7 @@ func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, name
 			}
 		}
 
-		log.Infof("wait task %s op log %d, current result %+v", name, opLogID, resp.QueryTaskOperation)
+		log.Infof("wait task %s op log %d, current result %+v", name, opLogID, queryResp)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()

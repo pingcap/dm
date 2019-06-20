@@ -67,8 +67,8 @@ func (c *GRPCClient) SendRequest(ctx context.Context, req *Request, timeout time
 // Close implements Client.Close
 func (c *GRPCClient) Close() error {
 	defer func() {
-		c.conn = nil
 		atomic.CompareAndSwapInt32(&c.closed, 0, 1)
+		c.conn = nil
 	}()
 	if c.conn == nil {
 		return nil
