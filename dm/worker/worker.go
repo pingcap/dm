@@ -782,7 +782,7 @@ Loop:
 					break
 				}
 
-				w.l.Info(" stopped sub task", zap.String("task", opLog.Task.Name))
+				w.l.Info("stop sub task", zap.String("task", opLog.Task.Name))
 				st.Close()
 				delete(w.subTasks, opLog.Task.Name)
 			case pb.TaskOp_Pause:
