@@ -662,6 +662,7 @@ func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
 	// reset some variables
 	l.db2Tables = make(map[string]Tables2DataFiles)
 	l.totalFileCount.Set(0) // reset
+	schemaFileCount := 0
 	for file := range files {
 		if !strings.HasSuffix(file, "-schema-create.sql") {
 			continue
@@ -669,6 +670,7 @@ func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
 
 		idx := strings.Index(file, "-schema-create.sql")
 		if idx > 0 {
+			schemaFileCount++
 			db := file[:idx]
 			if l.skipSchemaAndTable(&filter.Table{Schema: db}) {
 				log.Warnf("ignore schema file %s", file)
@@ -680,8 +682,11 @@ func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
 		}
 	}
 
-	if len(l.db2Tables) == 0 {
+	if schemaFileCount == 0 {
 		return errors.New("invalid mydumper files for there are no `-schema-create.sql` files found")
+	}
+	if len(l.db2Tables) == 0 {
+		return errors.New("no available `-schema-create.sql` files, check mydumper parameter matches black-white-list in task config")
 	}
 
 	return nil
@@ -789,13 +794,13 @@ func (l *Loader) prepare() error {
 		if strings.HasSuffix(l.cfg.Dir, dirSuffix) {
 			dirPrefix := strings.TrimSuffix(l.cfg.Dir, dirSuffix)
 			if utils.IsDirExists(dirPrefix) {
-				log.Warnf("[loader] %s is not exists, trying to load data from %s", l.cfg.Dir, dirPrefix)
+				log.Warnf("[loader] %s does not exist, trying to load data from %s", l.cfg.Dir, dirPrefix)
 				l.cfg.Dir = dirPrefix
 				trimmed = true
 			}
 		}
 		if !trimmed {
-			return errors.Errorf("%s is not exists or it's not a dir", l.cfg.Dir)
+			return errors.Errorf("%s does not exist or it's not a dir", l.cfg.Dir)
 		}
 	}
 
