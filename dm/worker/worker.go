@@ -791,7 +791,7 @@ Loop:
 					break
 				}
 
-				w.l.Info("paused sub task", zap.String("task", opLog.Task.Name))
+				w.l.Info("pause sub task", zap.String("task", opLog.Task.Name))
 				err = st.Pause()
 			case pb.TaskOp_Resume:
 				if !exist {
