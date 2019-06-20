@@ -386,7 +386,7 @@ func (s *Server) UpdateRelayConfig(ctx context.Context, req *pb.UpdateRelayReque
 
 	err := s.worker.UpdateRelayConfig(ctx, req.Content)
 	if err != nil {
-		log.L().Error("fail to Update relay configv", zap.String("request", "update relay config"), zap.Stringer("payload", req), zap.Error(err))
+		log.L().Error("fail to Update relay config", zap.String("request", "update relay config"), zap.Stringer("payload", req), zap.Error(err))
 	}
 	return makeCommonWorkerResponse(err), nil
 }
