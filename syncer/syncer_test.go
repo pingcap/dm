@@ -579,6 +579,9 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 }
 
 func (s *testSyncerSuite) TestColumnMapping(c *C) {
+	s.resetMaster()
+	s.resetBinlogSyncer()
+
 	rules := []*cm.Rule{
 		{
 			PatternSchema: "stest*",
