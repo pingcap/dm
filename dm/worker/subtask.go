@@ -259,7 +259,7 @@ retry:
 		case pb.Stage_Stopped:
 		case pb.Stage_Paused:
 			for _, err := range result.Errors {
-				st.l.Error("unit process error", zap.Stringer("unit", cu.Type()), zap.Reflect("error", err))
+				st.l.Error("unit process error", zap.Stringer("unit", cu.Type()), zap.Error(err))
 			}
 		}
 	}
