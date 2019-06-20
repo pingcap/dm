@@ -427,7 +427,7 @@ func (s *Server) MigrateRelay(ctx context.Context, req *pb.MigrateRelayRequest) 
 
 	err := s.worker.MigrateRelay(ctx, req.BinlogName, req.BinlogPos)
 	if err != nil {
-		log.L().Error("fail to  migrate relay", zap.String("request", "migrate relay"), zap.Stringer("payload", req), zap.Error(err))
+		log.L().Error("fail to migrate relay", zap.String("request", "migrate relay"), zap.Stringer("payload", req), zap.Error(err))
 	}
 	return makeCommonWorkerResponse(err), nil
 }
