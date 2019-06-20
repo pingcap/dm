@@ -1587,14 +1587,15 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 	// add new worker
 	for _, workerAddr := range cfg.DeployMap {
 		if _, ok := s.workerClients[workerAddr]; !ok {
-			s.workerClients[workerAddr], err = workerrpc.NewGRPCClient(workerAddr)
-			if err != nil {
+			cli, err2 := workerrpc.NewGRPCClient(workerAddr)
+			if err2 != nil {
 				s.Unlock()
 				return &pb.UpdateMasterConfigResponse{
 					Result: false,
-					Msg:    fmt.Sprintf("Failed to add woker %s, detail: ", workerAddr) + errors.ErrorStack(err),
+					Msg:    fmt.Sprintf("Failed to add woker %s, detail: ", workerAddr) + errors.ErrorStack(err2),
 				}, nil
 			}
+			s.workerClients[workerAddr] = cli
 		}
 	}
 
