@@ -153,6 +153,6 @@ func (r *reader) setUpReaderByGTID() error {
 
 func (r *reader) setUpReaderByPos() error {
 	pos := r.cfg.Pos
-	logger.Info("start sync", zap.String("master", r.cfg.MasterID), zap.String("from position", pos))
+	logger.Info("start sync", zap.String("master", r.cfg.MasterID), zap.Stringer("from position", pos))
 	return r.in.StartSyncByPos(pos)
 }
