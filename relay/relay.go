@@ -318,7 +318,7 @@ func (r *Relay) tryRecoverLatestFile(parser2 *parser.Parser) error {
 				return errors.Annotatef(err, "save position %s, GTID sets %v after recovered", result.LatestPos, result.LatestGTIDs)
 			}
 		} else if result.LatestPos.Compare(latestPos) > 0 ||
-			(result.LatestGTIDs != nil && result.LatestGTIDs.Contain(latestGTID)) {
+			(result.LatestGTIDs != nil && !result.LatestGTIDs.Equal(latestGTID) && result.LatestGTIDs.Contain(latestGTID)) {
 			log.Warnf("[relay] relay log file have more events after position %s (until %s), GTID sets %v (until %v)",
 				latestPos, result.LatestPos, latestGTID, result.LatestGTIDs)
 		}
