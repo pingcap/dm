@@ -380,7 +380,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 								Pos:  pos,
 							}
 							gapSyncEndPos = &gapSyncEndPos2 // reset the endPos
-							logger.Info("adjust gap streamer's start pos", zap.Reflect("pos", pos))
+							logger.Info("adjust gap streamer's start pos", zap.Uint32("pos", pos))
 							continue
 						}
 						return errors.Annotatef(err, "gap streamer")
