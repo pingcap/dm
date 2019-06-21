@@ -42,20 +42,16 @@ import (
 )
 
 var (
-	// ErrNoIncompleteEventFound represents no incomplete event found in relay log file
-	ErrNoIncompleteEventFound = errors.New("no incomplete event found in relay log file")
 	// used to fill RelayLogInfo
 	fakeTaskName = "relay"
 )
 
 const (
-	eventTimeout                = 1 * time.Hour
 	slaveReadTimeout            = 1 * time.Minute  // slave read binlog data timeout, ref: https://dev.mysql.com/doc/refman/8.0/en/replication-options-slave.html#sysvar_slave_net_timeout
 	masterHeartbeatPeriod       = 30 * time.Second // master server send heartbeat period: ref: `MASTER_HEARTBEAT_PERIOD` in https://dev.mysql.com/doc/refman/8.0/en/change-master-to.html
 	flushMetaInterval           = 30 * time.Second
 	getMasterStatusInterval     = 30 * time.Second
 	trimUUIDsInterval           = 1 * time.Hour
-	binlogHeaderSize            = 4
 	showStatusConnectionTimeout = "1m"
 
 	// dumpFlagSendAnnotateRowsEvent (BINLOG_SEND_ANNOTATE_ROWS_EVENT) request the MariaDB master to send Annotate_rows_log_event back.
@@ -340,21 +336,14 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 
 	for {
 		// 1. reader events from upstream server
-		ctx2, cancel2 := context.WithTimeout(ctx, eventTimeout)
 		readTimer := time.Now()
-		rResult, err := reader2.GetEvent(ctx2)
-		cancel2()
+		rResult, err := reader2.GetEvent(ctx)
 		binlogReadDurationHistogram.Observe(time.Since(readTimer).Seconds())
 
 		if err != nil {
-			if rResult.ErrIgnorable {
-				log.Infof("[relay] get ignorable error %v when reading binlog event", err)
+			switch errors.Cause(err) {
+			case context.Canceled:
 				return nil
-			} else if rResult.ErrRetryable {
-				log.Infof("[relay] get retryable error %v when reading binlog event", err)
-				continue
-			}
-			switch err {
 			case replication.ErrChecksumMismatch:
 				relayLogDataCorruptionCounter.Inc()
 			case replication.ErrSyncClosed, replication.ErrNeedSyncAgain:

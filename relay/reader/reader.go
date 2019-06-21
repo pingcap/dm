@@ -16,6 +16,7 @@ package reader
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
@@ -27,11 +28,14 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 )
 
+const (
+	// event timeout when trying to read events from upstream master server.
+	eventTimeout = 1 * time.Hour
+)
+
 // Result represents a read operation result.
 type Result struct {
-	Event        *replication.BinlogEvent
-	ErrIgnorable bool // the error is ignorable
-	ErrRetryable bool // the error is retryable
+	Event *replication.BinlogEvent
 }
 
 // Reader reads binlog events from a upstream master server.
@@ -48,7 +52,7 @@ type Reader interface {
 	Close() error
 
 	// GetEvent gets the binlog event one by one, it will block if no event can be read.
-	// You can pass a context (like Cancel or Timeout) to break the block.
+	// You can pass a context (like Cancel) to break the block.
 	GetEvent(ctx context.Context) (Result, error)
 }
 
@@ -121,7 +125,6 @@ func (r *reader) Close() error {
 }
 
 // GetEvent implements Reader.GetEvent.
-// If some ignorable error occurred, the returned event and error both are nil.
 // NOTE: can only close the reader after this returned.
 func (r *reader) GetEvent(ctx context.Context) (Result, error) {
 	r.mu.RLock()
@@ -133,14 +136,15 @@ func (r *reader) GetEvent(ctx context.Context) (Result, error) {
 	}
 
 	for {
-		ev, err := r.in.GetEvent(ctx)
-		// NOTE: add retryable error support if needed later
+		ctx2, cancel2 := context.WithTimeout(ctx, eventTimeout)
+		ev, err := r.in.GetEvent(ctx2)
+		cancel2()
+
 		if err == nil {
 			result.Event = ev
-		} else if isIgnorableError(err) {
-			result.ErrIgnorable = true
 		} else if isRetryableError(err) {
-			result.ErrRetryable = true
+			log.Infof("[relay] get retryable error %v when reading binlog event", err)
+			continue
 		}
 		return result, errors.Trace(err)
 	}

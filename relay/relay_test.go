@@ -97,7 +97,7 @@ func (r *mockReader) Close() error {
 func (r *mockReader) GetEvent(ctx context.Context) (reader.Result, error) {
 	select {
 	case <-ctx.Done():
-		return reader.Result{ErrIgnorable: true}, ctx.Err()
+		return reader.Result{}, ctx.Err()
 	default:
 	}
 	return r.result, r.err
@@ -296,23 +296,14 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
-	// reader return with ignorable error
-	reader2.result.ErrIgnorable = true
-	reader2.err = errors.New("reader error for testing")
-	// return with `nil`
-	err := r.handleEvents(ctx, reader2, transformer2, writer2)
-	c.Assert(err, IsNil)
-
-	// reader return with non-ignorable error
-	reader2.result.ErrIgnorable = false
-	// return with the annotated reader error
+	// reader return with an error
 	for _, reader2.err = range []error{
 		errors.New("reader error for testing"),
 		replication.ErrChecksumMismatch,
 		replication.ErrSyncClosed,
 		replication.ErrNeedSyncAgain,
 	} {
-		err = r.handleEvents(ctx, reader2, transformer2, writer2)
+		err := r.handleEvents(ctx, reader2, transformer2, writer2)
 		c.Assert(errors.Cause(err), Equals, reader2.err)
 	}
 
@@ -323,13 +314,13 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 	// writer return error
 	writer2.err = errors.New("writer error for testing")
 	// return with the annotated writer error
-	err = r.handleEvents(ctx, reader2, transformer2, writer2)
+	err := r.handleEvents(ctx, reader2, transformer2, writer2)
 	c.Assert(errors.Cause(err), Equals, writer2.err)
 
 	// writer without error
 	writer2.err = nil
 	err = r.handleEvents(ctx, reader2, transformer2, writer2) // returned when ctx timeout
-	c.Assert(err, IsNil)
+	c.Assert(errors.Cause(err), Equals, ctx.Err())
 	// check written event
 	c.Assert(writer2.latestEvent, Equals, reader2.result.Event)
 	// check meta
@@ -344,7 +335,7 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 	// write a QueryEvent with GTID sets
 	reader2.result.Event = queryEv
 	err = r.handleEvents(ctx2, reader2, transformer2, writer2)
-	c.Assert(err, IsNil)
+	c.Assert(errors.Cause(err), Equals, ctx.Err())
 	// check written event
 	c.Assert(writer2.latestEvent, Equals, reader2.result.Event)
 	// check meta
@@ -354,21 +345,7 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 	c.Assert(pos.Pos, Equals, queryEv.Header.LogPos)
 	c.Assert(gs.Origin(), DeepEquals, queryEv2.GSet) // got GTID sets
 
-	// reader return retryable error
-	reader2.result.ErrRetryable = true
-	reader2.err = errors.New("reader error for testing")
-	ctx3, cancel3 := context.WithTimeout(context.Background(), 10*time.Millisecond)
-	defer cancel3()
-	err = r.handleEvents(ctx3, reader2, transformer2, writer2)
-	c.Assert(err, IsNil)
-	select {
-	case <-ctx3.Done():
-	default:
-		c.Fatalf("retryable error for reader not retried")
-	}
-
 	// transformer return ignorable for the event
-	reader2.result.ErrIgnorable = false
 	reader2.err = nil
 	reader2.result.Event = &replication.BinlogEvent{
 		Header: &replication.EventHeader{EventType: replication.HEARTBEAT_EVENT},
@@ -376,7 +353,7 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 	ctx4, cancel4 := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel4()
 	err = r.handleEvents(ctx4, reader2, transformer2, writer2)
-	c.Assert(err, IsNil)
+	c.Assert(errors.Cause(err), Equals, ctx.Err())
 	select {
 	case <-ctx4.Done():
 	default:
@@ -389,7 +366,7 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 	ctx5, cancel5 := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel5()
 	err = r.handleEvents(ctx5, reader2, transformer2, writer2)
-	c.Assert(err, IsNil)
+	c.Assert(errors.Cause(err), Equals, ctx.Err())
 	select {
 	case <-ctx5.Done():
 	default:

@@ -122,18 +122,13 @@ func (t *testReaderSuite) TestGetEventWithError(c *check.C) {
 
 	errOther := errors.New("other error")
 	in := []error{
-		context.Canceled,         // ignorable
-		context.DeadlineExceeded, // retryable
+		context.Canceled,
+		context.DeadlineExceeded, // retried without return
 		errOther,
 	}
-	expected := []Result{
-		{
-			ErrIgnorable: true,
-		},
-		{
-			ErrRetryable: true,
-		},
-		{},
+	expected := []error{
+		context.Canceled,
+		errOther,
 	}
 
 	err := r.Start()
@@ -149,11 +144,11 @@ func (t *testReaderSuite) TestGetEventWithError(c *check.C) {
 		}
 	}()
 
-	results := make([]Result, 0, len(expected))
+	results := make([]error, 0, len(expected))
 	for {
-		result, err2 := r.GetEvent(ctx)
+		_, err2 := r.GetEvent(ctx)
 		c.Assert(err2, check.NotNil)
-		results = append(results, result)
+		results = append(results, errors.Cause(err2))
 		if err2 == errOther {
 			break // all received
 		}
