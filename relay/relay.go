@@ -321,7 +321,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 			if err != nil {
 				return errors.Annotatef(err, "start to fill gap in relay log file from %v", gapSyncStartPos)
 			}
-			logger.Info("start to fill gap in relay log file", zap.Reflect("from", gapSyncStartPos))
+			logger.Info("start to fill gap in relay log file", zap.Stringer("from", gapSyncStartPos))
 			if r.cfg.EnableGTID {
 				_, currentGtidSet := r.meta.GTID()
 				if currentGtidSet.Equal(r.gSetWhenSwitch) {
