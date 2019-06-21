@@ -47,9 +47,9 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	cli := common.MasterClient()
+	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
+	defer cancel()
 	resp, err := cli.QueryStatus(ctx, &pb.QueryStatusListRequest{
 		Name:    taskName,
 		Workers: workers,
