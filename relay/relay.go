@@ -876,7 +876,7 @@ func (r *Relay) retrySyncGTIDs() error {
 	if err != nil {
 		return errors.Annotatef(err, "get master status")
 	}
-	logger.Info("", zap.Reflect("new master GTID set", newGTIDSet))
+	logger.Info("", zap.Stringer("new master GTID set", newGTIDSet))
 
 	masterUUID, err := utils.GetServerUUID(r.db, r.cfg.Flavor)
 	if err != nil {
