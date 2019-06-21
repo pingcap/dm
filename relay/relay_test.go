@@ -191,9 +191,8 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	_, latestGTIDs := r.meta.GTID()
 	c.Assert(latestGTIDs.Contain(g.LatestGTID), IsTrue) // verifyMetadata is not enough
 
-	// in GTID mode and without filename specified, we can not do real recovering now.
+	// no relay log file need to recover
 	c.Assert(r.meta.Save(minCheckpoint, latestGTIDs), IsNil)
-	r.cfg.EnableGTID = true
 	c.Assert(r.tryRecoverLatestFile(parser2), IsNil)
 	_, latestPos = r.meta.Pos()
 	c.Assert(latestPos, DeepEquals, minCheckpoint)

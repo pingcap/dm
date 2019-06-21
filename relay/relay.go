@@ -285,8 +285,8 @@ func (r *Relay) tryRecoverLatestFile(parser2 *parser.Parser) error {
 		_, latestGTID   = r.meta.GTID()
 	)
 
-	if r.cfg.EnableGTID && latestPos.Compare(minCheckpoint) <= 0 {
-		log.Warnf("[relay] no corresponding position specified for GTID sets %s, skip recovering", latestGTID)
+	if latestPos.Compare(minCheckpoint) <= 0 {
+		log.Warnf("[relay] no relay log file need to recover, position %s, GTID sets %v", latestPos, latestGTID)
 		return nil
 	}
 
@@ -315,7 +315,7 @@ func (r *Relay) tryRecoverLatestFile(parser2 *parser.Parser) error {
 				latestPos, result.LatestPos, latestGTID, result.LatestGTIDs)
 			err = r.meta.Save(result.LatestPos, result.LatestGTIDs)
 			if err != nil {
-				return errors.Annotate(err, "save meta after recovered")
+				return errors.Annotatef(err, "save position %s, GTID sets %v after recovered", result.LatestPos, result.LatestGTIDs)
 			}
 		} else if result.LatestPos.Compare(latestPos) > 0 ||
 			(result.LatestGTIDs != nil && result.LatestGTIDs.Contain(latestGTID)) {
@@ -402,7 +402,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 		lastPos.Pos = tResult.LogPos
 		err = lastGTID.Set(tResult.GTIDSet)
 		if err != nil {
-			log.Errorf("[relay] update last GTID set to %v error %v", tResult.GTIDSet, err)
+			return errors.Annotatef(err, "update last GTID set to %v", tResult.GTIDSet)
 		}
 		if !r.cfg.EnableGTID {
 			// if go-mysql set RawModeEnabled to true
@@ -427,7 +427,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 		if needSavePos {
 			err = r.meta.Save(lastPos, lastGTID)
 			if err != nil {
-				return errors.Trace(err)
+				return errors.Annotatef(err, "save position %s, GTID sets %v into meta", lastPos, lastGTID)
 			}
 		}
 	}
