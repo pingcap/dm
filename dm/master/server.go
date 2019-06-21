@@ -1657,6 +1657,7 @@ func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWork
 	return resp.UpdateRelay, nil
 }
 
+// TODO: refine the call stack of this API, query worker configs that we needed only
 func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConfig, error) {
 	var (
 		wg          sync.WaitGroup
@@ -1729,7 +1730,7 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 			dbCfg := &config.DBConfig{}
 			err2 := dbCfg.Decode(resp.Content)
 			if err2 != nil {
-				handleErr(errors.Annotatef(err2, "unmarshal worker %s config", worker1))
+				handleErr(errors.Annotatef(err2, "unmarshal worker %s config, resp: %s", worker1, resp.Content))
 				return
 			}
 

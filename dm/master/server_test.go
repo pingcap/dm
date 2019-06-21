@@ -1295,9 +1295,7 @@ func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
 	c.Assert(resp.Workers, check.HasLen, 2)
 	for _, w := range resp.Workers {
 		c.Assert(w.Result, check.IsFalse)
-		lines := strings.Split(w.Msg, "\n")
-		c.Assert(len(lines), check.Greater, 1)
-		c.Assert(lines[0], check.Matches, ".*relevant worker-client not found")
+		c.Assert(w.Msg, check.Matches, "(?m).*relevant worker-client not found.*")
 	}
 
 	// test SwitchWorkerRelayMaster successfully
