@@ -33,6 +33,8 @@ type testHTTPServer struct {
 func (t *testHTTPServer) startServer(c *check.C) {
 	t.cfg = NewConfig()
 	t.cfg.MasterAddr = ":8261"
+	t.cfg.RPCRateLimit = DefaultRate
+	t.cfg.RPCRateBurst = DefaultBurst
 
 	t.server = NewServer(t.cfg)
 	go t.server.Start()
