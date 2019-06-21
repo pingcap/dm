@@ -374,7 +374,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 							if err2 != nil {
 								return errors.Annotatef(err, "truncate %s to size %d", r.fd.Name(), pos)
 							}
-							logger.Info("truncate file", zap.String("file", r.fd.Name()), zap.Reflect("to size", pos))
+							logger.Info("truncate file", zap.String("file", r.fd.Name()), zap.Uint32("to size", pos))
 							gapSyncStartPos = &mysql.Position{
 								Name: lastPos.Name,
 								Pos:  pos,
