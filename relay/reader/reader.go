@@ -147,7 +147,7 @@ func (r *reader) GetEvent(ctx context.Context) (*replication.BinlogEvent, error)
 
 func (r *reader) setUpReaderByGTID() error {
 	gs := r.cfg.GTIDs
-	logger.Info("start sync", zap.String("master", r.cfg.MasterID), zap.String("from GTID set", gs))
+	logger.Info("start sync", zap.String("master", r.cfg.MasterID), zap.Stringer("from GTID set", gs))
 	return r.in.StartSyncByGTID(gs)
 }
 
