@@ -14,6 +14,8 @@
 package utils
 
 import (
+	"time"
+
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/mysql"
 )
@@ -141,4 +143,33 @@ func (t *testUtilsSuite) TestCompareBinlogPos(c *C) {
 		c.Assert(cmp, Equals, tc.cmp)
 	}
 
+}
+
+func (t *testUtilsSuite) TestWaitSomething(c *C) {
+	var (
+		backoff  = 10
+		waitTime = 10 * time.Millisecond
+		count    = 0
+	)
+
+	// wait fail
+	f1 := func() bool {
+		count++
+		return false
+	}
+	c.Assert(WaitSomething(backoff, waitTime, f1), IsFalse)
+	c.Assert(count, Equals, backoff)
+
+	count = 0 // reset
+	// wait success
+	f2 := func() bool {
+		count++
+		if count >= 5 {
+			return true
+		}
+		return false
+	}
+
+	c.Assert(WaitSomething(backoff, waitTime, f2), IsTrue)
+	c.Assert(count, Equals, 5)
 }

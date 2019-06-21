@@ -15,6 +15,7 @@ package worker
 
 import (
 	"context"
+	"time"
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
@@ -22,6 +23,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	pkgstreamer "github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay"
 	"github.com/pingcap/dm/relay/purger"
 )
@@ -306,7 +308,7 @@ func (t *testRelay) testStop(c *C, holder *realRelayHolder) {
 }
 
 func waitRelayStage(holder *realRelayHolder, expect pb.Stage, backoff int) bool {
-	return waitSomething(backoff, func() bool {
+	return utils.WaitSomething(backoff, 10*time.Millisecond, func() bool {
 		return holder.Stage() == expect
 	})
 }
