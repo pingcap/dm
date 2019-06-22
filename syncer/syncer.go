@@ -1043,7 +1043,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 		// if remaining DDLs in sequence, redirect global stream to the next sharding DDL position
 		if !shardingReSync.allResolved {
-			nextPos, err2 := s.sgk.NextShardingDDLFirstPos(shardingReSync.targetSchema, shardingReSync.targetTable)
+			nextPos, err2 := s.sgk.ActiveDDLFirstPos(shardingReSync.targetSchema, shardingReSync.targetTable)
 			if err2 != nil {
 				return errors.Trace(err2)
 			}

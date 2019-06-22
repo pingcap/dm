@@ -31,7 +31,7 @@ const (
 
 // DDLItem records ddl information used in sharding sequence organization
 type DDLItem struct {
-	FirstPos mysql.Position `json:"first-pos"` // first DDL's binlog pos
+	FirstPos mysql.Position `json:"first-pos"` // first DDL's binlog Pos, not the End_log_pos of the event
 	DDLs     []string       `json:"ddls"`      // DDLs
 	Source   string         `json:"source"`    // source table ID
 }
@@ -201,8 +201,8 @@ func (meta *ShardingMeta) ResolveShardingDDL() bool {
 	return false
 }
 
-// NextShardingDDLFirstPos returns the first binlog position of next sharding DDL in sequence
-func (meta *ShardingMeta) NextShardingDDLFirstPos() (*mysql.Position, error) {
+// ActiveDDLFirstPos returns the first binlog position of active DDL
+func (meta *ShardingMeta) ActiveDDLFirstPos() (*mysql.Position, error) {
 	if meta.activeIdx >= len(meta.global.Items) {
 		return nil, errors.Errorf("activeIdx %d larger than global DDLItems: %v", meta.activeIdx, meta.global.Items)
 	}
