@@ -1087,8 +1087,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		s.currentPosMu.currentPos = currentPos
 		s.currentPosMu.Unlock()
 
-		// if there are sharding groups need to re-sync previous ignored DMLs, we use another special streamer
-		if len(shardingReSyncCh) > 0 {
+		// fetch from sharding resync channel if needed, and redirect global
+		// stream to current binlog position recorded by ShardingReSync
+		if shardingReSync == nil && len(shardingReSyncCh) > 0 {
 			// some sharding groups need to re-syncing
 			shardingReSync = <-shardingReSyncCh
 			savedGlobalLastPos = lastPos // save global last pos

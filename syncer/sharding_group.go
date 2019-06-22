@@ -48,16 +48,14 @@ package syncer
  *    save this DDL's next binlog pos as last pos for the sharding group
  *    execute this DDL
  *    reset the sharding group
- * 7. create a new streamer to re-sync ignored binlog events in the sharding group before
- *    start re-syncing from first DDL's binlog pos in step.2
- *    pause the global streamer's syncing
- * 8. continue the syncing with the sharding group special streamer
+ * 7. redirect global streamer to the first DDL's binlog pos in step.2
+ * 8. continue the syncing with the global streamer
  *    ignore binlog events which not belong to the sharding group
  *    ignore binlog events have synced (obsolete) for the sharding group
  *    synced ignored binlog events in the sharding group from step.3 to step.5
  *    update per-table's and global checkpoint
  * 9. last pos in step.6 arrived
- * 10. close the sharding group special streamer
+ * 10. redirect global streamer to the active DDL in sequance sharding if needed
  * 11. use the global streamer to continue the syncing
  *
  * all binlogs executed at least once:
