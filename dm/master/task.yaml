@@ -80,53 +80,58 @@ mysql-instances:             # one or more source database, config more source d
 
 routes:                      # schema/table route mapping
   user-route-rules-schema:
-    schema-pattern: "test_*"
-    target-schema: "test"
+    schema-pattern: "test_*"    # pattern of the upstream schema name, wildcard characters (*?) are supported
+    target-schema: "test"       # downstream schema name
   user-route-rules:
     schema-pattern: "test_*"
-    table-pattern: "t_*"
+    table-pattern: "t_*"        # pattern of the upstream table name, wildcard characters (*?) are supported
     target-schema: "test"
-    target-table: "t"
+    target-table: "t"           # downstream table name
 
 filters:                     # filter rules, mysql instance can ref rules in it
   user-filter-1:
-    schema-pattern: "test_*"
-    table-pattern: "t_*"
+    schema-pattern: "test_*"    # pattern of the upstream schema name, wildcard characters (*?) are supported
+    table-pattern: "t_*"        # pattern of the upstream table name, wildcard characters (*?) are supported
     events: ["truncate table", "drop table"]  # ignore truncate/drop table ddl
+    # pattern of the SQL statements, regular expression is supported
+    # when using global filtering rule (`schema-pattern: "*"`), it will try to match the original statement executed in the upstream
+    # when not using global filtering rule, it will try to match the statement parsed/restored by DM without route-rules applied (can find it in the log)
+    sql-pattern: ["^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"]
     action: Ignore
   user-filter-2:
     schema-pattern: "test_*"
-    events: ["All DML"]             # only do all DML events
+    events: ["all dml"]             # only do all DML events
     action: Do
 
 black-white-list:
   instance:
-    do-dbs: ["~^test.*", "do"]
-    ignore-dbs: ["mysql", "ignored"]
-    do-tables:
+    do-dbs: ["~^test.*", "do"]        # white list of upstream schemas needs to be replicated, regular expression (starts with ~) is supported
+    ignore-dbs: ["mysql", "ignored"]  # black list of upstream schemas needs to be replicated, regular expression (starts with ~) is supported
+    do-tables:                        # white list of upstream tables needs to be replicated, (db-name, tbl-name) regular expression (starts with ~) is supported
     - db-name: "~^test.*"
       tbl-name: "~^t.*"
     - db-name: "do"
       tbl-name: "do"
-    - db-name: "do"
-      tbl-name: "do"
+    ignore-tables:                    # black list of upstream tables needs to be replicated, (db-name, tbl-name) regular expression (starts with ~) is supported
+    - db-name: "test"
+      tbl-name: "log"
 
 
 column-mappings:             # column mapping rules, mysql instance can ref rules in it
   instance-1:
-    schema-pattern: "test_*"
-    table-pattern: "t_*"
-    expression: "partition id"       # handle sharding partition id
-    source-column: "id"
-    target-column: "id"
-    arguments: ["1", "test_", "t_"]
+    schema-pattern: "test_*"            # pattern of the upstream schema name, wildcard characters (*?) are supported
+    table-pattern: "t_*"                # pattern of the upstream table name, wildcard characters (*?) are supported
+    expression: "partition id"          # handle sharding partition id
+    source-column: "id"                 # upstream column name
+    target-column: "id"                 # downstream column name
+    arguments: ["1", "test", "t", "_"]  # arguments for the `expression`
   instance-2:
     schema-pattern: "test_*"
     table-pattern: "t_*"
-    expression: "partition id"       # handle sharding partition id
+    expression: "partition id"
     source-column: "id"
     target-column: "id"
-    arguments: ["2", "test_", "t_"]
+    arguments: ["2", "test", "t", "_"]
 
 mydumpers:                   # mydumper process unit specific configs, mysql instance can ref one config in it
   global:
