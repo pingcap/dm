@@ -376,9 +376,9 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(exceptTables [][]string, extraSQLs
 			}
 		}
 	}
-	for i := range shardMetaSQLs {
-		sqls = append(sqls, shardMetaSQLs[i])
-		args = append(args, shardMetaArgs[i])
+	for i := range extraSQLs {
+		sqls = append(sqls, extraSQLs[i])
+		args = append(args, extraArgs[i])
 	}
 
 	err := cp.db.executeSQL(sqls, args, maxRetryCount)
