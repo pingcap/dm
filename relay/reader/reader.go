@@ -30,7 +30,7 @@ import (
 
 const (
 	// event timeout when trying to read events from upstream master server.
-	eventTimeout = 1 * time.Hour
+	eventTimeout = 10 * time.Minute
 )
 
 // Result represents a read operation result.
