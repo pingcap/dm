@@ -916,6 +916,22 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 	}
 }
 
+// redirectStreamer redirects binlog stream to given position
+func (s *Syncer) redirectStreamer(pos mysql.Position) (streamer.Streamer, error) {
+	var (
+		bs  streamer.Streamer
+		err error
+	)
+	log.Infof("reset global streamer to position: %v", pos)
+	s.resetRepliactionSyncer()
+	if s.binlogType == RemoteBinlog {
+		bs, err = s.getBinlogStreamer(s.syncer, pos)
+	} else if s.binlogType == LocalBinlog {
+		bs, err = s.getBinlogStreamer(s.localReader, pos)
+	}
+	return bs, errors.Trace(err)
+}
+
 // Run starts running for sync, we should guarantee it can rerun when paused.
 func (s *Syncer) Run(ctx context.Context) (err error) {
 	defer func() {
@@ -1026,7 +1042,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	var (
 		shardingSyncer      *replication.BinlogSyncer
 		shardingReader      *streamer.BinlogReader
-		shardingStreamer    streamer.Streamer
 		shardingReSyncCh    = make(chan *ShardingReSync, 10)
 		shardingReSync      *ShardingReSync
 		savedGlobalLastPos  mysql.Position
@@ -1048,13 +1063,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				return errors.Trace(err2)
 			}
 
-			log.Infof("reset global streamer to position: %v", *nextPos)
-			s.resetRepliactionSyncer()
-			if s.binlogType == RemoteBinlog {
-				globalStreamer, err2 = s.getBinlogStreamer(s.syncer, *nextPos)
-			} else if s.binlogType == LocalBinlog {
-				globalStreamer, err2 = s.getBinlogStreamer(s.localReader, *nextPos)
-			}
+			globalStreamer, err2 = s.redirectStreamer(*nextPos)
 			if err2 != nil {
 				return errors.Trace(err2)
 			}
@@ -1067,7 +1076,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			shardingReader.Close()
 			shardingReader = nil
 		}
-		shardingStreamer = nil
 		shardingReSync = nil
 		lastPos = savedGlobalLastPos // restore global last pos
 		return nil
@@ -1080,23 +1088,17 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		s.currentPosMu.Unlock()
 
 		// if there are sharding groups need to re-sync previous ignored DMLs, we use another special streamer
-		if shardingStreamer == nil && len(shardingReSyncCh) > 0 {
+		if len(shardingReSyncCh) > 0 {
 			// some sharding groups need to re-syncing
 			shardingReSync = <-shardingReSyncCh
 			savedGlobalLastPos = lastPos // save global last pos
 			lastPos = shardingReSync.currPos
 
-			if s.binlogType == RemoteBinlog {
-				shardingSyncer = replication.NewBinlogSyncer(s.shardingSyncCfg)
-				shardingStreamer, err = s.getBinlogStreamer(shardingSyncer, shardingReSync.currPos)
-			} else if s.binlogType == LocalBinlog {
-				shardingReader = streamer.NewBinlogReader(&streamer.BinlogReaderConfig{
-					RelayDir: s.cfg.RelayDir,
-					Timezone: s.timezone,
-				})
-				shardingStreamer, err = s.getBinlogStreamer(shardingReader, shardingReSync.currPos)
+			globalStreamer, err = s.redirectStreamer(shardingReSync.currPos)
+			if err != nil {
+				return errors.Trace(err)
 			}
-			log.Debugf("[syncer] start using a special streamer to re-sync DMLs for sharding group %+v", shardingReSync)
+
 			failpoint.Inject("ReSyncExit", func() {
 				log.Warn("[failpoint] exit triggered by ReSyncExit")
 				utils.OsExit(1)
@@ -1118,12 +1120,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 			})
 			ctx2, cancel := context.WithTimeout(ctx, eventTimeout)
-			if shardingStreamer != nil {
-				// use sharding group's special streamer to get binlog event
-				e, err = shardingStreamer.GetEvent(ctx2)
-			} else {
-				e, err = globalStreamer.GetEvent(ctx2)
-			}
+			e, err = globalStreamer.GetEvent(ctx2)
 			cancel()
 		}
 
@@ -1145,11 +1142,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			eventTimeoutCounter = 0
 			if s.needResync() {
 				log.Info("timeout, resync")
-				if shardingStreamer != nil {
-					shardingStreamer, err = s.reopenWithRetry(s.shardingSyncCfg)
-				} else {
-					globalStreamer, err = s.reopenWithRetry(s.syncCfg)
-				}
+				globalStreamer, err = s.reopenWithRetry(s.syncCfg)
 				if err != nil {
 					return errors.Trace(err)
 				}
@@ -1162,11 +1155,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			// try to re-sync in gtid mode
 			if tryReSync && s.cfg.EnableGTID && isBinlogPurgedError(err) && s.cfg.AutoFixGTID {
 				time.Sleep(retryTimeout)
-				if shardingStreamer != nil {
-					shardingStreamer, err = s.reSyncBinlog(s.shardingSyncCfg)
-				} else {
-					globalStreamer, err = s.reSyncBinlog(s.syncCfg)
-				}
+				globalStreamer, err = s.reSyncBinlog(s.syncCfg)
 				if err != nil {
 					return errors.Trace(err)
 				}
