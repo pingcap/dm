@@ -48,13 +48,13 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 		meta       = NewShardingMeta()
 		items      = []*DDLItem{
 			NewDDLItem(mysql.Position{filename, 1000}, []string{"ddl1"}, table1),
-			NewDDLItem(mysql.Position{filename, 1200}, []string{"ddl2"}, table1),
+			NewDDLItem(mysql.Position{filename, 1200}, []string{"ddl2-1,ddl2-2"}, table1),
 			NewDDLItem(mysql.Position{filename, 1400}, []string{"ddl3"}, table1),
 			NewDDLItem(mysql.Position{filename, 1600}, []string{"ddl1"}, table2),
-			NewDDLItem(mysql.Position{filename, 1800}, []string{"ddl2"}, table2),
+			NewDDLItem(mysql.Position{filename, 1800}, []string{"ddl2-1,ddl2-2"}, table2),
 			NewDDLItem(mysql.Position{filename, 2000}, []string{"ddl3"}, table2),
 			NewDDLItem(mysql.Position{filename, 2200}, []string{"ddl1"}, table3),
-			NewDDLItem(mysql.Position{filename, 2400}, []string{"ddl2"}, table3),
+			NewDDLItem(mysql.Position{filename, 2400}, []string{"ddl2-1,ddl2-2"}, table3),
 			NewDDLItem(mysql.Position{filename, 2600}, []string{"ddl3"}, table3),
 		}
 	)
