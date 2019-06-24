@@ -36,6 +36,11 @@ type DDLItem struct {
 	Source   string         `json:"source"`    // source table ID
 }
 
+// String returns the item's format string value
+func (item *DDLItem) String() string {
+	return fmt.Sprintf("first-pos: %s ddls: %+v source: %s", item.FirstPos, item.DDLs, item.Source)
+}
+
 // ShardingSequence records a list of DDLItem
 type ShardingSequence struct {
 	Items []*DDLItem `json:"items"`
@@ -202,11 +207,11 @@ func (meta *ShardingMeta) ResolveShardingDDL() bool {
 }
 
 // ActiveDDLFirstPos returns the first binlog position of active DDL
-func (meta *ShardingMeta) ActiveDDLFirstPos() (*mysql.Position, error) {
+func (meta *ShardingMeta) ActiveDDLFirstPos() (mysql.Position, error) {
 	if meta.activeIdx >= len(meta.global.Items) {
-		return nil, errors.Errorf("activeIdx %d larger than global DDLItems: %v", meta.activeIdx, meta.global.Items)
+		return mysql.Position{}, errors.Errorf("activeIdx %d larger than global DDLItems: %v", meta.activeIdx, meta.global.Items)
 	}
-	return &meta.global.Items[meta.activeIdx].FirstPos, nil
+	return meta.global.Items[meta.activeIdx].FirstPos, nil
 }
 
 // FlushData returns sharding meta flush SQL and args

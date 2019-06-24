@@ -36,7 +36,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 		err        error
 		sqls       []string
 		args       [][]interface{}
-		pos        *mysql.Position
+		pos        mysql.Position
 		filename   = "mysql-bin.000001"
 		table1     = "table1"
 		table2     = "table2"
@@ -76,7 +76,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(meta.InSequenceSharding(), check.IsTrue)
 	pos, err = meta.ActiveDDLFirstPos()
 	c.Assert(err, check.IsNil)
-	c.Assert(*pos, check.DeepEquals, items[0].FirstPos)
+	c.Assert(pos, check.DeepEquals, items[0].FirstPos)
 
 	// find synced in shrading group, and call ShardingMeta.ResolveShardingDDL
 	c.Assert(meta.ResolveShardingDDL(), check.IsFalse)
@@ -87,7 +87,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(meta.InSequenceSharding(), check.IsTrue)
 	pos, err = meta.ActiveDDLFirstPos()
 	c.Assert(err, check.IsNil)
-	c.Assert(*pos, check.DeepEquals, items[1].FirstPos)
+	c.Assert(pos, check.DeepEquals, items[1].FirstPos)
 
 	sqls, args = meta.FlushData(metaSchema, metaTable, sourceID, tableID)
 	c.Assert(sqls, check.HasLen, 4)
@@ -120,7 +120,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(meta.InSequenceSharding(), check.IsTrue)
 	pos, err = meta.ActiveDDLFirstPos()
 	c.Assert(err, check.IsNil)
-	c.Assert(*pos, check.DeepEquals, items[1].FirstPos)
+	c.Assert(pos, check.DeepEquals, items[1].FirstPos)
 
 	// find synced in shrading group, and call ShardingMeta.ResolveShardingDDL
 	c.Assert(meta.ResolveShardingDDL(), check.IsFalse)
@@ -131,7 +131,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(meta.InSequenceSharding(), check.IsTrue)
 	pos, err = meta.ActiveDDLFirstPos()
 	c.Assert(err, check.IsNil)
-	c.Assert(*pos, check.DeepEquals, items[2].FirstPos)
+	c.Assert(pos, check.DeepEquals, items[2].FirstPos)
 
 	sqls, args = meta.FlushData(metaSchema, metaTable, sourceID, tableID)
 	c.Assert(sqls, check.HasLen, 4)
@@ -163,7 +163,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(meta.InSequenceSharding(), check.IsTrue)
 	pos, err = meta.ActiveDDLFirstPos()
 	c.Assert(err, check.IsNil)
-	c.Assert(*pos, check.DeepEquals, items[2].FirstPos)
+	c.Assert(pos, check.DeepEquals, items[2].FirstPos)
 
 	// find synced in shrading group, and call ShardingMeta.ResolveShardingDDL
 	c.Assert(meta.ResolveShardingDDL(), check.IsTrue)

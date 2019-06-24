@@ -1063,7 +1063,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				return errors.Trace(err2)
 			}
 
-			globalStreamer, err2 = s.redirectStreamer(*nextPos)
+			globalStreamer, err2 = s.redirectStreamer(nextPos)
 			if err2 != nil {
 				return errors.Trace(err2)
 			}

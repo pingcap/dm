@@ -366,7 +366,7 @@ func (sg *ShardingGroup) ResolveShardingDDL() bool {
 }
 
 // ActiveDDLFirstPos returns the first binlog position of active DDL
-func (sg *ShardingGroup) ActiveDDLFirstPos() (*mysql.Position, error) {
+func (sg *ShardingGroup) ActiveDDLFirstPos() (mysql.Position, error) {
 	sg.RLock()
 	defer sg.RUnlock()
 	pos, err := sg.meta.ActiveDDLFirstPos()
@@ -647,7 +647,7 @@ func (k *ShardingGroupKeeper) ResolveShardingDDL(targetSchema, targetTable strin
 }
 
 // ActiveDDLFirstPos returns the binlog postion of active DDL
-func (k *ShardingGroupKeeper) ActiveDDLFirstPos(targetSchema, targetTable string) (*mysql.Position, error) {
+func (k *ShardingGroupKeeper) ActiveDDLFirstPos(targetSchema, targetTable string) (mysql.Position, error) {
 	group := k.Group(targetSchema, targetTable)
 	k.Lock()
 	defer k.Unlock()
@@ -655,7 +655,7 @@ func (k *ShardingGroupKeeper) ActiveDDLFirstPos(targetSchema, targetTable string
 		pos, err := group.ActiveDDLFirstPos()
 		return pos, errors.Trace(err)
 	}
-	return nil, errors.NotFoundf("sharding group for %s.%s", targetSchema, targetTable)
+	return mysql.Position{}, errors.NotFoundf("sharding group for %s.%s", targetSchema, targetTable)
 }
 
 // PrepareFlushSQLs returns all sharding meta flushed SQLs execpt for given table IDs
