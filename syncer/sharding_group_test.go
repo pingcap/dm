@@ -34,26 +34,27 @@ func (t *testShardingGroupSuite) TestLowestFirstPosInGroups(c *C) {
 
 	ddls := []string{"DUMMY DDL"}
 
-	g1 := NewShardingGroup(cfg, []string{"db1.tbl1", "db1.tbl2"}, nil, false)
+	k := NewShardingGroupKeeper(cfg)
+
+	g1 := NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, []string{"db1.tbl1", "db1.tbl2"}, nil, false)
 	pos1 := mysql.Position{Name: "mysql-bin.000002", Pos: 123}
 	endPos1 := mysql.Position{Name: "mysql-bin.000002", Pos: 456}
 	_, _, _, err := g1.TrySync("db1.tbl1", pos1, endPos1, ddls)
 	c.Assert(err, IsNil)
 
 	// lowest
-	g2 := NewShardingGroup(cfg, []string{"db2.tbl1", "db2.tbl2"}, nil, false)
+	g2 := NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, []string{"db2.tbl1", "db2.tbl2"}, nil, false)
 	pos2 := mysql.Position{Name: "mysql-bin.000001", Pos: 123}
 	endPos2 := mysql.Position{Name: "mysql-bin.000001", Pos: 456}
 	_, _, _, err = g2.TrySync("db2.tbl1", pos2, endPos2, ddls)
 	c.Assert(err, IsNil)
 
-	g3 := NewShardingGroup(cfg, []string{"db3.tbl1", "db3.tbl2"}, nil, false)
+	g3 := NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, []string{"db3.tbl1", "db3.tbl2"}, nil, false)
 	pos3 := mysql.Position{Name: "mysql-bin.000003", Pos: 123}
 	endPos3 := mysql.Position{Name: "mysql-bin.000003", Pos: 456}
 	_, _, _, err = g3.TrySync("db3.tbl1", pos3, endPos3, ddls)
 	c.Assert(err, IsNil)
 
-	k := NewShardingGroupKeeper(cfg)
 	k.groups["db1.tbl"] = g1
 	k.groups["db2.tbl"] = g2
 	k.groups["db3.tbl"] = g3
