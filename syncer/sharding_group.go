@@ -72,7 +72,6 @@ package syncer
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 
@@ -544,15 +543,15 @@ func (k *ShardingGroupKeeper) CheckSyncing(targetSchema, targetTable, source str
 // NOTE: this func only ensure the returned tables are current un-resolved
 // if passing the returned tables to other func (like checkpoint),
 // must ensure their sync state not changed in this progress
-func (k *ShardingGroupKeeper) UnresolvedTables() ([]string, [][]string) {
-	ids := make([]string, 0)
+func (k *ShardingGroupKeeper) UnresolvedTables() (map[string]bool, [][]string) {
+	ids := make(map[string]bool)
 	tables := make([][]string, 0, 10)
 	k.RLock()
 	defer k.RUnlock()
 	for id, group := range k.groups {
 		unresolved := group.UnresolvedTables()
 		if len(unresolved) > 0 {
-			ids = append(ids, id)
+			ids[id] = true
 			tables = append(tables, unresolved...)
 		}
 	}
@@ -659,20 +658,19 @@ func (k *ShardingGroupKeeper) ActiveDDLFirstPos(targetSchema, targetTable string
 }
 
 // PrepareFlushSQLs returns all sharding meta flushed SQLs execpt for given table IDs
-func (k *ShardingGroupKeeper) PrepareFlushSQLs(exceptTableIDs []string) ([]string, [][]interface{}) {
+func (k *ShardingGroupKeeper) PrepareFlushSQLs(exceptTableIDs map[string]bool) ([]string, [][]interface{}) {
 	k.RLock()
 	defer k.RUnlock()
 	var (
 		sqls = make([]string, 0, len(k.groups))
 		args = make([][]interface{}, 0, len(k.groups))
 	)
-	sort.Strings(exceptTableIDs)
 	for id, group := range k.groups {
 		if group.IsSchemaOnly {
 			continue
 		}
-		i := sort.Search(len(exceptTableIDs), func(i int) bool { return id <= exceptTableIDs[i] })
-		if i < len(exceptTableIDs) && exceptTableIDs[i] == id {
+		_, ok := exceptTableIDs[id]
+		if ok {
 			continue
 		}
 		sqls2, args2 := group.FlushData(id)

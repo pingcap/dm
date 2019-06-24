@@ -751,7 +751,7 @@ func (s *Syncer) flushCheckPoints() error {
 	}
 
 	var (
-		exceptTableIDs []string
+		exceptTableIDs map[string]bool
 		exceptTables   [][]string
 		shardMetaSQLs  []string
 		shardMetaArgs  [][]interface{}
