@@ -259,7 +259,7 @@ func (t *testShardMetaSuite) TestFlushLoadMeta(c *check.C) {
 	c.Assert(args, check.HasLen, 3)
 	for _, arg := range args {
 		c.Assert(arg, check.HasLen, 8)
-		loadedMeta.LoadData(arg[2].(string), arg[3].(int), arg[4].(bool), []byte(arg[5].(string)))
+		loadedMeta.RestoreFromData(arg[2].(string), arg[3].(int), arg[4].(bool), []byte(arg[5].(string)))
 	}
 	c.Assert(loadedMeta, check.DeepEquals, meta)
 }

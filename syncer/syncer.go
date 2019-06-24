@@ -1051,7 +1051,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		traceID             string
 	)
 
-	closeShardingSyncer := func() error {
+	closeShardingResync := func() error {
 		if shardingReSync == nil {
 			return nil
 		}
@@ -1080,7 +1080,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		lastPos = savedGlobalLastPos // restore global last pos
 		return nil
 	}
-	defer closeShardingSyncer()
+	defer closeShardingResync()
 
 	for {
 		s.currentPosMu.Lock()
@@ -1186,7 +1186,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			lastPos:             &lastPos,
 			shardingReSync:      shardingReSync,
 			latestOp:            &latestOp,
-			closeShardingSyncer: closeShardingSyncer,
+			closeShardingResync: closeShardingResync,
 			traceSource:         traceSource,
 			safeMode:            safeMode,
 			tryReSync:           tryReSync,
@@ -1216,7 +1216,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				lastPos = shardingReSync.currPos
 				if shardingReSync.currPos.Compare(shardingReSync.latestPos) >= 0 {
 					log.Infof("[syncer] sharding group %v re-syncing completed", shardingReSync)
-					closeShardingSyncer()
+					closeShardingResync()
 					continue
 				}
 			}
@@ -1241,7 +1241,7 @@ type eventContext struct {
 	lastPos             *mysql.Position
 	shardingReSync      *ShardingReSync
 	latestOp            *opType
-	closeShardingSyncer func() error
+	closeShardingResync func() error
 	traceSource         string
 	safeMode            *sm.SafeMode
 	tryReSync           bool
@@ -1270,7 +1270,7 @@ func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext)
 
 		if ec.shardingReSync.currPos.Compare(ec.shardingReSync.latestPos) >= 0 {
 			log.Infof("[syncer] sharding group %+v re-syncing completed", ec.shardingReSync)
-			ec.closeShardingSyncer()
+			ec.closeShardingResync()
 		} else {
 			log.Debugf("[syncer] rotate binlog to %v when re-syncing sharding group %+v", ec.currentPos, ec.shardingReSync)
 		}
@@ -1303,7 +1303,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		ec.shardingReSync.currPos.Pos = ec.header.LogPos
 		if ec.shardingReSync.currPos.Compare(ec.shardingReSync.latestPos) >= 0 {
 			log.Infof("[syncer] sharding group %v re-syncing completed", ec.shardingReSync)
-			return errors.Trace(ec.closeShardingSyncer())
+			return errors.Trace(ec.closeShardingResync())
 		}
 		if ec.shardingReSync.targetSchema != schemaName || ec.shardingReSync.targetTable != tableName {
 			// in re-syncing, ignore non current sharding group's events
@@ -1472,7 +1472,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		ec.shardingReSync.currPos.Pos = ec.header.LogPos
 		if ec.shardingReSync.currPos.Compare(ec.shardingReSync.latestPos) >= 0 {
 			log.Infof("[syncer] sharding group %v re-syncing completed", ec.shardingReSync)
-			err2 := ec.closeShardingSyncer()
+			err2 := ec.closeShardingResync()
 			if err2 != nil {
 				return errors.Trace(err2)
 			}

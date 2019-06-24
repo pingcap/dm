@@ -55,7 +55,7 @@ package syncer
  *    synced ignored binlog events in the sharding group from step.3 to step.5
  *    update per-table's and global checkpoint
  * 9. last pos in step.6 arrived
- * 10. redirect global streamer to the active DDL in sequance sharding if needed
+ * 10. redirect global streamer to the active DDL in sequence sharding if needed
  * 11. use the global streamer to continue the syncing
  *
  * all binlogs executed at least once:
@@ -374,8 +374,8 @@ func (sg *ShardingGroup) ActiveDDLFirstPos() (mysql.Position, error) {
 }
 
 // FlushData returns sharding meta flush SQLs and args
-func (sg *ShardingGroup) FlushData(tableID string) ([]string, [][]interface{}) {
-	return sg.meta.FlushData(sg.shardmetaSchema, sg.shardmetaTable, sg.sourceID, tableID)
+func (sg *ShardingGroup) FlushData(targetTableID string) ([]string, [][]interface{}) {
+	return sg.meta.FlushData(sg.shardmetaSchema, sg.shardmetaTable, sg.sourceID, targetTableID)
 }
 
 // GenTableID generates table ID
@@ -421,7 +421,7 @@ func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceI
 	// if need to support target table-level sharding DDL
 	// we also need to support target schema-level sharding DDL
 	schemaID, _ := GenTableID(targetSchema, "")
-	tableID, _ := GenTableID(targetSchema, targetTable)
+	targetTableID, _ := GenTableID(targetSchema, targetTable)
 
 	k.Lock()
 	defer k.Unlock()
@@ -433,13 +433,13 @@ func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceI
 	}
 
 	var ok bool
-	if group, ok = k.groups[tableID]; !ok {
+	if group, ok = k.groups[targetTableID]; !ok {
 		group = NewShardingGroup(k.cfg, sourceIDs, meta, false)
-		k.groups[tableID] = group
+		k.groups[targetTableID] = group
 	} else if merge {
-		needShardingHandle, synced, remain, err = k.groups[tableID].Merge(sourceIDs)
+		needShardingHandle, synced, remain, err = k.groups[targetTableID].Merge(sourceIDs)
 	} else {
-		err = errors.AlreadyExistsf("table group %s", tableID)
+		err = errors.AlreadyExistsf("table group %s", targetTableID)
 		return
 	}
 
@@ -482,10 +482,10 @@ func (k *ShardingGroupKeeper) ResetGroups() {
 // LeaveGroup doesn't affect in syncing process
 func (k *ShardingGroupKeeper) LeaveGroup(targetSchema, targetTable string, sources []string) error {
 	schemaID, _ := GenTableID(targetSchema, "")
-	tableID, _ := GenTableID(targetSchema, targetTable)
+	targetTableID, _ := GenTableID(targetSchema, targetTable)
 	k.Lock()
 	defer k.Unlock()
-	if group, ok := k.groups[tableID]; ok {
+	if group, ok := k.groups[targetTableID]; ok {
 		if err := group.Leave(sources); err != nil {
 			return errors.Trace(err)
 		}
@@ -509,7 +509,7 @@ func (k *ShardingGroupKeeper) TrySync(
 	targetSchema, targetTable, source string, pos, endPos mysql.Position, ddls []string) (
 	needShardingHandle bool, group *ShardingGroup, synced, active bool, remain int, err error) {
 
-	tableID, schemaOnly := GenTableID(targetSchema, targetTable)
+	targetTableID, schemaOnly := GenTableID(targetSchema, targetTable)
 	if schemaOnly {
 		// NOTE: now we don't support syncing for schema only sharding DDL
 		return false, nil, true, false, 0, nil
@@ -518,7 +518,7 @@ func (k *ShardingGroupKeeper) TrySync(
 	k.Lock()
 	defer k.Unlock()
 
-	group, ok := k.groups[tableID]
+	group, ok := k.groups[targetTableID]
 	if !ok {
 		return false, group, true, false, 0, nil
 	}
@@ -561,10 +561,10 @@ func (k *ShardingGroupKeeper) UnresolvedTables() ([]string, [][]string) {
 
 // Group returns target table's group, nil if not exist
 func (k *ShardingGroupKeeper) Group(targetSchema, targetTable string) *ShardingGroup {
-	tableID, _ := GenTableID(targetSchema, targetTable)
+	targetTableID, _ := GenTableID(targetSchema, targetTable)
 	k.RLock()
 	defer k.RUnlock()
-	return k.groups[tableID]
+	return k.groups[targetTableID]
 }
 
 // lowestFirstPosInGroups returns the lowest pos in all groups which are unresolved
@@ -711,15 +711,15 @@ func (k *ShardingGroupKeeper) createSchema() error {
 func (k *ShardingGroupKeeper) createTable() error {
 	tableName := fmt.Sprintf("`%s`.`%s`", k.shardmetaSchema, k.shardmetaTable)
 	sql2 := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
-		source_id VARCHAR(32) NOT NULL,
-		table_id VARCHAR(128) NOT NULL,
-		source  VARCHAR(128) NOT NULL,
-		active INT,
+		source_id VARCHAR(32) NOT NULL COMMENT 'replica source id, defined in task.yaml',
+		target_table_id VARCHAR(128) NOT NULL,
+		source_table_id  VARCHAR(128) NOT NULL,
+		active_index INT,
 		is_global BOOLEAN,
 		data JSON,
 		create_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-		UNIQUE KEY uk_source_id_table_id_source (source_id, table_id, source)
+		UNIQUE KEY uk_source_id_table_id_source (source_id, target_table_id, source_table_id)
 	)`, tableName)
 	err := k.db.executeSQL([]string{sql2}, [][]interface{}{{}}, maxRetryCount)
 	log.Infof("[ShardingGroupKeeper] execute sql %s", sql2)
@@ -728,7 +728,7 @@ func (k *ShardingGroupKeeper) createTable() error {
 
 // LoadShardMeta implements CheckPoint.LoadShardMeta
 func (k *ShardingGroupKeeper) LoadShardMeta() (map[string]*shardmeta.ShardingMeta, error) {
-	query := fmt.Sprintf("SELECT `table_id`, `source`, `active`, `is_global`, `data` FROM `%s`.`%s` WHERE `source_id`='%s'", k.shardmetaSchema, k.shardmetaTable, k.cfg.SourceID)
+	query := fmt.Sprintf("SELECT `target_table_id`, `source_table_id`, `active_index`, `is_global`, `data` FROM `%s`.`%s` WHERE `source_id`='%s'", k.shardmetaSchema, k.shardmetaTable, k.cfg.SourceID)
 	rows, err := k.db.querySQL(query, maxRetryCount)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -736,22 +736,22 @@ func (k *ShardingGroupKeeper) LoadShardMeta() (map[string]*shardmeta.ShardingMet
 	defer rows.Close()
 
 	var (
-		tableID  string
-		source   string
-		active   int
-		isGlobal bool
-		data     string
-		meta     = make(map[string]*shardmeta.ShardingMeta)
+		targetTableID string
+		sourceTableID string
+		activeIndex   int
+		isGlobal      bool
+		data          string
+		meta          = make(map[string]*shardmeta.ShardingMeta)
 	)
 	for rows.Next() {
-		err := rows.Scan(&tableID, &source, &active, &isGlobal, &data)
+		err := rows.Scan(&targetTableID, &sourceTableID, &activeIndex, &isGlobal, &data)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		if _, ok := meta[tableID]; !ok {
-			meta[tableID] = shardmeta.NewShardingMeta()
+		if _, ok := meta[targetTableID]; !ok {
+			meta[targetTableID] = shardmeta.NewShardingMeta()
 		}
-		err = meta[tableID].LoadData(source, active, isGlobal, []byte(data))
+		err = meta[targetTableID].RestoreFromData(sourceTableID, activeIndex, isGlobal, []byte(data))
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

@@ -32,7 +32,7 @@ const (
 // DDLItem records ddl information used in sharding sequence organization
 type DDLItem struct {
 	FirstPos mysql.Position `json:"first-pos"` // first DDL's binlog Pos, not the End_log_pos of the event
-	DDLs     []string       `json:"ddls"`      // DDLs
+	DDLs     []string       `json:"ddls"`      // DDLs, these ddls are in the same QueryEvent
 	Source   string         `json:"source"`    // source table ID
 }
 
@@ -93,8 +93,8 @@ func NewShardingMeta() *ShardingMeta {
 	}
 }
 
-// LoadData loads data into ShardingMeta
-func (meta *ShardingMeta) LoadData(source string, activeIdx int, isGlobal bool, data []byte) error {
+// RestoreFromData restores ShardingMeta from given data
+func (meta *ShardingMeta) RestoreFromData(sourceTableID string, activeIdx int, isGlobal bool, data []byte) error {
 	items := make([]*DDLItem, 0)
 	err := json.Unmarshal(data, &items)
 	if err != nil {
@@ -103,7 +103,7 @@ func (meta *ShardingMeta) LoadData(source string, activeIdx int, isGlobal bool, 
 	if isGlobal {
 		meta.global = &ShardingSequence{Items: items}
 	} else {
-		meta.sources[source] = &ShardingSequence{Items: items}
+		meta.sources[sourceTableID] = &ShardingSequence{Items: items}
 	}
 	meta.activeIdx = activeIdx
 	return nil
@@ -217,14 +217,14 @@ func (meta *ShardingMeta) ActiveDDLFirstPos() (mysql.Position, error) {
 // FlushData returns sharding meta flush SQL and args
 func (meta *ShardingMeta) FlushData(schema, table, sourceID, tableID string) ([]string, [][]interface{}) {
 	if len(meta.global.Items) == 0 {
-		sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` where source_id=? and table_id=?", schema, table)
+		sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` where source_id=? and target_table_id=?", schema, table)
 		args2 := []interface{}{sourceID, tableID}
 		return []string{sql2}, [][]interface{}{args2}
 	}
 	var (
 		sqls    = make([]string, 1+len(meta.sources))
 		args    = make([][]interface{}, 0, 1+len(meta.sources))
-		baseSQL = fmt.Sprintf("INSERT INTO `%s`.`%s` (`source_id`, `table_id`, `source`, `active`, `is_global`, `data`) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE `data`=?, `active`=?", schema, table)
+		baseSQL = fmt.Sprintf("INSERT INTO `%s`.`%s` (`source_id`, `target_table_id`, `source_table_id`, `active_index`, `is_global`, `data`) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE `data`=?, `active_index`=?", schema, table)
 	)
 	for i := range sqls {
 		sqls[i] = baseSQL
