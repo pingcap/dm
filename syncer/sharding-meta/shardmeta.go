@@ -194,7 +194,8 @@ func (meta *ShardingMeta) GetActiveDDLItem(tableSource string) *DDLItem {
 
 // InSequenceSharding returns whether in sequence sharding
 func (meta *ShardingMeta) InSequenceSharding() bool {
-	return meta.activeIdx < len(meta.global.Items)
+	globalItemCount := len(meta.global.Items)
+	return globalItemCount > 0 && meta.activeIdx < globalItemCount
 }
 
 // ResolveShardingDDL resolves one sharding DDL and increase activeIdx

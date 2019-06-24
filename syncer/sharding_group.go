@@ -127,36 +127,28 @@ func NewShardingGroup(sourceID, shardMetaSchema, shardMetaTable string, sources 
 
 // Merge merges new sources to exists
 // used cases
-//   * add a new database / table to exists sharding group
+//   * add a new table to exists sharding group
 //   * add new table(s) to parent database's sharding group
-//  if group is un-resolved, we add it in sources and set it true
+//  if group is in sequence sharding, return error directly
 //  othereise add it in source, set it false and increment remain
 func (sg *ShardingGroup) Merge(sources []string) (bool, bool, int, error) {
 	sg.Lock()
 	defer sg.Unlock()
 
-	// need to check whether source is exist? but we maybe re-sync more times
-	isResolving := sg.remain != len(sg.sources)
+	// NOTE: we don't support add shard table when in sequence sharding
+	if sg.meta.InSequenceSharding() {
+		return true, sg.remain <= 0, sg.remain, errors.NotSupportedf("in sequence sharding, can't add table")
+	}
 
 	for _, source := range sources {
-		synced, exist := sg.sources[source]
-		if isResolving && !synced {
-			if exist {
-				if !synced {
-					sg.remain--
-				}
-			}
-
-			sg.sources[source] = true
-		} else {
-			if !exist {
-				sg.remain++
-			}
+		_, exist := sg.sources[source]
+		if !exist {
+			sg.remain++
 			sg.sources[source] = false
 		}
 	}
 
-	return isResolving, sg.remain <= 0, sg.remain, nil
+	return false, sg.remain <= 0, sg.remain, nil
 }
 
 // Leave leaves from sharding group
@@ -168,8 +160,8 @@ func (sg *ShardingGroup) Leave(sources []string) error {
 	sg.Lock()
 	defer sg.Unlock()
 
-	//  if group is un-resolved, we can't do drop (DROP DATABASE / TABLE)
-	if sg.remain != len(sg.sources) {
+	// NOTE: if gropu is in sequence sharding, we can't do drop (DROP DATABASE / TABLE)
+	if sg.meta.InSequenceSharding() {
 		return errors.NotSupportedf("group's sharding DDL %v is un-resolved, try drop sources %v", sg.ddls, sources)
 	}
 
