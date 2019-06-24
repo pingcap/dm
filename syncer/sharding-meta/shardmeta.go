@@ -168,7 +168,7 @@ func (meta *ShardingMeta) AddItem(item *DDLItem) (active bool, err error) {
 
 	global, source := meta.global, meta.sources[item.Source]
 	if !source.IsPrefixSequence(global) {
-		return false, errors.Errorf("wrong sql sequence of source %+v, global is %+v", source.Items, global.Items)
+		return false, errors.Errorf("detect inconsistent DDL sequence from source %+v, right DDL sequence should be %+v", source.Items, global.Items)
 	}
 
 	return index == meta.activeIdx, nil

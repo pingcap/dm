@@ -95,6 +95,7 @@ type Syncer struct {
 	syncer      *replication.BinlogSyncer
 	localReader *streamer.BinlogReader
 	binlogType  BinlogType
+	streamer    streamer.Streamer
 
 	wg    sync.WaitGroup
 	jobWg sync.WaitGroup
@@ -917,19 +918,16 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 }
 
 // redirectStreamer redirects binlog stream to given position
-func (s *Syncer) redirectStreamer(pos mysql.Position) (streamer.Streamer, error) {
-	var (
-		bs  streamer.Streamer
-		err error
-	)
+func (s *Syncer) redirectStreamer(pos mysql.Position) error {
+	var err error
 	log.Infof("reset global streamer to position: %v", pos)
 	s.resetRepliactionSyncer()
 	if s.binlogType == RemoteBinlog {
-		bs, err = s.getBinlogStreamer(s.syncer, pos)
+		s.streamer, err = s.getBinlogStreamer(s.syncer, pos)
 	} else if s.binlogType == LocalBinlog {
-		bs, err = s.getBinlogStreamer(s.localReader, pos)
+		s.streamer, err = s.getBinlogStreamer(s.localReader, pos)
 	}
-	return bs, errors.Trace(err)
+	return errors.Trace(err)
 }
 
 // Run starts running for sync, we should guarantee it can rerun when paused.
@@ -964,11 +962,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	)
 	log.Infof("replicate binlog from latest checkpoint %+v", lastPos)
 
-	var globalStreamer streamer.Streamer
 	if s.binlogType == RemoteBinlog {
-		globalStreamer, err = s.getBinlogStreamer(s.syncer, lastPos)
+		s.streamer, err = s.getBinlogStreamer(s.syncer, lastPos)
 	} else if s.binlogType == LocalBinlog {
-		globalStreamer, err = s.getBinlogStreamer(s.localReader, lastPos)
+		s.streamer, err = s.getBinlogStreamer(s.localReader, lastPos)
 	}
 	if err != nil {
 		return errors.Trace(err)
@@ -1063,7 +1060,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				return errors.Trace(err2)
 			}
 
-			globalStreamer, err2 = s.redirectStreamer(nextPos)
+			err2 = s.redirectStreamer(nextPos)
 			if err2 != nil {
 				return errors.Trace(err2)
 			}
@@ -1095,7 +1092,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			savedGlobalLastPos = lastPos // save global last pos
 			lastPos = shardingReSync.currPos
 
-			globalStreamer, err = s.redirectStreamer(shardingReSync.currPos)
+			err = s.redirectStreamer(shardingReSync.currPos)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -1121,7 +1118,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				}
 			})
 			ctx2, cancel := context.WithTimeout(ctx, eventTimeout)
-			e, err = globalStreamer.GetEvent(ctx2)
+			e, err = s.streamer.GetEvent(ctx2)
 			cancel()
 		}
 
@@ -1143,7 +1140,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			eventTimeoutCounter = 0
 			if s.needResync() {
 				log.Info("timeout, resync")
-				globalStreamer, err = s.reopenWithRetry(s.syncCfg)
+				err = s.reopenWithRetry(s.syncCfg)
 				if err != nil {
 					return errors.Trace(err)
 				}
@@ -1156,7 +1153,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			// try to re-sync in gtid mode
 			if tryReSync && s.cfg.EnableGTID && isBinlogPurgedError(err) && s.cfg.AutoFixGTID {
 				time.Sleep(retryTimeout)
-				globalStreamer, err = s.reSyncBinlog(s.syncCfg)
+				err = s.reSyncBinlog(s.syncCfg)
 				if err != nil {
 					return errors.Trace(err)
 				}
@@ -2004,20 +2001,21 @@ func (s *Syncer) flushJobs() error {
 	return errors.Trace(err)
 }
 
-func (s *Syncer) reSyncBinlog(cfg replication.BinlogSyncerConfig) (streamer.Streamer, error) {
+func (s *Syncer) reSyncBinlog(cfg replication.BinlogSyncerConfig) error {
 	err := s.retrySyncGTIDs()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return errors.Trace(err)
 	}
 	// close still running sync
-	return s.reopenWithRetry(cfg)
+	return errors.Trace(s.reopenWithRetry(cfg))
 }
 
-func (s *Syncer) reopenWithRetry(cfg replication.BinlogSyncerConfig) (streamer streamer.Streamer, err error) {
+func (s *Syncer) reopenWithRetry(cfg replication.BinlogSyncerConfig) error {
+	var err error
 	for i := 0; i < maxRetryCount; i++ {
-		streamer, err = s.reopen(cfg)
+		s.streamer, err = s.reopen(cfg)
 		if err == nil {
-			return
+			return nil
 		}
 		if needRetryReplicate(err) {
 			log.Infof("[syncer] retry open binlog streamer %v", err)
@@ -2026,7 +2024,7 @@ func (s *Syncer) reopenWithRetry(cfg replication.BinlogSyncerConfig) (streamer s
 		}
 		break
 	}
-	return nil, errors.Trace(err)
+	return errors.Trace(err)
 }
 
 func (s *Syncer) reopen(cfg replication.BinlogSyncerConfig) (streamer.Streamer, error) {

@@ -98,8 +98,8 @@ type ShardingGroup struct {
 	IsSchemaOnly bool            // whether is a schema (database) only DDL TODO: zxc add schema-level syncing support later
 
 	sourceID        string                  // associate dm-worker source ID
-	shardmetaSchema string                  // shard meta storage schema name
-	shardmetaTable  string                  // shard meta storage table name
+	shardMetaSchema string                  // shard meta storage schema name
+	shardMetaTable  string                  // shard meta storage table name
 	meta            *shardmeta.ShardingMeta // sharding sequence meta storage
 
 	firstPos    *mysql.Position // first DDL's binlog pos, used to restrain the global checkpoint when un-resolved
@@ -114,8 +114,8 @@ func NewShardingGroup(cfg *config.SubTaskConfig, sources []string, meta *shardme
 		sources:         make(map[string]bool, len(sources)),
 		IsSchemaOnly:    isSchemaOnly,
 		sourceID:        cfg.SourceID,
-		shardmetaSchema: cfg.MetaSchema,
-		shardmetaTable:  fmt.Sprintf(shardmeta.MetaTableFormat, cfg.Name),
+		shardMetaSchema: cfg.MetaSchema,
+		shardMetaTable:  fmt.Sprintf(shardmeta.MetaTableFormat, cfg.Name),
 		firstPos:        nil,
 		firstEndPos:     nil,
 	}
@@ -218,7 +218,7 @@ func (sg *ShardingGroup) TrySync(source string, pos, endPos mysql.Position, ddls
 	if err != nil {
 		return sg.remain <= 0, active, sg.remain, errors.Trace(err)
 	}
-	if active {
+	if active && !sg.sources[source] {
 		sg.sources[source] = true
 		sg.remain--
 	}
@@ -353,6 +353,8 @@ func (sg *ShardingGroup) String() string {
 
 // InSequenceSharding returns whether this sharding group is in sequence sharding
 func (sg *ShardingGroup) InSequenceSharding() bool {
+	sg.RLock()
+	defer sg.RUnlock()
 	return sg.meta.InSequenceSharding()
 }
 
@@ -375,7 +377,9 @@ func (sg *ShardingGroup) ActiveDDLFirstPos() (mysql.Position, error) {
 
 // FlushData returns sharding meta flush SQLs and args
 func (sg *ShardingGroup) FlushData(targetTableID string) ([]string, [][]interface{}) {
-	return sg.meta.FlushData(sg.shardmetaSchema, sg.shardmetaTable, sg.sourceID, targetTableID)
+	sg.RLock()
+	defer sg.RUnlock()
+	return sg.meta.FlushData(sg.shardMetaSchema, sg.shardMetaTable, sg.sourceID, targetTableID)
 }
 
 // GenTableID generates table ID
@@ -400,8 +404,8 @@ type ShardingGroupKeeper struct {
 	groups map[string]*ShardingGroup // target table ID -> ShardingGroup
 	cfg    *config.SubTaskConfig
 
-	shardmetaSchema string
-	shardmetaTable  string
+	shardMetaSchema string
+	shardMetaTable  string
 	db              *Conn
 }
 
@@ -411,8 +415,8 @@ func NewShardingGroupKeeper(cfg *config.SubTaskConfig) *ShardingGroupKeeper {
 		groups: make(map[string]*ShardingGroup),
 		cfg:    cfg,
 	}
-	k.shardmetaSchema = cfg.MetaSchema
-	k.shardmetaTable = fmt.Sprintf(shardmeta.MetaTableFormat, cfg.Name)
+	k.shardMetaSchema = cfg.MetaSchema
+	k.shardMetaTable = fmt.Sprintf(shardmeta.MetaTableFormat, cfg.Name)
 	return k
 }
 
@@ -701,7 +705,7 @@ func (k *ShardingGroupKeeper) Close() {
 }
 
 func (k *ShardingGroupKeeper) createSchema() error {
-	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", k.shardmetaSchema)
+	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", k.shardMetaSchema)
 	args := make([]interface{}, 0)
 	err := k.db.executeSQL([]string{sql2}, [][]interface{}{args}, maxRetryCount)
 	log.Infof("[ShardingGroupKeeper] execute sql %s", sql2)
@@ -709,7 +713,7 @@ func (k *ShardingGroupKeeper) createSchema() error {
 }
 
 func (k *ShardingGroupKeeper) createTable() error {
-	tableName := fmt.Sprintf("`%s`.`%s`", k.shardmetaSchema, k.shardmetaTable)
+	tableName := fmt.Sprintf("`%s`.`%s`", k.shardMetaSchema, k.shardMetaTable)
 	sql2 := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 		source_id VARCHAR(32) NOT NULL COMMENT 'replica source id, defined in task.yaml',
 		target_table_id VARCHAR(128) NOT NULL,
@@ -728,7 +732,7 @@ func (k *ShardingGroupKeeper) createTable() error {
 
 // LoadShardMeta implements CheckPoint.LoadShardMeta
 func (k *ShardingGroupKeeper) LoadShardMeta() (map[string]*shardmeta.ShardingMeta, error) {
-	query := fmt.Sprintf("SELECT `target_table_id`, `source_table_id`, `active_index`, `is_global`, `data` FROM `%s`.`%s` WHERE `source_id`='%s'", k.shardmetaSchema, k.shardmetaTable, k.cfg.SourceID)
+	query := fmt.Sprintf("SELECT `target_table_id`, `source_table_id`, `active_index`, `is_global`, `data` FROM `%s`.`%s` WHERE `source_id`='%s'", k.shardMetaSchema, k.shardMetaTable, k.cfg.SourceID)
 	rows, err := k.db.querySQL(query, maxRetryCount)
 	if err != nil {
 		return nil, errors.Trace(err)
