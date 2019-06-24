@@ -228,7 +228,7 @@ func (t *testShardMetaSuite) TestShardingMetaWrongSequence(c *check.C) {
 	}
 	active, err = meta.AddItem(items[4])
 	c.Assert(active, check.IsFalse)
-	c.Assert(err, check.ErrorMatches, "wrong sql sequence of source .*, global is .*")
+	c.Assert(err, check.ErrorMatches, "detect inconsistent DDL sequence from source .*, right DDL sequence should be .*")
 }
 
 func (t *testShardMetaSuite) TestFlushLoadMeta(c *check.C) {
