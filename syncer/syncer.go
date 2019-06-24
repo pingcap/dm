@@ -1333,8 +1333,8 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 	if s.cfg.IsSharding {
 		source, _ := GenTableID(originSchema, originTable)
-		needShardingHandle, beforeDDL := s.sgk.CheckSyncing(schemaName, tableName, source, *ec.currentPos)
-		if needShardingHandle && !beforeDDL {
+		needShardingHandle, beforeActiveDDL := s.sgk.CheckSyncing(schemaName, tableName, source, *ec.currentPos)
+		if needShardingHandle && !beforeActiveDDL {
 			// if in unsync stage and not before active DDL, ignore it
 			// if in sharding re-sync stage and not before active DDL (the next DDL to be synced), ignore it
 			log.Debugf("[syncer] source %s is in sharding DDL syncing, ignore Rows event %v", source, ec.currentPos)

@@ -229,8 +229,8 @@ func (sg *ShardingGroup) TrySync(source string, pos, endPos mysql.Position, ddls
 
 // CheckSyncing checks the source table syncing status
 // returns
-//   beforeDDL: whether the position is before active DDL
-func (sg *ShardingGroup) CheckSyncing(source string, pos mysql.Position) (beforeDDL bool) {
+//   beforeActiveDDL: whether the position is before active DDL
+func (sg *ShardingGroup) CheckSyncing(source string, pos mysql.Position) (beforeActiveDDL bool) {
 	sg.RLock()
 	defer sg.RUnlock()
 	activeDDLItem := sg.meta.GetActiveDDLItem(source)
@@ -452,7 +452,7 @@ func (k *ShardingGroupKeeper) Init(conn *Conn) error {
 	if conn != nil {
 		k.db = conn
 	} else {
-		db, err := createDB(k.cfg, k.cfg.To, "1m")
+		db, err := createDB(k.cfg, k.cfg.To, maxDDLConnectionTimeout)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -529,8 +529,8 @@ func (k *ShardingGroupKeeper) TrySync(
 // CheckSyncing checks the source table syncing status
 // returns
 //   needShardingHandle: whether the source table in is a sharding group
-//   beforeDDL: whether the position is before active DDL
-func (k *ShardingGroupKeeper) CheckSyncing(targetSchema, targetTable, source string, pos mysql.Position) (needShardingHandle, beforeDDL bool) {
+//   beforeActiveDDL: whether the position is before active DDL
+func (k *ShardingGroupKeeper) CheckSyncing(targetSchema, targetTable, source string, pos mysql.Position) (needShardingHandle, beforeActiveDDL bool) {
 	group := k.Group(targetSchema, targetTable)
 	if group == nil {
 		return false, true
@@ -643,7 +643,7 @@ func (k *ShardingGroupKeeper) ResolveShardingDDL(targetSchema, targetTable strin
 	if group != nil {
 		return group.ResolveShardingDDL(), nil
 	}
-	return false, errors.NotFoundf("sharding group for %s.%s", targetSchema, targetTable)
+	return false, errors.NotFoundf("sharding group for `%s`.`%s`", targetSchema, targetTable)
 }
 
 // ActiveDDLFirstPos returns the binlog postion of active DDL
@@ -655,17 +655,17 @@ func (k *ShardingGroupKeeper) ActiveDDLFirstPos(targetSchema, targetTable string
 		pos, err := group.ActiveDDLFirstPos()
 		return pos, errors.Trace(err)
 	}
-	return mysql.Position{}, errors.NotFoundf("sharding group for %s.%s", targetSchema, targetTable)
+	return mysql.Position{}, errors.NotFoundf("sharding group for `%s`.`%s`", targetSchema, targetTable)
 }
 
 // PrepareFlushSQLs returns all sharding meta flushed SQLs execpt for given table IDs
 func (k *ShardingGroupKeeper) PrepareFlushSQLs(exceptTableIDs []string) ([]string, [][]interface{}) {
+	k.RLock()
+	defer k.RUnlock()
 	var (
 		sqls = make([]string, 0, len(k.groups))
 		args = make([][]interface{}, 0, len(k.groups))
 	)
-	k.RLock()
-	defer k.RUnlock()
 	sort.Strings(exceptTableIDs)
 	for id, group := range k.groups {
 		if group.IsSchemaOnly {
@@ -712,8 +712,8 @@ func (k *ShardingGroupKeeper) createTable() error {
 	tableName := fmt.Sprintf("`%s`.`%s`", k.shardMetaSchema, k.shardMetaTable)
 	sql2 := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 		source_id VARCHAR(32) NOT NULL COMMENT 'replica source id, defined in task.yaml',
-		target_table_id VARCHAR(128) NOT NULL,
-		source_table_id  VARCHAR(128) NOT NULL,
+		target_table_id VARCHAR(144) NOT NULL,
+		source_table_id  VARCHAR(144) NOT NULL,
 		active_index INT,
 		is_global BOOLEAN,
 		data JSON,
