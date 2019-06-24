@@ -97,10 +97,8 @@ type ShardingGroup struct {
 	sources      map[string]bool // source table ID -> whether source table's DDL synced
 	IsSchemaOnly bool            // whether is a schema (database) only DDL TODO: zxc add schema-level syncing support later
 
-	sourceID        string                  // associate dm-worker source ID
-	shardMetaSchema string                  // shard meta storage schema name
-	shardMetaTable  string                  // shard meta storage table name
-	meta            *shardmeta.ShardingMeta // sharding sequence meta storage
+	sourceID string                  // associate dm-worker source ID
+	meta     *shardmeta.ShardingMeta // sharding sequence meta storage
 
 	firstPos    *mysql.Position // first DDL's binlog pos, used to restrain the global checkpoint when un-resolved
 	firstEndPos *mysql.Position // first DDL's binlog End_log_pos, used to re-direct binlog streamer after synced
@@ -108,21 +106,19 @@ type ShardingGroup struct {
 }
 
 // NewShardingGroup creates a new ShardingGroup
-func NewShardingGroup(cfg *config.SubTaskConfig, sources []string, meta *shardmeta.ShardingMeta, isSchemaOnly bool) *ShardingGroup {
+func NewShardingGroup(sourceID, shardMetaSchema, shardMetaTable string, sources []string, meta *shardmeta.ShardingMeta, isSchemaOnly bool) *ShardingGroup {
 	sg := &ShardingGroup{
-		remain:          len(sources),
-		sources:         make(map[string]bool, len(sources)),
-		IsSchemaOnly:    isSchemaOnly,
-		sourceID:        cfg.SourceID,
-		shardMetaSchema: cfg.MetaSchema,
-		shardMetaTable:  fmt.Sprintf(shardmeta.MetaTableFormat, cfg.Name),
-		firstPos:        nil,
-		firstEndPos:     nil,
+		remain:       len(sources),
+		sources:      make(map[string]bool, len(sources)),
+		IsSchemaOnly: isSchemaOnly,
+		sourceID:     sourceID,
+		firstPos:     nil,
+		firstEndPos:  nil,
 	}
 	if meta != nil {
 		sg.meta = meta
 	} else {
-		sg.meta = shardmeta.NewShardingMeta()
+		sg.meta = shardmeta.NewShardingMeta(shardMetaSchema, shardMetaTable)
 	}
 	for _, source := range sources {
 		sg.sources[source] = false
@@ -379,7 +375,7 @@ func (sg *ShardingGroup) ActiveDDLFirstPos() (mysql.Position, error) {
 func (sg *ShardingGroup) FlushData(targetTableID string) ([]string, [][]interface{}) {
 	sg.RLock()
 	defer sg.RUnlock()
-	return sg.meta.FlushData(sg.shardMetaSchema, sg.shardMetaTable, sg.sourceID, targetTableID)
+	return sg.meta.FlushData(sg.sourceID, targetTableID)
 }
 
 // GenTableID generates table ID
@@ -431,14 +427,14 @@ func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceI
 	defer k.Unlock()
 
 	if schemaGroup, ok := k.groups[schemaID]; !ok {
-		k.groups[schemaID] = NewShardingGroup(k.cfg, sourceIDs, meta, true)
+		k.groups[schemaID] = NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, sourceIDs, meta, true)
 	} else {
 		schemaGroup.Merge(sourceIDs)
 	}
 
 	var ok bool
 	if group, ok = k.groups[targetTableID]; !ok {
-		group = NewShardingGroup(k.cfg, sourceIDs, meta, false)
+		group = NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, sourceIDs, meta, false)
 		k.groups[targetTableID] = group
 	} else if merge {
 		needShardingHandle, synced, remain, err = k.groups[targetTableID].Merge(sourceIDs)
@@ -753,7 +749,7 @@ func (k *ShardingGroupKeeper) LoadShardMeta() (map[string]*shardmeta.ShardingMet
 			return nil, errors.Trace(err)
 		}
 		if _, ok := meta[targetTableID]; !ok {
-			meta[targetTableID] = shardmeta.NewShardingMeta()
+			meta[targetTableID] = shardmeta.NewShardingMeta(k.shardMetaSchema, k.shardMetaTable)
 		}
 		err = meta[targetTableID].RestoreFromData(sourceTableID, activeIndex, isGlobal, []byte(data))
 		if err != nil {

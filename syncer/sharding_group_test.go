@@ -27,6 +27,7 @@ type testShardingGroupSuite struct {
 
 func (t *testShardingGroupSuite) TestLowestFirstPosInGroups(c *C) {
 	cfg := &config.SubTaskConfig{
+		SourceID:   "mysql-replica-01",
 		MetaSchema: "test",
 		Name:       "checkpoint_ut",
 	}

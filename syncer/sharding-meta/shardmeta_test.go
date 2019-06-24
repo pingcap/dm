@@ -45,7 +45,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 		metaTable  = "test_syncer_sharding_meta"
 		sourceID   = "mysql-replica-01"
 		tableID    = "`target_db`.`target_table`"
-		meta       = NewShardingMeta()
+		meta       = NewShardingMeta(metaSchema, metaTable)
 		items      = []*DDLItem{
 			NewDDLItem(mysql.Position{filename, 1000}, []string{"ddl1"}, table1),
 			NewDDLItem(mysql.Position{filename, 1200}, []string{"ddl2-1,ddl2-2"}, table1),
@@ -89,7 +89,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(pos, check.DeepEquals, items[1].FirstPos)
 
-	sqls, args = meta.FlushData(metaSchema, metaTable, sourceID, tableID)
+	sqls, args = meta.FlushData(sourceID, tableID)
 	c.Assert(sqls, check.HasLen, 4)
 	c.Assert(args, check.HasLen, 4)
 	for _, stmt := range sqls {
@@ -133,7 +133,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(pos, check.DeepEquals, items[2].FirstPos)
 
-	sqls, args = meta.FlushData(metaSchema, metaTable, sourceID, tableID)
+	sqls, args = meta.FlushData(sourceID, tableID)
 	c.Assert(sqls, check.HasLen, 4)
 	c.Assert(args, check.HasLen, 4)
 	for _, stmt := range sqls {
@@ -175,7 +175,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	pos, err = meta.ActiveDDLFirstPos()
 	c.Assert(err, check.ErrorMatches, fmt.Sprintf("activeIdx %d larger than global DDLItems:.*", meta.ActiveIdx()))
 
-	sqls, args = meta.FlushData(metaSchema, metaTable, sourceID, tableID)
+	sqls, args = meta.FlushData(sourceID, tableID)
 	c.Assert(sqls, check.HasLen, 1)
 	c.Assert(args, check.HasLen, 1)
 	c.Assert(sqls[0], check.Matches, fmt.Sprintf("DELETE FROM .*"))
@@ -189,7 +189,7 @@ func (t *testShardMetaSuite) TestShardingMetaWrongSequence(c *check.C) {
 		filename = "mysql-bin.000001"
 		table1   = "table1"
 		table2   = "table2"
-		meta     = NewShardingMeta()
+		meta     = NewShardingMeta("", "")
 		items    = []*DDLItem{
 			NewDDLItem(mysql.Position{filename, 1000}, []string{"ddl1"}, table1),
 			NewDDLItem(mysql.Position{filename, 1200}, []string{"ddl2"}, table1),
@@ -242,8 +242,8 @@ func (t *testShardMetaSuite) TestFlushLoadMeta(c *check.C) {
 		metaTable  = "test_syncer_sharding_meta"
 		sourceID   = "mysql-replica-01"
 		tableID    = "`target_db`.`target_table`"
-		meta       = NewShardingMeta()
-		loadedMeta = NewShardingMeta()
+		meta       = NewShardingMeta(metaSchema, metaTable)
+		loadedMeta = NewShardingMeta(metaSchema, metaTable)
 		items      = []*DDLItem{
 			NewDDLItem(mysql.Position{filename, 1000}, []string{"ddl1"}, table1),
 			NewDDLItem(mysql.Position{filename, 1200}, []string{"ddl1"}, table2),
@@ -254,7 +254,7 @@ func (t *testShardMetaSuite) TestFlushLoadMeta(c *check.C) {
 		c.Assert(err, check.IsNil)
 		c.Assert(active, check.IsTrue)
 	}
-	sqls, args := meta.FlushData(metaSchema, metaTable, sourceID, tableID)
+	sqls, args := meta.FlushData(sourceID, tableID)
 	c.Assert(sqls, check.HasLen, 3)
 	c.Assert(args, check.HasLen, 3)
 	for _, arg := range args {
