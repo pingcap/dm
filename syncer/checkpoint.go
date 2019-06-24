@@ -146,7 +146,8 @@ type CheckPoint interface {
 	SaveGlobalPoint(pos mysql.Position)
 
 	// FlushGlobalPointsExcept flushes the global checkpoint and tables'
-	// checkpoints except exceptTables, it also flushes sharding meta infomation
+	// checkpoints except exceptTables, it also flushes SQLs with Args providing
+	// by extraSQLs and extraArgs. Currently extraSQLs contain shard meta only.
 	// @exceptTables: [[schema, table]... ]
 	// corresponding to Meta.Flush
 	FlushPointsExcept(exceptTables [][]string, extraSQLs []string, extraArgs [][]interface{}) error

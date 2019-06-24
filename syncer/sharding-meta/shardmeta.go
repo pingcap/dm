@@ -38,7 +38,7 @@ type DDLItem struct {
 
 // ShardingSequence records a list of DDLItem
 type ShardingSequence struct {
-	Items []*DDLItem `json:"Items"`
+	Items []*DDLItem `json:"items"`
 }
 
 // ShardingMeta stores sharding ddl sequence
@@ -64,11 +64,11 @@ func (seq *ShardingSequence) IsPrefixSequence(other *ShardingSequence) bool {
 
 // String returns the ShardingSequence's json string
 func (seq *ShardingSequence) String() string {
-	cfg, err := json.Marshal(seq.Items)
+	jsonSeq, err := json.Marshal(seq.Items)
 	if err != nil {
 		log.Errorf("marshal ShardingSequence to json error %v", err)
 	}
-	return string(cfg)
+	return string(jsonSeq)
 }
 
 // NewDDLItem creates a new DDLItem
