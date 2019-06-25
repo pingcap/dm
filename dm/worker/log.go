@@ -106,6 +106,16 @@ func LoadHandledPointer(db *leveldb.DB) (Pointer, error) {
 	return p, nil
 }
 
+// ClearHandledPointer clears the handled pointer in kv DB.
+func ClearHandledPointer(txn *leveldb.Transaction) error {
+	if txn == nil {
+		return errors.Trace(ErrInValidHandler)
+	}
+
+	err := txn.Delete(HandledPointerKey, nil)
+	return errors.Annotate(err, "clear handled pointer")
+}
+
 var (
 	defaultGCForwardLog int64 = 10000
 
@@ -352,6 +362,11 @@ func (logger *Logger) doGC(db *leveldb.DB, id int64) {
 	}
 }
 
+// ClearOperationLog clears the task operation log.
+func ClearOperationLog(txn *leveldb.Transaction) error {
+	return errors.Annotate(clearByPrefix(txn, TaskLogPrefix), "clear task operation log")
+}
+
 // **************** task meta oepration *************** //
 
 // TaskMetaPrefix is prefix of task meta key
@@ -462,6 +477,11 @@ func DeleteTaskMeta(h Deleter, name string) error {
 	return nil
 }
 
+// ClearTaskMeta clears all task meta in kv DB.
+func ClearTaskMeta(txn *leveldb.Transaction) error {
+	return errors.Annotate(clearByPrefix(txn, TaskMetaPrefix), "clear task meta")
+}
+
 // VerifyTaskMeta verify legality of take meta
 func VerifyTaskMeta(task *pb.TaskMeta) error {
 	if task == nil {
@@ -504,4 +524,37 @@ func CloneTaskLog(log *pb.TaskLog) *pb.TaskLog {
 
 func whetherNil(handler interface{}) bool {
 	return handler == nil || reflect.ValueOf(handler).IsNil()
+}
+
+// clearByPrefix clears all keys with the specified prefix.
+func clearByPrefix(txn *leveldb.Transaction, prefix []byte) error {
+	if txn == nil {
+		return errors.Trace(ErrInValidHandler)
+	}
+
+	var err error
+	iter := txn.NewIterator(util.BytesPrefix(prefix), nil)
+	batch := new(leveldb.Batch)
+	for iter.Next() {
+		batch.Delete(iter.Key())
+		if batch.Len() >= GCBatchSize {
+			err = txn.Write(batch, nil)
+			if err != nil {
+				iter.Release()
+				return errors.Annotatef(err, "delete kv with prefix % X until % X", prefix, iter.Key())
+			}
+			log.Infof("[worker log] delete kv with prefix % X until % X", prefix, iter.Key())
+			batch.Reset()
+		}
+	}
+	iter.Release()
+	err = iter.Error()
+	if err != nil {
+		return errors.Annotatef(err, "iterate kv with prefix % X", prefix)
+	}
+
+	if batch.Len() > 0 {
+		err = txn.Write(batch, nil)
+	}
+	return errors.Annotatef(err, "clear kv with prefix % X", prefix)
 }

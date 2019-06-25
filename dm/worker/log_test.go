@@ -17,6 +17,8 @@ import (
 	"bytes"
 
 	. "github.com/pingcap/check"
+	"github.com/pkg/errors"
+	"github.com/syndtr/goleveldb/leveldb"
 
 	"github.com/pingcap/dm/dm/pb"
 )
@@ -38,7 +40,7 @@ func (t *testLog) TestPointer(c *C) {
 	c.Assert(np.UnmarshalBinary([]byte("xx")), NotNil)
 }
 
-func (t *testLog) TestLoadHandledPointer(c *C) {
+func (t *testLog) TestHandledPointer(c *C) {
 	p, err := LoadHandledPointer(nil)
 	c.Assert(err, Equals, ErrInValidHandler)
 	c.Assert(p.Location, Equals, int64(0))
@@ -62,6 +64,20 @@ func (t *testLog) TestLoadHandledPointer(c *C) {
 	c.Assert(db.Put(HandledPointerKey, []byte("xx"), nil), IsNil)
 	_, err = LoadHandledPointer(db)
 	c.Assert(err, ErrorMatches, ".*not valid length data as.*")
+
+	// clear the handled pointer
+	txn, err := db.OpenTransaction()
+	c.Assert(err, IsNil)
+	c.Assert(ClearHandledPointer(txn), IsNil)
+	c.Assert(txn.Commit(), IsNil)
+
+	// try load handled pointer again
+	p, err = LoadHandledPointer(db)
+	c.Assert(err, IsNil)
+	c.Assert(p.Location, Equals, int64(0))
+
+	// clear with nil txn
+	c.Assert(errors.Cause(ClearHandledPointer(nil)), Equals, ErrInValidHandler)
 }
 
 func (t *testLog) TestTaskLogKey(c *C) {
@@ -196,6 +212,17 @@ func (t *testLog) TestTaskLog(c *C) {
 	c.Assert(logs, DeepEquals, []*pb.TaskLog{taskLog3})
 	c.Assert(logger.handledPointer.Location, Equals, int64(2))
 	c.Assert(logger.endPointer.Location, Equals, int64(4))
+
+	// clear operation log
+	txn, err := db.OpenTransaction()
+	c.Assert(err, IsNil)
+	c.Assert(ClearOperationLog(txn), IsNil)
+	c.Assert(txn.Commit(), IsNil)
+
+	// try initial again
+	logs, err = logger.Initial(db)
+	c.Assert(err, IsNil)
+	c.Assert(logs, HasLen, 0)
 }
 
 func (t *testLog) TestTaskLogGC(c *C) {
@@ -317,4 +344,27 @@ func (t *testLog) TestTaskMeta(c *C) {
 	c.Assert(err, NotNil)
 	t2, err = GetTaskMeta(db, "task2")
 	c.Assert(err, NotNil)
+
+	// add some task meta again
+	c.Assert(SetTaskMeta(db, testTask1Meta), IsNil)
+	c.Assert(SetTaskMeta(db, testTask2Meta), IsNil)
+	c.Assert(SetTaskMeta(db, testTask3Meta), IsNil)
+
+	// clear task meta
+	GCBatchSize = 2 // < 3
+	txn, err := db.OpenTransaction()
+	c.Assert(err, IsNil)
+	c.Assert(ClearTaskMeta(txn), IsNil)
+	c.Assert(txn.Commit(), IsNil)
+
+	// try to get task meta back
+	_, err = GetTaskMeta(db, "task1")
+	c.Assert(errors.Cause(err), Equals, leveldb.ErrNotFound)
+	_, err = GetTaskMeta(db, "task2")
+	c.Assert(errors.Cause(err), Equals, leveldb.ErrNotFound)
+	_, err = GetTaskMeta(db, "task2")
+	c.Assert(errors.Cause(err), Equals, leveldb.ErrNotFound)
+
+	// clear with nil txn
+	c.Assert(errors.Cause(ClearTaskMeta(nil)), Equals, ErrInValidHandler)
 }
