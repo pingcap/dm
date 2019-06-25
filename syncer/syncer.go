@@ -1056,13 +1056,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		if !shardingReSync.allResolved {
 			nextPos, err2 := s.sgk.ActiveDDLFirstPos(shardingReSync.targetSchema, shardingReSync.targetTable)
 			if err2 != nil {
-				log.Errorf("[syncer] query active DDL position error: %v", err2)
 				return errors.Trace(err2)
 			}
 
 			err2 = s.redirectStreamer(nextPos)
 			if err2 != nil {
-				log.Errorf("[syncer] redirect global streamer error: %v", err2)
 				return errors.Trace(err2)
 			}
 		}
@@ -1074,7 +1072,12 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		lastPos = savedGlobalLastPos // restore global last pos
 		return nil
 	}
-	defer closeShardingResync()
+	defer func() {
+		err = closeShardingResync()
+		if err != nil {
+			log.Errorf("[syncer] closeShardingResync with error: %v", err)
+		}
+	}()
 
 	for {
 		s.currentPosMu.Lock()
