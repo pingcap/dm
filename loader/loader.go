@@ -713,7 +713,12 @@ func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 		}
 		tables, ok := l.db2Tables[db]
 		if !ok {
-			return errors.Errorf("invalid table schema file, cannot find db - %s", file)
+			log.Warnf("cann't find schema create file for db %s, will generate one", db)
+			if err := generateSchemaCreateFile(l.cfg.Dir, db); err != nil {
+				return errors.Trace(err)
+			}
+			l.db2Tables[db] = make(Tables2DataFiles)
+			l.totalFileCount.Add(1)
 		}
 
 		if _, ok := tables[table]; ok {

@@ -18,8 +18,11 @@ import (
 	"crypto/sha1"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/pingcap/errors"
 )
 
 // CollectDirFiles gets files in path
@@ -72,4 +75,15 @@ func shortSha1(s string) string {
 // percent calculates percentage of a/b.
 func percent(a int64, b int64) string {
 	return fmt.Sprintf("%.2f %%", float64(a)/float64(b)*100)
+}
+
+func generateSchemaCreateFile(dir string, schema string) error {
+	file, err := os.Create(path.Join(dir, fmt.Sprintf("%s-schema-create.sql", schema)))
+	if err != nil {
+		return errors.Trace(err)
+	}
+	defer file.Close()
+
+	file.WriteString(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`", schema))
+	return nil
 }
