@@ -80,8 +80,14 @@ func NewWorker(cfg *Config) (*Worker, error) {
 	}
 	w.relayPurger = purger
 
-	// open kv db
+	// try upgrade from an older version
 	dbDir := path.Join(w.cfg.MetaDir, "kv")
+	err = tryUpgrade(dbDir)
+	if err != nil {
+		return nil, errors.Annotatef(err, "try to upgrade from any older version to %d", currentWorkerVersion)
+	}
+
+	// open kv db
 	w.db, err = openDB(dbDir, defaultKVConfig)
 	if err != nil {
 		return nil, errors.Trace(err)

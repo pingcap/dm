@@ -21,6 +21,8 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/syndtr/goleveldb/leveldb"
+
+	"github.com/pingcap/dm/dm/pb"
 )
 
 type testUpgrade struct{}
@@ -150,6 +152,67 @@ func (t *testUpgrade) TestTryUpgrade(c *C) {
 			currVer := t.loadVerFromDB(c, dbDir)
 			c.Assert(currVer, DeepEquals, prevVer)
 		})
+}
+
+func (t *testUpgrade) TestUpgradeToVer1(c *C) {
+	dbDir := c.MkDir()
+	t.verifyUpgrade(c, dbDir,
+		func() {
+			t.prepareBeforeUpgradeVer1(c, dbDir)
+		}, func() {
+			t.verifyAfterUpgradeVer1(c, dbDir)
+		})
+}
+
+func (t *testUpgrade) prepareBeforeUpgradeVer1(c *C, dbDir string) {
+	db := t.openTestDB(c, dbDir)
+	defer db.Close()
+
+	// 1. add some operation log into levelDB and set handled pointer
+	logger := new(Logger)
+	c.Assert(logger.MarkAndForwardLog(db, &pb.TaskLog{
+		Id:   100,
+		Task: testTask1Meta,
+	}), IsNil)
+	c.Assert(logger.MarkAndForwardLog(db, &pb.TaskLog{
+		Id:   200,
+		Task: testTask2Meta,
+	}), IsNil)
+	c.Assert(logger.MarkAndForwardLog(db, &pb.TaskLog{
+		Id:   300,
+		Task: testTask3Meta,
+	}), IsNil)
+	c.Assert(logger.handledPointer.Location, Equals, int64(300))
+	c.Assert(logger.endPointer.Location, Equals, int64(0))
+
+	// 2. add some task meta into levelDB
+	c.Assert(SetTaskMeta(db, testTask1Meta), IsNil)
+	c.Assert(SetTaskMeta(db, testTask2Meta), IsNil)
+	t1, err := GetTaskMeta(db, "task1")
+	c.Assert(err, IsNil)
+	c.Assert(t1, DeepEquals, testTask1Meta)
+	t2, err := GetTaskMeta(db, "task2")
+	c.Assert(err, IsNil)
+	c.Assert(t2, DeepEquals, testTask2Meta)
+}
+
+func (t *testUpgrade) verifyAfterUpgradeVer1(c *C, dbDir string) {
+	db := t.openTestDB(c, dbDir)
+	defer db.Close()
+
+	// 1. verify operation log and handled pointer
+	logger := new(Logger)
+	logs, err := logger.Initial(db)
+	c.Assert(err, IsNil)
+	c.Assert(logs, HasLen, 0)
+	c.Assert(logger.handledPointer.Location, Equals, int64(0))
+	c.Assert(logger.endPointer.Location, Equals, int64(1))
+
+	// 2. verify task meta
+	_, err = GetTaskMeta(db, "task1")
+	c.Assert(errors.Cause(err), Equals, leveldb.ErrNotFound)
+	_, err = GetTaskMeta(db, "task2")
+	c.Assert(errors.Cause(err), Equals, leveldb.ErrNotFound)
 }
 
 func (t *testUpgrade) saveVerToDB(c *C, dbDir string, ver internalVersion) {

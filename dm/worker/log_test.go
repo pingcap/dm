@@ -362,7 +362,7 @@ func (t *testLog) TestTaskMeta(c *C) {
 	c.Assert(errors.Cause(err), Equals, leveldb.ErrNotFound)
 	_, err = GetTaskMeta(db, "task2")
 	c.Assert(errors.Cause(err), Equals, leveldb.ErrNotFound)
-	_, err = GetTaskMeta(db, "task2")
+	_, err = GetTaskMeta(db, "task3")
 	c.Assert(errors.Cause(err), Equals, leveldb.ErrNotFound)
 
 	// clear with nil txn

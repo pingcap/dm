@@ -26,7 +26,7 @@ import (
 
 const (
 	// The current internal version of DM-worker used when upgrading from an older version, and it's different from the release version.
-	// +1 when an incompatible problem is introduced.
+	// NOTE: +1 when an incompatible problem is introduced.
 	currentWorkerVersion uint64 = 1
 	// The default previous internal version of DM-worker if no valid internal version exists in DB before the upgrade.
 	defaultPreviousWorkerVersion uint64 = 0
@@ -72,7 +72,7 @@ func (v *internalVersion) compare(other internalVersion) int {
 }
 
 // String implements Stringer.String.
-func (v *internalVersion) String() string {
+func (v internalVersion) String() string {
 	return strconv.FormatUint(v.no, 10)
 }
 
@@ -169,7 +169,7 @@ func tryUpgrade(dbDir string) error {
 
 	// 5. upgrade from previous version to +1, +2, ...
 	if prevVer.compare(newInternalVersion(workerVersion1)) < 0 {
-		err = upgradeToVer1()
+		err = upgradeToVer1(db)
 		if err != nil {
 			return errors.Annotate(err, "upgrade to internal version 1")
 		}
@@ -181,8 +181,41 @@ func tryUpgrade(dbDir string) error {
 }
 
 // upgradeToVer1 upgrades from version 0 to version 1.
-func upgradeToVer1() error {
+// before this version, we use `LittleEndian` to encode/decode operation log ID, but it's not correct when scanning operation log by log ID.
+// so, if upgrading from previous version to this one, we need to:
+//  1. remove all operation log in the levelDB
+//  2. reset handled pointer
+//  3. remove all task meta in the levelDB
+// and let user to restart all necessary tasks.
+func upgradeToVer1(db *leveldb.DB) error {
 	log.Info("[worker upgrade] upgrading to internal version 1")
-	log.Info("[worker upgrade] upgraded to internal version 1")
+	txn, err := db.OpenTransaction()
+	if err != nil {
+		return errors.Annotate(err, "open transaction for upgrading to internal version 1")
+	}
+
+	defer func() {
+		if err != nil {
+			txn.Discard()
+		}
+	}()
+	err = ClearOperationLog(txn)
+	if err != nil {
+		return errors.Annotate(err, "upgrade to internal version 1")
+	}
+	err = ClearHandledPointer(txn)
+	if err != nil {
+		return errors.Annotate(err, "upgrade to internal version 1")
+	}
+	err = ClearTaskMeta(txn)
+	if err != nil {
+		return errors.Annotate(err, "upgrade to internal version 1")
+	}
+	err2 := txn.Commit()
+	if err2 != nil {
+		return errors.Annotate(err2, "upgrade to internal version 1")
+	}
+
+	log.Warn("[worker upgrade] upgraded to internal version 1, please restart all necessary tasks manually")
 	return nil
 }
