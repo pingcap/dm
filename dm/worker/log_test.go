@@ -17,7 +17,7 @@ import (
 	"bytes"
 
 	. "github.com/pingcap/check"
-	"github.com/pkg/errors"
+	"github.com/pingcap/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 
 	"github.com/pingcap/dm/dm/pb"
