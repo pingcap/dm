@@ -160,7 +160,7 @@ func (sg *ShardingGroup) Leave(sources []string) error {
 	sg.Lock()
 	defer sg.Unlock()
 
-	// NOTE: if gropu is in sequence sharding, we can't do drop (DROP DATABASE / TABLE)
+	// NOTE: if group is in sequence sharding, we can't do drop (DROP DATABASE / TABLE)
 	if sg.meta.InSequenceSharding() {
 		return errors.NotSupportedf("group's sharding DDL %v is un-resolved, try drop sources %v", sg.ddls, sources)
 	}
@@ -191,7 +191,6 @@ func (sg *ShardingGroup) Reset() {
 }
 
 // TrySync tries to sync the sharding group
-// if source not in sharding group before, it will be added
 // returns
 //   synced: whether the source table's sharding group synced
 //   active: whether the DDL will be processed in this round
@@ -691,16 +690,16 @@ func (k *ShardingGroupKeeper) Close() {
 }
 
 func (k *ShardingGroupKeeper) createSchema() error {
-	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", k.shardMetaSchema)
+	stmt := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", k.shardMetaSchema)
 	args := make([]interface{}, 0)
-	err := k.db.executeSQL([]string{sql2}, [][]interface{}{args}, maxRetryCount)
-	log.Infof("[ShardingGroupKeeper] execute sql %s", sql2)
+	err := k.db.executeSQL([]string{stmt}, [][]interface{}{args}, maxRetryCount)
+	log.Infof("[ShardingGroupKeeper] execute sql %s", stmt)
 	return errors.Trace(err)
 }
 
 func (k *ShardingGroupKeeper) createTable() error {
 	tableName := fmt.Sprintf("`%s`.`%s`", k.shardMetaSchema, k.shardMetaTable)
-	sql2 := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
+	stmt := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 		source_id VARCHAR(32) NOT NULL COMMENT 'replica source id, defined in task.yaml',
 		target_table_id VARCHAR(144) NOT NULL,
 		source_table_id  VARCHAR(144) NOT NULL,
@@ -711,8 +710,8 @@ func (k *ShardingGroupKeeper) createTable() error {
 		update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		UNIQUE KEY uk_source_id_table_id_source (source_id, target_table_id, source_table_id)
 	)`, tableName)
-	err := k.db.executeSQL([]string{sql2}, [][]interface{}{{}}, maxRetryCount)
-	log.Infof("[ShardingGroupKeeper] execute sql %s", sql2)
+	err := k.db.executeSQL([]string{stmt}, [][]interface{}{{}}, maxRetryCount)
+	log.Infof("[ShardingGroupKeeper] execute sql %s", stmt)
 	return errors.Trace(err)
 }
 

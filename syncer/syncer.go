@@ -1037,7 +1037,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	//    * compare last pos with current binlog's pos to determine whether re-sync completed
 	// 6. use the global streamer to continue the syncing
 	var (
-		shardingSyncer      *replication.BinlogSyncer
 		shardingReader      *streamer.BinlogReader
 		shardingReSyncCh    = make(chan *ShardingReSync, 10)
 		shardingReSync      *ShardingReSync
@@ -1057,17 +1056,15 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		if !shardingReSync.allResolved {
 			nextPos, err2 := s.sgk.ActiveDDLFirstPos(shardingReSync.targetSchema, shardingReSync.targetTable)
 			if err2 != nil {
+				log.Errorf("[syncer] query active DDL position error: %v", err2)
 				return errors.Trace(err2)
 			}
 
 			err2 = s.redirectStreamer(nextPos)
 			if err2 != nil {
+				log.Errorf("[syncer] redirect global streamer error: %v", err2)
 				return errors.Trace(err2)
 			}
-		}
-		if shardingSyncer != nil {
-			s.closeBinlogSyncer(shardingSyncer)
-			shardingSyncer = nil
 		}
 		if shardingReader != nil {
 			shardingReader.Close()
@@ -1194,17 +1191,20 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 		switch ev := e.Event.(type) {
 		case *replication.RotateEvent:
-			s.handleRotateEvent(ev, ec)
+			err = s.handleRotateEvent(ev, ec)
+			if err != nil {
+				return errors.Trace(err)
+			}
 		case *replication.RowsEvent:
 			err = s.handleRowsEvent(ev, ec)
 			if err != nil {
-				return err
+				return errors.Trace(err)
 			}
 
 		case *replication.QueryEvent:
 			err = s.handleQueryEvent(ev, ec)
 			if err != nil {
-				return err
+				return errors.Trace(err)
 			}
 
 		case *replication.XIDEvent:
@@ -1213,7 +1213,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				lastPos = shardingReSync.currPos
 				if shardingReSync.currPos.Compare(shardingReSync.latestPos) >= 0 {
 					log.Infof("[syncer] sharding group %v re-syncing completed", shardingReSync)
-					closeShardingResync()
+					err = closeShardingResync()
+					if err != nil {
+						return errors.Trace(err)
+					}
 					continue
 				}
 			}
@@ -1251,7 +1254,7 @@ type eventContext struct {
 // TODO: Further split into smaller functions and group common arguments into
 // a context struct.
 
-func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext) {
+func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext) error {
 	*ec.currentPos = mysql.Position{
 		Name: string(ev.NextLogName),
 		Pos:  uint32(ev.Position),
@@ -1267,11 +1270,14 @@ func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext)
 
 		if ec.shardingReSync.currPos.Compare(ec.shardingReSync.latestPos) >= 0 {
 			log.Infof("[syncer] sharding group %+v re-syncing completed", ec.shardingReSync)
-			ec.closeShardingResync()
+			err := ec.closeShardingResync()
+			if err != nil {
+				return errors.Trace(err)
+			}
 		} else {
 			log.Debugf("[syncer] rotate binlog to %v when re-syncing sharding group %+v", ec.currentPos, ec.shardingReSync)
 		}
-		return
+		return nil
 	}
 	*ec.latestOp = rotate
 
@@ -1286,6 +1292,7 @@ func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext)
 	}
 
 	log.Infof("rotate binlog to %v", *ec.currentPos)
+	return nil
 }
 
 func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) error {

@@ -214,7 +214,7 @@ func (meta *ShardingMeta) ResolveShardingDDL() bool {
 // ActiveDDLFirstPos returns the first binlog position of active DDL
 func (meta *ShardingMeta) ActiveDDLFirstPos() (mysql.Position, error) {
 	if meta.activeIdx >= len(meta.global.Items) {
-		return mysql.Position{}, errors.Errorf("activeIdx %d larger than global DDLItems: %v", meta.activeIdx, meta.global.Items)
+		return mysql.Position{}, errors.Errorf("activeIdx %d larger than length of global DDLItems: %v", meta.activeIdx, meta.global.Items)
 	}
 	return meta.global.Items[meta.activeIdx].FirstPos, nil
 }
