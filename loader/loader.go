@@ -683,10 +683,10 @@ func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
 	}
 
 	if schemaFileCount == 0 {
-		return errors.New("invalid mydumper files for there are no `-schema-create.sql` files found")
+		log.Warn("invalid mydumper files for there are no `-schema-create.sql` files found, and will generate later")
 	}
 	if len(l.db2Tables) == 0 {
-		return errors.New("no available `-schema-create.sql` files, check mydumper parameter matches black-white-list in task config")
+		log.Warn("no available `-schema-create.sql` files, check mydumper parameter matches black-white-list in task config, will generate later")
 	}
 
 	return nil
@@ -718,6 +718,7 @@ func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 				return errors.Trace(err)
 			}
 			l.db2Tables[db] = make(Tables2DataFiles)
+			tables = l.db2Tables[db]
 			l.totalFileCount.Add(1)
 		}
 

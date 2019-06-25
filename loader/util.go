@@ -84,6 +84,6 @@ func generateSchemaCreateFile(dir string, schema string) error {
 	}
 	defer file.Close()
 
-	file.WriteString(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`", schema))
+	file.WriteString(fmt.Sprintf("CREATE DATABASE `%s`;\n", schema))
 	return nil
 }

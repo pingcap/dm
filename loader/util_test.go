@@ -78,5 +78,5 @@ func (t *testUtilSuite) TestGenerateSchemaCreateFile(c *C) {
 
 	data, err := ioutil.ReadAll(file)
 	c.Assert(err, IsNil)
-	c.Assert(string(data), Equals, "CREATE DATABASE IF NOT EXISTS `loader_test`")
+	c.Assert(string(data), Equals, "CREATE DATABASE `loader_test`;\n")
 }
