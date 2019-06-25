@@ -66,7 +66,7 @@ type Pointer struct {
 // MarshalBinary never return not nil err now
 func (p *Pointer) MarshalBinary() ([]byte, error) {
 	data := make([]byte, 8)
-	binary.LittleEndian.PutUint64(data, uint64(p.Location))
+	binary.BigEndian.PutUint64(data, uint64(p.Location))
 
 	return data, nil
 }
@@ -77,7 +77,7 @@ func (p *Pointer) UnmarshalBinary(data []byte) error {
 		return errors.Errorf("not valid length data as pointer % X", data)
 	}
 
-	p.Location = int64(binary.LittleEndian.Uint64(data))
+	p.Location = int64(binary.BigEndian.Uint64(data))
 	return nil
 }
 
@@ -119,14 +119,14 @@ func DecodeTaskLogKey(key []byte) (int64, error) {
 		return 0, errors.Errorf("not valid length data as task log key % X", key)
 	}
 
-	return int64(binary.LittleEndian.Uint64(key[len(TaskLogPrefix):])), nil
+	return int64(binary.BigEndian.Uint64(key[len(TaskLogPrefix):])), nil
 }
 
 // EncodeTaskLogKey encodes log ID into a task log key
 func EncodeTaskLogKey(id int64) []byte {
 	key := make([]byte, 8+len(TaskLogPrefix))
 	copy(key[:len(TaskLogPrefix)], TaskLogPrefix)
-	binary.LittleEndian.PutUint64(key[len(TaskLogPrefix):], uint64(id))
+	binary.BigEndian.PutUint64(key[len(TaskLogPrefix):], uint64(id))
 
 	return key
 }

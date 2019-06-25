@@ -14,7 +14,10 @@
 package worker
 
 import (
+	"bytes"
+
 	. "github.com/pingcap/check"
+
 	"github.com/pingcap/dm/dm/pb"
 )
 
@@ -69,6 +72,11 @@ func (t *testLog) TestTaskLogKey(c *C) {
 
 	_, err = DecodeTaskLogKey([]byte("xx"))
 	c.Assert(err, ErrorMatches, ".*not valid length data as.*")
+
+	// test compare
+	b23 := EncodeTaskLogKey(23)
+	b534 := EncodeTaskLogKey(534)
+	c.Assert(bytes.Compare(b23, b534), Less, 0)
 }
 
 func (t *testLog) TestTaskLog(c *C) {
