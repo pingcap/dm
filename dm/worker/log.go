@@ -17,7 +17,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"fmt"
 	"reflect"
 	"sync/atomic"
 	"time"
@@ -147,6 +146,7 @@ func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	log.Infof("initial handle pointer %+v", handledPointer)
 
 	var (
 		endPointer = Pointer{
@@ -156,6 +156,7 @@ func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 	)
 	iter := db.NewIterator(util.BytesPrefix(TaskLogPrefix), nil)
 	startLocation := handledPointer.Location + 1
+	log.Infof("seek task losg from pointer localtion %d", startLocation)
 	for ok := iter.Seek(EncodeTaskLogKey(startLocation)); ok; ok = iter.Next() {
 		logBytes := iter.Value()
 		opLog := &pb.TaskLog{}
@@ -165,12 +166,14 @@ func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 			break
 		}
 
+		log.Infof("seek to task log %+v", opLog)
+
 		if opLog.Id >= endPointer.Location {
 			// move to next location
 			endPointer.Location = opLog.Id + 1
 			logs = append(logs, opLog)
 		} else {
-			panic(fmt.Sprintf("out of sorted order from level db for task log key % X (log ID %d)", iter.Key(), opLog.Id))
+			log.Errorf("out of sorted order from level db for task log key % X (log ID %d), and endpointer %+v", iter.Key(), opLog.Id, endPointer)
 		}
 	}
 	iter.Release()
