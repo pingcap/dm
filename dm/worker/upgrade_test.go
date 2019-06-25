@@ -14,7 +14,9 @@
 package worker
 
 import (
+	"io/ioutil"
 	"path"
+	"path/filepath"
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
@@ -41,6 +43,11 @@ func (t *testUpgrade) TestIntervalVersion(c *C) {
 	c.Assert(ver.toUint64(), Equals, no)
 	c.Assert(ver.String(), Equals, "12345")
 
+	// compare
+	c.Assert(ver.compare(newInternalVersion(12344)), Equals, 1)
+	c.Assert(ver.compare(newInternalVersion(12345)), Equals, 0)
+	c.Assert(ver.compare(newInternalVersion(12346)), Equals, -1)
+
 	// marshal
 	data12345 := []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x39}
 	dataMar, err := ver.MarshalBinary()
@@ -59,9 +66,10 @@ func (t *testUpgrade) TestIntervalVersion(c *C) {
 	c.Assert(err, ErrorMatches, ".*binary data.*")
 }
 
-func (t *testUpgrade) openTestDB(c *C) *leveldb.DB {
-	dir := c.MkDir()
-	dbDir := path.Join(dir, "kv")
+func (t *testUpgrade) openTestDB(c *C, dbDir string) *leveldb.DB {
+	if dbDir == "" {
+		dbDir = path.Join(c.MkDir(), "kv")
+	}
 	db, err := openDB(dbDir, defaultKVConfig)
 	if err != nil {
 		c.Fatalf("fail to open leveldb %v", err)
@@ -72,9 +80,8 @@ func (t *testUpgrade) openTestDB(c *C) *leveldb.DB {
 func (t *testUpgrade) TestLoadSaveInternalVersion(c *C) {
 	var (
 		db      *leveldb.DB
-		ver1234 internalVersion
+		ver1234 = newInternalVersion(1234)
 	)
-	ver1234.fromUint64(1234)
 
 	// load with nil DB
 	_, err := loadInternalVersion(nil)
@@ -89,19 +96,80 @@ func (t *testUpgrade) TestLoadSaveInternalVersion(c *C) {
 	c.Assert(errors.Cause(err), Equals, ErrInValidHandler)
 
 	// open DB
-	db = t.openTestDB(c)
+	db = t.openTestDB(c, "")
 	defer db.Close()
 
 	// load but no data exist
-	_, err = loadInternalVersion(db)
-	c.Assert(errors.Cause(err), Equals, leveldb.ErrNotFound)
+	verLoad, err := loadInternalVersion(db)
+	c.Assert(err, IsNil)
+	c.Assert(verLoad.no, DeepEquals, defaultPreviousWorkerVersion)
 
 	// save into DB
 	err = saveInternalVersion(db, ver1234)
 	c.Assert(err, IsNil)
 
 	// load back
-	verLoad, err := loadInternalVersion(db)
+	verLoad, err = loadInternalVersion(db)
 	c.Assert(err, IsNil)
 	c.Assert(verLoad, DeepEquals, ver1234)
+}
+
+func (t *testUpgrade) TestTryUpgrade(c *C) {
+	// DB directory not exists, no need to upgrade
+	dbDir := "/path-not-exists"
+	err := tryUpgrade(dbDir)
+	c.Assert(err, IsNil)
+
+	// DB directory is a file path, invalid
+	tDir := c.MkDir()
+	dbDir = filepath.Join(tDir, "file-not-dir")
+	err = ioutil.WriteFile(dbDir, nil, 0600)
+	c.Assert(err, IsNil)
+	err = tryUpgrade(dbDir)
+	c.Assert(err, ErrorMatches, ".*directory.*for DB.*")
+
+	// valid DB directory
+	dbDir = tDir
+
+	// previousVer == currentVer, no need to upgrade
+	prevVer := newInternalVersion(currentWorkerVersion)
+	t.verifyUpgrade(c, dbDir,
+		func() {
+			t.saveVerToDB(c, dbDir, prevVer)
+		}, func() {
+			currVer := t.loadVerFromDB(c, dbDir)
+			c.Assert(currVer, DeepEquals, prevVer)
+		})
+
+	// previousVer > currentVer, no need to upgrade, and can not automatic downgrade now
+	prevVer = newInternalVersion(currentWorkerVersion + 1)
+	t.verifyUpgrade(c, dbDir,
+		func() {
+			t.saveVerToDB(c, dbDir, prevVer)
+		}, func() {
+			currVer := t.loadVerFromDB(c, dbDir)
+			c.Assert(currVer, DeepEquals, prevVer)
+		})
+}
+
+func (t *testUpgrade) saveVerToDB(c *C, dbDir string, ver internalVersion) {
+	db := t.openTestDB(c, dbDir)
+	defer db.Close()
+	err := saveInternalVersion(db, ver)
+	c.Assert(err, IsNil)
+}
+
+func (t *testUpgrade) loadVerFromDB(c *C, dbDir string) internalVersion {
+	db := t.openTestDB(c, dbDir)
+	defer db.Close()
+	ver, err := loadInternalVersion(db)
+	c.Assert(err, IsNil)
+	return ver
+}
+
+func (t *testUpgrade) verifyUpgrade(c *C, dir string, before func(), after func()) {
+	before()
+	err := tryUpgrade(dir)
+	c.Assert(err, IsNil)
+	after()
 }
