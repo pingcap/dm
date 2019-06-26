@@ -335,7 +335,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 	)
 
 	for {
-		// 1. reader events from upstream server
+		// 1. read events from upstream server
 		readTimer := time.Now()
 		rResult, err := reader2.GetEvent(ctx)
 		binlogReadDurationHistogram.Observe(time.Since(readTimer).Seconds())
