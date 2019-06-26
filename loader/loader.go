@@ -713,7 +713,7 @@ func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 		}
 		tables, ok := l.db2Tables[db]
 		if !ok {
-			log.Warnf("cann't find schema create file for db %s, will generate one", db)
+			log.Warnf("can't find schema create file for db %s, will generate one", db)
 			if err := generateSchemaCreateFile(l.cfg.Dir, db); err != nil {
 				return errors.Trace(err)
 			}
