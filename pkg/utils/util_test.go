@@ -164,10 +164,7 @@ func (t *testUtilsSuite) TestWaitSomething(c *C) {
 	// wait success
 	f2 := func() bool {
 		count++
-		if count >= 5 {
-			return true
-		}
-		return false
+		return count >= 5
 	}
 
 	c.Assert(WaitSomething(backoff, waitTime, f2), IsTrue)

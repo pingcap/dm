@@ -60,10 +60,8 @@ func (d *DummyRelay) InjectInitError(err error) {
 
 // Process implements Process interface
 func (d *DummyRelay) Process(ctx context.Context, pr chan pb.ProcessResult) {
-	select {
-	case <-ctx.Done():
-		pr <- d.processResult
-	}
+	<-ctx.Done()
+	pr <- d.processResult
 }
 
 // InjectProcessResult injects process result

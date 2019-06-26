@@ -101,10 +101,7 @@ func (t *testTCPReaderSuite) setUpData(c *C) {
 		time.Sleep(time.Second)
 		_, gs, err2 := utils.GetMasterStatus(t.db, flavor)
 		c.Assert(err2, IsNil)
-		if len(gs.String()) > 0 {
-			return false // some events exist now, try again later.
-		}
-		return true
+		return gs.String() == "" // break waiting if no other case wrote any events
 	}
 	utils.WaitSomething(backoff, waitTime, waitFn)
 

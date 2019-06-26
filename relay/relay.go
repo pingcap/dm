@@ -351,6 +351,9 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 			default:
 				if utils.IsErrBinlogPurged(err) {
 					// TODO: try auto fix GTID, and can support auto switching between upstream server later.
+					cfg := r.cfg.From
+					log.Errorf("[relay] the requested binlog files have purged in the master server or the master server behind %s:%d have switched, currently DM do no support to handle this error %v",
+						cfg.Host, cfg.Port, err)
 				}
 				binlogReadErrorCounter.Inc()
 			}
@@ -382,9 +385,11 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 			return errors.Trace(err)
 		} else if wResult.Ignore {
 			log.Infof("[relay] ignore event %+v by writer", e.Header)
+			r.tryUpdateActiveRelayLog(e, lastPos.Name) // even the event ignored we still need to try this update.
 			continue
 		}
 		relayLogWriteDurationHistogram.Observe(time.Since(writeTimer).Seconds())
+		r.tryUpdateActiveRelayLog(e, lastPos.Name) // wrote a event, try update the current active relay log.
 
 		// 4. update meta and metrics
 		needSavePos := tResult.CanSaveGTID
@@ -419,6 +424,16 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 				return errors.Annotatef(err, "save position %s, GTID sets %v into meta", lastPos, lastGTID)
 			}
 		}
+	}
+}
+
+// tryUpdateActiveRelayLog tries to update current active relay log file.
+// we should to update after received/wrote a FormatDescriptionEvent because it means switched to a new relay log file.
+// NOTE: we can refactor active (writer/read) relay log mechanism later.
+func (r *Relay) tryUpdateActiveRelayLog(e *replication.BinlogEvent, filename string) {
+	if e.Header.EventType == replication.FORMAT_DESCRIPTION_EVENT {
+		r.setActiveRelayLog(filename)
+		log.Infof("[relay] the active relay log file change to %s", filename)
 	}
 }
 
