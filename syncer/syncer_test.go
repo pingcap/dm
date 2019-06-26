@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -514,6 +515,11 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 			TablePattern:  "bar1",
 			Events:        []bf.EventType{bf.DeleteEvent},
 			Action:        bf.Ignore,
+		}, {
+			SchemaPattern: "foo1",
+			TablePattern:  "bar2",
+			Events:        []bf.EventType{bf.EventType(strings.ToUpper(string(bf.DeleteEvent)))},
+			Action:        bf.Ignore,
 		},
 	}
 	s.cfg.BWList = nil
@@ -535,6 +541,10 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 		{"insert into foo1.bar1 values(1)", true, false},
 		{"update foo1.bar1 set id=2", true, true},
 		{"delete from foo1.bar1 where id=2", true, true},
+		{"create table foo1.bar2(id int)", false, false},
+		{"insert into foo1.bar2 values(1)", true, false},
+		{"update foo1.bar2 set id=2", true, true},
+		{"delete from foo1.bar2 where id=2", true, true},
 	}
 
 	for i := range sqls {
