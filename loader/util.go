@@ -84,6 +84,10 @@ func generateSchemaCreateFile(dir string, schema string) error {
 	}
 	defer file.Close()
 
-	_, err = fmt.Fprintf(file, "CREATE DATABASE `%s`;\n", schema)
+	_, err = fmt.Fprintf(file, "CREATE DATABASE `%s`;\n", escapeName(schema))
 	return errors.Trace(err)
+}
+
+func escapeName(name string) string {
+	return strings.Replace(name, "`", "``", -1)
 }

@@ -68,15 +68,27 @@ func (t *testUtilSuite) TestShortSha1(c *C) {
 
 func (t *testUtilSuite) TestGenerateSchemaCreateFile(c *C) {
 	dir := c.MkDir()
-	schema := "loader_test"
+	testCases := []struct {
+		schema    string
+		createSQL string
+	}{
+		{
+			"loader_test",
+			"CREATE DATABASE `loader_test`;\n",
+		}, {
+			"loader`test",
+			"CREATE DATABASE `loader``test`;\n",
+		},
+	}
+	for _, testCase := range testCases {
+		err := generateSchemaCreateFile(dir, testCase.schema)
+		c.Assert(err, IsNil)
 
-	err := generateSchemaCreateFile(dir, schema)
-	c.Assert(err, IsNil)
+		file, err := os.Open(path.Join(dir, fmt.Sprintf("%s-schema-create.sql", testCase.schema)))
+		c.Assert(err, IsNil)
 
-	file, err := os.Open(path.Join(dir, fmt.Sprintf("%s-schema-create.sql", schema)))
-	c.Assert(err, IsNil)
-
-	data, err := ioutil.ReadAll(file)
-	c.Assert(err, IsNil)
-	c.Assert(string(data), Equals, "CREATE DATABASE `loader_test`;\n")
+		data, err := ioutil.ReadAll(file)
+		c.Assert(err, IsNil)
+		c.Assert(string(data), Equals, testCase.createSQL)
+	}
 }
