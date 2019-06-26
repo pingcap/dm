@@ -118,7 +118,7 @@ func (t *testUpgrade) TestLoadSaveInternalVersion(c *C) {
 
 func (t *testUpgrade) TestTryUpgrade(c *C) {
 	// DB directory not exists, no need to upgrade
-	dbDir := "/path-not-exists"
+	dbDir := "./path-not-exists"
 	err := tryUpgrade(dbDir)
 	c.Assert(err, IsNil)
 
