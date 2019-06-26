@@ -180,7 +180,8 @@ func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 			endPointer.Location = opLog.Id + 1
 			logs = append(logs, opLog)
 		} else {
-			panic(fmt.Sprintf("out of sorted order from level db for task log key % X (log ID %d)", iter.Key(), opLog.Id))
+			panic(fmt.Sprintf("out of sorted order from level db for task log key % X (log ID %d), start location %d, end location %d",
+				iter.Key(), opLog.Id, startLocation, endPointer.Location))
 		}
 	}
 	iter.Release()
@@ -190,7 +191,7 @@ func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 
 	err = iter.Error()
 	if err != nil {
-		return nil, errors.Annotatef(err, "fetch logs from meta")
+		return nil, errors.Annotatef(err, "fetch logs from meta with handle pointer %+v", handledPointer)
 	}
 
 	logger.handledPointer = handledPointer
@@ -340,7 +341,7 @@ func (logger *Logger) doGC(db *leveldb.DB, id int64) {
 		if batch.Len() == GCBatchSize {
 			err := db.Write(batch, nil)
 			if err != nil {
-				log.Errorf("[task log gc] fail to delete keys from kv db %v", err)
+				log.Errorf("[task log gc] fail to delete keys from kv db %v until %s(% X)", err, iter.Key(), iter.Key())
 			}
 			log.Infof("[task log gc] delete range [%s(% X), %s(% X)]", firstKey, firstKey, iter.Key(), iter.Key())
 			firstKey = firstKey[:0]
@@ -350,7 +351,8 @@ func (logger *Logger) doGC(db *leveldb.DB, id int64) {
 	iter.Release()
 	err := iter.Error()
 	if err != nil {
-		log.Errorf("[task log gc] query logs from meta error %v", err)
+		log.Errorf("[task log gc] query logs from meta error %v in range [%s(% X), %s(% X))",
+			err, firstKey, firstKey, endKey, endKey)
 	}
 
 	if batch.Len() > 0 {
@@ -413,7 +415,7 @@ func LoadTaskMetas(db *leveldb.DB) (map[string]*pb.TaskMeta, error) {
 
 	err = iter.Error()
 	if err != nil {
-		return nil, errors.Annotatef(err, "fetch tasks from meta")
+		return nil, errors.Annotatef(err, "fetch tasks from meta with prefix % X", TaskMetaPrefix)
 	}
 
 	return tasks, nil
