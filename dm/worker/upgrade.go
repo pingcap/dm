@@ -132,7 +132,14 @@ func tryUpgrade(dbDir string) error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			log.Infof("[worker upgrade] no previous operation log exists, no need to upgrade")
-			return nil // DB does not exist, no need to upgrade
+			// 1.1 still need to save the current internal version version
+			db, err2 := openDB(dbDir, defaultKVConfig)
+			if err2 != nil {
+				return errors.Annotatef(err2, "open DB for %s", dbDir)
+			}
+			currVer := newInternalVersion(currentWorkerVersion)
+			err2 = saveInternalVersion(db, currVer)
+			return errors.Annotatef(err2, "save current internal version %v into DB %s", currVer, dbDir)
 		}
 		return errors.Annotatef(err, "get stat for %s", dbDir)
 	} else if !fs.IsDir() { // should be a directory
@@ -156,6 +163,7 @@ func tryUpgrade(dbDir string) error {
 	if err != nil {
 		return errors.Annotatef(err, "load previous internal version from DB %s", dbDir)
 	}
+	log.Infof("[worker upgrade] the previous internal version is %v", prevVer)
 
 	// 4. check needing to upgrade
 	currVer := newInternalVersion(currentWorkerVersion)
