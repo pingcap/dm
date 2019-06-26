@@ -1029,6 +1029,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			log.Infof("stop dispatch data file job because %v", ctx.Err())
+			l.closeFileJobQueue()
 			return nil
 		case l.fileJobQueue <- j:
 		}
