@@ -137,6 +137,12 @@ func tryUpgrade(dbDir string) error {
 			if err2 != nil {
 				return errors.Annotatef(err2, "open DB for %s", dbDir)
 			}
+			defer func() {
+				err2 = db.Close()
+				if err2 != nil {
+					log.Errorf("[worker upgrade] close DB fail %v", err2)
+				}
+			}()
 			currVer := newInternalVersion(currentWorkerVersion)
 			err2 = saveInternalVersion(db, currVer)
 			return errors.Annotatef(err2, "save current internal version %v into DB %s", currVer, dbDir)
