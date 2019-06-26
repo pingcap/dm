@@ -14,6 +14,10 @@
 package loader
 
 import (
+	"fmt"
+	"io/ioutil"
+	"os"
+	"path"
 	"testing"
 
 	. "github.com/pingcap/check"
@@ -60,4 +64,31 @@ func (t *testUtilSuite) TestSQLReplace(c *C) {
 
 func (t *testUtilSuite) TestShortSha1(c *C) {
 	c.Assert(shortSha1("/tmp/test_sha1_short_6"), Equals, "97b645")
+}
+
+func (t *testUtilSuite) TestGenerateSchemaCreateFile(c *C) {
+	dir := c.MkDir()
+	testCases := []struct {
+		schema    string
+		createSQL string
+	}{
+		{
+			"loader_test",
+			"CREATE DATABASE `loader_test`;\n",
+		}, {
+			"loader`test",
+			"CREATE DATABASE `loader``test`;\n",
+		},
+	}
+	for _, testCase := range testCases {
+		err := generateSchemaCreateFile(dir, testCase.schema)
+		c.Assert(err, IsNil)
+
+		file, err := os.Open(path.Join(dir, fmt.Sprintf("%s-schema-create.sql", testCase.schema)))
+		c.Assert(err, IsNil)
+
+		data, err := ioutil.ReadAll(file)
+		c.Assert(err, IsNil)
+		c.Assert(string(data), Equals, testCase.createSQL)
+	}
 }
