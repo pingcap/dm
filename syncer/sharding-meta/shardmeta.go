@@ -36,6 +36,15 @@ type DDLItem struct {
 	Source   string         `json:"source"`    // source table ID
 }
 
+// NewDDLItem creates a new DDLItem
+func NewDDLItem(pos mysql.Position, ddls []string, source string) *DDLItem {
+	return &DDLItem{
+		FirstPos: pos,
+		DDLs:     ddls,
+		Source:   source,
+	}
+}
+
 // String returns the item's format string value
 func (item *DDLItem) String() string {
 	return fmt.Sprintf("first-pos: %s ddls: %+v source: %s", item.FirstPos, item.DDLs, item.Source)
@@ -44,16 +53,6 @@ func (item *DDLItem) String() string {
 // ShardingSequence records a list of DDLItem
 type ShardingSequence struct {
 	Items []*DDLItem `json:"items"`
-}
-
-// ShardingMeta stores sharding ddl sequence
-// including global sequence and each source's own sequence
-type ShardingMeta struct {
-	activeIdx int                          // the first unsynced DDL index
-	global    *ShardingSequence            // merged sharding sequence of all source tables
-	sources   map[string]*ShardingSequence // source table ID -> its sharding sequence
-	schema    string                       // schema name in downstream meta db
-	table     string                       // table name used in downstream meta db
 }
 
 // IsPrefixSequence checks whether a ShardingSequence is the prefix sequence of other.
@@ -78,13 +77,14 @@ func (seq *ShardingSequence) String() string {
 	return string(jsonSeq)
 }
 
-// NewDDLItem creates a new DDLItem
-func NewDDLItem(pos mysql.Position, ddls []string, source string) *DDLItem {
-	return &DDLItem{
-		FirstPos: pos,
-		DDLs:     ddls,
-		Source:   source,
-	}
+// ShardingMeta stores sharding ddl sequence
+// including global sequence and each source's own sequence
+type ShardingMeta struct {
+	activeIdx int                          // the first unsynced DDL index
+	global    *ShardingSequence            // merged sharding sequence of all source tables
+	sources   map[string]*ShardingSequence // source table ID -> its sharding sequence
+	schema    string                       // schema name in downstream meta db
+	table     string                       // table name used in downstream meta db
 }
 
 // NewShardingMeta creates a new ShardingMeta
