@@ -732,7 +732,7 @@ func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 
 func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 	for file := range files {
-		if !strings.HasSuffix(file, ".sql") || strings.ContainsAny(file, "-schema.sql") ||
+		if !strings.HasSuffix(file, ".sql") || strings.Contains(file, "-schema.sql") ||
 			strings.Contains(file, "-schema-create.sql") {
 			continue
 		}
