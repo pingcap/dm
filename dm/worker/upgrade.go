@@ -58,7 +58,7 @@ func (v *internalVersion) fromUint64(verNo uint64) {
 
 // toUint64 converts the version to an uint64 value.
 func (v *internalVersion) toUint64() uint64 {
-	return uint64(v.no)
+	return v.no
 }
 
 // compare compares the version with another version.
