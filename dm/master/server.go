@@ -39,9 +39,8 @@ import (
 )
 
 var (
-	retryTimeout       = 5 * time.Second
-	tryResolveInterval = 30 * time.Second
-	cmuxReadTimeout    = 10 * time.Second
+	retryTimeout    = 5 * time.Second
+	cmuxReadTimeout = 10 * time.Second
 )
 
 // Server handles RPC requests for dm-master
