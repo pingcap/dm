@@ -14,7 +14,9 @@
 package worker
 
 import (
+	"fmt"
 	"io/ioutil"
+	"os"
 	"path"
 	"path/filepath"
 
@@ -23,6 +25,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 type testUpgrade struct{}
@@ -30,42 +33,23 @@ type testUpgrade struct{}
 var _ = Suite(&testUpgrade{})
 
 func (t *testUpgrade) TestIntervalVersion(c *C) {
-	var (
-		ver internalVersion
-		no  uint64
-	)
-	c.Assert(ver.no, Equals, no)
-	c.Assert(ver.toUint64(), Equals, no)
-	c.Assert(ver.String(), Equals, "0")
+	currVer := newCurrentVersion()
+	c.Assert(currVer.InternalNo, Equals, currentWorkerInternalNo)
+	c.Assert(currVer.ReleaseVersion, Equals, utils.ReleaseVersion)
+	c.Assert(currVer.String(), Matches, fmt.Sprintf(".*%d.*", currentWorkerInternalNo))
+	c.Assert(currVer.String(), Matches, fmt.Sprintf(".*%s.*", utils.ReleaseVersion))
 
-	// from, to, string
-	no = 12345
-	ver.fromUint64(no)
-	c.Assert(ver.no, Equals, no)
-	c.Assert(ver.toUint64(), Equals, no)
-	c.Assert(ver.String(), Equals, "12345")
-
-	// compare
-	c.Assert(ver.compare(newInternalVersion(12344)), Equals, 1)
-	c.Assert(ver.compare(newInternalVersion(12345)), Equals, 0)
-	c.Assert(ver.compare(newInternalVersion(12346)), Equals, -1)
-
-	// marshal
-	data12345 := []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x39}
-	dataMar, err := ver.MarshalBinary()
+	// marshal and unmarshal
+	data, err := currVer.MarshalBinary()
 	c.Assert(err, IsNil)
-	c.Assert(dataMar, DeepEquals, data12345)
+	var currVer2 version
+	c.Assert(currVer2.UnmarshalBinary(data), IsNil)
+	c.Assert(currVer2, DeepEquals, currVer)
 
-	// unmarshal
-	data6789 := []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1A, 0x85}
-	err = ver.UnmarshalBinary(data6789)
-	c.Assert(err, IsNil)
-	c.Assert(ver.no, Equals, uint64(6789))
-
-	// invalid data length
-	dataInvalid := data6789[:len(data6789)-1]
-	err = ver.UnmarshalBinary(dataInvalid)
-	c.Assert(err, ErrorMatches, ".*binary data.*")
+	// compare by internal version number.
+	c.Assert(currVer.compare(newVersion(currentWorkerInternalNo-1, utils.ReleaseVersion)), Equals, 1)
+	c.Assert(currVer.compare(newVersion(currentWorkerInternalNo, utils.ReleaseVersion)), Equals, 0)
+	c.Assert(currVer.compare(newVersion(currentWorkerInternalNo+1, utils.ReleaseVersion)), Equals, -1)
 }
 
 func (t *testUpgrade) openTestDB(c *C, dbDir string) *leveldb.DB {
@@ -82,19 +66,19 @@ func (t *testUpgrade) openTestDB(c *C, dbDir string) *leveldb.DB {
 func (t *testUpgrade) TestLoadSaveInternalVersion(c *C) {
 	var (
 		db      *leveldb.DB
-		ver1234 = newInternalVersion(1234)
+		ver1234 = newVersion(1234, "v1.0.0")
 	)
 
 	// load with nil DB
-	_, err := loadInternalVersion(nil)
+	_, err := loadVersion(nil)
 	c.Assert(errors.Cause(err), Equals, ErrInValidHandler)
-	_, err = loadInternalVersion(db)
+	_, err = loadVersion(db)
 	c.Assert(errors.Cause(err), Equals, ErrInValidHandler)
 
 	// save with nil DB
-	err = saveInternalVersion(nil, ver1234)
+	err = saveVersion(nil, ver1234)
 	c.Assert(errors.Cause(err), Equals, ErrInValidHandler)
-	err = saveInternalVersion(db, ver1234)
+	err = saveVersion(db, ver1234)
 	c.Assert(errors.Cause(err), Equals, ErrInValidHandler)
 
 	// open DB
@@ -102,16 +86,16 @@ func (t *testUpgrade) TestLoadSaveInternalVersion(c *C) {
 	defer db.Close()
 
 	// load but no data exist
-	verLoad, err := loadInternalVersion(db)
+	verLoad, err := loadVersion(db)
 	c.Assert(err, IsNil)
-	c.Assert(verLoad.no, DeepEquals, defaultPreviousWorkerVersion)
+	c.Assert(verLoad, DeepEquals, defaultPreviousWorkerVersion)
 
 	// save into DB
-	err = saveInternalVersion(db, ver1234)
+	err = saveVersion(db, ver1234)
 	c.Assert(err, IsNil)
 
 	// load back
-	verLoad, err = loadInternalVersion(db)
+	verLoad, err = loadVersion(db)
 	c.Assert(err, IsNil)
 	c.Assert(verLoad, DeepEquals, ver1234)
 }
@@ -121,6 +105,7 @@ func (t *testUpgrade) TestTryUpgrade(c *C) {
 	dbDir := "./path-not-exists"
 	err := tryUpgrade(dbDir)
 	c.Assert(err, IsNil)
+	c.Assert(os.RemoveAll(dbDir), IsNil)
 
 	// DB directory is a file path, invalid
 	tDir := c.MkDir()
@@ -134,7 +119,7 @@ func (t *testUpgrade) TestTryUpgrade(c *C) {
 	dbDir = tDir
 
 	// previousVer == currentVer, no need to upgrade
-	prevVer := newInternalVersion(currentWorkerVersion)
+	prevVer := newCurrentVersion()
 	t.verifyUpgrade(c, dbDir,
 		func() {
 			t.saveVerToDB(c, dbDir, prevVer)
@@ -144,7 +129,7 @@ func (t *testUpgrade) TestTryUpgrade(c *C) {
 		})
 
 	// previousVer > currentVer, no need to upgrade, and can not automatic downgrade now
-	prevVer = newInternalVersion(currentWorkerVersion + 1)
+	prevVer = newVersion(currentWorkerInternalNo+1, newCurrentVersion().ReleaseVersion)
 	t.verifyUpgrade(c, dbDir,
 		func() {
 			t.saveVerToDB(c, dbDir, prevVer)
@@ -215,17 +200,17 @@ func (t *testUpgrade) verifyAfterUpgradeVer1(c *C, dbDir string) {
 	c.Assert(errors.Cause(err), Equals, leveldb.ErrNotFound)
 }
 
-func (t *testUpgrade) saveVerToDB(c *C, dbDir string, ver internalVersion) {
+func (t *testUpgrade) saveVerToDB(c *C, dbDir string, ver version) {
 	db := t.openTestDB(c, dbDir)
 	defer db.Close()
-	err := saveInternalVersion(db, ver)
+	err := saveVersion(db, ver)
 	c.Assert(err, IsNil)
 }
 
-func (t *testUpgrade) loadVerFromDB(c *C, dbDir string) internalVersion {
+func (t *testUpgrade) loadVerFromDB(c *C, dbDir string) version {
 	db := t.openTestDB(c, dbDir)
 	defer db.Close()
-	ver, err := loadInternalVersion(db)
+	ver, err := loadVersion(db)
 	c.Assert(err, IsNil)
 	return ver
 }

@@ -14,115 +14,112 @@
 package worker
 
 import (
-	"encoding/binary"
+	"encoding/json"
 	"os"
-	"strconv"
 
 	"github.com/pingcap/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 const (
-	// The current internal version of DM-worker used when upgrading from an older version, and it's different from the release version.
+	// The current internal version number of DM-worker used when upgrading from an older version, and it's different from the release version.
 	// NOTE: +1 when an incompatible problem is introduced.
-	currentWorkerVersion uint64 = 1
-	// The default previous internal version of DM-worker if no valid internal version exists in DB before the upgrade.
-	defaultPreviousWorkerVersion uint64 = 0
-	// all internal versions exists in the history.
-	workerVersion1 uint64 = 1
+	currentWorkerInternalNo uint64 = 1
 )
 
 var (
-	// The key used when saving the internal version of DM-worker
-	internalVersionKey = []byte("!DM-worker!internalVersion")
+	// The key used when saving the version of DM-worker
+	dmWorkerVersionKey = []byte("!DM-worker!version")
+	// The default previous version of DM-worker if no valid version exists in DB before the upgrade.
+	defaultPreviousWorkerVersion = version{InternalNo: 0, ReleaseVersion: "None"}
+	// all versions exists in the history.
+	workerVersion1 = version{InternalNo: 1, ReleaseVersion: "v1.0.0-alpha"}
 )
 
-// The internal version of DM-worker used when upgrading from an older version.
-type internalVersion struct {
-	no uint64 // version number
+// The version of DM-worker used when upgrading from an older version.
+type version struct {
+	InternalNo     uint64 `json:"internal-no"`     // internal version number
+	ReleaseVersion string `json:"release-version"` // release version, like `v1.0.0`
 }
 
-// newInternalVersion creates a new instance of internalVersion.
-func newInternalVersion(verNo uint64) internalVersion {
-	return internalVersion{
-		no: verNo,
+// newVersion creates a new instance of version.
+func newVersion(internalNo uint64, releaseVersion string) version {
+	return version{
+		InternalNo:     internalNo,
+		ReleaseVersion: releaseVersion,
 	}
 }
 
-// fromUint64 restores the version from an uint64 value.
-func (v *internalVersion) fromUint64(verNo uint64) {
-	v.no = verNo
-}
-
-// toUint64 converts the version to an uint64 value.
-func (v *internalVersion) toUint64() uint64 {
-	return v.no
+// newCurrentVersion creates a new instance of version match the current DM-worker.
+func newCurrentVersion() version {
+	return newVersion(currentWorkerInternalNo, utils.ReleaseVersion)
 }
 
 // compare compares the version with another version.
-func (v *internalVersion) compare(other internalVersion) int {
-	if v.no < other.no {
+// NOTE: also compare `ReleaseVersion` when needed.
+func (v *version) compare(other version) int {
+	if v.InternalNo < other.InternalNo {
 		return -1
-	} else if v.no == other.no {
+	} else if v.InternalNo == other.InternalNo {
 		return 0
 	}
 	return 1
 }
 
 // String implements Stringer.String.
-func (v internalVersion) String() string {
-	return strconv.FormatUint(v.no, 10)
+func (v version) String() string {
+	data, err := v.MarshalBinary()
+	if err != nil {
+		log.Errorf("[worker upgrade] marshal version (internal-no: %d, release-version: %s) to binary error %v",
+			v.InternalNo, v.ReleaseVersion, err)
+		return ""
+	}
+	return string(data)
 }
 
-// MarshalBinary implements encoding.BinaryMarshal, it never returns none-nil error now.
-func (v *internalVersion) MarshalBinary() ([]byte, error) {
-	data := make([]byte, 8)
-	binary.BigEndian.PutUint64(data, v.toUint64())
-	return data, nil
+// MarshalBinary implements encoding.BinaryMarshal.
+func (v *version) MarshalBinary() ([]byte, error) {
+	return json.Marshal(v)
 }
 
 // UnmarshalBinary implements encoding.BinaryMarshal.
-func (v *internalVersion) UnmarshalBinary(data []byte) error {
-	if len(data) != 8 {
-		return errors.NotValidf("binary data % X", data)
-	}
-	v.fromUint64(binary.BigEndian.Uint64(data))
-	return nil
+func (v *version) UnmarshalBinary(data []byte) error {
+	return json.Unmarshal(data, v)
 }
 
-// loadInternalVersion loads the internal version from the levelDB.
-func loadInternalVersion(h Getter) (ver internalVersion, err error) {
+// loadVersion loads the version of DM-worker from the levelDB.
+func loadVersion(h Getter) (ver version, err error) {
 	if whetherNil(h) {
 		return ver, errors.Trace(ErrInValidHandler)
 	}
 
-	data, err := h.Get(internalVersionKey, nil)
+	data, err := h.Get(dmWorkerVersionKey, nil)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
-			ver.fromUint64(defaultPreviousWorkerVersion)
-			return ver, nil
+			return defaultPreviousWorkerVersion, nil
 		}
-		return ver, errors.Annotatef(err, "load internal version with key %s from levelDB", internalVersionKey)
+		return ver, errors.Annotatef(err, "load version with key %s from levelDB", dmWorkerVersionKey)
 	}
 	err = ver.UnmarshalBinary(data)
-	return ver, errors.Annotatef(err, "unmarshal internal version from data % X", data)
+	return ver, errors.Annotatef(err, "unmarshal version from data % X", data)
 }
 
-// saveInternalVersion saves the internal version into the levelDB.
-func saveInternalVersion(h Putter, ver internalVersion) error {
+// saveVersion saves the version of DM-worker into the levelDB.
+func saveVersion(h Putter, ver version) error {
 	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
 
 	data, err := ver.MarshalBinary()
 	if err != nil {
-		return errors.Annotatef(err, "marshal internal version %v to binary data", ver)
+		return errors.Annotatef(err, "marshal version %v to binary data", ver)
 	}
 
-	err = h.Put(internalVersionKey, data, nil)
-	return errors.Annotatef(err, "save internal version %v into levelDB with key %s", ver, internalVersionKey)
+	err = h.Put(dmWorkerVersionKey, data, nil)
+	return errors.Annotatef(err, "save version %v into levelDB with key %s", ver, dmWorkerVersionKey)
 }
 
 // tryUpgrade tries to upgrade from an older version.
@@ -132,7 +129,7 @@ func tryUpgrade(dbDir string) error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			log.Infof("[worker upgrade] no previous operation log exists, no need to upgrade")
-			// 1.1 still need to save the current internal version version
+			// 1.1 still need to save the current version version
 			db, err2 := openDB(dbDir, defaultKVConfig)
 			if err2 != nil {
 				return errors.Annotatef(err2, "open DB for %s", dbDir)
@@ -143,9 +140,9 @@ func tryUpgrade(dbDir string) error {
 					log.Errorf("[worker upgrade] close DB fail %v", err2)
 				}
 			}()
-			currVer := newInternalVersion(currentWorkerVersion)
-			err2 = saveInternalVersion(db, currVer)
-			return errors.Annotatef(err2, "save current internal version %v into DB %s", currVer, dbDir)
+			currVer := newCurrentVersion()
+			err2 = saveVersion(db, currVer)
+			return errors.Annotatef(err2, "save current version %v into DB %s", currVer, dbDir)
 		}
 		return errors.Annotatef(err, "get stat for %s", dbDir)
 	} else if !fs.IsDir() { // should be a directory
@@ -164,34 +161,34 @@ func tryUpgrade(dbDir string) error {
 		}
 	}()
 
-	// 3. load previous internal version
-	prevVer, err := loadInternalVersion(db)
+	// 3. load previous version
+	prevVer, err := loadVersion(db)
 	if err != nil {
-		return errors.Annotatef(err, "load previous internal version from DB %s", dbDir)
+		return errors.Annotatef(err, "load previous version from DB %s", dbDir)
 	}
-	log.Infof("[worker upgrade] the previous internal version is %v", prevVer)
+	log.Infof("[worker upgrade] the previous version is %v", prevVer)
 
 	// 4. check needing to upgrade
-	currVer := newInternalVersion(currentWorkerVersion)
+	currVer := newCurrentVersion()
 	if prevVer.compare(currVer) == 0 {
-		log.Infof("[worker upgrade] the previous and current internal versions both are %v, no need to upgrade", prevVer)
+		log.Infof("[worker upgrade] the previous and current versions both are %v, no need to upgrade", prevVer)
 		return nil
 	} else if prevVer.compare(currVer) > 0 {
-		log.Warnf("[worker upgrade] the previous internal version %v is newer than current %v, automatic downgrade is not supported now", prevVer, currVer)
+		log.Warnf("[worker upgrade] the previous version %v is newer than current %v, automatic downgrade is not supported now", prevVer, currVer)
 		return nil
 	}
 
 	// 5. upgrade from previous version to +1, +2, ...
-	if prevVer.compare(newInternalVersion(workerVersion1)) < 0 {
+	if prevVer.compare(workerVersion1) < 0 {
 		err = upgradeToVer1(db)
 		if err != nil {
-			return errors.Annotate(err, "upgrade to internal version 1")
+			return errors.Annotatef(err, "upgrade to version %v", workerVersion1)
 		}
 	}
 
-	// 6. save current internal version after upgrade done
-	err = saveInternalVersion(db, currVer)
-	return errors.Annotatef(err, "save current internal version %v into DB %s", currVer, dbDir)
+	// 6. save current version after upgrade done
+	err = saveVersion(db, currVer)
+	return errors.Annotatef(err, "save current version %v into DB %s", currVer, dbDir)
 }
 
 // upgradeToVer1 upgrades from version 0 to version 1.
@@ -202,10 +199,10 @@ func tryUpgrade(dbDir string) error {
 //  3. remove all task meta in the levelDB
 // and let user to restart all necessary tasks.
 func upgradeToVer1(db *leveldb.DB) error {
-	log.Info("[worker upgrade] upgrading to internal version 1")
+	log.Infof("[worker upgrade] upgrading to version %v", workerVersion1)
 	txn, err := db.OpenTransaction()
 	if err != nil {
-		return errors.Annotate(err, "open transaction for upgrading to internal version 1")
+		return errors.Annotatef(err, "open transaction for upgrading to version %v", workerVersion1)
 	}
 
 	defer func() {
@@ -215,21 +212,21 @@ func upgradeToVer1(db *leveldb.DB) error {
 	}()
 	err = ClearOperationLog(txn)
 	if err != nil {
-		return errors.Annotate(err, "upgrade to internal version 1")
+		return errors.Annotatef(err, "upgrade to version %v", workerVersion1)
 	}
 	err = ClearHandledPointer(txn)
 	if err != nil {
-		return errors.Annotate(err, "upgrade to internal version 1")
+		return errors.Annotatef(err, "upgrade to version %v", workerVersion1)
 	}
 	err = ClearTaskMeta(txn)
 	if err != nil {
-		return errors.Annotate(err, "upgrade to internal version 1")
+		return errors.Annotatef(err, "upgrade to version %v", workerVersion1)
 	}
 	err2 := txn.Commit()
 	if err2 != nil {
-		return errors.Annotate(err2, "upgrade to internal version 1")
+		return errors.Annotatef(err, "upgrade to version %v", workerVersion1)
 	}
 
-	log.Warn("[worker upgrade] upgraded to internal version 1, please restart all necessary tasks manually")
+	log.Warnf("[worker upgrade] upgraded to version %v, please restart all necessary tasks manually", workerVersion1)
 	return nil
 }
