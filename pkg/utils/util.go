@@ -18,6 +18,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
@@ -75,4 +76,17 @@ func CompareBinlogPos(a, b mysql.Position, deviation float64) int {
 	}
 
 	return 1
+}
+
+// WaitSomething waits for something done with `true`.
+func WaitSomething(backoff int, waitTime time.Duration, fn func() bool) bool {
+	for i := 0; i < backoff; i++ {
+		if fn() {
+			return true
+		}
+
+		time.Sleep(waitTime)
+	}
+
+	return false
 }

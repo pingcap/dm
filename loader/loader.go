@@ -419,15 +419,9 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for {
-			select {
-			case err, ok := <-l.runFatalChan:
-				if !ok {
-					return
-				}
-				cancel() // cancel l.Restore
-				errs = append(errs, err)
-			}
+		for err := range l.runFatalChan {
+			cancel() // cancel l.Restore
+			errs = append(errs, err)
 		}
 	}()
 
@@ -515,6 +509,9 @@ func (l *Loader) Restore(ctx context.Context) error {
 	go l.PrintStatus(ctx)
 
 	if err := l.restoreData(ctx); err != nil {
+		if errors.Cause(err) == context.Canceled {
+			return nil
+		}
 		return errors.Trace(err)
 	}
 
@@ -1010,7 +1007,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 				select {
 				case <-ctx.Done():
 					log.Infof("stop generate data file job because %v", ctx.Err())
-					return nil
+					return ctx.Err()
 				default:
 					// do nothing
 				}
@@ -1041,7 +1038,8 @@ func (l *Loader) restoreData(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			log.Infof("stop dispatch data file job because %v", ctx.Err())
-			break
+			l.closeFileJobQueue()
+			return ctx.Err()
 		case l.fileJobQueue <- j:
 		}
 	}

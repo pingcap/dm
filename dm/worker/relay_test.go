@@ -15,22 +15,117 @@ package worker
 
 import (
 	"context"
+	"time"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/errors"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	pkgstreamer "github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay"
 	"github.com/pingcap/dm/relay/purger"
-	"github.com/pingcap/errors"
 )
 
 type testRelay struct{}
 
 var _ = Suite(&testRelay{})
 
+/*********** dummy relay log process unit, used only for testing *************/
+
+// DummyRelay is a dummy relay
+type DummyRelay struct {
+	initErr error
+
+	processResult pb.ProcessResult
+	errorInfo     *pb.RelayError
+	reloadErr     error
+}
+
+// NewDummyRelay creates an instance of dummy Relay.
+func NewDummyRelay(cfg *relay.Config) relay.Process {
+	return &DummyRelay{}
+}
+
+// Init implements Process interface
+func (d *DummyRelay) Init() error {
+	return d.initErr
+}
+
+// InjectInitError injects init error
+func (d *DummyRelay) InjectInitError(err error) {
+	d.initErr = err
+}
+
+// Process implements Process interface
+func (d *DummyRelay) Process(ctx context.Context, pr chan pb.ProcessResult) {
+	<-ctx.Done()
+	pr <- d.processResult
+}
+
+// InjectProcessResult injects process result
+func (d *DummyRelay) InjectProcessResult(result pb.ProcessResult) {
+	d.processResult = result
+}
+
+// SwitchMaster implements Process interface
+func (d *DummyRelay) SwitchMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) error {
+	return nil
+}
+
+// Migrate implements Process interface
+func (d *DummyRelay) Migrate(ctx context.Context, binlogName string, binlogPos uint32) error {
+	return nil
+}
+
+// ActiveRelayLog implements Process interface
+func (d *DummyRelay) ActiveRelayLog() *pkgstreamer.RelayLogInfo {
+	return nil
+}
+
+// Reload implements Process interface
+func (d *DummyRelay) Reload(newCfg *relay.Config) error {
+	return d.reloadErr
+}
+
+// InjectReloadError injects reload error
+func (d *DummyRelay) InjectReloadError(err error) {
+	d.reloadErr = err
+}
+
+// Update implements Process interface
+func (d *DummyRelay) Update(cfg *config.SubTaskConfig) error {
+	return nil
+}
+
+// Resume implements Process interface
+func (d *DummyRelay) Resume(ctx context.Context, pr chan pb.ProcessResult) {}
+
+// Pause implements Process interface
+func (d *DummyRelay) Pause() {}
+
+// Error implements Process interface
+func (d *DummyRelay) Error() interface{} {
+	return d.errorInfo
+}
+
+// Status implements Process interface
+func (d *DummyRelay) Status() interface{} {
+	return &pb.RelayStatus{
+		Stage: pb.Stage_New,
+	}
+}
+
+// Close implements Process interface
+func (d *DummyRelay) Close() {}
+
+// IsClosed implements Process interface
+func (d *DummyRelay) IsClosed() bool { return false }
+
 func (t *testRelay) TestRelay(c *C) {
 	originNewRelay := relay.NewRelay
-	relay.NewRelay = relay.NewDummyRelay
+	relay.NewRelay = NewDummyRelay
 	originNewPurger := purger.NewPurger
 	purger.NewPurger = purger.NewDummyPurger
 	defer func() {
@@ -62,7 +157,7 @@ func (t *testRelay) testInit(c *C, holder *realRelayHolder) {
 	_, err := holder.Init(nil)
 	c.Assert(err, IsNil)
 
-	r, ok := holder.relay.(*relay.DummyRelay)
+	r, ok := holder.relay.(*DummyRelay)
 	c.Assert(ok, IsTrue)
 
 	initErr := errors.New("init error")
@@ -106,7 +201,7 @@ func (t *testRelay) testStart(c *C, holder *realRelayHolder) {
 }
 
 func (t *testRelay) testClose(c *C, holder *realRelayHolder) {
-	r, ok := holder.relay.(*relay.DummyRelay)
+	r, ok := holder.relay.(*DummyRelay)
 	c.Assert(ok, IsTrue)
 	processResult := &pb.ProcessResult{
 		IsCanceled: true,
@@ -191,7 +286,7 @@ func (t *testRelay) testUpdate(c *C, holder *realRelayHolder) {
 	c.Assert(waitRelayStage(holder, originStage, 10), IsTrue)
 	c.Assert(holder.closed.Get(), Equals, closedFalse)
 
-	r, ok := holder.relay.(*relay.DummyRelay)
+	r, ok := holder.relay.(*DummyRelay)
 	c.Assert(ok, IsTrue)
 
 	err := errors.New("reload error")
@@ -211,7 +306,7 @@ func (t *testRelay) testStop(c *C, holder *realRelayHolder) {
 }
 
 func waitRelayStage(holder *realRelayHolder, expect pb.Stage, backoff int) bool {
-	return waitSomething(backoff, func() bool {
+	return utils.WaitSomething(backoff, 10*time.Millisecond, func() bool {
 		return holder.Stage() == expect
 	})
 }
