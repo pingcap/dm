@@ -6,16 +6,6 @@ cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
-function checksum() {
-    read -d '' sql << EOF
-SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', uid, name, info, age, id_gen,
-    CONCAT(ISNULL(uid), ISNULL(name), ISNULL(info), ISNULL(age), ISNULL(id_gen)))) AS UNSIGNED)) AS checksum
-    FROM db_target.t_target WHERE (uid > 70000);
-EOF
-    run_sql "$sql" $TIDB_PORT
-    echo $(tail -n 1 "$TEST_DIR/sql_res.$TEST_NAME.txt")
-}
-
 function run() {
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2
