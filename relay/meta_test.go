@@ -17,7 +17,6 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
-	"testing"
 
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/mysql"
@@ -25,13 +24,9 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 )
 
-var _ = Suite(&testRelaySuite{})
+var _ = Suite(&testMetaSuite{})
 
-func TestSuite(t *testing.T) {
-	TestingT(t)
-}
-
-type testRelaySuite struct {
+type testMetaSuite struct {
 }
 
 type MetaTestCase struct {
@@ -41,7 +36,7 @@ type MetaTestCase struct {
 	gset           gtid.Set
 }
 
-func (r *testRelaySuite) TestLocalMeta(c *C) {
+func (r *testMetaSuite) TestLocalMeta(c *C) {
 	dir, err := ioutil.TempDir("", "test_local_meta")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(dir)

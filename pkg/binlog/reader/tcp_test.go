@@ -90,10 +90,20 @@ func (t *testTCPReaderSuite) setUpData(c *C) {
 	query := fmt.Sprintf("DROP DATABASE `%s`", dbName)
 	_, err := t.db.Exec(query)
 
-	// delete previous binlog files/events.
-	query = "RESET MASTER"
-	_, err = t.db.Exec(query)
-	c.Assert(err, IsNil)
+	backoff := 5
+	waitTime := 5 * time.Second
+	waitFn := func() bool {
+		// delete previous binlog files/events. if other test cases writing events, they may be failed.
+		query = "RESET MASTER"
+		_, err = t.db.Exec(query)
+		c.Assert(err, IsNil)
+		// check whether other test cases have wrote any events.
+		time.Sleep(time.Second)
+		_, gs, err2 := utils.GetMasterStatus(t.db, flavor)
+		c.Assert(err2, IsNil)
+		return gs.String() == "" // break waiting if no other case wrote any events
+	}
+	utils.WaitSomething(backoff, waitTime, waitFn)
 
 	// execute some SQL statements to generate binlog events.
 	query = fmt.Sprintf("CREATE DATABASE `%s`", dbName)
