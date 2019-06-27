@@ -125,26 +125,14 @@ func saveVersion(h Putter, ver version) error {
 // tryUpgrade tries to upgrade from an older version.
 func tryUpgrade(dbDir string) error {
 	// 1. check the DB directory
+	notExist := false
 	fs, err := os.Stat(dbDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Infof("[worker upgrade] no previous operation log exists, no need to upgrade")
-			// 1.1 still need to save the current version version
-			db, err2 := openDB(dbDir, defaultKVConfig)
-			if err2 != nil {
-				return errors.Annotatef(err2, "open DB for %s", dbDir)
-			}
-			defer func() {
-				err2 = db.Close()
-				if err2 != nil {
-					log.Errorf("[worker upgrade] close DB fail %v", err2)
-				}
-			}()
-			currVer := newCurrentVersion()
-			err2 = saveVersion(db, currVer)
-			return errors.Annotatef(err2, "save current version %v into DB %s", currVer, dbDir)
+			notExist = true
+		} else {
+			return errors.Annotatef(err, "get stat for %s", dbDir)
 		}
-		return errors.Annotatef(err, "get stat for %s", dbDir)
 	} else if !fs.IsDir() { // should be a directory
 		return errors.NotValidf("directory %s for DB", dbDir)
 	}
@@ -160,6 +148,14 @@ func tryUpgrade(dbDir string) error {
 			log.Errorf("[worker upgrade] close DB fail %v", err)
 		}
 	}()
+
+	if notExist {
+		log.Infof("[worker upgrade] no previous operation log exists, no need to upgrade")
+		// still need to save the current version version
+		currVer := newCurrentVersion()
+		err = saveVersion(db, currVer)
+		return errors.Annotatef(err, "save current version %v into DB %s", currVer, dbDir)
+	}
 
 	// 3. load previous version
 	prevVer, err := loadVersion(db)
