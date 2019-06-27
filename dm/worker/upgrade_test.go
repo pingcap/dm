@@ -130,13 +130,9 @@ func (t *testUpgrade) TestTryUpgrade(c *C) {
 
 	// previousVer > currentVer, no need to upgrade, and can not automatic downgrade now
 	prevVer = newVersion(currentWorkerInternalNo+1, newCurrentVersion().ReleaseVersion)
-	t.verifyUpgrade(c, dbDir,
-		func() {
-			t.saveVerToDB(c, dbDir, prevVer)
-		}, func() {
-			currVer := t.loadVerFromDB(c, dbDir)
-			c.Assert(currVer, DeepEquals, prevVer)
-		})
+	t.saveVerToDB(c, dbDir, prevVer)
+	c.Assert(tryUpgrade(dbDir), ErrorMatches, ".*automatic downgrade is not supported now, please handle it manually")
+	c.Assert(t.loadVerFromDB(c, dbDir), DeepEquals, prevVer)
 }
 
 func (t *testUpgrade) TestUpgradeToVer1(c *C) {

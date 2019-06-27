@@ -91,7 +91,7 @@ func (v *version) UnmarshalBinary(data []byte) error {
 }
 
 // loadVersion loads the version of DM-worker from the levelDB.
-func loadVersion(h Getter) (ver version, err error) {
+func loadVersion(h dbOperator) (ver version, err error) {
 	if whetherNil(h) {
 		return ver, errors.Trace(ErrInValidHandler)
 	}
@@ -99,6 +99,7 @@ func loadVersion(h Getter) (ver version, err error) {
 	data, err := h.Get(dmWorkerVersionKey, nil)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
+			log.Warnf("[worker upgrade] no version found in levelDB, default %v used", defaultPreviousWorkerVersion)
 			return defaultPreviousWorkerVersion, nil
 		}
 		return ver, errors.Annotatef(err, "load version with key %s from levelDB", dmWorkerVersionKey)
@@ -108,7 +109,7 @@ func loadVersion(h Getter) (ver version, err error) {
 }
 
 // saveVersion saves the version of DM-worker into the levelDB.
-func saveVersion(h Putter, ver version) error {
+func saveVersion(h dbOperator, ver version) error {
 	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
@@ -170,8 +171,7 @@ func tryUpgrade(dbDir string) error {
 		log.Infof("[worker upgrade] the previous and current versions both are %v, no need to upgrade", prevVer)
 		return nil
 	} else if prevVer.compare(currVer) > 0 {
-		log.Warnf("[worker upgrade] the previous version %v is newer than current %v, automatic downgrade is not supported now", prevVer, currVer)
-		return nil
+		return errors.Errorf("the previous version %v is newer than current %v, automatic downgrade is not supported now, please handle it manually", prevVer, currVer)
 	}
 
 	// 5. upgrade from previous version to +1, +2, ...
@@ -196,30 +196,16 @@ func tryUpgrade(dbDir string) error {
 // and let user to restart all necessary tasks.
 func upgradeToVer1(db *leveldb.DB) error {
 	log.Infof("[worker upgrade] upgrading to version %v", workerVersion1)
-	txn, err := db.OpenTransaction()
-	if err != nil {
-		return errors.Annotatef(err, "open transaction for upgrading to version %v", workerVersion1)
-	}
-
-	defer func() {
-		if err != nil {
-			txn.Discard()
-		}
-	}()
-	err = ClearOperationLog(txn)
+	err := ClearOperationLog(db)
 	if err != nil {
 		return errors.Annotatef(err, "upgrade to version %v", workerVersion1)
 	}
-	err = ClearHandledPointer(txn)
+	err = ClearHandledPointer(db)
 	if err != nil {
 		return errors.Annotatef(err, "upgrade to version %v", workerVersion1)
 	}
-	err = ClearTaskMeta(txn)
+	err = ClearTaskMeta(db)
 	if err != nil {
-		return errors.Annotatef(err, "upgrade to version %v", workerVersion1)
-	}
-	err2 := txn.Commit()
-	if err2 != nil {
 		return errors.Annotatef(err, "upgrade to version %v", workerVersion1)
 	}
 

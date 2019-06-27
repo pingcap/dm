@@ -22,16 +22,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
+
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 )
 
-// ErrInValidHandler indicates we meet an invalid Putter/Getter/Deleter
+// ErrInValidHandler indicates we meet an invalid dbOperator.
 var ErrInValidHandler = errors.New("handler is nil, please pass a leveldb.DB or leveldb.Transaction")
 
 var (
@@ -41,23 +42,12 @@ var (
 	GCInterval = time.Hour
 )
 
-// Putter is interface which has Put method
-type Putter interface {
-	Put(key, value []byte, opts *opt.WriteOptions) error
-	Write(batch *leveldb.Batch, wo *opt.WriteOptions) error
-	NewIterator(slice *util.Range, ro *opt.ReadOptions) iterator.Iterator
-}
-
-// Deleter is interface which has Delete method
-type Deleter interface {
-	Delete(key []byte, wo *opt.WriteOptions) error
-	Write(batch *leveldb.Batch, wo *opt.WriteOptions) error
-	NewIterator(slice *util.Range, ro *opt.ReadOptions) iterator.Iterator
-}
-
-// Getter is interface which has Get method
-type Getter interface {
+// dbOperator is an interface which used to do Get/Put/Delete operation on levelDB.
+// It often can be an instance of leveldb.DB or leveldb.Transaction.
+type dbOperator interface {
 	Get(key []byte, ro *opt.ReadOptions) ([]byte, error)
+	Put(key, value []byte, opts *opt.WriteOptions) error
+	Delete(key []byte, wo *opt.WriteOptions) error
 	Write(batch *leveldb.Batch, wo *opt.WriteOptions) error
 	NewIterator(slice *util.Range, ro *opt.ReadOptions) iterator.Iterator
 }
@@ -89,7 +79,7 @@ func (p *Pointer) UnmarshalBinary(data []byte) error {
 }
 
 // LoadHandledPointer loads handled pointer value from kv DB
-func LoadHandledPointer(h Getter) (Pointer, error) {
+func LoadHandledPointer(h dbOperator) (Pointer, error) {
 	var p Pointer
 	if whetherNil(h) {
 		return p, errors.Trace(ErrInValidHandler)
@@ -114,7 +104,7 @@ func LoadHandledPointer(h Getter) (Pointer, error) {
 }
 
 // ClearHandledPointer clears the handled pointer in kv DB.
-func ClearHandledPointer(h Deleter) error {
+func ClearHandledPointer(h dbOperator) error {
 	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
@@ -155,7 +145,7 @@ type Logger struct {
 }
 
 // Initial initials Logger
-func (logger *Logger) Initial(h Getter) ([]*pb.TaskLog, error) {
+func (logger *Logger) Initial(h dbOperator) ([]*pb.TaskLog, error) {
 	if whetherNil(h) {
 		return nil, errors.Trace(ErrInValidHandler)
 	}
@@ -210,7 +200,7 @@ func (logger *Logger) Initial(h Getter) ([]*pb.TaskLog, error) {
 }
 
 // GetTaskLog returns task log by given log ID
-func (logger *Logger) GetTaskLog(h Getter, id int64) (*pb.TaskLog, error) {
+func (logger *Logger) GetTaskLog(h dbOperator, id int64) (*pb.TaskLog, error) {
 	if whetherNil(h) {
 		return nil, errors.Trace(ErrInValidHandler)
 	}
@@ -234,8 +224,8 @@ func (logger *Logger) GetTaskLog(h Getter, id int64) (*pb.TaskLog, error) {
 
 // ForwardTo forward handled pointer to specified ID location
 // not thread safe
-func (logger *Logger) ForwardTo(db Putter, ID int64) error {
-	if whetherNil(db) {
+func (logger *Logger) ForwardTo(h dbOperator, ID int64) error {
+	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
 
@@ -245,7 +235,7 @@ func (logger *Logger) ForwardTo(db Putter, ID int64) error {
 
 	handledPointerBytes, _ := handledPointer.MarshalBinary()
 
-	err := db.Put(HandledPointerKey, handledPointerBytes, nil)
+	err := h.Put(HandledPointerKey, handledPointerBytes, nil)
 	if err != nil {
 		return errors.Annotatef(err, "forward handled pointer to %d", ID)
 	}
@@ -255,8 +245,8 @@ func (logger *Logger) ForwardTo(db Putter, ID int64) error {
 }
 
 // MarkAndForwardLog marks result sucess or not in log, and forwards handledPointer
-func (logger *Logger) MarkAndForwardLog(db Putter, opLog *pb.TaskLog) error {
-	if whetherNil(db) {
+func (logger *Logger) MarkAndForwardLog(h dbOperator, opLog *pb.TaskLog) error {
+	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
 
@@ -265,17 +255,17 @@ func (logger *Logger) MarkAndForwardLog(db Putter, opLog *pb.TaskLog) error {
 		return errors.Annotatef(err, "marshal task log %+v", opLog)
 	}
 
-	err = db.Put(EncodeTaskLogKey(opLog.Id), logBytes, nil)
+	err = h.Put(EncodeTaskLogKey(opLog.Id), logBytes, nil)
 	if err != nil {
 		return errors.Annotatef(err, "save task log %d", opLog.Id)
 	}
 
-	return errors.Trace(logger.ForwardTo(db, opLog.Id))
+	return errors.Trace(logger.ForwardTo(h, opLog.Id))
 }
 
 // Append appends a task log
-func (logger *Logger) Append(db Putter, opLog *pb.TaskLog) error {
-	if whetherNil(db) {
+func (logger *Logger) Append(h dbOperator, opLog *pb.TaskLog) error {
+	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
 
@@ -294,7 +284,7 @@ func (logger *Logger) Append(db Putter, opLog *pb.TaskLog) error {
 		return errors.Annotatef(err, "marshal task log %+v", opLog)
 	}
 
-	err = db.Put(EncodeTaskLogKey(id), logBytes, nil)
+	err = h.Put(EncodeTaskLogKey(id), logBytes, nil)
 	if err != nil {
 		return errors.Annotatef(err, "save task log %+v", opLog)
 	}
@@ -303,7 +293,7 @@ func (logger *Logger) Append(db Putter, opLog *pb.TaskLog) error {
 }
 
 // GC deletes useless log
-func (logger *Logger) GC(ctx context.Context, h Deleter) {
+func (logger *Logger) GC(ctx context.Context, h dbOperator) {
 	ticker := time.NewTicker(GCInterval)
 	defer ticker.Stop()
 	for {
@@ -322,7 +312,7 @@ func (logger *Logger) GC(ctx context.Context, h Deleter) {
 	}
 }
 
-func (logger *Logger) doGC(h Deleter, id int64) {
+func (logger *Logger) doGC(h dbOperator, id int64) {
 	if whetherNil(h) {
 		log.Error(ErrInValidHandler)
 		return
@@ -372,7 +362,7 @@ func (logger *Logger) doGC(h Deleter, id int64) {
 }
 
 // ClearOperationLog clears the task operation log.
-func ClearOperationLog(h Deleter) error {
+func ClearOperationLog(h dbOperator) error {
 	return errors.Annotate(clearByPrefix(h, TaskLogPrefix), "clear task operation log")
 }
 
@@ -393,7 +383,7 @@ func EncodeTaskMetaKey(name string) []byte {
 }
 
 // LoadTaskMetas loads all task metas from kv db
-func LoadTaskMetas(h Getter) (map[string]*pb.TaskMeta, error) {
+func LoadTaskMetas(h dbOperator) (map[string]*pb.TaskMeta, error) {
 	if whetherNil(h) {
 		return nil, errors.Trace(ErrInValidHandler)
 	}
@@ -429,7 +419,7 @@ func LoadTaskMetas(h Getter) (map[string]*pb.TaskMeta, error) {
 }
 
 // SetTaskMeta saves task meta into kv db
-func SetTaskMeta(h Putter, task *pb.TaskMeta) error {
+func SetTaskMeta(h dbOperator, task *pb.TaskMeta) error {
 	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
@@ -453,7 +443,7 @@ func SetTaskMeta(h Putter, task *pb.TaskMeta) error {
 }
 
 // GetTaskMeta returns task meta by given name
-func GetTaskMeta(h Getter, name string) (*pb.TaskMeta, error) {
+func GetTaskMeta(h dbOperator, name string) (*pb.TaskMeta, error) {
 	if whetherNil(h) {
 		return nil, errors.Trace(ErrInValidHandler)
 	}
@@ -473,7 +463,7 @@ func GetTaskMeta(h Getter, name string) (*pb.TaskMeta, error) {
 }
 
 // DeleteTaskMeta delete task meta from kv DB
-func DeleteTaskMeta(h Deleter, name string) error {
+func DeleteTaskMeta(h dbOperator, name string) error {
 	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
@@ -487,7 +477,7 @@ func DeleteTaskMeta(h Deleter, name string) error {
 }
 
 // ClearTaskMeta clears all task meta in kv DB.
-func ClearTaskMeta(h Deleter) error {
+func ClearTaskMeta(h dbOperator) error {
 	return errors.Annotate(clearByPrefix(h, TaskMetaPrefix), "clear task meta")
 }
 
@@ -536,7 +526,7 @@ func whetherNil(handler interface{}) bool {
 }
 
 // clearByPrefix clears all keys with the specified prefix.
-func clearByPrefix(h Deleter, prefix []byte) error {
+func clearByPrefix(h dbOperator, prefix []byte) error {
 	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
