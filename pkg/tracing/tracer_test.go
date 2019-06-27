@@ -46,7 +46,6 @@ type TraceEvent struct {
 // MockServer is a mock tracing server
 type MockServer struct {
 	sync.Mutex
-	wg     sync.WaitGroup
 	closed sync2.AtomicBool
 
 	addr string

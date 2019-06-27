@@ -738,8 +738,8 @@ func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 		}
 
 		// ignore view / triggers
-		if strings.Index(file, "-schema-view.sql") >= 0 || strings.Index(file, "-schema-triggers.sql") >= 0 ||
-			strings.Index(file, "-schema-post.sql") >= 0 {
+		if strings.Contains(file, "-schema-view.sql") || strings.Contains(file, "-schema-triggers.sql") ||
+			strings.Contains(file, "-schema-post.sql") {
 			log.Warnf("[loader] ignore unsupport view/trigger: %s", file)
 			continue
 		}

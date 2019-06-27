@@ -190,6 +190,7 @@ func (t *testTCPReaderSuite) TestSyncPos(c *C) {
 
 	// get current position for master
 	pos, _, err = utils.GetMasterStatus(t.db, flavor)
+	c.Assert(err, IsNil)
 
 	// execute another DML again
 	query := fmt.Sprintf("INSERT INTO `%s`.`%s` VALUES (%d)", dbName, tableName, columnValue+1)
@@ -274,6 +275,7 @@ func (t *testTCPReaderSuite) TestSyncGTID(c *C) {
 
 	// get current GTID set for master
 	_, gSet, err = utils.GetMasterStatus(t.db, flavor)
+	c.Assert(err, IsNil)
 
 	// execute another DML again
 	query := fmt.Sprintf("INSERT INTO `%s`.`%s` VALUES (%d)", dbName, tableName, columnValue+2)
