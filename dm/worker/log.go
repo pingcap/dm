@@ -26,6 +26,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
@@ -43,16 +44,22 @@ var (
 // Putter is interface which has Put method
 type Putter interface {
 	Put(key, value []byte, opts *opt.WriteOptions) error
+	Write(batch *leveldb.Batch, wo *opt.WriteOptions) error
+	NewIterator(slice *util.Range, ro *opt.ReadOptions) iterator.Iterator
 }
 
 // Deleter is interface which has Delete method
 type Deleter interface {
 	Delete(key []byte, wo *opt.WriteOptions) error
+	Write(batch *leveldb.Batch, wo *opt.WriteOptions) error
+	NewIterator(slice *util.Range, ro *opt.ReadOptions) iterator.Iterator
 }
 
 // Getter is interface which has Get method
 type Getter interface {
 	Get(key []byte, ro *opt.ReadOptions) ([]byte, error)
+	Write(batch *leveldb.Batch, wo *opt.WriteOptions) error
+	NewIterator(slice *util.Range, ro *opt.ReadOptions) iterator.Iterator
 }
 
 // HandledPointerKey is key of HandledPointer which point to the last handled log
@@ -82,13 +89,13 @@ func (p *Pointer) UnmarshalBinary(data []byte) error {
 }
 
 // LoadHandledPointer loads handled pointer value from kv DB
-func LoadHandledPointer(db *leveldb.DB) (Pointer, error) {
+func LoadHandledPointer(h Getter) (Pointer, error) {
 	var p Pointer
-	if db == nil {
+	if whetherNil(h) {
 		return p, errors.Trace(ErrInValidHandler)
 	}
 
-	value, err := db.Get(HandledPointerKey, nil)
+	value, err := h.Get(HandledPointerKey, nil)
 	if err != nil {
 		// return zero value when not found
 		if err == leveldb.ErrNotFound {
@@ -107,12 +114,12 @@ func LoadHandledPointer(db *leveldb.DB) (Pointer, error) {
 }
 
 // ClearHandledPointer clears the handled pointer in kv DB.
-func ClearHandledPointer(txn *leveldb.Transaction) error {
-	if txn == nil {
+func ClearHandledPointer(h Deleter) error {
+	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
 
-	err := txn.Delete(HandledPointerKey, nil)
+	err := h.Delete(HandledPointerKey, nil)
 	return errors.Annotate(err, "clear handled pointer")
 }
 
@@ -148,12 +155,12 @@ type Logger struct {
 }
 
 // Initial initials Logger
-func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
-	if db == nil {
+func (logger *Logger) Initial(h Getter) ([]*pb.TaskLog, error) {
+	if whetherNil(h) {
 		return nil, errors.Trace(ErrInValidHandler)
 	}
 
-	handledPointer, err := LoadHandledPointer(db)
+	handledPointer, err := LoadHandledPointer(h)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -164,7 +171,7 @@ func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 		}
 		logs = make([]*pb.TaskLog, 0, 4)
 	)
-	iter := db.NewIterator(util.BytesPrefix(TaskLogPrefix), nil)
+	iter := h.NewIterator(util.BytesPrefix(TaskLogPrefix), nil)
 	startLocation := handledPointer.Location + 1
 	for ok := iter.Seek(EncodeTaskLogKey(startLocation)); ok; ok = iter.Next() {
 		logBytes := iter.Value()
@@ -296,7 +303,7 @@ func (logger *Logger) Append(db Putter, opLog *pb.TaskLog) error {
 }
 
 // GC deletes useless log
-func (logger *Logger) GC(ctx context.Context, db *leveldb.DB) {
+func (logger *Logger) GC(ctx context.Context, h Deleter) {
 	ticker := time.NewTicker(GCInterval)
 	defer ticker.Stop()
 	for {
@@ -310,13 +317,13 @@ func (logger *Logger) GC(ctx context.Context, db *leveldb.DB) {
 			if handledPointerLocaltion > defaultGCForwardLog {
 				gcID = handledPointerLocaltion - defaultGCForwardLog
 			}
-			logger.doGC(db, gcID)
+			logger.doGC(h, gcID)
 		}
 	}
 }
 
-func (logger *Logger) doGC(db *leveldb.DB, id int64) {
-	if db == nil {
+func (logger *Logger) doGC(h Deleter, id int64) {
+	if whetherNil(h) {
 		log.Error(ErrInValidHandler)
 		return
 	}
@@ -326,7 +333,7 @@ func (logger *Logger) doGC(db *leveldb.DB, id int64) {
 	irange := &util.Range{
 		Start: EncodeTaskLogKey(0),
 	}
-	iter := db.NewIterator(irange, nil)
+	iter := h.NewIterator(irange, nil)
 	batch := new(leveldb.Batch)
 	for iter.Next() {
 		if bytes.Compare(endKey, iter.Key()) <= 0 {
@@ -339,7 +346,7 @@ func (logger *Logger) doGC(db *leveldb.DB, id int64) {
 
 		batch.Delete(iter.Key())
 		if batch.Len() == GCBatchSize {
-			err := db.Write(batch, nil)
+			err := h.Write(batch, nil)
 			if err != nil {
 				log.Errorf("[task log gc] fail to delete keys from kv db %v until %s(% X)", err, iter.Key(), iter.Key())
 			}
@@ -357,7 +364,7 @@ func (logger *Logger) doGC(db *leveldb.DB, id int64) {
 
 	if batch.Len() > 0 {
 		log.Infof("[task log gc] delete range [%s(% X), %s(% X))", firstKey, firstKey, endKey, endKey)
-		err := db.Write(batch, nil)
+		err := h.Write(batch, nil)
 		if err != nil {
 			log.Errorf("[task log gc] fail to delete keys from kv db %v", err)
 		}
@@ -365,8 +372,8 @@ func (logger *Logger) doGC(db *leveldb.DB, id int64) {
 }
 
 // ClearOperationLog clears the task operation log.
-func ClearOperationLog(txn *leveldb.Transaction) error {
-	return errors.Annotate(clearByPrefix(txn, TaskLogPrefix), "clear task operation log")
+func ClearOperationLog(h Deleter) error {
+	return errors.Annotate(clearByPrefix(h, TaskLogPrefix), "clear task operation log")
 }
 
 // **************** task meta oepration *************** //
@@ -386,8 +393,8 @@ func EncodeTaskMetaKey(name string) []byte {
 }
 
 // LoadTaskMetas loads all task metas from kv db
-func LoadTaskMetas(db *leveldb.DB) (map[string]*pb.TaskMeta, error) {
-	if db == nil {
+func LoadTaskMetas(h Getter) (map[string]*pb.TaskMeta, error) {
+	if whetherNil(h) {
 		return nil, errors.Trace(ErrInValidHandler)
 	}
 
@@ -396,7 +403,7 @@ func LoadTaskMetas(db *leveldb.DB) (map[string]*pb.TaskMeta, error) {
 		err   error
 	)
 
-	iter := db.NewIterator(util.BytesPrefix(TaskMetaPrefix), nil)
+	iter := h.NewIterator(util.BytesPrefix(TaskMetaPrefix), nil)
 	for iter.Next() {
 		taskBytes := iter.Value()
 		task := &pb.TaskMeta{}
@@ -480,8 +487,8 @@ func DeleteTaskMeta(h Deleter, name string) error {
 }
 
 // ClearTaskMeta clears all task meta in kv DB.
-func ClearTaskMeta(txn *leveldb.Transaction) error {
-	return errors.Annotate(clearByPrefix(txn, TaskMetaPrefix), "clear task meta")
+func ClearTaskMeta(h Deleter) error {
+	return errors.Annotate(clearByPrefix(h, TaskMetaPrefix), "clear task meta")
 }
 
 // VerifyTaskMeta verify legality of take meta
@@ -529,18 +536,18 @@ func whetherNil(handler interface{}) bool {
 }
 
 // clearByPrefix clears all keys with the specified prefix.
-func clearByPrefix(txn *leveldb.Transaction, prefix []byte) error {
-	if txn == nil {
+func clearByPrefix(h Deleter, prefix []byte) error {
+	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
 
 	var err error
-	iter := txn.NewIterator(util.BytesPrefix(prefix), nil)
+	iter := h.NewIterator(util.BytesPrefix(prefix), nil)
 	batch := new(leveldb.Batch)
 	for iter.Next() {
 		batch.Delete(iter.Key())
 		if batch.Len() >= GCBatchSize {
-			err = txn.Write(batch, nil)
+			err = h.Write(batch, nil)
 			if err != nil {
 				iter.Release()
 				return errors.Annotatef(err, "delete kv with prefix % X until % X", prefix, iter.Key())
@@ -556,7 +563,7 @@ func clearByPrefix(txn *leveldb.Transaction, prefix []byte) error {
 	}
 
 	if batch.Len() > 0 {
-		err = txn.Write(batch, nil)
+		err = h.Write(batch, nil)
 	}
 	return errors.Annotatef(err, "clear kv with prefix % X", prefix)
 }
