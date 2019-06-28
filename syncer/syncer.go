@@ -649,11 +649,7 @@ func (s *Syncer) addJob(job *job) error {
 	)
 	switch job.tp {
 	case xid:
-		// update globalpoint if sharding is disabled or there doesn't exist
-		// unfinished sequence sharding.
-		if !s.cfg.IsSharding || !s.sgk.InSequenceSharding() {
-			s.saveGlobalPoint(job.pos)
-		}
+		s.saveGlobalPoint(job.pos)
 		return nil
 	case flush:
 		addedJobsTotal.WithLabelValues("flush", s.cfg.Name, adminQueueName).Inc()
