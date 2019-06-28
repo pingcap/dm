@@ -32,13 +32,22 @@ function run() {
     check_port_offline $WORKER1_PORT 20
     check_port_offline $WORKER2_PORT 20
 
-    export GO_FAILPOINTS='github.com/pingcap/dm/syncer/ShardSyncedExecutionExit=return(true);github.com/pingcap/dm/syncer/SafeModeInitPhaseSeconds=return(0)'
-
+    export GO_FAILPOINTS=''
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    pkill -hup dm-worker.test 2>/dev/null || true
+    wait_process_exit dm-worker.test
+
+    export GO_FAILPOINTS='github.com/pingcap/dm/syncer/SequenceShardSyncedExecutionExit=return(true);github.com/pingcap/dm/syncer/SafeModeInitPhaseSeconds=return(0)'
+
+    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
     # DM-worker exit when waiting for sharding group synced
     run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1
@@ -77,7 +86,7 @@ function run() {
     $cur/../bin/check_safe_mode
 }
 
-cleanup1 safe_mode_target
+cleanup1 sequence_safe_mode_target
 # also cleanup dm processes in case of last run failed
 cleanup2 $*
 run $*
