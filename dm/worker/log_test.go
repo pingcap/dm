@@ -214,10 +214,7 @@ func (t *testLog) TestTaskLog(c *C) {
 	c.Assert(logger.endPointer.Location, Equals, int64(4))
 
 	// clear operation log
-	txn, err := db.OpenTransaction()
-	c.Assert(err, IsNil)
-	c.Assert(ClearOperationLog(txn), IsNil)
-	c.Assert(txn.Commit(), IsNil)
+	c.Assert(ClearOperationLog(db), IsNil)
 
 	// try initial again
 	logs, err = logger.Initial(db)
@@ -352,10 +349,7 @@ func (t *testLog) TestTaskMeta(c *C) {
 
 	// clear task meta
 	GCBatchSize = 2 // < 3
-	txn, err := db.OpenTransaction()
-	c.Assert(err, IsNil)
-	c.Assert(ClearTaskMeta(txn), IsNil)
-	c.Assert(txn.Commit(), IsNil)
+	c.Assert(ClearTaskMeta(db), IsNil)
 
 	// try to get task meta back
 	_, err = GetTaskMeta(db, "task1")

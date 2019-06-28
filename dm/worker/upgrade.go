@@ -33,10 +33,12 @@ const (
 var (
 	// The key used when saving the version of DM-worker
 	dmWorkerVersionKey = []byte("!DM-worker!version")
+	// The current version of DM-worker.
+	currentWorkerVersion = newVersion(currentWorkerInternalNo, utils.ReleaseVersion)
 	// The default previous version of DM-worker if no valid version exists in DB before the upgrade.
-	defaultPreviousWorkerVersion = version{InternalNo: 0, ReleaseVersion: "None"}
+	defaultPreviousWorkerVersion = newVersion(0, "None")
 	// all versions exists in the history.
-	workerVersion1 = version{InternalNo: 1, ReleaseVersion: "v1.0.0-alpha"}
+	workerVersion1 = newVersion(1, "v1.0.0-alpha")
 )
 
 // The version of DM-worker used when upgrading from an older version.
@@ -51,11 +53,6 @@ func newVersion(internalNo uint64, releaseVersion string) version {
 		InternalNo:     internalNo,
 		ReleaseVersion: releaseVersion,
 	}
-}
-
-// newCurrentVersion creates a new instance of version match the current DM-worker.
-func newCurrentVersion() version {
-	return newVersion(currentWorkerInternalNo, utils.ReleaseVersion)
 }
 
 // compare compares the version with another version.
@@ -99,10 +96,10 @@ func loadVersion(h dbOperator) (ver version, err error) {
 	data, err := h.Get(dmWorkerVersionKey, nil)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
-			log.Warnf("[worker upgrade] no version found in levelDB, default %v used", defaultPreviousWorkerVersion)
+			log.Warnf("[worker upgrade] no version found in levelDB, default %s used", defaultPreviousWorkerVersion)
 			return defaultPreviousWorkerVersion, nil
 		}
-		return ver, errors.Annotatef(err, "load version with key %s from levelDB", dmWorkerVersionKey)
+		return ver, errors.Annotatef(err, "load version with key %v from levelDB", dmWorkerVersionKey)
 	}
 	err = ver.UnmarshalBinary(data)
 	return ver, errors.Annotatef(err, "unmarshal version from data % X", data)
@@ -116,11 +113,11 @@ func saveVersion(h dbOperator, ver version) error {
 
 	data, err := ver.MarshalBinary()
 	if err != nil {
-		return errors.Annotatef(err, "marshal version %v to binary data", ver)
+		return errors.Annotatef(err, "marshal version %s to binary data", ver)
 	}
 
 	err = h.Put(dmWorkerVersionKey, data, nil)
-	return errors.Annotatef(err, "save version %v into levelDB with key %s", ver, dmWorkerVersionKey)
+	return errors.Annotatef(err, "save version %v into levelDB with key %v", ver, dmWorkerVersionKey)
 }
 
 // tryUpgrade tries to upgrade from an older version.
@@ -153,9 +150,9 @@ func tryUpgrade(dbDir string) error {
 	if notExist {
 		log.Infof("[worker upgrade] no previous operation log exists, no need to upgrade")
 		// still need to save the current version version
-		currVer := newCurrentVersion()
+		currVer := currentWorkerVersion
 		err = saveVersion(db, currVer)
-		return errors.Annotatef(err, "save current version %v into DB %s", currVer, dbDir)
+		return errors.Annotatef(err, "save current version %s into DB %s", currVer, dbDir)
 	}
 
 	// 3. load previous version
@@ -163,28 +160,28 @@ func tryUpgrade(dbDir string) error {
 	if err != nil {
 		return errors.Annotatef(err, "load previous version from DB %s", dbDir)
 	}
-	log.Infof("[worker upgrade] the previous version is %v", prevVer)
+	log.Infof("[worker upgrade] the previous version is %s", prevVer)
 
 	// 4. check needing to upgrade
-	currVer := newCurrentVersion()
+	currVer := currentWorkerVersion
 	if prevVer.compare(currVer) == 0 {
-		log.Infof("[worker upgrade] the previous and current versions both are %v, no need to upgrade", prevVer)
+		log.Infof("[worker upgrade] the previous and current versions both are %s, no need to upgrade", prevVer)
 		return nil
 	} else if prevVer.compare(currVer) > 0 {
-		return errors.Errorf("the previous version %v is newer than current %v, automatic downgrade is not supported now, please handle it manually", prevVer, currVer)
+		return errors.Errorf("the previous version %s is newer than current %s, automatic downgrade is not supported now, please handle it manually", prevVer, currVer)
 	}
 
 	// 5. upgrade from previous version to +1, +2, ...
 	if prevVer.compare(workerVersion1) < 0 {
 		err = upgradeToVer1(db)
 		if err != nil {
-			return errors.Annotatef(err, "upgrade to version %v", workerVersion1)
+			return errors.Annotatef(err, "upgrade to version %s", workerVersion1)
 		}
 	}
 
 	// 6. save current version after upgrade done
 	err = saveVersion(db, currVer)
-	return errors.Annotatef(err, "save current version %v into DB %s", currVer, dbDir)
+	return errors.Annotatef(err, "save current version %s into DB %s", currVer, dbDir)
 }
 
 // upgradeToVer1 upgrades from version 0 to version 1.
@@ -195,20 +192,20 @@ func tryUpgrade(dbDir string) error {
 //  3. remove all task meta in the levelDB
 // and let user to restart all necessary tasks.
 func upgradeToVer1(db *leveldb.DB) error {
-	log.Infof("[worker upgrade] upgrading to version %v", workerVersion1)
+	log.Infof("[worker upgrade] upgrading to version %s", workerVersion1)
 	err := ClearOperationLog(db)
 	if err != nil {
-		return errors.Annotatef(err, "upgrade to version %v", workerVersion1)
+		return errors.Annotatef(err, "upgrade to version %s", workerVersion1)
 	}
 	err = ClearHandledPointer(db)
 	if err != nil {
-		return errors.Annotatef(err, "upgrade to version %v", workerVersion1)
+		return errors.Annotatef(err, "upgrade to version %s", workerVersion1)
 	}
 	err = ClearTaskMeta(db)
 	if err != nil {
-		return errors.Annotatef(err, "upgrade to version %v", workerVersion1)
+		return errors.Annotatef(err, "upgrade to version %s", workerVersion1)
 	}
 
-	log.Warnf("[worker upgrade] upgraded to version %v, please restart all necessary tasks manually", workerVersion1)
+	log.Warnf("[worker upgrade] upgraded to version %s, please restart all necessary tasks manually", workerVersion1)
 	return nil
 }

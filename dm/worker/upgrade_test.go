@@ -33,7 +33,7 @@ type testUpgrade struct{}
 var _ = Suite(&testUpgrade{})
 
 func (t *testUpgrade) TestIntervalVersion(c *C) {
-	currVer := newCurrentVersion()
+	currVer := currentWorkerVersion
 	c.Assert(currVer.InternalNo, Equals, currentWorkerInternalNo)
 	c.Assert(currVer.ReleaseVersion, Equals, utils.ReleaseVersion)
 	c.Assert(currVer.String(), Matches, fmt.Sprintf(".*%d.*", currentWorkerInternalNo))
@@ -119,7 +119,7 @@ func (t *testUpgrade) TestTryUpgrade(c *C) {
 	dbDir = tDir
 
 	// previousVer == currentVer, no need to upgrade
-	prevVer := newCurrentVersion()
+	prevVer := currentWorkerVersion
 	t.verifyUpgrade(c, dbDir,
 		func() {
 			t.saveVerToDB(c, dbDir, prevVer)
@@ -129,7 +129,7 @@ func (t *testUpgrade) TestTryUpgrade(c *C) {
 		})
 
 	// previousVer > currentVer, no need to upgrade, and can not automatic downgrade now
-	prevVer = newVersion(currentWorkerInternalNo+1, newCurrentVersion().ReleaseVersion)
+	prevVer = newVersion(currentWorkerInternalNo+1, currentWorkerVersion.ReleaseVersion)
 	t.saveVerToDB(c, dbDir, prevVer)
 	c.Assert(tryUpgrade(dbDir), ErrorMatches, ".*automatic downgrade is not supported now, please handle it manually")
 	c.Assert(t.loadVerFromDB(c, dbDir), DeepEquals, prevVer)
