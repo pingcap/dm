@@ -522,7 +522,7 @@ func (k *ShardingGroupKeeper) InSyncing(targetSchema, targetTable, source string
 	if group == nil {
 		return false
 	}
-	return group.CheckSyncing(source, pos)
+	return !group.CheckSyncing(source, pos)
 }
 
 // UnresolvedTables returns
