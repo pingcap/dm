@@ -19,14 +19,14 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/command"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // operator contains an operation for specified binlog pos or SQL pattern

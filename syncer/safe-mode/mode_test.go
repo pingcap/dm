@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	. "github.com/pingcap/check"
+
 	"github.com/pingcap/dm/pkg/log"
 )
 

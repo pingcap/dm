@@ -18,8 +18,9 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/golang/protobuf/jsonpb"
 	"github.com/pingcap/dm/dm/pb"
+
+	"github.com/golang/protobuf/jsonpb"
 	"go.uber.org/zap"
 )
 

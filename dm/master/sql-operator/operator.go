@@ -19,13 +19,13 @@ import (
 	"sync"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/command"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // Operator contains an operation for specified binlog pos

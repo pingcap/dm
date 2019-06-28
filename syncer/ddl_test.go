@@ -17,10 +17,11 @@ import (
 	"bytes"
 	"database/sql"
 
-	. "github.com/pingcap/check"
 	"github.com/pingcap/dm/dm/config"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/utils"
+
+	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"

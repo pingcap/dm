@@ -14,7 +14,6 @@
 package syncer
 
 import (
-	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
@@ -22,6 +21,7 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
 
+	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/utils"
 )
 

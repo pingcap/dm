@@ -21,10 +21,11 @@ import (
 	"path"
 	"sync"
 
-	"github.com/BurntSushi/toml"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
+
+	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"go.uber.org/zap"

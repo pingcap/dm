@@ -17,9 +17,8 @@ import (
 	"context"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/pingcap/failpoint"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/pb"
 )

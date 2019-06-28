@@ -15,6 +15,7 @@ package worker
 
 import (
 	"github.com/pingcap/dm/pkg/log"
+
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"go.uber.org/zap"

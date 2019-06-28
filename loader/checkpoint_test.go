@@ -18,6 +18,7 @@ import (
 	"strconv"
 
 	. "github.com/pingcap/check"
+
 	"github.com/pingcap/dm/dm/config"
 )
 

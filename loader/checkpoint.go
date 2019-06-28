@@ -21,6 +21,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/log"
+
 	"github.com/pingcap/errors"
 	"go.uber.org/zap"
 )

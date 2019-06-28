@@ -22,12 +22,12 @@ import (
 	"strings"
 	"time"
 
-	"go.uber.org/zap"
-
-	"github.com/BurntSushi/toml"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
+
+	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
+	"go.uber.org/zap"
 )
 
 // SampleConfigFile is sample config file of dm-master

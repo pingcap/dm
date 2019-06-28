@@ -17,6 +17,7 @@ import (
 	"fmt"
 
 	"github.com/pingcap/dm/pkg/log"
+
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )

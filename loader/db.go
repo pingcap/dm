@@ -18,9 +18,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/log"
+
+	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
 	"go.uber.org/zap"

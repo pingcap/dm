@@ -17,6 +17,7 @@ import (
 	"sync"
 
 	"github.com/pingcap/dm/pkg/log"
+
 	"go.uber.org/zap"
 )
 

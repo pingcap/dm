@@ -17,10 +17,10 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/pingcap/errors"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/errors"
 )
 
 // SafeMode controls whether enable safe-mode through a mechanism similar to reference-count
