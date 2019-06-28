@@ -97,24 +97,24 @@ func (w *FileWriter) Close() error {
 }
 
 // Recover implements Writer.Recover.
-func (w *FileWriter) Recover() (*RecoverResult, error) {
+func (w *FileWriter) Recover() (RecoverResult, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	if w.stage != common.StagePrepared {
-		return nil, errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, common.StagePrepared)
+		return RecoverResult{}, errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, common.StagePrepared)
 	}
 
 	return w.doRecovering()
 }
 
 // WriteEvent implements Writer.WriteEvent.
-func (w *FileWriter) WriteEvent(ev *replication.BinlogEvent) (*Result, error) {
+func (w *FileWriter) WriteEvent(ev *replication.BinlogEvent) (Result, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	if w.stage != common.StagePrepared {
-		return nil, errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, common.StagePrepared)
+		return Result{}, errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, common.StagePrepared)
 	}
 
 	switch ev.Event.(type) {
@@ -157,19 +157,19 @@ func (w *FileWriter) offset() int64 {
 //   2. open/create a new binlog file
 //   3. write the binlog file header if not exists
 //   4. write the FormatDescriptionEvent if not exists one
-func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (*Result, error) {
+func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (Result, error) {
 	// close the previous binlog file
 	if w.out != nil {
 		logger.Info("closing previous underlying binlog writer", zap.Reflect("status", w.out.Status()))
 		err := w.out.Close()
 		if err != nil {
-			return nil, errors.Annotate(err, "close previous underlying binlog writer")
+			return Result{}, errors.Annotate(err, "close previous underlying binlog writer")
 		}
 	}
 
 	// verify filename
 	if !binlog.VerifyFilename(w.filename.Get()) {
-		return nil, errors.NotValidf("binlog filename %s", w.filename.Get())
+		return Result{}, errors.NotValidf("binlog filename %s", w.filename.Get())
 	}
 
 	// open/create a new binlog file
@@ -180,7 +180,7 @@ func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (
 	out := bw.NewFileWriter(outCfg)
 	err := out.Start()
 	if err != nil {
-		return nil, errors.Annotatef(err, "start underlying binlog writer for %s", filename)
+		return Result{}, errors.Annotatef(err, "start underlying binlog writer for %s", filename)
 	}
 	w.out = out.(*bw.FileWriter)
 	logger.Info("open underlying binlog writer", zap.Reflect("status", w.out.Status()))
@@ -188,26 +188,26 @@ func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (
 	// write the binlog file header if not exists
 	exist, err := checkBinlogHeaderExist(filename)
 	if err != nil {
-		return nil, errors.Annotatef(err, "check binlog file header for %s", filename)
+		return Result{}, errors.Annotatef(err, "check binlog file header for %s", filename)
 	} else if !exist {
 		err = w.out.Write(replication.BinLogFileHeader)
 		if err != nil {
-			return nil, errors.Annotatef(err, "write binlog file header for %s", filename)
+			return Result{}, errors.Annotatef(err, "write binlog file header for %s", filename)
 		}
 	}
 
 	// write the FormatDescriptionEvent if not exists one
 	exist, err = checkFormatDescriptionEventExist(filename)
 	if err != nil {
-		return nil, errors.Annotatef(err, "check FormatDescriptionEvent for %s", filename)
+		return Result{}, errors.Annotatef(err, "check FormatDescriptionEvent for %s", filename)
 	} else if !exist {
 		err = w.out.Write(ev.RawData)
 		if err != nil {
-			return nil, errors.Annotatef(err, "write FormatDescriptionEvent %+v for %s", ev.Header, filename)
+			return Result{}, errors.Annotatef(err, "write FormatDescriptionEvent %+v for %s", ev.Header, filename)
 		}
 	}
 
-	return &Result{
+	return Result{
 		Ignore: exist, // ignore if exists
 	}, nil
 }
@@ -220,10 +220,10 @@ func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (
 // NOTE: we do not create a new binlog file when received a RotateEvent,
 //       instead, we create a new binlog file when received a FormatDescriptionEvent.
 //       because a binlog file without any events has no meaning.
-func (w *FileWriter) handleRotateEvent(ev *replication.BinlogEvent) (result *Result, err error) {
+func (w *FileWriter) handleRotateEvent(ev *replication.BinlogEvent) (result Result, err error) {
 	rotateEv, ok := ev.Event.(*replication.RotateEvent)
 	if !ok {
-		return nil, errors.NotValidf("except RotateEvent, but got %+v", ev.Header)
+		return result, errors.NotValidf("except RotateEvent, but got %+v", ev.Header)
 	}
 
 	var currFile = w.filename.Get()
@@ -244,27 +244,27 @@ func (w *FileWriter) handleRotateEvent(ev *replication.BinlogEvent) (result *Res
 	// write the RotateEvent if not fake
 	if ev.Header.Timestamp == 0 || ev.Header.LogPos == 0 {
 		// skip fake rotate event
-		return &Result{
+		return Result{
 			Ignore: true,
 		}, nil
 	} else if w.out == nil {
 		// if not open a binlog file yet, then non-fake RotateEvent can't be handled
-		return nil, errors.Errorf("non-fake RotateEvent %+v received, but no binlog file opened", ev.Header)
+		return result, errors.Errorf("non-fake RotateEvent %+v received, but no binlog file opened", ev.Header)
 	}
 
 	result, err = w.handlePotentialHoleOrDuplicate(ev)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return result, errors.Trace(err)
 	} else if result.Ignore {
 		return result, nil
 	}
 
 	err = w.out.Write(ev.RawData)
 	if err != nil {
-		return nil, errors.Annotatef(err, "write RotateEvent %+v for %s", ev.Header, filepath.Join(w.cfg.RelayDir, currFile))
+		return result, errors.Annotatef(err, "write RotateEvent %+v for %s", ev.Header, filepath.Join(w.cfg.RelayDir, currFile))
 	}
 
-	return &Result{
+	return Result{
 		Ignore: false,
 	}, nil
 }
@@ -273,27 +273,27 @@ func (w *FileWriter) handleRotateEvent(ev *replication.BinlogEvent) (result *Res
 //   1. handle a potential hole if exists
 //   2. handle any duplicate events if exist
 //   3. write the non-duplicate event
-func (w *FileWriter) handleEventDefault(ev *replication.BinlogEvent) (*Result, error) {
+func (w *FileWriter) handleEventDefault(ev *replication.BinlogEvent) (Result, error) {
 	result, err := w.handlePotentialHoleOrDuplicate(ev)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return Result{}, errors.Trace(err)
 	} else if result.Ignore {
 		return result, nil
 	}
 
 	// write the non-duplicate event
 	err = w.out.Write(ev.RawData)
-	return &Result{
+	return Result{
 		Ignore: false,
 	}, errors.Annotatef(err, "write event %+v", ev.Header)
 }
 
 // handlePotentialHoleOrDuplicate combines handleFileHoleExist and handleDuplicateEventsExist.
-func (w *FileWriter) handlePotentialHoleOrDuplicate(ev *replication.BinlogEvent) (*Result, error) {
+func (w *FileWriter) handlePotentialHoleOrDuplicate(ev *replication.BinlogEvent) (Result, error) {
 	// handle a potential hole
 	mayDuplicate, err := w.handleFileHoleExist(ev)
 	if err != nil {
-		return nil, errors.Annotatef(err, "handle a potential hole in %s before %+v",
+		return Result{}, errors.Annotatef(err, "handle a potential hole in %s before %+v",
 			w.filename.Get(), ev.Header)
 	}
 
@@ -301,7 +301,7 @@ func (w *FileWriter) handlePotentialHoleOrDuplicate(ev *replication.BinlogEvent)
 		// handle any duplicate events if exist
 		result, err2 := w.handleDuplicateEventsExist(ev)
 		if err2 != nil {
-			return nil, errors.Annotatef(err2, "handle a potential duplicate event %+v in %s",
+			return Result{}, errors.Annotatef(err2, "handle a potential duplicate event %+v in %s",
 				ev.Header, w.filename.Get())
 		}
 		if result.Ignore {
@@ -310,7 +310,7 @@ func (w *FileWriter) handlePotentialHoleOrDuplicate(ev *replication.BinlogEvent)
 		}
 	}
 
-	return &Result{
+	return Result{
 		Ignore: false,
 	}, nil
 }
@@ -354,16 +354,16 @@ func (w *FileWriter) handleFileHoleExist(ev *replication.BinlogEvent) (bool, err
 }
 
 // handleDuplicateEventsExist tries to handle a potential duplicate event in the binlog file.
-func (w *FileWriter) handleDuplicateEventsExist(ev *replication.BinlogEvent) (*Result, error) {
+func (w *FileWriter) handleDuplicateEventsExist(ev *replication.BinlogEvent) (Result, error) {
 	filename := filepath.Join(w.cfg.RelayDir, w.filename.Get())
 	duplicate, err := checkIsDuplicateEvent(filename, ev)
 	if err != nil {
-		return nil, errors.Annotatef(err, "check event %+v whether duplicate in %s", ev.Header, filename)
+		return Result{}, errors.Annotatef(err, "check event %+v whether duplicate in %s", ev.Header, filename)
 	} else if duplicate {
 		logger.Info("event is duplicate", zap.Reflect("event header", ev.Header), zap.String("file name", w.filename.Get()))
 	}
 
-	return &Result{
+	return Result{
 		Ignore: duplicate,
 	}, nil
 }
@@ -376,41 +376,44 @@ func (w *FileWriter) handleDuplicateEventsExist(ev *replication.BinlogEvent) (*R
 // 3. truncate any incomplete events/transactions
 // now, we think a transaction finished if we received a XIDEvent or DDL in QueryEvent
 // NOTE: handle cases when file size > 4GB
-func (w *FileWriter) doRecovering() (*RecoverResult, error) {
+func (w *FileWriter) doRecovering() (RecoverResult, error) {
 	filename := filepath.Join(w.cfg.RelayDir, w.filename.Get())
+	fs, err := os.Stat(filename)
+	if (err != nil && os.IsNotExist(err)) || (err == nil && len(w.filename.Get()) == 0) {
+		return RecoverResult{}, nil // no file need to recover
+	} else if err != nil {
+		return RecoverResult{}, errors.Annotatef(err, "get stat for %s", filename)
+	}
+
 	// get latest pos/GTID set for all completed transactions from the file
 	latestPos, latestGTIDs, err := getTxnPosGTIDs(filename, w.parser)
 	if err != nil {
-		return nil, errors.Annotatef(err, "get latest pos/GTID set from %s", filename)
+		return RecoverResult{}, errors.Annotatef(err, "get latest pos/GTID set from %s", filename)
 	}
 
 	// in most cases, we think the file is fine, so compare the size is simpler.
-	fs, err := os.Stat(filename)
-	if err != nil {
-		return nil, errors.Annotatef(err, "get stat for %s", filename)
-	}
 	if fs.Size() == latestPos {
-		return &RecoverResult{
+		return RecoverResult{
 			Recovered:   false, // no recovering for the file
 			LatestPos:   gmysql.Position{Name: w.filename.Get(), Pos: uint32(latestPos)},
 			LatestGTIDs: latestGTIDs,
 		}, nil
 	} else if fs.Size() < latestPos {
-		return nil, errors.Errorf("latest pos %d greater than file size %d, should not happen", latestPos, fs.Size())
+		return RecoverResult{}, errors.Errorf("latest pos %d greater than file size %d, should not happen", latestPos, fs.Size())
 	}
 
 	// truncate the file
 	f, err := os.OpenFile(filename, os.O_WRONLY, 0644)
 	if err != nil {
-		return nil, errors.Annotatef(err, "open %s", filename)
+		return RecoverResult{}, errors.Annotatef(err, "open %s", filename)
 	}
 	defer f.Close()
 	err = f.Truncate(latestPos)
 	if err != nil {
-		return nil, errors.Annotatef(err, "truncate %s to %d", filename, latestPos)
+		return RecoverResult{}, errors.Annotatef(err, "truncate %s to %d", filename, latestPos)
 	}
 
-	return &RecoverResult{
+	return RecoverResult{
 		Recovered:   true,
 		LatestPos:   gmysql.Position{Name: w.filename.Get(), Pos: uint32(latestPos)},
 		LatestGTIDs: latestGTIDs,

@@ -19,11 +19,11 @@ import (
 	"github.com/pingcap/errors"
 )
 
-// isIgnorableError checks whether the error is ignorable.
-func isIgnorableError(err error) bool {
+// isRetryableError checks whether the error is retryable.
+func isRetryableError(err error) bool {
 	err = errors.Cause(err)
 	switch err {
-	case context.Canceled:
+	case context.DeadlineExceeded:
 		return true
 	}
 	return false

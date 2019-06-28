@@ -77,7 +77,7 @@ func (s *FileReaderStatus) String() string {
 }
 
 // NewFileReader creates a FileReader instance.
-func NewFileReader(logger log.Logger, cfg *FileReaderConfig) Reader {
+func NewFileReader(cfg *FileReaderConfig) Reader {
 	parser := replication.NewBinlogParser()
 	parser.SetVerifyChecksum(true)
 	parser.SetUseDecimal(true)
@@ -89,7 +89,7 @@ func NewFileReader(logger log.Logger, cfg *FileReaderConfig) Reader {
 		parser: parser,
 		ch:     make(chan *replication.BinlogEvent, cfg.ChBufferSize),
 		ech:    make(chan error, cfg.EchBufferSize),
-		logger: logger,
+		logger: log.With(zap.String("component", "binlog file reader")),
 	}
 }
 

@@ -297,7 +297,7 @@ func genColumnList(columns []*column) string {
 }
 
 func genColumnPlaceholders(length int) string {
-	values := make([]string, length, length)
+	values := make([]string, length)
 	for i := 0; i < length; i++ {
 		values[i] = "?"
 	}

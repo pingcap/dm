@@ -67,12 +67,10 @@ func (t *testFileWriterSuite) TestInterfaceMethods(c *check.C) {
 	c.Assert(w, check.NotNil)
 
 	// not prepared
-	rres, err := w.Recover()
+	_, err := w.Recover()
 	c.Assert(err, check.ErrorMatches, fmt.Sprintf(".*%s.*", common.StageNew))
-	c.Assert(rres, check.IsNil)
-	res, err := w.WriteEvent(ev)
+	_, err = w.WriteEvent(ev)
 	c.Assert(err, check.ErrorMatches, fmt.Sprintf(".*%s.*", common.StageNew))
-	c.Assert(res, check.IsNil)
 	err = w.Flush()
 	c.Assert(err, check.ErrorMatches, fmt.Sprintf(".*%s.*", common.StageNew))
 
@@ -86,14 +84,14 @@ func (t *testFileWriterSuite) TestInterfaceMethods(c *check.C) {
 	c.Assert(err, check.ErrorMatches, ".*no underlying writer opened.*")
 
 	// recover
-	rres, err = w.Recover()
-	c.Assert(err, check.ErrorMatches, ".*no such file or directory.*")
-	c.Assert(rres, check.IsNil)
+	rres, err := w.Recover()
+	c.Assert(err, check.IsNil)
+	c.Assert(rres.Recovered, check.IsFalse)
 
 	// write event
-	res, err = w.WriteEvent(ev)
+	res, err := w.WriteEvent(ev)
 	c.Assert(err, check.IsNil)
-	c.Assert(res, check.NotNil)
+	c.Assert(res.Ignore, check.IsFalse)
 
 	// flush buffered data
 	c.Assert(w.Flush(), check.IsNil)
@@ -120,45 +118,41 @@ func (t *testFileWriterSuite) TestRelayDir(c *check.C) {
 	w1 := NewFileWriter(cfg, t.parser)
 	defer w1.Close()
 	c.Assert(w1.Start(), check.IsNil)
-	result, err := w1.WriteEvent(ev)
+	_, err = w1.WriteEvent(ev)
 	c.Assert(err, check.ErrorMatches, ".*not valid.*")
-	c.Assert(result, check.IsNil)
 
 	// invalid dir
 	cfg.RelayDir = "invalid\x00path"
 	w2 := NewFileWriter(cfg, t.parser)
 	defer w2.Close()
 	c.Assert(w2.Start(), check.IsNil)
-	result, err = w2.WriteEvent(ev)
+	_, err = w2.WriteEvent(ev)
 	c.Assert(err, check.ErrorMatches, ".*not valid.*")
-	c.Assert(result, check.IsNil)
 
 	// valid directory, but no filename specified
 	cfg.RelayDir = c.MkDir()
 	w3 := NewFileWriter(cfg, t.parser)
 	defer w3.Close()
 	c.Assert(w3.Start(), check.IsNil)
-	result, err = w3.WriteEvent(ev)
+	_, err = w3.WriteEvent(ev)
 	c.Assert(err, check.ErrorMatches, ".*not valid.*")
-	c.Assert(result, check.IsNil)
 
 	// valid directory, but invalid filename
 	cfg.Filename = "test-mysql-bin.666abc"
 	w4 := NewFileWriter(cfg, t.parser)
 	defer w4.Close()
 	c.Assert(w4.Start(), check.IsNil)
-	result, err = w4.WriteEvent(ev)
+	_, err = w4.WriteEvent(ev)
 	c.Assert(err, check.ErrorMatches, ".*not valid.*")
-	c.Assert(result, check.IsNil)
 
 	// valid directory, valid filename
 	cfg.Filename = "test-mysql-bin.000001"
 	w5 := NewFileWriter(cfg, t.parser)
 	defer w5.Close()
 	c.Assert(w5.Start(), check.IsNil)
-	result, err = w5.WriteEvent(ev)
+	result, err := w5.WriteEvent(ev)
 	c.Assert(err, check.IsNil)
-	c.Assert(result, check.NotNil)
+	c.Assert(result.Ignore, check.IsFalse)
 }
 
 func (t *testFileWriterSuite) TestFormatDescriptionEvent(c *check.C) {
@@ -183,7 +177,6 @@ func (t *testFileWriterSuite) TestFormatDescriptionEvent(c *check.C) {
 	c.Assert(w.Start(), check.IsNil)
 	result, err := w.WriteEvent(formatDescEv)
 	c.Assert(err, check.IsNil)
-	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsFalse)
 	fileSize := int64(len(replication.BinLogFileHeader) + len(formatDescEv.RawData))
 	t.verifyFilenameOffset(c, w, cfg.Filename, fileSize)
@@ -192,7 +185,6 @@ func (t *testFileWriterSuite) TestFormatDescriptionEvent(c *check.C) {
 	// write FormatDescriptionEvent again, ignore
 	result, err = w.WriteEvent(formatDescEv)
 	c.Assert(err, check.IsNil)
-	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsTrue)
 	t.verifyFilenameOffset(c, w, cfg.Filename, fileSize)
 
@@ -201,16 +193,13 @@ func (t *testFileWriterSuite) TestFormatDescriptionEvent(c *check.C) {
 	c.Assert(err, check.IsNil)
 	result, err = w.WriteEvent(queryEv)
 	c.Assert(err, check.IsNil)
-	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsFalse)
 	fileSize += int64(len(queryEv.RawData))
 	t.verifyFilenameOffset(c, w, cfg.Filename, fileSize)
-	latestPos = queryEv.Header.LogPos
 
 	// write FormatDescriptionEvent again, ignore
 	result, err = w.WriteEvent(formatDescEv)
 	c.Assert(err, check.IsNil)
-	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsTrue)
 	t.verifyFilenameOffset(c, w, cfg.Filename, fileSize)
 
@@ -283,23 +272,20 @@ func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check
 	w1 := NewFileWriter(cfg, t.parser)
 	defer w1.Close()
 	c.Assert(w1.Start(), check.IsNil)
-	result, err := w1.WriteEvent(rotateEv)
+	_, err = w1.WriteEvent(rotateEv)
 	c.Assert(err, check.ErrorMatches, ".*no binlog file opened.*")
-	c.Assert(result, check.IsNil)
 
 	// 2. fake RotateEvent before FormatDescriptionEvent
 	cfg.RelayDir = c.MkDir() // use a new relay directory
 	w2 := NewFileWriter(cfg, t.parser)
 	defer w2.Close()
 	c.Assert(w2.Start(), check.IsNil)
-	result, err = w2.WriteEvent(fakeRotateEv)
+	result, err := w2.WriteEvent(fakeRotateEv)
 	c.Assert(err, check.IsNil)
-	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsTrue) // ignore fake RotateEvent
 
 	result, err = w2.WriteEvent(formatDescEv)
 	c.Assert(err, check.IsNil)
-	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsFalse)
 
 	fileSize := int64(len(replication.BinLogFileHeader) + len(formatDescEv.RawData))
@@ -354,22 +340,19 @@ func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check
 	c.Assert(result.Ignore, check.IsFalse)
 
 	// try to write a rotateEv with hole exists
-	result, err = w4.WriteEvent(holeRotateEv)
+	_, err = w4.WriteEvent(holeRotateEv)
 	c.Assert(err, check.ErrorMatches, ".*required dummy event size.*is too small.*")
-	c.Assert(result, check.IsNil)
 
 	result, err = w4.WriteEvent(rotateEv)
 	c.Assert(err, check.IsNil)
-	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsFalse)
 
 	fileSize += int64(len(rotateEv.RawData))
 	t.verifyFilenameOffset(c, w4, nextFilename, fileSize)
 
 	// write again, duplicate, but we already rotated and new binlog file not created
-	result, err = w4.WriteEvent(rotateEv)
+	_, err = w4.WriteEvent(rotateEv)
 	c.Assert(err, check.ErrorMatches, ".*no such file or directory.*")
-	c.Assert(result, check.IsNil)
 
 	// cfg.Filename should contain both one FormatDescriptionEvent and one RotateEvent, next file should be empty
 	filename1 = filepath.Join(cfg.RelayDir, cfg.Filename)
@@ -442,7 +425,6 @@ func (t *testFileWriterSuite) TestWriteMultiEvents(c *check.C) {
 	for _, ev := range allEvents {
 		result, err2 := w.WriteEvent(ev)
 		c.Assert(err2, check.IsNil)
-		c.Assert(result, check.NotNil)
 		c.Assert(result.Ignore, check.IsFalse) // no event is ignored
 	}
 
@@ -478,16 +460,14 @@ func (t *testFileWriterSuite) TestHandleFileHoleExist(c *check.C) {
 	// write the FormatDescriptionEvent, no hole exists
 	result, err := w.WriteEvent(formatDescEv)
 	c.Assert(err, check.IsNil)
-	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsFalse)
 
 	// hole exits, but the size is too small, invalid
 	latestPos = formatDescEv.Header.LogPos + event.MinUserVarEventLen - 1
 	queryEv, err := event.GenQueryEvent(header, latestPos, 0, 0, 0, nil, []byte("schema"), []byte("BEGIN"))
 	c.Assert(err, check.IsNil)
-	result, err = w.WriteEvent(queryEv)
+	_, err = w.WriteEvent(queryEv)
 	c.Assert(err, check.ErrorMatches, ".*generate dummy event.*")
-	c.Assert(result, check.IsNil)
 
 	// hole exits, and the size is enough
 	latestPos = formatDescEv.Header.LogPos + event.MinUserVarEventLen
@@ -495,7 +475,6 @@ func (t *testFileWriterSuite) TestHandleFileHoleExist(c *check.C) {
 	c.Assert(err, check.IsNil)
 	result, err = w.WriteEvent(queryEv)
 	c.Assert(err, check.IsNil)
-	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsFalse)
 	fileSize := int64(queryEv.Header.LogPos)
 	t.verifyFilenameOffset(c, w, cfg.Filename, fileSize)
@@ -547,7 +526,6 @@ func (t *testFileWriterSuite) TestHandleDuplicateEventsExist(c *check.C) {
 	c.Assert(err, check.IsNil)
 	result, err := w.WriteEvent(formatDescEv)
 	c.Assert(err, check.IsNil)
-	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsFalse)
 	latestPos = formatDescEv.Header.LogPos
 
@@ -556,22 +534,19 @@ func (t *testFileWriterSuite) TestHandleDuplicateEventsExist(c *check.C) {
 	c.Assert(err, check.IsNil)
 	result, err = w.WriteEvent(queryEv)
 	c.Assert(err, check.IsNil)
-	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsFalse)
 
 	// write the QueryEvent again, duplicate
 	result, err = w.WriteEvent(queryEv)
 	c.Assert(err, check.IsNil)
-	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsTrue)
 
 	// write a start/end pos mismatched event
 	latestPos--
 	queryEv, err = event.GenQueryEvent(header, latestPos, 0, 0, 0, nil, []byte("schema"), []byte("BEGIN"))
 	c.Assert(err, check.IsNil)
-	result, err = w.WriteEvent(queryEv)
+	_, err = w.WriteEvent(queryEv)
 	c.Assert(err, check.ErrorMatches, ".*handle a potential duplicate event.*")
-	c.Assert(result, check.IsNil)
 }
 
 func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
@@ -617,7 +592,6 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	// try recover, but in fact do nothing
 	result, err := w.Recover()
 	c.Assert(err, check.IsNil)
-	c.Assert(result, check.NotNil)
 	c.Assert(result.Recovered, check.IsFalse)
 	c.Assert(result.LatestPos, check.DeepEquals, expectedPos)
 	c.Assert(result.LatestGTIDs, check.DeepEquals, expectedGTIDs)
@@ -648,7 +622,6 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	// try recover, truncate the incomplete event
 	result, err = w.Recover()
 	c.Assert(err, check.IsNil)
-	c.Assert(result, check.NotNil)
 	c.Assert(result.Recovered, check.IsTrue)
 	c.Assert(result.LatestPos, check.DeepEquals, expectedPos)
 	c.Assert(result.LatestGTIDs, check.DeepEquals, expectedGTIDs)
@@ -677,7 +650,6 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	// try recover, truncate the incomplete transaction
 	result, err = w.Recover()
 	c.Assert(err, check.IsNil)
-	c.Assert(result, check.NotNil)
 	c.Assert(result.Recovered, check.IsTrue)
 	c.Assert(result.LatestPos, check.DeepEquals, expectedPos)
 	c.Assert(result.LatestGTIDs, check.DeepEquals, expectedGTIDs)
@@ -709,7 +681,6 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	c.Assert(err, check.IsNil)
 	result, err = w.Recover()
 	c.Assert(err, check.IsNil)
-	c.Assert(result, check.NotNil)
 	c.Assert(result.Recovered, check.IsFalse)
 	c.Assert(result.LatestPos, check.DeepEquals, expectedPos)
 	c.Assert(result.LatestGTIDs, check.DeepEquals, expectedGTIDs)
@@ -721,4 +692,31 @@ func (t *testFileWriterSuite) TestRecoverMySQL(c *check.C) {
 	fileData, err := ioutil.ReadFile(filename)
 	c.Assert(err, check.IsNil)
 	c.Assert(fileData, check.DeepEquals, allData.Bytes())
+}
+
+func (t *testFileWriterSuite) TestRecoverMySQLNone(c *check.C) {
+	var (
+		cfg = &FileConfig{
+			RelayDir: c.MkDir(),
+		}
+	)
+
+	w1 := NewFileWriter(cfg, t.parser)
+	defer w1.Close()
+	c.Assert(w1.Start(), check.IsNil)
+
+	// no file specified to recover
+	result, err := w1.Recover()
+	c.Assert(err, check.IsNil)
+	c.Assert(result.Recovered, check.IsFalse)
+
+	cfg.Filename = "mysql-bin.000001"
+	w2 := NewFileWriter(cfg, t.parser)
+	defer w2.Close()
+	c.Assert(w2.Start(), check.IsNil)
+
+	// file not exist, no need to recover
+	result, err = w2.Recover()
+	c.Assert(err, check.IsNil)
+	c.Assert(result.Recovered, check.IsFalse)
 }

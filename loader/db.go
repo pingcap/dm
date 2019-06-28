@@ -222,10 +222,6 @@ func isErrTableExists(err error) bool {
 	return isMySQLError(err, tmysql.ErrTableExists)
 }
 
-func isErrTableNotExists(err error) bool {
-	return isMySQLError(err, tmysql.ErrNoSuchTable)
-}
-
 func isErrDupEntry(err error) bool {
 	return isMySQLError(err, tmysql.ErrDupEntry)
 }

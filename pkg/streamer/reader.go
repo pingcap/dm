@@ -268,12 +268,6 @@ func (r *BinlogReader) parseFile(
 
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		r.logger.Debug("read event", zap.Reflect("header", e.Header))
-		if e.Header.Flags&0x0040 != 0 {
-			// now LOG_EVENT_RELAY_LOG_F is only used for events which used to fill the gap in relay log file when switching the master server
-			r.logger.Debug("skip event created by relay writer", zap.Reflect("header", e.Header))
-			return nil
-		}
-
 		r.latestServerID = e.Header.ServerID // record server_id
 
 		switch e.Header.EventType {

@@ -74,7 +74,7 @@ func Decrypt(ciphertext []byte) ([]byte, error) {
 		return nil, errors.NotValidf("ciphertext's length should be greater than %d, but got %d", block.BlockSize()+len(ivSep), len(ciphertext))
 	}
 
-	if bytes.Compare(ciphertext[block.BlockSize():block.BlockSize()+len(ivSep)], ivSep) != 0 {
+	if !bytes.Equal(ciphertext[block.BlockSize():block.BlockSize()+len(ivSep)], ivSep) {
 		return nil, errors.NotValidf("ciphertext's content")
 	}
 

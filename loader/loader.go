@@ -426,15 +426,9 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for {
-			select {
-			case err, ok := <-l.runFatalChan:
-				if !ok {
-					return
-				}
-				cancel() // cancel l.Restore
-				errs = append(errs, err)
-			}
+		for err := range l.runFatalChan {
+			cancel() // cancel l.Restore
+			errs = append(errs, err)
 		}
 	}()
 
@@ -522,6 +516,9 @@ func (l *Loader) Restore(ctx context.Context) error {
 	go l.PrintStatus(ctx)
 
 	if err := l.restoreData(ctx); err != nil {
+		if errors.Cause(err) == context.Canceled {
+			return nil
+		}
 		return errors.Trace(err)
 	}
 
@@ -669,6 +666,7 @@ func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
 	// reset some variables
 	l.db2Tables = make(map[string]Tables2DataFiles)
 	l.totalFileCount.Set(0) // reset
+	schemaFileCount := 0
 	for file := range files {
 		if !strings.HasSuffix(file, "-schema-create.sql") {
 			continue
@@ -676,6 +674,7 @@ func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
 
 		idx := strings.Index(file, "-schema-create.sql")
 		if idx > 0 {
+			schemaFileCount++
 			db := file[:idx]
 			if l.skipSchemaAndTable(&filter.Table{Schema: db}) {
 				l.logger.Warn("ignore schema file", zap.String("schema file", file))
@@ -687,8 +686,11 @@ func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
 		}
 	}
 
+	if schemaFileCount == 0 {
+		l.logger.Warn("invalid mydumper files for there are no `-schema-create.sql` files found, and will generate later")
+	}
 	if len(l.db2Tables) == 0 {
-		return errors.New("invalid mydumper files for there are no `-schema-create.sql` files found")
+		l.logger.Warn("no available `-schema-create.sql` files, check mydumper parameter matches black-white-list in task config, will generate later")
 	}
 
 	return nil
@@ -715,7 +717,13 @@ func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 		}
 		tables, ok := l.db2Tables[db]
 		if !ok {
-			return errors.Errorf("invalid table schema file, cannot find db - %s", file)
+			l.logger.Warn("can't find schema create file, will generate one", zap.String("schema", db))
+			if err := generateSchemaCreateFile(l.cfg.Dir, db); err != nil {
+				return errors.Trace(err)
+			}
+			l.db2Tables[db] = make(Tables2DataFiles)
+			tables = l.db2Tables[db]
+			l.totalFileCount.Add(1)
 		}
 
 		if _, ok := tables[table]; ok {
@@ -731,15 +739,15 @@ func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 
 func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 	for file := range files {
-		if !strings.HasSuffix(file, ".sql") || strings.Index(file, "-schema.sql") >= 0 ||
-			strings.Index(file, "-schema-create.sql") >= 0 {
+		if !strings.HasSuffix(file, ".sql") || strings.Contains(file, "-schema.sql") ||
+			strings.Contains(file, "-schema-create.sql") {
 			continue
 		}
 
 		// ignore view / triggers
-		if strings.Index(file, "-schema-view.sql") >= 0 || strings.Index(file, "-schema-triggers.sql") >= 0 ||
-			strings.Index(file, "-schema-post.sql") >= 0 {
-			l.logger.Warn("ignore unsupport view/trigger", zap.String("file", file))
+		if strings.Contains(file, "-schema-view.sql") || strings.Contains(file, "-schema-triggers.sql") ||
+			strings.Contains(file, "-schema-post.sql") {
+			l.logger.Warn("ignore unsupport view/trigger file", zap.String("file", file))
 			continue
 		}
 
@@ -802,7 +810,7 @@ func (l *Loader) prepare() error {
 			}
 		}
 		if !trimmed {
-			return errors.Errorf("%s is not exists or it's not a dir", l.cfg.Dir)
+			return errors.Errorf("%s does not exist or it's not a dir", l.cfg.Dir)
 		}
 	}
 
@@ -1006,7 +1014,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 				select {
 				case <-ctx.Done():
 					l.logger.Warn("stop generate data file job", log.ShortError(ctx.Err()))
-					return nil
+					return ctx.Err()
 				default:
 					// do nothing
 				}
@@ -1037,7 +1045,8 @@ func (l *Loader) restoreData(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			l.logger.Warn("stop dispatch data file job", log.ShortError(ctx.Err()))
-			break
+			l.closeFileJobQueue()
+			return ctx.Err()
 		case l.fileJobQueue <- j:
 		}
 	}

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -33,6 +34,8 @@ import (
 // later we can read it from dm/master/dm-master.toml
 // and assign it to SampleConfigFile while we build dm-master
 var SampleConfigFile string
+
+var defaultRPCTimeout = "30s"
 
 // NewConfig creates a config for dm-master
 func NewConfig() *Config {
@@ -74,6 +77,11 @@ type Config struct {
 	LogLevel  string `toml:"log-level" json:"log-level"`
 	LogFile   string `toml:"log-file" json:"log-file"`
 	LogRotate string `toml:"log-rotate" json:"log-rotate"`
+
+	RPCTimeoutStr string        `toml:"rpc-timeout" json:"rpc-timeout"`
+	RPCTimeout    time.Duration `json:"-"`
+	RPCRateLimit  float64       `toml:"rpc-rate-limit" json:"rpc-rate-limit"`
+	RPCRateBurst  int           `toml:"rpc-rate-burst" json:"rpc-rate-burst"`
 
 	MasterAddr string `toml:"master-addr" json:"master-addr"`
 
@@ -163,6 +171,26 @@ func (c *Config) adjust() error {
 
 		c.DeployMap[item.Source] = item.Worker
 	}
+
+	if c.RPCTimeoutStr == "" {
+		c.RPCTimeoutStr = defaultRPCTimeout
+	}
+	timeout, err := time.ParseDuration(c.RPCTimeoutStr)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	c.RPCTimeout = timeout
+
+	// for backward compatibility
+	if c.RPCRateLimit <= 0 {
+		log.L().Warn("invalid rpc-rate-limit", zap.Float64("specified rpc-rare-limit", c.RPCRateLimit), zap.Float64("default rpc-rare-limit", DefaultRate))
+		c.RPCRateLimit = DefaultRate
+	}
+	if c.RPCRateBurst <= 0 {
+		log.L().Warn("invalid rpc-rate-burst", zap.Int("specified rpc-rate-burst", c.RPCRateBurst), zap.Int("default rpc-rate-burst", DefaultBurst))
+		c.RPCRateBurst = DefaultBurst
+	}
+
 	return nil
 }
 

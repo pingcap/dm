@@ -38,28 +38,25 @@ func toBinlogType(bt string) BinlogType {
 
 // tableNameForDML gets table name from INSERT/UPDATE/DELETE statement
 func tableNameForDML(dml ast.DMLNode) (schema, table string, err error) {
-	switch dml.(type) {
+	switch stmt := dml.(type) {
 	case *ast.InsertStmt:
-		is := dml.(*ast.InsertStmt)
-		if is.Table == nil || is.Table.TableRefs == nil || is.Table.TableRefs.Left == nil {
-			return "", "", errors.NotValidf("INSERT statement %s", is.Text())
+		if stmt.Table == nil || stmt.Table.TableRefs == nil || stmt.Table.TableRefs.Left == nil {
+			return "", "", errors.NotValidf("INSERT statement %s", stmt.Text())
 		}
-		schema, table, err = tableNameResultSet(is.Table.TableRefs.Left)
-		return schema, table, errors.Annotatef(err, "INSERT statement %s", is.Text())
+		schema, table, err = tableNameResultSet(stmt.Table.TableRefs.Left)
+		return schema, table, errors.Annotatef(err, "INSERT statement %s", stmt.Text())
 	case *ast.UpdateStmt:
-		us := dml.(*ast.UpdateStmt)
-		if us.TableRefs == nil || us.TableRefs.TableRefs == nil || us.TableRefs.TableRefs.Left == nil {
-			return "", "", errors.NotValidf("UPDATE statement %s", us.Text())
+		if stmt.TableRefs == nil || stmt.TableRefs.TableRefs == nil || stmt.TableRefs.TableRefs.Left == nil {
+			return "", "", errors.NotValidf("UPDATE statement %s", stmt.Text())
 		}
-		schema, table, err = tableNameResultSet(us.TableRefs.TableRefs.Left)
-		return schema, table, errors.Annotatef(err, "UPDATE statement %s", us.Text())
+		schema, table, err = tableNameResultSet(stmt.TableRefs.TableRefs.Left)
+		return schema, table, errors.Annotatef(err, "UPDATE statement %s", stmt.Text())
 	case *ast.DeleteStmt:
-		ds := dml.(*ast.DeleteStmt)
-		if ds.TableRefs == nil || ds.TableRefs.TableRefs == nil || ds.TableRefs.TableRefs.Left == nil {
-			return "", "", errors.NotValidf("DELETE statement %s", ds.Text())
+		if stmt.TableRefs == nil || stmt.TableRefs.TableRefs == nil || stmt.TableRefs.TableRefs.Left == nil {
+			return "", "", errors.NotValidf("DELETE statement %s", stmt.Text())
 		}
-		schema, table, err = tableNameResultSet(ds.TableRefs.TableRefs.Left)
-		return schema, table, errors.Annotatef(err, "DELETE statement %s", ds.Text())
+		schema, table, err = tableNameResultSet(stmt.TableRefs.TableRefs.Left)
+		return schema, table, errors.Annotatef(err, "DELETE statement %s", stmt.Text())
 	}
 	return "", "", errors.NotSupportedf("DMLNode %v", dml)
 }

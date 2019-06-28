@@ -21,6 +21,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/log"
@@ -83,7 +84,7 @@ func (w *FileWriter) Start() error {
 	if err != nil {
 		err2 := f.Close() // close the file opened before
 		if err2 != nil {
-			log.Errorf("[file writer] close file error %s", err2)
+			log.L().Error("fail to close file", zap.String("component", "file writer"), zap.Error(err2))
 		}
 		return errors.Annotatef(err, "get stat for %s", f.Name())
 	}
@@ -107,7 +108,7 @@ func (w *FileWriter) Close() error {
 	if w.file != nil {
 		err2 := w.flush() // try flush manually before close.
 		if err2 != nil {
-			log.Errorf("[file writer] flush buffered data error %s", err2)
+			log.L().Error("fail to flush buffered data", zap.String("component", "file writer"), zap.Error(err2))
 		}
 		err = w.file.Close()
 		w.file = nil

@@ -38,7 +38,7 @@ type CommandMasterFlags struct {
 func Init(cfg *common.Config) error {
 	// set the log level temporarily
 	log.SetLevel(zapcore.InfoLevel)
-	return errors.Trace(common.InitClient(cfg.MasterAddr))
+	return errors.Trace(common.InitUtils(cfg))
 }
 
 // Start starts running a command
