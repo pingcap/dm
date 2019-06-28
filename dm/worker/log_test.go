@@ -241,6 +241,7 @@ func (t *testLog) TestTaskLogGC(c *C) {
 	logger.doGC(db, 59)
 
 	logs, err := logger.Initial(db)
+	c.Assert(err, IsNil)
 	c.Assert(logs, DeepEquals, []*pb.TaskLog{taskLog4})
 	c.Assert(logger.handledPointer.Location, Equals, int64(59))
 	c.Assert(logger.endPointer.Location, Equals, int64(61))
