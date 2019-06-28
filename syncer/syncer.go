@@ -421,7 +421,7 @@ func (s *Syncer) IsFreshTask() (bool, error) {
 	return globalPoint.Compare(minCheckpoint) <= 0, nil
 }
 
-func (s *Syncer) resetRepliactionSyncer() {
+func (s *Syncer) resetReplicationSyncer() {
 	if s.binlogType == RemoteBinlog {
 		// create new binlog-syncer
 		if s.syncer != nil {
@@ -444,7 +444,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	newCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	s.resetRepliactionSyncer()
+	s.resetReplicationSyncer()
 	// create new done chan
 	s.done = make(chan struct{})
 	// create new job chans
@@ -921,7 +921,7 @@ func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan
 func (s *Syncer) redirectStreamer(pos mysql.Position) error {
 	var err error
 	log.Infof("reset global streamer to position: %v", pos)
-	s.resetRepliactionSyncer()
+	s.resetReplicationSyncer()
 	if s.binlogType == RemoteBinlog {
 		s.streamer, err = s.getBinlogStreamer(s.syncer, pos)
 	} else if s.binlogType == LocalBinlog {
@@ -1037,7 +1037,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	//    * compare last pos with current binlog's pos to determine whether re-sync completed
 	// 6. use the global streamer to continue the syncing
 	var (
-		shardingReader      *streamer.BinlogReader
 		shardingReSyncCh    = make(chan *ShardingReSync, 10)
 		shardingReSync      *ShardingReSync
 		savedGlobalLastPos  mysql.Position
@@ -1064,20 +1063,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				return errors.Trace(err2)
 			}
 		}
-		if shardingReader != nil {
-			shardingReader.Close()
-			shardingReader = nil
-		}
 		shardingReSync = nil
 		lastPos = savedGlobalLastPos // restore global last pos
 		return nil
 	}
-	defer func() {
-		err = closeShardingResync()
-		if err != nil {
-			log.Errorf("[syncer] closeShardingResync with error: %v", err)
-		}
-	}()
 
 	for {
 		s.currentPosMu.Lock()
@@ -1677,6 +1666,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 		// meets DDL that will not be processed in sequence sharding
 		if !active {
+			log.Infof("[syncer] skip in-activeDDL %v from source %s", needHandleDDLs, source)
 			return nil
 		}
 		log.Infof("[syncer] try to sync table %s to shard group (%v)", source, needShardingHandle)
@@ -1715,7 +1705,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 
 		allResolved, err2 := s.sgk.ResolveShardingDDL(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
-		if err != nil {
+		if err2 != nil {
 			return errors.Trace(err2)
 		}
 		*ec.shardingReSyncCh <- &ShardingReSync{
