@@ -43,10 +43,20 @@ func (c *Context) WithContext(ctx context.Context) *Context {
 	}
 }
 
+// GetContext returns real context
+func (c *Context) GetContext() context.Context {
+	return c.Ctx
+}
+
 // WithLogger set logger
 func (c *Context) WithLogger(logger log.Logger) *Context {
 	return &Context{
 		Ctx:    c.Ctx,
 		Logger: logger,
 	}
+}
+
+// L returns real logger
+func (c *Context) L() log.Logger {
+	return c.Logger
 }
