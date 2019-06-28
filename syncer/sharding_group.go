@@ -317,7 +317,11 @@ func (sg *ShardingGroup) FirstPosUnresolved() *mysql.Position {
 	}
 	item := sg.meta.GetGlobalActiveDDL()
 	if item != nil {
-		return &item.FirstPos
+		// make a new copy
+		return &mysql.Position{
+			Name: item.FirstPos.Name,
+			Pos:  item.FirstPos.Pos,
+		}
 	}
 	return nil
 }
