@@ -231,7 +231,7 @@ func (t *testFileSuite) TestGetFirstBinlogName(c *C) {
 	filename := "invalid.bin"
 	err = ioutil.WriteFile(filepath.Join(subDir, filename), nil, 0600)
 	c.Assert(err, IsNil)
-	name, err = getFirstBinlogName(baseDir, uuid)
+	_, err = getFirstBinlogName(baseDir, uuid)
 	c.Assert(err, ErrorMatches, ".*not valid.*")
 	err = os.Remove(filepath.Join(subDir, filename))
 	c.Assert(err, IsNil)
