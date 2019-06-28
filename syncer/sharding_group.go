@@ -516,16 +516,13 @@ func (k *ShardingGroupKeeper) TrySync(
 	return true, group, synced, active, remain, errors.Trace(err)
 }
 
-// CheckSyncing checks the source table syncing status
-// returns
-//   inShardingGroup: whether the source table in is a sharding group
-//   beforeActiveDDL: whether the position is before active DDL
-func (k *ShardingGroupKeeper) CheckSyncing(targetSchema, targetTable, source string, pos mysql.Position) (inShardingGroup, beforeActiveDDL bool) {
+// CheckSyncing checks whether the source is in sharding syncing
+func (k *ShardingGroupKeeper) InSyncing(targetSchema, targetTable, source string, pos mysql.Position) bool {
 	group := k.Group(targetSchema, targetTable)
 	if group == nil {
-		return false, true
+		return false
 	}
-	return true, group.CheckSyncing(source, pos)
+	return group.CheckSyncing(source, pos)
 }
 
 // UnresolvedTables returns
