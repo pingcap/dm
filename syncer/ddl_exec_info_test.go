@@ -42,7 +42,7 @@ func (t *testDDLExecInfoSuite) TestDDLExecItem(c *C) {
 		defer wg.Done()
 
 		select {
-		case _ = <-ddlExecInfo.Chan(ddls):
+		case <-ddlExecInfo.Chan(ddls):
 		case <-time.After(time.Second):
 			c.Fatal("timeout")
 		}

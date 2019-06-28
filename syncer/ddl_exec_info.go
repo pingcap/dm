@@ -109,12 +109,9 @@ func (i *DDLExecInfo) cancelAndWaitSending() {
 	// wait Send to return
 	timer := time.NewTicker(1 * time.Millisecond)
 	defer timer.Stop()
-	for {
-		select {
-		case <-timer.C:
-			if !i.status.CompareAndSwap(ddlExecSending, ddlExecSending) {
-				return // return from select and for
-			}
+	for range timer.C {
+		if !i.status.CompareAndSwap(ddlExecSending, ddlExecSending) {
+			return // return from select and for
 		}
 	}
 }

@@ -196,7 +196,6 @@ func (t *testFileWriterSuite) TestFormatDescriptionEvent(c *check.C) {
 	c.Assert(result.Ignore, check.IsFalse)
 	fileSize += int64(len(queryEv.RawData))
 	t.verifyFilenameOffset(c, w, cfg.Filename, fileSize)
-	latestPos = queryEv.Header.LogPos
 
 	// write FormatDescriptionEvent again, ignore
 	result, err = w.WriteEvent(formatDescEv)
@@ -309,10 +308,12 @@ func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check
 	defer w3.Close()
 	c.Assert(w3.Start(), check.IsNil)
 	result, err = w3.WriteEvent(formatDescEv)
+	c.Assert(err, check.IsNil)
 	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsFalse)
 
 	result, err = w3.WriteEvent(fakeRotateEv)
+	c.Assert(err, check.IsNil)
 	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsTrue)
 
@@ -334,6 +335,7 @@ func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check
 	defer w4.Close()
 	c.Assert(w4.Start(), check.IsNil)
 	result, err = w4.WriteEvent(formatDescEv)
+	c.Assert(err, check.IsNil)
 	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsFalse)
 

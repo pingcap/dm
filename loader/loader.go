@@ -732,14 +732,14 @@ func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 
 func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 	for file := range files {
-		if !strings.HasSuffix(file, ".sql") || strings.Index(file, "-schema.sql") >= 0 ||
-			strings.Index(file, "-schema-create.sql") >= 0 {
+		if !strings.HasSuffix(file, ".sql") || strings.Contains(file, "-schema.sql") ||
+			strings.Contains(file, "-schema-create.sql") {
 			continue
 		}
 
 		// ignore view / triggers
-		if strings.Index(file, "-schema-view.sql") >= 0 || strings.Index(file, "-schema-triggers.sql") >= 0 ||
-			strings.Index(file, "-schema-post.sql") >= 0 {
+		if strings.Contains(file, "-schema-view.sql") || strings.Contains(file, "-schema-triggers.sql") ||
+			strings.Contains(file, "-schema-post.sql") {
 			log.Warnf("[loader] ignore unsupport view/trigger: %s", file)
 			continue
 		}

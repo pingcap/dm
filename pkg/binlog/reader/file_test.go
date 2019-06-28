@@ -211,6 +211,7 @@ func (t *testFileReaderSuite) TestGetEvent(c *C) {
 	c.Assert(e.RawData, DeepEquals, formatDescEv.RawData) // always got a FormatDescriptionEvent first
 	e, err = r.GetEvent(timeoutCtx)
 	c.Assert(err, ErrorMatches, ".*EOF.*")
+	c.Assert(e, IsNil)
 }
 
 func (t *testFileReaderSuite) TestWithChannelBuffer(c *C) {

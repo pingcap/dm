@@ -109,7 +109,7 @@ func (t *testMeta) TestNewMetaDB(c *C) {
 	// test fail to recover from old fashion meta
 	err = ioutil.WriteFile(path.Join(dir, "meta"), []byte("xxxx"), 0644)
 	c.Assert(err, IsNil)
-	metaDB, err = NewMetadata(dir, db)
+	_, err = NewMetadata(dir, db)
 	c.Assert(err, NotNil)
 	c.Assert(err, ErrorMatches, ".*decode old metadata.*")
 
@@ -271,14 +271,17 @@ func (t *testMeta) TestTaskOperation(c *C) {
 	c.Assert(log1C, DeepEquals, log1)
 
 	log2, err := meta.GetTaskLog(2)
+	c.Assert(err, IsNil)
 	c.Assert(log2.Task, DeepEquals, testTask2Meta)
 	c.Assert(log2.Id, DeepEquals, int64(2))
 
 	log1s, err := meta.GetTaskLog(3)
+	c.Assert(err, IsNil)
 	c.Assert(log1s.Task, DeepEquals, testTask1MetaC)
 	c.Assert(log1s.Id, DeepEquals, int64(3))
 
 	log2s, err := meta.GetTaskLog(4)
+	c.Assert(err, IsNil)
 	c.Assert(log2s.Task, DeepEquals, testTask2MetaC)
 	c.Assert(log2s.Id, DeepEquals, int64(4))
 
