@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/log"
+	tcontext "github.com/pingcap/dm/pkg/context"
 
 	"github.com/pingcap/errors"
 	"go.uber.org/zap"
@@ -69,14 +69,16 @@ type RemoteCheckPoint struct {
 	table          string
 	restoringFiles map[string]map[string]FilePosSet
 	finishedTables map[string]struct{}
-	logger         log.Logger
+	tctx           *tcontext.Context
 }
 
-func newRemoteCheckPoint(logger log.Logger, cfg *config.SubTaskConfig, id string) (CheckPoint, error) {
+func newRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id string) (CheckPoint, error) {
 	conn, err := createConn(cfg)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+
+	newtctx := tctx.WithLogger(tctx.L().WithFields(zap.String("component", "remote checkpoint")))
 
 	cp := &RemoteCheckPoint{
 		conn:           conn,
@@ -85,7 +87,7 @@ func newRemoteCheckPoint(logger log.Logger, cfg *config.SubTaskConfig, id string
 		finishedTables: make(map[string]struct{}),
 		schema:         cfg.MetaSchema,
 		table:          fmt.Sprintf("%s_loader_checkpoint", cfg.Name),
-		logger:         logger,
+		tctx:           newtctx,
 	}
 
 	err = cp.prepare()
@@ -110,7 +112,7 @@ func (cp *RemoteCheckPoint) prepare() error {
 
 func (cp *RemoteCheckPoint) createSchema() error {
 	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", cp.schema)
-	err := cp.conn.executeSQL(cp.logger, []string{sql2}, true)
+	err := cp.conn.executeSQL(cp.tctx, []string{sql2}, true)
 	return errors.Trace(err)
 }
 
@@ -129,7 +131,7 @@ func (cp *RemoteCheckPoint) createTable() error {
 	);
 `
 	sql2 := fmt.Sprintf(createTable, tableName)
-	err := cp.conn.executeSQL(cp.logger, []string{sql2}, true)
+	err := cp.conn.executeSQL(cp.tctx, []string{sql2}, true)
 	return errors.Trace(err)
 }
 
@@ -137,11 +139,11 @@ func (cp *RemoteCheckPoint) createTable() error {
 func (cp *RemoteCheckPoint) Load() error {
 	begin := time.Now()
 	defer func() {
-		cp.logger.Info("load checkpoint", zap.Float64("cost time", time.Since(begin).Seconds()))
+		cp.tctx.L().Info("load checkpoint", zap.Float64("cost time", time.Since(begin).Seconds()))
 	}()
 
 	query := fmt.Sprintf("SELECT `filename`,`cp_schema`,`cp_table`,`offset`,`end_pos` from `%s`.`%s` where `id`=?", cp.schema, cp.table)
-	rows, err := cp.conn.querySQL(cp.logger, query, queryRetryCount, cp.id)
+	rows, err := cp.conn.querySQL(cp.tctx, query, queryRetryCount, cp.id)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -238,14 +240,14 @@ func (cp *RemoteCheckPoint) CalcProgress(allFiles map[string]Tables2DataFiles) e
 		}
 	}
 
-	cp.logger.Info("calculate checkpoint finished.", zap.Reflect("finished tables", cp.finishedTables))
+	cp.tctx.L().Info("calculate checkpoint finished.", zap.Reflect("finished tables", cp.finishedTables))
 	return nil
 }
 
 func (cp *RemoteCheckPoint) allFilesFinished(files map[string][]int64) bool {
 	for file, pos := range files {
 		if len(pos) != 2 {
-			cp.logger.Error("unexpected checkpoint record", zap.String("data file", file), zap.Int64s("position", pos))
+			cp.tctx.L().Error("unexpected checkpoint record", zap.String("data file", file), zap.Int64s("position", pos))
 			return false
 		}
 		if pos[0] != pos[1] {
@@ -269,7 +271,7 @@ func (cp *RemoteCheckPoint) Init(filename string, endPos int64) error {
 
 	// fields[0] -> db name, fields[1] -> table name
 	sql2 := fmt.Sprintf("INSERT INTO `%s`.`%s` (`id`, `filename`, `cp_schema`, `cp_table`, `offset`, `end_pos`) VALUES(?,?,?,?,?,?)", cp.schema, cp.table)
-	cp.logger.Debug("initial checkpoint record",
+	cp.tctx.L().Debug("initial checkpoint record",
 		zap.String("sql", sql2),
 		zap.String("id", cp.id),
 		zap.String("filename", filename),
@@ -277,10 +279,10 @@ func (cp *RemoteCheckPoint) Init(filename string, endPos int64) error {
 		zap.String("table", fields[1]),
 		zap.Int64("offset", 0),
 		zap.Int64("end position", endPos))
-	err := cp.conn.executeSQL2(cp.logger, sql2, maxRetryCount, cp.id, filename, fields[0], fields[1], 0, endPos)
+	err := cp.conn.executeSQL2(cp.tctx, sql2, maxRetryCount, cp.id, filename, fields[0], fields[1], 0, endPos)
 	if err != nil {
 		if isErrDupEntry(err) {
-			cp.logger.Info("checkpoint record already exists, skip it.", zap.String("id", cp.id), zap.String("filename", filename))
+			cp.tctx.L().Info("checkpoint record already exists, skip it.", zap.String("id", cp.id), zap.String("filename", filename))
 			return nil
 		}
 		return errors.Annotate(err, "initialize checkpoint")
@@ -304,14 +306,14 @@ func (cp *RemoteCheckPoint) GenSQL(filename string, offset int64) string {
 // Clear implements CheckPoint.Clear
 func (cp *RemoteCheckPoint) Clear() error {
 	sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s'", cp.schema, cp.table, cp.id)
-	err := cp.conn.executeSQL(cp.logger, []string{sql2}, true)
+	err := cp.conn.executeSQL(cp.tctx, []string{sql2}, true)
 	return errors.Trace(err)
 }
 
 // Count implements CheckPoint.Count
 func (cp *RemoteCheckPoint) Count() (int, error) {
 	query := fmt.Sprintf("SELECT COUNT(id) FROM `%s`.`%s` WHERE `id` = ?", cp.schema, cp.table)
-	rows, err := cp.conn.querySQL(cp.logger, query, queryRetryCount, cp.id)
+	rows, err := cp.conn.querySQL(cp.tctx, query, queryRetryCount, cp.id)
 	if err != nil {
 		return 0, errors.Trace(err)
 	}
@@ -326,7 +328,7 @@ func (cp *RemoteCheckPoint) Count() (int, error) {
 	if rows.Err() != nil {
 		return 0, errors.Trace(rows.Err())
 	}
-	cp.logger.Debug("checkpoint record", zap.Int("count", count))
+	cp.tctx.L().Debug("checkpoint record", zap.Int("count", count))
 	return count, nil
 }
 

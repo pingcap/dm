@@ -63,7 +63,7 @@ type Logger struct {
 }
 
 // WithFields return new Logger with specified fields
-func (l *Logger) WithFields(fields ...zap.Field) Logger {
+func (l Logger) WithFields(fields ...zap.Field) Logger {
 	return Logger{l.With(fields...)}
 }
 

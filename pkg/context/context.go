@@ -43,8 +43,8 @@ func (c *Context) WithContext(ctx context.Context) *Context {
 	}
 }
 
-// GetContext returns real context
-func (c *Context) GetContext() context.Context {
+// Context returns real context
+func (c *Context) Context() context.Context {
 	return c.Ctx
 }
 

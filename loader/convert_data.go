@@ -22,7 +22,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/pingcap/dm/pkg/log"
+	tcontext "github.com/pingcap/dm/pkg/context"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 
 	"github.com/pingcap/errors"
@@ -229,7 +229,7 @@ func tableName(schema, table string) string {
 	return fmt.Sprintf("`%s`.`%s`", schema, table)
 }
 
-func parseTable(logger log.Logger, r *router.Table, schema, table, file string) (*tableInfo, error) {
+func parseTable(ctx *tcontext.Context, r *router.Table, schema, table, file string) (*tableInfo, error) {
 	statement, err := ExportStatement(file)
 	if err != nil {
 		return nil, errors.Annotatef(err, "read table info from file %s", file)
@@ -280,7 +280,7 @@ func parseTable(logger log.Logger, r *router.Table, schema, table, file string) 
 		columnNameFields = "(" + strings.Join(escapeColumns, ",") + ") "
 	}
 
-	dstSchema, dstTable := fetchMatchedLiteral(logger, r, schema, table)
+	dstSchema, dstTable := fetchMatchedLiteral(ctx, r, schema, table)
 	return &tableInfo{
 		sourceSchema:   schema,
 		sourceTable:    table,

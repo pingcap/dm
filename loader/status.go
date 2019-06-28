@@ -51,7 +51,7 @@ func (l *Loader) PrintStatus(ctx context.Context) {
 	failpoint.Inject("PrintStatusCheckSeconds", func(val failpoint.Value) {
 		if seconds, ok := val.(int); ok {
 			printStatusInterval = time.Duration(seconds) * time.Second
-			l.logger.Info("set loader printStatusInterval", zap.String("feature", "failpoint"), zap.Int("printStatusInterval", seconds))
+			l.tctx.L().Info("set loader printStatusInterval", zap.String("feature", "failpoint"), zap.Int("printStatusInterval", seconds))
 		}
 	})
 
@@ -72,7 +72,7 @@ func (l *Loader) PrintStatus(ctx context.Context) {
 		finishedSize := l.finishedDataSize.Get()
 		totalSize := l.totalDataSize.Get()
 		totalFileCount := l.totalFileCount.Get()
-		l.logger.Info("progress status of load",
+		l.tctx.L().Info("progress status of load",
 			zap.Int64("finished_bytes", finishedSize),
 			zap.Int64("total_bytes", totalSize),
 			zap.Int64("total_file_count", totalFileCount),

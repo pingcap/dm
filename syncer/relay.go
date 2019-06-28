@@ -86,7 +86,7 @@ func (s *Syncer) setInitActiveRelayLog() error {
 	}
 
 	err = s.readerHub.UpdateActiveRelayLog(s.cfg.Name, activeUUID, pos.Name)
-	s.logger.Info("current earliest active relay log", zap.Stringer("active relay log", s.readerHub.EarliestActiveRelayLog()))
+	s.tctx.L().Info("current earliest active relay log", zap.Stringer("active relay log", s.readerHub.EarliestActiveRelayLog()))
 	return errors.Trace(err)
 }
 
@@ -110,7 +110,7 @@ func (s *Syncer) updateActiveRelayLog(pos mysql.Position) error {
 	}
 
 	err = s.readerHub.UpdateActiveRelayLog(s.cfg.Name, activeUUID, pos.Name)
-	s.logger.Info("current earliest active relay log", zap.Stringer("active relay log", s.readerHub.EarliestActiveRelayLog()))
+	s.tctx.L().Info("current earliest active relay log", zap.Stringer("active relay log", s.readerHub.EarliestActiveRelayLog()))
 	return errors.Trace(err)
 }
 
@@ -120,5 +120,5 @@ func (s *Syncer) removeActiveRelayLog() {
 	}
 
 	s.readerHub.RemoveActiveRelayLog(s.cfg.Name)
-	s.logger.Info("current earliest active relay log", zap.Stringer("active relay log", s.readerHub.EarliestActiveRelayLog()))
+	s.tctx.L().Info("current earliest active relay log", zap.Stringer("active relay log", s.readerHub.EarliestActiveRelayLog()))
 }

@@ -22,7 +22,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/log"
+	tcontext "github.com/pingcap/dm/pkg/context"
 )
 
 // Ghost handles gh-ost online ddls (not complete, don't need to review it)
@@ -34,9 +34,12 @@ type Ghost struct {
 }
 
 // NewGhost returns gh-oat online plugin
-func NewGhost(parent log.Logger, cfg *config.SubTaskConfig) (OnlinePlugin, error) {
+func NewGhost(tctx *tcontext.Context, cfg *config.SubTaskConfig) (OnlinePlugin, error) {
+
+	newtctx := tctx.WithLogger(tctx.L().WithFields(zap.String("online ddl", "ghost osc")))
+
 	g := &Ghost{
-		storge: NewOnlineDDLStorage(parent.WithFields(zap.String("online ddl", "ghost osc")), cfg),
+		storge: NewOnlineDDLStorage(newtctx, cfg),
 	}
 
 	return g, errors.Trace(g.storge.Init())
