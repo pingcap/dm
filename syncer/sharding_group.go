@@ -137,7 +137,7 @@ func (sg *ShardingGroup) Merge(sources []string) (bool, bool, int, error) {
 
 	// NOTE: we don't support add shard table when in sequence sharding
 	if sg.meta.InSequenceSharding() {
-		return true, sg.remain <= 0, sg.remain, errors.NotSupportedf("in sequence sharding, can't add table")
+		return true, sg.remain <= 0, sg.remain, errors.NotSupportedf("in sequence sharding, can't add table, activeDDL: %s, sharding sequence: %s", sg.meta.GetGlobalActiveDDL(), sg.meta.GetGlobalItems())
 	}
 
 	for _, source := range sources {
@@ -162,7 +162,7 @@ func (sg *ShardingGroup) Leave(sources []string) error {
 
 	// NOTE: if group is in sequence sharding, we can't do drop (DROP DATABASE / TABLE)
 	if sg.meta.InSequenceSharding() {
-		return errors.NotSupportedf("group's sharding DDL %v is un-resolved, try drop sources %v", sg.ddls, sources)
+		return errors.NotSupportedf("in sequence sharding, try drop sources %v, activeDDL: %s, sharding sequence: %s", sources, sg.meta.GetGlobalActiveDDL(), sg.meta.GetGlobalItems())
 	}
 
 	for _, source := range sources {

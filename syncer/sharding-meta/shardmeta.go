@@ -79,6 +79,7 @@ func (seq *ShardingSequence) String() string {
 
 // ShardingMeta stores sharding ddl sequence
 // including global sequence and each source's own sequence
+// NOTE: sharding meta is not thread safe, it must be used in thread safe context
 type ShardingMeta struct {
 	activeIdx int                          // the first unsynced DDL index
 	global    *ShardingSequence            // merged sharding sequence of all source tables
@@ -176,6 +177,19 @@ func (meta *ShardingMeta) AddItem(item *DDLItem) (active bool, err error) {
 	}
 
 	return index == meta.activeIdx, nil
+}
+
+// GetGlobalActiveDDL returns activeDDL in global sequence
+func (meta *ShardingMeta) GetGlobalActiveDDL() *DDLItem {
+	if meta.activeIdx < len(meta.global.Items) {
+		return meta.global.Items[meta.activeIdx]
+	}
+	return nil
+}
+
+// GetGlobalItems returns global DDLItems
+func (meta *ShardingMeta) GetGlobalItems() []*DDLItem {
+	return meta.global.Items
 }
 
 // GetActiveDDLItem returns the source table's active DDLItem

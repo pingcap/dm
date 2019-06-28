@@ -70,6 +70,8 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 		}
 	}
 
+	c.Assert(meta.GetGlobalItems(), check.DeepEquals, []*DDLItem{items[0], items[1], items[2]})
+	c.Assert(meta.GetGlobalActiveDDL(), check.DeepEquals, items[0])
 	c.Assert(meta.GetActiveDDLItem(table1), check.DeepEquals, items[0])
 	c.Assert(meta.GetActiveDDLItem(table2), check.DeepEquals, items[3])
 	c.Assert(meta.GetActiveDDLItem(table3), check.DeepEquals, items[6])
@@ -81,6 +83,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	// find synced in shrading group, and call ShardingMeta.ResolveShardingDDL
 	c.Assert(meta.ResolveShardingDDL(), check.IsFalse)
 
+	c.Assert(meta.GetGlobalActiveDDL(), check.DeepEquals, items[1])
 	c.Assert(meta.GetActiveDDLItem(table1), check.DeepEquals, items[1])
 	c.Assert(meta.GetActiveDDLItem(table2), check.DeepEquals, items[4])
 	c.Assert(meta.GetActiveDDLItem(table3), check.IsNil)
@@ -114,6 +117,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 		}
 	}
 
+	c.Assert(meta.GetGlobalActiveDDL(), check.DeepEquals, items[1])
 	c.Assert(meta.GetActiveDDLItem(table1), check.DeepEquals, items[1])
 	c.Assert(meta.GetActiveDDLItem(table2), check.DeepEquals, items[4])
 	c.Assert(meta.GetActiveDDLItem(table3), check.DeepEquals, items[7])
@@ -125,6 +129,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	// find synced in shrading group, and call ShardingMeta.ResolveShardingDDL
 	c.Assert(meta.ResolveShardingDDL(), check.IsFalse)
 
+	c.Assert(meta.GetGlobalActiveDDL(), check.DeepEquals, items[2])
 	c.Assert(meta.GetActiveDDLItem(table1), check.DeepEquals, items[2])
 	c.Assert(meta.GetActiveDDLItem(table2), check.DeepEquals, items[5])
 	c.Assert(meta.GetActiveDDLItem(table3), check.IsNil)
@@ -157,6 +162,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 			c.Assert(active, check.IsFalse)
 		}
 	}
+	c.Assert(meta.GetGlobalActiveDDL(), check.DeepEquals, items[2])
 	c.Assert(meta.GetActiveDDLItem(table1), check.DeepEquals, items[2])
 	c.Assert(meta.GetActiveDDLItem(table2), check.DeepEquals, items[5])
 	c.Assert(meta.GetActiveDDLItem(table3), check.DeepEquals, items[8])
@@ -168,6 +174,7 @@ func (t *testShardMetaSuite) TestShardingMeta(c *check.C) {
 	// find synced in shrading group, and call ShardingMeta.ResolveShardingDDL
 	c.Assert(meta.ResolveShardingDDL(), check.IsTrue)
 
+	c.Assert(meta.GetGlobalActiveDDL(), check.IsNil)
 	c.Assert(meta.GetActiveDDLItem(table1), check.IsNil)
 	c.Assert(meta.GetActiveDDLItem(table2), check.IsNil)
 	c.Assert(meta.GetActiveDDLItem(table3), check.IsNil)
