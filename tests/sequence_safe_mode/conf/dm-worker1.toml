@@ -1,0 +1,21 @@
+# Worker Configuration.
+
+server-id = 101
+source-id = "mysql-replica-01"
+flavor = "mysql"
+meta-file = "relay.meta"
+enable-gtid = false
+relay-binlog-name = ""
+relay-binlog-gtid = ""
+
+[from]
+host = "127.0.0.1"
+user = "root"
+password = ""
+port = 3306
+
+[tracer]
+enable = true
+tracer-addr = "127.0.0.1:8264"
+batch-size = 1
+checksum = true
