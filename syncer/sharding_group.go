@@ -516,7 +516,7 @@ func (k *ShardingGroupKeeper) TrySync(
 	return true, group, synced, active, remain, errors.Trace(err)
 }
 
-// CheckSyncing checks whether the source is in sharding syncing
+// InSyncing checks whether the source is in sharding syncing
 func (k *ShardingGroupKeeper) InSyncing(targetSchema, targetTable, source string, pos mysql.Position) bool {
 	group := k.Group(targetSchema, targetTable)
 	if group == nil {
