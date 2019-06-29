@@ -23,6 +23,8 @@ import (
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
+
+	"go.uber.org/zap"
 )
 
 func TestRunMain(t *testing.T) {
