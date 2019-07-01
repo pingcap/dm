@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/prometheus/common/log"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
@@ -61,7 +62,7 @@ func migrateRelayFunc(cmd *cobra.Command, _ []string) {
 	})
 
 	if err != nil {
-		log.Infof("can not migrate relay config:\n%v", errors.ErrorStack(err))
+		log.L().Error("can not migrate relay", zap.Error(err))
 		return
 	}
 
