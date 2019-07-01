@@ -14,7 +14,7 @@ All notable changes to this project will be documented in this file.
 - Support skipping pre-check items when starting tasks [#65](https://github.com/pingcap/dm/pull/65)
 - Support case-insensitive binlog event type in Binlog Event Filter rules [#188](https://github.com/pingcap/dm/pull/188)
 - Optimize relay log mechanism to improve compatibility with upstream MySQL/MariaDB [#92](https://github.com/pingcap/dm/pull/92) [#108](https://github.com/pingcap/dm/pull/108) [#117](https://github.com/pingcap/dm/pull/117) [#140](https://github.com/pingcap/dm/pull/140) [#171](https://github.com/pingcap/dm/pull/171)
-- Optimize RCP framework to limit the concurrency between DM-master and DM-worker [#157](https://github.com/pingcap/dm/pull/157)
+- Optimize RPC framework to limit the concurrency between DM-master and DM-worker [#157](https://github.com/pingcap/dm/pull/157)
 - Redirect the log of mydumper into the log of DM-worker [#93](https://github.com/pingcap/dm/pull/93)
 - Support using `--print-sample-config` command flag to show the sample config of DM-worker and DM-master [#28](https://github.com/pingcap/dm/pull/28)
 - Support showing the status of sharding DDL replication in the Grafana dashboard and optimize the dashboard [#96](https://github.com/pingcap/dm/pull/96) [#101](https://github.com/pingcap/dm/pull/101) [#120](https://github.com/pingcap/dm/pull/120)
