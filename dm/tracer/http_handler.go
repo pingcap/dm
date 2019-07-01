@@ -74,7 +74,7 @@ func writeData(w http.ResponseWriter, data interface{}) {
 		writeInternalServerError(w, err)
 		return
 	}
-	log.L().Debug("write data", zap.ByteString("writeData json bytes", js))
+	log.L().Debug("write data", zap.ByteString("request data", js))
 	w.Header().Set(headerContentType, contentTypeJSON)
 	w.WriteHeader(http.StatusOK)
 	_, err = w.Write(js)
