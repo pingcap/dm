@@ -19,9 +19,8 @@ import (
 	"strconv"
 
 	"github.com/pingcap/errors"
+	
 	"go.uber.org/zap"
-
-	"github.com/pingcap/dm/pkg/log"
 )
 
 const (
@@ -79,7 +78,7 @@ func writeData(w http.ResponseWriter, data interface{}) {
 	w.WriteHeader(http.StatusOK)
 	_, err = w.Write(js)
 	if err != nil {
-		log.L().Error("fail to write data", zap.Error(err))
+		logger.Error("fail to write data", zap.Error(err))
 	}
 }
 
