@@ -21,7 +21,7 @@ All notable changes to this project will be documented in this file.
 - Support setting the `max_allowed_packet` parameter for the database connection to the upstream and downstream [#99](https://github.com/pingcap/dm/pull/99) 
 - Support using `unsafe_cleanup` in DM Ansible to clean components of DM cluster [#128](https://github.com/pingcap/dm/pull/128)
 - Fix the wrong flush for checkpoint when existing multiple sharding groups [#124](https://github.com/pingcap/dm/pull/124)
-- Fix the wrong progress when loading dumped files [#89](https://github.com/pingcap/dm/pull/89)
+- Fix the wrong progress status when loading dumped files [#89](https://github.com/pingcap/dm/pull/89)
 - Greatly improve the test to ensure correctness
 - Fix many other bugs that don't affect correctness
 
