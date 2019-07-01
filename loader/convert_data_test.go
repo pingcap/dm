@@ -14,6 +14,7 @@
 package loader
 
 import (
+	tcontext "github.com/pingcap/dm/pkg/context"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 
 	. "github.com/pingcap/check"
@@ -163,7 +164,7 @@ func (t *testConvertDataSuite) TestParseTable(c *C) {
 	r, err := router.NewTableRouter(false, rules)
 	c.Assert(err, IsNil)
 
-	tableInfo, err := parseTable(r, "test1", "t2", "./dumpfile/test1.t2-schema.sql")
+	tableInfo, err := parseTable(tcontext.Background(), r, "test1", "t2", "./dumpfile/test1.t2-schema.sql")
 	c.Assert(err, IsNil)
 	c.Assert(tableInfo, DeepEquals, expectedTableInfo)
 }
@@ -191,7 +192,7 @@ func (t *testConvertDataSuite) TestParseTableWithGeneratedColumn(c *C) {
 	r, err := router.NewTableRouter(false, rules)
 	c.Assert(err, IsNil)
 
-	tableInfo, err := parseTable(r, "test1", "t3", "./dumpfile/test1.t3-schema.sql")
+	tableInfo, err := parseTable(tcontext.Background(), r, "test1", "t3", "./dumpfile/test1.t3-schema.sql")
 	c.Assert(err, IsNil)
 	c.Assert(tableInfo, DeepEquals, expectedTableInfo)
 }

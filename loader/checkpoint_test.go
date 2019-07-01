@@ -20,6 +20,7 @@ import (
 	. "github.com/pingcap/check"
 
 	"github.com/pingcap/dm/dm/config"
+	tcontext "github.com/pingcap/dm/pkg/context"
 )
 
 var _ = Suite(&testCheckPointSuite{})
@@ -70,7 +71,8 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 	}
 
 	id := "test_for_db"
-	cp, err := newRemoteCheckPoint(t.cfg, id)
+	tctx := tcontext.Background()
+	cp, err := newRemoteCheckPoint(tctx, t.cfg, id)
 	c.Assert(err, IsNil)
 	defer cp.Close()
 

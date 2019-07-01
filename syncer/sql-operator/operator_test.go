@@ -20,6 +20,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/pb"
+	tcontext "github.com/pingcap/dm/pkg/context"
 )
 
 var _ = Suite(&testOperatorSuite{})
@@ -42,22 +43,24 @@ func (o *testOperatorSuite) TestOperatorSet(c *C) {
 	}
 	sql := "ALTER TABLE `db1`.`tbl1` ADD COLUMN col1 INT"
 
+	tctx := tcontext.Background()
+
 	h := NewHolder()
 
 	// nil request
-	err := h.Set(nil)
+	err := h.Set(tctx, nil)
 	c.Assert(err, NotNil)
 
 	// not supported op
-	err = h.Set(&pb.HandleSubTaskSQLsRequest{Op: pb.SQLOp_INJECT})
+	err = h.Set(tctx, &pb.HandleSubTaskSQLsRequest{Op: pb.SQLOp_INJECT})
 	c.Assert(err, NotNil)
 
 	// none of binlog-pos, sql-pattern set
-	err = h.Set(&pb.HandleSubTaskSQLsRequest{Op: pb.SQLOp_SKIP})
+	err = h.Set(tctx, &pb.HandleSubTaskSQLsRequest{Op: pb.SQLOp_SKIP})
 	c.Assert(err, NotNil)
 
 	// both binlog-pos, sql-pattern set
-	err = h.Set(&pb.HandleSubTaskSQLsRequest{
+	err = h.Set(tctx, &pb.HandleSubTaskSQLsRequest{
 		Op:         pb.SQLOp_SKIP,
 		BinlogPos:  reqPos.BinlogPos,
 		SqlPattern: reqPattern.SqlPattern,
@@ -65,7 +68,7 @@ func (o *testOperatorSuite) TestOperatorSet(c *C) {
 	c.Assert(err, NotNil)
 
 	// no operator set, apply got nothing
-	applied, args, err := h.Apply(mysql.Position{}, []string{sql})
+	applied, args, err := h.Apply(tctx, mysql.Position{}, []string{sql})
 	c.Assert(err, IsNil)
 	c.Assert(applied, IsFalse)
 	c.Assert(args, IsNil)
@@ -94,30 +97,31 @@ func (o *testOperatorSuite) TestBinlogPos(c *C) {
 		},
 	}
 
+	tctx := tcontext.Background()
 	h := NewHolder()
 
 	// invalid binlog-pos
-	err := h.Set(&pb.HandleSubTaskSQLsRequest{Op: pb.SQLOp_SKIP, BinlogPos: "invalid-binlog-pos.123"})
+	err := h.Set(tctx, &pb.HandleSubTaskSQLsRequest{Op: pb.SQLOp_SKIP, BinlogPos: "invalid-binlog-pos.123"})
 	c.Assert(err, NotNil)
 
 	// no operator set, mismatch
-	applied, args, err := h.Apply(cases[0].pos, nil)
+	applied, args, err := h.Apply(tctx, cases[0].pos, nil)
 	c.Assert(err, IsNil)
 	c.Assert(applied, IsFalse)
 	c.Assert(args, IsNil) // mismatch, no args used
 
 	// set skip operator
-	err = h.Set(cases[0].req)
+	err = h.Set(tctx, cases[0].req)
 	c.Assert(err, IsNil)
 
 	// binlog-pos mismatch
-	applied, args, err = h.Apply(mysql.Position{}, nil)
+	applied, args, err = h.Apply(tctx, mysql.Position{}, nil)
 	c.Assert(err, IsNil)
 	c.Assert(applied, IsFalse)
 	c.Assert(args, IsNil)
 
 	// matched
-	applied, args, err = h.Apply(cases[0].pos, nil)
+	applied, args, err = h.Apply(tctx, cases[0].pos, nil)
 	c.Assert(err, IsNil)
 	c.Assert(applied, IsTrue)
 	c.Assert(args, IsNil) // for skip, no args used
@@ -125,18 +129,18 @@ func (o *testOperatorSuite) TestBinlogPos(c *C) {
 	// op replace, multi operators
 	for _, cs := range cases {
 		cs.req.Op = pb.SQLOp_REPLACE
-		err = h.Set(cs.req)
+		err = h.Set(tctx, cs.req)
 		c.Assert(err, IsNil)
 	}
 	for _, cs := range cases {
-		applied, args, err = h.Apply(cs.pos, nil)
+		applied, args, err = h.Apply(tctx, cs.pos, nil)
 		c.Assert(err, IsNil)
 		c.Assert(applied, IsTrue)
 		c.Assert(args, DeepEquals, cs.req.Args)
 	}
 
 	// all operators applied, match nothing
-	applied, args, err = h.Apply(cases[0].pos, nil)
+	applied, args, err = h.Apply(tctx, cases[0].pos, nil)
 	c.Assert(err, IsNil)
 	c.Assert(applied, IsFalse)
 	c.Assert(args, IsNil)
@@ -166,30 +170,31 @@ func (o *testOperatorSuite) TestSQLPattern(c *C) {
 	}
 	emptyPos := mysql.Position{}
 
+	tctx := tcontext.Background()
 	h := NewHolder()
 
 	// invalid sql-pattern
-	err := h.Set(&pb.HandleSubTaskSQLsRequest{Op: pb.SQLOp_SKIP, SqlPattern: "~(invalid-regexp"})
+	err := h.Set(tctx, &pb.HandleSubTaskSQLsRequest{Op: pb.SQLOp_SKIP, SqlPattern: "~(invalid-regexp"})
 	c.Assert(err, NotNil)
 
 	// no operator set, mismatch
-	applied, args, err := h.Apply(emptyPos, cases[0].sqls)
+	applied, args, err := h.Apply(tctx, emptyPos, cases[0].sqls)
 	c.Assert(err, IsNil)
 	c.Assert(applied, IsFalse)
 	c.Assert(args, IsNil) // mismatch, no args used
 
 	// set skip operator
-	err = h.Set(cases[0].req)
+	err = h.Set(tctx, cases[0].req)
 	c.Assert(err, IsNil)
 
 	// sql-pattern mismatch
-	applied, args, err = h.Apply(emptyPos, []string{"INSERT INTO `db1`.`tbl1` VALUES (1, 2)"})
+	applied, args, err = h.Apply(tctx, emptyPos, []string{"INSERT INTO `db1`.`tbl1` VALUES (1, 2)"})
 	c.Assert(err, IsNil)
 	c.Assert(applied, IsFalse)
 	c.Assert(args, IsNil)
 
 	// matched
-	applied, args, err = h.Apply(emptyPos, cases[0].sqls)
+	applied, args, err = h.Apply(tctx, emptyPos, cases[0].sqls)
 	c.Assert(err, IsNil)
 	c.Assert(applied, IsTrue)
 	c.Assert(args, IsNil) // for skip, no args used
@@ -197,18 +202,18 @@ func (o *testOperatorSuite) TestSQLPattern(c *C) {
 	// op replace, multi operators
 	for _, cs := range cases {
 		cs.req.Op = pb.SQLOp_REPLACE
-		err = h.Set(cs.req)
+		err = h.Set(tctx, cs.req)
 		c.Assert(err, IsNil)
 	}
 	for _, cs := range cases {
-		applied, args, err = h.Apply(emptyPos, cs.sqls)
+		applied, args, err = h.Apply(tctx, emptyPos, cs.sqls)
 		c.Assert(err, IsNil)
 		c.Assert(applied, IsTrue)
 		c.Assert(args, DeepEquals, cs.req.Args)
 	}
 
 	// all operators applied, match nothing
-	applied, args, err = h.Apply(emptyPos, cases[0].sqls)
+	applied, args, err = h.Apply(tctx, emptyPos, cases[0].sqls)
 	c.Assert(err, IsNil)
 	c.Assert(applied, IsFalse)
 	c.Assert(args, IsNil)
