@@ -28,9 +28,6 @@ import (
 )
 
 var (
-	// logger writes log start with `[component=tracer]`
-	logger log.Logger
-
 	uploadInterval = 1 * time.Minute
 )
 
