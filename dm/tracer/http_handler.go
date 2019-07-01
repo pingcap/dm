@@ -18,9 +18,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/pingcap/errors"
-
 	"go.uber.org/zap"
+
+	"github.com/pingcap/errors"
 )
 
 const (

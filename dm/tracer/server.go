@@ -20,8 +20,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
 	"go.uber.org/zap"
@@ -29,7 +27,9 @@ import (
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/tracing"
+	"github.com/pingcap/errors"
 )
 
 var (
