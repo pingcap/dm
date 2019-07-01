@@ -35,9 +35,6 @@ import (
 )
 
 var (
-	// testLogger writes log start with `[component=test-server]`
-	testLogger log.Logger
-
 	cmuxReadTimeout = 10 * time.Second
 )
 
@@ -99,11 +96,11 @@ func (s *MockServer) Start() error {
 	go func() {
 		err2 := s.svr.Serve(grpcL)
 		if err2 != nil && !common.IsErrNetClosing(err2) && err2 != cmux.ErrListenerClosed {
-			testLogger.Error("gRPC server return with error", log.ShortError(err2))
+			log.L().Error("gRPC server return with error", log.ShortError(err2))
 		}
 	}()
 
-	testLogger.Info("listening on tracing address for gRPC API and status request", zap.String("tracing address", s.addr))
+	log.L().Info("listening on tracing address for gRPC API and status request", zap.String("tracing address", s.addr))
 	err = m.Serve()
 	if err != nil && common.IsErrNetClosing(err) {
 		err = nil
@@ -121,7 +118,7 @@ func (s *MockServer) Close() {
 
 	err := s.rootLis.Close()
 	if err != nil && !common.IsErrNetClosing(err) {
-		testLogger.Error("close net listener with error", log.ShortError(err))
+		log.L().Error("close net listener with error", log.ShortError(err))
 	}
 	if s.svr != nil {
 		s.svr.Stop()

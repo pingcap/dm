@@ -63,18 +63,18 @@ func writeError(w http.ResponseWriter, statusCode int, err error) {
 	w.WriteHeader(statusCode)
 	_, err = w.Write([]byte(err.Error()))
 	if err != nil {
-		log.L().Error("write error", zap.Error(err))
+		logger.Error("write error", zap.Error(err))
 	}
 }
 
 func writeData(w http.ResponseWriter, data interface{}) {
 	js, err := json.MarshalIndent(data, "", " ")
 	if err != nil {
-		logger.Error("invalid json data: %v, error: %s", data, err)
+		logger.Error("invalid json data",  zap.Reflect("data", data), zap.Error(err))
 		writeInternalServerError(w, err)
 		return
 	}
-	log.L().Debug("write data", zap.ByteString("request data", js))
+	logger.Debug("write data", zap.ByteString("request data", js))
 	w.Header().Set(headerContentType, contentTypeJSON)
 	w.WriteHeader(http.StatusOK)
 	_, err = w.Write(js)
