@@ -97,7 +97,7 @@ func (s *Server) Start() error {
 	}()
 	go s.startHTTPServer(httpL)
 
-	logger.Info("listening on tracer address for gRPC API and status request", zap.String("tracer address", s.cfg.TracerAddr))
+	logger.Info("listening on tracer address for gRPC API and status request", zap.String("address", s.cfg.TracerAddr))
 	err = m.Serve()
 	if err != nil && common.IsErrNetClosing(err) {
 		err = nil
