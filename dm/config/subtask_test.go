@@ -49,11 +49,12 @@ func (t *testConfig) TestSubTask(c *C) {
 	c.Assert(clone2, DeepEquals, clone1)
 
 	cfg.From.Password = "xxx"
-	clone3, err := cfg.DecryptPassword()
+	_, err = cfg.DecryptPassword()
 	c.Assert(err, NotNil)
 
 	cfg.From.Password = ""
-	clone3, err = cfg.DecryptPassword()
+	clone3, err := cfg.DecryptPassword()
+	c.Assert(err, IsNil)
 	c.Assert(clone3, DeepEquals, cfg)
 
 	err = cfg.Adjust()

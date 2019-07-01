@@ -25,6 +25,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -33,14 +34,6 @@ import (
 var (
 	ErrReaderRunning          = errors.New("binlog reader is already running")
 	ErrBinlogFileNotSpecified = errors.New("binlog file must be specified")
-
-	// in order to differ binlog pos from multi (switched) masters, we added a UUID-suffix field into binlogPos.Name
-	// and we also need support: with UUIDSuffix's pos should always > without UUIDSuffix's pos, so we can update from @without to @with automatically
-	// conversion: originalPos.NamePrefix + posUUIDSuffixSeparator + UUIDSuffix + baseSeqSeparator + originalPos.NameSuffix => convertedPos.Name
-	// UUIDSuffix is the suffix of sub relay directory name, and when new sub directory created, UUIDSuffix is incremented
-	// eg. mysql-bin.000003 in c6ae5afe-c7a3-11e8-a19d-0242ac130006.000002 => mysql-bin|000002.000003
-	// where `000002` in `c6ae5afe-c7a3-11e8-a19d-0242ac130006.000002` is the UUIDSuffix
-	posUUIDSuffixSeparator = "|"
 
 	// polling interval for watcher
 	watcherInterval = 100 * time.Millisecond
@@ -98,6 +91,7 @@ func (r *BinlogReader) StartSync(pos mysql.Position) (Streamer, error) {
 	}
 
 	// load and update UUID list
+	// NOTE: if want to support auto master-slave switching, then needing to re-load UUIDs when parsing.
 	err := r.updateUUIDs()
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -152,13 +146,13 @@ func (r *BinlogReader) parseRelay(ctx context.Context, s *LocalStreamer, pos mys
 		}
 		uuidSuffix := utils.SuffixIntToStr(suffixInt)
 
-		parsed, err2 := parseBinlogFile(nextBinlogName)
+		parsed, err2 := binlog.ParseFilename(nextBinlogName)
 		if err2 != nil {
 			return errors.Annotatef(err2, "parse binlog file name %s", nextBinlogName)
 		}
 
 		// update pos, so can switch to next sub directory
-		pos.Name = constructBinlogName(parsed, uuidSuffix)
+		pos.Name = binlog.ConstructFilenameWithUUIDSuffix(parsed, uuidSuffix)
 		pos.Pos = 4 // start from pos 4 for next sub directory / file
 		log.Infof("[streamer] switching to next realy sub directory with UUID %s and pos %s", nextUUID, pos)
 	}
@@ -166,7 +160,7 @@ func (r *BinlogReader) parseRelay(ctx context.Context, s *LocalStreamer, pos mys
 
 // parseDirAsPossible parses relay sub directory as far as possible
 func (r *BinlogReader) parseDirAsPossible(ctx context.Context, s *LocalStreamer, pos mysql.Position) (needSwitch bool, nextUUID string, nextBinlogName string, err error) {
-	currentUUID, _, realPos, err := ExtractPos(pos, r.uuids)
+	currentUUID, _, realPos, err := binlog.ExtractPos(pos, r.uuids)
 	if err != nil {
 		return false, "", "", errors.Annotatef(err, "parse relay dir with pos %v", pos)
 	}
@@ -255,7 +249,10 @@ func (r *BinlogReader) parseFileAsPossible(ctx context.Context, s *LocalStreamer
 }
 
 // parseFile parses single relay log file from specified offset
-func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLogFile string, offset int64, relayLogDir string, firstParse bool, currentUUID string, possibleLast bool) (needSwitch, needReParse bool, latestPos int64, nextUUID string, nextBinlogName string, err error) {
+func (r *BinlogReader) parseFile(
+	ctx context.Context, s *LocalStreamer, relayLogFile string, offset int64,
+	relayLogDir string, firstParse bool, currentUUID string, possibleLast bool) (
+	needSwitch, needReParse bool, latestPos int64, nextUUID string, nextBinlogName string, err error) {
 	_, suffixInt, err := utils.ParseSuffixForUUID(currentUUID)
 	if err != nil {
 		return false, false, 0, "", "", errors.Trace(err)
@@ -266,12 +263,6 @@ func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLog
 
 	onEventFunc := func(e *replication.BinlogEvent) error {
 		log.Debugf("[streamer] read event %+v", e.Header)
-		if e.Header.Flags&0x0040 != 0 {
-			// now LOG_EVENT_RELAY_LOG_F is only used for events which used to fill the gap in relay log file when switching the master server
-			log.Debugf("skip event %+v created by relay writer", e.Header)
-			return nil
-		}
-
 		r.latestServerID = e.Header.ServerID // record server_id
 
 		switch e.Header.EventType {
@@ -280,8 +271,8 @@ func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLog
 		case replication.ROTATE_EVENT:
 			// add master UUID suffix to pos.Name
 			env := e.Event.(*replication.RotateEvent)
-			parsed, _ := parseBinlogFile(string(env.NextLogName))
-			nameWithSuffix := constructBinlogName(parsed, uuidSuffix)
+			parsed, _ := binlog.ParseFilename(string(env.NextLogName))
+			nameWithSuffix := binlog.ConstructFilenameWithUUIDSuffix(parsed, uuidSuffix)
 			env.NextLogName = []byte(nameWithSuffix)
 
 			if e.Header.Timestamp != 0 && e.Header.LogPos != 0 {
@@ -291,6 +282,10 @@ func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLog
 				log.Debugf("[streamer] skip fake rotate event %+v", e.Header)
 			}
 
+			// currently, we do not switch to the next relay log file when we receive the RotateEvent,
+			// because that next relay log file may not exists at this time,
+			// and we *try* to switch to the next when `needReParse` is false.
+			// so this `currentPos` only used for log now.
 			currentPos := mysql.Position{
 				Name: string(env.NextLogName),
 				Pos:  uint32(env.Position),
@@ -326,13 +321,15 @@ func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLog
 		log.Debugf("[streamer] start parse relay log file %s from offset %d", fullPath, offset)
 	}
 
+	// use parser.ParseFile directly now, if needed we can change to use FileReader.
 	err = r.parser.ParseFile(fullPath, offset, onEventFunc)
-	if possibleLast && err != nil && strings.Contains(err.Error(), "err EOF") {
-		// NOTE: go-mysql returned err not includes caused err, but as message, ref: parser.go `parseSingleEvent`
-		log.Warnf("[streamer] parse relay log file %s from offset %d got EOF %s", fullPath, offset, errors.ErrorStack(err))
-	} else if err != nil {
-		log.Errorf("[streamer] parse relay log file %s from offset %d error %s", fullPath, offset, errors.ErrorStack(err))
-		return false, false, 0, "", "", errors.Annotatef(err, "relay log file %s", fullPath)
+	if err != nil {
+		if possibleLast && isIgnorableParseError(err) {
+			log.Warnf("[streamer] parse relay log file %s from offset %d got error %s", fullPath, offset, errors.ErrorStack(err))
+		} else {
+			log.Errorf("[streamer] parse relay log file %s from offset %d error %s", fullPath, offset, errors.ErrorStack(err))
+			return false, false, 0, "", "", errors.Annotatef(err, "relay log file %s", fullPath)
+		}
 	}
 	log.Debugf("[streamer] parse relay log file %s return with offset %d", fullPath, latestPos)
 
@@ -342,7 +339,7 @@ func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLog
 		return false, false, latestPos, "", "", nil
 	}
 
-	needSwitch, needReParse, nextUUID, nextBinlogName, err = r.needSwitchSubDir(currentUUID, fullPath, latestPos)
+	needSwitch, needReParse, nextUUID, nextBinlogName, err = needSwitchSubDir(r.cfg.RelayDir, currentUUID, fullPath, latestPos, r.uuids)
 	if err != nil {
 		return false, false, 0, "", "", errors.Trace(err)
 	} else if needReParse {
@@ -367,38 +364,6 @@ func (r *BinlogReader) parseFile(ctx context.Context, s *LocalStreamer, relayLog
 	return false, false, latestPos, "", "", nil
 }
 
-// needSwitchSubDir checks whether the reader need switch to next relay sub directory
-func (r *BinlogReader) needSwitchSubDir(currentUUID string, latestFilePath string, latestFileSize int64) (needSwitch, needReParse bool, nextUUID string, nextBinlogName string, err error) {
-	nextUUID, _ = r.getNextUUID(currentUUID)
-	if len(nextUUID) == 0 {
-		// no next sub dir exists, not need to switch
-		return false, false, "", "", nil
-	}
-
-	// try get the first binlog file in next sub directory
-	nextBinlogName, err = getFirstBinlogName(r.cfg.RelayDir, nextUUID)
-	if err != nil {
-		// NOTE: current we can not handle `errors.IsNotFound(err)` easily
-		// because creating sub directory and writing relay log file are not atomic
-		// so we let user to pause syncing before switching relay's master server
-		return false, false, "", "", errors.Trace(err)
-	}
-
-	// check the latest relay log file whether updated when checking next sub directory
-	cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
-	if err != nil {
-		return false, false, "", "", errors.Trace(err)
-	} else if cmp < 0 {
-		return false, false, "", "", errors.Errorf("file size of relay log %s become smaller", latestFilePath)
-	} else if cmp > 0 {
-		// the latest relay log file already updated, need to parse from it again (not need to switch sub directory)
-		return false, true, "", "", nil
-	}
-
-	// need to switch to next sub directory
-	return true, false, nextUUID, nextBinlogName, nil
-}
-
 // updateUUIDs re-parses UUID index file and updates UUID list
 func (r *BinlogReader) updateUUIDs() error {
 	uuids, err := utils.ParseUUIDIndex(r.indexPath)
@@ -409,17 +374,6 @@ func (r *BinlogReader) updateUUIDs() error {
 	r.uuids = uuids
 	log.Infof("[streamer] update relay UUIDs from %v to %v", oldUUIDs, uuids)
 	return nil
-}
-
-func (r *BinlogReader) getNextUUID(uuid string) (string, string) {
-	for i := len(r.uuids) - 2; i >= 0; i-- {
-		if r.uuids[i] == uuid {
-			nextUUID := r.uuids[i+1]
-			_, suffixInt, _ := utils.ParseSuffixForUUID(nextUUID)
-			return nextUUID, utils.SuffixIntToStr(suffixInt)
-		}
-	}
-	return "", ""
 }
 
 // Close closes BinlogReader.

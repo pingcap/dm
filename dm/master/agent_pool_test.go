@@ -14,6 +14,9 @@
 package master
 
 import (
+	"context"
+	"time"
+
 	. "github.com/pingcap/check"
 )
 
@@ -23,33 +26,40 @@ func (t *testMaster) TestAgentPool(c *C) {
 }
 
 func (t *testMaster) testPool(c *C) {
+	var (
+		rate  = 10
+		burst = 100
+	)
 	// test limit
-	agentlimit = 2
+	ap := NewAgentPool(&RateLimitConfig{rate: float64(rate), burst: burst})
+	go ap.Start(context.Background())
 	pc := make(chan *Agent)
 
 	go func() {
-		ap := GetAgentPool()
-		pc <- ap.Apply()
-		pc <- ap.Apply()
-		pc <- ap.Apply()
-
+		for i := 0; i < rate+burst; i++ {
+			pc <- ap.Apply(context.Background(), i)
+		}
 	}()
 
-	agent1 := <-pc
-	c.Assert(agent1.ID, Equals, 1)
-	agent2 := <-pc
-	c.Assert(agent2.ID, Equals, 2)
+	for i := 0; i < burst; i++ {
+		agent := <-pc
+		c.Assert(agent.ID, Equals, i)
+	}
 	select {
 	case <-pc:
-		c.FailNow()
+		c.Error("should not get agent now")
 	default:
 	}
 
-	GetAgentPool().Recycle(agent1)
-	agent := <-pc
-	c.Assert(agent.ID, Equals, 1)
-	GetAgentPool().Recycle(agent2)
-	GetAgentPool().Recycle(agent)
+	for i := 0; i < rate; i++ {
+		select {
+		case agent := <-pc:
+			c.Assert(agent.ID, Equals, i+burst)
+		case <-time.After(time.Millisecond * 150):
+			// add 50ms time drift here
+			c.Error("get agent timeout")
+		}
+	}
 }
 
 func (t *testMaster) testEmit(c *C) {
@@ -60,7 +70,10 @@ func (t *testMaster) testEmit(c *C) {
 		worker testWorkerType = 1
 	)
 
-	Emit(func(args ...interface{}) {
+	ap := NewAgentPool(&RateLimitConfig{rate: DefaultRate, burst: DefaultBurst})
+	go ap.Start(context.Background())
+
+	ap.Emit(context.Background(), 1, func(args ...interface{}) {
 		if len(args) != 2 {
 			c.Fatalf("args count is not 2, args %v", args)
 		}
@@ -80,6 +93,22 @@ func (t *testMaster) testEmit(c *C) {
 		if worker1 != worker {
 			c.Fatalf("args[1] is not expected worker, args[1] %v vs %v", worker1, worker)
 		}
-	}, []interface{}{id, worker}...)
+	}, func(args ...interface{}) {}, []interface{}{id, worker}...)
 
+	counter := 0
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	ap.Emit(ctx, 1, func(args ...interface{}) {
+		c.FailNow()
+	}, func(args ...interface{}) {
+		if len(args) != 1 {
+			c.Fatalf("args count is not 1, args %v", args)
+		}
+		pCounter, ok := args[0].(*int)
+		if !ok {
+			c.Fatalf("args[0] is not *int, args %+v", args)
+		}
+		*pCounter++
+	}, []interface{}{&counter}...)
+	c.Assert(counter, Equals, 1)
 }

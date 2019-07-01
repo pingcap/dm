@@ -21,8 +21,10 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
-	"github.com/pingcap/dm/dm/pb"
 	"google.golang.org/grpc"
+
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 func TestServer(t *testing.T) {
@@ -53,7 +55,7 @@ func (t *testServer) TestServer(c *C) {
 		c.Assert(err1, IsNil)
 	}()
 
-	c.Assert(waitSomething(10, func() bool {
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
 		return !s.closed.Get()
 	}), IsTrue)
 
@@ -124,7 +126,7 @@ func (t *testServer) TestServer(c *C) {
 	// close
 	s.Close()
 
-	c.Assert(waitSomething(10, func() bool {
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
 		return s.closed.Get()
 	}), IsTrue)
 
@@ -145,16 +147,4 @@ func (t *testServer) createClient(c *C) pb.WorkerClient {
 	conn, err := grpc.Dial("127.0.0.1:8262", grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	c.Assert(err, IsNil)
 	return pb.NewWorkerClient(conn)
-}
-
-func waitSomething(backoff int, fn func() bool) bool {
-	for i := 0; i < backoff; i++ {
-		if fn() {
-			return true
-		}
-
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	return false
 }
