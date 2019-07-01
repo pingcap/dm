@@ -177,6 +177,7 @@ type Syncer struct {
 func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer := new(Syncer)
 	syncer.cfg = cfg
+	syncer.tctx = tcontext.Background().WithLogger(log.With(zap.String("task", cfg.Name), zap.String("unit", "inlog replication")))
 	syncer.jobsClosed.Set(true) // not open yet
 	syncer.closed.Set(false)
 	syncer.lastBinlogSizeCount.Set(0)
@@ -194,7 +195,6 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.setTimezone()
 	syncer.addJobFunc = syncer.addJob
 
-	syncer.tctx = tcontext.Background().WithLogger(log.With(zap.String("task", cfg.Name), zap.String("unit", "inlog replication")))
 	syncer.checkpoint = NewRemoteCheckPoint(syncer.tctx, cfg, syncer.checkpointID())
 
 	syncer.syncCfg = replication.BinlogSyncerConfig{

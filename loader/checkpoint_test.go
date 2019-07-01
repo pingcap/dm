@@ -118,7 +118,7 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 	defer closeConn(conn)
 	for _, cs := range cases {
 		sql2 := cp.GenSQL(cs.filename, cs.endPos)
-		err = conn.executeSQL([]string{sql2}, true)
+		err = conn.executeSQL(tctx, []string{sql2}, true)
 		c.Assert(err, IsNil)
 	}
 

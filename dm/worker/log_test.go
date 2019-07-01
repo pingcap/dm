@@ -17,6 +17,7 @@ import (
 	. "github.com/pingcap/check"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 type testLog struct{}
@@ -73,7 +74,9 @@ func (t *testLog) TestTaskLogKey(c *C) {
 }
 
 func (t *testLog) TestTaskLog(c *C) {
-	logger := new(Logger)
+	logger := &Logger{
+		l: log.L(),
+	}
 
 	_, err := logger.Initial(nil)
 	c.Assert(err, Equals, ErrInValidHandler)
@@ -192,7 +195,9 @@ func (t *testLog) TestTaskLog(c *C) {
 }
 
 func (t *testLog) TestTaskLogGC(c *C) {
-	logger := new(Logger)
+	logger := &Logger{
+		l: log.L(),
+	}
 
 	db, _ := testSetUpDB(c)
 	defer db.Close()
