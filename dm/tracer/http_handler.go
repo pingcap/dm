@@ -79,7 +79,7 @@ func writeData(w http.ResponseWriter, data interface{}) {
 	w.WriteHeader(http.StatusOK)
 	_, err = w.Write(js)
 	if err != nil {
-		log.L().Error("write data", zap.Error(err))
+		log.L().Error("fail to write data", zap.Error(err))
 	}
 }
 
