@@ -75,7 +75,7 @@ func main() {
 		os.Exit(2)
 	}
 	s.Close() // wait until closed
-	log.L().Info("dm-master exit")
+	log.L().Info("dm-worker exit")
 
 	syncErr := log.L().Sync()
 	if syncErr != nil {
