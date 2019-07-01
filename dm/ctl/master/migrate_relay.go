@@ -19,12 +19,12 @@ import (
 	"strconv"
 
 	"github.com/pingcap/errors"
-	"github.com/prometheus/common/log"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // NewMigrateRelayCmd creates a MigrateRelay command
