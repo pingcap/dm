@@ -94,7 +94,7 @@ func (c *Config) Parse(arguments []string) error {
 func (c *Config) String() string {
 	cfg, err := json.Marshal(c)
 	if err != nil {
-		log.Errorf("[tracer] marshal config to json error %v", err)
+		logger.Error("marshal tracer config to json", log.ShortError(err))
 	}
 	return string(cfg)
 }
