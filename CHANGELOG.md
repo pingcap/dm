@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 - Support retry task on the `invalid connection` error for binlog replication [#66](https://github.com/pingcap/dm/pull/66)
 - Support generating `-schema-create.sql` files automatically for full migration [#186](https://github.com/pingcap/dm/pull/186)
 - Use [TiDB SQL Parser](https://github.com/pingcap/parser) to parse and restore DDL statements in binlog query events, and remove the `using db` statement when replicating to downstream [#54](https://github.com/pingcap/dm/pull/54)
-- Support migrate tables with generated column for full migration and binlog replication [#42](https://github.com/pingcap/dm/pull/43) [#60](https://github.com/pingcap/dm/pull/60)
+- Support migrating tables with generated column for full migration and binlog replication [#42](https://github.com/pingcap/dm/pull/43) [#60](https://github.com/pingcap/dm/pull/60)
 - Support appending the task name as a suffix to the dumped data directory (`dir` in the task configuration file) for full migration [#100](https://github.com/pingcap/dm/pull/100)
 - Support resuming tasks automatically after the DM-worker process restarted [#88](https://github.com/pingcap/dm/pull/88) [#116](https://github.com/pingcap/dm/pull/116)
 - Support skipping pre-check items when starting tasks [#65](https://github.com/pingcap/dm/pull/65)
@@ -20,7 +20,7 @@ All notable changes to this project will be documented in this file.
 - Support showing the status of sharding DDL replication in the Grafana dashboard and optimize the dashboard [#96](https://github.com/pingcap/dm/pull/96) [#101](https://github.com/pingcap/dm/pull/101) [#120](https://github.com/pingcap/dm/pull/120)
 - Support setting the `max_allowed_packet` parameter for the database connection to the upstream and downstream [#99](https://github.com/pingcap/dm/pull/99) 
 - Support using `unsafe_cleanup` in DM Ansible to clean components of DM cluster [#128](https://github.com/pingcap/dm/pull/128)
-- Fix flush checkpoint wrongly when existing multiple sharding groups [#124](https://github.com/pingcap/dm/pull/124)
+- Fix flushing checkpoint wrongly when existing multiple sharding groups [#124](https://github.com/pingcap/dm/pull/124)
 - Fix the wrong progress status when loading dumped files [#89](https://github.com/pingcap/dm/pull/89)
 - Greatly improve the test to ensure correctness
 - Fix many other bugs that don't affect correctness
