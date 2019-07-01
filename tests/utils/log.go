@@ -22,6 +22,6 @@ import (
 )
 
 func ExitWithError(err error) {
-	log.L().Error(zap.Error(err))
+	log.L().Error("", zap.Error(err))
 	os.Exit(1)
 }

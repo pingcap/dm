@@ -2060,6 +2060,7 @@ func (s *Syncer) Close() {
 // maybe we can refine the workflow more clear
 func (s *Syncer) stopSync() {
 	<-s.done // wait Run to return
+	close(s.runFatalChan)
 	s.closeJobChans()
 	s.wg.Wait() // wait job workers to return
 
