@@ -20,20 +20,28 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/tracing"
+	"github.com/pingcap/errors"
 )
 
 var (
+	// logger writes log start with `[component=server]`
+	logger log.Logger
+
 	cmuxReadTimeout = 10 * time.Second
 )
+
+func init() {
+	logger = log.With(zap.String("component", "server"))
+}
 
 // Server accepts tracing RPC requests and sends RPC responses back
 type Server struct {
@@ -84,12 +92,12 @@ func (s *Server) Start() error {
 	go func() {
 		err2 := s.svr.Serve(grpcL)
 		if err2 != nil && !common.IsErrNetClosing(err2) && err2 != cmux.ErrListenerClosed {
-			log.Errorf("[server] gRPC server return with error %s", err2.Error())
+			logger.Error("gRPC server return with error", log.ShortError(err2))
 		}
 	}()
 	go s.startHTTPServer(httpL)
 
-	log.Infof("[server] listening on %v for gRPC API and status request", s.cfg.TracerAddr)
+	logger.Info("listening on tracer address for gRPC API and status request", zap.String("address", s.cfg.TracerAddr))
 	err = m.Serve()
 	if err != nil && common.IsErrNetClosing(err) {
 		err = nil
@@ -107,7 +115,7 @@ func (s *Server) Close() {
 
 	err := s.rootLis.Close()
 	if err != nil && !common.IsErrNetClosing(err) {
-		log.Errorf("[server] close net listener with error %s", err.Error())
+		logger.Error("close net listener with error", log.ShortError(err))
 	}
 	if s.svr != nil {
 		// GracefulStop can not cancel active stream RPCs
@@ -121,7 +129,7 @@ func (s *Server) Close() {
 
 // GetTSO implements TracerServer.GetTSO
 func (s *Server) GetTSO(ctx context.Context, req *pb.GetTSORequest) (*pb.GetTSOResponse, error) {
-	log.Debugf("[server] receives GetTSO request %+v", req)
+	logger.Debug("receives GetTSO request", zap.Stringer("request", req))
 	resp := &pb.GetTSOResponse{
 		Result: true,
 		Ts:     time.Now().UnixNano(),
@@ -131,7 +139,7 @@ func (s *Server) GetTSO(ctx context.Context, req *pb.GetTSORequest) (*pb.GetTSOR
 
 // UploadSyncerBinlogEvent implements TracerServer.UploadSyncerBinlogEvent
 func (s *Server) UploadSyncerBinlogEvent(ctx context.Context, req *pb.UploadSyncerBinlogEventRequest) (*pb.CommonUploadResponse, error) {
-	log.Debugf("[server] receives UploadSyncerBinlogEvent request %+v", req)
+	logger.Debug("receives UploadSyncerBinlogEvent request", zap.Stringer("request", req))
 	for _, e := range req.Events {
 		err := s.eventStore.addNewEvent(&TraceEvent{
 			Type:  pb.TraceType_BinlogEvent,
@@ -149,7 +157,7 @@ func (s *Server) UploadSyncerBinlogEvent(ctx context.Context, req *pb.UploadSync
 
 // UploadSyncerJobEvent implements TracerServer.UploadSyncerJobEvent
 func (s *Server) UploadSyncerJobEvent(ctx context.Context, req *pb.UploadSyncerJobEventRequest) (*pb.CommonUploadResponse, error) {
-	log.Debugf("[server] receives UploadSyncerJobEvent request %+v", req)
+	logger.Debug("receives UploadSyncerJobEvent request", zap.Stringer("request", req))
 	for _, e := range req.Events {
 		err := s.eventStore.addNewEvent(&TraceEvent{
 			Type:  pb.TraceType_JobEvent,
