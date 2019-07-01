@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [1.0-rc.1] 2019-07-01
 
 - Remove the restriction of "the next shard DDL statement cannot be executed unless the current shard DDL operation is completely finished in shard merge scene for binlog replication" [#177](https://github.com/pingcap/dm/pull/177)
-- Support auto retry when meeting the error of `invalid connection` for incremental migration [#66](https://github.com/pingcap/dm/pull/66)
+- Support retry task on the `invalid connection` error for binlog replication [#66](https://github.com/pingcap/dm/pull/66)
 - Support generating `-schema-create.sql` files automatically for full migration [#186](https://github.com/pingcap/dm/pull/186)
 - Use [TiDB SQL Parser](https://github.com/pingcap/parser) to parse and restore DDL statements in binlog query events, and remove the `using` statement when replicating to downstream [#54](https://github.com/pingcap/dm/pull/54)
 - Support migrate tables with generated column for full and incremental migration [#42](https://github.com/pingcap/dm/pull/43) [#60](https://github.com/pingcap/dm/pull/60)
