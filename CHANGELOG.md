@@ -23,7 +23,7 @@ All notable changes to this project will be documented in this file.
 - Fix the wrong flush for checkpoint when existing multiple sharding groups [#124](https://github.com/pingcap/dm/pull/124)
 - Fix the wrong progress when loading dumped files [#89](https://github.com/pingcap/dm/pull/89)
 - Improve the test framework and test cases greatly and improve the correctness significantly
-- Fix multiple other bugs that don't affect correctness
+- Fix many other bugs that don't affect correctness
 
 ## [1.0-alpha] 2019-01-18
 
