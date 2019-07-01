@@ -27,10 +27,10 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer"
+
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
-
 	// hack for glide update, remove it later
 	_ "github.com/pingcap/tidb-tools/pkg/check"
 	_ "github.com/pingcap/tidb-tools/pkg/dbutil"

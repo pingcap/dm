@@ -23,6 +23,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/dm/unit"
+	fr "github.com/pingcap/dm/pkg/func-rollback"
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
+
 	_ "github.com/go-sql-driver/mysql" // for mysql
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/check"
@@ -32,13 +39,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
-
-	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/dm/unit"
-	fr "github.com/pingcap/dm/pkg/func-rollback"
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/utils"
 )
 
 type mysqlInstance struct {

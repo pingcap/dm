@@ -17,6 +17,7 @@ import (
 	"sync"
 
 	"github.com/pingcap/dm/pkg/utils"
+
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 )

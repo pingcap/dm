@@ -22,7 +22,6 @@ import (
 	"time"
 
 	tc "github.com/pingcap/check"
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/sync2"
@@ -32,6 +31,7 @@ import (
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 var (

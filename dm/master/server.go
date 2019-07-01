@@ -23,12 +23,10 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
-
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/checker"
@@ -37,6 +35,7 @@ import (
 	"github.com/pingcap/dm/dm/master/sql-operator"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/tracing"
 )
 

@@ -18,9 +18,10 @@ import (
 	"os"
 	"path"
 
-	. "github.com/pingcap/check"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+
+	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 )

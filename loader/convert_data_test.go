@@ -14,8 +14,9 @@
 package loader
 
 import (
-	. "github.com/pingcap/check"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
+
+	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 )
 

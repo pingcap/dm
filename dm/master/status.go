@@ -18,9 +18,8 @@ import (
 	"net/http"
 	"net/http/pprof"
 
-	"github.com/pingcap/dm/pkg/log"
-
 	"github.com/pingcap/dm/dm/common"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
 

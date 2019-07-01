@@ -17,15 +17,15 @@ import (
 	"context"
 	"sync"
 
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/relay/purger"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/relay"
+	"github.com/pingcap/dm/relay/purger"
 )
 
 // RelayHolder for relay unit

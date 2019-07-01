@@ -18,6 +18,7 @@ import (
 	"errors"
 
 	"github.com/pingcap/dm/pkg/log"
+
 	"github.com/siddontang/go-mysql/replication"
 )
 

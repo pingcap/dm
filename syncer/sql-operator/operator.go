@@ -19,14 +19,14 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/command"
 	"github.com/pingcap/dm/dm/pb"
+	tcontext "github.com/pingcap/dm/pkg/context"
 )
 
 // operator contains an operation for specified binlog pos or SQL pattern
@@ -38,15 +38,14 @@ type operator struct {
 	reg     *regexp.Regexp
 	op      pb.SQLOp
 	args    []string // if op == SQLOp_REPLACE, it has arguments
-	logger  log.Logger
 }
 
 // newOperator creates a new Operator with a random UUID
-func newOperator(logger log.Logger, pos *mysql.Position, pattern string, reg *regexp.Regexp, op pb.SQLOp, args []string) *operator {
+func newOperator(tctx *tcontext.Context, pos *mysql.Position, pattern string, reg *regexp.Regexp, op pb.SQLOp, args []string) *operator {
 	switch op {
 	case pb.SQLOp_SKIP:
 		if len(args) > 0 {
-			logger.Warn("ignore operation", zap.Stringer("operation", op), zap.Strings("arguments", args))
+			tctx.L().Warn("ignore operation", zap.Stringer("operation", op), zap.Strings("arguments", args))
 			args = nil
 		}
 	}
@@ -58,7 +57,6 @@ func newOperator(logger log.Logger, pos *mysql.Position, pattern string, reg *re
 		reg:     reg,
 		op:      op,
 		args:    args,
-		logger:  logger,
 	}
 }
 
@@ -93,20 +91,17 @@ func (o *operator) String() string {
 type Holder struct {
 	mu        sync.Mutex
 	operators map[string]*operator
-
-	logger log.Logger
 }
 
 // NewHolder creates a new Holder
-func NewHolder(logger log.Logger) *Holder {
+func NewHolder() *Holder {
 	return &Holder{
 		operators: make(map[string]*operator),
-		logger:    logger,
 	}
 }
 
 // Set sets an operator according request
-func (h *Holder) Set(req *pb.HandleSubTaskSQLsRequest) error {
+func (h *Holder) Set(tctx *tcontext.Context, req *pb.HandleSubTaskSQLsRequest) error {
 	if req == nil {
 		return errors.NotValidf("nil request")
 	}
@@ -131,18 +126,18 @@ func (h *Holder) Set(req *pb.HandleSubTaskSQLsRequest) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	oper := newOperator(h.logger, binlogPos, req.SqlPattern, sqlReg, req.Op, req.Args)
+	oper := newOperator(tctx, binlogPos, req.SqlPattern, sqlReg, req.Op, req.Args)
 	prev, ok := h.operators[key]
 	if ok {
-		h.logger.Warn("overwrite operator", zap.Stringer("old operator", prev), zap.Stringer("new operator", oper))
+		tctx.L().Warn("overwrite operator", zap.Stringer("old operator", prev), zap.Stringer("new operator", oper))
 	}
 	h.operators[key] = oper
-	h.logger.Info("set a new operator", zap.Stringer("new operator", oper))
+	tctx.L().Info("set a new operator", zap.Stringer("new operator", oper))
 	return nil
 }
 
 // Apply tries to apply operator by pos or SQLs, returns applied, args, error
-func (h *Holder) Apply(pos mysql.Position, sqls []string) (bool, []string, error) {
+func (h *Holder) Apply(tctx *tcontext.Context, pos mysql.Position, sqls []string) (bool, []string, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -174,6 +169,6 @@ func (h *Holder) Apply(pos mysql.Position, sqls []string) (bool, []string, error
 		return false, nil, errors.Annotatef(err, "operator %s", oper)
 	}
 
-	h.logger.Info("applying operator", zap.String("chance", cause), zap.Stringer("operation", oper))
+	tctx.L().Info("applying operator", zap.String("chance", cause), zap.Stringer("operation", oper))
 	return true, args, nil
 }

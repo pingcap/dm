@@ -18,6 +18,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+
 	"github.com/pingcap/errors"
 )
 

@@ -16,13 +16,13 @@ package ctl
 import (
 	"fmt"
 
-	"go.uber.org/zap/zapcore"
-
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/ctl/master"
 	"github.com/pingcap/dm/pkg/log"
+
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap/zapcore"
 )
 
 var (

@@ -17,8 +17,9 @@ import (
 	"context"
 	"testing"
 
-	tc "github.com/pingcap/check"
 	"github.com/pingcap/dm/dm/config"
+
+	tc "github.com/pingcap/check"
 )
 
 func TestChecker(t *testing.T) {
