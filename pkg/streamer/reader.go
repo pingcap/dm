@@ -83,7 +83,7 @@ func NewBinlogReader(tctx *tcontext.Context, cfg *BinlogReaderConfig) *BinlogRea
 		parser:    parser,
 		indexPath: path.Join(cfg.RelayDir, utils.UUIDIndexFilename),
 		cancel:    cancel,
-		tctx:      tctx,
+		tctx:      newtctx,
 	}
 }
 
