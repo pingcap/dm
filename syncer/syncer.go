@@ -492,10 +492,10 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		// cancel goroutines created in s.Run
 		cancel()
 	}
-	s.closeJobChans()     // Run returned, all jobs sent, we can close s.jobs
-	s.wg.Wait()           // wait for sync goroutine to return
-	close(s.runFatalChan) // Run returned, all potential fatal sent to s.runFatalChan
-	wg.Wait()             // wait for receive all fatal from s.runFatalChan
+	s.closeJobChans()   // Run returned, all jobs sent, we can close s.jobs
+	s.wg.Wait()         // wait for sync goroutine to return
+	close(runFatalChan) // Run returned, all potential fatal sent to s.runFatalChan
+	wg.Wait()           // wait for receive all fatal from s.runFatalChan
 
 	if err != nil {
 		syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name).Inc()
