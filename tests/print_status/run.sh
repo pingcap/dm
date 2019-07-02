@@ -76,7 +76,7 @@ function check_print_status() {
     # check sync unit print status
     status_file2=$WORK_DIR/worker1/log/syncer_status.log
     #grep -oP "syncer.*\Ktotal events = [0-9]+, total tps = [0-9]+, recent tps = [0-9]+, master-binlog = .*" $WORK_DIR/worker1/log/dm-worker.log > $status_file2
-    grep -oP "\[total_events=[0-9]+\] \[total_tps=[0-9]+\] \[tps=[0-9]+\], \[master_position=.*\]" $WORK_DIR/worker1/log/dm-worker.log > $status_file2
+    grep -oP "\[total_events=[0-9]+\] \[total_tps=[0-9]+\] \[tps=[0-9]+\] \[master_position=.*\]" $WORK_DIR/worker1/log/dm-worker.log > $status_file2
     status_count2=$(wc -l $status_file2|awk '{print $1}')
     [ $status_count2 -ge 1 ]
     echo "check sync unit print status success"
