@@ -80,9 +80,11 @@ func main() {
 	syncErr := log.L().Sync()
 	if syncErr != nil {
 		fmt.Fprintln(os.Stderr, "sync log failed", syncErr)
+		log.L().Error("sync log failed", zap.Error(syncErr))
 	}
 
 	if err != nil || syncErr != nil {
+
 		os.Exit(1)
 	}
 }
