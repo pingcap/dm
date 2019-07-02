@@ -177,7 +177,7 @@ type Syncer struct {
 func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer := new(Syncer)
 	syncer.cfg = cfg
-	syncer.tctx = tcontext.Background().WithLogger(log.With(zap.String("task", cfg.Name), zap.String("unit", "inlog replication")))
+	syncer.tctx = tcontext.Background().WithLogger(log.With(zap.String("task", cfg.Name), zap.String("unit", "binlog replication")))
 	syncer.jobsClosed.Set(true) // not open yet
 	syncer.closed.Set(false)
 	syncer.lastBinlogSizeCount.Set(0)
@@ -1864,11 +1864,11 @@ func (s *Syncer) printStatus(ctx context.Context) {
 			}
 
 			s.tctx.L().Info("binlog replication status",
-				zap.Int64("total events", total),
-				zap.Int64("total tps", totalTps),
+				zap.Int64("total_events", total),
+				zap.Int64("total_tps", totalTps),
 				zap.Int64("tps", tps),
-				zap.Stringer("master position", latestMasterPos),
-				zap.Stringer("master gtid", latestmasterGTIDSet),
+				zap.Stringer("master_position", latestMasterPos),
+				zap.Stringer("master_gtid", latestmasterGTIDSet),
 				zap.Stringer("checkpoint", s.checkpoint))
 
 			s.lastCount.Set(total)
