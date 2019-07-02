@@ -40,6 +40,13 @@ var (
 	}
 	testTask2Meta  *pb.TaskMeta
 	testTask2Bytes []byte
+
+	testTask3 = &config.SubTaskConfig{
+		Name:     "task3",
+		SourceID: "replica-1",
+	}
+	testTask3Meta  *pb.TaskMeta
+	testTask3Bytes []byte
 )
 
 type testMeta struct{}
@@ -68,6 +75,16 @@ func testSetUpDB(c *C) (*leveldb.DB, string) {
 		Name:  testTask2.Name,
 		Stage: pb.Stage_New,
 		Task:  testTask2Bytes,
+	}
+
+	testTask3Str, err := testTask3.Toml()
+	c.Assert(err, IsNil)
+	testTask3Bytes = []byte(testTask3Str)
+	testTask3Meta = &pb.TaskMeta{
+		Op:    pb.TaskOp_Start,
+		Name:  testTask3.Name,
+		Stage: pb.Stage_New,
+		Task:  testTask3Bytes,
 	}
 
 	dir := c.MkDir()

@@ -27,12 +27,13 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"go.uber.org/zap"
 )
 
-// ErrInValidHandler indicates we meet an invalid Putter/Getter/Deleter
+// ErrInValidHandler indicates we meet an invalid dbOperator.
 var ErrInValidHandler = errors.New("handler is nil, please pass a leveldb.DB or leveldb.Transaction")
 
 var (
@@ -42,19 +43,14 @@ var (
 	GCInterval = time.Hour
 )
 
-// Putter is interface which has Put method
-type Putter interface {
-	Put(key, value []byte, opts *opt.WriteOptions) error
-}
-
-// Deleter is interface which has Delete method
-type Deleter interface {
-	Delete(key []byte, wo *opt.WriteOptions) error
-}
-
-// Getter is interface which has Get method
-type Getter interface {
+// dbOperator is an interface which used to do Get/Put/Delete operation on levelDB.
+// It often can be an instance of leveldb.DB or leveldb.Transaction.
+type dbOperator interface {
 	Get(key []byte, ro *opt.ReadOptions) ([]byte, error)
+	Put(key, value []byte, opts *opt.WriteOptions) error
+	Delete(key []byte, wo *opt.WriteOptions) error
+	Write(batch *leveldb.Batch, wo *opt.WriteOptions) error
+	NewIterator(slice *util.Range, ro *opt.ReadOptions) iterator.Iterator
 }
 
 // HandledPointerKey is key of HandledPointer which point to the last handled log
@@ -68,7 +64,7 @@ type Pointer struct {
 // MarshalBinary never return not nil err now
 func (p *Pointer) MarshalBinary() ([]byte, error) {
 	data := make([]byte, 8)
-	binary.LittleEndian.PutUint64(data, uint64(p.Location))
+	binary.BigEndian.PutUint64(data, uint64(p.Location))
 
 	return data, nil
 }
@@ -79,18 +75,18 @@ func (p *Pointer) UnmarshalBinary(data []byte) error {
 		return errors.Errorf("not valid length data as pointer % X", data)
 	}
 
-	p.Location = int64(binary.LittleEndian.Uint64(data))
+	p.Location = int64(binary.BigEndian.Uint64(data))
 	return nil
 }
 
 // LoadHandledPointer loads handled pointer value from kv DB
-func LoadHandledPointer(db *leveldb.DB) (Pointer, error) {
+func LoadHandledPointer(h dbOperator) (Pointer, error) {
 	var p Pointer
-	if db == nil {
+	if whetherNil(h) {
 		return p, errors.Trace(ErrInValidHandler)
 	}
 
-	value, err := db.Get(HandledPointerKey, nil)
+	value, err := h.Get(HandledPointerKey, nil)
 	if err != nil {
 		// return zero value when not found
 		if err == leveldb.ErrNotFound {
@@ -108,6 +104,16 @@ func LoadHandledPointer(db *leveldb.DB) (Pointer, error) {
 	return p, nil
 }
 
+// ClearHandledPointer clears the handled pointer in kv DB.
+func ClearHandledPointer(h dbOperator) error {
+	if whetherNil(h) {
+		return errors.Trace(ErrInValidHandler)
+	}
+
+	err := h.Delete(HandledPointerKey, nil)
+	return errors.Annotate(err, "clear handled pointer")
+}
+
 var (
 	defaultGCForwardLog int64 = 10000
 
@@ -121,14 +127,14 @@ func DecodeTaskLogKey(key []byte) (int64, error) {
 		return 0, errors.Errorf("not valid length data as task log key % X", key)
 	}
 
-	return int64(binary.LittleEndian.Uint64(key[len(TaskLogPrefix):])), nil
+	return int64(binary.BigEndian.Uint64(key[len(TaskLogPrefix):])), nil
 }
 
 // EncodeTaskLogKey encodes log ID into a task log key
 func EncodeTaskLogKey(id int64) []byte {
 	key := make([]byte, 8+len(TaskLogPrefix))
 	copy(key[:len(TaskLogPrefix)], TaskLogPrefix)
-	binary.LittleEndian.PutUint64(key[len(TaskLogPrefix):], uint64(id))
+	binary.BigEndian.PutUint64(key[len(TaskLogPrefix):], uint64(id))
 
 	return key
 }
@@ -142,12 +148,12 @@ type Logger struct {
 }
 
 // Initial initials Logger
-func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
-	if db == nil {
+func (logger *Logger) Initial(h dbOperator) ([]*pb.TaskLog, error) {
+	if whetherNil(h) {
 		return nil, errors.Trace(ErrInValidHandler)
 	}
 
-	handledPointer, err := LoadHandledPointer(db)
+	handledPointer, err := LoadHandledPointer(h)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -158,7 +164,7 @@ func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 		}
 		logs = make([]*pb.TaskLog, 0, 4)
 	)
-	iter := db.NewIterator(util.BytesPrefix(TaskLogPrefix), nil)
+	iter := h.NewIterator(util.BytesPrefix(TaskLogPrefix), nil)
 	startLocation := handledPointer.Location + 1
 	for ok := iter.Seek(EncodeTaskLogKey(startLocation)); ok; ok = iter.Next() {
 		logBytes := iter.Value()
@@ -174,7 +180,8 @@ func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 			endPointer.Location = opLog.Id + 1
 			logs = append(logs, opLog)
 		} else {
-			panic(fmt.Sprintf("out of sorted order from level db for task log key % X (log ID %d)", iter.Key(), opLog.Id))
+			panic(fmt.Sprintf("out of sorted order from level db for task log key % X (log ID %d), start location %d, end location %d",
+				iter.Key(), opLog.Id, startLocation, endPointer.Location))
 		}
 	}
 	iter.Release()
@@ -184,7 +191,7 @@ func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 
 	err = iter.Error()
 	if err != nil {
-		return nil, errors.Annotatef(err, "fetch logs from meta")
+		return nil, errors.Annotatef(err, "fetch logs from meta with handle pointer %+v", handledPointer)
 	}
 
 	logger.handledPointer = handledPointer
@@ -196,7 +203,7 @@ func (logger *Logger) Initial(db *leveldb.DB) ([]*pb.TaskLog, error) {
 }
 
 // GetTaskLog returns task log by given log ID
-func (logger *Logger) GetTaskLog(h Getter, id int64) (*pb.TaskLog, error) {
+func (logger *Logger) GetTaskLog(h dbOperator, id int64) (*pb.TaskLog, error) {
 	if whetherNil(h) {
 		return nil, errors.Trace(ErrInValidHandler)
 	}
@@ -220,8 +227,8 @@ func (logger *Logger) GetTaskLog(h Getter, id int64) (*pb.TaskLog, error) {
 
 // ForwardTo forward handled pointer to specified ID location
 // not thread safe
-func (logger *Logger) ForwardTo(db Putter, ID int64) error {
-	if whetherNil(db) {
+func (logger *Logger) ForwardTo(h dbOperator, ID int64) error {
+	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
 
@@ -231,7 +238,7 @@ func (logger *Logger) ForwardTo(db Putter, ID int64) error {
 
 	handledPointerBytes, _ := handledPointer.MarshalBinary()
 
-	err := db.Put(HandledPointerKey, handledPointerBytes, nil)
+	err := h.Put(HandledPointerKey, handledPointerBytes, nil)
 	if err != nil {
 		return errors.Annotatef(err, "forward handled pointer to %d", ID)
 	}
@@ -241,8 +248,8 @@ func (logger *Logger) ForwardTo(db Putter, ID int64) error {
 }
 
 // MarkAndForwardLog marks result sucess or not in log, and forwards handledPointer
-func (logger *Logger) MarkAndForwardLog(db Putter, opLog *pb.TaskLog) error {
-	if whetherNil(db) {
+func (logger *Logger) MarkAndForwardLog(h dbOperator, opLog *pb.TaskLog) error {
+	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
 
@@ -251,17 +258,17 @@ func (logger *Logger) MarkAndForwardLog(db Putter, opLog *pb.TaskLog) error {
 		return errors.Annotatef(err, "marshal task log %+v", opLog)
 	}
 
-	err = db.Put(EncodeTaskLogKey(opLog.Id), logBytes, nil)
+	err = h.Put(EncodeTaskLogKey(opLog.Id), logBytes, nil)
 	if err != nil {
 		return errors.Annotatef(err, "save task log %d", opLog.Id)
 	}
 
-	return errors.Trace(logger.ForwardTo(db, opLog.Id))
+	return errors.Trace(logger.ForwardTo(h, opLog.Id))
 }
 
 // Append appends a task log
-func (logger *Logger) Append(db Putter, opLog *pb.TaskLog) error {
-	if whetherNil(db) {
+func (logger *Logger) Append(h dbOperator, opLog *pb.TaskLog) error {
+	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
 
@@ -280,7 +287,7 @@ func (logger *Logger) Append(db Putter, opLog *pb.TaskLog) error {
 		return errors.Annotatef(err, "marshal task log %+v", opLog)
 	}
 
-	err = db.Put(EncodeTaskLogKey(id), logBytes, nil)
+	err = h.Put(EncodeTaskLogKey(id), logBytes, nil)
 	if err != nil {
 		return errors.Annotatef(err, "save task log %+v", opLog)
 	}
@@ -289,7 +296,7 @@ func (logger *Logger) Append(db Putter, opLog *pb.TaskLog) error {
 }
 
 // GC deletes useless log
-func (logger *Logger) GC(ctx context.Context, db *leveldb.DB) {
+func (logger *Logger) GC(ctx context.Context, h dbOperator) {
 	ticker := time.NewTicker(GCInterval)
 	defer ticker.Stop()
 	for {
@@ -303,13 +310,13 @@ func (logger *Logger) GC(ctx context.Context, db *leveldb.DB) {
 			if handledPointerLocaltion > defaultGCForwardLog {
 				gcID = handledPointerLocaltion - defaultGCForwardLog
 			}
-			logger.doGC(db, gcID)
+			logger.doGC(h, gcID)
 		}
 	}
 }
 
-func (logger *Logger) doGC(db *leveldb.DB, id int64) {
-	if db == nil {
+func (logger *Logger) doGC(h dbOperator, id int64) {
+	if whetherNil(h) {
 		logger.l.Error(ErrInValidHandler.Error(), zap.String("feature", "gc"))
 		return
 	}
@@ -319,7 +326,7 @@ func (logger *Logger) doGC(db *leveldb.DB, id int64) {
 	irange := &util.Range{
 		Start: EncodeTaskLogKey(0),
 	}
-	iter := db.NewIterator(irange, nil)
+	iter := h.NewIterator(irange, nil)
 	batch := new(leveldb.Batch)
 	for iter.Next() {
 		if bytes.Compare(endKey, iter.Key()) <= 0 {
@@ -332,9 +339,9 @@ func (logger *Logger) doGC(db *leveldb.DB, id int64) {
 
 		batch.Delete(iter.Key())
 		if batch.Len() == GCBatchSize {
-			err := db.Write(batch, nil)
+			err := h.Write(batch, nil)
 			if err != nil {
-				logger.l.Error("fail to delete keys from kv db", zap.String("feature", "gc"), log.ShortError(err))
+				logger.l.Error("fail to delete keys from kv db", zap.String("feature", "gc"), zap.Binary("binary key", iter.Key()), zap.ByteString("text key", iter.Key()), log.ShortError(err))
 			}
 			logger.l.Info("delete range", zap.String("feature", "gc"), zap.ByteString("first key", firstKey), zap.Binary("raw first key", firstKey), zap.ByteString("end key", iter.Key()), zap.Binary("raw end key", iter.Key()))
 			firstKey = firstKey[:0]
@@ -344,16 +351,22 @@ func (logger *Logger) doGC(db *leveldb.DB, id int64) {
 	iter.Release()
 	err := iter.Error()
 	if err != nil {
-		logger.l.Error("query logs from meta", zap.String("feature", "gc"), log.ShortError(err))
+		logger.l.Error("query logs from meta", zap.String("feature", "gc"),
+			zap.ByteString("first key", firstKey), zap.Binary("raw first key", firstKey), zap.ByteString("< end key", endKey), zap.Binary("< raw end key", endKey), log.ShortError(err))
 	}
 
 	if batch.Len() > 0 {
 		logger.l.Info("delete range", zap.String("feature", "gc"), zap.ByteString("first key", firstKey), zap.Binary("raw first key", firstKey), zap.ByteString("< end key", endKey), zap.Binary("< raw end key", endKey))
-		err := db.Write(batch, nil)
+		err := h.Write(batch, nil)
 		if err != nil {
 			logger.l.Error("fail to delete keys from kv db", log.ShortError(err))
 		}
 	}
+}
+
+// ClearOperationLog clears the task operation log.
+func ClearOperationLog(h dbOperator) error {
+	return errors.Annotate(clearByPrefix(h, TaskLogPrefix), "clear task operation log")
 }
 
 // **************** task meta oepration *************** //
@@ -373,8 +386,8 @@ func EncodeTaskMetaKey(name string) []byte {
 }
 
 // LoadTaskMetas loads all task metas from kv db
-func LoadTaskMetas(db *leveldb.DB) (map[string]*pb.TaskMeta, error) {
-	if db == nil {
+func LoadTaskMetas(h dbOperator) (map[string]*pb.TaskMeta, error) {
+	if whetherNil(h) {
 		return nil, errors.Trace(ErrInValidHandler)
 	}
 
@@ -383,7 +396,7 @@ func LoadTaskMetas(db *leveldb.DB) (map[string]*pb.TaskMeta, error) {
 		err   error
 	)
 
-	iter := db.NewIterator(util.BytesPrefix(TaskMetaPrefix), nil)
+	iter := h.NewIterator(util.BytesPrefix(TaskMetaPrefix), nil)
 	for iter.Next() {
 		taskBytes := iter.Value()
 		task := &pb.TaskMeta{}
@@ -402,14 +415,14 @@ func LoadTaskMetas(db *leveldb.DB) (map[string]*pb.TaskMeta, error) {
 
 	err = iter.Error()
 	if err != nil {
-		return nil, errors.Annotatef(err, "fetch tasks from meta")
+		return nil, errors.Annotatef(err, "fetch tasks from meta with prefix % X", TaskMetaPrefix)
 	}
 
 	return tasks, nil
 }
 
 // SetTaskMeta saves task meta into kv db
-func SetTaskMeta(h Putter, task *pb.TaskMeta) error {
+func SetTaskMeta(h dbOperator, task *pb.TaskMeta) error {
 	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
@@ -433,7 +446,7 @@ func SetTaskMeta(h Putter, task *pb.TaskMeta) error {
 }
 
 // GetTaskMeta returns task meta by given name
-func GetTaskMeta(h Getter, name string) (*pb.TaskMeta, error) {
+func GetTaskMeta(h dbOperator, name string) (*pb.TaskMeta, error) {
 	if whetherNil(h) {
 		return nil, errors.Trace(ErrInValidHandler)
 	}
@@ -453,7 +466,7 @@ func GetTaskMeta(h Getter, name string) (*pb.TaskMeta, error) {
 }
 
 // DeleteTaskMeta delete task meta from kv DB
-func DeleteTaskMeta(h Deleter, name string) error {
+func DeleteTaskMeta(h dbOperator, name string) error {
 	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
@@ -464,6 +477,11 @@ func DeleteTaskMeta(h Deleter, name string) error {
 	}
 
 	return nil
+}
+
+// ClearTaskMeta clears all task meta in kv DB.
+func ClearTaskMeta(h dbOperator) error {
+	return errors.Annotate(clearByPrefix(h, TaskMetaPrefix), "clear task meta")
 }
 
 // VerifyTaskMeta verify legality of take meta
@@ -508,4 +526,37 @@ func CloneTaskLog(log *pb.TaskLog) *pb.TaskLog {
 
 func whetherNil(handler interface{}) bool {
 	return handler == nil || reflect.ValueOf(handler).IsNil()
+}
+
+// clearByPrefix clears all keys with the specified prefix.
+func clearByPrefix(h dbOperator, prefix []byte) error {
+	if whetherNil(h) {
+		return errors.Trace(ErrInValidHandler)
+	}
+
+	var err error
+	iter := h.NewIterator(util.BytesPrefix(prefix), nil)
+	batch := new(leveldb.Batch)
+	for iter.Next() {
+		batch.Delete(iter.Key())
+		if batch.Len() >= GCBatchSize {
+			err = h.Write(batch, nil)
+			if err != nil {
+				iter.Release()
+				return errors.Annotatef(err, "delete kv with prefix % X until % X", prefix, iter.Key())
+			}
+			log.L().Info("delete task operation log kv", zap.Binary("with prefix", prefix), zap.Binary("< key", iter.Key()))
+			batch.Reset()
+		}
+	}
+	iter.Release()
+	err = iter.Error()
+	if err != nil {
+		return errors.Annotatef(err, "iterate kv with prefix % X", prefix)
+	}
+
+	if batch.Len() > 0 {
+		err = h.Write(batch, nil)
+	}
+	return errors.Annotatef(err, "clear kv with prefix % X", prefix)
 }
