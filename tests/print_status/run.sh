@@ -62,12 +62,12 @@ function check_print_status() {
     [ $status_count -ge 2 ]
     count=0
     cat $status_file|while read -r line; do
-        total_file_count=$(echo "$line"|awk '{print $(NF-4)}'|tr -d ",")
+        total_file_count=$(echo "$line"|awk '{print $(NF-2)}'|tr -d "[total_file_count="| tr -d "]")
         [ $total_file_count -eq 3 ]
         count=$((count+1))
         if [ $count -eq $status_count ]; then
-            finished_bytes=$(echo "$line"|awk '{print $3}'|tr -d ",")
-            total_bytes=$(echo "$line"|awk '{print $6}'|tr -d ",")
+            finished_bytes=$(echo "$line"|awk '{print $2}'|tr -d "[finished_bytes="|tr -d "]")
+            total_bytes=$(echo "$line"|awk '{print $3}'|tr -d "[total_file_count"|tr -d "]")
             [[ "$finished_bytes" -eq "$total_bytes" ]]
         fi
     done
