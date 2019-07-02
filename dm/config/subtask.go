@@ -21,9 +21,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/BurntSushi/toml"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
+
+	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
@@ -50,6 +51,14 @@ type DBConfig struct {
 	User             string `toml:"user" json:"user" yaml:"user"`
 	Password         string `toml:"password" json:"-" yaml:"password"` // omit it for privacy
 	MaxAllowedPacket *int   `toml:"max-allowed-packet" json:"max-allowed-packet" yaml:"max-allowed-packet"`
+}
+
+func (db *DBConfig) String() string {
+	cfg, err := json.Marshal(db)
+	if err != nil {
+		log.L().Error("fail to marshal config to json", log.ShortError(err))
+	}
+	return string(cfg)
 }
 
 // Toml returns TOML format representation of config
@@ -149,7 +158,7 @@ func NewSubTaskConfig() *SubTaskConfig {
 func (c *SubTaskConfig) String() string {
 	cfg, err := json.Marshal(c)
 	if err != nil {
-		log.L().Error("marshal sub task dm config to json", zap.Reflect("subtask configuration", c), log.ShortError(err))
+		log.L().Error("marshal sub task dm config to json", zap.String("task", c.Name), log.ShortError(err))
 	}
 	return string(cfg)
 }

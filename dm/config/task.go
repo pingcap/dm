@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/pkg/log"
+
 	"github.com/pingcap/errors"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/column-mapping"
@@ -281,7 +282,7 @@ func NewTaskConfig() *TaskConfig {
 func (c *TaskConfig) String() string {
 	cfg, err := yaml.Marshal(c)
 	if err != nil {
-		log.L().Error("marshal task config to yaml", zap.Reflect("subtask configuration", c), log.ShortError(err))
+		log.L().Error("marshal task config to yaml", zap.String("task", c.Name), log.ShortError(err))
 	}
 	return string(cfg)
 }

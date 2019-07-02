@@ -116,5 +116,10 @@ func loop() {
 
 		args := strings.Fields(line)
 		ctl.Start(args)
+
+		syncErr := log.L().Sync()
+		if syncErr != nil {
+			fmt.Fprintln(os.Stderr, "sync log failed", syncErr)
+		}
 	}
 }

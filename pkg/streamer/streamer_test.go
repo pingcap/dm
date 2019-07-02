@@ -58,6 +58,7 @@ func (t *testStreamerSuite) TestStreamer(c *C) {
 	// can not get event anymore because got error
 	ev2, err = s.GetEvent(ctx)
 	c.Assert(err, Equals, ErrNeedSyncAgain)
+	c.Assert(ev2, IsNil)
 
 	// 2. close with error
 	s = newLocalStreamer()
@@ -70,6 +71,7 @@ func (t *testStreamerSuite) TestStreamer(c *C) {
 	// can not get event anymore
 	ev2, err = s.GetEvent(ctx)
 	c.Assert(err, Equals, ErrNeedSyncAgain)
+	c.Assert(ev2, IsNil)
 
 	// 3. close without error
 	s = newLocalStreamer()
@@ -81,6 +83,7 @@ func (t *testStreamerSuite) TestStreamer(c *C) {
 	// can not get event anymore
 	ev2, err = s.GetEvent(ctx)
 	c.Assert(err, Equals, ErrNeedSyncAgain)
+	c.Assert(ev2, IsNil)
 
 	// 4. close with nil error
 	s = newLocalStreamer()
@@ -92,4 +95,5 @@ func (t *testStreamerSuite) TestStreamer(c *C) {
 	// can not get event anymore
 	ev2, err = s.GetEvent(ctx)
 	c.Assert(err, Equals, ErrNeedSyncAgain)
+	c.Assert(ev2, IsNil)
 }

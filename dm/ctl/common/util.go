@@ -19,10 +19,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
 	"github.com/pingcap/dm/dm/pb"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
+
+	"github.com/golang/protobuf/jsonpb"
+	"github.com/golang/protobuf/proto"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
@@ -32,9 +33,16 @@ import (
 
 var (
 	masterClient pb.MasterClient
+	globalConfig = &Config{}
 )
 
-// InitClient initializes dm-worker client or dm-master client
+// InitUtils inits necessary dmctl utils
+func InitUtils(cfg *Config) error {
+	globalConfig = cfg
+	return errors.Trace(InitClient(cfg.MasterAddr))
+}
+
+// InitClient initializes dm-master client
 func InitClient(addr string) error {
 	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	if err != nil {
@@ -42,6 +50,11 @@ func InitClient(addr string) error {
 	}
 	masterClient = pb.NewMasterClient(conn)
 	return nil
+}
+
+// GlobalConfig returns global dmctl config
+func GlobalConfig() *Config {
+	return globalConfig
 }
 
 // MasterClient returns dm-master client

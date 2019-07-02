@@ -16,16 +16,28 @@ package reader
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog/common"
 	br "github.com/pingcap/dm/pkg/binlog/reader"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 )
+
+const (
+	// event timeout when trying to read events from upstream master server.
+	eventTimeout = 10 * time.Minute
+)
+
+// Result represents a read operation result.
+type Result struct {
+	Event *replication.BinlogEvent
+}
 
 // Reader reads binlog events from a upstream master server.
 // The read binlog events should be send to a transformer.
@@ -41,8 +53,8 @@ type Reader interface {
 	Close() error
 
 	// GetEvent gets the binlog event one by one, it will block if no event can be read.
-	// You can pass a context (like Cancel or Timeout) to break the block.
-	GetEvent(ctx context.Context) (*replication.BinlogEvent, error)
+	// You can pass a context (like Cancel) to break the block.
+	GetEvent(ctx context.Context) (Result, error)
 }
 
 // Config is the configuration used by the Reader.
@@ -63,14 +75,17 @@ type reader struct {
 
 	in  br.Reader // the underlying reader used to read binlog events.
 	out chan *replication.BinlogEvent
+
+	logger log.Logger
 }
 
 // NewReader creates a Reader instance.
 func NewReader(cfg *Config) Reader {
 	return &reader{
-		cfg: cfg,
-		in:  br.NewTCPReader(cfg.SyncConfig),
-		out: make(chan *replication.BinlogEvent),
+		cfg:    cfg,
+		in:     br.NewTCPReader(cfg.SyncConfig),
+		out:    make(chan *replication.BinlogEvent),
+		logger: log.With(zap.String("component", "relay reader")),
 	}
 }
 
@@ -86,7 +101,7 @@ func (r *reader) Start() error {
 
 	defer func() {
 		status := r.in.Status()
-		log.Infof("[relay] set up binlog reader for master %s with status %s", r.cfg.MasterID, status)
+		r.logger.Info("set up binlog reader", zap.String("master", r.cfg.MasterID), zap.Reflect("status", status))
 	}()
 
 	var err error
@@ -114,37 +129,39 @@ func (r *reader) Close() error {
 }
 
 // GetEvent implements Reader.GetEvent.
-// If some ignorable error occurred, the returned event and error both are nil.
 // NOTE: can only close the reader after this returned.
-func (r *reader) GetEvent(ctx context.Context) (*replication.BinlogEvent, error) {
+func (r *reader) GetEvent(ctx context.Context) (Result, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
+	var result Result
 	if r.stage != common.StagePrepared {
-		return nil, errors.Errorf("stage %s, expect %s, please start the reader first", r.stage, common.StagePrepared)
+		return result, errors.Errorf("stage %s, expect %s, please start the reader first", r.stage, common.StagePrepared)
 	}
 
 	for {
-		ev, err := r.in.GetEvent(ctx)
-		// NOTE: add retryable error support if needed later
+		ctx2, cancel2 := context.WithTimeout(ctx, eventTimeout)
+		ev, err := r.in.GetEvent(ctx2)
+		cancel2()
+
 		if err == nil {
-			return ev, nil
-		} else if isIgnorableError(err) {
-			log.Warnf("[relay] get event with ignorable error %s", err)
-			return nil, nil // return without error and also without binlog event
+			result.Event = ev
+		} else if isRetryableError(err) {
+			r.logger.Info("get retryable error when reading binlog event", log.ShortError(err))
+			continue
 		}
-		return nil, errors.Trace(err)
+		return result, errors.Trace(err)
 	}
 }
 
 func (r *reader) setUpReaderByGTID() error {
 	gs := r.cfg.GTIDs
-	log.Infof("[relay] start sync for master %s from GTID set %s", r.cfg.MasterID, gs)
+	r.logger.Info("start sync", zap.String("master", r.cfg.MasterID), zap.Stringer("from GTID set", gs))
 	return r.in.StartSyncByGTID(gs)
 }
 
 func (r *reader) setUpReaderByPos() error {
 	pos := r.cfg.Pos
-	log.Infof("[relay] start sync for master %s from position %s", r.cfg.MasterID, pos)
+	r.logger.Info("start sync", zap.String("master", r.cfg.MasterID), zap.Stringer("from position", pos))
 	return r.in.StartSyncByPos(pos)
 }

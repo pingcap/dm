@@ -20,15 +20,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 var (
@@ -92,14 +93,14 @@ func (s *Server) Start() error {
 	go func() {
 		err2 := s.svr.Serve(grpcL)
 		if err2 != nil && !common.IsErrNetClosing(err2) && err2 != cmux.ErrListenerClosed {
-			log.Errorf("[server] gRPC server return with error %s", err2.Error())
+			log.L().Error("fail to start gRPC server", log.ShortError(err2))
 		}
 	}()
 	go InitStatus(httpL) // serve status
 
 	s.closed.Set(false)
 
-	log.Infof("[server] listening on %v for gRPC API and status request", s.cfg.WorkerAddr)
+	log.L().Info("start gRPC API", zap.String("listened address", s.cfg.WorkerAddr))
 	err = m.Serve()
 	if err != nil && common.IsErrNetClosing(err) {
 		err = nil
@@ -117,7 +118,7 @@ func (s *Server) Close() {
 
 	err := s.rootLis.Close()
 	if err != nil && !common.IsErrNetClosing(err) {
-		log.Errorf("[server] close net listener with error %s", err.Error())
+		log.L().Error("fail to close net listener", log.ShortError(err))
 	}
 	if s.svr != nil {
 		// GracefulStop can not cancel active stream RPCs
@@ -135,20 +136,20 @@ func (s *Server) Close() {
 
 // StartSubTask implements WorkerServer.StartSubTask
 func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
-	log.Infof("[server] receive StartSubTask request %+v", req)
+	log.L().Info("", zap.String("request", "start subtask"), zap.Stringer("payload", req))
 
 	cfg := config.NewSubTaskConfig()
 	err := cfg.Decode(req.Task)
 	if err != nil {
 		err = errors.Annotatef(err, "decode subtask config from request %+v", req.Task)
-		log.Errorf("[server] %s", errors.ErrorStack(err))
+		log.L().Error("fail to decode task", zap.String("request", "start subtask"), zap.Stringer("payload", req), zap.Error(err))
 		return nil, err
 	}
 
 	opLogID, err := s.worker.StartSubTask(cfg)
 	if err != nil {
 		err = errors.Annotatef(err, "start sub task %s", cfg.Name)
-		log.Errorf("[server] %s", errors.ErrorStack(err))
+		log.L().Error("fail to start subtask", zap.String("request", "start subtask"), zap.Stringer("payload", req), zap.Error(err))
 		return nil, err
 	}
 
@@ -164,12 +165,11 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 
 // OperateSubTask implements WorkerServer.OperateSubTask
 func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
-	log.Infof("[server] receive OperateSubTask request %+v", req)
-
+	log.L().Info("", zap.String("request", "operate subtask"), zap.Stringer("payload", req))
 	opLogID, err := s.worker.OperateSubTask(req.Name, req.Op)
 	if err != nil {
 		err = errors.Annotatef(err, "operate(%s) sub task %s", req.Op.String(), req.Name)
-		log.Errorf("[server] %s", errors.ErrorStack(err))
+		log.L().Error("fail to operate task", zap.String("request", "operate subtask"), zap.Stringer("payload", req), zap.Error(err))
 		return nil, err
 	}
 
@@ -185,19 +185,19 @@ func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskReque
 
 // UpdateSubTask implements WorkerServer.UpdateSubTask
 func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
-	log.Infof("[server] receive UpdateSubTask request %+v", req)
+	log.L().Info("", zap.String("request", "update subtask"), zap.Stringer("payload", req))
 	cfg := config.NewSubTaskConfig()
 	err := cfg.Decode(req.Task)
 	if err != nil {
 		err = errors.Annotatef(err, "decode config from request %+v", req.Task)
-		log.Errorf("[server] %s", errors.ErrorStack(err))
+		log.L().Error("fail to decode subtask", zap.String("request", "update subtask"), zap.Stringer("payload", req), zap.Error(err))
 		return nil, err
 	}
 
 	opLogID, err := s.worker.UpdateSubTask(cfg)
 	if err != nil {
 		err = errors.Annotatef(err, "update sub task %s", cfg.Name)
-		log.Errorf("[server] %s", errors.ErrorStack(err))
+		log.L().Error("fail to update task", zap.String("request", "update subtask"), zap.Stringer("payload", req), zap.Error(err))
 		return nil, err
 	}
 
@@ -213,13 +213,15 @@ func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest
 
 // QueryTaskOperation implements WorkerServer.QueryTaskOperation
 func (s *Server) QueryTaskOperation(ctx context.Context, req *pb.QueryTaskOperationRequest) (*pb.QueryTaskOperationResponse, error) {
+	log.L().Info("", zap.String("request", "query subtask"), zap.Stringer("payload", req))
+
 	taskName := req.Name
 	opLogID := req.LogID
 
 	opLog, err := s.worker.meta.GetTaskLog(opLogID)
 	if err != nil {
 		err = errors.Annotatef(err, "fail to get operation %d of task %s", opLogID, taskName)
-		log.Error(err)
+		log.L().Error(err.Error())
 		return nil, err
 	}
 
@@ -234,7 +236,7 @@ func (s *Server) QueryTaskOperation(ctx context.Context, req *pb.QueryTaskOperat
 
 // QueryStatus implements WorkerServer.QueryStatus
 func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*pb.QueryStatusResponse, error) {
-	log.Infof("[server] receive QueryStatus request %+v", req)
+	log.L().Info("", zap.String("request", "query status"), zap.Stringer("payload", req))
 
 	resp := &pb.QueryStatusResponse{
 		Result:        true,
@@ -250,7 +252,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 
 // QueryError implements WorkerServer.QueryError
 func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorRequest) (*pb.QueryErrorResponse, error) {
-	log.Infof("[server] receive QueryError request %+v", req)
+	log.L().Info("", zap.String("request", "query error"), zap.Stringer("payload", req))
 
 	resp := &pb.QueryErrorResponse{
 		Result:       true,
@@ -265,7 +267,7 @@ func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorRequest) (*pb
 // we do ping-pong send-receive on stream for DDL (lock) info
 // if error occurred in Send / Recv, just retry in client
 func (s *Server) FetchDDLInfo(stream pb.Worker_FetchDDLInfoServer) error {
-	log.Infof("[server] receive FetchDDLInfo request")
+	log.L().Info("", zap.String("request", "fetch ddl info"))
 	var ddlInfo *pb.DDLInfo
 	for {
 		// try fetch pending to sync DDL info from worker
@@ -273,11 +275,11 @@ func (s *Server) FetchDDLInfo(stream pb.Worker_FetchDDLInfoServer) error {
 		if ddlInfo == nil {
 			return nil // worker closed or context canceled
 		}
-		log.Infof("[server] fetched DDLInfo from worker %v", ddlInfo)
+		log.L().Info("", zap.String("request", "fetch ddl info"), zap.Stringer("ddl info", ddlInfo))
 		// send DDLInfo to dm-master
 		err := stream.Send(ddlInfo)
 		if err != nil {
-			log.Errorf("[server] send DDLInfo %v to RPC stream fail %v", ddlInfo, err)
+			log.L().Error("fail to send DDLInfo to RPC stream", zap.String("request", "fetch ddl info"), zap.Stringer("ddl info", ddlInfo), log.ShortError(err))
 			return err
 		}
 
@@ -287,10 +289,10 @@ func (s *Server) FetchDDLInfo(stream pb.Worker_FetchDDLInfoServer) error {
 			return nil
 		}
 		if err != nil {
-			log.Errorf("[server] receive DDLLockInfo from RPC stream fail %v", err)
+			log.L().Error("fail to receive DDLLockInfo from RPC stream", zap.String("request", "fetch ddl info"), zap.Stringer("ddl info", ddlInfo), log.ShortError(err))
 			return err
 		}
-		log.Infof("[server] receive DDLLockInfo %v", in)
+		log.L().Info("receive DDLLockInfo", zap.String("request", "fetch ddl info"), zap.Stringer("ddl lock info", in), log.ShortError(err))
 
 		//ddlInfo = nil // clear and protect to put it back
 
@@ -298,58 +300,58 @@ func (s *Server) FetchDDLInfo(stream pb.Worker_FetchDDLInfoServer) error {
 		if err != nil {
 			// if error occurred when recording DDLLockInfo, log an error
 			// user can handle this case using dmctl
-			log.Errorf("[server] record DDLLockInfo %v to worker fail %v", in, errors.ErrorStack(err))
+			log.L().Error("fail to record DDLLockInfo", zap.String("request", "fetch ddl info"), zap.Stringer("ddl lock info", in), zap.Error(err))
 		}
 	}
 }
 
 // ExecuteDDL implements WorkerServer.ExecuteDDL
 func (s *Server) ExecuteDDL(ctx context.Context, req *pb.ExecDDLRequest) (*pb.CommonWorkerResponse, error) {
-	log.Infof("[server] receive ExecuteDDL request %+v", req)
+	log.L().Info("", zap.String("request", "execute ddl"), zap.Stringer("payload", req))
 
 	err := s.worker.ExecuteDDL(ctx, req)
 	if err != nil {
-		log.Errorf("[server] %v ExecuteDDL error %v", req, errors.ErrorStack(err))
+		log.L().Error("fail to execute ddl", zap.String("request", "execute ddl"), zap.Stringer("payload", req), zap.Error(err))
 	}
 	return makeCommonWorkerResponse(err), nil
 }
 
 // BreakDDLLock implements WorkerServer.BreakDDLLock
 func (s *Server) BreakDDLLock(ctx context.Context, req *pb.BreakDDLLockRequest) (*pb.CommonWorkerResponse, error) {
-	log.Infof("[server] receive BreakDDLLock request %+v", req)
+	log.L().Info("", zap.String("request", "break ddl lock"), zap.Stringer("payload", req))
 
 	err := s.worker.BreakDDLLock(ctx, req)
 	if err != nil {
-		log.Errorf("[server] %v BreakDDLLock error %v", req, errors.ErrorStack(err))
+		log.L().Error("fail to break ddl lock", zap.String("request", "break ddl lock"), zap.Stringer("payload", req), zap.Error(err))
 	}
 	return makeCommonWorkerResponse(err), nil
 }
 
 // HandleSQLs implements WorkerServer.HandleSQLs
 func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSubTaskSQLsRequest) (*pb.CommonWorkerResponse, error) {
-	log.Infof("[server] receive HandleSQLs request %+v", req)
+	log.L().Info("", zap.String("request", "handle sqls"), zap.Stringer("payload", req))
 
 	err := s.worker.HandleSQLs(ctx, req)
 	if err != nil {
-		log.Errorf("[server] handle sqls %+v error %v", req, errors.ErrorStack(err))
+		log.L().Error("fail to handle sqls", zap.String("request", "handle sqls"), zap.Stringer("payload", req), zap.Error(err))
 	}
 	return makeCommonWorkerResponse(err), nil
 }
 
 // SwitchRelayMaster implements WorkerServer.SwitchRelayMaster
 func (s *Server) SwitchRelayMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) (*pb.CommonWorkerResponse, error) {
-	log.Infof("[server] receive SwitchRelayMaster request %+v", req)
+	log.L().Info("", zap.String("request", "switch relay master"), zap.Stringer("payload", req))
 
 	err := s.worker.SwitchRelayMaster(ctx, req)
 	if err != nil {
-		log.Errorf("[server] %v SwitchRelayMaster error %v", req, errors.ErrorStack(err))
+		log.L().Error("fail to switch relay master", zap.String("request", "switch relay master"), zap.Stringer("payload", req), zap.Error(err))
 	}
 	return makeCommonWorkerResponse(err), nil
 }
 
 // OperateRelay implements WorkerServer.OperateRelay
 func (s *Server) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) (*pb.OperateRelayResponse, error) {
-	log.Infof("[server] receive OperateRelay request %+v", req)
+	log.L().Info("", zap.String("request", "operate relay"), zap.Stringer("payload", req))
 
 	resp := &pb.OperateRelayResponse{
 		Op:     req.Op,
@@ -358,7 +360,7 @@ func (s *Server) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) 
 
 	err := s.worker.OperateRelay(ctx, req)
 	if err != nil {
-		log.Errorf("[server] operate(%s) relay unit error %v", req.Op.String(), errors.ErrorStack(err))
+		log.L().Error("fail to operate relay", zap.String("request", "operate relay"), zap.Stringer("payload", req), zap.Error(err))
 		resp.Msg = errors.ErrorStack(err)
 		return resp, nil
 	}
@@ -369,22 +371,22 @@ func (s *Server) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) 
 
 // PurgeRelay implements WorkerServer.PurgeRelay
 func (s *Server) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) (*pb.CommonWorkerResponse, error) {
-	log.Infof("[server] receive PurgeRelay request %+v", req)
+	log.L().Info("", zap.String("request", "purge relay"), zap.Stringer("payload", req))
 
 	err := s.worker.PurgeRelay(ctx, req)
 	if err != nil {
-		log.Errorf("[server] %v PurgeRelay error %v", req, errors.ErrorStack(err))
+		log.L().Error("fail to purge relay", zap.String("request", "purge relay"), zap.Stringer("payload", req), zap.Error(err))
 	}
 	return makeCommonWorkerResponse(err), nil
 }
 
 // UpdateRelayConfig updates config for relay and (dm-worker)
 func (s *Server) UpdateRelayConfig(ctx context.Context, req *pb.UpdateRelayRequest) (*pb.CommonWorkerResponse, error) {
-	log.Infof("[server] receive UpdateRelayConfig request %+v", req)
+	log.L().Info("", zap.String("request", "update relay config"), zap.Stringer("payload", req))
 
 	err := s.worker.UpdateRelayConfig(ctx, req.Content)
 	if err != nil {
-		log.Errorf("[server] %v UpdateRelayConfig error %v", req, errors.ErrorStack(err))
+		log.L().Error("fail to Update relay config", zap.String("request", "update relay config"), zap.Stringer("payload", req), zap.Error(err))
 	}
 	return makeCommonWorkerResponse(err), nil
 }
@@ -393,7 +395,8 @@ func (s *Server) UpdateRelayConfig(ctx context.Context, req *pb.UpdateRelayReque
 // worker config is defined in worker directory now,
 // to avoid circular import, we only return db config
 func (s *Server) QueryWorkerConfig(ctx context.Context, req *pb.QueryWorkerConfigRequest) (*pb.QueryWorkerConfigResponse, error) {
-	log.Infof("[server] receive query worker config request %+v", req)
+	log.L().Info("", zap.String("request", "query worker config"), zap.Stringer("payload", req))
+
 	resp := &pb.QueryWorkerConfigResponse{
 		Result: true,
 	}
@@ -402,7 +405,7 @@ func (s *Server) QueryWorkerConfig(ctx context.Context, req *pb.QueryWorkerConfi
 	if err != nil {
 		resp.Result = false
 		resp.Msg = errors.ErrorStack(err)
-		log.Errorf("[worker] query worker config error %v", errors.ErrorStack(err))
+		log.L().Error("fail to query worker config", zap.String("request", "query worker config"), zap.Stringer("payload", req), zap.Error(err))
 		return resp, nil
 	}
 
@@ -410,7 +413,7 @@ func (s *Server) QueryWorkerConfig(ctx context.Context, req *pb.QueryWorkerConfi
 	if err != nil {
 		resp.Result = false
 		resp.Msg = errors.ErrorStack(err)
-		log.Errorf("[worker] marshal worker config error %v", errors.ErrorStack(err))
+		log.L().Error("fail to marshal worker config", zap.String("request", "query worker config"), zap.Stringer("worker from config", &workerCfg.From), zap.Error(err))
 	}
 
 	resp.Content = rawConfig
@@ -420,11 +423,11 @@ func (s *Server) QueryWorkerConfig(ctx context.Context, req *pb.QueryWorkerConfi
 
 // MigrateRelay migrate relay to original binlog pos
 func (s *Server) MigrateRelay(ctx context.Context, req *pb.MigrateRelayRequest) (*pb.CommonWorkerResponse, error) {
-	log.Infof("[server] receive MigrateRelay request %+v", req)
+	log.L().Info("", zap.String("request", "migrate relay"), zap.Stringer("payload", req))
 
 	err := s.worker.MigrateRelay(ctx, req.BinlogName, req.BinlogPos)
 	if err != nil {
-		log.Errorf("[worker] %v MigrateRelay error %v", req, errors.ErrorStack(err))
+		log.L().Error("fail to migrate relay", zap.String("request", "migrate relay"), zap.Stringer("payload", req), zap.Error(err))
 	}
 	return makeCommonWorkerResponse(err), nil
 }

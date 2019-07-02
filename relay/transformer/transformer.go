@@ -21,10 +21,6 @@ import (
 	"github.com/pingcap/dm/relay/common"
 )
 
-var (
-	artificialFlag = uint16(0x0020) // LOG_EVENT_ARTIFICIAL_F
-)
-
 // Result represents a transform result.
 type Result struct {
 	Ignore      bool          // whether the event should be ignored
@@ -43,7 +39,7 @@ type Result struct {
 // NOTE: more features maybe moved from outer into Transformer later.
 type Transformer interface {
 	// Transform transforms a binlog event.
-	Transform(e *replication.BinlogEvent) *Result
+	Transform(e *replication.BinlogEvent) Result
 }
 
 // transformer implements Transformer interface.
@@ -59,8 +55,8 @@ func NewTransformer(parser2 *parser.Parser) Transformer {
 }
 
 // Transform implements Transformer.Transform.
-func (t *transformer) Transform(e *replication.BinlogEvent) *Result {
-	result := &Result{
+func (t *transformer) Transform(e *replication.BinlogEvent) Result {
+	result := Result{
 		LogPos: e.Header.LogPos,
 	}
 
@@ -68,9 +64,7 @@ func (t *transformer) Transform(e *replication.BinlogEvent) *Result {
 	case *replication.RotateEvent:
 		result.LogPos = uint32(ev.Position)         // next event's position
 		result.NextLogName = string(ev.NextLogName) // for RotateEvent, update binlog name
-		if e.Header.Timestamp == 0 || e.Header.LogPos == 0 {
-			result.Ignore = true // ignore fake rotate event
-		}
+		// NOTE: we need to get the first binlog filename from fake RotateEvent when using auto position
 	case *replication.QueryEvent:
 		// when RawModeEnabled not true, QueryEvent will be parsed.
 		// even for `BEGIN`, we still update pos/GTID, but only save GTID for DDL.
@@ -92,7 +86,7 @@ func (t *transformer) Transform(e *replication.BinlogEvent) *Result {
 			result.Ignore = true
 		}
 	default:
-		if e.Header.Flags&artificialFlag != 0 {
+		if e.Header.Flags&replication.LOG_EVENT_ARTIFICIAL_F != 0 {
 			// ignore events with LOG_EVENT_ARTIFICIAL_F flag(0x0020) set
 			// ref: https://dev.mysql.com/doc/internals/en/binlog-event-flag.html
 			result.Ignore = true

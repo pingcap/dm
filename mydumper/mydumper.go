@@ -29,13 +29,17 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/log"
+
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
+	"go.uber.org/zap"
 )
 
 // Mydumper is a simple wrapper for mydumper binary
 type Mydumper struct {
 	cfg *config.SubTaskConfig
+
+	logger log.Logger
 
 	args   []string
 	closed sync2.AtomicBool
@@ -44,7 +48,8 @@ type Mydumper struct {
 // NewMydumper creates a new Mydumper
 func NewMydumper(cfg *config.SubTaskConfig) *Mydumper {
 	m := &Mydumper{
-		cfg: cfg,
+		cfg:    cfg,
+		logger: log.With(zap.String("task", cfg.Name), zap.String("unit", "dump")),
 	}
 	m.args = m.constructArgs()
 	return m
@@ -67,7 +72,7 @@ func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	// every time re-dump, loader should re-prepare
 	err := os.RemoveAll(m.cfg.Dir)
 	if err != nil {
-		log.Errorf("[mydumper] remove output dir %s fail %v", m.cfg.Dir, err)
+		m.logger.Error("fail to remove output dirv", zap.String("directory", m.cfg.Dir), log.ShortError(err))
 	}
 
 	// Cmd cannot be reused, so we create a new cmd when begin processing
@@ -84,7 +89,7 @@ func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		}
 	}
 
-	log.Infof("[mydumper] dump data takes %v", time.Since(begin))
+	m.logger.Info("dump data finished", zap.Stringer("cost time", time.Since(begin)))
 
 	pr <- pb.ProcessResult{
 		IsCanceled: isCanceled,
@@ -125,16 +130,16 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 			msg := line[loc[1]:]
 			switch level {
 			case "DEBUG":
-				log.Debugf("[mydumper] %s", msg)
+				m.logger.Debug(string(msg))
 				continue
 			case "INFO":
-				log.Infof("[mydumper] %s", msg)
+				m.logger.Info(string(msg))
 				continue
 			case "WARNING":
-				log.Warnf("[mydumper] %s", msg)
+				m.logger.Warn(string(msg))
 				continue
 			case "ERROR":
-				log.Errorf("[mydumper] %s", msg)
+				m.logger.Error(string(msg))
 				continue
 			}
 		}
@@ -163,7 +168,7 @@ func (m *Mydumper) Close() {
 // Pause implements Unit.Pause
 func (m *Mydumper) Pause() {
 	if m.closed.Get() {
-		log.Warn("[mydumper] try to pause, but already closed")
+		m.logger.Warn("try to pause, but already closed")
 		return
 	}
 	// do nothing, external will cancel the command (if running)
@@ -172,7 +177,7 @@ func (m *Mydumper) Pause() {
 // Resume implements Unit.Resume
 func (m *Mydumper) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	if m.closed.Get() {
-		log.Warn("[mydumper] try to resume, but already closed")
+		m.logger.Warn("try to resume, but already closed")
 		return
 	}
 	// just call Process
@@ -238,7 +243,7 @@ func (m *Mydumper) constructArgs() []string {
 		ret = append(ret, ParseArgLikeBash(extraArgs)...)
 	}
 
-	log.Infof("[mydumper] create mydumper using args %v", ret)
+	m.logger.Info("create mydumper", zap.Strings("argument", ret))
 
 	ret = append(ret, "--password", db.Password)
 	return ret

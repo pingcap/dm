@@ -20,10 +20,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
-
 	"github.com/pingcap/dm/pkg/log"
+
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
 
 type genColumnCacheStatus uint8
@@ -297,7 +297,7 @@ func genColumnList(columns []*column) string {
 }
 
 func genColumnPlaceholders(length int) string {
-	values := make([]string, length, length)
+	values := make([]string, length)
 	for i := 0; i < length; i++ {
 		values[i] = "?"
 	}
@@ -428,7 +428,7 @@ func findFitIndex(indexColumns map[string][]*column) []*column {
 	cols, ok := indexColumns["primary"]
 	if ok {
 		if len(cols) == 0 {
-			log.Error("cols is empty")
+			log.L().Error("cols is empty")
 		} else {
 			return cols
 		}

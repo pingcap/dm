@@ -19,13 +19,13 @@ import (
 	"sync"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/command"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // Operator contains an operation for specified binlog pos
@@ -111,7 +111,7 @@ func (h *Holder) Set(req *pb.HandleSQLsRequest) error {
 	if ok1 {
 		prev, ok2 := operators[key]
 		if ok2 {
-			h.logger.Warn(" overwrite operation", zap.Stringer("previous operation", prev), zap.Stringer("current operation", oper))
+			h.logger.Warn("overwrite operation", zap.Stringer("previous operation", prev), zap.Stringer("current operation", oper))
 		}
 	} else {
 		operators = make(map[string]*Operator)

@@ -18,11 +18,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/dm/dm/config"
+	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
+
+	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
+	"go.uber.org/zap"
 )
 
 // Conn represents a live DB connection
@@ -32,7 +35,7 @@ type Conn struct {
 	db *sql.DB
 }
 
-func (conn *Conn) querySQL(query string, maxRetry int, args ...interface{}) (*sql.Rows, error) {
+func (conn *Conn) querySQL(ctx *tcontext.Context, query string, maxRetry int, args ...interface{}) (*sql.Rows, error) {
 	if conn == nil || conn.db == nil {
 		return nil, errors.NotValidf("database connection")
 	}
@@ -42,14 +45,14 @@ func (conn *Conn) querySQL(query string, maxRetry int, args ...interface{}) (*sq
 		rows *sql.Rows
 	)
 
-	log.Debugf("[query][sql]%s, args %v", query, args)
+	ctx.L().Debug("query statement", zap.String("sql", query), zap.Reflect("arguments", args))
 	startTime := time.Now()
 	defer func() {
 		if err == nil {
 			cost := time.Since(startTime).Seconds()
 			queryHistogram.WithLabelValues(conn.cfg.Name).Observe(cost)
 			if cost > 1 {
-				log.Warnf("query %s [args: %v] costs %f seconds", query, args, cost)
+				ctx.L().Warn("query statement", zap.String("sql", query), zap.Reflect("arguments", args), zap.Float64("cost time", cost))
 			}
 		}
 	}()
@@ -57,22 +60,22 @@ func (conn *Conn) querySQL(query string, maxRetry int, args ...interface{}) (*sq
 	for i := 0; i < maxRetry; i++ {
 		if i > 0 {
 			time.Sleep(time.Duration(i) * time.Second)
-			log.Warnf("sql query retry: %d sql: [%s] args: [%v]", i, query, args)
+			ctx.L().Warn("query statement", zap.Int("retry", i), zap.String("sql", query), zap.Reflect("arguments", args))
 		}
-		rows, err = conn.db.Query(query, args...)
+		rows, err = conn.db.QueryContext(ctx.Context(), query, args...)
 		if err != nil {
 			if isRetryableError(err) {
-				log.Warnf("sql: [%s] args: [%v] query error: [%v]", query, args, err)
+				ctx.L().Warn("query statement", zap.Int("retry", i), zap.String("sql", query), zap.Reflect("arguments", args), log.ShortError(err))
 				continue
 			}
 			return nil, errors.Trace(err)
 		}
 		return rows, nil
 	}
-	return nil, errors.Annotatef(err, "query sql [%s] args [%v] failed", query, args)
+	return nil, errors.Annotatef(err, "query statement, sql [%s] args [%v] failed", query, args)
 }
 
-func (conn *Conn) executeSQL2(stmt string, maxRetry int, args ...interface{}) error {
+func (conn *Conn) executeSQL2(ctx *tcontext.Context, stmt string, maxRetry int, args ...interface{}) error {
 	if conn == nil || conn.db == nil {
 		return errors.NotValidf("database connection")
 	}
@@ -80,13 +83,13 @@ func (conn *Conn) executeSQL2(stmt string, maxRetry int, args ...interface{}) er
 	var err error
 	for i := 0; i < maxRetry; i++ {
 		if i > 0 {
-			log.Warnf("sql exec retry %d: sql: [%s] args: [%v]", i, stmt, args)
+			ctx.L().Warn("execute statement", zap.Int("retry", i), zap.String("sql", stmt), zap.Reflect("arguments", args))
 			time.Sleep(time.Duration(i) * time.Second)
 		}
-		_, err = conn.db.Exec(stmt, args...)
+		_, err = conn.db.ExecContext(ctx.Context(), stmt, args...)
 		if err != nil {
 			if isRetryableError(err) {
-				log.Warnf("sql: [%s] args: [%v] query error: [%v]", stmt, args, err)
+				ctx.L().Warn("execute statement", zap.Int("retry", i), zap.String("sql", stmt), zap.Reflect("arguments", args), log.ShortError(err))
 				continue
 			}
 			return errors.Trace(err)
@@ -96,15 +99,15 @@ func (conn *Conn) executeSQL2(stmt string, maxRetry int, args ...interface{}) er
 	return errors.Annotatef(err, "exec sql[%s] args[%v] failed", stmt, args)
 }
 
-func (conn *Conn) executeSQL(sqls []string, enableRetry bool) error {
-	return conn.executeSQLCustomRetry(sqls, enableRetry, isRetryableError)
+func (conn *Conn) executeSQL(ctx *tcontext.Context, sqls []string, enableRetry bool) error {
+	return conn.executeSQLCustomRetry(ctx, sqls, enableRetry, isRetryableError)
 }
 
-func (conn *Conn) executeDDL(sqls []string, enableRetry bool) error {
-	return conn.executeSQLCustomRetry(sqls, enableRetry, isDDLRetryableError)
+func (conn *Conn) executeDDL(ctx *tcontext.Context, sqls []string, enableRetry bool) error {
+	return conn.executeSQLCustomRetry(ctx, sqls, enableRetry, isDDLRetryableError)
 }
 
-func (conn *Conn) executeSQLCustomRetry(sqls []string, enableRetry bool, isRetryableFn func(err error) bool) error {
+func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []string, enableRetry bool, isRetryableFn func(err error) bool) error {
 	if len(sqls) == 0 {
 		return nil
 	}
@@ -122,12 +125,12 @@ func (conn *Conn) executeSQLCustomRetry(sqls []string, enableRetry bool, isRetry
 
 	for i := 0; i < retryCount; i++ {
 		if i > 0 {
-			log.Warnf("exec sql retry %d - %-.100v", i, sqls)
+			ctx.L().Debug("execute statement", zap.Int("retry", i), zap.String("sqls", fmt.Sprintf("%-.200v", sqls)))
 			time.Sleep(2 * time.Duration(i) * time.Second)
 		}
 
 		startTime := time.Now()
-		err = executeSQLImp(conn.db, sqls)
+		err = executeSQLImp(ctx, conn.db, sqls)
 		if err != nil {
 			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
 			if isRetryableFn(err) {
@@ -140,7 +143,7 @@ func (conn *Conn) executeSQLCustomRetry(sqls []string, enableRetry bool, isRetry
 		cost := time.Since(startTime).Seconds()
 		txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost)
 		if cost > 1 {
-			log.Warnf("transaction execution costs %f seconds", cost)
+			ctx.L().Warn("transaction execute successfully", zap.Float64("cost time", cost))
 		}
 
 		return nil
@@ -149,7 +152,7 @@ func (conn *Conn) executeSQLCustomRetry(sqls []string, enableRetry bool, isRetry
 	return errors.Trace(err)
 }
 
-func executeSQLImp(db *sql.DB, sqls []string) error {
+func executeSQLImp(ctx *tcontext.Context, db *sql.DB, sqls []string) error {
 	var (
 		err error
 		txn *sql.Tx
@@ -158,18 +161,18 @@ func executeSQLImp(db *sql.DB, sqls []string) error {
 
 	txn, err = db.Begin()
 	if err != nil {
-		log.Errorf("exec sqls[%-.100v] begin failed %v", sqls, errors.ErrorStack(err))
+		ctx.L().Error("fail to begin a transaction", zap.String("sqls", fmt.Sprintf("%-.200v", sqls)), zap.Error(err))
 		return err
 	}
 
 	for i := range sqls {
-		log.Debugf("[exec][sql]%-.200v", sqls[i])
-		res, err = txn.Exec(sqls[i])
+		ctx.L().Debug("execute statement", zap.String("sqls", fmt.Sprintf("%-.200v", sqls[i])))
+		res, err = txn.ExecContext(ctx.Context(), sqls[i])
 		if err != nil {
-			log.Warnf("[exec][sql]%-.100v[error]%v", sqls[i], err)
+			ctx.L().Warn("execute statement", zap.String("sqls", fmt.Sprintf("%-.200v", sqls[i])), log.ShortError(err))
 			rerr := txn.Rollback()
 			if rerr != nil {
-				log.Errorf("[exec][sql]%-.100s[error]%v", sqls, rerr)
+				ctx.L().Error("fail rollback", log.ShortError(rerr))
 			}
 			return err
 		}
@@ -177,11 +180,11 @@ func executeSQLImp(db *sql.DB, sqls []string) error {
 		if i == 2 {
 			row, err1 := res.RowsAffected()
 			if err1 != nil {
-				log.Warnf("exec sql %s get rows affected error %s", sqls[i], err1)
+				ctx.L().Warn("fail to get rows affected", zap.String("sqls", fmt.Sprintf("%-.200v", sqls[i])), log.ShortError(err1))
 				continue
 			}
 			if row != 1 {
-				log.Warnf("update checkpoint affected rows %d", row)
+				ctx.L().Warn("update checkpoint", zap.Int64("affected rows", row))
 			}
 		}
 	}
@@ -219,10 +222,6 @@ func isErrDBExists(err error) bool {
 
 func isErrTableExists(err error) bool {
 	return isMySQLError(err, tmysql.ErrTableExists)
-}
-
-func isErrTableNotExists(err error) bool {
-	return isMySQLError(err, tmysql.ErrNoSuchTable)
 }
 
 func isErrDupEntry(err error) bool {

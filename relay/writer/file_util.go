@@ -151,7 +151,8 @@ func checkIsDuplicateEvent(filename string, ev *replication.BinlogEvent) (bool, 
 	_, err = f.ReadAt(buf, evStartPos)
 	if err != nil {
 		return false, errors.Annotatef(err, "read data from %d in %s with length %d", evStartPos, filename, len(buf))
-	} else if bytes.Compare(buf, ev.RawData) != 0 {
+		// } else if bytes.Compare(buf, ev.RawData) != 0 {
+	} else if !bytes.Equal(buf, ev.RawData) {
 		return false, errors.Errorf("event from %d in %s diff from passed-in event %+v", evStartPos, filename, ev.Header)
 	}
 

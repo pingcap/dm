@@ -90,10 +90,20 @@ func (t *testTCPReaderSuite) setUpData(c *C) {
 	query := fmt.Sprintf("DROP DATABASE `%s`", dbName)
 	_, err := t.db.Exec(query)
 
-	// delete previous binlog files/events.
-	query = "RESET MASTER"
-	_, err = t.db.Exec(query)
-	c.Assert(err, IsNil)
+	backoff := 5
+	waitTime := 5 * time.Second
+	waitFn := func() bool {
+		// delete previous binlog files/events. if other test cases writing events, they may be failed.
+		query = "RESET MASTER"
+		_, err = t.db.Exec(query)
+		c.Assert(err, IsNil)
+		// check whether other test cases have wrote any events.
+		time.Sleep(time.Second)
+		_, gs, err2 := utils.GetMasterStatus(t.db, flavor)
+		c.Assert(err2, IsNil)
+		return gs.String() == "" // break waiting if no other case wrote any events
+	}
+	utils.WaitSomething(backoff, waitTime, waitFn)
 
 	// execute some SQL statements to generate binlog events.
 	query = fmt.Sprintf("CREATE DATABASE `%s`", dbName)
@@ -180,6 +190,7 @@ func (t *testTCPReaderSuite) TestSyncPos(c *C) {
 
 	// get current position for master
 	pos, _, err = utils.GetMasterStatus(t.db, flavor)
+	c.Assert(err, IsNil)
 
 	// execute another DML again
 	query := fmt.Sprintf("INSERT INTO `%s`.`%s` VALUES (%d)", dbName, tableName, columnValue+1)
@@ -264,6 +275,7 @@ func (t *testTCPReaderSuite) TestSyncGTID(c *C) {
 
 	// get current GTID set for master
 	_, gSet, err = utils.GetMasterStatus(t.db, flavor)
+	c.Assert(err, IsNil)
 
 	// execute another DML again
 	query := fmt.Sprintf("INSERT INTO `%s`.`%s` VALUES (%d)", dbName, tableName, columnValue+2)

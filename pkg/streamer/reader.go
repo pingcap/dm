@@ -24,8 +24,10 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog"
+	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -57,12 +59,13 @@ type BinlogReader struct {
 
 	running bool
 	wg      sync.WaitGroup
-	ctx     context.Context
 	cancel  context.CancelFunc
+
+	tctx *tcontext.Context
 }
 
 // NewBinlogReader creates a new BinlogReader
-func NewBinlogReader(cfg *BinlogReaderConfig) *BinlogReader {
+func NewBinlogReader(tctx *tcontext.Context, cfg *BinlogReaderConfig) *BinlogReader {
 	ctx, cancel := context.WithCancel(context.Background())
 	parser := replication.NewBinlogParser()
 	parser.SetVerifyChecksum(true)
@@ -71,12 +74,16 @@ func NewBinlogReader(cfg *BinlogReaderConfig) *BinlogReader {
 	if cfg.Timezone != nil {
 		parser.SetTimestampStringLocation(cfg.Timezone)
 	}
+
+	newtctx := tctx.WithContext(ctx)
+	newtctx = newtctx.WithLogger(tctx.L().WithFields(zap.String("component", "binlog reader")))
+
 	return &BinlogReader{
 		cfg:       cfg,
 		parser:    parser,
 		indexPath: path.Join(cfg.RelayDir, utils.UUIDIndexFilename),
-		ctx:       ctx,
 		cancel:    cancel,
+		tctx:      newtctx,
 	}
 }
 
@@ -104,13 +111,13 @@ func (r *BinlogReader) StartSync(pos mysql.Position) (Streamer, error) {
 	r.wg.Add(1)
 	go func() {
 		defer r.wg.Done()
-		log.Infof("[streamer] start read from pos %v", pos)
-		err = r.parseRelay(r.ctx, s, pos)
-		if errors.Cause(err) == r.ctx.Err() {
-			log.Infof("[streamer] parse relay finished because %v", r.ctx.Err())
+		r.tctx.L().Info("start reading", zap.Stringer("position", pos))
+		err = r.parseRelay(r.tctx.Context(), s, pos)
+		if errors.Cause(err) == r.tctx.Context().Err() {
+			r.tctx.L().Warn("parse relay finished", log.ShortError(err))
 		} else if err != nil {
 			s.closeWithError(err)
-			log.Errorf("[streamer] parse relay stopped because %v", errors.ErrorStack(err))
+			r.tctx.L().Error("parse relay stopped", zap.Error(err))
 		}
 	}()
 
@@ -154,7 +161,7 @@ func (r *BinlogReader) parseRelay(ctx context.Context, s *LocalStreamer, pos mys
 		// update pos, so can switch to next sub directory
 		pos.Name = binlog.ConstructFilenameWithUUIDSuffix(parsed, uuidSuffix)
 		pos.Pos = 4 // start from pos 4 for next sub directory / file
-		log.Infof("[streamer] switching to next realy sub directory with UUID %s and pos %s", nextUUID, pos)
+		r.tctx.L().Info("switching to next realy sub directory", zap.String("next uuid", nextUUID), zap.Stringer("position", pos))
 	}
 }
 
@@ -167,7 +174,7 @@ func (r *BinlogReader) parseDirAsPossible(ctx context.Context, s *LocalStreamer,
 	pos = realPos         // use realPos to do syncing
 	var firstParse = true // the first parse time for the relay log file
 	var dir = path.Join(r.cfg.RelayDir, currentUUID)
-	log.Infof("[streamer] start to parse relay log files in sub directory %s with pos %s", dir, pos)
+	r.tctx.L().Info("start to parse relay log files in sub directory", zap.String("directory", dir), zap.Stringer("position", pos))
 
 	for {
 		select {
@@ -182,7 +189,7 @@ func (r *BinlogReader) parseDirAsPossible(ctx context.Context, s *LocalStreamer,
 			return false, "", "", errors.Errorf("no relay log files in dir %s match pos %s", dir, pos)
 		}
 
-		log.Debugf("[streamer] start read relay log files %v in directory %s with pos %s", files, dir, pos)
+		r.tctx.L().Debug("start read relay log files", zap.Strings("files", files), zap.String("directory", dir), zap.Stringer("position", pos))
 
 		var (
 			latestPos  int64
@@ -227,7 +234,7 @@ func (r *BinlogReader) parseFileAsPossible(ctx context.Context, s *LocalStreamer
 		needReParse bool
 	)
 	latestPos = offset
-	log.Debugf("[streamer] start to parse relay log file %s from offset %d in dir %s", relayLogFile, latestPos, relayLogDir)
+	r.tctx.L().Debug("start to parse relay log file", zap.String("file", relayLogFile), zap.Int64("position", latestPos), zap.String("directory", relayLogDir))
 
 	for {
 		select {
@@ -241,7 +248,7 @@ func (r *BinlogReader) parseFileAsPossible(ctx context.Context, s *LocalStreamer
 			return false, 0, "", "", errors.Annotatef(err, "parse relay log file %s from offset %d in dir %s", relayLogFile, latestPos, relayLogDir)
 		}
 		if needReParse {
-			log.Debugf("[streamer] continue to re-parse relay log file %s in dir %s", relayLogFile, relayLogDir)
+			r.tctx.L().Debug("continue to re-parse relay log file", zap.String("file", relayLogFile), zap.String("directory", relayLogDir))
 			continue // should continue to parse this file
 		}
 		return needSwitch, latestPos, nextUUID, nextBinlogName, nil
@@ -262,13 +269,7 @@ func (r *BinlogReader) parseFile(
 	latestPos = offset                            // set to argument passed in
 
 	onEventFunc := func(e *replication.BinlogEvent) error {
-		log.Debugf("[streamer] read event %+v", e.Header)
-		if e.Header.Flags&0x0040 != 0 {
-			// now LOG_EVENT_RELAY_LOG_F is only used for events which used to fill the gap in relay log file when switching the master server
-			log.Debugf("skip event %+v created by relay writer", e.Header)
-			return nil
-		}
-
+		r.tctx.L().Debug("read event", zap.Reflect("header", e.Header))
 		r.latestServerID = e.Header.ServerID // record server_id
 
 		switch e.Header.EventType {
@@ -285,7 +286,7 @@ func (r *BinlogReader) parseFile(
 				// not fake rotate event, update file pos
 				latestPos = int64(e.Header.LogPos)
 			} else {
-				log.Debugf("[streamer] skip fake rotate event %+v", e.Header)
+				r.tctx.L().Debug("skip fake rotate event %+v", zap.Reflect("header", e.Header))
 			}
 
 			// currently, we do not switch to the next relay log file when we receive the RotateEvent,
@@ -296,7 +297,7 @@ func (r *BinlogReader) parseFile(
 				Name: string(env.NextLogName),
 				Pos:  uint32(env.Position),
 			}
-			log.Infof("[streamer] rotate binlog to %v", currentPos)
+			r.tctx.L().Info("rotate binlog", zap.Stringer("position", currentPos))
 		default:
 			// update file pos
 			latestPos = int64(e.Header.LogPos)
@@ -322,26 +323,26 @@ func (r *BinlogReader) parseFile(
 		if err2 != nil {
 			return false, false, 0, "", "", errors.Annotatef(err2, "send event %+v", e.Header)
 		}
-		log.Infof("[streamer] start parse relay log file %s from offset %d", fullPath, offset)
+		r.tctx.L().Info("start parse relay log file", zap.String("file", fullPath), zap.Int64("offset", offset))
 	} else {
-		log.Debugf("[streamer] start parse relay log file %s from offset %d", fullPath, offset)
+		r.tctx.L().Debug("start parse relay log file", zap.String("file", fullPath), zap.Int64("offset", offset))
 	}
 
 	// use parser.ParseFile directly now, if needed we can change to use FileReader.
 	err = r.parser.ParseFile(fullPath, offset, onEventFunc)
 	if err != nil {
 		if possibleLast && isIgnorableParseError(err) {
-			log.Warnf("[streamer] parse relay log file %s from offset %d got error %s", fullPath, offset, errors.ErrorStack(err))
+			r.tctx.L().Warn("fail to parse relay log file, meet some ignorable error", zap.String("file", fullPath), zap.Int64("offset", offset), zap.Error(err))
 		} else {
-			log.Errorf("[streamer] parse relay log file %s from offset %d error %s", fullPath, offset, errors.ErrorStack(err))
+			r.tctx.L().Error("parse relay log file", zap.String("file", fullPath), zap.Int64("offset", offset), zap.Error(err))
 			return false, false, 0, "", "", errors.Annotatef(err, "relay log file %s", fullPath)
 		}
 	}
-	log.Debugf("[streamer] parse relay log file %s return with offset %d", fullPath, latestPos)
+	r.tctx.L().Debug("parse relay log file", zap.String("file", fullPath), zap.Int64("offset", latestPos))
 
 	if !possibleLast {
 		// there are more relay log files in current sub directory, continue to re-collect them
-		log.Infof("[streamer] more relay log files need to parse in dir %s", relayLogDir)
+		r.tctx.L().Info("more relay log files need to parse", zap.String("directory", relayLogDir))
 		return false, false, latestPos, "", "", nil
 	}
 
@@ -378,17 +379,17 @@ func (r *BinlogReader) updateUUIDs() error {
 	}
 	oldUUIDs := r.uuids
 	r.uuids = uuids
-	log.Infof("[streamer] update relay UUIDs from %v to %v", oldUUIDs, uuids)
+	r.tctx.L().Info("update relay UUIDs", zap.Strings("old uuids", oldUUIDs), zap.Strings("uuids", uuids))
 	return nil
 }
 
 // Close closes BinlogReader.
 func (r *BinlogReader) Close() error {
-	log.Info("[streamer] binlog reader closing")
+	r.tctx.L().Info("binlog reader closing")
 	r.running = false
 	r.cancel()
 	r.parser.Stop()
 	r.wg.Wait()
-	log.Info("[streamer] binlog reader closed")
+	r.tctx.L().Info("binlog reader closed")
 	return nil
 }

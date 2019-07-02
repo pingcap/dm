@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	cpu "github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -202,10 +203,10 @@ func InitStatusAndMetrics(addr string) {
 
 		// HTTP path for prometheus.
 		http.Handle("/metrics", prometheus.Handler())
-		log.Infof("listening on %v for status and metrics report.", addr)
+		log.L().Info("listening for status and metrics report.", zap.String("address", addr))
 		err := http.ListenAndServe(addr, nil)
 		if err != nil {
-			log.Fatal(err)
+			log.L().Fatal(err.Error())
 		}
 	}()
 }

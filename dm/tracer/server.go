@@ -16,7 +16,6 @@ package tracer
 import (
 	"context"
 	"net"
-	"net/http"
 	"sync"
 	"time"
 
@@ -46,7 +45,6 @@ func init() {
 // Server accepts tracing RPC requests and sends RPC responses back
 type Server struct {
 	sync.Mutex
-	wg     sync.WaitGroup
 	closed sync2.AtomicBool
 
 	cfg *Config
@@ -54,9 +52,8 @@ type Server struct {
 	rootLis net.Listener
 	svr     *grpc.Server
 
-	eventStore   *EventStore
-	idGen        *tracing.IDGenerator
-	statusServer *http.Server
+	eventStore *EventStore
+	idGen      *tracing.IDGenerator
 }
 
 // NewServer creates a new Server

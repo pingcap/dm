@@ -16,9 +16,18 @@ package writer
 import (
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/log"
 )
+
+// // logger writes log start with `[component=relay]`
+var logger log.Logger
+
+func init() {
+	logger = log.With(zap.String("component", "relay"))
+}
 
 // Result represents a write result.
 type Result struct {
@@ -54,11 +63,11 @@ type Writer interface {
 	// It is often used to recover a binlog file with some corrupt/incomplete binlog events/transactions at the end of the file.
 	// It is not safe for concurrent use by multiple goroutines.
 	// It should be called before writing to the file.
-	Recover() (*RecoverResult, error)
+	Recover() (RecoverResult, error)
 
 	// WriteEvent writes an binlog event's data into disk or any other places.
 	// It is not safe for concurrent use by multiple goroutines.
-	WriteEvent(ev *replication.BinlogEvent) (*Result, error)
+	WriteEvent(ev *replication.BinlogEvent) (Result, error)
 
 	// Flush flushes the buffered data to a stable storage or sends through the network.
 	// It is not safe for concurrent use by multiple goroutines.

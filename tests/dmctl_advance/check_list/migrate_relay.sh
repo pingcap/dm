@@ -16,5 +16,5 @@ function migrate_relay_without_worker() {
 function migrate_relay_while_master_down() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "migrate-relay 127.0.0.1:$WORKER1_PORT bin-000001 194" \
-        "can not migrate relay config:" 1
+        "can not migrate relay" 1
 }
