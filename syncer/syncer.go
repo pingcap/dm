@@ -444,7 +444,8 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	// clear tables info
 	s.clearAllTables()
 
-	s.runFatalChan = make(chan *pb.ProcessError, s.cfg.WorkerCount+1)
+	runFatalChan := make(chan *pb.ProcessError, s.cfg.WorkerCount+1)
+	s.runFatalChan = runFatalChan
 	s.execErrorDetected.Set(false)
 	s.resetExecErrors()
 	errs := make([]*pb.ProcessError, 0, 2)
@@ -460,7 +461,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	go func() {
 		defer wg.Done()
 		for {
-			err, ok := <-s.runFatalChan
+			err, ok := <-runFatalChan
 			if !ok {
 				return
 			}
@@ -2060,7 +2061,6 @@ func (s *Syncer) Close() {
 // maybe we can refine the workflow more clear
 func (s *Syncer) stopSync() {
 	<-s.done // wait Run to return
-	close(s.runFatalChan)
 	s.closeJobChans()
 	s.wg.Wait() // wait job workers to return
 
