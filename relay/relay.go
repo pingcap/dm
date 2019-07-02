@@ -373,7 +373,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 				Name: string(tResult.NextLogName),
 				Pos:  uint32(tResult.LogPos),
 			}
-			r.logger.Info("rotate to %s", zap.Stringer("position", lastPos))
+			r.logger.Info("rotate event", zap.Stringer("position", lastPos))
 		}
 		if tResult.Ignore {
 			r.logger.Info("ignore event by transformer", zap.Reflect("header", e.Header))
