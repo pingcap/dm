@@ -21,7 +21,8 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/tests/utils"
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/errors"
 )
 
 // use query status request to test DM-worker is online
@@ -29,12 +30,12 @@ func main() {
 	addr := os.Args[1]
 	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(2*time.Second))
 	if err != nil {
-		utils.ExitWithError(err)
+		log.Fatal(errors.ErrorStack(err))
 	}
 	cli := pb.NewWorkerClient(conn)
 	req := &pb.QueryStatusRequest{}
 	_, err = cli.QueryStatus(context.Background(), req)
 	if err != nil {
-		utils.ExitWithError(err)
+		log.Fatal(errors.ErrorStack(err))
 	}
 }

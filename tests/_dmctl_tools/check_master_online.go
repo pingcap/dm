@@ -21,7 +21,8 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/tests/utils"
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/errors"
 )
 
 // use show-ddl-locks request to test DM-master is online
@@ -29,12 +30,12 @@ func main() {
 	addr := os.Args[1]
 	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(2*time.Second))
 	if err != nil {
-		utils.ExitWithError(err)
+		log.Fatal(errors.ErrorStack(err))
 	}
 	cli := pb.NewMasterClient(conn)
 	req := &pb.ShowDDLLocksRequest{}
 	_, err = cli.ShowDDLLocks(context.Background(), req)
 	if err != nil {
-		utils.ExitWithError(err)
+		log.Fatal(errors.ErrorStack(err))
 	}
 }
