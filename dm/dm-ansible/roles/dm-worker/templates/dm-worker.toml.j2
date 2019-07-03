@@ -7,9 +7,18 @@ meta-file = "relay.meta"
 enable-gtid = {{ enable_gtid }}
 relay-binlog-name = "{{ relay_binlog_name }}"
 relay-binlog-gtid = "{{ relay_binlog_gtid }}"
+#charset of DSN of source mysql/mariadb instance
+charset = ""
+meta-dir = ""
 
 [from]
 host = "{{ mysql_host }}"
 user = "{{ mysql_user }}"
 password = "{{ mysql_password }}"
 port = {{ mysql_port }}
+
+#relay log purge strategy
+[purge]
+interval = 3600
+expires = 24
+remain-space = 15
