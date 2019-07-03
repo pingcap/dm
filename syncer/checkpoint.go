@@ -279,7 +279,7 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, pos
 	}
 
 	// we save table checkpoint while we meet DDL or DML
-	cp.tctx.L().Error("save checkpoint", zap.Stringer("position", pos), zap.String("schema", sourceSchema), zap.String("table", sourceTable))
+	cp.tctx.L().Debug("save table checkpoint", zap.Stringer("position", pos), zap.String("schema", sourceSchema), zap.String("table", sourceTable))
 	mSchema, ok := cp.points[sourceSchema]
 	if !ok {
 		mSchema = make(map[string]*binlogPoint)
@@ -307,6 +307,8 @@ func (cp *RemoteCheckPoint) DeleteTablePoint(sourceSchema, sourceTable string) e
 	if !ok {
 		return nil
 	}
+
+	cp.tctx.L().Info("delete table checkpoint", zap.String("schema", sourceSchema), zap.String("table", sourceTable))
 	// delete  checkpoint
 	sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s' AND `cp_schema` = '%s' AND `cp_table` = '%s'", cp.schema, cp.table, cp.id, sourceSchema, sourceTable)
 	args := make([]interface{}, 0)
@@ -338,6 +340,8 @@ func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, 
 func (cp *RemoteCheckPoint) SaveGlobalPoint(pos mysql.Position) {
 	cp.Lock()
 	defer cp.Unlock()
+
+	cp.tctx.L().Debug("save global checkpoint", zap.Stringer("position", pos))
 	if err := cp.globalPoint.save(pos); err != nil {
 		cp.tctx.L().Error("fail to save global checkpoint", log.ShortError(err))
 	}
