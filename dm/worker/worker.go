@@ -595,7 +595,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		}
 	}
 
-	w.l.Info("[worker] update relay configure in subtasks success.")
+	w.l.Info("update relay configure in subtasks success.")
 
 	// Update relay unit configure
 	err = w.relayHolder.Update(ctx, cloneCfg)
@@ -780,7 +780,7 @@ Loop:
 					break
 				}
 
-				w.l.Info("updateed sub task", zap.String("task", opLog.Task.Name), zap.Stringer("new config", taskCfg))
+				w.l.Info("updated sub task", zap.String("task", opLog.Task.Name), zap.Stringer("new config", taskCfg))
 				err = st.Update(taskCfg)
 			case pb.TaskOp_Stop:
 				if !exist {

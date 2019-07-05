@@ -168,7 +168,7 @@ func tryUpgrade(dbDir string) error {
 	// 4. check needing to upgrade
 	currVer := currentWorkerVersion
 	if prevVer.compare(currVer) == 0 {
-		log.L().Info("previous and current versions both are same, no need to upgrade", zap.String("feature", "bootstrap upgrade"), zap.Stringer("version", prevVer))
+		log.L().Info("previous and current versions are same, no need to upgrade", zap.String("feature", "bootstrap upgrade"), zap.Stringer("version", prevVer))
 		return nil
 	} else if prevVer.compare(currVer) > 0 {
 		return errors.Errorf("the previous version %s is newer than current %s, automatic downgrade is not supported now, please handle it manually", prevVer, currVer)
