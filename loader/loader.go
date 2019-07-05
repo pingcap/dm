@@ -228,7 +228,7 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 	baseFile := filepath.Base(file)
 	err = w.checkPoint.Init(baseFile, finfo.Size())
 	if err != nil {
-		w.tctx.L().Error("fail to  initial checkpoint", zap.String("data file", file), log.ShortError(err))
+		w.tctx.L().Error("fail to initial checkpoint", zap.String("data file", file), log.ShortError(err))
 		return errors.Trace(err)
 	}
 
