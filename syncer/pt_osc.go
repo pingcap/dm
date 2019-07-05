@@ -35,7 +35,6 @@ type PT struct {
 
 // NewPT returns pt online schema changes plugin
 func NewPT(tctx *tcontext.Context, cfg *config.SubTaskConfig) (OnlinePlugin, error) {
-
 	newtctx := tctx.WithLogger(tctx.L().WithFields(zap.String("online ddl", "ghost osc")))
 
 	g := &PT{

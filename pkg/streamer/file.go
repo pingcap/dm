@@ -109,12 +109,12 @@ func CollectBinlogFilesCmp(dir, baseFile string, cmp FileCmp) ([]string, error) 
 			}
 		case FileCmpBiggerEqual:
 			if !parsed.GreaterThanOrEqualTo(bf) {
-				log.L().Debug("[streamer] ignore older binlog files", zap.String("file", f), zap.String("directory", dir))
+				log.L().Debug("ignore older binlog files", zap.String("file", f), zap.String("directory", dir))
 				continue
 			}
 		case FileCmpLess:
 			if !parsed.LessThan(bf) {
-				log.L().Debug("[streamer] ignore newer or equal binlog file", zap.String("file", f), zap.String("directory", dir))
+				log.L().Debug("ignore newer or equal binlog file", zap.String("file", f), zap.String("directory", dir))
 				continue
 			}
 		default:
