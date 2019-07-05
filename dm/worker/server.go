@@ -292,7 +292,7 @@ func (s *Server) FetchDDLInfo(stream pb.Worker_FetchDDLInfoServer) error {
 			log.L().Error("fail to receive DDLLockInfo from RPC stream", zap.String("request", "fetch ddl info"), zap.Stringer("ddl info", ddlInfo), log.ShortError(err))
 			return err
 		}
-		log.L().Info("receive DDLLockInfo", zap.String("request", "fetch ddl info"), zap.Stringer("ddl lock info", in), log.ShortError(err))
+		log.L().Info("receive DDLLockInfo", zap.String("request", "fetch ddl info"), zap.Stringer("ddl lock info", in))
 
 		//ddlInfo = nil // clear and protect to put it back
 

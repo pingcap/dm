@@ -1501,7 +1501,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		s.tctx.L().Error("fail to resolve statement", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last position", ec.lastPos), zap.Stringer("position", ec.currentPos), zap.Stringer("gtid set", ev.GSet), log.ShortError(err))
 		return errors.Trace(err)
 	}
-	s.tctx.L().Info("resolve sql", zap.String("event", "query"), zap.String("raw statement", sql), zap.Strings("statements", sqls), zap.String("schema", usedSchema), zap.Stringer("last position", ec.lastPos), zap.Stringer("position", ec.currentPos), zap.Stringer("gtid set", ev.GSet), log.ShortError(err))
+	s.tctx.L().Info("resolve sql", zap.String("event", "query"), zap.String("raw statement", sql), zap.Strings("statements", sqls), zap.String("schema", usedSchema), zap.Stringer("last position", ec.lastPos), zap.Stringer("position", ec.currentPos), zap.Stringer("gtid set", ev.GSet))
 
 	if len(onlineDDLTableNames) > 1 {
 		return errors.NotSupportedf("online ddl changes on multiple table: %s", string(ev.Query))
