@@ -559,7 +559,7 @@ func (l *Loader) stopLoad() {
 		worker.Close()
 	}
 	l.pool = l.pool[:0]
-	l.tctx.L().Debug("all workers has been closed")
+	l.tctx.L().Debug("all workers have been closed")
 }
 
 // Pause pauses the process, and it can be resumed later

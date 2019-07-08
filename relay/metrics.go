@@ -150,7 +150,7 @@ func reportRelayLogSpaceInBackground(dirpath string) error {
 		for range ticker.C {
 			size, err := utils.GetStorageSize(dirpath)
 			if err != nil {
-				log.L().Error("fail to update relay log sotrage size", log.ShortError(err))
+				log.L().Error("fail to update relay log storage size", log.ShortError(err))
 			} else {
 				relayLogSpaceGauge.WithLabelValues("capacity").Set(float64(size.Capacity))
 				relayLogSpaceGauge.WithLabelValues("available").Set(float64(size.Available))

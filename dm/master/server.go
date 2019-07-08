@@ -699,7 +699,7 @@ func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLL
 
 // HandleSQLs implements MasterServer.HandleSQLs
 func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb.HandleSQLsResponse, error) {
-	log.L().Info("", zap.String("operation name", req.Name), zap.Stringer("payload", req), zap.String("request", "HandleSQLs"))
+	log.L().Info("", zap.String("task name", req.Name), zap.Stringer("payload", req), zap.String("request", "HandleSQLs"))
 
 	// save request for --sharding operation
 	if req.Sharding {
@@ -710,7 +710,7 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb
 				Msg:    fmt.Sprintf("save request with --sharding error:\n%s", errors.ErrorStack(err)),
 			}, nil
 		}
-		log.L().Info("handle sqls request was saved", zap.String("operation name", req.Name), zap.String("request", "HandleSQLs"))
+		log.L().Info("handle sqls request was saved", zap.String("task name", req.Name), zap.String("request", "HandleSQLs"))
 		return &pb.HandleSQLsResponse{
 			Result: true,
 			Msg:    "request with --sharding saved and will be sent to DDL lock's owner when resolving DDL lock",
@@ -1483,7 +1483,7 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 				return
 			}
 
-			log.L().Info("request to skip DDL", zap.String("not owner worker", owner), zap.String("lock ID", lockID))
+			log.L().Info("request to skip DDL", zap.String("not owner worker", worker), zap.String("lock ID", lockID))
 			resp, err2 := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
 			var workerResp *pb.CommonWorkerResponse
 			if err2 != nil {

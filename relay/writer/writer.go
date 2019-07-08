@@ -22,7 +22,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 )
 
-// // logger writes log start with `[component=relay]`
+// logger writes log start with `[component=relay]`
 var logger log.Logger
 
 func init() {

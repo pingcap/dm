@@ -183,11 +183,11 @@ func (c *Config) adjust() error {
 
 	// for backward compatibility
 	if c.RPCRateLimit <= 0 {
-		log.L().Warn("invalid rpc-rate-limit", zap.Float64("specified rpc-rate-limit", c.RPCRateLimit), zap.Float64("default rpc-rate-limit", DefaultRate))
+		log.L().Warn("invalid rpc-rate-limit, default value used", zap.Float64("specified rpc-rate-limit", c.RPCRateLimit), zap.Float64("default rpc-rate-limit", DefaultRate))
 		c.RPCRateLimit = DefaultRate
 	}
 	if c.RPCRateBurst <= 0 {
-		log.L().Warn("invalid rpc-rate-burst", zap.Int("specified rpc-rate-burst", c.RPCRateBurst), zap.Int("default rpc-rate-burst", DefaultBurst))
+		log.L().Warn("invalid rpc-rate-burst, default value use", zap.Int("specified rpc-rate-burst", c.RPCRateBurst), zap.Int("default rpc-rate-burst", DefaultBurst))
 		c.RPCRateBurst = DefaultBurst
 	}
 
