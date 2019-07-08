@@ -1219,7 +1219,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			latestOp = xid
 			currentPos.Pos = e.Header.LogPos
-			s.tctx.L().Debug("", zap.String("event", "XID"), zap.Stringer("last position", lastPos), zap.Stringer("position", currentPos), zap.Stringer("gtid set", ev.GSet))
+			s.tctx.L().Debug("", zap.String("event", "XID"), zap.Stringer("last position", lastPos), zap.Stringer("position", currentPos), wrapStringerField("gtid set", ev.GSet))
 			lastPos.Pos = e.Header.LogPos // update lastPos
 
 			job := newXIDJob(currentPos, currentPos, nil, traceID)
@@ -1452,7 +1452,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	usedSchema := string(ev.Schema)
 	parseResult, err := s.parseDDLSQL(sql, ec.parser2, usedSchema)
 	if err != nil {
-		s.tctx.L().Error("fail to parse statement", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last position", ec.lastPos), zap.Stringer("position", ec.currentPos), zap.Stringer("gtid set", ev.GSet), log.ShortError(err))
+		s.tctx.L().Error("fail to parse statement", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last position", ec.lastPos), zap.Stringer("position", ec.currentPos), wrapStringerField("gtid set", ev.GSet), log.ShortError(err))
 		return errors.Trace(err)
 	}
 
@@ -1485,7 +1485,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		return nil
 	}
 
-	s.tctx.L().Info("", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last position", ec.lastPos), zap.Stringer("position", ec.currentPos), zap.Stringer("gtid set", ev.GSet))
+	s.tctx.L().Info("", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last position", ec.lastPos), zap.Stringer("position", ec.currentPos), wrapStringerField("gtid set", ev.GSet))
 	*ec.lastPos = *ec.currentPos // update lastPos, because we have checked `isDDL`
 	*ec.latestOp = ddl
 
@@ -1498,10 +1498,10 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	// so can handle sharding cases
 	sqls, onlineDDLTableNames, err = s.resolveDDLSQL(ec.parser2, parseResult.stmt, usedSchema)
 	if err != nil {
-		s.tctx.L().Error("fail to resolve statement", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last position", ec.lastPos), zap.Stringer("position", ec.currentPos), zap.Stringer("gtid set", ev.GSet), log.ShortError(err))
+		s.tctx.L().Error("fail to resolve statement", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last position", ec.lastPos), zap.Stringer("position", ec.currentPos), wrapStringerField("gtid set", ev.GSet), log.ShortError(err))
 		return errors.Trace(err)
 	}
-	s.tctx.L().Info("resolve sql", zap.String("event", "query"), zap.String("raw statement", sql), zap.Strings("statements", sqls), zap.String("schema", usedSchema), zap.Stringer("last position", ec.lastPos), zap.Stringer("position", ec.currentPos), zap.Stringer("gtid set", ev.GSet))
+	s.tctx.L().Info("resolve sql", zap.String("event", "query"), zap.String("raw statement", sql), zap.Strings("statements", sqls), zap.String("schema", usedSchema), zap.Stringer("last position", ec.lastPos), zap.Stringer("position", ec.currentPos), wrapStringerField("gtid set", ev.GSet))
 
 	if len(onlineDDLTableNames) > 1 {
 		return errors.NotSupportedf("online ddl changes on multiple table: %s", string(ev.Query))

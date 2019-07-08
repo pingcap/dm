@@ -35,6 +35,14 @@ func Background() *Context {
 	}
 }
 
+// NewContext return a new Context
+func NewContext(ctx context.Context, logger log.Logger) *Context {
+	return &Context{
+		Ctx:    ctx,
+		Logger: logger,
+	}
+}
+
 // WithContext set go context
 func (c *Context) WithContext(ctx context.Context) *Context {
 	return &Context{

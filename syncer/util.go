@@ -14,12 +14,14 @@
 package syncer
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
 )
@@ -93,4 +95,12 @@ func getDBConfigFromEnv() config.DBConfig {
 		Password: pswd,
 		Port:     port,
 	}
+}
+
+func wrapStringerField(message string, object fmt.Stringer) zap.Field {
+	if object != nil {
+		return zap.Stringer(message, object)
+	}
+
+	return zap.String(message, "NULL")
 }

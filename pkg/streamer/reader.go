@@ -75,8 +75,7 @@ func NewBinlogReader(tctx *tcontext.Context, cfg *BinlogReaderConfig) *BinlogRea
 		parser.SetTimestampStringLocation(cfg.Timezone)
 	}
 
-	newtctx := tctx.WithContext(ctx)
-	newtctx = newtctx.WithLogger(tctx.L().WithFields(zap.String("component", "binlog reader")))
+	newtctx := tcontext.NewContext(ctx, tctx.L().WithFields(zap.String("component", "binlog reader")))
 
 	return &BinlogReader{
 		cfg:       cfg,
