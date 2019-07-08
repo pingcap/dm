@@ -50,7 +50,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	utils.PrintInfo("worker", func() {
+	utils.PrintInfo("dm-worker", func() {
 		log.L().Info("", zap.Stringer("dm-worker config", cfg))
 	})
 
