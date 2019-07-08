@@ -198,7 +198,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 			Msg:    errors.ErrorStack(err),
 		}, nil
 	}
-	log.L().Info("", zap.String("name", cfg.Name), zap.Stringer("task", cfg), zap.String("request", "StartTask"))
+	log.L().Info("", zap.String("task name", cfg.Name), zap.Stringer("task", cfg), zap.String("request", "StartTask"))
 
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(stCfgs)+len(req.Workers))
 	if len(req.Workers) > 0 {
