@@ -326,6 +326,9 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 }
 
 func (s *testSyncerSuite) TestIgnoreDB(c *C) {
+	s.resetMaster()
+	s.resetBinlogSyncer()
+
 	s.cfg.BWList = &filter.Rules{
 		IgnoreDBs: []string{"~^b.*", "s1", "stest"},
 	}
@@ -784,6 +787,8 @@ func (s *testSyncerSuite) TestTimezone(c *C) {
 }
 
 func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
+	defer s.db.Exec("drop database if exists gctest_1")
+
 	s.cfg.BWList = &filter.Rules{
 		DoDBs: []string{"~^gctest_.*"},
 	}
@@ -1032,12 +1037,16 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 
 func (s *testSyncerSuite) TestRun(c *C) {
 	// 1. run syncer with column mapping
-	// 2. update config, add route rules, and update syncer
+	// 2. execute some sqls which will trigger casuality
+	// 3. check the generated jobs
+	// 4. update config, add route rules, and update syncer
+	// 5. execute somes sqls and then check jobs generated
 
 	defer s.db.Exec("drop database if exists test_1")
 
 	s.resetMaster()
 	s.resetBinlogSyncer()
+	testJobs.jobs = testJobs.jobs[:0]
 
 	s.cfg.BWList = &filter.Rules{
 		DoDBs: []string{"test_1"},
@@ -1058,8 +1067,9 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		},
 	}
 
-	s.cfg.Batch = 10
+	s.cfg.Batch = 1000
 	s.cfg.WorkerCount = 2
+	s.cfg.DisableCausality = false
 
 	syncer := NewSyncer(s.cfg)
 	err := syncer.Init()
@@ -1073,53 +1083,67 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	go syncer.Process(ctx, resultCh)
 
-	testCases1 := []struct {
-		sql      string
+	sqls1 := []string{
+		"create database if not exists test_1",
+		"create table if not exists test_1.t_1(id int primary key, name varchar(24))",
+		"create table if not exists test_1.t_2(id int primary key, name varchar(24))",
+		"insert into test_1.t_1 values(1, 'a')",
+		"alter table test_1.t_1 add index index1(name)",
+		"insert into test_1.t_1 values(2, 'b')",
+		"delete from test_1.t_1 where id = 1",
+		"update test_1.t_1 set id = 1 where id = 2", // will find casuality and then generate flush job
+	}
+	expectJobs1 := []struct {
 		tp       opType
 		sqlInJob string
-		arg      interface{}
+		args     []interface{}
 	}{
 		{
-			"create database if not exists test_1",
 			ddl,
 			"CREATE DATABASE IF NOT EXISTS `test_1`",
 			nil,
 		}, {
-			"create table if not exists test_1.t_1(id int)",
 			ddl,
-			"CREATE TABLE IF NOT EXISTS `test_1`.`t_1` (`id` INT)",
+			"CREATE TABLE IF NOT EXISTS `test_1`.`t_1` (`id` INT PRIMARY KEY,`name` VARCHAR(24))",
 			nil,
 		}, {
-			"create table if not exists test_1.t_2(id int)",
 			ddl,
-			"CREATE TABLE IF NOT EXISTS `test_1`.`t_2` (`id` INT)",
+			"CREATE TABLE IF NOT EXISTS `test_1`.`t_2` (`id` INT PRIMARY KEY,`name` VARCHAR(24))",
 			nil,
 		}, {
-			"insert into test_1.t_1 values(1)",
 			insert,
-			"REPLACE INTO `test_1`.`t_1` (`id`) VALUES (?);",
-			int64(580981944116838401),
+			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?);",
+			[]interface{}{int64(580981944116838401), "a"},
 		}, {
-			"alter table test_1.t_1 add index index1(id)",
 			ddl,
-			"ALTER TABLE `test_1`.`t_1` ADD INDEX `index1`(`id`)",
+			"ALTER TABLE `test_1`.`t_1` ADD INDEX `index1`(`name`)",
 			nil,
 		}, {
-			"insert into test_1.t_1 values(2)",
 			insert,
-			"REPLACE INTO `test_1`.`t_1` (`id`) VALUES (?);",
-			int64(580981944116838402),
+			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?);",
+			[]interface{}{int64(580981944116838402), "b"},
 		}, {
-			"delete from test_1.t_1 where id = 1",
 			del,
 			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1;",
-			int64(580981944116838401),
+			[]interface{}{int64(580981944116838401)},
+		}, {
+			flush,
+			"",
+			nil,
+		}, {
+			update,
+			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1;",
+			[]interface{}{int64(580981944116838402)},
+		}, {
+			update,
+			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?);",
+			[]interface{}{int64(580981944116838401), "b"},
 		},
 	}
 
-	for _, testCase := range testCases1 {
-		c.Log("exec sql: ", testCase.sql)
-		_, err := s.db.Exec(testCase.sql)
+	for _, sql := range sqls1 {
+		c.Log("exec sql: ", sql)
+		_, err := s.db.Exec(sql)
 		c.Assert(err, IsNil)
 	}
 
@@ -1130,23 +1154,24 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		jobNum := len(testJobs.jobs)
 		testJobs.RUnlock()
 
-		if jobNum >= len(testCases1) {
+		if jobNum >= len(expectJobs1) {
 			break
 		}
 	}
 
 	testJobs.Lock()
-	c.Assert(testJobs.jobs, HasLen, len(testCases1))
-	for i, testCase := range testCases1 {
-		c.Assert(testJobs.jobs[i].tp, Equals, testCase.tp)
-		if testJobs.jobs[i].tp == ddl {
-			c.Assert(testJobs.jobs[i].ddls[0], Equals, testCase.sqlInJob)
+	c.Assert(testJobs.jobs, HasLen, len(expectJobs1))
+	for i, job := range testJobs.jobs {
+		c.Log(i, job.sql, job.ddls, job.args)
+
+		c.Assert(job.tp, Equals, expectJobs1[i].tp)
+		if job.tp == ddl {
+			c.Assert(job.ddls[0], Equals, expectJobs1[i].sqlInJob)
 		} else {
-			c.Assert(testJobs.jobs[i].sql, Equals, testCase.sqlInJob)
-			c.Assert(testJobs.jobs[i].args[0], Equals, testCase.arg)
+			c.Assert(job.sql, Equals, expectJobs1[i].sqlInJob)
+			c.Assert(job.args, DeepEquals, expectJobs1[i].args)
 		}
 	}
-
 	testJobs.jobs = testJobs.jobs[:0]
 	testJobs.Unlock()
 
@@ -1161,6 +1186,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	}
 
 	cancel()
+	// when syncer exit Run(), will flush job
 	syncer.Pause()
 	syncer.Update(s.cfg)
 
@@ -1171,28 +1197,34 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	resultCh = make(chan pb.ProcessResult)
 	go syncer.Resume(ctx, resultCh)
 
-	testCases2 := []struct {
-		sql      string
+	sql2 := []string{
+		"insert into test_1.t_1 values(3, 'c')",
+		"delete from test_1.t_1 where id = 3",
+	}
+
+	expectJobs2 := []struct {
 		tp       opType
 		sqlInJob string
-		arg      interface{}
+		args     []interface{}
 	}{
 		{
-			"insert into test_1.t_1 values(3)",
-			insert,
-			"REPLACE INTO `test_1`.`t_2` (`id`) VALUES (?);",
-			int32(3),
+			flush,
+			"",
+			nil,
 		}, {
-			"delete from test_1.t_1 where id = 3",
+			insert,
+			"REPLACE INTO `test_1`.`t_2` (`id`,`name`) VALUES (?,?);",
+			[]interface{}{int32(3), "c"},
+		}, {
 			del,
 			"DELETE FROM `test_1`.`t_2` WHERE `id` = ? LIMIT 1;",
-			int32(3),
+			[]interface{}{int32(3)},
 		},
 	}
 
-	for _, testCase := range testCases2 {
-		c.Log("exec sql: ", testCase.sql)
-		_, err := s.db.Exec(testCase.sql)
+	for _, sql := range sql2 {
+		c.Log("exec sql: ", sql)
+		_, err := s.db.Exec(sql)
 		c.Assert(err, IsNil)
 	}
 
@@ -1203,26 +1235,28 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		jobNum := len(testJobs.jobs)
 		testJobs.RUnlock()
 
-		if jobNum >= len(testCases2) {
+		if jobNum >= len(expectJobs2) {
 			break
 		}
 	}
 
 	testJobs.RLock()
-	c.Assert(testJobs.jobs, HasLen, len(testCases2))
-	for i, testCase := range testCases2 {
-		c.Assert(testJobs.jobs[i].tp, Equals, testCase.tp)
-		if testJobs.jobs[i].tp == ddl {
-			c.Assert(testJobs.jobs[i].ddls[0], Equals, testCase.sqlInJob)
+	c.Assert(testJobs.jobs, HasLen, len(expectJobs2))
+	for i, job := range testJobs.jobs {
+		c.Log(i, job.tp, job.ddls, job.sql, job.args)
+
+		c.Assert(job.tp, Equals, expectJobs2[i].tp)
+		if job.tp == ddl {
+			c.Assert(job.ddls[0], Equals, expectJobs2[i].sqlInJob)
 		} else {
-			c.Assert(testJobs.jobs[i].sql, Equals, testCase.sqlInJob)
-			c.Assert(testJobs.jobs[i].args[0], Equals, testCase.arg)
+			c.Assert(job.sql, Equals, expectJobs2[i].sqlInJob)
+			c.Assert(job.args, DeepEquals, expectJobs2[i].args)
 		}
 	}
 	testJobs.RUnlock()
 
 	status := syncer.Status().(*pb.SyncStatus)
-	c.Assert(status.TotalEvents, Equals, int64(len(testCases1)+len(testCases2)))
+	c.Assert(status.TotalEvents, Equals, int64(len(expectJobs1)+len(expectJobs2)))
 
 	cancel()
 	syncer.Close()
@@ -1238,7 +1272,7 @@ func (s *Syncer) addJobToMemory(job *job) error {
 	log.Infof("addJobToMemory: %v", job)
 
 	switch job.tp {
-	case ddl, insert, update, del:
+	case ddl, insert, update, del, flush:
 		s.addCount(false, "test", job.tp, 1)
 		testJobs.Lock()
 		testJobs.jobs = append(testJobs.jobs, job)
