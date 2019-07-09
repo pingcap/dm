@@ -147,7 +147,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *
 				failpoint.Inject("LoadExceedOffsetExit", func(val failpoint.Value) {
 					threshold, _ := val.(int)
 					if job.offset >= int64(threshold) {
-						w.tctx.L().Warn("load offset execeeds threshold, it will panic", zap.Int64("load offset", job.offset), zap.Int("threshold", threshold), zap.String("feature", "failpoint"))
+						w.tctx.L().Warn("load offset execeeds threshold, it will exit", zap.Int64("load offset", job.offset), zap.Int("threshold", threshold), zap.String("feature", "failpoint"))
 						utils.OsExit(1)
 					}
 				})
@@ -846,7 +846,7 @@ func (l *Loader) restoreSchema(conn *Conn, sqlFile, schema string) error {
 	err := l.restoreStructure(conn, sqlFile, schema, "")
 	if err != nil {
 		if isErrDBExists(err) {
-			l.tctx.L().Info("database already exists, skip it", zap.String("sql", sqlFile))
+			l.tctx.L().Info("database already exists, skip it", zap.String("db schema file", sqlFile))
 		} else {
 			return errors.Annotatef(err, "run db schema failed - dbfile %s", sqlFile)
 		}
@@ -859,7 +859,7 @@ func (l *Loader) restoreTable(conn *Conn, sqlFile, schema, table string) error {
 	err := l.restoreStructure(conn, sqlFile, schema, table)
 	if err != nil {
 		if isErrTableExists(err) {
-			l.tctx.L().Info("table already exists, skip it", zap.String("sql", sqlFile))
+			l.tctx.L().Info("table already exists, skip it", zap.String("table schema file", sqlFile))
 		} else {
 			return errors.Annotatef(err, "run table schema failed - dbfile %s", sqlFile)
 		}
@@ -938,7 +938,7 @@ func fetchMatchedLiteral(ctx *tcontext.Context, router *router.Table, schema, ta
 
 	targetSchema, targetTable, err := router.Route(schema, table)
 	if err != nil {
-		ctx.L().Error("fail to route table", zap.String("unit", "loader"), zap.Error(err)) // log the error, but still continue
+		ctx.L().Error("fail to route table", zap.Error(err)) // log the error, but still continue
 	}
 	if targetSchema == "" {
 		// nothing change

@@ -38,13 +38,12 @@ require (
 	github.com/pingcap/tidb v0.0.0-20190613131440-c59a108c28b7
 	github.com/pingcap/tidb-tools v3.0.0-beta.1.0.20190626065910-16523947c844+incompatible
 	github.com/prometheus/client_golang v0.9.4
-	github.com/prometheus/common v0.4.1
 	github.com/remyoudompheng/bigfft v0.0.0-20190512091148-babf20351dd7 // indirect
 	github.com/satori/go.uuid v1.2.0
 	github.com/shirou/gopsutil v2.18.12+incompatible // indirect
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
 	github.com/siddontang/go-mysql v0.0.0-20190312052122-c6ab05a85eb8
-	github.com/sirupsen/logrus v1.4.2
+	github.com/sirupsen/logrus v1.4.2 // indirect
 	github.com/soheilhy/cmux v0.1.4
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/cobra v0.0.4
@@ -65,7 +64,6 @@ require (
 	google.golang.org/appengine v1.4.0 // indirect
 	google.golang.org/genproto v0.0.0-20190611190212-a7e196e89fd3 // indirect
 	google.golang.org/grpc v1.21.1
-	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.2.2
 	sourcegraph.com/sourcegraph/appdash v0.0.0-20190107175209-d9ea5c54f7dc // indirect
 )
