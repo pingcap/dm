@@ -1097,7 +1097,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		}, {
 			"insert into test_1.t_1 values(1)",
 			insert,
-			"INSERT INTO `test_1`.`t_1` (`id`) VALUES (?);",
+			"REPLACE INTO `test_1`.`t_1` (`id`) VALUES (?);",
 			int64(580981944116838401),
 		}, {
 			"alter table test_1.t_1 add index index1(id)",
@@ -1107,7 +1107,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		}, {
 			"insert into test_1.t_1 values(2)",
 			insert,
-			"INSERT INTO `test_1`.`t_1` (`id`) VALUES (?);",
+			"REPLACE INTO `test_1`.`t_1` (`id`) VALUES (?);",
 			int64(580981944116838402),
 		}, {
 			"delete from test_1.t_1 where id = 1",
@@ -1180,7 +1180,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		{
 			"insert into test_1.t_1 values(3)",
 			insert,
-			"INSERT INTO `test_1`.`t_2` (`id`) VALUES (?);",
+			"REPLACE INTO `test_1`.`t_2` (`id`) VALUES (?);",
 			int32(3),
 		}, {
 			"delete from test_1.t_1 where id = 3",
