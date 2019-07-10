@@ -1647,7 +1647,7 @@ func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWork
 		return errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", worker), worker), nil
 	}
 
-	log.L().Info("update relay configure", zap.String("worker", worker), zap.String("request", "UpdateWorkerRelayConfig"))
+	log.L().Info("update relay config", zap.String("worker", worker), zap.String("request", "UpdateWorkerRelayConfig"))
 	request := &workerrpc.Request{
 		Type:        workerrpc.CmdUpdateRelay,
 		UpdateRelay: &pb.UpdateRelayRequest{Content: content},
@@ -1670,7 +1670,7 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 	)
 	handleErr := func(err2 error) bool {
 		if err2 != nil {
-			log.L().Error("reponse error", zap.Error(err2))
+			log.L().Error("response error", zap.Error(err2))
 		}
 		errCh <- errors.Trace(err2)
 		return false

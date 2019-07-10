@@ -352,7 +352,7 @@ func (c *TaskConfig) adjust() error {
 		switch c.TaskMode {
 		case ModeFull, ModeAll:
 			if inst.Meta != nil {
-				log.L().Warn("metadata setted will not be used. for Full mode, incremental sync will never occur; for All mode, the meta dumped by MyDumper will be used", zap.Int("mysql instance", i), zap.String("task mode", c.TaskMode))
+				log.L().Warn("metadata will not be used. for Full mode, incremental sync will never occur; for All mode, the meta dumped by MyDumper will be used", zap.Int("mysql instance", i), zap.String("task mode", c.TaskMode))
 			}
 		case ModeIncrement:
 			if inst.Meta == nil {
