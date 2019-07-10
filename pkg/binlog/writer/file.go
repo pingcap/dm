@@ -24,6 +24,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog/common"
+	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 )
 
@@ -36,6 +37,8 @@ type FileWriter struct {
 	offset sync2.AtomicInt64
 
 	file *os.File
+
+	tctx *tcontext.Context
 }
 
 // FileWriterStatus represents the status of a FileWriter.
@@ -61,9 +64,10 @@ type FileWriterConfig struct {
 }
 
 // NewFileWriter creates a FileWriter instance.
-func NewFileWriter(cfg *FileWriterConfig) Writer {
+func NewFileWriter(tctx *tcontext.Context, cfg *FileWriterConfig) Writer {
 	return &FileWriter{
-		cfg: cfg,
+		cfg:  cfg,
+		tctx: tctx,
 	}
 }
 

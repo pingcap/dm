@@ -63,7 +63,7 @@ func NewFileWriter(tctx *tcontext.Context, cfg *FileConfig, parser2 *parser.Pars
 	w := &FileWriter{
 		cfg:    cfg,
 		parser: parser2,
-		tctx:   tctx.WithLogger(tctx.L().WithFields(zap.String("component", "file writer"))),
+		tctx:   tctx.WithLogger(tctx.L().WithFields(zap.String("sub component", "relay writer"))),
 	}
 	w.filename.Set(cfg.Filename) // set the startup filename
 	return w
@@ -181,7 +181,7 @@ func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (
 	outCfg := &bw.FileWriterConfig{
 		Filename: filename,
 	}
-	out := bw.NewFileWriter(outCfg)
+	out := bw.NewFileWriter(w.tctx, outCfg)
 	err := out.Start()
 	if err != nil {
 		return Result{}, errors.Annotatef(err, "start underlying binlog writer for %s", filename)
