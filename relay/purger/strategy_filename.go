@@ -19,7 +19,10 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
+	"go.uber.org/zap"
 
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -80,10 +83,14 @@ func (fa *filenameArgs) String() string {
 // similar to `PURGE BINARY LOGS TO`
 type filenameStrategy struct {
 	purging sync2.AtomicInt32
+
+	tctx *tcontext.Context
 }
 
 func newFilenameStrategy() PurgeStrategy {
-	return &filenameStrategy{}
+	return &filenameStrategy{
+		tctx: tcontext.Background().WithLogger(log.With(zap.String("component", "relay purger"), zap.String("strategy", "file name"))),
+	}
 }
 
 func (s *filenameStrategy) Check(args interface{}) (bool, error) {
@@ -102,7 +109,7 @@ func (s *filenameStrategy) Do(args interface{}) error {
 		return errors.NotValidf("args (%T) %+v", args, args)
 	}
 
-	return errors.Trace(purgeRelayFilesBeforeFile(fa.relayBaseDir, fa.uuids, fa.safeRelayLog))
+	return errors.Trace(purgeRelayFilesBeforeFile(s.tctx, fa.relayBaseDir, fa.uuids, fa.safeRelayLog))
 }
 
 func (s *filenameStrategy) Purging() bool {

@@ -20,7 +20,10 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
+	"go.uber.org/zap"
 
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
 )
 
@@ -45,10 +48,14 @@ func (ta *timeArgs) String() string {
 // similar to `PURGE BINARY LOGS BEFORE` in MySQL
 type timeStrategy struct {
 	purging sync2.AtomicInt32
+
+	tctx *tcontext.Context
 }
 
 func newTimeStrategy() PurgeStrategy {
-	return &timeStrategy{}
+	return &timeStrategy{
+		tctx: tcontext.Background().WithLogger(log.With(zap.String("component", "relay purger"), zap.String("strategy", "time"))),
+	}
 }
 
 func (s *timeStrategy) Check(args interface{}) (bool, error) {
@@ -70,7 +77,7 @@ func (s *timeStrategy) Do(args interface{}) error {
 		return errors.NotValidf("args (%T) %+v", args, args)
 	}
 
-	return errors.Trace(purgeRelayFilesBeforeFileAndTime(ta.relayBaseDir, ta.uuids, ta.activeRelayLog, ta.safeTime))
+	return errors.Trace(purgeRelayFilesBeforeFileAndTime(s.tctx, ta.relayBaseDir, ta.uuids, ta.activeRelayLog, ta.safeTime))
 }
 
 func (s *timeStrategy) Purging() bool {

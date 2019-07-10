@@ -30,6 +30,7 @@ import (
 	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/binlog/event"
 	bw "github.com/pingcap/dm/pkg/binlog/writer"
+	tcontext "github.com/pingcap/dm/pkg/context"
 )
 
 // FileConfig is the configuration used by the FileWriter.
@@ -53,13 +54,16 @@ type FileWriter struct {
 	parser *parser.Parser
 
 	filename sync2.AtomicString // current binlog filename
+
+	tctx *tcontext.Context
 }
 
 // NewFileWriter creates a FileWriter instances.
-func NewFileWriter(cfg *FileConfig, parser2 *parser.Parser) Writer {
+func NewFileWriter(tctx *tcontext.Context, cfg *FileConfig, parser2 *parser.Parser) Writer {
 	w := &FileWriter{
 		cfg:    cfg,
 		parser: parser2,
+		tctx:   tctx.WithLogger(tctx.L().WithFields(zap.String("component", "file writer"))),
 	}
 	w.filename.Set(cfg.Filename) // set the startup filename
 	return w
@@ -160,7 +164,7 @@ func (w *FileWriter) offset() int64 {
 func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (Result, error) {
 	// close the previous binlog file
 	if w.out != nil {
-		logger.Info("closing previous underlying binlog writer", zap.Reflect("status", w.out.Status()))
+		w.tctx.L().Info("closing previous underlying binlog writer", zap.Reflect("status", w.out.Status()))
 		err := w.out.Close()
 		if err != nil {
 			return Result{}, errors.Annotate(err, "close previous underlying binlog writer")
@@ -183,7 +187,7 @@ func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (
 		return Result{}, errors.Annotatef(err, "start underlying binlog writer for %s", filename)
 	}
 	w.out = out.(*bw.FileWriter)
-	logger.Info("open underlying binlog writer", zap.Reflect("status", w.out.Status()))
+	w.tctx.L().Info("open underlying binlog writer", zap.Reflect("status", w.out.Status()))
 
 	// write the binlog file header if not exists
 	exist, err := checkBinlogHeaderExist(filename)
@@ -332,7 +336,7 @@ func (w *FileWriter) handleFileHoleExist(ev *replication.BinlogEvent) (bool, err
 		// no hole exists, but duplicate events may exists, this should be handled in another place.
 		return holeSize < 0, nil
 	}
-	logger.Info("hole exist from pos1 to pos2", zap.Int64("pos1", fileOffset), zap.Int64("pos2", evStartPos), zap.String("file", w.filename.Get()))
+	w.tctx.L().Info("hole exist from pos1 to pos2", zap.Int64("pos1", fileOffset), zap.Int64("pos2", evStartPos), zap.String("file", w.filename.Get()))
 
 	// 2. generate dummy event
 	var (
@@ -360,7 +364,7 @@ func (w *FileWriter) handleDuplicateEventsExist(ev *replication.BinlogEvent) (Re
 	if err != nil {
 		return Result{}, errors.Annotatef(err, "check event %+v whether duplicate in %s", ev.Header, filename)
 	} else if duplicate {
-		logger.Info("event is duplicate", zap.Reflect("header", ev.Header), zap.String("file", w.filename.Get()))
+		w.tctx.L().Info("event is duplicate", zap.Reflect("header", ev.Header), zap.String("file", w.filename.Get()))
 	}
 
 	return Result{

@@ -32,15 +32,8 @@ import (
 )
 
 var (
-	// logger writes log start with `[component=server]`
-	logger log.Logger
-
 	cmuxReadTimeout = 10 * time.Second
 )
-
-func init() {
-	logger = log.With(zap.String("component", "server"))
-}
 
 // Server accepts tracing RPC requests and sends RPC responses back
 type Server struct {
@@ -89,12 +82,12 @@ func (s *Server) Start() error {
 	go func() {
 		err2 := s.svr.Serve(grpcL)
 		if err2 != nil && !common.IsErrNetClosing(err2) && err2 != cmux.ErrListenerClosed {
-			logger.Error("gRPC server return with error", log.ShortError(err2))
+			log.L().Error("gRPC server return with error", log.ShortError(err2))
 		}
 	}()
 	go s.startHTTPServer(httpL)
 
-	logger.Info("listening on tracer address for gRPC API and status request", zap.String("address", s.cfg.TracerAddr))
+	log.L().Info("listening on tracer address for gRPC API and status request", zap.String("address", s.cfg.TracerAddr))
 	err = m.Serve()
 	if err != nil && common.IsErrNetClosing(err) {
 		err = nil
@@ -112,7 +105,7 @@ func (s *Server) Close() {
 
 	err := s.rootLis.Close()
 	if err != nil && !common.IsErrNetClosing(err) {
-		logger.Error("close net listener with error", log.ShortError(err))
+		log.L().Error("close net listener with error", log.ShortError(err))
 	}
 	if s.svr != nil {
 		// GracefulStop can not cancel active stream RPCs
@@ -126,7 +119,7 @@ func (s *Server) Close() {
 
 // GetTSO implements TracerServer.GetTSO
 func (s *Server) GetTSO(ctx context.Context, req *pb.GetTSORequest) (*pb.GetTSOResponse, error) {
-	logger.Debug("receives GetTSO request", zap.Stringer("request", req))
+	log.L().Debug("receives GetTSO request", zap.Stringer("request", req))
 	resp := &pb.GetTSOResponse{
 		Result: true,
 		Ts:     time.Now().UnixNano(),
@@ -136,7 +129,7 @@ func (s *Server) GetTSO(ctx context.Context, req *pb.GetTSORequest) (*pb.GetTSOR
 
 // UploadSyncerBinlogEvent implements TracerServer.UploadSyncerBinlogEvent
 func (s *Server) UploadSyncerBinlogEvent(ctx context.Context, req *pb.UploadSyncerBinlogEventRequest) (*pb.CommonUploadResponse, error) {
-	logger.Debug("receives UploadSyncerBinlogEvent request", zap.Stringer("request", req))
+	log.L().Debug("receives UploadSyncerBinlogEvent request", zap.Stringer("request", req))
 	for _, e := range req.Events {
 		err := s.eventStore.addNewEvent(&TraceEvent{
 			Type:  pb.TraceType_BinlogEvent,
@@ -154,7 +147,7 @@ func (s *Server) UploadSyncerBinlogEvent(ctx context.Context, req *pb.UploadSync
 
 // UploadSyncerJobEvent implements TracerServer.UploadSyncerJobEvent
 func (s *Server) UploadSyncerJobEvent(ctx context.Context, req *pb.UploadSyncerJobEventRequest) (*pb.CommonUploadResponse, error) {
-	logger.Debug("receives UploadSyncerJobEvent request", zap.Stringer("request", req))
+	log.L().Debug("receives UploadSyncerJobEvent request", zap.Stringer("request", req))
 	for _, e := range req.Events {
 		err := s.eventStore.addNewEvent(&TraceEvent{
 			Type:  pb.TraceType_JobEvent,
