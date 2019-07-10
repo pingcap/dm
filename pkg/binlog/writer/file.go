@@ -25,7 +25,6 @@ import (
 
 	"github.com/pingcap/dm/pkg/binlog/common"
 	tcontext "github.com/pingcap/dm/pkg/context"
-	"github.com/pingcap/dm/pkg/log"
 )
 
 // FileWriter is a binlog event writer which writes binlog events to a file.
@@ -88,7 +87,7 @@ func (w *FileWriter) Start() error {
 	if err != nil {
 		err2 := f.Close() // close the file opened before
 		if err2 != nil {
-			log.L().Error("fail to close file", zap.String("component", "file writer"), zap.Error(err2))
+			w.tctx.L().Error("fail to close file", zap.String("component", "file writer"), zap.Error(err2))
 		}
 		return errors.Annotatef(err, "get stat for %s", f.Name())
 	}
@@ -112,7 +111,7 @@ func (w *FileWriter) Close() error {
 	if w.file != nil {
 		err2 := w.flush() // try flush manually before close.
 		if err2 != nil {
-			log.L().Error("fail to flush buffered data", zap.String("component", "file writer"), zap.Error(err2))
+			w.tctx.L().Error("fail to flush buffered data", zap.String("component", "file writer"), zap.Error(err2))
 		}
 		err = w.file.Close()
 		w.file = nil

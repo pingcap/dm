@@ -224,14 +224,14 @@ func (conn *Conn) executeSQLJobImp(tctx *tcontext.Context, jobs []*job) *ExecErr
 	}
 
 	for i := range jobs {
-		tctx.L().Debug("execute job", zap.Stringer("job", jobs[i]))
+		tctx.L().Debug("execute job", log.WrapStringerField("job", jobs[i]))
 
 		_, err = txn.ExecContext(tctx.Context(), jobs[i].sql, jobs[i].args...)
 		if err != nil {
-			tctx.L().Error("execute job", zap.Stringer("job", jobs[i]), log.ShortError(err))
+			tctx.L().Error("execute job", log.WrapStringerField("job", jobs[i]), log.ShortError(err))
 			rerr := txn.Rollback()
 			if rerr != nil {
-				tctx.L().Error("rollback job", zap.Stringer("job", jobs[i]), log.ShortError(rerr))
+				tctx.L().Error("rollback job", log.WrapStringerField("job", jobs[i]), log.ShortError(rerr))
 			}
 			// error in ExecErrorContext should be the exec err, instead of the rollback rerr.
 			return &ExecErrorContext{err: errors.Trace(err), pos: jobs[i].currentPos, jobs: fmt.Sprintf("%v", jobs)}

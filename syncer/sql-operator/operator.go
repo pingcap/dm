@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/dm/dm/command"
 	"github.com/pingcap/dm/dm/pb"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // operator contains an operation for specified binlog pos or SQL pattern
@@ -129,10 +130,10 @@ func (h *Holder) Set(tctx *tcontext.Context, req *pb.HandleSubTaskSQLsRequest) e
 	oper := newOperator(tctx, binlogPos, req.SqlPattern, sqlReg, req.Op, req.Args)
 	prev, ok := h.operators[key]
 	if ok {
-		tctx.L().Warn("overwrite operator", zap.Stringer("old operator", prev), zap.Stringer("new operator", oper))
+		tctx.L().Warn("overwrite operator", log.WrapStringerField("old operator", prev), log.WrapStringerField("new operator", oper))
 	}
 	h.operators[key] = oper
-	tctx.L().Info("set a new operator", zap.Stringer("new operator", oper))
+	tctx.L().Info("set a new operator", log.WrapStringerField("new operator", oper))
 	return nil
 }
 
@@ -169,6 +170,6 @@ func (h *Holder) Apply(tctx *tcontext.Context, pos mysql.Position, sqls []string
 		return false, nil, errors.Annotatef(err, "operator %s", oper)
 	}
 
-	tctx.L().Info("applying operator", zap.String("chance", cause), zap.Stringer("operation", oper))
+	tctx.L().Info("applying operator", zap.String("chance", cause), log.WrapStringerField("operation", oper))
 	return true, args, nil
 }

@@ -441,7 +441,7 @@ func (cp *RemoteCheckPoint) Rollback() {
 	cp.globalPoint.rollback()
 	for schema, mSchema := range cp.points {
 		for table, point := range mSchema {
-			cp.tctx.L().Info("rollback checkpoint", zap.Stringer("checkpoint", point), zap.String("schema", schema), zap.String("table", table))
+			cp.tctx.L().Info("rollback checkpoint", log.WrapStringerField("checkpoint", point), zap.String("schema", schema), zap.String("table", table))
 			point.rollback()
 		}
 	}
@@ -515,7 +515,7 @@ func (cp *RemoteCheckPoint) Load() error {
 		if isGlobal {
 			if pos.Compare(minCheckpoint) > 0 {
 				cp.globalPoint = newBinlogPoint(pos, pos)
-				cp.tctx.L().Info("fetch global checkpoint from DB", zap.Stringer("global checkpoint", cp.globalPoint))
+				cp.tctx.L().Info("fetch global checkpoint from DB", log.WrapStringerField("global checkpoint", cp.globalPoint))
 			}
 			continue // skip global checkpoint
 		}
@@ -561,7 +561,7 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 	// if meta loaded, we will start syncing from meta's pos
 	if pos != nil {
 		cp.globalPoint = newBinlogPoint(*pos, *pos)
-		cp.tctx.L().Info("loaded checkpoints from meta", zap.Stringer("global checkpoint", cp.globalPoint))
+		cp.tctx.L().Info("loaded checkpoints from meta", log.WrapStringerField("global checkpoint", cp.globalPoint))
 	}
 
 	return nil
