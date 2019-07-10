@@ -36,7 +36,7 @@ type Ghost struct {
 // NewGhost returns gh-oat online plugin
 func NewGhost(tctx *tcontext.Context, cfg *config.SubTaskConfig) (OnlinePlugin, error) {
 
-	newtctx := tctx.WithLogger(tctx.L().WithFields(zap.String("online ddl", "ghost osc")))
+	newtctx := tctx.WithLogger(tctx.L().WithFields(zap.String("online ddl", "gh-ost")))
 
 	g := &Ghost{
 		storge: NewOnlineDDLStorage(newtctx, cfg),

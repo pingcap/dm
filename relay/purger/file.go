@@ -163,7 +163,7 @@ func collectRelayFilesBeforeFileAndTime(tctx *tcontext.Context, relayBaseDir str
 func purgeRelayFiles(tctx *tcontext.Context, files []*subRelayFiles) error {
 	startTime := time.Now()
 	defer func() {
-		tctx.L().Info("purge relay log files", zap.Float64("takes seconds", time.Since(startTime).Seconds()))
+		tctx.L().Info("purge relay log files", zap.Duration("cost time", time.Since(startTime)))
 	}()
 
 	for _, subRelay := range files {

@@ -257,7 +257,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 	defer func() {
 		err = reader2.Close()
 		if err != nil {
-			r.tctx.L().Error("fail to close binlog event writer", zap.Error(err))
+			r.tctx.L().Error("fail to close binlog event reader", zap.Error(err))
 		}
 	}()
 

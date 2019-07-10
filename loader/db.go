@@ -49,10 +49,10 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string, maxRetry int, ar
 	startTime := time.Now()
 	defer func() {
 		if err == nil {
-			cost := time.Since(startTime).Seconds()
-			queryHistogram.WithLabelValues(conn.cfg.Name).Observe(cost)
+			cost := time.Since(startTime)
+			queryHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
 			if cost > 1 {
-				ctx.L().Warn("query statement", zap.String("sql", query), zap.Reflect("arguments", args), zap.Float64("cost time", cost))
+				ctx.L().Warn("query statement", zap.String("sql", query), zap.Reflect("arguments", args), zap.Duration("cost time", cost))
 			}
 		}
 	}()
@@ -140,10 +140,10 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []string, en
 		}
 
 		// update metrics
-		cost := time.Since(startTime).Seconds()
-		txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost)
+		cost := time.Since(startTime)
+		txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
 		if cost > 1 {
-			ctx.L().Warn("transaction execute successfully", zap.Float64("cost time", cost))
+			ctx.L().Warn("transaction execute successfully", zap.Duration("cost time", cost))
 		}
 
 		return nil
