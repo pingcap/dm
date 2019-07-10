@@ -560,7 +560,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		return errors.New("update source ID is not allowed")
 	}
 
-	w.l.Info("update relay configure", zap.Stringer("new config", newCfg))
+	w.l.Info("update relay config", zap.Stringer("new config", newCfg))
 	cloneCfg, _ := newCfg.DecryptPassword()
 
 	// Update SubTask configure
@@ -595,7 +595,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		}
 	}
 
-	w.l.Info("update relay configure in subtasks success.")
+	w.l.Info("update relay config of subtasks successfully.")
 
 	// Update relay unit configure
 	err = w.relayHolder.Update(ctx, cloneCfg)
@@ -616,7 +616,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	}
 	w.cfg.UpdateConfigFile(content)
 
-	w.l.Info("update relay configure in success, save config to local file", zap.String("local file", w.cfg.ConfigFile))
+	w.l.Info("update relay config successfully, save config to local file", zap.String("local file", w.cfg.ConfigFile))
 
 	return nil
 }

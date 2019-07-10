@@ -1900,7 +1900,7 @@ func (s *Server) handleOperationResult(ctx context.Context, cli workerrpc.Client
 // grpc client, worker id (host:port), subtask config in toml, task name and error
 func (s *Server) taskConfigArgsExtractor(args ...interface{}) (workerrpc.Client, string, string, string, error) {
 	handleErr := func(err error) error {
-		log.L().Error("reponse", zap.Error(err))
+		log.L().Error("response", zap.Error(err))
 		return err
 	}
 
