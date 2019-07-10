@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/dm/pb"
+	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 
 	"github.com/pingcap/errors"
@@ -105,7 +106,7 @@ func LoadHandledPointer(h dbOperator) (Pointer, error) {
 }
 
 // ClearHandledPointer clears the handled pointer in kv DB.
-func ClearHandledPointer(h dbOperator) error {
+func ClearHandledPointer(tctx *tcontext.Context, h dbOperator) error {
 	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
@@ -365,8 +366,8 @@ func (logger *Logger) doGC(h dbOperator, id int64) {
 }
 
 // ClearOperationLog clears the task operation log.
-func ClearOperationLog(h dbOperator) error {
-	return errors.Annotate(clearByPrefix(h, TaskLogPrefix), "clear task operation log")
+func ClearOperationLog(tctx *tcontext.Context, h dbOperator) error {
+	return errors.Annotate(clearByPrefix(tctx, h, TaskLogPrefix), "clear task operation log")
 }
 
 // **************** task meta oepration *************** //
@@ -480,8 +481,8 @@ func DeleteTaskMeta(h dbOperator, name string) error {
 }
 
 // ClearTaskMeta clears all task meta in kv DB.
-func ClearTaskMeta(h dbOperator) error {
-	return errors.Annotate(clearByPrefix(h, TaskMetaPrefix), "clear task meta")
+func ClearTaskMeta(tctx *tcontext.Context, h dbOperator) error {
+	return errors.Annotate(clearByPrefix(tctx, h, TaskMetaPrefix), "clear task meta")
 }
 
 // VerifyTaskMeta verify legality of take meta
@@ -529,7 +530,7 @@ func whetherNil(handler interface{}) bool {
 }
 
 // clearByPrefix clears all keys with the specified prefix.
-func clearByPrefix(h dbOperator, prefix []byte) error {
+func clearByPrefix(tctx *tcontext.Context, h dbOperator, prefix []byte) error {
 	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
@@ -545,7 +546,7 @@ func clearByPrefix(h dbOperator, prefix []byte) error {
 				iter.Release()
 				return errors.Annotatef(err, "delete kv with prefix % X until % X", prefix, iter.Key())
 			}
-			log.L().Info("delete task operation log kv", zap.Binary("with prefix", prefix), zap.Binary("< key", iter.Key()))
+			tctx.L().Info("delete task operation log kv", zap.Binary("with prefix", prefix), zap.Binary("< key", iter.Key()))
 			batch.Reset()
 		}
 	}

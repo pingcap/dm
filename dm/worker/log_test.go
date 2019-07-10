@@ -21,6 +21,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 
 	"github.com/pingcap/dm/dm/pb"
+	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 )
 
@@ -69,7 +70,7 @@ func (t *testLog) TestHandledPointer(c *C) {
 	// clear the handled pointer
 	txn, err := db.OpenTransaction()
 	c.Assert(err, IsNil)
-	c.Assert(ClearHandledPointer(txn), IsNil)
+	c.Assert(ClearHandledPointer(tcontext.Background(), txn), IsNil)
 	c.Assert(txn.Commit(), IsNil)
 
 	// try load handled pointer again
@@ -78,7 +79,7 @@ func (t *testLog) TestHandledPointer(c *C) {
 	c.Assert(p.Location, Equals, int64(0))
 
 	// clear with nil txn
-	c.Assert(errors.Cause(ClearHandledPointer(nil)), Equals, ErrInValidHandler)
+	c.Assert(errors.Cause(ClearHandledPointer(tcontext.Background(), nil)), Equals, ErrInValidHandler)
 }
 
 func (t *testLog) TestTaskLogKey(c *C) {
@@ -217,7 +218,7 @@ func (t *testLog) TestTaskLog(c *C) {
 	c.Assert(logger.endPointer.Location, Equals, int64(4))
 
 	// clear operation log
-	c.Assert(ClearOperationLog(db), IsNil)
+	c.Assert(ClearOperationLog(tcontext.Background(), db), IsNil)
 
 	// try initial again
 	logs, err = logger.Initial(db)
@@ -355,7 +356,7 @@ func (t *testLog) TestTaskMeta(c *C) {
 
 	// clear task meta
 	GCBatchSize = 2 // < 3
-	c.Assert(ClearTaskMeta(db), IsNil)
+	c.Assert(ClearTaskMeta(tcontext.Background(), db), IsNil)
 
 	// try to get task meta back
 	_, err = GetTaskMeta(db, "task1")
@@ -366,5 +367,5 @@ func (t *testLog) TestTaskMeta(c *C) {
 	c.Assert(errors.Cause(err), Equals, leveldb.ErrNotFound)
 
 	// clear with nil txn
-	c.Assert(errors.Cause(ClearTaskMeta(nil)), Equals, ErrInValidHandler)
+	c.Assert(errors.Cause(ClearTaskMeta(tcontext.Background(), nil)), Equals, ErrInValidHandler)
 }

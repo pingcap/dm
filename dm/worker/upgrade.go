@@ -21,6 +21,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"go.uber.org/zap"
 
+	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -72,7 +73,6 @@ func (v version) String() string {
 	data, err := v.MarshalBinary()
 	if err != nil {
 		log.L().Error("fail to marshal version to binary",
-			zap.String("feature", "bootstrap upgrade"),
 			zap.Uint64("internal NO", v.InternalNo),
 			zap.String("release version", v.ReleaseVersion), log.ShortError(err))
 		return ""
@@ -91,7 +91,7 @@ func (v *version) UnmarshalBinary(data []byte) error {
 }
 
 // loadVersion loads the version of DM-worker from the levelDB.
-func loadVersion(h dbOperator) (ver version, err error) {
+func loadVersion(tctx *tcontext.Context, h dbOperator) (ver version, err error) {
 	if whetherNil(h) {
 		return ver, errors.Trace(ErrInValidHandler)
 	}
@@ -99,7 +99,7 @@ func loadVersion(h dbOperator) (ver version, err error) {
 	data, err := h.Get(dmWorkerVersionKey, nil)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
-			log.L().Warn("no version found in levelDB, use default version", zap.String("feature", "bootstrap upgrade"), zap.Stringer("default version", defaultPreviousWorkerVersion))
+			tctx.L().Warn("no version found in levelDB, use default version", zap.Stringer("default version", defaultPreviousWorkerVersion))
 			return defaultPreviousWorkerVersion, nil
 		}
 		return ver, errors.Annotatef(err, "load version with key %v from levelDB", dmWorkerVersionKey)
@@ -109,7 +109,7 @@ func loadVersion(h dbOperator) (ver version, err error) {
 }
 
 // saveVersion saves the version of DM-worker into the levelDB.
-func saveVersion(h dbOperator, ver version) error {
+func saveVersion(tctx *tcontext.Context, h dbOperator, ver version) error {
 	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
@@ -125,6 +125,8 @@ func saveVersion(h dbOperator, ver version) error {
 
 // tryUpgrade tries to upgrade from an older version.
 func tryUpgrade(dbDir string) error {
+	tctx := tcontext.Background().WithLogger(log.L().WithFields(zap.String("component", "bootstrap upgrade")))
+
 	// 1. check the DB directory
 	notExist := false
 	fs, err := os.Stat(dbDir)
@@ -146,29 +148,29 @@ func tryUpgrade(dbDir string) error {
 	defer func() {
 		err = db.Close()
 		if err != nil {
-			log.L().Error("fail to close DB", zap.String("feature", "bootstrap upgrade"), log.ShortError(err))
+			tctx.L().Error("fail to close DB", log.ShortError(err))
 		}
 	}()
 
 	if notExist {
-		log.L().Info("no previous operation log exists, no need to upgrade", zap.String("feature", "bootstrap upgrade"))
+		tctx.L().Info("no previous operation log exists, no need to upgrade")
 		// still need to save the current version version
 		currVer := currentWorkerVersion
-		err = saveVersion(db, currVer)
+		err = saveVersion(tctx, db, currVer)
 		return errors.Annotatef(err, "save current version %s into DB %s", currVer, dbDir)
 	}
 
 	// 3. load previous version
-	prevVer, err := loadVersion(db)
+	prevVer, err := loadVersion(tctx, db)
 	if err != nil {
 		return errors.Annotatef(err, "load previous version from DB %s", dbDir)
 	}
-	log.L().Info("", zap.String("feature", "bootstrap upgrade"), zap.Stringer("previous version", prevVer))
+	tctx.L().Info("", zap.Stringer("previous version", prevVer))
 
 	// 4. check needing to upgrade
 	currVer := currentWorkerVersion
 	if prevVer.compare(currVer) == 0 {
-		log.L().Info("previous and current versions are same, no need to upgrade", zap.String("feature", "bootstrap upgrade"), zap.Stringer("version", prevVer))
+		tctx.L().Info("previous and current versions are same, no need to upgrade", zap.Stringer("version", prevVer))
 		return nil
 	} else if prevVer.compare(currVer) > 0 {
 		return errors.Errorf("the previous version %s is newer than current %s, automatic downgrade is not supported now, please handle it manually", prevVer, currVer)
@@ -176,14 +178,14 @@ func tryUpgrade(dbDir string) error {
 
 	// 5. upgrade from previous version to +1, +2, ...
 	if prevVer.compare(workerVersion1) < 0 {
-		err = upgradeToVer1(db)
+		err = upgradeToVer1(tctx, db)
 		if err != nil {
 			return errors.Annotatef(err, "upgrade to version %s", workerVersion1)
 		}
 	}
 
 	// 6. save current version after upgrade done
-	err = saveVersion(db, currVer)
+	err = saveVersion(tctx, db, currVer)
 	return errors.Annotatef(err, "save current version %s into DB %s", currVer, dbDir)
 }
 
@@ -194,21 +196,21 @@ func tryUpgrade(dbDir string) error {
 //  2. reset handled pointer
 //  3. remove all task meta in the levelDB
 // and let user to restart all necessary tasks.
-func upgradeToVer1(db *leveldb.DB) error {
-	log.L().Info("upgrading to version", zap.String("feature", "bootstrap upgrade"), zap.Stringer("version", workerVersion1))
-	err := ClearOperationLog(db)
+func upgradeToVer1(tctx *tcontext.Context, db *leveldb.DB) error {
+	tctx.L().Info("upgrading to version", zap.Stringer("version", workerVersion1))
+	err := ClearOperationLog(tctx, db)
 	if err != nil {
 		return errors.Annotatef(err, "upgrade to version %s", workerVersion1)
 	}
-	err = ClearHandledPointer(db)
+	err = ClearHandledPointer(tctx, db)
 	if err != nil {
 		return errors.Annotatef(err, "upgrade to version %s", workerVersion1)
 	}
-	err = ClearTaskMeta(db)
+	err = ClearTaskMeta(tctx, db)
 	if err != nil {
 		return errors.Annotatef(err, "upgrade to version %s", workerVersion1)
 	}
 
-	log.L().Warn("upgraded to version, please restart all necessary tasks manually", zap.String("feature", "bootstrap upgrade"), zap.Stringer("version", workerVersion1))
+	tctx.L().Warn("upgraded to version, please restart all necessary tasks manually", zap.Stringer("version", workerVersion1))
 	return nil
 }
