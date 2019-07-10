@@ -139,7 +139,7 @@ func (cp *RemoteCheckPoint) createTable() error {
 func (cp *RemoteCheckPoint) Load() error {
 	begin := time.Now()
 	defer func() {
-		cp.tctx.L().Info("load checkpoint", zap.Float64("cost time", time.Since(begin).Seconds()))
+		cp.tctx.L().Info("load checkpoint", zap.Duration("cost time", time.Since(begin)))
 	}()
 
 	query := fmt.Sprintf("SELECT `filename`,`cp_schema`,`cp_table`,`offset`,`end_pos` from `%s`.`%s` where `id`=?", cp.schema, cp.table)

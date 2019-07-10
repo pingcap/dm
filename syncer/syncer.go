@@ -17,7 +17,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -1004,7 +1003,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 	defer func() {
 		if err1 := recover(); err1 != nil {
-			s.tctx.L().Error("panic log", zap.Reflect("error message", err1), zap.ByteString("statck", debug.Stack()))
+			s.tctx.L().Error("panic log", zap.Reflect("error message", err1), zap.Stack("statck"))
 			err = errors.Errorf("panic error: %v", err1)
 		}
 		// flush the jobs channels, but if error occurred, we should not flush the checkpoints
@@ -1339,7 +1338,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		if s.sgk.InSyncing(schemaName, tableName, source, *ec.currentPos) {
 			// if in unsync stage and not before active DDL, ignore it
 			// if in sharding re-sync stage and not before active DDL (the next DDL to be synced), ignore it
-			s.tctx.L().Debug("sreplicate sharding DDL, ignore Rows event", zap.String("event", "row"), zap.String("source", source), zap.Stringer("position", ec.currentPos))
+			s.tctx.L().Debug("replicate sharding DDL, ignore Rows event", zap.String("event", "row"), zap.String("source", source), zap.Stringer("position", ec.currentPos))
 			return nil
 		}
 	}
@@ -2366,6 +2365,6 @@ func (s *Syncer) setTimezone() {
 		loc = time.Now().Location()
 		s.tctx.L().Warn("use system default time location")
 	}
-	s.tctx.L().Info("use timezone", zap.Stringer("localtion", loc))
+	s.tctx.L().Info("use timezone", zap.Stringer("location", loc))
 	s.timezone = loc
 }

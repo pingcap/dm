@@ -795,7 +795,7 @@ func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 func (l *Loader) prepare() error {
 	begin := time.Now()
 	defer func() {
-		l.tctx.L().Info("prepare loading", zap.Float64("cost time", time.Since(begin).Seconds()))
+		l.tctx.L().Info("prepare loading", zap.Duration("cost time", time.Since(begin)))
 	}()
 
 	// check if mydumper dir data exists.
@@ -1040,7 +1040,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 			}
 		}
 	}
-	l.tctx.L().Info("finish to create tables", zap.Float64("cost time", time.Since(begin).Seconds()))
+	l.tctx.L().Info("finish to create tables", zap.Duration("cost time", time.Since(begin)))
 
 	// a simple and naive approach to dispatch files randomly based on the feature of golang map(range by random)
 	for _, j := range dispatchMap {
@@ -1057,7 +1057,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	l.tctx.L().Info("all data files have been dispatched, waiting for them finished")
 	l.workerWg.Wait()
 
-	l.tctx.L().Info("all data files has been finished", zap.Float64("cost time", time.Since(begin).Seconds()))
+	l.tctx.L().Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
 	return nil
 }
 

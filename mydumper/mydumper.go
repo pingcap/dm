@@ -89,7 +89,7 @@ func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		}
 	}
 
-	m.logger.Info("dump data finished", zap.Stringer("cost time", time.Since(begin)))
+	m.logger.Info("dump data finished", zap.Duration("cost time", time.Since(begin)))
 
 	pr <- pb.ProcessResult{
 		IsCanceled: isCanceled,
