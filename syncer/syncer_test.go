@@ -28,7 +28,7 @@ import (
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	"github.com/pingcap/tidb-tools/pkg/table-router"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/dm/config"
@@ -817,15 +817,15 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				"insert into gctest_1.t_3(id, cfg) values (3, '{\"id\": 3}')",
 			},
 			[]string{
-				"REPLACE INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
-				"REPLACE INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
-				"REPLACE INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
-				"REPLACE INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?);",
-				"REPLACE INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?);",
-				"REPLACE INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?);",
-				"REPLACE INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?);",
-				"REPLACE INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?);",
-				"REPLACE INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?);",
+				"INSERT INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
+				"INSERT INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
+				"INSERT INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
+				"INSERT INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?);",
+				"INSERT INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?);",
+				"INSERT INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?);",
+				"INSERT INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?);",
+				"INSERT INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?);",
+				"INSERT INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?);",
 			},
 			[][]interface{}{
 				{int32(1), int32(18), "{}"},
@@ -925,7 +925,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	for _, testCase := range testCases {
 		for _, sql := range testCase.sqls {
 			_, err := s.db.Exec(sql)
-			c.Assert(err, IsNil)
+			c.Assert(err, IsNil, Commentf("sql: %s", sql))
 		}
 		idx := 0
 		for {
@@ -1097,7 +1097,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		}, {
 			"insert into test_1.t_1 values(1)",
 			insert,
-			"REPLACE INTO `test_1`.`t_1` (`id`) VALUES (?);",
+			"INSERT INTO `test_1`.`t_1` (`id`) VALUES (?);",
 			int64(580981944116838401),
 		}, {
 			"alter table test_1.t_1 add index index1(id)",
@@ -1107,7 +1107,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		}, {
 			"insert into test_1.t_1 values(2)",
 			insert,
-			"REPLACE INTO `test_1`.`t_1` (`id`) VALUES (?);",
+			"INSERT INTO `test_1`.`t_1` (`id`) VALUES (?);",
 			int64(580981944116838402),
 		}, {
 			"delete from test_1.t_1 where id = 1",
@@ -1180,7 +1180,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		{
 			"insert into test_1.t_1 values(3)",
 			insert,
-			"REPLACE INTO `test_1`.`t_2` (`id`) VALUES (?);",
+			"INSERT INTO `test_1`.`t_2` (`id`) VALUES (?);",
 			int32(3),
 		}, {
 			"delete from test_1.t_1 where id = 3",
