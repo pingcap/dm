@@ -31,7 +31,7 @@ import (
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	"github.com/pingcap/tidb-tools/pkg/table-router"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
@@ -47,7 +47,7 @@ import (
 	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/pkg/utils"
 	sm "github.com/pingcap/dm/syncer/safe-mode"
-	"github.com/pingcap/dm/syncer/sql-operator"
+	operator "github.com/pingcap/dm/syncer/sql-operator"
 )
 
 var (
@@ -1376,6 +1376,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	switch ec.header.EventType {
 	case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
 		if !applied {
+			param.safeMode = ec.safeMode.Enable()
 			sqls, keys, args, err = genInsertSQLs(param)
 			if err != nil {
 				return errors.Annotatef(err, "gen insert sqls failed, schema: %s, table: %s", table.schema, table.name)

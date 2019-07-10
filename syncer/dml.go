@@ -129,7 +129,14 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 			originalValue = extractValueFromData(originalData, originalColumns)
 		}
 
-		sql := fmt.Sprintf("REPLACE INTO `%s`.`%s` (%s) VALUES (%s);", schema, table, columnList, columnPlaceholders)
+		var insertOrReplace string
+		if param.safeMode {
+			insertOrReplace = "REPLACE"
+		} else {
+			insertOrReplace = "INSERT"
+		}
+
+		sql := fmt.Sprintf("%s INTO `%s`.`%s` (%s) VALUES (%s);", insertOrReplace, schema, table, columnList, columnPlaceholders)
 		ks := genMultipleKeys(originalColumns, originalValue, originalIndexColumns)
 		sqls = append(sqls, sql)
 		values = append(values, value)
