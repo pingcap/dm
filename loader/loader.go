@@ -147,7 +147,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *
 				failpoint.Inject("LoadExceedOffsetExit", func(val failpoint.Value) {
 					threshold, _ := val.(int)
 					if job.offset >= int64(threshold) {
-						w.tctx.L().Warn("load offset execeeds threshold, it will exit", zap.Int64("load offset", job.offset), zap.Int("threshold", threshold), zap.String("feature", "failpoint"))
+						w.tctx.L().Warn("load offset execeeds threshold, it will exit", zap.Int64("load offset", job.offset), zap.Int("value", threshold), zap.String("failpoint", "LoadExceedOffsetExit"))
 						utils.OsExit(1)
 					}
 				})
@@ -501,7 +501,7 @@ func (l *Loader) Restore(ctx context.Context) error {
 	l.finishedDataSize.Set(0) // reset before load from checkpoint
 
 	if err := l.prepare(); err != nil {
-		l.tctx.L().Error("scan dir failed", zap.String("dir", l.cfg.Dir), log.ShortError(err))
+		l.tctx.L().Error("scan directory failed", zap.String("directory", l.cfg.Dir), log.ShortError(err))
 		return errors.Trace(err)
 	}
 

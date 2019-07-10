@@ -360,7 +360,7 @@ func (w *FileWriter) handleDuplicateEventsExist(ev *replication.BinlogEvent) (Re
 	if err != nil {
 		return Result{}, errors.Annotatef(err, "check event %+v whether duplicate in %s", ev.Header, filename)
 	} else if duplicate {
-		logger.Info("event is duplicate", zap.Reflect("event header", ev.Header), zap.String("file name", w.filename.Get()))
+		logger.Info("event is duplicate", zap.Reflect("header", ev.Header), zap.String("file", w.filename.Get()))
 	}
 
 	return Result{

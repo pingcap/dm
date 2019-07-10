@@ -137,7 +137,7 @@ func collectRelayFilesBeforeFileAndTime(relayBaseDir string, uuids []string, saf
 				}
 				if fs.ModTime().After(safeTime) {
 					hasAll = false // newer found, reset to false
-					logger.Debug("ignore newer relay log file in dir", zap.String("file", f), zap.String("dir", dir))
+					logger.Debug("ignore newer relay log file in dir", zap.String("file", f), zap.String("directory", dir))
 					break
 				}
 			}

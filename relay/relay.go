@@ -286,7 +286,7 @@ func (r *Relay) tryRecoverLatestFile(parser2 *parser.Parser) error {
 	)
 
 	if latestPos.Compare(minCheckpoint) <= 0 {
-		r.logger.Warn("[no relay log file need to recover", zap.Stringer("position", latestPos), zap.Stringer("gtid set", latestGTID))
+		r.logger.Warn("no relay log file need to recover", zap.Stringer("position", latestPos), log.WrapStringerField("gtid set", latestGTID))
 		return nil
 	}
 
@@ -312,7 +312,7 @@ func (r *Relay) tryRecoverLatestFile(parser2 *parser.Parser) error {
 	if err == nil {
 		if result.Recovered {
 			r.logger.Warn("relay log file recovered",
-				zap.Stringer("from position", latestPos), zap.Stringer("to position", result.LatestPos), zap.Stringer("from GTID set", latestGTID), zap.Stringer("to GTID set", result.LatestGTIDs))
+				zap.Stringer("from position", latestPos), zap.Stringer("to position", result.LatestPos), log.WrapStringerField("from GTID set", latestGTID), log.WrapStringerField("to GTID set", result.LatestGTIDs))
 			err = r.meta.Save(result.LatestPos, result.LatestGTIDs)
 			if err != nil {
 				return errors.Annotatef(err, "save position %s, GTID sets %v after recovered", result.LatestPos, result.LatestGTIDs)
@@ -320,7 +320,7 @@ func (r *Relay) tryRecoverLatestFile(parser2 *parser.Parser) error {
 		} else if result.LatestPos.Compare(latestPos) > 0 ||
 			(result.LatestGTIDs != nil && !result.LatestGTIDs.Equal(latestGTID) && result.LatestGTIDs.Contain(latestGTID)) {
 			r.logger.Warn("relay log file have more events",
-				zap.Stringer("after position", latestPos), zap.Stringer("until position", result.LatestPos), zap.Stringer("after GTID set", latestGTID), zap.Stringer("until GTID set", result.LatestGTIDs))
+				zap.Stringer("after position", latestPos), zap.Stringer("until position", result.LatestPos), log.WrapStringerField("after GTID set", latestGTID), log.WrapStringerField("until GTID set", result.LatestGTIDs))
 		}
 
 	}
@@ -364,7 +364,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 			return errors.Trace(err)
 		}
 		e := rResult.Event
-		r.logger.Debug("receive binlog event with header", zap.Reflect("binlog header", e.Header))
+		r.logger.Debug("receive binlog event with header", zap.Reflect("header", e.Header))
 
 		// 2. transform events
 		tResult := transformer2.Transform(e)

@@ -49,7 +49,7 @@ func (s *Syncer) enableSafeModeInitializationPhase(tctx *tcontext.Context, safeM
 		failpoint.Inject("SafeModeInitPhaseSeconds", func(val failpoint.Value) {
 			seconds, _ := val.(int)
 			initPhaseSeconds = seconds
-			s.tctx.L().Info("set initPhaseSeconds", zap.String("feature", "failpoint"), zap.Int("initPhaseSeconds", seconds))
+			s.tctx.L().Info("set initPhaseSeconds", zap.String("failpoint", "SafeModeInitPhaseSeconds"), zap.Int("value", seconds))
 		})
 		select {
 		case <-tctx.Context().Done():

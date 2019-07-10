@@ -14,6 +14,8 @@
 package log
 
 import (
+	"fmt"
+
 	pclog "github.com/pingcap/log"
 	"github.com/pingcap/tidb/util/logutil"
 	"go.uber.org/zap"
@@ -126,4 +128,13 @@ func ShortError(err error) zap.Field {
 // L returns the current logger for DM.
 func L() Logger {
 	return appLogger
+}
+
+// WrapStringerField returns a wrap stringer field
+func WrapStringerField(message string, object fmt.Stringer) zap.Field {
+	if object != nil {
+		return zap.Stringer(message, object)
+	}
+
+	return zap.String(message, "NULL")
 }

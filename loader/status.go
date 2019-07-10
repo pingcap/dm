@@ -51,7 +51,7 @@ func (l *Loader) PrintStatus(ctx context.Context) {
 	failpoint.Inject("PrintStatusCheckSeconds", func(val failpoint.Value) {
 		if seconds, ok := val.(int); ok {
 			printStatusInterval = time.Duration(seconds) * time.Second
-			l.tctx.L().Info("set loader printStatusInterval", zap.String("feature", "failpoint"), zap.Int("printStatusInterval", seconds))
+			l.tctx.L().Info("set printStatusInterval", zap.String("failpoint", "PrintStatusCheckSeconds"), zap.Int("value", seconds))
 		}
 	})
 
