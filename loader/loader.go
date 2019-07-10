@@ -126,6 +126,8 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *
 	newCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	ctctx := w.tctx.WithContext(newCtx)
+
 	doJob := func() {
 		defer w.wg.Done()
 		for {
@@ -154,7 +156,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *
 
 				failpoint.Inject("LoadDataSlowDown", nil)
 
-				if err := w.conn.executeSQL(w.tctx, sqls, true); err != nil {
+				if err := w.conn.executeSQL(ctctx, sqls, true); err != nil {
 					// expect pause rather than exit
 					err = errors.Annotatef(err, "file %s", job.file)
 					runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, errors.ErrorStack(err))

@@ -781,7 +781,7 @@ func (s *Syncer) flushCheckPoints() error {
 	return nil
 }
 
-func (s *Syncer) sync(ctx context.Context, queueBucket string, db *Conn, jobChan chan *job) {
+func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *Conn, jobChan chan *job) {
 	defer s.wg.Done()
 
 	idx := 0
@@ -981,7 +981,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		s.queueBucketMapping = append(s.queueBucketMapping, name)
 		go func(i int, n string) {
 			ctx2, cancel := context.WithCancel(ctx)
-			s.sync(ctx2, n, s.toDBs[i], s.jobs[i])
+			ctctx := s.tctx.WithContext(ctx2)
+			s.sync(ctctx, n, s.toDBs[i], s.jobs[i])
 			cancel()
 		}(i, name)
 	}
@@ -990,7 +991,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	s.wg.Add(1)
 	go func() {
 		ctx2, cancel := context.WithCancel(ctx)
-		s.sync(ctx2, adminQueueName, s.ddlDB, s.jobs[s.cfg.WorkerCount])
+		ctctx := s.tctx.WithContext(ctx2)
+		s.sync(ctctx, adminQueueName, s.ddlDB, s.jobs[s.cfg.WorkerCount])
 		cancel()
 	}()
 
