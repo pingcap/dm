@@ -23,6 +23,8 @@ import (
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
+
+	"go.uber.org/zap"
 )
 
 func TestRunMain(t *testing.T) {
@@ -51,7 +53,7 @@ func TestRunMain(t *testing.T) {
 	oldOsExit := utils.OsExit
 	defer func() { utils.OsExit = oldOsExit }()
 	utils.OsExit = func(code int) {
-		log.Infof("[test] os.Exit with code %d", code)
+		log.L().Info("os exits", zap.Int("exit code", code))
 		exit <- code
 		// sleep here to prevent following code execution in the caller routine
 		time.Sleep(time.Second * 60)

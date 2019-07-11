@@ -17,6 +17,7 @@ import (
 	"bytes"
 
 	"github.com/pingcap/dm/pkg/log"
+
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
@@ -24,6 +25,7 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	_ "github.com/pingcap/tidb/types/parser_driver" // for import parser driver
+	"go.uber.org/zap"
 )
 
 var (
@@ -38,13 +40,12 @@ var (
 // Parse wraps parser.Parse(), makes `parser` suitable for dm
 func Parse(p *parser.Parser, sql, charset, collation string) (stmt []ast.StmtNode, err error) {
 	stmts, warnings, err := p.Parse(sql, charset, collation)
-
-	for _, warning := range warnings {
-		log.Warnf("parsing sql %s:%v", sql, warning)
+	if err != nil {
+		log.L().Error("parse statement", zap.String("sql", sql), log.ShortError(err))
 	}
 
-	if err != nil {
-		log.Errorf("parsing sql %s:%v", sql, err)
+	if len(warnings) > 0 {
+		log.L().Warn("parse statement", zap.String("sql", sql), zap.Errors("warning messages", warnings))
 	}
 
 	return stmts, errors.Trace(err)
