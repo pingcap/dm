@@ -1093,11 +1093,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		"delete from test_1.t_1 where id = 1",
 		"update test_1.t_1 set id = 1 where id = 2", // will find casuality and then generate flush job
 	}
-	expectJobs1 := []struct {
-		tp       opType
-		sqlInJob string
-		args     []interface{}
-	}{
+	expectJobs1 := []*expectJob{
 		{
 			ddl,
 			"CREATE DATABASE IF NOT EXISTS `test_1`",
@@ -1160,18 +1156,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	}
 
 	testJobs.Lock()
-	c.Assert(testJobs.jobs, HasLen, len(expectJobs1))
-	for i, job := range testJobs.jobs {
-		c.Log(i, job.sql, job.ddls, job.args)
-
-		c.Assert(job.tp, Equals, expectJobs1[i].tp)
-		if job.tp == ddl {
-			c.Assert(job.ddls[0], Equals, expectJobs1[i].sqlInJob)
-		} else {
-			c.Assert(job.sql, Equals, expectJobs1[i].sqlInJob)
-			c.Assert(job.args, DeepEquals, expectJobs1[i].args)
-		}
-	}
+	checkJobs(c, testJobs.jobs, expectJobs1)
 	testJobs.jobs = testJobs.jobs[:0]
 	testJobs.Unlock()
 
@@ -1202,11 +1187,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		"delete from test_1.t_1 where id = 3",
 	}
 
-	expectJobs2 := []struct {
-		tp       opType
-		sqlInJob string
-		args     []interface{}
-	}{
+	expectJobs2 := []*expectJob{
 		{
 			flush,
 			"",
@@ -1241,18 +1222,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	}
 
 	testJobs.RLock()
-	c.Assert(testJobs.jobs, HasLen, len(expectJobs2))
-	for i, job := range testJobs.jobs {
-		c.Log(i, job.tp, job.ddls, job.sql, job.args)
-
-		c.Assert(job.tp, Equals, expectJobs2[i].tp)
-		if job.tp == ddl {
-			c.Assert(job.ddls[0], Equals, expectJobs2[i].sqlInJob)
-		} else {
-			c.Assert(job.sql, Equals, expectJobs2[i].sqlInJob)
-			c.Assert(job.args, DeepEquals, expectJobs2[i].args)
-		}
-	}
+	checkJobs(c, testJobs.jobs, expectJobs2)
 	testJobs.RUnlock()
 
 	status := syncer.Status().(*pb.SyncStatus)
@@ -1261,6 +1231,27 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	cancel()
 	syncer.Close()
 	c.Assert(syncer.isClosed(), IsTrue)
+}
+
+type expectJob struct {
+	tp       opType
+	sqlInJob string
+	args     []interface{}
+}
+
+func checkJobs(c *C, jobs []*job, expectJobs []*expectJob) {
+	c.Assert(jobs, HasLen, len(expectJobs))
+	for i, job := range jobs {
+		c.Log(i, job.tp, job.ddls, job.sql, job.args)
+
+		c.Assert(job.tp, Equals, expectJobs[i].tp)
+		if job.tp == ddl {
+			c.Assert(job.ddls[0], Equals, expectJobs[i].sqlInJob)
+		} else {
+			c.Assert(job.sql, Equals, expectJobs[i].sqlInJob)
+			c.Assert(job.args, DeepEquals, expectJobs[i].args)
+		}
+	}
 }
 
 var testJobs struct {
