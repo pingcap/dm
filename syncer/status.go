@@ -14,8 +14,8 @@
 package syncer
 
 import (
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/binlog"
@@ -36,12 +36,12 @@ func (s *Syncer) Status() interface{} {
 	tps := s.tps.Get()
 	masterPos, masterGTIDSet, err := s.getMasterStatus()
 	if err != nil {
-		log.Warnf("[syncer] get master status err %v", errors.ErrorStack(err))
+		s.tctx.L().Warn("fail to get master status", zap.Error(err))
 	}
 
 	syncerPos := s.checkpoint.FlushedGlobalPoint()
 	if err != nil {
-		log.Warnf("[syncer] get gtid err %v", errors.ErrorStack(err))
+		s.tctx.L().Warn("fail to get flushed global point", zap.Error(err))
 	}
 	st := &pb.SyncStatus{
 		TotalEvents:  total,
@@ -59,7 +59,7 @@ func (s *Syncer) Status() interface{} {
 	// position in syncer status, we record this error only in debug level.
 	realPos, err := binlog.RealMySQLPos(syncerPos)
 	if err != nil {
-		log.Debugf("[syncer] parse real mysql position err %v", err)
+		s.tctx.L().Debug("fail to parse real mysql position", zap.Stringer("position", syncerPos), log.ShortError(err))
 	}
 	st.Synced = utils.CompareBinlogPos(masterPos, realPos, 0) == 0
 

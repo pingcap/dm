@@ -22,10 +22,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/BurntSushi/toml"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
+
+	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
+	"go.uber.org/zap"
 )
 
 // SampleConfigFile is sample config file of dm-master
@@ -95,7 +97,7 @@ type Config struct {
 func (c *Config) String() string {
 	cfg, err := json.Marshal(c)
 	if err != nil {
-		log.Errorf("[dm-master] marshal config to json error %v", err)
+		log.L().Error("marshal to json", zap.Reflect("master config", c), log.ShortError(err))
 	}
 	return string(cfg)
 }
@@ -181,11 +183,11 @@ func (c *Config) adjust() error {
 
 	// for backward compatibility
 	if c.RPCRateLimit <= 0 {
-		log.Warnf("[dm-master] invalid rpc-rate-limit: %f, use default value: %f", c.RPCRateLimit, DefaultRate)
+		log.L().Warn("invalid rpc-rate-limit, default value used", zap.Float64("specified rpc-rate-limit", c.RPCRateLimit), zap.Float64("default rpc-rate-limit", DefaultRate))
 		c.RPCRateLimit = DefaultRate
 	}
 	if c.RPCRateBurst <= 0 {
-		log.Warnf("[dm-master] invalid rpc-rate-burst: %d, use default value: %d", c.RPCRateBurst, DefaultBurst)
+		log.L().Warn("invalid rpc-rate-burst, default value use", zap.Int("specified rpc-rate-burst", c.RPCRateBurst), zap.Int("default rpc-rate-burst", DefaultBurst))
 		c.RPCRateBurst = DefaultBurst
 	}
 

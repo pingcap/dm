@@ -26,6 +26,7 @@ import (
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/gtid"
@@ -44,6 +45,8 @@ type FileReader struct {
 	parser *replication.BinlogParser
 	ch     chan *replication.BinlogEvent
 	ech    chan error
+
+	logger log.Logger
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -68,7 +71,7 @@ type FileReaderStatus struct {
 func (s *FileReaderStatus) String() string {
 	data, err := json.Marshal(s)
 	if err != nil {
-		log.Errorf("[FileReaderStatus] marshal status to json error %v", err)
+		log.L().Error("fail to marshal status to json", zap.Reflect("file reader status", s), log.ShortError(err))
 	}
 	return string(data)
 }
@@ -86,6 +89,7 @@ func NewFileReader(cfg *FileReaderConfig) Reader {
 		parser: parser,
 		ch:     make(chan *replication.BinlogEvent, cfg.ChBufferSize),
 		ech:    make(chan error, cfg.EchBufferSize),
+		logger: log.With(zap.String("component", "binlog file reader")),
 	}
 }
 
@@ -104,7 +108,7 @@ func (r *FileReader) StartSyncByPos(pos gmysql.Position) error {
 		defer r.wg.Done()
 		err := r.parser.ParseFile(pos.Name, int64(pos.Pos), r.onEvent)
 		if err != nil {
-			log.Errorf("[file reader] parse binlog file with error %s", errors.ErrorStack(err))
+			r.logger.Error("fail to parse binlog file", zap.Error(err))
 			select {
 			case r.ech <- err:
 			case <-r.ctx.Done():

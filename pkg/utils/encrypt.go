@@ -17,6 +17,7 @@ import (
 	"encoding/base64"
 
 	"github.com/pingcap/dm/pkg/encrypt"
+
 	"github.com/pingcap/errors"
 )
 

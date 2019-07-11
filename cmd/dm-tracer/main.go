@@ -15,6 +15,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"strings"
@@ -24,6 +25,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/errors"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -34,17 +36,21 @@ func main() {
 	case flag.ErrHelp:
 		os.Exit(0)
 	default:
-		log.Errorf("parse cmd flags err %s", err)
+		fmt.Printf("parse cmd flags err %s", err)
 		os.Exit(2)
 	}
 
-	log.SetLevelByString(strings.ToLower(cfg.LogLevel))
-	if len(cfg.LogFile) > 0 {
-		log.SetOutputByName(cfg.LogFile)
+	err = log.InitLogger(&log.Config{
+		File:  cfg.LogFile,
+		Level: strings.ToLower(cfg.LogLevel),
+	})
+	if err != nil {
+		fmt.Printf("init logger error %v", errors.ErrorStack(err))
+		os.Exit(2)
 	}
 
-	utils.PrintInfo("tracer", func() {
-		log.Infof("config: %s", cfg)
+	utils.PrintInfo("dm-tracer", func() {
+		log.L().Info("", zap.Stringer("dm-tracer config", cfg))
 	})
 
 	sc := make(chan os.Signal, 1)
@@ -58,14 +64,23 @@ func main() {
 
 	go func() {
 		sig := <-sc
-		log.Infof("got signal [%v] to exit", sig)
+		log.L().Info("got signal to exit", zap.Stringer("signal", sig))
 		s.Close()
 	}()
 
 	err = s.Start()
 	if err != nil {
-		log.Errorf("start dm-tracer err %s", err)
+		log.L().Error("fail to start dm-tracer", zap.Error(err))
 	}
 	s.Close() // wait until closed
-	log.Info("dm-tracer exit")
+	log.L().Info("dm-tracer exit")
+
+	syncErr := log.L().Sync()
+	if syncErr != nil {
+		fmt.Fprintln(os.Stderr, "sync log failed", syncErr)
+	}
+
+	if err != nil || syncErr != nil {
+		os.Exit(1)
+	}
 }

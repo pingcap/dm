@@ -27,11 +27,13 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/binlog"
+	tcontext "github.com/pingcap/dm/pkg/context"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/log"
 	pkgstreamer "github.com/pingcap/dm/pkg/streamer"
@@ -101,6 +103,8 @@ type Relay struct {
 	closed sync2.AtomicBool
 	sync.RWMutex
 
+	tctx *tcontext.Context
+
 	activeRelayLog struct {
 		sync.RWMutex
 		info *pkgstreamer.RelayLogInfo
@@ -139,6 +143,7 @@ func NewRealRelay(cfg *Config) Process {
 		cfg:       cfg,
 		syncerCfg: syncerCfg,
 		meta:      NewLocalMeta(cfg.Flavor, cfg.RelayDir),
+		tctx:      tcontext.Background().WithLogger(log.With(zap.String("component", "relay log"))),
 	}
 }
 
@@ -182,7 +187,7 @@ func (r *Relay) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	err := r.process(ctx)
 	if err != nil && errors.Cause(err) != replication.ErrSyncClosed {
 		relayExitWithErrorCounter.Inc()
-		log.Errorf("[relay] process exit with error %v", errors.ErrorStack(err))
+		r.tctx.L().Error("process exit", zap.Error(err))
 		// TODO: add specified error type instead of pb.ErrorType_UnknownError
 		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err)))
 	}
@@ -252,7 +257,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 	defer func() {
 		err = reader2.Close()
 		if err != nil {
-			log.Errorf("[relay] close binlog event reader error %v", err)
+			r.tctx.L().Error("fail to close binlog event reader", zap.Error(err))
 		}
 	}()
 
@@ -263,7 +268,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 	defer func() {
 		err = writer2.Close()
 		if err != nil {
-			log.Errorf("[relay] close binlog event writer error %v", err)
+			r.tctx.L().Error("fail to close binlog event writer", zap.Error(err))
 		}
 	}()
 
@@ -282,7 +287,7 @@ func (r *Relay) tryRecoverLatestFile(parser2 *parser.Parser) error {
 	)
 
 	if latestPos.Compare(minCheckpoint) <= 0 {
-		log.Warnf("[relay] no relay log file need to recover, position %s, GTID sets %v", latestPos, latestGTID)
+		r.tctx.L().Warn("no relay log file need to recover", zap.Stringer("position", latestPos), log.WrapStringerField("gtid set", latestGTID))
 		return nil
 	}
 
@@ -291,7 +296,7 @@ func (r *Relay) tryRecoverLatestFile(parser2 *parser.Parser) error {
 		RelayDir: r.meta.Dir(),
 		Filename: latestPos.Name,
 	}
-	writer2 := writer.NewFileWriter(cfg, parser2)
+	writer2 := writer.NewFileWriter(r.tctx, cfg, parser2)
 	err := writer2.Start()
 	if err != nil {
 		return errors.Annotatef(err, "start recover writer for UUID %s with config %+v", uuid, cfg)
@@ -299,24 +304,24 @@ func (r *Relay) tryRecoverLatestFile(parser2 *parser.Parser) error {
 	defer func() {
 		err2 := writer2.Close()
 		if err2 != nil {
-			log.Errorf("[relay] close recover writer for UUID %s with config %+v error %v", uuid, cfg, err2)
+			r.tctx.L().Error("fail to close recover writer", zap.String("UUID", uuid), zap.Reflect("config", cfg), log.ShortError(err2))
 		}
 	}()
-	log.Infof("[relay] started recover writer for UUID %s with config %+v", uuid, cfg)
+	r.tctx.L().Info("started recover writer", zap.String("UUID", uuid), zap.Reflect("config", cfg))
 
 	result, err := writer2.Recover()
 	if err == nil {
 		if result.Recovered {
-			log.Warnf("[relay] relay log file recovered from position %s to %s, GTID sets %v to %v",
-				latestPos, result.LatestPos, latestGTID, result.LatestGTIDs)
+			r.tctx.L().Warn("relay log file recovered",
+				zap.Stringer("from position", latestPos), zap.Stringer("to position", result.LatestPos), log.WrapStringerField("from GTID set", latestGTID), log.WrapStringerField("to GTID set", result.LatestGTIDs))
 			err = r.meta.Save(result.LatestPos, result.LatestGTIDs)
 			if err != nil {
 				return errors.Annotatef(err, "save position %s, GTID sets %v after recovered", result.LatestPos, result.LatestGTIDs)
 			}
 		} else if result.LatestPos.Compare(latestPos) > 0 ||
 			(result.LatestGTIDs != nil && !result.LatestGTIDs.Equal(latestGTID) && result.LatestGTIDs.Contain(latestGTID)) {
-			log.Warnf("[relay] relay log file have more events after position %s (until %s), GTID sets %v (until %v)",
-				latestPos, result.LatestPos, latestGTID, result.LatestGTIDs)
+			r.tctx.L().Warn("relay log file have more events",
+				zap.Stringer("after position", latestPos), zap.Stringer("until position", result.LatestPos), log.WrapStringerField("after GTID set", latestGTID), log.WrapStringerField("until GTID set", result.LatestGTIDs))
 		}
 
 	}
@@ -352,15 +357,15 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 				if utils.IsErrBinlogPurged(err) {
 					// TODO: try auto fix GTID, and can support auto switching between upstream server later.
 					cfg := r.cfg.From
-					log.Errorf("[relay] the requested binlog files have purged in the master server or the master server behind %s:%d have switched, currently DM do no support to handle this error %v",
-						cfg.Host, cfg.Port, err)
+					r.tctx.L().Error("the requested binlog files have purged in the master server or the master server have switched, currently DM do no support to handle this error",
+						zap.String("db host", cfg.Host), zap.Int("db port", cfg.Port), log.ShortError(err))
 				}
 				binlogReadErrorCounter.Inc()
 			}
 			return errors.Trace(err)
 		}
 		e := rResult.Event
-		log.Debugf("[relay] receive binlog event with header %+v", e.Header)
+		r.tctx.L().Debug("receive binlog event with header", zap.Reflect("header", e.Header))
 
 		// 2. transform events
 		tResult := transformer2.Transform(e)
@@ -369,22 +374,22 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 				Name: string(tResult.NextLogName),
 				Pos:  uint32(tResult.LogPos),
 			}
-			log.Infof("[relay] rotate to %s", lastPos.String())
+			r.tctx.L().Info("rotate event", zap.Stringer("position", lastPos))
 		}
 		if tResult.Ignore {
-			log.Infof("[relay] ignore event %+v by transformer", e.Header)
+			r.tctx.L().Info("ignore event by transformer", zap.Reflect("header", e.Header))
 			continue
 		}
 
 		// 3. save events into file
 		writeTimer := time.Now()
-		log.Debugf("[relay] writing binlog event with header %+v", e.Header)
+		r.tctx.L().Debug("writing binlog event", zap.Reflect("header", e.Header))
 		wResult, err := writer2.WriteEvent(e)
 		if err != nil {
 			relayLogWriteErrorCounter.Inc()
 			return errors.Trace(err)
 		} else if wResult.Ignore {
-			log.Infof("[relay] ignore event %+v by writer", e.Header)
+			r.tctx.L().Info("ignore event by writer", zap.Reflect("header", e.Header))
 			r.tryUpdateActiveRelayLog(e, lastPos.Name) // even the event ignored we still need to try this update.
 			continue
 		}
@@ -413,7 +418,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 		relayLogWriteSizeHistogram.Observe(float64(e.Header.EventSize))
 		relayLogPosGauge.WithLabelValues("relay").Set(float64(lastPos.Pos))
 		if index, err2 := binlog.GetFilenameIndex(lastPos.Name); err2 != nil {
-			log.Errorf("[relay] parse binlog file name %s err %v", lastPos.Name, err2)
+			r.tctx.L().Error("parse binlog file name", zap.String("file name", lastPos.Name), log.ShortError(err2))
 		} else {
 			relayLogFileGauge.WithLabelValues("relay").Set(float64(index))
 		}
@@ -433,7 +438,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 func (r *Relay) tryUpdateActiveRelayLog(e *replication.BinlogEvent, filename string) {
 	if e.Header.EventType == replication.FORMAT_DESCRIPTION_EVENT {
 		r.setActiveRelayLog(filename)
-		log.Infof("[relay] the active relay log file change to %s", filename)
+		r.tctx.L().Info("change the active relay log file", zap.String("file name", filename))
 	}
 }
 
@@ -458,7 +463,7 @@ func (r *Relay) reSetupMeta() error {
 		if err != nil {
 			return errors.Trace(err)
 		} else if adjusted {
-			log.Infof("[relay] adjusted meta to start pos with binlog-name (%s), binlog-gtid (%s)", r.cfg.BinLogName, r.cfg.BinlogGTID)
+			r.tctx.L().Info("adjusted meta to start pos", zap.String("start pos's binlog name", r.cfg.BinLogName), zap.String("start pos's binlog gtid", r.cfg.BinlogGTID))
 		}
 	}
 
@@ -473,7 +478,7 @@ func (r *Relay) updateMetricsRelaySubDirIndex() {
 	uuidWithSuffix := r.meta.UUID() // only change after switch
 	_, suffix, err := utils.ParseSuffixForUUID(uuidWithSuffix)
 	if err != nil {
-		log.Errorf("parse suffix for UUID %s error %v", uuidWithSuffix, errors.Trace(err))
+		r.tctx.L().Error("parse suffix for UUID", zap.String("UUID", uuidWithSuffix), zap.Error(err))
 		return
 	}
 	relaySubDirIndex.WithLabelValues(node, uuidWithSuffix).Set(float64(suffix))
@@ -493,20 +498,20 @@ func (r *Relay) doIntervalOps(ctx context.Context) {
 			if r.meta.Dirty() {
 				err := r.meta.Flush()
 				if err != nil {
-					log.Errorf("[relay] flush meta error %v", errors.ErrorStack(err))
+					r.tctx.L().Error("flush meta", zap.Error(err))
 				} else {
-					log.Infof("[relay] flush meta finished, %s", r.meta.String())
+					r.tctx.L().Info("flush meta finished", zap.Stringer("meta", r.meta))
 				}
 			}
 		case <-masterStatusTicker.C:
 			pos, _, err := utils.GetMasterStatus(r.db, r.cfg.Flavor)
 			if err != nil {
-				log.Warnf("[relay] get master status error %v", errors.ErrorStack(err))
+				r.tctx.L().Warn("get master status", zap.Error(err))
 				continue
 			}
 			index, err := binlog.GetFilenameIndex(pos.Name)
 			if err != nil {
-				log.Errorf("[relay] parse binlog file name %s error %v", pos.Name, err)
+				r.tctx.L().Error("parse binlog file name", zap.String("file name", pos.Name), log.ShortError(err))
 				continue
 			}
 			relayLogFileGauge.WithLabelValues("master").Set(float64(index))
@@ -514,9 +519,9 @@ func (r *Relay) doIntervalOps(ctx context.Context) {
 		case <-trimUUIDsTicker.C:
 			trimmed, err := r.meta.TrimUUIDs()
 			if err != nil {
-				log.Errorf("[relay] trim UUIDs error %s", errors.ErrorStack(err))
+				r.tctx.L().Error("trim UUIDs", zap.Error(err))
 			} else if len(trimmed) > 0 {
-				log.Infof("[relay] trim UUIDs %s", strings.Join(trimmed, ";"))
+				r.tctx.L().Info("trim UUIDs", zap.String("UUIDs", strings.Join(trimmed, ";")))
 			}
 		case <-ctx.Done():
 			return
@@ -544,7 +549,7 @@ func (r *Relay) setUpReader() (reader.Reader, error) {
 		return nil, errors.Annotatef(err, "start reader for UUID %s", uuid)
 	}
 
-	log.Infof("[relay] started underlying reader for UUID %s ", uuid)
+	r.tctx.L().Info("started underlying reader", zap.String("UUID", uuid))
 	return reader2, nil
 }
 
@@ -555,13 +560,13 @@ func (r *Relay) setUpWriter(parser2 *parser.Parser) (writer.Writer, error) {
 		RelayDir: r.meta.Dir(),
 		Filename: pos.Name,
 	}
-	writer2 := writer.NewFileWriter(cfg, parser2)
+	writer2 := writer.NewFileWriter(r.tctx, cfg, parser2)
 	err := writer2.Start()
 	if err != nil {
 		return nil, errors.Annotatef(err, "start writer for UUID %s with config %+v", uuid, cfg)
 	}
 
-	log.Infof("[relay] started underlying writer for UUID %s with config %+v", uuid, cfg)
+	r.tctx.L().Info("started underlying writer", zap.String("UUID", uuid), zap.Reflect("config", cfg))
 	return writer2, nil
 }
 
@@ -577,7 +582,7 @@ func (r *Relay) IsClosed() bool {
 // stopSync stops syncing, now it used by Close and Pause
 func (r *Relay) stopSync() {
 	if err := r.meta.Flush(); err != nil {
-		log.Errorf("[relay] flush checkpoint error %v", errors.ErrorStack(err))
+		r.tctx.L().Error("flush checkpoint", zap.Error(err))
 	}
 }
 
@@ -595,21 +600,21 @@ func (r *Relay) Close() {
 	if r.closed.Get() {
 		return
 	}
-	log.Info("[relay] relay unit is closing")
+	r.tctx.L().Info("relay unit is closing")
 
 	r.stopSync()
 
 	r.closeDB()
 
 	r.closed.Set(true)
-	log.Info("[relay] relay unit closed")
+	r.tctx.L().Info("relay unit closed")
 }
 
 // Status implements the dm.Unit interface.
 func (r *Relay) Status() interface{} {
 	masterPos, masterGTID, err := utils.GetMasterStatus(r.db, r.cfg.Flavor)
 	if err != nil {
-		log.Warnf("[relay] get master status %v", errors.ErrorStack(err))
+		r.tctx.L().Warn("get master status", zap.Error(err))
 	}
 
 	uuid, relayPos := r.meta.Pos()
@@ -653,7 +658,7 @@ func (r *Relay) IsFreshTask() (bool, error) {
 // Pause pauses the process, it can be resumed later
 func (r *Relay) Pause() {
 	if r.IsClosed() {
-		log.Warn("[relay] try to pause, but already closed")
+		r.tctx.L().Warn("try to pause, but already closed")
 		return
 	}
 
@@ -675,7 +680,7 @@ func (r *Relay) Update(cfg *config.SubTaskConfig) error {
 func (r *Relay) Reload(newCfg *Config) error {
 	r.Lock()
 	defer r.Unlock()
-	log.Info("[relay] relay unit is updating")
+	r.tctx.L().Info("relay unit is updating")
 
 	// Update From
 	r.cfg.From = newCfg.From
@@ -717,7 +722,7 @@ func (r *Relay) Reload(newCfg *Config) error {
 
 	r.syncerCfg = syncerCfg
 
-	log.Info("[relay] relay unit is updated")
+	r.tctx.L().Info("relay unit is updated")
 
 	return nil
 }

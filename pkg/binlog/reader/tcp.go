@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/errors"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/gtid"
@@ -51,7 +52,7 @@ type TCPReaderStatus struct {
 func (s *TCPReaderStatus) String() string {
 	data, err := json.Marshal(s)
 	if err != nil {
-		log.Errorf("[TCPReaderStatus] marshal status to json error %v", err)
+		log.L().Error("fail to marshal status to json", zap.Reflect("tcp reader status", s), log.ShortError(err))
 	}
 	return string(data)
 }

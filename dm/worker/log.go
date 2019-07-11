@@ -22,14 +22,16 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/pingcap/dm/dm/pb"
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
+
 	"github.com/pingcap/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
-
-	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/log"
+	"go.uber.org/zap"
 )
 
 // ErrInValidHandler indicates we meet an invalid dbOperator.
@@ -104,7 +106,7 @@ func LoadHandledPointer(h dbOperator) (Pointer, error) {
 }
 
 // ClearHandledPointer clears the handled pointer in kv DB.
-func ClearHandledPointer(h dbOperator) error {
+func ClearHandledPointer(tctx *tcontext.Context, h dbOperator) error {
 	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
@@ -142,6 +144,8 @@ func EncodeTaskLogKey(id int64) []byte {
 type Logger struct {
 	endPointer     Pointer
 	handledPointer Pointer
+
+	l log.Logger
 }
 
 // Initial initials Logger
@@ -194,7 +198,7 @@ func (logger *Logger) Initial(h dbOperator) ([]*pb.TaskLog, error) {
 	logger.handledPointer = handledPointer
 	logger.endPointer = endPointer
 
-	log.Infof("[task log] initialized, handle pointer %+v, end pointer %+v", logger.handledPointer, logger.endPointer)
+	logger.l.Info("finish initialization", zap.Reflect("handle pointer", logger.handledPointer), zap.Reflect("end pointer", logger.endPointer))
 
 	return logs, nil
 }
@@ -299,7 +303,7 @@ func (logger *Logger) GC(ctx context.Context, h dbOperator) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof("[task log gc] goroutine exist!")
+			logger.l.Info("gc routine exist!")
 			return
 		case <-ticker.C:
 			var gcID int64
@@ -314,7 +318,7 @@ func (logger *Logger) GC(ctx context.Context, h dbOperator) {
 
 func (logger *Logger) doGC(h dbOperator, id int64) {
 	if whetherNil(h) {
-		log.Error(ErrInValidHandler)
+		logger.l.Error(ErrInValidHandler.Error(), zap.String("feature", "gc"))
 		return
 	}
 
@@ -338,9 +342,9 @@ func (logger *Logger) doGC(h dbOperator, id int64) {
 		if batch.Len() == GCBatchSize {
 			err := h.Write(batch, nil)
 			if err != nil {
-				log.Errorf("[task log gc] fail to delete keys from kv db %v until %s(% X)", err, iter.Key(), iter.Key())
+				logger.l.Error("fail to delete keys from kv db", zap.String("feature", "gc"), zap.Binary("binary key", iter.Key()), zap.ByteString("text key", iter.Key()), log.ShortError(err))
 			}
-			log.Infof("[task log gc] delete range [%s(% X), %s(% X)]", firstKey, firstKey, iter.Key(), iter.Key())
+			logger.l.Info("delete range", zap.String("feature", "gc"), zap.ByteString("first key", firstKey), zap.Binary("raw first key", firstKey), zap.ByteString("end key", iter.Key()), zap.Binary("raw end key", iter.Key()))
 			firstKey = firstKey[:0]
 			batch.Reset()
 		}
@@ -348,22 +352,22 @@ func (logger *Logger) doGC(h dbOperator, id int64) {
 	iter.Release()
 	err := iter.Error()
 	if err != nil {
-		log.Errorf("[task log gc] query logs from meta error %v in range [%s(% X), %s(% X))",
-			err, firstKey, firstKey, endKey, endKey)
+		logger.l.Error("query logs from meta", zap.String("feature", "gc"),
+			zap.ByteString("first key", firstKey), zap.Binary("raw first key", firstKey), zap.ByteString("< end key", endKey), zap.Binary("< raw end key", endKey), log.ShortError(err))
 	}
 
 	if batch.Len() > 0 {
-		log.Infof("[task log gc] delete range [%s(% X), %s(% X))", firstKey, firstKey, endKey, endKey)
+		logger.l.Info("delete range", zap.String("feature", "gc"), zap.ByteString("first key", firstKey), zap.Binary("raw first key", firstKey), zap.ByteString("< end key", endKey), zap.Binary("< raw end key", endKey))
 		err := h.Write(batch, nil)
 		if err != nil {
-			log.Errorf("[task log gc] fail to delete keys from kv db %v", err)
+			logger.l.Error("fail to delete keys from kv db", log.ShortError(err))
 		}
 	}
 }
 
 // ClearOperationLog clears the task operation log.
-func ClearOperationLog(h dbOperator) error {
-	return errors.Annotate(clearByPrefix(h, TaskLogPrefix), "clear task operation log")
+func ClearOperationLog(tctx *tcontext.Context, h dbOperator) error {
+	return errors.Annotate(clearByPrefix(tctx, h, TaskLogPrefix), "clear task operation log")
 }
 
 // **************** task meta oepration *************** //
@@ -477,8 +481,8 @@ func DeleteTaskMeta(h dbOperator, name string) error {
 }
 
 // ClearTaskMeta clears all task meta in kv DB.
-func ClearTaskMeta(h dbOperator) error {
-	return errors.Annotate(clearByPrefix(h, TaskMetaPrefix), "clear task meta")
+func ClearTaskMeta(tctx *tcontext.Context, h dbOperator) error {
+	return errors.Annotate(clearByPrefix(tctx, h, TaskMetaPrefix), "clear task meta")
 }
 
 // VerifyTaskMeta verify legality of take meta
@@ -526,7 +530,7 @@ func whetherNil(handler interface{}) bool {
 }
 
 // clearByPrefix clears all keys with the specified prefix.
-func clearByPrefix(h dbOperator, prefix []byte) error {
+func clearByPrefix(tctx *tcontext.Context, h dbOperator, prefix []byte) error {
 	if whetherNil(h) {
 		return errors.Trace(ErrInValidHandler)
 	}
@@ -542,7 +546,7 @@ func clearByPrefix(h dbOperator, prefix []byte) error {
 				iter.Release()
 				return errors.Annotatef(err, "delete kv with prefix % X until % X", prefix, iter.Key())
 			}
-			log.Infof("[worker log] delete kv with prefix % X until % X", prefix, iter.Key())
+			tctx.L().Info("delete task operation log kv", zap.Binary("with prefix", prefix), zap.Binary("< key", iter.Key()))
 			batch.Reset()
 		}
 	}
