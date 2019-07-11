@@ -17,14 +17,15 @@ import (
 	"context"
 	"sync"
 
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/relay/purger"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/relay"
+	"github.com/pingcap/dm/relay/purger"
 )
 
 // RelayHolder for relay unit
@@ -68,6 +69,8 @@ type realRelayHolder struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
+	l log.Logger
+
 	closed sync2.AtomicInt32
 	stage  pb.Stage
 	result *pb.ProcessResult // the process result, nil when is processing
@@ -97,6 +100,7 @@ func NewRealRelayHolder(cfg *Config) RelayHolder {
 		cfg:   cfg,
 		stage: pb.Stage_New,
 		relay: relay.NewRelay(relayCfg),
+		l:     log.With(zap.String("component", "relay holder")),
 	}
 	h.closed.Set(closedTrue)
 	return h
@@ -154,7 +158,7 @@ func (h *realRelayHolder) run() {
 		r := <-pr
 		h.setResult(&r)
 		for _, err := range r.Errors {
-			log.Errorf("process error with type %v:\n %v", err.Type, err.Msg)
+			h.l.Error("process error", zap.Stringer("type", err))
 		}
 	}
 

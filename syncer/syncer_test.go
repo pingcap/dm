@@ -30,6 +30,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go-mysql/replication"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -71,7 +72,7 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 	dbAddr := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8", s.cfg.From.User, s.cfg.From.Password, s.cfg.From.Host, s.cfg.From.Port)
 	s.db, err = sql.Open("mysql", dbAddr)
 	if err != nil {
-		log.Fatal(err)
+		log.L().Fatal("", zap.Error(err))
 	}
 
 	s.resetMaster()
@@ -96,7 +97,7 @@ func (s *testSyncerSuite) resetBinlogSyncer() {
 	if s.cfg.Timezone != "" {
 		timezone, err2 := time.LoadLocation(s.cfg.Timezone)
 		if err != nil {
-			log.Fatal(err2)
+			log.L().Fatal("", zap.Error(err2))
 		}
 		cfg.TimestampStringLocation = timezone
 	}
@@ -107,13 +108,13 @@ func (s *testSyncerSuite) resetBinlogSyncer() {
 
 	pos, _, err := utils.GetMasterStatus(s.db, "mysql")
 	if err != nil {
-		log.Fatal(err)
+		log.L().Fatal("", zap.Error(err))
 	}
 
 	s.syncer = replication.NewBinlogSyncer(cfg)
 	s.streamer, err = s.syncer.StartSync(pos)
 	if err != nil {
-		log.Fatal(err)
+		log.L().Fatal("", zap.Error(err))
 	}
 }
 
@@ -1260,7 +1261,7 @@ var testJobs struct {
 }
 
 func (s *Syncer) addJobToMemory(job *job) error {
-	log.Infof("addJobToMemory: %v", job)
+	log.L().Info("add job to memory", zap.Stringer("job", job))
 
 	switch job.tp {
 	case ddl, insert, update, del, flush:

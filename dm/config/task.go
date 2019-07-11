@@ -19,11 +19,13 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/pkg/log"
+
 	"github.com/pingcap/errors"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
+	"go.uber.org/zap"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -280,7 +282,7 @@ func NewTaskConfig() *TaskConfig {
 func (c *TaskConfig) String() string {
 	cfg, err := yaml.Marshal(c)
 	if err != nil {
-		log.Errorf("[config] marshal task config to yaml error %v", err)
+		log.L().Error("marshal task config to yaml", zap.String("task", c.Name), log.ShortError(err))
 	}
 	return string(cfg)
 }
@@ -350,7 +352,7 @@ func (c *TaskConfig) adjust() error {
 		switch c.TaskMode {
 		case ModeFull, ModeAll:
 			if inst.Meta != nil {
-				log.Warnf("[config] mysql-instance(%d) set meta, but it will not be used for task-mode %s.\n for Full mode, incremental sync will never occur; for All mode, the meta dumped by MyDumper will be used", i, c.TaskMode)
+				log.L().Warn("metadata will not be used. for Full mode, incremental sync will never occur; for All mode, the meta dumped by MyDumper will be used", zap.Int("mysql instance", i), zap.String("task mode", c.TaskMode))
 			}
 		case ModeIncrement:
 			if inst.Meta == nil {

@@ -19,11 +19,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -60,15 +62,15 @@ func newBinlogPoint(pos mysql.Position, flushedPos mysql.Position) *binlogPoint 
 	}
 }
 
-func (b *binlogPoint) save(pos mysql.Position) {
+func (b *binlogPoint) save(pos mysql.Position) error {
 	b.Lock()
 	defer b.Unlock()
 	if pos.Compare(b.Position) < 0 {
 		// support to save equal pos, but not older pos
-		log.Warnf("[binlogPoint] try to save %v is older than current pos %v", pos, b.Position)
-		return
+		return errors.Errorf("%v is older than current pos %v", pos, b.Position)
 	}
 	b.Position = pos
+	return nil
 }
 
 func (b *binlogPoint) flush() {
@@ -196,10 +198,15 @@ type RemoteCheckPoint struct {
 	//   this global checkpoint is next-binlog-pos
 	globalPoint         *binlogPoint
 	globalPointSaveTime time.Time
+
+	tctx *tcontext.Context
 }
 
 // NewRemoteCheckPoint creates a new RemoteCheckPoint
-func NewRemoteCheckPoint(cfg *config.SubTaskConfig, id string) CheckPoint {
+func NewRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id string) CheckPoint {
+
+	newtctx := tctx.WithLogger(tctx.L().WithFields(zap.String("component", "remote checkpoint")))
+
 	cp := &RemoteCheckPoint{
 		cfg:         cfg,
 		schema:      cfg.MetaSchema,
@@ -207,6 +214,7 @@ func NewRemoteCheckPoint(cfg *config.SubTaskConfig, id string) CheckPoint {
 		id:          id,
 		points:      make(map[string]map[string]*binlogPoint),
 		globalPoint: newBinlogPoint(minCheckpoint, minCheckpoint),
+		tctx:        newtctx,
 	}
 
 	return cp
@@ -234,7 +242,7 @@ func (cp *RemoteCheckPoint) Init(conn *Conn) error {
 
 // Close implements CheckPoint.Close
 func (cp *RemoteCheckPoint) Close() {
-	closeDBs(cp.db)
+	closeDBs(cp.tctx, cp.db)
 }
 
 // Clear implements CheckPoint.Clear
@@ -245,7 +253,7 @@ func (cp *RemoteCheckPoint) Clear() error {
 	// delete all checkpoints
 	sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s'", cp.schema, cp.table, cp.id)
 	args := make([]interface{}, 0)
-	err := cp.db.executeSQL([]string{sql2}, [][]interface{}{args}, maxRetryCount)
+	err := cp.db.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}, maxRetryCount)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -271,7 +279,7 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, pos
 	}
 
 	// we save table checkpoint while we meet DDL or DML
-	log.Debugf("save checkpoint %s for table %s.%s", pos, sourceSchema, sourceTable)
+	cp.tctx.L().Debug("save table checkpoint", zap.Stringer("position", pos), zap.String("schema", sourceSchema), zap.String("table", sourceTable))
 	mSchema, ok := cp.points[sourceSchema]
 	if !ok {
 		mSchema = make(map[string]*binlogPoint)
@@ -281,7 +289,9 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, pos
 	if !ok {
 		mSchema[sourceTable] = newBinlogPoint(pos, minCheckpoint)
 	} else {
-		point.save(pos)
+		if err := point.save(pos); err != nil {
+			cp.tctx.L().Error("fail to save table point", zap.String("schema", sourceSchema), zap.String("table", sourceTable), log.ShortError(err))
+		}
 	}
 }
 
@@ -297,10 +307,12 @@ func (cp *RemoteCheckPoint) DeleteTablePoint(sourceSchema, sourceTable string) e
 	if !ok {
 		return nil
 	}
+
+	cp.tctx.L().Info("delete table checkpoint", zap.String("schema", sourceSchema), zap.String("table", sourceTable))
 	// delete  checkpoint
 	sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s' AND `cp_schema` = '%s' AND `cp_table` = '%s'", cp.schema, cp.table, cp.id, sourceSchema, sourceTable)
 	args := make([]interface{}, 0)
-	err := cp.db.executeSQL([]string{sql2}, [][]interface{}{args}, maxRetryCount)
+	err := cp.db.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}, maxRetryCount)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -328,7 +340,11 @@ func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, 
 func (cp *RemoteCheckPoint) SaveGlobalPoint(pos mysql.Position) {
 	cp.Lock()
 	defer cp.Unlock()
-	cp.globalPoint.save(pos)
+
+	cp.tctx.L().Debug("save global checkpoint", zap.Stringer("position", pos))
+	if err := cp.globalPoint.save(pos); err != nil {
+		cp.tctx.L().Error("fail to save global checkpoint", log.ShortError(err))
+	}
 }
 
 // FlushPointsExcept implements CheckPoint.FlushPointsExcept
@@ -382,7 +398,7 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(exceptTables [][]string, extraSQLs
 		args = append(args, extraArgs[i])
 	}
 
-	err := cp.db.executeSQL(sqls, args, maxRetryCount)
+	err := cp.db.executeSQL(cp.tctx, sqls, args, maxRetryCount)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -425,7 +441,7 @@ func (cp *RemoteCheckPoint) Rollback() {
 	cp.globalPoint.rollback()
 	for schema, mSchema := range cp.points {
 		for table, point := range mSchema {
-			log.Infof("rollback checkpoint %s for table %s.%s", point, schema, table)
+			cp.tctx.L().Info("rollback checkpoint", log.WrapStringerField("checkpoint", point), zap.String("schema", schema), zap.String("table", table))
 			point.rollback()
 		}
 	}
@@ -445,8 +461,8 @@ func (cp *RemoteCheckPoint) prepare() error {
 func (cp *RemoteCheckPoint) createSchema() error {
 	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", cp.schema)
 	args := make([]interface{}, 0)
-	err := cp.db.executeSQL([]string{sql2}, [][]interface{}{args}, maxRetryCount)
-	log.Infof("[syncer] %s", sql2)
+	err := cp.db.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}, maxRetryCount)
+	cp.tctx.L().Info("create checkpoint schema", zap.String("statement", sql2))
 	return errors.Trace(err)
 }
 
@@ -464,15 +480,15 @@ func (cp *RemoteCheckPoint) createTable() error {
 			UNIQUE KEY uk_id_schema_table (id, cp_schema, cp_table)
 		)`, tableName)
 	args := make([]interface{}, 0)
-	err := cp.db.executeSQL([]string{sql2}, [][]interface{}{args}, maxRetryCount)
-	log.Infof("[syncer] %s", sql2)
+	err := cp.db.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}, maxRetryCount)
+	cp.tctx.L().Info("create checkpoint table", zap.String("statement", sql2))
 	return errors.Trace(err)
 }
 
 // Load implements CheckPoint.Load
 func (cp *RemoteCheckPoint) Load() error {
 	query := fmt.Sprintf("SELECT `cp_schema`, `cp_table`, `binlog_name`, `binlog_pos`, `is_global` FROM `%s`.`%s` WHERE `id`='%s'", cp.schema, cp.table, cp.id)
-	rows, err := cp.db.querySQL(query, maxRetryCount)
+	rows, err := cp.db.querySQL(cp.tctx, query, maxRetryCount)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -499,7 +515,7 @@ func (cp *RemoteCheckPoint) Load() error {
 		if isGlobal {
 			if pos.Compare(minCheckpoint) > 0 {
 				cp.globalPoint = newBinlogPoint(pos, pos)
-				log.Infof("[checkpoint] get global checkpoint %+v from DB", cp.globalPoint)
+				cp.tctx.L().Info("fetch global checkpoint from DB", log.WrapStringerField("global checkpoint", cp.globalPoint))
 			}
 			continue // skip global checkpoint
 		}
@@ -530,7 +546,7 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 	case config.ModeIncrement:
 		// load meta from task config
 		if cp.cfg.Meta == nil {
-			log.Warn("[checkpoint] not set meta in increment task-mode")
+			cp.tctx.L().Warn("don't set meta in increment task-mode")
 			return nil
 		}
 		pos = &mysql.Position{
@@ -545,7 +561,7 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 	// if meta loaded, we will start syncing from meta's pos
 	if pos != nil {
 		cp.globalPoint = newBinlogPoint(*pos, *pos)
-		log.Infof("[checkpoint] loaded checkpoints %+v from meta", cp.globalPoint)
+		cp.tctx.L().Info("loaded checkpoints from meta", log.WrapStringerField("global checkpoint", cp.globalPoint))
 	}
 
 	return nil
@@ -568,6 +584,6 @@ func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, binlogName st
 func (cp *RemoteCheckPoint) parseMetaData() (*mysql.Position, error) {
 	// `metadata` is mydumper's output meta file name
 	filename := path.Join(cp.cfg.Dir, "metadata")
-	log.Infof("parsing metadata from %s", filename)
+	cp.tctx.L().Info("parsing metadata from file", zap.String("file", filename))
 	return utils.ParseMetaData(filename)
 }

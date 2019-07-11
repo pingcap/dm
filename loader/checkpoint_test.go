@@ -18,7 +18,9 @@ import (
 	"strconv"
 
 	. "github.com/pingcap/check"
+
 	"github.com/pingcap/dm/dm/config"
+	tcontext "github.com/pingcap/dm/pkg/context"
 )
 
 var _ = Suite(&testCheckPointSuite{})
@@ -69,7 +71,8 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 	}
 
 	id := "test_for_db"
-	cp, err := newRemoteCheckPoint(t.cfg, id)
+	tctx := tcontext.Background()
+	cp, err := newRemoteCheckPoint(tctx, t.cfg, id)
 	c.Assert(err, IsNil)
 	defer cp.Close()
 
@@ -115,7 +118,7 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 	defer closeConn(conn)
 	for _, cs := range cases {
 		sql2 := cp.GenSQL(cs.filename, cs.endPos)
-		err = conn.executeSQL([]string{sql2}, true)
+		err = conn.executeSQL(tctx, []string{sql2}, true)
 		c.Assert(err, IsNil)
 	}
 

@@ -23,8 +23,11 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/syndtr/goleveldb/leveldb"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/pb"
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -70,15 +73,15 @@ func (t *testUpgrade) TestLoadSaveInternalVersion(c *C) {
 	)
 
 	// load with nil DB
-	_, err := loadVersion(nil)
+	_, err := loadVersion(tcontext.Background(), nil)
 	c.Assert(errors.Cause(err), Equals, ErrInValidHandler)
-	_, err = loadVersion(db)
+	_, err = loadVersion(tcontext.Background(), db)
 	c.Assert(errors.Cause(err), Equals, ErrInValidHandler)
 
 	// save with nil DB
-	err = saveVersion(nil, ver1234)
+	err = saveVersion(tcontext.Background(), nil, ver1234)
 	c.Assert(errors.Cause(err), Equals, ErrInValidHandler)
-	err = saveVersion(db, ver1234)
+	err = saveVersion(tcontext.Background(), db, ver1234)
 	c.Assert(errors.Cause(err), Equals, ErrInValidHandler)
 
 	// open DB
@@ -86,16 +89,16 @@ func (t *testUpgrade) TestLoadSaveInternalVersion(c *C) {
 	defer db.Close()
 
 	// load but no data exist
-	verLoad, err := loadVersion(db)
+	verLoad, err := loadVersion(tcontext.Background(), db)
 	c.Assert(err, IsNil)
 	c.Assert(verLoad, DeepEquals, defaultPreviousWorkerVersion)
 
 	// save into DB
-	err = saveVersion(db, ver1234)
+	err = saveVersion(tcontext.Background(), db, ver1234)
 	c.Assert(err, IsNil)
 
 	// load back
-	verLoad, err = loadVersion(db)
+	verLoad, err = loadVersion(tcontext.Background(), db)
 	c.Assert(err, IsNil)
 	c.Assert(verLoad, DeepEquals, ver1234)
 }
@@ -150,7 +153,9 @@ func (t *testUpgrade) prepareBeforeUpgradeVer1(c *C, dbDir string) {
 	defer db.Close()
 
 	// 1. add some operation log into levelDB and set handled pointer
-	logger := new(Logger)
+	logger := &Logger{
+		l: log.With(zap.String("component", "operator log")),
+	}
 	c.Assert(logger.MarkAndForwardLog(db, &pb.TaskLog{
 		Id:   100,
 		Task: testTask1Meta,
@@ -182,7 +187,9 @@ func (t *testUpgrade) verifyAfterUpgradeVer1(c *C, dbDir string) {
 	defer db.Close()
 
 	// 1. verify operation log and handled pointer
-	logger := new(Logger)
+	logger := &Logger{
+		l: log.With(zap.String("component", "operator log")),
+	}
 	logs, err := logger.Initial(db)
 	c.Assert(err, IsNil)
 	c.Assert(logs, HasLen, 0)
@@ -199,14 +206,14 @@ func (t *testUpgrade) verifyAfterUpgradeVer1(c *C, dbDir string) {
 func (t *testUpgrade) saveVerToDB(c *C, dbDir string, ver version) {
 	db := t.openTestDB(c, dbDir)
 	defer db.Close()
-	err := saveVersion(db, ver)
+	err := saveVersion(tcontext.Background(), db, ver)
 	c.Assert(err, IsNil)
 }
 
 func (t *testUpgrade) loadVerFromDB(c *C, dbDir string) version {
 	db := t.openTestDB(c, dbDir)
 	defer db.Close()
-	ver, err := loadVersion(db)
+	ver, err := loadVersion(tcontext.Background(), db)
 	c.Assert(err, IsNil)
 	return ver
 }

@@ -21,9 +21,10 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog/common"
-	"github.com/pingcap/dm/pkg/log"
+	tcontext "github.com/pingcap/dm/pkg/context"
 )
 
 // FileWriter is a binlog event writer which writes binlog events to a file.
@@ -35,6 +36,8 @@ type FileWriter struct {
 	offset sync2.AtomicInt64
 
 	file *os.File
+
+	tctx *tcontext.Context
 }
 
 // FileWriterStatus represents the status of a FileWriter.
@@ -60,9 +63,10 @@ type FileWriterConfig struct {
 }
 
 // NewFileWriter creates a FileWriter instance.
-func NewFileWriter(cfg *FileWriterConfig) Writer {
+func NewFileWriter(tctx *tcontext.Context, cfg *FileWriterConfig) Writer {
 	return &FileWriter{
-		cfg: cfg,
+		cfg:  cfg,
+		tctx: tctx,
 	}
 }
 
@@ -83,7 +87,7 @@ func (w *FileWriter) Start() error {
 	if err != nil {
 		err2 := f.Close() // close the file opened before
 		if err2 != nil {
-			log.Errorf("[file writer] close file error %s", err2)
+			w.tctx.L().Error("fail to close file", zap.String("component", "file writer"), zap.Error(err2))
 		}
 		return errors.Annotatef(err, "get stat for %s", f.Name())
 	}
@@ -107,7 +111,7 @@ func (w *FileWriter) Close() error {
 	if w.file != nil {
 		err2 := w.flush() // try flush manually before close.
 		if err2 != nil {
-			log.Errorf("[file writer] flush buffered data error %s", err2)
+			w.tctx.L().Error("fail to flush buffered data", zap.String("component", "file writer"), zap.Error(err2))
 		}
 		err = w.file.Close()
 		w.file = nil

@@ -17,12 +17,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -86,7 +86,7 @@ func (s *Syncer) setInitActiveRelayLog() error {
 	}
 
 	err = s.readerHub.UpdateActiveRelayLog(s.cfg.Name, activeUUID, pos.Name)
-	log.Infof("[syncer] current earliest active relay log %s", s.readerHub.EarliestActiveRelayLog())
+	s.tctx.L().Info("current earliest active relay log", log.WrapStringerField("active relay log", s.readerHub.EarliestActiveRelayLog()))
 	return errors.Trace(err)
 }
 
@@ -110,7 +110,7 @@ func (s *Syncer) updateActiveRelayLog(pos mysql.Position) error {
 	}
 
 	err = s.readerHub.UpdateActiveRelayLog(s.cfg.Name, activeUUID, pos.Name)
-	log.Infof("[syncer] current earliest active relay log %s", s.readerHub.EarliestActiveRelayLog())
+	s.tctx.L().Info("current earliest active relay log", log.WrapStringerField("active relay log", s.readerHub.EarliestActiveRelayLog()))
 	return errors.Trace(err)
 }
 
@@ -120,5 +120,5 @@ func (s *Syncer) removeActiveRelayLog() {
 	}
 
 	s.readerHub.RemoveActiveRelayLog(s.cfg.Name)
-	log.Infof("[syncer] current earliest active relay log %s", s.readerHub.EarliestActiveRelayLog())
+	s.tctx.L().Info("current earliest active relay log", log.WrapStringerField("active relay log", s.readerHub.EarliestActiveRelayLog()))
 }

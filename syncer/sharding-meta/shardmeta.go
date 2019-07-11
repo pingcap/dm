@@ -19,6 +19,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
@@ -72,7 +73,7 @@ func (seq *ShardingSequence) IsPrefixSequence(other *ShardingSequence) bool {
 func (seq *ShardingSequence) String() string {
 	jsonSeq, err := json.Marshal(seq.Items)
 	if err != nil {
-		log.Errorf("marshal ShardingSequence to json error %v", err)
+		log.L().Error("fail to marshal ShardingSequence to json", zap.Reflect("shard sequence", seq))
 	}
 	return string(jsonSeq)
 }
