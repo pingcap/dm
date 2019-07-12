@@ -22,15 +22,16 @@ import (
 	"time"
 
 	tc "github.com/pingcap/check"
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 var (
@@ -94,11 +95,11 @@ func (s *MockServer) Start() error {
 	go func() {
 		err2 := s.svr.Serve(grpcL)
 		if err2 != nil && !common.IsErrNetClosing(err2) && err2 != cmux.ErrListenerClosed {
-			log.Errorf("[server] gRPC server return with error %s", err2.Error())
+			log.L().Error("gRPC server return with error", log.ShortError(err2))
 		}
 	}()
 
-	log.Infof("[server] listening on %v for gRPC API and status request", s.addr)
+	log.L().Info("listening on tracing address for gRPC API and status request", zap.String("tracing address", s.addr))
 	err = m.Serve()
 	if err != nil && common.IsErrNetClosing(err) {
 		err = nil
@@ -116,7 +117,7 @@ func (s *MockServer) Close() {
 
 	err := s.rootLis.Close()
 	if err != nil && !common.IsErrNetClosing(err) {
-		log.Errorf("[server] close net listener with error %s", err.Error())
+		log.L().Error("close net listener with error", log.ShortError(err))
 	}
 	if s.svr != nil {
 		s.svr.Stop()

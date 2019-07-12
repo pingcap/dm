@@ -16,9 +16,8 @@ package tracer
 import (
 	"sync"
 
-	"github.com/pingcap/errors"
-
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/errors"
 )
 
 // TraceEvent represents a sigle tracing event

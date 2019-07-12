@@ -23,6 +23,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/log"
@@ -85,6 +86,8 @@ type Heartbeat struct {
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
+
+	logger log.Logger
 }
 
 // GetHeartbeat gets singleton instance of Heartbeat
@@ -96,6 +99,7 @@ func GetHeartbeat(cfg *HeartbeatConfig) (*Heartbeat, error) {
 			schema:   filter.DMHeartbeatSchema,
 			table:    filter.DMHeartbeatTable,
 			slavesTs: make(map[string]float64),
+			logger:   log.With(zap.String("component", "heartbeat")),
 		}
 	})
 	if err := heartbeat.cfg.Equal(cfg); err != nil {
@@ -178,34 +182,34 @@ func (h *Heartbeat) RemoveTask(name string) error {
 // TryUpdateTaskTs tries to update task's ts
 func (h *Heartbeat) TryUpdateTaskTs(taskName, schema, table string, data [][]interface{}) {
 	if schema != h.schema || table != h.table {
-		log.Debugf("[syncer] not need to handle non-heartbeat table `%s`.`%s`", schema, table)
+		h.logger.Debug("don't need to handle non-heartbeat table", zap.String("schema", schema), zap.String("table", table))
 		return // not heartbeat table
 	}
 	if len(data) == 0 || len(data[0]) != 2 {
-		log.Warnf("[syncer] %+v rows / columns mismatch for heartbeat", data)
+		h.logger.Warn("rows / columns mismatch for heartbeat", zap.Reflect("data", data))
 		return // rows / columns mismatch
 	}
 
 	latest := data[len(data)-1]
 	serverID, ok := latest[1].(int32)
 	if !ok {
-		log.Warnf("[syncer] invalid data %v(%T) as server_id for heartbeat", latest[1], latest[1])
+		h.logger.Warn("invalid data server_id for heartbeat", zap.Reflect("server ID", latest[1]))
 		return
 	}
 	if int(serverID) != h.cfg.serverID {
-		log.Debugf("[syncer] ignore mismatched server_id (obtained: %v, expected: %v) for heartbeat", serverID, h.cfg.serverID)
+		h.logger.Debug("ignore mismatched server_id for heartbeat", zap.Int32("obtained server ID", serverID), zap.Int("excepted server ID", h.cfg.serverID))
 		return // only ignore
 	}
 
 	ts, ok := latest[0].(string)
 	if !ok {
-		log.Warnf("[syncer] invalid data %v(%T) as ts for heartbeat", latest[0], latest[0])
+		h.logger.Warn("invalid ts for heartbeat", zap.Reflect("ts", latest[0]))
 		return
 	}
 
 	t, err := time.Parse(timeFormat, ts)
 	if err != nil {
-		log.Errorf("[syncer] parse heartbeat ts %v error %v", ts, err)
+		h.logger.Error("parse heartbeat ts", zap.String("ts", ts), log.ShortError(err))
 		return
 	}
 
@@ -249,13 +253,13 @@ func (h *Heartbeat) run(ctx context.Context) {
 		case <-updateTicker.C:
 			err := h.updateTS()
 			if err != nil {
-				log.Errorf("[syncer] update heartbeat ts error %s", errors.ErrorStack(err))
+				h.logger.Error("update heartbeat ts", zap.Error(err))
 			}
 
 		case <-reportTicker.C:
 			err := h.calculateLag(ctx)
 			if err != nil {
-				log.Errorf("[syncer] calculate replication lag error %v", errors.ErrorStack(err))
+				h.logger.Error("calculate replication lag", zap.Error(err))
 			}
 
 		case <-ctx.Done():
@@ -268,7 +272,7 @@ func (h *Heartbeat) run(ctx context.Context) {
 func (h *Heartbeat) createDatabase() error {
 	createDatabase := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`", h.schema)
 	_, err := h.master.Exec(createDatabase)
-	log.Infof("[syncer] %s", createDatabase)
+	h.logger.Info("create heartbeat schema", zap.String("sql", createDatabase))
 	return errors.Trace(err)
 }
 
@@ -282,7 +286,7 @@ func (h *Heartbeat) createTable() error {
 )`, tableName)
 
 	_, err := h.master.Exec(createTableStmt)
-	log.Infof("[syncer] %s", createTableStmt)
+	h.logger.Info("create heartbeat table", zap.String("sql", createTableStmt))
 	return errors.Trace(err)
 }
 
@@ -291,7 +295,7 @@ func (h *Heartbeat) updateTS() error {
 	// when we not need to support MySQL <=5.5, we can replace with `UTC_TIMESTAMP(6)`
 	query := fmt.Sprintf("REPLACE INTO `%s`.`%s` (`ts`, `server_id`) VALUES(UTC_TIMESTAMP(), ?)", h.schema, h.table)
 	_, err := h.master.Exec(query, h.cfg.serverID)
-	log.Debugf("[syncer] %s %v", query, h.cfg.serverID)
+	h.logger.Debug("update ts", zap.String("sql", query), zap.Int("server ID", h.cfg.serverID))
 	return errors.Trace(err)
 }
 

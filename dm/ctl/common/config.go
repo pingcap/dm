@@ -20,8 +20,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/BurntSushi/toml"
 	"github.com/pingcap/dm/pkg/utils"
+
+	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
 )
 

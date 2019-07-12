@@ -18,6 +18,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/config"
+	tcontext "github.com/pingcap/dm/pkg/context"
 )
 
 var _ = Suite(&testShardingGroupSuite{})
@@ -34,7 +35,7 @@ func (t *testShardingGroupSuite) TestLowestFirstPosInGroups(c *C) {
 
 	ddls := []string{"DUMMY DDL"}
 
-	k := NewShardingGroupKeeper(cfg)
+	k := NewShardingGroupKeeper(tcontext.Background(), cfg)
 
 	g1 := NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, []string{"db1.tbl1", "db1.tbl2"}, nil, false)
 	pos1 := mysql.Position{Name: "mysql-bin.000002", Pos: 123}

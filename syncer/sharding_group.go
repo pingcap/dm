@@ -77,10 +77,11 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/log"
+	tcontext "github.com/pingcap/dm/pkg/context"
 	shardmeta "github.com/pingcap/dm/syncer/sharding-meta"
 )
 
@@ -401,13 +402,16 @@ type ShardingGroupKeeper struct {
 	shardMetaSchema string
 	shardMetaTable  string
 	db              *Conn
+
+	tctx *tcontext.Context
 }
 
 // NewShardingGroupKeeper creates a new ShardingGroupKeeper
-func NewShardingGroupKeeper(cfg *config.SubTaskConfig) *ShardingGroupKeeper {
+func NewShardingGroupKeeper(tctx *tcontext.Context, cfg *config.SubTaskConfig) *ShardingGroupKeeper {
 	k := &ShardingGroupKeeper{
 		groups: make(map[string]*ShardingGroup),
 		cfg:    cfg,
+		tctx:   tctx.WithLogger(tctx.L().WithFields(zap.String("component", "shard group keeper"))),
 	}
 	k.shardMetaSchema = cfg.MetaSchema
 	k.shardMetaTable = fmt.Sprintf(shardmeta.MetaTableFormat, cfg.Name)
@@ -691,14 +695,14 @@ func (k *ShardingGroupKeeper) prepare() error {
 
 // Close closes sharding group keeper
 func (k *ShardingGroupKeeper) Close() {
-	closeDBs(k.db)
+	closeDBs(k.tctx, k.db)
 }
 
 func (k *ShardingGroupKeeper) createSchema() error {
 	stmt := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", k.shardMetaSchema)
 	args := make([]interface{}, 0)
-	err := k.db.executeSQL([]string{stmt}, [][]interface{}{args}, maxRetryCount)
-	log.Infof("[ShardingGroupKeeper] execute sql %s", stmt)
+	err := k.db.executeSQL(k.tctx, []string{stmt}, [][]interface{}{args}, maxRetryCount)
+	k.tctx.L().Info("execute sql", zap.String("statement", stmt))
 	return errors.Trace(err)
 }
 
@@ -715,15 +719,15 @@ func (k *ShardingGroupKeeper) createTable() error {
 		update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		UNIQUE KEY uk_source_id_table_id_source (source_id, target_table_id, source_table_id)
 	)`, tableName)
-	err := k.db.executeSQL([]string{stmt}, [][]interface{}{{}}, maxRetryCount)
-	log.Infof("[ShardingGroupKeeper] execute sql %s", stmt)
+	err := k.db.executeSQL(k.tctx, []string{stmt}, [][]interface{}{{}}, maxRetryCount)
+	k.tctx.L().Info("execute sql", zap.String("statement", stmt))
 	return errors.Trace(err)
 }
 
 // LoadShardMeta implements CheckPoint.LoadShardMeta
 func (k *ShardingGroupKeeper) LoadShardMeta() (map[string]*shardmeta.ShardingMeta, error) {
 	query := fmt.Sprintf("SELECT `target_table_id`, `source_table_id`, `active_index`, `is_global`, `data` FROM `%s`.`%s` WHERE `source_id`='%s'", k.shardMetaSchema, k.shardMetaTable, k.cfg.SourceID)
-	rows, err := k.db.querySQL(query, maxRetryCount)
+	rows, err := k.db.querySQL(k.tctx, query, maxRetryCount)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog/common"
 	br "github.com/pingcap/dm/pkg/binlog/reader"
@@ -74,14 +75,17 @@ type reader struct {
 
 	in  br.Reader // the underlying reader used to read binlog events.
 	out chan *replication.BinlogEvent
+
+	logger log.Logger
 }
 
 // NewReader creates a Reader instance.
 func NewReader(cfg *Config) Reader {
 	return &reader{
-		cfg: cfg,
-		in:  br.NewTCPReader(cfg.SyncConfig),
-		out: make(chan *replication.BinlogEvent),
+		cfg:    cfg,
+		in:     br.NewTCPReader(cfg.SyncConfig),
+		out:    make(chan *replication.BinlogEvent),
+		logger: log.With(zap.String("component", "relay reader")),
 	}
 }
 
@@ -97,7 +101,7 @@ func (r *reader) Start() error {
 
 	defer func() {
 		status := r.in.Status()
-		log.Infof("[relay] set up binlog reader for master %s with status %s", r.cfg.MasterID, status)
+		r.logger.Info("set up binlog reader", zap.String("master", r.cfg.MasterID), zap.Reflect("status", status))
 	}()
 
 	var err error
@@ -143,7 +147,7 @@ func (r *reader) GetEvent(ctx context.Context) (Result, error) {
 		if err == nil {
 			result.Event = ev
 		} else if isRetryableError(err) {
-			log.Infof("[relay] get retryable error %v when reading binlog event", err)
+			r.logger.Info("get retryable error when reading binlog event", log.ShortError(err))
 			continue
 		}
 		return result, errors.Trace(err)
@@ -152,12 +156,12 @@ func (r *reader) GetEvent(ctx context.Context) (Result, error) {
 
 func (r *reader) setUpReaderByGTID() error {
 	gs := r.cfg.GTIDs
-	log.Infof("[relay] start sync for master %s from GTID set %s", r.cfg.MasterID, gs)
+	r.logger.Info("start sync", zap.String("master", r.cfg.MasterID), zap.Stringer("from GTID set", gs))
 	return r.in.StartSyncByGTID(gs)
 }
 
 func (r *reader) setUpReaderByPos() error {
 	pos := r.cfg.Pos
-	log.Infof("[relay] start sync for master %s from position %s", r.cfg.MasterID, pos)
+	r.logger.Info("start sync", zap.String("master", r.cfg.MasterID), zap.Stringer("from position", pos))
 	return r.in.StartSyncByPos(pos)
 }

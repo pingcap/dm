@@ -23,10 +23,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/checker"
@@ -35,6 +35,7 @@ import (
 	"github.com/pingcap/dm/dm/master/sql-operator"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/tracing"
 )
 
@@ -145,12 +146,12 @@ func (s *Server) Start() error {
 	go func() {
 		err2 := s.svr.Serve(grpcL)
 		if err2 != nil && !common.IsErrNetClosing(err2) && err2 != cmux.ErrListenerClosed {
-			log.Errorf("[server] gRPC server return with error %s", err2.Error())
+			log.L().Error("fail to start gRPC server", zap.Error(err2))
 		}
 	}()
 	go InitStatus(httpL) // serve status
 
-	log.Infof("[server] listening on %v for gRPC API and status request", s.cfg.MasterAddr)
+	log.L().Info("listening gRPC API and status request", zap.String("address", s.cfg.MasterAddr))
 	err = m.Serve() // start serving, block
 	if err != nil && common.IsErrNetClosing(err) {
 		err = nil
@@ -170,7 +171,7 @@ func (s *Server) Close() {
 	}
 	err := s.rootLis.Close()
 	if err != nil && !common.IsErrNetClosing(err) {
-		log.Errorf("[server] close net listener with error %s", err.Error())
+		log.L().Error("close net listener", zap.Error(err))
 	}
 	if s.svr != nil {
 		s.svr.GracefulStop()
@@ -188,7 +189,7 @@ func errorCommonWorkerResponse(msg string, worker string) *pb.CommonWorkerRespon
 
 // StartTask implements MasterServer.StartTask
 func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.StartTaskResponse, error) {
-	log.Infof("[server] receive StartTask request %+v", req)
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "StartTask"))
 
 	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task)
 	if err != nil {
@@ -197,7 +198,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 			Msg:    errors.ErrorStack(err),
 		}, nil
 	}
-	log.Infof("[server] starting task with config:\n%v", cfg)
+	log.L().Info("", zap.String("task name", cfg.Name), zap.Stringer("task", cfg), zap.String("request", "StartTask"))
 
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(stCfgs)+len(req.Workers))
 	if len(req.Workers) > 0 {
@@ -283,7 +284,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 
 // OperateTask implements MasterServer.OperateTask
 func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*pb.OperateTaskResponse, error) {
-	log.Infof("[server] receive OperateTask request %+v", req)
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateTask"))
 
 	resp := &pb.OperateTaskResponse{
 		Op:     req.Op,
@@ -301,7 +302,7 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 	workerRespCh := make(chan *pb.OperateSubTaskResponse, len(workers))
 
 	handleErr := func(err error, worker string) {
-		log.Error(err)
+		log.L().Error("response error", zap.Error(err))
 		workerResp := &pb.OperateSubTaskResponse{
 			Meta: errorCommonWorkerResponse(err.Error(), worker),
 			Op:   req.Op,
@@ -372,7 +373,7 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 
 // UpdateTask implements MasterServer.UpdateTask
 func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb.UpdateTaskResponse, error) {
-	log.Infof("[server] receive UpdateTask request %+v", req)
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "UpdateTask"))
 
 	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task)
 	if err != nil {
@@ -381,7 +382,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 			Msg:    errors.ErrorStack(err),
 		}, nil
 	}
-	log.Infof("[server] update task with config:\n%v", cfg)
+	log.L().Info("update task", zap.String("task name", cfg.Name), zap.Stringer("task", cfg))
 
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(stCfgs)+len(req.Workers))
 	if len(req.Workers) > 0 {
@@ -457,7 +458,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 
 // QueryStatus implements MasterServer.QueryStatus
 func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest) (*pb.QueryStatusListResponse, error) {
-	log.Infof("[server] receive QueryStatus request %+v", req)
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "QueryStatus"))
 
 	workers := make([]string, 0, len(s.workerClients))
 	if len(req.Workers) > 0 {
@@ -513,7 +514,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 
 // QueryError implements MasterServer.QueryError
 func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorListRequest) (*pb.QueryErrorListResponse, error) {
-	log.Infof("[server] receive QueryError request %+v", req)
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "QueryError"))
 
 	workers := make([]string, 0, len(s.workerClients))
 	if len(req.Workers) > 0 {
@@ -569,7 +570,7 @@ func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorListRequest) 
 
 // ShowDDLLocks implements MasterServer.ShowDDLLocks
 func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) (*pb.ShowDDLLocksResponse, error) {
-	log.Infof("[server] receive ShowDDLLocks request %+v", req)
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "ShowDDLLocks"))
 
 	resp := &pb.ShowDDLLocksResponse{
 		Result: true,
@@ -617,7 +618,7 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 
 // UnlockDDLLock implements MasterServer.UnlockDDLLock
 func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest) (*pb.UnlockDDLLockResponse, error) {
-	log.Infof("[server] receive UnlockDDLLock request %+v", req)
+	log.L().Info("", zap.String("lock ID", req.ID), zap.Stringer("payload", req), zap.String("request", "UnlockDDLLock"))
 
 	workerResps, err := s.resolveDDLLock(ctx, req.ID, req.ReplaceOwner, req.Workers)
 	resp := &pb.UnlockDDLLockResponse{
@@ -627,14 +628,14 @@ func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest
 	if err != nil {
 		resp.Result = false
 		resp.Msg = errors.ErrorStack(err)
-		log.Errorf("[sever] UnlockDDLLock %s error %v", req.ID, errors.ErrorStack(err))
+		log.L().Error("fail to unlock ddl", zap.String("ID", req.ID), zap.String("request", "UnlockDDLLock"), zap.Error(err))
 
 		if req.ForceRemove {
 			s.lockKeeper.RemoveLock(req.ID)
-			log.Warnf("[server] force to remove DDL lock %s because of `ForceRemove` set", req.ID)
+			log.L().Warn("force to remove DDL lock", zap.String("request", "UnlockDDLLock"), zap.String("ID", req.ID))
 		}
 	} else {
-		log.Infof("[server] UnlockDDLLock %s successfully, remove it", req.ID)
+		log.L().Info("unlock ddl successfully", zap.String("ID", req.ID), zap.String("request", "UnlockDDLLock"))
 	}
 
 	return resp, nil
@@ -642,7 +643,7 @@ func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest
 
 // BreakWorkerDDLLock implements MasterServer.BreakWorkerDDLLock
 func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLLockRequest) (*pb.BreakWorkerDDLLockResponse, error) {
-	log.Infof("[server] receive BreakWorkerDDLLock request %+v", req)
+	log.L().Info("", zap.String("lock ID", req.RemoveLockID), zap.Stringer("payload", req), zap.String("request", "BreakWorkerDDLLock"))
 
 	request := &workerrpc.Request{
 		Type: workerrpc.CmdBreakDDLLock,
@@ -698,7 +699,7 @@ func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLL
 
 // HandleSQLs implements MasterServer.HandleSQLs
 func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb.HandleSQLsResponse, error) {
-	log.Infof("[server] receive HandleSQLs request %+v", req)
+	log.L().Info("", zap.String("task name", req.Name), zap.Stringer("payload", req), zap.String("request", "HandleSQLs"))
 
 	// save request for --sharding operation
 	if req.Sharding {
@@ -709,7 +710,7 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb
 				Msg:    fmt.Sprintf("save request with --sharding error:\n%s", errors.ErrorStack(err)),
 			}, nil
 		}
-		log.Infof("[server] saved handle --sharding SQLs request %v", req)
+		log.L().Info("handle sqls request was saved", zap.String("task name", req.Name), zap.String("request", "HandleSQLs"))
 		return &pb.HandleSQLsResponse{
 			Result: true,
 			Msg:    "request with --sharding saved and will be sent to DDL lock's owner when resolving DDL lock",
@@ -756,7 +757,7 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb
 
 // PurgeWorkerRelay implements MasterServer.PurgeWorkerRelay
 func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayRequest) (*pb.PurgeWorkerRelayResponse, error) {
-	log.Infof("[server] receive PurgeWorkerRelay request %+v", req)
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "PurgeWorkerRelay"))
 
 	workerReq := &workerrpc.Request{
 		Type: workerrpc.CmdPurgeRelay,
@@ -812,12 +813,12 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 
 // SwitchWorkerRelayMaster implements MasterServer.SwitchWorkerRelayMaster
 func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWorkerRelayMasterRequest) (*pb.SwitchWorkerRelayMasterResponse, error) {
-	log.Infof("[server] receive SwitchWorkerRelayMaster request %+v", req)
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "SwitchWorkerRelayMaster"))
 
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Workers))
 
 	handleErr := func(err error, worker string) {
-		log.Error(err)
+		log.L().Error("response error", zap.Error(err))
 		resp := &pb.CommonWorkerResponse{
 			Result: false,
 			Msg:    errors.ErrorStack(err),
@@ -881,7 +882,7 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 
 // OperateWorkerRelayTask implements MasterServer.OperateWorkerRelayTask
 func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWorkerRelayRequest) (*pb.OperateWorkerRelayResponse, error) {
-	log.Infof("[server] receive OperateWorkerRelayTask request %+v", req)
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateWorkerRelayTask"))
 
 	request := &workerrpc.Request{
 		Type:         workerrpc.CmdOperateRelay,
@@ -941,12 +942,12 @@ func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWork
 
 // RefreshWorkerTasks implements MasterServer.RefreshWorkerTasks
 func (s *Server) RefreshWorkerTasks(ctx context.Context, req *pb.RefreshWorkerTasksRequest) (*pb.RefreshWorkerTasksResponse, error) {
-	log.Infof("[server] receive RefreshWorkerTasks request %+v", req)
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "RefreshWorkerTasks"))
 
 	taskWorkers, workerMsgMap := s.fetchTaskWorkers(ctx)
 	// always update task workers mapping in memory
 	s.replaceTaskWorkers(taskWorkers)
-	log.Infof("[server] update task workers to %v", taskWorkers)
+	log.L().Info("refresh workers of task", zap.Reflect("workers of task", taskWorkers), zap.String("request", "RefreshWorkerTasks"))
 
 	workers := make([]string, 0, len(workerMsgMap))
 	for worker := range workerMsgMap {
@@ -1001,7 +1002,7 @@ func (s *Server) addTaskWorkers(task string, workers []string, replace bool) {
 
 	sort.Strings(valid)
 	s.taskWorkers[task] = valid
-	log.Infof("[server] update task %s workers to %v", task, valid)
+	log.L().Info("update workers of task", zap.String("task", task), zap.Strings("workers", valid))
 }
 
 // replaceTaskWorkers replaces the whole task-workers mapper
@@ -1024,7 +1025,7 @@ func (s *Server) removeTaskWorkers(task string, workers []string) {
 	s.Lock()
 	defer s.Unlock()
 	if _, ok := s.taskWorkers[task]; !ok {
-		log.Warnf("[server] %s has no workers", task)
+		log.L().Warn("not found workers", zap.String("task", task))
 		return
 	}
 	remain := make([]string, 0, len(s.taskWorkers[task]))
@@ -1035,10 +1036,10 @@ func (s *Server) removeTaskWorkers(task string, workers []string) {
 	}
 	if len(remain) == 0 {
 		delete(s.taskWorkers, task)
-		log.Infof("[server] remove task %s workers", task)
+		log.L().Info("remove task from taskWorker", zap.String("task", task))
 	} else {
 		s.taskWorkers[task] = remain
-		log.Infof("[server] update task %s workers to %v", task, remain)
+		log.L().Info("update workers of task", zap.String("task", task), zap.Strings("reamin workers", remain))
 	}
 }
 
@@ -1075,7 +1076,7 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, workers []string, tas
 	workerRespCh := make(chan *pb.QueryStatusResponse, len(workers))
 
 	handleErr := func(err error, worker string) bool {
-		log.Error(err)
+		log.L().Error("response error", zap.Error(err))
 		resp := &pb.QueryStatusResponse{
 			Result: false,
 			Msg:    errors.ErrorStack(err),
@@ -1130,7 +1131,7 @@ func (s *Server) getErrorFromWorkers(ctx context.Context, workers []string, task
 	workerRespCh := make(chan *pb.QueryErrorResponse, len(workers))
 
 	handleErr := func(err error, worker string) bool {
-		log.Error(err)
+		log.L().Error("response error", zap.Error(err))
 		resp := &pb.QueryErrorResponse{
 			Result: false,
 			Msg:    errors.ErrorStack(err),
@@ -1184,7 +1185,7 @@ func (s *Server) updateTaskWorkers(ctx context.Context) {
 	}
 	// simple replace, maybe we can do more accurate update later
 	s.replaceTaskWorkers(taskWorkers)
-	log.Infof("[server] update task workers to %v", taskWorkers)
+	log.L().Info("update workers of task", zap.Reflect("workers", taskWorkers))
 }
 
 // fetchTaskWorkers fetches task-workers mapper from workers based on deployment
@@ -1268,7 +1269,7 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 				default:
 					resp, err := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
 					if err != nil {
-						log.Errorf("[server] create FetchDDLInfo stream for worker %s fail %v", worker, err)
+						log.L().Error("create FetchDDLInfo stream", zap.String("worker", worker), log.ShortError(err))
 						doRetry = true
 						continue
 					}
@@ -1285,29 +1286,29 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 						default:
 						}
 						if err != nil {
-							log.Errorf("[server] receive DDLInfo from worker %s fail %v", worker, err)
+							log.L().Error("receive ddl info", zap.String("worker", worker), log.ShortError(err))
 							doRetry = true
 							break
 						}
-						log.Infof("[server] receive DDLInfo %v from worker %s", in, worker)
+						log.L().Info("receive ddl info", zap.Stringer("ddl info", in), zap.String("worker", worker))
 
 						workers := s.getTaskWorkers(in.Task)
 						if len(workers) == 0 {
 							// should happen only when starting and before updateTaskWorkers return
-							log.Errorf("[server] try to sync sharding DDL for task %s, but with no workers", in.Task)
+							log.L().Error("try to sync shard DDL, but with no workers", zap.String("task", in.Task))
 							doRetry = true
 							break
 						}
 						if !s.containWorker(workers, worker) {
 							// should not happen
-							log.Errorf("[server] try to sync sharding DDL for task %s, but worker %s not in workers %v", in.Task, worker, workers)
+							log.L().Error("try to sync shard DDL, but worker is not in workers", zap.String("task", in.Task), zap.String("worker", worker), zap.Strings("workers", workers))
 							doRetry = true
 							break
 						}
 
 						lockID, synced, remain, err := s.lockKeeper.TrySync(in.Task, in.Schema, in.Table, worker, in.DDLs, workers)
 						if err != nil {
-							log.Errorf("[server] try to sync lock for worker %s fail %v", worker, err)
+							log.L().Error("fail to sync lock", zap.String("worker", worker), log.ShortError(err))
 							doRetry = true
 							break
 						}
@@ -1318,18 +1319,18 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 						}
 						err = stream.Send(out)
 						if err != nil {
-							log.Errorf("[server] send DDLLockInfo %v to worker %s fail %v", out, worker, err)
+							log.L().Error("fail to send ddl lock info", zap.Stringer("ddl lock info", out), zap.String("worker", worker), log.ShortError(err))
 							doRetry = true
 							break
 						}
 
 						if !synced {
 							// still need wait other workers to sync
-							log.Infof("[server] sharding DDL %s in syncing, waiting %v workers to sync", lockID, remain)
+							log.L().Info("shard DDL is in syncing", zap.String("lock ID", lockID), zap.Int("remain worker count", remain))
 							continue
 						}
 
-						log.Infof("[server] sharding DDL %s synced", lockID)
+						log.L().Info("shard DDL was synced", zap.String("lock ID", lockID))
 
 						// resolve DDL lock
 						wg.Add(1)
@@ -1337,9 +1338,9 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 							defer wg.Done()
 							resps, err := s.resolveDDLLock(ctx, lockID, "", nil)
 							if err == nil {
-								log.Infof("[server] resolve DDL lock %s successfully, remove it", lockID)
+								log.L().Info("resolve DDL lock successfully", zap.String("lock ID", lockID))
 							} else {
-								log.Errorf("[server] resolve DDL lock %s fail %v, responses is:\n%+v", lockID, errors.ErrorStack(err), resps)
+								log.L().Error("fail to resolve DDL lock", zap.String("lock ID", lockID), zap.Reflect("responses", resps), zap.Error(err))
 								lock := s.lockKeeper.FindLock(lockID)
 								if lock != nil {
 									lock.AutoRetry.Set(true) // need auto-retry resolve at intervals
@@ -1409,7 +1410,7 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 		if !ownerResp.Result {
 			return nil, errors.Errorf("request DDL lock %s owner %s handle SQLs request %s fail %s", lockID, owner, ownerReq.HandleSubTaskSQLs, ownerResp.Msg)
 		}
-		log.Infof("[server] sent handle --sharding DDL request %s to owner %s for lock %s", ownerReq.HandleSubTaskSQLs, owner, lockID)
+		log.L().Info("sent handle --sharding DDL request", zap.Stringer("payload", ownerReq.HandleSubTaskSQLs), zap.String("owner", owner), zap.String("lock ID", lockID))
 		s.sqlOperatorHolder.Remove(lock.Task, key) // remove SQL operator after sent to owner
 	}
 
@@ -1418,7 +1419,7 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 	// TODO: we need a better way to combine brain split tracing events into one
 	// single group.
 	traceGID := s.idGen.NextID("resolveDDLLock", 0)
-	log.Infof("[server] requesting %s to execute DDL (with ID %s)", owner, lockID)
+	log.L().Info("requesting to execute DDL", zap.String("owner", owner), zap.String("lock ID", lockID))
 	ownerReq := &workerrpc.Request{
 		Type: workerrpc.CmdExecDDL,
 		ExecDDL: &pb.ExecDDLRequest{
@@ -1482,7 +1483,7 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 				return
 			}
 
-			log.Infof("[server] requesting %s to skip DDL (with ID %s)", worker, lockID)
+			log.L().Info("request to skip DDL", zap.String("not owner worker", worker), zap.String("lock ID", lockID))
 			resp, err2 := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
 			var workerResp *pb.CommonWorkerResponse
 			if err2 != nil {
@@ -1528,7 +1529,7 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 
 // UpdateMasterConfig implements MasterServer.UpdateConfig
 func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterConfigRequest) (*pb.UpdateMasterConfigResponse, error) {
-	log.Infof("[server] receive UpdateMasterConfig request %+v", req)
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "UpdateMasterConfig"))
 	s.Lock()
 
 	err := s.cfg.UpdateConfigFile(req.Config)
@@ -1539,7 +1540,7 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 			Msg:    "Failed to write config to local file. detail: " + errors.ErrorStack(err),
 		}, nil
 	}
-	log.Infof("[server] saving dm-master config file to local file %s", s.cfg.ConfigFile)
+	log.L().Info("saved dm-master config file", zap.String("config file", s.cfg.ConfigFile), zap.String("request", "UpdateMasterConfig"))
 
 	cfg := NewConfig()
 	cfg.ConfigFile = s.cfg.ConfigFile
@@ -1551,7 +1552,7 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 			Msg:    fmt.Sprintf("Failed to parse configure from file %s, detail: ", cfg.ConfigFile) + errors.ErrorStack(err),
 		}, nil
 	}
-	log.Infof("[server] updating dm-master config file with config:\n%+v", cfg)
+	log.L().Info("update dm-master config", zap.Stringer("config", cfg), zap.String("request", "UpdateMasterConfig"))
 
 	// delete worker
 	wokerList := make([]string, 0, len(s.cfg.DeployMap))
@@ -1599,14 +1600,14 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 		}
 	}
 
-	// update log configure
-	log.SetLevelByString(strings.ToLower(cfg.LogLevel))
+	// update log configure. not supported now
+	/*log.SetLevelByString(strings.ToLower(cfg.LogLevel))
 	if len(cfg.LogFile) > 0 {
 		log.SetOutputByName(cfg.LogFile)
-	}
+	}*/
 
 	s.cfg = cfg
-	log.Infof("[server] update dm-master config file success")
+	log.L().Info("update dm-master config file success", zap.String("request", "UpdateMasterConfig"))
 	s.Unlock()
 
 	workers := make([]string, 0, len(s.workerClients))
@@ -1615,7 +1616,7 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 	}
 
 	workerRespCh := s.getStatusFromWorkers(ctx, workers, "")
-	log.Infof("[server] checking every dm-worker status...")
+	log.L().Info("checking every dm-worker status...", zap.String("request", "UpdateMasterConfig"))
 
 	workerRespMap := make(map[string]*pb.QueryStatusResponse, len(workers))
 	for len(workerRespCh) > 0 {
@@ -1638,13 +1639,15 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 
 // UpdateWorkerRelayConfig updates config for relay and (dm-worker)
 func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWorkerRelayConfigRequest) (*pb.CommonWorkerResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "UpdateWorkerRelayConfig"))
 	worker := req.Worker
 	content := req.Config
 	cli, ok := s.workerClients[worker]
 	if !ok {
 		return errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", worker), worker), nil
 	}
-	log.Infof("[server] try to update %s relay configure", worker)
+
+	log.L().Info("update relay config", zap.String("worker", worker), zap.String("request", "UpdateWorkerRelayConfig"))
 	request := &workerrpc.Request{
 		Type:        workerrpc.CmdUpdateRelay,
 		UpdateRelay: &pb.UpdateRelayRequest{Content: content},
@@ -1665,9 +1668,10 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 		errCh       = make(chan error, len(s.workerClients))
 		err         error
 	)
-
 	handleErr := func(err2 error) bool {
-		log.Error(err2)
+		if err2 != nil {
+			log.L().Error("response error", zap.Error(err2))
+		}
 		errCh <- errors.Trace(err2)
 		return false
 	}
@@ -1759,6 +1763,7 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 
 // MigrateWorkerRelay migrates dm-woker relay unit
 func (s *Server) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRelayRequest) (*pb.CommonWorkerResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "MigrateWorkerRelay"))
 	worker := req.Worker
 	binlogPos := req.BinlogPos
 	binlogName := req.BinlogName
@@ -1766,7 +1771,7 @@ func (s *Server) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRe
 	if !ok {
 		return errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", worker), worker), nil
 	}
-	log.Infof("[server] try to migrate %s relay", worker)
+	log.L().Info("try to migrate relay", zap.String("worker", worker), zap.String("request", "MigrateWorkerRelay"))
 	request := &workerrpc.Request{
 		Type:         workerrpc.CmdMigrateRelay,
 		MigrateRelay: &pb.MigrateRelayRequest{BinlogName: binlogName, BinlogPos: binlogPos},
@@ -1780,7 +1785,7 @@ func (s *Server) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRe
 
 // CheckTask checks legality of task configuration
 func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.CheckTaskResponse, error) {
-	log.Infof("[server] check task request %+v", req)
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "CheckTask"))
 
 	_, _, err := s.generateSubTask(ctx, req.Task)
 	if err != nil {
@@ -1839,7 +1844,7 @@ func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, name
 		resp, err := cli.SendRequest(ctx, req, s.cfg.RPCTimeout)
 		var queryResp *pb.QueryTaskOperationResponse
 		if err != nil {
-			log.Errorf("fail to query task operation %v", err)
+			log.L().Error("fail to query task operation", log.ShortError(err))
 		} else {
 			queryResp = resp.QueryTaskOperation
 			respLog := queryResp.Log
@@ -1852,7 +1857,7 @@ func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, name
 			}
 		}
 
-		log.Infof("wait task %s op log %d, current result %+v", name, opLogID, queryResp)
+		log.L().Info("wait op log result", zap.String("task", name), zap.Int64("operation log ID", opLogID), zap.Stringer("result", resp.QueryTaskOperation))
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -1895,7 +1900,7 @@ func (s *Server) handleOperationResult(ctx context.Context, cli workerrpc.Client
 // grpc client, worker id (host:port), subtask config in toml, task name and error
 func (s *Server) taskConfigArgsExtractor(args ...interface{}) (workerrpc.Client, string, string, string, error) {
 	handleErr := func(err error) error {
-		log.Error(errors.ErrorStack(err))
+		log.L().Error("response", zap.Error(err))
 		return err
 	}
 

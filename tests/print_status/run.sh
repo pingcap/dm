@@ -53,19 +53,21 @@ function check_print_status() {
         exit 1
     fi
 
+    echo "checking print status"
     # check load unit print status
     status_file=$WORK_DIR/worker1/log/loader_status.log
-    grep -oP "loader.*\Kfinished_bytes = [0-9]+, total_bytes = [0-9]+, total_file_count = [0-9]+, progress = .*" $WORK_DIR/worker1/log/dm-worker.log > $status_file
+    grep -oP "\[unit=load\] \[finished_bytes=[0-9]+\] \[total_bytes=58165\] \[total_file_count=3\] \[progress=.*\]" $WORK_DIR/worker1/log/dm-worker.log > $status_file
+    #grep -oP "loader.*\Kfinished_bytes = [0-9]+, total_bytes = [0-9]+, total_file_count = [0-9]+, progress = .*" $WORK_DIR/worker1/log/dm-worker.log > $status_file
     status_count=$(wc -l $status_file|awk '{print $1}')
     [ $status_count -ge 2 ]
     count=0
     cat $status_file|while read -r line; do
-        total_file_count=$(echo "$line"|awk '{print $(NF-4)}'|tr -d ",")
+        total_file_count=$(echo "$line"|awk '{print $(NF-2)}'|tr -d "[total_file_count="| tr -d "]")
         [ $total_file_count -eq 3 ]
         count=$((count+1))
         if [ $count -eq $status_count ]; then
-            finished_bytes=$(echo "$line"|awk '{print $3}'|tr -d ",")
-            total_bytes=$(echo "$line"|awk '{print $6}'|tr -d ",")
+            finished_bytes=$(echo "$line"|awk '{print $2}'|tr -d "[finished_bytes="|tr -d "]")
+            total_bytes=$(echo "$line"|awk '{print $3}'|tr -d "[total_file_count"|tr -d "]")
             [[ "$finished_bytes" -eq "$total_bytes" ]]
         fi
     done
@@ -73,7 +75,8 @@ function check_print_status() {
 
     # check sync unit print status
     status_file2=$WORK_DIR/worker1/log/syncer_status.log
-    grep -oP "syncer.*\Ktotal events = [0-9]+, total tps = [0-9]+, recent tps = [0-9]+, master-binlog = .*" $WORK_DIR/worker1/log/dm-worker.log > $status_file2
+    #grep -oP "syncer.*\Ktotal events = [0-9]+, total tps = [0-9]+, recent tps = [0-9]+, master-binlog = .*" $WORK_DIR/worker1/log/dm-worker.log > $status_file2
+    grep -oP "\[total_events=[0-9]+\] \[total_tps=[0-9]+\] \[tps=[0-9]+\] \[master_position=.*\]" $WORK_DIR/worker1/log/dm-worker.log > $status_file2
     status_count2=$(wc -l $status_file2|awk '{print $1}')
     [ $status_count2 -ge 1 ]
     echo "check sync unit print status success"

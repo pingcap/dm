@@ -16,11 +16,12 @@ package utils
 import (
 	"os"
 
+	"go.uber.org/zap"
+
 	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/errors"
 )
 
 func ExitWithError(err error) {
-	log.Error(errors.ErrorStack(err))
+	log.L().Error("", zap.Error(err))
 	os.Exit(1)
 }

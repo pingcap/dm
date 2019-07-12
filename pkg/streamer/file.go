@@ -23,6 +23,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/watcher"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/log"
@@ -60,11 +61,11 @@ func CollectAllBinlogFiles(dir string) ([]string, error) {
 	for _, f := range files {
 		if strings.HasPrefix(f, utils.MetaFilename) {
 			// skip meta file or temp meta file
-			log.Debugf("[streamer] skip meta file %s", f)
+			log.L().Debug("skip meta file", zap.String("file", f))
 			continue
 		}
 		if !binlog.VerifyFilename(f) {
-			log.Warnf("[streamer] collecting binlog file, ignore invalid file %s", f)
+			log.L().Warn("collecting binlog file, ignore invalid file", zap.String("file", f))
 			continue
 		}
 		ret = append(ret, f)
@@ -97,23 +98,23 @@ func CollectBinlogFilesCmp(dir, baseFile string, cmp FileCmp) ([]string, error) 
 		// we have parse f in `CollectAllBinlogFiles`, may be we can refine this
 		parsed, err := binlog.ParseFilename(f)
 		if err != nil || parsed.BaseName != bf.BaseName {
-			log.Warnf("[streamer] collecting binlog file, ignore invalid file %s, err %v", f, err)
+			log.L().Warn("collecting binlog file, ignore invalid file", zap.String("file", f), log.ShortError(err))
 			continue
 		}
 		switch cmp {
 		case FileCmpBigger:
 			if !parsed.GreaterThan(bf) {
-				log.Debugf("[streamer] ignore older or equal binlog file %s in dir %s", f, dir)
+				log.L().Debug("ignore older or equal binlog file", zap.String("file", f), zap.String("directory", dir))
 				continue
 			}
 		case FileCmpBiggerEqual:
 			if !parsed.GreaterThanOrEqualTo(bf) {
-				log.Debugf("[streamer] ignore older binlog file %s in dir %s", f, dir)
+				log.L().Debug("ignore older binlog file", zap.String("file", f), zap.String("directory", dir))
 				continue
 			}
 		case FileCmpLess:
 			if !parsed.LessThan(bf) {
-				log.Debugf("[streamer] ignore newer or equal binlog file %s in dir %s", f, dir)
+				log.L().Debug("ignore newer or equal binlog file", zap.String("file", f), zap.String("directory", dir))
 				continue
 			}
 		default:
@@ -136,7 +137,7 @@ func getFirstBinlogName(baseDir, uuid string) (string, error) {
 
 	for _, f := range files {
 		if f == utils.MetaFilename {
-			log.Debugf("[streamer] skip meta file %s", f)
+			log.L().Debug("skip meta file", zap.String("file", f))
 			continue
 		}
 
@@ -182,10 +183,10 @@ func fileSizeUpdated(path string, latestSize int64) (int, error) {
 	if currSize == latestSize {
 		return 0, nil
 	} else if currSize > latestSize {
-		log.Debugf("[streamer] size of relay log file %s has changed from %d to %d", path, latestSize, currSize)
+		log.L().Debug("size of relay log file has been changed", zap.String("file", path), zap.Int64("old size", latestSize), zap.Int64("size", currSize))
 		return 1, nil
 	} else {
-		log.Errorf("[streamer] size of relay log file %s has changed from %d to %d", path, latestSize, currSize)
+		log.L().Error("size of relay log file has been changed", zap.String("file", path), zap.Int64("old size", latestSize), zap.Int64("size", currSize))
 		return -1, nil
 	}
 }
@@ -248,17 +249,17 @@ func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir 
 					}
 					return
 				}
-				log.Debugf("[streamer] watcher receive event %+v", event)
+				log.L().Debug("watcher receive event", zap.Reflect("event", event))
 				if event.IsDirEvent() {
-					log.Debugf("[streamer] skip watcher event %+v for directory", event)
+					log.L().Debug("skip watched event for directory", zap.Reflect("event", event))
 					continue
 				} else if !event.HasOps(watcher.Modify, watcher.Create) {
-					log.Debugf("[streamer] skip uninterested event op %s for file %s", event.Op, event.Path)
+					log.L().Debug("skip uninterested event", zap.Stringer("operation", event.Op), zap.String("path", event.Path))
 					continue
 				}
 				baseName := filepath.Base(event.Path)
 				if !binlog.VerifyFilename(baseName) {
-					log.Debugf("skip watcher event %+v for invalid relay log file", event)
+					log.L().Debug("skip watcher event for invalid relay log file", zap.Reflect("event", event))
 					continue // not valid binlog created, updated
 				}
 				result <- watchResult{
@@ -288,7 +289,7 @@ func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir 
 	} else if len(newerFiles) > 0 {
 		// check whether newer relay log file exists
 		nextFilePath := filepath.Join(dir, newerFiles[0])
-		log.Infof("[streamer] newer relay log file %s already generated, start parse from it", nextFilePath)
+		log.L().Info("newer relay log file is already generated, start parse from it", zap.String("new file", nextFilePath))
 		return nextFilePath, nil
 	}
 

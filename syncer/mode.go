@@ -14,30 +14,30 @@
 package syncer
 
 import (
-	"context"
 	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
-	"github.com/pingcap/dm/pkg/log"
+	tcontext "github.com/pingcap/dm/pkg/context"
 	sm "github.com/pingcap/dm/syncer/safe-mode"
 )
 
-func (s *Syncer) enableSafeModeInitializationPhase(ctx context.Context, safeMode *sm.SafeMode) {
-	safeMode.Reset() // in initialization phase, reset first
-	safeMode.Add(1)  // try to enable
+func (s *Syncer) enableSafeModeInitializationPhase(tctx *tcontext.Context, safeMode *sm.SafeMode) {
+	safeMode.Reset(tctx)  // in initialization phase, reset first
+	safeMode.Add(tctx, 1) // try to enable
 
 	if s.cfg.SafeMode {
-		safeMode.Add(1) // add 1 but should no corresponding -1
-		log.Info("[syncer] enable safe-mode by config")
+		safeMode.Add(tctx, 1) // add 1 but should no corresponding -1
+		s.tctx.L().Info("enable safe-mode by config")
 	}
 
 	go func() {
 		defer func() {
-			err := safeMode.Add(-1) // try to disable after 5 minutes
+			err := safeMode.Add(tctx, -1) // try to disable after 5 minutes
 			if err != nil {
 				// send error to the fatal chan to interrupt the process
 				s.runFatalChan <- unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err))
@@ -49,10 +49,10 @@ func (s *Syncer) enableSafeModeInitializationPhase(ctx context.Context, safeMode
 		failpoint.Inject("SafeModeInitPhaseSeconds", func(val failpoint.Value) {
 			seconds, _ := val.(int)
 			initPhaseSeconds = seconds
-			log.Infof("[failpoint] set initPhaseSeconds to %d", seconds)
+			s.tctx.L().Info("set initPhaseSeconds", zap.String("failpoint", "SafeModeInitPhaseSeconds"), zap.Int("value", seconds))
 		})
 		select {
-		case <-ctx.Done():
+		case <-tctx.Context().Done():
 		case <-time.After(time.Duration(initPhaseSeconds) * time.Second):
 		}
 	}()
