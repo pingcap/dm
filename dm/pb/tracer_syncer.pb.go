@@ -888,7 +888,7 @@ func (m *MySQLPosition) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -916,7 +916,7 @@ func (m *MySQLPosition) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -926,6 +926,9 @@ func (m *MySQLPosition) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTracerSyncer
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -945,7 +948,7 @@ func (m *MySQLPosition) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Pos |= (uint32(b) & 0x7F) << shift
+				m.Pos |= uint32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -957,6 +960,9 @@ func (m *MySQLPosition) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthTracerSyncer
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthTracerSyncer
 			}
 			if (iNdEx + skippy) > l {
@@ -986,7 +992,7 @@ func (m *SyncerState) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -1014,7 +1020,7 @@ func (m *SyncerState) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1034,7 +1040,7 @@ func (m *SyncerState) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1054,7 +1060,7 @@ func (m *SyncerState) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1063,6 +1069,9 @@ func (m *SyncerState) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthTracerSyncer
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1087,7 +1096,7 @@ func (m *SyncerState) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1096,6 +1105,9 @@ func (m *SyncerState) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthTracerSyncer
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1113,6 +1125,9 @@ func (m *SyncerState) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthTracerSyncer
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthTracerSyncer
 			}
 			if (iNdEx + skippy) > l {
@@ -1142,7 +1157,7 @@ func (m *ExecDDLInfo) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -1170,7 +1185,7 @@ func (m *ExecDDLInfo) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1180,6 +1195,9 @@ func (m *ExecDDLInfo) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTracerSyncer
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1199,7 +1217,7 @@ func (m *ExecDDLInfo) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1212,6 +1230,9 @@ func (m *ExecDDLInfo) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthTracerSyncer
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthTracerSyncer
 			}
 			if (iNdEx + skippy) > l {
@@ -1241,7 +1262,7 @@ func (m *SyncerBinlogEvent) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -1269,7 +1290,7 @@ func (m *SyncerBinlogEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1278,6 +1299,9 @@ func (m *SyncerBinlogEvent) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthTracerSyncer
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1302,7 +1326,7 @@ func (m *SyncerBinlogEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1311,6 +1335,9 @@ func (m *SyncerBinlogEvent) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthTracerSyncer
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1335,7 +1362,7 @@ func (m *SyncerBinlogEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.EventType |= (int32(b) & 0x7F) << shift
+				m.EventType |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1354,7 +1381,7 @@ func (m *SyncerBinlogEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.OpType |= (int32(b) & 0x7F) << shift
+				m.OpType |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1366,6 +1393,9 @@ func (m *SyncerBinlogEvent) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthTracerSyncer
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthTracerSyncer
 			}
 			if (iNdEx + skippy) > l {
@@ -1395,7 +1425,7 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -1423,7 +1453,7 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1432,6 +1462,9 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthTracerSyncer
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1456,7 +1489,7 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.OpType |= (int32(b) & 0x7F) << shift
+				m.OpType |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1475,7 +1508,7 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1484,6 +1517,9 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthTracerSyncer
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1508,7 +1544,7 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1517,6 +1553,9 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthTracerSyncer
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1541,7 +1580,7 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1551,6 +1590,9 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTracerSyncer
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1570,7 +1612,7 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1580,6 +1622,9 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTracerSyncer
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1599,7 +1644,7 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.ArgsChecksum |= (uint32(b) & 0x7F) << shift
+				m.ArgsChecksum |= uint32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1618,7 +1663,7 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1627,6 +1672,9 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthTracerSyncer
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1651,7 +1699,7 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1661,6 +1709,9 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTracerSyncer
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1680,7 +1731,7 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.State |= (SyncerJobState(b) & 0x7F) << shift
+				m.State |= SyncerJobState(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1692,6 +1743,9 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthTracerSyncer
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthTracerSyncer
 			}
 			if (iNdEx + skippy) > l {
@@ -1760,8 +1814,11 @@ func skipTracerSyncer(dAtA []byte) (n int, err error) {
 					break
 				}
 			}
-			iNdEx += length
 			if length < 0 {
+				return 0, ErrInvalidLengthTracerSyncer
+			}
+			iNdEx += length
+			if iNdEx < 0 {
 				return 0, ErrInvalidLengthTracerSyncer
 			}
 			return iNdEx, nil
@@ -1792,6 +1849,9 @@ func skipTracerSyncer(dAtA []byte) (n int, err error) {
 					return 0, err
 				}
 				iNdEx = start + next
+				if iNdEx < 0 {
+					return 0, ErrInvalidLengthTracerSyncer
+				}
 			}
 			return iNdEx, nil
 		case 4:
