@@ -242,6 +242,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 		Result:        true,
 		SubTaskStatus: s.worker.QueryStatus(req.Name),
 		RelayStatus:   s.worker.relayHolder.Status(),
+		SourceID:      s.worker.cfg.SourceID,
 	}
 
 	if len(resp.SubTaskStatus) == 0 {
