@@ -19,6 +19,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/siddontang/go-mysql/mysql"
 	"strings"
 	"sync"
 	"testing"
@@ -1035,68 +1036,113 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 }
 
 func (s *testSyncerSuite) TestSharding(c *C) {
-	db, mock, err := sqlmock.New()
-	if err != nil {
-		c.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-
 	createSQLs := []string{
 		"CREATE DATABASE IF NOT EXISTS `stest_1` CHARACTER SET = utf8mb4",
 		"CREATE TABLE IF NOT EXISTS `stest_1`.`st_1` (id INT, age INT)",
 		"CREATE TABLE IF NOT EXISTS `stest_1`.`st_2` (id INT, age INT)",
 	}
 
-	testSQLs := []struct {
-		rawSQL    string
-		expectSQL string
-		args      []driver.Value
-		skip      bool // skip ddl in sharding
-	}{
+	testCases := []struct {
+		testSQLs []string
+		expectSQLS []struct{sql string;args []driver.Value}
+		globalCheckPoint mysql.Position
+	} {
+		// case 1:
+		// upstream binlog events:
+		// insert t1 -> insert t2 -> alter t1 -> insert t2 -> alter t2 -> insert t1(new schema) -> insert t2(new schema)
+		// downstream expected events:
+		// insert t(from t1) -> insert t(from t2) -> insert t(from t2) -> alter t(from t2 same as t1) -> insert t1(new schema) -> insert t2(new schema)
 		{
+			[]string {
+				"INSERT INTO `stest_1`.`st_1`(id, age) VALUES (1, 1)",
+				"INSERT INTO `stest_1`.`st_2`(id, age) VALUES (2, 2)",
+				"ALTER TABLE `stest_1`.`st_1` ADD COLUMN NAME VARCHAR(30)",
+				"INSERT INTO `stest_1`.`st_2`(id, age) VALUES (4, 4)",
+				"ALTER TABLE `stest_1`.`st_2` ADD COLUMN NAME VARCHAR(30)",
+				"INSERT INTO `stest_1`.`st_1`(id, age, name) VALUES (3, 3, 'test')",
+				"INSERT INTO `stest_1`.`st_2`(id, age, name) VALUES (6, 6, 'test')",
+			},
+			[]struct {
+				sql string
+				args []driver.Value
+			} {
+				{
+					"REPLACE INTO",
+					[]driver.Value{1, 1},
+				},
+				{
+					"REPLACE INTO",
+					[]driver.Value{2, 2},
+				},
+				{
+					"REPLACE INTO",
+					[]driver.Value{4, 4},
+				},
+				{
+					"ALTER TABLE",
+					[]driver.Value{},
+				},
+				{
+					"REPLACE INTO",
+					[]driver.Value{3, 3, "test"},
+				},
+				{
+					"REPLACE INTO",
+					[]driver.Value{6, 6, "test"},
+				},
+			},
+			mysql.Position{Pos: 11317},
+		},
+		// case 2:
+		// upstream binlog events:
+		// insert t1 -> insert t2 -> alter t1 -> insert t1(new schema) -> insert t2 -> alter t2 -> insert t1(new schema) -> insert t2(new schema)
+		// downstream expected events:
+		// insert t(from t1) -> insert t(from t2) -> insert t(from t2) -> alter t(from t2 same as t1) -> insert t1(new schema) -> insert t1(new schema) -> insert t2(new schema)
+		{
+		[]string {
 			"INSERT INTO `stest_1`.`st_1`(id, age) VALUES (1, 1)",
-			"REPLACE INTO",
-			[]driver.Value{1, 1},
-			false,
-		},
-		{
-
 			"INSERT INTO `stest_1`.`st_2`(id, age) VALUES (2, 2)",
-			"REPLACE INTO",
-			[]driver.Value{2, 2},
-			false,
-		},
-		{
 			"ALTER TABLE `stest_1`.`st_1` ADD COLUMN NAME VARCHAR(30)",
-			"ALTER TABLE",
-			[]driver.Value{},
-			true, // skip not active ddl in mock db
-		},
-		{
-
-			"INSERT INTO `stest_1`.`st_2`(id, age) VALUES (4, 4)",
-			"REPLACE INTO",
-			[]driver.Value{4, 4},
-			false,
-		},
-		{
-			"ALTER TABLE `stest_1`.`st_2` ADD COLUMN NAME VARCHAR(30)",
-			"ALTER TABLE",
-			[]driver.Value{},
-			false,
-		},
-		{
-
 			"INSERT INTO `stest_1`.`st_1`(id, age, name) VALUES (3, 3, 'test')",
-			"REPLACE INTO",
-			[]driver.Value{3, 3, "test"},
-			false,
-		},
-		{
-
+			"INSERT INTO `stest_1`.`st_2`(id, age) VALUES (4, 4)",
+			"ALTER TABLE `stest_1`.`st_2` ADD COLUMN NAME VARCHAR(30)",
+			"INSERT INTO `stest_1`.`st_1`(id, age, name) VALUES (5, 5, 'test')",
 			"INSERT INTO `stest_1`.`st_2`(id, age, name) VALUES (6, 6, 'test')",
-			"REPLACE INTO",
-			[]driver.Value{6, 6, "test"},
-			false,
+		},
+			[]struct {
+				sql string
+				args []driver.Value
+			} {
+				{
+					"REPLACE INTO",
+					[]driver.Value{1, 1},
+				},
+				{
+					"REPLACE INTO",
+					[]driver.Value{2, 2},
+				},
+				{
+					"REPLACE INTO",
+					[]driver.Value{4, 4},
+				},
+				{
+					"ALTER TABLE",
+					[]driver.Value{},
+				},
+				{
+					"REPLACE INTO",
+					[]driver.Value{3, 3, "test"},
+				},
+				{
+					"REPLACE INTO",
+					[]driver.Value{5, 5, "test"},
+				},
+				{
+					"REPLACE INTO",
+					[]driver.Value{6, 6, "test"},
+				},
+			},
+			mysql.Position{Pos: 7006},
 		},
 	}
 
@@ -1108,14 +1154,12 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 
 	runSQL := func(sqls []string) {
 		for _, sql := range sqls {
-			s.db.Exec(sql)
+			_, err := s.db.Exec(sql)
 			c.Assert(err, IsNil)
 		}
 	}
 
-	// drop first if last time test failed
-	runSQL(dropSQLs)
-
+	s.cfg.Flavor = "mysql"
 	s.cfg.BWList = &filter.Rules{
 		DoDBs: []string{"stest_1"},
 	}
@@ -1133,95 +1177,101 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 	s.cfg.WorkerCount = 1
 	s.cfg.MaxRetry = 1
 
-	syncer := NewSyncer(s.cfg)
-	syncer.Init()
-	// make syncer write to mock db
-	syncer.toDBs = []*Conn{{cfg: s.cfg, db: db}}
-	syncer.ddlDB = &Conn{cfg: s.cfg, db: db}
-
-	runSQL(createSQLs)
-	// run sql on upstream db to generate binlog event
-	sqls := make([]string, 0, len(testSQLs))
-	for _, s := range testSQLs {
-		sqls = append(sqls, s.rawSQL)
-	}
-	runSQL(sqls)
-
-	// mock downstream db result
-	mock.ExpectBegin()
-	mock.ExpectExec("CREATE DATABASE").WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectCommit()
-
-	mock.ExpectBegin()
-	mock.ExpectExec("CREATE TABLE").WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectCommit()
-
-	mock.ExpectBegin()
-	e := newMysqlErr(1050, "Table exist")
-	mock.ExpectExec("CREATE TABLE").WillReturnError(e)
-	mock.ExpectRollback()
-
-	// mock get table in first handle RowEvent
-	mock.ExpectQuery("SHOW COLUMNS").WillReturnRows(
-		sqlmock.NewRows([]string{"Field", "Type", "Null", "Key", "Default", "Extra"}).AddRow("id", "int", "NO", "PRI", null, "").AddRow("age", "int", "NO", "", null, ""))
-	mock.ExpectQuery("SHOW INDEX").WillReturnRows(
-		sqlmock.NewRows([]string{"Table", "Non_unique", "Key_name", "Seq_in_index", "Column_name",
-			"Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Comment", "Index_comment"},
-		).AddRow("st", 0, "PRIMARY", 1, "id", "A", 0, null, null, null, "BTREE", "", ""))
-
-	// mock downstream test sql
-	for i, sql := range testSQLs {
-		if sql.skip {
-			continue
+	for _, _case := range testCases {
+		// drop first if last time test failed
+		runSQL(dropSQLs)
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			c.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
 		}
+		syncer := NewSyncer(s.cfg)
+		syncer.Init()
+
+		c.Assert(syncer.checkpoint.GlobalPoint(), Equals, minCheckpoint)
+		c.Assert(syncer.checkpoint.FlushedGlobalPoint(), Equals, minCheckpoint)
+
+		// make syncer write to mock db
+		syncer.toDBs = []*Conn{{cfg: s.cfg, db: db}}
+		syncer.ddlDB = &Conn{cfg: s.cfg, db: db}
+
+		// run sql on upstream db to generate binlog event
+		runSQL(createSQLs)
+
+		// mock downstream db result
 		mock.ExpectBegin()
-		if strings.HasPrefix(sql.expectSQL, "ALTER") {
-			mock.ExpectExec(sql.expectSQL).WillReturnResult(sqlmock.NewResult(1, int64(i)+1))
-			mock.ExpectCommit()
-			// mock get table after ddl sql exec
-			mock.ExpectQuery("SHOW COLUMNS").WillReturnRows(
-				sqlmock.NewRows([]string{"Field", "Type", "Null", "Key", "Default", "Extra"}).AddRow("id", "int", "NO", "PRI", null, "").AddRow("age", "int", "NO", "", null, "").AddRow("name", "varchar", "NO", "", null, ""))
-			mock.ExpectQuery("SHOW INDEX").WillReturnRows(
-				sqlmock.NewRows([]string{"Table", "Non_unique", "Key_name", "Seq_in_index", "Column_name",
-					"Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Comment", "Index_comment"},
-				).AddRow("st", 0, "PRIMARY", 1, "id", "A", 0, null, null, null, "BTREE", "", ""))
-		} else {
-			// change insert to replace because of safe mode
-			mock.ExpectExec(sql.expectSQL).WithArgs(sql.args...).WillReturnResult(sqlmock.NewResult(1, 1))
-			mock.ExpectCommit()
+		mock.ExpectExec("CREATE DATABASE").WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectCommit()
+
+		mock.ExpectBegin()
+		mock.ExpectExec("CREATE TABLE").WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectCommit()
+
+		mock.ExpectBegin()
+		e := newMysqlErr(1050, "Table exist")
+		mock.ExpectExec("CREATE TABLE").WillReturnError(e)
+		mock.ExpectRollback()
+
+		// mock get table in first handle RowEvent
+		mock.ExpectQuery("SHOW COLUMNS").WillReturnRows(
+			sqlmock.NewRows([]string{"Field", "Type", "Null", "Key", "Default", "Extra"}).AddRow("id", "int", "NO", "PRI", null, "").AddRow("age", "int", "NO", "", null, ""))
+		mock.ExpectQuery("SHOW INDEX").WillReturnRows(
+			sqlmock.NewRows([]string{"Table", "Non_unique", "Key_name", "Seq_in_index", "Column_name",
+				"Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Comment", "Index_comment"},
+			).AddRow("st", 0, "PRIMARY", 1, "id", "A", 0, null, null, null, "BTREE", "", ""))
+
+		// run sql on upstream db
+		runSQL(_case.testSQLs)
+		// mock expect sql
+		for i, expectSQL := range _case.expectSQLS {
+			mock.ExpectBegin()
+			if strings.HasPrefix(expectSQL.sql, "ALTER") {
+				mock.ExpectExec(expectSQL.sql).WillReturnResult(sqlmock.NewResult(1, int64(i)+1))
+				mock.ExpectCommit()
+				// mock get table after ddl sql exec
+				mock.ExpectQuery("SHOW COLUMNS").WillReturnRows(
+					sqlmock.NewRows([]string{"Field", "Type", "Null", "Key", "Default", "Extra"}).AddRow("id", "int", "NO", "PRI", null, "").AddRow("age", "int", "NO", "", null, "").AddRow("name", "varchar", "NO", "", null, ""))
+				mock.ExpectQuery("SHOW INDEX").WillReturnRows(
+					sqlmock.NewRows([]string{"Table", "Non_unique", "Key_name", "Seq_in_index", "Column_name",
+						"Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Comment", "Index_comment"},
+					).AddRow("st", 0, "PRIMARY", 1, "id", "A", 0, null, null, null, "BTREE", "", ""))
+			} else {
+				// change insert to replace because of safe mode
+				mock.ExpectExec(expectSQL.sql).WithArgs(expectSQL.args...).WillReturnResult(sqlmock.NewResult(1, 1))
+				mock.ExpectCommit()
+			}
 		}
+		ctx, cancel := context.WithCancel(context.Background())
+		resultCh := make(chan pb.ProcessResult)
+
+		go syncer.Process(ctx, resultCh)
+
+		go func() {
+			// sleep to ensure ddlExecInfo.Send() happen after ddlExecInfo.Renew() in Process
+			// because Renew() will generate new channel, Send() may send to old channel due to goroutine schedule
+			time.Sleep(1 * time.Second)
+			// mock permit exec ddl request from dm-master
+			req := &DDLExecItem{&pb.ExecDDLRequest{Exec: true}, make(chan error, 1)}
+			syncer.ddlExecInfo.Send(ctx, req)
+		}()
+
+		select {
+		case r := <-resultCh:
+			c.Assert(len(r.Errors), Equals, 0)
+		case <-time.After(2 * time.Second):
+		}
+		cancel()
+
+		c.Assert(syncer.checkpoint.GlobalPoint().Pos, Equals, _case.globalCheckPoint.Pos)
+		// check expectations for mock db
+		if err := mock.ExpectationsWereMet(); err != nil {
+			c.Errorf("there were unfulfilled expectations: %s", err)
+		}
+		runSQL(dropSQLs)
+		syncer.Close()
+		c.Assert(syncer.isClosed(), IsTrue)
+		s.resetMaster()
+		s.catchUpBinlog()
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	resultCh := make(chan pb.ProcessResult)
-	// process upstream binlog
-	go syncer.Process(ctx, resultCh)
-
-	go func() {
-		// sleep to ensure ddlExecInfo.Send() after ddlExecInfo.Renew() in Porcess
-		// because Renew() will generate new channel, Send() may send to old channel due to goroutine schedule
-		time.Sleep(1 * time.Second)
-		// mock permit exec ddl request from dm-master
-		req := &DDLExecItem{&pb.ExecDDLRequest{Exec: true}, make(chan error, 1)}
-		syncer.ddlExecInfo.Send(ctx, req)
-	}()
-
-	select {
-	case <-resultCh:
-	case <-time.After(3 * time.Second):
-	}
-	cancel()
-
-	// check expectations for mock db
-	if err := mock.ExpectationsWereMet(); err != nil {
-		c.Errorf("there were unfulfilled expectations: %s", err)
-	}
-
-	syncer.Close()
-
-	runSQL(dropSQLs)
-	s.resetMaster()
-	s.catchUpBinlog()
 }
 
 func (s *testSyncerSuite) TestRun(c *C) {
