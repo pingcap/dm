@@ -1046,12 +1046,12 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		"CREATE TABLE IF NOT EXISTS `stest_1`.`st_2` (id INT, age INT)",
 	}
 
-	testSQLs := []struct{
-		rawSql string
-		expectSql string
-		args []driver.Value
-		skip bool  // skip ddl in sharding
-	} {
+	testSQLs := []struct {
+		rawSQL    string
+		expectSQL string
+		args      []driver.Value
+		skip      bool // skip ddl in sharding
+	}{
 		{
 			"INSERT INTO `stest_1`.`st_1`(id, age) VALUES (1, 1)",
 			"REPLACE INTO",
@@ -1069,7 +1069,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 			"ALTER TABLE `stest_1`.`st_1` ADD COLUMN NAME VARCHAR(30)",
 			"ALTER TABLE",
 			[]driver.Value{},
-			true, // skip not active ddl
+			true, // skip not active ddl in mock db
 		},
 		{
 
@@ -1128,7 +1128,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 			TargetTable:   "st",
 		},
 	}
-	// easy to mock
+	// set batch to 1 is easy to mock
 	s.cfg.Batch = 1
 	s.cfg.WorkerCount = 1
 	s.cfg.MaxRetry = 1
@@ -1139,18 +1139,17 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 	syncer.toDBs = []*Conn{{cfg: s.cfg, db: db}}
 	syncer.ddlDB = &Conn{cfg: s.cfg, db: db}
 
-
 	runSQL(createSQLs)
 	// run sql on upstream db to generate binlog event
 	sqls := make([]string, 0, len(testSQLs))
 	for _, s := range testSQLs {
-		sqls = append(sqls, s.rawSql)
+		sqls = append(sqls, s.rawSQL)
 	}
 	runSQL(sqls)
 
 	// mock downstream db result
 	mock.ExpectBegin()
-	mock.ExpectExec(createSQLs[0]).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("CREATE DATABASE").WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
 	mock.ExpectBegin()
@@ -1164,13 +1163,11 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 
 	// mock get table in first handle RowEvent
 	mock.ExpectQuery("SHOW COLUMNS").WillReturnRows(
-		sqlmock.NewRows([]string{"Field", "Type", "Null", "Key", "Default", "Extra"},
-		).AddRow("id", "int", "NO", "PRI", null, "",
-		).AddRow("age", "int", "NO", "", null, ""))
+		sqlmock.NewRows([]string{"Field", "Type", "Null", "Key", "Default", "Extra"}).AddRow("id", "int", "NO", "PRI", null, "").AddRow("age", "int", "NO", "", null, ""))
 	mock.ExpectQuery("SHOW INDEX").WillReturnRows(
-		sqlmock.NewRows([]string{"Table" ,"Non_unique", "Key_name", "Seq_in_index", "Column_name",
-			"Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Comment",  "Index_comment"},
-		).AddRow("st", 0, "PRIMARY", 1, "id", "A", 0, null, null, null, "BTREE","", ""))
+		sqlmock.NewRows([]string{"Table", "Non_unique", "Key_name", "Seq_in_index", "Column_name",
+			"Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Comment", "Index_comment"},
+		).AddRow("st", 0, "PRIMARY", 1, "id", "A", 0, null, null, null, "BTREE", "", ""))
 
 	// mock downstream test sql
 	for i, sql := range testSQLs {
@@ -1178,22 +1175,19 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 			continue
 		}
 		mock.ExpectBegin()
-		if strings.HasPrefix(sql.expectSql, "ALTER") {
-			mock.ExpectExec(sql.expectSql).WillReturnResult(sqlmock.NewResult(1, int64(i)+1))
+		if strings.HasPrefix(sql.expectSQL, "ALTER") {
+			mock.ExpectExec(sql.expectSQL).WillReturnResult(sqlmock.NewResult(1, int64(i)+1))
 			mock.ExpectCommit()
 			// mock get table after ddl sql exec
 			mock.ExpectQuery("SHOW COLUMNS").WillReturnRows(
-				sqlmock.NewRows([]string{"Field", "Type", "Null", "Key", "Default", "Extra"},
-				).AddRow("id", "int", "NO", "PRI", null, "",
-				).AddRow("age", "int", "NO", "", null, "",
-				).AddRow("name", "varchar", "NO", "", null, ""))
+				sqlmock.NewRows([]string{"Field", "Type", "Null", "Key", "Default", "Extra"}).AddRow("id", "int", "NO", "PRI", null, "").AddRow("age", "int", "NO", "", null, "").AddRow("name", "varchar", "NO", "", null, ""))
 			mock.ExpectQuery("SHOW INDEX").WillReturnRows(
-				sqlmock.NewRows([]string{"Table" ,"Non_unique", "Key_name", "Seq_in_index", "Column_name",
-					"Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Comment",  "Index_comment"},
-				).AddRow("st", 0, "PRIMARY", 1, "id", "A", 0, null, null, null, "BTREE","", ""))
+				sqlmock.NewRows([]string{"Table", "Non_unique", "Key_name", "Seq_in_index", "Column_name",
+					"Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Comment", "Index_comment"},
+				).AddRow("st", 0, "PRIMARY", 1, "id", "A", 0, null, null, null, "BTREE", "", ""))
 		} else {
-			// change instead to replace because of safe mode
-			mock.ExpectExec(sql.expectSql).WithArgs(sql.args...).WillReturnResult(sqlmock.NewResult(1, 1))
+			// change insert to replace because of safe mode
+			mock.ExpectExec(sql.expectSQL).WithArgs(sql.args...).WillReturnResult(sqlmock.NewResult(1, 1))
 			mock.ExpectCommit()
 		}
 	}
@@ -1204,8 +1198,8 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 	go syncer.Process(ctx, resultCh)
 
 	go func() {
-		// sleep to ensure ddlExecInfo.Send after ddlExecInfo.Renew in Porcess
-		// because Renew will generate new channel, Send may send to Old one due to goroutine schedule
+		// sleep to ensure ddlExecInfo.Send() after ddlExecInfo.Renew() in Porcess
+		// because Renew() will generate new channel, Send() may send to old channel due to goroutine schedule
 		time.Sleep(1 * time.Second)
 		// mock permit exec ddl request from dm-master
 		req := &DDLExecItem{&pb.ExecDDLRequest{Exec: true}, make(chan error, 1)}
@@ -1218,7 +1212,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 	}
 	cancel()
 
-	// check mock expection
+	// check expectations for mock db
 	if err := mock.ExpectationsWereMet(); err != nil {
 		c.Errorf("there were unfulfilled expectations: %s", err)
 	}
