@@ -1035,6 +1035,9 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 }
 
 func (s *testSyncerSuite) TestSharding(c *C) {
+	s.resetMaster()
+	s.resetBinlogSyncer()
+
 	createSQLs := []string{
 		"CREATE DATABASE IF NOT EXISTS `stest_1` CHARACTER SET = utf8mb4",
 		"CREATE TABLE IF NOT EXISTS `stest_1`.`st_1` (id INT, age INT)",
@@ -1042,16 +1045,19 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 	}
 
 	testCases := []struct {
-		testSQLs []string
-		expectSQLS []struct{sql string;args []driver.Value}
-	} {
+		testSQLs   []string
+		expectSQLS []struct {
+			sql  string
+			args []driver.Value
+		}
+	}{
 		// case 1:
 		// upstream binlog events:
 		// insert t1 -> insert t2 -> alter t1 -> insert t2 -> alter t2 -> insert t1(new schema) -> insert t2(new schema)
 		// downstream expected events:
 		// insert t(from t1) -> insert t(from t2) -> insert t(from t2) -> alter t(from t2 same as t1) -> insert t1(new schema) -> insert t2(new schema)
 		{
-			[]string {
+			[]string{
 				"INSERT INTO `stest_1`.`st_1`(id, age) VALUES (1, 1)",
 				"INSERT INTO `stest_1`.`st_2`(id, age) VALUES (2, 2)",
 				"ALTER TABLE `stest_1`.`st_1` ADD COLUMN NAME VARCHAR(30)",
@@ -1061,9 +1067,9 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 				"INSERT INTO `stest_1`.`st_2`(id, age, name) VALUES (6, 6, 'test')",
 			},
 			[]struct {
-				sql string
+				sql  string
 				args []driver.Value
-			} {
+			}{
 				{
 					"REPLACE INTO",
 					[]driver.Value{1, 1},
@@ -1096,20 +1102,20 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		// downstream expected events:
 		// insert t(from t1) -> insert t(from t2) -> insert t(from t2) -> alter t(from t2 same as t1) -> insert t1(new schema) -> insert t1(new schema) -> insert t2(new schema)
 		{
-		[]string {
-			"INSERT INTO `stest_1`.`st_1`(id, age) VALUES (1, 1)",
-			"INSERT INTO `stest_1`.`st_2`(id, age) VALUES (2, 2)",
-			"ALTER TABLE `stest_1`.`st_1` ADD COLUMN NAME VARCHAR(30)",
-			"INSERT INTO `stest_1`.`st_1`(id, age, name) VALUES (3, 3, 'test')",
-			"INSERT INTO `stest_1`.`st_2`(id, age) VALUES (4, 4)",
-			"ALTER TABLE `stest_1`.`st_2` ADD COLUMN NAME VARCHAR(30)",
-			"INSERT INTO `stest_1`.`st_1`(id, age, name) VALUES (5, 5, 'test')",
-			"INSERT INTO `stest_1`.`st_2`(id, age, name) VALUES (6, 6, 'test')",
-		},
+			[]string{
+				"INSERT INTO `stest_1`.`st_1`(id, age) VALUES (1, 1)",
+				"INSERT INTO `stest_1`.`st_2`(id, age) VALUES (2, 2)",
+				"ALTER TABLE `stest_1`.`st_1` ADD COLUMN NAME VARCHAR(30)",
+				"INSERT INTO `stest_1`.`st_1`(id, age, name) VALUES (3, 3, 'test')",
+				"INSERT INTO `stest_1`.`st_2`(id, age) VALUES (4, 4)",
+				"ALTER TABLE `stest_1`.`st_2` ADD COLUMN NAME VARCHAR(30)",
+				"INSERT INTO `stest_1`.`st_1`(id, age, name) VALUES (5, 5, 'test')",
+				"INSERT INTO `stest_1`.`st_2`(id, age, name) VALUES (6, 6, 'test')",
+			},
 			[]struct {
-				sql string
+				sql  string
 				args []driver.Value
-			} {
+			}{
 				{
 					"REPLACE INTO",
 					[]driver.Value{1, 1},
@@ -1173,7 +1179,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 	s.cfg.WorkerCount = 1
 	s.cfg.MaxRetry = 1
 
-	for _, _case := range testCases {
+	for i, _case := range testCases {
 		// drop first if last time test failed
 		runSQL(dropSQLs)
 		db, mock, err := sqlmock.New()
@@ -1253,7 +1259,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		select {
 		case r := <-resultCh:
 			for _, err := range r.Errors {
-				c.Errorf("Process:", err)
+				c.Errorf("Case %d: Process Err:%s", i, err)
 			}
 			c.Assert(len(r.Errors), Equals, 0)
 		case <-time.After(2 * time.Second):
@@ -1263,11 +1269,17 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		// cancel function only closed done channel asynchronously
 		// other goroutine(s.streamer.GetEvent()) received done msg then trigger flush
 		// so the flush action may not execute before we check due to goroutine schedule
-		time.Sleep(time.Second)
+		// time.Sleep(time.Second)
+
+		syncer.Close()
+
+		flushedGP := syncer.checkpoint.FlushedGlobalPoint().Pos
+		GP := syncer.checkpoint.GlobalPoint().Pos
+		c.Assert(GP, Equals, flushedGP)
 
 		// Xid Event has 31 bytes
 		// check whether last event before flushed globalPoint is Xid event
-		q, err := s.db.Query(fmt.Sprintf("SHOW BINLOG EVENTS FROM %d LIMIT 1", syncer.checkpoint.GlobalPoint().Pos - 31))
+		q, err := s.db.Query(fmt.Sprintf("SHOW BINLOG EVENTS FROM %d LIMIT 1", GP-31))
 		c.Assert(err, IsNil)
 
 		var pos, endLogPos uint32
@@ -1279,7 +1291,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 			q.Scan(&unused, &pos, &eventType, &unused, &endLogPos, &unused)
 			break
 		}
-		c.Assert(syncer.checkpoint.GlobalPoint().Pos, Equals, endLogPos)
+
 		c.Assert(eventType, Equals, "Xid")
 
 		// check expectations for mock db
@@ -1287,10 +1299,10 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 			c.Errorf("there were unfulfilled expectations: %s", err)
 		}
 		runSQL(dropSQLs)
-		syncer.Close()
 		c.Assert(syncer.isClosed(), IsTrue)
+
 		s.resetMaster()
-		s.catchUpBinlog()
+		s.resetBinlogSyncer()
 	}
 }
 
