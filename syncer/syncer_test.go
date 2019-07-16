@@ -1128,33 +1128,19 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			"",
 			nil,
 		}, {
+			// in first 5 minutes, safe mode is true, will split update to delete + replace
 			update,
 			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1;",
 			[]interface{}{int64(580981944116838402)},
 		}, {
+			// in first 5 minutes, , safe mode is true, will split update to delete + replace
 			update,
 			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?);",
 			[]interface{}{int64(580981944116838401), "b"},
 		},
 	}
 
-	for _, sql := range sqls1 {
-		c.Log("exec sql: ", sql)
-		_, err := s.db.Exec(sql)
-		c.Assert(err, IsNil)
-	}
-
-	for i := 0; i < 10; i++ {
-		time.Sleep(time.Second)
-
-		testJobs.RLock()
-		jobNum := len(testJobs.jobs)
-		testJobs.RUnlock()
-
-		if jobNum >= len(expectJobs1) {
-			break
-		}
-	}
+	executeSQLAndWait(c, s.db, sqls1, len(expectJobs1))
 
 	testJobs.Lock()
 	checkJobs(c, testJobs.jobs, expectJobs1)
@@ -1204,23 +1190,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		},
 	}
 
-	for _, sql := range sql2 {
-		c.Log("exec sql: ", sql)
-		_, err := s.db.Exec(sql)
-		c.Assert(err, IsNil)
-	}
-
-	for i := 0; i < 10; i++ {
-		time.Sleep(time.Second)
-
-		testJobs.RLock()
-		jobNum := len(testJobs.jobs)
-		testJobs.RUnlock()
-
-		if jobNum >= len(expectJobs2) {
-			break
-		}
-	}
+	executeSQLAndWait(c, s.db, sql2, len(expectJobs2))
 
 	testJobs.RLock()
 	checkJobs(c, testJobs.jobs, expectJobs2)
@@ -1232,6 +1202,26 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	cancel()
 	syncer.Close()
 	c.Assert(syncer.isClosed(), IsTrue)
+}
+
+func executeSQLAndWait(c *C, db *sql.DB, sqls []string, expectJobNum int) {
+	for _, sql := range sqls {
+		c.Log("exec sql: ", sql)
+		_, err := db.Exec(sql)
+		c.Assert(err, IsNil)
+	}
+
+	for i := 0; i < 10; i++ {
+		time.Sleep(time.Second)
+
+		testJobs.RLock()
+		jobNum := len(testJobs.jobs)
+		testJobs.RUnlock()
+
+		if jobNum >= expectJobNum {
+			break
+		}
+	}
 }
 
 type expectJob struct {
