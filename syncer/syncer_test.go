@@ -19,7 +19,6 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/siddontang/go-mysql/mysql"
 	"strings"
 	"sync"
 	"testing"
@@ -1045,7 +1044,6 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 	testCases := []struct {
 		testSQLs []string
 		expectSQLS []struct{sql string;args []driver.Value}
-		globalCheckPoint mysql.Position
 	} {
 		// case 1:
 		// upstream binlog events:
@@ -1091,7 +1089,6 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 					[]driver.Value{6, 6, "test"},
 				},
 			},
-			mysql.Position{Pos: 11317},
 		},
 		// case 2:
 		// upstream binlog events:
@@ -1142,7 +1139,6 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 					[]driver.Value{6, 6, "test"},
 				},
 			},
-			mysql.Position{Pos: 7006},
 		},
 	}
 
@@ -1260,8 +1256,29 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		case <-time.After(2 * time.Second):
 		}
 		cancel()
+		// wait for flush finish in Process.Run()
+		// cancel function only closed done channel asynchronously
+		// other goroutine(s.streamer.GetEvent()) received done msg then trigger flush
+		// so the flush action may not execute before we check due to goroutine schedule
+		time.Sleep(time.Second)
 
-		c.Assert(syncer.checkpoint.GlobalPoint().Pos, Equals, _case.globalCheckPoint.Pos)
+		// Xid Event has 31 bytes
+		// check whether last event before flushed globalPoint is Xid event
+		q, err := s.db.Query(fmt.Sprintf("SHOW BINLOG EVENTS FROM %d LIMIT 1", syncer.checkpoint.GlobalPoint().Pos - 31))
+		c.Assert(err, IsNil)
+
+		var pos, endLogPos uint32
+		var eventType string
+		var unusedVal interface{}
+		unused := &unusedVal
+
+		for q.Next() {
+			q.Scan(&unused, &pos, &eventType, &unused, &endLogPos, &unused)
+			break
+		}
+		c.Assert(syncer.checkpoint.GlobalPoint().Pos, Equals, endLogPos)
+		c.Assert(eventType, Equals, "Xid")
+
 		// check expectations for mock db
 		if err := mock.ExpectationsWereMet(); err != nil {
 			c.Errorf("there were unfulfilled expectations: %s", err)
