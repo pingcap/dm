@@ -1252,6 +1252,9 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 
 		select {
 		case r := <-resultCh:
+			for _, err := range r.Errors {
+				c.Errorf("Process:", err)
+			}
 			c.Assert(len(r.Errors), Equals, 0)
 		case <-time.After(2 * time.Second):
 		}
