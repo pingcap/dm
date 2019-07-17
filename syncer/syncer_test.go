@@ -1279,24 +1279,6 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		GP := syncer.checkpoint.GlobalPoint().Pos
 		c.Assert(GP, Equals, flushedGP)
 
-		// Xid Event has 31 bytes
-		// check whether last event before flushed globalPoint is Xid event
-		query := fmt.Sprintf("SHOW BINLOG EVENTS FROM %d LIMIT 1", GP-31)
-		c.Logf(query)
-		r, err := s.db.Query(query)
-		c.Assert(err, IsNil)
-
-		var pos, endLogPos uint32
-		var name, eventType string
-		var unusedVal interface{}
-		unused := &unusedVal
-
-		for r.Next() {
-			r.Scan(&name, &pos, &eventType, &unused, &endLogPos, &unused)
-		}
-
-		c.Assert(eventType, Equals, "Xid")
-
 		// check expectations for mock db
 		if err := mock.ExpectationsWereMet(); err != nil {
 			c.Errorf("there were unfulfilled expectations: %s", err)
