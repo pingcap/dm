@@ -421,7 +421,12 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	defer cancel()
 
 	l.newFileJobQueue()
-	l.getMydumpMetadata()
+	if err := l.getMydumpMetadata(); err != nil {
+		pr <- pb.ProcessResult{
+			Errors: []*pb.ProcessError{unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err))},
+		}
+		return
+	}
 
 	l.runFatalChan = make(chan *pb.ProcessError, 2*l.cfg.PoolSize)
 	errs := make([]*pb.ProcessError, 0, 2)
@@ -1076,12 +1081,15 @@ func (l *Loader) checkpointID() string {
 	return shortSha1(dir)
 }
 
-func (l *Loader) getMydumpMetadata() {
+func (l *Loader) getMydumpMetadata() error {
 	metafile := filepath.Join(l.cfg.LoaderConfig.Dir, "metadata")
 	pos, err := utils.ParseMetaData(metafile)
 	if err != nil {
 		l.tctx.L().Error("fail to parse dump metadata", log.ShortError(err))
+		return errors.Trace(err)
 	} else {
 		l.metaBinlog.Set(pos.String())
 	}
+
+	return nil
 }
