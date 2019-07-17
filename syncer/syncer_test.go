@@ -1035,8 +1035,6 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 }
 
 func (s *testSyncerSuite) TestSharding(c *C) {
-	s.resetMaster()
-	s.resetBinlogSyncer()
 
 	createSQLs := []string{
 		"CREATE DATABASE IF NOT EXISTS `stest_1` CHARACTER SET = utf8mb4",
@@ -1180,6 +1178,8 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 	s.cfg.MaxRetry = 1
 
 	for i, _case := range testCases {
+		s.resetMaster()
+		s.resetBinlogSyncer()
 		// drop first if last time test failed
 		runSQL(dropSQLs)
 		db, mock, err := sqlmock.New()
@@ -1279,7 +1279,9 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 
 		// Xid Event has 31 bytes
 		// check whether last event before flushed globalPoint is Xid event
-		q, err := s.db.Query(fmt.Sprintf("SHOW BINLOG EVENTS FROM %d LIMIT 1", GP-31))
+		query := fmt.Sprintf("SHOW BINLOG EVENTS FROM %d LIMIT 1", GP-31)
+		c.Logf(query)
+		r, err := s.db.Query(query)
 		c.Assert(err, IsNil)
 
 		var pos, endLogPos uint32
@@ -1287,8 +1289,11 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		var unusedVal interface{}
 		unused := &unusedVal
 
-		for q.Next() {
-			q.Scan(&unused, &pos, &eventType, &unused, &endLogPos, &unused)
+		cols, err := r.Columns()
+		c.Logf("columns:", cols)
+
+		for r.Next() {
+			r.Scan(&unused, &pos, &eventType, &unused, &endLogPos, &unused)
 			break
 		}
 
@@ -1301,8 +1306,6 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		runSQL(dropSQLs)
 		c.Assert(syncer.isClosed(), IsTrue)
 
-		s.resetMaster()
-		s.resetBinlogSyncer()
 	}
 }
 
