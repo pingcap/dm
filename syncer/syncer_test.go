@@ -1178,16 +1178,20 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 	s.cfg.MaxRetry = 1
 
 	for i, _case := range testCases {
-		s.resetMaster()
-		s.resetBinlogSyncer()
 		// drop first if last time test failed
 		runSQL(dropSQLs)
+		s.resetMaster()
+		// must wait for reset Master finish
+		time.Sleep(time.Second)
+
 		db, mock, err := sqlmock.New()
 		if err != nil {
 			c.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
 		}
 		syncer := NewSyncer(s.cfg)
 		syncer.Init()
+		syncer.syncer = s.syncer
+		syncer.streamer = s.streamer
 
 		c.Assert(syncer.checkpoint.GlobalPoint(), Equals, minCheckpoint)
 		c.Assert(syncer.checkpoint.FlushedGlobalPoint(), Equals, minCheckpoint)
@@ -1264,12 +1268,11 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 			c.Assert(len(r.Errors), Equals, 0)
 		case <-time.After(2 * time.Second):
 		}
-		cancel()
 		// wait for flush finish in Process.Run()
 		// cancel function only closed done channel asynchronously
 		// other goroutine(s.streamer.GetEvent()) received done msg then trigger flush
 		// so the flush action may not execute before we check due to goroutine schedule
-		// time.Sleep(time.Second)
+		cancel()
 
 		syncer.Close()
 
@@ -1285,16 +1288,12 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		c.Assert(err, IsNil)
 
 		var pos, endLogPos uint32
-		var eventType string
+		var name, eventType string
 		var unusedVal interface{}
 		unused := &unusedVal
 
-		cols, err := r.Columns()
-		c.Logf("columns:", cols)
-
 		for r.Next() {
-			r.Scan(&unused, &pos, &eventType, &unused, &endLogPos, &unused)
-			break
+			r.Scan(&name, &pos, &eventType, &unused, &endLogPos, &unused)
 		}
 
 		c.Assert(eventType, Equals, "Xid")
@@ -1305,7 +1304,6 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		}
 		runSQL(dropSQLs)
 		c.Assert(syncer.isClosed(), IsTrue)
-
 	}
 }
 
