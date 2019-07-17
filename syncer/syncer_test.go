@@ -1190,8 +1190,6 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		}
 		syncer := NewSyncer(s.cfg)
 		syncer.Init()
-		syncer.syncer = s.syncer
-		syncer.streamer = s.streamer
 
 		c.Assert(syncer.checkpoint.GlobalPoint(), Equals, minCheckpoint)
 		c.Assert(syncer.checkpoint.FlushedGlobalPoint(), Equals, minCheckpoint)
@@ -1275,6 +1273,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		cancel()
 
 		syncer.Close()
+		c.Assert(syncer.isClosed(), IsTrue)
 
 		flushedGP := syncer.checkpoint.FlushedGlobalPoint().Pos
 		GP := syncer.checkpoint.GlobalPoint().Pos
@@ -1303,7 +1302,6 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 			c.Errorf("there were unfulfilled expectations: %s", err)
 		}
 		runSQL(dropSQLs)
-		c.Assert(syncer.isClosed(), IsTrue)
 	}
 }
 
