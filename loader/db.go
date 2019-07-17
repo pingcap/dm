@@ -17,6 +17,7 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
+	"strings"
 
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
@@ -24,6 +25,8 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb/domain"
+	"github.com/pingcap/failpoint"
 	tmysql "github.com/pingcap/parser/mysql"
 	"go.uber.org/zap"
 )
@@ -131,6 +134,13 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []string, en
 
 		startTime := time.Now()
 		err = executeSQLImp(ctx, conn.db, sqls)
+
+		failpoint.Inject("LoadExecCreateTableFailed", func() {
+			if i == 0 && len(sqls) == 1 && strings.Contains(sqls[0], "CREATE TABLE") {
+				err = domain.ErrInfoSchemaChanged
+			}
+		})
+
 		if err != nil {
 			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
 			if isRetryableFn(err) {
