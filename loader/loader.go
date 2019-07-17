@@ -1087,8 +1087,8 @@ func (l *Loader) getMydumpMetadata() error {
 	if err != nil {
 		l.tctx.L().Error("fail to parse dump metadata", log.ShortError(err))
 		return errors.Trace(err)
-	} 
-		
+	}
+
 	l.metaBinlog.Set(pos.String())
 	return nil
 }
