@@ -997,7 +997,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	s.tctx.L().Info("replicate binlog from checkpoint", zap.Stringer("checkpoint", lastPos))
 
 	s.streamer, err = s.streamerProducer.generateStreamer(lastPos)
-
 	if err != nil {
 		return errors.Trace(err)
 	}
