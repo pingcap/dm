@@ -48,8 +48,14 @@ func main() {
 
 	// now, we use checker in dmctl while it using some pkg which log some thing when running
 	// to make dmctl output more clear, simply redirect log to file rather output to stdout
-	log.SetLevelByString("info")
-	log.SetOutputByName("dmctl.log")
+	err = log.InitLogger(&log.Config{
+		File:  "dmctl.log",
+		Level: "info",
+	})
+	if err != nil {
+		fmt.Printf("init logger error %v", errors.ErrorStack(err))
+		os.Exit(2)
+	}
 
 	err = ctl.Init(cfg)
 	if err != nil {
@@ -110,5 +116,10 @@ func loop() {
 
 		args := strings.Fields(line)
 		ctl.Start(args)
+
+		syncErr := log.L().Sync()
+		if syncErr != nil {
+			fmt.Fprintln(os.Stderr, "sync log failed", syncErr)
+		}
 	}
 }

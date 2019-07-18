@@ -19,12 +19,13 @@ import (
 	"sync"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/command"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // Operator contains an operation for specified binlog pos
@@ -69,12 +70,14 @@ func (o *Operator) String() string {
 type Holder struct {
 	mu        sync.RWMutex
 	operators map[string]map[string]*Operator // taskName -> Key(sql-pattern) -> Operator
+	logger    log.Logger
 }
 
 // NewHolder creates a new Holder
 func NewHolder() *Holder {
 	return &Holder{
 		operators: make(map[string]map[string]*Operator),
+		logger:    log.With(zap.String("component", "sql operator")),
 	}
 }
 
@@ -108,14 +111,14 @@ func (h *Holder) Set(req *pb.HandleSQLsRequest) error {
 	if ok1 {
 		prev, ok2 := operators[key]
 		if ok2 {
-			log.Warnf("[sql-operator] overwrite previous operator %s by operator %s", prev, oper)
+			h.logger.Warn("overwrite operation", zap.Stringer("previous operation", prev), zap.Stringer("current operation", oper))
 		}
 	} else {
 		operators = make(map[string]*Operator)
 		h.operators[req.Name] = operators
 	}
 	operators[key] = oper
-	log.Infof("[sql-operator] set a new operator %s", oper)
+	h.logger.Info("set operation", zap.Stringer("operation", oper))
 	return nil
 }
 
@@ -132,7 +135,7 @@ func (h *Holder) Get(taskName string, sqls []string) (string, *Operator) {
 	for _, sql := range sqls {
 		for key, oper := range operators {
 			if oper.matchPattern(sql) { // matched one SQL of all is enough
-				log.Infof("[sql-operator] get an operator %s with key %s matched SQL %s", oper, key, sql)
+				h.logger.Info("get a matched operator", zap.Stringer("operation", oper), zap.String("key", key), zap.String("sql", sql))
 				return key, oper.clone()
 			}
 		}
@@ -155,6 +158,6 @@ func (h *Holder) Remove(taskName, key string) {
 		if len(operators) == 0 {
 			delete(h.operators, taskName)
 		}
-		log.Infof("[sql-operator] remove an operator %s", oper)
+		h.logger.Info("remove operator", zap.Stringer("operation", oper))
 	}
 }

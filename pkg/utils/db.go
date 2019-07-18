@@ -18,8 +18,9 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/dm/pkg/gtid"
+
+	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	tmysql "github.com/pingcap/parser/mysql"

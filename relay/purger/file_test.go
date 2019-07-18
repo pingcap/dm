@@ -21,6 +21,7 @@ import (
 
 	. "github.com/pingcap/check"
 
+	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -30,7 +31,7 @@ func (t *testPurgerSuite) TestPurgeRelayFilesBeforeFile(c *C) {
 	safeRelay := &streamer.RelayLogInfo{
 		UUID: "not-found-uuid",
 	}
-	files, err := getRelayFilesBeforeFile("", t.uuids, safeRelay)
+	files, err := getRelayFilesBeforeFile(tcontext.Background(), "", t.uuids, safeRelay)
 	c.Assert(err, NotNil)
 	c.Assert(files, IsNil)
 
@@ -42,7 +43,7 @@ func (t *testPurgerSuite) TestPurgeRelayFilesBeforeFile(c *C) {
 	safeRelay = &streamer.RelayLogInfo{
 		UUID: t.uuids[len(t.uuids)-1],
 	}
-	files, err = getRelayFilesBeforeFile(baseDir, t.uuids, safeRelay)
+	files, err = getRelayFilesBeforeFile(tcontext.Background(), baseDir, t.uuids, safeRelay)
 	c.Assert(err, NotNil)
 	c.Assert(files, IsNil)
 
@@ -54,7 +55,7 @@ func (t *testPurgerSuite) TestPurgeRelayFilesBeforeFile(c *C) {
 		UUID:     t.uuids[0],
 		Filename: t.relayFiles[0][0],
 	}
-	files, err = getRelayFilesBeforeFile(baseDir, t.uuids, safeRelay)
+	files, err = getRelayFilesBeforeFile(tcontext.Background(), baseDir, t.uuids, safeRelay)
 	c.Assert(err, IsNil)
 	c.Assert(files, DeepEquals, []*subRelayFiles{})
 
@@ -63,7 +64,7 @@ func (t *testPurgerSuite) TestPurgeRelayFilesBeforeFile(c *C) {
 		UUID:     t.uuids[1],
 		Filename: t.relayFiles[1][0],
 	}
-	files, err = getRelayFilesBeforeFile(baseDir, t.uuids, safeRelay)
+	files, err = getRelayFilesBeforeFile(tcontext.Background(), baseDir, t.uuids, safeRelay)
 	c.Assert(err, IsNil)
 	c.Assert(len(files), Equals, 1)
 	c.Assert(files[0].dir, Equals, relayDirsPath[0])
@@ -75,7 +76,7 @@ func (t *testPurgerSuite) TestPurgeRelayFilesBeforeFile(c *C) {
 		UUID:     t.uuids[1],
 		Filename: t.relayFiles[1][len(t.relayFiles[1])-1],
 	}
-	files, err = getRelayFilesBeforeFile(baseDir, t.uuids, safeRelay)
+	files, err = getRelayFilesBeforeFile(tcontext.Background(), baseDir, t.uuids, safeRelay)
 	c.Assert(err, IsNil)
 	c.Assert(len(files), Equals, 2)
 	c.Assert(files[0].dir, Equals, relayDirsPath[0])
@@ -90,7 +91,7 @@ func (t *testPurgerSuite) TestPurgeRelayFilesBeforeFile(c *C) {
 		UUID:     t.uuids[2],
 		Filename: t.relayFiles[2][1],
 	}
-	files, err = getRelayFilesBeforeFile(baseDir, t.uuids, safeRelay)
+	files, err = getRelayFilesBeforeFile(tcontext.Background(), baseDir, t.uuids, safeRelay)
 	c.Assert(err, IsNil)
 	c.Assert(len(files), Equals, 3)
 	c.Assert(files[0].dir, Equals, relayDirsPath[0])
@@ -108,7 +109,7 @@ func (t *testPurgerSuite) TestPurgeRelayFilesBeforeFile(c *C) {
 	ioutil.WriteFile(fakeMeta, []byte{}, 0666)
 
 	// purge all relay log files in first and second sub dir, and some in third sub dir
-	err = purgeRelayFilesBeforeFile(baseDir, t.uuids, safeRelay)
+	err = purgeRelayFilesBeforeFile(tcontext.Background(), baseDir, t.uuids, safeRelay)
 	c.Assert(err, IsNil)
 	c.Assert(utils.IsDirExists(relayDirsPath[0]), IsFalse)
 	c.Assert(utils.IsDirExists(relayDirsPath[1]), IsFalse)
@@ -128,7 +129,7 @@ func (t *testPurgerSuite) TestPurgeRelayFilesBeforeFileAndTime(c *C) {
 	safeRelay := &streamer.RelayLogInfo{
 		UUID: t.uuids[len(t.uuids)-1],
 	}
-	files, err := getRelayFilesBeforeFileAndTime(baseDir, t.uuids, safeRelay, time.Now())
+	files, err := getRelayFilesBeforeFileAndTime(tcontext.Background(), baseDir, t.uuids, safeRelay, time.Now())
 	c.Assert(err, NotNil)
 	c.Assert(files, IsNil)
 
@@ -140,7 +141,7 @@ func (t *testPurgerSuite) TestPurgeRelayFilesBeforeFileAndTime(c *C) {
 		UUID:     t.uuids[1],
 		Filename: t.relayFiles[1][0],
 	}
-	files, err = getRelayFilesBeforeFileAndTime(baseDir, t.uuids, safeRelay, safeTime)
+	files, err = getRelayFilesBeforeFileAndTime(tcontext.Background(), baseDir, t.uuids, safeRelay, safeTime)
 	c.Assert(err, IsNil)
 	c.Assert(len(files), Equals, 1)
 	c.Assert(files[0].dir, Equals, relayDirsPath[0])
@@ -152,7 +153,7 @@ func (t *testPurgerSuite) TestPurgeRelayFilesBeforeFileAndTime(c *C) {
 		UUID:     t.uuids[2],
 		Filename: t.relayFiles[2][0],
 	}
-	files, err = getRelayFilesBeforeFileAndTime(baseDir, t.uuids, safeRelay, safeTime)
+	files, err = getRelayFilesBeforeFileAndTime(tcontext.Background(), baseDir, t.uuids, safeRelay, safeTime)
 	c.Assert(err, IsNil)
 	c.Assert(len(files), Equals, 2)
 	c.Assert(files[0].dir, Equals, relayDirsPath[0])
@@ -167,7 +168,7 @@ func (t *testPurgerSuite) TestPurgeRelayFilesBeforeFileAndTime(c *C) {
 	ioutil.WriteFile(fakeMeta, []byte{}, 0666)
 
 	// purge all relay log files in first and second sub dir, and some in third sub dir
-	err = purgeRelayFilesBeforeFileAndTime(baseDir, t.uuids, safeRelay, safeTime)
+	err = purgeRelayFilesBeforeFileAndTime(tcontext.Background(), baseDir, t.uuids, safeRelay, safeTime)
 	c.Assert(err, IsNil)
 	c.Assert(utils.IsDirExists(relayDirsPath[0]), IsFalse)
 	c.Assert(utils.IsDirExists(relayDirsPath[1]), IsTrue)

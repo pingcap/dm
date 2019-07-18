@@ -18,13 +18,14 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/pingcap/check"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/loader"
 	"github.com/pingcap/dm/mydumper"
 	"github.com/pingcap/dm/syncer"
+
+	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 )
 

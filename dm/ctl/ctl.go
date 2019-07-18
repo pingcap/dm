@@ -19,8 +19,10 @@ import (
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/ctl/master"
 	"github.com/pingcap/dm/pkg/log"
+
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap/zapcore"
 )
 
 var (
@@ -35,7 +37,7 @@ type CommandMasterFlags struct {
 // Init initializes dm-control
 func Init(cfg *common.Config) error {
 	// set the log level temporarily
-	log.SetLevelByString("info")
+	log.SetLevel(zapcore.InfoLevel)
 	return errors.Trace(common.InitUtils(cfg))
 }
 

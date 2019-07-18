@@ -19,11 +19,12 @@ import (
 	"strconv"
 
 	"github.com/pingcap/errors"
-	"github.com/prometheus/common/log"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // NewMigrateRelayCmd creates a MigrateRelay command
@@ -59,9 +60,8 @@ func migrateRelayFunc(cmd *cobra.Command, _ []string) {
 		BinlogPos:  uint32(binlogPos),
 		Worker:     worker,
 	})
-
 	if err != nil {
-		log.Infof("can not migrate relay config:\n%v", errors.ErrorStack(err))
+		log.L().Error("can not migrate relay", zap.Error(err))
 		return
 	}
 

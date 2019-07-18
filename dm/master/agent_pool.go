@@ -17,9 +17,10 @@ import (
 	"context"
 	"math"
 
-	"golang.org/x/time/rate"
-
 	"github.com/pingcap/dm/pkg/log"
+
+	"go.uber.org/zap"
+	"golang.org/x/time/rate"
 )
 
 // rate limit related constant value
@@ -94,7 +95,7 @@ func (ap *AgentPool) Start(ctx context.Context) {
 			err := ap.limiter.Wait(ctx)
 			if err != nil {
 				if err != context.Canceled {
-					log.Fatalf("agent limiter wait meets unexpected error: %v", err)
+					log.L().Fatal("agent limiter wait meets unexpected error", zap.Error(err))
 				}
 				return
 			}

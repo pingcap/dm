@@ -19,13 +19,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
-
-	"github.com/pingcap/tidb-tools/pkg/table-router"
-
 	"github.com/pingcap/dm/pkg/log"
+
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"github.com/pingcap/tidb-tools/pkg/table-router"
+	"go.uber.org/zap"
 )
 
 // move to tidb-tools later
@@ -77,7 +77,7 @@ func FetchAllDoTables(db *sql.DB, bw *filter.Filter) (map[string][]string, error
 	}
 	ftSchemas = bw.ApplyOn(ftSchemas)
 	if len(ftSchemas) == 0 {
-		log.Warn("[syncer] no schema need to sync")
+		log.L().Warn("no schema need to sync")
 		return nil, nil
 	}
 
@@ -98,7 +98,7 @@ func FetchAllDoTables(db *sql.DB, bw *filter.Filter) (map[string][]string, error
 		}
 		ftTables = bw.ApplyOn(ftTables)
 		if len(ftTables) == 0 {
-			log.Infof("[syncer] schema %s no tables need to sync", schema)
+			log.L().Info("no tables need to sync", zap.String("schema", schema))
 			continue // NOTE: should we still keep it as an empty elem?
 		}
 		tables = tables[:0]
@@ -179,15 +179,15 @@ func querySQL(db *sql.DB, query string, maxRetry int) (*sql.Rows, error) {
 
 	for i := 0; i < maxRetry; i++ {
 		if i > 0 {
-			log.Warnf("sql query retry %d: %s", i, query)
+			log.L().Warn("query retry", zap.Int("retry number", i), zap.String("query", query))
 			time.Sleep(retryTimeout)
+		} else {
+			log.L().Debug("query sql", zap.String("query", query))
 		}
-
-		log.Debugf("[query][sql]%s", query)
 
 		rows, err = db.Query(query)
 		if err != nil {
-			log.Warnf("[query][sql]%s[error]%v", query, err)
+			log.L().Warn("query retry", zap.String("query", query), log.ShortError(err))
 			continue
 		}
 
@@ -195,11 +195,11 @@ func querySQL(db *sql.DB, query string, maxRetry int) (*sql.Rows, error) {
 	}
 
 	if err != nil {
-		log.Errorf("query sql[%s] failed %v", query, errors.ErrorStack(err))
+		log.L().Error("query failed", zap.String("query", query), zap.Error(err))
 		return nil, errors.Trace(err)
 	}
 
-	return nil, errors.Errorf("query sql[%s] failed", query)
+	return nil, errors.Errorf("fail to query %s", query)
 }
 
 // CompareShardingDDLs compares s and t ddls

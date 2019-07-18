@@ -16,12 +16,14 @@ package syncer
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	_ "github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser/ast"
@@ -29,7 +31,9 @@ import (
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+
 	"github.com/siddontang/go-mysql/replication"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -71,7 +75,7 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 	dbAddr := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8", s.cfg.From.User, s.cfg.From.Password, s.cfg.From.Host, s.cfg.From.Port)
 	s.db, err = sql.Open("mysql", dbAddr)
 	if err != nil {
-		log.Fatal(err)
+		log.L().Fatal("", zap.Error(err))
 	}
 
 	s.resetMaster()
@@ -96,7 +100,7 @@ func (s *testSyncerSuite) resetBinlogSyncer() {
 	if s.cfg.Timezone != "" {
 		timezone, err2 := time.LoadLocation(s.cfg.Timezone)
 		if err != nil {
-			log.Fatal(err2)
+			log.L().Fatal("", zap.Error(err2))
 		}
 		cfg.TimestampStringLocation = timezone
 	}
@@ -107,13 +111,13 @@ func (s *testSyncerSuite) resetBinlogSyncer() {
 
 	pos, _, err := utils.GetMasterStatus(s.db, "mysql")
 	if err != nil {
-		log.Fatal(err)
+		log.L().Fatal("", zap.Error(err))
 	}
 
 	s.syncer = replication.NewBinlogSyncer(cfg)
 	s.streamer, err = s.syncer.StartSync(pos)
 	if err != nil {
-		log.Fatal(err)
+		log.L().Fatal("", zap.Error(err))
 	}
 }
 
@@ -326,6 +330,9 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 }
 
 func (s *testSyncerSuite) TestIgnoreDB(c *C) {
+	s.resetMaster()
+	s.resetBinlogSyncer()
+
 	s.cfg.BWList = &filter.Rules{
 		IgnoreDBs: []string{"~^b.*", "s1", "stest"},
 	}
@@ -784,6 +791,8 @@ func (s *testSyncerSuite) TestTimezone(c *C) {
 }
 
 func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
+	defer s.db.Exec("drop database if exists gctest_1")
+
 	s.cfg.BWList = &filter.Rules{
 		DoDBs: []string{"~^gctest_.*"},
 	}
@@ -1030,14 +1039,271 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	wg.Wait()
 }
 
+func (s *testSyncerSuite) TestSharding(c *C) {
+
+	createSQLs := []string{
+		"CREATE DATABASE IF NOT EXISTS `stest_1` CHARACTER SET = utf8mb4",
+		"CREATE TABLE IF NOT EXISTS `stest_1`.`st_1` (id INT, age INT)",
+		"CREATE TABLE IF NOT EXISTS `stest_1`.`st_2` (id INT, age INT)",
+	}
+
+	testCases := []struct {
+		testSQLs   []string
+		expectSQLS []struct {
+			sql  string
+			args []driver.Value
+		}
+	}{
+		// case 1:
+		// upstream binlog events:
+		// insert t1 -> insert t2 -> alter t1 -> insert t2 -> alter t2 -> insert t1(new schema) -> insert t2(new schema)
+		// downstream expected events:
+		// insert t(from t1) -> insert t(from t2) -> insert t(from t2) -> alter t(from t2 same as t1) -> insert t1(new schema) -> insert t2(new schema)
+		{
+			[]string{
+				"INSERT INTO `stest_1`.`st_1`(id, age) VALUES (1, 1)",
+				"INSERT INTO `stest_1`.`st_2`(id, age) VALUES (2, 2)",
+				"ALTER TABLE `stest_1`.`st_1` ADD COLUMN NAME VARCHAR(30)",
+				"INSERT INTO `stest_1`.`st_2`(id, age) VALUES (4, 4)",
+				"ALTER TABLE `stest_1`.`st_2` ADD COLUMN NAME VARCHAR(30)",
+				"INSERT INTO `stest_1`.`st_1`(id, age, name) VALUES (3, 3, 'test')",
+				"INSERT INTO `stest_1`.`st_2`(id, age, name) VALUES (6, 6, 'test')",
+			},
+			[]struct {
+				sql  string
+				args []driver.Value
+			}{
+				{
+					"REPLACE INTO",
+					[]driver.Value{1, 1},
+				},
+				{
+					"REPLACE INTO",
+					[]driver.Value{2, 2},
+				},
+				{
+					"REPLACE INTO",
+					[]driver.Value{4, 4},
+				},
+				{
+					"ALTER TABLE",
+					[]driver.Value{},
+				},
+				{
+					"REPLACE INTO",
+					[]driver.Value{3, 3, "test"},
+				},
+				{
+					"REPLACE INTO",
+					[]driver.Value{6, 6, "test"},
+				},
+			},
+		},
+		// case 2:
+		// upstream binlog events:
+		// insert t1 -> insert t2 -> alter t1 -> insert t1(new schema) -> insert t2 -> alter t2 -> insert t1(new schema) -> insert t2(new schema)
+		// downstream expected events:
+		// insert t(from t1) -> insert t(from t2) -> insert t(from t2) -> alter t(from t2 same as t1) -> insert t1(new schema) -> insert t1(new schema) -> insert t2(new schema)
+		{
+			[]string{
+				"INSERT INTO `stest_1`.`st_1`(id, age) VALUES (1, 1)",
+				"INSERT INTO `stest_1`.`st_2`(id, age) VALUES (2, 2)",
+				"ALTER TABLE `stest_1`.`st_1` ADD COLUMN NAME VARCHAR(30)",
+				"INSERT INTO `stest_1`.`st_1`(id, age, name) VALUES (3, 3, 'test')",
+				"INSERT INTO `stest_1`.`st_2`(id, age) VALUES (4, 4)",
+				"ALTER TABLE `stest_1`.`st_2` ADD COLUMN NAME VARCHAR(30)",
+				"INSERT INTO `stest_1`.`st_1`(id, age, name) VALUES (5, 5, 'test')",
+				"INSERT INTO `stest_1`.`st_2`(id, age, name) VALUES (6, 6, 'test')",
+			},
+			[]struct {
+				sql  string
+				args []driver.Value
+			}{
+				{
+					"REPLACE INTO",
+					[]driver.Value{1, 1},
+				},
+				{
+					"REPLACE INTO",
+					[]driver.Value{2, 2},
+				},
+				{
+					"REPLACE INTO",
+					[]driver.Value{4, 4},
+				},
+				{
+					"ALTER TABLE",
+					[]driver.Value{},
+				},
+				{
+					"REPLACE INTO",
+					[]driver.Value{3, 3, "test"},
+				},
+				{
+					"REPLACE INTO",
+					[]driver.Value{5, 5, "test"},
+				},
+				{
+					"REPLACE INTO",
+					[]driver.Value{6, 6, "test"},
+				},
+			},
+		},
+	}
+
+	dropSQLs := []string{
+		"DROP DATABASE IF EXISTS stest_1",
+		// drop checkpoint info for next test
+		fmt.Sprintf("DROP DATABASE IF EXISTS %s", s.cfg.MetaSchema),
+	}
+
+	runSQL := func(sqls []string) {
+		for _, sql := range sqls {
+			_, err := s.db.Exec(sql)
+			c.Assert(err, IsNil)
+		}
+	}
+
+	s.cfg.Flavor = "mysql"
+	s.cfg.BWList = &filter.Rules{
+		DoDBs: []string{"stest_1"},
+	}
+	s.cfg.IsSharding = true
+	s.cfg.RouteRules = []*router.TableRule{
+		{
+			SchemaPattern: "stest_1",
+			TablePattern:  "st_*",
+			TargetSchema:  "stest",
+			TargetTable:   "st",
+		},
+	}
+	// set batch to 1 is easy to mock
+	s.cfg.Batch = 1
+	s.cfg.WorkerCount = 1
+	s.cfg.MaxRetry = 1
+
+	for i, _case := range testCases {
+		// drop first if last time test failed
+		runSQL(dropSQLs)
+		s.resetMaster()
+		// must wait for reset Master finish
+		time.Sleep(time.Second)
+
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			c.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+		}
+		syncer := NewSyncer(s.cfg)
+		syncer.Init()
+
+		c.Assert(syncer.checkpoint.GlobalPoint(), Equals, minCheckpoint)
+		c.Assert(syncer.checkpoint.FlushedGlobalPoint(), Equals, minCheckpoint)
+
+		// make syncer write to mock db
+		syncer.toDBs = []*Conn{{cfg: s.cfg, db: db}}
+		syncer.ddlDB = &Conn{cfg: s.cfg, db: db}
+
+		// run sql on upstream db to generate binlog event
+		runSQL(createSQLs)
+
+		// mock downstream db result
+		mock.ExpectBegin()
+		mock.ExpectExec("CREATE DATABASE").WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectCommit()
+
+		mock.ExpectBegin()
+		mock.ExpectExec("CREATE TABLE").WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectCommit()
+
+		mock.ExpectBegin()
+		e := newMysqlErr(1050, "Table exist")
+		mock.ExpectExec("CREATE TABLE").WillReturnError(e)
+		mock.ExpectRollback()
+
+		// mock get table in first handle RowEvent
+		mock.ExpectQuery("SHOW COLUMNS").WillReturnRows(
+			sqlmock.NewRows([]string{"Field", "Type", "Null", "Key", "Default", "Extra"}).AddRow("id", "int", "NO", "PRI", null, "").AddRow("age", "int", "NO", "", null, ""))
+		mock.ExpectQuery("SHOW INDEX").WillReturnRows(
+			sqlmock.NewRows([]string{"Table", "Non_unique", "Key_name", "Seq_in_index", "Column_name",
+				"Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Comment", "Index_comment"},
+			).AddRow("st", 0, "PRIMARY", 1, "id", "A", 0, null, null, null, "BTREE", "", ""))
+
+		// run sql on upstream db
+		runSQL(_case.testSQLs)
+		// mock expect sql
+		for i, expectSQL := range _case.expectSQLS {
+			mock.ExpectBegin()
+			if strings.HasPrefix(expectSQL.sql, "ALTER") {
+				mock.ExpectExec(expectSQL.sql).WillReturnResult(sqlmock.NewResult(1, int64(i)+1))
+				mock.ExpectCommit()
+				// mock get table after ddl sql exec
+				mock.ExpectQuery("SHOW COLUMNS").WillReturnRows(
+					sqlmock.NewRows([]string{"Field", "Type", "Null", "Key", "Default", "Extra"}).AddRow("id", "int", "NO", "PRI", null, "").AddRow("age", "int", "NO", "", null, "").AddRow("name", "varchar", "NO", "", null, ""))
+				mock.ExpectQuery("SHOW INDEX").WillReturnRows(
+					sqlmock.NewRows([]string{"Table", "Non_unique", "Key_name", "Seq_in_index", "Column_name",
+						"Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Comment", "Index_comment"},
+					).AddRow("st", 0, "PRIMARY", 1, "id", "A", 0, null, null, null, "BTREE", "", ""))
+			} else {
+				// change insert to replace because of safe mode
+				mock.ExpectExec(expectSQL.sql).WithArgs(expectSQL.args...).WillReturnResult(sqlmock.NewResult(1, 1))
+				mock.ExpectCommit()
+			}
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		resultCh := make(chan pb.ProcessResult)
+
+		go syncer.Process(ctx, resultCh)
+
+		go func() {
+			// sleep to ensure ddlExecInfo.Send() happen after ddlExecInfo.Renew() in Process
+			// because Renew() will generate new channel, Send() may send to old channel due to goroutine schedule
+			time.Sleep(1 * time.Second)
+			// mock permit exec ddl request from dm-master
+			req := &DDLExecItem{&pb.ExecDDLRequest{Exec: true}, make(chan error, 1)}
+			syncer.ddlExecInfo.Send(ctx, req)
+		}()
+
+		select {
+		case r := <-resultCh:
+			for _, err := range r.Errors {
+				c.Errorf("Case %d: Process Err:%s", i, err)
+			}
+			c.Assert(len(r.Errors), Equals, 0)
+		case <-time.After(2 * time.Second):
+		}
+		// wait for flush finish in Process.Run()
+		// cancel function only closed done channel asynchronously
+		// other goroutine(s.streamer.GetEvent()) received done msg then trigger flush
+		// so the flush action may not execute before we check due to goroutine schedule
+		cancel()
+
+		syncer.Close()
+		c.Assert(syncer.isClosed(), IsTrue)
+
+		flushedGP := syncer.checkpoint.FlushedGlobalPoint().Pos
+		GP := syncer.checkpoint.GlobalPoint().Pos
+		c.Assert(GP, Equals, flushedGP)
+
+		// check expectations for mock db
+		if err := mock.ExpectationsWereMet(); err != nil {
+			c.Errorf("there were unfulfilled expectations: %s", err)
+		}
+		runSQL(dropSQLs)
+	}
+}
+
 func (s *testSyncerSuite) TestRun(c *C) {
 	// 1. run syncer with column mapping
-	// 2. update config, add route rules, and update syncer
+	// 2. execute some sqls which will trigger casuality
+	// 3. check the generated jobs
+	// 4. update config, add route rules, and update syncer
+	// 5. execute somes sqls and then check jobs generated
 
 	defer s.db.Exec("drop database if exists test_1")
 
 	s.resetMaster()
 	s.resetBinlogSyncer()
+	testJobs.jobs = testJobs.jobs[:0]
 
 	s.cfg.BWList = &filter.Rules{
 		DoDBs: []string{"test_1"},
@@ -1058,8 +1324,9 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		},
 	}
 
-	s.cfg.Batch = 10
+	s.cfg.Batch = 1000
 	s.cfg.WorkerCount = 2
+	s.cfg.DisableCausality = false
 
 	syncer := NewSyncer(s.cfg)
 	err := syncer.Init()
@@ -1073,80 +1340,66 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	go syncer.Process(ctx, resultCh)
 
-	testCases1 := []struct {
-		sql      string
-		tp       opType
-		sqlInJob string
-		arg      interface{}
-	}{
+	sqls1 := []string{
+		"create database if not exists test_1",
+		"create table if not exists test_1.t_1(id int primary key, name varchar(24))",
+		"create table if not exists test_1.t_2(id int primary key, name varchar(24))",
+		"insert into test_1.t_1 values(1, 'a')",
+		"alter table test_1.t_1 add index index1(name)",
+		"insert into test_1.t_1 values(2, 'b')",
+		"delete from test_1.t_1 where id = 1",
+		"update test_1.t_1 set id = 1 where id = 2", // will find casuality and then generate flush job
+	}
+	expectJobs1 := []*expectJob{
 		{
-			"create database if not exists test_1",
 			ddl,
 			"CREATE DATABASE IF NOT EXISTS `test_1`",
 			nil,
 		}, {
-			"create table if not exists test_1.t_1(id int)",
 			ddl,
-			"CREATE TABLE IF NOT EXISTS `test_1`.`t_1` (`id` INT)",
+			"CREATE TABLE IF NOT EXISTS `test_1`.`t_1` (`id` INT PRIMARY KEY,`name` VARCHAR(24))",
 			nil,
 		}, {
-			"create table if not exists test_1.t_2(id int)",
 			ddl,
-			"CREATE TABLE IF NOT EXISTS `test_1`.`t_2` (`id` INT)",
+			"CREATE TABLE IF NOT EXISTS `test_1`.`t_2` (`id` INT PRIMARY KEY,`name` VARCHAR(24))",
 			nil,
 		}, {
-			"insert into test_1.t_1 values(1)",
 			insert,
-			"REPLACE INTO `test_1`.`t_1` (`id`) VALUES (?);",
-			int64(580981944116838401),
+			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?);",
+			[]interface{}{int64(580981944116838401), "a"},
 		}, {
-			"alter table test_1.t_1 add index index1(id)",
 			ddl,
-			"ALTER TABLE `test_1`.`t_1` ADD INDEX `index1`(`id`)",
+			"ALTER TABLE `test_1`.`t_1` ADD INDEX `index1`(`name`)",
 			nil,
 		}, {
-			"insert into test_1.t_1 values(2)",
 			insert,
-			"REPLACE INTO `test_1`.`t_1` (`id`) VALUES (?);",
-			int64(580981944116838402),
+			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?);",
+			[]interface{}{int64(580981944116838402), "b"},
 		}, {
-			"delete from test_1.t_1 where id = 1",
 			del,
 			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1;",
-			int64(580981944116838401),
+			[]interface{}{int64(580981944116838401)},
+		}, {
+			flush,
+			"",
+			nil,
+		}, {
+			// in first 5 minutes, safe mode is true, will split update to delete + replace
+			update,
+			"DELETE FROM `test_1`.`t_1` WHERE `id` = ? LIMIT 1;",
+			[]interface{}{int64(580981944116838402)},
+		}, {
+			// in first 5 minutes, , safe mode is true, will split update to delete + replace
+			update,
+			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?);",
+			[]interface{}{int64(580981944116838401), "b"},
 		},
 	}
 
-	for _, testCase := range testCases1 {
-		c.Log("exec sql: ", testCase.sql)
-		_, err := s.db.Exec(testCase.sql)
-		c.Assert(err, IsNil)
-	}
-
-	for i := 0; i < 10; i++ {
-		time.Sleep(time.Second)
-
-		testJobs.RLock()
-		jobNum := len(testJobs.jobs)
-		testJobs.RUnlock()
-
-		if jobNum >= len(testCases1) {
-			break
-		}
-	}
+	executeSQLAndWait(c, s.db, sqls1, len(expectJobs1))
 
 	testJobs.Lock()
-	c.Assert(testJobs.jobs, HasLen, len(testCases1))
-	for i, testCase := range testCases1 {
-		c.Assert(testJobs.jobs[i].tp, Equals, testCase.tp)
-		if testJobs.jobs[i].tp == ddl {
-			c.Assert(testJobs.jobs[i].ddls[0], Equals, testCase.sqlInJob)
-		} else {
-			c.Assert(testJobs.jobs[i].sql, Equals, testCase.sqlInJob)
-			c.Assert(testJobs.jobs[i].args[0], Equals, testCase.arg)
-		}
-	}
-
+	checkJobs(c, testJobs.jobs, expectJobs1)
 	testJobs.jobs = testJobs.jobs[:0]
 	testJobs.Unlock()
 
@@ -1161,6 +1414,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	}
 
 	cancel()
+	// when syncer exit Run(), will flush job
 	syncer.Pause()
 	syncer.Update(s.cfg)
 
@@ -1171,28 +1425,45 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	resultCh = make(chan pb.ProcessResult)
 	go syncer.Resume(ctx, resultCh)
 
-	testCases2 := []struct {
-		sql      string
-		tp       opType
-		sqlInJob string
-		arg      interface{}
-	}{
+	sql2 := []string{
+		"insert into test_1.t_1 values(3, 'c')",
+		"delete from test_1.t_1 where id = 3",
+	}
+
+	expectJobs2 := []*expectJob{
 		{
-			"insert into test_1.t_1 values(3)",
-			insert,
-			"REPLACE INTO `test_1`.`t_2` (`id`) VALUES (?);",
-			int32(3),
+			flush,
+			"",
+			nil,
 		}, {
-			"delete from test_1.t_1 where id = 3",
+			insert,
+			"REPLACE INTO `test_1`.`t_2` (`id`,`name`) VALUES (?,?);",
+			[]interface{}{int32(3), "c"},
+		}, {
 			del,
 			"DELETE FROM `test_1`.`t_2` WHERE `id` = ? LIMIT 1;",
-			int32(3),
+			[]interface{}{int32(3)},
 		},
 	}
 
-	for _, testCase := range testCases2 {
-		c.Log("exec sql: ", testCase.sql)
-		_, err := s.db.Exec(testCase.sql)
+	executeSQLAndWait(c, s.db, sql2, len(expectJobs2))
+
+	testJobs.RLock()
+	checkJobs(c, testJobs.jobs, expectJobs2)
+	testJobs.RUnlock()
+
+	status := syncer.Status().(*pb.SyncStatus)
+	c.Assert(status.TotalEvents, Equals, int64(len(expectJobs1)+len(expectJobs2)))
+
+	cancel()
+	syncer.Close()
+	c.Assert(syncer.isClosed(), IsTrue)
+}
+
+func executeSQLAndWait(c *C, db *sql.DB, sqls []string, expectJobNum int) {
+	for _, sql := range sqls {
+		c.Log("exec sql: ", sql)
+		_, err := db.Exec(sql)
 		c.Assert(err, IsNil)
 	}
 
@@ -1203,30 +1474,31 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		jobNum := len(testJobs.jobs)
 		testJobs.RUnlock()
 
-		if jobNum >= len(testCases2) {
+		if jobNum >= expectJobNum {
 			break
 		}
 	}
+}
 
-	testJobs.RLock()
-	c.Assert(testJobs.jobs, HasLen, len(testCases2))
-	for i, testCase := range testCases2 {
-		c.Assert(testJobs.jobs[i].tp, Equals, testCase.tp)
-		if testJobs.jobs[i].tp == ddl {
-			c.Assert(testJobs.jobs[i].ddls[0], Equals, testCase.sqlInJob)
+type expectJob struct {
+	tp       opType
+	sqlInJob string
+	args     []interface{}
+}
+
+func checkJobs(c *C, jobs []*job, expectJobs []*expectJob) {
+	c.Assert(jobs, HasLen, len(expectJobs))
+	for i, job := range jobs {
+		c.Log(i, job.tp, job.ddls, job.sql, job.args)
+
+		c.Assert(job.tp, Equals, expectJobs[i].tp)
+		if job.tp == ddl {
+			c.Assert(job.ddls[0], Equals, expectJobs[i].sqlInJob)
 		} else {
-			c.Assert(testJobs.jobs[i].sql, Equals, testCase.sqlInJob)
-			c.Assert(testJobs.jobs[i].args[0], Equals, testCase.arg)
+			c.Assert(job.sql, Equals, expectJobs[i].sqlInJob)
+			c.Assert(job.args, DeepEquals, expectJobs[i].args)
 		}
 	}
-	testJobs.RUnlock()
-
-	status := syncer.Status().(*pb.SyncStatus)
-	c.Assert(status.TotalEvents, Equals, int64(len(testCases1)+len(testCases2)))
-
-	cancel()
-	syncer.Close()
-	c.Assert(syncer.isClosed(), IsTrue)
 }
 
 var testJobs struct {
@@ -1235,10 +1507,10 @@ var testJobs struct {
 }
 
 func (s *Syncer) addJobToMemory(job *job) error {
-	log.Infof("addJobToMemory: %v", job)
+	log.L().Info("add job to memory", zap.Stringer("job", job))
 
 	switch job.tp {
-	case ddl, insert, update, del:
+	case ddl, insert, update, del, flush:
 		s.addCount(false, "test", job.tp, 1)
 		testJobs.Lock()
 		testJobs.jobs = append(testJobs.jobs, job)
