@@ -35,6 +35,7 @@ func (s *Server) startHTTPServer(lis net.Listener) {
 	router.Handle("/events/query", eventHandler{s.eventStore, opQueryEvents})
 	router.Handle("/events/scan", eventHandler{s.eventStore, opScanEvents})
 	router.Handle("/events/delete", eventHandler{s.eventStore, opDelEvents})
+	router.Handle("/events/truncate", eventHandler{s.eventStore, opTruncateEvents})
 
 	httpServer := &http.Server{
 		Handler: router,

@@ -1741,6 +1741,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		if ddlExecItem.req.Exec {
 			failpoint.Inject("ShardSyncedExecutionExit", func() {
 				log.Warn("[failpoint] exit triggered by ShardSyncedExecutionExit")
+				s.flushCheckPoints()
 				utils.OsExit(1)
 			})
 			failpoint.Inject("SequenceShardSyncedExecutionExit", func() {
@@ -1749,6 +1750,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 					// exit in the first round sequence sharding DDL only
 					if group.meta.ActiveIdx() == 1 {
 						log.Warn("[failpoint] exit triggered by SequenceShardSyncedExecutionExit")
+						s.flushCheckPoints()
 						utils.OsExit(1)
 					}
 				}
