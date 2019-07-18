@@ -68,6 +68,8 @@ function run() {
 
     run_sql "SELECT count(*) from dm_meta.test_loader_checkpoint where cp_schema = '$TEST_NAME' and offset = end_pos" $TIDB_PORT
     check_contains "count(*): 2"
+
+    export GO_FAILPOINTS=''
 }
 
 cleanup1 load_interrupt
