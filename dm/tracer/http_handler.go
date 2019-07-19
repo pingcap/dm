@@ -25,10 +25,11 @@ import (
 )
 
 const (
-	opQueryEvents = "query-events"
-	opScanEvents  = "scan-events"
-	opDelEvents   = "del-events"
-	defaultLimit  = 10
+	opQueryEvents    = "query-events"
+	opScanEvents     = "scan-events"
+	opDelEvents      = "del-events"
+	opTruncateEvents = "truncate-events"
+	defaultLimit     = 10
 )
 
 const (
@@ -91,6 +92,8 @@ func (h eventHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		h.handleTraceEventScanRequest(w, req)
 	case opDelEvents:
 		h.handleTraceEventDeleteRequest(w, req)
+	case opTruncateEvents:
+		h.handleTraceEventTruncateRequest(w, req)
 	}
 }
 
@@ -151,4 +154,13 @@ func (h eventHandler) handleTraceEventDeleteRequest(w http.ResponseWriter, req *
 	} else {
 		writeBadRequest(w, errors.New("trace id not provided"))
 	}
+}
+
+func (h eventHandler) handleTraceEventTruncateRequest(w http.ResponseWriter, req *http.Request) {
+	if req.Method != "POST" {
+		writeBadRequest(w, errors.New("post only"))
+		return
+	}
+	h.truncate()
+	writeData(w, map[string]interface{}{"result": true})
 }

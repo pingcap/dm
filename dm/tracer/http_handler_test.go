@@ -357,3 +357,56 @@ func (ts *HTTPHandlerTestSuite) TestTraceEventDelete(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(string(raw), Equals, fmt.Sprintf("trace event %s not found", traceID))
 }
+
+func (ts *HTTPHandlerTestSuite) TestTraceEventTruncate(c *C) {
+	ts.startServer(c, 4)
+	defer ts.stopServer(c)
+
+	var (
+		traceID     = "test.delete.trace_id"
+		err         error
+		queryURL    = fmt.Sprintf("http://127.0.0.1%s/events/query?trace_id=%s", ts.cfg.TracerAddr, traceID)
+		truncateURL = fmt.Sprintf("http://127.0.0.1%s/events/truncate", ts.cfg.TracerAddr)
+		resp        *http.Response
+		data        []SyncerBinlogEventResp
+		raw         []byte
+	)
+
+	err = ts.server.eventStore.addNewEvent(&TraceEvent{
+		Type: pb.TraceType_BinlogEvent,
+		Event: &pb.SyncerBinlogEvent{
+			Base: &pb.BaseEvent{
+				Filename: "/path/to/test.go",
+				Line:     100,
+				Tso:      time.Now().UnixNano(),
+				TraceID:  traceID,
+				Type:     pb.TraceType_BinlogEvent,
+			},
+		},
+	})
+	c.Assert(err, IsNil)
+
+	resp, err = http.Get(queryURL)
+	c.Assert(err, IsNil, Commentf("url:%s", queryURL))
+	decoder := json.NewDecoder(resp.Body)
+
+	err = decoder.Decode(&data)
+	resp.Body.Close()
+	c.Assert(err, IsNil)
+	for _, event := range data {
+		c.Assert(event.Event.Base.TraceID, Equals, traceID)
+	}
+
+	form := make(url.Values)
+	resp, err = http.PostForm(truncateURL, form)
+	resp.Body.Close()
+	c.Assert(err, IsNil, Commentf("url:%s", truncateURL))
+
+	resp, err = http.Get(queryURL)
+	c.Assert(err, IsNil, Commentf("url:%s", queryURL))
+	c.Assert(resp.StatusCode, Equals, http.StatusNotFound)
+	raw, err = ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	c.Assert(err, IsNil)
+	c.Assert(string(raw), Equals, fmt.Sprintf("trace event %s not found", traceID))
+}

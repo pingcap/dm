@@ -18,19 +18,19 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
-	"github.com/DATA-DOG/go-sqlmock"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	_ "github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser/ast"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	"github.com/pingcap/tidb-tools/pkg/table-router"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
 
 	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
@@ -826,15 +826,15 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 				"insert into gctest_1.t_3(id, cfg) values (3, '{\"id\": 3}')",
 			},
 			[]string{
-				"REPLACE INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
-				"REPLACE INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
-				"REPLACE INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
-				"REPLACE INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?);",
-				"REPLACE INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?);",
-				"REPLACE INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?);",
-				"REPLACE INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?);",
-				"REPLACE INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?);",
-				"REPLACE INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?);",
+				"INSERT INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
+				"INSERT INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
+				"INSERT INTO `gctest_1`.`t_1` (`id`,`age`,`cfg`) VALUES (?,?,?);",
+				"INSERT INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?);",
+				"INSERT INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?);",
+				"INSERT INTO `gctest_1`.`t_2` (`id`,`age`,`cfg`) VALUES (?,?,?);",
+				"INSERT INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?);",
+				"INSERT INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?);",
+				"INSERT INTO `gctest_1`.`t_3` (`id`,`cfg`) VALUES (?,?);",
 			},
 			[][]interface{}{
 				{int32(1), int32(18), "{}"},
@@ -934,7 +934,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	for _, testCase := range testCases {
 		for _, sql := range testCase.sqls {
 			_, err := s.db.Exec(sql)
-			c.Assert(err, IsNil)
+			c.Assert(err, IsNil, Commentf("sql: %s", sql))
 		}
 		idx := 0
 		for {

@@ -38,6 +38,7 @@ type EventStore struct {
 // NewEventStore creates a new EventStore
 func NewEventStore() *EventStore {
 	return &EventStore{
+		ids:    make([]string, 0),
 		events: make(map[string][]*TraceEvent),
 	}
 }
@@ -118,4 +119,11 @@ func (store *EventStore) removeByTraceID(traceID string) (removed bool) {
 		}
 	}
 	return
+}
+
+func (store *EventStore) truncate() {
+	store.Lock()
+	defer store.Unlock()
+	store.events = make(map[string][]*TraceEvent)
+	store.ids = make([]string, 0)
 }
