@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 
@@ -96,9 +97,11 @@ func main() {
 		limit  int = 10
 		count  int
 	)
+	checkInstance := fmt.Sprintf("mysql-replica-0%s", os.Args[1])
 	updateEvents := make(map[string][]*pb.SyncerBinlogEvent)
 	ddlEvents := make(map[string][]*pb.SyncerBinlogEvent)
 	latestDDL := make(map[string][]*pb.SyncerBinlogEvent)
+	fmt.Printf("check safe mode for instance %s\n", checkInstance)
 	for {
 		raw, err = scan_events(offset, limit)
 		if err != nil {
@@ -145,8 +148,8 @@ func main() {
 	for worker, events := range ddlEvents {
 		sort.Sort(BinlogEventSlice(events))
 		latestDDL[worker] = make([]*pb.SyncerBinlogEvent, 2)
-		// we have run two round of sharding DDL
-		if len(events) < 4 {
+		// we check the second round of sharding DDL only
+		if len(events) < 2 {
 			panic(fmt.Sprintf("invalid ddl events count, events: %v", events))
 		}
 		latestDDL[worker][1] = events[len(events)-1]
@@ -165,6 +168,9 @@ func main() {
 
 	// check safe mode of each `update` binlog event is reasonable
 	for worker, evs := range latestDDL {
+		if worker != checkInstance {
+			continue
+		}
 		startPos := binlogPosition(evs[0])
 		endPos := binlogPosition(evs[1])
 		for _, ev := range updateEvents[worker] {
