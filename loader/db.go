@@ -16,8 +16,8 @@ package loader
 import (
 	"database/sql"
 	"fmt"
-	"time"
 	"strings"
+	"time"
 
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
@@ -25,9 +25,9 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
-	"github.com/pingcap/tidb/domain"
 	"github.com/pingcap/failpoint"
 	tmysql "github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb/domain"
 	"go.uber.org/zap"
 )
 
