@@ -422,6 +422,7 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	l.newFileJobQueue()
 	if err := l.getMydumpMetadata(); err != nil {
+		loaderExitWithErrorCounter.WithLabelValues(l.cfg.Name).Inc()
 		pr <- pb.ProcessResult{
 			Errors: []*pb.ProcessError{unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err))},
 		}
