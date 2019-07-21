@@ -94,6 +94,7 @@ type SubTaskConfig struct {
 	// so we should not export flagSet
 	flagSet *flag.FlagSet
 
+	IsIgnore      bool   `toml:"is-ignore" json:"is-ignore"`
 	// when in sharding, multi dm-workers do one task
 	IsSharding      bool   `toml:"is-sharding" json:"is-sharding"`
 	OnlineDDLScheme string `toml:"online-ddl-scheme" json:"online-ddl-scheme"`

@@ -155,7 +155,12 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *
 				})
 
 				failpoint.Inject("LoadDataSlowDown", nil)
-
+				if len(sqls) == 3 && w.cfg.IsIgnore {// Use "INSERT IGNORE INTO" to avoid dup entry comflict
+					if sqls[1][0:6] == "INSERT" && sqls[1][7:13] != "IGNORE"{// Only add "IGNORE" once
+						newsql := sqls[1][0:7] + "IGNORE" + sqls[1][6:]
+						sqls[1] = newsql
+					}
+				}
 				if err := w.conn.executeSQL(ctctx, sqls, true); err != nil {
 					// expect pause rather than exit
 					err = errors.Annotatef(err, "file %s", job.file)
