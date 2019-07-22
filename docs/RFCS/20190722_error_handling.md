@@ -79,10 +79,10 @@ type Error struct {
 
 ```go
 // Equal returns true iff the error contains `reference` in any of its
-func (e *Error) Equal(reference error) bool
+func (e *Error) Equal(reference error) bool {}
 
 // EqualAny is like Equal() but supports multiple reference errors.
-func (e terror) EqualAny(references ...error) bool
+func (e terror) EqualAny(references ...error) bool {}
 ```
 
 #### Enhance the error chain
@@ -126,14 +126,14 @@ as for error combination requirements, we provide the following APIs.
 
 ```go
 // Annotate adds a message and ensures there is a stack trace
-func Annotate(err error, message string) error
+func Annotate(err error, message string) error {}
 
 // Annotatef adds a message and ensures there is a stack trace
-func Annotatef(err error, format string, args ...interface{}) error
+func Annotatef(err error, format string, args ...interface{}) error {}
 
 // Delegate creates a new *Error with the same fields of the give *Error,
 // except for new arguments, it also sets the err as raw cause of *Error
-func (e *Error) Delegate(err error, args ...interface{}) error
+func (e *Error) Delegate(err error, args ...interface{}) error {}
 ```
 
 Difference between `error Annotate` and `error Delegate`
@@ -165,24 +165,24 @@ We use [pingcap/errors/StackTracer](https://www.google.com/url?q=https://github.
 
 ```go
 // Equal returns true iff the error contains `reference` in any of its
-func (e *Error) Equal(reference error) bool
+func (e *Error) Equal(reference error) bool {}
 
 // EqualAny is like Equal() but supports multiple reference errors.
-func (e terror) EqualAny(references ...error) bool
+func (e terror) EqualAny(references ...error) bool {}
 
 // Generate generates a new *Error with the same class and code, and new arguments.
-func (e *Error) Generate(args ...interface{}) error
+func (e *Error) Generate(args ...interface{}) error {}
 
 // Generatef generates a new *Error with the same class and code, and a new formatted message.
-func (e *Error) Generatef(format string, args ...interface{}) error
+func (e *Error) Generatef(format string, args ...interface{}) error {}
 
 // Annotate adds a message and ensures there is a stack trace
-func Annotate(err error, message string) error
+func Annotate(err error, message string) error {}
 
 // Annotatef adds a message and ensures there is a stack trace
-func Annotatef(err error, format string, args ...interface{}) error
+func Annotatef(err error, format string, args ...interface{}) error {}
 
 // Delegate creates a new *Error with the same fields of the give *Error,
 // except for new arguments, it also sets the err as raw cause of *Error
-func (e *Error) Delegate(err error, args ...interface{}) error
+func (e *Error) Delegate(err error, args ...interface{}) error {}
 ```
