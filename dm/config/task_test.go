@@ -70,7 +70,6 @@ mysql-instances:
     syncer-config-name: "global"
 `
 
-
 func (t *testConfig) TestInvalidTaskConfig(c *C) {
 	taskConfig := NewTaskConfig()
 	err := taskConfig.Decode(errorTaskConfig1)

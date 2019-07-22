@@ -17,7 +17,6 @@ target-database:
 
 mysql-instances:
   - source-id: "mysql-replica-01"
-    server-id: 101
     meta:
       binlog-name: binlog-name-placeholder-1
       binlog-pos: binlog-pos-placeholder-1
@@ -27,7 +26,6 @@ mysql-instances:
     syncer-config-name: "global"
 
   - source-id: "mysql-replica-02"
-    server-id: 102
     meta:
       binlog-name: binlog-name-placeholder-2
       binlog-pos: binlog-pos-placeholder-2
