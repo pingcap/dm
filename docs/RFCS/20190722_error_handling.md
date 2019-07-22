@@ -12,12 +12,15 @@ Table of contents:
 - [Background](#Background)
 - [Implementation](#Implementation)
     - [Error scenario classification and error codes](#Error-scenario-classification-and-error-codes)
+        - [Error object definition](#Error-object-definition)
+        - [Error classification and error codes](#Error-classification-and-error-codes)
     - [Goal of error handling](#Goal-of-error-handling)
         - [Provide better error equivalences check](#Provide-better-error-equivalences-check)
         - [Enhance the error chain](#Enhance-the-error-chain)
         - [Embedded stack traces](#Embedded-stack-traces)
         - [Error output specification](#Error-output-specification)
     - [Error handling regulation](#Error-handling-regulation)
+        - [API list](#API-list)
 
 ## Background
 
@@ -31,7 +34,7 @@ Currently all DM errors are constructed by `errors.Errorf` with error descriptio
 
 ### Error scenario classification and error codes
 
-### Error object definition
+#### Error object definition
 
 Error object is defined as following, with some import fields:
 
@@ -50,24 +53,23 @@ type ErrScope int
 type ErrLevel int
 
 type Error struct {
-    code        ErrCode
-    class        ErrClass
-    scope        ErrScope
-    level        ErrLevel
-    message        string
-    args        []interface{}
-    rawCause    error
-    stack        errors.StackTracer
+	code		ErrCode
+	class		ErrClass
+	scope		ErrScope
+	level		ErrLevel
+	message		string
+	args		[]interface{}
+	rawCause	error
+	stack		errors.StackTracer
 }
 ```
 
-### Error classification and error codes
+#### Error classification and error codes
 
 1. Error is classfied by class field, which relates to code logic
 2. Error codes range allocation will be added later
 
-
-#### Goal of error handling
+### Goal of error handling
 
 #### Provide better error equivalences check
 
@@ -99,10 +101,10 @@ func (e terror) EqualAny(references ...error) bool
 
 ```go
 func (s *Syncer) flushCheckPoints() error {
-    err := s.checkpoint.FlushPointsExcept(...)
-    if err != nil {
-        return Annotatef(err, "flush checkpoint %s", s.checkpoint)
-    }
+	err := s.checkpoint.FlushPointsExcept(...)
+	if err != nil {
+		return Annotatef(err, "flush checkpoint %s", s.checkpoint)
+	}
 }
 ```
 
@@ -111,12 +113,12 @@ func (s *Syncer) flushCheckPoints() error {
 ```go
 err1 := txn.Exec(sql, args...)
 if err != nil {
-    err2 := txn.Rollback()
-    if err2 != nil {
-        log.Errorf("rollback error: %v", err2)
-    }
-    // should return the exec err1, instead of the rollback err2.
-    return errors.Trace(err1)
+	err2 := txn.Rollback()
+	if err2 != nil {
+		log.Errorf("rollback error: %v", err2)
+	}
+	// should return the exec err1, instead of the rollback err2.
+	return errors.Trace(err1)
 }
 ```
 
@@ -158,3 +160,29 @@ We use [pingcap/errors/StackTracer](https://www.google.com/url?q=https://github.
 - When we want to generate an error based on a third-party error, `Delegate` is recommended
 - There are two ways to handle error in DM function call stack, one way is to return the error directly, the other way is to `Annotate` the error with more information
 - DO NOT use other error libraries any more, such as [pingcap/errors](https://www.google.com/url?q=https://github.com/pingcap/errors&sa=D&ust=1563783859475000) to wrap or add stack trace with error instance in our new error system, which may lead to stack trace missing before this call and unexpected error format.
+
+### API list
+
+```go
+// Equal returns true iff the error contains `reference` in any of its
+func (e *Error) Equal(reference error) bool
+
+// EqualAny is like Equal() but supports multiple reference errors.
+func (e terror) EqualAny(references ...error) bool
+
+// Generate generates a new *Error with the same class and code, and new arguments.
+func (e *Error) Generate(args ...interface{}) error
+
+// Generatef generates a new *Error with the same class and code, and a new formatted message.
+func (e *Error) Generatef(format string, args ...interface{}) error
+
+// Annotate adds a message and ensures there is a stack trace
+func Annotate(err error, message string) error
+
+// Annotatef adds a message and ensures there is a stack trace
+func Annotatef(err error, format string, args ...interface{}) error
+
+// Delegate creates a new *Error with the same fields of the give *Error,
+// except for new arguments, it also sets the err as raw cause of *Error
+func (e *Error) Delegate(err error, args ...interface{}) error
+```
