@@ -12,4 +12,4 @@ exec bin/dm-master \
     --master-addr=":{{ dm_master_port }}" \
     -L="{{ dm_master_log_level }}" \
     --config="conf/dm-master.toml" \
-    --log-file="{{ dm_master_log_dir }}/{{ dm_master_log_file }}" 2>> "{{ dm_master_log_dir }}/{{ dm_master_stderr_log_file }}"
+    --log-file="{{ dm_master_log_dir }}/{{ dm_master_log_file }}" >> "{{ dm_master_log_dir }}/{{ dm_master_stdout_log_file }}" 2>> "{{ dm_master_log_dir }}/{{ dm_master_stderr_log_file }}"
