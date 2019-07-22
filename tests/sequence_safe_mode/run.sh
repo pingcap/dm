@@ -53,14 +53,13 @@ function run() {
     run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2
 
-    curl -d "a=a" "http://127.0.0.1:$TRACER_PORT/events/truncate"
-
     i=0
     while [ $i -lt 10 ]; do
         # we can't determine which DM-worker is the sharding lock owner, so we try both of them
         # DM-worker1 is sharding lock owner and exits
         if [ "$(check_port_return $WORKER1_PORT)" == "0" ]; then
             echo "DM-worker1 is sharding lock owner and detects it offline"
+            truncate_trace_events $TRACER_PORT
             export GO_FAILPOINTS='github.com/pingcap/dm/syncer/SafeModeInitPhaseSeconds=return(0)'
             run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
             check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
@@ -70,6 +69,7 @@ function run() {
         # DM-worker2 is sharding lock owner and exits
         if [ "$(check_port_return $WORKER2_PORT)" == "0" ]; then
             echo "DM-worker2 is sharding lock owner and detects it offline"
+            truncate_trace_events $TRACER_PORT
             export GO_FAILPOINTS='github.com/pingcap/dm/syncer/SafeModeInitPhaseSeconds=return(0)'
             run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
             check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
