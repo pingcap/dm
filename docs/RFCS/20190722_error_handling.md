@@ -1,0 +1,160 @@
+# Proposal: Improve Error Mechanism
+
+- Author(s):    [yangfei](https://github.com/amyangfei)
+- Last updated: 2019-07-22
+
+## Abstract
+
+This proposal proposes to introduce error code mechanism in DM error systems and make a regulation for error handling.
+
+Table of contents:
+
+- [Background](#Background)
+- [Implementation](#Implementation)
+    - [Error scenario classification and error codes](#Error-scenario-classification-and-error-codes)
+    - [Goal of error handling](#Goal-of-error-handling)
+        - [Provide better error equivalences check](#Provide-better-error-equivalences-check)
+        - [Enhance the error chain](#Enhance-the-error-chain)
+        - [Embedded stack traces](#Embedded-stack-traces)
+        - [Error output specification](#Error-output-specification)
+    - [Error handling regulation](#Error-handling-regulation)
+
+## Background
+
+Currently all DM errors are constructed by `errors.Errorf` with error description or `errors.Annotatef` with description and annotated error. Description oriented error is easy for users to understand, however when users report error to developer or DBA, they have to give the full description of the error, which is often a long text with some embed programming objects. On the other side, if users want to find some specific error, they have to grep some keywords or even a long text from the log. From the developers’ perspective, we need a better way to distinguish specific error rather than matching error relying on the presence of a substring in the error message. Based on the above considerations, it is highly demanded to design a new error system, which will provide better error classification, more useful embedded information and better error equivalences check. This proposal will focus on the following points:
+
+- Organize DM error scenarios and classify these errors
+- Provide a unified error code mechanism
+- Standardize error handling, including how to create,  propagate and log an error
+
+## Implementation
+
+### Error scenario classification and error codes
+
+### Error object definition
+
+Error object is defined as following, with some import fields:
+
+- code: error code, unique for each kind error
+- class: error class, error belongs to which component, unit, etc. classified by code logic
+- scope: which scope does this error happen, including upstream, downstream, DM inner
+- level: emergency level for this error, including high, medium and low
+- args: used for message generator, such as we have an error ErrFailedFlushCheckpoint = terror.Syncer.New(5300, “failed to flush checkpoint %s”), we can use this error like ErrFailedFlushCheckpoint.GenWithArgs(checkpoint), so we don’t need additional error messages when we use this error
+- rawCause: used to record some root error from the third party function call
+- stack: thanks to [pingcap/errors/StackTracer](https://www.google.com/url?q=https://github.com/pingcap/errors/blob/master/stack.go%23L13-L17&sa=D&ust=1563783859452000), we can use this to record stack trace easily
+
+```go
+type ErrCode int
+type ErrClass int
+type ErrScope int
+type ErrLevel int
+
+type Error struct {
+    code        ErrCode
+    class        ErrClass
+    scope        ErrScope
+    level        ErrLevel
+    message        string
+    args        []interface{}
+    rawCause    error
+    stack        errors.StackTracer
+}
+```
+
+### Error classification and error codes
+
+1. error is classfied by class field, which relates to code logic
+2. error codes range allocation will be added later
+
+
+#### Goal of error handling
+
+#### Provide better error equivalences check
+
+1. enable fast, reliable and secure determination of whether a particular error cause is present（no relying on the presence of a substring in the error messages）
+2. provide the following interface for error equivalences check.
+3. support protobuf-encodable error object，so we can work with errors transmitted across the network via GRPC.（TODO）
+
+```go
+// Equal returns true iff the error contains `reference` in any of its
+func (e *Error) Equal(reference error) bool
+
+// EqualAny is like Equal() but supports multiple reference errors.
+func (e terror) EqualAny(references ...error) bool
+```
+
+#### Enhance the error chain
+
+1. when we generate a new error in DM level source, we always use `Generate` or `Generatef` to create a new Error instance from a defined error list.
+2. when we invoke a third party function and get an error, we should change this error to adapt our error system, we have two choices here:
+
+- keep the error message from third party function and create a related Error instance in new error system.
+- create a new Error instance, and save the third party error in its `rawCause` field.
+
+1. supposing one function A invokes another function B, and function A is also invoked by other code, both functions A and function B are DM level code and have an error field in their return values, we should make a rule about how to propagate error to upper code. In this scenario, we call function A as current function, we call function B as inner function, and we call the code invokes function A as upper code stack. The inner function returns `err != nil`, the current function shall propagate this error to the upper code stack, it will generate different error object based on the code logic.
+
+- If the current function thinks the error information returned from the inner function is enough to describe the error scenario, then it returns `errors.Trace(err)` or `err` directly to the upper code stack.
+- If the current function wants to add more error information, such as more detail descriptions, some variable value from current code stack, then it `Annotate` the error returned from the inner function, or even change other fields such as `ErrClass`, `ErrLevel` etc. Take the following code snippet as an example, the checkpoint `FlushPointsExcept` returns an error, and in syncer’s code stack it annotates the returned error with more information.
+
+
+```go
+func (s *Syncer) flushCheckPoints() error {
+    err := s.checkpoint.FlushPointsExcept(...)
+    if err != nil {
+        return Annotatef(err, "flush checkpoint %s", s.checkpoint)
+    }
+}
+```
+
+- Considering the following code logic, the `txn.Exec` encounters with error err1, and we try to rollback the transaction but unfortunately the `txn.Rollback` gets another error err2. In this scenario the err1 is more essential than err2. We are considering to add some secondary error in Error instance, but for the implementation of this version we don’t add this feature. We should carefully use error in this scenario.
+
+```go
+err1 := txn.Exec(sql, args...)
+if err != nil {
+    err2 := txn.Rollback()
+    if err2 != nil {
+        log.Errorf("rollback error: %v", err2)
+    }
+    // should return the exec err1, instead of the rollback err2.
+    return errors.Trace(err1)
+}
+```
+
+as for error combination requirements, we provide the following APIs.
+
+```go
+// Annotate adds a message and ensures there is a stack trace
+func Annotate(err error, message string) error
+
+// Annotatef adds a message and ensures there is a stack trace
+func Annotatef(err error, format string, args ...interface{}) error
+
+// Delegate creates a new *Error with the same fields of the give *Error,
+// except for new arguments, it also sets the err as raw cause of *Error
+func (e *Error) Delegate(err error, args ...interface{}) error
+```
+
+difference between `error Annotate` and `error Delegate`
+
+- the Annotate way asserts the error to an `*Error` instance and adds additional error message.
+- the Delegate way creates a new `*Error` instance from given `*Error`, and set the given error to its `rawCause` field. The error in the parameter is often returned from third party function and we store it to use it later.
+
+#### Embedded stack traces
+
+We use [pingcap/errors/StackTracer](https://www.google.com/url?q=https://github.com/pingcap/errors/blob/master/stack.go%23L13-L17&sa=D&ust=1563783859473000) to record stack trace, we should ensure to add stack trace information each time when we create a new Error instance. Besides we should keep the stack trace in function call back tracing. Let’s see how each way keeps the stack trace.
+
+- first time create an `*Error`: `Generate`, `Generatef` or `Delegate` will automaticity add the stack trace
+- get an `*Error` from DM function, `return err` directly: the stack trace will be kept in *Error instance.
+- get an `*Error` from DM function, use `Annotate` or `Annotatef` to change some fields of the `*Error`: we still use the original `*Error` instance, only change fields excluding `code` and `stack`, so the stack trace is kept.
+
+#### Error output specification
+
+- how to log error in the log file
+- how to display error message in dmctl response
+
+## Error handling regulation
+
+- When we generate an error in DM for the first time, we should always use the new error API provided, including `Generate`, `Generatef`, `Delegate`
+- When we want to generate an error based on a third-party error, `Delegate` is recommended
+- There are two ways to handle error in DM function call stack, one way is to return error directly, the other way is to `Annotate` the error with more information
+- DO NOT use other error libraries any more, such as [pingcap/errors](https://www.google.com/url?q=https://github.com/pingcap/errors&sa=D&ust=1563783859475000) to wrap or add stack trace with error instance in our new error system, which may lead to stack trace missing before this call and unexpected error format.
