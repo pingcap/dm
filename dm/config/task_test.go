@@ -15,9 +15,12 @@ package config
 
 import (
 	. "github.com/pingcap/check"
+	"io/ioutil"
+	"path"
 )
 
-var errorTaskConfig1 = `---
+func (t *testConfig) TestInvalidTaskConfig(c *C) {
+	var errorTaskConfig1 = `---
 name: test
 task-mode: all
 is-sharding: true
@@ -35,7 +38,7 @@ target-database:
 
 mysql-instances:
   - source-id: "mysql-replica-01"
-	server-id: 101 
+    server-id: 101 
     black-white-list:  "instance"
     route-rules: ["sharding-route-rules-table", "sharding-route-rules-schema"]
     column-mapping-rules: ["instance-1"]
@@ -43,7 +46,7 @@ mysql-instances:
     loader-config-name: "global"
     syncer-config-name: "global"
 `
-var errorTaskConfig2 = `---
+	var errorTaskConfig2 = `---
 name: test
 name: test1
 task-mode: all
@@ -69,16 +72,48 @@ mysql-instances:
     loader-config-name: "global"
     syncer-config-name: "global"
 `
-
-func (t *testConfig) TestInvalidTaskConfig(c *C) {
 	taskConfig := NewTaskConfig()
 	err := taskConfig.Decode(errorTaskConfig1)
 	// field server-id is not a member of TaskConfig
 	c.Check(err, NotNil)
-	c.Assert(err, ErrorMatches, "*line 19: found character that cannot start any token*")
+	c.Assert(err, ErrorMatches, "*line 19: field server-id not found in type config.MySQLInstance*")
 
 	err = taskConfig.Decode(errorTaskConfig2)
 	// field name duplicate
 	c.Check(err, NotNil)
 	c.Assert(err, ErrorMatches, "*line 3: field name already set in type config.TaskConfig*")
+
+	filepath := path.Join(c.MkDir(), "test_invalid_task.yaml")
+	configContent := []byte(`---
+aaa: xxx
+name: test
+task-mode: all
+is-sharding: true
+meta-schema: "dm_meta"
+remove-meta: false
+enable-heartbeat: true
+timezone: "Asia/Shanghai"
+ignore-checking-items: ["all"]
+`)
+	err = ioutil.WriteFile(filepath, configContent, 0644)
+	err = taskConfig.DecodeFile(filepath)
+	c.Assert(err, NotNil)
+	c.Assert(err, ErrorMatches, "*line 2: field aaa not found in type config.TaskConfig*")
+
+	filepath = path.Join(c.MkDir(), "test_invalid_task.yaml")
+	configContent = []byte(`---
+name: test
+task-mode: all
+task-mode: all
+is-sharding: true
+meta-schema: "dm_meta"
+remove-meta: false
+enable-heartbeat: true
+timezone: "Asia/Shanghai"
+ignore-checking-items: ["all"]
+`)
+	err = ioutil.WriteFile(filepath, configContent, 0644)
+	err = taskConfig.DecodeFile(filepath)
+	c.Assert(err, NotNil)
+	c.Assert(err, ErrorMatches, "*line 4: field task-mode already set in type config.TaskConfig*")
 }
