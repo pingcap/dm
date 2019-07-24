@@ -73,6 +73,7 @@ type SubTask struct {
 	units    []unit.Unit // units do job one by one
 	currUnit unit.Unit
 	prevUnit unit.Unit
+	//initializedunits []unit.Unit
 
 	stage  pb.Stage          // stage of current sub task
 	result *pb.ProcessResult // the process result, nil when is processing
@@ -116,7 +117,11 @@ func (st *SubTask) Init() error {
 			u.Close()
 		}
 
-		st.initialized.Set(true)
+		if len(needCloseUnits) == 0 {
+			st.initialized.Set(true)
+		} else {
+			st.initialized.Set(false)
+		}
 	}()
 
 	// every unit does base initialization in `Init`, and this must pass before start running the sub task
@@ -130,6 +135,7 @@ func (st *SubTask) Init() error {
 				needCloseUnits = append(needCloseUnits, st.units[j])
 			}
 			return errors.Annotatef(err, "fail to initial unit %s of subtask %s ", u.Type(), st.cfg.Name)
+			//st.l.Error("fail to initial unit of subtask", zap.Stringer("unit", u.Type()), zap.String("task", st.cfg.Name), zap.Error(err))
 		}
 	}
 
@@ -437,6 +443,7 @@ func (st *SubTask) Resume() error {
 
 	st.setResult(nil) // clear previous result
 	cu := st.CurrUnit()
+
 	st.l.Info("resume with unit", zap.Stringer("unit", cu.Type()))
 
 	st.ctx, st.cancel = context.WithCancel(context.Background())
