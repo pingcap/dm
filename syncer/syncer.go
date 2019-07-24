@@ -328,9 +328,7 @@ func (s *Syncer) Init() (err error) {
 		s.tctx.L().Info("all previous meta cleared")
 	}
 
-	s.tctx.L().Info("load checkpoint")
 	err = s.checkpoint.Load()
-	//err = errors.New("must failed")
 	if err != nil {
 		return errors.Trace(err)
 	}
