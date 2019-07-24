@@ -16,7 +16,7 @@ fix-sql-file = "fix.sql"
 
 # tables need to check.
 [[check-tables]]
-schema = "db_trouble"
+schema = "start_task"
 tables = ["~.*"]
 
 [[source-db]]

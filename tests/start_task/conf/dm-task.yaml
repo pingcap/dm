@@ -23,7 +23,7 @@ mysql-instances:
 
 black-white-list:
   instance:
-    do-dbs: ["db_trouble"]
+    do-dbs: ["start_task"]
 
 mydumpers:
   global:
@@ -31,7 +31,7 @@ mydumpers:
     threads: 4
     chunk-filesize: 0
     skip-tz-utc: true
-    extra-args: "-B db_trouble --statement-size=100"
+    extra-args: "-B start_task --statement-size=100"
 
 loaders:
   global:
