@@ -216,7 +216,16 @@ func (c *Config) verify() error {
 
 // configFromFile loads config from file.
 func (c *Config) configFromFile(path string) error {
-	_, err := toml.DecodeFile(path, c)
+	metaData, err := toml.DecodeFile(path, c)
+	undecoded := metaData.Undecoded()
+	if len(undecoded) > 0 && err == nil {
+		var undecodedItems []string
+		for _, item := range undecoded {
+			undecodedItems = append(undecodedItems, item.String())
+		}
+		return errors.Errorf("worker config contained unknown configuration options: %s", strings.Join(undecodedItems, ","))
+	}
+
 	if err != nil {
 		return errors.Trace(err)
 	}

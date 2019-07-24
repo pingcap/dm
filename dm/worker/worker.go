@@ -187,6 +187,11 @@ func (w *Worker) Close() {
 	// close meta
 	w.meta.Close()
 
+	// close kv db
+	if w.db != nil {
+		w.db.Close()
+	}
+
 	// close tracer
 	if w.tracer.Enable() {
 		w.tracer.Stop()

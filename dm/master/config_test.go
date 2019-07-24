@@ -181,4 +181,17 @@ dm-worker = "172.16.10.72:8262"`)
 	cfg.ConfigFile = filepath
 	err = cfg.Reload()
 	c.Assert(err, check.NotNil)
+
+	filepath2 := path.Join(c.MkDir(), "test_invalid_config.toml")
+	// field still remain undecoded in config will cause verify failed
+	configContent2 := []byte(`
+master-addr = ":8261"
+aaa = "xxx"
+
+[[deploy]]
+dm-worker = "172.16.10.72:8262"`)
+	err = ioutil.WriteFile(filepath2, configContent2, 0644)
+	err = cfg.configFromFile(filepath2)
+	c.Assert(err, check.NotNil)
+	c.Assert(err, check.ErrorMatches, "*master config contained unknown configuration options: aaa*")
 }
