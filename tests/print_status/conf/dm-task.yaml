@@ -15,7 +15,6 @@ target-database:
 
 mysql-instances:
   - source-id: "mysql-replica-01"
-    server-id: 101
     black-white-list:  "instance"
     mydumper-config-name: "global"
     loader-config-name: "global"
