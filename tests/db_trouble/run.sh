@@ -6,6 +6,7 @@ cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 source $cur/../_utils/test_prepare
 source $cur/checkpoint_test
 source $cur/start_task_test
+source $cur/relay_test
 
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
@@ -19,16 +20,18 @@ function prepare_data() {
 }
 
 function run() {
-    #run_checkpoint
+    #run_checkpoint_test
 
     #clean
 
-    run_start_task_test
+    #run_start_task_test
+
+    run_relay_test
 }
 
 function run2() {
     #failpoints=("github.com/pingcap/dm/pkg/utils/FetchAllDoTablesFailed=return(true)"  start task
-    #            "github.com/pingcap/dm/pkg/utils/FetchTargetDoTablesFailed=return(true)"
+    #            "github.com/pingcap/dm/pkg/utils/FetchTargetDoTablesFailed=return(true)" start task
     #            "github.com/pingcap/dm/pkg/utils/GetMasterStatusFailed=return(true)"
     #            "github.com/pingcap/dm/pkg/utils/GetGlobalVariableFailed=return('server_id')"  mariadb
     #            "github.com/pingcap/dm/pkg/utils/GetGlobalVariableFailed=return('gtid_domain_id')" mariadb
@@ -82,7 +85,7 @@ clean
 
 run $*
 
-clean
+#clean
 
 
 
