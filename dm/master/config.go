@@ -152,7 +152,15 @@ func (c *Config) Parse(arguments []string) error {
 
 // configFromFile loads config from file.
 func (c *Config) configFromFile(path string) error {
-	_, err := toml.DecodeFile(path, c)
+	metaData, err := toml.DecodeFile(path, c)
+	undecoded := metaData.Undecoded()
+	if len(undecoded) > 0 && err == nil {
+		var undecodedItems []string
+		for _, item := range undecoded {
+			undecodedItems = append(undecodedItems, item.String())
+		}
+		return errors.Errorf("master config contained unknown configuration options: %s", strings.Join(undecodedItems, ","))
+	}
 	return errors.Trace(err)
 }
 

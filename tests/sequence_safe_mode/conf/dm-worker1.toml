@@ -3,7 +3,6 @@
 server-id = 101
 source-id = "mysql-replica-01"
 flavor = "mysql"
-meta-file = "relay.meta"
 enable-gtid = false
 relay-binlog-name = ""
 relay-binlog-gtid = ""
