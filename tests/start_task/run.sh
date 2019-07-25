@@ -18,8 +18,9 @@ function prepare_data() {
 
 function run() {
     failpoints=(
-        "github.com/pingcap/dm/pkg/utils/FetchTargetDoTablesFailed=return(true)"
-        "github.com/pingcap/dm/pkg/utils/FetchAllDoTablesFailed=return(true)"
+        # 1152 is ErrAbortingConnection
+        "github.com/pingcap/dm/pkg/utils/FetchTargetDoTablesFailed=return(1152)"
+        "github.com/pingcap/dm/pkg/utils/FetchAllDoTablesFailed=return(1152)"
     )
 
     for(( i=0;i<${#failpoints[@]};i++)) do
@@ -38,7 +39,7 @@ function run() {
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "start-task $task_conf" \
             "\"result\": false" 1 \
-            "connection is invalid" 1
+            "ERROR" 1
 
         echo "reset go failpoints, and need restart dm-worker, then start task again"
         kill_dm_master

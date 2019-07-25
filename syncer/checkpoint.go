@@ -21,6 +21,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
+	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 
@@ -491,9 +492,9 @@ func (cp *RemoteCheckPoint) Load() error {
 	query := fmt.Sprintf("SELECT `cp_schema`, `cp_table`, `binlog_name`, `binlog_pos`, `is_global` FROM `%s`.`%s` WHERE `id`='%s'", cp.schema, cp.table, cp.id)
 	rows, err := cp.db.querySQL(cp.tctx, query, maxRetryCount)
 
-	failpoint.Inject("LoadCheckpointFailed", func() {
-		err = errors.New("connection is invalid")
-		log.L().Warn("load checkpoint failed", zap.String("failpoint", "LoadCheckpointFailed"), zap.Error(err))
+	failpoint.Inject("LoadCheckpointFailed", func(val failpoint.Value) {
+		err = tmysql.NewErr(uint16(val.(int)))
+		log.L().Warn("Load failed", zap.String("failpoint", "LoadCheckpointFailed"), zap.Error(err))
 	})
 
 	if err != nil {

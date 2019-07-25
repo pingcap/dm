@@ -2,7 +2,7 @@
 
 while :
 do
-        dm_worker_num=`ps aux > temp && grep "dm-worker" temp | wc -l && rm temp`
+        dm_worker_num=`ps aux > temp && grep "dm-worker.test" temp | wc -l && rm temp`
         echo "$dm_worker_num dm-worker alive"
         if [ $dm_worker_num -ne 0 ]; then
                 killall dm-worker.test || true

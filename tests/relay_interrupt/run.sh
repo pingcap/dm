@@ -18,8 +18,9 @@ function prepare_data() {
 
 function run() {
     failpoints=(
-                "github.com/pingcap/dm/pkg/utils/GetGlobalVariableFailed=return(\"server_uuid\")"
-                "github.com/pingcap/dm/pkg/utils/GetGlobalVariableFailed=return(\"sql_mode\")"
+        # 1152 is ErrAbortingConnection
+        "github.com/pingcap/dm/pkg/utils/GetGlobalVariableFailed=return(\"server_uuid,1152\")"
+        "github.com/pingcap/dm/pkg/utils/GetGlobalVariableFailed=return(\"sql_mode,1152\")"
     )
 
     for(( i=0;i<${#failpoints[@]};i++)) do
@@ -37,7 +38,7 @@ function run() {
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status" \
             "no sub task started" 1 \
-            "connection is invalid" 1
+            "ERROR" 1
 
         echo "start task and query status, task have error message"
         task_conf="$cur/conf/dm-task.yaml"
@@ -48,7 +49,7 @@ function run() {
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status" \
             "no valid relay sub directory exists" 1 \
-            "connection is invalid" 1
+            "ERROR" 1
 
         echo "reset go failpoints, and need restart dm-worker"
         echo "then resume task, task will recover success"
