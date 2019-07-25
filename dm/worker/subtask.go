@@ -116,11 +116,7 @@ func (st *SubTask) Init() error {
 			u.Close()
 		}
 
-		if len(needCloseUnits) == 0 {
-			st.initialized.Set(true)
-		} else {
-			st.initialized.Set(false)
-		}
+		st.initialized.Set(len(needCloseUnits) == 0)
 	}()
 
 	// every unit does base initialization in `Init`, and this must pass before start running the sub task
