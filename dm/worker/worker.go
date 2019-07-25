@@ -29,6 +29,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/relay/purger"
 )
@@ -574,7 +575,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		cfg := config.NewSubTaskConfig()
 
 		cfg.From = cloneCfg.From
-		cfg.From.Adjust()
+		cfg.From.Adjust(terror.ScopeUpstream)
 
 		stage := st.Stage()
 		if stage == pb.Stage_Paused {

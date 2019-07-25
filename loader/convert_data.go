@@ -24,6 +24,7 @@ import (
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
+	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
@@ -76,14 +77,14 @@ func parseInsertStmt(sql []byte, table *tableInfo, columnMapping *cm.Mapping) ([
 			}
 		}
 		if e == size {
-			return nil, errors.New("not found cooresponding ending of sql: ')'")
+			return nil, terror.ErrLoadUnitInvalidFileEnding.Generate()
 		}
 
 		rp := e - 2
 		// extract columns' values
 		row, err := parseRowValues(sql[s+1:rp], table, columnMapping)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, err
 		}
 		rows = append(rows, row)
 
@@ -144,7 +145,7 @@ func parseRowValues(str []byte, table *tableInfo, columnMapping *cm.Mapping) ([]
 			}
 
 			if j >= size {
-				return nil, errors.New("parse quote values error")
+				return nil, terror.ErrLoadUnitParseQuoteValues.Generate()
 			}
 
 			val := str[i+1 : j]
@@ -159,7 +160,7 @@ func parseRowValues(str []byte, table *tableInfo, columnMapping *cm.Mapping) ([]
 		var err error
 		values, _, err = columnMapping.HandleRowValue(table.sourceSchema, table.sourceTable, table.columnNameList, values)
 		if err != nil {
-			return nil, errors.Annotatef(err, "mapping row data %v for table %+v", values, table)
+			return nil, terror.ErrLoadUnitDoColumnMapping.Delegate(err, values, table)
 		}
 	}
 
@@ -183,18 +184,18 @@ func parseRowValues(str []byte, table *tableInfo, columnMapping *cm.Mapping) ([]
 	return row, nil
 }
 
-// ExportStatement returns schema structure in sqlFile
-func ExportStatement(sqlFile string) ([]byte, error) {
+// exportStatement returns schema structure in sqlFile
+func exportStatement(sqlFile string) ([]byte, error) {
 	fd, err := os.Open(sqlFile)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.ErrLoadUnitReadSchemaFile.Delegate(err, sqlFile)
 	}
 	defer fd.Close()
 
 	br := bufio.NewReader(fd)
 	f, err := os.Stat(sqlFile)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.ErrLoadUnitReadSchemaFile.Delegate(err, sqlFile)
 	}
 
 	data := make([]byte, 0, f.Size()+1)
@@ -230,14 +231,14 @@ func tableName(schema, table string) string {
 }
 
 func parseTable(ctx *tcontext.Context, r *router.Table, schema, table, file string) (*tableInfo, error) {
-	statement, err := ExportStatement(file)
+	statement, err := exportStatement(file)
 	if err != nil {
-		return nil, errors.Annotatef(err, "read table info from file %s", file)
+		return nil, err
 	}
 
 	stmts, err := parserpkg.Parse(parser.New(), string(statement), "", "")
 	if err != nil {
-		return nil, errors.Annotatef(err, "parser statement %s", statement)
+		return nil, terror.ErrLoadUnitParseStatement.Delegate(err, statement)
 	}
 
 	var (
@@ -251,7 +252,7 @@ func parseTable(ctx *tcontext.Context, r *router.Table, schema, table, file stri
 		}
 	}
 	if !hasCreateTableStmt {
-		return nil, errors.Errorf("statement %s for %s/%s is not create table statement", statement, schema, table)
+		return nil, terror.ErrLoadUnitNotCreateTable.Generate(statement, schema, table)
 	}
 
 	var (
@@ -295,7 +296,7 @@ func parseTable(ctx *tcontext.Context, r *router.Table, schema, table, file stri
 func reassemble(data []byte, table *tableInfo, columnMapping *cm.Mapping) (string, error) {
 	rows, err := parseInsertStmt(data, table, columnMapping)
 	if err != nil {
-		return "", errors.Trace(err)
+		return "", err
 	}
 
 	query := bytes.NewBuffer(make([]byte, 0, len(data)))

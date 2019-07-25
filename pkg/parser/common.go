@@ -17,8 +17,8 @@ import (
 	"bytes"
 
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 
-	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/format"
@@ -26,15 +26,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	_ "github.com/pingcap/tidb/types/parser_driver" // for import parser driver
 	"go.uber.org/zap"
-)
-
-var (
-	// ErrDropMultipleTables is error that don't allow to drop multiple tables in one statement
-	ErrDropMultipleTables = errors.New("not allow operation: drop multiple tables in one statement")
-	// ErrRenameMultipleTables is error that don't allow to rename multiple tables in one statement
-	ErrRenameMultipleTables = errors.New("not allow operation: rename multiple tables in one statement")
-	// ErrAlterMultipleTables is error that don't allow to alter multiple tables in one statement
-	ErrAlterMultipleTables = errors.New("not allow operation: alter multiple tables in one statement")
 )
 
 // Parse wraps parser.Parse(), makes `parser` suitable for dm
@@ -48,7 +39,7 @@ func Parse(p *parser.Parser, sql, charset, collation string) (stmt []ast.StmtNod
 		log.L().Warn("parse statement", zap.String("sql", sql), zap.Errors("warning messages", warnings))
 	}
 
-	return stmts, errors.Trace(err)
+	return stmts, terror.ErrParseSQL.Delegate(err)
 }
 
 // FetchDDLTableNames returns table names in ddl
@@ -69,7 +60,7 @@ func FetchDDLTableNames(schema string, stmt ast.StmtNode) ([]*filter.Table, erro
 		}
 	case *ast.DropTableStmt:
 		if len(v.Tables) != 1 {
-			return res, ErrDropMultipleTables
+			return res, terror.ErrDropMultipleTables.Generate()
 		}
 		res = append(res, genTableName(v.Tables[0].Schema.O, v.Tables[0].Name.O))
 	case *ast.TruncateTableStmt:
@@ -87,7 +78,7 @@ func FetchDDLTableNames(schema string, stmt ast.StmtNode) ([]*filter.Table, erro
 	case *ast.DropIndexStmt:
 		res = append(res, genTableName(v.Table.Schema.O, v.Table.Name.O))
 	default:
-		return res, errors.Errorf("unknown type ddl %s", stmt)
+		return res, terror.ErrUnknownTypeDDL.Generate(stmt)
 	}
 
 	for i := range res {
@@ -120,7 +111,7 @@ func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string
 
 	case *ast.DropTableStmt:
 		if len(v.Tables) > 1 {
-			return "", ErrDropMultipleTables
+			return "", terror.ErrDropMultipleTables.Generate()
 		}
 
 		v.Tables[0].Schema = model.NewCIStr(targetTableNames[0].Schema)
@@ -138,7 +129,7 @@ func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string
 		v.Table.Name = model.NewCIStr(targetTableNames[0].Name)
 	case *ast.RenameTableStmt:
 		if len(v.TableToTables) > 1 {
-			return "", ErrRenameMultipleTables
+			return "", terror.ErrRenameMultipleTables.Generate(0)
 		}
 
 		v.TableToTables[0].OldTable.Schema = model.NewCIStr(targetTableNames[0].Schema)
@@ -148,7 +139,7 @@ func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string
 
 	case *ast.AlterTableStmt:
 		if len(v.Specs) > 1 {
-			return "", ErrAlterMultipleTables
+			return "", terror.ErrAlterMultipleTables.Generate()
 		}
 
 		v.Table.Schema = model.NewCIStr(targetTableNames[0].Schema)
@@ -160,7 +151,7 @@ func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string
 		}
 
 	default:
-		return "", errors.Errorf("unkown type ddl %+v", stmt)
+		return "", terror.ErrUnknownTypeDDL.Generatef("unknown type ddl %+v", stmt)
 	}
 
 	var b []byte
@@ -170,7 +161,7 @@ func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string
 		In:    bf,
 	})
 	if err != nil {
-		return "", errors.Annotate(err, "restore ast node")
+		return "", terror.ErrRestoreASTNode.Delegate(err)
 	}
 
 	return bf.String(), nil
@@ -207,7 +198,7 @@ func SplitDDL(stmt ast.StmtNode, schema string) (sqls []string, err error) {
 			err = stmt.Restore(ctx)
 			if err != nil {
 				v.Tables = tables
-				return nil, errors.Annotate(err, "restore ast node")
+				return nil, terror.ErrRestoreASTNode.Delegate(err)
 			}
 
 			sqls = append(sqls, bf.String())
@@ -253,7 +244,7 @@ func SplitDDL(stmt ast.StmtNode, schema string) (sqls []string, err error) {
 			err = stmt.Restore(ctx)
 			if err != nil {
 				v.TableToTables = t2ts
-				return nil, errors.Annotate(err, "restore ast node")
+				return nil, terror.ErrRestoreASTNode.Delegate(err)
 			}
 
 			sqls = append(sqls, bf.String())
@@ -283,7 +274,7 @@ func SplitDDL(stmt ast.StmtNode, schema string) (sqls []string, err error) {
 			if err != nil {
 				v.Specs = specs
 				v.Table = table
-				return nil, errors.Annotate(err, "restore ast node")
+				return nil, terror.ErrRestoreASTNode.Delegate(err)
 			}
 			sqls = append(sqls, bf.String())
 
@@ -296,13 +287,13 @@ func SplitDDL(stmt ast.StmtNode, schema string) (sqls []string, err error) {
 
 		return sqls, nil
 	default:
-		return nil, errors.Errorf("unknown type ddl %+v", stmt)
+		return nil, terror.ErrUnknownTypeDDL.Generatef("unknown type ddl %+v", stmt)
 	}
 
 	bf.Reset()
 	err = stmt.Restore(ctx)
 	if err != nil {
-		return nil, errors.Annotate(err, "restore ast node")
+		return nil, terror.ErrRestoreASTNode.Delegate(err)
 	}
 	sqls = append(sqls, bf.String())
 

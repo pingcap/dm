@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -62,7 +63,7 @@ func TrimCtrlChars(s string) string {
 func FetchAllDoTables(db *sql.DB, bw *filter.Filter) (map[string][]string, error) {
 	schemas, err := getSchemas(db, maxRetryCount)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.WithScope(err, terror.ScopeUpstream)
 	}
 
 	ftSchemas := make([]*filter.Table, 0, len(schemas))
@@ -87,7 +88,7 @@ func FetchAllDoTables(db *sql.DB, bw *filter.Filter) (map[string][]string, error
 		// use `GetTables` from tidb-tools, no view included
 		tables, err := dbutil.GetTables(context.Background(), db, schema)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 		}
 		ftTables := make([]*filter.Table, 0, len(tables))
 		for _, table := range tables {
@@ -116,7 +117,7 @@ func FetchTargetDoTables(db *sql.DB, bw *filter.Filter, router *router.Table) (m
 	// fetch tables from source and filter them
 	sourceTables, err := FetchAllDoTables(db, bw)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	mapper := make(map[string][]*filter.Table)
@@ -142,7 +143,7 @@ func getSchemas(db *sql.DB, maxRetry int) ([]string, error) {
 	query := "SHOW DATABASES"
 	rows, err := querySQL(db, query, maxRetry)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -164,11 +165,11 @@ func getSchemas(db *sql.DB, maxRetry int) ([]string, error) {
 		var schema string
 		err = rows.Scan(&schema)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 		}
 		schemas = append(schemas, schema)
 	}
-	return schemas, errors.Trace(rows.Err())
+	return schemas, terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
 }
 
 func querySQL(db *sql.DB, query string, maxRetry int) (*sql.Rows, error) {
@@ -194,12 +195,8 @@ func querySQL(db *sql.DB, query string, maxRetry int) (*sql.Rows, error) {
 		return rows, nil
 	}
 
-	if err != nil {
-		log.L().Error("query failed", zap.String("query", query), zap.Error(err))
-		return nil, errors.Trace(err)
-	}
-
-	return nil, errors.Errorf("fail to query %s", query)
+	log.L().Error("query failed", zap.String("query", query), zap.Error(err))
+	return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 }
 
 // CompareShardingDDLs compares s and t ddls

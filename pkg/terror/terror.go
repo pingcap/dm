@@ -1,0 +1,291 @@
+// Copyright 2019 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package terror
+
+import (
+	"fmt"
+	"io"
+
+	"github.com/pingcap/errors"
+)
+
+// stack represents a stack of program counters.
+type stack []uintptr
+
+// ErrCode is used as the unique identifier of a specific error type.
+type ErrCode int
+
+// ErrClass represents a class of errors
+type ErrClass int
+
+// Error classes
+const (
+	ClassDatabase ErrClass = iota + 1
+	ClassFunctional
+	ClassCheckpoint
+	ClassTaskCheck
+	ClassRelayAPI
+	ClassRelayUnit
+	ClassDumpUnit
+	ClassLoadUnit
+	ClassSyncUnit
+)
+
+var errClass2Str = map[ErrClass]string{
+	ClassDatabase:   "database",
+	ClassFunctional: "Functional",
+	ClassCheckpoint: "checkpoint",
+	ClassTaskCheck:  "task-check",
+	ClassRelayAPI:   "relay-api",
+	ClassRelayUnit:  "relay-unit",
+	ClassDumpUnit:   "dump-unit",
+	ClassLoadUnit:   "load-unit",
+	ClassSyncUnit:   "sync-unit",
+}
+
+// String implements fmt.Stringer interface
+func (ec ErrClass) String() string {
+	if s, ok := errClass2Str[ec]; ok {
+		return s
+	}
+	return fmt.Sprintf("unknown error class: %d", ec)
+}
+
+// ErrScope represents the error occurs environment, such as upstream DB error,
+// downstream DB error, DM internal error etc.
+type ErrScope int
+
+// Error scopes
+const (
+	ScopeNotSet ErrScope = iota
+	ScopeUpstream
+	ScopeDownstream
+	ScopeInternal
+)
+
+var errScope2Str = map[ErrScope]string{
+	ScopeNotSet:     "notset",
+	ScopeUpstream:   "upstream",
+	ScopeDownstream: "downstream",
+	ScopeInternal:   "internal",
+}
+
+// String implements fmt.Stringer interface
+func (ec ErrScope) String() string {
+	if s, ok := errScope2Str[ec]; ok {
+		return s
+	}
+	return fmt.Sprintf("unknown error scope: %d", ec)
+}
+
+// ErrLevel represents the emergency level of a specific error type
+type ErrLevel int
+
+// Error levels
+const (
+	LevelLow ErrLevel = iota + 1
+	LevelMedium
+	LevelHigh
+)
+
+var errLevel2Str = map[ErrLevel]string{
+	LevelLow:    "low",
+	LevelMedium: "medium",
+	LevelHigh:   "high",
+}
+
+// String implements fmt.Stringer interface
+func (ec ErrLevel) String() string {
+	if s, ok := errLevel2Str[ec]; ok {
+		return s
+	}
+	return fmt.Sprintf("unknown error level: %d", ec)
+}
+
+type Error struct {
+	code     ErrCode
+	class    ErrClass
+	scope    ErrScope
+	level    ErrLevel
+	message  string
+	args     []interface{}
+	rawCause error
+	stack    errors.StackTracer
+}
+
+// NewError creates a new *Error instance
+func New(code ErrCode, class ErrClass, scope ErrScope, level ErrLevel, message string) *Error {
+	return &Error{
+		code:    code,
+		class:   class,
+		scope:   scope,
+		level:   level,
+		message: message,
+	}
+}
+
+// Code returns ErrCode
+func (e *Error) Code() ErrCode {
+	return e.code
+}
+
+// Class returns ErrClass
+func (e *Error) Class() ErrClass {
+	return e.class
+}
+
+// Scope returns ErrScope
+func (e *Error) Scope() ErrScope {
+	return e.scope
+}
+
+// Level returns ErrLevel
+func (e *Error) Level() ErrLevel {
+	return e.level
+}
+
+// Error implements error interface.
+func (e *Error) Error() string {
+	return fmt.Sprintf("[%d:%s:%s:%s] %s", e.code, e.class, e.scope, e.level, e.getMsg())
+}
+
+func (e *Error) Format(s fmt.State, verb rune) {
+	switch verb {
+	case 'v':
+		if s.Flag('+') {
+			io.WriteString(s, e.Error())
+			if e.stack != nil {
+				e.stack.StackTrace().Format(s, verb)
+			}
+			return
+		}
+		fallthrough
+	case 's':
+		io.WriteString(s, e.Error())
+	case 'q':
+		fmt.Fprintf(s, "%q", e.Error())
+	}
+}
+
+// Cause implements causer.Cause defined in pingcap/errors
+// and returns the raw cause of an *Error
+func (e *Error) Cause() error {
+	return e.rawCause
+}
+
+func (e *Error) getMsg() string {
+	if len(e.args) > 0 {
+		return fmt.Sprintf(e.message, e.args...)
+	}
+	return e.message
+}
+
+// Equal checks if err equals to e.
+func (e *Error) Equal(err error) bool {
+	if error(e) == err {
+		return true
+	}
+	inErr, ok := err.(*Error)
+	return ok && e.code == inErr.code
+}
+
+// Generatef generates a new *Error with the same class and code, and a new formatted message.
+func (e *Error) Generatef(format string, args ...interface{}) error {
+	err := &Error{
+		code:    e.code,
+		class:   e.class,
+		scope:   e.scope,
+		level:   e.level,
+		message: format,
+		args:    args,
+		stack:   errors.NewStack(0),
+	}
+	return err
+}
+
+// Generate generates a new *Error with the same class and code, and new arguments.
+func (e *Error) Generate(args ...interface{}) error {
+	err := &Error{
+		code:    e.code,
+		class:   e.class,
+		scope:   e.scope,
+		level:   e.level,
+		message: e.message,
+		args:    args,
+		stack:   errors.NewStack(0),
+	}
+	return err
+}
+
+// Delegate creates a new *Error with the same fields of the give *Error,
+// except for new arguments, it also sets the err as raw cause of *Error
+func (e *Error) Delegate(err error, args ...interface{}) error {
+	if err == nil {
+		return nil
+	}
+	err2 := &Error{
+		code:     e.code,
+		class:    e.class,
+		scope:    e.scope,
+		level:    e.level,
+		message:  fmt.Sprintf("%s: %s", e.message, err),
+		args:     args,
+		rawCause: err,
+		stack:    errors.NewStack(0),
+	}
+	return err2
+}
+
+// Annotate tries to convert err to *Error and adds a message to it.
+// This API is designed to reset Error message but keeps its original trace stack
+func Annotate(err error, message string) error {
+	if err == nil {
+		return nil
+	}
+	e, ok := err.(*Error)
+	if !ok {
+		return errors.Annotate(err, message)
+	}
+	e.message = fmt.Sprintf("%s: %s", message, e.getMsg())
+	e.args = nil
+	return e
+}
+
+// Annotatef tries to convert err to *Error and adds a message to it.
+func Annotatef(err error, format string, args ...interface{}) error {
+	if err == nil {
+		return nil
+	}
+	e, ok := err.(*Error)
+	if !ok {
+		return errors.Annotatef(err, format, args...)
+	}
+	e.message = fmt.Sprintf("%s: %s", format, e.getMsg())
+	e.args = args
+	return e
+}
+
+// WithScope tries to set given scope to *Error, if err is not an *Error instance,
+// wrap it with error scope instead
+func WithScope(err error, scope ErrScope) error {
+	if err == nil {
+		return nil
+	}
+	e, ok := err.(*Error)
+	if !ok {
+		return errors.Annotatef(err, "error scope: %s", scope)
+	}
+	e.scope = scope
+	return e
+}

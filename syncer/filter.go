@@ -17,11 +17,12 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/siddontang/go-mysql/replication"
+
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 /*
@@ -122,7 +123,7 @@ func (s *Syncer) skipQuery(tables []*filter.Table, stmt ast.StmtNode, sql string
 	if len(tables) == 0 {
 		action, err := s.binlogFilter.Filter("", "", et, sql)
 		if err != nil {
-			return false, errors.Annotatef(err, "skip query %s", sql)
+			return false, terror.Annotatef(terror.ErrSyncerUnitBinlogEventFilter.Generatef(err.Error()), "skip query %s", sql)
 		}
 
 		if action == bf.Ignore {
@@ -133,7 +134,7 @@ func (s *Syncer) skipQuery(tables []*filter.Table, stmt ast.StmtNode, sql string
 	for _, table := range tables {
 		action, err := s.binlogFilter.Filter(table.Schema, table.Name, et, sql)
 		if err != nil {
-			return false, errors.Annotatef(err, "skip query %s on `%s`.`%s`", sql, table.Schema, table.Name)
+			return false, terror.Annotatef(terror.ErrSyncerUnitBinlogEventFilter.Generatef(err.Error()), "skip query %s on `%s`.`%s`", sql, table.Schema, table.Name)
 		}
 
 		if action == bf.Ignore {
@@ -175,12 +176,12 @@ func (s *Syncer) skipDMLEvent(schema string, table string, eventType replication
 	case replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2:
 		et = bf.DeleteEvent
 	default:
-		return false, errors.Errorf("[syncer] invalid replication event type %v", eventType)
+		return false, terror.ErrSyncerUnitInvalidReplicaEvent.Generate(eventType)
 	}
 
 	action, err := s.binlogFilter.Filter(schema, table, et, "")
 	if err != nil {
-		return false, errors.Annotatef(err, "skip row event %s on `%s`.`%s`", eventType, schema, table)
+		return false, terror.Annotatef(terror.ErrSyncerUnitBinlogEventFilter.Generatef(err.Error()), "skip row event %s on `%s`.`%s`", eventType, schema, table)
 	}
 
 	return action == bf.Ignore, nil

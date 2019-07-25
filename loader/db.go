@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
@@ -32,12 +33,14 @@ import (
 type Conn struct {
 	cfg *config.SubTaskConfig
 
+	scope terror.ErrScope
+
 	db *sql.DB
 }
 
 func (conn *Conn) querySQL(ctx *tcontext.Context, query string, maxRetry int, args ...interface{}) (*sql.Rows, error) {
 	if conn == nil || conn.db == nil {
-		return nil, errors.NotValidf("database connection")
+		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
 	var (
@@ -68,16 +71,18 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string, maxRetry int, ar
 				ctx.L().Warn("query statement", zap.Int("retry", i), zap.String("sql", query), zap.Reflect("arguments", args), log.ShortError(err))
 				continue
 			}
-			return nil, errors.Trace(err)
+			ctx.L().Error("query statement", zap.String("sql", query), zap.Reflect("arguments", args), log.ShortError(err))
+			return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed)
 		}
 		return rows, nil
 	}
-	return nil, errors.Annotatef(err, "query statement, sql [%s] args [%v] failed", query, args)
+	ctx.L().Error("query statement", zap.String("sql", query), zap.Reflect("arguments", args), log.ShortError(err))
+	return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed)
 }
 
-func (conn *Conn) executeSQL2(ctx *tcontext.Context, stmt string, maxRetry int, args ...interface{}) error {
+func (conn *Conn) executeCheckpointSQL(ctx *tcontext.Context, stmt string, maxRetry int, args ...interface{}) error {
 	if conn == nil || conn.db == nil {
-		return errors.NotValidf("database connection")
+		return terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
 	var err error
@@ -92,11 +97,13 @@ func (conn *Conn) executeSQL2(ctx *tcontext.Context, stmt string, maxRetry int, 
 				ctx.L().Warn("execute statement", zap.Int("retry", i), zap.String("sql", stmt), zap.Reflect("arguments", args), log.ShortError(err))
 				continue
 			}
-			return errors.Trace(err)
+			ctx.L().Error("execute statement", zap.String("sql", stmt), zap.Reflect("arguments", args), log.ShortError(err))
+			return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed)
 		}
 		return nil
 	}
-	return errors.Annotatef(err, "exec sql[%s] args[%v] failed", stmt, args)
+	ctx.L().Error("execute statement", zap.String("sql", stmt), zap.Reflect("arguments", args), log.ShortError(err))
+	return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed)
 }
 
 func (conn *Conn) executeSQL(ctx *tcontext.Context, sqls []string, enableRetry bool) error {
@@ -113,7 +120,7 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []string, en
 	}
 
 	if conn == nil || conn.db == nil {
-		return errors.NotValidf("database connection")
+		return terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
 	var err error
@@ -136,7 +143,7 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []string, en
 			if isRetryableFn(err) {
 				continue
 			}
-			return errors.Trace(err)
+			return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed)
 		}
 
 		// update metrics
@@ -149,7 +156,7 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []string, en
 		return nil
 	}
 
-	return errors.Trace(err)
+	return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed)
 }
 
 func executeSQLImp(ctx *tcontext.Context, db *sql.DB, sqls []string) error {
@@ -162,7 +169,7 @@ func executeSQLImp(ctx *tcontext.Context, db *sql.DB, sqls []string) error {
 	txn, err = db.Begin()
 	if err != nil {
 		ctx.L().Error("fail to begin a transaction", zap.String("sqls", fmt.Sprintf("%-.200v", sqls)), zap.Error(err))
-		return err
+		return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 
 	for i := range sqls {
@@ -174,7 +181,7 @@ func executeSQLImp(ctx *tcontext.Context, db *sql.DB, sqls []string) error {
 			if rerr != nil {
 				ctx.L().Error("fail rollback", log.ShortError(rerr))
 			}
-			return err
+			return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed)
 		}
 		// check update checkpoint successful or not
 		if i == 2 {
@@ -191,7 +198,7 @@ func executeSQLImp(ctx *tcontext.Context, db *sql.DB, sqls []string) error {
 
 	err = txn.Commit()
 	if err != nil {
-		return errors.Trace(err)
+		return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 
 	return nil
@@ -202,10 +209,10 @@ func createConn(cfg *config.SubTaskConfig) (*Conn, error) {
 		cfg.To.User, cfg.To.Password, cfg.To.Host, cfg.To.Port, *cfg.To.MaxAllowedPacket)
 	db, err := sql.Open("mysql", dbDSN)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 	}
 
-	return &Conn{db: db, cfg: cfg}, nil
+	return &Conn{db: db, cfg: cfg, scope: terror.ScopeDownstream}, nil
 }
 
 func closeConn(conn *Conn) error {
@@ -213,7 +220,7 @@ func closeConn(conn *Conn) error {
 		return nil
 	}
 
-	return errors.Trace(conn.db.Close())
+	return terror.WithScope(terror.DBErrorAdapt(conn.db.Close(), terror.ErrDBDriverError), conn.scope)
 }
 
 func isErrDBExists(err error) bool {

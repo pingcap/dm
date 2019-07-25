@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -41,10 +42,10 @@ func (s *Syncer) setInitActiveRelayLog() error {
 	indexPath := filepath.Join(s.cfg.RelayDir, utils.UUIDIndexFilename)
 	uuids, err := utils.ParseUUIDIndex(indexPath)
 	if err != nil {
-		return errors.Annotatef(err, "UUID index file path %s", indexPath)
+		return terror.Annotatef(err, "UUID index file path %s", indexPath)
 	}
 	if len(uuids) == 0 {
-		return errors.New("no valid relay sub directory exists")
+		return terror.ErrRelayNoValidRelaySubDir.Generate()
 	}
 
 	checkPos := s.checkpoint.GlobalPoint()

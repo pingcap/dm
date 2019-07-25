@@ -26,11 +26,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
-)
-
-var (
-	// ErrNotRowFormat defines an error which means binlog format is not ROW format.
-	ErrNotRowFormat = errors.New("binlog format is not ROW format")
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 type column struct {
@@ -68,12 +64,14 @@ type binlogSize struct {
 type Conn struct {
 	cfg *config.SubTaskConfig
 
+	scope terror.ErrScope
+
 	db *sql.DB
 }
 
 func (conn *Conn) querySQL(tctx *tcontext.Context, query string, maxRetry int) (*sql.Rows, error) {
 	if conn == nil || conn.db == nil {
-		return nil, errors.NotValidf("database connection")
+		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
 	var (
@@ -91,7 +89,7 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string, maxRetry int) (
 		rows, err = conn.db.QueryContext(tctx.Context(), query)
 		if err != nil {
 			if !isRetryableError(err) {
-				return rows, errors.Trace(err)
+				return rows, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed)
 			}
 			tctx.L().Warn("query statement failed and retry", zap.String("sql", query), log.ShortError(err))
 			continue
@@ -100,12 +98,8 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string, maxRetry int) (
 		return rows, nil
 	}
 
-	if err != nil {
-		tctx.L().Error("query statement failed", zap.String("sql", query), log.ShortError(err))
-		return nil, errors.Trace(err)
-	}
-
-	return nil, errors.Errorf("query sql[%s] failed", query)
+	tctx.L().Error("query statement failed", zap.String("sql", query), log.ShortError(err))
+	return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed)
 }
 
 // Note: keep it for later use?
@@ -115,7 +109,7 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, sqls []string, args [][]int
 	}
 
 	if conn == nil || conn.db == nil {
-		return errors.NotValidf("database connection")
+		return terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
 	var err error
@@ -131,19 +125,20 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, sqls []string, args [][]int
 				continue
 			}
 			tctx.L().Error("execute statements", zap.Strings("sqls", sqls), zap.Reflect("arguments", args), log.ShortError(err))
-			return errors.Trace(err)
+			return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed)
 		}
 
 		return nil
 	}
 
-	return errors.Errorf("exec sqls[%v] failed, err:%s", sqls, err.Error())
+	tctx.L().Error("exec statements failed", zap.Strings("sqls", sqls), zap.Reflect("arguments", args), log.ShortError(err))
+	return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed)
 }
 
 // Note: keep it for later use?
 func (conn *Conn) executeSQLImp(tctx *tcontext.Context, sqls []string, args [][]interface{}) error {
 	if conn == nil || conn.db == nil {
-		return errors.NotValidf("database connection")
+		return terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
 	startTime := time.Now()
@@ -154,7 +149,7 @@ func (conn *Conn) executeSQLImp(tctx *tcontext.Context, sqls []string, args [][]
 	txn, err := conn.db.Begin()
 	if err != nil {
 		tctx.L().Error("begin transaction", zap.Strings("sqls", sqls), zap.Reflect("arguments", args), zap.Error(err))
-		return errors.Trace(err)
+		return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed)
 	}
 
 	for i := range sqls {
@@ -168,13 +163,13 @@ func (conn *Conn) executeSQLImp(tctx *tcontext.Context, sqls []string, args [][]
 				tctx.L().Error("rollback failed", zap.String("sql", sqls[i]), zap.Reflect("argument", args[i]), log.ShortError(rerr))
 			}
 			// we should return the exec err, instead of the rollback rerr.
-			return errors.Trace(err)
+			return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed)
 		}
 	}
 	err = txn.Commit()
 	if err != nil {
 		tctx.L().Error("transaction commit failed", zap.Strings("sqls", sqls), zap.Reflect("arguments", args), zap.Error(err))
-		return errors.Trace(err)
+		return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed)
 	}
 	return nil
 }
@@ -194,19 +189,17 @@ func (conn *Conn) executeSQLJob(tctx *tcontext.Context, jobs []*job, maxRetry in
 		}
 
 		if errCtx = conn.executeSQLJobImp(tctx, jobs); errCtx != nil {
-			err := errCtx.err
-			if isRetryableError(err) {
+			if isRetryableError(errors.Cause(errCtx.err)) {
 				continue
 			}
-			tctx.L().Error("execute jobs", log.ShortError(err))
-			errCtx.err = errors.Trace(errCtx.err)
+			tctx.L().Error("execute jobs", log.ShortError(errCtx.err))
 			return errCtx
 		}
 
 		return nil
 	}
 
-	errCtx.err = errors.Errorf("exec jobs failed, err:%s", errCtx.err.Error())
+	errCtx.err = terror.ErrDBExecuteFailed.Generate(errCtx.err.Error())
 	return errCtx
 }
 
@@ -220,7 +213,7 @@ func (conn *Conn) executeSQLJobImp(tctx *tcontext.Context, jobs []*job) *ExecErr
 	txn, err := conn.db.Begin()
 	if err != nil {
 		tctx.L().Error("begin transaction in executing job", zap.Error(err))
-		return &ExecErrorContext{err: errors.Trace(err), jobs: fmt.Sprintf("%v", jobs)}
+		return &ExecErrorContext{err: terror.DBErrorAdapt(err, terror.ErrDBDriverError), jobs: fmt.Sprintf("%v", jobs)}
 	}
 
 	for i := range jobs {
@@ -234,13 +227,13 @@ func (conn *Conn) executeSQLJobImp(tctx *tcontext.Context, jobs []*job) *ExecErr
 				tctx.L().Error("rollback job", log.WrapStringerField("job", jobs[i]), log.ShortError(rerr))
 			}
 			// error in ExecErrorContext should be the exec err, instead of the rollback rerr.
-			return &ExecErrorContext{err: errors.Trace(err), pos: jobs[i].currentPos, jobs: fmt.Sprintf("%v", jobs)}
+			return &ExecErrorContext{err: terror.DBErrorAdapt(err, terror.ErrDBDriverError), pos: jobs[i].currentPos, jobs: fmt.Sprintf("%v", jobs)}
 		}
 	}
 	err = txn.Commit()
 	if err != nil {
 		tctx.L().Error("commit in executing job", zap.Error(err))
-		return &ExecErrorContext{err: errors.Trace(err), pos: jobs[0].currentPos, jobs: fmt.Sprintf("%v", jobs)}
+		return &ExecErrorContext{err: terror.DBErrorAdapt(err, terror.ErrDBDriverError), pos: jobs[0].currentPos, jobs: fmt.Sprintf("%v", jobs)}
 	}
 	return nil
 }
@@ -250,10 +243,10 @@ func createDB(cfg *config.SubTaskConfig, dbCfg config.DBConfig, timeout string) 
 		dbCfg.User, dbCfg.Password, dbCfg.Host, dbCfg.Port, timeout, *dbCfg.MaxAllowedPacket)
 	db, err := sql.Open("mysql", dbDSN)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 
-	return &Conn{db: db, cfg: cfg}, nil
+	return &Conn{db: db, cfg: cfg, scope: dbCfg.ErrScope}, nil
 }
 
 func (conn *Conn) close() error {
@@ -261,7 +254,7 @@ func (conn *Conn) close() error {
 		return nil
 	}
 
-	return errors.Trace(conn.db.Close())
+	return terror.DBErrorAdapt(conn.db.Close(), terror.ErrDBDriverError)
 }
 
 func createDBs(cfg *config.SubTaskConfig, dbCfg config.DBConfig, count int, timeout string) ([]*Conn, error) {
@@ -269,7 +262,7 @@ func createDBs(cfg *config.SubTaskConfig, dbCfg config.DBConfig, count int, time
 	for i := 0; i < count; i++ {
 		db, err := createDB(cfg, dbCfg, timeout)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, err
 		}
 
 		dbs = append(dbs, db)
@@ -289,19 +282,19 @@ func closeDBs(tctx *tcontext.Context, dbs ...*Conn) {
 
 func getTableIndex(tctx *tcontext.Context, db *Conn, table *table, maxRetry int) error {
 	if table.schema == "" || table.name == "" {
-		return errors.New("schema/table is empty")
+		return terror.ErrDBUnExpect.Generate("schema/table is empty")
 	}
 
 	query := fmt.Sprintf("SHOW INDEX FROM `%s`.`%s`", table.schema, table.name)
 	rows, err := db.querySQL(tctx, query, maxRetry)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 	defer rows.Close()
 
 	rowColumns, err := rows.Columns()
 	if err != nil {
-		return errors.Trace(err)
+		return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 
 	// Show an example.
@@ -327,7 +320,7 @@ func getTableIndex(tctx *tcontext.Context, db *Conn, table *table, maxRetry int)
 
 		err = rows.Scan(values...)
 		if err != nil {
-			return errors.Trace(err)
+			return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 		}
 
 		nonUnique := string(data[1])
@@ -337,7 +330,7 @@ func getTableIndex(tctx *tcontext.Context, db *Conn, table *table, maxRetry int)
 		}
 	}
 	if rows.Err() != nil {
-		return errors.Trace(rows.Err())
+		return terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
 	}
 
 	table.indexColumns = findColumns(table.columns, columns)
@@ -346,19 +339,19 @@ func getTableIndex(tctx *tcontext.Context, db *Conn, table *table, maxRetry int)
 
 func getTableColumns(tctx *tcontext.Context, db *Conn, table *table, maxRetry int) error {
 	if table.schema == "" || table.name == "" {
-		return errors.New("schema/table is empty")
+		return terror.ErrDBUnExpect.Generate("schema/table is empty")
 	}
 
 	query := fmt.Sprintf("SHOW COLUMNS FROM `%s`.`%s`", table.schema, table.name)
 	rows, err := db.querySQL(tctx, query, maxRetry)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 	defer rows.Close()
 
 	rowColumns, err := rows.Columns()
 	if err != nil {
-		return errors.Trace(err)
+		return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 
 	// Show an example.
@@ -386,7 +379,7 @@ func getTableColumns(tctx *tcontext.Context, db *Conn, table *table, maxRetry in
 
 		err = rows.Scan(values...)
 		if err != nil {
-			return errors.Trace(err)
+			return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 		}
 
 		column := &column{}
@@ -409,7 +402,7 @@ func getTableColumns(tctx *tcontext.Context, db *Conn, table *table, maxRetry in
 	}
 
 	if rows.Err() != nil {
-		return errors.Trace(rows.Err())
+		return terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
 	}
 
 	return nil
@@ -418,7 +411,7 @@ func getTableColumns(tctx *tcontext.Context, db *Conn, table *table, maxRetry in
 func countBinaryLogsSize(fromFile mysql.Position, db *sql.DB) (int64, error) {
 	files, err := getBinaryLogs(db)
 	if err != nil {
-		return 0, errors.Trace(err)
+		return 0, err
 	}
 
 	var total int64
@@ -441,13 +434,13 @@ func getBinaryLogs(db *sql.DB) ([]binlogSize, error) {
 	query := "SHOW BINARY LOGS"
 	rows, err := db.Query(query)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 	defer rows.Close()
 
 	rowColumns, err := rows.Columns()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 	files := make([]binlogSize, 0, 10)
 	for rows.Next() {
@@ -460,12 +453,12 @@ func getBinaryLogs(db *sql.DB) ([]binlogSize, error) {
 			err = rows.Scan(&file, &pos, &nullPtr)
 		}
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 		}
 		files = append(files, binlogSize{name: file, size: pos})
 	}
 	if rows.Err() != nil {
-		return nil, errors.Trace(rows.Err())
+		return nil, terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
 	}
 	return files, nil
 }

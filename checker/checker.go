@@ -28,10 +28,10 @@ import (
 	"github.com/pingcap/dm/dm/unit"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 
 	_ "github.com/go-sql-driver/mysql" // for mysql
-	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/check"
 	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -110,12 +110,12 @@ func (c *Checker) Init() (err error) {
 		bw := filter.New(instance.cfg.CaseSensitive, instance.cfg.BWList)
 		r, err := router.NewTableRouter(instance.cfg.CaseSensitive, instance.cfg.RouteRules)
 		if err != nil {
-			return errors.Trace(err)
+			return terror.ErrTaskCheckNewTableRouter.Delegate(err)
 		}
 
 		columnMapping[instance.cfg.SourceID], err = column.NewMapping(instance.cfg.CaseSensitive, instance.cfg.ColumnMappingRules)
 		if err != nil {
-			return errors.Trace(err)
+			return terror.ErrTaskCheckNewColumnMapping.Delegate(err)
 		}
 
 		instance.sourceDBinfo = &dbutil.DBConfig{
@@ -126,7 +126,7 @@ func (c *Checker) Init() (err error) {
 		}
 		instance.sourceDB, err = dbutil.OpenDB(*instance.sourceDBinfo)
 		if err != nil {
-			return errors.Annotatef(err, "failed to open source DSN %s:***@%s:%d", instance.cfg.From.User, instance.cfg.From.Host, instance.cfg.From.Port)
+			return terror.WithScope(terror.ErrTaskCheckFailedOpenDB.Generate(instance.cfg.From.User, instance.cfg.From.Host, instance.cfg.From.Port), terror.ScopeUpstream)
 		}
 
 		instance.targetDBInfo = &dbutil.DBConfig{
@@ -137,7 +137,7 @@ func (c *Checker) Init() (err error) {
 		}
 		instance.targetDB, err = dbutil.OpenDB(*instance.targetDBInfo)
 		if err != nil {
-			return errors.Annotatef(err, "failed to open target DSN %s:***@%s:%d", instance.cfg.To.User, instance.cfg.To.Host, instance.cfg.To.Port)
+			return terror.WithScope(terror.ErrTaskCheckFailedOpenDB.Generate(instance.cfg.To.User, instance.cfg.To.Host, instance.cfg.To.Port))
 		}
 
 		if _, ok := c.checkingItems[config.VersionChecking]; ok {
@@ -165,12 +165,12 @@ func (c *Checker) Init() (err error) {
 
 		mapping, err := utils.FetchTargetDoTables(instance.sourceDB, bw, r)
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 
 		err = sameTableNameDetection(mapping)
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 
 		checkTables := make(map[string][]string)
@@ -349,6 +349,7 @@ func (c *Checker) Status() interface{} {
 func (c *Checker) Error() interface{} {
 	return &pb.CheckError{}
 }
+
 func sameTableNameDetection(tables map[string][]*filter.Table) error {
 	tableNameSets := make(map[string]string)
 	var messages []string
@@ -363,7 +364,7 @@ func sameTableNameDetection(tables map[string][]*filter.Table) error {
 	}
 
 	if len(messages) > 0 {
-		return errors.Errorf("same table name in case-sensitive %v", messages)
+		return terror.ErrTaskCheckSameTableName.Generate(messages)
 	}
 
 	return nil

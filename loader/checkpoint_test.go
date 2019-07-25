@@ -21,6 +21,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var _ = Suite(&testCheckPointSuite{})
@@ -53,7 +54,7 @@ func (t *testCheckPointSuite) SetUpSuite(c *C) {
 		},
 		MetaSchema: "test",
 	}
-	t.cfg.To.Adjust()
+	t.cfg.To.Adjust(terror.ScopeDownstream)
 }
 
 func (t *testCheckPointSuite) TearDownSuite(c *C) {

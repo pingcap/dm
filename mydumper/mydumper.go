@@ -29,8 +29,8 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 )
@@ -110,10 +110,10 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 	cmd.Stdout = &stdout
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.ErrDumpUnitRuntime.Delegate(err)
 	}
 	if err = cmd.Start(); err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.ErrDumpUnitRuntime.Delegate(err)
 	}
 
 	// Read the stderr from mydumper, which contained the logs.
@@ -148,12 +148,12 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 	}
 	if err = scanner.Err(); err != nil {
 		stdout.Write(stderr.Bytes())
-		return stdout.Bytes(), errors.Trace(err)
+		return stdout.Bytes(), terror.ErrDumpUnitRuntime.Delegate(err)
 	}
 
 	err = cmd.Wait()
 	stdout.Write(stderr.Bytes())
-	return stdout.Bytes(), errors.Trace(err)
+	return stdout.Bytes(), terror.ErrDumpUnitRuntime.Delegate(err)
 }
 
 // Close implements Unit.Close

@@ -14,7 +14,6 @@
 package syncer
 
 import (
-	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/filter"
@@ -22,12 +21,11 @@ import (
 	"go.uber.org/zap"
 
 	parserpkg "github.com/pingcap/dm/pkg/parser"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
 var (
-	// ErrDMLStatementFound defines an error which means we found unexpected dml statement found in query event.
-	ErrDMLStatementFound = errors.New("only support ROW format binlog, unexpected DML statement found in query event")
 	// IncompatibleDDLFormat is for incompatible ddl
 	IncompatibleDDLFormat = `encountered incompatible DDL in TiDB:
 	please confirm your DDL statement is correct and needed.
@@ -55,7 +53,7 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 			stmt:   nil,
 			ignore: false,
 			isDDL:  false,
-		}, errors.Trace(err)
+		}, err
 	} else if ignore {
 		return parseDDLResult{
 			stmt:   nil,
@@ -74,7 +72,7 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 			stmt:   nil,
 			ignore: false,
 			isDDL:  false,
-		}, errors.Annotatef(err, IncompatibleDDLFormat, sql)
+		}, terror.Annotatef(err, IncompatibleDDLFormat, sql)
 	}
 
 	if len(stmts) == 0 {
@@ -114,7 +112,7 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 			stmt:   nil,
 			ignore: false,
 			isDDL:  false,
-		}, errors.Annotatef(ErrDMLStatementFound, "query %s", sql)
+		}, terror.Annotatef(terror.ErrSyncUnitDMLStatementFound.Generate(), "query %s", sql)
 	default:
 		// BEGIN statement is included here.
 		// let sqls be empty
@@ -133,7 +131,7 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 func (s *Syncer) resolveDDLSQL(p *parser.Parser, stmt ast.StmtNode, schema string) (sqls []string, tables map[string]*filter.Table, err error) {
 	sqls, err = parserpkg.SplitDDL(stmt, schema)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, err
 	}
 	if s.onlineDDL == nil {
 		return sqls, nil, nil
@@ -145,7 +143,7 @@ func (s *Syncer) resolveDDLSQL(p *parser.Parser, stmt ast.StmtNode, schema strin
 		// filter and store ghost table ddl, transform online ddl
 		ss, tableName, err := s.handleOnlineDDL(p, schema, sql)
 		if err != nil {
-			return statements, tables, errors.Trace(err)
+			return statements, tables, err
 		}
 
 		if tableName != nil {
@@ -160,17 +158,17 @@ func (s *Syncer) resolveDDLSQL(p *parser.Parser, stmt ast.StmtNode, schema strin
 func (s *Syncer) handleDDL(p *parser.Parser, schema, sql string) (string, [][]*filter.Table, ast.StmtNode, error) {
 	stmt, err := p.ParseOneStmt(sql, "", "")
 	if err != nil {
-		return "", nil, nil, errors.Annotatef(err, "ddl %s", sql)
+		return "", nil, nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.Generatef(err.Error()), "ddl %s", sql)
 	}
 
 	tableNames, err := parserpkg.FetchDDLTableNames(schema, stmt)
 	if err != nil {
-		return "", nil, nil, errors.Trace(err)
+		return "", nil, nil, err
 	}
 
 	ignore, err := s.skipQuery(tableNames, stmt, sql)
 	if err != nil {
-		return "", nil, nil, errors.Trace(err)
+		return "", nil, nil, err
 	}
 	if ignore {
 		return "", nil, stmt, nil
@@ -187,7 +185,7 @@ func (s *Syncer) handleDDL(p *parser.Parser, schema, sql string) (string, [][]*f
 	}
 
 	ddl, err := parserpkg.RenameDDLTable(stmt, targetTableNames)
-	return ddl, [][]*filter.Table{tableNames, targetTableNames}, stmt, errors.Trace(err)
+	return ddl, [][]*filter.Table{tableNames, targetTableNames}, stmt, err
 }
 
 // handle online ddls
@@ -199,17 +197,17 @@ func (s *Syncer) handleOnlineDDL(p *parser.Parser, schema, sql string) ([]string
 
 	stmt, err := p.ParseOneStmt(sql, "", "")
 	if err != nil {
-		return nil, nil, errors.Annotatef(err, "ddl %s", sql)
+		return nil, nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.Generatef(err.Error()), "ddl %s", sql)
 	}
 
 	tableNames, err := parserpkg.FetchDDLTableNames(schema, stmt)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, err
 	}
 
 	sqls, realSchema, realTable, err := s.onlineDDL.Apply(tableNames, sql, stmt)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, err
 	}
 
 	// skip or origin sqls
@@ -224,12 +222,12 @@ func (s *Syncer) handleOnlineDDL(p *parser.Parser, schema, sql string) ([]string
 	for i := range sqls {
 		stmt, err := p.ParseOneStmt(sqls[i], "", "")
 		if err != nil {
-			return nil, nil, errors.Trace(err)
+			return nil, nil, terror.ErrSyncerUnitParseStmt.Generatef(err.Error())
 		}
 
 		sqls[i], err = parserpkg.RenameDDLTable(stmt, targetTables)
 		if err != nil {
-			return nil, nil, errors.Trace(err)
+			return nil, nil, err
 		}
 	}
 	return sqls, tableNames[0], nil
@@ -262,7 +260,7 @@ func (s *Syncer) dropSchemaInSharding(sourceSchema string) error {
 		}
 		err := s.sgk.LeaveGroup(targetSchema, targetTable, sourceIDs)
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 	}
 	// delete from checkpoint
@@ -291,7 +289,7 @@ func (s *Syncer) clearOnlineDDL(targetSchema, targetTable string) error {
 		s.tctx.L().Info("finish online ddl", zap.String("schema", table[0]), zap.String("table", table[1]))
 		err := s.onlineDDL.Finish(table[0], table[1])
 		if err != nil {
-			return errors.Annotatef(err, "finish online ddl on %s.%s", table[0], table[1])
+			return terror.Annotatef(err, "finish online ddl on %s.%s", table[0], table[1])
 		}
 	}
 

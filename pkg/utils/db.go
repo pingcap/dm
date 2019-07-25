@@ -19,6 +19,7 @@ import (
 	"strconv"
 
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
@@ -41,13 +42,13 @@ func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, erro
 
 	rows, err := db.Query(`SHOW MASTER STATUS`)
 	if err != nil {
-		return binlogPos, gs, errors.Trace(err)
+		return binlogPos, gs, err
 	}
 	defer rows.Close()
 
 	rowColumns, err := rows.Columns()
 	if err != nil {
-		return binlogPos, gs, errors.Trace(err)
+		return binlogPos, gs, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 
 	// Show an example.
@@ -72,7 +73,7 @@ func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, erro
 			err = rows.Scan(&binlogName, &pos, &nullPtr, &nullPtr)
 		}
 		if err != nil {
-			return binlogPos, gs, errors.Trace(err)
+			return binlogPos, gs, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 		}
 
 		binlogPos = gmysql.Position{
@@ -86,13 +87,13 @@ func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, erro
 		}
 	}
 	if rows.Err() != nil {
-		return binlogPos, gs, errors.Trace(rows.Err())
+		return binlogPos, gs, terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
 	}
 
 	if flavor == gmysql.MariaDBFlavor && (gs == nil || gs.String() == "") {
 		gs, err = GetMariaDBGTID(db)
 		if err != nil {
-			return binlogPos, gs, errors.Trace(err)
+			return binlogPos, gs, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 		}
 	}
 

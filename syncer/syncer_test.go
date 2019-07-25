@@ -40,6 +40,7 @@ import (
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/log"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -65,8 +66,8 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 		Name:       "syncer_ut",
 		Mode:       config.ModeIncrement,
 	}
-	s.cfg.From.Adjust()
-	s.cfg.To.Adjust()
+	s.cfg.From.Adjust(terror.ScopeUpstream)
+	s.cfg.To.Adjust(terror.ScopeDownstream)
 
 	dir := c.MkDir()
 	s.cfg.RelayDir = dir

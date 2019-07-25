@@ -15,6 +15,8 @@ package config
 
 import (
 	. "github.com/pingcap/check"
+
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 func (t *testConfig) TestSubTask(c *C) {
@@ -36,8 +38,8 @@ func (t *testConfig) TestSubTask(c *C) {
 			Password: "",
 		},
 	}
-	cfg.From.Adjust()
-	cfg.To.Adjust()
+	cfg.From.Adjust(terror.ScopeUpstream)
+	cfg.To.Adjust(terror.ScopeDownstream)
 
 	clone1, err := cfg.Clone()
 	c.Assert(err, IsNil)

@@ -15,20 +15,22 @@ package utils
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"strconv"
 	"strings"
 
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
+
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // ParseMetaData parses mydumper's output meta file and returns binlog position
 func ParseMetaData(filename string) (*mysql.Position, error) {
 	fd, err := os.Open(filename)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.ErrParseMydumperMeta.Generate(err)
 	}
 	defer fd.Close()
 
@@ -39,7 +41,7 @@ func ParseMetaData(filename string) (*mysql.Position, error) {
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			return nil, errors.Trace(err)
+			return nil, terror.ErrParseMydumperMeta.Generate(err)
 		}
 		line = strings.TrimSpace(line[:len(line)-1])
 		if len(line) == 0 {
@@ -59,7 +61,7 @@ func ParseMetaData(filename string) (*mysql.Position, error) {
 		} else if parts[0] == "Pos" {
 			pos64, err := strconv.ParseUint(parts[1], 10, 32)
 			if err != nil {
-				return nil, errors.Trace(err)
+				return nil, terror.ErrParseMydumperMeta.Generate(err)
 			}
 			if len(logName) > 0 {
 				return &mysql.Position{Name: logName, Pos: uint32(pos64)}, nil
@@ -68,5 +70,5 @@ func ParseMetaData(filename string) (*mysql.Position, error) {
 		}
 	}
 
-	return nil, errors.Errorf("parse metadata for %s fail", filename)
+	return nil, terror.ErrParseMydumperMeta.Generate(fmt.Sprintf("file %s invalid format", filename))
 }
