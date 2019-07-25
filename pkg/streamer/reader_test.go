@@ -589,7 +589,6 @@ func (t *testReaderSuite) TestStartSync(c *C) {
 	// NOTE: load new UUIDs dynamically not supported yet
 
 	// close the reader
-	err = r.Close()
 	c.Assert(err, IsNil)
 }
 
@@ -620,7 +619,6 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 	ev, err := s.GetEvent(ctx)
 	c.Assert(err, ErrorMatches, ".*empty UUIDs not valid.*")
 	c.Assert(ev, IsNil)
-	c.Assert(r.Close(), IsNil)
 
 	// write UUIDs into index file
 	r = NewBinlogReader(tctx, cfg) // create a new reader
@@ -639,8 +637,6 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 	s, err = r.StartSync(startPos)
 	c.Assert(errors.Cause(err), Equals, ErrReaderRunning)
 	c.Assert(s, IsNil)
-
-	c.Assert(r.Close(), IsNil)
 }
 
 func (t *testReaderSuite) genBinlogEvents(c *C, latestPos uint32) []*replication.BinlogEvent {
