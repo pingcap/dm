@@ -589,7 +589,6 @@ func (t *testReaderSuite) TestStartSync(c *C) {
 	// NOTE: load new UUIDs dynamically not supported yet
 
 	// close the reader
-	c.Assert(err, IsNil)
 	r.Close()
 }
 
