@@ -17,14 +17,12 @@ target-database:
 
 mysql-instances:
   - source-id: "mysql-replica-01"
-    server-id: 101
     black-white-list:  "instance"
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
 
   - source-id: "mysql-replica-02"
-    server-id: 102
     black-white-list:  "instance"
     mydumper-config-name: "global"
     loader-config-name: "global"

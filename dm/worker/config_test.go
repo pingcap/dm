@@ -15,6 +15,7 @@ package worker
 
 import (
 	"fmt"
+	"io/ioutil"
 	"path"
 	"strings"
 
@@ -73,6 +74,19 @@ func (t *testServer) TestConfig(c *C) {
 	clone3, err := cfg.DecryptPassword()
 	c.Assert(err, IsNil)
 	c.Assert(clone3, DeepEquals, cfg)
+
+	// test invalid config
+	dir2 := c.MkDir()
+	configFile := path.Join(dir2, "dm-worker-invalid.toml")
+	configContent := []byte(`
+worker-addr = ":8262"
+aaa = "xxx"
+`)
+	err = ioutil.WriteFile(configFile, configContent, 0644)
+	c.Assert(err, IsNil)
+	err = cfg.configFromFile(configFile)
+	c.Assert(err, NotNil)
+	c.Assert(err, ErrorMatches, "*worker config contained unknown configuration options: aaa*")
 }
 
 func (t *testServer) TestConfigVerify(c *C) {
