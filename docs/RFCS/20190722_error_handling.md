@@ -131,7 +131,7 @@ func Annotate(err error, message string) error {}
 // Annotatef adds a message and ensures there is a stack trace
 func Annotatef(err error, format string, args ...interface{}) error {}
 
-// Delegate creates a new *Error with the same fields of the give *Error,
+// Delegate creates a new *Error with the same fields of the given *Error,
 // except for new arguments, it also sets the err as raw cause of *Error
 func (e *Error) Delegate(err error, args ...interface{}) error {}
 ```
