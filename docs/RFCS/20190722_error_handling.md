@@ -108,7 +108,7 @@ func (s *Syncer) flushCheckPoints() error {
 }
 ```
 
-- Considering the following code logic, the `txn.Exec` encounters with error err1, and we try to rollback the transaction but unfortunately the `txn.Rollback` gets another error err2. In this scenario the err1 is more essential than err2. We are considering to add some secondary error in Error instance, but for the implementation of this version we don’t add this feature. We should carefully use error in this scenario.
+- In the following code logic, the `txn.Exec` encounters error `err1`, and we try to roll back the transaction but unfortunately the `txn.Rollback` gets another error `err2`. In this scenario, `err1` is more essential than err2. We are considering adding a secondary error in the error instance, but not in the current version. We should carefully use error in this scenario.
 
 ```go
 err1 := txn.Exec(sql, args...)
