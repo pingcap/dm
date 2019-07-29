@@ -159,7 +159,7 @@ We use [pingcap/errors/StackTracer](https://www.google.com/url?q=https://github.
 - When we generate an error in DM for the first time, we should always use the new error API, including `Generate`, `Generatef`, and `Delegate`
 - When we want to generate an error based on a third-party error, `Delegate` is recommended
 - There are two ways to handle errors in the DM function call stack: one way is to return the error directly, the other way is to `Annotate` the error with more information
-- DO NOT use other error libraries any more, such as [pingcap/errors](https://www.google.com/url?q=https://github.com/pingcap/errors&sa=D&ust=1563783859475000) to wrap or add stack trace with error instance in our new error system, which may lead to stack trace missing before this call and unexpected error format.
+- DO NOT use other error libraries anymore, such as [pingcap/errors](https://www.google.com/url?q=https://github.com/pingcap/errors&sa=D&ust=1563783859475000) to wrap or add stack trace with the error instance in our new error system, which may lead to stack trace missing before this call and unexpected error format.
 
 ### API list
 
