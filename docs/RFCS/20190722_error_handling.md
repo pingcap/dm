@@ -39,7 +39,7 @@ Currently all DM errors are constructed by `errors.Errorf` with error descriptio
 Error object is defined as following, with some import fields:
 
 - code: error code, unique for each error type
-- class: error class, error belongs to which component, unit, etc. classified by code logic
+- class: error class based on the belonging component or unit, etc; classified by code logic
 - scope: which scope does this error happen, including upstream, downstream, DM inner
 - level: emergency level for this error, including high, medium and low
 - args: used for message generator, such as we have an error ErrFailedFlushCheckpoint = terror.Syncer.New(5300, “failed to flush checkpoint %s”), we can use this error like ErrFailedFlushCheckpoint.GenWithArgs(checkpoint), so we don’t need additional error messages when we use this error
