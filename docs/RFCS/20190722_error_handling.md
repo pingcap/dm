@@ -90,7 +90,7 @@ func (e terror) EqualAny(references ...error) bool {}
 1. When we generate a new error in DM level source, we always use `Generate` or `Generatef` to create a new Error instance from a defined error list.
 2. When we invoke a third party function and get an error, we should change this error to adapt our error system, we have two choices here:
 
-- Keep the error message from third party function and create a related Error instance in new error system.
+- Keep the error message from the third party function and create a related error instance in our new error system.
 - Create a new Error instance, and save the third party error in its `rawCause` field.
 
 3. Supposing one function A invokes another function B, and function A is also invoked by other code, both functions A and function B are DM level code and have an error field in their return values, we should make a rule about how to propagate error to upper code. In this scenario, we call function A as current function, we call function B as inner function, and we call the code invokes function A as upper code stack. The inner function returns `err != nil`, the current function shall propagate this error to the upper code stack, it will generate different error object based on the code logic.
