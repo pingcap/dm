@@ -2046,13 +2046,16 @@ func (s *Syncer) reopenWithRetry(cfg replication.BinlogSyncerConfig) error {
 
 func (s *Syncer) reopen(cfg replication.BinlogSyncerConfig) (streamer.Streamer, error) {
 	if s.streamerProducer != nil {
-		err := s.closeBinlogSyncer(s.streamerProducer.(*remoteBinlogReader).reader)
-		s.streamerProducer = nil
-		if err != nil {
-			return nil, errors.Trace(err)
+		switch s.streamerProducer.(type) {
+		case *remoteBinlogReader:
+			err := s.closeBinlogSyncer(s.streamerProducer.(*remoteBinlogReader).reader)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+		case *localBinlogReader:
+			return nil, errors.New("[syncer] not support local relay reader reopen currently")
 		}
 	}
-
 	// TODO: refactor to support relay
 	s.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(cfg), s.tctx, s.cfg.EnableGTID}
 	return s.streamerProducer.generateStreamer(s.checkpoint.GlobalPoint())
