@@ -66,7 +66,7 @@ type Error struct {
 
 #### Error classification and error codes
 
-1. Error is classfied by class field, which relates to code logic
+1. Errors are classfied by the class field, which relates to the code logic
 2. Error codes range allocation will be added later
 
 ### Goal of error handling
