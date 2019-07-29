@@ -147,7 +147,7 @@ We use [pingcap/errors/StackTracer](https://www.google.com/url?q=https://github.
 
 -  Create an `*Error` for the first time: `Generate`, `Generatef` or `Delegate` automaticity adds the stack trace
 - Get an `*Error` from the DM function, `return err` directly: the stack trace is kept in the *Error instance.
-- Get an `*Error` from DM function, use `Annotate` or `Annotatef` to change some fields of the `*Error`: we still use the original `*Error` instance, only change fields excluding `code` and `stack`, so the stack trace is kept.
+- Get an `*Error` from the DM function, use `Annotate` or `Annotatef` to change some fields of the `*Error`: we still use the original `*Error` instance, and only change fields excluding `code` and `stack`, so the stack trace is kept.
 
 #### Error output specification
 
