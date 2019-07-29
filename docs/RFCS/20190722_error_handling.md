@@ -143,7 +143,7 @@ Difference between `error Annotate` and `error Delegate`
 
 #### Embedded stack traces
 
-We use [pingcap/errors/StackTracer](https://www.google.com/url?q=https://github.com/pingcap/errors/blob/master/stack.go%23L13-L17&sa=D&ust=1563783859473000) to record stack trace, we should ensure to add stack trace information each time when we create a new Error instance. Besides we should keep the stack trace in function call back tracing. Let’s see how each way keeps the stack trace.
+We use [pingcap/errors/StackTracer](https://www.google.com/url?q=https://github.com/pingcap/errors/blob/master/stack.go%23L13-L17&sa=D&ust=1563783859473000) to record the stack trace, and ensures that stack trace information is added each time when we create a new Error instance. In addition, we should keep the stack trace in the backtracing of the function call. Let’s see how each way keeps the stack trace.
 
 -  Create an `*Error` for the first time: `Generate`, `Generatef` or `Delegate` automaticity adds the stack trace
 - Get an `*Error` from the DM function, `return err` directly: the stack trace is kept in the *Error instance.
