@@ -36,7 +36,7 @@ Currently all DM errors are constructed by `errors.Errorf` with error descriptio
 
 #### Error object definition
 
-Error object is defined as following, with some import fields:
+Error object is defined as below, with some import fields:
 
 - code: error code, unique for each error type
 - class: error class based on the belonging component or unit, etc; classified by code logic
