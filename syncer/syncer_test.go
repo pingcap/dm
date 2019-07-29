@@ -101,7 +101,7 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 
 	s.resetMaster()
 	s.resetBinlogSyncer()
-	s.resetEventsGenerator()
+	s.resetEventsGenerator(c)
 
 	_, err = s.db.Exec("SET GLOBAL binlog_format = 'ROW';")
 	c.Assert(err, IsNil)
@@ -153,17 +153,19 @@ func (s *testSyncerSuite) generateEvents(binlogEvents mockBinlogEvents, c *C) []
 	return events
 }
 
-func (s *testSyncerSuite) resetEventsGenerator() {
+func (s *testSyncerSuite) resetEventsGenerator(c *C) {
 	previousGTIDSetStr := "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,406a3f61-690d-11e7-87c5-6c92bf46f384:1-94321383"
 	previousGTIDSet, err := gtid.ParserGTID(s.cfg.Flavor, previousGTIDSetStr)
 	if err != nil {
-		log.L().Fatal("", zap.Error(err))
+		c.Fatal("", zap.Error(err))
+		c.FailNow()
 	}
 	latestGTIDStr := "3ccc475b-2343-11e7-be21-6c0b84d59f30:14"
 	latestGTID, err := gtid.ParserGTID(s.cfg.Flavor, latestGTIDStr)
 	s.eventsGenerator, err = event.NewGenerator(s.cfg.Flavor, uint32(s.cfg.ServerID), 0, latestGTID, previousGTIDSet, 0)
 	if err != nil {
-		log.L().Fatal("", zap.Error(err))
+		c.Fatal("", zap.Error(err))
+		c.FailNow()
 	}
 }
 
@@ -306,7 +308,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 			{Schema: "~^ptest*", Name: "~^t.*"},
 		},
 	}
-	s.resetEventsGenerator()
+	s.resetEventsGenerator(c)
 	events := make([]mockBinlogEvent, 0, 24)
 	events = append(events, mockBinlogEvent{typ: DBCreate, args: []interface{}{"s1"}})
 	events = append(events, mockBinlogEvent{typ: TableCreate, args: []interface{}{"s1", "create table s1.log(id int)"}})
@@ -420,7 +422,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 		IgnoreDBs: []string{"~^b.*", "s1", "stest"},
 	}
 
-	s.resetEventsGenerator()
+	s.resetEventsGenerator(c)
 	events := make([]mockBinlogEvent, 0, 12)
 	events = append(events, mockBinlogEvent{typ: DBCreate, args: []interface{}{"s1"}})
 	events = append(events, mockBinlogEvent{typ: DBDrop, args: []interface{}{"s1"}})
@@ -476,7 +478,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 		},
 	}
 
-	s.resetEventsGenerator()
+	s.resetEventsGenerator(c)
 	events := make([]mockBinlogEvent, 0, 12)
 	events = append(events, mockBinlogEvent{typ: DBCreate, args: []interface{}{"s1"}})
 	events = append(events, mockBinlogEvent{typ: TableCreate, args: []interface{}{"s1", "create table s1.log(id int)"}})
@@ -605,7 +607,7 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 	}
 	s.cfg.BWList = nil
 
-	s.resetEventsGenerator()
+	s.resetEventsGenerator(c)
 
 	type SQLChecker struct {
 		events  []*replication.BinlogEvent
@@ -714,7 +716,7 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 		},
 	}
 
-	s.resetEventsGenerator()
+	s.resetEventsGenerator(c)
 
 	//create db and tables
 	events := make([]mockBinlogEvent, 0, 24)
