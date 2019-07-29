@@ -137,7 +137,7 @@ func (c *Checker) Init() (err error) {
 		}
 		instance.targetDB, err = dbutil.OpenDB(*instance.targetDBInfo)
 		if err != nil {
-			return terror.WithScope(terror.ErrTaskCheckFailedOpenDB.Generate(instance.cfg.To.User, instance.cfg.To.Host, instance.cfg.To.Port))
+			return terror.WithScope(terror.ErrTaskCheckFailedOpenDB.Generate(instance.cfg.To.User, instance.cfg.To.Host, instance.cfg.To.Port), terror.ScopeDownstream)
 		}
 
 		if _, ok := c.checkingItems[config.VersionChecking]; ok {
