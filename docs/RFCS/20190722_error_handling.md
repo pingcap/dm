@@ -41,7 +41,7 @@ Error object is defined as following, with some import fields:
 - code: error code, unique for each error type
 - class: error class based on the belonging component or unit, etc; classified by code logic
 - scope: the scope within which this error happens, including upstream, downstream, and DM inner
-- level: emergency level for this error, including high, medium and low
+- level: emergency level of this error, including high, medium, and low
 - args: used for message generator, such as we have an error ErrFailedFlushCheckpoint = terror.Syncer.New(5300, “failed to flush checkpoint %s”), we can use this error like ErrFailedFlushCheckpoint.GenWithArgs(checkpoint), so we don’t need additional error messages when we use this error
 - rawCause: used to record some root error from the third party function call
 - stack: thanks to [pingcap/errors/StackTracer](https://www.google.com/url?q=https://github.com/pingcap/errors/blob/master/stack.go%23L13-L17&sa=D&ust=1563783859452000), we can use this to record stack trace easily
