@@ -136,7 +136,7 @@ func Annotatef(err error, format string, args ...interface{}) error {}
 func (e *Error) Delegate(err error, args ...interface{}) error {}
 ```
 
-Difference between `error Annotate` and `error Delegate`
+Differences between `error Annotate` and `error Delegate`
 
 - The Annotate way asserts the error to an `*Error` instance and adds additional error message.
 - The Delegate way creates a new `*Error` instance from the given `*Error`, and sets the given error to its `rawCause` field. The error in the parameter is often returned from a third party function and we store it for using later.
