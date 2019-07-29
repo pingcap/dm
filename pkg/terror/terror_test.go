@@ -34,13 +34,13 @@ type testTErrorSuite struct {
 
 func (t *testTErrorSuite) TestTError(c *check.C) {
 	var (
-		code        ErrCode  = codeDBBadConn
-		class       ErrClass = ClassDatabase
-		scope       ErrScope = ScopeUpstream
-		level       ErrLevel = LevelMedium
-		message              = "bad connection"
-		messageArgs          = "message with args: %s"
-		commonErr            = errors.New("common error")
+		code        = codeDBBadConn
+		class       = ClassDatabase
+		scope       = ScopeUpstream
+		level       = LevelMedium
+		message     = "bad connection"
+		messageArgs = "message with args: %s"
+		commonErr   = errors.New("common error")
 	)
 
 	c.Assert(ClassDatabase.String(), check.Equals, errClass2Str[ClassDatabase])

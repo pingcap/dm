@@ -33,8 +33,6 @@ import (
 type Conn struct {
 	cfg *config.SubTaskConfig
 
-	scope terror.ErrScope
-
 	db *sql.DB
 }
 
@@ -212,7 +210,7 @@ func createConn(cfg *config.SubTaskConfig) (*Conn, error) {
 		return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 	}
 
-	return &Conn{db: db, cfg: cfg, scope: terror.ScopeDownstream}, nil
+	return &Conn{db: db, cfg: cfg}, nil
 }
 
 func closeConn(conn *Conn) error {
@@ -220,7 +218,7 @@ func closeConn(conn *Conn) error {
 		return nil
 	}
 
-	return terror.WithScope(terror.DBErrorAdapt(conn.db.Close(), terror.ErrDBDriverError), conn.scope)
+	return terror.DBErrorAdapt(conn.db.Close(), terror.ErrDBDriverError)
 }
 
 func isErrDBExists(err error) bool {

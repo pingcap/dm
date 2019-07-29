@@ -113,6 +113,7 @@ func (ec ErrLevel) String() string {
 	return fmt.Sprintf("unknown error level: %d", ec)
 }
 
+// Error implements error interface and add more useful fields
 type Error struct {
 	code     ErrCode
 	class    ErrClass
@@ -124,7 +125,7 @@ type Error struct {
 	stack    errors.StackTracer
 }
 
-// NewError creates a new *Error instance
+// New creates a new *Error instance
 func New(code ErrCode, class ErrClass, scope ErrScope, level ErrLevel, message string) *Error {
 	return &Error{
 		code:    code,
@@ -160,6 +161,7 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("[%d:%s:%s:%s] %s", e.code, e.class, e.scope, e.level, e.getMsg())
 }
 
+// Format accepts flags that alter the printing of some verbs
 func (e *Error) Format(s fmt.State, verb rune) {
 	switch verb {
 	case 'v':

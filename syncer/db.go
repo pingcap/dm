@@ -64,8 +64,6 @@ type binlogSize struct {
 type Conn struct {
 	cfg *config.SubTaskConfig
 
-	scope terror.ErrScope
-
 	db *sql.DB
 }
 
@@ -246,7 +244,7 @@ func createDB(cfg *config.SubTaskConfig, dbCfg config.DBConfig, timeout string) 
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 
-	return &Conn{db: db, cfg: cfg, scope: dbCfg.ErrScope}, nil
+	return &Conn{db: db, cfg: cfg}, nil
 }
 
 func (conn *Conn) close() error {
