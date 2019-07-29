@@ -112,7 +112,7 @@ func (r *remoteBinlogReader) generateStreamer(pos mysql.Position) (streamer.Stre
 	}()
 	if r.EnableGTID {
 		// NOTE: our (per-table based) checkpoint does not support GTID yet
-		return nil, errors.New("[syncer] not support GTID mode yet")
+		return nil, errors.New("don't support open streamer with GTID mode")
 	}
 
 	streamer, err := r.reader.StartSync(pos)
@@ -2046,14 +2046,14 @@ func (s *Syncer) reopenWithRetry(cfg replication.BinlogSyncerConfig) error {
 
 func (s *Syncer) reopen(cfg replication.BinlogSyncerConfig) (streamer.Streamer, error) {
 	if s.streamerProducer != nil {
-		switch s.streamerProducer.(type) {
+		switch r := s.streamerProducer.(type) {
 		case *remoteBinlogReader:
-			err := s.closeBinlogSyncer(s.streamerProducer.(*remoteBinlogReader).reader)
+			err := s.closeBinlogSyncer(r.reader)
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
-		case *localBinlogReader:
-			return nil, errors.New("[syncer] not support local relay reader reopen currently")
+		default:
+			return nil, errors.Errorf("don’t support to reopen %T", r)
 		}
 	}
 	// TODO: refactor to support relay
