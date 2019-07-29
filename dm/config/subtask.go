@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/BurntSushi/toml"
@@ -47,12 +46,11 @@ var (
 
 // DBConfig is the DB configuration.
 type DBConfig struct {
-	Host             string          `toml:"host" json:"host" yaml:"host"`
-	Port             int             `toml:"port" json:"port" yaml:"port"`
-	User             string          `toml:"user" json:"user" yaml:"user"`
-	Password         string          `toml:"password" json:"-" yaml:"password"` // omit it for privacy
-	MaxAllowedPacket *int            `toml:"max-allowed-packet" json:"max-allowed-packet" yaml:"max-allowed-packet"`
-	ErrScope         terror.ErrScope `toml:"-" json:"-" yaml:"-"` // this is only used in internal
+	Host             string `toml:"host" json:"host" yaml:"host"`
+	Port             int    `toml:"port" json:"port" yaml:"port"`
+	User             string `toml:"user" json:"user" yaml:"user"`
+	Password         string `toml:"password" json:"-" yaml:"password"` // omit it for privacy
+	MaxAllowedPacket *int   `toml:"max-allowed-packet" json:"max-allowed-packet" yaml:"max-allowed-packet"`
 }
 
 func (db *DBConfig) String() string {
@@ -81,12 +79,11 @@ func (db *DBConfig) Decode(data string) error {
 }
 
 // Adjust adjusts the config.
-func (db *DBConfig) Adjust(scope terror.ErrScope) {
+func (db *DBConfig) Adjust() {
 	if db.MaxAllowedPacket == nil {
 		cloneV := defaultMaxAllowedPacket
 		db.MaxAllowedPacket = &cloneV
 	}
-	db.ErrScope = scope
 }
 
 // SubTaskConfig is the configuration for SubTask
@@ -243,8 +240,8 @@ func (c *SubTaskConfig) Adjust() error {
 		c.LoaderConfig.Dir += dirSuffix
 	}
 
-	c.From.Adjust(terror.ScopeUpstream)
-	c.To.Adjust(terror.ScopeDownstream)
+	c.From.Adjust()
+	c.To.Adjust()
 
 	_, err := c.DecryptPassword()
 	return err

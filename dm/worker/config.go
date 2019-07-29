@@ -29,7 +29,6 @@ import (
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay/purger"
@@ -181,7 +180,7 @@ func (c *Config) Parse(arguments []string) error {
 	// assign tracer id to source id
 	c.Tracer.Source = c.SourceID
 
-	c.From.Adjust(terror.ScopeUpstream)
+	c.From.Adjust()
 	return c.verify()
 }
 
