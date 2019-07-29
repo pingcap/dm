@@ -73,6 +73,7 @@ type Error struct {
 
 #### Provide better error equivalences check
 
+To provide better error equivalences check, we need to do the following:
 1. Enable fast, reliable and secure determination of whether a particular error cause is present（no relying on the presence of a substring in the error messages）
 2. Provide the following interface for error equivalences check.
 3. Support protobuf-encodable error object，so we can work with errors transmitted across the network via GRPC.（TODO）
