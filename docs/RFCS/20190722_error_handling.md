@@ -5,15 +5,14 @@
 
 ## Abstract
 
-This proposal proposes to introduce the error code mechanism in DM and make a regulation for error handling.
+This proposal introduce an error code mechanism in the DM error system, making a regulation for error handling.
 
 Table of contents:
 
 - [Background](#Background)
 - [Implementation](#Implementation)
-    - [Error scenario classification and error codes](#Error-scenario-classification-and-error-codes)
-        - [Error object definition](#Error-object-definition)
-        - [Error classification and error codes](#Error-classification-and-error-codes)
+    - [Error object definition](#Error-object-definition)
+    - [Error classification and error codes](#Error-classification-and-error-codes)
     - [Goal of error handling](#Goal-of-error-handling)
         - [Provide better error equivalences check](#Provide-better-error-equivalences-check)
         - [Enhance the error chain](#Enhance-the-error-chain)
@@ -32,9 +31,7 @@ Currently all DM errors are constructed by `errors.Errorf` with error descriptio
 
 ## Implementation
 
-### Error scenario classification and error codes
-
-#### Error object definition
+### Error object definition
 
 Error object is defined as below, with some import fields:
 
@@ -64,7 +61,7 @@ type Error struct {
 }
 ```
 
-#### Error classification and error codes
+### Error classification and error codes
 
 1. Errors are classfied by the class field, which relates to the code logic
 2. Error codes range allocation will be added later
@@ -74,9 +71,9 @@ type Error struct {
 #### Provide better error equivalences check
 
 To provide better error equivalences check, we need to do the following:
-1. Enable fast, reliable, and secure determination of whether a particular error cause is present（no relying on the presence of a substring in the error messages）
-2. Provide the following interface for error equivalences check.
-3. Support protobuf-encodable error object，so we can work with errors transmitted across the network via GRPC.（TODO）
+- Enable fast, reliable, and secure determination of whether a particular error cause is present（no relying on the presence of a substring in the error messages）
+- Support protobuf-encodable error object，so we can work with errors transmitted across the network via GRPC.（TODO）
+- Provide the following interface for error equivalences check.
 
 ```go
 // Equal returns true iff the error contains `reference` in any of its
