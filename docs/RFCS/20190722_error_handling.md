@@ -38,7 +38,7 @@ Currently all DM errors are constructed by `errors.Errorf` with error descriptio
 
 Error object is defined as following, with some import fields:
 
-- code: error code, unique for each kind error
+- code: error code, unique for each error type
 - class: error class, error belongs to which component, unit, etc. classified by code logic
 - scope: which scope does this error happen, including upstream, downstream, DM inner
 - level: emergency level for this error, including high, medium and low
