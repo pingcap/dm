@@ -165,7 +165,7 @@ We use [pingcap/errors/StackTracer](https://www.google.com/url?q=https://github.
 ### API list
 
 ```go
-// Equal returns true iff the error contains `reference` in any of its
+// Equal returns true if the error contains `reference` in any of its
 func (e *Error) Equal(reference error) bool {}
 
 // EqualAny is like Equal() but supports multiple reference errors.
