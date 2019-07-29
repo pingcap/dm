@@ -88,7 +88,7 @@ func (e terror) EqualAny(references ...error) bool {}
 #### Enhance the error chain
 
 1. When we generate a new error in DM level source, we always use `Generate` or `Generatef` to create a new Error instance from a defined error list.
-2. When we invoke a third party function and get an error, we should change this error to adapt our error system, we have two choices here:
+2. When we invoke a third party function and get an error, we should change this error to adapt to our error system. We have two choices here:
 
 - Keep the error message from the third party function and create a related error instance in our new error system.
 - Create a new Error instance, and save the third party error in its `rawCause` field.
