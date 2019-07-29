@@ -122,7 +122,7 @@ if err != nil {
 }
 ```
 
-as for error combination requirements, we provide the following APIs.
+As for error combination requirements, we provide the following APIs.
 
 ```go
 // Annotate adds a message and ensures there is a stack trace
