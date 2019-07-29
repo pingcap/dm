@@ -5,7 +5,7 @@
 
 ## Abstract
 
-This proposal proposes to introduce the error code mechanism in DM error system and make a regulation for error handling.
+This proposal proposes to introduce the error code mechanism in DM and make a regulation for error handling.
 
 Table of contents:
 
