@@ -51,6 +51,23 @@ func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
+type mockBinlogEvents []mockBinlogEvent
+type mockBinlogEvent struct {
+	typ  int
+	args []interface{}
+}
+
+const (
+	DBCreate = iota
+	DBDrop
+	TableCreate
+	TableDrop
+
+	Write
+	Update
+	Delete
+)
+
 type testSyncerSuite struct {
 	db              *sql.DB
 	syncer          *replication.BinlogSyncer
@@ -88,6 +105,52 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 
 	_, err = s.db.Exec("SET GLOBAL binlog_format = 'ROW';")
 	c.Assert(err, IsNil)
+}
+
+func (s *testSyncerSuite) generateEvents(binlogEvents mockBinlogEvents, c *C) []*replication.BinlogEvent {
+	events := make([]*replication.BinlogEvent, 0, 1024)
+	for _, e := range binlogEvents {
+		switch e.typ {
+		case DBCreate:
+			evs, _, err := s.eventsGenerator.GenCreateDatabaseEvents(e.args[0].(string))
+			c.Assert(err, IsNil)
+			events = append(events, evs...)
+		case DBDrop:
+			evs, _, err := s.eventsGenerator.GenDropDatabaseEvents(e.args[0].(string))
+			c.Assert(err, IsNil)
+			events = append(events, evs...)
+		case TableCreate:
+			evs, _, err := s.eventsGenerator.GenCreateTableEvents(e.args[0].(string), e.args[1].(string))
+			c.Assert(err, IsNil)
+			events = append(events, evs...)
+		case TableDrop:
+			evs, _, err := s.eventsGenerator.GenDropTableEvents(e.args[0].(string), e.args[1].(string))
+			c.Assert(err, IsNil)
+			events = append(events, evs...)
+
+		case Write, Update, Delete:
+			dmlData := []*event.DMLData{
+				{
+					TableID:    e.args[0].(uint64),
+					Schema:     e.args[1].(string),
+					Table:      e.args[2].(string),
+					ColumnType: e.args[3].([]byte),
+					Rows:       e.args[4].([][]interface{}),
+				},
+			}
+			eventType := replication.WRITE_ROWS_EVENTv2
+			if e.typ == Update {
+				eventType = replication.UPDATE_ROWS_EVENTv2
+			} else if e.typ == Delete {
+				eventType = replication.DELETE_ROWS_EVENTv2
+			}
+			evs, _, err := s.eventsGenerator.GenDMLEvents(eventType, dmlData)
+			c.Assert(err, IsNil)
+			events = append(events, evs...)
+		}
+
+	}
+	return events
 }
 
 func (s *testSyncerSuite) resetEventsGenerator() {
@@ -244,115 +307,36 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 		},
 	}
 	s.resetEventsGenerator()
-	allEvents := make([]*replication.BinlogEvent, 0, 24)
+	events := make([]mockBinlogEvent, 0, 24)
+	events = append(events, mockBinlogEvent{typ: DBCreate, args: []interface{}{"s1"}})
+	events = append(events, mockBinlogEvent{typ: TableCreate, args: []interface{}{"s1", "create table s1.log(id int)"}})
+	events = append(events, mockBinlogEvent{typ: DBDrop, args: []interface{}{"s1"}})
 
-	evs, _, err := s.eventsGenerator.GenCreateDatabaseEvents("s1")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateTableEvents("s1", "create table s1.log(id int)")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropDatabaseEvents("s1")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
+	events = append(events, mockBinlogEvent{typ: TableCreate, args: []interface{}{"mysql", "create table mysql.test(id int)"}})
+	events = append(events, mockBinlogEvent{typ: TableDrop, args: []interface{}{"mysql", "test"}})
+	events = append(events, mockBinlogEvent{typ: DBCreate, args: []interface{}{"stest"}})
+	events = append(events, mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest", "create table stest.log(id int)"}})
+	events = append(events, mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest", "create table stest.t(id int)"}})
+	events = append(events, mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest", "create table stest.log2(id int)"}})
+	events = append(events, mockBinlogEvent{typ: Write, args: []interface{}{uint64(8), "stest", "t", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(10)}}}})
+	events = append(events, mockBinlogEvent{typ: Write, args: []interface{}{uint64(9), "stest", "log", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(10)}}}})
+	events = append(events, mockBinlogEvent{typ: Write, args: []interface{}{uint64(10), "stest", "log2", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(10)}}}})
+	events = append(events, mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest", "log"}})
+	events = append(events, mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest", "t"}})
+	events = append(events, mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest", "log2"}})
+	events = append(events, mockBinlogEvent{typ: DBDrop, args: []interface{}{"stest"}})
 
-	evs, _, err = s.eventsGenerator.GenCreateTableEvents("mysql", "create table mysql.test(id int)")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropTableEvents("mysql", "test")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateDatabaseEvents("stest")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateTableEvents("stest", "create table stest.log(id int)")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateTableEvents("stest", "create table stest.t(id int)")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateTableEvents("stest", "create table stest.log2(id int)")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
+	events = append(events, mockBinlogEvent{typ: DBCreate, args: []interface{}{"t2"}})
+	events = append(events, mockBinlogEvent{typ: TableCreate, args: []interface{}{"t2", "create table t2.log(id int)"}})
+	events = append(events, mockBinlogEvent{typ: TableCreate, args: []interface{}{"t2", "create table t2.log1(id int)"}})
+	events = append(events, mockBinlogEvent{typ: TableDrop, args: []interface{}{"t2", "log"}})
+	events = append(events, mockBinlogEvent{typ: DBDrop, args: []interface{}{"t2"}})
 
-	columnType := []byte{mysql.MYSQL_TYPE_LONG}
-	insertRows := [][]interface{}{{int32(10)}}
-	dmlData := []*event.DMLData{
-		{
-			TableID:    8,
-			Schema:     "stest",
-			Table:      "t",
-			ColumnType: columnType,
-			Rows:       insertRows,
-		},
-	}
-	eventType := replication.WRITE_ROWS_EVENTv2
-	evs, _, err = s.eventsGenerator.GenDMLEvents(eventType, dmlData)
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
+	events = append(events, mockBinlogEvent{typ: DBCreate, args: []interface{}{"ptest1"}})
+	events = append(events, mockBinlogEvent{typ: TableCreate, args: []interface{}{"ptest1", "create table ptest1.t1(id int)"}})
+	events = append(events, mockBinlogEvent{typ: DBDrop, args: []interface{}{"ptest1"}})
 
-	dmlData = []*event.DMLData{
-		{
-			TableID:    9,
-			Schema:     "stest",
-			Table:      "log",
-			ColumnType: columnType,
-			Rows:       insertRows,
-		},
-	}
-	evs, _, err = s.eventsGenerator.GenDMLEvents(eventType, dmlData)
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-
-	dmlData = []*event.DMLData{
-		{
-			TableID:    10,
-			Schema:     "stest",
-			Table:      "log2",
-			ColumnType: columnType,
-			Rows:       insertRows,
-		},
-	}
-	evs, _, err = s.eventsGenerator.GenDMLEvents(eventType, dmlData)
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropTableEvents("stest", "log")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropTableEvents("stest", "t")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropTableEvents("stest", "log2")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropDatabaseEvents("stest")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-
-	evs, _, err = s.eventsGenerator.GenCreateDatabaseEvents("t2")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateTableEvents("t2", "create table t2.log(id int)")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateTableEvents("t2", "create table t2.log1(id int)")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropTableEvents("t2", "log")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropDatabaseEvents("t2")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateDatabaseEvents("ptest1")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateTableEvents("ptest1", "create table ptest1.t1(id int)")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropDatabaseEvents("ptest1")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
+	allEvents := s.generateEvents(events, c)
 
 	res := [][]bool{
 		{true},
@@ -378,6 +362,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 		{true},
 		{true},
 		{false},
+
 		{false},
 		{false},
 		{false},
@@ -397,6 +382,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 		switch ev := e.Event.(type) {
 		case *replication.QueryEvent:
 			query := string(ev.Query)
+
 			result, err := syncer.parseDDLSQL(query, p, string(ev.Schema))
 			c.Assert(err, IsNil)
 			if !result.isDDL {
@@ -427,56 +413,29 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 		}
 		i++
 	}
-	s.catchUpBinlog()
 }
 
 func (s *testSyncerSuite) TestIgnoreDB(c *C) {
-	s.resetMaster()
-	s.resetBinlogSyncer()
-
 	s.cfg.BWList = &filter.Rules{
 		IgnoreDBs: []string{"~^b.*", "s1", "stest"},
 	}
 
 	s.resetEventsGenerator()
-	allEvents := make([]*replication.BinlogEvent, 0, 12)
+	events := make([]mockBinlogEvent, 0, 12)
+	events = append(events, mockBinlogEvent{typ: DBCreate, args: []interface{}{"s1"}})
+	events = append(events, mockBinlogEvent{typ: DBDrop, args: []interface{}{"s1"}})
+	events = append(events, mockBinlogEvent{typ: DBCreate, args: []interface{}{"s2"}})
+	events = append(events, mockBinlogEvent{typ: DBDrop, args: []interface{}{"s2"}})
+	events = append(events, mockBinlogEvent{typ: DBCreate, args: []interface{}{"btest"}})
+	events = append(events, mockBinlogEvent{typ: DBDrop, args: []interface{}{"btest"}})
+	events = append(events, mockBinlogEvent{typ: DBCreate, args: []interface{}{"b1"}})
+	events = append(events, mockBinlogEvent{typ: DBDrop, args: []interface{}{"b1"}})
+	events = append(events, mockBinlogEvent{typ: DBCreate, args: []interface{}{"stest"}})
+	events = append(events, mockBinlogEvent{typ: DBDrop, args: []interface{}{"stest"}})
+	events = append(events, mockBinlogEvent{typ: DBCreate, args: []interface{}{"st"}})
+	events = append(events, mockBinlogEvent{typ: DBDrop, args: []interface{}{"st"}})
 
-	evs, _, err := s.eventsGenerator.GenCreateDatabaseEvents("s1")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropDatabaseEvents("s1")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateDatabaseEvents("s2")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropDatabaseEvents("s2")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateDatabaseEvents("btest")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropDatabaseEvents("btest")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateDatabaseEvents("b1")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropDatabaseEvents("b1")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateDatabaseEvents("stest")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropDatabaseEvents("stest")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateDatabaseEvents("st")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropDatabaseEvents("st")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
+	allEvents := s.generateEvents(events, c)
 
 	res := []bool{true, true, false, false, true, true, true, true, true, true, false, false}
 
@@ -518,103 +477,32 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 	}
 
 	s.resetEventsGenerator()
-	allEvents := make([]*replication.BinlogEvent, 0, 20)
+	events := make([]mockBinlogEvent, 0, 12)
+	events = append(events, mockBinlogEvent{typ: DBCreate, args: []interface{}{"s1"}})
+	events = append(events, mockBinlogEvent{typ: TableCreate, args: []interface{}{"s1", "create table s1.log(id int)"}})
+	events = append(events, mockBinlogEvent{typ: DBDrop, args: []interface{}{"s1"}})
+	events = append(events, mockBinlogEvent{typ: TableCreate, args: []interface{}{"mysql", "create table mysql.test(id int)"}})
+	events = append(events, mockBinlogEvent{typ: TableDrop, args: []interface{}{"mysql", "test"}})
 
-	evs, _, err := s.eventsGenerator.GenCreateDatabaseEvents("s1")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateTableEvents("s1", "create table s1.log(id int)")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropDatabaseEvents("s1")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
+	events = append(events, mockBinlogEvent{typ: DBCreate, args: []interface{}{"stest"}})
+	events = append(events, mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest", "create table stest.log(id int)"}})
+	events = append(events, mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest", "create table stest.t(id int)"}})
+	events = append(events, mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest", "create table stest.log2(id int)"}})
 
-	evs, _, err = s.eventsGenerator.GenCreateTableEvents("mysql", "create table mysql.test(id int)")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropTableEvents("mysql", "test")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateDatabaseEvents("stest")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateTableEvents("stest", "create table stest.log(id int)")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateTableEvents("stest", "create table stest.t(id int)")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateTableEvents("stest", "create table stest.log2(id int)")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	columnType := []byte{mysql.MYSQL_TYPE_LONG}
-	insertRows := [][]interface{}{{int32(10)}}
-	dmlData := []*event.DMLData{
-		{
-			TableID:    8,
-			Schema:     "stest",
-			Table:      "t",
-			ColumnType: columnType,
-			Rows:       insertRows,
-		},
-	}
-	eventType := replication.WRITE_ROWS_EVENTv2
-	evs, _, err = s.eventsGenerator.GenDMLEvents(eventType, dmlData)
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	dmlData = []*event.DMLData{
-		{
-			TableID:    9,
-			Schema:     "stest",
-			Table:      "log",
-			ColumnType: columnType,
-			Rows:       insertRows,
-		},
-	}
-	evs, _, err = s.eventsGenerator.GenDMLEvents(eventType, dmlData)
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	dmlData = []*event.DMLData{
-		{
-			TableID:    10,
-			Schema:     "stest",
-			Table:      "log2",
-			ColumnType: columnType,
-			Rows:       insertRows,
-		},
-	}
-	evs, _, err = s.eventsGenerator.GenDMLEvents(eventType, dmlData)
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropTableEvents("stest", "log")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropTableEvents("stest", "t")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropTableEvents("stest", "log2")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropDatabaseEvents("stest")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
+	events = append(events, mockBinlogEvent{typ: Write, args: []interface{}{uint64(8), "stest", "t", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(10)}}}})
+	events = append(events, mockBinlogEvent{typ: Write, args: []interface{}{uint64(9), "stest", "log", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(10)}}}})
+	events = append(events, mockBinlogEvent{typ: Write, args: []interface{}{uint64(10), "stest", "log2", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(10)}}}})
+	events = append(events, mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest", "log"}})
+	events = append(events, mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest", "t"}})
+	events = append(events, mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest", "log2"}})
+	events = append(events, mockBinlogEvent{typ: DBDrop, args: []interface{}{"stest"}})
 
-	evs, _, err = s.eventsGenerator.GenCreateDatabaseEvents("t2")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateTableEvents("t2", "create table t2.log(id int)")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateTableEvents("t2", "create table t2.log1(id int)")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropTableEvents("t2", "log")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropDatabaseEvents("t2")
-	c.Assert(err, IsNil)
-	allEvents = append(allEvents, evs...)
+	events = append(events, mockBinlogEvent{typ: DBCreate, args: []interface{}{"t2"}})
+	events = append(events, mockBinlogEvent{typ: TableCreate, args: []interface{}{"t2", "create table t2.log(id int)"}})
+	events = append(events, mockBinlogEvent{typ: TableCreate, args: []interface{}{"t2", "create table t2.log1(id int)"}})
+	events = append(events, mockBinlogEvent{typ: TableDrop, args: []interface{}{"t2", "log"}})
+	events = append(events, mockBinlogEvent{typ: DBDrop, args: []interface{}{"t2"}})
+	allEvents := s.generateEvents(events, c)
 
 	res := [][]bool{
 		{false},
@@ -727,156 +615,49 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 
 	sqls := make([]SQLChecker, 0, 16)
 
-	evs, _, err := s.eventsGenerator.GenDropDatabaseEvents("foo")
-	c.Assert(err, IsNil)
+	evs := s.generateEvents([]mockBinlogEvent{{DBCreate, []interface{}{"foo"}}}, c)
 	sqls = append(sqls, SQLChecker{events: evs, isDML: false, skipped: false})
 
-	evs, _, err = s.eventsGenerator.GenCreateDatabaseEvents("foo")
-	c.Assert(err, IsNil)
+	evs = s.generateEvents([]mockBinlogEvent{{TableCreate, []interface{}{"foo", "create table foo.bar(id int)"}}}, c)
 	sqls = append(sqls, SQLChecker{events: evs, isDML: false, skipped: false})
-	evs, _, err = s.eventsGenerator.GenCreateTableEvents("foo", "create table foo.bar(id int)")
-	c.Assert(err, IsNil)
-	sqls = append(sqls, SQLChecker{events: evs, isDML: false, skipped: false})
-	columnType := []byte{mysql.MYSQL_TYPE_LONG}
-	insertRows := [][]interface{}{{int32(1)}}
-	dmlData := []*event.DMLData{
-		{
-			TableID:    8,
-			Schema:     "foo",
-			Table:      "bar",
-			ColumnType: columnType,
-			Rows:       insertRows,
-		},
-	}
-	eventType := replication.WRITE_ROWS_EVENTv2
-	evs, _, err = s.eventsGenerator.GenDMLEvents(eventType, dmlData)
-	c.Assert(err, IsNil)
-	sqls = append(sqls, SQLChecker{events: evs, isDML: true, skipped: false})
-	updateRows := [][]interface{}{{int32(2)}, {int32(1)}}
-	dmlData = []*event.DMLData{
-		{
-			TableID:    8,
-			Schema:     "foo",
-			Table:      "bar",
-			ColumnType: columnType,
-			Rows:       updateRows,
-		},
-	}
-	eventType = replication.UPDATE_ROWS_EVENTv2
-	evs, _, err = s.eventsGenerator.GenDMLEvents(eventType, dmlData)
-	c.Assert(err, IsNil)
-	sqls = append(sqls, SQLChecker{events: evs, isDML: true, skipped: true})
-	deleteRows := [][]interface{}{{int32(2)}}
-	dmlData = []*event.DMLData{
-		{
-			TableID:    8,
-			Schema:     "foo",
-			Table:      "bar",
-			ColumnType: columnType,
-			Rows:       deleteRows,
-		},
-	}
-	eventType = replication.DELETE_ROWS_EVENTv2
-	evs, _, err = s.eventsGenerator.GenDMLEvents(eventType, dmlData)
-	c.Assert(err, IsNil)
-	sqls = append(sqls, SQLChecker{events: evs, isDML: true, skipped: true})
 
-	evs, _, err = s.eventsGenerator.GenDropDatabaseEvents("foo1")
-	c.Assert(err, IsNil)
-	sqls = append(sqls, SQLChecker{events: evs, isDML: false, skipped: false})
-	evs, _, err = s.eventsGenerator.GenCreateDatabaseEvents("foo1")
-	c.Assert(err, IsNil)
-	sqls = append(sqls, SQLChecker{events: evs, isDML: false, skipped: false})
-	evs, _, err = s.eventsGenerator.GenCreateTableEvents("foo1", "create table foo1.bar1(id int)")
-	c.Assert(err, IsNil)
-	sqls = append(sqls, SQLChecker{events: evs, isDML: false, skipped: false})
-	insertRows = [][]interface{}{{int32(1)}}
-	dmlData = []*event.DMLData{
-		{
-			TableID:    8,
-			Schema:     "foo1",
-			Table:      "bar1",
-			ColumnType: columnType,
-			Rows:       insertRows,
-		},
-	}
-	eventType = replication.WRITE_ROWS_EVENTv2
-	evs, _, err = s.eventsGenerator.GenDMLEvents(eventType, dmlData)
-	c.Assert(err, IsNil)
+	evs = s.generateEvents([]mockBinlogEvent{{Write, []interface{}{uint64(8), "foo", "bar", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(1)}}}}}, c)
 	sqls = append(sqls, SQLChecker{events: evs, isDML: true, skipped: false})
 
-	updateRows = [][]interface{}{{int32(2)}, {int32(1)}}
-	dmlData = []*event.DMLData{
-		{
-			TableID:    8,
-			Schema:     "foo1",
-			Table:      "bar1",
-			ColumnType: columnType,
-			Rows:       updateRows,
-		},
-	}
-	eventType = replication.UPDATE_ROWS_EVENTv2
-	evs, _, err = s.eventsGenerator.GenDMLEvents(eventType, dmlData)
-	c.Assert(err, IsNil)
+	evs = s.generateEvents([]mockBinlogEvent{{Update, []interface{}{uint64(8), "foo", "bar", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}, {int32(1)}}}}}, c)
 	sqls = append(sqls, SQLChecker{events: evs, isDML: true, skipped: true})
-	deleteRows = [][]interface{}{{int32(2)}}
-	dmlData = []*event.DMLData{
-		{
-			TableID:    8,
-			Schema:     "foo1",
-			Table:      "bar1",
-			ColumnType: columnType,
-			Rows:       deleteRows,
-		},
-	}
-	eventType = replication.DELETE_ROWS_EVENTv2
-	evs, _, err = s.eventsGenerator.GenDMLEvents(eventType, dmlData)
-	c.Assert(err, IsNil)
+
+	evs = s.generateEvents([]mockBinlogEvent{{Delete, []interface{}{uint64(8), "foo", "bar", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}}}}}, c)
 	sqls = append(sqls, SQLChecker{events: evs, isDML: true, skipped: true})
-	evs, _, err = s.eventsGenerator.GenCreateTableEvents("foo1", "create table foo1.bar2(id int)")
-	c.Assert(err, IsNil)
+
+	evs = s.generateEvents([]mockBinlogEvent{{DBDrop, []interface{}{"foo1"}}}, c)
 	sqls = append(sqls, SQLChecker{events: evs, isDML: false, skipped: false})
-	insertRows = [][]interface{}{{int32(1)}}
-	dmlData = []*event.DMLData{
-		{
-			TableID:    8,
-			Schema:     "foo1",
-			Table:      "bar2",
-			ColumnType: columnType,
-			Rows:       insertRows,
-		},
-	}
-	eventType = replication.WRITE_ROWS_EVENTv2
-	evs, _, err = s.eventsGenerator.GenDMLEvents(eventType, dmlData)
-	c.Assert(err, IsNil)
+
+	evs = s.generateEvents([]mockBinlogEvent{{DBCreate, []interface{}{"foo1"}}}, c)
+	sqls = append(sqls, SQLChecker{events: evs, isDML: false, skipped: false})
+
+	evs = s.generateEvents([]mockBinlogEvent{{TableCreate, []interface{}{"foo1", "create table foo1.bar1(id int)"}}}, c)
+	sqls = append(sqls, SQLChecker{events: evs, isDML: false, skipped: false})
+
+	evs = s.generateEvents([]mockBinlogEvent{{Write, []interface{}{uint64(9), "foo1", "bar1", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(1)}}}}}, c)
 	sqls = append(sqls, SQLChecker{events: evs, isDML: true, skipped: false})
-	updateRows = [][]interface{}{{int32(2)}, {int32(1)}}
-	dmlData = []*event.DMLData{
-		{
-			TableID:    8,
-			Schema:     "foo1",
-			Table:      "bar2",
-			ColumnType: columnType,
-			Rows:       updateRows,
-		},
-	}
-	eventType = replication.UPDATE_ROWS_EVENTv2
-	evs, _, err = s.eventsGenerator.GenDMLEvents(eventType, dmlData)
-	c.Assert(err, IsNil)
+
+	evs = s.generateEvents([]mockBinlogEvent{{Update, []interface{}{uint64(9), "foo1", "bar1", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}, {int32(1)}}}}}, c)
 	sqls = append(sqls, SQLChecker{events: evs, isDML: true, skipped: true})
-	deleteRows = [][]interface{}{{int32(2)}}
-	dmlData = []*event.DMLData{
-		{
-			TableID:    8,
-			Schema:     "foo1",
-			Table:      "bar2",
-			ColumnType: columnType,
-			Rows:       deleteRows,
-		},
-	}
-	eventType = replication.DELETE_ROWS_EVENTv2
-	evs, _, err = s.eventsGenerator.GenDMLEvents(eventType, dmlData)
-	c.Assert(err, IsNil)
+
+	evs = s.generateEvents([]mockBinlogEvent{{Delete, []interface{}{uint64(9), "foo1", "bar1", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}}}}}, c)
+	sqls = append(sqls, SQLChecker{events: evs, isDML: true, skipped: true})
+
+	evs = s.generateEvents([]mockBinlogEvent{{TableCreate, []interface{}{"foo1", "create table foo1.bar2(id int)"}}}, c)
+	sqls = append(sqls, SQLChecker{events: evs, isDML: false, skipped: false})
+
+	evs = s.generateEvents([]mockBinlogEvent{{Write, []interface{}{uint64(10), "foo1", "bar2", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(1)}}}}}, c)
+	sqls = append(sqls, SQLChecker{events: evs, isDML: true, skipped: false})
+
+	evs = s.generateEvents([]mockBinlogEvent{{Update, []interface{}{uint64(10), "foo1", "bar2", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}, {int32(1)}}}}}, c)
+	sqls = append(sqls, SQLChecker{events: evs, isDML: true, skipped: true})
+
+	evs = s.generateEvents([]mockBinlogEvent{{Delete, []interface{}{uint64(10), "foo1", "bar2", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2)}}}}}, c)
 	sqls = append(sqls, SQLChecker{events: evs, isDML: true, skipped: true})
 
 	db, mock, err := sqlmock.New()
@@ -935,23 +716,14 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 
 	s.resetEventsGenerator()
 
-	createEvents := make([]*replication.BinlogEvent, 0, 4)
-	dmlEvents := make([]*replication.BinlogEvent, 0, 15)
-	dropEvents := make([]*replication.BinlogEvent, 0, 4)
-
 	//create db and tables
-	evs, _, err := s.eventsGenerator.GenCreateDatabaseEvents("stest_3")
-	c.Assert(err, IsNil)
-	createEvents = append(createEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateTableEvents("stest_3", "create table stest_3.log(id varchar(45))")
-	c.Assert(err, IsNil)
-	createEvents = append(createEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateTableEvents("stest_3", "create table stest_3.t_2(name varchar(45), id bigint)")
-	c.Assert(err, IsNil)
-	createEvents = append(createEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenCreateTableEvents("stest_3", "create table stest_3.a(id int)")
-	c.Assert(err, IsNil)
-	createEvents = append(createEvents, evs...)
+	events := make([]mockBinlogEvent, 0, 24)
+	events = append(events, mockBinlogEvent{typ: DBCreate, args: []interface{}{"stest_3"}})
+	events = append(events, mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest_3", "create table stest_3.log(id varchar(45))"}})
+	events = append(events, mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest_3", "create table stest_3.t_2(name varchar(45), id bigint)"}})
+	events = append(events, mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest_3", "create table stest_3.a(id int)"}})
+
+	createEvents := s.generateEvents(events, c)
 
 	// dmls
 	type dml struct {
@@ -959,69 +731,30 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 		column []string
 		data   []interface{}
 	}
+
 	dmls := make([]dml, 0, 3)
-	columnType := []byte{mysql.MYSQL_TYPE_STRING, mysql.MYSQL_TYPE_LONGLONG}
-	insertRows := [][]interface{}{{"ian", int64(10)}}
-	dmlData := []*event.DMLData{
-		{
-			TableID:    8,
-			Schema:     "stest_3",
-			Table:      "t_2",
-			ColumnType: columnType,
-			Rows:       insertRows,
-		},
-	}
-	eventType := replication.WRITE_ROWS_EVENTv2
-	evs, _, err = s.eventsGenerator.GenDMLEvents(eventType, dmlData)
-	c.Assert(err, IsNil)
+
+	evs := s.generateEvents([]mockBinlogEvent{{typ: Write, args: []interface{}{uint64(8), "stest_3", "t_2", []byte{mysql.MYSQL_TYPE_STRING, mysql.MYSQL_TYPE_LONG}, [][]interface{}{{"ian", int32(10)}}}}}, c)
 	dmls = append(dmls, dml{events: evs, column: []string{"name", "id"}, data: []interface{}{"ian", int64(1<<59 | 3<<52 | 2<<44 | 10)}})
 
-	columnType = []byte{mysql.MYSQL_TYPE_STRING}
-	insertRows = [][]interface{}{{"10"}}
-	dmlData = []*event.DMLData{
-		{
-			TableID:    9,
-			Schema:     "stest_3",
-			Table:      "log",
-			ColumnType: columnType,
-			Rows:       insertRows,
-		},
-	}
-	evs, _, err = s.eventsGenerator.GenDMLEvents(eventType, dmlData)
-	c.Assert(err, IsNil)
+	evs = s.generateEvents([]mockBinlogEvent{{typ: Write, args: []interface{}{uint64(9), "stest_3", "log", []byte{mysql.MYSQL_TYPE_STRING}, [][]interface{}{{"10"}}}}}, c)
 	dmls = append(dmls, dml{events: evs, column: []string{"id"}, data: []interface{}{"test:10"}})
 
-	columnType = []byte{mysql.MYSQL_TYPE_LONG}
-	insertRows = [][]interface{}{{int32(10)}}
-	dmlData = []*event.DMLData{
-		{
-			TableID:    10,
-			Schema:     "stest_3",
-			Table:      "a",
-			ColumnType: columnType,
-			Rows:       insertRows,
-		},
-	}
-	evs, _, err = s.eventsGenerator.GenDMLEvents(eventType, dmlData)
-	c.Assert(err, IsNil)
+	evs = s.generateEvents([]mockBinlogEvent{{typ: Write, args: []interface{}{uint64(10), "stest_3", "a", []byte{mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(10)}}}}}, c)
 	dmls = append(dmls, dml{events: evs, column: []string{"id"}, data: []interface{}{int32(10)}})
+
+	dmlEvents := make([]*replication.BinlogEvent, 0, 15)
 	for _, dml := range dmls {
 		dmlEvents = append(dmlEvents, dml.events...)
 	}
 
 	// drop tables and db
-	evs, _, err = s.eventsGenerator.GenDropTableEvents("stest_3", "log")
-	c.Assert(err, IsNil)
-	dropEvents = append(dropEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropTableEvents("stest_3", "t_2")
-	c.Assert(err, IsNil)
-	dropEvents = append(dropEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropTableEvents("stest_3", "a")
-	c.Assert(err, IsNil)
-	dropEvents = append(dropEvents, evs...)
-	evs, _, err = s.eventsGenerator.GenDropDatabaseEvents("stest_3")
-	c.Assert(err, IsNil)
-	dropEvents = append(dropEvents, evs...)
+	events = events[:0]
+	events = append(events, mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest_3", "log"}})
+	events = append(events, mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest_3", "t_2"}})
+	events = append(events, mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest_3", "a"}})
+	events = append(events, mockBinlogEvent{typ: DBDrop, args: []interface{}{"stest_3"}})
+	dropEvents := s.generateEvents(events, c)
 
 	db, mock, err := sqlmock.New()
 	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
