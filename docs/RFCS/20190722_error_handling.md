@@ -28,7 +28,7 @@ Currently all DM errors are constructed by `errors.Errorf` with error descriptio
 
 - Organize DM error scenarios and classify these errors
 - Provide a unified error code mechanism
-- Standardize error handling, including how to create,  propagate and log an error
+- Standardize error handling, including how to create, propagate and log an error
 
 ## Implementation
 
