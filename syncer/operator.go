@@ -14,7 +14,6 @@
 package syncer
 
 import (
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/pb"
@@ -22,7 +21,7 @@ import (
 
 // SetSQLOperator sets an SQL operator to syncer
 func (s *Syncer) SetSQLOperator(req *pb.HandleSubTaskSQLsRequest) error {
-	return errors.Trace(s.sqlOperatorHolder.Set(s.tctx, req))
+	return s.sqlOperatorHolder.Set(s.tctx, req)
 }
 
 // tryApplySQLOperator tries to get SQLs by applying an possible operator
