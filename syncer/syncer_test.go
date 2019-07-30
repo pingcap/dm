@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
+	"github.com/pingcap/parser"
 	"strings"
 	"sync"
 	"testing"
@@ -158,14 +159,12 @@ func (s *testSyncerSuite) resetEventsGenerator(c *C) {
 	previousGTIDSet, err := gtid.ParserGTID(s.cfg.Flavor, previousGTIDSetStr)
 	if err != nil {
 		c.Fatal("", zap.Error(err))
-		c.FailNow()
 	}
 	latestGTIDStr := "3ccc475b-2343-11e7-be21-6c0b84d59f30:14"
 	latestGTID, err := gtid.ParserGTID(s.cfg.Flavor, latestGTIDStr)
 	s.eventsGenerator, err = event.NewGenerator(s.cfg.Flavor, uint32(s.cfg.ServerID), 0, latestGTID, previousGTIDSet, 0)
 	if err != nil {
 		c.Fatal("", zap.Error(err))
-		c.FailNow()
 	}
 }
 
@@ -207,6 +206,13 @@ func (s *testSyncerSuite) resetBinlogSyncer() {
 
 func (s *testSyncerSuite) TearDownSuite(c *C) {
 	s.db.Close()
+}
+
+func (s *testSyncerSuite) mockParser(db *sql.DB, mock sqlmock.Sqlmock) (*parser.Parser, error) {
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
+		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
+	return utils.GetParser(db, false)
 }
 
 func (s *testSyncerSuite) resetMaster() {
@@ -263,10 +269,7 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 	}
 
 	db, mock, err := sqlmock.New()
-	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
-		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
-			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
-	p, err := utils.GetParser(db, false)
+	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
@@ -371,10 +374,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 	}
 
 	db, mock, err := sqlmock.New()
-	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
-		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
-			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
-	p, err := utils.GetParser(db, false)
+	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
@@ -442,10 +442,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 	res := []bool{true, true, false, false, true, true, true, true, true, true, false, false}
 
 	db, mock, err := sqlmock.New()
-	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
-		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
-			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
-	p, err := utils.GetParser(db, false)
+	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
@@ -533,10 +530,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 	}
 
 	db, mock, err := sqlmock.New()
-	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
-		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
-			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
-	p, err := utils.GetParser(db, false)
+	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
@@ -663,10 +657,7 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 	sqls = append(sqls, SQLChecker{events: evs, isDML: true, skipped: true})
 
 	db, mock, err := sqlmock.New()
-	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
-		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
-			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
-	p, err := utils.GetParser(db, false)
+	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
@@ -759,10 +750,7 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 	dropEvents := s.generateEvents(events, c)
 
 	db, mock, err := sqlmock.New()
-	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
-		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
-			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
-	p, err := utils.GetParser(db, false)
+	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
 	mapping, err := cm.NewMapping(false, rules)
