@@ -82,7 +82,8 @@ const (
 	codeLoadUnitDumpDirNotFound
 	codeLoadUnitDuplicateTableFile
 
-	codeSyncUnitInvalidTableName = iota + 2201
+	codeSyncerUnitPanic = iota + 2201
+	codeSyncUnitInvalidTableName
 	codeSyncUnitTableNameQuery
 	codeSyncUnitNotSupportedDML
 	codeSyncUnitAddTableInSharding
@@ -95,7 +96,6 @@ const (
 	codeSyncUnitSafeModeSetCount
 	codeSyncUnitCausalityConflict
 	codeSyncUnitDMLStatementFound
-	codeSyncerUnitOnlineDDLInvalidMeta
 	codeSyncerUnitBinlogEventFilter
 	codeSyncerUnitInvalidReplicaEvent
 	codeSyncerUnitParseStmt
@@ -103,6 +103,7 @@ const (
 	codeSyncerUnitDDLExecChanCloseOrBusy
 	codeSyncerUnitDDLChanDone
 	codeSyncerUnitDDLChanCanceled
+	codeSyncerUnitDDLOnMultipleTable
 	codeSyncerUnitInjectDDLOnly
 	codeSyncerUnitInjectDDLWithoutSchema
 	codeSyncerUnitNotSupportedOperate
@@ -110,12 +111,18 @@ const (
 	codeSyncerUnitDMLColumnNotMatch
 	codeSyncerUnitDMLOldNewValueMismatch
 	codeSyncerUnitDMLPruneColumnMismatch
+	codeSyncerUnitNewBinlogEventFilter
+	codeSyncerUnitGenTableRouter
+	codeSyncerUnitNewColumnMapping
 	codeSyncerUnitDoColumnMapping
 	codeSyncerUnitCacheKeyNotFound
 	codeSyncerUnitHeartbeatCheckConfig
 	codeSyncerUnitHeartbeatRecordExists
 	codeSyncerUnitHeartbeatRecordNotFound
 	codeSyncerUnitHeartbeatRecordNotValid
+	codeSyncerUnitOnlineDDLInvalidMeta
+	codeSyncerUnitOnlineDDLSchemeNotSupport
+	codeSyncerUnitOnlineDDLOnMultipleTable
 	codeSyncerUnitGhostApplyEmptyTable
 	codeSyncerUnitGhostRenameTableNotValid
 	codeSyncerUnitGhostRenameToGhostTable
@@ -126,6 +133,14 @@ const (
 	codeSyncerUnitPTRenameToGhostTable
 	codeSyncerUnitPTRenameGhostTblToOther
 	codeSyncerUnitPTOnlineDDLOnGhostTbl
+	codeSyncerUnitRemoteSteamerWithGTID
+	codeSyncerUnitRemoteSteamerStartSync
+	codeSyncerUnitGetTableFromDB
+	codeSyncerUnitFirstEndPosNotFound
+	codeSyncerUnitResolveCasualityFail
+	codeSyncerUnitReopenStreamNotSupport
+	codeSyncerUnitUpdateConfigInSharding
+	codeSyncerUnitExecWithNoBlockingDDL
 )
 
 // Error instances
@@ -205,6 +220,7 @@ var (
 	ErrLoadUnitDuplicateTableFile  = New(codeLoadUnitDuplicateTableFile, ClassLoadUnit, ScopeInternal, LevelHigh, "invalid table schema file, duplicated item - %s")
 
 	// Sync unit error
+	ErrSyncerUnitPanic                   = New(codeSyncerUnitPanic, ClassSyncUnit, ScopeInternal, LevelHigh, "panic error: %v")
 	ErrSyncUnitInvalidTableName          = New(codeSyncUnitInvalidTableName, ClassSyncUnit, ScopeInternal, LevelHigh, "extract table name for DML error: %s")
 	ErrSyncUnitTableNameQuery            = New(codeSyncUnitTableNameQuery, ClassSyncUnit, ScopeInternal, LevelHigh, "table name parse error: %s")
 	ErrSyncUnitNotSupportedDML           = New(codeSyncUnitNotSupportedDML, ClassSyncUnit, ScopeInternal, LevelHigh, "DMLNode %v not supported")
@@ -219,7 +235,6 @@ var (
 	ErrSyncUnitCausalityConflict         = New(codeSyncUnitCausalityConflict, ClassSyncUnit, ScopeInternal, LevelHigh, "some conflicts in causality, must be resolved")
 	// ErrSyncUnitDMLStatementFound defines an error which means we found unexpected dml statement found in query event
 	ErrSyncUnitDMLStatementFound            = New(codeSyncUnitDMLStatementFound, ClassSyncUnit, ScopeInternal, LevelHigh, "only support ROW format binlog, unexpected DML statement found in query event")
-	ErrSyncerUnitOnlineDDLInvalidMeta       = New(codeSyncerUnitOnlineDDLInvalidMeta, ClassSyncUnit, ScopeInternal, LevelHigh, "online ddl meta invalid")
 	ErrSyncerUnitBinlogEventFilter          = New(codeSyncerUnitBinlogEventFilter, ClassSyncUnit, ScopeInternal, LevelHigh, "")
 	ErrSyncerUnitInvalidReplicaEvent        = New(codeSyncerUnitInvalidReplicaEvent, ClassSyncUnit, ScopeInternal, LevelHigh, "[syncer] invalid replication event type %v")
 	ErrSyncerUnitParseStmt                  = New(codeSyncerUnitParseStmt, ClassSyncUnit, ScopeInternal, LevelHigh, "")
@@ -227,6 +242,7 @@ var (
 	ErrSyncerUnitDDLExecChanCloseOrBusy     = New(codeSyncerUnitDDLExecChanCloseOrBusy, ClassSyncUnit, ScopeInternal, LevelHigh, "the chan has closed or already in sending")
 	ErrSyncerUnitDDLChanDone                = New(codeSyncerUnitDDLChanDone, ClassSyncUnit, ScopeInternal, LevelHigh, "canceled from external")
 	ErrSyncerUnitDDLChanCanceled            = New(codeSyncerUnitDDLChanCanceled, ClassSyncUnit, ScopeInternal, LevelHigh, "canceled by Close or Renew")
+	ErrSyncerUnitDDLOnMultipleTable         = New(codeSyncerUnitDDLOnMultipleTable, ClassSyncUnit, ScopeInternal, LevelHigh, "ddl on multiple table: %s")
 	ErrSyncerUnitInjectDDLOnly              = New(codeSyncerUnitInjectDDLOnly, ClassSyncUnit, ScopeInternal, LevelLow, "only support inject DDL for sharding group to be synced currently, but got %s")
 	ErrSyncerUnitInjectDDLWithoutSchema     = New(codeSyncerUnitInjectDDLWithoutSchema, ClassSyncUnit, ScopeInternal, LevelLow, "injected DDL %s without schema name not valid")
 	ErrSyncerUnitNotSupportedOperate        = New(codeSyncerUnitNotSupportedOperate, ClassSyncUnit, ScopeInternal, LevelMedium, "op %s not supported")
@@ -234,12 +250,18 @@ var (
 	ErrSyncerUnitDMLColumnNotMatch          = New(codeSyncerUnitDMLColumnNotMatch, ClassSyncUnit, ScopeInternal, LevelHigh, "Column count doesn't match value count: %d (columns) vs %d (values)")
 	ErrSyncerUnitDMLOldNewValueMismatch     = New(codeSyncerUnitDMLOldNewValueMismatch, ClassSyncUnit, ScopeInternal, LevelHigh, "Old value count doesn't match new value count: %d (old) vs %d (new)")
 	ErrSyncerUnitDMLPruneColumnMismatch     = New(codeSyncerUnitDMLPruneColumnMismatch, ClassSyncUnit, ScopeInternal, LevelHigh, "prune DML columns and data mismatch in length: %d (columns) %d (data)")
+	ErrSyncerUnitNewBinlogEventFilter       = New(codeSyncerUnitNewBinlogEventFilter, ClassSyncUnit, ScopeInternal, LevelHigh, "new binlog event filter")
+	ErrSyncerUnitGenTableRouter             = New(codeSyncerUnitGenTableRouter, ClassSyncUnit, ScopeInternal, LevelHigh, "generate table router")
+	ErrSyncerUnitNewColumnMapping           = New(codeSyncerUnitNewColumnMapping, ClassSyncUnit, ScopeInternal, LevelHigh, "new column mapping")
 	ErrSyncerUnitDoColumnMapping            = New(codeSyncerUnitDoColumnMapping, ClassSyncUnit, ScopeInternal, LevelHigh, "mapping row data %v for table `%s`.`%s`")
 	ErrSyncerUnitCacheKeyNotFound           = New(codeSyncerUnitCacheKeyNotFound, ClassSyncUnit, ScopeInternal, LevelHigh, "cache key %s in %s not found")
 	ErrSyncerUnitHeartbeatCheckConfig       = New(codeSyncerUnitHeartbeatCheckConfig, ClassSyncUnit, ScopeInternal, LevelMedium, "")
 	ErrSyncerUnitHeartbeatRecordExists      = New(codeSyncerUnitHeartbeatRecordExists, ClassSyncUnit, ScopeInternal, LevelMedium, "heartbeat slave record for task %s already exists")
 	ErrSyncerUnitHeartbeatRecordNotFound    = New(codeSyncerUnitHeartbeatRecordNotFound, ClassSyncUnit, ScopeInternal, LevelMedium, "heartbeat slave record for task %s not found")
 	ErrSyncerUnitHeartbeatRecordNotValid    = New(codeSyncerUnitHeartbeatRecordNotValid, ClassSyncUnit, ScopeInternal, LevelMedium, "heartbeat record %s not valid")
+	ErrSyncerUnitOnlineDDLInvalidMeta       = New(codeSyncerUnitOnlineDDLInvalidMeta, ClassSyncUnit, ScopeInternal, LevelHigh, "online ddl meta invalid")
+	ErrSyncerUnitOnlineDDLSchemeNotSupport  = New(codeSyncerUnitOnlineDDLSchemeNotSupport, ClassSyncUnit, ScopeInternal, LevelHigh, "online ddl scheme (%s) not supported")
+	ErrSyncerUnitOnlineDDLOnMultipleTable   = New(codeSyncerUnitOnlineDDLOnMultipleTable, ClassSyncUnit, ScopeInternal, LevelHigh, "online ddl changes on multiple table: %s not supported")
 	ErrSyncerUnitGhostApplyEmptyTable       = New(codeSyncerUnitGhostApplyEmptyTable, ClassSyncUnit, ScopeInternal, LevelHigh, "empty tables not valid")
 	ErrSyncerUnitGhostRenameTableNotValid   = New(codeSyncerUnitGhostRenameTableNotValid, ClassSyncUnit, ScopeInternal, LevelHigh, "tables should contain old and new table name")
 	ErrSyncerUnitGhostRenameToGhostTable    = New(codeSyncerUnitGhostRenameToGhostTable, ClassSyncUnit, ScopeInternal, LevelHigh, "rename table to ghost table %s not supported")
@@ -250,4 +272,12 @@ var (
 	ErrSyncerUnitPTRenameToGhostTable       = New(codeSyncerUnitPTRenameToGhostTable, ClassSyncUnit, ScopeInternal, LevelHigh, "rename table to ghost table %s not supported")
 	ErrSyncerUnitPTRenameGhostTblToOther    = New(codeSyncerUnitPTRenameGhostTblToOther, ClassSyncUnit, ScopeInternal, LevelHigh, "rename ghost table to other ghost table %s not supported")
 	ErrSyncerUnitPTOnlineDDLOnGhostTbl      = New(codeSyncerUnitPTOnlineDDLOnGhostTbl, ClassSyncUnit, ScopeInternal, LevelHigh, "online ddls on ghost table `%s`.`%s`")
+	ErrSyncerUnitRemoteSteamerWithGTID      = New(codeSyncerUnitRemoteSteamerWithGTID, ClassSyncUnit, ScopeInternal, LevelHigh, "open remote streamer with GTID mode not supported")
+	ErrSyncerUnitRemoteSteamerStartSync     = New(codeSyncerUnitRemoteSteamerStartSync, ClassSyncUnit, ScopeInternal, LevelHigh, "start syncing binlog from remote streamer")
+	ErrSyncerUnitGetTableFromDB             = New(codeSyncerUnitGetTableFromDB, ClassSyncUnit, ScopeInternal, LevelHigh, "invalid table `%s`.`%s`")
+	ErrSyncerUnitFirstEndPosNotFound        = New(codeSyncerUnitFirstEndPosNotFound, ClassSyncUnit, ScopeInternal, LevelHigh, "no valid End_log_pos of the first DDL exists for sharding group with source %s")
+	ErrSyncerUnitResolveCasualityFail       = New(codeSyncerUnitResolveCasualityFail, ClassSyncUnit, ScopeInternal, LevelHigh, "resolve karam error %v")
+	ErrSyncerUnitReopenStreamNotSupport     = New(codeSyncerUnitReopenStreamNotSupport, ClassSyncUnit, ScopeInternal, LevelHigh, "reopen %T not supported")
+	ErrSyncerUnitUpdateConfigInSharding     = New(codeSyncerUnitUpdateConfigInSharding, ClassSyncUnit, ScopeInternal, LevelHigh, "try update config when some tables' (%v) sharding DDL not synced not supported")
+	ErrSyncerUnitExecWithNoBlockingDDL      = New(codeSyncerUnitExecWithNoBlockingDDL, ClassSyncUnit, ScopeInternal, LevelHigh, "process unit not waiting for sharding DDL to sync")
 )
