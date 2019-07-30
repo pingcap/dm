@@ -41,7 +41,7 @@ func (s *Syncer) InjectSQLs(ctx context.Context, sqls []string) error {
 		}
 		ddlNode, ok := node.(ast.DDLNode)
 		if !ok {
-			return terrorErrSyncerUnitInjectDDLOnly.Generate(sql)
+			return terror.ErrSyncerUnitInjectDDLOnly.Generate(sql)
 		}
 		tableNames, err := parserpkg.FetchDDLTableNames("", ddlNode)
 		if err != nil {

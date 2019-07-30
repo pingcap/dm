@@ -69,7 +69,7 @@ func (o *operator) operate() ([]string, error) {
 	case pb.SQLOp_REPLACE:
 		return o.args, nil
 	default:
-		return nil, terror.ErrSyncerUnitNotSupportedOperate.Generate(op)
+		return nil, terror.ErrSyncerUnitNotSupportedOperate.Generate(o.op)
 	}
 }
 
