@@ -295,7 +295,7 @@ func (c *TaskConfig) DecodeFile(fpath string) error {
 		return errors.Annotatef(err, "read config file %v", fpath)
 	}
 
-	err = yaml.Unmarshal(bs, c)
+	err = yaml.UnmarshalStrict(bs, c)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -305,7 +305,7 @@ func (c *TaskConfig) DecodeFile(fpath string) error {
 
 // Decode loads config from file data
 func (c *TaskConfig) Decode(data string) error {
-	err := yaml.Unmarshal([]byte(data), c)
+	err := yaml.UnmarshalStrict([]byte(data), c)
 	if err != nil {
 		return errors.Trace(err)
 	}

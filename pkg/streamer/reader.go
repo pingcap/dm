@@ -383,12 +383,11 @@ func (r *BinlogReader) updateUUIDs() error {
 }
 
 // Close closes BinlogReader.
-func (r *BinlogReader) Close() error {
+func (r *BinlogReader) Close() {
 	r.tctx.L().Info("binlog reader closing")
 	r.running = false
 	r.cancel()
 	r.parser.Stop()
 	r.wg.Wait()
 	r.tctx.L().Info("binlog reader closed")
-	return nil
 }
