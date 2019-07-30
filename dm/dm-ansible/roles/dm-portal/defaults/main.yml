@@ -1,0 +1,9 @@
+---
+
+# default configuration for dm-master
+
+dm_master_log_level: "info"
+dm_master_log_dir: "{{ deploy_dir }}/log"
+dm_master_log_file: "dm-portal.log"
+dm_master_stdout_log_file: "dm-portal-stdout.log"
+dm_master_stderr_log_file: "dm-portal-stderr.log"

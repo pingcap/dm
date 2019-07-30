@@ -1,0 +1,13 @@
+# Master Configuration.
+
+{% set worker_hosts = groups.dm_worker_servers %}
+{% for host in worker_hosts -%}
+  {% set worker_ip = hostvars[host].ansible_host | default(hostvars[host].inventory_hostname) -%}
+  {% set worker_port = hostvars[host].dm_worker_port -%}
+  {% set source_id = hostvars[host].source_id -%}
+
+[[deploy]]
+source-id = "{{ source_id }}"
+dm-worker = "{{ worker_ip }}:{{ worker_port }}"
+
+{% endfor -%}
