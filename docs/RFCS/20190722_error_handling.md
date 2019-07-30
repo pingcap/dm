@@ -41,7 +41,7 @@ Error object is defined as below, with some import fields:
 - level: emergency level of this error, including high, medium, and low
 - args: variables used for error message generation. For example, we have an error `ErrFailedFlushCheckpoint = terror.Syncer.New(5300, “failed to flush checkpoint %s”)`.  We can use this error as ErrFailedFlushCheckpoint.GenWithArgs(checkpoint), so we don’t need additional error messages when we use this error
 - rawCause: used to record root errors via a third party function call
-- stack: thanks to [pingcap/errors/StackTracer](https://www.google.com/url?q=https://github.com/pingcap/errors/blob/master/stack.go%23L13-L17&sa=D&ust=1563783859452000), we can use this to record stack trace easily
+- stack: thanks to [pingcap/errors/StackTracer](https://github.com/pingcap/errors/blob/dc8ffe785c7fc9a74eeb5241814d77f1c5fb5e58/stack.go#L13-L17), we can use this to record stack trace easily
 
 ```go
 type ErrCode int

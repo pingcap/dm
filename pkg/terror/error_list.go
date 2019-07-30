@@ -46,6 +46,7 @@ const (
 	codeBinlogInvalidFilename
 	codeBinlogParsePosFromStr
 
+	// Checkpoint error code
 	codeCheckpointInvalidTaskMode = iota + 1301
 	codeCheckpointSaveInvalidPos
 	codeCheckpointInvalidTableFile
@@ -53,19 +54,25 @@ const (
 	codeCheckpointTableNotExistInFile
 	codeCheckpointRestoreCountGreater
 
+	// Task check error code
 	codeTaskCheckSameTableName = iota + 1401
 	codeTaskCheckFailedOpenDB
 	codeTaskCheckNewTableRouter
 	codeTaskCheckNewColumnMapping
 
+	// Relay log basic API error
 	codeRelayParseUUIDIndex = iota + 1501
 	codeRelayParseUUIDSuffix
 	codeRelayUUIDWithSuffixNotFound
 	codeRelayGenFakeRotateEvent
 	codeRelayNoValidRelaySubDir
 
+	// TODO: Relay unit error
+
+	// Dump unit error code
 	codeDumpUnitRuntime = iota + 2001
 
+	// Load unit error code
 	codeLoadUnitCreateSchemaFile = iota + 2101
 	codeLoadUnitInvalidFileEnding
 	codeLoadUnitParseQuoteValues
@@ -82,6 +89,7 @@ const (
 	codeLoadUnitDumpDirNotFound
 	codeLoadUnitDuplicateTableFile
 
+	// Sync unit error code
 	codeSyncerUnitPanic = iota + 2201
 	codeSyncUnitInvalidTableName
 	codeSyncUnitTableNameQuery
@@ -141,6 +149,10 @@ const (
 	codeSyncerUnitReopenStreamNotSupport
 	codeSyncerUnitUpdateConfigInSharding
 	codeSyncerUnitExecWithNoBlockingDDL
+
+	// TODO: DM-master error code
+
+	// TODO: DM-worker error code
 )
 
 // Error instances
