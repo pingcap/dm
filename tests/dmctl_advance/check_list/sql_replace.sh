@@ -10,7 +10,7 @@ function sql_replace_invalid_binlog_pos() {
     binlog_pos="mysql-bin:shoud-bin-digital"
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "sql-replace test-task --binlog-pos $binlog_pos sql1" \
-        "invalid --binlog-pos $binlog_pos in sql operation: \[[0-9]*:.*:.*:.*\] the pos should be digital" 1
+        "invalid --binlog-pos $binlog_pos in sql operation: \[.*\] the pos should be digital" 1
 }
 
 function sql_replace_non_sharding_without_one_worker() {
