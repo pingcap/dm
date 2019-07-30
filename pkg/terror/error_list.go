@@ -121,6 +121,11 @@ const (
 	codeSyncerUnitGhostRenameToGhostTable
 	codeSyncerUnitGhostRenameGhostTblToOther
 	codeSyncerUnitGhostOnlineDDLOnGhostTbl
+	codeSyncerUnitPTApplyEmptyTable
+	codeSyncerUnitPTRenameTableNotValid
+	codeSyncerUnitPTRenameToGhostTable
+	codeSyncerUnitPTRenameGhostTblToOther
+	codeSyncerUnitPTOnlineDDLOnGhostTbl
 )
 
 // Error instances
@@ -240,4 +245,9 @@ var (
 	ErrSyncerUnitGhostRenameToGhostTable    = New(codeSyncerUnitGhostRenameToGhostTable, ClassSyncUnit, ScopeInternal, LevelHigh, "rename table to ghost table %s not supported")
 	ErrSyncerUnitGhostRenameGhostTblToOther = New(codeSyncerUnitGhostRenameGhostTblToOther, ClassSyncUnit, ScopeInternal, LevelHigh, "rename ghost table to other ghost table %s not supported")
 	ErrSyncerUnitGhostOnlineDDLOnGhostTbl   = New(codeSyncerUnitGhostOnlineDDLOnGhostTbl, ClassSyncUnit, ScopeInternal, LevelHigh, "online ddls on ghost table `%s`.`%s`")
+	ErrSyncerUnitPTApplyEmptyTable          = New(codeSyncerUnitPTApplyEmptyTable, ClassSyncUnit, ScopeInternal, LevelHigh, "empty tables not valid")
+	ErrSyncerUnitPTRenameTableNotValid      = New(codeSyncerUnitPTRenameTableNotValid, ClassSyncUnit, ScopeInternal, LevelHigh, "tables should contain old and new table name")
+	ErrSyncerUnitPTRenameToGhostTable       = New(codeSyncerUnitPTRenameToGhostTable, ClassSyncUnit, ScopeInternal, LevelHigh, "rename table to ghost table %s not supported")
+	ErrSyncerUnitPTRenameGhostTblToOther    = New(codeSyncerUnitPTRenameGhostTblToOther, ClassSyncUnit, ScopeInternal, LevelHigh, "rename ghost table to other ghost table %s not supported")
+	ErrSyncerUnitPTOnlineDDLOnGhostTbl      = New(codeSyncerUnitPTOnlineDDLOnGhostTbl, ClassSyncUnit, ScopeInternal, LevelHigh, "online ddls on ghost table `%s`.`%s`")
 )

@@ -16,13 +16,13 @@ package syncer
 import (
 	"strings"
 
-	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // PT handles pt online schema changes
@@ -41,14 +41,14 @@ func NewPT(tctx *tcontext.Context, cfg *config.SubTaskConfig) (OnlinePlugin, err
 		storge: NewOnlineDDLStorage(newtctx, cfg),
 	}
 
-	return g, errors.Trace(g.storge.Init())
+	return g, g.storge.Init()
 }
 
 // Apply implements interface.
 // returns ddls, real schema, real table, error
 func (p *PT) Apply(tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, string, string, error) {
 	if len(tables) < 1 {
-		return nil, "", "", errors.NotValidf("tables should not be empty!")
+		return nil, "", "", terror.ErrSyncerUnitPTApplyEmptyTable.Generate()
 	}
 
 	schema, table := tables[0].Schema, tables[0].Name
@@ -60,14 +60,14 @@ func (p *PT) Apply(tables []*filter.Table, statement string, stmt ast.StmtNode) 
 		switch stmt.(type) {
 		case *ast.RenameTableStmt:
 			if len(tables) != 2 {
-				return nil, "", "", errors.NotValidf("tables should contain old and new table name")
+				return nil, "", "", terror.ErrSyncerUnitPTRenameTableNotValid.Generate()
 			}
 
 			tp1 := p.TableType(tables[1].Name)
 			if tp1 == trashTable {
 				return nil, "", "", nil
 			} else if tp1 == ghostTable {
-				return nil, "", "", errors.NotSupportedf("rename table to ghost table %s", statement)
+				return nil, "", "", terror.ErrSyncerUnitPTRenameToGhostTable.Generate(statement)
 			}
 		}
 		return []string{statement}, schema, table, nil
@@ -76,12 +76,12 @@ func (p *PT) Apply(tables []*filter.Table, statement string, stmt ast.StmtNode) 
 		switch stmt.(type) {
 		case *ast.RenameTableStmt:
 			if len(tables) != 2 {
-				return nil, "", "", errors.NotValidf("tables should contain old and new table name")
+				return nil, "", "", terror.ErrSyncerUnitPTRenameTableNotValid.Generate()
 			}
 
 			tp1 := p.TableType(tables[1].Name)
 			if tp1 == ghostTable {
-				return nil, "", "", errors.NotSupportedf("rename ghost table to other ghost table %s", statement)
+				return nil, "", "", terror.ErrSyncerUnitPTRenameGhostTblToOther.Generate(statement)
 			}
 		}
 	case ghostTable:
@@ -90,16 +90,16 @@ func (p *PT) Apply(tables []*filter.Table, statement string, stmt ast.StmtNode) 
 		case *ast.CreateTableStmt:
 			err := p.storge.Delete(schema, table)
 			if err != nil {
-				return nil, "", "", errors.Trace(err)
+				return nil, "", "", err
 			}
 		case *ast.DropTableStmt:
 			err := p.storge.Delete(schema, table)
 			if err != nil {
-				return nil, "", "", errors.Trace(err)
+				return nil, "", "", err
 			}
 		case *ast.RenameTableStmt:
 			if len(tables) != 2 {
-				return nil, "", "", errors.NotValidf("tables should contain old and new table name")
+				return nil, "", "", terror.ErrSyncerUnitPTRenameTableNotValid.Generate()
 			}
 
 			tp1 := p.TableType(tables[1].Name)
@@ -108,21 +108,21 @@ func (p *PT) Apply(tables []*filter.Table, statement string, stmt ast.StmtNode) 
 				if ghostInfo != nil {
 					return ghostInfo.DDLs, tables[1].Schema, tables[1].Name, nil
 				}
-				return nil, "", "", errors.NotFoundf("online ddls on ghost table `%s`.`%s`", schema, table)
+				return nil, "", "", terror.ErrSyncerUnitPTOnlineDDLOnGhostTbl.Generate(schema, table)
 			} else if tp1 == ghostTable {
-				return nil, "", "", errors.NotSupportedf("rename ghost table to other ghost table %s", statement)
+				return nil, "", "", terror.ErrSyncerUnitPTRenameGhostTblToOther.Generate(statement)
 			}
 
 			// rename ghost table to trash table
 			err := p.storge.Delete(schema, table)
 			if err != nil {
-				return nil, "", "", errors.Trace(err)
+				return nil, "", "", err
 			}
 
 		default:
 			err := p.storge.Save(schema, table, targetSchema, targetTable, statement)
 			if err != nil {
-				return nil, "", "", errors.Trace(err)
+				return nil, "", "", err
 			}
 		}
 	}
@@ -136,7 +136,7 @@ func (p *PT) Finish(schema, table string) error {
 		return nil
 	}
 
-	return errors.Trace(p.storge.Delete(schema, table))
+	return p.storge.Delete(schema, table)
 }
 
 // TableType implements interface
@@ -168,7 +168,7 @@ func (p *PT) RealName(schema, table string) (string, string) {
 
 // Clear clears online ddl information
 func (p *PT) Clear() error {
-	return errors.Trace(p.storge.Clear())
+	return p.storge.Clear()
 }
 
 // Close implements interface
