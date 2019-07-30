@@ -9,7 +9,7 @@
     group: '{{ deploy_user }}'
   become: true
   with_items:
-    - "{{ dm_master_log_dir }}"
+    - "{{ dm_portal_log_dir }}"
 
 - name: deploy dm-portal binary
   copy: src="{{ resources_dir }}/bin/dm-portal" dest="{{ deploy_dir }}/bin/" mode=0755

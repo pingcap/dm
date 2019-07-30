@@ -76,3 +76,12 @@
     - dmctl
   roles:
     - dmctl
+
+- name: deploying dm-portal
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tags:
+    - dm-portal
+  roles:
+    - dm-portal

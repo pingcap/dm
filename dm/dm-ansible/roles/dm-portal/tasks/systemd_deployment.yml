@@ -5,4 +5,4 @@
     name: systemd
   vars:
     this_role_name: dm-portal
-    service_name: dm-portal-{{ dm_master_port }}
+    service_name: dm-portal-{{ dm_portal_port }}

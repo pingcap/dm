@@ -10,5 +10,4 @@ cd "${DEPLOY_DIR}" || exit 1
 
 exec bin/dm-portal \
     --port="{{ dm_portal_port }}" \
-    -task-file-path="{{ dm_portal_task_file_path }}" \
-    --log-file="{{ dm_portal_log_dir }}/{{ dm_portal_log_file }}" >> "{{ dm_portal_log_dir }}/{{ dm_portal_stdout_log_file }}" 2>> "{{ dm_portal_log_dir }}/{{ dm_portal_stderr_log_file }}"
+    -task-file-path="{{ dm_portal_task_file_path }}"  >> "{{ dm_portal_log_dir }}/{{ dm_portal_stdout_log_file }}" 2>> "{{ dm_portal_log_dir }}/{{ dm_portal_stderr_log_file }}"

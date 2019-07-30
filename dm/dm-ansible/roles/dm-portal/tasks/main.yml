@@ -1,13 +1,3 @@
 ---
 
 - include_tasks: binary_deployment.yml
-
-- name: create configuration file
-  template: src=dm-portal.toml.j2 dest={{ deploy_dir }}/conf/dm-portal.toml mode=0644 backup=yes
-  register: dm_master_conf_st
-
-- name: backup conf file
-  command: mv "{{ dm_master_conf_st.backup_file }}" "{{ backup_dir }}"
-  when:
-    - dm_master_conf_st.changed
-    - dm_master_conf_st.backup_file is defined
