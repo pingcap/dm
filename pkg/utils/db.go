@@ -83,7 +83,7 @@ func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, erro
 
 		gs, err = gtid.ParserGTID(flavor, gtidStr)
 		if err != nil {
-			return binlogPos, gs, errors.Trace(err)
+			return binlogPos, gs, err
 		}
 	}
 	if rows.Err() != nil {
@@ -105,11 +105,11 @@ func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, erro
 func GetMariaDBGTID(db *sql.DB) (gtid.Set, error) {
 	gtidStr, err := GetGlobalVariable(db, "gtid_binlog_pos")
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	gs, err := gtid.ParserGTID(gmysql.MariaDBFlavor, gtidStr)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	return gs, nil
 }
@@ -119,7 +119,7 @@ func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
 	query := fmt.Sprintf("SHOW GLOBAL VARIABLES LIKE '%s'", variable)
 	rows, err := db.Query(query)
 	if err != nil {
-		return "", errors.Trace(err)
+		return "", terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 	defer rows.Close()
 
@@ -136,12 +136,12 @@ func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
 	for rows.Next() {
 		err = rows.Scan(&variable, &value)
 		if err != nil {
-			return "", errors.Trace(err)
+			return "", terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 		}
 	}
 
 	if rows.Err() != nil {
-		return "", errors.Trace(rows.Err())
+		return "", terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
 	}
 
 	return value, nil
@@ -151,22 +151,22 @@ func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
 func GetServerID(db *sql.DB) (int64, error) {
 	serverIDStr, err := GetGlobalVariable(db, "server_id")
 	if err != nil {
-		return 0, errors.Trace(err)
+		return 0, err
 	}
 
 	serverID, err := strconv.ParseInt(serverIDStr, 10, 64)
-	return serverID, errors.Trace(err)
+	return serverID, terror.ErrInvalidServerID.Delegate(err)
 }
 
 // GetMariaDBGtidDomainID gets MariaDB server's `gtid_domain_id`
 func GetMariaDBGtidDomainID(db *sql.DB) (uint32, error) {
 	domainIDStr, err := GetGlobalVariable(db, "gtid_domain_id")
 	if err != nil {
-		return 0, errors.Trace(err)
+		return 0, err
 	}
 
 	domainID, err := strconv.ParseUint(domainIDStr, 10, 32)
-	return uint32(domainID), errors.Trace(err)
+	return uint32(domainID), terror.ErrMariaDBDomainID.Delegate(err)
 }
 
 // GetServerUUID gets server's `server_uuid`
@@ -175,7 +175,7 @@ func GetServerUUID(db *sql.DB, flavor string) (string, error) {
 		return GetMariaDBUUID(db)
 	}
 	serverUUID, err := GetGlobalVariable(db, "server_uuid")
-	return serverUUID, errors.Trace(err)
+	return serverUUID, err
 }
 
 // GetMariaDBUUID gets equivalent `server_uuid` for MariaDB
@@ -183,11 +183,11 @@ func GetServerUUID(db *sql.DB, flavor string) (string, error) {
 func GetMariaDBUUID(db *sql.DB) (string, error) {
 	domainID, err := GetMariaDBGtidDomainID(db)
 	if err != nil {
-		return "", errors.Trace(err)
+		return "", err
 	}
 	serverID, err := GetServerID(db)
 	if err != nil {
-		return "", errors.Trace(err)
+		return "", err
 	}
 	return fmt.Sprintf("%d%s%d", domainID, domainServerIDSeparator, serverID), nil
 }
@@ -196,18 +196,18 @@ func GetMariaDBUUID(db *sql.DB) (string, error) {
 func GetSQLMode(db *sql.DB) (tmysql.SQLMode, error) {
 	sqlMode, err := GetGlobalVariable(db, "sql_mode")
 	if err != nil {
-		return tmysql.ModeNone, errors.Trace(err)
+		return tmysql.ModeNone, err
 	}
 
 	mode, err := tmysql.GetSQLMode(sqlMode)
-	return mode, errors.Trace(err)
+	return mode, terror.ErrGetSQLModeFromStr.Delegate(err)
 }
 
 // HasAnsiQuotesMode checks whether database has `ANSI_QUOTES` set
 func HasAnsiQuotesMode(db *sql.DB) (bool, error) {
 	mode, err := GetSQLMode(db)
 	if err != nil {
-		return false, errors.Trace(err)
+		return false, err
 	}
 	return mode.HasANSIQuotesMode(), nil
 }
@@ -219,7 +219,7 @@ func GetParser(db *sql.DB, ansiQuotesMode bool) (*parser.Parser, error) {
 		var err error
 		ansiQuotesMode, err = HasAnsiQuotesMode(db)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, err
 		}
 	}
 
@@ -233,7 +233,7 @@ func GetParser(db *sql.DB, ansiQuotesMode bool) (*parser.Parser, error) {
 // KillConn kills the DB connection (thread in mysqld)
 func KillConn(db *sql.DB, connID uint32) error {
 	_, err := db.Exec(fmt.Sprintf("KILL %d", connID))
-	return errors.Trace(err)
+	return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 }
 
 // IsMySQLError checks whether err is MySQLError error
@@ -264,21 +264,3 @@ func IsErrDupEntry(err error) bool {
 func IsNoSuchThreadError(err error) bool {
 	return IsMySQLError(err, tmysql.ErrNoSuchThread)
 }
-
-// OpenDBWithEncryptedPwd returns a db fd with encrypted password
-/*func OpenDBWithEncryptedPwd(host string, port int, user, password, timeout string) (db *sql.DB, err error) {
-	if len(password) > 0 {
-		password, err = Decrypt(password)
-		if err != nil {
-			return nil, errors.Annotatef(err, "can not decrypt password %s of user %s for db %s:%d", password, user, host, port)
-		}
-	}
-
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8&interpolateParams=true&readTimeout=%s", user, password, host, port, timeout)
-	db, err = sql.Open("mysql", dbDSN)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	return
-}*/

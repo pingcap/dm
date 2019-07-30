@@ -22,6 +22,7 @@ const (
 	codeDBQueryFailed
 	codeDBExecuteFailed
 
+	// Functional error code list
 	codeParseMydumperMeta = iota + 1101
 	codeGetFileSize
 	codeDropMultipleTables
@@ -30,28 +31,41 @@ const (
 	codeParseSQL
 	codeUnknownTypeDDL
 	codeRestoreASTNode
+	codeParseGTID
+	codeNotSupportedFlavor
+	codeNotMySQLGTID
+	codeNotMariaDBGTID
+	codeNotUUIDString
+	codeMariaDBDomainID
+	codeInvalidServerID
+	codeGetSQLModeFromStr
 
-	codeCheckpointInvalidTaskMode = iota + 1201
+	// Binlog operation error code list
+	codeBinlogExtractPosition = iota + 1201
+	codeBinlogInvalidFilename
+	codeBinlogParsePosFromStr
+
+	codeCheckpointInvalidTaskMode = iota + 1301
 	codeCheckpointSaveInvalidPos
 	codeCheckpointInvalidTableFile
 	codeCheckpointDBNotExistInFile
 	codeCheckpointTableNotExistInFile
 	codeCheckpointRestoreCountGreater
 
-	codeTaskCheckSameTableName = iota + 1301
+	codeTaskCheckSameTableName = iota + 1401
 	codeTaskCheckFailedOpenDB
 	codeTaskCheckNewTableRouter
 	codeTaskCheckNewColumnMapping
 
-	codeRelayParseUUIDIndex = iota + 1401
+	codeRelayParseUUIDIndex = iota + 1501
 	codeRelayParseUUIDSuffix
 	codeRelayUUIDWithSuffixNotFound
 	codeRelayGenFakeRotateEvent
 	codeRelayNoValidRelaySubDir
 
-	codeDumpUnitRuntime = iota + 1601
+	codeDumpUnitRuntime = iota + 2001
 
-	codeLoadUnitCreateSchemaFile = iota + 1701
+	codeLoadUnitCreateSchemaFile = iota + 2101
 	codeLoadUnitInvalidFileEnding
 	codeLoadUnitParseQuoteValues
 	codeLoadUnitDoColumnMapping
@@ -67,7 +81,7 @@ const (
 	codeLoadUnitDumpDirNotFound
 	codeLoadUnitDuplicateTableFile
 
-	codeSyncUnitInvalidTableName = iota + 1801
+	codeSyncUnitInvalidTableName = iota + 2201
 	codeSyncUnitTableNameQuery
 	codeSyncUnitNotSupportedDML
 	codeSyncUnitAddTableInSharding
@@ -84,6 +98,10 @@ const (
 	codeSyncerUnitBinlogEventFilter
 	codeSyncerUnitInvalidReplicaEvent
 	codeSyncerUnitParseStmt
+	codeSyncerUnitUUIDNotLatest
+	codeSyncerUnitDDLExecChanCloseOrBusy
+	codeSyncerUnitDDLChanDone
+	codeSyncerUnitDDLChanCanceled
 )
 
 // Error instances
@@ -106,6 +124,19 @@ var (
 	ErrParseSQL             = New(codeAlterMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "parse statement")
 	ErrUnknownTypeDDL       = New(codeUnknownTypeDDL, ClassFunctional, ScopeInternal, LevelHigh, "unknown type ddl %s")
 	ErrRestoreASTNode       = New(codeRestoreASTNode, ClassFunctional, ScopeInternal, LevelHigh, "restore ast node")
+	ErrParseGTID            = New(codeParseGTID, ClassFunctional, ScopeInternal, LevelHigh, "parse GTID")
+	ErrNotSupportedFlavor   = New(codeNotSupportedFlavor, ClassFunctional, ScopeInternal, LevelHigh, "flavor %s and gtid %s")
+	ErrNotMySQLGTID         = New(codeNotMySQLGTID, ClassFunctional, ScopeInternal, LevelHigh, "%s is not mysql GTID set")
+	ErrNotMariaDBGTID       = New(codeNotMariaDBGTID, ClassFunctional, ScopeInternal, LevelHigh, "%s is not mariadb GTID set")
+	ErrNotUUIDString        = New(codeNotUUIDString, ClassFunctional, ScopeInternal, LevelHigh, "%v is not string")
+	ErrMariaDBDomainID      = New(codeMariaDBDomainID, ClassFunctional, ScopeInternal, LevelHigh, "%v is not uint32")
+	ErrInvalidServerID      = New(codeInvalidServerID, ClassFunctional, ScopeInternal, LevelHigh, "invalid server id")
+	ErrGetSQLModeFromStr    = New(codeGetSQLModeFromStr, ClassFunctional, ScopeInternal, LevelHigh, "get sql from from string literal")
+
+	// Binlog operation error
+	ErrBinlogExtractPosition = New(codeBinlogExtractPosition, ClassBinlogOp, ScopeInternal, LevelHigh, "")
+	ErrBinlogInvalidFilename = New(codeBinlogInvalidFilename, ClassBinlogOp, ScopeInternal, LevelHigh, "invalid binlog filename")
+	ErrBinlogParsePosFromStr = New(codeBinlogParsePosFromStr, ClassBinlogOp, ScopeInternal, LevelHigh, "")
 
 	// Checkpoint error
 	ErrCheckpointInvalidTaskMode     = New(codeCheckpointInvalidTaskMode, ClassCheckpoint, ScopeInternal, LevelMedium, "invalid task mode: %s")
@@ -115,22 +146,23 @@ var (
 	ErrCheckpointTableNotExistInFile = New(codeCheckpointTableNotExistInFile, ClassCheckpoint, ScopeInternal, LevelMedium, "table (%s) not exist in db (%s) data files, but in checkpoint")
 	ErrCheckpointRestoreCountGreater = New(codeCheckpointRestoreCountGreater, ClassCheckpoint, ScopeInternal, LevelMedium, "restoring count greater than total count for table[%v]")
 
-	// task check error
+	// Task check error
 	ErrTaskCheckSameTableName    = New(codeTaskCheckSameTableName, ClassTaskCheck, ScopeInternal, LevelMedium, "same table name in case-sensitive %v")
 	ErrTaskCheckFailedOpenDB     = New(codeTaskCheckFailedOpenDB, ClassTaskCheck, ScopeInternal, LevelHigh, "failed to open DSN %s:***@%s:%d")
 	ErrTaskCheckNewTableRouter   = New(codeTaskCheckNewTableRouter, ClassTaskCheck, ScopeInternal, LevelMedium, "new table router error")
 	ErrTaskCheckNewColumnMapping = New(codeTaskCheckNewColumnMapping, ClassTaskCheck, ScopeInternal, LevelMedium, "new column mapping error")
 
+	// Relay log basic API error
 	ErrRelayParseUUIDIndex         = New(codeRelayParseUUIDIndex, ClassRelayAPI, ScopeInternal, LevelHigh, "parse server-uuid.index")
 	ErrRelayParseUUIDSuffix        = New(codeRelayParseUUIDSuffix, ClassRelayAPI, ScopeInternal, LevelHigh, "UUID (with suffix) %s not valid")
 	ErrRelayUUIDWithSuffixNotFound = New(codeRelayUUIDWithSuffixNotFound, ClassRelayAPI, ScopeInternal, LevelHigh, "no UUID (with suffix) matched %s found in %s, all UUIDs are %v")
 	ErrRelayGenFakeRotateEvent     = New(codeRelayGenFakeRotateEvent, ClassRelayAPI, ScopeInternal, LevelHigh, "generate fake rotate event")
 	ErrRelayNoValidRelaySubDir     = New(codeRelayNoValidRelaySubDir, ClassRelayAPI, ScopeInternal, LevelHigh, "no valid relay sub directory exists")
 
-	// dump unit error
+	// Dump unit error
 	ErrDumpUnitRuntime = New(codeDumpUnitRuntime, ClassDumpUnit, ScopeInternal, LevelHigh, "mydumper runs with error")
 
-	// load unit error
+	// Load unit error
 	ErrLoadUnitCreateSchemaFile    = New(codeLoadUnitCreateSchemaFile, ClassLoadUnit, ScopeInternal, LevelMedium, "generate schema file")
 	ErrLoadUnitInvalidFileEnding   = New(codeLoadUnitInvalidFileEnding, ClassLoadUnit, ScopeInternal, LevelHigh, "cooresponding ending of sql: ')' not found")
 	ErrLoadUnitParseQuoteValues    = New(codeLoadUnitParseQuoteValues, ClassLoadUnit, ScopeInternal, LevelHigh, "parse quote values error")
@@ -147,7 +179,7 @@ var (
 	ErrLoadUnitDumpDirNotFound     = New(codeLoadUnitDumpDirNotFound, ClassLoadUnit, ScopeInternal, LevelHigh, "%s does not exist or it's not a dir")
 	ErrLoadUnitDuplicateTableFile  = New(codeLoadUnitDuplicateTableFile, ClassLoadUnit, ScopeInternal, LevelHigh, "invalid table schema file, duplicated item - %s")
 
-	// sync unit error
+	// Sync unit error
 	ErrSyncUnitInvalidTableName          = New(codeSyncUnitInvalidTableName, ClassSyncUnit, ScopeInternal, LevelHigh, "extract table name for DML error: %s")
 	ErrSyncUnitTableNameQuery            = New(codeSyncUnitTableNameQuery, ClassSyncUnit, ScopeInternal, LevelHigh, "table name parse error: %s")
 	ErrSyncUnitNotSupportedDML           = New(codeSyncUnitNotSupportedDML, ClassSyncUnit, ScopeInternal, LevelHigh, "DMLNode %v not supported")
@@ -161,9 +193,13 @@ var (
 	ErrSyncUnitSafeModeSetCount          = New(codeSyncUnitSafeModeSetCount, ClassSyncUnit, ScopeInternal, LevelHigh, "")
 	ErrSyncUnitCausalityConflict         = New(codeSyncUnitCausalityConflict, ClassSyncUnit, ScopeInternal, LevelHigh, "some conflicts in causality, must be resolved")
 	// ErrSyncUnitDMLStatementFound defines an error which means we found unexpected dml statement found in query event
-	ErrSyncUnitDMLStatementFound      = New(codeSyncUnitDMLStatementFound, ClassSyncUnit, ScopeInternal, LevelHigh, "only support ROW format binlog, unexpected DML statement found in query event")
-	ErrSyncerUnitOnlineDDLInvalidMeta = New(codeSyncerUnitOnlineDDLInvalidMeta, ClassSyncUnit, ScopeInternal, LevelHigh, "online ddl meta invalid")
-	ErrSyncerUnitBinlogEventFilter    = New(codeSyncerUnitBinlogEventFilter, ClassSyncUnit, ScopeInternal, LevelHigh, "")
-	ErrSyncerUnitInvalidReplicaEvent  = New(codeSyncerUnitInvalidReplicaEvent, ClassSyncUnit, ScopeInternal, LevelHigh, "[syncer] invalid replication event type %v")
-	ErrSyncerUnitParseStmt            = New(codeSyncerUnitParseStmt, ClassSyncUnit, ScopeInternal, LevelHigh, "")
+	ErrSyncUnitDMLStatementFound        = New(codeSyncUnitDMLStatementFound, ClassSyncUnit, ScopeInternal, LevelHigh, "only support ROW format binlog, unexpected DML statement found in query event")
+	ErrSyncerUnitOnlineDDLInvalidMeta   = New(codeSyncerUnitOnlineDDLInvalidMeta, ClassSyncUnit, ScopeInternal, LevelHigh, "online ddl meta invalid")
+	ErrSyncerUnitBinlogEventFilter      = New(codeSyncerUnitBinlogEventFilter, ClassSyncUnit, ScopeInternal, LevelHigh, "")
+	ErrSyncerUnitInvalidReplicaEvent    = New(codeSyncerUnitInvalidReplicaEvent, ClassSyncUnit, ScopeInternal, LevelHigh, "[syncer] invalid replication event type %v")
+	ErrSyncerUnitParseStmt              = New(codeSyncerUnitParseStmt, ClassSyncUnit, ScopeInternal, LevelHigh, "")
+	ErrSyncerUnitUUIDNotLatest          = New(codeSyncerUnitUUIDNotLatest, ClassSyncUnit, ScopeInternal, LevelHigh, "UUID %s not the latest one in UUIDs %v")
+	ErrSyncerUnitDDLExecChanCloseOrBusy = New(codeSyncerUnitDDLExecChanCloseOrBusy, ClassSyncUnit, ScopeInternal, LevelHigh, "the chan has closed or already in sending")
+	ErrSyncerUnitDDLChanDone            = New(codeSyncerUnitDDLChanDone, ClassSyncUnit, ScopeInternal, LevelHigh, "canceled from external")
+	ErrSyncerUnitDDLChanCanceled        = New(codeSyncerUnitDDLChanCanceled, ClassSyncUnit, ScopeInternal, LevelHigh, "canceled by Close or Renew")
 )

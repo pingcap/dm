@@ -18,17 +18,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pingcap/errors"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 const (
 	// the binlog file name format is `base + '.' + seq`.
 	binlogFilenameSep = "."
-)
-
-var (
-	// ErrInvalidBinlogFilename means error about invalid binlog filename.
-	ErrInvalidBinlogFilename = errors.New("invalid binlog filename")
 )
 
 // Filename represents a binlog filename.
@@ -58,7 +53,7 @@ func ParseFilename(filename string) (Filename, error) {
 	var fn Filename
 	parts := strings.Split(filename, binlogFilenameSep)
 	if len(parts) != 2 {
-		return fn, errors.Annotatef(ErrInvalidBinlogFilename, "filename %s", filename)
+		return fn, terror.Annotatef(terror.ErrBinlogInvalidFilename.Generate(), "filename %s", filename)
 	}
 
 	var (
@@ -66,7 +61,7 @@ func ParseFilename(filename string) (Filename, error) {
 		err      error
 	)
 	if seqInt64, err = strconv.ParseInt(parts[1], 10, 64); err != nil || seqInt64 <= 0 {
-		return fn, errors.Annotatef(ErrInvalidBinlogFilename, "filename %s", filename)
+		return fn, terror.Annotatef(terror.ErrBinlogInvalidFilename.Generate(), "filename %s", filename)
 	}
 	fn.BaseName = parts[0]
 	fn.Seq = parts[1]
@@ -87,7 +82,7 @@ func VerifyFilename(filename string) bool {
 func GetFilenameIndex(filename string) (int64, error) {
 	fn, err := ParseFilename(filename)
 	if err != nil {
-		return 0, errors.Trace(err)
+		return 0, err
 	}
 	return fn.SeqInt64, nil
 }

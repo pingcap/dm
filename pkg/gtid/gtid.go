@@ -14,8 +14,9 @@
 package gtid
 
 import (
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
+
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // Set provide gtid operations for syncer
@@ -46,7 +47,7 @@ func ParserGTID(flavor, gtidStr string) (Set, error) {
 
 	gtid, err := mysql.ParseGTIDSet(flavor, gtidStr)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.ErrParseGTID.Delegate(err)
 	}
 
 	switch flavor {
@@ -55,10 +56,10 @@ func ParserGTID(flavor, gtidStr string) (Set, error) {
 	case mysql.MySQLFlavor:
 		m = &mySQLGTIDSet{}
 	default:
-		return nil, errors.NotSupportedf("flavor %s and gtid %s", flavor, gtidStr)
+		return nil, terror.ErrNotSupportedFlavor.Generate(flavor, gtidStr)
 	}
 	err = m.Set(gtid)
-	return m, errors.Trace(err)
+	return m, err
 }
 
 /************************ mysql gtid set ***************************/
@@ -77,7 +78,7 @@ func (g *mySQLGTIDSet) Set(other mysql.GTIDSet) error {
 
 	gs, ok := other.(*mysql.MysqlGTIDSet)
 	if !ok {
-		return errors.Errorf("%s is not mysql GTID set", other)
+		return terror.ErrNotMySQLGTID.Generate(other)
 	}
 
 	g.set = gs
@@ -91,13 +92,13 @@ func (g *mySQLGTIDSet) Replace(other Set, masters []interface{}) error {
 
 	otherGS, ok := other.(*mySQLGTIDSet)
 	if !ok {
-		return errors.Errorf("%s is not mysql GTID set", other)
+		return terror.ErrNotMySQLGTID.Generate(other)
 	}
 
 	for _, uuid := range masters {
 		uuidStr, ok := uuid.(string)
 		if !ok {
-			return errors.Errorf("%v is not string", uuid)
+			return terror.ErrNotUUIDString.Generate(uuid)
 		}
 
 		otherGS.delete(uuidStr)
@@ -192,7 +193,7 @@ func (m *mariadbGTIDSet) Set(other mysql.GTIDSet) error {
 
 	gs, ok := other.(*mysql.MariadbGTIDSet)
 	if !ok {
-		return errors.Errorf("%s is not mariadb GTID set", other)
+		return terror.ErrNotMariaDBGTID.Generate(other)
 	}
 
 	m.set = gs
@@ -206,13 +207,13 @@ func (m *mariadbGTIDSet) Replace(other Set, masters []interface{}) error {
 
 	otherGS, ok := other.(*mariadbGTIDSet)
 	if !ok {
-		return errors.Errorf("%s is not mariadb GTID set", other)
+		return terror.ErrNotMariaDBGTID.Generate(other)
 	}
 
 	for _, id := range masters {
 		domainID, ok := id.(uint32)
 		if !ok {
-			return errors.Errorf("%v is not uint32", id)
+			return terror.ErrMariaDBDomainID.Generate(id)
 		}
 
 		otherGS.delete(domainID)

@@ -33,6 +33,7 @@ type ErrClass int
 const (
 	ClassDatabase ErrClass = iota + 1
 	ClassFunctional
+	ClassBinlogOp
 	ClassCheckpoint
 	ClassTaskCheck
 	ClassRelayAPI
@@ -44,7 +45,8 @@ const (
 
 var errClass2Str = map[ErrClass]string{
 	ClassDatabase:   "database",
-	ClassFunctional: "Functional",
+	ClassFunctional: "functional",
+	ClassBinlogOp:   "binlog-op",
 	ClassCheckpoint: "checkpoint",
 	ClassTaskCheck:  "task-check",
 	ClassRelayAPI:   "relay-api",
@@ -202,8 +204,23 @@ func (e *Error) Equal(err error) bool {
 	return ok && e.code == inErr.code
 }
 
+// New generates a new *Error with the same class and code, and replace message with new message
+func (e *Error) New(message string) error {
+	return e.levelGeneratef(1, message)
+}
+
+// Generate generates a new *Error with the same class and code, and new arguments.
+func (e *Error) Generate(args ...interface{}) error {
+	return e.levelGeneratef(1, e.message, args...)
+}
+
 // Generatef generates a new *Error with the same class and code, and a new formatted message.
 func (e *Error) Generatef(format string, args ...interface{}) error {
+	return e.levelGeneratef(1, format, args...)
+}
+
+// levelGeneratef is an inner interface to generate new *Error
+func (e *Error) levelGeneratef(stackSkipLevel int, format string, args ...interface{}) error {
 	err := &Error{
 		code:    e.code,
 		class:   e.class,
@@ -211,21 +228,7 @@ func (e *Error) Generatef(format string, args ...interface{}) error {
 		level:   e.level,
 		message: format,
 		args:    args,
-		stack:   errors.NewStack(0),
-	}
-	return err
-}
-
-// Generate generates a new *Error with the same class and code, and new arguments.
-func (e *Error) Generate(args ...interface{}) error {
-	err := &Error{
-		code:    e.code,
-		class:   e.class,
-		scope:   e.scope,
-		level:   e.level,
-		message: e.message,
-		args:    args,
-		stack:   errors.NewStack(0),
+		stack:   errors.NewStack(stackSkipLevel),
 	}
 	return err
 }

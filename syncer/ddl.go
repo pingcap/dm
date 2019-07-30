@@ -158,7 +158,7 @@ func (s *Syncer) resolveDDLSQL(p *parser.Parser, stmt ast.StmtNode, schema strin
 func (s *Syncer) handleDDL(p *parser.Parser, schema, sql string) (string, [][]*filter.Table, ast.StmtNode, error) {
 	stmt, err := p.ParseOneStmt(sql, "", "")
 	if err != nil {
-		return "", nil, nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.Generatef(err.Error()), "ddl %s", sql)
+		return "", nil, nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)
 	}
 
 	tableNames, err := parserpkg.FetchDDLTableNames(schema, stmt)
@@ -197,7 +197,7 @@ func (s *Syncer) handleOnlineDDL(p *parser.Parser, schema, sql string) ([]string
 
 	stmt, err := p.ParseOneStmt(sql, "", "")
 	if err != nil {
-		return nil, nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.Generatef(err.Error()), "ddl %s", sql)
+		return nil, nil, terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "ddl %s", sql)
 	}
 
 	tableNames, err := parserpkg.FetchDDLTableNames(schema, stmt)
@@ -222,7 +222,7 @@ func (s *Syncer) handleOnlineDDL(p *parser.Parser, schema, sql string) ([]string
 	for i := range sqls {
 		stmt, err := p.ParseOneStmt(sqls[i], "", "")
 		if err != nil {
-			return nil, nil, terror.ErrSyncerUnitParseStmt.Generatef(err.Error())
+			return nil, nil, terror.ErrSyncerUnitParseStmt.New(err.Error())
 		}
 
 		sqls[i], err = parserpkg.RenameDDLTable(stmt, targetTables)

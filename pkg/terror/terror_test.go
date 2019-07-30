@@ -116,3 +116,34 @@ func (t *testTErrorSuite) TestTError(c *check.C) {
 	c.Assert(verbose[1], check.Matches, ".*\\(\\*Error\\)\\.Generate")
 	c.Assert(fmt.Sprintf("%v", err2), check.Equals, err2.Error())
 }
+
+func (t *testTErrorSuite) TestTErrorStackTrace(c *check.C) {
+	err := ErrDBUnExpect
+
+	testCases := []struct {
+		fn               string
+		message          string
+		args             []interface{}
+		stackFingerprint string
+	}{
+		{"new", "new error", nil, ".*\\(\\*Error\\)\\.New"},
+		{"generate", "", []interface{}{"parma1"}, ".*\\(\\*Error\\)\\.Generate"},
+		{"generatef", "generatef error %s %d", []interface{}{"param1", 12}, ".*\\(\\*Error\\)\\.Generatef"},
+	}
+
+	for _, tc := range testCases {
+		var err2 error
+		switch tc.fn {
+		case "new":
+			err2 = err.New(tc.message)
+		case "generate":
+			err2 = err.Generate(tc.args...)
+		case "generatef":
+			err2 = err.Generatef(tc.message, tc.args...)
+		}
+		verbose := strings.Split(fmt.Sprintf("%+v", err2), "\n")
+		c.Assert(len(verbose) > 5, check.IsTrue)
+		c.Assert(verbose[0], check.Equals, err2.Error())
+		c.Assert(verbose[1], check.Matches, tc.stackFingerprint)
+	}
+}
