@@ -21,8 +21,8 @@ import (
 	"strings"
 
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 
-	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
 
@@ -117,7 +117,7 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 	columnPlaceholders := genColumnPlaceholders(len(columns))
 	for dataIdx, data := range dataSeq {
 		if len(data) != len(columns) {
-			return nil, nil, nil, errors.Errorf("Column count doesn't match value count: %d (columns) vs %d (values)", len(columns), len(data))
+			return nil, nil, nil, terror.ErrSyncerUnitDMLColumnNotMatch.Generate(len(columns), len(data))
 		}
 
 		value := extractValueFromData(data, columns)
@@ -171,11 +171,11 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		oriChangedData := originalData[i+1]
 
 		if len(oldData) != len(changedData) {
-			return nil, nil, nil, errors.Errorf("Old value count doesn't match new value count: %d (old) vs %d (new)", len(oldData), len(changedData))
+			return nil, nil, nil, terror.ErrSyncerUnitDMLOldNewValueMismatch.Generate(len(oldData), len(changedData))
 		}
 
 		if len(oldData) != len(columns) {
-			return nil, nil, nil, errors.Errorf("Column count doesn't match value count: %d (columns) vs %d (values)", len(columns), len(oldData))
+			return nil, nil, nil, terror.ErrSyncerUnitDMLColumnNotMatch.Generate(len(columns), len(oldData))
 		}
 
 		oldValues := extractValueFromData(oldData, columns)
@@ -259,7 +259,7 @@ func genDeleteSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 
 	for _, data := range dataSeq {
 		if len(data) != len(columns) {
-			return nil, nil, nil, errors.Errorf("Column count doesn't match value count: %d (columns) vs %d (values)", len(columns), len(data))
+			return nil, nil, nil, terror.ErrSyncerUnitDMLColumnNotMatch.Generate(len(columns), len(data))
 		}
 
 		value := extractValueFromData(data, columns)
@@ -532,7 +532,7 @@ func (s *Syncer) mappingDML(schema, table string, columns []string, data [][]int
 	for i := range data {
 		rows[i], _, err = s.columnMapping.HandleRowValue(schema, table, columns, data[i])
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, terror.ErrSyncerUnitDoColumnMapping.Generate(data[i], schema, table)
 		}
 	}
 	return rows, nil
@@ -555,11 +555,11 @@ func pruneGeneratedColumnDML(columns []*column, data [][]interface{}, schema, ta
 		rows := make([][]interface{}, 0, len(data))
 		filters, ok1 := cache.isGenColumn[cacheKey]
 		if !ok1 {
-			return nil, nil, errors.NotFoundf("cache key %s in isGenColumn", cacheKey)
+			return nil, nil, terror.ErrSyncerUnitCacheKeyNotFound.Generate(cacheKey, "isGenColumn")
 		}
 		cols, ok2 := cache.columns[cacheKey]
 		if !ok2 {
-			return nil, nil, errors.NotFoundf("cache key %s in columns", cacheKey)
+			return nil, nil, terror.ErrSyncerUnitCacheKeyNotFound.Generate(cacheKey, "columns")
 		}
 		for _, row := range data {
 			value := make([]interface{}, 0, len(row))
@@ -605,7 +605,7 @@ func pruneGeneratedColumnDML(columns []*column, data [][]interface{}, schema, ta
 	}
 	for _, row := range data {
 		if len(row) != len(columns) {
-			return nil, nil, errors.Errorf("prune DML columns and data mismatch in length: %d (columns) %d (data)", len(columns), len(data))
+			return nil, nil, terror.ErrSyncerUnitDMLPruneColumnMismatch.Generate(len(columns), len(data))
 		}
 		value := make([]interface{}, 0, len(row))
 		for i := range row {
