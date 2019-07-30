@@ -67,6 +67,33 @@
       wait_for: |
         host={{ ansible_host }} port={{ dm_master_port }} state=started
 
+- name: rolling update dm-portal
+  hosts: dm_portal_servers
+  any_errors_fatal: true
+  serial: 1
+  tags:
+    - dm-portal
+
+  pre_tasks:
+    - name: stop dm-portal by systemd
+      become: true
+      systemd: name=dm-portal-{{ dm_portal_port }}.service state=stopped enabled=no
+
+    - name: wait for dm-master down
+      wait_for: |
+        host={{ ansible_host }} port={{ dm_portal_port }} state=stopped
+
+  roles:
+    - dm-portal
+
+  post_tasks:
+    - name: start dm-portal by systemd
+      become: true
+      systemd: name=dm-portal-{{ dm_portal_port }}.service state=started enabled=no
+
+    - name: wait for dm-portal up
+      wait_for: |
+        host={{ ansible_host }} port={{ dm_portal_port }} state=started
 
 - name: deploying dmctl
   hosts: localhost
