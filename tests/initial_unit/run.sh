@@ -37,7 +37,7 @@ function run() {
         echo "start task and query status, the sync unit will initial failed"
         task_conf="$cur/conf/dm-task.yaml"
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "start-task $task_conf"
+            "start-task $task_conf" \
             "\"result\": true" 2
 
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
