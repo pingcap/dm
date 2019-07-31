@@ -68,3 +68,15 @@
     - name: wait for dm-master down
       wait_for: |
         host={{ ansible_host }} port={{ dm_master_port }} state=stopped
+
+- hosts: dm_portal_servers
+  tags:
+    - dm-portal
+  tasks:
+    - name: stop dm-portal by systemd
+      become: true
+      systemd: name=dm-portal-{{ dm_portal_port }}.service state=stopped enabled=no
+
+    - name: wait for dm-portal down
+      wait_for: |
+        host={{ ansible_host }} port={{ dm_portal_port }} state=stopped
