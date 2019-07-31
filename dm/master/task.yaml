@@ -151,3 +151,8 @@ syncers:                     # syncer process unit specific configs, mysql insta
     worker-count: 16
     batch: 100
     max-retry: 100
+    ignore-columns: # allow downstream tables exists extra columns and ignore it when syncing
+      - db: "t"
+        table: "t1"
+        columns: ["update_time"]
+

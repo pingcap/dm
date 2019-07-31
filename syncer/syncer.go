@@ -633,15 +633,33 @@ func (s *Syncer) getTable(schema string, table string) (*table, []string, error)
 		return nil, nil, errors.Trace(err)
 	}
 
-	// compute cache column list for column mapping
-	columns := make([]string, 0, len(t.columns))
-	for _, c := range t.columns {
-		columns = append(columns, c.name)
+	// Normally row values count is as same as downstream table columns count
+	// but some user may add extra columns in downstream tables
+	// so we simply ignore extra columns to make sure row values is align with columns
+	ignoreColumns := make(map[string]bool)
+	if len(s.cfg.IgnoreColumns) > 0 {
+		for _, i := range s.cfg.IgnoreColumns {
+			if i.DB == schema && i.Table == table {
+				for _, col := range i.Columns {
+					ignoreColumns[col] = true
+				}
+			}
+		}
 	}
+	// compute cache column list for column mapping
+	columns := make([]*column, 0, len(t.columns))
+	columnNames := make([]string, 0, len(t.columns))
+	for _, c := range t.columns {
+		if _, ok := ignoreColumns[c.name]; !ok {
+			columns = append(columns, c)
+			columnNames = append(columnNames, c.name)
+		}
+	}
+	t.columns = columns
 
 	s.tables[key] = t
-	s.cacheColumns[key] = columns
-	return t, columns, nil
+	s.cacheColumns[key] = columnNames
+	return t, columnNames, nil
 }
 
 func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int64) {
@@ -1382,6 +1400,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		return errors.Trace(err)
 	}
 	prunedColumns, prunedRows, err := pruneGeneratedColumnDML(table.columns, rows, schemaName, tableName, s.genColsCache)
+
 	if err != nil {
 		return errors.Trace(err)
 	}

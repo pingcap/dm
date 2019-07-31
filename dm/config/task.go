@@ -178,12 +178,19 @@ func (m *LoaderConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
+type ignoreColumn struct {
+	DB      string   `yaml:"db" toml:"db" json:"db"`
+	Table   string   `yaml:"table" toml:"table" json:"table"`
+	Columns []string `yaml:"columns" toml:"columns" json:"columns"`
+}
+
 // SyncerConfig represents syncer process unit's specific config
 type SyncerConfig struct {
-	MetaFile    string `yaml:"meta-file" toml:"meta-file" json:"meta-file"` // meta filename, used only when load SubConfig directly
-	WorkerCount int    `yaml:"worker-count" toml:"worker-count" json:"worker-count"`
-	Batch       int    `yaml:"batch" toml:"batch" json:"batch"`
-	MaxRetry    int    `yaml:"max-retry" toml:"max-retry" json:"max-retry"`
+	MetaFile      string          `yaml:"meta-file" toml:"meta-file" json:"meta-file"` // meta filename, used only when load SubConfig directly
+	WorkerCount   int             `yaml:"worker-count" toml:"worker-count" json:"worker-count"`
+	Batch         int             `yaml:"batch" toml:"batch" json:"batch"`
+	MaxRetry      int             `yaml:"max-retry" toml:"max-retry" json:"max-retry"`
+	IgnoreColumns []*ignoreColumn `yaml:"ignore-columns" toml:"ignore-columns" json:"ignore-columns"`
 
 	// refine following configs to top level configs?
 	AutoFixGTID      bool `yaml:"auto-fix-gtid" toml:"auto-fix-gtid" json:"auto-fix-gtid"`
