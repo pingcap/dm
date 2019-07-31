@@ -22,6 +22,7 @@ tables = ["~t.*"]
 [[table-config]]
 schema = "ignore_columns"
 table = "t1"
+remove-columns = ["ignore_column"]
 
 [[table-config.source-tables]]
 instance-id = "source-1"

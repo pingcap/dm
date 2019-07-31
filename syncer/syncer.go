@@ -649,10 +649,14 @@ func (s *Syncer) getTable(schema string, table string) (*table, []string, error)
 	// compute cache column list for column mapping
 	columns := make([]*column, 0, len(t.columns))
 	columnNames := make([]string, 0, len(t.columns))
+	// tricky way to fix idx when ignore columns exists
+	idx := 0
 	for _, c := range t.columns {
 		if _, ok := ignoreColumns[c.name]; !ok {
+			c.idx = idx
 			columns = append(columns, c)
 			columnNames = append(columnNames, c.name)
+			idx++
 		}
 	}
 	t.columns = columns
@@ -1392,6 +1396,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	}
 
 	table, columns, err := s.getTable(schemaName, tableName)
+
 	if err != nil {
 		return errors.Trace(err)
 	}

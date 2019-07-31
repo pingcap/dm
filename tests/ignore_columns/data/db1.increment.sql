@@ -23,3 +23,4 @@ insert into t1 (id, name, info) values (7, 'gentest', '{"id": 126}');
 update t1 set name = 'gentestxxxxxx' where gen_id = 124;
 -- delete with unique key
 delete from t1 where gen_id > 124;
+delete from t1 where id = 5;
