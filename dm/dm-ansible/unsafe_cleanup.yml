@@ -48,6 +48,14 @@
       with_items:
         - dm-master-{{ dm_master_port }}.service 
 
+- hosts: dm_portal_servers
+  tasks:
+    - name: clean systemd config
+      file: path="/etc/systemd/system/{{ item }}" state=absent
+      become: true
+      with_items:
+        - dm-portal-{{ dm_portal_port }}.service 
+
 
 - hosts: all
   tasks:
