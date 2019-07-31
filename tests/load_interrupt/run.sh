@@ -80,13 +80,10 @@ function run() {
     export GO_FAILPOINTS=''
 }
 
-cleanup1 load_interrupt
+cleanup_data load_interrupt
 # also cleanup dm processes in case of last run failed
-cleanup2 $*
+cleanup_process $*
 run $*
-cleanup2 $*
-
-wait_process_exit dm-master.test
-wait_process_exit dm-worker.test
+cleanup_process $*
 
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"

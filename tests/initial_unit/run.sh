@@ -24,6 +24,8 @@ function run() {
     )
 
     for(( i=0;i<${#failpoints[@]};i++)) do
+        WORK_DIR=$TEST_DIR/$TEST_NAME/$i
+
         prepare_data
 
         echo "failpoint=${failpoints[i]}"
@@ -73,14 +75,16 @@ function run() {
 
         check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-        cleanup
+        cleanup_process
+        run_sql "drop database if exists dm_meta" $TIDB_PORT
     done
 }
 
-cleanup
+cleanup_data initial_unit
+cleanup_process
 
 run $*
 
-cleanup
+cleanup_process
 
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"

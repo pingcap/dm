@@ -24,6 +24,8 @@ function run() {
     )
 
     for(( i=0;i<${#failpoints[@]};i++)) do
+        WORK_DIR=$TEST_DIR/$TEST_NAME/$i
+
         echo "failpoint=${failpoints[i]}"
         export GO_FAILPOINTS=${failpoints[i]}
 
@@ -55,14 +57,14 @@ function run() {
 
         check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-        cleanup
+        cleanup_process
     done
 }
 
-cleanup
+cleanup_data start_task
 
 run $*
 
-cleanup
+cleanup_process
 
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"
