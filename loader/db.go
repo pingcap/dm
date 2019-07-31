@@ -141,7 +141,7 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []string, en
 				ctx.L().Fatal("failpoint LoadExecCreateTableFailed's value is invalid", zap.String("val", val.(string)))
 			}
 
-			errCode, err1 := strconv.ParseUint(items[0], 16, 16)
+			errCode, err1 := strconv.ParseUint(items[0], 10, 16)
 			errNum, err2 := strconv.ParseInt(items[1], 16, 16)
 			if err1 != nil || err2 != nil {
 				ctx.L().Fatal("failpoint LoadExecCreateTableFailed's value is invalid", zap.String("val", val.(string)), zap.Strings("items", items), zap.Error(err1), zap.Error(err2))
