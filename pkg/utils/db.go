@@ -134,7 +134,7 @@ func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
 			log.L().Fatal("failpoint GetGlobalVariableFailed's value is invalid", zap.String("val", val.(string)))
 		}
 		variableName := items[0]
-		errCode, err1 := strconv.ParseUint(items[1], 16, 16)
+		errCode, err1 := strconv.ParseUint(items[1], 10, 16)
 		if err1 != nil {
 			log.L().Fatal("failpoint GetGlobalVariableFailed's value is invalid", zap.String("val", val.(string)))
 		}
