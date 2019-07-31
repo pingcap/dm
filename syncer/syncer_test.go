@@ -1295,7 +1295,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		runSQL(dropSQLs)
 		s.resetMaster()
 		// must wait for reset Master finish
-		time.Sleep(time.Second)
+		time.Sleep(2 * time.Second)
 
 		db, mock, err := sqlmock.New()
 		if err != nil {
