@@ -16,6 +16,8 @@ package loader
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pingcap/dm/dm/config"
@@ -24,6 +26,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	tmysql "github.com/pingcap/parser/mysql"
 	"go.uber.org/zap"
 )
@@ -131,6 +134,25 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []string, en
 
 		startTime := time.Now()
 		err = executeSQLImp(ctx, conn.db, sqls)
+
+		failpoint.Inject("LoadExecCreateTableFailed", func(val failpoint.Value) {
+			items := strings.Split(val.(string), ",")
+			if len(items) != 2 {
+				ctx.L().Fatal("failpoint LoadExecCreateTableFailed's value is invalid", zap.String("val", val.(string)))
+			}
+
+			errCode, err1 := strconv.ParseUint(items[0], 10, 16)
+			errNum, err2 := strconv.ParseInt(items[1], 10, 16)
+			if err1 != nil || err2 != nil {
+				ctx.L().Fatal("failpoint LoadExecCreateTableFailed's value is invalid", zap.String("val", val.(string)), zap.Strings("items", items), zap.Error(err1), zap.Error(err2))
+			}
+
+			if i < int(errNum) && len(sqls) == 1 && strings.Contains(sqls[0], "CREATE TABLE") {
+				err = tmysql.NewErr(uint16(errCode))
+				ctx.L().Warn("executeSQLCustomRetry failed", zap.String("failpoint", "LoadExecCreateTableFailed"), zap.Error(err))
+			}
+		})
+
 		if err != nil {
 			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
 			if isRetryableFn(err) {

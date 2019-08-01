@@ -30,13 +30,10 @@ function run() {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
-cleanup1 sharding_target2
+cleanup_data sharding_target2
 # also cleanup dm processes in case of last run failed
-cleanup2 $*
+cleanup_process $*
 run $*
-cleanup2 $*
-
-wait_process_exit dm-master.test
-wait_process_exit dm-worker.test
+cleanup_process $*
 
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"
