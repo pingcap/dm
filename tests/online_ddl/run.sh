@@ -41,14 +41,11 @@ function run() {
     TEST_NAME=${BASE_TEST_NAME}_$online_ddl_scheme
     WORK_DIR=$TEST_DIR/$TEST_NAME
 
-    cleanup1 online_ddl
+    cleanup_data online_ddl
     # also cleanup dm processes in case of last run failed
-    cleanup2 $*
+    cleanup_process $*
     real_run $*
-    cleanup2 $*
-
-    wait_process_exit dm-master.test
-    wait_process_exit dm-worker.test
+    cleanup_process $*
 
     echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"
 }

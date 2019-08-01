@@ -17,15 +17,19 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	tmysql "github.com/pingcap/parser/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"
+	"go.uber.org/zap"
 )
 
 var (
@@ -41,6 +45,12 @@ func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, erro
 	)
 
 	rows, err := db.Query(`SHOW MASTER STATUS`)
+
+	failpoint.Inject("GetMasterStatusFailed", func(val failpoint.Value) {
+		err = tmysql.NewErr(uint16(val.(int)))
+		log.L().Warn("GetMasterStatus failed", zap.String("failpoint", "GetMasterStatusFailed"), zap.Error(err))
+	})
+
 	if err != nil {
 		return binlogPos, gs, err
 	}
@@ -118,6 +128,24 @@ func GetMariaDBGTID(db *sql.DB) (gtid.Set, error) {
 func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
 	query := fmt.Sprintf("SHOW GLOBAL VARIABLES LIKE '%s'", variable)
 	rows, err := db.Query(query)
+
+	failpoint.Inject("GetGlobalVariableFailed", func(val failpoint.Value) {
+		items := strings.Split(val.(string), ",")
+		if len(items) != 2 {
+			log.L().Fatal("failpoint GetGlobalVariableFailed's value is invalid", zap.String("val", val.(string)))
+		}
+		variableName := items[0]
+		errCode, err1 := strconv.ParseUint(items[1], 10, 16)
+		if err1 != nil {
+			log.L().Fatal("failpoint GetGlobalVariableFailed's value is invalid", zap.String("val", val.(string)))
+		}
+
+		if variable == variableName {
+			err = tmysql.NewErr(uint16(errCode))
+			log.L().Warn("GetGlobalVariable failed", zap.String("variable", variable), zap.String("failpoint", "GetGlobalVariableFailed"), zap.Error(err))
+		}
+	})
+
 	if err != nil {
 		return "", terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}

@@ -90,14 +90,10 @@ function run() {
     $cur/../bin/check_safe_mode $check_instance_id
 }
 
-cleanup1 sequence_safe_mode_target
+cleanup_data sequence_safe_mode_target
 # also cleanup dm processes in case of last run failed
-cleanup2 $*
+cleanup_process $*
 run $*
-cleanup2 $*
-
-wait_process_exit dm-master.test
-wait_process_exit dm-worker.test
-wait_process_exit dm-tracer.test
+cleanup_process $*
 
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"

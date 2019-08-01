@@ -66,13 +66,10 @@ function run() {
     [ "$old_checksum" == "$new_checksum" ]
 }
 
-cleanup1 db_target
+cleanup_data db_target
 # also cleanup dm processes in case of last run failed
-cleanup2 $*
+cleanup_process $*
 run $*
-cleanup2 $*
-
-wait_process_exit dm-master.test
-wait_process_exit dm-worker.test
+cleanup_process $*
 
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"

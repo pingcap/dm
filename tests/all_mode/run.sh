@@ -42,13 +42,10 @@ function run() {
     check_metric $WORKER2_PORT 'dm_syncer_replication_lag{task="test"}' 3 0 1
 }
 
-cleanup1 all_mode
+cleanup_data all_mode
 # also cleanup dm processes in case of last run failed
-cleanup2 $*
+cleanup_process $*
 run $*
-cleanup2 $*
-
-wait_process_exit dm-master.test
-wait_process_exit dm-worker.test
+cleanup_process $*
 
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"
