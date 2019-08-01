@@ -3,10 +3,16 @@ syntax = "proto3";
 package pb;
 
 import "dmworker.proto"; // refine if needed
-
+import "google/api/annotations.proto";
 
 service Master {
-    rpc StartTask (StartTaskRequest) returns (StartTaskResponse) {}
+    rpc StartTask (StartTaskRequest) returns (StartTaskResponse) {
+        option (google.api.http) = { 
+            post: "/apis/http-test"
+            body: "*"
+        };
+    }
+
     rpc OperateTask (OperateTaskRequest) returns (OperateTaskResponse) {}
     rpc UpdateTask (UpdateTaskRequest) returns (UpdateTaskResponse) {}
 

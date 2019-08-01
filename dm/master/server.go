@@ -22,12 +22,14 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"net/http"
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/common"
@@ -92,10 +94,12 @@ func NewServer(cfg *Config) *Server {
 // Start starts to serving
 func (s *Server) Start() error {
 	var err error
+	/*
 	s.rootLis, err = net.Listen("tcp", s.cfg.MasterAddr)
 	if err != nil {
 		return errors.Trace(err)
 	}
+	*/
 
 	for _, workerAddr := range s.cfg.DeployMap {
 		s.workerClients[workerAddr], err = workerrpc.NewGRPCClient(workerAddr)
@@ -143,6 +147,22 @@ func (s *Server) Start() error {
 
 	s.svr = grpc.NewServer()
 	pb.RegisterMasterServer(s.svr, s)
+
+	//dopts := []grpc.DialOption{}
+	mux := http.NewServeMux()
+	gwmux := runtime.NewServeMux()
+	mux.Handle("/", gwmux)
+
+	opts := []grpc.DialOption{grpc.WithInsecure()}
+
+	err = pb.RegisterMasterHandlerFromEndpoint(ctx, gwmux, "127.0.0.1:8261", opts)
+	//err = pb.RegisterMasterHandler(ctx, gwmux, nil)
+	if err != nil {
+		return err
+	}
+
+	http.ListenAndServe(":8261", mux)
+	
 	go func() {
 		err2 := s.svr.Serve(grpcL)
 		if err2 != nil && !common.IsErrNetClosing(err2) && err2 != cmux.ErrListenerClosed {

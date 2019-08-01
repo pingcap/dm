@@ -10,7 +10,12 @@ if [ ! -d $GOGO_ROOT ]; then
 		exit 1
 fi
 
+#protoc -I .:${GOGO_ROOT}:${GOGO_ROOT}/protobuf --go_out=plugins=grpc,Mgoogle/protobuf/descriptor.proto=github.com/golang/protobuf/protoc-gen-go/descriptor:../pb/ google/api/*.proto
+
 protoc -I.:${GOGO_ROOT}:${GOGO_ROOT}/protobuf --gogofaster_out=plugins=grpc:../pb/ *.proto
+
+protoc --grpc-gateway_out=logtostderr=true:../pb/ *.proto
+
 
 cd ../pb
 sed -i.bak -E 's/import _ \"gogoproto\"//g' *.pb.go
