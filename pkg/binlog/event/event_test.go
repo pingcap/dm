@@ -490,26 +490,26 @@ func (t *testEventSuite) TestGenRowsEvent(c *C) {
 	)
 
 	// invalid eventType, rows and columnType
-	rowsEv, err := GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType)
+	rowsEv, err := GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType, nil)
 	c.Assert(err, NotNil)
 	c.Assert(rowsEv, IsNil)
 
 	// valid eventType, invalid rows and columnType
 	eventType = replication.WRITE_ROWS_EVENTv0
-	rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType)
+	rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType, nil)
 	c.Assert(err, NotNil)
 	c.Assert(rowsEv, IsNil)
 
 	// valid eventType and rows, invalid columnType
 	row := []interface{}{int32(1)}
 	rows = append(rows, row)
-	rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType)
+	rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType, nil)
 	c.Assert(err, NotNil)
 	c.Assert(rowsEv, IsNil)
 
 	// all valid
 	columnType = []byte{gmysql.MYSQL_TYPE_LONG}
-	rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType)
+	rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType, nil)
 	c.Assert(err, IsNil)
 	c.Assert(rowsEv, NotNil)
 
@@ -530,7 +530,7 @@ func (t *testEventSuite) TestGenRowsEvent(c *C) {
 
 	// multi rows, with different length, invalid
 	rows = append(rows, []interface{}{int32(1), int32(2)})
-	rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType)
+	rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType, nil)
 	c.Assert(err, NotNil)
 	c.Assert(rowsEv, IsNil)
 
@@ -539,7 +539,7 @@ func (t *testEventSuite) TestGenRowsEvent(c *C) {
 	rows = append(rows, []interface{}{int32(1), int32(2)})
 	rows = append(rows, []interface{}{int32(3), int32(4)})
 	columnType = []byte{gmysql.MYSQL_TYPE_LONG, gmysql.MYSQL_TYPE_LONG}
-	rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType)
+	rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType, nil)
 	c.Assert(err, IsNil)
 	c.Assert(rowsEv, NotNil)
 	// verify the body
@@ -556,7 +556,7 @@ func (t *testEventSuite) TestGenRowsEvent(c *C) {
 		replication.DELETE_ROWS_EVENTv0, replication.DELETE_ROWS_EVENTv1, replication.DELETE_ROWS_EVENTv2,
 	}
 	for _, eventType = range evTypes {
-		rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType)
+		rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType, nil)
 		c.Assert(err, IsNil)
 		c.Assert(rowsEv, NotNil)
 		c.Assert(rowsEv.Header.EventType, Equals, eventType)
@@ -568,7 +568,7 @@ func (t *testEventSuite) TestGenRowsEvent(c *C) {
 		float32(1.23), float64(4.56), "string with type STRING"})
 	columnType = []byte{gmysql.MYSQL_TYPE_LONG, gmysql.MYSQL_TYPE_TINY, gmysql.MYSQL_TYPE_SHORT, gmysql.MYSQL_TYPE_INT24, gmysql.MYSQL_TYPE_LONGLONG,
 		gmysql.MYSQL_TYPE_FLOAT, gmysql.MYSQL_TYPE_DOUBLE, gmysql.MYSQL_TYPE_STRING}
-	rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType)
+	rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType, nil)
 	c.Assert(err, IsNil)
 	c.Assert(rowsEv, NotNil)
 	// verify the body
@@ -580,7 +580,7 @@ func (t *testEventSuite) TestGenRowsEvent(c *C) {
 
 	// column type mismatch
 	rows[0][0] = int8(1)
-	rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType)
+	rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType, nil)
 	c.Assert(err, NotNil)
 	c.Assert(rowsEv, IsNil)
 
@@ -596,7 +596,7 @@ func (t *testEventSuite) TestGenRowsEvent(c *C) {
 		gmysql.MYSQL_TYPE_BLOB, gmysql.MYSQL_TYPE_JSON, gmysql.MYSQL_TYPE_GEOMETRY}
 	for i := range unsupportedTypes {
 		columnType = unsupportedTypes[i : i+1]
-		rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType)
+		rowsEv, err = GenRowsEvent(header, latestPos, eventType, tableID, rowsFlag, rows, columnType, nil)
 		c.Assert(err, NotNil)
 		c.Assert(strings.Contains(err.Error(), "not supported"), IsTrue)
 		c.Assert(rowsEv, IsNil)

@@ -58,6 +58,18 @@
       wait_for: |
         host={{ ansible_host }} port={{ dm_master_port }} state=started
 
+- hosts: dm_portal_servers
+  tags:
+    - dm-portal
+  tasks:
+    - name: start dm-portal by systemd
+      become: true
+      systemd: name=dm-portal-{{ dm_portal_port }}.service state=started enabled=no
+
+    - name: wait for dm-portal up
+      wait_for: |
+        host={{ ansible_host }} port={{ dm_portal_port }} state=started
+
 - hosts: grafana_servers
   tags:
     - grafana

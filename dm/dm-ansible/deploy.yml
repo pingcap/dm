@@ -60,3 +60,11 @@
   gather_facts: false
   roles:
     - dmctl
+
+- name: deploying dm-portal
+  hosts: dm_portal_servers
+  any_errors_fatal: true
+  tags:
+    - dm-portal
+  roles:
+    - dm-portal
