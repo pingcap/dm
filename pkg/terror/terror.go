@@ -33,6 +33,7 @@ type ErrClass int
 const (
 	ClassDatabase ErrClass = iota + 1
 	ClassFunctional
+	ClassConfig
 	ClassBinlogOp
 	ClassCheckpoint
 	ClassTaskCheck
@@ -41,11 +42,14 @@ const (
 	ClassDumpUnit
 	ClassLoadUnit
 	ClassSyncUnit
+	ClassDMWorker
+	ClassDMMaster
 )
 
 var errClass2Str = map[ErrClass]string{
 	ClassDatabase:   "database",
 	ClassFunctional: "functional",
+	ClassConfig:     "config",
 	ClassBinlogOp:   "binlog-op",
 	ClassCheckpoint: "checkpoint",
 	ClassTaskCheck:  "task-check",
@@ -54,6 +58,8 @@ var errClass2Str = map[ErrClass]string{
 	ClassDumpUnit:   "dump-unit",
 	ClassLoadUnit:   "load-unit",
 	ClassSyncUnit:   "sync-unit",
+	ClassDMWorker:   "dm-worker",
+	ClassDMMaster:   "dm-master",
 }
 
 // String implements fmt.Stringer interface

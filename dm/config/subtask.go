@@ -22,10 +22,10 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/BurntSushi/toml"
-	"github.com/pingcap/errors"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
@@ -67,7 +67,7 @@ func (db *DBConfig) Toml() (string, error) {
 	enc := toml.NewEncoder(&b)
 	err := enc.Encode(db)
 	if err != nil {
-		return "", errors.Trace(err)
+		return "", terror.ErrConfigTomlTransform.Delegate(err, "db config to toml")
 	}
 	return b.String(), nil
 }
@@ -75,7 +75,7 @@ func (db *DBConfig) Toml() (string, error) {
 // Decode loads config from file data
 func (db *DBConfig) Decode(data string) error {
 	_, err := toml.Decode(data, db)
-	return errors.Trace(err)
+	return terror.ErrConfigTomlTransform.Delegate(err, "decode db config")
 }
 
 // Adjust adjusts the config.
@@ -158,7 +158,7 @@ func NewSubTaskConfig() *SubTaskConfig {
 func (c *SubTaskConfig) String() string {
 	cfg, err := json.Marshal(c)
 	if err != nil {
-		log.L().Error("marshal sub task dm config to json", zap.String("task", c.Name), log.ShortError(err))
+		log.L().Error("marshal subtask config to json", zap.String("task", c.Name), log.ShortError(err))
 	}
 	return string(cfg)
 }
@@ -169,7 +169,7 @@ func (c *SubTaskConfig) Toml() (string, error) {
 	enc := toml.NewEncoder(&b)
 	err := enc.Encode(c)
 	if err != nil {
-		return "", errors.Trace(err)
+		return "", terror.ErrConfigTomlTransform.Delegate(err, "encode subtask config")
 	}
 	return b.String(), nil
 }
@@ -178,33 +178,33 @@ func (c *SubTaskConfig) Toml() (string, error) {
 func (c *SubTaskConfig) DecodeFile(fpath string) error {
 	_, err := toml.DecodeFile(fpath, c)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrConfigTomlTransform.Delegate(err, "decode subtask config from file")
 	}
 
-	return errors.Trace(c.Adjust())
+	return c.Adjust()
 }
 
 // Decode loads config from file data
 func (c *SubTaskConfig) Decode(data string) error {
 	_, err := toml.Decode(data, c)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrConfigTomlTransform.Delegate(err, "decode subtask config from data")
 	}
 
-	return errors.Trace(c.Adjust())
+	return c.Adjust()
 }
 
 // Adjust adjusts configs
 func (c *SubTaskConfig) Adjust() error {
 	if c.Name == "" {
-		return errors.New("task name should not be empty")
+		return terror.ErrConfigTaskNameEmpty.Generate()
 	}
 
 	if c.SourceID == "" {
-		return errors.NotValidf("empty source-id")
+		return terror.ErrConfigEmptySourceID.Generate()
 	}
 	if len(c.SourceID) > MaxSourceIDLength {
-		return errors.NotValidf("too long source-id")
+		return terror.ErrConfigTooLongSourceID.Generate()
 	}
 
 	//if c.Flavor != mysql.MySQLFlavor && c.Flavor != mysql.MariaDBFlavor {
@@ -212,7 +212,7 @@ func (c *SubTaskConfig) Adjust() error {
 	//}
 
 	if c.OnlineDDLScheme != "" && c.OnlineDDLScheme != PT && c.OnlineDDLScheme != GHOST {
-		return errors.NotSupportedf("online scheme %s", c.OnlineDDLScheme)
+		return terror.ErrConfigOnlineSchemeNotSupport.Generate(c.OnlineDDLScheme)
 	}
 
 	if c.MetaSchema == "" {
@@ -230,7 +230,7 @@ func (c *SubTaskConfig) Adjust() error {
 	if c.Timezone != "" {
 		_, err := time.LoadLocation(c.Timezone)
 		if err != nil {
-			return errors.Annotatef(err, "invalid timezone string: %s", c.Timezone)
+			return terror.ErrConfigInvalidTimezone.Delegate(err, c.Timezone)
 		}
 	}
 
@@ -252,7 +252,7 @@ func (c *SubTaskConfig) Parse(arguments []string) error {
 	// Parse first to get config file.
 	err := c.flagSet.Parse(arguments)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrConfigParseFlagSet.Delegate(err)
 	}
 
 	if c.printVersion {
@@ -264,28 +264,28 @@ func (c *SubTaskConfig) Parse(arguments []string) error {
 	if c.ConfigFile != "" {
 		err = c.DecodeFile(c.ConfigFile)
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 	}
 
 	// Parse again to replace with command line options.
 	err = c.flagSet.Parse(arguments)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrConfigParseFlagSet.Delegate(err)
 	}
 
 	if len(c.flagSet.Args()) != 0 {
-		return errors.Errorf("'%s' is an invalid flag", c.flagSet.Arg(0))
+		return terror.ErrConfigParseFlagSet.Generatef("'%s' is an invalid flag", c.flagSet.Arg(0))
 	}
 
-	return errors.Trace(c.Adjust())
+	return c.Adjust()
 }
 
 // DecryptPassword tries to decrypt db password in config
 func (c *SubTaskConfig) DecryptPassword() (*SubTaskConfig, error) {
 	clone, err := c.Clone()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	var (
@@ -295,13 +295,13 @@ func (c *SubTaskConfig) DecryptPassword() (*SubTaskConfig, error) {
 	if len(clone.To.Password) > 0 {
 		pswdTo, err = utils.Decrypt(clone.To.Password)
 		if err != nil {
-			return nil, errors.Annotatef(err, "downstream DB password %s", clone.To.Password)
+			return nil, terror.WithScope(terror.ErrConfigDecryptDBPassword.Delegate(err, clone.To.Password), terror.ScopeDownstream)
 		}
 	}
 	if len(clone.From.Password) > 0 {
 		pswdFrom, err = utils.Decrypt(clone.From.Password)
 		if err != nil {
-			return nil, errors.Annotatef(err, "source DB password %s", clone.From.Password)
+			return nil, terror.WithScope(terror.ErrConfigDecryptDBPassword.Delegate(err, clone.From.Password), terror.ScopeUpstream)
 		}
 	}
 	clone.From.Password = pswdFrom
@@ -314,13 +314,13 @@ func (c *SubTaskConfig) DecryptPassword() (*SubTaskConfig, error) {
 func (c *SubTaskConfig) Clone() (*SubTaskConfig, error) {
 	content, err := c.Toml()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	clone := &SubTaskConfig{}
 	_, err = toml.Decode(content, clone)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.ErrConfigTomlTransform.Delegate(err, "decode subtask config from data")
 	}
 
 	return clone, nil

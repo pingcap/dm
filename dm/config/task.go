@@ -19,8 +19,8 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 
-	"github.com/pingcap/errors"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
@@ -68,7 +68,7 @@ type Meta struct {
 // Verify does verification on configs
 func (m *Meta) Verify() error {
 	if m != nil && len(m.BinLogName) == 0 {
-		return errors.New("binlog-name must specify")
+		return terror.ErrConfigMetaNoBinlogName.Generate()
 	}
 
 	return nil
@@ -95,25 +95,25 @@ type MySQLInstance struct {
 // Verify does verification on configs
 func (m *MySQLInstance) Verify() error {
 	if m == nil {
-		return errors.New("mysql instance config must specify")
+		return terror.ErrConfigMySQLInstNotFound.Generate()
 	}
 
 	if m.SourceID == "" {
-		return errors.NotValidf("empty source-id")
+		return terror.ErrConfigEmptySourceID.Generate()
 	}
 
 	if err := m.Meta.Verify(); err != nil {
-		return errors.Annotatef(err, "source %s", m.SourceID)
+		return terror.Annotatef(err, "source %s", m.SourceID)
 	}
 
 	if len(m.MydumperConfigName) > 0 && m.Mydumper != nil {
-		return errors.New("mydumper-config-name and mydumper should only specify one")
+		return terror.ErrConfigMydumperCfgConflict.Generate()
 	}
 	if len(m.LoaderConfigName) > 0 && m.Loader != nil {
-		return errors.New("loader-config-name and loader should only specify one")
+		return terror.ErrConfigLoaderCfgConflict.Generate()
 	}
 	if len(m.SyncerConfigName) > 0 && m.Syncer != nil {
-		return errors.New("syncer-config-name and syncer should only specify one")
+		return terror.ErrConfigSyncerCfgConflict.Generate()
 	}
 
 	return nil
@@ -146,7 +146,7 @@ type rawMydumperConfig MydumperConfig
 func (m *MydumperConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	raw := rawMydumperConfig(defaultMydumperConfig())
 	if err := unmarshal(&raw); err != nil {
-		return errors.Trace(err)
+		return terror.ErrConfigTaskYamlTransform.Delegate(err, "unmarshal mydumper config")
 	}
 	*m = MydumperConfig(raw) // raw used only internal, so no deep copy
 	return nil
@@ -172,7 +172,7 @@ type rawLoaderConfig LoaderConfig
 func (m *LoaderConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	raw := rawLoaderConfig(defaultLoaderConfig())
 	if err := unmarshal(&raw); err != nil {
-		return errors.Trace(err)
+		return terror.ErrConfigTaskYamlTransform.Delegate(err, "unmarshal loader config")
 	}
 	*m = LoaderConfig(raw) // raw used only internal, so no deep copy
 	return nil
@@ -208,7 +208,7 @@ type rawSyncerConfig SyncerConfig
 func (m *SyncerConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	raw := rawSyncerConfig(defaultSyncerConfig())
 	if err := unmarshal(&raw); err != nil {
-		return errors.Trace(err)
+		return terror.ErrConfigTaskYamlTransform.Delegate(err, "unmarshal syncer config")
 	}
 	*m = SyncerConfig(raw) // raw used only internal, so no deep copy
 	return nil
@@ -291,61 +291,61 @@ func (c *TaskConfig) String() string {
 func (c *TaskConfig) DecodeFile(fpath string) error {
 	bs, err := ioutil.ReadFile(fpath)
 	if err != nil {
-		return errors.Annotatef(err, "read config file %v", fpath)
+		return terror.ErrConfigReadTaskCfgFromFile.Delegate(err, fpath)
 	}
 
 	err = yaml.UnmarshalStrict(bs, c)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrConfigTaskYamlTransform.Delegate(err)
 	}
 
-	return errors.Trace(c.adjust())
+	return c.adjust()
 }
 
 // Decode loads config from file data
 func (c *TaskConfig) Decode(data string) error {
 	err := yaml.UnmarshalStrict([]byte(data), c)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrConfigTaskYamlTransform.Delegate(err, "decode config from data")
 	}
 
-	return errors.Trace(c.adjust())
+	return c.adjust()
 }
 
 // adjust adjusts configs
 func (c *TaskConfig) adjust() error {
 	if len(c.Name) == 0 {
-		return errors.New("must specify a unique task name")
+		return terror.ErrConfigNeedUniqueTaskName.Generate()
 	}
 	if c.TaskMode != ModeFull && c.TaskMode != ModeIncrement && c.TaskMode != ModeAll {
-		return errors.New("please specify right task-mode, support `full`, `incremental`, `all`")
+		return terror.ErrConfigInvalidTaskMode.Generate()
 	}
 
 	for _, item := range c.IgnoreCheckingItems {
 		if err := ValidateCheckingItem(item); err != nil {
-			return errors.Trace(err)
+			return err
 		}
 	}
 
 	if c.OnlineDDLScheme != "" && c.OnlineDDLScheme != PT && c.OnlineDDLScheme != GHOST {
-		return errors.NotSupportedf("online scheme %s", c.OnlineDDLScheme)
+		return terror.ErrConfigOnlineSchemeNotSupport.Generate(c.OnlineDDLScheme)
 	}
 
 	if c.TargetDB == nil {
-		return errors.New("must specify target-database")
+		return terror.ErrConfigNeedTargetDB.Generate()
 	}
 
 	if len(c.MySQLInstances) == 0 {
-		return errors.New("must specify at least one mysql-instances")
+		return terror.ErrConfigMySQLInstsAtLeastOne.Generate()
 	}
 
 	iids := make(map[string]int) // source-id -> instance-index
 	for i, inst := range c.MySQLInstances {
 		if err := inst.Verify(); err != nil {
-			return errors.Annotatef(err, "mysql-instance: %d", i)
+			return terror.Annotatef(err, "mysql-instance: %d", i)
 		}
 		if iid, ok := iids[inst.SourceID]; ok {
-			return errors.Errorf("mysql-instance (%d) and (%d) have same source-id (%s)", iid, i, inst.SourceID)
+			return terror.ErrConfigMySQLInstSameSourceID.Generate(iid, i, inst.SourceID)
 		}
 		iids[inst.SourceID] = i
 
@@ -356,37 +356,37 @@ func (c *TaskConfig) adjust() error {
 			}
 		case ModeIncrement:
 			if inst.Meta == nil {
-				return errors.Errorf("mysql-instance(%d) must set meta for task-mode %s", i, c.TaskMode)
+				return terror.ErrConfigMetadataNotSet.Generate(i, c.TaskMode)
 			}
 			err := inst.Meta.Verify()
 			if err != nil {
-				return errors.Annotatef(err, "mysql-instance: %d", i)
+				return terror.Annotatef(err, "mysql-instance: %d", i)
 			}
 		}
 
 		for _, name := range inst.RouteRules {
 			if _, ok := c.Routes[name]; !ok {
-				return errors.Errorf("mysql-instance(%d)'s route-rules %s not exist in routes", i, name)
+				return terror.ErrConfigRouteRuleNotFound.Generate(i, name)
 			}
 		}
 		for _, name := range inst.FilterRules {
 			if _, ok := c.Filters[name]; !ok {
-				return errors.Errorf("mysql-instance(%d)'s filter-rules %s not exist in filters", i, name)
+				return terror.ErrConfigFilterRuleNotFound.Generate(i, name)
 			}
 		}
 		for _, name := range inst.ColumnMappingRules {
 			if _, ok := c.ColumnMappings[name]; !ok {
-				return errors.Errorf("mysql-instance(%d)'s column-mapping-rules %s not exist in column-mapping", i, name)
+				return terror.ErrConfigColumnMappingNotFound.Generate(i, name)
 			}
 		}
 		if _, ok := c.BWList[inst.BWListName]; len(inst.BWListName) > 0 && !ok {
-			return errors.Errorf("mysql-instance(%d)'s list %s not exist in black white list", i, inst.BWListName)
+			return terror.ErrConfigBWListNotFound.Generate(i, inst.BWListName)
 		}
 
 		if len(inst.MydumperConfigName) > 0 {
 			rule, ok := c.Mydumpers[inst.MydumperConfigName]
 			if !ok {
-				return errors.Errorf("mysql-instance(%d)'s mydumper config %s not exist in mydumpers", i, inst.MydumperConfigName)
+				return terror.ErrConfigMydumperCfgNotFound.Generate(i, inst.MydumperConfigName)
 			}
 			inst.Mydumper = rule // ref mydumper config
 		}
@@ -397,13 +397,13 @@ func (c *TaskConfig) adjust() error {
 
 		if (c.TaskMode == ModeFull || c.TaskMode == ModeAll) && len(inst.Mydumper.MydumperPath) == 0 {
 			// only verify if set, whether is valid can only be verify when we run it
-			return errors.Errorf("mysql-instance(%d)'s mydumper-path must specify a valid path to mydumper binary when task-mode is all or full", i)
+			return terror.ErrConfigMydumperPathNotValid.Generate(i)
 		}
 
 		if len(inst.LoaderConfigName) > 0 {
 			rule, ok := c.Loaders[inst.LoaderConfigName]
 			if !ok {
-				return errors.Errorf("mysql-instance(%d)'s loader config %s not exist in loaders", i, inst.LoaderConfigName)
+				return terror.ErrConfigLoaderCfgNotFound.Generate(i, inst.LoaderConfigName)
 			}
 			inst.Loader = rule // ref loader config
 		}
@@ -415,7 +415,7 @@ func (c *TaskConfig) adjust() error {
 		if len(inst.SyncerConfigName) > 0 {
 			rule, ok := c.Syncers[inst.SyncerConfigName]
 			if !ok {
-				return errors.Errorf("mysql-instance(%d)'s syncer config %s not exist in syncer", i, inst.SyncerConfigName)
+				return terror.ErrConfigSyncerCfgNotFound.Generate(i, inst.SyncerConfigName)
 			}
 			inst.Syncer = rule // ref syncer config
 		}
@@ -428,7 +428,7 @@ func (c *TaskConfig) adjust() error {
 	if c.Timezone != "" {
 		_, err := time.LoadLocation(c.Timezone)
 		if err != nil {
-			return errors.Annotatef(err, "invalid timezone string: %s", c.Timezone)
+			return terror.ErrConfigInvalidTimezone.Delegate(err, c.Timezone)
 		}
 	}
 
@@ -441,7 +441,7 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 	for i, inst := range c.MySQLInstances {
 		dbCfg, exist := sources[inst.SourceID]
 		if !exist {
-			return nil, errors.NotFoundf("source %s in deployment configuration", inst.SourceID)
+			return nil, terror.ErrConfigSourceIDNotFound.Generate(inst.SourceID)
 		}
 
 		cfg := NewSubTaskConfig()
@@ -489,7 +489,7 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 
 		err := cfg.Adjust()
 		if err != nil {
-			return nil, errors.Annotatef(err, "source %s", inst.SourceID)
+			return nil, terror.Annotatef(err, "source %s", inst.SourceID)
 		}
 
 		cfgs[i] = cfg

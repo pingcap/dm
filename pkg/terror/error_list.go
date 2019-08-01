@@ -41,13 +41,46 @@ const (
 	codeGetSQLModeFromStr
 	codeVerifySQLOperateArgs
 
+	// Config related error code list
+	codeConfigCheckItemNotSupport = iota + 1201
+	codeConfigTomlTransform
+	codeConfigTaskYamlTransform
+	codeConfigTaskNameEmpty
+	codeConfigEmptySourceID
+	codeConfigTooLongSourceID
+	codeConfigOnlineSchemeNotSupport
+	codeConfigInvalidTimezone
+	codeConfigParseFlagSet
+	codeConfigDecryptDBPassword
+	codeConfigMetaNoBinlogName
+	codeConfigMySQLInstNotFound
+	codeConfigMySQLInstsAtLeastOne
+	codeConfigMySQLInstSameSourceID
+	codeConfigMydumperCfgConflict
+	codeConfigLoaderCfgConflict
+	codeConfigSyncerCfgConflict
+	codeConfigReadTaskCfgFromFile
+	codeConfigNeedUniqueTaskName
+	codeConfigInvalidTaskMode
+	codeConfigNeedTargetDB
+	codeConfigMetadataNotSet
+	codeConfigRouteRuleNotFound
+	codeConfigFilterRuleNotFound
+	codeConfigColumnMappingNotFound
+	codeConfigBWListNotFound
+	codeConfigMydumperCfgNotFound
+	codeConfigMydumperPathNotValid
+	codeConfigLoaderCfgNotFound
+	codeConfigSyncerCfgNotFound
+	codeConfigSourceIDNotFound
+
 	// Binlog operation error code list
-	codeBinlogExtractPosition = iota + 1201
+	codeBinlogExtractPosition = iota + 1301
 	codeBinlogInvalidFilename
 	codeBinlogParsePosFromStr
 
 	// Checkpoint error code
-	codeCheckpointInvalidTaskMode = iota + 1301
+	codeCheckpointInvalidTaskMode = iota + 1401
 	codeCheckpointSaveInvalidPos
 	codeCheckpointInvalidTableFile
 	codeCheckpointDBNotExistInFile
@@ -55,13 +88,13 @@ const (
 	codeCheckpointRestoreCountGreater
 
 	// Task check error code
-	codeTaskCheckSameTableName = iota + 1401
+	codeTaskCheckSameTableName = iota + 1501
 	codeTaskCheckFailedOpenDB
 	codeTaskCheckNewTableRouter
 	codeTaskCheckNewColumnMapping
 
 	// Relay log basic API error
-	codeRelayParseUUIDIndex = iota + 1501
+	codeRelayParseUUIDIndex = iota + 1601
 	codeRelayParseUUIDSuffix
 	codeRelayUUIDWithSuffixNotFound
 	codeRelayGenFakeRotateEvent
@@ -184,6 +217,39 @@ var (
 	ErrInvalidServerID      = New(codeInvalidServerID, ClassFunctional, ScopeInternal, LevelHigh, "invalid server id")
 	ErrGetSQLModeFromStr    = New(codeGetSQLModeFromStr, ClassFunctional, ScopeInternal, LevelHigh, "get sql from from string literal")
 	ErrVerifySQLOperateArgs = New(codeVerifySQLOperateArgs, ClassFunctional, ScopeInternal, LevelLow, "")
+
+	// Config related error
+	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s")
+	ErrConfigTomlTransform          = New(codeConfigTomlTransform, ClassConfig, ScopeInternal, LevelMedium, "%s")
+	ErrConfigTaskYamlTransform      = New(codeConfigTaskYamlTransform, ClassConfig, ScopeInternal, LevelMedium, "%s")
+	ErrConfigTaskNameEmpty          = New(codeConfigTaskNameEmpty, ClassConfig, ScopeInternal, LevelMedium, "task name should not be empty")
+	ErrConfigEmptySourceID          = New(codeConfigEmptySourceID, ClassConfig, ScopeInternal, LevelMedium, "empty source-id not valid")
+	ErrConfigTooLongSourceID        = New(codeConfigTooLongSourceID, ClassConfig, ScopeInternal, LevelMedium, "too long source-id not valid")
+	ErrConfigOnlineSchemeNotSupport = New(codeConfigOnlineSchemeNotSupport, ClassConfig, ScopeInternal, LevelMedium, "online scheme %s not supported")
+	ErrConfigInvalidTimezone        = New(codeConfigInvalidTimezone, ClassConfig, ScopeInternal, LevelMedium, "invalid timezone string: %s")
+	ErrConfigParseFlagSet           = New(codeConfigParseFlagSet, ClassConfig, ScopeInternal, LevelMedium, "parse subtask config flag set")
+	ErrConfigDecryptDBPassword      = New(codeConfigDecryptDBPassword, ClassConfig, ScopeInternal, LevelMedium, "decrypt DB password %s failed")
+	ErrConfigMetaNoBinlogName       = New(codeConfigMetaNoBinlogName, ClassConfig, ScopeInternal, LevelMedium, "binlog-name must specify")
+	ErrConfigMySQLInstNotFound      = New(codeConfigMySQLInstNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql instance config must specify")
+	ErrConfigMySQLInstsAtLeastOne   = New(codeConfigMySQLInstsAtLeastOne, ClassConfig, ScopeInternal, LevelMedium, "must specify at least one mysql-instances")
+	ErrConfigMySQLInstSameSourceID  = New(codeConfigMySQLInstSameSourceID, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance (%d) and (%d) have same source-id (%s)")
+	ErrConfigMydumperCfgConflict    = New(codeConfigMydumperCfgConflict, ClassConfig, ScopeInternal, LevelMedium, "mydumper-config-name and mydumper should only specify one")
+	ErrConfigLoaderCfgConflict      = New(codeConfigLoaderCfgConflict, ClassConfig, ScopeInternal, LevelMedium, "loader-config-name and loader should only specify one")
+	ErrConfigSyncerCfgConflict      = New(codeConfigSyncerCfgConflict, ClassConfig, ScopeInternal, LevelMedium, "syncer-config-name and syncer should only specify one")
+	ErrConfigReadTaskCfgFromFile    = New(codeConfigReadTaskCfgFromFile, ClassConfig, ScopeInternal, LevelMedium, "read config file %v")
+	ErrConfigNeedUniqueTaskName     = New(codeConfigNeedUniqueTaskName, ClassConfig, ScopeInternal, LevelMedium, "must specify a unique task name")
+	ErrConfigInvalidTaskMode        = New(codeConfigInvalidTaskMode, ClassConfig, ScopeInternal, LevelMedium, "please specify right task-mode, support `full`, `incremental`, `all`")
+	ErrConfigNeedTargetDB           = New(codeConfigNeedTargetDB, ClassConfig, ScopeInternal, LevelMedium, "must specify target-database")
+	ErrConfigMetadataNotSet         = New(codeConfigMetadataNotSet, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d) must set meta for task-mode %s")
+	ErrConfigRouteRuleNotFound      = New(codeConfigRouteRuleNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s route-rules %s not exist in routes")
+	ErrConfigFilterRuleNotFound     = New(codeConfigFilterRuleNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s filter-rules %s not exist in filters")
+	ErrConfigColumnMappingNotFound  = New(codeConfigColumnMappingNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s column-mapping-rules %s not exist in column-mapping")
+	ErrConfigBWListNotFound         = New(codeConfigBWListNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s list %s not exist in black white list")
+	ErrConfigMydumperCfgNotFound    = New(codeConfigMydumperCfgNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s mydumper config %s not exist in mydumpers")
+	ErrConfigMydumperPathNotValid   = New(codeConfigMydumperPathNotValid, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s mydumper-path must specify a valid path to mydumper binary when task-mode is all or full")
+	ErrConfigLoaderCfgNotFound      = New(codeConfigLoaderCfgNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s loader config %s not exist in loaders")
+	ErrConfigSyncerCfgNotFound      = New(codeConfigSyncerCfgNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s syncer config %s not exist in syncer")
+	ErrConfigSourceIDNotFound       = New(codeConfigSourceIDNotFound, ClassConfig, ScopeInternal, LevelMedium, "source %s in deployment configuration")
 
 	// Binlog operation error
 	ErrBinlogExtractPosition = New(codeBinlogExtractPosition, ClassBinlogOp, ScopeInternal, LevelHigh, "")
