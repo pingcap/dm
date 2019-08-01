@@ -10,18 +10,14 @@ if [ ! -d $GOGO_ROOT ]; then
 		exit 1
 fi
 
-for filename in `ls google/api/*.proto`; do
+GATEWAY_ROOT=${GOPATH}/src/github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
+if [ ! -d $GOGO_ROOT ]; then
+	echo "please use the following command to get grpc-gateway."
+	echo "go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway"
+	exit 1
+fi
 
-	protoc -I.:${GOGO_ROOT}:${GOGO_ROOT}/protobuf --gogofaster_out=plugins=grpc,Mgoogle/api/annotations.proto=google/api:../pb/ $filename
-
-done
-
-#protoc -I .:${GOGO_ROOT}:${GOGO_ROOT}/protobuf --go_out=plugins=grpc,Mgoogle/protobuf/descriptor.proto=github.com/golang/protobuf/protoc-gen-go/descriptor:../pb/ google/api/*.proto
-
-#protoc -I.:${GOGO_ROOT}:${GOGO_ROOT}/protobuf --gogofaster_out=plugins=grpc:../pb/ google/api/*.proto
-
-#protoc -I.:${GOGO_ROOT}:${GOGO_ROOT}/protobuf --gogofaster_out=plugins=grpc:../pb/ *.proto
-protoc -I.:${GOGO_ROOT}:${GOGO_ROOT}/protobuf --gogofaster_out=plugins=grpc,Mgoogle/api/annotations.proto=google/api:../pb/ dmmaster.proto
+protoc -I.:${GOGO_ROOT}:${GOGO_ROOT}/protobuf --gogofaster_out=plugins=grpc:../pb/ *.proto
 
 protoc -I.:${GOGO_ROOT}:${GOGO_ROOT}/protobuf --grpc-gateway_out=logtostderr=true:../pb/ dmmaster.proto
 

@@ -107,7 +107,7 @@ func RegisterMasterHandlerClient(ctx context.Context, mux *runtime.ServeMux, cli
 }
 
 var (
-	pattern_Master_StartTask_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"apis", "http-test"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Master_StartTask_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"apis", "http-test"}, ""))
 )
 
 var (
