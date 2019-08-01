@@ -339,7 +339,7 @@ func (s *Syncer) Init() (err error) {
 	}
 
 	if s.cfg.IsSharding {
-		err = s.initShardingGroups()
+		err = s.initShardingGroups(nil)
 		if err != nil {
 			return err
 		}
@@ -395,17 +395,13 @@ func (s *Syncer) Init() (err error) {
 	}
 	rollbackHolder.Add(fr.FuncRollback{Name: "remove-active-realylog", Fn: s.removeActiveRelayLog})
 
-	// init successfully, close done chan to make Syncer can be closed
-	// when Process started, we will re-create done chan again
-	// NOTE: we should refactor the Concurrency Model some day
-	s.done = make(chan struct{})
-	close(s.done)
+	s.reset()
 	return nil
 }
 
 // initShardingGroups initializes sharding groups according to source MySQL, filter rules and router rules
 // NOTE: now we don't support modify router rules after task has started
-func (s *Syncer) initShardingGroups() error {
+func (s *Syncer) initShardingGroups(conn *Conn) error {
 	// fetch tables from source and filter them
 	sourceTables, err := s.fromDB.fetchAllDoTables(s.bwList)
 	if err != nil {
@@ -413,7 +409,7 @@ func (s *Syncer) initShardingGroups() error {
 	}
 
 	// clear old sharding group and initials some needed data
-	err = s.sgk.Init(nil)
+	err = s.sgk.Init(conn)
 	if err != nil {
 		return err
 	}
@@ -467,15 +463,34 @@ func (s *Syncer) IsFreshTask() (bool, error) {
 }
 
 func (s *Syncer) resetReplicationSyncer() {
-	if s.binlogType == RemoteBinlog {
-		// create new binlog-syncer
-		if s.streamerProducer != nil {
-			s.closeBinlogSyncer(s.streamerProducer.(*remoteBinlogReader).reader)
+	if s.streamerProducer != nil {
+		switch t := s.streamerProducer.(type) {
+		case *remoteBinlogReader:
+			s.closeBinlogSyncer(t.reader)
+			s.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(s.syncCfg), s.tctx, s.cfg.EnableGTID}
+		case *localBinlogReader:
+			// TODO: close old local reader before creating a new one
+			s.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(s.tctx, &streamer.BinlogReaderConfig{RelayDir: s.cfg.RelayDir, Timezone: s.timezone})}
+		default:
 		}
+	} else {
 		s.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(s.syncCfg), s.tctx, s.cfg.EnableGTID}
-	} else if s.binlogType == LocalBinlog {
-		// TODO: close old local reader before creating a new one
-		s.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(s.tctx, &streamer.BinlogReaderConfig{RelayDir: s.cfg.RelayDir, Timezone: s.timezone})}
+	}
+}
+
+func (s *Syncer) reset() {
+	s.resetReplicationSyncer()
+	// create new done chan
+	s.done = make(chan struct{})
+	// create new job chans
+	s.newJobChans(s.cfg.WorkerCount + 1)
+	// clear tables info
+	s.clearAllTables()
+
+	if s.cfg.IsSharding {
+		// every time start to re-sync from resume, we reset status to make it like a fresh syncing
+		s.sgk.ResetGroups()
+		s.ddlExecInfo.Renew()
 	}
 }
 
@@ -486,25 +501,11 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	newCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	s.resetReplicationSyncer()
-	// create new done chan
-	s.done = make(chan struct{})
-	// create new job chans
-	s.newJobChans(s.cfg.WorkerCount + 1)
-	// clear tables info
-	s.clearAllTables()
-
 	runFatalChan := make(chan *pb.ProcessError, s.cfg.WorkerCount+1)
 	s.runFatalChan = runFatalChan
 	s.execErrorDetected.Set(false)
 	s.resetExecErrors()
 	errs := make([]*pb.ProcessError, 0, 2)
-
-	if s.cfg.IsSharding {
-		// every time start to re-sync from resume, we reset status to make it like a fresh syncing
-		s.sgk.ResetGroups()
-		s.ddlExecInfo.Renew()
-	}
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -2053,12 +2054,12 @@ func (s *Syncer) reopen(cfg replication.BinlogSyncerConfig) (streamer.Streamer, 
 			if err != nil {
 				return nil, err
 			}
+			// TODO: refactor to support relay
+			s.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(cfg), s.tctx, s.cfg.EnableGTID}
 		default:
 			return nil, terror.ErrSyncerUnitReopenStreamNotSupport.Generate(r)
 		}
 	}
-	// TODO: refactor to support relay
-	s.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(cfg), s.tctx, s.cfg.EnableGTID}
 	return s.streamerProducer.generateStreamer(s.checkpoint.GlobalPoint())
 }
 
@@ -2189,6 +2190,7 @@ func (s *Syncer) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	}
 
 	// continue the processing
+	s.reset()
 	s.Process(ctx, pr)
 }
 
@@ -2256,7 +2258,7 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 
 	if s.cfg.IsSharding {
 		// re-init sharding group
-		s.initShardingGroups()
+		s.initShardingGroups(nil)
 	}
 
 	// update l.cfg
