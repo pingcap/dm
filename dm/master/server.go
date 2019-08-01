@@ -30,6 +30,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"github.com/tmc/grpc-websocket-proxy/wsproxy"
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/common"
@@ -94,12 +95,11 @@ func NewServer(cfg *Config) *Server {
 // Start starts to serving
 func (s *Server) Start() error {
 	var err error
-	/*
+
 	s.rootLis, err = net.Listen("tcp", s.cfg.MasterAddr)
 	if err != nil {
 		return errors.Trace(err)
 	}
-	*/
 
 	for _, workerAddr := range s.cfg.DeployMap {
 		s.workerClients[workerAddr], err = workerrpc.NewGRPCClient(workerAddr)
@@ -147,21 +147,6 @@ func (s *Server) Start() error {
 
 	s.svr = grpc.NewServer()
 	pb.RegisterMasterServer(s.svr, s)
-
-	//dopts := []grpc.DialOption{}
-	mux := http.NewServeMux()
-	gwmux := runtime.NewServeMux()
-	mux.Handle("/", gwmux)
-
-	opts := []grpc.DialOption{grpc.WithInsecure()}
-
-	err = pb.RegisterMasterHandlerFromEndpoint(ctx, gwmux, "127.0.0.1:8261", opts)
-	//err = pb.RegisterMasterHandler(ctx, gwmux, nil)
-	if err != nil {
-		return err
-	}
-
-	http.ListenAndServe(":8261", mux)
 	
 	go func() {
 		err2 := s.svr.Serve(grpcL)
@@ -169,7 +154,44 @@ func (s *Server) Start() error {
 			log.L().Error("fail to start gRPC server", zap.Error(err2))
 		}
 	}()
-	go InitStatus(httpL) // serve status
+
+	httpmux := http.NewServeMux()
+	go InitStatus(httpL, httpmux) // serve status
+
+	go func() {
+		opts := []grpc.DialOption{grpc.WithInsecure()}
+		conn, err := grpc.DialContext(ctx, "127.0.0.1"+s.cfg.MasterAddr, opts...)
+		if err != nil {
+			log.L().Error("", zap.Error(err))
+			return
+		}
+
+		gwmux := runtime.NewServeMux()
+		err = pb.RegisterMasterHandler(ctx, gwmux, conn)
+		if err != nil {
+			return
+		}
+		
+		httpmux.Handle("/apis/", wsproxy.WebsocketProxy(
+			gwmux,
+			wsproxy.WithRequestMutator(
+				// Default to the POST method for streams
+				func(_ *http.Request, outgoing *http.Request) *http.Request {
+					outgoing.Method = "POST"
+					return outgoing
+				},
+			),
+		),)
+
+		httpS := &http.Server{
+			Handler: httpmux,
+		}
+
+		err = httpS.Serve(httpL)
+		if err != nil && !common.IsErrNetClosing(err) && err != http.ErrServerClosed {
+			log.L().Error("initial status server", log.ShortError(err))
+		}
+	}()
 
 	log.L().Info("listening gRPC API and status request", zap.String("address", s.cfg.MasterAddr))
 	err = m.Serve() // start serving, block
@@ -213,6 +235,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 
 	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task)
 	if err != nil {
+		log.L().Error("", zap.Error(err))
 		return &pb.StartTaskResponse{
 			Result: false,
 			Msg:    errors.ErrorStack(err),

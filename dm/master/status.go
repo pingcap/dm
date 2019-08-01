@@ -36,8 +36,7 @@ func (h *statusHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 // InitStatus initializes the HTTP status server
-func InitStatus(lis net.Listener) {
-	mux := http.NewServeMux()
+func InitStatus(lis net.Listener, mux *http.ServeMux) {
 	mux.Handle("/status", &statusHandler{})
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
 	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
