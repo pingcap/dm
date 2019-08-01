@@ -80,7 +80,7 @@ func GenDMLEvents(flavor string, serverID uint32, latestPos uint32, latestGTID g
 		events = append(events, tableMapEv)
 
 		// RowsEvent
-		rowsEv, err2 := GenRowsEvent(header, latestPos, eventType, data.TableID, defaultRowsFlag, data.Rows, data.ColumnType)
+		rowsEv, err2 := GenRowsEvent(header, latestPos, eventType, data.TableID, defaultRowsFlag, data.Rows, data.ColumnType, tableMapEv)
 		if err2 != nil {
 			return nil, errors.Annotatef(err2, "generate RowsEvent for `%s`.`%s`", data.Schema, data.Table)
 		}
