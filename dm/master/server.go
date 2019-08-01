@@ -235,7 +235,6 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 
 	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task)
 	if err != nil {
-		log.L().Error("", zap.Error(err))
 		return &pb.StartTaskResponse{
 			Result: false,
 			Msg:    errors.ErrorStack(err),
