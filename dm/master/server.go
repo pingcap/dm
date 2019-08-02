@@ -156,7 +156,7 @@ func (s *Server) Start() error {
 	httpmux := http.NewServeMux()
 	HandleStatus(httpmux) // serve status
 
-	err = s.HandleHttpApis(ctx, httpmux) // server http api
+	err = s.HandleHTTPApis(ctx, httpmux) // server http api
 	if err != nil {
 		return errors.Trace(err)
 	}

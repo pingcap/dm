@@ -37,7 +37,10 @@ func (t *testHTTPServer) startServer(c *check.C) {
 	t.cfg.RPCRateBurst = DefaultBurst
 
 	t.server = NewServer(t.cfg)
-	go t.server.Start()
+	go func() {
+		err := t.server.Start()
+		c.Assert(err, check.IsNil)
+	}()
 
 	err := t.waitUntilServerOnline()
 	c.Assert(err, check.IsNil)
