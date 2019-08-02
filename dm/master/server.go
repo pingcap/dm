@@ -1991,9 +1991,7 @@ func (s *Server) HandleHTTPApis(ctx context.Context, mux *http.ServeMux) error {
 	mux.Handle("/apis/", wsproxy.WebsocketProxy(
 		gwmux,
 		wsproxy.WithRequestMutator(
-			// Default to the POST method for streams
 			func(_ *http.Request, outgoing *http.Request) *http.Request {
-				outgoing.Method = "POST"
 				return outgoing
 			},
 		),
