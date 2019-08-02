@@ -20,7 +20,7 @@ require (
 	github.com/golang/protobuf v1.3.1
 	github.com/google/btree v1.0.0 // indirect
 	github.com/gorilla/mux v1.7.2 // indirect
-	github.com/grpc-ecosystem/grpc-gateway v1.9.1
+	github.com/grpc-ecosystem/grpc-gateway v1.9.5
 	github.com/kami-zh/go-capturer v0.0.0-20171211120116-e492ea43421d
 	github.com/klauspost/cpuid v1.2.1 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
