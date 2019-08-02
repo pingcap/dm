@@ -170,9 +170,9 @@ func (s *Server) Start() error {
 			Handler: httpmux,
 		}
 
-		err = httpS.Serve(httpL)
-		if err != nil && !common.IsErrNetClosing(err) && err != http.ErrServerClosed {
-			log.L().Error("run http server", log.ShortError(err))
+		err3 := httpS.Serve(httpL)
+		if err3 != nil && !common.IsErrNetClosing(err3) && err3 != http.ErrServerClosed {
+			log.L().Error("run http server", log.ShortError(err3))
 		}
 	}()
 
