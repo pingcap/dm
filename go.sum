@@ -203,8 +203,8 @@ github.com/pingcap/errors v0.11.4 h1:lFuQV/oaUMGcD2tqt+01ROSmJs75VG1ToEOkZIZ4nE4
 github.com/pingcap/errors v0.11.4/go.mod h1:Oi8TUi2kEtXXLMJk9l1cGmz20kV3TaQ0usTwv5KuLY8=
 github.com/pingcap/failpoint v0.0.0-20190422094118-d8535965f59b h1:gFQVlQbthX4C2WKV/zqGBF3bZFr7oceKK9jGOVNkfws=
 github.com/pingcap/failpoint v0.0.0-20190422094118-d8535965f59b/go.mod h1:fdAkVXuIXHAPZ7a280nj9bRORfK9NuSsOguvBH0+W6c=
-github.com/pingcap/failpoint v0.0.0-20190614013653-30bc1b85253b h1:pvgxofvViLtBAyYN5zf2BWR4AjLPl+KRxXfcIw2Bd5Y=
-github.com/pingcap/failpoint v0.0.0-20190614013653-30bc1b85253b/go.mod h1:DNS3Qg7bEDhU6EXNHF+XSv/PGznQaMJ5FWvctpm6pQI=
+github.com/pingcap/failpoint v0.0.0-20190708053854-e7b1061e6e81 h1:g9j4cAoWE39lhb6q6j11Y/Alu1rpYKjgjT+BhLJ+KSs=
+github.com/pingcap/failpoint v0.0.0-20190708053854-e7b1061e6e81/go.mod h1:DNS3Qg7bEDhU6EXNHF+XSv/PGznQaMJ5FWvctpm6pQI=
 github.com/pingcap/gofail v0.0.0-20181217135706-6a951c1e42c3 h1:04yuCf5NMvLU8rB2m4Qs3rynH7EYpMno3lHkewIOdMo=
 github.com/pingcap/gofail v0.0.0-20181217135706-6a951c1e42c3/go.mod h1:DazNTg0PTldtpsQiT9I5tVJwV1onHMKBBgXzmJUlMns=
 github.com/pingcap/goleveldb v0.0.0-20171020122428-b9ff6c35079e h1:P73/4dPCL96rGrobssy1nVy2VaVpNCuLpCbr+FEaTA8=
@@ -215,8 +215,8 @@ github.com/pingcap/kvproto v0.0.0-20190531033352-d288a78c7482/go.mod h1:QMdbTAXC
 github.com/pingcap/log v0.0.0-20190307075452-bd41d9273596 h1:t2OQTpPJnrPDGlvA+3FwJptMTt6MEPdzK1Wt99oaefQ=
 github.com/pingcap/log v0.0.0-20190307075452-bd41d9273596/go.mod h1:WpHUKhNZ18v116SvGrmjkA9CBhYmuUTKL+p8JC9ANEw=
 github.com/pingcap/parser v0.0.0-20190612052718-3b36f86d9b7b/go.mod h1:1FNvfp9+J0wvc4kl8eGNh7Rqrxveg15jJoWo/a0uHwA=
-github.com/pingcap/parser v0.0.0-20190613082312-d2cf6071823d h1:JzkfOBJLcmtPJs+U5i0FUdN84wf4m0eNVB1c7EQcA9I=
-github.com/pingcap/parser v0.0.0-20190613082312-d2cf6071823d/go.mod h1:1FNvfp9+J0wvc4kl8eGNh7Rqrxveg15jJoWo/a0uHwA=
+github.com/pingcap/parser v0.0.0-20190731091814-efebd4550ee1 h1:PTuk7z3IoDIODQtgUhdy3L0aGeA/twfLcx16Mjyp/MY=
+github.com/pingcap/parser v0.0.0-20190731091814-efebd4550ee1/go.mod h1:1FNvfp9+J0wvc4kl8eGNh7Rqrxveg15jJoWo/a0uHwA=
 github.com/pingcap/pd v2.1.11+incompatible/go.mod h1:nD3+EoYes4+aNNODO99ES59V83MZSI+dFbhyr667a0E=
 github.com/pingcap/pd v2.1.12+incompatible h1:6N3LBxx2aSZqT+IWEG730EDNDttP7dXO8J6yvBh+HXw=
 github.com/pingcap/pd v2.1.12+incompatible/go.mod h1:nD3+EoYes4+aNNODO99ES59V83MZSI+dFbhyr667a0E=

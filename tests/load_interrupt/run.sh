@@ -59,24 +59,31 @@ function run() {
     check_row_count 1
     check_row_count 2
 
-    export GO_FAILPOINTS=''
+    # only failed at the first two time, will retry later and success
+    export GO_FAILPOINTS='github.com/pingcap/dm/loader/LoadExecCreateTableFailed=return("1152,2")'
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
+    # LoadExecCreateTableFailed error return twice
+    err_cnt=`grep LoadExecCreateTableFailed $WORK_DIR/worker1/log/dm-worker.log | wc -l`
+    if [ $err_cnt -ne 2 ]; then
+        echo "error LoadExecCreateTableFailed's count is not 2"
+        exit 2
+    fi
+
     run_sql "SELECT count(*) from dm_meta.test_loader_checkpoint where cp_schema = '$TEST_NAME' and offset = end_pos" $TIDB_PORT
     check_contains "count(*): 2"
+
+    export GO_FAILPOINTS=''
 }
 
-cleanup1 load_interrupt
+cleanup_data load_interrupt
 # also cleanup dm processes in case of last run failed
-cleanup2 $*
+cleanup_process $*
 run $*
-cleanup2 $*
-
-wait_process_exit dm-master.test
-wait_process_exit dm-worker.test
+cleanup_process $*
 
 echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"

@@ -30,10 +30,10 @@ require (
 	github.com/opentracing/opentracing-go v1.1.0 // indirect
 	github.com/pingcap/check v0.0.0-20190102082844-67f458068fc8
 	github.com/pingcap/errors v0.11.4
-	github.com/pingcap/failpoint v0.0.0-20190614013653-30bc1b85253b
+	github.com/pingcap/failpoint v0.0.0-20190708053854-e7b1061e6e81
 	github.com/pingcap/kvproto v0.0.0-20190531033352-d288a78c7482 // indirect
 	github.com/pingcap/log v0.0.0-20190307075452-bd41d9273596
-	github.com/pingcap/parser v0.0.0-20190613082312-d2cf6071823d
+	github.com/pingcap/parser v0.0.0-20190731091814-efebd4550ee1
 	github.com/pingcap/pd v2.1.12+incompatible // indirect
 	github.com/pingcap/tidb v0.0.0-20190613131440-c59a108c28b7
 	github.com/pingcap/tidb-tools v3.0.0-beta.1.0.20190709045846-a3fe9b9aaf6f+incompatible
