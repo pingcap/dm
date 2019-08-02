@@ -95,7 +95,6 @@ func NewServer(cfg *Config) *Server {
 // Start starts to serving
 func (s *Server) Start() error {
 	var err error
-
 	s.rootLis, err = net.Listen("tcp", s.cfg.MasterAddr)
 	if err != nil {
 		return errors.Trace(err)
@@ -147,7 +146,6 @@ func (s *Server) Start() error {
 
 	s.svr = grpc.NewServer()
 	pb.RegisterMasterServer(s.svr, s)
-
 	go func() {
 		err2 := s.svr.Serve(grpcL)
 		if err2 != nil && !common.IsErrNetClosing(err2) && err2 != cmux.ErrListenerClosed {
@@ -1968,8 +1966,8 @@ func (s *Server) workerArgsExtractor(args ...interface{}) (workerrpc.Client, str
 	return cli, worker, nil
 }
 
-// HandleHttpApis handles http apis and translate to grpc request
-func (s *Server) HandleHttpApis(ctx context.Context, mux *http.ServeMux) error {
+// HandleHTTPApis handles http apis and translate to grpc request
+func (s *Server) HandleHTTPApis(ctx context.Context, mux *http.ServeMux) error {
 	// MasterAddr's format may be "host:port" or "":port"
 	_, port, err := net.SplitHostPort(s.cfg.MasterAddr)
 	if err != nil {
