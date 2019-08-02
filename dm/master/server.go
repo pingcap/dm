@@ -18,19 +18,19 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
 	"time"
-	"net/http"
 
+	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
+	"github.com/tmc/grpc-websocket-proxy/wsproxy"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"github.com/grpc-ecosystem/grpc-gateway/runtime"
-	"github.com/tmc/grpc-websocket-proxy/wsproxy"
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/common"
@@ -147,7 +147,7 @@ func (s *Server) Start() error {
 
 	s.svr = grpc.NewServer()
 	pb.RegisterMasterServer(s.svr, s)
-	
+
 	go func() {
 		err2 := s.svr.Serve(grpcL)
 		if err2 != nil && !common.IsErrNetClosing(err2) && err2 != cmux.ErrListenerClosed {
@@ -156,40 +156,21 @@ func (s *Server) Start() error {
 	}()
 
 	httpmux := http.NewServeMux()
-	go InitStatus(httpL, httpmux) // serve status
+	HandleStatus(httpmux) // serve status
+
+	err = s.HandleHttpApis(ctx, httpmux) // server http api
+	if err != nil {
+		return errors.Trace(err)
+	}
 
 	go func() {
-		opts := []grpc.DialOption{grpc.WithInsecure()}
-		conn, err := grpc.DialContext(ctx, "127.0.0.1"+s.cfg.MasterAddr, opts...)
-		if err != nil {
-			log.L().Error("", zap.Error(err))
-			return
-		}
-
-		gwmux := runtime.NewServeMux()
-		err = pb.RegisterMasterHandler(ctx, gwmux, conn)
-		if err != nil {
-			return
-		}
-		
-		httpmux.Handle("/apis/", wsproxy.WebsocketProxy(
-			gwmux,
-			wsproxy.WithRequestMutator(
-				// Default to the POST method for streams
-				func(_ *http.Request, outgoing *http.Request) *http.Request {
-					outgoing.Method = "POST"
-					return outgoing
-				},
-			),
-		),)
-
 		httpS := &http.Server{
 			Handler: httpmux,
 		}
 
 		err = httpS.Serve(httpL)
 		if err != nil && !common.IsErrNetClosing(err) && err != http.ErrServerClosed {
-			log.L().Error("initial status server", log.ShortError(err))
+			log.L().Error("run http server", log.ShortError(err))
 		}
 	}()
 
@@ -1985,4 +1966,37 @@ func (s *Server) workerArgsExtractor(args ...interface{}) (workerrpc.Client, str
 	}
 
 	return cli, worker, nil
+}
+
+
+// HandleHttpApis handles http apis and translate to grpc request
+func (s *Server) HandleHttpApis(ctx context.Context, mux *http.ServeMux) error {
+	// MasterAddr's format may be "host:port" or "":port"
+	items := strings.Split(s.cfg.MasterAddr, ":")
+	port := items[len(items)-1]
+
+	opts := []grpc.DialOption{grpc.WithInsecure()}
+	conn, err := grpc.DialContext(ctx, "127.0.0.1:"+port, opts...)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	gwmux := runtime.NewServeMux()
+	err = pb.RegisterMasterHandler(ctx, gwmux, conn)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	mux.Handle("/apis/", wsproxy.WebsocketProxy(
+		gwmux,
+		wsproxy.WithRequestMutator(
+			// Default to the POST method for streams
+			func(_ *http.Request, outgoing *http.Request) *http.Request {
+				outgoing.Method = "POST"
+				return outgoing
+			},
+		),
+	))
+
+	return nil
 }
