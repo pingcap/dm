@@ -110,6 +110,10 @@ func (s *Server) Start() error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
+	defer func() {
+		cancel()
+		wg.Wait()
+	}()
 
 	wg.Add(1)
 	go func() {
@@ -178,8 +182,6 @@ func (s *Server) Start() error {
 		err = nil
 	}
 
-	cancel()
-	wg.Wait()
 	return err
 }
 
