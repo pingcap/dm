@@ -21,7 +21,11 @@ service Master {
     }
     rpc UpdateTask (UpdateTaskRequest) returns (UpdateTaskResponse) {}
 
-    rpc QueryStatus (QueryStatusListRequest) returns (QueryStatusListResponse) {}
+    rpc QueryStatus (QueryStatusListRequest) returns (QueryStatusListResponse) {
+        option (google.api.http) = { 
+            get: "/apis/alpha/status/{name}"
+        };
+    }
     rpc QueryError (QueryErrorListRequest) returns (QueryErrorListResponse) {}
 
     // show un-resolved DDL locks
