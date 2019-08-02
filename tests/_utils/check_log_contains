@@ -1,0 +1,14 @@
+#!/bin/sh
+
+set -eu
+
+log=$1
+text=$2
+num=$3
+
+got=`grep $text $log | wc -l`
+if [ $got -ne $num ]; then
+    echo "$log dosen't contain $num $text"
+    cat $log
+    exit 1
+fi

@@ -1968,12 +1968,13 @@ func (s *Server) workerArgsExtractor(args ...interface{}) (workerrpc.Client, str
 	return cli, worker, nil
 }
 
-
 // HandleHttpApis handles http apis and translate to grpc request
 func (s *Server) HandleHttpApis(ctx context.Context, mux *http.ServeMux) error {
 	// MasterAddr's format may be "host:port" or "":port"
-	items := strings.Split(s.cfg.MasterAddr, ":")
-	port := items[len(items)-1]
+	_, port, err := net.SplitHostPort(s.cfg.MasterAddr)
+	if err != nil {
+		return errors.Trace(err)
+	}
 
 	opts := []grpc.DialOption{grpc.WithInsecure()}
 	conn, err := grpc.DialContext(ctx, "127.0.0.1:"+port, opts...)
