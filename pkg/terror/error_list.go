@@ -101,6 +101,39 @@ const (
 	codeRelayNoValidRelaySubDir
 
 	// TODO: Relay unit error
+	codeRelayUUIDSuffixNotValid = iota + 1701
+	codeRelayUUIDSuffixLessThanPrev
+	codeRelayLoadMetaData
+	codeRelayBinlogNameNotValid
+	codeRelayNoCurrentUUID
+	codeRelayFlushLocalMeta
+	codeRelayUpdateIndexFile
+	codeRelayLogDirpathEmpty
+	codeRelayReaderNotStateNew
+	codeRelayReaderStateCannotClose
+	codeRelayReaderNeedStart
+	codeRelayTCPReaderStartSync
+	codeRelayTCPReaderNilGTID
+	codeRelayTCPReaderStartSyncGTID
+	codeRelayTCPReaderGetEvent
+	codeRelayWriterNotStateNew
+	codeRelayWriterStateCannotClose
+	codeRelayWriterNeedStart
+	codeRelayWriterNotOpened
+	codeRelayWriterExpectRotateEv
+	codeRelayWriterRotateEvWithNoWriter
+	codeRelayWriterStatusNotValid
+	codeRelayWriterGetFileStat
+	codeRelayWriterLatestPosGTFileSize
+	codeRelayWriterFileOperate
+	codeRelayCheckBinlogFileHeaderExist
+	codeRelayCheckFormatDescEventExist
+	codeRelayCheckIsDuplicateEvent
+	codeRelayUpdateGTID
+	codeRelayNeedPrevGTIDEvBeforeGTIDEv
+	codeRelayNeedMaGTIDListEvBeforeGTIDEv
+	codeRelayMkdir
+	codeRelaySwitchMasterNeedGTID
 
 	// Dump unit error code
 	codeDumpUnitRuntime = iota + 2001
@@ -276,6 +309,41 @@ var (
 	ErrRelayUUIDWithSuffixNotFound = New(codeRelayUUIDWithSuffixNotFound, ClassRelayAPI, ScopeInternal, LevelHigh, "no UUID (with suffix) matched %s found in %s, all UUIDs are %v")
 	ErrRelayGenFakeRotateEvent     = New(codeRelayGenFakeRotateEvent, ClassRelayAPI, ScopeInternal, LevelHigh, "generate fake rotate event")
 	ErrRelayNoValidRelaySubDir     = New(codeRelayNoValidRelaySubDir, ClassRelayAPI, ScopeInternal, LevelHigh, "no valid relay sub directory exists")
+
+	// Relay unit error
+	ErrRelayUUIDSuffixNotValid           = New(codeRelayUUIDSuffixNotValid, ClassRelayUnit, ScopeInternal, LevelHigh, "UUID %s suffix %d should be 1 larger than previous suffix %d")
+	ErrRelayUUIDSuffixLessThanPrev       = New(codeRelayUUIDSuffixLessThanPrev, ClassRelayUnit, ScopeInternal, LevelHigh, "previous UUID %s has suffix larger than %s")
+	ErrRelayLoadMetaData                 = New(codeRelayLoadMetaData, ClassRelayUnit, ScopeInternal, LevelHigh, "load meta data")
+	ErrRelayBinlogNameNotValid           = New(codeRelayBinlogNameNotValid, ClassRelayUnit, ScopeInternal, LevelHigh, "relay-binlog-name %s not valid")
+	ErrRelayNoCurrentUUID                = New(codeRelayNoCurrentUUID, ClassRelayUnit, ScopeInternal, LevelHigh, "no current UUID set")
+	ErrRelayFlushLocalMeta               = New(codeRelayFlushLocalMeta, ClassRelayUnit, ScopeInternal, LevelHigh, "flush local meta")
+	ErrRelayUpdateIndexFile              = New(codeRelayUpdateIndexFile, ClassRelayUnit, ScopeInternal, LevelHigh, "update UUID index file %s")
+	ErrRelayLogDirpathEmpty              = New(codeRelayLogDirpathEmpty, ClassRelayUnit, ScopeInternal, LevelHigh, "dirpath is empty")
+	ErrRelayReaderNotStateNew            = New(codeRelayReaderNotStateNew, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s, already started")
+	ErrRelayReaderStateCannotClose       = New(codeRelayReaderStateCannotClose, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s, can not close")
+	ErrRelayReaderNeedStart              = New(codeRelayReaderNeedStart, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s, please start the reader first")
+	ErrRelayTCPReaderStartSync           = New(codeRelayTCPReaderStartSync, ClassRelayUnit, ScopeUpstream, LevelHigh, "start sync from position %s")
+	ErrRelayTCPReaderNilGTID             = New(codeRelayTCPReaderNilGTID, ClassRelayUnit, ScopeInternal, LevelHigh, "nil GTID set not valid")
+	ErrRelayTCPReaderStartSyncGTID       = New(codeRelayTCPReaderStartSyncGTID, ClassRelayUnit, ScopeUpstream, LevelHigh, "start sync from GTID set %s")
+	ErrRelayTCPReaderGetEvent            = New(codeRelayTCPReaderGetEvent, ClassRelayUnit, ScopeUpstream, LevelHigh, "TCPReader get event")
+	ErrRelayWriterNotStateNew            = New(codeRelayWriterNotStateNew, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s, already started")
+	ErrRelayWriterStateCannotClose       = New(codeRelayWriterStateCannotClose, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s, can not close")
+	ErrRelayWriterNeedStart              = New(codeRelayWriterNeedStart, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s, please start the writer first")
+	ErrRelayWriterNotOpened              = New(codeRelayWriterNotOpened, ClassRelayUnit, ScopeInternal, LevelHigh, "no underlying writer opened")
+	ErrRelayWriterExpectRotateEv         = New(codeRelayWriterExpectRotateEv, ClassRelayUnit, ScopeInternal, LevelHigh, "except RotateEvent, but got %+v")
+	ErrRelayWriterRotateEvWithNoWriter   = New(codeRelayWriterRotateEvWithNoWriter, ClassRelayUnit, ScopeInternal, LevelHigh, "non-fake RotateEvent %+v received, but no binlog file opened")
+	ErrRelayWriterStatusNotValid         = New(codeRelayWriterStatusNotValid, ClassRelayUnit, ScopeInternal, LevelHigh, "invalid status type %T of the underlying writer")
+	ErrRelayWriterGetFileStat            = New(codeRelayWriterGetFileStat, ClassRelayUnit, ScopeInternal, LevelHigh, "get stat for %s")
+	ErrRelayWriterLatestPosGTFileSize    = New(codeRelayWriterLatestPosGTFileSize, ClassRelayUnit, ScopeInternal, LevelHigh, "latest pos %d greater than file size %d, should not happen")
+	ErrRelayWriterFileOperate            = New(codeRelayWriterFileOperate, ClassRelayUnit, ScopeInternal, LevelHigh, "")
+	ErrRelayCheckBinlogFileHeaderExist   = New(codeRelayCheckBinlogFileHeaderExist, ClassRelayUnit, ScopeInternal, LevelHigh, "")
+	ErrRelayCheckFormatDescEventExist    = New(codeRelayCheckFormatDescEventExist, ClassRelayUnit, ScopeInternal, LevelHigh, "")
+	ErrRelayCheckIsDuplicateEvent        = New(codeRelayCheckIsDuplicateEvent, ClassRelayUnit, ScopeInternal, LevelHigh, "")
+	ErrRelayUpdateGTID                   = New(codeRelayUpdateGTID, ClassRelayUnit, ScopeInternal, LevelHigh, "update GTID set %v with GTID %s")
+	ErrRelayNeedPrevGTIDEvBeforeGTIDEv   = New(codeRelayNeedPrevGTIDEvBeforeGTIDEv, ClassRelayUnit, ScopeInternal, LevelHigh, "should have a PreviousGTIDsEvent before the GTIDEvent %+v")
+	ErrRelayNeedMaGTIDListEvBeforeGTIDEv = New(codeRelayNeedMaGTIDListEvBeforeGTIDEv, ClassRelayUnit, ScopeInternal, LevelHigh, "should have a MariadbGTIDListEvent before the MariadbGTIDEvent %+v")
+	ErrRelayMkdir                        = New(codeRelayMkdir, ClassRelayUnit, ScopeInternal, LevelHigh, "relay mkdir")
+	ErrRelaySwitchMasterNeedGTID         = New(codeRelaySwitchMasterNeedGTID, ClassRelayUnit, ScopeInternal, LevelHigh, "can only switch relay's master server when GTID enabled")
 
 	// Dump unit error
 	ErrDumpUnitRuntime = New(codeDumpUnitRuntime, ClassDumpUnit, ScopeInternal, LevelHigh, "mydumper runs with error")

@@ -21,12 +21,12 @@ import (
 	"sync"
 
 	"github.com/BurntSushi/toml"
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/ioutil2"
 
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -126,26 +126,26 @@ func (lm *LocalMeta) Load() error {
 
 	uuids, err := utils.ParseUUIDIndex(lm.uuidIndexPath)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	err = lm.verifyUUIDs(uuids)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	if len(uuids) > 0 {
 		// update to the latest
 		err = lm.updateCurrentUUID(uuids[len(uuids)-1])
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 	}
 	lm.uuids = uuids
 
 	err = lm.loadMetaData()
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	return nil
@@ -171,7 +171,7 @@ func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, en
 
 	if !enableGTID && len(binlogName) > 0 {
 		if !binlog.VerifyFilename(binlogName) {
-			return false, errors.NotValidf("relay-binlog-name %s", binlogName)
+			return false, terror.ErrRelayBinlogNameNotValid.Generate(binlogName)
 		}
 	}
 	var gset = lm.emptyGSet.Clone()
@@ -179,7 +179,7 @@ func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, en
 		var err error
 		gset, err = gtid.ParserGTID(lm.flavor, binlogGTID)
 		if err != nil {
-			return false, errors.Annotatef(err, "relay-binlog-gtid %s", binlogGTID)
+			return false, terror.Annotatef(err, "relay-binlog-gtid %s", binlogGTID)
 		}
 	}
 
@@ -202,7 +202,7 @@ func (lm *LocalMeta) Save(pos mysql.Position, gset gtid.Set) error {
 	defer lm.Unlock()
 
 	if len(lm.currentUUID) == 0 {
-		return errors.NotValidf("no current UUID set")
+		return terror.ErrRelayNoCurrentUUID.Generate()
 	}
 
 	lm.BinLogName = pos.Name
@@ -230,20 +230,20 @@ func (lm *LocalMeta) Flush() error {
 // doFlush does the real flushing
 func (lm *LocalMeta) doFlush() error {
 	if len(lm.currentUUID) == 0 {
-		return errors.NotValidf("no current UUID set")
+		return terror.ErrRelayNoCurrentUUID.Generate()
 	}
 
 	var buf bytes.Buffer
 	enc := toml.NewEncoder(&buf)
 	err := enc.Encode(lm)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrRelayFlushLocalMeta.Delegate(err)
 	}
 
 	filename := filepath.Join(lm.baseDir, lm.currentUUID, utils.MetaFilename)
 	err = ioutil2.WriteFileAtomic(filename, buf.Bytes(), 0644)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrRelayFlushLocalMeta.Delegate(err)
 	}
 
 	lm.dirty = false
@@ -280,7 +280,7 @@ func (lm *LocalMeta) AddDir(serverUUID string, newPos *mysql.Position, newGTID g
 	} else {
 		_, suffix, err := utils.ParseSuffixForUUID(lm.currentUUID)
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 		// even newUUID == currentUUID, we still append it (for some cases, like `RESET MASTER`)
 		newUUID = utils.AddSuffixForUUID(serverUUID, suffix+1)
@@ -290,7 +290,7 @@ func (lm *LocalMeta) AddDir(serverUUID string, newPos *mysql.Position, newGTID g
 	if lm.dirty {
 		err := lm.doFlush()
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 	}
 
@@ -301,7 +301,7 @@ func (lm *LocalMeta) AddDir(serverUUID string, newPos *mysql.Position, newGTID g
 	uuids := append(lm.uuids, newUUID)
 	err := lm.updateIndexFile(uuids)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	// update current UUID
@@ -375,7 +375,7 @@ func (lm *LocalMeta) TrimUUIDs() ([]string, error) {
 
 	err := lm.updateIndexFile(kept)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	// currentUUID should be not changed
@@ -399,7 +399,7 @@ func (lm *LocalMeta) updateIndexFile(uuids []string) error {
 	}
 
 	err := ioutil2.WriteFileAtomic(lm.uuidIndexPath, buf.Bytes(), 0644)
-	return errors.Annotatef(err, "update UUID index file %s", lm.uuidIndexPath)
+	return terror.ErrRelayUpdateIndexFile.Delegate(err, lm.uuidIndexPath)
 }
 
 func (lm *LocalMeta) verifyUUIDs(uuids []string) error {
@@ -407,11 +407,11 @@ func (lm *LocalMeta) verifyUUIDs(uuids []string) error {
 	for _, uuid := range uuids {
 		_, suffix, err := utils.ParseSuffixForUUID(uuid)
 		if err != nil {
-			return errors.Annotatef(err, "UUID %s", uuid)
+			return terror.Annotatef(err, "UUID %s", uuid)
 		}
 		if previousSuffix > 0 {
 			if previousSuffix+1 != suffix {
-				return errors.Errorf("UUID %s suffix %d should be 1 larger than previous suffix %d", uuid, suffix, previousSuffix)
+				return terror.ErrRelayUUIDSuffixNotValid.Generate(uuid, suffix, previousSuffix)
 			}
 		}
 		previousSuffix = suffix
@@ -424,16 +424,16 @@ func (lm *LocalMeta) verifyUUIDs(uuids []string) error {
 func (lm *LocalMeta) updateCurrentUUID(uuid string) error {
 	_, suffix, err := utils.ParseSuffixForUUID(uuid)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	if len(lm.currentUUID) > 0 {
 		_, previousSuffix, err := utils.ParseSuffixForUUID(lm.currentUUID)
 		if err != nil {
-			return errors.Trace(err) // should not happen
+			return err // should not happen
 		}
 		if previousSuffix > suffix {
-			return errors.Errorf("previous UUID %s has suffix larger than %s", lm.currentUUID, uuid)
+			return terror.ErrRelayUUIDSuffixLessThanPrev.Generate(lm.currentUUID, uuid)
 		}
 	}
 
@@ -455,18 +455,18 @@ func (lm *LocalMeta) loadMetaData() error {
 	if os.IsNotExist(err) {
 		return nil
 	} else if err != nil {
-		return errors.Trace(err)
+		return terror.ErrRelayLoadMetaData.Delegate(err)
 	}
 	defer fd.Close()
 
 	_, err = toml.DecodeReader(fd, lm)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrRelayLoadMetaData.Delegate(err)
 	}
 
 	gset, err := gtid.ParserGTID(lm.flavor, lm.BinlogGTID)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrRelayLoadMetaData.Delegate(err)
 	}
 	lm.gset = gset
 
