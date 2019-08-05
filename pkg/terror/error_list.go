@@ -40,6 +40,20 @@ const (
 	codeInvalidServerID
 	codeGetSQLModeFromStr
 	codeVerifySQLOperateArgs
+	codeStatFileSize
+	// pkg/streamer
+	codeEmptyRelayDir
+	codeReadDir
+	codeBaseFileNotFound
+	codeBinFileCmpCondNotSupport
+	codeBinlogFileNotValid
+	codeBinlogFilesNotFound
+	codeGetRelayLogStat
+	codeAddWatchForRelayLogDir
+	codeWatcherStart
+	codeWatcherChanClosed
+	codeWatcherChanRecvError
+	codeRelayLogFileSizeSmaller
 
 	// Config related error code list
 	codeConfigCheckItemNotSupport = iota + 1201
@@ -100,7 +114,6 @@ const (
 	codeRelayGenFakeRotateEvent
 	codeRelayNoValidRelaySubDir
 
-	// TODO: Relay unit error
 	codeRelayUUIDSuffixNotValid = iota + 1701
 	codeRelayUUIDSuffixLessThanPrev
 	codeRelayLoadMetaData
@@ -135,6 +148,14 @@ const (
 	codeRelayNeedMaGTIDListEvBeforeGTIDEv
 	codeRelayMkdir
 	codeRelaySwitchMasterNeedGTID
+	codeRelayThisStrategyIsPurging
+	codeRelayOtherStrategyIsPurging
+	codeRelayPurgeIsForbidden
+	codeRelayNoActiveRelayLog
+	codeRelayPurgeRequestNotValid
+	codeRelayTrimUUIDNotFound
+	codeRelayRemoveFileFail
+	codeRelayPurgeArgsNotValid
 
 	// Dump unit error code
 	codeDumpUnitRuntime = iota + 2001
@@ -234,23 +255,36 @@ var (
 	ErrDBExecuteFailed = New(codeDBExecuteFailed, ClassDatabase, ScopeNotSet, LevelHigh, "execute statement failed: %s")
 
 	// Functional error
-	ErrParseMydumperMeta    = New(codeParseMydumperMeta, ClassFunctional, ScopeInternal, LevelHigh, "parse metadata error: %s")
-	ErrGetFileSize          = New(codeGetFileSize, ClassFunctional, ScopeInternal, LevelHigh, "get file size")
-	ErrDropMultipleTables   = New(codeDropMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allow operation: drop multiple tables in one statement")
-	ErrRenameMultipleTables = New(codeRenameMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allow operation: rename multiple tables in one statement")
-	ErrAlterMultipleTables  = New(codeAlterMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allow operation: alter multiple tables in one statement")
-	ErrParseSQL             = New(codeAlterMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "parse statement")
-	ErrUnknownTypeDDL       = New(codeUnknownTypeDDL, ClassFunctional, ScopeInternal, LevelHigh, "unknown type ddl %s")
-	ErrRestoreASTNode       = New(codeRestoreASTNode, ClassFunctional, ScopeInternal, LevelHigh, "restore ast node")
-	ErrParseGTID            = New(codeParseGTID, ClassFunctional, ScopeInternal, LevelHigh, "parse GTID")
-	ErrNotSupportedFlavor   = New(codeNotSupportedFlavor, ClassFunctional, ScopeInternal, LevelHigh, "flavor %s and gtid %s")
-	ErrNotMySQLGTID         = New(codeNotMySQLGTID, ClassFunctional, ScopeInternal, LevelHigh, "%s is not mysql GTID set")
-	ErrNotMariaDBGTID       = New(codeNotMariaDBGTID, ClassFunctional, ScopeInternal, LevelHigh, "%s is not mariadb GTID set")
-	ErrNotUUIDString        = New(codeNotUUIDString, ClassFunctional, ScopeInternal, LevelHigh, "%v is not string")
-	ErrMariaDBDomainID      = New(codeMariaDBDomainID, ClassFunctional, ScopeInternal, LevelHigh, "%v is not uint32")
-	ErrInvalidServerID      = New(codeInvalidServerID, ClassFunctional, ScopeInternal, LevelHigh, "invalid server id")
-	ErrGetSQLModeFromStr    = New(codeGetSQLModeFromStr, ClassFunctional, ScopeInternal, LevelHigh, "get sql from from string literal")
-	ErrVerifySQLOperateArgs = New(codeVerifySQLOperateArgs, ClassFunctional, ScopeInternal, LevelLow, "")
+	ErrParseMydumperMeta        = New(codeParseMydumperMeta, ClassFunctional, ScopeInternal, LevelHigh, "parse metadata error: %s")
+	ErrGetFileSize              = New(codeGetFileSize, ClassFunctional, ScopeInternal, LevelHigh, "get file size")
+	ErrDropMultipleTables       = New(codeDropMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allow operation: drop multiple tables in one statement")
+	ErrRenameMultipleTables     = New(codeRenameMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allow operation: rename multiple tables in one statement")
+	ErrAlterMultipleTables      = New(codeAlterMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allow operation: alter multiple tables in one statement")
+	ErrParseSQL                 = New(codeAlterMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "parse statement")
+	ErrUnknownTypeDDL           = New(codeUnknownTypeDDL, ClassFunctional, ScopeInternal, LevelHigh, "unknown type ddl %s")
+	ErrRestoreASTNode           = New(codeRestoreASTNode, ClassFunctional, ScopeInternal, LevelHigh, "restore ast node")
+	ErrParseGTID                = New(codeParseGTID, ClassFunctional, ScopeInternal, LevelHigh, "parse GTID")
+	ErrNotSupportedFlavor       = New(codeNotSupportedFlavor, ClassFunctional, ScopeInternal, LevelHigh, "flavor %s and gtid %s")
+	ErrNotMySQLGTID             = New(codeNotMySQLGTID, ClassFunctional, ScopeInternal, LevelHigh, "%s is not mysql GTID set")
+	ErrNotMariaDBGTID           = New(codeNotMariaDBGTID, ClassFunctional, ScopeInternal, LevelHigh, "%s is not mariadb GTID set")
+	ErrNotUUIDString            = New(codeNotUUIDString, ClassFunctional, ScopeInternal, LevelHigh, "%v is not string")
+	ErrMariaDBDomainID          = New(codeMariaDBDomainID, ClassFunctional, ScopeInternal, LevelHigh, "%v is not uint32")
+	ErrInvalidServerID          = New(codeInvalidServerID, ClassFunctional, ScopeInternal, LevelHigh, "invalid server id")
+	ErrGetSQLModeFromStr        = New(codeGetSQLModeFromStr, ClassFunctional, ScopeInternal, LevelHigh, "get sql from from string literal")
+	ErrVerifySQLOperateArgs     = New(codeVerifySQLOperateArgs, ClassFunctional, ScopeInternal, LevelLow, "")
+	ErrStatFileSize             = New(codeStatFileSize, ClassFunctional, ScopeInternal, LevelHigh, "statfs")
+	ErrEmptyRelayDir            = New(codeEmptyRelayDir, ClassFunctional, ScopeInternal, LevelHigh, "empty relay dir")
+	ErrReadDir                  = New(codeReadDir, ClassFunctional, ScopeInternal, LevelHigh, "read dir: %s")
+	ErrBaseFileNotFound         = New(codeBaseFileNotFound, ClassFunctional, ScopeInternal, LevelHigh, "base file %s in directory %s not found")
+	ErrBinFileCmpCondNotSupport = New(codeBinFileCmpCondNotSupport, ClassFunctional, ScopeInternal, LevelHigh, "cmp condition %v not supported")
+	ErrBinlogFileNotValid       = New(codeBinlogFileNotValid, ClassFunctional, ScopeInternal, LevelHigh, "binlog file %s not valid")
+	ErrBinlogFilesNotFound      = New(codeBinlogFilesNotFound, ClassFunctional, ScopeInternal, LevelHigh, "binlog files in dir %s not found")
+	ErrGetRelayLogStat          = New(codeGetRelayLogStat, ClassFunctional, ScopeInternal, LevelHigh, "get stat for relay log %s")
+	ErrAddWatchForRelayLogDir   = New(codeAddWatchForRelayLogDir, ClassFunctional, ScopeInternal, LevelHigh, "add watch for relay log dir %s")
+	ErrWatcherStart             = New(codeWatcherStart, ClassFunctional, ScopeInternal, LevelHigh, "add watch for relay log dir %s")
+	ErrWatcherChanClosed        = New(codeWatcherChanClosed, ClassFunctional, ScopeInternal, LevelHigh, "watcher's %s chan for relay log dir %s closed")
+	ErrWatcherChanRecvError     = New(codeWatcherChanRecvError, ClassFunctional, ScopeInternal, LevelHigh, "relay log dir %s")
+	ErrRelayLogFileSizeSmaller  = New(codeRelayLogFileSizeSmaller, ClassFunctional, ScopeInternal, LevelHigh, "file size of relay log %s become smaller")
 
 	// Config related error
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s")
@@ -346,6 +380,14 @@ var (
 	ErrRelayNeedMaGTIDListEvBeforeGTIDEv = New(codeRelayNeedMaGTIDListEvBeforeGTIDEv, ClassRelayUnit, ScopeInternal, LevelHigh, "should have a MariadbGTIDListEvent before the MariadbGTIDEvent %+v")
 	ErrRelayMkdir                        = New(codeRelayMkdir, ClassRelayUnit, ScopeInternal, LevelHigh, "relay mkdir")
 	ErrRelaySwitchMasterNeedGTID         = New(codeRelaySwitchMasterNeedGTID, ClassRelayUnit, ScopeInternal, LevelHigh, "can only switch relay's master server when GTID enabled")
+	ErrRelayThisStrategyIsPurging        = New(codeRelayThisStrategyIsPurging, ClassRelayUnit, ScopeInternal, LevelHigh, "this strategy is purging")
+	ErrRelayOtherStrategyIsPurging       = New(codeRelayOtherStrategyIsPurging, ClassRelayUnit, ScopeInternal, LevelHigh, "%s is purging")
+	ErrRelayPurgeIsForbidden             = New(codeRelayPurgeIsForbidden, ClassRelayUnit, ScopeInternal, LevelHigh, "relay log purge is forbidden temporarily, because %s, please try again later")
+	ErrRelayNoActiveRelayLog             = New(codeRelayNoActiveRelayLog, ClassRelayUnit, ScopeInternal, LevelHigh, "no active relay log file found")
+	ErrRelayPurgeRequestNotValid         = New(codeRelayPurgeRequestNotValid, ClassRelayUnit, ScopeInternal, LevelHigh, "request %+v not valid")
+	ErrRelayTrimUUIDNotFound             = New(codeRelayTrimUUIDNotFound, ClassRelayUnit, ScopeInternal, LevelHigh, "UUID %s in UUIDs %v not found")
+	ErrRelayRemoveFileFail               = New(codeRelayRemoveFileFail, ClassRelayUnit, ScopeInternal, LevelHigh, "remove relay log %s %s")
+	ErrRelayPurgeArgsNotValid            = New(codeRelayPurgeArgsNotValid, ClassRelayUnit, ScopeInternal, LevelHigh, "args (%T) %+v not valid")
 
 	// Dump unit error
 	ErrDumpUnitRuntime = New(codeDumpUnitRuntime, ClassDumpUnit, ScopeInternal, LevelHigh, "mydumper runs with error")
