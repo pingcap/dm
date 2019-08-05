@@ -20,7 +20,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 
-	"github.com/pingcap/errors"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var (
@@ -34,7 +34,7 @@ func SetSecretKey(key []byte) error {
 	case 16, 24, 32:
 		break
 	default:
-		return errors.NotValidf("key size should be 16, 24 or 32, but input key's size is %d", len(key))
+		return terror.ErrEncryptSecretKeyNotValid.Generate(len(key))
 	}
 	secretKey = key
 	return nil
@@ -44,12 +44,12 @@ func SetSecretKey(key []byte) error {
 func Encrypt(plaintext []byte) ([]byte, error) {
 	block, err := aes.NewCipher(secretKey)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.ErrEncryptNewCiphter.Delegate(err)
 	}
 
 	iv, err := genIV(block.BlockSize())
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	ciphertext := make([]byte, 0, len(iv)+len(ivSep)+len(plaintext))
@@ -67,15 +67,15 @@ func Encrypt(plaintext []byte) ([]byte, error) {
 func Decrypt(ciphertext []byte) ([]byte, error) {
 	block, err := aes.NewCipher(secretKey)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	if len(ciphertext) < block.BlockSize()+len(ivSep) {
-		return nil, errors.NotValidf("ciphertext's length should be greater than %d, but got %d", block.BlockSize()+len(ivSep), len(ciphertext))
+		return nil, terror.ErrCiphertextLenNotValid.Generate(block.BlockSize()+len(ivSep), len(ciphertext))
 	}
 
 	if !bytes.Equal(ciphertext[block.BlockSize():block.BlockSize()+len(ivSep)], ivSep) {
-		return nil, errors.NotValidf("ciphertext's content")
+		return nil, terror.ErrCiphertextContextNotValid.Generate()
 	}
 
 	iv := ciphertext[:block.BlockSize()]
@@ -91,5 +91,5 @@ func Decrypt(ciphertext []byte) ([]byte, error) {
 func genIV(n int) ([]byte, error) {
 	b := make([]byte, n)
 	_, err := rand.Read(b)
-	return b, errors.Trace(err)
+	return b, terror.ErrEncryptGenIV.Delegate(err)
 }

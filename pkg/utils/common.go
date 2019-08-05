@@ -22,7 +22,6 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 
-	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -42,7 +41,7 @@ const (
 func ExtractTable(name string) (string, string, error) {
 	parts := strings.Split(name, "`.`")
 	if len(parts) != 2 {
-		return "", "", errors.NotValidf("table name %s", name)
+		return "", "", terror.ErrSchemaTableNameNotValid.Generate(name)
 	}
 
 	return strings.TrimLeft(parts[0], "`"), strings.TrimRight(parts[1], "`"), nil
@@ -139,7 +138,7 @@ func FetchTargetDoTables(db *sql.DB, bw *filter.Filter, router *router.Table) (m
 		for _, table := range tables {
 			targetSchema, targetTable, err := router.Route(schema, table)
 			if err != nil {
-				return nil, errors.Trace(err)
+				return nil, terror.ErrGenTableRouter.Delegate(err)
 			}
 
 			targetTableName := dbutil.TableName(targetSchema, targetTable)

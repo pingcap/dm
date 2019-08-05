@@ -54,6 +54,23 @@ const (
 	codeWatcherChanClosed
 	codeWatcherChanRecvError
 	codeRelayLogFileSizeSmaller
+	codeReaderAlreadyRunning
+	codeBinlogFileNotSpecified
+	codeNoRelayLogMatchPos
+	codeFirstRelayLogNotMatchPos
+	codeParserParseRelayLog
+	codeNoSubdirToSwitch
+	codeNeedSyncAgain
+	codeSyncClosed
+	// pkg/utils
+	codeSchemaTableNameNotValid
+	codeGenTableRouter
+	codeEncryptSecretKeyNotValid
+	codeEncryptNewCiphter
+	codeEncryptGenIV
+	codeCiphertextLenNotValid
+	codeCiphertextContextNotValid
+	codeInvalidBinlogPosStr
 
 	// Config related error code list
 	codeConfigCheckItemNotSupport = iota + 1201
@@ -255,36 +272,52 @@ var (
 	ErrDBExecuteFailed = New(codeDBExecuteFailed, ClassDatabase, ScopeNotSet, LevelHigh, "execute statement failed: %s")
 
 	// Functional error
-	ErrParseMydumperMeta        = New(codeParseMydumperMeta, ClassFunctional, ScopeInternal, LevelHigh, "parse metadata error: %s")
-	ErrGetFileSize              = New(codeGetFileSize, ClassFunctional, ScopeInternal, LevelHigh, "get file size")
-	ErrDropMultipleTables       = New(codeDropMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allow operation: drop multiple tables in one statement")
-	ErrRenameMultipleTables     = New(codeRenameMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allow operation: rename multiple tables in one statement")
-	ErrAlterMultipleTables      = New(codeAlterMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allow operation: alter multiple tables in one statement")
-	ErrParseSQL                 = New(codeAlterMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "parse statement")
-	ErrUnknownTypeDDL           = New(codeUnknownTypeDDL, ClassFunctional, ScopeInternal, LevelHigh, "unknown type ddl %s")
-	ErrRestoreASTNode           = New(codeRestoreASTNode, ClassFunctional, ScopeInternal, LevelHigh, "restore ast node")
-	ErrParseGTID                = New(codeParseGTID, ClassFunctional, ScopeInternal, LevelHigh, "parse GTID")
-	ErrNotSupportedFlavor       = New(codeNotSupportedFlavor, ClassFunctional, ScopeInternal, LevelHigh, "flavor %s and gtid %s")
-	ErrNotMySQLGTID             = New(codeNotMySQLGTID, ClassFunctional, ScopeInternal, LevelHigh, "%s is not mysql GTID set")
-	ErrNotMariaDBGTID           = New(codeNotMariaDBGTID, ClassFunctional, ScopeInternal, LevelHigh, "%s is not mariadb GTID set")
-	ErrNotUUIDString            = New(codeNotUUIDString, ClassFunctional, ScopeInternal, LevelHigh, "%v is not string")
-	ErrMariaDBDomainID          = New(codeMariaDBDomainID, ClassFunctional, ScopeInternal, LevelHigh, "%v is not uint32")
-	ErrInvalidServerID          = New(codeInvalidServerID, ClassFunctional, ScopeInternal, LevelHigh, "invalid server id")
-	ErrGetSQLModeFromStr        = New(codeGetSQLModeFromStr, ClassFunctional, ScopeInternal, LevelHigh, "get sql from from string literal")
-	ErrVerifySQLOperateArgs     = New(codeVerifySQLOperateArgs, ClassFunctional, ScopeInternal, LevelLow, "")
-	ErrStatFileSize             = New(codeStatFileSize, ClassFunctional, ScopeInternal, LevelHigh, "statfs")
-	ErrEmptyRelayDir            = New(codeEmptyRelayDir, ClassFunctional, ScopeInternal, LevelHigh, "empty relay dir")
-	ErrReadDir                  = New(codeReadDir, ClassFunctional, ScopeInternal, LevelHigh, "read dir: %s")
-	ErrBaseFileNotFound         = New(codeBaseFileNotFound, ClassFunctional, ScopeInternal, LevelHigh, "base file %s in directory %s not found")
-	ErrBinFileCmpCondNotSupport = New(codeBinFileCmpCondNotSupport, ClassFunctional, ScopeInternal, LevelHigh, "cmp condition %v not supported")
-	ErrBinlogFileNotValid       = New(codeBinlogFileNotValid, ClassFunctional, ScopeInternal, LevelHigh, "binlog file %s not valid")
-	ErrBinlogFilesNotFound      = New(codeBinlogFilesNotFound, ClassFunctional, ScopeInternal, LevelHigh, "binlog files in dir %s not found")
-	ErrGetRelayLogStat          = New(codeGetRelayLogStat, ClassFunctional, ScopeInternal, LevelHigh, "get stat for relay log %s")
-	ErrAddWatchForRelayLogDir   = New(codeAddWatchForRelayLogDir, ClassFunctional, ScopeInternal, LevelHigh, "add watch for relay log dir %s")
-	ErrWatcherStart             = New(codeWatcherStart, ClassFunctional, ScopeInternal, LevelHigh, "add watch for relay log dir %s")
-	ErrWatcherChanClosed        = New(codeWatcherChanClosed, ClassFunctional, ScopeInternal, LevelHigh, "watcher's %s chan for relay log dir %s closed")
-	ErrWatcherChanRecvError     = New(codeWatcherChanRecvError, ClassFunctional, ScopeInternal, LevelHigh, "relay log dir %s")
-	ErrRelayLogFileSizeSmaller  = New(codeRelayLogFileSizeSmaller, ClassFunctional, ScopeInternal, LevelHigh, "file size of relay log %s become smaller")
+	ErrParseMydumperMeta         = New(codeParseMydumperMeta, ClassFunctional, ScopeInternal, LevelHigh, "parse metadata error: %s")
+	ErrGetFileSize               = New(codeGetFileSize, ClassFunctional, ScopeInternal, LevelHigh, "get file size")
+	ErrDropMultipleTables        = New(codeDropMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allow operation: drop multiple tables in one statement")
+	ErrRenameMultipleTables      = New(codeRenameMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allow operation: rename multiple tables in one statement")
+	ErrAlterMultipleTables       = New(codeAlterMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allow operation: alter multiple tables in one statement")
+	ErrParseSQL                  = New(codeAlterMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "parse statement")
+	ErrUnknownTypeDDL            = New(codeUnknownTypeDDL, ClassFunctional, ScopeInternal, LevelHigh, "unknown type ddl %s")
+	ErrRestoreASTNode            = New(codeRestoreASTNode, ClassFunctional, ScopeInternal, LevelHigh, "restore ast node")
+	ErrParseGTID                 = New(codeParseGTID, ClassFunctional, ScopeInternal, LevelHigh, "parse GTID")
+	ErrNotSupportedFlavor        = New(codeNotSupportedFlavor, ClassFunctional, ScopeInternal, LevelHigh, "flavor %s and gtid %s")
+	ErrNotMySQLGTID              = New(codeNotMySQLGTID, ClassFunctional, ScopeInternal, LevelHigh, "%s is not mysql GTID set")
+	ErrNotMariaDBGTID            = New(codeNotMariaDBGTID, ClassFunctional, ScopeInternal, LevelHigh, "%s is not mariadb GTID set")
+	ErrNotUUIDString             = New(codeNotUUIDString, ClassFunctional, ScopeInternal, LevelHigh, "%v is not string")
+	ErrMariaDBDomainID           = New(codeMariaDBDomainID, ClassFunctional, ScopeInternal, LevelHigh, "%v is not uint32")
+	ErrInvalidServerID           = New(codeInvalidServerID, ClassFunctional, ScopeInternal, LevelHigh, "invalid server id")
+	ErrGetSQLModeFromStr         = New(codeGetSQLModeFromStr, ClassFunctional, ScopeInternal, LevelHigh, "get sql from from string literal")
+	ErrVerifySQLOperateArgs      = New(codeVerifySQLOperateArgs, ClassFunctional, ScopeInternal, LevelLow, "")
+	ErrStatFileSize              = New(codeStatFileSize, ClassFunctional, ScopeInternal, LevelHigh, "statfs")
+	ErrEmptyRelayDir             = New(codeEmptyRelayDir, ClassFunctional, ScopeInternal, LevelHigh, "empty relay dir")
+	ErrReadDir                   = New(codeReadDir, ClassFunctional, ScopeInternal, LevelHigh, "read dir: %s")
+	ErrBaseFileNotFound          = New(codeBaseFileNotFound, ClassFunctional, ScopeInternal, LevelHigh, "base file %s in directory %s not found")
+	ErrBinFileCmpCondNotSupport  = New(codeBinFileCmpCondNotSupport, ClassFunctional, ScopeInternal, LevelHigh, "cmp condition %v not supported")
+	ErrBinlogFileNotValid        = New(codeBinlogFileNotValid, ClassFunctional, ScopeInternal, LevelHigh, "binlog file %s not valid")
+	ErrBinlogFilesNotFound       = New(codeBinlogFilesNotFound, ClassFunctional, ScopeInternal, LevelHigh, "binlog files in dir %s not found")
+	ErrGetRelayLogStat           = New(codeGetRelayLogStat, ClassFunctional, ScopeInternal, LevelHigh, "get stat for relay log %s")
+	ErrAddWatchForRelayLogDir    = New(codeAddWatchForRelayLogDir, ClassFunctional, ScopeInternal, LevelHigh, "add watch for relay log dir %s")
+	ErrWatcherStart              = New(codeWatcherStart, ClassFunctional, ScopeInternal, LevelHigh, "add watch for relay log dir %s")
+	ErrWatcherChanClosed         = New(codeWatcherChanClosed, ClassFunctional, ScopeInternal, LevelHigh, "watcher's %s chan for relay log dir %s closed")
+	ErrWatcherChanRecvError      = New(codeWatcherChanRecvError, ClassFunctional, ScopeInternal, LevelHigh, "relay log dir %s")
+	ErrRelayLogFileSizeSmaller   = New(codeRelayLogFileSizeSmaller, ClassFunctional, ScopeInternal, LevelHigh, "file size of relay log %s become smaller")
+	ErrReaderAlreadyRunning      = New(codeReaderAlreadyRunning, ClassFunctional, ScopeInternal, LevelHigh, "binlog reader is already running")
+	ErrBinlogFileNotSpecified    = New(codeBinlogFileNotSpecified, ClassFunctional, ScopeInternal, LevelHigh, "binlog file must be specified")
+	ErrNoRelayLogMatchPos        = New(codeNoRelayLogMatchPos, ClassFunctional, ScopeInternal, LevelHigh, "no relay log files in dir %s match pos %")
+	ErrFirstRelayLogNotMatchPos  = New(codeFirstRelayLogNotMatchPos, ClassFunctional, ScopeInternal, LevelHigh, "the first relay log %s not match the start pos %v")
+	ErrParserParseRelayLog       = New(codeParserParseRelayLog, ClassFunctional, ScopeInternal, LevelHigh, "relay log file %s")
+	ErrNoSubdirToSwitch          = New(codeNoSubdirToSwitch, ClassFunctional, ScopeInternal, LevelHigh, "parse for previous sub relay directory finished, but no next sub directory need to switch not supported")
+	ErrNeedSyncAgain             = New(codeNeedSyncAgain, ClassFunctional, ScopeInternal, LevelHigh, "Last sync error or closed, try sync and get event again")
+	ErrSyncClosed                = New(codeSyncClosed, ClassFunctional, ScopeInternal, LevelHigh, "Sync was closed")
+	ErrSchemaTableNameNotValid   = New(codeSchemaTableNameNotValid, ClassFunctional, ScopeInternal, LevelHigh, "table name %s not valid")
+	ErrGenTableRouter            = New(codeGenTableRouter, ClassFunctional, ScopeInternal, LevelHigh, "generate table router")
+	ErrEncryptSecretKeyNotValid  = New(codeEncryptSecretKeyNotValid, ClassFunctional, ScopeInternal, LevelHigh, "key size should be 16, 24 or 32, but input key's size is %d")
+	ErrEncryptNewCiphter         = New(codeEncryptNewCiphter, ClassFunctional, ScopeInternal, LevelHigh, "new ciphter")
+	ErrEncryptGenIV              = New(codeEncryptGenIV, ClassFunctional, ScopeInternal, LevelHigh, "generate iv")
+	ErrCiphertextLenNotValid     = New(codeCiphertextLenNotValid, ClassFunctional, ScopeInternal, LevelHigh, "ciphertext's length should be greater than %d, but got %d not valid")
+	ErrCiphertextContextNotValid = New(codeCiphertextContextNotValid, ClassFunctional, ScopeInternal, LevelHigh, "ciphertext's content not valid")
+	ErrInvalidBinlogPosStr       = New(codeInvalidBinlogPosStr, ClassFunctional, ScopeInternal, LevelHigh, "invalid mysql position string: %s")
 
 	// Config related error
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s")
