@@ -71,6 +71,7 @@ const (
 	codeCiphertextLenNotValid
 	codeCiphertextContextNotValid
 	codeInvalidBinlogPosStr
+	codeEncCipherTextBase64Decode
 
 	// Config related error code list
 	codeConfigCheckItemNotSupport = iota + 1201
@@ -318,6 +319,7 @@ var (
 	ErrCiphertextLenNotValid     = New(codeCiphertextLenNotValid, ClassFunctional, ScopeInternal, LevelHigh, "ciphertext's length should be greater than %d, but got %d not valid")
 	ErrCiphertextContextNotValid = New(codeCiphertextContextNotValid, ClassFunctional, ScopeInternal, LevelHigh, "ciphertext's content not valid")
 	ErrInvalidBinlogPosStr       = New(codeInvalidBinlogPosStr, ClassFunctional, ScopeInternal, LevelHigh, "invalid mysql position string: %s")
+	ErrEncCipherTextBase64Decode = New(codeEncCipherTextBase64Decode, ClassFunctional, ScopeInternal, LevelHigh, "decode base64 encoded ciphertext %s")
 
 	// Config related error
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s")
