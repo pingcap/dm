@@ -115,9 +115,9 @@ func checkFormatDescriptionEventExist(filename string) (bool, error) {
 	if found {
 		return found, nil // if found is true, we return `true` even meet an error, because FormatDescriptionEvent exists.
 	} else if err != nil {
-		return false, terror.Annotatef(terror.ErrRelayCheckFormatDescEventExist.New(err.Error()), "parse %s", filename)
+		return false, terror.ErrRelayCheckFormatDescEventParseEv.Delegate(err, filename)
 	} else if eof {
-		return false, terror.Annotatef(terror.ErrRelayCheckFormatDescEventExist.New(io.EOF.Error()), "parse %s", filename)
+		return false, terror.ErrRelayCheckFormatDescEventParseEv.Delegate(io.EOF, filename)
 	}
 	return found, nil
 }

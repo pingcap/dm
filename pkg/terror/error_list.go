@@ -128,6 +128,7 @@ const (
 	codeRelayWriterFileOperate
 	codeRelayCheckBinlogFileHeaderExist
 	codeRelayCheckFormatDescEventExist
+	codeRelayCheckFormatDescEventParseEv
 	codeRelayCheckIsDuplicateEvent
 	codeRelayUpdateGTID
 	codeRelayNeedPrevGTIDEvBeforeGTIDEv
@@ -338,6 +339,7 @@ var (
 	ErrRelayWriterFileOperate            = New(codeRelayWriterFileOperate, ClassRelayUnit, ScopeInternal, LevelHigh, "")
 	ErrRelayCheckBinlogFileHeaderExist   = New(codeRelayCheckBinlogFileHeaderExist, ClassRelayUnit, ScopeInternal, LevelHigh, "")
 	ErrRelayCheckFormatDescEventExist    = New(codeRelayCheckFormatDescEventExist, ClassRelayUnit, ScopeInternal, LevelHigh, "")
+	ErrRelayCheckFormatDescEventParseEv  = New(codeRelayCheckFormatDescEventParseEv, ClassRelayUnit, ScopeInternal, LevelHigh, "parse %s")
 	ErrRelayCheckIsDuplicateEvent        = New(codeRelayCheckIsDuplicateEvent, ClassRelayUnit, ScopeInternal, LevelHigh, "")
 	ErrRelayUpdateGTID                   = New(codeRelayUpdateGTID, ClassRelayUnit, ScopeInternal, LevelHigh, "update GTID set %v with GTID %s")
 	ErrRelayNeedPrevGTIDEvBeforeGTIDEv   = New(codeRelayNeedPrevGTIDEvBeforeGTIDEv, ClassRelayUnit, ScopeInternal, LevelHigh, "should have a PreviousGTIDsEvent before the GTIDEvent %+v")

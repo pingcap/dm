@@ -173,7 +173,7 @@ func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (
 
 	// verify filename
 	if !binlog.VerifyFilename(w.filename.Get()) {
-		return Result{}, terror.ErrRelayBinlogNameNotValid.Generatef("binlog filename %s", w.filename.Get())
+		return Result{}, terror.ErrRelayBinlogNameNotValid.Generatef("binlog filename %s not valid", w.filename.Get())
 	}
 
 	// open/create a new binlog file
