@@ -71,7 +71,7 @@ func (t *testServer) testWorker(c *C) {
 	c.Assert(err, ErrorMatches, "worker already closed.*")
 }
 
-func (t *testServer) TestHandleTask(c *C) {
+func (t *testServer) testWorkerHandleTask(c *C) {
 	var (
 		wg       sync.WaitGroup
 		taskName = "test"
