@@ -90,7 +90,7 @@ func (r *TCPReader) StartSyncByGTID(gSet gtid.Set) error {
 	defer r.mu.Unlock()
 
 	if r.stage != common.StageNew {
-		terror.ErrRelayReaderNotStateNew.Generate(r.stage, common.StageNew)
+		return terror.ErrRelayReaderNotStateNew.Generate(r.stage, common.StageNew)
 	}
 
 	if gSet == nil {
