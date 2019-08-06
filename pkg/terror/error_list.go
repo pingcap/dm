@@ -74,12 +74,19 @@ const (
 	codeEncCipherTextBase64Decode
 	// pkg/binlog
 	codeBinlogWriteBinaryData
+	codeBinlogWriteDataToBuffer
 	codeBinlogHeaderLengthNotValid
 	codeBinlogEventDecode
 	codeBinlogEmptyNextBinName
 	codeBinlogParseSID
 	codeBinlogEmptyGTID
-	codeBinlogGTIDNotValid
+	codeBinlogGTIDSetNotValid
+	codeBinlogGTIDMySQLNotValid
+	codeBinlogGTIDMariaDBNotValid
+	codeBinlogMariaDBServerIDMismatch
+	codeBinlogOnlyOneGTIDSupport
+	codeBinlogOnlyOneIntervalInUUID
+	codeBinlogIntervalValueNotValid
 	codeBinlogEmptyQuery
 	codeBinlogTableMapEvNotValid
 	codeBinlogExpectFormatDescEv
@@ -94,9 +101,13 @@ const (
 	codeBinlogColumnTypeNotSupport
 	codeBinlogGoMySQLTypeNotSupport
 	codeBinlogColumnTypeMisMatch
+	codeBinlogDummyEvSizeTooSmall
+	codeBinlogFlavorNotSupport
+	codeBinlogDMLEmptyData
+	codeBinlogLatestGTIDNotInPrev
 
 	// Config related error code list
-	codeConfigCheckItemNotSupport = iota + 1201
+	codeConfigCheckItemNotSupport = iota + 2001
 	codeConfigTomlTransform
 	codeConfigTaskYamlTransform
 	codeConfigTaskNameEmpty
@@ -129,12 +140,12 @@ const (
 	codeConfigSourceIDNotFound
 
 	// Binlog operation error code list
-	codeBinlogExtractPosition = iota + 1301
+	codeBinlogExtractPosition = iota + 2201
 	codeBinlogInvalidFilename
 	codeBinlogParsePosFromStr
 
 	// Checkpoint error code
-	codeCheckpointInvalidTaskMode = iota + 1401
+	codeCheckpointInvalidTaskMode = iota + 2401
 	codeCheckpointSaveInvalidPos
 	codeCheckpointInvalidTableFile
 	codeCheckpointDBNotExistInFile
@@ -142,19 +153,19 @@ const (
 	codeCheckpointRestoreCountGreater
 
 	// Task check error code
-	codeTaskCheckSameTableName = iota + 1501
+	codeTaskCheckSameTableName = iota + 2601
 	codeTaskCheckFailedOpenDB
 	codeTaskCheckNewTableRouter
 	codeTaskCheckNewColumnMapping
 
 	// Relay log basic API error
-	codeRelayParseUUIDIndex = iota + 1601
+	codeRelayParseUUIDIndex = iota + 2801
 	codeRelayParseUUIDSuffix
 	codeRelayUUIDWithSuffixNotFound
 	codeRelayGenFakeRotateEvent
 	codeRelayNoValidRelaySubDir
 
-	codeRelayUUIDSuffixNotValid = iota + 1701
+	codeRelayUUIDSuffixNotValid = iota + 3001
 	codeRelayUUIDSuffixLessThanPrev
 	codeRelayLoadMetaData
 	codeRelayBinlogNameNotValid
@@ -196,12 +207,13 @@ const (
 	codeRelayTrimUUIDNotFound
 	codeRelayRemoveFileFail
 	codeRelayPurgeArgsNotValid
+	codePreviousGTIDsNotValid
 
 	// Dump unit error code
-	codeDumpUnitRuntime = iota + 2001
+	codeDumpUnitRuntime = iota + 3201
 
 	// Load unit error code
-	codeLoadUnitCreateSchemaFile = iota + 2101
+	codeLoadUnitCreateSchemaFile = iota + 3401
 	codeLoadUnitInvalidFileEnding
 	codeLoadUnitParseQuoteValues
 	codeLoadUnitDoColumnMapping
@@ -218,7 +230,7 @@ const (
 	codeLoadUnitDuplicateTableFile
 
 	// Sync unit error code
-	codeSyncerUnitPanic = iota + 2201
+	codeSyncerUnitPanic = iota + 3601
 	codeSyncUnitInvalidTableName
 	codeSyncUnitTableNameQuery
 	codeSyncUnitNotSupportedDML
@@ -345,27 +357,38 @@ var (
 	ErrInvalidBinlogPosStr       = New(codeInvalidBinlogPosStr, ClassFunctional, ScopeInternal, LevelHigh, "invalid mysql position string: %s")
 	ErrEncCipherTextBase64Decode = New(codeEncCipherTextBase64Decode, ClassFunctional, ScopeInternal, LevelHigh, "decode base64 encoded password %s")
 	// pkg/binlog
-	ErrBinlogWriteBinaryData       = New(codeBinlogWriteBinaryData, ClassFunctional, ScopeInternal, LevelHigh, "")
-	ErrBinlogHeaderLengthNotValid  = New(codeBinlogHeaderLengthNotValid, ClassFunctional, ScopeInternal, LevelHigh, "header length should be %d, but got %d not valid")
-	ErrBinlogEventDecode           = New(codeBinlogEventDecode, ClassFunctional, ScopeInternal, LevelHigh, "decode % X")
-	ErrBinlogEmptyNextBinName      = New(codeBinlogEmptyNextBinName, ClassFunctional, ScopeInternal, LevelHigh, "empty next binlog name not valid")
-	ErrBinlogParseSID              = New(codeBinlogParseSID, ClassFunctional, ScopeInternal, LevelHigh, "")
-	ErrBinlogEmptyGTID             = New(codeBinlogEmptyGTID, ClassFunctional, ScopeInternal, LevelHigh, "empty GTID set not valid")
-	ErrBinlogGTIDNotValid          = New(codeBinlogGTIDNotValid, ClassFunctional, ScopeInternal, LevelHigh, "GTID set string %s fro MySQL not valid")
-	ErrBinlogEmptyQuery            = New(codeBinlogEmptyQuery, ClassFunctional, ScopeInternal, LevelHigh, "empty query not valid")
-	ErrBinlogTableMapEvNotValid    = New(codeBinlogTableMapEvNotValid, ClassFunctional, ScopeInternal, LevelHigh, "empty schema (% X) or table (% X) or column type (% X)")
-	ErrBinlogExpectFormatDescEv    = New(codeBinlogExpectFormatDescEv, ClassFunctional, ScopeInternal, LevelHigh, "expect FormatDescriptionEvent, but got %+v")
-	ErrBinlogExpectTableMapEv      = New(codeBinlogExpectTableMapEv, ClassFunctional, ScopeInternal, LevelHigh, "expect TableMapEvent, but got %+v")
-	ErrBinlogExpectRowsEv          = New(codeBinlogExpectRowsEv, ClassFunctional, ScopeInternal, LevelHigh, "expect event with type (%d), but got %+v")
-	ErrBinlogUnexpectedEV          = New(codeBinlogUnexpectedEV, ClassFunctional, ScopeInternal, LevelHigh, "unexpected event %+v")
-	ErrBinlogParseSingleEv         = New(codeBinlogParseSingleEv, ClassFunctional, ScopeInternal, LevelHigh, "")
-	ErrBinlogEventTypeNotValid     = New(codeBinlogEventTypeNotValid, ClassFunctional, ScopeInternal, LevelHigh, "event type %d not valid")
-	ErrBinlogEventNoRows           = New(codeBinlogEventNoRows, ClassFunctional, ScopeInternal, LevelHigh, "no rows not valid")
-	ErrBinlogEventNoColumns        = New(codeBinlogEventNoColumns, ClassFunctional, ScopeInternal, LevelHigh, "no columns not valid")
-	ErrBinlogEventRowLengthNotEq   = New(codeBinlogEventRowLengthNotEq, ClassFunctional, ScopeInternal, LevelHigh, "length of row (%d) not equal to length of column-type (%d)")
-	ErrBinlogColumnTypeNotSupport  = New(codeBinlogColumnTypeNotSupport, ClassFunctional, ScopeInternal, LevelHigh, "column type %d in binlog not supported")
-	ErrBinlogGoMySQLTypeNotSupport = New(codeBinlogGoMySQLTypeNotSupport, ClassFunctional, ScopeInternal, LevelHigh, "go-mysql type %d in event generator not supported")
-	ErrBinlogColumnTypeMisMatch    = New(codeBinlogColumnTypeMisMatch, ClassFunctional, ScopeInternal, LevelHigh, "value %+v (type %v) with column type %v not valid")
+	ErrBinlogWriteBinaryData         = New(codeBinlogWriteBinaryData, ClassFunctional, ScopeInternal, LevelHigh, "")
+	ErrBinlogWriteDataToBuffer       = New(codeBinlogWriteDataToBuffer, ClassFunctional, ScopeInternal, LevelHigh, "")
+	ErrBinlogHeaderLengthNotValid    = New(codeBinlogHeaderLengthNotValid, ClassFunctional, ScopeInternal, LevelHigh, "header length should be %d, but got %d not valid")
+	ErrBinlogEventDecode             = New(codeBinlogEventDecode, ClassFunctional, ScopeInternal, LevelHigh, "decode % X")
+	ErrBinlogEmptyNextBinName        = New(codeBinlogEmptyNextBinName, ClassFunctional, ScopeInternal, LevelHigh, "empty next binlog name not valid")
+	ErrBinlogParseSID                = New(codeBinlogParseSID, ClassFunctional, ScopeInternal, LevelHigh, "")
+	ErrBinlogEmptyGTID               = New(codeBinlogEmptyGTID, ClassFunctional, ScopeInternal, LevelHigh, "empty GTID set not valid")
+	ErrBinlogGTIDSetNotValid         = New(codeBinlogGTIDSetNotValid, ClassFunctional, ScopeInternal, LevelHigh, "GTID set %s with flavor %s not valid")
+	ErrBinlogGTIDMySQLNotValid       = New(codeBinlogGTIDMySQLNotValid, ClassFunctional, ScopeInternal, LevelHigh, "GTID set string %s for MySQL not valid")
+	ErrBinlogGTIDMariaDBNotValid     = New(codeBinlogGTIDMariaDBNotValid, ClassFunctional, ScopeInternal, LevelHigh, "GTID set string %s for MariaDB not valid")
+	ErrBinlogMariaDBServerIDMismatch = New(codeBinlogMariaDBServerIDMismatch, ClassFunctional, ScopeInternal, LevelHigh, "server_id mismatch, in GTID (%d), in event header/server_id (%d)")
+	ErrBinlogOnlyOneGTIDSupport      = New(codeBinlogOnlyOneGTIDSupport, ClassFunctional, ScopeInternal, LevelHigh, "only one GTID in set is supported, but got %d (%s)")
+	ErrBinlogOnlyOneIntervalInUUID   = New(codeBinlogOnlyOneIntervalInUUID, ClassFunctional, ScopeInternal, LevelHigh, "only one Interval in UUIDSet is supported, but got %d (%s)")
+	ErrBinlogIntervalValueNotValid   = New(codeBinlogIntervalValueNotValid, ClassFunctional, ScopeInternal, LevelHigh, "Interval's Stop should equal to Start+1, but got %+v (%s)")
+	ErrBinlogEmptyQuery              = New(codeBinlogEmptyQuery, ClassFunctional, ScopeInternal, LevelHigh, "empty query not valid")
+	ErrBinlogTableMapEvNotValid      = New(codeBinlogTableMapEvNotValid, ClassFunctional, ScopeInternal, LevelHigh, "empty schema (% X) or table (% X) or column type (% X)")
+	ErrBinlogExpectFormatDescEv      = New(codeBinlogExpectFormatDescEv, ClassFunctional, ScopeInternal, LevelHigh, "expect FormatDescriptionEvent, but got %+v")
+	ErrBinlogExpectTableMapEv        = New(codeBinlogExpectTableMapEv, ClassFunctional, ScopeInternal, LevelHigh, "expect TableMapEvent, but got %+v")
+	ErrBinlogExpectRowsEv            = New(codeBinlogExpectRowsEv, ClassFunctional, ScopeInternal, LevelHigh, "expect event with type (%d), but got %+v")
+	ErrBinlogUnexpectedEV            = New(codeBinlogUnexpectedEV, ClassFunctional, ScopeInternal, LevelHigh, "unexpected event %+v")
+	ErrBinlogParseSingleEv           = New(codeBinlogParseSingleEv, ClassFunctional, ScopeInternal, LevelHigh, "")
+	ErrBinlogEventTypeNotValid       = New(codeBinlogEventTypeNotValid, ClassFunctional, ScopeInternal, LevelHigh, "event type %d not valid")
+	ErrBinlogEventNoRows             = New(codeBinlogEventNoRows, ClassFunctional, ScopeInternal, LevelHigh, "no rows not valid")
+	ErrBinlogEventNoColumns          = New(codeBinlogEventNoColumns, ClassFunctional, ScopeInternal, LevelHigh, "no columns not valid")
+	ErrBinlogEventRowLengthNotEq     = New(codeBinlogEventRowLengthNotEq, ClassFunctional, ScopeInternal, LevelHigh, "length of row (%d) not equal to length of column-type (%d)")
+	ErrBinlogColumnTypeNotSupport    = New(codeBinlogColumnTypeNotSupport, ClassFunctional, ScopeInternal, LevelHigh, "column type %d in binlog not supported")
+	ErrBinlogGoMySQLTypeNotSupport   = New(codeBinlogGoMySQLTypeNotSupport, ClassFunctional, ScopeInternal, LevelHigh, "go-mysql type %d in event generator not supported")
+	ErrBinlogColumnTypeMisMatch      = New(codeBinlogColumnTypeMisMatch, ClassFunctional, ScopeInternal, LevelHigh, "value %+v (type %v) with column type %v not valid")
+	ErrBinlogDummyEvSizeTooSmall     = New(codeBinlogDummyEvSizeTooSmall, ClassFunctional, ScopeInternal, LevelHigh, "required dummy event size (%d) is too small, the minimum supported size is %d")
+	ErrBinlogFlavorNotSupport        = New(codeBinlogFlavorNotSupport, ClassFunctional, ScopeInternal, LevelHigh, "flavor %s not supported")
+	ErrBinlogDMLEmptyData            = New(codeBinlogDMLEmptyData, ClassFunctional, ScopeInternal, LevelHigh, "empty data not valid")
+	ErrBinlogLatestGTIDNotInPrev     = New(codeBinlogLatestGTIDNotInPrev, ClassFunctional, ScopeInternal, LevelHigh, "latest GTID %s is not one of the latest previousGTIDs %s not valid")
 
 	// Config related error
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s")
@@ -469,6 +492,7 @@ var (
 	ErrRelayTrimUUIDNotFound             = New(codeRelayTrimUUIDNotFound, ClassRelayUnit, ScopeInternal, LevelHigh, "UUID %s in UUIDs %v not found")
 	ErrRelayRemoveFileFail               = New(codeRelayRemoveFileFail, ClassRelayUnit, ScopeInternal, LevelHigh, "remove relay log %s %s")
 	ErrRelayPurgeArgsNotValid            = New(codeRelayPurgeArgsNotValid, ClassRelayUnit, ScopeInternal, LevelHigh, "args (%T) %+v not valid")
+	ErrPreviousGTIDsNotValid             = New(codePreviousGTIDsNotValid, ClassRelayUnit, ScopeInternal, LevelHigh, "previousGTIDs %s not valid")
 
 	// Dump unit error
 	ErrDumpUnitRuntime = New(codeDumpUnitRuntime, ClassDumpUnit, ScopeInternal, LevelHigh, "mydumper runs with error")

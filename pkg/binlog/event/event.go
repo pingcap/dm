@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/binary"
 
-	"github.com/pingcap/errors"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
@@ -209,7 +208,7 @@ func GenPreviousGTIDsEvent(header *replication.EventHeader, latestPos uint32, gS
 
 	origin := gSet.Origin()
 	if origin == nil {
-		return nil, terror.ErrBinlogGTIDNotValid.Generate(gSet.String())
+		return nil, terror.ErrBinlogGTIDMySQLNotValid.Generate(gSet.String())
 	}
 
 	// event payload, GTID set encoded in it
@@ -600,11 +599,11 @@ func GenRowsEvent(header *replication.EventHeader, latestPos uint32, eventType r
 
 	columnMetaData, err := encodeTableMapColumnMeta(columnType)
 	if err != nil {
-		return nil, errors.Annotatef(err, "encode column-meta-def from column-type % X", columnType)
+		return nil, terror.Annotatef(err, "encode column-meta-def from column-type % X", columnType)
 	}
 	columnMeta, err := decodeTableMapColumnMeta(columnMetaData, columnType)
 	if err != nil {
-		return nil, errors.Annotatef(err, "decode column-meta-def %X", columnMetaData)
+		return nil, terror.Annotatef(err, "decode column-meta-def %X", columnMetaData)
 	}
 
 	// for UPDATE, two rows for one statement
@@ -621,11 +620,11 @@ func GenRowsEvent(header *replication.EventHeader, latestPos uint32, eventType r
 			var colData []byte
 			colData, err = encodeColumnValue(col, columnType[i], columnMeta[i])
 			if err != nil {
-				return nil, errors.Annotatef(err, "encode column value %v to bytes", col)
+				return nil, terror.Annotatef(err, "encode column value %v to bytes", col)
 			}
 			err = binary.Write(payload, binary.LittleEndian, colData)
 			if err != nil {
-				return nil, errors.Annotatef(err, "write column data % X", colData)
+				return nil, terror.ErrBinlogWriteBinaryData.AnnotateDelegate(err, "write column data % X", colData)
 			}
 		}
 	}
@@ -716,16 +715,16 @@ func GenXIDEvent(header *replication.EventHeader, latestPos uint32, xid uint64) 
 // ref: https://mariadb.com/kb/en/library/gtid_list_event/
 func GenMariaDBGTIDListEvent(header *replication.EventHeader, latestPos uint32, gSet gtid.Set) (*replication.BinlogEvent, error) {
 	if gSet == nil || len(gSet.String()) == 0 {
-		return nil, errors.NotValidf("empty GTID set")
+		return nil, terror.ErrBinlogEmptyGTID.Generate()
 	}
 
 	origin := gSet.Origin()
 	if origin == nil {
-		return nil, errors.NotValidf("GTID set string %s for MariaDB", gSet.String())
+		return nil, terror.ErrBinlogGTIDMariaDBNotValid.Generate(gSet.String())
 	}
 	mariaDBGSet, ok := origin.(*gmysql.MariadbGTIDSet)
 	if !ok {
-		return nil, errors.NotValidf("GTID set string %s for MariaDB", gSet.String())
+		return nil, terror.ErrBinlogGTIDMariaDBNotValid.Generate(gSet.String())
 	}
 
 	payload := new(bytes.Buffer)
@@ -806,7 +805,7 @@ func GenMariaDBGTIDEvent(header *replication.EventHeader, latestPos uint32, sequ
 // ref: https://github.com/MariaDB/server/blob/a765b19e5ca31a3d866cdbc8bef3a6f4e5e44688/sql/log_event.cc#L4950
 func GenDummyEvent(header *replication.EventHeader, latestPos uint32, eventSize uint32) (*replication.BinlogEvent, error) {
 	if eventSize < MinUserVarEventLen {
-		return nil, errors.Errorf("required dummy event size (%d) is too small, the minimum supported size is %d", eventSize, MinUserVarEventLen)
+		return nil, terror.ErrBinlogDummyEvSizeTooSmall.Generate(eventSize, MinUserVarEventLen)
 	}
 
 	// modify flag in the header
