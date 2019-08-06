@@ -19,12 +19,12 @@ import (
 	"os"
 	"sync"
 
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog/common"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // FileWriter is a binlog event writer which writes binlog events to a file.
@@ -76,12 +76,12 @@ func (w *FileWriter) Start() error {
 	defer w.mu.Unlock()
 
 	if w.stage != common.StageNew {
-		return errors.Errorf("stage %s, expect %s, already started", w.stage, common.StageNew)
+		return terror.ErrBinlogWriterNotStateNew.Generate(w.stage, common.StageNew)
 	}
 
 	f, err := os.OpenFile(w.cfg.Filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrBinlogWriterOpenFile.Delegate(err)
 	}
 	fs, err := f.Stat()
 	if err != nil {
@@ -89,7 +89,7 @@ func (w *FileWriter) Start() error {
 		if err2 != nil {
 			w.tctx.L().Error("fail to close file", zap.String("component", "file writer"), zap.Error(err2))
 		}
-		return errors.Annotatef(err, "get stat for %s", f.Name())
+		return terror.ErrBinlogWriterGetFileStat.Delegate(err, f.Name())
 	}
 
 	w.offset.Set(fs.Size())
@@ -104,7 +104,7 @@ func (w *FileWriter) Close() error {
 	defer w.mu.Unlock()
 
 	if w.stage != common.StagePrepared {
-		return errors.Errorf("stage %s, expect %s, can not close", w.stage, common.StagePrepared)
+		return terror.ErrBinlogWriterStateCannotClose.Generate(w.stage, common.StagePrepared)
 	}
 
 	var err error
@@ -127,13 +127,13 @@ func (w *FileWriter) Write(rawData []byte) error {
 	defer w.mu.RUnlock()
 
 	if w.stage != common.StagePrepared {
-		return errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, common.StagePrepared)
+		return terror.ErrBinlogWriterNeedStart.Generate(w.stage, common.StagePrepared)
 	}
 
 	n, err := w.file.Write(rawData)
 	w.offset.Add(int64(n))
 
-	return errors.Annotatef(err, "data length %d", len(rawData))
+	return terror.ErrBinlogWriterWriteDataLen.Delegate(err, len(rawData))
 }
 
 // Flush implements Writer.Flush.
@@ -142,7 +142,7 @@ func (w *FileWriter) Flush() error {
 	defer w.mu.RUnlock()
 
 	if w.stage != common.StagePrepared {
-		return errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, common.StagePrepared)
+		return terror.ErrBinlogWriterNeedStart.Generate(w.stage, common.StagePrepared)
 	}
 
 	return w.flush()
@@ -164,7 +164,7 @@ func (w *FileWriter) Status() interface{} {
 // flush flushes the buffered data to the disk.
 func (w *FileWriter) flush() error {
 	if w.file == nil {
-		return errors.Errorf("file %s not opened", w.cfg.Filename)
+		return terror.ErrBinlogWriterFileNotOpened.Generate(w.cfg.Filename)
 	}
-	return w.file.Sync()
+	return terror.ErrBinlogWriterFileSync.Delegate(w.file.Sync())
 }

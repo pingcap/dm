@@ -41,6 +41,9 @@ const (
 	codeGetSQLModeFromStr
 	codeVerifySQLOperateArgs
 	codeStatFileSize
+	codeReaderAlreadyRunning
+	codeReaderStateCannotClose
+	codeReaderShouldStartSync
 	// pkg/streamer
 	codeEmptyRelayDir
 	codeReadDir
@@ -54,7 +57,6 @@ const (
 	codeWatcherChanClosed
 	codeWatcherChanRecvError
 	codeRelayLogFileSizeSmaller
-	codeReaderAlreadyRunning
 	codeBinlogFileNotSpecified
 	codeNoRelayLogMatchPos
 	codeFirstRelayLogNotMatchPos
@@ -105,6 +107,20 @@ const (
 	codeBinlogFlavorNotSupport
 	codeBinlogDMLEmptyData
 	codeBinlogLatestGTIDNotInPrev
+	codeBinlogReadFileByGTID
+	codeBinlogWriterNotStateNew
+	codeBinlogWriterStateCannotClose
+	codeBinlogWriterNeedStart
+	codeBinlogWriterOpenFile
+	codeBinlogWriterGetFileStat
+	codeBinlogWriterWriteDataLen
+	codeBinlogWriterFileNotOpened
+	codeBinlogWriterFileSync
+	codeBinlogPrevGTIDEvNotValid
+	codeBinlogDecodeMySQLGTIDSet
+	codeBinlogNeedMariaDBGTIDSet
+	codeBinlogParseMariaDBGTIDSet
+	codeBinlogMariaDBAddGTIDSet
 
 	// Config related error code list
 	codeConfigCheckItemNotSupport = iota + 2001
@@ -307,24 +323,27 @@ var (
 	ErrDBExecuteFailed = New(codeDBExecuteFailed, ClassDatabase, ScopeNotSet, LevelHigh, "execute statement failed: %s")
 
 	// Functional error
-	ErrParseMydumperMeta    = New(codeParseMydumperMeta, ClassFunctional, ScopeInternal, LevelHigh, "parse metadata error: %s")
-	ErrGetFileSize          = New(codeGetFileSize, ClassFunctional, ScopeInternal, LevelHigh, "get file size")
-	ErrDropMultipleTables   = New(codeDropMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allow operation: drop multiple tables in one statement")
-	ErrRenameMultipleTables = New(codeRenameMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allow operation: rename multiple tables in one statement")
-	ErrAlterMultipleTables  = New(codeAlterMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allow operation: alter multiple tables in one statement")
-	ErrParseSQL             = New(codeAlterMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "parse statement")
-	ErrUnknownTypeDDL       = New(codeUnknownTypeDDL, ClassFunctional, ScopeInternal, LevelHigh, "unknown type ddl %s")
-	ErrRestoreASTNode       = New(codeRestoreASTNode, ClassFunctional, ScopeInternal, LevelHigh, "restore ast node")
-	ErrParseGTID            = New(codeParseGTID, ClassFunctional, ScopeInternal, LevelHigh, "parse GTID")
-	ErrNotSupportedFlavor   = New(codeNotSupportedFlavor, ClassFunctional, ScopeInternal, LevelHigh, "flavor %s and gtid %s")
-	ErrNotMySQLGTID         = New(codeNotMySQLGTID, ClassFunctional, ScopeInternal, LevelHigh, "%s is not mysql GTID set")
-	ErrNotMariaDBGTID       = New(codeNotMariaDBGTID, ClassFunctional, ScopeInternal, LevelHigh, "%s is not mariadb GTID set")
-	ErrNotUUIDString        = New(codeNotUUIDString, ClassFunctional, ScopeInternal, LevelHigh, "%v is not string")
-	ErrMariaDBDomainID      = New(codeMariaDBDomainID, ClassFunctional, ScopeInternal, LevelHigh, "%v is not uint32")
-	ErrInvalidServerID      = New(codeInvalidServerID, ClassFunctional, ScopeInternal, LevelHigh, "invalid server id")
-	ErrGetSQLModeFromStr    = New(codeGetSQLModeFromStr, ClassFunctional, ScopeInternal, LevelHigh, "get sql from from string literal")
-	ErrVerifySQLOperateArgs = New(codeVerifySQLOperateArgs, ClassFunctional, ScopeInternal, LevelLow, "")
-	ErrStatFileSize         = New(codeStatFileSize, ClassFunctional, ScopeInternal, LevelHigh, "statfs")
+	ErrParseMydumperMeta      = New(codeParseMydumperMeta, ClassFunctional, ScopeInternal, LevelHigh, "parse metadata error: %s")
+	ErrGetFileSize            = New(codeGetFileSize, ClassFunctional, ScopeInternal, LevelHigh, "get file size")
+	ErrDropMultipleTables     = New(codeDropMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allow operation: drop multiple tables in one statement")
+	ErrRenameMultipleTables   = New(codeRenameMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allow operation: rename multiple tables in one statement")
+	ErrAlterMultipleTables    = New(codeAlterMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allow operation: alter multiple tables in one statement")
+	ErrParseSQL               = New(codeAlterMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "parse statement")
+	ErrUnknownTypeDDL         = New(codeUnknownTypeDDL, ClassFunctional, ScopeInternal, LevelHigh, "unknown type ddl %s")
+	ErrRestoreASTNode         = New(codeRestoreASTNode, ClassFunctional, ScopeInternal, LevelHigh, "restore ast node")
+	ErrParseGTID              = New(codeParseGTID, ClassFunctional, ScopeInternal, LevelHigh, "parse GTID")
+	ErrNotSupportedFlavor     = New(codeNotSupportedFlavor, ClassFunctional, ScopeInternal, LevelHigh, "flavor %s and gtid %s")
+	ErrNotMySQLGTID           = New(codeNotMySQLGTID, ClassFunctional, ScopeInternal, LevelHigh, "%s is not mysql GTID set")
+	ErrNotMariaDBGTID         = New(codeNotMariaDBGTID, ClassFunctional, ScopeInternal, LevelHigh, "%s is not mariadb GTID set")
+	ErrNotUUIDString          = New(codeNotUUIDString, ClassFunctional, ScopeInternal, LevelHigh, "%v is not string")
+	ErrMariaDBDomainID        = New(codeMariaDBDomainID, ClassFunctional, ScopeInternal, LevelHigh, "%v is not uint32")
+	ErrInvalidServerID        = New(codeInvalidServerID, ClassFunctional, ScopeInternal, LevelHigh, "invalid server id")
+	ErrGetSQLModeFromStr      = New(codeGetSQLModeFromStr, ClassFunctional, ScopeInternal, LevelHigh, "get sql from from string literal")
+	ErrVerifySQLOperateArgs   = New(codeVerifySQLOperateArgs, ClassFunctional, ScopeInternal, LevelLow, "")
+	ErrStatFileSize           = New(codeStatFileSize, ClassFunctional, ScopeInternal, LevelHigh, "statfs")
+	ErrReaderAlreadyRunning   = New(codeReaderAlreadyRunning, ClassFunctional, ScopeInternal, LevelHigh, "binlog reader is already running")
+	ErrReaderStateCannotClose = New(codeReaderStateCannotClose, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s, can not close")
+	ErrReaderShouldStartSync  = New(codeReaderShouldStartSync, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s, please start sync first")
 	// pkg/streamer
 	ErrEmptyRelayDir            = New(codeEmptyRelayDir, ClassFunctional, ScopeInternal, LevelHigh, "empty relay dir")
 	ErrReadDir                  = New(codeReadDir, ClassFunctional, ScopeInternal, LevelHigh, "read dir: %s")
@@ -338,7 +357,6 @@ var (
 	ErrWatcherChanClosed        = New(codeWatcherChanClosed, ClassFunctional, ScopeInternal, LevelHigh, "watcher's %s chan for relay log dir %s closed")
 	ErrWatcherChanRecvError     = New(codeWatcherChanRecvError, ClassFunctional, ScopeInternal, LevelHigh, "relay log dir %s")
 	ErrRelayLogFileSizeSmaller  = New(codeRelayLogFileSizeSmaller, ClassFunctional, ScopeInternal, LevelHigh, "file size of relay log %s become smaller")
-	ErrReaderAlreadyRunning     = New(codeReaderAlreadyRunning, ClassFunctional, ScopeInternal, LevelHigh, "binlog reader is already running")
 	ErrBinlogFileNotSpecified   = New(codeBinlogFileNotSpecified, ClassFunctional, ScopeInternal, LevelHigh, "binlog file must be specified")
 	ErrNoRelayLogMatchPos       = New(codeNoRelayLogMatchPos, ClassFunctional, ScopeInternal, LevelHigh, "no relay log files in dir %s match pos %")
 	ErrFirstRelayLogNotMatchPos = New(codeFirstRelayLogNotMatchPos, ClassFunctional, ScopeInternal, LevelHigh, "the first relay log %s not match the start pos %v")
@@ -389,6 +407,20 @@ var (
 	ErrBinlogFlavorNotSupport        = New(codeBinlogFlavorNotSupport, ClassFunctional, ScopeInternal, LevelHigh, "flavor %s not supported")
 	ErrBinlogDMLEmptyData            = New(codeBinlogDMLEmptyData, ClassFunctional, ScopeInternal, LevelHigh, "empty data not valid")
 	ErrBinlogLatestGTIDNotInPrev     = New(codeBinlogLatestGTIDNotInPrev, ClassFunctional, ScopeInternal, LevelHigh, "latest GTID %s is not one of the latest previousGTIDs %s not valid")
+	ErrBinlogReadFileByGTID          = New(codeBinlogReadFileByGTID, ClassFunctional, ScopeInternal, LevelHigh, "read from file by GTID not supported")
+	ErrBinlogWriterNotStateNew       = New(codeBinlogWriterNotStateNew, ClassFunctional, ScopeInternal, LevelHigh, "stage %s, expect %s, already started")
+	ErrBinlogWriterStateCannotClose  = New(codeBinlogWriterStateCannotClose, ClassFunctional, ScopeInternal, LevelHigh, "stage %s, expect %s, can not close")
+	ErrBinlogWriterNeedStart         = New(codeBinlogWriterNeedStart, ClassFunctional, ScopeInternal, LevelHigh, "stage %s, expect %s, please start the writer first")
+	ErrBinlogWriterOpenFile          = New(codeBinlogWriterOpenFile, ClassFunctional, ScopeInternal, LevelHigh, "open file")
+	ErrBinlogWriterGetFileStat       = New(codeBinlogWriterGetFileStat, ClassFunctional, ScopeInternal, LevelHigh, "get stat for %s")
+	ErrBinlogWriterWriteDataLen      = New(codeBinlogWriterWriteDataLen, ClassFunctional, ScopeInternal, LevelHigh, "data length %d")
+	ErrBinlogWriterFileNotOpened     = New(codeBinlogWriterFileNotOpened, ClassFunctional, ScopeInternal, LevelHigh, "file %s not opened")
+	ErrBinlogWriterFileSync          = New(codeBinlogWriterFileSync, ClassFunctional, ScopeInternal, LevelHigh, "sync file")
+	ErrBinlogPrevGTIDEvNotValid      = New(codeBinlogPrevGTIDEvNotValid, ClassFunctional, ScopeInternal, LevelHigh, "PreviousGTIDsEvent should be a GenericEvent in go-mysql, but got %T")
+	ErrBinlogDecodeMySQLGTIDSet      = New(codeBinlogDecodeMySQLGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "decode from % X")
+	ErrBinlogNeedMariaDBGTIDSet      = New(codeBinlogNeedMariaDBGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "the event should be a MariadbGTIDListEvent, but got %T")
+	ErrBinlogParseMariaDBGTIDSet     = New(codeBinlogParseMariaDBGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "parse MariaDB GTID set")
+	ErrBinlogMariaDBAddGTIDSet       = New(codeBinlogMariaDBAddGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "add set %v to GTID set")
 
 	// Config related error
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s")
