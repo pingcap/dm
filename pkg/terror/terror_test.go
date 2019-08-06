@@ -60,10 +60,10 @@ func (t *testTErrorSuite) TestTError(c *check.C) {
 	c.Assert(err.Level(), check.Equals, level)
 	c.Assert(err.Error(), check.Equals, fmt.Sprintf("[%d:%s:%s:%s] %s", code, class, scope, level, err.getMsg()))
 
-	err.message = messageArgs
-	c.Assert(err.getMsg(), check.Equals, err.message)
+	setMsgErr := err.SetMessage(messageArgs)
+	c.Assert(setMsgErr.getMsg(), check.Equals, messageArgs)
 	err.args = []interface{}{"1062"}
-	c.Assert(err.getMsg(), check.Equals, fmt.Sprintf(err.message, err.args...))
+	c.Assert(setMsgErr.getMsg(), check.Equals, fmt.Sprintf(messageArgs, err.args...))
 
 	// test Error Generate/Generatef
 	err2 := err.Generate("1063")

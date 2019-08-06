@@ -210,6 +210,13 @@ func (e *Error) Equal(err error) bool {
 	return ok && e.code == inErr.code
 }
 
+// SetMessage clones an Error and resets its message
+func (e *Error) SetMessage(message string) *Error {
+	err := e
+	err.message = message
+	return err
+}
+
 // New generates a new *Error with the same class and code, and replace message with new message
 func (e *Error) New(message string) error {
 	return e.levelGeneratef(1, message)
@@ -256,6 +263,14 @@ func (e *Error) Delegate(err error, args ...interface{}) error {
 		stack:    errors.NewStack(0),
 	}
 	return err2
+}
+
+// AnnotateDelegate resets the message of *Error and Delegate with error and new args
+func (e *Error) AnnotateDelegate(err error, message string, args ...interface{}) error {
+	if err == nil {
+		return nil
+	}
+	return e.SetMessage(message).Delegate(err, args...)
 }
 
 // Annotate tries to convert err to *Error and adds a message to it.
