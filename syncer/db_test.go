@@ -17,17 +17,16 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	. "github.com/pingcap/check"
+	"time"
+
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/utils"
+
+	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	gouuid "github.com/satori/go.uuid"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
-	"go.uber.org/zap"
-	"time"
-
-	"github.com/pingcap/dm/pkg/utils"
 )
 
 var _ = Suite(&testDBSuite{})
@@ -58,17 +57,14 @@ func (s *testDBSuite) SetUpSuite(c *C) {
 	var err error
 	dbAddr := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8", s.cfg.From.User, s.cfg.From.Password, s.cfg.From.Host, s.cfg.From.Port)
 	s.db, err = sql.Open("mysql", dbAddr)
-	if err != nil {
-		log.L().Fatal("", zap.Error(err))
-	}
-	s.resetBinlogSyncer()
+	c.Assert(err, IsNil)
 
+	s.resetBinlogSyncer(c)
 	_, err = s.db.Exec("SET GLOBAL binlog_format = 'ROW';")
 	c.Assert(err, IsNil)
 }
 
-func (s *testDBSuite) resetBinlogSyncer() {
-	var err error
+func (s *testDBSuite) resetBinlogSyncer(c *C) {
 	cfg := replication.BinlogSyncerConfig{
 		ServerID:       uint32(s.cfg.ServerID),
 		Flavor:         "mysql",
@@ -81,9 +77,7 @@ func (s *testDBSuite) resetBinlogSyncer() {
 	}
 	if s.cfg.Timezone != "" {
 		timezone, err2 := time.LoadLocation(s.cfg.Timezone)
-		if err != nil {
-			log.L().Fatal("", zap.Error(err2))
-		}
+		c.Assert(err2, IsNil)
 		cfg.TimestampStringLocation = timezone
 	}
 
@@ -92,15 +86,11 @@ func (s *testDBSuite) resetBinlogSyncer() {
 	}
 
 	pos, _, err := utils.GetMasterStatus(s.db, "mysql")
-	if err != nil {
-		log.L().Fatal("", zap.Error(err))
-	}
+	c.Assert(err, IsNil)
 
 	s.syncer = replication.NewBinlogSyncer(cfg)
 	s.streamer, err = s.syncer.StartSync(pos)
-	if err != nil {
-		log.L().Fatal("", zap.Error(err))
-	}
+	c.Assert(err, IsNil)
 }
 
 func (s *testDBSuite) TestGetServerUUID(c *C) {
@@ -186,15 +176,23 @@ func (s *testDBSuite) TestTimezone(c *C) {
 		"drop database tztest_1",
 	}
 
+	defer func() {
+		for _, sql := range dropSQLs {
+			_, err := s.db.Exec(sql)
+			c.Assert(err, IsNil)
+		}
+	}()
+
 	for _, sql := range createSQLs {
-		s.db.Exec(sql)
+		_, err := s.db.Exec(sql)
+		c.Assert(err, IsNil)
 	}
 
 	for _, testCase := range testCases {
 		s.cfg.Timezone = testCase.timezone
 		syncer := NewSyncer(s.cfg)
 		syncer.genRouter()
-		s.resetBinlogSyncer()
+		s.resetBinlogSyncer(c)
 
 		// we should not use `sql.DB.Exec` to do query which depends on session variables
 		// because `sql.DB.Exec` will choose a underlying Conn for every query from the connection pool
@@ -246,9 +244,5 @@ func (s *testDBSuite) TestTimezone(c *C) {
 				continue
 			}
 		}
-	}
-
-	for _, sql := range dropSQLs {
-		s.db.Exec(sql)
 	}
 }

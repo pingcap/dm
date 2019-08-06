@@ -210,30 +210,30 @@ func (s *testSyncerSuite) resetEventsGenerator(c *C) {
 
 func (s *testSyncerSuite) TearDownSuite(c *C) {}
 
-func (s *testSyncerSuite) mockParser(db *sql.DB, mock *sqlmock.Sqlmock) (*parser.Parser, error) {
-	(*mock).ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
+func (s *testSyncerSuite) mockParser(db *sql.DB, mock sqlmock.Sqlmock) (*parser.Parser, error) {
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
 		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
 			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
 	return utils.GetParser(db, false)
 }
 
-func (s *testSyncerSuite) mockCheckPointCreate(checkPointMock *sqlmock.Sqlmock) {
-	(*checkPointMock).ExpectBegin()
-	(*checkPointMock).ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
-	(*checkPointMock).ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+func (s *testSyncerSuite) mockCheckPointCreate(checkPointMock sqlmock.Sqlmock) {
+	checkPointMock.ExpectBegin()
+	checkPointMock.ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+	checkPointMock.ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
 	// TODO because shardGroup DB is same as checkpoint DB, next time split them is better
-	(*checkPointMock).ExpectExec(fmt.Sprintf("DELETE FROM `%s`.`%s_syncer_sharding_meta", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
-	(*checkPointMock).ExpectCommit()
+	checkPointMock.ExpectExec(fmt.Sprintf("DELETE FROM `%s`.`%s_syncer_sharding_meta", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+	checkPointMock.ExpectCommit()
 }
 
-func (s *testSyncerSuite) mockCheckPointFlush(checkPointMock *sqlmock.Sqlmock) {
-	(*checkPointMock).ExpectBegin()
-	(*checkPointMock).ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
-	(*checkPointMock).ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
-	(*checkPointMock).ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+func (s *testSyncerSuite) mockCheckPointFlush(checkPointMock sqlmock.Sqlmock) {
+	checkPointMock.ExpectBegin()
+	checkPointMock.ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+	checkPointMock.ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+	checkPointMock.ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
 	// TODO because shardGroup DB is same as checkpoint DB, next time split them is better
-	(*checkPointMock).ExpectExec(fmt.Sprintf("DELETE FROM `%s`.`%s_syncer_sharding_meta", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
-	(*checkPointMock).ExpectCommit()
+	checkPointMock.ExpectExec(fmt.Sprintf("DELETE FROM `%s`.`%s_syncer_sharding_meta", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+	checkPointMock.ExpectCommit()
 }
 
 func (s *testSyncerSuite) TestSelectDB(c *C) {
@@ -262,7 +262,7 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
-	p, err := s.mockParser(db, &mock)
+	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
@@ -369,7 +369,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
-	p, err := s.mockParser(db, &mock)
+	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
@@ -439,7 +439,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
-	p, err := s.mockParser(db, &mock)
+	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
@@ -530,7 +530,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
-	p, err := s.mockParser(db, &mock)
+	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
@@ -658,7 +658,7 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
-	p, err := s.mockParser(db, &mock)
+	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
@@ -755,7 +755,7 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
-	p, err := s.mockParser(db, &mock)
+	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
 	mapping, err := cm.NewMapping(false, rules)
@@ -1214,11 +1214,13 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 
 		// make syncer write to mock baseConn
 		syncer := NewSyncer(s.cfg)
-		// mock create db
+
+		// fromDB mocks upstream db, db mocks downstream db
 		syncer.fromDB = &Conn{cfg: s.cfg, baseConn: &baseconn.BaseConn{fromDB, "", &retry.FiniteRetryStrategy{}}}
 		syncer.toDBs = []*Conn{{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, "", &retry.FiniteRetryStrategy{}}}}
 		syncer.ddlDB = &Conn{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, "", &retry.FiniteRetryStrategy{}}}
-		// syncer.Init()
+
+		// mock syncer.Init() function, because we need to pass mock dbs to different members' init
 		syncer.genRouter()
 		syncer.initShardingGroups(&Conn{cfg: s.cfg, baseConn: &baseconn.BaseConn{shardGroupDB, "", &retry.FiniteRetryStrategy{}}})
 		syncer.checkpoint.Init(&Conn{cfg: s.cfg, baseConn: &baseconn.BaseConn{checkPointDB, "", &retry.FiniteRetryStrategy{}}})
@@ -1231,9 +1233,9 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 				AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
 
 		// mock checkpoint db after create db table1 table2
-		s.mockCheckPointCreate(&checkPointMock)
-		s.mockCheckPointCreate(&checkPointMock)
-		s.mockCheckPointCreate(&checkPointMock)
+		s.mockCheckPointCreate(checkPointMock)
+		s.mockCheckPointCreate(checkPointMock)
+		s.mockCheckPointCreate(checkPointMock)
 
 		// mock downstream db result
 		mock.ExpectBegin()
@@ -1268,7 +1270,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 					sqlmock.NewRows([]string{"Table", "Non_unique", "Key_name", "Seq_in_index", "Column_name",
 						"Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Comment", "Index_comment"},
 					).AddRow("st", 0, "PRIMARY", 1, "id", "A", 0, null, null, null, "BTREE", "", ""))
-				s.mockCheckPointFlush(&checkPointMock)
+				s.mockCheckPointFlush(checkPointMock)
 			} else {
 				// change insert to replace because of safe mode
 				mock.ExpectExec(expectSQL.sql).WithArgs(expectSQL.args...).WillReturnResult(sqlmock.NewResult(1, 1))
@@ -1278,7 +1280,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		ctx, cancel := context.WithCancel(context.Background())
 		resultCh := make(chan pb.ProcessResult)
 
-		s.mockCheckPointFlush(&checkPointMock)
+		s.mockCheckPointFlush(checkPointMock)
 		checkPointMock.ExpectClose()
 
 		go syncer.Process(ctx, resultCh)

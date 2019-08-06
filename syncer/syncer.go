@@ -226,7 +226,7 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.cacheColumns = make(map[string][]string)
 	syncer.genColsCache = NewGenColCache()
 	syncer.c = newCausality()
-	syncer.done = make(chan struct{})
+	syncer.done = nil
 	syncer.bwList = filter.New(cfg.CaseSensitive, cfg.BWList)
 	syncer.injectEventCh = make(chan *replication.BinlogEvent)
 	syncer.tracer = tracing.GetTracer()
@@ -463,25 +463,31 @@ func (s *Syncer) IsFreshTask() (bool, error) {
 }
 
 func (s *Syncer) resetReplicationSyncer() {
+	// close old streamerProducer
 	if s.streamerProducer != nil {
 		switch t := s.streamerProducer.(type) {
 		case *remoteBinlogReader:
 			s.closeBinlogSyncer(t.reader)
-			s.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(s.syncCfg), s.tctx, s.cfg.EnableGTID}
 		case *localBinlogReader:
 			// TODO: close old local reader before creating a new one
-			s.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(s.tctx, &streamer.BinlogReaderConfig{RelayDir: s.cfg.RelayDir, Timezone: s.timezone})}
 		default:
+			// some other producers such as mockStreamerProducer, should not re-create
+			return
 		}
-	} else {
+	}
+	// re-create new streamerProducer
+	switch s.binlogType {
+	case RemoteBinlog:
 		s.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(s.syncCfg), s.tctx, s.cfg.EnableGTID}
+	case LocalBinlog:
+		s.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(s.tctx, &streamer.BinlogReaderConfig{RelayDir: s.cfg.RelayDir, Timezone: s.timezone})}
+	default:
+		s.tctx.L().Error("init streamerProducer with un-recognized binlogType")
 	}
 }
 
 func (s *Syncer) reset() {
 	s.resetReplicationSyncer()
-	// create new done chan
-	s.done = make(chan struct{})
 	// create new job chans
 	s.newJobChans(s.cfg.WorkerCount + 1)
 	// clear tables info
@@ -500,6 +506,9 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	newCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
+	// create new done chan
+	s.done = make(chan struct{})
 
 	runFatalChan := make(chan *pb.ProcessError, s.cfg.WorkerCount+1)
 	s.runFatalChan = runFatalChan
@@ -2054,12 +2063,12 @@ func (s *Syncer) reopen(cfg replication.BinlogSyncerConfig) (streamer.Streamer, 
 			if err != nil {
 				return nil, err
 			}
-			// TODO: refactor to support relay
-			s.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(cfg), s.tctx, s.cfg.EnableGTID}
 		default:
 			return nil, terror.ErrSyncerUnitReopenStreamNotSupport.Generate(r)
 		}
 	}
+	// TODO: refactor to support relay
+	s.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(cfg), s.tctx, s.cfg.EnableGTID}
 	return s.streamerProducer.generateStreamer(s.checkpoint.GlobalPoint())
 }
 
@@ -2118,7 +2127,9 @@ func (s *Syncer) Close() {
 // stopSync stops syncing, now it used by Close and Pause
 // maybe we can refine the workflow more clear
 func (s *Syncer) stopSync() {
-	<-s.done // wait Run to return
+	if s.done != nil {
+		<-s.done // wait Run to return
+	}
 	s.closeJobChans()
 	s.wg.Wait() // wait job workers to return
 

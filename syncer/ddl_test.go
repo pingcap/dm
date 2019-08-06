@@ -15,12 +15,12 @@ package syncer
 
 import (
 	"bytes"
-	"github.com/DATA-DOG/go-sqlmock"
 
 	"github.com/pingcap/dm/dm/config"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/utils"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/filter"
@@ -40,7 +40,7 @@ func (s *testSyncerSuite) TestTrimCtrlChars(c *C) {
 	var buf bytes.Buffer
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
-	p, err := s.mockParser(db, &mock)
+	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
 	for _, char := range controlChars {
@@ -94,7 +94,7 @@ CREATE TABLE test.test_table_with_c (id int);
 
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
-	parser, err := s.mockParser(db, &mock)
+	parser, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
 	_, err = parserpkg.Parse(parser, sql, "", "")
@@ -107,7 +107,7 @@ func (s *testSyncerSuite) TestCommentQuote(c *C) {
 
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
-	parser, err := s.mockParser(db, &mock)
+	parser, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
 	stmt, err := parser.ParseOneStmt(sql, "", "")
@@ -338,7 +338,7 @@ func (s *testSyncerSuite) TestParseDDLSQL(c *C) {
 
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
-	parser, err := s.mockParser(db, &mock)
+	parser, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
 	for _, cs := range cases {
@@ -371,7 +371,7 @@ func (s *testSyncerSuite) TestResolveGeneratedColumnSQL(c *C) {
 	syncer := &Syncer{}
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
-	parser, err := s.mockParser(db, &mock)
+	parser, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
 	for _, tc := range testCases {
