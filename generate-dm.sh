@@ -10,8 +10,8 @@ if [ ! -d $GOGO_ROOT ]; then
 		exit 1
 fi
 
-GATEWAY_ROOT=${GOPATH}/src/github.com/grpc-ecosystem/grpc-gateway
-if [ ! -d $GATEWAY_ROOT ]; then
+which protoc-gen-grpc-gateway
+if [ $? -ne 0 ]; then
 	echo "please use the following command to get grpc-gateway."
 	echo "go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway"
 	exit 1

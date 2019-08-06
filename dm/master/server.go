@@ -28,7 +28,6 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
-	"github.com/tmc/grpc-websocket-proxy/wsproxy"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
@@ -1987,15 +1986,7 @@ func (s *Server) HandleHTTPApis(ctx context.Context, mux *http.ServeMux) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-
-	mux.Handle("/apis/", wsproxy.WebsocketProxy(
-		gwmux,
-		wsproxy.WithRequestMutator(
-			func(_ *http.Request, outgoing *http.Request) *http.Request {
-				return outgoing
-			},
-		),
-	))
+	mux.Handle("/apis/", gwmux)
 
 	return nil
 }
