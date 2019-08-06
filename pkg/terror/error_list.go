@@ -121,6 +121,13 @@ const (
 	codeBinlogNeedMariaDBGTIDSet
 	codeBinlogParseMariaDBGTIDSet
 	codeBinlogMariaDBAddGTIDSet
+	// pkg/tracing
+	codeTracingEventDataNotValid
+	codeTracingUploadData
+	codeTracingEventTypeNotValid
+	codeTracingGetTraceCode
+	codeTracingDataChecksum
+	codeTracingGetTSO
 
 	// Config related error code list
 	codeConfigCheckItemNotSupport = iota + 2001
@@ -421,6 +428,13 @@ var (
 	ErrBinlogNeedMariaDBGTIDSet      = New(codeBinlogNeedMariaDBGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "the event should be a MariadbGTIDListEvent, but got %T")
 	ErrBinlogParseMariaDBGTIDSet     = New(codeBinlogParseMariaDBGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "parse MariaDB GTID set")
 	ErrBinlogMariaDBAddGTIDSet       = New(codeBinlogMariaDBAddGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "add set %v to GTID set")
+	// pkg/tracing
+	ErrTracingEventDataNotValid = New(codeTracingEventDataNotValid, ClassFunctional, ScopeInternal, LevelHigh, "invalid event data for type: %s")
+	ErrTracingUploadData        = New(codeTracingUploadData, ClassFunctional, ScopeInternal, LevelHigh, "upload event")
+	ErrTracingEventTypeNotValid = New(codeTracingEventTypeNotValid, ClassFunctional, ScopeInternal, LevelHigh, "invalid event type %s, will not process")
+	ErrTracingGetTraceCode      = New(codeTracingGetTraceCode, ClassFunctional, ScopeInternal, LevelHigh, "failed to get code information from runtime.Caller")
+	ErrTracingDataChecksum      = New(codeTracingDataChecksum, ClassFunctional, ScopeInternal, LevelHigh, "calc data checksum")
+	ErrTracingGetTSO            = New(codeTracingGetTSO, ClassFunctional, ScopeInternal, LevelHigh, "get tso")
 
 	// Config related error
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s")

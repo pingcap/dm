@@ -14,7 +14,6 @@
 package tracing
 
 import (
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/pb"
@@ -31,7 +30,7 @@ func convertMySQLPos(pos mysql.Position) *pb.MySQLPosition {
 func (t *Tracer) CollectSyncerBinlogEvent(source string, safeMode, tryReSync bool, globalPos, currentPos mysql.Position, eventType, opType int32) (*pb.SyncerBinlogEvent, error) {
 	base, err := t.collectBaseEvent(source, "", "", pb.TraceType_BinlogEvent)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	syncerState := &pb.SyncerState{
 		SafeMode:   safeMode,
@@ -68,7 +67,7 @@ func (t *Tracer) FinishedSyncerJobState(err error) pb.SyncerJobState {
 func (t *Tracer) CollectSyncerJobEvent(traceID string, traceGID string, opType int32, pos, currentPos mysql.Position, queueBucket, sql string, ddls []string, args []interface{}, req *pb.ExecDDLRequest, state pb.SyncerJobState) (*pb.SyncerJobEvent, error) {
 	base, err := t.collectBaseEvent("", traceID, traceGID, pb.TraceType_JobEvent)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	event := &pb.SyncerJobEvent{
 		Base:        base,
