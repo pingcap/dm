@@ -25,17 +25,14 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 
-	"github.com/pingcap/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"go.uber.org/zap"
 )
-
-// ErrInValidHandler indicates we meet an invalid dbOperator.
-var ErrInValidHandler = errors.New("handler is nil, please pass a leveldb.DB or leveldb.Transaction")
 
 var (
 	// GCBatchSize is batch size for gc process
@@ -73,7 +70,7 @@ func (p *Pointer) MarshalBinary() ([]byte, error) {
 // UnmarshalBinary implement encoding.BinaryMarshal
 func (p *Pointer) UnmarshalBinary(data []byte) error {
 	if len(data) != 8 {
-		return errors.Errorf("not valid length data as pointer % X", data)
+		return terror.ErrWorkerLogPointerInvalid.Generate(data)
 	}
 
 	p.Location = int64(binary.BigEndian.Uint64(data))
@@ -84,7 +81,7 @@ func (p *Pointer) UnmarshalBinary(data []byte) error {
 func LoadHandledPointer(h dbOperator) (Pointer, error) {
 	var p Pointer
 	if whetherNil(h) {
-		return p, errors.Trace(ErrInValidHandler)
+		return p, terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
 	value, err := h.Get(HandledPointerKey, nil)
@@ -94,12 +91,12 @@ func LoadHandledPointer(h dbOperator) (Pointer, error) {
 			return p, nil
 		}
 
-		return p, errors.Annotatef(err, "fetch handled pointer")
+		return p, terror.ErrWorkerLogFetchPointer.Delegate(err)
 	}
 
 	err = p.UnmarshalBinary(value)
 	if err != nil {
-		return p, errors.Annotatef(err, "unmarshal handle pointer % X", value)
+		return p, terror.ErrWorkerLogUnmarshalPointer.Delegate(err, value)
 	}
 
 	return p, nil
@@ -108,11 +105,11 @@ func LoadHandledPointer(h dbOperator) (Pointer, error) {
 // ClearHandledPointer clears the handled pointer in kv DB.
 func ClearHandledPointer(tctx *tcontext.Context, h dbOperator) error {
 	if whetherNil(h) {
-		return errors.Trace(ErrInValidHandler)
+		return terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
 	err := h.Delete(HandledPointerKey, nil)
-	return errors.Annotate(err, "clear handled pointer")
+	return terror.ErrWorkerLogClearPointer.Delegate(err)
 }
 
 var (
@@ -125,7 +122,7 @@ var (
 // DecodeTaskLogKey decodes task log key and returns its log ID
 func DecodeTaskLogKey(key []byte) (int64, error) {
 	if len(key) != len(TaskLogPrefix)+8 {
-		return 0, errors.Errorf("not valid length data as task log key % X", key)
+		return 0, terror.ErrWorkerLogTaskKeyNotValid.Generate(key)
 	}
 
 	return int64(binary.BigEndian.Uint64(key[len(TaskLogPrefix):])), nil
@@ -151,12 +148,12 @@ type Logger struct {
 // Initial initials Logger
 func (logger *Logger) Initial(h dbOperator) ([]*pb.TaskLog, error) {
 	if whetherNil(h) {
-		return nil, errors.Trace(ErrInValidHandler)
+		return nil, terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
 	handledPointer, err := LoadHandledPointer(h)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	var (
@@ -172,7 +169,7 @@ func (logger *Logger) Initial(h dbOperator) ([]*pb.TaskLog, error) {
 		opLog := &pb.TaskLog{}
 		err = opLog.Unmarshal(logBytes)
 		if err != nil {
-			err = errors.Annotatef(err, "unmarshal task log % X", logBytes)
+			err = terror.ErrWorkerLogUnmarshalTaskKey.Delegate(err, logBytes)
 			break
 		}
 
@@ -187,12 +184,12 @@ func (logger *Logger) Initial(h dbOperator) ([]*pb.TaskLog, error) {
 	}
 	iter.Release()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	err = iter.Error()
 	if err != nil {
-		return nil, errors.Annotatef(err, "fetch logs from meta with handle pointer %+v", handledPointer)
+		return nil, terror.ErrWorkerLogFetchLogIter.Delegate(err, handledPointer)
 	}
 
 	logger.handledPointer = handledPointer
@@ -206,7 +203,7 @@ func (logger *Logger) Initial(h dbOperator) ([]*pb.TaskLog, error) {
 // GetTaskLog returns task log by given log ID
 func (logger *Logger) GetTaskLog(h dbOperator, id int64) (*pb.TaskLog, error) {
 	if whetherNil(h) {
-		return nil, errors.Trace(ErrInValidHandler)
+		return nil, terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
 	logBytes, err := h.Get(EncodeTaskLogKey(id), nil)
@@ -214,13 +211,13 @@ func (logger *Logger) GetTaskLog(h dbOperator, id int64) (*pb.TaskLog, error) {
 		if err == leveldb.ErrNotFound {
 			return nil, nil
 		}
-		return nil, errors.Annotatef(err, "get task log %d from leveldb", id)
+		return nil, terror.ErrWorkerLogGetTaskLog.Delegate(err, id)
 	}
 
 	opLog := &pb.TaskLog{}
 	err = opLog.Unmarshal(logBytes)
 	if err != nil {
-		return nil, errors.Annotatef(err, "unmarshal task log binary % X", logBytes)
+		return nil, terror.ErrWorkerLogUnmarshalBinary.Delegate(err, logBytes)
 	}
 
 	return opLog, nil
@@ -230,7 +227,7 @@ func (logger *Logger) GetTaskLog(h dbOperator, id int64) (*pb.TaskLog, error) {
 // not thread safe
 func (logger *Logger) ForwardTo(h dbOperator, ID int64) error {
 	if whetherNil(h) {
-		return errors.Trace(ErrInValidHandler)
+		return terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
 	handledPointer := Pointer{
@@ -241,7 +238,7 @@ func (logger *Logger) ForwardTo(h dbOperator, ID int64) error {
 
 	err := h.Put(HandledPointerKey, handledPointerBytes, nil)
 	if err != nil {
-		return errors.Annotatef(err, "forward handled pointer to %d", ID)
+		return terror.ErrWorkerLogForwardPointer.Delegate(err, ID)
 	}
 
 	logger.handledPointer = handledPointer
@@ -251,26 +248,26 @@ func (logger *Logger) ForwardTo(h dbOperator, ID int64) error {
 // MarkAndForwardLog marks result sucess or not in log, and forwards handledPointer
 func (logger *Logger) MarkAndForwardLog(h dbOperator, opLog *pb.TaskLog) error {
 	if whetherNil(h) {
-		return errors.Trace(ErrInValidHandler)
+		return terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
 	logBytes, err := opLog.Marshal()
 	if err != nil {
-		return errors.Annotatef(err, "marshal task log %+v", opLog)
+		return terror.ErrWorkerLogMarshalTask.Delegate(err, opLog)
 	}
 
 	err = h.Put(EncodeTaskLogKey(opLog.Id), logBytes, nil)
 	if err != nil {
-		return errors.Annotatef(err, "save task log %d", opLog.Id)
+		return terror.ErrWorkerLogSaveTask.Delegate(err, opLog.Id)
 	}
 
-	return errors.Trace(logger.ForwardTo(h, opLog.Id))
+	return logger.ForwardTo(h, opLog.Id)
 }
 
 // Append appends a task log
 func (logger *Logger) Append(h dbOperator, opLog *pb.TaskLog) error {
 	if whetherNil(h) {
-		return errors.Trace(ErrInValidHandler)
+		return terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
 	var id int64
@@ -285,12 +282,12 @@ func (logger *Logger) Append(h dbOperator, opLog *pb.TaskLog) error {
 	opLog.Ts = time.Now().UnixNano()
 	logBytes, err := opLog.Marshal()
 	if err != nil {
-		return errors.Annotatef(err, "marshal task log %+v", opLog)
+		return terror.ErrWorkerLogMarshalTask.Delegate(err, opLog)
 	}
 
 	err = h.Put(EncodeTaskLogKey(id), logBytes, nil)
 	if err != nil {
-		return errors.Annotatef(err, "save task log %+v", opLog)
+		return terror.ErrWorkerLogSaveTask.Delegate(err, opLog)
 	}
 
 	return nil
@@ -318,7 +315,7 @@ func (logger *Logger) GC(ctx context.Context, h dbOperator) {
 
 func (logger *Logger) doGC(h dbOperator, id int64) {
 	if whetherNil(h) {
-		logger.l.Error(ErrInValidHandler.Error(), zap.String("feature", "gc"))
+		logger.l.Error(terror.ErrWorkerLogInvalidHandler.Error(), zap.String("feature", "gc"))
 		return
 	}
 
@@ -367,7 +364,7 @@ func (logger *Logger) doGC(h dbOperator, id int64) {
 
 // ClearOperationLog clears the task operation log.
 func ClearOperationLog(tctx *tcontext.Context, h dbOperator) error {
-	return errors.Annotate(clearByPrefix(tctx, h, TaskLogPrefix), "clear task operation log")
+	return terror.Annotate(clearByPrefix(tctx, h, TaskLogPrefix), "clear task operation log")
 }
 
 // **************** task meta oepration *************** //
@@ -389,7 +386,7 @@ func EncodeTaskMetaKey(name string) []byte {
 // LoadTaskMetas loads all task metas from kv db
 func LoadTaskMetas(h dbOperator) (map[string]*pb.TaskMeta, error) {
 	if whetherNil(h) {
-		return nil, errors.Trace(ErrInValidHandler)
+		return nil, terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
 	var (
@@ -403,7 +400,7 @@ func LoadTaskMetas(h dbOperator) (map[string]*pb.TaskMeta, error) {
 		task := &pb.TaskMeta{}
 		err = task.Unmarshal(taskBytes)
 		if err != nil {
-			err = errors.Annotatef(err, "unmarshal task meta % X", taskBytes)
+			err = terror.ErrWorkerLogUnmarshalTaskMeta.Delegate(err, taskBytes)
 			break
 		}
 
@@ -411,12 +408,12 @@ func LoadTaskMetas(h dbOperator) (map[string]*pb.TaskMeta, error) {
 	}
 	iter.Release()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.ErrWorkerLogFetchTaskFromMeta.Delegate(err)
 	}
 
 	err = iter.Error()
 	if err != nil {
-		return nil, errors.Annotatef(err, "fetch tasks from meta with prefix % X", TaskMetaPrefix)
+		return nil, terror.ErrWorkerLogFetchTaskFromMeta.Delegate(err, TaskMetaPrefix)
 	}
 
 	return tasks, nil
@@ -425,22 +422,22 @@ func LoadTaskMetas(h dbOperator) (map[string]*pb.TaskMeta, error) {
 // SetTaskMeta saves task meta into kv db
 func SetTaskMeta(h dbOperator, task *pb.TaskMeta) error {
 	if whetherNil(h) {
-		return errors.Trace(ErrInValidHandler)
+		return terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
 	err := VerifyTaskMeta(task)
 	if err != nil {
-		return errors.Annotatef(err, "verify task meta %+v", task)
+		return terror.Annotatef(err, "verify task meta %+v", task)
 	}
 
 	taskBytes, err := task.Marshal()
 	if err != nil {
-		return errors.Annotatef(err, "marshal task %+v", task)
+		return terror.ErrWorkerLogMarshalTask.Delegate(err, task)
 	}
 
 	err = h.Put(EncodeTaskMetaKey(task.Name), taskBytes, nil)
 	if err != nil {
-		return errors.Annotatef(err, "save task meta %s into kv db", task.Name)
+		return terror.ErrWorkerLogSaveTask.Delegate(err, task.Name)
 	}
 
 	return nil
@@ -449,18 +446,18 @@ func SetTaskMeta(h dbOperator, task *pb.TaskMeta) error {
 // GetTaskMeta returns task meta by given name
 func GetTaskMeta(h dbOperator, name string) (*pb.TaskMeta, error) {
 	if whetherNil(h) {
-		return nil, errors.Trace(ErrInValidHandler)
+		return nil, terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
 	taskBytes, err := h.Get(EncodeTaskMetaKey(name), nil)
 	if err != nil {
-		return nil, errors.Annotatef(err, "get task meta %s from leveldb", name)
+		return nil, terror.ErrWorkerLogGetTaskMeta.Delegate(err, name)
 	}
 
 	task := &pb.TaskMeta{}
 	err = task.Unmarshal(taskBytes)
 	if err != nil {
-		return nil, errors.Annotatef(err, "unmarshal binary % X", taskBytes)
+		return nil, terror.ErrWorkerLogUnmarshalBinary.Delegate(err, taskBytes)
 	}
 
 	return task, nil
@@ -469,12 +466,12 @@ func GetTaskMeta(h dbOperator, name string) (*pb.TaskMeta, error) {
 // DeleteTaskMeta delete task meta from kv DB
 func DeleteTaskMeta(h dbOperator, name string) error {
 	if whetherNil(h) {
-		return errors.Trace(ErrInValidHandler)
+		return terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
 	err := h.Delete(EncodeTaskMetaKey(name), nil)
 	if err != nil {
-		return errors.Annotatef(err, "delete task meta %s from kv db", name)
+		return terror.ErrWorkerLogDeleteTaskMeta.Delegate(err, name)
 	}
 
 	return nil
@@ -482,29 +479,29 @@ func DeleteTaskMeta(h dbOperator, name string) error {
 
 // ClearTaskMeta clears all task meta in kv DB.
 func ClearTaskMeta(tctx *tcontext.Context, h dbOperator) error {
-	return errors.Annotate(clearByPrefix(tctx, h, TaskMetaPrefix), "clear task meta")
+	return terror.Annotate(clearByPrefix(tctx, h, TaskMetaPrefix), "clear task meta")
 }
 
 // VerifyTaskMeta verify legality of take meta
 func VerifyTaskMeta(task *pb.TaskMeta) error {
 	if task == nil {
-		return errors.Errorf("empty task")
+		return terror.ErrWorkerLogVerifyTaskMeta.New("empty task not valid")
 	}
 
 	if len(task.Name) == 0 {
-		return errors.NotValidf("empty task name")
+		return terror.ErrWorkerLogVerifyTaskMeta.New("empty task name not valid")
 	}
 
 	if len(task.Task) == 0 {
-		return errors.NotValidf("empty task config")
+		return terror.ErrWorkerLogVerifyTaskMeta.New("empty task config not valid")
 	}
 
 	if task.Stage == pb.Stage_InvalidStage {
-		return errors.NotValidf("stage")
+		return terror.ErrWorkerLogVerifyTaskMeta.Generatef("stage %s not valid", task.Stage)
 	}
 
 	if task.Op == pb.TaskOp_InvalidOp {
-		return errors.NotValidf("task operation")
+		return terror.ErrWorkerLogVerifyTaskMeta.Generatef("task operation %s not valid", task.Op)
 	}
 
 	return nil
@@ -532,7 +529,7 @@ func whetherNil(handler interface{}) bool {
 // clearByPrefix clears all keys with the specified prefix.
 func clearByPrefix(tctx *tcontext.Context, h dbOperator, prefix []byte) error {
 	if whetherNil(h) {
-		return errors.Trace(ErrInValidHandler)
+		return terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
 	var err error
@@ -544,7 +541,7 @@ func clearByPrefix(tctx *tcontext.Context, h dbOperator, prefix []byte) error {
 			err = h.Write(batch, nil)
 			if err != nil {
 				iter.Release()
-				return errors.Annotatef(err, "delete kv with prefix % X until % X", prefix, iter.Key())
+				return terror.ErrWorkerLogDeleteKV.Delegate(err, prefix, iter.Key())
 			}
 			tctx.L().Info("delete task operation log kv", zap.Binary("with prefix", prefix), zap.Binary("< key", iter.Key()))
 			batch.Reset()
@@ -553,11 +550,11 @@ func clearByPrefix(tctx *tcontext.Context, h dbOperator, prefix []byte) error {
 	iter.Release()
 	err = iter.Error()
 	if err != nil {
-		return errors.Annotatef(err, "iterate kv with prefix % X", prefix)
+		return terror.ErrWorkerLogDeleteKVIter.Delegate(err, prefix)
 	}
 
 	if batch.Len() > 0 {
 		err = h.Write(batch, nil)
 	}
-	return errors.Annotatef(err, "clear kv with prefix % X", prefix)
+	return terror.ErrWorkerLogDeleteKV.Delegate(err, prefix)
 }

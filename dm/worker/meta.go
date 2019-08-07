@@ -24,9 +24,9 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/BurntSushi/toml"
-	"github.com/pingcap/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"go.uber.org/zap"
 )
@@ -43,7 +43,7 @@ func (m *Meta) Toml() (string, error) {
 	enc := toml.NewEncoder(&b)
 	err := enc.Encode(m)
 	if err != nil {
-		return "", errors.Trace(err)
+		return "", terror.ErrWorkerMetaTomlTransform.Delegate(err)
 	}
 	return b.String(), nil
 }
@@ -52,7 +52,7 @@ func (m *Meta) Toml() (string, error) {
 func (m *Meta) DecodeFile(fpath string) error {
 	_, err := toml.DecodeFile(fpath, m)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrWorkerMetaTomlTransform.Delegate(err)
 	}
 
 	return m.adjust()
@@ -62,7 +62,7 @@ func (m *Meta) DecodeFile(fpath string) error {
 func (m *Meta) Decode(data string) error {
 	_, err := toml.Decode(data, m)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrWorkerMetaTomlTransform.Delegate(err)
 	}
 
 	return m.adjust()
@@ -73,7 +73,7 @@ func (m *Meta) adjust() error {
 	for name, subTask := range m.SubTasks {
 		err := subTask.Adjust()
 		if err != nil {
-			return errors.Annotatef(err, "task %s", name)
+			return terror.Annotatef(err, "task %s", name)
 		}
 	}
 	return nil
@@ -119,12 +119,12 @@ func NewMetadata(dir string, db *leveldb.DB) (*Metadata, error) {
 	err := meta.tryToRecoverMetaFromOldFashion(oldPath)
 	if err != nil {
 		meta.l.Error("fail to recover from old metadata file, meta file may be corrupt", zap.String("old meta file", oldPath), log.ShortError(err))
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	err = meta.loadFromDB()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	meta.ctx, meta.cancel = context.WithCancel(context.Background())
@@ -176,7 +176,7 @@ func (meta *Metadata) GetTask(name string) (task *pb.TaskMeta) {
 // GetTaskLog returns task log by give log ID
 func (meta *Metadata) GetTaskLog(opLogID int64) (*pb.TaskLog, error) {
 	log, err := meta.log.GetTaskLog(meta.db, opLogID)
-	return log, errors.Trace(err)
+	return log, err
 }
 
 // PeekLog returns first need to be handled task log
@@ -200,7 +200,7 @@ func (meta *Metadata) AppendOperation(subTask *pb.TaskMeta) (int64, error) {
 	}
 
 	if err := meta.log.Append(meta.db, opLog); err != nil {
-		return 0, errors.Trace(err)
+		return 0, err
 	}
 
 	meta.logs = append(meta.logs, opLog)
@@ -213,22 +213,22 @@ func (meta *Metadata) MarkOperation(log *pb.TaskLog) error {
 	defer meta.Unlock()
 
 	if len(meta.logs) == 0 {
-		return errors.NotFoundf("any task operation log")
+		return terror.ErrWorkerMetaTaskLogNotFound.Generate()
 	}
 
 	if meta.logs[0].Id != log.Id {
-		return errors.Errorf("please handle task operation order by log ID, the log need to be handled is %+v, not %+v", meta.logs[0], log)
+		return terror.ErrWorkerMetaHandleTaskOrder.Generate(meta.logs[0], log)
 	}
 
 	txn, err := meta.db.OpenTransaction()
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrWorkerMetaOpenTxn.Delegate(err)
 	}
 
 	err = meta.log.MarkAndForwardLog(txn, log)
 	if err != nil {
 		txn.Discard()
-		return errors.Trace(err)
+		return err
 	}
 
 	if log.Success {
@@ -239,13 +239,13 @@ func (meta *Metadata) MarkOperation(log *pb.TaskLog) error {
 		}
 		if err != nil {
 			txn.Discard()
-			return errors.Trace(err)
+			return err
 		}
 	}
 
 	err = txn.Commit()
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrWorkerMetaCommitTxn.Delegate(err)
 	}
 
 	if log.Success {
@@ -262,12 +262,12 @@ func (meta *Metadata) MarkOperation(log *pb.TaskLog) error {
 func (meta *Metadata) loadFromDB() (err error) {
 	meta.logs, err = meta.log.Initial(meta.db)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	meta.tasks, err = LoadTaskMetas(meta.db)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	return nil
@@ -278,7 +278,7 @@ func (meta *Metadata) tryToRecoverMetaFromOldFashion(path string) error {
 	_, err := os.Stat(path)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			return errors.Trace(err)
+			return terror.ErrWorkerMetaOldFileStat.Delegate(err)
 		}
 		return nil
 	}
@@ -286,13 +286,13 @@ func (meta *Metadata) tryToRecoverMetaFromOldFashion(path string) error {
 	// old metadata file exists, recover metadata from it
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
-		return errors.Annotatef(err, "read old metadata file %s", path)
+		return terror.ErrWorkerMetaOldReadFile.Delegate(err, path)
 	}
 
 	oldMeta := &Meta{}
 	err = oldMeta.Decode(string(data))
 	if err != nil {
-		return errors.Annotatef(err, "decode old metadata file %s", path)
+		return terror.Annotatef(err, "decode old metadata file %s", path)
 	}
 
 	meta.l.Info("find tasks from old metadata file", zap.Int("task number", len(oldMeta.SubTasks)))
@@ -303,7 +303,7 @@ func (meta *Metadata) tryToRecoverMetaFromOldFashion(path string) error {
 		enc := toml.NewEncoder(&b)
 		err = enc.Encode(task)
 		if err != nil {
-			return errors.Annotatef(err, "encode task %v", task)
+			return terror.ErrWorkerMetaEncodeTask.Delegate(err, task)
 		}
 
 		taskMeta := &pb.TaskMeta{
@@ -315,9 +315,9 @@ func (meta *Metadata) tryToRecoverMetaFromOldFashion(path string) error {
 
 		err := SetTaskMeta(meta.db, taskMeta)
 		if err != nil {
-			return errors.Errorf("fail to set task meta %s error message: %v", taskMeta.Name, err)
+			return terror.Annotatef(err, "failed to set task meta %s error message: %v", taskMeta.Name)
 		}
 	}
 
-	return errors.Trace(os.Remove(path))
+	return terror.ErrWorkerMetaRemoveOldDir.Delegate(os.Remove(path))
 }
