@@ -212,9 +212,10 @@ func (e *Error) Equal(err error) bool {
 
 // SetMessage clones an Error and resets its message
 func (e *Error) SetMessage(message string) *Error {
-	err := e
+	err := *e
 	err.message = message
-	return err
+	err.args = append([]interface{}{}, e.args...)
+	return &err
 }
 
 // New generates a new *Error with the same class and code, and replace message with new message
