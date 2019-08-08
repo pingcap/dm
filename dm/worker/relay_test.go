@@ -240,7 +240,7 @@ func (t *testRelay) testPauseAndResume(c *C, holder *realRelayHolder) {
 	c.Assert(holder.closed.Get(), Equals, closedFalse)
 
 	err = holder.pauseRelay(context.Background(), &pb.OperateRelayRequest{Op: pb.RelayOp_PauseRelay})
-	c.Assert(err, ErrorMatches, "current stage is Paused.*")
+	c.Assert(err, ErrorMatches, ".*current stage is Paused.*")
 
 	// test status
 	status := holder.Status()
@@ -259,7 +259,7 @@ func (t *testRelay) testPauseAndResume(c *C, holder *realRelayHolder) {
 	c.Assert(holder.closed.Get(), Equals, closedFalse)
 
 	err = holder.Operate(context.Background(), &pb.OperateRelayRequest{Op: pb.RelayOp_ResumeRelay})
-	c.Assert(err, ErrorMatches, "current stage is Running.*")
+	c.Assert(err, ErrorMatches, ".*current stage is Running.*")
 
 	// test status
 	status = holder.Status()

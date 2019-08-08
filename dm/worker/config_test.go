@@ -86,7 +86,7 @@ aaa = "xxx"
 	c.Assert(err, IsNil)
 	err = cfg.configFromFile(configFile)
 	c.Assert(err, NotNil)
-	c.Assert(err, ErrorMatches, ".*worker config contained unknown configuration options: aaa*")
+	c.Assert(err, ErrorMatches, ".*worker config contains unknown configuration options: aaa")
 }
 
 func (t *testServer) TestConfigVerify(c *C) {
