@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go/sync2"
 	"github.com/syndtr/goleveldb/leveldb"
 	"go.uber.org/zap"
@@ -707,7 +708,14 @@ func (w *Worker) restoreSubTask() error {
 var maxRetryCount = 10
 
 func (w *Worker) handleTask() {
-	ticker := time.NewTicker(time.Second)
+	var handleTaskInterval = time.Second
+	failpoint.Inject("handleTaskInternal", func(val failpoint.Value) {
+		if milliseconds, ok := val.(int); ok {
+			handleTaskInterval = time.Duration(milliseconds) * time.Millisecond
+			w.l.Info("set handleTaskInterval", zap.String("failpoint", "handleTaskInternal"), zap.Int("value", milliseconds))
+		}
+	})
+	ticker := time.NewTicker(handleTaskInterval)
 	defer ticker.Stop()
 
 	retryCnt := 0
@@ -827,7 +835,11 @@ Loop:
 			// fill current task config
 			if len(opLog.Task.Task) == 0 {
 				tm := w.meta.GetTask(opLog.Task.Name)
-				opLog.Task.Task = append([]byte{}, tm.Task...)
+				if tm == nil {
+					w.l.Warn("task meta not found", zap.String("task", opLog.Task.Name))
+				} else {
+					opLog.Task.Task = append([]byte{}, tm.Task...)
+				}
 			}
 
 			err = w.meta.MarkOperation(opLog)

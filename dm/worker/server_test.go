@@ -132,6 +132,7 @@ func (t *testServer) TestServer(c *C) {
 
 	// test worker, just make sure testing sort
 	t.testWorker(c)
+	t.testWorkerHandleTask(c)
 }
 
 func (t *testServer) testHTTPInterface(c *C, uri string) {
