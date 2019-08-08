@@ -355,6 +355,34 @@ const (
 	codeWorkerMetaCommitTxn
 	codeWorkerRelayStageNotValid
 	codeWorkerRelayOperNotSupport
+	codeWorkerOpenKVDBFile
+	codeWorkerUpgradeCheckKVDir
+	codeWorkerMarshalVerBinary
+	codeWorkerUnmarshalVerBinary
+	codeWorkerGetVersionFromKV
+	codeWorkerSaveVersionToKV
+	codeWorkerVerAutoDowngrade
+	codeWorkerStartService
+	codeWorkerAlreadyClosed
+	codeWorkerNotRunningStage
+	codeWorkerNotPausedStage
+	codeWorkerUpdateTaskStage
+	codeWorkerMigrateStopRelay
+	codeWorkerSubTaskNotFound
+	codeWorkerSubTaskExists
+	codeWorkerOperSyncUnitOnly
+	codeWorkerRelayUnitStage
+	codeWorkerNoSyncerRunning
+	codeWorkerCannotUpdateSourceID
+	codeWorkerNoAvailUnits
+	codeWorkerDDLLockInfoNotFound
+	codeWorkerDDLLockInfoExists
+	codeWorkerCacheDDLInfoExists
+	codeWorkerExecSkipDDLConflict
+	codeWorkerExecDDLSyncerOnly
+	codeWorkerExecDDLTimeout
+	codeWorkerWaitRelayCatchupTimeout
+	codeWorkerRelayIsPurging
 )
 
 // Error instances
@@ -662,43 +690,71 @@ var (
 	ErrSyncerUnitExecWithNoBlockingDDL      = New(codeSyncerUnitExecWithNoBlockingDDL, ClassSyncUnit, ScopeInternal, LevelHigh, "process unit not waiting for sharding DDL to sync")
 
 	// DM-worker error
-	ErrWorkerParseFlagSet          = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set")
-	ErrWorkerInvalidFlag           = New(codeWorkerInvalidFlag, ClassDMWorker, ScopeInternal, LevelMedium, "'%s' is an invalid flag")
-	ErrWorkerDecodeConfigFromFile  = New(codeWorkerDecodeConfigFromFile, ClassDMWorker, ScopeInternal, LevelMedium, "toml decode file")
-	ErrWorkerUndecodedItemFromFile = New(codeWorkerUndecodedItemFromFile, ClassDMWorker, ScopeInternal, LevelMedium, "worker config contains unknown configuration options: %s")
-	ErrWorkerNeedSourceID          = New(codeWorkerNeedSourceID, ClassDMWorker, ScopeInternal, LevelMedium, "dm-worker should bind a non-empty source ID which represents a MySQL/MariaDB instance or a replica group. \n notice: if you use old version dm-ansible, please update to newest version.")
-	ErrWorkerTooLongSourceID       = New(codeWorkerTooLongSourceID, ClassDMWorker, ScopeInternal, LevelMedium, "the length of source ID %s is more than max allowed value %d")
-	ErrWorkerRelayBinlogName       = New(codeWorkerRelayBinlogName, ClassDMWorker, ScopeInternal, LevelMedium, "relay-binlog-name %s not valid")
-	ErrWorkerWriteConfigFile       = New(codeWorkerWriteConfigFile, ClassDMWorker, ScopeInternal, LevelMedium, "write config to local file")
-	ErrWorkerLogInvalidHandler     = New(codeWorkerLogInvalidHandler, ClassDMWorker, ScopeInternal, LevelHigh, "handler is nil, please pass a leveldb.DB or leveldb.Transaction")
-	ErrWorkerLogPointerInvalid     = New(codeWorkerLogPointerInvalid, ClassDMWorker, ScopeInternal, LevelHigh, "not valid length data as pointer % X")
-	ErrWorkerLogFetchPointer       = New(codeWorkerLogFetchPointer, ClassDMWorker, ScopeInternal, LevelHigh, "fetch handled pointer")
-	ErrWorkerLogUnmarshalPointer   = New(codeWorkerLogUnmarshalPointer, ClassDMWorker, ScopeInternal, LevelHigh, "unmarshal handle pointer % X")
-	ErrWorkerLogClearPointer       = New(codeWorkerLogClearPointer, ClassDMWorker, ScopeInternal, LevelHigh, "clear handled pointer")
-	ErrWorkerLogTaskKeyNotValid    = New(codeWorkerLogTaskKeyNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "not valid length data as task log key % X")
-	ErrWorkerLogUnmarshalTaskKey   = New(codeWorkerLogUnmarshalTaskKey, ClassDMWorker, ScopeInternal, LevelHigh, "unmarshal task log % X")
-	ErrWorkerLogFetchLogIter       = New(codeWorkerLogFetchLogIter, ClassDMWorker, ScopeInternal, LevelHigh, "fetch logs from meta with handle pointer %+v")
-	ErrWorkerLogGetTaskLog         = New(codeWorkerLogGetTaskLog, ClassDMWorker, ScopeInternal, LevelHigh, "get task log %d from leveldb")
-	ErrWorkerLogUnmarshalBinary    = New(codeWorkerLogUnmarshalBinary, ClassDMWorker, ScopeInternal, LevelHigh, "unmarshal task log binary % X")
-	ErrWorkerLogForwardPointer     = New(codeWorkerLogForwardPointer, ClassDMWorker, ScopeInternal, LevelHigh, "forward handled pointer to %d")
-	ErrWorkerLogMarshalTask        = New(codeWorkerLogMarshalTask, ClassDMWorker, ScopeInternal, LevelHigh, "marshal task log %+v")
-	ErrWorkerLogSaveTask           = New(codeWorkerLogSaveTask, ClassDMWorker, ScopeInternal, LevelHigh, "save task log %d")
-	ErrWorkerLogDeleteKV           = New(codeWorkerLogDeleteKV, ClassDMWorker, ScopeInternal, LevelHigh, "delete kv with prefix % X until % X")
-	ErrWorkerLogDeleteKVIter       = New(codeWorkerLogDeleteKVIter, ClassDMWorker, ScopeInternal, LevelHigh, "iterate kv with prefix % X")
-	ErrWorkerLogUnmarshalTaskMeta  = New(codeWorkerLogUnmarshalTaskMeta, ClassDMWorker, ScopeInternal, LevelHigh, "unmarshal task meta % X")
-	ErrWorkerLogFetchTaskFromMeta  = New(codeWorkerLogFetchTaskFromMeta, ClassDMWorker, ScopeInternal, LevelHigh, "fetch tasks from meta with prefix % X")
-	ErrWorkerLogVerifyTaskMeta     = New(codeWorkerLogVerifyTaskMeta, ClassDMWorker, ScopeInternal, LevelHigh, "")
-	ErrWorkerLogGetTaskMeta        = New(codeWorkerLogGetTaskMeta, ClassDMWorker, ScopeInternal, LevelHigh, "get task meta %s from kv db")
-	ErrWorkerLogDeleteTaskMeta     = New(codeWorkerLogDeleteTaskMeta, ClassDMWorker, ScopeInternal, LevelHigh, "delete task meta %s from kv db")
-	ErrWorkerMetaTomlTransform     = New(codeWorkerMetaTomlTransform, ClassDMWorker, ScopeInternal, LevelHigh, "meta toml transform")
-	ErrWorkerMetaOldFileStat       = New(codeWorkerMetaOldFileStat, ClassDMWorker, ScopeInternal, LevelHigh, "file stat")
-	ErrWorkerMetaOldReadFile       = New(codeWorkerMetaOldReadFile, ClassDMWorker, ScopeInternal, LevelHigh, "read old metadata file %s")
-	ErrWorkerMetaEncodeTask        = New(codeWorkerMetaEncodeTask, ClassDMWorker, ScopeInternal, LevelHigh, "encode task %v")
-	ErrWorkerMetaRemoveOldDir      = New(codeWorkerMetaRemoveOldDir, ClassDMWorker, ScopeInternal, LevelHigh, "remove old meta dir")
-	ErrWorkerMetaTaskLogNotFound   = New(codeWorkerMetaTaskLogNotFound, ClassDMWorker, ScopeInternal, LevelHigh, "any task operation log not found")
-	ErrWorkerMetaHandleTaskOrder   = New(codeWorkerMetaHandleTaskOrder, ClassDMWorker, ScopeInternal, LevelHigh, "please handle task operation order by log ID, the log need to be handled is %+v, not %+v")
-	ErrWorkerMetaOpenTxn           = New(codeWorkerMetaOpenTxn, ClassDMWorker, ScopeInternal, LevelHigh, "open kv db txn")
-	ErrWorkerMetaCommitTxn         = New(codeWorkerMetaCommitTxn, ClassDMWorker, ScopeInternal, LevelHigh, "commit kv db txn")
-	ErrWorkerRelayStageNotValid    = New(codeWorkerRelayStageNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "current stage is %s, %s required")
-	ErrWorkerRelayOperNotSupport   = New(codeWorkerRelayOperNotSupport, ClassDMWorker, ScopeInternal, LevelHigh, "operation %s not supported")
+	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set")
+	ErrWorkerInvalidFlag             = New(codeWorkerInvalidFlag, ClassDMWorker, ScopeInternal, LevelMedium, "'%s' is an invalid flag")
+	ErrWorkerDecodeConfigFromFile    = New(codeWorkerDecodeConfigFromFile, ClassDMWorker, ScopeInternal, LevelMedium, "toml decode file")
+	ErrWorkerUndecodedItemFromFile   = New(codeWorkerUndecodedItemFromFile, ClassDMWorker, ScopeInternal, LevelMedium, "worker config contains unknown configuration options: %s")
+	ErrWorkerNeedSourceID            = New(codeWorkerNeedSourceID, ClassDMWorker, ScopeInternal, LevelMedium, "dm-worker should bind a non-empty source ID which represents a MySQL/MariaDB instance or a replica group. \n notice: if you use old version dm-ansible, please update to newest version.")
+	ErrWorkerTooLongSourceID         = New(codeWorkerTooLongSourceID, ClassDMWorker, ScopeInternal, LevelMedium, "the length of source ID %s is more than max allowed value %d")
+	ErrWorkerRelayBinlogName         = New(codeWorkerRelayBinlogName, ClassDMWorker, ScopeInternal, LevelMedium, "relay-binlog-name %s not valid")
+	ErrWorkerWriteConfigFile         = New(codeWorkerWriteConfigFile, ClassDMWorker, ScopeInternal, LevelMedium, "write config to local file")
+	ErrWorkerLogInvalidHandler       = New(codeWorkerLogInvalidHandler, ClassDMWorker, ScopeInternal, LevelHigh, "handler is nil, please pass a leveldb.DB or leveldb.Transaction")
+	ErrWorkerLogPointerInvalid       = New(codeWorkerLogPointerInvalid, ClassDMWorker, ScopeInternal, LevelHigh, "not valid length data as pointer % X")
+	ErrWorkerLogFetchPointer         = New(codeWorkerLogFetchPointer, ClassDMWorker, ScopeInternal, LevelHigh, "fetch handled pointer")
+	ErrWorkerLogUnmarshalPointer     = New(codeWorkerLogUnmarshalPointer, ClassDMWorker, ScopeInternal, LevelHigh, "unmarshal handle pointer % X")
+	ErrWorkerLogClearPointer         = New(codeWorkerLogClearPointer, ClassDMWorker, ScopeInternal, LevelHigh, "clear handled pointer")
+	ErrWorkerLogTaskKeyNotValid      = New(codeWorkerLogTaskKeyNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "not valid length data as task log key % X")
+	ErrWorkerLogUnmarshalTaskKey     = New(codeWorkerLogUnmarshalTaskKey, ClassDMWorker, ScopeInternal, LevelHigh, "unmarshal task log % X")
+	ErrWorkerLogFetchLogIter         = New(codeWorkerLogFetchLogIter, ClassDMWorker, ScopeInternal, LevelHigh, "fetch logs from meta with handle pointer %+v")
+	ErrWorkerLogGetTaskLog           = New(codeWorkerLogGetTaskLog, ClassDMWorker, ScopeInternal, LevelHigh, "get task log %d from leveldb")
+	ErrWorkerLogUnmarshalBinary      = New(codeWorkerLogUnmarshalBinary, ClassDMWorker, ScopeInternal, LevelHigh, "unmarshal task log binary % X")
+	ErrWorkerLogForwardPointer       = New(codeWorkerLogForwardPointer, ClassDMWorker, ScopeInternal, LevelHigh, "forward handled pointer to %d")
+	ErrWorkerLogMarshalTask          = New(codeWorkerLogMarshalTask, ClassDMWorker, ScopeInternal, LevelHigh, "marshal task log %+v")
+	ErrWorkerLogSaveTask             = New(codeWorkerLogSaveTask, ClassDMWorker, ScopeInternal, LevelHigh, "save task log %d")
+	ErrWorkerLogDeleteKV             = New(codeWorkerLogDeleteKV, ClassDMWorker, ScopeInternal, LevelHigh, "delete kv with prefix % X until % X")
+	ErrWorkerLogDeleteKVIter         = New(codeWorkerLogDeleteKVIter, ClassDMWorker, ScopeInternal, LevelHigh, "iterate kv with prefix % X")
+	ErrWorkerLogUnmarshalTaskMeta    = New(codeWorkerLogUnmarshalTaskMeta, ClassDMWorker, ScopeInternal, LevelHigh, "unmarshal task meta % X")
+	ErrWorkerLogFetchTaskFromMeta    = New(codeWorkerLogFetchTaskFromMeta, ClassDMWorker, ScopeInternal, LevelHigh, "fetch tasks from meta with prefix % X")
+	ErrWorkerLogVerifyTaskMeta       = New(codeWorkerLogVerifyTaskMeta, ClassDMWorker, ScopeInternal, LevelHigh, "")
+	ErrWorkerLogGetTaskMeta          = New(codeWorkerLogGetTaskMeta, ClassDMWorker, ScopeInternal, LevelHigh, "get task meta %s from kv db")
+	ErrWorkerLogDeleteTaskMeta       = New(codeWorkerLogDeleteTaskMeta, ClassDMWorker, ScopeInternal, LevelHigh, "delete task meta %s from kv db")
+	ErrWorkerMetaTomlTransform       = New(codeWorkerMetaTomlTransform, ClassDMWorker, ScopeInternal, LevelHigh, "meta toml transform")
+	ErrWorkerMetaOldFileStat         = New(codeWorkerMetaOldFileStat, ClassDMWorker, ScopeInternal, LevelHigh, "file stat")
+	ErrWorkerMetaOldReadFile         = New(codeWorkerMetaOldReadFile, ClassDMWorker, ScopeInternal, LevelHigh, "read old metadata file %s")
+	ErrWorkerMetaEncodeTask          = New(codeWorkerMetaEncodeTask, ClassDMWorker, ScopeInternal, LevelHigh, "encode task %v")
+	ErrWorkerMetaRemoveOldDir        = New(codeWorkerMetaRemoveOldDir, ClassDMWorker, ScopeInternal, LevelHigh, "remove old meta dir")
+	ErrWorkerMetaTaskLogNotFound     = New(codeWorkerMetaTaskLogNotFound, ClassDMWorker, ScopeInternal, LevelHigh, "any task operation log not found")
+	ErrWorkerMetaHandleTaskOrder     = New(codeWorkerMetaHandleTaskOrder, ClassDMWorker, ScopeInternal, LevelHigh, "please handle task operation order by log ID, the log need to be handled is %+v, not %+v")
+	ErrWorkerMetaOpenTxn             = New(codeWorkerMetaOpenTxn, ClassDMWorker, ScopeInternal, LevelHigh, "open kv db txn")
+	ErrWorkerMetaCommitTxn           = New(codeWorkerMetaCommitTxn, ClassDMWorker, ScopeInternal, LevelHigh, "commit kv db txn")
+	ErrWorkerRelayStageNotValid      = New(codeWorkerRelayStageNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "current stage is %s, %s required")
+	ErrWorkerRelayOperNotSupport     = New(codeWorkerRelayOperNotSupport, ClassDMWorker, ScopeInternal, LevelHigh, "operation %s not supported")
+	ErrWorkerOpenKVDBFile            = New(codeWorkerOpenKVDBFile, ClassDMWorker, ScopeInternal, LevelHigh, "open kv db file")
+	ErrWorkerUpgradeCheckKVDir       = New(codeWorkerUpgradeCheckKVDir, ClassDMWorker, ScopeInternal, LevelHigh, "")
+	ErrWorkerMarshalVerBinary        = New(codeWorkerMarshalVerBinary, ClassDMWorker, ScopeInternal, LevelHigh, "marshal version %s to binary data")
+	ErrWorkerUnmarshalVerBinary      = New(codeWorkerUnmarshalVerBinary, ClassDMWorker, ScopeInternal, LevelHigh, "unmarshal version from data % X")
+	ErrWorkerGetVersionFromKV        = New(codeWorkerGetVersionFromKV, ClassDMWorker, ScopeInternal, LevelHigh, "load version with key %v from levelDB")
+	ErrWorkerSaveVersionToKV         = New(codeWorkerSaveVersionToKV, ClassDMWorker, ScopeInternal, LevelHigh, "save version %v into levelDB with key %v")
+	ErrWorkerVerAutoDowngrade        = New(codeWorkerVerAutoDowngrade, ClassDMWorker, ScopeInternal, LevelHigh, "the previous version %s is newer than current %s, automatic downgrade is not supported now, please handle it manually")
+	ErrWorkerStartService            = New(codeWorkerStartService, ClassDMWorker, ScopeInternal, LevelHigh, "start server")
+	ErrWorkerAlreadyClosed           = New(codeWorkerAlreadyClosed, ClassDMWorker, ScopeInternal, LevelHigh, "worker already closed")
+	ErrWorkerNotRunningStage         = New(codeWorkerNotRunningStage, ClassDMWorker, ScopeInternal, LevelHigh, "current stage is not running not valid")
+	ErrWorkerNotPausedStage          = New(codeWorkerNotPausedStage, ClassDMWorker, ScopeInternal, LevelHigh, "current stage is not paused not valid")
+	ErrWorkerUpdateTaskStage         = New(codeWorkerUpdateTaskStage, ClassDMWorker, ScopeInternal, LevelHigh, "can only update task on Paused stage, but current stage is %s")
+	ErrWorkerMigrateStopRelay        = New(codeWorkerMigrateStopRelay, ClassDMWorker, ScopeInternal, LevelHigh, "relay unit has stopped, can not be migrated")
+	ErrWorkerSubTaskNotFound         = New(codeWorkerSubTaskNotFound, ClassDMWorker, ScopeInternal, LevelHigh, "sub task with name %s not found")
+	ErrWorkerSubTaskExists           = New(codeWorkerSubTaskExists, ClassDMWorker, ScopeInternal, LevelHigh, "sub task %s already exists")
+	ErrWorkerOperSyncUnitOnly        = New(codeWorkerOperSyncUnitOnly, ClassDMWorker, ScopeInternal, LevelHigh, "such operation is only available for syncer, but now syncer is not running. current unit is %s")
+	ErrWorkerRelayUnitStage          = New(codeWorkerRelayUnitStage, ClassDMWorker, ScopeInternal, LevelHigh, "Worker's relay log unit in invalid stage: %s")
+	ErrWorkerNoSyncerRunning         = New(codeWorkerNoSyncerRunning, ClassDMWorker, ScopeInternal, LevelHigh, "there is a subtask does not run syncer")
+	ErrWorkerCannotUpdateSourceID    = New(codeWorkerCannotUpdateSourceID, ClassDMWorker, ScopeInternal, LevelHigh, "update source ID is not allowed")
+	ErrWorkerNoAvailUnits            = New(codeWorkerNoAvailUnits, ClassDMWorker, ScopeInternal, LevelHigh, "subtask %s has no dm units for mode %s")
+	ErrWorkerDDLLockInfoNotFound     = New(codeWorkerDDLLockInfoNotFound, ClassDMWorker, ScopeInternal, LevelHigh, "DDLLockInfo with ID %s not found")
+	ErrWorkerDDLLockInfoExists       = New(codeWorkerDDLLockInfoExists, ClassDMWorker, ScopeInternal, LevelHigh, "DDLLockInfo for task %s already exists")
+	ErrWorkerCacheDDLInfoExists      = New(codeWorkerCacheDDLInfoExists, ClassDMWorker, ScopeInternal, LevelHigh, "CacheDDLInfo for task %s already exists")
+	ErrWorkerExecSkipDDLConflict     = New(codeWorkerExecSkipDDLConflict, ClassDMWorker, ScopeInternal, LevelHigh, "execDDL and skipDDL can not specify both at the same time")
+	ErrWorkerExecDDLSyncerOnly       = New(codeWorkerExecDDLSyncerOnly, ClassDMWorker, ScopeInternal, LevelHigh, "only syncer support ExecuteDDL, but current unit is %s")
+	ErrWorkerExecDDLTimeout          = New(codeWorkerExecDDLTimeout, ClassDMWorker, ScopeInternal, LevelHigh, "ExecuteDDL timeout, try use `query-status` to query whether the DDL is still blocking")
+	ErrWorkerWaitRelayCatchupTimeout = New(codeWorkerWaitRelayCatchupTimeout, ClassDMWorker, ScopeInternal, LevelHigh, "wait relay catchup timeout, loader end binlog pos: %s, relay binlog pos: %s")
+	ErrWorkerRelayIsPurging          = New(codeWorkerRelayIsPurging, ClassDMWorker, ScopeInternal, LevelHigh, "relay log purger is purging, cannot start sub task %s, please try again later")
 )

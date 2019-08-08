@@ -30,6 +30,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var (
@@ -65,12 +66,12 @@ func (s *Server) Start() error {
 	var err error
 	s.rootLis, err = net.Listen("tcp", s.cfg.WorkerAddr)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrWorkerStartService.Delegate(err)
 	}
 
 	s.worker, err = NewWorker(s.cfg)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	s.wg.Add(1)
@@ -105,7 +106,7 @@ func (s *Server) Start() error {
 	if err != nil && common.IsErrNetClosing(err) {
 		err = nil
 	}
-	return errors.Trace(err)
+	return terror.ErrWorkerStartService.Delegate(err)
 }
 
 // Close close the RPC server
@@ -141,14 +142,14 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 	cfg := config.NewSubTaskConfig()
 	err := cfg.Decode(req.Task)
 	if err != nil {
-		err = errors.Annotatef(err, "decode subtask config from request %+v", req.Task)
+		err = terror.Annotatef(err, "decode subtask config from request %+v", req.Task)
 		log.L().Error("fail to decode task", zap.String("request", "StartSubTask"), zap.Stringer("payload", req), zap.Error(err))
 		return nil, err
 	}
 
 	opLogID, err := s.worker.StartSubTask(cfg)
 	if err != nil {
-		err = errors.Annotatef(err, "start sub task %s", cfg.Name)
+		err = terror.Annotatef(err, "start sub task %s", cfg.Name)
 		log.L().Error("fail to start subtask", zap.String("request", "StartSubTask"), zap.Stringer("payload", req), zap.Error(err))
 		return nil, err
 	}
@@ -168,7 +169,7 @@ func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskReque
 	log.L().Info("", zap.String("request", "OperateSubTask"), zap.Stringer("payload", req))
 	opLogID, err := s.worker.OperateSubTask(req.Name, req.Op)
 	if err != nil {
-		err = errors.Annotatef(err, "operate(%s) sub task %s", req.Op.String(), req.Name)
+		err = terror.Annotatef(err, "operate(%s) sub task %s", req.Op.String(), req.Name)
 		log.L().Error("fail to operate task", zap.String("request", "OperateSubTask"), zap.Stringer("payload", req), zap.Error(err))
 		return nil, err
 	}
@@ -189,14 +190,14 @@ func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest
 	cfg := config.NewSubTaskConfig()
 	err := cfg.Decode(req.Task)
 	if err != nil {
-		err = errors.Annotatef(err, "decode config from request %+v", req.Task)
+		err = terror.Annotatef(err, "decode config from request %+v", req.Task)
 		log.L().Error("fail to decode subtask", zap.String("request", "UpdateSubTask"), zap.Stringer("payload", req), zap.Error(err))
 		return nil, err
 	}
 
 	opLogID, err := s.worker.UpdateSubTask(cfg)
 	if err != nil {
-		err = errors.Annotatef(err, "update sub task %s", cfg.Name)
+		err = terror.Annotatef(err, "update sub task %s", cfg.Name)
 		log.L().Error("fail to update task", zap.String("request", "UpdateSubTask"), zap.Stringer("payload", req), zap.Error(err))
 		return nil, err
 	}
@@ -220,7 +221,7 @@ func (s *Server) QueryTaskOperation(ctx context.Context, req *pb.QueryTaskOperat
 
 	opLog, err := s.worker.meta.GetTaskLog(opLogID)
 	if err != nil {
-		err = errors.Annotatef(err, "fail to get operation %d of task %s", opLogID, taskName)
+		err = terror.Annotatef(err, "fail to get operation %d of task %s", opLogID, taskName)
 		log.L().Error(err.Error())
 		return nil, err
 	}

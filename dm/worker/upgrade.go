@@ -17,7 +17,6 @@ import (
 	"encoding/json"
 	"os"
 
-	"github.com/pingcap/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"go.uber.org/zap"
 
@@ -103,10 +102,10 @@ func loadVersion(tctx *tcontext.Context, h dbOperator) (ver version, err error) 
 			tctx.L().Warn("no version found in levelDB, use default version", zap.Stringer("default version", defaultPreviousWorkerVersion))
 			return defaultPreviousWorkerVersion, nil
 		}
-		return ver, errors.Annotatef(err, "load version with key %v from levelDB", dmWorkerVersionKey)
+		return ver, terror.ErrWorkerGetVersionFromKV.Delegate(err, dmWorkerVersionKey)
 	}
 	err = ver.UnmarshalBinary(data)
-	return ver, errors.Annotatef(err, "unmarshal version from data % X", data)
+	return ver, terror.ErrWorkerUnmarshalVerBinary.Delegate(err, data)
 }
 
 // saveVersion saves the version of DM-worker into the levelDB.
@@ -117,11 +116,11 @@ func saveVersion(tctx *tcontext.Context, h dbOperator, ver version) error {
 
 	data, err := ver.MarshalBinary()
 	if err != nil {
-		return errors.Annotatef(err, "marshal version %s to binary data", ver)
+		return terror.ErrWorkerMarshalVerBinary.Delegate(err, ver)
 	}
 
 	err = h.Put(dmWorkerVersionKey, data, nil)
-	return errors.Annotatef(err, "save version %v into levelDB with key %v", ver, dmWorkerVersionKey)
+	return terror.ErrWorkerSaveVersionToKV.Delegate(err, ver, dmWorkerVersionKey)
 }
 
 // tryUpgrade tries to upgrade from an older version.
@@ -135,16 +134,16 @@ func tryUpgrade(dbDir string) error {
 		if os.IsNotExist(err) {
 			notExist = true
 		} else {
-			return errors.Annotatef(err, "get stat for %s", dbDir)
+			return terror.ErrWorkerUpgradeCheckKVDir.AnnotateDelegate(err, "get stat for %s", dbDir)
 		}
 	} else if !fs.IsDir() { // should be a directory
-		return errors.NotValidf("directory %s for DB", dbDir)
+		return terror.ErrWorkerUpgradeCheckKVDir.Generatef("directory %s for DB not valid", dbDir)
 	}
 
 	// 2. open the kv DB
 	db, err := openDB(dbDir, defaultKVConfig)
 	if err != nil {
-		return errors.Annotatef(err, "open DB for %s", dbDir)
+		return terror.Annotatef(err, "open DB for %s", dbDir)
 	}
 	defer func() {
 		err = db.Close()
@@ -158,13 +157,13 @@ func tryUpgrade(dbDir string) error {
 		// still need to save the current version version
 		currVer := currentWorkerVersion
 		err = saveVersion(tctx, db, currVer)
-		return errors.Annotatef(err, "save current version %s into DB %s", currVer, dbDir)
+		return terror.Annotatef(err, "save current version %s into DB %s", currVer, dbDir)
 	}
 
 	// 3. load previous version
 	prevVer, err := loadVersion(tctx, db)
 	if err != nil {
-		return errors.Annotatef(err, "load previous version from DB %s", dbDir)
+		return terror.Annotatef(err, "load previous version from DB %s", dbDir)
 	}
 	tctx.L().Info("", zap.Stringer("previous version", prevVer))
 
@@ -174,20 +173,20 @@ func tryUpgrade(dbDir string) error {
 		tctx.L().Info("previous and current versions are same, no need to upgrade", zap.Stringer("version", prevVer))
 		return nil
 	} else if prevVer.compare(currVer) > 0 {
-		return errors.Errorf("the previous version %s is newer than current %s, automatic downgrade is not supported now, please handle it manually", prevVer, currVer)
+		return terror.ErrWorkerVerAutoDowngrade.Generate(prevVer, currVer)
 	}
 
 	// 5. upgrade from previous version to +1, +2, ...
 	if prevVer.compare(workerVersion1) < 0 {
 		err = upgradeToVer1(tctx, db)
 		if err != nil {
-			return errors.Annotatef(err, "upgrade to version %s", workerVersion1)
+			return err
 		}
 	}
 
 	// 6. save current version after upgrade done
 	err = saveVersion(tctx, db, currVer)
-	return errors.Annotatef(err, "save current version %s into DB %s", currVer, dbDir)
+	return terror.Annotatef(err, "save current version %s into DB %s", currVer, dbDir)
 }
 
 // upgradeToVer1 upgrades from version 0 to version 1.
@@ -201,15 +200,15 @@ func upgradeToVer1(tctx *tcontext.Context, db *leveldb.DB) error {
 	tctx.L().Info("upgrading to version", zap.Stringer("version", workerVersion1))
 	err := ClearOperationLog(tctx, db)
 	if err != nil {
-		return errors.Annotatef(err, "upgrade to version %s", workerVersion1)
+		return terror.Annotatef(err, "upgrade to version %s", workerVersion1)
 	}
 	err = ClearHandledPointer(tctx, db)
 	if err != nil {
-		return errors.Annotatef(err, "upgrade to version %s", workerVersion1)
+		return terror.Annotatef(err, "upgrade to version %s", workerVersion1)
 	}
 	err = ClearTaskMeta(tctx, db)
 	if err != nil {
-		return errors.Annotatef(err, "upgrade to version %s", workerVersion1)
+		return terror.Annotatef(err, "upgrade to version %s", workerVersion1)
 	}
 
 	tctx.L().Warn("upgraded to version, please restart all necessary tasks manually", zap.Stringer("version", workerVersion1))

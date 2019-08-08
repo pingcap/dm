@@ -21,7 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"github.com/syndtr/goleveldb/leveldb"
 	"go.uber.org/zap"
@@ -29,6 +28,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/relay/purger"
 )
@@ -87,26 +87,26 @@ func NewWorker(cfg *Config) (*Worker, error) {
 	dbDir := path.Join(w.cfg.MetaDir, "kv")
 	err = tryUpgrade(dbDir)
 	if err != nil {
-		return nil, errors.Annotatef(err, "try to upgrade from any older version to %s", currentWorkerVersion)
+		return nil, terror.Annotatef(err, "try to upgrade from any older version to %s", currentWorkerVersion)
 	}
 
 	// open kv db
 	w.db, err = openDB(dbDir, defaultKVConfig)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	// initial metadata
 	w.meta, err = NewMetadata(dbDir, w.db)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	InitConditionHub(w)
 
 	err = w.restoreSubTask()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	// start relay
@@ -209,7 +209,7 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) (int64, error) {
 	w.copyConfigFromWorker(cfg)
 	cfgStr, err := cfg.Toml()
 	if err != nil {
-		return 0, errors.Annotatef(err, "encode subtask %+v into toml format", cfg)
+		return 0, terror.Annotatef(err, "encode subtask %+v into toml format", cfg)
 	}
 
 	opLogID, err := w.operateSubTask(&pb.TaskMeta{
@@ -218,7 +218,7 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) (int64, error) {
 		Task: append([]byte{}, cfgStr...),
 	})
 	if err != nil {
-		return 0, errors.Trace(err)
+		return 0, err
 	}
 
 	return opLogID, nil
@@ -231,7 +231,7 @@ func (w *Worker) UpdateSubTask(cfg *config.SubTaskConfig) (int64, error) {
 
 	cfgStr, err := cfg.Toml()
 	if err != nil {
-		return 0, errors.Annotatef(err, "encode subtask %+v into toml format", cfg)
+		return 0, terror.Annotatef(err, "encode subtask %+v into toml format", cfg)
 	}
 
 	opLogID, err := w.operateSubTask(&pb.TaskMeta{
@@ -240,7 +240,7 @@ func (w *Worker) UpdateSubTask(cfg *config.SubTaskConfig) (int64, error) {
 		Task: append([]byte{}, cfgStr...),
 	})
 	if err != nil {
-		return 0, errors.Trace(err)
+		return 0, err
 	}
 
 	return opLogID, nil
@@ -256,7 +256,7 @@ func (w *Worker) OperateSubTask(name string, op pb.TaskOp) (int64, error) {
 		Op:   op,
 	})
 	if err != nil {
-		return 0, errors.Trace(err)
+		return 0, err
 	}
 
 	return opLogID, nil
@@ -265,12 +265,12 @@ func (w *Worker) OperateSubTask(name string, op pb.TaskOp) (int64, error) {
 // not thread safe
 func (w *Worker) operateSubTask(task *pb.TaskMeta) (int64, error) {
 	if w.closed.Get() == closedTrue {
-		return 0, errors.NotValidf("worker already closed")
+		return 0, terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
 	opLogID, err := w.meta.AppendOperation(task)
 	if err != nil {
-		return 0, errors.Annotatef(err, "%s task %s, something wrong with saving operation log", task.Op, task.Name)
+		return 0, terror.Annotatef(err, "%s task %s, something wrong with saving operation log", task.Op, task.Name)
 	}
 
 	w.l.Info("operate subtask", zap.Stringer("operation", task.Op), zap.String("task", task.Name))
@@ -300,15 +300,15 @@ func (w *Worker) QueryError(name string) []*pb.SubTaskError {
 // HandleSQLs implements Handler.HandleSQLs.
 func (w *Worker) HandleSQLs(ctx context.Context, req *pb.HandleSubTaskSQLsRequest) error {
 	if w.closed.Get() == closedTrue {
-		return errors.NotValidf("worker already closed")
+		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
 	st := w.findSubTask(req.Name)
 	if st == nil {
-		return errors.NotFoundf("sub task with name %s", req.Name)
+		return terror.ErrWorkerSubTaskNotFound.Generate(req.Name)
 	}
 
-	return errors.Trace(st.SetSyncerSQLOperator(ctx, req))
+	return st.SetSyncerSQLOperator(ctx, req)
 }
 
 // FetchDDLInfo fetches all sub tasks' DDL info which pending to sync
@@ -393,12 +393,12 @@ func (w *Worker) doFetchDDLInfo(ctx context.Context, ch chan<- *pb.DDLInfo) {
 // RecordDDLLockInfo records the current DDL lock info which pending to sync
 func (w *Worker) RecordDDLLockInfo(info *pb.DDLLockInfo) error {
 	if w.closed.Get() == closedTrue {
-		return errors.NotValidf("worker already closed")
+		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
 	st := w.findSubTask(info.Task)
 	if st == nil {
-		return errors.NotFoundf("sub task for DDLLockInfo %+v", info)
+		return terror.ErrWorkerSubTaskNotFound.Generatef("sub task for DDLLockInfo %+v not found", info)
 	}
 	return st.SaveDDLLockInfo(info)
 }
@@ -406,17 +406,17 @@ func (w *Worker) RecordDDLLockInfo(info *pb.DDLLockInfo) error {
 // ExecuteDDL executes (or ignores) DDL (in sharding DDL lock, requested by dm-master)
 func (w *Worker) ExecuteDDL(ctx context.Context, req *pb.ExecDDLRequest) error {
 	if w.closed.Get() == closedTrue {
-		return errors.NotValidf("worker already closed")
+		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
 	st := w.findSubTask(req.Task)
 	if st == nil {
-		return errors.NotFoundf("sub task %v", req.Task)
+		return terror.ErrWorkerSubTaskNotFound.Generate(req.Task)
 	}
 
 	info := st.DDLLockInfo()
 	if info == nil || info.ID != req.LockID {
-		return errors.NotFoundf("DDLLockInfo with ID %s", req.LockID)
+		return terror.ErrWorkerDDLLockInfoNotFound.Generate(req.LockID)
 	}
 
 	err := st.ExecuteDDL(ctx, req)
@@ -431,18 +431,18 @@ func (w *Worker) ExecuteDDL(ctx context.Context, req *pb.ExecDDLRequest) error {
 // BreakDDLLock breaks current blocking DDL lock and/or remove current DDLLockInfo
 func (w *Worker) BreakDDLLock(ctx context.Context, req *pb.BreakDDLLockRequest) error {
 	if w.closed.Get() == closedTrue {
-		return errors.NotValidf("worker already closed")
+		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
 	st := w.findSubTask(req.Task)
 	if st == nil {
-		return errors.NotFoundf("sub task %v", req.Task)
+		return terror.ErrWorkerSubTaskNotFound.Generate(req.Task)
 	}
 
 	if len(req.RemoveLockID) > 0 {
 		info := st.DDLLockInfo()
 		if info == nil || info.ID != req.RemoveLockID {
-			return errors.NotFoundf("DDLLockInfo with ID %s", req.RemoveLockID)
+			return terror.ErrWorkerDDLLockInfoNotFound.Generate(req.RemoveLockID)
 		}
 		st.ClearDDLLockInfo() // remove DDL lock info
 		st.ClearDDLInfo()
@@ -450,7 +450,7 @@ func (w *Worker) BreakDDLLock(ctx context.Context, req *pb.BreakDDLLockRequest) 
 	}
 
 	if req.ExecDDL && req.SkipDDL {
-		return errors.New("execDDL and skipDDL can not specify both at the same time")
+		return terror.ErrWorkerExecSkipDDLConflict.Generate()
 	}
 
 	if !req.ExecDDL && !req.SkipDDL {
@@ -472,28 +472,28 @@ func (w *Worker) BreakDDLLock(ctx context.Context, req *pb.BreakDDLLockRequest) 
 // SwitchRelayMaster switches relay unit's master server
 func (w *Worker) SwitchRelayMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) error {
 	if w.closed.Get() == closedTrue {
-		return errors.NotValidf("worker already closed")
+		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	return errors.Trace(w.relayHolder.SwitchMaster(ctx, req))
+	return w.relayHolder.SwitchMaster(ctx, req)
 }
 
 // OperateRelay operates relay unit
 func (w *Worker) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) error {
 	if w.closed.Get() == closedTrue {
-		return errors.NotValidf("worker already closed")
+		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	return errors.Trace(w.relayHolder.Operate(ctx, req))
+	return w.relayHolder.Operate(ctx, req)
 }
 
 // PurgeRelay purges relay log files
 func (w *Worker) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) error {
 	if w.closed.Get() == closedTrue {
-		return errors.NotValidf("worker already closed")
+		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	return errors.Trace(w.relayPurger.Do(ctx, req))
+	return w.relayPurger.Do(ctx, req)
 }
 
 // ForbidPurge implements PurgeInterceptor.ForbidPurge
@@ -519,7 +519,7 @@ func (w *Worker) ForbidPurge() (bool, string) {
 // QueryConfig returns worker's config
 func (w *Worker) QueryConfig(ctx context.Context) (*Config, error) {
 	if w.closed.Get() == closedTrue {
-		return nil, errors.NotValidf("worker already closed")
+		return nil, terror.ErrWorkerAlreadyClosed.Generate()
 	}
 	w.RLock()
 	defer w.RUnlock()
@@ -533,19 +533,19 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	defer w.Unlock()
 
 	if w.closed.Get() == closedTrue {
-		return errors.NotValidf("worker already closed")
+		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
 	stage := w.relayHolder.Stage()
 	if stage == pb.Stage_Finished || stage == pb.Stage_Stopped {
-		return errors.Errorf("Worker's relay log unit in invalid stage: %s", stage.String())
+		return terror.ErrWorkerRelayUnitStage.Generate(stage.String())
 	}
 
 	// Check whether subtask is running syncer unit
 	for _, st := range w.subTasks {
 		isRunning := st.CheckUnit()
 		if !isRunning {
-			return errors.New("there is a subtask does not run syncer")
+			return terror.ErrWorkerNoSyncerRunning.Generate()
 		}
 	}
 
@@ -553,16 +553,16 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	newCfg := NewConfig()
 	err := newCfg.UpdateConfigFile(content)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	err = newCfg.Reload()
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	if newCfg.SourceID != w.cfg.SourceID {
-		return errors.New("update source ID is not allowed")
+		return terror.ErrWorkerCannotUpdateSourceID.Generate()
 	}
 
 	w.l.Info("update relay config", zap.Stringer("new config", newCfg))
@@ -580,22 +580,22 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		if stage == pb.Stage_Paused {
 			err = st.UpdateFromConfig(cfg)
 			if err != nil {
-				return errors.Trace(err)
+				return err
 			}
 		} else if stage == pb.Stage_Running {
 			err = st.Pause()
 			if err != nil {
-				return errors.Trace(err)
+				return err
 			}
 
 			err = st.UpdateFromConfig(cfg)
 			if err != nil {
-				return errors.Trace(err)
+				return err
 			}
 
 			err = st.Resume()
 			if err != nil {
-				return errors.Trace(err)
+				return err
 			}
 		}
 	}
@@ -605,7 +605,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	// Update relay unit configure
 	err = w.relayHolder.Update(ctx, cloneCfg)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	w.cfg.From = newCfg.From
@@ -617,7 +617,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	}
 	content, err = w.cfg.Toml()
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	w.cfg.UpdateConfigFile(content)
 
@@ -634,14 +634,14 @@ func (w *Worker) MigrateRelay(ctx context.Context, binlogName string, binlogPos 
 	if stage == pb.Stage_Running {
 		err := w.relayHolder.Operate(ctx, &pb.OperateRelayRequest{Op: pb.RelayOp_PauseRelay})
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 	} else if stage == pb.Stage_Stopped {
-		return errors.New("relay unit has stopped, can not be migrated")
+		return terror.ErrWorkerMigrateStopRelay.Generate()
 	}
 	err := w.relayHolder.Migrate(ctx, binlogName, binlogPos)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	return nil
 }
@@ -680,12 +680,12 @@ func (w *Worker) restoreSubTask() error {
 	for name, task := range tasks {
 		taskCfg := new(config.SubTaskConfig)
 		if err := taskCfg.Decode(string(task.Task)); err != nil {
-			return errors.Annotatef(err, "decode subtask config %s error in restoreSubTask", task.Task)
+			return terror.Annotatef(err, "decode subtask config %s error in restoreSubTask", task.Task)
 		}
 
 		cfgDecrypted, err := taskCfg.DecryptPassword()
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 
 		w.l.Info("prepare to restore sub task", zap.Stringer("config", cfgDecrypted))
@@ -738,7 +738,7 @@ Loop:
 			switch opLog.Task.Op {
 			case pb.TaskOp_Start:
 				if exist {
-					err = errors.AlreadyExistsf("sub task %s", opLog.Task.Name)
+					err = terror.ErrWorkerSubTaskExists.Generate(opLog.Task.Name)
 					break
 				}
 
@@ -751,20 +751,21 @@ Loop:
 					}
 
 					retryCnt = 0
-					err = errors.Errorf("relay log purger is purging, cannot start sub task %s, please try again later", opLog.Task.Name)
+					err = terror.ErrWorkerRelayIsPurging.Generate(opLog.Task.Name)
 					break
 				}
 
 				retryCnt = 0
 				taskCfg := new(config.SubTaskConfig)
 				if err1 := taskCfg.Decode(string(opLog.Task.Task)); err1 != nil {
-					err = errors.Annotate(err1, "decode subtask config error in handleTask")
+					err = terror.Annotate(err1, "decode subtask config error in handleTask")
 					break
 				}
 
 				var cfgDecrypted *config.SubTaskConfig
 				cfgDecrypted, err = taskCfg.DecryptPassword()
 				if err != nil {
+					err = terror.WithClass(err, terror.ClassDMWorker)
 					break
 				}
 
@@ -775,13 +776,13 @@ Loop:
 
 			case pb.TaskOp_Update:
 				if !exist {
-					err = errors.NotFoundf("sub task with name %s", opLog.Task.Name)
+					err = terror.ErrWorkerSubTaskNotFound.Generate(opLog.Task.Name)
 					break
 				}
 
 				taskCfg := new(config.SubTaskConfig)
 				if err1 := taskCfg.Decode(string(opLog.Task.Task)); err1 != nil {
-					err = errors.Annotate(err1, "decode subtask config error in handleTask")
+					err = terror.Annotate(err1, "decode subtask config error in handleTask")
 					break
 				}
 
@@ -789,7 +790,7 @@ Loop:
 				err = st.Update(taskCfg)
 			case pb.TaskOp_Stop:
 				if !exist {
-					err = errors.NotFoundf("sub task with name %s", opLog.Task.Name)
+					err = terror.ErrWorkerSubTaskNotFound.Generate(opLog.Task.Name)
 					break
 				}
 
@@ -798,7 +799,7 @@ Loop:
 				delete(w.subTasks, opLog.Task.Name)
 			case pb.TaskOp_Pause:
 				if !exist {
-					err = errors.NotFoundf("sub task with name %s", opLog.Task.Name)
+					err = terror.ErrWorkerSubTaskNotFound.Generate(opLog.Task.Name)
 					break
 				}
 
@@ -806,7 +807,7 @@ Loop:
 				err = st.Pause()
 			case pb.TaskOp_Resume:
 				if !exist {
-					err = errors.NotFoundf("sub task with name %s", opLog.Task.Name)
+					err = terror.ErrWorkerSubTaskNotFound.Generate(opLog.Task.Name)
 					break
 				}
 
