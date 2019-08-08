@@ -315,7 +315,7 @@ func (meta *Metadata) tryToRecoverMetaFromOldFashion(path string) error {
 
 		err := SetTaskMeta(meta.db, taskMeta)
 		if err != nil {
-			return terror.Annotatef(err, "failed to set task meta %s error message: %v", taskMeta.Name)
+			return terror.Annotatef(err, "failed to set task meta %s", taskMeta.Name)
 		}
 	}
 

@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/relay"
 	"github.com/pingcap/dm/relay/purger"
 )
@@ -117,7 +118,7 @@ func (h *realRelayHolder) Init(interceptors []purger.PurgeInterceptor) (purger.P
 	}
 
 	if err := h.relay.Init(); err != nil {
-		return nil, errors.Annotate(err, "initial relay unit")
+		return nil, terror.Annotate(err, "initial relay unit")
 	}
 
 	return purger.NewPurger(h.cfg.Purge, h.cfg.RelayDir, operators, interceptors), nil
@@ -197,9 +198,9 @@ func (h *realRelayHolder) SwitchMaster(ctx context.Context, req *pb.SwitchRelayM
 	h.RLock()
 	defer h.RUnlock()
 	if h.stage != pb.Stage_Paused {
-		return errors.Errorf("current stage is %s, Paused required", h.stage.String())
+		return terror.ErrWorkerRelayStageNotValid.Generate(h.stage, pb.Stage_Paused)
 	}
-	return errors.Trace(h.relay.SwitchMaster(ctx, req))
+	return h.relay.SwitchMaster(ctx, req)
 }
 
 // Operate operates relay unit
@@ -212,14 +213,14 @@ func (h *realRelayHolder) Operate(ctx context.Context, req *pb.OperateRelayReque
 	case pb.RelayOp_StopRelay:
 		return h.stopRelay(ctx, req)
 	}
-	return errors.NotSupportedf("operation %s", req.Op.String())
+	return terror.ErrWorkerRelayOperNotSupport.Generate(req.Op.String())
 }
 
 func (h *realRelayHolder) pauseRelay(ctx context.Context, req *pb.OperateRelayRequest) error {
 	h.Lock()
 	if h.stage != pb.Stage_Running {
 		h.Unlock()
-		return errors.Errorf("current stage is %s, Running required", h.stage.String())
+		return terror.ErrWorkerRelayStageNotValid.Generate(h.stage, pb.Stage_Running)
 	}
 	h.stage = pb.Stage_Paused
 
@@ -238,7 +239,7 @@ func (h *realRelayHolder) resumeRelay(ctx context.Context, req *pb.OperateRelayR
 	h.Lock()
 	defer h.Unlock()
 	if h.stage != pb.Stage_Paused {
-		return errors.Errorf("current stage is %s, Paused required", h.stage.String())
+		return terror.ErrWorkerRelayStageNotValid.Generate(h.stage, pb.Stage_Paused)
 	}
 
 	h.wg.Add(1)
@@ -253,7 +254,7 @@ func (h *realRelayHolder) stopRelay(ctx context.Context, req *pb.OperateRelayReq
 	h.Lock()
 	defer h.Unlock()
 	if h.stage == pb.Stage_Stopped {
-		return errors.NotValidf("current stage is already stopped")
+		return terror.ErrWorkerRelayStageNotValid.New("current stage is already stopped not valid")
 	}
 	h.stage = pb.Stage_Stopped
 
@@ -326,22 +327,22 @@ func (h *realRelayHolder) Update(ctx context.Context, cfg *Config) error {
 	if stage == pb.Stage_Paused {
 		err := h.relay.Reload(relayCfg)
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 	} else if stage == pb.Stage_Running {
 		err := h.Operate(ctx, &pb.OperateRelayRequest{Op: pb.RelayOp_PauseRelay})
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 
 		err = h.relay.Reload(relayCfg)
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 
 		err = h.Operate(ctx, &pb.OperateRelayRequest{Op: pb.RelayOp_ResumeRelay})
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 	}
 

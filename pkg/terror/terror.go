@@ -316,7 +316,7 @@ func WithScope(err error, scope ErrScope) error {
 	return e
 }
 
-// WithScope tries to set given class to *Error, if err is not an *Error instance,
+// WithClass tries to set given class to *Error, if err is not an *Error instance,
 // wrap it with error class instead
 func WithClass(err error, class ErrClass) error {
 	if err == nil {

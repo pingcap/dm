@@ -79,7 +79,7 @@ func NewWorker(cfg *Config) (*Worker, error) {
 		w,
 	})
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	w.relayPurger = purger
 
