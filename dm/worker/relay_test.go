@@ -179,7 +179,7 @@ func (t *testRelay) testStart(c *C, holder *realRelayHolder) {
 	c.Assert(holder.closed.Get(), Equals, closedFalse)
 
 	// test switch
-	c.Assert(holder.SwitchMaster(context.Background(), nil), ErrorMatches, "current stage is Running.*")
+	c.Assert(holder.SwitchMaster(context.Background(), nil), ErrorMatches, ".*current stage is Running.*")
 
 	// test status
 	status := holder.Status()
