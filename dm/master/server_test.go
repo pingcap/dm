@@ -17,7 +17,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -123,10 +122,13 @@ syncers:
 `
 
 var (
-	errGRPCFailed      = "test grpc request failed"
-	errExecDDLFailed   = "dm-worker exec ddl failed"
-	msgNoSubTask       = "no sub task started"
-	errCheckSyncConfig = "check sync config with error"
+	errGRPCFailed         = "test grpc request failed"
+	errGRPCFailedReg      = fmt.Sprintf("(?m).*%s.*", errGRPCFailed)
+	errExecDDLFailed      = "dm-worker exec ddl failed"
+	msgNoSubTask          = "no sub task started"
+	msgNoSubTaskReg       = fmt.Sprintf(".*%s", msgNoSubTask)
+	errCheckSyncConfig    = "(?m).*check sync config with error.*"
+	errCheckSyncConfigReg = fmt.Sprintf("(?m).*%s.*", errCheckSyncConfig)
 )
 
 func TestMaster(t *testing.T) {
@@ -468,9 +470,7 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	c.Assert(resp.Workers, check.HasLen, 2)
 	for _, workerResp := range resp.Workers {
 		c.Assert(workerResp.Result, check.IsFalse)
-		lines := strings.Split(workerResp.Msg, "\n")
-		c.Assert(len(lines), check.Greater, 1)
-		c.Assert(lines[0], check.Equals, errGRPCFailed)
+		c.Assert(workerResp.Msg, check.Matches, errGRPCFailedReg)
 	}
 
 	// test start task, but the first step check-task fails
@@ -488,9 +488,7 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
-	lines := strings.Split(resp.Msg, "\n")
-	c.Assert(len(lines), check.Greater, 1)
-	c.Assert(lines[0], check.Equals, errCheckSyncConfig)
+	c.Assert(resp.Msg, check.Matches, errCheckSyncConfigReg)
 }
 
 func (t *testMaster) TestQueryError(c *check.C) {
@@ -648,7 +646,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	c.Assert(resp.Workers, check.HasLen, 2)
 	for _, subtaskResp := range resp.Workers {
 		c.Assert(subtaskResp.Op, check.Equals, pauseOp)
-		c.Assert(strings.Split(subtaskResp.Meta.Msg, "\n")[0], check.Equals, errGRPCFailed)
+		c.Assert(subtaskResp.Meta.Msg, check.Matches, errGRPCFailedReg)
 	}
 
 	// test stop task successfully, remove partial workers
@@ -851,9 +849,7 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 	c.Assert(resp.Workers, check.HasLen, 2)
 	for _, workerResp := range resp.Workers {
 		c.Assert(workerResp.Result, check.IsFalse)
-		lines := strings.Split(workerResp.Msg, "\n")
-		c.Assert(len(lines), check.Greater, 1)
-		c.Assert(lines[0], check.Equals, errGRPCFailed)
+		c.Assert(workerResp.Msg, check.Matches, errGRPCFailedReg)
 	}
 }
 
@@ -1077,9 +1073,7 @@ func (t *testMaster) TestBreakWorkerDDLLock(c *check.C) {
 	c.Assert(resp.Workers, check.HasLen, 2)
 	for _, w := range resp.Workers {
 		c.Assert(w.Result, check.IsFalse)
-		lines := strings.Split(w.Msg, "\n")
-		c.Assert(len(lines), check.Greater, 1)
-		c.Assert(lines[0], check.Equals, errGRPCFailed)
+		c.Assert(w.Msg, check.Matches, errGRPCFailedReg)
 	}
 }
 
@@ -1151,7 +1145,7 @@ func (t *testMaster) TestRefreshWorkerTasks(c *check.C) {
 	c.Assert(len(server.taskWorkers), check.Equals, 0)
 	c.Assert(resp.Workers, check.HasLen, 2)
 	for _, w := range resp.Workers {
-		c.Assert(w.Msg, check.Equals, msgNoSubTask)
+		c.Assert(w.Msg, check.Matches, msgNoSubTaskReg)
 	}
 }
 
@@ -1240,9 +1234,7 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 	c.Assert(resp.Workers, check.HasLen, 2)
 	for _, w := range resp.Workers {
 		c.Assert(w.Result, check.IsFalse)
-		lines := strings.Split(w.Msg, "\n")
-		c.Assert(len(lines), check.Greater, 1)
-		c.Assert(lines[0], check.Equals, errGRPCFailed)
+		c.Assert(w.Msg, check.Matches, errGRPCFailedReg)
 	}
 }
 
@@ -1318,9 +1310,7 @@ func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
 	c.Assert(resp.Workers, check.HasLen, 2)
 	for _, w := range resp.Workers {
 		c.Assert(w.Result, check.IsFalse)
-		lines := strings.Split(w.Msg, "\n")
-		c.Assert(len(lines), check.Greater, 1)
-		c.Assert(lines[0], check.Equals, errGRPCFailed)
+		c.Assert(w.Msg, check.Matches, errGRPCFailedReg)
 	}
 }
 
@@ -1401,9 +1391,7 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 	c.Assert(resp.Workers, check.HasLen, 2)
 	for _, w := range resp.Workers {
 		c.Assert(w.Result, check.IsFalse)
-		lines := strings.Split(w.Msg, "\n")
-		c.Assert(len(lines), check.Greater, 1)
-		c.Assert(lines[0], check.Equals, errGRPCFailed)
+		c.Assert(w.Msg, check.Matches, errGRPCFailedReg)
 	}
 }
 

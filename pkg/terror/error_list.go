@@ -180,6 +180,7 @@ const (
 	codeTaskCheckFailedOpenDB
 	codeTaskCheckNewTableRouter
 	codeTaskCheckNewColumnMapping
+	codeTaskCheckSyncConfigError
 
 	// Relay log basic API error
 	codeRelayParseUUIDIndex = iota + 2801
@@ -313,7 +314,6 @@ const (
 	codeSyncerUnitUpdateConfigInSharding
 	codeSyncerUnitExecWithNoBlockingDDL
 
-	// TODO: DM-master error code
 	codeMasterSQLOpNilRequest = iota + 3801
 	codeMasterSQLOpNotSupport
 	codeMasterSQLOpWihtoutSharding
@@ -348,7 +348,6 @@ const (
 	codeMasterOperRespNotSuccess
 	codeMasterOperRequestTimeout
 
-	// TODO: DM-worker error code
 	codeWorkerParseFlagSet = iota + 4001
 	codeWorkerInvalidFlag
 	codeWorkerDecodeConfigFromFile
@@ -587,6 +586,7 @@ var (
 	ErrTaskCheckFailedOpenDB     = New(codeTaskCheckFailedOpenDB, ClassTaskCheck, ScopeInternal, LevelHigh, "failed to open DSN %s:***@%s:%d")
 	ErrTaskCheckNewTableRouter   = New(codeTaskCheckNewTableRouter, ClassTaskCheck, ScopeInternal, LevelMedium, "new table router error")
 	ErrTaskCheckNewColumnMapping = New(codeTaskCheckNewColumnMapping, ClassTaskCheck, ScopeInternal, LevelMedium, "new column mapping error")
+	ErrTaskCheckSyncConfigError  = New(codeTaskCheckSyncConfigError, ClassTaskCheck, ScopeInternal, LevelMedium, "%s %v: %v\n detail: %v")
 
 	// Relay log basic API error
 	ErrRelayParseUUIDIndex         = New(codeRelayParseUUIDIndex, ClassRelayAPI, ScopeInternal, LevelHigh, "parse server-uuid.index")
