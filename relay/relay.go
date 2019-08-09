@@ -370,14 +370,13 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 			failpoint.Continue()
 		})
 
-		//r.tctx.L().Info("transform binlog")
 		e := rResult.Event
 		r.tctx.L().Debug("receive binlog event with header", zap.Reflect("header", e.Header))
 
 		// 2. transform events
-		transformimer := time.Now()
+		transformTimer := time.Now()
 		tResult := transformer2.Transform(e)
-		binlogTransformDurationHistogram.Observe(time.Since(transformimer).Seconds())
+		binlogTransformDurationHistogram.Observe(time.Since(transformTimer).Seconds())
 		if len(tResult.NextLogName) > 0 && tResult.NextLogName > lastPos.Name {
 			lastPos = mysql.Position{
 				Name: string(tResult.NextLogName),
