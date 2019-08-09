@@ -16,9 +16,9 @@ package master
 import (
 	"sync"
 
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 )
 
@@ -70,7 +70,7 @@ func (l *Lock) TrySync(caller string, workers []string, ddls []string) (bool, in
 		if len(l.ddls) == 0 {
 			l.ddls = ddls
 		} else if !utils.CompareShardingDDLs(ddls, l.ddls) {
-			return l.remain <= 0, l.remain, errors.Errorf("sharding ddls in ddl lock %s is different with %s", l.ddls, ddls)
+			return l.remain <= 0, l.remain, terror.ErrMasterShardingDDLDiff.Generate(l.ddls, ddls)
 		}
 
 		if !synced {

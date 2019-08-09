@@ -314,6 +314,39 @@ const (
 	codeSyncerUnitExecWithNoBlockingDDL
 
 	// TODO: DM-master error code
+	codeMasterSQLOpNilRequest = iota + 3801
+	codeMasterSQLOpNotSupport
+	codeMasterSQLOpWihtoutSharding
+	codeMasterGRPCCreateConn
+	codeMasterGRPCSendOnCloseConn
+	codeMasterGRPCClientClose
+	codeMasterGRPCInvalidReqType
+	codeMasterGRPCRequestError
+	codeMasterDeployMapperVerify
+	codeMasterConfigParseFlagSet
+	codeMasterConfigUnknownItem
+	codeMasterConfigInvalidFlag
+	codeMasterConfigTomlTransform
+	codeMasterConfigTimeoutParse
+	codeMasterConfigUpdateCfgFile
+	codeMasterShardingDDLDiff
+	codeMasterStartService
+	codeMasterNoEmitToken
+	codeMasterLockNotFound
+	codeMasterLockIsResolving
+	codeMasterWorkerCliNotFound
+	codeMasterWorkerNotWaitLock
+	codeMasterHandleSQLReqFail
+	codeMasterOwnerExecDDL
+	codeMasterPartWorkerExecDDLFail
+	codeMasterWorkerExistDDLLock
+	codeMasterGetWorkerCfgExtractor
+	codeMasterTaskConfigExtractor
+	codeMasterWorkerArgsExtractor
+	codeMasterQueryWorkerConfig
+	codeMasterOperNotFound
+	codeMasterOperRespNotSuccess
+	codeMasterOperRequestTimeout
 
 	// TODO: DM-worker error code
 	codeWorkerParseFlagSet = iota + 4001
@@ -688,6 +721,41 @@ var (
 	ErrSyncerUnitReopenStreamNotSupport     = New(codeSyncerUnitReopenStreamNotSupport, ClassSyncUnit, ScopeInternal, LevelHigh, "reopen %T not supported")
 	ErrSyncerUnitUpdateConfigInSharding     = New(codeSyncerUnitUpdateConfigInSharding, ClassSyncUnit, ScopeInternal, LevelHigh, "try update config when some tables' (%v) sharding DDL not synced not supported")
 	ErrSyncerUnitExecWithNoBlockingDDL      = New(codeSyncerUnitExecWithNoBlockingDDL, ClassSyncUnit, ScopeInternal, LevelHigh, "process unit not waiting for sharding DDL to sync")
+
+	// DM-master error
+	ErrMasterSQLOpNilRequest       = New(codeMasterSQLOpNilRequest, ClassDMMaster, ScopeInternal, LevelMedium, "nil request not valid")
+	ErrMasterSQLOpNotSupport       = New(codeMasterSQLOpNotSupport, ClassDMMaster, ScopeInternal, LevelMedium, "op %s not supported")
+	ErrMasterSQLOpWihtoutSharding  = New(codeMasterSQLOpWihtoutSharding, ClassDMMaster, ScopeInternal, LevelMedium, "operate request without --sharding specified not valid")
+	ErrMasterGRPCCreateConn        = New(codeMasterGRPCCreateConn, ClassDMMaster, ScopeInternal, LevelHigh, "create grpc connection")
+	ErrMasterGRPCSendOnCloseConn   = New(codeMasterGRPCSendOnCloseConn, ClassDMMaster, ScopeInternal, LevelHigh, "send request on a closed client")
+	ErrMasterGRPCClientClose       = New(codeMasterGRPCClientClose, ClassDMMaster, ScopeInternal, LevelHigh, "close rpc client")
+	ErrMasterGRPCInvalidReqType    = New(codeMasterGRPCInvalidReqType, ClassDMMaster, ScopeInternal, LevelHigh, "invalid request type: %v")
+	ErrMasterGRPCRequestError      = New(codeMasterGRPCRequestError, ClassDMMaster, ScopeInternal, LevelHigh, "grpc request error")
+	ErrMasterDeployMapperVerify    = New(codeMasterDeployMapperVerify, ClassDMMaster, ScopeInternal, LevelHigh, "user should specify valid relation between source(mysql/mariadb) and dm-worker, config %+v not valid")
+	ErrMasterConfigParseFlagSet    = New(codeMasterConfigParseFlagSet, ClassDMMaster, ScopeInternal, LevelMedium, "parse config flag set")
+	ErrMasterConfigUnknownItem     = New(codeMasterConfigUnknownItem, ClassDMMaster, ScopeInternal, LevelMedium, "master config contained unknown configuration options: %s")
+	ErrMasterConfigInvalidFlag     = New(codeMasterConfigInvalidFlag, ClassDMMaster, ScopeInternal, LevelMedium, "'%s' is an invalid flag")
+	ErrMasterConfigTomlTransform   = New(codeMasterConfigTomlTransform, ClassDMMaster, ScopeInternal, LevelMedium, "config toml transform")
+	ErrMasterConfigTimeoutParse    = New(codeMasterConfigTimeoutParse, ClassDMMaster, ScopeInternal, LevelMedium, "parse rpc timeout str")
+	ErrMasterConfigUpdateCfgFile   = New(codeMasterConfigUpdateCfgFile, ClassDMMaster, ScopeInternal, LevelHigh, "update config file")
+	ErrMasterShardingDDLDiff       = New(codeMasterShardingDDLDiff, ClassDMMaster, ScopeInternal, LevelHigh, "sharding ddls in ddl lock %s is different with %s")
+	ErrMasterStartService          = New(codeMasterStartService, ClassDMMaster, ScopeInternal, LevelHigh, "start server")
+	ErrMasterNoEmitToken           = New(codeMasterNoEmitToken, ClassDMMaster, ScopeInternal, LevelHigh, "fail to get emit opportunity for worker %s")
+	ErrMasterLockNotFound          = New(codeMasterLockNotFound, ClassDMMaster, ScopeInternal, LevelHigh, "lock with ID %s not found")
+	ErrMasterLockIsResolving       = New(codeMasterLockIsResolving, ClassDMMaster, ScopeInternal, LevelHigh, "lock %s is resolving")
+	ErrMasterWorkerCliNotFound     = New(codeMasterWorkerCliNotFound, ClassDMMaster, ScopeInternal, LevelHigh, "worker %s relevant worker-client not found")
+	ErrMasterWorkerNotWaitLock     = New(codeMasterWorkerNotWaitLock, ClassDMMaster, ScopeInternal, LevelHigh, "worker %s not waiting for DDL lock %s")
+	ErrMasterHandleSQLReqFail      = New(codeMasterHandleSQLReqFail, ClassDMMaster, ScopeInternal, LevelHigh, "request DDL lock %s owner %s handle SQLs request %s fail %s")
+	ErrMasterOwnerExecDDL          = New(codeMasterOwnerExecDDL, ClassDMMaster, ScopeInternal, LevelHigh, "owner %s ExecuteDDL fail")
+	ErrMasterPartWorkerExecDDLFail = New(codeMasterPartWorkerExecDDLFail, ClassDMMaster, ScopeInternal, LevelHigh, "DDL lock %s owner ExecuteDDL successfully, so DDL lock removed. but some dm-workers ExecuteDDL fail, you should to handle dm-worker directly")
+	ErrMasterWorkerExistDDLLock    = New(codeMasterWorkerExistDDLLock, ClassDMMaster, ScopeInternal, LevelHigh, "worker %s exist ddl lock, please unlock ddl lock first!")
+	ErrMasterGetWorkerCfgExtractor = New(codeMasterGetWorkerCfgExtractor, ClassDMMaster, ScopeInternal, LevelHigh, "")
+	ErrMasterTaskConfigExtractor   = New(codeMasterTaskConfigExtractor, ClassDMMaster, ScopeInternal, LevelHigh, "")
+	ErrMasterWorkerArgsExtractor   = New(codeMasterWorkerArgsExtractor, ClassDMMaster, ScopeInternal, LevelHigh, "")
+	ErrMasterQueryWorkerConfig     = New(codeMasterQueryWorkerConfig, ClassDMMaster, ScopeInternal, LevelHigh, "")
+	ErrMasterOperNotFound          = New(codeMasterOperNotFound, ClassDMMaster, ScopeInternal, LevelHigh, "operation %d of task %s not found, please execute `query-status` to check status")
+	ErrMasterOperRespNotSuccess    = New(codeMasterOperRespNotSuccess, ClassDMMaster, ScopeInternal, LevelHigh, "operation not success: %s")
+	ErrMasterOperRequestTimeout    = New(codeMasterOperRequestTimeout, ClassDMMaster, ScopeInternal, LevelHigh, "request is timeout, but request may be successful, please execute `query-status` to check status")
 
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set")
