@@ -669,9 +669,7 @@ func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int6
 		s.tctx.L().Warn("unknown job operation type", zap.Stringer("type", tp))
 	}
 
-	if isFinished {
-		s.count.Add(n)
-	}
+	s.count.Add(n)
 }
 
 func (s *Syncer) checkWait(job *job) bool {
