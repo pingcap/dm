@@ -1,6 +1,7 @@
 ---
 name: test # global unique
 task-mode: all  # full/incremental/all
+is-ignore: true # Whether skip dupEntry error and write the complete row of data to a file
 is-sharding: true  # whether multi dm-worker do one sharding job
 meta-schema: "dm_meta"  # meta schema in downstreaming database to store meta informaton of dm
 remove-meta: false  # remove meta from downstreaming database, now we delete checkpoint and online ddl information
