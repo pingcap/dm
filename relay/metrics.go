@@ -83,7 +83,7 @@ var (
 			Subsystem: "relay",
 			Name:      "write_duration",
 			Help:      "bucketed histogram of write time (s) of single relay log event",
-			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 18),
+			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 20),
 		})
 
 	// should alert
@@ -110,7 +110,16 @@ var (
 			Subsystem: "relay",
 			Name:      "read_binlog_duration",
 			Help:      "bucketed histogram of read time (s) of single binlog event from the master.",
-			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 18),
+			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 20),
+		})
+
+	binlogTransformDurationHistogram = prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Namespace: "dm",
+			Subsystem: "relay",
+			Name:      "read_transform_duration",
+			Help:      "bucketed histogram of read time (s) of transform single binlog event.",
+			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 20),
 		})
 
 	// should alert
