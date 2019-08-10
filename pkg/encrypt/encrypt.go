@@ -44,7 +44,7 @@ func SetSecretKey(key []byte) error {
 func Encrypt(plaintext []byte) ([]byte, error) {
 	block, err := aes.NewCipher(secretKey)
 	if err != nil {
-		return nil, terror.ErrEncryptNewCiphter.Delegate(err)
+		return nil, terror.ErrEncryptNewCipher.Delegate(err)
 	}
 
 	iv, err := genIV(block.BlockSize())

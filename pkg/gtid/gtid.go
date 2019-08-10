@@ -47,7 +47,7 @@ func ParserGTID(flavor, gtidStr string) (Set, error) {
 
 	gtid, err := mysql.ParseGTIDSet(flavor, gtidStr)
 	if err != nil {
-		return nil, terror.ErrParseGTID.Delegate(err)
+		return nil, terror.ErrParseGTID.Delegate(err, gtidStr)
 	}
 
 	switch flavor {
@@ -56,7 +56,7 @@ func ParserGTID(flavor, gtidStr string) (Set, error) {
 	case mysql.MySQLFlavor:
 		m = &mySQLGTIDSet{}
 	default:
-		return nil, terror.ErrNotSupportedFlavor.Generate(flavor, gtidStr)
+		return nil, terror.ErrNotSupportedFlavor.Generate(flavor)
 	}
 	err = m.Set(gtid)
 	return m, err

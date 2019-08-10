@@ -183,7 +183,7 @@ func GetServerID(db *sql.DB) (int64, error) {
 	}
 
 	serverID, err := strconv.ParseInt(serverIDStr, 10, 64)
-	return serverID, terror.ErrInvalidServerID.Delegate(err)
+	return serverID, terror.ErrInvalidServerID.Delegate(err, serverIDStr)
 }
 
 // GetMariaDBGtidDomainID gets MariaDB server's `gtid_domain_id`

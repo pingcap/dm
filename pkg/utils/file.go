@@ -55,12 +55,12 @@ func IsDirExists(name string) bool {
 func GetFileSize(file string) (int64, error) {
 	fd, err := os.Open(file)
 	if err != nil {
-		return 0, terror.ErrGetFileSize.Delegate(err)
+		return 0, terror.ErrGetFileSize.Delegate(err, file)
 	}
 	defer fd.Close()
 	stat, err := fd.Stat()
 	if err != nil {
-		return 0, terror.ErrGetFileSize.Delegate(err)
+		return 0, terror.ErrGetFileSize.Delegate(err, file)
 	}
 	return stat.Size(), nil
 }
