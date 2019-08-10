@@ -21,7 +21,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/errors"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 const (
@@ -101,12 +101,12 @@ func (h eventHandler) handleTraceEventQueryRequest(w http.ResponseWriter, req *h
 	if traceID := req.FormValue(qTraceID); len(traceID) > 0 {
 		events := h.queryByTraceID(traceID)
 		if events == nil {
-			writeNotFound(w, errors.NotFoundf("trace event %s", traceID))
+			writeNotFound(w, terror.ErrTracerTraceEventNotFound.Generate(traceID))
 			return
 		}
 		writeData(w, events)
 	} else {
-		writeBadRequest(w, errors.New("trace id not provided"))
+		writeBadRequest(w, terror.ErrTracerTraceIDNotProvided.Generate())
 	}
 }
 
@@ -120,20 +120,20 @@ func (h eventHandler) handleTraceEventScanRequest(w http.ResponseWriter, req *ht
 	if len(offsetStr) > 0 {
 		offset, err = strconv.ParseInt(offsetStr, 0, 64)
 		if err != nil {
-			writeBadRequest(w, errors.NotValidf("offset: %s", offsetStr))
+			writeBadRequest(w, terror.ErrTracerParamNotValid.Generate("offset", offsetStr))
 		}
 	}
 	limitStr := req.FormValue(qLimit)
 	if len(limitStr) > 0 {
 		limit, err = strconv.ParseInt(limitStr, 0, 64)
 		if err != nil {
-			writeBadRequest(w, errors.NotValidf("limit: %s", limitStr))
+			writeBadRequest(w, terror.ErrTracerParamNotValid.Generate("limit", limitStr))
 		}
 	}
 
 	events := h.scan(offset, limit)
 	if events == nil {
-		writeNotFound(w, errors.NotFoundf("offset: %d, limit: %d", offset, limit))
+		writeNotFound(w, terror.ErrTracerTraceEventNotFound.Generatef("offset: %d, limit: %d not found", offset, limit))
 		return
 	}
 	writeData(w, events)
@@ -141,7 +141,7 @@ func (h eventHandler) handleTraceEventScanRequest(w http.ResponseWriter, req *ht
 
 func (h eventHandler) handleTraceEventDeleteRequest(w http.ResponseWriter, req *http.Request) {
 	if req.Method != "POST" {
-		writeBadRequest(w, errors.New("post only"))
+		writeBadRequest(w, terror.ErrTracerPostMethodOnly.Generate())
 		return
 	}
 	if traceID := req.FormValue(qTraceID); len(traceID) > 0 {
@@ -152,13 +152,13 @@ func (h eventHandler) handleTraceEventDeleteRequest(w http.ResponseWriter, req *
 		}
 		writeData(w, data)
 	} else {
-		writeBadRequest(w, errors.New("trace id not provided"))
+		writeBadRequest(w, terror.ErrTracerTraceIDNotProvided.Generate())
 	}
 }
 
 func (h eventHandler) handleTraceEventTruncateRequest(w http.ResponseWriter, req *http.Request) {
 	if req.Method != "POST" {
-		writeBadRequest(w, errors.New("post only"))
+		writeBadRequest(w, terror.ErrTracerPostMethodOnly.Generate())
 		return
 	}
 	h.truncate()

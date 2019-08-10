@@ -23,7 +23,7 @@ const (
 	codeDBExecuteFailed
 
 	// Functional error code list
-	codeParseMydumperMeta = iota + 1101
+	codeParseMydumperMeta ErrCode = iota + 1101
 	codeGetFileSize
 	codeDropMultipleTables
 	codeRenameMultipleTables
@@ -94,7 +94,7 @@ const (
 	codeBinlogExpectFormatDescEv
 	codeBinlogExpectTableMapEv
 	codeBinlogExpectRowsEv
-	codeBinlogUnexpectedEV
+	codeBinlogUnexpectedEv
 	codeBinlogParseSingleEv
 	codeBinlogEventTypeNotValid
 	codeBinlogEventNoRows
@@ -130,7 +130,7 @@ const (
 	codeTracingGetTSO
 
 	// Config related error code list
-	codeConfigCheckItemNotSupport = iota + 2001
+	codeConfigCheckItemNotSupport ErrCode = iota + 2001
 	codeConfigTomlTransform
 	codeConfigTaskYamlTransform
 	codeConfigTaskNameEmpty
@@ -163,12 +163,12 @@ const (
 	codeConfigSourceIDNotFound
 
 	// Binlog operation error code list
-	codeBinlogExtractPosition = iota + 2201
+	codeBinlogExtractPosition ErrCode = iota + 2201
 	codeBinlogInvalidFilename
 	codeBinlogParsePosFromStr
 
 	// Checkpoint error code
-	codeCheckpointInvalidTaskMode = iota + 2401
+	codeCheckpointInvalidTaskMode ErrCode = iota + 2401
 	codeCheckpointSaveInvalidPos
 	codeCheckpointInvalidTableFile
 	codeCheckpointDBNotExistInFile
@@ -176,20 +176,20 @@ const (
 	codeCheckpointRestoreCountGreater
 
 	// Task check error code
-	codeTaskCheckSameTableName = iota + 2601
+	codeTaskCheckSameTableName ErrCode = iota + 2601
 	codeTaskCheckFailedOpenDB
 	codeTaskCheckNewTableRouter
 	codeTaskCheckNewColumnMapping
 	codeTaskCheckSyncConfigError
 
 	// Relay log basic API error
-	codeRelayParseUUIDIndex = iota + 2801
+	codeRelayParseUUIDIndex ErrCode = iota + 2801
 	codeRelayParseUUIDSuffix
 	codeRelayUUIDWithSuffixNotFound
 	codeRelayGenFakeRotateEvent
 	codeRelayNoValidRelaySubDir
 
-	codeRelayUUIDSuffixNotValid = iota + 3001
+	codeRelayUUIDSuffixNotValid ErrCode = iota + 3001
 	codeRelayUUIDSuffixLessThanPrev
 	codeRelayLoadMetaData
 	codeRelayBinlogNameNotValid
@@ -234,10 +234,10 @@ const (
 	codePreviousGTIDsNotValid
 
 	// Dump unit error code
-	codeDumpUnitRuntime = iota + 3201
+	codeDumpUnitRuntime ErrCode = iota + 3201
 
 	// Load unit error code
-	codeLoadUnitCreateSchemaFile = iota + 3401
+	codeLoadUnitCreateSchemaFile ErrCode = iota + 3401
 	codeLoadUnitInvalidFileEnding
 	codeLoadUnitParseQuoteValues
 	codeLoadUnitDoColumnMapping
@@ -254,7 +254,7 @@ const (
 	codeLoadUnitDuplicateTableFile
 
 	// Sync unit error code
-	codeSyncerUnitPanic = iota + 3601
+	codeSyncerUnitPanic ErrCode = iota + 3601
 	codeSyncUnitInvalidTableName
 	codeSyncUnitTableNameQuery
 	codeSyncUnitNotSupportedDML
@@ -314,7 +314,8 @@ const (
 	codeSyncerUnitUpdateConfigInSharding
 	codeSyncerUnitExecWithNoBlockingDDL
 
-	codeMasterSQLOpNilRequest = iota + 3801
+	// DM-master error code
+	codeMasterSQLOpNilRequest ErrCode = iota + 3801
 	codeMasterSQLOpNotSupport
 	codeMasterSQLOpWihtoutSharding
 	codeMasterGRPCCreateConn
@@ -348,7 +349,8 @@ const (
 	codeMasterOperRespNotSuccess
 	codeMasterOperRequestTimeout
 
-	codeWorkerParseFlagSet = iota + 4001
+	// DM-worker error code
+	codeWorkerParseFlagSet ErrCode = iota + 4001
 	codeWorkerInvalidFlag
 	codeWorkerDecodeConfigFromFile
 	codeWorkerUndecodedItemFromFile
@@ -415,6 +417,18 @@ const (
 	codeWorkerExecDDLTimeout
 	codeWorkerWaitRelayCatchupTimeout
 	codeWorkerRelayIsPurging
+
+	// DM-tracer error code
+	codeTracerParseFlagSet ErrCode = iota + 4201
+	codeTracerConfigTomlTransform
+	codeTracerConfigInvalidFlag
+	codeTracerTraceEventNotFound
+	codeTracerTraceIDNotProvided
+	codeTracerParamNotValid
+	codeTracerPostMethodOnly
+	codeTracerEventAssertionFail
+	codeTracerEventTypeNotValid
+	codeTracerStartService
 )
 
 // Error instances
@@ -825,4 +839,16 @@ var (
 	ErrWorkerExecDDLTimeout          = New(codeWorkerExecDDLTimeout, ClassDMWorker, ScopeInternal, LevelHigh, "ExecuteDDL timeout, try use `query-status` to query whether the DDL is still blocking")
 	ErrWorkerWaitRelayCatchupTimeout = New(codeWorkerWaitRelayCatchupTimeout, ClassDMWorker, ScopeInternal, LevelHigh, "wait relay catchup timeout, loader end binlog pos: %s, relay binlog pos: %s")
 	ErrWorkerRelayIsPurging          = New(codeWorkerRelayIsPurging, ClassDMWorker, ScopeInternal, LevelHigh, "relay log purger is purging, cannot start sub task %s, please try again later")
+
+	// DM-tracer error
+	ErrTracerParseFlagSet        = New(codeTracerParseFlagSet, ClassDMTracer, ScopeInternal, LevelMedium, "parse dm-tracer config flag set")
+	ErrTracerConfigTomlTransform = New(codeTracerConfigTomlTransform, ClassDMTracer, ScopeInternal, LevelMedium, "config toml transform")
+	ErrTracerConfigInvalidFlag   = New(codeTracerConfigInvalidFlag, ClassDMTracer, ScopeInternal, LevelMedium, "'%s' is an invalid flag")
+	ErrTracerTraceEventNotFound  = New(codeTracerTraceEventNotFound, ClassDMTracer, ScopeInternal, LevelMedium, "trace event %s not found")
+	ErrTracerTraceIDNotProvided  = New(codeTracerTraceIDNotProvided, ClassDMTracer, ScopeInternal, LevelMedium, "trace id not provided")
+	ErrTracerParamNotValid       = New(codeTracerParamNotValid, ClassDMTracer, ScopeInternal, LevelMedium, "param %s value %s not valid")
+	ErrTracerPostMethodOnly      = New(codeTracerPostMethodOnly, ClassDMTracer, ScopeInternal, LevelMedium, "post method only")
+	ErrTracerEventAssertionFail  = New(codeTracerEventAssertionFail, ClassDMTracer, ScopeInternal, LevelHigh, "type %s event: %v not valid")
+	ErrTracerEventTypeNotValid   = New(codeTracerEventTypeNotValid, ClassDMTracer, ScopeInternal, LevelHigh, "trace event type %d not valid")
+	ErrTracerStartService        = New(codeTracerStartService, ClassDMTracer, ScopeInternal, LevelHigh, "start server")
 )

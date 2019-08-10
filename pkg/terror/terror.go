@@ -42,8 +42,9 @@ const (
 	ClassDumpUnit
 	ClassLoadUnit
 	ClassSyncUnit
-	ClassDMWorker
 	ClassDMMaster
+	ClassDMWorker
+	ClassDMTracer
 )
 
 var errClass2Str = map[ErrClass]string{
@@ -58,8 +59,9 @@ var errClass2Str = map[ErrClass]string{
 	ClassDumpUnit:   "dump-unit",
 	ClassLoadUnit:   "load-unit",
 	ClassSyncUnit:   "sync-unit",
-	ClassDMWorker:   "dm-worker",
 	ClassDMMaster:   "dm-master",
+	ClassDMWorker:   "dm-worker",
+	ClassDMTracer:   "dm-tracer",
 }
 
 // String implements fmt.Stringer interface
