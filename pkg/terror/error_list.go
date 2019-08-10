@@ -500,7 +500,7 @@ var (
 	ErrBinlogExpectFormatDescEv      = New(codeBinlogExpectFormatDescEv, ClassFunctional, ScopeInternal, LevelHigh, "expect FormatDescriptionEvent, but got %+v")
 	ErrBinlogExpectTableMapEv        = New(codeBinlogExpectTableMapEv, ClassFunctional, ScopeInternal, LevelHigh, "expect TableMapEvent, but got %+v")
 	ErrBinlogExpectRowsEv            = New(codeBinlogExpectRowsEv, ClassFunctional, ScopeInternal, LevelHigh, "expect event with type (%d), but got %+v")
-	ErrBinlogUnexpectedEV            = New(codeBinlogUnexpectedEV, ClassFunctional, ScopeInternal, LevelHigh, "unexpected event %+v")
+	ErrBinlogUnexpectedEv            = New(codeBinlogUnexpectedEv, ClassFunctional, ScopeInternal, LevelHigh, "unexpected event %+v")
 	ErrBinlogParseSingleEv           = New(codeBinlogParseSingleEv, ClassFunctional, ScopeInternal, LevelHigh, "")
 	ErrBinlogEventTypeNotValid       = New(codeBinlogEventTypeNotValid, ClassFunctional, ScopeInternal, LevelHigh, "event type %d not valid")
 	ErrBinlogEventNoRows             = New(codeBinlogEventNoRows, ClassFunctional, ScopeInternal, LevelHigh, "no rows not valid")

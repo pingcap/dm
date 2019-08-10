@@ -488,7 +488,7 @@ func GenTableMapEvent(header *replication.EventHeader, latestPos uint32, tableID
 			}
 			tableMapEvent = e
 		default:
-			return terror.ErrBinlogUnexpectedEV.Generate(e)
+			return terror.ErrBinlogUnexpectedEv.Generate(e)
 		}
 		return nil
 	}
@@ -656,7 +656,7 @@ func GenRowsEvent(header *replication.EventHeader, latestPos uint32, eventType r
 			}
 			rowsEvent = e
 		default:
-			return terror.ErrBinlogUnexpectedEV.Generate(e)
+			return terror.ErrBinlogUnexpectedEv.Generate(e)
 		}
 		return nil
 	}
