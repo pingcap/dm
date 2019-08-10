@@ -30,8 +30,8 @@ var (
 	IncompatibleDDLFormat = `encountered incompatible DDL in TiDB:
 	please confirm your DDL statement is correct and needed.
 	for TiDB compatible DDL, please see the docs:
-	  English version: https://github.com/pingcap/docs/blob/master/sql/ddl.md
-	  Chinese version: https://github.com/pingcap/docs-cn/blob/master/sql/ddl.md
+	  English version: https://pingcap.com/docs/dev/reference/mysql-compatibility/#ddl
+	  Chinese version: https://pingcap.com/docs-cn/dev/reference/mysql-compatibility/#ddl
 	if the DDL is not needed, you can use a filter rule with "*" schema-pattern to ignore it.
 	 `
 )
