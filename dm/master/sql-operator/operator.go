@@ -94,7 +94,7 @@ func (h *Holder) Set(req *pb.HandleSQLsRequest) error {
 
 	// now, only support --sharding operate request
 	if !req.Sharding {
-		return terror.ErrMasterSQLOpWihtoutSharding.Generate()
+		return terror.ErrMasterSQLOpWithoutSharding.Generate()
 	}
 
 	_, sqlReg, err := command.VerifySQLOperateArgs(req.BinlogPos, req.SqlPattern, req.Sharding)

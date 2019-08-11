@@ -21,8 +21,6 @@ import (
 	"github.com/pingcap/errors"
 )
 
-var _ = check.Suite(&testTErrorSuite{})
-
 func (t *testTErrorSuite) TestDBAdapter(c *check.C) {
 	defaultErr := ErrDBDriverError
 	testCases := []struct {

@@ -317,7 +317,7 @@ const (
 	// DM-master error code
 	codeMasterSQLOpNilRequest ErrCode = iota + 3801
 	codeMasterSQLOpNotSupport
-	codeMasterSQLOpWihtoutSharding
+	codeMasterSQLOpWithoutSharding
 	codeMasterGRPCCreateConn
 	codeMasterGRPCSendOnCloseConn
 	codeMasterGRPCClientClose
@@ -580,7 +580,7 @@ var (
 	ErrConfigMydumperPathNotValid   = New(codeConfigMydumperPathNotValid, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s mydumper-path must specify a valid path to mydumper binary when task-mode is all or full")
 	ErrConfigLoaderCfgNotFound      = New(codeConfigLoaderCfgNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s loader config %s not exist in loaders")
 	ErrConfigSyncerCfgNotFound      = New(codeConfigSyncerCfgNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s syncer config %s not exist in syncer")
-	ErrConfigSourceIDNotFound       = New(codeConfigSourceIDNotFound, ClassConfig, ScopeInternal, LevelMedium, "source %s in deployment configuration")
+	ErrConfigSourceIDNotFound       = New(codeConfigSourceIDNotFound, ClassConfig, ScopeInternal, LevelMedium, "source %s in deployment configuration not found")
 
 	// Binlog operation error
 	ErrBinlogExtractPosition = New(codeBinlogExtractPosition, ClassBinlogOp, ScopeInternal, LevelHigh, "")
@@ -659,7 +659,7 @@ var (
 
 	// Load unit error
 	ErrLoadUnitCreateSchemaFile    = New(codeLoadUnitCreateSchemaFile, ClassLoadUnit, ScopeInternal, LevelMedium, "generate schema file")
-	ErrLoadUnitInvalidFileEnding   = New(codeLoadUnitInvalidFileEnding, ClassLoadUnit, ScopeInternal, LevelHigh, "cooresponding ending of sql: ')' not found")
+	ErrLoadUnitInvalidFileEnding   = New(codeLoadUnitInvalidFileEnding, ClassLoadUnit, ScopeInternal, LevelHigh, "coresponding ending of sql: ')' not found")
 	ErrLoadUnitParseQuoteValues    = New(codeLoadUnitParseQuoteValues, ClassLoadUnit, ScopeInternal, LevelHigh, "parse quote values error")
 	ErrLoadUnitDoColumnMapping     = New(codeLoadUnitDoColumnMapping, ClassLoadUnit, ScopeInternal, LevelHigh, "mapping row data %v for table %+v")
 	ErrLoadUnitReadSchemaFile      = New(codeLoadUnitReadSchemaFile, ClassLoadUnit, ScopeInternal, LevelHigh, "read schema from sql file")
@@ -691,7 +691,7 @@ var (
 	// ErrSyncUnitDMLStatementFound defines an error which means we found unexpected dml statement found in query event
 	ErrSyncUnitDMLStatementFound            = New(codeSyncUnitDMLStatementFound, ClassSyncUnit, ScopeInternal, LevelHigh, "only support ROW format binlog, unexpected DML statement found in query event")
 	ErrSyncerUnitBinlogEventFilter          = New(codeSyncerUnitBinlogEventFilter, ClassSyncUnit, ScopeInternal, LevelHigh, "")
-	ErrSyncerUnitInvalidReplicaEvent        = New(codeSyncerUnitInvalidReplicaEvent, ClassSyncUnit, ScopeInternal, LevelHigh, "[syncer] invalid replication event type %v")
+	ErrSyncerUnitInvalidReplicaEvent        = New(codeSyncerUnitInvalidReplicaEvent, ClassSyncUnit, ScopeInternal, LevelHigh, "invalid replication event type %v")
 	ErrSyncerUnitParseStmt                  = New(codeSyncerUnitParseStmt, ClassSyncUnit, ScopeInternal, LevelHigh, "")
 	ErrSyncerUnitUUIDNotLatest              = New(codeSyncerUnitUUIDNotLatest, ClassSyncUnit, ScopeInternal, LevelHigh, "UUID %s not the latest one in UUIDs %v")
 	ErrSyncerUnitDDLExecChanCloseOrBusy     = New(codeSyncerUnitDDLExecChanCloseOrBusy, ClassSyncUnit, ScopeInternal, LevelHigh, "the chan has closed or already in sending")
@@ -739,7 +739,7 @@ var (
 	// DM-master error
 	ErrMasterSQLOpNilRequest       = New(codeMasterSQLOpNilRequest, ClassDMMaster, ScopeInternal, LevelMedium, "nil request not valid")
 	ErrMasterSQLOpNotSupport       = New(codeMasterSQLOpNotSupport, ClassDMMaster, ScopeInternal, LevelMedium, "op %s not supported")
-	ErrMasterSQLOpWihtoutSharding  = New(codeMasterSQLOpWihtoutSharding, ClassDMMaster, ScopeInternal, LevelMedium, "operate request without --sharding specified not valid")
+	ErrMasterSQLOpWithoutSharding  = New(codeMasterSQLOpWithoutSharding, ClassDMMaster, ScopeInternal, LevelMedium, "operate request without --sharding specified not valid")
 	ErrMasterGRPCCreateConn        = New(codeMasterGRPCCreateConn, ClassDMMaster, ScopeInternal, LevelHigh, "create grpc connection")
 	ErrMasterGRPCSendOnCloseConn   = New(codeMasterGRPCSendOnCloseConn, ClassDMMaster, ScopeInternal, LevelHigh, "send request on a closed client")
 	ErrMasterGRPCClientClose       = New(codeMasterGRPCClientClose, ClassDMMaster, ScopeInternal, LevelHigh, "close rpc client")
@@ -762,7 +762,7 @@ var (
 	ErrMasterHandleSQLReqFail      = New(codeMasterHandleSQLReqFail, ClassDMMaster, ScopeInternal, LevelHigh, "request DDL lock %s owner %s handle SQLs request %s fail %s")
 	ErrMasterOwnerExecDDL          = New(codeMasterOwnerExecDDL, ClassDMMaster, ScopeInternal, LevelHigh, "owner %s ExecuteDDL fail")
 	ErrMasterPartWorkerExecDDLFail = New(codeMasterPartWorkerExecDDLFail, ClassDMMaster, ScopeInternal, LevelHigh, "DDL lock %s owner ExecuteDDL successfully, so DDL lock removed. but some dm-workers ExecuteDDL fail, you should to handle dm-worker directly")
-	ErrMasterWorkerExistDDLLock    = New(codeMasterWorkerExistDDLLock, ClassDMMaster, ScopeInternal, LevelHigh, "worker %s exist ddl lock, please unlock ddl lock first!")
+	ErrMasterWorkerExistDDLLock    = New(codeMasterWorkerExistDDLLock, ClassDMMaster, ScopeInternal, LevelHigh, "worker %s exist ddl lock, please unlock ddl lock first")
 	ErrMasterGetWorkerCfgExtractor = New(codeMasterGetWorkerCfgExtractor, ClassDMMaster, ScopeInternal, LevelHigh, "")
 	ErrMasterTaskConfigExtractor   = New(codeMasterTaskConfigExtractor, ClassDMMaster, ScopeInternal, LevelHigh, "")
 	ErrMasterWorkerArgsExtractor   = New(codeMasterWorkerArgsExtractor, ClassDMMaster, ScopeInternal, LevelHigh, "")
@@ -801,7 +801,7 @@ var (
 	ErrWorkerLogGetTaskMeta          = New(codeWorkerLogGetTaskMeta, ClassDMWorker, ScopeInternal, LevelHigh, "get task meta %s from kv db")
 	ErrWorkerLogDeleteTaskMeta       = New(codeWorkerLogDeleteTaskMeta, ClassDMWorker, ScopeInternal, LevelHigh, "delete task meta %s from kv db")
 	ErrWorkerMetaTomlTransform       = New(codeWorkerMetaTomlTransform, ClassDMWorker, ScopeInternal, LevelHigh, "meta toml transform")
-	ErrWorkerMetaOldFileStat         = New(codeWorkerMetaOldFileStat, ClassDMWorker, ScopeInternal, LevelHigh, "file stat")
+	ErrWorkerMetaOldFileStat         = New(codeWorkerMetaOldFileStat, ClassDMWorker, ScopeInternal, LevelHigh, "get old file stat")
 	ErrWorkerMetaOldReadFile         = New(codeWorkerMetaOldReadFile, ClassDMWorker, ScopeInternal, LevelHigh, "read old metadata file %s")
 	ErrWorkerMetaEncodeTask          = New(codeWorkerMetaEncodeTask, ClassDMWorker, ScopeInternal, LevelHigh, "encode task %v")
 	ErrWorkerMetaRemoveOldDir        = New(codeWorkerMetaRemoveOldDir, ClassDMWorker, ScopeInternal, LevelHigh, "remove old meta dir")

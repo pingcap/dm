@@ -20,9 +20,6 @@ import (
 	"github.com/pingcap/errors"
 )
 
-// stack represents a stack of program counters.
-type stack []uintptr
-
 // ErrCode is used as the unique identifier of a specific error type.
 type ErrCode int
 
@@ -85,18 +82,18 @@ const (
 )
 
 var errScope2Str = map[ErrScope]string{
-	ScopeNotSet:     "notset",
+	ScopeNotSet:     "not-set",
 	ScopeUpstream:   "upstream",
 	ScopeDownstream: "downstream",
 	ScopeInternal:   "internal",
 }
 
 // String implements fmt.Stringer interface
-func (ec ErrScope) String() string {
-	if s, ok := errScope2Str[ec]; ok {
+func (es ErrScope) String() string {
+	if s, ok := errScope2Str[es]; ok {
 		return s
 	}
-	return fmt.Sprintf("unknown error scope: %d", ec)
+	return fmt.Sprintf("unknown error scope: %d", es)
 }
 
 // ErrLevel represents the emergency level of a specific error type
@@ -116,11 +113,11 @@ var errLevel2Str = map[ErrLevel]string{
 }
 
 // String implements fmt.Stringer interface
-func (ec ErrLevel) String() string {
-	if s, ok := errLevel2Str[ec]; ok {
+func (el ErrLevel) String() string {
+	if s, ok := errLevel2Str[el]; ok {
 		return s
 	}
-	return fmt.Sprintf("unknown error level: %d", ec)
+	return fmt.Sprintf("unknown error level: %d", el)
 }
 
 // Error implements error interface and add more useful fields
