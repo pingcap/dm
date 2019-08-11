@@ -462,8 +462,8 @@ var (
 	ErrVerifySQLOperateArgs   = New(codeVerifySQLOperateArgs, ClassFunctional, ScopeInternal, LevelLow, "")
 	ErrStatFileSize           = New(codeStatFileSize, ClassFunctional, ScopeInternal, LevelHigh, "get file statfs")
 	ErrReaderAlreadyRunning   = New(codeReaderAlreadyRunning, ClassFunctional, ScopeInternal, LevelHigh, "binlog reader is already running")
-	ErrReaderStateCannotClose = New(codeReaderStateCannotClose, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s, can not close")
-	ErrReaderShouldStartSync  = New(codeReaderShouldStartSync, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s, please start sync first")
+	ErrReaderStateCannotClose = New(codeReaderStateCannotClose, ClassFunctional, ScopeInternal, LevelHigh, "stage %s, expect %s, can not close")
+	ErrReaderShouldStartSync  = New(codeReaderShouldStartSync, ClassFunctional, ScopeInternal, LevelHigh, "stage %s, expect %s, please start sync first")
 	// pkg/streamer
 	ErrEmptyRelayDir            = New(codeEmptyRelayDir, ClassFunctional, ScopeInternal, LevelHigh, "empty relay dir")
 	ErrReadDir                  = New(codeReadDir, ClassFunctional, ScopeInternal, LevelHigh, "read dir: %s")
