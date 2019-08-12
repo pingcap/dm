@@ -118,7 +118,7 @@ var (
 			Namespace: "dm",
 			Subsystem: "relay",
 			Name:      "read_transform_duration",
-			Help:      "bucketed histogram of read time (s) of transform single binlog event.",
+			Help:      "bucketed histogram of transform time (s) of single binlog event.",
 			Buckets:   prometheus.ExponentialBuckets(0.00005, 2, 20),
 		})
 
