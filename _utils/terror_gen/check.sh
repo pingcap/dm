@@ -10,4 +10,4 @@ trap "cd $PWD" EXIT
 cd $CUR
 GO111MODULE=on go build gen.go && ./gen ../../pkg/terror/error_list.go && rm gen
 GO111MODULE=on go run checker_generated.go
-git diff
+git diff --quiet -- errors_release.txt

@@ -7,6 +7,7 @@
 * checker_generated.go: check whether current errors have conflict with the previous version, checklist as follows:
   - check each error that is not newly added in develop version has the same error code with the release version
   - check each error in develop version has a unique error code
+* errors_release.txt: generated error information list
 
 ## Run
 
