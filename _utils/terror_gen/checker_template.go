@@ -17,7 +17,7 @@ const (
 	generatedCheckerFile = "checker_generated.go"
 )
 
-var dumpErrorRe = regexp.MustCompile("^([a-zA-Z].*),\\[([0-9]+).*$")
+var dumpErrorRe = regexp.MustCompile("^([a-zA-Z].*),\\[code=([0-9]+).*$")
 
 var errors = []struct {
 	name string
