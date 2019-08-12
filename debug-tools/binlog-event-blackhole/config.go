@@ -13,6 +13,8 @@ type config struct {
 	logLevel string
 	logFile  string
 
+	mode int
+
 	addr       string
 	username   string
 	password   string
@@ -30,6 +32,8 @@ func newConfig() *config {
 
 	fs.StringVar(&cfg.logLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.logFile, "log-file", "", "log file path")
+
+	fs.IntVar(&cfg.mode, "mode", 0, "event read mode.\n1: read packet with go-mysql;\n2: read packet without go-mysql;\n3: read binary data but do nothing")
 
 	fs.StringVar(&cfg.addr, "addr", "", "master's address")
 	fs.StringVar(&cfg.username, "u", "", "master's username")

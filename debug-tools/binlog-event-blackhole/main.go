@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/pingcap/errors"
 	"go.uber.org/zap"
@@ -70,7 +71,18 @@ func main() {
 		zap.Int("server-id", cfg.serverID), zap.String("binlog-name", cfg.binlogName),
 		zap.Int("binlog-pos", cfg.binlogPos))
 
-	count, duration, err := readEventsWithGoMySQL(ctx, conn)
+	var (
+		count    uint64
+		duration time.Duration
+	)
+	switch cfg.mode {
+	case 1:
+		count, duration, err = readEventsWithGoMySQL(ctx, conn)
+	case 2:
+		count, duration, err = readEventsWithoutGoMySQL(ctx, conn)
+	default:
+		log.L().Error("invalid mode specified`", zap.Int("mode", cfg.mode))
+	}
 	if err != nil {
 		log.L().Error("read events", zap.Error(err))
 	}

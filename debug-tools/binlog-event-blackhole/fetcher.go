@@ -95,3 +95,38 @@ func readEventsWithGoMySQL(ctx context.Context, conn *client.Conn) (uint64, time
 		}
 	}
 }
+
+// readEventsWithoutGoMySQL reads binlog events from master server without `go-mysql` pkg.
+func readEventsWithoutGoMySQL(ctx context.Context, conn *client.Conn) (uint64, time.Duration, error) {
+	var (
+		count     sync2.AtomicUint64
+		startTime = time.Now()
+	)
+	for {
+		select {
+		case <-ctx.Done():
+			return count.Get(), time.Since(startTime), nil
+		default:
+		}
+
+		_, data, err := readPacket(conn)
+		if err != nil {
+			return count.Get(), time.Since(startTime), errors.Annotate(err, "read event packet")
+		}
+
+		switch data[0] {
+		case 0x00: // OK_HEADER
+			count.Add(1) // got one more event
+			continue
+		case 0xff: // ERR_HEADER
+			return count.Get(), time.Since(startTime), errors.New("read event fail with 0xFF header")
+		case 0xfe: // EOF_HEADER
+			// Refer http://dev.mysql.com/doc/internals/en/packet-EOF_Packet.html
+			log.L().Warn("receive EOF packet, retrying")
+			continue
+		default:
+			log.L().Warn("invalid stream header, retrying", zap.Uint8("header", uint8(data[0])))
+			continue
+		}
+	}
+}
