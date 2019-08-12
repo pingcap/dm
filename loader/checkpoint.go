@@ -112,7 +112,7 @@ func (cp *RemoteCheckPoint) prepare() error {
 
 func (cp *RemoteCheckPoint) createSchema() error {
 	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", cp.schema)
-	err := cp.conn.executeSQL(cp.tctx, []string{sql2}, true)
+	err := cp.conn.executeSQL(cp.tctx, []string{sql2})
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
@@ -131,7 +131,7 @@ func (cp *RemoteCheckPoint) createTable() error {
 	);
 `
 	sql2 := fmt.Sprintf(createTable, tableName)
-	err := cp.conn.executeSQL(cp.tctx, []string{sql2}, true)
+	err := cp.conn.executeSQL(cp.tctx, []string{sql2})
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
@@ -142,8 +142,8 @@ func (cp *RemoteCheckPoint) Load() error {
 		cp.tctx.L().Info("load checkpoint", zap.Duration("cost time", time.Since(begin)))
 	}()
 
-	query := fmt.Sprintf("SELECT `filename`,`cp_schema`,`cp_table`,`offset`,`end_pos` from `%s`.`%s` where `id`=?", cp.schema, cp.table)
-	rows, err := cp.conn.querySQL(cp.tctx, query, queryRetryCount, cp.id)
+	query := fmt.Sprintf("SELECT `filename`,`cp_schema`,`cp_table`,`offset`,`end_pos` from `%s`.`%s` where `id`= '%s'", cp.schema, cp.table, cp.id)
+	rows, err := cp.conn.querySQL(cp.tctx, query, queryRetryCount)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -279,7 +279,8 @@ func (cp *RemoteCheckPoint) Init(filename string, endPos int64) error {
 		zap.String("table", fields[1]),
 		zap.Int64("offset", 0),
 		zap.Int64("end position", endPos))
-	err := cp.conn.executeCheckpointSQL(cp.tctx, sql2, maxRetryCount, cp.id, filename, fields[0], fields[1], 0, endPos)
+	args := []interface{}{cp.id, filename, fields[0], fields[1], 0, endPos}
+	err := cp.conn.executeSQL(cp.tctx, []string{sql2}, args)
 	if err != nil {
 		if isErrDupEntry(err) {
 			cp.tctx.L().Info("checkpoint record already exists, skip it.", zap.String("id", cp.id), zap.String("filename", filename))
@@ -305,14 +306,14 @@ func (cp *RemoteCheckPoint) GenSQL(filename string, offset int64) string {
 // Clear implements CheckPoint.Clear
 func (cp *RemoteCheckPoint) Clear() error {
 	sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s'", cp.schema, cp.table, cp.id)
-	err := cp.conn.executeSQL(cp.tctx, []string{sql2}, true)
+	err := cp.conn.executeSQL(cp.tctx, []string{sql2})
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
 // Count implements CheckPoint.Count
 func (cp *RemoteCheckPoint) Count() (int, error) {
-	query := fmt.Sprintf("SELECT COUNT(id) FROM `%s`.`%s` WHERE `id` = ?", cp.schema, cp.table)
-	rows, err := cp.conn.querySQL(cp.tctx, query, queryRetryCount, cp.id)
+	query := fmt.Sprintf("SELECT COUNT(id) FROM `%s`.`%s` WHERE `id` = '%s'", cp.schema, cp.table, cp.id)
+	rows, err := cp.conn.querySQL(cp.tctx, query, queryRetryCount)
 	if err != nil {
 		return 0, terror.WithScope(err, terror.ScopeDownstream)
 	}

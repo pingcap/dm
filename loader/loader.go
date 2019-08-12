@@ -157,7 +157,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *
 
 				failpoint.Inject("LoadDataSlowDown", nil)
 
-				if err := w.conn.executeSQL(ctctx, sqls, true); err != nil {
+				if err := w.conn.executeSQL(ctctx, sqls); err != nil {
 					// expect pause rather than exit
 					err = terror.Annotatef(err, "file %s", job.file)
 					runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, errors.ErrorStack(err))
@@ -918,7 +918,7 @@ func (l *Loader) restoreStructure(conn *Conn, sqlFile string, schema string, tab
 			l.tctx.L().Debug("schema create statement", zap.String("sql", query))
 
 			sqls = append(sqls, query)
-			err = conn.executeDDL(l.tctx, sqls, true)
+			err = conn.executeDDL(l.tctx, sqls)
 			if err != nil {
 				return err
 			}
@@ -968,7 +968,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer conn.db.Close()
+	defer conn.baseConn.Close()
 
 	dispatchMap := make(map[string]*fileJob)
 

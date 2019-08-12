@@ -16,6 +16,7 @@ package loader
 import (
 	"database/sql"
 	"fmt"
+	"github.com/pingcap/dm/pkg/utils"
 	"strconv"
 	"strings"
 	"time"
@@ -34,13 +35,12 @@ import (
 
 // Conn represents a live DB connection
 type Conn struct {
-	cfg *config.SubTaskConfig
-
-	db *sql.DB
+	cfg      *config.SubTaskConfig
+	baseConn *utils.BaseConn
 }
 
-func (conn *Conn) querySQL(ctx *tcontext.Context, query string, maxRetry int, args ...interface{}) (*sql.Rows, error) {
-	if conn == nil || conn.db == nil {
+func (conn *Conn) querySQL(ctx *tcontext.Context, query string, maxRetry int) (*sql.Rows, error) {
+	if conn == nil || conn.baseConn == nil {
 		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
@@ -49,14 +49,13 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string, maxRetry int, ar
 		rows *sql.Rows
 	)
 
-	ctx.L().Debug("query statement", zap.String("sql", query), zap.Reflect("arguments", args))
 	startTime := time.Now()
 	defer func() {
 		if err == nil {
 			cost := time.Since(startTime)
 			queryHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
 			if cost > 1 {
-				ctx.L().Warn("query statement", zap.String("sql", query), zap.Reflect("arguments", args), zap.Duration("cost time", cost))
+				ctx.L().Warn("query statement", zap.String("sql", query), zap.Duration("cost time", cost))
 			}
 		}
 	}()
@@ -64,81 +63,60 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string, maxRetry int, ar
 	for i := 0; i < maxRetry; i++ {
 		if i > 0 {
 			time.Sleep(time.Duration(i) * time.Second)
-			ctx.L().Warn("query statement", zap.Int("retry", i), zap.String("sql", query), zap.Reflect("arguments", args))
+			ctx.L().Warn("query statement", zap.Int("retry", i), zap.String("sql", query))
 		}
-		rows, err = conn.db.QueryContext(ctx.Context(), query, args...)
+		rows, err = conn.baseConn.QuerySQL(ctx, query)
 		if err != nil {
 			if isRetryableError(err) {
-				ctx.L().Warn("query statement", zap.Int("retry", i), zap.String("sql", query), zap.Reflect("arguments", args), log.ShortError(err))
+				ctx.L().Warn("query statement", zap.Int("retry", i), zap.String("sql", query), log.ShortError(err))
 				continue
 			}
-			ctx.L().Error("query statement", zap.String("sql", query), zap.Reflect("arguments", args), log.ShortError(err))
 			return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query)
 		}
 		return rows, nil
 	}
-	ctx.L().Error("query statement", zap.String("sql", query), zap.Reflect("arguments", args), log.ShortError(err))
 	return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query)
 }
 
-func (conn *Conn) executeCheckpointSQL(ctx *tcontext.Context, stmt string, maxRetry int, args ...interface{}) error {
-	if conn == nil || conn.db == nil {
-		return terror.ErrDBUnExpect.Generate("database connection not valid")
-	}
-
-	var err error
-	for i := 0; i < maxRetry; i++ {
-		if i > 0 {
-			ctx.L().Warn("execute statement", zap.Int("retry", i), zap.String("sql", stmt), zap.Reflect("arguments", args))
-			time.Sleep(time.Duration(i) * time.Second)
+func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]interface{}) error {
+	sqls := make([]utils.SQL, 0, len(queries))
+	for i, query := range queries {
+		if i >= len(args) {
+			sqls = append(sqls, utils.SQL{Query: query, Args: []interface{}{}})
+		} else {
+			sqls = append(sqls, utils.SQL{Query: query, Args: args[i]})
 		}
-		_, err = conn.db.ExecContext(ctx.Context(), stmt, args...)
-		if err != nil {
-			if isRetryableError(err) {
-				ctx.L().Warn("execute statement", zap.Int("retry", i), zap.String("sql", stmt), zap.Reflect("arguments", args), log.ShortError(err))
-				continue
-			}
-			ctx.L().Error("execute statement", zap.String("sql", stmt), zap.Reflect("arguments", args), log.ShortError(err))
-			return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, stmt)
-		}
-		return nil
 	}
-	ctx.L().Error("execute statement", zap.String("sql", stmt), zap.Reflect("arguments", args), log.ShortError(err))
-	return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, stmt)
+	return conn.executeSQLCustomRetry(ctx, sqls, isRetryableError)
 }
 
-func (conn *Conn) executeSQL(ctx *tcontext.Context, sqls []string, enableRetry bool) error {
-	return conn.executeSQLCustomRetry(ctx, sqls, enableRetry, isRetryableError)
+func (conn *Conn) executeDDL(ctx *tcontext.Context, queries []string) error {
+	sqls := make([]utils.SQL, 0, len(queries))
+	for _, query := range queries {
+		sqls = append(sqls, utils.SQL{Query: query, Args: []interface{}{}})
+	}
+	return conn.executeSQLCustomRetry(ctx, sqls, isDDLRetryableError)
 }
 
-func (conn *Conn) executeDDL(ctx *tcontext.Context, sqls []string, enableRetry bool) error {
-	return conn.executeSQLCustomRetry(ctx, sqls, enableRetry, isDDLRetryableError)
-}
-
-func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []string, enableRetry bool, isRetryableFn func(err error) bool) error {
+func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []utils.SQL, isRetryableFn func(err error) bool) error {
 	if len(sqls) == 0 {
 		return nil
 	}
 
-	if conn == nil || conn.db == nil {
+	if conn == nil || conn.baseConn == nil {
 		return terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
 	var err error
 
-	retryCount := 1
-	if enableRetry {
-		retryCount = maxRetryCount
-	}
-
-	for i := 0; i < retryCount; i++ {
+	for i := 0; i < maxRetryCount; i++ {
 		if i > 0 {
 			ctx.L().Debug("execute statement", zap.Int("retry", i), zap.String("sqls", fmt.Sprintf("%-.200v", sqls)))
 			time.Sleep(2 * time.Duration(i) * time.Second)
 		}
 
 		startTime := time.Now()
-		err = executeSQLImp(ctx, conn.db, sqls)
+		err = executeSQLImp(ctx, conn.baseConn.DB, sqls)
 
 		failpoint.Inject("LoadExecCreateTableFailed", func(val failpoint.Value) {
 			items := strings.Split(val.(string), ",")
@@ -152,7 +130,7 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []string, en
 				ctx.L().Fatal("failpoint LoadExecCreateTableFailed's value is invalid", zap.String("val", val.(string)), zap.Strings("items", items), zap.Error(err1), zap.Error(err2))
 			}
 
-			if i < int(errNum) && len(sqls) == 1 && strings.Contains(sqls[0], "CREATE TABLE") {
+			if i < int(errNum) && len(sqls) == 1 && strings.Contains(sqls[0].Query, "CREATE TABLE") {
 				err = tmysql.NewErr(uint16(errCode))
 				ctx.L().Warn("executeSQLCustomRetry failed", zap.String("failpoint", "LoadExecCreateTableFailed"), zap.Error(err))
 			}
@@ -163,7 +141,7 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []string, en
 			if isRetryableFn(err) {
 				continue
 			}
-			return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, strings.Join(sqls, ";"))
+			return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, strings.Join([]string{}, ";"))
 		}
 
 		// update metrics
@@ -176,10 +154,10 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []string, en
 		return nil
 	}
 
-	return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, strings.Join(sqls, ";"))
+	return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, strings.Join([]string{}, ";"))
 }
 
-func executeSQLImp(ctx *tcontext.Context, db *sql.DB, sqls []string) error {
+func executeSQLImp(ctx *tcontext.Context, db *sql.DB, sqls []utils.SQL) error {
 	var (
 		err error
 		txn *sql.Tx
@@ -194,7 +172,7 @@ func executeSQLImp(ctx *tcontext.Context, db *sql.DB, sqls []string) error {
 
 	for i := range sqls {
 		ctx.L().Debug("execute statement", zap.String("sqls", fmt.Sprintf("%-.200v", sqls[i])))
-		res, err = txn.ExecContext(ctx.Context(), sqls[i])
+		res, err = txn.ExecContext(ctx.Context(), sqls[i].Query, sqls[i].Args...)
 		if err != nil {
 			ctx.L().Warn("execute statement", zap.String("sqls", fmt.Sprintf("%-.200v", sqls[i])), log.ShortError(err))
 			rerr := txn.Rollback()
@@ -227,20 +205,21 @@ func executeSQLImp(ctx *tcontext.Context, db *sql.DB, sqls []string) error {
 func createConn(cfg *config.SubTaskConfig) (*Conn, error) {
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&maxAllowedPacket=%d",
 		cfg.To.User, cfg.To.Password, cfg.To.Host, cfg.To.Port, *cfg.To.MaxAllowedPacket)
-	db, err := sql.Open("mysql", dbDSN)
+	baseConn := &utils.BaseConn{}
+	err := baseConn.Init(dbDSN)
 	if err != nil {
 		return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 	}
 
-	return &Conn{db: db, cfg: cfg}, nil
+	return &Conn{baseConn: baseConn, cfg: cfg}, nil
 }
 
 func closeConn(conn *Conn) error {
-	if conn.db == nil {
+	if conn.baseConn == nil {
 		return nil
 	}
 
-	return terror.DBErrorAdapt(conn.db.Close(), terror.ErrDBDriverError)
+	return terror.DBErrorAdapt(conn.baseConn.Close(), terror.ErrDBDriverError)
 }
 
 func isErrDBExists(err error) bool {
