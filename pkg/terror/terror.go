@@ -219,12 +219,12 @@ func (e *Error) SetMessage(message string) *Error {
 
 // New generates a new *Error with the same class and code, and replace message with new message
 func (e *Error) New(message string) error {
-	return e.levelGeneratef(1, message)
+	return e.stackLevelGeneratef(1, message)
 }
 
 // Generate generates a new *Error with the same class and code, and new arguments.
 func (e *Error) Generate(args ...interface{}) error {
-	return e.levelGeneratef(1, e.message, args...)
+	return e.stackLevelGeneratef(1, e.message, args...)
 }
 
 // Generatef generates a new *Error with the same class and code, and a new formatted message.

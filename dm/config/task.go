@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 
+	"github.com/dustin/go-humanize"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
@@ -342,7 +343,7 @@ func (c *TaskConfig) adjust() error {
 	iids := make(map[string]int) // source-id -> instance-index
 	for i, inst := range c.MySQLInstances {
 		if err := inst.Verify(); err != nil {
-			return terror.Annotatef(err, "mysql-instance: %d", i)
+			return terror.Annotatef(err, "mysql-instance: %s", humanize.Ordinal(i))
 		}
 		if iid, ok := iids[inst.SourceID]; ok {
 			return terror.ErrConfigMySQLInstSameSourceID.Generate(iid, i, inst.SourceID)
