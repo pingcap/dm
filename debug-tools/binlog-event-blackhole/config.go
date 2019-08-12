@@ -10,6 +10,9 @@ import (
 type config struct {
 	*flag.FlagSet
 
+	logLevel string
+	logFile  string
+
 	addr       string
 	username   string
 	password   string
@@ -25,9 +28,12 @@ func newConfig() *config {
 	}
 	fs := cfg.FlagSet
 
+	fs.StringVar(&cfg.logLevel, "L", "info", "log level: debug, info, warn, error, fatal")
+	fs.StringVar(&cfg.logFile, "log-file", "", "log file path")
+
 	fs.StringVar(&cfg.addr, "addr", "", "master's address")
-	fs.StringVar(&cfg.username, "username", "", "master's username")
-	fs.StringVar(&cfg.password, "password", "", "password for `username`")
+	fs.StringVar(&cfg.username, "u", "", "master's username")
+	fs.StringVar(&cfg.password, "p", "", "password for `username`")
 	fs.IntVar(&cfg.serverID, "server-id", 0, "slave's server-id")
 	fs.StringVar(&cfg.binlogName, "binlog-name", "", "startup binlog filename")
 	fs.IntVar(&cfg.binlogPos, "binlog-pos", 0, "startup binlog position")
