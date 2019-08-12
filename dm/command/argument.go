@@ -50,7 +50,7 @@ func VerifySQLOperateArgs(binlogPosStr, sqlPattern string, sharding bool) (*mysq
 	if len(binlogPosStr) > 0 {
 		pos2, err := binlog.PositionFromStr(binlogPosStr)
 		if err != nil {
-			return nil, nil, terror.ErrVerifySQLOperateArgs.AnnotateDelegate(err, "invalid --binlog-pos %s in sql operation", binlogPosStr)
+			return nil, nil, terror.ErrVerifySQLOperateArgs.Generatef("invalid --binlog-pos %s in sql operation: %s", binlogPosStr, terror.Message(err))
 		}
 		pos = &pos2
 	} else if len(sqlPattern) > 0 {

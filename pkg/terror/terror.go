@@ -307,6 +307,18 @@ func Annotatef(err error, format string, args ...interface{}) error {
 	return e
 }
 
+// Message returns `getMsg()` value if err is an *Error instance, else returns `Error()` value
+func Message(err error) string {
+	if err == nil {
+		return ""
+	}
+	e, ok := err.(*Error)
+	if !ok {
+		return err.Error()
+	}
+	return e.getMsg()
+}
+
 // WithScope tries to set given scope to *Error, if err is not an *Error instance,
 // wrap it with error scope instead
 func WithScope(err error, scope ErrScope) error {

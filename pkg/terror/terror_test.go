@@ -127,6 +127,11 @@ func (t *testTErrorSuite) TestTError(c *check.C) {
 	c.Assert(verbose[0], check.Equals, err2.Error())
 	c.Assert(verbose[1], check.Matches, ".*\\(\\*Error\\)\\.Generate")
 	c.Assert(fmt.Sprintf("%v", err2), check.Equals, err2.Error())
+
+	// test Message function
+	c.Assert(Message(nil), check.Equals, "")
+	c.Assert(Message(commonErr), check.Equals, commonErr.Error())
+	c.Assert(Message(err), check.Equals, err.getMsg())
 }
 
 func (t *testTErrorSuite) TestTErrorStackTrace(c *check.C) {
