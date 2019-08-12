@@ -38,6 +38,10 @@ type column struct {
 	extra    string
 }
 
+func (c *column) isGeneratedColumn() bool {
+	return strings.Contains(c.extra, "VIRTUAL GENERATED") || strings.Contains(c.extra, "STORED GENERATED")
+}
+
 type table struct {
 	schema string
 	name   string
@@ -459,8 +463,4 @@ func getBinaryLogs(db *sql.DB) ([]binlogSize, error) {
 		return nil, terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
 	}
 	return files, nil
-}
-
-func (c *column) isGeneratedColumn() bool {
-	return strings.Contains(c.extra, "VIRTUAL GENERATED") || strings.Contains(c.extra, "STORED GENERATED")
 }

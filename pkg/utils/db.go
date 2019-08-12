@@ -22,6 +22,7 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	tcontext "github.com/pingcap/dm/pkg/context"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
@@ -278,17 +279,115 @@ func IsErrBinlogPurged(err error) bool {
 	return ok && e.Code == tmysql.ErrMasterFatalErrorReadingBinlog
 }
 
-// IsErrTableNotExists checks whether err is TableNotExists error
-func IsErrTableNotExists(err error) bool {
-	return IsMySQLError(err, tmysql.ErrNoSuchTable)
-}
-
-// IsErrDupEntry checks whether err is DupEntry error
-func IsErrDupEntry(err error) bool {
-	return IsMySQLError(err, tmysql.ErrDupEntry)
-}
-
 // IsNoSuchThreadError checks whether err is NoSuchThreadError
 func IsNoSuchThreadError(err error) bool {
 	return IsMySQLError(err, tmysql.ErrNoSuchThread)
+}
+
+type Connect interface {
+	Init(dbDSN string) error
+	QuerySQL(ctx *tcontext.Context, query string) (*sql.Rows, error)
+	ExecuteSQL(ctx *tcontext.Context, sqls ...[]SQL) error
+	Close() error
+}
+
+type RetryConnect interface {
+	Connect
+
+	WithPolicy()
+}
+
+type Conn struct {
+	db *sql.DB
+}
+
+type SQL struct {
+	query string
+	args  []interface{}
+}
+
+func (conn *Conn) Init(dbDSN string) error {
+	db, err := sql.Open("mysql", dbDSN)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	conn.db = db
+	return nil
+}
+
+func (conn *Conn) QuerySQL(tctx *tcontext.Context, query string, maxRetry int) (*sql.Rows, error) {
+	if conn == nil || conn.db == nil {
+		return nil, errors.NotValidf("database connection")
+	}
+
+	var (
+		err  error
+		rows *sql.Rows
+	)
+
+	tctx.L().Debug("query statement", zap.String("query", query))
+
+	rows, err = conn.db.QueryContext(tctx.Context(), query)
+
+	if err != nil {
+		tctx.L().Error("query statement failed", zap.String("query", query), log.ShortError(err))
+		return nil, errors.Trace(err)
+	}
+	return rows, nil
+}
+
+func (conn *Conn) ExecuteSQL(tctx *tcontext.Context, sqls []SQL, maxRetry int) error {
+	if len(sqls) == 0 {
+		return nil
+	}
+
+	if conn == nil || conn.db == nil {
+		return errors.NotValidf("database connection")
+	}
+
+	var err error
+
+	if err = conn.executeSQLImp(tctx, sqls); err != nil {
+		return errors.Errorf("exec sqls[%v] failed, err:%s", sqls, err.Error())
+	}
+	return nil
+}
+
+func (conn *Conn) executeSQLImp(tctx *tcontext.Context, sqls []SQL) error {
+	if conn == nil || conn.db == nil {
+		return errors.NotValidf("database connection")
+	}
+
+	txn, err := conn.db.Begin()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	for i := range sqls {
+		tctx.L().Debug("execute statement", zap.String("query", sqls[i].query), zap.Reflect("argument", sqls[i].args))
+
+		_, err = txn.ExecContext(tctx.Context(), sqls[i].query, sqls[i].args...)
+		if err != nil {
+			tctx.L().Error("execute statement failed", zap.String("query", sqls[i].query), zap.Reflect("argument", sqls[i].args), log.ShortError(err))
+			rerr := txn.Rollback()
+			if rerr != nil {
+				tctx.L().Error("rollback failed", zap.String("query", sqls[i].query), zap.Reflect("argument", sqls[i].args), log.ShortError(rerr))
+			}
+			// we should return the exec err, instead of the rollback rerr.
+			return errors.Trace(err)
+		}
+	}
+	err = txn.Commit()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
+}
+
+func (conn *Conn) Close() error {
+	if conn == nil || conn.db == nil {
+		return nil
+	}
+
+	return errors.Trace(conn.db.Close())
 }
