@@ -75,7 +75,7 @@ func main() {
 		log.L().Error("read events", zap.Error(err))
 	}
 
-	tps := count / uint64(duration.Seconds())
+	tps := float64(count) / duration.Seconds()
 	log.L().Info("binlog-event-blackhole exit", zap.Uint64("count", count),
-		zap.Duration("duration", duration), zap.Uint64("tps", tps))
+		zap.Duration("duration", duration), zap.Float64("tps", tps))
 }

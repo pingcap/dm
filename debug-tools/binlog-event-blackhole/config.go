@@ -36,7 +36,7 @@ func newConfig() *config {
 	fs.StringVar(&cfg.password, "p", "", "password for `username`")
 	fs.IntVar(&cfg.serverID, "server-id", 0, "slave's server-id")
 	fs.StringVar(&cfg.binlogName, "binlog-name", "", "startup binlog filename")
-	fs.IntVar(&cfg.binlogPos, "binlog-pos", 0, "startup binlog position")
+	fs.IntVar(&cfg.binlogPos, "binlog-pos", 4, "startup binlog position")
 
 	return cfg
 }
