@@ -62,29 +62,31 @@ func closeConn(conn *client.Conn) error {
 }
 
 // readEventsWithGoMySQL reads binlog events from the master server with `go-mysql` pkg.
-func readEventsWithGoMySQL(ctx context.Context, conn *client.Conn) (uint64, time.Duration, error) {
+func readEventsWithGoMySQL(ctx context.Context, conn *client.Conn) (uint64, uint64, time.Duration, error) {
 	var (
-		count     sync2.AtomicUint64
-		startTime = time.Now()
+		eventCount sync2.AtomicUint64
+		byteCount  sync2.AtomicUint64
+		startTime  = time.Now()
 	)
 	for {
 		select {
 		case <-ctx.Done():
-			return count.Get(), time.Since(startTime), nil
+			return eventCount.Get(), byteCount.Get(), time.Since(startTime), nil
 		default:
 		}
 
 		data, err := conn.ReadPacket()
 		if err != nil {
-			return count.Get(), time.Since(startTime), errors.Annotate(err, "read event packet")
+			return eventCount.Get(), byteCount.Get(), time.Since(startTime), errors.Annotate(err, "read event packet")
 		}
 
 		switch data[0] {
 		case 0x00: // OK_HEADER
-			count.Add(1) // got one more event
+			eventCount.Add(1)                    // got one more event
+			byteCount.Add(4 + uint64(len(data))) // with 4 bytes packet header
 			continue
 		case 0xff: // ERR_HEADER
-			return count.Get(), time.Since(startTime), errors.New("read event fail with 0xFF header")
+			return eventCount.Get(), byteCount.Get(), time.Since(startTime), errors.New("read event fail with 0xFF header")
 		case 0xfe: // EOF_HEADER
 			// Refer http://dev.mysql.com/doc/internals/en/packet-EOF_Packet.html
 			log.L().Warn("receive EOF packet, retrying")
@@ -97,29 +99,31 @@ func readEventsWithGoMySQL(ctx context.Context, conn *client.Conn) (uint64, time
 }
 
 // readEventsWithoutGoMySQL reads binlog events from master server without `go-mysql` pkg.
-func readEventsWithoutGoMySQL(ctx context.Context, conn *client.Conn) (uint64, time.Duration, error) {
+func readEventsWithoutGoMySQL(ctx context.Context, conn *client.Conn) (uint64, uint64, time.Duration, error) {
 	var (
-		count     sync2.AtomicUint64
-		startTime = time.Now()
+		eventCount sync2.AtomicUint64
+		byteCount  sync2.AtomicUint64
+		startTime  = time.Now()
 	)
 	for {
 		select {
 		case <-ctx.Done():
-			return count.Get(), time.Since(startTime), nil
+			return eventCount.Get(), byteCount.Get(), time.Since(startTime), nil
 		default:
 		}
 
 		_, data, err := readPacket(conn)
 		if err != nil {
-			return count.Get(), time.Since(startTime), errors.Annotate(err, "read event packet")
+			return eventCount.Get(), byteCount.Get(), time.Since(startTime), errors.Annotate(err, "read event packet")
 		}
 
 		switch data[0] {
 		case 0x00: // OK_HEADER
-			count.Add(1) // got one more event
+			eventCount.Add(1)                    // got one more event
+			byteCount.Add(4 + uint64(len(data))) // with 4 bytes packet header
 			continue
 		case 0xff: // ERR_HEADER
-			return count.Get(), time.Since(startTime), errors.New("read event fail with 0xFF header")
+			return eventCount.Get(), byteCount.Get(), time.Since(startTime), errors.New("read event fail with 0xFF header")
 		case 0xfe: // EOF_HEADER
 			// Refer http://dev.mysql.com/doc/internals/en/packet-EOF_Packet.html
 			log.L().Warn("receive EOF packet, retrying")
@@ -128,5 +132,27 @@ func readEventsWithoutGoMySQL(ctx context.Context, conn *client.Conn) (uint64, t
 			log.L().Warn("invalid stream header, retrying", zap.Uint8("header", uint8(data[0])))
 			continue
 		}
+	}
+}
+
+// readDataOnly reads the binary data only and does not parse packet or binlog event.
+func readDataOnly(ctx context.Context, conn *client.Conn) (uint64, uint64, time.Duration, error) {
+	var (
+		buf       = make([]byte, 10240)
+		byteCount sync2.AtomicUint64
+		startTime = time.Now()
+	)
+	for {
+		select {
+		case <-ctx.Done():
+			return 0, byteCount.Get(), time.Since(startTime), nil
+		default:
+		}
+
+		n, err := conn.Conn.Conn.Read(buf)
+		if err != nil {
+			return 0, byteCount.Get(), time.Since(startTime), errors.Annotatef(err, "read binary data")
+		}
+		byteCount.Add(uint64(n))
 	}
 }

@@ -72,14 +72,17 @@ func main() {
 		zap.Int("binlog-pos", cfg.binlogPos))
 
 	var (
-		count    uint64
-		duration time.Duration
+		eventCount uint64
+		byteCount  uint64
+		duration   time.Duration
 	)
 	switch cfg.mode {
 	case 1:
-		count, duration, err = readEventsWithGoMySQL(ctx, conn)
+		eventCount, byteCount, duration, err = readEventsWithGoMySQL(ctx, conn)
 	case 2:
-		count, duration, err = readEventsWithoutGoMySQL(ctx, conn)
+		eventCount, byteCount, duration, err = readEventsWithoutGoMySQL(ctx, conn)
+	case 3:
+		eventCount, byteCount, duration, err = readDataOnly(ctx, conn)
 	default:
 		log.L().Error("invalid mode specified`", zap.Int("mode", cfg.mode))
 	}
@@ -87,7 +90,9 @@ func main() {
 		log.L().Error("read events", zap.Error(err))
 	}
 
-	tps := float64(count) / duration.Seconds()
-	log.L().Info("binlog-event-blackhole exit", zap.Uint64("count", count),
-		zap.Duration("duration", duration), zap.Float64("tps", tps))
+	tps := float64(eventCount) / duration.Seconds()
+	speed := float64(byteCount) / duration.Seconds()
+	log.L().Info("binlog-event-blackhole exit",
+		zap.Uint64("event-count", eventCount), zap.Uint64("byte-count", byteCount),
+		zap.Duration("duration", duration), zap.Float64("tps", tps), zap.Float64("speed (byte/s)", speed))
 }
