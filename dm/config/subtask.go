@@ -67,7 +67,7 @@ func (db *DBConfig) Toml() (string, error) {
 	enc := toml.NewEncoder(&b)
 	err := enc.Encode(db)
 	if err != nil {
-		return "", terror.ErrConfigTomlTransform.Delegate(err, "db config to toml")
+		return "", terror.ErrConfigTomlTransform.Delegate(err, "encode db config to toml")
 	}
 	return b.String(), nil
 }

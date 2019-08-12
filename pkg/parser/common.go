@@ -129,7 +129,7 @@ func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string
 		v.Table.Name = model.NewCIStr(targetTableNames[0].Name)
 	case *ast.RenameTableStmt:
 		if len(v.TableToTables) > 1 {
-			return "", terror.ErrRenameMultipleTables.Generate(0)
+			return "", terror.ErrRenameMultipleTables.Generate()
 		}
 
 		v.TableToTables[0].OldTable.Schema = model.NewCIStr(targetTableNames[0].Schema)

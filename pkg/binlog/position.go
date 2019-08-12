@@ -37,11 +37,11 @@ const (
 func PositionFromStr(s string) (gmysql.Position, error) {
 	parsed := strings.Split(s, ":")
 	if len(parsed) != 2 {
-		return gmysql.Position{}, terror.ErrBinlogParsePosFromStr.New("the format should be filename:pos")
+		return gmysql.Position{}, terror.ErrBinlogParsePosFromStr.Generatef("the format should be filename:pos, position string %s", s)
 	}
 	pos, err := strconv.ParseUint(parsed[1], 10, 32)
 	if err != nil {
-		return gmysql.Position{}, terror.ErrBinlogParsePosFromStr.New("the pos should be digital")
+		return gmysql.Position{}, terror.ErrBinlogParsePosFromStr.Generatef("the pos should be digital, position string %s", s)
 	}
 
 	return gmysql.Position{

@@ -153,15 +153,18 @@ func (c *Config) Parse(arguments []string) error {
 // configFromFile loads config from file.
 func (c *Config) configFromFile(path string) error {
 	metaData, err := toml.DecodeFile(path, c)
+	if err != nil {
+		return terror.ErrMasterConfigTomlTransform.Delegate(err)
+	}
 	undecoded := metaData.Undecoded()
-	if len(undecoded) > 0 && err == nil {
+	if len(undecoded) > 0 {
 		var undecodedItems []string
 		for _, item := range undecoded {
 			undecodedItems = append(undecodedItems, item.String())
 		}
 		return terror.ErrMasterConfigUnknownItem.Generate(strings.Join(undecodedItems, ","))
 	}
-	return terror.ErrMasterConfigTomlTransform.Delegate(err)
+	return nil
 }
 
 // adjust adjusts configs

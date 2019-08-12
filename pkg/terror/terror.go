@@ -229,11 +229,11 @@ func (e *Error) Generate(args ...interface{}) error {
 
 // Generatef generates a new *Error with the same class and code, and a new formatted message.
 func (e *Error) Generatef(format string, args ...interface{}) error {
-	return e.levelGeneratef(1, format, args...)
+	return e.stackLevelGeneratef(1, format, args...)
 }
 
-// levelGeneratef is an inner interface to generate new *Error
-func (e *Error) levelGeneratef(stackSkipLevel int, format string, args ...interface{}) error {
+// stackLevelGeneratef is an inner interface to generate new *Error
+func (e *Error) stackLevelGeneratef(stackSkipLevel int, format string, args ...interface{}) error {
 	err := &Error{
 		code:    e.code,
 		class:   e.class,
