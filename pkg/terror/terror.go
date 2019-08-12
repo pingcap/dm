@@ -20,6 +20,11 @@ import (
 	"github.com/pingcap/errors"
 )
 
+const (
+	errBaseFormat = "[code=%d:class=%s:scope=%s:level=%s]"
+	errFormat     = errBaseFormat + " %s"
+)
+
 // ErrCode is used as the unique identifier of a specific error type.
 type ErrCode int
 
@@ -165,7 +170,7 @@ func (e *Error) Level() ErrLevel {
 
 // Error implements error interface.
 func (e *Error) Error() string {
-	return fmt.Sprintf("[%d:%s:%s:%s] %s", e.code, e.class, e.scope, e.level, e.getMsg())
+	return fmt.Sprintf(errFormat, e.code, e.class, e.scope, e.level, e.getMsg())
 }
 
 // Format accepts flags that alter the printing of some verbs

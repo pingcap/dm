@@ -58,7 +58,7 @@ func (t *testTErrorSuite) TestTError(c *check.C) {
 	c.Assert(err.Class(), check.Equals, class)
 	c.Assert(err.Scope(), check.Equals, scope)
 	c.Assert(err.Level(), check.Equals, level)
-	c.Assert(err.Error(), check.Equals, fmt.Sprintf("[%d:%s:%s:%s] %s", code, class, scope, level, err.getMsg()))
+	c.Assert(err.Error(), check.Equals, fmt.Sprintf(errFormat, code, class, scope, level, err.getMsg()))
 
 	setMsgErr := err.SetMessage(messageArgs)
 	c.Assert(setMsgErr.getMsg(), check.Equals, messageArgs)
@@ -68,35 +68,35 @@ func (t *testTErrorSuite) TestTError(c *check.C) {
 	// test Error Generate/Generatef
 	err2 := err.Generate("1063")
 	c.Assert(err.Equal(err2), check.IsTrue)
-	c.Assert(err2.Error(), check.Equals, fmt.Sprintf("[%d:%s:%s:%s] "+err.message, code, class, scope, level, "1063"))
+	c.Assert(err2.Error(), check.Equals, fmt.Sprintf(errBaseFormat+" "+err.message, code, class, scope, level, "1063"))
 
 	err3 := err.Generatef("new message format: %s", "1064")
 	c.Assert(err.Equal(err3), check.IsTrue)
-	c.Assert(err3.Error(), check.Equals, fmt.Sprintf("[%d:%s:%s:%s] new message format: %s", code, class, scope, level, "1064"))
+	c.Assert(err3.Error(), check.Equals, fmt.Sprintf(errBaseFormat+" new message format: %s", code, class, scope, level, "1064"))
 
 	// test Error Delegate
 	c.Assert(err.Delegate(nil, "nil"), check.IsNil)
 	err4 := err.Delegate(commonErr)
 	c.Assert(err.Equal(err4), check.IsTrue)
-	c.Assert(err4.Error(), check.Equals, fmt.Sprintf("[%d:%s:%s:%s] "+err.message+": %s", code, class, scope, level, commonErr))
+	c.Assert(err4.Error(), check.Equals, fmt.Sprintf(errBaseFormat+" "+err.message+": %s", code, class, scope, level, commonErr))
 	c.Assert(perrors.Cause(err4), check.Equals, commonErr)
 
 	argsErr := New(code, class, scope, level, messageArgs)
 	err4 = argsErr.Delegate(commonErr, "1065")
 	c.Assert(argsErr.Equal(err4), check.IsTrue)
-	c.Assert(err4.Error(), check.Equals, fmt.Sprintf("[%d:%s:%s:%s] "+argsErr.message+": %s", code, class, scope, level, "1065", commonErr))
+	c.Assert(err4.Error(), check.Equals, fmt.Sprintf(errBaseFormat+" "+argsErr.message+": %s", code, class, scope, level, "1065", commonErr))
 
 	// test Error AnnotateDelegate
 	c.Assert(err.AnnotateDelegate(nil, "message", "args"), check.IsNil)
 	err5 := err.AnnotateDelegate(commonErr, "annotate delegate error: %d", 1066)
 	c.Assert(err.Equal(err5), check.IsTrue)
-	c.Assert(err5.Error(), check.Equals, fmt.Sprintf("[%d:%s:%s:%s] annotate delegate error: 1066: common error", code, class, scope, level))
+	c.Assert(err5.Error(), check.Equals, fmt.Sprintf(errBaseFormat+" annotate delegate error: 1066: common error", code, class, scope, level))
 
 	// test Error Annotate
 	oldMsg := err.getMsg()
 	err6 := Annotate(err, "annotate error")
 	c.Assert(err.Equal(err6), check.IsTrue)
-	c.Assert(err6.Error(), check.Equals, fmt.Sprintf("[%d:%s:%s:%s] annotate error: %s", code, class, scope, level, oldMsg))
+	c.Assert(err6.Error(), check.Equals, fmt.Sprintf(errBaseFormat+" annotate error: %s", code, class, scope, level, oldMsg))
 
 	c.Assert(Annotate(nil, ""), check.IsNil)
 	annotateErr := Annotate(commonErr, "annotate")
@@ -108,7 +108,7 @@ func (t *testTErrorSuite) TestTError(c *check.C) {
 	oldMsg = err.getMsg()
 	err7 := Annotatef(err, "annotatef error %s", "1067")
 	c.Assert(err.Equal(err7), check.IsTrue)
-	c.Assert(err7.Error(), check.Equals, fmt.Sprintf("[%d:%s:%s:%s] annotatef error 1067: %s", code, class, scope, level, oldMsg))
+	c.Assert(err7.Error(), check.Equals, fmt.Sprintf(errBaseFormat+" annotatef error 1067: %s", code, class, scope, level, oldMsg))
 
 	c.Assert(Annotatef(nil, ""), check.IsNil)
 	annotateErr = Annotatef(commonErr, "annotatef %s", "1068")
@@ -178,7 +178,7 @@ func (t *testTErrorSuite) TestTerrorWithOperate(c *check.C) {
 	c.Assert(WithScope(commonErr, newScope).Error(), check.Equals, fmt.Sprintf("error scope: %s: common error", newScope))
 	err1 := WithScope(err.Generate(arg), newScope)
 	c.Assert(err.Equal(err1), check.IsTrue)
-	c.Assert(err1.Error(), check.Equals, fmt.Sprintf("[%d:%s:%s:%s] message with args: %s", code, class, newScope, level, arg))
+	c.Assert(err1.Error(), check.Equals, fmt.Sprintf(errBaseFormat+" message with args: %s", code, class, newScope, level, arg))
 
 	// test WithClass
 	newClass := ClassFunctional
@@ -186,5 +186,5 @@ func (t *testTErrorSuite) TestTerrorWithOperate(c *check.C) {
 	c.Assert(WithClass(commonErr, newClass).Error(), check.Equals, fmt.Sprintf("error class: %s: common error", newClass))
 	err2 := WithClass(err.Generate(arg), newClass)
 	c.Assert(err.Equal(err2), check.IsTrue)
-	c.Assert(err2.Error(), check.Equals, fmt.Sprintf("[%d:%s:%s:%s] message with args: %s", code, newClass, scope, level, arg))
+	c.Assert(err2.Error(), check.Equals, fmt.Sprintf(errBaseFormat+" message with args: %s", code, newClass, scope, level, arg))
 }
