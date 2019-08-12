@@ -15,7 +15,7 @@ package terror
 
 // Error codes list
 const (
-	codeDBDriverError ErrCode = iota + 1001
+	codeDBDriverError ErrCode = iota + 10001
 	codeDBBadConn
 	codeDBInvalidConn
 	codeDBUnExpect
@@ -23,7 +23,7 @@ const (
 	codeDBExecuteFailed
 
 	// Functional error code list
-	codeParseMydumperMeta ErrCode = iota + 1101
+	codeParseMydumperMeta ErrCode = iota + 11001
 	codeGetFileSize
 	codeDropMultipleTables
 	codeRenameMultipleTables
@@ -130,7 +130,7 @@ const (
 	codeTracingGetTSO
 
 	// Config related error code list
-	codeConfigCheckItemNotSupport ErrCode = iota + 2001
+	codeConfigCheckItemNotSupport ErrCode = iota + 20001
 	codeConfigTomlTransform
 	codeConfigTaskYamlTransform
 	codeConfigTaskNameEmpty
@@ -163,12 +163,12 @@ const (
 	codeConfigSourceIDNotFound
 
 	// Binlog operation error code list
-	codeBinlogExtractPosition ErrCode = iota + 2201
+	codeBinlogExtractPosition ErrCode = iota + 22001
 	codeBinlogInvalidFilename
 	codeBinlogParsePosFromStr
 
 	// Checkpoint error code
-	codeCheckpointInvalidTaskMode ErrCode = iota + 2401
+	codeCheckpointInvalidTaskMode ErrCode = iota + 24001
 	codeCheckpointSaveInvalidPos
 	codeCheckpointInvalidTableFile
 	codeCheckpointDBNotExistInFile
@@ -176,20 +176,20 @@ const (
 	codeCheckpointRestoreCountGreater
 
 	// Task check error code
-	codeTaskCheckSameTableName ErrCode = iota + 2601
+	codeTaskCheckSameTableName ErrCode = iota + 26001
 	codeTaskCheckFailedOpenDB
 	codeTaskCheckNewTableRouter
 	codeTaskCheckNewColumnMapping
 	codeTaskCheckSyncConfigError
 
 	// Relay log basic API error
-	codeRelayParseUUIDIndex ErrCode = iota + 2801
+	codeRelayParseUUIDIndex ErrCode = iota + 28001
 	codeRelayParseUUIDSuffix
 	codeRelayUUIDWithSuffixNotFound
 	codeRelayGenFakeRotateEvent
 	codeRelayNoValidRelaySubDir
 
-	codeRelayUUIDSuffixNotValid ErrCode = iota + 3001
+	codeRelayUUIDSuffixNotValid ErrCode = iota + 30001
 	codeRelayUUIDSuffixLessThanPrev
 	codeRelayLoadMetaData
 	codeRelayBinlogNameNotValid
@@ -234,10 +234,10 @@ const (
 	codePreviousGTIDsNotValid
 
 	// Dump unit error code
-	codeDumpUnitRuntime ErrCode = iota + 3201
+	codeDumpUnitRuntime ErrCode = iota + 32001
 
 	// Load unit error code
-	codeLoadUnitCreateSchemaFile ErrCode = iota + 3401
+	codeLoadUnitCreateSchemaFile ErrCode = iota + 34001
 	codeLoadUnitInvalidFileEnding
 	codeLoadUnitParseQuoteValues
 	codeLoadUnitDoColumnMapping
@@ -254,7 +254,7 @@ const (
 	codeLoadUnitDuplicateTableFile
 
 	// Sync unit error code
-	codeSyncerUnitPanic ErrCode = iota + 3601
+	codeSyncerUnitPanic ErrCode = iota + 36001
 	codeSyncUnitInvalidTableName
 	codeSyncUnitTableNameQuery
 	codeSyncUnitNotSupportedDML
@@ -315,7 +315,7 @@ const (
 	codeSyncerUnitExecWithNoBlockingDDL
 
 	// DM-master error code
-	codeMasterSQLOpNilRequest ErrCode = iota + 3801
+	codeMasterSQLOpNilRequest ErrCode = iota + 38001
 	codeMasterSQLOpNotSupport
 	codeMasterSQLOpWithoutSharding
 	codeMasterGRPCCreateConn
@@ -350,7 +350,7 @@ const (
 	codeMasterOperRequestTimeout
 
 	// DM-worker error code
-	codeWorkerParseFlagSet ErrCode = iota + 4001
+	codeWorkerParseFlagSet ErrCode = iota + 40001
 	codeWorkerInvalidFlag
 	codeWorkerDecodeConfigFromFile
 	codeWorkerUndecodedItemFromFile
@@ -419,7 +419,7 @@ const (
 	codeWorkerRelayIsPurging
 
 	// DM-tracer error code
-	codeTracerParseFlagSet ErrCode = iota + 4201
+	codeTracerParseFlagSet ErrCode = iota + 42001
 	codeTracerConfigTomlTransform
 	codeTracerConfigInvalidFlag
 	codeTracerTraceEventNotFound

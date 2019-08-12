@@ -66,7 +66,7 @@ unit_test:
 	|| { $(FAILPOINT_DISABLE); exit 1; }
 	$(FAILPOINT_DISABLE)
 
-check: fmt lint vet
+check: fmt lint vet terror_check
 
 fmt:
 	@echo "gofmt (simplify)"
@@ -87,6 +87,10 @@ vet:
 	@echo "vet"
 	@$(GO) vet -composites=false $(PACKAGES)
 	@$(GO) vet -vettool=$(CURDIR)/bin/shadow $(PACKAGES) || true
+
+terror_check:
+	@echo "check terror conflict"
+	_utils/terror_gen/check.sh
 
 dm_integration_test_build:
 	which $(FAILPOINT) >/dev/null 2>&1 || $(GOBUILD) -o $(FAILPOINT) github.com/pingcap/failpoint/failpoint-ctl
