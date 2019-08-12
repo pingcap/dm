@@ -718,7 +718,7 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 
 	s.resetEventsGenerator(c)
 
-	//create db and tables
+	//create baseConn and tables
 	events := mockBinlogEvents{
 		mockBinlogEvent{typ: DBCreate, args: []interface{}{"stest_3"}},
 		mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest_3", "create table stest_3.log(id varchar(45))"}},
@@ -751,7 +751,7 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 		dmlEvents = append(dmlEvents, dml.events...)
 	}
 
-	// drop tables and db
+	// drop tables and baseConn
 	events = mockBinlogEvents{
 		// TODO event generator support generate an event with multiple tables DDL
 		mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest_3", "log"}},
@@ -841,9 +841,9 @@ func (s *testSyncerSuite) TestTimezone(c *C) {
 		s.resetBinlogSyncer()
 
 		// we should not use `sql.DB.Exec` to do query which depends on session variables
-		// because `sql.DB.Exec` will choose a underlying Conn for every query from the connection pool
-		// and different Conn using different session
-		// ref: `sql.DB.Conn`
+		// because `sql.DB.Exec` will choose a underlying BaseConn for every query from the connection pool
+		// and different BaseConn using different session
+		// ref: `sql.DB.BaseConn`
 		// and `set @@global` is also not reasonable, because it can not affect sessions already exist
 		// if we must ensure multi queries use the same session, we should use a transaction
 		txn, err := s.db.Begin()
@@ -1036,8 +1036,8 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 
 	syncer := NewSyncer(s.cfg)
 	syncer.cfg.MaxRetry = 1
-	// use upstream db as mock downstream
-	syncer.toDBs = []*Conn{{db: s.db}}
+	// use upstream baseConn as mock downstream
+	syncer.toDBs = []*Conn{{baseConn: &utils.BaseConn{s.db}}}
 
 	for _, testCase := range testCases {
 		for _, sql := range testCase.sqls {
@@ -1307,14 +1307,14 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		c.Assert(syncer.checkpoint.GlobalPoint(), Equals, minCheckpoint)
 		c.Assert(syncer.checkpoint.FlushedGlobalPoint(), Equals, minCheckpoint)
 
-		// make syncer write to mock db
-		syncer.toDBs = []*Conn{{cfg: s.cfg, db: db}}
-		syncer.ddlDB = &Conn{cfg: s.cfg, db: db}
+		// make syncer write to mock baseConn
+		syncer.toDBs = []*Conn{{cfg: s.cfg, baseConn: &utils.BaseConn{db}}}
+		syncer.ddlDB = &Conn{cfg: s.cfg, baseConn: &utils.BaseConn{db}}
 
-		// run sql on upstream db to generate binlog event
+		// run sql on upstream baseConn to generate binlog event
 		runSQL(createSQLs)
 
-		// mock downstream db result
+		// mock downstream baseConn result
 		mock.ExpectBegin()
 		mock.ExpectExec("CREATE DATABASE").WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()
@@ -1336,7 +1336,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 				"Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Comment", "Index_comment"},
 			).AddRow("st", 0, "PRIMARY", 1, "id", "A", 0, null, null, null, "BTREE", "", ""))
 
-		// run sql on upstream db
+		// run sql on upstream baseConn
 		runSQL(_case.testSQLs)
 		// mock expect sql
 		for i, expectSQL := range _case.expectSQLS {
@@ -1392,7 +1392,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		GP := syncer.checkpoint.GlobalPoint().Pos
 		c.Assert(GP, Equals, flushedGP)
 
-		// check expectations for mock db
+		// check expectations for mock baseConn
 		if err := mock.ExpectationsWereMet(); err != nil {
 			c.Errorf("there were unfulfilled expectations: %s", err)
 		}

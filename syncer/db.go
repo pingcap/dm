@@ -16,10 +16,10 @@ package syncer
 import (
 	"database/sql"
 	"fmt"
+	"github.com/pingcap/dm/pkg/utils"
 	"strings"
 	"time"
 
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 
@@ -66,13 +66,12 @@ type binlogSize struct {
 
 // Conn represents a live DB connection
 type Conn struct {
-	cfg *config.SubTaskConfig
-
-	db *sql.DB
+	cfg      *config.SubTaskConfig
+	baseConn *utils.BaseConn
 }
 
 func (conn *Conn) querySQL(tctx *tcontext.Context, query string, maxRetry int) (*sql.Rows, error) {
-	if conn == nil || conn.db == nil {
+	if conn == nil || conn.baseConn == nil {
 		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
@@ -80,7 +79,6 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string, maxRetry int) (
 		err  error
 		rows *sql.Rows
 	)
-	tctx.L().Debug("query statement", zap.String("sql", query))
 	for i := 0; i < maxRetry; i++ {
 		if i > 0 {
 			sqlRetriesTotal.WithLabelValues("query", conn.cfg.Name).Add(1)
@@ -88,7 +86,7 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string, maxRetry int) (
 			time.Sleep(retryTimeout)
 		}
 
-		rows, err = conn.db.QueryContext(tctx.Context(), query)
+		rows, err = conn.baseConn.QuerySQL(tctx, query)
 		if err != nil {
 			if !isRetryableError(err) {
 				return rows, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query)
@@ -100,163 +98,45 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string, maxRetry int) (
 		return rows, nil
 	}
 
-	tctx.L().Error("query statement failed", zap.String("sql", query), log.ShortError(err))
 	return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query)
 }
 
-// Note: keep it for later use?
-func (conn *Conn) executeSQL(tctx *tcontext.Context, sqls []string, args [][]interface{}, maxRetry int) error {
-	if len(sqls) == 0 {
-		return nil
+func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]interface{}, maxRetry int) (int, error) {
+	if len(queries) == 0 {
+		return 0, nil
 	}
 
-	if conn == nil || conn.db == nil {
-		return terror.ErrDBUnExpect.Generate("database connection not valid")
+	if conn == nil || conn.baseConn == nil {
+		return 0, terror.ErrDBUnExpect.Generate("database connection not valid")
+	}
+
+	sqls := make([]utils.SQL, 0, len(queries))
+	for i, query := range queries {
+		sqls = append(sqls, utils.SQL{query, args[i]})
 	}
 
 	var err error
-	for i := 0; i < maxRetry; i++ {
-		if i > 0 {
-			sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
-			tctx.L().Warn("execute statements", zap.Int("retry", i), zap.Strings("sqls", sqls), zap.Reflect("arguments", args))
-			time.Sleep(retryTimeout)
-		}
-
-		if err = conn.executeSQLImp(tctx, sqls, args); err != nil {
+	var affected int
+	for i := 0; i < maxRetryCount; i++ {
+		if affected, err = conn.baseConn.ExecuteSQL(tctx, sqls); err != nil {
 			if isRetryableError(err) {
 				continue
 			}
-			tctx.L().Error("execute statements", zap.Strings("sqls", sqls), zap.Reflect("arguments", args), log.ShortError(err))
-			return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, strings.Join(sqls, ";"))
-		}
-
-		return nil
-	}
-
-	tctx.L().Error("exec statements failed", zap.Strings("sqls", sqls), zap.Reflect("arguments", args), log.ShortError(err))
-	return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, strings.Join(sqls, ";"))
-}
-
-// Note: keep it for later use?
-func (conn *Conn) executeSQLImp(tctx *tcontext.Context, sqls []string, args [][]interface{}) error {
-	if conn == nil || conn.db == nil {
-		return terror.ErrDBUnExpect.Generate("database connection not valid")
-	}
-
-	startTime := time.Now()
-	defer func() {
-		txnHistogram.WithLabelValues(conn.cfg.Name).Observe(time.Since(startTime).Seconds())
-	}()
-
-	txn, err := conn.db.Begin()
-	if err != nil {
-		tctx.L().Error("begin transaction", zap.Strings("sqls", sqls), zap.Reflect("arguments", args), zap.Error(err))
-		return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, strings.Join(sqls, ";"))
-	}
-
-	for i := range sqls {
-		tctx.L().Debug("execute statement", zap.String("sql", sqls[i]), zap.Reflect("argument", args[i]))
-
-		_, err = txn.ExecContext(tctx.Context(), sqls[i], args[i]...)
-		if err != nil {
-			tctx.L().Error("execute statement failed", zap.String("sql", sqls[i]), zap.Reflect("argument", args[i]), log.ShortError(err))
-			rerr := txn.Rollback()
-			if rerr != nil {
-				tctx.L().Error("rollback failed", zap.String("sql", sqls[i]), zap.Reflect("argument", args[i]), log.ShortError(rerr))
-			}
-			// we should return the exec err, instead of the rollback rerr.
-			return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, sqls[i])
 		}
 	}
-	err = txn.Commit()
-	if err != nil {
-		tctx.L().Error("transaction commit failed", zap.Strings("sqls", sqls), zap.Reflect("arguments", args), zap.Error(err))
-		return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, strings.Join(sqls, ";"))
-	}
-	return nil
-}
-
-func (conn *Conn) executeSQLJob(tctx *tcontext.Context, jobs []*job, maxRetry int) *ExecErrorContext {
-	if len(jobs) == 0 {
-		return nil
-	}
-
-	var errCtx *ExecErrorContext
-
-	for i := 0; i < maxRetry; i++ {
-		if i > 0 {
-			sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
-			tctx.L().Warn("execute jobs", zap.Int("retry", i))
-			time.Sleep(retryTimeout)
-		}
-
-		if errCtx = conn.executeSQLJobImp(tctx, jobs); errCtx != nil {
-			if isRetryableError(errors.Cause(errCtx.err)) {
-				continue
-			}
-			tctx.L().Error("execute jobs", log.ShortError(errCtx.err))
-			return errCtx
-		}
-
-		return nil
-	}
-
-	errCtx.err = terror.ErrDBExecuteFailed.Generate(errCtx.err.Error())
-	return errCtx
-}
-
-func (conn *Conn) executeSQLJobImp(tctx *tcontext.Context, jobs []*job) *ExecErrorContext {
-	startTime := time.Now()
-	defer func() {
-		cost := time.Since(startTime).Seconds()
-		txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost)
-	}()
-
-	txn, err := conn.db.Begin()
-	if err != nil {
-		tctx.L().Error("begin transaction in executing job", zap.Error(err))
-		return &ExecErrorContext{err: terror.DBErrorAdapt(err, terror.ErrDBDriverError), jobs: fmt.Sprintf("%v", jobs)}
-	}
-
-	for i := range jobs {
-		tctx.L().Debug("execute job", log.WrapStringerField("job", jobs[i]))
-
-		_, err = txn.ExecContext(tctx.Context(), jobs[i].sql, jobs[i].args...)
-		if err != nil {
-			tctx.L().Error("execute job", log.WrapStringerField("job", jobs[i]), log.ShortError(err))
-			rerr := txn.Rollback()
-			if rerr != nil {
-				tctx.L().Error("rollback job", log.WrapStringerField("job", jobs[i]), log.ShortError(rerr))
-			}
-			// error in ExecErrorContext should be the exec err, instead of the rollback rerr.
-			return &ExecErrorContext{err: terror.DBErrorAdapt(err, terror.ErrDBDriverError), pos: jobs[i].currentPos, jobs: fmt.Sprintf("%v", jobs)}
-		}
-	}
-	err = txn.Commit()
-	if err != nil {
-		tctx.L().Error("commit in executing job", zap.Error(err))
-		return &ExecErrorContext{err: terror.DBErrorAdapt(err, terror.ErrDBDriverError), pos: jobs[0].currentPos, jobs: fmt.Sprintf("%v", jobs)}
-	}
-	return nil
+	return affected, terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, queries)
 }
 
 func createDB(cfg *config.SubTaskConfig, dbCfg config.DBConfig, timeout string) (*Conn, error) {
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&readTimeout=%s&maxAllowedPacket=%d",
 		dbCfg.User, dbCfg.Password, dbCfg.Host, dbCfg.Port, timeout, *dbCfg.MaxAllowedPacket)
-	db, err := sql.Open("mysql", dbDSN)
+	baseConn := &utils.BaseConn{}
+	err := baseConn.Init(dbDSN)
 	if err != nil {
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+
 	}
-
-	return &Conn{db: db, cfg: cfg}, nil
-}
-
-func (conn *Conn) close() error {
-	if conn == nil || conn.db == nil {
-		return nil
-	}
-
-	return terror.DBErrorAdapt(conn.db.Close(), terror.ErrDBDriverError)
+	return &Conn{baseConn: baseConn, cfg: cfg}, nil
 }
 
 func createDBs(cfg *config.SubTaskConfig, dbCfg config.DBConfig, count int, timeout string) ([]*Conn, error) {
@@ -275,9 +155,9 @@ func createDBs(cfg *config.SubTaskConfig, dbCfg config.DBConfig, count int, time
 
 func closeDBs(tctx *tcontext.Context, dbs ...*Conn) {
 	for _, db := range dbs {
-		err := db.close()
+		err := db.baseConn.Close()
 		if err != nil {
-			tctx.L().Error("fail to close db connection", log.ShortError(err))
+			tctx.L().Error("fail to close baseConn connection", log.ShortError(err))
 		}
 	}
 }

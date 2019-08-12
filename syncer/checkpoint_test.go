@@ -15,6 +15,7 @@ package syncer
 
 import (
 	"fmt"
+	"github.com/pingcap/dm/pkg/utils"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -88,8 +89,9 @@ func (s *testCheckpointSuite) TestCheckPoint(c *C) {
 	mock.ExpectExec(clearCheckPointSQL).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
-	// pass sqlmock db directly
-	err = cp.Init(&Conn{cfg: s.cfg, db: db})
+	// pass sqlmock baseConn directly
+	conn := &Conn{cfg: s.cfg, baseConn: &utils.BaseConn{db}}
+	err = cp.Init(conn)
 	c.Assert(err, IsNil)
 	cp.Clear()
 

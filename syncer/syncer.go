@@ -407,7 +407,7 @@ func (s *Syncer) Init() (err error) {
 // NOTE: now we don't support modify router rules after task has started
 func (s *Syncer) initShardingGroups() error {
 	// fetch tables from source and filter them
-	sourceTables, err := utils.FetchAllDoTables(s.fromDB.db, s.bwList)
+	sourceTables, err := utils.FetchAllDoTables(s.fromDB.baseConn.DB, s.bwList)
 	if err != nil {
 		return err
 	}
@@ -579,7 +579,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 }
 
 func (s *Syncer) getMasterStatus() (mysql.Position, gtid.Set, error) {
-	return utils.GetMasterStatus(s.fromDB.db, s.cfg.Flavor)
+	return utils.GetMasterStatus(s.fromDB.baseConn.DB, s.cfg.Flavor)
 }
 
 // clearTables is used for clear table cache of given table. this function must
@@ -848,10 +848,15 @@ func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *Conn, jobCh
 		if len(jobs) == 0 {
 			return nil
 		}
-		errCtx := db.executeSQLJob(s.tctx, jobs, s.cfg.MaxRetry)
-		var err error
-		if errCtx != nil {
-			err = errCtx.err
+		queries := make([]string, 0, len(jobs))
+		args := make([][]interface{}, 0, len(jobs))
+		for _, j := range jobs {
+			queries = append(queries, j.sql)
+			args = append(args, j.args)
+		}
+		affected, err := db.executeSQL(s.tctx, queries, args, s.cfg.MaxRetry)
+		if err != nil {
+			errCtx := &ExecErrorContext{err, jobs[affected].currentPos, fmt.Sprintf("%v", jobs)}
 			s.appendExecErrors(errCtx)
 		}
 		if s.tracer.Enable() {
@@ -886,7 +891,7 @@ func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *Conn, jobCh
 					s.tctx.L().Info("ignore sharding DDLs", zap.Strings("ddls", sqlJob.ddls))
 				} else {
 					args := make([][]interface{}, len(sqlJob.ddls))
-					err = db.executeSQL(s.tctx, sqlJob.ddls, args, 1)
+					_, err = db.executeSQL(s.tctx, sqlJob.ddls, args, 1)
 					if err != nil && ignoreDDLError(err) {
 						err = nil
 					}
@@ -971,7 +976,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		close(s.done)
 	}()
 
-	parser2, err := utils.GetParser(s.fromDB.db, s.cfg.EnableANSIQuotes)
+	parser2, err := utils.GetParser(s.fromDB.baseConn.DB, s.cfg.EnableANSIQuotes)
 	if err != nil {
 		return err
 	}
@@ -1919,7 +1924,7 @@ func (s *Syncer) printStatus(ctx context.Context) {
 				currentPos := s.currentPosMu.currentPos
 				s.currentPosMu.RUnlock()
 
-				remainingSize, err2 := countBinaryLogsSize(currentPos, s.fromDB.db)
+				remainingSize, err2 := countBinaryLogsSize(currentPos, s.fromDB.baseConn.DB)
 				if err2 != nil {
 					// log the error, but still handle the rest operation
 					s.tctx.L().Error("fail to estimate unreplicated binlog size", zap.Error(err2))
@@ -1984,7 +1989,7 @@ func (s *Syncer) createDBs() error {
 		closeDBs(s.tctx, s.fromDB) // release resources acquired before return with error
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
-	// db for ddl
+	// baseConn for ddl
 	s.ddlDB, err = createDB(s.cfg, s.cfg.To, maxDDLConnectionTimeout)
 	if err != nil {
 		closeDBs(s.tctx, s.fromDB)
@@ -2154,7 +2159,7 @@ func (s *Syncer) closeBinlogSyncer(syncer *replication.BinlogSyncer) error {
 	lastSlaveConnectionID := syncer.LastConnectionID()
 	defer syncer.Close()
 	if lastSlaveConnectionID > 0 {
-		err := utils.KillConn(s.fromDB.db, lastSlaveConnectionID)
+		err := utils.KillConn(s.fromDB.baseConn.DB, lastSlaveConnectionID)
 		if err != nil {
 			s.tctx.L().Error("fail to kill last connection", zap.Uint32("connection ID", lastSlaveConnectionID), log.ShortError(err))
 			if !utils.IsNoSuchThreadError(err) {
@@ -2328,14 +2333,14 @@ func (s *Syncer) ExecuteDDL(ctx context.Context, execReq *pb.ExecDDLRequest) (<-
 func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 	s.Lock()
 	defer s.Unlock()
-	s.fromDB.close()
+	s.fromDB.baseConn.Close()
 
 	s.cfg.From = cfg.From
 
 	var err error
 	s.fromDB, err = createDB(s.cfg, s.cfg.From, maxDMLConnectionTimeout)
 	if err != nil {
-		s.tctx.L().Error("fail to create db connection", log.ShortError(err))
+		s.tctx.L().Error("fail to create baseConn connection", log.ShortError(err))
 		return err
 	}
 	return nil

@@ -60,7 +60,7 @@ func (s *Syncer) setInitActiveRelayLog() error {
 		}
 	} else {
 		// start from dumper or loader, get current pos from master
-		pos, _, err = utils.GetMasterStatus(s.fromDB.db, s.cfg.Flavor)
+		pos, _, err = utils.GetMasterStatus(s.fromDB.baseConn.DB, s.cfg.Flavor)
 		if err != nil {
 			return terror.Annotatef(err, "get master status")
 		}
@@ -74,7 +74,7 @@ func (s *Syncer) setInitActiveRelayLog() error {
 	} else {
 		var uuid string
 		latestUUID := uuids[len(uuids)-1]
-		uuid, err = utils.GetServerUUID(s.fromDB.db, s.cfg.Flavor)
+		uuid, err = utils.GetServerUUID(s.fromDB.baseConn.DB, s.cfg.Flavor)
 		if err != nil {
 			return terror.WithScope(terror.Annotatef(err, "get server UUID"), terror.ScopeUpstream)
 		}
