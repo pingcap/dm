@@ -376,6 +376,7 @@ const (
 	codeWorkerLogUnmarshalTaskMeta
 	codeWorkerLogFetchTaskFromMeta
 	codeWorkerLogVerifyTaskMeta
+	codeWorkerLogSaveTaskMeta
 	codeWorkerLogGetTaskMeta
 	codeWorkerLogDeleteTaskMeta
 	codeWorkerMetaTomlTransform
@@ -659,10 +660,10 @@ var (
 
 	// Load unit error
 	ErrLoadUnitCreateSchemaFile    = New(codeLoadUnitCreateSchemaFile, ClassLoadUnit, ScopeInternal, LevelMedium, "generate schema file")
-	ErrLoadUnitInvalidFileEnding   = New(codeLoadUnitInvalidFileEnding, ClassLoadUnit, ScopeInternal, LevelHigh, "coresponding ending of sql: ')' not found")
+	ErrLoadUnitInvalidFileEnding   = New(codeLoadUnitInvalidFileEnding, ClassLoadUnit, ScopeInternal, LevelHigh, "corresponding ending of sql: ')' not found")
 	ErrLoadUnitParseQuoteValues    = New(codeLoadUnitParseQuoteValues, ClassLoadUnit, ScopeInternal, LevelHigh, "parse quote values error")
 	ErrLoadUnitDoColumnMapping     = New(codeLoadUnitDoColumnMapping, ClassLoadUnit, ScopeInternal, LevelHigh, "mapping row data %v for table %+v")
-	ErrLoadUnitReadSchemaFile      = New(codeLoadUnitReadSchemaFile, ClassLoadUnit, ScopeInternal, LevelHigh, "read schema from sql file")
+	ErrLoadUnitReadSchemaFile      = New(codeLoadUnitReadSchemaFile, ClassLoadUnit, ScopeInternal, LevelHigh, "read schema from sql file %s")
 	ErrLoadUnitParseStatement      = New(codeLoadUnitParseStatement, ClassLoadUnit, ScopeInternal, LevelHigh, "parse statement %s")
 	ErrLoadUnitNotCreateTable      = New(codeLoadUnitNotCreateTable, ClassLoadUnit, ScopeInternal, LevelHigh, "statement %s for %s/%s is not create table statement")
 	ErrLoadUnitDispatchSQLFromFile = New(codeLoadUnitDispatchSQLFromFile, ClassLoadUnit, ScopeInternal, LevelHigh, "dispatch sql")
@@ -792,12 +793,13 @@ var (
 	ErrWorkerLogUnmarshalBinary      = New(codeWorkerLogUnmarshalBinary, ClassDMWorker, ScopeInternal, LevelHigh, "unmarshal task log binary % X")
 	ErrWorkerLogForwardPointer       = New(codeWorkerLogForwardPointer, ClassDMWorker, ScopeInternal, LevelHigh, "forward handled pointer to %d")
 	ErrWorkerLogMarshalTask          = New(codeWorkerLogMarshalTask, ClassDMWorker, ScopeInternal, LevelHigh, "marshal task log %+v")
-	ErrWorkerLogSaveTask             = New(codeWorkerLogSaveTask, ClassDMWorker, ScopeInternal, LevelHigh, "save task log %d")
+	ErrWorkerLogSaveTask             = New(codeWorkerLogSaveTask, ClassDMWorker, ScopeInternal, LevelHigh, "save task log %+v")
 	ErrWorkerLogDeleteKV             = New(codeWorkerLogDeleteKV, ClassDMWorker, ScopeInternal, LevelHigh, "delete kv with prefix % X until % X")
 	ErrWorkerLogDeleteKVIter         = New(codeWorkerLogDeleteKVIter, ClassDMWorker, ScopeInternal, LevelHigh, "iterate kv with prefix % X")
 	ErrWorkerLogUnmarshalTaskMeta    = New(codeWorkerLogUnmarshalTaskMeta, ClassDMWorker, ScopeInternal, LevelHigh, "unmarshal task meta % X")
 	ErrWorkerLogFetchTaskFromMeta    = New(codeWorkerLogFetchTaskFromMeta, ClassDMWorker, ScopeInternal, LevelHigh, "fetch tasks from meta with prefix % X")
 	ErrWorkerLogVerifyTaskMeta       = New(codeWorkerLogVerifyTaskMeta, ClassDMWorker, ScopeInternal, LevelHigh, "")
+	ErrWorkerLogSaveTaskMeta         = New(codeWorkerLogSaveTaskMeta, ClassDMWorker, ScopeInternal, LevelHigh, "save task meta %s into kv db")
 	ErrWorkerLogGetTaskMeta          = New(codeWorkerLogGetTaskMeta, ClassDMWorker, ScopeInternal, LevelHigh, "get task meta %s from kv db")
 	ErrWorkerLogDeleteTaskMeta       = New(codeWorkerLogDeleteTaskMeta, ClassDMWorker, ScopeInternal, LevelHigh, "delete task meta %s from kv db")
 	ErrWorkerMetaTomlTransform       = New(codeWorkerMetaTomlTransform, ClassDMWorker, ScopeInternal, LevelHigh, "meta toml transform")

@@ -408,7 +408,7 @@ func LoadTaskMetas(h dbOperator) (map[string]*pb.TaskMeta, error) {
 	}
 	iter.Release()
 	if err != nil {
-		return nil, terror.ErrWorkerLogFetchTaskFromMeta.Delegate(err)
+		return nil, terror.ErrWorkerLogFetchTaskFromMeta.Delegate(err, TaskMetaPrefix)
 	}
 
 	err = iter.Error()
@@ -437,7 +437,7 @@ func SetTaskMeta(h dbOperator, task *pb.TaskMeta) error {
 
 	err = h.Put(EncodeTaskMetaKey(task.Name), taskBytes, nil)
 	if err != nil {
-		return terror.ErrWorkerLogSaveTask.Delegate(err, task.Name)
+		return terror.ErrWorkerLogSaveTaskMeta.Delegate(err, task.Name)
 	}
 
 	return nil
@@ -550,11 +550,11 @@ func clearByPrefix(tctx *tcontext.Context, h dbOperator, prefix []byte) error {
 	iter.Release()
 	err = iter.Error()
 	if err != nil {
-		return terror.ErrWorkerLogDeleteKVIter.Delegate(err, prefix)
+		return terror.ErrWorkerLogDeleteKVIter.Delegate(err, prefix, iter.Key())
 	}
 
 	if batch.Len() > 0 {
 		err = h.Write(batch, nil)
 	}
-	return terror.ErrWorkerLogDeleteKV.Delegate(err, prefix)
+	return terror.ErrWorkerLogDeleteKV.Delegate(err, prefix, iter.Key())
 }

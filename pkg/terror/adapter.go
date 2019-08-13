@@ -42,6 +42,6 @@ func DBErrorAdaptArgs(err error, defaultErr *Error, args ...interface{}) error {
 
 // DBErrorAdapt is an adapter to change raw database error to *Error object.
 // If err is already an *Error object, return it directly.
-func DBErrorAdapt(err error, defaultErr *Error) error {
-	return DBErrorAdaptArgs(err, defaultErr)
+func DBErrorAdapt(err error, defaultErr *Error, args ...interface{}) error {
+	return DBErrorAdaptArgs(err, defaultErr, args...)
 }

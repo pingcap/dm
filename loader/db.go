@@ -73,12 +73,12 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string, maxRetry int, ar
 				continue
 			}
 			ctx.L().Error("query statement", zap.String("sql", query), zap.Reflect("arguments", args), log.ShortError(err))
-			return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed)
+			return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query)
 		}
 		return rows, nil
 	}
 	ctx.L().Error("query statement", zap.String("sql", query), zap.Reflect("arguments", args), log.ShortError(err))
-	return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed)
+	return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query)
 }
 
 func (conn *Conn) executeCheckpointSQL(ctx *tcontext.Context, stmt string, maxRetry int, args ...interface{}) error {
@@ -99,12 +99,12 @@ func (conn *Conn) executeCheckpointSQL(ctx *tcontext.Context, stmt string, maxRe
 				continue
 			}
 			ctx.L().Error("execute statement", zap.String("sql", stmt), zap.Reflect("arguments", args), log.ShortError(err))
-			return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed)
+			return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, stmt)
 		}
 		return nil
 	}
 	ctx.L().Error("execute statement", zap.String("sql", stmt), zap.Reflect("arguments", args), log.ShortError(err))
-	return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed)
+	return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, stmt)
 }
 
 func (conn *Conn) executeSQL(ctx *tcontext.Context, sqls []string, enableRetry bool) error {
@@ -163,7 +163,7 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []string, en
 			if isRetryableFn(err) {
 				continue
 			}
-			return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed)
+			return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, strings.Join(sqls, ";"))
 		}
 
 		// update metrics
@@ -176,7 +176,7 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []string, en
 		return nil
 	}
 
-	return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed)
+	return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, strings.Join(sqls, ";"))
 }
 
 func executeSQLImp(ctx *tcontext.Context, db *sql.DB, sqls []string) error {
@@ -201,7 +201,7 @@ func executeSQLImp(ctx *tcontext.Context, db *sql.DB, sqls []string) error {
 			if rerr != nil {
 				ctx.L().Error("fail rollback", log.ShortError(rerr))
 			}
-			return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed)
+			return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, sqls[i])
 		}
 		// check update checkpoint successful or not
 		if i == 2 {

@@ -87,7 +87,7 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string, maxRetry int) (
 		rows, err = conn.db.QueryContext(tctx.Context(), query)
 		if err != nil {
 			if !isRetryableError(err) {
-				return rows, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed)
+				return rows, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query)
 			}
 			tctx.L().Warn("query statement failed and retry", zap.String("sql", query), log.ShortError(err))
 			continue
@@ -97,7 +97,7 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string, maxRetry int) (
 	}
 
 	tctx.L().Error("query statement failed", zap.String("sql", query), log.ShortError(err))
-	return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed)
+	return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query)
 }
 
 // Note: keep it for later use?
@@ -123,14 +123,14 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, sqls []string, args [][]int
 				continue
 			}
 			tctx.L().Error("execute statements", zap.Strings("sqls", sqls), zap.Reflect("arguments", args), log.ShortError(err))
-			return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed)
+			return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, strings.Join(sqls, ";"))
 		}
 
 		return nil
 	}
 
 	tctx.L().Error("exec statements failed", zap.Strings("sqls", sqls), zap.Reflect("arguments", args), log.ShortError(err))
-	return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed)
+	return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, strings.Join(sqls, ";"))
 }
 
 // Note: keep it for later use?
@@ -147,7 +147,7 @@ func (conn *Conn) executeSQLImp(tctx *tcontext.Context, sqls []string, args [][]
 	txn, err := conn.db.Begin()
 	if err != nil {
 		tctx.L().Error("begin transaction", zap.Strings("sqls", sqls), zap.Reflect("arguments", args), zap.Error(err))
-		return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed)
+		return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, strings.Join(sqls, ";"))
 	}
 
 	for i := range sqls {
@@ -161,13 +161,13 @@ func (conn *Conn) executeSQLImp(tctx *tcontext.Context, sqls []string, args [][]
 				tctx.L().Error("rollback failed", zap.String("sql", sqls[i]), zap.Reflect("argument", args[i]), log.ShortError(rerr))
 			}
 			// we should return the exec err, instead of the rollback rerr.
-			return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed)
+			return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, sqls[i])
 		}
 	}
 	err = txn.Commit()
 	if err != nil {
 		tctx.L().Error("transaction commit failed", zap.Strings("sqls", sqls), zap.Reflect("arguments", args), zap.Error(err))
-		return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed)
+		return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, strings.Join(sqls, ";"))
 	}
 	return nil
 }
