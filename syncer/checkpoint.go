@@ -227,7 +227,7 @@ func (cp *RemoteCheckPoint) Init(conn *Conn) error {
 	if conn != nil {
 		cp.db = conn
 	} else {
-		db, err := createDB(cp.cfg, cp.cfg.To, maxCheckPointTimeout)
+		db, err := createConn(cp.cfg, cp.cfg.To, maxCheckPointTimeout)
 		if err != nil {
 			return err
 		}
@@ -239,7 +239,7 @@ func (cp *RemoteCheckPoint) Init(conn *Conn) error {
 
 // Close implements CheckPoint.Close
 func (cp *RemoteCheckPoint) Close() {
-	closeDBs(cp.tctx, cp.db)
+	closeConns(cp.tctx, cp.db)
 }
 
 // Clear implements CheckPoint.Clear

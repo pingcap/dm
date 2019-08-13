@@ -106,7 +106,7 @@ func NewOnlineDDLStorage(newtctx *tcontext.Context, cfg *config.SubTaskConfig) *
 
 // Init initials online handler
 func (s *OnlineDDLStorage) Init() error {
-	db, err := createDB(s.cfg, s.cfg.To, maxCheckPointTimeout)
+	db, err := createConn(s.cfg, s.cfg.To, maxCheckPointTimeout)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -250,7 +250,7 @@ func (s *OnlineDDLStorage) Close() {
 	s.Lock()
 	defer s.Unlock()
 
-	closeDBs(s.tctx, s.db)
+	closeConns(s.tctx, s.db)
 }
 
 func (s *OnlineDDLStorage) prepare() error {

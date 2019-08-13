@@ -454,7 +454,7 @@ func (k *ShardingGroupKeeper) Init(conn *Conn) error {
 	if conn != nil {
 		k.db = conn
 	} else {
-		db, err := createDB(k.cfg, k.cfg.To, maxDDLConnectionTimeout)
+		db, err := createConn(k.cfg, k.cfg.To, maxDDLConnectionTimeout)
 		if err != nil {
 			return err
 		}
@@ -695,7 +695,7 @@ func (k *ShardingGroupKeeper) prepare() error {
 
 // Close closes sharding group keeper
 func (k *ShardingGroupKeeper) Close() {
-	closeDBs(k.tctx, k.db)
+	closeConns(k.tctx, k.db)
 }
 
 func (k *ShardingGroupKeeper) createSchema() error {

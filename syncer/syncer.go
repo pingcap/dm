@@ -1978,33 +1978,33 @@ func (s *Syncer) printStatus(ctx context.Context) {
 
 func (s *Syncer) createDBs() error {
 	var err error
-	s.fromDB, err = createDB(s.cfg, s.cfg.From, maxDMLConnectionTimeout)
+	s.fromDB, err = createConn(s.cfg, s.cfg.From, maxDMLConnectionTimeout)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeUpstream)
 	}
 
 	s.toDBs = make([]*Conn, 0, s.cfg.WorkerCount)
-	s.toDBs, err = createDBs(s.cfg, s.cfg.To, s.cfg.WorkerCount, maxDMLConnectionTimeout)
+	s.toDBs, err = createConns(s.cfg, s.cfg.To, s.cfg.WorkerCount, maxDMLConnectionTimeout)
 	if err != nil {
-		closeDBs(s.tctx, s.fromDB) // release resources acquired before return with error
+		closeConns(s.tctx, s.fromDB) // release resources acquired before return with error
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
 	// baseConn for ddl
-	s.ddlDB, err = createDB(s.cfg, s.cfg.To, maxDDLConnectionTimeout)
+	s.ddlDB, err = createConn(s.cfg, s.cfg.To, maxDDLConnectionTimeout)
 	if err != nil {
-		closeDBs(s.tctx, s.fromDB)
-		closeDBs(s.tctx, s.toDBs...)
+		closeConns(s.tctx, s.fromDB)
+		closeConns(s.tctx, s.toDBs...)
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
 
 	return nil
 }
 
-// closeDBs closes all opened DBs, rollback for createDBs
+// closeConns closes all opened DBs, rollback for createConns
 func (s *Syncer) closeDBs() {
-	closeDBs(s.tctx, s.fromDB)
-	closeDBs(s.tctx, s.toDBs...)
-	closeDBs(s.tctx, s.ddlDB)
+	closeConns(s.tctx, s.fromDB)
+	closeConns(s.tctx, s.toDBs...)
+	closeConns(s.tctx, s.ddlDB)
 }
 
 // record skip ddl/dml sqls' position
@@ -2338,7 +2338,7 @@ func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 	s.cfg.From = cfg.From
 
 	var err error
-	s.fromDB, err = createDB(s.cfg, s.cfg.From, maxDMLConnectionTimeout)
+	s.fromDB, err = createConn(s.cfg, s.cfg.From, maxDMLConnectionTimeout)
 	if err != nil {
 		s.tctx.L().Error("fail to create baseConn connection", log.ShortError(err))
 		return err

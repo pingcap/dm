@@ -320,7 +320,7 @@ func (conn *BaseConn) Init(dbDSN string) error {
 	return nil
 }
 
-// QuerySQL Query sql
+// QuerySQL query sql
 func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string) (*sql.Rows, error) {
 	if conn == nil || conn.DB == nil {
 		return nil, errors.NotValidf("database connection")

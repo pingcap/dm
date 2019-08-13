@@ -116,7 +116,7 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []utils.SQL,
 		}
 
 		startTime := time.Now()
-		err = executeSQLImp(ctx, conn.baseConn.DB, sqls)
+		_, err = conn.baseConn.ExecuteSQL(ctx, sqls)
 
 		failpoint.Inject("LoadExecCreateTableFailed", func(val failpoint.Value) {
 			items := strings.Split(val.(string), ",")
@@ -155,51 +155,6 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []utils.SQL,
 	}
 
 	return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, strings.Join([]string{}, ";"))
-}
-
-func executeSQLImp(ctx *tcontext.Context, db *sql.DB, sqls []utils.SQL) error {
-	var (
-		err error
-		txn *sql.Tx
-		res sql.Result
-	)
-
-	txn, err = db.Begin()
-	if err != nil {
-		ctx.L().Error("fail to begin a transaction", zap.String("sqls", fmt.Sprintf("%-.200v", sqls)), zap.Error(err))
-		return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-	}
-
-	for i := range sqls {
-		ctx.L().Debug("execute statement", zap.String("sqls", fmt.Sprintf("%-.200v", sqls[i])))
-		res, err = txn.ExecContext(ctx.Context(), sqls[i].Query, sqls[i].Args...)
-		if err != nil {
-			ctx.L().Warn("execute statement", zap.String("sqls", fmt.Sprintf("%-.200v", sqls[i])), log.ShortError(err))
-			rerr := txn.Rollback()
-			if rerr != nil {
-				ctx.L().Error("fail rollback", log.ShortError(rerr))
-			}
-			return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, sqls[i])
-		}
-		// check update checkpoint successful or not
-		if i == 2 {
-			row, err1 := res.RowsAffected()
-			if err1 != nil {
-				ctx.L().Warn("fail to get rows affected", zap.String("sqls", fmt.Sprintf("%-.200v", sqls[i])), log.ShortError(err1))
-				continue
-			}
-			if row != 1 {
-				ctx.L().Warn("update checkpoint", zap.Int64("affected rows", row))
-			}
-		}
-	}
-
-	err = txn.Commit()
-	if err != nil {
-		return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-	}
-
-	return nil
 }
 
 func createConn(cfg *config.SubTaskConfig) (*Conn, error) {

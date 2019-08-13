@@ -127,7 +127,7 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 	return affected, terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, queries)
 }
 
-func createDB(cfg *config.SubTaskConfig, dbCfg config.DBConfig, timeout string) (*Conn, error) {
+func createConn(cfg *config.SubTaskConfig, dbCfg config.DBConfig, timeout string) (*Conn, error) {
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&readTimeout=%s&maxAllowedPacket=%d",
 		dbCfg.User, dbCfg.Password, dbCfg.Host, dbCfg.Port, timeout, *dbCfg.MaxAllowedPacket)
 	baseConn := &utils.BaseConn{}
@@ -139,10 +139,10 @@ func createDB(cfg *config.SubTaskConfig, dbCfg config.DBConfig, timeout string) 
 	return &Conn{baseConn: baseConn, cfg: cfg}, nil
 }
 
-func createDBs(cfg *config.SubTaskConfig, dbCfg config.DBConfig, count int, timeout string) ([]*Conn, error) {
+func createConns(cfg *config.SubTaskConfig, dbCfg config.DBConfig, count int, timeout string) ([]*Conn, error) {
 	dbs := make([]*Conn, 0, count)
 	for i := 0; i < count; i++ {
-		db, err := createDB(cfg, dbCfg, timeout)
+		db, err := createConn(cfg, dbCfg, timeout)
 		if err != nil {
 			return nil, err
 		}
@@ -153,22 +153,22 @@ func createDBs(cfg *config.SubTaskConfig, dbCfg config.DBConfig, count int, time
 	return dbs, nil
 }
 
-func closeDBs(tctx *tcontext.Context, dbs ...*Conn) {
-	for _, db := range dbs {
-		err := db.baseConn.Close()
+func closeConns(tctx *tcontext.Context, conns ...*Conn) {
+	for _, conn := range conns {
+		err := conn.baseConn.Close()
 		if err != nil {
 			tctx.L().Error("fail to close baseConn connection", log.ShortError(err))
 		}
 	}
 }
 
-func getTableIndex(tctx *tcontext.Context, db *Conn, table *table, maxRetry int) error {
+func getTableIndex(tctx *tcontext.Context, conn *Conn, table *table, maxRetry int) error {
 	if table.schema == "" || table.name == "" {
 		return terror.ErrDBUnExpect.Generate("schema/table is empty")
 	}
 
 	query := fmt.Sprintf("SHOW INDEX FROM `%s`.`%s`", table.schema, table.name)
-	rows, err := db.querySQL(tctx, query, maxRetry)
+	rows, err := conn.querySQL(tctx, query, maxRetry)
 	if err != nil {
 		return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
@@ -219,13 +219,13 @@ func getTableIndex(tctx *tcontext.Context, db *Conn, table *table, maxRetry int)
 	return nil
 }
 
-func getTableColumns(tctx *tcontext.Context, db *Conn, table *table, maxRetry int) error {
+func getTableColumns(tctx *tcontext.Context, conn *Conn, table *table, maxRetry int) error {
 	if table.schema == "" || table.name == "" {
 		return terror.ErrDBUnExpect.Generate("schema/table is empty")
 	}
 
 	query := fmt.Sprintf("SHOW COLUMNS FROM `%s`.`%s`", table.schema, table.name)
-	rows, err := db.querySQL(tctx, query, maxRetry)
+	rows, err := conn.querySQL(tctx, query, maxRetry)
 	if err != nil {
 		return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
