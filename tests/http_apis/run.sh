@@ -35,24 +35,24 @@ function run() {
     check_log_contains $WORK_DIR/start-task.log "\"result\":true" 1
 
     curl -X GET 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test > $WORK_DIR/status.log
-    check_log_contains $WORK_DIR/status.log "\"stage\": \"Running\"" 1
-    check_log_contains $WORK_DIR/status.log "\"name\": \"test\"" 1
+    check_log_contains $WORK_DIR/status.log "\"stage\":\"Running\"" 1
+    check_log_contains $WORK_DIR/status.log "\"name\":\"test\"" 1
 
     echo "pause task and check stage"
     curl -X PUT 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/tasks/test -d '{ "op": 2 }' > $WORK_DIR/pause.log
-    check_log_contains $WORK_DIR/pause.log "\"op\": \"Pause\"" 1
+    check_log_contains $WORK_DIR/pause.log "\"op\":\"Pause\"" 1
 
     curl -X GET 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test > $WORK_DIR/status.log
-    check_log_contains $WORK_DIR/status.log "\"stage\": \"Paused\"" 1
-    check_log_contains $WORK_DIR/status.log "\"name\": \"test\"" 1
+    check_log_contains $WORK_DIR/status.log "\"stage\":\"Paused\"" 1
+    check_log_contains $WORK_DIR/status.log "\"name\":\"test\"" 1
 
     echo "resume task and check stage"
     curl -X PUT 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/tasks/test -d '{ "op": 3 }' > $WORK_DIR/resume.log
-    check_log_contains $WORK_DIR/resume.log "\"op\": \"Resume\"" 1
+    check_log_contains $WORK_DIR/resume.log "\"op\":\"Resume\"" 1
 
     curl -X GET 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test > $WORK_DIR/status.log
-    check_log_contains $WORK_DIR/status.log "\"stage\": \"Running\"" 1
-    check_log_contains $WORK_DIR/status.log "\"name\": \"test\"" 1
+    check_log_contains $WORK_DIR/status.log "\"stage\":\"Running\"" 1
+    check_log_contains $WORK_DIR/status.log "\"name\":\"test\"" 1
 
     echo "check data"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
