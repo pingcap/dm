@@ -239,7 +239,7 @@ func (e *Error) Generatef(format string, args ...interface{}) error {
 
 // stackLevelGeneratef is an inner interface to generate new *Error
 func (e *Error) stackLevelGeneratef(stackSkipLevel int, format string, args ...interface{}) error {
-	err := &Error{
+	return &Error{
 		code:    e.code,
 		class:   e.class,
 		scope:   e.scope,
@@ -248,7 +248,6 @@ func (e *Error) stackLevelGeneratef(stackSkipLevel int, format string, args ...i
 		args:    args,
 		stack:   errors.NewStack(stackSkipLevel),
 	}
-	return err
 }
 
 // Delegate creates a new *Error with the same fields of the give *Error,
@@ -257,7 +256,7 @@ func (e *Error) Delegate(err error, args ...interface{}) error {
 	if err == nil {
 		return nil
 	}
-	err2 := &Error{
+	return &Error{
 		code:     e.code,
 		class:    e.class,
 		scope:    e.scope,
@@ -267,7 +266,6 @@ func (e *Error) Delegate(err error, args ...interface{}) error {
 		rawCause: err,
 		stack:    errors.NewStack(0),
 	}
-	return err2
 }
 
 // AnnotateDelegate resets the message of *Error and Delegate with error and new args
