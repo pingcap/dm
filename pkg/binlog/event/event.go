@@ -517,7 +517,7 @@ func GenTableMapEvent(header *replication.EventHeader, latestPos uint32, tableID
 //   DELETE_ROWS_EVENTv0, DELETE_ROWS_EVENTv1, DELETE_ROWS_EVENTv2
 // ref: https://dev.mysql.com/doc/internals/en/rows-event.html
 // ref: http://blog.51cto.com/yanzongshuai/2090894
-func GenRowsEvent(header *replication.EventHeader, latestPos uint32, eventType replication.EventType, tableID uint64, rowsFlags uint16, rows [][]interface{}, columnType []byte) (*replication.BinlogEvent, error) {
+func GenRowsEvent(header *replication.EventHeader, latestPos uint32, eventType replication.EventType, tableID uint64, rowsFlags uint16, rows [][]interface{}, columnType []byte, tableMapEv *replication.BinlogEvent) (*replication.BinlogEvent, error) {
 	switch eventType {
 	case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2,
 		replication.UPDATE_ROWS_EVENTv0, replication.UPDATE_ROWS_EVENTv1, replication.UPDATE_ROWS_EVENTv2,
@@ -675,9 +675,11 @@ func GenRowsEvent(header *replication.EventHeader, latestPos uint32, eventType r
 	}
 
 	// parse TableMapEvent
-	tableMapEv, err := GenTableMapEvent(header, latestPos, tableID, []byte("schema-placeholder"), []byte("table-placeholder"), columnType)
-	if err != nil {
-		return nil, errors.Annotate(err, "generate TableMapEvent")
+	if tableMapEv == nil {
+		tableMapEv, err = GenTableMapEvent(header, latestPos, tableID, []byte("schema-placeholder"), []byte("table-placeholder"), columnType)
+		if err != nil {
+			return nil, errors.Annotate(err, "generate TableMapEvent")
+		}
 	}
 	_, err = parse2.ParseSingleEvent(bytes.NewReader(tableMapEv.RawData), onEventFunc)
 	if err != nil {

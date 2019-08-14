@@ -82,14 +82,11 @@ function check_print_status() {
     echo "check sync unit print status success"
 }
 
-cleanup1 $TEST_NAME
+cleanup_data $TEST_NAME
 # also cleanup dm processes in case of last run failed
-cleanup2 $*
+cleanup_process $*
 run $*
-cleanup2 $*
-
-wait_process_exit dm-master.test
-wait_process_exit dm-worker.test
+cleanup_process $*
 
 check_print_status $*
 

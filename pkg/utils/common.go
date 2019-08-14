@@ -22,6 +22,8 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
+	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb-tools/pkg/table-router"
@@ -61,6 +63,12 @@ func TrimCtrlChars(s string) string {
 // FetchAllDoTables returns all need to do tables after filtered (fetches from upstream MySQL)
 func FetchAllDoTables(db *sql.DB, bw *filter.Filter) (map[string][]string, error) {
 	schemas, err := getSchemas(db, maxRetryCount)
+
+	failpoint.Inject("FetchAllDoTablesFailed", func(val failpoint.Value) {
+		err = tmysql.NewErr(uint16(val.(int)))
+		log.L().Warn("FetchAllDoTables failed", zap.String("failpoint", "FetchAllDoTablesFailed"), zap.Error(err))
+	})
+
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -115,6 +123,12 @@ func FetchAllDoTables(db *sql.DB, bw *filter.Filter) (map[string][]string, error
 func FetchTargetDoTables(db *sql.DB, bw *filter.Filter, router *router.Table) (map[string][]*filter.Table, error) {
 	// fetch tables from source and filter them
 	sourceTables, err := FetchAllDoTables(db, bw)
+
+	failpoint.Inject("FetchTargetDoTablesFailed", func(val failpoint.Value) {
+		err = tmysql.NewErr(uint16(val.(int)))
+		log.L().Warn("FetchTargetDoTables failed", zap.String("failpoint", "FetchTargetDoTablesFailed"), zap.Error(err))
+	})
+
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
