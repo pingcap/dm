@@ -26,13 +26,6 @@ user = "root"
 password = ""
 instance-id = "source-1"
 
-[[source-db]]
-host = "127.0.0.1"
-port = 3307
-user = "root"
-password = ""
-instance-id = "source-2"
-
 [target-db]
 host = "127.0.0.1"
 port = 4000
