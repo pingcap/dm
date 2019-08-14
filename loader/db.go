@@ -46,14 +46,13 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string) (*sql.Rows, erro
 
 	startTime := time.Now()
 
-	ret, err := conn.baseConn.RetryOperation(
+	ret, err := conn.baseConn.NormalRetryOperation(
 		func() (interface{}, error) {
 			rows, err := conn.baseConn.QuerySQL(ctx, query)
 			return rows, err
 		},
 		func(err error) bool {
 			if isRetryableError(err) {
-				time.Sleep(2 * time.Second)
 				ctx.L().Warn("query statement retry", zap.String("sql", query), log.ShortError(err))
 				return true
 			}

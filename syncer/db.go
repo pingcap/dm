@@ -16,16 +16,19 @@ package syncer
 import (
 	"database/sql"
 	"fmt"
-	"github.com/pingcap/dm/pkg/utils"
 	"strings"
 	"time"
 
-	"github.com/siddontang/go-mysql/mysql"
 
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+
+	"github.com/siddontang/go-mysql/mysql"
+	"go.uber.org/zap"
+
 )
 
 type column struct {
@@ -74,7 +77,7 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string) (*sql.Rows, err
 		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
-	ret, err := conn.baseConn.RetryOperation(
+	ret, err := conn.baseConn.NormalRetryOperation(
 		func() (interface{}, error) {
 			rows, err := conn.baseConn.QuerySQL(tctx, query)
 			return rows, err
@@ -107,7 +110,7 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 	for i, query := range queries {
 		sqls = append(sqls, utils.SQL{query, args[i]})
 	}
-	ret, err := conn.baseConn.RetryOperation(
+	ret, err := conn.baseConn.NormalRetryOperation(
 		func() (interface{}, error) {
 			affected, err := conn.baseConn.ExecuteSQL(tctx, sqls)
 			return affected, err
