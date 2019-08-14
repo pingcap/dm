@@ -39,7 +39,7 @@ const (
 	ClassBinlogOp
 	ClassCheckpoint
 	ClassTaskCheck
-	ClassRelayAPI
+	ClassRelayUtil
 	ClassRelayUnit
 	ClassDumpUnit
 	ClassLoadUnit
@@ -56,7 +56,7 @@ var errClass2Str = map[ErrClass]string{
 	ClassBinlogOp:   "binlog-op",
 	ClassCheckpoint: "checkpoint",
 	ClassTaskCheck:  "task-check",
-	ClassRelayAPI:   "relay-api",
+	ClassRelayUtil:  "relay-util",
 	ClassRelayUnit:  "relay-unit",
 	ClassDumpUnit:   "dump-unit",
 	ClassLoadUnit:   "load-unit",

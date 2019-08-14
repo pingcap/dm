@@ -604,11 +604,11 @@ var (
 	ErrTaskCheckSyncConfigError  = New(codeTaskCheckSyncConfigError, ClassTaskCheck, ScopeInternal, LevelMedium, "%s %v: %v\n detail: %v")
 
 	// Relay log basic API error
-	ErrRelayParseUUIDIndex         = New(codeRelayParseUUIDIndex, ClassRelayAPI, ScopeInternal, LevelHigh, "parse server-uuid.index")
-	ErrRelayParseUUIDSuffix        = New(codeRelayParseUUIDSuffix, ClassRelayAPI, ScopeInternal, LevelHigh, "UUID (with suffix) %s not valid")
-	ErrRelayUUIDWithSuffixNotFound = New(codeRelayUUIDWithSuffixNotFound, ClassRelayAPI, ScopeInternal, LevelHigh, "no UUID (with suffix) matched %s found in %s, all UUIDs are %v")
-	ErrRelayGenFakeRotateEvent     = New(codeRelayGenFakeRotateEvent, ClassRelayAPI, ScopeInternal, LevelHigh, "generate fake rotate event")
-	ErrRelayNoValidRelaySubDir     = New(codeRelayNoValidRelaySubDir, ClassRelayAPI, ScopeInternal, LevelHigh, "no valid relay sub directory exists")
+	ErrRelayParseUUIDIndex         = New(codeRelayParseUUIDIndex, ClassRelayUtil, ScopeInternal, LevelHigh, "parse server-uuid.index")
+	ErrRelayParseUUIDSuffix        = New(codeRelayParseUUIDSuffix, ClassRelayUtil, ScopeInternal, LevelHigh, "UUID (with suffix) %s not valid")
+	ErrRelayUUIDWithSuffixNotFound = New(codeRelayUUIDWithSuffixNotFound, ClassRelayUtil, ScopeInternal, LevelHigh, "no UUID (with suffix) matched %s found in %s, all UUIDs are %v")
+	ErrRelayGenFakeRotateEvent     = New(codeRelayGenFakeRotateEvent, ClassRelayUtil, ScopeInternal, LevelHigh, "generate fake rotate event")
+	ErrRelayNoValidRelaySubDir     = New(codeRelayNoValidRelaySubDir, ClassRelayUtil, ScopeInternal, LevelHigh, "no valid relay sub directory exists")
 
 	// Relay unit error
 	ErrRelayUUIDSuffixNotValid           = New(codeRelayUUIDSuffixNotValid, ClassRelayUnit, ScopeInternal, LevelHigh, "UUID %s suffix %d should be 1 larger than previous suffix %d")

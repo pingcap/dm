@@ -11,4 +11,4 @@
 
 ## Run
 
-run `check.sh` will automatically check the valid of error list, if no conflict is detected, errors_release.txt will be updated with latest error list
+Run `check.sh` will automatically check the valid of error list, if no conflict is detected, errors_release.txt will be updated with latest error list. Each time we change errors definition in error_list, we must run `make terror_check`, which will call `check.sh` directly.
