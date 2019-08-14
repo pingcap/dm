@@ -25,7 +25,8 @@ function run() {
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 
     echo "start task and check stage"
-    curl -X POST 127.0.0.1:$MASTER_PORT/apis/alpha/tasks -d '{"task": "name: test\ntask-mode: all\nis-sharding: false\nmeta-schema: \"dm_meta\"\nremove-meta: false\nenable-heartbeat: true\ntimezone: \"Asia/Shanghai\"\n\ntarget-database:\n  host: \"127.0.0.1\"\n  port: 4000\n  user: \"root\"\n  password: \"\"\n\nmysql-instances:\n  - source-id: \"mysql-replica-01\"\n    black-white-list:  \"instance\"\n    mydumper-config-name: \"global\"\n    loader-config-name: \"global\"\n    syncer-config-name: \"global\"\n\nblack-white-list:\n  instance:\n    do-dbs: [\"http_apis\"]\n\nmydumpers:\n  global:\n    mydumper-path: \"./bin/mydumper\"\n    threads: 4\n    chunk-filesize: 0\n    skip-tz-utc: true\n    extra-args: \"-B http_apis --statement-size=100\"\n\nloaders:\n  global:\n    pool-size: 16\n    dir: \"./dumped_data\"\n\nsyncers:\n  global:\n    worker-count: 16\n    batch: 100\n    max-retry: 100"}' > $WORK_DIR/start-task.log
+    task_data=`cat $cur/conf/dm-task.yaml | sed 's/$/\\\n/' | sed 's/"/\\"/' | tr -d '\n'`
+    curl -X POST 127.0.0.1:$MASTER_PORT/apis/alpha/tasks -d '{"task": "'"$task_data"'"}' > $WORK_DIR/start-task.log
     check_log_contains $WORK_DIR/start-task.log "\"result\":true" 1
 
     curl -X GET 127.0.0.1:$MASTER_PORT/apis/alpha/status/test > $WORK_DIR/status.log
