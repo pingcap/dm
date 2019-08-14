@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/gtid"
@@ -307,14 +306,13 @@ func (conn *BaseConn) Init(dbDSN string) error {
 }
 
 // NormalRetryOperation will retry 100 times
-func (conn *BaseConn) NormalRetryOperation(operateFn func() (interface{}, error), retryFn func(int, error) bool) (interface{}, error) {
+func (conn *BaseConn) NormalRetryOperation(operateFn func(int) (interface{}, error), retryFn func(int, error) bool) (interface{}, error) {
 	var err error
 	var ret interface{}
 	for i := 0; i < 100; i++ {
-		ret, err = operateFn()
+		ret, err = operateFn(i)
 		if err != nil {
 			if retryFn(i, err) {
-				time.Sleep(2 * time.Second)
 				continue
 			}
 		}
@@ -331,7 +329,6 @@ func (conn *BaseConn) InfinityRetryOperation(operateFn func() (interface{}, erro
 		ret, err = operateFn()
 		if err != nil {
 			if retryFn(err) {
-				time.Sleep(2 * time.Second)
 				continue
 			}
 		}

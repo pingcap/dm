@@ -17,6 +17,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/failpoint"
 	"strconv"
 	"strings"
 	"time"
@@ -28,7 +29,6 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
-	"github.com/pingcap/failpoint"
 	tmysql "github.com/pingcap/parser/mysql"
 	"go.uber.org/zap"
 )
@@ -47,7 +47,7 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string) (*sql.Rows, erro
 	startTime := time.Now()
 
 	ret, err := conn.baseConn.NormalRetryOperation(
-		func() (interface{}, error) {
+		func(_ int) (interface{}, error) {
 			rows, err := conn.baseConn.QuerySQL(ctx, query)
 			return rows, err
 		},
@@ -102,20 +102,9 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []utils.SQL,
 	}
 
 	_, err := conn.baseConn.NormalRetryOperation(
-		func() (interface{}, error) {
+		func(retryTime int) (interface{}, error) {
 			startTime := time.Now()
 			_, err := conn.baseConn.ExecuteSQL(ctx, sqls)
-			cost := time.Since(startTime)
-			txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
-			if cost > 1 {
-				ctx.L().Warn("transaction execute successfully", zap.Duration("cost time", cost))
-			}
-			return nil, err
-		},
-		func(retryTime int, err error) bool {
-			ctx.L().Debug("execute statement", zap.Int("retry", retryTime), zap.String("sqls", fmt.Sprintf("%-.200v", sqls)))
-			time.Sleep(2 * time.Duration(retryTime) * time.Second)
-
 			failpoint.Inject("LoadExecCreateTableFailed", func(val failpoint.Value) {
 				items := strings.Split(val.(string), ",")
 				if len(items) != 2 {
@@ -133,6 +122,16 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []utils.SQL,
 					ctx.L().Warn("executeSQLCustomRetry failed", zap.String("failpoint", "LoadExecCreateTableFailed"), zap.Error(err))
 				}
 			})
+			cost := time.Since(startTime)
+			txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
+			if cost > 1 {
+				ctx.L().Warn("transaction execute successfully", zap.Duration("cost time", cost))
+			}
+			return nil, err
+		},
+		func(retryTime int, err error) bool {
+			ctx.L().Debug("execute statement", zap.Int("retry", retryTime), zap.String("sqls", fmt.Sprintf("%-.200v", sqls)))
+			time.Sleep(2 * time.Duration(retryTime) * time.Second)
 
 			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
 			if isRetryableFn(err) {
