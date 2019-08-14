@@ -219,10 +219,6 @@ func (c *SubTaskConfig) Adjust() error {
 		c.MetaSchema = defaultMetaSchema
 	}
 
-	if c.MaxRetry == 0 {
-		c.MaxRetry = 1
-	}
-
 	if !c.DisableHeartbeat {
 		c.EnableHeartbeat = true
 	}

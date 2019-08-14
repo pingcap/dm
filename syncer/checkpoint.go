@@ -250,7 +250,7 @@ func (cp *RemoteCheckPoint) Clear() error {
 	// delete all checkpoints
 	sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s'", cp.schema, cp.table, cp.id)
 	args := make([]interface{}, 0)
-	_, err := cp.db.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}, maxRetryCount)
+	_, err := cp.db.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args})
 	if err != nil {
 		return err
 	}
@@ -309,7 +309,7 @@ func (cp *RemoteCheckPoint) DeleteTablePoint(sourceSchema, sourceTable string) e
 	// delete  checkpoint
 	sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s' AND `cp_schema` = '%s' AND `cp_table` = '%s'", cp.schema, cp.table, cp.id, sourceSchema, sourceTable)
 	args := make([]interface{}, 0)
-	_, err := cp.db.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}, maxRetryCount)
+	_, err := cp.db.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args})
 	if err != nil {
 		return err
 	}
@@ -395,7 +395,7 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(exceptTables [][]string, extraSQLs
 		args = append(args, extraArgs[i])
 	}
 
-	_, err := cp.db.executeSQL(cp.tctx, sqls, args, maxRetryCount)
+	_, err := cp.db.executeSQL(cp.tctx, sqls, args)
 	if err != nil {
 		return err
 	}
@@ -458,7 +458,7 @@ func (cp *RemoteCheckPoint) prepare() error {
 func (cp *RemoteCheckPoint) createSchema() error {
 	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", cp.schema)
 	args := make([]interface{}, 0)
-	_, err := cp.db.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}, maxRetryCount)
+	_, err := cp.db.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args})
 	cp.tctx.L().Info("create checkpoint schema", zap.String("statement", sql2))
 	return err
 }
@@ -477,7 +477,7 @@ func (cp *RemoteCheckPoint) createTable() error {
 			UNIQUE KEY uk_id_schema_table (id, cp_schema, cp_table)
 		)`, tableName)
 	args := make([]interface{}, 0)
-	_, err := cp.db.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}, maxRetryCount)
+	_, err := cp.db.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args})
 	cp.tctx.L().Info("create checkpoint table", zap.String("statement", sql2))
 	return err
 }
@@ -485,7 +485,7 @@ func (cp *RemoteCheckPoint) createTable() error {
 // Load implements CheckPoint.Load
 func (cp *RemoteCheckPoint) Load() error {
 	query := fmt.Sprintf("SELECT `cp_schema`, `cp_table`, `binlog_name`, `binlog_pos`, `is_global` FROM `%s`.`%s` WHERE `id`='%s'", cp.schema, cp.table, cp.id)
-	rows, err := cp.db.querySQL(cp.tctx, query, maxRetryCount)
+	rows, err := cp.db.querySQL(cp.tctx, query)
 
 	failpoint.Inject("LoadCheckpointFailed", func(val failpoint.Value) {
 		err = tmysql.NewErr(uint16(val.(int)))

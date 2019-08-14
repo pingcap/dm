@@ -603,12 +603,12 @@ func (s *Syncer) getTableFromDB(db *Conn, schema string, name string) (*table, e
 	table.name = name
 	table.indexColumns = make(map[string][]*column)
 
-	err := getTableColumns(s.tctx, db, table, s.cfg.MaxRetry)
+	err := getTableColumns(s.tctx, db, table)
 	if err != nil {
 		return nil, err
 	}
 
-	err = getTableIndex(s.tctx, db, table, s.cfg.MaxRetry)
+	err = getTableIndex(s.tctx, db, table)
 	if err != nil {
 		return nil, err
 	}
@@ -854,7 +854,7 @@ func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *Conn, jobCh
 			queries = append(queries, j.sql)
 			args = append(args, j.args)
 		}
-		affected, err := db.executeSQL(s.tctx, queries, args, s.cfg.MaxRetry)
+		affected, err := db.executeSQL(s.tctx, queries, args)
 		if err != nil {
 			errCtx := &ExecErrorContext{err, jobs[affected].currentPos, fmt.Sprintf("%v", jobs)}
 			s.appendExecErrors(errCtx)
@@ -891,7 +891,7 @@ func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *Conn, jobCh
 					s.tctx.L().Info("ignore sharding DDLs", zap.Strings("ddls", sqlJob.ddls))
 				} else {
 					args := make([][]interface{}, len(sqlJob.ddls))
-					_, err = db.executeSQL(s.tctx, sqlJob.ddls, args, 1)
+					_, err = db.executeSQL(s.tctx, sqlJob.ddls, args)
 					if err != nil && ignoreDDLError(err) {
 						err = nil
 					}

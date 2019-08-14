@@ -1035,7 +1035,6 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	}
 
 	syncer := NewSyncer(s.cfg)
-	syncer.cfg.MaxRetry = 1
 	// use upstream baseConn as mock downstream
 	syncer.toDBs = []*Conn{{baseConn: &utils.BaseConn{s.db}}}
 
@@ -1288,7 +1287,6 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 	// set batch to 1 is easy to mock
 	s.cfg.Batch = 1
 	s.cfg.WorkerCount = 1
-	s.cfg.MaxRetry = 1
 
 	for i, _case := range testCases {
 		// drop first if last time test failed

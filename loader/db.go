@@ -39,22 +39,13 @@ type Conn struct {
 	baseConn *utils.BaseConn
 }
 
-func (conn *Conn) querySQL(ctx *tcontext.Context, query string, maxRetry int) (*sql.Rows, error) {
+func (conn *Conn) querySQL(ctx *tcontext.Context, query string) (*sql.Rows, error) {
 	if conn == nil || conn.baseConn == nil {
 		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
-	var err error
 	startTime := time.Now()
-	defer func() {
-		if err == nil {
-			cost := time.Since(startTime)
-			queryHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
-			if cost > 1 {
-				ctx.L().Warn("query statement", zap.String("sql", query), zap.Duration("cost time", cost))
-			}
-		}
-	}()
+
 	ret, err := conn.baseConn.RetryOperation(
 		func() (interface{}, error) {
 			rows, err := conn.baseConn.QuerySQL(ctx, query)
@@ -68,6 +59,17 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string, maxRetry int) (*
 			}
 			return false
 		})
+
+	defer func() {
+		if err == nil {
+			cost := time.Since(startTime)
+			queryHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
+			if cost > 1 {
+				ctx.L().Warn("query statement", zap.String("sql", query), zap.Duration("cost time", cost))
+			}
+		}
+	}()
+
 	if err != nil {
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query)
 	}

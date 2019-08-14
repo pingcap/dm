@@ -69,7 +69,7 @@ type Conn struct {
 	baseConn *utils.BaseConn
 }
 
-func (conn *Conn) querySQL(tctx *tcontext.Context, query string, maxRetry int) (*sql.Rows, error) {
+func (conn *Conn) querySQL(tctx *tcontext.Context, query string) (*sql.Rows, error) {
 	if conn == nil || conn.baseConn == nil {
 		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
@@ -94,7 +94,7 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string, maxRetry int) (
 	return ret.(*sql.Rows), nil
 }
 
-func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]interface{}, maxRetry int) (int, error) {
+func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]interface{}) (int, error) {
 	if len(queries) == 0 {
 		return 0, nil
 	}
@@ -161,13 +161,13 @@ func closeConns(tctx *tcontext.Context, conns ...*Conn) {
 	}
 }
 
-func getTableIndex(tctx *tcontext.Context, conn *Conn, table *table, maxRetry int) error {
+func getTableIndex(tctx *tcontext.Context, conn *Conn, table *table) error {
 	if table.schema == "" || table.name == "" {
 		return terror.ErrDBUnExpect.Generate("schema/table is empty")
 	}
 
 	query := fmt.Sprintf("SHOW INDEX FROM `%s`.`%s`", table.schema, table.name)
-	rows, err := conn.querySQL(tctx, query, maxRetry)
+	rows, err := conn.querySQL(tctx, query)
 	if err != nil {
 		return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
@@ -218,13 +218,13 @@ func getTableIndex(tctx *tcontext.Context, conn *Conn, table *table, maxRetry in
 	return nil
 }
 
-func getTableColumns(tctx *tcontext.Context, conn *Conn, table *table, maxRetry int) error {
+func getTableColumns(tctx *tcontext.Context, conn *Conn, table *table) error {
 	if table.schema == "" || table.name == "" {
 		return terror.ErrDBUnExpect.Generate("schema/table is empty")
 	}
 
 	query := fmt.Sprintf("SHOW COLUMNS FROM `%s`.`%s`", table.schema, table.name)
-	rows, err := conn.querySQL(tctx, query, maxRetry)
+	rows, err := conn.querySQL(tctx, query)
 	if err != nil {
 		return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}

@@ -118,7 +118,6 @@ syncers:
   global:
     worker-count: 16
     batch: 100
-    max-retry: 100
 `
 
 var (
