@@ -202,7 +202,7 @@ func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir 
 
 	err = watcher2.Start(watcherInterval)
 	if err != nil {
-		return "", terror.ErrWatcherStart.Delegate(err)
+		return "", terror.ErrWatcherStart.Delegate(err, dir)
 	}
 	defer watcher2.Close()
 

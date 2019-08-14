@@ -151,7 +151,7 @@ func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string
 		}
 
 	default:
-		return "", terror.ErrUnknownTypeDDL.Generatef("unknown type ddl %+v", stmt)
+		return "", terror.ErrUnknownTypeDDL.Generate(stmt)
 	}
 
 	var b []byte
@@ -287,7 +287,7 @@ func SplitDDL(stmt ast.StmtNode, schema string) (sqls []string, err error) {
 
 		return sqls, nil
 	default:
-		return nil, terror.ErrUnknownTypeDDL.Generatef("unknown type ddl %+v", stmt)
+		return nil, terror.ErrUnknownTypeDDL.Generate(stmt)
 	}
 
 	bf.Reset()

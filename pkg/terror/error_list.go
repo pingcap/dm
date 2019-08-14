@@ -42,6 +42,7 @@ const (
 	codeVerifySQLOperateArgs
 	codeStatFileSize
 	codeReaderAlreadyRunning
+	codeReaderAlreadyStarted
 	codeReaderStateCannotClose
 	codeReaderShouldStartSync
 	// pkg/streamer
@@ -450,7 +451,7 @@ var (
 	ErrRenameMultipleTables   = New(codeRenameMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allowed operation: rename multiple tables in one statement")
 	ErrAlterMultipleTables    = New(codeAlterMultipleTables, ClassFunctional, ScopeInternal, LevelHigh, "not allowed operation: alter multiple tables in one statement")
 	ErrParseSQL               = New(codeParseSQL, ClassFunctional, ScopeInternal, LevelHigh, "parse statement")
-	ErrUnknownTypeDDL         = New(codeUnknownTypeDDL, ClassFunctional, ScopeInternal, LevelHigh, "unknown type ddl %s")
+	ErrUnknownTypeDDL         = New(codeUnknownTypeDDL, ClassFunctional, ScopeInternal, LevelHigh, "unknown type ddl %+v")
 	ErrRestoreASTNode         = New(codeRestoreASTNode, ClassFunctional, ScopeInternal, LevelHigh, "restore ast node")
 	ErrParseGTID              = New(codeParseGTID, ClassFunctional, ScopeInternal, LevelHigh, "parse GTID %s")
 	ErrNotSupportedFlavor     = New(codeNotSupportedFlavor, ClassFunctional, ScopeInternal, LevelHigh, "flavor %s not supported")
@@ -463,6 +464,7 @@ var (
 	ErrVerifySQLOperateArgs   = New(codeVerifySQLOperateArgs, ClassFunctional, ScopeInternal, LevelLow, "")
 	ErrStatFileSize           = New(codeStatFileSize, ClassFunctional, ScopeInternal, LevelHigh, "get file statfs")
 	ErrReaderAlreadyRunning   = New(codeReaderAlreadyRunning, ClassFunctional, ScopeInternal, LevelHigh, "binlog reader is already running")
+	ErrReaderAlreadyStarted   = New(codeReaderAlreadyStarted, ClassFunctional, ScopeInternal, LevelHigh, "stage %s, expect %s, already started")
 	ErrReaderStateCannotClose = New(codeReaderStateCannotClose, ClassFunctional, ScopeInternal, LevelHigh, "stage %s, expect %s, can not close")
 	ErrReaderShouldStartSync  = New(codeReaderShouldStartSync, ClassFunctional, ScopeInternal, LevelHigh, "stage %s, expect %s, please start sync first")
 	// pkg/streamer

@@ -99,7 +99,7 @@ func (r *FileReader) StartSyncByPos(pos gmysql.Position) error {
 	defer r.mu.Unlock()
 
 	if r.stage != common.StageNew {
-		return terror.ErrReaderAlreadyRunning.Generate(r.stage, common.StageNew)
+		return terror.ErrReaderAlreadyStarted.Generate(r.stage, common.StageNew)
 	}
 
 	r.ctx, r.cancel = context.WithCancel(context.Background())

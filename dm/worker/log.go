@@ -550,7 +550,7 @@ func clearByPrefix(tctx *tcontext.Context, h dbOperator, prefix []byte) error {
 	iter.Release()
 	err = iter.Error()
 	if err != nil {
-		return terror.ErrWorkerLogDeleteKVIter.Delegate(err, prefix, iter.Key())
+		return terror.ErrWorkerLogDeleteKVIter.Delegate(err, prefix)
 	}
 
 	if batch.Len() > 0 {
