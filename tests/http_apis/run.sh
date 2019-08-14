@@ -25,7 +25,10 @@ function run() {
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 
     echo "start task and check stage"
-    task_data=`cat $cur/conf/dm-task.yaml | sed 's/$/\\\n/' | sed 's/"/\\"/' | tr -d '\n'`
+    cat $cur/conf/dm-task.yaml | sed 's/$/\\\n/' | sed 's/"/\\"/g' | tr -d '\n' > $cur/task.yaml.bak
+    task_data=`cat $cur/task.yaml.bak`
+    rm $cur/task.yaml.bak
+    echo $task_data
     curl -X POST 127.0.0.1:$MASTER_PORT/apis/alpha/tasks -d '{"task": "'"$task_data"'"}' > $WORK_DIR/start-task.log
     check_log_contains $WORK_DIR/start-task.log "\"result\":true" 1
 
