@@ -220,11 +220,11 @@ func RegisterMasterHandlerClient(ctx context.Context, mux *runtime.ServeMux, cli
 }
 
 var (
-	pattern_Master_StartTask_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"apis", "alpha", "tasks"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Master_StartTask_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"apis", "v1alpha1", "tasks"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Master_OperateTask_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"apis", "alpha", "tasks", "name"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Master_OperateTask_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"apis", "v1alpha1", "tasks", "name"}, "", runtime.AssumeColonVerbOpt(true)))
 
-	pattern_Master_QueryStatus_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"apis", "alpha", "status", "name"}, "", runtime.AssumeColonVerbOpt(true)))
+	pattern_Master_QueryStatus_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"apis", "v1alpha1", "status", "name"}, "", runtime.AssumeColonVerbOpt(true)))
 )
 
 var (

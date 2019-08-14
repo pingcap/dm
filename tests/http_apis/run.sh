@@ -7,6 +7,8 @@ source $cur/../_utils/test_prepare
 
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
+API_VERSION="v1alpha1"
+
 function prepare_data() {
     run_sql 'DROP DATABASE if exists http_apis;' $MYSQL_PORT1
     run_sql 'CREATE DATABASE http_apis;' $MYSQL_PORT1
@@ -29,26 +31,26 @@ function run() {
     task_data=`cat $cur/task.yaml.bak`
     rm $cur/task.yaml.bak
     echo $task_data
-    curl -X POST 127.0.0.1:$MASTER_PORT/apis/alpha/tasks -d '{"task": "'"$task_data"'"}' > $WORK_DIR/start-task.log
+    curl -X POST 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/tasks -d '{"task": "'"$task_data"'"}' > $WORK_DIR/start-task.log
     check_log_contains $WORK_DIR/start-task.log "\"result\":true" 1
 
-    curl -X GET 127.0.0.1:$MASTER_PORT/apis/alpha/status/test > $WORK_DIR/status.log
+    curl -X GET 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test > $WORK_DIR/status.log
     check_log_contains $WORK_DIR/status.log "\"stage\": \"Running\"" 1
     check_log_contains $WORK_DIR/status.log "\"name\": \"test\"" 1
 
     echo "pause task and check stage"
-    curl -X PUT 127.0.0.1:$MASTER_PORT/apis/alpha/tasks/test -d '{ "op": 2 }' > $WORK_DIR/pause.log
+    curl -X PUT 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/tasks/test -d '{ "op": 2 }' > $WORK_DIR/pause.log
     check_log_contains $WORK_DIR/pause.log "\"op\": \"Pause\"" 1
 
-    curl -X GET 127.0.0.1:$MASTER_PORT/apis/alpha/status/test > $WORK_DIR/status.log
+    curl -X GET 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test > $WORK_DIR/status.log
     check_log_contains $WORK_DIR/status.log "\"stage\": \"Paused\"" 1
     check_log_contains $WORK_DIR/status.log "\"name\": \"test\"" 1
 
     echo "resume task and check stage"
-    curl -X PUT 127.0.0.1:$MASTER_PORT/apis/alpha/tasks/test -d '{ "op": 3 }' > $WORK_DIR/resume.log
+    curl -X PUT 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/tasks/test -d '{ "op": 3 }' > $WORK_DIR/resume.log
     check_log_contains $WORK_DIR/resume.log "\"op\": \"Resume\"" 1
 
-    curl -X GET 127.0.0.1:$MASTER_PORT/apis/alpha/status/test > $WORK_DIR/status.log
+    curl -X GET 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test > $WORK_DIR/status.log
     check_log_contains $WORK_DIR/status.log "\"stage\": \"Running\"" 1
     check_log_contains $WORK_DIR/status.log "\"name\": \"test\"" 1
 

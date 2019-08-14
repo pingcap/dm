@@ -8,14 +8,14 @@ import "google/api/annotations.proto";
 service Master {
     rpc StartTask (StartTaskRequest) returns (StartTaskResponse) {
         option (google.api.http) = { 
-            post: "/apis/alpha/tasks"
+            post: "/apis/v1alpha1/tasks"
             body: "*"
         };
     }
 
     rpc OperateTask (OperateTaskRequest) returns (OperateTaskResponse) {
         option (google.api.http) = { 
-            put: "/apis/alpha/tasks/{name}"
+            put: "/apis/v1alpha1/tasks/{name}"
             body: "*"
         };
     }
@@ -23,7 +23,7 @@ service Master {
 
     rpc QueryStatus (QueryStatusListRequest) returns (QueryStatusListResponse) {
         option (google.api.http) = { 
-            get: "/apis/alpha/status/{name}"
+            get: "/apis/v1alpha1/status/{name}"
         };
     }
     rpc QueryError (QueryErrorListRequest) returns (QueryErrorListResponse) {}
