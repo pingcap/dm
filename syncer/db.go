@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/siddontang/go-mysql/mysql"
-	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
@@ -75,30 +74,24 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string, maxRetry int) (
 		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
-	var (
-		err  error
-		rows *sql.Rows
-	)
-	for i := 0; i < maxRetry; i++ {
-		if i > 0 {
-			sqlRetriesTotal.WithLabelValues("query", conn.cfg.Name).Add(1)
-			tctx.L().Warn("query statement", zap.Int("retry", i), zap.String("sql", query))
-			time.Sleep(retryTimeout)
-		}
-
-		rows, err = conn.baseConn.QuerySQL(tctx, query)
-		if err != nil {
-			if !isRetryableError(err) {
-				return rows, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query)
+	ret, err := conn.baseConn.RetryOperation(
+		func() (interface{}, error) {
+			rows, err := conn.baseConn.QuerySQL(tctx, query)
+			return rows, err
+		},
+		func(err error) bool {
+			if isRetryableError(err) {
+				sqlRetriesTotal.WithLabelValues("query", conn.cfg.Name).Add(1)
+				time.Sleep(retryTimeout)
+				return true
 			}
-			tctx.L().Warn("query statement failed and retry", zap.String("sql", query), log.ShortError(err))
-			continue
-		}
+			return false
+		})
 
-		return rows, nil
+	if err != nil {
+		return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query)
 	}
-
-	return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query)
+	return ret.(*sql.Rows), nil
 }
 
 func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]interface{}, maxRetry int) (int, error) {
@@ -114,17 +107,23 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 	for i, query := range queries {
 		sqls = append(sqls, utils.SQL{query, args[i]})
 	}
-
-	var err error
-	var affected int
-	for i := 0; i < maxRetryCount; i++ {
-		if affected, err = conn.baseConn.ExecuteSQL(tctx, sqls); err != nil {
+	ret, err := conn.baseConn.RetryOperation(
+		func() (interface{}, error) {
+			affected, err := conn.baseConn.ExecuteSQL(tctx, sqls)
+			return affected, err
+		},
+		func(err error) bool {
 			if isRetryableError(err) {
-				continue
+				sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
+				time.Sleep(retryTimeout)
+				return true
 			}
-		}
+			return false
+		})
+	if err != nil {
+		return ret.(int), terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, queries)
 	}
-	return affected, terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, queries)
+	return ret.(int), nil
 }
 
 func createConn(cfg *config.SubTaskConfig, dbCfg config.DBConfig, timeout string) (*Conn, error) {

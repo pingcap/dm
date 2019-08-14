@@ -284,22 +284,7 @@ func IsNoSuchThreadError(err error) bool {
 	return IsMySQLError(err, tmysql.ErrNoSuchThread)
 }
 
-//// Connect Interface
-//type Connect interface {
-//	Init(dbDSN string) error
-//	QuerySQL(ctx *tcontext.Context, Query string) (*sql.Rows, error)
-//	ExecuteSQL(ctx *tcontext.Context, sqls ...[]SQL) error
-//	Close() error
-//}
-
-//// Connect Interface
-//type RetryConnect interface {
-//	Connect
-//
-//	WithPolicy()
-//}
-
-// BaseConn Base Connect to Database
+// BaseConn Connect to Database
 type BaseConn struct {
 	DB *sql.DB
 }
@@ -318,6 +303,22 @@ func (conn *BaseConn) Init(dbDSN string) error {
 	}
 	conn.DB = db
 	return nil
+}
+
+// RetryOperation defines an abstract retry operation for db
+func (conn *BaseConn) RetryOperation(operateFn func() (interface{}, error), retryFn func(error) bool) (interface{}, error) {
+	var err error
+	var ret interface{}
+	for {
+		ret, err = operateFn()
+		if err != nil {
+			if retryFn(err) {
+				continue
+			}
+		}
+		break
+	}
+	return ret, err
 }
 
 // QuerySQL query sql

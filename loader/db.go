@@ -44,11 +44,7 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string, maxRetry int) (*
 		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
-	var (
-		err  error
-		rows *sql.Rows
-	)
-
+	var err error
 	startTime := time.Now()
 	defer func() {
 		if err == nil {
@@ -59,26 +55,30 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string, maxRetry int) (*
 			}
 		}
 	}()
-
-	for i := 0; i < maxRetry; i++ {
-		if i > 0 {
-			time.Sleep(time.Duration(i) * time.Second)
-			ctx.L().Warn("query statement", zap.Int("retry", i), zap.String("sql", query))
-		}
-		rows, err = conn.baseConn.QuerySQL(ctx, query)
-		if err != nil {
+	ret, err := conn.baseConn.RetryOperation(
+		func() (interface{}, error) {
+			rows, err := conn.baseConn.QuerySQL(ctx, query)
+			return rows, err
+		},
+		func(err error) bool {
 			if isRetryableError(err) {
-				ctx.L().Warn("query statement", zap.Int("retry", i), zap.String("sql", query), log.ShortError(err))
-				continue
+				time.Sleep(2 * time.Second)
+				ctx.L().Warn("query statement retry", zap.String("sql", query), log.ShortError(err))
+				return true
 			}
-			return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query)
-		}
-		return rows, nil
+			return false
+		})
+	if err != nil {
+		return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query)
 	}
-	return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query)
+	return ret.(*sql.Rows), nil
 }
 
-func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]interface{}) error {
+func (conn *Conn) executeSQL(ctx *tcontext.Context, ddl bool, queries []string, args ...[]interface{}) error {
+	if len(queries) == 0 {
+		return nil
+	}
+
 	sqls := make([]utils.SQL, 0, len(queries))
 	for i, query := range queries {
 		if i >= len(args) {
@@ -87,22 +87,15 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]
 			sqls = append(sqls, utils.SQL{Query: query, Args: args[i]})
 		}
 	}
-	return conn.executeSQLCustomRetry(ctx, sqls, isRetryableError)
-}
-
-func (conn *Conn) executeDDL(ctx *tcontext.Context, queries []string) error {
-	sqls := make([]utils.SQL, 0, len(queries))
-	for _, query := range queries {
-		sqls = append(sqls, utils.SQL{Query: query, Args: []interface{}{}})
+	retry := isRetryableError
+	if ddl {
+		retry = isDDLRetryableError
 	}
-	return conn.executeSQLCustomRetry(ctx, sqls, isDDLRetryableError)
+
+	return conn.executeSQLCustomRetry(ctx, sqls, retry)
 }
 
 func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []utils.SQL, isRetryableFn func(err error) bool) error {
-	if len(sqls) == 0 {
-		return nil
-	}
-
 	if conn == nil || conn.baseConn == nil {
 		return terror.ErrDBUnExpect.Generate("database connection not valid")
 	}

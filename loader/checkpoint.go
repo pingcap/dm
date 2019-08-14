@@ -112,7 +112,7 @@ func (cp *RemoteCheckPoint) prepare() error {
 
 func (cp *RemoteCheckPoint) createSchema() error {
 	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", cp.schema)
-	err := cp.conn.executeSQL(cp.tctx, []string{sql2})
+	err := cp.conn.executeSQL(cp.tctx, false, []string{sql2})
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
@@ -131,7 +131,7 @@ func (cp *RemoteCheckPoint) createTable() error {
 	);
 `
 	sql2 := fmt.Sprintf(createTable, tableName)
-	err := cp.conn.executeSQL(cp.tctx, []string{sql2})
+	err := cp.conn.executeSQL(cp.tctx, false, []string{sql2})
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
@@ -280,7 +280,7 @@ func (cp *RemoteCheckPoint) Init(filename string, endPos int64) error {
 		zap.Int64("offset", 0),
 		zap.Int64("end position", endPos))
 	args := []interface{}{cp.id, filename, fields[0], fields[1], 0, endPos}
-	err := cp.conn.executeSQL(cp.tctx, []string{sql2}, args)
+	err := cp.conn.executeSQL(cp.tctx, false, []string{sql2}, args)
 	if err != nil {
 		if isErrDupEntry(err) {
 			cp.tctx.L().Info("checkpoint record already exists, skip it.", zap.String("id", cp.id), zap.String("filename", filename))
@@ -306,7 +306,7 @@ func (cp *RemoteCheckPoint) GenSQL(filename string, offset int64) string {
 // Clear implements CheckPoint.Clear
 func (cp *RemoteCheckPoint) Clear() error {
 	sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s'", cp.schema, cp.table, cp.id)
-	err := cp.conn.executeSQL(cp.tctx, []string{sql2})
+	err := cp.conn.executeSQL(cp.tctx, false, []string{sql2})
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
