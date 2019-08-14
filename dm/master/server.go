@@ -164,7 +164,10 @@ func (s *Server) Start() error {
 		return errors.Trace(err)
 	}
 
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
+
 		httpS := &http.Server{
 			Handler: httpmux,
 		}
