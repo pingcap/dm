@@ -194,7 +194,7 @@ func GetMariaDBGtidDomainID(db *sql.DB) (uint32, error) {
 	}
 
 	domainID, err := strconv.ParseUint(domainIDStr, 10, 32)
-	return uint32(domainID), terror.ErrMariaDBDomainID.Delegate(err)
+	return uint32(domainID), terror.ErrMariaDBDomainID.Delegate(err, domainIDStr)
 }
 
 // GetServerUUID gets server's `server_uuid`
@@ -228,7 +228,7 @@ func GetSQLMode(db *sql.DB) (tmysql.SQLMode, error) {
 	}
 
 	mode, err := tmysql.GetSQLMode(sqlMode)
-	return mode, terror.ErrGetSQLModeFromStr.Delegate(err)
+	return mode, terror.ErrGetSQLModeFromStr.Delegate(err, sqlMode)
 }
 
 // HasAnsiQuotesMode checks whether database has `ANSI_QUOTES` set

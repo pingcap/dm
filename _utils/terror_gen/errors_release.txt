@@ -19,7 +19,7 @@ ErrNotMariaDBGTID,[code=11018:class=functional:scope=internal:level=high],"%s is
 ErrNotUUIDString,[code=11019:class=functional:scope=internal:level=high],"%v is not UUID string"
 ErrMariaDBDomainID,[code=11020:class=functional:scope=internal:level=high],"%v is not uint32"
 ErrInvalidServerID,[code=11021:class=functional:scope=internal:level=high],"invalid server id %s"
-ErrGetSQLModeFromStr,[code=11022:class=functional:scope=internal:level=high],"get sql from from string literal"
+ErrGetSQLModeFromStr,[code=11022:class=functional:scope=internal:level=high],"get sql mode from string literal %s"
 ErrVerifySQLOperateArgs,[code=11023:class=functional:scope=internal:level=low],""
 ErrStatFileSize,[code=11024:class=functional:scope=internal:level=high],"get file statfs"
 ErrReaderAlreadyRunning,[code=11025:class=functional:scope=internal:level=high],"binlog reader is already running"
