@@ -307,13 +307,13 @@ func (conn *BaseConn) Init(dbDSN string) error {
 }
 
 // NormalRetryOperation will retry 100 times
-func (conn *BaseConn) NormalRetryOperation(operateFn func() (interface{}, error), retryFn func(error) bool) (interface{}, error) {
+func (conn *BaseConn) NormalRetryOperation(operateFn func() (interface{}, error), retryFn func(int, error) bool) (interface{}, error) {
 	var err error
 	var ret interface{}
 	for i := 0; i < 100; i++ {
 		ret, err = operateFn()
 		if err != nil {
-			if retryFn(err) {
+			if retryFn(i, err) {
 				time.Sleep(2 * time.Second)
 				continue
 			}

@@ -51,9 +51,9 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string) (*sql.Rows, erro
 			rows, err := conn.baseConn.QuerySQL(ctx, query)
 			return rows, err
 		},
-		func(err error) bool {
+		func(retryTime int, err error) bool {
 			if isRetryableError(err) {
-				ctx.L().Warn("query statement retry", zap.String("sql", query), log.ShortError(err))
+				ctx.L().Warn("query statement", zap.Int("retry", retryTime), zap.String("sql", query), log.ShortError(err))
 				return true
 			}
 			return false
@@ -101,53 +101,45 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []utils.SQL,
 		return terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
-	var err error
-
-	for i := 0; i < maxRetryCount; i++ {
-		if i > 0 {
-			ctx.L().Debug("execute statement", zap.Int("retry", i), zap.String("sqls", fmt.Sprintf("%-.200v", sqls)))
-			time.Sleep(2 * time.Duration(i) * time.Second)
-		}
-
-		startTime := time.Now()
-		_, err = conn.baseConn.ExecuteSQL(ctx, sqls)
-
-		failpoint.Inject("LoadExecCreateTableFailed", func(val failpoint.Value) {
-			items := strings.Split(val.(string), ",")
-			if len(items) != 2 {
-				ctx.L().Fatal("failpoint LoadExecCreateTableFailed's value is invalid", zap.String("val", val.(string)))
+	_, err := conn.baseConn.NormalRetryOperation(
+		func() (interface{}, error) {
+			startTime := time.Now()
+			_, err := conn.baseConn.ExecuteSQL(ctx, sqls)
+			cost := time.Since(startTime)
+			txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
+			if cost > 1 {
+				ctx.L().Warn("transaction execute successfully", zap.Duration("cost time", cost))
 			}
+			return nil, err
+		},
+		func(retryTime int, err error) bool {
+			ctx.L().Debug("execute statement", zap.Int("retry", retryTime), zap.String("sqls", fmt.Sprintf("%-.200v", sqls)))
+			time.Sleep(2 * time.Duration(retryTime) * time.Second)
 
-			errCode, err1 := strconv.ParseUint(items[0], 10, 16)
-			errNum, err2 := strconv.ParseInt(items[1], 10, 16)
-			if err1 != nil || err2 != nil {
-				ctx.L().Fatal("failpoint LoadExecCreateTableFailed's value is invalid", zap.String("val", val.(string)), zap.Strings("items", items), zap.Error(err1), zap.Error(err2))
-			}
+			failpoint.Inject("LoadExecCreateTableFailed", func(val failpoint.Value) {
+				items := strings.Split(val.(string), ",")
+				if len(items) != 2 {
+					ctx.L().Fatal("failpoint LoadExecCreateTableFailed's value is invalid", zap.String("val", val.(string)))
+				}
 
-			if i < int(errNum) && len(sqls) == 1 && strings.Contains(sqls[0].Query, "CREATE TABLE") {
-				err = tmysql.NewErr(uint16(errCode))
-				ctx.L().Warn("executeSQLCustomRetry failed", zap.String("failpoint", "LoadExecCreateTableFailed"), zap.Error(err))
-			}
-		})
+				errCode, err1 := strconv.ParseUint(items[0], 10, 16)
+				errNum, err2 := strconv.ParseInt(items[1], 10, 16)
+				if err1 != nil || err2 != nil {
+					ctx.L().Fatal("failpoint LoadExecCreateTableFailed's value is invalid", zap.String("val", val.(string)), zap.Strings("items", items), zap.Error(err1), zap.Error(err2))
+				}
 
-		if err != nil {
+				if retryTime < int(errNum) && len(sqls) == 1 && strings.Contains(sqls[0].Query, "CREATE TABLE") {
+					err = tmysql.NewErr(uint16(errCode))
+					ctx.L().Warn("executeSQLCustomRetry failed", zap.String("failpoint", "LoadExecCreateTableFailed"), zap.Error(err))
+				}
+			})
+
 			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
 			if isRetryableFn(err) {
-				continue
+				return true
 			}
-			return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, strings.Join([]string{}, ";"))
-		}
-
-		// update metrics
-		cost := time.Since(startTime)
-		txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
-		if cost > 1 {
-			ctx.L().Warn("transaction execute successfully", zap.Duration("cost time", cost))
-		}
-
-		return nil
-	}
-
+			return false
+		})
 	return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, strings.Join([]string{}, ";"))
 }
 
