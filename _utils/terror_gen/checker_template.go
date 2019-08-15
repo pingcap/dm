@@ -27,7 +27,7 @@ import (
 const (
 	developErrorFile     = "errors_develop.txt"
 	releaseErrorFile     = "errors_release.txt"
-	generatedCheckerFile = "checker_generated.go"
+	generatedCheckerFile = "{{.CheckerFile}}"
 )
 
 var dumpErrorRe = regexp.MustCompile("^([a-zA-Z].*),\\[code=([0-9]+).*$")
@@ -38,7 +38,7 @@ var errors = []struct {
 }{
 	// sample:
 	// {"ErrWorkerExecDDLTimeout", terror.ErrWorkerExecDDLTimeout},
-	// TODO: fillin me
+	// {{.ErrList}}
 }
 
 func genErrors() {

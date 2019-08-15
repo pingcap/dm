@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+	"text/template"
 )
 
 const (
@@ -65,20 +66,30 @@ func getErrorInstances(filepath string) []string {
 }
 
 func genFile(names []string) {
-	content, err := ioutil.ReadFile(templateCheckerFile)
+	var (
+		buf, genBuf bytes.Buffer
+		content     []byte
+		err         error
+	)
+	content, err = ioutil.ReadFile(templateCheckerFile)
 	if err != nil {
 		panic(err)
 	}
-	var buf bytes.Buffer
-	for i, name := range names {
-		tab := "\t"
-		if i == 0 {
-			tab = ""
-		}
-		fmt.Fprintf(&buf, "%s{\"%s\", terror.%s},\n", tab, name, name)
+	fmt.Fprint(&buf, "\n")
+	for _, name := range names {
+		fmt.Fprintf(&buf, "\t{\"%s\", terror.%s},\n", name, name)
 	}
-	newContent := bytes.ReplaceAll(content, templatePlaceHolder, buf.Bytes())
-	err = ioutil.WriteFile(generatedCheckerFile, newContent, 0644)
+
+	data := map[string]interface{}{
+		"ErrList":     buf.String(),
+		"CheckerFile": generatedCheckerFile,
+	}
+	t := template.Must(template.New(generatedCheckerFile).Parse(string(content)))
+	err = t.Execute(&genBuf, data)
+	if err != nil {
+		panic(err)
+	}
+	err = ioutil.WriteFile(generatedCheckerFile, genBuf.Bytes(), 0644)
 	if err != nil {
 		panic(err)
 	}
