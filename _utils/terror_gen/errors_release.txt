@@ -236,7 +236,7 @@ ErrSyncerUnitUUIDNotLatest,[code=36235:class=sync-unit:scope=internal:level=high
 ErrSyncerUnitDDLExecChanCloseOrBusy,[code=36236:class=sync-unit:scope=internal:level=high],"the chan has closed or already in sending"
 ErrSyncerUnitDDLChanDone,[code=36237:class=sync-unit:scope=internal:level=high],"canceled from external"
 ErrSyncerUnitDDLChanCanceled,[code=36238:class=sync-unit:scope=internal:level=high],"canceled by Close or Renew"
-ErrSyncerUnitDDLOnMultipleTable,[code=36239:class=sync-unit:scope=internal:level=high],"ddl on multiple table: %s"
+ErrSyncerUnitDDLOnMultipleTable,[code=36239:class=sync-unit:scope=internal:level=high],"ddl on multiple table: %s not supported"
 ErrSyncerUnitInjectDDLOnly,[code=36240:class=sync-unit:scope=internal:level=low],"only support inject DDL for sharding group to be synced currently, but got %s"
 ErrSyncerUnitInjectDDLWithoutSchema,[code=36241:class=sync-unit:scope=internal:level=low],"injected DDL %s without schema name not valid"
 ErrSyncerUnitNotSupportedOperate,[code=36242:class=sync-unit:scope=internal:level=medium],"op %s not supported"
