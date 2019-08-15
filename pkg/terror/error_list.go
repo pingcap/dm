@@ -13,7 +13,7 @@
 
 package terror
 
-// Error codes list
+// Database operation error code list
 const (
 	codeDBDriverError ErrCode = iota + 10001
 	codeDBBadConn
@@ -21,8 +21,10 @@ const (
 	codeDBUnExpect
 	codeDBQueryFailed
 	codeDBExecuteFailed
+)
 
-	// Functional error code list
+// Functional error code list
+const (
 	codeParseMydumperMeta ErrCode = iota + 11001
 	codeGetFileSize
 	codeDropMultipleTables
@@ -129,8 +131,10 @@ const (
 	codeTracingGetTraceCode
 	codeTracingDataChecksum
 	codeTracingGetTSO
+)
 
-	// Config related error code list
+// Config related error code list
+const (
 	codeConfigCheckItemNotSupport ErrCode = iota + 20001
 	codeConfigTomlTransform
 	codeConfigTaskYamlTransform
@@ -162,34 +166,45 @@ const (
 	codeConfigLoaderCfgNotFound
 	codeConfigSyncerCfgNotFound
 	codeConfigSourceIDNotFound
+)
 
-	// Binlog operation error code list
+// Binlog operation error code list
+const (
 	codeBinlogExtractPosition ErrCode = iota + 22001
 	codeBinlogInvalidFilename
 	codeBinlogParsePosFromStr
+)
 
-	// Checkpoint error code
+// Checkpoint error code
+const (
 	codeCheckpointInvalidTaskMode ErrCode = iota + 24001
 	codeCheckpointSaveInvalidPos
 	codeCheckpointInvalidTableFile
 	codeCheckpointDBNotExistInFile
 	codeCheckpointTableNotExistInFile
 	codeCheckpointRestoreCountGreater
+)
 
-	// Task check error code
+// Task check error code
+const (
 	codeTaskCheckSameTableName ErrCode = iota + 26001
 	codeTaskCheckFailedOpenDB
 	codeTaskCheckNewTableRouter
 	codeTaskCheckNewColumnMapping
 	codeTaskCheckSyncConfigError
+)
 
-	// Relay log basic API error
+// Relay log utils error code
+const (
 	codeRelayParseUUIDIndex ErrCode = iota + 28001
 	codeRelayParseUUIDSuffix
 	codeRelayUUIDWithSuffixNotFound
 	codeRelayGenFakeRotateEvent
 	codeRelayNoValidRelaySubDir
+)
 
+// Relay unit error code
+const (
 	codeRelayUUIDSuffixNotValid ErrCode = iota + 30001
 	codeRelayUUIDSuffixLessThanPrev
 	codeRelayLoadMetaData
@@ -233,11 +248,15 @@ const (
 	codeRelayRemoveFileFail
 	codeRelayPurgeArgsNotValid
 	codePreviousGTIDsNotValid
+)
 
-	// Dump unit error code
+// Dump unit error code
+const (
 	codeDumpUnitRuntime ErrCode = iota + 32001
+)
 
-	// Load unit error code
+// Load unit error code
+const (
 	codeLoadUnitCreateSchemaFile ErrCode = iota + 34001
 	codeLoadUnitInvalidFileEnding
 	codeLoadUnitParseQuoteValues
@@ -253,8 +272,10 @@ const (
 	codeLoadUnitNoTableFile
 	codeLoadUnitDumpDirNotFound
 	codeLoadUnitDuplicateTableFile
+)
 
-	// Sync unit error code
+// Sync unit error code
+const (
 	codeSyncerUnitPanic ErrCode = iota + 36001
 	codeSyncUnitInvalidTableName
 	codeSyncUnitTableNameQuery
@@ -314,8 +335,10 @@ const (
 	codeSyncerUnitReopenStreamNotSupport
 	codeSyncerUnitUpdateConfigInSharding
 	codeSyncerUnitExecWithNoBlockingDDL
+)
 
-	// DM-master error code
+// DM-master error code
+const (
 	codeMasterSQLOpNilRequest ErrCode = iota + 38001
 	codeMasterSQLOpNotSupport
 	codeMasterSQLOpWithoutSharding
@@ -349,8 +372,11 @@ const (
 	codeMasterOperNotFound
 	codeMasterOperRespNotSuccess
 	codeMasterOperRequestTimeout
+	// codeMasterHandleHTTPApi
+)
 
-	// DM-worker error code
+// DM-worker error code
+const (
 	codeWorkerParseFlagSet ErrCode = iota + 40001
 	codeWorkerInvalidFlag
 	codeWorkerDecodeConfigFromFile
@@ -419,8 +445,10 @@ const (
 	codeWorkerExecDDLTimeout
 	codeWorkerWaitRelayCatchupTimeout
 	codeWorkerRelayIsPurging
+)
 
-	// DM-tracer error code
+// DM-tracer error code
+const (
 	codeTracerParseFlagSet ErrCode = iota + 42001
 	codeTracerConfigTomlTransform
 	codeTracerConfigInvalidFlag
@@ -773,6 +801,7 @@ var (
 	ErrMasterOperNotFound          = New(codeMasterOperNotFound, ClassDMMaster, ScopeInternal, LevelHigh, "operation %d of task %s not found, please execute `query-status` to check status")
 	ErrMasterOperRespNotSuccess    = New(codeMasterOperRespNotSuccess, ClassDMMaster, ScopeInternal, LevelHigh, "operation not success: %s")
 	ErrMasterOperRequestTimeout    = New(codeMasterOperRequestTimeout, ClassDMMaster, ScopeInternal, LevelHigh, "request is timeout, but request may be successful, please execute `query-status` to check status")
+	// ErrMasterHandleHTTPApi         = New(codeMasterHandleHTTPApi, ClassDMMaster, ScopeInternal, LevelHigh, "serve http apis to grpc")
 
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set")
