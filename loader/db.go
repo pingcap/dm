@@ -47,7 +47,8 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string) (*sql.Rows, erro
 	startTime := time.Now()
 
 	ret, err := conn.baseConn.NormalRetryOperation(
-		func(_ int) (interface{}, error) {
+		ctx,
+		func(ctx *tcontext.Context, _ int) (interface{}, error) {
 			rows, err := conn.baseConn.QuerySQL(ctx, query)
 			return rows, err
 		},
@@ -96,13 +97,14 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, ddl bool, queries []string, 
 	return conn.executeSQLCustomRetry(ctx, sqls, retry)
 }
 
-func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []utils.SQL, isRetryableFn func(err error) bool) error {
+func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []utils.SQL, retryFn func(err error) bool) error {
 	if conn == nil || conn.baseConn == nil {
 		return terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
 	_, err := conn.baseConn.NormalRetryOperation(
-		func(retryTime int) (interface{}, error) {
+		ctx,
+		func(ctx *tcontext.Context, retryTime int) (interface{}, error) {
 			startTime := time.Now()
 			_, err := conn.baseConn.ExecuteSQL(ctx, sqls)
 			failpoint.Inject("LoadExecCreateTableFailed", func(val failpoint.Value) {
@@ -134,7 +136,7 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []utils.SQL,
 			time.Sleep(2 * time.Duration(retryTime) * time.Second)
 
 			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
-			if isRetryableFn(err) {
+			if retryFn(err) {
 				return true
 			}
 			return false

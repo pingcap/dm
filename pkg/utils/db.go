@@ -306,11 +306,11 @@ func (conn *BaseConn) Init(dbDSN string) error {
 }
 
 // NormalRetryOperation will retry 100 times
-func (conn *BaseConn) NormalRetryOperation(operateFn func(int) (interface{}, error), retryFn func(int, error) bool) (interface{}, error) {
+func (conn *BaseConn) NormalRetryOperation(ctx *tcontext.Context, operateFn func(*tcontext.Context, int) (interface{}, error), retryFn func(int, error) bool) (interface{}, error) {
 	var err error
 	var ret interface{}
-	for i := 0; i < 100; i++ {
-		ret, err = operateFn(i)
+	for i := 0; i < retryFnCount; i++ {
+		ret, err = operateFn(ctx, i)
 		if err != nil {
 			if retryFn(i, err) {
 				continue
@@ -321,36 +321,14 @@ func (conn *BaseConn) NormalRetryOperation(operateFn func(int) (interface{}, err
 	return ret, err
 }
 
-// InfinityRetryOperation retry operation until succeed
-func (conn *BaseConn) InfinityRetryOperation(operateFn func() (interface{}, error), retryFn func(error) bool) (interface{}, error) {
-	var err error
-	var ret interface{}
-	for {
-		ret, err = operateFn()
-		if err != nil {
-			if retryFn(err) {
-				continue
-			}
-		}
-		break
-	}
-	return ret, err
-}
-
-// QuerySQL query sql
+// QuerySQL defines query statement, and connect to real DB
 func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string) (*sql.Rows, error) {
 	if conn == nil || conn.DB == nil {
 		return nil, errors.NotValidf("database connection")
 	}
-
-	var (
-		err  error
-		rows *sql.Rows
-	)
-
 	tctx.L().Debug("Query statement", zap.String("Query", query))
 
-	rows, err = conn.DB.QueryContext(tctx.Context(), query)
+	rows, err := conn.DB.QueryContext(tctx.Context(), query)
 
 	if err != nil {
 		tctx.L().Error("Query statement failed", zap.String("Query", query), log.ShortError(err))
@@ -359,23 +337,14 @@ func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string) (*sql.Rows,
 	return rows, nil
 }
 
-// ExecuteSQL execute sql
+// ExecuteSQL executes sql on real DB,
+// return
+// 1. failed: (the index of sqls executed error, error)
+// 2. succeed: (len(sqls), nil)
 func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, sqls []SQL) (int, error) {
 	if len(sqls) == 0 {
 		return 0, nil
 	}
-
-	if conn == nil || conn.DB == nil {
-		return 0, errors.NotValidf("database connection")
-	}
-
-	if affected, err := conn.executeSQLImp(tctx, sqls); err != nil {
-		return affected, err
-	}
-	return 0, nil
-}
-
-func (conn *BaseConn) executeSQLImp(tctx *tcontext.Context, sqls []SQL) (int, error) {
 	if conn == nil || conn.DB == nil {
 		return 0, errors.NotValidf("database connection")
 	}

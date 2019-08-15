@@ -75,8 +75,9 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string) (*sql.Rows, err
 	}
 
 	ret, err := conn.baseConn.NormalRetryOperation(
-		func(_ int) (interface{}, error) {
-			rows, err := conn.baseConn.QuerySQL(tctx, query)
+		tctx,
+		func(ctx *tcontext.Context, _ int) (interface{}, error) {
+			rows, err := conn.baseConn.QuerySQL(ctx, query)
 			return rows, err
 		},
 		func(retryTime int, err error) bool {
@@ -108,8 +109,9 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 		sqls = append(sqls, utils.SQL{query, args[i]})
 	}
 	ret, err := conn.baseConn.NormalRetryOperation(
-		func(_ int) (interface{}, error) {
-			affected, err := conn.baseConn.ExecuteSQL(tctx, sqls)
+		tctx,
+		func(ctx *tcontext.Context, _ int) (interface{}, error) {
+			affected, err := conn.baseConn.ExecuteSQL(ctx, sqls)
 			return affected, err
 		},
 		func(retryTime int, err error) bool {
