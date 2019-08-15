@@ -842,7 +842,7 @@ var (
 	ErrWorkerMetaHandleTaskOrder     = New(codeWorkerMetaHandleTaskOrder, ClassDMWorker, ScopeInternal, LevelHigh, "please handle task operation order by log ID, the log need to be handled is %+v, not %+v")
 	ErrWorkerMetaOpenTxn             = New(codeWorkerMetaOpenTxn, ClassDMWorker, ScopeInternal, LevelHigh, "open kv db txn")
 	ErrWorkerMetaCommitTxn           = New(codeWorkerMetaCommitTxn, ClassDMWorker, ScopeInternal, LevelHigh, "commit kv db txn")
-	ErrWorkerRelayStageNotValid      = New(codeWorkerRelayStageNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "current stage is %s, %s required, relayop %s")
+	ErrWorkerRelayStageNotValid      = New(codeWorkerRelayStageNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "current stage is %s, %s required, relay op %s")
 	ErrWorkerRelayOperNotSupport     = New(codeWorkerRelayOperNotSupport, ClassDMWorker, ScopeInternal, LevelHigh, "operation %s not supported")
 	ErrWorkerOpenKVDBFile            = New(codeWorkerOpenKVDBFile, ClassDMWorker, ScopeInternal, LevelHigh, "open kv db file")
 	ErrWorkerUpgradeCheckKVDir       = New(codeWorkerUpgradeCheckKVDir, ClassDMWorker, ScopeInternal, LevelHigh, "")

@@ -346,7 +346,7 @@ ErrWorkerMetaTaskLogNotFound,[code=40035:class=dm-worker:scope=internal:level=hi
 ErrWorkerMetaHandleTaskOrder,[code=40036:class=dm-worker:scope=internal:level=high],"please handle task operation order by log ID, the log need to be handled is %+v, not %+v"
 ErrWorkerMetaOpenTxn,[code=40037:class=dm-worker:scope=internal:level=high],"open kv db txn"
 ErrWorkerMetaCommitTxn,[code=40038:class=dm-worker:scope=internal:level=high],"commit kv db txn"
-ErrWorkerRelayStageNotValid,[code=40039:class=dm-worker:scope=internal:level=high],"current stage is %s, %s required, relayop %s"
+ErrWorkerRelayStageNotValid,[code=40039:class=dm-worker:scope=internal:level=high],"current stage is %s, %s required, relay op %s"
 ErrWorkerRelayOperNotSupport,[code=40040:class=dm-worker:scope=internal:level=high],"operation %s not supported"
 ErrWorkerOpenKVDBFile,[code=40041:class=dm-worker:scope=internal:level=high],"open kv db file"
 ErrWorkerUpgradeCheckKVDir,[code=40042:class=dm-worker:scope=internal:level=high],""
