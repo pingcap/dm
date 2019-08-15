@@ -18,11 +18,13 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
@@ -108,6 +110,10 @@ func (s *Server) Start() error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
+	defer func() {
+		cancel()
+		wg.Wait()
+	}()
 
 	wg.Add(1)
 	go func() {
@@ -150,7 +156,28 @@ func (s *Server) Start() error {
 			log.L().Error("fail to start gRPC server", zap.Error(err2))
 		}
 	}()
-	go InitStatus(httpL) // serve status
+
+	httpmux := http.NewServeMux()
+	HandleStatus(httpmux) // serve status
+
+	err = s.HandleHTTPApis(ctx, httpmux) // server http api
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		httpS := &http.Server{
+			Handler: httpmux,
+		}
+
+		err3 := httpS.Serve(httpL)
+		if err3 != nil && !common.IsErrNetClosing(err3) && err3 != http.ErrServerClosed {
+			log.L().Error("run http server", log.ShortError(err3))
+		}
+	}()
 
 	log.L().Info("listening gRPC API and status request", zap.String("address", s.cfg.MasterAddr))
 	err = m.Serve() // start serving, block
@@ -158,8 +185,6 @@ func (s *Server) Start() error {
 		err = nil
 	}
 
-	cancel()
-	wg.Wait()
 	return err
 }
 
@@ -1944,4 +1969,28 @@ func (s *Server) workerArgsExtractor(args ...interface{}) (workerrpc.Client, str
 	}
 
 	return cli, worker, nil
+}
+
+// HandleHTTPApis handles http apis and translate to grpc request
+func (s *Server) HandleHTTPApis(ctx context.Context, mux *http.ServeMux) error {
+	// MasterAddr's format may be "host:port" or "":port"
+	_, port, err := net.SplitHostPort(s.cfg.MasterAddr)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	opts := []grpc.DialOption{grpc.WithInsecure()}
+	conn, err := grpc.DialContext(ctx, "127.0.0.1:"+port, opts...)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	gwmux := runtime.NewServeMux()
+	err = pb.RegisterMasterHandler(ctx, gwmux, conn)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	mux.Handle("/apis/", gwmux)
+
+	return nil
 }
