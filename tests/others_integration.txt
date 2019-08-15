@@ -4,3 +4,4 @@ sequence_safe_mode
 relay_interrupt
 start_task
 initial_unit
+http_apis
