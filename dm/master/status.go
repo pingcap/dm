@@ -14,7 +14,6 @@
 package master
 
 import (
-	"net"
 	"net/http"
 	"net/http/pprof"
 
@@ -35,21 +34,12 @@ func (h *statusHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// InitStatus initializes the HTTP status server
-func InitStatus(lis net.Listener) {
-	mux := http.NewServeMux()
+// HandleStatus handles functions for getting status by HTTP request
+func HandleStatus(mux *http.ServeMux) {
 	mux.Handle("/status", &statusHandler{})
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
 	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
 	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
 	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
-
-	httpS := &http.Server{
-		Handler: mux,
-	}
-	err := httpS.Serve(lis)
-	if err != nil && !common.IsErrNetClosing(err) && err != http.ErrServerClosed {
-		log.L().Error("initial status server", log.ShortError(err))
-	}
 }
