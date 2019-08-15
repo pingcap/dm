@@ -76,7 +76,7 @@ func (s *Syncer) setInitActiveRelayLog() error {
 		latestUUID := uuids[len(uuids)-1]
 		uuid, err = utils.GetServerUUID(s.fromDB.db, s.cfg.Flavor)
 		if err != nil {
-			return terror.WithScope(terror.Annotatef(err, "get server UUID"), terror.ScopeDownstream)
+			return terror.WithScope(terror.Annotatef(err, "get server UUID"), terror.ScopeUpstream)
 		}
 		// latest should be the current
 		if !strings.HasPrefix(latestUUID, uuid) {

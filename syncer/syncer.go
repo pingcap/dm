@@ -1832,7 +1832,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, keys []string, retry bool, pos, cmdPos mysql.Position, gs gtid.Set, traceID string) error {
 	key, err := s.resolveCasuality(keys)
 	if err != nil {
-		terror.ErrSyncerUnitResolveCasualityFail.Generate(err)
+		return terror.ErrSyncerUnitResolveCasualityFail.Generate(err)
 	}
 	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, pos, cmdPos, gs, traceID)
 	return s.addJobFunc(job)
