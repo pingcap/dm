@@ -162,7 +162,7 @@ func (s *Server) Start() error {
 
 	err = s.HandleHTTPApis(ctx, httpmux) // server http api
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	wg.Add(1)
@@ -1976,19 +1976,19 @@ func (s *Server) HandleHTTPApis(ctx context.Context, mux *http.ServeMux) error {
 	// MasterAddr's format may be "host:port" or "":port"
 	_, port, err := net.SplitHostPort(s.cfg.MasterAddr)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrMasterHandleHTTPApis.Delegate(err)
 	}
 
 	opts := []grpc.DialOption{grpc.WithInsecure()}
 	conn, err := grpc.DialContext(ctx, "127.0.0.1:"+port, opts...)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrMasterHandleHTTPApis.Delegate(err)
 	}
 
 	gwmux := runtime.NewServeMux()
 	err = pb.RegisterMasterHandler(ctx, gwmux, conn)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrMasterHandleHTTPApis.Delegate(err)
 	}
 	mux.Handle("/apis/", gwmux)
 

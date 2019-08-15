@@ -372,7 +372,7 @@ const (
 	codeMasterOperNotFound
 	codeMasterOperRespNotSuccess
 	codeMasterOperRequestTimeout
-	// codeMasterHandleHTTPApi
+	codeMasterHandleHTTPApis
 )
 
 // DM-worker error code
@@ -801,7 +801,7 @@ var (
 	ErrMasterOperNotFound          = New(codeMasterOperNotFound, ClassDMMaster, ScopeInternal, LevelHigh, "operation %d of task %s not found, please execute `query-status` to check status")
 	ErrMasterOperRespNotSuccess    = New(codeMasterOperRespNotSuccess, ClassDMMaster, ScopeInternal, LevelHigh, "operation not success: %s")
 	ErrMasterOperRequestTimeout    = New(codeMasterOperRequestTimeout, ClassDMMaster, ScopeInternal, LevelHigh, "request is timeout, but request may be successful, please execute `query-status` to check status")
-	// ErrMasterHandleHTTPApi         = New(codeMasterHandleHTTPApi, ClassDMMaster, ScopeInternal, LevelHigh, "serve http apis to grpc")
+	ErrMasterHandleHTTPApis        = New(codeMasterHandleHTTPApis, ClassDMMaster, ScopeInternal, LevelHigh, "serve http apis to grpc")
 
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set")

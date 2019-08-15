@@ -307,6 +307,7 @@ ErrMasterQueryWorkerConfig,[code=38030:class=dm-master:scope=internal:level=high
 ErrMasterOperNotFound,[code=38031:class=dm-master:scope=internal:level=high],"operation %d of task %s not found, please execute `query-status` to check status"
 ErrMasterOperRespNotSuccess,[code=38032:class=dm-master:scope=internal:level=high],"operation not success: %s"
 ErrMasterOperRequestTimeout,[code=38033:class=dm-master:scope=internal:level=high],"request is timeout, but request may be successful, please execute `query-status` to check status"
+ErrMasterHandleHTTPApis,[code=38034:class=dm-master:scope=internal:level=high],"serve http apis to grpc"
 ErrWorkerParseFlagSet,[code=40001:class=dm-worker:scope=internal:level=medium],"parse dm-worker config flag set"
 ErrWorkerInvalidFlag,[code=40002:class=dm-worker:scope=internal:level=medium],"'%s' is an invalid flag"
 ErrWorkerDecodeConfigFromFile,[code=40003:class=dm-worker:scope=internal:level=medium],"toml decode file"
