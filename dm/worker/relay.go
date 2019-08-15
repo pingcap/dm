@@ -198,7 +198,7 @@ func (h *realRelayHolder) SwitchMaster(ctx context.Context, req *pb.SwitchRelayM
 	h.RLock()
 	defer h.RUnlock()
 	if h.stage != pb.Stage_Paused {
-		return terror.ErrWorkerRelayStageNotValid.Generate(h.stage, pb.Stage_Paused)
+		return terror.ErrWorkerRelayStageNotValid.Generate(h.stage, pb.Stage_Paused, "switch master")
 	}
 	return h.relay.SwitchMaster(ctx, req)
 }
@@ -220,7 +220,7 @@ func (h *realRelayHolder) pauseRelay(ctx context.Context, req *pb.OperateRelayRe
 	h.Lock()
 	if h.stage != pb.Stage_Running {
 		h.Unlock()
-		return terror.ErrWorkerRelayStageNotValid.Generate(h.stage, pb.Stage_Running)
+		return terror.ErrWorkerRelayStageNotValid.Generate(h.stage, pb.Stage_Running, req.Op)
 	}
 	h.stage = pb.Stage_Paused
 
@@ -239,7 +239,7 @@ func (h *realRelayHolder) resumeRelay(ctx context.Context, req *pb.OperateRelayR
 	h.Lock()
 	defer h.Unlock()
 	if h.stage != pb.Stage_Paused {
-		return terror.ErrWorkerRelayStageNotValid.Generate(h.stage, pb.Stage_Paused)
+		return terror.ErrWorkerRelayStageNotValid.Generate(h.stage, pb.Stage_Paused, req.Op)
 	}
 
 	h.wg.Add(1)
@@ -254,7 +254,7 @@ func (h *realRelayHolder) stopRelay(ctx context.Context, req *pb.OperateRelayReq
 	h.Lock()
 	defer h.Unlock()
 	if h.stage == pb.Stage_Stopped {
-		return terror.ErrWorkerRelayStageNotValid.New("current stage is already stopped not valid")
+		return terror.ErrWorkerRelayStageNotValid.Generatef("current stage is already stopped not valid, relayop %s", req.Op)
 	}
 	h.stage = pb.Stage_Stopped
 
