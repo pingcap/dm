@@ -532,7 +532,7 @@ func (s *Syncer) mappingDML(schema, table string, columns []string, data [][]int
 	for i := range data {
 		rows[i], _, err = s.columnMapping.HandleRowValue(schema, table, columns, data[i])
 		if err != nil {
-			return nil, terror.ErrSyncerUnitDoColumnMapping.Generate(data[i], schema, table)
+			return nil, terror.ErrSyncerUnitDoColumnMapping.Delegate(err, data[i], schema, table)
 		}
 	}
 	return rows, nil

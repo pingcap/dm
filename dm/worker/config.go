@@ -217,6 +217,9 @@ func (c *Config) verify() error {
 // configFromFile loads config from file.
 func (c *Config) configFromFile(path string) error {
 	metaData, err := toml.DecodeFile(path, c)
+	if err != nil {
+		return terror.ErrWorkerDecodeConfigFromFile.Delegate(err)
+	}
 	undecoded := metaData.Undecoded()
 	if len(undecoded) > 0 && err == nil {
 		var undecodedItems []string
@@ -226,15 +229,7 @@ func (c *Config) configFromFile(path string) error {
 		return terror.ErrWorkerUndecodedItemFromFile.Generate(strings.Join(undecodedItems, ","))
 	}
 
-	if err != nil {
-		return terror.ErrWorkerDecodeConfigFromFile.Delegate(err)
-	}
-
-	err = c.verify()
-	if err != nil {
-		return err
-	}
-	return nil
+	return c.verify()
 }
 
 // UpdateConfigFile write configure to local file

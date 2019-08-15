@@ -65,13 +65,7 @@ func getErrorInstances(filepath string) []string {
 }
 
 func genFile(names []string) {
-	f, err := os.Open(templateCheckerFile)
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-
-	content, err := ioutil.ReadAll(f)
+	content, err := ioutil.ReadFile(templateCheckerFile)
 	if err != nil {
 		panic(err)
 	}

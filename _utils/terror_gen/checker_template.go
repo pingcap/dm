@@ -70,7 +70,10 @@ func readErrorFile(filename string) map[string]int64 {
 		if len(match) != 3 {
 			panic(fmt.Sprintf("invalid error: %s", s))
 		}
-		code, _ := strconv.ParseInt(match[2], 10, 64)
+		code, err := strconv.ParseInt(match[2], 10, 64)
+		if err != nil {
+			panic(err)
+		}
 		result[match[1]] = code
 	}
 	return result
