@@ -18,10 +18,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pingcap/errors"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // GRPCClient stores raw grpc connection and worker client
@@ -44,7 +44,7 @@ func NewGRPCClientWrap(conn *grpc.ClientConn, client pb.WorkerClient) (*GRPCClie
 func NewGRPCClient(addr string) (*GRPCClient, error) {
 	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.ErrMasterGRPCCreateConn.Delegate(err)
 	}
 	return NewGRPCClientWrap(conn, pb.NewWorkerClient(conn))
 }
@@ -52,7 +52,7 @@ func NewGRPCClient(addr string) (*GRPCClient, error) {
 // SendRequest implements Client.SendRequest
 func (c *GRPCClient) SendRequest(ctx context.Context, req *Request, timeout time.Duration) (*Response, error) {
 	if atomic.LoadInt32(&c.closed) != 0 {
-		return nil, errors.New("send request on a closed client")
+		return nil, terror.ErrMasterGRPCSendOnCloseConn.Generate()
 	}
 	if req.IsStreamAPI() {
 		// call stream API and returns a grpc stream client
@@ -75,7 +75,7 @@ func (c *GRPCClient) Close() error {
 	}
 	err := c.conn.Close()
 	if err != nil {
-		return errors.Annotatef(err, "close rpc client")
+		return terror.ErrMasterGRPCClientClose.Delegate(err)
 	}
 	return nil
 }
@@ -118,10 +118,10 @@ func callRPC(ctx context.Context, client pb.WorkerClient, req *Request) (*Respon
 	case CmdFetchDDLInfo:
 		resp.FetchDDLInfo, err = client.FetchDDLInfo(ctx)
 	default:
-		return nil, errors.Errorf("invalid request type: %v", req.Type)
+		return nil, terror.ErrMasterGRPCInvalidReqType.Generate(req.Type)
 	}
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.ErrMasterGRPCRequestError.Delegate(err)
 	}
 	return resp, nil
 }

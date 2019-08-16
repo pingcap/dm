@@ -17,11 +17,11 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -104,7 +104,7 @@ func (meta *ShardingMeta) RestoreFromData(sourceTableID string, activeIdx int, i
 	items := make([]*DDLItem, 0)
 	err := json.Unmarshal(data, &items)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrSyncUnitInvalidShardMeta.Delegate(err)
 	}
 	if isGlobal {
 		meta.global = &ShardingSequence{Items: items}
@@ -174,7 +174,7 @@ func (meta *ShardingMeta) AddItem(item *DDLItem) (active bool, err error) {
 
 	global, source := meta.global, meta.sources[item.Source]
 	if !source.IsPrefixSequence(global) {
-		return false, errors.Errorf("detect inconsistent DDL sequence from source %+v, right DDL sequence should be %+v", source.Items, global.Items)
+		return false, terror.ErrSyncUnitDDLWrongSequence.Generate(source.Items, global.Items)
 	}
 
 	return index == meta.activeIdx, nil
@@ -229,7 +229,7 @@ func (meta *ShardingMeta) ResolveShardingDDL() bool {
 // ActiveDDLFirstPos returns the first binlog position of active DDL
 func (meta *ShardingMeta) ActiveDDLFirstPos() (mysql.Position, error) {
 	if meta.activeIdx >= len(meta.global.Items) {
-		return mysql.Position{}, errors.Errorf("activeIdx %d larger than length of global DDLItems: %v", meta.activeIdx, meta.global.Items)
+		return mysql.Position{}, terror.ErrSyncUnitDDLActiveIndexLarger.Generate(meta.activeIdx, meta.global.Items)
 	}
 	return meta.global.Items[meta.activeIdx].FirstPos, nil
 }

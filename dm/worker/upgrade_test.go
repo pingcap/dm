@@ -28,6 +28,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -74,15 +75,15 @@ func (t *testUpgrade) TestLoadSaveInternalVersion(c *C) {
 
 	// load with nil DB
 	_, err := loadVersion(tcontext.Background(), nil)
-	c.Assert(errors.Cause(err), Equals, ErrInValidHandler)
+	c.Assert(terror.ErrWorkerLogInvalidHandler.Equal(err), IsTrue)
 	_, err = loadVersion(tcontext.Background(), db)
-	c.Assert(errors.Cause(err), Equals, ErrInValidHandler)
+	c.Assert(terror.ErrWorkerLogInvalidHandler.Equal(err), IsTrue)
 
 	// save with nil DB
 	err = saveVersion(tcontext.Background(), nil, ver1234)
-	c.Assert(errors.Cause(err), Equals, ErrInValidHandler)
+	c.Assert(terror.ErrWorkerLogInvalidHandler.Equal(err), IsTrue)
 	err = saveVersion(tcontext.Background(), db, ver1234)
-	c.Assert(errors.Cause(err), Equals, ErrInValidHandler)
+	c.Assert(terror.ErrWorkerLogInvalidHandler.Equal(err), IsTrue)
 
 	// open DB
 	db = t.openTestDB(c, "")

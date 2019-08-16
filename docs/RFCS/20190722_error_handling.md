@@ -41,7 +41,7 @@ Error object is defined as below, with some import fields:
 - level: emergency level of this error, including high, medium, and low
 - args: variables used for error message generation. For example, we have an error `ErrFailedFlushCheckpoint = terror.Syncer.New(5300, “failed to flush checkpoint %s”)`.  We can use this error as ErrFailedFlushCheckpoint.GenWithArgs(checkpoint), so we don’t need additional error messages when we use this error
 - rawCause: used to record root errors via a third party function call
-- stack: thanks to [pingcap/errors/StackTracer](https://www.google.com/url?q=https://github.com/pingcap/errors/blob/master/stack.go%23L13-L17&sa=D&ust=1563783859452000), we can use this to record stack trace easily
+- stack: thanks to [pingcap/errors/StackTracer](https://github.com/pingcap/errors/blob/dc8ffe785c7fc9a74eeb5241814d77f1c5fb5e58/stack.go#L13-L17), we can use this to record stack trace easily
 
 ```go
 type ErrCode int
@@ -158,6 +158,7 @@ We use [pingcap/errors/StackTracer](https://www.google.com/url?q=https://github.
 - When we want to generate an error based on a third-party error, `Delegate` is recommended
 - There are two ways to handle errors in the DM function call stack: one way is to return the error directly, the other way is to `Annotate` the error with more information
 - DO NOT use other error libraries anymore, such as [pingcap/errors](https://www.google.com/url?q=https://github.com/pingcap/errors&sa=D&ust=1563783859475000) to wrap or add stack trace with the error instance in our new error system, which may lead to stack trace missing before this call and unexpected error format.
+- We should try our best to wrap the proper ErrClass to all errors with ErrClass ClassFunctional, which will help user to find out the error is happened in which component, module or use scenario.
 
 ### API list
 

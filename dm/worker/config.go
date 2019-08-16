@@ -23,12 +23,12 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/pingcap/errors"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay/purger"
@@ -133,7 +133,7 @@ func (c *Config) Parse(arguments []string) error {
 	// Parse first to get config file.
 	err := c.flagSet.Parse(arguments)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrWorkerParseFlagSet.Delegate(err)
 	}
 
 	if c.printVersion {
@@ -159,18 +159,18 @@ func (c *Config) Parse(arguments []string) error {
 	if c.ConfigFile != "" {
 		err = c.configFromFile(c.ConfigFile)
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 	}
 
 	// Parse again to replace with command line options.
 	err = c.flagSet.Parse(arguments)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrWorkerParseFlagSet.Delegate(err)
 	}
 
 	if len(c.flagSet.Args()) != 0 {
-		return errors.Errorf("'%s' is an invalid flag", c.flagSet.Arg(0))
+		return terror.ErrWorkerInvalidFlag.Generate(c.flagSet.Arg(0))
 	}
 
 	if len(c.MetaDir) == 0 {
@@ -187,28 +187,28 @@ func (c *Config) Parse(arguments []string) error {
 // verify verifies the config
 func (c *Config) verify() error {
 	if len(c.SourceID) == 0 {
-		return errors.Errorf("dm-worker should bind a non-empty source ID which represents a MySQL/MariaDB instance or a replica group. \n notice: if you use old version dm-ansible, please update to newest version.")
+		return terror.ErrWorkerNeedSourceID.Generate()
 	}
 	if len(c.SourceID) > config.MaxSourceIDLength {
-		return errors.Errorf("the length of source ID %s is more than max allowed value %d", c.SourceID, config.MaxSourceIDLength)
+		return terror.ErrWorkerTooLongSourceID.Generate(c.SourceID, config.MaxSourceIDLength)
 	}
 
 	var err error
 	if len(c.RelayBinLogName) > 0 {
 		if !binlog.VerifyFilename(c.RelayBinLogName) {
-			return errors.NotValidf("relay-binlog-name %s", c.RelayBinLogName)
+			return terror.ErrWorkerRelayBinlogName.Generate(c.RelayBinLogName)
 		}
 	}
 	if len(c.RelayBinlogGTID) > 0 {
 		_, err = gtid.ParserGTID(c.Flavor, c.RelayBinlogGTID)
 		if err != nil {
-			return errors.Annotatef(err, "relay-binlog-gtid %s", c.RelayBinlogGTID)
+			return terror.WithClass(terror.Annotatef(err, "relay-binlog-gtid %s", c.RelayBinlogGTID), terror.ClassDMWorker)
 		}
 	}
 
 	_, err = c.DecryptPassword()
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	return nil
@@ -217,24 +217,19 @@ func (c *Config) verify() error {
 // configFromFile loads config from file.
 func (c *Config) configFromFile(path string) error {
 	metaData, err := toml.DecodeFile(path, c)
+	if err != nil {
+		return terror.ErrWorkerDecodeConfigFromFile.Delegate(err)
+	}
 	undecoded := metaData.Undecoded()
 	if len(undecoded) > 0 && err == nil {
 		var undecodedItems []string
 		for _, item := range undecoded {
 			undecodedItems = append(undecodedItems, item.String())
 		}
-		return errors.Errorf("worker config contained unknown configuration options: %s", strings.Join(undecodedItems, ","))
+		return terror.ErrWorkerUndecodedItemFromFile.Generate(strings.Join(undecodedItems, ","))
 	}
 
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	err = c.verify()
-	if err != nil {
-		return errors.Trace(err)
-	}
-	return nil
+	return c.verify()
 }
 
 // UpdateConfigFile write configure to local file
@@ -244,7 +239,7 @@ func (c *Config) UpdateConfigFile(content string) error {
 	}
 	err := ioutil.WriteFile(c.ConfigFile, []byte(content), 0666)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrWorkerWriteConfigFile.Delegate(err)
 	}
 	return nil
 }
@@ -257,7 +252,7 @@ func (c *Config) Reload() error {
 
 	err := c.configFromFile(c.ConfigFile)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	return nil
@@ -273,7 +268,7 @@ func (c *Config) DecryptPassword() (*Config, error) {
 	if len(clone.From.Password) > 0 {
 		pswdFrom, err = utils.Decrypt(clone.From.Password)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, terror.WithClass(err, terror.ClassDMWorker)
 		}
 	}
 	clone.From.Password = pswdFrom

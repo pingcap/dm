@@ -19,7 +19,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/pingcap/errors"
 	uuid "github.com/satori/go.uuid"
 	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
@@ -28,6 +27,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // operator contains an operation for specified binlog pos or SQL pattern
@@ -69,7 +69,7 @@ func (o *operator) operate() ([]string, error) {
 	case pb.SQLOp_REPLACE:
 		return o.args, nil
 	default:
-		return nil, errors.NotSupportedf("op %s", o.op)
+		return nil, terror.ErrSyncerUnitNotSupportedOperate.Generate(o.op)
 	}
 }
 
@@ -104,17 +104,17 @@ func NewHolder() *Holder {
 // Set sets an operator according request
 func (h *Holder) Set(tctx *tcontext.Context, req *pb.HandleSubTaskSQLsRequest) error {
 	if req == nil {
-		return errors.NotValidf("nil request")
+		return terror.ErrSyncerUnitNilOperatorReq.Generate()
 	}
 	switch req.Op {
 	case pb.SQLOp_SKIP, pb.SQLOp_REPLACE:
 	default:
-		return errors.NotSupportedf("op %s", req.Op)
+		return terror.ErrSyncerUnitNotSupportedOperate.Generate(req.Op)
 	}
 
 	binlogPos, sqlReg, err := command.VerifySQLOperateArgs(req.BinlogPos, req.SqlPattern, false) // sharding only be used in DM-master
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	var key string
@@ -167,7 +167,7 @@ func (h *Holder) Apply(tctx *tcontext.Context, pos mysql.Position, sqls []string
 	delete(h.operators, key) // always delete the operator
 	args, err := oper.operate()
 	if err != nil {
-		return false, nil, errors.Annotatef(err, "operator %s", oper)
+		return false, nil, terror.Annotatef(err, "operator %s", oper)
 	}
 
 	tctx.L().Info("applying operator", zap.String("chance", cause), log.WrapStringerField("operation", oper))

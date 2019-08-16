@@ -39,6 +39,7 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -92,7 +93,7 @@ type Worker struct {
 func NewWorker(loader *Loader, id int) (worker *Worker, err error) {
 	conn, err := createConn(loader.cfg)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	ctctx := loader.tctx.WithLogger(loader.tctx.L().WithFields(zap.Int("worker ID", id)))
@@ -158,7 +159,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *
 
 				if err := w.conn.executeSQL(ctctx, sqls, true); err != nil {
 					// expect pause rather than exit
-					err = errors.Annotatef(err, "file %s", job.file)
+					err = terror.Annotatef(err, "file %s", job.file)
 					runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, errors.ErrorStack(err))
 					return
 				}
@@ -184,7 +185,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *
 			// restore a table
 			if err := w.restoreDataFile(ctx, filepath.Join(w.cfg.Dir, job.dataFile), job.offset, job.info); err != nil {
 				// expect pause rather than exit
-				err = errors.Annotatef(err, "restore data file (%v) failed", job.dataFile)
+				err = terror.Annotatef(err, "restore data file (%v) failed", job.dataFile)
 				runFatalChan <- unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err))
 				return
 			}
@@ -196,7 +197,7 @@ func (w *Worker) restoreDataFile(ctx context.Context, filePath string, offset in
 	w.tctx.L().Info("start to restore dump sql file", zap.String("data file", filePath))
 	err := w.dispatchSQL(ctx, filePath, offset, table)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	// dispatchSQL completed, send nil.
@@ -218,25 +219,25 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 
 	f, err = os.Open(file)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrLoadUnitDispatchSQLFromFile.Delegate(err)
 	}
 	defer f.Close()
 
 	finfo, err := f.Stat()
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrLoadUnitDispatchSQLFromFile.Delegate(err)
 	}
 
 	baseFile := filepath.Base(file)
 	err = w.checkPoint.Init(baseFile, finfo.Size())
 	if err != nil {
 		w.tctx.L().Error("fail to initial checkpoint", zap.String("data file", file), log.ShortError(err))
-		return errors.Trace(err)
+		return err
 	}
 
 	cur, err = f.Seek(offset, io.SeekStart)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrLoadUnitDispatchSQLFromFile.Delegate(err)
 	}
 	w.tctx.L().Debug("read file", zap.String("data file", file), zap.Int64("offset", offset))
 
@@ -277,7 +278,7 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 				// column mapping and route table
 				query, err = reassemble(data, table, w.loader.columnMapping)
 				if err != nil {
-					return errors.Annotatef(err, "file %s", file)
+					return terror.Annotatef(err, "file %s", file)
 				}
 			} else if table.sourceTable != table.targetTable {
 				query = renameShardingTable(query, table.sourceTable, table.targetTable)
@@ -285,7 +286,7 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 
 			idx := strings.Index(query, "INSERT INTO")
 			if idx < 0 {
-				return errors.Errorf("[invalid insert sql][sql]%s", query)
+				return terror.ErrLoadUnitInvalidInsertSQL.Generate(query)
 			}
 
 			data = data[0:0]
@@ -383,7 +384,7 @@ func (l *Loader) Init() (err error) {
 
 	checkpoint, err := newRemoteCheckPoint(l.tctx, l.cfg, l.checkpointID())
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	l.checkPoint = checkpoint
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-checkpoint", Fn: l.checkPoint.Close})
@@ -393,20 +394,20 @@ func (l *Loader) Init() (err error) {
 	if l.cfg.RemoveMeta {
 		err2 := l.checkPoint.Clear()
 		if err2 != nil {
-			return errors.Trace(err2)
+			return err2
 		}
 		l.tctx.L().Info("all previous checkpoints cleared")
 	}
 
 	err = l.genRouter(l.cfg.RouteRules)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	if len(l.cfg.ColumnMappingRules) > 0 {
 		l.columnMapping, err = cm.NewMapping(l.cfg.CaseSensitive, l.cfg.ColumnMappingRules)
 		if err != nil {
-			return errors.Trace(err)
+			return terror.ErrLoadUnitNewColumnMapping.Delegate(err)
 		}
 	}
 
@@ -499,7 +500,7 @@ func (l *Loader) isClosed() bool {
 // IsFreshTask implements Unit.IsFreshTask
 func (l *Loader) IsFreshTask() (bool, error) {
 	count, err := l.checkPoint.Count()
-	return count == 0, errors.Trace(err)
+	return count == 0, err
 }
 
 // Restore begins the restore process.
@@ -510,7 +511,7 @@ func (l *Loader) Restore(ctx context.Context) error {
 
 	if err := l.prepare(); err != nil {
 		l.tctx.L().Error("scan directory failed", zap.String("directory", l.cfg.Dir), log.ShortError(err))
-		return errors.Trace(err)
+		return err
 	}
 
 	// not update checkpoint in memory when restoring, so when re-Restore, we need to load checkpoint from DB
@@ -520,7 +521,7 @@ func (l *Loader) Restore(ctx context.Context) error {
 
 	if err := l.initAndStartWorkerPool(ctx); err != nil {
 		l.tctx.L().Error("initial and start worker pools failed", log.ShortError(err))
-		return errors.Trace(err)
+		return err
 	}
 
 	go l.PrintStatus(ctx)
@@ -529,7 +530,7 @@ func (l *Loader) Restore(ctx context.Context) error {
 		if errors.Cause(err) == context.Canceled {
 			return nil
 		}
-		return errors.Trace(err)
+		return err
 	}
 
 	return nil
@@ -627,14 +628,14 @@ func (l *Loader) Update(cfg *config.SubTaskConfig) error {
 	oldTableRouter = l.tableRouter
 	l.tableRouter, err = router.NewTableRouter(cfg.CaseSensitive, cfg.RouteRules)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrLoadUnitGenTableRouter.Delegate(err)
 	}
 
 	// update column-mappings
 	oldColumnMapping = l.columnMapping
 	l.columnMapping, err = cm.NewMapping(cfg.CaseSensitive, cfg.ColumnMappingRules)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrLoadUnitNewColumnMapping.Delegate(err)
 	}
 
 	// update l.cfg
@@ -649,7 +650,7 @@ func (l *Loader) genRouter(rules []*router.TableRule) error {
 	for _, rule := range rules {
 		err := l.tableRouter.AddRule(rule)
 		if err != nil {
-			return errors.Trace(err)
+			return terror.ErrLoadUnitGenTableRouter.Delegate(err)
 		}
 	}
 	schemaRules, tableRules := l.tableRouter.AllRules()
@@ -729,7 +730,7 @@ func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 		if !ok {
 			l.tctx.L().Warn("can't find schema create file, will generate one", zap.String("schema", db))
 			if err := generateSchemaCreateFile(l.cfg.Dir, db); err != nil {
-				return errors.Trace(err)
+				return err
 			}
 			l.db2Tables[db] = make(Tables2DataFiles)
 			tables = l.db2Tables[db]
@@ -737,7 +738,7 @@ func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 		}
 
 		if _, ok := tables[table]; ok {
-			return errors.Errorf("invalid table schema file, duplicated item - %s", file)
+			return terror.ErrLoadUnitDuplicateTableFile.Generate(file)
 		}
 		tableCounter.WithLabelValues(l.cfg.Name).Inc()
 		tables[table] = make(DataFiles, 0, 16)
@@ -776,17 +777,17 @@ func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 		}
 		tables, ok := l.db2Tables[db]
 		if !ok {
-			return errors.Errorf("invalid data sql file, cannot find db - %s", file)
+			return terror.ErrLoadUnitNoDBFile.Generate(file)
 		}
 
 		dataFiles, ok := tables[table]
 		if !ok {
-			return errors.Errorf("invalid data sql file, cannot find table - %s", file)
+			return terror.ErrLoadUnitNoTableFile.Generate(file)
 		}
 
 		size, err := utils.GetFileSize(filepath.Join(l.cfg.Dir, file))
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 		l.totalDataSize.Add(size)
 		l.totalFileCount.Add(1) // for data
@@ -820,7 +821,7 @@ func (l *Loader) prepare() error {
 			}
 		}
 		if !trimmed {
-			return errors.Errorf("%s does not exist or it's not a dir", l.cfg.Dir)
+			return terror.ErrLoadUnitDumpDirNotFound.Generate(l.cfg.Dir)
 		}
 	}
 
@@ -856,7 +857,7 @@ func (l *Loader) restoreSchema(conn *Conn, sqlFile, schema string) error {
 		if isErrDBExists(err) {
 			l.tctx.L().Info("database already exists, skip it", zap.String("db schema file", sqlFile))
 		} else {
-			return errors.Annotatef(err, "run db schema failed - dbfile %s", sqlFile)
+			return terror.Annotatef(err, "run db schema failed - dbfile %s", sqlFile)
 		}
 	}
 	return nil
@@ -869,7 +870,7 @@ func (l *Loader) restoreTable(conn *Conn, sqlFile, schema, table string) error {
 		if isErrTableExists(err) {
 			l.tctx.L().Info("table already exists, skip it", zap.String("table schema file", sqlFile))
 		} else {
-			return errors.Annotatef(err, "run table schema failed - dbfile %s", sqlFile)
+			return terror.Annotatef(err, "run table schema failed - dbfile %s", sqlFile)
 		}
 	}
 	return nil
@@ -879,7 +880,7 @@ func (l *Loader) restoreTable(conn *Conn, sqlFile, schema, table string) error {
 func (l *Loader) restoreStructure(conn *Conn, sqlFile string, schema string, table string) error {
 	f, err := os.Open(sqlFile)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrLoadUnitReadSchemaFile.Delegate(err)
 	}
 	defer f.Close()
 
@@ -919,7 +920,7 @@ func (l *Loader) restoreStructure(conn *Conn, sqlFile string, schema string, tab
 			sqls = append(sqls, query)
 			err = conn.executeDDL(l.tctx, sqls, true)
 			if err != nil {
-				return errors.Trace(err)
+				return err
 			}
 		}
 
@@ -965,7 +966,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 
 	conn, err := createConn(l.cfg)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	defer conn.db.Close()
 
@@ -985,7 +986,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 		l.tctx.L().Info("start to create schema", zap.String("schema file", dbFile))
 		err = l.restoreSchema(conn, dbFile, db)
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 		l.tctx.L().Info("finish to create schema", zap.String("schema file", dbFile))
 
@@ -999,7 +1000,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 			if _, ok := l.tableInfos[tableName(db, table)]; !ok {
 				l.tableInfos[tableName(db, table)], err = parseTable(l.tctx, l.tableRouter, db, table, tableFile)
 				if err != nil {
-					return errors.Annotatef(err, "parse table %s/%s", db, table)
+					return terror.Annotatef(err, "parse table %s/%s", db, table)
 				}
 			}
 
@@ -1012,7 +1013,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 			l.tctx.L().Info("start to create table", zap.String("table file", tableFile))
 			err := l.restoreTable(conn, tableFile, db, table)
 			if err != nil {
-				return errors.Trace(err)
+				return err
 			}
 			l.tctx.L().Info("finish to create table", zap.String("table file", tableFile))
 
@@ -1087,7 +1088,7 @@ func (l *Loader) getMydumpMetadata() error {
 	pos, err := utils.ParseMetaData(metafile)
 	if err != nil {
 		l.tctx.L().Error("fail to parse dump metadata", log.ShortError(err))
-		return errors.Trace(err)
+		return err
 	}
 
 	l.metaBinlog.Set(pos.String())

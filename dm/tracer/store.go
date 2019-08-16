@@ -17,7 +17,7 @@ import (
 	"sync"
 
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/errors"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // TraceEvent represents a sigle tracing event
@@ -49,17 +49,17 @@ func (store *EventStore) addNewEvent(e *TraceEvent) error {
 	case pb.TraceType_BinlogEvent:
 		ev, ok := e.Event.(*pb.SyncerBinlogEvent)
 		if !ok {
-			return errors.NotValidf("type %d event: %v", e.Type, e.Event)
+			return terror.ErrTracerEventAssertionFail.Generate(e.Type, e.Event)
 		}
 		traceID = ev.Base.TraceID
 	case pb.TraceType_JobEvent:
 		ev, ok := e.Event.(*pb.SyncerJobEvent)
 		if !ok {
-			return errors.NotValidf("type %d event: %v", e.Type, e.Event)
+			return terror.ErrTracerEventAssertionFail.Generate(e.Type, e.Event)
 		}
 		traceID = ev.Base.TraceID
 	default:
-		return errors.NotValidf("trace event type %d", e.Type)
+		return terror.ErrTracerEventTypeNotValid.Generate(e.Type)
 	}
 
 	store.Lock()

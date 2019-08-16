@@ -22,8 +22,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/replication"
+
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // not support to config yet
@@ -39,7 +40,7 @@ func ParseUUIDIndex(indexPath string) ([]string, error) {
 	if os.IsNotExist(err) {
 		return nil, nil
 	} else if err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.ErrRelayParseUUIDIndex.Delegate(err)
 	}
 	defer fd.Close()
 
@@ -52,7 +53,7 @@ func ParseUUIDIndex(indexPath string) ([]string, error) {
 				break
 			}
 		} else if err != nil {
-			return nil, errors.Trace(err)
+			return nil, terror.ErrRelayParseUUIDIndex.Delegate(err)
 		}
 
 		line = strings.TrimSpace(line)
@@ -80,11 +81,11 @@ func SuffixIntToStr(ID int) string {
 func ParseSuffixForUUID(uuid string) (string, int, error) {
 	parts := strings.Split(uuid, uuidIndexSeparator)
 	if len(parts) != 2 || len(parts[1]) != 6 {
-		return "", 0, errors.NotValidf("UUID (with suffix) %s", uuid)
+		return "", 0, terror.ErrRelayParseUUIDSuffix.Generate(uuid)
 	}
 	ID, err := strconv.Atoi(parts[1])
 	if err != nil {
-		return "", 0, errors.NotValidf("UUID (with suffix) %s", uuid)
+		return "", 0, terror.ErrRelayParseUUIDSuffix.Generate(uuid)
 	}
 	return parts[0], ID, nil
 }
@@ -94,21 +95,21 @@ func ParseSuffixForUUID(uuid string) (string, int, error) {
 func GetSuffixUUID(indexPath, uuid string) (string, error) {
 	uuids, err := ParseUUIDIndex(indexPath)
 	if err != nil {
-		return "", errors.Trace(err)
+		return "", err
 	}
 
 	// newer is preferred
 	for i := len(uuids) - 1; i >= 0; i-- {
 		uuid2, _, err := ParseSuffixForUUID(uuids[i])
 		if err != nil {
-			return "", errors.Trace(err)
+			return "", err
 		}
 		if uuid2 == uuid {
 			return uuids[i], nil
 		}
 	}
 
-	return "", errors.Errorf("no UUID (with suffix) matched %s found in %s, all UUIDs are %v", uuid, indexPath, uuids)
+	return "", terror.ErrRelayUUIDWithSuffixNotFound.Generate(uuid, indexPath, uuids)
 }
 
 // GetUUIDBySuffix gets UUID from uuids by suffix
@@ -147,14 +148,14 @@ func GenFakeRotateEvent(nextLogName string, logPos uint64, serverID uint32) (*re
 	h := &replication.EventHeader{}
 	err := h.Decode(rawData)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.ErrRelayGenFakeRotateEvent.Delegate(err)
 	}
 
 	// decode body
 	e := &replication.RotateEvent{}
 	err = e.Decode(rawData[headerLen:])
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.ErrRelayGenFakeRotateEvent.Delegate(err)
 	}
 
 	return &replication.BinlogEvent{RawData: rawData, Header: h, Event: e}, nil

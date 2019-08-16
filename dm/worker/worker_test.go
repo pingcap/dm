@@ -60,15 +60,15 @@ func (t *testServer) testWorker(c *C) {
 	_, err = w.StartSubTask(&config.SubTaskConfig{
 		Name: "testStartTask",
 	})
-	c.Assert(err, ErrorMatches, "worker already closed.*")
+	c.Assert(err, ErrorMatches, ".*worker already closed.*")
 
 	_, err = w.UpdateSubTask(&config.SubTaskConfig{
 		Name: "testStartTask",
 	})
-	c.Assert(err, ErrorMatches, "worker already closed.*")
+	c.Assert(err, ErrorMatches, ".*worker already closed.*")
 
 	_, err = w.OperateSubTask("testSubTask", pb.TaskOp_Stop)
-	c.Assert(err, ErrorMatches, "worker already closed.*")
+	c.Assert(err, ErrorMatches, ".*worker already closed.*")
 }
 
 func (t *testServer) testWorkerHandleTask(c *C) {

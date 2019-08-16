@@ -18,7 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
@@ -27,6 +26,7 @@ import (
 	br "github.com/pingcap/dm/pkg/binlog/reader"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 const (
@@ -95,7 +95,7 @@ func (r *reader) Start() error {
 	defer r.mu.Unlock()
 
 	if r.stage != common.StageNew {
-		return errors.Errorf("stage %s, expect %s, already started", r.stage, common.StageNew)
+		return terror.ErrRelayReaderNotStateNew.Generate(r.stage, common.StageNew)
 	}
 	r.stage = common.StagePrepared
 
@@ -111,7 +111,7 @@ func (r *reader) Start() error {
 		err = r.setUpReaderByPos()
 	}
 
-	return errors.Trace(err)
+	return err
 }
 
 // Close implements Reader.Close.
@@ -120,12 +120,12 @@ func (r *reader) Close() error {
 	defer r.mu.Unlock()
 
 	if r.stage != common.StagePrepared {
-		return errors.Errorf("stage %s, expect %s, can not close", r.stage, common.StagePrepared)
+		return terror.ErrRelayReaderStateCannotClose.Generate(r.stage, common.StagePrepared)
 	}
 
 	err := r.in.Close()
 	r.stage = common.StageClosed
-	return errors.Trace(err)
+	return err
 }
 
 // GetEvent implements Reader.GetEvent.
@@ -136,7 +136,7 @@ func (r *reader) GetEvent(ctx context.Context) (Result, error) {
 
 	var result Result
 	if r.stage != common.StagePrepared {
-		return result, errors.Errorf("stage %s, expect %s, please start the reader first", r.stage, common.StagePrepared)
+		return result, terror.ErrRelayReaderNeedStart.Generate(r.stage, common.StagePrepared)
 	}
 
 	for {
@@ -150,7 +150,7 @@ func (r *reader) GetEvent(ctx context.Context) (Result, error) {
 			r.logger.Info("get retryable error when reading binlog event", log.ShortError(err))
 			continue
 		}
-		return result, errors.Trace(err)
+		return result, err
 	}
 }
 

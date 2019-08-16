@@ -17,13 +17,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -60,12 +60,12 @@ func newSpaceStrategy() PurgeStrategy {
 func (s *spaceStrategy) Check(args interface{}) (bool, error) {
 	sa, ok := args.(*spaceArgs)
 	if !ok {
-		return false, errors.NotValidf("args (%T) %+v", args, args)
+		return false, terror.ErrRelayPurgeArgsNotValid.Generate(args, args)
 	}
 
 	storageSize, err := utils.GetStorageSize(sa.relayBaseDir)
 	if err != nil {
-		return false, errors.Annotatef(err, "get storage size for directory %s", sa.relayBaseDir)
+		return false, terror.Annotatef(err, "get storage size for directory %s", sa.relayBaseDir)
 	}
 
 	requiredBytes := uint64(sa.remainSpace) * 1024 * 1024 * 1024
@@ -74,18 +74,18 @@ func (s *spaceStrategy) Check(args interface{}) (bool, error) {
 
 func (s *spaceStrategy) Do(args interface{}) error {
 	if !s.purging.CompareAndSwap(0, 1) {
-		return ErrSelfPurging
+		return terror.ErrRelayThisStrategyIsPurging.Generate()
 	}
 	defer s.purging.Set(0)
 
 	sa, ok := args.(*spaceArgs)
 	if !ok {
-		return errors.NotValidf("args (%T) %+v", args, args)
+		return terror.ErrRelayPurgeArgsNotValid.Generate(args, args)
 	}
 
 	// NOTE: we purge all inactive relay log files when available space less than @remainSpace
 	// maybe we can refine this to purge only part of this files every time
-	return errors.Trace(purgeRelayFilesBeforeFile(s.tctx, sa.relayBaseDir, sa.uuids, sa.activeRelayLog))
+	return purgeRelayFilesBeforeFile(s.tctx, sa.relayBaseDir, sa.uuids, sa.activeRelayLog)
 }
 
 func (s *spaceStrategy) Purging() bool {

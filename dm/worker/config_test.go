@@ -86,7 +86,7 @@ aaa = "xxx"
 	c.Assert(err, IsNil)
 	err = cfg.configFromFile(configFile)
 	c.Assert(err, NotNil)
-	c.Assert(err, ErrorMatches, "*worker config contained unknown configuration options: aaa*")
+	c.Assert(err, ErrorMatches, ".*worker config contains unknown configuration options: aaa")
 }
 
 func (t *testServer) TestConfigVerify(c *C) {
@@ -111,7 +111,7 @@ func (t *testServer) TestConfigVerify(c *C) {
 				cfg.SourceID = ""
 				return cfg
 			},
-			"dm-worker should bind a non-empty source ID which represents a MySQL/MariaDB instance or a replica group.*",
+			".*dm-worker should bind a non-empty source ID which represents a MySQL/MariaDB instance or a replica group.*",
 		},
 		{
 			func() *Config {
@@ -119,7 +119,7 @@ func (t *testServer) TestConfigVerify(c *C) {
 				cfg.SourceID = "source-id-length-more-than-thirty-two"
 				return cfg
 			},
-			fmt.Sprintf("the length of source ID .* is more than max allowed value %d", config.MaxSourceIDLength),
+			fmt.Sprintf(".*the length of source ID .* is more than max allowed value %d", config.MaxSourceIDLength),
 		},
 		{
 			func() *Config {
@@ -135,7 +135,7 @@ func (t *testServer) TestConfigVerify(c *C) {
 				cfg.RelayBinlogGTID = "9afe121c-40c2-11e9-9ec7-0242ac110002:1-rtc"
 				return cfg
 			},
-			"relay-binlog-gtid 9afe121c-40c2-11e9-9ec7-0242ac110002:1-rtc:.*",
+			".*relay-binlog-gtid 9afe121c-40c2-11e9-9ec7-0242ac110002:1-rtc:.*",
 		},
 		{
 			func() *Config {
@@ -143,7 +143,7 @@ func (t *testServer) TestConfigVerify(c *C) {
 				cfg.From.Password = "not-encrypt"
 				return cfg
 			},
-			"can not decrypt password.*",
+			"*decode base64 encoded password.*",
 		},
 	}
 

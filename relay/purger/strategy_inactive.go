@@ -17,13 +17,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // inactiveArgs represents args needed by inactiveStrategy
@@ -66,16 +66,16 @@ func (s *inactiveStrategy) Check(args interface{}) (bool, error) {
 
 func (s *inactiveStrategy) Do(args interface{}) error {
 	if !s.purging.CompareAndSwap(0, 1) {
-		return ErrSelfPurging
+		return terror.ErrRelayThisStrategyIsPurging.Generate()
 	}
 	defer s.purging.Set(0)
 
 	ia, ok := args.(*inactiveArgs)
 	if !ok {
-		return errors.NotValidf("args (%T) %+v", args, args)
+		return terror.ErrRelayPurgeArgsNotValid.Generate(args, args)
 	}
 
-	return errors.Trace(purgeRelayFilesBeforeFile(s.tctx, ia.relayBaseDir, ia.uuids, ia.activeRelayLog))
+	return purgeRelayFilesBeforeFile(s.tctx, ia.relayBaseDir, ia.uuids, ia.activeRelayLog)
 }
 
 func (s *inactiveStrategy) Purging() bool {

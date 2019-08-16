@@ -13,7 +13,9 @@
 
 package syncer
 
-import "github.com/pingcap/errors"
+import (
+	"github.com/pingcap/dm/pkg/terror"
+)
 
 // causality provides a simple mechanism to improve the concurrency of SQLs execution under the premise of ensuring correctness.
 // causality groups sqls that maybe contain causal relationships, and syncer executes them linearly.
@@ -35,7 +37,7 @@ func (c *causality) add(keys []string) error {
 	}
 
 	if c.detectConflict(keys) {
-		return errors.New("some conflicts in causality, must be resolved")
+		return terror.ErrSyncUnitCausalityConflict.Generate()
 	}
 	// find causal key
 	selectedRelation := keys[0]

@@ -38,6 +38,7 @@ import (
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
 )
 
@@ -96,13 +97,13 @@ func (s *Server) Start() error {
 	var err error
 	s.rootLis, err = net.Listen("tcp", s.cfg.MasterAddr)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrMasterStartService.Delegate(err)
 	}
 
 	for _, workerAddr := range s.cfg.DeployMap {
 		s.workerClients[workerAddr], err = workerrpc.NewGRPCClient(workerAddr)
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 	}
 	s.closed.Set(false)
@@ -161,7 +162,7 @@ func (s *Server) Start() error {
 
 	err = s.HandleHTTPApis(ctx, httpmux) // server http api
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	wg.Add(1)
@@ -272,7 +273,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 				workerRespCh <- errorCommonWorkerResponse(err.Error(), worker)
 				return
 			}
-			workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf(ErrorNoEmitToken, worker), worker)
+			workerRespCh <- errorCommonWorkerResponse(terror.ErrMasterNoEmitToken.Generate(worker).Error(), worker)
 		}, stCfg)
 	}
 	wg.Wait()
@@ -365,7 +366,7 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 				handleErr(err, worker1)
 				return
 			}
-			handleErr(errors.Errorf(ErrorNoEmitToken, worker1), worker1)
+			handleErr(terror.ErrMasterNoEmitToken.Generate(worker1), worker1)
 		}, worker)
 	}
 	wg.Wait()
@@ -456,7 +457,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 				workerRespCh <- errorCommonWorkerResponse(err.Error(), worker)
 				return
 			}
-			workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf(ErrorNoEmitToken, worker), worker)
+			workerRespCh <- errorCommonWorkerResponse(terror.ErrMasterNoEmitToken.Generate(worker).Error(), worker)
 		}, stCfg)
 	}
 	wg.Wait()
@@ -882,7 +883,7 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 				handleErr(err, worker1)
 				return
 			}
-			workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf(ErrorNoEmitToken, worker1), worker1)
+			workerRespCh <- errorCommonWorkerResponse(terror.ErrMasterNoEmitToken.Generate(worker1).Error(), worker1)
 		}, worker)
 	}
 	wg.Wait()
@@ -1140,7 +1141,7 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, workers []string, tas
 				handleErr(err, worker1)
 				return
 			}
-			handleErr(errors.Errorf(ErrorNoEmitToken, worker1), worker1)
+			handleErr(terror.ErrMasterNoEmitToken.Generate(worker1), worker1)
 		}, worker)
 	}
 	wg.Wait()
@@ -1195,7 +1196,7 @@ func (s *Server) getErrorFromWorkers(ctx context.Context, workers []string, task
 				handleErr(err, worker1)
 				return
 			}
-			handleErr(errors.Errorf(ErrorNoEmitToken, worker1), worker1)
+			handleErr(terror.ErrMasterNoEmitToken.Generate(worker1), worker1)
 		}, worker)
 	}
 	wg.Wait()
@@ -1390,11 +1391,11 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 	lock := s.lockKeeper.FindLock(lockID)
 	if lock == nil {
 		// should not happen even when dm-master restarted
-		return nil, errors.NotFoundf("lock with ID %s", lockID)
+		return nil, terror.ErrMasterLockNotFound.Generate(lockID)
 	}
 
 	if lock.Resolving.Get() {
-		return nil, errors.Errorf("lock %s is resolving", lockID)
+		return nil, terror.ErrMasterLockIsResolving.Generate(lockID)
 	}
 	lock.Resolving.Set(true)
 	defer lock.Resolving.Set(false) //reset
@@ -1408,10 +1409,10 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 	}
 	cli, ok := s.workerClients[owner]
 	if !ok {
-		return nil, errors.NotFoundf("worker %s relevant worker-client", owner)
+		return nil, terror.ErrMasterWorkerCliNotFound.Generate(owner)
 	}
 	if _, ok := ready[owner]; !ok {
-		return nil, errors.Errorf("worker %s not waiting for DDL lock %s", owner, lockID)
+		return nil, terror.ErrMasterWorkerNotWaitLock.Generate(owner, lockID)
 	}
 
 	// try send handle SQLs request to owner if exists
@@ -1429,11 +1430,11 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 		}
 		resp, err := cli.SendRequest(ctx, ownerReq, s.cfg.RPCTimeout)
 		if err != nil {
-			return nil, errors.Annotatef(err, "send handle SQLs request %s to DDL lock %s owner %s fail", ownerReq.HandleSubTaskSQLs, lockID, owner)
+			return nil, terror.Annotatef(err, "send handle SQLs request %s to DDL lock %s owner %s fail", ownerReq.HandleSubTaskSQLs, lockID, owner)
 		}
 		ownerResp := resp.HandleSubTaskSQLs
 		if !ownerResp.Result {
-			return nil, errors.Errorf("request DDL lock %s owner %s handle SQLs request %s fail %s", lockID, owner, ownerReq.HandleSubTaskSQLs, ownerResp.Msg)
+			return nil, terror.ErrMasterHandleSQLReqFail.Generate(lockID, owner, ownerReq.HandleSubTaskSQLs, ownerResp.Msg)
 		}
 		log.L().Info("sent handle --sharding DDL request", zap.Stringer("payload", ownerReq.HandleSubTaskSQLs), zap.String("owner", owner), zap.String("lock ID", lockID))
 		s.sqlOperatorHolder.Remove(lock.Task, key) // remove SQL operator after sent to owner
@@ -1466,7 +1467,7 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 		// owner execute DDL fail, do not continue
 		return []*pb.CommonWorkerResponse{
 			ownerResp,
-		}, errors.Errorf("owner %s ExecuteDDL fail", owner)
+		}, terror.ErrMasterOwnerExecDDL.Generate(owner)
 	}
 
 	// request other dm-workers to ignore DDL
@@ -1547,7 +1548,7 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 	s.lockKeeper.RemoveLock(lockID)
 
 	if !success {
-		err = errors.Errorf("DDL lock %s owner ExecuteDDL successfully, so DDL lock removed. but some dm-workers ExecuteDDL fail, you should to handle dm-worker directly", lockID)
+		err = terror.ErrMasterPartWorkerExecDDLFail.Generate(lockID)
 	}
 	return workerResps, err
 }
@@ -1597,7 +1598,7 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 				}, nil
 			}
 			if len(resp.Locks) != 0 {
-				err = errors.Errorf("worker %s exist ddl lock, please unlock ddl lock first!", workerAddr)
+				err = terror.ErrMasterWorkerExistDDLLock.Generate(workerAddr)
 				s.Unlock()
 				return &pb.UpdateMasterConfigResponse{
 					Result: false,
@@ -1697,23 +1698,23 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 		if err2 != nil {
 			log.L().Error("response error", zap.Error(err2))
 		}
-		errCh <- errors.Trace(err2)
+		errCh <- err2
 		return false
 	}
 
 	argsExtractor := func(args ...interface{}) (string, workerrpc.Client, bool) {
 		if len(args) != 2 {
-			return "", nil, handleErr(errors.Errorf("fail to call emit to fetch worker config, miss some arguments %v", args))
+			return "", nil, handleErr(terror.ErrMasterGetWorkerCfgExtractor.Generatef("fail to call emit to fetch worker config, miss some arguments %v", args))
 		}
 
 		worker, ok := args[0].(string)
 		if !ok {
-			return "", nil, handleErr(errors.Errorf("fail to call emit to fetch worker config, can't get id from args[0], arguments %v", args))
+			return "", nil, handleErr(terror.ErrMasterGetWorkerCfgExtractor.Generatef("fail to call emit to fetch worker config, can't get id from args[0], arguments %v", args))
 		}
 
 		client, ok := args[1].(*workerrpc.GRPCClient)
 		if !ok {
-			return "", nil, handleErr(errors.Errorf("fail to call emit to fetch config of worker %s, can't get worker client from args[1], arguments %v", worker, args))
+			return "", nil, handleErr(terror.ErrMasterGetWorkerCfgExtractor.Generatef("fail to call emit to fetch config of worker %s, can't get worker client from args[1], arguments %v", worker, args))
 		}
 
 		return worker, client, true
@@ -1735,30 +1736,30 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 
 			response, err1 := client1.SendRequest(ctx, request, s.cfg.RPCTimeout)
 			if err1 != nil {
-				handleErr(errors.Annotatef(err1, "fetch config of worker %s", worker1))
+				handleErr(terror.Annotatef(err1, "fetch config of worker %s", worker1))
 				return
 			}
 
 			resp := response.QueryWorkerConfig
 			if !resp.Result {
-				handleErr(errors.Errorf("fail to query config from worker %s, message %s", worker1, resp.Msg))
+				handleErr(terror.ErrMasterQueryWorkerConfig.Generatef("fail to query config from worker %s, message %s", worker1, resp.Msg))
 				return
 			}
 
 			if len(resp.Content) == 0 {
-				handleErr(errors.Errorf("fail to query config from worker %s, config is empty", worker1))
+				handleErr(terror.ErrMasterQueryWorkerConfig.Generatef("fail to query config from worker %s, config is empty", worker1))
 				return
 			}
 
 			if len(resp.SourceID) == 0 {
-				handleErr(errors.Errorf("fail to query config from worker %s, source ID is empty, it should be set in worker config", worker1))
+				handleErr(terror.ErrMasterQueryWorkerConfig.Generatef("fail to query config from worker %s, source ID is empty, it should be set in worker config", worker1))
 				return
 			}
 
 			dbCfg := &config.DBConfig{}
 			err2 := dbCfg.Decode(resp.Content)
 			if err2 != nil {
-				handleErr(errors.Annotatef(err2, "unmarshal worker %s config, resp: %s", worker1, resp.Content))
+				handleErr(terror.WithClass(terror.Annotatef(err2, "unmarshal worker %s config, resp: %s", worker1, resp.Content), terror.ClassDMMaster))
 				return
 			}
 
@@ -1773,7 +1774,7 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 			if !ok {
 				return
 			}
-			handleErr(errors.Errorf("fail to get emit opporunity for worker %s", worker1))
+			handleErr(terror.ErrMasterNoEmitToken.Generate(worker1))
 		}, worker, client)
 	}
 
@@ -1783,7 +1784,7 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 		err = <-errCh
 	}
 
-	return workerCfgs, errors.Trace(err)
+	return workerCfgs, err
 }
 
 // MigrateWorkerRelay migrates dm-woker relay unit
@@ -1830,22 +1831,22 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 	cfg := config.NewTaskConfig()
 	err := cfg.Decode(task)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
 
 	sourceCfgs, err := s.allWorkerConfigs(ctx)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, err
 	}
 
 	stCfgs, err := cfg.SubTaskConfigs(sourceCfgs)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
 
 	err = checker.CheckSyncConfigFunc(ctx, stCfgs)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
 
 	return cfg, stCfgs, nil
@@ -1874,11 +1875,11 @@ func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, name
 			queryResp = resp.QueryTaskOperation
 			respLog := queryResp.Log
 			if respLog == nil {
-				return errors.Errorf("operation %d of task %s not found, please execute `query-status` to check status", opLogID, name)
+				return terror.ErrMasterOperNotFound.Generate(opLogID, name)
 			} else if respLog.Success {
 				return nil
 			} else if len(respLog.Message) != 0 {
-				return errors.New(respLog.Message)
+				return terror.ErrMasterOperRespNotSuccess.Generate(respLog.Message)
 			}
 		}
 
@@ -1890,7 +1891,7 @@ func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, name
 		}
 	}
 
-	return errors.New("request is timeout, but request may be successful, please execute `query-status` to check status")
+	return terror.ErrMasterOperRequestTimeout.Generate()
 }
 
 func (s *Server) handleOperationResult(ctx context.Context, cli workerrpc.Client, name string, err error, resp *workerrpc.Response) *pb.OperateSubTaskResponse {
@@ -1930,18 +1931,18 @@ func (s *Server) taskConfigArgsExtractor(args ...interface{}) (workerrpc.Client,
 	}
 
 	if len(args) != 1 {
-		return nil, "", "", "", handleErr(errors.Errorf("miss task config %v", args))
+		return nil, "", "", "", handleErr(terror.ErrMasterTaskConfigExtractor.Generatef("miss task config %v", args))
 	}
 
 	cfg, ok := args[0].(*config.SubTaskConfig)
 	if !ok {
-		return nil, "", "", "", handleErr(errors.Errorf("args[0] is not SubTaskConfig: %v", args[0]))
+		return nil, "", "", "", handleErr(terror.ErrMasterTaskConfigExtractor.Generatef("args[0] is not SubTaskConfig: %v", args[0]))
 	}
 
 	worker, ok1 := s.cfg.DeployMap[cfg.SourceID]
 	cli, ok2 := s.workerClients[worker]
 	if !ok1 || !ok2 {
-		return nil, "", "", "", handleErr(errors.Errorf("%s relevant worker-client not found", worker))
+		return nil, "", "", "", handleErr(terror.ErrMasterTaskConfigExtractor.Generatef("%s relevant worker-client not found", worker))
 	}
 
 	cfgToml, err := cfg.Toml()
@@ -1956,15 +1957,15 @@ func (s *Server) taskConfigArgsExtractor(args ...interface{}) (workerrpc.Client,
 // grpc client, worker id (host:port) and error
 func (s *Server) workerArgsExtractor(args ...interface{}) (workerrpc.Client, string, error) {
 	if len(args) != 1 {
-		return nil, "", errors.Errorf("miss worker id %v", args)
+		return nil, "", terror.ErrMasterWorkerArgsExtractor.Generatef("miss worker id %v", args)
 	}
 	worker, ok := args[0].(string)
 	if !ok {
-		return nil, "", errors.Errorf("invalid argument, args[0] is not valid worker id: %v", args[0])
+		return nil, "", terror.ErrMasterWorkerArgsExtractor.Generatef("invalid argument, args[0] is not valid worker id: %v", args[0])
 	}
 	cli, ok := s.workerClients[worker]
 	if !ok {
-		return nil, worker, errors.Errorf("%s relevant worker-client not found", worker)
+		return nil, worker, terror.ErrMasterWorkerArgsExtractor.Generatef("%s relevant worker-client not found", worker)
 	}
 
 	return cli, worker, nil
@@ -1975,19 +1976,19 @@ func (s *Server) HandleHTTPApis(ctx context.Context, mux *http.ServeMux) error {
 	// MasterAddr's format may be "host:port" or "":port"
 	_, port, err := net.SplitHostPort(s.cfg.MasterAddr)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrMasterHandleHTTPApis.Delegate(err)
 	}
 
 	opts := []grpc.DialOption{grpc.WithInsecure()}
 	conn, err := grpc.DialContext(ctx, "127.0.0.1:"+port, opts...)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrMasterHandleHTTPApis.Delegate(err)
 	}
 
 	gwmux := runtime.NewServeMux()
 	err = pb.RegisterMasterHandler(ctx, gwmux, conn)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrMasterHandleHTTPApis.Delegate(err)
 	}
 	mux.Handle("/apis/", gwmux)
 

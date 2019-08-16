@@ -18,10 +18,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var (
@@ -121,18 +121,18 @@ func (i *DDLExecInfo) Send(ctx context.Context, item *DDLExecItem) error {
 	i.RLock()
 	if !i.status.CompareAndSwap(ddlExecIdle, ddlExecSending) {
 		i.RUnlock()
-		return errors.New("the chan has closed or already in sending")
+		return terror.ErrSyncerUnitDDLExecChanCloseOrBusy.Generate()
 	}
 	i.RUnlock()
 	defer i.status.Set(ddlExecIdle)
 
 	select {
 	case <-ctx.Done():
-		return errors.New("canceled from external")
+		return terror.ErrSyncerUnitDDLChanDone.Generate()
 	case i.ch <- item:
 		return nil
 	case <-i.cancel:
-		return errors.New("canceled by Close or Renew")
+		return terror.ErrSyncerUnitDDLChanCanceled.Generate()
 	}
 }
 
