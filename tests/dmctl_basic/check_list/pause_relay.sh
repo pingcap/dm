@@ -29,5 +29,5 @@ function pause_relay_fail() {
         "pause-relay -w 127.0.0.1:$WORKER1_PORT -w 127.0.0.1:$WORKER2_PORT" \
         "\"result\": true" 1 \
         "\"result\": false" 2 \
-        "\"msg\": \"current stage is Paused, Running required" 2
+        "\"msg\": \".*current stage is Paused, Running required" 2
 }

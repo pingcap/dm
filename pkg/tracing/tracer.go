@@ -18,13 +18,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var (
@@ -148,10 +148,10 @@ func (t *Tracer) syncTS() error {
 	req := &pb.GetTSORequest{Id: t.cfg.Source}
 	resp, err := t.cli.GetTSO(t.ctx, req)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrTracingGetTSO.Delegate(err)
 	}
 	if !resp.Result {
-		return errors.Errorf("sync ts with error: %s", resp.Msg)
+		return terror.ErrTracingGetTSO.Generatef("sync ts with error: %s", resp.Msg)
 	}
 	currentTS := time.Now().UnixNano()
 	oldSyncedTS := t.tso.syncedTS
@@ -257,7 +257,7 @@ func (t *Tracer) AddJob(job *Job) {
 func (t *Tracer) collectBaseEvent(source, traceID, traceGID string, traceType pb.TraceType) (*pb.BaseEvent, error) {
 	file, line, err := GetTraceCode(3)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	tso := t.GetTSO()

@@ -17,10 +17,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/pingcap/errors"
 	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // SafeMode controls whether enable safe-mode through a mechanism similar to reference-count
@@ -42,7 +42,7 @@ func NewSafeMode() *SafeMode {
 func (m *SafeMode) Add(tctx *tcontext.Context, n int32) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return errors.Trace(m.setCount(tctx, m.count+n))
+	return m.setCount(tctx, m.count+n)
 }
 
 // IncrForTable tries to add 1 on the count if the table not added before
@@ -54,7 +54,7 @@ func (m *SafeMode) IncrForTable(tctx *tcontext.Context, schema, table string) er
 	defer m.mu.Unlock()
 	if _, ok := m.tables[key]; !ok {
 		m.tables[key] = struct{}{}
-		return errors.Trace(m.setCount(tctx, m.count+1))
+		return m.setCount(tctx, m.count+1)
 	}
 	return nil
 }
@@ -67,7 +67,7 @@ func (m *SafeMode) DescForTable(tctx *tcontext.Context, schema, table string) er
 	defer m.mu.Unlock()
 	if _, ok := m.tables[key]; ok {
 		delete(m.tables, key)
-		return errors.Trace(m.setCount(tctx, m.count-1))
+		return m.setCount(tctx, m.count-1)
 	}
 	return nil
 }
@@ -91,7 +91,7 @@ func (m *SafeMode) Enable() bool {
 // setCount sets the count, called internal
 func (m *SafeMode) setCount(tctx *tcontext.Context, n int32) error {
 	if n < 0 {
-		return errors.NotValidf("set negative count (%d) for safe-mode", m.count)
+		return terror.ErrSyncUnitSafeModeSetCount.Generatef("set negative count (%d) for safe-mode not valid", m.count)
 	}
 
 	prev := m.count

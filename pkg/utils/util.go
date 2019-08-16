@@ -20,8 +20,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
+
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var (
@@ -35,20 +36,19 @@ func init() {
 
 // DecodeBinlogPosition parses a mysql.Position from string format
 func DecodeBinlogPosition(pos string) (*mysql.Position, error) {
-	invalidFmt := "invalid mysql position string: %s"
 	if len(pos) < 3 {
-		return nil, errors.Errorf(invalidFmt, pos)
+		return nil, terror.ErrInvalidBinlogPosStr.Generate(pos)
 	}
 	if pos[0] != '(' || pos[len(pos)-1] != ')' {
-		return nil, errors.Errorf(invalidFmt, pos)
+		return nil, terror.ErrInvalidBinlogPosStr.Generate(pos)
 	}
 	sp := strings.Split(pos[1:len(pos)-1], ",")
 	if len(sp) != 2 {
-		return nil, errors.Errorf(invalidFmt, pos)
+		return nil, terror.ErrInvalidBinlogPosStr.Generate(pos)
 	}
 	position, err := strconv.ParseUint(strings.TrimSpace(sp[1]), 10, 32)
 	if err != nil {
-		return nil, errors.Errorf(invalidFmt, pos)
+		return nil, terror.ErrInvalidBinlogPosStr.Delegate(err, pos)
 	}
 	return &mysql.Position{
 		Name: strings.TrimSpace(sp[0]),

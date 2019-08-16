@@ -17,7 +17,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/pingcap/errors"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // DM definition checking items
@@ -58,7 +58,7 @@ func ValidateCheckingItem(item string) error {
 		return nil
 	}
 
-	return errors.Errorf("checking item %s is not supported\n%s", item, SupportCheckingItems())
+	return terror.ErrConfigCheckItemNotSupport.Generate(item, SupportCheckingItems())
 }
 
 // SupportCheckingItems returns all supporting checking item

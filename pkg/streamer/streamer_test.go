@@ -22,6 +22,7 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 
 	"github.com/pingcap/dm/pkg/binlog/event"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var _ = Suite(&testStreamerSuite{})
@@ -57,7 +58,7 @@ func (t *testStreamerSuite) TestStreamer(c *C) {
 
 	// can not get event anymore because got error
 	ev2, err = s.GetEvent(ctx)
-	c.Assert(err, Equals, ErrNeedSyncAgain)
+	c.Assert(terror.ErrNeedSyncAgain.Equal(err), IsTrue)
 	c.Assert(ev2, IsNil)
 
 	// 2. close with error
@@ -70,30 +71,30 @@ func (t *testStreamerSuite) TestStreamer(c *C) {
 
 	// can not get event anymore
 	ev2, err = s.GetEvent(ctx)
-	c.Assert(err, Equals, ErrNeedSyncAgain)
+	c.Assert(terror.ErrNeedSyncAgain.Equal(err), IsTrue)
 	c.Assert(ev2, IsNil)
 
 	// 3. close without error
 	s = newLocalStreamer()
 	s.close()
 	ev2, err = s.GetEvent(ctx)
-	c.Assert(err, Equals, ErrSyncClosed)
+	c.Assert(terror.ErrSyncClosed.Equal(err), IsTrue)
 	c.Assert(ev2, IsNil)
 
 	// can not get event anymore
 	ev2, err = s.GetEvent(ctx)
-	c.Assert(err, Equals, ErrNeedSyncAgain)
+	c.Assert(terror.ErrNeedSyncAgain.Equal(err), IsTrue)
 	c.Assert(ev2, IsNil)
 
 	// 4. close with nil error
 	s = newLocalStreamer()
 	s.closeWithError(nil)
 	ev2, err = s.GetEvent(ctx)
-	c.Assert(err, Equals, ErrSyncClosed)
+	c.Assert(terror.ErrSyncClosed.Equal(err), IsTrue)
 	c.Assert(ev2, IsNil)
 
 	// can not get event anymore
 	ev2, err = s.GetEvent(ctx)
-	c.Assert(err, Equals, ErrNeedSyncAgain)
+	c.Assert(terror.ErrNeedSyncAgain.Equal(err), IsTrue)
 	c.Assert(ev2, IsNil)
 }

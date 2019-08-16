@@ -14,14 +14,15 @@
 package syncer
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
 
-	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 func toBinlogType(bt string) BinlogType {
@@ -41,34 +42,34 @@ func tableNameForDML(dml ast.DMLNode) (schema, table string, err error) {
 	switch stmt := dml.(type) {
 	case *ast.InsertStmt:
 		if stmt.Table == nil || stmt.Table.TableRefs == nil || stmt.Table.TableRefs.Left == nil {
-			return "", "", errors.NotValidf("INSERT statement %s", stmt.Text())
+			return "", "", terror.ErrSyncUnitInvalidTableName.Generate(fmt.Sprintf("INSERT statement %s not valid", stmt.Text()))
 		}
 		schema, table, err = tableNameResultSet(stmt.Table.TableRefs.Left)
-		return schema, table, errors.Annotatef(err, "INSERT statement %s", stmt.Text())
+		return schema, table, terror.Annotatef(err, "INSERT statement %s", stmt.Text())
 	case *ast.UpdateStmt:
 		if stmt.TableRefs == nil || stmt.TableRefs.TableRefs == nil || stmt.TableRefs.TableRefs.Left == nil {
-			return "", "", errors.NotValidf("UPDATE statement %s", stmt.Text())
+			return "", "", terror.ErrSyncUnitInvalidTableName.Generate(fmt.Sprintf("UPDATE statement %s not valid", stmt.Text()))
 		}
 		schema, table, err = tableNameResultSet(stmt.TableRefs.TableRefs.Left)
-		return schema, table, errors.Annotatef(err, "UPDATE statement %s", stmt.Text())
+		return schema, table, terror.Annotatef(err, "UPDATE statement %s", stmt.Text())
 	case *ast.DeleteStmt:
 		if stmt.TableRefs == nil || stmt.TableRefs.TableRefs == nil || stmt.TableRefs.TableRefs.Left == nil {
-			return "", "", errors.NotValidf("DELETE statement %s", stmt.Text())
+			return "", "", terror.ErrSyncUnitInvalidTableName.Generate(fmt.Sprintf("DELETE statement %s not valid", stmt.Text()))
 		}
 		schema, table, err = tableNameResultSet(stmt.TableRefs.TableRefs.Left)
-		return schema, table, errors.Annotatef(err, "DELETE statement %s", stmt.Text())
+		return schema, table, terror.Annotatef(err, "DELETE statement %s", stmt.Text())
 	}
-	return "", "", errors.NotSupportedf("DMLNode %v", dml)
+	return "", "", terror.ErrSyncUnitNotSupportedDML.Generate(dml)
 }
 
 func tableNameResultSet(rs ast.ResultSetNode) (schema, table string, err error) {
 	ts, ok := rs.(*ast.TableSource)
 	if !ok {
-		return "", "", errors.NotValidf("ResultSetNode %s", rs.Text())
+		return "", "", terror.ErrSyncUnitTableNameQuery.Generate(fmt.Sprintf("ResultSetNode %s", rs.Text()))
 	}
 	tn, ok := ts.Source.(*ast.TableName)
 	if !ok {
-		return "", "", errors.NotValidf("TableSource %s", ts.Text())
+		return "", "", terror.ErrSyncUnitTableNameQuery.Generate(fmt.Sprintf("TableSource %s", ts.Text()))
 	}
 	return tn.Schema.O, tn.Name.O, nil
 }

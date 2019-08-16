@@ -16,7 +16,7 @@ function sql_skip_invalid_binlog_pos() {
     binlog_pos="mysql-bin:shoud-bin-digital"
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "sql-skip test-task --binlog-pos $binlog_pos" \
-        "invalid --binlog-pos $binlog_pos in sql operation: the pos should be digital" 1
+        "\[.*\] invalid --binlog-pos $binlog_pos in sql operation: the pos should be digital" 1
 }
 
 function sql_skip_invalid_regex() {

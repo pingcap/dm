@@ -25,6 +25,7 @@ import (
 	"github.com/pingcap/dm/loader"
 	"github.com/pingcap/dm/mydumper"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer"
 
@@ -103,7 +104,7 @@ func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage) *SubTask {
 // Init initializes the sub task processing units
 func (st *SubTask) Init() error {
 	if len(st.units) < 1 {
-		return errors.Errorf("subtask %s has no dm units for mode %s", st.cfg.Name, st.cfg.Mode)
+		return terror.ErrWorkerNoAvailUnits.Generate(st.cfg.Name, st.cfg.Mode)
 	}
 
 	st.DDLInfo = make(chan *pb.DDLInfo, 1)
@@ -129,7 +130,7 @@ func (st *SubTask) Init() error {
 			for j := 0; j < i; j++ {
 				needCloseUnits = append(needCloseUnits, st.units[j])
 			}
-			return errors.Annotatef(err, "fail to initial unit %s of subtask %s ", u.Type(), st.cfg.Name)
+			return terror.Annotatef(err, "fail to initial unit %s of subtask %s ", u.Type(), st.cfg.Name)
 		}
 	}
 
@@ -139,7 +140,7 @@ func (st *SubTask) Init() error {
 		u := st.units[i]
 		isFresh, err := u.IsFreshTask()
 		if err != nil {
-			return errors.Annotatef(err, "fail to get fresh status of subtask %s %s", st.cfg.Name, u.Type())
+			return terror.Annotatef(err, "fail to get fresh status of subtask %s %s", st.cfg.Name, u.Type())
 		} else if !isFresh {
 			skipIdx = i
 			st.l.Info("continue unit", zap.Stringer("unit", u.Type()))
@@ -402,7 +403,7 @@ func (st *SubTask) Close() {
 // Pause pauses the running sub task
 func (st *SubTask) Pause() error {
 	if !st.stageCAS(pb.Stage_Running, pb.Stage_Paused) {
-		return errors.NotValidf("current stage is not running")
+		return terror.ErrWorkerNotRunningStage.Generate()
 	}
 
 	st.cancel()
@@ -428,11 +429,11 @@ func (st *SubTask) Resume() error {
 	if err != nil {
 		st.l.Error("wait condition", log.ShortError(err))
 		st.setStage(pb.Stage_Paused)
-		return errors.Trace(err)
+		return err
 	}
 
 	if !st.stageCAS(pb.Stage_Paused, pb.Stage_Running) {
-		return errors.NotValidf("current stage is not paused")
+		return terror.ErrWorkerNotPausedStage.Generate()
 	}
 
 	st.setResult(nil) // clear previous result
@@ -453,14 +454,14 @@ func (st *SubTask) Resume() error {
 // Update update the sub task's config
 func (st *SubTask) Update(cfg *config.SubTaskConfig) error {
 	if !st.stageCAS(pb.Stage_Paused, pb.Stage_Paused) { // only test for Paused
-		return errors.Errorf("can only update task on Paused stage, but current stage is %s", st.Stage().String())
+		return terror.ErrWorkerUpdateTaskStage.Generate(st.Stage().String())
 	}
 
 	// update all units' configuration, if SubTask itself has configuration need to update, do it later
 	for _, u := range st.units {
 		err := u.Update(cfg)
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 	}
 
@@ -507,11 +508,11 @@ func (st *SubTask) ExecuteDDL(ctx context.Context, req *pb.ExecDDLRequest) error
 	cu := st.CurrUnit()
 	syncer2, ok := cu.(*syncer.Syncer)
 	if !ok {
-		return errors.Errorf("only syncer support ExecuteDDL, but current unit is %s", cu.Type().String())
+		return terror.ErrWorkerExecDDLSyncerOnly.Generate(cu.Type().String())
 	}
 	chResp, err := syncer2.ExecuteDDL(ctx, req)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	// also any timeout
@@ -520,11 +521,11 @@ func (st *SubTask) ExecuteDDL(ctx context.Context, req *pb.ExecDDLRequest) error
 	defer cancel()
 	select {
 	case err = <-chResp: // block until complete ddl execution
-		return errors.Trace(err)
+		return err
 	case <-ctx.Done():
-		return errors.Trace(ctx.Err())
+		return ctx.Err()
 	case <-ctxTimeout.Done():
-		return errors.New("ExecuteDDL timeout, try use `query-status` to query whether the DDL is still blocking")
+		return terror.ErrWorkerExecDDLTimeout.Generate()
 	}
 }
 
@@ -533,7 +534,7 @@ func (st *SubTask) SaveDDLLockInfo(info *pb.DDLLockInfo) error {
 	st.Lock()
 	defer st.Unlock()
 	if st.ddlLockInfo != nil {
-		return errors.AlreadyExistsf("DDLLockInfo for task %s", info.Task)
+		return terror.ErrWorkerDDLLockInfoExists.Generate(info.Task)
 	}
 	st.ddlLockInfo = info
 	return nil
@@ -543,7 +544,7 @@ func (st *SubTask) SaveDDLLockInfo(info *pb.DDLLockInfo) error {
 func (st *SubTask) SetSyncerSQLOperator(ctx context.Context, req *pb.HandleSubTaskSQLsRequest) error {
 	syncUnit, ok := st.currUnit.(*syncer.Syncer)
 	if !ok {
-		return errors.Errorf("such operation is only available for syncer, but now syncer is not running. current unit is %s", st.currUnit.Type())
+		return terror.ErrWorkerOperSyncUnitOnly.Generate(st.currUnit.Type())
 	}
 
 	// special handle for INJECT
@@ -551,7 +552,7 @@ func (st *SubTask) SetSyncerSQLOperator(ctx context.Context, req *pb.HandleSubTa
 		return syncUnit.InjectSQLs(ctx, req.Args)
 	}
 
-	return errors.Trace(syncUnit.SetSQLOperator(req))
+	return syncUnit.SetSQLOperator(req)
 }
 
 // ClearDDLLockInfo clears current DDLLockInfo
@@ -576,7 +577,7 @@ func (st *SubTask) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 	if sync, ok := st.currUnit.(*syncer.Syncer); ok {
 		err := sync.UpdateFromConfig(cfg)
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 	}
 
@@ -604,7 +605,7 @@ func (st *SubTask) SaveDDLInfo(info *pb.DDLInfo) error {
 	st.Lock()
 	defer st.Unlock()
 	if st.cacheDDLInfo != nil {
-		return errors.AlreadyExistsf("CacheDDLInfo for task %s", info.Task)
+		return terror.ErrWorkerCacheDDLInfoExists.Generate(info.Task)
 	}
 	st.cacheDDLInfo = info
 	return nil
@@ -639,13 +640,13 @@ func (st *SubTask) unitTransWaitCondition() error {
 		loadStatus := pu.Status().(*pb.LoadStatus)
 		pos1, err := utils.DecodeBinlogPosition(loadStatus.MetaBinlog)
 		if err != nil {
-			return errors.Trace(err)
+			return terror.WithClass(err, terror.ClassDMWorker)
 		}
 		for {
 			relayStatus := hub.w.relayHolder.Status()
 			pos2, err := utils.DecodeBinlogPosition(relayStatus.RelayBinlog)
 			if err != nil {
-				return errors.Trace(err)
+				return terror.WithClass(err, terror.ClassDMWorker)
 			}
 			if pos1.Compare(*pos2) <= 0 {
 				break
@@ -654,7 +655,7 @@ func (st *SubTask) unitTransWaitCondition() error {
 
 			select {
 			case <-ctx.Done():
-				return errors.Errorf("wait relay catchup timeout, loader end binlog pos: %s, relay binlog pos: %s", pos1, pos2)
+				return terror.ErrWorkerWaitRelayCatchupTimeout.Generate(pos1, pos2)
 			case <-time.After(time.Millisecond * 50):
 			}
 		}

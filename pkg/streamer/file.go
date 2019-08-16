@@ -21,18 +21,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/watcher"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
-)
-
-var (
-	// ErrEmptyRelayDir means error about empty relay dir.
-	ErrEmptyRelayDir = errors.New("empty relay dir")
 )
 
 // FileCmp is a compare condition used when collecting binlog files
@@ -50,11 +45,11 @@ const (
 // CollectAllBinlogFiles collects all valid binlog files in dir
 func CollectAllBinlogFiles(dir string) ([]string, error) {
 	if dir == "" {
-		return nil, ErrEmptyRelayDir
+		return nil, terror.ErrEmptyRelayDir.Generate()
 	}
 	files, err := readDir(dir)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	ret := make([]string, 0, len(files))
@@ -76,21 +71,21 @@ func CollectAllBinlogFiles(dir string) ([]string, error) {
 // CollectBinlogFilesCmp collects valid binlog files with a compare condition
 func CollectBinlogFilesCmp(dir, baseFile string, cmp FileCmp) ([]string, error) {
 	if dir == "" {
-		return nil, ErrEmptyRelayDir
+		return nil, terror.ErrEmptyRelayDir.Generate()
 	}
 
 	if bp := filepath.Join(dir, baseFile); !utils.IsFileExists(bp) {
-		return nil, errors.NotFoundf("base file %s in directory %s", baseFile, dir)
+		return nil, terror.ErrBaseFileNotFound.Generate(baseFile, dir)
 	}
 
 	bf, err := binlog.ParseFilename(baseFile)
 	if err != nil {
-		return nil, errors.Annotatef(err, "filename %s", baseFile)
+		return nil, terror.Annotatef(err, "filename %s", baseFile)
 	}
 
 	allFiles, err := CollectAllBinlogFiles(dir)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	results := make([]string, 0, len(allFiles))
@@ -118,7 +113,7 @@ func CollectBinlogFilesCmp(dir, baseFile string, cmp FileCmp) ([]string, error) 
 				continue
 			}
 		default:
-			return nil, errors.NotSupportedf("cmp condition %v", cmp)
+			return nil, terror.ErrBinFileCmpCondNotSupport.Generate(cmp)
 		}
 
 		results = append(results, f)
@@ -132,7 +127,7 @@ func getFirstBinlogName(baseDir, uuid string) (string, error) {
 	subDir := filepath.Join(baseDir, uuid)
 	files, err := readDir(subDir)
 	if err != nil {
-		return "", errors.Annotatef(err, "get binlog file for dir %s", subDir)
+		return "", terror.Annotatef(err, "get binlog file for dir %s", subDir)
 	}
 
 	for _, f := range files {
@@ -142,25 +137,25 @@ func getFirstBinlogName(baseDir, uuid string) (string, error) {
 		}
 
 		if !binlog.VerifyFilename(f) {
-			return "", errors.NotValidf("binlog file %s", f)
+			return "", terror.ErrBinlogFileNotValid.Generate(f)
 		}
 		return f, nil
 	}
 
-	return "", errors.NotFoundf("binlog files in dir %s", subDir)
+	return "", terror.ErrBinlogFilesNotFound.Generate(subDir)
 }
 
 // readDir reads and returns all file(sorted asc) and dir names from directory f
 func readDir(dirpath string) ([]string, error) {
 	dir, err := os.Open(dirpath)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.ErrReadDir.Delegate(err, dirpath)
 	}
 	defer dir.Close()
 
 	names, err := dir.Readdirnames(-1)
 	if err != nil {
-		return nil, errors.Annotatef(err, "dir %s", dirpath)
+		return nil, terror.ErrReadDir.Delegate(err, dirpath)
 	}
 
 	sort.Strings(names)
@@ -177,7 +172,7 @@ func readDir(dirpath string) ([]string, error) {
 func fileSizeUpdated(path string, latestSize int64) (int, error) {
 	fi, err := os.Stat(path)
 	if err != nil {
-		return 0, errors.Annotatef(err, "get stat for relay log %s", path)
+		return 0, terror.ErrGetRelayLogStat.Delegate(err, path)
 	}
 	currSize := fi.Size()
 	if currSize == latestSize {
@@ -202,12 +197,12 @@ func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir 
 	// no need to Remove, it will be closed and release when return
 	err := watcher2.Add(dir)
 	if err != nil {
-		return "", errors.Annotatef(err, "add watch for relay log dir %s", dir)
+		return "", terror.ErrAddWatchForRelayLogDir.Delegate(err, dir)
 	}
 
 	err = watcher2.Start(watcherInterval)
 	if err != nil {
-		return "", errors.Trace(err)
+		return "", terror.ErrWatcherStart.Delegate(err, dir)
 	}
 	defer watcher2.Close()
 
@@ -232,12 +227,12 @@ func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir 
 				if !ok {
 					result <- watchResult{
 						updatePath: "",
-						err:        errors.Errorf("watcher's errors chan for relay log dir %s closed", dir),
+						err:        terror.ErrWatcherChanClosed.Generate("errors", dir),
 					}
 				} else {
 					result <- watchResult{
 						updatePath: "",
-						err:        errors.Annotatef(err2, "relay log dir %s", dir),
+						err:        terror.ErrWatcherChanRecvError.Delegate(err2, dir),
 					}
 				}
 				return
@@ -245,7 +240,7 @@ func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir 
 				if !ok {
 					result <- watchResult{
 						updatePath: "",
-						err:        errors.Errorf("watcher's events chan for relay log dir %s closed", dir),
+						err:        terror.ErrWatcherChanClosed.Generate("events", dir),
 					}
 					return
 				}
@@ -274,15 +269,15 @@ func relaySubDirUpdated(ctx context.Context, watcherInterval time.Duration, dir 
 	// try collect newer relay log file to check whether newer exists before watching
 	newerFiles, err := CollectBinlogFilesCmp(dir, latestFile, FileCmpBigger)
 	if err != nil {
-		return "", errors.Annotatef(err, "collect newer files from %s in dir %s", latestFile, dir)
+		return "", terror.Annotatef(err, "collect newer files from %s in dir %s", latestFile, dir)
 	}
 
 	// check the latest relay log file whether updated when adding watching and collecting newer
 	cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
 	if err != nil {
-		return "", errors.Trace(err)
+		return "", err
 	} else if cmp < 0 {
-		return "", errors.Errorf("file size of relay log %s become smaller", latestFilePath)
+		return "", terror.ErrRelayLogFileSizeSmaller.Generate(latestFilePath)
 	} else if cmp > 0 {
 		// the latest relay log file already updated, need to parse from it again (not need to re-collect relay log files)
 		return latestFilePath, nil
@@ -302,7 +297,7 @@ func needSwitchSubDir(relayDir, currentUUID, latestFilePath string, latestFileSi
 	needSwitch, needReParse bool, nextUUID string, nextBinlogName string, err error) {
 	nextUUID, _, err = getNextUUID(currentUUID, UUIDs)
 	if err != nil {
-		return false, false, "", "", errors.Annotatef(err, "current UUID %s, UUIDs %v", currentUUID, UUIDs)
+		return false, false, "", "", terror.Annotatef(err, "current UUID %s, UUIDs %v", currentUUID, UUIDs)
 	} else if len(nextUUID) == 0 {
 		// no next sub dir exists, not need to switch
 		return false, false, "", "", nil
@@ -314,15 +309,15 @@ func needSwitchSubDir(relayDir, currentUUID, latestFilePath string, latestFileSi
 		// NOTE: current we can not handle `errors.IsNotFound(err)` easily
 		// because creating sub directory and writing relay log file are not atomic
 		// so we let user to pause syncing before switching relay's master server
-		return false, false, "", "", errors.Trace(err)
+		return false, false, "", "", err
 	}
 
 	// check the latest relay log file whether updated when checking next sub directory
 	cmp, err := fileSizeUpdated(latestFilePath, latestFileSize)
 	if err != nil {
-		return false, false, "", "", errors.Trace(err)
+		return false, false, "", "", err
 	} else if cmp < 0 {
-		return false, false, "", "", errors.Errorf("file size of relay log %s become smaller", latestFilePath)
+		return false, false, "", "", terror.ErrRelayLogFileSizeSmaller.Generate(latestFilePath)
 	} else if cmp > 0 {
 		// the latest relay log file already updated, need to parse from it again (not need to switch to sub directory)
 		return false, true, "", "", nil

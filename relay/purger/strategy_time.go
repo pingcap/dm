@@ -18,13 +18,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // timeArgs represents args needed by timeStrategy
@@ -68,16 +68,16 @@ func (s *timeStrategy) Stop() {
 
 func (s *timeStrategy) Do(args interface{}) error {
 	if !s.purging.CompareAndSwap(0, 1) {
-		return ErrSelfPurging
+		return terror.ErrRelayThisStrategyIsPurging.Generate()
 	}
 	defer s.purging.Set(0)
 
 	ta, ok := args.(*timeArgs)
 	if !ok {
-		return errors.NotValidf("args (%T) %+v", args, args)
+		return terror.ErrRelayPurgeArgsNotValid.Generate(args, args)
 	}
 
-	return errors.Trace(purgeRelayFilesBeforeFileAndTime(s.tctx, ta.relayBaseDir, ta.uuids, ta.activeRelayLog, ta.safeTime))
+	return purgeRelayFilesBeforeFileAndTime(s.tctx, ta.relayBaseDir, ta.uuids, ta.activeRelayLog, ta.safeTime)
 }
 
 func (s *timeStrategy) Purging() bool {

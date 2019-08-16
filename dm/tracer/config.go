@@ -19,9 +19,9 @@ import (
 	"fmt"
 
 	"github.com/BurntSushi/toml"
-	"github.com/pingcap/errors"
 
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -61,7 +61,7 @@ func (c *Config) Parse(arguments []string) error {
 	// Parse first to get config file.
 	err := c.flagSet.Parse(arguments)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrTracerParseFlagSet.Delegate(err)
 	}
 
 	if c.printVersion {
@@ -73,18 +73,18 @@ func (c *Config) Parse(arguments []string) error {
 	if c.ConfigFile != "" {
 		err = c.configFromFile(c.ConfigFile)
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 	}
 
 	// Parse again to replace with command line options.
 	err = c.flagSet.Parse(arguments)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrTracerParseFlagSet.Delegate(err)
 	}
 
 	if len(c.flagSet.Args()) != 0 {
-		return errors.Errorf("'%s' is an invalid flag", c.flagSet.Arg(0))
+		return terror.ErrTracerConfigInvalidFlag.Generate(c.flagSet.Arg(0))
 	}
 
 	return nil
@@ -102,5 +102,5 @@ func (c *Config) String() string {
 // configFromFile loads config from file.
 func (c *Config) configFromFile(path string) error {
 	_, err := toml.DecodeFile(path, c)
-	return errors.Trace(err)
+	return terror.ErrTracerConfigTomlTransform.Delegate(err)
 }

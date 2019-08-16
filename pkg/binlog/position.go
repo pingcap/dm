@@ -17,9 +17,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pingcap/errors"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -37,11 +37,11 @@ const (
 func PositionFromStr(s string) (gmysql.Position, error) {
 	parsed := strings.Split(s, ":")
 	if len(parsed) != 2 {
-		return gmysql.Position{}, errors.New("the format should be filename:pos")
+		return gmysql.Position{}, terror.ErrBinlogParsePosFromStr.Generatef("the format should be filename:pos, position string %s", s)
 	}
 	pos, err := strconv.ParseUint(parsed[1], 10, 32)
 	if err != nil {
-		return gmysql.Position{}, errors.New("the pos should be digital")
+		return gmysql.Position{}, terror.ErrBinlogParsePosFromStr.Generatef("the pos should be digital, position string %s", s)
 	}
 
 	return gmysql.Position{
@@ -57,7 +57,7 @@ func PositionFromStr(s string) (gmysql.Position, error) {
 func RealMySQLPos(pos gmysql.Position) (gmysql.Position, error) {
 	parsed, err := ParseFilename(pos.Name)
 	if err != nil {
-		return pos, errors.Trace(err)
+		return pos, err
 	}
 
 	sepIdx := strings.LastIndex(parsed.BaseName, posUUIDSuffixSeparator)
@@ -78,20 +78,19 @@ func RealMySQLPos(pos gmysql.Position) (gmysql.Position, error) {
 // ExtractPos extracts (uuidWithSuffix, uuidSuffix, originalPos) from input pos (originalPos or convertedPos)
 func ExtractPos(pos gmysql.Position, uuids []string) (uuidWithSuffix string, uuidSuffix string, realPos gmysql.Position, err error) {
 	if len(uuids) == 0 {
-		err = errors.NotValidf("empty UUIDs")
+		err = terror.ErrBinlogExtractPosition.New("empty UUIDs not valid")
 		return
 	}
 
-	parsed, err2 := ParseFilename(pos.Name)
-	if err2 != nil {
-		err = errors.Trace(err)
+	parsed, err := ParseFilename(pos.Name)
+	if err != nil {
 		return
 	}
 	sepIdx := strings.LastIndex(parsed.BaseName, posUUIDSuffixSeparator)
 	if sepIdx > 0 && sepIdx+len(posUUIDSuffixSeparator) < len(parsed.BaseName) {
 		realBaseName, masterUUIDSuffix := parsed.BaseName[:sepIdx], parsed.BaseName[sepIdx+len(posUUIDSuffixSeparator):]
 		if !verifyUUIDSuffix(masterUUIDSuffix) {
-			err = errors.Errorf("invalid UUID suffix %s", masterUUIDSuffix)
+			err = terror.ErrBinlogExtractPosition.Generatef("invalid UUID suffix %s", masterUUIDSuffix)
 			return
 		}
 
@@ -107,7 +106,7 @@ func ExtractPos(pos gmysql.Position, uuids []string) (uuidWithSuffix string, uui
 				Pos:  pos.Pos,
 			}
 		} else {
-			err = errors.NotFoundf("UUID suffix %s with UUIDs %v", masterUUIDSuffix, uuids)
+			err = terror.ErrBinlogExtractPosition.Generatef("UUID suffix %s with UUIDs %v not found", masterUUIDSuffix, uuids)
 		}
 		return
 	}
@@ -117,7 +116,6 @@ func ExtractPos(pos gmysql.Position, uuids []string) (uuidWithSuffix string, uui
 	uuid := uuids[len(uuids)-1]
 	_, suffixInt, err = utils.ParseSuffixForUUID(uuid)
 	if err != nil {
-		err = errors.Trace(err)
 		return
 	}
 	uuidWithSuffix = uuid

@@ -197,7 +197,7 @@ func (ts *HTTPHandlerTestSuite) TestTraceEventQuery(c *C) {
 		raw, err = ioutil.ReadAll(resp.Body)
 		resp.Body.Close()
 		c.Assert(err, IsNil)
-		c.Assert(string(raw), Equals, fmt.Sprintf("trace event %s not found", tc.traceID))
+		c.Assert(string(raw), Matches, fmt.Sprintf(".*trace event %s not found", tc.traceID))
 
 		for _, ev := range tc.events {
 			err = ts.server.eventStore.addNewEvent(ev)
@@ -355,7 +355,7 @@ func (ts *HTTPHandlerTestSuite) TestTraceEventDelete(c *C) {
 	raw, err = ioutil.ReadAll(resp.Body)
 	resp.Body.Close()
 	c.Assert(err, IsNil)
-	c.Assert(string(raw), Equals, fmt.Sprintf("trace event %s not found", traceID))
+	c.Assert(string(raw), Matches, fmt.Sprintf(".*trace event %s not found", traceID))
 }
 
 func (ts *HTTPHandlerTestSuite) TestTraceEventTruncate(c *C) {
@@ -408,5 +408,5 @@ func (ts *HTTPHandlerTestSuite) TestTraceEventTruncate(c *C) {
 	raw, err = ioutil.ReadAll(resp.Body)
 	resp.Body.Close()
 	c.Assert(err, IsNil)
-	c.Assert(string(raw), Equals, fmt.Sprintf("trace event %s not found", traceID))
+	c.Assert(string(raw), Matches, fmt.Sprintf(".*trace event %s not found", traceID))
 }

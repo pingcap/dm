@@ -19,13 +19,13 @@ import (
 	"sync"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/pingcap/errors"
 	uuid "github.com/satori/go.uuid"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/command"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // Operator contains an operation for specified binlog pos
@@ -84,22 +84,22 @@ func NewHolder() *Holder {
 // Set sets an operator according to request
 func (h *Holder) Set(req *pb.HandleSQLsRequest) error {
 	if req == nil {
-		return errors.NotValidf("nil request")
+		return terror.ErrMasterSQLOpNilRequest.Generate()
 	}
 	switch req.Op {
 	case pb.SQLOp_SKIP, pb.SQLOp_REPLACE:
 	default:
-		return errors.NotSupportedf("op %s", req.Op)
+		return terror.ErrMasterSQLOpNotSupport.Generate(req.Op)
 	}
 
 	// now, only support --sharding operate request
 	if !req.Sharding {
-		return errors.NotValidf("operate request without --sharding specified")
+		return terror.ErrMasterSQLOpWithoutSharding.Generate()
 	}
 
 	_, sqlReg, err := command.VerifySQLOperateArgs(req.BinlogPos, req.SqlPattern, req.Sharding)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.WithClass(err, terror.ClassDMMaster)
 	}
 
 	h.mu.Lock()

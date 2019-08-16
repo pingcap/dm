@@ -75,13 +75,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/terror"
 	shardmeta "github.com/pingcap/dm/syncer/sharding-meta"
 )
 
@@ -138,7 +138,7 @@ func (sg *ShardingGroup) Merge(sources []string) (bool, bool, int, error) {
 
 	// NOTE: we don't support add shard table when in sequence sharding
 	if sg.meta.InSequenceSharding() {
-		return true, sg.remain <= 0, sg.remain, errors.NotSupportedf("in sequence sharding, can't add table, activeDDL: %s, sharding sequence: %s", sg.meta.GetGlobalActiveDDL(), sg.meta.GetGlobalItems())
+		return true, sg.remain <= 0, sg.remain, terror.ErrSyncUnitAddTableInSharding.Generate(sg.meta.GetGlobalActiveDDL(), sg.meta.GetGlobalItems())
 	}
 
 	for _, source := range sources {
@@ -163,7 +163,7 @@ func (sg *ShardingGroup) Leave(sources []string) error {
 
 	// NOTE: if group is in sequence sharding, we can't do drop (DROP DATABASE / TABLE)
 	if sg.meta.InSequenceSharding() {
-		return errors.NotSupportedf("in sequence sharding, try drop sources %v, activeDDL: %s, sharding sequence: %s", sources, sg.meta.GetGlobalActiveDDL(), sg.meta.GetGlobalItems())
+		return terror.ErrSyncUnitDropSchemaTableInSharding.Generate(sources, sg.meta.GetGlobalActiveDDL(), sg.meta.GetGlobalItems())
 	}
 
 	for _, source := range sources {
@@ -203,7 +203,7 @@ func (sg *ShardingGroup) TrySync(source string, pos, endPos mysql.Position, ddls
 	ddlItem := shardmeta.NewDDLItem(pos, ddls, source)
 	active, err := sg.meta.AddItem(ddlItem)
 	if err != nil {
-		return sg.remain <= 0, active, sg.remain, errors.Trace(err)
+		return sg.remain <= 0, active, sg.remain, err
 	}
 	if active && !sg.sources[source] {
 		sg.sources[source] = true
@@ -367,7 +367,7 @@ func (sg *ShardingGroup) ActiveDDLFirstPos() (mysql.Position, error) {
 	sg.RLock()
 	defer sg.RUnlock()
 	pos, err := sg.meta.ActiveDDLFirstPos()
-	return pos, errors.Trace(err)
+	return pos, err
 }
 
 // FlushData returns sharding meta flush SQLs and args
@@ -441,7 +441,7 @@ func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceI
 	} else if merge {
 		needShardingHandle, synced, remain, err = k.groups[targetTableID].Merge(sourceIDs)
 	} else {
-		err = errors.AlreadyExistsf("table group %s", targetTableID)
+		err = terror.ErrSyncUnitDupTableGroup.Generate(targetTableID)
 		return
 	}
 
@@ -456,12 +456,12 @@ func (k *ShardingGroupKeeper) Init(conn *Conn) error {
 	} else {
 		db, err := createDB(k.cfg, k.cfg.To, maxDDLConnectionTimeout)
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 		k.db = db
 	}
 	err := k.prepare()
-	return errors.Trace(err)
+	return err
 }
 
 // clear clears all sharding groups
@@ -489,12 +489,12 @@ func (k *ShardingGroupKeeper) LeaveGroup(targetSchema, targetTable string, sourc
 	defer k.Unlock()
 	if group, ok := k.groups[targetTableID]; ok {
 		if err := group.Leave(sources); err != nil {
-			return errors.Trace(err)
+			return err
 		}
 	}
 	if schemaGroup, ok := k.groups[schemaID]; ok {
 		if err := schemaGroup.Leave(sources); err != nil {
-			return errors.Trace(err)
+			return err
 		}
 	}
 	return nil
@@ -525,7 +525,7 @@ func (k *ShardingGroupKeeper) TrySync(
 		return false, group, true, false, 0, nil
 	}
 	synced, active, remain, err = group.TrySync(source, pos, endPos, ddls)
-	return true, group, synced, active, remain, errors.Trace(err)
+	return true, group, synced, active, remain, err
 }
 
 // InSyncing checks whether the source is in sharding syncing
@@ -642,7 +642,7 @@ func (k *ShardingGroupKeeper) ResolveShardingDDL(targetSchema, targetTable strin
 	if group != nil {
 		return group.ResolveShardingDDL(), nil
 	}
-	return false, errors.NotFoundf("sharding group for `%s`.`%s`", targetSchema, targetTable)
+	return false, terror.ErrSyncUnitShardingGroupNotFound.Generate(targetSchema, targetTable)
 }
 
 // ActiveDDLFirstPos returns the binlog postion of active DDL
@@ -652,9 +652,9 @@ func (k *ShardingGroupKeeper) ActiveDDLFirstPos(targetSchema, targetTable string
 	defer k.Unlock()
 	if group != nil {
 		pos, err := group.ActiveDDLFirstPos()
-		return pos, errors.Trace(err)
+		return pos, err
 	}
-	return mysql.Position{}, errors.NotFoundf("sharding group for `%s`.`%s`", targetSchema, targetTable)
+	return mysql.Position{}, terror.ErrSyncUnitShardingGroupNotFound.Generate(targetSchema, targetTable)
 }
 
 // PrepareFlushSQLs returns all sharding meta flushed SQLs execpt for given table IDs
@@ -683,11 +683,11 @@ func (k *ShardingGroupKeeper) PrepareFlushSQLs(exceptTableIDs map[string]bool) (
 // Prepare inits sharding meta schema and tables if not exists
 func (k *ShardingGroupKeeper) prepare() error {
 	if err := k.createSchema(); err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	if err := k.createTable(); err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	return nil
@@ -703,7 +703,7 @@ func (k *ShardingGroupKeeper) createSchema() error {
 	args := make([]interface{}, 0)
 	err := k.db.executeSQL(k.tctx, []string{stmt}, [][]interface{}{args}, maxRetryCount)
 	k.tctx.L().Info("execute sql", zap.String("statement", stmt))
-	return errors.Trace(err)
+	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
 func (k *ShardingGroupKeeper) createTable() error {
@@ -721,7 +721,7 @@ func (k *ShardingGroupKeeper) createTable() error {
 	)`, tableName)
 	err := k.db.executeSQL(k.tctx, []string{stmt}, [][]interface{}{{}}, maxRetryCount)
 	k.tctx.L().Info("execute sql", zap.String("statement", stmt))
-	return errors.Trace(err)
+	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
 // LoadShardMeta implements CheckPoint.LoadShardMeta
@@ -729,7 +729,7 @@ func (k *ShardingGroupKeeper) LoadShardMeta() (map[string]*shardmeta.ShardingMet
 	query := fmt.Sprintf("SELECT `target_table_id`, `source_table_id`, `active_index`, `is_global`, `data` FROM `%s`.`%s` WHERE `source_id`='%s'", k.shardMetaSchema, k.shardMetaTable, k.cfg.SourceID)
 	rows, err := k.db.querySQL(k.tctx, query, maxRetryCount)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.WithScope(err, terror.ScopeDownstream)
 	}
 	defer rows.Close()
 
@@ -744,17 +744,17 @@ func (k *ShardingGroupKeeper) LoadShardMeta() (map[string]*shardmeta.ShardingMet
 	for rows.Next() {
 		err := rows.Scan(&targetTableID, &sourceTableID, &activeIndex, &isGlobal, &data)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 		}
 		if _, ok := meta[targetTableID]; !ok {
 			meta[targetTableID] = shardmeta.NewShardingMeta(k.shardMetaSchema, k.shardMetaTable)
 		}
 		err = meta[targetTableID].RestoreFromData(sourceTableID, activeIndex, isGlobal, []byte(data))
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, err
 		}
 	}
-	return meta, errors.Trace(rows.Err())
+	return meta, terror.WithScope(terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError), terror.ScopeDownstream)
 }
 
 // ShardingReSync represents re-sync info for a sharding DDL group
