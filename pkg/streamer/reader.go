@@ -29,14 +29,11 @@ import (
 	"github.com/pingcap/dm/pkg/binlog"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-// errors used by reader
 var (
-	ErrReaderRunning          = errors.New("binlog reader is already running")
-	ErrBinlogFileNotSpecified = errors.New("binlog file must be specified")
-
 	// polling interval for watcher
 	watcherInterval = 100 * time.Millisecond
 )
@@ -90,17 +87,17 @@ func NewBinlogReader(tctx *tcontext.Context, cfg *BinlogReaderConfig) *BinlogRea
 // TODO:  thread-safe?
 func (r *BinlogReader) StartSync(pos mysql.Position) (Streamer, error) {
 	if pos.Name == "" {
-		return nil, ErrBinlogFileNotSpecified
+		return nil, terror.ErrBinlogFileNotSpecified.Generate()
 	}
 	if r.running {
-		return nil, ErrReaderRunning
+		return nil, terror.ErrReaderAlreadyRunning.Generate()
 	}
 
 	// load and update UUID list
 	// NOTE: if want to support auto master-slave switching, then needing to re-load UUIDs when parsing.
 	err := r.updateUUIDs()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	r.latestServerID = 0
@@ -140,21 +137,21 @@ func (r *BinlogReader) parseRelay(ctx context.Context, s *LocalStreamer, pos mys
 		}
 		needSwitch, nextUUID, nextBinlogName, err = r.parseDirAsPossible(ctx, s, pos)
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 		if !needSwitch {
-			return errors.NotSupportedf("parse for previous sub relay directory finished, but no next sub directory need to switch")
+			return terror.ErrNoSubdirToSwitch.Generate()
 		}
 
 		_, suffixInt, err2 := utils.ParseSuffixForUUID(nextUUID)
 		if err2 != nil {
-			return errors.Annotatef(err2, "parse suffix for UUID %s", nextUUID)
+			return terror.Annotatef(err2, "parse suffix for UUID %s", nextUUID)
 		}
 		uuidSuffix := utils.SuffixIntToStr(suffixInt)
 
 		parsed, err2 := binlog.ParseFilename(nextBinlogName)
 		if err2 != nil {
-			return errors.Annotatef(err2, "parse binlog file name %s", nextBinlogName)
+			return terror.Annotatef(err2, "parse binlog file name %s", nextBinlogName)
 		}
 
 		// update pos, so can switch to next sub directory
@@ -168,7 +165,7 @@ func (r *BinlogReader) parseRelay(ctx context.Context, s *LocalStreamer, pos mys
 func (r *BinlogReader) parseDirAsPossible(ctx context.Context, s *LocalStreamer, pos mysql.Position) (needSwitch bool, nextUUID string, nextBinlogName string, err error) {
 	currentUUID, _, realPos, err := binlog.ExtractPos(pos, r.uuids)
 	if err != nil {
-		return false, "", "", errors.Annotatef(err, "parse relay dir with pos %v", pos)
+		return false, "", "", terror.Annotatef(err, "parse relay dir with pos %v", pos)
 	}
 	pos = realPos         // use realPos to do syncing
 	var firstParse = true // the first parse time for the relay log file
@@ -183,9 +180,9 @@ func (r *BinlogReader) parseDirAsPossible(ctx context.Context, s *LocalStreamer,
 		}
 		files, err := CollectBinlogFilesCmp(dir, pos.Name, FileCmpBiggerEqual)
 		if err != nil {
-			return false, "", "", errors.Annotatef(err, "parse relay dir %s with pos %s", dir, pos)
+			return false, "", "", terror.Annotatef(err, "parse relay dir %s with pos %s", dir, pos)
 		} else if len(files) == 0 {
-			return false, "", "", errors.Errorf("no relay log files in dir %s match pos %s", dir, pos)
+			return false, "", "", terror.ErrNoRelayLogMatchPos.Generate(dir, pos)
 		}
 
 		r.tctx.L().Debug("start read relay log files", zap.Strings("files", files), zap.String("directory", dir), zap.Stringer("position", pos))
@@ -203,7 +200,7 @@ func (r *BinlogReader) parseDirAsPossible(ctx context.Context, s *LocalStreamer,
 			}
 			if i == 0 {
 				if !strings.HasSuffix(relayLogFile, pos.Name) {
-					return false, "", "", errors.Errorf("the first relay log %s not match the start pos %v", relayLogFile, pos)
+					return false, "", "", terror.ErrFirstRelayLogNotMatchPos.Generate(relayLogFile, pos)
 				}
 			} else {
 				offset = 4        // for other relay log file, start parse from 4
@@ -212,7 +209,7 @@ func (r *BinlogReader) parseDirAsPossible(ctx context.Context, s *LocalStreamer,
 			needSwitch, latestPos, nextUUID, nextBinlogName, err = r.parseFileAsPossible(ctx, s, relayLogFile, offset, dir, firstParse, currentUUID, i == len(files)-1)
 			firstParse = false // already parsed
 			if err != nil {
-				return false, "", "", errors.Annotatef(err, "parse relay log file %s from offset %d in dir %s", relayLogFile, offset, dir)
+				return false, "", "", terror.Annotatef(err, "parse relay log file %s from offset %d in dir %s", relayLogFile, offset, dir)
 			}
 			if needSwitch {
 				// need switch to next relay sub directory
@@ -244,7 +241,7 @@ func (r *BinlogReader) parseFileAsPossible(ctx context.Context, s *LocalStreamer
 		needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(ctx, s, relayLogFile, latestPos, relayLogDir, firstParse, currentUUID, possibleLast)
 		firstParse = false // set to false to handle the `continue` below
 		if err != nil {
-			return false, 0, "", "", errors.Annotatef(err, "parse relay log file %s from offset %d in dir %s", relayLogFile, latestPos, relayLogDir)
+			return false, 0, "", "", terror.Annotatef(err, "parse relay log file %s from offset %d in dir %s", relayLogFile, latestPos, relayLogDir)
 		}
 		if needReParse {
 			r.tctx.L().Debug("continue to re-parse relay log file", zap.String("file", relayLogFile), zap.String("directory", relayLogDir))
@@ -261,7 +258,7 @@ func (r *BinlogReader) parseFile(
 	needSwitch, needReParse bool, latestPos int64, nextUUID string, nextBinlogName string, err error) {
 	_, suffixInt, err := utils.ParseSuffixForUUID(currentUUID)
 	if err != nil {
-		return false, false, 0, "", "", errors.Trace(err)
+		return false, false, 0, "", "", err
 	}
 
 	uuidSuffix := utils.SuffixIntToStr(suffixInt) // current UUID's suffix, which will be added to binlog name
@@ -316,11 +313,11 @@ func (r *BinlogReader) parseFile(
 		// ref: https://github.com/mysql/mysql-server/blob/4f1d7cf5fcb11a3f84cff27e37100d7295e7d5ca/sql/rpl_binlog_sender.cc#L248
 		e, err2 := utils.GenFakeRotateEvent(relayLogFile, uint64(offset), r.latestServerID)
 		if err2 != nil {
-			return false, false, 0, "", "", errors.Annotatef(err2, "generate fake RotateEvent for (%s: %d)", relayLogFile, offset)
+			return false, false, 0, "", "", terror.Annotatef(err2, "generate fake RotateEvent for (%s: %d)", relayLogFile, offset)
 		}
 		err2 = onEventFunc(e)
 		if err2 != nil {
-			return false, false, 0, "", "", errors.Annotatef(err2, "send event %+v", e.Header)
+			return false, false, 0, "", "", terror.Annotatef(err2, "send event %+v", e.Header)
 		}
 		r.tctx.L().Info("start parse relay log file", zap.String("file", fullPath), zap.Int64("offset", offset))
 	} else {
@@ -334,7 +331,7 @@ func (r *BinlogReader) parseFile(
 			r.tctx.L().Warn("fail to parse relay log file, meet some ignorable error", zap.String("file", fullPath), zap.Int64("offset", offset), zap.Error(err))
 		} else {
 			r.tctx.L().Error("parse relay log file", zap.String("file", fullPath), zap.Int64("offset", offset), zap.Error(err))
-			return false, false, 0, "", "", errors.Annotatef(err, "relay log file %s", fullPath)
+			return false, false, 0, "", "", terror.ErrParserParseRelayLog.Delegate(err, fullPath)
 		}
 	}
 	r.tctx.L().Debug("parse relay log file", zap.String("file", fullPath), zap.Int64("offset", latestPos))
@@ -347,7 +344,7 @@ func (r *BinlogReader) parseFile(
 
 	needSwitch, needReParse, nextUUID, nextBinlogName, err = needSwitchSubDir(r.cfg.RelayDir, currentUUID, fullPath, latestPos, r.uuids)
 	if err != nil {
-		return false, false, 0, "", "", errors.Trace(err)
+		return false, false, 0, "", "", err
 	} else if needReParse {
 		// need to re-parse the current relay log file
 		return false, true, latestPos, "", "", nil
@@ -358,7 +355,7 @@ func (r *BinlogReader) parseFile(
 
 	updatedPath, err := relaySubDirUpdated(ctx, watcherInterval, relayLogDir, fullPath, relayLogFile, latestPos)
 	if err != nil {
-		return false, false, 0, "", "", errors.Trace(err)
+		return false, false, 0, "", "", err
 	}
 
 	if strings.HasSuffix(updatedPath, relayLogFile) {
@@ -374,7 +371,7 @@ func (r *BinlogReader) parseFile(
 func (r *BinlogReader) updateUUIDs() error {
 	uuids, err := utils.ParseUUIDIndex(r.indexPath)
 	if err != nil {
-		return errors.Annotatef(err, "index file path %s", r.indexPath)
+		return terror.Annotatef(err, "index file path %s", r.indexPath)
 	}
 	oldUUIDs := r.uuids
 	r.uuids = uuids

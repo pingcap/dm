@@ -22,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/errors"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
@@ -31,6 +30,7 @@ import (
 	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // FileReader is a binlog event reader which reads binlog events from a file.
@@ -99,7 +99,7 @@ func (r *FileReader) StartSyncByPos(pos gmysql.Position) error {
 	defer r.mu.Unlock()
 
 	if r.stage != common.StageNew {
-		return errors.Errorf("stage %s, expect %s, already started", r.stage, common.StageNew)
+		return terror.ErrReaderAlreadyStarted.Generate(r.stage, common.StageNew)
 	}
 
 	r.ctx, r.cancel = context.WithCancel(context.Background())
@@ -123,7 +123,7 @@ func (r *FileReader) StartSyncByPos(pos gmysql.Position) error {
 // StartSyncByGTID implements Reader.StartSyncByGTID.
 func (r *FileReader) StartSyncByGTID(gSet gtid.Set) error {
 	// NOTE: may be supported later.
-	return errors.NotSupportedf("read from file by GTID")
+	return terror.ErrBinlogReadFileByGTID.Generate()
 }
 
 // Close implements Reader.Close.
@@ -132,7 +132,7 @@ func (r *FileReader) Close() error {
 	defer r.mu.Unlock()
 
 	if r.stage != common.StagePrepared {
-		return errors.Errorf("stage %s, expect %s, can not close", r.stage, common.StagePrepared)
+		return terror.ErrReaderStateCannotClose.Generate(r.stage, common.StagePrepared)
 	}
 
 	r.cancel()
@@ -148,7 +148,7 @@ func (r *FileReader) GetEvent(ctx context.Context) (*replication.BinlogEvent, er
 	defer r.mu.RUnlock()
 
 	if r.stage != common.StagePrepared {
-		return nil, errors.Errorf("stage %s, expect %s, please start sync first", r.stage, common.StagePrepared)
+		return nil, terror.ErrReaderShouldStartSync.Generate(r.stage, common.StagePrepared)
 	}
 
 	select {

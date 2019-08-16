@@ -12,6 +12,7 @@ require (
 	github.com/coreos/go-systemd v0.0.0-20190612170431-362f06ec6bc1 // indirect
 	github.com/cznic/sortutil v0.0.0-20181122101858-f5f958428db8 // indirect
 	github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2 // indirect
+	github.com/dustin/go-humanize v1.0.0
 	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/gogo/protobuf v1.2.1
@@ -61,6 +62,7 @@ require (
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 	golang.org/x/tools v0.0.0-20190805222050-c5a2fd39b72a // indirect
 	google.golang.org/appengine v1.6.1 // indirect
+	google.golang.org/genproto v0.0.0-20190108161440-ae2f86662275
 	google.golang.org/grpc v1.22.1
 	gopkg.in/yaml.v2 v2.2.2
 	sourcegraph.com/sourcegraph/appdash v0.0.0-20190107175209-d9ea5c54f7dc // indirect

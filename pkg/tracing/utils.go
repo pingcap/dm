@@ -21,7 +21,7 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/pingcap/errors"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // tsoHolder is used for global tso cache
@@ -64,7 +64,7 @@ func GetTraceCode(skip int) (string, int, error) {
 	if _, file, line, ok := runtime.Caller(skip); ok {
 		return file, line, nil
 	}
-	return "", 0, errors.New("failed to get code information from runtime.Caller")
+	return "", 0, terror.ErrTracingGetTraceCode.Generate()
 }
 
 // DataChecksum calculates the checksum of a given interface{} slice. each
@@ -76,7 +76,7 @@ func DataChecksum(data []interface{}) (uint32, error) {
 		enc := gob.NewEncoder(&buf)
 		err := enc.Encode(val)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, terror.ErrTracingDataChecksum.Delegate(err)
 		}
 		return buf.Bytes(), nil
 	}
@@ -87,7 +87,7 @@ func DataChecksum(data []interface{}) (uint32, error) {
 		}
 		b, err := getBytes(val)
 		if err != nil {
-			return 0, errors.Trace(err)
+			return 0, terror.ErrTracingDataChecksum.Delegate(err)
 		}
 		sumup = append(sumup, b...)
 	}

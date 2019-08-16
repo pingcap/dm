@@ -23,10 +23,10 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/BurntSushi/toml"
-	"github.com/pingcap/errors"
 	"go.uber.org/zap"
 )
 
@@ -64,7 +64,7 @@ type DeployMapper struct {
 // Verify verifies deploy configuration
 func (d *DeployMapper) Verify() error {
 	if d.MySQL == "" && d.Source == "" {
-		return errors.NotValidf("user should specify valid relation between source(mysql/mariadb) and dm-worker, config %+v", d)
+		return terror.ErrMasterDeployMapperVerify.Generate(d)
 	}
 
 	return nil
@@ -107,7 +107,7 @@ func (c *Config) Parse(arguments []string) error {
 	// Parse first to get config file.
 	err := c.FlagSet.Parse(arguments)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrMasterConfigParseFlagSet.Delegate(err)
 	}
 
 	if c.printVersion {
@@ -133,18 +133,18 @@ func (c *Config) Parse(arguments []string) error {
 	if c.ConfigFile != "" {
 		err = c.configFromFile(c.ConfigFile)
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 	}
 
 	// Parse again to replace with command line options.
 	err = c.FlagSet.Parse(arguments)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrMasterConfigParseFlagSet.Delegate(err)
 	}
 
 	if len(c.FlagSet.Args()) != 0 {
-		return errors.Errorf("'%s' is an invalid flag", c.FlagSet.Arg(0))
+		return terror.ErrMasterConfigInvalidFlag.Generate(c.FlagSet.Arg(0))
 	}
 
 	return c.adjust()
@@ -153,15 +153,18 @@ func (c *Config) Parse(arguments []string) error {
 // configFromFile loads config from file.
 func (c *Config) configFromFile(path string) error {
 	metaData, err := toml.DecodeFile(path, c)
+	if err != nil {
+		return terror.ErrMasterConfigTomlTransform.Delegate(err)
+	}
 	undecoded := metaData.Undecoded()
-	if len(undecoded) > 0 && err == nil {
+	if len(undecoded) > 0 {
 		var undecodedItems []string
 		for _, item := range undecoded {
 			undecodedItems = append(undecodedItems, item.String())
 		}
-		return errors.Errorf("master config contained unknown configuration options: %s", strings.Join(undecodedItems, ","))
+		return terror.ErrMasterConfigUnknownItem.Generate(strings.Join(undecodedItems, ","))
 	}
-	return errors.Trace(err)
+	return nil
 }
 
 // adjust adjusts configs
@@ -169,7 +172,7 @@ func (c *Config) adjust() error {
 	c.DeployMap = make(map[string]string)
 	for _, item := range c.Deploy {
 		if err := item.Verify(); err != nil {
-			return errors.Trace(err)
+			return err
 		}
 
 		// compatible with mysql instance which is deprecated
@@ -185,7 +188,7 @@ func (c *Config) adjust() error {
 	}
 	timeout, err := time.ParseDuration(c.RPCTimeoutStr)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrMasterConfigTimeoutParse.Delegate(err)
 	}
 	c.RPCTimeout = timeout
 
@@ -207,11 +210,11 @@ func (c *Config) adjust() error {
 func (c *Config) UpdateConfigFile(content string) error {
 	if c.ConfigFile != "" {
 		err := ioutil.WriteFile(c.ConfigFile, []byte(content), 0666)
-		return errors.Trace(err)
+		return terror.ErrMasterConfigUpdateCfgFile.Delegate(err)
 	}
 	c.ConfigFile = "dm-master.toml"
 	err := ioutil.WriteFile(c.ConfigFile, []byte(content), 0666)
-	return errors.Trace(err)
+	return terror.ErrMasterConfigUpdateCfgFile.Delegate(err)
 }
 
 // Reload load config from local file
@@ -219,7 +222,7 @@ func (c *Config) Reload() error {
 	if c.ConfigFile != "" {
 		err := c.configFromFile(c.ConfigFile)
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 	}
 

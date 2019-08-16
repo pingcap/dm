@@ -16,10 +16,10 @@ package relay
 import (
 	"time"
 
-	"github.com/pingcap/errors"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -149,7 +149,7 @@ func RegisterMetrics(registry *prometheus.Registry) {
 
 func reportRelayLogSpaceInBackground(dirpath string) error {
 	if len(dirpath) == 0 {
-		return errors.New("dirpath is empty")
+		return terror.ErrRelayLogDirpathEmpty.Generate()
 	}
 
 	go func() {

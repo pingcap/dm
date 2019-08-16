@@ -25,6 +25,7 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -130,7 +131,7 @@ func (t *testFileSuite) TestCollectBinlogFilesCmp(c *C) {
 
 	// empty dir
 	files, err := CollectBinlogFilesCmp(dir, baseFile, cmp)
-	c.Assert(err, Equals, ErrEmptyRelayDir)
+	c.Assert(terror.ErrEmptyRelayDir.Equal(err), IsTrue)
 	c.Assert(files, IsNil)
 
 	// empty base filename, not found

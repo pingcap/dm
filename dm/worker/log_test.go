@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 type testLog struct{}
@@ -44,7 +45,7 @@ func (t *testLog) TestPointer(c *C) {
 
 func (t *testLog) TestHandledPointer(c *C) {
 	p, err := LoadHandledPointer(nil)
-	c.Assert(err, Equals, ErrInValidHandler)
+	c.Assert(terror.ErrWorkerLogInvalidHandler.Equal(err), IsTrue)
 	c.Assert(p.Location, Equals, int64(0))
 
 	db, _ := testSetUpDB(c)
@@ -79,7 +80,7 @@ func (t *testLog) TestHandledPointer(c *C) {
 	c.Assert(p.Location, Equals, int64(0))
 
 	// clear with nil txn
-	c.Assert(errors.Cause(ClearHandledPointer(tcontext.Background(), nil)), Equals, ErrInValidHandler)
+	c.Assert(terror.ErrWorkerLogInvalidHandler.Equal(ClearHandledPointer(tcontext.Background(), nil)), IsTrue)
 }
 
 func (t *testLog) TestTaskLogKey(c *C) {
@@ -103,7 +104,7 @@ func (t *testLog) TestTaskLog(c *C) {
 	}
 
 	_, err := logger.Initial(nil)
-	c.Assert(err, Equals, ErrInValidHandler)
+	c.Assert(terror.ErrWorkerLogInvalidHandler.Equal(err), IsTrue)
 
 	db, _ := testSetUpDB(c)
 	defer db.Close()
@@ -115,14 +116,14 @@ func (t *testLog) TestTaskLog(c *C) {
 
 	// try to get log from empty queue
 	l, err := logger.GetTaskLog(nil, 0)
-	c.Assert(err, Equals, ErrInValidHandler)
+	c.Assert(terror.ErrWorkerLogInvalidHandler.Equal(err), IsTrue)
 
 	l, err = logger.GetTaskLog(db, 0)
 	c.Assert(err, IsNil)
 	c.Assert(l, IsNil)
 
 	// try to append log
-	c.Assert(logger.Append(nil, nil), Equals, ErrInValidHandler)
+	c.Assert(terror.ErrWorkerLogInvalidHandler.Equal(logger.Append(nil, nil)), IsTrue)
 
 	taskLog1 := &pb.TaskLog{
 		Id:   100,
@@ -183,7 +184,7 @@ func (t *testLog) TestTaskLog(c *C) {
 	c.Assert(hp.Location, Equals, int64(0))
 
 	// try to mark and forward
-	c.Assert(logger.MarkAndForwardLog(nil, nil), Equals, ErrInValidHandler)
+	c.Assert(terror.ErrWorkerLogInvalidHandler.Equal(logger.MarkAndForwardLog(nil, nil)), IsTrue)
 	c.Assert(logger.MarkAndForwardLog(db, taskLog1), IsNil)
 	c.Assert(logger.handledPointer.Location, Equals, int64(1))
 	hp, err = LoadHandledPointer(db)
@@ -290,7 +291,7 @@ func (t *testLog) TestTaskMeta(c *C) {
 	defer db.Close()
 
 	// set task meta
-	c.Assert(SetTaskMeta(nil, nil), Equals, ErrInValidHandler)
+	c.Assert(terror.ErrWorkerLogInvalidHandler.Equal(SetTaskMeta(nil, nil)), IsTrue)
 	err := SetTaskMeta(db, nil)
 	c.Assert(err, ErrorMatches, ".*empty task.*")
 
@@ -302,7 +303,7 @@ func (t *testLog) TestTaskMeta(c *C) {
 
 	// load task meta
 	_, err = LoadTaskMetas(nil)
-	c.Assert(err, Equals, ErrInValidHandler)
+	c.Assert(terror.ErrWorkerLogInvalidHandler.Equal(err), IsTrue)
 	tasks, err := LoadTaskMetas(db)
 	c.Assert(err, IsNil)
 	c.Assert(tasks, DeepEquals, map[string]*pb.TaskMeta{
@@ -367,5 +368,5 @@ func (t *testLog) TestTaskMeta(c *C) {
 	c.Assert(errors.Cause(err), Equals, leveldb.ErrNotFound)
 
 	// clear with nil txn
-	c.Assert(errors.Cause(ClearTaskMeta(tcontext.Background(), nil)), Equals, ErrInValidHandler)
+	c.Assert(terror.ErrWorkerLogInvalidHandler.Equal(ClearTaskMeta(tcontext.Background(), nil)), IsTrue)
 }

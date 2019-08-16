@@ -19,7 +19,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 
@@ -27,13 +26,8 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
-)
-
-// errors created by Purger
-var (
-	ErrSelfPurging  = errors.New("this strategy is purging")
-	MsgOtherPurging = "%s is purging"
 )
 
 // RelayOperator represents an operator for relay log files, like writer, reader
@@ -173,7 +167,7 @@ func (p *RelayPurger) Purging() bool {
 func (p *RelayPurger) Do(ctx context.Context, req *pb.PurgeRelayRequest) error {
 	uuids, err := utils.ParseUUIDIndex(p.indexPath)
 	if err != nil {
-		return errors.Annotatef(err, "parse UUID index file %s", p.indexPath)
+		return terror.Annotatef(err, "parse UUID index file %s", p.indexPath)
 	}
 
 	if req.Inactive {
@@ -182,7 +176,7 @@ func (p *RelayPurger) Do(ctx context.Context, req *pb.PurgeRelayRequest) error {
 			relayBaseDir: p.baseRelayDir,
 			uuids:        uuids,
 		}
-		return errors.Trace(p.doPurge(ps, args))
+		return p.doPurge(ps, args)
 	} else if req.Time > 0 {
 		ps := p.strategies[strategyTime]
 		args := &timeArgs{
@@ -190,7 +184,7 @@ func (p *RelayPurger) Do(ctx context.Context, req *pb.PurgeRelayRequest) error {
 			safeTime:     time.Unix(req.Time, 0),
 			uuids:        uuids,
 		}
-		return errors.Trace(p.doPurge(ps, args))
+		return p.doPurge(ps, args)
 	} else if len(req.Filename) > 0 {
 		ps := p.strategies[strategyFilename]
 		args := &filenameArgs{
@@ -199,9 +193,9 @@ func (p *RelayPurger) Do(ctx context.Context, req *pb.PurgeRelayRequest) error {
 			subDir:       req.SubDir,
 			uuids:        uuids,
 		}
-		return errors.Trace(p.doPurge(ps, args))
+		return p.doPurge(ps, args)
 	}
-	return errors.NotValidf("request %+v", req)
+	return terror.ErrRelayPurgeRequestNotValid.Generate(req)
 }
 
 // tryPurge tries to do purge by check condition first
@@ -223,26 +217,26 @@ func (p *RelayPurger) tryPurge() {
 // doPurge does the purging operation
 func (p *RelayPurger) doPurge(ps PurgeStrategy, args StrategyArgs) error {
 	if !p.purgingStrategy.CompareAndSwap(uint32(strategyNone), uint32(ps.Type())) {
-		return errors.Errorf(MsgOtherPurging, ps.Type())
+		return terror.ErrRelayOtherStrategyIsPurging.Generate(ps.Type())
 	}
 	defer p.purgingStrategy.Set(uint32(strategyNone))
 
 	for _, inter := range p.interceptors {
 		forbidden, msg := inter.ForbidPurge()
 		if forbidden {
-			return errors.Errorf("relay log purge is forbidden temporarily, because %s, please try again later", msg)
+			return terror.ErrRelayPurgeIsForbidden.Generate(msg)
 		}
 	}
 
 	// set ActiveRelayLog lazily to make it can be protected by purgingStrategy
 	earliest := p.earliestActiveRelayLog()
 	if earliest == nil {
-		return errors.NotValidf("no active relay log file found")
+		return terror.ErrRelayNoActiveRelayLog.Generate()
 	}
 	args.SetActiveRelayLog(earliest)
 
 	p.tctx.L().Info("start purging relay log files", zap.Stringer("type", ps.Type()), zap.Reflect("args", args))
-	return errors.Trace(ps.Do(args))
+	return ps.Do(args)
 }
 
 func (p *RelayPurger) check() (PurgeStrategy, StrategyArgs, error) {
@@ -250,7 +244,7 @@ func (p *RelayPurger) check() (PurgeStrategy, StrategyArgs, error) {
 
 	uuids, err := utils.ParseUUIDIndex(p.indexPath)
 	if err != nil {
-		return nil, nil, errors.Annotatef(err, "parse UUID index file %s", p.indexPath)
+		return nil, nil, terror.Annotatef(err, "parse UUID index file %s", p.indexPath)
 	}
 
 	// NOTE: no priority supported yet
@@ -267,7 +261,7 @@ func (p *RelayPurger) check() (PurgeStrategy, StrategyArgs, error) {
 		ps := p.strategies[strategySpace]
 		need, err := ps.Check(args)
 		if err != nil {
-			return nil, nil, errors.Annotatef(err, "check with %s with args %+v", ps.Type(), args)
+			return nil, nil, terror.Annotatef(err, "check with %s with args %+v", ps.Type(), args)
 		}
 		if need {
 			return ps, args, nil
@@ -285,7 +279,7 @@ func (p *RelayPurger) check() (PurgeStrategy, StrategyArgs, error) {
 		ps := p.strategies[strategyTime]
 		need, err := ps.Check(args)
 		if err != nil {
-			return nil, nil, errors.Annotatef(err, "check with %s with args %+v", ps.Type(), args)
+			return nil, nil, terror.Annotatef(err, "check with %s with args %+v", ps.Type(), args)
 		}
 		if need {
 			return ps, args, nil

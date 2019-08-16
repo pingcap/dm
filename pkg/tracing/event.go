@@ -15,8 +15,7 @@ package tracing
 
 import (
 	"github.com/pingcap/dm/dm/pb"
-
-	"github.com/pingcap/errors"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // EventType represents trace event type
@@ -71,37 +70,37 @@ func (t *Tracer) ProcessTraceEvents(jobs []*Job) error {
 		for _, job := range jobs {
 			event, ok := job.Event.(*pb.SyncerBinlogEvent)
 			if !ok {
-				return errors.Errorf("invalid event data for type: %s", tp)
+				return terror.ErrTracingEventDataNotValid.Generate(tp)
 			}
 			events = append(events, event)
 		}
 		req := &pb.UploadSyncerBinlogEventRequest{Events: events}
 		resp, err := t.cli.UploadSyncerBinlogEvent(t.ctx, req)
 		if err != nil {
-			return errors.Trace(err)
+			return terror.ErrTracingUploadData.Delegate(err)
 		}
 		if !resp.Result {
-			return errors.Errorf("upload syncer binlog event failed, msg: %s", resp.Msg)
+			return terror.ErrTracingUploadData.Generatef("upload syncer binlog event failed, msg: %s", resp.Msg)
 		}
 	case EventSyncerJob:
 		events := make([]*pb.SyncerJobEvent, 0, len(jobs))
 		for _, job := range jobs {
 			event, ok := job.Event.(*pb.SyncerJobEvent)
 			if !ok {
-				return errors.Errorf("invalid event data for type: %s", tp)
+				return terror.ErrTracingEventDataNotValid.Generate(tp)
 			}
 			events = append(events, event)
 		}
 		req := &pb.UploadSyncerJobEventRequest{Events: events}
 		resp, err := t.cli.UploadSyncerJobEvent(t.ctx, req)
 		if err != nil {
-			return errors.Trace(err)
+			return terror.ErrTracingUploadData.Delegate(err)
 		}
 		if !resp.Result {
-			return errors.Errorf("upload syncer job event failed, msg: %s", resp.Msg)
+			return terror.ErrTracingUploadData.Generatef("upload syncer job event failed, msg: %s", resp.Msg)
 		}
 	default:
-		return errors.Errorf("invalid event type %s, will not process", tp)
+		return terror.ErrTracingEventTypeNotValid.Generate(tp)
 	}
 
 	return nil

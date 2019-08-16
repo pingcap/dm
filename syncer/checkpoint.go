@@ -19,7 +19,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/siddontang/go-mysql/mysql"
@@ -28,6 +27,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -69,7 +69,7 @@ func (b *binlogPoint) save(pos mysql.Position) error {
 	defer b.Unlock()
 	if pos.Compare(b.Position) < 0 {
 		// support to save equal pos, but not older pos
-		return errors.Errorf("%v is older than current pos %v", pos, b.Position)
+		return terror.ErrCheckpointSaveInvalidPos.Generate(pos, b.Position)
 	}
 	b.Position = pos
 	return nil
@@ -229,17 +229,12 @@ func (cp *RemoteCheckPoint) Init(conn *Conn) error {
 	} else {
 		db, err := createDB(cp.cfg, cp.cfg.To, maxCheckPointTimeout)
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 		cp.db = db
 	}
 
-	err := cp.prepare()
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	return errors.Trace(err)
+	return cp.prepare()
 }
 
 // Close implements CheckPoint.Close
@@ -257,7 +252,7 @@ func (cp *RemoteCheckPoint) Clear() error {
 	args := make([]interface{}, 0)
 	err := cp.db.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}, maxRetryCount)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	cp.globalPoint = newBinlogPoint(minCheckpoint, minCheckpoint)
@@ -316,7 +311,7 @@ func (cp *RemoteCheckPoint) DeleteTablePoint(sourceSchema, sourceTable string) e
 	args := make([]interface{}, 0)
 	err := cp.db.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}, maxRetryCount)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	delete(mSchema, sourceTable)
 	return nil
@@ -402,7 +397,7 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(exceptTables [][]string, extraSQLs
 
 	err := cp.db.executeSQL(cp.tctx, sqls, args, maxRetryCount)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	cp.globalPoint.flush()
@@ -451,11 +446,11 @@ func (cp *RemoteCheckPoint) Rollback() {
 
 func (cp *RemoteCheckPoint) prepare() error {
 	if err := cp.createSchema(); err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	if err := cp.createTable(); err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	return nil
 }
@@ -465,7 +460,7 @@ func (cp *RemoteCheckPoint) createSchema() error {
 	args := make([]interface{}, 0)
 	err := cp.db.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}, maxRetryCount)
 	cp.tctx.L().Info("create checkpoint schema", zap.String("statement", sql2))
-	return errors.Trace(err)
+	return err
 }
 
 func (cp *RemoteCheckPoint) createTable() error {
@@ -484,7 +479,7 @@ func (cp *RemoteCheckPoint) createTable() error {
 	args := make([]interface{}, 0)
 	err := cp.db.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}, maxRetryCount)
 	cp.tctx.L().Info("create checkpoint table", zap.String("statement", sql2))
-	return errors.Trace(err)
+	return err
 }
 
 // Load implements CheckPoint.Load
@@ -498,7 +493,7 @@ func (cp *RemoteCheckPoint) Load() error {
 	})
 
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	defer rows.Close()
 
@@ -514,7 +509,7 @@ func (cp *RemoteCheckPoint) Load() error {
 	for rows.Next() {
 		err := rows.Scan(&cpSchema, &cpTable, &binlogName, &binlogPos, &isGlobal)
 		if err != nil {
-			return errors.Trace(err)
+			return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 		}
 		pos := mysql.Position{
 			Name: binlogName,
@@ -534,7 +529,7 @@ func (cp *RemoteCheckPoint) Load() error {
 		}
 		mSchema[cpTable] = newBinlogPoint(pos, pos)
 	}
-	return errors.Trace(rows.Err())
+	return terror.WithScope(terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError), terror.ScopeDownstream)
 }
 
 // LoadMeta implements CheckPoint.LoadMeta
@@ -549,7 +544,7 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 		// refine when master / slave switching added and checkpoint mechanism refactored
 		pos, err = cp.parseMetaData()
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 	case config.ModeIncrement:
 		// load meta from task config
@@ -563,7 +558,7 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 		}
 	default:
 		// should not go here (syncer is only used in `all` or `incremental` mode)
-		return errors.Errorf("invalid task mode: %s", cp.cfg.Mode)
+		return terror.ErrCheckpointInvalidTaskMode.Generate(cp.cfg.Mode)
 	}
 
 	// if meta loaded, we will start syncing from meta's pos

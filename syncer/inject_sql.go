@@ -17,7 +17,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/siddontang/go-mysql/mysql"
@@ -25,6 +24,7 @@ import (
 	"go.uber.org/zap"
 
 	parserpkg "github.com/pingcap/dm/pkg/parser"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // InjectSQLs injects ddl into syncer as binlog events while meet xid/query event
@@ -37,18 +37,18 @@ func (s *Syncer) InjectSQLs(ctx context.Context, sqls []string) error {
 	for _, sql := range sqls {
 		node, err := parser2.ParseOneStmt(sql, "", "")
 		if err != nil {
-			return errors.Annotatef(err, "sql %s", sql)
+			return terror.Annotatef(terror.ErrSyncerUnitParseStmt.New(err.Error()), "sql %s", sql)
 		}
 		ddlNode, ok := node.(ast.DDLNode)
 		if !ok {
-			return errors.Errorf("only support inject DDL for sharding group to be synced currently, but got %s", sql)
+			return terror.ErrSyncerUnitInjectDDLOnly.Generate(sql)
 		}
 		tableNames, err := parserpkg.FetchDDLTableNames("", ddlNode)
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 		if len(tableNames[0].Schema) == 0 {
-			return errors.NotValidf("injected DDL %s without schema name", sql)
+			return terror.ErrSyncerUnitInjectDDLWithoutSchema.Generate(sql)
 		}
 		schemas = append(schemas, tableNames[0].Schema)
 	}

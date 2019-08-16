@@ -19,6 +19,7 @@ import (
 
 	"github.com/pingcap/errors"
 
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -29,7 +30,7 @@ func getNextUUID(currUUID string, UUIDs []string) (string, string, error) {
 			nextUUID := UUIDs[i+1]
 			_, suffixInt, err := utils.ParseSuffixForUUID(nextUUID)
 			if err != nil {
-				return "", "", errors.Annotatef(err, "UUID %s", nextUUID)
+				return "", "", terror.Annotatef(err, "UUID %s", nextUUID)
 			}
 			return nextUUID, utils.SuffixIntToStr(suffixInt), nil
 		}

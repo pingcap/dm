@@ -16,8 +16,9 @@ package utils
 import (
 	"reflect"
 
-	"github.com/pingcap/errors"
 	"golang.org/x/sys/unix"
+
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // StorageSize represents the storage's capacity and available size
@@ -33,7 +34,7 @@ func GetStorageSize(dir string) (size StorageSize, err error) {
 
 	err = unix.Statfs(dir, &stat)
 	if err != nil {
-		return size, errors.Trace(err)
+		return size, terror.ErrStatFileSize.Delegate(err)
 	}
 
 	// When container is run in MacOS, `bsize` obtained by `statfs` syscall is not the fundamental block size,

@@ -17,8 +17,6 @@ import (
 	"database/sql"
 	"strings"
 
-	"github.com/pingcap/errors"
-
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -30,7 +28,7 @@ func isNewServer(prevUUID string, db *sql.DB, flavor string) (bool, error) {
 	}
 	uuid, err := utils.GetServerUUID(db, flavor)
 	if err != nil {
-		return false, errors.Trace(err)
+		return false, err
 	}
 	if strings.HasPrefix(prevUUID, uuid) {
 		// same server as before

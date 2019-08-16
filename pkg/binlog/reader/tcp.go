@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/pingcap/errors"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
@@ -28,6 +27,7 @@ import (
 	"github.com/pingcap/dm/pkg/binlog/common"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -71,12 +71,12 @@ func (r *TCPReader) StartSyncByPos(pos gmysql.Position) error {
 	defer r.mu.Unlock()
 
 	if r.stage != common.StageNew {
-		return errors.Errorf("stage %s, expect %s, already started", r.stage, common.StageNew)
+		return terror.ErrRelayReaderNotStateNew.Generate(r.stage, common.StageNew)
 	}
 
 	streamer, err := r.syncer.StartSync(pos)
 	if err != nil {
-		return errors.Annotatef(err, "start sync from position %s", pos)
+		return terror.ErrRelayTCPReaderStartSync.Delegate(err, pos)
 	}
 
 	r.streamer = streamer
@@ -90,16 +90,16 @@ func (r *TCPReader) StartSyncByGTID(gSet gtid.Set) error {
 	defer r.mu.Unlock()
 
 	if r.stage != common.StageNew {
-		return errors.Errorf("stage %s, expect %s, already started", r.stage, common.StageNew)
+		return terror.ErrRelayReaderNotStateNew.Generate(r.stage, common.StageNew)
 	}
 
 	if gSet == nil {
-		return errors.NotValidf("nil GTID set")
+		return terror.ErrRelayTCPReaderNilGTID.Generate()
 	}
 
 	streamer, err := r.syncer.StartSyncGTID(gSet.Origin())
 	if err != nil {
-		return errors.Annotatef(err, "start sync from GTID set %s", gSet)
+		return terror.ErrRelayTCPReaderStartSyncGTID.Delegate(err, gSet)
 	}
 
 	r.streamer = streamer
@@ -113,7 +113,7 @@ func (r *TCPReader) Close() error {
 	defer r.mu.Unlock()
 
 	if r.stage != common.StagePrepared {
-		return errors.Errorf("stage %s, expect %s, can not close", r.stage, common.StagePrepared)
+		return terror.ErrRelayReaderStateCannotClose.Generate(r.stage, common.StagePrepared)
 	}
 
 	defer r.syncer.Close()
@@ -123,12 +123,14 @@ func (r *TCPReader) Close() error {
 			r.syncerCfg.User, r.syncerCfg.Password, r.syncerCfg.Host, r.syncerCfg.Port)
 		db, err := sql.Open("mysql", dsn)
 		if err != nil {
-			return errors.Annotatef(err, "open connection to the master %s:%d", r.syncerCfg.Host, r.syncerCfg.Port)
+			return terror.WithScope(
+				terror.Annotatef(terror.DBErrorAdapt(err, terror.ErrDBDriverError),
+					"open connection to the master %s:%d", r.syncerCfg.Host, r.syncerCfg.Port), terror.ScopeUpstream)
 		}
 		defer db.Close()
 		err = utils.KillConn(db, connID)
 		if err != nil {
-			return errors.Annotatef(err, "kill connection %d for master %s:%d", connID, r.syncerCfg.Host, r.syncerCfg.Port)
+			return terror.WithScope(terror.Annotatef(err, "kill connection %d for master %s:%d", connID, r.syncerCfg.Host, r.syncerCfg.Port), terror.ScopeUpstream)
 		}
 	}
 
@@ -142,10 +144,11 @@ func (r *TCPReader) GetEvent(ctx context.Context) (*replication.BinlogEvent, err
 	defer r.mu.RUnlock()
 
 	if r.stage != common.StagePrepared {
-		return nil, errors.Errorf("stage %s, expect %s, please start sync first", r.stage, common.StagePrepared)
+		return nil, terror.ErrRelayReaderNeedStart.Generate(r.stage, common.StagePrepared)
 	}
 
-	return r.streamer.GetEvent(ctx)
+	ev, err := r.streamer.GetEvent(ctx)
+	return ev, terror.ErrRelayTCPReaderGetEvent.Delegate(err)
 }
 
 // Status implements Reader.Status.
