@@ -23,7 +23,7 @@ DM can meet replication interruption in many scenarios, currently most of these 
 2. Add automated recovery mechanism for some expected interruption scenarios
 3. Add some measures and actions for known scenarios to reduce preventable interruption.
 
-This proposal mainly forcus on the first two parts.
+This proposal mainly focus on the first two parts.
 
 ## Implementation
 
