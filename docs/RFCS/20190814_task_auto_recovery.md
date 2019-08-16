@@ -51,6 +51,6 @@ Task status checker is running in the background of DM-worker, in the future DM 
 
 Task recovery executor will be implement in the `handleTask` function of DM-worker as a standalone `TaskOp` processing case, it will reuse the subtask `Resume` interface to resume a task. We should refine the status management in DM-worker in order to meet the following guarantees:
 
-- It is always safe and no harm to resume a paused task, although in some scenarios a task will always meet error after the resume, for example when a replication task meets an TIDB incompatible DDL.
+- It is always safe and no harm to resume a paused task, although in some scenarios a task will always meet error after the resume, for example when a replication task meets a TiDB incompatible DDL.
 
 - Resume a non-paused task will do nothing and return an error.
