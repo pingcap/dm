@@ -82,7 +82,7 @@ function run() {
             "current stage is not paused not valid" 1
 
         cleanup_process
-        cleanup_data initial_unit
+        run_sql "drop database if exists initial_unit" $TIDB_PORT
         run_sql "drop database if exists dm_meta" $TIDB_PORT
     done
 }
