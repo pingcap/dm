@@ -133,6 +133,7 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []utils.SQL,
 		},
 		func(retryTime int, err error) bool {
 			ctx.L().Debug("execute statement", zap.Int("retry", retryTime), zap.String("sqls", fmt.Sprintf("%-.200v", sqls)))
+			time.Sleep(2 * time.Duration(retryTime) * time.Second)
 			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
 			if retryFn(err) {
 				return true
