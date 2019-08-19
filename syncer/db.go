@@ -142,12 +142,12 @@ func createConn(cfg *config.SubTaskConfig, dbCfg config.DBConfig, timeout string
 
 func createConns(cfg *config.SubTaskConfig, dbCfg config.DBConfig, count int, timeout string) ([]*Conn, error) {
 	dbs := make([]*Conn, 0, count)
-	for i := 0; i < count; i++ {
-		db, err := createConn(cfg, dbCfg, timeout)
-		if err != nil {
-			return nil, err
-		}
+	db, err := createConn(cfg, dbCfg, timeout)
+	if err != nil {
+		return nil, err
+	}
 
+	for i := 0; i < count; i++ {
 		dbs = append(dbs, db)
 	}
 

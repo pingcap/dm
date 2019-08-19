@@ -64,7 +64,7 @@ var (
 	// MaxDDLConnectionTimeoutMinute also used by SubTask.ExecuteDDL
 	MaxDDLConnectionTimeoutMinute = 10
 
-	maxDMLConnectionTimeout = "1m"
+	maxDMLConnectionTimeout = "5m"
 	maxDDLConnectionTimeout = fmt.Sprintf("%dm", MaxDDLConnectionTimeoutMinute)
 
 	adminQueueName     = "admin queue"

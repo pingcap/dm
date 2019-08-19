@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/gtid"
@@ -305,12 +306,20 @@ func (conn *BaseConn) Init(dbDSN string) error {
 	return nil
 }
 
-// NormalRetryOperation will retry 100 times
+// NormalRetryOperation will retry retryCount times
 func (conn *BaseConn) NormalRetryOperation(ctx *tcontext.Context, operateFn func(*tcontext.Context, int) (interface{}, error), retryFn func(int, error) bool) (interface{}, error) {
 	var err error
 	var ret interface{}
-	for i := 0; i < retryFnCount; i++ {
+	for i := 0; i < retryCount; i++ {
 		ret, err = operateFn(ctx, i)
+		if terr, ok := err.(*terror.Error); ok {
+			switch terr.Cause() {
+			case mysql.ErrInvalidConn:
+				time.Sleep(10 * time.Second)
+			default:
+				time.Sleep(time.Second)
+			}
+		}
 		if err != nil {
 			if retryFn(i, err) {
 				continue
@@ -350,6 +359,7 @@ func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, sqls []SQL) (int, error
 	}
 
 	txn, err := conn.DB.Begin()
+
 	if err != nil {
 		return 0, terror.DBErrorAdapt(err, terror.ErrDBUnExpect)
 	}
@@ -377,7 +387,7 @@ func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, sqls []SQL) (int, error
 	return l, nil
 }
 
-// Close is close DB resource
+// Close release DB resource
 func (conn *BaseConn) Close() error {
 	if conn == nil || conn.DB == nil {
 		return nil

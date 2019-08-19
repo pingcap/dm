@@ -35,7 +35,7 @@ import (
 const (
 	maxRetryCount = 3
 	retryTimeout  = 3 * time.Second
-	retryFnCount  = 100
+	retryCount    = 100
 )
 
 // ExtractTable extracts schema and table from `schema`.`table`
