@@ -53,6 +53,7 @@ enum TaskOp {
     Resume = 3;
     Start = 4;
     Update = 5;
+    AutoResume = 6;
 }
 
 message UpdateRelayRequest {
@@ -458,4 +459,11 @@ message TaskLog {
     // true means this log is applied successfully
     bool success = 4;
     string message = 5;
+}
+
+// TaskStatus holds basic information of a task, mainly used for status checker
+message TaskStatus {
+    string name = 1;
+    Stage stage = 2;
+    ProcessResult result = 3;
 }

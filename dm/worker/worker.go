@@ -63,6 +63,8 @@ type Worker struct {
 	meta   *Metadata
 	db     *leveldb.DB
 	tracer *tracing.Tracer
+
+	taskStatusChecker TaskStatusChecker
 }
 
 // NewWorker creates a new Worker
@@ -83,6 +85,22 @@ func NewWorker(cfg *Config) (*Worker, error) {
 		return nil, err
 	}
 	w.relayPurger = purger
+
+	// initial task status checker
+	tscConfig := &CheckerConfig{
+		checkInterval:   DefaultCheckInterval,
+		backoffRollback: DefaultBackoffRollback,
+		backoffMin:      DefaultBackoffMin,
+		backoffMax:      DefaultBackoffMax,
+		backoffJitter:   DefaultBackoffJitter,
+		backoffFactor:   DefaultBackoffFactor,
+	}
+	tsc := NewTaskStatusChecker(tscConfig, w)
+	err = tsc.Init()
+	if err != nil {
+		return nil, err
+	}
+	w.taskStatusChecker = tsc
 
 	// try upgrade from an older version
 	dbDir := path.Join(w.cfg.MetaDir, "kv")
@@ -115,6 +133,9 @@ func NewWorker(cfg *Config) (*Worker, error) {
 
 	// start purger
 	w.relayPurger.Start()
+
+	// start task status checker
+	w.taskStatusChecker.Start()
 
 	// start tracer
 	if w.tracer.Enable() {
@@ -184,6 +205,9 @@ func (w *Worker) Close() {
 
 	// close purger
 	w.relayPurger.Close()
+
+	// clase task status checker
+	w.taskStatusChecker.Close()
 
 	// close meta
 	w.meta.Close()
@@ -672,6 +696,22 @@ func (w *Worker) findSubTask(name string) *SubTask {
 	return w.subTasks[name]
 }
 
+func (w *Worker) getPausedSubTasks() []*pb.TaskStatus {
+	w.RLock()
+	defer w.RUnlock()
+	result := make([]*pb.TaskStatus, 0)
+	for name, task := range w.subTasks {
+		if task.stage == pb.Stage_Paused {
+			result = append(result, &pb.TaskStatus{
+				Name:   name,
+				Stage:  pb.Stage_Paused,
+				Result: task.result,
+			})
+		}
+	}
+	return result
+}
+
 func (w *Worker) restoreSubTask() error {
 	tasks := w.meta.LoadTaskMeta()
 
@@ -820,6 +860,14 @@ Loop:
 				}
 
 				w.l.Info("resume sub task", zap.String("task", opLog.Task.Name))
+				err = st.Resume()
+			case pb.TaskOp_AutoResume:
+				if !exist {
+					err = terror.ErrWorkerSubTaskNotFound.Generate(opLog.Task.Name)
+					break
+				}
+
+				w.l.Info("auto_resume sub task", zap.String("task", opLog.Task.Name))
 				err = st.Resume()
 			}
 
