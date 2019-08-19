@@ -299,7 +299,7 @@ type SQL struct {
 func (conn *BaseConn) Init(dbDSN string) error {
 	db, err := sql.Open("mysql", dbDSN)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.DBErrorAdapt(err, terror.ErrDBDriverError, "init")
 	}
 	conn.DB = db
 	return nil
@@ -324,7 +324,7 @@ func (conn *BaseConn) NormalRetryOperation(ctx *tcontext.Context, operateFn func
 // QuerySQL defines query statement, and connect to real DB
 func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string) (*sql.Rows, error) {
 	if conn == nil || conn.DB == nil {
-		return nil, errors.NotValidf("database connection")
+		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 	tctx.L().Debug("Query statement", zap.String("Query", query))
 
@@ -332,7 +332,7 @@ func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string) (*sql.Rows,
 
 	if err != nil {
 		tctx.L().Error("Query statement failed", zap.String("Query", query), log.ShortError(err))
-		return nil, errors.Trace(err)
+		return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query)
 	}
 	return rows, nil
 }
@@ -346,12 +346,12 @@ func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, sqls []SQL) (int, error
 		return 0, nil
 	}
 	if conn == nil || conn.DB == nil {
-		return 0, errors.NotValidf("database connection")
+		return 0, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
 	txn, err := conn.DB.Begin()
 	if err != nil {
-		return 0, errors.Trace(err)
+		return 0, terror.DBErrorAdapt(err, terror.ErrDBUnExpect)
 	}
 
 	l := len(sqls)
@@ -367,12 +367,12 @@ func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, sqls []SQL) (int, error
 				tctx.L().Error("rollback failed", zap.String("Query", sqls[i].Query), zap.Reflect("argument", sqls[i].Args), log.ShortError(rerr))
 			}
 			// we should return the exec err, instead of the rollback rerr.
-			return i, errors.Trace(err)
+			return i, terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, sqls[i].Query)
 		}
 	}
 	err = txn.Commit()
 	if err != nil {
-		return l, errors.Trace(err)
+		return l, terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, "commit")
 	}
 	return l, nil
 }
@@ -383,5 +383,5 @@ func (conn *BaseConn) Close() error {
 		return nil
 	}
 
-	return errors.Trace(conn.DB.Close())
+	return terror.DBErrorAdapt(conn.DB.Close(), terror.ErrDBUnExpect)
 }

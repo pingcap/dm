@@ -71,7 +71,7 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string) (*sql.Rows, erro
 	}()
 
 	if err != nil {
-		return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query)
+		return nil, err
 	}
 	return ret.(*sql.Rows), nil
 }
@@ -141,7 +141,7 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []utils.SQL,
 			}
 			return false
 		})
-	return terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, strings.Join([]string{}, ";"))
+	return err
 }
 
 func createConn(cfg *config.SubTaskConfig) (*Conn, error) {

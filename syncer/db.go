@@ -71,7 +71,7 @@ type Conn struct {
 
 func (conn *Conn) querySQL(tctx *tcontext.Context, query string) (*sql.Rows, error) {
 	if conn == nil || conn.baseConn == nil {
-		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
+		return nil, terror.ErrDBUnExpect.Generate("database base connection not valid")
 	}
 
 	ret, err := conn.baseConn.NormalRetryOperation(
@@ -101,7 +101,7 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 	}
 
 	if conn == nil || conn.baseConn == nil {
-		return 0, terror.ErrDBUnExpect.Generate("database connection not valid")
+		return 0, terror.ErrDBUnExpect.Generate("database base connection not valid")
 	}
 
 	sqls := make([]utils.SQL, 0, len(queries))
