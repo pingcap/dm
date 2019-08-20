@@ -316,7 +316,6 @@ func (conn *BaseConn) NormalRetryOperation(ctx *tcontext.Context, operateFn func
 			case mysql.ErrInvalidConn:
 				time.Sleep(10 * time.Second)
 			default:
-				time.Sleep(100 * time.Millisecond)
 			}
 		}
 		if err != nil {
