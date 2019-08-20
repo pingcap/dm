@@ -311,14 +311,16 @@ func (conn *BaseConn) NormalRetryOperation(ctx *tcontext.Context, operateFn func
 	var ret interface{}
 	for i := 0; i < retryCount; i++ {
 		ret, err = operateFn(ctx, i)
-		if terr, ok := err.(*terror.Error); ok {
-			switch terr.Cause() {
-			case mysql.ErrInvalidConn:
-				time.Sleep(10 * time.Second)
-			default:
-			}
-		}
 		if err != nil {
+			if terr, ok := err.(*terror.Error); ok {
+				switch terr.Cause() {
+				case mysql.ErrInvalidConn:
+					ctx.L().Warn(fmt.Sprintf("Met invalid connection error, next retry in %s seconds", i * 5))
+					time.Sleep(time.Duration(i) * 5 * time.Second)
+					continue
+				default:
+				}
+			}
 			if retryFn(i, err) {
 				continue
 			}
