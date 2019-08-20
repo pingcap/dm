@@ -71,6 +71,7 @@ const (
 
 type testSyncerSuite struct {
 	db              *sql.DB
+	dbAddr          string
 	syncer          *replication.BinlogSyncer
 	streamer        *replication.BinlogStreamer
 	cfg             *config.SubTaskConfig
@@ -94,8 +95,8 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 	s.cfg.RelayDir = dir
 
 	var err error
-	dbAddr := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8", s.cfg.From.User, s.cfg.From.Password, s.cfg.From.Host, s.cfg.From.Port)
-	s.db, err = sql.Open("mysql", dbAddr)
+	s.dbAddr = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8", s.cfg.From.User, s.cfg.From.Password, s.cfg.From.Host, s.cfg.From.Port)
+	s.db, err = sql.Open("mysql", s.dbAddr)
 	if err != nil {
 		log.L().Fatal("", zap.Error(err))
 	}
@@ -1036,7 +1037,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 
 	syncer := NewSyncer(s.cfg)
 	// use upstream baseConn as mock downstream
-	syncer.toDBs = []*Conn{{baseConn: &utils.BaseConn{s.db}}}
+	syncer.toDBs = []*Conn{{baseConn: &utils.BaseConn{s.db, s.dbAddr}}}
 
 	for _, testCase := range testCases {
 		for _, sql := range testCase.sqls {
@@ -1306,8 +1307,8 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		c.Assert(syncer.checkpoint.FlushedGlobalPoint(), Equals, minCheckpoint)
 
 		// make syncer write to mock baseConn
-		syncer.toDBs = []*Conn{{cfg: s.cfg, baseConn: &utils.BaseConn{db}}}
-		syncer.ddlDB = &Conn{cfg: s.cfg, baseConn: &utils.BaseConn{db}}
+		syncer.toDBs = []*Conn{{cfg: s.cfg, baseConn: &utils.BaseConn{db, s.dbAddr}}}
+		syncer.ddlDB = &Conn{cfg: s.cfg, baseConn: &utils.BaseConn{db, s.dbAddr}}
 
 		// run sql on upstream baseConn to generate binlog event
 		runSQL(createSQLs)

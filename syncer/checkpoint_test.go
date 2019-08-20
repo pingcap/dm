@@ -90,7 +90,7 @@ func (s *testCheckpointSuite) TestCheckPoint(c *C) {
 	mock.ExpectCommit()
 
 	// pass sqlmock baseConn directly
-	conn := &Conn{cfg: s.cfg, baseConn: &utils.BaseConn{db}}
+	conn := &Conn{cfg: s.cfg, baseConn: &utils.BaseConn{db, ""}}
 	err = cp.Init(conn)
 	c.Assert(err, IsNil)
 	cp.Clear()

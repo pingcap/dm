@@ -34,9 +34,11 @@ import (
 	"go.uber.org/zap"
 )
 
+type retrySpeed uint8
+
 const (
 	// RetrySpeedSlow represents slow retry strategy, every retry should wait (retryDuration * retryCount)
-	RetrySpeedSlow = iota + 1
+	RetrySpeedSlow retrySpeed = iota + 1
 	// RetrySpeedStable represents fixed retry strategy, every retry wait fix time retryDuration
 	RetrySpeedStable
 )
@@ -292,12 +294,12 @@ func IsNoSuchThreadError(err error) bool {
 	return IsMySQLError(err, tmysql.ErrNoSuchThread)
 }
 
-// BaseConn wraps a connect to DB
+// BaseConn wraps a connection to DB
 type BaseConn struct {
 	DB *sql.DB
 
 	// for reset
-	dbDSN string
+	DSN string
 }
 
 // SQL is format sql job
@@ -317,7 +319,7 @@ func NewBaseConn(dbDSN string) (*BaseConn, error) {
 
 // ResetConn generates new *DB with new connection pool to take place old one
 func (conn *BaseConn) ResetConn() error {
-	db, err := sql.Open("mysql", conn.dbDSN)
+	db, err := sql.Open("mysql", conn.DSN)
 	if err != nil {
 		return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
@@ -334,7 +336,7 @@ func (conn *BaseConn) ResetConn() error {
 func (conn *BaseConn) FiniteRetryStrategy(ctx *tcontext.Context,
 	retryCount int,
 	firstRetryDuration time.Duration,
-	retrySpeed int,
+	retrySpeed retrySpeed,
 	operateFn func(*tcontext.Context, int) (interface{}, error),
 	retryFn func(int, error) bool) (interface{}, error) {
 	var err error
