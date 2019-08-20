@@ -69,6 +69,7 @@ type Conn struct {
 	baseConn *utils.BaseConn
 }
 
+// ResetConn reset baseConn.*DB's connection pool
 func (conn *Conn) ResetConn() error {
 	if conn.baseConn == nil {
 		return terror.ErrDBUnExpect.Generate("database base connection not valid")

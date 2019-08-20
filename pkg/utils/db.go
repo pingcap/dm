@@ -315,6 +315,7 @@ func NewBaseConn(dbDSN string) (*BaseConn, error) {
 	return &BaseConn{db, dbDSN}, nil
 }
 
+// ResetConn generates new *DB with new connection pool to take place old one
 func (conn *BaseConn) ResetConn() error {
 	db, err := sql.Open("mysql", conn.dbDSN)
 	if err != nil {
