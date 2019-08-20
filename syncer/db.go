@@ -164,11 +164,19 @@ func createConn(cfg *config.SubTaskConfig, dbCfg config.DBConfig, timeout string
 
 func createConns(cfg *config.SubTaskConfig, dbCfg config.DBConfig, count int, timeout string) ([]*Conn, error) {
 	dbs := make([]*Conn, 0, count)
-	baseConn, err := createBaseConn(dbCfg, timeout)
-	if err != nil {
-		return nil, err
-	}
+
+	var db *sql.DB
 	for i := 0; i < count; i++ {
+		baseConn, err := createBaseConn(dbCfg, timeout)
+		if db == nil {
+			db = baseConn.DB
+		}
+		// TODO use *sql.Conn instead of *sql.DB
+		// share db by all conns
+		baseConn.DB = db
+		if err != nil {
+			return nil, err
+		}
 		dbs = append(dbs, &Conn{baseConn: baseConn, cfg: cfg})
 	}
 	return dbs, nil
