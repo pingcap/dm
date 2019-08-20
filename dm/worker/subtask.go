@@ -109,7 +109,6 @@ func (st *SubTask) Init() error {
 
 	st.DDLInfo = make(chan *pb.DDLInfo, 1)
 
-	initializeUnitSuccess := true
 	// when error occurred, initialized units should be closed
 	// when continue sub task from loader / syncer, ahead units should be closed
 	var needCloseUnits []unit.Unit
@@ -118,7 +117,7 @@ func (st *SubTask) Init() error {
 			u.Close()
 		}
 
-		st.initialized.Set(initializeUnitSuccess)
+		st.initialized.Set(len(needCloseUnits) == 0)
 	}()
 
 	// every unit does base initialization in `Init`, and this must pass before start running the sub task
@@ -127,7 +126,6 @@ func (st *SubTask) Init() error {
 	for i, u := range st.units {
 		err := u.Init()
 		if err != nil {
-			initializeUnitSuccess = false
 			// when init fail, other units initialized before should be closed
 			for j := 0; j < i; j++ {
 				needCloseUnits = append(needCloseUnits, st.units[j])
@@ -142,7 +140,6 @@ func (st *SubTask) Init() error {
 		u := st.units[i]
 		isFresh, err := u.IsFreshTask()
 		if err != nil {
-			initializeUnitSuccess = false
 			return terror.Annotatef(err, "fail to get fresh status of subtask %s %s", st.cfg.Name, u.Type())
 		} else if !isFresh {
 			skipIdx = i
