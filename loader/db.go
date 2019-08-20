@@ -46,9 +46,9 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string) (*sql.Rows, erro
 
 	startTime := time.Now()
 
-	ret, err := conn.baseConn.NormalRetryOperation(
+	ret, err := conn.baseConn.FiniteRetryStrategy(
 		ctx,
-		100,
+		10,
 		time.Second,
 		utils.RetrySpeedStable,
 		func(ctx *tcontext.Context, _ int) (interface{}, error) {
@@ -105,9 +105,9 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []utils.SQL,
 		return terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
-	_, err := conn.baseConn.NormalRetryOperation(
+	_, err := conn.baseConn.FiniteRetryStrategy(
 		ctx,
-		100,
+		10,
 		2*time.Second,
 		utils.RetrySpeedSlow,
 		func(ctx *tcontext.Context, retryTime int) (interface{}, error) {

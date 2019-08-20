@@ -45,7 +45,6 @@ import (
 
 var (
 	jobCount      = 1000
-	maxRetryCount = 10
 )
 
 // FilePosSet represents a set in mathematics.

@@ -312,8 +312,10 @@ func NewBaseConn(dbDSN string) (*BaseConn, error) {
 	return &BaseConn{db}, nil
 }
 
-// NormalRetryOperation will retry retryCount times
-func (conn *BaseConn) NormalRetryOperation(ctx *tcontext.Context,
+// FiniteRetryStrategy will retry retryCount times when failed to operate DB.
+// it will wait firstRetryDuration before first retry, and then rest of retries wait time depends on retrySpeed.
+// ErrInvalidConn is a special error, need a public retry strategy, and need wait more time, so put it before retryFn.
+func (conn *BaseConn) FiniteRetryStrategy(ctx *tcontext.Context,
 	retryCount int,
 	firstRetryDuration time.Duration,
 	retrySpeed int,
