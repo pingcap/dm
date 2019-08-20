@@ -75,7 +75,14 @@ function run() {
 
         check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
+        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "resume-task test" \
+            "\"result\": true" 1 \
+            "\"result\": false" 1 \
+            "current stage is not paused not valid" 1
+
         cleanup_process
+        run_sql "drop database if exists initial_unit" $TIDB_PORT
         run_sql "drop database if exists dm_meta" $TIDB_PORT
     done
 }
