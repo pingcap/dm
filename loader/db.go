@@ -48,13 +48,15 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string) (*sql.Rows, erro
 
 	ret, err := conn.baseConn.NormalRetryOperation(
 		ctx,
+		100,
+		time.Second,
+		utils.RetrySpeedStable,
 		func(ctx *tcontext.Context, _ int) (interface{}, error) {
 			rows, err := conn.baseConn.QuerySQL(ctx, query)
 			return rows, err
 		},
 		func(retryTime int, err error) bool {
 			if isRetryableError(err) {
-				time.Sleep(time.Second)
 				ctx.L().Warn("query statement", zap.Int("retry", retryTime), zap.String("sql", query), log.ShortError(err))
 				return true
 			}
@@ -105,6 +107,9 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []utils.SQL,
 
 	_, err := conn.baseConn.NormalRetryOperation(
 		ctx,
+		100,
+		2*time.Second,
+		utils.RetrySpeedSlow,
 		func(ctx *tcontext.Context, retryTime int) (interface{}, error) {
 			startTime := time.Now()
 			_, err := conn.baseConn.ExecuteSQL(ctx, sqls)
@@ -134,7 +139,6 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []utils.SQL,
 		},
 		func(retryTime int, err error) bool {
 			ctx.L().Debug("execute statement", zap.Int("retry", retryTime), zap.String("sqls", fmt.Sprintf("%-.200v", sqls)))
-			time.Sleep(2 * time.Duration(retryTime) * time.Second)
 			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
 			if retryFn(err) {
 				return true

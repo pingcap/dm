@@ -34,6 +34,13 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	// RetrySpeedSlow represents slow retry strategy, every retry should wait (retryDuration * retryCount)
+	RetrySpeedSlow = iota + 1
+	// RetrySpeedStable represents fixed retry strategy, every retry wait fix time retryDuration
+	RetrySpeedStable
+)
+
 var (
 	// for MariaDB, UUID set as `gtid_domain_id` + domainServerIDSeparator + `server_id`
 	domainServerIDSeparator = "-"
@@ -306,7 +313,12 @@ func NewBaseConn(dbDSN string) (*BaseConn, error) {
 }
 
 // NormalRetryOperation will retry retryCount times
-func (conn *BaseConn) NormalRetryOperation(ctx *tcontext.Context, operateFn func(*tcontext.Context, int) (interface{}, error), retryFn func(int, error) bool) (interface{}, error) {
+func (conn *BaseConn) NormalRetryOperation(ctx *tcontext.Context,
+	retryCount int,
+	firstRetryDuration time.Duration,
+	retrySpeed int,
+	operateFn func(*tcontext.Context, int) (interface{}, error),
+	retryFn func(int, error) bool) (interface{}, error) {
 	var err error
 	var ret interface{}
 	for i := 0; i < retryCount; i++ {
@@ -315,13 +327,22 @@ func (conn *BaseConn) NormalRetryOperation(ctx *tcontext.Context, operateFn func
 			if terr, ok := err.(*terror.Error); ok {
 				switch terr.Cause() {
 				case mysql.ErrInvalidConn:
-					ctx.L().Warn(fmt.Sprintf("Met invalid connection error, next retry in %s seconds", i * 5))
+					ctx.L().Warn(fmt.Sprintf("Met invalid connection error, next retry %d, will retry in %d seconds", i, i*5))
 					time.Sleep(time.Duration(i) * 5 * time.Second)
 					continue
 				default:
 				}
 			}
 			if retryFn(i, err) {
+				duration := firstRetryDuration
+				if i > 0 {
+					switch retrySpeed {
+					case RetrySpeedSlow:
+						duration = time.Duration(i) * firstRetryDuration
+					default:
+					}
+				}
+				time.Sleep(duration)
 				continue
 			}
 		}

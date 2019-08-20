@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"github.com/pingcap/dm/pkg/gtid"
 	"strings"
-	"time"
 
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
@@ -81,6 +80,9 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string) (*sql.Rows, err
 
 	ret, err := conn.baseConn.NormalRetryOperation(
 		tctx,
+		100,
+		retryTimeout,
+		utils.RetrySpeedStable,
 		func(ctx *tcontext.Context, _ int) (interface{}, error) {
 			rows, err := conn.baseConn.QuerySQL(ctx, query)
 			return rows, err
@@ -88,7 +90,6 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string) (*sql.Rows, err
 		func(retryTime int, err error) bool {
 			if isRetryableError(err) {
 				sqlRetriesTotal.WithLabelValues("query", conn.cfg.Name).Add(1)
-				time.Sleep(retryTimeout)
 				return true
 			}
 			return false
@@ -115,6 +116,9 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 	}
 	ret, err := conn.baseConn.NormalRetryOperation(
 		tctx,
+		100,
+		retryTimeout,
+		utils.RetrySpeedStable,
 		func(ctx *tcontext.Context, _ int) (interface{}, error) {
 			affected, err := conn.baseConn.ExecuteSQL(ctx, sqls)
 			return affected, err
@@ -122,7 +126,6 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 		func(retryTime int, err error) bool {
 			if isRetryableError(err) {
 				sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
-				time.Sleep(retryTimeout)
 				return true
 			}
 			return false
