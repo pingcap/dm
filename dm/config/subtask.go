@@ -44,6 +44,26 @@ var (
 	defaultMaxAllowedPacket = 64 * 1024 * 1024 // 64MiB, equal to TiDB's default
 )
 
+// RawDBConfig contains some low level database config
+type RawDBConfig struct {
+	MaxIdleConns int
+	ReadTimeout  string
+	WriteTimeout string
+}
+
+// DefaultRawDBConfig returns a default raw database config
+func DefaultRawDBConfig(readTimeout string, maxIdleConns ...int) *RawDBConfig {
+	if len(maxIdleConns) == 0 {
+		return &RawDBConfig{
+			ReadTimeout:  readTimeout,
+		}
+	}
+	return &RawDBConfig{
+		MaxIdleConns: maxIdleConns[0],
+		ReadTimeout:  readTimeout,
+	}
+}
+
 // DBConfig is the DB configuration.
 type DBConfig struct {
 	Host             string `toml:"host" json:"host" yaml:"host"`
@@ -51,6 +71,8 @@ type DBConfig struct {
 	User             string `toml:"user" json:"user" yaml:"user"`
 	Password         string `toml:"password" json:"-" yaml:"password"` // omit it for privacy
 	MaxAllowedPacket *int   `toml:"max-allowed-packet" json:"max-allowed-packet" yaml:"max-allowed-packet"`
+
+	RawDBCfg *RawDBConfig `toml:"-" json:"-" yaml:"-"`
 }
 
 func (db *DBConfig) String() string {

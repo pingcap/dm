@@ -20,7 +20,9 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 
 	"go.uber.org/zap"
@@ -63,7 +65,8 @@ type CheckPoint interface {
 
 // RemoteCheckPoint implements CheckPoint by saving status in remote database system, mostly in TiDB.
 type RemoteCheckPoint struct {
-	conn           *Conn // NOTE: use dbutil in tidb-tools later
+	db             *conn.BaseDB
+	conn           *WorkerConn // NOTE: use dbutil in tidb-tools later
 	id             string
 	schema         string
 	table          string
@@ -73,7 +76,7 @@ type RemoteCheckPoint struct {
 }
 
 func newRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id string) (CheckPoint, error) {
-	conn, err := createConn(cfg)
+	db, conn, err := createConn(tctx.Context(), cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -81,6 +84,7 @@ func newRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id s
 	newtctx := tctx.WithLogger(tctx.L().WithFields(zap.String("component", "remote checkpoint")))
 
 	cp := &RemoteCheckPoint{
+		db:             db,
 		conn:           conn,
 		id:             id,
 		restoringFiles: make(map[string]map[string]FilePosSet),
@@ -293,7 +297,14 @@ func (cp *RemoteCheckPoint) Init(filename string, endPos int64) error {
 
 // Close implements CheckPoint.Close
 func (cp *RemoteCheckPoint) Close() {
-	closeConn(cp.conn)
+	err := cp.conn.Close()
+	if err != nil {
+		cp.tctx.L().Error("close checkpoint connection error", log.ShortError(err))
+	}
+	err = cp.db.Close()
+	if err != nil {
+		cp.tctx.L().Error("close checkpoint db error", log.ShortError(err))
+	}
 }
 
 // GenSQL implements CheckPoint.GenSQL

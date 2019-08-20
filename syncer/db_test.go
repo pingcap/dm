@@ -29,7 +29,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/baseconn"
+	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/retry"
@@ -145,9 +145,12 @@ func (s *testDBSuite) TestBinaryLogs(c *C) {
 
 func (s *testSyncerSuite) TestExecuteSQLSWithIgnore(c *C) {
 	db, mock, err := sqlmock.New()
-	conn := &Conn{
-		baseConn: &baseconn.BaseConn{
-			DB:            db,
+	c.Assert(err, IsNil)
+	dbConn, err := db.Conn(context.Background())
+	c.Assert(err, IsNil)
+	conn := &WorkerConn{
+		baseConn: &conn.BaseConn{
+			DBConn:        dbConn,
 			RetryStrategy: &retry.FiniteRetryStrategy{},
 		},
 		cfg: &config.SubTaskConfig{
@@ -238,7 +241,7 @@ func (s *testDBSuite) TestTimezone(c *C) {
 		s.resetBinlogSyncer(c)
 
 		// we should not use `sql.DB.Exec` to do query which depends on session variables
-		// because `sql.DB.Exec` will choose a underlying Conn for every query from the connection pool
+		// because `sql.DB.Exec` will choose a underlying WorkerConn for every query from the connection pool
 		// and different Conn using different session
 		// ref: `sql.DB.Conn`
 		// and `set @@global` is also not reasonable, because it can not affect sessions already exist

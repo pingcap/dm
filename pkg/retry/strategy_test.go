@@ -79,6 +79,13 @@ func (t *testStrategySuite) TestFiniteRetryStrategy(c *C) {
 	c.Assert(opCount, Equals, 0)
 	c.Assert(terror.ErrDBInvalidConn.Equal(err), IsTrue)
 
+	params.IsRetryableFn = func(int, error) bool {
+		return IsConnectionError(err)
+	}
+	_, opCount, err = strategy.Apply(ctx, params, operateFn)
+	c.Assert(opCount, Equals, 3)
+	c.Assert(terror.ErrDBInvalidConn.Equal(err), IsTrue)
+
 	retValue := "success"
 	operateFn = func(*tcontext.Context) (interface{}, error) {
 		return retValue, nil

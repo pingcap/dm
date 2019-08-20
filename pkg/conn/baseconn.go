@@ -11,61 +11,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package baseconn
+package conn
 
 import (
 	"database/sql"
-
-	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+
+	"go.uber.org/zap"
 )
 
 // BaseConn wraps a connection to DB
 type BaseConn struct {
-	DB *sql.DB
-
-	// for reset
-	DSN string
+	DBConn *sql.Conn
 
 	RetryStrategy retry.Strategy
-
-	RawDBCfg *RawDBConfig
 }
 
-// RawDBConfig contains some low level database config
-type RawDBConfig struct {
-	MaxIdleConns int
-}
-
-// DefaultRawDBConfig returns a default raw database config
-func DefaultRawDBConfig() *RawDBConfig {
-	return &RawDBConfig{
-		MaxIdleConns: 2,
-	}
-}
-
-// NewBaseConn builds BaseConn to connect real DB
-func NewBaseConn(dbDSN string, strategy retry.Strategy, rawDBCfg *RawDBConfig) (*BaseConn, error) {
-	db, err := sql.Open("mysql", dbDSN)
-	if err != nil {
-		return nil, terror.ErrDBDriverError.Delegate(err)
-	}
-	// set max idle connection limit before any database call
-	db.SetMaxIdleConns(rawDBCfg.MaxIdleConns)
-	err = db.Ping()
-	if err != nil {
-		db.Close()
-		return nil, terror.ErrDBDriverError.Delegate(err)
-	}
+// newBaseConn builds BaseConn to connect real DB
+func newBaseConn(conn *sql.Conn, strategy retry.Strategy) (*BaseConn, error) {
 	if strategy == nil {
 		strategy = &retry.FiniteRetryStrategy{}
 	}
-	return &BaseConn{db, dbDSN, strategy, rawDBCfg}, nil
+	return &BaseConn{conn, strategy}, nil
 }
 
 // SetRetryStrategy set retry strategy for baseConn
@@ -77,42 +49,16 @@ func (conn *BaseConn) SetRetryStrategy(strategy retry.Strategy) error {
 	return nil
 }
 
-// ResetConn generates new *DB with new connection pool to take place old one
-func (conn *BaseConn) ResetConn(tctx *tcontext.Context) error {
-	if conn == nil {
-		return terror.ErrDBUnExpect.Generate("database connection not valid")
-	}
-	db, err := sql.Open("mysql", conn.DSN)
-	if err != nil {
-		return terror.ErrDBDriverError.Delegate(err)
-	}
-	// set max idle connection limit before any database call
-	db.SetMaxIdleConns(conn.RawDBCfg.MaxIdleConns)
-	err = db.Ping()
-	if err != nil {
-		db.Close()
-		return terror.ErrDBDriverError.Delegate(err)
-	}
-	if conn.DB != nil {
-		err := conn.DB.Close()
-		if err != nil {
-			tctx.L().Warn("reset connection", log.ShortError(err))
-		}
-	}
-	conn.DB = db
-	return nil
-}
-
 // QuerySQL defines query statement, and connect to real DB
 func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string, args ...interface{}) (*sql.Rows, error) {
-	if conn == nil || conn.DB == nil {
+	if conn == nil || conn.DBConn == nil {
 		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 	tctx.L().Debug("query statement",
 		zap.String("query", utils.TruncateString(query, -1)),
 		zap.String("argument", utils.TruncateInterface(args, -1)))
 
-	rows, err := conn.DB.QueryContext(tctx.Context(), query, args...)
+	rows, err := conn.DBConn.QueryContext(tctx.Context(), query, args...)
 
 	if err != nil {
 		tctx.L().Error("query statement failed",
@@ -132,11 +78,11 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, ignoreEr
 	if len(queries) == 0 {
 		return 0, nil
 	}
-	if conn == nil || conn.DB == nil {
+	if conn == nil || conn.DBConn == nil {
 		return 0, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
-	txn, err := conn.DB.Begin()
+	txn, err := conn.DBConn.BeginTx(tctx.Context(), nil)
 
 	if err != nil {
 		return 0, terror.ErrDBExecuteFailed.Delegate(err, "begin")
@@ -202,8 +148,8 @@ func (conn *BaseConn) ApplyRetryStrategy(tctx *tcontext.Context, params retry.Pa
 
 // Close release DB resource
 func (conn *BaseConn) Close() error {
-	if conn == nil || conn.DB == nil {
+	if conn == nil || conn.DBConn == nil {
 		return nil
 	}
-	return terror.ErrDBUnExpect.Delegate(conn.DB.Close(), "close")
+	return terror.ErrDBUnExpect.Delegate(conn.DBConn.Close(), "close")
 }

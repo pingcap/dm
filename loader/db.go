@@ -14,8 +14,8 @@
 package loader
 
 import (
+	"context"
 	"database/sql"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -27,7 +27,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/baseconn"
+	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/retry"
@@ -35,13 +35,13 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-// Conn represents a live DB connection
-type Conn struct {
+// WorkerConn represents a live DB connection
+type WorkerConn struct {
 	cfg      *config.SubTaskConfig
-	baseConn *baseconn.BaseConn
+	baseConn *conn.BaseConn
 }
 
-func (conn *Conn) querySQL(ctx *tcontext.Context, query string, args ...interface{}) (*sql.Rows, error) {
+func (conn *WorkerConn) querySQL(ctx *tcontext.Context, query string, args ...interface{}) (*sql.Rows, error) {
 	if conn == nil || conn.baseConn == nil {
 		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
@@ -90,7 +90,7 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string, args ...interfac
 	return ret.(*sql.Rows), nil
 }
 
-func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]interface{}) error {
+func (conn *WorkerConn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]interface{}) error {
 	if len(queries) == 0 {
 		return nil
 	}
@@ -149,23 +149,44 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]
 	return err
 }
 
-func createConn(cfg *config.SubTaskConfig) (*Conn, error) {
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&maxAllowedPacket=%d",
-		cfg.To.User, cfg.To.Password, cfg.To.Host, cfg.To.Port, *cfg.To.MaxAllowedPacket)
-	baseConn, err := baseconn.NewBaseConn(dbDSN, &retry.FiniteRetryStrategy{}, baseconn.DefaultRawDBConfig())
-	if err != nil {
-		return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
-	}
-
-	return &Conn{baseConn: baseConn, cfg: cfg}, nil
-}
-
-func closeConn(conn *Conn) error {
-	if conn.baseConn == nil {
+// Close release db connection resource, return it to BaseDB.db connection pool
+func (conn *WorkerConn) Close() error {
+	if conn == nil || conn.baseConn == nil {
 		return nil
 	}
+	return conn.baseConn.Close()
+}
 
-	return terror.DBErrorAdapt(conn.baseConn.Close(), terror.ErrDBDriverError)
+func createConn(ctx context.Context, cfg *config.SubTaskConfig) (*conn.BaseDB, *WorkerConn, error) {
+	baseDB, err := conn.DefaultDBProvider.Apply(cfg.To)
+	if err != nil {
+		return nil, nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
+	}
+	baseConn, err := baseDB.GetBaseConn(ctx)
+	if err != nil {
+		return nil, nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
+	}
+	return baseDB, &WorkerConn{baseConn: baseConn, cfg: cfg}, nil
+}
+
+func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, workerCount int) (*conn.BaseDB, []*WorkerConn, error) {
+	baseDB, err := conn.DefaultDBProvider.Apply(cfg.To)
+	if err != nil {
+		return nil, nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
+	}
+	conns := make([]*WorkerConn, 0, workerCount)
+	for i := 0; i < workerCount; i++ {
+		baseConn, err := baseDB.GetBaseConn(tctx.Context())
+		if err != nil {
+			err := baseDB.Close()
+			if err != nil {
+				tctx.L().Error("failed to close baseDB")
+			}
+			return nil, nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
+		}
+		conns = append(conns, &WorkerConn{baseConn: baseConn, cfg: cfg})
+	}
+	return baseDB, conns, nil
 }
 
 func isErrDBExists(err error) bool {

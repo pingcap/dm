@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/baseconn"
+	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
@@ -69,45 +69,88 @@ type binlogSize struct {
 	size int64
 }
 
-// Conn represents a live DB connection
-type Conn struct {
-	cfg      *config.SubTaskConfig
-	baseConn *baseconn.BaseConn
-}
-
-// ResetConn reset baseConn.*DB's connection pool
-func (conn *Conn) ResetConn(tctx *tcontext.Context) error {
-	if conn.baseConn == nil {
-		return terror.ErrDBUnExpect.Generate("database base connection not valid")
+func createBaseDB(dbCfg config.DBConfig) (*conn.BaseDB, error) {
+	db, err := conn.DefaultDBProvider.Apply(dbCfg)
+	if err != nil {
+		return nil, err
 	}
-	return conn.baseConn.ResetConn(tctx)
+	return db, nil
 }
 
-func (conn *Conn) getMasterStatus(flavor string) (mysql.Position, gtid.Set, error) {
-	return utils.GetMasterStatus(conn.baseConn.DB, flavor)
+// UpStreamConn connect to upstream DB, use *sql.DB instead of *sql.Conn
+type UpStreamConn struct {
+	cfg *config.SubTaskConfig
+	// TODO change to BaseDB
+	DB *sql.DB
 }
 
-func (conn *Conn) getServerUUID(flavor string) (string, error) {
-	return utils.GetServerUUID(conn.baseConn.DB, flavor)
+func (conn *UpStreamConn) getMasterStatus(flavor string) (mysql.Position, gtid.Set, error) {
+	return utils.GetMasterStatus(conn.DB, flavor)
 }
 
-func (conn *Conn) getParser(ansiQuotesMode bool) (*parser.Parser, error) {
-	return utils.GetParser(conn.baseConn.DB, ansiQuotesMode)
+func (conn *UpStreamConn) getServerUUID(flavor string) (string, error) {
+	return utils.GetServerUUID(conn.DB, flavor)
 }
 
-func (conn *Conn) killConn(connID uint32) error {
-	return utils.KillConn(conn.baseConn.DB, connID)
+func (conn *UpStreamConn) getParser(ansiQuotesMode bool) (*parser.Parser, error) {
+	return utils.GetParser(conn.DB, ansiQuotesMode)
 }
 
-func (conn *Conn) fetchAllDoTables(bw *filter.Filter) (map[string][]string, error) {
-	return utils.FetchAllDoTables(conn.baseConn.DB, bw)
+func (conn *UpStreamConn) killConn(connID uint32) error {
+	return utils.KillConn(conn.DB, connID)
 }
 
-func (conn *Conn) countBinaryLogsSize(pos mysql.Position) (int64, error) {
-	return countBinaryLogsSize(pos, conn.baseConn.DB)
+func (conn *UpStreamConn) fetchAllDoTables(bw *filter.Filter) (map[string][]string, error) {
+	return utils.FetchAllDoTables(conn.DB, bw)
 }
 
-func (conn *Conn) querySQL(tctx *tcontext.Context, query string, args ...interface{}) (*sql.Rows, error) {
+func (conn *UpStreamConn) countBinaryLogsSize(pos mysql.Position) (int64, error) {
+	return countBinaryLogsSize(pos, conn.DB)
+}
+
+func createUpStreamConn(cfg *config.SubTaskConfig, dbCfg config.DBConfig) (*UpStreamConn, error) {
+	baseDB, err := createBaseDB(dbCfg)
+	if err != nil {
+		return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
+	}
+	return &UpStreamConn{DB: baseDB.DB, cfg: cfg}, nil
+}
+
+func closeUpstreamConn(tctx *tcontext.Context, conn *UpStreamConn) {
+	err := conn.DB.Close()
+	if err != nil {
+		tctx.L().Error("fail to close baseConn connection", log.ShortError(err))
+	}
+}
+
+// WorkerConn represents a live DB connection
+type WorkerConn struct {
+	cfg      *config.SubTaskConfig
+	baseConn *conn.BaseConn
+
+	baseDB *conn.BaseDB
+}
+
+// ResetConn reset one worker connection from specify *BaseDB
+func (conn *WorkerConn) ResetConn(tctx *tcontext.Context) error {
+	if conn == nil || conn.baseDB == nil {
+		return terror.ErrDBDriverError.Generate("database not valid")
+	}
+	dbConn, err := conn.baseDB.GetBaseConn(tctx.Context())
+	if err != nil {
+		return err
+	}
+	if conn.baseConn != nil {
+		err = conn.baseConn.Close()
+		if err != nil {
+			return err
+		}
+	}
+	conn.baseConn = dbConn
+	return nil
+}
+
+func (conn *WorkerConn) querySQL(tctx *tcontext.Context, query string, args ...interface{}) (*sql.Rows, error) {
 	if conn == nil || conn.baseConn == nil {
 		return nil, terror.ErrDBUnExpect.Generate("database base connection not valid")
 	}
@@ -145,7 +188,7 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string, args ...interfa
 	return ret.(*sql.Rows), nil
 }
 
-func (conn *Conn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError func(error) bool, queries []string, args ...[]interface{}) (int, error) {
+func (conn *WorkerConn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError func(error) bool, queries []string, args ...[]interface{}) (int, error) {
 	if len(queries) == 0 {
 		return 0, nil
 	}
@@ -159,6 +202,16 @@ func (conn *Conn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError func(
 		FirstRetryDuration: retryTimeout,
 		BackoffStrategy:    retry.Stable,
 		IsRetryableFn: func(retryTime int, err error) bool {
+			if retry.IsConnectionError(err) {
+				err := conn.ResetConn(tctx)
+				if err != nil {
+					tctx.L().Warn("reset connection failed", zap.Int("retry", retryTime),
+						zap.String("queries", utils.TruncateInterface(queries, -1)),
+						zap.String("arguments", utils.TruncateInterface(args, -1)))
+					return false
+				}
+				return true
+			}
 			if retry.IsRetryableError(err) {
 				tctx.L().Warn("execute statements", zap.Int("retry", retryTime),
 					zap.String("queries", utils.TruncateInterface(queries, -1)),
@@ -176,6 +229,7 @@ func (conn *Conn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError func(
 		func(ctx *tcontext.Context) (interface{}, error) {
 			startTime := time.Now()
 			ret, err := conn.baseConn.ExecuteSQLWithIgnoreError(ctx, ignoreError, queries, args...)
+
 			if err == nil {
 				cost := time.Since(startTime)
 				txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
@@ -196,57 +250,59 @@ func (conn *Conn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError func(
 	return ret.(int), nil
 }
 
-func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args ...[]interface{}) (int, error) {
+func (conn *WorkerConn) executeSQL(tctx *tcontext.Context, queries []string, args ...[]interface{}) (int, error) {
 	return conn.executeSQLWithIgnore(tctx, nil, queries, args...)
 }
 
-func createBaseConn(dbCfg config.DBConfig, timeout string, rawDBCfg *baseconn.RawDBConfig) (*baseconn.BaseConn, error) {
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&readTimeout=%s&maxAllowedPacket=%d",
-		dbCfg.User, dbCfg.Password, dbCfg.Host, dbCfg.Port, timeout, *dbCfg.MaxAllowedPacket)
-	baseConn, err := baseconn.NewBaseConn(dbDSN, &retry.FiniteRetryStrategy{}, rawDBCfg)
-	if err != nil {
-		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-	}
-	return baseConn, nil
-}
-
-func createConn(cfg *config.SubTaskConfig, dbCfg config.DBConfig, timeout string) (*Conn, error) {
-	baseConn, err := createBaseConn(dbCfg, timeout, baseconn.DefaultRawDBConfig())
+func createConn(tctx *tcontext.Context, cfg *config.SubTaskConfig, dbCfg config.DBConfig) (*WorkerConn, error) {
+	baseDB, err := createBaseDB(dbCfg)
 	if err != nil {
 		return nil, err
 	}
-	return &Conn{baseConn: baseConn, cfg: cfg}, nil
+	baseConn, err := baseDB.GetBaseConn(tctx.Context())
+	if err != nil {
+		return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
+	}
+	return &WorkerConn{baseDB: baseDB, baseConn: baseConn, cfg: cfg}, nil
 }
 
-func createConns(cfg *config.SubTaskConfig, dbCfg config.DBConfig, count int, timeout string) ([]*Conn, error) {
-	dbs := make([]*Conn, 0, count)
-
-	rawDBCfg := &baseconn.RawDBConfig{
-		MaxIdleConns: cfg.SyncerConfig.WorkerCount,
-	}
-	baseConn, err := createBaseConn(dbCfg, timeout, rawDBCfg)
+func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, dbCfg config.DBConfig, count int) ([]*WorkerConn, error) {
+	conns := make([]*WorkerConn, 0, count)
+	db, err := createBaseDB(dbCfg)
 	if err != nil {
 		return nil, err
 	}
 	for i := 0; i < count; i++ {
-		// TODO use *sql.Conn instead of *sql.DB
-		// share db by all conns
-		bc := &baseconn.BaseConn{baseConn.DB, baseConn.DSN, baseConn.RetryStrategy, rawDBCfg}
-		dbs = append(dbs, &Conn{baseConn: bc, cfg: cfg})
+		dbConn, err := db.GetBaseConn(tctx.Context())
+		if err != nil {
+			closeConns(tctx, conns...)
+			return nil, terror.WithScope(terror.ErrDBBadConn.Delegate(err), terror.ScopeDownstream)
+		}
+		conns = append(conns, &WorkerConn{baseDB: db, baseConn: dbConn, cfg: cfg})
 	}
-	return dbs, nil
+	return conns, nil
 }
 
-func closeConns(tctx *tcontext.Context, conns ...*Conn) {
+func closeConns(tctx *tcontext.Context, conns ...*WorkerConn) {
+	var db *conn.BaseDB
 	for _, conn := range conns {
+		if db == nil {
+			db = conn.baseDB
+		}
 		err := conn.baseConn.Close()
 		if err != nil {
 			tctx.L().Error("fail to close baseConn connection", log.ShortError(err))
 		}
 	}
+	if db != nil {
+		err := db.Close()
+		if err != nil {
+			tctx.L().Error("fail to close baseDB", log.ShortError(err))
+		}
+	}
 }
 
-func getTableIndex(tctx *tcontext.Context, conn *Conn, table *table) error {
+func getTableIndex(tctx *tcontext.Context, conn *WorkerConn, table *table) error {
 	if table.schema == "" || table.name == "" {
 		return terror.ErrDBUnExpect.Generate("schema/table is empty")
 	}
@@ -303,7 +359,7 @@ func getTableIndex(tctx *tcontext.Context, conn *Conn, table *table) error {
 	return nil
 }
 
-func getTableColumns(tctx *tcontext.Context, conn *Conn, table *table) error {
+func getTableColumns(tctx *tcontext.Context, conn *WorkerConn, table *table) error {
 	if table.schema == "" || table.name == "" {
 		return terror.ErrDBUnExpect.Generate("schema/table is empty")
 	}

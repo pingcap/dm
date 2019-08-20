@@ -14,6 +14,7 @@
 package retry
 
 import (
+	"database/sql/driver"
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
@@ -32,6 +33,18 @@ func IsRetryableError(err error) bool {
 		default:
 			return false
 		}
+	}
+	return false
+}
+
+// IsConnectionError tells whether this error should reconnect to Database
+func IsConnectionError(err error) bool {
+	err = errors.Cause(err)
+	switch err {
+	case driver.ErrBadConn:
+		return true
+	case mysql.ErrInvalidConn:
+		return true
 	}
 	return false
 }
