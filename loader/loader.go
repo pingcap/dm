@@ -44,7 +44,7 @@ import (
 )
 
 var (
-	jobCount      = 1000
+	jobCount = 1000
 )
 
 // FilePosSet represents a set in mathematics.
