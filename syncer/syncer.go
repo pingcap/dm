@@ -62,7 +62,7 @@ var (
 	statusTime      = 30 * time.Second
 
 	// MaxDDLConnectionTimeoutMinute also used by SubTask.ExecuteDDL
-	MaxDDLConnectionTimeoutMinute = 10
+	MaxDDLConnectionTimeoutMinute = 30
 
 	maxDMLConnectionTimeout = "5m"
 	maxDDLConnectionTimeout = fmt.Sprintf("%dm", MaxDDLConnectionTimeoutMinute)
@@ -579,7 +579,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 }
 
 func (s *Syncer) getMasterStatus() (mysql.Position, gtid.Set, error) {
-	return utils.GetMasterStatus(s.fromDB.baseConn.DB, s.cfg.Flavor)
+	return s.fromDB.getMasterStatus(s.cfg.Flavor)
 }
 
 // clearTables is used for clear table cache of given table. this function must

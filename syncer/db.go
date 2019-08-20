@@ -16,6 +16,7 @@ package syncer
 import (
 	"database/sql"
 	"fmt"
+	"github.com/pingcap/dm/pkg/gtid"
 	"strings"
 	"time"
 
@@ -67,6 +68,10 @@ type binlogSize struct {
 type Conn struct {
 	cfg      *config.SubTaskConfig
 	baseConn *utils.BaseConn
+}
+
+func (conn *Conn) getMasterStatus(flavor string) (mysql.Position, gtid.Set, error) {
+	return utils.GetMasterStatus(conn.baseConn.DB, flavor)
 }
 
 func (conn *Conn) querySQL(tctx *tcontext.Context, query string) (*sql.Rows, error) {
@@ -131,8 +136,7 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 func createConn(cfg *config.SubTaskConfig, dbCfg config.DBConfig, timeout string) (*Conn, error) {
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&readTimeout=%s&maxAllowedPacket=%d",
 		dbCfg.User, dbCfg.Password, dbCfg.Host, dbCfg.Port, timeout, *dbCfg.MaxAllowedPacket)
-	baseConn := &utils.BaseConn{}
-	err := baseConn.Init(dbDSN)
+	baseConn, err := utils.NewBaseConn(dbDSN)
 	if err != nil {
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 

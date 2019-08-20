@@ -285,7 +285,7 @@ func IsNoSuchThreadError(err error) bool {
 	return IsMySQLError(err, tmysql.ErrNoSuchThread)
 }
 
-// BaseConn Connect to Database
+// BaseConn wraps a connect to DB
 type BaseConn struct {
 	DB *sql.DB
 }
@@ -296,14 +296,13 @@ type SQL struct {
 	Args  []interface{}
 }
 
-// Init base BaseConn
-func (conn *BaseConn) Init(dbDSN string) error {
+// NewBaseConn builds BaseConn to connect real DB
+func NewBaseConn(dbDSN string) (*BaseConn, error) {
 	db, err := sql.Open("mysql", dbDSN)
 	if err != nil {
-		return terror.DBErrorAdapt(err, terror.ErrDBDriverError, "init")
+		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
-	conn.DB = db
-	return nil
+	return &BaseConn{db}, nil
 }
 
 // NormalRetryOperation will retry retryCount times
@@ -361,7 +360,7 @@ func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, sqls []SQL) (int, error
 	txn, err := conn.DB.Begin()
 
 	if err != nil {
-		return 0, terror.DBErrorAdapt(err, terror.ErrDBUnExpect)
+		return 0, terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, "begin")
 	}
 
 	l := len(sqls)
@@ -382,7 +381,7 @@ func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, sqls []SQL) (int, error
 	}
 	err = txn.Commit()
 	if err != nil {
-		return l, terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, "commit")
+		return l, terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed)
 	}
 	return l, nil
 }
@@ -393,5 +392,5 @@ func (conn *BaseConn) Close() error {
 		return nil
 	}
 
-	return terror.DBErrorAdapt(conn.DB.Close(), terror.ErrDBUnExpect)
+	return terror.DBErrorAdapt(conn.DB.Close(), terror.ErrDBUnExpect, "close")
 }

@@ -60,7 +60,7 @@ func (s *Syncer) setInitActiveRelayLog() error {
 		}
 	} else {
 		// start from dumper or loader, get current pos from master
-		pos, _, err = utils.GetMasterStatus(s.fromDB.baseConn.DB, s.cfg.Flavor)
+		pos, _, err = s.fromDB.getMasterStatus(s.cfg.Flavor)
 		if err != nil {
 			return terror.Annotatef(err, "get master status")
 		}
