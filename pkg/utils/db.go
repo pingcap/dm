@@ -295,6 +295,9 @@ func IsNoSuchThreadError(err error) bool {
 // BaseConn wraps a connect to DB
 type BaseConn struct {
 	DB *sql.DB
+
+	// for reset
+	dbDSN string
 }
 
 // SQL is format sql job
@@ -309,7 +312,19 @@ func NewBaseConn(dbDSN string) (*BaseConn, error) {
 	if err != nil {
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
-	return &BaseConn{db}, nil
+	return &BaseConn{db, dbDSN}, nil
+}
+
+func (conn *BaseConn) ResetConn() error {
+	db, err := sql.Open("mysql", conn.dbDSN)
+	if err != nil {
+		return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+	}
+	if conn.DB != nil {
+		conn.DB.Close()
+	}
+	conn.DB = db
+	return nil
 }
 
 // FiniteRetryStrategy will retry retryCount times when failed to operate DB.

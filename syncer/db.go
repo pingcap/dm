@@ -69,6 +69,13 @@ type Conn struct {
 	baseConn *utils.BaseConn
 }
 
+func (conn *Conn) ResetConn() error {
+	if conn.baseConn == nil {
+		return terror.ErrDBUnExpect.Generate("database base connection not valid")
+	}
+	return conn.baseConn.ResetConn()
+}
+
 func (conn *Conn) getMasterStatus(flavor string) (mysql.Position, gtid.Set, error) {
 	return utils.GetMasterStatus(conn.baseConn.DB, flavor)
 }
