@@ -26,6 +26,8 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 
+	"github.com/pingcap/parser"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
@@ -80,6 +82,26 @@ func (conn *Conn) ResetConn() error {
 
 func (conn *Conn) getMasterStatus(flavor string) (mysql.Position, gtid.Set, error) {
 	return utils.GetMasterStatus(conn.baseConn.DB, flavor)
+}
+
+func (conn *Conn) getServerUUID(flavor string) (string, error) {
+	return utils.GetServerUUID(conn.baseConn.DB, flavor)
+}
+
+func (conn *Conn) getParser(ansiQuotesMode bool) (*parser.Parser, error) {
+	return utils.GetParser(conn.baseConn.DB, ansiQuotesMode)
+}
+
+func (conn *Conn) killConn(connID uint32) error {
+	return utils.KillConn(conn.baseConn.DB, connID)
+}
+
+func (conn *Conn) fetchAllDoTables(bw *filter.Filter) (map[string][]string, error) {
+	return utils.FetchAllDoTables(conn.baseConn.DB, bw)
+}
+
+func (conn *Conn) countBinaryLogsSize(pos mysql.Position) (int64, error) {
+	return countBinaryLogsSize(pos, conn.baseConn.DB)
 }
 
 func (conn *Conn) querySQL(tctx *tcontext.Context, query string) (*sql.Rows, error) {

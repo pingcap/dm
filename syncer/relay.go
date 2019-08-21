@@ -74,7 +74,7 @@ func (s *Syncer) setInitActiveRelayLog() error {
 	} else {
 		var uuid string
 		latestUUID := uuids[len(uuids)-1]
-		uuid, err = utils.GetServerUUID(s.fromDB.baseConn.DB, s.cfg.Flavor)
+		uuid, err = s.fromDB.getServerUUID(s.cfg.Flavor)
 		if err != nil {
 			return terror.WithScope(terror.Annotatef(err, "get server UUID"), terror.ScopeUpstream)
 		}

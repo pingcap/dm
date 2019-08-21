@@ -407,7 +407,7 @@ func (s *Syncer) Init() (err error) {
 // NOTE: now we don't support modify router rules after task has started
 func (s *Syncer) initShardingGroups() error {
 	// fetch tables from source and filter them
-	sourceTables, err := utils.FetchAllDoTables(s.fromDB.baseConn.DB, s.bwList)
+	sourceTables, err := s.fromDB.fetchAllDoTables(s.bwList)
 	if err != nil {
 		return err
 	}
@@ -976,7 +976,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		close(s.done)
 	}()
 
-	parser2, err := utils.GetParser(s.fromDB.baseConn.DB, s.cfg.EnableANSIQuotes)
+	parser2, err := s.fromDB.getParser(s.cfg.EnableANSIQuotes)
 	if err != nil {
 		return err
 	}
@@ -1924,7 +1924,7 @@ func (s *Syncer) printStatus(ctx context.Context) {
 				currentPos := s.currentPosMu.currentPos
 				s.currentPosMu.RUnlock()
 
-				remainingSize, err2 := countBinaryLogsSize(currentPos, s.fromDB.baseConn.DB)
+				remainingSize, err2 := s.fromDB.countBinaryLogsSize(currentPos)
 				if err2 != nil {
 					// log the error, but still handle the rest operation
 					s.tctx.L().Error("fail to estimate unreplicated binlog size", zap.Error(err2))
@@ -2159,7 +2159,7 @@ func (s *Syncer) closeBinlogSyncer(syncer *replication.BinlogSyncer) error {
 	lastSlaveConnectionID := syncer.LastConnectionID()
 	defer syncer.Close()
 	if lastSlaveConnectionID > 0 {
-		err := utils.KillConn(s.fromDB.baseConn.DB, lastSlaveConnectionID)
+		err := s.fromDB.killConn(lastSlaveConnectionID)
 		if err != nil {
 			s.tctx.L().Error("fail to kill last connection", zap.Uint32("connection ID", lastSlaveConnectionID), log.ShortError(err))
 			if !utils.IsNoSuchThreadError(err) {
