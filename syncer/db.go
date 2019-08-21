@@ -16,16 +16,15 @@ package syncer
 import (
 	"database/sql"
 	"fmt"
-	"github.com/pingcap/dm/pkg/baseconn"
-	"strings"
-
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/baseconn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	"strings"
 
 	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/filter"
@@ -109,23 +108,27 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string) (*sql.Rows, err
 	if conn == nil || conn.baseConn == nil {
 		return nil, terror.ErrDBUnExpect.Generate("database base connection not valid")
 	}
-
-	ret, err := conn.baseConn.FiniteRetryStrategy(
-		tctx,
-		10,
-		retryTimeout,
-		retry.SpeedStable,
-		func(ctx *tcontext.Context, _ int) (interface{}, error) {
-			rows, err := conn.baseConn.QuerySQL(ctx, query)
-			return rows, err
-		},
-		func(retryTime int, err error) bool {
+	params := retry.Params{
+		RetryCount:         10,
+		FirstRetryDuration: retryTimeout,
+		RetrySpeed:         retry.SpeedStable,
+		IsRetryableFn: func(retryTime int, err error) bool {
 			if retry.IsSyncerRetryableError(err) {
 				sqlRetriesTotal.WithLabelValues("query", conn.cfg.Name).Add(1)
 				return true
 			}
 			return false
-		})
+		},
+	}
+
+	ret, err := conn.baseConn.RetryStrategy.DefaultRetryStrategy(
+		tctx,
+		params,
+		func(ctx *tcontext.Context, _ int) (interface{}, error) {
+			rows, err := conn.baseConn.QuerySQL(ctx, query)
+			return rows, err
+		},
+	)
 
 	if err != nil {
 		return nil, terror.ErrDBQueryFailed.Delegate(err, query)
@@ -146,22 +149,28 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 	for i, query := range queries {
 		sqls = append(sqls, baseconn.SQL{query, args[i]})
 	}
-	ret, err := conn.baseConn.FiniteRetryStrategy(
-		tctx,
-		100,
-		retryTimeout,
-		retry.SpeedStable,
-		func(ctx *tcontext.Context, _ int) (interface{}, error) {
-			affected, err := conn.baseConn.ExecuteSQL(ctx, sqls)
-			return affected, err
-		},
-		func(retryTime int, err error) bool {
+
+	params := retry.Params{
+		RetryCount:         100,
+		FirstRetryDuration: retryTimeout,
+		RetrySpeed:         retry.SpeedStable,
+		IsRetryableFn: func(retryTime int, err error) bool {
 			if retry.IsSyncerRetryableError(err) {
 				sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
 				return true
 			}
 			return false
+		},
+	}
+
+	ret, err := conn.baseConn.RetryStrategy.DefaultRetryStrategy(
+		tctx,
+		params,
+		func(ctx *tcontext.Context, _ int) (interface{}, error) {
+			affected, err := conn.baseConn.ExecuteSQL(ctx, sqls)
+			return affected, err
 		})
+
 	if err != nil {
 		return ret.(int), terror.ErrDBExecuteFailed.Delegate(err, queries)
 	}
@@ -174,6 +183,10 @@ func createBaseConn(dbCfg config.DBConfig, timeout string) (*baseconn.BaseConn, 
 	baseConn, err := baseconn.NewBaseConn(dbDSN)
 	if err != nil {
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+	}
+	err = baseConn.SetRetryStrategy(&retry.FiniteRetryStrategy{})
+	if err != nil {
+		return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 	}
 	return baseConn, nil
 }
@@ -196,7 +209,7 @@ func createConns(cfg *config.SubTaskConfig, dbCfg config.DBConfig, count int, ti
 	for i := 0; i < count; i++ {
 		// TODO use *sql.Conn instead of *sql.DB
 		// share db by all conns
-		bc := &baseconn.BaseConn{baseConn.DB, baseConn.DSN}
+		bc := &baseconn.BaseConn{baseConn.DB, baseConn.DSN, baseConn.RetryStrategy}
 		dbs = append(dbs, &Conn{baseConn: bc, cfg: cfg})
 	}
 	return dbs, nil

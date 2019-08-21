@@ -19,6 +19,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"github.com/pingcap/dm/pkg/baseconn"
+	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/parser"
 	"strings"
 	"sync"
@@ -1038,7 +1039,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 
 	syncer := NewSyncer(s.cfg)
 	// use upstream baseConn as mock downstream
-	syncer.toDBs = []*Conn{{baseConn: &baseconn.BaseConn{s.db, s.dbAddr}}}
+	syncer.toDBs = []*Conn{{baseConn: &baseconn.BaseConn{s.db, s.dbAddr, &retry.FiniteRetryStrategy{}}}}
 
 	for _, testCase := range testCases {
 		for _, sql := range testCase.sqls {
@@ -1308,8 +1309,8 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		c.Assert(syncer.checkpoint.FlushedGlobalPoint(), Equals, minCheckpoint)
 
 		// make syncer write to mock baseConn
-		syncer.toDBs = []*Conn{{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, s.dbAddr}}}
-		syncer.ddlDB = &Conn{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, s.dbAddr}}
+		syncer.toDBs = []*Conn{{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, s.dbAddr, &retry.FiniteRetryStrategy{}}}}
+		syncer.ddlDB = &Conn{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, s.dbAddr, &retry.FiniteRetryStrategy{}}}
 
 		// run sql on upstream baseConn to generate binlog event
 		runSQL(createSQLs)

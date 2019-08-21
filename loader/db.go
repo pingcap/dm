@@ -46,21 +46,25 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string) (*sql.Rows, erro
 
 	startTime := time.Now()
 
-	ret, err := conn.baseConn.FiniteRetryStrategy(
-		ctx,
-		10,
-		time.Second,
-		retry.SpeedStable,
-		func(ctx *tcontext.Context, _ int) (interface{}, error) {
-			rows, err := conn.baseConn.QuerySQL(ctx, query)
-			return rows, err
-		},
-		func(retryTime int, err error) bool {
+	params := retry.Params{
+		RetryCount:         10,
+		FirstRetryDuration: time.Second,
+		RetrySpeed:         retry.SpeedStable,
+		IsRetryableFn: func(retryTime int, err error) bool {
 			if retry.IsLoaderRetryableError(err) {
 				ctx.L().Warn("query statement", zap.Int("retry", retryTime), zap.String("sql", query), log.ShortError(err))
 				return true
 			}
 			return false
+		},
+	}
+
+	ret, err := conn.baseConn.RetryStrategy.DefaultRetryStrategy(
+		ctx,
+		params,
+		func(ctx *tcontext.Context, _ int) (interface{}, error) {
+			rows, err := conn.baseConn.QuerySQL(ctx, query)
+			return rows, err
 		})
 
 	defer func() {
@@ -118,11 +122,22 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []baseconn.S
 		return terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
-	_, err := conn.baseConn.FiniteRetryStrategy(
+	params := retry.Params{
+		RetryCount:         10,
+		FirstRetryDuration: 2 * time.Second,
+		RetrySpeed:         retry.SpeedSlow,
+		IsRetryableFn: func(retryTime int, err error) bool {
+			ctx.L().Debug("execute statement", zap.Int("retry", retryTime), zap.String("sqls", fmt.Sprintf("%-.200v", sqls)))
+			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
+			if retryFn(err) {
+				return true
+			}
+			return false
+		},
+	}
+	_, err := conn.baseConn.RetryStrategy.DefaultRetryStrategy(
 		ctx,
-		10,
-		2*time.Second,
-		retry.SpeedSlow,
+		params,
 		func(ctx *tcontext.Context, retryTime int) (interface{}, error) {
 			startTime := time.Now()
 			_, err := conn.baseConn.ExecuteSQL(ctx, sqls)
@@ -149,15 +164,8 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []baseconn.S
 				ctx.L().Warn("transaction execute successfully", zap.Duration("cost time", cost))
 			}
 			return nil, err
-		},
-		func(retryTime int, err error) bool {
-			ctx.L().Debug("execute statement", zap.Int("retry", retryTime), zap.String("sqls", fmt.Sprintf("%-.200v", sqls)))
-			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
-			if retryFn(err) {
-				return true
-			}
-			return false
 		})
+
 	return err
 }
 
@@ -165,6 +173,10 @@ func createConn(cfg *config.SubTaskConfig) (*Conn, error) {
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&maxAllowedPacket=%d",
 		cfg.To.User, cfg.To.Password, cfg.To.Host, cfg.To.Port, *cfg.To.MaxAllowedPacket)
 	baseConn, err := baseconn.NewBaseConn(dbDSN)
+	if err != nil {
+		return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
+	}
+	err = baseConn.SetRetryStrategy(&retry.FiniteRetryStrategy{})
 	if err != nil {
 		return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 	}

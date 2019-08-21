@@ -15,9 +15,6 @@ package baseconn
 
 import (
 	"database/sql"
-	"fmt"
-	"time"
-
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/retry"
@@ -32,9 +29,9 @@ type BaseConn struct {
 
 	// for reset
 	DSN string
-}
 
-var _ retry.Strategy = new(BaseConn)
+	RetryStrategy retry.Strategy
+}
 
 // SQL is format sql job
 type SQL struct {
@@ -52,7 +49,16 @@ func NewBaseConn(dbDSN string) (*BaseConn, error) {
 	if err != nil {
 		return nil, terror.ErrDBDriverError.Delegate(err)
 	}
-	return &BaseConn{db, dbDSN}, nil
+	return &BaseConn{db, dbDSN, nil}, nil
+}
+
+// SetRetryStrategy set retry strategy for baseConn
+func (conn *BaseConn) SetRetryStrategy(strategy retry.Strategy) error {
+	if conn == nil {
+		return terror.ErrDBDriverError.Generate("no valid connection")
+	}
+	conn.RetryStrategy = strategy
+	return nil
 }
 
 // ResetConn generates new *DB with new connection pool to take place old one
@@ -73,45 +79,6 @@ func (conn *BaseConn) ResetConn() error {
 	}
 	conn.DB = db
 	return nil
-}
-
-// FiniteRetryStrategy define in pkg/retry/strategy.go
-// ErrInvalidConn is a special error, need a public retry strategy, and need wait more time, so put it before retryFn.
-func (conn *BaseConn) FiniteRetryStrategy(ctx *tcontext.Context,
-	retryCount int,
-	firstRetryDuration time.Duration,
-	retrySpeed retry.Speed,
-	operateFn func(*tcontext.Context, int) (interface{}, error),
-	retryFn func(int, error) bool) (interface{}, error) {
-	var err error
-	var ret interface{}
-	for i := 0; i < retryCount; i++ {
-		ret, err = operateFn(ctx, i)
-		if err != nil {
-			if retry.IsInvalidConnError(err) {
-				ctx.L().Warn(fmt.Sprintf("met invalid connection error, in %dth retry", i))
-				return nil, err
-			}
-			if retryFn(i, err) {
-				duration := firstRetryDuration
-
-				switch retrySpeed {
-				case retry.SpeedSlow:
-					duration = time.Duration(i+1) * firstRetryDuration
-				default:
-				}
-
-				select {
-				case <-ctx.Context().Done():
-					return nil, err
-				case <-time.After(duration):
-				}
-				continue
-			}
-		}
-		break
-	}
-	return ret, err
 }
 
 // QuerySQL defines query statement, and connect to real DB

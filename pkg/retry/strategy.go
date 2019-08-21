@@ -14,8 +14,10 @@
 package retry
 
 import (
-	tcontext "github.com/pingcap/dm/pkg/context"
+	"fmt"
 	"time"
+
+	tcontext "github.com/pingcap/dm/pkg/context"
 )
 
 // Speed represents enum of retry speed
@@ -28,12 +30,65 @@ const (
 	SpeedStable
 )
 
+// Params define parameters that all retry strategies need
+// it makes DefaultRetryStrategy more abstract for other implements
+type Params struct {
+	RetryCount         int
+	FirstRetryDuration time.Duration
+
+	RetrySpeed Speed
+
+	// IsRetryableFn tells whether need retry when operateFn failed
+	IsRetryableFn func(int, error) bool
+}
+
 // Strategy define different kind of retry strategy
 type Strategy interface {
 
-	// FiniteRetryStrategy will retry `retryCount` times when failed to operate DB.
-	// it will wait `firstRetryDuration` before it starts first retry, and then rest of retries wait time depends on retrySpeed.
-	FiniteRetryStrategy(ctx *tcontext.Context, retryCount int, firstRetryDuration time.Duration, retrySpeed Speed,
+	// DefaultRetryStrategy define retry strategy,
+	// Params define retry parameters for different retry strategy
+	// operateFn define a normal operation
+	DefaultRetryStrategy(ctx *tcontext.Context,
+		params Params,
 		operateFn func(*tcontext.Context, int) (interface{}, error),
-		retryFn func(int, error) bool) (interface{}, error)
+	) (interface{}, error)
+}
+
+// FiniteRetryStrategy will retry `RetryCount` times when failed to operate DB.
+type FiniteRetryStrategy struct {
+}
+
+// DefaultRetryStrategy wait `FirstRetryDuration` before it starts first retry, and then rest of retries wait time depends on RetrySpeed.
+// ErrInvalidConn is a special error, need a public retry strategy, so return it to up layer continue retry.
+func (*FiniteRetryStrategy) DefaultRetryStrategy(ctx *tcontext.Context, params Params,
+	operateFn func(*tcontext.Context, int) (interface{}, error)) (interface{}, error) {
+	var err error
+	var ret interface{}
+	for i := 0; i < params.RetryCount; i++ {
+		ret, err = operateFn(ctx, i)
+		if err != nil {
+			if IsInvalidConnError(err) {
+				ctx.L().Warn(fmt.Sprintf("met invalid connection error, in %dth retry", i))
+				return nil, err
+			}
+			if params.IsRetryableFn(i, err) {
+				duration := params.FirstRetryDuration
+
+				switch params.RetrySpeed {
+				case SpeedSlow:
+					duration = time.Duration(i+1) * params.FirstRetryDuration
+				default:
+				}
+
+				select {
+				case <-ctx.Context().Done():
+					return nil, err
+				case <-time.After(duration):
+				}
+				continue
+			}
+		}
+		break
+	}
+	return ret, err
 }

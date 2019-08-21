@@ -43,7 +43,7 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10004))
 
 	db, mock, err := sqlmock.New()
-	baseConn = &BaseConn{db, ""}
+	baseConn = &BaseConn{db, "", nil}
 
 	mock.ExpectQuery("select 1").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 	rows, err := baseConn.QuerySQL(tctx, "select 1")
