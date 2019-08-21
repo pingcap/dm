@@ -16,9 +16,6 @@ package loader
 import (
 	"database/sql"
 	"fmt"
-	"github.com/pingcap/dm/pkg/retry"
-	"github.com/pingcap/dm/pkg/utils"
-	"github.com/pingcap/failpoint"
 	"strconv"
 	"strings"
 	"time"
@@ -26,10 +23,13 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	tmysql "github.com/pingcap/parser/mysql"
 	"go.uber.org/zap"
 )
@@ -57,7 +57,7 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string) (*sql.Rows, erro
 			return rows, err
 		},
 		func(retryTime int, err error) bool {
-			if isRetryableError(err) {
+			if retry.IsLoaderRetryableError(err) {
 				ctx.L().Warn("query statement", zap.Int("retry", retryTime), zap.String("sql", query), log.ShortError(err))
 				return true
 			}
@@ -94,7 +94,7 @@ func (conn *Conn) executeDDL(ctx *tcontext.Context, queries []string, args ...[]
 		}
 	}
 
-	return conn.executeSQLCustomRetry(ctx, sqls, isDDLRetryableError)
+	return conn.executeSQLCustomRetry(ctx, sqls, retry.IsLoaderDDLRetryableError)
 }
 
 func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]interface{}) error {
@@ -111,7 +111,7 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]
 		}
 	}
 
-	return conn.executeSQLCustomRetry(ctx, sqls, isRetryableError)
+	return conn.executeSQLCustomRetry(ctx, sqls, retry.IsLoaderRetryableError)
 }
 
 func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []utils.SQL, retryFn func(err error) bool) error {
@@ -191,24 +191,6 @@ func isErrTableExists(err error) bool {
 
 func isErrDupEntry(err error) bool {
 	return isMySQLError(err, tmysql.ErrDupEntry)
-}
-
-func isRetryableError(err error) bool {
-	err = errors.Cause(err)
-	if isMySQLError(err, tmysql.ErrDupEntry) {
-		return false
-	}
-	if isMySQLError(err, tmysql.ErrDataTooLong) {
-		return false
-	}
-	return true
-}
-
-func isDDLRetryableError(err error) bool {
-	if isErrTableExists(err) || isErrDBExists(err) {
-		return false
-	}
-	return isRetryableError(err)
 }
 
 func isMySQLError(err error, code uint16) bool {

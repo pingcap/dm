@@ -16,13 +16,14 @@ package syncer
 import (
 	"database/sql/driver"
 
+	"github.com/pingcap/dm/pkg/retry"
+	"github.com/pingcap/dm/pkg/utils"
+
 	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"
-
-	"github.com/pingcap/dm/pkg/utils"
 )
 
 func newMysqlErr(number uint16, message string) *mysql.MySQLError {
@@ -52,7 +53,7 @@ func (s *testSyncerSuite) TestIsRetryableError(c *C) {
 
 	for _, t := range cases {
 		c.Logf("err %v, expected %v", t.err, t.isRetryable)
-		c.Assert(isRetryableError(t.err), Equals, t.isRetryable)
+		c.Assert(retry.IsSyncerRetryableError(t.err), Equals, t.isRetryable)
 	}
 }
 

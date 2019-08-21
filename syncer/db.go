@@ -16,13 +16,13 @@ package syncer
 import (
 	"database/sql"
 	"fmt"
-	"github.com/pingcap/dm/pkg/gtid"
-	"github.com/pingcap/dm/pkg/retry"
 	"strings"
 
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 
@@ -97,7 +97,7 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string) (*sql.Rows, err
 			return rows, err
 		},
 		func(retryTime int, err error) bool {
-			if isRetryableError(err) {
+			if retry.IsSyncerRetryableError(err) {
 				sqlRetriesTotal.WithLabelValues("query", conn.cfg.Name).Add(1)
 				return true
 			}
@@ -133,7 +133,7 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 			return affected, err
 		},
 		func(retryTime int, err error) bool {
-			if isRetryableError(err) {
+			if retry.IsSyncerRetryableError(err) {
 				sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
 				return true
 			}
