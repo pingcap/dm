@@ -15,13 +15,19 @@ package baseconn
 
 import (
 	"errors"
+	"testing"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 )
+
+func TestSuite(t *testing.T) {
+	TestingT(t)
+}
 
 var _ = Suite(&testBaseConnSuite{})
 
@@ -35,6 +41,9 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	err = baseConn.ResetConn()
 	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10001))
 
+	err = baseConn.SetRetryStrategy(nil)
+	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10001))
+
 	tctx := tcontext.Background()
 	_, err = baseConn.QuerySQL(tctx, "select 1")
 	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10004))
@@ -44,6 +53,9 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 
 	db, mock, err := sqlmock.New()
 	baseConn = &BaseConn{db, "", nil}
+
+	err = baseConn.SetRetryStrategy(&retry.FiniteRetryStrategy{})
+	c.Assert(err, IsNil)
 
 	mock.ExpectQuery("select 1").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 	rows, err := baseConn.QuerySQL(tctx, "select 1")

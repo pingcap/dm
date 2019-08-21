@@ -16,6 +16,7 @@ package syncer
 import (
 	"fmt"
 	"github.com/pingcap/dm/pkg/baseconn"
+	"github.com/pingcap/dm/pkg/retry"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -90,7 +91,7 @@ func (s *testCheckpointSuite) TestCheckPoint(c *C) {
 	mock.ExpectCommit()
 
 	// pass sqlmock baseConn directly
-	conn := &Conn{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, "", nil}}
+	conn := &Conn{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, "", &retry.FiniteRetryStrategy{}}}
 	err = cp.Init(conn)
 	c.Assert(err, IsNil)
 	cp.Clear()

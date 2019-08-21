@@ -14,16 +14,19 @@
 package retry
 
 import (
+	"github.com/pingcap/dm/pkg/terror"
+
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 )
 
-// loader define etry error
-
 // IsLoaderRetryableError tells whether an error need retry in Loader executeSQL/querySQL
 func IsLoaderRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
 	err = errors.Cause(err)
 	mysqlErr, ok := err.(*mysql.MySQLError)
 	if ok {
@@ -39,6 +42,9 @@ func IsLoaderRetryableError(err error) bool {
 
 // IsLoaderDDLRetryableError tells whether an error need retry in Loader executeDDL
 func IsLoaderDDLRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
 	err = errors.Cause(err) // check the original error
 	mysqlErr, ok := err.(*mysql.MySQLError)
 	if ok {
@@ -52,10 +58,11 @@ func IsLoaderDDLRetryableError(err error) bool {
 	return IsLoaderRetryableError(err)
 }
 
-// syncer define retry error
-
 // IsSyncerRetryableError tells whether an error need retry in Syncer executeSQL/querySQL
 func IsSyncerRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
 	err = errors.Cause(err) // check the original error
 	mysqlErr, ok := err.(*mysql.MySQLError)
 	if ok {
@@ -73,9 +80,12 @@ func IsSyncerRetryableError(err error) bool {
 
 // IsInvalidConnError tells whether it's a mysql connection error
 func IsInvalidConnError(err error) bool {
+	if err == nil {
+		return false
+	}
 	err = errors.Cause(err)
-	mysqlErr, ok := err.(*mysql.MySQLError)
-	if ok && mysqlErr == mysql.ErrInvalidConn {
+	dmErr, ok := err.(*terror.Error)
+	if ok && dmErr.Code() == terror.ErrDBInvalidConn.Code() {
 		return true
 	}
 	return false

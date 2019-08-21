@@ -20,14 +20,14 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 )
 
-// Speed represents enum of retry speed
-type Speed uint8
+// retryInterval represents enum of retry wait retryInterval
+type retryInterval uint8
 
 const (
-	// SpeedSlow represents slow retry speed, every retry should wait more time depends on increasing retry times
-	SpeedSlow Speed = iota + 1
-	// SpeedStable represents fixed retry speed, every retry should wait fix time
-	SpeedStable
+	// LinearIncrease represents increase time wait retry policy, every retry should wait more time depends on increasing retry times
+	LinearIncrease retryInterval = iota + 1
+	// Stable represents fixed time wait retry policy, every retry should wait a fixed time
+	Stable
 )
 
 // Params define parameters that all retry strategies need
@@ -36,9 +36,13 @@ type Params struct {
 	RetryCount         int
 	FirstRetryDuration time.Duration
 
-	RetrySpeed Speed
+	RetryInterval retryInterval
 
-	// IsRetryableFn tells whether need retry when operateFn failed
+	// IsRetryableFn tells whether we should retry when operateFn failed
+	// params: (number of retry, error of operate)
+	// return: (bool)
+	//   1. true: means operateFn can be retried
+	//   2. false: means operateFn cannot retry after receive this error
 	IsRetryableFn func(int, error) bool
 }
 
@@ -46,43 +50,49 @@ type Params struct {
 type Strategy interface {
 
 	// DefaultRetryStrategy define retry strategy,
-	// Params define retry parameters for different retry strategy
-	// operateFn define a normal operation
+	// params means retry parameters for different retry strategy
+	// operateFn means a normal operation
+	// return: (result of operate, number of retry, error of operate)
 	DefaultRetryStrategy(ctx *tcontext.Context,
 		params Params,
+		// TODO: remove `number of retry` in operateFn, we need it now because loader.ExecuteSQL operation need it
+		// operateFn:
+		//   params: (context, number of retry)
+		//   return: (result of operate, error of operate)
 		operateFn func(*tcontext.Context, int) (interface{}, error),
-	) (interface{}, error)
+	) (interface{}, int, error)
 }
 
 // FiniteRetryStrategy will retry `RetryCount` times when failed to operate DB.
 type FiniteRetryStrategy struct {
 }
 
-// DefaultRetryStrategy wait `FirstRetryDuration` before it starts first retry, and then rest of retries wait time depends on RetrySpeed.
+// DefaultRetryStrategy wait `FirstRetryDuration` before it starts first retry, and then rest of retries wait time depends on RetryInterval.
 // ErrInvalidConn is a special error, need a public retry strategy, so return it to up layer continue retry.
 func (*FiniteRetryStrategy) DefaultRetryStrategy(ctx *tcontext.Context, params Params,
-	operateFn func(*tcontext.Context, int) (interface{}, error)) (interface{}, error) {
+	operateFn func(*tcontext.Context, int) (interface{}, error)) (interface{}, int, error) {
 	var err error
 	var ret interface{}
-	for i := 0; i < params.RetryCount; i++ {
+	i := 0
+	for ; i < params.RetryCount; i++ {
 		ret, err = operateFn(ctx, i)
 		if err != nil {
 			if IsInvalidConnError(err) {
 				ctx.L().Warn(fmt.Sprintf("met invalid connection error, in %dth retry", i))
-				return nil, err
+				return nil, i, err
 			}
 			if params.IsRetryableFn(i, err) {
 				duration := params.FirstRetryDuration
 
-				switch params.RetrySpeed {
-				case SpeedSlow:
+				switch params.RetryInterval {
+				case LinearIncrease:
 					duration = time.Duration(i+1) * params.FirstRetryDuration
 				default:
 				}
 
 				select {
 				case <-ctx.Context().Done():
-					return nil, err
+					return nil, i, err
 				case <-time.After(duration):
 				}
 				continue
@@ -90,5 +100,5 @@ func (*FiniteRetryStrategy) DefaultRetryStrategy(ctx *tcontext.Context, params P
 		}
 		break
 	}
-	return ret, err
+	return ret, i, err
 }

@@ -49,7 +49,7 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string) (*sql.Rows, erro
 	params := retry.Params{
 		RetryCount:         10,
 		FirstRetryDuration: time.Second,
-		RetrySpeed:         retry.SpeedStable,
+		RetryInterval:      retry.Stable,
 		IsRetryableFn: func(retryTime int, err error) bool {
 			if retry.IsLoaderRetryableError(err) {
 				ctx.L().Warn("query statement", zap.Int("retry", retryTime), zap.String("sql", query), log.ShortError(err))
@@ -59,7 +59,7 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string) (*sql.Rows, erro
 		},
 	}
 
-	ret, err := conn.baseConn.RetryStrategy.DefaultRetryStrategy(
+	ret, _, err := conn.baseConn.RetryStrategy.DefaultRetryStrategy(
 		ctx,
 		params,
 		func(ctx *tcontext.Context, _ int) (interface{}, error) {
@@ -125,7 +125,7 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []baseconn.S
 	params := retry.Params{
 		RetryCount:         10,
 		FirstRetryDuration: 2 * time.Second,
-		RetrySpeed:         retry.SpeedSlow,
+		RetryInterval:      retry.LinearIncrease,
 		IsRetryableFn: func(retryTime int, err error) bool {
 			ctx.L().Debug("execute statement", zap.Int("retry", retryTime), zap.String("sqls", fmt.Sprintf("%-.200v", sqls)))
 			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
@@ -135,7 +135,7 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []baseconn.S
 			return false
 		},
 	}
-	_, err := conn.baseConn.RetryStrategy.DefaultRetryStrategy(
+	_, _, err := conn.baseConn.RetryStrategy.DefaultRetryStrategy(
 		ctx,
 		params,
 		func(ctx *tcontext.Context, retryTime int) (interface{}, error) {

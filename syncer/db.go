@@ -111,7 +111,7 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string) (*sql.Rows, err
 	params := retry.Params{
 		RetryCount:         10,
 		FirstRetryDuration: retryTimeout,
-		RetrySpeed:         retry.SpeedStable,
+		RetryInterval:      retry.Stable,
 		IsRetryableFn: func(retryTime int, err error) bool {
 			if retry.IsSyncerRetryableError(err) {
 				sqlRetriesTotal.WithLabelValues("query", conn.cfg.Name).Add(1)
@@ -121,7 +121,7 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string) (*sql.Rows, err
 		},
 	}
 
-	ret, err := conn.baseConn.RetryStrategy.DefaultRetryStrategy(
+	ret, _, err := conn.baseConn.RetryStrategy.DefaultRetryStrategy(
 		tctx,
 		params,
 		func(ctx *tcontext.Context, _ int) (interface{}, error) {
@@ -153,7 +153,7 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 	params := retry.Params{
 		RetryCount:         100,
 		FirstRetryDuration: retryTimeout,
-		RetrySpeed:         retry.SpeedStable,
+		RetryInterval:      retry.Stable,
 		IsRetryableFn: func(retryTime int, err error) bool {
 			if retry.IsSyncerRetryableError(err) {
 				sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
@@ -163,7 +163,7 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 		},
 	}
 
-	ret, err := conn.baseConn.RetryStrategy.DefaultRetryStrategy(
+	ret, _, err := conn.baseConn.RetryStrategy.DefaultRetryStrategy(
 		tctx,
 		params,
 		func(ctx *tcontext.Context, _ int) (interface{}, error) {

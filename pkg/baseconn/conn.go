@@ -15,6 +15,7 @@ package baseconn
 
 import (
 	"database/sql"
+
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/retry"
@@ -55,7 +56,7 @@ func NewBaseConn(dbDSN string) (*BaseConn, error) {
 // SetRetryStrategy set retry strategy for baseConn
 func (conn *BaseConn) SetRetryStrategy(strategy retry.Strategy) error {
 	if conn == nil {
-		return terror.ErrDBDriverError.Generate("no valid connection")
+		return terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 	conn.RetryStrategy = strategy
 	return nil
@@ -112,7 +113,7 @@ func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, sqls []SQL) (int, error
 	txn, err := conn.DB.Begin()
 
 	if err != nil {
-		return 0, terror.ErrDBExecuteFailed.Delegate(err)
+		return 0, terror.ErrDBExecuteFailed.Delegate(err, "begin")
 	}
 
 	l := len(sqls)
@@ -133,7 +134,7 @@ func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, sqls []SQL) (int, error
 	}
 	err = txn.Commit()
 	if err != nil {
-		return l, terror.ErrDBExecuteFailed.Delegate(err)
+		return l, terror.ErrDBExecuteFailed.Delegate(err, "commit")
 	}
 	return l, nil
 }
