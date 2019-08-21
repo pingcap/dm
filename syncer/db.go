@@ -16,6 +16,7 @@ package syncer
 import (
 	"database/sql"
 	"fmt"
+	"github.com/pingcap/dm/pkg/baseconn"
 	"strings"
 
 	"github.com/pingcap/dm/dm/config"
@@ -69,7 +70,7 @@ type binlogSize struct {
 // Conn represents a live DB connection
 type Conn struct {
 	cfg      *config.SubTaskConfig
-	baseConn *utils.BaseConn
+	baseConn *baseconn.BaseConn
 }
 
 // ResetConn reset baseConn.*DB's connection pool
@@ -141,9 +142,9 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 		return 0, terror.ErrDBUnExpect.Generate("database base connection not valid")
 	}
 
-	sqls := make([]utils.SQL, 0, len(queries))
+	sqls := make([]baseconn.SQL, 0, len(queries))
 	for i, query := range queries {
-		sqls = append(sqls, utils.SQL{query, args[i]})
+		sqls = append(sqls, baseconn.SQL{query, args[i]})
 	}
 	ret, err := conn.baseConn.FiniteRetryStrategy(
 		tctx,
@@ -167,10 +168,10 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 	return ret.(int), nil
 }
 
-func createBaseConn(dbCfg config.DBConfig, timeout string) (*utils.BaseConn, error) {
+func createBaseConn(dbCfg config.DBConfig, timeout string) (*baseconn.BaseConn, error) {
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&readTimeout=%s&maxAllowedPacket=%d",
 		dbCfg.User, dbCfg.Password, dbCfg.Host, dbCfg.Port, timeout, *dbCfg.MaxAllowedPacket)
-	baseConn, err := utils.NewBaseConn(dbDSN)
+	baseConn, err := baseconn.NewBaseConn(dbDSN)
 	if err != nil {
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
@@ -195,7 +196,7 @@ func createConns(cfg *config.SubTaskConfig, dbCfg config.DBConfig, count int, ti
 	for i := 0; i < count; i++ {
 		// TODO use *sql.Conn instead of *sql.DB
 		// share db by all conns
-		bc := &utils.BaseConn{baseConn.DB, baseConn.DSN}
+		bc := &baseconn.BaseConn{baseConn.DB, baseConn.DSN}
 		dbs = append(dbs, &Conn{baseConn: bc, cfg: cfg})
 	}
 	return dbs, nil

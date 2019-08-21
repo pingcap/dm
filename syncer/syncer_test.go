@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
+	"github.com/pingcap/dm/pkg/baseconn"
 	"github.com/pingcap/parser"
 	"strings"
 	"sync"
@@ -1037,7 +1038,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 
 	syncer := NewSyncer(s.cfg)
 	// use upstream baseConn as mock downstream
-	syncer.toDBs = []*Conn{{baseConn: &utils.BaseConn{s.db, s.dbAddr}}}
+	syncer.toDBs = []*Conn{{baseConn: &baseconn.BaseConn{s.db, s.dbAddr}}}
 
 	for _, testCase := range testCases {
 		for _, sql := range testCase.sqls {
@@ -1307,8 +1308,8 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		c.Assert(syncer.checkpoint.FlushedGlobalPoint(), Equals, minCheckpoint)
 
 		// make syncer write to mock baseConn
-		syncer.toDBs = []*Conn{{cfg: s.cfg, baseConn: &utils.BaseConn{db, s.dbAddr}}}
-		syncer.ddlDB = &Conn{cfg: s.cfg, baseConn: &utils.BaseConn{db, s.dbAddr}}
+		syncer.toDBs = []*Conn{{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, s.dbAddr}}}
+		syncer.ddlDB = &Conn{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, s.dbAddr}}
 
 		// run sql on upstream baseConn to generate binlog event
 		runSQL(createSQLs)

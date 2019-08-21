@@ -15,13 +15,13 @@ package syncer
 
 import (
 	"fmt"
-	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/pkg/baseconn"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
-	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/mysql"
 
@@ -90,7 +90,7 @@ func (s *testCheckpointSuite) TestCheckPoint(c *C) {
 	mock.ExpectCommit()
 
 	// pass sqlmock baseConn directly
-	conn := &Conn{cfg: s.cfg, baseConn: &utils.BaseConn{db, ""}}
+	conn := &Conn{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, ""}}
 	err = cp.Init(conn)
 	c.Assert(err, IsNil)
 	cp.Clear()

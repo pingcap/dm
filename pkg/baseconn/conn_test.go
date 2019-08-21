@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package utils
+package baseconn
 
 import (
 	"errors"
@@ -23,7 +23,12 @@ import (
 	. "github.com/pingcap/check"
 )
 
-func (t *testUtilsSuite) TestBaseConn(c *C) {
+var _ = Suite(&testBaseConnSuite{})
+
+type testBaseConnSuite struct {
+}
+
+func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	baseConn, err := NewBaseConn("error dsn")
 	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10001))
 
@@ -81,8 +86,6 @@ func (t *testUtilsSuite) TestBaseConn(c *C) {
 	_, err = baseConn.ExecuteSQL(tctx, sqls)
 	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10006))
 
-
-	baseConn.FiniteRetryStrategy()
 	if err = mock.ExpectationsWereMet(); err != nil {
 		c.Fatal("thers were unexpected:", err)
 	}

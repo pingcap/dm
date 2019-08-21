@@ -16,18 +16,17 @@ package loader
 import (
 	"database/sql"
 	"fmt"
+	"github.com/pingcap/dm/pkg/baseconn"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/dm/pkg/utils"
-
-	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	tmysql "github.com/pingcap/parser/mysql"
@@ -37,7 +36,7 @@ import (
 // Conn represents a live DB connection
 type Conn struct {
 	cfg      *config.SubTaskConfig
-	baseConn *utils.BaseConn
+	baseConn *baseconn.BaseConn
 }
 
 func (conn *Conn) querySQL(ctx *tcontext.Context, query string) (*sql.Rows, error) {
@@ -85,12 +84,12 @@ func (conn *Conn) executeDDL(ctx *tcontext.Context, queries []string, args ...[]
 		return nil
 	}
 
-	sqls := make([]utils.SQL, 0, len(queries))
+	sqls := make([]baseconn.SQL, 0, len(queries))
 	for i, query := range queries {
 		if i >= len(args) {
-			sqls = append(sqls, utils.SQL{Query: query, Args: []interface{}{}})
+			sqls = append(sqls, baseconn.SQL{Query: query, Args: []interface{}{}})
 		} else {
-			sqls = append(sqls, utils.SQL{Query: query, Args: args[i]})
+			sqls = append(sqls, baseconn.SQL{Query: query, Args: args[i]})
 		}
 	}
 
@@ -102,19 +101,19 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]
 		return nil
 	}
 
-	sqls := make([]utils.SQL, 0, len(queries))
+	sqls := make([]baseconn.SQL, 0, len(queries))
 	for i, query := range queries {
 		if i >= len(args) {
-			sqls = append(sqls, utils.SQL{Query: query, Args: []interface{}{}})
+			sqls = append(sqls, baseconn.SQL{Query: query, Args: []interface{}{}})
 		} else {
-			sqls = append(sqls, utils.SQL{Query: query, Args: args[i]})
+			sqls = append(sqls, baseconn.SQL{Query: query, Args: args[i]})
 		}
 	}
 
 	return conn.executeSQLCustomRetry(ctx, sqls, retry.IsLoaderRetryableError)
 }
 
-func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []utils.SQL, retryFn func(err error) bool) error {
+func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []baseconn.SQL, retryFn func(err error) bool) error {
 	if conn == nil || conn.baseConn == nil {
 		return terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
@@ -165,7 +164,7 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []utils.SQL,
 func createConn(cfg *config.SubTaskConfig) (*Conn, error) {
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&maxAllowedPacket=%d",
 		cfg.To.User, cfg.To.Password, cfg.To.Host, cfg.To.Port, *cfg.To.MaxAllowedPacket)
-	baseConn, err := utils.NewBaseConn(dbDSN)
+	baseConn, err := baseconn.NewBaseConn(dbDSN)
 	if err != nil {
 		return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 	}
