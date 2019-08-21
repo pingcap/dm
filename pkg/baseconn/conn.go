@@ -144,6 +144,5 @@ func (conn *BaseConn) Close() error {
 	if conn == nil || conn.DB == nil {
 		return nil
 	}
-
-	return terror.DBErrorAdapt(conn.DB.Close(), terror.ErrDBUnExpect, "close")
+	return terror.ErrDBUnExpect.Generate(conn.DB.Close())
 }
