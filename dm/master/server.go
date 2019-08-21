@@ -1881,9 +1881,9 @@ func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, name
 			} else if len(respLog.Message) != 0 {
 				return terror.ErrMasterOperRespNotSuccess.Generate(respLog.Message)
 			}
+			log.L().Info("wait op log result", zap.String("task", name), zap.Int64("operation log ID", opLogID), zap.Stringer("result", resp.QueryTaskOperation))
 		}
 
-		log.L().Info("wait op log result", zap.String("task", name), zap.Int64("operation log ID", opLogID), zap.Stringer("result", resp.QueryTaskOperation))
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
