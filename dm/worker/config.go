@@ -56,6 +56,7 @@ func NewConfig() *Config {
 	fs.Int64Var(&cfg.Purge.Interval, "purge-interval", 60*60, "interval (seconds) try to check whether needing to purge relay log files")
 	fs.Int64Var(&cfg.Purge.Expires, "purge-expires", 0, "try to purge relay log files if their modified time is older than this (hours)")
 	fs.Int64Var(&cfg.Purge.RemainSpace, "purge-remain-space", 15, "try to purge relay log files if remain space is less than this (GB)")
+	fs.BoolVar(&cfg.Checker.CheckEnable, "checker-check-enable", true, "whether enable task status checker")
 	fs.DurationVar(&cfg.Checker.CheckInterval, "checker-check-interval", DefaultCheckInterval, "task status checker check interval")
 	fs.DurationVar(&cfg.Checker.BackoffRollback, "checker-backoff-rollback", DefaultBackoffRollback, "task status checker backoff rollback interval")
 	fs.DurationVar(&cfg.Checker.BackoffMin, "checker-backoff-min", DefaultBackoffMin, "task status checker backoff min delay duration")

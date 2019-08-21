@@ -66,6 +66,7 @@ func (bs ResumeStrategy) String() string {
 
 // CheckerConfig is configuration used for TaskStatusChecker
 type CheckerConfig struct {
+	CheckEnable     bool          `toml:"check-enable" json:"check-enable"`
 	CheckInterval   time.Duration `toml:"check-interval" json:"check-interval"`
 	BackoffRollback time.Duration `toml:"backoff-rollback" json:"backoff-rollback"`
 	BackoffMin      time.Duration `toml:"backoff-min" json:"backoff-min"`

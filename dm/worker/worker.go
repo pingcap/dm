@@ -128,7 +128,9 @@ func NewWorker(cfg *Config) (*Worker, error) {
 	w.relayPurger.Start()
 
 	// start task status checker
-	w.taskStatusChecker.Start()
+	if w.cfg.Checker.CheckEnable {
+		w.taskStatusChecker.Start()
+	}
 
 	// start tracer
 	if w.tracer.Enable() {
@@ -200,7 +202,9 @@ func (w *Worker) Close() {
 	w.relayPurger.Close()
 
 	// clase task status checker
-	w.taskStatusChecker.Close()
+	if w.cfg.Check.CheckEnable {
+		w.taskStatusChecker.Close()
+	}
 
 	// close meta
 	w.meta.Close()
