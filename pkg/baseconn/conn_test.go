@@ -42,7 +42,7 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10001))
 
 	err = baseConn.SetRetryStrategy(nil)
-	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10001))
+	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10004))
 
 	tctx := tcontext.Background()
 	_, err = baseConn.QuerySQL(tctx, "select 1")

@@ -14,8 +14,6 @@
 package retry
 
 import (
-	"github.com/pingcap/dm/pkg/terror"
-
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
@@ -84,8 +82,8 @@ func IsInvalidConnError(err error) bool {
 		return false
 	}
 	err = errors.Cause(err)
-	dmErr, ok := err.(*terror.Error)
-	if ok && dmErr.Code() == terror.ErrDBInvalidConn.Code() {
+	switch err {
+	case mysql.ErrInvalidConn:
 		return true
 	}
 	return false

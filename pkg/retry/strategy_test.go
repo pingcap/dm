@@ -20,6 +20,7 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/terror"
 
+	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 )
 
@@ -61,7 +62,8 @@ func (t *testStrategySuite) TestFiniteRetryStrategy(c *C) {
 	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10001))
 
 	operateFn = func(*tcontext.Context, int) (interface{}, error) {
-		return nil, terror.ErrDBInvalidConn.Generate("test invalid connection")
+		mysqlErr := mysql.ErrInvalidConn
+		return nil, terror.ErrDBInvalidConn.Delegate(mysqlErr, "test invalid connection")
 	}
 
 	// invalid connection will return ErrInvalidConn immediately no matter how many retries left
@@ -72,7 +74,8 @@ func (t *testStrategySuite) TestFiniteRetryStrategy(c *C) {
 	params.RetryCount = 10
 	operateFn = func(ctx *tcontext.Context, i int) (interface{}, error) {
 		if i == 8 {
-			return nil, terror.ErrDBInvalidConn.Generate("test invalid connection")
+			mysqlErr := mysql.ErrInvalidConn
+			return nil, terror.ErrDBInvalidConn.Delegate(mysqlErr, "test invalid connection")
 		}
 		return nil, terror.ErrDBDriverError.Generate("test database error")
 	}
