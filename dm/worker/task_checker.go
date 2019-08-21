@@ -163,7 +163,8 @@ func (tsc *realTaskStatusChecker) run() {
 
 func (tsc *realTaskStatusChecker) getResumeStrategy(taskStatus *pb.TaskStatus, duration time.Duration) ResumeStrategy {
 	// task that is not paused or paused manually, just ignore it
-	if taskStatus.Stage != pb.Stage_Paused || taskStatus.Result.IsCanceled {
+	// should we check taskStatus.Result != nil?
+	if taskStatus == nil || taskStatus.Stage != pb.Stage_Paused || taskStatus.Result.IsCanceled {
 		return ResumeIgnore
 	}
 	// TODO: use different strategies based on the error detail
