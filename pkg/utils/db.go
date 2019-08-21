@@ -376,12 +376,12 @@ func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string) (*sql.Rows,
 	if conn == nil || conn.DB == nil {
 		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
-	tctx.L().Debug("Query statement", zap.String("Query", query))
+	tctx.L().Debug("query statement", zap.String("query", query))
 
 	rows, err := conn.DB.QueryContext(tctx.Context(), query)
 
 	if err != nil {
-		tctx.L().Error("Query statement failed", zap.String("Query", query), log.ShortError(err))
+		tctx.L().Error("query statement failed", zap.String("query", query), log.ShortError(err))
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query)
 	}
 	return rows, nil
@@ -408,14 +408,14 @@ func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, sqls []SQL) (int, error
 	l := len(sqls)
 
 	for i := range sqls {
-		tctx.L().Debug("execute statement", zap.String("Query", sqls[i].Query), zap.Reflect("argument", sqls[i].Args))
+		tctx.L().Debug("execute statement", zap.String("query", sqls[i].Query), zap.Reflect("argument", sqls[i].Args))
 
 		_, err = txn.ExecContext(tctx.Context(), sqls[i].Query, sqls[i].Args...)
 		if err != nil {
-			tctx.L().Error("execute statement failed", zap.String("Query", sqls[i].Query), zap.Reflect("argument", sqls[i].Args), log.ShortError(err))
+			tctx.L().Error("execute statement failed", zap.String("query", sqls[i].Query), zap.Reflect("argument", sqls[i].Args), log.ShortError(err))
 			rerr := txn.Rollback()
 			if rerr != nil {
-				tctx.L().Error("rollback failed", zap.String("Query", sqls[i].Query), zap.Reflect("argument", sqls[i].Args), log.ShortError(rerr))
+				tctx.L().Error("rollback failed", zap.String("query", sqls[i].Query), zap.Reflect("argument", sqls[i].Args), log.ShortError(rerr))
 			}
 			// we should return the exec err, instead of the rollback rerr.
 			return i, terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, sqls[i].Query)
