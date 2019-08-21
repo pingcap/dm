@@ -65,7 +65,7 @@ func (conn *BaseConn) SetRetryStrategy(strategy retry.Strategy) error {
 // ResetConn generates new *DB with new connection pool to take place old one
 func (conn *BaseConn) ResetConn() error {
 	if conn == nil {
-		return terror.ErrDBDriverError.Generate("no valid connection")
+		return terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 	db, err := sql.Open("mysql", conn.DSN)
 	if err != nil {
