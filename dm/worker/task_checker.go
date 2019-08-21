@@ -144,10 +144,10 @@ func (tsc *realTaskStatusChecker) Close() {
 }
 
 func (tsc *realTaskStatusChecker) run() {
-	tsc.closed.Set(closedFalse)
 	tsc.ctx, tsc.cancel = context.WithCancel(context.Background())
 	tsc.normalTime = time.Now()
 	tsc.lastestResume = time.Now().Add(-tsc.cfg.BackoffMin)
+	tsc.closed.Set(closedFalse)
 	ticker := time.NewTicker(tsc.cfg.CheckInterval)
 	defer ticker.Stop()
 	for {
