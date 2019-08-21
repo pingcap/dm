@@ -89,12 +89,16 @@ func InitLogger(cfg *Config) error {
 			MaxBackups: cfg.FileMaxBackups,
 		},
 	})
+	if err != nil {
+		return err
+	}
+
 	// Do not log stack traces at all, as we'll get the stack trace from the
 	// error itself.
 	appLogger = Logger{logger.WithOptions(zap.AddStacktrace(zap.DPanicLevel))}
 	appLevel = props.Level
 
-	return err
+	return nil
 }
 
 // With creates a child logger from the global logger and adds structured
