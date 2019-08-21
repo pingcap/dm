@@ -39,7 +39,7 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10001))
 
 	err = baseConn.ResetConn()
-	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10001))
+	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10004))
 
 	err = baseConn.SetRetryStrategy(nil)
 	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10004))
