@@ -46,16 +46,27 @@ type SQL struct {
 func NewBaseConn(dbDSN string) (*BaseConn, error) {
 	db, err := sql.Open("mysql", dbDSN)
 	if err != nil {
-		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+		return nil, terror.ErrDBDriverError.Delegate(err)
+	}
+	err = db.Ping()
+	if err != nil {
+		return nil, terror.ErrDBDriverError.Delegate(err)
 	}
 	return &BaseConn{db, dbDSN}, nil
 }
 
 // ResetConn generates new *DB with new connection pool to take place old one
 func (conn *BaseConn) ResetConn() error {
+	if conn == nil {
+		return terror.ErrDBDriverError.Generate("no valid connection")
+	}
 	db, err := sql.Open("mysql", conn.DSN)
 	if err != nil {
-		return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+		return terror.ErrDBDriverError.Delegate(err)
+	}
+	err = db.Ping()
+	if err != nil {
+		return terror.ErrDBDriverError.Delegate(err)
 	}
 	if conn.DB != nil {
 		conn.DB.Close()
@@ -78,7 +89,7 @@ func (conn *BaseConn) FiniteRetryStrategy(ctx *tcontext.Context,
 		ret, err = operateFn(ctx, i)
 		if err != nil {
 			if retry.IsInvalidConnError(err) {
-				ctx.L().Warn(fmt.Sprintf("Met invalid connection error, in %dth retry", i))
+				ctx.L().Warn(fmt.Sprintf("met invalid connection error, in %dth retry", i))
 				return nil, err
 			}
 			if retryFn(i, err) {
