@@ -66,7 +66,7 @@ func (t *testServer) TestServer(c *C) {
 	t.testHTTPInterface(c, "metrics")
 
 	// create client
-	cli := t.createClient(c)
+	cli := t.createClient(c, "127.0.0.1:8262")
 
 	c.Assert(s.worker.meta.LoadTaskMeta(), HasLen, 0)
 	c.Assert(s.worker.meta.PeekLog(), IsNil)
@@ -144,8 +144,8 @@ func (t *testServer) testHTTPInterface(c *C, uri string) {
 	c.Assert(err, IsNil)
 }
 
-func (t *testServer) createClient(c *C) pb.WorkerClient {
-	conn, err := grpc.Dial("127.0.0.1:8262", grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
+func (t *testServer) createClient(c *C, addr string) pb.WorkerClient {
+	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	c.Assert(err, IsNil)
 	return pb.NewWorkerClient(conn)
 }

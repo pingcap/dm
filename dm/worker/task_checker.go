@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/pb"
@@ -90,6 +91,7 @@ type realTaskStatusChecker struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
+	closed sync2.AtomicInt32
 
 	cfg CheckerConfig
 	l   log.Logger
@@ -109,6 +111,7 @@ func NewRealTaskStatusChecker(cfg CheckerConfig, w *Worker) TaskStatusChecker {
 		l:   log.With(zap.String("component", "task checker")),
 		w:   w,
 	}
+	tsc.closed.Set(closedTrue)
 	return tsc
 }
 
@@ -130,6 +133,10 @@ func (tsc *realTaskStatusChecker) Start() {
 
 // Close implements TaskStatusChecker.Close
 func (tsc *realTaskStatusChecker) Close() {
+	if !tsc.closed.CompareAndSwap(closedFalse, closedTrue) {
+		return
+	}
+
 	if tsc.cancel != nil {
 		tsc.cancel()
 	}
@@ -137,6 +144,7 @@ func (tsc *realTaskStatusChecker) Close() {
 }
 
 func (tsc *realTaskStatusChecker) run() {
+	tsc.closed.Set(closedFalse)
 	tsc.ctx, tsc.cancel = context.WithCancel(context.Background())
 	tsc.normalTime = time.Now()
 	tsc.lastestResume = time.Now().Add(-tsc.cfg.BackoffMin)

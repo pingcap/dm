@@ -30,16 +30,18 @@ import (
 	"github.com/pingcap/dm/syncer"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
-	// hack for glide update, remove it later
-	_ "github.com/pingcap/tidb-tools/pkg/check"
-	_ "github.com/pingcap/tidb-tools/pkg/dbutil"
-	_ "github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 // createUnits creates process units base on task mode
 func createUnits(cfg *config.SubTaskConfig) []unit.Unit {
+	failpoint.Inject("mockWorkerUnits", func(_ failpoint.Value) {
+		log.L().Info("create mock worker units", zap.String("failpoint", "mockWorkerUnits"))
+		failpoint.Return([]unit.Unit{mydumper.NewMydumper(cfg)})
+	})
+
 	us := make([]unit.Unit, 0, 3)
 	switch cfg.Mode {
 	case config.ModeAll:
