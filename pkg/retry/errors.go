@@ -1,3 +1,16 @@
+// Copyright 2019 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package retry
 
 import (
@@ -39,15 +52,9 @@ func IsLoaderDDLRetryableError(err error) bool {
 	return IsLoaderRetryableError(err)
 }
 
-func isMySQLError(err error, code uint16) bool {
-	err = errors.Cause(err)
-	e, ok := err.(*mysql.MySQLError)
-	return ok && e.Number == code
-}
-
 // syncer define retry error
 
-// IsSyncerRetryableError tells whether an error need retry in sycner executeSQL/querySQL
+// IsSyncerRetryableError tells whether an error need retry in Syncer executeSQL/querySQL
 func IsSyncerRetryableError(err error) bool {
 	err = errors.Cause(err) // check the original error
 	mysqlErr, ok := err.(*mysql.MySQLError)
@@ -61,5 +68,15 @@ func IsSyncerRetryableError(err error) bool {
 		}
 	}
 
+	return false
+}
+
+// IsInvalidConnError tells whether it's a mysql connection error
+func IsInvalidConnError(err error) bool {
+	err = errors.Cause(err)
+	mysqlErr, ok := err.(*mysql.MySQLError)
+	if ok && mysqlErr == mysql.ErrInvalidConn {
+		return true
+	}
 	return false
 }

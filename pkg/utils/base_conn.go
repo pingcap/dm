@@ -1,3 +1,16 @@
+// Copyright 2019 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package utils
 
 import (
@@ -10,7 +23,6 @@ import (
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
 
-	"github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
 )
 
@@ -65,25 +77,24 @@ func (conn *BaseConn) FiniteRetryStrategy(ctx *tcontext.Context,
 	for i := 0; i < retryCount; i++ {
 		ret, err = operateFn(ctx, i)
 		if err != nil {
-			if terr, ok := err.(*terror.Error); ok {
-				switch terr.Cause() {
-				case mysql.ErrInvalidConn:
-					ctx.L().Warn(fmt.Sprintf("Met invalid connection error, next retry %d, will retry in %d seconds", i, i*5))
-					time.Sleep(time.Duration(i) * 5 * time.Second)
-					continue
-				default:
-				}
+			if retry.IsInvalidConnError(err) {
+				ctx.L().Warn(fmt.Sprintf("Met invalid connection error, in %dth retry", i))
+				return nil, err
 			}
 			if retryFn(i, err) {
 				duration := firstRetryDuration
-				if i > 0 {
-					switch retrySpeed {
-					case retry.SpeedSlow:
-						duration = time.Duration(i) * firstRetryDuration
-					default:
-					}
+
+				switch retrySpeed {
+				case retry.SpeedSlow:
+					duration = time.Duration(i+1) * firstRetryDuration
+				default:
 				}
-				time.Sleep(duration)
+
+				select {
+				case <-ctx.Context().Done():
+					return nil, err
+				case <-time.After(duration):
+				}
 				continue
 			}
 		}
@@ -103,7 +114,7 @@ func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string) (*sql.Rows,
 
 	if err != nil {
 		tctx.L().Error("query statement failed", zap.String("query", query), log.ShortError(err))
-		return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query)
+		return nil, terror.ErrDBQueryFailed.Delegate(err, query)
 	}
 	return rows, nil
 }
@@ -123,7 +134,7 @@ func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, sqls []SQL) (int, error
 	txn, err := conn.DB.Begin()
 
 	if err != nil {
-		return 0, terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, "begin")
+		return 0, terror.ErrDBExecuteFailed.Delegate(err)
 	}
 
 	l := len(sqls)
@@ -139,12 +150,12 @@ func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, sqls []SQL) (int, error
 				tctx.L().Error("rollback failed", zap.String("query", sqls[i].Query), zap.Reflect("argument", sqls[i].Args), log.ShortError(rerr))
 			}
 			// we should return the exec err, instead of the rollback rerr.
-			return i, terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, sqls[i].Query)
+			return i, terror.ErrDBExecuteFailed.Delegate(err, sqls[i].Query)
 		}
 	}
 	err = txn.Commit()
 	if err != nil {
-		return l, terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed)
+		return l, terror.ErrDBExecuteFailed.Delegate(err)
 	}
 	return l, nil
 }

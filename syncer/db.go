@@ -127,7 +127,7 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string) (*sql.Rows, err
 		})
 
 	if err != nil {
-		return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query)
+		return nil, terror.ErrDBQueryFailed.Delegate(err, query)
 	}
 	return ret.(*sql.Rows), nil
 }
@@ -162,7 +162,7 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 			return false
 		})
 	if err != nil {
-		return ret.(int), terror.DBErrorAdapt(err, terror.ErrDBExecuteFailed, queries)
+		return ret.(int), terror.ErrDBExecuteFailed.Delegate(err, queries)
 	}
 	return ret.(int), nil
 }
