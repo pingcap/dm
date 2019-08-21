@@ -79,7 +79,7 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string) (*sql.Rows, erro
 	return ret.(*sql.Rows), nil
 }
 
-func (conn *Conn) executeSQL(ctx *tcontext.Context, ddl bool, queries []string, args ...[]interface{}) error {
+func (conn *Conn) executeDDL(ctx *tcontext.Context, queries []string, args ...[]interface{}) error {
 	if len(queries) == 0 {
 		return nil
 	}
@@ -92,12 +92,25 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, ddl bool, queries []string, 
 			sqls = append(sqls, utils.SQL{Query: query, Args: args[i]})
 		}
 	}
-	retry := isRetryableError
-	if ddl {
-		retry = isDDLRetryableError
+
+	return conn.executeSQLCustomRetry(ctx, sqls, isDDLRetryableError)
+}
+
+func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]interface{}) error {
+	if len(queries) == 0 {
+		return nil
 	}
 
-	return conn.executeSQLCustomRetry(ctx, sqls, retry)
+	sqls := make([]utils.SQL, 0, len(queries))
+	for i, query := range queries {
+		if i >= len(args) {
+			sqls = append(sqls, utils.SQL{Query: query, Args: []interface{}{}})
+		} else {
+			sqls = append(sqls, utils.SQL{Query: query, Args: args[i]})
+		}
+	}
+
+	return conn.executeSQLCustomRetry(ctx, sqls, isRetryableError)
 }
 
 func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []utils.SQL, retryFn func(err error) bool) error {
