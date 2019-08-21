@@ -87,15 +87,7 @@ func NewWorker(cfg *Config) (*Worker, error) {
 	w.relayPurger = purger
 
 	// initial task status checker
-	tscConfig := &CheckerConfig{
-		checkInterval:   DefaultCheckInterval,
-		backoffRollback: DefaultBackoffRollback,
-		backoffMin:      DefaultBackoffMin,
-		backoffMax:      DefaultBackoffMax,
-		backoffJitter:   DefaultBackoffJitter,
-		backoffFactor:   DefaultBackoffFactor,
-	}
-	tsc := NewTaskStatusChecker(tscConfig, w)
+	tsc := NewTaskStatusChecker(w.cfg.Checker, w)
 	err = tsc.Init()
 	if err != nil {
 		return nil, err

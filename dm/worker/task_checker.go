@@ -65,12 +65,12 @@ func (bs ResumeStrategy) String() string {
 
 // CheckerConfig is configuration used for TaskStatusChecker
 type CheckerConfig struct {
-	checkInterval   time.Duration
-	backoffRollback time.Duration
-	backoffMin      time.Duration
-	backoffMax      time.Duration
-	backoffJitter   bool
-	backoffFactor   float64
+	CheckInterval   time.Duration `toml:"check-interval" json:"check-interval"`
+	BackoffRollback time.Duration `toml:"backoff-rollback" json:"backoff-rollback"`
+	BackoffMin      time.Duration `toml:"backoff-min" json:"backoff-min"`
+	BackoffMax      time.Duration `toml:"backoff-max" json:"backoff-max"`
+	BackoffJitter   bool          `toml:"backoff-jitter" json:"backoff-jitter"`
+	BackoffFactor   float64       `toml:"backoff-factor" json:"backoff-factor"`
 }
 
 // TaskStatusChecker is an interface that defines how we manage task status
@@ -91,7 +91,7 @@ type realTaskStatusChecker struct {
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 
-	cfg *CheckerConfig
+	cfg CheckerConfig
 	l   log.Logger
 	w   *Worker
 	bf  *backoff.Backoff
@@ -103,7 +103,7 @@ type realTaskStatusChecker struct {
 }
 
 // NewRealTaskStatusChecker creates a new realTaskStatusChecker instance
-func NewRealTaskStatusChecker(cfg *CheckerConfig, w *Worker) TaskStatusChecker {
+func NewRealTaskStatusChecker(cfg CheckerConfig, w *Worker) TaskStatusChecker {
 	tsc := &realTaskStatusChecker{
 		cfg: cfg,
 		l:   log.With(zap.String("component", "task checker")),
@@ -115,7 +115,7 @@ func NewRealTaskStatusChecker(cfg *CheckerConfig, w *Worker) TaskStatusChecker {
 // Init implements TaskStatusChecker.Init
 func (tsc *realTaskStatusChecker) Init() error {
 	var err error
-	tsc.bf, err = backoff.NewBackoff(tsc.cfg.backoffFactor, tsc.cfg.backoffJitter, tsc.cfg.backoffMin, tsc.cfg.backoffMax)
+	tsc.bf, err = backoff.NewBackoff(tsc.cfg.BackoffFactor, tsc.cfg.BackoffJitter, tsc.cfg.BackoffMin, tsc.cfg.BackoffMax)
 	return terror.WithClass(err, terror.ClassDMWorker)
 }
 
@@ -139,8 +139,8 @@ func (tsc *realTaskStatusChecker) Close() {
 func (tsc *realTaskStatusChecker) run() {
 	tsc.ctx, tsc.cancel = context.WithCancel(context.Background())
 	tsc.normalTime = time.Now()
-	tsc.lastestResume = time.Now().Add(-tsc.cfg.backoffMin)
-	ticker := time.NewTicker(tsc.cfg.checkInterval)
+	tsc.lastestResume = time.Now().Add(-tsc.cfg.BackoffMin)
+	ticker := time.NewTicker(tsc.cfg.CheckInterval)
 	defer ticker.Stop()
 	for {
 		select {
@@ -205,7 +205,7 @@ func (tsc *realTaskStatusChecker) check() {
 			tsc.bf.Forward()
 		}
 	} else {
-		if time.Since(tsc.normalTime) > tsc.cfg.backoffRollback {
+		if time.Since(tsc.normalTime) > tsc.cfg.BackoffRollback {
 			tsc.bf.Rollback()
 			tsc.normalTime = time.Now()
 		}
