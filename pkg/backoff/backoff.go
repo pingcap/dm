@@ -38,6 +38,7 @@ type Backoff struct {
 	Min, Max time.Duration
 }
 
+// NewBackoff creates a new backoff instance
 func NewBackoff(factor float64, jitter bool, min, max time.Duration) (*Backoff, error) {
 	if factor <= 0 {
 		return nil, terror.ErrBackoffArgsNotValid.Generate("factor", factor)
@@ -63,7 +64,7 @@ func (b *Backoff) Duration() time.Duration {
 	return d
 }
 
-// Next returns the duration for the current cwnd, but doesn't increase the
+// Current returns the duration for the current cwnd, but doesn't increase the
 // cwnd counter
 func (b *Backoff) Current() time.Duration {
 	return b.durationcwnd(b.cwnd)

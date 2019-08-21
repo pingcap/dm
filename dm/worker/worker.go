@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go/sync2"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -692,14 +693,16 @@ func (w *Worker) getPausedSubTasks() []*pb.TaskStatus {
 	w.RLock()
 	defer w.RUnlock()
 	result := make([]*pb.TaskStatus, 0)
-	for name, task := range w.subTasks {
-		if task.stage == pb.Stage_Paused {
+	for name, st := range w.subTasks {
+		st.RLock()
+		if st.stage == pb.Stage_Paused {
 			result = append(result, &pb.TaskStatus{
 				Name:   name,
 				Stage:  pb.Stage_Paused,
-				Result: task.result,
+				Result: proto.Clone(st.result).(*pb.ProcessResult),
 			})
 		}
+		st.RUnlock()
 	}
 	return result
 }
