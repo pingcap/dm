@@ -35,7 +35,7 @@ type testBaseConnSuite struct {
 }
 
 func (t *testBaseConnSuite) TestBaseConn(c *C) {
-	baseConn, err := NewBaseConn("error dsn")
+	baseConn, err := NewBaseConn("error dsn", nil)
 	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10001))
 
 	err = baseConn.ResetConn()

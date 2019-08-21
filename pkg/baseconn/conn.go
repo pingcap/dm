@@ -41,7 +41,7 @@ type SQL struct {
 }
 
 // NewBaseConn builds BaseConn to connect real DB
-func NewBaseConn(dbDSN string) (*BaseConn, error) {
+func NewBaseConn(dbDSN string, strategy retry.Strategy) (*BaseConn, error) {
 	db, err := sql.Open("mysql", dbDSN)
 	if err != nil {
 		return nil, terror.ErrDBDriverError.Delegate(err)
@@ -50,7 +50,7 @@ func NewBaseConn(dbDSN string) (*BaseConn, error) {
 	if err != nil {
 		return nil, terror.ErrDBDriverError.Delegate(err)
 	}
-	return &BaseConn{db, dbDSN, nil}, nil
+	return &BaseConn{db, dbDSN, strategy}, nil
 }
 
 // SetRetryStrategy set retry strategy for baseConn

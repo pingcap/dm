@@ -180,13 +180,9 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 func createBaseConn(dbCfg config.DBConfig, timeout string) (*baseconn.BaseConn, error) {
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&readTimeout=%s&maxAllowedPacket=%d",
 		dbCfg.User, dbCfg.Password, dbCfg.Host, dbCfg.Port, timeout, *dbCfg.MaxAllowedPacket)
-	baseConn, err := baseconn.NewBaseConn(dbDSN)
+	baseConn, err := baseconn.NewBaseConn(dbDSN, &retry.FiniteRetryStrategy{})
 	if err != nil {
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-	}
-	err = baseConn.SetRetryStrategy(&retry.FiniteRetryStrategy{})
-	if err != nil {
-		return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 	}
 	return baseConn, nil
 }

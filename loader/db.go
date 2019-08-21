@@ -172,11 +172,7 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []baseconn.S
 func createConn(cfg *config.SubTaskConfig) (*Conn, error) {
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&maxAllowedPacket=%d",
 		cfg.To.User, cfg.To.Password, cfg.To.Host, cfg.To.Port, *cfg.To.MaxAllowedPacket)
-	baseConn, err := baseconn.NewBaseConn(dbDSN)
-	if err != nil {
-		return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
-	}
-	err = baseConn.SetRetryStrategy(&retry.FiniteRetryStrategy{})
+	baseConn, err := baseconn.NewBaseConn(dbDSN, &retry.FiniteRetryStrategy{})
 	if err != nil {
 		return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 	}
