@@ -17,6 +17,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/retry"
 	"strings"
 
 	"github.com/pingcap/dm/dm/config"
@@ -90,7 +91,7 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string) (*sql.Rows, err
 		tctx,
 		10,
 		retryTimeout,
-		utils.RetrySpeedStable,
+		retry.SpeedStable,
 		func(ctx *tcontext.Context, _ int) (interface{}, error) {
 			rows, err := conn.baseConn.QuerySQL(ctx, query)
 			return rows, err
@@ -126,7 +127,7 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 		tctx,
 		100,
 		retryTimeout,
-		utils.RetrySpeedStable,
+		retry.SpeedStable,
 		func(ctx *tcontext.Context, _ int) (interface{}, error) {
 			affected, err := conn.baseConn.ExecuteSQL(ctx, sqls)
 			return affected, err

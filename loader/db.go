@@ -16,6 +16,7 @@ package loader
 import (
 	"database/sql"
 	"fmt"
+	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/failpoint"
 	"strconv"
@@ -50,7 +51,7 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string) (*sql.Rows, erro
 		ctx,
 		10,
 		time.Second,
-		utils.RetrySpeedStable,
+		retry.SpeedStable,
 		func(ctx *tcontext.Context, _ int) (interface{}, error) {
 			rows, err := conn.baseConn.QuerySQL(ctx, query)
 			return rows, err
@@ -122,7 +123,7 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []utils.SQL,
 		ctx,
 		10,
 		2*time.Second,
-		utils.RetrySpeedSlow,
+		retry.SpeedSlow,
 		func(ctx *tcontext.Context, retryTime int) (interface{}, error) {
 			startTime := time.Now()
 			_, err := conn.baseConn.ExecuteSQL(ctx, sqls)
