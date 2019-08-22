@@ -201,7 +201,7 @@ func (w *Worker) Close() {
 	// close purger
 	w.relayPurger.Close()
 
-	// clase task status checker
+	// close task status checker
 	if w.cfg.Checker.CheckEnable {
 		w.taskStatusChecker.Close()
 	}

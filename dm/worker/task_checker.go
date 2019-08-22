@@ -16,6 +16,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,7 +50,7 @@ const (
 	ResumeDispatch
 )
 
-var backoffStrategy2Str = map[ResumeStrategy]string{
+var resumeStrategy2Str = map[ResumeStrategy]string{
 	ResumeIgnore:   "ignore task",
 	ResumeSkip:     "skip task resume",
 	ResumeNoSense:  "resume task makes no sense",
@@ -58,7 +59,7 @@ var backoffStrategy2Str = map[ResumeStrategy]string{
 
 // String implements fmt.Stringer interface
 func (bs ResumeStrategy) String() string {
-	if s, ok := backoffStrategy2Str[bs]; ok {
+	if s, ok := resumeStrategy2Str[bs]; ok {
 		return s
 	}
 	return fmt.Sprintf("unknown backoff strategy: %d", bs)
@@ -101,8 +102,8 @@ type realTaskStatusChecker struct {
 
 	// normalTime is used to record the time interval that no abnormal paused task
 	normalTime time.Time
-	// lastestResume is used to record the lastest auto resume time
-	lastestResume time.Time
+	// latestResume is used to record the lastest auto resume time
+	latestResume time.Time
 }
 
 // NewRealTaskStatusChecker creates a new realTaskStatusChecker instance
@@ -147,7 +148,7 @@ func (tsc *realTaskStatusChecker) Close() {
 func (tsc *realTaskStatusChecker) run() {
 	tsc.ctx, tsc.cancel = context.WithCancel(context.Background())
 	tsc.normalTime = time.Now()
-	tsc.lastestResume = time.Now().Add(-tsc.cfg.BackoffMin)
+	tsc.latestResume = time.Now()
 	tsc.closed.Set(closedFalse)
 	ticker := time.NewTicker(tsc.cfg.CheckInterval)
 	defer ticker.Stop()
@@ -162,18 +163,45 @@ func (tsc *realTaskStatusChecker) run() {
 	}
 }
 
+// isRetryableError checks the error message and returns whether we need to
+// resume the task and retry
+func isRetryableError(err *pb.ProcessError) bool {
+	// not elegant code, because TiDB doesn't expose some error
+	unsupportedDDLMsgs := []string{
+		"can't drop column with index",
+		"unsupported add column",
+		"unsupported modify column",
+		"unsupported modify",
+		"unsupported drop integer primary key",
+	}
+	if err.Type == pb.ErrorType_ExecSQL {
+		for _, msg := range unsupportedDDLMsgs {
+			if strings.Contains(err.Msg, msg) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func (tsc *realTaskStatusChecker) getResumeStrategy(taskStatus *pb.TaskStatus, duration time.Duration) ResumeStrategy {
 	// task that is not paused or paused manually, just ignore it
 	if taskStatus == nil || taskStatus.Stage != pb.Stage_Paused || taskStatus.Result == nil || taskStatus.Result.IsCanceled {
 		return ResumeIgnore
 	}
+
 	// TODO: use different strategies based on the error detail
-	// for _, processErr := range taskStatus.Result.Errors {
-	// }
+	for _, processErr := range taskStatus.Result.Errors {
+		if !isRetryableError(processErr) {
+			return ResumeNoSense
+		}
+	}
+
 	// auto resume interval does not exceed backoff duration, skip this paused task
-	if time.Since(tsc.lastestResume) < duration {
+	if time.Since(tsc.latestResume) < duration {
 		return ResumeSkip
 	}
+
 	return ResumeDispatch
 }
 
@@ -193,7 +221,7 @@ func (tsc *realTaskStatusChecker) check() {
 			continue
 		}
 		if strategy == ResumeSkip {
-			tsc.l.Warn("skip auto resume task", zap.String("task", task.Name), zap.Time("lastestResume", tsc.lastestResume), zap.Reflect("duration", duration))
+			tsc.l.Warn("skip auto resume task", zap.String("task", task.Name), zap.Time("latestResume", tsc.latestResume), zap.Reflect("duration", duration))
 			continue
 		}
 		opLogID, err := tsc.w.operateSubTask(&pb.TaskMeta{
@@ -201,10 +229,10 @@ func (tsc *realTaskStatusChecker) check() {
 			Op:   pb.TaskOp_AutoResume,
 		})
 		if err != nil {
-			tsc.l.Error("dispatch auto resume task", zap.String("task", task.Name), zap.Error(err))
+			tsc.l.Error("dispatch auto resume task failed", zap.String("task", task.Name), zap.Error(err))
 		} else {
 			resumed++
-			tsc.lastestResume = time.Now()
+			tsc.latestResume = time.Now()
 			tsc.l.Info("dispatch auto resume task", zap.String("task", task.Name), zap.Int64("opLogID", opLogID))
 		}
 	}

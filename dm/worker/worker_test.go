@@ -125,8 +125,8 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	)
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
-	cfg.Checker.CheckInterval = 20 * time.Millisecond
-	cfg.Checker.BackoffMin = 10 * time.Millisecond
+	cfg.Checker.CheckInterval = 40 * time.Millisecond
+	cfg.Checker.BackoffMin = 20 * time.Millisecond
 	cfg.Checker.BackoffMax = 1 * time.Second
 	cfg.WorkerAddr = fmt.Sprintf(":%d", port)
 
@@ -165,7 +165,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	c.Assert(err, IsNil)
 
 	// check task in paused state
-	c.Assert(utils.WaitSomething(5, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(10, 10*time.Millisecond, func() bool {
 		for _, st := range s.worker.QueryStatus(taskName) {
 			if st.Name == taskName && st.Stage == pb.Stage_Paused {
 				return true
