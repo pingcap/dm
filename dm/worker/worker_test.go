@@ -100,8 +100,8 @@ func (t *testServer) testWorkerHandleTask(c *C) {
 	}
 	c.Assert(len(w.meta.logs), Equals, len(tasks))
 
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/handleTaskInternal", `return(10)`), IsNil)
-	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/handleTaskInternal")
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/handleTaskInterval", `return(10)`), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/handleTaskInterval")
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -143,8 +143,8 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	defer failpoint.Disable("github.com/pingcap/dm/mydumper/dumpUnitProcessForever")
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/mydumper/dumpUnitProcessWithError", `2*return("test auto resume inject error")`), IsNil)
 	defer failpoint.Disable("github.com/pingcap/dm/mydumper/dumpUnitProcessWithError")
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/handleTaskInternal", `return(10)`), IsNil)
-	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/handleTaskInternal")
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/handleTaskInterval", `return(10)`), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/handleTaskInterval")
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/mockWorkerUnits", `return(true)`), IsNil)
 	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/mockWorkerUnits")
 

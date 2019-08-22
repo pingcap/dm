@@ -748,10 +748,10 @@ var maxRetryCount = 10
 
 func (w *Worker) handleTask() {
 	var handleTaskInterval = time.Second
-	failpoint.Inject("handleTaskInternal", func(val failpoint.Value) {
+	failpoint.Inject("handleTaskInterval", func(val failpoint.Value) {
 		if milliseconds, ok := val.(int); ok {
 			handleTaskInterval = time.Duration(milliseconds) * time.Millisecond
-			w.l.Info("set handleTaskInterval", zap.String("failpoint", "handleTaskInternal"), zap.Int("value", milliseconds))
+			w.l.Info("set handleTaskInterval", zap.String("failpoint", "handleTaskInterval"), zap.Int("value", milliseconds))
 		}
 	})
 	ticker := time.NewTicker(handleTaskInterval)
