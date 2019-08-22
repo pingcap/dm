@@ -174,6 +174,14 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		return false
 	}), IsTrue)
 
+	rtsc, ok := s.worker.taskStatusChecker.(*realTaskStatusChecker)
+	c.Assert(ok, IsTrue)
+	defer func() {
+		// close multiple time
+		rtsc.Close()
+		rtsc.Close()
+	}()
+
 	// check task will be auto resumed
 	c.Assert(utils.WaitSomething(10, 10*time.Millisecond, func() bool {
 		for _, st := range s.worker.QueryStatus(taskName) {
