@@ -27,6 +27,7 @@ type testTaskCheckerSuite struct{}
 
 func (s *testTaskCheckerSuite) TestResumeStrategy(c *check.C) {
 	c.Assert(ResumeSkip.String(), check.Equals, resumeStrategy2Str[ResumeSkip])
+	c.Assert(ResumeStrategy(10000).String(), check.Equals, "unknown resume strategy: 10000")
 
 	taskName := "test-task"
 	now := func(addition time.Duration) time.Time { return time.Now().Add(addition) }
@@ -55,7 +56,8 @@ func (s *testTaskCheckerSuite) TestResumeStrategy(c *check.C) {
 		BackoffFactor:   DefaultBackoffFactor,
 	}, nil)
 	for _, tc := range testCases {
-		rtsc := tsc.(*realTaskStatusChecker)
+		rtsc, ok := tsc.(*realTaskStatusChecker)
+		c.Assert(ok, check.IsTrue)
 		rtsc.latestResume = tc.latestResumeFn(tc.addition)
 		strategy := rtsc.getResumeStrategy(tc.status, tc.duration)
 		c.Assert(strategy, check.Equals, tc.expected)
@@ -81,7 +83,8 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 		BackoffFactor:   DefaultBackoffFactor,
 	}, nil)
 	c.Assert(tsc.Init(), check.IsNil)
-	rtsc := tsc.(*realTaskStatusChecker)
+	rtsc, ok := tsc.(*realTaskStatusChecker)
+	c.Assert(ok, check.IsTrue)
 	rtsc.w = w
 
 	// test resume with paused task
@@ -149,7 +152,8 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 		BackoffFactor:   DefaultBackoffFactor,
 	}, nil)
 	c.Assert(tsc.Init(), check.IsNil)
-	rtsc = tsc.(*realTaskStatusChecker)
+	rtsc, ok = tsc.(*realTaskStatusChecker)
+	c.Assert(ok, check.IsTrue)
 	rtsc.w = w
 	rtsc.w.subTasks = map[string]*SubTask{
 		"task1": {

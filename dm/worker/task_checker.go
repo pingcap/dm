@@ -62,7 +62,7 @@ func (bs ResumeStrategy) String() string {
 	if s, ok := resumeStrategy2Str[bs]; ok {
 		return s
 	}
-	return fmt.Sprintf("unknown backoff strategy: %d", bs)
+	return fmt.Sprintf("unknown resume strategy: %d", bs)
 }
 
 // CheckerConfig is configuration used for TaskStatusChecker
