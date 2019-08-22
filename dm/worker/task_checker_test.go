@@ -86,7 +86,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 
 	// test resume with paused task
 	rtsc.w.subTasks = map[string]*SubTask{
-		"task1": &SubTask{
+		"task1": {
 			stage: pb.Stage_Paused,
 			result: &pb.ProcessResult{
 				IsCanceled: false,
@@ -109,7 +109,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 
 	// test backoff rollback at least once, as well as resume ignore strategy
 	rtsc.w.subTasks = map[string]*SubTask{
-		"task2": &SubTask{
+		"task2": {
 			stage: pb.Stage_Paused,
 			result: &pb.ProcessResult{
 				IsCanceled: true,
@@ -125,7 +125,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 
 	// test no sense strategy, will not forward or rollback backoff
 	rtsc.w.subTasks = map[string]*SubTask{
-		"task3": &SubTask{
+		"task3": {
 			stage: pb.Stage_Paused,
 			result: &pb.ProcessResult{
 				IsCanceled: false,
@@ -152,7 +152,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	rtsc = tsc.(*realTaskStatusChecker)
 	rtsc.w = w
 	rtsc.w.subTasks = map[string]*SubTask{
-		"task1": &SubTask{
+		"task1": {
 			stage: pb.Stage_Paused,
 			result: &pb.ProcessResult{
 				IsCanceled: false,
