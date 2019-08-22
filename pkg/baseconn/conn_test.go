@@ -38,13 +38,13 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	baseConn, err := NewBaseConn("error dsn", nil)
 	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10001))
 
-	err = baseConn.ResetConn()
+	tctx := tcontext.Background()
+	err = baseConn.ResetConn(tctx)
 	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10004))
 
 	err = baseConn.SetRetryStrategy(nil)
 	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10004))
 
-	tctx := tcontext.Background()
 	_, err = baseConn.QuerySQL(tctx, "select 1")
 	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10004))
 

@@ -73,11 +73,11 @@ type Conn struct {
 }
 
 // ResetConn reset baseConn.*DB's connection pool
-func (conn *Conn) ResetConn() error {
+func (conn *Conn) ResetConn(tctx *tcontext.Context) error {
 	if conn.baseConn == nil {
 		return terror.ErrDBUnExpect.Generate("database base connection not valid")
 	}
-	return conn.baseConn.ResetConn()
+	return conn.baseConn.ResetConn(tctx)
 }
 
 func (conn *Conn) getMasterStatus(flavor string) (mysql.Position, gtid.Set, error) {

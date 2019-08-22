@@ -31,7 +31,7 @@ const (
 )
 
 // DefaultRetryParams define parameters for DefaultRetryStrategy
-// it's a union set of all implements' parameters which implement DefaultRetryStrategy
+// it's a parameters union set of all implements which implement DefaultRetryStrategy
 type DefaultRetryParams struct {
 	RetryCount         int
 	FirstRetryDuration time.Duration

@@ -48,7 +48,11 @@ func NewBaseConn(dbDSN string, strategy retry.Strategy) (*BaseConn, error) {
 	}
 	err = db.Ping()
 	if err != nil {
+		db.Close()
 		return nil, terror.ErrDBDriverError.Delegate(err)
+	}
+	if strategy == nil {
+		strategy = &retry.FiniteRetryStrategy{}
 	}
 	return &BaseConn{db, dbDSN, strategy}, nil
 }
@@ -63,7 +67,7 @@ func (conn *BaseConn) SetRetryStrategy(strategy retry.Strategy) error {
 }
 
 // ResetConn generates new *DB with new connection pool to take place old one
-func (conn *BaseConn) ResetConn() error {
+func (conn *BaseConn) ResetConn(tctx *tcontext.Context) error {
 	if conn == nil {
 		return terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
@@ -73,10 +77,14 @@ func (conn *BaseConn) ResetConn() error {
 	}
 	err = db.Ping()
 	if err != nil {
+		db.Close()
 		return terror.ErrDBDriverError.Delegate(err)
 	}
 	if conn.DB != nil {
-		conn.DB.Close()
+		err := conn.DB.Close()
+		if err != nil {
+			tctx.L().Warn("reset connection", log.ShortError(err))
+		}
 	}
 	conn.DB = db
 	return nil
