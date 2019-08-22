@@ -16,6 +16,8 @@ package syncer
 import (
 	"database/sql"
 	"fmt"
+	"strings"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/baseconn"
 	tcontext "github.com/pingcap/dm/pkg/context"
@@ -24,7 +26,6 @@ import (
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
-	"strings"
 
 	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/filter"

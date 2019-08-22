@@ -16,17 +16,18 @@ package loader
 import (
 	"database/sql"
 	"fmt"
-	"github.com/pingcap/dm/pkg/baseconn"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
-	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/baseconn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
+
+	"github.com/go-sql-driver/mysql"
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	tmysql "github.com/pingcap/parser/mysql"
