@@ -108,7 +108,7 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string) (*sql.Rows, err
 	if conn == nil || conn.baseConn == nil {
 		return nil, terror.ErrDBUnExpect.Generate("database base connection not valid")
 	}
-	params := retry.Params{
+	params := retry.DefaultRetryParams{
 		RetryCount:         10,
 		FirstRetryDuration: retryTimeout,
 		RetryInterval:      retry.Stable,
@@ -150,7 +150,7 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 		sqls = append(sqls, baseconn.SQL{query, args[i]})
 	}
 
-	params := retry.Params{
+	params := retry.DefaultRetryParams{
 		RetryCount:         100,
 		FirstRetryDuration: retryTimeout,
 		RetryInterval:      retry.Stable,

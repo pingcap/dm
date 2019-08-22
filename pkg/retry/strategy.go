@@ -20,7 +20,7 @@ import (
 	tcontext "github.com/pingcap/dm/pkg/context"
 )
 
-// retryInterval represents enum of retry wait retryInterval
+// retryInterval represents enum of retry wait interval
 type retryInterval uint8
 
 const (
@@ -30,16 +30,16 @@ const (
 	Stable
 )
 
-// Params define parameters that all retry strategies need
-// it makes DefaultRetryStrategy more abstract for other implements
-type Params struct {
+// DefaultRetryParams define parameters for DefaultRetryStrategy
+// it's a union set of all implements' parameters which implement DefaultRetryStrategy
+type DefaultRetryParams struct {
 	RetryCount         int
 	FirstRetryDuration time.Duration
 
 	RetryInterval retryInterval
 
 	// IsRetryableFn tells whether we should retry when operateFn failed
-	// params: (number of retry, error of operate)
+	// params: (number of retry, error of operation)
 	// return: (bool)
 	//   1. true: means operateFn can be retried
 	//   2. false: means operateFn cannot retry after receive this error
@@ -49,16 +49,15 @@ type Params struct {
 // Strategy define different kind of retry strategy
 type Strategy interface {
 
-	// DefaultRetryStrategy define retry strategy,
-	// params means retry parameters for different retry strategy
-	// operateFn means a normal operation
-	// return: (result of operate, number of retry, error of operate)
+	// DefaultRetryStrategy define retry strategy
+	// params: (retry parameters for this strategy, a normal operation)
+	// return: (result of operation, number of retry, error of operation)
 	DefaultRetryStrategy(ctx *tcontext.Context,
-		params Params,
+		params DefaultRetryParams,
 		// TODO: remove `number of retry` in operateFn, we need it now because loader.ExecuteSQL operation need it
 		// operateFn:
 		//   params: (context, number of retry)
-		//   return: (result of operate, error of operate)
+		//   return: (result of operation, error of operation)
 		operateFn func(*tcontext.Context, int) (interface{}, error),
 	) (interface{}, int, error)
 }
@@ -69,7 +68,7 @@ type FiniteRetryStrategy struct {
 
 // DefaultRetryStrategy wait `FirstRetryDuration` before it starts first retry, and then rest of retries wait time depends on RetryInterval.
 // ErrInvalidConn is a special error, need a public retry strategy, so return it to up layer continue retry.
-func (*FiniteRetryStrategy) DefaultRetryStrategy(ctx *tcontext.Context, params Params,
+func (*FiniteRetryStrategy) DefaultRetryStrategy(ctx *tcontext.Context, params DefaultRetryParams,
 	operateFn func(*tcontext.Context, int) (interface{}, error)) (interface{}, int, error) {
 	var err error
 	var ret interface{}

@@ -36,7 +36,7 @@ type testStrategySuite struct {
 func (t *testStrategySuite) TestFiniteRetryStrategy(c *C) {
 	strategy := &FiniteRetryStrategy{}
 
-	params := Params{
+	params := DefaultRetryParams{
 		RetryCount:         1,
 		RetryInterval:      Stable,
 		FirstRetryDuration: time.Second,

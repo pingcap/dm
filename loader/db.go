@@ -46,7 +46,7 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string) (*sql.Rows, erro
 
 	startTime := time.Now()
 
-	params := retry.Params{
+	params := retry.DefaultRetryParams{
 		RetryCount:         10,
 		FirstRetryDuration: time.Second,
 		RetryInterval:      retry.Stable,
@@ -122,7 +122,7 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []baseconn.S
 		return terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
-	params := retry.Params{
+	params := retry.DefaultRetryParams{
 		RetryCount:         10,
 		FirstRetryDuration: 2 * time.Second,
 		RetryInterval:      retry.LinearIncrease,
