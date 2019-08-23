@@ -20,7 +20,7 @@ import (
 	gmysql "github.com/siddontang/go-mysql/mysql"
 )
 
-func isRetryWhiteListError(err error) bool {
+func isCommonRetryableError(err error) bool {
 	err = errors.Cause(err) // check the original error
 	mysqlErr, ok := err.(*mysql.MySQLError)
 	if ok {
@@ -48,7 +48,7 @@ func IsLoaderRetryableError(err error) bool {
 			return false
 		}
 	}
-	return isRetryWhiteListError(err)
+	return isCommonRetryableError(err)
 }
 
 // IsLoaderDDLRetryableError tells whether an error need retry in Loader executeDDL
@@ -72,7 +72,7 @@ func IsSyncerRetryableError(err error) bool {
 	if err == nil {
 		return false
 	}
-	return isRetryWhiteListError(err)
+	return isCommonRetryableError(err)
 }
 
 // IsInvalidConnError tells whether it's a mysql connection error

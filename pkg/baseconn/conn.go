@@ -147,6 +147,12 @@ func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, sqls []SQL) (int, error
 	return l, nil
 }
 
+// ApplyRetryStrategy apply specify strategy for BaseConn
+func (conn *BaseConn) ApplyRetryStrategy(tctx *tcontext.Context, params retry.Params,
+	operateFn func(*tcontext.Context) (interface{}, error)) (interface{}, int, error) {
+	return conn.RetryStrategy.Apply(tctx, params, operateFn)
+}
+
 // Close release DB resource
 func (conn *BaseConn) Close() error {
 	if conn == nil || conn.DB == nil {

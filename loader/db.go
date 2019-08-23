@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/baseconn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
@@ -27,7 +28,6 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	tmysql "github.com/pingcap/parser/mysql"
@@ -60,12 +60,11 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string, args ...interfac
 		},
 	}
 
-	ret, _, err := conn.baseConn.RetryStrategy.Apply(
+	ret, _, err := conn.baseConn.ApplyRetryStrategy(
 		ctx,
 		params,
 		func(ctx *tcontext.Context) (interface{}, error) {
-			rows, err := conn.baseConn.QuerySQL(ctx, query, args...)
-			return rows, err
+			return conn.baseConn.QuerySQL(ctx, query, args...)
 		})
 
 	defer func() {
@@ -88,23 +87,20 @@ func (conn *Conn) executeDDL(ctx *tcontext.Context, queries []string, args ...[]
 	if len(queries) == 0 {
 		return nil
 	}
-
-	sqls := make([]baseconn.SQL, 0, len(queries))
-	for i, query := range queries {
-		if i >= len(args) {
-			sqls = append(sqls, baseconn.SQL{Query: query, Args: []interface{}{}})
-		} else {
-			sqls = append(sqls, baseconn.SQL{Query: query, Args: args[i]})
-		}
-	}
-
-	return conn.executeSQLCustomRetry(ctx, sqls, retry.IsLoaderDDLRetryableError)
+	return conn.executeSQLCustomRetry(ctx, retry.IsLoaderDDLRetryableError, queries, args...)
 }
 
 func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]interface{}) error {
 	if len(queries) == 0 {
 		return nil
 	}
+	return conn.executeSQLCustomRetry(ctx, retry.IsLoaderRetryableError, queries, args...)
+}
+
+func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, retryFn func(err error) bool, queries []string, args ...[]interface{}) error {
+	if conn == nil || conn.baseConn == nil {
+		return terror.ErrDBUnExpect.Generate("database connection not valid")
+	}
 
 	sqls := make([]baseconn.SQL, 0, len(queries))
 	for i, query := range queries {
@@ -113,14 +109,6 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]
 		} else {
 			sqls = append(sqls, baseconn.SQL{Query: query, Args: args[i]})
 		}
-	}
-
-	return conn.executeSQLCustomRetry(ctx, sqls, retry.IsLoaderRetryableError)
-}
-
-func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []baseconn.SQL, retryFn func(err error) bool) error {
-	if conn == nil || conn.baseConn == nil {
-		return terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
 	params := retry.Params{
@@ -130,13 +118,10 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []baseconn.S
 		IsRetryableFn: func(retryTime int, err error) bool {
 			ctx.L().Debug("execute statement", zap.Int("retry", retryTime), zap.String("sqls", fmt.Sprintf("%-.200v", sqls)))
 			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
-			if retryFn(err) {
-				return true
-			}
-			return false
+			return retryFn(err)
 		},
 	}
-	_, _, err := conn.baseConn.RetryStrategy.Apply(
+	_, _, err := conn.baseConn.ApplyRetryStrategy(
 		ctx,
 		params,
 		func(ctx *tcontext.Context) (interface{}, error) {

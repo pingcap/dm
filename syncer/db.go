@@ -122,12 +122,11 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string, args ...interfa
 		},
 	}
 
-	ret, _, err := conn.baseConn.RetryStrategy.Apply(
+	ret, _, err := conn.baseConn.ApplyRetryStrategy(
 		tctx,
 		params,
 		func(ctx *tcontext.Context) (interface{}, error) {
-			rows, err := conn.baseConn.QuerySQL(ctx, query, args...)
-			return rows, err
+			return conn.baseConn.QuerySQL(ctx, query, args...)
 		},
 	)
 
@@ -164,12 +163,11 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 		},
 	}
 
-	ret, _, err := conn.baseConn.RetryStrategy.Apply(
+	ret, _, err := conn.baseConn.ApplyRetryStrategy(
 		tctx,
 		params,
 		func(ctx *tcontext.Context) (interface{}, error) {
-			affected, err := conn.baseConn.ExecuteSQL(ctx, sqls)
-			return affected, err
+			return conn.baseConn.ExecuteSQL(ctx, sqls)
 		})
 
 	if err != nil {
