@@ -20,6 +20,21 @@ import (
 	gmysql "github.com/siddontang/go-mysql/mysql"
 )
 
+func isRetryWhiteListError(err error) bool {
+	err = errors.Cause(err) // check the original error
+	mysqlErr, ok := err.(*mysql.MySQLError)
+	if ok {
+		switch mysqlErr.Number {
+		// ER_LOCK_DEADLOCK can retry to commit while meet deadlock
+		case tmysql.ErrUnknown, gmysql.ER_LOCK_DEADLOCK, tmysql.ErrPDServerTimeout, tmysql.ErrTiKVServerTimeout, tmysql.ErrTiKVServerBusy, tmysql.ErrResolveLockTimeout, tmysql.ErrRegionUnavailable:
+			return true
+		default:
+			return false
+		}
+	}
+	return false
+}
+
 // IsLoaderRetryableError tells whether an error need retry in Loader executeSQL/querySQL
 func IsLoaderRetryableError(err error) bool {
 	if err == nil {
@@ -31,11 +46,9 @@ func IsLoaderRetryableError(err error) bool {
 		switch mysqlErr.Number {
 		case tmysql.ErrDupEntry, tmysql.ErrDataTooLong:
 			return false
-		default:
-			return true
 		}
 	}
-	return true
+	return isRetryWhiteListError(err)
 }
 
 // IsLoaderDDLRetryableError tells whether an error need retry in Loader executeDDL
@@ -49,8 +62,6 @@ func IsLoaderDDLRetryableError(err error) bool {
 		switch mysqlErr.Number {
 		case tmysql.ErrDBCreateExists, tmysql.ErrTableExists:
 			return false
-		default:
-			return IsLoaderRetryableError(err)
 		}
 	}
 	return IsLoaderRetryableError(err)
@@ -61,19 +72,7 @@ func IsSyncerRetryableError(err error) bool {
 	if err == nil {
 		return false
 	}
-	err = errors.Cause(err) // check the original error
-	mysqlErr, ok := err.(*mysql.MySQLError)
-	if ok {
-		switch mysqlErr.Number {
-		// ER_LOCK_DEADLOCK can retry to commit while meet deadlock
-		case tmysql.ErrUnknown, gmysql.ER_LOCK_DEADLOCK, tmysql.ErrPDServerTimeout, tmysql.ErrTiKVServerTimeout, tmysql.ErrTiKVServerBusy, tmysql.ErrResolveLockTimeout, tmysql.ErrRegionUnavailable:
-			return true
-		default:
-			return false
-		}
-	}
-
-	return false
+	return isRetryWhiteListError(err)
 }
 
 // IsInvalidConnError tells whether it's a mysql connection error
