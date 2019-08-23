@@ -89,6 +89,7 @@ type TaskStatusChecker interface {
 // NewTaskStatusChecker is a TaskStatusChecker initializer
 var NewTaskStatusChecker = NewRealTaskStatusChecker
 
+// realTaskStatusChecker is not thread-safe
 type realTaskStatusChecker struct {
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -99,6 +100,10 @@ type realTaskStatusChecker struct {
 	l   log.Logger
 	w   *Worker
 	bf  *backoff.Backoff
+
+	// task name -> 1st detected paused time
+	// block records paused task that can't be resume automatically
+	block map[string]time.Time
 
 	// latestNormalTime is used to record the latest time that checker observes no abnormal task
 	latestNormalTime time.Time
@@ -206,10 +211,21 @@ func (tsc *realTaskStatusChecker) getResumeStrategy(taskStatus *pb.TaskStatus, d
 }
 
 func (tsc *realTaskStatusChecker) check() {
+	var (
+		// paused task found in this check round, historical paused task that
+		// can't be automatically resumed will not increase the counter
+		abnormal = 0
+		// resumed task counter
+		resumed = 0
+	)
 	tasks := tsc.w.getPausedSubTasks()
-	abnormal := 0
-	resumed := 0
 	duration := tsc.bf.Current()
+	// rotate tsc.block and an empty map, so we can remove resumed block task
+	block := make(map[string]time.Time)
+	for k, v := range tsc.block {
+		block[k] = v
+	}
+	tsc.block = make(map[string]time.Time)
 	for _, task := range tasks {
 		strategy := tsc.getResumeStrategy(task, duration)
 		if strategy == ResumeIgnore {
@@ -217,7 +233,14 @@ func (tsc *realTaskStatusChecker) check() {
 		}
 		abnormal++
 		if strategy == ResumeNoSense {
-			tsc.l.Warn("no help to resume task", zap.String("task", task.Name))
+			if ts, ok := block[task.Name]; ok {
+				abnormal--
+				tsc.block[task.Name] = ts
+				tsc.l.Warn("task can't auto resume", zap.String("task", task.Name), zap.Duration("paused duration", time.Since(ts)))
+			} else {
+				tsc.block[task.Name] = time.Now()
+				tsc.l.Warn("task can't auto resume", zap.String("task", task.Name))
+			}
 			continue
 		}
 		if strategy == ResumeSkip {

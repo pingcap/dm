@@ -126,7 +126,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	c.Assert(w.meta.logs, check.HasLen, 0)
 	current := rtsc.bf.Current()
 
-	// test no sense strategy, will not forward or rollback backoff
+	// test no sense strategy
 	rtsc.w.subTasks = map[string]*SubTask{
 		"task3": {
 			stage: pb.Stage_Paused,
@@ -136,10 +136,17 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 			},
 		},
 	}
+	latestNormalTime := rtsc.latestNormalTime
 	rtsc.check()
+	// check latestNormalTime is updated when we first meet no-auto-resume paused task
+	c.Assert(latestNormalTime.Before(rtsc.latestNormalTime), check.IsTrue)
+	latestNormalTime = rtsc.latestNormalTime
+	rtsc.check()
+	// check latestNormalTime is not updated when we meet historical no-auto-resume paused task
+	c.Assert(rtsc.latestNormalTime, check.Equals, latestNormalTime)
 	time.Sleep(200 * time.Millisecond)
 	rtsc.check()
-	c.Assert(rtsc.bf.Current(), check.Equals, current)
+	c.Assert(rtsc.bf.Current(), check.Equals, current/2)
 	c.Assert(w.meta.logs, check.HasLen, 0)
 
 	// test resume skip strategy

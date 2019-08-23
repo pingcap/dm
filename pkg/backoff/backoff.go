@@ -23,7 +23,7 @@ import (
 
 // Backoff is an exponential counter, it starts from `Min` duration, and after
 // every call to `Duration` method the duration will be multiplied by `Factor`,
-// but it never exceeds `Max`. Backoff is not generally concurrent-safe
+// but it never exceeds `Max`. Backoff is not thread-safe
 type Backoff struct {
 	// cwnd is the congestion window
 	cwnd int
