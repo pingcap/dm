@@ -142,8 +142,8 @@ func (cp *RemoteCheckPoint) Load() error {
 		cp.tctx.L().Info("load checkpoint", zap.Duration("cost time", time.Since(begin)))
 	}()
 
-	query := fmt.Sprintf("SELECT `filename`,`cp_schema`,`cp_table`,`offset`,`end_pos` from `%s`.`%s` where `id`= '%s'", cp.schema, cp.table, cp.id)
-	rows, err := cp.conn.querySQL(cp.tctx, query)
+	query := fmt.Sprintf("SELECT `filename`,`cp_schema`,`cp_table`,`offset`,`end_pos` from `%s`.`%s` where `id`=?", cp.schema, cp.table)
+	rows, err := cp.conn.querySQL(cp.tctx, query, cp.id)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -312,8 +312,8 @@ func (cp *RemoteCheckPoint) Clear() error {
 
 // Count implements CheckPoint.Count
 func (cp *RemoteCheckPoint) Count() (int, error) {
-	query := fmt.Sprintf("SELECT COUNT(id) FROM `%s`.`%s` WHERE `id` = '%s'", cp.schema, cp.table, cp.id)
-	rows, err := cp.conn.querySQL(cp.tctx, query)
+	query := fmt.Sprintf("SELECT COUNT(id) FROM `%s`.`%s` WHERE `id` = ?", cp.schema, cp.table)
+	rows, err := cp.conn.querySQL(cp.tctx, query, cp.id)
 	if err != nil {
 		return 0, terror.WithScope(err, terror.ScopeDownstream)
 	}

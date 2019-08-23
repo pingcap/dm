@@ -105,7 +105,7 @@ func (conn *Conn) countBinaryLogsSize(pos mysql.Position) (int64, error) {
 	return countBinaryLogsSize(pos, conn.baseConn.DB)
 }
 
-func (conn *Conn) querySQL(tctx *tcontext.Context, query string) (*sql.Rows, error) {
+func (conn *Conn) querySQL(tctx *tcontext.Context, query string, args ...interface{}) (*sql.Rows, error) {
 	if conn == nil || conn.baseConn == nil {
 		return nil, terror.ErrDBUnExpect.Generate("database base connection not valid")
 	}
@@ -126,7 +126,7 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string) (*sql.Rows, err
 		tctx,
 		params,
 		func(ctx *tcontext.Context) (interface{}, error) {
-			rows, err := conn.baseConn.QuerySQL(ctx, query)
+			rows, err := conn.baseConn.QuerySQL(ctx, query, args...)
 			return rows, err
 		},
 	)

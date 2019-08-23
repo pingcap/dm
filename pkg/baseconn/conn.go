@@ -91,13 +91,13 @@ func (conn *BaseConn) ResetConn(tctx *tcontext.Context) error {
 }
 
 // QuerySQL defines query statement, and connect to real DB
-func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string) (*sql.Rows, error) {
+func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string, args ...interface{}) (*sql.Rows, error) {
 	if conn == nil || conn.DB == nil {
 		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 	tctx.L().Debug("query statement", zap.String("query", query))
 
-	rows, err := conn.DB.QueryContext(tctx.Context(), query)
+	rows, err := conn.DB.QueryContext(tctx.Context(), query, args...)
 
 	if err != nil {
 		tctx.L().Error("query statement failed", zap.String("query", query), log.ShortError(err))
