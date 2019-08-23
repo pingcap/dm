@@ -100,9 +100,9 @@ type realTaskStatusChecker struct {
 	w   *Worker
 	bf  *backoff.Backoff
 
-	// normalTime is used to record the time interval that no abnormal paused task
-	normalTime time.Time
-	// latestResume is used to record the lastest auto resume time
+	// latestNormalTime is used to record the latest time that checker observes no abnormal task
+	latestNormalTime time.Time
+	// latestResume is used to record the latest auto resume time
 	latestResume time.Time
 }
 
@@ -147,7 +147,7 @@ func (tsc *realTaskStatusChecker) Close() {
 
 func (tsc *realTaskStatusChecker) run() {
 	tsc.ctx, tsc.cancel = context.WithCancel(context.Background())
-	tsc.normalTime = time.Now()
+	tsc.latestNormalTime = time.Now()
 	tsc.latestResume = time.Now()
 	tsc.closed.Set(closedFalse)
 	ticker := time.NewTicker(tsc.cfg.CheckInterval)
@@ -237,14 +237,14 @@ func (tsc *realTaskStatusChecker) check() {
 		}
 	}
 	if abnormal > 0 {
-		tsc.normalTime = time.Now()
+		tsc.latestNormalTime = time.Now()
 		if resumed > 0 {
 			tsc.bf.Forward()
 		}
 	} else {
-		if time.Since(tsc.normalTime) > tsc.cfg.BackoffRollback {
+		if time.Since(tsc.latestNormalTime) > tsc.cfg.BackoffRollback {
 			tsc.bf.Rollback()
-			tsc.normalTime = time.Now()
+			tsc.latestNormalTime = time.Now()
 		}
 	}
 }

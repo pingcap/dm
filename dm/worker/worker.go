@@ -88,12 +88,14 @@ func NewWorker(cfg *Config) (*Worker, error) {
 	w.relayPurger = purger
 
 	// initial task status checker
-	tsc := NewTaskStatusChecker(w.cfg.Checker, w)
-	err = tsc.Init()
-	if err != nil {
-		return nil, err
+	if w.cfg.Checker.CheckEnable {
+		tsc := NewTaskStatusChecker(w.cfg.Checker, w)
+		err = tsc.Init()
+		if err != nil {
+			return nil, err
+		}
+		w.taskStatusChecker = tsc
 	}
-	w.taskStatusChecker = tsc
 
 	// try upgrade from an older version
 	dbDir := path.Join(w.cfg.MetaDir, "kv")
