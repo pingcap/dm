@@ -134,7 +134,7 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, retryFn func(err 
 				}
 
 				if len(sqls) == 1 && strings.Contains(sqls[0].Query, "CREATE TABLE") {
-					err = tmysql.NewErr(uint16(errCode))
+					err = &mysql.MySQLError{uint16(errCode), ""}
 					ctx.L().Warn("executeSQLCustomRetry failed", zap.String("failpoint", "LoadExecCreateTableFailed"), zap.Error(err))
 				}
 			})
