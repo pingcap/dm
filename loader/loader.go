@@ -916,7 +916,7 @@ func (l *Loader) restoreStructure(conn *Conn, sqlFile string, schema string, tab
 			l.tctx.L().Debug("schema create statement", zap.String("sql", query))
 
 			sqls = append(sqls, query)
-			err = conn.executeDDL(l.tctx, sqls)
+			err = conn.executeSQL(l.tctx, sqls)
 			if err != nil {
 				return err
 			}

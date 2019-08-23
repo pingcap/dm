@@ -53,7 +53,7 @@ func (s *testSyncerSuite) TestIsRetryableError(c *C) {
 
 	for _, t := range cases {
 		c.Logf("err %v, expected %v", t.err, t.isRetryable)
-		c.Assert(retry.IsSyncerRetryableError(t.err), Equals, t.isRetryable)
+		c.Assert(retry.IsRetryableError(t.err), Equals, t.isRetryable)
 	}
 }
 

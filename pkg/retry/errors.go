@@ -20,7 +20,7 @@ import (
 	gmysql "github.com/siddontang/go-mysql/mysql"
 )
 
-func isCommonRetryableError(err error) bool {
+func IsRetryableError(err error) bool {
 	err = errors.Cause(err) // check the original error
 	mysqlErr, ok := err.(*mysql.MySQLError)
 	if ok {
@@ -33,46 +33,6 @@ func isCommonRetryableError(err error) bool {
 		}
 	}
 	return false
-}
-
-// IsLoaderRetryableError tells whether an error need retry in Loader executeSQL/querySQL
-func IsLoaderRetryableError(err error) bool {
-	if err == nil {
-		return false
-	}
-	err = errors.Cause(err)
-	mysqlErr, ok := err.(*mysql.MySQLError)
-	if ok {
-		switch mysqlErr.Number {
-		case tmysql.ErrDupEntry, tmysql.ErrDataTooLong:
-			return false
-		}
-	}
-	return isCommonRetryableError(err)
-}
-
-// IsLoaderDDLRetryableError tells whether an error need retry in Loader executeDDL
-func IsLoaderDDLRetryableError(err error) bool {
-	if err == nil {
-		return false
-	}
-	err = errors.Cause(err) // check the original error
-	mysqlErr, ok := err.(*mysql.MySQLError)
-	if ok {
-		switch mysqlErr.Number {
-		case tmysql.ErrDBCreateExists, tmysql.ErrTableExists:
-			return false
-		}
-	}
-	return IsLoaderRetryableError(err)
-}
-
-// IsSyncerRetryableError tells whether an error need retry in Syncer executeSQL/querySQL
-func IsSyncerRetryableError(err error) bool {
-	if err == nil {
-		return false
-	}
-	return isCommonRetryableError(err)
 }
 
 // IsInvalidConnError tells whether it's a mysql connection error

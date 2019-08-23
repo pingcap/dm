@@ -114,7 +114,7 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string, args ...interfa
 		FirstRetryDuration: retryTimeout,
 		BackoffStrategy:    retry.Stable,
 		IsRetryableFn: func(retryTime int, err error) bool {
-			if retry.IsSyncerRetryableError(err) {
+			if retry.IsRetryableError(err) {
 				sqlRetriesTotal.WithLabelValues("query", conn.cfg.Name).Add(1)
 				return true
 			}
@@ -155,7 +155,7 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 		FirstRetryDuration: retryTimeout,
 		BackoffStrategy:    retry.Stable,
 		IsRetryableFn: func(retryTime int, err error) bool {
-			if retry.IsSyncerRetryableError(err) {
+			if retry.IsRetryableError(err) {
 				sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
 				return true
 			}
