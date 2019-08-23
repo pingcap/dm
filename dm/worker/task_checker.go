@@ -114,9 +114,10 @@ type realTaskStatusChecker struct {
 // NewRealTaskStatusChecker creates a new realTaskStatusChecker instance
 func NewRealTaskStatusChecker(cfg CheckerConfig, w *Worker) TaskStatusChecker {
 	tsc := &realTaskStatusChecker{
-		cfg: cfg,
-		l:   log.With(zap.String("component", "task checker")),
-		w:   w,
+		cfg:   cfg,
+		l:     log.With(zap.String("component", "task checker")),
+		w:     w,
+		block: make(map[string]time.Time),
 	}
 	tsc.closed.Set(closedTrue)
 	return tsc
