@@ -20,6 +20,7 @@ import (
 	gmysql "github.com/siddontang/go-mysql/mysql"
 )
 
+// IsRetryableError tells whether this error should retry
 func IsRetryableError(err error) bool {
 	err = errors.Cause(err) // check the original error
 	mysqlErr, ok := err.(*mysql.MySQLError)
