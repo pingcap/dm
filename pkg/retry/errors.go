@@ -78,13 +78,5 @@ func IsSyncerRetryableError(err error) bool {
 
 // IsInvalidConnError tells whether it's a mysql connection error
 func IsInvalidConnError(err error) bool {
-	if err == nil {
-		return false
-	}
-	err = errors.Cause(err)
-	switch err {
-	case mysql.ErrInvalidConn:
-		return true
-	}
-	return false
+	return errors.Cause(err) == mysql.ErrInvalidConn
 }

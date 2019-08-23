@@ -47,10 +47,10 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string) (*sql.Rows, erro
 
 	startTime := time.Now()
 
-	params := retry.DefaultRetryParams{
+	params := retry.Params{
 		RetryCount:         10,
 		FirstRetryDuration: time.Second,
-		RetryInterval:      retry.Stable,
+		BackoffStrategy:    retry.Stable,
 		IsRetryableFn: func(retryTime int, err error) bool {
 			if retry.IsLoaderRetryableError(err) {
 				ctx.L().Warn("query statement", zap.Int("retry", retryTime), zap.String("sql", query), log.ShortError(err))
@@ -60,10 +60,10 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string) (*sql.Rows, erro
 		},
 	}
 
-	ret, _, err := conn.baseConn.RetryStrategy.DefaultRetryStrategy(
+	ret, _, err := conn.baseConn.RetryStrategy.Apply(
 		ctx,
 		params,
-		func(ctx *tcontext.Context, _ int) (interface{}, error) {
+		func(ctx *tcontext.Context) (interface{}, error) {
 			rows, err := conn.baseConn.QuerySQL(ctx, query)
 			return rows, err
 		})
@@ -123,10 +123,10 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []baseconn.S
 		return terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
-	params := retry.DefaultRetryParams{
+	params := retry.Params{
 		RetryCount:         10,
 		FirstRetryDuration: 2 * time.Second,
-		RetryInterval:      retry.LinearIncrease,
+		BackoffStrategy:    retry.LinearIncrease,
 		IsRetryableFn: func(retryTime int, err error) bool {
 			ctx.L().Debug("execute statement", zap.Int("retry", retryTime), zap.String("sqls", fmt.Sprintf("%-.200v", sqls)))
 			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
@@ -136,25 +136,19 @@ func (conn *Conn) executeSQLCustomRetry(ctx *tcontext.Context, sqls []baseconn.S
 			return false
 		},
 	}
-	_, _, err := conn.baseConn.RetryStrategy.DefaultRetryStrategy(
+	_, _, err := conn.baseConn.RetryStrategy.Apply(
 		ctx,
 		params,
-		func(ctx *tcontext.Context, retryTime int) (interface{}, error) {
+		func(ctx *tcontext.Context) (interface{}, error) {
 			startTime := time.Now()
 			_, err := conn.baseConn.ExecuteSQL(ctx, sqls)
 			failpoint.Inject("LoadExecCreateTableFailed", func(val failpoint.Value) {
-				items := strings.Split(val.(string), ",")
-				if len(items) != 2 {
+				errCode, err1 := strconv.ParseUint(val.(string), 10, 16)
+				if err1 != nil {
 					ctx.L().Fatal("failpoint LoadExecCreateTableFailed's value is invalid", zap.String("val", val.(string)))
 				}
 
-				errCode, err1 := strconv.ParseUint(items[0], 10, 16)
-				errNum, err2 := strconv.ParseInt(items[1], 10, 16)
-				if err1 != nil || err2 != nil {
-					ctx.L().Fatal("failpoint LoadExecCreateTableFailed's value is invalid", zap.String("val", val.(string)), zap.Strings("items", items), zap.Error(err1), zap.Error(err2))
-				}
-
-				if retryTime < int(errNum) && len(sqls) == 1 && strings.Contains(sqls[0].Query, "CREATE TABLE") {
+				if len(sqls) == 1 && strings.Contains(sqls[0].Query, "CREATE TABLE") {
 					err = tmysql.NewErr(uint16(errCode))
 					ctx.L().Warn("executeSQLCustomRetry failed", zap.String("failpoint", "LoadExecCreateTableFailed"), zap.Error(err))
 				}

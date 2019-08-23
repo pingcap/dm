@@ -36,20 +36,20 @@ type testBaseConnSuite struct {
 
 func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	baseConn, err := NewBaseConn("error dsn", nil)
-	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10001))
+	c.Assert(terror.ErrDBDriverError.Equal(err), IsTrue)
 
 	tctx := tcontext.Background()
 	err = baseConn.ResetConn(tctx)
-	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10004))
+	c.Assert(terror.ErrDBUnExpect.Equal(err), IsTrue)
 
 	err = baseConn.SetRetryStrategy(nil)
-	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10004))
+	c.Assert(terror.ErrDBUnExpect.Equal(err), IsTrue)
 
 	_, err = baseConn.QuerySQL(tctx, "select 1")
-	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10004))
+	c.Assert(terror.ErrDBUnExpect.Equal(err), IsTrue)
 
 	_, err = baseConn.ExecuteSQL(tctx, []SQL{{"", nil}})
-	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10004))
+	c.Assert(terror.ErrDBUnExpect.Equal(err), IsTrue)
 
 	db, mock, err := sqlmock.New()
 	baseConn = &BaseConn{db, "", nil}
@@ -72,7 +72,7 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 
 	mock.ExpectQuery("select 1").WillReturnError(errors.New("invalid connection"))
 	_, err = baseConn.QuerySQL(tctx, "select 1")
-	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10005))
+	c.Assert(terror.ErrDBQueryFailed.Equal(err), IsTrue)
 
 	sqls := []SQL{}
 	affected, _ := baseConn.ExecuteSQL(tctx, sqls)
@@ -89,14 +89,14 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	mock.ExpectBegin().WillReturnError(errors.New("begin error"))
 	sqls = []SQL{{"create database test", nil}}
 	_, err = baseConn.ExecuteSQL(tctx, sqls)
-	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10006))
+	c.Assert(terror.ErrDBExecuteFailed.Equal(err), IsTrue)
 
 	mock.ExpectBegin()
 	mock.ExpectExec("create database test").WillReturnError(errors.New("invalid connection"))
 	mock.ExpectRollback()
 	sqls = []SQL{{"create database test", nil}}
 	_, err = baseConn.ExecuteSQL(tctx, sqls)
-	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10006))
+	c.Assert(terror.ErrDBExecuteFailed.Equal(err), IsTrue)
 
 	if err = mock.ExpectationsWereMet(); err != nil {
 		c.Fatal("thers were unexpected:", err)

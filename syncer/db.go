@@ -109,10 +109,10 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string) (*sql.Rows, err
 	if conn == nil || conn.baseConn == nil {
 		return nil, terror.ErrDBUnExpect.Generate("database base connection not valid")
 	}
-	params := retry.DefaultRetryParams{
+	params := retry.Params{
 		RetryCount:         10,
 		FirstRetryDuration: retryTimeout,
-		RetryInterval:      retry.Stable,
+		BackoffStrategy:    retry.Stable,
 		IsRetryableFn: func(retryTime int, err error) bool {
 			if retry.IsSyncerRetryableError(err) {
 				sqlRetriesTotal.WithLabelValues("query", conn.cfg.Name).Add(1)
@@ -122,10 +122,10 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string) (*sql.Rows, err
 		},
 	}
 
-	ret, _, err := conn.baseConn.RetryStrategy.DefaultRetryStrategy(
+	ret, _, err := conn.baseConn.RetryStrategy.Apply(
 		tctx,
 		params,
-		func(ctx *tcontext.Context, _ int) (interface{}, error) {
+		func(ctx *tcontext.Context) (interface{}, error) {
 			rows, err := conn.baseConn.QuerySQL(ctx, query)
 			return rows, err
 		},
@@ -151,10 +151,10 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 		sqls = append(sqls, baseconn.SQL{query, args[i]})
 	}
 
-	params := retry.DefaultRetryParams{
+	params := retry.Params{
 		RetryCount:         100,
 		FirstRetryDuration: retryTimeout,
-		RetryInterval:      retry.Stable,
+		BackoffStrategy:    retry.Stable,
 		IsRetryableFn: func(retryTime int, err error) bool {
 			if retry.IsSyncerRetryableError(err) {
 				sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
@@ -164,10 +164,10 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 		},
 	}
 
-	ret, _, err := conn.baseConn.RetryStrategy.DefaultRetryStrategy(
+	ret, _, err := conn.baseConn.RetryStrategy.Apply(
 		tctx,
 		params,
-		func(ctx *tcontext.Context, _ int) (interface{}, error) {
+		func(ctx *tcontext.Context) (interface{}, error) {
 			affected, err := conn.baseConn.ExecuteSQL(ctx, sqls)
 			return affected, err
 		})

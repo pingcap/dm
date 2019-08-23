@@ -36,9 +36,9 @@ type testStrategySuite struct {
 func (t *testStrategySuite) TestFiniteRetryStrategy(c *C) {
 	strategy := &FiniteRetryStrategy{}
 
-	params := DefaultRetryParams{
+	params := Params{
 		RetryCount:         1,
-		RetryInterval:      Stable,
+		BackoffStrategy:    Stable,
 		FirstRetryDuration: time.Second,
 		IsRetryableFn: func(int, error) bool {
 			return false
@@ -46,41 +46,47 @@ func (t *testStrategySuite) TestFiniteRetryStrategy(c *C) {
 	}
 	ctx := tcontext.Background()
 
-	operateFn := func(*tcontext.Context, int) (interface{}, error) {
+	operateFn := func(*tcontext.Context) (interface{}, error) {
 		return nil, terror.ErrDBDriverError.Generate("test database error")
 	}
 
-	_, opCount, err := strategy.DefaultRetryStrategy(ctx, params, operateFn)
+	_, opCount, err := strategy.Apply(ctx, params, operateFn)
 	c.Assert(opCount, Equals, 0)
-	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10001))
+	c.Assert(terror.ErrDBDriverError.Equal(err), IsTrue)
 
 	params.IsRetryableFn = func(int, error) bool {
 		return true
 	}
-	_, opCount, err = strategy.DefaultRetryStrategy(ctx, params, operateFn)
-	c.Assert(opCount, Equals, 1)
-	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10001))
+	_, opCount, err = strategy.Apply(ctx, params, operateFn)
+	c.Assert(opCount, Equals, params.RetryCount)
+	c.Assert(terror.ErrDBDriverError.Equal(err), IsTrue)
 
-	operateFn = func(*tcontext.Context, int) (interface{}, error) {
+	operateFn = func(*tcontext.Context) (interface{}, error) {
 		mysqlErr := mysql.ErrInvalidConn
 		return nil, terror.ErrDBInvalidConn.Delegate(mysqlErr, "test invalid connection")
 	}
 
 	// invalid connection will return ErrInvalidConn immediately no matter how many retries left
-	_, opCount, err = strategy.DefaultRetryStrategy(ctx, params, operateFn)
+	_, opCount, err = strategy.Apply(ctx, params, operateFn)
 	c.Assert(opCount, Equals, 0)
-	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10003))
+	c.Assert(terror.ErrDBInvalidConn.Equal(err), IsTrue)
 
-	params.RetryCount = 10
-	operateFn = func(ctx *tcontext.Context, i int) (interface{}, error) {
-		if i == 8 {
-			mysqlErr := mysql.ErrInvalidConn
-			return nil, terror.ErrDBInvalidConn.Delegate(mysqlErr, "test invalid connection")
-		}
+	params.RetryCount = 3
+	operateFn = func(ctx *tcontext.Context) (interface{}, error) {
 		return nil, terror.ErrDBDriverError.Generate("test database error")
 	}
 
-	_, opCount, err = strategy.DefaultRetryStrategy(ctx, params, operateFn)
-	c.Assert(opCount, Equals, 8)
-	c.Assert(err.(*terror.Error).Code(), Equals, terror.ErrCode(10003))
+	_, opCount, err = strategy.Apply(ctx, params, operateFn)
+	c.Assert(opCount, Equals, params.RetryCount)
+	c.Assert(terror.ErrDBDriverError.Equal(err), IsTrue)
+
+	retValue := "success"
+	operateFn = func(*tcontext.Context) (interface{}, error) {
+		return retValue, nil
+	}
+	ret, opCount, err := strategy.Apply(ctx, params, operateFn)
+	c.Assert(ret.(string), Equals, retValue)
+	c.Assert(opCount, Equals, 0)
+	c.Assert(err, IsNil)
+
 }
