@@ -117,7 +117,7 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]
 		func(ctx *tcontext.Context) (interface{}, error) {
 			startTime := time.Now()
 			_, err := conn.baseConn.ExecuteSQL(ctx, sqls)
-			if val, ok := failpoint.Eval(_curpkg_("LoadExecCreateTableFailed")); ok {
+			failpoint.Inject("LoadExecCreateTableFailed", func(val failpoint.Value) {
 				errCode, err1 := strconv.ParseUint(val.(string), 10, 16)
 				if err1 != nil {
 					ctx.L().Fatal("failpoint LoadExecCreateTableFailed's value is invalid", zap.String("val", val.(string)))
@@ -127,7 +127,7 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]
 					err = &mysql.MySQLError{uint16(errCode), ""}
 					ctx.L().Warn("executeSQLCustomRetry failed", zap.String("failpoint", "LoadExecCreateTableFailed"), zap.Error(err))
 				}
-			}
+			})
 			cost := time.Since(startTime)
 			txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
 			if cost > 1 {
