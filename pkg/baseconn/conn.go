@@ -95,7 +95,7 @@ func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string, args ...int
 	if conn == nil || conn.DB == nil {
 		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
-	tctx.L().Debug("query statement", zap.String("query", query))
+	tctx.L().Debug("query statement", zap.String("query", query), zap.Reflect("argument", args))
 
 	rows, err := conn.DB.QueryContext(tctx.Context(), query, args...)
 
