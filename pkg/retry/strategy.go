@@ -14,7 +14,6 @@
 package retry
 
 import (
-	"fmt"
 	"time"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
@@ -72,10 +71,6 @@ func (*FiniteRetryStrategy) Apply(ctx *tcontext.Context, params Params,
 	for ; i < params.RetryCount; i++ {
 		ret, err = operateFn(ctx)
 		if err != nil {
-			if IsInvalidConnError(err) {
-				ctx.L().Warn(fmt.Sprintf("met invalid connection error, in %dth retry", i))
-				return nil, i, err
-			}
 			if params.IsRetryableFn(i, err) {
 				duration := params.FirstRetryDuration
 

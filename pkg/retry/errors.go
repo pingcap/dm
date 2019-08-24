@@ -35,8 +35,3 @@ func IsRetryableError(err error) bool {
 	}
 	return false
 }
-
-// IsInvalidConnError tells whether it's a mysql connection error
-func IsInvalidConnError(err error) bool {
-	return errors.Cause(err) == mysql.ErrInvalidConn
-}
