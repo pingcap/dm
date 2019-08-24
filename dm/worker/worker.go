@@ -695,14 +695,16 @@ func (w *Worker) findSubTask(name string) *SubTask {
 	return w.subTasks[name]
 }
 
-func (w *Worker) getPausedSubTasks() []*pb.TaskStatus {
+// getPausedSubTasks returns sub task status of paused task, note the field
+// in sub task status is not completed, including `Name`, `Stage` and `Result` now
+func (w *Worker) getPausedSubTasks() []*pb.SubTaskStatus {
 	w.RLock()
 	defer w.RUnlock()
-	result := make([]*pb.TaskStatus, 0)
+	result := make([]*pb.SubTaskStatus, 0)
 	for name, st := range w.subTasks {
 		st.RLock()
 		if st.stage == pb.Stage_Paused {
-			result = append(result, &pb.TaskStatus{
+			result = append(result, &pb.SubTaskStatus{
 				Name:   name,
 				Stage:  pb.Stage_Paused,
 				Result: proto.Clone(st.result).(*pb.ProcessResult),

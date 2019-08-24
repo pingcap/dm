@@ -37,8 +37,8 @@ import (
 
 // createUnits creates process units base on task mode
 func createUnits(cfg *config.SubTaskConfig) []unit.Unit {
-	failpoint.Inject("mockWorkerUnits", func(_ failpoint.Value) {
-		log.L().Info("create mock worker units", zap.String("failpoint", "mockWorkerUnits"))
+	failpoint.Inject("mockCreateUnitsDumpOnly", func(_ failpoint.Value) {
+		log.L().Info("create mock worker units with dump unit only", zap.String("failpoint", "mockCreateUnitsDumpOnly"))
 		failpoint.Return([]unit.Unit{mydumper.NewMydumper(cfg)})
 	})
 

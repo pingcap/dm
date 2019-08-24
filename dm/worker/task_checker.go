@@ -44,9 +44,18 @@ type ResumeStrategy int
 
 // resume strategies
 const (
+	// ResumeIgnore strategy processes task that is not paused, or paused by manually
+	// or we don't get enough information to determine task is paused because of error
+	// Will do nothing with this task in this check round.
 	ResumeIgnore ResumeStrategy = iota + 1
+	// ResumeSkip applys to paused task that can be resumed, but last auto resume duration
+	// is less than backoff waiting time, will skip auto resume in this check round.
 	ResumeSkip
+	// ResumeNoSense means we know resuming a paused task will always fail again, such as
+	// a task is paused because of executing incompatible DDL to downstream, resume this
+	// task will make no sense.
 	ResumeNoSense
+	// ResumeDispatch means we will dispatch an auto resume operation in this check round for the paused task
 	ResumeDispatch
 )
 
@@ -62,7 +71,7 @@ func (bs ResumeStrategy) String() string {
 	if s, ok := resumeStrategy2Str[bs]; ok {
 		return s
 	}
-	return fmt.Sprintf("unknown resume strategy: %d", bs)
+	return fmt.Sprintf("unsupported resume strategy: %d", bs)
 }
 
 // CheckerConfig is configuration used for TaskStatusChecker
@@ -190,7 +199,7 @@ func isRetryableError(err *pb.ProcessError) bool {
 	return true
 }
 
-func (tsc *realTaskStatusChecker) getResumeStrategy(taskStatus *pb.TaskStatus, duration time.Duration) ResumeStrategy {
+func (tsc *realTaskStatusChecker) getResumeStrategy(taskStatus *pb.SubTaskStatus, duration time.Duration) ResumeStrategy {
 	// task that is not paused or paused manually, just ignore it
 	if taskStatus == nil || taskStatus.Stage != pb.Stage_Paused || taskStatus.Result == nil || taskStatus.Result.IsCanceled {
 		return ResumeIgnore

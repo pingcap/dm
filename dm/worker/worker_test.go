@@ -145,8 +145,8 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	defer failpoint.Disable("github.com/pingcap/dm/mydumper/dumpUnitProcessWithError")
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/handleTaskInterval", `return(10)`), IsNil)
 	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/handleTaskInterval")
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/mockWorkerUnits", `return(true)`), IsNil)
-	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/mockWorkerUnits")
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/mockCreateUnitsDumpOnly", `return(true)`), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/mockCreateUnitsDumpOnly")
 
 	s := NewServer(cfg)
 
