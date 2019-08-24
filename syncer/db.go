@@ -16,7 +16,9 @@ package syncer
 import (
 	"database/sql"
 	"fmt"
+	"go.uber.org/zap"
 	"strings"
+	"time"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/baseconn"
@@ -131,6 +133,7 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string, args ...interfa
 	)
 
 	if err != nil {
+		tctx.L().Error("query statement failed after retry", zap.String("query", query), zap.Reflect("argument", args), log.ShortError(err))
 		return nil, terror.ErrDBQueryFailed.Delegate(err, query)
 	}
 	return ret.(*sql.Rows), nil
@@ -144,6 +147,7 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 	if conn == nil || conn.baseConn == nil {
 		return 0, terror.ErrDBUnExpect.Generate("database base connection not valid")
 	}
+	startTime := time.Now()
 
 	sqls := make([]baseconn.SQL, 0, len(queries))
 	for i, query := range queries {
@@ -156,12 +160,16 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 		BackoffStrategy:    retry.Stable,
 		IsRetryableFn: func(retryTime int, err error) bool {
 			if retry.IsRetryableError(err) {
+				tctx.L().Warn("execute statements", zap.Int("retry", retryTime), zap.Strings("sqls", queries), zap.Reflect("arguments", args))
 				sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
 				return true
 			}
 			return false
 		},
 	}
+	defer func() {
+		txnHistogram.WithLabelValues(conn.cfg.Name).Observe(time.Since(startTime).Seconds())
+	}()
 
 	ret, _, err := conn.baseConn.ApplyRetryStrategy(
 		tctx,
@@ -171,6 +179,7 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 		})
 
 	if err != nil {
+		tctx.L().Error("execute statements failed after retry", zap.Strings("sqls", queries), zap.Reflect("arguments", args), log.ShortError(err))
 		return ret.(int), terror.ErrDBExecuteFailed.Delegate(err, queries)
 	}
 	return ret.(int), nil

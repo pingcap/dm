@@ -65,7 +65,6 @@ type FiniteRetryStrategy struct {
 }
 
 // Apply for FiniteRetryStrategy, it wait `FirstRetryDuration` before it starts first retry, and then rest of retries wait time depends on BackoffStrategy.
-// ErrInvalidConn is a special error, need a public retry strategy, so return it to up layer continue retry.
 func (*FiniteRetryStrategy) Apply(ctx *tcontext.Context, params Params,
 	operateFn func(*tcontext.Context) (interface{}, error)) (ret interface{}, i int, err error) {
 	for ; i < params.RetryCount; i++ {

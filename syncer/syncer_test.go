@@ -843,9 +843,9 @@ func (s *testSyncerSuite) TestTimezone(c *C) {
 		s.resetBinlogSyncer()
 
 		// we should not use `sql.DB.Exec` to do query which depends on session variables
-		// because `sql.DB.Exec` will choose a underlying BaseConn for every query from the connection pool
-		// and different BaseConn using different session
-		// ref: `sql.DB.BaseConn`
+		// because `sql.DB.Exec` will choose a underlying Conn for every query from the connection pool
+		// and different Conn using different session
+		// ref: `sql.DB.Conn`
 		// and `set @@global` is also not reasonable, because it can not affect sessions already exist
 		// if we must ensure multi queries use the same session, we should use a transaction
 		txn, err := s.db.Begin()
@@ -1311,10 +1311,10 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		syncer.toDBs = []*Conn{{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, s.dbAddr, &retry.FiniteRetryStrategy{}}}}
 		syncer.ddlDB = &Conn{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, s.dbAddr, &retry.FiniteRetryStrategy{}}}
 
-		// run sql on upstream baseConn to generate binlog event
+		// run sql on upstream db to generate binlog event
 		runSQL(createSQLs)
 
-		// mock downstream baseConn result
+		// mock downstream db result
 		mock.ExpectBegin()
 		mock.ExpectExec("CREATE DATABASE").WillReturnResult(sqlmock.NewResult(1, 1))
 		mock.ExpectCommit()

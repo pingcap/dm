@@ -62,9 +62,6 @@ func (t *testStrategySuite) TestFiniteRetryStrategy(c *C) {
 	c.Assert(terror.ErrDBDriverError.Equal(err), IsTrue)
 
 	params.RetryCount = 3
-	operateFn = func(ctx *tcontext.Context) (interface{}, error) {
-		return nil, terror.ErrDBDriverError.Generate("test database error")
-	}
 
 	_, opCount, err = strategy.Apply(ctx, params, operateFn)
 	c.Assert(opCount, Equals, params.RetryCount)

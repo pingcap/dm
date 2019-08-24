@@ -100,7 +100,7 @@ func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string, args ...int
 	rows, err := conn.DB.QueryContext(tctx.Context(), query, args...)
 
 	if err != nil {
-		tctx.L().Error("query statement failed", zap.String("query", query), log.ShortError(err))
+		tctx.L().Error("query statement failed", zap.String("query", query), zap.Reflect("argument", args), log.ShortError(err))
 		return nil, terror.ErrDBQueryFailed.Delegate(err, query)
 	}
 	return rows, nil

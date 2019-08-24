@@ -53,12 +53,23 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string, args ...interfac
 		BackoffStrategy:    retry.Stable,
 		IsRetryableFn: func(retryTime int, err error) bool {
 			if retry.IsRetryableError(err) {
-				ctx.L().Warn("query statement", zap.Int("retry", retryTime), zap.String("sql", query), log.ShortError(err))
+				ctx.L().Warn("query statement", zap.Int("retry", retryTime), zap.String("query", query), zap.Reflect("argument", args), log.ShortError(err))
 				return true
 			}
 			return false
 		},
 	}
+
+	var err error
+	defer func() {
+		if err == nil {
+			cost := time.Since(startTime)
+			queryHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
+			if cost > 1 {
+				ctx.L().Warn("query statement", zap.String("query", query), zap.Reflect("argument", args), zap.Duration("cost time", cost))
+			}
+		}
+	}()
 
 	ret, _, err := conn.baseConn.ApplyRetryStrategy(
 		ctx,
@@ -66,18 +77,8 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string, args ...interfac
 		func(ctx *tcontext.Context) (interface{}, error) {
 			return conn.baseConn.QuerySQL(ctx, query, args...)
 		})
-
-	defer func() {
-		if err == nil {
-			cost := time.Since(startTime)
-			queryHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
-			if cost > 1 {
-				ctx.L().Warn("query statement", zap.String("sql", query), zap.Duration("cost time", cost))
-			}
-		}
-	}()
-
 	if err != nil {
+		ctx.L().Error("query statement failed after retry", zap.String("query", query), zap.Reflect("argument", args), log.ShortError(err))
 		return nil, err
 	}
 	return ret.(*sql.Rows), nil
@@ -106,7 +107,7 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]
 		FirstRetryDuration: 2 * time.Second,
 		BackoffStrategy:    retry.LinearIncrease,
 		IsRetryableFn: func(retryTime int, err error) bool {
-			ctx.L().Debug("execute statement", zap.Int("retry", retryTime), zap.String("sqls", fmt.Sprintf("%-.200v", sqls)))
+			ctx.L().Warn("execute statements", zap.Int("retry", retryTime), zap.Strings("queries", queries), zap.Reflect("arguments", args), log.ShortError(err))
 			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
 			return retry.IsRetryableError(err)
 		},
@@ -125,16 +126,22 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]
 
 				if len(sqls) == 1 && strings.Contains(sqls[0].Query, "CREATE TABLE") {
 					err = &mysql.MySQLError{uint16(errCode), ""}
-					ctx.L().Warn("executeSQLCustomRetry failed", zap.String("failpoint", "LoadExecCreateTableFailed"), zap.Error(err))
+					ctx.L().Warn("executeSQL failed", zap.String("failpoint", "LoadExecCreateTableFailed"), zap.Error(err))
 				}
 			})
-			cost := time.Since(startTime)
-			txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
-			if cost > 1 {
-				ctx.L().Warn("transaction execute successfully", zap.Duration("cost time", cost))
+			if err == nil {
+				cost := time.Since(startTime)
+				txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
+				if cost > 1 {
+					ctx.L().Warn("transaction execute successfully", zap.Duration("cost time", cost))
+				}
 			}
 			return nil, err
 		})
+
+	if err != nil {
+		ctx.L().Error("execute statements failed after retry", zap.Strings("queries", queries), zap.Reflect("arguments", args), log.ShortError(err))
+	}
 
 	return err
 }
