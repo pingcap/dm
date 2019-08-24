@@ -1336,7 +1336,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 				"Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Comment", "Index_comment"},
 			).AddRow("st", 0, "PRIMARY", 1, "id", "A", 0, null, null, null, "BTREE", "", ""))
 
-		// run sql on upstream baseConn
+		// run sql on upstream db
 		runSQL(_case.testSQLs)
 		// mock expect sql
 		for i, expectSQL := range _case.expectSQLS {
