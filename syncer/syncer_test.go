@@ -720,7 +720,7 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 
 	s.resetEventsGenerator(c)
 
-	//create baseConn and tables
+	//create db and tables
 	events := mockBinlogEvents{
 		mockBinlogEvent{typ: DBCreate, args: []interface{}{"stest_3"}},
 		mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest_3", "create table stest_3.log(id varchar(45))"}},
@@ -753,7 +753,7 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 		dmlEvents = append(dmlEvents, dml.events...)
 	}
 
-	// drop tables and baseConn
+	// drop tables and db
 	events = mockBinlogEvents{
 		// TODO event generator support generate an event with multiple tables DDL
 		mockBinlogEvent{typ: TableDrop, args: []interface{}{"stest_3", "log"}},
@@ -1037,7 +1037,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	}
 
 	syncer := NewSyncer(s.cfg)
-	// use upstream baseConn as mock downstream
+	// use upstream db as mock downstream
 	syncer.toDBs = []*Conn{{baseConn: &baseconn.BaseConn{s.db, s.dbAddr, &retry.FiniteRetryStrategy{}}}}
 
 	for _, testCase := range testCases {
