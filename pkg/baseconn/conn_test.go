@@ -52,6 +52,7 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	c.Assert(terror.ErrDBUnExpect.Equal(err), IsTrue)
 
 	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
 	baseConn = &BaseConn{db, "", nil}
 
 	err = baseConn.SetRetryStrategy(&retry.FiniteRetryStrategy{})
