@@ -16,7 +16,6 @@ package syncer
 import (
 	"database/sql"
 	"fmt"
-	"go.uber.org/zap"
 	"strings"
 	"time"
 
@@ -32,6 +31,7 @@ import (
 	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/siddontang/go-mysql/mysql"
+	"go.uber.org/zap"
 )
 
 type column struct {
