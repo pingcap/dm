@@ -117,6 +117,7 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string, args ...interfa
 		BackoffStrategy:    retry.Stable,
 		IsRetryableFn: func(retryTime int, err error) bool {
 			if retry.IsRetryableError(err) {
+				tctx.L().Warn("query statement", zap.Int("retry", retryTime), zap.String("query", query), zap.Reflect("argument", args))
 				sqlRetriesTotal.WithLabelValues("query", conn.cfg.Name).Add(1)
 				return true
 			}
@@ -154,7 +155,7 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args ...[
 		BackoffStrategy:    retry.Stable,
 		IsRetryableFn: func(retryTime int, err error) bool {
 			if retry.IsRetryableError(err) {
-				tctx.L().Warn("execute statements", zap.Int("retry", retryTime), zap.Strings("sqls", queries), zap.Reflect("arguments", args))
+				tctx.L().Warn("execute statements", zap.Int("retry", retryTime), zap.Strings("queries", queries), zap.Reflect("arguments", args))
 				sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
 				return true
 			}
@@ -175,7 +176,7 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args ...[
 		})
 
 	if err != nil {
-		tctx.L().Error("execute statements failed after retry", zap.Strings("sqls", queries), zap.Reflect("arguments", args), log.ShortError(err))
+		tctx.L().Error("execute statements failed after retry", zap.Strings("queries", queries), zap.Reflect("arguments", args), log.ShortError(err))
 		return ret.(int), terror.ErrDBExecuteFailed.Delegate(err, queries)
 	}
 	return ret.(int), nil
