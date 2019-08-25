@@ -139,19 +139,13 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string, args ...interfa
 	return ret.(*sql.Rows), nil
 }
 
-func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]interface{}) (int, error) {
+func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args ...[]interface{}) (int, error) {
 	if len(queries) == 0 {
 		return 0, nil
 	}
 
 	if conn == nil || conn.baseConn == nil {
 		return 0, terror.ErrDBUnExpect.Generate("database base connection not valid")
-	}
-	startTime := time.Now()
-
-	sqls := make([]baseconn.SQL, 0, len(queries))
-	for i, query := range queries {
-		sqls = append(sqls, baseconn.SQL{query, args[i]})
 	}
 
 	params := retry.Params{
@@ -167,15 +161,17 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args [][]
 			return false
 		},
 	}
-	defer func() {
-		txnHistogram.WithLabelValues(conn.cfg.Name).Observe(time.Since(startTime).Seconds())
-	}()
 
 	ret, _, err := conn.baseConn.ApplyRetryStrategy(
 		tctx,
 		params,
 		func(ctx *tcontext.Context) (interface{}, error) {
-			return conn.baseConn.ExecuteSQL(ctx, sqls)
+			startTime := time.Now()
+			ret, err := conn.baseConn.ExecuteSQL(ctx, queries, args...)
+			if err == nil {
+				txnHistogram.WithLabelValues(conn.cfg.Name).Observe(time.Since(startTime).Seconds())
+			}
+			return ret, err
 		})
 
 	if err != nil {

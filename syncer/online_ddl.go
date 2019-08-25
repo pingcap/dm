@@ -204,7 +204,7 @@ func (s *OnlineDDLStorage) Save(ghostSchema, ghostTable, realSchema, realTable, 
 	}
 
 	query := fmt.Sprintf("REPLACE INTO `%s`.`%s`(`id`,`ghost_schema`, `ghost_table`, `ddls`) VALUES ('%s', '%s', '%s', '%s')", s.schema, s.table, s.id, ghostSchema, ghostTable, escapeSingleQuote(string(ddlsBytes)))
-	_, err = s.db.executeSQL(s.tctx, []string{query}, [][]interface{}{nil})
+	_, err = s.db.executeSQL(s.tctx, []string{query})
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
@@ -220,7 +220,7 @@ func (s *OnlineDDLStorage) Delete(ghostSchema, ghostTable string) error {
 
 	// delete all checkpoints
 	sql := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s' and `ghost_schema` = '%s' and `ghost_table` = '%s'", s.schema, s.table, s.id, ghostSchema, ghostTable)
-	_, err := s.db.executeSQL(s.tctx, []string{sql}, [][]interface{}{nil})
+	_, err := s.db.executeSQL(s.tctx, []string{sql})
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -236,7 +236,7 @@ func (s *OnlineDDLStorage) Clear() error {
 
 	// delete all checkpoints
 	sql := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s'", s.schema, s.table, s.id)
-	_, err := s.db.executeSQL(s.tctx, []string{sql}, [][]interface{}{nil})
+	_, err := s.db.executeSQL(s.tctx, []string{sql})
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -266,7 +266,7 @@ func (s *OnlineDDLStorage) prepare() error {
 
 func (s *OnlineDDLStorage) createSchema() error {
 	sql := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", s.schema)
-	_, err := s.db.executeSQL(s.tctx, []string{sql}, [][]interface{}{nil})
+	_, err := s.db.executeSQL(s.tctx, []string{sql})
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
@@ -280,7 +280,7 @@ func (s *OnlineDDLStorage) createTable() error {
 			update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			UNIQUE KEY uk_id_schema_table (id, ghost_schema, ghost_table)
 		)`, tableName)
-	_, err := s.db.executeSQL(s.tctx, []string{sql}, [][]interface{}{nil})
+	_, err := s.db.executeSQL(s.tctx, []string{sql})
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
 

@@ -854,7 +854,7 @@ func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *Conn, jobCh
 			queries = append(queries, j.sql)
 			args = append(args, j.args)
 		}
-		affected, err := db.executeSQL(s.tctx, queries, args)
+		affected, err := db.executeSQL(s.tctx, queries, args...)
 		if err != nil {
 			errCtx := &ExecErrorContext{err, jobs[affected].currentPos, fmt.Sprintf("%v", jobs)}
 			s.appendExecErrors(errCtx)
@@ -890,8 +890,7 @@ func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *Conn, jobCh
 				if sqlJob.ddlExecItem != nil && sqlJob.ddlExecItem.req != nil && !sqlJob.ddlExecItem.req.Exec {
 					s.tctx.L().Info("ignore sharding DDLs", zap.Strings("ddls", sqlJob.ddls))
 				} else {
-					args := make([][]interface{}, len(sqlJob.ddls))
-					_, err = db.executeSQL(s.tctx, sqlJob.ddls, args)
+					_, err = db.executeSQL(s.tctx, sqlJob.ddls)
 					if err != nil && ignoreDDLError(err) {
 						err = nil
 					}

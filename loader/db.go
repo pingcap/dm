@@ -45,8 +45,6 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string, args ...interfac
 		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
-	startTime := time.Now()
-
 	params := retry.Params{
 		RetryCount:         10,
 		FirstRetryDuration: time.Second,
@@ -60,22 +58,20 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string, args ...interfac
 		},
 	}
 
-	var err error
-	defer func() {
-		if err == nil {
-			cost := time.Since(startTime)
-			queryHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
-			if cost > 1 {
-				ctx.L().Warn("query statement", zap.String("query", query), zap.Reflect("argument", args), zap.Duration("cost time", cost))
-			}
-		}
-	}()
-
 	ret, _, err := conn.baseConn.ApplyRetryStrategy(
 		ctx,
 		params,
 		func(ctx *tcontext.Context) (interface{}, error) {
-			return conn.baseConn.QuerySQL(ctx, query, args...)
+			startTime := time.Now()
+			ret, err := conn.baseConn.QuerySQL(ctx, query, args...)
+			if err == nil {
+				cost := time.Since(startTime)
+				queryHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
+				if cost > 1 {
+					ctx.L().Warn("query statement", zap.String("query", query), zap.Reflect("argument", args), zap.Duration("cost time", cost))
+				}
+			}
+			return ret, err
 		})
 	if err != nil {
 		ctx.L().Error("query statement failed after retry", zap.String("query", query), zap.Reflect("argument", args), log.ShortError(err))
@@ -93,15 +89,6 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]
 		return terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
-	sqls := make([]baseconn.SQL, 0, len(queries))
-	for i, query := range queries {
-		if i >= len(args) {
-			sqls = append(sqls, baseconn.SQL{Query: query, Args: []interface{}{}})
-		} else {
-			sqls = append(sqls, baseconn.SQL{Query: query, Args: args[i]})
-		}
-	}
-
 	params := retry.Params{
 		RetryCount:         10,
 		FirstRetryDuration: 2 * time.Second,
@@ -117,14 +104,14 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]
 		params,
 		func(ctx *tcontext.Context) (interface{}, error) {
 			startTime := time.Now()
-			_, err := conn.baseConn.ExecuteSQL(ctx, sqls)
+			_, err := conn.baseConn.ExecuteSQL(ctx, queries, args...)
 			failpoint.Inject("LoadExecCreateTableFailed", func(val failpoint.Value) {
 				errCode, err1 := strconv.ParseUint(val.(string), 10, 16)
 				if err1 != nil {
 					ctx.L().Fatal("failpoint LoadExecCreateTableFailed's value is invalid", zap.String("val", val.(string)))
 				}
 
-				if len(sqls) == 1 && strings.Contains(sqls[0].Query, "CREATE TABLE") {
+				if len(queries) == 1 && strings.Contains(queries[0], "CREATE TABLE") {
 					err = &mysql.MySQLError{uint16(errCode), ""}
 					ctx.L().Warn("executeSQL failed", zap.String("failpoint", "LoadExecCreateTableFailed"), zap.Error(err))
 				}

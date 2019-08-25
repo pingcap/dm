@@ -34,12 +34,6 @@ type BaseConn struct {
 	RetryStrategy retry.Strategy
 }
 
-// SQL is format sql job
-type SQL struct {
-	Query string
-	Args  []interface{}
-}
-
 // NewBaseConn builds BaseConn to connect real DB
 func NewBaseConn(dbDSN string, strategy retry.Strategy) (*BaseConn, error) {
 	db, err := sql.Open("mysql", dbDSN)
@@ -110,8 +104,8 @@ func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string, args ...int
 // return
 // 1. failed: (the index of sqls executed error, error)
 // 2. succeed: (len(sqls), nil)
-func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, sqls []SQL) (int, error) {
-	if len(sqls) == 0 {
+func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, queries []string, args ...[]interface{}) (int, error) {
+	if len(queries) == 0 {
 		return 0, nil
 	}
 	if conn == nil || conn.DB == nil {
@@ -124,20 +118,25 @@ func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, sqls []SQL) (int, error
 		return 0, terror.ErrDBExecuteFailed.Delegate(err, "begin")
 	}
 
-	l := len(sqls)
+	l := len(queries)
 
-	for i := range sqls {
-		tctx.L().Debug("execute statement", zap.String("query", sqls[i].Query), zap.Reflect("argument", sqls[i].Args))
+	for i, query := range queries {
+		var arg []interface{}
+		if len(args) > i {
+			arg = args[i]
+		}
 
-		_, err = txn.ExecContext(tctx.Context(), sqls[i].Query, sqls[i].Args...)
+		tctx.L().Debug("execute statement", zap.String("query", query), zap.Reflect("argument", arg))
+
+		_, err = txn.ExecContext(tctx.Context(), query, arg...)
 		if err != nil {
-			tctx.L().Error("execute statement failed", zap.String("query", sqls[i].Query), zap.Reflect("argument", sqls[i].Args), log.ShortError(err))
+			tctx.L().Error("execute statement failed", zap.String("query", query), zap.Reflect("argument", arg), log.ShortError(err))
 			rerr := txn.Rollback()
 			if rerr != nil {
-				tctx.L().Error("rollback failed", zap.String("query", sqls[i].Query), zap.Reflect("argument", sqls[i].Args), log.ShortError(rerr))
+				tctx.L().Error("rollback failed", zap.String("query", query), zap.Reflect("argument", arg), log.ShortError(rerr))
 			}
 			// we should return the exec err, instead of the rollback rerr.
-			return i, terror.ErrDBExecuteFailed.Delegate(err, sqls[i].Query)
+			return i, terror.ErrDBExecuteFailed.Delegate(err, query)
 		}
 	}
 	err = txn.Commit()

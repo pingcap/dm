@@ -48,7 +48,7 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	_, err = baseConn.QuerySQL(tctx, "select 1")
 	c.Assert(terror.ErrDBUnExpect.Equal(err), IsTrue)
 
-	_, err = baseConn.ExecuteSQL(tctx, []SQL{{"", nil}})
+	_, err = baseConn.ExecuteSQL(tctx, []string{""})
 	c.Assert(terror.ErrDBUnExpect.Equal(err), IsTrue)
 
 	db, mock, err := sqlmock.New()
@@ -75,28 +75,24 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	_, err = baseConn.QuerySQL(tctx, "select 1")
 	c.Assert(terror.ErrDBQueryFailed.Equal(err), IsTrue)
 
-	sqls := []SQL{}
-	affected, _ := baseConn.ExecuteSQL(tctx, sqls)
+	affected, _ := baseConn.ExecuteSQL(tctx, []string{""})
 	c.Assert(affected, Equals, 0)
 
 	mock.ExpectBegin()
 	mock.ExpectExec("create database test").WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
-	sqls = []SQL{{"create database test", nil}}
-	affected, err = baseConn.ExecuteSQL(tctx, sqls)
+	affected, err = baseConn.ExecuteSQL(tctx, []string{"create database test"})
 	c.Assert(err, IsNil)
 	c.Assert(affected, Equals, 1)
 
 	mock.ExpectBegin().WillReturnError(errors.New("begin error"))
-	sqls = []SQL{{"create database test", nil}}
-	_, err = baseConn.ExecuteSQL(tctx, sqls)
+	_, err = baseConn.ExecuteSQL(tctx, []string{"create database test"})
 	c.Assert(terror.ErrDBExecuteFailed.Equal(err), IsTrue)
 
 	mock.ExpectBegin()
 	mock.ExpectExec("create database test").WillReturnError(errors.New("invalid connection"))
 	mock.ExpectRollback()
-	sqls = []SQL{{"create database test", nil}}
-	_, err = baseConn.ExecuteSQL(tctx, sqls)
+	_, err = baseConn.ExecuteSQL(tctx, []string{"create database test"})
 	c.Assert(terror.ErrDBExecuteFailed.Equal(err), IsTrue)
 
 	if err = mock.ExpectationsWereMet(); err != nil {
