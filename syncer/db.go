@@ -135,7 +135,7 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string, args ...interfa
 
 	if err != nil {
 		tctx.L().Error("query statement failed after retry", zap.String("query", query), zap.Reflect("argument", args), log.ShortError(err))
-		return nil, terror.ErrDBQueryFailed.Delegate(err, query)
+		return nil, err
 	}
 	return ret.(*sql.Rows), nil
 }
@@ -181,7 +181,7 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args ...[
 
 	if err != nil {
 		tctx.L().Error("execute statements failed after retry", zap.Strings("queries", queries), zap.Reflect("arguments", args), log.ShortError(err))
-		return ret.(int), terror.ErrDBExecuteFailed.Delegate(err, queries)
+		return ret.(int), err
 	}
 	return ret.(int), nil
 }
