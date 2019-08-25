@@ -170,7 +170,11 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args ...[
 			startTime := time.Now()
 			ret, err := conn.baseConn.ExecuteSQL(ctx, queries, args...)
 			if err == nil {
-				txnHistogram.WithLabelValues(conn.cfg.Name).Observe(time.Since(startTime).Seconds())
+				cost := time.Since(startTime)
+				txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
+				if cost > 1 {
+					ctx.L().Warn("transaction execute successfully", zap.Duration("cost time", cost))
+				}
 			}
 			return ret, err
 		})
