@@ -49,22 +49,6 @@ func needRetryReplicate(err error) bool {
 	return err == gmysql.ErrBadConn
 }
 
-func isRetryableError(err error) bool {
-	err = errors.Cause(err) // check the original error
-	mysqlErr, ok := err.(*mysql.MySQLError)
-	if ok {
-		switch mysqlErr.Number {
-		// ER_LOCK_DEADLOCK can retry to commit while meet deadlock
-		case tmysql.ErrUnknown, gmysql.ER_LOCK_DEADLOCK, tmysql.ErrPDServerTimeout, tmysql.ErrTiKVServerTimeout, tmysql.ErrTiKVServerBusy, tmysql.ErrResolveLockTimeout, tmysql.ErrRegionUnavailable:
-			return true
-		default:
-			return false
-		}
-	}
-
-	return false
-}
-
 func isBinlogPurgedError(err error) bool {
 	return isMysqlError(err, tmysql.ErrMasterFatalErrorReadingBinlog)
 }

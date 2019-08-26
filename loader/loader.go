@@ -25,14 +25,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pingcap/errors"
-	"github.com/pingcap/failpoint"
-	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
-	"github.com/pingcap/tidb-tools/pkg/filter"
-	"github.com/pingcap/tidb-tools/pkg/table-router"
-	"github.com/siddontang/go/sync2"
-	"go.uber.org/zap"
-
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
@@ -41,12 +33,18 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+
+	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
+	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
+	"github.com/pingcap/tidb-tools/pkg/filter"
+	"github.com/pingcap/tidb-tools/pkg/table-router"
+	"github.com/siddontang/go/sync2"
+	"go.uber.org/zap"
 )
 
 var (
-	jobCount        = 1000
-	maxRetryCount   = 10
-	queryRetryCount = 3
+	jobCount = 1000
 )
 
 // FilePosSet represents a set in mathematics.
@@ -157,7 +155,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *
 
 				failpoint.Inject("LoadDataSlowDown", nil)
 
-				if err := w.conn.executeSQL(ctctx, sqls, true); err != nil {
+				if err := w.conn.executeSQL(ctctx, sqls); err != nil {
 					// expect pause rather than exit
 					err = terror.Annotatef(err, "file %s", job.file)
 					runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, errors.ErrorStack(err))
@@ -918,7 +916,7 @@ func (l *Loader) restoreStructure(conn *Conn, sqlFile string, schema string, tab
 			l.tctx.L().Debug("schema create statement", zap.String("sql", query))
 
 			sqls = append(sqls, query)
-			err = conn.executeDDL(l.tctx, sqls, true)
+			err = conn.executeSQL(l.tctx, sqls)
 			if err != nil {
 				return err
 			}
@@ -968,7 +966,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer conn.db.Close()
+	defer conn.baseConn.Close()
 
 	dispatchMap := make(map[string]*fileJob)
 

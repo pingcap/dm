@@ -278,16 +278,6 @@ func IsErrBinlogPurged(err error) bool {
 	return ok && e.Code == tmysql.ErrMasterFatalErrorReadingBinlog
 }
 
-// IsErrTableNotExists checks whether err is TableNotExists error
-func IsErrTableNotExists(err error) bool {
-	return IsMySQLError(err, tmysql.ErrNoSuchTable)
-}
-
-// IsErrDupEntry checks whether err is DupEntry error
-func IsErrDupEntry(err error) bool {
-	return IsMySQLError(err, tmysql.ErrDupEntry)
-}
-
 // IsNoSuchThreadError checks whether err is NoSuchThreadError
 func IsNoSuchThreadError(err error) bool {
 	return IsMySQLError(err, tmysql.ErrNoSuchThread)

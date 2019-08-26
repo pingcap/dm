@@ -74,7 +74,6 @@ mysql-instances:             # one or more source database, config more source d
     syncer:
       worker-count: 16
       batch: 100
-      max-retry: 100
 
 # other common configs shared by all instances
 
@@ -150,4 +149,3 @@ syncers:                     # syncer process unit specific configs, mysql insta
   global:
     worker-count: 16
     batch: 100
-    max-retry: 100

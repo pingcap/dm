@@ -18,32 +18,33 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
-	"github.com/pingcap/parser"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/baseconn"
+	"github.com/pingcap/dm/pkg/binlog/event"
+	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/log"
+	parserpkg "github.com/pingcap/dm/pkg/parser"
+	"github.com/pingcap/dm/pkg/retry"
+	"github.com/pingcap/dm/pkg/utils"
+
 	"github.com/DATA-DOG/go-sqlmock"
 	_ "github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
-	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go-mysql/mysql"
-
 	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
-
-	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/binlog/event"
-	"github.com/pingcap/dm/pkg/log"
-	parserpkg "github.com/pingcap/dm/pkg/parser"
-	"github.com/pingcap/dm/pkg/utils"
 )
 
 var _ = Suite(&testSyncerSuite{})
@@ -71,6 +72,7 @@ const (
 
 type testSyncerSuite struct {
 	db              *sql.DB
+	dbAddr          string
 	syncer          *replication.BinlogSyncer
 	streamer        *replication.BinlogStreamer
 	cfg             *config.SubTaskConfig
@@ -94,8 +96,8 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 	s.cfg.RelayDir = dir
 
 	var err error
-	dbAddr := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8", s.cfg.From.User, s.cfg.From.Password, s.cfg.From.Host, s.cfg.From.Port)
-	s.db, err = sql.Open("mysql", dbAddr)
+	s.dbAddr = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8", s.cfg.From.User, s.cfg.From.Password, s.cfg.From.Host, s.cfg.From.Port)
+	s.db, err = sql.Open("mysql", s.dbAddr)
 	if err != nil {
 		log.L().Fatal("", zap.Error(err))
 	}
@@ -1035,9 +1037,8 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	}
 
 	syncer := NewSyncer(s.cfg)
-	syncer.cfg.MaxRetry = 1
 	// use upstream db as mock downstream
-	syncer.toDBs = []*Conn{{db: s.db}}
+	syncer.toDBs = []*Conn{{baseConn: &baseconn.BaseConn{s.db, s.dbAddr, &retry.FiniteRetryStrategy{}}}}
 
 	for _, testCase := range testCases {
 		for _, sql := range testCase.sqls {
@@ -1288,7 +1289,6 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 	// set batch to 1 is easy to mock
 	s.cfg.Batch = 1
 	s.cfg.WorkerCount = 1
-	s.cfg.MaxRetry = 1
 
 	for i, _case := range testCases {
 		// drop first if last time test failed
@@ -1307,9 +1307,9 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		c.Assert(syncer.checkpoint.GlobalPoint(), Equals, minCheckpoint)
 		c.Assert(syncer.checkpoint.FlushedGlobalPoint(), Equals, minCheckpoint)
 
-		// make syncer write to mock db
-		syncer.toDBs = []*Conn{{cfg: s.cfg, db: db}}
-		syncer.ddlDB = &Conn{cfg: s.cfg, db: db}
+		// make syncer write to mock baseConn
+		syncer.toDBs = []*Conn{{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, s.dbAddr, &retry.FiniteRetryStrategy{}}}}
+		syncer.ddlDB = &Conn{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, s.dbAddr, &retry.FiniteRetryStrategy{}}}
 
 		// run sql on upstream db to generate binlog event
 		runSQL(createSQLs)
@@ -1392,7 +1392,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		GP := syncer.checkpoint.GlobalPoint().Pos
 		c.Assert(GP, Equals, flushedGP)
 
-		// check expectations for mock db
+		// check expectations for mock baseConn
 		if err := mock.ExpectationsWereMet(); err != nil {
 			c.Errorf("there were unfulfilled expectations: %s", err)
 		}

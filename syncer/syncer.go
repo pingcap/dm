@@ -62,9 +62,9 @@ var (
 	statusTime      = 30 * time.Second
 
 	// MaxDDLConnectionTimeoutMinute also used by SubTask.ExecuteDDL
-	MaxDDLConnectionTimeoutMinute = 10
+	MaxDDLConnectionTimeoutMinute = 30
 
-	maxDMLConnectionTimeout = "1m"
+	maxDMLConnectionTimeout = "5m"
 	maxDDLConnectionTimeout = fmt.Sprintf("%dm", MaxDDLConnectionTimeoutMinute)
 
 	adminQueueName     = "admin queue"
@@ -407,7 +407,7 @@ func (s *Syncer) Init() (err error) {
 // NOTE: now we don't support modify router rules after task has started
 func (s *Syncer) initShardingGroups() error {
 	// fetch tables from source and filter them
-	sourceTables, err := utils.FetchAllDoTables(s.fromDB.db, s.bwList)
+	sourceTables, err := s.fromDB.fetchAllDoTables(s.bwList)
 	if err != nil {
 		return err
 	}
@@ -579,7 +579,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 }
 
 func (s *Syncer) getMasterStatus() (mysql.Position, gtid.Set, error) {
-	return utils.GetMasterStatus(s.fromDB.db, s.cfg.Flavor)
+	return s.fromDB.getMasterStatus(s.cfg.Flavor)
 }
 
 // clearTables is used for clear table cache of given table. this function must
@@ -603,12 +603,12 @@ func (s *Syncer) getTableFromDB(db *Conn, schema string, name string) (*table, e
 	table.name = name
 	table.indexColumns = make(map[string][]*column)
 
-	err := getTableColumns(s.tctx, db, table, s.cfg.MaxRetry)
+	err := getTableColumns(s.tctx, db, table)
 	if err != nil {
 		return nil, err
 	}
 
-	err = getTableIndex(s.tctx, db, table, s.cfg.MaxRetry)
+	err = getTableIndex(s.tctx, db, table)
 	if err != nil {
 		return nil, err
 	}
@@ -848,10 +848,15 @@ func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *Conn, jobCh
 		if len(jobs) == 0 {
 			return nil
 		}
-		errCtx := db.executeSQLJob(s.tctx, jobs, s.cfg.MaxRetry)
-		var err error
-		if errCtx != nil {
-			err = errCtx.err
+		queries := make([]string, 0, len(jobs))
+		args := make([][]interface{}, 0, len(jobs))
+		for _, j := range jobs {
+			queries = append(queries, j.sql)
+			args = append(args, j.args)
+		}
+		affected, err := db.executeSQL(s.tctx, queries, args...)
+		if err != nil {
+			errCtx := &ExecErrorContext{err, jobs[affected].currentPos, fmt.Sprintf("%v", jobs)}
 			s.appendExecErrors(errCtx)
 		}
 		if s.tracer.Enable() {
@@ -885,8 +890,7 @@ func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *Conn, jobCh
 				if sqlJob.ddlExecItem != nil && sqlJob.ddlExecItem.req != nil && !sqlJob.ddlExecItem.req.Exec {
 					s.tctx.L().Info("ignore sharding DDLs", zap.Strings("ddls", sqlJob.ddls))
 				} else {
-					args := make([][]interface{}, len(sqlJob.ddls))
-					err = db.executeSQL(s.tctx, sqlJob.ddls, args, 1)
+					_, err = db.executeSQL(s.tctx, sqlJob.ddls)
 					if err != nil && ignoreDDLError(err) {
 						err = nil
 					}
@@ -971,7 +975,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		close(s.done)
 	}()
 
-	parser2, err := utils.GetParser(s.fromDB.db, s.cfg.EnableANSIQuotes)
+	parser2, err := s.fromDB.getParser(s.cfg.EnableANSIQuotes)
 	if err != nil {
 		return err
 	}
@@ -1919,7 +1923,7 @@ func (s *Syncer) printStatus(ctx context.Context) {
 				currentPos := s.currentPosMu.currentPos
 				s.currentPosMu.RUnlock()
 
-				remainingSize, err2 := countBinaryLogsSize(currentPos, s.fromDB.db)
+				remainingSize, err2 := s.fromDB.countBinaryLogsSize(currentPos)
 				if err2 != nil {
 					// log the error, but still handle the rest operation
 					s.tctx.L().Error("fail to estimate unreplicated binlog size", zap.Error(err2))
@@ -1973,33 +1977,33 @@ func (s *Syncer) printStatus(ctx context.Context) {
 
 func (s *Syncer) createDBs() error {
 	var err error
-	s.fromDB, err = createDB(s.cfg, s.cfg.From, maxDMLConnectionTimeout)
+	s.fromDB, err = createConn(s.cfg, s.cfg.From, maxDMLConnectionTimeout)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeUpstream)
 	}
 
 	s.toDBs = make([]*Conn, 0, s.cfg.WorkerCount)
-	s.toDBs, err = createDBs(s.cfg, s.cfg.To, s.cfg.WorkerCount, maxDMLConnectionTimeout)
+	s.toDBs, err = createConns(s.cfg, s.cfg.To, s.cfg.WorkerCount, maxDMLConnectionTimeout)
 	if err != nil {
-		closeDBs(s.tctx, s.fromDB) // release resources acquired before return with error
+		closeConns(s.tctx, s.fromDB) // release resources acquired before return with error
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
-	// db for ddl
-	s.ddlDB, err = createDB(s.cfg, s.cfg.To, maxDDLConnectionTimeout)
+	// baseConn for ddl
+	s.ddlDB, err = createConn(s.cfg, s.cfg.To, maxDDLConnectionTimeout)
 	if err != nil {
-		closeDBs(s.tctx, s.fromDB)
-		closeDBs(s.tctx, s.toDBs...)
+		closeConns(s.tctx, s.fromDB)
+		closeConns(s.tctx, s.toDBs...)
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
 
 	return nil
 }
 
-// closeDBs closes all opened DBs, rollback for createDBs
+// closeConns closes all opened DBs, rollback for createConns
 func (s *Syncer) closeDBs() {
-	closeDBs(s.tctx, s.fromDB)
-	closeDBs(s.tctx, s.toDBs...)
-	closeDBs(s.tctx, s.ddlDB)
+	closeConns(s.tctx, s.fromDB)
+	closeConns(s.tctx, s.toDBs...)
+	closeConns(s.tctx, s.ddlDB)
 }
 
 // record skip ddl/dml sqls' position
@@ -2154,7 +2158,7 @@ func (s *Syncer) closeBinlogSyncer(syncer *replication.BinlogSyncer) error {
 	lastSlaveConnectionID := syncer.LastConnectionID()
 	defer syncer.Close()
 	if lastSlaveConnectionID > 0 {
-		err := utils.KillConn(s.fromDB.db, lastSlaveConnectionID)
+		err := s.fromDB.killConn(lastSlaveConnectionID)
 		if err != nil {
 			s.tctx.L().Error("fail to kill last connection", zap.Uint32("connection ID", lastSlaveConnectionID), log.ShortError(err))
 			if !utils.IsNoSuchThreadError(err) {
@@ -2328,14 +2332,14 @@ func (s *Syncer) ExecuteDDL(ctx context.Context, execReq *pb.ExecDDLRequest) (<-
 func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 	s.Lock()
 	defer s.Unlock()
-	s.fromDB.close()
+	s.fromDB.baseConn.Close()
 
 	s.cfg.From = cfg.From
 
 	var err error
-	s.fromDB, err = createDB(s.cfg, s.cfg.From, maxDMLConnectionTimeout)
+	s.fromDB, err = createConn(s.cfg, s.cfg.From, maxDMLConnectionTimeout)
 	if err != nil {
-		s.tctx.L().Error("fail to create db connection", log.ShortError(err))
+		s.tctx.L().Error("fail to create baseConn connection", log.ShortError(err))
 		return err
 	}
 	return nil
