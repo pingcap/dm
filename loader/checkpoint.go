@@ -286,7 +286,7 @@ func (cp *RemoteCheckPoint) Init(filename string, endPos int64) error {
 			cp.tctx.L().Info("checkpoint record already exists, skip it.", zap.String("id", cp.id), zap.String("filename", filename))
 			return nil
 		}
-		return terror.Annotate(err, "initialize checkpoint")
+		return terror.WithScope(terror.Annotate(err, "initialize checkpoint"), terror.ScopeDownstream)
 	}
 	return nil
 }
