@@ -187,3 +187,83 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	}
 	c.Assert(w.meta.logs, check.HasLen, 0)
 }
+
+func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
+	var (
+		task1                 = "task1"
+		task2                 = "tesk2"
+		task1LatestResumeTime time.Time
+		task2LatestResumeTime time.Time
+		backoffMin            = 5 * time.Millisecond
+	)
+
+	NewRelayHolder = NewDummyRelayHolder
+	dir := c.MkDir()
+	cfg := NewConfig()
+	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), check.IsNil)
+	cfg.RelayDir = dir
+	cfg.MetaDir = dir
+	w, err := NewWorker(cfg)
+	c.Assert(err, check.IsNil)
+
+	tsc := NewRealTaskStatusChecker(CheckerConfig{
+		CheckEnable:     true,
+		CheckInterval:   DefaultCheckInterval,
+		BackoffRollback: 200 * time.Millisecond,
+		BackoffMin:      backoffMin,
+		BackoffMax:      10 * time.Second,
+		BackoffFactor:   1.0,
+	}, nil)
+	c.Assert(tsc.Init(), check.IsNil)
+	rtsc, ok := tsc.(*realTaskStatusChecker)
+	c.Assert(ok, check.IsTrue)
+	rtsc.w = w
+
+	rtsc.w.subTasks = map[string]*SubTask{
+		task1: {
+			stage: pb.Stage_Running,
+		},
+		task2: {
+			stage: pb.Stage_Running,
+		},
+	}
+	rtsc.check()
+	c.Assert(len(rtsc.backoffs), check.Equals, 2)
+	c.Assert(len(rtsc.latestPausedTime), check.Equals, 2)
+	c.Assert(len(rtsc.latestResumeTime), check.Equals, 2)
+	c.Assert(len(rtsc.latestBlockTime), check.Equals, 0)
+
+	// test backoff strategies of different tasks do not affect each other
+	rtsc.w.subTasks[task1].stage = pb.Stage_Paused
+	rtsc.w.subTasks[task1].result = &pb.ProcessResult{
+		IsCanceled: false,
+		Errors:     []*pb.ProcessError{{pb.ErrorType_ExecSQL, "ERROR 1105 (HY000): unsupported modify column length 20 is less than origin 40"}},
+	}
+	rtsc.w.subTasks[task2].stage = pb.Stage_Paused
+	rtsc.w.subTasks[task2].result = &pb.ProcessResult{
+		IsCanceled: false,
+		Errors:     []*pb.ProcessError{{pb.ErrorType_UnknownError, "error message"}},
+	}
+	task1LatestResumeTime = rtsc.latestResumeTime[task1]
+	task2LatestResumeTime = rtsc.latestResumeTime[task2]
+	for i := 0; i < 10; i++ {
+		time.Sleep(backoffMin)
+		rtsc.check()
+		c.Assert(task1LatestResumeTime, check.Equals, rtsc.latestResumeTime[task1])
+		c.Assert(task2LatestResumeTime.Before(rtsc.latestResumeTime[task2]), check.IsTrue)
+		c.Assert(len(rtsc.latestBlockTime), check.Equals, 1)
+		task2LatestResumeTime = rtsc.latestResumeTime[task2]
+		c.Assert(w.meta.logs, check.HasLen, i+1)
+	}
+
+	// test task information cleanup in task status checker
+	delete(rtsc.w.subTasks, task1)
+	time.Sleep(backoffMin)
+	rtsc.check()
+	c.Assert(task2LatestResumeTime.Before(rtsc.latestResumeTime[task2]), check.IsTrue)
+	c.Assert(w.meta.logs, check.HasLen, 11)
+	c.Assert(len(rtsc.backoffs), check.Equals, 1)
+	c.Assert(len(rtsc.latestPausedTime), check.Equals, 1)
+	c.Assert(len(rtsc.latestResumeTime), check.Equals, 1)
+	c.Assert(len(rtsc.latestBlockTime), check.Equals, 0)
+}

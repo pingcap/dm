@@ -172,10 +172,6 @@ func (tsc *realTaskStatusChecker) Close() {
 
 func (tsc *realTaskStatusChecker) run() {
 	tsc.ctx, tsc.cancel = context.WithCancel(context.Background())
-	for taskName := range tsc.backoffs {
-		tsc.latestPausedTime[taskName] = time.Now()
-		tsc.latestResumeTime[taskName] = time.Now()
-	}
 	tsc.closed.Set(closedFalse)
 	ticker := time.NewTicker(tsc.cfg.CheckInterval)
 	defer ticker.Stop()
@@ -270,8 +266,8 @@ func (tsc *realTaskStatusChecker) check() {
 				tsc.latestPausedTime[taskName] = time.Now()
 			}
 		case ResumeNoSense:
-			tsc.latestPausedTime[taskName] = time.Now()
 			// this strategy doesn't forward or rollback backoff
+			tsc.latestPausedTime[taskName] = time.Now()
 			blockTime, ok := tsc.latestBlockTime[taskName]
 			if ok {
 				tsc.l.Warn("task can't auto resume", zap.String("task", taskName), zap.Duration("paused duration", time.Since(blockTime)))
@@ -280,7 +276,7 @@ func (tsc *realTaskStatusChecker) check() {
 				tsc.l.Warn("task can't auto resume", zap.String("task", taskName))
 			}
 		case ResumeSkip:
-			tsc.l.Warn("backoff skip auto resume task", zap.String("task", taskName), zap.Time("latestResumeTime", tsc.latestResumeTime[taskName]), zap.Reflect("duration", duration))
+			tsc.l.Warn("backoff skip auto resume task", zap.String("task", taskName), zap.Time("latestResumeTime", tsc.latestResumeTime[taskName]), zap.Duration("duration", duration))
 			tsc.latestPausedTime[taskName] = time.Now()
 		case ResumeDispatch:
 			tsc.latestPausedTime[taskName] = time.Now()
