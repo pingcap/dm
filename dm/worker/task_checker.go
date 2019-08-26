@@ -42,18 +42,20 @@ var (
 // ResumeStrategy represents what we can do when we meet a paused task in task status checker
 type ResumeStrategy int
 
-// resume strategies
+// resume strategies, in each round of `check`, the checker will apply one of the following strategies
+// to a given task based on its `state`, `result` from `SubTaskStatus` and backoff information recored
+// in task status checker.
 const (
-	// ResumeIgnore strategy processes task that is not paused, or paused by manually
-	// or we don't get enough information to determine task is paused because of error
-	// Will do nothing with this task in this check round.
+	// When a task is not in paused state, or paused by manually, or we can't get enough information from worker
+	// to determine whether this task is paused because of some error, we will apply ResumeIgnore strategy, and
+	// do nothing with this task in this check round.
 	ResumeIgnore ResumeStrategy = iota + 1
-	// ResumeSkip applys to paused task that can be resumed, but last auto resume duration
-	// is less than backoff waiting time, will skip auto resume in this check round.
+	// When checker detects a paused task can recover synchronization by resume, but its last auto resume
+	// duration is less than backoff waiting time, we will apply ResumeSkip strategy, and skip auto resume
+	// for this task in this check round.
 	ResumeSkip
-	// ResumeNoSense means we know resuming a paused task will always fail again, such as
-	// a task is paused because of executing incompatible DDL to downstream, resume this
-	// task will make no sense.
+	// When checker detects a task is paused because of some un-resumable error, such as paused because of
+	// executing incompatible DDL to downstream, we will apply ResumeNoSense strategy
 	ResumeNoSense
 	// ResumeDispatch means we will dispatch an auto resume operation in this check round for the paused task
 	ResumeDispatch
