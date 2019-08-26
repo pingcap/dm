@@ -99,6 +99,8 @@ type TaskStatusChecker interface {
 var NewTaskStatusChecker = NewRealTaskStatusChecker
 
 // realTaskStatusChecker is not thread-safe
+// It runs asynchronously against DM-worker, and task information may be updated
+// late than DM-worker, but it is acceptable.
 type realTaskStatusChecker struct {
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -108,25 +110,30 @@ type realTaskStatusChecker struct {
 	cfg CheckerConfig
 	l   log.Logger
 	w   *Worker
-	bf  *backoff.Backoff
 
-	// task name -> 1st detected paused time
-	// block records paused task that can't be resume automatically
-	block map[string]time.Time
+	// task name -> backoff counter
+	backoffs map[string]*backoff.Backoff
 
-	// latestNormalTime is used to record the latest time that checker observes no abnormal task
-	latestNormalTime time.Time
-	// latestResume is used to record the latest auto resume time
-	latestResume time.Time
+	// task name -> task latest paused time that checker observes
+	latestPausedTime map[string]time.Time
+
+	// task name -> task latest block time, block means task paused with un-resumable error
+	latestBlockTime map[string]time.Time
+
+	// task name -> the latest auto resume time
+	latestResumeTime map[string]time.Time
 }
 
 // NewRealTaskStatusChecker creates a new realTaskStatusChecker instance
 func NewRealTaskStatusChecker(cfg CheckerConfig, w *Worker) TaskStatusChecker {
 	tsc := &realTaskStatusChecker{
-		cfg:   cfg,
-		l:     log.With(zap.String("component", "task checker")),
-		w:     w,
-		block: make(map[string]time.Time),
+		cfg:              cfg,
+		l:                log.With(zap.String("component", "task checker")),
+		w:                w,
+		backoffs:         make(map[string]*backoff.Backoff),
+		latestPausedTime: make(map[string]time.Time),
+		latestBlockTime:  make(map[string]time.Time),
+		latestResumeTime: make(map[string]time.Time),
 	}
 	tsc.closed.Set(closedTrue)
 	return tsc
@@ -134,8 +141,9 @@ func NewRealTaskStatusChecker(cfg CheckerConfig, w *Worker) TaskStatusChecker {
 
 // Init implements TaskStatusChecker.Init
 func (tsc *realTaskStatusChecker) Init() error {
-	var err error
-	tsc.bf, err = backoff.NewBackoff(tsc.cfg.BackoffFactor, tsc.cfg.BackoffJitter, tsc.cfg.BackoffMin, tsc.cfg.BackoffMax)
+	// just check configuration of backoff here, lazy creates backoff counter,
+	// as we can't get task information before dm-worker starts
+	_, err := backoff.NewBackoff(tsc.cfg.BackoffFactor, tsc.cfg.BackoffJitter, tsc.cfg.BackoffMin, tsc.cfg.BackoffMax)
 	return terror.WithClass(err, terror.ClassDMWorker)
 }
 
@@ -162,8 +170,10 @@ func (tsc *realTaskStatusChecker) Close() {
 
 func (tsc *realTaskStatusChecker) run() {
 	tsc.ctx, tsc.cancel = context.WithCancel(context.Background())
-	tsc.latestNormalTime = time.Now()
-	tsc.latestResume = time.Now()
+	for taskName := range tsc.backoffs {
+		tsc.latestPausedTime[taskName] = time.Now()
+		tsc.latestResumeTime[taskName] = time.Now()
+	}
 	tsc.closed.Set(closedFalse)
 	ticker := time.NewTicker(tsc.cfg.CheckInterval)
 	defer ticker.Stop()
@@ -178,9 +188,9 @@ func (tsc *realTaskStatusChecker) run() {
 	}
 }
 
-// isRetryableError checks the error message and returns whether we need to
+// isResumableError checks the error message and returns whether we need to
 // resume the task and retry
-func isRetryableError(err *pb.ProcessError) bool {
+func isResumableError(err *pb.ProcessError) bool {
 	// not elegant code, because TiDB doesn't expose some error
 	unsupportedDDLMsgs := []string{
 		"can't drop column with index",
@@ -199,21 +209,21 @@ func isRetryableError(err *pb.ProcessError) bool {
 	return true
 }
 
-func (tsc *realTaskStatusChecker) getResumeStrategy(taskStatus *pb.SubTaskStatus, duration time.Duration) ResumeStrategy {
+func (tsc *realTaskStatusChecker) getResumeStrategy(stStatus *pb.SubTaskStatus, duration time.Duration) ResumeStrategy {
 	// task that is not paused or paused manually, just ignore it
-	if taskStatus == nil || taskStatus.Stage != pb.Stage_Paused || taskStatus.Result == nil || taskStatus.Result.IsCanceled {
+	if stStatus == nil || stStatus.Stage != pb.Stage_Paused || stStatus.Result == nil || stStatus.Result.IsCanceled {
 		return ResumeIgnore
 	}
 
 	// TODO: use different strategies based on the error detail
-	for _, processErr := range taskStatus.Result.Errors {
-		if !isRetryableError(processErr) {
+	for _, processErr := range stStatus.Result.Errors {
+		if !isResumableError(processErr) {
 			return ResumeNoSense
 		}
 	}
 
 	// auto resume interval does not exceed backoff duration, skip this paused task
-	if time.Since(tsc.latestResume) < duration {
+	if time.Since(tsc.latestResumeTime[stStatus.Name]) < duration {
 		return ResumeSkip
 	}
 
@@ -221,63 +231,68 @@ func (tsc *realTaskStatusChecker) getResumeStrategy(taskStatus *pb.SubTaskStatus
 }
 
 func (tsc *realTaskStatusChecker) check() {
-	var (
-		// paused task found in this check round, historical paused task that
-		// can't be automatically resumed will not increase the counter
-		abnormal = 0
-		// resumed task counter
-		resumed = 0
-	)
-	tasks := tsc.w.getPausedSubTasks()
-	duration := tsc.bf.Current()
-	// rotate tsc.block and an empty map, so we can remove resumed block task
-	block := make(map[string]time.Time)
-	for k, v := range tsc.block {
-		block[k] = v
-	}
-	tsc.block = make(map[string]time.Time)
-	for _, task := range tasks {
-		strategy := tsc.getResumeStrategy(task, duration)
-		if strategy == ResumeIgnore {
-			continue
-		}
-		abnormal++
-		if strategy == ResumeNoSense {
-			if ts, ok := block[task.Name]; ok {
-				abnormal--
-				tsc.block[task.Name] = ts
-				tsc.l.Warn("task can't auto resume", zap.String("task", task.Name), zap.Duration("paused duration", time.Since(ts)))
-			} else {
-				tsc.block[task.Name] = time.Now()
-				tsc.l.Warn("task can't auto resume", zap.String("task", task.Name))
+	allSubTaskStatus := tsc.w.getAllSubTaskStatus()
+	tasks := make(map[string]struct{}, len(allSubTaskStatus))
+
+	defer func() {
+		// cleanup outdated tasks
+		for taskName := range tsc.backoffs {
+			_, ok := tasks[taskName]
+			if !ok {
+				tsc.l.Debug("remove task from checker", zap.String("task", taskName))
+				delete(tsc.backoffs, taskName)
+				delete(tsc.latestPausedTime, taskName)
+				delete(tsc.latestBlockTime, taskName)
+				delete(tsc.latestResumeTime, taskName)
 			}
-			continue
 		}
-		if strategy == ResumeSkip {
-			tsc.l.Warn("skip auto resume task", zap.String("task", task.Name), zap.Time("latestResume", tsc.latestResume), zap.Reflect("duration", duration))
-			continue
+	}()
+
+	for _, stStatus := range allSubTaskStatus {
+		taskName := stStatus.Name
+		tasks[taskName] = struct{}{}
+		bf, ok := tsc.backoffs[taskName]
+		if !ok {
+			bf, _ = backoff.NewBackoff(tsc.cfg.BackoffFactor, tsc.cfg.BackoffJitter, tsc.cfg.BackoffMin, tsc.cfg.BackoffMax)
+			tsc.backoffs[taskName] = bf
+			tsc.latestPausedTime[taskName] = time.Now()
+			tsc.latestResumeTime[taskName] = time.Now()
 		}
-		opLogID, err := tsc.w.operateSubTask(&pb.TaskMeta{
-			Name: task.Name,
-			Op:   pb.TaskOp_AutoResume,
-		})
-		if err != nil {
-			tsc.l.Error("dispatch auto resume task failed", zap.String("task", task.Name), zap.Error(err))
-		} else {
-			resumed++
-			tsc.latestResume = time.Now()
-			tsc.l.Info("dispatch auto resume task", zap.String("task", task.Name), zap.Int64("opLogID", opLogID))
-		}
-	}
-	if abnormal > 0 {
-		tsc.latestNormalTime = time.Now()
-		if resumed > 0 {
-			tsc.bf.Forward()
-		}
-	} else {
-		if time.Since(tsc.latestNormalTime) > tsc.cfg.BackoffRollback {
-			tsc.bf.Rollback()
-			tsc.latestNormalTime = time.Now()
+		duration := bf.Current()
+		strategy := tsc.getResumeStrategy(stStatus, duration)
+		switch strategy {
+		case ResumeIgnore:
+			if time.Since(tsc.latestPausedTime[taskName]) > tsc.cfg.BackoffRollback {
+				bf.Rollback()
+				// after each rollback, reset this timer
+				tsc.latestPausedTime[taskName] = time.Now()
+			}
+		case ResumeNoSense:
+			tsc.latestPausedTime[taskName] = time.Now()
+			// this strategy doesn't forward or rollback backoff
+			blockTime, ok := tsc.latestBlockTime[taskName]
+			if ok {
+				tsc.l.Warn("task can't auto resume", zap.String("task", taskName), zap.Duration("paused duration", time.Since(blockTime)))
+			} else {
+				tsc.latestBlockTime[taskName] = time.Now()
+				tsc.l.Warn("task can't auto resume", zap.String("task", taskName))
+			}
+		case ResumeSkip:
+			tsc.l.Warn("backoff skip auto resume task", zap.String("task", taskName), zap.Time("latestResumeTime", tsc.latestResumeTime[taskName]), zap.Reflect("duration", duration))
+			tsc.latestPausedTime[taskName] = time.Now()
+		case ResumeDispatch:
+			tsc.latestPausedTime[taskName] = time.Now()
+			opLogID, err := tsc.w.operateSubTask(&pb.TaskMeta{
+				Name: taskName,
+				Op:   pb.TaskOp_AutoResume,
+			})
+			if err != nil {
+				tsc.l.Error("dispatch auto resume task failed", zap.String("task", taskName), zap.Error(err))
+			} else {
+				tsc.l.Info("dispatch auto resume task", zap.String("task", taskName), zap.Int64("opLogID", opLogID))
+				tsc.latestResumeTime[taskName] = time.Now()
+				bf.Forward()
+			}
 		}
 	}
 }

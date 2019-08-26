@@ -58,13 +58,20 @@ func (s *testTaskCheckerSuite) TestResumeStrategy(c *check.C) {
 	for _, tc := range testCases {
 		rtsc, ok := tsc.(*realTaskStatusChecker)
 		c.Assert(ok, check.IsTrue)
-		rtsc.latestResume = tc.latestResumeFn(tc.addition)
+		rtsc.latestResumeTime[taskName] = tc.latestResumeFn(tc.addition)
 		strategy := rtsc.getResumeStrategy(tc.status, tc.duration)
 		c.Assert(strategy, check.Equals, tc.expected)
 	}
 }
 
 func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
+	var (
+		latestResumeTime time.Time
+		latestPausedTime time.Time
+		latestBlockTime  time.Time
+		taskName         = "test-check-task"
+	)
+
 	NewRelayHolder = NewDummyRelayHolder
 	dir := c.MkDir()
 	cfg := NewConfig()
@@ -87,15 +94,20 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	c.Assert(ok, check.IsTrue)
 	rtsc.w = w
 
-	// test resume with paused task
 	rtsc.w.subTasks = map[string]*SubTask{
-		"task1": {
-			stage: pb.Stage_Paused,
-			result: &pb.ProcessResult{
-				IsCanceled: false,
-				Errors:     []*pb.ProcessError{{pb.ErrorType_UnknownError, "error message"}},
-			},
+		taskName: {
+			stage: pb.Stage_Running,
 		},
+	}
+	rtsc.check()
+	bf, ok := rtsc.backoffs[taskName]
+	c.Assert(ok, check.IsTrue)
+
+	// test resume with paused task
+	rtsc.w.subTasks[taskName].stage = pb.Stage_Paused
+	rtsc.w.subTasks[taskName].result = &pb.ProcessResult{
+		IsCanceled: false,
+		Errors:     []*pb.ProcessError{{pb.ErrorType_UnknownError, "error message"}},
 	}
 	time.Sleep(1 * time.Millisecond)
 	rtsc.check()
@@ -103,7 +115,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	rtsc.check()
 	time.Sleep(4 * time.Millisecond)
 	rtsc.check()
-	c.Assert(rtsc.bf.Current(), check.Equals, 8*time.Millisecond)
+	c.Assert(bf.Current(), check.Equals, 8*time.Millisecond)
 	c.Assert(w.meta.logs, check.HasLen, 3)
 	for _, tl := range w.meta.logs {
 		c.Assert(tl.Task, check.NotNil)
@@ -111,42 +123,28 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	}
 
 	// test backoff rollback at least once, as well as resume ignore strategy
-	rtsc.w.subTasks = map[string]*SubTask{
-		"task2": {
-			stage: pb.Stage_Paused,
-			result: &pb.ProcessResult{
-				IsCanceled: true,
-			},
-		},
-	}
+	rtsc.w.subTasks[taskName].result = &pb.ProcessResult{IsCanceled: true}
 	w.meta.logs = []*pb.TaskLog{}
 	time.Sleep(200 * time.Millisecond)
 	rtsc.check()
-	c.Assert(rtsc.bf.Current() <= 4*time.Millisecond, check.IsTrue)
+	c.Assert(bf.Current() <= 4*time.Millisecond, check.IsTrue)
 	c.Assert(w.meta.logs, check.HasLen, 0)
-	current := rtsc.bf.Current()
+	current := bf.Current()
 
 	// test no sense strategy
-	rtsc.w.subTasks = map[string]*SubTask{
-		"task3": {
-			stage: pb.Stage_Paused,
-			result: &pb.ProcessResult{
-				IsCanceled: false,
-				Errors:     []*pb.ProcessError{{pb.ErrorType_ExecSQL, "ERROR 1105 (HY000): unsupported modify column length 20 is less than origin 40"}},
-			},
-		},
+	rtsc.w.subTasks[taskName].result = &pb.ProcessResult{
+		IsCanceled: false,
+		Errors:     []*pb.ProcessError{{pb.ErrorType_ExecSQL, "ERROR 1105 (HY000): unsupported modify column length 20 is less than origin 40"}},
 	}
-	latestNormalTime := rtsc.latestNormalTime
+	latestPausedTime = rtsc.latestPausedTime[taskName]
 	rtsc.check()
-	// check latestNormalTime is updated when we first meet no-auto-resume paused task
-	c.Assert(latestNormalTime.Before(rtsc.latestNormalTime), check.IsTrue)
-	latestNormalTime = rtsc.latestNormalTime
-	rtsc.check()
-	// check latestNormalTime is not updated when we meet historical no-auto-resume paused task
-	c.Assert(rtsc.latestNormalTime, check.Equals, latestNormalTime)
+	c.Assert(latestPausedTime.Before(rtsc.latestPausedTime[taskName]), check.IsTrue)
+	latestPausedTime = rtsc.latestPausedTime[taskName]
+	latestBlockTime = rtsc.latestBlockTime[taskName]
 	time.Sleep(200 * time.Millisecond)
 	rtsc.check()
-	c.Assert(rtsc.bf.Current(), check.Equals, current/2)
+	c.Assert(rtsc.latestBlockTime[taskName], check.Equals, latestBlockTime)
+	c.Assert(bf.Current(), check.Equals, current)
 	c.Assert(w.meta.logs, check.HasLen, 0)
 
 	// test resume skip strategy
@@ -157,25 +155,35 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 		BackoffMin:      10 * time.Second,
 		BackoffMax:      100 * time.Second,
 		BackoffFactor:   DefaultBackoffFactor,
-	}, nil)
+	}, w)
 	c.Assert(tsc.Init(), check.IsNil)
 	rtsc, ok = tsc.(*realTaskStatusChecker)
 	c.Assert(ok, check.IsTrue)
-	rtsc.w = w
+
 	rtsc.w.subTasks = map[string]*SubTask{
-		"task1": {
-			stage: pb.Stage_Paused,
-			result: &pb.ProcessResult{
-				IsCanceled: false,
-				Errors:     []*pb.ProcessError{{pb.ErrorType_UnknownError, "error message"}},
-			},
+		taskName: {
+			stage: pb.Stage_Running,
 		},
 	}
 	rtsc.check()
-	c.Assert(w.meta.logs, check.HasLen, 1)
-	c.Assert(rtsc.bf.Current(), check.Equals, 20*time.Second)
+	bf, ok = rtsc.backoffs[taskName]
+	c.Assert(ok, check.IsTrue)
+
+	rtsc.w.subTasks[taskName].stage = pb.Stage_Paused
+	rtsc.w.subTasks[taskName].result = &pb.ProcessResult{
+		IsCanceled: false,
+		Errors:     []*pb.ProcessError{{pb.ErrorType_UnknownError, "error message"}},
+	}
+	rtsc.check()
+	latestResumeTime = rtsc.latestResumeTime[taskName]
+	latestPausedTime = rtsc.latestPausedTime[taskName]
+	c.Assert(bf.Current(), check.Equals, 10*time.Second)
+	c.Assert(w.meta.logs, check.HasLen, 0)
 	for i := 0; i < 10; i++ {
 		rtsc.check()
+		c.Assert(latestResumeTime, check.Equals, rtsc.latestResumeTime[taskName])
+		c.Assert(latestPausedTime.Before(rtsc.latestPausedTime[taskName]), check.IsTrue)
+		latestPausedTime = rtsc.latestPausedTime[taskName]
 	}
-	c.Assert(w.meta.logs, check.HasLen, 1)
+	c.Assert(w.meta.logs, check.HasLen, 0)
 }
