@@ -88,6 +88,7 @@ func (t *testBackoffSuite) TestExponentialBackoff(c *check.C) {
 		c.Assert(b.Duration(), check.Equals, max)
 	}
 	b.Reset()
+	c.Assert(b.Duration(), check.Equals, min)
 }
 
 func (t *testBackoffSuite) checkBetween(c *check.C, value, low, high time.Duration) {
@@ -107,12 +108,12 @@ func (t *testBackoffSuite) TestBackoffJitter(c *check.C) {
 		Factor: factor,
 		Jitter: true,
 	}
-	c.Assert(b.Duration(), check.Equals, 1*time.Millisecond)
-	t.checkBetween(c, b.Duration(), 1*time.Millisecond, 2*time.Millisecond)
-	t.checkBetween(c, b.Duration(), 2*time.Millisecond, 4*time.Millisecond)
-	t.checkBetween(c, b.Duration(), 4*time.Millisecond, 8*time.Millisecond)
+	c.Assert(b.Duration(), check.Equals, min)
+	t.checkBetween(c, b.Duration(), min, 2*min)
+	t.checkBetween(c, b.Duration(), 2*min, 4*min)
+	t.checkBetween(c, b.Duration(), 4*min, 8*min)
 	b.Reset()
-	c.Assert(b.Duration(), check.Equals, 1*time.Millisecond)
+	c.Assert(b.Duration(), check.Equals, min)
 }
 
 func (t *testBackoffSuite) TestFixedBackoff(c *check.C) {
