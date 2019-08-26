@@ -454,7 +454,7 @@ func (k *ShardingGroupKeeper) Init(conn *Conn) error {
 	if conn != nil {
 		k.db = conn
 	} else {
-		db, err := createDB(k.cfg, k.cfg.To, maxDDLConnectionTimeout)
+		db, err := createConn(k.cfg, k.cfg.To, maxDDLConnectionTimeout)
 		if err != nil {
 			return err
 		}
@@ -695,13 +695,12 @@ func (k *ShardingGroupKeeper) prepare() error {
 
 // Close closes sharding group keeper
 func (k *ShardingGroupKeeper) Close() {
-	closeDBs(k.tctx, k.db)
+	closeConns(k.tctx, k.db)
 }
 
 func (k *ShardingGroupKeeper) createSchema() error {
 	stmt := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", k.shardMetaSchema)
-	args := make([]interface{}, 0)
-	err := k.db.executeSQL(k.tctx, []string{stmt}, [][]interface{}{args}, maxRetryCount)
+	_, err := k.db.executeSQL(k.tctx, []string{stmt})
 	k.tctx.L().Info("execute sql", zap.String("statement", stmt))
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
@@ -719,7 +718,7 @@ func (k *ShardingGroupKeeper) createTable() error {
 		update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		UNIQUE KEY uk_source_id_table_id_source (source_id, target_table_id, source_table_id)
 	)`, tableName)
-	err := k.db.executeSQL(k.tctx, []string{stmt}, [][]interface{}{{}}, maxRetryCount)
+	_, err := k.db.executeSQL(k.tctx, []string{stmt})
 	k.tctx.L().Info("execute sql", zap.String("statement", stmt))
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
@@ -727,7 +726,7 @@ func (k *ShardingGroupKeeper) createTable() error {
 // LoadShardMeta implements CheckPoint.LoadShardMeta
 func (k *ShardingGroupKeeper) LoadShardMeta() (map[string]*shardmeta.ShardingMeta, error) {
 	query := fmt.Sprintf("SELECT `target_table_id`, `source_table_id`, `active_index`, `is_global`, `data` FROM `%s`.`%s` WHERE `source_id`='%s'", k.shardMetaSchema, k.shardMetaTable, k.cfg.SourceID)
-	rows, err := k.db.querySQL(k.tctx, query, maxRetryCount)
+	rows, err := k.db.querySQL(k.tctx, query)
 	if err != nil {
 		return nil, terror.WithScope(err, terror.ScopeDownstream)
 	}

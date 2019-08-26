@@ -55,7 +55,6 @@ var (
 	// SyncerConfig
 	defaultWorkerCount = 16
 	defaultBatch       = 100
-	defaultMaxRetry    = 100
 )
 
 // Meta represents binlog's meta pos
@@ -184,7 +183,8 @@ type SyncerConfig struct {
 	MetaFile    string `yaml:"meta-file" toml:"meta-file" json:"meta-file"` // meta filename, used only when load SubConfig directly
 	WorkerCount int    `yaml:"worker-count" toml:"worker-count" json:"worker-count"`
 	Batch       int    `yaml:"batch" toml:"batch" json:"batch"`
-	MaxRetry    int    `yaml:"max-retry" toml:"max-retry" json:"max-retry"`
+	// deprecated
+	MaxRetry int `yaml:"max-retry" toml:"max-retry" json:"max-retry"`
 
 	// refine following configs to top level configs?
 	AutoFixGTID      bool `yaml:"auto-fix-gtid" toml:"auto-fix-gtid" json:"auto-fix-gtid"`
@@ -198,7 +198,6 @@ func defaultSyncerConfig() SyncerConfig {
 	return SyncerConfig{
 		WorkerCount: defaultWorkerCount,
 		Batch:       defaultBatch,
-		MaxRetry:    defaultMaxRetry,
 	}
 }
 
