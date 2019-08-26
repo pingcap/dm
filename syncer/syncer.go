@@ -493,6 +493,9 @@ func (s *Syncer) reset() {
 	// clear tables info
 	s.clearAllTables()
 
+	s.execErrorDetected.Set(false)
+	s.resetExecErrors()
+
 	if s.cfg.IsSharding {
 		// every time start to re-sync from resume, we reset status to make it like a fresh syncing
 		s.sgk.ResetGroups()
@@ -512,8 +515,6 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	runFatalChan := make(chan *pb.ProcessError, s.cfg.WorkerCount+1)
 	s.runFatalChan = runFatalChan
-	s.execErrorDetected.Set(false)
-	s.resetExecErrors()
 	errs := make([]*pb.ProcessError, 0, 2)
 
 	var wg sync.WaitGroup
@@ -982,7 +983,9 @@ func (s *Syncer) redirectStreamer(pos mysql.Position) error {
 // Run starts running for sync, we should guarantee it can rerun when paused.
 func (s *Syncer) Run(ctx context.Context) (err error) {
 	defer func() {
-		close(s.done)
+		if s.done != nil {
+			close(s.done)
+		}
 	}()
 
 	parser2, err := s.fromDB.getParser(s.cfg.EnableANSIQuotes)
