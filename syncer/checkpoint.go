@@ -493,7 +493,7 @@ func (cp *RemoteCheckPoint) Load() error {
 	})
 
 	if err != nil {
-		return err
+		return terror.WithScope(err, terror.ScopeDownstream)
 	}
 	defer rows.Close()
 

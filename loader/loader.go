@@ -157,7 +157,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *
 
 				if err := w.conn.executeSQL(ctctx, sqls); err != nil {
 					// expect pause rather than exit
-					err = terror.Annotatef(err, "file %s", job.file)
+					err = terror.WithScope(terror.Annotatef(err, "file %s", job.file), terror.ScopeDownstream)
 					runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, errors.ErrorStack(err))
 					return
 				}
@@ -918,7 +918,7 @@ func (l *Loader) restoreStructure(conn *Conn, sqlFile string, schema string, tab
 			sqls = append(sqls, query)
 			err = conn.executeSQL(l.tctx, sqls)
 			if err != nil {
-				return err
+				return terror.WithScope(err, terror.ScopeDownstream)
 			}
 		}
 
