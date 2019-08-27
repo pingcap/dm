@@ -240,12 +240,11 @@ func (tsc *realTaskStatusChecker) getResumeStrategy(stStatus *pb.SubTaskStatus, 
 
 func (tsc *realTaskStatusChecker) check() {
 	allSubTaskStatus := tsc.w.getAllSubTaskStatus()
-	tasks := make(map[string]struct{}, len(allSubTaskStatus))
 
 	defer func() {
 		// cleanup outdated tasks
 		for taskName := range tsc.bc.backoffs {
-			_, ok := tasks[taskName]
+			_, ok := allSubTaskStatus[taskName]
 			if !ok {
 				tsc.l.Debug("remove task from checker", zap.String("task", taskName))
 				delete(tsc.bc.backoffs, taskName)
@@ -256,9 +255,7 @@ func (tsc *realTaskStatusChecker) check() {
 		}
 	}()
 
-	for _, stStatus := range allSubTaskStatus {
-		taskName := stStatus.Name
-		tasks[taskName] = struct{}{}
+	for taskName, stStatus := range allSubTaskStatus {
 		bf, ok := tsc.bc.backoffs[taskName]
 		if !ok {
 			bf, _ = backoff.NewBackoff(tsc.cfg.BackoffFactor, tsc.cfg.BackoffJitter, tsc.cfg.BackoffMin, tsc.cfg.BackoffMax)

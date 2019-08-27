@@ -697,17 +697,17 @@ func (w *Worker) findSubTask(name string) *SubTask {
 
 // getAllSubTaskStatus returns all subtask status of this worker, note the field
 // in subtask status is not completed, only includes `Name`, `Stage` and `Result` now
-func (w *Worker) getAllSubTaskStatus() []*pb.SubTaskStatus {
+func (w *Worker) getAllSubTaskStatus() map[string]*pb.SubTaskStatus {
 	w.RLock()
 	defer w.RUnlock()
-	result := make([]*pb.SubTaskStatus, 0, len(w.subTasks))
+	result := make(map[string]*pb.SubTaskStatus)
 	for name, st := range w.subTasks {
 		st.RLock()
-		result = append(result, &pb.SubTaskStatus{
+		result[name] = &pb.SubTaskStatus{
 			Name:   name,
 			Stage:  st.stage,
 			Result: proto.Clone(st.result).(*pb.ProcessResult),
-		})
+		}
 		st.RUnlock()
 	}
 	return result
