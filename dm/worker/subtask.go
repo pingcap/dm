@@ -205,7 +205,6 @@ func (st *SubTask) run() {
 func (st *SubTask) fetchResult(pr chan pb.ProcessResult) {
 	defer st.wg.Done()
 
-retry:
 	select {
 	case <-st.ctx.Done():
 		return
@@ -228,20 +227,6 @@ retry:
 				stage = pb.Stage_Finished // process finished with no error
 			}
 		} else {
-			/* TODO
-			it's a poor and very rough retry feature, the main reason is that
-			the concurrency control of the sub task module is very confusing and needs to be optimized.
-			After improving its state transition and concurrency control,
-			I will optimize the implementation of retry feature.
-			*/
-			if st.retryErrors(result.Errors, cu) {
-				st.l.Warn("unit retry on error, waiting 10 seconds!", zap.Stringer("unit", cu.Type()), zap.Reflect("errors", result.Errors))
-				st.ctx, st.cancel = context.WithCancel(context.Background())
-				time.Sleep(10 * time.Second)
-				go cu.Resume(st.ctx, pr)
-				goto retry
-			}
-
 			stage = pb.Stage_Paused // error occurred, paused
 		}
 		st.setStage(stage)
