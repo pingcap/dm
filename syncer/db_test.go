@@ -171,6 +171,7 @@ func (s *testSyncerSuite) TestExecuteSQLSWithIgnore(c *C) {
 	// will return error when execute the first sql
 	mock.ExpectBegin()
 	mock.ExpectExec("alter table t1 add column a int").WillReturnError(newMysqlErr(uint16(infoschema.ErrColumnExists.Code()), "column a already exists"))
+	mock.ExpectRollback()
 
 	n, err = conn.executeSQL(tctx, sqls)
 	c.Assert(err, ErrorMatches, ".*column a already exists")

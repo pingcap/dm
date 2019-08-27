@@ -1247,7 +1247,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		mock.ExpectBegin()
 		e := newMysqlErr(1050, "Table exist")
 		mock.ExpectExec("CREATE TABLE").WillReturnError(e)
-		mock.ExpectRollback()
+		mock.ExpectCommit()
 
 		// mock get table in first handle RowEvent
 		mock.ExpectQuery("SHOW COLUMNS").WillReturnRows(
