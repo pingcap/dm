@@ -58,7 +58,7 @@ func (s *testTaskCheckerSuite) TestResumeStrategy(c *check.C) {
 	for _, tc := range testCases {
 		rtsc, ok := tsc.(*realTaskStatusChecker)
 		c.Assert(ok, check.IsTrue)
-		rtsc.latestResumeTime[taskName] = tc.latestResumeFn(tc.addition)
+		rtsc.bc.latestResumeTime[taskName] = tc.latestResumeFn(tc.addition)
 		strategy := rtsc.getResumeStrategy(tc.status, tc.duration)
 		c.Assert(strategy, check.Equals, tc.expected)
 	}
@@ -100,7 +100,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 		},
 	}
 	rtsc.check()
-	bf, ok := rtsc.backoffs[taskName]
+	bf, ok := rtsc.bc.backoffs[taskName]
 	c.Assert(ok, check.IsTrue)
 
 	// test resume with paused task
@@ -136,14 +136,14 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 		IsCanceled: false,
 		Errors:     []*pb.ProcessError{{pb.ErrorType_ExecSQL, "ERROR 1105 (HY000): unsupported modify column length 20 is less than origin 40"}},
 	}
-	latestPausedTime = rtsc.latestPausedTime[taskName]
+	latestPausedTime = rtsc.bc.latestPausedTime[taskName]
 	rtsc.check()
-	c.Assert(latestPausedTime.Before(rtsc.latestPausedTime[taskName]), check.IsTrue)
-	latestPausedTime = rtsc.latestPausedTime[taskName]
-	latestBlockTime = rtsc.latestBlockTime[taskName]
+	c.Assert(latestPausedTime.Before(rtsc.bc.latestPausedTime[taskName]), check.IsTrue)
+	latestPausedTime = rtsc.bc.latestPausedTime[taskName]
+	latestBlockTime = rtsc.bc.latestBlockTime[taskName]
 	time.Sleep(200 * time.Millisecond)
 	rtsc.check()
-	c.Assert(rtsc.latestBlockTime[taskName], check.Equals, latestBlockTime)
+	c.Assert(rtsc.bc.latestBlockTime[taskName], check.Equals, latestBlockTime)
 	c.Assert(bf.Current(), check.Equals, current)
 	c.Assert(w.meta.logs, check.HasLen, 0)
 
@@ -166,7 +166,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 		},
 	}
 	rtsc.check()
-	bf, ok = rtsc.backoffs[taskName]
+	bf, ok = rtsc.bc.backoffs[taskName]
 	c.Assert(ok, check.IsTrue)
 
 	rtsc.w.subTasks[taskName].stage = pb.Stage_Paused
@@ -175,15 +175,15 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 		Errors:     []*pb.ProcessError{{pb.ErrorType_UnknownError, "error message"}},
 	}
 	rtsc.check()
-	latestResumeTime = rtsc.latestResumeTime[taskName]
-	latestPausedTime = rtsc.latestPausedTime[taskName]
+	latestResumeTime = rtsc.bc.latestResumeTime[taskName]
+	latestPausedTime = rtsc.bc.latestPausedTime[taskName]
 	c.Assert(bf.Current(), check.Equals, 10*time.Second)
 	c.Assert(w.meta.logs, check.HasLen, 0)
 	for i := 0; i < 10; i++ {
 		rtsc.check()
-		c.Assert(latestResumeTime, check.Equals, rtsc.latestResumeTime[taskName])
-		c.Assert(latestPausedTime.Before(rtsc.latestPausedTime[taskName]), check.IsTrue)
-		latestPausedTime = rtsc.latestPausedTime[taskName]
+		c.Assert(latestResumeTime, check.Equals, rtsc.bc.latestResumeTime[taskName])
+		c.Assert(latestPausedTime.Before(rtsc.bc.latestPausedTime[taskName]), check.IsTrue)
+		latestPausedTime = rtsc.bc.latestPausedTime[taskName]
 	}
 	c.Assert(w.meta.logs, check.HasLen, 0)
 }
@@ -228,10 +228,10 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 		},
 	}
 	rtsc.check()
-	c.Assert(len(rtsc.backoffs), check.Equals, 2)
-	c.Assert(len(rtsc.latestPausedTime), check.Equals, 2)
-	c.Assert(len(rtsc.latestResumeTime), check.Equals, 2)
-	c.Assert(len(rtsc.latestBlockTime), check.Equals, 0)
+	c.Assert(len(rtsc.bc.backoffs), check.Equals, 2)
+	c.Assert(len(rtsc.bc.latestPausedTime), check.Equals, 2)
+	c.Assert(len(rtsc.bc.latestResumeTime), check.Equals, 2)
+	c.Assert(len(rtsc.bc.latestBlockTime), check.Equals, 0)
 
 	// test backoff strategies of different tasks do not affect each other
 	rtsc.w.subTasks[task1].stage = pb.Stage_Paused
@@ -244,15 +244,15 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 		IsCanceled: false,
 		Errors:     []*pb.ProcessError{{pb.ErrorType_UnknownError, "error message"}},
 	}
-	task1LatestResumeTime = rtsc.latestResumeTime[task1]
-	task2LatestResumeTime = rtsc.latestResumeTime[task2]
+	task1LatestResumeTime = rtsc.bc.latestResumeTime[task1]
+	task2LatestResumeTime = rtsc.bc.latestResumeTime[task2]
 	for i := 0; i < 10; i++ {
 		time.Sleep(backoffMin)
 		rtsc.check()
-		c.Assert(task1LatestResumeTime, check.Equals, rtsc.latestResumeTime[task1])
-		c.Assert(task2LatestResumeTime.Before(rtsc.latestResumeTime[task2]), check.IsTrue)
-		c.Assert(len(rtsc.latestBlockTime), check.Equals, 1)
-		task2LatestResumeTime = rtsc.latestResumeTime[task2]
+		c.Assert(task1LatestResumeTime, check.Equals, rtsc.bc.latestResumeTime[task1])
+		c.Assert(task2LatestResumeTime.Before(rtsc.bc.latestResumeTime[task2]), check.IsTrue)
+		c.Assert(len(rtsc.bc.latestBlockTime), check.Equals, 1)
+		task2LatestResumeTime = rtsc.bc.latestResumeTime[task2]
 		c.Assert(w.meta.logs, check.HasLen, i+1)
 	}
 
@@ -260,10 +260,10 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 	delete(rtsc.w.subTasks, task1)
 	time.Sleep(backoffMin)
 	rtsc.check()
-	c.Assert(task2LatestResumeTime.Before(rtsc.latestResumeTime[task2]), check.IsTrue)
+	c.Assert(task2LatestResumeTime.Before(rtsc.bc.latestResumeTime[task2]), check.IsTrue)
 	c.Assert(w.meta.logs, check.HasLen, 11)
-	c.Assert(len(rtsc.backoffs), check.Equals, 1)
-	c.Assert(len(rtsc.latestPausedTime), check.Equals, 1)
-	c.Assert(len(rtsc.latestResumeTime), check.Equals, 1)
-	c.Assert(len(rtsc.latestBlockTime), check.Equals, 0)
+	c.Assert(len(rtsc.bc.backoffs), check.Equals, 1)
+	c.Assert(len(rtsc.bc.latestPausedTime), check.Equals, 1)
+	c.Assert(len(rtsc.bc.latestResumeTime), check.Equals, 1)
+	c.Assert(len(rtsc.bc.latestBlockTime), check.Equals, 0)
 }

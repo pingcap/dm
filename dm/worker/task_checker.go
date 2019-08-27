@@ -100,19 +100,7 @@ type TaskStatusChecker interface {
 // NewTaskStatusChecker is a TaskStatusChecker initializer
 var NewTaskStatusChecker = NewRealTaskStatusChecker
 
-// realTaskStatusChecker is not thread-safe
-// It runs asynchronously against DM-worker, and task information may be updated
-// late than DM-worker, but it is acceptable.
-type realTaskStatusChecker struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
-	closed sync2.AtomicInt32
-
-	cfg CheckerConfig
-	l   log.Logger
-	w   *Worker
-
+type backoffController struct {
 	// task name -> backoff counter
 	backoffs map[string]*backoff.Backoff
 
@@ -126,16 +114,38 @@ type realTaskStatusChecker struct {
 	latestResumeTime map[string]time.Time
 }
 
-// NewRealTaskStatusChecker creates a new realTaskStatusChecker instance
-func NewRealTaskStatusChecker(cfg CheckerConfig, w *Worker) TaskStatusChecker {
-	tsc := &realTaskStatusChecker{
-		cfg:              cfg,
-		l:                log.With(zap.String("component", "task checker")),
-		w:                w,
+// newBackoffController returns a new backoffController instance
+func newBackoffController() *backoffController {
+	return &backoffController{
 		backoffs:         make(map[string]*backoff.Backoff),
 		latestPausedTime: make(map[string]time.Time),
 		latestBlockTime:  make(map[string]time.Time),
 		latestResumeTime: make(map[string]time.Time),
+	}
+}
+
+// realTaskStatusChecker is not thread-safe.
+// It runs asynchronously against DM-worker, and task information may be updated
+// later than DM-worker, but it is acceptable.
+type realTaskStatusChecker struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
+	closed sync2.AtomicInt32
+
+	cfg CheckerConfig
+	l   log.Logger
+	w   *Worker
+	bc  *backoffController
+}
+
+// NewRealTaskStatusChecker creates a new realTaskStatusChecker instance
+func NewRealTaskStatusChecker(cfg CheckerConfig, w *Worker) TaskStatusChecker {
+	tsc := &realTaskStatusChecker{
+		cfg: cfg,
+		l:   log.With(zap.String("component", "task checker")),
+		w:   w,
+		bc:  newBackoffController(),
 	}
 	tsc.closed.Set(closedTrue)
 	return tsc
@@ -221,7 +231,7 @@ func (tsc *realTaskStatusChecker) getResumeStrategy(stStatus *pb.SubTaskStatus, 
 	}
 
 	// auto resume interval does not exceed backoff duration, skip this paused task
-	if time.Since(tsc.latestResumeTime[stStatus.Name]) < duration {
+	if time.Since(tsc.bc.latestResumeTime[stStatus.Name]) < duration {
 		return ResumeSkip
 	}
 
@@ -234,14 +244,14 @@ func (tsc *realTaskStatusChecker) check() {
 
 	defer func() {
 		// cleanup outdated tasks
-		for taskName := range tsc.backoffs {
+		for taskName := range tsc.bc.backoffs {
 			_, ok := tasks[taskName]
 			if !ok {
 				tsc.l.Debug("remove task from checker", zap.String("task", taskName))
-				delete(tsc.backoffs, taskName)
-				delete(tsc.latestPausedTime, taskName)
-				delete(tsc.latestBlockTime, taskName)
-				delete(tsc.latestResumeTime, taskName)
+				delete(tsc.bc.backoffs, taskName)
+				delete(tsc.bc.latestPausedTime, taskName)
+				delete(tsc.bc.latestBlockTime, taskName)
+				delete(tsc.bc.latestResumeTime, taskName)
 			}
 		}
 	}()
@@ -249,37 +259,37 @@ func (tsc *realTaskStatusChecker) check() {
 	for _, stStatus := range allSubTaskStatus {
 		taskName := stStatus.Name
 		tasks[taskName] = struct{}{}
-		bf, ok := tsc.backoffs[taskName]
+		bf, ok := tsc.bc.backoffs[taskName]
 		if !ok {
 			bf, _ = backoff.NewBackoff(tsc.cfg.BackoffFactor, tsc.cfg.BackoffJitter, tsc.cfg.BackoffMin, tsc.cfg.BackoffMax)
-			tsc.backoffs[taskName] = bf
-			tsc.latestPausedTime[taskName] = time.Now()
-			tsc.latestResumeTime[taskName] = time.Now()
+			tsc.bc.backoffs[taskName] = bf
+			tsc.bc.latestPausedTime[taskName] = time.Now()
+			tsc.bc.latestResumeTime[taskName] = time.Now()
 		}
 		duration := bf.Current()
 		strategy := tsc.getResumeStrategy(stStatus, duration)
 		switch strategy {
 		case ResumeIgnore:
-			if time.Since(tsc.latestPausedTime[taskName]) > tsc.cfg.BackoffRollback {
+			if time.Since(tsc.bc.latestPausedTime[taskName]) > tsc.cfg.BackoffRollback {
 				bf.Rollback()
 				// after each rollback, reset this timer
-				tsc.latestPausedTime[taskName] = time.Now()
+				tsc.bc.latestPausedTime[taskName] = time.Now()
 			}
 		case ResumeNoSense:
 			// this strategy doesn't forward or rollback backoff
-			tsc.latestPausedTime[taskName] = time.Now()
-			blockTime, ok := tsc.latestBlockTime[taskName]
+			tsc.bc.latestPausedTime[taskName] = time.Now()
+			blockTime, ok := tsc.bc.latestBlockTime[taskName]
 			if ok {
 				tsc.l.Warn("task can't auto resume", zap.String("task", taskName), zap.Duration("paused duration", time.Since(blockTime)))
 			} else {
-				tsc.latestBlockTime[taskName] = time.Now()
+				tsc.bc.latestBlockTime[taskName] = time.Now()
 				tsc.l.Warn("task can't auto resume", zap.String("task", taskName))
 			}
 		case ResumeSkip:
-			tsc.l.Warn("backoff skip auto resume task", zap.String("task", taskName), zap.Time("latestResumeTime", tsc.latestResumeTime[taskName]), zap.Duration("duration", duration))
-			tsc.latestPausedTime[taskName] = time.Now()
+			tsc.l.Warn("backoff skip auto resume task", zap.String("task", taskName), zap.Time("latestResumeTime", tsc.bc.latestResumeTime[taskName]), zap.Duration("duration", duration))
+			tsc.bc.latestPausedTime[taskName] = time.Now()
 		case ResumeDispatch:
-			tsc.latestPausedTime[taskName] = time.Now()
+			tsc.bc.latestPausedTime[taskName] = time.Now()
 			opLogID, err := tsc.w.operateSubTask(&pb.TaskMeta{
 				Name: taskName,
 				Op:   pb.TaskOp_AutoResume,
@@ -288,7 +298,7 @@ func (tsc *realTaskStatusChecker) check() {
 				tsc.l.Error("dispatch auto resume task failed", zap.String("task", taskName), zap.Error(err))
 			} else {
 				tsc.l.Info("dispatch auto resume task", zap.String("task", taskName), zap.Int64("opLogID", opLogID))
-				tsc.latestResumeTime[taskName] = time.Now()
+				tsc.bc.latestResumeTime[taskName] = time.Now()
 				bf.Forward()
 			}
 		}
