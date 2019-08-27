@@ -705,7 +705,7 @@ func (w *Worker) getAllSubTaskStatus() []*pb.SubTaskStatus {
 		st.RLock()
 		result = append(result, &pb.SubTaskStatus{
 			Name:   name,
-			Stage:  pb.Stage_Paused,
+			Stage:  st.stage,
 			Result: proto.Clone(st.result).(*pb.ProcessResult),
 		})
 		st.RUnlock()
