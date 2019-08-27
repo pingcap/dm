@@ -204,7 +204,6 @@ func InitStatusAndMetrics(addr string) {
 
 		// HTTP path for prometheus.
 		http.Handle("/metrics", promhttp.Handler())
-		// http.Handle("/metrics", prometheus.Handler())
 		log.L().Info("listening for status and metrics report.", zap.String("address", addr))
 		err := http.ListenAndServe(addr, nil)
 		if err != nil {
