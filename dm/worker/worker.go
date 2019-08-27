@@ -696,11 +696,11 @@ func (w *Worker) findSubTask(name string) *SubTask {
 }
 
 // getAllSubTaskStatus returns all subtask status of this worker, note the field
-// in subtask status is not completed, only includs `Name`, `Stage` and `Result` now
+// in subtask status is not completed, only includes `Name`, `Stage` and `Result` now
 func (w *Worker) getAllSubTaskStatus() []*pb.SubTaskStatus {
 	w.RLock()
 	defer w.RUnlock()
-	result := make([]*pb.SubTaskStatus, 0)
+	result := make([]*pb.SubTaskStatus, 0, len(w.subTasks))
 	for name, st := range w.subTasks {
 		st.RLock()
 		result = append(result, &pb.SubTaskStatus{
