@@ -902,8 +902,12 @@ func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *Conn, jobCh
 					s.tctx.L().Info("ignore sharding DDLs", zap.Strings("ddls", sqlJob.ddls))
 				} else {
 					_, err = db.executeSQL(s.tctx, sqlJob.ddls)
-					if err != nil && ignoreDDLError(err) {
-						err = nil
+					if err != nil {
+						if ignoreDDLError(err) {
+							err = nil
+						} else {
+							err = terror.WithScope(err, terror.ScopeDownstream)
+						}
 					}
 
 					if s.tracer.Enable() {
