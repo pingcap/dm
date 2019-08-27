@@ -16,6 +16,9 @@ package loader
 import (
 	"database/sql"
 	"fmt"
+	"os"
+	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -26,12 +29,17 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
+	tutils "github.com/pingcap/dm/pkg/utils"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	tmysql "github.com/pingcap/parser/mysql"
 	"go.uber.org/zap"
+)
+
+const (
+	defaultDupEntryLog = "dupDataFile.txt"
 )
 
 // Conn represents a live DB connection
@@ -89,6 +97,9 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]
 		return terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
+	// record whether the current statement is in insert-ignore mode
+	var dupErrFlag bool
+
 	params := retry.Params{
 		RetryCount:         10,
 		FirstRetryDuration: 2 * time.Second,
@@ -96,15 +107,32 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]
 		IsRetryableFn: func(retryTime int, err error) bool {
 			ctx.L().Warn("execute statements", zap.Int("retry", retryTime), zap.Strings("queries", queries), zap.Reflect("arguments", args), log.ShortError(err))
 			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
-			return retry.IsRetryableError(err)
+			res := isErrDupEntry(err)
+			if res == false && isErrDupEntry(err) {
+				if len(queries) == 3 && queries[1][:11] == "INSERT INTO" {
+					ctx.L().Info("because dupEntry error caused the SQL failed, will replace it with 'INSERT IGNORE...' and try again")
+					queries[1] = "INSERT IGNORE" + queries[1][6:]
+					dupErrFlag = true
+					return true
+				}
+			}
+			return res
 		},
 	}
 	_, _, err := conn.baseConn.ApplyRetryStrategy(
 		ctx,
 		params,
 		func(ctx *tcontext.Context) (interface{}, error) {
+			var err error
 			startTime := time.Now()
-			_, err := conn.baseConn.ExecuteSQL(ctx, queries, args...)
+			if dupErrFlag == true {
+				_, err = ExecuteSQLForInsertIgnore(ctx, conn, conn.baseConn.GetDb(), queries)
+				if err == nil {
+					dupErrFlag = false
+				}
+			} else {
+				_, err = conn.baseConn.ExecuteSQL(ctx, queries, args...)
+			}
 			failpoint.Inject("LoadExecCreateTableFailed", func(val failpoint.Value) {
 				errCode, err1 := strconv.ParseUint(val.(string), 10, 16)
 				if err1 != nil {
@@ -168,4 +196,328 @@ func isMySQLError(err error, code uint16) bool {
 	err = errors.Cause(err)
 	e, ok := err.(*mysql.MySQLError)
 	return ok && e.Number == code
+}
+
+// ExecuteSQLForInsertIgnore executes SQL from the fetched db connection on real DB
+// return
+// 1. failed: (the index of sqls executed error, error)
+// 2. succeed: (len(sqls), nil)
+func ExecuteSQLForInsertIgnore(tctx *tcontext.Context, conn *Conn, db *sql.DB, queries []string) (int, error) {
+	if db == nil {
+		return 0, terror.ErrDBUnExpect.Generate("database connection not valid")
+	}
+
+	txn, err := db.Begin()
+	if err != nil {
+		tctx.L().Error("fail to begin a transaction", zap.String("sqls", fmt.Sprintf("%-.200v", queries)), zap.Error(err))
+		return 0, terror.ErrDBExecuteFailed.Delegate(err, "begin")
+	}
+	l := len(queries)
+
+	for i, query := range queries {
+		tctx.L().Debug("execute statement", zap.String("query", query))
+
+		_, err = txn.ExecContext(tctx.Context(), query)
+		if err != nil {
+			tctx.L().Error("execute statement failed", zap.String("query", query), log.ShortError(err))
+			rerr := txn.Rollback()
+			if rerr != nil {
+				tctx.L().Error("rollback failed", zap.String("query", query), log.ShortError(rerr))
+			}
+			// we should return the exec err, instead of the rollback rerr.
+			return i, terror.ErrDBExecuteFailed.Delegate(err, query)
+		}
+		if i == 1 {
+			processErrSQL(tctx, conn, txn, query)
+		}
+	}
+	err = txn.Commit()
+	if err != nil {
+		return l, terror.ErrDBExecuteFailed.Delegate(err, "commit")
+	}
+	return l, nil
+}
+
+func processErrSQL(ctx *tcontext.Context, conn *Conn, txn *sql.Tx, sql string) {
+	var (
+		dupData     string
+		table       string
+		messages    []string
+		tmpDupData  string
+		keyName     string
+		tmpKeyName  string
+		dupDataPair string
+		flag        bool
+		query       string
+	)
+
+	reg := regexp.MustCompile(`^INSERT IGNORE INTO .*?VALUES`)
+	if reg.MatchString(sql) {
+		tmpTable := reg.FindAllString(sql, 1)
+		table = tmpTable[0][20 : len(tmpTable[0])-8]
+	} else {
+		ctx.L().Warn("get duplicate entry failed, can't get table name", zap.String("sql", sql))
+		return
+	}
+
+	processTmpErr := func(msg string, err error) {
+		ctx.L().Warn("get duplicate entry", zap.String("dupEntry information", msg), zap.Error(err))
+	}
+
+	addEscapeCharacter := func(tmpStr string) string {
+		// The "'", "\", """ in the data obtained from the error message has no escape character \ , so the escape character must be added after obtaining data
+		finalStr := ""
+		for i := 0; i < len(tmpStr); i++ {
+			if tmpStr[i] == '\'' || tmpStr[i] == '"' || tmpStr[i] == '\\' {
+				finalStr += "\\" + string(tmpStr[i])
+			} else {
+				finalStr += string(tmpStr[i])
+			}
+		}
+		return finalStr
+	}
+
+	warns, err := tutils.ShowWarnings(txn)
+	if err != nil {
+		ctx.L().Warn("get duplicate entry", zap.Error(err))
+		return
+	}
+
+	for i := 0; i < len(warns); i++ {
+		if warns[i].Level == "Warning" && warns[i].Code == tmysql.ErrDupEntry {
+			messages = append(messages, warns[i].Message)
+		}
+	}
+
+	for i := 0; i < len(messages); i++ {
+		tmpDupData, tmpKeyName, err = getDupEntry(messages[i]) // Get duplicate data and index key name
+		if err != nil {
+			processTmpErr(messages[i], err)
+			continue
+		}
+
+		dupData = addEscapeCharacter(tmpDupData)
+		keyName = addEscapeCharacter(tmpKeyName)
+		ctx.L().Warn(" dupData: " + dupData + " keyName: " + keyName)
+
+		var queryCondition = []tutils.Conditions{
+			{"table_name", table},
+			{"constraint_name", keyName},
+		}
+		query = tutils.GetDbInfoFromInfoSchema("column_name", "KEY_COLUMN_USAGE", queryCondition)
+		rows, err := txn.Query(query)
+
+		if err != nil {
+			processTmpErr(messages[i], terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query))
+			continue
+		}
+
+		var columnName string
+		for rows.Next() {
+			err = rows.Scan(&columnName)
+			if err != nil {
+				processTmpErr(messages[i], terror.DBErrorAdapt(err, terror.ErrDBDriverError))
+				flag = true
+				break
+			}
+		}
+
+		if rows.Err() != nil {
+			processTmpErr(messages[i], terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError))
+			continue
+		}
+
+		if flag {
+			flag = false
+			continue
+		}
+		rows.Close()
+
+		queryCondition = []tutils.Conditions{
+			{"table_name", table},
+		}
+		query = tutils.GetDbInfoFromInfoSchema("column_name", "COLUMNS", queryCondition)
+		rows, err = txn.Query(query)
+		if err != nil {
+			processTmpErr(messages[i], terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query))
+			continue
+		}
+		pos := 1
+
+		for rows.Next() {
+			var tmpColumnName string
+			err = rows.Scan(&tmpColumnName)
+			if err != nil {
+				processTmpErr(messages[i], terror.DBErrorAdapt(err, terror.ErrDBDriverError))
+				flag = true
+				break
+			}
+			if tmpColumnName == columnName {
+				break
+			}
+			pos++
+		}
+		if flag {
+			flag = false
+			continue
+		}
+		rows.Close()
+
+		dupDataPair, err = findDataPair(sql, dupData, pos) // Get the complete data pair
+		if err != nil {
+			processTmpErr(messages[i], err)
+			continue
+		}
+
+		if conn.cfg.OpenErrDataLog {
+			err = dupEntryLog(conn.cfg.DirErrDataLog, dupDataPair, table, dupData, columnName, strconv.Itoa(pos)) // Write dupdata to the dupEntryLog
+			if err != nil {
+				processTmpErr(messages[i], err)
+				continue
+			}
+		} else {
+			ctx.L().Info("record duplicate entry", zap.String("column", columnName), zap.String("pos", strconv.Itoa(pos)), zap.String("data", dupData), zap.String("statement", "INSERT INTO `"+table+"` VALUES"+dupDataPair+";"))
+		}
+	}
+}
+
+func getDupEntry(mes string) (string, string, error) {
+	var (
+		keyName    string
+		tmpKeyName []string
+		dupData    string
+		reg        = regexp.MustCompile(`for key '[^ ]*'`)
+	)
+
+	if reg.MatchString(mes) {
+		tmpKeyName = reg.FindAllString(mes, -1)
+		keyName = tmpKeyName[len(tmpKeyName)-1][9 : len(tmpKeyName[len(tmpKeyName)-1])-1]
+	} else {
+		return "", "", errors.New("Can't find dupEntry key")
+	}
+	dupData = mes[17 : len(mes)-len(tmpKeyName[len(tmpKeyName)-1])-2]
+	return dupData, keyName, nil
+}
+
+func findDataPair(target, dupData string, pos int) (string, error) {
+	var trxStart int
+	var dupDataPair string // Duplicate data pair
+	trxStart = 0
+	dataIn := false // Use a bool type to record whether the current data ends or not, avoiding encountering ( and ) in the data that causes the current data pair to be considered finished or restarted
+	dataNow := 0    // Record the start of each match
+	nowPos := 0     // Record the location of the current data, and compare whether the data is equal to dupData only when it is equal to pos
+	isSymbol := 0   // Records whether the current data carries ', Used to record data locations and compare data, 0 for stateless, 1 for currently traversing string data, 2 for currently traversing non-string data
+	isFind := false // Use a variable to record whether duplicate values have been found
+	for i := 0; i < len(target); i++ {
+		switch target[i] {
+		case '(':
+			if dataIn == false {
+				trxStart = i             // Left edge position of deleted data
+				if target[i+1] != '\'' { // For non-string data after (
+					nowPos++
+					dataNow = i
+					isSymbol = 2
+				}
+			}
+		case '\\': // When an escape character is encountered, need to skip the next character to avoid the effect of characters such as ' "
+			i++
+			continue
+		case '\'':
+			if dataIn == false {
+				dataIn = true
+				isSymbol = 1
+				nowPos++
+				dataNow = i
+			} else {
+				dataIn = false
+				isSymbol = 0
+				if nowPos == pos { // Find a string data
+					if target[dataNow+1:i] == dupData {
+						isFind = true
+					}
+				}
+			}
+		case ',':
+			if isSymbol == 0 && dataIn == false && target[i-1] != ')' && target[i+1] != '\'' { // No "," can appear before the beginning of non-string data, and cannot between the string data, but between the "(" and ")", and the last bit cannot be a "'"
+				nowPos++
+				dataNow = i
+				isSymbol = 2
+			} else if isSymbol == 2 {
+				isSymbol = 0
+				if nowPos == pos { // Find a non-string data
+					if target[dataNow+1:i] == dupData {
+						isFind = true
+					}
+				}
+				if target[i+1] != '\'' { // The "," may be the beginning of another data at the same time as the end of the data
+					nowPos++
+					dataNow = i
+					isSymbol = 2
+				}
+			}
+		case ')':
+			if dataIn == false {
+				if isSymbol == 2 { // For non-string data before )
+					isSymbol = 0
+					if nowPos == pos { // Find a non-string data
+						if target[dataNow+1:i] == dupData {
+							isFind = true
+						}
+					}
+				}
+				nowPos = 0
+				if isFind == true {
+					dupDataPair = target[trxStart : i+1]
+					return dupDataPair, nil
+				}
+			}
+		}
+	}
+	return "", errors.New("Can't find dup Error")
+}
+
+func dupEntryLog(dir, dupDataPair, errTable, errData, errColumn, errPos string) error {
+	var dupDataFile *os.File
+	_, err := os.Stat(dir)
+	if os.IsNotExist(err) {
+		err = os.Mkdir(dir, 0755)
+		if err != nil {
+			return err
+		}
+	}
+	dir = path.Join(dir, defaultDupEntryLog)
+	_, err = os.Stat(dir) // Detects if the file exists
+	if os.IsNotExist(err) {
+		dupDataFile, err = os.Create(dir)
+		if err != nil {
+			return err
+		}
+	} else {
+		dupDataFile, err = os.OpenFile(dir, os.O_APPEND|os.O_WRONLY, 0666)
+		if err != nil {
+			return err
+		}
+	}
+	errTime := fmt.Sprintf("%d-%d-%d %d:%d:%d", time.Now().Year(), time.Now().Month(), time.Now().Day(), time.Now().Hour(), time.Now().Minute(), time.Now().Second())
+	_, err = dupDataFile.WriteString("*********************\n" + "Time: " + errTime + "\n" + "Column: " + errColumn + "\n" + "Data: " + errData + "\n" + "Pos: " + errPos + "\n")
+	if err != nil {
+		closeErr := dupDataFile.Close()
+		if closeErr != nil {
+			return closeErr
+		}
+		return err
+	}
+	_, err = dupDataFile.WriteString("INSERT INTO `" + errTable + "` VALUES" + dupDataPair + ";\n")
+	if err != nil {
+		closeErr := dupDataFile.Close()
+		if closeErr != nil {
+			return closeErr
+		}
+		return err
+	}
+	err = dupDataFile.Close()
+	if err != nil {
+		return err
+	}
+	return nil
 }

@@ -37,6 +37,19 @@ var (
 	domainServerIDSeparator = "-"
 )
 
+// Warns returns three column results of the "SHOW WARNINGS" statement
+type Warns struct {
+	Level   string
+	Code    uint16
+	Message string
+}
+
+// Conditions for querying INFORMATION_SCHEMA
+type Conditions struct {
+	ConditionKey   string
+	ConditionValue string
+}
+
 // GetMasterStatus gets status from master
 func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, error) {
 	var (
@@ -281,4 +294,51 @@ func IsErrBinlogPurged(err error) bool {
 // IsNoSuchThreadError checks whether err is NoSuchThreadError
 func IsNoSuchThreadError(err error) bool {
 	return IsMySQLError(err, tmysql.ErrNoSuchThread)
+}
+
+// ShowWarnings is used to return warnings produced by a previous SQL statement
+// "SHOW WARNINGS;" used to must follow the previous SQL statement when use "SHOW WARNINGS;" to view the warnings produced by the previous SQL statement
+// so the two SQL statements must be in the same transaction
+func ShowWarnings(txn *sql.Tx) ([]Warns, error) {
+	var tmpWarns []Warns
+	rows, err := txn.Query("SHOW WARNINGS;")
+	if err != nil {
+		return nil, terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, "SHOW WARNINGS;")
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			tmpLevel string
+			tmpCode  uint16
+			tmpMsg   string
+		)
+		err = rows.Scan(&tmpLevel, &tmpCode, &tmpMsg)
+		if err != nil {
+			return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+		}
+		tmpWarns = append(tmpWarns, Warns{Level: tmpLevel, Code: tmpCode, Message: tmpMsg})
+	}
+
+	if rows.Err() != nil {
+		return nil, terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
+	}
+
+	return tmpWarns, nil
+}
+
+// GetDbInfoFromInfoSchema Gets the required database structure information
+// information database stores structure information for all other databases
+func GetDbInfoFromInfoSchema(targetValue string, targetStructure string, queryCondition []Conditions) string {
+	query := "SELECT " + targetValue + " FROM INFORMATION_SCHEMA.`" + targetStructure + "`"
+	if len(queryCondition) != 0 {
+		query += " WHERE "
+		for i := 0; i < len(queryCondition); i++ {
+			if i != 0 {
+				query += " AND "
+			}
+			query += queryCondition[i].ConditionKey + "='" + queryCondition[i].ConditionValue + "'"
+		}
+		query += ";"
+	}
+	return query
 }

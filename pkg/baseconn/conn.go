@@ -173,3 +173,11 @@ func (conn *BaseConn) Close() error {
 	}
 	return terror.ErrDBUnExpect.Delegate(conn.DB.Close(), "close")
 }
+
+// GetDb provides an external interface to operate on a real database
+func (conn *BaseConn) GetDb() *sql.DB {
+	if conn == nil || conn.DB == nil {
+		return nil
+	}
+	return conn.DB
+}
