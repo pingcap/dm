@@ -175,6 +175,8 @@ func (s *testSyncerSuite) TestExecuteSQLSWithIgnore(c *C) {
 	n, err = conn.executeSQL(tctx, sqls)
 	c.Assert(err, ErrorMatches, ".*column a already exists")
 	c.Assert(n, Equals, 0)
+
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
 }
 
 func (s *testDBSuite) TestTimezone(c *C) {
