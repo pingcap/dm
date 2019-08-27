@@ -15,12 +15,12 @@ package syncer
 
 import (
 	"bytes"
-	"database/sql"
 
 	"github.com/pingcap/dm/dm/config"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/utils"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/filter"
@@ -38,7 +38,9 @@ func (s *testSyncerSuite) TestTrimCtrlChars(c *C) {
 	controlChars = append(controlChars, 0x7f)
 
 	var buf bytes.Buffer
-	p, err := utils.GetParser(s.db, false)
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
 	for _, char := range controlChars {
@@ -67,30 +69,20 @@ func (s *testSyncerSuite) TestAnsiQuotes(c *C) {
 		"create table test.test (\"id\" int)",
 		"insert into test.test (\"id\") values('a')",
 	}
-	result, err := s.db.Query("select @@global.sql_mode")
-	var sqlMode sql.NullString
-	c.Assert(err, IsNil)
-	defer result.Close()
-	for result.Next() {
-		err = result.Scan(&sqlMode)
-		c.Assert(err, IsNil)
-		break
-	}
-	c.Assert(sqlMode.Valid, IsTrue)
 
-	_, err = s.db.Exec("set @@global.sql_mode='ANSI_QUOTES'")
+	db, mock, err := sqlmock.New()
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
+		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+			AddRow("sql_mode", "ANSI_QUOTES"))
 	c.Assert(err, IsNil)
-	// recover original sql_mode
-	defer s.db.Exec("set @@global.sql_mode = ?", sqlMode)
 
-	parser, err := utils.GetParser(s.db, false)
+	parser, err := utils.GetParser(db, false)
 	c.Assert(err, IsNil)
 
 	for _, sql := range ansiQuotesCases {
 		_, err = parser.ParseOneStmt(sql, "", "")
 		c.Assert(err, IsNil)
 	}
-
 }
 
 func (s *testSyncerSuite) TestDDLWithDashComments(c *C) {
@@ -100,7 +92,9 @@ func (s *testSyncerSuite) TestDDLWithDashComments(c *C) {
 CREATE TABLE test.test_table_with_c (id int);
 `
 
-	parser, err := utils.GetParser(s.db, false)
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	parser, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
 	_, err = parserpkg.Parse(parser, sql, "", "")
@@ -111,7 +105,9 @@ func (s *testSyncerSuite) TestCommentQuote(c *C) {
 	sql := "ALTER TABLE schemadb.ep_edu_course_message_auto_reply MODIFY answer JSON COMMENT '回复的内容-格式为list，有两个字段：\"answerType\"：//''发送客服消息类型：1-文本消息，2-图片，3-图文链接''；  answer：回复内容';"
 	expectedSQL := "ALTER TABLE `schemadb`.`ep_edu_course_message_auto_reply` MODIFY COLUMN `answer` JSON COMMENT '回复的内容-格式为list，有两个字段：\"answerType\"：//''发送客服消息类型：1-文本消息，2-图片，3-图文链接''；  answer：回复内容'"
 
-	parser, err := utils.GetParser(s.db, false)
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	parser, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
 	stmt, err := parser.ParseOneStmt(sql, "", "")
@@ -340,7 +336,9 @@ func (s *testSyncerSuite) TestParseDDLSQL(c *C) {
 	}
 	syncer := NewSyncer(cfg)
 
-	parser, err := utils.GetParser(s.db, false)
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	parser, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
 	for _, cs := range cases {
@@ -371,7 +369,9 @@ func (s *testSyncerSuite) TestResolveGeneratedColumnSQL(c *C) {
 	}
 
 	syncer := &Syncer{}
-	parser, err := utils.GetParser(s.db, false)
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	parser, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
 	for _, tc := range testCases {
