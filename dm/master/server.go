@@ -1883,7 +1883,7 @@ func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, name
 			}
 		}
 
-		log.L().Info("wait op log result", zap.String("task", name), zap.Int64("operation log ID", opLogID), zap.Stringer("result", resp.QueryTaskOperation))
+		log.L().Info("wait op log result", zap.String("task", name), zap.Int64("operation log ID", opLogID), zap.Stringer("result", queryResp))
 		select {
 		case <-ctx.Done():
 			return ctx.Err()

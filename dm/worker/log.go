@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -509,17 +510,12 @@ func VerifyTaskMeta(task *pb.TaskMeta) error {
 
 // CloneTaskMeta returns a task meta copy
 func CloneTaskMeta(task *pb.TaskMeta) *pb.TaskMeta {
-	clone := new(pb.TaskMeta)
-	*clone = *task
-	return clone
+	return proto.Clone(task).(*pb.TaskMeta)
 }
 
 // CloneTaskLog returns a task log copy
 func CloneTaskLog(log *pb.TaskLog) *pb.TaskLog {
-	clone := new(pb.TaskLog)
-	*clone = *log
-	clone.Task = CloneTaskMeta(log.Task)
-	return clone
+	return proto.Clone(log).(*pb.TaskLog)
 }
 
 func whetherNil(handler interface{}) bool {

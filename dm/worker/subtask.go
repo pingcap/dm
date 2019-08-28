@@ -29,6 +29,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
@@ -386,7 +387,7 @@ func (st *SubTask) setResult(result *pb.ProcessResult) {
 func (st *SubTask) Result() *pb.ProcessResult {
 	st.RLock()
 	defer st.RUnlock()
-	return st.result
+	return proto.Clone(st.result).(*pb.ProcessResult)
 }
 
 // Close stops the sub task
@@ -569,7 +570,7 @@ func (st *SubTask) ClearDDLLockInfo() {
 func (st *SubTask) DDLLockInfo() *pb.DDLLockInfo {
 	st.RLock()
 	defer st.RUnlock()
-	return st.ddlLockInfo
+	return proto.Clone(st.ddlLockInfo).(*pb.DDLLockInfo)
 }
 
 // UpdateFromConfig updates config for `From`
@@ -618,7 +619,7 @@ func (st *SubTask) SaveDDLInfo(info *pb.DDLInfo) error {
 func (st *SubTask) GetDDLInfo() *pb.DDLInfo {
 	st.RLock()
 	defer st.RUnlock()
-	return st.cacheDDLInfo
+	return proto.Clone(st.cacheDDLInfo).(*pb.DDLInfo)
 }
 
 // ClearDDLInfo clears current CacheDDLInfo.
