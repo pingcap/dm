@@ -901,13 +901,9 @@ func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *Conn, jobCh
 				if sqlJob.ddlExecItem != nil && sqlJob.ddlExecItem.req != nil && !sqlJob.ddlExecItem.req.Exec {
 					s.tctx.L().Info("ignore sharding DDLs", zap.Strings("ddls", sqlJob.ddls))
 				} else {
-					_, err = db.executeSQL(s.tctx, sqlJob.ddls)
+					_, err = db.executeSQLWithIgnore(s.tctx, ignoreDDLError, sqlJob.ddls)
 					if err != nil {
-						if ignoreDDLError(err) {
-							err = nil
-						} else {
-							err = terror.WithScope(err, terror.ScopeDownstream)
-						}
+						err = terror.WithScope(err, terror.ScopeDownstream)
 					}
 
 					if s.tracer.Enable() {
