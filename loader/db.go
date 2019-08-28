@@ -17,7 +17,6 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -36,10 +35,6 @@ import (
 	"github.com/pingcap/failpoint"
 	tmysql "github.com/pingcap/parser/mysql"
 	"go.uber.org/zap"
-)
-
-const (
-	defaultDupEntryLog = "dupDataFile.txt"
 )
 
 // Conn represents a live DB connection
@@ -97,9 +92,6 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]
 		return terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
-	// record whether the current statement is in insert-ignore mode
-	var dupErrFlag bool
-
 	params := retry.Params{
 		RetryCount:         10,
 		FirstRetryDuration: 2 * time.Second,
@@ -107,16 +99,7 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]
 		IsRetryableFn: func(retryTime int, err error) bool {
 			ctx.L().Warn("execute statements", zap.Int("retry", retryTime), zap.Strings("queries", queries), zap.Reflect("arguments", args), log.ShortError(err))
 			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
-			res := isErrDupEntry(err)
-			if res == false && isErrDupEntry(err) {
-				if len(queries) == 3 && queries[1][:11] == "INSERT INTO" {
-					ctx.L().Info("because dupEntry error caused the SQL failed, will replace it with 'INSERT IGNORE...' and try again")
-					queries[1] = "INSERT IGNORE" + queries[1][6:]
-					dupErrFlag = true
-					return true
-				}
-			}
-			return res
+			return retry.IsRetryableError(err)
 		},
 	}
 	_, _, err := conn.baseConn.ApplyRetryStrategy(
@@ -125,14 +108,7 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]
 		func(ctx *tcontext.Context) (interface{}, error) {
 			var err error
 			startTime := time.Now()
-			if dupErrFlag == true {
-				_, err = ExecuteSQLForInsertIgnore(ctx, conn, conn.baseConn.GetDb(), queries)
-				if err == nil {
-					dupErrFlag = false
-				}
-			} else {
-				_, err = conn.baseConn.ExecuteSQL(ctx, queries, args...)
-			}
+			_, err = conn.baseConn.ExecuteSQL(ctx, queries, args...)
 			failpoint.Inject("LoadExecCreateTableFailed", func(val failpoint.Value) {
 				errCode, err1 := strconv.ParseUint(val.(string), 10, 16)
 				if err1 != nil {
@@ -156,6 +132,45 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]
 
 	if err != nil {
 		ctx.L().Error("execute statements failed after retry", zap.Strings("queries", queries), zap.Reflect("arguments", args), log.ShortError(err))
+	}
+
+	return err
+}
+
+func (conn *Conn) executeSQLForInsertIgnore(ctx *tcontext.Context, queries []string) error {
+	if conn == nil || conn.baseConn == nil {
+		return terror.ErrDBUnExpect.Generate("database connection not valid")
+	}
+
+	params := retry.Params{
+		RetryCount:         10,
+		FirstRetryDuration: 2 * time.Second,
+		BackoffStrategy:    retry.LinearIncrease,
+		IsRetryableFn: func(retryTime int, err error) bool {
+			ctx.L().Warn("execute statements", zap.Int("retry", retryTime), zap.Strings("queries", queries), log.ShortError(err))
+			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
+			return retry.IsRetryableError(err)
+		},
+	}
+	_, _, err := conn.baseConn.ApplyRetryStrategy(
+		ctx,
+		params,
+		func(ctx *tcontext.Context) (interface{}, error) {
+			var err error
+			startTime := time.Now()
+			err = executeSQL(ctx, conn, conn.baseConn.GetDb(), queries)
+			if err == nil {
+				cost := time.Since(startTime)
+				txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
+				if cost > 1 {
+					ctx.L().Warn("transaction execute successfully", zap.Duration("cost time", cost))
+				}
+			}
+			return nil, err
+		})
+
+	if err != nil {
+		ctx.L().Error("execute statements failed after retry", zap.Strings("queries", queries), log.ShortError(err))
 	}
 
 	return err
@@ -192,50 +207,50 @@ func isErrDupEntry(err error) bool {
 	return isMySQLError(err, tmysql.ErrDupEntry)
 }
 
+func isWriteConflict(err error) bool {
+	return isMySQLError(err, tmysql.ErrWriteConflictInTiDB)
+}
+
 func isMySQLError(err error, code uint16) bool {
 	err = errors.Cause(err)
 	e, ok := err.(*mysql.MySQLError)
 	return ok && e.Number == code
 }
 
-// ExecuteSQLForInsertIgnore executes SQL from the fetched db connection on real DB
-// return
-// 1. failed: (the index of sqls executed error, error)
-// 2. succeed: (len(sqls), nil)
-func ExecuteSQLForInsertIgnore(tctx *tcontext.Context, conn *Conn, db *sql.DB, queries []string) (int, error) {
+// executeSQL executes SQL from the fetched db connection on real DB
+func executeSQL(ctx *tcontext.Context, conn *Conn, db *sql.DB, queries []string) error {
 	if db == nil {
-		return 0, terror.ErrDBUnExpect.Generate("database connection not valid")
+		return terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
 	txn, err := db.Begin()
 	if err != nil {
-		tctx.L().Error("fail to begin a transaction", zap.String("sqls", fmt.Sprintf("%-.200v", queries)), zap.Error(err))
-		return 0, terror.ErrDBExecuteFailed.Delegate(err, "begin")
+		ctx.L().Error("fail to begin a transaction", zap.String("sqls", fmt.Sprintf("%-.200v", queries)), zap.Error(err))
+		return terror.ErrDBExecuteFailed.Delegate(err, "begin")
 	}
-	l := len(queries)
 
 	for i, query := range queries {
-		tctx.L().Debug("execute statement", zap.String("query", query))
+		ctx.L().Debug("execute statement", zap.String("query", query))
 
-		_, err = txn.ExecContext(tctx.Context(), query)
+		_, err = txn.ExecContext(ctx.Context(), query)
 		if err != nil {
-			tctx.L().Error("execute statement failed", zap.String("query", query), log.ShortError(err))
+			ctx.L().Error("execute statement failed", zap.String("query", query), log.ShortError(err))
 			rerr := txn.Rollback()
 			if rerr != nil {
-				tctx.L().Error("rollback failed", zap.String("query", query), log.ShortError(rerr))
+				ctx.L().Error("rollback failed", zap.String("query", query), log.ShortError(rerr))
 			}
 			// we should return the exec err, instead of the rollback rerr.
-			return i, terror.ErrDBExecuteFailed.Delegate(err, query)
+			return terror.ErrDBExecuteFailed.Delegate(err, query)
 		}
 		if i == 1 {
-			processErrSQL(tctx, conn, txn, query)
+			processErrSQL(ctx, conn, txn, query)
 		}
 	}
 	err = txn.Commit()
 	if err != nil {
-		return l, terror.ErrDBExecuteFailed.Delegate(err, "commit")
+		return terror.ErrDBExecuteFailed.Delegate(err, "commit")
 	}
-	return l, nil
+	return nil
 }
 
 func processErrSQL(ctx *tcontext.Context, conn *Conn, txn *sql.Tx, sql string) {
@@ -298,7 +313,6 @@ func processErrSQL(ctx *tcontext.Context, conn *Conn, txn *sql.Tx, sql string) {
 
 		dupData = addEscapeCharacter(tmpDupData)
 		keyName = addEscapeCharacter(tmpKeyName)
-		ctx.L().Warn(" dupData: " + dupData + " keyName: " + keyName)
 
 		var queryCondition = []tutils.Conditions{
 			{"table_name", table},
@@ -309,6 +323,7 @@ func processErrSQL(ctx *tcontext.Context, conn *Conn, txn *sql.Tx, sql string) {
 
 		if err != nil {
 			processTmpErr(messages[i], terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query))
+			rows.Close()
 			continue
 		}
 
@@ -324,14 +339,15 @@ func processErrSQL(ctx *tcontext.Context, conn *Conn, txn *sql.Tx, sql string) {
 
 		if rows.Err() != nil {
 			processTmpErr(messages[i], terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError))
+			rows.Close()
 			continue
 		}
+		rows.Close()
 
 		if flag {
 			flag = false
 			continue
 		}
-		rows.Close()
 
 		queryCondition = []tutils.Conditions{
 			{"table_name", table},
@@ -340,6 +356,7 @@ func processErrSQL(ctx *tcontext.Context, conn *Conn, txn *sql.Tx, sql string) {
 		rows, err = txn.Query(query)
 		if err != nil {
 			processTmpErr(messages[i], terror.DBErrorAdapt(err, terror.ErrDBQueryFailed, query))
+			rows.Close()
 			continue
 		}
 		pos := 1
@@ -357,11 +374,18 @@ func processErrSQL(ctx *tcontext.Context, conn *Conn, txn *sql.Tx, sql string) {
 			}
 			pos++
 		}
+
+		if rows.Err() != nil {
+			processTmpErr(messages[i], terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError))
+			rows.Close()
+			continue
+		}
+		rows.Close()
+
 		if flag {
 			flag = false
 			continue
 		}
-		rows.Close()
 
 		dupDataPair, err = findDataPair(sql, dupData, pos) // Get the complete data pair
 		if err != nil {
@@ -369,8 +393,8 @@ func processErrSQL(ctx *tcontext.Context, conn *Conn, txn *sql.Tx, sql string) {
 			continue
 		}
 
-		if conn.cfg.OpenErrDataLog {
-			err = dupEntryLog(conn.cfg.DirErrDataLog, dupDataPair, table, dupData, columnName, strconv.Itoa(pos)) // Write dupdata to the dupEntryLog
+		if conn.cfg.ErrDataFile != "" {
+			err = dupEntryLog(conn.cfg.ErrDataFile, dupDataPair, table, dupData, columnName, strconv.Itoa(pos)) // Write dupdata to the dupEntryLog
 			if err != nil {
 				processTmpErr(messages[i], err)
 				continue
@@ -476,8 +500,12 @@ func findDataPair(target, dupData string, pos int) (string, error) {
 	return "", errors.New("Can't find dup Error")
 }
 
-func dupEntryLog(dir, dupDataPair, errTable, errData, errColumn, errPos string) error {
+func dupEntryLog(errDataFile, dupDataPair, errTable, errData, errColumn, errPos string) error {
 	var dupDataFile *os.File
+
+	tmpDir := strings.Split(errDataFile, "/")
+	dir := errDataFile[:len(errDataFile)-len(tmpDir[len(tmpDir)-1])-1]
+
 	_, err := os.Stat(dir)
 	if os.IsNotExist(err) {
 		err = os.Mkdir(dir, 0755)
@@ -485,15 +513,14 @@ func dupEntryLog(dir, dupDataPair, errTable, errData, errColumn, errPos string) 
 			return err
 		}
 	}
-	dir = path.Join(dir, defaultDupEntryLog)
-	_, err = os.Stat(dir) // Detects if the file exists
+	_, err = os.Stat(errDataFile) // Detects if the file exists
 	if os.IsNotExist(err) {
-		dupDataFile, err = os.Create(dir)
+		dupDataFile, err = os.Create(errDataFile)
 		if err != nil {
 			return err
 		}
 	} else {
-		dupDataFile, err = os.OpenFile(dir, os.O_APPEND|os.O_WRONLY, 0666)
+		dupDataFile, err = os.OpenFile(errDataFile, os.O_APPEND|os.O_WRONLY, 0666)
 		if err != nil {
 			return err
 		}

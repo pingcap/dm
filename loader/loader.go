@@ -156,8 +156,16 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *
 				failpoint.Inject("LoadDataSlowDown", nil)
 
 				if err := w.conn.executeSQL(ctctx, sqls); err != nil {
+					for count := 0; isWriteConflict(err) && count < 10; count++ {
+						err = w.conn.executeSQL(ctctx, sqls)
+					}
+					if w.cfg.InsertIgnore && isErrDupEntry(err) && sqls[1][:11] == "INSERT INTO" {
+						w.tctx.L().Info("because dupEntry error caused the SQL failed, will replace it with 'INSERT IGNORE...' and try again")
+						sqls[1] = "INSERT IGNORE" + sqls[1][6:]
+						err = w.conn.executeSQLForInsertIgnore(ctctx, sqls)
+					}
 					// expect pause rather than exit
-					err = terror.WithScope(terror.Annotatef(err, "file %s", job.file), terror.ScopeDownstream)
+					err = terror.Annotatef(err, "file %s", job.file)
 					runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, errors.ErrorStack(err))
 					return
 				}
@@ -918,7 +926,7 @@ func (l *Loader) restoreStructure(conn *Conn, sqlFile string, schema string, tab
 			sqls = append(sqls, query)
 			err = conn.executeSQL(l.tctx, sqls)
 			if err != nil {
-				return terror.WithScope(err, terror.ScopeDownstream)
+				return err
 			}
 		}
 

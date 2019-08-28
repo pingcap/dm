@@ -54,15 +54,15 @@ func (t *testdDbSuite) TestProcessErrSQL(c *C) {
 	tctx := tcontext.Background()
 
 	dir := c.MkDir()
-	t.cfg.DirErrDataLog = dir
-	t.cfg.OpenErrDataLog = true
+	t.cfg.ErrDataFile = path.Join(dir, "dupDataFile.txt")
 	t.cfg.To.Adjust()
 
 	conn, err := createConn(t.cfg)
 	c.Assert(err, IsNil)
 	defer closeConn(conn)
 
-	txn, err := conn.db.Begin()
+	db := conn.baseConn.GetDb()
+	txn, err := db.Begin()
 	c.Assert(err, IsNil)
 
 	_, err = txn.Exec("USE test;")
@@ -196,7 +196,7 @@ func (t *testdDbSuite) TestDupEntryLog(c *C) {
 		c.Assert(err, IsNil)
 	}
 
-	err = dupEntryLog(dir, dupDataPair, errTable, errData, errColumn, errPos)
+	err = dupEntryLog(dupDataFile, dupDataPair, errTable, errData, errColumn, errPos)
 	c.Assert(err, IsNil)
 
 	fi, err := os.Open(dupDataFile)

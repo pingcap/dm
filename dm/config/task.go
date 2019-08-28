@@ -50,11 +50,10 @@ var (
 	defaultChunkFilesize int64 = 64
 	defaultSkipTzUTC           = true
 	// LoaderConfig
-	defaultInsertIgnore   = false
-	defaultOpenErrDataLog = false
-	defaultDirErrDataLog  = "./"
-	defaultPoolSize       = 16
-	defaultDir            = "./dumped_data"
+	defaultInsertIgnore = false
+	defaultErrDataFile  = ""
+	defaultPoolSize     = 16
+	defaultDir          = "./dumped_data"
 	// SyncerConfig
 	defaultWorkerCount = 16
 	defaultBatch       = 100
@@ -157,20 +156,18 @@ func (m *MydumperConfig) UnmarshalYAML(unmarshal func(interface{}) error) error 
 
 // LoaderConfig represents loader process unit's specific config
 type LoaderConfig struct {
-	InsertIgnore   bool   `yaml:"is-insert-ignore" toml:"is-insert-ignore" json:"is-insert-ignore"`
-	OpenErrDataLog bool   `yaml:"is-open-errDataLog" toml:"is-open-errDataLog" json:"is-open-errDataLog"`
-	DirErrDataLog  string `yaml:"dir-errDataLog" toml:"dir-errDataLog" json:"dir-errDataLog"`
-	PoolSize       int    `yaml:"pool-size" toml:"pool-size" json:"pool-size"`
-	Dir            string `yaml:"dir" toml:"dir" json:"dir"`
+	InsertIgnore bool   `yaml:"is-insert-ignore" toml:"is-insert-ignore" json:"is-insert-ignore"`
+	ErrDataFile  string `yaml:"error-data-file" toml:"error-data-file" json:"error-data-file"`
+	PoolSize     int    `yaml:"pool-size" toml:"pool-size" json:"pool-size"`
+	Dir          string `yaml:"dir" toml:"dir" json:"dir"`
 }
 
 func defaultLoaderConfig() LoaderConfig {
 	return LoaderConfig{
-		InsertIgnore:   defaultInsertIgnore,
-		OpenErrDataLog: defaultOpenErrDataLog,
-		DirErrDataLog:  defaultDirErrDataLog,
-		PoolSize:       defaultPoolSize,
-		Dir:            defaultDir,
+		InsertIgnore: defaultInsertIgnore,
+		ErrDataFile:  defaultErrDataFile,
+		PoolSize:     defaultPoolSize,
+		Dir:          defaultDir,
 	}
 }
 

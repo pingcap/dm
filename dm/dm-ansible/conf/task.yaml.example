@@ -143,9 +143,8 @@ mydumpers:                   # mydumper process unit specific configs, mysql ins
 
 loaders:                     # loader process unit specific configs, mysql instance can ref one config in it
   global:
-    is-insert-ignore: true    # whether skip dupEntry error by insert ignore
-    is-open-errDataLog: true  # whether write the data that caused SQL execution error to a error data log
-    dir-errDataLog: "./" # The location of the errDataLog file
+    is-insert-ignore: true   # whether skip dupEntry error by insert ignore
+    error-data-file: ""      # The location of the errDataLog file, if the string is empty, the error data will be written to log
     pool-size: 16
     dir: "./dumped_data"
 
