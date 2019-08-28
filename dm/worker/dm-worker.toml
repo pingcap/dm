@@ -41,9 +41,5 @@ port = 3306
 #task status checker
 #[checker]
 #check-enable = true
-#check-interval = 5s
 #backoff-rollback = 5m
-#backoff-min = 1s
 #backoff-max = 5m
-#backoff-jitter = true
-#backoff-factor = 2

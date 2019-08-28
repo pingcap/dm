@@ -57,12 +57,8 @@ func NewConfig() *Config {
 	fs.Int64Var(&cfg.Purge.Expires, "purge-expires", 0, "try to purge relay log files if their modified time is older than this (hours)")
 	fs.Int64Var(&cfg.Purge.RemainSpace, "purge-remain-space", 15, "try to purge relay log files if remain space is less than this (GB)")
 	fs.BoolVar(&cfg.Checker.CheckEnable, "checker-check-enable", true, "whether enable task status checker")
-	fs.DurationVar(&cfg.Checker.CheckInterval, "checker-check-interval", DefaultCheckInterval, "task status checker check interval")
 	fs.DurationVar(&cfg.Checker.BackoffRollback, "checker-backoff-rollback", DefaultBackoffRollback, "task status checker backoff rollback interval")
-	fs.DurationVar(&cfg.Checker.BackoffMin, "checker-backoff-min", DefaultBackoffMin, "task status checker backoff min delay duration")
 	fs.DurationVar(&cfg.Checker.BackoffMax, "checker-backoff-max", DefaultBackoffMax, "task status checker backoff max delay duration")
-	fs.BoolVar(&cfg.Checker.BackoffJitter, "checker-backoff-jitter", DefaultBackoffJitter, "task status checker backoff jitter")
-	fs.Float64Var(&cfg.Checker.BackoffFactor, "checker-backoff-factor", DefaultBackoffFactor, "task status checker backoff factor")
 	fs.BoolVar(&cfg.Tracer.Enable, "tracer-enable", false, "whether to enable tracing")
 	fs.StringVar(&cfg.Tracer.TracerAddr, "tracer-server-addr", "", "tracing service rpc address")
 	fs.IntVar(&cfg.Tracer.BatchSize, "tracer-batch-size", 20, "upload to tracing service batch size")
@@ -191,6 +187,7 @@ func (c *Config) Parse(arguments []string) error {
 	c.Tracer.Source = c.SourceID
 
 	c.From.Adjust()
+	c.Checker.adjust()
 	return c.verify()
 }
 

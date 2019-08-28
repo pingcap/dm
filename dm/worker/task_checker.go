@@ -91,12 +91,20 @@ func (bs ResumeStrategy) String() string {
 // CheckerConfig is configuration used for TaskStatusChecker
 type CheckerConfig struct {
 	CheckEnable     bool          `toml:"check-enable" json:"check-enable"`
-	CheckInterval   time.Duration `toml:"check-interval" json:"check-interval"`
 	BackoffRollback time.Duration `toml:"backoff-rollback" json:"backoff-rollback"`
-	BackoffMin      time.Duration `toml:"backoff-min" json:"backoff-min"`
 	BackoffMax      time.Duration `toml:"backoff-max" json:"backoff-max"`
-	BackoffJitter   bool          `toml:"backoff-jitter" json:"backoff-jitter"`
-	BackoffFactor   float64       `toml:"backoff-factor" json:"backoff-factor"`
+	// unexpose config
+	CheckInterval time.Duration `json:"-"`
+	BackoffMin    time.Duration `json:"-"`
+	BackoffJitter bool          `json:"-"`
+	BackoffFactor float64       `json:"-"`
+}
+
+func (cc *CheckerConfig) adjust() {
+	cc.CheckInterval = DefaultCheckInterval
+	cc.BackoffMin = DefaultBackoffMin
+	cc.BackoffJitter = DefaultBackoffJitter
+	cc.BackoffFactor = DefaultBackoffFactor
 }
 
 // TaskStatusChecker is an interface that defines how we manage task status
