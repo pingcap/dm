@@ -1,7 +1,6 @@
 ---
 name: test # global unique
 task-mode: all  # full/incremental/all
-is-ignore: true # Whether skip dupEntry error and write the complete row of data to a file
 is-sharding: true  # whether multi dm-worker do one sharding job
 meta-schema: "dm_meta"  # meta schema in downstreaming database to store meta informaton of dm
 remove-meta: false  # remove meta from downstreaming database, now we delete checkpoint and online ddl information
@@ -143,7 +142,7 @@ mydumpers:                   # mydumper process unit specific configs, mysql ins
 
 loaders:                     # loader process unit specific configs, mysql instance can ref one config in it
   global:
-    is-insert-ignore: true   # whether skip dupEntry error by insert ignore
+    is-insert-ignore: false  # whether skip dupEntry error by insert ignore
     error-data-file: ""      # The location of the errDataLog file, if the string is empty, the error data will be written to log
     pool-size: 16
     dir: "./dumped_data"

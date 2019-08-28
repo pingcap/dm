@@ -106,9 +106,8 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]
 		ctx,
 		params,
 		func(ctx *tcontext.Context) (interface{}, error) {
-			var err error
 			startTime := time.Now()
-			_, err = conn.baseConn.ExecuteSQL(ctx, queries, args...)
+			_, err := conn.baseConn.ExecuteSQL(ctx, queries, args...)
 			failpoint.Inject("LoadExecCreateTableFailed", func(val failpoint.Value) {
 				errCode, err1 := strconv.ParseUint(val.(string), 10, 16)
 				if err1 != nil {
