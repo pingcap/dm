@@ -70,6 +70,14 @@ func (b *Backoff) Current() time.Duration {
 	return b.durationcwnd(b.cwnd)
 }
 
+// BoundaryForward checks whether `Current` reaches `Max` duration, if not then
+// increases the cwnd counter, else does nothing.
+func (b *Backoff) BoundaryForward() {
+	if b.Current() < b.Max {
+		b.cwnd++
+	}
+}
+
 // Forward increases the cwnd counter
 func (b *Backoff) Forward() {
 	b.cwnd++

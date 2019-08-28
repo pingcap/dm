@@ -654,23 +654,6 @@ func (st *SubTask) unitTransWaitCondition() error {
 	return nil
 }
 
-func (st *SubTask) retryErrors(errors []*pb.ProcessError, current unit.Unit) bool {
-	retry := true
-	switch current.Type() {
-	case pb.UnitType_Sync:
-		for _, err := range errors {
-			if strings.Contains(err.Msg, "invalid connection") {
-				continue
-			}
-			retry = false
-		}
-	default:
-		retry = false
-	}
-
-	return retry
-}
-
 func (st *SubTask) fail(message string) {
 	st.setStage(pb.Stage_Paused)
 	st.setResult(&pb.ProcessResult{

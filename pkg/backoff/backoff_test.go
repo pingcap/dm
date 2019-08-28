@@ -152,3 +152,27 @@ func (t *testBackoffSuite) TestOverflowBackoff(c *check.C) {
 		c.Assert(b.Duration(), check.Equals, tc.max)
 	}
 }
+
+func (t *testBackoffSuite) TestForward(c *check.C) {
+	var (
+		factor float64 = 2
+		min            = 1 * time.Second
+		max            = 5 * time.Second
+		n              = 10
+	)
+	b := &Backoff{
+		Min:    min,
+		Max:    max,
+		Factor: factor,
+	}
+	for i := 0; i < n; i++ {
+		b.Forward()
+	}
+	c.Assert(b.cwnd, check.Equals, n)
+	b.Reset()
+	c.Assert(b.cwnd, check.Equals, 0)
+	for i := 0; i < n; i++ {
+		b.BoundaryForward()
+	}
+	c.Assert(b.cwnd, check.Equals, 3)
+}

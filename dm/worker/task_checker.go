@@ -308,7 +308,7 @@ func (tsc *realTaskStatusChecker) check() {
 			} else {
 				tsc.l.Info("dispatch auto resume task", zap.String("task", taskName), zap.Int64("opLogID", opLogID))
 				tsc.bc.latestResumeTime[taskName] = time.Now()
-				bf.Forward()
+				bf.BoundaryForward()
 			}
 		}
 	}
