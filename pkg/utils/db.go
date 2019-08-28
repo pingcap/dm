@@ -326,7 +326,7 @@ func ShowWarnings(txn *sql.Tx) ([]Warns, error) {
 	return tmpWarns, nil
 }
 
-// GetDbInfoFromInfoSchema Gets the required database structure information
+// GetDbInfoFromInfoSchema Gets the required database structure information.
 // information database stores structure information for all other databases
 func GetDbInfoFromInfoSchema(targetValue string, targetStructure string, queryCondition []Conditions) string {
 	query := "SELECT " + targetValue + " FROM INFORMATION_SCHEMA.`" + targetStructure + "`"
