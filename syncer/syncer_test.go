@@ -1360,7 +1360,6 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	s.cfg.WorkerCount = 2
 	s.cfg.MaxRetry = 1
 	s.cfg.DisableCausality = false
-	s.cfg.ResumeResetConn = false
 
 	syncer := NewSyncer(s.cfg)
 	syncer.fromDB = &Conn{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, "", &retry.FiniteRetryStrategy{}}}
@@ -1514,7 +1513,9 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	ctx, cancel = context.WithCancel(context.Background())
 	resultCh = make(chan pb.ProcessResult)
-	go syncer.Resume(ctx, resultCh)
+	// simulate `syncer.Resume` here, but doesn't reset database conns
+	syncer.reset()
+	go syncer.Process(ctx, resultCh)
 
 	expectJobs2 := []*expectJob{
 		{

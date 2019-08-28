@@ -42,7 +42,6 @@ var (
 	defaultMetaSchema      = "dm_meta"
 	defaultEnableHeartbeat = false
 	defaultIsSharding      = false
-	defaultResumeResetConn = true
 	defaultUpdateInterval  = 1
 	defaultReportInterval  = 10
 	// MydumperConfig
@@ -234,7 +233,6 @@ type TaskConfig struct {
 	EnableHeartbeat         bool   `yaml:"enable-heartbeat"`
 	HeartbeatUpdateInterval int    `yaml:"heartbeat-update-interval"`
 	HeartbeatReportInterval int    `yaml:"heartbeat-report-interval"`
-	ResumeResetConn         bool   `yaml:"resume-reset-conn"`
 	Timezone                string `yaml:"timezone"`
 
 	// handle schema/table name mode, and only for schema/table name
