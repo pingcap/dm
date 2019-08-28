@@ -127,6 +127,9 @@ type CheckPoint interface {
 	// Close closes the CheckPoint
 	Close()
 
+	// ResetConn resets database connections owned by the Checkpoint
+	ResetConn() error
+
 	// Clear clears all checkpoints
 	Clear() error
 
@@ -240,6 +243,11 @@ func (cp *RemoteCheckPoint) Init(conn *Conn) error {
 // Close implements CheckPoint.Close
 func (cp *RemoteCheckPoint) Close() {
 	closeConns(cp.tctx, cp.db)
+}
+
+// ResetConn implements CheckPoint.ResetConn
+func (cp *RemoteCheckPoint) ResetConn() error {
+	return cp.db.ResetConn(cp.tctx)
 }
 
 // Clear implements CheckPoint.Clear

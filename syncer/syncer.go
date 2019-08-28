@@ -503,6 +503,34 @@ func (s *Syncer) reset() {
 	}
 }
 
+func (s *Syncer) resetDBs() error {
+	var err error
+
+	// toDBs share the same `*sql.DB` in underlying `*baseconn.BaseConn`, currently the `BaseConn.ResetConn`
+	// can only reset the `*sql.DB` and point to the new `*sql.DB`, it is hard to reset all the `*sql.DB` by
+	// calling `BaseConn.ResetConn` once. On the other side if we simply change the underlying value of a
+	// `*sql.DB` by `*conn.DB = *db`, there exists some data race and invalid memory address in db driver.
+	// So we use the close and recreate way here.
+	closeConns(s.tctx, s.toDBs...)
+	s.toDBs, err = createConns(s.cfg, s.cfg.To, s.cfg.WorkerCount, maxDMLConnectionTimeout)
+	if err != nil {
+		return terror.WithScope(err, terror.ScopeDownstream)
+	}
+	s.tctx.L().Info("createDBs", zap.String("toDBs baseConn", fmt.Sprintf("%p", s.toDBs[0].baseConn.DB)))
+
+	err = s.ddlDB.ResetConn(s.tctx)
+	if err != nil {
+		return terror.WithScope(err, terror.ScopeDownstream)
+	}
+
+	err = s.checkpoint.ResetConn()
+	if err != nil {
+		return terror.WithScope(err, terror.ScopeDownstream)
+	}
+
+	return nil
+}
+
 // Process implements the dm.Unit interface.
 func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name).Add(0)
@@ -1392,7 +1420,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 	table, columns, err := s.getTable(schemaName, tableName)
 	if err != nil {
-		return err
+		return terror.WithScope(err, terror.ScopeDownstream)
 	}
 	rows, err := s.mappingDML(originSchema, originTable, columns, ev.Rows)
 	if err != nil {
@@ -2205,6 +2233,16 @@ func (s *Syncer) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 
 	// continue the processing
 	s.reset()
+	err := s.resetDBs()
+	if err != nil {
+		pr <- pb.ProcessResult{
+			IsCanceled: false,
+			Errors: []*pb.ProcessError{
+				unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err)),
+			},
+		}
+		return
+	}
 	s.Process(ctx, pr)
 }
 
