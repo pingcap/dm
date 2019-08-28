@@ -1360,6 +1360,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	s.cfg.WorkerCount = 2
 	s.cfg.MaxRetry = 1
 	s.cfg.DisableCausality = false
+	s.cfg.ResumeResetConn = false
 
 	syncer := NewSyncer(s.cfg)
 	syncer.fromDB = &Conn{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, "", &retry.FiniteRetryStrategy{}}}

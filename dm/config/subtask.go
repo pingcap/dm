@@ -116,6 +116,7 @@ type SubTaskConfig struct {
 	HeartbeatUpdateInterval int    `toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
 	HeartbeatReportInterval int    `toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
 	EnableHeartbeat         bool   `toml:"enable-heartbeat" json:"enable-heartbeat"`
+	ResumeResetConn         bool   `toml:"resume-reset-conn" json:"resume-reset-conn"`
 	Meta                    *Meta  `toml:"meta" json:"meta"`
 	Timezone                string `toml:"timezone" josn:"timezone"`
 

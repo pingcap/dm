@@ -2233,15 +2233,18 @@ func (s *Syncer) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 
 	// continue the processing
 	s.reset()
-	err := s.resetDBs()
-	if err != nil {
-		pr <- pb.ProcessResult{
-			IsCanceled: false,
-			Errors: []*pb.ProcessError{
-				unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err)),
-			},
+	// reset database conns if ResumeResetConn is enabled
+	if s.cfg.ResumeResetConn {
+		err := s.resetDBs()
+		if err != nil {
+			pr <- pb.ProcessResult{
+				IsCanceled: false,
+				Errors: []*pb.ProcessError{
+					unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err)),
+				},
+			}
+			return
 		}
-		return
 	}
 	s.Process(ctx, pr)
 }
