@@ -15,7 +15,6 @@ package worker
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"time"
 
