@@ -19,14 +19,21 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/utils"
-
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"github.com/pingcap/tidb/infoschema"
 	gouuid "github.com/satori/go.uuid"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
+	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/baseconn"
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/retry"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 var _ = Suite(&testDBSuite{})
@@ -134,7 +141,43 @@ func (s *testDBSuite) TestBinaryLogs(c *C) {
 	remainingSize, err = countBinaryLogsSize(pos, s.db)
 	c.Assert(err, IsNil)
 	c.Assert(remainingSize, Equals, files[fileNum].size)
+}
 
+func (s *testSyncerSuite) TestExecuteSQLSWithIgnore(c *C) {
+	db, mock, err := sqlmock.New()
+	conn := &Conn{
+		baseConn: &baseconn.BaseConn{
+			DB:            db,
+			RetryStrategy: &retry.FiniteRetryStrategy{},
+		},
+		cfg: &config.SubTaskConfig{
+			Name: "test",
+		},
+	}
+
+	sqls := []string{"alter table t1 add column a int", "alter table t1 add column b int"}
+
+	// will ignore the first error, and continue execute the second sql
+	mock.ExpectBegin()
+	mock.ExpectExec("alter table t1 add column a int").WillReturnError(newMysqlErr(uint16(infoschema.ErrColumnExists.Code()), "column a already exists"))
+	mock.ExpectExec("alter table t1 add column b int").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	tctx := tcontext.Background().WithLogger(log.With(zap.String("test", "TestExecuteSQLSWithIgnore")))
+	n, err := conn.executeSQLWithIgnore(tctx, ignoreDDLError, sqls)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, 2)
+
+	// will return error when execute the first sql
+	mock.ExpectBegin()
+	mock.ExpectExec("alter table t1 add column a int").WillReturnError(newMysqlErr(uint16(infoschema.ErrColumnExists.Code()), "column a already exists"))
+	mock.ExpectRollback()
+
+	n, err = conn.executeSQL(tctx, sqls)
+	c.Assert(err, ErrorMatches, ".*column a already exists")
+	c.Assert(n, Equals, 0)
+
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
 }
 
 func (s *testDBSuite) TestTimezone(c *C) {

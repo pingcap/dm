@@ -140,7 +140,7 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string, args ...interfa
 	return ret.(*sql.Rows), nil
 }
 
-func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args ...[]interface{}) (int, error) {
+func (conn *Conn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError func(error) bool, queries []string, args ...[]interface{}) (int, error) {
 	if len(queries) == 0 {
 		return 0, nil
 	}
@@ -168,7 +168,7 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args ...[
 		params,
 		func(ctx *tcontext.Context) (interface{}, error) {
 			startTime := time.Now()
-			ret, err := conn.baseConn.ExecuteSQL(ctx, queries, args...)
+			ret, err := conn.baseConn.ExecuteSQLWithIgnoreError(ctx, ignoreError, queries, args...)
 			if err == nil {
 				cost := time.Since(startTime)
 				txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
@@ -184,6 +184,10 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args ...[
 		return ret.(int), err
 	}
 	return ret.(int), nil
+}
+
+func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args ...[]interface{}) (int, error) {
+	return conn.executeSQLWithIgnore(tctx, nil, queries, args...)
 }
 
 func createBaseConn(dbCfg config.DBConfig, timeout string) (*baseconn.BaseConn, error) {
