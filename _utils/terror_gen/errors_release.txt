@@ -106,6 +106,7 @@ ErrTracingEventTypeNotValid,[code=11099:class=functional:scope=internal:level=hi
 ErrTracingGetTraceCode,[code=11100:class=functional:scope=internal:level=high],"failed to get code information from runtime.Caller"
 ErrTracingDataChecksum,[code=11101:class=functional:scope=internal:level=high],"calc data checksum"
 ErrTracingGetTSO,[code=11102:class=functional:scope=internal:level=high],"get tso"
+ErrBackoffArgsNotValid,[code=11103:class=functional:scope=internal:level=medium],"backoff argument %s value %v not valid"
 ErrConfigCheckItemNotSupport,[code=20001:class=config:scope=internal:level=medium],"checking item %s is not supported\n%s"
 ErrConfigTomlTransform,[code=20002:class=config:scope=internal:level=medium],"%s"
 ErrConfigTaskYamlTransform,[code=20003:class=config:scope=internal:level=medium],"%s"

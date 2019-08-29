@@ -31,6 +31,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 
+	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 )
@@ -64,9 +65,28 @@ func (m *Mydumper) Init() error {
 func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	mydumperExitWithErrorCounter.WithLabelValues(m.cfg.Name).Add(0)
 
+	failpoint.Inject("dumpUnitProcessWithError", func(val failpoint.Value) {
+		m.logger.Info("dump unit runs with injected error", zap.String("failpoint", "dumpUnitProcessWithError"), zap.Reflect("error", val))
+		msg, ok := val.(string)
+		if !ok {
+			msg = "unknown process error"
+		}
+		pr <- pb.ProcessResult{
+			IsCanceled: false,
+			Errors:     []*pb.ProcessError{unit.NewProcessError(pb.ErrorType_UnknownError, msg)},
+		}
+		failpoint.Return()
+	})
+
 	begin := time.Now()
 	errs := make([]*pb.ProcessError, 0, 1)
 	isCanceled := false
+
+	failpoint.Inject("dumpUnitProcessForever", func() {
+		m.logger.Info("dump unit runs forever", zap.String("failpoint", "dumpUnitProcessForever"))
+		<-ctx.Done()
+		failpoint.Return()
+	})
 
 	// NOTE: remove output dir before start dumping
 	// every time re-dump, loader should re-prepare
