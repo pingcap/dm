@@ -47,8 +47,8 @@ func (st *SubTask) StatusJSON() string {
 // Status returns the status of the worker (and sub tasks)
 // if stName is empty, all sub task's status will be returned
 func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
-	w.Lock()
-	defer w.Unlock()
+	w.RLock()
+	defer w.RUnlock()
 
 	if len(w.subTasks) == 0 {
 		return nil // no sub task started

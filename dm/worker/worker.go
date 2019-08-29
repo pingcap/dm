@@ -664,6 +664,20 @@ func (w *Worker) copyConfigFromWorker(cfg *config.SubTaskConfig) {
 	cfg.LogFile = w.cfg.LogFile
 }
 
+// recordSubTask records subtask info in the memory.
+func (w *Worker) recordSubTask(st *SubTask) {
+	w.Lock()
+	defer w.Unlock()
+	w.subTasks[st.cfg.Name] = st
+}
+
+// removeSubTask removes subtask info by name.
+func (w *Worker) removeSubTask(name string) {
+	w.Lock()
+	defer w.Unlock()
+	delete(w.subTasks, name)
+}
+
 // findSubTask finds sub task by name
 func (w *Worker) findSubTask(name string) *SubTask {
 	w.RLock()
@@ -727,25 +741,22 @@ Loop:
 			w.l.Info("handle task process exits!")
 			return
 		case <-ticker.C:
-			w.Lock()
 			if w.closed.Get() == closedTrue {
-				w.Unlock()
 				return
 			}
 
 			opLog := w.meta.PeekLog()
 			if opLog == nil {
-				w.Unlock()
 				continue
 			}
 
 			w.l.Info("start to execute operation", zap.Reflect("oplog", opLog))
 
-			st, exist := w.subTasks[opLog.Task.Name]
+			st := w.findSubTask(opLog.Task.Name)
 			var err error
 			switch opLog.Task.Op {
 			case pb.TaskOp_Start:
-				if exist {
+				if st != nil {
 					err = terror.ErrWorkerSubTaskExists.Generate(opLog.Task.Name)
 					break
 				}
@@ -754,7 +765,6 @@ Loop:
 					if retryCnt < maxRetryCount {
 						retryCnt++
 						w.l.Warn("relay log purger is purging, cannot start subtask, would try again later", zap.String("task", opLog.Task.Name))
-						w.Unlock()
 						continue Loop
 					}
 
@@ -779,11 +789,11 @@ Loop:
 
 				w.l.Info("started sub task", zap.Stringer("config", cfgDecrypted))
 				st = NewSubTask(cfgDecrypted)
-				w.subTasks[opLog.Task.Name] = st
+				w.recordSubTask(st)
 				st.Run()
 
 			case pb.TaskOp_Update:
-				if !exist {
+				if st == nil {
 					err = terror.ErrWorkerSubTaskNotFound.Generate(opLog.Task.Name)
 					break
 				}
@@ -797,16 +807,16 @@ Loop:
 				w.l.Info("updated sub task", zap.String("task", opLog.Task.Name), zap.Stringer("new config", taskCfg))
 				err = st.Update(taskCfg)
 			case pb.TaskOp_Stop:
-				if !exist {
+				if st == nil {
 					err = terror.ErrWorkerSubTaskNotFound.Generate(opLog.Task.Name)
 					break
 				}
 
 				w.l.Info("stop sub task", zap.String("task", opLog.Task.Name))
 				st.Close()
-				delete(w.subTasks, opLog.Task.Name)
+				w.removeSubTask(opLog.Task.Name)
 			case pb.TaskOp_Pause:
-				if !exist {
+				if st == nil {
 					err = terror.ErrWorkerSubTaskNotFound.Generate(opLog.Task.Name)
 					break
 				}
@@ -814,7 +824,7 @@ Loop:
 				w.l.Info("pause sub task", zap.String("task", opLog.Task.Name))
 				err = st.Pause()
 			case pb.TaskOp_Resume:
-				if !exist {
+				if st == nil {
 					err = terror.ErrWorkerSubTaskNotFound.Generate(opLog.Task.Name)
 					break
 				}
@@ -843,7 +853,6 @@ Loop:
 			}
 
 			err = w.meta.MarkOperation(opLog)
-			w.Unlock()
 			if err != nil {
 				w.l.Error("fail to mark subtask operation", zap.Reflect("oplog", opLog))
 			}
