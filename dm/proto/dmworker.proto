@@ -53,6 +53,7 @@ enum TaskOp {
     Resume = 3;
     Start = 4;
     Update = 5;
+    AutoResume = 6;
 }
 
 message UpdateRelayRequest {

@@ -1870,7 +1870,7 @@ func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, name
 		resp, err := cli.SendRequest(ctx, req, s.cfg.RPCTimeout)
 		var queryResp *pb.QueryTaskOperationResponse
 		if err != nil {
-			log.L().Error("fail to query task operation", log.ShortError(err))
+			log.L().Error("fail to query task operation", zap.String("task", name), zap.Int64("operation log ID", opLogID), log.ShortError(err))
 		} else {
 			queryResp = resp.QueryTaskOperation
 			respLog := queryResp.Log
@@ -1881,9 +1881,9 @@ func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, name
 			} else if len(respLog.Message) != 0 {
 				return terror.ErrMasterOperRespNotSuccess.Generate(respLog.Message)
 			}
+			log.L().Info("wait op log result", zap.String("task", name), zap.Int64("operation log ID", opLogID), zap.Stringer("result", resp.QueryTaskOperation))
 		}
 
-		log.L().Info("wait op log result", zap.String("task", name), zap.Int64("operation log ID", opLogID), zap.Stringer("result", queryResp))
 		select {
 		case <-ctx.Done():
 			return ctx.Err()

@@ -100,11 +100,11 @@ func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string, args ...int
 	return rows, nil
 }
 
-// ExecuteSQL executes sql on real DB,
+// ExecuteSQLWithIgnoreError executes sql on real DB, and will ignore some error and continue execute the next query.
 // return
 // 1. failed: (the index of sqls executed error, error)
 // 2. succeed: (len(sqls), nil)
-func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, queries []string, args ...[]interface{}) (int, error) {
+func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, ignoreErr func(error) bool, queries []string, args ...[]interface{}) (int, error) {
 	if len(queries) == 0 {
 		return 0, nil
 	}
@@ -130,7 +130,13 @@ func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, queries []string, args 
 
 		_, err = txn.ExecContext(tctx.Context(), query, arg...)
 		if err != nil {
+			if ignoreErr != nil && ignoreErr(err) {
+				tctx.L().Warn("execute statement failed and will ignore this error", zap.String("query", query), zap.Reflect("argument", arg), log.ShortError(err))
+				continue
+			}
+
 			tctx.L().Error("execute statement failed", zap.String("query", query), zap.Reflect("argument", arg), log.ShortError(err))
+
 			rerr := txn.Rollback()
 			if rerr != nil {
 				tctx.L().Error("rollback failed", zap.String("query", query), zap.Reflect("argument", arg), log.ShortError(rerr))
@@ -144,6 +150,14 @@ func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, queries []string, args 
 		return l, terror.ErrDBExecuteFailed.Delegate(err, "commit")
 	}
 	return l, nil
+}
+
+// ExecuteSQL executes sql on real DB,
+// return
+// 1. failed: (the index of sqls executed error, error)
+// 2. succeed: (len(sqls), nil)
+func (conn *BaseConn) ExecuteSQL(tctx *tcontext.Context, queries []string, args ...[]interface{}) (int, error) {
+	return conn.ExecuteSQLWithIgnoreError(tctx, nil, queries, args...)
 }
 
 // ApplyRetryStrategy apply specify strategy for BaseConn

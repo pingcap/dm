@@ -131,6 +131,8 @@ const (
 	codeTracingGetTraceCode
 	codeTracingDataChecksum
 	codeTracingGetTSO
+	// pkg/backoff
+	codeBackoffArgsNotValid
 )
 
 // Config related error code list
@@ -579,6 +581,8 @@ var (
 	ErrTracingGetTraceCode      = New(codeTracingGetTraceCode, ClassFunctional, ScopeInternal, LevelHigh, "failed to get code information from runtime.Caller")
 	ErrTracingDataChecksum      = New(codeTracingDataChecksum, ClassFunctional, ScopeInternal, LevelHigh, "calc data checksum")
 	ErrTracingGetTSO            = New(codeTracingGetTSO, ClassFunctional, ScopeInternal, LevelHigh, "get tso")
+	// pkg/backoff
+	ErrBackoffArgsNotValid = New(codeBackoffArgsNotValid, ClassFunctional, ScopeInternal, LevelMedium, "backoff argument %s value %v not valid")
 
 	// Config related error
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s")
