@@ -34,6 +34,10 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	stringLenLimit = 1024
+)
+
 type column struct {
 	idx      int
 	name     string
@@ -117,7 +121,9 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string, args ...interfa
 		BackoffStrategy:    retry.Stable,
 		IsRetryableFn: func(retryTime int, err error) bool {
 			if retry.IsRetryableError(err) {
-				tctx.L().Warn("query statement", zap.Int("retry", retryTime), zap.String("query", query), zap.Reflect("argument", args))
+				tctx.L().Warn("query statement", zap.Int("retry", retryTime),
+					zap.String("query", utils.TruncateString(query, stringLenLimit)),
+					zap.Reflect("argument", utils.TruncateInterface(args, stringLenLimit)))
 				sqlRetriesTotal.WithLabelValues("query", conn.cfg.Name).Add(1)
 				return true
 			}
@@ -134,7 +140,10 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string, args ...interfa
 	)
 
 	if err != nil {
-		tctx.L().Error("query statement failed after retry", zap.String("query", query), zap.Reflect("argument", args), log.ShortError(err))
+		tctx.L().Error("query statement failed after retry",
+			zap.String("query", utils.TruncateString(query, stringLenLimit)),
+			zap.Reflect("argument", utils.TruncateInterface(args, stringLenLimit)),
+			log.ShortError(err))
 		return nil, err
 	}
 	return ret.(*sql.Rows), nil
@@ -155,7 +164,9 @@ func (conn *Conn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError func(
 		BackoffStrategy:    retry.Stable,
 		IsRetryableFn: func(retryTime int, err error) bool {
 			if retry.IsRetryableError(err) {
-				tctx.L().Warn("execute statements", zap.Int("retry", retryTime), zap.Strings("queries", queries), zap.Reflect("arguments", args))
+				tctx.L().Warn("execute statements", zap.Int("retry", retryTime),
+					zap.String("queries", utils.TruncateInterface(queries, stringLenLimit)),
+					zap.Reflect("arguments", utils.TruncateInterface(args, stringLenLimit)))
 				sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
 				return true
 			}
@@ -180,7 +191,10 @@ func (conn *Conn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError func(
 		})
 
 	if err != nil {
-		tctx.L().Error("execute statements failed after retry", zap.Strings("queries", queries), zap.Reflect("arguments", args), log.ShortError(err))
+		tctx.L().Error("execute statements failed after retry",
+			zap.String("queries", utils.TruncateInterface(queries, stringLenLimit)),
+			zap.Reflect("arguments", utils.TruncateInterface(args, stringLenLimit)),
+			log.ShortError(err))
 		return ret.(int), err
 	}
 	return ret.(int), nil

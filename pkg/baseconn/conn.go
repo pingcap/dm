@@ -16,12 +16,17 @@ package baseconn
 import (
 	"database/sql"
 
+	"go.uber.org/zap"
+
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
+)
 
-	"go.uber.org/zap"
+const (
+	stringLenLimit = 1024
 )
 
 // BaseConn wraps a connection to DB
@@ -89,13 +94,18 @@ func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string, args ...int
 	if conn == nil || conn.DB == nil {
 		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
-	tctx.L().Debug("query statement", zap.String("query", query), zap.Reflect("argument", args))
+	tctx.L().Debug("query statement",
+		zap.String("query", utils.TruncateString(query, stringLenLimit)),
+		zap.Reflect("argument", utils.TruncateInterface(args, stringLenLimit)))
 
 	rows, err := conn.DB.QueryContext(tctx.Context(), query, args...)
 
 	if err != nil {
-		tctx.L().Error("query statement failed", zap.String("query", query), zap.Reflect("argument", args), log.ShortError(err))
-		return nil, terror.ErrDBQueryFailed.Delegate(err, query)
+		tctx.L().Error("query statement failed",
+			zap.String("query", utils.TruncateString(query, stringLenLimit)),
+			zap.Reflect("argument", utils.TruncateInterface(args, stringLenLimit)),
+			log.ShortError(err))
+		return nil, terror.ErrDBQueryFailed.Delegate(err, utils.TruncateString(query, stringLenLimit))
 	}
 	return rows, nil
 }
@@ -126,23 +136,33 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, ignoreEr
 			arg = args[i]
 		}
 
-		tctx.L().Debug("execute statement", zap.String("query", query), zap.Reflect("argument", arg))
+		tctx.L().Debug("execute statement",
+			zap.String("query", utils.TruncateString(query, stringLenLimit)),
+			zap.Reflect("argument", utils.TruncateInterface(arg, stringLenLimit)))
 
 		_, err = txn.ExecContext(tctx.Context(), query, arg...)
 		if err != nil {
 			if ignoreErr != nil && ignoreErr(err) {
-				tctx.L().Warn("execute statement failed and will ignore this error", zap.String("query", query), zap.Reflect("argument", arg), log.ShortError(err))
+				tctx.L().Warn("execute statement failed and will ignore this error",
+					zap.String("query", utils.TruncateString(query, stringLenLimit)),
+					zap.Reflect("argument", utils.TruncateInterface(arg, stringLenLimit)),
+					log.ShortError(err))
 				continue
 			}
 
-			tctx.L().Error("execute statement failed", zap.String("query", query), zap.Reflect("argument", arg), log.ShortError(err))
+			tctx.L().Error("execute statement failed",
+				zap.String("query", utils.TruncateString(query, stringLenLimit)),
+				zap.Reflect("argument", utils.TruncateInterface(arg, stringLenLimit)), log.ShortError(err))
 
 			rerr := txn.Rollback()
 			if rerr != nil {
-				tctx.L().Error("rollback failed", zap.String("query", query), zap.Reflect("argument", arg), log.ShortError(rerr))
+				tctx.L().Error("rollback failed",
+					zap.String("query", utils.TruncateString(query, stringLenLimit)),
+					zap.Reflect("argument", utils.TruncateInterface(arg, stringLenLimit)),
+					log.ShortError(rerr))
 			}
 			// we should return the exec err, instead of the rollback rerr.
-			return i, terror.ErrDBExecuteFailed.Delegate(err, query)
+			return i, terror.ErrDBExecuteFailed.Delegate(err, utils.TruncateString(query, stringLenLimit))
 		}
 	}
 	err = txn.Commit()
