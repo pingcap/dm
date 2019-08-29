@@ -75,7 +75,7 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string, args ...interfac
 			if err == nil {
 				cost := time.Since(startTime)
 				queryHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
-				if cost > 1 {
+				if cost.Seconds() > 1 {
 					ctx.L().Warn("query statement",
 						zap.String("query", utils.TruncateString(query, stringLenLimit)),
 						zap.Reflect("argument", utils.TruncateInterface(args, stringLenLimit)),
@@ -136,7 +136,7 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]
 			if err == nil {
 				cost := time.Since(startTime)
 				txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
-				if cost > 1 {
+				if cost.Seconds() > 1 {
 					ctx.L().Warn("transaction execute successfully", zap.Duration("cost time", cost))
 				}
 			}

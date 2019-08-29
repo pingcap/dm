@@ -183,7 +183,7 @@ func (conn *Conn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError func(
 			if err == nil {
 				cost := time.Since(startTime)
 				txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
-				if cost > 1 {
+				if cost.Seconds() > 1 {
 					ctx.L().Warn("transaction execute successfully", zap.Duration("cost time", cost))
 				}
 			}
