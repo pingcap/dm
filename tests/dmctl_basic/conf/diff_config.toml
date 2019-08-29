@@ -22,7 +22,7 @@ tables = ["t_target"]
 [[table-config]]
 schema = "dmctl"
 table = "t_target"
-remove-columns = ["id"]
+ignore-columns = ["id"]
 is-sharding = true
 index-fields = "b"
 

@@ -25,7 +25,7 @@ tables = ["~t.*"]
 schema = "print_status"
 table = "t_1"
 # currently ignore check float and timestamp field
-remove-columns = ["c5", "c9", "c11", "c15"]
+ignore-columns = ["c5", "c9", "c11", "c15"]
 
 [[table-config.source-tables]]
 instance-id = "source-1"
