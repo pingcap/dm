@@ -23,7 +23,7 @@ tables = ["t_target"]
 schema = "db_target"
 table = "t_target"
 # currently sync_diff does not support json fields well
-remove-columns = ["id", "info_json"]
+ignore-columns = ["id", "info_json"]
 is-sharding = true
 index-fields = "uid"
 # range-placeholder

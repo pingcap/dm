@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go/sync2"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -63,6 +64,8 @@ type Worker struct {
 	meta   *Metadata
 	db     *leveldb.DB
 	tracer *tracing.Tracer
+
+	taskStatusChecker TaskStatusChecker
 }
 
 // NewWorker creates a new Worker
@@ -83,6 +86,16 @@ func NewWorker(cfg *Config) (*Worker, error) {
 		return nil, err
 	}
 	w.relayPurger = purger
+
+	// initial task status checker
+	if w.cfg.Checker.CheckEnable {
+		tsc := NewTaskStatusChecker(w.cfg.Checker, w)
+		err = tsc.Init()
+		if err != nil {
+			return nil, err
+		}
+		w.taskStatusChecker = tsc
+	}
 
 	// try upgrade from an older version
 	dbDir := path.Join(w.cfg.MetaDir, "kv")
@@ -115,6 +128,11 @@ func NewWorker(cfg *Config) (*Worker, error) {
 
 	// start purger
 	w.relayPurger.Start()
+
+	// start task status checker
+	if w.cfg.Checker.CheckEnable {
+		w.taskStatusChecker.Start()
+	}
 
 	// start tracer
 	if w.tracer.Enable() {
@@ -184,6 +202,11 @@ func (w *Worker) Close() {
 
 	// close purger
 	w.relayPurger.Close()
+
+	// close task status checker
+	if w.cfg.Checker.CheckEnable {
+		w.taskStatusChecker.Close()
+	}
 
 	// close meta
 	w.meta.Close()
@@ -672,6 +695,24 @@ func (w *Worker) findSubTask(name string) *SubTask {
 	return w.subTasks[name]
 }
 
+// getAllSubTaskStatus returns all subtask status of this worker, note the field
+// in subtask status is not completed, only includes `Name`, `Stage` and `Result` now
+func (w *Worker) getAllSubTaskStatus() map[string]*pb.SubTaskStatus {
+	w.RLock()
+	defer w.RUnlock()
+	result := make(map[string]*pb.SubTaskStatus)
+	for name, st := range w.subTasks {
+		st.RLock()
+		result[name] = &pb.SubTaskStatus{
+			Name:   name,
+			Stage:  st.stage,
+			Result: proto.Clone(st.result).(*pb.ProcessResult),
+		}
+		st.RUnlock()
+	}
+	return result
+}
+
 func (w *Worker) restoreSubTask() error {
 	tasks := w.meta.LoadTaskMeta()
 
@@ -709,10 +750,10 @@ var maxRetryCount = 10
 
 func (w *Worker) handleTask() {
 	var handleTaskInterval = time.Second
-	failpoint.Inject("handleTaskInternal", func(val failpoint.Value) {
+	failpoint.Inject("handleTaskInterval", func(val failpoint.Value) {
 		if milliseconds, ok := val.(int); ok {
 			handleTaskInterval = time.Duration(milliseconds) * time.Millisecond
-			w.l.Info("set handleTaskInterval", zap.String("failpoint", "handleTaskInternal"), zap.Int("value", milliseconds))
+			w.l.Info("set handleTaskInterval", zap.String("failpoint", "handleTaskInterval"), zap.Int("value", milliseconds))
 		}
 	})
 	ticker := time.NewTicker(handleTaskInterval)
@@ -820,6 +861,14 @@ Loop:
 				}
 
 				w.l.Info("resume sub task", zap.String("task", opLog.Task.Name))
+				err = st.Resume()
+			case pb.TaskOp_AutoResume:
+				if !exist {
+					err = terror.ErrWorkerSubTaskNotFound.Generate(opLog.Task.Name)
+					break
+				}
+
+				w.l.Info("auto_resume sub task", zap.String("task", opLog.Task.Name))
 				err = st.Resume()
 			}
 

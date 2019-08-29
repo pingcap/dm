@@ -1513,7 +1513,9 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	ctx, cancel = context.WithCancel(context.Background())
 	resultCh = make(chan pb.ProcessResult)
-	go syncer.Resume(ctx, resultCh)
+	// simulate `syncer.Resume` here, but doesn't reset database conns
+	syncer.reset()
+	go syncer.Process(ctx, resultCh)
 
 	expectJobs2 := []*expectJob{
 		{

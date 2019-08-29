@@ -14,6 +14,9 @@
 package worker
 
 import (
+	"context"
+	"fmt"
+	"io/ioutil"
 	"sync"
 	"time"
 
@@ -97,8 +100,8 @@ func (t *testServer) testWorkerHandleTask(c *C) {
 	}
 	c.Assert(len(w.meta.logs), Equals, len(tasks))
 
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/handleTaskInternal", `return(10)`), IsNil)
-	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/handleTaskInternal")
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/handleTaskInterval", `return(10)`), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/handleTaskInterval")
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -113,4 +116,79 @@ func (t *testServer) testWorkerHandleTask(c *C) {
 
 	w.Close()
 	wg.Wait()
+}
+
+func (t *testServer) TestTaskAutoResume(c *C) {
+	var (
+		taskName = "sub-task-name"
+		port     = 8263
+	)
+	cfg := NewConfig()
+	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	cfg.Checker.CheckInterval = 40 * time.Millisecond
+	cfg.Checker.BackoffMin = 20 * time.Millisecond
+	cfg.Checker.BackoffMax = 1 * time.Second
+	cfg.WorkerAddr = fmt.Sprintf(":%d", port)
+
+	dir := c.MkDir()
+	cfg.RelayDir = dir
+	cfg.MetaDir = dir
+
+	NewRelayHolder = NewDummyRelayHolder
+	defer func() {
+		NewRelayHolder = NewRealRelayHolder
+	}()
+
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/mydumper/dumpUnitProcessForever", `return(true)`), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/mydumper/dumpUnitProcessForever")
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/mydumper/dumpUnitProcessWithError", `2*return("test auto resume inject error")`), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/mydumper/dumpUnitProcessWithError")
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/handleTaskInterval", `return(10)`), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/handleTaskInterval")
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/mockCreateUnitsDumpOnly", `return(true)`), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/mockCreateUnitsDumpOnly")
+
+	s := NewServer(cfg)
+
+	go func() {
+		defer s.Close()
+		c.Assert(s.Start(), IsNil)
+	}()
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+		return !s.closed.Get()
+	}), IsTrue)
+
+	// start task
+	cli := t.createClient(c, fmt.Sprintf("127.0.0.1:%d", port))
+	subtaskCfgBytes, err := ioutil.ReadFile("./subtask.toml")
+	_, err = cli.StartSubTask(context.Background(), &pb.StartSubTaskRequest{Task: string(subtaskCfgBytes)})
+	c.Assert(err, IsNil)
+
+	// check task in paused state
+	c.Assert(utils.WaitSomething(10, 10*time.Millisecond, func() bool {
+		for _, st := range s.worker.QueryStatus(taskName) {
+			if st.Name == taskName && st.Stage == pb.Stage_Paused {
+				return true
+			}
+		}
+		return false
+	}), IsTrue)
+
+	rtsc, ok := s.worker.taskStatusChecker.(*realTaskStatusChecker)
+	c.Assert(ok, IsTrue)
+	defer func() {
+		// close multiple time
+		rtsc.Close()
+		rtsc.Close()
+	}()
+
+	// check task will be auto resumed
+	c.Assert(utils.WaitSomething(10, 10*time.Millisecond, func() bool {
+		for _, st := range s.worker.QueryStatus(taskName) {
+			if st.Name == taskName && st.Stage == pb.Stage_Running {
+				return true
+			}
+		}
+		return false
+	}), IsTrue)
 }
