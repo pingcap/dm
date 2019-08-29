@@ -44,7 +44,12 @@ var (
 
 // Worker manages sub tasks and process units for data migration
 type Worker struct {
+	// used to do two things (we can refine this later):
+	// 1. protect concurrent access of `subTasks` (we can use a special mutex to archive this)
+	// 2. ensure no other operation can be done when closing (we can use `WatGroup`/`Context` to archive this)
+	// the internal operation of the subtask should be protected any mechanism in the subtask itself.
 	sync.RWMutex
+
 	wg     sync.WaitGroup
 	closed sync2.AtomicInt32
 
@@ -721,6 +726,9 @@ func (w *Worker) restoreSubTask() error {
 
 var maxRetryCount = 10
 
+// handleTask handles task operation according to the metadata in levelDB.
+// when the worker is closing, it should wait for this method to return.
+// so we only need the mutex to protect concurrent access of `subTasks`.
 func (w *Worker) handleTask() {
 	var handleTaskInterval = time.Second
 	failpoint.Inject("handleTaskInternal", func(val failpoint.Value) {
