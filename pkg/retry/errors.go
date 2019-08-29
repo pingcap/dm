@@ -27,7 +27,7 @@ func IsRetryableError(err error) bool {
 	if ok {
 		switch mysqlErr.Number {
 		// ER_LOCK_DEADLOCK can retry to commit while meet deadlock
-		case tmysql.ErrUnknown, gmysql.ER_LOCK_DEADLOCK, tmysql.ErrPDServerTimeout, tmysql.ErrTiKVServerTimeout, tmysql.ErrTiKVServerBusy, tmysql.ErrResolveLockTimeout, tmysql.ErrRegionUnavailable:
+		case tmysql.ErrUnknown, gmysql.ER_LOCK_DEADLOCK, tmysql.ErrPDServerTimeout, tmysql.ErrTiKVServerTimeout, tmysql.ErrTiKVServerBusy, tmysql.ErrResolveLockTimeout, tmysql.ErrRegionUnavailable, tmysql.ErrQueryInterrupted, tmysql.ErrWriteConflictInTiDB, tmysql.ErrTableLocked, tmysql.ErrWriteConflict:
 			return true
 		default:
 			return false
