@@ -153,8 +153,9 @@ func (t *testTransformerSuite) TestTransform(c *check.C) {
 	cases = append(cases, Case{
 		event: ev,
 		result: Result{
-			Ignore: true,
-			LogPos: ev.Header.LogPos,
+			Ignore:       true,
+			IgnoreReason: ignoreReasonHeartbeat,
+			LogPos:       ev.Header.LogPos,
 		},
 	})
 
@@ -175,8 +176,9 @@ func (t *testTransformerSuite) TestTransform(c *check.C) {
 	cases = append(cases, Case{
 		event: ev,
 		result: Result{
-			Ignore: true,
-			LogPos: ev.Header.LogPos,
+			Ignore:       true,
+			IgnoreReason: ignoreReasonArtificialFlag,
+			LogPos:       ev.Header.LogPos,
 		},
 	})
 
