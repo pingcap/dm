@@ -15,8 +15,6 @@ package log
 
 import (
 	"fmt"
-	"reflect"
-
 	pclog "github.com/pingcap/log"
 	"github.com/pingcap/tidb/util/logutil"
 	"go.uber.org/zap"
@@ -137,9 +135,9 @@ func L() Logger {
 
 // WrapStringerField returns a wrap stringer field
 func WrapStringerField(message string, object fmt.Stringer) zap.Field {
-	if object == nil || reflect.ValueOf(object).IsNil() {
-		return zap.String(message, "NULL")
+	if object != nil {
+		return zap.Stringer(message, object)
 	}
 
-	return zap.Stringer(message, object)
+	return zap.String(message, "NULL")
 }
