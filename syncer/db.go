@@ -34,10 +34,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	stringLenLimit = 1024
-)
-
 type column struct {
 	idx      int
 	name     string
@@ -122,8 +118,8 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string, args ...interfa
 		IsRetryableFn: func(retryTime int, err error) bool {
 			if retry.IsRetryableError(err) {
 				tctx.L().Warn("query statement", zap.Int("retry", retryTime),
-					zap.String("query", utils.TruncateString(query, stringLenLimit)),
-					zap.Reflect("argument", utils.TruncateInterface(args, stringLenLimit)))
+					zap.String("query", utils.TruncateString(query, -1)),
+					zap.String("argument", utils.TruncateInterface(args, -1)))
 				sqlRetriesTotal.WithLabelValues("query", conn.cfg.Name).Add(1)
 				return true
 			}
@@ -141,8 +137,8 @@ func (conn *Conn) querySQL(tctx *tcontext.Context, query string, args ...interfa
 
 	if err != nil {
 		tctx.L().Error("query statement failed after retry",
-			zap.String("query", utils.TruncateString(query, stringLenLimit)),
-			zap.Reflect("argument", utils.TruncateInterface(args, stringLenLimit)),
+			zap.String("query", utils.TruncateString(query, -1)),
+			zap.String("argument", utils.TruncateInterface(args, -1)),
 			log.ShortError(err))
 		return nil, err
 	}
@@ -165,8 +161,8 @@ func (conn *Conn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError func(
 		IsRetryableFn: func(retryTime int, err error) bool {
 			if retry.IsRetryableError(err) {
 				tctx.L().Warn("execute statements", zap.Int("retry", retryTime),
-					zap.String("queries", utils.TruncateInterface(queries, stringLenLimit)),
-					zap.Reflect("arguments", utils.TruncateInterface(args, stringLenLimit)))
+					zap.String("queries", utils.TruncateInterface(queries, -1)),
+					zap.String("arguments", utils.TruncateInterface(args, -1)))
 				sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
 				return true
 			}
@@ -192,8 +188,8 @@ func (conn *Conn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError func(
 
 	if err != nil {
 		tctx.L().Error("execute statements failed after retry",
-			zap.String("queries", utils.TruncateInterface(queries, stringLenLimit)),
-			zap.Reflect("arguments", utils.TruncateInterface(args, stringLenLimit)),
+			zap.String("queries", utils.TruncateInterface(queries, -1)),
+			zap.String("arguments", utils.TruncateInterface(args, -1)),
 			log.ShortError(err))
 		return ret.(int), err
 	}

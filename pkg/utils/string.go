@@ -15,9 +15,16 @@ package utils
 
 import "fmt"
 
+const (
+	defaultStringLenLimit = 1024
+)
+
 // TruncateString returns a string with only the leading (at most) n runes of the input string.
 // If the string is truncated, a `...` tail will be appended.
 func TruncateString(s string, n int) string {
+	if n < 0 {
+		n = defaultStringLenLimit
+	}
 	if len(s) <= n {
 		return s
 	}

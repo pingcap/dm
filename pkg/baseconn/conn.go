@@ -25,10 +25,6 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-const (
-	stringLenLimit = 1024
-)
-
 // BaseConn wraps a connection to DB
 type BaseConn struct {
 	DB *sql.DB
@@ -95,17 +91,17 @@ func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string, args ...int
 		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 	tctx.L().Debug("query statement",
-		zap.String("query", utils.TruncateString(query, stringLenLimit)),
-		zap.Reflect("argument", utils.TruncateInterface(args, stringLenLimit)))
+		zap.String("query", utils.TruncateString(query, -1)),
+		zap.String("argument", utils.TruncateInterface(args, -1)))
 
 	rows, err := conn.DB.QueryContext(tctx.Context(), query, args...)
 
 	if err != nil {
 		tctx.L().Error("query statement failed",
-			zap.String("query", utils.TruncateString(query, stringLenLimit)),
-			zap.Reflect("argument", utils.TruncateInterface(args, stringLenLimit)),
+			zap.String("query", utils.TruncateString(query, -1)),
+			zap.String("argument", utils.TruncateInterface(args, -1)),
 			log.ShortError(err))
-		return nil, terror.ErrDBQueryFailed.Delegate(err, utils.TruncateString(query, stringLenLimit))
+		return nil, terror.ErrDBQueryFailed.Delegate(err, utils.TruncateString(query, -1))
 	}
 	return rows, nil
 }
@@ -137,32 +133,32 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, ignoreEr
 		}
 
 		tctx.L().Debug("execute statement",
-			zap.String("query", utils.TruncateString(query, stringLenLimit)),
-			zap.Reflect("argument", utils.TruncateInterface(arg, stringLenLimit)))
+			zap.String("query", utils.TruncateString(query, -1)),
+			zap.String("argument", utils.TruncateInterface(arg, -1)))
 
 		_, err = txn.ExecContext(tctx.Context(), query, arg...)
 		if err != nil {
 			if ignoreErr != nil && ignoreErr(err) {
 				tctx.L().Warn("execute statement failed and will ignore this error",
-					zap.String("query", utils.TruncateString(query, stringLenLimit)),
-					zap.Reflect("argument", utils.TruncateInterface(arg, stringLenLimit)),
+					zap.String("query", utils.TruncateString(query, -1)),
+					zap.String("argument", utils.TruncateInterface(arg, -1)),
 					log.ShortError(err))
 				continue
 			}
 
 			tctx.L().Error("execute statement failed",
-				zap.String("query", utils.TruncateString(query, stringLenLimit)),
-				zap.Reflect("argument", utils.TruncateInterface(arg, stringLenLimit)), log.ShortError(err))
+				zap.String("query", utils.TruncateString(query, -1)),
+				zap.String("argument", utils.TruncateInterface(arg, -1)), log.ShortError(err))
 
 			rerr := txn.Rollback()
 			if rerr != nil {
 				tctx.L().Error("rollback failed",
-					zap.String("query", utils.TruncateString(query, stringLenLimit)),
-					zap.Reflect("argument", utils.TruncateInterface(arg, stringLenLimit)),
+					zap.String("query", utils.TruncateString(query, -1)),
+					zap.String("argument", utils.TruncateInterface(arg, -1)),
 					log.ShortError(rerr))
 			}
 			// we should return the exec err, instead of the rollback rerr.
-			return i, terror.ErrDBExecuteFailed.Delegate(err, utils.TruncateString(query, stringLenLimit))
+			return i, terror.ErrDBExecuteFailed.Delegate(err, utils.TruncateString(query, -1))
 		}
 	}
 	err = txn.Commit()

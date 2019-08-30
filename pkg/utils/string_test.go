@@ -50,11 +50,21 @@ func (t *testStringSuite) TestTruncateInterface(c *C) {
 		s string
 	}
 
+	var (
+		i1  = compose{b: true, i: 123, s: "abc"}
+		i2  = compose{b: true, i: 456, s: "def"}
+		i3  = compose{b: false, i: 321, s: "cba"}
+		i4  = compose{b: false, i: 654, s: "fed"}
+		iis [][]interface{}
+	)
+	iis = append(iis, []interface{}{i1, i2}, []interface{}{i3, i4})
+
 	cases := []struct {
 		v      interface{}
 		n      int
 		expect string
 	}{
+		{v: nil, n: -1, expect: "<nil>"},
 		{v: nil, n: 0, expect: "..."},
 		{v: nil, n: 3, expect: "<ni..."},
 		{v: nil, n: 9, expect: "<nil>"},
@@ -67,6 +77,9 @@ func (t *testStringSuite) TestTruncateInterface(c *C) {
 		{v: []string{"abc", "123"}, n: 9, expect: "[abc 123]"},
 		{v: []compose{{b: true, i: 123, s: "abc"}, {b: false, i: 456, s: "def"}}, n: 3, expect: "[{b..."},
 		{v: []compose{{b: true, i: 123, s: "abc"}, {b: false, i: 456, s: "def"}}, n: 99, expect: "[{b:true i:123 s:abc} {b:false i:456 s:def}]"},
+		{v: iis, n: 3, expect: "[[{..."},
+		{v: iis, n: 9, expect: "[[{b:true..."},
+		{v: iis, n: 99, expect: "[[{b:true i:123 s:abc} {b:true i:456 s:def}] [{b:false i:321 s:cba} {b:false i:654 s:fed}]]"},
 	}
 
 	for _, cs := range cases {

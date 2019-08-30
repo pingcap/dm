@@ -33,9 +33,8 @@ import (
 // move to tidb-tools later
 
 const (
-	maxRetryCount  = 3
-	retryTimeout   = 3 * time.Second
-	stringLenLimit = 1024
+	maxRetryCount = 3
+	retryTimeout  = 3 * time.Second
 )
 
 // ExtractTable extracts schema and table from `schema`.`table`
@@ -194,22 +193,22 @@ func querySQL(db *sql.DB, query string, maxRetry int) (*sql.Rows, error) {
 
 	for i := 0; i < maxRetry; i++ {
 		if i > 0 {
-			log.L().Warn("query retry", zap.Int("retry number", i), zap.String("query", TruncateString(query, stringLenLimit)))
+			log.L().Warn("query retry", zap.Int("retry number", i), zap.String("query", TruncateString(query, -1)))
 			time.Sleep(retryTimeout)
 		} else {
-			log.L().Debug("query sql", zap.String("query", TruncateString(query, stringLenLimit)))
+			log.L().Debug("query sql", zap.String("query", TruncateString(query, -1)))
 		}
 
 		rows, err = db.Query(query)
 		if err != nil {
-			log.L().Warn("query retry", zap.String("query", TruncateString(query, stringLenLimit)), log.ShortError(err))
+			log.L().Warn("query retry", zap.String("query", TruncateString(query, -1)), log.ShortError(err))
 			continue
 		}
 
 		return rows, nil
 	}
 
-	log.L().Error("query failed", zap.String("query", TruncateString(query, stringLenLimit)), zap.Error(err))
+	log.L().Error("query failed", zap.String("query", TruncateString(query, -1)), zap.Error(err))
 	return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 }
 
