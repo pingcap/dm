@@ -431,7 +431,10 @@ func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceI
 	if schemaGroup, ok := k.groups[schemaID]; !ok {
 		k.groups[schemaID] = NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, sourceIDs, meta, true)
 	} else {
-		schemaGroup.Merge(sourceIDs)
+		needShardingHandle, synced, remain, err = schemaGroup.Merge(sourceIDs)
+		if err != nil {
+			return
+		}
 	}
 
 	var ok bool
@@ -442,7 +445,6 @@ func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceI
 		needShardingHandle, synced, remain, err = k.groups[targetTableID].Merge(sourceIDs)
 	} else {
 		err = terror.ErrSyncUnitDupTableGroup.Generate(targetTableID)
-		return
 	}
 
 	return
