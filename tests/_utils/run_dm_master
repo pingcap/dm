@@ -9,8 +9,13 @@ workdir=$1
 port=$2
 conf=$3
 
-PWD=$(pwd)
 binary=$PWD/bin/dm-master.test
+if [ "$#" -ge 4 ]; then
+    version=$4
+    binary=$PWD/bin/dm-master.test.$version
+fi
+
+PWD=$(pwd)
 
 mkdir -p $workdir/log
 
