@@ -44,7 +44,7 @@ function run() {
     wait_process_exit dm-master.test.current
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml previous
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
-    sleep 2
+    sleep 5
     
     echo "pause task and check status"
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
