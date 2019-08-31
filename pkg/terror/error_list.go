@@ -133,6 +133,8 @@ const (
 	codeTracingGetTSO
 	// pkg/backoff
 	codeBackoffArgsNotValid
+
+	codeInitLoggerFail
 )
 
 // Config related error code list
@@ -583,6 +585,8 @@ var (
 	ErrTracingGetTSO            = New(codeTracingGetTSO, ClassFunctional, ScopeInternal, LevelHigh, "get tso")
 	// pkg/backoff
 	ErrBackoffArgsNotValid = New(codeBackoffArgsNotValid, ClassFunctional, ScopeInternal, LevelMedium, "backoff argument %s value %v not valid")
+	// pkg
+	ErrInitLoggerFail = New(codeInitLoggerFail, ClassFunctional, ScopeInternal, LevelMedium, "init logger failed")
 
 	// Config related error
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s")
