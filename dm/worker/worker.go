@@ -301,6 +301,9 @@ func (w *Worker) operateSubTask(task *pb.TaskMeta) (int64, error) {
 
 // QueryStatus query worker's sub tasks' status
 func (w *Worker) QueryStatus(name string) []*pb.SubTaskStatus {
+	w.RLock()
+	defer w.RUnlock()
+
 	if w.closed.Get() == closedTrue {
 		w.l.Warn("querying status from a closed worker")
 		return nil
@@ -311,6 +314,9 @@ func (w *Worker) QueryStatus(name string) []*pb.SubTaskStatus {
 
 // QueryError query worker's sub tasks' error
 func (w *Worker) QueryError(name string) []*pb.SubTaskError {
+	w.RLock()
+	defer w.RUnlock()
+
 	if w.closed.Get() == closedTrue {
 		w.l.Warn("querying error from a closed worker")
 		return nil
