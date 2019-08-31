@@ -15,10 +15,13 @@ package log
 
 import (
 	"fmt"
+
 	pclog "github.com/pingcap/log"
 	"github.com/pingcap/tidb/util/logutil"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/pingcap/dm/pkg/helper"
 )
 
 const (
@@ -135,9 +138,9 @@ func L() Logger {
 
 // WrapStringerField returns a wrap stringer field
 func WrapStringerField(message string, object fmt.Stringer) zap.Field {
-	if object != nil {
-		return zap.Stringer(message, object)
+	if helper.IsNil(object) {
+		return zap.String(message, "NULL")
 	}
 
-	return zap.String(message, "NULL")
+	return zap.Stringer(message, object)
 }
