@@ -412,6 +412,8 @@ func (w *Worker) doFetchDDLInfo(ctx context.Context, ch chan<- *pb.DDLInfo) {
 		st.SaveDDLInfo(v)
 		w.l.Info("save DDLInfo into subTasks")
 		ch <- v
+	} else {
+		w.l.Warn("can not find specified subtask", zap.String("task", v.Task))
 	}
 }
 
