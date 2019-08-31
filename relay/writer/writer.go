@@ -20,9 +20,15 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 )
 
+const (
+	ignoreReasonAlreadyExists = "already exists"
+	ignoreReasonFakeRotate    = "fake rotate event"
+)
+
 // Result represents a write result.
 type Result struct {
-	Ignore bool // whether the event ignored by the writer
+	Ignore       bool   // whether the event ignored by the writer
+	IgnoreReason string // why the writer ignore the event
 }
 
 // RecoverResult represents a result for a binlog recover operation.

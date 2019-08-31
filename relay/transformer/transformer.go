@@ -21,13 +21,19 @@ import (
 	"github.com/pingcap/dm/relay/common"
 )
 
+const (
+	ignoreReasonHeartbeat      = "heartbeat event"
+	ignoreReasonArtificialFlag = "artificial flag (0x0020) set"
+)
+
 // Result represents a transform result.
 type Result struct {
-	Ignore      bool          // whether the event should be ignored
-	LogPos      uint32        // binlog event's End_log_pos or Position in RotateEvent
-	NextLogName string        // next binlog filename, only valid for RotateEvent
-	GTIDSet     mysql.GTIDSet // GTIDSet got from QueryEvent and XIDEvent when RawModeEnabled not true
-	CanSaveGTID bool          // whether can save GTID into meta, true for DDL query and XIDEvent
+	Ignore       bool          // whether the event should be ignored
+	IgnoreReason string        // why the transformer ignore the event
+	LogPos       uint32        // binlog event's End_log_pos or Position in RotateEvent
+	NextLogName  string        // next binlog filename, only valid for RotateEvent
+	GTIDSet      mysql.GTIDSet // GTIDSet got from QueryEvent and XIDEvent when RawModeEnabled not true
+	CanSaveGTID  bool          // whether can save GTID into meta, true for DDL query and XIDEvent
 }
 
 // Transformer receives binlog events from a reader and transforms them.
@@ -84,12 +90,14 @@ func (t *transformer) Transform(e *replication.BinlogEvent) Result {
 			// ignore artificial heartbeat event
 			// ref: https://dev.mysql.com/doc/internals/en/heartbeat-event.html
 			result.Ignore = true
+			result.IgnoreReason = ignoreReasonHeartbeat
 		}
 	default:
 		if e.Header.Flags&replication.LOG_EVENT_ARTIFICIAL_F != 0 {
 			// ignore events with LOG_EVENT_ARTIFICIAL_F flag(0x0020) set
 			// ref: https://dev.mysql.com/doc/internals/en/binlog-event-flag.html
 			result.Ignore = true
+			result.IgnoreReason = ignoreReasonArtificialFlag
 		}
 	}
 	return result
