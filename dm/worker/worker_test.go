@@ -183,7 +183,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	}()
 
 	// check task will be auto resumed
-	c.Assert(utils.WaitSomething(10, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
 		for _, st := range s.worker.QueryStatus(taskName) {
 			if st.Name == taskName && st.Stage == pb.Stage_Running {
 				return true
