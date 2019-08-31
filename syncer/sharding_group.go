@@ -431,7 +431,7 @@ func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceI
 	if schemaGroup, ok := k.groups[schemaID]; !ok {
 		k.groups[schemaID] = NewShardingGroup(k.cfg.SourceID, k.shardMetaSchema, k.shardMetaTable, sourceIDs, meta, true)
 	} else {
-		needShardingHandle, synced, remain, err = schemaGroup.Merge(sourceIDs)
+		_, _, _, err = schemaGroup.Merge(sourceIDs)
 		if err != nil {
 			return
 		}
