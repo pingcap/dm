@@ -385,7 +385,9 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 			r.tctx.L().Info("rotate event", zap.Stringer("position", lastPos))
 		}
 		if tResult.Ignore {
-			r.tctx.L().Info("ignore event by transformer", zap.Reflect("header", e.Header))
+			r.tctx.L().Info("ignore event by transformer",
+				zap.Reflect("header", e.Header),
+				zap.String("reason", tResult.IgnoreReason))
 			continue
 		}
 
@@ -397,7 +399,9 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 			relayLogWriteErrorCounter.Inc()
 			return err
 		} else if wResult.Ignore {
-			r.tctx.L().Info("ignore event by writer", zap.Reflect("header", e.Header))
+			r.tctx.L().Info("ignore event by writer",
+				zap.Reflect("header", e.Header),
+				zap.String("reason", wResult.IgnoreReason))
 			r.tryUpdateActiveRelayLog(e, lastPos.Name) // even the event ignored we still need to try this update.
 			continue
 		}

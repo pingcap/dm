@@ -187,6 +187,7 @@ func (t *testFileWriterSuite) TestFormatDescriptionEvent(c *check.C) {
 	result, err = w.WriteEvent(formatDescEv)
 	c.Assert(err, check.IsNil)
 	c.Assert(result.Ignore, check.IsTrue)
+	c.Assert(result.IgnoreReason, check.Equals, ignoreReasonAlreadyExists)
 	t.verifyFilenameOffset(c, w, cfg.Filename, fileSize)
 
 	// write another event
@@ -202,6 +203,7 @@ func (t *testFileWriterSuite) TestFormatDescriptionEvent(c *check.C) {
 	result, err = w.WriteEvent(formatDescEv)
 	c.Assert(err, check.IsNil)
 	c.Assert(result.Ignore, check.IsTrue)
+	c.Assert(result.IgnoreReason, check.Equals, ignoreReasonAlreadyExists)
 	t.verifyFilenameOffset(c, w, cfg.Filename, fileSize)
 
 	// check events by reading them back
@@ -284,6 +286,7 @@ func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check
 	result, err := w2.WriteEvent(fakeRotateEv)
 	c.Assert(err, check.IsNil)
 	c.Assert(result.Ignore, check.IsTrue) // ignore fake RotateEvent
+	c.Assert(result.IgnoreReason, check.Equals, ignoreReasonFakeRotate)
 
 	result, err = w2.WriteEvent(formatDescEv)
 	c.Assert(err, check.IsNil)
@@ -317,6 +320,7 @@ func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check
 	c.Assert(err, check.IsNil)
 	c.Assert(result, check.NotNil)
 	c.Assert(result.Ignore, check.IsTrue)
+	c.Assert(result.IgnoreReason, check.Equals, ignoreReasonFakeRotate)
 
 	t.verifyFilenameOffset(c, w3, nextFilename, fileSize)
 
@@ -541,6 +545,7 @@ func (t *testFileWriterSuite) TestHandleDuplicateEventsExist(c *check.C) {
 	result, err = w.WriteEvent(queryEv)
 	c.Assert(err, check.IsNil)
 	c.Assert(result.Ignore, check.IsTrue)
+	c.Assert(result.IgnoreReason, check.Equals, ignoreReasonAlreadyExists)
 
 	// write a start/end pos mismatched event
 	latestPos--

@@ -18,14 +18,8 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"reflect"
 	"sync/atomic"
 	"time"
-
-	"github.com/pingcap/dm/dm/pb"
-	tcontext "github.com/pingcap/dm/pkg/context"
-	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -33,6 +27,12 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/dm/pb"
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/helper"
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var (
@@ -81,7 +81,7 @@ func (p *Pointer) UnmarshalBinary(data []byte) error {
 // LoadHandledPointer loads handled pointer value from kv DB
 func LoadHandledPointer(h dbOperator) (Pointer, error) {
 	var p Pointer
-	if whetherNil(h) {
+	if helper.IsNil(h) {
 		return p, terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
@@ -105,7 +105,7 @@ func LoadHandledPointer(h dbOperator) (Pointer, error) {
 
 // ClearHandledPointer clears the handled pointer in kv DB.
 func ClearHandledPointer(tctx *tcontext.Context, h dbOperator) error {
-	if whetherNil(h) {
+	if helper.IsNil(h) {
 		return terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
@@ -148,7 +148,7 @@ type Logger struct {
 
 // Initial initials Logger
 func (logger *Logger) Initial(h dbOperator) ([]*pb.TaskLog, error) {
-	if whetherNil(h) {
+	if helper.IsNil(h) {
 		return nil, terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
@@ -203,7 +203,7 @@ func (logger *Logger) Initial(h dbOperator) ([]*pb.TaskLog, error) {
 
 // GetTaskLog returns task log by given log ID
 func (logger *Logger) GetTaskLog(h dbOperator, id int64) (*pb.TaskLog, error) {
-	if whetherNil(h) {
+	if helper.IsNil(h) {
 		return nil, terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
@@ -227,7 +227,7 @@ func (logger *Logger) GetTaskLog(h dbOperator, id int64) (*pb.TaskLog, error) {
 // ForwardTo forward handled pointer to specified ID location
 // not thread safe
 func (logger *Logger) ForwardTo(h dbOperator, ID int64) error {
-	if whetherNil(h) {
+	if helper.IsNil(h) {
 		return terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
@@ -248,7 +248,7 @@ func (logger *Logger) ForwardTo(h dbOperator, ID int64) error {
 
 // MarkAndForwardLog marks result sucess or not in log, and forwards handledPointer
 func (logger *Logger) MarkAndForwardLog(h dbOperator, opLog *pb.TaskLog) error {
-	if whetherNil(h) {
+	if helper.IsNil(h) {
 		return terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
@@ -267,7 +267,7 @@ func (logger *Logger) MarkAndForwardLog(h dbOperator, opLog *pb.TaskLog) error {
 
 // Append appends a task log
 func (logger *Logger) Append(h dbOperator, opLog *pb.TaskLog) error {
-	if whetherNil(h) {
+	if helper.IsNil(h) {
 		return terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
@@ -315,7 +315,7 @@ func (logger *Logger) GC(ctx context.Context, h dbOperator) {
 }
 
 func (logger *Logger) doGC(h dbOperator, id int64) {
-	if whetherNil(h) {
+	if helper.IsNil(h) {
 		logger.l.Error(terror.ErrWorkerLogInvalidHandler.Error(), zap.String("feature", "gc"))
 		return
 	}
@@ -386,7 +386,7 @@ func EncodeTaskMetaKey(name string) []byte {
 
 // LoadTaskMetas loads all task metas from kv db
 func LoadTaskMetas(h dbOperator) (map[string]*pb.TaskMeta, error) {
-	if whetherNil(h) {
+	if helper.IsNil(h) {
 		return nil, terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
@@ -422,7 +422,7 @@ func LoadTaskMetas(h dbOperator) (map[string]*pb.TaskMeta, error) {
 
 // SetTaskMeta saves task meta into kv db
 func SetTaskMeta(h dbOperator, task *pb.TaskMeta) error {
-	if whetherNil(h) {
+	if helper.IsNil(h) {
 		return terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
@@ -446,7 +446,7 @@ func SetTaskMeta(h dbOperator, task *pb.TaskMeta) error {
 
 // GetTaskMeta returns task meta by given name
 func GetTaskMeta(h dbOperator, name string) (*pb.TaskMeta, error) {
-	if whetherNil(h) {
+	if helper.IsNil(h) {
 		return nil, terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
@@ -466,7 +466,7 @@ func GetTaskMeta(h dbOperator, name string) (*pb.TaskMeta, error) {
 
 // DeleteTaskMeta delete task meta from kv DB
 func DeleteTaskMeta(h dbOperator, name string) error {
-	if whetherNil(h) {
+	if helper.IsNil(h) {
 		return terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
@@ -518,13 +518,9 @@ func CloneTaskLog(log *pb.TaskLog) *pb.TaskLog {
 	return proto.Clone(log).(*pb.TaskLog)
 }
 
-func whetherNil(handler interface{}) bool {
-	return handler == nil || reflect.ValueOf(handler).IsNil()
-}
-
 // clearByPrefix clears all keys with the specified prefix.
 func clearByPrefix(tctx *tcontext.Context, h dbOperator, prefix []byte) error {
-	if whetherNil(h) {
+	if helper.IsNil(h) {
 		return terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 

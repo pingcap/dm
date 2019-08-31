@@ -21,6 +21,7 @@ import (
 	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/helper"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -92,7 +93,7 @@ func (v *version) UnmarshalBinary(data []byte) error {
 
 // loadVersion loads the version of DM-worker from the levelDB.
 func loadVersion(tctx *tcontext.Context, h dbOperator) (ver version, err error) {
-	if whetherNil(h) {
+	if helper.IsNil(h) {
 		return ver, terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
@@ -110,7 +111,7 @@ func loadVersion(tctx *tcontext.Context, h dbOperator) (ver version, err error) 
 
 // saveVersion saves the version of DM-worker into the levelDB.
 func saveVersion(tctx *tcontext.Context, h dbOperator, ver version) error {
-	if whetherNil(h) {
+	if helper.IsNil(h) {
 		return terror.ErrWorkerLogInvalidHandler.Generate()
 	}
 
