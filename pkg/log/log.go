@@ -22,6 +22,7 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/pingcap/dm/pkg/helper"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 const (
