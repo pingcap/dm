@@ -16,12 +16,13 @@ package baseconn
 import (
 	"database/sql"
 
+	"go.uber.org/zap"
+
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
-
-	"go.uber.org/zap"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // BaseConn wraps a connection to DB
@@ -89,13 +90,18 @@ func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string, args ...int
 	if conn == nil || conn.DB == nil {
 		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
-	tctx.L().Debug("query statement", zap.String("query", query), zap.Reflect("argument", args))
+	tctx.L().Debug("query statement",
+		zap.String("query", utils.TruncateString(query, -1)),
+		zap.String("argument", utils.TruncateInterface(args, -1)))
 
 	rows, err := conn.DB.QueryContext(tctx.Context(), query, args...)
 
 	if err != nil {
-		tctx.L().Error("query statement failed", zap.String("query", query), zap.Reflect("argument", args), log.ShortError(err))
-		return nil, terror.ErrDBQueryFailed.Delegate(err, query)
+		tctx.L().Error("query statement failed",
+			zap.String("query", utils.TruncateString(query, -1)),
+			zap.String("argument", utils.TruncateInterface(args, -1)),
+			log.ShortError(err))
+		return nil, terror.ErrDBQueryFailed.Delegate(err, utils.TruncateString(query, -1))
 	}
 	return rows, nil
 }
@@ -126,23 +132,33 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, ignoreEr
 			arg = args[i]
 		}
 
-		tctx.L().Debug("execute statement", zap.String("query", query), zap.Reflect("argument", arg))
+		tctx.L().Debug("execute statement",
+			zap.String("query", utils.TruncateString(query, -1)),
+			zap.String("argument", utils.TruncateInterface(arg, -1)))
 
 		_, err = txn.ExecContext(tctx.Context(), query, arg...)
 		if err != nil {
 			if ignoreErr != nil && ignoreErr(err) {
-				tctx.L().Warn("execute statement failed and will ignore this error", zap.String("query", query), zap.Reflect("argument", arg), log.ShortError(err))
+				tctx.L().Warn("execute statement failed and will ignore this error",
+					zap.String("query", utils.TruncateString(query, -1)),
+					zap.String("argument", utils.TruncateInterface(arg, -1)),
+					log.ShortError(err))
 				continue
 			}
 
-			tctx.L().Error("execute statement failed", zap.String("query", query), zap.Reflect("argument", arg), log.ShortError(err))
+			tctx.L().Error("execute statement failed",
+				zap.String("query", utils.TruncateString(query, -1)),
+				zap.String("argument", utils.TruncateInterface(arg, -1)), log.ShortError(err))
 
 			rerr := txn.Rollback()
 			if rerr != nil {
-				tctx.L().Error("rollback failed", zap.String("query", query), zap.Reflect("argument", arg), log.ShortError(rerr))
+				tctx.L().Error("rollback failed",
+					zap.String("query", utils.TruncateString(query, -1)),
+					zap.String("argument", utils.TruncateInterface(arg, -1)),
+					log.ShortError(rerr))
 			}
 			// we should return the exec err, instead of the rollback rerr.
-			return i, terror.ErrDBExecuteFailed.Delegate(err, query)
+			return i, terror.ErrDBExecuteFailed.Delegate(err, utils.TruncateString(query, -1))
 		}
 	}
 	err = txn.Commit()
