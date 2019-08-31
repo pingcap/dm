@@ -16,6 +16,7 @@ package helper
 import (
 	"errors"
 	"testing"
+	"unsafe"
 
 	"github.com/pingcap/check"
 )
@@ -60,6 +61,12 @@ func (t *testValueSuite) TestIsNil(c *check.C) {
 	var piNotNil = &i
 	c.Assert(IsNil(piNil), check.IsTrue)
 	c.Assert(IsNil(piNotNil), check.IsFalse)
+
+	// unsafe pointer
+	var upiNil unsafe.Pointer
+	var upiNotNil = unsafe.Pointer(piNotNil)
+	c.Assert(IsNil(upiNil), check.IsTrue)
+	c.Assert(IsNil(upiNotNil), check.IsFalse)
 
 	// slice
 	c.Assert(IsNil(([]int)(nil)), check.IsTrue)

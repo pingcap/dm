@@ -22,7 +22,7 @@ func IsNil(vi interface{}) (result bool) {
 		result = true
 	} else {
 		switch v := reflect.ValueOf(vi); v.Kind() {
-		case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
+		case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.UnsafePointer, reflect.Slice:
 			return v.IsNil()
 		}
 	}
