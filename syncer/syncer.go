@@ -1865,7 +1865,10 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	}
 
 	if len(onlineDDLTableNames) > 0 {
-		s.clearOnlineDDL(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
+		err = s.clearOnlineDDL(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
+		if err != nil {
+			return err
+		}
 	}
 
 	s.tctx.L().Info("finish to handle ddls in shard mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start position", startPos), log.WrapStringerField("end position", ec.currentPos))
@@ -2311,7 +2314,10 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 
 	if s.cfg.IsSharding {
 		// re-init sharding group
-		s.initShardingGroups(nil)
+		err = s.initShardingGroups(nil)
+		if err != nil {
+			return err
+		}
 	}
 
 	// update l.cfg

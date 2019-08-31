@@ -20,6 +20,8 @@ import (
 	"github.com/pingcap/tidb/util/logutil"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 const (
@@ -77,7 +79,10 @@ var (
 
 // InitLogger initializes DM's and also the TiDB library's loggers.
 func InitLogger(cfg *Config) error {
-	logutil.InitLogger(&logutil.LogConfig{Config: pclog.Config{Level: cfg.Level}})
+	err := logutil.InitLogger(&logutil.LogConfig{Config: pclog.Config{Level: cfg.Level}})
+	if err != nil {
+		return terror.ErrInitLoggerFail.Delegate(err)
+	}
 
 	logger, props, err := pclog.InitLogger(&pclog.Config{
 		Level: cfg.Level,
@@ -90,7 +95,7 @@ func InitLogger(cfg *Config) error {
 		},
 	})
 	if err != nil {
-		return err
+		return terror.ErrInitLoggerFail.Delegate(err)
 	}
 
 	// Do not log stack traces at all, as we'll get the stack trace from the

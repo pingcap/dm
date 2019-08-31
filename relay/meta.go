@@ -295,11 +295,14 @@ func (lm *LocalMeta) AddDir(serverUUID string, newPos *mysql.Position, newGTID g
 	}
 
 	// make sub dir for UUID
-	os.Mkdir(filepath.Join(lm.baseDir, newUUID), 0744)
+	err := os.Mkdir(filepath.Join(lm.baseDir, newUUID), 0744)
+	if err != nil {
+		return terror.ErrRelayMkdir.Delegate(err)
+	}
 
 	// update UUID index file
 	uuids := append(lm.uuids, newUUID)
-	err := lm.updateIndexFile(uuids)
+	err = lm.updateIndexFile(uuids)
 	if err != nil {
 		return err
 	}
@@ -324,9 +327,7 @@ func (lm *LocalMeta) AddDir(serverUUID string, newPos *mysql.Position, newGTID g
 	} // if newGTID == nil, keep GTID not changed
 
 	// flush new meta to file
-	lm.doFlush()
-
-	return nil
+	return lm.doFlush()
 }
 
 // Pos implements Meta.Pos

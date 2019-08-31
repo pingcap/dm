@@ -647,7 +647,10 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	if err != nil {
 		return err
 	}
-	w.cfg.UpdateConfigFile(content)
+	err = w.cfg.UpdateConfigFile(content)
+	if err != nil {
+		return err
+	}
 
 	w.l.Info("update relay config successfully, save config to local file", zap.String("local file", w.cfg.ConfigFile))
 
