@@ -55,10 +55,10 @@ func (t *testServer) testWorker(c *C) {
 	// close twice
 	w.Close()
 	c.Assert(w.closed.Get(), Equals, closedTrue)
-	c.Assert(w.subTasks, IsNil)
+	c.Assert(w.subTaskHolder.getAllSubTasks(), HasLen, 0)
 	w.Close()
 	c.Assert(w.closed.Get(), Equals, closedTrue)
-	c.Assert(w.subTasks, IsNil)
+	c.Assert(w.subTaskHolder.getAllSubTasks(), HasLen, 0)
 
 	_, err = w.StartSubTask(&config.SubTaskConfig{
 		Name: "testStartTask",

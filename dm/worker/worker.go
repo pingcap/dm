@@ -45,10 +45,7 @@ var (
 
 // Worker manages sub tasks and process units for data migration
 type Worker struct {
-	// used to do two things (we can refine this later):
-	// 1. protect concurrent access of `subTasks` (we can use a special mutex to archive this)
-	// 2. ensure no other operation can be done when closing (we can use `WatGroup`/`Context` to archive this)
-	// the internal operation of the subtask should be protected any mechanism in the subtask itself.
+	// ensure no other operation can be done when closing (we can use `WatGroup`/`Context` to archive this)
 	sync.RWMutex
 
 	wg     sync.WaitGroup
@@ -61,7 +58,7 @@ type Worker struct {
 	cfg *Config
 	l   log.Logger
 
-	subTasks map[string]*SubTask
+	subTaskHolder *subTaskHolder
 
 	relayHolder RelayHolder
 	relayPurger purger.Purger
@@ -76,11 +73,11 @@ type Worker struct {
 // NewWorker creates a new Worker
 func NewWorker(cfg *Config) (*Worker, error) {
 	w := &Worker{
-		cfg:         cfg,
-		relayHolder: NewRelayHolder(cfg),
-		tracer:      tracing.InitTracerHub(cfg.Tracer),
-		subTasks:    make(map[string]*SubTask),
-		l:           log.With(zap.String("component", "worker controller")),
+		cfg:           cfg,
+		relayHolder:   NewRelayHolder(cfg),
+		tracer:        tracing.InitTracerHub(cfg.Tracer),
+		subTaskHolder: newSubTaskHolder(),
+		l:             log.With(zap.String("component", "worker controller")),
 	}
 
 	// initial relay holder
@@ -196,11 +193,7 @@ func (w *Worker) Close() {
 	w.wg.Wait()
 
 	// close all sub tasks
-	for _, st := range w.subTasks {
-		st.Close()
-	}
-
-	w.subTasks = nil
+	w.subTaskHolder.closeAllSubTasks()
 
 	// close relay
 	w.relayHolder.Close()
@@ -332,7 +325,7 @@ func (w *Worker) HandleSQLs(ctx context.Context, req *pb.HandleSubTaskSQLsReques
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	st := w.findSubTask(req.Name)
+	st := w.subTaskHolder.findSubTask(req.Name)
 	if st == nil {
 		return terror.ErrWorkerSubTaskNotFound.Generate(req.Name)
 	}
@@ -376,15 +369,14 @@ func (w *Worker) FetchDDLInfo(ctx context.Context) *pb.DDLInfo {
 
 // doFetchDDLInfo does fetching DDL info for all sub tasks concurrently
 func (w *Worker) doFetchDDLInfo(ctx context.Context, ch chan<- *pb.DDLInfo) {
-	w.RLock()
-	cases := make([]reflect.SelectCase, 0, len(w.subTasks)+1)
-	for _, st := range w.subTasks {
+	sts := w.subTaskHolder.getAllSubTasks()
+	cases := make([]reflect.SelectCase, 0, len(sts)+1)
+	for _, st := range sts {
 		cases = append(cases, reflect.SelectCase{
 			Dir:  reflect.SelectRecv,
 			Chan: reflect.ValueOf(st.DDLInfo), // select all sub tasks' chan
 		})
 	}
-	w.RUnlock()
 
 	cases = append(cases, reflect.SelectCase{
 		Dir:  reflect.SelectRecv,
@@ -393,8 +385,7 @@ func (w *Worker) doFetchDDLInfo(ctx context.Context, ch chan<- *pb.DDLInfo) {
 
 	_, value, ok := reflect.Select(cases)
 	if !ok {
-		w.RLock()
-		for _, st := range w.subTasks {
+		for _, st := range sts {
 			// NOTE: Can you guarantee that each DDLInfo you get is different?
 			if st.GetDDLInfo() == nil {
 				continue
@@ -402,7 +393,6 @@ func (w *Worker) doFetchDDLInfo(ctx context.Context, ch chan<- *pb.DDLInfo) {
 			ch <- st.GetDDLInfo()
 			break
 		}
-		w.RUnlock()
 		return
 	}
 
@@ -411,12 +401,12 @@ func (w *Worker) doFetchDDLInfo(ctx context.Context, ch chan<- *pb.DDLInfo) {
 		return // should not go here
 	}
 
-	w.RLock()
-	w.subTasks[v.Task].SaveDDLInfo(v)
-	w.RUnlock()
-	w.l.Info("save DDLInfo into subTasks")
-
-	ch <- v
+	st := w.subTaskHolder.findSubTask(v.Task)
+	if st != nil {
+		st.SaveDDLInfo(v)
+		w.l.Info("save DDLInfo into subTasks")
+		ch <- v
+	}
 }
 
 // RecordDDLLockInfo records the current DDL lock info which pending to sync
@@ -425,7 +415,7 @@ func (w *Worker) RecordDDLLockInfo(info *pb.DDLLockInfo) error {
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	st := w.findSubTask(info.Task)
+	st := w.subTaskHolder.findSubTask(info.Task)
 	if st == nil {
 		return terror.ErrWorkerSubTaskNotFound.Generatef("sub task for DDLLockInfo %+v not found", info)
 	}
@@ -438,7 +428,7 @@ func (w *Worker) ExecuteDDL(ctx context.Context, req *pb.ExecDDLRequest) error {
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	st := w.findSubTask(req.Task)
+	st := w.subTaskHolder.findSubTask(req.Task)
 	if st == nil {
 		return terror.ErrWorkerSubTaskNotFound.Generate(req.Task)
 	}
@@ -463,7 +453,7 @@ func (w *Worker) BreakDDLLock(ctx context.Context, req *pb.BreakDDLLockRequest) 
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	st := w.findSubTask(req.Task)
+	st := w.subTaskHolder.findSubTask(req.Task)
 	if st == nil {
 		return terror.ErrWorkerSubTaskNotFound.Generate(req.Task)
 	}
@@ -527,16 +517,16 @@ func (w *Worker) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) erro
 
 // ForbidPurge implements PurgeInterceptor.ForbidPurge
 func (w *Worker) ForbidPurge() (bool, string) {
+	w.RLock()
+	defer w.RUnlock()
+
 	if w.closed.Get() == closedTrue {
 		return false, ""
 	}
 
-	w.RLock()
-	defer w.RUnlock()
-
 	// forbid purging if some sub tasks are paused
 	// so we can debug the system easily
-	for _, st := range w.subTasks {
+	for _, st := range w.subTaskHolder.getAllSubTasks() {
 		stage := st.Stage()
 		if stage == pb.Stage_New || stage == pb.Stage_Paused {
 			return true, fmt.Sprintf("sub task %s current stage is %s", st.cfg.Name, stage.String())
@@ -547,11 +537,12 @@ func (w *Worker) ForbidPurge() (bool, string) {
 
 // QueryConfig returns worker's config
 func (w *Worker) QueryConfig(ctx context.Context) (*Config, error) {
+	w.RLock()
+	defer w.RUnlock()
+
 	if w.closed.Get() == closedTrue {
 		return nil, terror.ErrWorkerAlreadyClosed.Generate()
 	}
-	w.RLock()
-	defer w.RUnlock()
 
 	return w.cfg.Clone(), nil
 }
@@ -570,8 +561,10 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		return terror.ErrWorkerRelayUnitStage.Generate(stage.String())
 	}
 
+	sts := w.subTaskHolder.getAllSubTasks()
+
 	// Check whether subtask is running syncer unit
-	for _, st := range w.subTasks {
+	for _, st := range sts {
 		isRunning := st.CheckUnit()
 		if !isRunning {
 			return terror.ErrWorkerNoSyncerRunning.Generate()
@@ -599,7 +592,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 
 	// Update SubTask configure
 	// NOTE: we only update `DB.Config` in SubTaskConfig now
-	for _, st := range w.subTasks {
+	for _, st := range sts {
 		cfg := config.NewSubTaskConfig()
 
 		cfg.From = cloneCfg.From
@@ -692,35 +685,12 @@ func (w *Worker) copyConfigFromWorker(cfg *config.SubTaskConfig) {
 	cfg.LogFile = w.cfg.LogFile
 }
 
-// recordSubTask records subtask info in the memory.
-func (w *Worker) recordSubTask(st *SubTask) {
-	w.Lock()
-	defer w.Unlock()
-	w.subTasks[st.cfg.Name] = st
-}
-
-// removeSubTask removes subtask info by name.
-func (w *Worker) removeSubTask(name string) {
-	w.Lock()
-	defer w.Unlock()
-	delete(w.subTasks, name)
-}
-
-// findSubTask finds sub task by name
-func (w *Worker) findSubTask(name string) *SubTask {
-	w.RLock()
-	defer w.RUnlock()
-
-	return w.subTasks[name]
-}
-
 // getAllSubTaskStatus returns all subtask status of this worker, note the field
 // in subtask status is not completed, only includes `Name`, `Stage` and `Result` now
 func (w *Worker) getAllSubTaskStatus() map[string]*pb.SubTaskStatus {
-	w.RLock()
-	defer w.RUnlock()
-	result := make(map[string]*pb.SubTaskStatus)
-	for name, st := range w.subTasks {
+	sts := w.subTaskHolder.getAllSubTasks()
+	result := make(map[string]*pb.SubTaskStatus, len(sts))
+	for name, st := range sts {
 		st.RLock()
 		result[name] = &pb.SubTaskStatus{
 			Name:   name,
@@ -734,11 +704,7 @@ func (w *Worker) getAllSubTaskStatus() map[string]*pb.SubTaskStatus {
 
 func (w *Worker) restoreSubTask() error {
 	tasks := w.meta.LoadTaskMeta()
-
-	w.Lock()
-	defer w.Unlock()
-	w.subTasks = make(map[string]*SubTask)
-	for name, task := range tasks {
+	for _, task := range tasks {
 		taskCfg := new(config.SubTaskConfig)
 		if err := taskCfg.Decode(string(task.Task)); err != nil {
 			return terror.Annotatef(err, "decode subtask config %s error in restoreSubTask", task.Task)
@@ -759,7 +725,7 @@ func (w *Worker) restoreSubTask() error {
 			st = NewSubTaskWithStage(cfgDecrypted, task.Stage)
 		}
 
-		w.subTasks[name] = st
+		w.subTaskHolder.recordSubTask(st)
 	}
 
 	return nil
@@ -801,7 +767,7 @@ Loop:
 
 			w.l.Info("start to execute operation", zap.Reflect("oplog", opLog))
 
-			st := w.findSubTask(opLog.Task.Name)
+			st := w.subTaskHolder.findSubTask(opLog.Task.Name)
 			var err error
 			switch opLog.Task.Op {
 			case pb.TaskOp_Start:
@@ -838,7 +804,7 @@ Loop:
 
 				w.l.Info("started sub task", zap.Stringer("config", cfgDecrypted))
 				st = NewSubTask(cfgDecrypted)
-				w.recordSubTask(st)
+				w.subTaskHolder.recordSubTask(st)
 				st.Run()
 
 			case pb.TaskOp_Update:
@@ -863,7 +829,7 @@ Loop:
 
 				w.l.Info("stop sub task", zap.String("task", opLog.Task.Name))
 				st.Close()
-				w.removeSubTask(opLog.Task.Name)
+				w.subTaskHolder.removeSubTask(opLog.Task.Name)
 			case pb.TaskOp_Pause:
 				if st == nil {
 					err = terror.ErrWorkerSubTaskNotFound.Generate(opLog.Task.Name)
