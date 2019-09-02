@@ -36,7 +36,7 @@ type Config struct {
 	BinlogGTID string `toml:"binlog-gtid" json:"binlog-gtid"`
 
 	// for binlog reader retry
-	ReaderRetry *retry.ReaderRetryConfig `toml:"reader-retry" json:"reader-retry"`
+	ReaderRetry retry.ReaderRetryConfig `toml:"reader-retry" json:"reader-retry"`
 }
 
 // DBConfig is the DB configuration.

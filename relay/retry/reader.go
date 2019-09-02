@@ -38,13 +38,13 @@ type ReaderRetryConfig struct {
 // ReaderRetry is used to control the retry for the ReaderRetry.
 // It is not thread-safe.
 type ReaderRetry struct {
-	cfg           *ReaderRetryConfig
+	cfg           ReaderRetryConfig
 	bf            *backoff.Backoff
 	lastRetryTime time.Time
 }
 
 // NewReaderRetry creates a new ReaderRetry instance.
-func NewReaderRetry(cfg *ReaderRetryConfig) (*ReaderRetry, error) {
+func NewReaderRetry(cfg ReaderRetryConfig) (*ReaderRetry, error) {
 	bf, err := backoff.NewBackoff(cfg.BackoffFactor, cfg.BackoffJitter, cfg.BackoffMin, cfg.BackoffMax)
 	if err != nil {
 		return nil, terror.WithClass(err, terror.ClassRelayUnit)

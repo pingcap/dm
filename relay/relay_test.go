@@ -38,6 +38,7 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay/reader"
+	"github.com/pingcap/dm/relay/retry"
 	"github.com/pingcap/dm/relay/transformer"
 	"github.com/pingcap/dm/relay/writer"
 )
@@ -283,7 +284,7 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 		}
 		binlogPos   = gmysql.Position{"mysql-bin.666888", 4}
 		rotateEv, _ = event.GenRotateEvent(eventHeader, 123, []byte(binlogPos.Name), uint64(binlogPos.Pos))
-		queryEv, _  = event.GenQueryEvent(eventHeader, 123, 0, 0, 0, nil, nil, []byte("BEGIN"))
+		queryEv, _  = event.GenQueryEvent(eventHeader, 123, 0, 0, 0, nil, nil, []byte("CREATE DATABASE db_relay_test"))
 	)
 	// NOTE: we can mock meta later.
 	c.Assert(r.meta.Load(), IsNil)
@@ -439,6 +440,13 @@ func (t *testRelaySuite) TestProcess(c *C) {
 				Port:     dbCfg.Port,
 				User:     dbCfg.User,
 				Password: dbCfg.Password,
+			},
+			ReaderRetry: retry.ReaderRetryConfig{
+				BackoffRollback: 200 * time.Millisecond,
+				BackoffMax:      1 * time.Second,
+				BackoffMin:      1 * time.Millisecond,
+				BackoffJitter:   true,
+				BackoffFactor:   2,
 			},
 		}
 		r = NewRelay(relayCfg).(*Relay)

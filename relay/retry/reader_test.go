@@ -32,7 +32,7 @@ var _ = Suite(&testReaderRetrySuite{})
 type testReaderRetrySuite struct{}
 
 func (t *testReaderRetrySuite) TestRetry(c *C) {
-	rr, err := NewReaderRetry(&ReaderRetryConfig{
+	rr, err := NewReaderRetry(ReaderRetryConfig{
 		BackoffRollback: 200 * time.Millisecond,
 		BackoffMax:      1 * time.Second,
 		BackoffMin:      1 * time.Millisecond,
