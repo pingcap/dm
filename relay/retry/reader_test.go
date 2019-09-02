@@ -21,8 +21,6 @@ import (
 
 	. "github.com/pingcap/check"
 	gmysql "github.com/siddontang/go-mysql/mysql"
-
-	"github.com/pingcap/dm/dm/worker"
 )
 
 func TestSuite(t *testing.T) {
@@ -38,7 +36,7 @@ func (t *testReaderRetrySuite) TestRetry(c *C) {
 		BackoffRollback: 200 * time.Millisecond,
 		BackoffMax:      1 * time.Second,
 		BackoffMin:      1 * time.Millisecond,
-		BackoffFactor:   worker.DefaultBackoffFactor,
+		BackoffFactor:   2,
 	})
 	c.Assert(err, IsNil)
 	c.Assert(rr, NotNil)
