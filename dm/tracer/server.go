@@ -75,7 +75,7 @@ func (s *Server) Start() error {
 	m := cmux.New(s.rootLis)
 	m.SetReadTimeout(cmuxReadTimeout) // set a timeout, ref: https://github.com/pingcap/tidb-binlog/pull/352
 
-	grpcL := m.Match(cmux.HTTP2HeaderField("content-type", "application/grpc"))
+	grpcL := m.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
 	httpL := m.Match(cmux.HTTP1Fast())
 
 	s.svr = grpc.NewServer()
