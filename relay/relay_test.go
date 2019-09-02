@@ -465,10 +465,10 @@ func (t *testRelaySuite) TestProcess(c *C) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err = r.process(ctx)
-		if !utils.IsErrBinlogPurged(err) {
+		err2 := r.process(ctx)
+		if !utils.IsErrBinlogPurged(err2) {
 			// we can tolerate `ERROR 1236` caused by `RESET MASTER` in other test cases.
-			c.Assert(err, IsNil)
+			c.Assert(err2, IsNil)
 		}
 	}()
 
