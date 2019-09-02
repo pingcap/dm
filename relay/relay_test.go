@@ -36,6 +36,7 @@ import (
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay/reader"
 	"github.com/pingcap/dm/relay/retry"
@@ -471,7 +472,22 @@ func (t *testRelaySuite) TestProcess(c *C) {
 		}
 	}()
 
-	time.Sleep(3 * time.Second) // waiting for get events from upstream
+	time.Sleep(1 * time.Second) // waiting for get events from upstream
+
+	// kill the binlog dump connection
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel2()
+	connID, err := getBinlogDumpConnID(ctx2, r.db)
+	c.Assert(err, IsNil)
+	_, err = r.db.ExecContext(ctx2, fmt.Sprintf(`KILL %d`, connID))
+	c.Assert(err, IsNil)
+
+	// execute a DDL again
+	lastDDL := "CREATE DATABASE `db_relay_retry_test`"
+	_, err = r.db.ExecContext(ctx2, lastDDL)
+	c.Assert(err, IsNil)
+
+	time.Sleep(2 * time.Second) // waiting for events
 	cancel()                    // stop processing
 	wg.Wait()
 
@@ -479,13 +495,64 @@ func (t *testRelaySuite) TestProcess(c *C) {
 	// and check for events already done in `TestHandleEvent`
 	uuid, err := utils.GetServerUUID(r.db, r.cfg.Flavor)
 	c.Assert(err, IsNil)
-	files, err := ioutil.ReadDir(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid)))
+	files, err := streamer.CollectAllBinlogFiles(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid)))
 	c.Assert(err, IsNil)
 	var binlogFileCount int
 	for _, f := range files {
-		if binlog.VerifyFilename(f.Name()) {
+		if binlog.VerifyFilename(f) {
 			binlogFileCount++
 		}
 	}
 	c.Assert(binlogFileCount, Greater, 0)
+
+	// should got the last DDL
+	gotLastDDL := false
+	onEventFunc := func(e *replication.BinlogEvent) error {
+		switch ev := e.Event.(type) {
+		case *replication.QueryEvent:
+			if bytes.Contains(ev.Query, []byte(lastDDL)) {
+				gotLastDDL = true
+			}
+		}
+		return nil
+	}
+
+	lastFilename := files[len(files)-1]
+	parser2 := replication.NewBinlogParser()
+	parser2.SetVerifyChecksum(true)
+	err = parser2.ParseFile(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid), lastFilename), 0, onEventFunc)
+	c.Assert(err, IsNil)
+	c.Assert(gotLastDDL, IsTrue)
+}
+
+// getBinlogDumpConnID gets the `Binlog Dump` connection ID.
+// now only return the first one.
+func getBinlogDumpConnID(ctx context.Context, db *sql.DB) (uint32, error) {
+	query := `SHOW PROCESSLIST`
+	rows, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	var (
+		id      sql.NullInt64
+		user    sql.NullString
+		host    sql.NullString
+		db2     sql.NullString
+		command sql.NullString
+		time2   sql.NullInt64
+		state   sql.NullString
+		info    sql.NullString
+	)
+	for rows.Next() {
+		err = rows.Scan(&id, &user, &host, &db2, &command, &time2, &state, &info)
+		if err != nil {
+			return 0, err
+		}
+		if id.Valid && command.Valid && command.String == "Binlog Dump" {
+			return uint32(id.Int64), rows.Err()
+		}
+	}
+	return 0, errors.NotFoundf("Binlog Dump")
 }
