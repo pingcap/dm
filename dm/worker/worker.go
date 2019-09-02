@@ -530,8 +530,8 @@ func (w *Worker) ForbidPurge() (bool, string) {
 	}
 
 	// forbid purging if some sub tasks are paused, so we can debug the system easily
-	// This function is not protected by `w.lock`, this may lead to sub tasks information
-	// not up to date, but this does not affect correctness.
+	// This function is not protected by `w.RWMutex`, which may lead to sub tasks information
+	// not up to date, but do not affect correctness.
 	for _, st := range w.subTaskHolder.getAllSubTasks() {
 		stage := st.Stage()
 		if stage == pb.Stage_New || stage == pb.Stage_Paused {
