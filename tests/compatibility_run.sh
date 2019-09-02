@@ -14,6 +14,10 @@ function run() {
 }
 
 if [ "$#" -ge 1 ]; then
+    if [ $1 == "all" ]; then
+        run compatibility
+    fi
+
     test_case=$1
 else
     run compatibility
