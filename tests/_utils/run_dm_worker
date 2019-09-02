@@ -2,13 +2,13 @@
 # parameter 1: work directory
 # parameter 2: worker-addr port
 # parameter 3: config file for DM-worker
+# parameter 4: binary version, previous or current, can be null
 
 set -eu
 
 workdir=$1
 port=$2
 conf=$3
-
 
 binary=$PWD/bin/dm-worker.test
 if [ "$#" -ge 4 ]; then
