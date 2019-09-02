@@ -131,7 +131,7 @@ compatibility_test: check_third_party_binary
 	@which bin/dm-worker.test.current
 	@which bin/dm-master.test.previous
 	@which bin/dm-worker.test.previous
-	tests/compatibility_run.sh
+	tests/compatibility_run.sh ${CASE}
 
 # unify cover mode in coverage files, more details refer to tests/_utils/run_dm_ctl
 coverage_fix_cover_mode:
