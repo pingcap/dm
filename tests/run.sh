@@ -84,8 +84,12 @@ if [ "$test_case" == "*" ]; then
     for script in $CUR/$test_case/run.sh; do
         run $script
     done
+elif [ "$test_case" == "compatibility" ]; then
+    script="$CUR/compatibility/start.sh"
+    run $script
 else
     for name in $test_case; do
+        echo $name
         script="$CUR/$name/run.sh"
         run $script
     done
