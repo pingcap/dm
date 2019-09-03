@@ -62,11 +62,11 @@ require (
 	go.etcd.io/etcd v3.3.15+incompatible // indirect
 	go.uber.org/atomic v1.4.0 // indirect
 	go.uber.org/zap v1.10.0
-	golang.org/x/crypto v0.0.0-20190829043050-9756ffdc2472 // indirect
-	golang.org/x/net v0.0.0-20190827160401-ba9fcec4b297
-	golang.org/x/sys v0.0.0-20190830142957-1e83adbbebd0
+	golang.org/x/crypto v0.0.0-20190820162420-60c769a6c586 // indirect
+	golang.org/x/net v0.0.0-20190813141303-74dc4d7220e7
+	golang.org/x/sys v0.0.0-20190826190057-c7b8b68b1456
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
-	golang.org/x/tools v0.0.0-20190830223141-573d9926052a // indirect
+	golang.org/x/tools v0.0.0-20190826234050-71894ab67ee3 // indirect
 	google.golang.org/appengine v1.6.1 // indirect
 	google.golang.org/genproto v0.0.0-20190819201941-24fa4b261c55
 	google.golang.org/grpc v1.23.0
@@ -74,7 +74,3 @@ require (
 	sigs.k8s.io/yaml v1.1.0 // indirect
 	sourcegraph.com/sourcegraph/appdash v0.0.0-20190731080439-ebfcffb1b5c0 // indirect
 )
-
-replace github.com/golang/lint => golang.org/x/lint v0.0.0-20190409202823-959b441ac422
-
-replace google.golang.org/grpc => google.golang.org/grpc v1.17.0
