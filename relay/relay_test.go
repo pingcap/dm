@@ -483,27 +483,19 @@ func (t *testRelaySuite) TestProcess(c *C) {
 	c.Assert(err, IsNil)
 
 	// execute a DDL again
-	lastDDL := "CREATE DATABASE `db_relay_retry_test`"
+	lastDDL := "CREATE DATABASE `test_relay_retry_db`"
 	_, err = r.db.ExecContext(ctx2, lastDDL)
 	c.Assert(err, IsNil)
+
+	defer func() {
+		query := "DROP DATABASE IF EXISTS `test_relay_retry_db`"
+		_, err = r.db.ExecContext(ctx2, query)
+		c.Assert(err, IsNil)
+	}()
 
 	time.Sleep(2 * time.Second) // waiting for events
 	cancel()                    // stop processing
 	wg.Wait()
-
-	// check whether have binlog file in relay directory
-	// and check for events already done in `TestHandleEvent`
-	uuid, err := utils.GetServerUUID(r.db, r.cfg.Flavor)
-	c.Assert(err, IsNil)
-	files, err := streamer.CollectAllBinlogFiles(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid)))
-	c.Assert(err, IsNil)
-	var binlogFileCount int
-	for _, f := range files {
-		if binlog.VerifyFilename(f) {
-			binlogFileCount++
-		}
-	}
-	c.Assert(binlogFileCount, Greater, 0)
 
 	// should got the last DDL
 	gotLastDDL := false
@@ -516,12 +508,27 @@ func (t *testRelaySuite) TestProcess(c *C) {
 		}
 		return nil
 	}
-
-	lastFilename := files[len(files)-1]
 	parser2 := replication.NewBinlogParser()
 	parser2.SetVerifyChecksum(true)
-	err = parser2.ParseFile(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid), lastFilename), 0, onEventFunc)
+
+	// check whether have binlog file in relay directory
+	// and check for events already done in `TestHandleEvent`
+	uuid, err := utils.GetServerUUID(r.db, r.cfg.Flavor)
 	c.Assert(err, IsNil)
+	files, err := streamer.CollectAllBinlogFiles(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid)))
+	c.Assert(err, IsNil)
+	var binlogFileCount int
+	for _, f := range files {
+		if binlog.VerifyFilename(f) {
+			binlogFileCount++
+
+			if !gotLastDDL {
+				err = parser2.ParseFile(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid), f), 0, onEventFunc)
+				c.Assert(err, IsNil)
+			}
+		}
+	}
+	c.Assert(binlogFileCount, Greater, 0)
 	c.Assert(gotLastDDL, IsTrue)
 }
 
