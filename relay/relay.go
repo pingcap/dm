@@ -41,6 +41,7 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay/reader"
+	"github.com/pingcap/dm/relay/retry"
 	"github.com/pingcap/dm/relay/transformer"
 	"github.com/pingcap/dm/relay/writer"
 )
@@ -116,17 +117,18 @@ type Relay struct {
 // NewRealRelay creates an instance of Relay.
 func NewRealRelay(cfg *Config) Process {
 	syncerCfg := replication.BinlogSyncerConfig{
-		ServerID:        uint32(cfg.ServerID),
-		Flavor:          cfg.Flavor,
-		Host:            cfg.From.Host,
-		Port:            uint16(cfg.From.Port),
-		User:            cfg.From.User,
-		Password:        cfg.From.Password,
-		Charset:         cfg.Charset,
-		UseDecimal:      true, // must set true. ref: https://github.com/pingcap/tidb-enterprise-tools/pull/272
-		ReadTimeout:     slaveReadTimeout,
-		HeartbeatPeriod: masterHeartbeatPeriod,
-		VerifyChecksum:  true,
+		ServerID:         uint32(cfg.ServerID),
+		Flavor:           cfg.Flavor,
+		Host:             cfg.From.Host,
+		Port:             uint16(cfg.From.Port),
+		User:             cfg.From.User,
+		Password:         cfg.From.Password,
+		Charset:          cfg.Charset,
+		UseDecimal:       true, // must set true. ref: https://github.com/pingcap/tidb-enterprise-tools/pull/272
+		ReadTimeout:      slaveReadTimeout,
+		HeartbeatPeriod:  masterHeartbeatPeriod,
+		VerifyChecksum:   true,
+		DisableRetrySync: true, // the retry of go-mysql has some problem now, we disable it and do the retry in relay first.
 	}
 
 	if !cfg.EnableGTID {
@@ -256,9 +258,11 @@ func (r *Relay) process(parentCtx context.Context) error {
 		return err
 	}
 	defer func() {
-		err = reader2.Close()
-		if err != nil {
-			r.tctx.L().Error("fail to close binlog event reader", zap.Error(err))
+		if reader2 != nil {
+			err = reader2.Close()
+			if err != nil {
+				r.tctx.L().Error("fail to close binlog event reader", zap.Error(err))
+			}
 		}
 	}()
 
@@ -273,11 +277,36 @@ func (r *Relay) process(parentCtx context.Context) error {
 		}
 	}()
 
+	readerRetry, err := retry.NewReaderRetry(r.cfg.ReaderRetry)
+	if err != nil {
+		return err
+	}
+
 	transformer2 := transformer.NewTransformer(parser2)
 
 	go r.doIntervalOps(parentCtx)
 
-	return r.handleEvents(parentCtx, reader2, transformer2, writer2)
+	// handles binlog events with retry mechanism.
+	// it only do the retry for some binlog reader error now.
+	for {
+		err := r.handleEvents(parentCtx, reader2, transformer2, writer2)
+		if err == nil {
+			return nil
+		} else if !readerRetry.Check(parentCtx, err) {
+			return err
+		}
+
+		r.tctx.L().Info("receive retryable error for binlog reader", log.ShortError(err))
+		err = reader2.Close() // close the previous reader
+		if err != nil {
+			r.tctx.L().Error("fail to close binlog event reader", zap.Error(err))
+		}
+		reader2, err = r.setUpReader() // setup a new one
+		if err != nil {
+			return err
+		}
+		r.tctx.L().Info("retrying to read binlog")
+	}
 }
 
 // tryRecoverLatestFile tries to recover latest relay log file with corrupt/incomplete binlog events/transactions.

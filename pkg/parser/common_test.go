@@ -83,11 +83,7 @@ func (t *testParserSuite) TestParser(c *C) {
 	}
 
 	unsupportedSQLs := []string{
-		"alter table bar ADD FULLTEXT INDEX `fulltext` (`name`) WITH PARSER ngram",
 		"alter table bar ADD SPATIAL INDEX (`g`)",
-		"alter table bar ORDER BY id1, id2",
-		// compatible after https://github.com/pingcap/parser/pull/393
-		// "alter table bar add index (`name`), add FOREIGN KEY (product_category, product_id) REFERENCES product(category, id) ON UPDATE CASCADE ON DELETE RESTRICT",
 	}
 
 	for _, sql := range unsupportedSQLs {

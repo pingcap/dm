@@ -55,7 +55,7 @@ func (t *testServer) TestServer(c *C) {
 		c.Assert(err1, IsNil)
 	}()
 
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return !s.closed.Get()
 	}), IsTrue)
 

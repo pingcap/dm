@@ -36,8 +36,10 @@ import (
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/gtid"
+	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay/reader"
+	"github.com/pingcap/dm/relay/retry"
 	"github.com/pingcap/dm/relay/transformer"
 	"github.com/pingcap/dm/relay/writer"
 )
@@ -283,7 +285,7 @@ func (t *testRelaySuite) TestHandleEvent(c *C) {
 		}
 		binlogPos   = gmysql.Position{"mysql-bin.666888", 4}
 		rotateEv, _ = event.GenRotateEvent(eventHeader, 123, []byte(binlogPos.Name), uint64(binlogPos.Pos))
-		queryEv, _  = event.GenQueryEvent(eventHeader, 123, 0, 0, 0, nil, nil, []byte("BEGIN"))
+		queryEv, _  = event.GenQueryEvent(eventHeader, 123, 0, 0, 0, nil, nil, []byte("CREATE DATABASE db_relay_test"))
 	)
 	// NOTE: we can mock meta later.
 	c.Assert(r.meta.Load(), IsNil)
@@ -440,6 +442,13 @@ func (t *testRelaySuite) TestProcess(c *C) {
 				User:     dbCfg.User,
 				Password: dbCfg.Password,
 			},
+			ReaderRetry: retry.ReaderRetryConfig{
+				BackoffRollback: 200 * time.Millisecond,
+				BackoffMax:      1 * time.Second,
+				BackoffMin:      1 * time.Millisecond,
+				BackoffJitter:   true,
+				BackoffFactor:   2,
+			},
 		}
 		r = NewRelay(relayCfg).(*Relay)
 	)
@@ -456,28 +465,101 @@ func (t *testRelaySuite) TestProcess(c *C) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		err = r.process(ctx)
-		if !utils.IsErrBinlogPurged(err) {
+		err2 := r.process(ctx)
+		if !utils.IsErrBinlogPurged(err2) {
 			// we can tolerate `ERROR 1236` caused by `RESET MASTER` in other test cases.
-			c.Assert(err, IsNil)
+			c.Assert(err2, IsNil)
 		}
 	}()
 
-	time.Sleep(3 * time.Second) // waiting for get events from upstream
+	time.Sleep(1 * time.Second) // waiting for get events from upstream
+
+	// kill the binlog dump connection
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel2()
+	connID, err := getBinlogDumpConnID(ctx2, r.db)
+	c.Assert(err, IsNil)
+	_, err = r.db.ExecContext(ctx2, fmt.Sprintf(`KILL %d`, connID))
+	c.Assert(err, IsNil)
+
+	// execute a DDL again
+	lastDDL := "CREATE DATABASE `test_relay_retry_db`"
+	_, err = r.db.ExecContext(ctx2, lastDDL)
+	c.Assert(err, IsNil)
+
+	defer func() {
+		query := "DROP DATABASE IF EXISTS `test_relay_retry_db`"
+		_, err = r.db.ExecContext(ctx2, query)
+		c.Assert(err, IsNil)
+	}()
+
+	time.Sleep(2 * time.Second) // waiting for events
 	cancel()                    // stop processing
 	wg.Wait()
+
+	// should got the last DDL
+	gotLastDDL := false
+	onEventFunc := func(e *replication.BinlogEvent) error {
+		switch ev := e.Event.(type) {
+		case *replication.QueryEvent:
+			if bytes.Contains(ev.Query, []byte(lastDDL)) {
+				gotLastDDL = true
+			}
+		}
+		return nil
+	}
+	parser2 := replication.NewBinlogParser()
+	parser2.SetVerifyChecksum(true)
 
 	// check whether have binlog file in relay directory
 	// and check for events already done in `TestHandleEvent`
 	uuid, err := utils.GetServerUUID(r.db, r.cfg.Flavor)
 	c.Assert(err, IsNil)
-	files, err := ioutil.ReadDir(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid)))
+	files, err := streamer.CollectAllBinlogFiles(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid)))
 	c.Assert(err, IsNil)
 	var binlogFileCount int
 	for _, f := range files {
-		if binlog.VerifyFilename(f.Name()) {
+		if binlog.VerifyFilename(f) {
 			binlogFileCount++
+
+			if !gotLastDDL {
+				err = parser2.ParseFile(filepath.Join(relayCfg.RelayDir, fmt.Sprintf("%s.000001", uuid), f), 0, onEventFunc)
+				c.Assert(err, IsNil)
+			}
 		}
 	}
 	c.Assert(binlogFileCount, Greater, 0)
+	c.Assert(gotLastDDL, IsTrue)
+}
+
+// getBinlogDumpConnID gets the `Binlog Dump` connection ID.
+// now only return the first one.
+func getBinlogDumpConnID(ctx context.Context, db *sql.DB) (uint32, error) {
+	query := `SHOW PROCESSLIST`
+	rows, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	var (
+		id      sql.NullInt64
+		user    sql.NullString
+		host    sql.NullString
+		db2     sql.NullString
+		command sql.NullString
+		time2   sql.NullInt64
+		state   sql.NullString
+		info    sql.NullString
+	)
+	for rows.Next() {
+		err = rows.Scan(&id, &user, &host, &db2, &command, &time2, &state, &info)
+		if err != nil {
+			return 0, err
+		}
+		if id.Valid && command.Valid && command.String == "Binlog Dump" {
+			return uint32(id.Int64), rows.Err()
+		}
+	}
+	return 0, errors.NotFoundf("Binlog Dump")
 }
