@@ -2,6 +2,7 @@
 # parameter 1: work directory
 # parameter 2: master-addr port
 # parameter 3: config file for DM-master
+# parameter 4: binary version, previous or current, can be omitted
 
 set -eu
 
@@ -9,8 +10,13 @@ workdir=$1
 port=$2
 conf=$3
 
-PWD=$(pwd)
 binary=$PWD/bin/dm-master.test
+if [ "$#" -ge 4 ]; then
+    version=$4
+    binary=$PWD/bin/dm-master.test.$version
+fi
+
+PWD=$(pwd)
 
 mkdir -p $workdir/log
 
