@@ -97,7 +97,7 @@ func NewRealRelayHolder(cfg *Config) RelayHolder {
 		},
 		BinLogName: clone.RelayBinLogName,
 		BinlogGTID: clone.RelayBinlogGTID,
-		ReaderRetry: rr.ReaderRetryConfig{ // we use config for TaskChecker now
+		ReaderRetry: rr.ReaderRetryConfig{ // we use config from TaskChecker now
 			BackoffRollback: cfg.Checker.BackoffRollback,
 			BackoffMax:      cfg.Checker.BackoffMax,
 			BackoffMin:      cfg.Checker.BackoffMin,
@@ -328,7 +328,7 @@ func (h *realRelayHolder) Update(ctx context.Context, cfg *Config) error {
 			User:     cfg.From.User,
 			Password: cfg.From.Password,
 		},
-		ReaderRetry: rr.ReaderRetryConfig{ // we use config for TaskChecker now
+		ReaderRetry: rr.ReaderRetryConfig{ // we use config from TaskChecker now
 			BackoffRollback: cfg.Checker.BackoffRollback,
 			BackoffMax:      cfg.Checker.BackoffMax,
 			BackoffMin:      cfg.Checker.BackoffMin,
