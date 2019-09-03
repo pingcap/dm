@@ -513,8 +513,14 @@ func (l *Loader) Restore(ctx context.Context) error {
 	}
 
 	// not update checkpoint in memory when restoring, so when re-Restore, we need to load checkpoint from DB
-	l.checkPoint.Load()
-	l.checkPoint.CalcProgress(l.db2Tables)
+	err := l.checkPoint.Load()
+	if err != nil {
+		return err
+	}
+	err = l.checkPoint.CalcProgress(l.db2Tables)
+	if err != nil {
+		l.tctx.L().Error("calc load process", log.ShortError(err))
+	}
 	l.loadFinishedSize()
 
 	if err := l.initAndStartWorkerPool(ctx); err != nil {

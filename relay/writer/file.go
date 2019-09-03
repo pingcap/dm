@@ -210,9 +210,14 @@ func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (
 			return Result{}, terror.Annotatef(err, "write FormatDescriptionEvent %+v for %s", ev.Header, filename)
 		}
 	}
+	var reason string
+	if exist {
+		reason = ignoreReasonAlreadyExists
+	}
 
 	return Result{
-		Ignore: exist, // ignore if exists
+		Ignore:       exist, // ignore if exists
+		IgnoreReason: reason,
 	}, nil
 }
 
@@ -249,7 +254,8 @@ func (w *FileWriter) handleRotateEvent(ev *replication.BinlogEvent) (result Resu
 	if ev.Header.Timestamp == 0 || ev.Header.LogPos == 0 {
 		// skip fake rotate event
 		return Result{
-			Ignore: true,
+			Ignore:       true,
+			IgnoreReason: ignoreReasonFakeRotate,
 		}, nil
 	} else if w.out == nil {
 		// if not open a binlog file yet, then non-fake RotateEvent can't be handled
@@ -367,8 +373,14 @@ func (w *FileWriter) handleDuplicateEventsExist(ev *replication.BinlogEvent) (Re
 		w.tctx.L().Info("event is duplicate", zap.Reflect("header", ev.Header), zap.String("file", w.filename.Get()))
 	}
 
+	var reason string
+	if duplicate {
+		reason = ignoreReasonAlreadyExists
+	}
+
 	return Result{
-		Ignore: duplicate,
+		Ignore:       duplicate,
+		IgnoreReason: reason,
 	}, nil
 }
 

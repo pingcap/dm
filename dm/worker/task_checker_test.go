@@ -18,6 +18,7 @@ import (
 
 	"github.com/pingcap/check"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 )
 
@@ -94,18 +95,18 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	c.Assert(ok, check.IsTrue)
 	rtsc.w = w
 
-	rtsc.w.subTasks = map[string]*SubTask{
-		taskName: {
-			stage: pb.Stage_Running,
-		},
+	st := &SubTask{
+		cfg:   &config.SubTaskConfig{Name: taskName},
+		stage: pb.Stage_Running,
 	}
+	rtsc.w.subTaskHolder.recordSubTask(st)
 	rtsc.check()
 	bf, ok := rtsc.bc.backoffs[taskName]
 	c.Assert(ok, check.IsTrue)
 
 	// test resume with paused task
-	rtsc.w.subTasks[taskName].stage = pb.Stage_Paused
-	rtsc.w.subTasks[taskName].result = &pb.ProcessResult{
+	st.stage = pb.Stage_Paused
+	st.result = &pb.ProcessResult{
 		IsCanceled: false,
 		Errors:     []*pb.ProcessError{{pb.ErrorType_UnknownError, "error message"}},
 	}
@@ -123,7 +124,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	}
 
 	// test backoff rollback at least once, as well as resume ignore strategy
-	rtsc.w.subTasks[taskName].result = &pb.ProcessResult{IsCanceled: true}
+	st.result = &pb.ProcessResult{IsCanceled: true}
 	w.meta.logs = []*pb.TaskLog{}
 	time.Sleep(200 * time.Millisecond)
 	rtsc.check()
@@ -132,7 +133,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	current := bf.Current()
 
 	// test no sense strategy
-	rtsc.w.subTasks[taskName].result = &pb.ProcessResult{
+	st.result = &pb.ProcessResult{
 		IsCanceled: false,
 		Errors:     []*pb.ProcessError{{pb.ErrorType_ExecSQL, "ERROR 1105 (HY000): unsupported modify column length 20 is less than origin 40"}},
 	}
@@ -160,17 +161,17 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	rtsc, ok = tsc.(*realTaskStatusChecker)
 	c.Assert(ok, check.IsTrue)
 
-	rtsc.w.subTasks = map[string]*SubTask{
-		taskName: {
-			stage: pb.Stage_Running,
-		},
+	st = &SubTask{
+		cfg:   &config.SubTaskConfig{Name: taskName},
+		stage: pb.Stage_Running,
 	}
+	rtsc.w.subTaskHolder.recordSubTask(st)
 	rtsc.check()
 	bf, ok = rtsc.bc.backoffs[taskName]
 	c.Assert(ok, check.IsTrue)
 
-	rtsc.w.subTasks[taskName].stage = pb.Stage_Paused
-	rtsc.w.subTasks[taskName].result = &pb.ProcessResult{
+	st.stage = pb.Stage_Paused
+	st.result = &pb.ProcessResult{
 		IsCanceled: false,
 		Errors:     []*pb.ProcessError{{pb.ErrorType_UnknownError, "error message"}},
 	}
@@ -219,14 +220,16 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 	c.Assert(ok, check.IsTrue)
 	rtsc.w = w
 
-	rtsc.w.subTasks = map[string]*SubTask{
-		task1: {
-			stage: pb.Stage_Running,
-		},
-		task2: {
-			stage: pb.Stage_Running,
-		},
+	st1 := &SubTask{
+		cfg:   &config.SubTaskConfig{Name: task1},
+		stage: pb.Stage_Running,
 	}
+	rtsc.w.subTaskHolder.recordSubTask(st1)
+	st2 := &SubTask{
+		cfg:   &config.SubTaskConfig{Name: task2},
+		stage: pb.Stage_Running,
+	}
+	rtsc.w.subTaskHolder.recordSubTask(st2)
 	rtsc.check()
 	c.Assert(len(rtsc.bc.backoffs), check.Equals, 2)
 	c.Assert(len(rtsc.bc.latestPausedTime), check.Equals, 2)
@@ -234,16 +237,25 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 	c.Assert(len(rtsc.bc.latestBlockTime), check.Equals, 0)
 
 	// test backoff strategies of different tasks do not affect each other
-	rtsc.w.subTasks[task1].stage = pb.Stage_Paused
-	rtsc.w.subTasks[task1].result = &pb.ProcessResult{
-		IsCanceled: false,
-		Errors:     []*pb.ProcessError{{pb.ErrorType_ExecSQL, "ERROR 1105 (HY000): unsupported modify column length 20 is less than origin 40"}},
+	st1 = &SubTask{
+		cfg:   &config.SubTaskConfig{Name: task1},
+		stage: pb.Stage_Paused,
+		result: &pb.ProcessResult{
+			IsCanceled: false,
+			Errors:     []*pb.ProcessError{{pb.ErrorType_ExecSQL, "ERROR 1105 (HY000): unsupported modify column length 20 is less than origin 40"}},
+		},
 	}
-	rtsc.w.subTasks[task2].stage = pb.Stage_Paused
-	rtsc.w.subTasks[task2].result = &pb.ProcessResult{
-		IsCanceled: false,
-		Errors:     []*pb.ProcessError{{pb.ErrorType_UnknownError, "error message"}},
+	rtsc.w.subTaskHolder.recordSubTask(st1)
+	st2 = &SubTask{
+		cfg:   &config.SubTaskConfig{Name: task2},
+		stage: pb.Stage_Paused,
+		result: &pb.ProcessResult{
+			IsCanceled: false,
+			Errors:     []*pb.ProcessError{{pb.ErrorType_UnknownError, "error message"}},
+		},
 	}
+	rtsc.w.subTaskHolder.recordSubTask(st2)
+
 	task1LatestResumeTime = rtsc.bc.latestResumeTime[task1]
 	task2LatestResumeTime = rtsc.bc.latestResumeTime[task2]
 	for i := 0; i < 10; i++ {
@@ -257,7 +269,7 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 	}
 
 	// test task information cleanup in task status checker
-	delete(rtsc.w.subTasks, task1)
+	rtsc.w.subTaskHolder.removeSubTask(task1)
 	time.Sleep(backoffMin)
 	rtsc.check()
 	c.Assert(task2LatestResumeTime.Before(rtsc.bc.latestResumeTime[task2]), check.IsTrue)

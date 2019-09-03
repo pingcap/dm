@@ -55,10 +55,10 @@ func (t *testServer) testWorker(c *C) {
 	// close twice
 	w.Close()
 	c.Assert(w.closed.Get(), Equals, closedTrue)
-	c.Assert(w.subTasks, IsNil)
+	c.Assert(w.subTaskHolder.getAllSubTasks(), HasLen, 0)
 	w.Close()
 	c.Assert(w.closed.Get(), Equals, closedTrue)
-	c.Assert(w.subTasks, IsNil)
+	c.Assert(w.subTaskHolder.getAllSubTasks(), HasLen, 0)
 
 	_, err = w.StartSubTask(&config.SubTaskConfig{
 		Name: "testStartTask",
@@ -183,7 +183,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	}()
 
 	// check task will be auto resumed
-	c.Assert(utils.WaitSomething(10, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
 		for _, st := range s.worker.QueryStatus(taskName) {
 			if st.Name == taskName && st.Stage == pb.Stage_Running {
 				return true
