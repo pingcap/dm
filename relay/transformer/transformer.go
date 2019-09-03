@@ -73,10 +73,10 @@ func (t *transformer) Transform(e *replication.BinlogEvent) Result {
 		// NOTE: we need to get the first binlog filename from fake RotateEvent when using auto position
 	case *replication.QueryEvent:
 		// when RawModeEnabled not true, QueryEvent will be parsed.
-		// even for `BEGIN`, we still update pos/GTID, but only save GTID for DDL.
-		result.GTIDSet = ev.GSet
-		isDDL := common.CheckIsDDL(string(ev.Query), t.parser2)
-		if isDDL {
+		if common.CheckIsDDL(string(ev.Query), t.parser2) {
+			// we only update/save GTID for DDL/XID event
+			// if the query is something like `BEGIN`, we do not update/save GTID.
+			result.GTIDSet = ev.GSet
 			result.CanSaveGTID = true
 		}
 	case *replication.XIDEvent:

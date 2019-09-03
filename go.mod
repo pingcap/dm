@@ -35,7 +35,7 @@ require (
 	github.com/pingcap/failpoint v0.0.0-20190708053854-e7b1061e6e81
 	github.com/pingcap/kvproto v0.0.0-20190827032240-9696cd0c6acb // indirect
 	github.com/pingcap/log v0.0.0-20190715063458-479153f07ebd
-	github.com/pingcap/parser v0.0.0-20190827021345-87e7a137ab41
+	github.com/pingcap/parser v0.0.0-20190902030720-275a827cf4e3
 	github.com/pingcap/tidb v0.0.0-20190827060935-cc07b110825e
 	github.com/pingcap/tidb-tools v3.0.0-beta.1.0.20190821032033-e6ccf3994944+incompatible
 	github.com/pingcap/tipb v0.0.0-20190823055122-55a45ba82a79 // indirect
@@ -47,7 +47,7 @@ require (
 	github.com/shirou/gopsutil v2.18.12+incompatible // indirect
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
 	github.com/siddontang/go-log v0.0.0-20190221022429-1e957dd83bed // indirect
-	github.com/siddontang/go-mysql v0.0.0-20190823102627-d34ccf107dfd
+	github.com/siddontang/go-mysql v0.0.0-20190902035209-f52d30c9fcb7
 	github.com/sirupsen/logrus v1.4.2 // indirect
 	github.com/soheilhy/cmux v0.1.4
 	github.com/spaolacci/murmur3 v1.1.0 // indirect

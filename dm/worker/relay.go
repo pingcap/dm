@@ -28,6 +28,7 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/relay"
 	"github.com/pingcap/dm/relay/purger"
+	rr "github.com/pingcap/dm/relay/retry"
 )
 
 // RelayHolder for relay unit
@@ -96,6 +97,13 @@ func NewRealRelayHolder(cfg *Config) RelayHolder {
 		},
 		BinLogName: clone.RelayBinLogName,
 		BinlogGTID: clone.RelayBinlogGTID,
+		ReaderRetry: rr.ReaderRetryConfig{ // we use config from TaskChecker now
+			BackoffRollback: cfg.Checker.BackoffRollback,
+			BackoffMax:      cfg.Checker.BackoffMax,
+			BackoffMin:      cfg.Checker.BackoffMin,
+			BackoffJitter:   cfg.Checker.BackoffJitter,
+			BackoffFactor:   cfg.Checker.BackoffFactor,
+		},
 	}
 
 	h := &realRelayHolder{
@@ -319,6 +327,13 @@ func (h *realRelayHolder) Update(ctx context.Context, cfg *Config) error {
 			Port:     cfg.From.Port,
 			User:     cfg.From.User,
 			Password: cfg.From.Password,
+		},
+		ReaderRetry: rr.ReaderRetryConfig{ // we use config from TaskChecker now
+			BackoffRollback: cfg.Checker.BackoffRollback,
+			BackoffMax:      cfg.Checker.BackoffMax,
+			BackoffMin:      cfg.Checker.BackoffMin,
+			BackoffJitter:   cfg.Checker.BackoffJitter,
+			BackoffFactor:   cfg.Checker.BackoffFactor,
 		},
 	}
 
