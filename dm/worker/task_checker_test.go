@@ -279,3 +279,23 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 	c.Assert(len(rtsc.bc.latestResumeTime), check.Equals, 1)
 	c.Assert(len(rtsc.bc.latestBlockTime), check.Equals, 0)
 }
+
+func (s *testTaskCheckerSuite) TestIsResumableError(c *check.C) {
+	testCases := []struct {
+		err       *pb.ProcessError
+		resumable bool
+	}{
+		{&pb.ProcessError{pb.ErrorType_ExecSQL, "ERROR 1105 (HY000): unsupported modify column length 20 is less than origin 40"}, false},
+		{&pb.ProcessError{pb.ErrorType_ExecSQL, "ERROR 1105 (HY000): unsupported drop integer primary key"}, false},
+		{&pb.ProcessError{pb.ErrorType_ExecSQL, ""}, true},
+		{&pb.ProcessError{pb.ErrorType_ExecSQL, "[code=10006:class=database:scope=not-set:level=high] file test.t3.sql: execute statement failed: USE `test_abc`;: context canceled"}, true},
+		{&pb.ProcessError{pb.ErrorType_UnknownError, "[code=11038:class=functional:scope=internal:level=high] parse relay log file bin.000018 from offset 555 in dir /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004: parse relay log file bin.000018 from offset 0 in dir /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004: parse relay log file /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004/bin.000018: binlog checksum mismatch, data may be corrupted"}, false},
+		{&pb.ProcessError{pb.ErrorType_UnknownError, "[code=11038:class=functional:scope=internal:level=high] parse relay log file bin.000018 from offset 500 in dir /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004: parse relay log file bin.000018 from offset 0 in dir /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004: parse relay log file /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004/bin.000018: get event err EOF, need 1567488104 but got 316323"}, false},
+		{&pb.ProcessError{pb.ErrorType_UnknownError, ""}, true},
+		{&pb.ProcessError{pb.ErrorType_UnknownError, "unknown error"}, true},
+	}
+
+	for _, tc := range testCases {
+		c.Assert(isResumableError(tc.err), check.Equals, tc.resumable)
+	}
+}
