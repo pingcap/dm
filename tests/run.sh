@@ -89,7 +89,6 @@ elif [ "$test_case" == "compatibility" ]; then
     run $script
 else
     for name in $test_case; do
-        echo $name
         script="$CUR/$name/run.sh"
         run $script
     done
