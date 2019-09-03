@@ -50,12 +50,12 @@
 ### Compatibility Test
 
 1. Run Compatibility test
-   
+
     Run `make compatibility_test` will run compatibility test.
 
 2. Run other test with different version's dm-master and dm-worker
-   
-   Run `make compatibility_test CASE={test_case}`, for example, `make compatibility_test CASE=http_apis` will run test `http_apis` with previous dm-master and current dm-worker, or current dm-master and previous dm-worker. The `test_case` can be `all`, and will run all the test cases.
+
+   Run `make compatibility_test CASE={test_case}`, for example, `make compatibility_test CASE=http_apis` will run test `http_apis` with previous dm-master and current dm-worker, and also current dm-master and previous dm-worker. The `test_case` can be `all`, and will run all the test cases.
 
 ## Writing new tests
 

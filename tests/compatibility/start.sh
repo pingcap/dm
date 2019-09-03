@@ -36,7 +36,7 @@ function run() {
     run_sql_file $cur/data/db1.increment.1.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.increment.1.sql $MYSQL_HOST2 $MYSQL_PORT2
 
-    echo "use sync_diff_inspector to check increment data first time "
+    echo "use sync_diff_inspector to check increment data first time"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
     
     echo "use current dm-master"
@@ -44,7 +44,7 @@ function run() {
     wait_process_exit dm-master.test.previous
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml current
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
-    sleep 5
+    sleep 3
     
     echo "pause task and check status"
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
