@@ -29,7 +29,7 @@ function run() {
     pkill -hup dm-worker.test.previous 2>/dev/null || true
     wait_process_exit dm-worker.test.previous
 
-    echo "restart dm-worker, one use current version, and another one use previous version"
+    echo "restart dm-worker, one use the current version, and the other one use the previous version"
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml current
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml previous
 
