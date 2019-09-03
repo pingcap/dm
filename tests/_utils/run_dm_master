@@ -2,7 +2,7 @@
 # parameter 1: work directory
 # parameter 2: master-addr port
 # parameter 3: config file for DM-master
-# parameter 4: binary version, previous or current, can be null
+# parameter 4: binary version, previous or current, can be omitted
 
 set -eu
 
