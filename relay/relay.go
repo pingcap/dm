@@ -288,7 +288,9 @@ func (r *Relay) process(parentCtx context.Context) error {
 	// it only do the retry for some binlog reader error now.
 	for {
 		err := r.handleEvents(parentCtx, reader2, transformer2, writer2)
-		if !readerRetry.Check(parentCtx, err) {
+		if err == nil {
+			return nil
+		} else if !readerRetry.Check(parentCtx, err) {
 			return err
 		}
 
