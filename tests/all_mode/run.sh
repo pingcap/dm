@@ -7,7 +7,7 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
 function run() {
-    export GO_FAILPOINTS="github.com/pingcap/dm/dm/worker/TaskCheckInterval=return(500)"
+    export GO_FAILPOINTS="github.com/pingcap/dm/dm/worker/TaskCheckInterval=return(\"500ms\")"
 
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
     check_contains 'Query OK, 2 rows affected'
@@ -48,7 +48,7 @@ function run() {
 
     # restart tidb, and task will recover success
     run_tidb_server 4000
-    sleep 1
+    sleep 2
 
     # use sync_diff_inspector to check data now!
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml

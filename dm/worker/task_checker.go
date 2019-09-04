@@ -206,12 +206,12 @@ func (tsc *realTaskStatusChecker) run() {
 	tsc.closed.Set(closedFalse)
 
 	failpoint.Inject("TaskCheckInterval", func(val failpoint.Value) {
-		interval, ok := val.(int)
-		if !ok {
-			tsc.l.Warn("inject failpoint failed", zap.Reflect("value", val))
+		interval, err := time.ParseDuration(val.(string))
+		if err != nil {
+			tsc.l.Warn("inject failpoint TaskCheckInterval failed", zap.Reflect("value", val), zap.Error(err))
 		} else {
-			tsc.cfg.CheckInterval = time.Duration(interval) * time.Millisecond
-			tsc.l.Info("set TaskCheckInterval", zap.String("failpoint", "TaskCheckInterval"), zap.Int("value", interval))
+			tsc.cfg.CheckInterval = interval
+			tsc.l.Info("set TaskCheckInterval", zap.String("failpoint", "TaskCheckInterval"), zap.Duration("value", interval))
 		}
 	})
 
