@@ -18,11 +18,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/pingcap/errors"
 	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -37,20 +37,20 @@ type subRelayFiles struct {
 func purgeRelayFilesBeforeFile(tctx *tcontext.Context, relayBaseDir string, uuids []string, safeRelay *streamer.RelayLogInfo) error {
 	files, err := getRelayFilesBeforeFile(tctx, relayBaseDir, uuids, safeRelay)
 	if err != nil {
-		return errors.Annotatef(err, "get relay files from directory %s before file %+v with UUIDs %v", relayBaseDir, safeRelay, uuids)
+		return terror.Annotatef(err, "get relay files from directory %s before file %+v with UUIDs %v", relayBaseDir, safeRelay, uuids)
 	}
 
-	return errors.Trace(purgeRelayFiles(tctx, files))
+	return purgeRelayFiles(tctx, files)
 }
 
 // purgeRelayFilesBeforeFileAndTime purge relay log files which are older than safeRelay and safeTime
 func purgeRelayFilesBeforeFileAndTime(tctx *tcontext.Context, relayBaseDir string, uuids []string, safeRelay *streamer.RelayLogInfo, safeTime time.Time) error {
 	files, err := getRelayFilesBeforeFileAndTime(tctx, relayBaseDir, uuids, safeRelay, safeTime)
 	if err != nil {
-		return errors.Annotatef(err, "get relay files from directory %s before file %+v and time %v with UUIDs %v", relayBaseDir, safeRelay, safeTime, uuids)
+		return terror.Annotatef(err, "get relay files from directory %s before file %+v and time %v with UUIDs %v", relayBaseDir, safeRelay, safeTime, uuids)
 	}
 
-	return errors.Trace(purgeRelayFiles(tctx, files))
+	return purgeRelayFiles(tctx, files)
 }
 
 // getRelayFilesBeforeFile gets a list of relay log files which are older than safeRelay
@@ -58,12 +58,12 @@ func getRelayFilesBeforeFile(tctx *tcontext.Context, relayBaseDir string, uuids 
 	// discard all newer UUIDs
 	uuids, err := trimUUIDs(uuids, safeRelay)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
 	zeroTime := time.Unix(0, 0)
 	files, err := collectRelayFilesBeforeFileAndTime(tctx, relayBaseDir, uuids, safeRelay.Filename, zeroTime)
-	return files, errors.Trace(err)
+	return files, err
 }
 
 // getRelayFilesBeforeTime gets a list of relay log files which have modified time earlier than safeTime
@@ -71,11 +71,10 @@ func getRelayFilesBeforeFileAndTime(tctx *tcontext.Context, relayBaseDir string,
 	// discard all newer UUIDs
 	uuids, err := trimUUIDs(uuids, safeRelay)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 
-	files, err := collectRelayFilesBeforeFileAndTime(tctx, relayBaseDir, uuids, safeRelay.Filename, safeTime)
-	return files, errors.Trace(err)
+	return collectRelayFilesBeforeFileAndTime(tctx, relayBaseDir, uuids, safeRelay.Filename, safeTime)
 }
 
 // trimUUIDs trims all newer UUIDs than safeRelay
@@ -88,7 +87,7 @@ func trimUUIDs(uuids []string, safeRelay *streamer.RelayLogInfo) ([]string, erro
 		}
 	}
 	if endIdx < 0 {
-		return nil, errors.NotFoundf("UUID %s in UUIDs %v", safeRelay.UUID, uuids)
+		return nil, terror.ErrRelayTrimUUIDNotFound.Generate(safeRelay.UUID, uuids)
 	}
 
 	return uuids[:endIdx+1], nil
@@ -110,7 +109,7 @@ func collectRelayFilesBeforeFileAndTime(tctx *tcontext.Context, relayBaseDir str
 			// same sub dir, only collect relay files newer than safeRelay.filename
 			shortFiles, err = streamer.CollectBinlogFilesCmp(dir, safeFilename, streamer.FileCmpLess)
 			if err != nil {
-				return nil, errors.Annotatef(err, "dir %s", dir)
+				return nil, terror.Annotatef(err, "dir %s", dir)
 			}
 		} else {
 			if !utils.IsDirExists(dir) {
@@ -120,7 +119,7 @@ func collectRelayFilesBeforeFileAndTime(tctx *tcontext.Context, relayBaseDir str
 			// earlier sub dir, collect all relay files
 			shortFiles, err = streamer.CollectAllBinlogFiles(dir)
 			if err != nil {
-				return nil, errors.Annotatef(err, "dir %s", dir)
+				return nil, terror.Annotatef(err, "dir %s", dir)
 			}
 			hasAll = true // collected all relay files
 		}
@@ -134,7 +133,7 @@ func collectRelayFilesBeforeFileAndTime(tctx *tcontext.Context, relayBaseDir str
 				// check modified time
 				fs, err := os.Stat(fp)
 				if err != nil {
-					return nil, errors.Annotatef(err, "get stat for relay log file %s", fp)
+					return nil, terror.ErrGetRelayLogStat.Delegate(err, fp)
 				}
 				if fs.ModTime().After(safeTime) {
 					hasAll = false // newer found, reset to false
@@ -171,7 +170,7 @@ func purgeRelayFiles(tctx *tcontext.Context, files []*subRelayFiles) error {
 			tctx.L().Info("purging relay log file", zap.String("file", f))
 			err := os.Remove(f)
 			if err != nil {
-				return errors.Annotatef(err, "relay log file %s", f)
+				return terror.ErrRelayRemoveFileFail.Delegate(err, "file", f)
 			}
 		}
 		if subRelay.hasAll {
@@ -179,7 +178,7 @@ func purgeRelayFiles(tctx *tcontext.Context, files []*subRelayFiles) error {
 			tctx.L().Info("purging relay log directory", zap.String("directory", subRelay.dir))
 			err := os.RemoveAll(subRelay.dir)
 			if err != nil {
-				return errors.Annotatef(err, "relay log dir %s", subRelay.dir)
+				return terror.ErrRelayRemoveFileFail.Delegate(err, "dir", subRelay.dir)
 			}
 		}
 	}

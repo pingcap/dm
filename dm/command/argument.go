@@ -17,10 +17,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // TrimQuoteMark tries to trim leading and tailing quote(") mark if exists
@@ -44,13 +44,13 @@ func VerifySQLOperateArgs(binlogPosStr, sqlPattern string, sharding bool) (*mysq
 	)
 
 	if len(binlogPosStr) > 0 && len(sqlPattern) > 0 {
-		return nil, nil, errors.New("cannot specify both --binlog-pos and --sql-pattern in sql operation")
+		return nil, nil, terror.ErrVerifySQLOperateArgs.New("cannot specify both --binlog-pos and --sql-pattern in sql operation")
 	}
 
 	if len(binlogPosStr) > 0 {
 		pos2, err := binlog.PositionFromStr(binlogPosStr)
 		if err != nil {
-			return nil, nil, errors.Annotatef(err, "invalid --binlog-pos %s in sql operation", binlogPosStr)
+			return nil, nil, terror.ErrVerifySQLOperateArgs.Generatef("invalid --binlog-pos %s in sql operation: %s", binlogPosStr, terror.Message(err))
 		}
 		pos = &pos2
 	} else if len(sqlPattern) > 0 {
@@ -64,14 +64,14 @@ func VerifySQLOperateArgs(binlogPosStr, sqlPattern string, sharding bool) (*mysq
 		var err error
 		reg, err = regexp.Compile(pattern)
 		if err != nil {
-			return nil, nil, errors.Annotatef(err, "invalid --sql-pattern %s in sql operation", sqlPattern)
+			return nil, nil, terror.ErrVerifySQLOperateArgs.AnnotateDelegate(err, "invalid --sql-pattern %s in sql operation", sqlPattern)
 		}
 	} else {
-		return nil, nil, errors.New("must specify one of --binlog-pos and --sql-pattern in sql operation")
+		return nil, nil, terror.ErrVerifySQLOperateArgs.New("must specify one of --binlog-pos and --sql-pattern in sql operation")
 	}
 
 	if sharding && len(binlogPosStr) > 0 {
-		return nil, nil, errors.New("cannot specify --binlog-pos with --sharding in sql operation")
+		return nil, nil, terror.ErrVerifySQLOperateArgs.New("cannot specify --binlog-pos with --sharding in sql operation")
 	}
 
 	return pos, reg, nil

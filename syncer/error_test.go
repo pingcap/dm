@@ -16,13 +16,14 @@ package syncer
 import (
 	"database/sql/driver"
 
+	"github.com/pingcap/dm/pkg/retry"
+	"github.com/pingcap/dm/pkg/utils"
+
 	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"
-
-	"github.com/pingcap/dm/pkg/utils"
 )
 
 func newMysqlErr(number uint16, message string) *mysql.MySQLError {
@@ -37,10 +38,10 @@ func (s *testSyncerSuite) TestIsRetryableError(c *C) {
 		err         error
 		isRetryable bool
 	}{
-		{newMysqlErr(tmysql.ErrNoDB, "no db error"), false},
+		{newMysqlErr(tmysql.ErrNoDB, "no baseConn error"), false},
 		{errors.New("unknown error"), false},
 		{newMysqlErr(tmysql.ErrUnknown, "i/o timeout"), true},
-		{newMysqlErr(tmysql.ErrDBCreateExists, "db already exists"), false},
+		{newMysqlErr(tmysql.ErrDBCreateExists, "baseConn already exists"), false},
 		{driver.ErrBadConn, false},
 		{newMysqlErr(gmysql.ER_LOCK_DEADLOCK, "Deadlock found when trying to get lock; try restarting transaction"), true},
 		{newMysqlErr(tmysql.ErrPDServerTimeout, "pd server timeout"), true},
@@ -52,7 +53,7 @@ func (s *testSyncerSuite) TestIsRetryableError(c *C) {
 
 	for _, t := range cases {
 		c.Logf("err %v, expected %v", t.err, t.isRetryable)
-		c.Assert(isRetryableError(t.err), Equals, t.isRetryable)
+		c.Assert(retry.IsRetryableError(t.err), Equals, t.isRetryable)
 	}
 }
 

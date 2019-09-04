@@ -69,7 +69,7 @@ unit_test:
 	|| { $(FAILPOINT_DISABLE); exit 1; }
 	$(FAILPOINT_DISABLE)
 
-check: fmt lint vet
+check: fmt lint vet terror_check
 
 fmt:
 	@echo "gofmt (simplify)"
@@ -90,6 +90,10 @@ vet:
 	@echo "vet"
 	@$(GO) vet -composites=false $(PACKAGES)
 	@$(GO) vet -vettool=$(CURDIR)/bin/shadow $(PACKAGES) || true
+
+terror_check:
+	@echo "check terror conflict"
+	_utils/terror_gen/check.sh
 
 dm_integration_test_build:
 	which $(FAILPOINT) >/dev/null 2>&1 || $(GOBUILD) -o $(FAILPOINT) github.com/pingcap/failpoint/failpoint-ctl
@@ -113,14 +117,24 @@ dm_integration_test_build:
 	$(FAILPOINT_DISABLE)
 	tests/prepare_tools.sh
 
-integration_test:
+check_third_party_binary:
 	@which bin/tidb-server
 	@which bin/sync_diff_inspector
 	@which bin/mydumper
+
+integration_test: check_third_party_binary
 	@which bin/dm-master.test
 	@which bin/dm-worker.test
 	@which bin/dm-tracer.test
 	tests/run.sh $(CASE)
+
+compatibility_test: check_third_party_binary
+	@which bin/dm-tracer.test
+	@which bin/dm-master.test.current
+	@which bin/dm-worker.test.current
+	@which bin/dm-master.test.previous
+	@which bin/dm-worker.test.previous
+	tests/compatibility_run.sh ${CASE}
 
 # unify cover mode in coverage files, more details refer to tests/_utils/run_dm_ctl
 coverage_fix_cover_mode:

@@ -20,6 +20,7 @@ import (
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/loader"
@@ -67,7 +68,7 @@ func InitStatus(lis net.Listener) {
 
 	mux := http.NewServeMux()
 	mux.Handle("/status", &statusHandler{})
-	mux.Handle("/metrics", prometheus.Handler())
+	mux.Handle("/metrics", promhttp.Handler())
 
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
 	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)

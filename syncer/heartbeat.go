@@ -21,12 +21,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // privileges: SELECT, UPDATE,  optionaly INSERT, optionaly CREATE.
@@ -58,16 +58,16 @@ type HeartbeatConfig struct {
 // Equal tests whether config equals to other
 func (cfg *HeartbeatConfig) Equal(other *HeartbeatConfig) error {
 	if other.updateInterval != 0 && other.updateInterval != cfg.updateInterval {
-		return errors.Errorf("updateInterval not equal, self: %d, other: %d", cfg.updateInterval, other.updateInterval)
+		return terror.ErrSyncerUnitHeartbeatCheckConfig.Generatef("updateInterval not equal, self: %d, other: %d", cfg.updateInterval, other.updateInterval)
 	}
 	if other.reportInterval != 0 && other.reportInterval != cfg.reportInterval {
-		return errors.Errorf("reportInterval not equal, self: %d, other: %d", cfg.reportInterval, other.reportInterval)
+		return terror.ErrSyncerUnitHeartbeatCheckConfig.Generatef("reportInterval not equal, self: %d, other: %d", cfg.reportInterval, other.reportInterval)
 	}
 	if cfg.serverID != other.serverID {
-		return errors.Errorf("serverID not equal, self: %d, other: %d", cfg.serverID, other.serverID)
+		return terror.ErrSyncerUnitHeartbeatCheckConfig.Generatef("serverID not equal, self: %d, other: %d", cfg.serverID, other.serverID)
 	}
 	if !reflect.DeepEqual(cfg.masterCfg, other.masterCfg) {
-		return errors.Errorf("masterCfg not equal, self: %+v, other: %+v", cfg.masterCfg, other.masterCfg)
+		return terror.ErrSyncerUnitHeartbeatCheckConfig.Generatef("masterCfg not equal, self: %+v, other: %+v", cfg.masterCfg, other.masterCfg)
 	}
 	return nil
 }
@@ -103,7 +103,7 @@ func GetHeartbeat(cfg *HeartbeatConfig) (*Heartbeat, error) {
 		}
 	})
 	if err := heartbeat.cfg.Equal(cfg); err != nil {
-		return nil, errors.Errorf("heartbeat config is different from previous used, %s", err)
+		return nil, terror.Annotate(err, "heartbeat config is different from previous used")
 	}
 	return heartbeat, nil
 }
@@ -115,7 +115,7 @@ func (h *Heartbeat) AddTask(name string) error {
 		<-h.lock // read from the chan, release the lock
 	}()
 	if _, ok := h.slavesTs[name]; ok {
-		return errors.AlreadyExistsf("heartbeat slave record for task %s", name)
+		return terror.ErrSyncerUnitHeartbeatRecordExists.Generate(name)
 	}
 	if h.master == nil {
 		// open DB
@@ -123,7 +123,7 @@ func (h *Heartbeat) AddTask(name string) error {
 		dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8&interpolateParams=true&readTimeout=1m", dbCfg.User, dbCfg.Password, dbCfg.Host, dbCfg.Port)
 		master, err := sql.Open("mysql", dbDSN)
 		if err != nil {
-			return errors.Trace(err)
+			return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 		}
 		h.master = master
 
@@ -132,7 +132,7 @@ func (h *Heartbeat) AddTask(name string) error {
 		if err != nil {
 			h.master.Close()
 			h.master = nil
-			return errors.Trace(err)
+			return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 		}
 
 		// run work
@@ -161,7 +161,7 @@ func (h *Heartbeat) RemoveTask(name string) error {
 		<-h.lock
 	}()
 	if _, ok := h.slavesTs[name]; !ok {
-		return errors.NotFoundf("heartbeat slave record for task %s", name)
+		return terror.ErrSyncerUnitHeartbeatRecordNotFound.Generate(name)
 	}
 	delete(h.slavesTs, name)
 
@@ -227,12 +227,12 @@ func (h *Heartbeat) TryUpdateTaskTs(taskName, schema, table string, data [][]int
 func (h *Heartbeat) init() error {
 	err := h.createDatabase()
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	err = h.createTable()
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	return nil
@@ -273,7 +273,7 @@ func (h *Heartbeat) createDatabase() error {
 	createDatabase := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`", h.schema)
 	_, err := h.master.Exec(createDatabase)
 	h.logger.Info("create heartbeat schema", zap.String("sql", createDatabase))
-	return errors.Trace(err)
+	return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 }
 
 // createTable creates heartbeat table if not exists in master
@@ -287,7 +287,7 @@ func (h *Heartbeat) createTable() error {
 
 	_, err := h.master.Exec(createTableStmt)
 	h.logger.Info("create heartbeat table", zap.String("sql", createTableStmt))
-	return errors.Trace(err)
+	return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 }
 
 // updateTS use `REPLACE` statement to insert or update ts
@@ -296,13 +296,13 @@ func (h *Heartbeat) updateTS() error {
 	query := fmt.Sprintf("REPLACE INTO `%s`.`%s` (`ts`, `server_id`) VALUES(UTC_TIMESTAMP(), ?)", h.schema, h.table)
 	_, err := h.master.Exec(query, h.cfg.serverID)
 	h.logger.Debug("update ts", zap.String("sql", query), zap.Int("server ID", h.cfg.serverID))
-	return errors.Trace(err)
+	return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 }
 
 func (h *Heartbeat) calculateLag(ctx context.Context) error {
 	masterTS, err := h.getMasterTS()
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	select {
@@ -335,7 +335,7 @@ func (h *Heartbeat) getTS(db *sql.DB) (float64, error) {
 		if err == sql.ErrNoRows {
 			return 0, nil
 		}
-		return 0, errors.Trace(err)
+		return 0, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 	}
 
 	return h.tsToSeconds(ts)
@@ -344,7 +344,7 @@ func (h *Heartbeat) getTS(db *sql.DB) (float64, error) {
 func (h *Heartbeat) tsToSeconds(ts string) (float64, error) {
 	t, err := time.Parse(timeFormat, ts)
 	if err != nil {
-		return 0, errors.Trace(err)
+		return 0, terror.ErrSyncerUnitHeartbeatRecordNotValid.Delegate(err, ts)
 	}
 
 	return h.timeToSeconds(t), nil

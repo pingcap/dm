@@ -88,7 +88,7 @@ func (s *MockServer) Start() error {
 	// set a timeout
 	m.SetReadTimeout(cmuxReadTimeout)
 
-	grpcL := m.Match(cmux.HTTP2HeaderField("content-type", "application/grpc"))
+	grpcL := m.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
 
 	s.svr = grpc.NewServer()
 	pb.RegisterTracerServer(s.svr, s)

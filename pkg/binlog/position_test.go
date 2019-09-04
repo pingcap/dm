@@ -168,7 +168,7 @@ func (t *testPositionSuite) TestExtractPos(c *C) {
 			// invalid UUID suffix
 			pos:       gmysql.Position{Name: "mysql-bin|abcdef.000007", Pos: 666},
 			uuids:     []string{"server-a-uuid.000001", "server-b-uuid.000002", "server-c-uuid.000003"},
-			errMsgReg: "invalid UUID suffix.*",
+			errMsgReg: ".* invalid UUID suffix.*",
 		},
 	}
 

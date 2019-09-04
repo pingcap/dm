@@ -20,12 +20,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 
 	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var (
@@ -106,18 +106,18 @@ func NewOnlineDDLStorage(newtctx *tcontext.Context, cfg *config.SubTaskConfig) *
 
 // Init initials online handler
 func (s *OnlineDDLStorage) Init() error {
-	db, err := createDB(s.cfg, s.cfg.To, maxCheckPointTimeout)
+	db, err := createConn(s.cfg, s.cfg.To, maxCheckPointTimeout)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.WithScope(err, terror.ScopeDownstream)
 	}
 	s.db = db
 
 	err = s.prepare()
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
-	return errors.Trace(s.Load())
+	return s.Load()
 }
 
 // Load loads information from storage
@@ -126,9 +126,9 @@ func (s *OnlineDDLStorage) Load() error {
 	defer s.Unlock()
 
 	query := fmt.Sprintf("SELECT `ghost_schema`, `ghost_table`, `ddls` FROM `%s`.`%s` WHERE `id`='%s'", s.schema, s.table, s.id)
-	rows, err := s.db.querySQL(s.tctx, query, maxRetryCount)
+	rows, err := s.db.querySQL(s.tctx, query)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.WithScope(err, terror.ScopeDownstream)
 	}
 	defer rows.Close()
 
@@ -140,7 +140,7 @@ func (s *OnlineDDLStorage) Load() error {
 	for rows.Next() {
 		err := rows.Scan(&schema, &table, &ddls)
 		if err != nil {
-			return errors.Trace(err)
+			return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 		}
 
 		mSchema, ok := s.ddls[schema]
@@ -152,11 +152,11 @@ func (s *OnlineDDLStorage) Load() error {
 		mSchema[table] = &GhostDDLInfo{}
 		err = json.Unmarshal([]byte(ddls), mSchema[table])
 		if err != nil {
-			return errors.Trace(err)
+			return terror.ErrSyncerUnitOnlineDDLInvalidMeta.Delegate(err)
 		}
 	}
 
-	return errors.Trace(rows.Err())
+	return terror.WithScope(terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError), terror.ScopeDownstream)
 }
 
 // Get returns ddls by given schema/table
@@ -200,12 +200,12 @@ func (s *OnlineDDLStorage) Save(ghostSchema, ghostTable, realSchema, realTable, 
 	info.DDLs = append(info.DDLs, ddl)
 	ddlsBytes, err := json.Marshal(mSchema[ghostTable])
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrSyncerUnitOnlineDDLInvalidMeta.Delegate(err)
 	}
 
 	query := fmt.Sprintf("REPLACE INTO `%s`.`%s`(`id`,`ghost_schema`, `ghost_table`, `ddls`) VALUES ('%s', '%s', '%s', '%s')", s.schema, s.table, s.id, ghostSchema, ghostTable, escapeSingleQuote(string(ddlsBytes)))
-	err = s.db.executeSQL(s.tctx, []string{query}, [][]interface{}{nil}, maxRetryCount)
-	return errors.Trace(err)
+	_, err = s.db.executeSQL(s.tctx, []string{query})
+	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
 // Delete deletes online ddl informations
@@ -220,9 +220,9 @@ func (s *OnlineDDLStorage) Delete(ghostSchema, ghostTable string) error {
 
 	// delete all checkpoints
 	sql := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s' and `ghost_schema` = '%s' and `ghost_table` = '%s'", s.schema, s.table, s.id, ghostSchema, ghostTable)
-	err := s.db.executeSQL(s.tctx, []string{sql}, [][]interface{}{nil}, maxRetryCount)
+	_, err := s.db.executeSQL(s.tctx, []string{sql})
 	if err != nil {
-		return errors.Trace(err)
+		return terror.WithScope(err, terror.ScopeDownstream)
 	}
 
 	delete(mSchema, ghostTable)
@@ -236,9 +236,9 @@ func (s *OnlineDDLStorage) Clear() error {
 
 	// delete all checkpoints
 	sql := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s'", s.schema, s.table, s.id)
-	err := s.db.executeSQL(s.tctx, []string{sql}, [][]interface{}{nil}, maxRetryCount)
+	_, err := s.db.executeSQL(s.tctx, []string{sql})
 	if err != nil {
-		return errors.Trace(err)
+		return terror.WithScope(err, terror.ScopeDownstream)
 	}
 
 	s.ddls = make(map[string]map[string]*GhostDDLInfo)
@@ -250,24 +250,24 @@ func (s *OnlineDDLStorage) Close() {
 	s.Lock()
 	defer s.Unlock()
 
-	closeDBs(s.tctx, s.db)
+	closeConns(s.tctx, s.db)
 }
 
 func (s *OnlineDDLStorage) prepare() error {
 	if err := s.createSchema(); err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	if err := s.createTable(); err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	return nil
 }
 
 func (s *OnlineDDLStorage) createSchema() error {
 	sql := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", s.schema)
-	err := s.db.executeSQL(s.tctx, []string{sql}, [][]interface{}{nil}, maxRetryCount)
-	return errors.Trace(err)
+	_, err := s.db.executeSQL(s.tctx, []string{sql})
+	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
 func (s *OnlineDDLStorage) createTable() error {
@@ -280,8 +280,8 @@ func (s *OnlineDDLStorage) createTable() error {
 			update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			UNIQUE KEY uk_id_schema_table (id, ghost_schema, ghost_table)
 		)`, tableName)
-	err := s.db.executeSQL(s.tctx, []string{sql}, [][]interface{}{nil}, maxRetryCount)
-	return errors.Trace(err)
+	_, err := s.db.executeSQL(s.tctx, []string{sql})
+	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
 func escapeSingleQuote(str string) string {

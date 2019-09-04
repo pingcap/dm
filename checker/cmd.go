@@ -18,8 +18,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
-
-	"github.com/pingcap/errors"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var (
@@ -50,7 +49,7 @@ func CheckSyncConfig(ctx context.Context, cfgs []*config.SubTaskConfig) error {
 
 	err := c.Init()
 	if err != nil {
-		return errors.Annotate(err, "fail to initial checker")
+		return terror.Annotate(err, "fail to initial checker")
 	}
 	defer c.Close()
 
@@ -60,7 +59,7 @@ func CheckSyncConfig(ctx context.Context, cfgs []*config.SubTaskConfig) error {
 		r := <-pr
 		// we only want first error
 		if len(r.Errors) > 0 {
-			return errors.Errorf("%s %v: %v\n detail: %v", ErrorMsgHeader, r.Errors[0].Type, r.Errors[0].Msg, string(r.Detail))
+			return terror.ErrTaskCheckSyncConfigError.Generate(ErrorMsgHeader, r.Errors[0].Type, r.Errors[0].Msg, string(r.Detail))
 		}
 	}
 

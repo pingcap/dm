@@ -19,7 +19,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
@@ -31,6 +30,7 @@ import (
 	"github.com/pingcap/dm/pkg/binlog/event"
 	bw "github.com/pingcap/dm/pkg/binlog/writer"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // FileConfig is the configuration used by the FileWriter.
@@ -75,7 +75,7 @@ func (w *FileWriter) Start() error {
 	defer w.mu.Unlock()
 
 	if w.stage != common.StageNew {
-		return errors.Errorf("stage %s, expect %s, already started", w.stage, common.StageNew)
+		return terror.ErrRelayWriterNotStateNew.Generate(w.stage, common.StageNew)
 	}
 	w.stage = common.StagePrepared
 
@@ -88,7 +88,7 @@ func (w *FileWriter) Close() error {
 	defer w.mu.Unlock()
 
 	if w.stage != common.StagePrepared {
-		return errors.Errorf("stage %s, expect %s, can not close", w.stage, common.StagePrepared)
+		return terror.ErrRelayWriterStateCannotClose.Generate(w.stage, common.StagePrepared)
 	}
 
 	var err error
@@ -97,7 +97,7 @@ func (w *FileWriter) Close() error {
 	}
 
 	w.stage = common.StageClosed
-	return errors.Trace(err)
+	return err
 }
 
 // Recover implements Writer.Recover.
@@ -106,7 +106,7 @@ func (w *FileWriter) Recover() (RecoverResult, error) {
 	defer w.mu.Unlock()
 
 	if w.stage != common.StagePrepared {
-		return RecoverResult{}, errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, common.StagePrepared)
+		return RecoverResult{}, terror.ErrRelayWriterNeedStart.Generate(w.stage, common.StagePrepared)
 	}
 
 	return w.doRecovering()
@@ -118,7 +118,7 @@ func (w *FileWriter) WriteEvent(ev *replication.BinlogEvent) (Result, error) {
 	defer w.mu.Unlock()
 
 	if w.stage != common.StagePrepared {
-		return Result{}, errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, common.StagePrepared)
+		return Result{}, terror.ErrRelayWriterNeedStart.Generate(w.stage, common.StagePrepared)
 	}
 
 	switch ev.Event.(type) {
@@ -137,13 +137,13 @@ func (w *FileWriter) Flush() error {
 	defer w.mu.Unlock()
 
 	if w.stage != common.StagePrepared {
-		return errors.Errorf("stage %s, expect %s, please start the writer first", w.stage, common.StagePrepared)
+		return terror.ErrRelayWriterNeedStart.Generate(w.stage, common.StagePrepared)
 	}
 
 	if w.out != nil {
 		return w.out.Flush()
 	}
-	return errors.New("no underlying writer opened")
+	return terror.ErrRelayWriterNotOpened.Generate()
 }
 
 // offset returns the current offset of the binlog file.
@@ -167,13 +167,13 @@ func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (
 		w.tctx.L().Info("closing previous underlying binlog writer", zap.Reflect("status", w.out.Status()))
 		err := w.out.Close()
 		if err != nil {
-			return Result{}, errors.Annotate(err, "close previous underlying binlog writer")
+			return Result{}, terror.Annotate(err, "close previous underlying binlog writer")
 		}
 	}
 
 	// verify filename
 	if !binlog.VerifyFilename(w.filename.Get()) {
-		return Result{}, errors.NotValidf("binlog filename %s", w.filename.Get())
+		return Result{}, terror.ErrRelayBinlogNameNotValid.Generatef("binlog filename %s not valid", w.filename.Get())
 	}
 
 	// open/create a new binlog file
@@ -184,7 +184,7 @@ func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (
 	out := bw.NewFileWriter(w.tctx, outCfg)
 	err := out.Start()
 	if err != nil {
-		return Result{}, errors.Annotatef(err, "start underlying binlog writer for %s", filename)
+		return Result{}, terror.Annotatef(err, "start underlying binlog writer for %s", filename)
 	}
 	w.out = out.(*bw.FileWriter)
 	w.tctx.L().Info("open underlying binlog writer", zap.Reflect("status", w.out.Status()))
@@ -192,27 +192,32 @@ func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (
 	// write the binlog file header if not exists
 	exist, err := checkBinlogHeaderExist(filename)
 	if err != nil {
-		return Result{}, errors.Annotatef(err, "check binlog file header for %s", filename)
+		return Result{}, terror.Annotatef(err, "check binlog file header for %s", filename)
 	} else if !exist {
 		err = w.out.Write(replication.BinLogFileHeader)
 		if err != nil {
-			return Result{}, errors.Annotatef(err, "write binlog file header for %s", filename)
+			return Result{}, terror.Annotatef(err, "write binlog file header for %s", filename)
 		}
 	}
 
 	// write the FormatDescriptionEvent if not exists one
 	exist, err = checkFormatDescriptionEventExist(filename)
 	if err != nil {
-		return Result{}, errors.Annotatef(err, "check FormatDescriptionEvent for %s", filename)
+		return Result{}, terror.Annotatef(err, "check FormatDescriptionEvent for %s", filename)
 	} else if !exist {
 		err = w.out.Write(ev.RawData)
 		if err != nil {
-			return Result{}, errors.Annotatef(err, "write FormatDescriptionEvent %+v for %s", ev.Header, filename)
+			return Result{}, terror.Annotatef(err, "write FormatDescriptionEvent %+v for %s", ev.Header, filename)
 		}
+	}
+	var reason string
+	if exist {
+		reason = ignoreReasonAlreadyExists
 	}
 
 	return Result{
-		Ignore: exist, // ignore if exists
+		Ignore:       exist, // ignore if exists
+		IgnoreReason: reason,
 	}, nil
 }
 
@@ -227,7 +232,7 @@ func (w *FileWriter) handleFormatDescriptionEvent(ev *replication.BinlogEvent) (
 func (w *FileWriter) handleRotateEvent(ev *replication.BinlogEvent) (result Result, err error) {
 	rotateEv, ok := ev.Event.(*replication.RotateEvent)
 	if !ok {
-		return result, errors.NotValidf("except RotateEvent, but got %+v", ev.Header)
+		return result, terror.ErrRelayWriterExpectRotateEv.Generate(ev.Header)
 	}
 
 	var currFile = w.filename.Get()
@@ -249,23 +254,24 @@ func (w *FileWriter) handleRotateEvent(ev *replication.BinlogEvent) (result Resu
 	if ev.Header.Timestamp == 0 || ev.Header.LogPos == 0 {
 		// skip fake rotate event
 		return Result{
-			Ignore: true,
+			Ignore:       true,
+			IgnoreReason: ignoreReasonFakeRotate,
 		}, nil
 	} else if w.out == nil {
 		// if not open a binlog file yet, then non-fake RotateEvent can't be handled
-		return result, errors.Errorf("non-fake RotateEvent %+v received, but no binlog file opened", ev.Header)
+		return result, terror.ErrRelayWriterRotateEvWithNoWriter.Generate(ev.Header)
 	}
 
 	result, err = w.handlePotentialHoleOrDuplicate(ev)
 	if err != nil {
-		return result, errors.Trace(err)
+		return result, err
 	} else if result.Ignore {
 		return result, nil
 	}
 
 	err = w.out.Write(ev.RawData)
 	if err != nil {
-		return result, errors.Annotatef(err, "write RotateEvent %+v for %s", ev.Header, filepath.Join(w.cfg.RelayDir, currFile))
+		return result, terror.Annotatef(err, "write RotateEvent %+v for %s", ev.Header, filepath.Join(w.cfg.RelayDir, currFile))
 	}
 
 	return Result{
@@ -280,7 +286,7 @@ func (w *FileWriter) handleRotateEvent(ev *replication.BinlogEvent) (result Resu
 func (w *FileWriter) handleEventDefault(ev *replication.BinlogEvent) (Result, error) {
 	result, err := w.handlePotentialHoleOrDuplicate(ev)
 	if err != nil {
-		return Result{}, errors.Trace(err)
+		return Result{}, err
 	} else if result.Ignore {
 		return result, nil
 	}
@@ -289,7 +295,7 @@ func (w *FileWriter) handleEventDefault(ev *replication.BinlogEvent) (Result, er
 	err = w.out.Write(ev.RawData)
 	return Result{
 		Ignore: false,
-	}, errors.Annotatef(err, "write event %+v", ev.Header)
+	}, terror.Annotatef(err, "write event %+v", ev.Header)
 }
 
 // handlePotentialHoleOrDuplicate combines handleFileHoleExist and handleDuplicateEventsExist.
@@ -297,7 +303,7 @@ func (w *FileWriter) handlePotentialHoleOrDuplicate(ev *replication.BinlogEvent)
 	// handle a potential hole
 	mayDuplicate, err := w.handleFileHoleExist(ev)
 	if err != nil {
-		return Result{}, errors.Annotatef(err, "handle a potential hole in %s before %+v",
+		return Result{}, terror.Annotatef(err, "handle a potential hole in %s before %+v",
 			w.filename.Get(), ev.Header)
 	}
 
@@ -305,7 +311,7 @@ func (w *FileWriter) handlePotentialHoleOrDuplicate(ev *replication.BinlogEvent)
 		// handle any duplicate events if exist
 		result, err2 := w.handleDuplicateEventsExist(ev)
 		if err2 != nil {
-			return Result{}, errors.Annotatef(err2, "handle a potential duplicate event %+v in %s",
+			return Result{}, terror.Annotatef(err2, "handle a potential duplicate event %+v in %s",
 				ev.Header, w.filename.Get())
 		}
 		if result.Ignore {
@@ -328,7 +334,7 @@ func (w *FileWriter) handleFileHoleExist(ev *replication.BinlogEvent) (bool, err
 	evStartPos := int64(ev.Header.LogPos - ev.Header.EventSize)
 	outFs, ok := w.out.Status().(*bw.FileWriterStatus)
 	if !ok {
-		return false, errors.Errorf("invalid status type %T of the underlying writer", w.out.Status())
+		return false, terror.ErrRelayWriterStatusNotValid.Generate(w.out.Status())
 	}
 	fileOffset := outFs.Offset
 	holeSize := evStartPos - fileOffset
@@ -349,12 +355,12 @@ func (w *FileWriter) handleFileHoleExist(ev *replication.BinlogEvent) (bool, err
 	)
 	dummyEv, err := event.GenDummyEvent(header, latestPos, eventSize)
 	if err != nil {
-		return false, errors.Annotatef(err, "generate dummy event at %d with size %d", latestPos, eventSize)
+		return false, terror.Annotatef(err, "generate dummy event at %d with size %d", latestPos, eventSize)
 	}
 
 	// 3. write the dummy event
 	err = w.out.Write(dummyEv.RawData)
-	return false, errors.Annotatef(err, "write dummy event %+v to fill the hole", dummyEv.Header)
+	return false, terror.Annotatef(err, "write dummy event %+v to fill the hole", dummyEv.Header)
 }
 
 // handleDuplicateEventsExist tries to handle a potential duplicate event in the binlog file.
@@ -362,13 +368,19 @@ func (w *FileWriter) handleDuplicateEventsExist(ev *replication.BinlogEvent) (Re
 	filename := filepath.Join(w.cfg.RelayDir, w.filename.Get())
 	duplicate, err := checkIsDuplicateEvent(filename, ev)
 	if err != nil {
-		return Result{}, errors.Annotatef(err, "check event %+v whether duplicate in %s", ev.Header, filename)
+		return Result{}, terror.Annotatef(err, "check event %+v whether duplicate in %s", ev.Header, filename)
 	} else if duplicate {
 		w.tctx.L().Info("event is duplicate", zap.Reflect("header", ev.Header), zap.String("file", w.filename.Get()))
 	}
 
+	var reason string
+	if duplicate {
+		reason = ignoreReasonAlreadyExists
+	}
+
 	return Result{
-		Ignore: duplicate,
+		Ignore:       duplicate,
+		IgnoreReason: reason,
 	}, nil
 }
 
@@ -386,13 +398,13 @@ func (w *FileWriter) doRecovering() (RecoverResult, error) {
 	if (err != nil && os.IsNotExist(err)) || (err == nil && len(w.filename.Get()) == 0) {
 		return RecoverResult{}, nil // no file need to recover
 	} else if err != nil {
-		return RecoverResult{}, errors.Annotatef(err, "get stat for %s", filename)
+		return RecoverResult{}, terror.ErrRelayWriterGetFileStat.Delegate(err, filename)
 	}
 
 	// get latest pos/GTID set for all completed transactions from the file
 	latestPos, latestGTIDs, err := getTxnPosGTIDs(filename, w.parser)
 	if err != nil {
-		return RecoverResult{}, errors.Annotatef(err, "get latest pos/GTID set from %s", filename)
+		return RecoverResult{}, terror.Annotatef(err, "get latest pos/GTID set from %s", filename)
 	}
 
 	// in most cases, we think the file is fine, so compare the size is simpler.
@@ -403,18 +415,18 @@ func (w *FileWriter) doRecovering() (RecoverResult, error) {
 			LatestGTIDs: latestGTIDs,
 		}, nil
 	} else if fs.Size() < latestPos {
-		return RecoverResult{}, errors.Errorf("latest pos %d greater than file size %d, should not happen", latestPos, fs.Size())
+		return RecoverResult{}, terror.ErrRelayWriterLatestPosGTFileSize.Generate(latestPos, fs.Size())
 	}
 
 	// truncate the file
 	f, err := os.OpenFile(filename, os.O_WRONLY, 0644)
 	if err != nil {
-		return RecoverResult{}, errors.Annotatef(err, "open %s", filename)
+		return RecoverResult{}, terror.Annotatef(terror.ErrRelayWriterFileOperate.New(err.Error()), "open %s", filename)
 	}
 	defer f.Close()
 	err = f.Truncate(latestPos)
 	if err != nil {
-		return RecoverResult{}, errors.Annotatef(err, "truncate %s to %d", filename, latestPos)
+		return RecoverResult{}, terror.Annotatef(terror.ErrRelayWriterFileOperate.New(err.Error()), "truncate %s to %d", filename, latestPos)
 	}
 
 	return RecoverResult{

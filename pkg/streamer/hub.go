@@ -18,9 +18,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/pingcap/errors"
-
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -67,10 +66,10 @@ func newRelayLogInfoHub() *relayLogInfoHub {
 func (h *relayLogInfoHub) update(taskName, uuid, filename string) error {
 	_, suffix, err := utils.ParseSuffixForUUID(uuid)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 	if !binlog.VerifyFilename(filename) {
-		return errors.NotValidf("binlog filename %s", filename)
+		return terror.ErrBinlogInvalidFilename.Generatef("binlog filename %s not valid", filename)
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()

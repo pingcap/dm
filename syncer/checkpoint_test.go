@@ -20,12 +20,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/baseconn"
+	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/retry"
+
+	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/mysql"
-
-	"github.com/pingcap/dm/dm/config"
-	tcontext "github.com/pingcap/dm/pkg/context"
 )
 
 var (
@@ -88,8 +90,9 @@ func (s *testCheckpointSuite) TestCheckPoint(c *C) {
 	mock.ExpectExec(clearCheckPointSQL).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
-	// pass sqlmock db directly
-	err = cp.Init(&Conn{cfg: s.cfg, db: db})
+	// pass sqlmock baseConn directly
+	conn := &Conn{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, "", &retry.FiniteRetryStrategy{}}}
+	err = cp.Init(conn)
 	c.Assert(err, IsNil)
 	cp.Clear()
 

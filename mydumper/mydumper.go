@@ -29,8 +29,9 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 
-	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 )
@@ -64,9 +65,28 @@ func (m *Mydumper) Init() error {
 func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	mydumperExitWithErrorCounter.WithLabelValues(m.cfg.Name).Add(0)
 
+	failpoint.Inject("dumpUnitProcessWithError", func(val failpoint.Value) {
+		m.logger.Info("dump unit runs with injected error", zap.String("failpoint", "dumpUnitProcessWithError"), zap.Reflect("error", val))
+		msg, ok := val.(string)
+		if !ok {
+			msg = "unknown process error"
+		}
+		pr <- pb.ProcessResult{
+			IsCanceled: false,
+			Errors:     []*pb.ProcessError{unit.NewProcessError(pb.ErrorType_UnknownError, msg)},
+		}
+		failpoint.Return()
+	})
+
 	begin := time.Now()
 	errs := make([]*pb.ProcessError, 0, 1)
 	isCanceled := false
+
+	failpoint.Inject("dumpUnitProcessForever", func() {
+		m.logger.Info("dump unit runs forever", zap.String("failpoint", "dumpUnitProcessForever"))
+		<-ctx.Done()
+		failpoint.Return()
+	})
 
 	// NOTE: remove output dir before start dumping
 	// every time re-dump, loader should re-prepare
@@ -110,10 +130,10 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 	cmd.Stdout = &stdout
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.ErrDumpUnitRuntime.Delegate(err)
 	}
 	if err = cmd.Start(); err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.ErrDumpUnitRuntime.Delegate(err)
 	}
 
 	// Read the stderr from mydumper, which contained the logs.
@@ -148,12 +168,12 @@ func (m *Mydumper) spawn(ctx context.Context) ([]byte, error) {
 	}
 	if err = scanner.Err(); err != nil {
 		stdout.Write(stderr.Bytes())
-		return stdout.Bytes(), errors.Trace(err)
+		return stdout.Bytes(), terror.ErrDumpUnitRuntime.Delegate(err)
 	}
 
 	err = cmd.Wait()
 	stdout.Write(stderr.Bytes())
-	return stdout.Bytes(), errors.Trace(err)
+	return stdout.Bytes(), terror.ErrDumpUnitRuntime.Delegate(err)
 }
 
 // Close implements Unit.Close

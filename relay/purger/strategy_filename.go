@@ -17,13 +17,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -100,16 +100,16 @@ func (s *filenameStrategy) Check(args interface{}) (bool, error) {
 
 func (s *filenameStrategy) Do(args interface{}) error {
 	if !s.purging.CompareAndSwap(0, 1) {
-		return ErrSelfPurging
+		return terror.ErrRelayThisStrategyIsPurging.Generate()
 	}
 	defer s.purging.Set(0)
 
 	fa, ok := args.(*filenameArgs)
 	if !ok {
-		return errors.NotValidf("args (%T) %+v", args, args)
+		return terror.ErrRelayPurgeArgsNotValid.Generate(args, args)
 	}
 
-	return errors.Trace(purgeRelayFilesBeforeFile(s.tctx, fa.relayBaseDir, fa.uuids, fa.safeRelayLog))
+	return purgeRelayFilesBeforeFile(s.tctx, fa.relayBaseDir, fa.uuids, fa.safeRelayLog)
 }
 
 func (s *filenameStrategy) Purging() bool {

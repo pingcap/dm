@@ -33,6 +33,7 @@ import (
 
 	"github.com/pingcap/dm/pkg/binlog/event"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var _ = Suite(&testReaderSuite{})
@@ -610,7 +611,7 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 
 	// no startup pos specified
 	s, err := r.StartSync(gmysql.Position{})
-	c.Assert(errors.Cause(err), Equals, ErrBinlogFileNotSpecified)
+	c.Assert(terror.ErrBinlogFileNotSpecified.Equal(err), IsTrue)
 	c.Assert(s, IsNil)
 
 	// empty UUIDs
@@ -636,7 +637,7 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 
 	// can not re-start the reader
 	s, err = r.StartSync(startPos)
-	c.Assert(errors.Cause(err), Equals, ErrReaderRunning)
+	c.Assert(terror.ErrReaderAlreadyRunning.Equal(err), IsTrue)
 	c.Assert(s, IsNil)
 	r.Close()
 }

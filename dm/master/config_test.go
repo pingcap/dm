@@ -92,7 +92,7 @@ func (t *testMaster) TestConfig(c *check.C) {
 			{
 				[]string{"invalid"},
 				true,
-				"'invalid' is an invalid flag",
+				".*'invalid' is an invalid flag",
 			},
 			{
 				[]string{"--config=./dm-master.toml"},
@@ -171,7 +171,7 @@ dm-worker = "172.16.10.72:8262"`)
 	err = cfg.configFromFile(filepath)
 	c.Assert(err, check.IsNil)
 	err = cfg.adjust()
-	c.Assert(err, check.ErrorMatches, "user should specify valid relation between source\\(mysql/mariadb\\) and dm-worker.*")
+	c.Assert(err, check.ErrorMatches, ".*user should specify valid relation between source\\(mysql/mariadb\\) and dm-worker.*")
 
 	// test invalid config file content
 	err = ioutil.WriteFile(filepath, []byte("invalid toml file"), 0644)

@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
 	"go.uber.org/zap"
@@ -27,8 +28,8 @@ import (
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
-	"github.com/pingcap/errors"
 )
 
 var (
@@ -65,7 +66,7 @@ func (s *Server) Start() error {
 	var err error
 	s.rootLis, err = net.Listen("tcp", s.cfg.TracerAddr)
 	if err != nil {
-		return errors.Trace(err)
+		return terror.ErrTracerStartService.Delegate(err)
 	}
 
 	s.closed.Set(false)
@@ -74,7 +75,7 @@ func (s *Server) Start() error {
 	m := cmux.New(s.rootLis)
 	m.SetReadTimeout(cmuxReadTimeout) // set a timeout, ref: https://github.com/pingcap/tidb-binlog/pull/352
 
-	grpcL := m.Match(cmux.HTTP2HeaderField("content-type", "application/grpc"))
+	grpcL := m.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
 	httpL := m.Match(cmux.HTTP1Fast())
 
 	s.svr = grpc.NewServer()
@@ -92,7 +93,7 @@ func (s *Server) Start() error {
 	if err != nil && common.IsErrNetClosing(err) {
 		err = nil
 	}
-	return errors.Trace(err)
+	return terror.ErrTracerStartService.Delegate(err)
 }
 
 // Close close the RPC server

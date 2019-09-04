@@ -15,6 +15,7 @@ package worker
 
 import (
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -64,5 +65,6 @@ func openDB(kvDir string, config *KVConfig) (*leveldb.DB, error) {
 	opts.WriteL0PauseTrigger = config.WriteL0PauseTrigger
 	opts.WriteL0SlowdownTrigger = config.WriteL0SlowdownTrigger
 
-	return leveldb.OpenFile(kvDir, &opts)
+	db, err := leveldb.OpenFile(kvDir, &opts)
+	return db, terror.ErrWorkerOpenKVDBFile.Delegate(err)
 }

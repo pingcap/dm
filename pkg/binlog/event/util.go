@@ -23,9 +23,10 @@ import (
 	"math"
 	"reflect"
 
-	"github.com/pingcap/errors"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
+
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var (
@@ -53,7 +54,7 @@ func encodeTableMapColumnMeta(columnType []byte) ([]byte, error) {
 			gmysql.MYSQL_TYPE_TIME2, gmysql.MYSQL_TYPE_DATETIME2, gmysql.MYSQL_TYPE_TIMESTAMP2:
 			buf.WriteByte(0xff)
 		case gmysql.MYSQL_TYPE_NEWDATE, gmysql.MYSQL_TYPE_ENUM, gmysql.MYSQL_TYPE_SET, gmysql.MYSQL_TYPE_TINY_BLOB, gmysql.MYSQL_TYPE_MEDIUM_BLOB, gmysql.MYSQL_TYPE_LONG_BLOB:
-			return nil, errors.NotSupportedf("column type %d in binlog", t)
+			return nil, terror.ErrBinlogColumnTypeNotSupport.Generate(t)
 		}
 	}
 	return gmysql.PutLengthEncodedString(buf.Bytes()), nil
@@ -84,7 +85,7 @@ func decodeTableMapColumnMeta(data []byte, columnType []byte) ([]uint16, error) 
 			columnMeta[i] = uint16(data[pos])
 			pos++
 		case gmysql.MYSQL_TYPE_NEWDATE, gmysql.MYSQL_TYPE_ENUM, gmysql.MYSQL_TYPE_SET, gmysql.MYSQL_TYPE_TINY_BLOB, gmysql.MYSQL_TYPE_MEDIUM_BLOB, gmysql.MYSQL_TYPE_LONG_BLOB:
-			return nil, errors.NotSupportedf("column type %d in binlog", t)
+			return nil, terror.ErrBinlogColumnTypeNotSupport.Generate(t)
 		default:
 			columnMeta[i] = 0
 		}
@@ -122,19 +123,19 @@ func assembleEvent(buf *bytes.Buffer, event replication.Event, decodeWithChecksu
 	header.EventType = eventType
 	headerData, err := GenEventHeader(&header)
 	if err != nil {
-		return nil, errors.Annotate(err, "generate event header")
+		return nil, terror.Annotate(err, "generate event header")
 	}
 
 	err = combineHeaderPayload(buf, headerData, postHeader, payload)
 	if err != nil {
-		return nil, errors.Annotate(err, "combine header, post-header and payload")
+		return nil, terror.Annotate(err, "combine header, post-header and payload")
 	}
 
 	// CRC32 checksum, 4 bytes
 	checksum := crc32.ChecksumIEEE(buf.Bytes())
 	err = binary.Write(buf, binary.LittleEndian, checksum)
 	if err != nil {
-		return nil, errors.Annotatef(err, "write CRC32 % X", checksum)
+		return nil, terror.ErrBinlogWriteBinaryData.AnnotateDelegate(err, "write CRC32 % X", checksum)
 	}
 
 	if event == nil {
@@ -148,7 +149,7 @@ func assembleEvent(buf *bytes.Buffer, event replication.Event, decodeWithChecksu
 	}
 	err = event.Decode(buf.Bytes()[eventHeaderLen:endIdx])
 	if err != nil {
-		return nil, errors.Annotatef(err, "decode % X", buf.Bytes())
+		return nil, terror.ErrBinlogEventDecode.Delegate(err, buf.Bytes())
 	}
 
 	return &replication.BinlogEvent{RawData: buf.Bytes(), Header: &header, Event: event}, nil
@@ -157,24 +158,24 @@ func assembleEvent(buf *bytes.Buffer, event replication.Event, decodeWithChecksu
 // combineHeaderPayload combines header, postHeader and payload together.
 func combineHeaderPayload(buf *bytes.Buffer, header, postHeader, payload []byte) error {
 	if len(header) != int(eventHeaderLen) {
-		return errors.NotValidf("header length should be %d, but got %d", eventHeaderLen, len(header))
+		return terror.ErrBinlogHeaderLengthNotValid.Generate(eventHeaderLen, len(header))
 	}
 
 	err := binary.Write(buf, binary.LittleEndian, header)
 	if err != nil {
-		return errors.Annotatef(err, "write event header % X", header)
+		return terror.ErrBinlogWriteBinaryData.AnnotateDelegate(err, "write event header % X", header)
 	}
 
 	if len(postHeader) > 0 { // postHeader maybe empty
 		err = binary.Write(buf, binary.LittleEndian, postHeader)
 		if err != nil {
-			return errors.Annotatef(err, "write event post-header % X", postHeader)
+			return terror.ErrBinlogWriteBinaryData.AnnotateDelegate(err, "write event post-header % X", postHeader)
 		}
 	}
 
 	err = binary.Write(buf, binary.LittleEndian, payload)
 	if err != nil {
-		return errors.Annotatef(err, "write event payload % X", payload)
+		return terror.ErrBinlogWriteBinaryData.AnnotateDelegate(err, "write event payload % X", payload)
 	}
 
 	return nil
@@ -207,7 +208,7 @@ func encodeColumnValue(v interface{}, tp byte, meta uint16) ([]byte, error) {
 	case gmysql.MYSQL_TYPE_FLOAT:
 		value, ok := v.(float32)
 		if !ok {
-			err = errors.NotValidf(columnTypeMismatchErrFmt, v, reflect.TypeOf(v), reflect.TypeOf(float32(0)))
+			err = terror.ErrBinlogColumnTypeMisMatch.Generate(v, reflect.TypeOf(v), reflect.TypeOf(float32(0)))
 		} else {
 			bits := math.Float32bits(value)
 			err = writeIntegerColumnValue(buf, bits, reflect.TypeOf(uint32(0)))
@@ -215,7 +216,7 @@ func encodeColumnValue(v interface{}, tp byte, meta uint16) ([]byte, error) {
 	case gmysql.MYSQL_TYPE_DOUBLE:
 		value, ok := v.(float64)
 		if !ok {
-			err = errors.NotValidf(columnTypeMismatchErrFmt, v, reflect.TypeOf(v), reflect.TypeOf(float64(0)))
+			err = terror.ErrBinlogColumnTypeMisMatch.Generate(v, reflect.TypeOf(v), reflect.TypeOf(float64(0)))
 		} else {
 			bits := math.Float64bits(value)
 			err = writeIntegerColumnValue(buf, bits, reflect.TypeOf(uint64(0)))
@@ -230,26 +231,26 @@ func encodeColumnValue(v interface{}, tp byte, meta uint16) ([]byte, error) {
 		gmysql.MYSQL_TYPE_YEAR, gmysql.MYSQL_TYPE_ENUM, gmysql.MYSQL_TYPE_SET,
 		gmysql.MYSQL_TYPE_BLOB, gmysql.MYSQL_TYPE_JSON, gmysql.MYSQL_TYPE_GEOMETRY:
 		// this generator is used for testing, so some types supporting can be added later.
-		err = errors.NotSupportedf("go-mysql type %d in event generator", tp)
+		err = terror.ErrBinlogGoMySQLTypeNotSupport.Generate(tp)
 	default:
-		err = errors.NotValidf("go-mysql type %d in event generator", tp)
+		err = terror.ErrBinlogGoMySQLTypeNotSupport.Generate(tp)
 	}
-	return buf.Bytes(), errors.Annotatef(err, "go-mysql type %d", tp)
+	return buf.Bytes(), terror.Annotatef(err, "go-mysql type %d", tp)
 }
 
 // writeIntegerColumnValue writes integer value to bytes buffer.
 func writeIntegerColumnValue(buf *bytes.Buffer, value interface{}, valueType reflect.Type) error {
 	if reflect.TypeOf(value) != valueType {
-		return errors.NotValidf(columnTypeMismatchErrFmt, value, reflect.TypeOf(value), valueType)
+		return terror.ErrBinlogColumnTypeMisMatch.Generate(value, reflect.TypeOf(value), valueType)
 	}
-	return errors.Trace(binary.Write(buf, binary.LittleEndian, value))
+	return terror.ErrBinlogWriteBinaryData.Delegate(binary.Write(buf, binary.LittleEndian, value))
 }
 
 // writeStringColumnValue writes string value to bytes buffer.
 func writeStringColumnValue(buf *bytes.Buffer, value interface{}) error {
 	str, ok := value.(string)
 	if !ok {
-		return errors.NotValidf(columnTypeMismatchErrFmt, value, reflect.TypeOf(value), reflect.TypeOf(""))
+		return terror.ErrBinlogColumnTypeMisMatch.Generate(value, reflect.TypeOf(value), reflect.TypeOf(""))
 	}
 	var (
 		err    error
@@ -266,5 +267,5 @@ func writeStringColumnValue(buf *bytes.Buffer, value interface{}) error {
 			err = binary.Write(buf, binary.LittleEndian, []byte(str))
 		}
 	}
-	return errors.Trace(err)
+	return terror.ErrBinlogWriteBinaryData.Delegate(err)
 }

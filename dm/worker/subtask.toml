@@ -58,8 +58,6 @@ meta-file = "./syncer.subTaskA.meta"
 worker-count = 16
 batch = 1000
 
-# max-retry is used for retry when network interruption.
-max-retry = 100
 
 # target database timezone, all timestamp event in binlog will translate to format time based on this timezone, default use local timezone
 # timezone = "Asia/Shanghai"

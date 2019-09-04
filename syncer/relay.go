@@ -17,12 +17,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -41,10 +41,10 @@ func (s *Syncer) setInitActiveRelayLog() error {
 	indexPath := filepath.Join(s.cfg.RelayDir, utils.UUIDIndexFilename)
 	uuids, err := utils.ParseUUIDIndex(indexPath)
 	if err != nil {
-		return errors.Annotatef(err, "UUID index file path %s", indexPath)
+		return terror.Annotatef(err, "UUID index file path %s", indexPath)
 	}
 	if len(uuids) == 0 {
-		return errors.New("no valid relay sub directory exists")
+		return terror.ErrRelayNoValidRelaySubDir.Generate()
 	}
 
 	checkPos := s.checkpoint.GlobalPoint()
@@ -60,34 +60,34 @@ func (s *Syncer) setInitActiveRelayLog() error {
 		}
 	} else {
 		// start from dumper or loader, get current pos from master
-		pos, _, err = utils.GetMasterStatus(s.fromDB.db, s.cfg.Flavor)
+		pos, _, err = s.fromDB.getMasterStatus(s.cfg.Flavor)
 		if err != nil {
-			return errors.Annotatef(err, "get master status")
+			return terror.Annotatef(err, "get master status")
 		}
 	}
 
 	if extractPos {
 		activeUUID, _, pos, err = binlog.ExtractPos(pos, uuids)
 		if err != nil {
-			return errors.Trace(err)
+			return err
 		}
 	} else {
 		var uuid string
 		latestUUID := uuids[len(uuids)-1]
-		uuid, err = utils.GetServerUUID(s.fromDB.db, s.cfg.Flavor)
+		uuid, err = s.fromDB.getServerUUID(s.cfg.Flavor)
 		if err != nil {
-			return errors.Annotatef(err, "get server UUID")
+			return terror.WithScope(terror.Annotatef(err, "get server UUID"), terror.ScopeUpstream)
 		}
 		// latest should be the current
 		if !strings.HasPrefix(latestUUID, uuid) {
-			return errors.Errorf("UUID %s not the latest one in UUIDs %v", uuid, uuids)
+			return terror.ErrSyncerUnitUUIDNotLatest.Generate(uuid, uuids)
 		}
 		activeUUID = latestUUID
 	}
 
 	err = s.readerHub.UpdateActiveRelayLog(s.cfg.Name, activeUUID, pos.Name)
 	s.tctx.L().Info("current earliest active relay log", log.WrapStringerField("active relay log", s.readerHub.EarliestActiveRelayLog()))
-	return errors.Trace(err)
+	return err
 }
 
 func (s *Syncer) updateActiveRelayLog(pos mysql.Position) error {
@@ -98,20 +98,20 @@ func (s *Syncer) updateActiveRelayLog(pos mysql.Position) error {
 	indexPath := filepath.Join(s.cfg.RelayDir, utils.UUIDIndexFilename)
 	uuids, err := utils.ParseUUIDIndex(indexPath)
 	if err != nil {
-		return errors.Annotatef(err, "UUID index file path %s", indexPath)
+		return terror.Annotatef(err, "UUID index file path %s", indexPath)
 	}
 	if len(uuids) == 0 {
-		return errors.New("no valid relay sub directory exists")
+		return terror.ErrRelayNoValidRelaySubDir.Generate()
 	}
 
 	activeUUID, _, pos, err := binlog.ExtractPos(pos, uuids)
 	if err != nil {
-		return errors.Trace(err)
+		return err
 	}
 
 	err = s.readerHub.UpdateActiveRelayLog(s.cfg.Name, activeUUID, pos.Name)
 	s.tctx.L().Info("current earliest active relay log", log.WrapStringerField("active relay log", s.readerHub.EarliestActiveRelayLog()))
-	return errors.Trace(err)
+	return err
 }
 
 func (s *Syncer) removeActiveRelayLog() {
