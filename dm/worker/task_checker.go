@@ -227,13 +227,30 @@ func isResumableError(err *pb.ProcessError) bool {
 		"unsupported modify",
 		"unsupported drop integer primary key",
 	}
-	if err.Type == pb.ErrorType_ExecSQL {
+	parseRelayLogErrMsg := []string{
+		"binlog checksum mismatch, data may be corrupted",
+		"get event err EOF",
+	}
+	parseRelayLogCode := fmt.Sprintf("code=%d", terror.ErrParserParseRelayLog.Code())
+
+	switch err.Type {
+	case pb.ErrorType_ExecSQL:
 		for _, msg := range unsupportedDDLMsgs {
 			if strings.Contains(err.Msg, msg) {
 				return false
 			}
 		}
+	case pb.ErrorType_UnknownError:
+		// TODO: we need better mechanism to convert error in `ProcessError` to `terror.Error`
+		if strings.Contains(err.Msg, parseRelayLogCode) {
+			for _, msg := range parseRelayLogErrMsg {
+				if strings.Contains(err.Msg, msg) {
+					return false
+				}
+			}
+		}
 	}
+
 	return true
 }
 
