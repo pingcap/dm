@@ -4,11 +4,23 @@ set -eu
 
 log=$1
 text=$2
-num=$3
 
-got=`grep $text $log | wc -l`
-if [ $got -ne $num ]; then
-    echo "$log dosen't contain $num $text"
+num=0
+if [ "$#" -ge 3 ]; then
+    num=$3
+fi
+
+echo "execute grep "$text" $log | wc -l"
+got=`grep "$text" $log | wc -l`
+
+if [ $num -eq 0 ]; then
+    if [[ $got -eq 0 ]]; then
+        cat $log
+        echo "$log dosen't contain $text"
+        exit 1
+    fi
+elif [ $got -ne $num ]; then
     cat $log
+    echo "$log dosen't contain $num $text"
     exit 1
 fi

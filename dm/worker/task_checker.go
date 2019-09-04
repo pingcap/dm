@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 
@@ -203,6 +204,17 @@ func (tsc *realTaskStatusChecker) Close() {
 func (tsc *realTaskStatusChecker) run() {
 	tsc.ctx, tsc.cancel = context.WithCancel(context.Background())
 	tsc.closed.Set(closedFalse)
+
+	failpoint.Inject("TaskCheckInterval", func(val failpoint.Value) {
+		interval, ok := val.(int)
+		if !ok {
+			tsc.l.Warn("inject failpoint failed", zap.Reflect("value", val))
+		} else {
+			tsc.cfg.CheckInterval = time.Duration(interval) * time.Millisecond
+			tsc.l.Info("set TaskCheckInterval", zap.String("failpoint", "TaskCheckInterval"), zap.Int("value", interval))
+		}
+	})
+
 	ticker := time.NewTicker(tsc.cfg.CheckInterval)
 	defer ticker.Stop()
 	for {
