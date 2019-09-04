@@ -41,7 +41,7 @@ function run() {
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
 
-    sleep 1
+    sleep 2
     # dm-worker execute sql failed, and will try auto resume task
     check_log_contains $WORK_DIR/worker1/log/dm-worker.log "dispatch auto resume task"
     check_log_contains $WORK_DIR/worker2/log/dm-worker.log "dispatch auto resume task"
