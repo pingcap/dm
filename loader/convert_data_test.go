@@ -196,3 +196,32 @@ func (t *testConvertDataSuite) TestParseTableWithGeneratedColumn(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(tableInfo, DeepEquals, expectedTableInfo)
 }
+
+func (t *testConvertDataSuite) TestParseRowValues(c *C) {
+	var (
+		data = []byte("585520728116297738")
+		ti   = &tableInfo{
+			sourceSchema:   "test_parse_rows_values",
+			sourceTable:    "tbl_1",
+			targetSchema:   "test_parse_rows_values",
+			targetTable:    "tbl_1",
+			columnNameList: []string{"c1"},
+		}
+		rules = []*cm.Rule{
+			{
+				PatternSchema: "test_parse_rows_values",
+				PatternTable:  "tbl_1",
+				TargetColumn:  "c1",
+				Expression:    cm.PartitionID,
+				Arguments:     []string{"1", "", ""},
+			},
+		}
+	)
+
+	columnMapping, err := cm.NewMapping(false, rules)
+	c.Assert(err, IsNil)
+
+	values, err := parseRowValues(data, ti, columnMapping)
+	c.Assert(err, ErrorMatches, ".*mapping row data \\[585520728116297738\\] for table.*")
+	c.Assert(values, IsNil)
+}
