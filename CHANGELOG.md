@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file.
 - Improve the DDL compatibility in DM
 
 #### Bug fixes
-- Fix the bug when upstream database connection anomaly which may have a chance to lost data
+- Fix the bug that has a risk of data loss when the upstream database connection is abnormal 
 
 ### Detailed Bug Fixes and Changes
 - Retry for upstream bad connection [#265](https://github.com/pingcap/dm/pull/265)
