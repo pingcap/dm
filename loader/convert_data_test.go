@@ -222,6 +222,6 @@ func (t *testConvertDataSuite) TestParseRowValues(c *C) {
 	c.Assert(err, IsNil)
 
 	values, err := parseRowValues(data, ti, columnMapping)
-	c.Assert(err, ErrorMatches, ".*585520728116297738.*")
+	c.Assert(err, ErrorMatches, ".*mapping row data \\[585520728116297738\\] for table.*")
 	c.Assert(values, IsNil)
 }

@@ -29,22 +29,7 @@ start_services() {
     mkdir -p "$TEST_DIR"
     rm -rf "$TEST_DIR/*.log"
 
-    echo "Starting TiDB..."
-    bin/tidb-server \
-        -P 4000 \
-        --store mocktikv \
-        --log-file "$TEST_DIR/tidb.log" &
-
-    echo "Verifying TiDB is started..."
-    i=0
-    while ! mysql -uroot -h127.0.0.1 -P4000 --default-character-set utf8 -e 'select * from mysql.tidb;'; do
-        i=$((i+1))
-        if [ "$i" -gt 10 ]; then
-            echo 'Failed to start TiDB'
-            exit 1
-        fi
-        sleep 2
-    done
+    $CUR/_utils/run_tidb_server 4000
 
     i=0
     MYSQL_HOST1=${MYSQL_HOST1:-127.0.0.1}
