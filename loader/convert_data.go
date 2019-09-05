@@ -157,7 +157,6 @@ func parseRowValues(str []byte, table *tableInfo, columnMapping *cm.Mapping) ([]
 	}
 
 	if columnMapping != nil {
-		var err error
 		cmValues, _, err := columnMapping.HandleRowValue(table.sourceSchema, table.sourceTable, table.columnNameList, values)
 		if err != nil {
 			return nil, terror.ErrLoadUnitDoColumnMapping.Delegate(err, values, table)
