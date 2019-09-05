@@ -295,7 +295,7 @@ func (t *testMeta) TestTaskOperation(c *C) {
 	})
 	c.Assert(err, ErrorMatches, ".*please handle task operation order by log ID.*")
 
-	// make sucessful  task1 create log
+	// make successful task1 create log
 	err = meta.MarkOperation(&pb.TaskLog{
 		Id:      1,
 		Task:    testTask1Meta,
@@ -313,7 +313,7 @@ func (t *testMeta) TestTaskOperation(c *C) {
 	task1 := meta.GetTask(testTask1Meta.Name)
 	c.Assert(task1, DeepEquals, testTask1Meta)
 
-	// make sucessful  task2 create log
+	// make successful task2 create log
 	err = meta.MarkOperation(&pb.TaskLog{
 		Id:      2,
 		Task:    testTask2Meta,

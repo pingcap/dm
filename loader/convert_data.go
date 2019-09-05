@@ -98,7 +98,7 @@ func parseInsertStmt(sql []byte, table *tableInfo, columnMapping *cm.Mapping) ([
 }
 
 func parseRowValues(str []byte, table *tableInfo, columnMapping *cm.Mapping) ([]string, error) {
-	// values are seperated by comma, but we can not split using comma directly
+	// values are separated by comma, but we can not split using comma directly
 	// string is enclosed by single quote
 
 	// a poor implementation, may be more robust later.
@@ -213,8 +213,8 @@ func exportStatement(sqlFile string) ([]byte, error) {
 
 		buffer = append(buffer, []byte(line)...)
 		if buffer[len(buffer)-1] == ';' {
-			statment := string(buffer)
-			if !(strings.HasPrefix(statment, "/*") && strings.HasSuffix(statment, "*/;")) {
+			statement := string(buffer)
+			if !(strings.HasPrefix(statement, "/*") && strings.HasSuffix(statement, "*/;")) {
 				data = append(data, buffer...)
 			}
 			buffer = buffer[:0]
