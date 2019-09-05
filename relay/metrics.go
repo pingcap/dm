@@ -50,13 +50,13 @@ var (
 			Help:      "current relay sub directory index",
 		}, []string{"node", "uuid"})
 
-	// should alert if avaiable space < 10G
+	// should alert if available space < 10G
 	relayLogSpaceGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "dm",
 			Subsystem: "relay",
 			Name:      "space",
-			Help:      "the space of storge for relay component",
+			Help:      "the space of storage for relay component",
 		}, []string{"type"}) // type can be 'capacity' and 'available'.
 
 	// should alert
