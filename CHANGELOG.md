@@ -7,15 +7,22 @@ All notable changes to this project will be documented in this file.
 ### v1.0.0 What's New
 
 #### Improvements
+
 - Add auto recovery framework
 - Make task retryable when encounters a database driver error
 - Make task retryable when encounters network issue
 - Improve the DDL compatibility in DM
 
 #### Bug fixes
+
 - Fix the bug that has a risk of data loss when the upstream database connection is abnormal 
 
+#### Action required
+
+- When upgrading from a previous version, please note that you must upgrade all DM components (dmctl/DM-master/DM-worker) together
+
 ### Detailed Bug Fixes and Changes
+
 - Retry for upstream bad connection [#265](https://github.com/pingcap/dm/pull/265)
 - Added some retryable errors in underlying database implementation [#256](https://github.com/pingcap/dm/pull/256)
 - Added task auto recovery framework [#246](https://github.com/pingcap/dm/pull/246)
