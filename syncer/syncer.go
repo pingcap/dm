@@ -1545,7 +1545,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	if ec.shardingReSync != nil {
 		ec.shardingReSync.currPos.Pos = ec.header.LogPos
 		if ec.shardingReSync.currPos.Compare(ec.shardingReSync.latestPos) >= 0 {
-			s.tctx.L().Info("re-repliate shard group was completed", zap.String("event", "query"), zap.String("statement", sql), zap.Reflect("re-shard", ec.shardingReSync))
+			s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "query"), zap.String("statement", sql), zap.Reflect("re-shard", ec.shardingReSync))
 			err2 := ec.closeShardingResync()
 			if err2 != nil {
 				return err2
@@ -1661,9 +1661,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		targetTbls[tableNames[1][0].String()] = tableNames[1][0]
 	}
 
-	s.tctx.L().Info("prepare to handl ddls", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("position", ec.currentPos))
+	s.tctx.L().Info("prepare to handle ddls", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("position", ec.currentPos))
 	if len(needHandleDDLs) == 0 {
-		s.tctx.L().Info("skip event, need hanled ddls is empty", zap.String("event", "query"), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("position", ec.currentPos))
+		s.tctx.L().Info("skip event, need handled ddls is empty", zap.String("event", "query"), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("position", ec.currentPos))
 		return s.recordSkipSQLsPos(*ec.lastPos, nil)
 	}
 

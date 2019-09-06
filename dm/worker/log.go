@@ -246,7 +246,7 @@ func (logger *Logger) ForwardTo(h dbOperator, ID int64) error {
 	return nil
 }
 
-// MarkAndForwardLog marks result sucess or not in log, and forwards handledPointer
+// MarkAndForwardLog marks result success or not in log, and forwards handledPointer
 func (logger *Logger) MarkAndForwardLog(h dbOperator, opLog *pb.TaskLog) error {
 	if helper.IsNil(h) {
 		return terror.ErrWorkerLogInvalidHandler.Generate()
@@ -301,7 +301,7 @@ func (logger *Logger) GC(ctx context.Context, h dbOperator) {
 	for {
 		select {
 		case <-ctx.Done():
-			logger.l.Info("gc routine exist!")
+			logger.l.Info("gc routine exits!")
 			return
 		case <-ticker.C:
 			var gcID int64

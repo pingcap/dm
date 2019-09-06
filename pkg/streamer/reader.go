@@ -157,7 +157,7 @@ func (r *BinlogReader) parseRelay(ctx context.Context, s *LocalStreamer, pos mys
 		// update pos, so can switch to next sub directory
 		pos.Name = binlog.ConstructFilenameWithUUIDSuffix(parsed, uuidSuffix)
 		pos.Pos = 4 // start from pos 4 for next sub directory / file
-		r.tctx.L().Info("switching to next realy sub directory", zap.String("next uuid", nextUUID), zap.Stringer("position", pos))
+		r.tctx.L().Info("switching to next ready sub directory", zap.String("next uuid", nextUUID), zap.Stringer("position", pos))
 	}
 }
 

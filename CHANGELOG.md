@@ -2,7 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.0-rc.1] 2019-07-01
+## [1.0.0] 2019-09-06
+
+### v1.0.0 What's New
+
+#### Improvements
+- Add auto recovery framework
+- Make task retryable when encounters a database driver error
+- Make task retryable when encounters network issue
+- Improve the DDL compatibility in DM
+
+#### Bug fixes
+- Fix the bug that has a risk of data loss when the upstream database connection is abnormal 
+
+### Detailed Bug Fixes and Changes
+- Retry for upstream bad connection [#265](https://github.com/pingcap/dm/pull/265)
+- Added some retryable errors in underlying database implementation [#256](https://github.com/pingcap/dm/pull/256)
+- Added task auto recovery framework [#246](https://github.com/pingcap/dm/pull/246)
+- Unify DB operation into one pkg for load and binlog replication [#236](https://github.com/pingcap/dm/pull/236)
+- Fixed a bug in task handler that may cause dm-worker panic [#225](https://github.com/pingcap/dm/pull/225)
+- Refactor DM error system [#216](https://github.com/pingcap/dm/pull/216)
+- Add strictly config verification in dm-master, dm-worker and task [#212](https://github.com/pingcap/dm/pull/212)
+- Limit DM error and log message length [#257](https://github.com/pingcap/dm/pull/257)
+- Support case insensitive binlog event filter in binlog replication [#188](https://github.com/pingcap/dm/pull/188)
+- Refactor DM log with pingcap/log [#195](https://github.com/pingcap/dm/pull/195)
+- Use `INSERT` instead of `REPLACE` under non safe-mode [#199](https://github.com/pingcap/dm/pull/199)
+
+
+## [1.0.0-rc.1] 2019-07-01
 
 - Remove the restriction of "the next shard DDL statement cannot be executed unless the current shard DDL operation is completely finished in shard merge scene for binlog replication" [#177](https://github.com/pingcap/dm/pull/177)
 - Support retry task on the `invalid connection` error for binlog replication [#66](https://github.com/pingcap/dm/pull/66)
@@ -25,7 +52,7 @@ All notable changes to this project will be documented in this file.
 - Greatly improve the test to ensure correctness
 - Fix many other bugs that don't affect correctness
 
-## [1.0-alpha] 2019-01-18
+## [1.0.0-alpha] 2019-01-18
 
 - Support the full data migration and the incremental data migration from MySQL/MariaDB into TiDB
 - Support running multi independent synchronization tasks concurrently on one DM-worker instance

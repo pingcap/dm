@@ -647,7 +647,7 @@ func (k *ShardingGroupKeeper) ResolveShardingDDL(targetSchema, targetTable strin
 	return false, terror.ErrSyncUnitShardingGroupNotFound.Generate(targetSchema, targetTable)
 }
 
-// ActiveDDLFirstPos returns the binlog postion of active DDL
+// ActiveDDLFirstPos returns the binlog position of active DDL
 func (k *ShardingGroupKeeper) ActiveDDLFirstPos(targetSchema, targetTable string) (mysql.Position, error) {
 	group := k.Group(targetSchema, targetTable)
 	k.Lock()
