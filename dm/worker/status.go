@@ -161,7 +161,7 @@ func (w *Worker) Error(stName string) []*pb.SubTaskError {
 			}
 
 			// oneof error
-			us := st.Error()
+			us := cu.Error()
 			switch cu.Type() {
 			case pb.UnitType_Check:
 				stError.Error = &pb.SubTaskError_Check{Check: us.(*pb.CheckError)}
