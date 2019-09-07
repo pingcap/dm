@@ -93,7 +93,7 @@ func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
 			if cu != nil {
 				stStatus.Unit = cu.Type()
 				// oneof status
-				us := st.Status()
+				us := cu.Status()
 				switch stStatus.Unit {
 				case pb.UnitType_Check:
 					stStatus.Status = &pb.SubTaskStatus_Check{Check: us.(*pb.CheckStatus)}
