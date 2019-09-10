@@ -210,14 +210,8 @@ func createBaseConn(dbCfg config.DBConfig, timeout string, rawDBCfg *baseconn.Ra
 	return baseConn, nil
 }
 
-func getRawDBConfig(cfg *config.SubTaskConfig) *baseconn.RawDBConfig {
-	return &baseconn.RawDBConfig{
-		MaxIdleConns: cfg.SyncerConfig.WorkerCount,
-	}
-}
-
 func createConn(cfg *config.SubTaskConfig, dbCfg config.DBConfig, timeout string) (*Conn, error) {
-	baseConn, err := createBaseConn(dbCfg, timeout, getRawDBConfig(cfg))
+	baseConn, err := createBaseConn(dbCfg, timeout, &baseconn.RawDBConfig{MaxIdleConns: 2})
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +221,9 @@ func createConn(cfg *config.SubTaskConfig, dbCfg config.DBConfig, timeout string
 func createConns(cfg *config.SubTaskConfig, dbCfg config.DBConfig, count int, timeout string) ([]*Conn, error) {
 	dbs := make([]*Conn, 0, count)
 
-	rawDBCfg := getRawDBConfig(cfg)
+	rawDBCfg := &baseconn.RawDBConfig{
+		MaxIdleConns: cfg.SyncerConfig.WorkerCount,
+	}
 	baseConn, err := createBaseConn(dbCfg, timeout, rawDBCfg)
 	if err != nil {
 		return nil, err

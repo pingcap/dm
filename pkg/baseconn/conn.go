@@ -42,6 +42,13 @@ type RawDBConfig struct {
 	MaxIdleConns int
 }
 
+// DefaultRawDBConfig returns a default raw database config
+func DefaultRawDBConfig() *RawDBConfig {
+	return &RawDBConfig{
+		MaxIdleConns: 2,
+	}
+}
+
 // NewBaseConn builds BaseConn to connect real DB
 func NewBaseConn(dbDSN string, strategy retry.Strategy, rawDBCfg *RawDBConfig) (*BaseConn, error) {
 	db, err := sql.Open("mysql", dbDSN)
