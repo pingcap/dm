@@ -33,14 +33,23 @@ type BaseConn struct {
 	DSN string
 
 	RetryStrategy retry.Strategy
+
+	RawDBCfg *RawDBConfig
+}
+
+// RawDBConfig contains some low level database config
+type RawDBConfig struct {
+	MaxIdleConns int
 }
 
 // NewBaseConn builds BaseConn to connect real DB
-func NewBaseConn(dbDSN string, strategy retry.Strategy) (*BaseConn, error) {
+func NewBaseConn(dbDSN string, strategy retry.Strategy, rawDBCfg *RawDBConfig) (*BaseConn, error) {
 	db, err := sql.Open("mysql", dbDSN)
 	if err != nil {
 		return nil, terror.ErrDBDriverError.Delegate(err)
 	}
+	// set max idle connection limit before any database call
+	db.SetMaxIdleConns(rawDBCfg.MaxIdleConns)
 	err = db.Ping()
 	if err != nil {
 		db.Close()
@@ -49,7 +58,7 @@ func NewBaseConn(dbDSN string, strategy retry.Strategy) (*BaseConn, error) {
 	if strategy == nil {
 		strategy = &retry.FiniteRetryStrategy{}
 	}
-	return &BaseConn{db, dbDSN, strategy}, nil
+	return &BaseConn{db, dbDSN, strategy, rawDBCfg}, nil
 }
 
 // SetRetryStrategy set retry strategy for baseConn
@@ -70,6 +79,8 @@ func (conn *BaseConn) ResetConn(tctx *tcontext.Context) error {
 	if err != nil {
 		return terror.ErrDBDriverError.Delegate(err)
 	}
+	// set max idle connection limit before any database call
+	db.SetMaxIdleConns(conn.RawDBCfg.MaxIdleConns)
 	err = db.Ping()
 	if err != nil {
 		db.Close()

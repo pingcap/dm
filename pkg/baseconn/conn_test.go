@@ -35,7 +35,7 @@ type testBaseConnSuite struct {
 }
 
 func (t *testBaseConnSuite) TestBaseConn(c *C) {
-	baseConn, err := NewBaseConn("error dsn", nil)
+	baseConn, err := NewBaseConn("error dsn", nil, &BaseConnConfig{MaxIdleConns: 2})
 	c.Assert(terror.ErrDBDriverError.Equal(err), IsTrue)
 
 	tctx := tcontext.Background()
