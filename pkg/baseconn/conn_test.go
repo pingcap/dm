@@ -35,7 +35,7 @@ type testBaseConnSuite struct {
 }
 
 func (t *testBaseConnSuite) TestBaseConn(c *C) {
-	baseConn, err := NewBaseConn("error dsn", nil)
+	baseConn, err := NewBaseConn("error dsn", nil, DefaultRawDBConfig())
 	c.Assert(terror.ErrDBDriverError.Equal(err), IsTrue)
 
 	tctx := tcontext.Background()
@@ -53,7 +53,7 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
-	baseConn = &BaseConn{db, "", nil}
+	baseConn = &BaseConn{db, "", nil, DefaultRawDBConfig()}
 
 	err = baseConn.SetRetryStrategy(&retry.FiniteRetryStrategy{})
 	c.Assert(err, IsNil)
