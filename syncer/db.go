@@ -211,7 +211,7 @@ func createBaseConn(dbCfg config.DBConfig, timeout string, rawDBCfg *baseconn.Ra
 }
 
 func createConn(cfg *config.SubTaskConfig, dbCfg config.DBConfig, timeout string) (*Conn, error) {
-	baseConn, err := createBaseConn(dbCfg, timeout, &baseconn.RawDBConfig{MaxIdleConns: 2})
+	baseConn, err := createBaseConn(dbCfg, timeout, baseconn.DefaultRawDBConfig())
 	if err != nil {
 		return nil, err
 	}

@@ -17,6 +17,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/pingcap/dm/pkg/baseconn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
@@ -35,7 +36,7 @@ type testBaseConnSuite struct {
 }
 
 func (t *testBaseConnSuite) TestBaseConn(c *C) {
-	baseConn, err := NewBaseConn("error dsn", nil, &BaseConnConfig{MaxIdleConns: 2})
+	baseConn, err := NewBaseConn("error dsn", nil, DefaultRawDBConfig())
 	c.Assert(terror.ErrDBDriverError.Equal(err), IsTrue)
 
 	tctx := tcontext.Background()
@@ -53,7 +54,7 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
-	baseConn = &BaseConn{db, "", nil}
+	baseConn = &BaseConn{db, "", nil, DefaultRawDBConfig()}
 
 	err = baseConn.SetRetryStrategy(&retry.FiniteRetryStrategy{})
 	c.Assert(err, IsNil)

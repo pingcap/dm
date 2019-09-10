@@ -935,7 +935,6 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 
 	syncer := NewSyncer(s.cfg)
 	// use upstream db as mock downstream
-	rawDBCfg := &baseconn.RawDBConfig{MaxIdleConns: baseconn.DefaultMaxIdleConns}
 	syncer.fromDB = &Conn{baseConn: &baseconn.BaseConn{db, "", &retry.FiniteRetryStrategy{}, baseconn.DefaultRawDBConfig()}}
 	syncer.toDBs = []*Conn{{baseConn: &baseconn.BaseConn{db, "", &retry.FiniteRetryStrategy{}, baseconn.DefaultRawDBConfig()}}}
 	syncer.reset()
