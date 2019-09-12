@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 #### Bug fixes
 
 - Fix a bug that may cause database connection re-establish too frequent [#280](https://github.com/pingcap/dm/pull/280)
+- Fix a potential panic bug when we query-status during subtask unit transforming between different units [#274](https://github.com/pingcap/dm/pull/274)
 
 ## [1.0.0] 2019-09-06
 
