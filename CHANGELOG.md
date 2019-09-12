@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.1] 2019-09-10
+
+#### Bug fixes
+
+- Fix a bug that may cause database connection re-establish too frequent
+
 ## [1.0.0] 2019-09-06
 
 ### v1.0.0 What's New
