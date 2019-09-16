@@ -2025,7 +2025,9 @@ func (s *Syncer) createDBs() error {
 	}
 
 	dbCfg = s.cfg.To
-	dbCfg.RawDBCfg = config.DefaultRawDBConfig(maxDMLConnectionTimeout, s.cfg.WorkerCount)
+	dbCfg.RawDBCfg = config.DefaultRawDBConfig(maxDMLConnectionTimeout).
+		AddMaxIdleConns(s.cfg.WorkerCount)
+
 	s.toDBConns, err = createConns(s.tctx, s.cfg, dbCfg, s.cfg.WorkerCount)
 	if err != nil {
 		closeUpstreamConn(s.tctx, s.fromDB) // release resources acquired before return with error

@@ -79,7 +79,7 @@ func createBaseDB(dbCfg config.DBConfig) (*conn.BaseDB, error) {
 
 // UpStreamConn connect to upstream DB, use *sql.DB instead of *sql.Conn
 type UpStreamConn struct {
-	cfg *config.SubTaskConfig
+	cfg    *config.SubTaskConfig
 	BaseDB *conn.BaseDB
 }
 
