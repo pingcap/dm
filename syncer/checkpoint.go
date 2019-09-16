@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -186,6 +187,7 @@ type RemoteCheckPoint struct {
 
 	cfg *config.SubTaskConfig
 
+	db     *conn.BaseDB
 	dbConn *WorkerConn
 	schema string // schema name, set through task config
 	table  string // table name, now it's task name
@@ -231,10 +233,11 @@ func (cp *RemoteCheckPoint) Init(conn *WorkerConn) error {
 		cp.dbConn = conn
 	} else {
 		cp.cfg.To.RawDBCfg = config.DefaultRawDBConfig(maxCheckPointTimeout)
-		dbConn, err := createConn(cp.tctx, cp.cfg, cp.cfg.To)
+		db, dbConn, err := createConn(cp.tctx, cp.cfg, cp.cfg.To)
 		if err != nil {
 			return err
 		}
+		cp.db = db
 		cp.dbConn = dbConn
 	}
 
@@ -243,12 +246,12 @@ func (cp *RemoteCheckPoint) Init(conn *WorkerConn) error {
 
 // Close implements CheckPoint.Close
 func (cp *RemoteCheckPoint) Close() {
-	closeConns(cp.tctx, cp.dbConn)
+	closeBaseDB(cp.tctx, cp.db)
 }
 
 // ResetConn implements CheckPoint.ResetConn
 func (cp *RemoteCheckPoint) ResetConn() error {
-	return cp.dbConn.ResetConn(cp.tctx)
+	return cp.dbConn.resetConn(cp.tctx)
 }
 
 // Clear implements CheckPoint.Clear

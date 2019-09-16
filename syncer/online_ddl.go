@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/terror"
 
@@ -79,6 +80,7 @@ type OnlineDDLStorage struct {
 
 	cfg *config.SubTaskConfig
 
+	db     *conn.BaseDB
 	dbConn *WorkerConn
 	schema string // schema name, set through task config
 	table  string // table name, now it's task name
@@ -107,10 +109,11 @@ func NewOnlineDDLStorage(newtctx *tcontext.Context, cfg *config.SubTaskConfig) *
 // Init initials online handler
 func (s *OnlineDDLStorage) Init() error {
 	s.cfg.To.RawDBCfg = config.DefaultRawDBConfig(maxCheckPointTimeout)
-	dbConn, err := createConn(s.tctx, s.cfg, s.cfg.To)
+	db, dbConn, err := createConn(s.tctx, s.cfg, s.cfg.To)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
+	s.db = db
 	s.dbConn = dbConn
 
 	err = s.prepare()
@@ -251,7 +254,7 @@ func (s *OnlineDDLStorage) Close() {
 	s.Lock()
 	defer s.Unlock()
 
-	closeConns(s.tctx, s.dbConn)
+	closeBaseDB(s.tctx, s.db)
 }
 
 func (s *OnlineDDLStorage) prepare() error {

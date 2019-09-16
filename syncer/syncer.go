@@ -26,6 +26,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/gtid"
@@ -148,7 +149,9 @@ type Syncer struct {
 
 	fromDB *UpStreamConn
 
+	toDB      *conn.BaseDB
 	toDBConns []*WorkerConn
+	ddlDB     *conn.BaseDB
 	ddlDBConn *WorkerConn
 
 	jobs               []chan *job
@@ -508,13 +511,13 @@ func (s *Syncer) resetDBs() error {
 	var err error
 
 	for i := 0; i < len(s.toDBConns); i++ {
-		err = s.toDBConns[i].ResetConn(s.tctx)
+		err = s.toDBConns[i].resetConn(s.tctx)
 		if err != nil {
 			return terror.WithScope(err, terror.ScopeDownstream)
 		}
 	}
 
-	err = s.ddlDBConn.ResetConn(s.tctx)
+	err = s.ddlDBConn.resetConn(s.tctx)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -2023,7 +2026,7 @@ func (s *Syncer) createDBs() error {
 	dbCfg.RawDBCfg = config.DefaultRawDBConfig(maxDMLConnectionTimeout).
 		AddMaxIdleConns(s.cfg.WorkerCount)
 
-	s.toDBConns, err = createConns(s.tctx, s.cfg, dbCfg, s.cfg.WorkerCount)
+	s.toDB, s.toDBConns, err = createConns(s.tctx, s.cfg, dbCfg, s.cfg.WorkerCount)
 	if err != nil {
 		closeUpstreamConn(s.tctx, s.fromDB) // release resources acquired before return with error
 		return err
@@ -2031,21 +2034,21 @@ func (s *Syncer) createDBs() error {
 	// baseConn for ddl
 	dbCfg = s.cfg.To
 	dbCfg.RawDBCfg = config.DefaultRawDBConfig(maxDDLConnectionTimeout)
-	s.ddlDBConn, err = createConn(s.tctx, s.cfg, dbCfg)
+	s.ddlDB, s.ddlDBConn, err = createConn(s.tctx, s.cfg, dbCfg)
 	if err != nil {
 		closeUpstreamConn(s.tctx, s.fromDB)
-		closeConns(s.tctx, s.toDBConns...)
+		closeBaseDB(s.tctx, s.toDB)
 		return err
 	}
 
 	return nil
 }
 
-// closeConns closes all opened DBs, rollback for createConns
+// closeBaseDB closes all opened DBs, rollback for createConns
 func (s *Syncer) closeDBs() {
 	closeUpstreamConn(s.tctx, s.fromDB)
-	closeConns(s.tctx, s.toDBConns...)
-	closeConns(s.tctx, s.ddlDBConn)
+	closeBaseDB(s.tctx, s.toDB)
+	closeBaseDB(s.tctx, s.ddlDB)
 }
 
 // record skip ddl/dml sqls' position
