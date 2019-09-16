@@ -38,6 +38,7 @@ func NewConfig() *Config {
 
 	fs.BoolVar(&cfg.printVersion, "V", false, "prints version and exit")
 	fs.StringVar(&cfg.ConfigFile, "config", "", "path to config file")
+	fs.StringVar(&cfg.MasterAddr, "m", "", "master API server addr")
 	fs.StringVar(&cfg.MasterAddr, "master-addr", "", "master API server addr")
 	fs.StringVar(&cfg.RPCTimeoutStr, "rpc-timeout", defaultRPCTimeout, fmt.Sprintf("rpc timeout, default is %s", defaultRPCTimeout))
 	fs.StringVar(&cfg.encrypt, "encrypt", "", "encrypt plaintext to ciphertext")
