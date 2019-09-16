@@ -36,9 +36,10 @@ func main() {
 	cfg := common.NewConfig()
 	args := os.Args[1:]
 	cmdArgs := collectArgs(args)
-	lastArgs := len(args) - 1
+	lenArgs := len(args)
 	lastCmdArgs := len(cmdArgs) - 1
 	if lastCmdArgs > 0 {
+		lastArgs := lenArgs - 1
 		for lastCmdArgs > 0 && lastArgs > 0 {
 			if cmdArgs[lastCmdArgs] != args[lastArgs] {
 				break
@@ -46,8 +47,9 @@ func main() {
 			lastCmdArgs--
 			lastArgs--
 		}
+		lenArgs = lastArgs + 1
 	}
-	err := cfg.Parse(args[:lastArgs])
+	err := cfg.Parse(args[:lenArgs])
 	switch errors.Cause(err) {
 	case nil:
 	case flag.ErrHelp:
@@ -101,9 +103,6 @@ func collectArgs(args []string) []string {
 		default:
 			continue
 		}
-	}
-	if len(collectedArgs) == 0 {
-		fmt.Printf("met unsupport command\n")
 	}
 	return collectedArgs
 }
