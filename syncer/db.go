@@ -80,32 +80,31 @@ func createBaseDB(dbCfg config.DBConfig) (*conn.BaseDB, error) {
 // UpStreamConn connect to upstream DB, use *sql.DB instead of *sql.Conn
 type UpStreamConn struct {
 	cfg *config.SubTaskConfig
-	// TODO change to BaseDB
-	DB *sql.DB
+	BaseDB *conn.BaseDB
 }
 
 func (conn *UpStreamConn) getMasterStatus(flavor string) (mysql.Position, gtid.Set, error) {
-	return utils.GetMasterStatus(conn.DB, flavor)
+	return utils.GetMasterStatus(conn.BaseDB.DB, flavor)
 }
 
 func (conn *UpStreamConn) getServerUUID(flavor string) (string, error) {
-	return utils.GetServerUUID(conn.DB, flavor)
+	return utils.GetServerUUID(conn.BaseDB.DB, flavor)
 }
 
 func (conn *UpStreamConn) getParser(ansiQuotesMode bool) (*parser.Parser, error) {
-	return utils.GetParser(conn.DB, ansiQuotesMode)
+	return utils.GetParser(conn.BaseDB.DB, ansiQuotesMode)
 }
 
 func (conn *UpStreamConn) killConn(connID uint32) error {
-	return utils.KillConn(conn.DB, connID)
+	return utils.KillConn(conn.BaseDB.DB, connID)
 }
 
 func (conn *UpStreamConn) fetchAllDoTables(bw *filter.Filter) (map[string][]string, error) {
-	return utils.FetchAllDoTables(conn.DB, bw)
+	return utils.FetchAllDoTables(conn.BaseDB.DB, bw)
 }
 
 func (conn *UpStreamConn) countBinaryLogsSize(pos mysql.Position) (int64, error) {
-	return countBinaryLogsSize(pos, conn.DB)
+	return countBinaryLogsSize(pos, conn.BaseDB.DB)
 }
 
 func createUpStreamConn(cfg *config.SubTaskConfig, dbCfg config.DBConfig) (*UpStreamConn, error) {
@@ -113,11 +112,11 @@ func createUpStreamConn(cfg *config.SubTaskConfig, dbCfg config.DBConfig) (*UpSt
 	if err != nil {
 		return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 	}
-	return &UpStreamConn{DB: baseDB.DB, cfg: cfg}, nil
+	return &UpStreamConn{BaseDB: baseDB, cfg: cfg}, nil
 }
 
 func closeUpstreamConn(tctx *tcontext.Context, conn *UpStreamConn) {
-	err := conn.DB.Close()
+	err := conn.BaseDB.Close()
 	if err != nil {
 		tctx.L().Error("fail to close baseConn connection", log.ShortError(err))
 	}
