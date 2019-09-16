@@ -29,11 +29,25 @@ import (
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/errors"
 )
 
 func main() {
 	cfg := common.NewConfig()
-	err := cfg.Parse(os.Args[1:])
+	args := os.Args[1:]
+	cmdArgs := collectArgs(args)
+	lastArgs := len(args) - 1
+	lastCmdArgs := len(cmdArgs) - 1
+	if lastCmdArgs > 0 {
+		for lastCmdArgs > 0 && lastArgs > 0 {
+			if cmdArgs[lastCmdArgs] != args[lastArgs] {
+				break
+			}
+			lastCmdArgs--
+			lastArgs--
+		}
+	}
+	err := cfg.Parse(args[:lastArgs])
 	switch errors.Cause(err) {
 	case nil:
 	case flag.ErrHelp:
@@ -42,10 +56,6 @@ func main() {
 		fmt.Printf("parse cmd flags err: %s", err)
 		os.Exit(2)
 	}
-
-	utils.PrintInfo2("dmctl")
-	fmt.Println() // print a separater
-
 	// now, we use checker in dmctl while it using some pkg which log some thing when running
 	// to make dmctl output more clear, simply redirect log to file rather output to stdout
 	err = log.InitLogger(&log.Config{
@@ -62,6 +72,53 @@ func main() {
 		fmt.Printf("init control error %v", errors.ErrorStack(err))
 		os.Exit(2)
 	}
+
+	if len(cmdArgs) > 0 {
+		commandMode(cmdArgs)
+	} else {
+		interactionMode()
+	}
+}
+
+func collectArgs(args []string) []string {
+	collectedArgs := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		switch strings.ToLower(args[i]) {
+		case "start-task", "query-status", "stop-task", "pause-task", "resume-task", "show-ddl-locks":
+			{
+				collectedArgs = append(collectedArgs, args[i])
+				i++
+				collectedArgs = append(collectedArgs, args[i])
+			}
+		case "unlock-ddl-lock":
+			{
+
+			}
+		case "break-ddl-lock":
+			{
+
+			}
+		default:
+			continue
+		}
+	}
+	if len(collectedArgs) == 0 {
+		fmt.Printf("met unsupport command\n")
+	}
+	return collectedArgs
+}
+
+func commandMode(args []string) {
+	ctl.Start(args)
+	syncErr := log.L().Sync()
+	if syncErr != nil {
+		fmt.Fprintln(os.Stderr, "sync log failed", syncErr)
+	}
+}
+
+func interactionMode() {
+	utils.PrintInfo2("dmctl")
+	fmt.Println() // print a separater
 
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc,
