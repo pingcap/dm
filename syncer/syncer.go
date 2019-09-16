@@ -916,11 +916,6 @@ func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *WorkerConn,
 			idx++
 
 			if sqlJob.tp == ddl {
-				err = executeSQLs()
-				if err != nil {
-					fatalF(err, pb.ErrorType_ExecSQL)
-					continue
-				}
 
 				if sqlJob.ddlExecItem != nil && sqlJob.ddlExecItem.req != nil && !sqlJob.ddlExecItem.req.Exec {
 					s.tctx.L().Info("ignore sharding DDLs", zap.Strings("ddls", sqlJob.ddls))
