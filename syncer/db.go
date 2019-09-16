@@ -127,6 +127,7 @@ type WorkerConn struct {
 	cfg      *config.SubTaskConfig
 	baseConn *conn.BaseConn
 
+	// for workerConn to reset itself
 	baseDB *conn.BaseDB
 }
 

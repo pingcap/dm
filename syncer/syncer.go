@@ -2396,7 +2396,7 @@ func (s *Syncer) ExecuteDDL(ctx context.Context, execReq *pb.ExecDDLRequest) (<-
 func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 	s.Lock()
 	defer s.Unlock()
-	s.fromDB.DB.Close()
+	s.fromDB.BaseDB.Close()
 
 	s.cfg.From = cfg.From
 

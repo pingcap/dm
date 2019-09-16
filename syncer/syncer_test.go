@@ -937,7 +937,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	// use upstream dbConn as mock downstream
 	dbConn, err := db.Conn(context.Background())
 	c.Assert(err, IsNil)
-	syncer.fromDB = &UpStreamConn{DB: db}
+	syncer.fromDB = &UpStreamConn{BaseDB: &conn.BaseDB{db, nil}}
 	syncer.toDBConns = []*WorkerConn{{baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}}}
 	syncer.reset()
 
@@ -1219,7 +1219,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 
 		ctx := context.Background()
 		// fromDB mocks upstream dbConn, dbConn mocks downstream dbConn
-		syncer.fromDB = &UpStreamConn{cfg: s.cfg, DB: fromDB}
+		syncer.fromDB = &UpStreamConn{cfg: s.cfg, BaseDB: &conn.BaseDB{fromDB, nil}}
 		dbConn, err := db.Conn(ctx)
 		c.Assert(err, IsNil)
 		syncer.toDBConns = []*WorkerConn{{cfg: s.cfg, baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}}}
@@ -1373,7 +1373,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	s.cfg.DisableCausality = false
 
 	syncer := NewSyncer(s.cfg)
-	syncer.fromDB = &UpStreamConn{cfg: s.cfg, DB: db}
+	syncer.fromDB = &UpStreamConn{cfg: s.cfg, BaseDB: &conn.BaseDB{db, nil}}
 	syncer.toDBConns = []*WorkerConn{{cfg: s.cfg, baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}},
 		{cfg: s.cfg, baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}}}
 	syncer.ddlDBConn = &WorkerConn{cfg: s.cfg, baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}}
