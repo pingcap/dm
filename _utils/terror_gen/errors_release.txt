@@ -112,6 +112,7 @@ ErrConfigCheckItemNotSupport,[code=20001:class=config:scope=internal:level=mediu
 ErrConfigTomlTransform,[code=20002:class=config:scope=internal:level=medium],"%s"
 ErrConfigTaskYamlTransform,[code=20003:class=config:scope=internal:level=medium],"%s"
 ErrConfigTaskNameEmpty,[code=20004:class=config:scope=internal:level=medium],"task name should not be empty"
+ErrConfigTaskNameNotValid,[code=20032:class=config:scope=internal:level=medium],"task name not valid"
 ErrConfigEmptySourceID,[code=20005:class=config:scope=internal:level=medium],"empty source-id not valid"
 ErrConfigTooLongSourceID,[code=20006:class=config:scope=internal:level=medium],"too long source-id not valid"
 ErrConfigOnlineSchemeNotSupport,[code=20007:class=config:scope=internal:level=medium],"online scheme %s not supported"

@@ -170,6 +170,8 @@ const (
 	codeConfigLoaderCfgNotFound
 	codeConfigSyncerCfgNotFound
 	codeConfigSourceIDNotFound
+
+	codeConfigTaskNameNotValid
 )
 
 // Binlog operation error code list
@@ -593,6 +595,7 @@ var (
 	ErrConfigTomlTransform          = New(codeConfigTomlTransform, ClassConfig, ScopeInternal, LevelMedium, "%s")
 	ErrConfigTaskYamlTransform      = New(codeConfigTaskYamlTransform, ClassConfig, ScopeInternal, LevelMedium, "%s")
 	ErrConfigTaskNameEmpty          = New(codeConfigTaskNameEmpty, ClassConfig, ScopeInternal, LevelMedium, "task name should not be empty")
+	ErrConfigTaskNameNotValid       = New(codeConfigTaskNameNotValid, ClassConfig, ScopeInternal, LevelMedium, "task name not valid")
 	ErrConfigEmptySourceID          = New(codeConfigEmptySourceID, ClassConfig, ScopeInternal, LevelMedium, "empty source-id not valid")
 	ErrConfigTooLongSourceID        = New(codeConfigTooLongSourceID, ClassConfig, ScopeInternal, LevelMedium, "too long source-id not valid")
 	ErrConfigOnlineSchemeNotSupport = New(codeConfigOnlineSchemeNotSupport, ClassConfig, ScopeInternal, LevelMedium, "online scheme %s not supported")
