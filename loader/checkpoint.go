@@ -299,7 +299,7 @@ func (cp *RemoteCheckPoint) Init(filename string, endPos int64) error {
 func (cp *RemoteCheckPoint) Close() {
 	err := cp.conn.Close()
 	if err != nil {
-		cp.tctx.L().Error("close checkpoint connection error", log.ShortError(err))
+		cp.tctx.L().Error("close checkpoint connection", log.ShortError(err))
 	}
 	err = cp.db.Close()
 	if err != nil {
