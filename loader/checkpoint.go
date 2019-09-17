@@ -66,7 +66,7 @@ type CheckPoint interface {
 // RemoteCheckPoint implements CheckPoint by saving status in remote database system, mostly in TiDB.
 type RemoteCheckPoint struct {
 	db             *conn.BaseDB
-	conn           *WorkerConn // NOTE: use dbutil in tidb-tools later
+	conn           *WorkerConn
 	id             string
 	schema         string
 	table          string

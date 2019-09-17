@@ -975,13 +975,13 @@ func fetchMatchedLiteral(ctx *tcontext.Context, router *router.Table, schema, ta
 func (l *Loader) restoreData(ctx context.Context) error {
 	begin := time.Now()
 
-	db, conn, err := createConn(ctx, l.cfg)
+	baseDB, conn, err := createConn(ctx, l.cfg)
 	if err != nil {
 		return err
 	}
 	defer func() {
 		conn.baseConn.Close()
-		db.Close()
+		baseDB.Close()
 	}()
 
 	dispatchMap := make(map[string]*fileJob)
