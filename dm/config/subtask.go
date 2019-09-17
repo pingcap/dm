@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -154,6 +155,19 @@ func NewSubTaskConfig() *SubTaskConfig {
 	return cfg
 }
 
+func (c *SubTaskConfig) verifyTaskName() bool {
+	if c.Name == "" {
+		return false
+	}
+
+	for _, i := range c.Name {
+		if unicode.IsSpace(i) {
+			return false
+		}
+	}
+	return true
+}
+
 // String returns the config's json string
 func (c *SubTaskConfig) String() string {
 	cfg, err := json.Marshal(c)
@@ -196,8 +210,8 @@ func (c *SubTaskConfig) Decode(data string) error {
 
 // Adjust adjusts configs
 func (c *SubTaskConfig) Adjust() error {
-	if c.Name == "" {
-		return terror.ErrConfigTaskNameEmpty.Generate()
+	if !c.verifyTaskName() {
+		return terror.ErrConfigTaskNameNotValid.Generate()
 	}
 
 	if c.SourceID == "" {
