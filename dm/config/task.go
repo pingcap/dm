@@ -16,6 +16,7 @@ package config
 import (
 	"flag"
 	"io/ioutil"
+	"regexp"
 	"time"
 
 	"github.com/pingcap/dm/pkg/log"
@@ -55,6 +56,8 @@ var (
 	// SyncerConfig
 	defaultWorkerCount = 16
 	defaultBatch       = 100
+
+	taskNameRegexp = regexp.MustCompile(`^[a-zA-Z0-9$_]+$`).MatchString
 )
 
 // Meta represents binlog's meta pos
@@ -278,6 +281,14 @@ func NewTaskConfig() *TaskConfig {
 	return cfg
 }
 
+func (c *TaskConfig) verifyTaskName() bool {
+	if c.Name == "" {
+		return false
+	}
+
+	return taskNameRegexp(c.Name)
+}
+
 // String returns the config's yaml string
 func (c *TaskConfig) String() string {
 	cfg, err := yaml.Marshal(c)
@@ -314,8 +325,8 @@ func (c *TaskConfig) Decode(data string) error {
 
 // adjust adjusts configs
 func (c *TaskConfig) adjust() error {
-	if len(c.Name) == 0 {
-		return terror.ErrConfigNeedUniqueTaskName.Generate()
+	if !c.verifyTaskName() {
+		return terror.ErrConfigTaskNameNotValid.Generate()
 	}
 	if c.TaskMode != ModeFull && c.TaskMode != ModeIncrement && c.TaskMode != ModeAll {
 		return terror.ErrConfigInvalidTaskMode.Generate()

@@ -92,15 +92,7 @@ func (t *testConfig) TestSubTaskAdjustFail(c *C) {
 				cfg.Name = ""
 				return cfg
 			},
-			"\\[.*\\] task name not valid",
-		},
-		{
-			func() *SubTaskConfig {
-				cfg := newSubTaskConfig()
-				cfg.Name = "test test"
-				return cfg
-			},
-			"\\[.*\\] task name not valid",
+			"\\[.*\\] task name should not be empty",
 		},
 		{
 			func() *SubTaskConfig {

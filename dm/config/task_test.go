@@ -117,3 +117,24 @@ ignore-checking-items: ["all"]
 	c.Assert(err, NotNil)
 	c.Assert(err, ErrorMatches, "*line 4: field task-mode already set in type config.TaskConfig*")
 }
+
+func (t *testConfig) TestInvalidTaskName(c *C) {
+	taskConfig := NewTaskConfig()
+	taskConfig.Name = ""
+	c.Assert(taskConfig.verifyTaskName(), IsFalse)
+
+	taskConfig.Name = "test test"
+	c.Assert(taskConfig.verifyTaskName(), IsFalse)
+
+	taskConfig.Name = "_"
+	c.Assert(taskConfig.verifyTaskName(), IsTrue)
+
+	taskConfig.Name = "$"
+	c.Assert(taskConfig.verifyTaskName(), IsTrue)
+
+	taskConfig.Name = "123Test"
+	c.Assert(taskConfig.verifyTaskName(), IsTrue)
+
+	taskConfig.Name = "123_test"
+	c.Assert(taskConfig.verifyTaskName(), IsTrue)
+}
