@@ -27,7 +27,7 @@ import (
 // NewShowDDLLocksCmd creates a ShowDDlLocks command
 func NewShowDDLLocksCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "show-ddl-locks [-w worker ...] [task_name]",
+		Use:   "show-ddl-locks [-w worker ...] [task-name]",
 		Short: "show un-resolved DDL locks",
 		Run:   showDDLLocksFunc,
 	}
