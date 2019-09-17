@@ -142,12 +142,6 @@ func (conn *WorkerConn) resetConn(tctx *tcontext.Context) error {
 	if err != nil {
 		return err
 	}
-	if conn.baseConn != nil {
-		err = conn.baseConn.Close()
-		if err != nil {
-			return err
-		}
-	}
 	conn.baseConn = dbConn
 	return nil
 }
