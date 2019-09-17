@@ -303,7 +303,7 @@ func (cp *RemoteCheckPoint) Close() {
 	}
 	err = cp.db.Close()
 	if err != nil {
-		cp.tctx.L().Error("close checkpoint db error", log.ShortError(err))
+		cp.tctx.L().Error("close checkpoint db", log.ShortError(err))
 	}
 }
 
