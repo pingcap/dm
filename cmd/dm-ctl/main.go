@@ -37,18 +37,11 @@ func main() {
 	args := os.Args[1:]
 	cmdArgs := collectArgs(args)
 	lenArgs := len(args)
-	lastCmdArgs := len(cmdArgs) - 1
-	if lastCmdArgs > 0 {
-		lastArgs := lenArgs - 1
-		for lastCmdArgs > 0 && lastArgs > 0 {
-			if cmdArgs[lastCmdArgs] != args[lastArgs] {
-				break
-			}
-			lastCmdArgs--
-			lastArgs--
-		}
-		lenArgs = lastArgs + 1
+	lenCmdArgs := len(cmdArgs)
+	if lenCmdArgs > 0 {
+		lenArgs = lenArgs - lenCmdArgs
 	}
+
 	err := cfg.Parse(args[:lenArgs])
 	switch errors.Cause(err) {
 	case nil:
@@ -86,19 +79,9 @@ func collectArgs(args []string) []string {
 	collectedArgs := make([]string, 0, len(args))
 	for i := 0; i < len(args); i++ {
 		switch strings.ToLower(args[i]) {
-		case "start-task", "query-status", "stop-task", "pause-task", "resume-task", "show-ddl-locks":
+		case "start-task", "query-status", "stop-task", "pause-task", "resume-task", "show-ddl-locks", "unlock-ddl-lock", "break-ddl-lock":
 			{
-				collectedArgs = append(collectedArgs, args[i])
-				i++
-				collectedArgs = append(collectedArgs, args[i])
-			}
-		case "unlock-ddl-lock":
-			{
-
-			}
-		case "break-ddl-lock":
-			{
-
+				collectedArgs = append(collectedArgs, args[i:]...)
 			}
 		default:
 			continue
