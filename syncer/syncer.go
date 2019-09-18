@@ -902,12 +902,12 @@ func (s *Syncer) syncDDL(ctx *tcontext.Context, queueBucket string, db *Conn, dd
 			}
 			s.ddlExecInfo.ClearBlockingDDL()
 		}
+		s.jobWg.Done()
 		if err != nil {
 			s.execErrorDetected.Set(true)
 			s.runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, errors.ErrorStack(err))
 			continue
 		}
-		s.jobWg.Done()
 		s.addCount(true, queueBucket, sqlJob.tp, int64(len(sqlJob.ddls)))
 	}
 }
