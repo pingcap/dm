@@ -3,7 +3,7 @@
 function update_master_config_wrong_arg() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "update-master-config" \
-        "update-master-config <config_file> \[flags\]" 1
+        "update-master-config <config-file> \[flags\]" 1
 }
 
 function update_master_config_wrong_config_file() {
