@@ -3,7 +3,7 @@
 function check_task_wrong_arg() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "check-task" \
-        "check-task <config_file> \[flags\]" 1
+        "check-task <config-file> \[flags\]" 1
 }
 
 function check_task_wrong_config_file() {
