@@ -16,6 +16,7 @@ package conn
 import (
 	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
+
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/retry"
 )
@@ -25,7 +26,7 @@ var _ = Suite(&testBaseDBSuite{})
 type testBaseDBSuite struct {
 }
 
-func (t *testBaseDBSuite) TestBaseDB(c *C) {
+func (t *testBaseDBSuite) TestGetBaseConn(c *C) {
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 
@@ -47,7 +48,7 @@ func (t *testBaseDBSuite) TestBaseDB(c *C) {
 		c.Assert(err, IsNil)
 		ids = append(ids, id)
 	}
-	c.Assert(len(ids), Equals, 1)
+	c.Assert(ids, HasLen, 1)
 	c.Assert(ids[0], Equals, 1)
 
 	mock.ExpectBegin()

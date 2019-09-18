@@ -43,8 +43,6 @@ func IsConnectionError(err error) bool {
 	switch err {
 	case driver.ErrBadConn:
 		return true
-	case mysql.ErrInvalidConn:
-		return true
 	}
 	return false
 }

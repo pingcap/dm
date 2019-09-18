@@ -938,7 +938,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	dbConn, err := db.Conn(context.Background())
 	c.Assert(err, IsNil)
 	syncer.fromDB = &UpStreamConn{BaseDB: &conn.BaseDB{db, nil}}
-	syncer.toDBConns = []*WorkerConn{{baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}}}
+	syncer.toDBConns = []*DBConn{{baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}}}
 	syncer.reset()
 
 	streamer, err := syncer.streamerProducer.generateStreamer(pos)
@@ -1222,8 +1222,8 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		syncer.fromDB = &UpStreamConn{cfg: s.cfg, BaseDB: &conn.BaseDB{fromDB, nil}}
 		dbConn, err := db.Conn(ctx)
 		c.Assert(err, IsNil)
-		syncer.toDBConns = []*WorkerConn{{cfg: s.cfg, baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}}}
-		syncer.ddlDBConn = &WorkerConn{cfg: s.cfg, baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}}
+		syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}}}
+		syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}}
 
 		// mock syncer.Init() function, because we need to pass mock dbs to different members' init
 		syncer.genRouter()
@@ -1231,8 +1231,8 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		c.Assert(err, IsNil)
 		checkPointDBConn, err := checkPointDB.Conn(ctx)
 		c.Assert(err, IsNil)
-		syncer.initShardingGroups(&WorkerConn{cfg: s.cfg, baseConn: &conn.BaseConn{shardGroupDBConn, &retry.FiniteRetryStrategy{}}})
-		syncer.checkpoint.Init(&WorkerConn{cfg: s.cfg, baseConn: &conn.BaseConn{checkPointDBConn, &retry.FiniteRetryStrategy{}}})
+		syncer.initShardingGroups(&DBConn{cfg: s.cfg, baseConn: &conn.BaseConn{shardGroupDBConn, &retry.FiniteRetryStrategy{}}})
+		syncer.checkpoint.Init(&DBConn{cfg: s.cfg, baseConn: &conn.BaseConn{checkPointDBConn, &retry.FiniteRetryStrategy{}}})
 		syncer.reset()
 		events := append(createEvents, s.generateEvents(_case.testEvents, c)...)
 		syncer.streamerProducer = &MockStreamProducer{events}
@@ -1374,9 +1374,9 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	syncer := NewSyncer(s.cfg)
 	syncer.fromDB = &UpStreamConn{cfg: s.cfg, BaseDB: &conn.BaseDB{db, nil}}
-	syncer.toDBConns = []*WorkerConn{{cfg: s.cfg, baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}},
+	syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}},
 		{cfg: s.cfg, baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}}}
-	syncer.ddlDBConn = &WorkerConn{cfg: s.cfg, baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}}
+	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}}
 	c.Assert(syncer.Type(), Equals, pb.UnitType_Sync)
 
 	syncer.columnMapping, err = cm.NewMapping(s.cfg.CaseSensitive, s.cfg.ColumnMappingRules)
@@ -1390,7 +1390,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	checkPointMock.ExpectExec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
 	checkPointMock.ExpectCommit()
 
-	syncer.checkpoint.Init(&WorkerConn{cfg: s.cfg, baseConn: &conn.BaseConn{checkPointDBConn, &retry.FiniteRetryStrategy{}}})
+	syncer.checkpoint.Init(&DBConn{cfg: s.cfg, baseConn: &conn.BaseConn{checkPointDBConn, &retry.FiniteRetryStrategy{}}})
 	syncer.reset()
 	events1 := mockBinlogEvents{
 		mockBinlogEvent{typ: DBCreate, args: []interface{}{"test_1"}},

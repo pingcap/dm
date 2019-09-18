@@ -81,7 +81,7 @@ type OnlineDDLStorage struct {
 	cfg *config.SubTaskConfig
 
 	db     *conn.BaseDB
-	dbConn *WorkerConn
+	dbConn *DBConn
 	schema string // schema name, set through task config
 	table  string // table name, now it's task name
 	id     string // now it is `server-id` used as MySQL slave

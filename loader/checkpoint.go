@@ -64,9 +64,10 @@ type CheckPoint interface {
 }
 
 // RemoteCheckPoint implements CheckPoint by saving status in remote database system, mostly in TiDB.
+// it's not thread-safe
 type RemoteCheckPoint struct {
 	db             *conn.BaseDB
-	conn           *WorkerConn
+	conn           *DBConn
 	id             string
 	schema         string
 	table          string
@@ -76,7 +77,7 @@ type RemoteCheckPoint struct {
 }
 
 func newRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id string) (CheckPoint, error) {
-	db, conn, err := createConn(tctx.Context(), cfg)
+	db, dbConn, err := createConn(tctx.Context(), cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +86,7 @@ func newRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id s
 
 	cp := &RemoteCheckPoint{
 		db:             db,
-		conn:           conn,
+		conn:           dbConn,
 		id:             id,
 		restoringFiles: make(map[string]map[string]FilePosSet),
 		finishedTables: make(map[string]struct{}),

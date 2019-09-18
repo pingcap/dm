@@ -35,13 +35,14 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-// WorkerConn represents a live DB connection
-type WorkerConn struct {
+// DBConn represents a live DB connection
+// it's not thread-safe
+type DBConn struct {
 	cfg      *config.SubTaskConfig
 	baseConn *conn.BaseConn
 }
 
-func (conn *WorkerConn) querySQL(ctx *tcontext.Context, query string, args ...interface{}) (*sql.Rows, error) {
+func (conn *DBConn) querySQL(ctx *tcontext.Context, query string, args ...interface{}) (*sql.Rows, error) {
 	if conn == nil || conn.baseConn == nil {
 		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
@@ -90,7 +91,7 @@ func (conn *WorkerConn) querySQL(ctx *tcontext.Context, query string, args ...in
 	return ret.(*sql.Rows), nil
 }
 
-func (conn *WorkerConn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]interface{}) error {
+func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]interface{}) error {
 	if len(queries) == 0 {
 		return nil
 	}
@@ -150,14 +151,14 @@ func (conn *WorkerConn) executeSQL(ctx *tcontext.Context, queries []string, args
 }
 
 // Close release db connection resource, return it to BaseDB.db connection pool
-func (conn *WorkerConn) Close() error {
+func (conn *DBConn) Close() error {
 	if conn == nil || conn.baseConn == nil {
 		return nil
 	}
 	return conn.baseConn.Close()
 }
 
-func createConn(ctx context.Context, cfg *config.SubTaskConfig) (*conn.BaseDB, *WorkerConn, error) {
+func createConn(ctx context.Context, cfg *config.SubTaskConfig) (*conn.BaseDB, *DBConn, error) {
 	baseDB, err := conn.DefaultDBProvider.Apply(cfg.To)
 	if err != nil {
 		return nil, nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
@@ -166,15 +167,15 @@ func createConn(ctx context.Context, cfg *config.SubTaskConfig) (*conn.BaseDB, *
 	if err != nil {
 		return nil, nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 	}
-	return baseDB, &WorkerConn{baseConn: baseConn, cfg: cfg}, nil
+	return baseDB, &DBConn{baseConn: baseConn, cfg: cfg}, nil
 }
 
-func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, workerCount int) (*conn.BaseDB, []*WorkerConn, error) {
+func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, workerCount int) (*conn.BaseDB, []*DBConn, error) {
 	baseDB, err := conn.DefaultDBProvider.Apply(cfg.To)
 	if err != nil {
 		return nil, nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 	}
-	conns := make([]*WorkerConn, 0, workerCount)
+	conns := make([]*DBConn, 0, workerCount)
 	for i := 0; i < workerCount; i++ {
 		baseConn, err := baseDB.GetBaseConn(tctx.Context())
 		if err != nil {
@@ -184,7 +185,7 @@ func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, workerCount 
 			}
 			return nil, nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 		}
-		conns = append(conns, &WorkerConn{baseConn: baseConn, cfg: cfg})
+		conns = append(conns, &DBConn{baseConn: baseConn, cfg: cfg})
 	}
 	return baseDB, conns, nil
 }

@@ -38,11 +38,12 @@ func init() {
 	DefaultDBProvider = &defaultDBProvider{}
 }
 
+// Apply will build BaseDB with DBConfig
 func (d *defaultDBProvider) Apply(config config.DBConfig) (*BaseDB, error) {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&maxAllowedPacket=%d",
 		config.User, config.Password, config.Host, config.Port, *config.MaxAllowedPacket)
 
-	maxIdleConn := 0
+	maxIdleConn := -1
 	rawCfg := config.RawDBCfg
 	if rawCfg != nil {
 		if rawCfg.ReadTimeout != "" {
@@ -54,14 +55,13 @@ func (d *defaultDBProvider) Apply(config config.DBConfig) (*BaseDB, error) {
 		maxIdleConn = rawCfg.MaxIdleConns
 	}
 	db, err := sql.Open("mysql", dsn)
-
-	if maxIdleConn > 0 {
-		db.SetMaxIdleConns(maxIdleConn)
-	}
-
 	if err != nil {
 		return nil, terror.ErrDBDriverError.Delegate(err)
 	}
+	if maxIdleConn >= 0 {
+		db.SetMaxIdleConns(maxIdleConn)
+	}
+
 	return &BaseDB{db, &retry.FiniteRetryStrategy{}}, nil
 }
 
@@ -78,7 +78,12 @@ func (d *BaseDB) GetBaseConn(ctx context.Context) (*BaseConn, error) {
 	if err != nil {
 		return nil, terror.ErrDBDriverError.Delegate(err)
 	}
-	return newBaseConn(conn, d.Retry)
+	err = conn.PingContext(ctx)
+	if err != nil {
+		return nil, terror.ErrDBDriverError.Delegate(err)
+	}
+
+	return newBaseConn(conn, d.Retry), nil
 }
 
 // Close release db resource

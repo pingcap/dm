@@ -58,15 +58,18 @@ func DefaultRawDBConfig(readTimeout string) *RawDBConfig {
 	}
 }
 
-// AddWriteTimeout adds writeTimeout for raw database
-func (c *RawDBConfig) AddWriteTimeout(writeTimeout string) *RawDBConfig {
+// SetWriteTimeout adds writeTimeout for raw database
+func (c *RawDBConfig) SetWriteTimeout(writeTimeout string) *RawDBConfig {
 	c.WriteTimeout = writeTimeout
 	return c
 }
 
-// AddMaxIdleConns set maxIdleConns for raw database
-func (c *RawDBConfig) AddMaxIdleConns(conns int) *RawDBConfig {
-	c.MaxIdleConns = conns
+// SetMaxIdleConns set maxIdleConns for raw database
+// set value < 0 then do nothing (default 2 idle connections)
+// set value == 0 then no idle connection
+// set value > 0 then conns idle connections
+func (c *RawDBConfig) SetMaxIdleConns(value int) *RawDBConfig {
+	c.MaxIdleConns = value
 	return c
 }
 

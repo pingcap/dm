@@ -404,7 +404,7 @@ type ShardingGroupKeeper struct {
 	shardMetaTable  string
 
 	db     *conn.BaseDB
-	dbConn *WorkerConn
+	dbConn *DBConn
 
 	tctx *tcontext.Context
 }
@@ -454,7 +454,7 @@ func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceI
 }
 
 // Init does initialization staff
-func (k *ShardingGroupKeeper) Init(conn *WorkerConn) error {
+func (k *ShardingGroupKeeper) Init(conn *DBConn) error {
 	k.clear()
 	if conn != nil {
 		k.dbConn = conn

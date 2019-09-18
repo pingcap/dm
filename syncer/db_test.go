@@ -148,7 +148,7 @@ func (s *testSyncerSuite) TestExecuteSQLSWithIgnore(c *C) {
 	c.Assert(err, IsNil)
 	dbConn, err := db.Conn(context.Background())
 	c.Assert(err, IsNil)
-	conn := &WorkerConn{
+	conn := &DBConn{
 		baseConn: &conn.BaseConn{
 			DBConn:        dbConn,
 			RetryStrategy: &retry.FiniteRetryStrategy{},
@@ -241,7 +241,7 @@ func (s *testDBSuite) TestTimezone(c *C) {
 		s.resetBinlogSyncer(c)
 
 		// we should not use `sql.DB.Exec` to do query which depends on session variables
-		// because `sql.DB.Exec` will choose a underlying WorkerConn for every query from the connection pool
+		// because `sql.DB.Exec` will choose a underlying DBConn for every query from the connection pool
 		// and different Conn using different session
 		// ref: `sql.DB.Conn`
 		// and `set @@global` is also not reasonable, because it can not affect sessions already exist

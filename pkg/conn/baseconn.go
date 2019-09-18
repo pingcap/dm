@@ -33,11 +33,11 @@ type BaseConn struct {
 }
 
 // newBaseConn builds BaseConn to connect real DB
-func newBaseConn(conn *sql.Conn, strategy retry.Strategy) (*BaseConn, error) {
+func newBaseConn(conn *sql.Conn, strategy retry.Strategy) *BaseConn {
 	if strategy == nil {
 		strategy = &retry.FiniteRetryStrategy{}
 	}
-	return &BaseConn{conn, strategy}, nil
+	return &BaseConn{conn, strategy}
 }
 
 // SetRetryStrategy set retry strategy for baseConn

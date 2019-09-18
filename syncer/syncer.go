@@ -150,9 +150,9 @@ type Syncer struct {
 	fromDB *UpStreamConn
 
 	toDB      *conn.BaseDB
-	toDBConns []*WorkerConn
+	toDBConns []*DBConn
 	ddlDB     *conn.BaseDB
-	ddlDBConn *WorkerConn
+	ddlDBConn *DBConn
 
 	jobs               []chan *job
 	jobsClosed         sync2.AtomicBool
@@ -405,7 +405,7 @@ func (s *Syncer) Init() (err error) {
 
 // initShardingGroups initializes sharding groups according to source MySQL, filter rules and router rules
 // NOTE: now we don't support modify router rules after task has started
-func (s *Syncer) initShardingGroups(conn *WorkerConn) error {
+func (s *Syncer) initShardingGroups(conn *DBConn) error {
 	// fetch tables from source and filter them
 	sourceTables, err := s.fromDB.fetchAllDoTables(s.bwList)
 	if err != nil {
@@ -635,7 +635,7 @@ func (s *Syncer) clearAllTables() {
 	s.genColsCache.reset()
 }
 
-func (s *Syncer) getTableFromDB(db *WorkerConn, schema string, name string) (*table, error) {
+func (s *Syncer) getTableFromDB(db *DBConn, schema string, name string) (*table, error) {
 	table := &table{}
 	table.schema = schema
 	table.name = name
@@ -855,7 +855,7 @@ func (s *Syncer) flushCheckPoints() error {
 	return nil
 }
 
-func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *WorkerConn, jobChan chan *job) {
+func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *DBConn, jobChan chan *job) {
 	defer s.wg.Done()
 
 	idx := 0
@@ -2024,7 +2024,7 @@ func (s *Syncer) createDBs() error {
 
 	dbCfg = s.cfg.To
 	dbCfg.RawDBCfg = config.DefaultRawDBConfig(maxDMLConnectionTimeout).
-		AddMaxIdleConns(s.cfg.WorkerCount)
+		SetMaxIdleConns(s.cfg.WorkerCount)
 
 	s.toDB, s.toDBConns, err = createConns(s.tctx, s.cfg, dbCfg, s.cfg.WorkerCount)
 	if err != nil {

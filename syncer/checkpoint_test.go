@@ -92,7 +92,7 @@ func (s *testCheckpointSuite) TestCheckPoint(c *C) {
 
 	dbConn, err := db.Conn(tcontext.Background().Context())
 	c.Assert(err, IsNil)
-	conn := &WorkerConn{cfg: s.cfg, baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}}
+	conn := &DBConn{cfg: s.cfg, baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}}
 
 	err = cp.Init(conn)
 	c.Assert(err, IsNil)

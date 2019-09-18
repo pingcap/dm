@@ -124,8 +124,9 @@ func closeUpstreamConn(tctx *tcontext.Context, conn *UpStreamConn) {
 	}
 }
 
-// WorkerConn represents a live DB connection
-type WorkerConn struct {
+// DBConn represents a live DB connection
+// it's not thread-safe
+type DBConn struct {
 	cfg      *config.SubTaskConfig
 	baseConn *conn.BaseConn
 
@@ -134,7 +135,7 @@ type WorkerConn struct {
 }
 
 // ResetConn reset one worker connection from specify *BaseDB
-func (conn *WorkerConn) resetConn(tctx *tcontext.Context) error {
+func (conn *DBConn) resetConn(tctx *tcontext.Context) error {
 	if conn == nil {
 		return terror.ErrDBDriverError.Generate("database not valid")
 	}
@@ -146,7 +147,7 @@ func (conn *WorkerConn) resetConn(tctx *tcontext.Context) error {
 	return nil
 }
 
-func (conn *WorkerConn) querySQL(tctx *tcontext.Context, query string, args ...interface{}) (*sql.Rows, error) {
+func (conn *DBConn) querySQL(tctx *tcontext.Context, query string, args ...interface{}) (*sql.Rows, error) {
 	if conn == nil || conn.baseConn == nil {
 		return nil, terror.ErrDBUnExpect.Generate("database base connection not valid")
 	}
@@ -184,7 +185,7 @@ func (conn *WorkerConn) querySQL(tctx *tcontext.Context, query string, args ...i
 	return ret.(*sql.Rows), nil
 }
 
-func (conn *WorkerConn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError func(error) bool, queries []string, args ...[]interface{}) (int, error) {
+func (conn *DBConn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError func(error) bool, queries []string, args ...[]interface{}) (int, error) {
 	if len(queries) == 0 {
 		return 0, nil
 	}
@@ -247,11 +248,11 @@ func (conn *WorkerConn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError
 	return ret.(int), nil
 }
 
-func (conn *WorkerConn) executeSQL(tctx *tcontext.Context, queries []string, args ...[]interface{}) (int, error) {
+func (conn *DBConn) executeSQL(tctx *tcontext.Context, queries []string, args ...[]interface{}) (int, error) {
 	return conn.executeSQLWithIgnore(tctx, nil, queries, args...)
 }
 
-func createConn(tctx *tcontext.Context, cfg *config.SubTaskConfig, dbCfg config.DBConfig) (*conn.BaseDB, *WorkerConn, error) {
+func createConn(tctx *tcontext.Context, cfg *config.SubTaskConfig, dbCfg config.DBConfig) (*conn.BaseDB, *DBConn, error) {
 	baseDB, err := createBaseDB(dbCfg)
 	if err != nil {
 		return nil, nil, err
@@ -263,11 +264,11 @@ func createConn(tctx *tcontext.Context, cfg *config.SubTaskConfig, dbCfg config.
 	resetConnFn := func(tctx *tcontext.Context) (*conn.BaseConn, error) {
 		return baseDB.GetBaseConn(tctx.Context())
 	}
-	return baseDB, &WorkerConn{baseConn: baseConn, cfg: cfg, resetConnFn: resetConnFn}, nil
+	return baseDB, &DBConn{baseConn: baseConn, cfg: cfg, resetConnFn: resetConnFn}, nil
 }
 
-func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, dbCfg config.DBConfig, count int) (*conn.BaseDB, []*WorkerConn, error) {
-	conns := make([]*WorkerConn, 0, count)
+func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, dbCfg config.DBConfig, count int) (*conn.BaseDB, []*DBConn, error) {
+	conns := make([]*DBConn, 0, count)
 	db, err := createBaseDB(dbCfg)
 	if err != nil {
 		return nil, nil, err
@@ -281,7 +282,7 @@ func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, dbCfg config
 		resetConnFn := func(tctx *tcontext.Context) (*conn.BaseConn, error) {
 			return db.GetBaseConn(tctx.Context())
 		}
-		conns = append(conns, &WorkerConn{baseConn: dbConn, cfg: cfg, resetConnFn: resetConnFn})
+		conns = append(conns, &DBConn{baseConn: dbConn, cfg: cfg, resetConnFn: resetConnFn})
 	}
 	return db, conns, nil
 }
@@ -296,7 +297,7 @@ func closeBaseDB(tctx *tcontext.Context, baseDB *conn.BaseDB) {
 	}
 }
 
-func getTableIndex(tctx *tcontext.Context, conn *WorkerConn, table *table) error {
+func getTableIndex(tctx *tcontext.Context, conn *DBConn, table *table) error {
 	if table.schema == "" || table.name == "" {
 		return terror.ErrDBUnExpect.Generate("schema/table is empty")
 	}
@@ -353,7 +354,7 @@ func getTableIndex(tctx *tcontext.Context, conn *WorkerConn, table *table) error
 	return nil
 }
 
-func getTableColumns(tctx *tcontext.Context, conn *WorkerConn, table *table) error {
+func getTableColumns(tctx *tcontext.Context, conn *DBConn, table *table) error {
 	if table.schema == "" || table.name == "" {
 		return terror.ErrDBUnExpect.Generate("schema/table is empty")
 	}

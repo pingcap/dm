@@ -77,7 +77,7 @@ type Worker struct {
 	id         int
 	cfg        *config.SubTaskConfig
 	checkPoint CheckPoint
-	conn       *WorkerConn
+	conn       *DBConn
 	wg         sync.WaitGroup
 	jobQueue   chan *dataJob
 	loader     *Loader
@@ -338,7 +338,7 @@ type Loader struct {
 	closed sync2.AtomicBool
 
 	toDB      *conn.BaseDB
-	toDBConns []*WorkerConn
+	toDBConns []*DBConn
 
 	totalDataSize    sync2.AtomicInt64
 	totalFileCount   sync2.AtomicInt64 // schema + table + data
@@ -862,7 +862,7 @@ func (l *Loader) prepare() error {
 }
 
 // restoreSchema creates schema
-func (l *Loader) restoreSchema(conn *WorkerConn, sqlFile, schema string) error {
+func (l *Loader) restoreSchema(conn *DBConn, sqlFile, schema string) error {
 	err := l.restoreStructure(conn, sqlFile, schema, "")
 	if err != nil {
 		if isErrDBExists(err) {
@@ -875,7 +875,7 @@ func (l *Loader) restoreSchema(conn *WorkerConn, sqlFile, schema string) error {
 }
 
 // restoreTable creates table
-func (l *Loader) restoreTable(conn *WorkerConn, sqlFile, schema, table string) error {
+func (l *Loader) restoreTable(conn *DBConn, sqlFile, schema, table string) error {
 	err := l.restoreStructure(conn, sqlFile, schema, table)
 	if err != nil {
 		if isErrTableExists(err) {
@@ -888,7 +888,7 @@ func (l *Loader) restoreTable(conn *WorkerConn, sqlFile, schema, table string) e
 }
 
 // restoreStruture creates schema or table
-func (l *Loader) restoreStructure(conn *WorkerConn, sqlFile string, schema string, table string) error {
+func (l *Loader) restoreStructure(conn *DBConn, sqlFile string, schema string, table string) error {
 	f, err := os.Open(sqlFile)
 	if err != nil {
 		return terror.ErrLoadUnitReadSchemaFile.Delegate(err)

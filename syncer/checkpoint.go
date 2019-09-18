@@ -123,7 +123,7 @@ func (b *binlogPoint) String() string {
 // because, when restarting to continue the sync, all sharding DDLs must try-sync again
 type CheckPoint interface {
 	// Init initializes the CheckPoint
-	Init(conn *WorkerConn) error
+	Init(conn *DBConn) error
 
 	// Close closes the CheckPoint
 	Close()
@@ -182,13 +182,14 @@ type CheckPoint interface {
 // RemoteCheckPoint implements CheckPoint
 // which using target database to store info
 // NOTE: now we sync from relay log, so not add GTID support yet
+// it's not thread-safe
 type RemoteCheckPoint struct {
 	sync.RWMutex
 
 	cfg *config.SubTaskConfig
 
 	db     *conn.BaseDB
-	dbConn *WorkerConn
+	dbConn *DBConn
 	schema string // schema name, set through task config
 	table  string // table name, now it's task name
 	id     string // checkpoint ID, now it is `source-id`
@@ -228,7 +229,7 @@ func NewRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id s
 }
 
 // Init implements CheckPoint.Init
-func (cp *RemoteCheckPoint) Init(conn *WorkerConn) error {
+func (cp *RemoteCheckPoint) Init(conn *DBConn) error {
 	if conn != nil {
 		cp.dbConn = conn
 	} else {

@@ -35,11 +35,10 @@ type testBaseConnSuite struct {
 }
 
 func (t *testBaseConnSuite) TestBaseConn(c *C) {
-	baseConn, err := newBaseConn(nil, nil)
-	c.Assert(err, IsNil)
+	baseConn := newBaseConn(nil, nil)
 
 	tctx := tcontext.Background()
-	err = baseConn.SetRetryStrategy(nil)
+	err := baseConn.SetRetryStrategy(nil)
 	c.Assert(err, IsNil)
 
 	_, err = baseConn.QuerySQL(tctx, "select 1")
