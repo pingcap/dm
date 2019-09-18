@@ -11,12 +11,13 @@ Table of contents:
 
 - [Background](#Background)
 - [Implementation](#Implementation)
-    - [Congestion definitio](#Congestion-definitio)
+    - [Congestion definition](#Congestion-definition)
         - [How to measure the key indices](#How-to-measure-the-key-indices)
         - [How to detect and measure congestion](#How-to-detect-and-measure-congestion)
     - [Congestion control framework](#Congestion-control-framework)
         - [The congestion detect component](#The-congestion-detect-component)
         - [The data flow control component](#The-data-flow-control-component)
+        - [The concurrency control component](#The-concurrency-control-component)
 
 ## Background
 
@@ -74,7 +75,7 @@ The congestion degree can be measured by the three indices, but the workflow in 
 
 ### Congestion control framework
 
-The congestion control framework is separated into two parts, the congestion detect component and the data flow control component.
+The congestion control framework is separated into three parts, the congestion detect component, the data flow control component and the concurrency control component.
 
 #### The congestion detect component
 
