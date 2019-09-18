@@ -43,7 +43,7 @@ func (d *defaultDBProvider) Apply(config config.DBConfig) (*BaseDB, error) {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&maxAllowedPacket=%d",
 		config.User, config.Password, config.Host, config.Port, *config.MaxAllowedPacket)
 
-	maxIdleConn := -1
+	var maxIdleConns int
 	rawCfg := config.RawDBCfg
 	if rawCfg != nil {
 		if rawCfg.ReadTimeout != "" {
@@ -52,15 +52,13 @@ func (d *defaultDBProvider) Apply(config config.DBConfig) (*BaseDB, error) {
 		if rawCfg.WriteTimeout != "" {
 			dsn += fmt.Sprintf("&writeTimeout=%s", rawCfg.WriteTimeout)
 		}
-		maxIdleConn = rawCfg.MaxIdleConns
+		maxIdleConns = rawCfg.MaxIdleConns
 	}
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return nil, terror.ErrDBDriverError.Delegate(err)
 	}
-	if maxIdleConn >= 0 {
-		db.SetMaxIdleConns(maxIdleConn)
-	}
+	db.SetMaxIdleConns(maxIdleConns)
 
 	return &BaseDB{db, &retry.FiniteRetryStrategy{}}, nil
 }

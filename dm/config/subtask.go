@@ -42,6 +42,7 @@ const (
 
 var (
 	defaultMaxAllowedPacket = 64 * 1024 * 1024 // 64MiB, equal to TiDB's default
+	defaultMaxIdleConns     = 2
 )
 
 // RawDBConfig contains some low level database config
@@ -54,7 +55,8 @@ type RawDBConfig struct {
 // DefaultRawDBConfig returns a default raw database config
 func DefaultRawDBConfig(readTimeout string) *RawDBConfig {
 	return &RawDBConfig{
-		ReadTimeout: readTimeout,
+		ReadTimeout:  readTimeout,
+		MaxIdleConns: defaultMaxIdleConns,
 	}
 }
 
