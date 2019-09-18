@@ -110,7 +110,6 @@ func (w *Worker) Close() {
 
 	close(w.jobQueue)
 	w.wg.Wait()
-	w.conn.Close()
 }
 
 func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *sync.WaitGroup, runFatalChan chan *pb.ProcessError) {
@@ -559,9 +558,16 @@ func (l *Loader) Close() {
 	}
 
 	l.stopLoad()
+
+	for _, c := range l.toDBConns {
+		err := c.Close()
+		if err != nil {
+			l.tctx.L().Error("close downstream connetion error", log.ShortError(err))
+		}
+	}
 	err := l.toDB.Close()
 	if err != nil {
-		l.tctx.L().Error("close toDB error", log.ShortError(err))
+		l.tctx.L().Error("close downstream DB error", log.ShortError(err))
 	}
 	l.checkPoint.Close()
 	l.closed.Set(true)
@@ -975,12 +981,12 @@ func fetchMatchedLiteral(ctx *tcontext.Context, router *router.Table, schema, ta
 func (l *Loader) restoreData(ctx context.Context) error {
 	begin := time.Now()
 
-	baseDB, conn, err := createConn(ctx, l.cfg)
+	baseDB, dbConn, err := createConn(ctx, l.cfg)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		conn.baseConn.Close()
+		dbConn.Close()
 		baseDB.Close()
 	}()
 
@@ -998,7 +1004,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 		// create db
 		dbFile := fmt.Sprintf("%s/%s-schema-create.sql", l.cfg.Dir, db)
 		l.tctx.L().Info("start to create schema", zap.String("schema file", dbFile))
-		err = l.restoreSchema(conn, dbFile, db)
+		err = l.restoreSchema(dbConn, dbFile, db)
 		if err != nil {
 			return err
 		}
@@ -1025,7 +1031,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 
 			// create table
 			l.tctx.L().Info("start to create table", zap.String("table file", tableFile))
-			err := l.restoreTable(conn, tableFile, db, table)
+			err := l.restoreTable(dbConn, tableFile, db, table)
 			if err != nil {
 				return err
 			}

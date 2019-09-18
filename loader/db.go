@@ -179,9 +179,9 @@ func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, workerCount 
 	for i := 0; i < workerCount; i++ {
 		baseConn, err := baseDB.GetBaseConn(tctx.Context())
 		if err != nil {
-			err := baseDB.Close()
-			if err != nil {
-				tctx.L().Error("failed to close baseDB")
+			terr := baseDB.Close()
+			if terr != nil {
+				tctx.L().Error("failed to close baseDB", zap.Error(terr))
 			}
 			return nil, nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 		}
