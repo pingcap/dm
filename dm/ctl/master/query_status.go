@@ -27,7 +27,7 @@ import (
 // NewQueryStatusCmd creates a QueryStatus command
 func NewQueryStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "query-status [-w worker ...] [task_name]",
+		Use:   "query-status [-w worker ...] [task-name]",
 		Short: "query task's status",
 		Run:   queryStatusFunc,
 	}
