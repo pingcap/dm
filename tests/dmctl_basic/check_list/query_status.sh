@@ -3,7 +3,7 @@
 function query_status_wrong_arg() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status wrong_args_count more_than_one" \
-        "query-status \[-w worker ...\] \[task_name\]" 1
+        "query-status \[-w worker ...\] \[task-name\]" 1
 }
 
 function query_status_wrong_params() {
