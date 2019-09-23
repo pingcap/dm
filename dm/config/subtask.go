@@ -67,9 +67,8 @@ func (c *RawDBConfig) SetWriteTimeout(writeTimeout string) *RawDBConfig {
 }
 
 // SetMaxIdleConns set maxIdleConns for raw database
-// set value < 0 then do nothing (default 2 idle connections)
-// set value == 0 then no idle connection
-// set value > 0 then conns idle connections
+// set value <= 0 then no idle connections are retained.
+// set value > 0 then `value` idle connections are retained.
 func (c *RawDBConfig) SetMaxIdleConns(value int) *RawDBConfig {
 	c.MaxIdleConns = value
 	return c
