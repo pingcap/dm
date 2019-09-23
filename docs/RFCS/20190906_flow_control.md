@@ -24,11 +24,17 @@ Table of contents:
 Firstly we will discuss the key factor that affects the import or replication speed between DM data processing unit and downstream TiDB.
 
 - In the full data import procedure, data import speed is based on the SQL batch size and SQL executor concurrency. The SQL batch size is mainly determined by the single statement size of dump data, which can be controlled with the `mydumper` configuration. The SQL executor concurrency equals to the worker count of load unit, which is configurated by loader `pool-size` in task config.
-- In the incremental data replication procedure, replication speed relates to SQL job batch size and SQL executor concurrency. The binlog replication unit gets data from relay log consumer (assuming the relay log consume speed is fast enough), and distributes SQL jobs to multiple executors, the executor count is configurated by `worker-count` in task config. When the cached SQL jobs' count exceed SQL batch size, all SQLs in these jobs will be executed to downstream in a transaction.
+- In the incremental data replication procedure, replication speed relates to SQL job batch size and SQL executor concurrency. The binlog replication unit gets data from relay log consumer (assuming the relay log consume speed is fast enough), and distributes SQL jobs to multiple executors, the executor count is configurated by `worker-count` in task config. When the cached SQL job count exceeds SQL batch size (SQL batch size is configurated by `batch` in task config) or every 10ms, all SQLs in these jobs will be executed to downstream in a transaction.
 
-In the full data import scenario, it is easy to meet downstream congestion if we have many DM-workers and much high executor concurrency. While in incremental data replication scenario the congestion does not happen often, but sometimes if user pauses replication task for a while and a lot of relay log is accumulated or the replication nodes too many with high concurrency, it is also possible to meet downstream congestion. Besides too many upstream shard instances can also cause downstream congestion. When we encounter these abnormal scenario, we often pause part of the tasks or decrease the SQL executor concurrency. The key point of solving the congestion problem is to reduce the data flow speed.
+In the full data import scenario, it is easy to meet downstream congestion if we have many DM-workers and much high executor concurrency.
 
-Currently DM has no data flow control. We need to build a data flow control framework which will make data import or replication more smooth, more automotive and as fast as possible. The data flow control framework should provide the following features:
+While in incremental data replication scenario the congestion does not happen often, but there still exists some use scenario that may lead to congestion, including
+
+- User pauses replication task for a while and a lot of relay log is accumulated, and the replication node has high concurrency.
+- In shard scenario and there are too many upstream shard instances replicating to downstream at the same time.
+- In none shard scenario, but there are many tasks replicating to downstream from multiple instances at the same time.
+
+When we encounter these abnormal scenario, we often pause part of the tasks or decrease the SQL executor concurrency. The key point of solving the congestion problem is to reduce the data flow speed. Currently DM has no data flow control, we need to build a data flow control framework which will make data import or replication more smooth, more automotive and as fast as possible. The data flow control framework should provide the following features:
 
 - Downstream congestion definition and auto detection
 - Import or replication speed auto control
@@ -43,7 +49,7 @@ There exists some key concepts in a data import/replication link:
 - Bandwidth: Bandwidth describes the maximum data import/replication rate from a DM-worker to downstream, this can be measured by tps from DM-worker (or TPS in downstream, but should filter the data traffic from the specific DM-worker).
 - Latency: Latency is the amount of time it takes for data to travel from DM-worker to downstream.
 
-The congestion ususlly means the quality of service decreases because of the service node or data link is carrying more data than it can handle. In the data import/replication scenario, the consequence of congestion can be partial downstream database execution timeout, downstream qps decrease or SQL execution latency increase. We can use these three indices to determine whether congestion happens and measure the degree of congestion.
+The congestion usually means the quality of service decreases because of the service node or data link is carrying more data than it can handle. In the data import/replication scenario, the consequence of congestion can be partial downstream database execution timeout, downstream qps decrease or SQL execution latency increase. We can use these three indices to determine whether congestion happens and measure the degree of congestion.
 
 #### How to measure the key indices
 
