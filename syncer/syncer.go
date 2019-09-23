@@ -686,6 +686,7 @@ func (s *Syncer) getTable(schema string, table string) (*table, []string, error)
 func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int64) {
 	m := addedJobsTotal
 	if isFinished {
+		s.count.Add(n)
 		m = finishedJobsTotal
 	}
 
@@ -707,8 +708,6 @@ func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int6
 	default:
 		s.tctx.L().Warn("unknown job operation type", zap.Stringer("type", tp))
 	}
-
-	s.count.Add(n)
 }
 
 func (s *Syncer) checkWait(job *job) bool {
@@ -855,6 +854,62 @@ func (s *Syncer) flushCheckPoints() error {
 	return nil
 }
 
+// DDL synced one by one, so we only need to process one DDL at a time
+func (s *Syncer) syncDDL(ctx *tcontext.Context, queueBucket string, db *DBConn, ddlJobChan chan *job) {
+	defer s.wg.Done()
+
+	var err error
+	for {
+		sqlJob, ok := <-ddlJobChan
+		if !ok {
+			return
+		}
+
+		if sqlJob.ddlExecItem != nil && sqlJob.ddlExecItem.req != nil && !sqlJob.ddlExecItem.req.Exec {
+			s.tctx.L().Info("ignore sharding DDLs", zap.Strings("ddls", sqlJob.ddls))
+		} else {
+			_, err = db.executeSQLWithIgnore(s.tctx, ignoreDDLError, sqlJob.ddls)
+			if err != nil {
+				err = terror.WithScope(err, terror.ScopeDownstream)
+			}
+
+			if s.tracer.Enable() {
+				syncerJobState := s.tracer.FinishedSyncerJobState(err)
+				var execDDLReq *pb.ExecDDLRequest
+				if sqlJob.ddlExecItem != nil {
+					execDDLReq = sqlJob.ddlExecItem.req
+				}
+				_, traceErr := s.tracer.CollectSyncerJobEvent(sqlJob.traceID, sqlJob.traceGID, int32(sqlJob.tp), sqlJob.pos, sqlJob.currentPos, queueBucket, sqlJob.sql, sqlJob.ddls, nil, execDDLReq, syncerJobState)
+				if traceErr != nil {
+					s.tctx.L().Error("fail to collect binlog replication job event", log.ShortError(traceErr))
+				}
+			}
+		}
+		if err != nil {
+			s.appendExecErrors(&ExecErrorContext{
+				err:  err,
+				pos:  sqlJob.currentPos,
+				jobs: fmt.Sprintf("%v", sqlJob.ddls),
+			})
+		}
+
+		if s.cfg.IsSharding {
+			// for sharding DDL syncing, send result back
+			if sqlJob.ddlExecItem != nil {
+				sqlJob.ddlExecItem.resp <- err
+			}
+			s.ddlExecInfo.ClearBlockingDDL()
+		}
+		s.jobWg.Done()
+		if err != nil {
+			s.execErrorDetected.Set(true)
+			s.runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, errors.ErrorStack(err))
+			continue
+		}
+		s.addCount(true, queueBucket, sqlJob.tp, int64(len(sqlJob.ddls)))
+	}
+}
+
 func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *DBConn, jobChan chan *job) {
 	defer s.wg.Done()
 
@@ -918,53 +973,7 @@ func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *DBConn, job
 			}
 			idx++
 
-			if sqlJob.tp == ddl {
-
-				if sqlJob.ddlExecItem != nil && sqlJob.ddlExecItem.req != nil && !sqlJob.ddlExecItem.req.Exec {
-					s.tctx.L().Info("ignore sharding DDLs", zap.Strings("ddls", sqlJob.ddls))
-				} else {
-					_, err = db.executeSQLWithIgnore(s.tctx, ignoreDDLError, sqlJob.ddls)
-					if err != nil {
-						err = terror.WithScope(err, terror.ScopeDownstream)
-					}
-
-					if s.tracer.Enable() {
-						syncerJobState := s.tracer.FinishedSyncerJobState(err)
-						var execDDLReq *pb.ExecDDLRequest
-						if sqlJob.ddlExecItem != nil {
-							execDDLReq = sqlJob.ddlExecItem.req
-						}
-						_, traceErr := s.tracer.CollectSyncerJobEvent(sqlJob.traceID, sqlJob.traceGID, int32(sqlJob.tp), sqlJob.pos, sqlJob.currentPos, queueBucket, sqlJob.sql, sqlJob.ddls, nil, execDDLReq, syncerJobState)
-						if traceErr != nil {
-							s.tctx.L().Error("fail to collect binlog replication job event", log.ShortError(traceErr))
-						}
-					}
-				}
-				if err != nil {
-					s.appendExecErrors(&ExecErrorContext{
-						err:  err,
-						pos:  sqlJob.currentPos,
-						jobs: fmt.Sprintf("%v", sqlJob.ddls),
-					})
-				}
-
-				if s.cfg.IsSharding {
-					// for sharding DDL syncing, send result back
-					if sqlJob.ddlExecItem != nil {
-						sqlJob.ddlExecItem.resp <- err
-					}
-					s.ddlExecInfo.ClearBlockingDDL()
-				}
-				if err != nil {
-					// errro then pause.
-					fatalF(err, pb.ErrorType_ExecSQL)
-					continue
-				}
-
-				tpCnt[sqlJob.tp] += int64(len(sqlJob.ddls))
-				clearF()
-
-			} else if sqlJob.tp != flush && len(sqlJob.sql) > 0 {
+			if sqlJob.tp != flush && len(sqlJob.sql) > 0 {
 				jobs = append(jobs, sqlJob)
 				tpCnt[sqlJob.tp]++
 			}
@@ -1059,7 +1068,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	go func() {
 		ctx2, cancel := context.WithCancel(ctx)
 		ctctx := s.tctx.WithContext(ctx2)
-		s.sync(ctctx, adminQueueName, s.ddlDBConn, s.jobs[s.cfg.WorkerCount])
+		s.syncDDL(ctctx, adminQueueName, s.ddlDBConn, s.jobs[s.cfg.WorkerCount])
 		cancel()
 	}()
 
