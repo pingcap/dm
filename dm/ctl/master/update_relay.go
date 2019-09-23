@@ -27,7 +27,7 @@ import (
 // NewUpdateRelayCmd creates a UpdateRelay command
 func NewUpdateRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "update-relay [-w worker ...] <config_file>",
+		Use:   "update-relay [-w worker ...] <config-file>",
 		Short: "update dm-worker's relay unit configure",
 		Run:   updateRelayFunc,
 	}

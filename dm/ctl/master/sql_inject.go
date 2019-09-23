@@ -28,7 +28,7 @@ import (
 // NewSQLInjectCmd creates a SQLInject command
 func NewSQLInjectCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "sql-inject <-w worker> <task_name> <sql1;sql2;>",
+		Use:   "sql-inject <-w worker> <task-name> <sql1;sql2;>",
 		Short: "sql-inject injects (limited) sqls into syncer as binlog event",
 		Run:   sqlInjectFunc,
 	}
@@ -54,7 +54,7 @@ func sqlInjectFunc(cmd *cobra.Command, _ []string) {
 
 	taskName := cmd.Flags().Arg(0)
 	if strings.TrimSpace(taskName) == "" {
-		common.PrintLines("task_name is empty")
+		common.PrintLines("task-name is empty")
 		return
 	}
 
