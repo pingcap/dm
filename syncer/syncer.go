@@ -687,6 +687,7 @@ func (s *Syncer) getTable(schema string, table string) (*table, []string, error)
 func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int64) {
 	m := addedJobsTotal
 	if isFinished {
+		s.count.Add(n)
 		m = finishedJobsTotal
 	}
 
@@ -708,8 +709,6 @@ func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int6
 	default:
 		s.tctx.L().Warn("unknown job operation type", zap.Stringer("type", tp))
 	}
-
-	s.count.Add(n)
 }
 
 func (s *Syncer) checkWait(job *job) bool {
