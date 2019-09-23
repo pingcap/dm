@@ -1472,6 +1472,8 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	}
 
 	executeSQLAndWait(len(expectJobs1))
+	c.Assert(syncer.Status().(*pb.SyncStatus).TotalEvents, Equals, int64(0))
+	syncer.mockFinishJob(expectJobs1)
 
 	testJobs.Lock()
 	checkJobs(c, testJobs.jobs, expectJobs1)
@@ -1534,13 +1536,13 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	}
 
 	executeSQLAndWait(len(expectJobs2))
+	c.Assert(syncer.Status().(*pb.SyncStatus).TotalEvents, Equals, int64(len(expectJobs1)))
+	syncer.mockFinishJob(expectJobs2)
+	c.Assert(syncer.Status().(*pb.SyncStatus).TotalEvents, Equals, int64(len(expectJobs1)+len(expectJobs2)))
 
 	testJobs.RLock()
 	checkJobs(c, testJobs.jobs, expectJobs2)
 	testJobs.RUnlock()
-
-	status := syncer.Status().(*pb.SyncStatus)
-	c.Assert(status.TotalEvents, Equals, int64(len(expectJobs1)+len(expectJobs2)))
 
 	cancel()
 	syncer.Close()
@@ -1593,6 +1595,15 @@ func checkJobs(c *C, jobs []*job, expectJobs []*expectJob) {
 var testJobs struct {
 	sync.RWMutex
 	jobs []*job
+}
+
+func (s *Syncer) mockFinishJob(jobs []*expectJob) {
+	for _, job := range jobs {
+		switch job.tp {
+		case ddl, insert, update, del, flush:
+			s.addCount(true, "test", job.tp, 1)
+		}
+	}
 }
 
 func (s *Syncer) addJobToMemory(job *job) error {
