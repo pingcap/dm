@@ -46,8 +46,8 @@ When we encounter these abnormal scenario, we often pause part of the tasks or d
 There exists some key concepts in a data import/replication link:
 
 - Data loss: Each database transaction execution failure is treated as one data loss, the failure includes every kind of database execution failure that no data is written to downstream, partial data written error does not include.
-- Bandwidth: Bandwidth describes the maximum data import/replication rate from a DM-worker to downstream, this can be measured by tps from DM-worker (or TPS in downstream, but should filter the data traffic from the specific DM-worker).
-- Latency: Latency is the amount of time it takes for data to travel from DM-worker to downstream.
+- Bandwidth: Bandwidth describes the maximum data import/replication rate from a DM-worker to downstream, this can be measured by tps from DM-worker (or TPS in downstream, but should only include the data traffic of this DM-worker).
+- Latency: Latency is the amount of time it takes for data to replicate from DM-worker to downstream.
 
 The congestion usually means the quality of service decreases because of the service node or data link is carrying more data than it can handle. In the data import/replication scenario, the consequence of congestion can be partial downstream database execution timeout, downstream qps decrease or SQL execution latency increase. We can use these three indices to determine whether congestion happens and measure the degree of congestion.
 
