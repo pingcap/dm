@@ -559,12 +559,6 @@ func (l *Loader) Close() {
 
 	l.stopLoad()
 
-	for _, c := range l.toDBConns {
-		err := c.Close()
-		if err != nil {
-			l.tctx.L().Error("close downstream connetion error", log.ShortError(err))
-		}
-	}
 	err := l.toDB.Close()
 	if err != nil {
 		l.tctx.L().Error("close downstream DB error", log.ShortError(err))
@@ -985,10 +979,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		dbConn.Close()
-		baseDB.Close()
-	}()
+	defer baseDB.Close()
 
 	dispatchMap := make(map[string]*fileJob)
 

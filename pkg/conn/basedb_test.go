@@ -18,7 +18,6 @@ import (
 	. "github.com/pingcap/check"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
-	"github.com/pingcap/dm/pkg/retry"
 )
 
 var _ = Suite(&testBaseDBSuite{})
@@ -30,7 +29,7 @@ func (t *testBaseDBSuite) TestGetBaseConn(c *C) {
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 
-	baseDB := &BaseDB{db, &retry.FiniteRetryStrategy{}}
+	baseDB := NewBaseDB(db)
 
 	tctx := tcontext.Background()
 

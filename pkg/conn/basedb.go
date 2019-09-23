@@ -60,14 +60,23 @@ func (d *defaultDBProvider) Apply(config config.DBConfig) (*BaseDB, error) {
 	}
 	db.SetMaxIdleConns(maxIdleConns)
 
-	return &BaseDB{db, &retry.FiniteRetryStrategy{}}, nil
+	return NewBaseDB(db), nil
 }
 
 // BaseDB wraps *sql.DB
 type BaseDB struct {
 	DB *sql.DB
 
+	// hold all db connections generated from this BaseDB
+	conns []*BaseConn
+
 	Retry retry.Strategy
+}
+
+// NewBaseDB returns *BaseDB object
+func NewBaseDB(db *sql.DB) *BaseDB {
+	conns := make([]*BaseConn, 0)
+	return &BaseDB{db, conns, &retry.FiniteRetryStrategy{}}
 }
 
 // GetBaseConn retrieves *BaseConn which has own retryStrategy
@@ -80,8 +89,9 @@ func (d *BaseDB) GetBaseConn(ctx context.Context) (*BaseConn, error) {
 	if err != nil {
 		return nil, terror.ErrDBDriverError.Delegate(err)
 	}
-
-	return newBaseConn(conn, d.Retry), nil
+	baseConn := newBaseConn(conn, d.Retry)
+	d.conns = append(d.conns, baseConn)
+	return baseConn, nil
 }
 
 // Close release db resource
@@ -89,5 +99,16 @@ func (d *BaseDB) Close() error {
 	if d == nil || d.DB == nil {
 		return nil
 	}
-	return d.DB.Close()
+	var err error
+	for _, conn := range d.conns {
+		terr := conn.Close()
+		if err == nil {
+			err = terr
+		}
+	}
+	terr := d.DB.Close()
+	if err == nil {
+		return terr
+	}
+	return err
 }

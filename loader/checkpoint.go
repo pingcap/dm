@@ -298,11 +298,7 @@ func (cp *RemoteCheckPoint) Init(filename string, endPos int64) error {
 
 // Close implements CheckPoint.Close
 func (cp *RemoteCheckPoint) Close() {
-	err := cp.conn.Close()
-	if err != nil {
-		cp.tctx.L().Error("close checkpoint connection", log.ShortError(err))
-	}
-	err = cp.db.Close()
+	err := cp.db.Close()
 	if err != nil {
 		cp.tctx.L().Error("close checkpoint db", log.ShortError(err))
 	}
