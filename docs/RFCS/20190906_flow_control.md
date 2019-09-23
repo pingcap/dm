@@ -26,7 +26,7 @@ Firstly we will discuss the key factor that affects the import or replication sp
 - In the full data import procedure, data import speed is based on the SQL batch size and SQL executor concurrency. The SQL batch size is mainly determined by the single statement size of dump data, which can be controlled with the `mydumper` configuration. The SQL executor concurrency equals to the worker count of load unit, which is configurated by loader `pool-size` in task config.
 - In the incremental data replication procedure, replication speed relates to SQL job batch size and SQL executor concurrency. The binlog replication unit gets data from relay log consumer (assuming the relay log consume speed is fast enough), and distributes SQL jobs to multiple executors, the executor count is configurated by `worker-count` in task config. When the cached SQL job count exceeds SQL batch size (SQL batch size is configurated by `batch` in task config) or every 10ms, all SQLs in these jobs will be executed to downstream in a transaction.
 
-In the full data import scenario, it is easy to meet downstream congestion if we have many DM-workers and much high executor concurrency.
+In the full data import scenario, downstream congestion may happen if we have too many DM-workers and much high executor concurrency.
 
 While in incremental data replication scenario the congestion does not happen often, but there still exists some use scenario that may lead to congestion, including
 
@@ -46,7 +46,7 @@ When we encounter these abnormal scenario, we often pause part of the tasks or d
 There exists some key concepts in a data import/replication link:
 
 - Data loss: Each database transaction execution failure is treated as one data loss, the failure includes every kind of database execution failure that no data is written to downstream, partial data written error does not include.
-- Bandwidth: Bandwidth describes the maximum data import/replication rate from a DM-worker to downstream, this can be measured by tps from DM-worker (or TPS in downstream, but should only include the data traffic of this DM-worker).
+- Bandwidth: Bandwidth describes the maximum data import/replication rate from a DM-worker to downstream, this can be measured by TPS from DM-worker (or TPS in downstream, but should only include the data traffic from this DM-worker).
 - Latency: Latency is the amount of time it takes for data to replicate from DM-worker to downstream.
 
 The congestion usually means the quality of service decreases because of the service node or data link is carrying more data than it can handle. In the data import/replication scenario, the consequence of congestion can be partial downstream database execution timeout, downstream qps decrease or SQL execution latency increase. We can use these three indices to determine whether congestion happens and measure the degree of congestion.
