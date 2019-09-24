@@ -30,11 +30,15 @@ var _ = check.Suite(&testTaskCheckerSuite{})
 
 type testTaskCheckerSuite struct{}
 
+var (
+	unsupporteModifyColumnError = unit.NewProcessError(pb.ErrorType_ExecSQL, terror.ErrDBExecuteFailed.Delegate(&tmysql.SQLError{1105, "unsupported modify column length 20 is less than origin 40", tmysql.DefaultMySQLState}))
+	unknownProcessError         = unit.NewProcessError(pb.ErrorType_UnknownError, errors.New("error mesage"))
+)
+
 func (s *testTaskCheckerSuite) TestResumeStrategy(c *check.C) {
 	c.Assert(ResumeSkip.String(), check.Equals, resumeStrategy2Str[ResumeSkip])
 	c.Assert(ResumeStrategy(10000).String(), check.Equals, "unsupported resume strategy: 10000")
 
-	sqlExecErr := unit.NewProcessError(pb.ErrorType_ExecSQL, terror.ErrDBExecuteFailed.Delegate(&tmysql.SQLError{1105, "unsupported modify column length 20 is less than origin 40", tmysql.DefaultMySQLState}))
 	taskName := "test-task"
 	now := func(addition time.Duration) time.Time { return time.Now().Add(addition) }
 	testCases := []struct {
@@ -48,7 +52,7 @@ func (s *testTaskCheckerSuite) TestResumeStrategy(c *check.C) {
 		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Running}, now, time.Duration(0), 1 * time.Millisecond, ResumeIgnore},
 		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Paused}, now, time.Duration(0), 1 * time.Millisecond, ResumeIgnore},
 		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Paused, Result: &pb.ProcessResult{IsCanceled: true}}, now, time.Duration(0), 1 * time.Millisecond, ResumeIgnore},
-		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Paused, Result: &pb.ProcessResult{IsCanceled: false, Errors: []*pb.ProcessError{sqlExecErr}}}, now, time.Duration(0), 1 * time.Millisecond, ResumeNoSense},
+		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Paused, Result: &pb.ProcessResult{IsCanceled: false, Errors: []*pb.ProcessError{unsupporteModifyColumnError}}}, now, time.Duration(0), 1 * time.Millisecond, ResumeNoSense},
 		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Paused, Result: &pb.ProcessResult{IsCanceled: false}}, now, time.Duration(0), 1 * time.Second, ResumeSkip},
 		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Paused, Result: &pb.ProcessResult{IsCanceled: false}}, now, -2 * time.Millisecond, 1 * time.Millisecond, ResumeDispatch},
 	}
@@ -113,7 +117,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	st.stage = pb.Stage_Paused
 	st.result = &pb.ProcessResult{
 		IsCanceled: false,
-		Errors:     []*pb.ProcessError{{Type: pb.ErrorType_UnknownError, Msg: "error message"}},
+		Errors:     []*pb.ProcessError{unknownProcessError},
 	}
 	time.Sleep(1 * time.Millisecond)
 	rtsc.check()
@@ -140,7 +144,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	// test no sense strategy
 	st.result = &pb.ProcessResult{
 		IsCanceled: false,
-		Errors:     []*pb.ProcessError{{Type: pb.ErrorType_ExecSQL, Msg: "ERROR 1105 (HY000): unsupported modify column length 20 is less than origin 40"}},
+		Errors:     []*pb.ProcessError{unsupporteModifyColumnError},
 	}
 	latestPausedTime = rtsc.bc.latestPausedTime[taskName]
 	rtsc.check()
@@ -178,7 +182,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	st.stage = pb.Stage_Paused
 	st.result = &pb.ProcessResult{
 		IsCanceled: false,
-		Errors:     []*pb.ProcessError{{Type: pb.ErrorType_UnknownError, Msg: "error message"}},
+		Errors:     []*pb.ProcessError{unknownProcessError},
 	}
 	rtsc.check()
 	latestResumeTime = rtsc.bc.latestResumeTime[taskName]
@@ -247,7 +251,7 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 		stage: pb.Stage_Paused,
 		result: &pb.ProcessResult{
 			IsCanceled: false,
-			Errors:     []*pb.ProcessError{{Type: pb.ErrorType_ExecSQL, Msg: "ERROR 1105 (HY000): unsupported modify column length 20 is less than origin 40"}},
+			Errors:     []*pb.ProcessError{unsupporteModifyColumnError},
 		},
 	}
 	rtsc.w.subTaskHolder.recordSubTask(st1)
@@ -256,7 +260,7 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 		stage: pb.Stage_Paused,
 		result: &pb.ProcessResult{
 			IsCanceled: false,
-			Errors:     []*pb.ProcessError{{Type: pb.ErrorType_UnknownError, Msg: "error message"}},
+			Errors:     []*pb.ProcessError{unknownProcessError},
 		},
 	}
 	rtsc.w.subTaskHolder.recordSubTask(st2)

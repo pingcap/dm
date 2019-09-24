@@ -369,10 +369,17 @@ func (st *SubTask) setResult(result *pb.ProcessResult) {
 }
 
 // Result returns the result of the sub task
+// Note this method will omit the `Error` field in `pb.ProcessError`
 func (st *SubTask) Result() *pb.ProcessResult {
 	st.RLock()
 	defer st.RUnlock()
-	return proto.Clone(st.result).(*pb.ProcessResult)
+	result := proto.Clone(st.result).(*pb.ProcessResult)
+	if result != nil {
+		for i := range result.Errors {
+			result.Errors[i].Error = nil
+		}
+	}
+	return result
 }
 
 // Close stops the sub task

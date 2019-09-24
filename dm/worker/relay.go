@@ -308,13 +308,20 @@ func (h *realRelayHolder) setResult(result *pb.ProcessResult) {
 }
 
 // Result returns the result of the relay
+// Note this method will omit the `Error` field in `pb.ProcessError`
 func (h *realRelayHolder) Result() *pb.ProcessResult {
 	h.RLock()
 	defer h.RUnlock()
 	if h.result == nil {
 		return nil
 	}
-	return proto.Clone(h.result).(*pb.ProcessResult)
+	result := proto.Clone(h.result).(*pb.ProcessResult)
+	if result != nil {
+		for i := range result.Errors {
+			result.Errors[i].Error = nil
+		}
+	}
+	return result
 }
 
 // Update update relay config online
