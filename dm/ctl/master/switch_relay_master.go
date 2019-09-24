@@ -28,7 +28,7 @@ import (
 func NewSwitchRelayMasterCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "switch-relay-master <-w worker ...>",
-		Short: "switch master server of dm-worker's relay unit",
+		Short: "switch the master server of the DM-worker's relay unit",
 		Run:   switchRelayMasterFunc,
 	}
 	return cmd

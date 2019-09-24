@@ -28,7 +28,7 @@ import (
 func NewUnlockDDLLockCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "unlock-ddl-lock [-w worker ...] <lock-ID>",
-		Short: "force to unlock DDL lock",
+		Short: "forcefully unlock DDL lock",
 		Run:   unlockDDLLockFunc,
 	}
 	cmd.Flags().StringP("owner", "o", "", "dm-worker to replace the default owner")
