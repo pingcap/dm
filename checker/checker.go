@@ -32,6 +32,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 
 	_ "github.com/go-sql-driver/mysql" // for mysql
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/check"
 	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -235,7 +236,7 @@ func (c *Checker) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	errs := make([]*pb.ProcessError, 0, 1)
 	result, _ := check.Do(cctx, c.checkList)
 	if !result.Summary.Passed {
-		errs = append(errs, unit.NewProcessError(pb.ErrorType_CheckFailed, "check was failed, please see detail"))
+		errs = append(errs, unit.NewProcessError(pb.ErrorType_CheckFailed, errors.New("check was failed, please see detail")))
 
 	}
 

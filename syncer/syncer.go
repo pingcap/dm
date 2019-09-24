@@ -22,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
@@ -588,7 +587,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	if err != nil {
 		syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name).Inc()
-		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err)))
+		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, err))
 	}
 
 	isCanceled := false
@@ -904,7 +903,7 @@ func (s *Syncer) syncDDL(ctx *tcontext.Context, queueBucket string, db *Conn, dd
 		s.jobWg.Done()
 		if err != nil {
 			s.execErrorDetected.Set(true)
-			s.runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, errors.ErrorStack(err))
+			s.runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, err)
 			continue
 		}
 		s.addCount(true, queueBucket, sqlJob.tp, int64(len(sqlJob.ddls)))
@@ -934,7 +933,7 @@ func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *Conn, jobCh
 
 	fatalF := func(err error, errType pb.ErrorType) {
 		s.execErrorDetected.Set(true)
-		s.runFatalChan <- unit.NewProcessError(errType, errors.ErrorStack(err))
+		s.runFatalChan <- unit.NewProcessError(errType, err)
 		clearF()
 	}
 
@@ -2246,7 +2245,7 @@ func (s *Syncer) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 		pr <- pb.ProcessResult{
 			IsCanceled: false,
 			Errors: []*pb.ProcessError{
-				unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err)),
+				unit.NewProcessError(pb.ErrorType_UnknownError, err),
 			},
 		}
 		return

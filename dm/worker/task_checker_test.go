@@ -17,9 +17,13 @@ import (
 	"time"
 
 	"github.com/pingcap/check"
+	"github.com/pingcap/errors"
+	tmysql "github.com/pingcap/parser/mysql"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var _ = check.Suite(&testTaskCheckerSuite{})
@@ -30,6 +34,7 @@ func (s *testTaskCheckerSuite) TestResumeStrategy(c *check.C) {
 	c.Assert(ResumeSkip.String(), check.Equals, resumeStrategy2Str[ResumeSkip])
 	c.Assert(ResumeStrategy(10000).String(), check.Equals, "unsupported resume strategy: 10000")
 
+	sqlExecErr := unit.NewProcessError(pb.ErrorType_ExecSQL, terror.ErrDBExecuteFailed.Delegate(&tmysql.SQLError{1105, "unsupported modify column length 20 is less than origin 40", tmysql.DefaultMySQLState}))
 	taskName := "test-task"
 	now := func(addition time.Duration) time.Time { return time.Now().Add(addition) }
 	testCases := []struct {
@@ -43,7 +48,7 @@ func (s *testTaskCheckerSuite) TestResumeStrategy(c *check.C) {
 		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Running}, now, time.Duration(0), 1 * time.Millisecond, ResumeIgnore},
 		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Paused}, now, time.Duration(0), 1 * time.Millisecond, ResumeIgnore},
 		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Paused, Result: &pb.ProcessResult{IsCanceled: true}}, now, time.Duration(0), 1 * time.Millisecond, ResumeIgnore},
-		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Paused, Result: &pb.ProcessResult{IsCanceled: false, Errors: []*pb.ProcessError{{Type: pb.ErrorType_ExecSQL, Msg: "ERROR 1105 (HY000): unsupported modify column length 20 is less than origin 40"}}}}, now, time.Duration(0), 1 * time.Millisecond, ResumeNoSense},
+		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Paused, Result: &pb.ProcessResult{IsCanceled: false, Errors: []*pb.ProcessError{sqlExecErr}}}, now, time.Duration(0), 1 * time.Millisecond, ResumeNoSense},
 		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Paused, Result: &pb.ProcessResult{IsCanceled: false}}, now, time.Duration(0), 1 * time.Second, ResumeSkip},
 		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Paused, Result: &pb.ProcessResult{IsCanceled: false}}, now, -2 * time.Millisecond, 1 * time.Millisecond, ResumeDispatch},
 	}
@@ -282,20 +287,26 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 
 func (s *testTaskCheckerSuite) TestIsResumableError(c *check.C) {
 	testCases := []struct {
-		err       *pb.ProcessError
+		errorType pb.ErrorType
+		err       error
 		resumable bool
 	}{
-		{&pb.ProcessError{Type: pb.ErrorType_ExecSQL, Msg: "ERROR 1105 (HY000): unsupported modify column length 20 is less than origin 40"}, false},
-		{&pb.ProcessError{Type: pb.ErrorType_ExecSQL, Msg: "ERROR 1105 (HY000): unsupported drop integer primary key"}, false},
-		{&pb.ProcessError{Type: pb.ErrorType_ExecSQL, Msg: ""}, true},
-		{&pb.ProcessError{Type: pb.ErrorType_ExecSQL, Msg: "[code=10006:class=database:scope=not-set:level=high] file test.t3.sql: execute statement failed: USE `test_abc`;: context canceled"}, true},
-		{&pb.ProcessError{Type: pb.ErrorType_UnknownError, Msg: "[code=11038:class=functional:scope=internal:level=high] parse relay log file bin.000018 from offset 555 in dir /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004: parse relay log file bin.000018 from offset 0 in dir /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004: parse relay log file /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004/bin.000018: binlog checksum mismatch, data may be corrupted"}, false},
-		{&pb.ProcessError{Type: pb.ErrorType_UnknownError, Msg: "[code=11038:class=functional:scope=internal:level=high] parse relay log file bin.000018 from offset 500 in dir /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004: parse relay log file bin.000018 from offset 0 in dir /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004: parse relay log file /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004/bin.000018: get event err EOF, need 1567488104 but got 316323"}, false},
-		{&pb.ProcessError{Type: pb.ErrorType_UnknownError, Msg: ""}, true},
-		{&pb.ProcessError{Type: pb.ErrorType_UnknownError, Msg: "unknown error"}, true},
+		// only DM new error is checked
+		{pb.ErrorType_ExecSQL, &tmysql.SQLError{1105, "unsupported modify column length 20 is less than origin 40", tmysql.DefaultMySQLState}, true},
+		{pb.ErrorType_ExecSQL, &tmysql.SQLError{1105, "unsupported drop integer primary key", tmysql.DefaultMySQLState}, true},
+		{pb.ErrorType_ExecSQL, nil, true},
+		{pb.ErrorType_ExecSQL, terror.ErrDBExecuteFailed.Generate("file test.t3.sql: execute statement failed: USE `test_abc`;: context canceled"), true},
+		{pb.ErrorType_ExecSQL, terror.ErrDBExecuteFailed.Delegate(&tmysql.SQLError{1105, "unsupported modify column length 20 is less than origin 40", tmysql.DefaultMySQLState}, "alter table t modify col varchar(20)"), false},
+		{pb.ErrorType_ExecSQL, terror.ErrDBExecuteFailed.Delegate(&tmysql.SQLError{1105, "unsupported drop integer primary key", tmysql.DefaultMySQLState}, "alter table t drop column id"), false},
+		// real error is generated by `Delegate` and multiple `Annotatef`, we use `New` to simplify it
+		{pb.ErrorType_UnknownError, terror.ErrParserParseRelayLog.New("parse relay log file bin.000018 from offset 555 in dir /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004: parse relay log file bin.000018 from offset 0 in dir /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004: parse relay log file /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004/bin.000018: binlog checksum mismatch, data may be corrupted"), false},
+		{pb.ErrorType_UnknownError, terror.ErrParserParseRelayLog.New("parse relay log file bin.000018 from offset 500 in dir /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004: parse relay log file bin.000018 from offset 0 in dir /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004: parse relay log file /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004/bin.000018: get event err EOF, need 1567488104 but got 316323"), false},
+		{pb.ErrorType_UnknownError, nil, true},
+		{pb.ErrorType_UnknownError, errors.New("unknown error"), true},
 	}
 
 	for _, tc := range testCases {
-		c.Assert(isResumableError(tc.err), check.Equals, tc.resumable)
+		err := unit.NewProcessError(tc.errorType, tc.err)
+		c.Assert(isResumableError(err), check.Equals, tc.resumable)
 	}
 }

@@ -158,7 +158,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *
 				if err := w.conn.executeSQL(ctctx, sqls); err != nil {
 					// expect pause rather than exit
 					err = terror.WithScope(terror.Annotatef(err, "file %s", job.file), terror.ScopeDownstream)
-					runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, errors.ErrorStack(err))
+					runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, err)
 					return
 				}
 				w.loader.finishedDataSize.Add(job.offset - job.lastOffset)
@@ -184,7 +184,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *
 			if err := w.restoreDataFile(ctx, filepath.Join(w.cfg.Dir, job.dataFile), job.offset, job.info); err != nil {
 				// expect pause rather than exit
 				err = terror.Annotatef(err, "restore data file (%v) failed", job.dataFile)
-				runFatalChan <- unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err))
+				runFatalChan <- unit.NewProcessError(pb.ErrorType_UnknownError, err)
 				return
 			}
 		}
@@ -423,7 +423,7 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	if err := l.getMydumpMetadata(); err != nil {
 		loaderExitWithErrorCounter.WithLabelValues(l.cfg.Name).Inc()
 		pr <- pb.ProcessResult{
-			Errors: []*pb.ProcessError{unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err))},
+			Errors: []*pb.ProcessError{unit.NewProcessError(pb.ErrorType_UnknownError, err)},
 		}
 		return
 	}
@@ -447,7 +447,7 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	if err != nil {
 		loaderExitWithErrorCounter.WithLabelValues(l.cfg.Name).Inc()
-		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err)))
+		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, err))
 	}
 
 	isCanceled := false
