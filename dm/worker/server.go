@@ -57,7 +57,6 @@ func NewServer(cfg *Config) *Server {
 	s := Server{
 		cfg: cfg,
 	}
-	s.closed.Set(true) // not start yet
 	return &s
 }
 
@@ -109,7 +108,7 @@ func (s *Server) Start() error {
 	return terror.ErrWorkerStartService.Delegate(err)
 }
 
-// Close close the RPC server
+// Close close the RPC server, this function can be called multiple times
 func (s *Server) Close() {
 	s.Lock()
 	defer s.Unlock()
@@ -117,9 +116,11 @@ func (s *Server) Close() {
 		return
 	}
 
-	err := s.rootLis.Close()
-	if err != nil && !common.IsErrNetClosing(err) {
-		log.L().Error("fail to close net listener", log.ShortError(err))
+	if s.rootLis != nil {
+		err := s.rootLis.Close()
+		if err != nil && !common.IsErrNetClosing(err) {
+			log.L().Error("fail to close net listener", log.ShortError(err))
+		}
 	}
 	if s.svr != nil {
 		// GracefulStop can not cancel active stream RPCs
@@ -129,8 +130,10 @@ func (s *Server) Close() {
 	}
 
 	// close worker and wait for return
-	s.worker.Close()
-	s.wg.Wait()
+	if s.worker != nil {
+		s.worker.Close()
+		s.wg.Wait()
+	}
 
 	s.closed.Set(true)
 }

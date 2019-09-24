@@ -95,6 +95,12 @@ func NewServer(cfg *Config) *Server {
 // Start starts to serving
 func (s *Server) Start() error {
 	var err error
+
+	_, _, err = s.serveHostAndPort()
+	if err != nil {
+		return err
+	}
+
 	s.rootLis, err = net.Listen("tcp", s.cfg.MasterAddr)
 	if err != nil {
 		return terror.ErrMasterStartService.Delegate(err)
@@ -188,16 +194,18 @@ func (s *Server) Start() error {
 	return err
 }
 
-// Close close the RPC server
+// Close close the RPC server, this function can be called multiple times
 func (s *Server) Close() {
 	s.Lock()
 	defer s.Unlock()
 	if s.closed.Get() {
 		return
 	}
-	err := s.rootLis.Close()
-	if err != nil && !common.IsErrNetClosing(err) {
-		log.L().Error("close net listener", zap.Error(err))
+	if s.rootLis != nil {
+		err := s.rootLis.Close()
+		if err != nil && !common.IsErrNetClosing(err) {
+			log.L().Error("close net listener", zap.Error(err))
+		}
 	}
 	if s.svr != nil {
 		s.svr.GracefulStop()
@@ -1974,9 +1982,9 @@ func (s *Server) workerArgsExtractor(args ...interface{}) (workerrpc.Client, str
 // HandleHTTPApis handles http apis and translate to grpc request
 func (s *Server) HandleHTTPApis(ctx context.Context, mux *http.ServeMux) error {
 	// MasterAddr's format may be "host:port" or "":port"
-	_, port, err := net.SplitHostPort(s.cfg.MasterAddr)
+	_, port, err := s.serveHostAndPort()
 	if err != nil {
-		return terror.ErrMasterHandleHTTPApis.Delegate(err)
+		return err
 	}
 
 	opts := []grpc.DialOption{grpc.WithInsecure()}
@@ -1993,4 +2001,13 @@ func (s *Server) HandleHTTPApis(ctx context.Context, mux *http.ServeMux) error {
 	mux.Handle("/apis/", gwmux)
 
 	return nil
+}
+
+func (s *Server) serveHostAndPort() (host, port string, err error) {
+	// MasterAddr's format may be "host:port" or "":port"
+	host, port, err = net.SplitHostPort(s.cfg.MasterAddr)
+	if err != nil {
+		err = terror.ErrMasterHandleHTTPApis.Delegate(err)
+	}
+	return
 }
