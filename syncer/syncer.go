@@ -350,7 +350,7 @@ func (s *Syncer) Init() (err error) {
 		rollbackHolder.Add(fr.FuncRollback{Name: "close-sharding-group-keeper", Fn: s.sgk.Close})
 	}
 
-	err = s.checkpoint.Init(nil)
+	err = s.checkpoint.Init()
 	if err != nil {
 		return err
 	}

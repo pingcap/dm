@@ -123,7 +123,7 @@ func (b *binlogPoint) String() string {
 // because, when restarting to continue the sync, all sharding DDLs must try-sync again
 type CheckPoint interface {
 	// Init initializes the CheckPoint
-	Init(conn *DBConn) error
+	Init() error
 
 	// Close closes the CheckPoint
 	Close()
@@ -229,19 +229,15 @@ func NewRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id s
 }
 
 // Init implements CheckPoint.Init
-func (cp *RemoteCheckPoint) Init(conn *DBConn) error {
-	if conn != nil {
-		cp.dbConn = conn
-	} else {
-		checkPointDB := cp.cfg.To
-		checkPointDB.RawDBCfg = config.DefaultRawDBConfig(maxCheckPointTimeout)
-		db, dbConns, err := createConns(cp.tctx, cp.cfg, checkPointDB, 1)
-		if err != nil {
-			return err
-		}
-		cp.db = db
-		cp.dbConn = dbConns[0]
+func (cp *RemoteCheckPoint) Init() error {
+	checkPointDB := cp.cfg.To
+	checkPointDB.RawDBCfg = config.DefaultRawDBConfig(maxCheckPointTimeout)
+	db, dbConns, err := createConns(cp.tctx, cp.cfg, checkPointDB, 1)
+	if err != nil {
+		return err
 	}
+	cp.db = db
+	cp.dbConn = dbConns[0]
 
 	return cp.prepare()
 }

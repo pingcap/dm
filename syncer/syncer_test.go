@@ -1232,7 +1232,11 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		checkPointDBConn, err := checkPointDB.Conn(ctx)
 		c.Assert(err, IsNil)
 		syncer.initShardingGroups(&DBConn{cfg: s.cfg, baseConn: &conn.BaseConn{shardGroupDBConn, &retry.FiniteRetryStrategy{}}})
-		syncer.checkpoint.Init(&DBConn{cfg: s.cfg, baseConn: &conn.BaseConn{checkPointDBConn, &retry.FiniteRetryStrategy{}}})
+
+		// mock syncer.checkpoint.Init() function
+		syncer.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: &conn.BaseConn{checkPointDBConn, &retry.FiniteRetryStrategy{}}}
+		syncer.checkpoint.(*RemoteCheckPoint).prepare()
+
 		syncer.reset()
 		events := append(createEvents, s.generateEvents(_case.testEvents, c)...)
 		syncer.streamerProducer = &MockStreamProducer{events}
@@ -1390,7 +1394,10 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	checkPointMock.ExpectExec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
 	checkPointMock.ExpectCommit()
 
-	syncer.checkpoint.Init(&DBConn{cfg: s.cfg, baseConn: &conn.BaseConn{checkPointDBConn, &retry.FiniteRetryStrategy{}}})
+	// mock syncer.checkpoint.Init() function
+	syncer.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: &conn.BaseConn{checkPointDBConn, &retry.FiniteRetryStrategy{}}}
+	syncer.checkpoint.(*RemoteCheckPoint).prepare()
+
 	syncer.reset()
 	events1 := mockBinlogEvents{
 		mockBinlogEvent{typ: DBCreate, args: []interface{}{"test_1"}},

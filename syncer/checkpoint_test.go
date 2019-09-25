@@ -94,7 +94,8 @@ func (s *testCheckpointSuite) TestCheckPoint(c *C) {
 	c.Assert(err, IsNil)
 	conn := &DBConn{cfg: s.cfg, baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}}
 
-	err = cp.Init(conn)
+	cp.(*RemoteCheckPoint).dbConn = conn
+	err = cp.(*RemoteCheckPoint).prepare()
 	c.Assert(err, IsNil)
 	cp.Clear()
 
