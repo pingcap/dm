@@ -343,7 +343,12 @@ func (s *Syncer) Init() (err error) {
 	}
 
 	if s.cfg.IsSharding {
-		err = s.initShardingGroups(nil)
+		err = s.sgk.Init()
+		if err != nil {
+			return err
+		}
+
+		err = s.initShardingGroups()
 		if err != nil {
 			return err
 		}
@@ -405,15 +410,9 @@ func (s *Syncer) Init() (err error) {
 
 // initShardingGroups initializes sharding groups according to source MySQL, filter rules and router rules
 // NOTE: now we don't support modify router rules after task has started
-func (s *Syncer) initShardingGroups(conn *DBConn) error {
+func (s *Syncer) initShardingGroups() error {
 	// fetch tables from source and filter them
 	sourceTables, err := s.fromDB.fetchAllDoTables(s.bwList)
-	if err != nil {
-		return err
-	}
-
-	// clear old sharding group and initials some needed data
-	err = s.sgk.Init(conn)
 	if err != nil {
 		return err
 	}
@@ -2328,7 +2327,12 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 
 	if s.cfg.IsSharding {
 		// re-init sharding group
-		err = s.initShardingGroups(nil)
+		err = s.sgk.Init()
+		if err != nil {
+			return err
+		}
+
+		err = s.initShardingGroups()
 		if err != nil {
 			return err
 		}

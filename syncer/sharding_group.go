@@ -454,22 +454,17 @@ func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceI
 }
 
 // Init does initialization staff
-func (k *ShardingGroupKeeper) Init(conn *DBConn) error {
+func (k *ShardingGroupKeeper) Init() error {
 	k.clear()
-	if conn != nil {
-		k.dbConn = conn
-	} else {
-		sgkDB := k.cfg.To
-		sgkDB.RawDBCfg = config.DefaultRawDBConfig(maxDDLConnectionTimeout)
-		db, dbConns, err := createConns(k.tctx, k.cfg, sgkDB, 1)
-		if err != nil {
-			return err
-		}
-		k.db = db
-		k.dbConn = dbConns[0]
+	sgkDB := k.cfg.To
+	sgkDB.RawDBCfg = config.DefaultRawDBConfig(maxDDLConnectionTimeout)
+	db, dbConns, err := createConns(k.tctx, k.cfg, sgkDB, 1)
+	if err != nil {
+		return err
 	}
-	err := k.prepare()
-	return err
+	k.db = db
+	k.dbConn = dbConns[0]
+	return k.prepare()
 }
 
 // clear clears all sharding groups

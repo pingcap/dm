@@ -1231,7 +1231,11 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		c.Assert(err, IsNil)
 		checkPointDBConn, err := checkPointDB.Conn(ctx)
 		c.Assert(err, IsNil)
-		syncer.initShardingGroups(&DBConn{cfg: s.cfg, baseConn: &conn.BaseConn{shardGroupDBConn, &retry.FiniteRetryStrategy{}}})
+
+		// mock syncer.shardGroupkeeper.Init() function
+		syncer.sgk.dbConn = &DBConn{cfg: s.cfg, baseConn: &conn.BaseConn{shardGroupDBConn, &retry.FiniteRetryStrategy{}}}
+		syncer.sgk.prepare()
+		syncer.initShardingGroups()
 
 		// mock syncer.checkpoint.Init() function
 		syncer.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: &conn.BaseConn{checkPointDBConn, &retry.FiniteRetryStrategy{}}}
