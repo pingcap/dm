@@ -459,8 +459,9 @@ func (k *ShardingGroupKeeper) Init(conn *DBConn) error {
 	if conn != nil {
 		k.dbConn = conn
 	} else {
-		k.cfg.To.RawDBCfg = config.DefaultRawDBConfig(maxDDLConnectionTimeout)
-		db, dbConn, err := createConn(k.tctx, k.cfg, k.cfg.To)
+		sgkDB := k.cfg.To
+		sgkDB.RawDBCfg = config.DefaultRawDBConfig(maxDDLConnectionTimeout)
+		db, dbConn, err := createConn(k.tctx, k.cfg, sgkDB)
 		if err != nil {
 			return err
 		}

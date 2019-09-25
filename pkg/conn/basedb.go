@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sync"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/retry"
@@ -67,6 +68,8 @@ func (d *defaultDBProvider) Apply(config config.DBConfig) (*BaseDB, error) {
 type BaseDB struct {
 	DB *sql.DB
 
+	lock *sync.Mutex
+
 	// hold all db connections generated from this BaseDB
 	conns []*BaseConn
 
@@ -76,11 +79,14 @@ type BaseDB struct {
 // NewBaseDB returns *BaseDB object
 func NewBaseDB(db *sql.DB) *BaseDB {
 	conns := make([]*BaseConn, 0)
-	return &BaseDB{db, conns, &retry.FiniteRetryStrategy{}}
+	lock := new(sync.Mutex)
+	return &BaseDB{db, lock, conns, &retry.FiniteRetryStrategy{}}
 }
 
 // GetBaseConn retrieves *BaseConn which has own retryStrategy
 func (d *BaseDB) GetBaseConn(ctx context.Context) (*BaseConn, error) {
+	d.lock.Lock()
+	defer d.lock.Unlock()
 	conn, err := d.DB.Conn(ctx)
 	if err != nil {
 		return nil, terror.ErrDBDriverError.Delegate(err)
@@ -100,6 +106,8 @@ func (d *BaseDB) Close() error {
 		return nil
 	}
 	var err error
+	d.lock.Lock()
+	defer d.lock.Unlock()
 	for _, conn := range d.conns {
 		terr := conn.Close()
 		if err == nil {

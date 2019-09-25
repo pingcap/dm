@@ -233,8 +233,9 @@ func (cp *RemoteCheckPoint) Init(conn *DBConn) error {
 	if conn != nil {
 		cp.dbConn = conn
 	} else {
-		cp.cfg.To.RawDBCfg = config.DefaultRawDBConfig(maxCheckPointTimeout)
-		db, dbConn, err := createConn(cp.tctx, cp.cfg, cp.cfg.To)
+		checkPointDB := cp.cfg.To
+		checkPointDB.RawDBCfg = config.DefaultRawDBConfig(maxCheckPointTimeout)
+		db, dbConn, err := createConn(cp.tctx, cp.cfg, checkPointDB)
 		if err != nil {
 			return err
 		}
