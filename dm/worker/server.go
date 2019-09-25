@@ -64,6 +64,12 @@ func NewServer(cfg *Config) *Server {
 // Start starts to serving
 func (s *Server) Start() error {
 	var err error
+
+	_, _, err = s.serveHostAndPort()
+	if err != nil {
+		return err
+	}
+
 	s.rootLis, err = net.Listen("tcp", s.cfg.WorkerAddr)
 	if err != nil {
 		return terror.ErrWorkerStartService.Delegate(err)
@@ -447,4 +453,13 @@ func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {
 		resp.Msg = errors.ErrorStack(reqErr)
 	}
 	return resp
+}
+
+func (s *Server) serveHostAndPort() (host, port string, err error) {
+	// MasterAddr's format may be "host:port" or "":port"
+	host, port, err = net.SplitHostPort(s.cfg.WorkerAddr)
+	if err != nil {
+		err = terror.ErrWorkerHostPortNotValid.Delegate(err, s.cfg.WorkerAddr)
+	}
+	return
 }
