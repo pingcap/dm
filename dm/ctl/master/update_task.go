@@ -29,7 +29,7 @@ import (
 func NewUpdateTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update-task [-w worker ...] <config-file>",
-		Short: "update a task's config for routes, filters, column-mappings, black-white-list",
+		Short: "update a task's config for routes, filters, black-white-list",
 		Run:   updateTaskFunc,
 	}
 	return cmd
