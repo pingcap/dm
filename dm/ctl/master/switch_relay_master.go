@@ -28,7 +28,7 @@ import (
 func NewSwitchRelayMasterCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "switch-relay-master <-w worker ...>",
-		Short: "switch master server of dm-worker's relay unit",
+		Short: "switch the master server of the DM-worker's relay unit",
 		Run:   switchRelayMasterFunc,
 	}
 	return cmd
@@ -47,7 +47,7 @@ func switchRelayMasterFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 	if len(workers) == 0 {
-		fmt.Println("must specify at least one dm-worker (`-w` / `--worker`)")
+		fmt.Println("must specify at least one DM-worker (`-w` / `--worker`)")
 		return
 	}
 

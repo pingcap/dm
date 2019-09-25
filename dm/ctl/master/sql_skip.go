@@ -29,7 +29,7 @@ import (
 func NewSQLSkipCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sql-skip <-w worker> [-b binlog-pos] [-s sql-pattern] [--sharding] <task-name>",
-		Short: "sql-skip skips binlog event in specific binlog-pos or sql-pattern matched",
+		Short: "skip the binlog event matched by a specific binlog position (binlog-pos) or a SQL pattern (sql-pattern)",
 		Run:   sqlSkipFunc,
 	}
 	cmd.Flags().StringP("binlog-pos", "b", "", "position used to match binlog event if matched the sql-skip operation will be applied. The format like \"mysql-bin|000001.000003:3270\"")

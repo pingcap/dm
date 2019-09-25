@@ -33,7 +33,7 @@ function resume_relay_wrong_arg() {
 function resume_relay_wihout_worker() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "resume-relay" \
-        "must specify at least one dm-worker" 1
+        "must specify at least one DM-worker" 1
 }
 
 function resume_relay_while_master_down() {
