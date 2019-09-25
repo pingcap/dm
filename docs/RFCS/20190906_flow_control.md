@@ -1,6 +1,6 @@
 # Proposal: Add flow control for data replication to downstream
 
-- Author(s):    [yangfei](htTPS://github.com/amyangfei)
+- Author(s):    [yangfei](https://github.com/amyangfei)
 - Last updated: 2019-09-18
 
 ## Abstract
@@ -59,7 +59,7 @@ Before we can measure the congestion, we should find a way to estimate the data 
 - Latency: equals to the transaction executed latency, can be collected in DM-worker itself.
 - Bandwidth: this is a little complicated, but we can estimate it by adjusting the concurrency and find the maximum downstream TPS for this DM-worker, which can be used as the bandwidth of the data import/replication link.
 
-Take the [benchmark result in DM 1.0-GA](htTPS://pingcap.com/docs/v3.0/benchmark/dm-v1.0-ga/#benchmark-result-with-different-pool-size-in-load-unit) as an example, we extract the result in load unit test, use load unit pool size as X-axis, latency and load speed as Y-axis.
+Take the [benchmark result in DM 1.0-GA](https://pingcap.com/docs/v3.0/benchmark/dm-v1.0-ga/#benchmark-result-with-different-pool-size-in-load-unit) as an example, we extract the result in load unit test, use load unit pool size as X-axis, latency and load speed as Y-axis.
 
 ![DM benchmark result with different pool size in load unit](../media/rfc-load-benchmark.png)
 
