@@ -179,6 +179,7 @@ func (conn *DBConn) querySQL(tctx *tcontext.Context, query string, args ...inter
 			return false
 		},
 	}
+
 	ret, _, err := conn.baseConn.ApplyRetryStrategy(
 		tctx,
 		params,
@@ -239,7 +240,6 @@ func (conn *DBConn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError fun
 		func(ctx *tcontext.Context) (interface{}, error) {
 			startTime := time.Now()
 			ret, err := conn.baseConn.ExecuteSQLWithIgnoreError(ctx, ignoreError, queries, args...)
-
 			if err == nil {
 				cost := time.Since(startTime)
 				txnHistogram.WithLabelValues(conn.cfg.Name).Observe(cost.Seconds())
