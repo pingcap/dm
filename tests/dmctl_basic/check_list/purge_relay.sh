@@ -9,7 +9,7 @@ function purge_relay_wrong_arg() {
 function purge_relay_wihout_worker() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "purge-relay" \
-        "must specify at least one dm-worker (\`-w\` \/ \`--worker\`)" 1
+        "must specify at least one DM-worker (\`-w\` \/ \`--worker\`)" 1
 }
 
 function purge_relay_filename_with_multi_workers() {
