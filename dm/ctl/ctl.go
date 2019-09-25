@@ -49,7 +49,7 @@ func Start(args []string) {
 	}
 
 	// --worker worker1 -w worker2 --worker=worker3,worker4 -w=worker5,worker6
-	rootCmd.PersistentFlags().StringSliceVarP(&commandMasterFlags.workers, "worker", "w", []string{}, "dm-worker ID")
+	rootCmd.PersistentFlags().StringSliceVarP(&commandMasterFlags.workers, "worker", "w", []string{}, "DM-worker ID")
 	rootCmd.AddCommand(
 		master.NewStartTaskCmd(),
 		master.NewStopTaskCmd(),

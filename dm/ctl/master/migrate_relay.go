@@ -31,7 +31,7 @@ import (
 func NewMigrateRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "migrate-relay <worker> <binlogName> <binlogPos>",
-		Short: "migrate dm-worker's relay unit",
+		Short: "migrate DM-worker's relay unit",
 		Run:   migrateRelayFunc,
 	}
 	return cmd
