@@ -113,8 +113,9 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 	c.Assert(count, Equals, len(cases))
 
 	// update checkpoints
-	db, conn, err := createConn(tctx.Context(), t.cfg)
+	db, conns, err := createConns(tctx, t.cfg, 1)
 	c.Assert(err, IsNil)
+	conn := conns[0]
 	defer func() {
 		conn.Close()
 		db.Close()

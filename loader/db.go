@@ -14,7 +14,6 @@
 package loader
 
 import (
-	"context"
 	"database/sql"
 	"strconv"
 	"strings"
@@ -156,18 +155,6 @@ func (conn *DBConn) Close() error {
 		return nil
 	}
 	return conn.baseConn.Close()
-}
-
-func createConn(ctx context.Context, cfg *config.SubTaskConfig) (*conn.BaseDB, *DBConn, error) {
-	baseDB, err := conn.DefaultDBProvider.Apply(cfg.To)
-	if err != nil {
-		return nil, nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
-	}
-	baseConn, err := baseDB.GetBaseConn(ctx)
-	if err != nil {
-		return nil, nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
-	}
-	return baseDB, &DBConn{baseConn: baseConn, cfg: cfg}, nil
 }
 
 func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, workerCount int) (*conn.BaseDB, []*DBConn, error) {

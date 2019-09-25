@@ -77,7 +77,7 @@ type RemoteCheckPoint struct {
 }
 
 func newRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id string) (CheckPoint, error) {
-	db, dbConn, err := createConn(tctx.Context(), cfg)
+	db, dbConns, err := createConns(tctx, cfg, 1)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func newRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id s
 
 	cp := &RemoteCheckPoint{
 		db:             db,
-		conn:           dbConn,
+		conn:           dbConns[0],
 		id:             id,
 		restoringFiles: make(map[string]map[string]FilePosSet),
 		finishedTables: make(map[string]struct{}),

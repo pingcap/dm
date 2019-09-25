@@ -2043,7 +2043,11 @@ func (s *Syncer) createDBs() error {
 	// baseConn for ddl
 	dbCfg = s.cfg.To
 	dbCfg.RawDBCfg = config.DefaultRawDBConfig(maxDDLConnectionTimeout)
-	s.ddlDB, s.ddlDBConn, err = createConn(s.tctx, s.cfg, dbCfg)
+
+	var ddlDBConns []*DBConn
+	s.ddlDB, ddlDBConns, err = createConns(s.tctx, s.cfg, dbCfg, 1)
+	s.ddlDBConn = ddlDBConns[0]
+
 	if err != nil {
 		closeUpstreamConn(s.tctx, s.fromDB)
 		closeBaseDB(s.tctx, s.toDB)

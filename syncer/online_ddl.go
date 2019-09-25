@@ -110,12 +110,12 @@ func NewOnlineDDLStorage(newtctx *tcontext.Context, cfg *config.SubTaskConfig) *
 func (s *OnlineDDLStorage) Init() error {
 	onlineDB := s.cfg.To
 	onlineDB.RawDBCfg = config.DefaultRawDBConfig(maxCheckPointTimeout)
-	db, dbConn, err := createConn(s.tctx, s.cfg, onlineDB)
+	db, dbConns, err := createConns(s.tctx, s.cfg, onlineDB, 1)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
 	s.db = db
-	s.dbConn = dbConn
+	s.dbConn = dbConns[0]
 
 	err = s.prepare()
 	if err != nil {

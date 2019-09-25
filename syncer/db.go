@@ -179,7 +179,6 @@ func (conn *DBConn) querySQL(tctx *tcontext.Context, query string, args ...inter
 			return false
 		},
 	}
-
 	ret, _, err := conn.baseConn.ApplyRetryStrategy(
 		tctx,
 		params,
@@ -263,21 +262,6 @@ func (conn *DBConn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError fun
 
 func (conn *DBConn) executeSQL(tctx *tcontext.Context, queries []string, args ...[]interface{}) (int, error) {
 	return conn.executeSQLWithIgnore(tctx, nil, queries, args...)
-}
-
-func createConn(tctx *tcontext.Context, cfg *config.SubTaskConfig, dbCfg config.DBConfig) (*conn.BaseDB, *DBConn, error) {
-	baseDB, err := createBaseDB(dbCfg)
-	if err != nil {
-		return nil, nil, err
-	}
-	baseConn, err := baseDB.GetBaseConn(tctx.Context())
-	if err != nil {
-		return nil, nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
-	}
-	resetConnFn := func(tctx *tcontext.Context) (*conn.BaseConn, error) {
-		return baseDB.GetBaseConn(tctx.Context())
-	}
-	return baseDB, &DBConn{baseConn: baseConn, cfg: cfg, resetConnFn: resetConnFn}, nil
 }
 
 func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, dbCfg config.DBConfig, count int) (*conn.BaseDB, []*DBConn, error) {
