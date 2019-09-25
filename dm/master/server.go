@@ -2005,7 +2005,7 @@ func (s *Server) HandleHTTPApis(ctx context.Context, mux *http.ServeMux) error {
 }
 
 func (s *Server) serveHostAndPort() (host, port string, err error) {
-	// MasterAddr's format may be "host:port" or "":port"
+	// MasterAddr's format may be "host:port" or ":port"
 	host, port, err = net.SplitHostPort(s.cfg.MasterAddr)
 	if err != nil {
 		err = terror.ErrMasterHostPortNotValid.Delegate(err, s.cfg.MasterAddr)
