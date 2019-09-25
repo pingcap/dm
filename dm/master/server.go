@@ -97,7 +97,7 @@ func NewServer(cfg *Config) *Server {
 func (s *Server) Start() error {
 	var err error
 
-	_, _, err = s.serveHostAndPort()
+	_, _, err = s.splitHostPort()
 	if err != nil {
 		return err
 	}
@@ -1983,7 +1983,7 @@ func (s *Server) workerArgsExtractor(args ...interface{}) (workerrpc.Client, str
 // HandleHTTPApis handles http apis and translate to grpc request
 func (s *Server) HandleHTTPApis(ctx context.Context, mux *http.ServeMux) error {
 	// MasterAddr's format may be "host:port" or "":port"
-	_, port, err := s.serveHostAndPort()
+	_, port, err := s.splitHostPort()
 	if err != nil {
 		return err
 	}
@@ -2004,7 +2004,7 @@ func (s *Server) HandleHTTPApis(ctx context.Context, mux *http.ServeMux) error {
 	return nil
 }
 
-func (s *Server) serveHostAndPort() (host, port string, err error) {
+func (s *Server) splitHostPort() (host, port string, err error) {
 	// MasterAddr's format may be "host:port" or ":port"
 	host, port, err = net.SplitHostPort(s.cfg.MasterAddr)
 	if err != nil {

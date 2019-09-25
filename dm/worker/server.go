@@ -65,7 +65,7 @@ func NewServer(cfg *Config) *Server {
 func (s *Server) Start() error {
 	var err error
 
-	_, _, err = s.serveHostAndPort()
+	_, _, err = s.splitHostPort()
 	if err != nil {
 		return err
 	}
@@ -455,7 +455,7 @@ func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {
 	return resp
 }
 
-func (s *Server) serveHostAndPort() (host, port string, err error) {
+func (s *Server) splitHostPort() (host, port string, err error) {
 	// WorkerAddr's format may be "host:port" or ":port"
 	host, port, err = net.SplitHostPort(s.cfg.WorkerAddr)
 	if err != nil {

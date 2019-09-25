@@ -1490,6 +1490,7 @@ func (t *testMaster) TestServer(c *check.C) {
 	s.cfg.MasterAddr = ""
 	err := s.Start()
 	c.Assert(terror.ErrMasterHostPortNotValid.Equal(err), check.IsTrue)
+	s.Close()
 	s.cfg.MasterAddr = masterAddr
 
 	go func() {
@@ -1502,6 +1503,11 @@ func (t *testMaster) TestServer(c *check.C) {
 	}), check.IsTrue)
 
 	t.testHTTPInterface(c, "status")
+
+	dupServer := NewServer(cfg)
+	err = dupServer.Start()
+	c.Assert(terror.ErrMasterStartService.Equal(err), check.IsTrue)
+	c.Assert(err.Error(), check.Matches, ".*bind: address already in use")
 
 	// close
 	s.Close()
