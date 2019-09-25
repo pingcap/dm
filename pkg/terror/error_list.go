@@ -377,6 +377,7 @@ const (
 	codeMasterOperRespNotSuccess
 	codeMasterOperRequestTimeout
 	codeMasterHandleHTTPApis
+	codeMasterHostPortNotValid
 )
 
 // DM-worker error code
@@ -810,6 +811,7 @@ var (
 	ErrMasterOperRespNotSuccess    = New(codeMasterOperRespNotSuccess, ClassDMMaster, ScopeInternal, LevelHigh, "operation not success: %s")
 	ErrMasterOperRequestTimeout    = New(codeMasterOperRequestTimeout, ClassDMMaster, ScopeInternal, LevelHigh, "request is timeout, but request may be successful, please execute `query-status` to check status")
 	ErrMasterHandleHTTPApis        = New(codeMasterHandleHTTPApis, ClassDMMaster, ScopeInternal, LevelHigh, "serve http apis to grpc")
+	ErrMasterHostPortNotValid      = New(codeMasterHostPortNotValid, ClassDMMaster, ScopeInternal, LevelHigh, "host:port '%s' not valid")
 
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set")

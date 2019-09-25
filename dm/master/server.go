@@ -88,6 +88,7 @@ func NewServer(cfg *Config) *Server {
 		idGen:             tracing.NewIDGen(),
 		ap:                NewAgentPool(&RateLimitConfig{rate: cfg.RPCRateLimit, burst: cfg.RPCRateBurst}),
 	}
+	server.closed.Set(true)
 
 	return &server
 }
@@ -2007,7 +2008,7 @@ func (s *Server) serveHostAndPort() (host, port string, err error) {
 	// MasterAddr's format may be "host:port" or "":port"
 	host, port, err = net.SplitHostPort(s.cfg.MasterAddr)
 	if err != nil {
-		err = terror.ErrMasterHandleHTTPApis.Delegate(err)
+		err = terror.ErrMasterHostPortNotValid.Delegate(err, s.cfg.MasterAddr)
 	}
 	return
 }

@@ -57,6 +57,7 @@ func NewServer(cfg *Config) *Server {
 	s := Server{
 		cfg: cfg,
 	}
+	s.closed.Set(true) // not start yet
 	return &s
 }
 
