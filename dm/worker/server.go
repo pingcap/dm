@@ -456,7 +456,7 @@ func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {
 }
 
 func (s *Server) serveHostAndPort() (host, port string, err error) {
-	// MasterAddr's format may be "host:port" or "":port"
+	// WorkerAddr's format may be "host:port" or ":port"
 	host, port, err = net.SplitHostPort(s.cfg.WorkerAddr)
 	if err != nil {
 		err = terror.ErrWorkerHostPortNotValid.Delegate(err, s.cfg.WorkerAddr)
