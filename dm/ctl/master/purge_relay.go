@@ -65,7 +65,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 	if len(workers) == 0 {
-		fmt.Println("must specify at least one dm-worker (`-w` / `--worker`)")
+		fmt.Println("must specify at least one DM-worker (`-w` / `--worker`)")
 		return
 	}
 
@@ -121,7 +121,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 	//}
 
 	if len(filename) > 0 && len(workers) > 1 {
-		fmt.Println("for --filename, can only specify one dm-worker per time")
+		fmt.Println("for --filename, can only specify one DM-worker per time")
 		return
 	}
 	if len(subDir) > 0 {

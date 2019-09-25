@@ -51,7 +51,7 @@ func breakDDLLockFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 	if len(workers) == 0 {
-		fmt.Println("must specify at least one dm-worker (`-w` / `--worker`)")
+		fmt.Println("must specify at least one DM-worker (`-w` / `--worker`)")
 		return
 	}
 
