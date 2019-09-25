@@ -15,6 +15,9 @@ package master
 
 import (
 	"context"
+	"io/ioutil"
+	"net/http"
+
 	"fmt"
 	"io"
 	"sync"
@@ -30,6 +33,8 @@ import (
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/pbmock"
+	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // use task config from integration test `sharding`
@@ -1473,4 +1478,44 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 		}
 	}()
 	wg.Wait()
+}
+
+func (t *testMaster) TestServer(c *check.C) {
+	cfg := NewConfig()
+	c.Assert(cfg.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
+
+	s := NewServer(cfg)
+
+	masterAddr := cfg.MasterAddr
+	s.cfg.MasterAddr = ""
+	err := s.Start()
+	c.Assert(terror.ErrMasterHostPortNotValid.Equal(err), check.IsTrue)
+	s.cfg.MasterAddr = masterAddr
+
+	go func() {
+		err1 := s.Start()
+		c.Assert(err1, check.IsNil)
+	}()
+
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		return !s.closed.Get()
+	}), check.IsTrue)
+
+	t.testHTTPInterface(c, "status")
+
+	// close
+	s.Close()
+
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+		return s.closed.Get()
+	}), check.IsTrue)
+}
+
+func (t *testMaster) testHTTPInterface(c *check.C, uri string) {
+	resp, err := http.Get("http://127.0.0.1:8261/" + uri)
+	c.Assert(err, check.IsNil)
+	defer resp.Body.Close()
+	c.Assert(resp.StatusCode, check.Equals, 200)
+	_, err = ioutil.ReadAll(resp.Body)
+	c.Assert(err, check.IsNil)
 }
