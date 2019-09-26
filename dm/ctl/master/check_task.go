@@ -29,7 +29,7 @@ import (
 func NewCheckTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "check-task <config-file>",
-		Short: "check a task with config file",
+		Short: "check the config file of the task",
 		Run:   checkTaskFunc,
 	}
 	return cmd
