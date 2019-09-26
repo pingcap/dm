@@ -498,15 +498,27 @@ func (r *Relay) reSetupMeta() error {
 		return err
 	}
 
-	// try adjust meta with start pos from config
-	if (r.cfg.EnableGTID && len(r.cfg.BinlogGTID) > 0) || len(r.cfg.BinLogName) > 0 {
-		adjusted, err := r.meta.AdjustWithStartPos(r.cfg.BinLogName, r.cfg.BinlogGTID, r.cfg.EnableGTID)
-		if err != nil {
-			return err
-		} else if adjusted {
-			r.tctx.L().Info("adjusted meta to start pos", zap.String("start pos's binlog name", r.cfg.BinLogName), zap.String("start pos's binlog gtid", r.cfg.BinlogGTID))
-		}
+	lastPos, _, err := utils.GetMasterStatus(r.db, r.cfg.Flavor)
+	if err != nil {
+		return err
 	}
+
+	// try adjust meta with start pos from config
+	//if (r.cfg.EnableGTID && len(r.cfg.BinlogGTID) > 0) || len(r.cfg.BinLogName) > 0 {
+	adjusted, err := r.meta.AdjustWithStartPos(r.cfg.BinLogName, r.cfg.BinlogGTID, r.cfg.EnableGTID, lastPos.Name)
+	if err != nil {
+		return err
+	} 
+	_, pos := r.meta.Pos()
+	_, gtid := r.meta.GTID()
+
+	if adjusted {
+		r.tctx.L().Info("adjusted meta to start pos", zap.Reflect("start pos", pos), zap.Reflect("start pos's binlog gtid", gtid))
+	} else {
+		r.tctx.L().Info("not adjusted meta to start pos", zap.Reflect("start pos", pos), zap.Reflect("start pos's binlog gtid", gtid))
+		//r.tctx.L().Info("not adjusted meta to start pos", zap.String("start pos's binlog name", r.meta.BinLogName), zap.String("start pos's binlog gtid", r.meta.BinlogGTID))
+	}
+	//}
 
 	r.updateMetricsRelaySubDirIndex()
 

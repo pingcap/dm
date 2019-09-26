@@ -43,10 +43,10 @@ type Meta interface {
 	// Load loads meta information for the recently active server
 	Load() error
 
-	// AdjustWithStartPos adjusts current pos / GTID with start pos
-	// if current pos / GTID is meaningless, update to start pos
+	// AdjustWithStartPos adjusts current pos / GTID with last binlog name
+	// if current pos / GTID is meaningless, update to last pos
 	// else do nothing
-	AdjustWithStartPos(binlogName string, binlogGTID string, enableGTID bool) (bool, error)
+	AdjustWithStartPos(binlogName string, binlogGTID string, enableGTID bool, lastBinlogName string) (bool, error)
 
 	// Save saves meta information
 	Save(pos mysql.Position, gset gtid.Set) error
@@ -152,7 +152,7 @@ func (lm *LocalMeta) Load() error {
 }
 
 // AdjustWithStartPos implements Meta.AdjustWithStartPos, return whether adjusted
-func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, enableGTID bool) (bool, error) {
+func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, enableGTID bool, lastBinlogName string) (bool, error) {
 	lm.Lock()
 	defer lm.Unlock()
 
@@ -165,30 +165,76 @@ func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, en
 		}
 	}
 
-	if (enableGTID && len(binlogGTID) == 0) || (!enableGTID && len(binlogName) == 0) {
-		return false, nil // no meaningful start pos specified
+	var gset = lm.emptyGSet.Clone()
+	var err error
+
+	if enableGTID {
+		//lm.BinLogName = lastBinlogName
+		//if len(binlogGTID) == 0 { // no meaningful start pos specified
+		//return false, nil
+		//}
+
+		if len(binlogGTID) != 0 {
+
+			gset, err = gtid.ParserGTID(lm.flavor, binlogGTID)
+			if err != nil {
+				return false, terror.Annotatef(err, "relay-binlog-gtid %s", binlogGTID)
+			}
+		}
+
+		//lm.BinLogName = lastBinlogName
+
+	} else {
+		if len(binlogName) == 0 { // no meaningful start pos specified
+			//return false, nil
+			lm.BinLogName = lastBinlogName
+		} else {
+			if binlog.VerifyFilename(binlogName) {
+				lm.BinLogName = binlogName
+			} else {
+				return false, terror.ErrRelayBinlogNameNotValid.Generate(binlogName)
+			}
+		}
+
+		lm.BinLogPos = minCheckpoint.Pos // always set pos to 4
+
+		//if len(binlogName) == 0 {
+		//lm.BinLogName = lastBinlogName
+		//} else {
+		//lm.BinLogName = binlogName
+		//}
+
 	}
 
-	if !enableGTID && len(binlogName) > 0 {
-		if !binlog.VerifyFilename(binlogName) {
-			return false, terror.ErrRelayBinlogNameNotValid.Generate(binlogName)
-		}
-	}
-	var gset = lm.emptyGSet.Clone()
-	if enableGTID && len(binlogGTID) > 0 {
-		var err error
-		gset, err = gtid.ParserGTID(lm.flavor, binlogGTID)
-		if err != nil {
-			return false, terror.Annotatef(err, "relay-binlog-gtid %s", binlogGTID)
-		}
-	}
+	//if (enableGTID && len(binlogGTID) == 0) || (!enableGTID && len(binlogName) == 0) {
+	//	return false, nil // no meaningful start pos specified
+	//}
+
+	//if !enableGTID && len(binlogName) > 0 {
+	//	if !binlog.VerifyFilename(binlogName) {
+	//		return false, terror.ErrRelayBinlogNameNotValid.Generate(binlogName)
+	//	}
+	//}
+	//var gset = lm.emptyGSet.Clone()
+	//if enableGTID && len(binlogGTID) > 0 {
+	//	var err error
+	//	gset, err = gtid.ParserGTID(lm.flavor, binlogGTID)
+	//	if err != nil {
+	//		return false, terror.Annotatef(err, "relay-binlog-gtid %s", binlogGTID)
+	//	}
+	//}
 
 	// verified, update them
-	if enableGTID {
-		lm.BinLogName = minCheckpoint.Name
-	} else {
-		lm.BinLogName = binlogName
-	}
+	//if enableGTID {
+	//lm.BinLogName = minCheckpoint.Name
+	//lm.BinLogName = lastBinlogName
+	//} else {
+	//if len(binlogName) == 0 {
+	//	lm.BinLogName = lastBinlogName
+	//} else {
+	//	lm.BinLogName = binlogName
+	//}
+	//}
 	lm.BinLogPos = minCheckpoint.Pos // always set pos to 4
 	lm.BinlogGTID = gset.String()
 	lm.gset = gset
