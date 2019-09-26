@@ -146,8 +146,7 @@ func (conn *BaseConn) ApplyRetryStrategy(tctx *tcontext.Context, params retry.Pa
 	return conn.RetryStrategy.Apply(tctx, params, operateFn)
 }
 
-// Close release DB resource
-func (conn *BaseConn) Close() error {
+func (conn *BaseConn) close() error {
 	if conn == nil || conn.DBConn == nil {
 		return nil
 	}

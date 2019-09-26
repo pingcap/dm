@@ -117,7 +117,6 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 	c.Assert(err, IsNil)
 	conn := conns[0]
 	defer func() {
-		conn.Close()
 		db.Close()
 	}()
 	for _, cs := range cases {

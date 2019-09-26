@@ -112,6 +112,7 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 			return retry.IsRetryableError(err)
 		},
 	}
+
 	_, _, err := conn.baseConn.ApplyRetryStrategy(
 		ctx,
 		params,
@@ -147,14 +148,6 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 	}
 
 	return err
-}
-
-// Close release db connection resource, return it to BaseDB.db connection pool
-func (conn *DBConn) Close() error {
-	if conn == nil || conn.baseConn == nil {
-		return nil
-	}
-	return conn.baseConn.Close()
 }
 
 func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, workerCount int) (*conn.BaseDB, []*DBConn, error) {

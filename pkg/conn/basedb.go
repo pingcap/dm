@@ -66,9 +66,9 @@ func (d *defaultDBProvider) Apply(config config.DBConfig) (*BaseDB, error) {
 
 // BaseDB wraps *sql.DB
 type BaseDB struct {
-	sync.Mutex
 	DB *sql.DB
 
+	sync.Mutex // protects following fields
 	// hold all db connections generated from this BaseDB
 	conns map[*BaseConn]bool
 
@@ -103,7 +103,7 @@ func (d *BaseDB) CloseBaseConn(conn *BaseConn) error {
 	d.Lock()
 	defer d.Unlock()
 	delete(d.conns, conn)
-	return conn.Close()
+	return conn.close()
 }
 
 // Close release baseDB resource
@@ -115,7 +115,7 @@ func (d *BaseDB) Close() error {
 	d.Lock()
 	defer d.Unlock()
 	for conn := range d.conns {
-		terr := conn.Close()
+		terr := conn.close()
 		if err == nil {
 			err = terr
 		}
