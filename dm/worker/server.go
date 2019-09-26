@@ -64,6 +64,12 @@ func NewServer(cfg *Config) *Server {
 // Start starts to serving
 func (s *Server) Start() error {
 	var err error
+
+	_, _, err = s.splitHostPort()
+	if err != nil {
+		return err
+	}
+
 	s.rootLis, err = net.Listen("tcp", s.cfg.WorkerAddr)
 	if err != nil {
 		return terror.ErrWorkerStartService.Delegate(err)
@@ -109,7 +115,7 @@ func (s *Server) Start() error {
 	return terror.ErrWorkerStartService.Delegate(err)
 }
 
-// Close close the RPC server
+// Close close the RPC server, this function can be called multiple times
 func (s *Server) Close() {
 	s.Lock()
 	defer s.Unlock()
@@ -117,9 +123,11 @@ func (s *Server) Close() {
 		return
 	}
 
-	err := s.rootLis.Close()
-	if err != nil && !common.IsErrNetClosing(err) {
-		log.L().Error("fail to close net listener", log.ShortError(err))
+	if s.rootLis != nil {
+		err := s.rootLis.Close()
+		if err != nil && !common.IsErrNetClosing(err) {
+			log.L().Error("fail to close net listener", log.ShortError(err))
+		}
 	}
 	if s.svr != nil {
 		// GracefulStop can not cancel active stream RPCs
@@ -129,8 +137,10 @@ func (s *Server) Close() {
 	}
 
 	// close worker and wait for return
-	s.worker.Close()
-	s.wg.Wait()
+	if s.worker != nil {
+		s.worker.Close()
+		s.wg.Wait()
+	}
 
 	s.closed.Set(true)
 }
@@ -443,4 +453,13 @@ func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {
 		resp.Msg = errors.ErrorStack(reqErr)
 	}
 	return resp
+}
+
+func (s *Server) splitHostPort() (host, port string, err error) {
+	// WorkerAddr's format may be "host:port" or ":port"
+	host, port, err = net.SplitHostPort(s.cfg.WorkerAddr)
+	if err != nil {
+		err = terror.ErrWorkerHostPortNotValid.Delegate(err, s.cfg.WorkerAddr)
+	}
+	return
 }

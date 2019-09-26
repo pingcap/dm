@@ -29,7 +29,7 @@ import (
 func NewSQLInjectCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sql-inject <-w worker> <task-name> <sql1;sql2;>",
-		Short: "sql-inject injects (limited) sqls into syncer as binlog event",
+		Short: "inject (limited) SQLs into binlog replication unit as binlog events",
 		Run:   sqlInjectFunc,
 	}
 	return cmd
