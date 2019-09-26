@@ -66,27 +66,23 @@ func (d *defaultDBProvider) Apply(config config.DBConfig) (*BaseDB, error) {
 
 // BaseDB wraps *sql.DB
 type BaseDB struct {
+	sync.Mutex
 	DB *sql.DB
 
-	lock *sync.Mutex
-
 	// hold all db connections generated from this BaseDB
-	conns []*BaseConn
+	conns map[*BaseConn]bool
 
 	Retry retry.Strategy
 }
 
 // NewBaseDB returns *BaseDB object
 func NewBaseDB(db *sql.DB) *BaseDB {
-	conns := make([]*BaseConn, 0)
-	lock := new(sync.Mutex)
-	return &BaseDB{db, lock, conns, &retry.FiniteRetryStrategy{}}
+	conns := make(map[*BaseConn]bool)
+	return &BaseDB{DB: db, conns: conns, Retry: &retry.FiniteRetryStrategy{}}
 }
 
 // GetBaseConn retrieves *BaseConn which has own retryStrategy
 func (d *BaseDB) GetBaseConn(ctx context.Context) (*BaseConn, error) {
-	d.lock.Lock()
-	defer d.lock.Unlock()
 	conn, err := d.DB.Conn(ctx)
 	if err != nil {
 		return nil, terror.ErrDBDriverError.Delegate(err)
@@ -96,19 +92,29 @@ func (d *BaseDB) GetBaseConn(ctx context.Context) (*BaseConn, error) {
 		return nil, terror.ErrDBDriverError.Delegate(err)
 	}
 	baseConn := newBaseConn(conn, d.Retry)
-	d.conns = append(d.conns, baseConn)
+	d.Lock()
+	defer d.Unlock()
+	d.conns[baseConn] = true
 	return baseConn, nil
 }
 
-// Close release db resource
+// CloseBaseConn release BaseConn resource from BaseDB, and close BaseConn
+func (d *BaseDB) CloseBaseConn(conn *BaseConn) error {
+	d.Lock()
+	defer d.Unlock()
+	delete(d.conns, conn)
+	return conn.Close()
+}
+
+// Close release baseDB resource
 func (d *BaseDB) Close() error {
 	if d == nil || d.DB == nil {
 		return nil
 	}
 	var err error
-	d.lock.Lock()
-	defer d.lock.Unlock()
-	for _, conn := range d.conns {
+	d.Lock()
+	defer d.Unlock()
+	for conn := range d.conns {
 		terr := conn.Close()
 		if err == nil {
 			err = terr

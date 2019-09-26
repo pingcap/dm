@@ -150,12 +150,6 @@ func (conn *DBConn) resetConn(tctx *tcontext.Context) error {
 	if err != nil {
 		return err
 	}
-	if conn.baseConn != nil {
-		err := conn.baseConn.Close()
-		if err != nil {
-			tctx.L().Warn("close connection error", log.ShortError(err))
-		}
-	}
 	conn.baseConn = dbConn
 	return nil
 }
@@ -277,6 +271,10 @@ func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, dbCfg config
 			return nil, nil, terror.WithScope(terror.ErrDBBadConn.Delegate(err), terror.ScopeDownstream)
 		}
 		resetConnFn := func(tctx *tcontext.Context) (*conn.BaseConn, error) {
+			err := db.CloseBaseConn(dbConn)
+			if err != nil {
+				return nil, err
+			}
 			return db.GetBaseConn(tctx.Context())
 		}
 		conns = append(conns, &DBConn{baseConn: dbConn, cfg: cfg, resetConnFn: resetConnFn})
