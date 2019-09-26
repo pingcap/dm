@@ -43,8 +43,8 @@ type Meta interface {
 	// Load loads meta information for the recently active server
 	Load() error
 
-	// AdjustWithStartPos adjusts current pos / GTID with last binlog name
-	// if current pos / GTID is meaningless, update to last pos
+	// AdjustWithStartPos adjusts current pos / GTID with start pos
+	// if current pos / GTID is meaningless, update to start pos or last pos when start pos is meaningless
 	// else do nothing
 	AdjustWithStartPos(binlogName string, binlogGTID string, enableGTID bool, lastBinlogName string) (bool, error)
 
@@ -169,13 +169,7 @@ func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, en
 	var err error
 
 	if enableGTID {
-		//lm.BinLogName = lastBinlogName
-		//if len(binlogGTID) == 0 { // no meaningful start pos specified
-		//return false, nil
-		//}
-
 		if len(binlogGTID) != 0 {
-
 			gset, err = gtid.ParserGTID(lm.flavor, binlogGTID)
 			if err != nil {
 				return false, terror.Annotatef(err, "relay-binlog-gtid %s", binlogGTID)
