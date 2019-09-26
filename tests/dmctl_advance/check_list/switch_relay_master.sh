@@ -9,7 +9,7 @@ function switch_relay_master_wrong_arg() {
 function switch_relay_master_without_worker() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "switch-relay-master" \
-        "must specify at least one dm-worker (\`-w\` \/ \`--worker\`)" 1
+        "must specify at least one DM-worker (\`-w\` \/ \`--worker\`)" 1
 }
 
 function switch_relay_master_while_master_down() {

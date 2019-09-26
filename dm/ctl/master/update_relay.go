@@ -28,7 +28,7 @@ import (
 func NewUpdateRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update-relay [-w worker ...] <config-file>",
-		Short: "update dm-worker's relay unit configure",
+		Short: "update the relay unit config of the DM-worker",
 		Run:   updateRelayFunc,
 	}
 	return cmd
@@ -49,7 +49,7 @@ func updateRelayFunc(cmd *cobra.Command, _ []string) {
 
 	workers, _ := common.GetWorkerArgs(cmd)
 	if len(workers) != 1 {
-		fmt.Println("must specify one dm-worker (`-w` / `--worker`)")
+		fmt.Println("must specify one DM-worker (`-w` / `--worker`)")
 		return
 	}
 
