@@ -29,7 +29,7 @@ import (
 func NewSQLReplaceCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sql-replace <-w worker> [-b binlog-pos] [-s sql-pattern] [--sharding] <task-name> <sql1;sql2;>",
-		Short: "sql-replace replaces SQL in specific binlog-pos or sql-pattern matched with other SQLs, each SQL must ends with semicolon;",
+		Short: "replace SQLs matched by a specific binlog position (binlog-pos) or a SQL pattern (sql-pattern); each SQL must end with a semicolon",
 		Run:   sqlReplaceFunc,
 	}
 	cmd.Flags().StringP("binlog-pos", "b", "", "position used to match binlog event if matched the sql-replace operation will be applied. The format like \"mysql-bin|000001.000003:3270\"")
