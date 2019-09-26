@@ -9,7 +9,7 @@ function break_ddl_lock_wrong_arg() {
 function break_ddl_lock_without_worker() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "break-ddl-lock test" \
-        "must specify at least one dm-worker (\`-w\` \/ \`--worker\`)" 1
+        "must specify at least one DM-worker (\`-w\` \/ \`--worker\`)" 1
 }
 
 function break_ddl_lock_shoud_specify_at_least_one() {

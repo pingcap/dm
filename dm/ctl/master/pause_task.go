@@ -27,7 +27,7 @@ import (
 func NewPauseTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pause-task [-w worker ...] <task-name>",
-		Short: "pause a running task with name",
+		Short: "pause a specified running task",
 		Run:   pauseTaskFunc,
 	}
 	return cmd
