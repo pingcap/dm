@@ -88,6 +88,9 @@ func closeBaseDB(tctx *tcontext.Context, baseDB *conn.BaseDB) {
 }
 
 // UpStreamConn connect to upstream DB
+// Normally, we need to get some upstream information through some helper functions
+// these helper functions are all easy query functions, so we use a pool of connections here
+// maybe change to one connection some day
 type UpStreamConn struct {
 	BaseDB *conn.BaseDB
 }
