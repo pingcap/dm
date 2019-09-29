@@ -2025,7 +2025,7 @@ func (s *Syncer) createDBs() error {
 	var err error
 	dbCfg := s.cfg.From
 	dbCfg.RawDBCfg = config.DefaultRawDBConfig(maxDMLConnectionTimeout)
-	s.fromDB, err = createUpStreamConn(s.cfg, dbCfg)
+	s.fromDB, err = createUpStreamConn(dbCfg)
 	if err != nil {
 		return err
 	}
@@ -2417,7 +2417,7 @@ func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 
 	var err error
 	s.cfg.From.RawDBCfg = config.DefaultRawDBConfig(maxDMLConnectionTimeout)
-	s.fromDB, err = createUpStreamConn(s.cfg, s.cfg.From)
+	s.fromDB, err = createUpStreamConn(s.cfg.From)
 	if err != nil {
 		s.tctx.L().Error("fail to create baseConn connection", log.ShortError(err))
 		return err

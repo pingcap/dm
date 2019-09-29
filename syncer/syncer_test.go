@@ -1219,7 +1219,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 
 		ctx := context.Background()
 		// fromDB mocks upstream dbConn, dbConn mocks downstream dbConn
-		syncer.fromDB = &UpStreamConn{cfg: s.cfg, BaseDB: conn.NewBaseDB(fromDB)}
+		syncer.fromDB = &UpStreamConn{BaseDB: conn.NewBaseDB(fromDB)}
 		dbConn, err := db.Conn(ctx)
 		c.Assert(err, IsNil)
 		syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}}}
@@ -1381,7 +1381,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	s.cfg.DisableCausality = false
 
 	syncer := NewSyncer(s.cfg)
-	syncer.fromDB = &UpStreamConn{cfg: s.cfg, BaseDB: conn.NewBaseDB(db)}
+	syncer.fromDB = &UpStreamConn{BaseDB: conn.NewBaseDB(db)}
 	syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}},
 		{cfg: s.cfg, baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}}}
 	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: &conn.BaseConn{dbConn, &retry.FiniteRetryStrategy{}}}

@@ -979,6 +979,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	defer l.toDB.CloseBaseConn(baseConn)
 	dbConn := &DBConn{
 		baseConn: baseConn,
 		cfg:      l.cfg,

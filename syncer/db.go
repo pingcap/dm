@@ -87,9 +87,8 @@ func closeBaseDB(tctx *tcontext.Context, baseDB *conn.BaseDB) {
 	}
 }
 
-// UpStreamConn connect to upstream DB, use *sql.DB instead of *sql.Conn
+// UpStreamConn connect to upstream DB
 type UpStreamConn struct {
-	cfg    *config.SubTaskConfig
 	BaseDB *conn.BaseDB
 }
 
@@ -117,12 +116,12 @@ func (conn *UpStreamConn) countBinaryLogsSize(pos mysql.Position) (int64, error)
 	return countBinaryLogsSize(pos, conn.BaseDB.DB)
 }
 
-func createUpStreamConn(cfg *config.SubTaskConfig, dbCfg config.DBConfig) (*UpStreamConn, error) {
+func createUpStreamConn(dbCfg config.DBConfig) (*UpStreamConn, error) {
 	baseDB, err := createBaseDB(dbCfg)
 	if err != nil {
 		return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 	}
-	return &UpStreamConn{BaseDB: baseDB, cfg: cfg}, nil
+	return &UpStreamConn{BaseDB: baseDB}, nil
 }
 
 func closeUpstreamConn(tctx *tcontext.Context, conn *UpStreamConn) {
