@@ -29,12 +29,16 @@ import (
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
-	"github.com/pingcap/errors"
 )
 
 func main() {
 	cfg := common.NewConfig()
 	args := os.Args[1:]
+
+	// try to split one task operation from dmctl command
+	// because we allow user put task operation at last with two restrictions
+	// 1. one command one task operation
+	// 2. put task operation at last
 	cmdArgs := collectArgs(args)
 	lenArgs := len(args)
 	lenCmdArgs := len(cmdArgs)
