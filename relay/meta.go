@@ -175,12 +175,8 @@ func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, en
 				return false, terror.Annotatef(err, "relay-binlog-gtid %s", binlogGTID)
 			}
 		}
-
-		//lm.BinLogName = lastBinlogName
-
 	} else {
 		if len(binlogName) == 0 { // no meaningful start pos specified
-			//return false, nil
 			lm.BinLogName = lastBinlogName
 		} else {
 			if binlog.VerifyFilename(binlogName) {
@@ -191,44 +187,8 @@ func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, en
 		}
 
 		lm.BinLogPos = minCheckpoint.Pos // always set pos to 4
-
-		//if len(binlogName) == 0 {
-		//lm.BinLogName = lastBinlogName
-		//} else {
-		//lm.BinLogName = binlogName
-		//}
-
 	}
 
-	//if (enableGTID && len(binlogGTID) == 0) || (!enableGTID && len(binlogName) == 0) {
-	//	return false, nil // no meaningful start pos specified
-	//}
-
-	//if !enableGTID && len(binlogName) > 0 {
-	//	if !binlog.VerifyFilename(binlogName) {
-	//		return false, terror.ErrRelayBinlogNameNotValid.Generate(binlogName)
-	//	}
-	//}
-	//var gset = lm.emptyGSet.Clone()
-	//if enableGTID && len(binlogGTID) > 0 {
-	//	var err error
-	//	gset, err = gtid.ParserGTID(lm.flavor, binlogGTID)
-	//	if err != nil {
-	//		return false, terror.Annotatef(err, "relay-binlog-gtid %s", binlogGTID)
-	//	}
-	//}
-
-	// verified, update them
-	//if enableGTID {
-	//lm.BinLogName = minCheckpoint.Name
-	//lm.BinLogName = lastBinlogName
-	//} else {
-	//if len(binlogName) == 0 {
-	//	lm.BinLogName = lastBinlogName
-	//} else {
-	//	lm.BinLogName = binlogName
-	//}
-	//}
 	lm.BinLogPos = minCheckpoint.Pos // always set pos to 4
 	lm.BinlogGTID = gset.String()
 	lm.gset = gset
