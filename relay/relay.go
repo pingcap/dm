@@ -508,7 +508,7 @@ func (r *Relay) reSetupMeta() error {
 	adjusted, err := r.meta.AdjustWithStartPos(r.cfg.BinLogName, r.cfg.BinlogGTID, r.cfg.EnableGTID, lastPos.Name)
 	if err != nil {
 		return err
-	} 
+	}
 	_, pos := r.meta.Pos()
 	_, gtid := r.meta.GTID()
 
