@@ -236,9 +236,7 @@ func (c *Checker) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	result, err := check.Do(cctx, c.checkList)
 	if err != nil {
 		errs = append(errs, unit.NewProcessError(pb.ErrorType_CheckFailed, err.Error()))
-	}
-
-	if !result.Summary.Passed {
+	} else if !result.Summary.Passed {
 		errs = append(errs, unit.NewProcessError(pb.ErrorType_CheckFailed, "check was failed, please see detail"))
 	}
 
