@@ -163,7 +163,7 @@ func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, workerCount 
 			if terr != nil {
 				tctx.L().Error("failed to close baseDB", zap.Error(terr))
 			}
-			return nil, nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
+			return nil, nil, terror.WithScope(err, terror.ScopeDownstream)
 		}
 		conns = append(conns, &DBConn{baseConn: baseConn, cfg: cfg})
 	}
