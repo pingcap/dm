@@ -85,7 +85,7 @@ func NewBaseDB(db *sql.DB) *BaseDB {
 func (d *BaseDB) GetBaseConn(ctx context.Context) (*BaseConn, error) {
 	conn, err := d.DB.Conn(ctx)
 	if err != nil {
-		return nil, terror.ErrDBDriverError.Delegate(err)
+		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 	err = conn.PingContext(ctx)
 	if err != nil {
