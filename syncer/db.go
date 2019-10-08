@@ -143,11 +143,8 @@ type DBConn struct {
 	resetConnFn func(*tcontext.Context) (*conn.BaseConn, error)
 }
 
-// ResetConn reset one worker connection from specify *BaseDB
+// resetConn reset one worker connection from specify *BaseDB
 func (conn *DBConn) resetConn(tctx *tcontext.Context) error {
-	if conn == nil {
-		return terror.ErrDBDriverError.Generate("database not valid")
-	}
 	dbConn, err := conn.resetConnFn(tctx)
 	if err != nil {
 		return err
@@ -270,7 +267,7 @@ func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, dbCfg config
 		dbConn, err := db.GetBaseConn(tctx.Context())
 		if err != nil {
 			closeBaseDB(tctx, db)
-			return nil, nil, terror.WithScope(terror.ErrDBBadConn.Delegate(err), terror.ScopeDownstream)
+			return nil, nil, terror.WithScope(err, terror.ScopeDownstream)
 		}
 		resetConnFn := func(tctx *tcontext.Context) (*conn.BaseConn, error) {
 			err := db.CloseBaseConn(dbConn)

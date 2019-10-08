@@ -50,6 +50,9 @@ type CheckPoint interface {
 	// Init initialize checkpoint data in tidb
 	Init(filename string, endpos int64) error
 
+	// ResetConn resets database connections owned by the Checkpoint
+	ResetConn() error
+
 	// Close closes the CheckPoint
 	Close()
 
@@ -294,6 +297,11 @@ func (cp *RemoteCheckPoint) Init(filename string, endPos int64) error {
 		return terror.WithScope(terror.Annotate(err, "initialize checkpoint"), terror.ScopeDownstream)
 	}
 	return nil
+}
+
+// ResetConn implements CheckPoint.ResetConn
+func (cp *RemoteCheckPoint) ResetConn() error {
+	return cp.conn.resetConn(cp.tctx)
 }
 
 // Close implements CheckPoint.Close

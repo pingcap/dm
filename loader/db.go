@@ -39,6 +39,8 @@ import (
 type DBConn struct {
 	cfg      *config.SubTaskConfig
 	baseConn *conn.BaseConn
+
+	resetConnFn func(*tcontext.Context) (*conn.BaseConn, error)
 }
 
 func (conn *DBConn) querySQL(ctx *tcontext.Context, query string, args ...interface{}) (*sql.Rows, error) {
@@ -104,6 +106,17 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 		FirstRetryDuration: 2 * time.Second,
 		BackoffStrategy:    retry.LinearIncrease,
 		IsRetryableFn: func(retryTime int, err error) bool {
+			if retry.IsConnectionError(err) {
+				err = conn.resetConn(ctx)
+				if err != nil {
+					ctx.L().Error("reset connection failed", zap.Int("retry", retryTime),
+						zap.String("queries", utils.TruncateInterface(queries, -1)),
+						zap.String("arguments", utils.TruncateInterface(args, -1)),
+						log.ShortError(err))
+					return false
+				}
+				return true
+			}
 			ctx.L().Warn("execute statements", zap.Int("retry", retryTime),
 				zap.String("queries", utils.TruncateInterface(queries, -1)),
 				zap.String("arguments", utils.TruncateInterface(args, -1)),
@@ -150,10 +163,20 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 	return err
 }
 
+// resetConn reset one worker connection from specify *BaseDB
+func (conn *DBConn) resetConn(tctx *tcontext.Context) error {
+	dbConn, err := conn.resetConnFn(tctx)
+	if err != nil {
+		return err
+	}
+	conn.baseConn = dbConn
+	return nil
+}
+
 func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, workerCount int) (*conn.BaseDB, []*DBConn, error) {
 	baseDB, err := conn.DefaultDBProvider.Apply(cfg.To)
 	if err != nil {
-		return nil, nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
+		return nil, nil, terror.WithScope(err, terror.ScopeDownstream)
 	}
 	conns := make([]*DBConn, 0, workerCount)
 	for i := 0; i < workerCount; i++ {
@@ -165,7 +188,14 @@ func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, workerCount 
 			}
 			return nil, nil, terror.WithScope(err, terror.ScopeDownstream)
 		}
-		conns = append(conns, &DBConn{baseConn: baseConn, cfg: cfg})
+		resetConnFn := func(tctx *tcontext.Context) (*conn.BaseConn, error) {
+			err := baseDB.CloseBaseConn(baseConn)
+			if err != nil {
+				return nil, err
+			}
+			return baseDB.GetBaseConn(tctx.Context())
+		}
+		conns = append(conns, &DBConn{baseConn: baseConn, cfg: cfg, resetConnFn: resetConnFn})
 	}
 	return baseDB, conns, nil
 }

@@ -600,8 +600,36 @@ func (l *Loader) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 		return
 	}
 
+	err := l.resetDBs()
+	if err != nil {
+		pr <- pb.ProcessResult{
+			IsCanceled: false,
+			Errors: []*pb.ProcessError{
+				unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err)),
+			},
+		}
+		return
+	}
 	// continue the processing
 	l.Process(ctx, pr)
+}
+
+func (l *Loader) resetDBs() error {
+	var err error
+
+	for i := 0; i < len(l.toDBConns); i++ {
+		err = l.toDBConns[i].resetConn(l.tctx)
+		if err != nil {
+			return terror.WithScope(err, terror.ScopeDownstream)
+		}
+	}
+
+	err = l.checkPoint.ResetConn()
+	if err != nil {
+		return terror.WithScope(err, terror.ScopeDownstream)
+	}
+
+	return nil
 }
 
 // Update implements Unit.Update
