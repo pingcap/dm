@@ -57,7 +57,7 @@ func (d *defaultDBProvider) Apply(config config.DBConfig) (*BaseDB, error) {
 	}
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
-		return nil, terror.ErrDBDriverError.Delegate(err)
+		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 	db.SetMaxIdleConns(maxIdleConns)
 
