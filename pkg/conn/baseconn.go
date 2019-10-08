@@ -26,6 +26,31 @@ import (
 )
 
 // BaseConn wraps a connection to DB
+// For Syncer and Loader Unit, they both have different amount of connections due to config
+// Currently we have some types of connections exist
+// Syncer:
+// 	Worker Connection:
+//      DML conenction:
+// 			execute some DML on Downstream DB, one unit has `syncer.WorkerCount` worker connections
+//  	DDL Connection:
+// 			execute some DDL on Downstream DB, one unit has one connection
+// 	CheckPoint Connection:
+// 		interact with CheckPoint DB, one unit has one connection
+//  OnlineDDL connection:
+// 		interact with Online DDL DB, one unit has one connection
+//  ShardGroupKeeper connection:
+// 		interact with ShardGroupKeeper DB, one unit has one connection
+//
+// Loader:
+// 	Worker Connection:
+// 		execute some DML to Downstream DB, one unit has `loader.PoolSize` worker connections
+// 	CheckPoint Connection:
+// 		interact with CheckPoint DB, one unit has one connection
+// 	restore Connection:
+// 		only use to create schema and table in restoreData, ignore already exists error, one unit has one connection
+//
+// each connection should have ability to retry on some common errors (e.g. tmysql.ErrTiKVServerTimeout) or maybe some specify errors in the future
+// and each connection also should have ability to reset itself during some specify connection error (e.g. driver.ErrBadConn)
 type BaseConn struct {
 	DBConn *sql.Conn
 
