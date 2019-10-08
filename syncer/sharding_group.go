@@ -457,7 +457,7 @@ func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceI
 func (k *ShardingGroupKeeper) Init() error {
 	k.clear()
 	sgkDB := k.cfg.To
-	sgkDB.RawDBCfg = config.DefaultRawDBConfig(maxDDLConnectionTimeout)
+	sgkDB.RawDBCfg = config.DefaultRawDBConfig(maxCheckPointTimeout)
 	db, dbConns, err := createConns(k.tctx, k.cfg, sgkDB, 1)
 	if err != nil {
 		return err
