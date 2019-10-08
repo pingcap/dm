@@ -72,7 +72,7 @@ type binlogSize struct {
 func createBaseDB(dbCfg config.DBConfig) (*conn.BaseDB, error) {
 	db, err := conn.DefaultDBProvider.Apply(dbCfg)
 	if err != nil {
-		return nil, err
+		return nil, terror.WithScope(err, terror.ScopeDownstream)
 	}
 	return db, nil
 }

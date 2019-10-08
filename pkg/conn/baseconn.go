@@ -47,7 +47,8 @@ import (
 // 	CheckPoint Connection:
 // 		interact with CheckPoint DB, one unit has one connection
 // 	restore Connection:
-// 		only use to create schema and table in restoreData, ignore already exists error, one unit has one connection
+// 		only use to create schema and table in restoreData,
+// 		it ignore already exists error and it should be removed after use, one unit has one connection
 //
 // each connection should have ability to retry on some common errors (e.g. tmysql.ErrTiKVServerTimeout) or maybe some specify errors in the future
 // and each connection also should have ability to reset itself during some specify connection error (e.g. driver.ErrBadConn)
