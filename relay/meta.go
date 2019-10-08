@@ -175,6 +175,7 @@ func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, en
 				return false, terror.Annotatef(err, "relay-binlog-gtid %s", binlogGTID)
 			}
 		}
+		lm.BinLogName = ""
 	} else {
 		if len(binlogName) == 0 { // no meaningful start pos specified
 			lm.BinLogName = lastBinlogName
@@ -185,8 +186,6 @@ func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, en
 				return false, terror.ErrRelayBinlogNameNotValid.Generate(binlogName)
 			}
 		}
-
-		lm.BinLogPos = minCheckpoint.Pos // always set pos to 4
 	}
 
 	lm.BinLogPos = minCheckpoint.Pos // always set pos to 4
