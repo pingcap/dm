@@ -274,7 +274,9 @@ func (c *Checker) updateInstruction(result *check.Results) {
 		// can't judge by other field, maybe update it later
 		switch r.Extra {
 		case check.AutoIncrementKeyChecking:
-			r.Instruction = "please handle it by yourself, read document https://pingcap.com/docs-cn/dev/reference/tools/data-migration/usage-scenarios/best-practice-dm-shard/#自增主键冲突处理 for more detail (only have Chinese document now, will translate to English later)"
+			if strings.HasPrefix(r.Instruction, "please handle it by yourself") {
+				r.Instruction += ", read document https://pingcap.com/docs-cn/dev/reference/tools/data-migration/usage-scenarios/best-practice-dm-shard/#自增主键冲突处理 for more detail (only have Chinese document now, will translate to English later)"
+			}
 		}
 	}
 }
