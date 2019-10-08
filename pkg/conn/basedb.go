@@ -89,7 +89,7 @@ func (d *BaseDB) GetBaseConn(ctx context.Context) (*BaseConn, error) {
 	}
 	err = conn.PingContext(ctx)
 	if err != nil {
-		return nil, terror.ErrDBDriverError.Delegate(err)
+		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 	baseConn := newBaseConn(conn, d.Retry)
 	d.mu.Lock()
