@@ -35,19 +35,20 @@ require (
 	github.com/pingcap/failpoint v0.0.0-20190708053854-e7b1061e6e81
 	github.com/pingcap/kvproto v0.0.0-20190827032240-9696cd0c6acb // indirect
 	github.com/pingcap/log v0.0.0-20190715063458-479153f07ebd
-	github.com/pingcap/parser v0.0.0-20190902030720-275a827cf4e3
+	github.com/pingcap/parser v0.0.0-20191008032157-51a2e3b2e34b
 	github.com/pingcap/tidb v0.0.0-20190827060935-cc07b110825e
 	github.com/pingcap/tidb-tools v3.0.0-beta.1.0.20190821032033-e6ccf3994944+incompatible
-	github.com/pingcap/tipb v0.0.0-20190823055122-55a45ba82a79 // indirect
+	github.com/pingcap/tipb v0.0.0-20191008064422-018b2fadf414 // indirect
 	github.com/prometheus/client_golang v1.1.0
 	github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4 // indirect
 	github.com/prometheus/procfs v0.0.4 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20190728182440-6a916e37a237 // indirect
 	github.com/satori/go.uuid v1.2.0
 	github.com/shirou/gopsutil v2.18.12+incompatible // indirect
+	github.com/shopspring/decimal v0.0.0-20190905144223-a36b5d85f337 // indirect
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
 	github.com/siddontang/go-log v0.0.0-20190221022429-1e957dd83bed // indirect
-	github.com/siddontang/go-mysql v0.0.0-20190902035209-f52d30c9fcb7
+	github.com/siddontang/go-mysql v0.0.0-20191009015310-f66c8b344478
 	github.com/sirupsen/logrus v1.4.2 // indirect
 	github.com/soheilhy/cmux v0.1.4
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
@@ -62,15 +63,16 @@ require (
 	go.etcd.io/etcd v3.3.15+incompatible // indirect
 	go.uber.org/atomic v1.4.0 // indirect
 	go.uber.org/zap v1.10.0
-	golang.org/x/crypto v0.0.0-20190820162420-60c769a6c586 // indirect
-	golang.org/x/net v0.0.0-20190813141303-74dc4d7220e7
-	golang.org/x/sys v0.0.0-20190826190057-c7b8b68b1456
+	golang.org/x/crypto v0.0.0-20191002192127-34f69633bfdc // indirect
+	golang.org/x/net v0.0.0-20191007182048-72f939374954
+	golang.org/x/sys v0.0.0-20191008105621-543471e840be
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
-	golang.org/x/tools v0.0.0-20190826234050-71894ab67ee3 // indirect
+	golang.org/x/tools v0.0.0-20191007185444-6536af71d98a // indirect
 	google.golang.org/appengine v1.6.1 // indirect
 	google.golang.org/genproto v0.0.0-20190819201941-24fa4b261c55
 	google.golang.org/grpc v1.23.0
-	gopkg.in/yaml.v2 v2.2.2
+	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
+	gopkg.in/yaml.v2 v2.2.4
 	sigs.k8s.io/yaml v1.1.0 // indirect
 	sourcegraph.com/sourcegraph/appdash v0.0.0-20190731080439-ebfcffb1b5c0 // indirect
 )
