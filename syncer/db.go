@@ -140,12 +140,12 @@ type DBConn struct {
 	baseConn *conn.BaseConn
 
 	// for workerConn to reset baseConn
-	resetConnFn func(*tcontext.Context) (*conn.BaseConn, error)
+	resetConnFn func(*tcontext.Context, *conn.BaseConn) (*conn.BaseConn, error)
 }
 
 // resetConn reset one worker connection from specify *BaseDB
 func (conn *DBConn) resetConn(tctx *tcontext.Context) error {
-	dbConn, err := conn.resetConnFn(tctx)
+	dbConn, err := conn.resetConnFn(tctx, conn.baseConn)
 	if err != nil {
 		return err
 	}
@@ -264,19 +264,19 @@ func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, dbCfg config
 		return nil, nil, err
 	}
 	for i := 0; i < count; i++ {
-		dbConn, err := db.GetBaseConn(tctx.Context())
+		baseConn, err := db.GetBaseConn(tctx.Context())
 		if err != nil {
 			closeBaseDB(tctx, db)
 			return nil, nil, terror.WithScope(err, terror.ScopeDownstream)
 		}
-		resetConnFn := func(tctx *tcontext.Context) (*conn.BaseConn, error) {
-			err := db.CloseBaseConn(dbConn)
+		resetConnFn := func(tctx *tcontext.Context, baseConn *conn.BaseConn) (*conn.BaseConn, error) {
+			err := db.CloseBaseConn(baseConn)
 			if err != nil {
 				return nil, err
 			}
 			return db.GetBaseConn(tctx.Context())
 		}
-		conns = append(conns, &DBConn{baseConn: dbConn, cfg: cfg, resetConnFn: resetConnFn})
+		conns = append(conns, &DBConn{baseConn: baseConn, cfg: cfg, resetConnFn: resetConnFn})
 	}
 	return db, conns, nil
 }

@@ -40,7 +40,7 @@ type DBConn struct {
 	cfg      *config.SubTaskConfig
 	baseConn *conn.BaseConn
 
-	resetConnFn func(*tcontext.Context) (*conn.BaseConn, error)
+	resetConnFn func(*tcontext.Context, *conn.BaseConn) (*conn.BaseConn, error)
 }
 
 func (conn *DBConn) querySQL(ctx *tcontext.Context, query string, args ...interface{}) (*sql.Rows, error) {
@@ -117,12 +117,15 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 				}
 				return true
 			}
-			ctx.L().Warn("execute statements", zap.Int("retry", retryTime),
-				zap.String("queries", utils.TruncateInterface(queries, -1)),
-				zap.String("arguments", utils.TruncateInterface(args, -1)),
-				log.ShortError(err))
-			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
-			return retry.IsRetryableError(err)
+			if retry.IsRetryableError(err) {
+				ctx.L().Warn("execute statements", zap.Int("retry", retryTime),
+					zap.String("queries", utils.TruncateInterface(queries, -1)),
+					zap.String("arguments", utils.TruncateInterface(args, -1)),
+					log.ShortError(err))
+				tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
+				return true
+			}
+			return false
 		},
 	}
 
@@ -165,7 +168,7 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 
 // resetConn reset one worker connection from specify *BaseDB
 func (conn *DBConn) resetConn(tctx *tcontext.Context) error {
-	dbConn, err := conn.resetConnFn(tctx)
+	dbConn, err := conn.resetConnFn(tctx, conn.baseConn)
 	if err != nil {
 		return err
 	}
@@ -188,7 +191,7 @@ func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, workerCount 
 			}
 			return nil, nil, terror.WithScope(err, terror.ScopeDownstream)
 		}
-		resetConnFn := func(tctx *tcontext.Context) (*conn.BaseConn, error) {
+		resetConnFn := func(tctx *tcontext.Context, baseConn *conn.BaseConn) (*conn.BaseConn, error) {
 			err := baseDB.CloseBaseConn(baseConn)
 			if err != nil {
 				return nil, err

@@ -30,7 +30,7 @@ import (
 // Currently we have some types of connections exist
 // Syncer:
 // 	Worker Connection:
-//      DML conenction:
+//      DML connection:
 // 			execute some DML on Downstream DB, one unit has `syncer.WorkerCount` worker connections
 //  	DDL Connection:
 // 			execute some DDL on Downstream DB, one unit has one connection
