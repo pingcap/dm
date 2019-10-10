@@ -106,6 +106,7 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 		FirstRetryDuration: 2 * time.Second,
 		BackoffStrategy:    retry.LinearIncrease,
 		IsRetryableFn: func(retryTime int, err error) bool {
+			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
 			if retry.IsConnectionError(err) {
 				err = conn.resetConn(ctx)
 				if err != nil {
@@ -122,7 +123,6 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 					zap.String("queries", utils.TruncateInterface(queries, -1)),
 					zap.String("arguments", utils.TruncateInterface(args, -1)),
 					log.ShortError(err))
-				tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
 				return true
 			}
 			return false

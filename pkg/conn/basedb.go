@@ -102,11 +102,8 @@ func (d *BaseDB) GetBaseConn(ctx context.Context) (*BaseConn, error) {
 func (d *BaseDB) CloseBaseConn(conn *BaseConn) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if _, ok := d.conns[conn]; ok {
-		delete(d.conns, conn)
-		return conn.close()
-	}
-	return nil
+	delete(d.conns, conn)
+	return conn.close()
 }
 
 // Close release baseDB resource

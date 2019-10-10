@@ -214,6 +214,7 @@ func (conn *DBConn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError fun
 						log.ShortError(err))
 					return false
 				}
+				sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
 				return true
 			}
 			if retry.IsRetryableError(err) {
