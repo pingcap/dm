@@ -35,7 +35,7 @@ type testBaseConnSuite struct {
 }
 
 func (t *testBaseConnSuite) TestBaseConn(c *C) {
-	baseConn := newBaseConn(nil, nil, nil)
+	baseConn := NewBaseConn(nil, nil, nil)
 
 	tctx := tcontext.Background()
 	err := baseConn.SetRetryStrategy(nil)

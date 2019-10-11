@@ -66,11 +66,11 @@ type BaseConn struct {
 	RetryStrategy retry.Strategy
 
 	// for reset
-	ParentDB *BaseDB
+	parentDB *BaseDB
 }
 
-// newBaseConn builds BaseConn to connect real DB
-func newBaseConn(conn *sql.Conn, strategy retry.Strategy, db *BaseDB) *BaseConn {
+// NewBaseConn builds BaseConn to connect real DB
+func NewBaseConn(conn *sql.Conn, strategy retry.Strategy, db *BaseDB) *BaseConn {
 	if strategy == nil {
 		strategy = &retry.FiniteRetryStrategy{}
 	}
@@ -79,11 +79,11 @@ func newBaseConn(conn *sql.Conn, strategy retry.Strategy, db *BaseDB) *BaseConn 
 
 // Reset resets this BaseConn, close old one and generate new *sql.Conn from its BaseDB
 func (conn *BaseConn) Reset(tctx *tcontext.Context) error {
-	err := conn.ParentDB.CloseBaseConn(conn)
+	err := conn.parentDB.CloseBaseConn(conn)
 	if err != nil {
-		return err
+		tctx.L().Warn("close connection during reset", log.ShortError(err))
 	}
-	baseConn, err := conn.ParentDB.GetBaseConn(tctx.Context())
+	baseConn, err := conn.parentDB.GetBaseConn(tctx.Context())
 	if err != nil {
 		return err
 	}

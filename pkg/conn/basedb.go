@@ -91,7 +91,7 @@ func (d *BaseDB) GetBaseConn(ctx context.Context) (*BaseConn, error) {
 	if err != nil {
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
-	baseConn := newBaseConn(conn, d.Retry, d)
+	baseConn := NewBaseConn(conn, d.Retry, d)
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.conns[baseConn] = struct{}{}
@@ -106,7 +106,7 @@ func (d *BaseDB) CloseBaseConn(conn *BaseConn) error {
 	return conn.close()
 }
 
-// Close release ParentDB resource
+// Close release *BaseDB resource
 func (d *BaseDB) Close() error {
 	if d == nil || d.DB == nil {
 		return nil
