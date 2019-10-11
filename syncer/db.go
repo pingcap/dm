@@ -138,19 +138,11 @@ func closeUpstreamConn(tctx *tcontext.Context, conn *UpStreamConn) {
 type DBConn struct {
 	cfg      *config.SubTaskConfig
 	baseConn *conn.BaseConn
-
-	// for workerConn to reset baseConn
-	resetConnFn func(*tcontext.Context, *conn.BaseConn) (*conn.BaseConn, error)
 }
 
 // resetConn reset one worker connection from specify *BaseDB
 func (conn *DBConn) resetConn(tctx *tcontext.Context) error {
-	dbConn, err := conn.resetConnFn(tctx, conn.baseConn)
-	if err != nil {
-		return err
-	}
-	conn.baseConn = dbConn
-	return nil
+	return conn.baseConn.Reset(tctx)
 }
 
 func (conn *DBConn) querySQL(tctx *tcontext.Context, query string, args ...interface{}) (*sql.Rows, error) {
@@ -270,14 +262,7 @@ func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, dbCfg config
 			closeBaseDB(tctx, db)
 			return nil, nil, terror.WithScope(err, terror.ScopeDownstream)
 		}
-		resetConnFn := func(tctx *tcontext.Context, baseConn *conn.BaseConn) (*conn.BaseConn, error) {
-			err := db.CloseBaseConn(baseConn)
-			if err != nil {
-				return nil, err
-			}
-			return db.GetBaseConn(tctx.Context())
-		}
-		conns = append(conns, &DBConn{baseConn: baseConn, cfg: cfg, resetConnFn: resetConnFn})
+		conns = append(conns, &DBConn{baseConn: baseConn, cfg: cfg})
 	}
 	return db, conns, nil
 }

@@ -25,28 +25,36 @@ import (
 	"go.uber.org/zap"
 )
 
-// BaseConn wraps a connection to DB
-// For Syncer and Loader Unit, they both have different amount of connections due to config
-// Currently we have some types of connections exist
-// Syncer:
-// 	Worker Connection:
+// BaseConn is the basic connection we use in dm
+// BaseDB -> BaseConn correspond to sql.DB -> sql.Conn
+// In our scenario, there are two main reasons why we need BaseConn
+//   1. we often need one fixed DB connection to execute sql
+//   2. we need own retry policy during execute failed
+// So we split a fixed sql.Conn out of sql.DB, and wraps it to BaseConn
+// And Similar with sql.Conn, all BaseConn generated from one BaseDB shares this BaseDB to reset
+//
+// Basic usage:
+//   For Syncer and Loader Unit, they both have different amount of connections due to config
+//   Currently we have some types of connections exist
+//   Syncer:
+// 	  Worker Connection:
 //      DML connection:
 // 			execute some DML on Downstream DB, one unit has `syncer.WorkerCount` worker connections
 //  	DDL Connection:
 // 			execute some DDL on Downstream DB, one unit has one connection
-// 	CheckPoint Connection:
+// 	  CheckPoint Connection:
 // 		interact with CheckPoint DB, one unit has one connection
-//  OnlineDDL connection:
+//    OnlineDDL connection:
 // 		interact with Online DDL DB, one unit has one connection
-//  ShardGroupKeeper connection:
+//    ShardGroupKeeper connection:
 // 		interact with ShardGroupKeeper DB, one unit has one connection
 //
-// Loader:
-// 	Worker Connection:
+//   Loader:
+// 	  Worker Connection:
 // 		execute some DML to Downstream DB, one unit has `loader.PoolSize` worker connections
-// 	CheckPoint Connection:
+// 	  CheckPoint Connection:
 // 		interact with CheckPoint DB, one unit has one connection
-// 	restore Connection:
+// 	  Restore Connection:
 // 		only use to create schema and table in restoreData,
 // 		it ignore already exists error and it should be removed after use, one unit has one connection
 //
@@ -56,14 +64,31 @@ type BaseConn struct {
 	DBConn *sql.Conn
 
 	RetryStrategy retry.Strategy
+
+	// for reset
+	ParentDB *BaseDB
 }
 
 // newBaseConn builds BaseConn to connect real DB
-func newBaseConn(conn *sql.Conn, strategy retry.Strategy) *BaseConn {
+func newBaseConn(conn *sql.Conn, strategy retry.Strategy, db *BaseDB) *BaseConn {
 	if strategy == nil {
 		strategy = &retry.FiniteRetryStrategy{}
 	}
-	return &BaseConn{conn, strategy}
+	return &BaseConn{conn, strategy, db}
+}
+
+// Reset resets this BaseConn, close old one and generate new *sql.Conn from its BaseDB
+func (conn *BaseConn) Reset(tctx *tcontext.Context) error {
+	err := conn.ParentDB.CloseBaseConn(conn)
+	if err != nil {
+		return err
+	}
+	baseConn, err := conn.ParentDB.GetBaseConn(tctx.Context())
+	if err != nil {
+		return err
+	}
+	conn.DBConn = baseConn.DBConn
+	return nil
 }
 
 // SetRetryStrategy set retry strategy for baseConn

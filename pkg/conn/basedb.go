@@ -64,7 +64,7 @@ func (d *defaultDBProvider) Apply(config config.DBConfig) (*BaseDB, error) {
 	return NewBaseDB(db), nil
 }
 
-// BaseDB wraps *sql.DB
+// BaseDB wraps *sql.DB, control the BaseConn
 type BaseDB struct {
 	DB *sql.DB
 
@@ -91,7 +91,7 @@ func (d *BaseDB) GetBaseConn(ctx context.Context) (*BaseConn, error) {
 	if err != nil {
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
-	baseConn := newBaseConn(conn, d.Retry)
+	baseConn := newBaseConn(conn, d.Retry, d)
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.conns[baseConn] = struct{}{}
@@ -106,7 +106,7 @@ func (d *BaseDB) CloseBaseConn(conn *BaseConn) error {
 	return conn.close()
 }
 
-// Close release baseDB resource
+// Close release ParentDB resource
 func (d *BaseDB) Close() error {
 	if d == nil || d.DB == nil {
 		return nil
