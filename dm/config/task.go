@@ -86,10 +86,18 @@ type MySQLInstance struct {
 
 	MydumperConfigName string          `yaml:"mydumper-config-name"`
 	Mydumper           *MydumperConfig `yaml:"mydumper"`
-	LoaderConfigName   string          `yaml:"loader-config-name"`
-	Loader             *LoaderConfig   `yaml:"loader"`
-	SyncerConfigName   string          `yaml:"syncer-config-name"`
-	Syncer             *SyncerConfig   `yaml:"syncer"`
+	// MydumperThread is alias for Threads in MydumperConfig, and it's priority is high than Threads
+	MydumperThread int `yaml:"mydumper-thread"`
+
+	LoaderConfigName string        `yaml:"loader-config-name"`
+	Loader           *LoaderConfig `yaml:"loader"`
+	// LoaderThread is alias for PoolSize in LoaderConfig, and it's priority is high than PoolSize
+	LoaderThread int `yaml:"loader-thread"`
+
+	SyncerConfigName string        `yaml:"syncer-config-name"`
+	Syncer           *SyncerConfig `yaml:"syncer"`
+	// SyncerThread is alias for WorkerCount in SyncerConfig, and it's priority is high than WorkerCount
+	SyncerThread int `yaml:"syncer-thread"`
 }
 
 // Verify does verification on configs
@@ -394,6 +402,9 @@ func (c *TaskConfig) adjust() error {
 			defaultCfg := defaultMydumperConfig()
 			inst.Mydumper = &defaultCfg
 		}
+		if inst.MydumperThread != 0 {
+			inst.Mydumper.Threads = inst.MydumperThread
+		}
 
 		if (c.TaskMode == ModeFull || c.TaskMode == ModeAll) && len(inst.Mydumper.MydumperPath) == 0 {
 			// only verify if set, whether is valid can only be verify when we run it
@@ -411,6 +422,9 @@ func (c *TaskConfig) adjust() error {
 			defaultCfg := defaultLoaderConfig()
 			inst.Loader = &defaultCfg
 		}
+		if inst.LoaderThread != 0 {
+			inst.Loader.PoolSize = inst.LoaderThread
+		}
 
 		if len(inst.SyncerConfigName) > 0 {
 			rule, ok := c.Syncers[inst.SyncerConfigName]
@@ -422,6 +436,9 @@ func (c *TaskConfig) adjust() error {
 		if inst.Syncer == nil {
 			defaultCfg := defaultSyncerConfig()
 			inst.Syncer = &defaultCfg
+		}
+		if inst.SyncerThread != 0 {
+			inst.Syncer.WorkerCount = inst.SyncerThread
 		}
 	}
 
