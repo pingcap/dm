@@ -396,7 +396,8 @@ func (c *TaskConfig) adjust() error {
 			if !ok {
 				return terror.ErrConfigMydumperCfgNotFound.Generate(i, inst.MydumperConfigName)
 			}
-			inst.Mydumper = rule // ref mydumper config
+			inst.Mydumper = new(MydumperConfig)
+			*inst.Mydumper = *rule // ref mydumper config
 		}
 		if inst.Mydumper == nil {
 			defaultCfg := defaultMydumperConfig()
@@ -416,7 +417,8 @@ func (c *TaskConfig) adjust() error {
 			if !ok {
 				return terror.ErrConfigLoaderCfgNotFound.Generate(i, inst.LoaderConfigName)
 			}
-			inst.Loader = rule // ref loader config
+			inst.Loader = new(LoaderConfig)
+			*inst.Loader = *rule // ref loader config
 		}
 		if inst.Loader == nil {
 			defaultCfg := defaultLoaderConfig()
@@ -431,7 +433,8 @@ func (c *TaskConfig) adjust() error {
 			if !ok {
 				return terror.ErrConfigSyncerCfgNotFound.Generate(i, inst.SyncerConfigName)
 			}
-			inst.Syncer = rule // ref syncer config
+			inst.Syncer = new(SyncerConfig)
+			*inst.Syncer = *rule // ref syncer config
 		}
 		if inst.Syncer == nil {
 			defaultCfg := defaultSyncerConfig()

@@ -151,6 +151,12 @@ mysql-instances:
     loader-config-name: "global"
     syncer-config-name: "global"
 
+  - source-id: "mysql-replica-03"
+    black-white-list:  "instance"
+    mydumper-thread: 44
+    loader-thread: 55
+    syncer-thread: 66
+
 black-white-list:
   instance:
     do-dbs: ["test"]
@@ -180,4 +186,10 @@ syncers:
 	c.Assert(taskConfig.MySQLInstances[0].Mydumper.Threads, Equals, 11)
 	c.Assert(taskConfig.MySQLInstances[0].Loader.PoolSize, Equals, 22)
 	c.Assert(taskConfig.MySQLInstances[0].Syncer.WorkerCount, Equals, 33)
+	c.Assert(taskConfig.MySQLInstances[1].Mydumper.Threads, Equals, 4)
+	c.Assert(taskConfig.MySQLInstances[1].Loader.PoolSize, Equals, 16)
+	c.Assert(taskConfig.MySQLInstances[1].Syncer.WorkerCount, Equals, 16)
+	c.Assert(taskConfig.MySQLInstances[2].Mydumper.Threads, Equals, 44)
+	c.Assert(taskConfig.MySQLInstances[2].Loader.PoolSize, Equals, 55)
+	c.Assert(taskConfig.MySQLInstances[2].Syncer.WorkerCount, Equals, 66)
 }
