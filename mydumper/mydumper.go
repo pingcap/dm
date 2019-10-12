@@ -52,13 +52,14 @@ func NewMydumper(cfg *config.SubTaskConfig) *Mydumper {
 		cfg:    cfg,
 		logger: log.With(zap.String("task", cfg.Name), zap.String("unit", "dump")),
 	}
-	m.args = m.constructArgs()
 	return m
 }
 
 // Init implements Unit.Init
 func (m *Mydumper) Init() error {
-	return nil // always return nil
+	var err error
+	m.args, err = m.constructArgs()
+	return err
 }
 
 // Process implements Unit.Process
@@ -232,7 +233,7 @@ func (m *Mydumper) IsFreshTask() (bool, error) {
 }
 
 // constructArgs constructs arguments for exec.Command
-func (m *Mydumper) constructArgs() []string {
+func (m *Mydumper) constructArgs() ([]string, error) {
 	cfg := m.cfg
 	db := cfg.From
 
@@ -261,12 +262,18 @@ func (m *Mydumper) constructArgs() []string {
 	extraArgs := strings.Fields(cfg.ExtraArgs)
 	if len(extraArgs) > 0 {
 		ret = append(ret, ParseArgLikeBash(extraArgs)...)
+	} else {
+		doTables, err := fetchMyDumperDoTables(cfg)
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, "--T", doTables)
 	}
 
 	m.logger.Info("create mydumper", zap.Strings("argument", ret))
 
 	ret = append(ret, "--password", db.Password)
-	return ret
+	return ret, nil
 }
 
 // logArgs constructs arguments for log from SubTaskConfig
