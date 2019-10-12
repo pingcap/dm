@@ -162,6 +162,18 @@ func (conn *DBConn) querySQL(tctx *tcontext.Context, query string, args ...inter
 		FirstRetryDuration: retryTimeout,
 		BackoffStrategy:    retry.Stable,
 		IsRetryableFn: func(retryTime int, err error) bool {
+			if retry.IsConnectionError(err) {
+				err = conn.resetConn(tctx)
+				if err != nil {
+					tctx.L().Error("reset connection failed", zap.Int("retry", retryTime),
+						zap.String("query", utils.TruncateInterface(query, -1)),
+						zap.String("arguments", utils.TruncateInterface(args, -1)),
+						log.ShortError(err))
+					return false
+				}
+				sqlRetriesTotal.WithLabelValues("query", conn.cfg.Name).Add(1)
+				return true
+			}
 			if retry.IsRetryableError(err) {
 				tctx.L().Warn("query statement", zap.Int("retry", retryTime),
 					zap.String("query", utils.TruncateString(query, -1)),
