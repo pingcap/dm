@@ -26,7 +26,7 @@ import (
 	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	"github.com/pingcap/tidb-tools/pkg/table-router"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"go.uber.org/zap"
 )
 
@@ -121,6 +121,20 @@ func FetchAllDoTables(db *sql.DB, bw *filter.Filter) (map[string][]string, error
 
 // FetchTargetDoTables returns all need to do tables after filtered and routed (fetches from upstream MySQL)
 func FetchTargetDoTables(db *sql.DB, bw *filter.Filter, router *router.Table) (map[string][]*filter.Table, error) {
+	failpoint.Inject("mockMydumperEmptyExtraArgs", func(_ failpoint.Value) {
+		log.L().Info("mock fetch target tables while starting mydumper", zap.String("failpoint", "mockMydumperEmptyExtraArgs"))
+		mapper := make(map[string][]*filter.Table)
+		mapper["mockDataBase"] = append(mapper["mockDataBase"], &filter.Table{
+			Schema: "mockDataBase",
+			Name:   "mockTable1",
+		})
+		mapper["mockDataBase"] = append(mapper["mockDataBase"], &filter.Table{
+			Schema: "mockDataBase",
+			Name:   "mockTable2",
+		})
+		failpoint.Return(mapper, nil)
+	})
+
 	// fetch tables from source and filter them
 	sourceTables, err := FetchAllDoTables(db, bw)
 
