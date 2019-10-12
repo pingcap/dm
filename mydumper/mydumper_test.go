@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/failpoint"
 
 	"github.com/pingcap/dm/dm/config"
 )
@@ -62,4 +63,21 @@ func (m *testMydumperSuite) TestArgs(c *C) {
 	args, err := mydumper.constructArgs()
 	c.Assert(err, IsNil)
 	c.Assert(args, DeepEquals, expected)
+}
+
+func (m *testMydumperSuite) TestEmptyExtraArgs(c *C) {
+	expected := strings.Fields("--host 127.0.0.1 --port 3306 --user root " +
+		"--outputdir ./dumped_data --threads 4 --chunk-filesize 64 --skip-tz-utc " +
+		"--tables-list mockDataBase.mockTable1,mockDataBase.mockTable2 " +
+		"--password 123")
+	m.cfg.MydumperConfig.ExtraArgs = ""
+
+	mockMydumperEmptyExtraArgs := "github.com/pingcap/dm/dm/mydumper/mockMydumperEmptyExtraArgs;github.com/pingcap/dm/pkg/utils/mockMydumperEmptyExtraArgs"
+	c.Assert(failpoint.Enable(mockMydumperEmptyExtraArgs, "return(true)"), IsNil)
+	defer failpoint.Disable(mockMydumperEmptyExtraArgs)
+
+	mydumper := NewMydumper(m.cfg)
+	err := mydumper.Init()
+	c.Assert(err, IsNil)
+	c.Assert(mydumper.args, DeepEquals, expected)
 }

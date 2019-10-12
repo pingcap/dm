@@ -268,7 +268,7 @@ func (m *Mydumper) constructArgs() ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		ret = append(ret, "--T", doTables)
+		ret = append(ret, "--tables-list", doTables)
 	}
 
 	m.logger.Info("create mydumper", zap.Strings("argument", ret))

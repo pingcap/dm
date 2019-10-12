@@ -22,8 +22,11 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 
+	"github.com/pingcap/failpoint"
+	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	"go.uber.org/zap"
 )
 
 var maxDMLConnectionTimeout = "5m"
@@ -54,6 +57,11 @@ func trimOutQuotes(arg string) string {
 }
 
 func createBaseConn(dbCfg config.DBConfig, timeout string, rawDBCfg *baseconn.RawDBConfig) (*baseconn.BaseConn, error) {
+	failpoint.Inject("mockMydumperEmptyExtraArgs", func(_ failpoint.Value) {
+		log.S().Info("create mock baseConn which is nil", zap.String("failpoint", "mockMydumperEmptyExtraArgs"))
+		failpoint.Return(nil, nil)
+	})
+
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&readTimeout=%s&maxAllowedPacket=%d",
 		dbCfg.User, dbCfg.Password, dbCfg.Host, dbCfg.Port, timeout, *dbCfg.MaxAllowedPacket)
 	baseConn, err := baseconn.NewBaseConn(dbDSN, &retry.FiniteRetryStrategy{}, rawDBCfg)
