@@ -59,6 +59,7 @@ func (m *testMydumperSuite) TestArgs(c *C) {
 		"--password 123")
 	m.cfg.MydumperConfig.ExtraArgs = "--regex '^(?!(mysql|information_schema|performance_schema))'"
 	mydumper := NewMydumper(m.cfg)
-	args := mydumper.constructArgs()
+	args, err := mydumper.constructArgs()
+	c.Assert(err, IsNil)
 	c.Assert(args, DeepEquals, expected)
 }
