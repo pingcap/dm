@@ -39,6 +39,9 @@ import (
 type DBConn struct {
 	cfg      *config.SubTaskConfig
 	baseConn *conn.BaseConn
+
+	// generate new BaseConn and close old one
+	resetBaseConnFn func(*tcontext.Context, *conn.BaseConn) (*conn.BaseConn, error)
 }
 
 func (conn *DBConn) querySQL(ctx *tcontext.Context, query string, args ...interface{}) (*sql.Rows, error) {
@@ -166,7 +169,12 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 
 // resetConn reset one worker connection from specify *BaseDB
 func (conn *DBConn) resetConn(tctx *tcontext.Context) error {
-	return conn.baseConn.Reset(tctx)
+	baseConn, err := conn.resetBaseConnFn(tctx, conn.baseConn)
+	if err != nil {
+		return err
+	}
+	conn.baseConn = baseConn
+	return nil
 }
 
 func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, workerCount int) (*conn.BaseDB, []*DBConn, error) {
@@ -184,7 +192,14 @@ func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, workerCount 
 			}
 			return nil, nil, terror.WithScope(err, terror.ScopeDownstream)
 		}
-		conns = append(conns, &DBConn{baseConn: baseConn, cfg: cfg})
+		resetBaseConnFn := func(tctx *tcontext.Context, baseConn *conn.BaseConn) (*conn.BaseConn, error) {
+			err := baseDB.CloseBaseConn(baseConn)
+			if err != nil {
+				tctx.L().Warn("failed to close baseConn in reset")
+			}
+			return baseDB.GetBaseConn(tctx.Context())
+		}
+		conns = append(conns, &DBConn{baseConn: baseConn, cfg: cfg, resetBaseConnFn: resetBaseConnFn})
 	}
 	return baseDB, conns, nil
 }

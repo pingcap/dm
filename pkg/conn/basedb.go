@@ -91,7 +91,7 @@ func (d *BaseDB) GetBaseConn(ctx context.Context) (*BaseConn, error) {
 	if err != nil {
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
-	baseConn := NewBaseConn(conn, d.Retry, d)
+	baseConn := NewBaseConn(conn, d.Retry)
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.conns[baseConn] = struct{}{}

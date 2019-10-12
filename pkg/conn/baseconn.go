@@ -64,31 +64,14 @@ type BaseConn struct {
 	DBConn *sql.Conn
 
 	RetryStrategy retry.Strategy
-
-	// for reset
-	parentDB *BaseDB
 }
 
 // NewBaseConn builds BaseConn to connect real DB
-func NewBaseConn(conn *sql.Conn, strategy retry.Strategy, db *BaseDB) *BaseConn {
+func NewBaseConn(conn *sql.Conn, strategy retry.Strategy) *BaseConn {
 	if strategy == nil {
 		strategy = &retry.FiniteRetryStrategy{}
 	}
-	return &BaseConn{conn, strategy, db}
-}
-
-// Reset resets this BaseConn, close old one and generate new *sql.Conn from its BaseDB
-func (conn *BaseConn) Reset(tctx *tcontext.Context) error {
-	err := conn.parentDB.CloseBaseConn(conn)
-	if err != nil {
-		tctx.L().Warn("close connection during reset", log.ShortError(err))
-	}
-	baseConn, err := conn.parentDB.GetBaseConn(tctx.Context())
-	if err != nil {
-		return err
-	}
-	conn.DBConn = baseConn.DBConn
-	return nil
+	return &BaseConn{conn, strategy}
 }
 
 // SetRetryStrategy set retry strategy for baseConn

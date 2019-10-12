@@ -138,11 +138,19 @@ func closeUpstreamConn(tctx *tcontext.Context, conn *UpStreamConn) {
 type DBConn struct {
 	cfg      *config.SubTaskConfig
 	baseConn *conn.BaseConn
+
+	// generate new BaseConn and close old one
+	resetBaseConnFn func(*tcontext.Context, *conn.BaseConn) (*conn.BaseConn, error)
 }
 
 // resetConn reset one worker connection from specify *BaseDB
 func (conn *DBConn) resetConn(tctx *tcontext.Context) error {
-	return conn.baseConn.Reset(tctx)
+	baseConn, err := conn.resetBaseConnFn(tctx, conn.baseConn)
+	if err != nil {
+		return err
+	}
+	conn.baseConn = baseConn
+	return nil
 }
 
 func (conn *DBConn) querySQL(tctx *tcontext.Context, query string, args ...interface{}) (*sql.Rows, error) {
@@ -252,19 +260,26 @@ func (conn *DBConn) executeSQL(tctx *tcontext.Context, queries []string, args ..
 
 func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, dbCfg config.DBConfig, count int) (*conn.BaseDB, []*DBConn, error) {
 	conns := make([]*DBConn, 0, count)
-	db, err := createBaseDB(dbCfg)
+	baseDB, err := createBaseDB(dbCfg)
 	if err != nil {
 		return nil, nil, err
 	}
 	for i := 0; i < count; i++ {
-		baseConn, err := db.GetBaseConn(tctx.Context())
+		baseConn, err := baseDB.GetBaseConn(tctx.Context())
 		if err != nil {
-			closeBaseDB(tctx, db)
+			closeBaseDB(tctx, baseDB)
 			return nil, nil, terror.WithScope(err, terror.ScopeDownstream)
 		}
-		conns = append(conns, &DBConn{baseConn: baseConn, cfg: cfg})
+		resetBaseConnFn := func(tctx *tcontext.Context, baseConn *conn.BaseConn) (*conn.BaseConn, error) {
+			err := baseDB.CloseBaseConn(baseConn)
+			if err != nil {
+				tctx.L().Warn("failed to close baseConn in reset")
+			}
+			return baseDB.GetBaseConn(tctx.Context())
+		}
+		conns = append(conns, &DBConn{baseConn: baseConn, cfg: cfg, resetBaseConnFn: resetBaseConnFn})
 	}
-	return db, conns, nil
+	return baseDB, conns, nil
 }
 
 func getTableIndex(tctx *tcontext.Context, conn *DBConn, table *table) error {

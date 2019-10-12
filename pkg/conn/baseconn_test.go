@@ -35,7 +35,7 @@ type testBaseConnSuite struct {
 }
 
 func (t *testBaseConnSuite) TestBaseConn(c *C) {
-	baseConn := NewBaseConn(nil, nil, nil)
+	baseConn := NewBaseConn(nil, nil)
 
 	tctx := tcontext.Background()
 	err := baseConn.SetRetryStrategy(nil)
@@ -52,7 +52,7 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 	dbConn, err := db.Conn(tctx.Context())
 	c.Assert(err, IsNil)
 
-	baseConn = &BaseConn{dbConn, nil, nil}
+	baseConn = &BaseConn{dbConn, nil}
 
 	err = baseConn.SetRetryStrategy(&retry.FiniteRetryStrategy{})
 	c.Assert(err, IsNil)
