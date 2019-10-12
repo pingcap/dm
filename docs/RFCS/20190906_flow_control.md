@@ -55,7 +55,7 @@ The congestion usually means the quality of service decreases because of the ser
 
 Before we can measure the congestion, we should find a way to estimate the data loss, the bandwidth and the latency.
 
-- Data loss: can be collected in DM-worker itself, and we often use it as data loss rate, which means the failed transaction count divided by the count of all transactions that need to be processed.
+- Data loss: can be collected in DM-worker itself, and we often use it as data loss rate, which means the count of sqls in all failed transaction divided by the count sqls in all transactions that need to be processed.
 - Latency: equals to the transaction executed latency, can be collected in DM-worker itself.
 - Bandwidth: this is a little complicated, but we can estimate it by adjusting the concurrency and find the maximum downstream TPS for this DM-worker, which can be used as the bandwidth of the data import/replication link.
 
