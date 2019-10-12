@@ -39,7 +39,7 @@ const (
 	ClassBinlogOp
 	ClassCheckpoint
 	ClassTaskCheck
-	ClassRelayUtil
+	ClassRelayEventLib
 	ClassRelayUnit
 	ClassDumpUnit
 	ClassLoadUnit
@@ -50,20 +50,20 @@ const (
 )
 
 var errClass2Str = map[ErrClass]string{
-	ClassDatabase:   "database",
-	ClassFunctional: "functional",
-	ClassConfig:     "config",
-	ClassBinlogOp:   "binlog-op",
-	ClassCheckpoint: "checkpoint",
-	ClassTaskCheck:  "task-check",
-	ClassRelayUtil:  "relay-util",
-	ClassRelayUnit:  "relay-unit",
-	ClassDumpUnit:   "dump-unit",
-	ClassLoadUnit:   "load-unit",
-	ClassSyncUnit:   "sync-unit",
-	ClassDMMaster:   "dm-master",
-	ClassDMWorker:   "dm-worker",
-	ClassDMTracer:   "dm-tracer",
+	ClassDatabase:      "database",
+	ClassFunctional:    "functional",
+	ClassConfig:        "config",
+	ClassBinlogOp:      "binlog-op",
+	ClassCheckpoint:    "checkpoint",
+	ClassTaskCheck:     "task-check",
+	ClassRelayEventLib: "relay-event-lib",
+	ClassRelayUnit:     "relay-unit",
+	ClassDumpUnit:      "dump-unit",
+	ClassLoadUnit:      "load-unit",
+	ClassSyncUnit:      "sync-unit",
+	ClassDMMaster:      "dm-master",
+	ClassDMWorker:      "dm-worker",
+	ClassDMTracer:      "dm-tracer",
 }
 
 // String implements fmt.Stringer interface
