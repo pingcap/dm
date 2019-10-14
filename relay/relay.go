@@ -498,13 +498,18 @@ func (r *Relay) reSetupMeta() error {
 		return err
 	}
 
-	latestPos, latestGTID, err := utils.GetMasterStatus(r.db, r.cfg.Flavor)
-	if err != nil {
-		return err
+	var latestPosName, latestGTIDStr string
+	if (r.cfg.EnableGTID && len(r.cfg.BinlogGTID) == 0) || (!r.cfg.EnableGTID && len(r.cfg.BinLogName) == 0) {
+		latestPos, latestGTID, err := utils.GetMasterStatus(r.db, r.cfg.Flavor)
+		if err != nil {
+			return err
+		}
+		latestPosName = latestPos.Name
+		latestGTIDStr = latestGTID.String()
 	}
 
 	// try adjust meta with start pos from config
-	adjusted, err := r.meta.AdjustWithStartPos(r.cfg.BinLogName, r.cfg.BinlogGTID, r.cfg.EnableGTID, latestPos.Name, latestGTID.String())
+	adjusted, err := r.meta.AdjustWithStartPos(r.cfg.BinLogName, r.cfg.BinlogGTID, r.cfg.EnableGTID, latestPosName, latestGTIDStr)
 	if err != nil {
 		return err
 	}
