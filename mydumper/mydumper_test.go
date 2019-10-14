@@ -72,8 +72,8 @@ func (m *testMydumperSuite) TestEmptyExtraArgs(c *C) {
 		"--password 123")
 	m.cfg.MydumperConfig.ExtraArgs = ""
 
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/mydumper/createEmptyBaseConn", "return(true)"), IsNil)
-	defer failpoint.Disable("github.com/pingcap/dm/mydumper/createEmptyBaseConn")
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/utils/baseconn/createEmptyBaseConn", "return(true)"), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/pkg/utils/baseconn/createEmptyBaseConn")
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/utils/mockSuccessfullyFetchTargetDoTables", "return(true)"), IsNil)
 	defer failpoint.Disable("github.com/pingcap/dm/pkg/utils/mockSuccessfullyFetchTargetDoTables")
 
