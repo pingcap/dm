@@ -57,9 +57,9 @@ func trimOutQuotes(arg string) string {
 }
 
 func createBaseConn(dbCfg config.DBConfig, timeout string, rawDBCfg *baseconn.RawDBConfig) (*baseconn.BaseConn, error) {
-	failpoint.Inject("mockMydumperEmptyExtraArgs", func(_ failpoint.Value) {
-		log.S().Info("create mock baseConn which is nil", zap.String("failpoint", "mockMydumperEmptyExtraArgs"))
-		failpoint.Return(nil, nil)
+	failpoint.Inject("createEmptyBaseConn", func(_ failpoint.Value) {
+		log.S().Info("create mock baseConn which is nil", zap.String("failpoint", "createEmptyBaseConn"))
+		failpoint.Return(&baseconn.BaseConn{}, nil)
 	})
 
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&readTimeout=%s&maxAllowedPacket=%d",
