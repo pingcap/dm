@@ -46,8 +46,6 @@ import (
 
 var (
 	jobCount = 1000
-
-	infiniteReadTimeout = "0"
 )
 
 // FilePosSet represents a set in mathematics.
@@ -1015,8 +1013,8 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	}
 	defer l.toDB.CloseBaseConn(baseConn)
 	dbConn := &DBConn{
-		cfg:      l.cfg,
-		baseConn: baseConn,
+		cfg:             l.cfg,
+		baseConn:        baseConn,
 		resetBaseConnFn: nil,
 	}
 
