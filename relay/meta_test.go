@@ -98,7 +98,7 @@ func (r *testMetaSuite) TestLocalMeta(c *C) {
 
 	// adjust to start pos
 	cs0 := cases[0]
-	adjusted, err := lm.AdjustWithStartPos(cs0.pos.Name, cs0.gset.String(), false, "")
+	adjusted, err := lm.AdjustWithStartPos(cs0.pos.Name, cs0.gset.String(), false, "", "")
 	c.Assert(err, IsNil)
 	c.Assert(adjusted, IsTrue)
 	uuid, pos = lm.Pos()
@@ -109,7 +109,7 @@ func (r *testMetaSuite) TestLocalMeta(c *C) {
 	c.Assert(gset.String(), Equals, "")
 
 	// adjust to start pos with enableGTID
-	adjusted, err = lm.AdjustWithStartPos(cs0.pos.Name, cs0.gset.String(), true, "")
+	adjusted, err = lm.AdjustWithStartPos(cs0.pos.Name, cs0.gset.String(), true, "", "")
 	c.Assert(err, IsNil)
 	c.Assert(adjusted, IsTrue)
 	uuid, pos = lm.Pos()
@@ -121,7 +121,7 @@ func (r *testMetaSuite) TestLocalMeta(c *C) {
 
 	// adjust to the last binlog if start pos is empty
 	lastBinlogName := "mysql-bin.000009"
-	adjusted, err = lm.AdjustWithStartPos("", cs0.gset.String(), false, lastBinlogName)
+	adjusted, err = lm.AdjustWithStartPos("", cs0.gset.String(), false, lastBinlogName, "")
 	c.Assert(err, IsNil)
 	c.Assert(adjusted, IsTrue)
 	uuid, pos = lm.Pos()
@@ -131,7 +131,7 @@ func (r *testMetaSuite) TestLocalMeta(c *C) {
 	c.Assert(uuid, Equals, "")
 	c.Assert(gset.String(), Equals, "")
 
-	adjusted, err = lm.AdjustWithStartPos("", cs0.gset.String(), true, lastBinlogName)
+	adjusted, err = lm.AdjustWithStartPos("", "", true, lastBinlogName, cs0.gset.String())
 	c.Assert(err, IsNil)
 	c.Assert(adjusted, IsTrue)
 	uuid, pos = lm.Pos()
@@ -171,7 +171,7 @@ func (r *testMetaSuite) TestLocalMeta(c *C) {
 
 	// try adjust to start pos again
 	csn1 := cases[len(cases)-1]
-	adjusted, err = lm.AdjustWithStartPos(cs0.pos.Name, cs0.gset.String(), false, "")
+	adjusted, err = lm.AdjustWithStartPos(cs0.pos.Name, cs0.gset.String(), false, "", "")
 	c.Assert(err, IsNil)
 	c.Assert(adjusted, IsFalse)
 	uuid, pos = lm.Pos()

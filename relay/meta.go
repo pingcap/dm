@@ -46,7 +46,7 @@ type Meta interface {
 	// AdjustWithStartPos adjusts current pos / GTID with start pos
 	// if current pos / GTID is meaningless, update to start pos or last pos when start pos is meaningless
 	// else do nothing
-	AdjustWithStartPos(binlogName string, binlogGTID string, enableGTID bool, lastBinlogName string) (bool, error)
+	AdjustWithStartPos(binlogName string, binlogGTID string, enableGTID bool, latestBinlogName string, latestBinlogGTID string) (bool, error)
 
 	// Save saves meta information
 	Save(pos mysql.Position, gset gtid.Set) error
@@ -152,7 +152,7 @@ func (lm *LocalMeta) Load() error {
 }
 
 // AdjustWithStartPos implements Meta.AdjustWithStartPos, return whether adjusted
-func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, enableGTID bool, lastBinlogName string) (bool, error) {
+func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, enableGTID bool, latestBinlogName string, latestBinlogGTID string) (bool, error) {
 	lm.Lock()
 	defer lm.Unlock()
 
@@ -169,16 +169,17 @@ func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, en
 	var err error
 
 	if enableGTID {
-		if len(binlogGTID) != 0 {
-			gset, err = gtid.ParserGTID(lm.flavor, binlogGTID)
-			if err != nil {
-				return false, terror.Annotatef(err, "relay-binlog-gtid %s", binlogGTID)
-			}
+		if len(binlogGTID) == 0 {
+			binlogGTID = latestBinlogGTID
+		}
+		gset, err = gtid.ParserGTID(lm.flavor, binlogGTID)
+		if err != nil {
+			return false, terror.Annotatef(err, "relay-binlog-gtid %s", binlogGTID)
 		}
 		lm.BinLogName = ""
 	} else {
 		if len(binlogName) == 0 { // no meaningful start pos specified
-			lm.BinLogName = lastBinlogName
+			lm.BinLogName = latestBinlogName
 		} else {
 			if binlog.VerifyFilename(binlogName) {
 				lm.BinLogName = binlogName
