@@ -46,6 +46,8 @@ import (
 
 var (
 	jobCount = 1000
+
+	infiniteReadTimeout = "0"
 )
 
 // FilePosSet represents a set in mathematics.
@@ -405,6 +407,10 @@ func (l *Loader) Init() (err error) {
 			return terror.ErrLoadUnitNewColumnMapping.Delegate(err)
 		}
 	}
+
+	dbCfg := l.cfg.To
+	dbCfg.RawDBCfg = config.DefaultRawDBConfig().
+		SetMaxIdleConns(l.cfg.PoolSize)
 
 	l.toDB, l.toDBConns, err = createConns(l.tctx, l.cfg, l.cfg.PoolSize)
 	if err != nil {
@@ -1009,8 +1015,9 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	}
 	defer l.toDB.CloseBaseConn(baseConn)
 	dbConn := &DBConn{
-		baseConn: baseConn,
 		cfg:      l.cfg,
+		baseConn: baseConn,
+		resetBaseConnFn: nil,
 	}
 
 	dispatchMap := make(map[string]*fileJob)

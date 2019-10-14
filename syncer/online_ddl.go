@@ -51,6 +51,8 @@ type OnlinePlugin interface {
 	TableType(table string) TableType
 	// RealName returns real table name that removed ghost suffix and handled by table router
 	RealName(schema, table string) (string, string)
+	// ResetConn reset db connection
+	ResetConn() error
 	// Clear clears all online information
 	Clear() error
 	// Close closes online ddl plugin
@@ -109,7 +111,7 @@ func NewOnlineDDLStorage(newtctx *tcontext.Context, cfg *config.SubTaskConfig) *
 // Init initials online handler
 func (s *OnlineDDLStorage) Init() error {
 	onlineDB := s.cfg.To
-	onlineDB.RawDBCfg = config.DefaultRawDBConfig(maxCheckPointTimeout)
+	onlineDB.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxCheckPointTimeout)
 	db, dbConns, err := createConns(s.tctx, s.cfg, onlineDB, 1)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
@@ -248,6 +250,11 @@ func (s *OnlineDDLStorage) Clear() error {
 
 	s.ddls = make(map[string]map[string]*GhostDDLInfo)
 	return nil
+}
+
+// ResetConn implements CheckPoint.ResetConn
+func (s *OnlineDDLStorage) ResetConn() error {
+	return s.dbConn.resetConn(s.tctx)
 }
 
 // Close closes database connection

@@ -175,3 +175,8 @@ func (g *Ghost) Clear() error {
 func (g *Ghost) Close() {
 	g.storge.Close()
 }
+
+// ResetConn implements interface
+func (g *Ghost) ResetConn() error {
+	return g.storge.ResetConn()
+}

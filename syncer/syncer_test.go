@@ -938,6 +938,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	dbConn, err := db.Conn(context.Background())
 	c.Assert(err, IsNil)
 	syncer.fromDB = &UpStreamConn{BaseDB: conn.NewBaseDB(db)}
+	syncer.ddlDBConn = &DBConn{baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
 	syncer.toDBConns = []*DBConn{{baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
 	syncer.reset()
 

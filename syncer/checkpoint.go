@@ -231,7 +231,7 @@ func NewRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id s
 // Init implements CheckPoint.Init
 func (cp *RemoteCheckPoint) Init() error {
 	checkPointDB := cp.cfg.To
-	checkPointDB.RawDBCfg = config.DefaultRawDBConfig(maxCheckPointTimeout)
+	checkPointDB.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxCheckPointTimeout)
 	db, dbConns, err := createConns(cp.tctx, cp.cfg, checkPointDB, 1)
 	if err != nil {
 		return err

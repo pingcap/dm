@@ -516,6 +516,16 @@ func (s *Syncer) resetDBs() error {
 		}
 	}
 
+	err = s.onlineDDL.ResetConn()
+	if err != nil {
+		return terror.WithScope(err, terror.ScopeDownstream)
+	}
+
+	err = s.sgk.dbConn.resetConn(s.tctx)
+	if err != nil {
+		return terror.WithScope(err, terror.ScopeDownstream)
+	}
+
 	err = s.ddlDBConn.resetConn(s.tctx)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
@@ -665,8 +675,7 @@ func (s *Syncer) getTable(schema string, table string) (*table, []string, error)
 		return value, s.cacheColumns[key], nil
 	}
 
-	db := s.toDBConns[len(s.toDBConns)-1]
-	t, err := s.getTableFromDB(db, schema, table)
+	t, err := s.getTableFromDB(s.ddlDBConn, schema, table)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -2024,14 +2033,15 @@ func (s *Syncer) printStatus(ctx context.Context) {
 func (s *Syncer) createDBs() error {
 	var err error
 	dbCfg := s.cfg.From
-	dbCfg.RawDBCfg = config.DefaultRawDBConfig(maxDMLConnectionTimeout)
+	dbCfg.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxDMLConnectionTimeout)
 	s.fromDB, err = createUpStreamConn(dbCfg)
 	if err != nil {
 		return err
 	}
 
 	dbCfg = s.cfg.To
-	dbCfg.RawDBCfg = config.DefaultRawDBConfig(maxDMLConnectionTimeout).
+	dbCfg.RawDBCfg = config.DefaultRawDBConfig().
+		SetReadTimeout(maxDMLConnectionTimeout).
 		SetMaxIdleConns(s.cfg.WorkerCount)
 
 	s.toDB, s.toDBConns, err = createConns(s.tctx, s.cfg, dbCfg, s.cfg.WorkerCount)
@@ -2041,7 +2051,7 @@ func (s *Syncer) createDBs() error {
 	}
 	// baseConn for ddl
 	dbCfg = s.cfg.To
-	dbCfg.RawDBCfg = config.DefaultRawDBConfig(maxDDLConnectionTimeout)
+	dbCfg.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxDDLConnectionTimeout)
 
 	var ddlDBConns []*DBConn
 	s.ddlDB, ddlDBConns, err = createConns(s.tctx, s.cfg, dbCfg, 1)
@@ -2416,7 +2426,7 @@ func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 	s.cfg.From = cfg.From
 
 	var err error
-	s.cfg.From.RawDBCfg = config.DefaultRawDBConfig(maxDMLConnectionTimeout)
+	s.cfg.From.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxDMLConnectionTimeout)
 	s.fromDB, err = createUpStreamConn(s.cfg.From)
 	if err != nil {
 		s.tctx.L().Error("fail to create baseConn connection", log.ShortError(err))

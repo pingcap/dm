@@ -53,14 +53,19 @@ type RawDBConfig struct {
 }
 
 // DefaultRawDBConfig returns a default raw database config
-func DefaultRawDBConfig(readTimeout string) *RawDBConfig {
+func DefaultRawDBConfig() *RawDBConfig {
 	return &RawDBConfig{
-		ReadTimeout:  readTimeout,
 		MaxIdleConns: defaultMaxIdleConns,
 	}
 }
 
-// SetWriteTimeout adds writeTimeout for raw database
+// SetReadTimeout set readTimeout for raw database
+func (c *RawDBConfig) SetReadTimeout(readTimeout string) *RawDBConfig {
+	c.ReadTimeout = readTimeout
+	return c
+}
+
+// SetWriteTimeout set writeTimeout for raw database
 func (c *RawDBConfig) SetWriteTimeout(writeTimeout string) *RawDBConfig {
 	c.WriteTimeout = writeTimeout
 	return c
