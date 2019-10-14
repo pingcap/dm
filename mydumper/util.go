@@ -14,6 +14,8 @@
 package mydumper
 
 import (
+	"strings"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/baseconn"
 	"github.com/pingcap/dm/pkg/utils"
@@ -49,6 +51,7 @@ func trimOutQuotes(arg string) string {
 	return arg
 }
 
+// fetchMyDumperDoTables fetches and filters the tables that needed to be dumped through black-white list and route rules
 func fetchMyDumperDoTables(cfg *config.SubTaskConfig) (string, error) {
 	fromDB, err := baseconn.CreateBaseConn(cfg.From, maxDMLConnectionTimeout, baseconn.DefaultRawDBConfig())
 	if err != nil {
@@ -63,11 +66,28 @@ func fetchMyDumperDoTables(cfg *config.SubTaskConfig) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var stringTables string
+	var filteredTables []string
 	for _, tables := range sourceTables {
 		for _, table := range tables {
-			stringTables += "," + table.Schema + "." + table.Name
+			filteredTables = append(filteredTables, table.Schema+"."+table.Name)
 		}
 	}
-	return stringTables[1:], nil // start from 1 to avoid first comma
+	return strings.Join(filteredTables, ","), nil
+}
+
+// needToGenerateDoTables will check whether customers specify the databases/tables that needed to be dumped
+// If not, this function will return true to notify mydumper to generate args
+func needToGenerateDoTables(args []string) bool {
+	for _, arg := range args {
+		if arg == "-B" || arg == "--database" {
+			return false
+		}
+		if arg == "-T" || arg == "--tables-list" {
+			return false
+		}
+		if arg == "-x" || arg == "--regex" {
+			return false
+		}
+	}
+	return true
 }
