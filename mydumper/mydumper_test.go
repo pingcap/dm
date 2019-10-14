@@ -68,7 +68,7 @@ func (m *testMydumperSuite) TestArgs(c *C) {
 func (m *testMydumperSuite) TestEmptyExtraArgs(c *C) {
 	expected := strings.Fields("--host 127.0.0.1 --port 3306 --user root " +
 		"--outputdir ./dumped_data --threads 4 --chunk-filesize 64 --skip-tz-utc " +
-		"--tables-list `mockDataBase`.`mockTable1`,`mockDataBase`.`mockTable2` " +
+		"--tables-list 'mockDataBase'.'mockTable1','mockDataBase'.'mockTable2' " +
 		"--password 123")
 	m.cfg.MydumperConfig.ExtraArgs = ""
 

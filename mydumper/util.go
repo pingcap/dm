@@ -94,7 +94,7 @@ func fetchMyDumperDoTables(cfg *config.SubTaskConfig) (string, error) {
 			} else {
 				notFirstTable = true
 			}
-			stringTables += table.String()
+			stringTables += fmt.Sprintf("'%s'.'%s'", table.Schema, table.Name)
 		}
 	}
 	return stringTables, nil
