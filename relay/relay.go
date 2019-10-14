@@ -498,13 +498,13 @@ func (r *Relay) reSetupMeta() error {
 		return err
 	}
 
-	lastPos, _, err := utils.GetMasterStatus(r.db, r.cfg.Flavor)
+	latestPos, latestGTID, err := utils.GetMasterStatus(r.db, r.cfg.Flavor)
 	if err != nil {
 		return err
 	}
 
 	// try adjust meta with start pos from config
-	adjusted, err := r.meta.AdjustWithStartPos(r.cfg.BinLogName, r.cfg.BinlogGTID, r.cfg.EnableGTID, lastPos.Name)
+	adjusted, err := r.meta.AdjustWithStartPos(r.cfg.BinLogName, r.cfg.BinlogGTID, r.cfg.EnableGTID, latestPos.Name, latestGTID.String())
 	if err != nil {
 		return err
 	}
@@ -512,7 +512,7 @@ func (r *Relay) reSetupMeta() error {
 	if adjusted {
 		_, pos := r.meta.Pos()
 		_, gtid := r.meta.GTID()
-		r.tctx.L().Info("adjusted meta to start pos", zap.Reflect("start pos", pos), zap.Reflect("start pos's binlog gtid", gtid))
+		r.tctx.L().Info("adjusted meta to start pos", zap.Reflect("start pos", pos), zap.Stringer("start pos's binlog gtid", gtid))
 	}
 
 	r.updateMetricsRelaySubDirIndex()
