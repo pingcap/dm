@@ -82,7 +82,7 @@ func NewWorker(cfg *Config) (w *Worker, err error) {
 	w.ctx, w.cancel = context.WithCancel(context.Background())
 
 	defer func(w2 *Worker) {
-		if err != nil { // when err !=nil, `w` will become nil in this func, so we pass `w` in defer.
+		if err != nil { // when err != nil, `w` will become nil in this func, so we pass `w` in defer.
 			// release resources, NOTE: we need to refactor New/Init/Start/Close for components later.
 			w2.cancel()
 			w2.subTaskHolder.closeAllSubTasks()
