@@ -35,17 +35,23 @@ mysql-instances:             # one or more source database, config more source d
 
     # `mydumper-config-name` and `mydumper` should only set one
     mydumper-config-name: "global"   # ref `mydumpers` config
-#    mydumper:
-#      mydumper-path: "./mydumper"
-#      threads: 16
+    # `mydumper-thread` is alias for `threads` in `mydumper` config, and it's priority is high than `threads`
+    #mydumper-thread: 16
+    #mydumper:
+    #  mydumper-path: "./mydumper"
+    #  threads: 16
 
     # `loader-config-name` and `loader` should only set one
     loader-config-name: "global"    # ref `loaders` config
+    # `loader-thread` is alias for `pool-size` in `loader` config, and it's priority is high than `poo-size`
+    #loader-thread: 32
     #loader:                  # local loader rule
     #  pool-size: 32
     # `syncer-config-name` and `syncer` should only set one
 
     syncer-config-name: "global"    # ref `syncers` config
+    # `syncer-thread` is alias for `worker-count` in `syncer` config, and it's priority is high than `worker-count`
+    #syncer-thread: 32
     #syncer:
     #  worker-count: 32
 
