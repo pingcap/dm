@@ -516,14 +516,18 @@ func (s *Syncer) resetDBs() error {
 		}
 	}
 
-	err = s.onlineDDL.ResetConn()
-	if err != nil {
-		return terror.WithScope(err, terror.ScopeDownstream)
+	if s.onlineDDL != nil {
+		err = s.onlineDDL.ResetConn()
+		if err != nil {
+			return terror.WithScope(err, terror.ScopeDownstream)
+		}
 	}
 
-	err = s.sgk.dbConn.resetConn(s.tctx)
-	if err != nil {
-		return terror.WithScope(err, terror.ScopeDownstream)
+	if s.sgk != nil {
+		err = s.sgk.dbConn.resetConn(s.tctx)
+		if err != nil {
+			return terror.WithScope(err, terror.ScopeDownstream)
+		}
 	}
 
 	err = s.ddlDBConn.resetConn(s.tctx)
