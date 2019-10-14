@@ -124,12 +124,12 @@ func FetchTargetDoTables(db *sql.DB, bw *filter.Filter, router *router.Table) (m
 	failpoint.Inject("mockSuccessfullyFetchTargetDoTables", func(_ failpoint.Value) {
 		log.L().Info("mock fetch target tables while starting mydumper", zap.String("failpoint", "mockSuccessfullyFetchTargetDoTables"))
 		mapper := make(map[string][]*filter.Table)
-		mapper["mockDataBase"] = append(mapper["mockDataBase"], &filter.Table{
-			Schema: "mockDataBase",
+		mapper["mockDatabase"] = append(mapper["mockDatabase"], &filter.Table{
+			Schema: "mockDatabase",
 			Name:   "mockTable1",
 		})
-		mapper["mockDataBase"] = append(mapper["mockDataBase"], &filter.Table{
-			Schema: "mockDataBase",
+		mapper["mockDatabase"] = append(mapper["mockDatabase"], &filter.Table{
+			Schema: "mockDatabase",
 			Name:   "mockTable2",
 		})
 		failpoint.Return(mapper, nil)

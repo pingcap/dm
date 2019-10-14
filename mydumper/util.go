@@ -86,16 +86,10 @@ func fetchMyDumperDoTables(cfg *config.SubTaskConfig) (string, error) {
 		return "", err
 	}
 	var stringTables string
-	var notFirstTable bool
 	for _, tables := range sourceTables {
 		for _, table := range tables {
-			if notFirstTable {
-				stringTables += ","
-			} else {
-				notFirstTable = true
-			}
-			stringTables += fmt.Sprintf("'%s'.'%s'", table.Schema, table.Name)
+			stringTables += fmt.Sprintf(",%s.%s", table.Schema, table.Name)
 		}
 	}
-	return stringTables, nil
+	return stringTables[1:], nil // start from 1 to avoid first comma
 }
