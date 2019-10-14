@@ -88,7 +88,7 @@ func fetchMyDumperDoTables(cfg *config.SubTaskConfig) (string, error) {
 	var stringTables string
 	for _, tables := range sourceTables {
 		for _, table := range tables {
-			stringTables += fmt.Sprintf(",%s.%s", table.Schema, table.Name)
+			stringTables += "," + table.Schema + "." + table.Name
 		}
 	}
 	return stringTables[1:], nil // start from 1 to avoid first comma
