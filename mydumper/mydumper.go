@@ -263,7 +263,8 @@ func (m *Mydumper) constructArgs() ([]string, error) {
 	extraArgs := strings.Fields(cfg.ExtraArgs)
 	if len(extraArgs) > 0 {
 		ret = append(ret, ParseArgLikeBash(extraArgs)...)
-	} else {
+	}
+	if needToGenerateDoTables(extraArgs) {
 		doTables, err := fetchMyDumperDoTables(cfg)
 		if err != nil {
 			return nil, err
