@@ -86,17 +86,17 @@ type MySQLInstance struct {
 
 	MydumperConfigName string          `yaml:"mydumper-config-name"`
 	Mydumper           *MydumperConfig `yaml:"mydumper"`
-	// MydumperThread is alias for Threads in MydumperConfig, and it's priority is higher than Threads
+	// MydumperThread is alias for Threads in MydumperConfig, and its priority is higher than Threads
 	MydumperThread int `yaml:"mydumper-thread"`
 
 	LoaderConfigName string        `yaml:"loader-config-name"`
 	Loader           *LoaderConfig `yaml:"loader"`
-	// LoaderThread is alias for PoolSize in LoaderConfig, and it's priority is higher than PoolSize
+	// LoaderThread is alias for PoolSize in LoaderConfig, and its priority is higher than PoolSize
 	LoaderThread int `yaml:"loader-thread"`
 
 	SyncerConfigName string        `yaml:"syncer-config-name"`
 	Syncer           *SyncerConfig `yaml:"syncer"`
-	// SyncerThread is alias for WorkerCount in SyncerConfig, and it's priority is higher than WorkerCount
+	// SyncerThread is alias for WorkerCount in SyncerConfig, and its priority is higher than WorkerCount
 	SyncerThread int `yaml:"syncer-thread"`
 }
 
