@@ -1015,7 +1015,9 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	dbConn := &DBConn{
 		cfg:             l.cfg,
 		baseConn:        baseConn,
-		resetBaseConnFn: nil,
+		resetBaseConnFn: func(*tcontext.Context, *conn.BaseConn) (*conn.BaseConn, error) {
+			return nil, terror.ErrDBBadConn.Generate("bad connection error restoreData")
+		},
 	}
 
 	dispatchMap := make(map[string]*fileJob)
