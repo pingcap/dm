@@ -1013,8 +1013,8 @@ func (l *Loader) restoreData(ctx context.Context) error {
 	}
 	defer l.toDB.CloseBaseConn(baseConn)
 	dbConn := &DBConn{
-		cfg:             l.cfg,
-		baseConn:        baseConn,
+		cfg:      l.cfg,
+		baseConn: baseConn,
 		resetBaseConnFn: func(*tcontext.Context, *conn.BaseConn) (*conn.BaseConn, error) {
 			return nil, terror.ErrDBBadConn.Generate("bad connection error restoreData")
 		},
