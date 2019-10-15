@@ -59,19 +59,19 @@ func DefaultRawDBConfig() *RawDBConfig {
 	}
 }
 
-// SetReadTimeout set readTimeout for raw database
+// SetReadTimeout set readTimeout for raw database config
 func (c *RawDBConfig) SetReadTimeout(readTimeout string) *RawDBConfig {
 	c.ReadTimeout = readTimeout
 	return c
 }
 
-// SetWriteTimeout set writeTimeout for raw database
+// SetWriteTimeout set writeTimeout for raw database config
 func (c *RawDBConfig) SetWriteTimeout(writeTimeout string) *RawDBConfig {
 	c.WriteTimeout = writeTimeout
 	return c
 }
 
-// SetMaxIdleConns set maxIdleConns for raw database
+// SetMaxIdleConns set maxIdleConns for raw database config
 // set value <= 0 then no idle connections are retained.
 // set value > 0 then `value` idle connections are retained.
 func (c *RawDBConfig) SetMaxIdleConns(value int) *RawDBConfig {

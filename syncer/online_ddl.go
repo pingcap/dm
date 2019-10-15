@@ -252,7 +252,7 @@ func (s *OnlineDDLStorage) Clear() error {
 	return nil
 }
 
-// ResetConn implements CheckPoint.ResetConn
+// ResetConn implements OnlinePlugin.ResetConn
 func (s *OnlineDDLStorage) ResetConn() error {
 	return s.dbConn.resetConn(s.tctx)
 }
