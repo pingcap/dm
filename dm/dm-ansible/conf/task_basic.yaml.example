@@ -13,41 +13,34 @@ mysql-instances:             # one or more source database, config more source d
     source-id: "instance118-4306" # unique in all instances, used as id when save checkpoints, configs, etc.
     black-white-list:  "instance"
 
-    # `mydumper-thread` is alias for `threads` in `mydumper` config, and it's priority is higher than `threads`
+    # number of threads to use for dump data
     mydumper-thread: 4
 
-    # `loader-thread` is alias for `pool-size` in `loader` config, and it's priority is higher than `pool-size`
+    # number of threads to use for load data
     loader-thread: 16
 
-    # `syncer-thread` is alias for `worker-count` in `syncer` config, and it's priority is higher than `worker-count`
+    # number of threads to use for replicate binlog
     syncer-thread: 16
 
   -
     source-id: "instance118-5306"
     black-white-list: "instance"
 
-    # `mydumper-thread` is alias for `threads` in `mydumper` config, and it's priority is higher than `threads`
+    # number of threads to use for dump data
     mydumper-thread: 4
 
-    # `loader-thread` is alias for `pool-size` in `loader` config, and it's priority is higher than `pool-size`
+    # number of threads to use for load data
     loader-thread: 16
 
-    # `syncer-thread` is alias for `worker-count` in `syncer` config, and it's priority is higher than `worker-count`
+    # number of threads to use for replicate binlog
     syncer-thread: 16
 
-    
-
-# other common configs shared by all instances
 black-white-list:
   instance:
     do-dbs: ["~^test.*", "do"]        # white list of upstream schemas needs to be replicated, regular expression (starts with ~) is supported
-    ignore-dbs: ["mysql", "ignored"]  # black list of upstream schemas needs to be replicated, regular expression (starts with ~) is supported
     do-tables:                        # white list of upstream tables needs to be replicated, (db-name, tbl-name) regular expression (starts with ~) is supported
     - db-name: "~^test.*"
       tbl-name: "~^t.*"
     - db-name: "do"
       tbl-name: "do"
-    ignore-tables:                    # black list of upstream tables needs to be replicated, (db-name, tbl-name) regular expression (starts with ~) is supported
-    - db-name: "test"
-      tbl-name: "log"
 
