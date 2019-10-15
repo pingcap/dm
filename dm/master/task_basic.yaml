@@ -1,0 +1,53 @@
+---
+name: test # global unique
+task-mode: all  # full/incremental/all
+
+target-database:
+  host: "192.168.0.1"
+  port: 4000
+  user: "root"
+  password: ""
+
+mysql-instances:             # one or more source database, config more source database for sharding merge
+  -
+    source-id: "instance118-4306" # unique in all instances, used as id when save checkpoints, configs, etc.
+    black-white-list:  "instance"
+
+    # `mydumper-thread` is alias for `threads` in `mydumper` config, and it's priority is higher than `threads`
+    mydumper-thread: 4
+
+    # `loader-thread` is alias for `pool-size` in `loader` config, and it's priority is higher than `pool-size`
+    loader-thread: 16
+
+    # `syncer-thread` is alias for `worker-count` in `syncer` config, and it's priority is higher than `worker-count`
+    syncer-thread: 16
+
+  -
+    source-id: "instance118-5306"
+    black-white-list: "instance"
+
+    # `mydumper-thread` is alias for `threads` in `mydumper` config, and it's priority is higher than `threads`
+    mydumper-thread: 4
+
+    # `loader-thread` is alias for `pool-size` in `loader` config, and it's priority is higher than `pool-size`
+    loader-thread: 16
+
+    # `syncer-thread` is alias for `worker-count` in `syncer` config, and it's priority is higher than `worker-count`
+    syncer-thread: 16
+
+    
+
+# other common configs shared by all instances
+black-white-list:
+  instance:
+    do-dbs: ["~^test.*", "do"]        # white list of upstream schemas needs to be replicated, regular expression (starts with ~) is supported
+    ignore-dbs: ["mysql", "ignored"]  # black list of upstream schemas needs to be replicated, regular expression (starts with ~) is supported
+    do-tables:                        # white list of upstream tables needs to be replicated, (db-name, tbl-name) regular expression (starts with ~) is supported
+    - db-name: "~^test.*"
+      tbl-name: "~^t.*"
+    - db-name: "do"
+      tbl-name: "do"
+    ignore-tables:                    # black list of upstream tables needs to be replicated, (db-name, tbl-name) regular expression (starts with ~) is supported
+    - db-name: "test"
+      tbl-name: "log"
+
