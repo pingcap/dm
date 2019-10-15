@@ -53,32 +53,54 @@ func (m *testMydumperSuite) SetUpSuite(c *C) {
 	}
 }
 
-func (m *testMydumperSuite) TestArgs(c *C) {
+func generateArgsAndCompare(c *C, m *testMydumperSuite, expectedExtraArgs, extraArgs string) {
 	expected := strings.Fields("--host 127.0.0.1 --port 3306 --user root " +
 		"--outputdir ./dumped_data --threads 4 --chunk-filesize 64 --skip-tz-utc " +
-		"--regex ^(?!(mysql|information_schema|performance_schema)) " +
-		"--password 123")
-	m.cfg.MydumperConfig.ExtraArgs = "--regex '^(?!(mysql|information_schema|performance_schema))'"
+		expectedExtraArgs + " --password 123")
+	m.cfg.MydumperConfig.ExtraArgs = extraArgs
+
 	mydumper := NewMydumper(m.cfg)
 	args, err := mydumper.constructArgs()
 	c.Assert(err, IsNil)
 	c.Assert(args, DeepEquals, expected)
 }
 
-func (m *testMydumperSuite) TestEmptyExtraArgs(c *C) {
-	expected := strings.Fields("--host 127.0.0.1 --port 3306 --user root " +
-		"--outputdir ./dumped_data --threads 4 --chunk-filesize 64 --skip-tz-utc " +
-		"--tables-list mockDatabase.mockTable1,mockDatabase.mockTable2 " +
-		"--password 123")
-	m.cfg.MydumperConfig.ExtraArgs = ""
+func testThroughGivenArgs(c *C, m *testMydumperSuite, arg, index string) {
+	quotedIndex := "'" + index + "'" // add quotes for constructArgs
+	generateArgsAndCompare(c, m, arg+" "+index, arg+" "+quotedIndex)
+}
 
+func (m *testMydumperSuite) TestShouldNotGenerateExtraArgs(c *C) {
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/baseconn/createEmptyBaseConn", "return(true)"), IsNil)
 	defer failpoint.Disable("github.com/pingcap/dm/pkg/baseconn/createEmptyBaseConn")
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/utils/mockSuccessfullyFetchTargetDoTables", "return(true)"), IsNil)
 	defer failpoint.Disable("github.com/pingcap/dm/pkg/utils/mockSuccessfullyFetchTargetDoTables")
 
-	mydumper := NewMydumper(m.cfg)
-	err := mydumper.Init()
-	c.Assert(err, IsNil)
-	c.Assert(mydumper.args, DeepEquals, expected)
+	// -x, --regex
+	index := "^(?!(mysql|information_schema|performance_schema))"
+	testThroughGivenArgs(c, m, "-x", index)
+	testThroughGivenArgs(c, m, "--regex", index)
+	// -T, --tables-list
+	index = "testDatabase.testTable"
+	testThroughGivenArgs(c, m, "-T", index)
+	testThroughGivenArgs(c, m, "--tables-list", index)
+	// -B, --database
+	index = "testDatabase"
+	testThroughGivenArgs(c, m, "-B", index)
+	testThroughGivenArgs(c, m, "--database", index)
+}
+
+func (m *testMydumperSuite) TestShouldGenerateExtraArgs(c *C) {
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/baseconn/createEmptyBaseConn", "return(true)"), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/pkg/baseconn/createEmptyBaseConn")
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/utils/mockSuccessfullyFetchTargetDoTables", "return(true)"), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/pkg/utils/mockSuccessfullyFetchTargetDoTables")
+
+	expectedMockResult := "--tables-list mockDatabase.mockTable1,mockDatabase.mockTable2"
+	// empty extraArgs
+	generateArgsAndCompare(c, m, expectedMockResult, "")
+	// extraArgs doesn't contains -T/-B/-x args
+	m.cfg.MydumperConfig.SkipTzUTC = false
+	generateArgsAndCompare(c, m, expectedMockResult, "--skip-tz-utc")
+	m.cfg.MydumperConfig.SkipTzUTC = true
 }

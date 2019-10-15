@@ -162,6 +162,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	// start task
 	cli := t.createClient(c, fmt.Sprintf("127.0.0.1:%d", port))
 	subtaskCfgBytes, err := ioutil.ReadFile("./subtask.toml")
+	// strings.Replace is used here to uncomment extra-args to avoid mydumper connecting to DB and generating arg --tables-list which will cause failure
 	_, err = cli.StartSubTask(context.Background(), &pb.StartSubTaskRequest{Task: strings.Replace(string(subtaskCfgBytes), "#extra-args", "extra-args", 1)})
 	c.Assert(err, IsNil)
 
