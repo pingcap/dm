@@ -109,7 +109,7 @@ func (t *testServer) testWorkerHandleTask(c *C) {
 		w.handleTask()
 	}()
 
-	c.Assert(utils.WaitSomething(5, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
 		w.meta.Lock()
 		defer w.meta.Unlock()
 		return len(w.meta.logs) == 0
@@ -155,7 +155,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		defer s.Close()
 		c.Assert(s.Start(), IsNil)
 	}()
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
 		return !s.closed.Get()
 	}), IsTrue)
 
@@ -167,7 +167,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	c.Assert(err, IsNil)
 
 	// check task in paused state
-	c.Assert(utils.WaitSomething(10, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
 		for _, st := range s.worker.QueryStatus(taskName) {
 			if st.Name == taskName && st.Stage == pb.Stage_Paused {
 				return true

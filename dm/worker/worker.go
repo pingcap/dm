@@ -71,14 +71,29 @@ type Worker struct {
 }
 
 // NewWorker creates a new Worker
-func NewWorker(cfg *Config) (*Worker, error) {
-	w := &Worker{
+func NewWorker(cfg *Config) (w *Worker, err error) {
+	w = &Worker{
 		cfg:           cfg,
 		relayHolder:   NewRelayHolder(cfg),
 		tracer:        tracing.InitTracerHub(cfg.Tracer),
 		subTaskHolder: newSubTaskHolder(),
 		l:             log.With(zap.String("component", "worker controller")),
 	}
+	w.ctx, w.cancel = context.WithCancel(context.Background())
+
+	defer func(w2 *Worker) {
+		if err != nil { // when err != nil, `w` will become nil in this func, so we pass `w` in defer.
+			// release resources, NOTE: we need to refactor New/Init/Start/Close for components later.
+			w2.cancel()
+			w2.subTaskHolder.closeAllSubTasks()
+			if w2.meta != nil {
+				w2.meta.Close()
+			}
+			if w2.db != nil {
+				w2.db.Close()
+			}
+		}
+	}(w)
 
 	// initial relay holder
 	purger, err := w.relayHolder.Init([]purger.PurgeInterceptor{
@@ -107,22 +122,36 @@ func NewWorker(cfg *Config) (*Worker, error) {
 	}
 
 	// open kv db
-	w.db, err = openDB(dbDir, defaultKVConfig)
+	metaDB, err := openDB(dbDir, defaultKVConfig)
 	if err != nil {
 		return nil, err
 	}
+	w.db = metaDB
 
 	// initial metadata
-	w.meta, err = NewMetadata(dbDir, w.db)
+	meta, err := NewMetadata(dbDir, w.db)
 	if err != nil {
 		return nil, err
 	}
+	w.meta = meta
 
 	InitConditionHub(w)
 
 	err = w.restoreSubTask()
 	if err != nil {
 		return nil, err
+	}
+
+	w.l.Info("initialized")
+
+	return w, nil
+}
+
+// Start starts working
+func (w *Worker) Start() {
+	if w.closed.Get() == closedTrue {
+		w.l.Warn("already closed")
+		return
 	}
 
 	// start relay
@@ -139,20 +168,6 @@ func NewWorker(cfg *Config) (*Worker, error) {
 	// start tracer
 	if w.tracer.Enable() {
 		w.tracer.Start()
-	}
-
-	w.ctx, w.cancel = context.WithCancel(context.Background())
-
-	w.l.Info("initialzed")
-
-	return w, nil
-}
-
-// Start starts working
-func (w *Worker) Start() {
-	if w.closed.Get() == closedTrue {
-		w.l.Warn("already closed")
-		return
 	}
 
 	w.wg.Add(2)
