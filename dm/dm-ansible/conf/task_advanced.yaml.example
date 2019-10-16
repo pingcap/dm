@@ -31,22 +31,27 @@ mysql-instances:             # one or more source database, config more source d
       binlog-pos: 4
     route-rules: ["user-route-rules-schema", "user-route-rules"]
     filter-rules: ["user-filter-1", "user-filter-2"]
-    column-mapping-rules: ["instance-1"]
     black-white-list:  "instance"
 
     # `mydumper-config-name` and `mydumper` should only set one
     mydumper-config-name: "global"   # ref `mydumpers` config
-#    mydumper:
-#      mydumper-path: "./mydumper"
-#      threads: 16
+    # `mydumper-thread` is alias for `threads` in `mydumper` config, and its priority is higher than `threads`
+    #mydumper-thread: 16
+    #mydumper:
+    #  mydumper-path: "./mydumper"
+    #  threads: 16
 
     # `loader-config-name` and `loader` should only set one
     loader-config-name: "global"    # ref `loaders` config
+    # `loader-thread` is alias for `pool-size` in `loader` config, and its priority is higher than `pool-size`
+    #loader-thread: 32
     #loader:                  # local loader rule
     #  pool-size: 32
     # `syncer-config-name` and `syncer` should only set one
 
     syncer-config-name: "global"    # ref `syncers` config
+    # `syncer-thread` is alias for `worker-count` in `syncer` config, and its priority is higher than `worker-count`
+    #syncer-thread: 32
     #syncer:
     #  worker-count: 32
 
@@ -57,7 +62,6 @@ mysql-instances:             # one or more source database, config more source d
       binlog-pos: 320
     route-rules: ["user-route-rules-schema", "user-route-rules"]
     filter-rules: ["user-filter-2"]
-    column-mapping-rules: ["instance-2"]
     black-white-list: "instance"
 
     mydumper:
@@ -80,12 +84,12 @@ mysql-instances:             # one or more source database, config more source d
 routes:                      # schema/table route mapping
   user-route-rules-schema:
     schema-pattern: "test_*"    # pattern of the upstream schema name, wildcard characters (*?) are supported
-    target-schema: "test"       # downstream target schema name
+    target-schema: "test"       # downstream schema name
   user-route-rules:
     schema-pattern: "test_*"
     table-pattern: "t_*"        # pattern of the upstream table name, wildcard characters (*?) are supported
     target-schema: "test"
-    target-table: "t"           # downstream target table name
+    target-table: "t"           # downstream table name
 
 filters:                     # filter rules, mysql instance can ref rules in it
   user-filter-1:
@@ -114,23 +118,6 @@ black-white-list:
     ignore-tables:                    # black list of upstream tables needs to be replicated, (db-name, tbl-name) regular expression (starts with ~) is supported
     - db-name: "test"
       tbl-name: "log"
-
-
-column-mappings:             # column mapping rules, mysql instance can ref rules in it
-  instance-1:
-    schema-pattern: "test_*"            # pattern of the upstream schema name, wildcard characters (*?) are supported
-    table-pattern: "t_*"                # pattern of the upstream table name, wildcard characters (*?) are supported
-    expression: "partition id"          # handle sharding partition id
-    source-column: "id"                 # upstream column name
-    target-column: "id"                 # downstream column name
-    arguments: ["1", "test", "t", "_"]  # arguments for the `expression`
-  instance-2:
-    schema-pattern: "test_*"
-    table-pattern: "t_*"
-    expression: "partition id"
-    source-column: "id"
-    target-column: "id"
-    arguments: ["2", "test", "t", "_"]
 
 mydumpers:                   # mydumper process unit specific configs, mysql instance can ref one config in it
   global:
