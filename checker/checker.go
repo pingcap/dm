@@ -125,7 +125,7 @@ func (c *Checker) Init() (err error) {
 			User:     instance.cfg.From.User,
 			Password: instance.cfg.From.Password,
 		}
-		instance.sourceDB, err = dbutil.OpenDB(*instance.sourceDBinfo)
+		instance.sourceDB, err = openDB(instance.cfg.From, "30s")
 		if err != nil {
 			return terror.WithScope(terror.ErrTaskCheckFailedOpenDB.Delegate(err, instance.cfg.From.User, instance.cfg.From.Host, instance.cfg.From.Port), terror.ScopeUpstream)
 		}
@@ -136,7 +136,7 @@ func (c *Checker) Init() (err error) {
 			User:     instance.cfg.To.User,
 			Password: instance.cfg.To.Password,
 		}
-		instance.targetDB, err = dbutil.OpenDB(*instance.targetDBInfo)
+		instance.targetDB, err = openDB(instance.cfg.To, "30s")
 		if err != nil {
 			return terror.WithScope(terror.ErrTaskCheckFailedOpenDB.Delegate(err, instance.cfg.To.User, instance.cfg.To.Host, instance.cfg.To.Port), terror.ScopeDownstream)
 		}
@@ -229,7 +229,10 @@ func (c *Checker) displayCheckingItems() string {
 
 // Process implements Unit interface
 func (c *Checker) Process(ctx context.Context, pr chan pb.ProcessResult) {
-	cctx, cancel := context.WithTimeout(ctx, time.Minute)
+	// the total time needed to complete the check depends on the number of instances, databases and tables,
+	// now increase the total timeout to 30min, but set `readTimeout` to 30s for source/target DB.
+	// if we can not complete the check in 30min, then we must need to refactor the implementation of the function.
+	cctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 	defer cancel()
 
 	isCanceled := false
@@ -389,4 +392,20 @@ func sameTableNameDetection(tables map[string][]*filter.Table) error {
 	}
 
 	return nil
+}
+
+// openDB with readTimeout
+// NOTE: we can refactor to use `DBProvider.Apply` after https://github.com/pingcap/dm/pull/266 merged.
+func openDB(cfg config.DBConfig, readTimeout string) (*sql.DB, error) {
+	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&readTimeout=%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, readTimeout)
+	dbConn, err := sql.Open("mysql", dbDSN)
+	if err != nil {
+		return nil, err
+	}
+	err = dbConn.Ping()
+	if err != nil {
+		dbConn.Close()
+		return nil, err
+	}
+	return dbConn, nil
 }
