@@ -1850,11 +1850,11 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 	// get workerID from deploy map by sourceID, refactor this when dynamic add/remove worker supported.
 	workerIDs := make([]string, 0, len(cfg.MySQLInstances))
 	for _, inst := range cfg.MySQLInstances {
-		if workerID, ok := s.cfg.DeployMap[inst.SourceID]; !ok {
+		workerID, ok := s.cfg.DeployMap[inst.SourceID]
+		if !ok {
 			return nil, nil, terror.ErrMasterTaskConfigExtractor.Generatef("%s relevant worker not found", inst.SourceID)
-		} else {
-			workerIDs = append(workerIDs, workerID)
 		}
+		workerIDs = append(workerIDs, workerID)
 	}
 
 	sourceCfgs, err := s.getWorkerConfigs(ctx, workerIDs)
