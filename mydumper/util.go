@@ -24,7 +24,7 @@ import (
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 )
 
-var maxDMLConnectionTimeout = "5m"
+var maxFetchConnectionTimeout = "1m"
 
 // ParseArgLikeBash parses list arguments like bash, which helps us to run
 // executable command via os/exec more likely running from bash
@@ -53,10 +53,11 @@ func trimOutQuotes(arg string) string {
 
 // fetchMyDumperDoTables fetches and filters the tables that needed to be dumped through black-white list and route rules
 func fetchMyDumperDoTables(cfg *config.SubTaskConfig) (string, error) {
-	fromDB, err := baseconn.CreateBaseConn(cfg.From, maxDMLConnectionTimeout, baseconn.DefaultRawDBConfig())
+	fromDB, err := baseconn.CreateBaseConn(cfg.From, maxFetchConnectionTimeout, baseconn.DefaultRawDBConfig())
 	if err != nil {
 		return "", err
 	}
+	defer fromDB.Close()
 	bw := filter.New(cfg.CaseSensitive, cfg.BWList)
 	r, err := router.NewTableRouter(cfg.CaseSensitive, cfg.RouteRules)
 	if err != nil {
