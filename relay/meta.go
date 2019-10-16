@@ -171,26 +171,26 @@ func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, en
 	if enableGTID {
 		if len(binlogGTID) == 0 {
 			binlogGTID = latestBinlogGTID
+			binlogName = latestBinlogName
 		}
 		gset, err = gtid.ParserGTID(lm.flavor, binlogGTID)
 		if err != nil {
 			return false, terror.Annotatef(err, "relay-binlog-gtid %s", binlogGTID)
 		}
-		lm.BinLogName = ""
 	} else {
 		if len(binlogName) == 0 { // no meaningful start pos specified
-			lm.BinLogName = latestBinlogName
+			binlogGTID = latestBinlogGTID
+			binlogName = latestBinlogName
 		} else {
-			if binlog.VerifyFilename(binlogName) {
-				lm.BinLogName = binlogName
-			} else {
+			if !binlog.VerifyFilename(binlogName) {
 				return false, terror.ErrRelayBinlogNameNotValid.Generate(binlogName)
 			}
 		}
 	}
 
+	lm.BinLogName = binlogName
 	lm.BinLogPos = minCheckpoint.Pos // always set pos to 4
-	lm.BinlogGTID = gset.String()
+	lm.BinlogGTID = binlogGTID
 	lm.gset = gset
 
 	return true, nil
