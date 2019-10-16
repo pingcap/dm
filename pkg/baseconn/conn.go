@@ -181,7 +181,7 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, ignoreEr
 	}
 	err = txn.Commit()
 	if err != nil {
-		return l, terror.ErrDBExecuteFailed.Delegate(err, "commit")
+		return l - 1, terror.ErrDBExecuteFailed.Delegate(err, "commit") // mark failed on the last one
 	}
 	return l, nil
 }
