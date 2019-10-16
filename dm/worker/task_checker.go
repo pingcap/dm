@@ -239,6 +239,10 @@ func isResumableError(err *pb.ProcessError) bool {
 		"unsupported modify",
 		"unsupported drop integer primary key",
 	}
+	unsupportedDMLMsgs := []string{
+		"Error 1062: Duplicate entry",
+		"Error 1406: Data too long for column",
+	}
 	parseRelayLogErrMsg := []string{
 		"binlog checksum mismatch, data may be corrupted",
 		"get event err EOF",
@@ -248,6 +252,11 @@ func isResumableError(err *pb.ProcessError) bool {
 	switch err.Type {
 	case pb.ErrorType_ExecSQL:
 		for _, msg := range unsupportedDDLMsgs {
+			if strings.Contains(err.Msg, msg) {
+				return false
+			}
+		}
+		for _, msg := range unsupportedDMLMsgs {
 			if strings.Contains(err.Msg, msg) {
 				return false
 			}
