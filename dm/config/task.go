@@ -86,10 +86,18 @@ type MySQLInstance struct {
 
 	MydumperConfigName string          `yaml:"mydumper-config-name"`
 	Mydumper           *MydumperConfig `yaml:"mydumper"`
-	LoaderConfigName   string          `yaml:"loader-config-name"`
-	Loader             *LoaderConfig   `yaml:"loader"`
-	SyncerConfigName   string          `yaml:"syncer-config-name"`
-	Syncer             *SyncerConfig   `yaml:"syncer"`
+	// MydumperThread is alias for Threads in MydumperConfig, and its priority is higher than Threads
+	MydumperThread int `yaml:"mydumper-thread"`
+
+	LoaderConfigName string        `yaml:"loader-config-name"`
+	Loader           *LoaderConfig `yaml:"loader"`
+	// LoaderThread is alias for PoolSize in LoaderConfig, and its priority is higher than PoolSize
+	LoaderThread int `yaml:"loader-thread"`
+
+	SyncerConfigName string        `yaml:"syncer-config-name"`
+	Syncer           *SyncerConfig `yaml:"syncer"`
+	// SyncerThread is alias for WorkerCount in SyncerConfig, and its priority is higher than WorkerCount
+	SyncerThread int `yaml:"syncer-thread"`
 }
 
 // Verify does verification on configs
@@ -388,11 +396,15 @@ func (c *TaskConfig) adjust() error {
 			if !ok {
 				return terror.ErrConfigMydumperCfgNotFound.Generate(i, inst.MydumperConfigName)
 			}
-			inst.Mydumper = rule // ref mydumper config
+			inst.Mydumper = new(MydumperConfig)
+			*inst.Mydumper = *rule // ref mydumper config
 		}
 		if inst.Mydumper == nil {
 			defaultCfg := defaultMydumperConfig()
 			inst.Mydumper = &defaultCfg
+		}
+		if inst.MydumperThread != 0 {
+			inst.Mydumper.Threads = inst.MydumperThread
 		}
 
 		if (c.TaskMode == ModeFull || c.TaskMode == ModeAll) && len(inst.Mydumper.MydumperPath) == 0 {
@@ -405,11 +417,15 @@ func (c *TaskConfig) adjust() error {
 			if !ok {
 				return terror.ErrConfigLoaderCfgNotFound.Generate(i, inst.LoaderConfigName)
 			}
-			inst.Loader = rule // ref loader config
+			inst.Loader = new(LoaderConfig)
+			*inst.Loader = *rule // ref loader config
 		}
 		if inst.Loader == nil {
 			defaultCfg := defaultLoaderConfig()
 			inst.Loader = &defaultCfg
+		}
+		if inst.LoaderThread != 0 {
+			inst.Loader.PoolSize = inst.LoaderThread
 		}
 
 		if len(inst.SyncerConfigName) > 0 {
@@ -417,11 +433,15 @@ func (c *TaskConfig) adjust() error {
 			if !ok {
 				return terror.ErrConfigSyncerCfgNotFound.Generate(i, inst.SyncerConfigName)
 			}
-			inst.Syncer = rule // ref syncer config
+			inst.Syncer = new(SyncerConfig)
+			*inst.Syncer = *rule // ref syncer config
 		}
 		if inst.Syncer == nil {
 			defaultCfg := defaultSyncerConfig()
 			inst.Syncer = &defaultCfg
+		}
+		if inst.SyncerThread != 0 {
+			inst.Syncer.WorkerCount = inst.SyncerThread
 		}
 	}
 
