@@ -97,8 +97,10 @@ func (r *testMetaSuite) TestLocalMeta(c *C) {
 	c.Assert(dirty, IsFalse)
 
 	// adjust to start pos
+	latestBinlogName := "mysql-bin.000009"
+	latestGTIDStr := "85ab69d1-b21f-11e6-9c5e-64006a8978d2:45-57"
 	cs0 := cases[0]
-	adjusted, err := lm.AdjustWithStartPos(cs0.pos.Name, cs0.gset.String(), false)
+	adjusted, err := lm.AdjustWithStartPos(cs0.pos.Name, cs0.gset.String(), false, latestBinlogName, latestGTIDStr)
 	c.Assert(err, IsNil)
 	c.Assert(adjusted, IsTrue)
 	uuid, pos = lm.Pos()
@@ -107,16 +109,38 @@ func (r *testMetaSuite) TestLocalMeta(c *C) {
 	uuid, gset = lm.GTID()
 	c.Assert(uuid, Equals, "")
 	c.Assert(gset.String(), Equals, "")
+
 	// adjust to start pos with enableGTID
-	adjusted, err = lm.AdjustWithStartPos(cs0.pos.Name, cs0.gset.String(), true)
+	adjusted, err = lm.AdjustWithStartPos(cs0.pos.Name, cs0.gset.String(), true, latestBinlogName, latestGTIDStr)
 	c.Assert(err, IsNil)
 	c.Assert(adjusted, IsTrue)
 	uuid, pos = lm.Pos()
 	c.Assert(uuid, Equals, "")
-	c.Assert(pos.Name, Equals, minCheckpoint.Name)
+	c.Assert(pos.Name, Equals, cs0.pos.Name)
 	uuid, gset = lm.GTID()
 	c.Assert(uuid, Equals, "")
 	c.Assert(gset, DeepEquals, cs0.gset)
+
+	// adjust to the last binlog if start pos is empty
+	adjusted, err = lm.AdjustWithStartPos("", cs0.gset.String(), false, latestBinlogName, latestGTIDStr)
+	c.Assert(err, IsNil)
+	c.Assert(adjusted, IsTrue)
+	uuid, pos = lm.Pos()
+	c.Assert(uuid, Equals, "")
+	c.Assert(pos.Name, Equals, latestBinlogName)
+	uuid, gset = lm.GTID()
+	c.Assert(uuid, Equals, "")
+	c.Assert(gset.String(), Equals, "")
+
+	adjusted, err = lm.AdjustWithStartPos("", "", true, latestBinlogName, latestGTIDStr)
+	c.Assert(err, IsNil)
+	c.Assert(adjusted, IsTrue)
+	uuid, pos = lm.Pos()
+	c.Assert(uuid, Equals, "")
+	c.Assert(pos.Name, Equals, latestBinlogName)
+	uuid, gset = lm.GTID()
+	c.Assert(uuid, Equals, "")
+	c.Assert(gset.String(), Equals, latestGTIDStr)
 
 	for _, cs := range cases {
 		err = lm.AddDir(cs.uuid, nil, nil)
@@ -148,7 +172,7 @@ func (r *testMetaSuite) TestLocalMeta(c *C) {
 
 	// try adjust to start pos again
 	csn1 := cases[len(cases)-1]
-	adjusted, err = lm.AdjustWithStartPos(cs0.pos.Name, cs0.gset.String(), false)
+	adjusted, err = lm.AdjustWithStartPos(cs0.pos.Name, cs0.gset.String(), false, "", "")
 	c.Assert(err, IsNil)
 	c.Assert(adjusted, IsFalse)
 	uuid, pos = lm.Pos()
