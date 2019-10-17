@@ -256,7 +256,7 @@ func (c *Config) adjustFlavor() error {
 		return nil
 	}
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&maxAllowedPacket=%d",
-		c.From.User, c.From.Password, c.From.Host, c.From.Port, c.From.MaxAllowedPacket)
+		c.From.User, c.From.Password, c.From.Host, c.From.Port, *c.From.MaxAllowedPacket)
 	conn, err := newBaseConn(dbDSN, nil, baseconn.DefaultRawDBConfig())
 	if err != nil {
 		return err
