@@ -370,8 +370,8 @@ func (st *SubTask) setResult(result *pb.ProcessResult) {
 
 // Result returns the result of the sub task
 // Note this method will omit the `Error` field in `pb.ProcessError`, so no duplicated
-// duplicated error message information will be displayed in `query-status`, as `Msg`
-// field contains enough error information
+// error message information will be displayed in `query-status`, as the `Msg` field
+// contains enough error information.
 func (st *SubTask) Result() *pb.ProcessResult {
 	st.RLock()
 	defer st.RUnlock()
