@@ -27,7 +27,7 @@ import (
 func NewStopTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stop-task [-w worker ...] <task-name>",
-		Short: "stop a task with name",
+		Short: "stop a specified task",
 		Run:   stopTaskFunc,
 	}
 	return cmd
