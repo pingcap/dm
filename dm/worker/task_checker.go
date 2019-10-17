@@ -232,8 +232,6 @@ func (tsc *realTaskStatusChecker) run() {
 // isResumableError checks the error message and returns whether we need to
 // resume the task and retry
 func isResumableError(err *pb.ProcessError) bool {
-	parseRelayLogCode := fmt.Sprintf("code=%d", terror.ErrParserParseRelayLog.Code())
-
 	switch err.Type {
 	case pb.ErrorType_ExecSQL:
 		// not elegant code, because TiDB doesn't expose some error
