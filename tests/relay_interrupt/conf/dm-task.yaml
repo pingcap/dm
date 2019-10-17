@@ -30,7 +30,7 @@ mydumpers:
     threads: 4
     chunk-filesize: 0
     skip-tz-utc: true
-    extra-args: "-B relay_interrupt --statement-size=100"
+    extra-args: "--statement-size=100"
 
 loaders:
   global:
