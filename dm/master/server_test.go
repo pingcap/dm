@@ -174,7 +174,7 @@ func testGenSubTaskConfig(c *check.C, server *Server, ctrl *gomock.Controller) m
 }
 
 func testMockWorkerConfig(c *check.C, server *Server, ctrl *gomock.Controller, password string, result bool) {
-	// mock QueryWorkerConfig API to be used in s.allWorkerConfigs
+	// mock QueryWorkerConfig API to be used in s.getWorkerConfigs
 	for idx, deploy := range server.cfg.Deploy {
 		dbCfg := &config.DBConfig{
 			Host:     "127.0.0.1",

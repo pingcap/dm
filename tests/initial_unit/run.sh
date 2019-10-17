@@ -20,7 +20,7 @@ function run() {
     failpoints=(
                 # 1152 is ErrAbortingConnection
                 "github.com/pingcap/dm/syncer/LoadCheckpointFailed=return(1152)"
-                "github.com/pingcap/dm/pkg/utils/GetMasterStatusFailed=return(1152)"
+                "github.com/pingcap/dm/syncer/GetMasterStatusFailed=return(1152)"
     )
 
     for(( i=0;i<${#failpoints[@]};i++)) do
