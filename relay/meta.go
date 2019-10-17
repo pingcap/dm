@@ -44,9 +44,9 @@ type Meta interface {
 	Load() error
 
 	// AdjustWithStartPos adjusts current pos / GTID with start pos
-	// if current pos / GTID is meaningless, update to start pos
+	// if current pos / GTID is meaningless, update to start pos or last pos when start pos is meaningless
 	// else do nothing
-	AdjustWithStartPos(binlogName string, binlogGTID string, enableGTID bool) (bool, error)
+	AdjustWithStartPos(binlogName string, binlogGTID string, enableGTID bool, latestBinlogName string, latestBinlogGTID string) (bool, error)
 
 	// Save saves meta information
 	Save(pos mysql.Position, gset gtid.Set) error
@@ -152,7 +152,7 @@ func (lm *LocalMeta) Load() error {
 }
 
 // AdjustWithStartPos implements Meta.AdjustWithStartPos, return whether adjusted
-func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, enableGTID bool) (bool, error) {
+func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, enableGTID bool, latestBinlogName string, latestBinlogGTID string) (bool, error) {
 	lm.Lock()
 	defer lm.Unlock()
 
@@ -165,32 +165,32 @@ func (lm *LocalMeta) AdjustWithStartPos(binlogName string, binlogGTID string, en
 		}
 	}
 
-	if (enableGTID && len(binlogGTID) == 0) || (!enableGTID && len(binlogName) == 0) {
-		return false, nil // no meaningful start pos specified
-	}
-
-	if !enableGTID && len(binlogName) > 0 {
-		if !binlog.VerifyFilename(binlogName) {
-			return false, terror.ErrRelayBinlogNameNotValid.Generate(binlogName)
-		}
-	}
 	var gset = lm.emptyGSet.Clone()
-	if enableGTID && len(binlogGTID) > 0 {
-		var err error
+	var err error
+
+	if enableGTID {
+		if len(binlogGTID) == 0 {
+			binlogGTID = latestBinlogGTID
+			binlogName = latestBinlogName
+		}
 		gset, err = gtid.ParserGTID(lm.flavor, binlogGTID)
 		if err != nil {
 			return false, terror.Annotatef(err, "relay-binlog-gtid %s", binlogGTID)
 		}
+	} else {
+		if len(binlogName) == 0 { // no meaningful start pos specified
+			binlogGTID = latestBinlogGTID
+			binlogName = latestBinlogName
+		} else {
+			if !binlog.VerifyFilename(binlogName) {
+				return false, terror.ErrRelayBinlogNameNotValid.Generate(binlogName)
+			}
+		}
 	}
 
-	// verified, update them
-	if enableGTID {
-		lm.BinLogName = minCheckpoint.Name
-	} else {
-		lm.BinLogName = binlogName
-	}
+	lm.BinLogName = binlogName
 	lm.BinLogPos = minCheckpoint.Pos // always set pos to 4
-	lm.BinlogGTID = gset.String()
+	lm.BinlogGTID = binlogGTID
 	lm.gset = gset
 
 	return true, nil
