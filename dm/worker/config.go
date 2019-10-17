@@ -23,8 +23,10 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/baseconn"
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
@@ -38,6 +40,8 @@ import (
 // later we can read it from dm/worker/dm-worker.toml
 // and assign it to SampleConfigFile while we build dm-worker
 var SampleConfigFile string
+
+var newBaseConn = baseconn.NewBaseConn
 
 // NewConfig creates a new base config for worker.
 func NewConfig() *Config {
@@ -188,6 +192,10 @@ func (c *Config) Parse(arguments []string) error {
 
 	c.From.Adjust()
 	c.Checker.adjust()
+	err = c.adjustFlavor()
+	if err != nil {
+		return err
+	}
 	return c.verify()
 }
 
@@ -237,6 +245,41 @@ func (c *Config) configFromFile(path string) error {
 	}
 
 	return c.verify()
+}
+
+// adjustFlavor adjusts flavor through querying from given database
+func (c *Config) adjustFlavor() error {
+	if c.Flavor != "" {
+		if c.Flavor != mysql.MariaDBFlavor && c.Flavor != mysql.MySQLFlavor {
+			return terror.ErrNotSupportedFlavor.Generate(c.Flavor)
+		}
+		return nil
+	}
+	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&maxAllowedPacket=%d",
+		c.From.User, c.From.Password, c.From.Host, c.From.Port, c.From.MaxAllowedPacket)
+	conn, err := newBaseConn(dbDSN, nil, baseconn.DefaultRawDBConfig())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	query := "SELECT @@version_comment;"
+	row := conn.DB.QueryRow(query)
+	var versionComment string
+	err = row.Scan(versionComment)
+	if err != nil {
+		return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+	}
+	lowercaseVersionComment := strings.ToLower(versionComment)
+	switch {
+	case strings.Contains(lowercaseVersionComment, mysql.MariaDBFlavor):
+		c.Flavor = mysql.MariaDBFlavor
+	case strings.Contains(lowercaseVersionComment, mysql.MySQLFlavor):
+		c.Flavor = mysql.MySQLFlavor
+	default:
+		return terror.ErrNotSupportedFlavor.Generate(versionComment)
+	}
+	return nil
 }
 
 // UpdateConfigFile write configure to local file

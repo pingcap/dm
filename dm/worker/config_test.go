@@ -22,6 +22,11 @@ import (
 	. "github.com/pingcap/check"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/baseconn"
+	"github.com/pingcap/dm/pkg/retry"
+
+	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/siddontang/go-mysql/mysql"
 )
 
 func (t *testServer) TestConfig(c *C) {
@@ -159,4 +164,46 @@ func (t *testServer) TestConfigVerify(c *C) {
 		}
 	}
 
+}
+
+func subtestFlavor(c *C, cfg *Config, sqlInfo, expectedFlavor, expectedError string) {
+	cfg.Flavor = ""
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	mock.ExpectQuery("SELECT @@version_comment;").
+		WillReturnRows(sqlmock.NewRows([]string{"@@version_comment"}).
+			AddRow("mariadb.org binary distribution"))
+	mock.ExpectClose()
+	newBaseConn = func(dbDSN string, strategy retry.Strategy, rawDBCfg *baseconn.RawDBConfig) (*baseconn.BaseConn, error) {
+		return &baseconn.BaseConn{DB: db}, nil
+	}
+	err = cfg.adjustFlavor()
+	if expectedError == "" {
+		c.Assert(err, IsNil)
+		c.Assert(cfg.Flavor, Equals, mysql.MariaDBFlavor)
+	} else {
+		c.Assert(err, ErrorMatches, expectedError)
+	}
+}
+
+func (t *testServer) TestAdjustFlavor(c *C) {
+	cfg := NewConfig()
+	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml", "-relay-dir=./xx"}), IsNil)
+
+	cfg.Flavor = "mariadb"
+	err := cfg.adjustFlavor()
+	c.Assert(err, IsNil)
+	c.Assert(cfg.Flavor, Equals, mysql.MariaDBFlavor)
+	cfg.Flavor = "MongoDB"
+	err = cfg.adjustFlavor()
+	c.Assert(err, ErrorMatches, "flavor MongoDB not supported")
+
+	var origNewBaseConn = newBaseConn
+	defer func() {
+		newBaseConn = origNewBaseConn
+	}()
+
+	subtestFlavor(c, cfg, "mariadb.org binary distribution", mysql.MariaDBFlavor, "")
+	subtestFlavor(c, cfg, "MySQL Community Server - GPL", mysql.MySQLFlavor, "")
+	subtestFlavor(c, cfg, "MongoDB", "", "flavor MongoDB not supported")
 }
