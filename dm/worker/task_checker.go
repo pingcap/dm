@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/backoff"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -231,38 +232,22 @@ func (tsc *realTaskStatusChecker) run() {
 // isResumableError checks the error message and returns whether we need to
 // resume the task and retry
 func isResumableError(err *pb.ProcessError) bool {
-	// not elegant code, because TiDB doesn't expose some error
-	unsupportedDDLMsgs := []string{
-		"can't drop column with index",
-		"unsupported add column",
-		"unsupported modify column",
-		"unsupported modify",
-		"unsupported drop integer primary key",
-	}
-	unsupportedDMLMsgs := []string{
-		"Error 1062: Duplicate entry",
-		"Error 1406: Data too long for column",
-	}
-	parseRelayLogErrMsg := []string{
-		"binlog checksum mismatch, data may be corrupted",
-		"get event err EOF",
-	}
-
 	switch err.Type {
 	case pb.ErrorType_ExecSQL:
-		for _, msg := range unsupportedDDLMsgs {
+		// not elegant code, because TiDB doesn't expose some error
+		for _, msg := range retry.UnsupportedDDLMsgs {
 			if err.Error != nil && strings.Contains(err.Error.RawCause, msg) {
 				return false
 			}
 		}
-		for _, msg := range unsupportedDMLMsgs {
+		for _, msg := range retry.UnsupportedDMLMsgs {
 			if err.Error != nil && strings.Contains(err.Error.RawCause, msg) {
 				return false
 			}
 		}
 	case pb.ErrorType_UnknownError:
 		if err.Error != nil && err.Error.ErrCode == int32(terror.ErrParserParseRelayLog.Code()) {
-			for _, msg := range parseRelayLogErrMsg {
+			for _, msg := range retry.ParseRelayLogErrMsgs {
 				if strings.Contains(err.Error.Message, msg) {
 					return false
 				}
