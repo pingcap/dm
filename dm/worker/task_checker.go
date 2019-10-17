@@ -238,20 +238,19 @@ func isResumableError(err *pb.ProcessError) bool {
 	case pb.ErrorType_ExecSQL:
 		// not elegant code, because TiDB doesn't expose some error
 		for _, msg := range retry.UnsupportedDDLMsgs {
-			if strings.Contains(err.Msg, msg) {
+			if err.Error != nil && strings.Contains(err.Error.RawCause, msg) {
 				return false
 			}
 		}
 		for _, msg := range retry.UnsupportedDMLMsgs {
-			if strings.Contains(err.Msg, msg) {
+			if err.Error != nil && strings.Contains(err.Error.RawCause, msg) {
 				return false
 			}
 		}
 	case pb.ErrorType_UnknownError:
-		// TODO: we need better mechanism to convert error in `ProcessError` to `terror.Error`
-		if strings.Contains(err.Msg, parseRelayLogCode) {
-			for _, msg := range retry.ParseRelayLogErrMsgs {
-				if strings.Contains(err.Msg, msg) {
+		if err.Error != nil && err.Error.ErrCode == int32(terror.ErrParserParseRelayLog.Code()) {
+			for _, msg := range parseRelayLogErrMsg {
+				if strings.Contains(err.Error.Message, msg) {
 					return false
 				}
 			}

@@ -16,7 +16,6 @@ package syncer
 import (
 	"time"
 
-	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"go.uber.org/zap"
 
@@ -40,7 +39,7 @@ func (s *Syncer) enableSafeModeInitializationPhase(tctx *tcontext.Context, safeM
 			err := safeMode.Add(tctx, -1) // try to disable after 5 minutes
 			if err != nil {
 				// send error to the fatal chan to interrupt the process
-				s.runFatalChan <- unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err))
+				s.runFatalChan <- unit.NewProcessError(pb.ErrorType_UnknownError, err)
 			}
 		}()
 
