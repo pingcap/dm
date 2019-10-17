@@ -405,7 +405,7 @@ func (t *testRelaySuite) TestReSetupMeta(c *C) {
 	r.cfg.BinLogName = "mysql-bin.000005"
 	c.Assert(r.reSetupMeta(), IsNil)
 	uuid001 := fmt.Sprintf("%s.000001", uuid)
-	t.verifyMetadata(c, r, uuid001, minCheckpoint, r.cfg.BinlogGTID, []string{uuid001})
+	t.verifyMetadata(c, r, uuid001, gmysql.Position{Name: r.cfg.BinLogName, Pos: 4}, r.cfg.BinlogGTID, []string{uuid001})
 
 	// re-setup meta again, often happen when connecting a server behind a VIP.
 	c.Assert(r.reSetupMeta(), IsNil)
