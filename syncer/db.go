@@ -98,7 +98,7 @@ type UpStreamConn struct {
 }
 
 func (conn *UpStreamConn) getMasterStatus(flavor string) (mysql.Position, gtid.Set, error) {
-	return utils.GetMasterStatus(conn.BaseDB.DB, flavor)
+	pos, gtidSet, err := utils.GetMasterStatus(conn.BaseDB.DB, flavor)
 
 	failpoint.Inject("GetMasterStatusFailed", func(val failpoint.Value) {
 		err = tmysql.NewErr(uint16(val.(int)))
