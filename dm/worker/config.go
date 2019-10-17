@@ -263,10 +263,10 @@ func (c *Config) adjustFlavor() error {
 	}
 	defer conn.Close()
 
-	query := "SELECT @@version_comment;"
+	query := "SELECT @@version_comment"
 	row := conn.DB.QueryRow(query)
 	var versionComment string
-	err = row.Scan(versionComment)
+	err = row.Scan(&versionComment)
 	if err != nil {
 		return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
@@ -322,6 +322,5 @@ func (c *Config) DecryptPassword() (*Config, error) {
 		}
 	}
 	clone.From.Password = pswdFrom
-
 	return clone, nil
 }

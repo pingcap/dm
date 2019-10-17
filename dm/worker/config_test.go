@@ -170,9 +170,9 @@ func subtestFlavor(c *C, cfg *Config, sqlInfo, expectedFlavor, expectedError str
 	cfg.Flavor = ""
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
-	mock.ExpectQuery("SELECT @@version_comment;").
+	mock.ExpectQuery("SELECT @@version_comment").
 		WillReturnRows(sqlmock.NewRows([]string{"@@version_comment"}).
-			AddRow("mariadb.org binary distribution"))
+			AddRow(sqlInfo))
 	mock.ExpectClose()
 	newBaseConn = func(dbDSN string, strategy retry.Strategy, rawDBCfg *baseconn.RawDBConfig) (*baseconn.BaseConn, error) {
 		return &baseconn.BaseConn{DB: db}, nil
@@ -180,7 +180,7 @@ func subtestFlavor(c *C, cfg *Config, sqlInfo, expectedFlavor, expectedError str
 	err = cfg.adjustFlavor()
 	if expectedError == "" {
 		c.Assert(err, IsNil)
-		c.Assert(cfg.Flavor, Equals, mysql.MariaDBFlavor)
+		c.Assert(cfg.Flavor, Equals, expectedFlavor)
 	} else {
 		c.Assert(err, ErrorMatches, expectedError)
 	}
@@ -196,7 +196,7 @@ func (t *testServer) TestAdjustFlavor(c *C) {
 	c.Assert(cfg.Flavor, Equals, mysql.MariaDBFlavor)
 	cfg.Flavor = "MongoDB"
 	err = cfg.adjustFlavor()
-	c.Assert(err, ErrorMatches, "flavor MongoDB not supported")
+	c.Assert(err, ErrorMatches, ".*flavor MongoDB not supported")
 
 	var origNewBaseConn = newBaseConn
 	defer func() {
@@ -205,5 +205,5 @@ func (t *testServer) TestAdjustFlavor(c *C) {
 
 	subtestFlavor(c, cfg, "mariadb.org binary distribution", mysql.MariaDBFlavor, "")
 	subtestFlavor(c, cfg, "MySQL Community Server - GPL", mysql.MySQLFlavor, "")
-	subtestFlavor(c, cfg, "MongoDB", "", "flavor MongoDB not supported")
+	subtestFlavor(c, cfg, "MongoDB", "", ".*flavor MongoDB not supported")
 }
