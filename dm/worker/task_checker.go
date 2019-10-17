@@ -247,25 +247,23 @@ func isResumableError(err *pb.ProcessError) bool {
 		"binlog checksum mismatch, data may be corrupted",
 		"get event err EOF",
 	}
-	parseRelayLogCode := fmt.Sprintf("code=%d", terror.ErrParserParseRelayLog.Code())
 
 	switch err.Type {
 	case pb.ErrorType_ExecSQL:
 		for _, msg := range unsupportedDDLMsgs {
-			if strings.Contains(err.Msg, msg) {
+			if err.Error != nil && strings.Contains(err.Error.RawCause, msg) {
 				return false
 			}
 		}
 		for _, msg := range unsupportedDMLMsgs {
-			if strings.Contains(err.Msg, msg) {
+			if err.Error != nil && strings.Contains(err.Error.RawCause, msg) {
 				return false
 			}
 		}
 	case pb.ErrorType_UnknownError:
-		// TODO: we need better mechanism to convert error in `ProcessError` to `terror.Error`
-		if strings.Contains(err.Msg, parseRelayLogCode) {
+		if err.Error != nil && err.Error.ErrCode == int32(terror.ErrParserParseRelayLog.Code()) {
 			for _, msg := range parseRelayLogErrMsg {
-				if strings.Contains(err.Msg, msg) {
+				if strings.Contains(err.Error.Message, msg) {
 					return false
 				}
 			}
