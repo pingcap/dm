@@ -247,7 +247,7 @@ func isResumableError(err *pb.ProcessError) bool {
 		}
 	case pb.ErrorType_UnknownError:
 		if err.Error != nil && err.Error.ErrCode == int32(terror.ErrParserParseRelayLog.Code()) {
-			for _, msg := range parseRelayLogErrMsg {
+			for _, msg := range retry.ParseRelayLogErrMsgs {
 				if strings.Contains(err.Error.Message, msg) {
 					return false
 				}
