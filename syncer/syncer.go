@@ -22,6 +22,19 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pingcap/failpoint"
+	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/ast"
+	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
+	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/filter"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	"github.com/siddontang/go-mysql/mysql"
+	"github.com/siddontang/go-mysql/replication"
+	"github.com/siddontang/go/sync2"
+	"go.uber.org/zap"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
@@ -37,20 +50,6 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 	sm "github.com/pingcap/dm/syncer/safe-mode"
 	operator "github.com/pingcap/dm/syncer/sql-operator"
-
-	"github.com/pingcap/errors"
-	"github.com/pingcap/failpoint"
-	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/ast"
-	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
-	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pingcap/tidb-tools/pkg/filter"
-	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	"github.com/siddontang/go-mysql/mysql"
-	"github.com/siddontang/go-mysql/replication"
-	"github.com/siddontang/go/sync2"
-	"go.uber.org/zap"
 )
 
 var (
@@ -600,7 +599,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	if err != nil {
 		syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name).Inc()
-		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err)))
+		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, err))
 	}
 
 	isCanceled := false
@@ -915,7 +914,7 @@ func (s *Syncer) syncDDL(ctx *tcontext.Context, queueBucket string, db *DBConn, 
 		s.jobWg.Done()
 		if err != nil {
 			s.execErrorDetected.Set(true)
-			s.runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, errors.ErrorStack(err))
+			s.runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, err)
 			continue
 		}
 		s.addCount(true, queueBucket, sqlJob.tp, int64(len(sqlJob.ddls)))
@@ -945,7 +944,7 @@ func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *DBConn, job
 
 	fatalF := func(err error, errType pb.ErrorType) {
 		s.execErrorDetected.Set(true)
-		s.runFatalChan <- unit.NewProcessError(errType, errors.ErrorStack(err))
+		s.runFatalChan <- unit.NewProcessError(errType, err)
 		clearF()
 	}
 
@@ -2269,7 +2268,7 @@ func (s *Syncer) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 		pr <- pb.ProcessResult{
 			IsCanceled: false,
 			Errors: []*pb.ProcessError{
-				unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err)),
+				unit.NewProcessError(pb.ErrorType_UnknownError, err),
 			},
 		}
 		return

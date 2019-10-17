@@ -31,6 +31,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 
+	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
@@ -73,7 +74,7 @@ func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		}
 		pr <- pb.ProcessResult{
 			IsCanceled: false,
-			Errors:     []*pb.ProcessError{unit.NewProcessError(pb.ErrorType_UnknownError, msg)},
+			Errors:     []*pb.ProcessError{unit.NewProcessError(pb.ErrorType_UnknownError, errors.New(msg))},
 		}
 		failpoint.Return()
 	})
@@ -100,7 +101,7 @@ func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	if err != nil {
 		mydumperExitWithErrorCounter.WithLabelValues(m.cfg.Name).Inc()
-		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, fmt.Sprintf("%s. %s", err.Error(), output)))
+		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, fmt.Errorf("%s. %s", err.Error(), output)))
 	} else {
 		select {
 		case <-ctx.Done():

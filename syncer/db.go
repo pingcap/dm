@@ -238,7 +238,7 @@ func (conn *DBConn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError fun
 				sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
 				return true
 			}
-			if retry.IsRetryableError(err) {
+			if retry.IsRetryableErrorFastFailFilter(err) {
 				tctx.L().Warn("execute statements", zap.Int("retry", retryTime),
 					zap.String("queries", utils.TruncateInterface(queries, -1)),
 					zap.String("arguments", utils.TruncateInterface(args, -1)))
