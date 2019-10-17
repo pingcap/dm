@@ -1695,7 +1695,7 @@ func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWork
 }
 
 // TODO: refine the call stack of this API, query worker configs that we needed only
-func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConfig, error) {
+func (s *Server) getWorkerConfigs(ctx context.Context, workerIDs []string) (map[string]config.DBConfig, error) {
 	var (
 		wg          sync.WaitGroup
 		workerMutex sync.Mutex
@@ -1733,7 +1733,11 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 		Type:              workerrpc.CmdQueryWorkerConfig,
 		QueryWorkerConfig: &pb.QueryWorkerConfigRequest{},
 	}
-	for worker, client := range s.workerClients {
+	for _, worker := range workerIDs {
+		client, ok := s.workerClients[worker]
+		if !ok {
+			continue // outer caller can handle the lack of the config
+		}
 		wg.Add(1)
 		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
@@ -1843,7 +1847,17 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
 
-	sourceCfgs, err := s.allWorkerConfigs(ctx)
+	// get workerID from deploy map by sourceID, refactor this when dynamic add/remove worker supported.
+	workerIDs := make([]string, 0, len(cfg.MySQLInstances))
+	for _, inst := range cfg.MySQLInstances {
+		workerID, ok := s.cfg.DeployMap[inst.SourceID]
+		if !ok {
+			return nil, nil, terror.ErrMasterTaskConfigExtractor.Generatef("%s relevant worker not found", inst.SourceID)
+		}
+		workerIDs = append(workerIDs, workerID)
+	}
+
+	sourceCfgs, err := s.getWorkerConfigs(ctx, workerIDs)
 	if err != nil {
 		return nil, nil, err
 	}
