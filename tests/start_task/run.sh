@@ -36,6 +36,11 @@ function run() {
         run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
         check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 
+        echo "check un-accessible DM-worker exists"
+        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status" \
+            "transport: Error while dialing dial tcp 127.0.0.1:8888: connect: connection refused" 1
+
         echo "start task and will failed"
         task_conf="$cur/conf/dm-task.yaml"
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
