@@ -369,19 +369,10 @@ func (st *SubTask) setResult(result *pb.ProcessResult) {
 }
 
 // Result returns the result of the sub task
-// Note this method will omit the `Error` field in `pb.ProcessError`, so no duplicated
-// error message information will be displayed in `query-status`, as the `Msg` field
-// contains enough error information.
 func (st *SubTask) Result() *pb.ProcessResult {
 	st.RLock()
 	defer st.RUnlock()
-	result := proto.Clone(st.result).(*pb.ProcessResult)
-	if result != nil {
-		for i := range result.Errors {
-			result.Errors[i].Error = nil
-		}
-	}
-	return result
+	return statusProcessResult(st.result)
 }
 
 // Close stops the sub task

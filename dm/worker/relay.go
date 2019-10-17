@@ -17,7 +17,6 @@ import (
 	"context"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
@@ -314,16 +313,7 @@ func (h *realRelayHolder) setResult(result *pb.ProcessResult) {
 func (h *realRelayHolder) Result() *pb.ProcessResult {
 	h.RLock()
 	defer h.RUnlock()
-	if h.result == nil {
-		return nil
-	}
-	result := proto.Clone(h.result).(*pb.ProcessResult)
-	if result != nil {
-		for i := range result.Errors {
-			result.Errors[i].Error = nil
-		}
-	}
-	return result
+	return statusProcessResult(h.result)
 }
 
 // Update update relay config online
