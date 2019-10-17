@@ -45,12 +45,6 @@ func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, erro
 	)
 
 	rows, err := db.Query(`SHOW MASTER STATUS`)
-
-	failpoint.Inject("GetMasterStatusFailed", func(val failpoint.Value) {
-		err = tmysql.NewErr(uint16(val.(int)))
-		log.L().Warn("GetMasterStatus failed", zap.String("failpoint", "GetMasterStatusFailed"), zap.Error(err))
-	})
-
 	if err != nil {
 		return binlogPos, gs, err
 	}

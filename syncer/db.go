@@ -28,7 +28,9 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
+	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
@@ -84,7 +86,14 @@ func (conn *Conn) ResetConn(tctx *tcontext.Context) error {
 }
 
 func (conn *Conn) getMasterStatus(flavor string) (mysql.Position, gtid.Set, error) {
-	return utils.GetMasterStatus(conn.baseConn.DB, flavor)
+	pos, gtidSet, err := utils.GetMasterStatus(conn.baseConn.DB, flavor)
+
+	failpoint.Inject("GetMasterStatusFailed", func(val failpoint.Value) {
+		err = tmysql.NewErr(uint16(val.(int)))
+		log.L().Warn("GetMasterStatus failed", zap.String("failpoint", "GetMasterStatusFailed"), zap.Error(err))
+	})
+
+	return pos, gtidSet, err
 }
 
 func (conn *Conn) getServerUUID(flavor string) (string, error) {
