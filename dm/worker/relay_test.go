@@ -22,6 +22,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/dm/unit"
 	pkgstreamer "github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay"
@@ -206,9 +207,7 @@ func (t *testRelay) testClose(c *C, holder *realRelayHolder) {
 	processResult := &pb.ProcessResult{
 		IsCanceled: true,
 		Errors: []*pb.ProcessError{
-			{
-				Msg: "process error",
-			},
+			unit.NewProcessError(pb.ErrorType_UnknownError, errors.New("process error")),
 		},
 	}
 	r.InjectProcessResult(*processResult)
