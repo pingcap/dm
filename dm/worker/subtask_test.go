@@ -99,7 +99,7 @@ func (m *MockUnit) Process(ctx context.Context, pr chan pb.ProcessResult) {
 			pr <- pb.ProcessResult{}
 		} else {
 			pr <- pb.ProcessResult{
-				Errors: append([]*pb.ProcessError{}, unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err))),
+				Errors: append([]*pb.ProcessError{}, unit.NewProcessError(pb.ErrorType_UnknownError, err)),
 			}
 		}
 	}
