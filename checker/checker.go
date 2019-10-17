@@ -18,6 +18,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -238,9 +239,9 @@ func (c *Checker) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	errs := make([]*pb.ProcessError, 0, 1)
 	result, err := check.Do(cctx, c.checkList)
 	if err != nil {
-		errs = append(errs, unit.NewProcessError(pb.ErrorType_CheckFailed, err.Error()))
+		errs = append(errs, unit.NewProcessError(pb.ErrorType_CheckFailed, err))
 	} else if !result.Summary.Passed {
-		errs = append(errs, unit.NewProcessError(pb.ErrorType_CheckFailed, "check was failed, please see detail"))
+		errs = append(errs, unit.NewProcessError(pb.ErrorType_CheckFailed, errors.New("check was failed, please see detail")))
 	}
 
 	c.updateInstruction(result)
