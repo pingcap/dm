@@ -308,7 +308,8 @@ func (h *realRelayHolder) setResult(result *pb.ProcessResult) {
 }
 
 // Result returns the result of the relay
-// Note this method will omit the `Error` field in `pb.ProcessError`
+// Note this method will omit the `Error` field in `pb.ProcessError`, so there would not
+// display duplicated error messages in `query-status`
 func (h *realRelayHolder) Result() *pb.ProcessResult {
 	h.RLock()
 	defer h.RUnlock()

@@ -256,7 +256,7 @@ func isResumableError(err *pb.ProcessError) bool {
 			}
 		}
 		for _, msg := range unsupportedDMLMsgs {
-			if strings.Contains(err.Msg, msg) {
+			if err.Error != nil && strings.Contains(err.Error.RawCause, msg) {
 				return false
 			}
 		}
