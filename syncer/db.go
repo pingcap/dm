@@ -159,7 +159,7 @@ func (conn *Conn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError func(
 		FirstRetryDuration: retryTimeout,
 		BackoffStrategy:    retry.Stable,
 		IsRetryableFn: func(retryTime int, err error) bool {
-			if retry.IsRetryableError(err) {
+			if retry.IsRetryableErrorFastFailFilter(err) {
 				tctx.L().Warn("execute statements", zap.Int("retry", retryTime),
 					zap.String("queries", utils.TruncateInterface(queries, -1)),
 					zap.String("arguments", utils.TruncateInterface(args, -1)))
