@@ -255,8 +255,13 @@ func (c *Config) adjustFlavor() error {
 		}
 		return nil
 	}
+	// decrypt password
+	clone, err := c.DecryptPassword()
+	if err != nil {
+		return err
+	}
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&maxAllowedPacket=%d",
-		c.From.User, c.From.Password, c.From.Host, c.From.Port, c.From.MaxAllowedPacket)
+		clone.From.User, clone.From.Password, clone.From.Host, clone.From.Port, clone.From.MaxAllowedPacket)
 	conn, err := newBaseConn(dbDSN, nil, baseconn.DefaultRawDBConfig())
 	if err != nil {
 		return err
