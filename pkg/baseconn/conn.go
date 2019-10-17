@@ -15,12 +15,9 @@ package baseconn
 
 import (
 	"database/sql"
-	"fmt"
 
-	"github.com/pingcap/failpoint"
 	"go.uber.org/zap"
 
-	"github.com/pingcap/dm/dm/config"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/retry"
@@ -69,22 +66,6 @@ func NewBaseConn(dbDSN string, strategy retry.Strategy, rawDBCfg *RawDBConfig) (
 		strategy = &retry.FiniteRetryStrategy{}
 	}
 	return &BaseConn{db, dbDSN, strategy, rawDBCfg}, nil
-}
-
-// CreateBaseConn builds BaseConn through DBConfig to connect real DB
-func CreateBaseConn(dbCfg config.DBConfig, timeout string, rawDBCfg *RawDBConfig) (*BaseConn, error) {
-	failpoint.Inject("createEmptyBaseConn", func(_ failpoint.Value) {
-		log.L().Info("create mock baseConn which is nil", zap.String("failpoint", "createEmptyBaseConn"))
-		failpoint.Return(&BaseConn{}, nil)
-	})
-
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&readTimeout=%s&maxAllowedPacket=%d",
-		dbCfg.User, dbCfg.Password, dbCfg.Host, dbCfg.Port, timeout, *dbCfg.MaxAllowedPacket)
-	baseConn, err := NewBaseConn(dbDSN, &retry.FiniteRetryStrategy{}, rawDBCfg)
-	if err != nil {
-		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-	}
-	return baseConn, nil
 }
 
 // SetRetryStrategy set retry strategy for baseConn

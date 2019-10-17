@@ -121,8 +121,8 @@ func FetchAllDoTables(db *sql.DB, bw *filter.Filter) (map[string][]string, error
 
 // FetchTargetDoTables returns all need to do tables after filtered and routed (fetches from upstream MySQL)
 func FetchTargetDoTables(db *sql.DB, bw *filter.Filter, router *router.Table) (map[string][]*filter.Table, error) {
-	failpoint.Inject("mockSuccessfullyFetchTargetDoTables", func(_ failpoint.Value) {
-		log.L().Info("mock fetch target tables while starting mydumper", zap.String("failpoint", "mockSuccessfullyFetchTargetDoTables"))
+	failpoint.Inject("mockGenerateExtraArgs", func(_ failpoint.Value) {
+		log.L().Info("mock fetch target tables while starting mydumper", zap.String("failpoint", "mockGenerateExtraArgs"))
 		mapper := make(map[string][]*filter.Table)
 		mapper["mockDatabase"] = append(mapper["mockDatabase"], &filter.Table{
 			Schema: "mockDatabase",

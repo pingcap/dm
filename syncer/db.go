@@ -209,8 +209,18 @@ func (conn *Conn) executeSQL(tctx *tcontext.Context, queries []string, args ...[
 	return conn.executeSQLWithIgnore(tctx, nil, queries, args...)
 }
 
+func createBaseConn(dbCfg config.DBConfig, timeout string, rawDBCfg *baseconn.RawDBConfig) (*baseconn.BaseConn, error) {
+	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&readTimeout=%s&maxAllowedPacket=%d",
+		dbCfg.User, dbCfg.Password, dbCfg.Host, dbCfg.Port, timeout, *dbCfg.MaxAllowedPacket)
+	baseConn, err := baseconn.NewBaseConn(dbDSN, &retry.FiniteRetryStrategy{}, rawDBCfg)
+	if err != nil {
+		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+	}
+	return baseConn, nil
+}
+
 func createConn(cfg *config.SubTaskConfig, dbCfg config.DBConfig, timeout string) (*Conn, error) {
-	baseConn, err := baseconn.CreateBaseConn(dbCfg, timeout, baseconn.DefaultRawDBConfig())
+	baseConn, err := createBaseConn(dbCfg, timeout, baseconn.DefaultRawDBConfig())
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +233,7 @@ func createConns(cfg *config.SubTaskConfig, dbCfg config.DBConfig, count int, ti
 	rawDBCfg := &baseconn.RawDBConfig{
 		MaxIdleConns: cfg.SyncerConfig.WorkerCount,
 	}
-	baseConn, err := baseconn.CreateBaseConn(dbCfg, timeout, rawDBCfg)
+	baseConn, err := createBaseConn(dbCfg, timeout, rawDBCfg)
 	if err != nil {
 		return nil, err
 	}

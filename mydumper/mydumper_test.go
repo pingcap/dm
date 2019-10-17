@@ -21,6 +21,8 @@ import (
 	"github.com/pingcap/failpoint"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/baseconn"
+	"github.com/pingcap/dm/pkg/retry"
 )
 
 var _ = Suite(&testMydumperSuite{})
@@ -30,7 +32,8 @@ func TestSuite(t *testing.T) {
 }
 
 type testMydumperSuite struct {
-	cfg *config.SubTaskConfig
+	cfg             *config.SubTaskConfig
+	origNewBaseConn func(string, retry.Strategy, *baseconn.RawDBConfig) (*baseconn.BaseConn, error)
 }
 
 func (m *testMydumperSuite) SetUpSuite(c *C) {
@@ -51,6 +54,17 @@ func (m *testMydumperSuite) SetUpSuite(c *C) {
 			Dir: "./dumped_data",
 		},
 	}
+
+	m.origNewBaseConn = newBaseConn
+	newBaseConn = func(dbDSN string, strategy retry.Strategy, rawDBCfg *baseconn.RawDBConfig) (*baseconn.BaseConn, error) {
+		return &baseconn.BaseConn{}, nil
+	}
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/utils/mockGenerateExtraArgs", "return(true)"), IsNil)
+}
+
+func (m *testMydumperSuite) TearDownSuite(c *C) {
+	newBaseConn = m.origNewBaseConn
+	failpoint.Disable("github.com/pingcap/dm/pkg/utils/mockGenerateExtraArgs")
 }
 
 func generateArgsAndCompare(c *C, m *testMydumperSuite, expectedExtraArgs, extraArgs string) {
@@ -71,11 +85,6 @@ func testThroughGivenArgs(c *C, m *testMydumperSuite, arg, index string) {
 }
 
 func (m *testMydumperSuite) TestShouldNotGenerateExtraArgs(c *C) {
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/baseconn/createEmptyBaseConn", "return(true)"), IsNil)
-	defer failpoint.Disable("github.com/pingcap/dm/pkg/baseconn/createEmptyBaseConn")
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/utils/mockSuccessfullyFetchTargetDoTables", "return(true)"), IsNil)
-	defer failpoint.Disable("github.com/pingcap/dm/pkg/utils/mockSuccessfullyFetchTargetDoTables")
-
 	// -x, --regex
 	index := "^(?!(mysql|information_schema|performance_schema))"
 	testThroughGivenArgs(c, m, "-x", index)
@@ -91,16 +100,10 @@ func (m *testMydumperSuite) TestShouldNotGenerateExtraArgs(c *C) {
 }
 
 func (m *testMydumperSuite) TestShouldGenerateExtraArgs(c *C) {
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/baseconn/createEmptyBaseConn", "return(true)"), IsNil)
-	defer failpoint.Disable("github.com/pingcap/dm/pkg/baseconn/createEmptyBaseConn")
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/utils/mockSuccessfullyFetchTargetDoTables", "return(true)"), IsNil)
-	defer failpoint.Disable("github.com/pingcap/dm/pkg/utils/mockSuccessfullyFetchTargetDoTables")
-
 	expectedMockResult := "--tables-list mockDatabase.mockTable1,mockDatabase.mockTable2"
 	// empty extraArgs
 	generateArgsAndCompare(c, m, expectedMockResult, "")
 	// extraArgs doesn't contains -T/-B/-x args
-	m.cfg.MydumperConfig.SkipTzUTC = false
-	generateArgsAndCompare(c, m, expectedMockResult, "--skip-tz-utc")
-	m.cfg.MydumperConfig.SkipTzUTC = true
+	statement := "--statement-size=100"
+	generateArgsAndCompare(c, m, statement+" "+expectedMockResult, statement)
 }
