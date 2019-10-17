@@ -28,7 +28,8 @@ var (
 		"can't drop column with index",
 		"unsupported add column",
 		"unsupported modify column",
-		"unsupported modify",
+		"unsupported modify charset",
+		"unsupported modify collate",
 		"unsupported drop integer primary key",
 	}
 
