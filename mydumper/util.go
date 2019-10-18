@@ -26,6 +26,7 @@ import (
 )
 
 var newBaseConn = baseconn.NewBaseConn
+var fetchTargetDoTables = utils.FetchTargetDoTables
 
 // ParseArgLikeBash parses list arguments like bash, which helps us to run
 // executable command via os/exec more likely running from bash
@@ -55,7 +56,7 @@ func trimOutQuotes(arg string) string {
 // fetchMyDumperDoTables fetches and filters the tables that needed to be dumped through black-white list and route rules
 func fetchMyDumperDoTables(cfg *config.SubTaskConfig) (string, error) {
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&maxAllowedPacket=%d",
-		cfg.From.User, cfg.From.Password, cfg.From.Host, cfg.From.Port, cfg.From.MaxAllowedPacket)
+		cfg.From.User, cfg.From.Password, cfg.From.Host, cfg.From.Port, *cfg.From.MaxAllowedPacket)
 	fromDB, err := newBaseConn(dbDSN, nil, baseconn.DefaultRawDBConfig())
 	if err != nil {
 		return "", err
@@ -66,7 +67,7 @@ func fetchMyDumperDoTables(cfg *config.SubTaskConfig) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	sourceTables, err := utils.FetchTargetDoTables(fromDB.DB, bw, r)
+	sourceTables, err := fetchTargetDoTables(fromDB.DB, bw, r)
 	if err != nil {
 		return "", err
 	}
