@@ -22,8 +22,7 @@ import (
 	. "github.com/pingcap/check"
 
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/baseconn"
-	"github.com/pingcap/dm/pkg/retry"
+	"github.com/pingcap/dm/pkg/conn"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/siddontang/go-mysql/mysql"
@@ -174,8 +173,8 @@ func subtestFlavor(c *C, cfg *Config, sqlInfo, expectedFlavor, expectedError str
 		WillReturnRows(sqlmock.NewRows([]string{"@@version_comment"}).
 			AddRow(sqlInfo))
 	mock.ExpectClose()
-	newBaseConn = func(dbDSN string, strategy retry.Strategy, rawDBCfg *baseconn.RawDBConfig) (*baseconn.BaseConn, error) {
-		return &baseconn.BaseConn{DB: db}, nil
+	applyNewBaseDB = func(config config.DBConfig) (*conn.BaseDB, error) {
+		return &conn.BaseDB{DB: db}, nil
 	}
 	err = cfg.adjustFlavor()
 	if expectedError == "" {
@@ -198,9 +197,9 @@ func (t *testServer) TestAdjustFlavor(c *C) {
 	err = cfg.adjustFlavor()
 	c.Assert(err, ErrorMatches, ".*flavor MongoDB not supported")
 
-	var origNewBaseConn = newBaseConn
+	var origApplyNewBaseDB = applyNewBaseDB
 	defer func() {
-		newBaseConn = origNewBaseConn
+		applyNewBaseDB = origApplyNewBaseDB
 	}()
 
 	subtestFlavor(c, cfg, "mariadb.org binary distribution", mysql.MariaDBFlavor, "")

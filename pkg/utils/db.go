@@ -37,6 +37,26 @@ var (
 	domainServerIDSeparator = "-"
 )
 
+// GetFlavor gets flavor from DB
+func GetFlavor(db *sql.DB) (string, error) {
+	query := "SELECT @@version_comment"
+	row := db.QueryRow(query)
+	var versionComment string
+	err := row.Scan(&versionComment)
+	if err != nil {
+		return "", terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+	}
+	lowercaseVersionComment := strings.ToLower(versionComment)
+	switch {
+	case strings.Contains(lowercaseVersionComment, gmysql.MariaDBFlavor):
+		return gmysql.MariaDBFlavor, nil
+	case strings.Contains(lowercaseVersionComment, gmysql.MySQLFlavor):
+		return gmysql.MySQLFlavor, nil
+	default:
+		return "", terror.ErrNotSupportedFlavor.Generate(versionComment)
+	}
+}
+
 // GetMasterStatus gets status from master
 func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, error) {
 	var (

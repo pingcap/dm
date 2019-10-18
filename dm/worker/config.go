@@ -26,8 +26,8 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/baseconn"
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -41,7 +41,7 @@ import (
 // and assign it to SampleConfigFile while we build dm-worker
 var SampleConfigFile string
 
-var newBaseConn = baseconn.NewBaseConn
+var applyNewBaseDB = conn.DefaultDBProvider.Apply
 
 // NewConfig creates a new base config for worker.
 func NewConfig() *Config {
@@ -260,31 +260,14 @@ func (c *Config) adjustFlavor() error {
 	if err != nil {
 		return err
 	}
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&maxAllowedPacket=%d",
-		clone.From.User, clone.From.Password, clone.From.Host, clone.From.Port, *clone.From.MaxAllowedPacket)
-	conn, err := newBaseConn(dbDSN, nil, baseconn.DefaultRawDBConfig())
+	fromDB, err := applyNewBaseDB(clone.From)
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer fromDB.Close()
 
-	query := "SELECT @@version_comment"
-	row := conn.DB.QueryRow(query)
-	var versionComment string
-	err = row.Scan(&versionComment)
-	if err != nil {
-		return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-	}
-	lowercaseVersionComment := strings.ToLower(versionComment)
-	switch {
-	case strings.Contains(lowercaseVersionComment, mysql.MariaDBFlavor):
-		c.Flavor = mysql.MariaDBFlavor
-	case strings.Contains(lowercaseVersionComment, mysql.MySQLFlavor):
-		c.Flavor = mysql.MySQLFlavor
-	default:
-		return terror.ErrNotSupportedFlavor.Generate(versionComment)
-	}
-	return nil
+	c.Flavor, err = utils.GetFlavor(fromDB.DB)
+	return err
 }
 
 // UpdateConfigFile write configure to local file
