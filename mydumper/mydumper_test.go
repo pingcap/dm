@@ -14,11 +14,13 @@
 package mydumper
 
 import (
+	"database/sql"
 	"strings"
 	"testing"
 
 	. "github.com/pingcap/check"
-	"github.com/pingcap/failpoint"
+	"github.com/pingcap/tidb-tools/pkg/filter"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/baseconn"
@@ -32,8 +34,9 @@ func TestSuite(t *testing.T) {
 }
 
 type testMydumperSuite struct {
-	cfg             *config.SubTaskConfig
-	origNewBaseConn func(string, retry.Strategy, *baseconn.RawDBConfig) (*baseconn.BaseConn, error)
+	cfg                     *config.SubTaskConfig
+	origNewBaseConn         func(string, retry.Strategy, *baseconn.RawDBConfig) (*baseconn.BaseConn, error)
+	origFetchTargetDoTables func(*sql.DB, *filter.Filter, *router.Table) (map[string][]*filter.Table, error)
 }
 
 func (m *testMydumperSuite) SetUpSuite(c *C) {
@@ -59,12 +62,23 @@ func (m *testMydumperSuite) SetUpSuite(c *C) {
 	newBaseConn = func(dbDSN string, strategy retry.Strategy, rawDBCfg *baseconn.RawDBConfig) (*baseconn.BaseConn, error) {
 		return &baseconn.BaseConn{}, nil
 	}
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/utils/mockGenerateExtraArgs", "return(true)"), IsNil)
+	fetchTargetDoTables = func(db *sql.DB, bw *filter.Filter, router *router.Table) (map[string][]*filter.Table, error) {
+		mapper := make(map[string][]*filter.Table)
+		mapper["mockDatabase"] = append(mapper["mockDatabase"], &filter.Table{
+			Schema: "mockDatabase",
+			Name:   "mockTable1",
+		})
+		mapper["mockDatabase"] = append(mapper["mockDatabase"], &filter.Table{
+			Schema: "mockDatabase",
+			Name:   "mockTable2",
+		})
+		return mapper, nil
+	}
 }
 
 func (m *testMydumperSuite) TearDownSuite(c *C) {
 	newBaseConn = m.origNewBaseConn
-	failpoint.Disable("github.com/pingcap/dm/pkg/utils/mockGenerateExtraArgs")
+	fetchTargetDoTables = m.origFetchTargetDoTables
 }
 
 func generateArgsAndCompare(c *C, m *testMydumperSuite, expectedExtraArgs, extraArgs string) {
