@@ -175,3 +175,8 @@ func (p *PT) Clear() error {
 func (p *PT) Close() {
 	p.storge.Close()
 }
+
+// ResetConn implements interface
+func (p *PT) ResetConn() error {
+	return p.storge.ResetConn()
+}

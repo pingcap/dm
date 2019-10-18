@@ -28,6 +28,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/log"
@@ -55,7 +56,6 @@ type DataFiles []string
 
 // Tables2DataFiles represent all data files of a table collection as a map
 type Tables2DataFiles map[string]DataFiles
-
 type dataJob struct {
 	sql        string
 	schema     string
@@ -77,7 +77,7 @@ type Worker struct {
 	id         int
 	cfg        *config.SubTaskConfig
 	checkPoint CheckPoint
-	conn       *Conn
+	conn       *DBConn
 	wg         sync.WaitGroup
 	jobQueue   chan *dataJob
 	loader     *Loader
@@ -89,18 +89,13 @@ type Worker struct {
 
 // NewWorker returns a Worker.
 func NewWorker(loader *Loader, id int) (worker *Worker, err error) {
-	conn, err := createConn(loader.cfg)
-	if err != nil {
-		return nil, err
-	}
-
 	ctctx := loader.tctx.WithLogger(loader.tctx.L().WithFields(zap.Int("worker ID", id)))
 
 	return &Worker{
 		id:         id,
 		cfg:        loader.cfg,
 		checkPoint: loader.checkPoint,
-		conn:       conn,
+		conn:       loader.toDBConns[id],
 		jobQueue:   make(chan *dataJob, jobCount),
 		loader:     loader,
 		tctx:       ctctx,
@@ -115,7 +110,6 @@ func (w *Worker) Close() {
 
 	close(w.jobQueue)
 	w.wg.Wait()
-	closeConn(w.conn)
 }
 
 func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *sync.WaitGroup, runFatalChan chan *pb.ProcessError) {
@@ -342,6 +336,9 @@ type Loader struct {
 	pool   []*Worker
 	closed sync2.AtomicBool
 
+	toDB      *conn.BaseDB
+	toDBConns []*DBConn
+
 	totalDataSize    sync2.AtomicInt64
 	totalFileCount   sync2.AtomicInt64 // schema + table + data
 	finishedDataSize sync2.AtomicInt64
@@ -407,6 +404,15 @@ func (l *Loader) Init() (err error) {
 		if err != nil {
 			return terror.ErrLoadUnitNewColumnMapping.Delegate(err)
 		}
+	}
+
+	dbCfg := l.cfg.To
+	dbCfg.RawDBCfg = config.DefaultRawDBConfig().
+		SetMaxIdleConns(l.cfg.PoolSize)
+
+	l.toDB, l.toDBConns, err = createConns(l.tctx, l.cfg, l.cfg.PoolSize)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -556,6 +562,11 @@ func (l *Loader) Close() {
 	}
 
 	l.stopLoad()
+
+	err := l.toDB.Close()
+	if err != nil {
+		l.tctx.L().Error("close downstream DB error", log.ShortError(err))
+	}
 	l.checkPoint.Close()
 	l.closed.Set(true)
 }
@@ -593,8 +604,36 @@ func (l *Loader) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 		return
 	}
 
+	err := l.resetDBs()
+	if err != nil {
+		pr <- pb.ProcessResult{
+			IsCanceled: false,
+			Errors: []*pb.ProcessError{
+				unit.NewProcessError(pb.ErrorType_UnknownError, err),
+			},
+		}
+		return
+	}
 	// continue the processing
 	l.Process(ctx, pr)
+}
+
+func (l *Loader) resetDBs() error {
+	var err error
+
+	for i := 0; i < len(l.toDBConns); i++ {
+		err = l.toDBConns[i].resetConn(l.tctx)
+		if err != nil {
+			return terror.WithScope(err, terror.ScopeDownstream)
+		}
+	}
+
+	err = l.checkPoint.ResetConn()
+	if err != nil {
+		return terror.WithScope(err, terror.ScopeDownstream)
+	}
+
+	return nil
 }
 
 // Update implements Unit.Update
@@ -855,7 +894,7 @@ func (l *Loader) prepare() error {
 }
 
 // restoreSchema creates schema
-func (l *Loader) restoreSchema(conn *Conn, sqlFile, schema string) error {
+func (l *Loader) restoreSchema(conn *DBConn, sqlFile, schema string) error {
 	err := l.restoreStructure(conn, sqlFile, schema, "")
 	if err != nil {
 		if isErrDBExists(err) {
@@ -868,7 +907,7 @@ func (l *Loader) restoreSchema(conn *Conn, sqlFile, schema string) error {
 }
 
 // restoreTable creates table
-func (l *Loader) restoreTable(conn *Conn, sqlFile, schema, table string) error {
+func (l *Loader) restoreTable(conn *DBConn, sqlFile, schema, table string) error {
 	err := l.restoreStructure(conn, sqlFile, schema, table)
 	if err != nil {
 		if isErrTableExists(err) {
@@ -881,7 +920,7 @@ func (l *Loader) restoreTable(conn *Conn, sqlFile, schema, table string) error {
 }
 
 // restoreStruture creates schema or table
-func (l *Loader) restoreStructure(conn *Conn, sqlFile string, schema string, table string) error {
+func (l *Loader) restoreStructure(conn *DBConn, sqlFile string, schema string, table string) error {
 	f, err := os.Open(sqlFile)
 	if err != nil {
 		return terror.ErrLoadUnitReadSchemaFile.Delegate(err)
@@ -968,11 +1007,18 @@ func fetchMatchedLiteral(ctx *tcontext.Context, router *router.Table, schema, ta
 func (l *Loader) restoreData(ctx context.Context) error {
 	begin := time.Now()
 
-	conn, err := createConn(l.cfg)
+	baseConn, err := l.toDB.GetBaseConn(ctx)
 	if err != nil {
 		return err
 	}
-	defer conn.baseConn.Close()
+	defer l.toDB.CloseBaseConn(baseConn)
+	dbConn := &DBConn{
+		cfg:      l.cfg,
+		baseConn: baseConn,
+		resetBaseConnFn: func(*tcontext.Context, *conn.BaseConn) (*conn.BaseConn, error) {
+			return nil, terror.ErrDBBadConn.Generate("bad connection error restoreData")
+		},
+	}
 
 	dispatchMap := make(map[string]*fileJob)
 
@@ -988,7 +1034,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 		// create db
 		dbFile := fmt.Sprintf("%s/%s-schema-create.sql", l.cfg.Dir, db)
 		l.tctx.L().Info("start to create schema", zap.String("schema file", dbFile))
-		err = l.restoreSchema(conn, dbFile, db)
+		err = l.restoreSchema(dbConn, dbFile, db)
 		if err != nil {
 			return err
 		}
@@ -1015,7 +1061,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 
 			// create table
 			l.tctx.L().Info("start to create table", zap.String("table file", tableFile))
-			err := l.restoreTable(conn, tableFile, db, table)
+			err := l.restoreTable(dbConn, tableFile, db, table)
 			if err != nil {
 				return err
 			}

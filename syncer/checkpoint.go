@@ -19,16 +19,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/failpoint"
-	tmysql "github.com/pingcap/parser/mysql"
-	"github.com/siddontang/go-mysql/mysql"
-	"go.uber.org/zap"
-
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+
+	"github.com/pingcap/failpoint"
+	tmysql "github.com/pingcap/parser/mysql"
+	"github.com/siddontang/go-mysql/mysql"
+	"go.uber.org/zap"
 )
 
 /*
@@ -122,7 +123,7 @@ func (b *binlogPoint) String() string {
 // because, when restarting to continue the sync, all sharding DDLs must try-sync again
 type CheckPoint interface {
 	// Init initializes the CheckPoint
-	Init(conn *Conn) error
+	Init() error
 
 	// Close closes the CheckPoint
 	Close()
@@ -181,12 +182,14 @@ type CheckPoint interface {
 // RemoteCheckPoint implements CheckPoint
 // which using target database to store info
 // NOTE: now we sync from relay log, so not add GTID support yet
+// it's not thread-safe
 type RemoteCheckPoint struct {
 	sync.RWMutex
 
 	cfg *config.SubTaskConfig
 
-	db     *Conn
+	db     *conn.BaseDB
+	dbConn *DBConn
 	schema string // schema name, set through task config
 	table  string // table name, now it's task name
 	id     string // checkpoint ID, now it is `source-id`
@@ -226,28 +229,27 @@ func NewRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id s
 }
 
 // Init implements CheckPoint.Init
-func (cp *RemoteCheckPoint) Init(conn *Conn) error {
-	if conn != nil {
-		cp.db = conn
-	} else {
-		db, err := createConn(cp.cfg, cp.cfg.To, maxCheckPointTimeout)
-		if err != nil {
-			return err
-		}
-		cp.db = db
+func (cp *RemoteCheckPoint) Init() error {
+	checkPointDB := cp.cfg.To
+	checkPointDB.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxCheckPointTimeout)
+	db, dbConns, err := createConns(cp.tctx, cp.cfg, checkPointDB, 1)
+	if err != nil {
+		return err
 	}
+	cp.db = db
+	cp.dbConn = dbConns[0]
 
 	return cp.prepare()
 }
 
 // Close implements CheckPoint.Close
 func (cp *RemoteCheckPoint) Close() {
-	closeConns(cp.tctx, cp.db)
+	closeBaseDB(cp.tctx, cp.db)
 }
 
 // ResetConn implements CheckPoint.ResetConn
 func (cp *RemoteCheckPoint) ResetConn() error {
-	return cp.db.ResetConn(cp.tctx)
+	return cp.dbConn.resetConn(cp.tctx)
 }
 
 // Clear implements CheckPoint.Clear
@@ -258,7 +260,7 @@ func (cp *RemoteCheckPoint) Clear() error {
 	// delete all checkpoints
 	sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s'", cp.schema, cp.table, cp.id)
 	args := make([]interface{}, 0)
-	_, err := cp.db.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}...)
+	_, err := cp.dbConn.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}...)
 	if err != nil {
 		return err
 	}
@@ -317,7 +319,7 @@ func (cp *RemoteCheckPoint) DeleteTablePoint(sourceSchema, sourceTable string) e
 	// delete  checkpoint
 	sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s' AND `cp_schema` = '%s' AND `cp_table` = '%s'", cp.schema, cp.table, cp.id, sourceSchema, sourceTable)
 	args := make([]interface{}, 0)
-	_, err := cp.db.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}...)
+	_, err := cp.dbConn.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}...)
 	if err != nil {
 		return err
 	}
@@ -403,7 +405,7 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(exceptTables [][]string, extraSQLs
 		args = append(args, extraArgs[i])
 	}
 
-	_, err := cp.db.executeSQL(cp.tctx, sqls, args...)
+	_, err := cp.dbConn.executeSQL(cp.tctx, sqls, args...)
 	if err != nil {
 		return err
 	}
@@ -466,7 +468,7 @@ func (cp *RemoteCheckPoint) prepare() error {
 func (cp *RemoteCheckPoint) createSchema() error {
 	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", cp.schema)
 	args := make([]interface{}, 0)
-	_, err := cp.db.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}...)
+	_, err := cp.dbConn.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}...)
 	cp.tctx.L().Info("create checkpoint schema", zap.String("statement", sql2))
 	return err
 }
@@ -485,7 +487,7 @@ func (cp *RemoteCheckPoint) createTable() error {
 			UNIQUE KEY uk_id_schema_table (id, cp_schema, cp_table)
 		)`, tableName)
 	args := make([]interface{}, 0)
-	_, err := cp.db.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}...)
+	_, err := cp.dbConn.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}...)
 	cp.tctx.L().Info("create checkpoint table", zap.String("statement", sql2))
 	return err
 }
@@ -493,7 +495,12 @@ func (cp *RemoteCheckPoint) createTable() error {
 // Load implements CheckPoint.Load
 func (cp *RemoteCheckPoint) Load() error {
 	query := fmt.Sprintf("SELECT `cp_schema`, `cp_table`, `binlog_name`, `binlog_pos`, `is_global` FROM `%s`.`%s` WHERE `id`='%s'", cp.schema, cp.table, cp.id)
-	rows, err := cp.db.querySQL(cp.tctx, query)
+	rows, err := cp.dbConn.querySQL(cp.tctx, query)
+	defer func() {
+		if rows != nil {
+			rows.Close()
+		}
+	}()
 
 	failpoint.Inject("LoadCheckpointFailed", func(val failpoint.Value) {
 		err = tmysql.NewErr(uint16(val.(int)))
@@ -503,7 +510,6 @@ func (cp *RemoteCheckPoint) Load() error {
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
-	defer rows.Close()
 
 	// checkpoints in DB have higher priority
 	// if don't want to use checkpoint in DB, set `remove-previous-checkpoint` to `true`

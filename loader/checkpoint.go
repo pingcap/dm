@@ -20,7 +20,9 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 
 	"go.uber.org/zap"
@@ -48,6 +50,9 @@ type CheckPoint interface {
 	// Init initialize checkpoint data in tidb
 	Init(filename string, endpos int64) error
 
+	// ResetConn resets database connections owned by the Checkpoint
+	ResetConn() error
+
 	// Close closes the CheckPoint
 	Close()
 
@@ -62,8 +67,10 @@ type CheckPoint interface {
 }
 
 // RemoteCheckPoint implements CheckPoint by saving status in remote database system, mostly in TiDB.
+// it's not thread-safe
 type RemoteCheckPoint struct {
-	conn           *Conn // NOTE: use dbutil in tidb-tools later
+	db             *conn.BaseDB
+	conn           *DBConn
 	id             string
 	schema         string
 	table          string
@@ -73,7 +80,7 @@ type RemoteCheckPoint struct {
 }
 
 func newRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id string) (CheckPoint, error) {
-	conn, err := createConn(cfg)
+	db, dbConns, err := createConns(tctx, cfg, 1)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +88,8 @@ func newRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id s
 	newtctx := tctx.WithLogger(tctx.L().WithFields(zap.String("component", "remote checkpoint")))
 
 	cp := &RemoteCheckPoint{
-		conn:           conn,
+		db:             db,
+		conn:           dbConns[0],
 		id:             id,
 		restoringFiles: make(map[string]map[string]FilePosSet),
 		finishedTables: make(map[string]struct{}),
@@ -291,9 +299,17 @@ func (cp *RemoteCheckPoint) Init(filename string, endPos int64) error {
 	return nil
 }
 
+// ResetConn implements CheckPoint.ResetConn
+func (cp *RemoteCheckPoint) ResetConn() error {
+	return cp.conn.resetConn(cp.tctx)
+}
+
 // Close implements CheckPoint.Close
 func (cp *RemoteCheckPoint) Close() {
-	closeConn(cp.conn)
+	err := cp.db.Close()
+	if err != nil {
+		cp.tctx.L().Error("close checkpoint db", log.ShortError(err))
+	}
 }
 
 // GenSQL implements CheckPoint.GenSQL
