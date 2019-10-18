@@ -15,7 +15,6 @@ package loader
 
 import (
 	"database/sql"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -27,7 +26,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/baseconn"
+	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/retry"
@@ -35,13 +34,17 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-// Conn represents a live DB connection
-type Conn struct {
+// DBConn represents a live DB connection
+// it's not thread-safe
+type DBConn struct {
 	cfg      *config.SubTaskConfig
-	baseConn *baseconn.BaseConn
+	baseConn *conn.BaseConn
+
+	// generate new BaseConn and close old one
+	resetBaseConnFn func(*tcontext.Context, *conn.BaseConn) (*conn.BaseConn, error)
 }
 
-func (conn *Conn) querySQL(ctx *tcontext.Context, query string, args ...interface{}) (*sql.Rows, error) {
+func (conn *DBConn) querySQL(ctx *tcontext.Context, query string, args ...interface{}) (*sql.Rows, error) {
 	if conn == nil || conn.baseConn == nil {
 		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
@@ -51,6 +54,17 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string, args ...interfac
 		FirstRetryDuration: time.Second,
 		BackoffStrategy:    retry.Stable,
 		IsRetryableFn: func(retryTime int, err error) bool {
+			if retry.IsConnectionError(err) {
+				err = conn.resetConn(ctx)
+				if err != nil {
+					ctx.L().Error("reset connection failed", zap.Int("retry", retryTime),
+						zap.String("query", utils.TruncateInterface(query, -1)),
+						zap.String("arguments", utils.TruncateInterface(args, -1)),
+						log.ShortError(err))
+					return false
+				}
+				return true
+			}
 			if retry.IsRetryableError(err) {
 				ctx.L().Warn("query statement", zap.Int("retry", retryTime),
 					zap.String("query", utils.TruncateString(query, -1)),
@@ -90,7 +104,7 @@ func (conn *Conn) querySQL(ctx *tcontext.Context, query string, args ...interfac
 	return ret.(*sql.Rows), nil
 }
 
-func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]interface{}) error {
+func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]interface{}) error {
 	if len(queries) == 0 {
 		return nil
 	}
@@ -104,14 +118,29 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]
 		FirstRetryDuration: 2 * time.Second,
 		BackoffStrategy:    retry.LinearIncrease,
 		IsRetryableFn: func(retryTime int, err error) bool {
-			ctx.L().Warn("execute statements", zap.Int("retry", retryTime),
-				zap.String("queries", utils.TruncateInterface(queries, -1)),
-				zap.String("arguments", utils.TruncateInterface(args, -1)),
-				log.ShortError(err))
 			tidbExecutionErrorCounter.WithLabelValues(conn.cfg.Name).Inc()
-			return retry.IsRetryableError(err)
+			if retry.IsConnectionError(err) {
+				err = conn.resetConn(ctx)
+				if err != nil {
+					ctx.L().Error("reset connection failed", zap.Int("retry", retryTime),
+						zap.String("queries", utils.TruncateInterface(queries, -1)),
+						zap.String("arguments", utils.TruncateInterface(args, -1)),
+						log.ShortError(err))
+					return false
+				}
+				return true
+			}
+			if retry.IsRetryableError(err) {
+				ctx.L().Warn("execute statements", zap.Int("retry", retryTime),
+					zap.String("queries", utils.TruncateInterface(queries, -1)),
+					zap.String("arguments", utils.TruncateInterface(args, -1)),
+					log.ShortError(err))
+				return true
+			}
+			return false
 		},
 	}
+
 	_, _, err := conn.baseConn.ApplyRetryStrategy(
 		ctx,
 		params,
@@ -149,23 +178,41 @@ func (conn *Conn) executeSQL(ctx *tcontext.Context, queries []string, args ...[]
 	return err
 }
 
-func createConn(cfg *config.SubTaskConfig) (*Conn, error) {
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&maxAllowedPacket=%d",
-		cfg.To.User, cfg.To.Password, cfg.To.Host, cfg.To.Port, *cfg.To.MaxAllowedPacket)
-	baseConn, err := baseconn.NewBaseConn(dbDSN, &retry.FiniteRetryStrategy{}, baseconn.DefaultRawDBConfig())
+// resetConn reset one worker connection from specify *BaseDB
+func (conn *DBConn) resetConn(tctx *tcontext.Context) error {
+	baseConn, err := conn.resetBaseConnFn(tctx, conn.baseConn)
 	if err != nil {
-		return nil, terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
+		return err
 	}
-
-	return &Conn{baseConn: baseConn, cfg: cfg}, nil
+	conn.baseConn = baseConn
+	return nil
 }
 
-func closeConn(conn *Conn) error {
-	if conn.baseConn == nil {
-		return nil
+func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, workerCount int) (*conn.BaseDB, []*DBConn, error) {
+	baseDB, err := conn.DefaultDBProvider.Apply(cfg.To)
+	if err != nil {
+		return nil, nil, terror.WithScope(err, terror.ScopeDownstream)
 	}
-
-	return terror.DBErrorAdapt(conn.baseConn.Close(), terror.ErrDBDriverError)
+	conns := make([]*DBConn, 0, workerCount)
+	for i := 0; i < workerCount; i++ {
+		baseConn, err := baseDB.GetBaseConn(tctx.Context())
+		if err != nil {
+			terr := baseDB.Close()
+			if terr != nil {
+				tctx.L().Error("failed to close baseDB", zap.Error(terr))
+			}
+			return nil, nil, terror.WithScope(err, terror.ScopeDownstream)
+		}
+		resetBaseConnFn := func(tctx *tcontext.Context, baseConn *conn.BaseConn) (*conn.BaseConn, error) {
+			err := baseDB.CloseBaseConn(baseConn)
+			if err != nil {
+				tctx.L().Warn("failed to close baseConn in reset")
+			}
+			return baseDB.GetBaseConn(tctx.Context())
+		}
+		conns = append(conns, &DBConn{baseConn: baseConn, cfg: cfg, resetBaseConnFn: resetBaseConnFn})
+	}
+	return baseDB, conns, nil
 }
 
 func isErrDBExists(err error) bool {
