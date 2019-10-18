@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/conn"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -45,10 +46,10 @@ import (
 type mysqlInstance struct {
 	cfg *config.SubTaskConfig
 
-	sourceDB     *sql.DB
+	sourceDB     *conn.BaseDB
 	sourceDBinfo *dbutil.DBConfig
 
-	targetDB     *sql.DB
+	targetDB     *conn.BaseDB
 	targetDBInfo *dbutil.DBConfig
 }
 
@@ -125,7 +126,9 @@ func (c *Checker) Init() (err error) {
 			User:     instance.cfg.From.User,
 			Password: instance.cfg.From.Password,
 		}
-		instance.sourceDB, err = openDB(instance.cfg.From, "30s")
+		dbCfg := instance.cfg.From
+		dbCfg.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout("30s")
+		instance.sourceDB, err = conn.DefaultDBProvider.Apply(dbCfg)
 		if err != nil {
 			return terror.WithScope(terror.ErrTaskCheckFailedOpenDB.Delegate(err, instance.cfg.From.User, instance.cfg.From.Host, instance.cfg.From.Port), terror.ScopeUpstream)
 		}
@@ -136,35 +139,37 @@ func (c *Checker) Init() (err error) {
 			User:     instance.cfg.To.User,
 			Password: instance.cfg.To.Password,
 		}
-		instance.targetDB, err = openDB(instance.cfg.To, "30s")
+		dbCfg = instance.cfg.To
+		dbCfg.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout("30s")
+		instance.targetDB, err = conn.DefaultDBProvider.Apply(dbCfg)
 		if err != nil {
 			return terror.WithScope(terror.ErrTaskCheckFailedOpenDB.Delegate(err, instance.cfg.To.User, instance.cfg.To.Host, instance.cfg.To.Port), terror.ScopeDownstream)
 		}
 
 		if _, ok := c.checkingItems[config.VersionChecking]; ok {
-			c.checkList = append(c.checkList, check.NewMySQLVersionChecker(instance.sourceDB, instance.sourceDBinfo))
+			c.checkList = append(c.checkList, check.NewMySQLVersionChecker(instance.sourceDB.DB, instance.sourceDBinfo))
 		}
 		if _, ok := c.checkingItems[config.BinlogEnableChecking]; ok {
-			c.checkList = append(c.checkList, check.NewMySQLBinlogEnableChecker(instance.sourceDB, instance.sourceDBinfo))
+			c.checkList = append(c.checkList, check.NewMySQLBinlogEnableChecker(instance.sourceDB.DB, instance.sourceDBinfo))
 		}
 		if _, ok := c.checkingItems[config.BinlogFormatChecking]; ok {
-			c.checkList = append(c.checkList, check.NewMySQLBinlogFormatChecker(instance.sourceDB, instance.sourceDBinfo))
+			c.checkList = append(c.checkList, check.NewMySQLBinlogFormatChecker(instance.sourceDB.DB, instance.sourceDBinfo))
 		}
 		if _, ok := c.checkingItems[config.BinlogRowImageChecking]; ok {
-			c.checkList = append(c.checkList, check.NewMySQLBinlogRowImageChecker(instance.sourceDB, instance.sourceDBinfo))
+			c.checkList = append(c.checkList, check.NewMySQLBinlogRowImageChecker(instance.sourceDB.DB, instance.sourceDBinfo))
 		}
 		if _, ok := c.checkingItems[config.DumpPrivilegeChecking]; ok {
-			c.checkList = append(c.checkList, check.NewSourceDumpPrivilegeChecker(instance.sourceDB, instance.sourceDBinfo))
+			c.checkList = append(c.checkList, check.NewSourceDumpPrivilegeChecker(instance.sourceDB.DB, instance.sourceDBinfo))
 		}
 		if _, ok := c.checkingItems[config.ReplicationPrivilegeChecking]; ok {
-			c.checkList = append(c.checkList, check.NewSourceReplicationPrivilegeChecker(instance.sourceDB, instance.sourceDBinfo))
+			c.checkList = append(c.checkList, check.NewSourceReplicationPrivilegeChecker(instance.sourceDB.DB, instance.sourceDBinfo))
 		}
 
 		if !checkingShard && !checkSchema {
 			continue
 		}
 
-		mapping, err := utils.FetchTargetDoTables(instance.sourceDB, bw, r)
+		mapping, err := utils.FetchTargetDoTables(instance.sourceDB.DB, bw, r)
 		if err != nil {
 			return err
 		}
@@ -192,10 +197,10 @@ func (c *Checker) Init() (err error) {
 				shardingCounter[name]++
 			}
 		}
-		dbs[instance.cfg.SourceID] = instance.sourceDB
+		dbs[instance.cfg.SourceID] = instance.sourceDB.DB
 
 		if checkSchema {
-			c.checkList = append(c.checkList, check.NewTablesChecker(instance.sourceDB, instance.sourceDBinfo, checkTables))
+			c.checkList = append(c.checkList, check.NewTablesChecker(instance.sourceDB.DB, instance.sourceDBinfo, checkTables))
 		}
 	}
 
@@ -299,14 +304,14 @@ func (c *Checker) Close() {
 func (c *Checker) closeDBs() {
 	for _, instance := range c.instances {
 		if instance.sourceDB != nil {
-			if err := dbutil.CloseDB(instance.sourceDB); err != nil {
+			if err := instance.sourceDB.Close(); err != nil {
 				c.logger.Error("close source db", zap.Stringer("db", instance.sourceDBinfo), log.ShortError(err))
 			}
 			instance.sourceDB = nil
 		}
 
 		if instance.targetDB != nil {
-			if err := dbutil.CloseDB(instance.targetDB); err != nil {
+			if err := instance.targetDB.Close(); err != nil {
 				c.logger.Error("close target db", zap.Stringer("db", instance.targetDBInfo), log.ShortError(err))
 			}
 			instance.targetDB = nil
@@ -392,20 +397,4 @@ func sameTableNameDetection(tables map[string][]*filter.Table) error {
 	}
 
 	return nil
-}
-
-// openDB with readTimeout
-// NOTE: we can refactor to use `DBProvider.Apply` after https://github.com/pingcap/dm/pull/266 merged.
-func openDB(cfg config.DBConfig, readTimeout string) (*sql.DB, error) {
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&readTimeout=%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, readTimeout)
-	dbConn, err := sql.Open("mysql", dbDSN)
-	if err != nil {
-		return nil, err
-	}
-	err = dbConn.Ping()
-	if err != nil {
-		dbConn.Close()
-		return nil, err
-	}
-	return dbConn, nil
 }
