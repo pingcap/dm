@@ -43,6 +43,13 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	// the total time needed to complete the check depends on the number of instances, databases and tables,
+	// now increase the total timeout to 30min, but set `readTimeout` to 30s for source/target DB.
+	// if we can not complete the check in 30min, then we must need to refactor the implementation of the function.
+	checkTimeout = 30 * time.Minute
+)
+
 type mysqlInstance struct {
 	cfg *config.SubTaskConfig
 
@@ -234,10 +241,7 @@ func (c *Checker) displayCheckingItems() string {
 
 // Process implements Unit interface
 func (c *Checker) Process(ctx context.Context, pr chan pb.ProcessResult) {
-	// the total time needed to complete the check depends on the number of instances, databases and tables,
-	// now increase the total timeout to 30min, but set `readTimeout` to 30s for source/target DB.
-	// if we can not complete the check in 30min, then we must need to refactor the implementation of the function.
-	cctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
+	cctx, cancel := context.WithTimeout(ctx, checkTimeout)
 	defer cancel()
 
 	isCanceled := false
