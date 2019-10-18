@@ -59,6 +59,7 @@ func (m *testMydumperSuite) SetUpSuite(c *C) {
 	}
 
 	m.origNewBaseConn = newBaseConn
+	m.origFetchTargetDoTables = fetchTargetDoTables
 	newBaseConn = func(dbDSN string, strategy retry.Strategy, rawDBCfg *baseconn.RawDBConfig) (*baseconn.BaseConn, error) {
 		return &baseconn.BaseConn{}, nil
 	}
