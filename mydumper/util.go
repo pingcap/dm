@@ -72,6 +72,7 @@ func fetchMyDumperDoTables(cfg *config.SubTaskConfig) (string, error) {
 		return "", err
 	}
 	var filteredTables []string
+	// TODO: For tables which contains special chars like ' , ` mydumper will fail while dumping. Once this bug is fixed on mydumper we should add quotes to table.Schema and table.Name
 	for _, tables := range sourceTables {
 		for _, table := range tables {
 			filteredTables = append(filteredTables, table.Schema+"."+table.Name)
