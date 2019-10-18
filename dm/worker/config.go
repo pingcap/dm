@@ -262,12 +262,12 @@ func (c *Config) adjustFlavor() error {
 	}
 	fromDB, err := applyNewBaseDB(clone.From)
 	if err != nil {
-		return err
+		return terror.WithScope(err, terror.ScopeUpstream)
 	}
 	defer fromDB.Close()
 
 	c.Flavor, err = utils.GetFlavor(fromDB.DB)
-	return err
+	return terror.WithScope(err, terror.ScopeUpstream)
 }
 
 // UpdateConfigFile write configure to local file

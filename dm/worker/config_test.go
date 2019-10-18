@@ -19,13 +19,12 @@ import (
 	"path"
 	"strings"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
+	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
-
-	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/siddontang/go-mysql/mysql"
 )
 
 func (t *testServer) TestConfig(c *C) {
