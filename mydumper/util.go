@@ -14,18 +14,17 @@
 package mydumper
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/baseconn"
+	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 )
 
-var newBaseConn = baseconn.NewBaseConn
+var applyNewBaseDB = conn.DefaultDBProvider.Apply
 var fetchTargetDoTables = utils.FetchTargetDoTables
 
 // ParseArgLikeBash parses list arguments like bash, which helps us to run
@@ -55,9 +54,7 @@ func trimOutQuotes(arg string) string {
 
 // fetchMyDumperDoTables fetches and filters the tables that needed to be dumped through black-white list and route rules
 func fetchMyDumperDoTables(cfg *config.SubTaskConfig) (string, error) {
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&maxAllowedPacket=%d",
-		cfg.From.User, cfg.From.Password, cfg.From.Host, cfg.From.Port, *cfg.From.MaxAllowedPacket)
-	fromDB, err := newBaseConn(dbDSN, nil, baseconn.DefaultRawDBConfig())
+	fromDB, err := applyNewBaseDB(cfg.From)
 	if err != nil {
 		return "", err
 	}

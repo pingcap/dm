@@ -23,8 +23,7 @@ import (
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/baseconn"
-	"github.com/pingcap/dm/pkg/retry"
+	"github.com/pingcap/dm/pkg/conn"
 )
 
 var _ = Suite(&testMydumperSuite{})
@@ -35,7 +34,7 @@ func TestSuite(t *testing.T) {
 
 type testMydumperSuite struct {
 	cfg                     *config.SubTaskConfig
-	origNewBaseConn         func(string, retry.Strategy, *baseconn.RawDBConfig) (*baseconn.BaseConn, error)
+	origApplyNewBaseDB      func(config config.DBConfig) (*conn.BaseDB, error)
 	origFetchTargetDoTables func(*sql.DB, *filter.Filter, *router.Table) (map[string][]*filter.Table, error)
 }
 
@@ -58,10 +57,10 @@ func (m *testMydumperSuite) SetUpSuite(c *C) {
 		},
 	}
 
-	m.origNewBaseConn = newBaseConn
+	m.origApplyNewBaseDB = applyNewBaseDB
 	m.origFetchTargetDoTables = fetchTargetDoTables
-	newBaseConn = func(dbDSN string, strategy retry.Strategy, rawDBCfg *baseconn.RawDBConfig) (*baseconn.BaseConn, error) {
-		return &baseconn.BaseConn{}, nil
+	applyNewBaseDB = func(config config.DBConfig) (*conn.BaseDB, error) {
+		return &conn.BaseDB{}, nil
 	}
 	fetchTargetDoTables = func(db *sql.DB, bw *filter.Filter, router *router.Table) (map[string][]*filter.Table, error) {
 		mapper := make(map[string][]*filter.Table)
@@ -78,7 +77,7 @@ func (m *testMydumperSuite) SetUpSuite(c *C) {
 }
 
 func (m *testMydumperSuite) TearDownSuite(c *C) {
-	newBaseConn = m.origNewBaseConn
+	applyNewBaseDB = m.origApplyNewBaseDB
 	fetchTargetDoTables = m.origFetchTargetDoTables
 }
 
