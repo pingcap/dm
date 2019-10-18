@@ -10,3 +10,4 @@ dmctl.log
 relay_log/*
 vendor
 */*.DS_Store
+tidb-slow.log

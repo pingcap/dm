@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package baseconn
+package conn
 
 import (
 	"errors"
@@ -35,15 +35,11 @@ type testBaseConnSuite struct {
 }
 
 func (t *testBaseConnSuite) TestBaseConn(c *C) {
-	baseConn, err := NewBaseConn("error dsn", nil, DefaultRawDBConfig())
-	c.Assert(terror.ErrDBDriverError.Equal(err), IsTrue)
+	baseConn := NewBaseConn(nil, nil)
 
 	tctx := tcontext.Background()
-	err = baseConn.ResetConn(tctx)
-	c.Assert(terror.ErrDBUnExpect.Equal(err), IsTrue)
-
-	err = baseConn.SetRetryStrategy(nil)
-	c.Assert(terror.ErrDBUnExpect.Equal(err), IsTrue)
+	err := baseConn.SetRetryStrategy(nil)
+	c.Assert(err, IsNil)
 
 	_, err = baseConn.QuerySQL(tctx, "select 1")
 	c.Assert(terror.ErrDBUnExpect.Equal(err), IsTrue)
@@ -53,7 +49,10 @@ func (t *testBaseConnSuite) TestBaseConn(c *C) {
 
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
-	baseConn = &BaseConn{db, "", nil, DefaultRawDBConfig()}
+	dbConn, err := db.Conn(tctx.Context())
+	c.Assert(err, IsNil)
+
+	baseConn = &BaseConn{dbConn, nil}
 
 	err = baseConn.SetRetryStrategy(&retry.FiniteRetryStrategy{})
 	c.Assert(err, IsNil)
