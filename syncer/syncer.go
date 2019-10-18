@@ -2058,13 +2058,12 @@ func (s *Syncer) createDBs() error {
 
 	var ddlDBConns []*DBConn
 	s.ddlDB, ddlDBConns, err = createConns(s.tctx, s.cfg, dbCfg, 1)
-	s.ddlDBConn = ddlDBConns[0]
-
 	if err != nil {
 		closeUpstreamConn(s.tctx, s.fromDB)
 		closeBaseDB(s.tctx, s.toDB)
 		return err
 	}
+	s.ddlDBConn = ddlDBConns[0]
 
 	return nil
 }
