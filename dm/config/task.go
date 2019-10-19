@@ -15,6 +15,7 @@ package config
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"regexp"
 	"time"
@@ -57,7 +58,7 @@ var (
 	defaultWorkerCount = 16
 	defaultBatch       = 100
 
-	taskNameRegexp = regexp.MustCompile(`^[a-zA-Z0-9$_]+$`).MatchString
+	taskNameRegexp = regexp.MustCompile(`^[a-zA-Z0-9$_]+$`)
 )
 
 // Meta represents binlog's meta pos
@@ -290,11 +291,7 @@ func NewTaskConfig() *TaskConfig {
 }
 
 func (c *TaskConfig) verifyTaskName() bool {
-	if c.Name == "" {
-		return false
-	}
-
-	return taskNameRegexp(c.Name)
+	return taskNameRegexp.MatchString(c.Name)
 }
 
 // String returns the config's yaml string
@@ -334,7 +331,7 @@ func (c *TaskConfig) Decode(data string) error {
 // adjust adjusts configs
 func (c *TaskConfig) adjust() error {
 	if !c.verifyTaskName() {
-		return terror.ErrConfigTaskNameNotValid.Generate()
+		return terror.ErrConfigTaskNameNotValid.Generate(fmt.Sprintf("task name %s not valid", c.Name))
 	}
 	if c.TaskMode != ModeFull && c.TaskMode != ModeIncrement && c.TaskMode != ModeAll {
 		return terror.ErrConfigInvalidTaskMode.Generate()
