@@ -25,8 +25,8 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/baseconn"
 	"github.com/pingcap/dm/pkg/binlog/event"
+	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
@@ -934,9 +934,12 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	}
 
 	syncer := NewSyncer(s.cfg)
-	// use upstream db as mock downstream
-	syncer.fromDB = &Conn{baseConn: &baseconn.BaseConn{db, "", &retry.FiniteRetryStrategy{}, baseconn.DefaultRawDBConfig()}}
-	syncer.toDBs = []*Conn{{baseConn: &baseconn.BaseConn{db, "", &retry.FiniteRetryStrategy{}, baseconn.DefaultRawDBConfig()}}}
+	// use upstream dbConn as mock downstream
+	dbConn, err := db.Conn(context.Background())
+	c.Assert(err, IsNil)
+	syncer.fromDB = &UpStreamConn{BaseDB: conn.NewBaseDB(db)}
+	syncer.ddlDBConn = &DBConn{baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
+	syncer.toDBConns = []*DBConn{{baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
 	syncer.reset()
 
 	streamer, err := syncer.streamerProducer.generateStreamer(pos)
@@ -1215,15 +1218,30 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		// make syncer write to mock baseConn
 		syncer := NewSyncer(s.cfg)
 
-		// fromDB mocks upstream db, db mocks downstream db
-		syncer.fromDB = &Conn{cfg: s.cfg, baseConn: &baseconn.BaseConn{fromDB, "", &retry.FiniteRetryStrategy{}, baseconn.DefaultRawDBConfig()}}
-		syncer.toDBs = []*Conn{{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, "", &retry.FiniteRetryStrategy{}, baseconn.DefaultRawDBConfig()}}}
-		syncer.ddlDB = &Conn{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, "", &retry.FiniteRetryStrategy{}, baseconn.DefaultRawDBConfig()}}
+		ctx := context.Background()
+		// fromDB mocks upstream dbConn, dbConn mocks downstream dbConn
+		syncer.fromDB = &UpStreamConn{BaseDB: conn.NewBaseDB(fromDB)}
+		dbConn, err := db.Conn(ctx)
+		c.Assert(err, IsNil)
+		syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
+		syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
 
 		// mock syncer.Init() function, because we need to pass mock dbs to different members' init
 		syncer.genRouter()
-		syncer.initShardingGroups(&Conn{cfg: s.cfg, baseConn: &baseconn.BaseConn{shardGroupDB, "", &retry.FiniteRetryStrategy{}, baseconn.DefaultRawDBConfig()}})
-		syncer.checkpoint.Init(&Conn{cfg: s.cfg, baseConn: &baseconn.BaseConn{checkPointDB, "", &retry.FiniteRetryStrategy{}, baseconn.DefaultRawDBConfig()}})
+		shardGroupDBConn, err := shardGroupDB.Conn(ctx)
+		c.Assert(err, IsNil)
+		checkPointDBConn, err := checkPointDB.Conn(ctx)
+		c.Assert(err, IsNil)
+
+		// mock syncer.shardGroupkeeper.Init() function
+		syncer.sgk.dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(shardGroupDBConn, &retry.FiniteRetryStrategy{})}
+		syncer.sgk.prepare()
+		syncer.initShardingGroups()
+
+		// mock syncer.checkpoint.Init() function
+		syncer.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(checkPointDBConn, &retry.FiniteRetryStrategy{})}
+		syncer.checkpoint.(*RemoteCheckPoint).prepare()
+
 		syncer.reset()
 		events := append(createEvents, s.generateEvents(_case.testEvents, c)...)
 		syncer.streamerProducer = &MockStreamProducer{events}
@@ -1281,7 +1299,6 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		resultCh := make(chan pb.ProcessResult)
 
 		s.mockCheckPointFlush(checkPointMock)
-		checkPointMock.ExpectClose()
 
 		go syncer.Process(ctx, resultCh)
 
@@ -1332,7 +1349,10 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
+	dbConn, err := db.Conn(context.Background())
+	c.Assert(err, IsNil)
 	checkPointDB, checkPointMock, err := sqlmock.New()
+	checkPointDBConn, err := checkPointDB.Conn(context.Background())
 	c.Assert(err, IsNil)
 
 	testJobs.jobs = testJobs.jobs[:0]
@@ -1362,10 +1382,10 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	s.cfg.DisableCausality = false
 
 	syncer := NewSyncer(s.cfg)
-	syncer.fromDB = &Conn{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, "", &retry.FiniteRetryStrategy{}, baseconn.DefaultRawDBConfig()}}
-	syncer.toDBs = []*Conn{{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, "", &retry.FiniteRetryStrategy{}, baseconn.DefaultRawDBConfig()}},
-		{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, "", &retry.FiniteRetryStrategy{}, baseconn.DefaultRawDBConfig()}}}
-	syncer.ddlDB = &Conn{cfg: s.cfg, baseConn: &baseconn.BaseConn{db, "", &retry.FiniteRetryStrategy{}, baseconn.DefaultRawDBConfig()}}
+	syncer.fromDB = &UpStreamConn{BaseDB: conn.NewBaseDB(db)}
+	syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
+		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
+	syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
 	c.Assert(syncer.Type(), Equals, pb.UnitType_Sync)
 
 	syncer.columnMapping, err = cm.NewMapping(s.cfg.CaseSensitive, s.cfg.ColumnMappingRules)
@@ -1379,7 +1399,10 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	checkPointMock.ExpectExec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
 	checkPointMock.ExpectCommit()
 
-	syncer.checkpoint.Init(&Conn{cfg: s.cfg, baseConn: &baseconn.BaseConn{checkPointDB, "", &retry.FiniteRetryStrategy{}, baseconn.DefaultRawDBConfig()}})
+	// mock syncer.checkpoint.Init() function
+	syncer.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(checkPointDBConn, &retry.FiniteRetryStrategy{})}
+	syncer.checkpoint.(*RemoteCheckPoint).prepare()
+
 	syncer.reset()
 	events1 := mockBinlogEvents{
 		mockBinlogEvent{typ: DBCreate, args: []interface{}{"test_1"}},
@@ -1472,6 +1495,8 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	}
 
 	executeSQLAndWait(len(expectJobs1))
+	c.Assert(syncer.Status().(*pb.SyncStatus).TotalEvents, Equals, int64(0))
+	syncer.mockFinishJob(expectJobs1)
 
 	testJobs.Lock()
 	checkJobs(c, testJobs.jobs, expectJobs1)
@@ -1534,13 +1559,13 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	}
 
 	executeSQLAndWait(len(expectJobs2))
+	c.Assert(syncer.Status().(*pb.SyncStatus).TotalEvents, Equals, int64(len(expectJobs1)))
+	syncer.mockFinishJob(expectJobs2)
+	c.Assert(syncer.Status().(*pb.SyncStatus).TotalEvents, Equals, int64(len(expectJobs1)+len(expectJobs2)))
 
 	testJobs.RLock()
 	checkJobs(c, testJobs.jobs, expectJobs2)
 	testJobs.RUnlock()
-
-	status := syncer.Status().(*pb.SyncStatus)
-	c.Assert(status.TotalEvents, Equals, int64(len(expectJobs1)+len(expectJobs2)))
 
 	cancel()
 	syncer.Close()
@@ -1593,6 +1618,15 @@ func checkJobs(c *C, jobs []*job, expectJobs []*expectJob) {
 var testJobs struct {
 	sync.RWMutex
 	jobs []*job
+}
+
+func (s *Syncer) mockFinishJob(jobs []*expectJob) {
+	for _, job := range jobs {
+		switch job.tp {
+		case ddl, insert, update, del, flush:
+			s.addCount(true, "test", job.tp, 1)
+		}
+	}
 }
 
 func (s *Syncer) addJobToMemory(job *job) error {

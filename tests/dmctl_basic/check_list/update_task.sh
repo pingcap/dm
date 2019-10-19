@@ -3,7 +3,7 @@
 function update_task_wrong_arg() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "update-task" \
-        "update-task \[-w worker ...\] <config_file> \[flags\]" 1
+        "update-task \[-w worker ...\] <config-file> \[flags\]" 1
 }
 
 function update_task_wrong_config_file() {

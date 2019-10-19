@@ -31,6 +31,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 
+	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
@@ -52,13 +53,14 @@ func NewMydumper(cfg *config.SubTaskConfig) *Mydumper {
 		cfg:    cfg,
 		logger: log.With(zap.String("task", cfg.Name), zap.String("unit", "dump")),
 	}
-	m.args = m.constructArgs()
 	return m
 }
 
 // Init implements Unit.Init
 func (m *Mydumper) Init() error {
-	return nil // always return nil
+	var err error
+	m.args, err = m.constructArgs()
+	return err
 }
 
 // Process implements Unit.Process
@@ -73,7 +75,7 @@ func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		}
 		pr <- pb.ProcessResult{
 			IsCanceled: false,
-			Errors:     []*pb.ProcessError{unit.NewProcessError(pb.ErrorType_UnknownError, msg)},
+			Errors:     []*pb.ProcessError{unit.NewProcessError(pb.ErrorType_UnknownError, errors.New(msg))},
 		}
 		failpoint.Return()
 	})
@@ -100,7 +102,7 @@ func (m *Mydumper) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	if err != nil {
 		mydumperExitWithErrorCounter.WithLabelValues(m.cfg.Name).Inc()
-		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, fmt.Sprintf("%s. %s", err.Error(), output)))
+		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, fmt.Errorf("%s. %s", err.Error(), output)))
 	} else {
 		select {
 		case <-ctx.Done():
@@ -232,7 +234,7 @@ func (m *Mydumper) IsFreshTask() (bool, error) {
 }
 
 // constructArgs constructs arguments for exec.Command
-func (m *Mydumper) constructArgs() []string {
+func (m *Mydumper) constructArgs() ([]string, error) {
 	cfg := m.cfg
 	db := cfg.From
 
@@ -262,11 +264,19 @@ func (m *Mydumper) constructArgs() []string {
 	if len(extraArgs) > 0 {
 		ret = append(ret, ParseArgLikeBash(extraArgs)...)
 	}
+	if needToGenerateDoTables(extraArgs) {
+		m.logger.Info("Tables needed to dump are not given, now we will start to generate table list that mydumper needs to dump through black-white list from given fromDB")
+		doTables, err := fetchMyDumperDoTables(cfg)
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, "--tables-list", doTables)
+	}
 
 	m.logger.Info("create mydumper", zap.Strings("argument", ret))
 
 	ret = append(ret, "--password", db.Password)
-	return ret
+	return ret, nil
 }
 
 // logArgs constructs arguments for log from SubTaskConfig

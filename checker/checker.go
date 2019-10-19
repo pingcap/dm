@@ -18,6 +18,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -233,11 +234,14 @@ func (c *Checker) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	isCanceled := false
 	errs := make([]*pb.ProcessError, 0, 1)
-	result, _ := check.Do(cctx, c.checkList)
-	if !result.Summary.Passed {
-		errs = append(errs, unit.NewProcessError(pb.ErrorType_CheckFailed, "check was failed, please see detail"))
-
+	result, err := check.Do(cctx, c.checkList)
+	if err != nil {
+		errs = append(errs, unit.NewProcessError(pb.ErrorType_CheckFailed, err))
+	} else if !result.Summary.Passed {
+		errs = append(errs, unit.NewProcessError(pb.ErrorType_CheckFailed, errors.New("check was failed, please see detail")))
 	}
+
+	c.updateInstruction(result)
 
 	select {
 	case <-cctx.Done():
@@ -258,6 +262,23 @@ func (c *Checker) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		IsCanceled: isCanceled,
 		Errors:     errs,
 		Detail:     rawResult,
+	}
+}
+
+// updateInstruction updates the check result's Instruction
+func (c *Checker) updateInstruction(result *check.Results) {
+	for _, r := range result.Results {
+		if r.State == check.StateSuccess {
+			continue
+		}
+
+		// can't judge by other field, maybe update it later
+		switch r.Extra {
+		case check.AutoIncrementKeyChecking:
+			if strings.HasPrefix(r.Instruction, "please handle it by yourself") {
+				r.Instruction += ", read document https://pingcap.com/docs-cn/dev/reference/tools/data-migration/usage-scenarios/best-practice-dm-shard/#自增主键冲突处理 for more detail (only have Chinese document now, will translate to English later)"
+			}
+		}
 	}
 }
 

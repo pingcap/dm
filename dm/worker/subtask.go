@@ -29,7 +29,6 @@ import (
 	"github.com/pingcap/dm/syncer"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
@@ -170,7 +169,7 @@ func (st *SubTask) Run() {
 	err := st.Init()
 	if err != nil {
 		st.l.Error("fail to initial subtask", log.ShortError(err))
-		st.fail(errors.ErrorStack(err))
+		st.fail(err)
 		return
 	}
 
@@ -182,7 +181,7 @@ func (st *SubTask) run() {
 	err := st.unitTransWaitCondition()
 	if err != nil {
 		st.l.Error("wait condition", log.ShortError(err))
-		st.fail(errors.ErrorStack(err))
+		st.fail(err)
 		return
 	}
 
@@ -373,7 +372,7 @@ func (st *SubTask) setResult(result *pb.ProcessResult) {
 func (st *SubTask) Result() *pb.ProcessResult {
 	st.RLock()
 	defer st.RUnlock()
-	return proto.Clone(st.result).(*pb.ProcessResult)
+	return statusProcessResult(st.result)
 }
 
 // Close stops the sub task
@@ -654,14 +653,11 @@ func (st *SubTask) unitTransWaitCondition() error {
 	return nil
 }
 
-func (st *SubTask) fail(message string) {
+func (st *SubTask) fail(err error) {
 	st.setStage(pb.Stage_Paused)
 	st.setResult(&pb.ProcessResult{
 		Errors: []*pb.ProcessError{
-			{
-				Type: pb.ErrorType_UnknownError,
-				Msg:  message,
-			},
+			unit.NewProcessError(pb.ErrorType_UnknownError, err),
 		},
 	})
 }

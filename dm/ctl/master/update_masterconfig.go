@@ -27,8 +27,8 @@ import (
 // NewUpdateMasterConfigCmd creates a UpdateMasterConfig command
 func NewUpdateMasterConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "update-master-config <config_file>",
-		Short: "update configure of dm-master",
+		Use:   "update-master-config <config-file>",
+		Short: "update the config of the DM-master",
 		Run:   updateMasterConfigFunc,
 	}
 	return cmd

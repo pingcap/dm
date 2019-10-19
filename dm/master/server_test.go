@@ -15,6 +15,9 @@ package master
 
 import (
 	"context"
+	"io/ioutil"
+	"net/http"
+
 	"fmt"
 	"io"
 	"sync"
@@ -30,6 +33,8 @@ import (
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/pbmock"
+	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // use task config from integration test `sharding`
@@ -169,7 +174,7 @@ func testGenSubTaskConfig(c *check.C, server *Server, ctrl *gomock.Controller) m
 }
 
 func testMockWorkerConfig(c *check.C, server *Server, ctrl *gomock.Controller, password string, result bool) {
-	// mock QueryWorkerConfig API to be used in s.allWorkerConfigs
+	// mock QueryWorkerConfig API to be used in s.getWorkerConfigs
 	for idx, deploy := range server.cfg.Deploy {
 		dbCfg := &config.DBConfig{
 			Host:     "127.0.0.1",
@@ -1473,4 +1478,50 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 		}
 	}()
 	wg.Wait()
+}
+
+func (t *testMaster) TestServer(c *check.C) {
+	cfg := NewConfig()
+	c.Assert(cfg.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
+
+	s := NewServer(cfg)
+
+	masterAddr := cfg.MasterAddr
+	s.cfg.MasterAddr = ""
+	err := s.Start()
+	c.Assert(terror.ErrMasterHostPortNotValid.Equal(err), check.IsTrue)
+	s.Close()
+	s.cfg.MasterAddr = masterAddr
+
+	go func() {
+		err1 := s.Start()
+		c.Assert(err1, check.IsNil)
+	}()
+
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		return !s.closed.Get()
+	}), check.IsTrue)
+
+	t.testHTTPInterface(c, "status")
+
+	dupServer := NewServer(cfg)
+	err = dupServer.Start()
+	c.Assert(terror.ErrMasterStartService.Equal(err), check.IsTrue)
+	c.Assert(err.Error(), check.Matches, ".*bind: address already in use")
+
+	// close
+	s.Close()
+
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+		return s.closed.Get()
+	}), check.IsTrue)
+}
+
+func (t *testMaster) testHTTPInterface(c *check.C, uri string) {
+	resp, err := http.Get("http://127.0.0.1:8261/" + uri)
+	c.Assert(err, check.IsNil)
+	defer resp.Body.Close()
+	c.Assert(resp.StatusCode, check.Equals, 200)
+	_, err = ioutil.ReadAll(resp.Body)
+	c.Assert(err, check.IsNil)
 }

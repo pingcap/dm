@@ -24,6 +24,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -49,6 +50,13 @@ func (t *testServer) TestServer(c *C) {
 	}()
 
 	s := NewServer(cfg)
+
+	workerAddr := cfg.WorkerAddr
+	s.cfg.WorkerAddr = ""
+	err := s.Start()
+	c.Assert(terror.ErrWorkerHostPortNotValid.Equal(err), IsTrue)
+	s.Close()
+	s.cfg.WorkerAddr = workerAddr
 
 	go func() {
 		err1 := s.Start()
@@ -122,6 +130,11 @@ func (t *testServer) TestServer(c *C) {
 	})
 	c.Assert(err, IsNil)
 	c.Assert(opsp.Log.Success, IsFalse)
+
+	dupServer := NewServer(cfg)
+	err = dupServer.Start()
+	c.Assert(terror.ErrWorkerStartService.Equal(err), IsTrue)
+	c.Assert(err.Error(), Matches, ".*bind: address already in use")
 
 	// close
 	s.Close()

@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"strings"
 	"sync"
 	"time"
 
@@ -108,7 +109,7 @@ func (t *testServer) testWorkerHandleTask(c *C) {
 		w.handleTask()
 	}()
 
-	c.Assert(utils.WaitSomething(5, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
 		w.meta.Lock()
 		defer w.meta.Unlock()
 		return len(w.meta.logs) == 0
@@ -154,18 +155,19 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		defer s.Close()
 		c.Assert(s.Start(), IsNil)
 	}()
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
 		return !s.closed.Get()
 	}), IsTrue)
 
 	// start task
 	cli := t.createClient(c, fmt.Sprintf("127.0.0.1:%d", port))
 	subtaskCfgBytes, err := ioutil.ReadFile("./subtask.toml")
-	_, err = cli.StartSubTask(context.Background(), &pb.StartSubTaskRequest{Task: string(subtaskCfgBytes)})
+	// strings.Replace is used here to uncomment extra-args to avoid mydumper connecting to DB and generating arg --tables-list which will cause failure
+	_, err = cli.StartSubTask(context.Background(), &pb.StartSubTaskRequest{Task: strings.Replace(string(subtaskCfgBytes), "#extra-args", "extra-args", 1)})
 	c.Assert(err, IsNil)
 
 	// check task in paused state
-	c.Assert(utils.WaitSomething(10, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
 		for _, st := range s.worker.QueryStatus(taskName) {
 			if st.Name == taskName && st.Stage == pb.Stage_Paused {
 				return true

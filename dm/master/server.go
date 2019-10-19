@@ -88,6 +88,7 @@ func NewServer(cfg *Config) *Server {
 		idGen:             tracing.NewIDGen(),
 		ap:                NewAgentPool(&RateLimitConfig{rate: cfg.RPCRateLimit, burst: cfg.RPCRateBurst}),
 	}
+	server.closed.Set(true)
 
 	return &server
 }
@@ -95,6 +96,12 @@ func NewServer(cfg *Config) *Server {
 // Start starts to serving
 func (s *Server) Start() error {
 	var err error
+
+	_, _, err = s.splitHostPort()
+	if err != nil {
+		return err
+	}
+
 	s.rootLis, err = net.Listen("tcp", s.cfg.MasterAddr)
 	if err != nil {
 		return terror.ErrMasterStartService.Delegate(err)
@@ -188,16 +195,18 @@ func (s *Server) Start() error {
 	return err
 }
 
-// Close close the RPC server
+// Close close the RPC server, this function can be called multiple times
 func (s *Server) Close() {
 	s.Lock()
 	defer s.Unlock()
 	if s.closed.Get() {
 		return
 	}
-	err := s.rootLis.Close()
-	if err != nil && !common.IsErrNetClosing(err) {
-		log.L().Error("close net listener", zap.Error(err))
+	if s.rootLis != nil {
+		err := s.rootLis.Close()
+		if err != nil && !common.IsErrNetClosing(err) {
+			log.L().Error("close net listener", zap.Error(err))
+		}
 	}
 	if s.svr != nil {
 		s.svr.GracefulStop()
@@ -1686,7 +1695,7 @@ func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWork
 }
 
 // TODO: refine the call stack of this API, query worker configs that we needed only
-func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConfig, error) {
+func (s *Server) getWorkerConfigs(ctx context.Context, workerIDs []string) (map[string]config.DBConfig, error) {
 	var (
 		wg          sync.WaitGroup
 		workerMutex sync.Mutex
@@ -1724,7 +1733,11 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 		Type:              workerrpc.CmdQueryWorkerConfig,
 		QueryWorkerConfig: &pb.QueryWorkerConfigRequest{},
 	}
-	for worker, client := range s.workerClients {
+	for _, worker := range workerIDs {
+		client, ok := s.workerClients[worker]
+		if !ok {
+			continue // outer caller can handle the lack of the config
+		}
 		wg.Add(1)
 		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
@@ -1834,7 +1847,17 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
 
-	sourceCfgs, err := s.allWorkerConfigs(ctx)
+	// get workerID from deploy map by sourceID, refactor this when dynamic add/remove worker supported.
+	workerIDs := make([]string, 0, len(cfg.MySQLInstances))
+	for _, inst := range cfg.MySQLInstances {
+		workerID, ok := s.cfg.DeployMap[inst.SourceID]
+		if !ok {
+			return nil, nil, terror.ErrMasterTaskConfigExtractor.Generatef("%s relevant worker not found", inst.SourceID)
+		}
+		workerIDs = append(workerIDs, workerID)
+	}
+
+	sourceCfgs, err := s.getWorkerConfigs(ctx, workerIDs)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1974,9 +1997,9 @@ func (s *Server) workerArgsExtractor(args ...interface{}) (workerrpc.Client, str
 // HandleHTTPApis handles http apis and translate to grpc request
 func (s *Server) HandleHTTPApis(ctx context.Context, mux *http.ServeMux) error {
 	// MasterAddr's format may be "host:port" or "":port"
-	_, port, err := net.SplitHostPort(s.cfg.MasterAddr)
+	_, port, err := s.splitHostPort()
 	if err != nil {
-		return terror.ErrMasterHandleHTTPApis.Delegate(err)
+		return err
 	}
 
 	opts := []grpc.DialOption{grpc.WithInsecure()}
@@ -1993,4 +2016,13 @@ func (s *Server) HandleHTTPApis(ctx context.Context, mux *http.ServeMux) error {
 	mux.Handle("/apis/", gwmux)
 
 	return nil
+}
+
+func (s *Server) splitHostPort() (host, port string, err error) {
+	// MasterAddr's format may be "host:port" or ":port"
+	host, port, err = net.SplitHostPort(s.cfg.MasterAddr)
+	if err != nil {
+		err = terror.ErrMasterHostPortNotValid.Delegate(err, s.cfg.MasterAddr)
+	}
+	return
 }
