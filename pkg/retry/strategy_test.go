@@ -14,13 +14,13 @@
 package retry
 
 import (
+	"database/sql/driver"
 	"testing"
 	"time"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/terror"
 
-	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 )
 
@@ -72,11 +72,18 @@ func (t *testStrategySuite) TestFiniteRetryStrategy(c *C) {
 		return IsRetryableError(err)
 	}
 	operateFn = func(*tcontext.Context) (interface{}, error) {
-		mysqlErr := mysql.ErrInvalidConn
+		mysqlErr := driver.ErrBadConn
 		return nil, terror.ErrDBInvalidConn.Delegate(mysqlErr, "test invalid connection")
 	}
 	_, opCount, err = strategy.Apply(ctx, params, operateFn)
 	c.Assert(opCount, Equals, 0)
+	c.Assert(terror.ErrDBInvalidConn.Equal(err), IsTrue)
+
+	params.IsRetryableFn = func(int, error) bool {
+		return IsConnectionError(err)
+	}
+	_, opCount, err = strategy.Apply(ctx, params, operateFn)
+	c.Assert(opCount, Equals, 3)
 	c.Assert(terror.ErrDBInvalidConn.Equal(err), IsTrue)
 
 	retValue := "success"

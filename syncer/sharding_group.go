@@ -75,14 +75,15 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/siddontang/go-mysql/mysql"
-	"go.uber.org/zap"
-
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/terror"
 	shardmeta "github.com/pingcap/dm/syncer/sharding-meta"
+
+	"github.com/siddontang/go-mysql/mysql"
+	"go.uber.org/zap"
 )
 
 // ShardingGroup represents a sharding DDL sync group
@@ -401,7 +402,9 @@ type ShardingGroupKeeper struct {
 
 	shardMetaSchema string
 	shardMetaTable  string
-	db              *Conn
+
+	db     *conn.BaseDB
+	dbConn *DBConn
 
 	tctx *tcontext.Context
 }
@@ -451,19 +454,17 @@ func (k *ShardingGroupKeeper) AddGroup(targetSchema, targetTable string, sourceI
 }
 
 // Init does initialization staff
-func (k *ShardingGroupKeeper) Init(conn *Conn) error {
+func (k *ShardingGroupKeeper) Init() error {
 	k.clear()
-	if conn != nil {
-		k.db = conn
-	} else {
-		db, err := createConn(k.cfg, k.cfg.To, maxDDLConnectionTimeout)
-		if err != nil {
-			return err
-		}
-		k.db = db
+	sgkDB := k.cfg.To
+	sgkDB.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxCheckPointTimeout)
+	db, dbConns, err := createConns(k.tctx, k.cfg, sgkDB, 1)
+	if err != nil {
+		return err
 	}
-	err := k.prepare()
-	return err
+	k.db = db
+	k.dbConn = dbConns[0]
+	return k.prepare()
 }
 
 // clear clears all sharding groups
@@ -697,12 +698,12 @@ func (k *ShardingGroupKeeper) prepare() error {
 
 // Close closes sharding group keeper
 func (k *ShardingGroupKeeper) Close() {
-	closeConns(k.tctx, k.db)
+	closeBaseDB(k.tctx, k.db)
 }
 
 func (k *ShardingGroupKeeper) createSchema() error {
 	stmt := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", k.shardMetaSchema)
-	_, err := k.db.executeSQL(k.tctx, []string{stmt})
+	_, err := k.dbConn.executeSQL(k.tctx, []string{stmt})
 	k.tctx.L().Info("execute sql", zap.String("statement", stmt))
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
@@ -720,7 +721,7 @@ func (k *ShardingGroupKeeper) createTable() error {
 		update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		UNIQUE KEY uk_source_id_table_id_source (source_id, target_table_id, source_table_id)
 	)`, tableName)
-	_, err := k.db.executeSQL(k.tctx, []string{stmt})
+	_, err := k.dbConn.executeSQL(k.tctx, []string{stmt})
 	k.tctx.L().Info("execute sql", zap.String("statement", stmt))
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
@@ -728,7 +729,7 @@ func (k *ShardingGroupKeeper) createTable() error {
 // LoadShardMeta implements CheckPoint.LoadShardMeta
 func (k *ShardingGroupKeeper) LoadShardMeta() (map[string]*shardmeta.ShardingMeta, error) {
 	query := fmt.Sprintf("SELECT `target_table_id`, `source_table_id`, `active_index`, `is_global`, `data` FROM `%s`.`%s` WHERE `source_id`='%s'", k.shardMetaSchema, k.shardMetaTable, k.cfg.SourceID)
-	rows, err := k.db.querySQL(k.tctx, query)
+	rows, err := k.dbConn.querySQL(k.tctx, query)
 	if err != nil {
 		return nil, terror.WithScope(err, terror.ScopeDownstream)
 	}
