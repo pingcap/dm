@@ -14,10 +14,37 @@
 package retry
 
 import (
+	"database/sql/driver"
+	"strings"
+
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
 	gmysql "github.com/siddontang/go-mysql/mysql"
+)
+
+var (
+	// UnsupportedDDLMsgs list the error messages of some unsupported DDL in TiDB
+	UnsupportedDDLMsgs = []string{
+		"can't drop column with index",
+		"unsupported add column",
+		"unsupported modify column",
+		"unsupported modify charset",
+		"unsupported modify collate",
+		"unsupported drop integer primary key",
+	}
+
+	// UnsupportedDMLMsgs list the error messages of some un-recoverable DML, which is used in task auto recovery
+	UnsupportedDMLMsgs = []string{
+		"Error 1062: Duplicate entry",
+		"Error 1406: Data too long for column",
+	}
+
+	// ParseRelayLogErrMsgs list the error messages of some un-recoverable relay log parsing error, which is used in task auto recovery.
+	ParseRelayLogErrMsgs = []string{
+		"binlog checksum mismatch, data may be corrupted",
+		"get event err EOF",
+	}
 )
 
 // IsRetryableError tells whether this error should retry
@@ -34,4 +61,29 @@ func IsRetryableError(err error) bool {
 		}
 	}
 	return false
+}
+
+// IsConnectionError tells whether this error should reconnect to Database
+func IsConnectionError(err error) bool {
+	err = errors.Cause(err)
+	switch err {
+	case driver.ErrBadConn:
+		return true
+	}
+	return false
+}
+
+// IsRetryableErrorFastFailFilter tells whether this error should retry,
+// filtering some incompatible DDL error to achieve fast fail.
+func IsRetryableErrorFastFailFilter(err error) bool {
+	err2 := errors.Cause(err) // check the original error
+	if mysqlErr, ok := err2.(*mysql.MySQLError); ok && mysqlErr.Number == tmysql.ErrUnknown {
+		for _, msg := range UnsupportedDDLMsgs {
+			if strings.Contains(mysqlErr.Message, msg) {
+				return false
+			}
+		}
+	}
+
+	return IsRetryableError(err)
 }

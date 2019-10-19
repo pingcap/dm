@@ -113,9 +113,13 @@ func (t *testCheckPointSuite) TestForDB(c *C) {
 	c.Assert(count, Equals, len(cases))
 
 	// update checkpoints
-	conn, err := createConn(t.cfg)
+	db, conns, err := createConns(tctx, t.cfg, 1)
 	c.Assert(err, IsNil)
-	defer closeConn(conn)
+	conn := conns[0]
+	defer func() {
+		err = db.Close()
+		c.Assert(err, IsNil)
+	}()
 	for _, cs := range cases {
 		sql2 := cp.GenSQL(cs.filename, cs.endPos)
 		err = conn.executeSQL(tctx, []string{sql2})

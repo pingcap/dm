@@ -193,7 +193,7 @@ func (r *Relay) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		relayExitWithErrorCounter.Inc()
 		r.tctx.L().Error("process exit", zap.Error(err))
 		// TODO: add specified error type instead of pb.ErrorType_UnknownError
-		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err)))
+		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, err))
 	}
 
 	isCanceled := false
@@ -498,14 +498,26 @@ func (r *Relay) reSetupMeta() error {
 		return err
 	}
 
-	// try adjust meta with start pos from config
-	if (r.cfg.EnableGTID && len(r.cfg.BinlogGTID) > 0) || len(r.cfg.BinLogName) > 0 {
-		adjusted, err := r.meta.AdjustWithStartPos(r.cfg.BinLogName, r.cfg.BinlogGTID, r.cfg.EnableGTID)
+	var latestPosName, latestGTIDStr string
+	if (r.cfg.EnableGTID && len(r.cfg.BinlogGTID) == 0) || (!r.cfg.EnableGTID && len(r.cfg.BinLogName) == 0) {
+		latestPos, latestGTID, err := utils.GetMasterStatus(r.db, r.cfg.Flavor)
 		if err != nil {
 			return err
-		} else if adjusted {
-			r.tctx.L().Info("adjusted meta to start pos", zap.String("start pos's binlog name", r.cfg.BinLogName), zap.String("start pos's binlog gtid", r.cfg.BinlogGTID))
 		}
+		latestPosName = latestPos.Name
+		latestGTIDStr = latestGTID.String()
+	}
+
+	// try adjust meta with start pos from config
+	adjusted, err := r.meta.AdjustWithStartPos(r.cfg.BinLogName, r.cfg.BinlogGTID, r.cfg.EnableGTID, latestPosName, latestGTIDStr)
+	if err != nil {
+		return err
+	}
+
+	if adjusted {
+		_, pos := r.meta.Pos()
+		_, gtid := r.meta.GTID()
+		r.tctx.L().Info("adjusted meta to start pos", zap.Reflect("start pos", pos), zap.Stringer("start pos's binlog gtid", gtid))
 	}
 
 	r.updateMetricsRelaySubDirIndex()

@@ -22,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
@@ -40,6 +39,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/gtid"
@@ -146,9 +146,12 @@ type Syncer struct {
 	cacheColumns map[string][]string // table columns cache: `target-schema`.`target-table` -> column names list
 	genColsCache *GenColCache
 
-	fromDB *Conn
-	toDBs  []*Conn
-	ddlDB  *Conn
+	fromDB *UpStreamConn
+
+	toDB      *conn.BaseDB
+	toDBConns []*DBConn
+	ddlDB     *conn.BaseDB
+	ddlDBConn *DBConn
 
 	jobs               []chan *job
 	jobsClosed         sync2.AtomicBool
@@ -339,14 +342,19 @@ func (s *Syncer) Init() (err error) {
 	}
 
 	if s.cfg.IsSharding {
-		err = s.initShardingGroups(nil)
+		err = s.sgk.Init()
+		if err != nil {
+			return err
+		}
+
+		err = s.initShardingGroups()
 		if err != nil {
 			return err
 		}
 		rollbackHolder.Add(fr.FuncRollback{Name: "close-sharding-group-keeper", Fn: s.sgk.Close})
 	}
 
-	err = s.checkpoint.Init(nil)
+	err = s.checkpoint.Init()
 	if err != nil {
 		return err
 	}
@@ -401,15 +409,9 @@ func (s *Syncer) Init() (err error) {
 
 // initShardingGroups initializes sharding groups according to source MySQL, filter rules and router rules
 // NOTE: now we don't support modify router rules after task has started
-func (s *Syncer) initShardingGroups(conn *Conn) error {
+func (s *Syncer) initShardingGroups() error {
 	// fetch tables from source and filter them
 	sourceTables, err := s.fromDB.fetchAllDoTables(s.bwList)
-	if err != nil {
-		return err
-	}
-
-	// clear old sharding group and initials some needed data
-	err = s.sgk.Init(conn)
 	if err != nil {
 		return err
 	}
@@ -506,19 +508,28 @@ func (s *Syncer) reset() {
 func (s *Syncer) resetDBs() error {
 	var err error
 
-	// toDBs share the same `*sql.DB` in underlying `*baseconn.BaseConn`, currently the `BaseConn.ResetConn`
-	// can only reset the `*sql.DB` and point to the new `*sql.DB`, it is hard to reset all the `*sql.DB` by
-	// calling `BaseConn.ResetConn` once. On the other side if we simply change the underlying value of a
-	// `*sql.DB` by `*conn.DB = *db`, there exists some data race and invalid memory address in db driver.
-	// So we use the close and recreate way here.
-	closeConns(s.tctx, s.toDBs...)
-	s.toDBs, err = createConns(s.cfg, s.cfg.To, s.cfg.WorkerCount, maxDMLConnectionTimeout)
-	if err != nil {
-		return terror.WithScope(err, terror.ScopeDownstream)
+	for i := 0; i < len(s.toDBConns); i++ {
+		err = s.toDBConns[i].resetConn(s.tctx)
+		if err != nil {
+			return terror.WithScope(err, terror.ScopeDownstream)
+		}
 	}
-	s.tctx.L().Info("createDBs", zap.String("toDBs baseConn", fmt.Sprintf("%p", s.toDBs[0].baseConn.DB)))
 
-	err = s.ddlDB.ResetConn(s.tctx)
+	if s.onlineDDL != nil {
+		err = s.onlineDDL.ResetConn()
+		if err != nil {
+			return terror.WithScope(err, terror.ScopeDownstream)
+		}
+	}
+
+	if s.sgk != nil {
+		err = s.sgk.dbConn.resetConn(s.tctx)
+		if err != nil {
+			return terror.WithScope(err, terror.ScopeDownstream)
+		}
+	}
+
+	err = s.ddlDBConn.resetConn(s.tctx)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -588,7 +599,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	if err != nil {
 		syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name).Inc()
-		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err)))
+		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, err))
 	}
 
 	isCanceled := false
@@ -636,7 +647,7 @@ func (s *Syncer) clearAllTables() {
 	s.genColsCache.reset()
 }
 
-func (s *Syncer) getTableFromDB(db *Conn, schema string, name string) (*table, error) {
+func (s *Syncer) getTableFromDB(db *DBConn, schema string, name string) (*table, error) {
 	table := &table{}
 	table.schema = schema
 	table.name = name
@@ -667,8 +678,7 @@ func (s *Syncer) getTable(schema string, table string) (*table, []string, error)
 		return value, s.cacheColumns[key], nil
 	}
 
-	db := s.toDBs[len(s.toDBs)-1]
-	t, err := s.getTableFromDB(db, schema, table)
+	t, err := s.getTableFromDB(s.ddlDBConn, schema, table)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -856,7 +866,7 @@ func (s *Syncer) flushCheckPoints() error {
 }
 
 // DDL synced one by one, so we only need to process one DDL at a time
-func (s *Syncer) syncDDL(ctx *tcontext.Context, queueBucket string, db *Conn, ddlJobChan chan *job) {
+func (s *Syncer) syncDDL(ctx *tcontext.Context, queueBucket string, db *DBConn, ddlJobChan chan *job) {
 	defer s.wg.Done()
 
 	var err error
@@ -904,14 +914,14 @@ func (s *Syncer) syncDDL(ctx *tcontext.Context, queueBucket string, db *Conn, dd
 		s.jobWg.Done()
 		if err != nil {
 			s.execErrorDetected.Set(true)
-			s.runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, errors.ErrorStack(err))
+			s.runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, err)
 			continue
 		}
 		s.addCount(true, queueBucket, sqlJob.tp, int64(len(sqlJob.ddls)))
 	}
 }
 
-func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *Conn, jobChan chan *job) {
+func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *DBConn, jobChan chan *job) {
 	defer s.wg.Done()
 
 	idx := 0
@@ -934,7 +944,7 @@ func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *Conn, jobCh
 
 	fatalF := func(err error, errType pb.ErrorType) {
 		s.execErrorDetected.Set(true)
-		s.runFatalChan <- unit.NewProcessError(errType, errors.ErrorStack(err))
+		s.runFatalChan <- unit.NewProcessError(errType, err)
 		clearF()
 	}
 
@@ -1059,7 +1069,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		go func(i int, n string) {
 			ctx2, cancel := context.WithCancel(ctx)
 			ctctx := s.tctx.WithContext(ctx2)
-			s.sync(ctctx, n, s.toDBs[i], s.jobs[i])
+			s.sync(ctctx, n, s.toDBConns[i], s.jobs[i])
 			cancel()
 		}(i, name)
 	}
@@ -1069,7 +1079,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	go func() {
 		ctx2, cancel := context.WithCancel(ctx)
 		ctctx := s.tctx.WithContext(ctx2)
-		s.syncDDL(ctctx, adminQueueName, s.ddlDB, s.jobs[s.cfg.WorkerCount])
+		s.syncDDL(ctctx, adminQueueName, s.ddlDBConn, s.jobs[s.cfg.WorkerCount])
 		cancel()
 	}()
 
@@ -2025,33 +2035,44 @@ func (s *Syncer) printStatus(ctx context.Context) {
 
 func (s *Syncer) createDBs() error {
 	var err error
-	s.fromDB, err = createConn(s.cfg, s.cfg.From, maxDMLConnectionTimeout)
+	dbCfg := s.cfg.From
+	dbCfg.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxDMLConnectionTimeout)
+	s.fromDB, err = createUpStreamConn(dbCfg)
 	if err != nil {
-		return terror.WithScope(err, terror.ScopeUpstream)
+		return err
 	}
 
-	s.toDBs = make([]*Conn, 0, s.cfg.WorkerCount)
-	s.toDBs, err = createConns(s.cfg, s.cfg.To, s.cfg.WorkerCount, maxDMLConnectionTimeout)
+	dbCfg = s.cfg.To
+	dbCfg.RawDBCfg = config.DefaultRawDBConfig().
+		SetReadTimeout(maxDMLConnectionTimeout).
+		SetMaxIdleConns(s.cfg.WorkerCount)
+
+	s.toDB, s.toDBConns, err = createConns(s.tctx, s.cfg, dbCfg, s.cfg.WorkerCount)
 	if err != nil {
-		closeConns(s.tctx, s.fromDB) // release resources acquired before return with error
-		return terror.WithScope(err, terror.ScopeDownstream)
+		closeUpstreamConn(s.tctx, s.fromDB) // release resources acquired before return with error
+		return err
 	}
 	// baseConn for ddl
-	s.ddlDB, err = createConn(s.cfg, s.cfg.To, maxDDLConnectionTimeout)
+	dbCfg = s.cfg.To
+	dbCfg.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxDDLConnectionTimeout)
+
+	var ddlDBConns []*DBConn
+	s.ddlDB, ddlDBConns, err = createConns(s.tctx, s.cfg, dbCfg, 1)
 	if err != nil {
-		closeConns(s.tctx, s.fromDB)
-		closeConns(s.tctx, s.toDBs...)
-		return terror.WithScope(err, terror.ScopeDownstream)
+		closeUpstreamConn(s.tctx, s.fromDB)
+		closeBaseDB(s.tctx, s.toDB)
+		return err
 	}
+	s.ddlDBConn = ddlDBConns[0]
 
 	return nil
 }
 
-// closeConns closes all opened DBs, rollback for createConns
+// closeBaseDB closes all opened DBs, rollback for createConns
 func (s *Syncer) closeDBs() {
-	closeConns(s.tctx, s.fromDB)
-	closeConns(s.tctx, s.toDBs...)
-	closeConns(s.tctx, s.ddlDB)
+	closeUpstreamConn(s.tctx, s.fromDB)
+	closeBaseDB(s.tctx, s.toDB)
+	closeBaseDB(s.tctx, s.ddlDB)
 }
 
 // record skip ddl/dml sqls' position
@@ -2246,7 +2267,7 @@ func (s *Syncer) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 		pr <- pb.ProcessResult{
 			IsCanceled: false,
 			Errors: []*pb.ProcessError{
-				unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err)),
+				unit.NewProcessError(pb.ErrorType_UnknownError, err),
 			},
 		}
 		return
@@ -2318,7 +2339,12 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 
 	if s.cfg.IsSharding {
 		// re-init sharding group
-		err = s.initShardingGroups(nil)
+		err = s.sgk.Init()
+		if err != nil {
+			return err
+		}
+
+		err = s.initShardingGroups()
 		if err != nil {
 			return err
 		}
@@ -2397,12 +2423,13 @@ func (s *Syncer) ExecuteDDL(ctx context.Context, execReq *pb.ExecDDLRequest) (<-
 func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 	s.Lock()
 	defer s.Unlock()
-	s.fromDB.baseConn.Close()
+	s.fromDB.BaseDB.Close()
 
 	s.cfg.From = cfg.From
 
 	var err error
-	s.fromDB, err = createConn(s.cfg, s.cfg.From, maxDMLConnectionTimeout)
+	s.cfg.From.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxDMLConnectionTimeout)
+	s.fromDB, err = createUpStreamConn(s.cfg.From)
 	if err != nil {
 		s.tctx.L().Error("fail to create baseConn connection", log.ShortError(err))
 		return err
