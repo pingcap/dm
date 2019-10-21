@@ -43,7 +43,7 @@ When we encounter these abnormal scenario, we often pause part of the tasks or d
 
 ### Congestion definition
 
-There exists some key concepts in a data import/replication link:
+There exists some key concepts in a data import/replication:
 
 - Data loss: Each database transaction execution failure is treated as one data loss, the failure includes every kind of database execution failure that no data is written to downstream, partial data written error does not include.
 - Bandwidth: Bandwidth describes the maximum data import/replication rate from a DM-worker to downstream, this can be measured by TPS from DM-worker (or TPS in downstream, but should only include the data traffic from this DM-worker).
