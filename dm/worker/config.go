@@ -16,11 +16,13 @@ package worker
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -43,6 +45,8 @@ const (
 	flavorReadTimeout = "30s"
 	// flavorGetTimeout is timeout for getting version info from DB
 	flavorGetTimeout = 30 * time.Second
+
+	maxServerID = 4294967295
 )
 
 // SampleConfigFile is sample config file of dm-worker
@@ -199,9 +203,7 @@ func (c *Config) Parse(arguments []string) error {
 	// assign tracer id to source id
 	c.Tracer.Source = c.SourceID
 
-	c.From.Adjust()
-	c.Checker.adjust()
-	err = c.adjustFlavor()
+	err = c.adjust()
 	if err != nil {
 		return err
 	}
@@ -256,8 +258,50 @@ func (c *Config) configFromFile(path string) error {
 	return c.verify()
 }
 
+func (c *Config) adjust() error {
+	c.From.Adjust()
+	c.Checker.adjust()
+
+	fromDB, err := c.createBaseDB()
+	if err != nil {
+		return err
+	}
+	defer fromDB.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), flavorGetTimeout)
+	defer cancel()
+
+	err = c.adjustFlavor(ctx, fromDB.DB)
+	if err != nil {
+		return err
+	}
+
+	err = c.adjustServerID(ctx, fromDB.DB)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Config) createBaseDB() (*conn.BaseDB, error) {
+	// decrypt password
+	clone, err := c.DecryptPassword()
+	if err != nil {
+		return nil, err
+	}
+	from := clone.From
+	from.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(flavorReadTimeout)
+	fromDB, err := applyNewBaseDB(from)
+	if err != nil {
+		return nil, terror.WithScope(err, terror.ScopeUpstream)
+	}
+
+	return fromDB, nil
+}
+
 // adjustFlavor adjusts flavor through querying from given database
-func (c *Config) adjustFlavor() error {
+func (c *Config) adjustFlavor(ctx context.Context, db *sql.DB) (err error) {
 	if c.Flavor != "" {
 		switch c.Flavor {
 		case mysql.MariaDBFlavor, mysql.MySQLFlavor:
@@ -266,26 +310,43 @@ func (c *Config) adjustFlavor() error {
 			return terror.ErrNotSupportedFlavor.Generate(c.Flavor)
 		}
 	}
-	// decrypt password
-	clone, err := c.DecryptPassword()
-	if err != nil {
-		return err
-	}
-	from := clone.From
-	from.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(flavorReadTimeout)
-	fromDB, err := applyNewBaseDB(from)
-	if err != nil {
-		return terror.WithScope(err, terror.ScopeUpstream)
-	}
-	defer fromDB.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), flavorGetTimeout)
-	defer cancel()
-	c.Flavor, err = utils.GetFlavor(ctx, fromDB.DB)
+	c.Flavor, err = utils.GetFlavor(ctx, db)
 	if ctx.Err() != nil {
 		err = terror.Annotatef(err, "time cost to get flavor info exceeds %s", flavorGetTimeout)
 	}
 	return terror.WithScope(err, terror.ScopeUpstream)
+}
+
+func (c *Config) adjustServerID(ctx context.Context, db *sql.DB) error {
+	if c.ServerID != 0 {
+		if c.ServerID < 0 || c.ServerID > maxServerID {
+			return terror.ErrInvalidServerID.Generate(c.ServerID)
+		}
+
+		return nil
+	}
+
+	serverIDs, err := utils.GetSlaveServerID(ctx, db)
+	if ctx.Err() != nil {
+		err = terror.Annotatef(err, "time cost to get flavor info exceeds %s", flavorGetTimeout)
+	}
+	if err != nil {
+		return terror.WithScope(err, terror.ScopeUpstream)
+	}
+
+	for i := 0; i < 5; i++ {
+		randomValue := rand.Intn(100000)
+		randomServerID := maxServerID/10 + randomValue
+		if _, ok := serverIDs[int64(randomServerID)]; ok {
+			continue
+		}
+
+		c.ServerID = randomServerID
+		return nil
+	}
+
+	return terror.ErrInvalidServerID.Generatef("can't find a random available server ID")
 }
 
 // UpdateConfigFile write configure to local file

@@ -52,6 +52,73 @@ func GetFlavor(ctx context.Context, db *sql.DB) (string, error) {
 	return gmysql.MySQLFlavor, nil
 }
 
+// GetSlaveServerID gets all slave hosts
+func GetSlaveServerID(ctx context.Context, db *sql.DB) (map[int64]interface{}, error) {
+	rows, err := db.QueryContext(ctx, `SHOW SLAVE HOSTS`)
+	if err != nil {
+		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+	}
+	defer rows.Close()
+
+	rowColumns, err := rows.Columns()
+	if err != nil {
+		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+	}
+
+	/*
+		in MySQL:
+		mysql> SHOW SLAVE HOSTS;
+		+------------+-----------+------+-----------+--------------------------------------+
+		| Server_id  | Host      | Port | Master_id | Slave_UUID                           |
+		+------------+-----------+------+-----------+--------------------------------------+
+		|  192168010 | iconnect2 | 3306 | 192168011 | 14cb6624-7f93-11e0-b2c0-c80aa9429562 |
+		| 1921680101 | athena    | 3306 | 192168011 | 07af4990-f41f-11df-a566-7ac56fdaf645 |
+		+------------+-----------+------+-----------+--------------------------------------+
+
+		in MariaDB:
+		mysql> SHOW SLAVE HOSTS;
+		+------------+-----------+------+-----------+
+		| Server_id  | Host      | Port | Master_id |
+		+------------+-----------+------+-----------+
+		|  192168010 | iconnect2 | 3306 | 192168011 |
+		| 1921680101 | athena    | 3306 | 192168011 |
+		+------------+-----------+------+-----------+
+	*/
+
+	var (
+		serverID  sql.NullInt64
+		host      sql.NullString
+		port      sql.NullInt64
+		masterID  sql.NullInt64
+		slaveUUID sql.NullString
+	)
+	serverIDs := make(map[int64]interface{})
+	for rows.Next() {
+		if len(rowColumns) == 5 {
+			err = rows.Scan(&serverID, &host, &port, &masterID, &slaveUUID)
+		} else {
+			err = rows.Scan(&serverID, &host, &port, &masterID)
+		}
+		if err != nil {
+			return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+		}
+
+		if serverID.Valid {
+			serverIDs[serverID.Int64] = struct{}{}
+		} else {
+			// should never happened
+			log.L().Warn("get invalid server_id when execute `SHOW SLAVE HOSTS;`")
+			continue
+		}
+	}
+
+	if rows.Err() != nil {
+		return nil, terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
+	}
+
+	return serverIDs, nil
+}
+
 // GetMasterStatus gets status from master
 func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, error) {
 	var (
@@ -61,7 +128,7 @@ func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, erro
 
 	rows, err := db.Query(`SHOW MASTER STATUS`)
 	if err != nil {
-		return binlogPos, gs, err
+		return binlogPos, gs, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 	defer rows.Close()
 
