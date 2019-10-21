@@ -250,10 +250,14 @@ func (c *Config) configFromFile(path string) error {
 // adjustFlavor adjusts flavor through querying from given database
 func (c *Config) adjustFlavor() error {
 	if c.Flavor != "" {
-		if c.Flavor != mysql.MariaDBFlavor && c.Flavor != mysql.MySQLFlavor {
+		switch c.Flavor {
+		case mysql.MariaDBFlavor:
+			return nil
+		case mysql.MySQLFlavor:
+			return nil
+		default:
 			return terror.ErrNotSupportedFlavor.Generate(c.Flavor)
 		}
-		return nil
 	}
 	// decrypt password
 	clone, err := c.DecryptPassword()

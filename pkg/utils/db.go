@@ -14,6 +14,7 @@
 package utils
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strconv"
@@ -28,6 +29,8 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	tmysql "github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb-tools/pkg/check"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 )
@@ -39,21 +42,14 @@ var (
 
 // GetFlavor gets flavor from DB
 func GetFlavor(db *sql.DB) (string, error) {
-	query := "SELECT @@version_comment"
-	row := db.QueryRow(query)
-	var versionComment string
-	err := row.Scan(&versionComment)
+	value, err := dbutil.ShowVersion(context.Background(), db)
 	if err != nil {
 		return "", terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
-	lowercaseVersionComment := strings.ToLower(versionComment)
-	switch {
-	case strings.Contains(lowercaseVersionComment, gmysql.MariaDBFlavor):
+	if check.IsMariaDB(value) {
 		return gmysql.MariaDBFlavor, nil
-	case strings.Contains(lowercaseVersionComment, gmysql.MySQLFlavor):
+	} else {
 		return gmysql.MySQLFlavor, nil
-	default:
-		return "", terror.ErrNotSupportedFlavor.Generate(versionComment)
 	}
 }
 

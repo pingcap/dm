@@ -168,9 +168,9 @@ func subtestFlavor(c *C, cfg *Config, sqlInfo, expectedFlavor, expectedError str
 	cfg.Flavor = ""
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
-	mock.ExpectQuery("SELECT @@version_comment").
-		WillReturnRows(sqlmock.NewRows([]string{"@@version_comment"}).
-			AddRow(sqlInfo))
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version';").
+		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+			AddRow("version", sqlInfo))
 	mock.ExpectClose()
 	applyNewBaseDB = func(config config.DBConfig) (*conn.BaseDB, error) {
 		return &conn.BaseDB{DB: db}, nil
@@ -203,5 +203,4 @@ func (t *testServer) TestAdjustFlavor(c *C) {
 
 	subtestFlavor(c, cfg, "mariadb.org binary distribution", mysql.MariaDBFlavor, "")
 	subtestFlavor(c, cfg, "MySQL Community Server - GPL", mysql.MySQLFlavor, "")
-	subtestFlavor(c, cfg, "MongoDB", "", ".*flavor MongoDB not supported")
 }
