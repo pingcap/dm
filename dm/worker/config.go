@@ -279,10 +279,11 @@ func (c *Config) adjustFlavor() error {
 	}
 	defer fromDB.Close()
 
-	ctx, _ := context.WithTimeout(context.Background(), flavorGetTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), flavorGetTimeout)
+	defer cancel()
 	c.Flavor, err = utils.GetFlavor(ctx, fromDB.DB)
 	if ctx.Err() != nil {
-		err = terror.Annotate(err, "time cost to get flavor info exceeds flavorGetTimeout")
+		err = terror.Annotate(err, "time cost to get flavor info exceeds "+flavorGetTimeout.String())
 	}
 	return terror.WithScope(err, terror.ScopeUpstream)
 }
