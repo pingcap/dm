@@ -54,7 +54,10 @@ const (
 // and assign it to SampleConfigFile while we build dm-worker
 var SampleConfigFile string
 
-var applyNewBaseDB = conn.DefaultDBProvider.Apply
+var (
+	applyNewBaseDB       = conn.DefaultDBProvider.Apply
+	getSlaveServerIDFunc = utils.GetSlaveServerID
+)
 
 // NewConfig creates a new base config for worker.
 func NewConfig() *Config {
@@ -327,7 +330,7 @@ func (c *Config) adjustServerID(ctx context.Context, db *sql.DB) error {
 		return nil
 	}
 
-	serverIDs, err := utils.GetSlaveServerID(ctx, db)
+	serverIDs, err := getSlaveServerIDFunc(ctx, db)
 	if ctx.Err() != nil {
 		err = terror.Annotatef(err, "time cost to get flavor info exceeds %s", flavorGetTimeout)
 	}

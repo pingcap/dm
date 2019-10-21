@@ -14,6 +14,8 @@
 package worker
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"io/ioutil"
 	"path"
@@ -24,7 +26,6 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/conn"
 )
 
 func (t *testServer) TestConfig(c *C) {
@@ -172,10 +173,8 @@ func subtestFlavor(c *C, cfg *Config, sqlInfo, expectedFlavor, expectedError str
 		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
 			AddRow("version", sqlInfo))
 	mock.ExpectClose()
-	applyNewBaseDB = func(config config.DBConfig) (*conn.BaseDB, error) {
-		return &conn.BaseDB{DB: db}, nil
-	}
-	err = cfg.adjustFlavor()
+
+	err = cfg.adjustFlavor(context.Background(), db)
 	if expectedError == "" {
 		c.Assert(err, IsNil)
 		c.Assert(cfg.Flavor, Equals, expectedFlavor)
@@ -189,18 +188,38 @@ func (t *testServer) TestAdjustFlavor(c *C) {
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml", "-relay-dir=./xx"}), IsNil)
 
 	cfg.Flavor = "mariadb"
-	err := cfg.adjustFlavor()
+	err := cfg.adjustFlavor(context.Background(), nil)
 	c.Assert(err, IsNil)
 	c.Assert(cfg.Flavor, Equals, mysql.MariaDBFlavor)
 	cfg.Flavor = "MongoDB"
-	err = cfg.adjustFlavor()
+	err = cfg.adjustFlavor(context.Background(), nil)
 	c.Assert(err, ErrorMatches, ".*flavor MongoDB not supported")
-
-	var origApplyNewBaseDB = applyNewBaseDB
-	defer func() {
-		applyNewBaseDB = origApplyNewBaseDB
-	}()
 
 	subtestFlavor(c, cfg, "10.4.8-MariaDB-1:10.4.8+maria~bionic", mysql.MariaDBFlavor, "")
 	subtestFlavor(c, cfg, "5.7.26-log", mysql.MySQLFlavor, "")
+}
+
+func (t *testServer) TestAdjustServerID(c *C) {
+	var originGetSlaveServerIDFunc = getSlaveServerIDFunc
+	defer func() {
+		getSlaveServerIDFunc = originGetSlaveServerIDFunc
+	}()
+	getSlaveServerIDFunc = getMockSlaveServerID
+
+	cfg := NewConfig()
+	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml", "-relay-dir=./xx"}), IsNil)
+
+	cfg.adjustServerID(context.Background(), nil)
+	c.Assert(cfg.ServerID, Equals, 101)
+
+	cfg.ServerID = 0
+	cfg.adjustServerID(context.Background(), nil)
+	c.Assert(cfg.ServerID, Not(Equals), 0)
+}
+
+func getMockSlaveServerID(ctx context.Context, db *sql.DB) (map[int64]interface{}, error) {
+	return map[int64]interface{}{
+		1: struct{}{},
+		2: struct{}{},
+	}, nil
 }
