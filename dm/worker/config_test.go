@@ -201,6 +201,6 @@ func (t *testServer) TestAdjustFlavor(c *C) {
 		applyNewBaseDB = origApplyNewBaseDB
 	}()
 
-	subtestFlavor(c, cfg, "mariadb.org binary distribution", mysql.MariaDBFlavor, "")
-	subtestFlavor(c, cfg, "MySQL Community Server - GPL", mysql.MySQLFlavor, "")
+	subtestFlavor(c, cfg, "10.4.8-MariaDB-1:10.4.8+maria~bionic", mysql.MariaDBFlavor, "")
+	subtestFlavor(c, cfg, "5.7.26-log", mysql.MySQLFlavor, "")
 }
