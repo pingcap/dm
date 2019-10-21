@@ -48,9 +48,8 @@ func GetFlavor(db *sql.DB) (string, error) {
 	}
 	if check.IsMariaDB(value) {
 		return gmysql.MariaDBFlavor, nil
-	} else {
-		return gmysql.MySQLFlavor, nil
 	}
+	return gmysql.MySQLFlavor, nil
 }
 
 // GetMasterStatus gets status from master

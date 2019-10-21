@@ -251,9 +251,7 @@ func (c *Config) configFromFile(path string) error {
 func (c *Config) adjustFlavor() error {
 	if c.Flavor != "" {
 		switch c.Flavor {
-		case mysql.MariaDBFlavor:
-			return nil
-		case mysql.MySQLFlavor:
+		case mysql.MariaDBFlavor, mysql.MySQLFlavor:
 			return nil
 		default:
 			return terror.ErrNotSupportedFlavor.Generate(c.Flavor)
