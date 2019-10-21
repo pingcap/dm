@@ -41,10 +41,10 @@ import (
 )
 
 const (
-	// flavorReadTimeout is readTimeout for DB connection in adjustFlavor
-	flavorReadTimeout = "30s"
-	// flavorGetTimeout is timeout for getting version info from DB
-	flavorGetTimeout = 30 * time.Second
+	// dbReadTimeout is readTimeout for DB connection in adjust
+	dbReadTimeout = "30s"
+	// flavorGetTimeout is timeout for getting some information from DB
+	dbGetTimeout = 30 * time.Second
 
 	maxServerID = 4294967295
 )
@@ -270,7 +270,7 @@ func (c *Config) adjust() error {
 	}
 	defer fromDB.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), flavorGetTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), dbGetTimeout)
 	defer cancel()
 
 	err = c.adjustFlavor(ctx, fromDB.DB)
@@ -293,7 +293,7 @@ func (c *Config) createBaseDB() (*conn.BaseDB, error) {
 		return nil, err
 	}
 	from := clone.From
-	from.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(flavorReadTimeout)
+	from.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(dbReadTimeout)
 	fromDB, err := conn.DefaultDBProvider.Apply(from)
 	if err != nil {
 		return nil, terror.WithScope(err, terror.ScopeUpstream)
@@ -315,7 +315,7 @@ func (c *Config) adjustFlavor(ctx context.Context, db *sql.DB) (err error) {
 
 	c.Flavor, err = utils.GetFlavor(ctx, db)
 	if ctx.Err() != nil {
-		err = terror.Annotatef(err, "time cost to get flavor info exceeds %s", flavorGetTimeout)
+		err = terror.Annotatef(err, "time cost to get flavor info exceeds %s", dbGetTimeout)
 	}
 	return terror.WithScope(err, terror.ScopeUpstream)
 }
@@ -331,7 +331,7 @@ func (c *Config) adjustServerID(ctx context.Context, db *sql.DB) error {
 
 	serverIDs, err := getSlaveServerIDFunc(ctx, db)
 	if ctx.Err() != nil {
-		err = terror.Annotatef(err, "time cost to get flavor info exceeds %s", flavorGetTimeout)
+		err = terror.Annotatef(err, "time cost to get flavor info exceeds %s", dbGetTimeout)
 	}
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeUpstream)
