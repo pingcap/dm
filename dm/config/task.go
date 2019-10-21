@@ -331,7 +331,7 @@ func (c *TaskConfig) Decode(data string) error {
 // adjust adjusts configs
 func (c *TaskConfig) adjust() error {
 	if !c.verifyTaskName() {
-		return terror.ErrConfigTaskNameNotValid.Generate(fmt.Sprintf("task name %s not valid", c.Name))
+		return terror.ErrConfigTaskNameNotValid.Generate(fmt.Sprintf("task name %s not valid, please use alphanumeric characters, underscores", c.Name))
 	}
 	if c.TaskMode != ModeFull && c.TaskMode != ModeIncrement && c.TaskMode != ModeAll {
 		return terror.ErrConfigInvalidTaskMode.Generate()

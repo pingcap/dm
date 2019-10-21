@@ -170,7 +170,6 @@ const (
 	codeConfigLoaderCfgNotFound
 	codeConfigSyncerCfgNotFound
 	codeConfigSourceIDNotFound
-
 	codeConfigTaskNameNotValid
 )
 
