@@ -48,6 +48,7 @@ const (
 	// now increase the total timeout to 30min, but set `readTimeout` to 30s for source/target DB.
 	// if we can not complete the check in 30min, then we must need to refactor the implementation of the function.
 	checkTimeout = 30 * time.Minute
+	readTimeout  = "30s"
 )
 
 type mysqlInstance struct {
@@ -134,7 +135,7 @@ func (c *Checker) Init() (err error) {
 			Password: instance.cfg.From.Password,
 		}
 		dbCfg := instance.cfg.From
-		dbCfg.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout("30s")
+		dbCfg.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(readTimeout)
 		instance.sourceDB, err = conn.DefaultDBProvider.Apply(dbCfg)
 		if err != nil {
 			return terror.WithScope(terror.ErrTaskCheckFailedOpenDB.Delegate(err, instance.cfg.From.User, instance.cfg.From.Host, instance.cfg.From.Port), terror.ScopeUpstream)
@@ -147,7 +148,7 @@ func (c *Checker) Init() (err error) {
 			Password: instance.cfg.To.Password,
 		}
 		dbCfg = instance.cfg.To
-		dbCfg.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout("30s")
+		dbCfg.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(readTimeout)
 		instance.targetDB, err = conn.DefaultDBProvider.Apply(dbCfg)
 		if err != nil {
 			return terror.WithScope(terror.ErrTaskCheckFailedOpenDB.Delegate(err, instance.cfg.To.User, instance.cfg.To.Host, instance.cfg.To.Port), terror.ScopeDownstream)
