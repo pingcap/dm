@@ -112,7 +112,7 @@ const (
 )
 ```
 
-We define a `FlowControl` interface, which is used to give a reasonable concurrency value based on the congestion stage, the historical and current data flow indicators. We can use different congestion algorithm, just to implement the `FlowControl` interface.
+We can use different congestion algorithm, just to implement the `FlowControl` interface.
 
 ```go
 type CongestionIndicator struct {
