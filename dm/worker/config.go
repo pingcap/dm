@@ -55,7 +55,6 @@ const (
 var SampleConfigFile string
 
 var (
-	applyNewBaseDB       = conn.DefaultDBProvider.Apply
 	getSlaveServerIDFunc = utils.GetSlaveServerID
 )
 
@@ -295,7 +294,7 @@ func (c *Config) createBaseDB() (*conn.BaseDB, error) {
 	}
 	from := clone.From
 	from.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(flavorReadTimeout)
-	fromDB, err := applyNewBaseDB(from)
+	fromDB, err := conn.DefaultDBProvider.Apply(from)
 	if err != nil {
 		return nil, terror.WithScope(err, terror.ScopeUpstream)
 	}
