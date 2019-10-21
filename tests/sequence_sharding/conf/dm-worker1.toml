@@ -2,7 +2,7 @@
 
 server-id = 101
 source-id = "mysql-replica-01"
-flavor = "mysql"
+flavor = ""
 enable-gtid = false
 relay-binlog-name = ""
 relay-binlog-gtid = ""

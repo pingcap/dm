@@ -15,17 +15,21 @@ package worker
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/binlog"
+	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -34,10 +38,19 @@ import (
 	"github.com/pingcap/dm/relay/purger"
 )
 
+const (
+	// flavorReadTimeout is readTimeout for DB connection in adjustFlavor
+	flavorReadTimeout = "30s"
+	// flavorGetTimeout is timeout for getting version info from DB
+	flavorGetTimeout = 30 * time.Second
+)
+
 // SampleConfigFile is sample config file of dm-worker
 // later we can read it from dm/worker/dm-worker.toml
 // and assign it to SampleConfigFile while we build dm-worker
 var SampleConfigFile string
+
+var applyNewBaseDB = conn.DefaultDBProvider.Apply
 
 // NewConfig creates a new base config for worker.
 func NewConfig() *Config {
@@ -188,6 +201,10 @@ func (c *Config) Parse(arguments []string) error {
 
 	c.From.Adjust()
 	c.Checker.adjust()
+	err = c.adjustFlavor()
+	if err != nil {
+		return err
+	}
 	return c.verify()
 }
 
@@ -239,6 +256,38 @@ func (c *Config) configFromFile(path string) error {
 	return c.verify()
 }
 
+// adjustFlavor adjusts flavor through querying from given database
+func (c *Config) adjustFlavor() error {
+	if c.Flavor != "" {
+		switch c.Flavor {
+		case mysql.MariaDBFlavor, mysql.MySQLFlavor:
+			return nil
+		default:
+			return terror.ErrNotSupportedFlavor.Generate(c.Flavor)
+		}
+	}
+	// decrypt password
+	clone, err := c.DecryptPassword()
+	if err != nil {
+		return err
+	}
+	from := clone.From
+	from.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(flavorReadTimeout)
+	fromDB, err := applyNewBaseDB(from)
+	if err != nil {
+		return terror.WithScope(err, terror.ScopeUpstream)
+	}
+	defer fromDB.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), flavorGetTimeout)
+	defer cancel()
+	c.Flavor, err = utils.GetFlavor(ctx, fromDB.DB)
+	if ctx.Err() != nil {
+		err = terror.Annotatef(err, "time cost to get flavor info exceeds %s", flavorGetTimeout)
+	}
+	return terror.WithScope(err, terror.ScopeUpstream)
+}
+
 // UpdateConfigFile write configure to local file
 func (c *Config) UpdateConfigFile(content string) error {
 	if c.ConfigFile == "" {
@@ -279,6 +328,5 @@ func (c *Config) DecryptPassword() (*Config, error) {
 		}
 	}
 	clone.From.Password = pswdFrom
-
 	return clone, nil
 }
