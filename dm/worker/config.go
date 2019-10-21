@@ -283,7 +283,7 @@ func (c *Config) adjustFlavor() error {
 	defer cancel()
 	c.Flavor, err = utils.GetFlavor(ctx, fromDB.DB)
 	if ctx.Err() != nil {
-		err = terror.Annotatef(err, "time cost to get flavor info exceeds %v in adjustFlavor", flavorGetTimeout.String())
+		err = terror.Annotatef(err, "time cost to get flavor info exceeds %s", flavorGetTimeout)
 	}
 	return terror.WithScope(err, terror.ScopeUpstream)
 }
