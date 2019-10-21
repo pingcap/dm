@@ -45,7 +45,7 @@ When we encounter these abnormal scenario, we often pause part of the tasks or d
 
 There exists some key concepts in a data import/replication:
 
-- Data loss: Each database transaction execution failure is treated as one data loss, the failure includes every kind of database execution failure that no data is written to downstream, partial data written error does not include.
+- Transaction failure: Each database transaction execution failure is treated as one transaction failure, the failure includes every kind of database execution failure that no data is written to downstream, partial data written error does not include.
 - Bandwidth: Bandwidth describes the maximum data import/replication rate from a DM-worker to downstream, this can be measured by TPS from DM-worker (or TPS in downstream, but should only include the data traffic from this DM-worker).
 - Latency: Latency is the amount of time it takes for data to replicate from DM-worker to downstream.
 
@@ -53,9 +53,9 @@ The congestion usually means the quality of service decreases because of the ser
 
 #### How to measure the key indicators
 
-Before we can measure the congestion, we should find a way to estimate the data loss, the bandwidth and the latency.
+Before we can measure the congestion, we should find a way to estimate the transaction failure, the bandwidth and the latency.
 
-- Data loss: can be collected in DM-worker itself, and we often use it as data loss rate, which means the count of sqls in all failed transaction divided by the count sqls in all transactions that need to be processed.
+- Transaction failure: can be collected in DM-worker itself, and we often use it as transaction failure rate, which means the count of sqls in all failed transaction divided by the count sqls in all transactions that need to be processed.
 - Latency: equals to the transaction executed latency, can be collected in DM-worker itself.
 - Bandwidth: this is a little complicated, but we can estimate it by adjusting the concurrency and find the maximum downstream TPS for this DM-worker, which can be used as the bandwidth of the data import/replication link.
 
@@ -75,7 +75,7 @@ Congestion can be exposed in different ways and have different effect on key ind
 
 - If TPS doesn't increase alongside with the concurrency increase (assuming the dumped data or relay log stream is fast enough), we can believe the congestion is occurring.
 - If concurrency doesn't change, but TPS decreases and latency increases significantly (maybe TPS halves and latency doubles), we can believe the congestion is occurring.
-- If concurrency doesn't change, TPS and latency don't change too much, but data loss rate increases significantly (however in most cases if data loss rate increases, we often find TPS decreases and latency increases), we can believe the congestion is occurring.
+- If concurrency doesn't change, TPS and latency don't change too much, but transaction failure rate increases significantly (however in most cases if transaction failure rate increases, we often find TPS decreases and latency increases), we can believe the congestion is occurring.
 
 The congestion degree can be measured by the three indicators, but the workflow in the real world is often complicated, we won't introduce an estimate model in this proposal, as we only need to known whether the congestion is occurring in our congestion control model.
 
@@ -87,7 +87,7 @@ The congestion control framework is separated into three parts, the congestion d
 
 The congestion detect component will collect the key indicators in DM-worker as following:
 
-- data loss rate: we will add a sliding window to record the count of downstream resource busy error (such as `tmysql.ErrPDServerTimeout`, `tmysql.ErrTiKVServerTimeout`, `tmysql.ErrTiKVServerBusy` etc) and the count of all dispatched transactions. The data loss rate will be calculated with these two counters.
+- transaction failure rate: we will add a sliding window to record the count of downstream resource busy error (such as `tmysql.ErrPDServerTimeout`, `tmysql.ErrTiKVServerTimeout`, `tmysql.ErrTiKVServerBusy` etc) and the count of all dispatched transactions. The transaction failure rate will be calculated with these two counters.
 - TPS detection: we will add a sliding window to record the count of successfully executed transactions, and calculate TPS with this value.
 - latency: transaction execution latency is already recorded in load and sync unit, we can use it directly.
 
@@ -105,7 +105,7 @@ const (
     StageSlowStart CongestionStage = iota + 1
     // When the concurrency exceeds a threshold, we recommend to increase slowly, which is often called the avoidance stage.
     StageAvoidance
-    // The steady stage means the data flow TPS reaches the bandwidth, the latency keeps steady and no data loss.
+    // The steady stage means the data flow TPS reaches the bandwidth, the latency keeps steady and no transaction failure.
     StageSteady
     // When congestion happens and the concurrency is turned down, we enter the recovery stage.
     StageRecovery
