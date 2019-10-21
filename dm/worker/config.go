@@ -15,12 +15,14 @@ package worker
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/siddontang/go-mysql/mysql"
@@ -34,6 +36,13 @@ import (
 	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay/purger"
+)
+
+const (
+	// flavorReadTimeout is readTimeout for DB connection in adjustFlavor
+	flavorReadTimeout = "30s"
+	// flavorGetTimeout is timeout for getting version info from DB
+	flavorGetTimeout = 30 * time.Second
 )
 
 // SampleConfigFile is sample config file of dm-worker
@@ -262,13 +271,19 @@ func (c *Config) adjustFlavor() error {
 	if err != nil {
 		return err
 	}
-	fromDB, err := applyNewBaseDB(clone.From)
+	from := clone.From
+	from.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(flavorReadTimeout)
+	fromDB, err := applyNewBaseDB(from)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeUpstream)
 	}
 	defer fromDB.Close()
 
-	c.Flavor, err = utils.GetFlavor(fromDB.DB)
+	ctx, _ := context.WithTimeout(context.Background(), flavorGetTimeout)
+	c.Flavor, err = utils.GetFlavor(ctx, fromDB.DB)
+	if ctx.Err() != nil {
+		err = terror.Annotate(err, "time cost to get flavor info exceeds flavorGetTimeout")
+	}
 	return terror.WithScope(err, terror.ScopeUpstream)
 }
 

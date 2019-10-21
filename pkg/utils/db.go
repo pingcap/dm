@@ -41,8 +41,8 @@ var (
 )
 
 // GetFlavor gets flavor from DB
-func GetFlavor(db *sql.DB) (string, error) {
-	value, err := dbutil.ShowVersion(context.Background(), db)
+func GetFlavor(ctx context.Context, db *sql.DB) (string, error) {
+	value, err := dbutil.ShowVersion(ctx, db)
 	if err != nil {
 		return "", terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
