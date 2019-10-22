@@ -91,6 +91,7 @@ func (bs ResumeStrategy) String() string {
 	return fmt.Sprintf("unsupported resume strategy: %d", bs)
 }
 
+// duration is used to hold a time.Duration field
 type duration struct {
 	time.Duration
 }
