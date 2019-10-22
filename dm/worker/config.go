@@ -44,7 +44,7 @@ import (
 const (
 	// dbReadTimeout is readTimeout for DB connection in adjust
 	dbReadTimeout = "30s"
-	// flavorGetTimeout is timeout for getting some information from DB
+	// dbGetTimeout is timeout for getting some information from DB
 	dbGetTimeout = 30 * time.Second
 
 	maxServerID uint32 = math.MaxUint32
