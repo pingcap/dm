@@ -23,15 +23,15 @@ import (
 
 func (t *testUtilsSuite) TestGetAllServerID(c *C) {
 	testCases := []struct {
-		masterID  int64
-		serverIDs []int64
+		masterID  uint32
+		serverIDs []uint32
 	}{
 		{
 			1,
-			[]int64{2, 3, 4},
+			[]uint32{2, 3, 4},
 		}, {
 			2,
-			[]int64{},
+			[]uint32{},
 		},
 	}
 
@@ -60,7 +60,7 @@ func (t *testUtilsSuite) TestGetAllServerID(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (t *testUtilsSuite) createMockResult(mock sqlmock.Sqlmock, masterID int64, serverIDs []int64, flavor string) {
+func (t *testUtilsSuite) createMockResult(mock sqlmock.Sqlmock, masterID uint32, serverIDs []uint32, flavor string) {
 	expectQuery := mock.ExpectQuery("SHOW SLAVE HOSTS")
 
 	host := "test"
@@ -83,7 +83,6 @@ func (t *testUtilsSuite) createMockResult(mock sqlmock.Sqlmock, masterID int64, 
 	}
 
 	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'server_id'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("server_id", masterID))
-
 
 	return
 }

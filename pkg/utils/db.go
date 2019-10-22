@@ -53,7 +53,7 @@ func GetFlavor(ctx context.Context, db *sql.DB) (string, error) {
 }
 
 // GetAllServerID gets all slave server id and master server id
-func GetAllServerID(ctx context.Context, db *sql.DB) (map[uint32]interface{}, error) {
+func GetAllServerID(ctx context.Context, db *sql.DB) (map[uint32]struct{}, error) {
 	serverIDs, err := GetSlaveServerID(ctx, db)
 	if err != nil {
 		return nil, err
@@ -69,7 +69,7 @@ func GetAllServerID(ctx context.Context, db *sql.DB) (map[uint32]interface{}, er
 }
 
 // GetSlaveServerID gets all slave server id
-func GetSlaveServerID(ctx context.Context, db *sql.DB) (map[uint32]interface{}, error) {
+func GetSlaveServerID(ctx context.Context, db *sql.DB) (map[uint32]struct{}, error) {
 	rows, err := db.QueryContext(ctx, `SHOW SLAVE HOSTS`)
 	if err != nil {
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
@@ -108,7 +108,7 @@ func GetSlaveServerID(ctx context.Context, db *sql.DB) (map[uint32]interface{}, 
 		masterID  sql.NullInt64
 		slaveUUID sql.NullString
 	)
-	serverIDs := make(map[uint32]interface{})
+	serverIDs := make(map[uint32]struct{})
 	for rows.Next() {
 		if len(rowColumns) == 5 {
 			err = rows.Scan(&serverID, &host, &port, &masterID, &slaveUUID)

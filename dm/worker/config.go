@@ -101,7 +101,7 @@ type Config struct {
 	AutoFixGTID bool   `toml:"auto-fix-gtid" json:"auto-fix-gtid"`
 	RelayDir    string `toml:"relay-dir" json:"relay-dir"`
 	MetaDir     string `toml:"meta-dir" json:"meta-dir"`
-	ServerID    uint32    `toml:"server-id" json:"server-id"`
+	ServerID    uint32 `toml:"server-id" json:"server-id"`
 	Flavor      string `toml:"flavor" json:"flavor"`
 	Charset     string `toml:"charset" json:"charset"`
 
