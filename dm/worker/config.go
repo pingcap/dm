@@ -335,7 +335,7 @@ func (c *Config) adjustServerID(ctx context.Context, db *sql.DB) error {
 
 	serverIDs, err := getAllServerIDFunc(ctx, db)
 	if ctx.Err() != nil {
-		err = terror.Annotatef(err, "time cost to get flavor info exceeds %s", dbGetTimeout)
+		err = terror.Annotatef(err, "time cost to get server-id info exceeds %s", dbGetTimeout)
 	}
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeUpstream)
