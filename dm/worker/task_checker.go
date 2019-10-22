@@ -93,7 +93,7 @@ func (bs ResumeStrategy) String() string {
 
 // duration is used to hold a time.Duration field
 type duration struct {
-	time.Duration `toml:"duration" json:"duration"`
+	time.Duration
 }
 
 // MarshalText hacks to satisfy the encoding.TextMarshaler interface
