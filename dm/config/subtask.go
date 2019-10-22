@@ -145,7 +145,7 @@ type SubTaskConfig struct {
 	IgnoreCheckingItems []string `toml:"ignore-checking-items" json:"ignore-checking-items"`
 	// it represents a MySQL/MariaDB instance or a replica group
 	SourceID                string `toml:"source-id" json:"source-id"`
-	ServerID                int    `toml:"server-id" json:"server-id"`
+	ServerID                uint32  `toml:"server-id" json:"server-id"`
 	Flavor                  string `toml:"flavor" json:"flavor"`
 	MetaSchema              string `toml:"meta-schema" json:"meta-schema"`
 	RemoveMeta              bool   `toml:"remove-meta" json:"remove-meta"`

@@ -53,7 +53,23 @@ func GetFlavor(ctx context.Context, db *sql.DB) (string, error) {
 }
 
 // GetAllServerID gets all slave server id and master server id
-func GetAllServerID(ctx context.Context, db *sql.DB) (map[int64]interface{}, error) {
+func GetAllServerID(ctx context.Context, db *sql.DB) (map[uint32]interface{}, error) {
+	serverIDs, err := GetSlaveServerID(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
+	masterServerID, err := GetServerID(db)
+	if err != nil {
+		return nil, err
+	}
+
+	serverIDs[masterServerID] = struct{}{}
+	return serverIDs, nil
+}
+
+// GetSlaveServerID gets all slave server id
+func GetSlaveServerID(ctx context.Context, db *sql.DB) (map[uint32]interface{}, error) {
 	rows, err := db.QueryContext(ctx, `SHOW SLAVE HOSTS`)
 	if err != nil {
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
@@ -92,7 +108,7 @@ func GetAllServerID(ctx context.Context, db *sql.DB) (map[int64]interface{}, err
 		masterID  sql.NullInt64
 		slaveUUID sql.NullString
 	)
-	serverIDs := make(map[int64]interface{})
+	serverIDs := make(map[uint32]interface{})
 	for rows.Next() {
 		if len(rowColumns) == 5 {
 			err = rows.Scan(&serverID, &host, &port, &masterID, &slaveUUID)
@@ -104,18 +120,10 @@ func GetAllServerID(ctx context.Context, db *sql.DB) (map[int64]interface{}, err
 		}
 
 		if serverID.Valid {
-			serverIDs[serverID.Int64] = struct{}{}
+			serverIDs[uint32(serverID.Int64)] = struct{}{}
 		} else {
 			// should never happened
 			log.L().Warn("get invalid server_id when execute `SHOW SLAVE HOSTS;`")
-			continue
-		}
-
-		if masterID.Valid {
-			serverIDs[masterID.Int64] = struct{}{}
-		} else {
-			// should never happened
-			log.L().Warn("get invalid master_id when execute `SHOW SLAVE HOSTS;`")
 			continue
 		}
 	}
@@ -260,14 +268,14 @@ func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
 }
 
 // GetServerID gets server's `server_id`
-func GetServerID(db *sql.DB) (int64, error) {
+func GetServerID(db *sql.DB) (uint32, error) {
 	serverIDStr, err := GetGlobalVariable(db, "server_id")
 	if err != nil {
 		return 0, err
 	}
 
-	serverID, err := strconv.ParseInt(serverIDStr, 10, 64)
-	return serverID, terror.ErrInvalidServerID.Delegate(err, serverIDStr)
+	serverID, err := strconv.ParseInt(serverIDStr, 10, 32)
+	return uint32(serverID), terror.ErrInvalidServerID.Delegate(err, serverIDStr)
 }
 
 // GetMariaDBGtidDomainID gets MariaDB server's `gtid_domain_id`

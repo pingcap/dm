@@ -100,7 +100,7 @@ func NewOnlineDDLStorage(newtctx *tcontext.Context, cfg *config.SubTaskConfig) *
 		cfg:    cfg,
 		schema: cfg.MetaSchema,
 		table:  fmt.Sprintf("%s_onlineddl", cfg.Name),
-		id:     strconv.Itoa(cfg.ServerID),
+		id:     strconv.Itoa(int(cfg.ServerID)),
 		ddls:   make(map[string]map[string]*GhostDDLInfo),
 		tctx:   newtctx,
 	}

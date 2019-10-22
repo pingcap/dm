@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"math/rand"
 	"strings"
 	"time"
@@ -46,7 +47,7 @@ const (
 	// flavorGetTimeout is timeout for getting some information from DB
 	dbGetTimeout = 30 * time.Second
 
-	maxServerID = 1<<32 - 1
+	maxServerID uint32 = math.MaxUint32
 )
 
 // SampleConfigFile is sample config file of dm-worker
@@ -100,7 +101,7 @@ type Config struct {
 	AutoFixGTID bool   `toml:"auto-fix-gtid" json:"auto-fix-gtid"`
 	RelayDir    string `toml:"relay-dir" json:"relay-dir"`
 	MetaDir     string `toml:"meta-dir" json:"meta-dir"`
-	ServerID    int    `toml:"server-id" json:"server-id"`
+	ServerID    uint32    `toml:"server-id" json:"server-id"`
 	Flavor      string `toml:"flavor" json:"flavor"`
 	Charset     string `toml:"charset" json:"charset"`
 
@@ -342,9 +343,9 @@ func (c *Config) adjustServerID(ctx context.Context, db *sql.DB) error {
 	}
 
 	for i := 0; i < 5; i++ {
-		randomValue := rand.Intn(100000)
+		randomValue := uint32(rand.Intn(100000))
 		randomServerID := maxServerID/10 + randomValue
-		if _, ok := serverIDs[int64(randomServerID)]; ok {
+		if _, ok := serverIDs[randomServerID]; ok {
 			continue
 		}
 

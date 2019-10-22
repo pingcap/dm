@@ -23,11 +23,14 @@ import (
 
 func (t *testUtilsSuite) TestGetAllServerID(c *C) {
 	testCases := []struct {
+		masterID  int64
 		serverIDs []int64
 	}{
 		{
-			[]int64{1, 2, 3},
+			1,
+			[]int64{2, 3, 4},
 		}, {
+			2,
 			[]int64{},
 		},
 	}
@@ -39,24 +42,29 @@ func (t *testUtilsSuite) TestGetAllServerID(c *C) {
 
 	for _, testCase := range testCases {
 		for _, flavor := range flavors {
-			t.createMockResult(mock, testCase.serverIDs, flavor)
-			slaveHosts, err := GetAllServerID(context.Background(), db)
+			t.createMockResult(mock, testCase.masterID, testCase.serverIDs, flavor)
+			serverIDs, err := GetAllServerID(context.Background(), db)
 			c.Assert(err, IsNil)
 
 			for _, serverID := range testCase.serverIDs {
-				_, ok := slaveHosts[serverID]
+				_, ok := serverIDs[serverID]
 				c.Assert(ok, IsTrue)
 			}
+
+			_, ok := serverIDs[testCase.masterID]
+			c.Assert(ok, IsTrue)
 		}
 	}
+
+	err = mock.ExpectationsWereMet()
+	c.Assert(err, IsNil)
 }
 
-func (t *testUtilsSuite) createMockResult(mock sqlmock.Sqlmock, serverIDs []int64, flavor string) {
+func (t *testUtilsSuite) createMockResult(mock sqlmock.Sqlmock, masterID int64, serverIDs []int64, flavor string) {
 	expectQuery := mock.ExpectQuery("SHOW SLAVE HOSTS")
 
 	host := "test"
 	port := 3306
-	masterID := 1
 	slaveUUID := "test"
 
 	if flavor == mysql.MariaDBFlavor {
@@ -73,6 +81,9 @@ func (t *testUtilsSuite) createMockResult(mock sqlmock.Sqlmock, serverIDs []int6
 		}
 		expectQuery.WillReturnRows(rows)
 	}
+
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'server_id'").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("server_id", masterID))
+
 
 	return
 }
