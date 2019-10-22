@@ -15,6 +15,7 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -90,21 +91,41 @@ func (bs ResumeStrategy) String() string {
 	return fmt.Sprintf("unsupported resume strategy: %d", bs)
 }
 
+type duration struct {
+	time.Duration
+}
+
+// UnmarshalText hacks to satisfy the encoding.TextUnmarshaler interface
+func (d *duration) UnmarshalText(text []byte) error {
+	var err error
+	d.Duration, err = time.ParseDuration(string(text))
+	return err
+}
+
+// MarshalJSON hacks to satisfy the json.Marshaler interface
+func (d *duration) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&struct {
+		Duration string `json:duration`
+	}{
+		d.Duration.String(),
+	})
+}
+
 // CheckerConfig is configuration used for TaskStatusChecker
 type CheckerConfig struct {
-	CheckEnable     bool          `toml:"check-enable" json:"check-enable"`
-	BackoffRollback time.Duration `toml:"backoff-rollback" json:"backoff-rollback"`
-	BackoffMax      time.Duration `toml:"backoff-max" json:"backoff-max"`
+	CheckEnable     bool     `toml:"check-enable" json:"check-enable"`
+	BackoffRollback duration `toml:"backoff-rollback" json:"backoff-rollback"`
+	BackoffMax      duration `toml:"backoff-max" json:"backoff-max"`
 	// unexpose config
-	CheckInterval time.Duration `json:"-"`
-	BackoffMin    time.Duration `json:"-"`
-	BackoffJitter bool          `json:"-"`
-	BackoffFactor float64       `json:"-"`
+	CheckInterval duration `json:"-"`
+	BackoffMin    duration `json:"-"`
+	BackoffJitter bool     `json:"-"`
+	BackoffFactor float64  `json:"-"`
 }
 
 func (cc *CheckerConfig) adjust() {
-	cc.CheckInterval = DefaultCheckInterval
-	cc.BackoffMin = DefaultBackoffMin
+	cc.CheckInterval = duration{Duration: DefaultCheckInterval}
+	cc.BackoffMin = duration{Duration: DefaultBackoffMin}
 	cc.BackoffJitter = DefaultBackoffJitter
 	cc.BackoffFactor = DefaultBackoffFactor
 }
@@ -177,7 +198,7 @@ func NewRealTaskStatusChecker(cfg CheckerConfig, w *Worker) TaskStatusChecker {
 func (tsc *realTaskStatusChecker) Init() error {
 	// just check configuration of backoff here, lazy creates backoff counter,
 	// as we can't get task information before dm-worker starts
-	_, err := backoff.NewBackoff(tsc.cfg.BackoffFactor, tsc.cfg.BackoffJitter, tsc.cfg.BackoffMin, tsc.cfg.BackoffMax)
+	_, err := backoff.NewBackoff(tsc.cfg.BackoffFactor, tsc.cfg.BackoffJitter, tsc.cfg.BackoffMin.Duration, tsc.cfg.BackoffMax.Duration)
 	return terror.WithClass(err, terror.ClassDMWorker)
 }
 
@@ -211,12 +232,12 @@ func (tsc *realTaskStatusChecker) run() {
 		if err != nil {
 			tsc.l.Warn("inject failpoint TaskCheckInterval failed", zap.Reflect("value", val), zap.Error(err))
 		} else {
-			tsc.cfg.CheckInterval = interval
+			tsc.cfg.CheckInterval = duration{Duration: interval}
 			tsc.l.Info("set TaskCheckInterval", zap.String("failpoint", "TaskCheckInterval"), zap.Duration("value", interval))
 		}
 	})
 
-	ticker := time.NewTicker(tsc.cfg.CheckInterval)
+	ticker := time.NewTicker(tsc.cfg.CheckInterval.Duration)
 	defer ticker.Stop()
 	for {
 		select {
@@ -299,7 +320,7 @@ func (tsc *realTaskStatusChecker) check() {
 	for taskName, stStatus := range allSubTaskStatus {
 		bf, ok := tsc.bc.backoffs[taskName]
 		if !ok {
-			bf, _ = backoff.NewBackoff(tsc.cfg.BackoffFactor, tsc.cfg.BackoffJitter, tsc.cfg.BackoffMin, tsc.cfg.BackoffMax)
+			bf, _ = backoff.NewBackoff(tsc.cfg.BackoffFactor, tsc.cfg.BackoffJitter, tsc.cfg.BackoffMin.Duration, tsc.cfg.BackoffMax.Duration)
 			tsc.bc.backoffs[taskName] = bf
 			tsc.bc.latestPausedTime[taskName] = time.Now()
 			tsc.bc.latestResumeTime[taskName] = time.Now()
@@ -308,7 +329,7 @@ func (tsc *realTaskStatusChecker) check() {
 		strategy := tsc.getResumeStrategy(stStatus, duration)
 		switch strategy {
 		case ResumeIgnore:
-			if time.Since(tsc.bc.latestPausedTime[taskName]) > tsc.cfg.BackoffRollback {
+			if time.Since(tsc.bc.latestPausedTime[taskName]) > tsc.cfg.BackoffRollback.Duration {
 				bf.Rollback()
 				// after each rollback, reset this timer
 				tsc.bc.latestPausedTime[taskName] = time.Now()
