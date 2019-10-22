@@ -14,6 +14,7 @@
 package utils
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strconv"
@@ -28,6 +29,8 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	tmysql "github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb-tools/pkg/check"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 )
@@ -36,6 +39,18 @@ var (
 	// for MariaDB, UUID set as `gtid_domain_id` + domainServerIDSeparator + `server_id`
 	domainServerIDSeparator = "-"
 )
+
+// GetFlavor gets flavor from DB
+func GetFlavor(ctx context.Context, db *sql.DB) (string, error) {
+	value, err := dbutil.ShowVersion(ctx, db)
+	if err != nil {
+		return "", terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+	}
+	if check.IsMariaDB(value) {
+		return gmysql.MariaDBFlavor, nil
+	}
+	return gmysql.MySQLFlavor, nil
+}
 
 // GetMasterStatus gets status from master
 func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, error) {
