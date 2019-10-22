@@ -40,7 +40,6 @@ func (s *testSyncerSuite) TestIsRetryableError(c *C) {
 	}{
 		{newMysqlErr(tmysql.ErrNoDB, "no baseConn error"), false},
 		{errors.New("unknown error"), false},
-		{newMysqlErr(tmysql.ErrUnknown, "i/o timeout"), true},
 		{newMysqlErr(tmysql.ErrDBCreateExists, "baseConn already exists"), false},
 		{driver.ErrBadConn, false},
 		{newMysqlErr(gmysql.ER_LOCK_DEADLOCK, "Deadlock found when trying to get lock; try restarting transaction"), true},
@@ -49,6 +48,10 @@ func (s *testSyncerSuite) TestIsRetryableError(c *C) {
 		{newMysqlErr(tmysql.ErrTiKVServerBusy, "tikv server busy"), true},
 		{newMysqlErr(tmysql.ErrResolveLockTimeout, "resolve lock timeout"), true},
 		{newMysqlErr(tmysql.ErrRegionUnavailable, "region unavailable"), true},
+		{newMysqlErr(tmysql.ErrUnknown, "i/o timeout"), false},
+		{newMysqlErr(tmysql.ErrUnknown, "can't drop column with index"), false},
+		{newMysqlErr(tmysql.ErrUnknown, "Information schema is out of date"), true},
+		{newMysqlErr(tmysql.ErrUnknown, "Information schema is changed"), true},
 	}
 
 	for _, t := range cases {
