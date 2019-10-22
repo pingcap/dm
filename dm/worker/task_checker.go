@@ -93,11 +93,16 @@ func (bs ResumeStrategy) String() string {
 
 // duration is used to hold a time.Duration field
 type duration struct {
-	time.Duration
+	time.Duration `toml:"duration" json:"duration"`
+}
+
+// MarshalText hacks to satisfy the encoding.TextMarshaler interface
+func (d duration) MarshalText() ([]byte, error) {
+	return []byte(d.Duration.String()), nil
 }
 
 // UnmarshalText hacks to satisfy the encoding.TextUnmarshaler interface
-func (d *duration) UnmarshalText(text []byte) error {
+func (d duration) UnmarshalText(text []byte) error {
 	var err error
 	d.Duration, err = time.ParseDuration(string(text))
 	return err
