@@ -21,7 +21,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 )
 
-func (t *testUtilsSuite) TestGetSlaveServerID(c *C) {
+func (t *testUtilsSuite) TestGetAllServerID(c *C) {
 	testCases := []struct {
 		serverIDs []int64
 	}{
@@ -40,7 +40,7 @@ func (t *testUtilsSuite) TestGetSlaveServerID(c *C) {
 	for _, testCase := range testCases {
 		for _, flavor := range flavors {
 			t.createMockResult(mock, testCase.serverIDs, flavor)
-			slaveHosts, err := GetSlaveServerID(context.Background(), db)
+			slaveHosts, err := GetAllServerID(context.Background(), db)
 			c.Assert(err, IsNil)
 
 			for _, serverID := range testCase.serverIDs {
