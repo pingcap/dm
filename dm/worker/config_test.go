@@ -200,11 +200,11 @@ func (t *testServer) TestAdjustFlavor(c *C) {
 }
 
 func (t *testServer) TestAdjustServerID(c *C) {
-	var originGetSlaveServerIDFunc = getSlaveServerIDFunc
+	var originGetAllServerIDFunc = getAllServerIDFunc
 	defer func() {
-		getSlaveServerIDFunc = originGetSlaveServerIDFunc
+		getAllServerIDFunc = originGetAllServerIDFunc
 	}()
-	getSlaveServerIDFunc = getMockSlaveServerID
+	getAllServerIDFunc = getMockServerIDs
 
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml", "-relay-dir=./xx"}), IsNil)
@@ -217,7 +217,7 @@ func (t *testServer) TestAdjustServerID(c *C) {
 	c.Assert(cfg.ServerID, Not(Equals), 0)
 }
 
-func getMockSlaveServerID(ctx context.Context, db *sql.DB) (map[int64]interface{}, error) {
+func getMockServerIDs(ctx context.Context, db *sql.DB) (map[int64]interface{}, error) {
 	return map[int64]interface{}{
 		1: struct{}{},
 		2: struct{}{},

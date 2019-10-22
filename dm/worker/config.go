@@ -55,7 +55,7 @@ const (
 var SampleConfigFile string
 
 var (
-	getSlaveServerIDFunc = utils.GetSlaveServerID
+	getAllServerIDFunc = utils.GetAllServerID
 )
 
 // NewConfig creates a new base config for worker.
@@ -329,7 +329,7 @@ func (c *Config) adjustServerID(ctx context.Context, db *sql.DB) error {
 		return nil
 	}
 
-	serverIDs, err := getSlaveServerIDFunc(ctx, db)
+	serverIDs, err := getAllServerIDFunc(ctx, db)
 	if ctx.Err() != nil {
 		err = terror.Annotatef(err, "time cost to get flavor info exceeds %s", dbGetTimeout)
 	}

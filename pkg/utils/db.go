@@ -52,8 +52,8 @@ func GetFlavor(ctx context.Context, db *sql.DB) (string, error) {
 	return gmysql.MySQLFlavor, nil
 }
 
-// GetSlaveServerID gets all slave hosts
-func GetSlaveServerID(ctx context.Context, db *sql.DB) (map[int64]interface{}, error) {
+// GetAllServerID gets all slave server id and master server id
+func GetAllServerID(ctx context.Context, db *sql.DB) (map[int64]interface{}, error) {
 	rows, err := db.QueryContext(ctx, `SHOW SLAVE HOSTS`)
 	if err != nil {
 		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
@@ -108,6 +108,14 @@ func GetSlaveServerID(ctx context.Context, db *sql.DB) (map[int64]interface{}, e
 		} else {
 			// should never happened
 			log.L().Warn("get invalid server_id when execute `SHOW SLAVE HOSTS;`")
+			continue
+		}
+
+		if masterID.Valid {
+			serverIDs[masterID.Int64] = struct{}{}
+		} else {
+			// should never happened
+			log.L().Warn("get invalid master_id when execute `SHOW SLAVE HOSTS;`")
 			continue
 		}
 	}
