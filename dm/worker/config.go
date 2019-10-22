@@ -266,8 +266,6 @@ func (c *Config) adjust() error {
 	c.Checker.adjust()
 
 	if c.Flavor == "" || c.ServerID == 0 {
-		return nil
-
 		fromDB, err := c.createBaseDB()
 		if err != nil {
 			return err
