@@ -106,7 +106,7 @@ func (d *duration) UnmarshalText(text []byte) error {
 // MarshalJSON hacks to satisfy the json.Marshaler interface
 func (d *duration) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
-		Duration string `json:duration`
+		Duration string `json:"duration"`
 	}{
 		d.Duration.String(),
 	})

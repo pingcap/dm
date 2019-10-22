@@ -126,9 +126,9 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	)
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
-	cfg.Checker.CheckInterval = 40 * time.Millisecond
-	cfg.Checker.BackoffMin = 20 * time.Millisecond
-	cfg.Checker.BackoffMax = 1 * time.Second
+	cfg.Checker.CheckInterval = duration{Duration: 40 * time.Millisecond}
+	cfg.Checker.BackoffMin = duration{Duration: 20 * time.Millisecond}
+	cfg.Checker.BackoffMax = duration{Duration: 1 * time.Second}
 	cfg.WorkerAddr = fmt.Sprintf(":%d", port)
 
 	dir := c.MkDir()
