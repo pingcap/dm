@@ -46,7 +46,7 @@ const (
 	// flavorGetTimeout is timeout for getting some information from DB
 	dbGetTimeout = 30 * time.Second
 
-	maxServerID = 4294967295
+	maxServerID = 1<<32 - 1
 )
 
 // SampleConfigFile is sample config file of dm-worker
@@ -264,23 +264,27 @@ func (c *Config) adjust() error {
 	c.From.Adjust()
 	c.Checker.adjust()
 
-	fromDB, err := c.createBaseDB()
-	if err != nil {
-		return err
-	}
-	defer fromDB.Close()
+	if c.Flavor == "" || c.ServerID == 0 {
+		return nil
 
-	ctx, cancel := context.WithTimeout(context.Background(), dbGetTimeout)
-	defer cancel()
+		fromDB, err := c.createBaseDB()
+		if err != nil {
+			return err
+		}
+		defer fromDB.Close()
 
-	err = c.adjustFlavor(ctx, fromDB.DB)
-	if err != nil {
-		return err
-	}
+		ctx, cancel := context.WithTimeout(context.Background(), dbGetTimeout)
+		defer cancel()
 
-	err = c.adjustServerID(ctx, fromDB.DB)
-	if err != nil {
-		return err
+		err = c.adjustFlavor(ctx, fromDB.DB)
+		if err != nil {
+			return err
+		}
+
+		err = c.adjustServerID(ctx, fromDB.DB)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
