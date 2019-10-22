@@ -219,7 +219,7 @@ func (t *testServer) TestAdjustServerID(c *C) {
 
 func getMockServerIDs(ctx context.Context, db *sql.DB) (map[int64]struct{}, error) {
 	return map[int64]struct{}{
-		1: struct{}{},
-		2: struct{}{},
+		1: {},
+		2: {},
 	}, nil
 }
