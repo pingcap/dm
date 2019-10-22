@@ -217,8 +217,8 @@ func (t *testServer) TestAdjustServerID(c *C) {
 	c.Assert(cfg.ServerID, Not(Equals), 0)
 }
 
-func getMockServerIDs(ctx context.Context, db *sql.DB) (map[int64]interface{}, error) {
-	return map[int64]interface{}{
+func getMockServerIDs(ctx context.Context, db *sql.DB) (map[int64]struct{}, error) {
+	return map[int64]struct{}{
 		1: struct{}{},
 		2: struct{}{},
 	}, nil
