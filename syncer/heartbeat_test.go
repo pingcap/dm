@@ -91,7 +91,7 @@ func (t *testHeartbeatSuite) TestHeartbeat(c *C) {
 	heartbeat.TryUpdateTaskTs("heartbeat_test_1", "dm_heartbeat", "heartbeat", [][]interface{}{
 		{
 			"2019-05-15 15:25:42",
-			int32(123),
+			uint32(123),
 		},
 	})
 
