@@ -33,7 +33,7 @@ func (t *testServer) TestConfig(c *C) {
 
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml", "-relay-dir=./xx"}), IsNil)
 	c.Assert(cfg.RelayDir, Equals, "./xx")
-	c.Assert(cfg.ServerID, Equals, 101)
+	c.Assert(cfg.ServerID, Equals, uint32(101))
 
 	dir := c.MkDir()
 	cfg.ConfigFile = path.Join(dir, "dm-worker.toml")
@@ -42,7 +42,7 @@ func (t *testServer) TestConfig(c *C) {
 	clone1 := cfg.Clone()
 	c.Assert(cfg, DeepEquals, clone1)
 	clone1.ServerID = 100
-	c.Assert(cfg.ServerID, Equals, 101)
+	c.Assert(cfg.ServerID, Equals, uint32(101))
 
 	// test format
 	c.Assert(cfg.String(), Matches, `.*"server-id":101.*`)
@@ -57,11 +57,11 @@ func (t *testServer) TestConfig(c *C) {
 	c.Assert(cfg.UpdateConfigFile(tomlStr), IsNil)
 	cfg.Reload()
 	c.Assert(err, IsNil)
-	c.Assert(cfg.ServerID, Equals, 100)
+	c.Assert(cfg.ServerID, Equals, uint32(100))
 	c.Assert(cfg.UpdateConfigFile(originCfgStr), IsNil)
 	cfg.Reload()
 	c.Assert(err, IsNil)
-	c.Assert(cfg.ServerID, Equals, 101)
+	c.Assert(cfg.ServerID, Equals, uint32(101))
 
 	// test decrypt password
 	clone1.From.Password = "1234"
@@ -210,7 +210,7 @@ func (t *testServer) TestAdjustServerID(c *C) {
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml", "-relay-dir=./xx"}), IsNil)
 
 	cfg.adjustServerID(context.Background(), nil)
-	c.Assert(cfg.ServerID, Equals, 101)
+	c.Assert(cfg.ServerID, Equals, uint32(101))
 
 	cfg.ServerID = 0
 	cfg.adjustServerID(context.Background(), nil)
