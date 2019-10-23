@@ -46,8 +46,6 @@ const (
 	dbReadTimeout = "30s"
 	// dbGetTimeout is timeout for getting some information from DB
 	dbGetTimeout = 30 * time.Second
-
-	maxServerID uint32 = math.MaxUint32
 )
 
 // SampleConfigFile is sample config file of dm-worker
@@ -325,10 +323,6 @@ func (c *Config) adjustFlavor(ctx context.Context, db *sql.DB) (err error) {
 
 func (c *Config) adjustServerID(ctx context.Context, db *sql.DB) error {
 	if c.ServerID != 0 {
-		if c.ServerID < 0 || c.ServerID > maxServerID {
-			return terror.ErrInvalidServerID.Generate(c.ServerID)
-		}
-
 		return nil
 	}
 
