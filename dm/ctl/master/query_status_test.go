@@ -83,7 +83,7 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 	}
 	expectedResult := []*taskInfo{{
 		TaskName:   "test",
-		TaskStatus: Stage_Error,
+		TaskStatus: StageError,
 		Workers:    []string{"172.17.0.2:8262", "172.17.0.3:8262", "172.17.0.6:8262"},
 	}}
 	generateAndCheckTaskResult(c, resp, expectedResult)
@@ -127,7 +127,7 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 		Workers:    []string{"172.17.0.2:8262", "172.17.0.3:8262", "172.17.0.6:8262"},
 	}, {
 		TaskName:   "test2",
-		TaskStatus: Stage_Error,
+		TaskStatus: StageError,
 		Workers:    []string{"172.17.0.4:8262"},
 	},
 	}
