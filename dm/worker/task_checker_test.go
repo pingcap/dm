@@ -60,10 +60,10 @@ func (s *testTaskCheckerSuite) TestResumeStrategy(c *check.C) {
 
 	tsc := NewRealTaskStatusChecker(CheckerConfig{
 		CheckEnable:     true,
-		CheckInterval:   DefaultCheckInterval,
-		BackoffRollback: DefaultBackoffRollback,
-		BackoffMin:      DefaultBackoffMin,
-		BackoffMax:      DefaultBackoffMax,
+		CheckInterval:   duration{Duration: DefaultCheckInterval},
+		BackoffRollback: duration{Duration: DefaultBackoffRollback},
+		BackoffMin:      duration{Duration: DefaultBackoffMin},
+		BackoffMax:      duration{Duration: DefaultBackoffMax},
 		BackoffFactor:   DefaultBackoffFactor,
 	}, nil)
 	for _, tc := range testCases {
@@ -94,10 +94,10 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 
 	tsc := NewRealTaskStatusChecker(CheckerConfig{
 		CheckEnable:     true,
-		CheckInterval:   DefaultCheckInterval,
-		BackoffRollback: 200 * time.Millisecond,
-		BackoffMin:      1 * time.Millisecond,
-		BackoffMax:      1 * time.Second,
+		CheckInterval:   duration{Duration: DefaultCheckInterval},
+		BackoffRollback: duration{Duration: 200 * time.Millisecond},
+		BackoffMin:      duration{Duration: 1 * time.Millisecond},
+		BackoffMax:      duration{Duration: 1 * time.Second},
 		BackoffFactor:   DefaultBackoffFactor,
 	}, nil)
 	c.Assert(tsc.Init(), check.IsNil)
@@ -161,10 +161,10 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	// test resume skip strategy
 	tsc = NewRealTaskStatusChecker(CheckerConfig{
 		CheckEnable:     true,
-		CheckInterval:   DefaultCheckInterval,
-		BackoffRollback: 200 * time.Millisecond,
-		BackoffMin:      10 * time.Second,
-		BackoffMax:      100 * time.Second,
+		CheckInterval:   duration{Duration: DefaultCheckInterval},
+		BackoffRollback: duration{Duration: 200 * time.Millisecond},
+		BackoffMin:      duration{Duration: 10 * time.Second},
+		BackoffMax:      duration{Duration: 100 * time.Second},
 		BackoffFactor:   DefaultBackoffFactor,
 	}, w)
 	c.Assert(tsc.Init(), check.IsNil)
@@ -219,10 +219,10 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 
 	tsc := NewRealTaskStatusChecker(CheckerConfig{
 		CheckEnable:     true,
-		CheckInterval:   DefaultCheckInterval,
-		BackoffRollback: 200 * time.Millisecond,
-		BackoffMin:      backoffMin,
-		BackoffMax:      10 * time.Second,
+		CheckInterval:   duration{Duration: DefaultCheckInterval},
+		BackoffRollback: duration{Duration: 200 * time.Millisecond},
+		BackoffMin:      duration{Duration: backoffMin},
+		BackoffMax:      duration{Duration: 10 * time.Second},
 		BackoffFactor:   1.0,
 	}, nil)
 	c.Assert(tsc.Init(), check.IsNil)
