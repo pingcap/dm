@@ -15,7 +15,7 @@ function query_status_wrong_params() {
 function query_status_with_no_tasks() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status" \
-        "\"result\": true" 1 \
+        "\"result\": true" 1
 }
 
 function query_status_with_tasks() {
