@@ -55,12 +55,10 @@ func (t *testServer) TestConfig(c *C) {
 
 	// test update config file and reload
 	c.Assert(cfg.UpdateConfigFile(tomlStr), IsNil)
-	cfg.Reload()
-	c.Assert(err, IsNil)
+	c.Assert(cfg.Reload(), IsNil)
 	c.Assert(cfg.ServerID, Equals, uint32(100))
 	c.Assert(cfg.UpdateConfigFile(originCfgStr), IsNil)
-	cfg.Reload()
-	c.Assert(err, IsNil)
+	c.Assert(cfg.Reload(), IsNil)
 	c.Assert(cfg.ServerID, Equals, uint32(101))
 
 	// test decrypt password

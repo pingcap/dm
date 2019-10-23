@@ -11,3 +11,8 @@ host = "127.0.0.1"
 user = "root"
 password = ""
 port = 3306
+
+[checker]
+check-enable = true
+backoff-rollback = "5m"
+backoff-max = "5m"
