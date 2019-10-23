@@ -46,6 +46,8 @@ const (
 	dbReadTimeout = "30s"
 	// dbGetTimeout is timeout for getting some information from DB
 	dbGetTimeout = 30 * time.Second
+
+	maxServerID uint32 = math.MaxUint32
 )
 
 // SampleConfigFile is sample config file of dm-worker
@@ -334,6 +336,7 @@ func (c *Config) adjustServerID(ctx context.Context, db *sql.DB) error {
 		return terror.WithScope(err, terror.ScopeUpstream)
 	}
 
+	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < 5; i++ {
 		randomValue := uint32(rand.Intn(100000))
 		randomServerID := maxServerID/10 + randomValue
