@@ -24,7 +24,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const StageError = "Error"
+const stageError = "Error"
 
 type taskResult struct {
 	Result bool        `json:"result,omitempty"`
@@ -94,9 +94,9 @@ func wrapTaskResult(resp *pb.QueryStatusListResponse) *taskResult {
 			taskCorrespondingWorkers[subTaskName] = append(taskCorrespondingWorkers[subTaskName], worker.Worker)
 			taskStage := taskStatusMap[subTaskName]
 			switch {
-			case taskStage == StageError:
+			case taskStage == stageError:
 			case subTaskStage == pb.Stage_Paused && subTask.Result != nil && len(subTask.Result.Errors) > 0:
-				taskStatusMap[subTaskName] = StageError
+				taskStatusMap[subTaskName] = stageError
 			case taskStage == pb.Stage_Paused.String():
 			case taskStage == "", subTaskStage == pb.Stage_Paused:
 				taskStatusMap[subTaskName] = subTaskStage.String()
