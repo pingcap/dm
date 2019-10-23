@@ -191,13 +191,13 @@ func (h *Heartbeat) TryUpdateTaskTs(taskName, schema, table string, data [][]int
 	}
 
 	latest := data[len(data)-1]
-	serverID, ok := latest[1].(uint32)
+	serverID, ok := latest[1].(int32)
 	if !ok {
 		h.logger.Warn("invalid data server_id for heartbeat", zap.Reflect("server ID", latest[1]))
 		return
 	}
-	if serverID != h.cfg.serverID {
-		h.logger.Debug("ignore mismatched server_id for heartbeat", zap.Uint32("obtained server ID", serverID), zap.Uint32("excepted server ID", h.cfg.serverID))
+	if uint32(serverID) != h.cfg.serverID {
+		h.logger.Debug("ignore mismatched server_id for heartbeat", zap.Int32("obtained server ID", serverID), zap.Uint32("excepted server ID", h.cfg.serverID))
 		return // only ignore
 	}
 
