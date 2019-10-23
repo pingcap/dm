@@ -38,9 +38,9 @@ function run() {
 
         echo "query status, relay log failed"
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "query-status" \
-            "\"taskName\": \"test\"" 1 \
-            "\"taskStatus\": \"Error\"" 1 \
+            "query-status -w 127.0.0.1:$WORKER1_PORT 127.0.0.1:$WORKER2_PORT" \
+            "no sub task started" 1 \
+            "ERROR" 1
 
         echo "start task and query status, task have error message"
         task_conf="$cur/conf/dm-task.yaml"
@@ -48,6 +48,10 @@ function run() {
             "start-task $task_conf" \
             "\"result\": true" 2
 
+        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status -w 127.0.0.1:$WORKER1_PORT 127.0.0.1:$WORKER2_PORT" \
+            "no valid relay sub directory exists" 1 \
+            "ERROR" 1
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status" \
             "\"taskName\": \"test\"" 1 \
