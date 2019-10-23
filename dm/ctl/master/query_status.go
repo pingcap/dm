@@ -24,6 +24,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const Stage_Error = "Error"
+
+type taskResult struct {
+	Result bool        `json:"result,omitempty"`
+	Msg    string      `json:"msg,omitempty"`
+	Tasks  []*taskInfo `json:"tasks,omitempty"`
+}
+
+type taskInfo struct {
+	TaskName   string   `json:"taskName,omitempty"`
+	TaskStatus string   `json:"taskStatus,omitempty"`
+	Workers    []string `json:"workers,omitempty"`
+}
+
 // NewQueryStatusCmd creates a QueryStatus command
 func NewQueryStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -60,5 +74,49 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	common.PrettyPrintResponse(resp)
+	if resp.Result && taskName == "" && len(workers) == 0 {
+		result := wrapTaskResult(resp)
+		common.PrettyPrintInterface(result)
+	} else {
+		common.PrettyPrintResponse(resp)
+	}
+}
+
+// wrapTaskResult pick task info and generate tasks' status and relative workers
+func wrapTaskResult(resp *pb.QueryStatusListResponse) *taskResult {
+	taskStatusMap := make(map[string]string, len(resp.Workers))
+	taskCorrespondingWorkers := make(map[string][]string, len(resp.Workers))
+	for _, worker := range resp.Workers {
+		for _, subTask := range worker.SubTaskStatus {
+			subTaskName := subTask.Name
+			subTaskStage := subTask.Stage
+
+			taskCorrespondingWorkers[subTaskName] = append(taskCorrespondingWorkers[subTaskName], worker.Worker)
+			taskStage := taskStatusMap[subTaskName]
+			switch {
+			case taskStage == Stage_Error:
+			case subTaskStage == pb.Stage_Paused && subTask.Result != nil && len(subTask.Result.Errors) > 0:
+				taskStatusMap[subTaskName] = Stage_Error
+			case taskStage == pb.Stage_Paused.String():
+			case taskStage == "", subTaskStage == pb.Stage_Paused:
+				taskStatusMap[subTaskName] = subTaskStage.String()
+			case taskStage != subTaskStage.String():
+				taskStatusMap[subTaskName] = pb.Stage_Running.String()
+			}
+		}
+	}
+	taskList := make([]*taskInfo, 0, len(taskStatusMap))
+	for curTaskName, taskStatus := range taskStatusMap {
+		taskList = append(taskList,
+			&taskInfo{
+				TaskName:   curTaskName,
+				TaskStatus: taskStatus,
+				Workers:    taskCorrespondingWorkers[curTaskName],
+			})
+	}
+	return &taskResult{
+		Result: resp.Result,
+		Msg:    resp.Msg,
+		Tasks:  taskList,
+	}
 }
