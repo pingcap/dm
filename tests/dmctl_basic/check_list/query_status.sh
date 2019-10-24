@@ -26,7 +26,8 @@ function query_status_with_tasks() {
         "\"unit\": \"Sync\"" 2 \
         "\"stage\": \"Running\"" 4
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "\"result\": true" 1 \
+        "query-status" \
+		"\"result\": true" 1 \
         "\"taskName\": \"test\"" 1 \
         "\"taskStatus\": \"Running\"" 1 \
         "\"workers\":" 1 \
