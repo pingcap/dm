@@ -325,6 +325,28 @@ func (m *mariadbGTIDSet) Contain(other Set) bool {
 }
 
 func (m *mariadbGTIDSet) Truncate(end Set) error {
+	if end == nil {
+		return nil // do nothing
+	}
+	if !m.Contain(end) {
+		return terror.ErrGTIDTruncateInvalid.Generate(m, end)
+	}
+	endGs := end.(*mariadbGTIDSet) // already verify the type is `*mariadbGTIDSet` in `Contain`.
+	if endGs == nil {
+		return nil // do nothing
+	}
+
+	for did, mGTID := range m.set.Sets {
+		eGTID, ok := endGs.set.Sets[did]
+		if !ok {
+			continue // no need to truncate for this domain ID
+		}
+		if mGTID.SequenceNumber > eGTID.SequenceNumber {
+			mGTID.SequenceNumber = eGTID.SequenceNumber // truncate the seqNO
+			mGTID.ServerID = eGTID.ServerID             // also update server-id to match the seqNO
+		}
+	}
+
 	return nil
 }
 
