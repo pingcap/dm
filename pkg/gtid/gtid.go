@@ -35,6 +35,12 @@ type Set interface {
 	Equal(other Set) bool
 	Contain(other Set) bool
 
+	// Truncate truncates the current GTID sets until the `end` in-place.
+	// NOTE: the original GTID sets should contain the end GTID sets, otherwise it's invalid.
+	// like truncating `00c04543-f584-11e9-a765-0242ac120002:1-100` with `00c04543-f584-11e9-a765-0242ac120002:40-60`
+	// should become `00c04543-f584-11e9-a765-0242ac120002:1-60`.
+	Truncate(end Set) error
+
 	String() string
 }
 
@@ -173,6 +179,36 @@ func (g *mySQLGTIDSet) Contain(other Set) bool {
 	return g.set.Contain(other.Origin())
 }
 
+func (g *mySQLGTIDSet) Truncate(end Set) error {
+	if end == nil {
+		return nil // do nothing
+	}
+	if !g.Contain(end) {
+		return terror.ErrGTIDTruncateInvalid.Generate(g, end)
+	}
+	endGs := end.(*mySQLGTIDSet) // already verify the type is `*mySQLGTIDSet` in `Contain`.
+	if endGs == nil {
+		return nil // do nothing
+	}
+
+	for sid, setG := range g.set.Sets {
+		setE, ok := endGs.set.Sets[sid]
+		if !ok {
+			continue // no need to truncate for this SID
+		}
+		for i, interG := range setG.Intervals {
+			for _, interE := range setE.Intervals {
+				if interG.Start <= interE.Start && interG.Stop >= interE.Stop {
+					interG.Stop = interE.Stop // truncate the stop
+				}
+			}
+			setG.Intervals[i] = interG // overwrite the value (because it's not a pointer)
+		}
+	}
+
+	return nil
+}
+
 func (g *mySQLGTIDSet) String() string {
 	if g.set == nil {
 		return ""
@@ -286,6 +322,10 @@ func (m *mariadbGTIDSet) Contain(other Set) bool {
 		return false // nil only contains nil
 	}
 	return m.set.Contain(other.Origin())
+}
+
+func (m *mariadbGTIDSet) Truncate(end Set) error {
+	return nil
 }
 
 func (m *mariadbGTIDSet) String() string {
