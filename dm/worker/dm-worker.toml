@@ -41,5 +41,5 @@ port = 3306
 #task status checker
 #[checker]
 #check-enable = true
-#backoff-rollback = 5m
-#backoff-max = 5m
+#backoff-rollback = "5m"
+#backoff-max = "5m"
