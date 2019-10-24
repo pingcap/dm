@@ -14,14 +14,14 @@ function query_status_wrong_params() {
 
 function query_status_with_no_tasks() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status -w 127.0.0.1:$WORKER1_PORT 127.0.0.1:$WORKER2_PORT" \
+        "query-status -w 127.0.0.1:$WORKER1_PORT,127.0.0.1:$WORKER2_PORT" \
         "\"result\": true" 3 \
         "\"msg\": \"no sub task started\"" 2
 }
 
 function query_status_with_tasks() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status -w 127.0.0.1:$WORKER1_PORT 127.0.0.1:$WORKER2_PORT" \
+        "query-status -w 127.0.0.1:$WORKER1_PORT,127.0.0.1:$WORKER2_PORT" \
         "\"result\": true" 3 \
         "\"unit\": \"Sync\"" 2 \
         "\"stage\": \"Running\"" 4
@@ -36,7 +36,7 @@ function query_status_with_tasks() {
 
 function query_status_stopped_relay() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status -w 127.0.0.1:$WORKER1_PORT 127.0.0.1:$WORKER2_PORT" \
+        "query-status -w 127.0.0.1:$WORKER1_PORT,127.0.0.1:$WORKER2_PORT" \
         "\"result\": true" 3 \
         "\"stage\": \"Paused\"" 2
 }
