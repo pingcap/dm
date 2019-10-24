@@ -27,9 +27,9 @@ import (
 const stageError = "Error"
 
 type taskResult struct {
-	Result bool        `json:"result,omitempty"`
-	Msg    string      `json:"msg,omitempty"`
-	Tasks  []*taskInfo `json:"tasks,omitempty"`
+	Result bool        `json:"result"`
+	Msg    string      `json:"msg"`
+	Tasks  []*taskInfo `json:"tasks"`
 }
 
 type taskInfo struct {
