@@ -344,6 +344,9 @@ func (r *Relay) tryRecoverLatestFile(parser2 *parser.Parser) error {
 		if result.Recovered {
 			r.tctx.L().Warn("relay log file recovered",
 				zap.Stringer("from position", latestPos), zap.Stringer("to position", result.LatestPos), log.WrapStringerField("from GTID set", latestGTID), log.WrapStringerField("to GTID set", result.LatestGTIDs))
+			if err = latestGTID.Truncate(result.LatestGTIDs); err != nil {
+				return err
+			}
 			err = r.meta.Save(result.LatestPos, result.LatestGTIDs)
 			if err != nil {
 				return terror.Annotatef(err, "save position %s, GTID sets %v after recovered", result.LatestPos, result.LatestGTIDs)
@@ -387,6 +390,11 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 					cfg := r.cfg.From
 					r.tctx.L().Error("the requested binlog files have purged in the master server or the master server have switched, currently DM do no support to handle this error",
 						zap.String("db host", cfg.Host), zap.Int("db port", cfg.Port), log.ShortError(err))
+					// log the status for debug
+					pos, gs, err2 := utils.GetMasterStatus(r.db, r.cfg.Flavor)
+					if err2 == nil {
+						r.tctx.L().Info("current master status", zap.Stringer("position", pos), zap.Stringer("GTID sets", gs))
+					}
 				}
 				binlogReadErrorCounter.Inc()
 			}
