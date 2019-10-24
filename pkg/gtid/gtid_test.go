@@ -183,10 +183,11 @@ func (s *testGTIDSuite) TestMairaGTIDContain(c *C) {
 
 func (s *testGTIDSuite) TestMySQLGTIDTruncate(c *C) {
 	var (
-		g1, _       = ParserGTID("mysql", "00c04543-f584-11e9-a765-0242ac120002:100")
-		g2, _       = ParserGTID("mysql", "00c04543-f584-11e9-a765-0242ac120002:100")
+		flavor      = "mysql"
+		g1, _       = ParserGTID(flavor, "00c04543-f584-11e9-a765-0242ac120002:100")
+		g2, _       = ParserGTID(flavor, "00c04543-f584-11e9-a765-0242ac120002:100")
 		gNil        *mySQLGTIDSet
-		gEmpty, _   = ParserGTID("mysql", "")
+		gEmpty, _   = ParserGTID(flavor, "")
 		gMariaDBNil *mariadbGTIDSet
 	)
 	// truncate to nil or empty GTID sets has no effect
@@ -258,11 +259,100 @@ func (s *testGTIDSuite) TestMySQLGTIDTruncate(c *C) {
 	}
 
 	for _, cs := range cases {
-		bg, err := ParserGTID("mysql", cs.before)
+		bg, err := ParserGTID(flavor, cs.before)
 		c.Assert(err, IsNil)
-		eg, err := ParserGTID("mysql", cs.end)
+		eg, err := ParserGTID(flavor, cs.end)
 		c.Assert(err, IsNil)
-		ag, err := ParserGTID("mysql", cs.after)
+		ag, err := ParserGTID(flavor, cs.after)
+		c.Assert(err, IsNil)
+		err = bg.Truncate(eg)
+		if cs.hasError {
+			c.Assert(terror.ErrGTIDTruncateInvalid.Equal(err), IsTrue)
+		} else {
+			c.Assert(bg, DeepEquals, ag)
+		}
+	}
+}
+
+func (s *testGTIDSuite) TestMariaDBGTIDTruncate(c *C) {
+	var (
+		flavor    = "mariadb"
+		g1, _     = ParserGTID(flavor, "1-2-3")
+		g2, _     = ParserGTID(flavor, "1-2-3")
+		gNil      *mariadbGTIDSet
+		gEmpty, _ = ParserGTID(flavor, "")
+		gMySQLNil *mySQLGTIDSet
+	)
+	// truncate to nil or empty GTID sets has no effect
+	c.Assert(g1.Truncate(nil), IsNil)
+	c.Assert(g1, DeepEquals, g2)
+	c.Assert(g1.Truncate(gNil), IsNil)
+	c.Assert(g1, DeepEquals, g2)
+	c.Assert(g1.Truncate(gEmpty), IsNil)
+	c.Assert(g1, DeepEquals, g2)
+
+	// nil truncate to nil has no effect
+	c.Assert(gNil.Truncate(nil), IsNil)
+	c.Assert(gNil.Truncate(gNil), IsNil)
+
+	// nil truncate to not nil report an error
+	c.Assert(terror.ErrGTIDTruncateInvalid.Equal(gNil.Truncate(g1)), IsTrue)
+
+	// truncate with invalid MariaDB GTID sets report an error
+	c.Assert(terror.ErrGTIDTruncateInvalid.Equal(g1.Truncate(gMySQLNil)), IsTrue)
+
+	cases := []struct {
+		before   string
+		end      string
+		after    string
+		hasError bool
+	}{
+		// before not contain end
+		{
+			before:   "1-2-3",
+			end:      "2-2-3",
+			hasError: true,
+		},
+		{
+			before:   "1-2-3",
+			end:      "1-2-4",
+			hasError: true,
+		},
+
+		// truncate take effect
+		{
+			before: "1-2-3",
+			end:    "1-2-3",
+			after:  "1-2-3",
+		},
+		{
+			before: "1-2-10",
+			end:    "1-2-8",
+			after:  "1-2-8",
+		},
+		{
+			before: "1-2-10",
+			end:    "1-3-8",
+			after:  "1-3-8",
+		},
+		{
+			before: "1-2-10,2-2-10",
+			end:    "1-2-8",
+			after:  "1-2-8,2-2-10",
+		},
+		{
+			before: "1-2-10,2-2-10",
+			end:    "1-3-8,2-2-6",
+			after:  "1-3-8,2-2-6",
+		},
+	}
+
+	for _, cs := range cases {
+		bg, err := ParserGTID(flavor, cs.before)
+		c.Assert(err, IsNil)
+		eg, err := ParserGTID(flavor, cs.end)
+		c.Assert(err, IsNil)
+		ag, err := ParserGTID(flavor, cs.after)
 		c.Assert(err, IsNil)
 		err = bg.Truncate(eg)
 		if cs.hasError {
