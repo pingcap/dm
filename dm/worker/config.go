@@ -46,8 +46,6 @@ const (
 	dbReadTimeout = "30s"
 	// dbGetTimeout is timeout for getting some information from DB
 	dbGetTimeout = 30 * time.Second
-
-	maxServerID uint32 = math.MaxUint32
 )
 
 // SampleConfigFile is sample config file of dm-worker
@@ -266,7 +264,7 @@ func (c *Config) adjust() error {
 	c.Checker.adjust()
 
 	if c.Flavor == "" || c.ServerID == 0 {
-		fromDB, err := c.createBaseDB()
+		fromDB, err := c.createFromDB()
 		if err != nil {
 			return err
 		}
@@ -289,7 +287,7 @@ func (c *Config) adjust() error {
 	return nil
 }
 
-func (c *Config) createBaseDB() (*conn.BaseDB, error) {
+func (c *Config) createFromDB() (*conn.BaseDB, error) {
 	// decrypt password
 	clone, err := c.DecryptPassword()
 	if err != nil {
@@ -339,7 +337,7 @@ func (c *Config) adjustServerID(ctx context.Context, db *sql.DB) error {
 	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < 5; i++ {
 		randomValue := uint32(rand.Intn(100000))
-		randomServerID := maxServerID/10 + randomValue
+		randomServerID := math.MaxUint32/10 + randomValue
 		if _, ok := serverIDs[randomServerID]; ok {
 			continue
 		}
