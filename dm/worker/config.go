@@ -334,7 +334,6 @@ func (c *Config) adjustServerID(ctx context.Context, db *sql.DB) error {
 		return terror.WithScope(err, terror.ScopeUpstream)
 	}
 
-	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < 5; i++ {
 		randomValue := uint32(rand.Intn(100000))
 		randomServerID := math.MaxUint32/10 + randomValue
