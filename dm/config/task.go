@@ -15,7 +15,6 @@ package config
 
 import (
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"regexp"
 	"time"
