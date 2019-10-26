@@ -861,6 +861,14 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
+	var (
+		sqls        = []string{"stmt"}
+		task        = "testA"
+		schema      = "test_db"
+		table       = "test_table"
+		traceGIDIdx = 1
+	)
+
 	server := testDefaultMasterServer(c)
 
 	workers := make([]string, 0, len(server.cfg.DeployMap))
@@ -897,20 +905,13 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 					LockID:   lockID,
 					Exec:     exec,
 					TraceGID: traceGID,
+					DDLs:     sqls,
 				},
 			).Return(ret...)
 
 			server.workerClients[worker] = newMockRPCClient(mockWorkerClient)
 		}
 	}
-
-	var (
-		sqls        = []string{"stmt"}
-		task        = "testA"
-		schema      = "test_db"
-		table       = "test_table"
-		traceGIDIdx = 1
-	)
 
 	prepareDDLLock := func() {
 		// prepare ddl lock keeper, mainly use code from ddl_lock_test.go
@@ -1445,6 +1446,7 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 				LockID:   lockID,
 				Exec:     true,
 				TraceGID: traceGID,
+				DDLs:     ddls,
 			},
 		).Return(&pb.CommonWorkerResponse{Result: true}, nil).MaxTimes(1)
 		mockWorkerClient.EXPECT().ExecuteDDL(
@@ -1454,6 +1456,7 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 				LockID:   lockID,
 				Exec:     false,
 				TraceGID: traceGID,
+				DDLs:     ddls,
 			},
 		).Return(&pb.CommonWorkerResponse{Result: true}, nil).MaxTimes(1)
 
