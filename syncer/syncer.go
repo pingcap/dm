@@ -62,7 +62,7 @@ var (
 	statusTime      = 30 * time.Second
 
 	// MaxDDLConnectionTimeoutMinute also used by SubTask.ExecuteDDL
-	MaxDDLConnectionTimeoutMinute = 30
+	MaxDDLConnectionTimeoutMinute = 5
 
 	maxDMLConnectionTimeout = "5m"
 	maxDDLConnectionTimeout = fmt.Sprintf("%dm", MaxDDLConnectionTimeoutMinute)
