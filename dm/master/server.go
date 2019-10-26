@@ -40,6 +40,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
+	"github.com/pingcap/dm/syncer"
 )
 
 var (
@@ -1464,7 +1465,10 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 			TraceGID: traceGID,
 		},
 	}
-	resp, err := cli.SendRequest(ctx, ownerReq, s.cfg.RPCTimeout)
+	// use a longer timeout for executing DDL in DM-worker.
+	// now, we ignore `invalid connection` for `ADD INDEX`, use a longer timout to ensure the DDL lock removed.
+	ownerTimeout := time.Duration(syncer.MaxDDLConnectionTimeoutMinute)*time.Minute + 30*time.Second
+	resp, err := cli.SendRequest(ctx, ownerReq, ownerTimeout)
 	ownerResp := &pb.CommonWorkerResponse{}
 	if err != nil {
 		ownerResp = errorCommonWorkerResponse(errors.ErrorStack(err), "")
