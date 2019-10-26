@@ -1428,7 +1428,7 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 			Table:  table,
 			DDLs:   ddls,
 		}, nil)
-		// This will lead to a select on ctx.Done and time.After(retryTimeout),
+		// This will lead to a select on ctx.Done and time.After(fetchDDLInfoRetryTimeout),
 		// so we have enough time to cancel the context.
 		stream.EXPECT().Recv().Return(nil, io.EOF).MaxTimes(1)
 		stream.EXPECT().Send(&pb.DDLLockInfo{Task: task, ID: lockID}).Return(nil)
