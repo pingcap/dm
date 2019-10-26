@@ -1463,6 +1463,7 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 			LockID:   lockID,
 			Exec:     true,
 			TraceGID: traceGID,
+			DDLs:     lock.ddls,
 		},
 	}
 	// use a longer timeout for executing DDL in DM-worker.
@@ -1500,6 +1501,7 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 			LockID:   lockID,
 			Exec:     false, // ignore and skip DDL
 			TraceGID: traceGID,
+			DDLs:     lock.ddls,
 		},
 	}
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(workers))
