@@ -44,8 +44,8 @@ import (
 )
 
 var (
-	retryTimeout    = 5 * time.Second
-	cmuxReadTimeout = 10 * time.Second
+	fetchDDLInfoRetryTimeout = 30 * time.Second
+	cmuxReadTimeout          = 10 * time.Second
 )
 
 // Server handles RPC requests for dm-master
@@ -1294,7 +1294,7 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 					select {
 					case <-ctx.Done():
 						return
-					case <-time.After(retryTimeout):
+					case <-time.After(fetchDDLInfoRetryTimeout):
 					}
 				}
 				doRetry = false // reset
