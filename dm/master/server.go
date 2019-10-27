@@ -44,7 +44,7 @@ import (
 )
 
 var (
-	fetchDDLInfoRetryTimeout = 30 * time.Second
+	fetchDDLInfoRetryTimeout = 5 * time.Second
 	cmuxReadTimeout          = 10 * time.Second
 )
 
