@@ -2408,7 +2408,7 @@ func (s *Syncer) checkpointID() string {
 	if len(s.cfg.SourceID) > 0 {
 		return s.cfg.SourceID
 	}
-	return strconv.Itoa(s.cfg.ServerID)
+	return strconv.FormatUint(uint64(s.cfg.ServerID), 10)
 }
 
 // DDLInfo returns a chan from which can receive DDLInfo
