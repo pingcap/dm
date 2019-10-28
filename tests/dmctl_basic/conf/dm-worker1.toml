@@ -1,6 +1,5 @@
 # Worker Configuration.
 
-server-id = 101
 source-id = "mysql-replica-01"
 flavor = ""
 enable-gtid = false

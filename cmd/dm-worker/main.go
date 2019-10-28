@@ -16,10 +16,12 @@ package main
 import (
 	"flag"
 	"fmt"
+	"math/rand"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/pingcap/dm/dm/worker"
 	"github.com/pingcap/dm/pkg/log"
@@ -30,6 +32,8 @@ import (
 )
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
+
 	cfg := worker.NewConfig()
 	err := cfg.Parse(os.Args[1:])
 	switch errors.Cause(err) {
