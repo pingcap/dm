@@ -347,7 +347,7 @@ func (r *Relay) tryRecoverLatestFile(parser2 *parser.Parser) error {
 			if err = latestGTID.Truncate(result.LatestGTIDs); err != nil {
 				return err
 			}
-			err = r.meta.Save(result.LatestPos, result.LatestGTIDs)
+			err = r.meta.Save(result.LatestPos, latestGTID)
 			if err != nil {
 				return terror.Annotatef(err, "save position %s, GTID sets %v after recovered", result.LatestPos, result.LatestGTIDs)
 			}
@@ -393,7 +393,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 					// log the status for debug
 					pos, gs, err2 := utils.GetMasterStatus(r.db, r.cfg.Flavor)
 					if err2 == nil {
-						r.tctx.L().Info("current master status", zap.Stringer("position", pos), zap.Stringer("GTID sets", gs))
+						r.tctx.L().Info("current master status", zap.Stringer("position", pos), log.WrapStringerField("GTID sets", gs))
 					}
 				}
 				binlogReadErrorCounter.Inc()
