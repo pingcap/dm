@@ -51,7 +51,7 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 	resp := new(pb.QueryStatusListResponse)
 	resp.Result = true
 
-	// Should return error
+	// Should return error when some error occurs in subtask
 	resp.Workers = []*pb.QueryStatusResponse{
 		{
 			Result: true,
@@ -83,13 +83,32 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 	}
 	expectedResult := []*taskInfo{{
 		TaskName:   "test",
-		TaskStatus: stageError,
+		TaskStatus: stageError + " - Some error occurred in subtask",
 		Workers:    []string{"172.17.0.2:8262", "172.17.0.3:8262", "172.17.0.6:8262"},
 	}}
 	generateAndCheckTaskResult(c, resp, expectedResult)
+	// Should return error when subtask unit is "Sync" while relay status is not running
+	resp.Workers[2].SubTaskStatus[0].Result = nil
+	// relay status is Error
+	resp.Workers[0].RelayStatus = &pb.RelayStatus{
+		Stage: pb.Stage_Paused,
+		Result: &pb.ProcessResult{
+			Errors: []*pb.ProcessError{{Type: pb.ErrorType_CheckFailed}},
+		}}
+	expectedResult[0].TaskStatus = stageError + " - Relay status is " + stageError
+	generateAndCheckTaskResult(c, resp, expectedResult)
+	// relay status is Paused
+	resp.Workers[0].RelayStatus = &pb.RelayStatus{Stage: pb.Stage_Paused}
+	expectedResult[0].TaskStatus = stageError + " - Relay status is " + pb.Stage_Paused.String()
+	generateAndCheckTaskResult(c, resp, expectedResult)
+	// relay status is Stopped
+	resp.Workers[0].RelayStatus = &pb.RelayStatus{Stage: pb.Stage_Stopped}
+	generateAndCheckTaskResult(c, resp, expectedResult)
+	expectedResult[0].TaskStatus = stageError + " - Relay status is " + pb.Stage_Stopped.String()
 
 	// one subtask is paused and no error occurs, should return paused
 	resp.Workers[2].SubTaskStatus[0].Result = nil
+	resp.Workers[0].RelayStatus = nil
 	expectedResult[0].TaskStatus = pb.Stage_Paused.String()
 	generateAndCheckTaskResult(c, resp, expectedResult)
 	// All subtasks are Finished
@@ -127,7 +146,7 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 		Workers:    []string{"172.17.0.2:8262", "172.17.0.3:8262", "172.17.0.6:8262"},
 	}, {
 		TaskName:   "test2",
-		TaskStatus: stageError,
+		TaskStatus: stageError + " - Some error occurred in subtask",
 		Workers:    []string{"172.17.0.4:8262"},
 	},
 	}

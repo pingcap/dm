@@ -82,21 +82,47 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) {
 	}
 }
 
+// errorOccurred check ProcessResult and return true if some error occurred
+func errorOccurred(result *pb.ProcessResult) bool {
+	return result != nil && len(result.Errors) > 0
+}
+
+// getRelayStage returns current relay stage (including stageError)
+func getRelayStage(relayStatus *pb.RelayStatus) string {
+	if errorOccurred(relayStatus.Result) {
+		return stageError
+	}
+	return relayStatus.Stage.String()
+}
+
 // wrapTaskResult pick task info and generate tasks' status and relative workers
 func wrapTaskResult(resp *pb.QueryStatusListResponse) *taskResult {
 	taskStatusMap := make(map[string]string, len(resp.Workers))
 	taskCorrespondingWorkers := make(map[string][]string, len(resp.Workers))
 	for _, worker := range resp.Workers {
+		relayStatus := worker.RelayStatus
 		for _, subTask := range worker.SubTaskStatus {
 			subTaskName := subTask.Name
 			subTaskStage := subTask.Stage
 
 			taskCorrespondingWorkers[subTaskName] = append(taskCorrespondingWorkers[subTaskName], worker.Worker)
 			taskStage := taskStatusMap[subTaskName]
+			// the status of a task is decided by its subtasks, the rule is listed as follows:
+			// |                     Subtasks' status                       |                Task's status                 |
+			// | :--------------------------------------------------------: | :------------------------------------------: |
+			// |           Any Paused and len(result.errors) > 0            |    Error - Some error occurred in subtask    |
+			// | Any Running and unit is "Sync" and relay is Paused/Stopped | Error - Relay status is Error/Paused/Stopped |
+			// |              Any Paused but without error                  |                    Paused                    |
+			// |                        All New                             |                     New                      |
+			// |                      All Finished                          |                   Finished                   |
+			// |                      All Stopped                           |                   Stopped                    |
+			// |                         Others                             |                   Running                    |
 			switch {
-			case taskStage == stageError:
-			case subTaskStage == pb.Stage_Paused && subTask.Result != nil && len(subTask.Result.Errors) > 0:
-				taskStatusMap[subTaskName] = stageError
+			case len(taskStage) >= 5 && taskStage[0:5] == stageError:
+			case subTaskStage == pb.Stage_Paused && errorOccurred(subTask.Result):
+				taskStatusMap[subTaskName] = stageError + " - Some error occurred in subtask"
+			case subTask.Unit == pb.UnitType_Sync && subTask.Stage == pb.Stage_Running && (relayStatus.Stage == pb.Stage_Paused || relayStatus.Stage == pb.Stage_Stopped):
+				taskStatusMap[subTaskName] = stageError + " - Relay status is " + getRelayStage(relayStatus)
 			case taskStage == pb.Stage_Paused.String():
 			case taskStage == "", subTaskStage == pb.Stage_Paused:
 				taskStatusMap[subTaskName] = subTaskStage.String()
