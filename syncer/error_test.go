@@ -110,6 +110,8 @@ func (s *testSyncerSuite) TestHandleSpecialDDLError(c *C) {
 		invalidDDL    = "SQL CAN NOT BE PARSED"
 		insertDML     = "INSERT INTO tbl VALUES (1)"
 		createTable   = "CREATE TABLE tbl (col INT)"
+		addUK         = "ALTER TABLE tbl ADD UNIQUE INDEX idx(col)"
+		addFK         = "ALTER TABLE tbl ADD CONSTRAINT fk FOREIGN KEY (col) REFERENCES tbl2 (col)"
 		addColumn     = "ALTER TABLE tbl ADD COLUMN col INT"
 		addIndexMulti = "ALTER TABLE tbl ADD INDEX idx1(col1), ADD INDEX idx2(col2)"
 		addIndex1     = "ALTER TABLE tbl ADD INDEX idx(col)"
@@ -154,6 +156,14 @@ func (s *testSyncerSuite) TestHandleSpecialDDLError(c *C) {
 			{
 				err:  mysql.ErrInvalidConn,
 				ddls: []string{addColumn}, // not `ADD INDEX`
+			},
+			{
+				err:  mysql.ErrInvalidConn,
+				ddls: []string{addUK}, // not `ADD INDEX`, but `ADD UNIQUE INDEX`
+			},
+			{
+				err:  mysql.ErrInvalidConn,
+				ddls: []string{addFK}, // not `ADD INDEX`, but `ADD * FOREIGN KEY`
 			},
 			{
 				err:  mysql.ErrInvalidConn,
