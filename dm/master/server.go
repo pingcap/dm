@@ -40,11 +40,12 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
+	"github.com/pingcap/dm/syncer"
 )
 
 var (
-	retryTimeout    = 5 * time.Second
-	cmuxReadTimeout = 10 * time.Second
+	fetchDDLInfoRetryTimeout = 5 * time.Second
+	cmuxReadTimeout          = 10 * time.Second
 )
 
 // Server handles RPC requests for dm-master
@@ -1293,7 +1294,7 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 					select {
 					case <-ctx.Done():
 						return
-					case <-time.After(retryTimeout):
+					case <-time.After(fetchDDLInfoRetryTimeout):
 					}
 				}
 				doRetry = false // reset
@@ -1462,9 +1463,13 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 			LockID:   lockID,
 			Exec:     true,
 			TraceGID: traceGID,
+			DDLs:     lock.ddls,
 		},
 	}
-	resp, err := cli.SendRequest(ctx, ownerReq, s.cfg.RPCTimeout)
+	// use a longer timeout for executing DDL in DM-worker.
+	// now, we ignore `invalid connection` for `ADD INDEX`, use a longer timout to ensure the DDL lock removed.
+	ownerTimeout := time.Duration(syncer.MaxDDLConnectionTimeoutMinute)*time.Minute + 30*time.Second
+	resp, err := cli.SendRequest(ctx, ownerReq, ownerTimeout)
 	ownerResp := &pb.CommonWorkerResponse{}
 	if err != nil {
 		ownerResp = errorCommonWorkerResponse(errors.ErrorStack(err), "")
@@ -1496,6 +1501,7 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 			LockID:   lockID,
 			Exec:     false, // ignore and skip DDL
 			TraceGID: traceGID,
+			DDLs:     lock.ddls,
 		},
 	}
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(workers))

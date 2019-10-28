@@ -1302,9 +1302,14 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 
 		go syncer.Process(ctx, resultCh)
 
+		var wg sync.WaitGroup
+		wg.Add(1)
 		go func() {
-			req := &DDLExecItem{&pb.ExecDDLRequest{Exec: true}, make(chan error, 1)}
-			syncer.ddlExecInfo.Send(ctx, req)
+			defer wg.Done()
+			reqMismatch := &DDLExecItem{&pb.ExecDDLRequest{Exec: true, DDLs: []string{"stmt"}}, make(chan error, 1)}
+			c.Assert(syncer.ddlExecInfo.Send(ctx, reqMismatch), IsNil)
+			reqMatch := &DDLExecItem{&pb.ExecDDLRequest{Exec: true}, make(chan error, 1)}
+			c.Assert(syncer.ddlExecInfo.Send(ctx, reqMatch), IsNil)
 		}()
 
 		select {
@@ -1316,6 +1321,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		case <-time.After(2 * time.Second):
 		}
 		cancel()
+		wg.Wait()
 
 		syncer.Close()
 		c.Assert(syncer.isClosed(), IsTrue)
