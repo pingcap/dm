@@ -89,6 +89,7 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 	generateAndCheckTaskResult(c, resp, expectedResult)
 	// Should return error when subtask unit is "Sync" while relay status is not running
 	resp.Workers[2].SubTaskStatus[0].Result = nil
+	resp.Workers[0].SubTaskStatus[0].Unit = pb.UnitType_Sync
 	// relay status is Error
 	resp.Workers[0].RelayStatus = &pb.RelayStatus{
 		Stage: pb.Stage_Paused,
@@ -103,11 +104,12 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 	generateAndCheckTaskResult(c, resp, expectedResult)
 	// relay status is Stopped
 	resp.Workers[0].RelayStatus = &pb.RelayStatus{Stage: pb.Stage_Stopped}
-	generateAndCheckTaskResult(c, resp, expectedResult)
 	expectedResult[0].TaskStatus = stageError + " - Relay status is " + pb.Stage_Stopped.String()
+	generateAndCheckTaskResult(c, resp, expectedResult)
 
 	// one subtask is paused and no error occurs, should return paused
 	resp.Workers[2].SubTaskStatus[0].Result = nil
+	resp.Workers[0].SubTaskStatus[0].Unit = 0
 	resp.Workers[0].RelayStatus = nil
 	expectedResult[0].TaskStatus = pb.Stage_Paused.String()
 	generateAndCheckTaskResult(c, resp, expectedResult)
