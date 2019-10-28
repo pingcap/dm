@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -62,7 +63,7 @@ var (
 	statusTime      = 30 * time.Second
 
 	// MaxDDLConnectionTimeoutMinute also used by SubTask.ExecuteDDL
-	MaxDDLConnectionTimeoutMinute = 30
+	MaxDDLConnectionTimeoutMinute = 5
 
 	maxDMLConnectionTimeout = "5m"
 	maxDDLConnectionTimeout = fmt.Sprintf("%dm", MaxDDLConnectionTimeoutMinute)
@@ -879,8 +880,10 @@ func (s *Syncer) syncDDL(ctx *tcontext.Context, queueBucket string, db *DBConn, 
 		if sqlJob.ddlExecItem != nil && sqlJob.ddlExecItem.req != nil && !sqlJob.ddlExecItem.req.Exec {
 			s.tctx.L().Info("ignore sharding DDLs", zap.Strings("ddls", sqlJob.ddls))
 		} else {
-			_, err = db.executeSQLWithIgnore(s.tctx, ignoreDDLError, sqlJob.ddls)
+			var affected int
+			affected, err = db.executeSQLWithIgnore(s.tctx, ignoreDDLError, sqlJob.ddls)
 			if err != nil {
+				err = s.handleSpecialDDLError(s.tctx, err, sqlJob.ddls, affected, db)
 				err = terror.WithScope(err, terror.ScopeDownstream)
 			}
 
@@ -1828,13 +1831,22 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 		// block and wait DDL lock to be synced
 		shardLockResolving.WithLabelValues(s.cfg.Name).Set(1)
-		var ok bool
-		ddlExecItem, ok = <-s.ddlExecInfo.Chan(needHandleDDLs)
-		shardLockResolving.WithLabelValues(s.cfg.Name).Set(0)
-		if !ok {
-			// chan closed
-			s.tctx.L().Warn("canceled from exrernal", zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start position", startPos), log.WrapStringerField("end position", ec.currentPos))
-			return nil
+		for {
+			var ok bool
+			ddlExecItem, ok = <-s.ddlExecInfo.Chan(needHandleDDLs)
+			if !ok {
+				// chan closed
+				shardLockResolving.WithLabelValues(s.cfg.Name).Set(0)
+				s.tctx.L().Warn("canceled from external", zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start position", startPos), log.WrapStringerField("end position", ec.currentPos))
+				return nil
+			} else if len(ddlExecItem.req.DDLs) != 0 && !reflect.DeepEqual(ddlExecItem.req.DDLs, needHandleDDLs) {
+				// ignore un-cleared cached/duplicate DDL execute request
+				// check `len(ddlExecItem.req.DDLs) != 0` to support old DM-master and `break-ddl-lock`
+				s.tctx.L().Warn("ignore mismatched DDL execute request", zap.String("source", source), zap.Strings("expect", needHandleDDLs), zap.Strings("request", ddlExecItem.req.DDLs))
+				continue
+			}
+			shardLockResolving.WithLabelValues(s.cfg.Name).Set(0)
+			break
 		}
 
 		if ddlExecItem.req.Exec {
