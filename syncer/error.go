@@ -114,8 +114,14 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 		if len(v.Specs) > 1 {
 			return err
 		} else if v.Specs[0].Tp == ast.AlterTableAddConstraint {
-			handle()
-			return nil // ignore the error
+			// only take effect on `ADD INDEX`, no UNIQUE KEY and FOREIGN KEY
+			// UNIQUE KEY may affect correctness, FOREIGN KEY should be filtered.
+			// ref https://github.com/pingcap/tidb/blob/3cdea0dfdf28197ee65545debce8c99e6d2945e3/ddl/ddl_api.go#L1929-L1948.
+			switch v.Specs[0].Constraint.Tp {
+			case ast.ConstraintKey, ast.ConstraintIndex:
+				handle()
+				return nil // ignore the error
+			}
 		}
 	case *ast.CreateIndexStmt:
 		handle()
