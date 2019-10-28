@@ -135,6 +135,9 @@ const (
 	codeBackoffArgsNotValid
 
 	codeInitLoggerFail
+
+	// pkg/gtid
+	codeGTIDTruncateInvalid
 )
 
 // Config related error code list
@@ -589,6 +592,8 @@ var (
 	ErrBackoffArgsNotValid = New(codeBackoffArgsNotValid, ClassFunctional, ScopeInternal, LevelMedium, "backoff argument %s value %v not valid")
 	// pkg
 	ErrInitLoggerFail = New(codeInitLoggerFail, ClassFunctional, ScopeInternal, LevelMedium, "init logger failed")
+	// pkg/gtid
+	ErrGTIDTruncateInvalid = New(codeGTIDTruncateInvalid, ClassFunctional, ScopeInternal, LevelHigh, "truncate GTID sets %v to %v not valid")
 
 	// Config related error
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s")
