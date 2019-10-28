@@ -120,8 +120,6 @@ func (s *Syncer) handleSpecialDDLError(tctx *tcontext.Context, err error, ddls [
 	case *ast.CreateIndexStmt:
 		handle()
 		return nil // ignore the error
-	default:
-		return err
 	}
 	return err
 }
