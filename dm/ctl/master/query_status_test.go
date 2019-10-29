@@ -113,12 +113,11 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 	resp.Workers[0].RelayStatus = nil
 	expectedResult[0].TaskStatus = pb.Stage_Paused.String()
 	generateAndCheckTaskResult(c, resp, expectedResult)
-	// All subtasks are Finished
-	subTestSameSubTaskStatus(c, resp, expectedResult, pb.Stage_Finished)
-	// All subtasks are Stopped
-	subTestSameSubTaskStatus(c, resp, expectedResult, pb.Stage_Stopped)
-	// All subtasks are New
-	subTestSameSubTaskStatus(c, resp, expectedResult, pb.Stage_New)
+	// All subtasks are Finished/Stopped/.../New
+	stageArray := []pb.Stage{pb.Stage_Finished, pb.Stage_Stopped, pb.Stage_Paused, pb.Stage_Running, pb.Stage_New}
+	for _, stage := range stageArray {
+		subTestSameSubTaskStatus(c, resp, expectedResult, stage)
+	}
 	// All subtasks are New except the last one(which is Finished)
 	resp.Workers[2].SubTaskStatus[0].Stage = pb.Stage_Finished
 	expectedResult[0].TaskStatus = pb.Stage_Running.String()
