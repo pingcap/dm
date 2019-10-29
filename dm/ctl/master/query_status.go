@@ -98,8 +98,8 @@ func getRelayStage(relayStatus *pb.RelayStatus) string {
 
 // wrapTaskResult picks task info and generate tasks' status and relative workers
 func wrapTaskResult(resp *pb.QueryStatusListResponse) *taskResult {
-	taskStatusMap := make(map[string]string, len(resp.Workers))
-	taskCorrespondingWorkers := make(map[string][]string, len(resp.Workers))
+	taskStatusMap := make(map[string]string)
+	taskCorrespondingWorkers := make(map[string][]string)
 	for _, worker := range resp.Workers {
 		relayStatus := worker.RelayStatus
 		for _, subTask := range worker.SubTaskStatus {
