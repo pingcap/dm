@@ -16,6 +16,7 @@ package master
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
@@ -82,7 +83,7 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) {
 	}
 }
 
-// errorOccurred check ProcessResult and return true if some error occurred
+// errorOccurred checks ProcessResult and return true if some error occurred
 func errorOccurred(result *pb.ProcessResult) bool {
 	return result != nil && len(result.Errors) > 0
 }
@@ -95,7 +96,7 @@ func getRelayStage(relayStatus *pb.RelayStatus) string {
 	return relayStatus.Stage.String()
 }
 
-// wrapTaskResult pick task info and generate tasks' status and relative workers
+// wrapTaskResult picks task info and generate tasks' status and relative workers
 func wrapTaskResult(resp *pb.QueryStatusListResponse) *taskResult {
 	taskStatusMap := make(map[string]string, len(resp.Workers))
 	taskCorrespondingWorkers := make(map[string][]string, len(resp.Workers))
@@ -118,7 +119,7 @@ func wrapTaskResult(resp *pb.QueryStatusListResponse) *taskResult {
 			// |                      All Stopped                           |                   Stopped                    |
 			// |                         Others                             |                   Running                    |
 			switch {
-			case len(taskStage) >= 5 && taskStage[0:5] == stageError:
+			case strings.HasPrefix(taskStage, stageError):
 			case subTaskStage == pb.Stage_Paused && errorOccurred(subTask.Result):
 				taskStatusMap[subTaskName] = stageError + " - Some error occurred in subtask"
 			case subTask.Unit == pb.UnitType_Sync && subTask.Stage == pb.Stage_Running && (relayStatus.Stage == pb.Stage_Paused || relayStatus.Stage == pb.Stage_Stopped):
