@@ -38,7 +38,7 @@ function run() {
 
         echo "check un-accessible DM-worker exists"
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "query-status" \
+            "query-status -w 127.0.0.1:8888" \
             "transport: Error while dialing dial tcp 127.0.0.1:8888: connect: connection refused" 1
 
         echo "start task and will failed"
