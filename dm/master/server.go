@@ -27,12 +27,11 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
-	"github.com/soheilhy/cmux"
+	"go.etcd.io/etcd/embed"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/checker"
-	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/master/sql-operator"
 	"github.com/pingcap/dm/dm/master/workerrpc"
@@ -45,7 +44,6 @@ import (
 
 var (
 	fetchDDLInfoRetryTimeout = 5 * time.Second
-	cmuxReadTimeout          = 10 * time.Second
 )
 
 // Server handles RPC requests for dm-master
@@ -54,8 +52,11 @@ type Server struct {
 
 	cfg *Config
 
-	rootLis net.Listener
-	svr     *grpc.Server
+	// the embed etcd server, and the gRPC/HTTP API server also attached to it.
+	etcd *embed.Etcd
+
+	// WaitGroup for background functions.
+	bgFunWg sync.WaitGroup
 
 	// dm-worker-ID(host:ip) -> dm-worker client management
 	workerClients map[string]workerrpc.Client
@@ -95,43 +96,61 @@ func NewServer(cfg *Config) *Server {
 }
 
 // Start starts to serving
-func (s *Server) Start() error {
-	var err error
-
-	_, _, err = s.splitHostPort()
+func (s *Server) Start(ctx context.Context) error {
+	// TODO: check config in config.go?
+	_, _, err := s.splitHostPort()
 	if err != nil {
 		return err
 	}
 
-	s.rootLis, err = net.Listen("tcp", s.cfg.MasterAddr)
-	if err != nil {
-		return terror.ErrMasterStartService.Delegate(err)
-	}
-
+	// create clients to DM-workers
 	for _, workerAddr := range s.cfg.DeployMap {
 		s.workerClients[workerAddr], err = workerrpc.NewGRPCClient(workerAddr)
 		if err != nil {
 			return err
 		}
 	}
-	s.closed.Set(false)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-	defer func() {
-		cancel()
-		wg.Wait()
-	}()
+	// get an HTTP to gRPC API handler.
+	apiHandler, err := getHTTPAPIHandler(ctx, s.cfg.MasterAddr)
+	if err != nil {
+		return err
+	}
 
-	wg.Add(1)
+	// HTTP handlers on etcd's client IP:port
+	// no `metrics` for DM-master now, add it later.
+	// NOTE: after received any HTTP request from chrome browser,
+	// the server may be blocked when closing sometime.
+	// And any request to etcd's builtin handler has the same problem.
+	// And curl or safari browser does trigger this problem.
+	// But I haven't figured it out.
+	// (maybe more requests are sent from chrome or its extensions).
+	userHandles := map[string]http.Handler{
+		"/apis/":  apiHandler,
+		"/status": getStatusHandle(),
+		"/debug/": getDebugHandler(),
+	}
+
+	// gRPC API server
+	gRPCSvr := func(gs *grpc.Server) { pb.RegisterMasterServer(gs, s) }
+
+	// start embed etcd server, gRPC API server and HTTP (API, status and debug) server.
+	s.etcd, err = startEtcd(s.cfg.MasterAddr, "", gRPCSvr, userHandles)
+	if err != nil {
+		return err
+	}
+
+	s.closed.Set(false) // the server started now.
+
+	s.bgFunWg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer s.bgFunWg.Done()
 		s.ap.Start(ctx)
 	}()
 
-	wg.Add(1)
+	s.bgFunWg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer s.bgFunWg.Done()
 		select {
 		case <-ctx.Done():
 			return
@@ -141,59 +160,15 @@ func (s *Server) Start() error {
 		}
 	}()
 
-	wg.Add(1)
+	s.bgFunWg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer s.bgFunWg.Done()
 		// fetch DDL info from dm-workers to sync sharding DDL
 		s.fetchWorkerDDLInfo(ctx)
 	}()
 
-	// create a cmux
-	m := cmux.New(s.rootLis)
-	m.SetReadTimeout(cmuxReadTimeout) // set a timeout, ref: https://github.com/pingcap/tidb-binlog/pull/352
-
-	// match connections in order: first gRPC, then HTTP
-	grpcL := m.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
-	httpL := m.Match(cmux.HTTP1Fast())
-
-	s.svr = grpc.NewServer()
-	pb.RegisterMasterServer(s.svr, s)
-	go func() {
-		err2 := s.svr.Serve(grpcL)
-		if err2 != nil && !common.IsErrNetClosing(err2) && err2 != cmux.ErrListenerClosed {
-			log.L().Error("fail to start gRPC server", zap.Error(err2))
-		}
-	}()
-
-	httpmux := http.NewServeMux()
-	HandleStatus(httpmux) // serve status
-
-	err = s.HandleHTTPApis(ctx, httpmux) // server http api
-	if err != nil {
-		return err
-	}
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
-		httpS := &http.Server{
-			Handler: httpmux,
-		}
-
-		err3 := httpS.Serve(httpL)
-		if err3 != nil && !common.IsErrNetClosing(err3) && err3 != http.ErrServerClosed {
-			log.L().Error("run http server", log.ShortError(err3))
-		}
-	}()
-
 	log.L().Info("listening gRPC API and status request", zap.String("address", s.cfg.MasterAddr))
-	err = m.Serve() // start serving, block
-	if err != nil && common.IsErrNetClosing(err) {
-		err = nil
-	}
-
-	return err
+	return nil
 }
 
 // Close close the RPC server, this function can be called multiple times
@@ -203,14 +178,14 @@ func (s *Server) Close() {
 	if s.closed.Get() {
 		return
 	}
-	if s.rootLis != nil {
-		err := s.rootLis.Close()
-		if err != nil && !common.IsErrNetClosing(err) {
-			log.L().Error("close net listener", zap.Error(err))
-		}
-	}
-	if s.svr != nil {
-		s.svr.GracefulStop()
+	log.L().Info("closing server")
+
+	// wait for background functions returned
+	s.bgFunWg.Wait()
+
+	// close the etcd and other attached servers
+	if s.etcd != nil {
+		s.etcd.Close()
 	}
 	s.closed.Set(true)
 }

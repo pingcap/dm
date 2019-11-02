@@ -14,6 +14,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -30,6 +31,7 @@ import (
 )
 
 func main() {
+	// 1. parse config
 	cfg := master.NewConfig()
 	err := cfg.Parse(os.Args[1:])
 	switch errors.Cause(err) {
@@ -41,6 +43,7 @@ func main() {
 		os.Exit(2)
 	}
 
+	// 2. init logger
 	err = log.InitLogger(&log.Config{
 		File:  cfg.LogFile,
 		Level: strings.ToLower(cfg.LogLevel),
@@ -50,39 +53,42 @@ func main() {
 		os.Exit(2)
 	}
 
+	// 3. print process version information
 	utils.PrintInfo("dm-master", func() {
 		log.L().Info("", zap.Stringer("dm-master config", cfg))
 	})
 
+	// 4. start the server
+	ctx, cancel := context.WithCancel(context.Background())
+	server := master.NewServer(cfg)
+	err = server.Start(ctx)
+	if err != nil {
+		log.L().Error("fail to start dm-master", zap.Error(err))
+		os.Exit(2)
+	}
+
+	// 5. wait for stopping the process
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc,
 		syscall.SIGHUP,
 		syscall.SIGINT,
 		syscall.SIGTERM,
 		syscall.SIGQUIT)
-
-	server := master.NewServer(cfg)
-
 	go func() {
 		sig := <-sc
 		log.L().Info("got signal to exit", zap.Stringer("signal", sig))
-		server.Close()
+		cancel()
 	}()
+	<-ctx.Done()
 
-	err = server.Start()
-	if err != nil {
-		log.L().Error("fail to start dm-master", zap.Error(err))
-	}
+	// 6. close the server
 	server.Close()
-
 	log.L().Info("dm-master exit")
 
+	// 7. flush log
 	syncErr := log.L().Sync()
 	if syncErr != nil {
 		fmt.Fprintln(os.Stderr, "sync log failed", syncErr)
-	}
-
-	if err != nil || syncErr != nil {
 		os.Exit(1)
 	}
 }

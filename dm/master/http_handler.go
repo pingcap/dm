@@ -14,14 +14,21 @@
 package master
 
 import (
+	"context"
 	"net/http"
 	"net/http/pprof"
 
+	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"google.golang.org/grpc"
+
 	"github.com/pingcap/dm/dm/common"
+	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
+// statusHandler handles process status.
 type statusHandler struct {
 }
 
@@ -34,12 +41,36 @@ func (h *statusHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// HandleStatus handles functions for getting status by HTTP request
-func HandleStatus(mux *http.ServeMux) {
-	mux.Handle("/status", &statusHandler{})
+// getStatusHandle returns a HTTP handler to handle process status.
+func getStatusHandle() http.Handler {
+	return &statusHandler{}
+}
+
+// getHTTPAPIHandler returns a HTTP handler to handle DM-master APIs.
+func getHTTPAPIHandler(ctx context.Context, addr string) (http.Handler, error) {
+	// dial the real API server in non-blocking mode, it may not started yet.
+	opts := []grpc.DialOption{grpc.WithInsecure()}
+	// NOTE: should we need to replace `host` in `addr` to `127.0.0.1`?
+	conn, err := grpc.DialContext(ctx, addr, opts...)
+	if err != nil {
+		return nil, terror.ErrMasterHandleHTTPApis.Delegate(err)
+	}
+
+	gwmux := runtime.NewServeMux()
+	err = pb.RegisterMasterHandler(ctx, gwmux, conn)
+	if err != nil {
+		return nil, terror.ErrMasterHandleHTTPApis.Delegate(err)
+	}
+	return gwmux, nil
+}
+
+// getDebugHandler returns a HTTP handler to handle debug information.
+func getDebugHandler() http.Handler {
+	mux := http.NewServeMux()
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
 	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
 	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
 	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	return mux
 }
