@@ -286,19 +286,19 @@ func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
 	cfg.Dir = c.DataDir
 
 	// reuse the previous master-addr as the client listening URL.
-	cURL, err := parseUrls(c.MasterAddr)
+	cURL, err := parseURLs(c.MasterAddr)
 	if err != nil {
 		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.Delegate(err, "--listen-client-urls/--advertise-client-urls")
 	}
 	cfg.LCUrls = cURL
 	cfg.ACUrls = cURL
 
-	cfg.LPUrls, err = parseUrls(c.PeerUrls)
+	cfg.LPUrls, err = parseURLs(c.PeerUrls)
 	if err != nil {
 		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.Delegate(err, "--listen-peer-urls")
 	}
 
-	cfg.APUrls, err = parseUrls(c.AdvertisePeerUrls)
+	cfg.APUrls, err = parseURLs(c.AdvertisePeerUrls)
 	if err != nil {
 		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.Delegate(err, "--initial-advertise-peer-urls")
 	}
@@ -308,10 +308,14 @@ func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
 	return cfg, nil
 }
 
-// parseUrls parse a string into multiple urls.
+// parseURLs parse a string into multiple urls.
 // if the URL in the string without protocol scheme, use `http` as the default.
 // if no IP exists in the address, `0.0.0.0` is used.
-func parseUrls(s string) ([]url.URL, error) {
+func parseURLs(s string) ([]url.URL, error) {
+	if s == "" {
+		return nil, nil
+	}
+
 	items := strings.Split(s, ",")
 	urls := make([]url.URL, 0, len(items))
 	for _, item := range items {
@@ -320,7 +324,7 @@ func parseUrls(s string) ([]url.URL, error) {
 			u, err = url.Parse("http://" + item)
 		}
 		if err != nil {
-			return nil, err
+			return nil, terror.ErrMasterParseURLFail.Delegate(err, item)
 		}
 		if strings.Index(u.Host, ":") == 0 {
 			u.Host = "0.0.0.0" + u.Host

@@ -18,18 +18,25 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"path"
 	"strings"
 
 	capturer "github.com/kami-zh/go-capturer"
 	"github.com/pingcap/check"
+
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var (
 	defaultConfigFile = "./dm-master.toml"
+	_                 = check.Suite(&testConfigSuite{})
 )
 
-func (t *testMaster) TestPrintSampleConfig(c *check.C) {
+type testConfigSuite struct {
+}
+
+func (t *testConfigSuite) TestPrintSampleConfig(c *check.C) {
 	var (
 		buf    []byte
 		err    error
@@ -65,7 +72,7 @@ func (t *testMaster) TestPrintSampleConfig(c *check.C) {
 	c.Assert(strings.TrimSpace(out), check.Matches, "base64 decode config error:.*")
 }
 
-func (t *testMaster) TestConfig(c *check.C) {
+func (t *testConfigSuite) TestConfig(c *check.C) {
 	var (
 		err        error
 		cfg        = &Config{}
@@ -121,7 +128,7 @@ func (t *testMaster) TestConfig(c *check.C) {
 	}
 }
 
-func (t *testMaster) TestUpdateConfigFile(c *check.C) {
+func (t *testConfigSuite) TestUpdateConfigFile(c *check.C) {
 	var (
 		err        error
 		content    []byte
@@ -153,7 +160,7 @@ func (t *testMaster) TestUpdateConfigFile(c *check.C) {
 	c.Assert(newContent, check.DeepEquals, content)
 }
 
-func (t *testMaster) TestInvalidConfig(c *check.C) {
+func (t *testConfigSuite) TestInvalidConfig(c *check.C) {
 	var (
 		err error
 		cfg = NewConfig()
@@ -194,4 +201,50 @@ dm-worker = "172.16.10.72:8262"`)
 	err = cfg.configFromFile(filepath2)
 	c.Assert(err, check.NotNil)
 	c.Assert(err, check.ErrorMatches, "*master config contained unknown configuration options: aaa*")
+}
+func (t *testConfigSuite) TestParseURLs(c *check.C) {
+	cases := []struct {
+		str    string
+		urls   []url.URL
+		hasErr bool
+	}{
+		{}, // empty str
+		{
+			str:  "http://127.0.0.1:8269",
+			urls: []url.URL{{Scheme: "http", Host: "127.0.0.1:8269"}},
+		},
+		{
+			str: "http://127.0.0.1:8269,http://127.0.0.1:18269",
+			urls: []url.URL{
+				{Scheme: "http", Host: "127.0.0.1:8269"},
+				{Scheme: "http", Host: "127.0.0.1:18269"},
+			},
+		},
+		{
+			str:    "127.0.0.1:8269", // no scheme, but url.Parse can't handle it now.
+			hasErr: true,
+		},
+		{
+			str:  ":8269", // no scheme and IP
+			urls: []url.URL{{Scheme: "http", Host: "0.0.0.0:8269"}},
+		},
+		{
+			str: ":8269,http://127.0.0.1:18269",
+			urls: []url.URL{
+				{Scheme: "http", Host: "0.0.0.0:8269"},
+				{Scheme: "http", Host: "127.0.0.1:18269"},
+			},
+		},
+	}
+
+	for _, cs := range cases {
+		c.Logf("raw string %s", cs.str)
+		urls, err := parseURLs(cs.str)
+		if cs.hasErr {
+			c.Assert(terror.ErrMasterParseURLFail.Equal(err), check.IsTrue)
+		} else {
+			c.Assert(err, check.IsNil)
+			c.Assert(urls, check.DeepEquals, cs.urls)
+		}
+	}
 }

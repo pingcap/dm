@@ -384,6 +384,7 @@ const (
 	codeMasterGetHostnameFail
 	codeMasterGenEmbedEtcdConfigFail
 	codeMasterStartEmbedEtcdFail
+	codeMasterParseURLFail
 )
 
 // DM-worker error code
@@ -824,6 +825,7 @@ var (
 	ErrMasterGetHostnameFail        = New(codeMasterGetHostnameFail, ClassDMMaster, ScopeInternal, LevelHigh, "get hostname fail")
 	ErrMasterGenEmbedEtcdConfigFail = New(codeMasterGenEmbedEtcdConfigFail, ClassDMMaster, ScopeInternal, LevelHigh, "generate config item %s for embed etcd fail")
 	ErrMasterStartEmbedEtcdFail     = New(codeMasterStartEmbedEtcdFail, ClassDMMaster, ScopeInternal, LevelHigh, "start embed etcd fail")
+	ErrMasterParseURLFail           = New(codeMasterParseURLFail, ClassDMMaster, ScopeInternal, LevelHigh, "parse URL %s fail")
 
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set")
