@@ -202,6 +202,14 @@ func (r *BinlogReader) parseDirAsPossible(ctx context.Context, s *LocalStreamer,
 				if !strings.HasSuffix(relayLogFile, pos.Name) {
 					return false, "", "", terror.ErrFirstRelayLogNotMatchPos.Generate(relayLogFile, pos)
 				}
+				relayFilepath := path.Join(dir, relayLogFile)
+				cmp, err := fileSizeUpdated(relayFilepath, offset)
+				if err != nil {
+					return false, "", "", err
+				}
+				if cmp < 0 {
+					return false, "", "", terror.ErrRelayLogGivenPosTooBig
+				}
 			} else {
 				offset = 4        // for other relay log file, start parse from 4
 				firstParse = true // new relay log file need to parse

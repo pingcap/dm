@@ -67,6 +67,7 @@ const (
 	codeNoSubdirToSwitch
 	codeNeedSyncAgain
 	codeSyncClosed
+	codeRelayLogGivenPosTooBig
 	// pkg/utils
 	codeSchemaTableNameNotValid
 	codeGenTableRouter
@@ -516,7 +517,8 @@ var (
 	ErrWatcherStart             = New(codeWatcherStart, ClassFunctional, ScopeInternal, LevelHigh, "watcher starts for relay log dir %s")
 	ErrWatcherChanClosed        = New(codeWatcherChanClosed, ClassFunctional, ScopeInternal, LevelHigh, "watcher's %s chan for relay log dir %s closed")
 	ErrWatcherChanRecvError     = New(codeWatcherChanRecvError, ClassFunctional, ScopeInternal, LevelHigh, "watcher receives error, relay log dir %s")
-	ErrRelayLogFileSizeSmaller  = New(codeRelayLogFileSizeSmaller, ClassFunctional, ScopeInternal, LevelHigh, "file size of relay log %s become smaller")
+	ErrRelayLogGivenPosTooBig   = New(codeRelayLogGivenPosTooBig, ClassFunctional, ScopeInternal, LevelHigh, "the relay log pos of meta config is too big, please check it again")
+	ErrRelayLogFileSizeSmaller  = New(codeRelayLogFileSizeSmaller, ClassFunctional, ScopeInternal, LevelHigh, "file size of relay log %s become smaller, please check the status of relay log and re-pull it")
 	ErrBinlogFileNotSpecified   = New(codeBinlogFileNotSpecified, ClassFunctional, ScopeInternal, LevelHigh, "binlog file must be specified")
 	ErrNoRelayLogMatchPos       = New(codeNoRelayLogMatchPos, ClassFunctional, ScopeInternal, LevelHigh, "no relay log files in dir %s match pos %s")
 	ErrFirstRelayLogNotMatchPos = New(codeFirstRelayLogNotMatchPos, ClassFunctional, ScopeInternal, LevelHigh, "the first relay log %s not match the start pos %v")
@@ -670,7 +672,7 @@ var (
 	ErrRelayTCPReaderStartSync           = New(codeRelayTCPReaderStartSync, ClassRelayUnit, ScopeUpstream, LevelHigh, "start sync from position %s")
 	ErrRelayTCPReaderNilGTID             = New(codeRelayTCPReaderNilGTID, ClassRelayUnit, ScopeInternal, LevelHigh, "nil GTID set not valid")
 	ErrRelayTCPReaderStartSyncGTID       = New(codeRelayTCPReaderStartSyncGTID, ClassRelayUnit, ScopeUpstream, LevelHigh, "start sync from GTID set %s")
-	ErrRelayTCPReaderGetEvent            = New(codeRelayTCPReaderGetEvent, ClassRelayUnit, ScopeUpstream, LevelHigh, "TCPReader get event")
+	ErrRelayTCPReaderGetEvent            = New(codeRelayTCPReaderGetEvent, ClassRelayUnit, ScopeUpstream, LevelHigh, "TCPReader get relay event with error:")
 	ErrRelayWriterNotStateNew            = New(codeRelayWriterNotStateNew, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s, already started")
 	ErrRelayWriterStateCannotClose       = New(codeRelayWriterStateCannotClose, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s, can not close")
 	ErrRelayWriterNeedStart              = New(codeRelayWriterNeedStart, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s, please start the writer first")
@@ -815,7 +817,7 @@ var (
 	ErrMasterQueryWorkerConfig     = New(codeMasterQueryWorkerConfig, ClassDMMaster, ScopeInternal, LevelHigh, "")
 	ErrMasterOperNotFound          = New(codeMasterOperNotFound, ClassDMMaster, ScopeInternal, LevelHigh, "operation %d of task %s not found, please execute `query-status` to check status")
 	ErrMasterOperRespNotSuccess    = New(codeMasterOperRespNotSuccess, ClassDMMaster, ScopeInternal, LevelHigh, "operation not success: %s")
-	ErrMasterOperRequestTimeout    = New(codeMasterOperRequestTimeout, ClassDMMaster, ScopeInternal, LevelHigh, "request is timeout, but request may be successful, please execute `query-status` to check status")
+	ErrMasterOperRequestTimeout    = New(codeMasterOperRequestTimeout, ClassDMMaster, ScopeInternal, LevelHigh, "request to worker is timeout, but request may be successful, please execute `query-status` to check status")
 	ErrMasterHandleHTTPApis        = New(codeMasterHandleHTTPApis, ClassDMMaster, ScopeInternal, LevelHigh, "serve http apis to grpc")
 	ErrMasterHostPortNotValid      = New(codeMasterHostPortNotValid, ClassDMMaster, ScopeInternal, LevelHigh, "host:port '%s' not valid")
 
@@ -886,7 +888,7 @@ var (
 	ErrWorkerExecSkipDDLConflict     = New(codeWorkerExecSkipDDLConflict, ClassDMWorker, ScopeInternal, LevelHigh, "execDDL and skipDDL can not specify both at the same time")
 	ErrWorkerExecDDLSyncerOnly       = New(codeWorkerExecDDLSyncerOnly, ClassDMWorker, ScopeInternal, LevelHigh, "only syncer support ExecuteDDL, but current unit is %s")
 	ErrWorkerExecDDLTimeout          = New(codeWorkerExecDDLTimeout, ClassDMWorker, ScopeInternal, LevelHigh, "ExecuteDDL timeout, try use `query-status` to query whether the DDL is still blocking")
-	ErrWorkerWaitRelayCatchupTimeout = New(codeWorkerWaitRelayCatchupTimeout, ClassDMWorker, ScopeInternal, LevelHigh, "wait relay catchup timeout, loader end binlog pos: %s, relay binlog pos: %s")
+	ErrWorkerWaitRelayCatchupTimeout = New(codeWorkerWaitRelayCatchupTimeout, ClassDMWorker, ScopeInternal, LevelHigh, "waiting for relay binlog pos to catch up with loader end binlog pos is timeout, loader end binlog pos: %s, relay binlog pos: %s")
 	ErrWorkerRelayIsPurging          = New(codeWorkerRelayIsPurging, ClassDMWorker, ScopeInternal, LevelHigh, "relay log purger is purging, cannot start sub task %s, please try again later")
 	ErrWorkerHostPortNotValid        = New(codeWorkerHostPortNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "host:port '%s' not valid")
 

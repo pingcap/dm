@@ -314,7 +314,7 @@ func (c *TaskConfig) DecodeFile(fpath string) error {
 func (c *TaskConfig) Decode(data string) error {
 	err := yaml.UnmarshalStrict([]byte(data), c)
 	if err != nil {
-		return terror.ErrConfigTaskYamlTransform.Delegate(err, "decode config from data")
+		return terror.ErrConfigTaskYamlTransform.Delegate(err, "decode task config failed")
 	}
 
 	return c.adjust()
