@@ -14,6 +14,7 @@
 package master
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -30,19 +31,16 @@ type testHTTPServer struct {
 	cfg    *Config
 }
 
-func (t *testHTTPServer) startServer(c *check.C) {
+func (t *testHTTPServer) startServer(ctx context.Context, c *check.C) {
 	t.cfg = NewConfig()
 	t.cfg.MasterAddr = ":8261"
 	t.cfg.RPCRateLimit = DefaultRate
 	t.cfg.RPCRateBurst = DefaultBurst
+	t.cfg.DataDir = c.MkDir()
+	c.Assert(t.cfg.adjust(), check.IsNil)
 
 	t.server = NewServer(t.cfg)
-	go func() {
-		err := t.server.Start()
-		c.Assert(err, check.IsNil)
-	}()
-
-	err := t.waitUntilServerOnline()
+	err := t.server.Start(ctx)
 	c.Assert(err, check.IsNil)
 }
 
@@ -69,8 +67,12 @@ func (t *testHTTPServer) waitUntilServerOnline() error {
 }
 
 func (t *testHTTPServer) TestStatus(c *check.C) {
-	t.startServer(c)
-	defer t.stopServer(c)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.startServer(ctx, c)
+	defer func() {
+		cancel()
+		t.stopServer(c)
+	}()
 
 	statusURL := fmt.Sprintf("http://127.0.0.1%s/status", t.cfg.MasterAddr)
 	resp, err := http.Get(statusURL)

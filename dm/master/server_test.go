@@ -153,6 +153,7 @@ func testDefaultMasterServer(c *check.C) *Server {
 	cfg := NewConfig()
 	err := cfg.Parse([]string{"-config=./dm-master.toml"})
 	c.Assert(err, check.IsNil)
+	cfg.DataDir = c.MkDir()
 	server := NewServer(cfg)
 	go server.ap.Start(context.Background())
 
@@ -1486,33 +1487,32 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 func (t *testMaster) TestServer(c *check.C) {
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
+	cfg.DataDir = c.MkDir()
 
 	s := NewServer(cfg)
 
 	masterAddr := cfg.MasterAddr
 	s.cfg.MasterAddr = ""
-	err := s.Start()
+	ctx1, cancel1 := context.WithCancel(context.Background())
+	err := s.Start(ctx1)
 	c.Assert(terror.ErrMasterHostPortNotValid.Equal(err), check.IsTrue)
+	cancel1()
 	s.Close()
 	s.cfg.MasterAddr = masterAddr
 
-	go func() {
-		err1 := s.Start()
-		c.Assert(err1, check.IsNil)
-	}()
-
-	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		return !s.closed.Get()
-	}), check.IsTrue)
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	err1 := s.Start(ctx2)
+	c.Assert(err1, check.IsNil)
 
 	t.testHTTPInterface(c, "status")
 
 	dupServer := NewServer(cfg)
-	err = dupServer.Start()
-	c.Assert(terror.ErrMasterStartService.Equal(err), check.IsTrue)
+	err = dupServer.Start(ctx2)
+	c.Assert(terror.ErrMasterStartEmbedEtcdFail.Equal(err), check.IsTrue)
 	c.Assert(err.Error(), check.Matches, ".*bind: address already in use")
 
 	// close
+	cancel2()
 	s.Close()
 
 	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {

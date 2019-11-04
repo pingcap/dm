@@ -19,23 +19,30 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"net/url"
+	"os"
 	"strings"
 	"time"
+
+	"github.com/BurntSushi/toml"
+	"go.etcd.io/etcd/embed"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+)
 
-	"github.com/BurntSushi/toml"
-	"go.uber.org/zap"
+const (
+	defaultRPCTimeout = "30s"
+	defaultNamePrefix = "dm-master"
+	defaultPeerUrls   = "http://127.0.0.1:8269"
 )
 
 // SampleConfigFile is sample config file of dm-master
 // later we can read it from dm/master/dm-master.toml
 // and assign it to SampleConfigFile while we build dm-master
 var SampleConfigFile string
-
-var defaultRPCTimeout = "30s"
 
 // NewConfig creates a config for dm-master
 func NewConfig() *Config {
@@ -50,6 +57,12 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
 	//fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
+
+	fs.StringVar(&cfg.Name, "name", "", "human-readable name for this DM-master member")
+	fs.StringVar(&cfg.DataDir, "data-dir", "", "path to the data directory (default 'default.${name}')")
+	fs.StringVar(&cfg.InitialCluster, "initial-cluster", "", fmt.Sprintf("initial cluster configuration for bootstrapping, e,g. dm-master=%s", defaultPeerUrls))
+	fs.StringVar(&cfg.PeerUrls, "peer-urls", defaultPeerUrls, "URLs for peer traffic")
+	fs.StringVar(&cfg.AdvertisePeerUrls, "advertise-peer-urls", "", "advertise URLs for peer traffic (default '${peer-urls}')")
 
 	return cfg
 }
@@ -89,6 +102,15 @@ type Config struct {
 	DeployMap map[string]string `json:"deploy"`
 
 	ConfigFile string `json:"config-file"`
+
+	// etcd relative config items
+	// NOTE: we use `MasterAddr` to generate `ClientUrls` and `AdvertiseClientUrls`
+	// NOTE: more items will be add when adding leader election
+	Name              string `toml:"name" json:"name"`
+	DataDir           string `toml:"data-dir" json:"data-dir"`
+	PeerUrls          string `toml:"peer-urls" json:"peer-urls"`
+	AdvertisePeerUrls string `toml:"advertise-peer-urls" json:"advertise-peer-urls"`
+	InitialCluster    string `toml:"initial-cluster" json:"initial-cluster"`
 
 	printVersion      bool
 	printSampleConfig bool
@@ -202,6 +224,34 @@ func (c *Config) adjust() error {
 		c.RPCRateBurst = DefaultBurst
 	}
 
+	if c.Name == "" {
+		hostname, err := os.Hostname()
+		if err != nil {
+			return terror.ErrMasterGetHostnameFail.Delegate(err)
+		}
+		c.Name = fmt.Sprintf("%s-%s", defaultNamePrefix, hostname)
+	}
+
+	if c.DataDir == "" {
+		c.DataDir = fmt.Sprintf("default.%s", c.Name)
+	}
+
+	if c.PeerUrls == "" {
+		c.PeerUrls = defaultPeerUrls
+	}
+
+	if c.AdvertisePeerUrls == "" {
+		c.AdvertisePeerUrls = defaultPeerUrls
+	}
+
+	if c.InitialCluster == "" {
+		items := strings.Split(c.AdvertisePeerUrls, ",")
+		for i, item := range items {
+			items[i] = fmt.Sprintf("%s=%s", c.Name, item)
+		}
+		c.InitialCluster = strings.Join(items, ",")
+	}
+
 	return nil
 }
 
@@ -227,4 +277,55 @@ func (c *Config) Reload() error {
 	}
 
 	return c.adjust()
+}
+
+// genEmbedEtcdConfig generates the configuration needed by embed etcd.
+func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
+	cfg := embed.NewConfig()
+	cfg.Name = c.Name
+	cfg.Dir = c.DataDir
+
+	// reuse the previous master-addr as the client listening URL.
+	cURL, err := parseUrls(c.MasterAddr)
+	if err != nil {
+		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.Delegate(err, "--listen-client-urls/--advertise-client-urls")
+	}
+	cfg.LCUrls = cURL
+	cfg.ACUrls = cURL
+
+	cfg.LPUrls, err = parseUrls(c.PeerUrls)
+	if err != nil {
+		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.Delegate(err, "--listen-peer-urls")
+	}
+
+	cfg.APUrls, err = parseUrls(c.AdvertisePeerUrls)
+	if err != nil {
+		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.Delegate(err, "--initial-advertise-peer-urls")
+	}
+
+	cfg.InitialCluster = c.InitialCluster
+
+	return cfg, nil
+}
+
+// parseUrls parse a string into multiple urls.
+// if the URL in the string without protocol scheme, use `http` as the default.
+// if no IP exists in the address, `0.0.0.0` is used.
+func parseUrls(s string) ([]url.URL, error) {
+	items := strings.Split(s, ",")
+	urls := make([]url.URL, 0, len(items))
+	for _, item := range items {
+		u, err := url.Parse(item)
+		if err != nil && strings.Contains(err.Error(), "missing protocol scheme") {
+			u, err = url.Parse("http://" + item)
+		}
+		if err != nil {
+			return nil, err
+		}
+		if strings.Index(u.Host, ":") == 0 {
+			u.Host = "0.0.0.0" + u.Host
+		}
+		urls = append(urls, *u)
+	}
+	return urls, nil
 }

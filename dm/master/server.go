@@ -135,7 +135,7 @@ func (s *Server) Start(ctx context.Context) error {
 	gRPCSvr := func(gs *grpc.Server) { pb.RegisterMasterServer(gs, s) }
 
 	// start embed etcd server, gRPC API server and HTTP (API, status and debug) server.
-	s.etcd, err = startEtcd(s.cfg.MasterAddr, "", gRPCSvr, userHandles)
+	s.etcd, err = startEtcd(s.cfg, gRPCSvr, userHandles)
 	if err != nil {
 		return err
 	}
