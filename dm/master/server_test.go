@@ -1491,28 +1491,19 @@ func (t *testMaster) TestServer(c *check.C) {
 
 	s := NewServer(cfg)
 
-	masterAddr := cfg.MasterAddr
-	s.cfg.MasterAddr = ""
-	ctx1, cancel1 := context.WithCancel(context.Background())
-	err := s.Start(ctx1)
-	c.Assert(terror.ErrMasterHostPortNotValid.Equal(err), check.IsTrue)
-	cancel1()
-	s.Close()
-	s.cfg.MasterAddr = masterAddr
-
-	ctx2, cancel2 := context.WithCancel(context.Background())
-	err1 := s.Start(ctx2)
+	ctx, cancel := context.WithCancel(context.Background())
+	err1 := s.Start(ctx)
 	c.Assert(err1, check.IsNil)
 
 	t.testHTTPInterface(c, "status")
 
 	dupServer := NewServer(cfg)
-	err = dupServer.Start(ctx2)
+	err := dupServer.Start(ctx)
 	c.Assert(terror.ErrMasterStartEmbedEtcdFail.Equal(err), check.IsTrue)
 	c.Assert(err.Error(), check.Matches, ".*bind: address already in use")
 
 	// close
-	cancel2()
+	cancel()
 	s.Close()
 
 	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {

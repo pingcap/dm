@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/url"
 	"os"
 	"strings"
@@ -34,9 +35,10 @@ import (
 )
 
 const (
-	defaultRPCTimeout = "30s"
-	defaultNamePrefix = "dm-master"
-	defaultPeerUrls   = "http://127.0.0.1:8269"
+	defaultRPCTimeout    = "30s"
+	defaultNamePrefix    = "dm-master"
+	defaultDataDirPrefix = "default"
+	defaultPeerUrls      = "http://127.0.0.1:8269"
 )
 
 // SampleConfigFile is sample config file of dm-master
@@ -59,10 +61,10 @@ func NewConfig() *Config {
 	//fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
 
 	fs.StringVar(&cfg.Name, "name", "", "human-readable name for this DM-master member")
-	fs.StringVar(&cfg.DataDir, "data-dir", "", "path to the data directory (default 'default.${name}')")
+	fs.StringVar(&cfg.DataDir, "data-dir", "", `path to the data directory (default "default.${name}")`)
 	fs.StringVar(&cfg.InitialCluster, "initial-cluster", "", fmt.Sprintf("initial cluster configuration for bootstrapping, e,g. dm-master=%s", defaultPeerUrls))
 	fs.StringVar(&cfg.PeerUrls, "peer-urls", defaultPeerUrls, "URLs for peer traffic")
-	fs.StringVar(&cfg.AdvertisePeerUrls, "advertise-peer-urls", "", "advertise URLs for peer traffic (default '${peer-urls}')")
+	fs.StringVar(&cfg.AdvertisePeerUrls, "advertise-peer-urls", "", `advertise URLs for peer traffic (default "${peer-urls}")`)
 
 	return cfg
 }
@@ -191,6 +193,12 @@ func (c *Config) configFromFile(path string) error {
 
 // adjust adjusts configs
 func (c *Config) adjust() error {
+	// MasterAddr's format may be "host:port" or ":port"
+	_, _, err := net.SplitHostPort(c.MasterAddr)
+	if err != nil {
+		return terror.ErrMasterHostPortNotValid.Delegate(err, c.MasterAddr)
+	}
+
 	c.DeployMap = make(map[string]string)
 	for _, item := range c.Deploy {
 		if err := item.Verify(); err != nil {
@@ -233,7 +241,7 @@ func (c *Config) adjust() error {
 	}
 
 	if c.DataDir == "" {
-		c.DataDir = fmt.Sprintf("default.%s", c.Name)
+		c.DataDir = fmt.Sprintf("%s.%s", defaultDataDirPrefix, c.Name)
 	}
 
 	if c.PeerUrls == "" {
@@ -252,7 +260,8 @@ func (c *Config) adjust() error {
 		c.InitialCluster = strings.Join(items, ",")
 	}
 
-	return nil
+	_, err = c.genEmbedEtcdConfig() // verify embed etcd config
+	return err
 }
 
 // UpdateConfigFile write config to local file
@@ -320,7 +329,8 @@ func parseURLs(s string) ([]url.URL, error) {
 	urls := make([]url.URL, 0, len(items))
 	for _, item := range items {
 		u, err := url.Parse(item)
-		if err != nil && strings.Contains(err.Error(), "missing protocol scheme") {
+		if err != nil && (strings.Contains(err.Error(), "missing protocol scheme") ||
+			strings.Contains(err.Error(), "first path segment in URL cannot contain colon")) {
 			u, err = url.Parse("http://" + item)
 		}
 		if err != nil {

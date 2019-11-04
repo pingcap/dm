@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/url"
+	"os"
 	"path"
 	"strings"
 
@@ -74,10 +75,15 @@ func (t *testConfigSuite) TestPrintSampleConfig(c *check.C) {
 
 func (t *testConfigSuite) TestConfig(c *check.C) {
 	var (
-		err        error
-		cfg        = &Config{}
-		masterAddr = ":8261"
-		deployMap  = map[string]string{
+		err               error
+		cfg               = &Config{}
+		masterAddr        = ":8261"
+		name              = "dm-master"
+		dataDir           = "default.dm-master"
+		peerURLs          = "http://127.0.0.1:8269"
+		advertisePeerURLs = "http://127.0.0.1:8269"
+		initialCluster    = "dm-master=http://127.0.0.1:8269"
+		deployMap         = map[string]string{
 			"mysql-replica-01": "172.16.10.72:8262",
 			"mysql-replica-02": "172.16.10.73:8262",
 		}
@@ -122,6 +128,11 @@ func (t *testConfigSuite) TestConfig(c *check.C) {
 			c.Assert(err, check.ErrorMatches, tc.errorReg)
 		} else {
 			c.Assert(cfg.MasterAddr, check.Equals, masterAddr)
+			c.Assert(cfg.Name, check.Equals, name)
+			c.Assert(cfg.DataDir, check.Equals, dataDir)
+			c.Assert(cfg.PeerUrls, check.Equals, peerURLs)
+			c.Assert(cfg.AdvertisePeerUrls, check.Equals, advertisePeerURLs)
+			c.Assert(cfg.InitialCluster, check.Equals, initialCluster)
 			c.Assert(cfg.DeployMap, check.DeepEquals, deployMap)
 			c.Assert(cfg.String(), check.Matches, fmt.Sprintf("{.*master-addr\":\"%s\".*}", masterAddr))
 		}
@@ -201,7 +212,34 @@ dm-worker = "172.16.10.72:8262"`)
 	err = cfg.configFromFile(filepath2)
 	c.Assert(err, check.NotNil)
 	c.Assert(err, check.ErrorMatches, "*master config contained unknown configuration options: aaa*")
+
+	// invalid `master-addr`
+	filepath3 := path.Join(c.MkDir(), "test_invalid_config.toml")
+	configContent3 := []byte(`master-addr = ""`)
+	err = ioutil.WriteFile(filepath3, configContent3, 0644)
+	err = cfg.configFromFile(filepath3)
+	c.Assert(err, check.IsNil)
+	c.Assert(terror.ErrMasterHostPortNotValid.Equal(cfg.adjust()), check.IsTrue)
 }
+
+func (t *testConfigSuite) TestGenEmbedEtcdConfig(c *check.C) {
+	hostname, err := os.Hostname()
+	c.Assert(err, check.IsNil)
+
+	cfg1 := NewConfig()
+	cfg1.MasterAddr = ":8261"
+	c.Assert(cfg1.adjust(), check.IsNil)
+	etcdCfg, err := cfg1.genEmbedEtcdConfig()
+	c.Assert(err, check.IsNil)
+	c.Assert(etcdCfg.Name, check.Equals, fmt.Sprintf("dm-master-%s", hostname))
+	c.Assert(etcdCfg.Dir, check.Equals, fmt.Sprintf("default.%s", etcdCfg.Name))
+	c.Assert(etcdCfg.LCUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "0.0.0.0:8261"}})
+	c.Assert(etcdCfg.ACUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "0.0.0.0:8261"}})
+	c.Assert(etcdCfg.LPUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "127.0.0.1:8269"}})
+	c.Assert(etcdCfg.APUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "127.0.0.1:8269"}})
+	c.Assert(etcdCfg.InitialCluster, check.DeepEquals, fmt.Sprintf("dm-master-%s=http://127.0.0.1:8269", hostname))
+}
+
 func (t *testConfigSuite) TestParseURLs(c *check.C) {
 	cases := []struct {
 		str    string
@@ -221,12 +259,24 @@ func (t *testConfigSuite) TestParseURLs(c *check.C) {
 			},
 		},
 		{
-			str:    "127.0.0.1:8269", // no scheme, but url.Parse can't handle it now.
-			hasErr: true,
+			str:  "127.0.0.1:8269", // no scheme
+			urls: []url.URL{{Scheme: "http", Host: "127.0.0.1:8269"}},
 		},
 		{
-			str:  ":8269", // no scheme and IP
+			str:  "http://:8269", // no IP
 			urls: []url.URL{{Scheme: "http", Host: "0.0.0.0:8269"}},
+		},
+		{
+			str:  ":8269", // no scheme, no IP
+			urls: []url.URL{{Scheme: "http", Host: "0.0.0.0:8269"}},
+		},
+		{
+			str:  "http://", // no IP, no port
+			urls: []url.URL{{Scheme: "http", Host: ""}},
+		},
+		{
+			str:    "http://\n127.0.0.1:8269", // invalid char in URL
+			hasErr: true,
 		},
 		{
 			str: ":8269,http://127.0.0.1:18269",

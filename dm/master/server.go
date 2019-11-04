@@ -17,14 +17,12 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/embed"
@@ -96,13 +94,7 @@ func NewServer(cfg *Config) *Server {
 }
 
 // Start starts to serving
-func (s *Server) Start(ctx context.Context) error {
-	// TODO: check config in config.go?
-	_, _, err := s.splitHostPort()
-	if err != nil {
-		return err
-	}
-
+func (s *Server) Start(ctx context.Context) (err error) {
 	// create clients to DM-workers
 	for _, workerAddr := range s.cfg.DeployMap {
 		s.workerClients[workerAddr], err = workerrpc.NewGRPCClient(workerAddr)
@@ -1973,37 +1965,4 @@ func (s *Server) workerArgsExtractor(args ...interface{}) (workerrpc.Client, str
 	}
 
 	return cli, worker, nil
-}
-
-// HandleHTTPApis handles http apis and translate to grpc request
-func (s *Server) HandleHTTPApis(ctx context.Context, mux *http.ServeMux) error {
-	// MasterAddr's format may be "host:port" or "":port"
-	_, port, err := s.splitHostPort()
-	if err != nil {
-		return err
-	}
-
-	opts := []grpc.DialOption{grpc.WithInsecure()}
-	conn, err := grpc.DialContext(ctx, "127.0.0.1:"+port, opts...)
-	if err != nil {
-		return terror.ErrMasterHandleHTTPApis.Delegate(err)
-	}
-
-	gwmux := runtime.NewServeMux()
-	err = pb.RegisterMasterHandler(ctx, gwmux, conn)
-	if err != nil {
-		return terror.ErrMasterHandleHTTPApis.Delegate(err)
-	}
-	mux.Handle("/apis/", gwmux)
-
-	return nil
-}
-
-func (s *Server) splitHostPort() (host, port string, err error) {
-	// MasterAddr's format may be "host:port" or ":port"
-	host, port, err = net.SplitHostPort(s.cfg.MasterAddr)
-	if err != nil {
-		err = terror.ErrMasterHostPortNotValid.Delegate(err, s.cfg.MasterAddr)
-	}
-	return
 }
