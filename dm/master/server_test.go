@@ -14,6 +14,7 @@
 package master
 
 import (
+	"bytes"
 	"context"
 	"io/ioutil"
 	"net/http"
@@ -1488,6 +1489,7 @@ func (t *testMaster) TestServer(c *check.C) {
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
 	cfg.DataDir = c.MkDir()
+	cfg.MasterAddr = "127.0.0.1:18261" // use a different port
 
 	s := NewServer(cfg)
 
@@ -1495,7 +1497,9 @@ func (t *testMaster) TestServer(c *check.C) {
 	err1 := s.Start(ctx)
 	c.Assert(err1, check.IsNil)
 
-	t.testHTTPInterface(c, "status")
+	t.testHTTPInterface(c, fmt.Sprintf("http://%s/status", cfg.MasterAddr), []byte(utils.GetRawInfo()))
+	t.testHTTPInterface(c, fmt.Sprintf("http://%s/debug/pprof/", cfg.MasterAddr), []byte("Types of profiles available"))
+	t.testHTTPInterface(c, fmt.Sprintf("http://%s/apis/v1alpha1/status/test-task", cfg.MasterAddr), []byte("task test-task has no workers or not exist"))
 
 	dupServer := NewServer(cfg)
 	err := dupServer.Start(ctx)
@@ -1511,11 +1515,13 @@ func (t *testMaster) TestServer(c *check.C) {
 	}), check.IsTrue)
 }
 
-func (t *testMaster) testHTTPInterface(c *check.C, uri string) {
-	resp, err := http.Get("http://127.0.0.1:8261/" + uri)
+func (t *testMaster) testHTTPInterface(c *check.C, url string, contain []byte) {
+	resp, err := http.Get(url)
 	c.Assert(err, check.IsNil)
 	defer resp.Body.Close()
 	c.Assert(resp.StatusCode, check.Equals, 200)
-	_, err = ioutil.ReadAll(resp.Body)
+
+	body, err := ioutil.ReadAll(resp.Body)
 	c.Assert(err, check.IsNil)
+	c.Assert(bytes.Contains(body, contain), check.IsTrue)
 }

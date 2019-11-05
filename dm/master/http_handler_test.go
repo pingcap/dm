@@ -18,10 +18,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"time"
 
 	"github.com/pingcap/check"
-	"github.com/pingcap/errors"
 )
 
 var _ = check.Suite(&testHTTPServer{})
@@ -48,22 +46,6 @@ func (t *testHTTPServer) stopServer(c *check.C) {
 	if t.server != nil {
 		t.server.Close()
 	}
-}
-
-const retryTime = 100
-
-func (t *testHTTPServer) waitUntilServerOnline() error {
-	statusURL := fmt.Sprintf("http://127.0.0.1%s/status", t.cfg.MasterAddr)
-	for i := 0; i < retryTime; i++ {
-		resp, err := http.Get(statusURL)
-		if err == nil && resp.StatusCode == http.StatusOK {
-			ioutil.ReadAll(resp.Body)
-			resp.Body.Close()
-			return nil
-		}
-		time.Sleep(time.Millisecond * 10)
-	}
-	return errors.Errorf("failed to connect http status for %d retries in every 10ms", retryTime)
 }
 
 func (t *testHTTPServer) TestStatus(c *check.C) {
