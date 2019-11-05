@@ -67,7 +67,6 @@ const (
 	codeNoSubdirToSwitch
 	codeNeedSyncAgain
 	codeSyncClosed
-	codeRelayLogGivenPosTooBig
 	// pkg/utils
 	codeSchemaTableNameNotValid
 	codeGenTableRouter
@@ -139,6 +138,8 @@ const (
 
 	// pkg/gtid
 	codeGTIDTruncateInvalid
+	// pkg/streamer
+	codeRelayLogGivenPosTooBig
 )
 
 // Config related error code list
