@@ -1,11 +1,25 @@
 # Worker Configuration.
 
+{% if server_id|default(false) %}
 server-id = {{ server_id }}
+{% endif %}
+
 source-id = "{{ source_id }}"
+
+{% if flavor|default(false) %}
 flavor = "{{ flavor }}"
+{% endif %}
+
 enable-gtid = {{ enable_gtid }}
+
+{% if relay_binlog_name|default(false) %}
 relay-binlog-name = "{{ relay_binlog_name }}"
+{% endif %}
+
+{% if relay_binlog_gtid|default(false) %}
 relay-binlog-gtid = "{{ relay_binlog_gtid }}"
+{% endif %}
+
 #charset of DSN of source mysql/mariadb instance
 charset = ""
 meta-dir = ""
