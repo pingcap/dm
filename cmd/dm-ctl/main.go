@@ -31,6 +31,24 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
+func helpUsage(cfg *common.Config) {
+	fmt.Println("Usage: dmctl [global options] command [command options] [arguments...]")
+	fmt.Println()
+	ctl.Usage()
+	fmt.Println()
+	fmt.Println("Special Command:")
+	f := cfg.FlagSet.Lookup(common.EncryptCmdName)
+	fmt.Println(fmt.Sprintf("\t--%s %s", f.Name, f.Usage))
+	fmt.Println()
+	fmt.Println("Global Options:")
+	cfg.FlagSet.VisitAll(func(flag2 *flag.Flag) {
+		if flag2.Name == common.EncryptCmdName {
+			return
+		}
+		fmt.Println(fmt.Sprintf("\t--%s %s", flag2.Name, flag2.Usage))
+	})
+}
+
 func main() {
 	cfg := common.NewConfig()
 	args := os.Args[1:]
@@ -46,35 +64,39 @@ func main() {
 		lenArgs = lenArgs - lenCmdArgs
 	}
 
-	err := cfg.Parse(args[:lenArgs])
-	switch errors.Cause(err) {
-	case nil:
-	case flag.ErrHelp:
-		os.Exit(0)
-	default:
-		fmt.Printf("parse cmd flags err: %s", err)
-		os.Exit(2)
-	}
-	// now, we use checker in dmctl while it using some pkg which log some thing when running
-	// to make dmctl output more clear, simply redirect log to file rather output to stdout
-	err = log.InitLogger(&log.Config{
-		File:  "dmctl.log",
-		Level: "info",
-	})
-	if err != nil {
-		fmt.Printf("init logger error %v", errors.ErrorStack(err))
-		os.Exit(2)
-	}
-
-	err = ctl.Init(cfg)
-	if err != nil {
-		fmt.Printf("init control error %v", errors.ErrorStack(err))
-		os.Exit(2)
-	}
-
 	if len(cmdArgs) > 0 {
 		commandMode(cmdArgs)
 	} else {
+		finished, err := cfg.Parse(args[:lenArgs])
+		if finished {
+			os.Exit(0)
+		}
+
+		switch errors.Cause(err) {
+		case nil:
+		case flag.ErrHelp:
+			helpUsage(cfg)
+			os.Exit(0)
+		default:
+			fmt.Printf("parse cmd flags err: %s", err)
+			os.Exit(2)
+		}
+		// now, we use checker in dmctl while it using some pkg which log some thing when running
+		// to make dmctl output more clear, simply redirect log to file rather output to stdout
+		err = log.InitLogger(&log.Config{
+			File:  "dmctl.log",
+			Level: "info",
+		})
+		if err != nil {
+			fmt.Printf("init logger error %v", errors.ErrorStack(err))
+			os.Exit(2)
+		}
+
+		err = ctl.Init(cfg)
+		if err != nil {
+			fmt.Printf("init control error %v", errors.ErrorStack(err))
+			os.Exit(2)
+		}
 		interactionMode()
 	}
 }
@@ -82,13 +104,9 @@ func main() {
 func collectArgs(args []string) []string {
 	collectedArgs := make([]string, 0, len(args))
 	for i := 0; i < len(args); i++ {
-		switch strings.ToLower(args[i]) {
-		case "start-task", "query-status", "stop-task", "pause-task", "resume-task", "show-ddl-locks", "unlock-ddl-lock", "break-ddl-lock":
-			{
-				collectedArgs = append(collectedArgs, args[i:]...)
-			}
-		default:
-			continue
+		if ctl.HasCommand(strings.ToLower(args[i])) {
+			collectedArgs = append(collectedArgs, args[i:]...)
+			break
 		}
 	}
 	return collectedArgs

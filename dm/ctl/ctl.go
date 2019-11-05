@@ -27,6 +27,10 @@ import (
 
 var (
 	commandMasterFlags = CommandMasterFlags{}
+	rootCmd            = &cobra.Command{
+		Use:   "dmctl",
+		Short: "DM control",
+	}
 )
 
 // CommandMasterFlags are flags that used in all commands for dm-master
@@ -34,20 +38,7 @@ type CommandMasterFlags struct {
 	workers []string // specify workers to control on these dm-workers
 }
 
-// Init initializes dm-control
-func Init(cfg *common.Config) error {
-	// set the log level temporarily
-	log.SetLevel(zapcore.InfoLevel)
-	return errors.Trace(common.InitUtils(cfg))
-}
-
-// Start starts running a command
-func Start(args []string) {
-	rootCmd := &cobra.Command{
-		Use:   "dmctl",
-		Short: "DM control",
-	}
-
+func init() {
 	// --worker worker1 -w worker2 --worker=worker3,worker4 -w=worker5,worker6
 	rootCmd.PersistentFlags().StringSliceVarP(&commandMasterFlags.workers, "worker", "w", []string{}, "DM-worker ID")
 	rootCmd.AddCommand(
@@ -74,9 +65,37 @@ func Start(args []string) {
 		master.NewPurgeRelayCmd(),
 		master.NewMigrateRelayCmd(),
 	)
+}
 
+// Init initializes dm-control
+func Init(cfg *common.Config) error {
+	// set the log level temporarily
+	log.SetLevel(zapcore.InfoLevel)
+
+	return errors.Trace(common.InitUtils(cfg))
+}
+
+// Usage prints usage
+func Usage() {
+	fmt.Println("Available Commands:")
+	for _, cmd := range rootCmd.Commands() {
+		fmt.Println("\t", cmd.Name())
+	}
+}
+
+// HasCommand represent whether rootCmd has this command
+func HasCommand(name string) bool {
+	for _, cmd := range rootCmd.Commands() {
+		if name == cmd.Name() {
+			return true
+		}
+	}
+	return false
+}
+
+// Start starts running a command
+func Start(args []string) {
 	rootCmd.SetArgs(args)
-
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(rootCmd.UsageString())
 	}
