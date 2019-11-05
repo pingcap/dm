@@ -238,6 +238,37 @@ func (t *testConfigSuite) TestGenEmbedEtcdConfig(c *check.C) {
 	c.Assert(etcdCfg.LPUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "127.0.0.1:8269"}})
 	c.Assert(etcdCfg.APUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "127.0.0.1:8269"}})
 	c.Assert(etcdCfg.InitialCluster, check.DeepEquals, fmt.Sprintf("dm-master-%s=http://127.0.0.1:8269", hostname))
+
+	cfg2 := *cfg1
+	cfg2.MasterAddr = "127.0.0.1\n:8261"
+	_, err = cfg2.genEmbedEtcdConfig()
+	c.Assert(terror.ErrMasterGenEmbedEtcdConfigFail.Equal(err), check.IsTrue)
+	c.Assert(err, check.ErrorMatches, "(?m).*--listen-client-urls/--advertise-client-urls.*")
+	cfg2.MasterAddr = "172.100.8.8:8261"
+	etcdCfg, err = cfg2.genEmbedEtcdConfig()
+	c.Assert(err, check.IsNil)
+	c.Assert(etcdCfg.LCUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "172.100.8.8:8261"}})
+	c.Assert(etcdCfg.ACUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "172.100.8.8:8261"}})
+
+	cfg3 := *cfg1
+	cfg3.PeerUrls = "127.0.0.1:\n8269"
+	_, err = cfg3.genEmbedEtcdConfig()
+	c.Assert(terror.ErrMasterGenEmbedEtcdConfigFail.Equal(err), check.IsTrue)
+	c.Assert(err, check.ErrorMatches, "(?m).*--listen-peer-urls.*")
+	cfg3.PeerUrls = "http://172.100.8.8:8269"
+	etcdCfg, err = cfg3.genEmbedEtcdConfig()
+	c.Assert(err, check.IsNil)
+	c.Assert(etcdCfg.LPUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "172.100.8.8:8269"}})
+
+	cfg4 := *cfg1
+	cfg4.AdvertisePeerUrls = "127.0.0.1:\n8269"
+	_, err = cfg4.genEmbedEtcdConfig()
+	c.Assert(terror.ErrMasterGenEmbedEtcdConfigFail.Equal(err), check.IsTrue)
+	c.Assert(err, check.ErrorMatches, "(?m).*--initial-advertise-peer-urls.*")
+	cfg4.AdvertisePeerUrls = "http://172.100.8.8:8269"
+	etcdCfg, err = cfg4.genEmbedEtcdConfig()
+	c.Assert(err, check.IsNil)
+	c.Assert(etcdCfg.APUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "172.100.8.8:8269"}})
 }
 
 func (t *testConfigSuite) TestParseURLs(c *check.C) {
