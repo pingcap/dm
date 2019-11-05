@@ -201,7 +201,7 @@ func (c *Config) adjust() error {
 
 	c.DeployMap = make(map[string]string)
 	for _, item := range c.Deploy {
-		if err := item.Verify(); err != nil {
+		if err = item.Verify(); err != nil {
 			return err
 		}
 
@@ -233,7 +233,8 @@ func (c *Config) adjust() error {
 	}
 
 	if c.Name == "" {
-		hostname, err := os.Hostname()
+		var hostname string
+		hostname, err = os.Hostname()
 		if err != nil {
 			return terror.ErrMasterGetHostnameFail.Delegate(err)
 		}

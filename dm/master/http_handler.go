@@ -21,7 +21,6 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"google.golang.org/grpc"
 
-	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -35,8 +34,7 @@ type statusHandler struct {
 func (h *statusHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	text := utils.GetRawInfo()
-	_, err := w.Write([]byte(text))
-	if err != nil && !common.IsErrNetClosing(err) {
+	if _, err := w.Write([]byte(text)); err != nil {
 		log.L().Error("write status response", log.ShortError(err))
 	}
 }
