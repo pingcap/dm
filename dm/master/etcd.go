@@ -17,7 +17,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/pingcap/errors"
 	"go.etcd.io/etcd/embed"
 	"google.golang.org/grpc"
 
@@ -52,7 +51,7 @@ func startEtcd(masterCfg *Config,
 	case <-time.After(timeout):
 		e.Server.Stop()
 		e.Close()
-		return nil, terror.ErrMasterStartEmbedEtcdFail.Delegate(errors.Errorf("start embed etcd timeout %v", timeout))
+		return nil, terror.ErrMasterStartEmbedEtcdFail.Generatef("start embed etcd timeout %v", timeout)
 	}
 	return e, nil
 }
