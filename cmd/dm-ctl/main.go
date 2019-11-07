@@ -64,7 +64,7 @@ func main() {
 		lenArgs = lenArgs - lenCmdArgs
 	}
 
-	if len(cmdArgs) > 0 {
+	if lenCmdArgs > 0 {
 		commandMode(cmdArgs)
 	} else {
 		finished, err := cfg.Parse(args[:lenArgs])
