@@ -36,7 +36,7 @@ func helpUsage(cfg *common.Config) {
 	fmt.Println()
 	ctl.Usage()
 	fmt.Println()
-	fmt.Println("Special Command:")
+	fmt.Println("Special Commands:")
 	f := cfg.FlagSet.Lookup(common.EncryptCmdName)
 	fmt.Println(fmt.Sprintf("\t--%s %s", f.Name, f.Usage))
 	fmt.Println()
