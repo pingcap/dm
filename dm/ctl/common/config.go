@@ -75,7 +75,7 @@ func (c *Config) String() string {
 }
 
 // Parse parses flag definitions from the argument list.
-func (c *Config) Parse(arguments []string) (bool, error) {
+func (c *Config) Parse(arguments []string) (finish bool, err error) {
 	// Parse first to get config file.
 	if len(arguments) == 0 {
 		return false, flag.ErrHelp

@@ -75,11 +75,11 @@ func Init(cfg *common.Config) error {
 	return errors.Trace(common.InitUtils(cfg))
 }
 
-// Usage prints usage
-func Usage() {
+// PrintUsage prints usage
+func PrintUsage() {
 	fmt.Println("Available Commands:")
 	for _, cmd := range rootCmd.Commands() {
-		fmt.Println("\t", cmd.Name())
+		fmt.Println("\t", cmd.Name(), cmd.Use)
 	}
 }
 
