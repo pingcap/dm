@@ -18,7 +18,6 @@ import (
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
@@ -33,11 +32,7 @@ import (
 func Parse(p *parser.Parser, sql, charset, collation string) (stmt []ast.StmtNode, err error) {
 	stmts, warnings, err := p.Parse(sql, charset, collation)
 	if err != nil {
-		if utils.IsBuildInSkipDDL(sql) {
-			log.L().Warn("parse statement", zap.String("sql", sql), log.ShortError(err))
-		} else {
-			log.L().Error("parse statement", zap.String("sql", sql), log.ShortError(err))
-		}
+		log.L().Error("parse statement", zap.String("sql", sql), log.ShortError(err))
 	}
 
 	if len(warnings) > 0 {
