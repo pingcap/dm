@@ -83,6 +83,34 @@ func NewBinlogReader(tctx *tcontext.Context, cfg *BinlogReaderConfig) *BinlogRea
 	}
 }
 
+// checkRelayPos will check whether the given relay pos is too big
+func (r *BinlogReader) checkRelayPos(pos mysql.Position) error {
+	currentUUID, _, realPos, err := binlog.ExtractPos(pos, r.uuids)
+	if err != nil {
+		return terror.Annotatef(err, "parse relay dir with pos %v", pos)
+	}
+	pos = realPos
+	var dir = path.Join(r.cfg.RelayDir, currentUUID)
+	r.tctx.L().Info("start to check relay log files in sub directory", zap.String("directory", dir), zap.Stringer("position", pos))
+	files, err := CollectBinlogFilesCmp(dir, pos.Name, FileCmpBiggerEqual)
+	if err != nil {
+		return terror.Annotatef(err, "parse relay dir %s with pos %s", dir, pos)
+	} else if len(files) == 0 {
+		return terror.ErrNoRelayLogMatchPos.Generate(dir, pos)
+	}
+	relayLogFile := files[0]
+	relayFilepath := path.Join(dir, relayLogFile)
+	offset := pos.Pos
+	cmp, err := fileSizeUpdated(relayFilepath, int64(offset))
+	if err != nil {
+		return err
+	}
+	if cmp < 0 {
+		return terror.ErrRelayLogGivenPosTooBig
+	}
+	return nil
+}
+
 // StartSync start syncon
 // TODO:  thread-safe?
 func (r *BinlogReader) StartSync(pos mysql.Position) (Streamer, error) {
@@ -96,6 +124,10 @@ func (r *BinlogReader) StartSync(pos mysql.Position) (Streamer, error) {
 	// load and update UUID list
 	// NOTE: if want to support auto master-slave switching, then needing to re-load UUIDs when parsing.
 	err := r.updateUUIDs()
+	if err != nil {
+		return nil, err
+	}
+	err = r.checkRelayPos(pos)
 	if err != nil {
 		return nil, err
 	}
@@ -201,14 +233,6 @@ func (r *BinlogReader) parseDirAsPossible(ctx context.Context, s *LocalStreamer,
 			if i == 0 {
 				if !strings.HasSuffix(relayLogFile, pos.Name) {
 					return false, "", "", terror.ErrFirstRelayLogNotMatchPos.Generate(relayLogFile, pos)
-				}
-				relayFilepath := path.Join(dir, relayLogFile)
-				cmp, err := fileSizeUpdated(relayFilepath, offset)
-				if err != nil {
-					return false, "", "", err
-				}
-				if cmp < 0 {
-					return false, "", "", terror.ErrRelayLogGivenPosTooBig
 				}
 			} else {
 				offset = 4        // for other relay log file, start parse from 4
