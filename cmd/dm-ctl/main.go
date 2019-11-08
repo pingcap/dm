@@ -32,9 +32,9 @@ import (
 )
 
 func helpUsage(cfg *common.Config) {
-	fmt.Println("Usage: dmctl [global options] command [command options] [arguments...]")
+	fmt.Println("PrintUsage: dmctl [global options] command [command options] [arguments...]")
 	fmt.Println()
-	ctl.Usage()
+	ctl.PrintUsage()
 	fmt.Println()
 	fmt.Println("Special Commands:")
 	f := cfg.FlagSet.Lookup(common.EncryptCmdName)
