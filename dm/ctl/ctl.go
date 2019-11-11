@@ -79,7 +79,7 @@ func Init(cfg *common.Config) error {
 func PrintUsage() {
 	fmt.Println("Available Commands:")
 	for _, cmd := range rootCmd.Commands() {
-		fmt.Println("\t", cmd.Name(), cmd.Use)
+		fmt.Printf("\t%s\t%s\n", cmd.Name(), cmd.Use)
 	}
 }
 

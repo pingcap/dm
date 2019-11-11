@@ -32,7 +32,7 @@ import (
 )
 
 func helpUsage(cfg *common.Config) {
-	fmt.Println("PrintUsage: dmctl [global options] command [command options] [arguments...]")
+	fmt.Println("Usage: dmctl [global options] command [command options] [arguments...]")
 	fmt.Println()
 	ctl.PrintUsage()
 	fmt.Println()
