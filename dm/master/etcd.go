@@ -81,19 +81,19 @@ func prepareJoinEtcd(cfg *Config) error {
 		return terror.ErrMasterJoinEmbedEtcdFail.Generatef("join self %s is forbidden", cfg.Join)
 	}
 
-	// join with persist data
+	// join with persistent data
 	joinFP := filepath.Join(cfg.DataDir, "join")
 	if _, err := os.Stat(joinFP); !os.IsNotExist(err) {
 		s, err := ioutil.ReadFile(joinFP)
 		if err != nil {
-			return terror.ErrMasterJoinEmbedEtcdFail.Delegate(err)
+			return terror.ErrMasterJoinEmbedEtcdFail.AnnotateDelegate(err, "read persistent join data")
 		}
 		cfg.InitialCluster = strings.TrimSpace(string(s))
 		cfg.InitialClusterState = embed.ClusterStateFlagExisting
 		return nil
 	}
 
-	// restart from previous data, no `InitialCluster` need to set
+	// restart with previous data, no `InitialCluster` need to set
 	if isDataExist(filepath.Join(cfg.DataDir, "member")) {
 		cfg.InitialCluster = ""
 		cfg.InitialClusterState = embed.ClusterStateFlagExisting
