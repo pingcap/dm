@@ -28,6 +28,7 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
@@ -608,6 +609,11 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 
 	tctx := tcontext.Background()
 	r := NewBinlogReader(tctx, cfg)
+	err := r.checkRelayPos(startPos)
+	c.Assert(err, ErrorMatches, ".*empty UUIDs not valid.*")
+
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/streamer/mockCheckRelayPosSuccess", "return(true)"), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/pkg/streamer/mockCheckRelayPosSuccess")
 
 	// no startup pos specified
 	s, err := r.StartSync(gmysql.Position{})
