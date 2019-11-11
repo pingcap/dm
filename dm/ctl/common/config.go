@@ -81,7 +81,7 @@ func (c *Config) Parse(arguments []string) (finish bool, err error) {
 		return false, flag.ErrHelp
 	}
 
-	err := c.FlagSet.Parse(arguments)
+	err = c.FlagSet.Parse(arguments)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
