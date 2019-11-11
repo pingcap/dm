@@ -77,9 +77,16 @@ func Init(cfg *common.Config) error {
 
 // PrintUsage prints usage
 func PrintUsage() {
+	maxCmdLen := 0
+	for _, cmd := range rootCmd.Commands() {
+		if maxCmdLen < len(cmd.Name()) {
+			maxCmdLen = len(cmd.Name())
+		}
+	}
 	fmt.Println("Available Commands:")
 	for _, cmd := range rootCmd.Commands() {
-		fmt.Printf("\t%s\t%s\n", cmd.Name(), cmd.Use)
+		format := fmt.Sprintf("  %%-%ds\t%%s\n", maxCmdLen)
+		fmt.Printf(format, cmd.Name(), cmd.Use)
 	}
 }
 
