@@ -266,10 +266,12 @@ func (conn *DBConn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError fun
 		})
 
 	if err != nil {
-		tctx.L().Error("execute statements failed after retry",
-			zap.String("queries", utils.TruncateInterface(queries, -1)),
-			zap.String("arguments", utils.TruncateInterface(args, -1)),
-			log.ShortError(err))
+		if !utils.IsContextCanceledError(err) {
+			tctx.L().Error("execute statements failed after retry",
+				zap.String("queries", utils.TruncateInterface(queries, -1)),
+				zap.String("arguments", utils.TruncateInterface(args, -1)),
+				log.ShortError(err))
+		}
 		return ret.(int), err
 	}
 	return ret.(int), nil

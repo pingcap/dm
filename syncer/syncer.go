@@ -568,7 +568,9 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 			}
 			cancel() // cancel s.Run
 			syncerExitWithErrorCounter.WithLabelValues(s.cfg.Name).Inc()
-			errs = append(errs, err)
+			if err != nil {
+				errs = append(errs, err)
+			}
 		}
 	}()
 
@@ -917,7 +919,11 @@ func (s *Syncer) syncDDL(ctx *tcontext.Context, queueBucket string, db *DBConn, 
 		s.jobWg.Done()
 		if err != nil {
 			s.execErrorDetected.Set(true)
-			s.runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, err)
+			if utils.IsContextCanceledError(err) {
+				s.runFatalChan <- nil
+			} else {
+				s.runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, err)
+			}
 			continue
 		}
 		s.addCount(true, queueBucket, sqlJob.tp, int64(len(sqlJob.ddls)))

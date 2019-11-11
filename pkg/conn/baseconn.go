@@ -143,6 +143,9 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, ignoreEr
 					log.ShortError(err))
 				continue
 			}
+			if utils.IsContextCanceledError(err) {
+				return i, terror.ErrDBExecuteFailed.Delegate(err, utils.TruncateString(query, -1))
+			}
 
 			tctx.L().Error("execute statement failed",
 				zap.String("query", utils.TruncateString(query, -1)),
