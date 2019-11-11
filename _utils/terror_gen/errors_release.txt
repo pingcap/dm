@@ -174,7 +174,7 @@ ErrRelayReaderNeedStart,[code=30011:class=relay-unit:scope=internal:level=high],
 ErrRelayTCPReaderStartSync,[code=30012:class=relay-unit:scope=upstream:level=high],"start sync from position %s"
 ErrRelayTCPReaderNilGTID,[code=30013:class=relay-unit:scope=internal:level=high],"nil GTID set not valid"
 ErrRelayTCPReaderStartSyncGTID,[code=30014:class=relay-unit:scope=upstream:level=high],"start sync from GTID set %s"
-ErrRelayTCPReaderGetEvent,[code=30015:class=relay-unit:scope=upstream:level=high],"TCPReader get relay event with error:"
+ErrRelayTCPReaderGetEvent,[code=30015:class=relay-unit:scope=upstream:level=high],"TCPReader get relay event with error"
 ErrRelayWriterNotStateNew,[code=30016:class=relay-unit:scope=internal:level=high],"stage %s, expect %s, already started"
 ErrRelayWriterStateCannotClose,[code=30017:class=relay-unit:scope=internal:level=high],"stage %s, expect %s, can not close"
 ErrRelayWriterNeedStart,[code=30018:class=relay-unit:scope=internal:level=high],"stage %s, expect %s, please start the writer first"
