@@ -53,6 +53,27 @@ func main() {
 	cfg := common.NewConfig()
 	args := os.Args[1:]
 
+	syncErr := log.L().Sync()
+	if syncErr != nil {
+		fmt.Fprintln(os.Stderr, "sync log failed", syncErr)
+	}
+	// now, we use checker in dmctl while it using some pkg which log some thing when running
+	// to make dmctl output more clear, simply redirect log to file rather output to stdout
+	err := log.InitLogger(&log.Config{
+		File:  "dmctl.log",
+		Level: "info",
+	})
+	if err != nil {
+		fmt.Printf("init logger error %v", errors.ErrorStack(err))
+		os.Exit(2)
+	}
+
+	err = ctl.Init(cfg)
+	if err != nil {
+		fmt.Printf("init control error %v", errors.ErrorStack(err))
+		os.Exit(2)
+	}
+
 	// try to split one task operation from dmctl command
 	// because we allow user put task operation at last with two restrictions
 	// 1. one command one task operation
@@ -81,28 +102,28 @@ func main() {
 			fmt.Printf("parse cmd flags err: %s", err)
 			os.Exit(2)
 		}
-		// now, we use checker in dmctl while it using some pkg which log some thing when running
-		// to make dmctl output more clear, simply redirect log to file rather output to stdout
-		err = log.InitLogger(&log.Config{
-			File:  "dmctl.log",
-			Level: "info",
-		})
-		if err != nil {
-			fmt.Printf("init logger error %v", errors.ErrorStack(err))
-			os.Exit(2)
-		}
 
-		err = ctl.Init(cfg)
-		if err != nil {
-			fmt.Printf("init control error %v", errors.ErrorStack(err))
-			os.Exit(2)
-		}
 		interactionMode()
 	}
 }
 
 func collectArgs(args []string) []string {
 	collectedArgs := make([]string, 0, len(args))
+	commandCount := 0
+	for i := 0; i < len(args); i++ {
+		// check whether has multiple commands
+		if ctl.HasCommand(strings.ToLower(args[i])) {
+			commandCount++
+		}
+	}
+	if commandCount == 0 {
+		return collectedArgs
+	}
+	if commandCount > 1 {
+		fmt.Printf("command mode only support one command at a time, find %d", commandCount)
+		os.Exit(1)
+	}
+
 	for i := 0; i < len(args); i++ {
 		if ctl.HasCommand(strings.ToLower(args[i])) {
 			collectedArgs = append(collectedArgs, args[i:]...)
@@ -114,10 +135,7 @@ func collectArgs(args []string) []string {
 
 func commandMode(args []string) {
 	ctl.Start(args)
-	syncErr := log.L().Sync()
-	if syncErr != nil {
-		fmt.Fprintln(os.Stderr, "sync log failed", syncErr)
-	}
+
 }
 
 func interactionMode() {
