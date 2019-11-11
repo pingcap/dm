@@ -818,7 +818,7 @@ var (
 	ErrMasterQueryWorkerConfig     = New(codeMasterQueryWorkerConfig, ClassDMMaster, ScopeInternal, LevelHigh, "")
 	ErrMasterOperNotFound          = New(codeMasterOperNotFound, ClassDMMaster, ScopeInternal, LevelHigh, "operation %d of task %s not found, please execute `query-status` to check status")
 	ErrMasterOperRespNotSuccess    = New(codeMasterOperRespNotSuccess, ClassDMMaster, ScopeInternal, LevelHigh, "operation not success: %s")
-	ErrMasterOperRequestTimeout    = New(codeMasterOperRequestTimeout, ClassDMMaster, ScopeInternal, LevelHigh, "request to worker is timeout, but request may be successful, please execute `query-status` to check status")
+	ErrMasterOperRequestTimeout    = New(codeMasterOperRequestTimeout, ClassDMMaster, ScopeInternal, LevelHigh, "request to dm-worker %s is timeout, but request may be successful, please execute `query-status` to check status")
 	ErrMasterHandleHTTPApis        = New(codeMasterHandleHTTPApis, ClassDMMaster, ScopeInternal, LevelHigh, "serve http apis to grpc")
 	ErrMasterHostPortNotValid      = New(codeMasterHostPortNotValid, ClassDMMaster, ScopeInternal, LevelHigh, "host:port '%s' not valid")
 
