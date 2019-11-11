@@ -31,6 +31,41 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
+// output:
+// Usage: dmctl [global options] command [command options] [arguments...]
+//
+//Available Commands:
+//  break-ddl-lock        break-ddl-lock <-w worker ...> <task-name> [--remove-id] [--exec] [--skip]
+//  check-task            check-task <config-file>
+//  migrate-relay         migrate-relay <worker> <binlogName> <binlogPos>
+//  pause-relay           pause-relay <-w worker ...>
+//  pause-task            pause-task [-w worker ...] <task-name>
+//  purge-relay           purge-relay <-w worker> [--filename] [--sub-dir]
+//  query-error           query-error [-w worker ...] [task-name]
+//  query-status          query-status [-w worker ...] [task-name]
+//  refresh-worker-tasks  refresh-worker-tasks
+//  resume-relay          resume-relay <-w worker ...>
+//  resume-task           resume-task [-w worker ...] <task-name>
+//  show-ddl-locks        show-ddl-locks [-w worker ...] [task-name]
+//  sql-inject            sql-inject <-w worker> <task-name> <sql1;sql2;>
+//  sql-replace           sql-replace <-w worker> [-b binlog-pos] [-s sql-pattern] [--sharding] <task-name> <sql1;sql2;>
+//  sql-skip              sql-skip <-w worker> [-b binlog-pos] [-s sql-pattern] [--sharding] <task-name>
+//  start-task            start-task [-w worker ...] <config-file>
+//  stop-task             stop-task [-w worker ...] <task-name>
+//  switch-relay-master   switch-relay-master <-w worker ...>
+//  unlock-ddl-lock       unlock-ddl-lock [-w worker ...] <lock-ID>
+//  update-master-config  update-master-config <config-file>
+//  update-relay          update-relay [-w worker ...] <config-file>
+//  update-task           update-task [-w worker ...] <config-file>
+//
+//Special Commands:
+//  --encrypt encrypt plaintext to ciphertext
+//
+//Global Options:
+//  --V prints version and exit
+//  --config path to config file
+//  --master-addr master API server addr
+//  --rpc-timeout rpc timeout, default is 10m
 func helpUsage(cfg *common.Config) {
 	fmt.Println("Usage: dmctl [global options] command [command options] [arguments...]")
 	fmt.Println()
@@ -38,14 +73,14 @@ func helpUsage(cfg *common.Config) {
 	fmt.Println()
 	fmt.Println("Special Commands:")
 	f := cfg.FlagSet.Lookup(common.EncryptCmdName)
-	fmt.Println(fmt.Sprintf("\t--%s %s", f.Name, f.Usage))
+	fmt.Println(fmt.Sprintf("  --%s %s", f.Name, f.Usage))
 	fmt.Println()
 	fmt.Println("Global Options:")
 	cfg.FlagSet.VisitAll(func(flag2 *flag.Flag) {
 		if flag2.Name == common.EncryptCmdName {
 			return
 		}
-		fmt.Println(fmt.Sprintf("\t--%s %s", flag2.Name, flag2.Usage))
+		fmt.Println(fmt.Sprintf("  --%s %s", flag2.Name, flag2.Usage))
 	})
 }
 
@@ -68,17 +103,11 @@ func main() {
 		os.Exit(2)
 	}
 
-	err = ctl.Init(cfg)
-	if err != nil {
-		fmt.Printf("init control error %v", errors.ErrorStack(err))
-		os.Exit(2)
-	}
-
 	// try to split one task operation from dmctl command
 	// because we allow user put task operation at last with two restrictions
 	// 1. one command one task operation
 	// 2. put task operation at last
-	cmdArgs := collectArgs(args)
+	cmdArgs := extractSubCommand(args)
 	lenArgs := len(args)
 	lenCmdArgs := len(cmdArgs)
 	if lenCmdArgs > 0 {
@@ -103,24 +132,30 @@ func main() {
 			os.Exit(2)
 		}
 
+		err = ctl.Init(cfg)
+		if err != nil {
+			fmt.Printf("init control error %v", errors.ErrorStack(err))
+			os.Exit(2)
+		}
 		interactionMode()
 	}
 }
 
-func collectArgs(args []string) []string {
+func extractSubCommand(args []string) []string {
 	collectedArgs := make([]string, 0, len(args))
-	commandCount := 0
+	subCommand := make([]string, 0, len(args))
 	for i := 0; i < len(args); i++ {
 		// check whether has multiple commands
 		if ctl.HasCommand(strings.ToLower(args[i])) {
-			commandCount++
+			subCommand = append(subCommand, args[i])
 		}
 	}
-	if commandCount == 0 {
+	if len(subCommand) == 0 {
 		return collectedArgs
 	}
-	if commandCount > 1 {
-		fmt.Printf("command mode only support one command at a time, find %d", commandCount)
+	if len(subCommand) > 1 {
+		fmt.Printf("command mode only support one command at a time, find %d:", len(subCommand))
+		fmt.Println(subCommand)
 		os.Exit(1)
 	}
 
