@@ -105,23 +105,32 @@ func NewWorker(loader *Loader, id int) (worker *Worker, err error) {
 // Close closes worker
 func (w *Worker) Close() {
 	if !atomic.CompareAndSwapInt64(&w.closed, 0, 1) {
+		w.tctx.L().Info("already closed...")
 		return
 	}
 
+	w.tctx.L().Info("start to close...")
+
 	close(w.jobQueue)
 	w.wg.Wait()
+
+	w.tctx.L().Info("closed !!!")
 }
 
 func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *sync.WaitGroup, runFatalChan chan *pb.ProcessError) {
 	atomic.StoreInt64(&w.closed, 0)
-	defer workerWg.Done()
 
 	newCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	defer func() {
+		cancel()
+		w.Close()
+		workerWg.Done()
+	}()
 
 	ctctx := w.tctx.WithContext(newCtx)
 
-	doJob := func() {
+	w.wg.Add(1)
+	go func() {
 		defer w.wg.Done()
 		for {
 			select {
@@ -158,7 +167,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *
 				w.loader.finishedDataSize.Add(job.offset - job.lastOffset)
 			}
 		}
-	}
+	}()
 
 	// worker main routine
 	for {
@@ -170,9 +179,6 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *
 				w.tctx.L().Debug("main routine exit.")
 				return
 			}
-
-			w.wg.Add(1)
-			go doJob()
 
 			// restore a table
 			if err := w.restoreDataFile(ctx, filepath.Join(w.cfg.Dir, job.dataFile), job.offset, job.info); err != nil {
@@ -192,12 +198,6 @@ func (w *Worker) restoreDataFile(ctx context.Context, filePath string, offset in
 		return err
 	}
 
-	// dispatchSQL completed, send nil.
-	// we don't want to close and re-make chan frequently
-	// but if we need to re-call w.run, we need re-make jobQueue chan
-	w.jobQueue <- nil
-
-	w.wg.Wait()
 	w.tctx.L().Info("finish to restore dump sql file", zap.String("data file", filePath))
 	return nil
 }
