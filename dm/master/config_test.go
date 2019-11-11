@@ -243,7 +243,7 @@ func (t *testConfigSuite) TestGenEmbedEtcdConfig(c *check.C) {
 	cfg2.MasterAddr = "127.0.0.1\n:8261"
 	_, err = cfg2.genEmbedEtcdConfig()
 	c.Assert(terror.ErrMasterGenEmbedEtcdConfigFail.Equal(err), check.IsTrue)
-	c.Assert(err, check.ErrorMatches, "(?m).*--listen-client-urls/--advertise-client-urls.*")
+	c.Assert(err, check.ErrorMatches, "(?m).*invalid master-addr.*")
 	cfg2.MasterAddr = "172.100.8.8:8261"
 	etcdCfg, err = cfg2.genEmbedEtcdConfig()
 	c.Assert(err, check.IsNil)
@@ -254,7 +254,7 @@ func (t *testConfigSuite) TestGenEmbedEtcdConfig(c *check.C) {
 	cfg3.PeerUrls = "127.0.0.1:\n8269"
 	_, err = cfg3.genEmbedEtcdConfig()
 	c.Assert(terror.ErrMasterGenEmbedEtcdConfigFail.Equal(err), check.IsTrue)
-	c.Assert(err, check.ErrorMatches, "(?m).*--listen-peer-urls.*")
+	c.Assert(err, check.ErrorMatches, "(?m).*invalid peer-urls.*")
 	cfg3.PeerUrls = "http://172.100.8.8:8269"
 	etcdCfg, err = cfg3.genEmbedEtcdConfig()
 	c.Assert(err, check.IsNil)
@@ -264,7 +264,7 @@ func (t *testConfigSuite) TestGenEmbedEtcdConfig(c *check.C) {
 	cfg4.AdvertisePeerUrls = "127.0.0.1:\n8269"
 	_, err = cfg4.genEmbedEtcdConfig()
 	c.Assert(terror.ErrMasterGenEmbedEtcdConfigFail.Equal(err), check.IsTrue)
-	c.Assert(err, check.ErrorMatches, "(?m).*--initial-advertise-peer-urls.*")
+	c.Assert(err, check.ErrorMatches, "(?m).*invalid advertise-peer-urls.*")
 	cfg4.AdvertisePeerUrls = "http://172.100.8.8:8269"
 	etcdCfg, err = cfg4.genEmbedEtcdConfig()
 	c.Assert(err, check.IsNil)
