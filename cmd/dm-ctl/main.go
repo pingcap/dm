@@ -135,7 +135,6 @@ func collectArgs(args []string) []string {
 
 func commandMode(args []string) {
 	ctl.Start(args)
-
 }
 
 func interactionMode() {
