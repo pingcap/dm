@@ -80,9 +80,9 @@ func (t *testConfigSuite) TestConfig(c *check.C) {
 		masterAddr        = ":8261"
 		name              = "dm-master"
 		dataDir           = "default.dm-master"
-		peerURLs          = "http://127.0.0.1:8269"
-		advertisePeerURLs = "http://127.0.0.1:8269"
-		initialCluster    = "dm-master=http://127.0.0.1:8269"
+		peerURLs          = "http://127.0.0.1:8291"
+		advertisePeerURLs = "http://127.0.0.1:8291"
+		initialCluster    = "dm-master=http://127.0.0.1:8291"
 		deployMap         = map[string]string{
 			"mysql-replica-01": "172.16.10.72:8262",
 			"mysql-replica-02": "172.16.10.73:8262",
@@ -235,9 +235,9 @@ func (t *testConfigSuite) TestGenEmbedEtcdConfig(c *check.C) {
 	c.Assert(etcdCfg.Dir, check.Equals, fmt.Sprintf("default.%s", etcdCfg.Name))
 	c.Assert(etcdCfg.LCUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "0.0.0.0:8261"}})
 	c.Assert(etcdCfg.ACUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "0.0.0.0:8261"}})
-	c.Assert(etcdCfg.LPUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "127.0.0.1:8269"}})
-	c.Assert(etcdCfg.APUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "127.0.0.1:8269"}})
-	c.Assert(etcdCfg.InitialCluster, check.DeepEquals, fmt.Sprintf("dm-master-%s=http://127.0.0.1:8269", hostname))
+	c.Assert(etcdCfg.LPUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "127.0.0.1:8291"}})
+	c.Assert(etcdCfg.APUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "127.0.0.1:8291"}})
+	c.Assert(etcdCfg.InitialCluster, check.DeepEquals, fmt.Sprintf("dm-master-%s=http://127.0.0.1:8291", hostname))
 
 	cfg2 := *cfg1
 	cfg2.MasterAddr = "127.0.0.1\n:8261"
@@ -251,24 +251,24 @@ func (t *testConfigSuite) TestGenEmbedEtcdConfig(c *check.C) {
 	c.Assert(etcdCfg.ACUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "172.100.8.8:8261"}})
 
 	cfg3 := *cfg1
-	cfg3.PeerUrls = "127.0.0.1:\n8269"
+	cfg3.PeerUrls = "127.0.0.1:\n8291"
 	_, err = cfg3.genEmbedEtcdConfig()
 	c.Assert(terror.ErrMasterGenEmbedEtcdConfigFail.Equal(err), check.IsTrue)
 	c.Assert(err, check.ErrorMatches, "(?m).*invalid peer-urls.*")
-	cfg3.PeerUrls = "http://172.100.8.8:8269"
+	cfg3.PeerUrls = "http://172.100.8.8:8291"
 	etcdCfg, err = cfg3.genEmbedEtcdConfig()
 	c.Assert(err, check.IsNil)
-	c.Assert(etcdCfg.LPUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "172.100.8.8:8269"}})
+	c.Assert(etcdCfg.LPUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "172.100.8.8:8291"}})
 
 	cfg4 := *cfg1
-	cfg4.AdvertisePeerUrls = "127.0.0.1:\n8269"
+	cfg4.AdvertisePeerUrls = "127.0.0.1:\n8291"
 	_, err = cfg4.genEmbedEtcdConfig()
 	c.Assert(terror.ErrMasterGenEmbedEtcdConfigFail.Equal(err), check.IsTrue)
 	c.Assert(err, check.ErrorMatches, "(?m).*invalid advertise-peer-urls.*")
-	cfg4.AdvertisePeerUrls = "http://172.100.8.8:8269"
+	cfg4.AdvertisePeerUrls = "http://172.100.8.8:8291"
 	etcdCfg, err = cfg4.genEmbedEtcdConfig()
 	c.Assert(err, check.IsNil)
-	c.Assert(etcdCfg.APUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "172.100.8.8:8269"}})
+	c.Assert(etcdCfg.APUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "172.100.8.8:8291"}})
 }
 
 func (t *testConfigSuite) TestParseURLs(c *check.C) {
@@ -279,41 +279,41 @@ func (t *testConfigSuite) TestParseURLs(c *check.C) {
 	}{
 		{}, // empty str
 		{
-			str:  "http://127.0.0.1:8269",
-			urls: []url.URL{{Scheme: "http", Host: "127.0.0.1:8269"}},
+			str:  "http://127.0.0.1:8291",
+			urls: []url.URL{{Scheme: "http", Host: "127.0.0.1:8291"}},
 		},
 		{
-			str: "http://127.0.0.1:8269,http://127.0.0.1:18269",
+			str: "http://127.0.0.1:8291,http://127.0.0.1:18291",
 			urls: []url.URL{
-				{Scheme: "http", Host: "127.0.0.1:8269"},
-				{Scheme: "http", Host: "127.0.0.1:18269"},
+				{Scheme: "http", Host: "127.0.0.1:8291"},
+				{Scheme: "http", Host: "127.0.0.1:18291"},
 			},
 		},
 		{
-			str:  "127.0.0.1:8269", // no scheme
-			urls: []url.URL{{Scheme: "http", Host: "127.0.0.1:8269"}},
+			str:  "127.0.0.1:8291", // no scheme
+			urls: []url.URL{{Scheme: "http", Host: "127.0.0.1:8291"}},
 		},
 		{
-			str:  "http://:8269", // no IP
-			urls: []url.URL{{Scheme: "http", Host: "0.0.0.0:8269"}},
+			str:  "http://:8291", // no IP
+			urls: []url.URL{{Scheme: "http", Host: "0.0.0.0:8291"}},
 		},
 		{
-			str:  ":8269", // no scheme, no IP
-			urls: []url.URL{{Scheme: "http", Host: "0.0.0.0:8269"}},
+			str:  ":8291", // no scheme, no IP
+			urls: []url.URL{{Scheme: "http", Host: "0.0.0.0:8291"}},
 		},
 		{
 			str:  "http://", // no IP, no port
 			urls: []url.URL{{Scheme: "http", Host: ""}},
 		},
 		{
-			str:    "http://\n127.0.0.1:8269", // invalid char in URL
+			str:    "http://\n127.0.0.1:8291", // invalid char in URL
 			hasErr: true,
 		},
 		{
-			str: ":8269,http://127.0.0.1:18269",
+			str: ":8291,http://127.0.0.1:18291",
 			urls: []url.URL{
-				{Scheme: "http", Host: "0.0.0.0:8269"},
-				{Scheme: "http", Host: "127.0.0.1:18269"},
+				{Scheme: "http", Host: "0.0.0.0:8291"},
+				{Scheme: "http", Host: "127.0.0.1:18291"},
 			},
 		},
 	}

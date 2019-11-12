@@ -38,7 +38,7 @@ const (
 	defaultRPCTimeout    = "30s"
 	defaultNamePrefix    = "dm-master"
 	defaultDataDirPrefix = "default"
-	defaultPeerUrls      = "http://127.0.0.1:8269"
+	defaultPeerUrls      = "http://127.0.0.1:8291"
 )
 
 // SampleConfigFile is sample config file of dm-master
