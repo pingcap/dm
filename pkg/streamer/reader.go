@@ -15,6 +15,7 @@ package streamer
 
 import (
 	"context"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -93,26 +94,18 @@ func (r *BinlogReader) checkRelayPos(pos mysql.Position) error {
 
 	currentUUID, _, realPos, err := binlog.ExtractPos(pos, r.uuids)
 	if err != nil {
-		return terror.Annotatef(err, "parse relay dir with pos %v", pos)
+		return terror.Annotatef(err, "parse relay dir with pos %s", pos)
 	}
 	pos = realPos
 	var dir = path.Join(r.cfg.RelayDir, currentUUID)
-	r.tctx.L().Info("start to check relay log files in sub directory", zap.String("directory", dir), zap.Stringer("position", pos))
-	files, err := CollectBinlogFilesCmp(dir, pos.Name, FileCmpBiggerEqual)
+	relayFilepath := path.Join(dir, pos.Name)
+	r.tctx.L().Info("start to check relay log file", zap.String("path", relayFilepath), zap.Stringer("position", pos))
+	fi, err := os.Stat(relayFilepath)
 	if err != nil {
-		return terror.Annotatef(err, "parse relay dir %s with pos %s", dir, pos)
-	} else if len(files) == 0 {
-		return terror.ErrNoRelayLogMatchPos.Generate(dir, pos)
+		return terror.ErrGetRelayLogStat.Delegate(err, relayFilepath)
 	}
-	relayLogFile := files[0]
-	relayFilepath := path.Join(dir, relayLogFile)
-	offset := pos.Pos
-	cmp, err := fileSizeUpdated(relayFilepath, int64(offset))
-	if err != nil {
-		return err
-	}
-	if cmp < 0 {
-		return terror.ErrRelayLogGivenPosTooBig
+	if fi.Size() < int64(pos.Pos) {
+		return terror.ErrRelayLogGivenPosTooBig.Generate(pos)
 	}
 	return nil
 }
