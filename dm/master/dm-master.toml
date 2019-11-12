@@ -14,13 +14,13 @@ name = "dm-master"
 data-dir = "default.dm-master"
 
 # URLs for peer traffic
-peer-urls = "http://127.0.0.1:8269"
+peer-urls = "http://127.0.0.1:8291"
 
 # advertise URLs for peer traffic (default '${peer-urls}')
-advertise-peer-urls = "http://127.0.0.1:8269"
+advertise-peer-urls = "http://127.0.0.1:8291"
 
-# initial cluster configuration for bootstrapping, e,g. dm-master=http://127.0.0.1:8269
-initial-cluster = "dm-master=http://127.0.0.1:8269"
+# initial cluster configuration for bootstrapping, e,g. dm-master=http://127.0.0.1:8291
+initial-cluster = "dm-master=http://127.0.0.1:8291"
 
 # rpc configuration
 #

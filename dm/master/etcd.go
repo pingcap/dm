@@ -30,7 +30,9 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-var (
+const (
+	// time waiting for etcd to be started
+	etcdStartTimeout = time.Minute
 	// privateDirMode grants owner to make/remove files inside the directory.
 	privateDirMode os.FileMode = 0700
 )
@@ -57,13 +59,12 @@ func startEtcd(masterCfg *Config,
 		return nil, terror.ErrMasterStartEmbedEtcdFail.Delegate(err)
 	}
 
-	timeout := time.Minute
 	select {
 	case <-e.Server.ReadyNotify():
-	case <-time.After(timeout):
+	case <-time.After(etcdStartTimeout):
 		e.Server.Stop()
 		e.Close()
-		return nil, terror.ErrMasterStartEmbedEtcdFail.Generatef("start embed etcd timeout %v", timeout)
+		return nil, terror.ErrMasterStartEmbedEtcdFail.Generatef("start embed etcd timeout %v", etcdStartTimeout)
 	}
 	return e, nil
 }

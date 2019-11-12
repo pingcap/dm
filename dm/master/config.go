@@ -38,7 +38,7 @@ const (
 	defaultRPCTimeout          = "30s"
 	defaultNamePrefix          = "dm-master"
 	defaultDataDirPrefix       = "default"
-	defaultPeerUrls            = "http://127.0.0.1:8269"
+	defaultPeerUrls            = "http://127.0.0.1:8291"
 	defaultInitialClusterState = embed.ClusterStateFlagNew
 )
 
@@ -306,19 +306,19 @@ func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
 	// reuse the previous master-addr as the client listening URL.
 	cURL, err := parseURLs(c.MasterAddr)
 	if err != nil {
-		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.Delegate(err, "--listen-client-urls/--advertise-client-urls")
+		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.Delegate(err, "invalid master-addr")
 	}
 	cfg.LCUrls = cURL
 	cfg.ACUrls = cURL
 
 	cfg.LPUrls, err = parseURLs(c.PeerUrls)
 	if err != nil {
-		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.Delegate(err, "--listen-peer-urls")
+		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.Delegate(err, "invalid peer-urls")
 	}
 
 	cfg.APUrls, err = parseURLs(c.AdvertisePeerUrls)
 	if err != nil {
-		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.Delegate(err, "--initial-advertise-peer-urls")
+		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.Delegate(err, "invalid advertise-peer-urls")
 	}
 
 	cfg.InitialCluster = c.InitialCluster
@@ -338,6 +338,9 @@ func parseURLs(s string) ([]url.URL, error) {
 	urls := make([]url.URL, 0, len(items))
 	for _, item := range items {
 		u, err := url.Parse(item)
+		// tolerate valid `master-addr`, but invalid URL format, like:
+		// `:8261`: missing protocol scheme
+		// `127.0.0.1:8261`: first path segment in URL cannot contain colon
 		if err != nil && (strings.Contains(err.Error(), "missing protocol scheme") ||
 			strings.Contains(err.Error(), "first path segment in URL cannot contain colon")) {
 			u, err = url.Parse("http://" + item)

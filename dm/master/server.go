@@ -99,14 +99,14 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	for _, workerAddr := range s.cfg.DeployMap {
 		s.workerClients[workerAddr], err = workerrpc.NewGRPCClient(workerAddr)
 		if err != nil {
-			return err
+			return
 		}
 	}
 
 	// get an HTTP to gRPC API handler.
 	apiHandler, err := getHTTPAPIHandler(ctx, s.cfg.MasterAddr)
 	if err != nil {
-		return err
+		return
 	}
 
 	// HTTP handlers on etcd's client IP:port
@@ -129,7 +129,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	// start embed etcd server, gRPC API server and HTTP (API, status and debug) server.
 	s.etcd, err = startEtcd(s.cfg, gRPCSvr, userHandles)
 	if err != nil {
-		return err
+		return
 	}
 
 	s.closed.Set(false) // the server started now.
@@ -160,7 +160,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	}()
 
 	log.L().Info("listening gRPC API and status request", zap.String("address", s.cfg.MasterAddr))
-	return nil
+	return
 }
 
 // Close close the RPC server, this function can be called multiple times
