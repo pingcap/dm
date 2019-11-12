@@ -630,6 +630,7 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 	c.Assert(s, IsNil)
 
 	// can not re-start the reader
+	r.running = true
 	s, err = r.StartSync(startPos)
 	c.Assert(terror.ErrReaderAlreadyRunning.Equal(err), IsTrue)
 	c.Assert(s, IsNil)
@@ -639,7 +640,8 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 	uuid := UUIDs[0]
 	err = os.MkdirAll(filepath.Join(baseDir, uuid), 0700)
 	c.Assert(err, IsNil)
-	relayLogFilePath := filepath.Join(baseDir, uuid, startPos.Name)
+	parsedStartPosName := "test-mysql-bin.000001"
+	relayLogFilePath := filepath.Join(baseDir, uuid, parsedStartPosName)
 	err = ioutil.WriteFile(relayLogFilePath, make([]byte, 100), 0600)
 	c.Assert(err, IsNil)
 	startPos.Pos = 10000
