@@ -1302,7 +1302,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "XID"), zap.Reflect("re-shard", shardingReSync))
 					err = closeShardingResync()
 					if err != nil {
-						return terror.Annotatef(err, "current pos %s", currentPos)
+						return terror.Annotatef(err, "shard group current pos %s", shardingReSync.currPos)
 					}
 					continue
 				}
