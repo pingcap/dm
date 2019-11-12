@@ -14,6 +14,7 @@
 package master
 
 import (
+	"bytes"
 	"context"
 	"io/ioutil"
 	"net/http"
@@ -153,6 +154,7 @@ func testDefaultMasterServer(c *check.C) *Server {
 	cfg := NewConfig()
 	err := cfg.Parse([]string{"-config=./dm-master.toml"})
 	c.Assert(err, check.IsNil)
+	cfg.DataDir = c.MkDir()
 	server := NewServer(cfg)
 	go server.ap.Start(context.Background())
 
@@ -1486,33 +1488,26 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 func (t *testMaster) TestServer(c *check.C) {
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
+	cfg.DataDir = c.MkDir()
+	cfg.MasterAddr = "127.0.0.1:18261" // use a different port
 
 	s := NewServer(cfg)
 
-	masterAddr := cfg.MasterAddr
-	s.cfg.MasterAddr = ""
-	err := s.Start()
-	c.Assert(terror.ErrMasterHostPortNotValid.Equal(err), check.IsTrue)
-	s.Close()
-	s.cfg.MasterAddr = masterAddr
+	ctx, cancel := context.WithCancel(context.Background())
+	err1 := s.Start(ctx)
+	c.Assert(err1, check.IsNil)
 
-	go func() {
-		err1 := s.Start()
-		c.Assert(err1, check.IsNil)
-	}()
-
-	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		return !s.closed.Get()
-	}), check.IsTrue)
-
-	t.testHTTPInterface(c, "status")
+	t.testHTTPInterface(c, fmt.Sprintf("http://%s/status", cfg.MasterAddr), []byte(utils.GetRawInfo()))
+	t.testHTTPInterface(c, fmt.Sprintf("http://%s/debug/pprof/", cfg.MasterAddr), []byte("Types of profiles available"))
+	t.testHTTPInterface(c, fmt.Sprintf("http://%s/apis/v1alpha1/status/test-task", cfg.MasterAddr), []byte("task test-task has no workers or not exist"))
 
 	dupServer := NewServer(cfg)
-	err = dupServer.Start()
-	c.Assert(terror.ErrMasterStartService.Equal(err), check.IsTrue)
+	err := dupServer.Start(ctx)
+	c.Assert(terror.ErrMasterStartEmbedEtcdFail.Equal(err), check.IsTrue)
 	c.Assert(err.Error(), check.Matches, ".*bind: address already in use")
 
 	// close
+	cancel()
 	s.Close()
 
 	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
@@ -1520,11 +1515,13 @@ func (t *testMaster) TestServer(c *check.C) {
 	}), check.IsTrue)
 }
 
-func (t *testMaster) testHTTPInterface(c *check.C, uri string) {
-	resp, err := http.Get("http://127.0.0.1:8261/" + uri)
+func (t *testMaster) testHTTPInterface(c *check.C, url string, contain []byte) {
+	resp, err := http.Get(url)
 	c.Assert(err, check.IsNil)
 	defer resp.Body.Close()
 	c.Assert(resp.StatusCode, check.Equals, 200)
-	_, err = ioutil.ReadAll(resp.Body)
+
+	body, err := ioutil.ReadAll(resp.Body)
 	c.Assert(err, check.IsNil)
+	c.Assert(bytes.Contains(body, contain), check.IsTrue)
 }
