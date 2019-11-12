@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/pingcap/check"
 	"github.com/pingcap/pd/pkg/tempurl"
@@ -93,9 +94,9 @@ func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
 	c.Assert(os.RemoveAll(memberDP), check.IsNil) // remove previous data
 
 	// start an etcd cluster
-	e, err := startEtcd(cfgCluster, nil, nil)
+	e1, err := startEtcd(cfgCluster, nil, nil)
 	c.Assert(err, check.IsNil)
-	defer e.Close()
+	defer e1.Close()
 
 	// same `name`, duplicate
 	cfgAfter = t.cloneConfig(cfgBefore)
@@ -131,6 +132,35 @@ func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
 	joinData, err := ioutil.ReadFile(joinFP)
 	c.Assert(err, check.IsNil)
 	c.Assert(string(joinData), check.Equals, cfgAfter.InitialCluster)
+
+	// prepare join done, but has not start the etcd to complete the join, can not join anymore.
+	cfgAfter2 := t.cloneConfig(cfgBefore)
+	cfgAfter2.Name = "dm-master-3" // overwrite some items
+	cfgAfter2.DataDir = c.MkDir()
+	cfgAfter2.MasterAddr = tempurl.Alloc()[len("http://"):]
+	cfgAfter2.PeerUrls = tempurl.Alloc()
+	cfgAfter2.AdvertisePeerUrls = cfgAfter2.PeerUrls
+	err = prepareJoinEtcd(cfgAfter2)
+	c.Assert(terror.ErrMasterJoinEmbedEtcdFail.Equal(err), check.IsTrue)
+	c.Assert(err, check.ErrorMatches, ".*fail to join embed etcd: there is a member that has not joined successfully.*")
+
+	// start the joining etcd
+	e2, err := startEtcd(cfgAfter, nil, nil)
+	c.Assert(err, check.IsNil)
+	defer e2.Close()
+
+	// try join again
+	for i := 0; i < 10; i++ {
+		err = prepareJoinEtcd(cfgAfter2)
+		if err == nil {
+			break
+		}
+		// for `etcdserver: unhealthy cluster`, try again later
+		c.Assert(terror.ErrMasterJoinEmbedEtcdFail.Equal(err), check.IsTrue)
+		c.Assert(err, check.ErrorMatches, ".*fail to join embed etcd: add member.*: etcdserver: unhealthy cluster.*")
+		time.Sleep(time.Second)
+	}
+	c.Assert(err, check.IsNil)
 }
 
 func (t *testEtcdSuite) cloneConfig(cfg *Config) *Config {
