@@ -1,5 +1,7 @@
 # Master Configuration.
 
+master-addr = ":8261"
+
 [[deploy]]
 source-id = "mysql-replica-01"
 dm-worker = "127.0.0.1:8262"
