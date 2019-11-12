@@ -28,7 +28,6 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
-	"github.com/pingcap/failpoint"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 
@@ -612,9 +611,6 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 	err := r.checkRelayPos(startPos)
 	c.Assert(err, ErrorMatches, ".*empty UUIDs not valid.*")
 
-	c.Assert(failpoint.Enable("github.com/pingcap/dm/pkg/streamer/mockCheckRelayPosSuccess", "return(true)"), IsNil)
-	defer failpoint.Disable("github.com/pingcap/dm/pkg/streamer/mockCheckRelayPosSuccess")
-
 	// no startup pos specified
 	s, err := r.StartSync(gmysql.Position{})
 	c.Assert(terror.ErrBinlogFileNotSpecified.Equal(err), IsTrue)
@@ -622,11 +618,8 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 
 	// empty UUIDs
 	s, err = r.StartSync(startPos)
-	c.Assert(err, IsNil)
-	ev, err := s.GetEvent(ctx)
 	c.Assert(err, ErrorMatches, ".*empty UUIDs not valid.*")
-	c.Assert(ev, IsNil)
-	r.Close()
+	c.Assert(s, IsNil)
 
 	// write UUIDs into index file
 	r = NewBinlogReader(tctx, cfg) // create a new reader
@@ -637,7 +630,7 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 	// the startup relay log file not found
 	s, err = r.StartSync(startPos)
 	c.Assert(err, IsNil)
-	ev, err = s.GetEvent(ctx)
+	ev, err := s.GetEvent(ctx)
 	c.Assert(err, ErrorMatches, fmt.Sprintf(".*%s.*not found.*", startPos.Name))
 	c.Assert(ev, IsNil)
 
@@ -646,6 +639,12 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 	c.Assert(terror.ErrReaderAlreadyRunning.Equal(err), IsTrue)
 	c.Assert(s, IsNil)
 	r.Close()
+
+	// too big startPos
+	startPos.Pos = 10000
+	s, err = r.StartSync(startPos)
+	c.Assert(terror.ErrRelayLogGivenPosTooBig.Equal(err), IsTrue)
+	c.Assert(s, IsNil)
 }
 
 func (t *testReaderSuite) genBinlogEvents(c *C, latestPos uint32) []*replication.BinlogEvent {
