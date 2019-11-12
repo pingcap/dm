@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
-	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
@@ -87,11 +86,6 @@ func NewBinlogReader(tctx *tcontext.Context, cfg *BinlogReaderConfig) *BinlogRea
 
 // checkRelayPos will check whether the given relay pos is too big
 func (r *BinlogReader) checkRelayPos(pos mysql.Position) error {
-	failpoint.Inject("mockCheckRelayPosSuccess", func(_ failpoint.Value) {
-		r.tctx.L().Info("mock successfully check relay pos")
-		failpoint.Return(nil)
-	})
-
 	currentUUID, _, realPos, err := binlog.ExtractPos(pos, r.uuids)
 	if err != nil {
 		return terror.Annotatef(err, "parse relay dir with pos %s", pos)
