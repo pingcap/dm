@@ -603,9 +603,6 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 		startPos = gmysql.Position{Name: "test-mysql-bin|000001.000001"} // from the first relay log file in the first sub directory
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
 	tctx := tcontext.Background()
 	r := NewBinlogReader(tctx, cfg)
 	err := r.checkRelayPos(startPos)
@@ -629,10 +626,8 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 
 	// the startup relay log file not found
 	s, err = r.StartSync(startPos)
-	c.Assert(err, IsNil)
-	ev, err := s.GetEvent(ctx)
 	c.Assert(err, ErrorMatches, fmt.Sprintf(".*%s.*not found.*", startPos.Name))
-	c.Assert(ev, IsNil)
+	c.Assert(s, IsNil)
 
 	// can not re-start the reader
 	s, err = r.StartSync(startPos)
@@ -641,6 +636,12 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 	r.Close()
 
 	// too big startPos
+	uuid := UUIDs[0]
+	err = os.MkdirAll(filepath.Join(baseDir, uuid), 0700)
+	c.Assert(err, IsNil)
+	relayLogFilePath := filepath.Join(baseDir, uuid, startPos.Name)
+	err = ioutil.WriteFile(relayLogFilePath, make([]byte, 100), 0600)
+	c.Assert(err, IsNil)
 	startPos.Pos = 10000
 	s, err = r.StartSync(startPos)
 	c.Assert(terror.ErrRelayLogGivenPosTooBig.Equal(err), IsTrue)

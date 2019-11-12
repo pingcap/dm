@@ -91,8 +91,7 @@ func (r *BinlogReader) checkRelayPos(pos mysql.Position) error {
 		return terror.Annotatef(err, "parse relay dir with pos %s", pos)
 	}
 	pos = realPos
-	var dir = path.Join(r.cfg.RelayDir, currentUUID)
-	relayFilepath := path.Join(dir, pos.Name)
+	relayFilepath := path.Join(r.cfg.RelayDir, currentUUID, pos.Name)
 	r.tctx.L().Info("start to check relay log file", zap.String("path", relayFilepath), zap.Stringer("position", pos))
 	fi, err := os.Stat(relayFilepath)
 	if err != nil {
