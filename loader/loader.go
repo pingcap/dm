@@ -104,6 +104,7 @@ func NewWorker(loader *Loader, id int) (worker *Worker, err error) {
 
 // Close closes worker
 func (w *Worker) Close() {
+	// simulate the case that doesn't wait all doJob goroutine exit
 	failpoint.Inject("workerCantClose", func(_ failpoint.Value) {
 		w.tctx.L().Info("", zap.String("failpoint", "workerCantClose"))
 		failpoint.Return()
@@ -121,14 +122,14 @@ func (w *Worker) Close() {
 	w.tctx.L().Info("closed !!!")
 }
 
-func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, workerWg *sync.WaitGroup, runFatalChan chan *pb.ProcessError) {
+func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalChan chan *pb.ProcessError) {
 	atomic.StoreInt64(&w.closed, 0)
 
 	newCtx, cancel := context.WithCancel(ctx)
 	defer func() {
 		cancel()
+		// make sure all doJob goroutines exit
 		w.Close()
-		workerWg.Done()
 	}()
 
 	ctctx := w.tctx.WithContext(newCtx)
@@ -363,7 +364,6 @@ type Loader struct {
 	bwList        *filter.Filter
 	columnMapping *cm.Mapping
 
-	pool   []*Worker
 	closed sync2.AtomicBool
 
 	toDB      *conn.BaseDB
@@ -385,7 +385,6 @@ func NewLoader(cfg *config.SubTaskConfig) *Loader {
 		db2Tables:  make(map[string]Tables2DataFiles),
 		tableInfos: make(map[string]*tableInfo),
 		workerWg:   new(sync.WaitGroup),
-		pool:       make([]*Worker, 0, cfg.PoolSize),
 		tctx:       tcontext.Background().WithLogger(log.With(zap.String("task", cfg.Name), zap.String("unit", "load"))),
 	}
 	loader.fileJobQueueClosed.Set(true) // not open yet
@@ -479,7 +478,13 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	err := l.Restore(newCtx)
 	close(l.runFatalChan) // Restore returned, all potential fatal sent to l.runFatalChan
-	wg.Wait()             // wait for receive all fatal from l.runFatalChan
+
+	failpoint.Inject("dontWaitWorkerExit", func(_ failpoint.Value) {
+		l.tctx.L().Info("", zap.String("failpoint", "dontWaitWorkerExit"))
+		l.workerWg.Wait()
+	})
+
+	wg.Wait() // wait for receive all fatal from l.runFatalChan
 
 	if err != nil {
 		loaderExitWithErrorCounter.WithLabelValues(l.cfg.Name).Inc()
@@ -566,11 +571,22 @@ func (l *Loader) Restore(ctx context.Context) error {
 
 	go l.PrintStatus(ctx)
 
-	if err := l.restoreData(ctx); err != nil {
-		if errors.Cause(err) == context.Canceled {
-			return nil
-		}
+	begin := time.Now()
+	err = l.restoreData(ctx)
+	if err != nil && errors.Cause(err) != context.Canceled {
 		return err
+	}
+
+	failpoint.Inject("dontWaitWorkerExit", func(_ failpoint.Value) {
+		l.tctx.L().Info("", zap.String("failpoint", "dontWaitWorkerExit"))
+		failpoint.Return(nil)
+	})
+
+	// make sure all workers exit
+	l.closeFileJobQueue() // all data file dispatched, close it
+	l.workerWg.Wait()
+	if err == nil {
+		l.tctx.L().Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
 	}
 
 	return nil
@@ -611,10 +627,6 @@ func (l *Loader) stopLoad() {
 	l.closeFileJobQueue()
 	l.workerWg.Wait()
 
-	for _, worker := range l.pool {
-		worker.Close()
-	}
-	l.pool = l.pool[:0]
 	l.tctx.L().Debug("all workers have been closed")
 }
 
@@ -741,9 +753,10 @@ func (l *Loader) initAndStartWorkerPool(ctx context.Context) error {
 		}
 
 		l.workerWg.Add(1) // for every worker goroutine, Add(1)
-		go worker.run(ctx, l.fileJobQueue, l.workerWg, l.runFatalChan)
-
-		l.pool = append(l.pool, worker)
+		go func() {
+			defer l.workerWg.Done()
+			worker.run(ctx, l.fileJobQueue, l.runFatalChan)
+		}()
 	}
 	return nil
 }
@@ -1138,17 +1151,12 @@ func (l *Loader) restoreData(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			l.tctx.L().Warn("stop dispatch data file job", log.ShortError(ctx.Err()))
-			l.closeFileJobQueue()
 			return ctx.Err()
 		case l.fileJobQueue <- j:
 		}
 	}
-	l.closeFileJobQueue() // all data file dispatched, close it
 
 	l.tctx.L().Info("all data files have been dispatched, waiting for them finished")
-	l.workerWg.Wait()
-
-	l.tctx.L().Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
 	return nil
 }
 
