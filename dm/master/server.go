@@ -95,6 +95,11 @@ func NewServer(cfg *Config) *Server {
 
 // Start starts to serving
 func (s *Server) Start(ctx context.Context) (err error) {
+	err = prepareJoinEtcd(s.cfg)
+	if err != nil {
+		return
+	}
+
 	// create clients to DM-workers
 	for _, workerAddr := range s.cfg.DeployMap {
 		s.workerClients[workerAddr], err = workerrpc.NewGRPCClient(workerAddr)
