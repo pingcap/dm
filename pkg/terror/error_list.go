@@ -889,8 +889,8 @@ var (
 	ErrWorkerCacheDDLInfoExists      = New(codeWorkerCacheDDLInfoExists, ClassDMWorker, ScopeInternal, LevelHigh, "CacheDDLInfo for task %s already exists")
 	ErrWorkerExecSkipDDLConflict     = New(codeWorkerExecSkipDDLConflict, ClassDMWorker, ScopeInternal, LevelHigh, "execDDL and skipDDL can not specify both at the same time")
 	ErrWorkerExecDDLSyncerOnly       = New(codeWorkerExecDDLSyncerOnly, ClassDMWorker, ScopeInternal, LevelHigh, "only syncer support ExecuteDDL, but current unit is %s")
-	ErrWorkerExecDDLTimeout          = New(codeWorkerExecDDLTimeout, ClassDMWorker, ScopeInternal, LevelHigh, "ExecuteDDL timeout, try use `query-status` to query whether the DDL is still blocking")
-	ErrWorkerWaitRelayCatchupTimeout = New(codeWorkerWaitRelayCatchupTimeout, ClassDMWorker, ScopeInternal, LevelHigh, "waiting for relay binlog pos to catch up with loader end binlog pos is timeout, loader end binlog pos: %s, relay binlog pos: %s")
+	ErrWorkerExecDDLTimeout          = New(codeWorkerExecDDLTimeout, ClassDMWorker, ScopeInternal, LevelHigh, "ExecuteDDL timeout (exceeding %s), try use `query-status` to query whether the DDL is still blocking")
+	ErrWorkerWaitRelayCatchupTimeout = New(codeWorkerWaitRelayCatchupTimeout, ClassDMWorker, ScopeInternal, LevelHigh, "waiting for relay binlog pos to catch up with loader end binlog pos is timeout (exceeding %s), loader end binlog pos: %s, relay binlog pos: %s")
 	ErrWorkerRelayIsPurging          = New(codeWorkerRelayIsPurging, ClassDMWorker, ScopeInternal, LevelHigh, "relay log purger is purging, cannot start sub task %s, please try again later")
 	ErrWorkerHostPortNotValid        = New(codeWorkerHostPortNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "host:port '%s' not valid")
 
