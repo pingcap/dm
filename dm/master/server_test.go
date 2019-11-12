@@ -36,6 +36,7 @@ import (
 	"github.com/pingcap/dm/dm/pbmock"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/pd/pkg/tempurl"
 )
 
 // use task config from integration test `sharding`
@@ -1489,7 +1490,7 @@ func (t *testMaster) TestServer(c *check.C) {
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
 	cfg.DataDir = c.MkDir()
-	cfg.MasterAddr = "127.0.0.1:18261" // use a different port
+	cfg.MasterAddr = tempurl.Alloc()[len("http://"):]
 
 	s := NewServer(cfg)
 
