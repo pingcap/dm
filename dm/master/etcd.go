@@ -23,6 +23,11 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
+const (
+	// time waiting for etcd to be started
+	etcdStartTimeout = time.Minute
+)
+
 // startEtcd starts an embedded etcd server.
 func startEtcd(masterCfg *Config,
 	gRPCSvr func(*grpc.Server),
@@ -45,13 +50,12 @@ func startEtcd(masterCfg *Config,
 		return nil, terror.ErrMasterStartEmbedEtcdFail.Delegate(err)
 	}
 
-	timeout := time.Minute
 	select {
 	case <-e.Server.ReadyNotify():
-	case <-time.After(timeout):
+	case <-time.After(etcdStartTimeout):
 		e.Server.Stop()
 		e.Close()
-		return nil, terror.ErrMasterStartEmbedEtcdFail.Generatef("start embed etcd timeout %v", timeout)
+		return nil, terror.ErrMasterStartEmbedEtcdFail.Generatef("start embed etcd timeout %v", etcdStartTimeout)
 	}
 	return e, nil
 }
