@@ -322,6 +322,7 @@ func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
 	}
 
 	cfg.InitialCluster = c.InitialCluster
+	cfg.ClusterState = c.InitialClusterState
 
 	return cfg, nil
 }
