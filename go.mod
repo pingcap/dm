@@ -36,6 +36,7 @@ require (
 	github.com/pingcap/kvproto v0.0.0-20190827032240-9696cd0c6acb // indirect
 	github.com/pingcap/log v0.0.0-20190715063458-479153f07ebd
 	github.com/pingcap/parser v0.0.0-20191008032157-51a2e3b2e34b
+	github.com/pingcap/pd v0.0.0-20190712044914-75a1f9f3062b
 	github.com/pingcap/tidb v0.0.0-20190827060935-cc07b110825e
 	github.com/pingcap/tidb-tools v3.0.0-beta.1.0.20190821032033-e6ccf3994944+incompatible
 	github.com/pingcap/tipb v0.0.0-20191008064422-018b2fadf414 // indirect

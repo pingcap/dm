@@ -254,7 +254,7 @@ func (c *Config) adjust() error {
 	}
 
 	if c.AdvertisePeerUrls == "" {
-		c.AdvertisePeerUrls = defaultPeerUrls
+		c.AdvertisePeerUrls = c.PeerUrls
 	}
 
 	if c.InitialCluster == "" {

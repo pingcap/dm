@@ -78,7 +78,7 @@ func prepareJoinEtcd(cfg *Config) error {
 
 	// try to join self, invalid
 	if cfg.Join == cfg.AdvertisePeerUrls {
-		return terror.ErrMasterJoinEmbedEtcdFail.Generatef("join self %s is forbidden", cfg.Join)
+		return terror.ErrMasterJoinEmbedEtcdFail.Generate(fmt.Sprintf("join self %s is forbidden", cfg.Join))
 	}
 
 	// join with persistent data
@@ -86,7 +86,7 @@ func prepareJoinEtcd(cfg *Config) error {
 	if _, err := os.Stat(joinFP); !os.IsNotExist(err) {
 		s, err := ioutil.ReadFile(joinFP)
 		if err != nil {
-			return terror.ErrMasterJoinEmbedEtcdFail.AnnotateDelegate(err, "read persistent join data")
+			return terror.ErrMasterJoinEmbedEtcdFail.Delegate(err, "read persistent join data")
 		}
 		cfg.InitialCluster = strings.TrimSpace(string(s))
 		cfg.InitialClusterState = embed.ClusterStateFlagExisting
@@ -106,31 +106,31 @@ func prepareJoinEtcd(cfg *Config) error {
 		DialTimeout: etcdutil.DefaultDialTimeout,
 	})
 	if err != nil {
-		return terror.ErrMasterJoinEmbedEtcdFail.Delegate(err)
+		return terror.ErrMasterJoinEmbedEtcdFail.Delegate(err, fmt.Sprintf("create etcd client for %s", cfg.Join))
 	}
 	defer client.Close()
 
 	// `member list`
 	listResp, err := etcdutil.ListMembers(client)
 	if err != nil {
-		return terror.ErrMasterJoinEmbedEtcdFail.Delegate(err)
+		return terror.ErrMasterJoinEmbedEtcdFail.Delegate(err, fmt.Sprintf("list member for %s", cfg.Join))
 	}
 
 	// check members
 	for _, m := range listResp.Members {
 		if m.Name == "" {
-			return terror.ErrMasterJoinEmbedEtcdFail.New("there is a member that has not joined successfully")
+			return terror.ErrMasterJoinEmbedEtcdFail.Generate("there is a member that has not joined successfully")
 		}
 		if m.Name == cfg.Name {
 			// a failed DM-master re-joins the previous cluster.
-			return terror.ErrMasterJoinEmbedEtcdFail.Generatef("missing data or joining a duplicated dm-master %s", m.Name)
+			return terror.ErrMasterJoinEmbedEtcdFail.Generate(fmt.Sprintf("missing data or joining a duplicate member %s", m.Name))
 		}
 	}
 
 	// `member add`, a new/deleted DM-master joins to an existing cluster.
 	addResp, err := etcdutil.AddMember(client, strings.Split(cfg.AdvertisePeerUrls, ","))
 	if err != nil {
-		return terror.ErrMasterJoinEmbedEtcdFail.Delegate(err)
+		return terror.ErrMasterJoinEmbedEtcdFail.Delegate(err, fmt.Sprintf("add member %s", cfg.AdvertisePeerUrls))
 	}
 
 	// generate `--initial-cluster`
@@ -141,7 +141,7 @@ func prepareJoinEtcd(cfg *Config) error {
 			name = cfg.Name
 		}
 		if name == "" {
-			return terror.ErrMasterJoinEmbedEtcdFail.New("there is a member that has not joined successfully")
+			return terror.ErrMasterJoinEmbedEtcdFail.Generate("there is a member that has not joined successfully")
 		}
 		for _, url := range m.PeerURLs {
 			ms = append(ms, fmt.Sprintf("%s=%s", name, url))
@@ -151,11 +151,11 @@ func prepareJoinEtcd(cfg *Config) error {
 	cfg.InitialClusterState = embed.ClusterStateFlagExisting
 
 	// save `--initial-cluster` in persist data
-	if err = os.MkdirAll(cfg.DataDir, privateDirMode); !os.IsExist(err) {
-		return terror.ErrMasterJoinEmbedEtcdFail.Delegate(err)
+	if err = os.MkdirAll(cfg.DataDir, privateDirMode); err != nil && !os.IsExist(err) {
+		return terror.ErrMasterJoinEmbedEtcdFail.Delegate(err, "make directory")
 	}
 	if err = ioutil.WriteFile(joinFP, []byte(cfg.InitialCluster), privateDirMode); err != nil {
-		return terror.ErrMasterJoinEmbedEtcdFail.Delegate(err)
+		return terror.ErrMasterJoinEmbedEtcdFail.Delegate(err, "write persistent join data")
 	}
 
 	return nil

@@ -18,8 +18,11 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/pingcap/check"
+	"github.com/pingcap/pd/pkg/tempurl"
 	"go.etcd.io/etcd/embed"
 
 	"github.com/pingcap/dm/pkg/terror"
@@ -31,13 +34,23 @@ type testEtcdSuite struct {
 }
 
 func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
-	joinCluster := "dm-master-1=http://172.100.100.100:8269"
+	cfgCluster := NewConfig() // used to start an etcd cluster
+	cfgCluster.Name = "dm-master-1"
+	cfgCluster.DataDir = c.MkDir()
+	cfgCluster.MasterAddr = tempurl.Alloc()[len("http://"):]
+	cfgCluster.PeerUrls = tempurl.Alloc()
+	c.Assert(cfgCluster.adjust(), check.IsNil)
 
-	cfgBefore := NewConfig() // before `prepareJoinEtcd` applied
-	cfgBefore.MasterAddr = ":8261"
-	cfgBefore.DataDir = c.MkDir()
+	cfgBefore := t.cloneConfig(cfgCluster) // before `prepareJoinEtcd` applied
+	cfgBefore.DataDir = c.MkDir()          // overwrite some config items
+	cfgBefore.MasterAddr = tempurl.Alloc()[len("http://"):]
+	cfgBefore.PeerUrls = tempurl.Alloc()
+	cfgBefore.AdvertisePeerUrls = cfgBefore.PeerUrls
 	c.Assert(cfgBefore.adjust(), check.IsNil)
+
 	cfgAfter := t.cloneConfig(cfgBefore) // after `prepareJoinEtcd applied
+
+	joinCluster := cfgCluster.PeerUrls
 	joinFP := filepath.Join(cfgBefore.DataDir, "join")
 	memberDP := filepath.Join(cfgBefore.DataDir, "member")
 
@@ -49,7 +62,7 @@ func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
 	cfgAfter.Join = cfgAfter.AdvertisePeerUrls
 	err := prepareJoinEtcd(cfgAfter)
 	c.Assert(terror.ErrMasterJoinEmbedEtcdFail.Equal(err), check.IsTrue)
-	c.Assert(err, check.ErrorMatches, ".*join self.*is forbidden.*")
+	c.Assert(err, check.ErrorMatches, ".*fail to join embed etcd: join self.*is forbidden.*")
 
 	// update `join` to a valid item
 	cfgBefore.Join = joinCluster
@@ -67,8 +80,9 @@ func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
 	cfgAfter = t.cloneConfig(cfgBefore)
 	err = prepareJoinEtcd(cfgAfter)
 	c.Assert(terror.ErrMasterJoinEmbedEtcdFail.Equal(err), check.IsTrue)
-	c.Assert(err, check.ErrorMatches, ".*read persistent join data.*")
-	c.Assert(os.Remove(joinFP), check.IsNil) // remove the persistent data
+	c.Assert(err, check.ErrorMatches, ".*fail to join embed etcd: read persistent join data.*")
+	c.Assert(os.Remove(joinFP), check.IsNil)        // remove the persistent data
+	c.Assert(cfgAfter, check.DeepEquals, cfgBefore) // not changed
 
 	// restart with previous data
 	c.Assert(os.Mkdir(memberDP, privateDirMode), check.IsNil)
@@ -77,6 +91,46 @@ func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
 	c.Assert(cfgAfter.InitialCluster, check.Equals, "")
 	c.Assert(cfgAfter.InitialClusterState, check.Equals, embed.ClusterStateFlagExisting)
 	c.Assert(os.RemoveAll(memberDP), check.IsNil) // remove previous data
+
+	// start an etcd cluster
+	e, err := startEtcd(cfgCluster, nil, nil)
+	c.Assert(err, check.IsNil)
+	defer e.Close()
+
+	// same `name`, duplicate
+	cfgAfter = t.cloneConfig(cfgBefore)
+	err = prepareJoinEtcd(cfgAfter)
+	c.Assert(terror.ErrMasterJoinEmbedEtcdFail.Equal(err), check.IsTrue)
+	c.Assert(err, check.ErrorMatches, ".*fail to join embed etcd: missing data or joining a duplicate member.*")
+	c.Assert(cfgAfter, check.DeepEquals, cfgBefore) // not changed
+
+	// set a different name
+	cfgBefore.Name = "dm-master-2"
+
+	// add member with invalid `advertise-peer-urls`
+	cfgAfter = t.cloneConfig(cfgBefore)
+	cfgAfter.AdvertisePeerUrls = "invalid-advertise-peer-urls"
+	err = prepareJoinEtcd(cfgAfter)
+	c.Assert(terror.ErrMasterJoinEmbedEtcdFail.Equal(err), check.IsTrue)
+	c.Assert(err, check.ErrorMatches, ".*fail to join embed etcd: add member.*")
+
+	// join with existing cluster
+	cfgAfter = t.cloneConfig(cfgBefore)
+	c.Assert(prepareJoinEtcd(cfgAfter), check.IsNil)
+	c.Assert(cfgAfter.InitialClusterState, check.Equals, embed.ClusterStateFlagExisting)
+	obtainClusters := strings.Split(cfgAfter.InitialCluster, ",")
+	sort.Strings(obtainClusters)
+	expectedClusters := []string{
+		cfgCluster.InitialCluster,
+		fmt.Sprintf("%s=%s", cfgAfter.Name, cfgAfter.PeerUrls),
+	}
+	sort.Strings(expectedClusters)
+	c.Assert(obtainClusters, check.DeepEquals, expectedClusters)
+
+	// join data should exist now
+	joinData, err := ioutil.ReadFile(joinFP)
+	c.Assert(err, check.IsNil)
+	c.Assert(string(joinData), check.Equals, cfgAfter.InitialCluster)
 }
 
 func (t *testEtcdSuite) cloneConfig(cfg *Config) *Config {
