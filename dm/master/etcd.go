@@ -17,8 +17,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
+	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/embed"
 	"google.golang.org/grpc"
 
