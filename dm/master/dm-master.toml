@@ -22,13 +22,7 @@ advertise-peer-urls = "http://127.0.0.1:8291"
 # initial cluster configuration for bootstrapping, e,g. dm-master=http://127.0.0.1:8291
 initial-cluster = "dm-master=http://127.0.0.1:8291"
 
-# Initial cluster state ("new" or "existing").
-# Set to "new" for all members present during initial static or DNS bootstrapping.
-# If this option is set to "existing", DM-master will attempt to join the existing cluster.
-# If the wrong value is set, DM-master will attempt to start but fail safely.
-initial-cluster-state = "new"
-
-# Join to an existing pd cluster, a string of existing cluster's endpoints.
+# Join to an existing DM-master cluster, a string of existing cluster's endpoints.
 join = ""
 
 # rpc configuration

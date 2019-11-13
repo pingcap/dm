@@ -71,6 +71,22 @@ func startEtcd(masterCfg *Config,
 
 // prepareJoinEtcd prepares config needed to join an existing cluster.
 // learn from https://github.com/pingcap/pd/blob/37efcb05f397f26c70cda8dd44acaa3061c92159/server/join/join.go#L44.
+//
+// when setting `initial-cluster` explicitly to bootstrap a new cluster:
+// - if local persistent data exist, just restart the previous cluster (in fact, it's not bootstrapping).
+// - if local persistent data not exist, just bootstrap the cluster.
+//
+// when setting `join` to join an existing cluster (without `initial-cluster` set):
+// - if local persistent data exists (in fact, it's not join):
+//   - just restart if `member` already exists (already joined before)
+//   - read `initial-cluster` back from local persistent data to restart (just like bootstrapping)
+// - if local persistent data not exist:
+//   1. fetch member list from the cluster to check if we can join now.
+//   2. call `member add` to add the member info into the cluster.
+//   3. generate config for join (`initial-cluster` and `initial-cluster-state`).
+//   4. save `initial-cluster` in local persistent data for later restarting.
+//
+// NOTE: A member can't join to another cluster after it has joined a previous one.
 func prepareJoinEtcd(cfg *Config) error {
 	// no need to join
 	if cfg.Join == "" {
@@ -82,21 +98,21 @@ func prepareJoinEtcd(cfg *Config) error {
 		return terror.ErrMasterJoinEmbedEtcdFail.Generate(fmt.Sprintf("join self %s is forbidden", cfg.Join))
 	}
 
-	// join with persistent data
-	joinFP := filepath.Join(cfg.DataDir, "join")
-	if _, err := os.Stat(joinFP); !os.IsNotExist(err) {
-		s, err := ioutil.ReadFile(joinFP)
-		if err != nil {
-			return terror.ErrMasterJoinEmbedEtcdFail.Delegate(err, "read persistent join data")
-		}
-		cfg.InitialCluster = strings.TrimSpace(string(s))
+	// restart with previous data, no `InitialCluster` need to set
+	if isDataExist(filepath.Join(cfg.DataDir, "member")) {
+		cfg.InitialCluster = ""
 		cfg.InitialClusterState = embed.ClusterStateFlagExisting
 		return nil
 	}
 
-	// restart with previous data, no `InitialCluster` need to set
-	if isDataExist(filepath.Join(cfg.DataDir, "member")) {
-		cfg.InitialCluster = ""
+	// join with persistent data
+	joinFP := filepath.Join(cfg.DataDir, "join")
+	if s, err := ioutil.ReadFile(joinFP); err != nil {
+		if !os.IsNotExist(err) {
+			return terror.ErrMasterJoinEmbedEtcdFail.Delegate(err, "read persistent join data")
+		}
+	} else {
+		cfg.InitialCluster = strings.TrimSpace(string(s))
 		cfg.InitialClusterState = embed.ClusterStateFlagExisting
 		return nil
 	}
@@ -139,6 +155,9 @@ func prepareJoinEtcd(cfg *Config) error {
 	for _, m := range addResp.Members {
 		name := m.Name
 		if m.ID == addResp.Member.ID {
+			// the member only called `member add`,
+			// but has not started the process to complete the join should have an empty name.
+			// so, we use the `name` in config instead.
 			name = cfg.Name
 		}
 		if name == "" {
