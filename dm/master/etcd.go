@@ -24,9 +24,11 @@ import (
 
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/embed"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/pkg/etcdutil"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -74,7 +76,7 @@ func startEtcd(masterCfg *Config,
 //
 // when setting `initial-cluster` explicitly to bootstrap a new cluster:
 // - if local persistent data exist, just restart the previous cluster (in fact, it's not bootstrapping).
-// - if local persistent data not exist, just bootstrap the cluster.
+// - if local persistent data not exist, just bootstrap the cluster as a new cluster.
 //
 // when setting `join` to join an existing cluster (without `initial-cluster` set):
 // - if local persistent data exists (in fact, it's not join):
@@ -114,6 +116,7 @@ func prepareJoinEtcd(cfg *Config) error {
 	} else {
 		cfg.InitialCluster = strings.TrimSpace(string(s))
 		cfg.InitialClusterState = embed.ClusterStateFlagExisting
+		log.L().Info("using persistent join data", zap.String("file", joinFP), zap.String("data", cfg.InitialCluster))
 		return nil
 	}
 
