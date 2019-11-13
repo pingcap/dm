@@ -573,9 +573,6 @@ func (l *Loader) Restore(ctx context.Context) error {
 
 	begin := time.Now()
 	err = l.restoreData(ctx)
-	if err != nil && errors.Cause(err) != context.Canceled {
-		return err
-	}
 
 	failpoint.Inject("dontWaitWorkerExit", func(_ failpoint.Value) {
 		l.tctx.L().Info("", zap.String("failpoint", "dontWaitWorkerExit"))
@@ -585,8 +582,11 @@ func (l *Loader) Restore(ctx context.Context) error {
 	// make sure all workers exit
 	l.closeFileJobQueue() // all data file dispatched, close it
 	l.workerWg.Wait()
+
 	if err == nil {
 		l.tctx.L().Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
+	} else if errors.Cause(err) != context.Canceled {
+		return err
 	}
 
 	return nil
