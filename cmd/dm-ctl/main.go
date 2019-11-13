@@ -88,10 +88,6 @@ func main() {
 	cfg := common.NewConfig()
 	args := os.Args[1:]
 
-	syncErr := log.L().Sync()
-	if syncErr != nil {
-		fmt.Fprintln(os.Stderr, "sync log failed", syncErr)
-	}
 	// now, we use checker in dmctl while it using some pkg which log some thing when running
 	// to make dmctl output more clear, simply redirect log to file rather output to stdout
 	err := log.InitLogger(&log.Config{
