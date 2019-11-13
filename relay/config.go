@@ -25,7 +25,7 @@ type Config struct {
 	EnableGTID  bool     `toml:"enable-gtid" json:"enable-gtid"`
 	AutoFixGTID bool     `toml:"auto-fix-gtid" json:"auto-fix-gtid"`
 	RelayDir    string   `toml:"relay-dir" json:"relay-dir"`
-	ServerID    int      `toml:"server-id" json:"server-id"`
+	ServerID    uint32   `toml:"server-id" json:"server-id"`
 	Flavor      string   `toml:"flavor" json:"flavor"`
 	Charset     string   `toml:"charset" json:"charset"`
 	From        DBConfig `toml:"data-source" json:"data-source"`

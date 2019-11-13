@@ -14,12 +14,16 @@
 package worker
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"io/ioutil"
 	"path"
 	"strings"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
+	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/config"
 )
@@ -29,7 +33,7 @@ func (t *testServer) TestConfig(c *C) {
 
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml", "-relay-dir=./xx"}), IsNil)
 	c.Assert(cfg.RelayDir, Equals, "./xx")
-	c.Assert(cfg.ServerID, Equals, 101)
+	c.Assert(cfg.ServerID, Equals, uint32(101))
 
 	dir := c.MkDir()
 	cfg.ConfigFile = path.Join(dir, "dm-worker.toml")
@@ -38,7 +42,7 @@ func (t *testServer) TestConfig(c *C) {
 	clone1 := cfg.Clone()
 	c.Assert(cfg, DeepEquals, clone1)
 	clone1.ServerID = 100
-	c.Assert(cfg.ServerID, Equals, 101)
+	c.Assert(cfg.ServerID, Equals, uint32(101))
 
 	// test format
 	c.Assert(cfg.String(), Matches, `.*"server-id":101.*`)
@@ -51,13 +55,11 @@ func (t *testServer) TestConfig(c *C) {
 
 	// test update config file and reload
 	c.Assert(cfg.UpdateConfigFile(tomlStr), IsNil)
-	cfg.Reload()
-	c.Assert(err, IsNil)
-	c.Assert(cfg.ServerID, Equals, 100)
+	c.Assert(cfg.Reload(), IsNil)
+	c.Assert(cfg.ServerID, Equals, uint32(100))
 	c.Assert(cfg.UpdateConfigFile(originCfgStr), IsNil)
-	cfg.Reload()
-	c.Assert(err, IsNil)
-	c.Assert(cfg.ServerID, Equals, 101)
+	c.Assert(cfg.Reload(), IsNil)
+	c.Assert(cfg.ServerID, Equals, uint32(101))
 
 	// test decrypt password
 	clone1.From.Password = "1234"
@@ -159,4 +161,63 @@ func (t *testServer) TestConfigVerify(c *C) {
 		}
 	}
 
+}
+
+func subtestFlavor(c *C, cfg *Config, sqlInfo, expectedFlavor, expectedError string) {
+	cfg.Flavor = ""
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'version';").
+		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
+			AddRow("version", sqlInfo))
+	mock.ExpectClose()
+
+	err = cfg.adjustFlavor(context.Background(), db)
+	if expectedError == "" {
+		c.Assert(err, IsNil)
+		c.Assert(cfg.Flavor, Equals, expectedFlavor)
+	} else {
+		c.Assert(err, ErrorMatches, expectedError)
+	}
+}
+
+func (t *testServer) TestAdjustFlavor(c *C) {
+	cfg := NewConfig()
+	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml", "-relay-dir=./xx"}), IsNil)
+
+	cfg.Flavor = "mariadb"
+	err := cfg.adjustFlavor(context.Background(), nil)
+	c.Assert(err, IsNil)
+	c.Assert(cfg.Flavor, Equals, mysql.MariaDBFlavor)
+	cfg.Flavor = "MongoDB"
+	err = cfg.adjustFlavor(context.Background(), nil)
+	c.Assert(err, ErrorMatches, ".*flavor MongoDB not supported")
+
+	subtestFlavor(c, cfg, "10.4.8-MariaDB-1:10.4.8+maria~bionic", mysql.MariaDBFlavor, "")
+	subtestFlavor(c, cfg, "5.7.26-log", mysql.MySQLFlavor, "")
+}
+
+func (t *testServer) TestAdjustServerID(c *C) {
+	var originGetAllServerIDFunc = getAllServerIDFunc
+	defer func() {
+		getAllServerIDFunc = originGetAllServerIDFunc
+	}()
+	getAllServerIDFunc = getMockServerIDs
+
+	cfg := NewConfig()
+	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml", "-relay-dir=./xx"}), IsNil)
+
+	cfg.adjustServerID(context.Background(), nil)
+	c.Assert(cfg.ServerID, Equals, uint32(101))
+
+	cfg.ServerID = 0
+	cfg.adjustServerID(context.Background(), nil)
+	c.Assert(cfg.ServerID, Not(Equals), 0)
+}
+
+func getMockServerIDs(ctx context.Context, db *sql.DB) (map[uint32]struct{}, error) {
+	return map[uint32]struct{}{
+		1: {},
+		2: {},
+	}, nil
 }

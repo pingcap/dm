@@ -351,11 +351,24 @@ enum ErrorType {
     CheckFailed = 2;
 }
 
+// TError represents error used in dm
+// NOTE: currently stack trace is not supported, `Message` is the `terror.Error.getMsg` result
+// and `RawCause` is the `Error` result of error from `terror.Error.Cause()`.
+message TError {
+    int32 ErrCode = 1;
+    int32 ErrClass = 2;
+    int32 ErrScope = 3;
+    int32 ErrLevel = 4;
+    string Message = 5;
+    string RawCause = 6;
+}
+
 // ProcessError represents error produced by a dm unit
 // NOTE: refine later, like add error scope field
 message ProcessError {
     ErrorType Type = 1;
     string msg = 2;
+    TError error = 3;
 }
 
 // DDLInfo represents a occurred DDL in a sub task
@@ -383,6 +396,7 @@ message ExecDDLRequest {
     string lockID = 2; // DDL lock ID
     bool exec = 3; // true for execute, false for ignore (skip)
     string traceGID = 4; // trace group ID
+    repeated string DDLs = 5; // DDL statement
 }
 
 // BreakDDLLockRequest represents a request for a dm-worker to force to break the DDL lock

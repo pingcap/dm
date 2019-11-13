@@ -17,7 +17,6 @@ import (
 	"context"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
@@ -98,9 +97,9 @@ func NewRealRelayHolder(cfg *Config) RelayHolder {
 		BinLogName: clone.RelayBinLogName,
 		BinlogGTID: clone.RelayBinlogGTID,
 		ReaderRetry: rr.ReaderRetryConfig{ // we use config from TaskChecker now
-			BackoffRollback: cfg.Checker.BackoffRollback,
-			BackoffMax:      cfg.Checker.BackoffMax,
-			BackoffMin:      cfg.Checker.BackoffMin,
+			BackoffRollback: cfg.Checker.BackoffRollback.Duration,
+			BackoffMax:      cfg.Checker.BackoffMax.Duration,
+			BackoffMin:      cfg.Checker.BackoffMin.Duration,
 			BackoffJitter:   cfg.Checker.BackoffJitter,
 			BackoffFactor:   cfg.Checker.BackoffFactor,
 		},
@@ -308,13 +307,13 @@ func (h *realRelayHolder) setResult(result *pb.ProcessResult) {
 }
 
 // Result returns the result of the relay
+// Note this method will omit the `Error` field in `pb.ProcessError`, so no duplicated
+// error message information will be displayed in `query-status`, as the `Msg` field
+// contains enough error information.
 func (h *realRelayHolder) Result() *pb.ProcessResult {
 	h.RLock()
 	defer h.RUnlock()
-	if h.result == nil {
-		return nil
-	}
-	return proto.Clone(h.result).(*pb.ProcessResult)
+	return statusProcessResult(h.result)
 }
 
 // Update update relay config online
@@ -329,9 +328,9 @@ func (h *realRelayHolder) Update(ctx context.Context, cfg *Config) error {
 			Password: cfg.From.Password,
 		},
 		ReaderRetry: rr.ReaderRetryConfig{ // we use config from TaskChecker now
-			BackoffRollback: cfg.Checker.BackoffRollback,
-			BackoffMax:      cfg.Checker.BackoffMax,
-			BackoffMin:      cfg.Checker.BackoffMin,
+			BackoffRollback: cfg.Checker.BackoffRollback.Duration,
+			BackoffMax:      cfg.Checker.BackoffMax.Duration,
+			BackoffMin:      cfg.Checker.BackoffMin.Duration,
 			BackoffJitter:   cfg.Checker.BackoffJitter,
 			BackoffFactor:   cfg.Checker.BackoffFactor,
 		},

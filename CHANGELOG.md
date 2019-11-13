@@ -2,7 +2,89 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.0-rc.1] 2019-07-01
+## [1.0.2] 2019-10-30
+
+### Improvements
+
+- Generate some config items for DM-worker automatically
+- Generate some config items for replication task automatically
+- Simplify the output of `query-status` without arguments
+- Manage DB connections directly for downstream
+
+### Bug fixes
+
+- Fix some panic when starting up or executing SQL statements
+- Fix abnormal sharding DDL replication on DDL execution timeout
+- Fix starting task failure caused by the checking timeout or any inaccessible DM-worker
+- Fix SQL execution retry for some error
+
+### Action required
+
+- When upgrading from a previous version, note that you must upgrade all DM components (dmctl/DM-master/DM-worker) together
+
+### Detailed Bug Fixes and Changes
+
+- Generate random `server-id` for DM-worker config automatically [#337](https://github.com/pingcap/dm/pull/337)
+- Generate `flavor` for DM-worker config automatically [#328](https://github.com/pingcap/dm/pull/328)
+- Generate `relay-binlog-name` and `relay-binlog-gtid` for DM-worker config automatically [#318](https://github.com/pingcap/dm/pull/318)
+- Generate table name list for dumping in task config from black & white table lists automatically [#326](https://github.com/pingcap/dm/pull/326)
+- Add concurrency items (`mydumper-thread`, `loader-thread` and `syncer-thread`) for task config [#314](https://github.com/pingcap/dm/pull/314)
+- Simplify the output of `query-status` without arguments [#340](https://github.com/pingcap/dm/pull/340)
+- Fix abnormal sharding DDL replication on DDL execution timeout [#338](https://github.com/pingcap/dm/pull/338)
+- Fix potential DM-worker panic when restoring subtask from local meta [#311](https://github.com/pingcap/dm/pull/311)
+- Fix DM-worker panic when committing a DML transaction failed [#313](https://github.com/pingcap/dm/pull/313)
+- Fix DM-worker or DM-master panic when the listening port is being used [#301](https://github.com/pingcap/dm/pull/301)
+- Fix retry for error code 1105 [#321](https://github.com/pingcap/dm/pull/321), [#332](https://github.com/pingcap/dm/pull/332)
+- Fix retry for `Duplicate entry` and `Data too long for column` [#313](https://github.com/pingcap/dm/pull/313)
+- Fix task check timeout when having large amounts of tables in upstream [#327](https://github.com/pingcap/dm/pull/327)
+- Fix starting task failure when any DM-worker is not accessible [#319](https://github.com/pingcap/dm/pull/319)
+- Fix potential DM-worker startup failure in GTID mode after being recovered from corrupt relay log [#339](https://github.com/pingcap/dm/pull/339)
+- Fix in-memory TPS count for sync unit [#294](https://github.com/pingcap/dm/pull/294)
+- Manage DB connections directly for downstream [#325](https://github.com/pingcap/dm/pull/325)
+- Improve error system by refining error information passed between components [#320](https://github.com/pingcap/dm/pull/320)
+
+## [1.0.1] 2019-09-10
+
+#### Bug fixes
+
+- Fix a bug that may cause database connection re-establish too frequent [#280](https://github.com/pingcap/dm/pull/280)
+- Fix a potential panic bug when we query-status during subtask unit transforming between different units [#274](https://github.com/pingcap/dm/pull/274)
+
+## [1.0.0] 2019-09-06
+
+### v1.0.0 What's New
+
+#### Improvements
+
+- Add auto recovery framework
+- Make task retryable when encounters a database driver error
+- Make task retryable when encounters network issue
+- Improve the DDL compatibility in DM
+
+#### Bug fixes
+
+- Fix the bug that has a risk of data loss when the upstream database connection is abnormal 
+
+#### Action required
+
+- When upgrading from a previous version, please note that you must upgrade all DM components (dmctl/DM-master/DM-worker) together
+
+### Detailed Bug Fixes and Changes
+
+- Retry for upstream bad connection [#265](https://github.com/pingcap/dm/pull/265)
+- Added some retryable errors in underlying database implementation [#256](https://github.com/pingcap/dm/pull/256)
+- Added task auto recovery framework [#246](https://github.com/pingcap/dm/pull/246)
+- Unify DB operation into one pkg for load and binlog replication [#236](https://github.com/pingcap/dm/pull/236)
+- Fixed a bug in task handler that may cause dm-worker panic [#225](https://github.com/pingcap/dm/pull/225)
+- Refactor DM error system [#216](https://github.com/pingcap/dm/pull/216)
+- Add strictly config verification in dm-master, dm-worker and task [#212](https://github.com/pingcap/dm/pull/212)
+- Limit DM error and log message length [#257](https://github.com/pingcap/dm/pull/257)
+- Support case insensitive binlog event filter in binlog replication [#188](https://github.com/pingcap/dm/pull/188)
+- Refactor DM log with pingcap/log [#195](https://github.com/pingcap/dm/pull/195)
+- Use `INSERT` instead of `REPLACE` under non safe-mode [#199](https://github.com/pingcap/dm/pull/199)
+
+
+## [1.0.0-rc.1] 2019-07-01
 
 - Remove the restriction of "the next shard DDL statement cannot be executed unless the current shard DDL operation is completely finished in shard merge scene for binlog replication" [#177](https://github.com/pingcap/dm/pull/177)
 - Support retry task on the `invalid connection` error for binlog replication [#66](https://github.com/pingcap/dm/pull/66)
@@ -25,7 +107,7 @@ All notable changes to this project will be documented in this file.
 - Greatly improve the test to ensure correctness
 - Fix many other bugs that don't affect correctness
 
-## [1.0-alpha] 2019-01-18
+## [1.0.0-alpha] 2019-01-18
 
 - Support the full data migration and the incremental data migration from MySQL/MariaDB into TiDB
 - Support running multi independent synchronization tasks concurrently on one DM-worker instance

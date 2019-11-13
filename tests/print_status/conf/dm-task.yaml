@@ -30,7 +30,7 @@ mydumpers:
     threads: 4
     chunk-filesize: 0
     skip-tz-utc: true
-    extra-args: "-B print_status --statement-size=5000"
+    extra-args: "--statement-size=5000"
 
 loaders:
   global:

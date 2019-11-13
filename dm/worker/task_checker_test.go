@@ -14,17 +14,27 @@
 package worker
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/pingcap/check"
+	"github.com/pingcap/errors"
+	tmysql "github.com/pingcap/parser/mysql"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var _ = check.Suite(&testTaskCheckerSuite{})
 
 type testTaskCheckerSuite struct{}
+
+var (
+	unsupporteModifyColumnError = unit.NewProcessError(pb.ErrorType_ExecSQL, terror.ErrDBExecuteFailed.Delegate(&tmysql.SQLError{1105, "unsupported modify column length 20 is less than origin 40", tmysql.DefaultMySQLState}))
+	unknownProcessError         = unit.NewProcessError(pb.ErrorType_UnknownError, errors.New("error mesage"))
+)
 
 func (s *testTaskCheckerSuite) TestResumeStrategy(c *check.C) {
 	c.Assert(ResumeSkip.String(), check.Equals, resumeStrategy2Str[ResumeSkip])
@@ -43,17 +53,17 @@ func (s *testTaskCheckerSuite) TestResumeStrategy(c *check.C) {
 		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Running}, now, time.Duration(0), 1 * time.Millisecond, ResumeIgnore},
 		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Paused}, now, time.Duration(0), 1 * time.Millisecond, ResumeIgnore},
 		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Paused, Result: &pb.ProcessResult{IsCanceled: true}}, now, time.Duration(0), 1 * time.Millisecond, ResumeIgnore},
-		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Paused, Result: &pb.ProcessResult{IsCanceled: false, Errors: []*pb.ProcessError{{Type: pb.ErrorType_ExecSQL, Msg: "ERROR 1105 (HY000): unsupported modify column length 20 is less than origin 40"}}}}, now, time.Duration(0), 1 * time.Millisecond, ResumeNoSense},
+		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Paused, Result: &pb.ProcessResult{IsCanceled: false, Errors: []*pb.ProcessError{unsupporteModifyColumnError}}}, now, time.Duration(0), 1 * time.Millisecond, ResumeNoSense},
 		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Paused, Result: &pb.ProcessResult{IsCanceled: false}}, now, time.Duration(0), 1 * time.Second, ResumeSkip},
 		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Paused, Result: &pb.ProcessResult{IsCanceled: false}}, now, -2 * time.Millisecond, 1 * time.Millisecond, ResumeDispatch},
 	}
 
 	tsc := NewRealTaskStatusChecker(CheckerConfig{
 		CheckEnable:     true,
-		CheckInterval:   DefaultCheckInterval,
-		BackoffRollback: DefaultBackoffRollback,
-		BackoffMin:      DefaultBackoffMin,
-		BackoffMax:      DefaultBackoffMax,
+		CheckInterval:   duration{Duration: DefaultCheckInterval},
+		BackoffRollback: duration{Duration: DefaultBackoffRollback},
+		BackoffMin:      duration{Duration: DefaultBackoffMin},
+		BackoffMax:      duration{Duration: DefaultBackoffMax},
 		BackoffFactor:   DefaultBackoffFactor,
 	}, nil)
 	for _, tc := range testCases {
@@ -84,10 +94,10 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 
 	tsc := NewRealTaskStatusChecker(CheckerConfig{
 		CheckEnable:     true,
-		CheckInterval:   DefaultCheckInterval,
-		BackoffRollback: 200 * time.Millisecond,
-		BackoffMin:      1 * time.Millisecond,
-		BackoffMax:      1 * time.Second,
+		CheckInterval:   duration{Duration: DefaultCheckInterval},
+		BackoffRollback: duration{Duration: 200 * time.Millisecond},
+		BackoffMin:      duration{Duration: 1 * time.Millisecond},
+		BackoffMax:      duration{Duration: 1 * time.Second},
 		BackoffFactor:   DefaultBackoffFactor,
 	}, nil)
 	c.Assert(tsc.Init(), check.IsNil)
@@ -108,7 +118,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	st.stage = pb.Stage_Paused
 	st.result = &pb.ProcessResult{
 		IsCanceled: false,
-		Errors:     []*pb.ProcessError{{Type: pb.ErrorType_UnknownError, Msg: "error message"}},
+		Errors:     []*pb.ProcessError{unknownProcessError},
 	}
 	time.Sleep(1 * time.Millisecond)
 	rtsc.check()
@@ -135,7 +145,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	// test no sense strategy
 	st.result = &pb.ProcessResult{
 		IsCanceled: false,
-		Errors:     []*pb.ProcessError{{Type: pb.ErrorType_ExecSQL, Msg: "ERROR 1105 (HY000): unsupported modify column length 20 is less than origin 40"}},
+		Errors:     []*pb.ProcessError{unsupporteModifyColumnError},
 	}
 	latestPausedTime = rtsc.bc.latestPausedTime[taskName]
 	rtsc.check()
@@ -151,10 +161,10 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	// test resume skip strategy
 	tsc = NewRealTaskStatusChecker(CheckerConfig{
 		CheckEnable:     true,
-		CheckInterval:   DefaultCheckInterval,
-		BackoffRollback: 200 * time.Millisecond,
-		BackoffMin:      10 * time.Second,
-		BackoffMax:      100 * time.Second,
+		CheckInterval:   duration{Duration: DefaultCheckInterval},
+		BackoffRollback: duration{Duration: 200 * time.Millisecond},
+		BackoffMin:      duration{Duration: 10 * time.Second},
+		BackoffMax:      duration{Duration: 100 * time.Second},
 		BackoffFactor:   DefaultBackoffFactor,
 	}, w)
 	c.Assert(tsc.Init(), check.IsNil)
@@ -173,7 +183,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	st.stage = pb.Stage_Paused
 	st.result = &pb.ProcessResult{
 		IsCanceled: false,
-		Errors:     []*pb.ProcessError{{Type: pb.ErrorType_UnknownError, Msg: "error message"}},
+		Errors:     []*pb.ProcessError{unknownProcessError},
 	}
 	rtsc.check()
 	latestResumeTime = rtsc.bc.latestResumeTime[taskName]
@@ -209,10 +219,10 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 
 	tsc := NewRealTaskStatusChecker(CheckerConfig{
 		CheckEnable:     true,
-		CheckInterval:   DefaultCheckInterval,
-		BackoffRollback: 200 * time.Millisecond,
-		BackoffMin:      backoffMin,
-		BackoffMax:      10 * time.Second,
+		CheckInterval:   duration{Duration: DefaultCheckInterval},
+		BackoffRollback: duration{Duration: 200 * time.Millisecond},
+		BackoffMin:      duration{Duration: backoffMin},
+		BackoffMax:      duration{Duration: 10 * time.Second},
 		BackoffFactor:   1.0,
 	}, nil)
 	c.Assert(tsc.Init(), check.IsNil)
@@ -242,7 +252,7 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 		stage: pb.Stage_Paused,
 		result: &pb.ProcessResult{
 			IsCanceled: false,
-			Errors:     []*pb.ProcessError{{Type: pb.ErrorType_ExecSQL, Msg: "ERROR 1105 (HY000): unsupported modify column length 20 is less than origin 40"}},
+			Errors:     []*pb.ProcessError{unsupporteModifyColumnError},
 		},
 	}
 	rtsc.w.subTaskHolder.recordSubTask(st1)
@@ -251,7 +261,7 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 		stage: pb.Stage_Paused,
 		result: &pb.ProcessResult{
 			IsCanceled: false,
-			Errors:     []*pb.ProcessError{{Type: pb.ErrorType_UnknownError, Msg: "error message"}},
+			Errors:     []*pb.ProcessError{unknownProcessError},
 		},
 	}
 	rtsc.w.subTaskHolder.recordSubTask(st2)
@@ -282,20 +292,29 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 
 func (s *testTaskCheckerSuite) TestIsResumableError(c *check.C) {
 	testCases := []struct {
-		err       *pb.ProcessError
+		errorType pb.ErrorType
+		err       error
 		resumable bool
 	}{
-		{&pb.ProcessError{Type: pb.ErrorType_ExecSQL, Msg: "ERROR 1105 (HY000): unsupported modify column length 20 is less than origin 40"}, false},
-		{&pb.ProcessError{Type: pb.ErrorType_ExecSQL, Msg: "ERROR 1105 (HY000): unsupported drop integer primary key"}, false},
-		{&pb.ProcessError{Type: pb.ErrorType_ExecSQL, Msg: ""}, true},
-		{&pb.ProcessError{Type: pb.ErrorType_ExecSQL, Msg: "[code=10006:class=database:scope=not-set:level=high] file test.t3.sql: execute statement failed: USE `test_abc`;: context canceled"}, true},
-		{&pb.ProcessError{Type: pb.ErrorType_UnknownError, Msg: "[code=11038:class=functional:scope=internal:level=high] parse relay log file bin.000018 from offset 555 in dir /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004: parse relay log file bin.000018 from offset 0 in dir /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004: parse relay log file /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004/bin.000018: binlog checksum mismatch, data may be corrupted"}, false},
-		{&pb.ProcessError{Type: pb.ErrorType_UnknownError, Msg: "[code=11038:class=functional:scope=internal:level=high] parse relay log file bin.000018 from offset 500 in dir /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004: parse relay log file bin.000018 from offset 0 in dir /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004: parse relay log file /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004/bin.000018: get event err EOF, need 1567488104 but got 316323"}, false},
-		{&pb.ProcessError{Type: pb.ErrorType_UnknownError, Msg: ""}, true},
-		{&pb.ProcessError{Type: pb.ErrorType_UnknownError, Msg: "unknown error"}, true},
+		// only DM new error is checked
+		{pb.ErrorType_ExecSQL, &tmysql.SQLError{1105, "unsupported modify column length 20 is less than origin 40", tmysql.DefaultMySQLState}, true},
+		{pb.ErrorType_ExecSQL, &tmysql.SQLError{1105, "unsupported drop integer primary key", tmysql.DefaultMySQLState}, true},
+		{pb.ErrorType_ExecSQL, nil, true},
+		{pb.ErrorType_ExecSQL, terror.ErrDBExecuteFailed.Generate("file test.t3.sql: execute statement failed: USE `test_abc`;: context canceled"), true},
+		{pb.ErrorType_ExecSQL, terror.ErrDBExecuteFailed.Delegate(&tmysql.SQLError{1105, "unsupported modify column length 20 is less than origin 40", tmysql.DefaultMySQLState}, "alter table t modify col varchar(20)"), false},
+		{pb.ErrorType_ExecSQL, terror.ErrDBExecuteFailed.Delegate(&tmysql.SQLError{1105, "unsupported drop integer primary key", tmysql.DefaultMySQLState}, "alter table t drop column id"), false},
+		{pb.ErrorType_ExecSQL, terror.ErrDBExecuteFailed.Delegate(errors.New("Error 1062: Duplicate entry '5' for key 'PRIMARY'")), false},
+		{pb.ErrorType_ExecSQL, terror.ErrDBExecuteFailed.Delegate(errors.New("INSERT INTO `db`.`tbl` (`c1`,`c2`) VALUES (?,?);: Error 1406: Data too long for column 'c2' at row 1")), false},
+		// real error is generated by `Delegate` and multiple `Annotatef`, we use `New` to simplify it
+		{pb.ErrorType_UnknownError, terror.ErrParserParseRelayLog.New("parse relay log file bin.000018 from offset 555 in dir /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004: parse relay log file bin.000018 from offset 0 in dir /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004: parse relay log file /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004/bin.000018: binlog checksum mismatch, data may be corrupted"), false},
+		{pb.ErrorType_UnknownError, terror.ErrParserParseRelayLog.New("parse relay log file bin.000018 from offset 500 in dir /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004: parse relay log file bin.000018 from offset 0 in dir /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004: parse relay log file /home/tidb/deploy/relay_log/d2e831df-b4ec-11e9-9237-0242ac110008.000004/bin.000018: get event err EOF, need 1567488104 but got 316323"), false},
+		{pb.ErrorType_UnknownError, nil, true},
+		{pb.ErrorType_UnknownError, errors.New("unknown error"), true},
 	}
 
 	for _, tc := range testCases {
-		c.Assert(isResumableError(tc.err), check.Equals, tc.resumable)
+		err := unit.NewProcessError(tc.errorType, tc.err)
+		fmt.Printf("error: %v\n", err)
+		c.Assert(isResumableError(err), check.Equals, tc.resumable)
 	}
 }

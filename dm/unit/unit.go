@@ -16,8 +16,11 @@ package unit
 import (
 	"context"
 
+	"github.com/pingcap/errors"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 // Unit defines interface for sub task process units, like syncer, loader, relay, etc.
@@ -54,9 +57,20 @@ type Unit interface {
 
 // NewProcessError creates a new ProcessError
 // we can refine to add error scope field if needed
-func NewProcessError(errorType pb.ErrorType, msg string) *pb.ProcessError {
-	return &pb.ProcessError{
+func NewProcessError(errorType pb.ErrorType, err error) *pb.ProcessError {
+	result := &pb.ProcessError{
 		Type: errorType,
-		Msg:  msg,
+		Msg:  errors.ErrorStack(err),
 	}
+	if e, ok := err.(*terror.Error); ok {
+		result.Error = &pb.TError{
+			ErrCode:  int32(e.Code()),
+			ErrClass: int32(e.Class()),
+			ErrScope: int32(e.Scope()),
+			ErrLevel: int32(e.Level()),
+			Message:  terror.Message(e),
+			RawCause: terror.Message(e.Cause()),
+		}
+	}
+	return result
 }

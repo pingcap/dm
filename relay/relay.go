@@ -193,7 +193,7 @@ func (r *Relay) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		relayExitWithErrorCounter.Inc()
 		r.tctx.L().Error("process exit", zap.Error(err))
 		// TODO: add specified error type instead of pb.ErrorType_UnknownError
-		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, errors.ErrorStack(err)))
+		errs = append(errs, unit.NewProcessError(pb.ErrorType_UnknownError, err))
 	}
 
 	isCanceled := false
@@ -344,7 +344,10 @@ func (r *Relay) tryRecoverLatestFile(parser2 *parser.Parser) error {
 		if result.Recovered {
 			r.tctx.L().Warn("relay log file recovered",
 				zap.Stringer("from position", latestPos), zap.Stringer("to position", result.LatestPos), log.WrapStringerField("from GTID set", latestGTID), log.WrapStringerField("to GTID set", result.LatestGTIDs))
-			err = r.meta.Save(result.LatestPos, result.LatestGTIDs)
+			if err = latestGTID.Truncate(result.LatestGTIDs); err != nil {
+				return err
+			}
+			err = r.meta.Save(result.LatestPos, latestGTID)
 			if err != nil {
 				return terror.Annotatef(err, "save position %s, GTID sets %v after recovered", result.LatestPos, result.LatestGTIDs)
 			}
@@ -387,6 +390,11 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 					cfg := r.cfg.From
 					r.tctx.L().Error("the requested binlog files have purged in the master server or the master server have switched, currently DM do no support to handle this error",
 						zap.String("db host", cfg.Host), zap.Int("db port", cfg.Port), log.ShortError(err))
+					// log the status for debug
+					pos, gs, err2 := utils.GetMasterStatus(r.db, r.cfg.Flavor)
+					if err2 == nil {
+						r.tctx.L().Info("current master status", zap.Stringer("position", pos), log.WrapStringerField("GTID sets", gs))
+					}
 				}
 				binlogReadErrorCounter.Inc()
 			}
@@ -498,14 +506,26 @@ func (r *Relay) reSetupMeta() error {
 		return err
 	}
 
-	// try adjust meta with start pos from config
-	if (r.cfg.EnableGTID && len(r.cfg.BinlogGTID) > 0) || len(r.cfg.BinLogName) > 0 {
-		adjusted, err := r.meta.AdjustWithStartPos(r.cfg.BinLogName, r.cfg.BinlogGTID, r.cfg.EnableGTID)
+	var latestPosName, latestGTIDStr string
+	if (r.cfg.EnableGTID && len(r.cfg.BinlogGTID) == 0) || (!r.cfg.EnableGTID && len(r.cfg.BinLogName) == 0) {
+		latestPos, latestGTID, err := utils.GetMasterStatus(r.db, r.cfg.Flavor)
 		if err != nil {
 			return err
-		} else if adjusted {
-			r.tctx.L().Info("adjusted meta to start pos", zap.String("start pos's binlog name", r.cfg.BinLogName), zap.String("start pos's binlog gtid", r.cfg.BinlogGTID))
 		}
+		latestPosName = latestPos.Name
+		latestGTIDStr = latestGTID.String()
+	}
+
+	// try adjust meta with start pos from config
+	adjusted, err := r.meta.AdjustWithStartPos(r.cfg.BinLogName, r.cfg.BinlogGTID, r.cfg.EnableGTID, latestPosName, latestGTIDStr)
+	if err != nil {
+		return err
+	}
+
+	if adjusted {
+		_, pos := r.meta.Pos()
+		_, gtid := r.meta.GTID()
+		r.tctx.L().Info("adjusted meta to start pos", zap.Reflect("start pos", pos), zap.Stringer("start pos's binlog gtid", gtid))
 	}
 
 	r.updateMetricsRelaySubDirIndex()

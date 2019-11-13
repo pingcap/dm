@@ -17,34 +17,31 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
-	"github.com/soheilhy/cmux"
+	"go.etcd.io/etcd/embed"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/checker"
-	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/dm/master/sql-operator"
+	operator "github.com/pingcap/dm/dm/master/sql-operator"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
+	"github.com/pingcap/dm/syncer"
 )
 
 var (
-	retryTimeout    = 5 * time.Second
-	cmuxReadTimeout = 10 * time.Second
+	fetchDDLInfoRetryTimeout = 5 * time.Second
 )
 
 // Server handles RPC requests for dm-master
@@ -53,8 +50,11 @@ type Server struct {
 
 	cfg *Config
 
-	rootLis net.Listener
-	svr     *grpc.Server
+	// the embed etcd server, and the gRPC/HTTP API server also attached to it.
+	etcd *embed.Etcd
+
+	// WaitGroup for background functions.
+	bgFunWg sync.WaitGroup
 
 	// dm-worker-ID(host:ip) -> dm-worker client management
 	workerClients map[string]workerrpc.Client
@@ -88,42 +88,61 @@ func NewServer(cfg *Config) *Server {
 		idGen:             tracing.NewIDGen(),
 		ap:                NewAgentPool(&RateLimitConfig{rate: cfg.RPCRateLimit, burst: cfg.RPCRateBurst}),
 	}
+	server.closed.Set(true)
 
 	return &server
 }
 
 // Start starts to serving
-func (s *Server) Start() error {
-	var err error
-	s.rootLis, err = net.Listen("tcp", s.cfg.MasterAddr)
-	if err != nil {
-		return terror.ErrMasterStartService.Delegate(err)
-	}
-
+func (s *Server) Start(ctx context.Context) (err error) {
+	// create clients to DM-workers
 	for _, workerAddr := range s.cfg.DeployMap {
 		s.workerClients[workerAddr], err = workerrpc.NewGRPCClient(workerAddr)
 		if err != nil {
-			return err
+			return
 		}
 	}
-	s.closed.Set(false)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-	defer func() {
-		cancel()
-		wg.Wait()
-	}()
+	// get an HTTP to gRPC API handler.
+	apiHandler, err := getHTTPAPIHandler(ctx, s.cfg.MasterAddr)
+	if err != nil {
+		return
+	}
 
-	wg.Add(1)
+	// HTTP handlers on etcd's client IP:port
+	// no `metrics` for DM-master now, add it later.
+	// NOTE: after received any HTTP request from chrome browser,
+	// the server may be blocked when closing sometime.
+	// And any request to etcd's builtin handler has the same problem.
+	// And curl or safari browser does trigger this problem.
+	// But I haven't figured it out.
+	// (maybe more requests are sent from chrome or its extensions).
+	userHandles := map[string]http.Handler{
+		"/apis/":  apiHandler,
+		"/status": getStatusHandle(),
+		"/debug/": getDebugHandler(),
+	}
+
+	// gRPC API server
+	gRPCSvr := func(gs *grpc.Server) { pb.RegisterMasterServer(gs, s) }
+
+	// start embed etcd server, gRPC API server and HTTP (API, status and debug) server.
+	s.etcd, err = startEtcd(s.cfg, gRPCSvr, userHandles)
+	if err != nil {
+		return
+	}
+
+	s.closed.Set(false) // the server started now.
+
+	s.bgFunWg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer s.bgFunWg.Done()
 		s.ap.Start(ctx)
 	}()
 
-	wg.Add(1)
+	s.bgFunWg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer s.bgFunWg.Done()
 		select {
 		case <-ctx.Done():
 			return
@@ -133,74 +152,32 @@ func (s *Server) Start() error {
 		}
 	}()
 
-	wg.Add(1)
+	s.bgFunWg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer s.bgFunWg.Done()
 		// fetch DDL info from dm-workers to sync sharding DDL
 		s.fetchWorkerDDLInfo(ctx)
 	}()
 
-	// create a cmux
-	m := cmux.New(s.rootLis)
-	m.SetReadTimeout(cmuxReadTimeout) // set a timeout, ref: https://github.com/pingcap/tidb-binlog/pull/352
-
-	// match connections in order: first gRPC, then HTTP
-	grpcL := m.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
-	httpL := m.Match(cmux.HTTP1Fast())
-
-	s.svr = grpc.NewServer()
-	pb.RegisterMasterServer(s.svr, s)
-	go func() {
-		err2 := s.svr.Serve(grpcL)
-		if err2 != nil && !common.IsErrNetClosing(err2) && err2 != cmux.ErrListenerClosed {
-			log.L().Error("fail to start gRPC server", zap.Error(err2))
-		}
-	}()
-
-	httpmux := http.NewServeMux()
-	HandleStatus(httpmux) // serve status
-
-	err = s.HandleHTTPApis(ctx, httpmux) // server http api
-	if err != nil {
-		return err
-	}
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
-		httpS := &http.Server{
-			Handler: httpmux,
-		}
-
-		err3 := httpS.Serve(httpL)
-		if err3 != nil && !common.IsErrNetClosing(err3) && err3 != http.ErrServerClosed {
-			log.L().Error("run http server", log.ShortError(err3))
-		}
-	}()
-
 	log.L().Info("listening gRPC API and status request", zap.String("address", s.cfg.MasterAddr))
-	err = m.Serve() // start serving, block
-	if err != nil && common.IsErrNetClosing(err) {
-		err = nil
-	}
-
-	return err
+	return
 }
 
-// Close close the RPC server
+// Close close the RPC server, this function can be called multiple times
 func (s *Server) Close() {
 	s.Lock()
 	defer s.Unlock()
 	if s.closed.Get() {
 		return
 	}
-	err := s.rootLis.Close()
-	if err != nil && !common.IsErrNetClosing(err) {
-		log.L().Error("close net listener", zap.Error(err))
-	}
-	if s.svr != nil {
-		s.svr.GracefulStop()
+	log.L().Info("closing server")
+
+	// wait for background functions returned
+	s.bgFunWg.Wait()
+
+	// close the etcd and other attached servers
+	if s.etcd != nil {
+		s.etcd.Close()
 	}
 	s.closed.Set(true)
 }
@@ -263,7 +240,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 				StartSubTask: &pb.StartSubTaskRequest{Task: stCfgToml},
 			}
 			resp, err := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
-			workerResp := s.handleOperationResult(ctx, cli, taskName, err, resp)
+			workerResp := s.handleOperationResult(ctx, cli, taskName, worker, err, resp)
 			workerResp.Meta.Worker = worker
 			workerRespCh <- workerResp.Meta
 		}, func(args ...interface{}) {
@@ -355,7 +332,7 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 				return
 			}
 			resp, err := cli.SendRequest(ctx, subReq, s.cfg.RPCTimeout)
-			workerResp := s.handleOperationResult(ctx, cli, req.Name, err, resp)
+			workerResp := s.handleOperationResult(ctx, cli, req.Name, worker1, err, resp)
 			workerResp.Op = req.Op
 			workerResp.Meta.Worker = worker1
 			workerRespCh <- workerResp
@@ -447,7 +424,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 				UpdateSubTask: &pb.UpdateSubTaskRequest{Task: stCfgToml},
 			}
 			resp, err := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
-			workerResp := s.handleOperationResult(ctx, cli, taskName, err, resp)
+			workerResp := s.handleOperationResult(ctx, cli, taskName, worker, err, resp)
 			workerResp.Meta.Worker = worker
 			workerRespCh <- workerResp.Meta
 		}, func(args ...interface{}) {
@@ -1284,7 +1261,7 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 					select {
 					case <-ctx.Done():
 						return
-					case <-time.After(retryTimeout):
+					case <-time.After(fetchDDLInfoRetryTimeout):
 					}
 				}
 				doRetry = false // reset
@@ -1453,9 +1430,13 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 			LockID:   lockID,
 			Exec:     true,
 			TraceGID: traceGID,
+			DDLs:     lock.ddls,
 		},
 	}
-	resp, err := cli.SendRequest(ctx, ownerReq, s.cfg.RPCTimeout)
+	// use a longer timeout for executing DDL in DM-worker.
+	// now, we ignore `invalid connection` for `ADD INDEX`, use a longer timout to ensure the DDL lock removed.
+	ownerTimeout := time.Duration(syncer.MaxDDLConnectionTimeoutMinute)*time.Minute + 30*time.Second
+	resp, err := cli.SendRequest(ctx, ownerReq, ownerTimeout)
 	ownerResp := &pb.CommonWorkerResponse{}
 	if err != nil {
 		ownerResp = errorCommonWorkerResponse(errors.ErrorStack(err), "")
@@ -1487,6 +1468,7 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 			LockID:   lockID,
 			Exec:     false, // ignore and skip DDL
 			TraceGID: traceGID,
+			DDLs:     lock.ddls,
 		},
 	}
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(workers))
@@ -1686,7 +1668,7 @@ func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWork
 }
 
 // TODO: refine the call stack of this API, query worker configs that we needed only
-func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConfig, error) {
+func (s *Server) getWorkerConfigs(ctx context.Context, workerIDs []string) (map[string]config.DBConfig, error) {
 	var (
 		wg          sync.WaitGroup
 		workerMutex sync.Mutex
@@ -1724,7 +1706,11 @@ func (s *Server) allWorkerConfigs(ctx context.Context) (map[string]config.DBConf
 		Type:              workerrpc.CmdQueryWorkerConfig,
 		QueryWorkerConfig: &pb.QueryWorkerConfigRequest{},
 	}
-	for worker, client := range s.workerClients {
+	for _, worker := range workerIDs {
+		client, ok := s.workerClients[worker]
+		if !ok {
+			continue // outer caller can handle the lack of the config
+		}
 		wg.Add(1)
 		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
@@ -1834,7 +1820,17 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
 
-	sourceCfgs, err := s.allWorkerConfigs(ctx)
+	// get workerID from deploy map by sourceID, refactor this when dynamic add/remove worker supported.
+	workerIDs := make([]string, 0, len(cfg.MySQLInstances))
+	for _, inst := range cfg.MySQLInstances {
+		workerID, ok := s.cfg.DeployMap[inst.SourceID]
+		if !ok {
+			return nil, nil, terror.ErrMasterTaskConfigExtractor.Generatef("%s relevant worker not found", inst.SourceID)
+		}
+		workerIDs = append(workerIDs, workerID)
+	}
+
+	sourceCfgs, err := s.getWorkerConfigs(ctx, workerIDs)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1857,11 +1853,11 @@ var (
 	retryInterval = time.Second
 )
 
-func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, name string, opLogID int64) error {
+func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, taskName, workerID string, opLogID int64) error {
 	req := &workerrpc.Request{
 		Type: workerrpc.CmdQueryTaskOperation,
 		QueryTaskOperation: &pb.QueryTaskOperationRequest{
-			Name:  name,
+			Name:  taskName,
 			LogID: opLogID,
 		},
 	}
@@ -1870,18 +1866,18 @@ func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, name
 		resp, err := cli.SendRequest(ctx, req, s.cfg.RPCTimeout)
 		var queryResp *pb.QueryTaskOperationResponse
 		if err != nil {
-			log.L().Error("fail to query task operation", zap.String("task", name), zap.Int64("operation log ID", opLogID), log.ShortError(err))
+			log.L().Error("fail to query task operation", zap.String("task", taskName), zap.String("worker", workerID), zap.Int64("operation log ID", opLogID), log.ShortError(err))
 		} else {
 			queryResp = resp.QueryTaskOperation
 			respLog := queryResp.Log
 			if respLog == nil {
-				return terror.ErrMasterOperNotFound.Generate(opLogID, name)
+				return terror.ErrMasterOperNotFound.Generate(opLogID, taskName, workerID)
 			} else if respLog.Success {
 				return nil
 			} else if len(respLog.Message) != 0 {
-				return terror.ErrMasterOperRespNotSuccess.Generate(respLog.Message)
+				return terror.ErrMasterOperRespNotSuccess.Generate(opLogID, taskName, workerID, respLog.Message)
 			}
-			log.L().Info("wait op log result", zap.String("task", name), zap.Int64("operation log ID", opLogID), zap.Stringer("result", resp.QueryTaskOperation))
+			log.L().Info("wait op log result", zap.String("task", taskName), zap.String("worker", workerID), zap.Int64("operation log ID", opLogID), zap.Stringer("result", resp.QueryTaskOperation))
 		}
 
 		select {
@@ -1891,10 +1887,10 @@ func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, name
 		}
 	}
 
-	return terror.ErrMasterOperRequestTimeout.Generate()
+	return terror.ErrMasterOperRequestTimeout.Generate(workerID)
 }
 
-func (s *Server) handleOperationResult(ctx context.Context, cli workerrpc.Client, name string, err error, resp *workerrpc.Response) *pb.OperateSubTaskResponse {
+func (s *Server) handleOperationResult(ctx context.Context, cli workerrpc.Client, taskName, workerID string, err error, resp *workerrpc.Response) *pb.OperateSubTaskResponse {
 	if err != nil {
 		return &pb.OperateSubTaskResponse{
 			Meta: errorCommonWorkerResponse(errors.ErrorStack(err), ""),
@@ -1914,7 +1910,7 @@ func (s *Server) handleOperationResult(ctx context.Context, cli workerrpc.Client
 		return response
 	}
 
-	err = s.waitOperationOk(ctx, cli, name, response.LogID)
+	err = s.waitOperationOk(ctx, cli, taskName, workerID, response.LogID)
 	if err != nil {
 		response.Meta = errorCommonWorkerResponse(errors.ErrorStack(err), "")
 	}
@@ -1969,28 +1965,4 @@ func (s *Server) workerArgsExtractor(args ...interface{}) (workerrpc.Client, str
 	}
 
 	return cli, worker, nil
-}
-
-// HandleHTTPApis handles http apis and translate to grpc request
-func (s *Server) HandleHTTPApis(ctx context.Context, mux *http.ServeMux) error {
-	// MasterAddr's format may be "host:port" or "":port"
-	_, port, err := net.SplitHostPort(s.cfg.MasterAddr)
-	if err != nil {
-		return terror.ErrMasterHandleHTTPApis.Delegate(err)
-	}
-
-	opts := []grpc.DialOption{grpc.WithInsecure()}
-	conn, err := grpc.DialContext(ctx, "127.0.0.1:"+port, opts...)
-	if err != nil {
-		return terror.ErrMasterHandleHTTPApis.Delegate(err)
-	}
-
-	gwmux := runtime.NewServeMux()
-	err = pb.RegisterMasterHandler(ctx, gwmux, conn)
-	if err != nil {
-		return terror.ErrMasterHandleHTTPApis.Delegate(err)
-	}
-	mux.Handle("/apis/", gwmux)
-
-	return nil
 }

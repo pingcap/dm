@@ -14,6 +14,7 @@
 package utils
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strconv"
@@ -28,6 +29,8 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	tmysql "github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb-tools/pkg/check"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 )
@@ -37,6 +40,101 @@ var (
 	domainServerIDSeparator = "-"
 )
 
+// GetFlavor gets flavor from DB
+func GetFlavor(ctx context.Context, db *sql.DB) (string, error) {
+	value, err := dbutil.ShowVersion(ctx, db)
+	if err != nil {
+		return "", terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+	}
+	if check.IsMariaDB(value) {
+		return gmysql.MariaDBFlavor, nil
+	}
+	return gmysql.MySQLFlavor, nil
+}
+
+// GetAllServerID gets all slave server id and master server id
+func GetAllServerID(ctx context.Context, db *sql.DB) (map[uint32]struct{}, error) {
+	serverIDs, err := GetSlaveServerID(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
+	masterServerID, err := GetServerID(db)
+	if err != nil {
+		return nil, err
+	}
+
+	serverIDs[masterServerID] = struct{}{}
+	return serverIDs, nil
+}
+
+// GetSlaveServerID gets all slave server id
+func GetSlaveServerID(ctx context.Context, db *sql.DB) (map[uint32]struct{}, error) {
+	rows, err := db.QueryContext(ctx, `SHOW SLAVE HOSTS`)
+	if err != nil {
+		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+	}
+	defer rows.Close()
+
+	rowColumns, err := rows.Columns()
+	if err != nil {
+		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+	}
+
+	/*
+		in MySQL:
+		mysql> SHOW SLAVE HOSTS;
+		+------------+-----------+------+-----------+--------------------------------------+
+		| Server_id  | Host      | Port | Master_id | Slave_UUID                           |
+		+------------+-----------+------+-----------+--------------------------------------+
+		|  192168010 | iconnect2 | 3306 | 192168011 | 14cb6624-7f93-11e0-b2c0-c80aa9429562 |
+		| 1921680101 | athena    | 3306 | 192168011 | 07af4990-f41f-11df-a566-7ac56fdaf645 |
+		+------------+-----------+------+-----------+--------------------------------------+
+
+		in MariaDB:
+		mysql> SHOW SLAVE HOSTS;
+		+------------+-----------+------+-----------+
+		| Server_id  | Host      | Port | Master_id |
+		+------------+-----------+------+-----------+
+		|  192168010 | iconnect2 | 3306 | 192168011 |
+		| 1921680101 | athena    | 3306 | 192168011 |
+		+------------+-----------+------+-----------+
+	*/
+
+	var (
+		serverID  sql.NullInt64
+		host      sql.NullString
+		port      sql.NullInt64
+		masterID  sql.NullInt64
+		slaveUUID sql.NullString
+	)
+	serverIDs := make(map[uint32]struct{})
+	for rows.Next() {
+		if len(rowColumns) == 5 {
+			err = rows.Scan(&serverID, &host, &port, &masterID, &slaveUUID)
+		} else {
+			err = rows.Scan(&serverID, &host, &port, &masterID)
+		}
+		if err != nil {
+			return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+		}
+
+		if serverID.Valid {
+			serverIDs[uint32(serverID.Int64)] = struct{}{}
+		} else {
+			// should never happened
+			log.L().Warn("get invalid server_id when execute `SHOW SLAVE HOSTS;`")
+			continue
+		}
+	}
+
+	if rows.Err() != nil {
+		return nil, terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
+	}
+
+	return serverIDs, nil
+}
+
 // GetMasterStatus gets status from master
 func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, error) {
 	var (
@@ -45,14 +143,8 @@ func GetMasterStatus(db *sql.DB, flavor string) (gmysql.Position, gtid.Set, erro
 	)
 
 	rows, err := db.Query(`SHOW MASTER STATUS`)
-
-	failpoint.Inject("GetMasterStatusFailed", func(val failpoint.Value) {
-		err = tmysql.NewErr(uint16(val.(int)))
-		log.L().Warn("GetMasterStatus failed", zap.String("failpoint", "GetMasterStatusFailed"), zap.Error(err))
-	})
-
 	if err != nil {
-		return binlogPos, gs, err
+		return binlogPos, gs, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 	defer rows.Close()
 
@@ -176,14 +268,14 @@ func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
 }
 
 // GetServerID gets server's `server_id`
-func GetServerID(db *sql.DB) (int64, error) {
+func GetServerID(db *sql.DB) (uint32, error) {
 	serverIDStr, err := GetGlobalVariable(db, "server_id")
 	if err != nil {
 		return 0, err
 	}
 
-	serverID, err := strconv.ParseInt(serverIDStr, 10, 64)
-	return serverID, terror.ErrInvalidServerID.Delegate(err, serverIDStr)
+	serverID, err := strconv.ParseInt(serverIDStr, 10, 32)
+	return uint32(serverID), terror.ErrInvalidServerID.Delegate(err, serverIDStr)
 }
 
 // GetMariaDBGtidDomainID gets MariaDB server's `gtid_domain_id`

@@ -37,6 +37,7 @@ import (
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/relay/reader"
 	"github.com/pingcap/dm/relay/retry"
@@ -140,6 +141,8 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 		previousGTIDSetStr = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-14,53bfca22-690d-11e7-8a62-18ded7a37b78:1-495,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456"
 		latestGTIDStr1     = "3ccc475b-2343-11e7-be21-6c0b84d59f30:14"
 		latestGTIDStr2     = "53bfca22-690d-11e7-8a62-18ded7a37b78:495"
+		genGTIDSetStr      = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-17,53bfca22-690d-11e7-8a62-18ded7a37b78:1-505,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456"
+		greaterGITDSetStr  = "3ccc475b-2343-11e7-be21-6c0b84d59f30:1-20,53bfca22-690d-11e7-8a62-18ded7a37b78:1-510,406a3f61-690d-11e7-87c5-6c92bf46f384:123-456"
 		filename           = "mysql-bin.000001"
 		startPos           = gmysql.Position{Name: filename, Pos: 123}
 
@@ -182,16 +185,33 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	// write some invalid data into the relay log file
 	f, err := os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0600)
 	c.Assert(err, IsNil)
-	defer f.Close()
 	_, err = f.Write([]byte("invalid event data"))
 	c.Assert(err, IsNil)
+	f.Close()
+
+	// GTID sets in meta data does not contain the GTID sets in relay log, invalid
+	c.Assert(terror.ErrGTIDTruncateInvalid.Equal(r.tryRecoverLatestFile(parser2)), IsTrue)
+
+	// write some invalid data into the relay log file again
+	f, err = os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0600)
+	c.Assert(err, IsNil)
+	_, err = f.Write([]byte("invalid event data"))
+	c.Assert(err, IsNil)
+	f.Close()
+
+	// write a greater GTID sets in meta
+	greaterGITDSet, err := gtid.ParserGTID(relayCfg.Flavor, greaterGITDSetStr)
+	c.Assert(err, IsNil)
+	c.Assert(r.meta.Save(startPos, greaterGITDSet), IsNil)
 
 	// invalid data truncated, meta updated
 	c.Assert(r.tryRecoverLatestFile(parser2), IsNil)
 	_, latestPos := r.meta.Pos()
 	c.Assert(latestPos, DeepEquals, gmysql.Position{Name: filename, Pos: g.LatestPos})
 	_, latestGTIDs := r.meta.GTID()
-	c.Assert(latestGTIDs.Contain(g.LatestGTID), IsTrue) // verifyMetadata is not enough
+	genGTIDSet, err := gtid.ParserGTID(relayCfg.Flavor, genGTIDSetStr)
+	c.Assert(err, IsNil)
+	c.Assert(latestGTIDs.Equal(genGTIDSet), IsTrue) // verifyMetadata is not enough
 
 	// no relay log file need to recover
 	c.Assert(r.meta.Save(minCheckpoint, latestGTIDs), IsNil)
@@ -405,7 +425,7 @@ func (t *testRelaySuite) TestReSetupMeta(c *C) {
 	r.cfg.BinLogName = "mysql-bin.000005"
 	c.Assert(r.reSetupMeta(), IsNil)
 	uuid001 := fmt.Sprintf("%s.000001", uuid)
-	t.verifyMetadata(c, r, uuid001, minCheckpoint, r.cfg.BinlogGTID, []string{uuid001})
+	t.verifyMetadata(c, r, uuid001, gmysql.Position{Name: r.cfg.BinLogName, Pos: 4}, r.cfg.BinlogGTID, []string{uuid001})
 
 	// re-setup meta again, often happen when connecting a server behind a VIP.
 	c.Assert(r.reSetupMeta(), IsNil)

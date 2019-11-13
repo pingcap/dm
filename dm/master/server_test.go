@@ -14,7 +14,11 @@
 package master
 
 import (
+	"bytes"
 	"context"
+	"io/ioutil"
+	"net/http"
+
 	"fmt"
 	"io"
 	"sync"
@@ -30,6 +34,8 @@ import (
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/pbmock"
+	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // use task config from integration test `sharding`
@@ -148,6 +154,7 @@ func testDefaultMasterServer(c *check.C) *Server {
 	cfg := NewConfig()
 	err := cfg.Parse([]string{"-config=./dm-master.toml"})
 	c.Assert(err, check.IsNil)
+	cfg.DataDir = c.MkDir()
 	server := NewServer(cfg)
 	go server.ap.Start(context.Background())
 
@@ -169,7 +176,7 @@ func testGenSubTaskConfig(c *check.C, server *Server, ctrl *gomock.Controller) m
 }
 
 func testMockWorkerConfig(c *check.C, server *Server, ctrl *gomock.Controller, password string, result bool) {
-	// mock QueryWorkerConfig API to be used in s.allWorkerConfigs
+	// mock QueryWorkerConfig API to be used in s.getWorkerConfigs
 	for idx, deploy := range server.cfg.Deploy {
 		dbCfg := &config.DBConfig{
 			Host:     "127.0.0.1",
@@ -856,6 +863,14 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
+	var (
+		sqls        = []string{"stmt"}
+		task        = "testA"
+		schema      = "test_db"
+		table       = "test_table"
+		traceGIDIdx = 1
+	)
+
 	server := testDefaultMasterServer(c)
 
 	workers := make([]string, 0, len(server.cfg.DeployMap))
@@ -892,20 +907,13 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 					LockID:   lockID,
 					Exec:     exec,
 					TraceGID: traceGID,
+					DDLs:     sqls,
 				},
 			).Return(ret...)
 
 			server.workerClients[worker] = newMockRPCClient(mockWorkerClient)
 		}
 	}
-
-	var (
-		sqls        = []string{"stmt"}
-		task        = "testA"
-		schema      = "test_db"
-		table       = "test_table"
-		traceGIDIdx = 1
-	)
 
 	prepareDDLLock := func() {
 		// prepare ddl lock keeper, mainly use code from ddl_lock_test.go
@@ -1423,7 +1431,7 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 			Table:  table,
 			DDLs:   ddls,
 		}, nil)
-		// This will lead to a select on ctx.Done and time.After(retryTimeout),
+		// This will lead to a select on ctx.Done and time.After(fetchDDLInfoRetryTimeout),
 		// so we have enough time to cancel the context.
 		stream.EXPECT().Recv().Return(nil, io.EOF).MaxTimes(1)
 		stream.EXPECT().Send(&pb.DDLLockInfo{Task: task, ID: lockID}).Return(nil)
@@ -1440,6 +1448,7 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 				LockID:   lockID,
 				Exec:     true,
 				TraceGID: traceGID,
+				DDLs:     ddls,
 			},
 		).Return(&pb.CommonWorkerResponse{Result: true}, nil).MaxTimes(1)
 		mockWorkerClient.EXPECT().ExecuteDDL(
@@ -1449,6 +1458,7 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 				LockID:   lockID,
 				Exec:     false,
 				TraceGID: traceGID,
+				DDLs:     ddls,
 			},
 		).Return(&pb.CommonWorkerResponse{Result: true}, nil).MaxTimes(1)
 
@@ -1473,4 +1483,45 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 		}
 	}()
 	wg.Wait()
+}
+
+func (t *testMaster) TestServer(c *check.C) {
+	cfg := NewConfig()
+	c.Assert(cfg.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
+	cfg.DataDir = c.MkDir()
+	cfg.MasterAddr = "127.0.0.1:18261" // use a different port
+
+	s := NewServer(cfg)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	err1 := s.Start(ctx)
+	c.Assert(err1, check.IsNil)
+
+	t.testHTTPInterface(c, fmt.Sprintf("http://%s/status", cfg.MasterAddr), []byte(utils.GetRawInfo()))
+	t.testHTTPInterface(c, fmt.Sprintf("http://%s/debug/pprof/", cfg.MasterAddr), []byte("Types of profiles available"))
+	t.testHTTPInterface(c, fmt.Sprintf("http://%s/apis/v1alpha1/status/test-task", cfg.MasterAddr), []byte("task test-task has no workers or not exist"))
+
+	dupServer := NewServer(cfg)
+	err := dupServer.Start(ctx)
+	c.Assert(terror.ErrMasterStartEmbedEtcdFail.Equal(err), check.IsTrue)
+	c.Assert(err.Error(), check.Matches, ".*bind: address already in use")
+
+	// close
+	cancel()
+	s.Close()
+
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+		return s.closed.Get()
+	}), check.IsTrue)
+}
+
+func (t *testMaster) testHTTPInterface(c *check.C, url string, contain []byte) {
+	resp, err := http.Get(url)
+	c.Assert(err, check.IsNil)
+	defer resp.Body.Close()
+	c.Assert(resp.StatusCode, check.Equals, 200)
+
+	body, err := ioutil.ReadAll(resp.Body)
+	c.Assert(err, check.IsNil)
+	c.Assert(bytes.Contains(body, contain), check.IsTrue)
 }

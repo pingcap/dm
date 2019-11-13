@@ -11,45 +11,67 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package baseconn
+package conn
 
 import (
 	"database/sql"
-
-	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+
+	"go.uber.org/zap"
 )
 
-// BaseConn wraps a connection to DB
+// BaseConn is the basic connection we use in dm
+// BaseDB -> BaseConn correspond to sql.DB -> sql.Conn
+// In our scenario, there are two main reasons why we need BaseConn
+//   1. we often need one fixed DB connection to execute sql
+//   2. we need own retry policy during execute failed
+// So we split a fixed sql.Conn out of sql.DB, and wraps it to BaseConn
+// And Similar with sql.Conn, all BaseConn generated from one BaseDB shares this BaseDB to reset
+//
+// Basic usage:
+// For Syncer and Loader Unit, they both have different amount of connections due to config
+// Currently we have some types of connections exist
+//	Syncer:
+//		Worker Connection:
+//			DML connection:
+//				execute some DML on Downstream DB, one unit has `syncer.WorkerCount` worker connections
+//			DDL Connection:
+//				execute some DDL on Downstream DB, one unit has one connection
+//		CheckPoint Connection:
+//			interact with CheckPoint DB, one unit has one connection
+//		OnlineDDL connection:
+//			interact with Online DDL DB, one unit has one connection
+//		ShardGroupKeeper connection:
+//			interact with ShardGroupKeeper DB, one unit has one connection
+//
+//	Loader:
+//		Worker Connection:
+//			execute some DML to Downstream DB, one unit has `loader.PoolSize` worker connections
+//		CheckPoint Connection:
+//			interact with CheckPoint DB, one unit has one connection
+//		Restore Connection:
+//			only use to create schema and table in restoreData,
+//			it ignore already exists error and it should be removed after use, one unit has one connection
+//
+// each connection should have ability to retry on some common errors (e.g. tmysql.ErrTiKVServerTimeout) or maybe some specify errors in the future
+// and each connection also should have ability to reset itself during some specify connection error (e.g. driver.ErrBadConn)
 type BaseConn struct {
-	DB *sql.DB
-
-	// for reset
-	DSN string
+	DBConn *sql.Conn
 
 	RetryStrategy retry.Strategy
 }
 
 // NewBaseConn builds BaseConn to connect real DB
-func NewBaseConn(dbDSN string, strategy retry.Strategy) (*BaseConn, error) {
-	db, err := sql.Open("mysql", dbDSN)
-	if err != nil {
-		return nil, terror.ErrDBDriverError.Delegate(err)
-	}
-	err = db.Ping()
-	if err != nil {
-		db.Close()
-		return nil, terror.ErrDBDriverError.Delegate(err)
-	}
+func NewBaseConn(conn *sql.Conn, strategy retry.Strategy) *BaseConn {
 	if strategy == nil {
 		strategy = &retry.FiniteRetryStrategy{}
 	}
-	return &BaseConn{db, dbDSN, strategy}, nil
+	return &BaseConn{conn, strategy}
 }
 
 // SetRetryStrategy set retry strategy for baseConn
@@ -61,40 +83,16 @@ func (conn *BaseConn) SetRetryStrategy(strategy retry.Strategy) error {
 	return nil
 }
 
-// ResetConn generates new *DB with new connection pool to take place old one
-func (conn *BaseConn) ResetConn(tctx *tcontext.Context) error {
-	if conn == nil {
-		return terror.ErrDBUnExpect.Generate("database connection not valid")
-	}
-	db, err := sql.Open("mysql", conn.DSN)
-	if err != nil {
-		return terror.ErrDBDriverError.Delegate(err)
-	}
-	err = db.Ping()
-	if err != nil {
-		db.Close()
-		return terror.ErrDBDriverError.Delegate(err)
-	}
-	if conn.DB != nil {
-		err := conn.DB.Close()
-		if err != nil {
-			tctx.L().Warn("reset connection", log.ShortError(err))
-		}
-	}
-	conn.DB = db
-	return nil
-}
-
 // QuerySQL defines query statement, and connect to real DB
 func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string, args ...interface{}) (*sql.Rows, error) {
-	if conn == nil || conn.DB == nil {
+	if conn == nil || conn.DBConn == nil {
 		return nil, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 	tctx.L().Debug("query statement",
 		zap.String("query", utils.TruncateString(query, -1)),
 		zap.String("argument", utils.TruncateInterface(args, -1)))
 
-	rows, err := conn.DB.QueryContext(tctx.Context(), query, args...)
+	rows, err := conn.DBConn.QueryContext(tctx.Context(), query, args...)
 
 	if err != nil {
 		tctx.L().Error("query statement failed",
@@ -114,11 +112,11 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, ignoreEr
 	if len(queries) == 0 {
 		return 0, nil
 	}
-	if conn == nil || conn.DB == nil {
+	if conn == nil || conn.DBConn == nil {
 		return 0, terror.ErrDBUnExpect.Generate("database connection not valid")
 	}
 
-	txn, err := conn.DB.Begin()
+	txn, err := conn.DBConn.BeginTx(tctx.Context(), nil)
 
 	if err != nil {
 		return 0, terror.ErrDBExecuteFailed.Delegate(err, "begin")
@@ -163,7 +161,7 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, ignoreEr
 	}
 	err = txn.Commit()
 	if err != nil {
-		return l, terror.ErrDBExecuteFailed.Delegate(err, "commit")
+		return l - 1, terror.ErrDBExecuteFailed.Delegate(err, "commit") // mark failed on the last one
 	}
 	return l, nil
 }
@@ -182,10 +180,9 @@ func (conn *BaseConn) ApplyRetryStrategy(tctx *tcontext.Context, params retry.Pa
 	return conn.RetryStrategy.Apply(tctx, params, operateFn)
 }
 
-// Close release DB resource
-func (conn *BaseConn) Close() error {
-	if conn == nil || conn.DB == nil {
+func (conn *BaseConn) close() error {
+	if conn == nil || conn.DBConn == nil {
 		return nil
 	}
-	return terror.ErrDBUnExpect.Delegate(conn.DB.Close(), "close")
+	return terror.ErrDBUnExpect.Delegate(conn.DBConn.Close(), "close")
 }

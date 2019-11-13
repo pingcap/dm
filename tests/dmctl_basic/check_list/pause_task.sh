@@ -3,7 +3,7 @@
 function pause_task_wrong_arg() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "pause-task" \
-        "pause-task \[-w worker ...\] <task_name> \[flags\]" 1
+        "pause-task \[-w worker ...\] <task-name> \[flags\]" 1
 }
 
 function pause_task_while_master_down() {
