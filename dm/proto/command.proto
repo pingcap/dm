@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package pb;
+
+import "google/api/annotations.proto";
+
+message Command {
+    int64 ID = 1;
+    bytes request = 2;
+    bytes response = 3;
+    string err = 4;
+}
