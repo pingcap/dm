@@ -15,6 +15,7 @@ package ctl
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/ctl/master"
@@ -98,6 +99,13 @@ func HasCommand(name string) bool {
 		}
 	}
 	return false
+}
+
+// PrintHelp print help message for special subCommand
+func PrintHelp(args []string) {
+	cmd, _, _ := rootCmd.Find(args)
+	cmd.SetOut(os.Stdout)
+	cmd.Usage()
 }
 
 // Start starts running a command

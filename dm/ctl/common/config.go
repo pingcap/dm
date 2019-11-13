@@ -76,11 +76,6 @@ func (c *Config) String() string {
 
 // Parse parses flag definitions from the argument list.
 func (c *Config) Parse(arguments []string) (finish bool, err error) {
-	// Parse first to get config file.
-	if len(arguments) == 0 {
-		return false, flag.ErrHelp
-	}
-
 	err = c.FlagSet.Parse(arguments)
 	if err != nil {
 		return false, errors.Trace(err)
@@ -119,13 +114,21 @@ func (c *Config) Parse(arguments []string) (finish bool, err error) {
 	}
 
 	if c.MasterAddr == "" {
-		return false, errors.New("--master-addr not provided")
-	}
-	if err = validateAddr(c.MasterAddr); err != nil {
-		return false, errors.Annotatef(err, "specify master addr %s", c.MasterAddr)
+		return false, flag.ErrHelp
 	}
 
 	return false, errors.Trace(c.adjust())
+}
+
+// Validate check config is ready to execute commmand
+func (c *Config) Validate() error {
+	if c.MasterAddr == "" {
+		return errors.New("--master-addr not provided")
+	}
+	if err := validateAddr(c.MasterAddr); err != nil {
+		return errors.Annotatef(err, "specify master addr %s", c.MasterAddr)
+	}
+	return nil
 }
 
 // configFromFile loads config from file.

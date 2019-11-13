@@ -88,6 +88,12 @@ func main() {
 	cfg := common.NewConfig()
 	args := os.Args[1:]
 
+	// no arguments: print help message about dmctl
+	if len(args) == 0 {
+		helpUsage(cfg)
+		os.Exit(0)
+	}
+
 	// now, we use checker in dmctl while it using some pkg which log some thing when running
 	// to make dmctl output more clear, simply redirect log to file rather output to stdout
 	err := log.InitLogger(&log.Config{
@@ -110,29 +116,41 @@ func main() {
 		lenArgs = lenArgs - lenCmdArgs
 	}
 
+	finished, err := cfg.Parse(args[:lenArgs])
+	if finished {
+		os.Exit(0)
+	}
+
+	switch errors.Cause(err) {
+	case nil:
+	case flag.ErrHelp:
+		if lenCmdArgs > 0 {
+			// print help message about special subCommand
+			ctl.PrintHelp(cmdArgs)
+		} else {
+			// print help message about dmctl
+			helpUsage(cfg)
+		}
+		os.Exit(0)
+	default:
+		fmt.Printf("parse cmd flags err: %s", err)
+		os.Exit(2)
+	}
+
+	err = cfg.Validate()
+	if err != nil {
+		fmt.Printf("flags are not validate: %s", err)
+		os.Exit(2)
+	}
+
+	err = ctl.Init(cfg)
+	if err != nil {
+		fmt.Printf("init control error %v", errors.ErrorStack(err))
+		os.Exit(2)
+	}
 	if lenCmdArgs > 0 {
 		commandMode(cmdArgs)
 	} else {
-		finished, err := cfg.Parse(args[:lenArgs])
-		if finished {
-			os.Exit(0)
-		}
-
-		switch errors.Cause(err) {
-		case nil:
-		case flag.ErrHelp:
-			helpUsage(cfg)
-			os.Exit(0)
-		default:
-			fmt.Printf("parse cmd flags err: %s", err)
-			os.Exit(2)
-		}
-
-		err = ctl.Init(cfg)
-		if err != nil {
-			fmt.Printf("init control error %v", errors.ErrorStack(err))
-			os.Exit(2)
-		}
 		interactionMode()
 	}
 }
