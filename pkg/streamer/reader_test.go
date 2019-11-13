@@ -603,11 +603,10 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 		startPos = gmysql.Position{Name: "test-mysql-bin|000001.000001"} // from the first relay log file in the first sub directory
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
 	tctx := tcontext.Background()
 	r := NewBinlogReader(tctx, cfg)
+	err := r.checkRelayPos(startPos)
+	c.Assert(err, ErrorMatches, ".*empty UUIDs not valid.*")
 
 	// no startup pos specified
 	s, err := r.StartSync(gmysql.Position{})
@@ -616,11 +615,8 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 
 	// empty UUIDs
 	s, err = r.StartSync(startPos)
-	c.Assert(err, IsNil)
-	ev, err := s.GetEvent(ctx)
 	c.Assert(err, ErrorMatches, ".*empty UUIDs not valid.*")
-	c.Assert(ev, IsNil)
-	r.Close()
+	c.Assert(s, IsNil)
 
 	// write UUIDs into index file
 	r = NewBinlogReader(tctx, cfg) // create a new reader
@@ -630,16 +626,28 @@ func (t *testReaderSuite) TestStartSyncError(c *C) {
 
 	// the startup relay log file not found
 	s, err = r.StartSync(startPos)
-	c.Assert(err, IsNil)
-	ev, err = s.GetEvent(ctx)
 	c.Assert(err, ErrorMatches, fmt.Sprintf(".*%s.*not found.*", startPos.Name))
-	c.Assert(ev, IsNil)
+	c.Assert(s, IsNil)
 
 	// can not re-start the reader
+	r.running = true
 	s, err = r.StartSync(startPos)
 	c.Assert(terror.ErrReaderAlreadyRunning.Equal(err), IsTrue)
 	c.Assert(s, IsNil)
 	r.Close()
+
+	// too big startPos
+	uuid := UUIDs[0]
+	err = os.MkdirAll(filepath.Join(baseDir, uuid), 0700)
+	c.Assert(err, IsNil)
+	parsedStartPosName := "test-mysql-bin.000001"
+	relayLogFilePath := filepath.Join(baseDir, uuid, parsedStartPosName)
+	err = ioutil.WriteFile(relayLogFilePath, make([]byte, 100), 0600)
+	c.Assert(err, IsNil)
+	startPos.Pos = 10000
+	s, err = r.StartSync(startPos)
+	c.Assert(terror.ErrRelayLogGivenPosTooBig.Equal(err), IsTrue)
+	c.Assert(s, IsNil)
 }
 
 func (t *testReaderSuite) genBinlogEvents(c *C, latestPos uint32) []*replication.BinlogEvent {
