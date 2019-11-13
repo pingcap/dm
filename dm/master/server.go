@@ -31,7 +31,7 @@ import (
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/dm/master/sql-operator"
+	operator "github.com/pingcap/dm/dm/master/sql-operator"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
@@ -240,7 +240,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 				StartSubTask: &pb.StartSubTaskRequest{Task: stCfgToml},
 			}
 			resp, err := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
-			workerResp := s.handleOperationResult(ctx, cli, taskName, err, resp)
+			workerResp := s.handleOperationResult(ctx, cli, taskName, worker, err, resp)
 			workerResp.Meta.Worker = worker
 			workerRespCh <- workerResp.Meta
 		}, func(args ...interface{}) {
@@ -332,7 +332,7 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 				return
 			}
 			resp, err := cli.SendRequest(ctx, subReq, s.cfg.RPCTimeout)
-			workerResp := s.handleOperationResult(ctx, cli, req.Name, err, resp)
+			workerResp := s.handleOperationResult(ctx, cli, req.Name, worker1, err, resp)
 			workerResp.Op = req.Op
 			workerResp.Meta.Worker = worker1
 			workerRespCh <- workerResp
@@ -424,7 +424,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 				UpdateSubTask: &pb.UpdateSubTaskRequest{Task: stCfgToml},
 			}
 			resp, err := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
-			workerResp := s.handleOperationResult(ctx, cli, taskName, err, resp)
+			workerResp := s.handleOperationResult(ctx, cli, taskName, worker, err, resp)
 			workerResp.Meta.Worker = worker
 			workerRespCh <- workerResp.Meta
 		}, func(args ...interface{}) {
@@ -1853,11 +1853,11 @@ var (
 	retryInterval = time.Second
 )
 
-func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, name string, opLogID int64) error {
+func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, taskName, workerID string, opLogID int64) error {
 	req := &workerrpc.Request{
 		Type: workerrpc.CmdQueryTaskOperation,
 		QueryTaskOperation: &pb.QueryTaskOperationRequest{
-			Name:  name,
+			Name:  taskName,
 			LogID: opLogID,
 		},
 	}
@@ -1866,18 +1866,18 @@ func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, name
 		resp, err := cli.SendRequest(ctx, req, s.cfg.RPCTimeout)
 		var queryResp *pb.QueryTaskOperationResponse
 		if err != nil {
-			log.L().Error("fail to query task operation", zap.String("task", name), zap.Int64("operation log ID", opLogID), log.ShortError(err))
+			log.L().Error("fail to query task operation", zap.String("task", taskName), zap.String("worker", workerID), zap.Int64("operation log ID", opLogID), log.ShortError(err))
 		} else {
 			queryResp = resp.QueryTaskOperation
 			respLog := queryResp.Log
 			if respLog == nil {
-				return terror.ErrMasterOperNotFound.Generate(opLogID, name)
+				return terror.ErrMasterOperNotFound.Generate(opLogID, taskName, workerID)
 			} else if respLog.Success {
 				return nil
 			} else if len(respLog.Message) != 0 {
-				return terror.ErrMasterOperRespNotSuccess.Generate(respLog.Message)
+				return terror.ErrMasterOperRespNotSuccess.Generate(opLogID, taskName, workerID, respLog.Message)
 			}
-			log.L().Info("wait op log result", zap.String("task", name), zap.Int64("operation log ID", opLogID), zap.Stringer("result", resp.QueryTaskOperation))
+			log.L().Info("wait op log result", zap.String("task", taskName), zap.String("worker", workerID), zap.Int64("operation log ID", opLogID), zap.Stringer("result", resp.QueryTaskOperation))
 		}
 
 		select {
@@ -1887,10 +1887,10 @@ func (s *Server) waitOperationOk(ctx context.Context, cli workerrpc.Client, name
 		}
 	}
 
-	return terror.ErrMasterOperRequestTimeout.Generate()
+	return terror.ErrMasterOperRequestTimeout.Generate(workerID)
 }
 
-func (s *Server) handleOperationResult(ctx context.Context, cli workerrpc.Client, name string, err error, resp *workerrpc.Response) *pb.OperateSubTaskResponse {
+func (s *Server) handleOperationResult(ctx context.Context, cli workerrpc.Client, taskName, workerID string, err error, resp *workerrpc.Response) *pb.OperateSubTaskResponse {
 	if err != nil {
 		return &pb.OperateSubTaskResponse{
 			Meta: errorCommonWorkerResponse(errors.ErrorStack(err), ""),
@@ -1910,7 +1910,7 @@ func (s *Server) handleOperationResult(ctx context.Context, cli workerrpc.Client
 		return response
 	}
 
-	err = s.waitOperationOk(ctx, cli, name, response.LogID)
+	err = s.waitOperationOk(ctx, cli, taskName, workerID, response.LogID)
 	if err != nil {
 		response.Meta = errorCommonWorkerResponse(errors.ErrorStack(err), "")
 	}

@@ -25,6 +25,10 @@ import (
 func CheckIsDDL(sql string, p *parser.Parser) bool {
 	sql = utils.TrimCtrlChars(sql)
 
+	if utils.IsBuildInSkipDDL(sql) {
+		return false
+	}
+
 	// if parse error, treat it as not a DDL
 	stmts, err := parserpkg.Parse(p, sql, "", "")
 	if err != nil || len(stmts) == 0 {
