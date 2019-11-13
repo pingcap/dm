@@ -15,6 +15,7 @@ package streamer
 
 import (
 	"context"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -83,6 +84,25 @@ func NewBinlogReader(tctx *tcontext.Context, cfg *BinlogReaderConfig) *BinlogRea
 	}
 }
 
+// checkRelayPos will check whether the given relay pos is too big
+func (r *BinlogReader) checkRelayPos(pos mysql.Position) error {
+	currentUUID, _, realPos, err := binlog.ExtractPos(pos, r.uuids)
+	if err != nil {
+		return terror.Annotatef(err, "parse relay dir with pos %s", pos)
+	}
+	pos = realPos
+	relayFilepath := path.Join(r.cfg.RelayDir, currentUUID, pos.Name)
+	r.tctx.L().Info("start to check relay log file", zap.String("path", relayFilepath), zap.Stringer("position", pos))
+	fi, err := os.Stat(relayFilepath)
+	if err != nil {
+		return terror.ErrGetRelayLogStat.Delegate(err, relayFilepath)
+	}
+	if fi.Size() < int64(pos.Pos) {
+		return terror.ErrRelayLogGivenPosTooBig.Generate(pos)
+	}
+	return nil
+}
+
 // StartSync start syncon
 // TODO:  thread-safe?
 func (r *BinlogReader) StartSync(pos mysql.Position) (Streamer, error) {
@@ -96,6 +116,10 @@ func (r *BinlogReader) StartSync(pos mysql.Position) (Streamer, error) {
 	// load and update UUID list
 	// NOTE: if want to support auto master-slave switching, then needing to re-load UUIDs when parsing.
 	err := r.updateUUIDs()
+	if err != nil {
+		return nil, err
+	}
+	err = r.checkRelayPos(pos)
 	if err != nil {
 		return nil, err
 	}
