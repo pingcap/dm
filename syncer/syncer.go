@@ -1051,7 +1051,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 	// currentPos is the pos for current received event (End_log_pos in `show binlog events` for mysql)
 	// lastPos is the pos for last received (ROTATE / QUERY / XID) event (End_log_pos in `show binlog events` for mysql)
-	// we use currentPos to replace and skip binlog event of specfied position and update table checkpoint in sharding ddl
+	// we use currentPos to replace and skip binlog event of specified position and update table checkpoint in sharding ddl
 	// we use lastPos to update global checkpoint and table checkpoint
 	var (
 		currentPos = s.checkpoint.GlobalPoint() // also init to global checkpoint
@@ -1280,18 +1280,18 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		case *replication.RotateEvent:
 			err = s.handleRotateEvent(ev, ec)
 			if err != nil {
-				return err
+				return terror.Annotatef(err, "current pos %s", currentPos)
 			}
 		case *replication.RowsEvent:
 			err = s.handleRowsEvent(ev, ec)
 			if err != nil {
-				return err
+				return terror.Annotatef(err, "current pos %s", currentPos)
 			}
 
 		case *replication.QueryEvent:
 			err = s.handleQueryEvent(ev, ec)
 			if err != nil {
-				return err
+				return terror.Annotatef(err, "current pos %s", currentPos)
 			}
 
 		case *replication.XIDEvent:
@@ -1302,7 +1302,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "XID"), zap.Reflect("re-shard", shardingReSync))
 					err = closeShardingResync()
 					if err != nil {
-						return err
+						return terror.Annotatef(err, "shard group current pos %s", shardingReSync.currPos)
 					}
 					continue
 				}
@@ -1316,7 +1316,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			job := newXIDJob(currentPos, currentPos, nil, traceID)
 			err = s.addJobFunc(job)
 			if err != nil {
-				return err
+				return terror.Annotatef(err, "current pos %s", currentPos)
 			}
 		}
 	}
