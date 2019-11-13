@@ -55,7 +55,7 @@ function run() {
         exit 2
     fi
 
-    echo "dm-workers paninc again, workers of import unit don't exit"
+    echo "dm-workers panic again, workers of import unit don't exit"
     # check workers of import unit exit
     inject_points=("github.com/pingcap/dm/loader/dontWaitWorkerExit=return(1)"
                    "github.com/pingcap/dm/loader/LoadDataSlowDown=sleep(1000)"

@@ -141,12 +141,12 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 				w.tctx.L().Info("context canceled, execution goroutine exits")
 				return
 			case job, ok := <-w.jobQueue:
-				if job == nil {
-					w.tctx.L().Info("jobs are finished, execution goroutine exits")
-					return
-				}
 				if !ok {
 					w.tctx.L().Info("job queue was closed, execution goroutine exits")
+					return
+				}
+				if job == nil {
+					w.tctx.L().Info("jobs are finished, execution goroutine exits")
 					return
 				}
 				sqls := make([]string, 0, 3)
