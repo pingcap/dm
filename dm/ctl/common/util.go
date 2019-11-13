@@ -14,13 +14,17 @@
 package common
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/etcd"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 
 	"github.com/golang/protobuf/jsonpb"
@@ -28,6 +32,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 )
@@ -35,12 +40,31 @@ import (
 var (
 	masterClient pb.MasterClient
 	globalConfig = &Config{}
+
+	etcdClient *etcd.Client
+
+	defaultEtcdTimeout = time.Duration(10 * time.Second)
+
+	// result path in etcd:
+	//	response: /dm-operate/{operate-id}/response
+	//  error:    /dm-operate/{operate-id}/error
+	defaultOperatePath = "/dm-operate"
 )
 
 // InitUtils inits necessary dmctl utils
 func InitUtils(cfg *Config) error {
 	globalConfig = cfg
-	return errors.Trace(InitClient(cfg.MasterAddr))
+	err := InitClient(cfg.MasterAddr)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	err = InitEtcdClient(cfg.MasterAddr)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
 }
 
 // InitClient initializes dm-master client
@@ -53,6 +77,22 @@ func InitClient(addr string) error {
 	return nil
 }
 
+// InitEtcdClient initializes etcd client
+func InitEtcdClient(addr string) error {
+	ectdEndpoints, err := utils.ParseHostPortAddr(addr)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	etcdClient, err = etcd.NewClientFromCfg(ectdEndpoints, defaultEtcdTimeout, defaultOperatePath)
+	if err != nil {
+		// TODO: use terror
+		return errors.Trace(err)
+	}
+
+	return nil
+}
+
 // GlobalConfig returns global dmctl config
 func GlobalConfig() *Config {
 	return globalConfig
@@ -61,6 +101,11 @@ func GlobalConfig() *Config {
 // MasterClient returns dm-master client
 func MasterClient() pb.MasterClient {
 	return masterClient
+}
+
+// EtcdClient retuens etcd client
+func EtcdClient() *etcd.Client {
+	return etcdClient
 }
 
 // PrintLines adds a wrap to support `\n` within `chzyer/readline`
@@ -207,5 +252,135 @@ func IsDDL(sql string) (bool, error) {
 		return true, nil
 	default:
 		return false, nil
+	}
+}
+
+// GetOperateID returns a unique operate id
+// TODO: Operate ID should be monotone increasing, just like OpLog.ID in dm-worker
+func GetOperateID() int64 {
+	rand.Seed(time.Now().UnixNano())
+	randomValue := uint32(rand.Intn(1000))
+	return time.Now().UnixNano()/1000*1000 + int64(randomValue)
+}
+
+// SendRequest writes request to etcd, and wait for the response
+func SendRequest(tp pb.CommandType, request []byte) (proto.Message, error) {
+	operateID := GetOperateID()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultEtcdTimeout)
+	defer cancel()
+
+	operateIDStr := strconv.FormatInt(operateID, 10)
+
+	command := pb.Command{
+		Tp:      tp,
+		Request: request,
+	}
+	cmdBytes, err := command.Marshal()
+	if err != nil {
+		return nil, err
+	}
+	revision, err := etcdClient.Create(ctx, operateIDStr, string(cmdBytes), nil)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	watchCh := etcdClient.Watch(ctx, operateIDStr, revision)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case wresp := <-watchCh:
+			if wresp.Err() != nil {
+				return nil, wresp.Err()
+			}
+
+			for _, ev := range wresp.Events {
+				command := &pb.Command{}
+				err := json.Unmarshal(ev.Kv.Value, &command)
+				if err != nil {
+					return nil, err
+				}
+
+				return transformResponse(command.Tp, command.Response)
+			}
+		}
+	}
+}
+
+func transformResponse(tp pb.CommandType, response []byte) (proto.Message, error) {
+	switch tp {
+	case pb.CommandType_MigrateWorkerRelay:
+		resp := &pb.CommonWorkerResponse{}
+		err := resp.Unmarshal(response)
+		return resp, err
+	case pb.CommandType_UpdateWorkerRelayConfig:
+		resp := &pb.CommonWorkerResponse{}
+		err := resp.Unmarshal(response)
+		return resp, err
+	case pb.CommandType_StartTask:
+		resp := &pb.StartTaskResponse{}
+		err := resp.Unmarshal(response)
+		return resp, err
+	case pb.CommandType_UpdateMasterConfig:
+		resp := &pb.UpdateMasterConfigResponse{}
+		err := resp.Unmarshal(response)
+		return resp, err
+	case pb.CommandType_OperateTask:
+		resp := &pb.OperateTaskResponse{}
+		err := resp.Unmarshal(response)
+		return resp, err
+	case pb.CommandType_UpdateTask:
+		resp := &pb.UpdateTaskResponse{}
+		err := resp.Unmarshal(response)
+		return resp, err
+	case pb.CommandType_QueryStatusList:
+		resp := &pb.QueryStatusListResponse{}
+		err := resp.Unmarshal(response)
+		return resp, err
+	case pb.CommandType_QueryErrorList:
+		resp := &pb.QueryErrorListResponse{}
+		err := resp.Unmarshal(response)
+		return resp, err
+	case pb.CommandType_ShowDDLLocks:
+		resp := &pb.ShowDDLLocksResponse{}
+		err := resp.Unmarshal(response)
+		return resp, err
+	case pb.CommandType_UnlockDDLLock:
+		resp := &pb.UnlockDDLLockResponse{}
+		err := resp.Unmarshal(response)
+		return resp, err
+	case pb.CommandType_BreakWorkerDDLLock:
+		resp := &pb.BreakWorkerDDLLockResponse{}
+		err := resp.Unmarshal(response)
+		return resp, err
+	case pb.CommandType_SwitchWorkerRelayMaster:
+		resp := &pb.SwitchWorkerRelayMasterResponse{}
+		err := resp.Unmarshal(response)
+		return resp, err
+	case pb.CommandType_OperateWorkerRelay:
+		resp := &pb.OperateWorkerRelayResponse{}
+		err := resp.Unmarshal(response)
+		return resp, err
+	case pb.CommandType_RefreshWorkerTasks:
+		resp := &pb.RefreshWorkerTasksResponse{}
+		err := resp.Unmarshal(response)
+		return resp, err
+	case pb.CommandType_HandleSQLs:
+		resp := &pb.HandleSQLsResponse{}
+		err := resp.Unmarshal(response)
+		return resp, err
+	case pb.CommandType_PurgeWorkerRelay:
+		resp := &pb.PurgeWorkerRelayResponse{}
+		err := resp.Unmarshal(response)
+		return resp, err
+	case pb.CommandType_CheckTask:
+		resp := &pb.CheckTaskResponse{}
+		err := resp.Unmarshal(response)
+		return resp, err
+	default:
+		// return error
+		return nil, nil
 	}
 }
