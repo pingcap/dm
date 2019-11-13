@@ -357,7 +357,7 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 	var wg sync.WaitGroup
 	for _, worker := range workers {
 		// https://golang.org/doc/faq#closures_and_goroutines
-		worker := worker
+		worker1 := worker
 		wg.Add(1)
 		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
@@ -367,7 +367,7 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 				return
 			}
 			resp, err := cli.SendRequest(ctx, subReq, s.cfg.RPCTimeout)
-			workerResp := s.handleOperationResult(ctx, cli, req.Name, worker, err, resp)
+			workerResp := s.handleOperationResult(ctx, cli, req.Name, worker1, err, resp)
 			workerResp.Op = req.Op
 			workerResp.Meta.Worker = worker1
 			workerRespCh <- workerResp
@@ -379,7 +379,7 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 				return
 			}
 			handleErr(terror.ErrMasterNoEmitToken.Generate(worker1), worker1)
-		}, worker)
+		}, worker1)
 	}
 	wg.Wait()
 
