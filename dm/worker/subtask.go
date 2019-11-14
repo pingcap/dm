@@ -93,10 +93,11 @@ func NewSubTask(cfg *config.SubTaskConfig) *SubTask {
 // NewSubTaskWithStage creates a new SubTask with stage
 func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage) *SubTask {
 	st := SubTask{
-		cfg:   cfg,
-		units: createUnits(cfg),
-		stage: stage,
-		l:     log.With(zap.String("subtask", cfg.Name)),
+		cfg:     cfg,
+		units:   createUnits(cfg),
+		stage:   stage,
+		l:       log.With(zap.String("subtask", cfg.Name)),
+		DDLInfo: make(chan *pb.DDLInfo, 1),
 	}
 	taskState.WithLabelValues(st.cfg.Name).Set(float64(st.stage))
 	return &st
@@ -107,8 +108,6 @@ func (st *SubTask) Init() error {
 	if len(st.units) < 1 {
 		return terror.ErrWorkerNoAvailUnits.Generate(st.cfg.Name, st.cfg.Mode)
 	}
-
-	st.DDLInfo = make(chan *pb.DDLInfo, 1)
 
 	initializeUnitSuccess := true
 	// when error occurred, initialized units should be closed
@@ -514,7 +513,7 @@ func (st *SubTask) ExecuteDDL(ctx context.Context, req *pb.ExecDDLRequest) error
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-ctxTimeout.Done():
-		return terror.ErrWorkerExecDDLTimeout.Generate()
+		return terror.ErrWorkerExecDDLTimeout.Generate(timeout)
 	}
 }
 
@@ -623,7 +622,8 @@ func (st *SubTask) unitTransWaitCondition() error {
 	if pu != nil && pu.Type() == pb.UnitType_Load && cu.Type() == pb.UnitType_Sync {
 		st.l.Info("wait condition between two units", zap.Stringer("previous unit", pu.Type()), zap.Stringer("unit", cu.Type()))
 		hub := GetConditionHub()
-		ctx, cancel := context.WithTimeout(hub.w.ctx, 5*time.Minute)
+		waitRelayCatchupTimeout := 5 * time.Minute
+		ctx, cancel := context.WithTimeout(hub.w.ctx, waitRelayCatchupTimeout)
 		defer cancel()
 
 		loadStatus := pu.Status().(*pb.LoadStatus)
@@ -644,7 +644,7 @@ func (st *SubTask) unitTransWaitCondition() error {
 
 			select {
 			case <-ctx.Done():
-				return terror.ErrWorkerWaitRelayCatchupTimeout.Generate(pos1, pos2)
+				return terror.ErrWorkerWaitRelayCatchupTimeout.Generate(waitRelayCatchupTimeout, pos1, pos2)
 			case <-time.After(time.Millisecond * 50):
 			}
 		}
