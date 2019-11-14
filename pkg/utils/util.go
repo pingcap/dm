@@ -17,6 +17,7 @@ import (
 	"context"
 	"math"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -30,10 +31,70 @@ import (
 var (
 	// OsExit is function placeholder for os.Exit
 	OsExit func(int)
+	/*
+		CREATE [TEMPORARY] TABLE [IF NOT EXISTS] tbl_name
+			{ LIKE old_tbl_name | (LIKE old_tbl_name) }
+	*/
+	builtInSkipDDLs = []string{
+		// transaction
+		"^SAVEPOINT",
+
+		// skip all flush sqls
+		"^FLUSH",
+
+		// table maintenance
+		"^OPTIMIZE\\s+TABLE",
+		"^ANALYZE\\s+TABLE",
+		"^REPAIR\\s+TABLE",
+
+		// temporary table
+		"^DROP\\s+(\\/\\*\\!40005\\s+)?TEMPORARY\\s+(\\*\\/\\s+)?TABLE",
+
+		// trigger
+		"^CREATE\\s+(DEFINER\\s?=.+?)?TRIGGER",
+		"^DROP\\s+TRIGGER",
+
+		// procedure
+		"^DROP\\s+PROCEDURE",
+		"^CREATE\\s+(DEFINER\\s?=.+?)?PROCEDURE",
+		"^ALTER\\s+PROCEDURE",
+
+		// view
+		"^CREATE\\s*(OR REPLACE)?\\s+(ALGORITHM\\s?=.+?)?(DEFINER\\s?=.+?)?\\s+(SQL SECURITY DEFINER)?VIEW",
+		"^DROP\\s+VIEW",
+		"^ALTER\\s+(ALGORITHM\\s?=.+?)?(DEFINER\\s?=.+?)?(SQL SECURITY DEFINER)?VIEW",
+
+		// function
+		// user-defined function
+		"^CREATE\\s+(AGGREGATE)?\\s*?FUNCTION",
+		// stored function
+		"^CREATE\\s+(DEFINER\\s?=.+?)?FUNCTION",
+		"^ALTER\\s+FUNCTION",
+		"^DROP\\s+FUNCTION",
+
+		// tableSpace
+		"^CREATE\\s+TABLESPACE",
+		"^ALTER\\s+TABLESPACE",
+		"^DROP\\s+TABLESPACE",
+
+		// account management
+		"^GRANT",
+		"^REVOKE",
+		"^CREATE\\s+USER",
+		"^ALTER\\s+USER",
+		"^RENAME\\s+USER",
+		"^DROP\\s+USER",
+		"^SET\\s+PASSWORD",
+
+		// alter database
+		"^ALTER DATABASE",
+	}
+	builtInSkipDDLPatterns *regexp.Regexp
 )
 
 func init() {
 	OsExit = os.Exit
+	builtInSkipDDLPatterns = regexp.MustCompile("(?i)" + strings.Join(builtInSkipDDLs, "|"))
 }
 
 // DecodeBinlogPosition parses a mysql.Position from string format
@@ -96,4 +157,9 @@ func WaitSomething(backoff int, waitTime time.Duration, fn func() bool) bool {
 // IsContextCanceledError checks whether err is context.Canceled
 func IsContextCanceledError(err error) bool {
 	return errors.Cause(err) == context.Canceled
+}
+
+// IsBuildInSkipDDL return true when checked sql that will be skipped for syncer
+func IsBuildInSkipDDL(sql string) bool {
+	return builtInSkipDDLPatterns.FindStringIndex(sql) != nil
 }
