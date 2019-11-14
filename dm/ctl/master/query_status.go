@@ -134,6 +134,9 @@ func wrapTaskResult(resp *pb.QueryStatusListResponse) *taskResult {
 	}
 	taskList := make([]*taskInfo, 0, len(taskStatusMap))
 	for curTaskName, taskStatus := range taskStatusMap {
+		if strings.HasPrefix(taskStatus, stageError) {
+			taskStatus += ". Please run `query-status " + curTaskName + "` to get more details."
+		}
 		taskList = append(taskList,
 			&taskInfo{
 				TaskName:   curTaskName,
