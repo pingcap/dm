@@ -246,7 +246,7 @@ func GetOperateID() int64 {
 func SendRequest(tp pb.CommandType, request []byte) (proto.Message, error) {
 	operateID := GetOperateID()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultEtcdTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), globalConfig.RPCTimeout)
 	defer cancel()
 
 	operateIDStr := strconv.FormatInt(operateID, 10)

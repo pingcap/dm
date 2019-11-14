@@ -21,7 +21,7 @@ import (
 )
 
 // OperateRelay does operation on relay unit
-func OperateRelay(op pb.RelayOp, workers []string) (proto.Message, error) {	
+func OperateRelay(op pb.RelayOp, workers []string) (proto.Message, error) {
 	request := &pb.OperateWorkerRelayRequest{
 		Op:      op,
 		Workers: workers,
