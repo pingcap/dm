@@ -25,6 +25,7 @@ import (
 
 	capturer "github.com/kami-zh/go-capturer"
 	"github.com/pingcap/check"
+	"go.etcd.io/etcd/embed"
 
 	"github.com/pingcap/dm/pkg/terror"
 )
@@ -133,6 +134,8 @@ func (t *testConfigSuite) TestConfig(c *check.C) {
 			c.Assert(cfg.PeerUrls, check.Equals, peerURLs)
 			c.Assert(cfg.AdvertisePeerUrls, check.Equals, advertisePeerURLs)
 			c.Assert(cfg.InitialCluster, check.Equals, initialCluster)
+			c.Assert(cfg.InitialClusterState, check.Equals, embed.ClusterStateFlagNew)
+			c.Assert(cfg.Join, check.Equals, "")
 			c.Assert(cfg.DeployMap, check.DeepEquals, deployMap)
 			c.Assert(cfg.String(), check.Matches, fmt.Sprintf("{.*master-addr\":\"%s\".*}", masterAddr))
 		}
@@ -228,6 +231,7 @@ func (t *testConfigSuite) TestGenEmbedEtcdConfig(c *check.C) {
 
 	cfg1 := NewConfig()
 	cfg1.MasterAddr = ":8261"
+	cfg1.InitialClusterState = embed.ClusterStateFlagExisting
 	c.Assert(cfg1.adjust(), check.IsNil)
 	etcdCfg, err := cfg1.genEmbedEtcdConfig()
 	c.Assert(err, check.IsNil)
@@ -238,6 +242,7 @@ func (t *testConfigSuite) TestGenEmbedEtcdConfig(c *check.C) {
 	c.Assert(etcdCfg.LPUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "127.0.0.1:8291"}})
 	c.Assert(etcdCfg.APUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "127.0.0.1:8291"}})
 	c.Assert(etcdCfg.InitialCluster, check.DeepEquals, fmt.Sprintf("dm-master-%s=http://127.0.0.1:8291", hostname))
+	c.Assert(etcdCfg.ClusterState, check.Equals, embed.ClusterStateFlagExisting)
 
 	cfg2 := *cfg1
 	cfg2.MasterAddr = "127.0.0.1\n:8261"
