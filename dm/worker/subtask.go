@@ -93,10 +93,11 @@ func NewSubTask(cfg *config.SubTaskConfig) *SubTask {
 // NewSubTaskWithStage creates a new SubTask with stage
 func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage) *SubTask {
 	st := SubTask{
-		cfg:   cfg,
-		units: createUnits(cfg),
-		stage: stage,
-		l:     log.With(zap.String("subtask", cfg.Name)),
+		cfg:     cfg,
+		units:   createUnits(cfg),
+		stage:   stage,
+		l:       log.With(zap.String("subtask", cfg.Name)),
+		DDLInfo: make(chan *pb.DDLInfo, 1),
 	}
 	taskState.WithLabelValues(st.cfg.Name).Set(float64(st.stage))
 	return &st
@@ -107,8 +108,6 @@ func (st *SubTask) Init() error {
 	if len(st.units) < 1 {
 		return terror.ErrWorkerNoAvailUnits.Generate(st.cfg.Name, st.cfg.Mode)
 	}
-
-	st.DDLInfo = make(chan *pb.DDLInfo, 1)
 
 	initializeUnitSuccess := true
 	// when error occurred, initialized units should be closed
