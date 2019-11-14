@@ -14,7 +14,6 @@
 package master
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/pingcap/errors"
@@ -47,14 +46,17 @@ func checkTaskFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	// start task
-	cli := common.MasterClient()
-	resp, err := cli.CheckTask(ctx, &pb.CheckTaskRequest{
+	request := &pb.CheckTaskRequest{
 		Task: string(content),
-	})
+	}
+	requestBytes, err := request.Marshal()
+	if err != nil {
+		common.PrintLines("marshal request error: \n%v", errors.ErrorStack(err))
+		return
+	}
+
+	resp, err := common.SendRequest(pb.CommandType_CheckTask, requestBytes)
 	if err != nil {
 		common.PrintLines("fail to check task:\n%v", errors.ErrorStack(err))
 		return

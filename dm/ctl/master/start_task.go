@@ -14,7 +14,6 @@
 package master
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/pingcap/errors"
@@ -53,15 +52,19 @@ func startTaskFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	// start task
-	cli := common.MasterClient()
-	resp, err := cli.StartTask(ctx, &pb.StartTaskRequest{
+
+	request := &pb.StartTaskRequest{
 		Task:    string(content),
 		Workers: workers,
-	})
+	}
+	requestBytes, err := request.Marshal()
+	if err != nil {
+		common.PrintLines("marshal request error: \n%v", errors.ErrorStack(err))
+		return
+	}
+
+	resp, err := common.SendRequest(pb.CommandType_StartTask, requestBytes)
 	if err != nil {
 		common.PrintLines("can not start task:\n%v", errors.ErrorStack(err))
 		return

@@ -15,12 +15,15 @@ package ctl
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/ctl/master"
 	"github.com/pingcap/dm/pkg/log"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb-tools/pkg/etcd"
+	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap/zapcore"
 )
@@ -32,6 +35,39 @@ var (
 // CommandMasterFlags are flags that used in all commands for dm-master
 type CommandMasterFlags struct {
 	workers []string // specify workers to control on these dm-workers
+}
+
+// Control used to handle request from dm-ctl
+// Sending request to etcd, and gets response from etcd
+type Control struct {
+	cfg     *common.Config
+	etcdCli *etcd.Client
+}
+
+// NewControl returns a new Control
+func NewControl(cfg *common.Config) (*Control, error) {
+	// set the log level temporarily
+	log.SetLevel(zapcore.InfoLevel)
+	err := common.InitUtils(cfg)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	ectdEndpoints, err := utils.ParseHostPortAddr(cfg.MasterAddr)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	etcdCli, err := etcd.NewClientFromCfg(ectdEndpoints, 10*time.Second, "/dm-operate", nil)
+	if err != nil {
+		// TODO: use terror
+		return nil, errors.Trace(err)
+	}
+
+	return &Control{
+		cfg:     cfg,
+		etcdCli: etcdCli,
+	}, nil
 }
 
 // Init initializes dm-control

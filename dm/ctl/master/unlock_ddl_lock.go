@@ -14,7 +14,6 @@
 package master
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/pingcap/dm/dm/ctl/common"
@@ -62,15 +61,19 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cli := common.MasterClient()
-	resp, err := cli.UnlockDDLLock(ctx, &pb.UnlockDDLLockRequest{
+	request := &pb.UnlockDDLLockRequest{
 		ID:           lockID,
 		ReplaceOwner: owner,
 		Workers:      workers,
 		ForceRemove:  forceRemove,
-	})
+	}
+	requestBytes, err := request.Marshal()
+	if err != nil {
+		common.PrintLines("marshal request error: \n%v", errors.ErrorStack(err))
+		return
+	}
+
+	resp, err := common.SendRequest(pb.CommandType_UnlockDDLLock, requestBytes)
 	if err != nil {
 		common.PrintLines("can not unlock DDL lock %s (in workers %v):\n%s", lockID, workers, errors.ErrorStack(err))
 		return

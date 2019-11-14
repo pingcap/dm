@@ -14,7 +14,6 @@
 package master
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/pingcap/dm/dm/ctl/common"
@@ -48,13 +47,18 @@ func queryErrorFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cli := common.MasterClient()
-	resp, err := cli.QueryError(ctx, &pb.QueryErrorListRequest{
+	request := &pb.QueryErrorListRequest{
 		Name:    taskName,
 		Workers: workers,
-	})
+	}
+
+	requestBytes, err := request.Marshal()
+	if err != nil {
+		common.PrintLines("marshal request error: \n%v", errors.ErrorStack(err))
+		return
+	}
+
+	resp, err := common.SendRequest(pb.CommandType_QueryErrorList, requestBytes)
 	if err != nil {
 		common.PrintLines("dmctl query error failed")
 		if taskName != "" {

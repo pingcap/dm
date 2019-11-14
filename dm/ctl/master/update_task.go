@@ -14,7 +14,6 @@
 package master
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/pingcap/errors"
@@ -53,15 +52,18 @@ func updateTaskFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	// update task
-	cli := common.MasterClient()
-	resp, err := cli.UpdateTask(ctx, &pb.UpdateTaskRequest{
+	request := &pb.UpdateTaskRequest{
 		Task:    string(content),
 		Workers: workers,
-	})
+	}
+	requestBytes, err := request.Marshal()
+	if err != nil {
+		common.PrintLines("marshal request error: \n%v", errors.ErrorStack(err))
+		return
+	}
+
+	resp, err := common.SendRequest(pb.CommandType_UpdateTask, requestBytes)
 	if err != nil {
 		common.PrintLines("can not update task:\n%v", errors.ErrorStack(err))
 		return

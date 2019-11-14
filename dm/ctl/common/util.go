@@ -34,11 +34,9 @@ import (
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
 )
 
 var (
-	masterClient pb.MasterClient
 	globalConfig = &Config{}
 
 	etcdClient *etcd.Client
@@ -54,26 +52,12 @@ var (
 // InitUtils inits necessary dmctl utils
 func InitUtils(cfg *Config) error {
 	globalConfig = cfg
-	err := InitClient(cfg.MasterAddr)
+
+	err := InitEtcdClient(cfg.MasterAddr)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	err = InitEtcdClient(cfg.MasterAddr)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	return nil
-}
-
-// InitClient initializes dm-master client
-func InitClient(addr string) error {
-	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
-	if err != nil {
-		return errors.Trace(err)
-	}
-	masterClient = pb.NewMasterClient(conn)
 	return nil
 }
 
@@ -96,11 +80,6 @@ func InitEtcdClient(addr string) error {
 // GlobalConfig returns global dmctl config
 func GlobalConfig() *Config {
 	return globalConfig
-}
-
-// MasterClient returns dm-master client
-func MasterClient() pb.MasterClient {
-	return masterClient
 }
 
 // EtcdClient retuens etcd client
@@ -340,7 +319,7 @@ func transformResponse(tp pb.CommandType, response []byte) (proto.Message, error
 		err := resp.Unmarshal(response)
 		return resp, err
 	case pb.CommandType_QueryErrorList:
-		resp := &pb.QueryErrorListResponse{}
+		resp := &pb.QueryErrorResponse{}
 		err := resp.Unmarshal(response)
 		return resp, err
 	case pb.CommandType_ShowDDLLocks:

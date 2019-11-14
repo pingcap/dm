@@ -14,7 +14,6 @@
 package master
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -131,17 +130,21 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 		fmt.Println("[warn] no --sub-dir specify for --filename, the latest one will be used")
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cli := common.MasterClient()
-
-	resp, err := cli.PurgeWorkerRelay(ctx, &pb.PurgeWorkerRelayRequest{
+	request := &pb.PurgeWorkerRelayRequest{
 		Workers: workers,
 		//Inactive: inactive,
 		//Time:     time2.Unix(),
 		Filename: filename,
 		SubDir:   subDir,
-	})
+	}
+
+	requestBytes, err := request.Marshal()
+	if err != nil {
+		common.PrintLines("marshal request error: \n%v", errors.ErrorStack(err))
+		return
+	}
+
+	resp, err := common.SendRequest(pb.CommandType_PurgeWorkerRelay, requestBytes)
 	if err != nil {
 		common.PrintLines("can not purge relay log files: \n%s", errors.ErrorStack(err))
 		return

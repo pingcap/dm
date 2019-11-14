@@ -14,7 +14,6 @@
 package master
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/pingcap/errors"
@@ -53,15 +52,17 @@ func updateRelayFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	cli := common.MasterClient()
-	resp, err := cli.UpdateWorkerRelayConfig(ctx, &pb.UpdateWorkerRelayConfigRequest{
+	request := &pb.UpdateWorkerRelayConfigRequest{
 		Config: string(content),
 		Worker: workers[0],
-	})
+	}
+	requestBytes, err := request.Marshal()
+	if err != nil {
+		common.PrintLines("marshal request error: \n%v", errors.ErrorStack(err))
+		return
+	}
 
+	resp, err := common.SendRequest(pb.CommandType_UpdateWorkerRelayConfig, requestBytes)
 	if err != nil {
 		common.PrintLines("can not update relay config:\n%v", errors.ErrorStack(err))
 		return

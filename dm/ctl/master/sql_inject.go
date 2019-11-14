@@ -14,7 +14,6 @@
 package master
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -76,15 +75,19 @@ func sqlInjectFunc(cmd *cobra.Command, _ []string) {
 		}
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cli := common.MasterClient()
-	resp, err := cli.HandleSQLs(ctx, &pb.HandleSQLsRequest{
+	request := &pb.HandleSQLsRequest{
 		Name:   taskName,
 		Op:     pb.SQLOp_INJECT,
 		Args:   realSQLs,
 		Worker: workers[0],
-	})
+	}
+	requestBytes, err := request.Marshal()
+	if err != nil {
+		common.PrintLines("marshal request error: \n%v", errors.ErrorStack(err))
+		return
+	}
+
+	resp, err := common.SendRequest(pb.CommandType_HandleSQLs, requestBytes)
 	if err != nil {
 		common.PrintLines("can not inject sql:\n%v", errors.ErrorStack(err))
 		return

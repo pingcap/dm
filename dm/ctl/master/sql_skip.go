@@ -14,7 +14,6 @@
 package master
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -75,18 +74,21 @@ func sqlSkipFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cli := common.MasterClient()
-
-	resp, err := cli.HandleSQLs(ctx, &pb.HandleSQLsRequest{
+	request := &pb.HandleSQLsRequest{
 		Name:       taskName,
 		Worker:     worker,
 		Op:         pb.SQLOp_SKIP,
 		BinlogPos:  binlogPos,
 		SqlPattern: sqlPattern,
 		Sharding:   sharding,
-	})
+	}
+	requestBytes, err := request.Marshal()
+	if err != nil {
+		common.PrintLines("marshal request error: \n%v", errors.ErrorStack(err))
+		return
+	}
+
+	resp, err := common.SendRequest(pb.CommandType_HandleSQLs, requestBytes)
 	if err != nil {
 		common.PrintLines("can not skip SQL:\n%v", errors.ErrorStack(err))
 		return

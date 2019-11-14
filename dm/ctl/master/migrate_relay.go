@@ -14,7 +14,6 @@
 package master
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 
@@ -51,15 +50,20 @@ func migrateRelayFunc(cmd *cobra.Command, _ []string) {
 		common.PrintLines(errors.ErrorStack(err))
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	cli := common.MasterClient()
-	resp, err := cli.MigrateWorkerRelay(ctx, &pb.MigrateWorkerRelayRequest{
+	request := &pb.MigrateWorkerRelayRequest{
 		BinlogName: binlogName,
 		BinlogPos:  uint32(binlogPos),
 		Worker:     worker,
-	})
+	}
+
+	requestBytes, err := request.Marshal()
+	if err != nil {
+		common.PrintLines("marshal request error: \n%v", errors.ErrorStack(err))
+		return
+	}
+
+	resp, err := common.SendRequest(pb.CommandType_MigrateWorkerRelay, requestBytes)
+
 	if err != nil {
 		log.L().Error("can not migrate relay", zap.Error(err))
 		return

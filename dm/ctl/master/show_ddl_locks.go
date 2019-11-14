@@ -14,7 +14,6 @@
 package master
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/pingcap/dm/dm/ctl/common"
@@ -48,13 +47,17 @@ func showDDLLocksFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cli := common.MasterClient()
-	resp, err := cli.ShowDDLLocks(ctx, &pb.ShowDDLLocksRequest{
+	request := &pb.ShowDDLLocksRequest{
 		Task:    taskName,
 		Workers: workers,
-	})
+	}
+	requestBytes, err := request.Marshal()
+	if err != nil {
+		common.PrintLines("marshal request error: \n%v", errors.ErrorStack(err))
+		return
+	}
+
+	resp, err := common.SendRequest(pb.CommandType_ShowDDLLocks, requestBytes)
 	if err != nil {
 		common.PrintLines("can not show DDL locks for task %s and workers %v:\n%s", taskName, workers, errors.ErrorStack(err))
 		return

@@ -14,7 +14,6 @@
 package master
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -63,18 +62,27 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	cli := common.MasterClient()
-	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
-	defer cancel()
-	resp, err := cli.QueryStatus(ctx, &pb.QueryStatusListRequest{
+	request := &pb.QueryStatusListRequest{
 		Name:    taskName,
 		Workers: workers,
-	})
+	}
+	requestBytes, err := request.Marshal()
+	if err != nil {
+		common.PrintLines("marshal request error: \n%v", errors.ErrorStack(err))
+		return
+	}
+
+	respMsg, err := common.SendRequest(pb.CommandType_QueryStatusList, requestBytes)
 	if err != nil {
 		common.PrintLines("can not query %s task's status(in workers %v):\n%s", taskName, workers, errors.ErrorStack(err))
 		return
 	}
 
+	resp, ok := respMsg.(*pb.QueryStatusListResponse)
+	if !ok {
+		common.PrintLines("invalid response")
+		return
+	}
 	if resp.Result && taskName == "" && len(workers) == 0 {
 		result := wrapTaskResult(resp)
 		common.PrettyPrintInterface(result)

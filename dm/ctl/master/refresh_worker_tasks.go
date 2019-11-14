@@ -14,7 +14,6 @@
 package master
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/pingcap/dm/dm/ctl/common"
@@ -41,10 +40,14 @@ func refreshWorkerTasksFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cli := common.MasterClient()
-	resp, err := cli.RefreshWorkerTasks(ctx, &pb.RefreshWorkerTasksRequest{})
+	request := &pb.RefreshWorkerTasksRequest{}
+	requestBytes, err := request.Marshal()
+	if err != nil {
+		common.PrintLines("marshal request error: \n%v", errors.ErrorStack(err))
+		return
+	}
+
+	resp, err := common.SendRequest(pb.CommandType_RefreshWorkerTasks, requestBytes)
 	if err != nil {
 		common.PrintLines("can not refresh workerTasks:\n%v", errors.ErrorStack(err))
 		return

@@ -14,18 +14,25 @@
 package common
 
 import (
-	"context"
-
 	"github.com/pingcap/dm/dm/pb"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/pingcap/errors"
 )
 
 // OperateRelay does operation on relay unit
-func OperateRelay(op pb.RelayOp, workers []string) (*pb.OperateWorkerRelayResponse, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cli := MasterClient()
-	return cli.OperateWorkerRelayTask(ctx, &pb.OperateWorkerRelayRequest{
+func OperateRelay(op pb.RelayOp, workers []string) (proto.Message, error) {	
+	request := &pb.OperateWorkerRelayRequest{
 		Op:      op,
 		Workers: workers,
-	})
+	}
+
+	requestBytes, err := request.Marshal()
+	if err != nil {
+		PrintLines("marshal request error: \n%v", errors.ErrorStack(err))
+		// FIXME: use terror
+		return nil, errors.New("marshal failed")
+	}
+
+	return SendRequest(pb.CommandType_OperateWorkerRelay, requestBytes)
 }

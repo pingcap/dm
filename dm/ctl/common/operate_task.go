@@ -14,19 +14,25 @@
 package common
 
 import (
-	"context"
-
 	"github.com/pingcap/dm/dm/pb"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/pingcap/errors"
 )
 
 // OperateTask does operation on task
-func OperateTask(op pb.TaskOp, name string, workers []string) (*pb.OperateTaskResponse, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cli := MasterClient()
-	return cli.OperateTask(ctx, &pb.OperateTaskRequest{
+func OperateTask(op pb.TaskOp, name string, workers []string) (proto.Message, error) {
+	request := &pb.OperateTaskRequest{
 		Op:      op,
 		Name:    name,
 		Workers: workers,
-	})
+	}
+	requestBytes, err := request.Marshal()
+	if err != nil {
+		PrintLines("marshal request error: \n%v", errors.ErrorStack(err))
+		// FIXME: use terror
+		return nil, errors.New("marshal failed")
+	}
+
+	return SendRequest(pb.CommandType_OperateTask, requestBytes)
 }

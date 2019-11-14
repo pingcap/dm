@@ -14,7 +14,6 @@
 package master
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/pingcap/dm/dm/ctl/common"
@@ -83,16 +82,22 @@ func breakDDLLockFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cli := common.MasterClient()
-	resp, err := cli.BreakWorkerDDLLock(ctx, &pb.BreakWorkerDDLLockRequest{
+	request := &pb.BreakWorkerDDLLockRequest{
 		Workers:      workers,
 		Task:         taskName,
 		RemoveLockID: removeLockID,
 		ExecDDL:      exec,
 		SkipDDL:      skip,
-	})
+	}
+
+	requestBytes, err := request.Marshal()
+	if err != nil {
+		common.PrintLines("marshal request error: \n%v", errors.ErrorStack(err))
+		return
+	}
+
+	resp, err := common.SendRequest(pb.CommandType_BreakWorkerDDLLock, requestBytes)
+
 	if err != nil {
 		common.PrintLines("can not break DDL lock (in workers %v):\n%s", workers, errors.ErrorStack(err))
 		return

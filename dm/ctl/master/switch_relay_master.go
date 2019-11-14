@@ -14,7 +14,6 @@
 package master
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/pingcap/errors"
@@ -51,12 +50,16 @@ func switchRelayMasterFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cli := common.MasterClient()
-	resp, err := cli.SwitchWorkerRelayMaster(ctx, &pb.SwitchWorkerRelayMasterRequest{
+	request := &pb.SwitchWorkerRelayMasterRequest{
 		Workers: workers,
-	})
+	}
+	requestBytes, err := request.Marshal()
+	if err != nil {
+		common.PrintLines("marshal request error: \n%v", errors.ErrorStack(err))
+		return
+	}
+
+	resp, err := common.SendRequest(pb.CommandType_SwitchWorkerRelayMaster, requestBytes)
 	if err != nil {
 		common.PrintLines("can not switch relay's master server (in workers %v):\n%s", workers, errors.ErrorStack(err))
 		return
