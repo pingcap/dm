@@ -1555,7 +1555,7 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 	cfg2.MasterAddr = tempurl.Alloc()[len("http://"):]
 	cfg2.PeerUrls = tempurl.Alloc()
 	cfg2.AdvertisePeerUrls = cfg2.PeerUrls
-	cfg2.Join = cfg1.AdvertisePeerUrls // join to an existing cluster
+	cfg2.Join = cfg1.MasterAddr // join to an existing cluster
 
 	s2 := NewServer(cfg2)
 	c.Assert(s2.Start(ctx), check.IsNil)

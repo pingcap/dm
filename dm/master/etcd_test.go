@@ -51,7 +51,7 @@ func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
 
 	cfgAfter := t.cloneConfig(cfgBefore) // after `prepareJoinEtcd applied
 
-	joinCluster := cfgCluster.PeerUrls
+	joinCluster := cfgCluster.MasterAddr
 	joinFP := filepath.Join(cfgBefore.DataDir, "join")
 	memberDP := filepath.Join(cfgBefore.DataDir, "member")
 
@@ -60,7 +60,7 @@ func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
 	c.Assert(cfgAfter, check.DeepEquals, cfgBefore)
 
 	// try to join self
-	cfgAfter.Join = cfgAfter.AdvertisePeerUrls
+	cfgAfter.Join = cfgAfter.MasterAddr
 	err := prepareJoinEtcd(cfgAfter)
 	c.Assert(terror.ErrMasterJoinEmbedEtcdFail.Equal(err), check.IsTrue)
 	c.Assert(err, check.ErrorMatches, ".*fail to join embed etcd: join self.*is forbidden.*")
@@ -142,7 +142,7 @@ func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
 	cfgAfter2.AdvertisePeerUrls = cfgAfter2.PeerUrls
 	err = prepareJoinEtcd(cfgAfter2)
 	c.Assert(terror.ErrMasterJoinEmbedEtcdFail.Equal(err), check.IsTrue)
-	c.Assert(err, check.ErrorMatches, ".*fail to join embed etcd: there is a member that has not joined successfully.*")
+	c.Assert(err, check.ErrorMatches, ".*fail to join embed etcd: there is a member that has not joined successfully, continue the join or remove it.*")
 
 	// start the joining etcd
 	e2, err := startEtcd(cfgAfter, nil, nil)
@@ -150,7 +150,7 @@ func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
 	defer e2.Close()
 
 	// try join again
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		err = prepareJoinEtcd(cfgAfter2)
 		if err == nil {
 			break
@@ -158,7 +158,7 @@ func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
 		// for `etcdserver: unhealthy cluster`, try again later
 		c.Assert(terror.ErrMasterJoinEmbedEtcdFail.Equal(err), check.IsTrue)
 		c.Assert(err, check.ErrorMatches, ".*fail to join embed etcd: add member.*: etcdserver: unhealthy cluster.*")
-		time.Sleep(time.Second)
+		time.Sleep(500 * time.Millisecond)
 	}
 	c.Assert(err, check.IsNil)
 }

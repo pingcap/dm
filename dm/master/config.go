@@ -66,7 +66,7 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.InitialCluster, "initial-cluster", "", fmt.Sprintf("initial cluster configuration for bootstrapping, e,g. dm-master=%s", defaultPeerUrls))
 	fs.StringVar(&cfg.PeerUrls, "peer-urls", defaultPeerUrls, "URLs for peer traffic")
 	fs.StringVar(&cfg.AdvertisePeerUrls, "advertise-peer-urls", "", `advertise URLs for peer traffic (default "${peer-urls}")`)
-	fs.StringVar(&cfg.Join, "join", "", `join to an existing cluster (usage: cluster's "${advertise-client-urls}"`)
+	fs.StringVar(&cfg.Join, "join", "", `join to an existing cluster (usage: cluster's "${master-addr}" list, e,g. "127.0.0.1:8261,127.0.0.1:18261"`)
 
 	return cfg
 }
@@ -116,7 +116,7 @@ type Config struct {
 	AdvertisePeerUrls   string `toml:"advertise-peer-urls" json:"advertise-peer-urls"`
 	InitialCluster      string `toml:"initial-cluster" json:"initial-cluster"`
 	InitialClusterState string `toml:"initial-cluster-state" json:"initial-cluster-state"`
-	Join                string `toml:"join" json:"join"`
+	Join                string `toml:"join" json:"join"` // cluster's client address (endpoints), not peer address
 
 	printVersion      bool
 	printSampleConfig bool

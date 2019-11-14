@@ -96,8 +96,11 @@ func prepareJoinEtcd(cfg *Config) error {
 	}
 
 	// try to join self, invalid
-	if cfg.Join == cfg.AdvertisePeerUrls {
-		return terror.ErrMasterJoinEmbedEtcdFail.Generate(fmt.Sprintf("join self %s is forbidden", cfg.Join))
+	clientURLs := strings.Split(cfg.Join, ",")
+	for _, clientURL := range clientURLs {
+		if clientURL == cfg.MasterAddr {
+			return terror.ErrMasterJoinEmbedEtcdFail.Generate(fmt.Sprintf("join self %s is forbidden", cfg.Join))
+		}
 	}
 
 	// restart with previous data, no `InitialCluster` need to set
@@ -138,8 +141,11 @@ func prepareJoinEtcd(cfg *Config) error {
 
 	// check members
 	for _, m := range listResp.Members {
-		if m.Name == "" {
-			return terror.ErrMasterJoinEmbedEtcdFail.Generate("there is a member that has not joined successfully")
+		if m.Name == "" { // the previous existing member without name (not complete the join operation)
+			// we can't generate `initial-cluster` correctly with empty member name,
+			// and if added a member but not started it to complete the join,
+			// the later join operation may encounter `etcdserver: re-configuration failed due to not enough started members`.
+			return terror.ErrMasterJoinEmbedEtcdFail.Generate("there is a member that has not joined successfully, continue the join or remove it")
 		}
 		if m.Name == cfg.Name {
 			// a failed DM-master re-joins the previous cluster.
@@ -164,7 +170,10 @@ func prepareJoinEtcd(cfg *Config) error {
 			name = cfg.Name
 		}
 		if name == "" {
-			return terror.ErrMasterJoinEmbedEtcdFail.Generate("there is a member that has not joined successfully")
+			// this should be checked in the previous `member list` operation if having only one member is join.
+			// if multi join operations exist, the behavior may be unexpected.
+			// check again here only to decrease the unexpectedness.
+			return terror.ErrMasterJoinEmbedEtcdFail.Generate("there is a member that has not joined successfully, continue the join or remove it")
 		}
 		for _, url := range m.PeerURLs {
 			ms = append(ms, fmt.Sprintf("%s=%s", name, url))
