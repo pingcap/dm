@@ -203,10 +203,12 @@ func (conn *DBConn) querySQL(tctx *tcontext.Context, query string, args ...inter
 	)
 
 	if err != nil {
-		tctx.L().Error("query statement failed after retry",
-			zap.String("query", utils.TruncateString(query, -1)),
-			zap.String("argument", utils.TruncateInterface(args, -1)),
-			log.ShortError(err))
+		if !utils.IsContextCanceledError(err) {
+			tctx.L().Error("query statement failed after retry",
+				zap.String("query", utils.TruncateString(query, -1)),
+				zap.String("argument", utils.TruncateInterface(args, -1)),
+				log.ShortError(err))
+		}
 		return nil, err
 	}
 	return ret.(*sql.Rows), nil

@@ -95,10 +95,12 @@ func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string, args ...int
 	rows, err := conn.DBConn.QueryContext(tctx.Context(), query, args...)
 
 	if err != nil {
-		tctx.L().Error("query statement failed",
-			zap.String("query", utils.TruncateString(query, -1)),
-			zap.String("argument", utils.TruncateInterface(args, -1)),
-			log.ShortError(err))
+		if !utils.IsContextCanceledError(err) {
+			tctx.L().Error("query statement failed",
+				zap.String("query", utils.TruncateString(query, -1)),
+				zap.String("argument", utils.TruncateInterface(args, -1)),
+				log.ShortError(err))
+		}
 		return nil, terror.ErrDBQueryFailed.Delegate(err, utils.TruncateString(query, -1))
 	}
 	return rows, nil

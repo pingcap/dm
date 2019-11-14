@@ -41,7 +41,7 @@ func (s *Syncer) Error() interface{} {
 
 	errors := make([]*pb.SyncSQLError, 0, len(s.execErrors.errors))
 	for _, ctx := range s.execErrors.errors {
-		if utils.IsContextCanceledError(ctx.err) {
+		if !utils.IsContextCanceledError(ctx.err) {
 			errors = append(errors, &pb.SyncSQLError{
 				Msg:                  ctx.err.Error(),
 				FailedBinlogPosition: fmt.Sprintf("%s:%d", ctx.pos.Name, ctx.pos.Pos),
