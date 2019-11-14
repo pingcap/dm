@@ -20,6 +20,8 @@ import (
 	"strconv"
 	"strings"
 
+	"go.uber.org/zap"
+
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 
@@ -141,6 +143,7 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		sqls = append(sqls, sql)
 		values = append(values, value)
 		keys = append(keys, ks)
+		log.L().Info("insert statement", zap.String("sql", sql), zap.Strings("keys", ks), zap.Reflect("values", value))
 	}
 
 	return sqls, keys, values, nil
@@ -203,11 +206,16 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 			sqls = append(sqls, sql)
 			values = append(values, value)
 			keys = append(keys, ks)
+
+			log.L().Info("update statement (safe-mode=true)", zap.String("sql", sql), zap.Strings("keys", ks), zap.Reflect("values", value))
+
 			// generate replace sql from new data
 			sql = fmt.Sprintf("REPLACE INTO `%s`.`%s` (%s) VALUES (%s);", schema, table, columnList, columnPlaceholders)
 			sqls = append(sqls, sql)
 			values = append(values, changedValues)
 			keys = append(keys, ks)
+			log.L().Info("update statement (safe-mode=true)", zap.String("sql", sql), zap.Strings("keys", ks), zap.Reflect("values", changedValues))
+
 			continue
 		}
 
@@ -239,6 +247,8 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		sqls = append(sqls, sql)
 		values = append(values, value)
 		keys = append(keys, ks)
+		log.L().Info("update statement (safe-mode=false)", zap.String("sql", sql), zap.Strings("keys", ks), zap.Reflect("values", value))
+
 	}
 
 	return sqls, keys, values, nil
@@ -273,6 +283,7 @@ func genDeleteSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		sqls = append(sqls, sql)
 		values = append(values, value)
 		keys = append(keys, ks)
+		log.L().Info("delete statement", zap.String("sql", sql), zap.Strings("keys", ks), zap.Reflect("values", value))
 	}
 
 	return sqls, keys, values, nil
