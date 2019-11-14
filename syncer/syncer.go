@@ -961,6 +961,9 @@ func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *DBConn, job
 			queries = append(queries, j.sql)
 			args = append(args, j.args)
 		}
+
+		s.tctx.L().Info("execute transaction", zap.Strings("sql", queries), zap.Reflect("values", args))
+
 		affected, err := db.executeSQL(s.tctx, queries, args...)
 		if err != nil {
 			errCtx := &ExecErrorContext{err, jobs[affected].currentPos, fmt.Sprintf("%v", jobs)}
@@ -1908,6 +1911,8 @@ func (s *Syncer) commitJob(tp opType, sourceSchema, sourceTable, targetSchema, t
 	if err != nil {
 		return terror.ErrSyncerUnitResolveCasualityFail.Generate(err)
 	}
+
+	s.tctx.L().Info("execute sql", zap.String("sql", sql), zap.String("key", key), zap.Strings("keys", keys), zap.Reflect("values", args))
 	job := newJob(tp, sourceSchema, sourceTable, targetSchema, targetTable, sql, args, key, pos, cmdPos, gs, traceID)
 	return s.addJobFunc(job)
 }
