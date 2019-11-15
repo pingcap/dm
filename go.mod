@@ -5,7 +5,7 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.3.3
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e
-	github.com/coreos/etcd v3.3.15+incompatible // indirect
+	github.com/coreos/etcd v3.3.15+incompatible
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f // indirect
 	github.com/cznic/sortutil v0.0.0-20181122101858-f5f958428db8 // indirect
@@ -36,6 +36,7 @@ require (
 	github.com/pingcap/kvproto v0.0.0-20190827032240-9696cd0c6acb // indirect
 	github.com/pingcap/log v0.0.0-20190715063458-479153f07ebd
 	github.com/pingcap/parser v0.0.0-20191008032157-51a2e3b2e34b
+	github.com/pingcap/pd v0.0.0-20190712044914-75a1f9f3062b
 	github.com/pingcap/tidb v0.0.0-20190827060935-cc07b110825e
 	github.com/pingcap/tidb-tools v3.0.0-beta.1.0.20190821032033-e6ccf3994944+incompatible
 	github.com/pingcap/tipb v0.0.0-20191008064422-018b2fadf414 // indirect
@@ -72,6 +73,7 @@ require (
 	google.golang.org/genproto v0.0.0-20190819201941-24fa4b261c55
 	google.golang.org/grpc v1.23.0
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
+	gopkg.in/stretchr/testify.v1 v1.2.2 // indirect
 	gopkg.in/yaml.v2 v2.2.4
 	sigs.k8s.io/yaml v1.1.0 // indirect
 	sourcegraph.com/sourcegraph/appdash v0.0.0-20190731080439-ebfcffb1b5c0 // indirect

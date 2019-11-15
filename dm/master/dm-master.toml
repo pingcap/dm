@@ -22,6 +22,9 @@ advertise-peer-urls = "http://127.0.0.1:8291"
 # initial cluster configuration for bootstrapping, e,g. dm-master=http://127.0.0.1:8291
 initial-cluster = "dm-master=http://127.0.0.1:8291"
 
+# Join to an existing DM-master cluster, a string of existing cluster's endpoints.
+join = ""
+
 # rpc configuration
 #
 # rpc timeout is a positive number plus time unit. we use golang standard time
