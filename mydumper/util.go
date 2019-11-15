@@ -82,13 +82,13 @@ func fetchMyDumperDoTables(cfg *config.SubTaskConfig) (string, error) {
 // If not, this function will return true to notify mydumper to generate args
 func needToGenerateDoTables(args []string) bool {
 	for _, arg := range args {
-		if arg == "-B" || arg == "--database" {
+		if strings.HasPrefix(arg, "-B") || strings.HasPrefix(arg, "--database") {
 			return false
 		}
-		if arg == "-T" || arg == "--tables-list" {
+		if strings.HasPrefix(arg, "-T") || strings.HasPrefix(arg, "--tables-list") {
 			return false
 		}
-		if arg == "-x" || arg == "--regex" {
+		if strings.HasPrefix(arg, "-x") || strings.HasPrefix(arg, "--regex") {
 			return false
 		}
 	}
