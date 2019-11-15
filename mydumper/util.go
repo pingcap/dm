@@ -18,6 +18,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/pingcap/tidb-tools/pkg/filter"
@@ -56,17 +57,17 @@ func trimOutQuotes(arg string) string {
 func fetchMyDumperDoTables(cfg *config.SubTaskConfig) (string, error) {
 	fromDB, err := applyNewBaseDB(cfg.From)
 	if err != nil {
-		return "", err
+		return "", terror.WithClass(err, terror.ClassDumpUnit)
 	}
 	defer fromDB.Close()
 	bw := filter.New(cfg.CaseSensitive, cfg.BWList)
 	r, err := router.NewTableRouter(cfg.CaseSensitive, cfg.RouteRules)
 	if err != nil {
-		return "", err
+		return "", terror.ErrDumpUnitGenTableRouter.Delegate(err)
 	}
 	sourceTables, err := fetchTargetDoTables(fromDB.DB, bw, r)
 	if err != nil {
-		return "", err
+		return "", terror.WithClass(err, terror.ClassDumpUnit)
 	}
 	var filteredTables []string
 	// TODO: For tables which contains special chars like ' , ` mydumper will fail while dumping. Once this bug is fixed on mydumper we should add quotes to table.Schema and table.Name
