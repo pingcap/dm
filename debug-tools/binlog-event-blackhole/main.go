@@ -107,5 +107,5 @@ func main() {
 	speed := float64(byteCount) / duration.Seconds()
 	log.L().Info("binlog-event-blackhole exit",
 		zap.Uint64("event-count", eventCount), zap.Uint64("byte-count", byteCount),
-		zap.Duration("duration", duration), zap.Float64("tps", tps), zap.Float64("speed (byte/s)", speed))
+		zap.Duration("duration", duration), zap.Float64("tps", tps), zap.Float64("throughput (byte/s)", speed))
 }

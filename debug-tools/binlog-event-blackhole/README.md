@@ -34,7 +34,7 @@
 When exiting, the result will be output to the log as following
 
 ```log
-[2019/08/12 15:44:19.269 +08:00] [INFO] [main.go:95] ["binlog-event-blackhole exit"] [event-count=35] [byte-count=2360] [duration=705.627314ms] [tps=49.601254522865595] ["speed (byte/s)"=3344.541733541794]
+[2019/08/12 15:44:19.269 +08:00] [INFO] [main.go:95] ["binlog-event-blackhole exit"] [event-count=35] [byte-count=2360] [duration=705.627314ms] [tps=49.601254522865595] ["throughput (byte/s)"=3344.541733541794]
 ```
 
 | Item | Description |
@@ -43,4 +43,4 @@ When exiting, the result will be output to the log as following
 | byte-count | The total bytes have received from the upstream master |
 | duration | The duration has be taken to fetch binlog events |
 | tps | The events have received per second |
-| speed | The speed of fetching binlog event data (bytes/second) |
+| throughput | The throughput of fetching binlog event data (bytes/second) |
