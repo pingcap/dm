@@ -143,6 +143,10 @@ func (s *Server) Start(ctx context.Context) (err error) {
 
 	s.closed.Set(false) // the server started now.
 
+	go func() {
+		s.WatchRequest()
+	}()
+
 	s.bgFunWg.Add(1)
 	go func() {
 		defer s.bgFunWg.Done()

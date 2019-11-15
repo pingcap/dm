@@ -257,14 +257,15 @@ func SendRequest(tp pb.CommandType, request []byte) (proto.Message, error) {
 	}
 	cmdBytes, err := command.Marshal()
 	if err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 	revision, err := etcdClient.Create(ctx, operateIDStr, string(cmdBytes), nil)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	fmt.Println(revision)
 
-	watchCh := etcdClient.Watch(ctx, operateIDStr, revision)
+	watchCh := etcdClient.Watch(ctx, operateIDStr, revision+1)
 
 	for {
 		select {
@@ -272,15 +273,16 @@ func SendRequest(tp pb.CommandType, request []byte) (proto.Message, error) {
 			return nil, ctx.Err()
 		case wresp := <-watchCh:
 			if wresp.Err() != nil {
-				return nil, wresp.Err()
+				return nil, errors.Trace(wresp.Err())
 			}
 
 			for _, ev := range wresp.Events {
 				command := &pb.Command{}
-				err := json.Unmarshal(ev.Kv.Value, &command)
+				err := command.Unmarshal(ev.Kv.Value)
 				if err != nil {
-					return nil, err
+					return nil, errors.Trace(err)
 				}
+				fmt.Println(command)
 
 				return transformResponse(command.Tp, command.Response)
 			}
@@ -293,71 +295,71 @@ func transformResponse(tp pb.CommandType, response []byte) (proto.Message, error
 	case pb.CommandType_MigrateWorkerRelay:
 		resp := &pb.CommonWorkerResponse{}
 		err := resp.Unmarshal(response)
-		return resp, err
+		return resp, errors.Trace(err)
 	case pb.CommandType_UpdateWorkerRelayConfig:
 		resp := &pb.CommonWorkerResponse{}
 		err := resp.Unmarshal(response)
-		return resp, err
+		return resp, errors.Trace(err)
 	case pb.CommandType_StartTask:
 		resp := &pb.StartTaskResponse{}
 		err := resp.Unmarshal(response)
-		return resp, err
+		return resp, errors.Trace(err)
 	case pb.CommandType_UpdateMasterConfig:
 		resp := &pb.UpdateMasterConfigResponse{}
 		err := resp.Unmarshal(response)
-		return resp, err
+		return resp, errors.Trace(err)
 	case pb.CommandType_OperateTask:
 		resp := &pb.OperateTaskResponse{}
 		err := resp.Unmarshal(response)
-		return resp, err
+		return resp, errors.Trace(err)
 	case pb.CommandType_UpdateTask:
 		resp := &pb.UpdateTaskResponse{}
 		err := resp.Unmarshal(response)
-		return resp, err
+		return resp, errors.Trace(err)
 	case pb.CommandType_QueryStatusList:
 		resp := &pb.QueryStatusListResponse{}
 		err := resp.Unmarshal(response)
-		return resp, err
+		return resp, errors.Trace(err)
 	case pb.CommandType_QueryErrorList:
 		resp := &pb.QueryErrorResponse{}
 		err := resp.Unmarshal(response)
-		return resp, err
+		return resp, errors.Trace(err)
 	case pb.CommandType_ShowDDLLocks:
 		resp := &pb.ShowDDLLocksResponse{}
 		err := resp.Unmarshal(response)
-		return resp, err
+		return resp, errors.Trace(err)
 	case pb.CommandType_UnlockDDLLock:
 		resp := &pb.UnlockDDLLockResponse{}
 		err := resp.Unmarshal(response)
-		return resp, err
+		return resp, errors.Trace(err)
 	case pb.CommandType_BreakWorkerDDLLock:
 		resp := &pb.BreakWorkerDDLLockResponse{}
 		err := resp.Unmarshal(response)
-		return resp, err
+		return resp, errors.Trace(err)
 	case pb.CommandType_SwitchWorkerRelayMaster:
 		resp := &pb.SwitchWorkerRelayMasterResponse{}
 		err := resp.Unmarshal(response)
-		return resp, err
+		return resp, errors.Trace(err)
 	case pb.CommandType_OperateWorkerRelay:
 		resp := &pb.OperateWorkerRelayResponse{}
 		err := resp.Unmarshal(response)
-		return resp, err
+		return resp, errors.Trace(err)
 	case pb.CommandType_RefreshWorkerTasks:
 		resp := &pb.RefreshWorkerTasksResponse{}
 		err := resp.Unmarshal(response)
-		return resp, err
+		return resp, errors.Trace(err)
 	case pb.CommandType_HandleSQLs:
 		resp := &pb.HandleSQLsResponse{}
 		err := resp.Unmarshal(response)
-		return resp, err
+		return resp, errors.Trace(err)
 	case pb.CommandType_PurgeWorkerRelay:
 		resp := &pb.PurgeWorkerRelayResponse{}
 		err := resp.Unmarshal(response)
-		return resp, err
+		return resp, errors.Trace(err)
 	case pb.CommandType_CheckTask:
 		resp := &pb.CheckTaskResponse{}
 		err := resp.Unmarshal(response)
-		return resp, err
+		return resp, errors.Trace(err)
 	default:
 		// return error
 		return nil, nil
