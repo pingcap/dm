@@ -69,3 +69,5 @@ require (
 	gopkg.in/yaml.v2 v2.2.5
 	sourcegraph.com/sourcegraph/appdash v0.0.0-20190731080439-ebfcffb1b5c0 // indirect
 )
+
+go 1.13
