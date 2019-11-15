@@ -143,8 +143,10 @@ func (s *Server) Start(ctx context.Context) (err error) {
 
 	s.closed.Set(false) // the server started now.
 
+	s.bgFunWg.Add(1)
 	go func() {
-		s.WatchRequest()
+		defer s.bgFunWg.Done()
+		s.WatchRequest(ctx)
 	}()
 
 	s.bgFunWg.Add(1)
@@ -204,11 +206,13 @@ func errorCommonWorkerResponse(msg string, worker string) *pb.CommonWorkerRespon
 }
 
 // WatchRequest watches requests in etcd, and handle these request, and write response to etcd.
-func (s *Server) WatchRequest() {
+func (s *Server) WatchRequest(ctx context.Context) {
 	watchCh := s.etcdClient.Watch(context.Background(), defaultOperatePath, -1)
 
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case wresp := <-watchCh:
 			if wresp.Err() != nil {
 				log.L().Warn("watch etcd failed", zap.Error(wresp.Err()))
