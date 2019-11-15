@@ -117,7 +117,10 @@ func (c *Checker) Init() (err error) {
 	_, checkSchema := c.checkingItems[config.TableSchemaChecking]
 
 	for _, instance := range c.instances {
-		bw := filter.New(instance.cfg.CaseSensitive, instance.cfg.BWList)
+		bw, err := filter.New(instance.cfg.CaseSensitive, instance.cfg.BWList)
+		if err != nil {
+			return terror.ErrTaskCheckNewBWList.Delegate(err)
+		}
 		r, err := router.NewTableRouter(instance.cfg.CaseSensitive, instance.cfg.RouteRules)
 		if err != nil {
 			return terror.ErrTaskCheckNewTableRouter.Delegate(err)

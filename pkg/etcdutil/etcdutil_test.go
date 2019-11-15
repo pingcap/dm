@@ -20,10 +20,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/coreos/etcd/etcdserver/etcdserverpb"
 	. "github.com/pingcap/check"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/embed"
+	"go.etcd.io/etcd/etcdserver/etcdserverpb"
 )
 
 var _ = Suite(&testEtcdUtilSuite{})

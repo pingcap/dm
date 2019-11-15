@@ -201,6 +201,7 @@ const (
 	codeTaskCheckNewTableRouter
 	codeTaskCheckNewColumnMapping
 	codeTaskCheckSyncConfigError
+	codeTaskCheckNewBWList
 )
 
 // Relay log utils error code
@@ -281,6 +282,7 @@ const (
 	codeLoadUnitNoTableFile
 	codeLoadUnitDumpDirNotFound
 	codeLoadUnitDuplicateTableFile
+	codeLoadUnitNewBWList
 )
 
 // Sync unit error code
@@ -344,6 +346,7 @@ const (
 	codeSyncerUnitReopenStreamNotSupport
 	codeSyncerUnitUpdateConfigInSharding
 	codeSyncerUnitExecWithNoBlockingDDL
+	codeSyncerUnitNewBWList
 )
 
 // DM-master error code
@@ -656,6 +659,7 @@ var (
 	ErrTaskCheckNewTableRouter   = New(codeTaskCheckNewTableRouter, ClassTaskCheck, ScopeInternal, LevelMedium, "new table router error")
 	ErrTaskCheckNewColumnMapping = New(codeTaskCheckNewColumnMapping, ClassTaskCheck, ScopeInternal, LevelMedium, "new column mapping error")
 	ErrTaskCheckSyncConfigError  = New(codeTaskCheckSyncConfigError, ClassTaskCheck, ScopeInternal, LevelMedium, "%s %v: %v\n detail: %v")
+	ErrTaskCheckNewBWList        = New(codeTaskCheckNewBWList, ClassTaskCheck, ScopeInternal, LevelMedium, "new black white list error")
 
 	// Relay log basic API error
 	ErrRelayParseUUIDIndex         = New(codeRelayParseUUIDIndex, ClassRelayEventLib, ScopeInternal, LevelHigh, "parse server-uuid.index")
@@ -728,6 +732,7 @@ var (
 	ErrLoadUnitNoTableFile         = New(codeLoadUnitNoTableFile, ClassLoadUnit, ScopeInternal, LevelHigh, "invalid data sql file, cannot find table - %s")
 	ErrLoadUnitDumpDirNotFound     = New(codeLoadUnitDumpDirNotFound, ClassLoadUnit, ScopeInternal, LevelHigh, "%s does not exist or it's not a dir")
 	ErrLoadUnitDuplicateTableFile  = New(codeLoadUnitDuplicateTableFile, ClassLoadUnit, ScopeInternal, LevelHigh, "invalid table schema file, duplicated item - %s")
+	ErrLoadUnitNewBWList           = New(codeLoadUnitNewBWList, ClassLoadUnit, ScopeInternal, LevelHigh, "new black white list")
 
 	// Sync unit error
 	ErrSyncerUnitPanic                   = New(codeSyncerUnitPanic, ClassSyncUnit, ScopeInternal, LevelHigh, "panic error: %v")
@@ -790,6 +795,7 @@ var (
 	ErrSyncerUnitReopenStreamNotSupport     = New(codeSyncerUnitReopenStreamNotSupport, ClassSyncUnit, ScopeInternal, LevelHigh, "reopen %T not supported")
 	ErrSyncerUnitUpdateConfigInSharding     = New(codeSyncerUnitUpdateConfigInSharding, ClassSyncUnit, ScopeInternal, LevelHigh, "try update config when some tables' (%v) sharding DDL not synced not supported")
 	ErrSyncerUnitExecWithNoBlockingDDL      = New(codeSyncerUnitExecWithNoBlockingDDL, ClassSyncUnit, ScopeInternal, LevelHigh, "process unit not waiting for sharding DDL to sync")
+	ErrSyncerUnitNewBWList                  = New(codeSyncerUnitNewBWList, ClassSyncUnit, ScopeInternal, LevelHigh, "new black white list")
 
 	// DM-master error
 	ErrMasterSQLOpNilRequest        = New(codeMasterSQLOpNilRequest, ClassDMMaster, ScopeInternal, LevelMedium, "nil request not valid")
