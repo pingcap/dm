@@ -17,15 +17,22 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb-tools/pkg/utils"
 	"go.etcd.io/etcd/embed"
 	"google.golang.org/grpc"
 
+	"github.com/pingcap/dm/pkg/etcd"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
 const (
 	// time waiting for etcd to be started
 	etcdStartTimeout = time.Minute
+
+	defaultOperatePath = "/dm-operate"
+
+	defaultEtcdTimeout = time.Duration(10 * time.Second)
 )
 
 // startEtcd starts an embedded etcd server.
@@ -58,4 +65,20 @@ func startEtcd(masterCfg *Config,
 		return nil, terror.ErrMasterStartEmbedEtcdFail.Generatef("start embed etcd timeout %v", etcdStartTimeout)
 	}
 	return e, nil
+}
+
+// getEtcdClient returns an etcd client
+func getEtcdClient(addr string) (*etcd.Client, error) {
+	ectdEndpoints, err := utils.ParseHostPortAddr(addr)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	etcdClient, err := etcd.NewClientFromCfg(ectdEndpoints, defaultEtcdTimeout, defaultOperatePath)
+	if err != nil {
+		// TODO: use terror
+		return nil, errors.Trace(err)
+	}
+
+	return etcdClient, nil
 }

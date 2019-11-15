@@ -26,6 +26,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/embed"
+	//"go.etcd.io/etcd/mvcc/mvccpb"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
@@ -34,6 +35,7 @@ import (
 	operator "github.com/pingcap/dm/dm/master/sql-operator"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/etcd"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
@@ -52,6 +54,8 @@ type Server struct {
 
 	// the embed etcd server, and the gRPC/HTTP API server also attached to it.
 	etcd *embed.Etcd
+
+	etcdClient *etcd.Client
 
 	// WaitGroup for background functions.
 	bgFunWg sync.WaitGroup
@@ -132,6 +136,11 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		return
 	}
 
+	s.etcdClient, err = getEtcdClient(s.cfg.MasterAddr)
+	if err != nil {
+		return
+	}
+
 	s.closed.Set(false) // the server started now.
 
 	s.bgFunWg.Add(1)
@@ -187,6 +196,113 @@ func errorCommonWorkerResponse(msg string, worker string) *pb.CommonWorkerRespon
 		Result: false,
 		Worker: worker,
 		Msg:    msg,
+	}
+}
+
+// WatchRequest watches requests in etcd, and handle these request, and write response to etcd.
+func (s *Server) WatchRequest() {
+	watchCh := s.etcdClient.Watch(context.Background(), defaultOperatePath, -1)
+
+	for {
+		select {
+		case wresp := <-watchCh:
+			if wresp.Err() != nil {
+				log.L().Warn("watch etcd failed", zap.Error(wresp.Err()))
+				continue
+			}
+
+			for _, ev := range wresp.Events {
+				// TODO: only need handle put event
+				command := &pb.Command{}
+				err := command.Unmarshal(ev.Kv.Value)
+				if err != nil {
+					log.L().Error("unmarshal command failed", zap.Error(err))
+					continue
+				}
+
+				if len(command.Response) != 0 || len(command.Err) != 0 {
+					// this request already had response, ignore it
+					continue
+				}
+
+				// FIXME: only master leader need handle request
+				go s.handleRequest(string(ev.Kv.Key), command)
+			}
+		}
+	}
+}
+
+func (s *Server) handleRequest(path string, command *pb.Command) {
+	var err error
+	var responseBytes []byte
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	switch command.Tp {
+	case pb.CommandType_MigrateWorkerRelay:
+		request := &pb.MigrateWorkerRelayRequest{}
+		if err = request.Unmarshal(command.Request); err != nil {
+			command.Err = err.Error()
+			break
+		}
+		response, err := s.MigrateWorkerRelay(ctx, request)
+		if err != nil {
+			command.Err = err.Error()
+			break
+		}
+		responseBytes, err = response.Marshal()
+	case pb.CommandType_UpdateWorkerRelayConfig:
+
+	case pb.CommandType_StartTask:
+
+	case pb.CommandType_UpdateMasterConfig:
+
+	case pb.CommandType_OperateTask:
+
+	case pb.CommandType_UpdateTask:
+
+	case pb.CommandType_QueryStatusList:
+
+	case pb.CommandType_QueryErrorList:
+
+	case pb.CommandType_ShowDDLLocks:
+
+	case pb.CommandType_UnlockDDLLock:
+
+	case pb.CommandType_BreakWorkerDDLLock:
+
+	case pb.CommandType_SwitchWorkerRelayMaster:
+
+	case pb.CommandType_OperateWorkerRelay:
+
+	case pb.CommandType_RefreshWorkerTasks:
+
+	case pb.CommandType_HandleSQLs:
+
+	case pb.CommandType_PurgeWorkerRelay:
+
+	case pb.CommandType_CheckTask:
+
+	default:
+
+	}
+
+	if err != nil {
+		command.Err = err.Error()
+	} else {
+		command.Response = responseBytes
+	}
+
+	commandBytes, err := command.Marshal()
+	if err != nil {
+		log.L().Error("marshal command failed", zap.Error(err))
+		return
+	}
+
+	err = s.etcdClient.Update(ctx, path, string(commandBytes), 0)
+	if err != nil {
+		log.L().Error("update command failed", zap.Error(err))
 	}
 }
 
