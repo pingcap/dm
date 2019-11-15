@@ -103,7 +103,11 @@ func HasCommand(name string) bool {
 
 // PrintHelp print help message for special subCommand
 func PrintHelp(args []string) {
-	cmd, _, _ := rootCmd.Find(args)
+	cmd, _, err := rootCmd.Find(args)
+	if err != nil {
+		rootCmd.SetOut(os.Stdout)
+		rootCmd.Usage()
+	}
 	cmd.SetOut(os.Stdout)
 	cmd.Usage()
 }

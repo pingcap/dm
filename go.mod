@@ -78,5 +78,3 @@ require (
 	sigs.k8s.io/yaml v1.1.0 // indirect
 	sourcegraph.com/sourcegraph/appdash v0.0.0-20190731080439-ebfcffb1b5c0 // indirect
 )
-
-go 1.13
