@@ -105,8 +105,10 @@ func HasCommand(name string) bool {
 func PrintHelp(args []string) {
 	cmd, _, err := rootCmd.Find(args)
 	if err != nil {
+		fmt.Println(err)
 		rootCmd.SetOut(os.Stdout)
 		rootCmd.Usage()
+		return
 	}
 	cmd.SetOut(os.Stdout)
 	cmd.Usage()
