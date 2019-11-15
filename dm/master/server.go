@@ -126,6 +126,12 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	// gRPC API server
 	gRPCSvr := func(gs *grpc.Server) { pb.RegisterMasterServer(gs, s) }
 
+	// prepare config to join an existing cluster
+	err = prepareJoinEtcd(s.cfg)
+	if err != nil {
+		return
+	}
+
 	// start embed etcd server, gRPC API server and HTTP (API, status and debug) server.
 	s.etcd, err = startEtcd(s.cfg, gRPCSvr, userHandles)
 	if err != nil {
