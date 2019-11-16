@@ -1503,7 +1503,8 @@ func (t *testMaster) TestServer(c *check.C) {
 
 	t.testHTTPInterface(c, fmt.Sprintf("http://%s/status", cfg.MasterAddr), []byte(utils.GetRawInfo()))
 	t.testHTTPInterface(c, fmt.Sprintf("http://%s/debug/pprof/", cfg.MasterAddr), []byte("Types of profiles available"))
-	t.testHTTPInterface(c, fmt.Sprintf("http://%s/apis/v1alpha1/status/test-task", cfg.MasterAddr), []byte("task test-task has no workers or not exist"))
+	// HTTP API in this unit test is unstable, but we test it in `http_apis` in integration test.
+	//t.testHTTPInterface(c, fmt.Sprintf("http://%s/apis/v1alpha1/status/test-task", cfg.MasterAddr), []byte("task test-task has no workers or not exist"))
 
 	dupServer := NewServer(cfg)
 	err := dupServer.Start(ctx)
