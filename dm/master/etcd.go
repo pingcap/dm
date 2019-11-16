@@ -48,10 +48,6 @@ func startEtcd(masterCfg *Config,
 		return nil, err
 	}
 
-	// use zap as the logger for embed etcd
-	cfg.ZapLoggerBuilder = embed.NewZapCoreLoggerBuilder(log.L().Logger, log.L().Core(), log.Props().Syncer)
-	cfg.Logger = "zap"
-
 	// attach extra gRPC and HTTP server
 	if gRPCSvr != nil {
 		cfg.ServiceRegister = gRPCSvr

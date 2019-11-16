@@ -269,7 +269,6 @@ func (c *Config) adjust() error {
 		c.InitialClusterState = defaultInitialClusterState
 	}
 
-	_, err = c.genEmbedEtcdConfig() // verify embed etcd config
 	return err
 }
 
@@ -323,6 +322,17 @@ func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
 
 	cfg.InitialCluster = c.InitialCluster
 	cfg.ClusterState = c.InitialClusterState
+
+	// use zap as the logger for embed etcd
+	// NOTE: `genEmbedEtcdConfig` can only be called after logger initialized.
+	// NOTE: if using zap logger for etcd, must build it before other gRPC calls,
+	// otherwise, DATA RACE occur in builder and gRPC.
+	cfg.ZapLoggerBuilder = embed.NewZapCoreLoggerBuilder(log.L().Logger, log.L().Core(), log.Props().Syncer)
+	cfg.Logger = "zap"
+	err = cfg.Validate() // verify & trigger the builder
+	if err != nil {
+		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.AnnotateDelegate(err, "fail to validate embed etcd config")
+	}
 
 	return cfg, nil
 }
