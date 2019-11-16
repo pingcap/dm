@@ -18,6 +18,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/conn"
+	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/pingcap/tidb-tools/pkg/filter"
@@ -56,7 +57,7 @@ func trimOutQuotes(arg string) string {
 func fetchMyDumperDoTables(cfg *config.SubTaskConfig) (string, error) {
 	fromDB, err := applyNewBaseDB(cfg.From)
 	if err != nil {
-		return "", err
+		return "", terror.WithClass(err, terror.ClassDumpUnit)
 	}
 	defer fromDB.Close()
 	bw, err := filter.New(cfg.CaseSensitive, cfg.BWList)
@@ -65,11 +66,11 @@ func fetchMyDumperDoTables(cfg *config.SubTaskConfig) (string, error) {
 	}
 	r, err := router.NewTableRouter(cfg.CaseSensitive, cfg.RouteRules)
 	if err != nil {
-		return "", err
+		return "", terror.ErrDumpUnitGenTableRouter.Delegate(err)
 	}
 	sourceTables, err := fetchTargetDoTables(fromDB.DB, bw, r)
 	if err != nil {
-		return "", err
+		return "", terror.WithClass(err, terror.ClassDumpUnit)
 	}
 	var filteredTables []string
 	// TODO: For tables which contains special chars like ' , ` mydumper will fail while dumping. Once this bug is fixed on mydumper we should add quotes to table.Schema and table.Name
@@ -85,13 +86,13 @@ func fetchMyDumperDoTables(cfg *config.SubTaskConfig) (string, error) {
 // If not, this function will return true to notify mydumper to generate args
 func needToGenerateDoTables(args []string) bool {
 	for _, arg := range args {
-		if arg == "-B" || arg == "--database" {
+		if strings.HasPrefix(arg, "-B") || strings.HasPrefix(arg, "--database") {
 			return false
 		}
-		if arg == "-T" || arg == "--tables-list" {
+		if strings.HasPrefix(arg, "-T") || strings.HasPrefix(arg, "--tables-list") {
 			return false
 		}
-		if arg == "-x" || arg == "--regex" {
+		if strings.HasPrefix(arg, "-x") || strings.HasPrefix(arg, "--regex") {
 			return false
 		}
 	}

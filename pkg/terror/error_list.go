@@ -263,6 +263,7 @@ const (
 // Dump unit error code
 const (
 	codeDumpUnitRuntime ErrCode = iota + 32001
+	codeDumpUnitGenTableRouter
 )
 
 // Load unit error code
@@ -714,7 +715,8 @@ var (
 	ErrPreviousGTIDsNotValid             = New(codePreviousGTIDsNotValid, ClassRelayUnit, ScopeInternal, LevelHigh, "previousGTIDs %s not valid")
 
 	// Dump unit error
-	ErrDumpUnitRuntime = New(codeDumpUnitRuntime, ClassDumpUnit, ScopeInternal, LevelHigh, "mydumper runs with error")
+	ErrDumpUnitRuntime        = New(codeDumpUnitRuntime, ClassDumpUnit, ScopeInternal, LevelHigh, "mydumper runs with error")
+	ErrDumpUnitGenTableRouter = New(codeDumpUnitGenTableRouter, ClassDumpUnit, ScopeInternal, LevelHigh, "generate table router")
 
 	// Load unit error
 	ErrLoadUnitCreateSchemaFile    = New(codeLoadUnitCreateSchemaFile, ClassLoadUnit, ScopeInternal, LevelMedium, "generate schema file")
