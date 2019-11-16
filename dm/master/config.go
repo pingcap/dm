@@ -297,6 +297,7 @@ func (c *Config) Reload() error {
 }
 
 // genEmbedEtcdConfig generates the configuration needed by embed etcd.
+// This method should be called after logger initialized and before any concurrent gRPC calls.
 func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
 	cfg := embed.NewConfig()
 	cfg.Name = c.Name
@@ -325,7 +326,7 @@ func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
 
 	// use zap as the logger for embed etcd
 	// NOTE: `genEmbedEtcdConfig` can only be called after logger initialized.
-	// NOTE: if using zap logger for etcd, must build it before other gRPC calls,
+	// NOTE: if using zap logger for etcd, must build it before any concurrent gRPC calls,
 	// otherwise, DATA RACE occur in builder and gRPC.
 	cfg.ZapLoggerBuilder = embed.NewZapCoreLoggerBuilder(log.L().Logger, log.L().Core(), log.Props().Syncer)
 	cfg.Logger = "zap"

@@ -26,12 +26,18 @@ import (
 	"github.com/pingcap/pd/pkg/tempurl"
 	"go.etcd.io/etcd/embed"
 
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
 var _ = check.Suite(&testEtcdSuite{})
 
 type testEtcdSuite struct {
+}
+
+func (t *testConfigSuite) testEtcdSuite(c *check.C) {
+	// initialized the logger to make genEmbedEtcdConfig working.
+	log.InitLogger(&log.Config{})
 }
 
 func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
@@ -41,6 +47,8 @@ func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
 	cfgCluster.MasterAddr = tempurl.Alloc()[len("http://"):]
 	cfgCluster.PeerUrls = tempurl.Alloc()
 	c.Assert(cfgCluster.adjust(), check.IsNil)
+	cfgClusterEtcd, err := cfgCluster.genEmbedEtcdConfig()
+	c.Assert(err, check.IsNil)
 
 	cfgBefore := t.cloneConfig(cfgCluster) // before `prepareJoinEtcd` applied
 	cfgBefore.DataDir = c.MkDir()          // overwrite some config items
@@ -61,7 +69,7 @@ func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
 
 	// try to join self
 	cfgAfter.Join = cfgAfter.MasterAddr
-	err := prepareJoinEtcd(cfgAfter)
+	err = prepareJoinEtcd(cfgAfter)
 	c.Assert(terror.ErrMasterJoinEmbedEtcdFail.Equal(err), check.IsTrue)
 	c.Assert(err, check.ErrorMatches, ".*fail to join embed etcd: join self.*is forbidden.*")
 
@@ -94,7 +102,7 @@ func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
 	c.Assert(os.RemoveAll(memberDP), check.IsNil) // remove previous data
 
 	// start an etcd cluster
-	e1, err := startEtcd(cfgCluster, nil, nil)
+	e1, err := startEtcd(cfgClusterEtcd, nil, nil)
 	c.Assert(err, check.IsNil)
 	defer e1.Close()
 
@@ -145,7 +153,9 @@ func (t *testEtcdSuite) TestPrepareJoinEtcd(c *check.C) {
 	c.Assert(err, check.ErrorMatches, ".*fail to join embed etcd: there is a member that has not joined successfully, continue the join or remove it.*")
 
 	// start the joining etcd
-	e2, err := startEtcd(cfgAfter, nil, nil)
+	cfgAfterEtcd, err := cfgAfter.genEmbedEtcdConfig()
+	c.Assert(err, check.IsNil)
+	e2, err := startEtcd(cfgAfterEtcd, nil, nil)
 	c.Assert(err, check.IsNil)
 	defer e2.Close()
 

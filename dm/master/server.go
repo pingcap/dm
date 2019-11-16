@@ -103,6 +103,18 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		}
 	}
 
+	// prepare config to join an existing cluster
+	err = prepareJoinEtcd(s.cfg)
+	if err != nil {
+		return
+	}
+
+	// generates embed etcd config before any concurrent gRPC calls.
+	etcdCfg, err := s.cfg.genEmbedEtcdConfig()
+	if err != nil {
+		return
+	}
+
 	// get an HTTP to gRPC API handler.
 	apiHandler, err := getHTTPAPIHandler(ctx, s.cfg.MasterAddr)
 	if err != nil {
@@ -126,14 +138,8 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	// gRPC API server
 	gRPCSvr := func(gs *grpc.Server) { pb.RegisterMasterServer(gs, s) }
 
-	// prepare config to join an existing cluster
-	err = prepareJoinEtcd(s.cfg)
-	if err != nil {
-		return
-	}
-
 	// start embed etcd server, gRPC API server and HTTP (API, status and debug) server.
-	s.etcd, err = startEtcd(s.cfg, gRPCSvr, userHandles)
+	s.etcd, err = startEtcd(etcdCfg, gRPCSvr, userHandles)
 	if err != nil {
 		return
 	}
