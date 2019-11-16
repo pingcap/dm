@@ -62,7 +62,7 @@ func fetchMyDumperDoTables(cfg *config.SubTaskConfig) (string, error) {
 	defer fromDB.Close()
 	bw, err := filter.New(cfg.CaseSensitive, cfg.BWList)
 	if err != nil {
-		return "", err
+		return "", terror.ErrDumpUnitGenBWList.Delegate(err)
 	}
 	r, err := router.NewTableRouter(cfg.CaseSensitive, cfg.RouteRules)
 	if err != nil {

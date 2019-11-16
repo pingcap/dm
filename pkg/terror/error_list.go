@@ -264,6 +264,7 @@ const (
 const (
 	codeDumpUnitRuntime ErrCode = iota + 32001
 	codeDumpUnitGenTableRouter
+	codeDumpUnitGenBWList
 )
 
 // Load unit error code
@@ -717,6 +718,7 @@ var (
 	// Dump unit error
 	ErrDumpUnitRuntime        = New(codeDumpUnitRuntime, ClassDumpUnit, ScopeInternal, LevelHigh, "mydumper runs with error")
 	ErrDumpUnitGenTableRouter = New(codeDumpUnitGenTableRouter, ClassDumpUnit, ScopeInternal, LevelHigh, "generate table router")
+	ErrDumpUnitGenBWList      = New(codeDumpUnitGenBWList, ClassDumpUnit, ScopeInternal, LevelHigh, "generate black white list")
 
 	// Load unit error
 	ErrLoadUnitCreateSchemaFile    = New(codeLoadUnitCreateSchemaFile, ClassLoadUnit, ScopeInternal, LevelMedium, "generate schema file")

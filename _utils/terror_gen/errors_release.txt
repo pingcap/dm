@@ -206,6 +206,7 @@ ErrRelayPurgeArgsNotValid,[code=30042:class=relay-unit:scope=internal:level=high
 ErrPreviousGTIDsNotValid,[code=30043:class=relay-unit:scope=internal:level=high],"previousGTIDs %s not valid"
 ErrDumpUnitRuntime,[code=32001:class=dump-unit:scope=internal:level=high],"mydumper runs with error"
 ErrDumpUnitGenTableRouter,[code=32002:class=dump-unit:scope=internal:level=high],"generate table router"
+ErrDumpUnitGenBWList,[code=32003:class=dump-unit:scope=internal:level=high],"generate black white list"
 ErrLoadUnitCreateSchemaFile,[code=34001:class=load-unit:scope=internal:level=medium],"generate schema file"
 ErrLoadUnitInvalidFileEnding,[code=34002:class=load-unit:scope=internal:level=high],"corresponding ending of sql: ')' not found"
 ErrLoadUnitParseQuoteValues,[code=34003:class=load-unit:scope=internal:level=high],"parse quote values error"
