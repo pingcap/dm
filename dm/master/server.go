@@ -95,14 +95,6 @@ func NewServer(cfg *Config) *Server {
 
 // Start starts to serving
 func (s *Server) Start(ctx context.Context) (err error) {
-	// create clients to DM-workers
-	for _, workerAddr := range s.cfg.DeployMap {
-		s.workerClients[workerAddr], err = workerrpc.NewGRPCClient(workerAddr)
-		if err != nil {
-			return
-		}
-	}
-
 	// prepare config to join an existing cluster
 	err = prepareJoinEtcd(s.cfg)
 	if err != nil {
@@ -110,9 +102,20 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	}
 
 	// generates embed etcd config before any concurrent gRPC calls.
+	// potential concurrent gRPC calls:
+	//   - workerrpc.NewGRPCClient
+	//   - getHTTPAPIHandler
 	etcdCfg, err := s.cfg.genEmbedEtcdConfig()
 	if err != nil {
 		return
+	}
+
+	// create clients to DM-workers
+	for _, workerAddr := range s.cfg.DeployMap {
+		s.workerClients[workerAddr], err = workerrpc.NewGRPCClient(workerAddr)
+		if err != nil {
+			return
+		}
 	}
 
 	// get an HTTP to gRPC API handler.
