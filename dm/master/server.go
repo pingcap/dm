@@ -100,11 +100,15 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	if err != nil {
 		return
 	}
+	log.L().Info("config after join prepared", zap.Stringer("config", s.cfg))
 
 	// generates embed etcd config before any concurrent gRPC calls.
 	// potential concurrent gRPC calls:
 	//   - workerrpc.NewGRPCClient
 	//   - getHTTPAPIHandler
+	// no `String` method exists for embed.Config, and can not marshal it to join too.
+	// but when starting embed etcd server, the etcd pkg will log the config.
+	// https://github.com/etcd-io/etcd/blob/3cf2f69b5738fb702ba1a935590f36b52b18979b/embed/etcd.go#L299
 	etcdCfg, err := s.cfg.genEmbedEtcdConfig()
 	if err != nil {
 		return
