@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package pb;
+
+import "google/api/annotations.proto";
+
+message Command {
+    CommandType tp = 1;
+    bytes request = 2;
+    bytes response = 3;
+    string err = 4;
+}
+
+enum CommandType {
+    MigrateWorkerRelay = 0;
+
+    UpdateWorkerRelayConfig = 1;
+
+    StartTask = 2;
+
+    UpdateMasterConfig = 3;
+
+    OperateTask = 4;
+
+    UpdateTask = 5;
+
+    QueryStatus = 6;
+
+    QueryError = 7;
+
+    ShowDDLLocks = 8;
+
+    UnlockDDLLock = 9;
+
+    BreakWorkerDDLLock = 10;
+
+    SwitchWorkerRelayMaster = 11;
+
+    OperateWorkerRelay = 12;
+
+    RefreshWorkerTasks = 13;
+
+    HandleSQLs = 14;
+
+    PurgeWorkerRelay = 15;
+
+    CheckTask = 16;
+}

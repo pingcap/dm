@@ -26,9 +26,12 @@ import (
 	"go.etcd.io/etcd/embed"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb-tools/pkg/utils"
 
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/etcd"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -37,6 +40,10 @@ const (
 	etcdStartTimeout = time.Minute
 	// privateDirMode grants owner to make/remove files inside the directory.
 	privateDirMode os.FileMode = 0700
+
+	defaultOperatePath = "/dm-operate"
+
+	defaultEtcdTimeout = time.Duration(10 * time.Second)
 )
 
 // startEtcd starts an embedded etcd server.
@@ -206,4 +213,20 @@ func isDataExist(d string) bool {
 		return false
 	}
 	return len(names) != 0
+}
+
+// getEtcdClient returns an etcd client
+func getEtcdClient(addr string) (*etcd.Client, error) {
+	ectdEndpoints, err := utils.ParseHostPortAddr(addr)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+ 	etcdClient, err := etcd.NewClientFromCfg(ectdEndpoints, defaultEtcdTimeout, defaultOperatePath)
+	if err != nil {
+		// TODO: use terror
+		return nil, errors.Trace(err)
+	}
+
+ 	return etcdClient, nil
 }
