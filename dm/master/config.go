@@ -328,7 +328,8 @@ func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
 	// NOTE: `genEmbedEtcdConfig` can only be called after logger initialized.
 	// NOTE: if using zap logger for etcd, must build it before any concurrent gRPC calls,
 	// otherwise, DATA RACE occur in builder and gRPC.
-	cfg.ZapLoggerBuilder = embed.NewZapCoreLoggerBuilder(log.L().Logger, log.L().Core(), log.Props().Syncer)
+	logger := log.L().WithFields(zap.String("component", "embed etcd"))
+	cfg.ZapLoggerBuilder = embed.NewZapCoreLoggerBuilder(logger.Logger, logger.Core(), log.Props().Syncer) // use global app props.
 	cfg.Logger = "zap"
 	err = cfg.Validate() // verify & trigger the builder
 	if err != nil {
