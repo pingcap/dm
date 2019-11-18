@@ -228,7 +228,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 	if err != nil {
 		return responseErr(err), nil
 	}
-	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_StartTask, reqBytes)
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_StartTask, reqBytes)
 	if err != nil {
 		return responseErr(err), nil
 	}
@@ -352,7 +352,7 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 		return responseErr(err), nil
 	}
 
-	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_OperateTask, reqBytes)
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_OperateTask, reqBytes)
 	if err != nil {
 		return responseErr(err), nil
 	}
@@ -468,7 +468,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 	if err != nil {
 		return responseErr(err), nil
 	}
-	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_UpdateTask, reqBytes)
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_UpdateTask, reqBytes)
 	if err != nil {
 		return responseErr(err), nil
 	}
@@ -581,7 +581,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 	if err != nil {
 		return responseErr(err), nil
 	}
-	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_QueryStatus, reqBytes)
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_QueryStatus, reqBytes)
 	if err != nil {
 		return responseErr(err), nil
 	}
@@ -665,7 +665,7 @@ func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorListRequest) 
 	if err != nil {
 		return responseErr(err), nil
 	}
-	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_QueryError, reqBytes)
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_QueryError, reqBytes)
 	if err != nil {
 		return responseErr(err), nil
 	}
@@ -749,7 +749,7 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 	if err != nil {
 		return responseErr(err), nil
 	}
-	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_ShowDDLLocks, reqBytes)
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_ShowDDLLocks, reqBytes)
 	if err != nil {
 		return responseErr(err), nil
 	}
@@ -825,7 +825,7 @@ func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest
 	if err != nil {
 		return responseErr(err), nil
 	}
-	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_UnlockDDLLock, reqBytes)
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_UnlockDDLLock, reqBytes)
 	if err != nil {
 		return responseErr(err), nil
 	}
@@ -878,7 +878,7 @@ func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLL
 	if err != nil {
 		return responseErr(err), nil
 	}
-	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_BreakWorkerDDLLock, reqBytes)
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_BreakWorkerDDLLock, reqBytes)
 	if err != nil {
 		return responseErr(err), nil
 	}
@@ -962,7 +962,7 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb
 	if err != nil {
 		return responseErr(err), nil
 	}
-	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_HandleSQLs, reqBytes)
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_HandleSQLs, reqBytes)
 	if err != nil {
 		return responseErr(err), nil
 	}
@@ -1048,7 +1048,7 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 	if err != nil {
 		return responseErr(err), nil
 	}
-	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_PurgeWorkerRelay, reqBytes)
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_PurgeWorkerRelay, reqBytes)
 	if err != nil {
 		return responseErr(err), nil
 	}
@@ -1132,7 +1132,7 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 	if err != nil {
 		return responseErr(err), nil
 	}
-	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_SwitchWorkerRelayMaster, reqBytes)
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_SwitchWorkerRelayMaster, reqBytes)
 	if err != nil {
 		return responseErr(err), nil
 	}
@@ -1229,7 +1229,7 @@ func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWork
 	if err != nil {
 		return responseErr(err), nil
 	}
-	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_OperateWorkerRelay, reqBytes)
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_OperateWorkerRelay, reqBytes)
 	if err != nil {
 		return responseErr(err), nil
 	}
@@ -1317,7 +1317,7 @@ func (s *Server) RefreshWorkerTasks(ctx context.Context, req *pb.RefreshWorkerTa
 	if err != nil {
 		return responseErr(err), nil
 	}
-	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_RefreshWorkerTasks, reqBytes)
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_RefreshWorkerTasks, reqBytes)
 	if err != nil {
 		return responseErr(err), nil
 	}
@@ -1937,7 +1937,7 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 	if err != nil {
 		return responseErr(err), nil
 	}
-	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_UpdateMasterConfig, reqBytes)
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_UpdateMasterConfig, reqBytes)
 	if err != nil {
 		return responseErr(err), nil
 	}
@@ -2075,7 +2075,7 @@ func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWork
 	if err != nil {
 		return responseErr(err), nil
 	}
-	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_UpdateWorkerRelayConfig, reqBytes)
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_UpdateWorkerRelayConfig, reqBytes)
 	if err != nil {
 		return responseErr(err), nil
 	}
@@ -2231,7 +2231,7 @@ func (s *Server) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRe
 	if err != nil {
 		return responseErr(err), nil
 	}
-	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_MigrateWorkerRelay, reqBytes)
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_MigrateWorkerRelay, reqBytes)
 	if err != nil {
 		return responseErr(err), nil
 	}
@@ -2281,7 +2281,7 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 	if err != nil {
 		return responseErr(err), nil
 	}
-	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_CheckTask, reqBytes)
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_CheckTask, reqBytes)
 	if err != nil {
 		return responseErr(err), nil
 	}
@@ -2482,7 +2482,7 @@ func (s *Server) WatchRequest(ctx context.Context) {
 
 			for _, ev := range wresp.Events {
 				// TODO: only need handle put event
-				command := &pb.Command{}
+				command := &pb.Operate{}
 				err := command.Unmarshal(ev.Kv.Value)
 				if err != nil {
 					log.L().Error("unmarshal command failed", zap.Error(err))
@@ -2501,215 +2501,215 @@ func (s *Server) WatchRequest(ctx context.Context) {
 	}
 }
 
-func (s *Server) handleRequest(path string, command *pb.Command) {
+func (s *Server) handleRequest(path string, operate *pb.Operate) {
 	var err error
 	var responseBytes []byte
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	switch command.Tp {
-	case pb.CommandType_MigrateWorkerRelay:
+	switch operate.Tp {
+	case pb.OperateType_MigrateWorkerRelay:
 		request := &pb.MigrateWorkerRelayRequest{}
-		if err = request.Unmarshal(command.Request); err != nil {
-			command.Err = err.Error()
+		if err = request.Unmarshal(operate.Request); err != nil {
+			operate.Err = err.Error()
 			break
 		}
 		response, err := s.migrateWorkerRelay(ctx, request)
 		if err != nil {
-			command.Err = err.Error()
+			operate.Err = err.Error()
 			break
 		}
 		responseBytes, err = response.Marshal()
-	case pb.CommandType_UpdateWorkerRelayConfig:
+	case pb.OperateType_UpdateWorkerRelayConfig:
 		request := &pb.UpdateWorkerRelayConfigRequest{}
-		if err = request.Unmarshal(command.Request); err != nil {
-			command.Err = err.Error()
+		if err = request.Unmarshal(operate.Request); err != nil {
+			operate.Err = err.Error()
 			break
 		}
 		response, err := s.updateWorkerRelayConfig(ctx, request)
 		if err != nil {
-			command.Err = err.Error()
+			operate.Err = err.Error()
 			break
 		}
 		responseBytes, err = response.Marshal()
-	case pb.CommandType_StartTask:
+	case pb.OperateType_StartTask:
 		request := &pb.StartTaskRequest{}
-		if err = request.Unmarshal(command.Request); err != nil {
-			command.Err = err.Error()
+		if err = request.Unmarshal(operate.Request); err != nil {
+			operate.Err = err.Error()
 			break
 		}
 		response, err := s.startTask(ctx, request)
 		if err != nil {
-			command.Err = err.Error()
+			operate.Err = err.Error()
 			break
 		}
 		responseBytes, err = response.Marshal()
-	case pb.CommandType_UpdateMasterConfig:
+	case pb.OperateType_UpdateMasterConfig:
 		request := &pb.UpdateMasterConfigRequest{}
-		if err = request.Unmarshal(command.Request); err != nil {
-			command.Err = err.Error()
+		if err = request.Unmarshal(operate.Request); err != nil {
+			operate.Err = err.Error()
 			break
 		}
 		response, err := s.updateMasterConfig(ctx, request)
 		if err != nil {
-			command.Err = err.Error()
+			operate.Err = err.Error()
 			break
 		}
 		responseBytes, err = response.Marshal()
-	case pb.CommandType_OperateTask:
+	case pb.OperateType_OperateTask:
 		request := &pb.OperateTaskRequest{}
-		if err = request.Unmarshal(command.Request); err != nil {
-			command.Err = err.Error()
+		if err = request.Unmarshal(operate.Request); err != nil {
+			operate.Err = err.Error()
 			break
 		}
 		response, err := s.operateTask(ctx, request)
 		if err != nil {
-			command.Err = err.Error()
+			operate.Err = err.Error()
 			break
 		}
 		responseBytes, err = response.Marshal()
-	case pb.CommandType_UpdateTask:
+	case pb.OperateType_UpdateTask:
 		request := &pb.UpdateTaskRequest{}
-		if err = request.Unmarshal(command.Request); err != nil {
-			command.Err = err.Error()
+		if err = request.Unmarshal(operate.Request); err != nil {
+			operate.Err = err.Error()
 			break
 		}
 		response, err := s.updateTask(ctx, request)
 		if err != nil {
-			command.Err = err.Error()
+			operate.Err = err.Error()
 			break
 		}
 		responseBytes, err = response.Marshal()
-	case pb.CommandType_QueryStatus:
+	case pb.OperateType_QueryStatus:
 		request := &pb.QueryStatusListRequest{}
-		if err = request.Unmarshal(command.Request); err != nil {
-			command.Err = err.Error()
+		if err = request.Unmarshal(operate.Request); err != nil {
+			operate.Err = err.Error()
 			break
 		}
 		response, err := s.queryStatus(ctx, request)
 		if err != nil {
-			command.Err = err.Error()
+			operate.Err = err.Error()
 			break
 		}
 		responseBytes, err = response.Marshal()
-	case pb.CommandType_QueryError:
+	case pb.OperateType_QueryError:
 		request := &pb.QueryErrorListRequest{}
-		if err = request.Unmarshal(command.Request); err != nil {
-			command.Err = err.Error()
+		if err = request.Unmarshal(operate.Request); err != nil {
+			operate.Err = err.Error()
 			break
 		}
 		response, err := s.queryError(ctx, request)
 		if err != nil {
-			command.Err = err.Error()
+			operate.Err = err.Error()
 			break
 		}
 		responseBytes, err = response.Marshal()
-	case pb.CommandType_ShowDDLLocks:
+	case pb.OperateType_ShowDDLLocks:
 		request := &pb.ShowDDLLocksRequest{}
-		if err = request.Unmarshal(command.Request); err != nil {
-			command.Err = err.Error()
+		if err = request.Unmarshal(operate.Request); err != nil {
+			operate.Err = err.Error()
 			break
 		}
 		response, err := s.showDDLLocks(ctx, request)
 		if err != nil {
-			command.Err = err.Error()
+			operate.Err = err.Error()
 			break
 		}
 		responseBytes, err = response.Marshal()
-	case pb.CommandType_UnlockDDLLock:
+	case pb.OperateType_UnlockDDLLock:
 		request := &pb.UnlockDDLLockRequest{}
-		if err = request.Unmarshal(command.Request); err != nil {
-			command.Err = err.Error()
+		if err = request.Unmarshal(operate.Request); err != nil {
+			operate.Err = err.Error()
 			break
 		}
 		response, err := s.unlockDDLLock(ctx, request)
 		if err != nil {
-			command.Err = err.Error()
+			operate.Err = err.Error()
 			break
 		}
 		responseBytes, err = response.Marshal()
-	case pb.CommandType_BreakWorkerDDLLock:
+	case pb.OperateType_BreakWorkerDDLLock:
 		request := &pb.BreakWorkerDDLLockRequest{}
-		if err = request.Unmarshal(command.Request); err != nil {
-			command.Err = err.Error()
+		if err = request.Unmarshal(operate.Request); err != nil {
+			operate.Err = err.Error()
 			break
 		}
 		response, err := s.breakWorkerDDLLock(ctx, request)
 		if err != nil {
-			command.Err = err.Error()
+			operate.Err = err.Error()
 			break
 		}
 		responseBytes, err = response.Marshal()
-	case pb.CommandType_SwitchWorkerRelayMaster:
+	case pb.OperateType_SwitchWorkerRelayMaster:
 		request := &pb.SwitchWorkerRelayMasterRequest{}
-		if err = request.Unmarshal(command.Request); err != nil {
-			command.Err = err.Error()
+		if err = request.Unmarshal(operate.Request); err != nil {
+			operate.Err = err.Error()
 			break
 		}
 		response, err := s.switchWorkerRelayMaster(ctx, request)
 		if err != nil {
-			command.Err = err.Error()
+			operate.Err = err.Error()
 			break
 		}
 		responseBytes, err = response.Marshal()
-	case pb.CommandType_OperateWorkerRelay:
+	case pb.OperateType_OperateWorkerRelay:
 		request := &pb.OperateWorkerRelayRequest{}
-		if err = request.Unmarshal(command.Request); err != nil {
-			command.Err = err.Error()
+		if err = request.Unmarshal(operate.Request); err != nil {
+			operate.Err = err.Error()
 			break
 		}
 		response, err := s.operateWorkerRelayTask(ctx, request)
 		if err != nil {
-			command.Err = err.Error()
+			operate.Err = err.Error()
 			break
 		}
 		responseBytes, err = response.Marshal()
-	case pb.CommandType_RefreshWorkerTasks:
+	case pb.OperateType_RefreshWorkerTasks:
 		request := &pb.RefreshWorkerTasksRequest{}
-		if err = request.Unmarshal(command.Request); err != nil {
-			command.Err = err.Error()
+		if err = request.Unmarshal(operate.Request); err != nil {
+			operate.Err = err.Error()
 			break
 		}
 		response, err := s.refreshWorkerTasks(ctx, request)
 		if err != nil {
-			command.Err = err.Error()
+			operate.Err = err.Error()
 			break
 		}
 		responseBytes, err = response.Marshal()
-	case pb.CommandType_HandleSQLs:
+	case pb.OperateType_HandleSQLs:
 		request := &pb.HandleSQLsRequest{}
-		if err = request.Unmarshal(command.Request); err != nil {
-			command.Err = err.Error()
+		if err = request.Unmarshal(operate.Request); err != nil {
+			operate.Err = err.Error()
 			break
 		}
 		response, err := s.handleSQLs(ctx, request)
 		if err != nil {
-			command.Err = err.Error()
+			operate.Err = err.Error()
 			break
 		}
 		responseBytes, err = response.Marshal()
-	case pb.CommandType_PurgeWorkerRelay:
+	case pb.OperateType_PurgeWorkerRelay:
 		request := &pb.PurgeWorkerRelayRequest{}
-		if err = request.Unmarshal(command.Request); err != nil {
-			command.Err = err.Error()
+		if err = request.Unmarshal(operate.Request); err != nil {
+			operate.Err = err.Error()
 			break
 		}
 		response, err := s.purgeWorkerRelay(ctx, request)
 		if err != nil {
-			command.Err = err.Error()
+			operate.Err = err.Error()
 			break
 		}
 		responseBytes, err = response.Marshal()
-	case pb.CommandType_CheckTask:
+	case pb.OperateType_CheckTask:
 		request := &pb.CheckTaskRequest{}
-		if err = request.Unmarshal(command.Request); err != nil {
-			command.Err = err.Error()
+		if err = request.Unmarshal(operate.Request); err != nil {
+			operate.Err = err.Error()
 			break
 		}
 		response, err := s.checkTask(ctx, request)
 		if err != nil {
-			command.Err = err.Error()
+			operate.Err = err.Error()
 			break
 		}
 		responseBytes, err = response.Marshal()
@@ -2718,38 +2718,38 @@ func (s *Server) handleRequest(path string, command *pb.Command) {
 	}
 
 	if err != nil {
-		command.Err = err.Error()
+		operate.Err = err.Error()
 	} else {
-		command.Response = responseBytes
+		operate.Response = responseBytes
 	}
 
-	commandBytes, err := command.Marshal()
+	operateBytes, err := operate.Marshal()
 	if err != nil {
-		log.L().Error("marshal command failed", zap.Error(err))
+		log.L().Error("marshal operate failed", zap.Error(err))
 		return
 	}
 
-	err = s.etcdClient.Update(ctx, path, string(commandBytes), 0)
+	err = s.etcdClient.Update(ctx, path, string(operateBytes), 0)
 	if err != nil {
-		log.L().Error("update command failed", zap.Error(err))
+		log.L().Error("update operate failed", zap.Error(err))
 	}
 }
 
 // saveRequestAndWaitResponse saves request to etcd, and wait for the response
-func (s *Server) saveRequestAndWaitResponse(ctx context.Context, tp pb.CommandType, request []byte) ([]byte, error) {
+func (s *Server) saveRequestAndWaitResponse(ctx context.Context, tp pb.OperateType, request []byte) ([]byte, error) {
 	operateID := getOperateID()
 
 	operateIDStr := strconv.FormatInt(operateID, 10)
 
-	command := pb.Command{
+	operate := pb.Operate{
 		Tp:      tp,
 		Request: request,
 	}
-	cmdBytes, err := command.Marshal()
+	opBytes, err := operate.Marshal()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	revision, err := s.etcdClient.Create(ctx, operateIDStr, string(cmdBytes), nil)
+	revision, err := s.etcdClient.Create(ctx, operateIDStr, string(opBytes), nil)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -2772,18 +2772,17 @@ func (s *Server) saveRequestAndWaitResponse(ctx context.Context, tp pb.CommandTy
 			}
 
 			for _, ev := range wresp.Events {
-				command := &pb.Command{}
-				err := command.Unmarshal(ev.Kv.Value)
+				operate := &pb.Operate{}
+				err := operate.Unmarshal(ev.Kv.Value)
 				if err != nil {
 					return nil, errors.Trace(err)
 				}
-				fmt.Println(command)
 
-				if len(command.Err) != 0 {
-					return nil, errors.New(command.Err)
+				if len(operate.Err) != 0 {
+					return nil, errors.New(operate.Err)
 				}
 
-				return command.Response, nil
+				return operate.Response, nil
 			}
 		}
 	}

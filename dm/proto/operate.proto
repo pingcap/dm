@@ -4,14 +4,14 @@ package pb;
 
 import "google/api/annotations.proto";
 
-message Command {
-    CommandType tp = 1;
+message Operate {
+    OperateType tp = 1;
     bytes request = 2;
     bytes response = 3;
     string err = 4;
 }
 
-enum CommandType {
+enum OperateType {
     MigrateWorkerRelay = 0;
 
     UpdateWorkerRelayConfig = 1;
