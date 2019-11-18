@@ -28,6 +28,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/embed"
+	"go.etcd.io/etcd/mvcc/mvccpb"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
@@ -2481,21 +2482,26 @@ func (s *Server) WatchRequest(ctx context.Context) {
 			}
 
 			for _, ev := range wresp.Events {
-				// TODO: only need handle put event
-				command := &pb.Operate{}
-				err := command.Unmarshal(ev.Kv.Value)
-				if err != nil {
-					log.L().Error("unmarshal command failed", zap.Error(err))
+				// only need handle put event
+				// FIXME: if don't use int32, will get error invalid operation: `ev.Type != "go.etcd.io/etcd/mvcc/mvccpb".PUT (mismatched types "github.com/coreos/etcd/mvcc/mvccpb".Event_EventType and "go.etcd.io/etcd/mvcc/mvccpb".Event_EventType)` when build, don't know why now, maybe fix it later.
+				if int32(ev.Type) != int32(mvccpb.PUT) {
 					continue
 				}
 
-				if len(command.Response) != 0 || len(command.Err) != 0 {
+				operate := &pb.Operate{}
+				err := operate.Unmarshal(ev.Kv.Value)
+				if err != nil {
+					log.L().Error("unmarshal operate failed", zap.Error(err))
+					continue
+				}
+
+				if len(operate.Response) != 0 || len(operate.Err) != 0 {
 					// this request already had response, ignore it
 					continue
 				}
 
 				// FIXME: only master leader need handle request
-				go s.handleRequest(string(ev.Kv.Key), command)
+				go s.handleRequest(string(ev.Kv.Key), operate)
 			}
 		}
 	}
