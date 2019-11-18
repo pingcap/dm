@@ -21,7 +21,7 @@ import (
 	"github.com/pingcap/parser/ast"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	_ "github.com/pingcap/tidb/types/parser_driver"
+	_ "github.com/pingcap/tidb/types/parser_driver" // for import parser driver
 	"github.com/spf13/cobra"
 
 	"github.com/pingcap/dm/dm/config"
@@ -39,7 +39,7 @@ type eventFilterResult struct {
 // NewEventFilterCmd creates a EventFilter command
 func NewEventFilterCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "event_filter <-s sql> <config-file>",
+		Use:   "event-filter <config-file> <sql>",
 		Short: "check whether the given sql will be filtered by binlog-event-filter",
 		Run:   eventFilterFunc,
 	}
@@ -49,11 +49,6 @@ func NewEventFilterCmd() *cobra.Command {
 func eventFilterFunc(cmd *cobra.Command, _ []string) {
 	if len(cmd.Flags().Args()) != 1 {
 		fmt.Println(cmd.Usage())
-		return
-	}
-	sql, err := cmd.Flags().GetString("sql")
-	if err != nil {
-		common.PrintLines("%s", errors.ErrorStack(err))
 		return
 	}
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
@@ -69,6 +64,17 @@ func eventFilterFunc(cmd *cobra.Command, _ []string) {
 		common.PrintLines("decode file content to config error:\n%v", errors.ErrorStack(err))
 		return
 	}
+
+	extraArgs := cmd.Flags().Args()[1:]
+	realSQLs, err := common.ExtractSQLsFromArgs(extraArgs)
+	if err != nil {
+		common.PrintLines("%s", errors.ErrorStack(err))
+		return
+	}
+	if len(realSQLs) > 1 {
+		common.PrintLines("Too many sqls are given. Simunator can only check one sql at one time")
+	}
+	sql := realSQLs[0]
 
 	filterName, action, err := filterEvent(sql, cfg.Filters)
 	if err != nil {
