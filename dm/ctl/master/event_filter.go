@@ -47,7 +47,7 @@ func NewEventFilterCmd() *cobra.Command {
 }
 
 func eventFilterFunc(cmd *cobra.Command, _ []string) {
-	if len(cmd.Flags().Args()) != 1 {
+	if len(cmd.Flags().Args()) < 2 {
 		fmt.Println(cmd.Usage())
 		return
 	}
@@ -78,7 +78,7 @@ func eventFilterFunc(cmd *cobra.Command, _ []string) {
 
 	filterName, action, err := filterEvent(sql, cfg.Filters)
 	if err != nil {
-		common.PrintLines("get filter's name failed:\n%v", errors.ErrorStack(err))
+		common.PrintLines("get filter info failed:\n%v", errors.ErrorStack(err))
 		return
 	}
 	result := eventFilterResult{
@@ -93,35 +93,39 @@ func eventFilterFunc(cmd *cobra.Command, _ []string) {
 
 func filterEvent(sql string, filterMap map[string]*bf.BinlogEventRule) (string, bf.ActionType, error) {
 	sql = utils.TrimCtrlChars(sql)
-	doAction := bf.Do
 	sqlParser := parser.New()
+	stmts, _, err := sqlParser.Parse(sql, "", "")
+	if err != nil {
+		return "", bf.Ignore, errors.Annotate(err, "parsing sql failed")
+	}
+	if len(stmts) > 1 {
+		return "", bf.Ignore, errors.New("invalid sql, length is bigger than 1")
+	} else if stmts == nil {
+		return "", bf.Ignore, errors.New("invalid sql, length is 0")
+	}
+
+	n := stmts[0]
+	et := bf.AstToDDLEvent(n)
+	table := filter.Table{}
+	genSchemaAndTable(&table, n)
+
 	for name, filterContent := range filterMap {
-		stmts, _, err := sqlParser.Parse(sql, "", "")
-		if len(stmts) > 1 {
-			return "", doAction, errors.New("invalid sql, length is bigger than 1")
-		} else if stmts == nil {
-			return "", doAction, errors.New("invalid sql, length is 0")
+		// FIXME: current caseSensitive is set to false which means filters will ignore uppercase
+		singleFilter, err := bf.NewBinlogEvent(false, []*bf.BinlogEventRule{filterContent})
+		if err != nil {
+			return "", bf.Ignore, errors.Annotate(err, "creating single filter failed")
 		}
 
-		n := stmts[0]
-		et := bf.AstToDDLEvent(n)
-		table := filter.Table{}
-		genSchemaAndTable(&table, n)
-
-		binlogFilter, err := bf.NewBinlogEvent(true, []*bf.BinlogEventRule{filterContent})
+		action, err := singleFilter.Filter(table.Schema, table.Name, et, sql)
 		if err != nil {
-			return "", doAction, err
-		}
-		action, err := binlogFilter.Filter(table.Schema, table.Name, et, sql)
-		if err != nil {
-			return "", doAction, errors.Annotate(err, "filter table fails")
+			return "", bf.Ignore, errors.Annotate(err, "singleFilter failed in filtering table")
 		}
 		if action == bf.Ignore {
-			return name, action, nil
+			return name, bf.Ignore, nil
 		}
 		// TODO: Check whether this table can match any event by this filter. If so, this sql is picked by this filter
 	}
-	return "", doAction, nil
+	return "", bf.Do, nil
 }
 
 func genSchemaAndTable(table *filter.Table, n ast.StmtNode) {
