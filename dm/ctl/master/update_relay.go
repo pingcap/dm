@@ -16,6 +16,7 @@ package master
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
@@ -37,7 +38,8 @@ func NewUpdateRelayCmd() *cobra.Command {
 // updateRealyFunc does update relay request
 func updateRelayFunc(cmd *cobra.Command, _ []string) {
 	if len(cmd.Flags().Args()) != 1 {
-		fmt.Println(cmd.Usage())
+		cmd.SetOut(os.Stdout)
+		cmd.Usage()
 		return
 	}
 

@@ -15,7 +15,7 @@ package master
 
 import (
 	"context"
-	"fmt"
+	"os"
 	"strings"
 
 	"github.com/pingcap/errors"
@@ -41,7 +41,8 @@ func NewSQLSkipCmd() *cobra.Command {
 // sqlSkipFunc does sql skip request
 func sqlSkipFunc(cmd *cobra.Command, _ []string) {
 	if len(cmd.Flags().Args()) != 1 {
-		fmt.Println(cmd.Usage())
+		cmd.SetOut(os.Stdout)
+		cmd.Usage()
 		return
 	}
 

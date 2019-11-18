@@ -15,6 +15,7 @@ package master
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
@@ -36,7 +37,8 @@ func NewPauseRelayCmd() *cobra.Command {
 // pauseRelayFunc does pause relay request
 func pauseRelayFunc(cmd *cobra.Command, _ []string) {
 	if len(cmd.Flags().Args()) > 0 {
-		fmt.Println(cmd.Usage())
+		cmd.SetOut(os.Stdout)
+		cmd.Usage()
 		return
 	}
 
