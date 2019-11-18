@@ -15,7 +15,7 @@ package master
 
 import (
 	"context"
-	"fmt"
+	"os"
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
@@ -37,7 +37,8 @@ func NewShowDDLLocksCmd() *cobra.Command {
 // showDDLLocksFunc does show DDL locks
 func showDDLLocksFunc(cmd *cobra.Command, _ []string) {
 	if len(cmd.Flags().Args()) > 1 {
-		fmt.Println(cmd.Usage())
+		cmd.SetOut(os.Stdout)
+		cmd.Usage()
 		return
 	}
 	taskName := cmd.Flags().Arg(0) // maybe empty
