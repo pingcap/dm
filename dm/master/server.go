@@ -36,8 +36,8 @@ import (
 	operator "github.com/pingcap/dm/dm/master/sql-operator"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/etcd"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/syncer"
@@ -216,14 +216,14 @@ func errorCommonWorkerResponse(msg string, worker string) *pb.CommonWorkerRespon
 // StartTask implements MasterServer.StartTask
 func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.StartTaskResponse, error) {
 	log.L().Info("receive request and will save it to etcd", zap.Stringer("payload", req), zap.String("request", "StartTask"))
-	
+
 	responseErr := func(err error) *pb.StartTaskResponse {
 		return &pb.StartTaskResponse{
 			Result: false,
 			Msg:    errors.ErrorStack(err),
 		}
 	}
-	
+
 	reqBytes, err := req.Marshal()
 	if err != nil {
 		return responseErr(err), nil
@@ -339,14 +339,14 @@ func (s *Server) startTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 // OperateTask implements MasterServer.OperateTask
 func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*pb.OperateTaskResponse, error) {
 	log.L().Info("receive request and will save it to etcd", zap.Stringer("payload", req), zap.String("request", "OperateTask"))
-	
+
 	responseErr := func(err error) *pb.OperateTaskResponse {
 		return &pb.OperateTaskResponse{
 			Result: false,
 			Msg:    errors.ErrorStack(err),
 		}
 	}
-	
+
 	reqBytes, err := req.Marshal()
 	if err != nil {
 		return responseErr(err), nil
@@ -457,7 +457,7 @@ func (s *Server) operateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 // UpdateTask implements MasterServer.UpdateTask
 func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb.UpdateTaskResponse, error) {
 	log.L().Info("receive request and will save it to etcd", zap.Stringer("payload", req), zap.String("request", "UpdateTask"))
-	
+
 	responseErr := func(err error) *pb.UpdateTaskResponse {
 		return &pb.UpdateTaskResponse{
 			Result: false,
@@ -569,7 +569,7 @@ func (s *Server) updateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 // QueryStatus implements MasterServer.QueryStatus
 func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest) (*pb.QueryStatusListResponse, error) {
 	log.L().Info("receive request and will save it to etcd", zap.Stringer("payload", req), zap.String("request", "QueryStatus"))
-	
+
 	responseErr := func(err error) *pb.QueryStatusListResponse {
 		return &pb.QueryStatusListResponse{
 			Result: false,
@@ -736,6 +736,34 @@ func (s *Server) queryError(ctx context.Context, req *pb.QueryErrorListRequest) 
 
 // ShowDDLLocks implements MasterServer.ShowDDLLocks
 func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) (*pb.ShowDDLLocksResponse, error) {
+	log.L().Info("receive request and will save it to etcd", zap.Stringer("payload", req), zap.String("request", "ShowDDLLocks"))
+
+	responseErr := func(err error) *pb.ShowDDLLocksResponse {
+		return &pb.ShowDDLLocksResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}
+	}
+
+	reqBytes, err := req.Marshal()
+	if err != nil {
+		return responseErr(err), nil
+	}
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_ShowDDLLocks, reqBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	response := &pb.ShowDDLLocksResponse{}
+	err = response.Unmarshal(responseBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	return response, nil
+}
+
+func (s *Server) showDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) (*pb.ShowDDLLocksResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "ShowDDLLocks"))
 
 	resp := &pb.ShowDDLLocksResponse{
@@ -784,6 +812,34 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 
 // UnlockDDLLock implements MasterServer.UnlockDDLLock
 func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest) (*pb.UnlockDDLLockResponse, error) {
+	log.L().Info("receive request and will save it to etcd", zap.String("lock ID", req.ID), zap.Stringer("payload", req), zap.String("request", "UnlockDDLLock"))
+
+	responseErr := func(err error) *pb.UnlockDDLLockResponse {
+		return &pb.UnlockDDLLockResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}
+	}
+
+	reqBytes, err := req.Marshal()
+	if err != nil {
+		return responseErr(err), nil
+	}
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_UnlockDDLLock, reqBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	response := &pb.UnlockDDLLockResponse{}
+	err = response.Unmarshal(responseBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	return response, nil
+}
+
+func (s *Server) unlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest) (*pb.UnlockDDLLockResponse, error) {
 	log.L().Info("", zap.String("lock ID", req.ID), zap.Stringer("payload", req), zap.String("request", "UnlockDDLLock"))
 
 	workerResps, err := s.resolveDDLLock(ctx, req.ID, req.ReplaceOwner, req.Workers)
@@ -809,6 +865,34 @@ func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest
 
 // BreakWorkerDDLLock implements MasterServer.BreakWorkerDDLLock
 func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLLockRequest) (*pb.BreakWorkerDDLLockResponse, error) {
+	log.L().Info("", zap.String("lock ID", req.RemoveLockID), zap.Stringer("payload", req), zap.String("request", "BreakWorkerDDLLock"))
+
+	responseErr := func(err error) *pb.BreakWorkerDDLLockResponse {
+		return &pb.BreakWorkerDDLLockResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}
+	}
+
+	reqBytes, err := req.Marshal()
+	if err != nil {
+		return responseErr(err), nil
+	}
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_BreakWorkerDDLLock, reqBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	response := &pb.BreakWorkerDDLLockResponse{}
+	err = response.Unmarshal(responseBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	return response, nil
+}
+
+func (s *Server) breakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLLockRequest) (*pb.BreakWorkerDDLLockResponse, error) {
 	log.L().Info("", zap.String("lock ID", req.RemoveLockID), zap.Stringer("payload", req), zap.String("request", "BreakWorkerDDLLock"))
 
 	request := &workerrpc.Request{
@@ -867,6 +951,34 @@ func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLL
 func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb.HandleSQLsResponse, error) {
 	log.L().Info("", zap.String("task name", req.Name), zap.Stringer("payload", req), zap.String("request", "HandleSQLs"))
 
+	responseErr := func(err error) *pb.HandleSQLsResponse {
+		return &pb.HandleSQLsResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}
+	}
+
+	reqBytes, err := req.Marshal()
+	if err != nil {
+		return responseErr(err), nil
+	}
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_HandleSQLs, reqBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	response := &pb.HandleSQLsResponse{}
+	err = response.Unmarshal(responseBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	return response, nil
+}
+
+func (s *Server) handleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb.HandleSQLsResponse, error) {
+	log.L().Info("", zap.String("task name", req.Name), zap.Stringer("payload", req), zap.String("request", "HandleSQLs"))
+
 	// save request for --sharding operation
 	if req.Sharding {
 		err := s.sqlOperatorHolder.Set(req)
@@ -923,6 +1035,34 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb
 
 // PurgeWorkerRelay implements MasterServer.PurgeWorkerRelay
 func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayRequest) (*pb.PurgeWorkerRelayResponse, error) {
+	log.L().Info("receive request and save it to etcd", zap.Stringer("payload", req), zap.String("request", "PurgeWorkerRelay"))
+
+	responseErr := func(err error) *pb.PurgeWorkerRelayResponse {
+		return &pb.PurgeWorkerRelayResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}
+	}
+
+	reqBytes, err := req.Marshal()
+	if err != nil {
+		return responseErr(err), nil
+	}
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_PurgeWorkerRelay, reqBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	response := &pb.PurgeWorkerRelayResponse{}
+	err = response.Unmarshal(responseBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	return response, nil
+}
+
+func (s *Server) purgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayRequest) (*pb.PurgeWorkerRelayResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "PurgeWorkerRelay"))
 
 	workerReq := &workerrpc.Request{
@@ -979,6 +1119,34 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 
 // SwitchWorkerRelayMaster implements MasterServer.SwitchWorkerRelayMaster
 func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWorkerRelayMasterRequest) (*pb.SwitchWorkerRelayMasterResponse, error) {
+	log.L().Info("receive request and will save it to etcd", zap.Stringer("payload", req), zap.String("request", "SwitchWorkerRelayMaster"))
+
+	responseErr := func(err error) *pb.SwitchWorkerRelayMasterResponse {
+		return &pb.SwitchWorkerRelayMasterResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}
+	}
+
+	reqBytes, err := req.Marshal()
+	if err != nil {
+		return responseErr(err), nil
+	}
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_SwitchWorkerRelayMaster, reqBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	response := &pb.SwitchWorkerRelayMasterResponse{}
+	err = response.Unmarshal(responseBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	return response, nil
+}
+
+func (s *Server) switchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWorkerRelayMasterRequest) (*pb.SwitchWorkerRelayMasterResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "SwitchWorkerRelayMaster"))
 
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Workers))
@@ -1048,6 +1216,34 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 
 // OperateWorkerRelayTask implements MasterServer.OperateWorkerRelayTask
 func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWorkerRelayRequest) (*pb.OperateWorkerRelayResponse, error) {
+	log.L().Info("receive request and will save it to etcd", zap.Stringer("payload", req), zap.String("request", "OperateWorkerRelayTask"))
+
+	responseErr := func(err error) *pb.OperateWorkerRelayResponse {
+		return &pb.OperateWorkerRelayResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}
+	}
+
+	reqBytes, err := req.Marshal()
+	if err != nil {
+		return responseErr(err), nil
+	}
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_OperateWorkerRelay, reqBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	response := &pb.OperateWorkerRelayResponse{}
+	err = response.Unmarshal(responseBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	return response, nil
+}
+
+func (s *Server) operateWorkerRelayTask(ctx context.Context, req *pb.OperateWorkerRelayRequest) (*pb.OperateWorkerRelayResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateWorkerRelayTask"))
 
 	request := &workerrpc.Request{
@@ -1108,6 +1304,34 @@ func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWork
 
 // RefreshWorkerTasks implements MasterServer.RefreshWorkerTasks
 func (s *Server) RefreshWorkerTasks(ctx context.Context, req *pb.RefreshWorkerTasksRequest) (*pb.RefreshWorkerTasksResponse, error) {
+	log.L().Info("receive request and will save it to etcd", zap.Stringer("payload", req), zap.String("request", "RefreshWorkerTasks"))
+
+	responseErr := func(err error) *pb.RefreshWorkerTasksResponse {
+		return &pb.RefreshWorkerTasksResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}
+	}
+
+	reqBytes, err := req.Marshal()
+	if err != nil {
+		return responseErr(err), nil
+	}
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_RefreshWorkerTasks, reqBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	response := &pb.RefreshWorkerTasksResponse{}
+	err = response.Unmarshal(responseBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	return response, nil
+}
+
+func (s *Server) refreshWorkerTasks(ctx context.Context, req *pb.RefreshWorkerTasksRequest) (*pb.RefreshWorkerTasksResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "RefreshWorkerTasks"))
 
 	taskWorkers, workerMsgMap := s.fetchTaskWorkers(ctx)
@@ -1700,6 +1924,34 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 
 // UpdateMasterConfig implements MasterServer.UpdateConfig
 func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterConfigRequest) (*pb.UpdateMasterConfigResponse, error) {
+	log.L().Info("receive request and save it to etcd", zap.Stringer("payload", req), zap.String("request", "UpdateMasterConfig"))
+
+	responseErr := func(err error) *pb.UpdateMasterConfigResponse {
+		return &pb.UpdateMasterConfigResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}
+	}
+
+	reqBytes, err := req.Marshal()
+	if err != nil {
+		return responseErr(err), nil
+	}
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_UpdateMasterConfig, reqBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	response := &pb.UpdateMasterConfigResponse{}
+	err = response.Unmarshal(responseBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	return response, nil
+}
+
+func (s *Server) updateMasterConfig(ctx context.Context, req *pb.UpdateMasterConfigRequest) (*pb.UpdateMasterConfigResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "UpdateMasterConfig"))
 	s.Lock()
 
@@ -1810,6 +2062,34 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 
 // UpdateWorkerRelayConfig updates config for relay and (dm-worker)
 func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWorkerRelayConfigRequest) (*pb.CommonWorkerResponse, error) {
+	log.L().Info("receive request and will save it to etcd", zap.Stringer("payload", req), zap.String("request", "UpdateWorkerRelayConfig"))
+
+	responseErr := func(err error) *pb.CommonWorkerResponse {
+		return &pb.CommonWorkerResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}
+	}
+
+	reqBytes, err := req.Marshal()
+	if err != nil {
+		return responseErr(err), nil
+	}
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_UpdateWorkerRelayConfig, reqBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	response := &pb.CommonWorkerResponse{}
+	err = response.Unmarshal(responseBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	return response, nil
+}
+
+func (s *Server) updateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWorkerRelayConfigRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "UpdateWorkerRelayConfig"))
 	worker := req.Worker
 	content := req.Config
@@ -1938,6 +2218,34 @@ func (s *Server) getWorkerConfigs(ctx context.Context, workerIDs []string) (map[
 
 // MigrateWorkerRelay migrates dm-woker relay unit
 func (s *Server) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRelayRequest) (*pb.CommonWorkerResponse, error) {
+	log.L().Info("receive request and will save it to etcd", zap.Stringer("payload", req), zap.String("request", "MigrateWorkerRelay"))
+
+	responseErr := func(err error) *pb.CommonWorkerResponse {
+		return &pb.CommonWorkerResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}
+	}
+
+	reqBytes, err := req.Marshal()
+	if err != nil {
+		return responseErr(err), nil
+	}
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_MigrateWorkerRelay, reqBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	response := &pb.CommonWorkerResponse{}
+	err = response.Unmarshal(responseBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	return response, nil
+}
+
+func (s *Server) migrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRelayRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "MigrateWorkerRelay"))
 	worker := req.Worker
 	binlogPos := req.BinlogPos
@@ -1960,6 +2268,34 @@ func (s *Server) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRe
 
 // CheckTask checks legality of task configuration
 func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.CheckTaskResponse, error) {
+	log.L().Info("receive request and will save it to etcd", zap.Stringer("payload", req), zap.String("request", "CheckTask"))
+
+	responseErr := func(err error) *pb.CheckTaskResponse {
+		return &pb.CheckTaskResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}
+	}
+
+	reqBytes, err := req.Marshal()
+	if err != nil {
+		return responseErr(err), nil
+	}
+	responseBytes, err := s.saveRequestAndWaitResponse(ctx, pb.CommandType_CheckTask, reqBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	response := &pb.CheckTaskResponse{}
+	err = response.Unmarshal(responseBytes)
+	if err != nil {
+		return responseErr(err), nil
+	}
+
+	return response, nil
+}
+
+func (s *Server) checkTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.CheckTaskResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "CheckTask"))
 
 	_, _, err := s.generateSubTask(ctx, req.Task)
@@ -2134,7 +2470,7 @@ func (s *Server) workerArgsExtractor(args ...interface{}) (workerrpc.Client, str
 func (s *Server) WatchRequest(ctx context.Context) {
 	watchCh := s.etcdClient.Watch(context.Background(), defaultOperatePath, -1)
 
- 	for {
+	for {
 		select {
 		case <-ctx.Done():
 			return
@@ -2144,7 +2480,7 @@ func (s *Server) WatchRequest(ctx context.Context) {
 				continue
 			}
 
- 			for _, ev := range wresp.Events {
+			for _, ev := range wresp.Events {
 				// TODO: only need handle put event
 				command := &pb.Command{}
 				err := command.Unmarshal(ev.Kv.Value)
@@ -2153,12 +2489,12 @@ func (s *Server) WatchRequest(ctx context.Context) {
 					continue
 				}
 
- 				if len(command.Response) != 0 || len(command.Err) != 0 {
+				if len(command.Response) != 0 || len(command.Err) != 0 {
 					// this request already had response, ignore it
 					continue
 				}
 
- 				// FIXME: only master leader need handle request
+				// FIXME: only master leader need handle request
 				go s.handleRequest(string(ev.Kv.Key), command)
 			}
 		}
@@ -2169,17 +2505,17 @@ func (s *Server) handleRequest(path string, command *pb.Command) {
 	var err error
 	var responseBytes []byte
 
- 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
- 	switch command.Tp {
+	switch command.Tp {
 	case pb.CommandType_MigrateWorkerRelay:
 		request := &pb.MigrateWorkerRelayRequest{}
 		if err = request.Unmarshal(command.Request); err != nil {
 			command.Err = err.Error()
 			break
 		}
-		response, err := s.MigrateWorkerRelay(ctx, request)
+		response, err := s.migrateWorkerRelay(ctx, request)
 		if err != nil {
 			command.Err = err.Error()
 			break
@@ -2191,7 +2527,7 @@ func (s *Server) handleRequest(path string, command *pb.Command) {
 			command.Err = err.Error()
 			break
 		}
-		response, err := s.UpdateWorkerRelayConfig(ctx, request)
+		response, err := s.updateWorkerRelayConfig(ctx, request)
 		if err != nil {
 			command.Err = err.Error()
 			break
@@ -2203,7 +2539,7 @@ func (s *Server) handleRequest(path string, command *pb.Command) {
 			command.Err = err.Error()
 			break
 		}
-		response, err := s.StartTask(ctx, request)
+		response, err := s.startTask(ctx, request)
 		if err != nil {
 			command.Err = err.Error()
 			break
@@ -2215,7 +2551,7 @@ func (s *Server) handleRequest(path string, command *pb.Command) {
 			command.Err = err.Error()
 			break
 		}
-		response, err := s.UpdateMasterConfig(ctx, request)
+		response, err := s.updateMasterConfig(ctx, request)
 		if err != nil {
 			command.Err = err.Error()
 			break
@@ -2227,7 +2563,7 @@ func (s *Server) handleRequest(path string, command *pb.Command) {
 			command.Err = err.Error()
 			break
 		}
-		response, err := s.OperateTask(ctx, request)
+		response, err := s.operateTask(ctx, request)
 		if err != nil {
 			command.Err = err.Error()
 			break
@@ -2239,7 +2575,7 @@ func (s *Server) handleRequest(path string, command *pb.Command) {
 			command.Err = err.Error()
 			break
 		}
-		response, err := s.UpdateTask(ctx, request)
+		response, err := s.updateTask(ctx, request)
 		if err != nil {
 			command.Err = err.Error()
 			break
@@ -2251,7 +2587,7 @@ func (s *Server) handleRequest(path string, command *pb.Command) {
 			command.Err = err.Error()
 			break
 		}
-		response, err := s.QueryStatus(ctx, request)
+		response, err := s.queryStatus(ctx, request)
 		if err != nil {
 			command.Err = err.Error()
 			break
@@ -2263,7 +2599,7 @@ func (s *Server) handleRequest(path string, command *pb.Command) {
 			command.Err = err.Error()
 			break
 		}
-		response, err := s.QueryError(ctx, request)
+		response, err := s.queryError(ctx, request)
 		if err != nil {
 			command.Err = err.Error()
 			break
@@ -2275,7 +2611,7 @@ func (s *Server) handleRequest(path string, command *pb.Command) {
 			command.Err = err.Error()
 			break
 		}
-		response, err := s.ShowDDLLocks(ctx, request)
+		response, err := s.showDDLLocks(ctx, request)
 		if err != nil {
 			command.Err = err.Error()
 			break
@@ -2287,7 +2623,7 @@ func (s *Server) handleRequest(path string, command *pb.Command) {
 			command.Err = err.Error()
 			break
 		}
-		response, err := s.UnlockDDLLock(ctx, request)
+		response, err := s.unlockDDLLock(ctx, request)
 		if err != nil {
 			command.Err = err.Error()
 			break
@@ -2299,7 +2635,7 @@ func (s *Server) handleRequest(path string, command *pb.Command) {
 			command.Err = err.Error()
 			break
 		}
-		response, err := s.BreakWorkerDDLLock(ctx, request)
+		response, err := s.breakWorkerDDLLock(ctx, request)
 		if err != nil {
 			command.Err = err.Error()
 			break
@@ -2311,7 +2647,7 @@ func (s *Server) handleRequest(path string, command *pb.Command) {
 			command.Err = err.Error()
 			break
 		}
-		response, err := s.SwitchWorkerRelayMaster(ctx, request)
+		response, err := s.switchWorkerRelayMaster(ctx, request)
 		if err != nil {
 			command.Err = err.Error()
 			break
@@ -2323,7 +2659,7 @@ func (s *Server) handleRequest(path string, command *pb.Command) {
 			command.Err = err.Error()
 			break
 		}
-		response, err := s.OperateWorkerRelayTask(ctx, request)
+		response, err := s.operateWorkerRelayTask(ctx, request)
 		if err != nil {
 			command.Err = err.Error()
 			break
@@ -2335,7 +2671,7 @@ func (s *Server) handleRequest(path string, command *pb.Command) {
 			command.Err = err.Error()
 			break
 		}
-		response, err := s.RefreshWorkerTasks(ctx, request)
+		response, err := s.refreshWorkerTasks(ctx, request)
 		if err != nil {
 			command.Err = err.Error()
 			break
@@ -2347,7 +2683,7 @@ func (s *Server) handleRequest(path string, command *pb.Command) {
 			command.Err = err.Error()
 			break
 		}
-		response, err := s.HandleSQLs(ctx, request)
+		response, err := s.handleSQLs(ctx, request)
 		if err != nil {
 			command.Err = err.Error()
 			break
@@ -2359,7 +2695,7 @@ func (s *Server) handleRequest(path string, command *pb.Command) {
 			command.Err = err.Error()
 			break
 		}
-		response, err := s.PurgeWorkerRelay(ctx, request)
+		response, err := s.purgeWorkerRelay(ctx, request)
 		if err != nil {
 			command.Err = err.Error()
 			break
@@ -2371,7 +2707,7 @@ func (s *Server) handleRequest(path string, command *pb.Command) {
 			command.Err = err.Error()
 			break
 		}
-		response, err := s.CheckTask(ctx, request)
+		response, err := s.checkTask(ctx, request)
 		if err != nil {
 			command.Err = err.Error()
 			break
@@ -2379,21 +2715,21 @@ func (s *Server) handleRequest(path string, command *pb.Command) {
 		responseBytes, err = response.Marshal()
 	default:
 
- 	}
+	}
 
- 	if err != nil {
+	if err != nil {
 		command.Err = err.Error()
 	} else {
 		command.Response = responseBytes
 	}
 
- 	commandBytes, err := command.Marshal()
+	commandBytes, err := command.Marshal()
 	if err != nil {
 		log.L().Error("marshal command failed", zap.Error(err))
 		return
 	}
 
- 	err = s.etcdClient.Update(ctx, path, string(commandBytes), 0)
+	err = s.etcdClient.Update(ctx, path, string(commandBytes), 0)
 	if err != nil {
 		log.L().Error("update command failed", zap.Error(err))
 	}

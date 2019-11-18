@@ -22,16 +22,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb-tools/pkg/utils"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/embed"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"github.com/pingcap/errors"
-	"github.com/pingcap/tidb-tools/pkg/utils"
 
+	"github.com/pingcap/dm/pkg/etcd"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/dm/pkg/etcd"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -222,11 +222,11 @@ func getEtcdClient(addr string) (*etcd.Client, error) {
 		return nil, errors.Trace(err)
 	}
 
- 	etcdClient, err := etcd.NewClientFromCfg(ectdEndpoints, defaultEtcdTimeout, defaultOperatePath)
+	etcdClient, err := etcd.NewClientFromCfg(ectdEndpoints, defaultEtcdTimeout, defaultOperatePath)
 	if err != nil {
 		// TODO: use terror
 		return nil, errors.Trace(err)
 	}
 
- 	return etcdClient, nil
+	return etcdClient, nil
 }

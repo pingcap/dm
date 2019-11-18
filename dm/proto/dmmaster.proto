@@ -258,6 +258,7 @@ message RefreshWorkerTasksMsg {
 message RefreshWorkerTasksResponse {
     bool result = 1;
     repeated RefreshWorkerTasksMsg workers = 2;
+    string msg = 3;
 }
 
 message HandleSQLsRequest {
