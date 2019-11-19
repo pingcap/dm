@@ -20,15 +20,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/coreos/etcd/etcdserver/etcdserverpb"
 	. "github.com/pingcap/check"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/embed"
+	"go.etcd.io/etcd/etcdserver/etcdserverpb"
+
+	"github.com/pingcap/dm/pkg/log"
 )
 
 var _ = Suite(&testEtcdUtilSuite{})
 
 type testEtcdUtilSuite struct {
+}
+
+func (t *testEtcdUtilSuite) SetUpSuite(c *C) {
+	// initialized the logger to make genEmbedEtcdConfig working.
+	log.InitLogger(&log.Config{})
 }
 
 func TestSuite(t *testing.T) {
@@ -39,11 +46,15 @@ func (t *testEtcdUtilSuite) newConfig(c *C, name string, basePort uint16, portCo
 	cfg := embed.NewConfig()
 	cfg.Name = name
 	cfg.Dir = c.MkDir()
+	cfg.ZapLoggerBuilder = embed.NewZapCoreLoggerBuilder(log.L().Logger, log.L().Core(), log.Props().Syncer)
+	cfg.Logger = "zap"
+	err := cfg.Validate() // verify & trigger the builder
+	c.Assert(err, IsNil)
 
 	cfg.LCUrls = []url.URL{}
 	for i := 0; i < portCount; i++ {
-		cu, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", basePort))
-		c.Assert(err, IsNil)
+		cu, err2 := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", basePort))
+		c.Assert(err2, IsNil)
 		cfg.LCUrls = append(cfg.LCUrls, *cu)
 		basePort++
 	}
@@ -52,8 +63,8 @@ func (t *testEtcdUtilSuite) newConfig(c *C, name string, basePort uint16, portCo
 	cfg.LPUrls = []url.URL{}
 	ic := make([]string, 0, portCount)
 	for i := 0; i < portCount; i++ {
-		pu, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", basePort))
-		c.Assert(err, IsNil)
+		pu, err2 := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", basePort))
+		c.Assert(err2, IsNil)
 		cfg.LPUrls = append(cfg.LPUrls, *pu)
 		ic = append(ic, fmt.Sprintf("%s=%s", cfg.Name, pu))
 		basePort++

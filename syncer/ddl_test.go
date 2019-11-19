@@ -206,9 +206,11 @@ func (s *testSyncerSuite) TestresolveDDLSQL(c *C) {
 			DoDBs: []string{"s1"},
 		},
 	}
-	syncer := NewSyncer(cfg)
-
 	var err error
+	syncer := NewSyncer(cfg)
+	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
+	c.Assert(err, IsNil)
+
 	syncer.tableRouter, err = router.NewTableRouter(false, []*router.TableRule{
 		{
 			SchemaPattern: "s1",
@@ -334,7 +336,10 @@ func (s *testSyncerSuite) TestParseDDLSQL(c *C) {
 			IgnoreDBs: []string{"ignore_db"},
 		},
 	}
+	var err error
 	syncer := NewSyncer(cfg)
+	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
+	c.Assert(err, IsNil)
 
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
