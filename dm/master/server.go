@@ -19,6 +19,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -879,7 +880,7 @@ func (s *Server) unlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest
 
 // BreakWorkerDDLLock implements MasterServer.BreakWorkerDDLLock
 func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLLockRequest) (*pb.BreakWorkerDDLLockResponse, error) {
-	log.L().Info("", zap.String("lock ID", req.RemoveLockID), zap.Stringer("payload", req), zap.String("request", "BreakWorkerDDLLock"))
+	log.L().Info("receive request and will save it to etcd", zap.String("lock ID", req.RemoveLockID), zap.Stringer("payload", req), zap.String("request", "BreakWorkerDDLLock"))
 
 	responseErr := func(err error) *pb.BreakWorkerDDLLockResponse {
 		return &pb.BreakWorkerDDLLockResponse{
@@ -963,7 +964,7 @@ func (s *Server) breakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLL
 
 // HandleSQLs implements MasterServer.HandleSQLs
 func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb.HandleSQLsResponse, error) {
-	log.L().Info("", zap.String("task name", req.Name), zap.Stringer("payload", req), zap.String("request", "HandleSQLs"))
+	log.L().Info("receive request and will save it to etcd", zap.String("task name", req.Name), zap.Stringer("payload", req), zap.String("request", "HandleSQLs"))
 
 	responseErr := func(err error) *pb.HandleSQLsResponse {
 		return &pb.HandleSQLsResponse{
@@ -2774,7 +2775,7 @@ func (s *Server) saveRequestAndWaitResponse(ctx context.Context, tp pb.OperateTy
 	}
 	fmt.Println(revision)
 
-	watchCh := s.etcdClient.Watch(ctx, operateIDStr, revision+1)
+	watchCh := s.etcdClient.Watch(ctx, path.Join(defaultOperatePath, operateIDStr), revision+1)
 
 	for {
 		select {

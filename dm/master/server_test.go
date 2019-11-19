@@ -30,7 +30,9 @@ import (
 	"github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/pd/pkg/tempurl"
+	"github.com/pingcap/tidb-tools/pkg/etcd"
 	"go.etcd.io/etcd/clientv3"
+	"go.etcd.io/etcd/integration"
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
@@ -138,9 +140,14 @@ var (
 	msgNoSubTaskReg       = fmt.Sprintf(".*%s", msgNoSubTask)
 	errCheckSyncConfig    = "(?m).*check sync config with error.*"
 	errCheckSyncConfigReg = fmt.Sprintf("(?m).*%s.*", errCheckSyncConfig)
+
+	etcdClient *etcd.Client
 )
 
 func TestMaster(t *testing.T) {
+	etcdMockCluster := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
+	etcdClient = etcd.NewClient(etcdMockCluster.RandClient(), "/dm-operate")
+	defer etcdMockCluster.Terminate(t)
 	check.TestingT(t)
 }
 
@@ -160,7 +167,9 @@ func testDefaultMasterServer(c *check.C) *Server {
 	c.Assert(err, check.IsNil)
 	cfg.DataDir = c.MkDir()
 	server := NewServer(cfg)
+	server.etcdClient = etcdClient
 	go server.ap.Start(context.Background())
+	go server.WatchRequest(context.Background())
 
 	return server
 }
