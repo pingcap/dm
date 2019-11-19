@@ -31,7 +31,9 @@ function run() {
     task_data=`cat $WORK_DIR/task.yaml.bak`
     rm $WORK_DIR/task.yaml.bak
     echo $task_data
-    sleep 2 # wait for embed HTTP service avaible
+
+    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test-task "task test-task has no workers or not exist" 3
+
     curl -X POST 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/tasks -d '{"task": "'"$task_data"'"}' > $WORK_DIR/start-task.log
     check_log_contains $WORK_DIR/start-task.log "\"result\":true" 1
 
