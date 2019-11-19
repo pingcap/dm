@@ -61,6 +61,9 @@ service Master {
 
     // CheckTask checks legality of task configuration
     rpc CheckTask(CheckTaskRequest) returns (CheckTaskResponse) {}
+
+    // FetchSourceInfo fetches table, ip info from source dbs
+    rpc FetchSourceInfo(FetchSourceInfoRequest) returns (FetchSourceInfoResponse) {}
 }
 
 message MigrateWorkerRelayRequest {
@@ -303,4 +306,24 @@ message CheckTaskRequest {
 message CheckTaskResponse {
     bool result = 1;
     string msg = 2;
+}
+
+message FetchSourceInfoRequest {
+    string worker = 1;
+    bool fetchTable = 2;
+    string task = 3;
+}
+
+message SourceInfo {
+    string worker = 1;
+    string sourceID = 2;
+    string sourceIP = 3;
+    repeated string schemas = 4;
+    repeated string tables = 5;
+}
+
+message FetchSourceInfoResponse {
+    bool result = 1;
+    string msg = 2;
+    repeated SourceInfo sourceInfo = 3;
 }

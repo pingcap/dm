@@ -14,26 +14,25 @@
 package master
 
 import (
+	"context"
 	"fmt"
-	"strings"
 
-	"github.com/pingcap/dm/pkg/utils"
-
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"github.com/spf13/cobra"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
-	"github.com/pingcap/errors"
-	"github.com/spf13/cobra"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 type bwListResult struct {
-	Result       bool                           `json:"result"`
-	Msg          string                         `json:"msg"`
-	Routes       map[string]map[string][]string `json:"routes,omitempty"`
-	MatchRoute   string                         `json:"match-route,omitempty"`
-	TargetSchema string                         `json:"target-schema,omitempty"`
-	TargetTable  string                         `json:"target-table,omitempty"`
+	Result         bool                `json:"result"`
+	Msg            string              `json:"msg"`
+	DoTables       map[string][]string `json:"do-tables,omitempty"`
+	IgnoreTables   map[string][]string `json:"ignore-tables,omitempty"`
+	WillBeFiltered string              `json:"will-be-filtered,omitempty"`
 }
 
 // NewBWListCmd creates a BWList command
@@ -72,35 +71,121 @@ func bwListFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	result := bwListResult{}
+	result := &bwListResult{
+		Result: true,
+	}
 	// no worker is specified, print all info
 	if len(workers) == 0 {
+		cli := common.MasterClient()
+		ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
+		defer cancel()
+		resp, err := cli.FetchSourceInfo(ctx, &pb.FetchSourceInfoRequest{
+			FetchTable: true,
+			Task:       task,
+		})
+		if errMsg := checkResp(err, resp); len(errMsg) > 0 {
+			common.PrintLines("can not fetch source info from dm-master:\n%s", errMsg)
+			return
+		}
 
+		bwListMap := make(map[string]string, len(cfg.MySQLInstances))
+		for _, inst := range cfg.MySQLInstances {
+			bwListMap[inst.SourceID] = inst.BWListName
+		}
+
+		doTableResult := make(map[string][]string, 0)
+		ignoreTableResult := make(map[string][]string, 0)
+		for _, sourceInfo := range resp.SourceInfo {
+			bwListName := bwListMap[sourceInfo.SourceID]
+			tableList := make([]*filter.Table, len(sourceInfo.Schemas))
+			for i := range sourceInfo.Schemas {
+				tableList = append(tableList, &filter.Table{
+					Schema: sourceInfo.Schemas[i],
+					Name:   sourceInfo.Tables[i],
+				})
+			}
+			bwFilter := filter.New(cfg.CaseSensitive, cfg.BWList[bwListName])
+			doTableList := bwFilter.ApplyOn(tableList)
+
+			doTableStringList := make([]string, 0, len(doTableList))
+			ignoreTableStringList := make([]string, 0, len(tableList)-len(doTableList))
+
+			var i int
+			for _, table := range tableList {
+				if i < len(doTableList) && *doTableList[i] == *table {
+					i++
+					doTableStringList = append(doTableStringList, table.String())
+				} else {
+					ignoreTableStringList = append(ignoreTableStringList, table.String())
+				}
+			}
+
+			doTableResult[sourceInfo.SourceIP] = doTableStringList
+			ignoreTableResult[sourceInfo.SourceIP] = ignoreTableStringList
+		}
+
+		result.DoTables = doTableResult
+		result.IgnoreTables = ignoreTableResult
 	} else {
-		table, err := parseTableName(cmd)
+		worker := workers[0]
+		tableName, err := cmd.Flags().GetString("table-name")
 		if err != nil {
 			fmt.Println(errors.ErrorStack(err))
 		}
-		fmt.Println(table)
+		schema, table, err := utils.ExtractTable(tableName)
+		if err != nil {
+			fmt.Println(errors.ErrorStack(err))
+		}
+
+		cli := common.MasterClient()
+		ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
+		defer cancel()
+		resp, err := cli.FetchSourceInfo(ctx, &pb.FetchSourceInfoRequest{
+			Worker:     worker,
+			FetchTable: false,
+			Task:       task,
+		})
+		if errMsg := checkResp(err, resp); len(errMsg) > 0 {
+			common.PrintLines("can not fetch source info from dm-master:\n%s", errMsg)
+			return
+		}
+
+		if len(resp.SourceInfo) != 1 {
+			common.PrintLines("the source info of worker is not found. pls check the worker address")
+			return
+		}
+		sourceInfo := resp.SourceInfo[0]
+
+		var mysqlInstance *config.MySQLInstance
+		for _, mysqlInst := range cfg.MySQLInstances {
+			if mysqlInst.SourceID == sourceInfo.SourceID {
+				mysqlInstance = mysqlInst
+				break
+			}
+		}
+		if mysqlInstance == nil {
+			common.PrintLines("the mysql instance info is not found. pls check the worker address")
+			return
+		}
+
+		checkTable := []*filter.Table{{Schema: schema, Name: table}}
+		bwFilter := filter.New(cfg.CaseSensitive, cfg.BWList[mysqlInstance.BWListName])
+		checkTable = bwFilter.ApplyOn(checkTable)
+		if len(checkTable) == 0 {
+			result.WillBeFiltered = "yes"
+		} else {
+			result.WillBeFiltered = "no"
+		}
 	}
 
 	common.PrettyPrintInterface(result)
 }
 
-// FIXME: a simple implementation to parse table name. Is there any better way to do this? Or we have to separate table-name arg to two args.
-func parseTableName(cmd *cobra.Command) (*filter.Table, error) {
-	tableName, err := cmd.Flags().GetString("table-name")
+func checkResp(err error, resp *pb.FetchSourceInfoResponse) string {
 	if err != nil {
-		return nil, nil
+		return err.Error()
+	} else if !resp.Result {
+		return resp.Msg
 	}
-
-	tableName = utils.TrimCtrlChars(tableName)
-	t := strings.Index(tableName, "`.`")
-	if strings.Count(tableName, "`.`") > 1 || t == -1 || t <= 1 || len(tableName)-1 <= t+3 {
-		return nil, errors.New("invalid table name, please check it again")
-	}
-	return &filter.Table{
-		Schema: tableName[1:t],
-		Name:   tableName[t+3 : len(tableName)-1],
-	}, nil
+	return ""
 }

@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pingcap/dm/pkg/utils"
+
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/embed"
@@ -34,6 +36,7 @@ import (
 	operator "github.com/pingcap/dm/dm/master/sql-operator"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
@@ -1816,6 +1819,63 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 	return &pb.CheckTaskResponse{
 		Result: true,
 		Msg:    "check pass!!!",
+	}, nil
+}
+
+func (s *Server) FetchSourceInfo(ctx context.Context, req *pb.FetchSourceInfoRequest) (*pb.FetchSourceInfoResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "FetchSourceInfo"))
+
+	_, stCfgs, err := s.generateSubTask(ctx, req.Task)
+	if err != nil {
+		return &pb.FetchSourceInfoResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}, nil
+	}
+
+	sourceInfoList := make([]*pb.SourceInfo, 0, len(s.cfg.DeployMap))
+	for _, stCfg := range stCfgs {
+		if req.Worker != "" && s.cfg.DeployMap[stCfg.SourceID] != req.Worker {
+			continue
+		}
+		schemas := make([]string, 0)
+		tables := make([]string, 0)
+		if req.FetchTable {
+			sourceDB, err := conn.DefaultDBProvider.Apply(stCfg.From)
+			if err != nil {
+				return &pb.FetchSourceInfoResponse{
+					Result: false,
+					Msg:    errors.ErrorStack(err),
+				}, nil
+			}
+			mapping, err := utils.FetchAllDoTables(sourceDB.DB, nil)
+			if err != nil {
+				return &pb.FetchSourceInfoResponse{
+					Result: false,
+					Msg:    errors.ErrorStack(err),
+				}, nil
+			}
+			for schema, tableList := range mapping {
+				for _, table := range tableList {
+					schemas = append(schemas, schema)
+					tables = append(tables, table)
+				}
+			}
+		}
+		sourceInfo := &pb.SourceInfo{
+			Worker:   s.cfg.DeployMap[stCfg.SourceID],
+			SourceID: stCfg.SourceID,
+			SourceIP: fmt.Sprintf("%s:%v", stCfg.From.Host, stCfg.From.Port),
+			Schemas:  schemas,
+			Tables:   tables,
+		}
+		sourceInfoList = append(sourceInfoList, sourceInfo)
+	}
+
+	return &pb.FetchSourceInfoResponse{
+		Result:     true,
+		Msg:        "",
+		SourceInfo: sourceInfoList,
 	}, nil
 }
 
