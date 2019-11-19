@@ -71,7 +71,7 @@ const (
 	codeSchemaTableNameNotValid
 	codeGenTableRouter
 	codeEncryptSecretKeyNotValid
-	codeEncryptNewCipher
+	codeEncryptGenCipher
 	codeEncryptGenIV
 	codeCiphertextLenNotValid
 	codeCiphertextContextNotValid
@@ -198,10 +198,10 @@ const (
 const (
 	codeTaskCheckSameTableName ErrCode = iota + 26001
 	codeTaskCheckFailedOpenDB
-	codeTaskCheckNewTableRouter
-	codeTaskCheckNewColumnMapping
+	codeTaskCheckGenTableRouter
+	codeTaskCheckGenColumnMapping
 	codeTaskCheckSyncConfigError
-	codeTaskCheckNewBWList
+	codeTaskCheckGenBWList
 )
 
 // Relay log utils error code
@@ -279,12 +279,12 @@ const (
 	codeLoadUnitDispatchSQLFromFile
 	codeLoadUnitInvalidInsertSQL
 	codeLoadUnitGenTableRouter
-	codeLoadUnitNewColumnMapping
+	codeLoadUnitGenColumnMapping
 	codeLoadUnitNoDBFile
 	codeLoadUnitNoTableFile
 	codeLoadUnitDumpDirNotFound
 	codeLoadUnitDuplicateTableFile
-	codeLoadUnitNewBWList
+	codeLoadUnitGenBWList
 )
 
 // Sync unit error code
@@ -318,9 +318,9 @@ const (
 	codeSyncerUnitDMLColumnNotMatch
 	codeSyncerUnitDMLOldNewValueMismatch
 	codeSyncerUnitDMLPruneColumnMismatch
-	codeSyncerUnitNewBinlogEventFilter
+	codeSyncerUnitGenBinlogEventFilter
 	codeSyncerUnitGenTableRouter
-	codeSyncerUnitNewColumnMapping
+	codeSyncerUnitGenColumnMapping
 	codeSyncerUnitDoColumnMapping
 	codeSyncerUnitCacheKeyNotFound
 	codeSyncerUnitHeartbeatCheckConfig
@@ -348,7 +348,7 @@ const (
 	codeSyncerUnitReopenStreamNotSupport
 	codeSyncerUnitUpdateConfigInSharding
 	codeSyncerUnitExecWithNoBlockingDDL
-	codeSyncerUnitNewBWList
+	codeSyncerUnitGenBWList
 )
 
 // DM-master error code
@@ -540,7 +540,7 @@ var (
 	ErrSchemaTableNameNotValid   = New(codeSchemaTableNameNotValid, ClassFunctional, ScopeInternal, LevelHigh, "table name %s not valid")
 	ErrGenTableRouter            = New(codeGenTableRouter, ClassFunctional, ScopeInternal, LevelHigh, "generate table router")
 	ErrEncryptSecretKeyNotValid  = New(codeEncryptSecretKeyNotValid, ClassFunctional, ScopeInternal, LevelHigh, "key size should be 16, 24 or 32, but input key's size is %d")
-	ErrEncryptNewCipher          = New(codeEncryptNewCipher, ClassFunctional, ScopeInternal, LevelHigh, "new cipher")
+	ErrEncryptGenCipher          = New(codeEncryptGenCipher, ClassFunctional, ScopeInternal, LevelHigh, "generate cipher")
 	ErrEncryptGenIV              = New(codeEncryptGenIV, ClassFunctional, ScopeInternal, LevelHigh, "generate iv")
 	ErrCiphertextLenNotValid     = New(codeCiphertextLenNotValid, ClassFunctional, ScopeInternal, LevelHigh, "ciphertext's length should be greater than %d, but got %d not valid")
 	ErrCiphertextContextNotValid = New(codeCiphertextContextNotValid, ClassFunctional, ScopeInternal, LevelHigh, "ciphertext's content not valid")
@@ -658,10 +658,10 @@ var (
 	// Task check error
 	ErrTaskCheckSameTableName    = New(codeTaskCheckSameTableName, ClassTaskCheck, ScopeInternal, LevelMedium, "same table name in case-sensitive %v")
 	ErrTaskCheckFailedOpenDB     = New(codeTaskCheckFailedOpenDB, ClassTaskCheck, ScopeInternal, LevelHigh, "failed to open DSN %s:***@%s:%d")
-	ErrTaskCheckNewTableRouter   = New(codeTaskCheckNewTableRouter, ClassTaskCheck, ScopeInternal, LevelMedium, "new table router error")
-	ErrTaskCheckNewColumnMapping = New(codeTaskCheckNewColumnMapping, ClassTaskCheck, ScopeInternal, LevelMedium, "new column mapping error")
+	ErrTaskCheckGenTableRouter   = New(codeTaskCheckGenTableRouter, ClassTaskCheck, ScopeInternal, LevelMedium, "generate table router error")
+	ErrTaskCheckGenColumnMapping = New(codeTaskCheckGenColumnMapping, ClassTaskCheck, ScopeInternal, LevelMedium, "generate column mapping error")
 	ErrTaskCheckSyncConfigError  = New(codeTaskCheckSyncConfigError, ClassTaskCheck, ScopeInternal, LevelMedium, "%s %v: %v\n detail: %v")
-	ErrTaskCheckNewBWList        = New(codeTaskCheckNewBWList, ClassTaskCheck, ScopeInternal, LevelMedium, "new black white list error")
+	ErrTaskCheckGenBWList        = New(codeTaskCheckGenBWList, ClassTaskCheck, ScopeInternal, LevelMedium, "generate black white list error")
 
 	// Relay log basic API error
 	ErrRelayParseUUIDIndex         = New(codeRelayParseUUIDIndex, ClassRelayEventLib, ScopeInternal, LevelHigh, "parse server-uuid.index")
@@ -731,12 +731,12 @@ var (
 	ErrLoadUnitDispatchSQLFromFile = New(codeLoadUnitDispatchSQLFromFile, ClassLoadUnit, ScopeInternal, LevelHigh, "dispatch sql")
 	ErrLoadUnitInvalidInsertSQL    = New(codeLoadUnitInvalidInsertSQL, ClassLoadUnit, ScopeInternal, LevelHigh, "invalid insert sql %s")
 	ErrLoadUnitGenTableRouter      = New(codeLoadUnitGenTableRouter, ClassLoadUnit, ScopeInternal, LevelHigh, "generate table router")
-	ErrLoadUnitNewColumnMapping    = New(codeLoadUnitNewColumnMapping, ClassLoadUnit, ScopeInternal, LevelHigh, "new column mapping")
+	ErrLoadUnitGenColumnMapping    = New(codeLoadUnitGenColumnMapping, ClassLoadUnit, ScopeInternal, LevelHigh, "generate column mapping")
 	ErrLoadUnitNoDBFile            = New(codeLoadUnitNoDBFile, ClassLoadUnit, ScopeInternal, LevelHigh, "invalid data sql file, cannot find db - %s")
 	ErrLoadUnitNoTableFile         = New(codeLoadUnitNoTableFile, ClassLoadUnit, ScopeInternal, LevelHigh, "invalid data sql file, cannot find table - %s")
 	ErrLoadUnitDumpDirNotFound     = New(codeLoadUnitDumpDirNotFound, ClassLoadUnit, ScopeInternal, LevelHigh, "%s does not exist or it's not a dir")
 	ErrLoadUnitDuplicateTableFile  = New(codeLoadUnitDuplicateTableFile, ClassLoadUnit, ScopeInternal, LevelHigh, "invalid table schema file, duplicated item - %s")
-	ErrLoadUnitNewBWList           = New(codeLoadUnitNewBWList, ClassLoadUnit, ScopeInternal, LevelHigh, "new black white list")
+	ErrLoadUnitGenBWList           = New(codeLoadUnitGenBWList, ClassLoadUnit, ScopeInternal, LevelHigh, "generate black white list")
 
 	// Sync unit error
 	ErrSyncerUnitPanic                   = New(codeSyncerUnitPanic, ClassSyncUnit, ScopeInternal, LevelHigh, "panic error: %v")
@@ -769,9 +769,9 @@ var (
 	ErrSyncerUnitDMLColumnNotMatch          = New(codeSyncerUnitDMLColumnNotMatch, ClassSyncUnit, ScopeInternal, LevelHigh, "Column count doesn't match value count: %d (columns) vs %d (values)")
 	ErrSyncerUnitDMLOldNewValueMismatch     = New(codeSyncerUnitDMLOldNewValueMismatch, ClassSyncUnit, ScopeInternal, LevelHigh, "Old value count doesn't match new value count: %d (old) vs %d (new)")
 	ErrSyncerUnitDMLPruneColumnMismatch     = New(codeSyncerUnitDMLPruneColumnMismatch, ClassSyncUnit, ScopeInternal, LevelHigh, "prune DML columns and data mismatch in length: %d (columns) %d (data)")
-	ErrSyncerUnitNewBinlogEventFilter       = New(codeSyncerUnitNewBinlogEventFilter, ClassSyncUnit, ScopeInternal, LevelHigh, "new binlog event filter")
+	ErrSyncerUnitGenBinlogEventFilter       = New(codeSyncerUnitGenBinlogEventFilter, ClassSyncUnit, ScopeInternal, LevelHigh, "generate binlog event filter")
 	ErrSyncerUnitGenTableRouter             = New(codeSyncerUnitGenTableRouter, ClassSyncUnit, ScopeInternal, LevelHigh, "generate table router")
-	ErrSyncerUnitNewColumnMapping           = New(codeSyncerUnitNewColumnMapping, ClassSyncUnit, ScopeInternal, LevelHigh, "new column mapping")
+	ErrSyncerUnitGenColumnMapping           = New(codeSyncerUnitGenColumnMapping, ClassSyncUnit, ScopeInternal, LevelHigh, "generate column mapping")
 	ErrSyncerUnitDoColumnMapping            = New(codeSyncerUnitDoColumnMapping, ClassSyncUnit, ScopeInternal, LevelHigh, "mapping row data %v for table `%s`.`%s`")
 	ErrSyncerUnitCacheKeyNotFound           = New(codeSyncerUnitCacheKeyNotFound, ClassSyncUnit, ScopeInternal, LevelHigh, "cache key %s in %s not found")
 	ErrSyncerUnitHeartbeatCheckConfig       = New(codeSyncerUnitHeartbeatCheckConfig, ClassSyncUnit, ScopeInternal, LevelMedium, "")
@@ -799,7 +799,7 @@ var (
 	ErrSyncerUnitReopenStreamNotSupport     = New(codeSyncerUnitReopenStreamNotSupport, ClassSyncUnit, ScopeInternal, LevelHigh, "reopen %T not supported")
 	ErrSyncerUnitUpdateConfigInSharding     = New(codeSyncerUnitUpdateConfigInSharding, ClassSyncUnit, ScopeInternal, LevelHigh, "try update config when some tables' (%v) sharding DDL not synced not supported")
 	ErrSyncerUnitExecWithNoBlockingDDL      = New(codeSyncerUnitExecWithNoBlockingDDL, ClassSyncUnit, ScopeInternal, LevelHigh, "process unit not waiting for sharding DDL to sync")
-	ErrSyncerUnitNewBWList                  = New(codeSyncerUnitNewBWList, ClassSyncUnit, ScopeInternal, LevelHigh, "new black white list")
+	ErrSyncerUnitGenBWList                  = New(codeSyncerUnitGenBWList, ClassSyncUnit, ScopeInternal, LevelHigh, "generate black white list")
 
 	// DM-master error
 	ErrMasterSQLOpNilRequest        = New(codeMasterSQLOpNilRequest, ClassDMMaster, ScopeInternal, LevelMedium, "nil request not valid")

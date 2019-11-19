@@ -119,16 +119,16 @@ func (c *Checker) Init() (err error) {
 	for _, instance := range c.instances {
 		bw, err := filter.New(instance.cfg.CaseSensitive, instance.cfg.BWList)
 		if err != nil {
-			return terror.ErrTaskCheckNewBWList.Delegate(err)
+			return terror.ErrTaskCheckGenBWList.Delegate(err)
 		}
 		r, err := router.NewTableRouter(instance.cfg.CaseSensitive, instance.cfg.RouteRules)
 		if err != nil {
-			return terror.ErrTaskCheckNewTableRouter.Delegate(err)
+			return terror.ErrTaskCheckGenTableRouter.Delegate(err)
 		}
 
 		columnMapping[instance.cfg.SourceID], err = column.NewMapping(instance.cfg.CaseSensitive, instance.cfg.ColumnMappingRules)
 		if err != nil {
-			return terror.ErrTaskCheckNewColumnMapping.Delegate(err)
+			return terror.ErrTaskCheckGenColumnMapping.Delegate(err)
 		}
 
 		instance.sourceDBinfo = &dbutil.DBConfig{

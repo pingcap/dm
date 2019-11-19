@@ -415,7 +415,7 @@ func (l *Loader) Init() (err error) {
 
 	l.bwList, err = filter.New(l.cfg.CaseSensitive, l.cfg.BWList)
 	if err != nil {
-		return terror.ErrLoadUnitNewBWList.Delegate(err)
+		return terror.ErrLoadUnitGenBWList.Delegate(err)
 	}
 
 	if l.cfg.RemoveMeta {
@@ -434,7 +434,7 @@ func (l *Loader) Init() (err error) {
 	if len(l.cfg.ColumnMappingRules) > 0 {
 		l.columnMapping, err = cm.NewMapping(l.cfg.CaseSensitive, l.cfg.ColumnMappingRules)
 		if err != nil {
-			return terror.ErrLoadUnitNewColumnMapping.Delegate(err)
+			return terror.ErrLoadUnitGenColumnMapping.Delegate(err)
 		}
 	}
 
@@ -714,7 +714,7 @@ func (l *Loader) Update(cfg *config.SubTaskConfig) error {
 	oldBwList = l.bwList
 	l.bwList, err = filter.New(cfg.CaseSensitive, cfg.BWList)
 	if err != nil {
-		return terror.ErrLoadUnitNewBWList.Delegate(err)
+		return terror.ErrLoadUnitGenBWList.Delegate(err)
 	}
 
 	// update route, for loader, this almost useless, because schemas often have been restored
@@ -728,7 +728,7 @@ func (l *Loader) Update(cfg *config.SubTaskConfig) error {
 	oldColumnMapping = l.columnMapping
 	l.columnMapping, err = cm.NewMapping(cfg.CaseSensitive, cfg.ColumnMappingRules)
 	if err != nil {
-		return terror.ErrLoadUnitNewColumnMapping.Delegate(err)
+		return terror.ErrLoadUnitGenColumnMapping.Delegate(err)
 	}
 
 	// update l.cfg
