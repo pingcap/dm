@@ -413,7 +413,10 @@ func (l *Loader) Init() (err error) {
 	l.checkPoint = checkpoint
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-checkpoint", Fn: l.checkPoint.Close})
 
-	l.bwList = filter.New(l.cfg.CaseSensitive, l.cfg.BWList)
+	l.bwList, err = filter.New(l.cfg.CaseSensitive, l.cfg.BWList)
+	if err != nil {
+		return terror.ErrLoadUnitGenBWList.Delegate(err)
+	}
 
 	if l.cfg.RemoveMeta {
 		err2 := l.checkPoint.Clear()
@@ -431,7 +434,7 @@ func (l *Loader) Init() (err error) {
 	if len(l.cfg.ColumnMappingRules) > 0 {
 		l.columnMapping, err = cm.NewMapping(l.cfg.CaseSensitive, l.cfg.ColumnMappingRules)
 		if err != nil {
-			return terror.ErrLoadUnitNewColumnMapping.Delegate(err)
+			return terror.ErrLoadUnitGenColumnMapping.Delegate(err)
 		}
 	}
 
@@ -709,7 +712,10 @@ func (l *Loader) Update(cfg *config.SubTaskConfig) error {
 
 	// update black-white-list
 	oldBwList = l.bwList
-	l.bwList = filter.New(cfg.CaseSensitive, cfg.BWList)
+	l.bwList, err = filter.New(cfg.CaseSensitive, cfg.BWList)
+	if err != nil {
+		return terror.ErrLoadUnitGenBWList.Delegate(err)
+	}
 
 	// update route, for loader, this almost useless, because schemas often have been restored
 	oldTableRouter = l.tableRouter
@@ -722,7 +728,7 @@ func (l *Loader) Update(cfg *config.SubTaskConfig) error {
 	oldColumnMapping = l.columnMapping
 	l.columnMapping, err = cm.NewMapping(cfg.CaseSensitive, cfg.ColumnMappingRules)
 	if err != nil {
-		return terror.ErrLoadUnitNewColumnMapping.Delegate(err)
+		return terror.ErrLoadUnitGenColumnMapping.Delegate(err)
 	}
 
 	// update l.cfg

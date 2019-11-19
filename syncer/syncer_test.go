@@ -266,6 +266,8 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
+	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
+	c.Assert(err, IsNil)
 	err = syncer.genRouter()
 	c.Assert(err, IsNil)
 
@@ -373,6 +375,8 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
+	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
+	c.Assert(err, IsNil)
 	syncer.genRouter()
 	i := 0
 	for _, e := range allEvents {
@@ -443,6 +447,8 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
+	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
+	c.Assert(err, IsNil)
 	syncer.genRouter()
 	i := 0
 	for _, e := range allEvents {
@@ -534,6 +540,8 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
+	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
+	c.Assert(err, IsNil)
 	syncer.genRouter()
 
 	i := 0
