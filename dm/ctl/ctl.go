@@ -74,6 +74,7 @@ func Start(args []string) {
 		master.NewPurgeRelayCmd(),
 		master.NewMigrateRelayCmd(),
 		master.NewEventFilterCmd(),
+		master.NewBWListCmd(),
 	)
 
 	rootCmd.SetArgs(args)
