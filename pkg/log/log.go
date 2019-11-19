@@ -76,6 +76,7 @@ func (l Logger) WithFields(fields ...zap.Field) Logger {
 var (
 	appLogger = Logger{zap.NewNop()}
 	appLevel  zap.AtomicLevel
+	appProps  *pclog.ZapProperties
 )
 
 // InitLogger initializes DM's and also the TiDB library's loggers.
@@ -89,7 +90,6 @@ func InitLogger(cfg *Config) error {
 		Level: cfg.Level,
 		File: pclog.FileLogConfig{
 			Filename:   cfg.File,
-			LogRotate:  true,
 			MaxSize:    cfg.FileMaxSize,
 			MaxDays:    cfg.FileMaxDays,
 			MaxBackups: cfg.FileMaxBackups,
@@ -103,6 +103,7 @@ func InitLogger(cfg *Config) error {
 	// error itself.
 	appLogger = Logger{logger.WithOptions(zap.AddStacktrace(zap.DPanicLevel))}
 	appLevel = props.Level
+	appProps = props
 
 	return nil
 }
@@ -138,6 +139,11 @@ func ShortError(err error) zap.Field {
 // L returns the current logger for DM.
 func L() Logger {
 	return appLogger
+}
+
+// Props returns the current logger's props.
+func Props() *pclog.ZapProperties {
+	return appProps
 }
 
 // WrapStringerField returns a wrap stringer field

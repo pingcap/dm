@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/check"
 	"go.etcd.io/etcd/embed"
 
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -36,6 +37,11 @@ var (
 )
 
 type testConfigSuite struct {
+}
+
+func (t *testConfigSuite) SetUpSuite(c *check.C) {
+	// initialized the logger to make genEmbedEtcdConfig working.
+	log.InitLogger(&log.Config{})
 }
 
 func (t *testConfigSuite) TestPrintSampleConfig(c *check.C) {

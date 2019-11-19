@@ -47,23 +47,18 @@ const (
 )
 
 // startEtcd starts an embedded etcd server.
-func startEtcd(masterCfg *Config,
+func startEtcd(etcdCfg *embed.Config,
 	gRPCSvr func(*grpc.Server),
 	httpHandles map[string]http.Handler) (*embed.Etcd, error) {
-	cfg, err := masterCfg.genEmbedEtcdConfig()
-	if err != nil {
-		return nil, err
-	}
-
 	// attach extra gRPC and HTTP server
 	if gRPCSvr != nil {
-		cfg.ServiceRegister = gRPCSvr
+		etcdCfg.ServiceRegister = gRPCSvr
 	}
 	if httpHandles != nil {
-		cfg.UserHandlers = httpHandles
+		etcdCfg.UserHandlers = httpHandles
 	}
 
-	e, err := embed.StartEtcd(cfg)
+	e, err := embed.StartEtcd(etcdCfg)
 	if err != nil {
 		return nil, terror.ErrMasterStartEmbedEtcdFail.Delegate(err)
 	}

@@ -102,6 +102,25 @@ func NewServer(cfg *Config) *Server {
 
 // Start starts to serving
 func (s *Server) Start(ctx context.Context) (err error) {
+	// prepare config to join an existing cluster
+	err = prepareJoinEtcd(s.cfg)
+	if err != nil {
+		return
+	}
+	log.L().Info("config after join prepared", zap.Stringer("config", s.cfg))
+
+	// generates embed etcd config before any concurrent gRPC calls.
+	// potential concurrent gRPC calls:
+	//   - workerrpc.NewGRPCClient
+	//   - getHTTPAPIHandler
+	// no `String` method exists for embed.Config, and can not marshal it to join too.
+	// but when starting embed etcd server, the etcd pkg will log the config.
+	// https://github.com/etcd-io/etcd/blob/3cf2f69b5738fb702ba1a935590f36b52b18979b/embed/etcd.go#L299
+	etcdCfg, err := s.cfg.genEmbedEtcdConfig()
+	if err != nil {
+		return
+	}
+
 	// create clients to DM-workers
 	for _, workerAddr := range s.cfg.DeployMap {
 		s.workerClients[workerAddr], err = workerrpc.NewGRPCClient(workerAddr)
@@ -133,14 +152,8 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	// gRPC API server
 	gRPCSvr := func(gs *grpc.Server) { pb.RegisterMasterServer(gs, s) }
 
-	// prepare config to join an existing cluster
-	err = prepareJoinEtcd(s.cfg)
-	if err != nil {
-		return
-	}
-
 	// start embed etcd server, gRPC API server and HTTP (API, status and debug) server.
-	s.etcd, err = startEtcd(s.cfg, gRPCSvr, userHandles)
+	s.etcd, err = startEtcd(etcdCfg, gRPCSvr, userHandles)
 	if err != nil {
 		return
 	}
