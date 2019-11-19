@@ -18,18 +18,33 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"net/url"
+	"os"
 	"path"
 	"strings"
 
 	capturer "github.com/kami-zh/go-capturer"
 	"github.com/pingcap/check"
+	"go.etcd.io/etcd/embed"
+
+	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var (
 	defaultConfigFile = "./dm-master.toml"
+	_                 = check.Suite(&testConfigSuite{})
 )
 
-func (t *testMaster) TestPrintSampleConfig(c *check.C) {
+type testConfigSuite struct {
+}
+
+func (t *testConfigSuite) SetUpSuite(c *check.C) {
+	// initialized the logger to make genEmbedEtcdConfig working.
+	log.InitLogger(&log.Config{})
+}
+
+func (t *testConfigSuite) TestPrintSampleConfig(c *check.C) {
 	var (
 		buf    []byte
 		err    error
@@ -65,12 +80,17 @@ func (t *testMaster) TestPrintSampleConfig(c *check.C) {
 	c.Assert(strings.TrimSpace(out), check.Matches, "base64 decode config error:.*")
 }
 
-func (t *testMaster) TestConfig(c *check.C) {
+func (t *testConfigSuite) TestConfig(c *check.C) {
 	var (
-		err        error
-		cfg        = &Config{}
-		masterAddr = ":8261"
-		deployMap  = map[string]string{
+		err               error
+		cfg               = &Config{}
+		masterAddr        = ":8261"
+		name              = "dm-master"
+		dataDir           = "default.dm-master"
+		peerURLs          = "http://127.0.0.1:8291"
+		advertisePeerURLs = "http://127.0.0.1:8291"
+		initialCluster    = "dm-master=http://127.0.0.1:8291"
+		deployMap         = map[string]string{
 			"mysql-replica-01": "172.16.10.72:8262",
 			"mysql-replica-02": "172.16.10.73:8262",
 		}
@@ -115,13 +135,20 @@ func (t *testMaster) TestConfig(c *check.C) {
 			c.Assert(err, check.ErrorMatches, tc.errorReg)
 		} else {
 			c.Assert(cfg.MasterAddr, check.Equals, masterAddr)
+			c.Assert(cfg.Name, check.Equals, name)
+			c.Assert(cfg.DataDir, check.Equals, dataDir)
+			c.Assert(cfg.PeerUrls, check.Equals, peerURLs)
+			c.Assert(cfg.AdvertisePeerUrls, check.Equals, advertisePeerURLs)
+			c.Assert(cfg.InitialCluster, check.Equals, initialCluster)
+			c.Assert(cfg.InitialClusterState, check.Equals, embed.ClusterStateFlagNew)
+			c.Assert(cfg.Join, check.Equals, "")
 			c.Assert(cfg.DeployMap, check.DeepEquals, deployMap)
 			c.Assert(cfg.String(), check.Matches, fmt.Sprintf("{.*master-addr\":\"%s\".*}", masterAddr))
 		}
 	}
 }
 
-func (t *testMaster) TestUpdateConfigFile(c *check.C) {
+func (t *testConfigSuite) TestUpdateConfigFile(c *check.C) {
 	var (
 		err        error
 		content    []byte
@@ -153,7 +180,7 @@ func (t *testMaster) TestUpdateConfigFile(c *check.C) {
 	c.Assert(newContent, check.DeepEquals, content)
 }
 
-func (t *testMaster) TestInvalidConfig(c *check.C) {
+func (t *testConfigSuite) TestInvalidConfig(c *check.C) {
 	var (
 		err error
 		cfg = NewConfig()
@@ -194,4 +221,122 @@ dm-worker = "172.16.10.72:8262"`)
 	err = cfg.configFromFile(filepath2)
 	c.Assert(err, check.NotNil)
 	c.Assert(err, check.ErrorMatches, "*master config contained unknown configuration options: aaa*")
+
+	// invalid `master-addr`
+	filepath3 := path.Join(c.MkDir(), "test_invalid_config.toml")
+	configContent3 := []byte(`master-addr = ""`)
+	err = ioutil.WriteFile(filepath3, configContent3, 0644)
+	err = cfg.configFromFile(filepath3)
+	c.Assert(err, check.IsNil)
+	c.Assert(terror.ErrMasterHostPortNotValid.Equal(cfg.adjust()), check.IsTrue)
+}
+
+func (t *testConfigSuite) TestGenEmbedEtcdConfig(c *check.C) {
+	hostname, err := os.Hostname()
+	c.Assert(err, check.IsNil)
+
+	cfg1 := NewConfig()
+	cfg1.MasterAddr = ":8261"
+	cfg1.InitialClusterState = embed.ClusterStateFlagExisting
+	c.Assert(cfg1.adjust(), check.IsNil)
+	etcdCfg, err := cfg1.genEmbedEtcdConfig()
+	c.Assert(err, check.IsNil)
+	c.Assert(etcdCfg.Name, check.Equals, fmt.Sprintf("dm-master-%s", hostname))
+	c.Assert(etcdCfg.Dir, check.Equals, fmt.Sprintf("default.%s", etcdCfg.Name))
+	c.Assert(etcdCfg.LCUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "0.0.0.0:8261"}})
+	c.Assert(etcdCfg.ACUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "0.0.0.0:8261"}})
+	c.Assert(etcdCfg.LPUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "127.0.0.1:8291"}})
+	c.Assert(etcdCfg.APUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "127.0.0.1:8291"}})
+	c.Assert(etcdCfg.InitialCluster, check.DeepEquals, fmt.Sprintf("dm-master-%s=http://127.0.0.1:8291", hostname))
+	c.Assert(etcdCfg.ClusterState, check.Equals, embed.ClusterStateFlagExisting)
+
+	cfg2 := *cfg1
+	cfg2.MasterAddr = "127.0.0.1\n:8261"
+	_, err = cfg2.genEmbedEtcdConfig()
+	c.Assert(terror.ErrMasterGenEmbedEtcdConfigFail.Equal(err), check.IsTrue)
+	c.Assert(err, check.ErrorMatches, "(?m).*invalid master-addr.*")
+	cfg2.MasterAddr = "172.100.8.8:8261"
+	etcdCfg, err = cfg2.genEmbedEtcdConfig()
+	c.Assert(err, check.IsNil)
+	c.Assert(etcdCfg.LCUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "172.100.8.8:8261"}})
+	c.Assert(etcdCfg.ACUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "172.100.8.8:8261"}})
+
+	cfg3 := *cfg1
+	cfg3.PeerUrls = "127.0.0.1:\n8291"
+	_, err = cfg3.genEmbedEtcdConfig()
+	c.Assert(terror.ErrMasterGenEmbedEtcdConfigFail.Equal(err), check.IsTrue)
+	c.Assert(err, check.ErrorMatches, "(?m).*invalid peer-urls.*")
+	cfg3.PeerUrls = "http://172.100.8.8:8291"
+	etcdCfg, err = cfg3.genEmbedEtcdConfig()
+	c.Assert(err, check.IsNil)
+	c.Assert(etcdCfg.LPUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "172.100.8.8:8291"}})
+
+	cfg4 := *cfg1
+	cfg4.AdvertisePeerUrls = "127.0.0.1:\n8291"
+	_, err = cfg4.genEmbedEtcdConfig()
+	c.Assert(terror.ErrMasterGenEmbedEtcdConfigFail.Equal(err), check.IsTrue)
+	c.Assert(err, check.ErrorMatches, "(?m).*invalid advertise-peer-urls.*")
+	cfg4.AdvertisePeerUrls = "http://172.100.8.8:8291"
+	etcdCfg, err = cfg4.genEmbedEtcdConfig()
+	c.Assert(err, check.IsNil)
+	c.Assert(etcdCfg.APUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "172.100.8.8:8291"}})
+}
+
+func (t *testConfigSuite) TestParseURLs(c *check.C) {
+	cases := []struct {
+		str    string
+		urls   []url.URL
+		hasErr bool
+	}{
+		{}, // empty str
+		{
+			str:  "http://127.0.0.1:8291",
+			urls: []url.URL{{Scheme: "http", Host: "127.0.0.1:8291"}},
+		},
+		{
+			str: "http://127.0.0.1:8291,http://127.0.0.1:18291",
+			urls: []url.URL{
+				{Scheme: "http", Host: "127.0.0.1:8291"},
+				{Scheme: "http", Host: "127.0.0.1:18291"},
+			},
+		},
+		{
+			str:  "127.0.0.1:8291", // no scheme
+			urls: []url.URL{{Scheme: "http", Host: "127.0.0.1:8291"}},
+		},
+		{
+			str:  "http://:8291", // no IP
+			urls: []url.URL{{Scheme: "http", Host: "0.0.0.0:8291"}},
+		},
+		{
+			str:  ":8291", // no scheme, no IP
+			urls: []url.URL{{Scheme: "http", Host: "0.0.0.0:8291"}},
+		},
+		{
+			str:  "http://", // no IP, no port
+			urls: []url.URL{{Scheme: "http", Host: ""}},
+		},
+		{
+			str:    "http://\n127.0.0.1:8291", // invalid char in URL
+			hasErr: true,
+		},
+		{
+			str: ":8291,http://127.0.0.1:18291",
+			urls: []url.URL{
+				{Scheme: "http", Host: "0.0.0.0:8291"},
+				{Scheme: "http", Host: "127.0.0.1:18291"},
+			},
+		},
+	}
+
+	for _, cs := range cases {
+		c.Logf("raw string %s", cs.str)
+		urls, err := parseURLs(cs.str)
+		if cs.hasErr {
+			c.Assert(terror.ErrMasterParseURLFail.Equal(err), check.IsTrue)
+		} else {
+			c.Assert(err, check.IsNil)
+			c.Assert(urls, check.DeepEquals, cs.urls)
+		}
+	}
 }

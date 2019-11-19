@@ -1,5 +1,30 @@
 # Master Configuration.
 
+# log configuration
+log-level = "info"
+log-file = "dm-master.log"
+
+# dm-master listen address
+master-addr = ":8261"
+
+# human-readable name for this DM-master member
+name = "dm-master"
+
+# path to the data directory (default 'default.${name}')
+data-dir = "default.dm-master"
+
+# URLs for peer traffic
+peer-urls = "http://127.0.0.1:8291"
+
+# advertise URLs for peer traffic (default '${peer-urls}')
+advertise-peer-urls = "http://127.0.0.1:8291"
+
+# initial cluster configuration for bootstrapping, e,g. dm-master=http://127.0.0.1:8291
+initial-cluster = "dm-master=http://127.0.0.1:8291"
+
+# Join to an existing DM-master cluster, a string of existing cluster's endpoints.
+join = ""
+
 # rpc configuration
 #
 # rpc timeout is a positive number plus time unit. we use golang standard time
@@ -13,13 +38,6 @@ rpc-timeout = "30s"
 # literal value happens to be an integer.
 rpc-rate-limit = 10.0
 rpc-rate-burst = 40
-
-#log configuration
-log-level = "info"
-log-file = "dm-master.log"
-
-#dm-master listen address
-master-addr = ":8261"
 
 # replication group <-> dm-Worker deployment, we'll refine it when new deployment function is available
 [[deploy]]

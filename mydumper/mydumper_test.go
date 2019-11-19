@@ -96,6 +96,7 @@ func generateArgsAndCompare(c *C, m *testMydumperSuite, expectedExtraArgs, extra
 func testThroughGivenArgs(c *C, m *testMydumperSuite, arg, index string) {
 	quotedIndex := "'" + index + "'" // add quotes for constructArgs
 	generateArgsAndCompare(c, m, arg+" "+index, arg+" "+quotedIndex)
+	generateArgsAndCompare(c, m, arg+"="+index, arg+"="+index)
 }
 
 func (m *testMydumperSuite) TestShouldNotGenerateExtraArgs(c *C) {

@@ -15,7 +15,7 @@ package master
 
 import (
 	"context"
-	"fmt"
+	"os"
 	"strings"
 
 	"github.com/pingcap/dm/dm/ctl/common"
@@ -41,7 +41,8 @@ func NewSQLReplaceCmd() *cobra.Command {
 // sqlReplaceFunc does sql replace request
 func sqlReplaceFunc(cmd *cobra.Command, _ []string) {
 	if len(cmd.Flags().Args()) < 2 {
-		fmt.Println(cmd.Usage())
+		cmd.SetOut(os.Stdout)
+		cmd.Usage()
 		return
 	}
 

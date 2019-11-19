@@ -14,9 +14,11 @@
 package master
 
 import (
+	"bytes"
 	"context"
 	"io/ioutil"
 	"net/http"
+	"strings"
 
 	"fmt"
 	"io"
@@ -27,12 +29,15 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/pingcap/check"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/pd/pkg/tempurl"
+	"go.etcd.io/etcd/clientv3"
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/pbmock"
+	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -153,6 +158,7 @@ func testDefaultMasterServer(c *check.C) *Server {
 	cfg := NewConfig()
 	err := cfg.Parse([]string{"-config=./dm-master.toml"})
 	c.Assert(err, check.IsNil)
+	cfg.DataDir = c.MkDir()
 	server := NewServer(cfg)
 	go server.ap.Start(context.Background())
 
@@ -861,6 +867,14 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
+	var (
+		sqls        = []string{"stmt"}
+		task        = "testA"
+		schema      = "test_db"
+		table       = "test_table"
+		traceGIDIdx = 1
+	)
+
 	server := testDefaultMasterServer(c)
 
 	workers := make([]string, 0, len(server.cfg.DeployMap))
@@ -897,20 +911,13 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 					LockID:   lockID,
 					Exec:     exec,
 					TraceGID: traceGID,
+					DDLs:     sqls,
 				},
 			).Return(ret...)
 
 			server.workerClients[worker] = newMockRPCClient(mockWorkerClient)
 		}
 	}
-
-	var (
-		sqls        = []string{"stmt"}
-		task        = "testA"
-		schema      = "test_db"
-		table       = "test_table"
-		traceGIDIdx = 1
-	)
 
 	prepareDDLLock := func() {
 		// prepare ddl lock keeper, mainly use code from ddl_lock_test.go
@@ -1428,7 +1435,7 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 			Table:  table,
 			DDLs:   ddls,
 		}, nil)
-		// This will lead to a select on ctx.Done and time.After(retryTimeout),
+		// This will lead to a select on ctx.Done and time.After(fetchDDLInfoRetryTimeout),
 		// so we have enough time to cancel the context.
 		stream.EXPECT().Recv().Return(nil, io.EOF).MaxTimes(1)
 		stream.EXPECT().Send(&pb.DDLLockInfo{Task: task, ID: lockID}).Return(nil)
@@ -1445,6 +1452,7 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 				LockID:   lockID,
 				Exec:     true,
 				TraceGID: traceGID,
+				DDLs:     ddls,
 			},
 		).Return(&pb.CommonWorkerResponse{Result: true}, nil).MaxTimes(1)
 		mockWorkerClient.EXPECT().ExecuteDDL(
@@ -1454,6 +1462,7 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 				LockID:   lockID,
 				Exec:     false,
 				TraceGID: traceGID,
+				DDLs:     ddls,
 			},
 		).Return(&pb.CommonWorkerResponse{Result: true}, nil).MaxTimes(1)
 
@@ -1483,33 +1492,27 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 func (t *testMaster) TestServer(c *check.C) {
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
+	cfg.DataDir = c.MkDir()
+	cfg.MasterAddr = tempurl.Alloc()[len("http://"):]
 
 	s := NewServer(cfg)
 
-	masterAddr := cfg.MasterAddr
-	s.cfg.MasterAddr = ""
-	err := s.Start()
-	c.Assert(terror.ErrMasterHostPortNotValid.Equal(err), check.IsTrue)
-	s.Close()
-	s.cfg.MasterAddr = masterAddr
+	ctx, cancel := context.WithCancel(context.Background())
+	err1 := s.Start(ctx)
+	c.Assert(err1, check.IsNil)
 
-	go func() {
-		err1 := s.Start()
-		c.Assert(err1, check.IsNil)
-	}()
-
-	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		return !s.closed.Get()
-	}), check.IsTrue)
-
-	t.testHTTPInterface(c, "status")
+	t.testHTTPInterface(c, fmt.Sprintf("http://%s/status", cfg.MasterAddr), []byte(utils.GetRawInfo()))
+	t.testHTTPInterface(c, fmt.Sprintf("http://%s/debug/pprof/", cfg.MasterAddr), []byte("Types of profiles available"))
+	// HTTP API in this unit test is unstable, but we test it in `http_apis` in integration test.
+	//t.testHTTPInterface(c, fmt.Sprintf("http://%s/apis/v1alpha1/status/test-task", cfg.MasterAddr), []byte("task test-task has no workers or not exist"))
 
 	dupServer := NewServer(cfg)
-	err = dupServer.Start()
-	c.Assert(terror.ErrMasterStartService.Equal(err), check.IsTrue)
+	err := dupServer.Start(ctx)
+	c.Assert(terror.ErrMasterStartEmbedEtcdFail.Equal(err), check.IsTrue)
 	c.Assert(err.Error(), check.Matches, ".*bind: address already in use")
 
 	// close
+	cancel()
 	s.Close()
 
 	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
@@ -1517,11 +1520,67 @@ func (t *testMaster) TestServer(c *check.C) {
 	}), check.IsTrue)
 }
 
-func (t *testMaster) testHTTPInterface(c *check.C, uri string) {
-	resp, err := http.Get("http://127.0.0.1:8261/" + uri)
+func (t *testMaster) testHTTPInterface(c *check.C, url string, contain []byte) {
+	resp, err := http.Get(url)
 	c.Assert(err, check.IsNil)
 	defer resp.Body.Close()
 	c.Assert(resp.StatusCode, check.Equals, 200)
-	_, err = ioutil.ReadAll(resp.Body)
+
+	body, err := ioutil.ReadAll(resp.Body)
 	c.Assert(err, check.IsNil)
+	c.Assert(bytes.Contains(body, contain), check.IsTrue)
+}
+
+func (t *testMaster) TestJoinMember(c *check.C) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	// create a new cluster
+	cfg1 := NewConfig()
+	c.Assert(cfg1.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
+	cfg1.Name = "dm-master-1"
+	cfg1.DataDir = c.MkDir()
+	cfg1.MasterAddr = tempurl.Alloc()[len("http://"):]
+	cfg1.PeerUrls = tempurl.Alloc()
+	cfg1.AdvertisePeerUrls = cfg1.PeerUrls
+	cfg1.InitialCluster = fmt.Sprintf("%s=%s", cfg1.Name, cfg1.AdvertisePeerUrls)
+
+	s1 := NewServer(cfg1)
+	c.Assert(s1.Start(ctx), check.IsNil)
+	defer s1.Close()
+
+	// join to an existing cluster
+	cfg2 := NewConfig()
+	c.Assert(cfg2.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
+	cfg2.Name = "dm-master-2"
+	cfg2.DataDir = c.MkDir()
+	cfg2.MasterAddr = tempurl.Alloc()[len("http://"):]
+	cfg2.PeerUrls = tempurl.Alloc()
+	cfg2.AdvertisePeerUrls = cfg2.PeerUrls
+	cfg2.Join = cfg1.MasterAddr // join to an existing cluster
+
+	s2 := NewServer(cfg2)
+	c.Assert(s2.Start(ctx), check.IsNil)
+	defer s2.Close()
+
+	client, err := clientv3.New(clientv3.Config{
+		Endpoints:   strings.Split(cfg1.AdvertisePeerUrls, ","),
+		DialTimeout: etcdutil.DefaultDialTimeout,
+	})
+	c.Assert(err, check.IsNil)
+	defer client.Close()
+
+	// verify membersm
+	listResp, err := etcdutil.ListMembers(client)
+	c.Assert(err, check.IsNil)
+	c.Assert(listResp.Members, check.HasLen, 2)
+	names := make(map[string]struct{}, len(listResp.Members))
+	for _, m := range listResp.Members {
+		names[m.Name] = struct{}{}
+	}
+	_, ok := names[cfg1.Name]
+	c.Assert(ok, check.IsTrue)
+	_, ok = names[cfg2.Name]
+	c.Assert(ok, check.IsTrue)
+
+	cancel()
 }

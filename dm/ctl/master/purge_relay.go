@@ -16,6 +16,7 @@ package master
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/pingcap/errors"
@@ -55,7 +56,8 @@ func NewPurgeRelayCmd() *cobra.Command {
 // purgeRelayFunc does purge relay log files
 func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 	if len(cmd.Flags().Args()) > 0 {
-		fmt.Println(cmd.Usage())
+		cmd.SetOut(os.Stdout)
+		cmd.Usage()
 		return
 	}
 

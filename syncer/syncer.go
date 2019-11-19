@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -62,7 +63,7 @@ var (
 	statusTime      = 30 * time.Second
 
 	// MaxDDLConnectionTimeoutMinute also used by SubTask.ExecuteDDL
-	MaxDDLConnectionTimeoutMinute = 30
+	MaxDDLConnectionTimeoutMinute = 5
 
 	maxDMLConnectionTimeout = "5m"
 	maxDDLConnectionTimeout = fmt.Sprintf("%dm", MaxDDLConnectionTimeoutMinute)
@@ -230,7 +231,6 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.genColsCache = NewGenColCache()
 	syncer.c = newCausality()
 	syncer.done = nil
-	syncer.bwList = filter.New(cfg.CaseSensitive, cfg.BWList)
 	syncer.injectEventCh = make(chan *replication.BinlogEvent)
 	syncer.tracer = tracing.GetTracer()
 	syncer.setTimezone()
@@ -312,15 +312,20 @@ func (s *Syncer) Init() (err error) {
 	}
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-DBs", Fn: s.closeDBs})
 
+	s.bwList, err = filter.New(s.cfg.CaseSensitive, s.cfg.BWList)
+	if err != nil {
+		return terror.ErrSyncerUnitGenBWList.Delegate(err)
+	}
+
 	s.binlogFilter, err = bf.NewBinlogEvent(s.cfg.CaseSensitive, s.cfg.FilterRules)
 	if err != nil {
-		return terror.ErrSyncerUnitNewBinlogEventFilter.Delegate(err)
+		return terror.ErrSyncerUnitGenBinlogEventFilter.Delegate(err)
 	}
 
 	if len(s.cfg.ColumnMappingRules) > 0 {
 		s.columnMapping, err = cm.NewMapping(s.cfg.CaseSensitive, s.cfg.ColumnMappingRules)
 		if err != nil {
-			return terror.ErrSyncerUnitNewColumnMapping.Delegate(err)
+			return terror.ErrSyncerUnitGenColumnMapping.Delegate(err)
 		}
 	}
 
@@ -879,8 +884,10 @@ func (s *Syncer) syncDDL(ctx *tcontext.Context, queueBucket string, db *DBConn, 
 		if sqlJob.ddlExecItem != nil && sqlJob.ddlExecItem.req != nil && !sqlJob.ddlExecItem.req.Exec {
 			s.tctx.L().Info("ignore sharding DDLs", zap.Strings("ddls", sqlJob.ddls))
 		} else {
-			_, err = db.executeSQLWithIgnore(s.tctx, ignoreDDLError, sqlJob.ddls)
+			var affected int
+			affected, err = db.executeSQLWithIgnore(s.tctx, ignoreDDLError, sqlJob.ddls)
 			if err != nil {
+				err = s.handleSpecialDDLError(s.tctx, err, sqlJob.ddls, affected, db)
 				err = terror.WithScope(err, terror.ScopeDownstream)
 			}
 
@@ -1048,7 +1055,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 	// currentPos is the pos for current received event (End_log_pos in `show binlog events` for mysql)
 	// lastPos is the pos for last received (ROTATE / QUERY / XID) event (End_log_pos in `show binlog events` for mysql)
-	// we use currentPos to replace and skip binlog event of specfied position and update table checkpoint in sharding ddl
+	// we use currentPos to replace and skip binlog event of specified position and update table checkpoint in sharding ddl
 	// we use lastPos to update global checkpoint and table checkpoint
 	var (
 		currentPos = s.checkpoint.GlobalPoint() // also init to global checkpoint
@@ -1277,18 +1284,18 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		case *replication.RotateEvent:
 			err = s.handleRotateEvent(ev, ec)
 			if err != nil {
-				return err
+				return terror.Annotatef(err, "current pos %s", currentPos)
 			}
 		case *replication.RowsEvent:
 			err = s.handleRowsEvent(ev, ec)
 			if err != nil {
-				return err
+				return terror.Annotatef(err, "current pos %s", currentPos)
 			}
 
 		case *replication.QueryEvent:
 			err = s.handleQueryEvent(ev, ec)
 			if err != nil {
-				return err
+				return terror.Annotatef(err, "current pos %s", currentPos)
 			}
 
 		case *replication.XIDEvent:
@@ -1299,7 +1306,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 					s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "XID"), zap.Reflect("re-shard", shardingReSync))
 					err = closeShardingResync()
 					if err != nil {
-						return err
+						return terror.Annotatef(err, "shard group current pos %s", shardingReSync.currPos)
 					}
 					continue
 				}
@@ -1313,7 +1320,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			job := newXIDJob(currentPos, currentPos, nil, traceID)
 			err = s.addJobFunc(job)
 			if err != nil {
-				return err
+				return terror.Annotatef(err, "current pos %s", currentPos)
 			}
 		}
 	}
@@ -1828,13 +1835,22 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 		// block and wait DDL lock to be synced
 		shardLockResolving.WithLabelValues(s.cfg.Name).Set(1)
-		var ok bool
-		ddlExecItem, ok = <-s.ddlExecInfo.Chan(needHandleDDLs)
-		shardLockResolving.WithLabelValues(s.cfg.Name).Set(0)
-		if !ok {
-			// chan closed
-			s.tctx.L().Warn("canceled from exrernal", zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start position", startPos), log.WrapStringerField("end position", ec.currentPos))
-			return nil
+		for {
+			var ok bool
+			ddlExecItem, ok = <-s.ddlExecInfo.Chan(needHandleDDLs)
+			if !ok {
+				// chan closed
+				shardLockResolving.WithLabelValues(s.cfg.Name).Set(0)
+				s.tctx.L().Warn("canceled from external", zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start position", startPos), log.WrapStringerField("end position", ec.currentPos))
+				return nil
+			} else if len(ddlExecItem.req.DDLs) != 0 && !reflect.DeepEqual(ddlExecItem.req.DDLs, needHandleDDLs) {
+				// ignore un-cleared cached/duplicate DDL execute request
+				// check `len(ddlExecItem.req.DDLs) != 0` to support old DM-master and `break-ddl-lock`
+				s.tctx.L().Warn("ignore mismatched DDL execute request", zap.String("source", source), zap.Strings("expect", needHandleDDLs), zap.Strings("request", ddlExecItem.req.DDLs))
+				continue
+			}
+			shardLockResolving.WithLabelValues(s.cfg.Name).Set(0)
+			break
 		}
 
 		if ddlExecItem.req.Exec {
@@ -2314,7 +2330,10 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 
 	// update black-white-list
 	oldBwList = s.bwList
-	s.bwList = filter.New(cfg.CaseSensitive, cfg.BWList)
+	s.bwList, err = filter.New(cfg.CaseSensitive, cfg.BWList)
+	if err != nil {
+		return terror.ErrSyncerUnitGenBWList.Delegate(err)
+	}
 
 	// update route
 	oldTableRouter = s.tableRouter
@@ -2327,14 +2346,14 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 	oldBinlogFilter = s.binlogFilter
 	s.binlogFilter, err = bf.NewBinlogEvent(cfg.CaseSensitive, cfg.FilterRules)
 	if err != nil {
-		return terror.ErrSyncerUnitNewBinlogEventFilter.Delegate(err)
+		return terror.ErrSyncerUnitGenBinlogEventFilter.Delegate(err)
 	}
 
 	// update column-mappings
 	oldColumnMapping = s.columnMapping
 	s.columnMapping, err = cm.NewMapping(cfg.CaseSensitive, cfg.ColumnMappingRules)
 	if err != nil {
-		return terror.ErrSyncerUnitNewColumnMapping.Delegate(err)
+		return terror.ErrSyncerUnitGenColumnMapping.Delegate(err)
 	}
 
 	if s.cfg.IsSharding {
@@ -2396,7 +2415,7 @@ func (s *Syncer) checkpointID() string {
 	if len(s.cfg.SourceID) > 0 {
 		return s.cfg.SourceID
 	}
-	return strconv.Itoa(s.cfg.ServerID)
+	return strconv.FormatUint(uint64(s.cfg.ServerID), 10)
 }
 
 // DDLInfo returns a chan from which can receive DDLInfo

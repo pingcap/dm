@@ -71,7 +71,7 @@ const (
 	codeSchemaTableNameNotValid
 	codeGenTableRouter
 	codeEncryptSecretKeyNotValid
-	codeEncryptNewCipher
+	codeEncryptGenCipher
 	codeEncryptGenIV
 	codeCiphertextLenNotValid
 	codeCiphertextContextNotValid
@@ -135,6 +135,11 @@ const (
 	codeBackoffArgsNotValid
 
 	codeInitLoggerFail
+
+	// pkg/gtid
+	codeGTIDTruncateInvalid
+	// pkg/streamer
+	codeRelayLogGivenPosTooBig
 )
 
 // Config related error code list
@@ -194,9 +199,10 @@ const (
 const (
 	codeTaskCheckSameTableName ErrCode = iota + 26001
 	codeTaskCheckFailedOpenDB
-	codeTaskCheckNewTableRouter
-	codeTaskCheckNewColumnMapping
+	codeTaskCheckGenTableRouter
+	codeTaskCheckGenColumnMapping
 	codeTaskCheckSyncConfigError
+	codeTaskCheckGenBWList
 )
 
 // Relay log utils error code
@@ -258,6 +264,8 @@ const (
 // Dump unit error code
 const (
 	codeDumpUnitRuntime ErrCode = iota + 32001
+	codeDumpUnitGenTableRouter
+	codeDumpUnitGenBWList
 )
 
 // Load unit error code
@@ -272,11 +280,12 @@ const (
 	codeLoadUnitDispatchSQLFromFile
 	codeLoadUnitInvalidInsertSQL
 	codeLoadUnitGenTableRouter
-	codeLoadUnitNewColumnMapping
+	codeLoadUnitGenColumnMapping
 	codeLoadUnitNoDBFile
 	codeLoadUnitNoTableFile
 	codeLoadUnitDumpDirNotFound
 	codeLoadUnitDuplicateTableFile
+	codeLoadUnitGenBWList
 )
 
 // Sync unit error code
@@ -310,9 +319,9 @@ const (
 	codeSyncerUnitDMLColumnNotMatch
 	codeSyncerUnitDMLOldNewValueMismatch
 	codeSyncerUnitDMLPruneColumnMismatch
-	codeSyncerUnitNewBinlogEventFilter
+	codeSyncerUnitGenBinlogEventFilter
 	codeSyncerUnitGenTableRouter
-	codeSyncerUnitNewColumnMapping
+	codeSyncerUnitGenColumnMapping
 	codeSyncerUnitDoColumnMapping
 	codeSyncerUnitCacheKeyNotFound
 	codeSyncerUnitHeartbeatCheckConfig
@@ -340,6 +349,7 @@ const (
 	codeSyncerUnitReopenStreamNotSupport
 	codeSyncerUnitUpdateConfigInSharding
 	codeSyncerUnitExecWithNoBlockingDDL
+	codeSyncerUnitGenBWList
 )
 
 // DM-master error code
@@ -379,6 +389,11 @@ const (
 	codeMasterOperRequestTimeout
 	codeMasterHandleHTTPApis
 	codeMasterHostPortNotValid
+	codeMasterGetHostnameFail
+	codeMasterGenEmbedEtcdConfigFail
+	codeMasterStartEmbedEtcdFail
+	codeMasterParseURLFail
+	codeMasterJoinEmbedEtcdFail
 )
 
 // DM-worker error code
@@ -514,7 +529,7 @@ var (
 	ErrWatcherStart             = New(codeWatcherStart, ClassFunctional, ScopeInternal, LevelHigh, "watcher starts for relay log dir %s")
 	ErrWatcherChanClosed        = New(codeWatcherChanClosed, ClassFunctional, ScopeInternal, LevelHigh, "watcher's %s chan for relay log dir %s closed")
 	ErrWatcherChanRecvError     = New(codeWatcherChanRecvError, ClassFunctional, ScopeInternal, LevelHigh, "watcher receives error, relay log dir %s")
-	ErrRelayLogFileSizeSmaller  = New(codeRelayLogFileSizeSmaller, ClassFunctional, ScopeInternal, LevelHigh, "file size of relay log %s become smaller")
+	ErrRelayLogFileSizeSmaller  = New(codeRelayLogFileSizeSmaller, ClassFunctional, ScopeInternal, LevelHigh, "file size of relay log %s become smaller, please check the status of relay log and re-pull it. If you want to re-pull it, you should open relay.meta, set the binlog-name to the error pos name, set binlog-pos to 4, delete the stashed relay log and run `resume-relay` in dmctl")
 	ErrBinlogFileNotSpecified   = New(codeBinlogFileNotSpecified, ClassFunctional, ScopeInternal, LevelHigh, "binlog file must be specified")
 	ErrNoRelayLogMatchPos       = New(codeNoRelayLogMatchPos, ClassFunctional, ScopeInternal, LevelHigh, "no relay log files in dir %s match pos %s")
 	ErrFirstRelayLogNotMatchPos = New(codeFirstRelayLogNotMatchPos, ClassFunctional, ScopeInternal, LevelHigh, "the first relay log %s not match the start pos %v")
@@ -526,7 +541,7 @@ var (
 	ErrSchemaTableNameNotValid   = New(codeSchemaTableNameNotValid, ClassFunctional, ScopeInternal, LevelHigh, "table name %s not valid")
 	ErrGenTableRouter            = New(codeGenTableRouter, ClassFunctional, ScopeInternal, LevelHigh, "generate table router")
 	ErrEncryptSecretKeyNotValid  = New(codeEncryptSecretKeyNotValid, ClassFunctional, ScopeInternal, LevelHigh, "key size should be 16, 24 or 32, but input key's size is %d")
-	ErrEncryptNewCipher          = New(codeEncryptNewCipher, ClassFunctional, ScopeInternal, LevelHigh, "new cipher")
+	ErrEncryptGenCipher          = New(codeEncryptGenCipher, ClassFunctional, ScopeInternal, LevelHigh, "generate cipher")
 	ErrEncryptGenIV              = New(codeEncryptGenIV, ClassFunctional, ScopeInternal, LevelHigh, "generate iv")
 	ErrCiphertextLenNotValid     = New(codeCiphertextLenNotValid, ClassFunctional, ScopeInternal, LevelHigh, "ciphertext's length should be greater than %d, but got %d not valid")
 	ErrCiphertextContextNotValid = New(codeCiphertextContextNotValid, ClassFunctional, ScopeInternal, LevelHigh, "ciphertext's content not valid")
@@ -590,6 +605,10 @@ var (
 	ErrBackoffArgsNotValid = New(codeBackoffArgsNotValid, ClassFunctional, ScopeInternal, LevelMedium, "backoff argument %s value %v not valid")
 	// pkg
 	ErrInitLoggerFail = New(codeInitLoggerFail, ClassFunctional, ScopeInternal, LevelMedium, "init logger failed")
+	// pkg/gtid
+	ErrGTIDTruncateInvalid = New(codeGTIDTruncateInvalid, ClassFunctional, ScopeInternal, LevelHigh, "truncate GTID sets %v to %v not valid")
+	// pkg/streamer
+	ErrRelayLogGivenPosTooBig = New(codeRelayLogGivenPosTooBig, ClassFunctional, ScopeInternal, LevelHigh, "the given relay log pos %s of meta config is too big, please check it again")
 
 	// Config related error
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s")
@@ -641,9 +660,10 @@ var (
 	// Task check error
 	ErrTaskCheckSameTableName    = New(codeTaskCheckSameTableName, ClassTaskCheck, ScopeInternal, LevelMedium, "same table name in case-sensitive %v")
 	ErrTaskCheckFailedOpenDB     = New(codeTaskCheckFailedOpenDB, ClassTaskCheck, ScopeInternal, LevelHigh, "failed to open DSN %s:***@%s:%d")
-	ErrTaskCheckNewTableRouter   = New(codeTaskCheckNewTableRouter, ClassTaskCheck, ScopeInternal, LevelMedium, "new table router error")
-	ErrTaskCheckNewColumnMapping = New(codeTaskCheckNewColumnMapping, ClassTaskCheck, ScopeInternal, LevelMedium, "new column mapping error")
+	ErrTaskCheckGenTableRouter   = New(codeTaskCheckGenTableRouter, ClassTaskCheck, ScopeInternal, LevelMedium, "generate table router error")
+	ErrTaskCheckGenColumnMapping = New(codeTaskCheckGenColumnMapping, ClassTaskCheck, ScopeInternal, LevelMedium, "generate column mapping error")
 	ErrTaskCheckSyncConfigError  = New(codeTaskCheckSyncConfigError, ClassTaskCheck, ScopeInternal, LevelMedium, "%s %v: %v\n detail: %v")
+	ErrTaskCheckGenBWList        = New(codeTaskCheckGenBWList, ClassTaskCheck, ScopeInternal, LevelMedium, "generate black white list error")
 
 	// Relay log basic API error
 	ErrRelayParseUUIDIndex         = New(codeRelayParseUUIDIndex, ClassRelayEventLib, ScopeInternal, LevelHigh, "parse server-uuid.index")
@@ -667,7 +687,7 @@ var (
 	ErrRelayTCPReaderStartSync           = New(codeRelayTCPReaderStartSync, ClassRelayUnit, ScopeUpstream, LevelHigh, "start sync from position %s")
 	ErrRelayTCPReaderNilGTID             = New(codeRelayTCPReaderNilGTID, ClassRelayUnit, ScopeInternal, LevelHigh, "nil GTID set not valid")
 	ErrRelayTCPReaderStartSyncGTID       = New(codeRelayTCPReaderStartSyncGTID, ClassRelayUnit, ScopeUpstream, LevelHigh, "start sync from GTID set %s")
-	ErrRelayTCPReaderGetEvent            = New(codeRelayTCPReaderGetEvent, ClassRelayUnit, ScopeUpstream, LevelHigh, "TCPReader get event")
+	ErrRelayTCPReaderGetEvent            = New(codeRelayTCPReaderGetEvent, ClassRelayUnit, ScopeUpstream, LevelHigh, "TCPReader get relay event with error")
 	ErrRelayWriterNotStateNew            = New(codeRelayWriterNotStateNew, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s, already started")
 	ErrRelayWriterStateCannotClose       = New(codeRelayWriterStateCannotClose, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s, can not close")
 	ErrRelayWriterNeedStart              = New(codeRelayWriterNeedStart, ClassRelayUnit, ScopeInternal, LevelHigh, "stage %s, expect %s, please start the writer first")
@@ -698,7 +718,9 @@ var (
 	ErrPreviousGTIDsNotValid             = New(codePreviousGTIDsNotValid, ClassRelayUnit, ScopeInternal, LevelHigh, "previousGTIDs %s not valid")
 
 	// Dump unit error
-	ErrDumpUnitRuntime = New(codeDumpUnitRuntime, ClassDumpUnit, ScopeInternal, LevelHigh, "mydumper runs with error")
+	ErrDumpUnitRuntime        = New(codeDumpUnitRuntime, ClassDumpUnit, ScopeInternal, LevelHigh, "mydumper runs with error")
+	ErrDumpUnitGenTableRouter = New(codeDumpUnitGenTableRouter, ClassDumpUnit, ScopeInternal, LevelHigh, "generate table router")
+	ErrDumpUnitGenBWList      = New(codeDumpUnitGenBWList, ClassDumpUnit, ScopeInternal, LevelHigh, "generate black white list")
 
 	// Load unit error
 	ErrLoadUnitCreateSchemaFile    = New(codeLoadUnitCreateSchemaFile, ClassLoadUnit, ScopeInternal, LevelMedium, "generate schema file")
@@ -711,11 +733,12 @@ var (
 	ErrLoadUnitDispatchSQLFromFile = New(codeLoadUnitDispatchSQLFromFile, ClassLoadUnit, ScopeInternal, LevelHigh, "dispatch sql")
 	ErrLoadUnitInvalidInsertSQL    = New(codeLoadUnitInvalidInsertSQL, ClassLoadUnit, ScopeInternal, LevelHigh, "invalid insert sql %s")
 	ErrLoadUnitGenTableRouter      = New(codeLoadUnitGenTableRouter, ClassLoadUnit, ScopeInternal, LevelHigh, "generate table router")
-	ErrLoadUnitNewColumnMapping    = New(codeLoadUnitNewColumnMapping, ClassLoadUnit, ScopeInternal, LevelHigh, "new column mapping")
+	ErrLoadUnitGenColumnMapping    = New(codeLoadUnitGenColumnMapping, ClassLoadUnit, ScopeInternal, LevelHigh, "generate column mapping")
 	ErrLoadUnitNoDBFile            = New(codeLoadUnitNoDBFile, ClassLoadUnit, ScopeInternal, LevelHigh, "invalid data sql file, cannot find db - %s")
 	ErrLoadUnitNoTableFile         = New(codeLoadUnitNoTableFile, ClassLoadUnit, ScopeInternal, LevelHigh, "invalid data sql file, cannot find table - %s")
 	ErrLoadUnitDumpDirNotFound     = New(codeLoadUnitDumpDirNotFound, ClassLoadUnit, ScopeInternal, LevelHigh, "%s does not exist or it's not a dir")
 	ErrLoadUnitDuplicateTableFile  = New(codeLoadUnitDuplicateTableFile, ClassLoadUnit, ScopeInternal, LevelHigh, "invalid table schema file, duplicated item - %s")
+	ErrLoadUnitGenBWList           = New(codeLoadUnitGenBWList, ClassLoadUnit, ScopeInternal, LevelHigh, "generate black white list")
 
 	// Sync unit error
 	ErrSyncerUnitPanic                   = New(codeSyncerUnitPanic, ClassSyncUnit, ScopeInternal, LevelHigh, "panic error: %v")
@@ -748,9 +771,9 @@ var (
 	ErrSyncerUnitDMLColumnNotMatch          = New(codeSyncerUnitDMLColumnNotMatch, ClassSyncUnit, ScopeInternal, LevelHigh, "Column count doesn't match value count: %d (columns) vs %d (values)")
 	ErrSyncerUnitDMLOldNewValueMismatch     = New(codeSyncerUnitDMLOldNewValueMismatch, ClassSyncUnit, ScopeInternal, LevelHigh, "Old value count doesn't match new value count: %d (old) vs %d (new)")
 	ErrSyncerUnitDMLPruneColumnMismatch     = New(codeSyncerUnitDMLPruneColumnMismatch, ClassSyncUnit, ScopeInternal, LevelHigh, "prune DML columns and data mismatch in length: %d (columns) %d (data)")
-	ErrSyncerUnitNewBinlogEventFilter       = New(codeSyncerUnitNewBinlogEventFilter, ClassSyncUnit, ScopeInternal, LevelHigh, "new binlog event filter")
+	ErrSyncerUnitGenBinlogEventFilter       = New(codeSyncerUnitGenBinlogEventFilter, ClassSyncUnit, ScopeInternal, LevelHigh, "generate binlog event filter")
 	ErrSyncerUnitGenTableRouter             = New(codeSyncerUnitGenTableRouter, ClassSyncUnit, ScopeInternal, LevelHigh, "generate table router")
-	ErrSyncerUnitNewColumnMapping           = New(codeSyncerUnitNewColumnMapping, ClassSyncUnit, ScopeInternal, LevelHigh, "new column mapping")
+	ErrSyncerUnitGenColumnMapping           = New(codeSyncerUnitGenColumnMapping, ClassSyncUnit, ScopeInternal, LevelHigh, "generate column mapping")
 	ErrSyncerUnitDoColumnMapping            = New(codeSyncerUnitDoColumnMapping, ClassSyncUnit, ScopeInternal, LevelHigh, "mapping row data %v for table `%s`.`%s`")
 	ErrSyncerUnitCacheKeyNotFound           = New(codeSyncerUnitCacheKeyNotFound, ClassSyncUnit, ScopeInternal, LevelHigh, "cache key %s in %s not found")
 	ErrSyncerUnitHeartbeatCheckConfig       = New(codeSyncerUnitHeartbeatCheckConfig, ClassSyncUnit, ScopeInternal, LevelMedium, "")
@@ -778,43 +801,49 @@ var (
 	ErrSyncerUnitReopenStreamNotSupport     = New(codeSyncerUnitReopenStreamNotSupport, ClassSyncUnit, ScopeInternal, LevelHigh, "reopen %T not supported")
 	ErrSyncerUnitUpdateConfigInSharding     = New(codeSyncerUnitUpdateConfigInSharding, ClassSyncUnit, ScopeInternal, LevelHigh, "try update config when some tables' (%v) sharding DDL not synced not supported")
 	ErrSyncerUnitExecWithNoBlockingDDL      = New(codeSyncerUnitExecWithNoBlockingDDL, ClassSyncUnit, ScopeInternal, LevelHigh, "process unit not waiting for sharding DDL to sync")
+	ErrSyncerUnitGenBWList                  = New(codeSyncerUnitGenBWList, ClassSyncUnit, ScopeInternal, LevelHigh, "generate black white list")
 
 	// DM-master error
-	ErrMasterSQLOpNilRequest       = New(codeMasterSQLOpNilRequest, ClassDMMaster, ScopeInternal, LevelMedium, "nil request not valid")
-	ErrMasterSQLOpNotSupport       = New(codeMasterSQLOpNotSupport, ClassDMMaster, ScopeInternal, LevelMedium, "op %s not supported")
-	ErrMasterSQLOpWithoutSharding  = New(codeMasterSQLOpWithoutSharding, ClassDMMaster, ScopeInternal, LevelMedium, "operate request without --sharding specified not valid")
-	ErrMasterGRPCCreateConn        = New(codeMasterGRPCCreateConn, ClassDMMaster, ScopeInternal, LevelHigh, "create grpc connection")
-	ErrMasterGRPCSendOnCloseConn   = New(codeMasterGRPCSendOnCloseConn, ClassDMMaster, ScopeInternal, LevelHigh, "send request on a closed client")
-	ErrMasterGRPCClientClose       = New(codeMasterGRPCClientClose, ClassDMMaster, ScopeInternal, LevelHigh, "close rpc client")
-	ErrMasterGRPCInvalidReqType    = New(codeMasterGRPCInvalidReqType, ClassDMMaster, ScopeInternal, LevelHigh, "invalid request type: %v")
-	ErrMasterGRPCRequestError      = New(codeMasterGRPCRequestError, ClassDMMaster, ScopeInternal, LevelHigh, "grpc request error")
-	ErrMasterDeployMapperVerify    = New(codeMasterDeployMapperVerify, ClassDMMaster, ScopeInternal, LevelHigh, "user should specify valid relation between source(mysql/mariadb) and dm-worker, config %+v not valid")
-	ErrMasterConfigParseFlagSet    = New(codeMasterConfigParseFlagSet, ClassDMMaster, ScopeInternal, LevelMedium, "parse config flag set")
-	ErrMasterConfigUnknownItem     = New(codeMasterConfigUnknownItem, ClassDMMaster, ScopeInternal, LevelMedium, "master config contained unknown configuration options: %s")
-	ErrMasterConfigInvalidFlag     = New(codeMasterConfigInvalidFlag, ClassDMMaster, ScopeInternal, LevelMedium, "'%s' is an invalid flag")
-	ErrMasterConfigTomlTransform   = New(codeMasterConfigTomlTransform, ClassDMMaster, ScopeInternal, LevelMedium, "config toml transform")
-	ErrMasterConfigTimeoutParse    = New(codeMasterConfigTimeoutParse, ClassDMMaster, ScopeInternal, LevelMedium, "parse rpc timeout str")
-	ErrMasterConfigUpdateCfgFile   = New(codeMasterConfigUpdateCfgFile, ClassDMMaster, ScopeInternal, LevelHigh, "update config file")
-	ErrMasterShardingDDLDiff       = New(codeMasterShardingDDLDiff, ClassDMMaster, ScopeInternal, LevelHigh, "sharding ddls in ddl lock %s is different with %s")
-	ErrMasterStartService          = New(codeMasterStartService, ClassDMMaster, ScopeInternal, LevelHigh, "start server")
-	ErrMasterNoEmitToken           = New(codeMasterNoEmitToken, ClassDMMaster, ScopeInternal, LevelHigh, "fail to get emit opportunity for worker %s")
-	ErrMasterLockNotFound          = New(codeMasterLockNotFound, ClassDMMaster, ScopeInternal, LevelHigh, "lock with ID %s not found")
-	ErrMasterLockIsResolving       = New(codeMasterLockIsResolving, ClassDMMaster, ScopeInternal, LevelHigh, "lock %s is resolving")
-	ErrMasterWorkerCliNotFound     = New(codeMasterWorkerCliNotFound, ClassDMMaster, ScopeInternal, LevelHigh, "worker %s relevant worker-client not found")
-	ErrMasterWorkerNotWaitLock     = New(codeMasterWorkerNotWaitLock, ClassDMMaster, ScopeInternal, LevelHigh, "worker %s not waiting for DDL lock %s")
-	ErrMasterHandleSQLReqFail      = New(codeMasterHandleSQLReqFail, ClassDMMaster, ScopeInternal, LevelHigh, "request DDL lock %s owner %s handle SQLs request %s fail %s")
-	ErrMasterOwnerExecDDL          = New(codeMasterOwnerExecDDL, ClassDMMaster, ScopeInternal, LevelHigh, "owner %s ExecuteDDL fail")
-	ErrMasterPartWorkerExecDDLFail = New(codeMasterPartWorkerExecDDLFail, ClassDMMaster, ScopeInternal, LevelHigh, "DDL lock %s owner ExecuteDDL successfully, so DDL lock removed. but some dm-workers ExecuteDDL fail, you should to handle dm-worker directly")
-	ErrMasterWorkerExistDDLLock    = New(codeMasterWorkerExistDDLLock, ClassDMMaster, ScopeInternal, LevelHigh, "worker %s exist ddl lock, please unlock ddl lock first")
-	ErrMasterGetWorkerCfgExtractor = New(codeMasterGetWorkerCfgExtractor, ClassDMMaster, ScopeInternal, LevelHigh, "")
-	ErrMasterTaskConfigExtractor   = New(codeMasterTaskConfigExtractor, ClassDMMaster, ScopeInternal, LevelHigh, "")
-	ErrMasterWorkerArgsExtractor   = New(codeMasterWorkerArgsExtractor, ClassDMMaster, ScopeInternal, LevelHigh, "")
-	ErrMasterQueryWorkerConfig     = New(codeMasterQueryWorkerConfig, ClassDMMaster, ScopeInternal, LevelHigh, "")
-	ErrMasterOperNotFound          = New(codeMasterOperNotFound, ClassDMMaster, ScopeInternal, LevelHigh, "operation %d of task %s not found, please execute `query-status` to check status")
-	ErrMasterOperRespNotSuccess    = New(codeMasterOperRespNotSuccess, ClassDMMaster, ScopeInternal, LevelHigh, "operation not success: %s")
-	ErrMasterOperRequestTimeout    = New(codeMasterOperRequestTimeout, ClassDMMaster, ScopeInternal, LevelHigh, "request is timeout, but request may be successful, please execute `query-status` to check status")
-	ErrMasterHandleHTTPApis        = New(codeMasterHandleHTTPApis, ClassDMMaster, ScopeInternal, LevelHigh, "serve http apis to grpc")
-	ErrMasterHostPortNotValid      = New(codeMasterHostPortNotValid, ClassDMMaster, ScopeInternal, LevelHigh, "host:port '%s' not valid")
+	ErrMasterSQLOpNilRequest        = New(codeMasterSQLOpNilRequest, ClassDMMaster, ScopeInternal, LevelMedium, "nil request not valid")
+	ErrMasterSQLOpNotSupport        = New(codeMasterSQLOpNotSupport, ClassDMMaster, ScopeInternal, LevelMedium, "op %s not supported")
+	ErrMasterSQLOpWithoutSharding   = New(codeMasterSQLOpWithoutSharding, ClassDMMaster, ScopeInternal, LevelMedium, "operate request without --sharding specified not valid")
+	ErrMasterGRPCCreateConn         = New(codeMasterGRPCCreateConn, ClassDMMaster, ScopeInternal, LevelHigh, "create grpc connection")
+	ErrMasterGRPCSendOnCloseConn    = New(codeMasterGRPCSendOnCloseConn, ClassDMMaster, ScopeInternal, LevelHigh, "send request on a closed client")
+	ErrMasterGRPCClientClose        = New(codeMasterGRPCClientClose, ClassDMMaster, ScopeInternal, LevelHigh, "close rpc client")
+	ErrMasterGRPCInvalidReqType     = New(codeMasterGRPCInvalidReqType, ClassDMMaster, ScopeInternal, LevelHigh, "invalid request type: %v")
+	ErrMasterGRPCRequestError       = New(codeMasterGRPCRequestError, ClassDMMaster, ScopeInternal, LevelHigh, "grpc request error")
+	ErrMasterDeployMapperVerify     = New(codeMasterDeployMapperVerify, ClassDMMaster, ScopeInternal, LevelHigh, "user should specify valid relation between source(mysql/mariadb) and dm-worker, config %+v not valid")
+	ErrMasterConfigParseFlagSet     = New(codeMasterConfigParseFlagSet, ClassDMMaster, ScopeInternal, LevelMedium, "parse config flag set")
+	ErrMasterConfigUnknownItem      = New(codeMasterConfigUnknownItem, ClassDMMaster, ScopeInternal, LevelMedium, "master config contained unknown configuration options: %s")
+	ErrMasterConfigInvalidFlag      = New(codeMasterConfigInvalidFlag, ClassDMMaster, ScopeInternal, LevelMedium, "'%s' is an invalid flag")
+	ErrMasterConfigTomlTransform    = New(codeMasterConfigTomlTransform, ClassDMMaster, ScopeInternal, LevelMedium, "config toml transform")
+	ErrMasterConfigTimeoutParse     = New(codeMasterConfigTimeoutParse, ClassDMMaster, ScopeInternal, LevelMedium, "parse rpc timeout str")
+	ErrMasterConfigUpdateCfgFile    = New(codeMasterConfigUpdateCfgFile, ClassDMMaster, ScopeInternal, LevelHigh, "update config file")
+	ErrMasterShardingDDLDiff        = New(codeMasterShardingDDLDiff, ClassDMMaster, ScopeInternal, LevelHigh, "sharding ddls in ddl lock %s is different with %s")
+	ErrMasterStartService           = New(codeMasterStartService, ClassDMMaster, ScopeInternal, LevelHigh, "start server")
+	ErrMasterNoEmitToken            = New(codeMasterNoEmitToken, ClassDMMaster, ScopeInternal, LevelHigh, "fail to get emit opportunity for worker %s")
+	ErrMasterLockNotFound           = New(codeMasterLockNotFound, ClassDMMaster, ScopeInternal, LevelHigh, "lock with ID %s not found")
+	ErrMasterLockIsResolving        = New(codeMasterLockIsResolving, ClassDMMaster, ScopeInternal, LevelHigh, "lock %s is resolving")
+	ErrMasterWorkerCliNotFound      = New(codeMasterWorkerCliNotFound, ClassDMMaster, ScopeInternal, LevelHigh, "worker %s relevant worker-client not found")
+	ErrMasterWorkerNotWaitLock      = New(codeMasterWorkerNotWaitLock, ClassDMMaster, ScopeInternal, LevelHigh, "worker %s not waiting for DDL lock %s")
+	ErrMasterHandleSQLReqFail       = New(codeMasterHandleSQLReqFail, ClassDMMaster, ScopeInternal, LevelHigh, "request DDL lock %s owner %s handle SQLs request %s fail %s")
+	ErrMasterOwnerExecDDL           = New(codeMasterOwnerExecDDL, ClassDMMaster, ScopeInternal, LevelHigh, "owner %s ExecuteDDL fail")
+	ErrMasterPartWorkerExecDDLFail  = New(codeMasterPartWorkerExecDDLFail, ClassDMMaster, ScopeInternal, LevelHigh, "DDL lock %s owner ExecuteDDL successfully, so DDL lock removed. but some dm-workers ExecuteDDL fail, you should to handle dm-worker directly")
+	ErrMasterWorkerExistDDLLock     = New(codeMasterWorkerExistDDLLock, ClassDMMaster, ScopeInternal, LevelHigh, "worker %s exist ddl lock, please unlock ddl lock first")
+	ErrMasterGetWorkerCfgExtractor  = New(codeMasterGetWorkerCfgExtractor, ClassDMMaster, ScopeInternal, LevelHigh, "")
+	ErrMasterTaskConfigExtractor    = New(codeMasterTaskConfigExtractor, ClassDMMaster, ScopeInternal, LevelHigh, "")
+	ErrMasterWorkerArgsExtractor    = New(codeMasterWorkerArgsExtractor, ClassDMMaster, ScopeInternal, LevelHigh, "")
+	ErrMasterQueryWorkerConfig      = New(codeMasterQueryWorkerConfig, ClassDMMaster, ScopeInternal, LevelHigh, "")
+	ErrMasterOperNotFound           = New(codeMasterOperNotFound, ClassDMMaster, ScopeInternal, LevelHigh, "operation %d of task %s on worker %s not found, please execute `query-status` to check status")
+	ErrMasterOperRespNotSuccess     = New(codeMasterOperRespNotSuccess, ClassDMMaster, ScopeInternal, LevelHigh, "operation %d of task %s on worker %s not success: %s")
+	ErrMasterOperRequestTimeout     = New(codeMasterOperRequestTimeout, ClassDMMaster, ScopeInternal, LevelHigh, "request to dm-worker %s is timeout, but request may be successful, please execute `query-status` to check status")
+	ErrMasterHandleHTTPApis         = New(codeMasterHandleHTTPApis, ClassDMMaster, ScopeInternal, LevelHigh, "serve http apis to grpc")
+	ErrMasterHostPortNotValid       = New(codeMasterHostPortNotValid, ClassDMMaster, ScopeInternal, LevelHigh, "host:port '%s' not valid")
+	ErrMasterGetHostnameFail        = New(codeMasterGetHostnameFail, ClassDMMaster, ScopeInternal, LevelHigh, "get hostname fail")
+	ErrMasterGenEmbedEtcdConfigFail = New(codeMasterGenEmbedEtcdConfigFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to generate config item %s for embed etcd")
+	ErrMasterStartEmbedEtcdFail     = New(codeMasterStartEmbedEtcdFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to start embed etcd")
+	ErrMasterParseURLFail           = New(codeMasterParseURLFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to parse URL %s")
+	ErrMasterJoinEmbedEtcdFail      = New(codeMasterJoinEmbedEtcdFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to join embed etcd: %s")
 
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set")
@@ -882,8 +911,8 @@ var (
 	ErrWorkerCacheDDLInfoExists      = New(codeWorkerCacheDDLInfoExists, ClassDMWorker, ScopeInternal, LevelHigh, "CacheDDLInfo for task %s already exists")
 	ErrWorkerExecSkipDDLConflict     = New(codeWorkerExecSkipDDLConflict, ClassDMWorker, ScopeInternal, LevelHigh, "execDDL and skipDDL can not specify both at the same time")
 	ErrWorkerExecDDLSyncerOnly       = New(codeWorkerExecDDLSyncerOnly, ClassDMWorker, ScopeInternal, LevelHigh, "only syncer support ExecuteDDL, but current unit is %s")
-	ErrWorkerExecDDLTimeout          = New(codeWorkerExecDDLTimeout, ClassDMWorker, ScopeInternal, LevelHigh, "ExecuteDDL timeout, try use `query-status` to query whether the DDL is still blocking")
-	ErrWorkerWaitRelayCatchupTimeout = New(codeWorkerWaitRelayCatchupTimeout, ClassDMWorker, ScopeInternal, LevelHigh, "wait relay catchup timeout, loader end binlog pos: %s, relay binlog pos: %s")
+	ErrWorkerExecDDLTimeout          = New(codeWorkerExecDDLTimeout, ClassDMWorker, ScopeInternal, LevelHigh, "ExecuteDDL timeout (exceeding %s), try use `query-status` to query whether the DDL is still blocking")
+	ErrWorkerWaitRelayCatchupTimeout = New(codeWorkerWaitRelayCatchupTimeout, ClassDMWorker, ScopeInternal, LevelHigh, "waiting for relay binlog pos to catch up with loader end binlog pos is timeout (exceeding %s), loader end binlog pos: %s, relay binlog pos: %s")
 	ErrWorkerRelayIsPurging          = New(codeWorkerRelayIsPurging, ClassDMWorker, ScopeInternal, LevelHigh, "relay log purger is purging, cannot start sub task %s, please try again later")
 	ErrWorkerHostPortNotValid        = New(codeWorkerHostPortNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "host:port '%s' not valid")
 

@@ -266,6 +266,8 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
+	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
+	c.Assert(err, IsNil)
 	err = syncer.genRouter()
 	c.Assert(err, IsNil)
 
@@ -373,6 +375,8 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
+	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
+	c.Assert(err, IsNil)
 	syncer.genRouter()
 	i := 0
 	for _, e := range allEvents {
@@ -443,6 +447,8 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
+	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
+	c.Assert(err, IsNil)
 	syncer.genRouter()
 	i := 0
 	for _, e := range allEvents {
@@ -534,6 +540,8 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := NewSyncer(s.cfg)
+	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
+	c.Assert(err, IsNil)
 	syncer.genRouter()
 
 	i := 0
@@ -1302,9 +1310,14 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 
 		go syncer.Process(ctx, resultCh)
 
+		var wg sync.WaitGroup
+		wg.Add(1)
 		go func() {
-			req := &DDLExecItem{&pb.ExecDDLRequest{Exec: true}, make(chan error, 1)}
-			syncer.ddlExecInfo.Send(ctx, req)
+			defer wg.Done()
+			reqMismatch := &DDLExecItem{&pb.ExecDDLRequest{Exec: true, DDLs: []string{"stmt"}}, make(chan error, 1)}
+			c.Assert(syncer.ddlExecInfo.Send(ctx, reqMismatch), IsNil)
+			reqMatch := &DDLExecItem{&pb.ExecDDLRequest{Exec: true}, make(chan error, 1)}
+			c.Assert(syncer.ddlExecInfo.Send(ctx, reqMatch), IsNil)
 		}()
 
 		select {
@@ -1316,6 +1329,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		case <-time.After(2 * time.Second):
 		}
 		cancel()
+		wg.Wait()
 
 		syncer.Close()
 		c.Assert(syncer.isClosed(), IsTrue)

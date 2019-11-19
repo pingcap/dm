@@ -110,7 +110,7 @@ func (s *testDBSuite) TestGetServerUUID(c *C) {
 func (s *testDBSuite) TestGetServerID(c *C) {
 	id, err := utils.GetServerID(s.db)
 	c.Assert(err, IsNil)
-	c.Assert(id, Greater, int64(0))
+	c.Assert(id, Greater, uint32(0))
 }
 
 func (s *testDBSuite) TestBinaryLogs(c *C) {

@@ -15,7 +15,7 @@ package master
 
 import (
 	"context"
-	"fmt"
+	"os"
 	"strings"
 
 	"github.com/pingcap/errors"
@@ -38,7 +38,8 @@ func NewSQLInjectCmd() *cobra.Command {
 // sqlInjectFunc does sql inject request
 func sqlInjectFunc(cmd *cobra.Command, _ []string) {
 	if len(cmd.Flags().Args()) < 2 {
-		fmt.Println(cmd.Usage())
+		cmd.SetOut(os.Stdout)
+		cmd.Usage()
 		return
 	}
 

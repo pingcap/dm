@@ -51,7 +51,7 @@ type HeartbeatConfig struct {
 	// serverID from dm-worker (relay)
 	// now, heartbeat not be synced to downstream
 	// so it will not be used by user directly and also enough to differ from other dm-worker's
-	serverID  int
+	serverID  uint32
 	masterCfg config.DBConfig // master server's DBConfig
 }
 
@@ -196,8 +196,8 @@ func (h *Heartbeat) TryUpdateTaskTs(taskName, schema, table string, data [][]int
 		h.logger.Warn("invalid data server_id for heartbeat", zap.Reflect("server ID", latest[1]))
 		return
 	}
-	if int(serverID) != h.cfg.serverID {
-		h.logger.Debug("ignore mismatched server_id for heartbeat", zap.Int32("obtained server ID", serverID), zap.Int("excepted server ID", h.cfg.serverID))
+	if uint32(serverID) != h.cfg.serverID {
+		h.logger.Debug("ignore mismatched server_id for heartbeat", zap.Int32("obtained server ID", serverID), zap.Uint32("excepted server ID", h.cfg.serverID))
 		return // only ignore
 	}
 
@@ -295,7 +295,7 @@ func (h *Heartbeat) updateTS() error {
 	// when we not need to support MySQL <=5.5, we can replace with `UTC_TIMESTAMP(6)`
 	query := fmt.Sprintf("REPLACE INTO `%s`.`%s` (`ts`, `server_id`) VALUES(UTC_TIMESTAMP(), ?)", h.schema, h.table)
 	_, err := h.master.Exec(query, h.cfg.serverID)
-	h.logger.Debug("update ts", zap.String("sql", query), zap.Int("server ID", h.cfg.serverID))
+	h.logger.Debug("update ts", zap.String("sql", query), zap.Uint32("server ID", h.cfg.serverID))
 	return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeUpstream)
 }
 
