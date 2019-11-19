@@ -104,7 +104,10 @@ func bwListFunc(cmd *cobra.Command, _ []string) {
 					Name:   sourceInfo.Tables[i],
 				})
 			}
-			bwFilter := filter.New(cfg.CaseSensitive, cfg.BWList[bwListName])
+			bwFilter, err := filter.New(cfg.CaseSensitive, cfg.BWList[bwListName])
+			if err != nil {
+				common.PrintLines("build of black white filter failed:\n%s", errors.ErrorStack(err))
+			}
 			doTableList := bwFilter.ApplyOn(tableList)
 
 			doTableStringList := make([]string, 0, len(doTableList))
@@ -169,7 +172,10 @@ func bwListFunc(cmd *cobra.Command, _ []string) {
 		}
 
 		checkTable := []*filter.Table{{Schema: schema, Name: table}}
-		bwFilter := filter.New(cfg.CaseSensitive, cfg.BWList[mysqlInstance.BWListName])
+		bwFilter, err := filter.New(cfg.CaseSensitive, cfg.BWList[mysqlInstance.BWListName])
+		if err != nil {
+			common.PrintLines("build of black white filter failed:\n%s", errors.ErrorStack(err))
+		}
 		checkTable = bwFilter.ApplyOn(checkTable)
 		if len(checkTable) == 0 {
 			result.WillBeFiltered = "yes"

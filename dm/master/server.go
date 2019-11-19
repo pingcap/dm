@@ -1822,6 +1822,7 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 	}, nil
 }
 
+// FetchSourceInfo fetches source info and table names
 func (s *Server) FetchSourceInfo(ctx context.Context, req *pb.FetchSourceInfoRequest) (*pb.FetchSourceInfoResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "FetchSourceInfo"))
 
