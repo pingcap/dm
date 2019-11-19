@@ -36,7 +36,7 @@ require (
 	github.com/pingcap/parser v0.0.0-20191112053614-3b43b46331d5
 	github.com/pingcap/pd v1.1.0-beta.0.20191114130008-2488cb978644
 	github.com/pingcap/tidb v1.1.0-beta.0.20191115021711-b274eb2079dc
-	github.com/pingcap/tidb-tools v3.0.6-0.20191113022349-48d5e90d3271+incompatible
+	github.com/pingcap/tidb-tools v3.0.6-0.20191118105807-a741d9a4082a+incompatible
 	github.com/prometheus/client_golang v1.2.1
 	github.com/prometheus/procfs v0.0.6 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20190728182440-6a916e37a237 // indirect
