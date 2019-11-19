@@ -231,7 +231,6 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.genColsCache = NewGenColCache()
 	syncer.c = newCausality()
 	syncer.done = nil
-	syncer.bwList = filter.New(cfg.CaseSensitive, cfg.BWList)
 	syncer.injectEventCh = make(chan *replication.BinlogEvent)
 	syncer.tracer = tracing.GetTracer()
 	syncer.setTimezone()
@@ -312,6 +311,11 @@ func (s *Syncer) Init() (err error) {
 		return err
 	}
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-DBs", Fn: s.closeDBs})
+
+	s.bwList, err = filter.New(s.cfg.CaseSensitive, s.cfg.BWList)
+	if err != nil {
+		return terror.ErrSyncerUnitNewBWList.Delegate(err)
+	}
 
 	s.binlogFilter, err = bf.NewBinlogEvent(s.cfg.CaseSensitive, s.cfg.FilterRules)
 	if err != nil {
@@ -2326,7 +2330,10 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 
 	// update black-white-list
 	oldBwList = s.bwList
-	s.bwList = filter.New(cfg.CaseSensitive, cfg.BWList)
+	s.bwList, err = filter.New(cfg.CaseSensitive, cfg.BWList)
+	if err != nil {
+		return terror.ErrSyncerUnitNewBWList.Delegate(err)
+	}
 
 	// update route
 	oldTableRouter = s.tableRouter
