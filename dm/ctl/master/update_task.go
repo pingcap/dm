@@ -15,7 +15,7 @@ package master
 
 import (
 	"context"
-	"fmt"
+	"os"
 
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
@@ -38,7 +38,8 @@ func NewUpdateTaskCmd() *cobra.Command {
 // updateTaskFunc does update task request
 func updateTaskFunc(cmd *cobra.Command, _ []string) {
 	if len(cmd.Flags().Args()) != 1 {
-		fmt.Println(cmd.Usage())
+		cmd.SetOut(os.Stdout)
+		cmd.Usage()
 		return
 	}
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
