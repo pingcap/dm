@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pingcap/tidb-tools/pkg/filter"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
@@ -91,6 +93,11 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 			return
 		}
 
+		bwListMap := make(map[string]string, len(cfg.MySQLInstances))
+		for _, inst := range cfg.MySQLInstances {
+			bwListMap[inst.SourceID] = inst.BWListName
+		}
+
 		routeRulesMap := make(map[string][]*router.TableRule, len(cfg.MySQLInstances))
 		for _, inst := range cfg.MySQLInstances {
 			routeRules := make([]*router.TableRule, 0, len(inst.RouteRules))
@@ -108,14 +115,24 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 				common.PrintLines("build of router failed:\n%s", errors.ErrorStack(err))
 				return
 			}
-			for i := range sourceInfo.Schemas {
-				schema, table, err := r.Route(sourceInfo.Schemas[i], sourceInfo.Tables[i])
+
+			// apply on black-white filter
+			tableList := getFilterTableList(sourceInfo)
+			bwListName := bwListMap[sourceInfo.SourceID]
+			bwFilter, err := filter.New(cfg.CaseSensitive, cfg.BWList[bwListName])
+			if err != nil {
+				common.PrintLines("build of black white filter failed:\n%s", errors.ErrorStack(err))
+			}
+			tableList = bwFilter.ApplyOn(tableList)
+
+			for _, filterTable := range tableList {
+				schema, table, err := r.Route(filterTable.Schema, filterTable.Name)
 				if err != nil {
 					common.PrintLines("routing table %s from MySQL %s failed:\n%s", dbutil.TableName(schema, table), sourceInfo.SourceIP, errors.ErrorStack(err))
 					return
 				}
 				targetTable := dbutil.TableName(schema, table)
-				sourceTable := dbutil.TableName(sourceInfo.Schemas[i], sourceInfo.Tables[i])
+				sourceTable := filterTable.String()
 				if routesResultMap[targetTable] == nil {
 					routesResultMap[targetTable] = make(map[string][]string)
 				}

@@ -97,13 +97,7 @@ func bwListFunc(cmd *cobra.Command, _ []string) {
 		ignoreTableResult := make(map[string][]string, 0)
 		for _, sourceInfo := range resp.SourceInfo {
 			bwListName := bwListMap[sourceInfo.SourceID]
-			tableList := make([]*filter.Table, 0, len(sourceInfo.Schemas))
-			for i := range sourceInfo.Schemas {
-				tableList = append(tableList, &filter.Table{
-					Schema: sourceInfo.Schemas[i],
-					Name:   sourceInfo.Tables[i],
-				})
-			}
+			tableList := getFilterTableList(sourceInfo)
 			bwFilter, err := filter.New(cfg.CaseSensitive, cfg.BWList[bwListName])
 			if err != nil {
 				common.PrintLines("build of black white filter failed:\n%s", errors.ErrorStack(err))
@@ -172,6 +166,17 @@ func checkResp(err error, resp *pb.FetchSourceInfoResponse) error {
 	return nil
 }
 
+func getFilterTableList(sourceInfo *pb.SourceInfo) []*filter.Table {
+	tableList := make([]*filter.Table, 0, len(sourceInfo.Schemas))
+	for i := range sourceInfo.Schemas {
+		tableList = append(tableList, &filter.Table{
+			Schema: sourceInfo.Schemas[i],
+			Name:   sourceInfo.Tables[i],
+		})
+	}
+	return tableList
+}
+
 func findRelativeMySQLInstance(cfg *config.TaskConfig, sourceID string) *config.MySQLInstance {
 	var mysqlInstance *config.MySQLInstance
 	for _, mysqlInst := range cfg.MySQLInstances {
@@ -202,7 +207,6 @@ func getMySQLInstanceThroughWorker(worker, task string, cfg *config.TaskConfig) 
 	}
 
 	sourceID := resp.SourceInfo[0].SourceID
-
 	mysqlInstance := findRelativeMySQLInstance(cfg, sourceID)
 	if mysqlInstance == nil {
 		return nil, errors.New("the mysql instance info is not found. pls check the worker address")
