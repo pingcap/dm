@@ -1856,6 +1856,7 @@ func (s *Server) FetchSourceInfo(ctx context.Context, req *pb.FetchSourceInfoReq
 		tables := make([]string, 0)
 		if req.FetchTable {
 			sourceDB, err := conn.DefaultDBProvider.Apply(stCfg.From)
+			defer sourceDB.Close()
 			if err != nil {
 				return &pb.FetchSourceInfoResponse{
 					Result: false,

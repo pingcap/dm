@@ -76,7 +76,7 @@ func eventFilterFunc(cmd *cobra.Command, _ []string) {
 	}
 	sql := realSQLs[0]
 
-	filterName, action, err := filterEvent(sql, cfg.Filters)
+	filterName, action, err := filterEvent(sql, cfg.Filters, cfg.CaseSensitive)
 	if err != nil {
 		common.PrintLines("get filter info failed:\n%v", errors.ErrorStack(err))
 		return
@@ -91,7 +91,7 @@ func eventFilterFunc(cmd *cobra.Command, _ []string) {
 	common.PrettyPrintInterface(result)
 }
 
-func filterEvent(sql string, filterMap map[string]*bf.BinlogEventRule) (string, bf.ActionType, error) {
+func filterEvent(sql string, filterMap map[string]*bf.BinlogEventRule, caseSensitive bool) (string, bf.ActionType, error) {
 	sql = utils.TrimCtrlChars(sql)
 	sqlParser := parser.New()
 	stmts, _, err := sqlParser.Parse(sql, "", "")
@@ -110,8 +110,7 @@ func filterEvent(sql string, filterMap map[string]*bf.BinlogEventRule) (string, 
 	genSchemaAndTable(&table, n)
 
 	for name, filterContent := range filterMap {
-		// FIXME: current caseSensitive is set to false which means filters will ignore uppercase
-		singleFilter, err := bf.NewBinlogEvent(false, []*bf.BinlogEventRule{filterContent})
+		singleFilter, err := bf.NewBinlogEvent(caseSensitive, []*bf.BinlogEventRule{filterContent})
 		if err != nil {
 			return "", bf.Ignore, errors.Annotate(err, "creating single filter failed")
 		}

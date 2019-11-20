@@ -97,7 +97,7 @@ func bwListFunc(cmd *cobra.Command, _ []string) {
 		ignoreTableResult := make(map[string][]string, 0)
 		for _, sourceInfo := range resp.SourceInfo {
 			bwListName := bwListMap[sourceInfo.SourceID]
-			tableList := make([]*filter.Table, len(sourceInfo.Schemas))
+			tableList := make([]*filter.Table, 0, len(sourceInfo.Schemas))
 			for i := range sourceInfo.Schemas {
 				tableList = append(tableList, &filter.Table{
 					Schema: sourceInfo.Schemas[i],
