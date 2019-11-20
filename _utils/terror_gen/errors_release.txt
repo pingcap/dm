@@ -110,6 +110,7 @@ ErrBackoffArgsNotValid,[code=11103:class=functional:scope=internal:level=medium]
 ErrInitLoggerFail,[code=11104:class=functional:scope=internal:level=medium],"init logger failed"
 ErrGTIDTruncateInvalid,[code=11105:class=functional:scope=internal:level=high],"truncate GTID sets %v to %v not valid"
 ErrRelayLogGivenPosTooBig,[code=11106:class=functional:scope=internal:level=high],"the given relay log pos %s of meta config is too big, please check it again"
+ErrElectionCampaignFail,[code=11107:class=functional:scope=internal:level=high],"fail to campaign leader: %s"
 ErrConfigCheckItemNotSupport,[code=20001:class=config:scope=internal:level=medium],"checking item %s is not supported\n%s"
 ErrConfigTomlTransform,[code=20002:class=config:scope=internal:level=medium],"%s"
 ErrConfigTaskYamlTransform,[code=20003:class=config:scope=internal:level=medium],"%s"
