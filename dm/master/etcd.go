@@ -214,13 +214,12 @@ func isDataExist(d string) bool {
 func getEtcdClient(addr string) (*etcd.Client, error) {
 	ectdEndpoints, err := utils.ParseHostPortAddr(addr)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, terror.ErrMasterCreateEtcdClient.Delegate(err)
 	}
 
 	etcdClient, err := etcd.NewClientFromCfg(ectdEndpoints, defaultEtcdTimeout, defaultOperatePath, nil)
 	if err != nil {
-		// TODO: use terror
-		return nil, errors.Trace(err)
+		return nil, terror.ErrMasterCreateEtcdClient.Delegate(err)
 	}
 
 	return etcdClient, nil

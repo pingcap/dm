@@ -399,6 +399,7 @@ const (
 	codeMasterMarshalResponse
 	codeMasterWatchEtcd
 	codeMasterWriteEtcd
+	codeMasterCreateEtcdClient
 )
 
 // DM-worker error code
@@ -854,6 +855,7 @@ var (
 	ErrMasterMarshalResponse         = New(codeMasterMarshalResponse, ClassDMMaster, ScopeInternal, LevelHigh, "fail to marshal response")
 	ErrMasterWatchEtcd               = New(codeMasterWatchEtcd, ClassDMMaster, ScopeInternal, LevelMedium, "fail to watch etcd's key: %s")
 	ErrMasterWriteEtcd               = New(codeMasterWriteEtcd, ClassDMMaster, ScopeInternal, LevelHigh, "fail to write data to etcd")
+	ErrMasterCreateEtcdClient        = New(codeMasterCreateEtcdClient, ClassDMMaster, ScopeInternal, LevelHigh, "fail to create etcd client")
 
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set")

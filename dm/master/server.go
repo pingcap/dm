@@ -87,6 +87,8 @@ type Server struct {
 
 // NewServer creates a new Server
 func NewServer(cfg *Config) *Server {
+	rand.Seed(time.Now().UnixNano())
+
 	server := Server{
 		cfg:               cfg,
 		workerClients:     make(map[string]workerrpc.Client),
@@ -2496,7 +2498,6 @@ func (s *Server) WatchRequest(ctx context.Context) {
 				continue
 			}
 
-			log.L().Info("WatchRequest response", zap.Int64("revision", wresp.Header.Revision))
 			for _, ev := range wresp.Events {
 				// only need handle put event
 				if ev.Type != mvccpb.PUT {
@@ -2736,6 +2737,7 @@ func (s *Server) handleRequest(path string, operate *pb.Operate) {
 		responseBytes, err = response.Marshal()
 	default:
 		log.L().Error("unhandle operate", zap.Reflect("type", operate.Tp))
+		return
 	}
 
 	if err != nil {
@@ -2759,7 +2761,6 @@ func (s *Server) handleRequest(path string, operate *pb.Operate) {
 // saveRequestAndWaitResponse saves request to etcd, and wait for the response
 func (s *Server) saveRequestAndWaitResponse(ctx context.Context, tp pb.OperateType, request []byte) ([]byte, error) {
 	operateID := getOperateID()
-
 	operateIDStr := strconv.FormatInt(operateID, 10)
 
 	operate := pb.Operate{
@@ -2792,7 +2793,6 @@ func (s *Server) saveRequestAndWaitResponse(ctx context.Context, tp pb.OperateTy
 				log.L().Warn("have more than one event on key in etcd", zap.String("key", operateIDStr))
 			}
 
-			log.L().Info("saveRequestAndWaitResponse response", zap.Int64("revision", wresp.Header.Revision))
 			for _, ev := range wresp.Events {
 				operate := &pb.Operate{}
 				err := operate.Unmarshal(ev.Kv.Value)
@@ -2813,7 +2813,6 @@ func (s *Server) saveRequestAndWaitResponse(ctx context.Context, tp pb.OperateTy
 // getOperateID returns a unique operate id
 // TODO: Operate ID should be monotone increasing, just like OpLog.ID in dm-worker
 func getOperateID() int64 {
-	rand.Seed(time.Now().UnixNano())
 	randomValue := uint32(rand.Intn(1000))
 	return time.Now().UnixNano()/1000*1000 + int64(randomValue)
 }
