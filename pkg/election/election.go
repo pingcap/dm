@@ -184,8 +184,10 @@ func (e *Election) campaignLoop(ctx context.Context) {
 		}
 
 		e.isLeader.Set(true) // become the leader now
+		e.l.Info("become the leader", zap.String("member", leaderID))
 		e.watchLeader(ctx, session, leaderKey)
 		e.isLeader.Set(false) // need to re-campaign
+		e.l.Info("retire from the leader", zap.String("member", leaderID))
 	}
 }
 
