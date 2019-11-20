@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/spf13/cobra"
 )
@@ -90,6 +91,38 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 			return
 		}
 
+		routeRulesMap := make(map[string][]*router.TableRule, len(cfg.MySQLInstances))
+		for _, inst := range cfg.MySQLInstances {
+			routeRules := make([]*router.TableRule, 0, len(inst.RouteRules))
+			for _, routeName := range inst.RouteRules {
+				routeRules = append(routeRules, cfg.Routes[routeName])
+			}
+			routeRulesMap[inst.SourceID] = routeRules
+		}
+
+		// key: targetTable, value: {key: sourceIP, value: sourceTable}
+		routesResultMap := make(map[string]map[string][]string)
+		for _, sourceInfo := range resp.SourceInfo {
+			r, err := router.NewTableRouter(cfg.CaseSensitive, routeRulesMap[sourceInfo.SourceID])
+			if err != nil {
+				common.PrintLines("build of router failed:\n%s", errors.ErrorStack(err))
+				return
+			}
+			for i := range sourceInfo.Schemas {
+				schema, table, err := r.Route(sourceInfo.Schemas[i], sourceInfo.Tables[i])
+				if err != nil {
+					common.PrintLines("routing table %s from MySQL %s failed:\n%s", dbutil.TableName(schema, table), sourceInfo.SourceIP, errors.ErrorStack(err))
+					return
+				}
+				targetTable := dbutil.TableName(schema, table)
+				sourceTable := dbutil.TableName(sourceInfo.Schemas[i], sourceInfo.Tables[i])
+				if routesResultMap[targetTable] == nil {
+					routesResultMap[targetTable] = make(map[string][]string)
+				}
+				routesResultMap[targetTable][sourceInfo.SourceIP] = append(routesResultMap[targetTable][sourceInfo.SourceIP], sourceTable)
+			}
+		}
+		result.Routes = routesResultMap
 	} else {
 		worker := workers[0]
 		tableName, err := cmd.Flags().GetString("table-name")
@@ -124,6 +157,7 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 				return
 			}
 			if routed > routedLevel {
+				routedLevel = routed
 				result.MatchRoute = routeRuleName
 			}
 		}
@@ -134,7 +168,7 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 		}
 		result.TargetSchema, result.TargetTable, err = r.Route(schema, table)
 		if err != nil {
-			common.PrintLines("route of table `%s`.`%s` failed:\n%s", schema, table, errors.ErrorStack(err))
+			common.PrintLines("route of table %s failed:\n%s", dbutil.TableName(schema, table), errors.ErrorStack(err))
 			return
 		}
 	}
