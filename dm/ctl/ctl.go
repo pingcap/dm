@@ -116,6 +116,7 @@ func PrintHelp(args []string) {
 
 // Start starts running a command
 func Start(args []string) {
+	commandMasterFlags.workers = commandMasterFlags.workers[:0]
 	rootCmd.SetArgs(args)
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(rootCmd.UsageString())
