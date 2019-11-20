@@ -24,6 +24,7 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/pd/pkg/tempurl"
 	"go.etcd.io/etcd/clientv3"
+	"go.etcd.io/etcd/clientv3/concurrency"
 	"go.etcd.io/etcd/embed"
 
 	"github.com/pingcap/dm/pkg/log"
@@ -170,6 +171,13 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	case <-time.After(time.Second):
 		c.Fatal("should fail to create session with closed client")
 	}
+
+	// can not get leader info with closed client.
+	leaderKey, leaderID, err := e3.LeaderInfo(ctx3)
+	c.Assert(terror.ErrElectionGetLeaderIDFail.Equal(err), IsTrue)
+	c.Assert(err, ErrorMatches, ".*fail to get leader ID: rpc error: code = Canceled.*")
+	c.Assert(leaderKey, Equals, "")
+	c.Assert(leaderID, Equals, "")
 }
 
 func (t *testElectionSuite) TestElectionAlways1(c *C) {
@@ -273,4 +281,11 @@ func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 	_, err = cli.Delete(ctx, leaderKey)
 	c.Assert(err, IsNil)
 	wg.Wait()
+
+	// can not get leader info when no leader exists
+	leaderKey, leaderID, err = e.LeaderInfo(ctx)
+	c.Assert(terror.ErrElectionGetLeaderIDFail.Equal(err), IsTrue)
+	c.Assert(err.(*terror.Error).Cause(), Equals, concurrency.ErrElectionNoLeader)
+	c.Assert(leaderKey, Equals, "")
+	c.Assert(leaderID, Equals, "")
 }
