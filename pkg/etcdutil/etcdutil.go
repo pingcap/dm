@@ -31,7 +31,7 @@ const (
 	DefaultRequestTimeout = 10 * time.Second
 )
 
-// CreateClient creates a etcd client with some default config items.
+// CreateClient creates an etcd client with some default config items.
 func CreateClient(endpoints []string) (*clientv3.Client, error) {
 	return clientv3.New(clientv3.Config{
 		Endpoints:   endpoints,
