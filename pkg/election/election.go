@@ -190,6 +190,24 @@ func (e *Election) IsLeader() bool {
 	return e.isLeader.Get()
 }
 
+// ID returns the current member's ID.
+func (e *Election) ID() string {
+	return e.id
+}
+
+// LeaderID returns the current leader's ID.
+// it's similar with https://github.com/etcd-io/etcd/blob/v3.4.3/clientv3/concurrency/election.go#L147.
+func (e *Election) LeaderID(ctx context.Context) (string, error) {
+	resp, err := e.cli.Get(ctx, e.key, clientv3.WithFirstCreate()...)
+	if err != nil {
+		return "", terror.ErrElectionGetLeaderIDFail.Delegate(err)
+	} else if len(resp.Kvs) == 0 {
+		// no leader currently elected
+		return "", terror.ErrElectionGetLeaderIDFail.Delegate(concurrency.ErrElectionNoLeader)
+	}
+	return string(resp.Kvs[0].Value), nil
+}
+
 // ErrorNotify returns a channel that can fetch errors occurred for campaign.
 func (e *Election) ErrorNotify() <-chan error {
 	return e.ech
