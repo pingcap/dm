@@ -51,6 +51,17 @@ func eventFilterFunc(cmd *cobra.Command, _ []string) {
 		fmt.Println(cmd.Usage())
 		return
 	}
+	workers, err := common.GetWorkerArgs(cmd)
+	if err != nil {
+		common.PrintLines("get workers error:\n%v", errors.ErrorStack(err))
+		return
+	}
+	if len(workers) != 1 {
+		common.PrintLines("we want 1 worker, but get ", workers)
+		return
+	}
+	worker := workers[0]
+
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
 	if err != nil {
 		common.PrintLines("get file content error:\n%v", errors.ErrorStack(err))
@@ -71,12 +82,23 @@ func eventFilterFunc(cmd *cobra.Command, _ []string) {
 		common.PrintLines("%s", errors.ErrorStack(err))
 		return
 	}
-	if len(realSQLs) > 1 {
-		common.PrintLines("Too many sqls are given. Simunator can only check one sql at one time")
+	if len(realSQLs) != 1 {
+		common.PrintLines("we want 1 sql, but get ", realSQLs)
+		return
 	}
 	sql := realSQLs[0]
 
-	filterName, action, err := filterEvent(sql, cfg.Filters, cfg.CaseSensitive)
+	mysqlInstance, err := getMySQLInstanceThroughWorker(worker, task, cfg)
+	if err != nil {
+		common.PrintLines("get mysqlInstance failed ", errors.ErrorStack(err))
+		return
+	}
+	taskEventFilter := make(map[string]*bf.BinlogEventRule, 0)
+	for _, eventFilterName := range mysqlInstance.FilterRules {
+		taskEventFilter[eventFilterName] = cfg.Filters[eventFilterName]
+	}
+
+	filterName, action, err := filterEvent(sql, taskEventFilter, cfg.CaseSensitive)
 	if err != nil {
 		common.PrintLines("get filter info failed:\n%v", errors.ErrorStack(err))
 		return

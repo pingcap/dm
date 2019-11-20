@@ -67,7 +67,7 @@ func bwListFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 	if len(workers) > 1 {
-		fmt.Println("too many workers are given. We can o nly check one worker and one table at one time.")
+		fmt.Println("we want 0 or 1 worker, but get ", workers)
 		return
 	}
 
@@ -83,8 +83,8 @@ func bwListFunc(cmd *cobra.Command, _ []string) {
 			FetchTable: true,
 			Task:       task,
 		})
-		if errMsg := checkResp(err, resp); len(errMsg) > 0 {
-			common.PrintLines("can not fetch source info from dm-master:\n%s", errMsg)
+		if err = checkResp(err, resp); err != nil {
+			common.PrintLines("can not fetch source info from dm-master:\n%s", err)
 			return
 		}
 
@@ -134,40 +134,17 @@ func bwListFunc(cmd *cobra.Command, _ []string) {
 		tableName, err := cmd.Flags().GetString("table-name")
 		if err != nil {
 			fmt.Println(errors.ErrorStack(err))
+			return
 		}
 		schema, table, err := utils.ExtractTable(tableName)
 		if err != nil {
 			fmt.Println(errors.ErrorStack(err))
-		}
-
-		cli := common.MasterClient()
-		ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
-		defer cancel()
-		resp, err := cli.FetchSourceInfo(ctx, &pb.FetchSourceInfoRequest{
-			Worker:     worker,
-			FetchTable: false,
-			Task:       task,
-		})
-		if errMsg := checkResp(err, resp); len(errMsg) > 0 {
-			common.PrintLines("can not fetch source info from dm-master:\n%s", errMsg)
 			return
 		}
 
-		if len(resp.SourceInfo) != 1 {
-			common.PrintLines("the source info of worker is not found. pls check the worker address")
-			return
-		}
-		sourceInfo := resp.SourceInfo[0]
-
-		var mysqlInstance *config.MySQLInstance
-		for _, mysqlInst := range cfg.MySQLInstances {
-			if mysqlInst.SourceID == sourceInfo.SourceID {
-				mysqlInstance = mysqlInst
-				break
-			}
-		}
-		if mysqlInstance == nil {
-			common.PrintLines("the mysql instance info is not found. pls check the worker address")
+		mysqlInstance, err := getMySQLInstanceThroughWorker(worker, task, cfg)
+		if err != nil {
+			fmt.Println(errors.ErrorStack(err))
 			return
 		}
 
@@ -187,11 +164,49 @@ func bwListFunc(cmd *cobra.Command, _ []string) {
 	common.PrettyPrintInterface(result)
 }
 
-func checkResp(err error, resp *pb.FetchSourceInfoResponse) string {
+func checkResp(err error, resp *pb.FetchSourceInfoResponse) error {
 	if err != nil {
-		return err.Error()
+		return errors.Trace(err)
 	} else if !resp.Result {
-		return resp.Msg
+		return errors.New(resp.Msg)
 	}
-	return ""
+	return nil
+}
+
+func findRelativeMySQLInstance(cfg *config.TaskConfig, sourceID string) *config.MySQLInstance {
+	var mysqlInstance *config.MySQLInstance
+	for _, mysqlInst := range cfg.MySQLInstances {
+		if mysqlInst.SourceID == sourceID {
+			mysqlInstance = mysqlInst
+			break
+		}
+	}
+	return mysqlInstance
+}
+
+func getMySQLInstanceThroughWorker(worker, task string, cfg *config.TaskConfig) (*config.MySQLInstance, error) {
+	cli := common.MasterClient()
+	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
+	defer cancel()
+
+	resp, err := cli.FetchSourceInfo(ctx, &pb.FetchSourceInfoRequest{
+		Worker:     worker,
+		FetchTable: false,
+		Task:       task,
+	})
+	if err = checkResp(err, resp); err != nil {
+		return nil, errors.Errorf("can not fetch source info from dm-master:\n%s", err)
+	}
+
+	if len(resp.SourceInfo) == 0 {
+		return nil, errors.Errorf("the source info of worker is not found. pls check the worker address")
+	}
+
+	sourceID := resp.SourceInfo[0].SourceID
+
+	mysqlInstance := findRelativeMySQLInstance(cfg, sourceID)
+	if mysqlInstance == nil {
+		return nil, errors.New("the mysql instance info is not found. pls check the worker address")
+	}
+	return mysqlInstance, nil
 }
