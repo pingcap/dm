@@ -99,7 +99,7 @@ func (t *testEtcdUtilSuite) startEtcd(c *C, cfg *embed.Config) *embed.Etcd {
 }
 
 func (t *testEtcdUtilSuite) createEtcdClient(c *C, cfg *embed.Config) *clientv3.Client {
-	cli, err := clientv3.New(clientv3.Config{Endpoints: t.urlsToStrings(cfg.LCUrls)})
+	cli, err := CreateClient(t.urlsToStrings(cfg.LCUrls))
 	c.Assert(err, IsNil)
 	return cli
 }

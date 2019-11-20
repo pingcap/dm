@@ -30,7 +30,6 @@ import (
 	"github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/pd/pkg/tempurl"
-	"go.etcd.io/etcd/clientv3"
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
@@ -1562,10 +1561,7 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 	c.Assert(s2.Start(ctx), check.IsNil)
 	defer s2.Close()
 
-	client, err := clientv3.New(clientv3.Config{
-		Endpoints:   strings.Split(cfg1.AdvertisePeerUrls, ","),
-		DialTimeout: etcdutil.DefaultDialTimeout,
-	})
+	client, err := etcdutil.CreateClient(strings.Split(cfg1.AdvertisePeerUrls, ","))
 	c.Assert(err, check.IsNil)
 	defer client.Close()
 

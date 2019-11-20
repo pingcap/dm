@@ -23,10 +23,10 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/pd/pkg/tempurl"
-	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/clientv3/concurrency"
 	"go.etcd.io/etcd/embed"
 
+	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -89,10 +89,7 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 		ID2        = "member2"
 		ID3        = "member3"
 	)
-	cli, err := clientv3.New(clientv3.Config{
-		Endpoints:   []string{t.endPoint},
-		DialTimeout: 3 * time.Second,
-	})
+	cli, err := etcdutil.CreateClient([]string{t.endPoint})
 	c.Assert(err, IsNil)
 	defer cli.Close()
 
@@ -187,10 +184,7 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 		ID1        = "member1"
 		ID2        = "member2"
 	)
-	cli, err := clientv3.New(clientv3.Config{
-		Endpoints:   []string{t.endPoint},
-		DialTimeout: 3 * time.Second,
-	})
+	cli, err := etcdutil.CreateClient([]string{t.endPoint})
 	c.Assert(err, IsNil)
 	defer cli.Close()
 
@@ -247,10 +241,7 @@ func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 		key        = "unit-test/election-delete-key"
 		ID         = "member"
 	)
-	cli, err := clientv3.New(clientv3.Config{
-		Endpoints:   []string{t.endPoint},
-		DialTimeout: 3 * time.Second,
-	})
+	cli, err := etcdutil.CreateClient([]string{t.endPoint})
 	c.Assert(err, IsNil)
 	defer cli.Close()
 

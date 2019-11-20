@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/embed"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -119,10 +118,7 @@ func prepareJoinEtcd(cfg *Config) error {
 	}
 
 	// if without previous data, we need a client to contact with the existing cluster.
-	client, err := clientv3.New(clientv3.Config{
-		Endpoints:   strings.Split(cfg.Join, ","),
-		DialTimeout: etcdutil.DefaultDialTimeout,
-	})
+	client, err := etcdutil.CreateClient(strings.Split(cfg.Join, ","))
 	if err != nil {
 		return terror.ErrMasterJoinEmbedEtcdFail.Delegate(err, fmt.Sprintf("create etcd client for %s", cfg.Join))
 	}
