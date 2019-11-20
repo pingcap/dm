@@ -397,6 +397,7 @@ func (s *Server) operateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 	if len(req.Workers) > 0 {
 		workers = req.Workers // specify only do operation on partial dm-workers
 	}
+	log.L().Info("", zap.Reflect("workers", workers))
 	workerRespCh := make(chan *pb.OperateSubTaskResponse, len(workers))
 
 	handleErr := func(err error, worker string) {
@@ -2495,6 +2496,7 @@ func (s *Server) WatchRequest(ctx context.Context) {
 				continue
 			}
 
+			log.L().Info("WatchRequest response", zap.Int64("revision", wresp.Header.Revision))
 			for _, ev := range wresp.Events {
 				// only need handle put event
 				// FIXME: if don't use int32, will get error invalid operation: `ev.Type != "go.etcd.io/etcd/mvcc/mvccpb".PUT (mismatched types "github.com/coreos/etcd/mvcc/mvccpb".Event_EventType and "go.etcd.io/etcd/mvcc/mvccpb".Event_EventType)` when build, don't know why now, maybe fix it later.
@@ -2773,7 +2775,6 @@ func (s *Server) saveRequestAndWaitResponse(ctx context.Context, tp pb.OperateTy
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	fmt.Println(revision)
 
 	watchCh := s.etcdClient.Watch(ctx, path.Join(defaultOperatePath, operateIDStr), revision+1)
 
@@ -2791,6 +2792,7 @@ func (s *Server) saveRequestAndWaitResponse(ctx context.Context, tp pb.OperateTy
 				log.L().Warn("have more than one event on key in etcd", zap.String("key", operateIDStr))
 			}
 
+			log.L().Info("saveRequestAndWaitResponse response", zap.Int64("revision", wresp.Header.Revision))
 			for _, ev := range wresp.Events {
 				operate := &pb.Operate{}
 				err := operate.Unmarshal(ev.Kv.Value)

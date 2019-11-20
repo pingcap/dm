@@ -161,17 +161,18 @@ func newMockRPCClient(client pb.WorkerClient) workerrpc.Client {
 	return c
 }
 
-func testDefaultMasterServer(c *check.C) *Server {
+func testDefaultMasterServer(c *check.C) (*Server, context.CancelFunc) {
 	cfg := NewConfig()
 	err := cfg.Parse([]string{"-config=./dm-master.toml"})
 	c.Assert(err, check.IsNil)
 	cfg.DataDir = c.MkDir()
 	server := NewServer(cfg)
 	server.etcdClient = etcdClient
-	go server.ap.Start(context.Background())
-	go server.WatchRequest(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	go server.ap.Start(ctx)
+	go server.WatchRequest(ctx)
 
-	return server
+	return server, cancel
 }
 
 func testGenSubTaskConfig(c *check.C, server *Server, ctrl *gomock.Controller) map[string]*config.SubTaskConfig {
@@ -284,7 +285,8 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
-	server := testDefaultMasterServer(c)
+	server, cancel := testDefaultMasterServer(c)
+	defer cancel()
 
 	// test query all workers
 	for _, workerAddr := range server.cfg.DeployMap {
@@ -336,7 +338,8 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 }
 
 func (t *testMaster) TestShowDDLLocks(c *check.C) {
-	server := testDefaultMasterServer(c)
+	server, cancel := testDefaultMasterServer(c)
+	defer cancel()
 
 	resp, err := server.ShowDDLLocks(context.Background(), &pb.ShowDDLLocksRequest{})
 	c.Assert(err, check.IsNil)
@@ -403,7 +406,8 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
-	server := testDefaultMasterServer(c)
+	server, cancel := testDefaultMasterServer(c)
+	defer cancel()
 
 	// check task successfully
 	testMockWorkerConfig(c, server, ctrl, "", true)
@@ -441,7 +445,8 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
-	server := testDefaultMasterServer(c)
+	server, cancel := testDefaultMasterServer(c)
+	defer cancel()
 
 	// s.generateSubTask with error
 	resp, err := server.StartTask(context.Background(), &pb.StartTaskRequest{
@@ -513,7 +518,8 @@ func (t *testMaster) TestStartTask(c *check.C) {
 func (t *testMaster) TestQueryError(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
-	server := testDefaultMasterServer(c)
+	server, cancel := testDefaultMasterServer(c)
+	defer cancel()
 
 	// test query all workers
 	for _, workerAddr := range server.cfg.DeployMap {
@@ -573,7 +579,9 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
-	server := testDefaultMasterServer(c)
+	server, cancel := testDefaultMasterServer(c)
+	defer cancel()
+
 	for _, workerAddr := range server.cfg.DeployMap {
 		workers = append(workers, workerAddr)
 	}
@@ -751,7 +759,8 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
-	server := testDefaultMasterServer(c)
+	server, cancel := testDefaultMasterServer(c)
+	defer cancel()
 
 	// s.generateSubTask with error
 	resp, err := server.UpdateTask(context.Background(), &pb.UpdateTaskRequest{
@@ -884,7 +893,8 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 		traceGIDIdx = 1
 	)
 
-	server := testDefaultMasterServer(c)
+	server, cancel := testDefaultMasterServer(c)
+	defer cancel()
 
 	workers := make([]string, 0, len(server.cfg.DeployMap))
 	for _, workerAddr := range server.cfg.DeployMap {
@@ -1006,7 +1016,9 @@ func (t *testMaster) TestBreakWorkerDDLLock(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
-	server := testDefaultMasterServer(c)
+	server, cancel := testDefaultMasterServer(c)
+	defer cancel()
+
 	var (
 		task    = "test"
 		schema  = "test_db"
@@ -1101,7 +1113,8 @@ func (t *testMaster) TestRefreshWorkerTasks(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
-	server := testDefaultMasterServer(c)
+	server, cancel := testDefaultMasterServer(c)
+	defer cancel()
 
 	workers := make([]string, 0, len(server.cfg.DeployMap))
 
@@ -1173,7 +1186,9 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
-	server := testDefaultMasterServer(c)
+	server, cancel := testDefaultMasterServer(c)
+	defer cancel()
+
 	var (
 		now      = time.Now().Unix()
 		filename = "mysql-bin.000005"
@@ -1262,7 +1277,8 @@ func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
-	server := testDefaultMasterServer(c)
+	server, cancel := testDefaultMasterServer(c)
+	defer cancel()
 	workers := make([]string, 0, len(server.cfg.Deploy))
 
 	for _, deploy := range server.cfg.Deploy {
@@ -1338,7 +1354,8 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
-	server := testDefaultMasterServer(c)
+	server, cancel := testDefaultMasterServer(c)
+	defer cancel()
 	workers := make([]string, 0, len(server.cfg.Deploy))
 
 	for _, deploy := range server.cfg.Deploy {
@@ -1419,7 +1436,8 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
-	server := testDefaultMasterServer(c)
+	server, cancel := testDefaultMasterServer(c)
+	defer cancel()
 	workers := make([]string, 0, len(server.cfg.Deploy))
 	for _, deploy := range server.cfg.Deploy {
 		workers = append(workers, deploy.Worker)
