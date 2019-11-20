@@ -28,10 +28,7 @@ import (
 
 var (
 	commandMasterFlags = CommandMasterFlags{}
-	rootCmd            = &cobra.Command{
-		Use:   "dmctl",
-		Short: "DM control",
-	}
+	rootCmd            *cobra.Command
 )
 
 // CommandMasterFlags are flags that used in all commands for dm-master
@@ -45,6 +42,15 @@ func (c CommandMasterFlags) Reset() {
 }
 
 func init() {
+	rootCmd = NewRootCmd()
+}
+
+// NewRootCmd generates a new rootCmd
+func NewRootCmd() *cobra.Command {
+	rootCmd := &cobra.Command{
+		Use:   "dmctl",
+		Short: "DM control",
+	}
 	// --worker worker1 -w worker2 --worker=worker3,worker4 -w=worker5,worker6
 	rootCmd.PersistentFlags().StringSliceVarP(&commandMasterFlags.workers, "worker", "w", []string{}, "DM-worker ID")
 	rootCmd.AddCommand(
@@ -71,6 +77,7 @@ func init() {
 		master.NewPurgeRelayCmd(),
 		master.NewMigrateRelayCmd(),
 	)
+	return rootCmd
 }
 
 // Init initializes dm-control
@@ -122,6 +129,7 @@ func PrintHelp(args []string) {
 // Start starts running a command
 func Start(args []string) {
 	commandMasterFlags.Reset()
+	rootCmd = NewRootCmd()
 	rootCmd.SetArgs(args)
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(rootCmd.UsageString())
