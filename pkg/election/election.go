@@ -17,6 +17,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/clientv3/concurrency"
@@ -77,17 +78,17 @@ func (e *Election) ID() string {
 	return e.id
 }
 
-// LeaderID returns the current leader's ID.
+// LeaderInfo returns the current leader's key and ID.
 // it's similar with https://github.com/etcd-io/etcd/blob/v3.4.3/clientv3/concurrency/election.go#L147.
-func (e *Election) LeaderID(ctx context.Context) (string, error) {
+func (e *Election) LeaderInfo(ctx context.Context) (string, string, error) {
 	resp, err := e.cli.Get(ctx, e.key, clientv3.WithFirstCreate()...)
 	if err != nil {
-		return "", terror.ErrElectionGetLeaderIDFail.Delegate(err)
+		return "", "", terror.ErrElectionGetLeaderIDFail.Delegate(err)
 	} else if len(resp.Kvs) == 0 {
 		// no leader currently elected
-		return "", terror.ErrElectionGetLeaderIDFail.Delegate(concurrency.ErrElectionNoLeader)
+		return "", "", terror.ErrElectionGetLeaderIDFail.Delegate(concurrency.ErrElectionNoLeader)
 	}
-	return string(resp.Kvs[0].Value), nil
+	return string(resp.Kvs[0].Key), string(resp.Kvs[0].Value), nil
 }
 
 // RetireNotify returns a channel that can fetch notification when the leader is retired
@@ -131,7 +132,7 @@ func (e *Election) campaignLoop(ctx context.Context) {
 		if session != nil {
 			closeSession(session) // close the latest session.
 		}
-		if err != nil {
+		if err != nil && errors.Cause(err) != ctx.Err() { // only send non-ctx.Err() error
 			e.l.Error("", zap.Error(err))
 			e.ech <- err
 		}
@@ -140,7 +141,7 @@ func (e *Election) campaignLoop(ctx context.Context) {
 	// create the initial session.
 	session, err = newSession(e.cli, e.sessionTTL)
 	if err != nil {
-		err = terror.ErrElectionCampaignFail.Delegate(err, "create a new session")
+		err = terror.ErrElectionCampaignFail.Delegate(err, "create the initial session")
 		return
 	}
 
@@ -171,7 +172,7 @@ func (e *Election) campaignLoop(ctx context.Context) {
 		}
 
 		// compare with the current leader
-		leaderID, err := getLeaderID(ctx, elec)
+		leaderKey, leaderID, err := getLeaderInfo(ctx, elec)
 		if err != nil {
 			// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
 			e.l.Warn("fail to get leader ID", zap.Error(err))
@@ -183,7 +184,7 @@ func (e *Election) campaignLoop(ctx context.Context) {
 		}
 
 		e.isLeader.Set(true) // become the leader now
-		e.watchLeader(ctx, session, leaderID)
+		e.watchLeader(ctx, session, leaderKey)
 		e.isLeader.Set(false) // need to re-campaign
 	}
 }
@@ -213,7 +214,7 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 
 			for _, ev := range resp.Events {
 				if ev.Type == mvccpb.DELETE {
-					e.l.Info("fail to watch, the leader is deleted")
+					e.l.Info("fail to watch, the leader is deleted", zap.ByteString("key", ev.Kv.Key))
 					return
 				}
 			}
@@ -230,11 +231,11 @@ func newSession(cli *clientv3.Client, ttl int) (*concurrency.Session, error) {
 	return concurrency.NewSession(cli, concurrency.WithTTL(ttl))
 }
 
-// getLeaderID get the current leader's ID (if exists).
-func getLeaderID(ctx context.Context, elec *concurrency.Election) (string, error) {
+// getLeaderInfo get the current leader's information (if exists).
+func getLeaderInfo(ctx context.Context, elec *concurrency.Election) (key, ID string, err error) {
 	resp, err := elec.Leader(ctx)
 	if err != nil {
-		return "", err
+		return
 	}
-	return string(resp.Kvs[0].Value), nil
+	return string(resp.Kvs[0].Key), string(resp.Kvs[0].Value), nil
 }
