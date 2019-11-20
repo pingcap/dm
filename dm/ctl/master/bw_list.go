@@ -160,7 +160,6 @@ func bwListFunc(cmd *cobra.Command, _ []string) {
 			result.WillBeFiltered = "no"
 		}
 	}
-
 	common.PrettyPrintInterface(result)
 }
 

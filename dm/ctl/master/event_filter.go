@@ -57,7 +57,7 @@ func eventFilterFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 	if len(workers) != 1 {
-		common.PrintLines("we want 1 worker, but get ", workers)
+		common.PrintLines("we want 1 worker, but get %v", workers)
 		return
 	}
 	worker := workers[0]
@@ -83,14 +83,14 @@ func eventFilterFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 	if len(realSQLs) != 1 {
-		common.PrintLines("we want 1 sql, but get ", realSQLs)
+		common.PrintLines("we want 1 sql, but get %v", realSQLs)
 		return
 	}
 	sql := realSQLs[0]
 
 	mysqlInstance, err := getMySQLInstanceThroughWorker(worker, task, cfg)
 	if err != nil {
-		common.PrintLines("get mysqlInstance failed ", errors.ErrorStack(err))
+		common.PrintLines("get mysqlInstance failed %v", errors.ErrorStack(err))
 		return
 	}
 	taskEventFilter := make(map[string]*bf.BinlogEventRule, 0)
