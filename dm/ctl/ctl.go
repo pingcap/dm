@@ -47,13 +47,13 @@ func init() {
 
 // NewRootCmd generates a new rootCmd
 func NewRootCmd() *cobra.Command {
-	rootCmd := &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "dmctl",
 		Short: "DM control",
 	}
 	// --worker worker1 -w worker2 --worker=worker3,worker4 -w=worker5,worker6
-	rootCmd.PersistentFlags().StringSliceVarP(&commandMasterFlags.workers, "worker", "w", []string{}, "DM-worker ID")
-	rootCmd.AddCommand(
+	cmd.PersistentFlags().StringSliceVarP(&commandMasterFlags.workers, "worker", "w", []string{}, "DM-worker ID")
+	cmd.AddCommand(
 		master.NewStartTaskCmd(),
 		master.NewStopTaskCmd(),
 		master.NewPauseTaskCmd(),
@@ -77,7 +77,7 @@ func NewRootCmd() *cobra.Command {
 		master.NewPurgeRelayCmd(),
 		master.NewMigrateRelayCmd(),
 	)
-	return rootCmd
+	return cmd
 }
 
 // Init initializes dm-control
