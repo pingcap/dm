@@ -27,11 +27,6 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-func newSession(cli *clientv3.Client, ttl int) (*concurrency.Session, error) {
-	// add more options if needed.
-	return concurrency.NewSession(cli, concurrency.WithTTL(ttl))
-}
-
 // Election implements the leader election based on etcd.
 type Election struct {
 	// the Election instance does not own the client instance,
@@ -41,6 +36,7 @@ type Election struct {
 	key        string
 	id         string
 	ech        chan error
+	retireCh   chan struct{}
 	isLeader   sync2.AtomicBool
 
 	closed sync2.AtomicInt32
@@ -58,6 +54,7 @@ func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key,
 		sessionTTL: sessionTTL,
 		key:        key,
 		id:         id,
+		retireCh:   make(chan struct{}, 1),
 		ech:        make(chan error, 1), // size 1 is enough
 		cancel:     cancel2,
 		l:          log.With(zap.String("component", "election")),
@@ -68,6 +65,39 @@ func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key,
 		e.campaignLoop(ctx2)
 	}()
 	return e
+}
+
+// IsLeader returns whether this member is the leader.
+func (e *Election) IsLeader() bool {
+	return e.isLeader.Get()
+}
+
+// ID returns the current member's ID.
+func (e *Election) ID() string {
+	return e.id
+}
+
+// LeaderID returns the current leader's ID.
+// it's similar with https://github.com/etcd-io/etcd/blob/v3.4.3/clientv3/concurrency/election.go#L147.
+func (e *Election) LeaderID(ctx context.Context) (string, error) {
+	resp, err := e.cli.Get(ctx, e.key, clientv3.WithFirstCreate()...)
+	if err != nil {
+		return "", terror.ErrElectionGetLeaderIDFail.Delegate(err)
+	} else if len(resp.Kvs) == 0 {
+		// no leader currently elected
+		return "", terror.ErrElectionGetLeaderIDFail.Delegate(concurrency.ErrElectionNoLeader)
+	}
+	return string(resp.Kvs[0].Value), nil
+}
+
+// RetireNotify returns a channel that can fetch notification when the leader is retired
+func (e *Election) RetireNotify() <-chan struct{} {
+	return e.retireCh
+}
+
+// ErrorNotify returns a channel that can fetch errors occurred for campaign.
+func (e *Election) ErrorNotify() <-chan error {
+	return e.ech
 }
 
 // Close closes the election instance and release the resources.
@@ -91,10 +121,13 @@ func (e *Election) campaignLoop(ctx context.Context) {
 
 	closeSession := func(se *concurrency.Session) {
 		err2 := se.Close() // only log this error
-		e.l.Error("fail to close etcd session", zap.Int64("lease", int64(se.Lease())), zap.Error(err2))
+		if err2 != nil {
+			e.l.Error("fail to close etcd session", zap.Int64("lease", int64(se.Lease())), zap.Error(err2))
+		}
 	}
 
 	defer func() {
+		e.isLeader.Set(false) // stop campaign now, mark it as not the leader.
 		if session != nil {
 			closeSession(session) // close the latest session.
 		}
@@ -158,6 +191,13 @@ func (e *Election) campaignLoop(ctx context.Context) {
 func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session, key string) {
 	e.l.Debug("watch leader key", zap.String("key", key))
 
+	defer func() {
+		select {
+		case e.retireCh <- struct{}{}:
+		default:
+		}
+	}()
+
 	wch := e.cli.Watch(ctx, key)
 	for {
 		select {
@@ -185,32 +225,9 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 	}
 }
 
-// IsLeader returns whether this member is the leader.
-func (e *Election) IsLeader() bool {
-	return e.isLeader.Get()
-}
-
-// ID returns the current member's ID.
-func (e *Election) ID() string {
-	return e.id
-}
-
-// LeaderID returns the current leader's ID.
-// it's similar with https://github.com/etcd-io/etcd/blob/v3.4.3/clientv3/concurrency/election.go#L147.
-func (e *Election) LeaderID(ctx context.Context) (string, error) {
-	resp, err := e.cli.Get(ctx, e.key, clientv3.WithFirstCreate()...)
-	if err != nil {
-		return "", terror.ErrElectionGetLeaderIDFail.Delegate(err)
-	} else if len(resp.Kvs) == 0 {
-		// no leader currently elected
-		return "", terror.ErrElectionGetLeaderIDFail.Delegate(concurrency.ErrElectionNoLeader)
-	}
-	return string(resp.Kvs[0].Value), nil
-}
-
-// ErrorNotify returns a channel that can fetch errors occurred for campaign.
-func (e *Election) ErrorNotify() <-chan error {
-	return e.ech
+func newSession(cli *clientv3.Client, ttl int) (*concurrency.Session, error) {
+	// add more options if needed.
+	return concurrency.NewSession(cli, concurrency.WithTTL(ttl))
 }
 
 // getLeaderID get the current leader's ID (if exists).
