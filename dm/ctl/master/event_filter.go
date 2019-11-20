@@ -16,6 +16,10 @@ package master
 import (
 	"fmt"
 
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/ctl/common"
+	"github.com/pingcap/dm/pkg/utils"
+
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
@@ -23,10 +27,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	_ "github.com/pingcap/tidb/types/parser_driver" // for import parser driver
 	"github.com/spf13/cobra"
-
-	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/dm/ctl/common"
-	"github.com/pingcap/dm/pkg/utils"
 )
 
 type eventFilterResult struct {

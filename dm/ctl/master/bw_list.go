@@ -17,14 +17,14 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pingcap/errors"
-	"github.com/pingcap/tidb-tools/pkg/filter"
-	"github.com/spf13/cobra"
-
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/utils"
+
+	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb-tools/pkg/filter"
+	"github.com/spf13/cobra"
 )
 
 type bwListResult struct {

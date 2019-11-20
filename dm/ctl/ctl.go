@@ -36,6 +36,11 @@ type CommandMasterFlags struct {
 	workers []string // specify workers to control on these dm-workers
 }
 
+// Reset clears cache of CommandMasterFlags
+func (c CommandMasterFlags) Reset() {
+	c.workers = c.workers[:0]
+}
+
 func init() {
 	rootCmd = NewRootCmd()
 }
@@ -126,7 +131,7 @@ func PrintHelp(args []string) {
 
 // Start starts running a command
 func Start(args []string) {
-	commandMasterFlags.workers = commandMasterFlags.workers[:0]
+	commandMasterFlags.Reset()
 	rootCmd = NewRootCmd()
 	rootCmd.SetArgs(args)
 	if err := rootCmd.Execute(); err != nil {
