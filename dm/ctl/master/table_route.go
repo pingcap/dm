@@ -68,7 +68,7 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 	if len(workers) > 1 {
-		common.PrintLines("we want 0 or 1 worker, but get ", workers)
+		common.PrintLines("we want 0 or 1 worker, but get %v", workers)
 		return
 	}
 
@@ -106,6 +106,7 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 			bwFilter, err := filter.New(cfg.CaseSensitive, cfg.BWList[bwListName])
 			if err != nil {
 				common.PrintLines("build of black white filter for source %s failed:\n%s", sourceInfo.SourceID, errors.ErrorStack(err))
+				return
 			}
 			filterTableList = bwFilter.ApplyOn(filterTableList)
 
@@ -144,7 +145,7 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 			return
 		}
 
-		filtered := checkSingleBlackWhiteFilter(schema, table, cfg, cfg.BWList[mysqlInstance.BWListName])
+		filtered := checkSingleBWFilter(schema, table, cfg.CaseSensitive, cfg.BWList[mysqlInstance.BWListName])
 		if filtered {
 			result.WillBeFiltered = "yes"
 		} else {

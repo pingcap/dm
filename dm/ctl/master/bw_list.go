@@ -66,7 +66,7 @@ func bwListFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 	if len(workers) > 1 {
-		common.PrintLines("we want 0 or 1 worker, but get ", workers)
+		common.PrintLines("we want 0 or 1 worker, but get %v", workers)
 		return
 	}
 
@@ -131,7 +131,7 @@ func bwListFunc(cmd *cobra.Command, _ []string) {
 			return
 		}
 
-		filtered := checkSingleBlackWhiteFilter(schema, table, cfg, cfg.BWList[mysqlInstance.BWListName])
+		filtered := checkSingleBWFilter(schema, table, cfg.CaseSensitive, cfg.BWList[mysqlInstance.BWListName])
 		if filtered {
 			result.WillBeFiltered = "yes"
 		} else {
@@ -181,7 +181,7 @@ func getCheckSchemaTableName(cmd *cobra.Command) (string, string, error) {
 		return "", "", errors.Annotate(err, "get table-name arg failed")
 	}
 	if tableName == "" {
-		return "", "", errors.New("argument table-name is not given. pls check it again.")
+		return "", "", errors.New("argument table-name is not given. pls check it again")
 	}
 	schema, table, err := utils.ExtractTable(tableName)
 	if err != nil {
@@ -227,9 +227,9 @@ func getMySQLInstanceThroughWorker(worker, task string, cfg *config.TaskConfig) 
 	return mysqlInstance, nil
 }
 
-func checkSingleBlackWhiteFilter(schema, table string, cfg *config.TaskConfig, rules *filter.Rules) bool {
+func checkSingleBWFilter(schema, table string, caseSensitive bool, rules *filter.Rules) bool {
 	checkTable := []*filter.Table{{Schema: schema, Name: table}}
-	bwFilter, err := filter.New(cfg.CaseSensitive, rules)
+	bwFilter, err := filter.New(caseSensitive, rules)
 	if err != nil {
 		common.PrintLines("build of black-white filter failed:\n%s", errors.ErrorStack(err))
 	}
