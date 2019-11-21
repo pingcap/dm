@@ -209,7 +209,7 @@ func isDataExist(d string) bool {
 	return len(names) != 0
 }
 
-// getEtcdClient returns an etcd client
+// getEtcdClientForOperate returns an etcd client
 func getEtcdClientForOperate(addr string) (*etcd.Client, error) {
 	ectdEndpoints, err := utils.ParseHostPortAddr(addr)
 	if err != nil {
