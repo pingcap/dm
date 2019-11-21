@@ -15,7 +15,7 @@ package master
 
 import (
 	"context"
-	"fmt"
+	"os"
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
@@ -37,7 +37,8 @@ func NewRefreshWorkerTasks() *cobra.Command {
 // refreshWorkerTasksFunc does refresh workerTasks request
 func refreshWorkerTasksFunc(cmd *cobra.Command, _ []string) {
 	if len(cmd.Flags().Args()) > 0 {
-		fmt.Println(cmd.Usage())
+		cmd.SetOut(os.Stdout)
+		cmd.Usage()
 		return
 	}
 

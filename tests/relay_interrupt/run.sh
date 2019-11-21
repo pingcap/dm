@@ -55,7 +55,7 @@ function run() {
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status" \
             "\"taskName\": \"test\"" 1 \
-            "\"taskStatus\": \"Error - Some error occurred in subtask\"" 1
+            "\"taskStatus\": \"Error - Some error occurred in subtask. Please run \`query-status test\` to get more details.\"" 1
 
         echo "reset go failpoints, and need restart dm-worker"
         echo "then resume task, task will recover success"

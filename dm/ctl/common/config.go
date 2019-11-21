@@ -28,19 +28,25 @@ import (
 
 const (
 	defaultRPCTimeout = "10m"
+
+	// EncryptCmdName is special command
+	EncryptCmdName = "encrypt"
 )
 
 // NewConfig creates a new base config for dmctl.
 func NewConfig() *Config {
 	cfg := &Config{}
 	cfg.FlagSet = flag.NewFlagSet("dmctl", flag.ContinueOnError)
+
+	// ignore default help usage
+	cfg.FlagSet.Usage = func() {}
 	fs := cfg.FlagSet
 
 	fs.BoolVar(&cfg.printVersion, "V", false, "prints version and exit")
 	fs.StringVar(&cfg.ConfigFile, "config", "", "path to config file")
 	fs.StringVar(&cfg.MasterAddr, "master-addr", "", "master API server addr")
 	fs.StringVar(&cfg.RPCTimeoutStr, "rpc-timeout", defaultRPCTimeout, fmt.Sprintf("rpc timeout, default is %s", defaultRPCTimeout))
-	fs.StringVar(&cfg.encrypt, "encrypt", "", "encrypt plaintext to ciphertext")
+	fs.StringVar(&cfg.encrypt, EncryptCmdName, "", "encrypt plaintext to ciphertext")
 
 	return cfg
 }
@@ -69,54 +75,60 @@ func (c *Config) String() string {
 }
 
 // Parse parses flag definitions from the argument list.
-func (c *Config) Parse(arguments []string) error {
-	// Parse first to get config file.
-	err := c.FlagSet.Parse(arguments)
+func (c *Config) Parse(arguments []string) (finish bool, err error) {
+	err = c.FlagSet.Parse(arguments)
 	if err != nil {
-		return errors.Trace(err)
+		return false, errors.Trace(err)
 	}
 
 	if c.printVersion {
 		fmt.Println(utils.GetRawInfo())
-		return flag.ErrHelp
+		return true, nil
 	}
 
 	if len(c.encrypt) > 0 {
 		ciphertext, err1 := utils.Encrypt(c.encrypt)
 		if err1 != nil {
-			fmt.Println(errors.ErrorStack(err1))
-		} else {
-			fmt.Println(ciphertext)
+			return true, err1
 		}
-		return flag.ErrHelp
+		fmt.Println(ciphertext)
+		return true, nil
 	}
 
 	// Load config file if specified.
 	if c.ConfigFile != "" {
 		err = c.configFromFile(c.ConfigFile)
 		if err != nil {
-			return errors.Trace(err)
+			return false, errors.Trace(err)
 		}
 	}
 
 	// Parse again to replace with command line options.
 	err = c.FlagSet.Parse(arguments)
 	if err != nil {
-		return errors.Trace(err)
+		return false, errors.Trace(err)
 	}
 
 	if len(c.FlagSet.Args()) != 0 {
-		return errors.Errorf("'%s' is an invalid flag", c.FlagSet.Arg(0))
+		return false, errors.Errorf("'%s' is an invalid flag", c.FlagSet.Arg(0))
 	}
 
 	if c.MasterAddr == "" {
-		return errors.New("--master-addr not provided")
-	}
-	if err = validateAddr(c.MasterAddr); err != nil {
-		return errors.Annotatef(err, "specify master addr %s", c.MasterAddr)
+		return false, flag.ErrHelp
 	}
 
-	return errors.Trace(c.adjust())
+	return false, errors.Trace(c.adjust())
+}
+
+// Validate check config is ready to execute commmand
+func (c *Config) Validate() error {
+	if c.MasterAddr == "" {
+		return errors.New("--master-addr not provided")
+	}
+	if err := validateAddr(c.MasterAddr); err != nil {
+		return errors.Annotatef(err, "specify master addr %s", c.MasterAddr)
+	}
+	return nil
 }
 
 // configFromFile loads config from file.

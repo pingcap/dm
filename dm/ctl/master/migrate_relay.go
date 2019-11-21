@@ -15,7 +15,7 @@ package master
 
 import (
 	"context"
-	"fmt"
+	"os"
 	"strconv"
 
 	"github.com/pingcap/errors"
@@ -40,7 +40,8 @@ func NewMigrateRelayCmd() *cobra.Command {
 // MigrateRealyFunc does migrate relay request
 func migrateRelayFunc(cmd *cobra.Command, _ []string) {
 	if len(cmd.Flags().Args()) != 3 {
-		fmt.Println(cmd.Usage())
+		cmd.SetOut(os.Stdout)
+		cmd.Usage()
 		return
 	}
 
