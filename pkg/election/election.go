@@ -203,7 +203,6 @@ func (e *Election) toBeLeader() {
 	case e.leaderCh <- true:
 	default:
 	}
-	e.l.Info("become the leader", zap.String("member", e.id))
 }
 
 func (e *Election) retireLeader() {
@@ -212,7 +211,6 @@ func (e *Election) retireLeader() {
 	case e.leaderCh <- false:
 	default:
 	}
-	e.l.Info("retire from the leader", zap.String("member", e.id))
 }
 
 func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session, key string) {
@@ -231,6 +229,7 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 			}
 
 			for _, ev := range resp.Events {
+				// user may use some etcd client (like etcdctl) to delete the leader key and trigger a new campaign.
 				if ev.Type == mvccpb.DELETE {
 					e.l.Info("fail to watch, the leader is deleted", zap.ByteString("key", ev.Kv.Key))
 					return
@@ -249,6 +248,8 @@ func (e *Election) newSession(ctx context.Context, retryCnt int) (*concurrency.S
 		err     error
 		session *concurrency.Session
 	)
+
+forLoop:
 	for i := 0; i < retryCnt; i++ {
 		if i > 0 {
 			select {
@@ -259,7 +260,7 @@ func (e *Election) newSession(ctx context.Context, retryCnt int) (*concurrency.S
 			select {
 			case <-time.After(newSessionRetryInterval):
 			case <-ctx.Done():
-				break
+				break forLoop
 			}
 		}
 
@@ -268,7 +269,7 @@ func (e *Election) newSession(ctx context.Context, retryCnt int) (*concurrency.S
 		// so we can close the session when the client is still valid.
 		session, err = concurrency.NewSession(e.cli, concurrency.WithTTL(e.sessionTTL))
 		if err == nil || errors.Cause(err) == ctx.Err() {
-			break
+			break forLoop
 		}
 	}
 	return session, err
