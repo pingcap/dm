@@ -39,8 +39,16 @@ func CheckSyncConfig(ctx context.Context, cfgs []*config.SubTaskConfig) error {
 		return nil
 	}
 
-	// all `IgnoreCheckingItems` of sub-task are same, so we take first one
-	checkingItems := config.FilterCheckingItems(cfgs[0].IgnoreCheckingItems)
+	// all `IgnoreCheckingItems` and `Mode` of sub-task are same, so we take first one
+	// for ModeFull we don't need replication privilege; for ModeIncrement we don't need dump privilege
+	ignoreCheckingItems := cfgs[0].IgnoreCheckingItems
+	switch cfgs[0].Mode {
+	case config.ModeFull:
+		ignoreCheckingItems = append(ignoreCheckingItems, config.ReplicationPrivilegeChecking)
+	case config.ModeIncrement:
+		ignoreCheckingItems = append(ignoreCheckingItems, config.DumpPrivilegeChecking)
+	}
+	checkingItems := config.FilterCheckingItems(ignoreCheckingItems)
 	if len(checkingItems) == 0 {
 		return nil
 	}
