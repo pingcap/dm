@@ -173,10 +173,13 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		return
 	}
 
-	s.closed.Set(false) // the server started now.
-
 	// start leader election
-	s.election = election.NewElection(ctx, s.etcdClient, electionTTL, electionKey, s.cfg.Name)
+	s.election, err = election.NewElection(ctx, s.etcdClient, electionTTL, electionKey, s.cfg.Name)
+	if err != nil {
+		return
+	}
+
+	s.closed.Set(false) // the server started now.
 
 	s.bgFunWg.Add(1)
 	go func() {

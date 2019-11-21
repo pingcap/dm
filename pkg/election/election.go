@@ -15,7 +15,9 @@ package election
 
 import (
 	"context"
+	"math"
 	"sync"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
@@ -26,6 +28,17 @@ import (
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+)
+
+const (
+	// newSessionDefaultRetryCnt is the default retry times when creating new session.
+	newSessionDefaultRetryCnt = 3
+	// newSessionRetryUnlimited is the unlimited retry times when creating new session.
+	newSessionRetryUnlimited = math.MaxInt64
+	// newSessionRetryInterval is the interval time when retrying to create a new session.
+	newSessionRetryInterval = 200 * time.Millisecond
+	// logNewSessionIntervalCnt is the interval count when logging errors for creating session
+	logNewSessionIntervalCnt = int(3 * time.Second / newSessionRetryInterval)
 )
 
 // Election implements the leader election based on etcd.
@@ -48,7 +61,7 @@ type Election struct {
 }
 
 // NewElection creates a new etcd leader Election instance and starts the campaign loop.
-func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key, id string) *Election {
+func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key, id string) (*Election, error) {
 	ctx2, cancel2 := context.WithCancel(ctx)
 	e := &Election{
 		cli:        cli,
@@ -60,12 +73,21 @@ func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key,
 		cancel:     cancel2,
 		l:          log.With(zap.String("component", "election")),
 	}
+
+	// try create a session before enter the campaign loop.
+	// so we can detect potential error earlier.
+	session, err := e.newSession(ctx, newSessionDefaultRetryCnt)
+	if err != nil {
+		cancel2()
+		return nil, terror.ErrElectionCampaignFail.Delegate(err, "create the initial session")
+	}
+
 	e.bgWg.Add(1)
 	go func() {
 		defer e.bgWg.Done()
-		e.campaignLoop(ctx2)
+		e.campaignLoop(ctx2, session)
 	}()
-	return e
+	return e, nil
 }
 
 // IsLeader returns whether this member is the leader.
@@ -115,12 +137,7 @@ func (e *Election) Close() {
 	e.l.Info("election is closed")
 }
 
-func (e *Election) campaignLoop(ctx context.Context) {
-	var (
-		session *concurrency.Session
-		err     error
-	)
-
+func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Session) {
 	closeSession := func(se *concurrency.Session) {
 		err2 := se.Close() // only log this error
 		if err2 != nil {
@@ -128,6 +145,7 @@ func (e *Election) campaignLoop(ctx context.Context) {
 		}
 	}
 
+	var err error
 	defer func() {
 		if session != nil {
 			closeSession(session) // close the latest session.
@@ -138,20 +156,13 @@ func (e *Election) campaignLoop(ctx context.Context) {
 		}
 	}()
 
-	// create the initial session.
-	session, err = newSession(e.cli, e.sessionTTL)
-	if err != nil {
-		err = terror.ErrElectionCampaignFail.Delegate(err, "create the initial session")
-		return
-	}
-
 	for {
 		// check context canceled/timeout
 		select {
 		case <-session.Done():
 			e.l.Info("etcd session is done, will try to create a new one", zap.Int64("old lease", int64(session.Lease())))
 			closeSession(session)
-			session, err = newSession(e.cli, e.sessionTTL)
+			session, err = e.newSession(ctx, newSessionRetryUnlimited) // retry until context is done
 			if err != nil {
 				err = terror.ErrElectionCampaignFail.Delegate(err, "create a new session")
 				return
@@ -236,9 +247,29 @@ func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session
 	}
 }
 
-func newSession(cli *clientv3.Client, ttl int) (*concurrency.Session, error) {
-	// add more options if needed.
-	return concurrency.NewSession(cli, concurrency.WithTTL(ttl))
+func (e *Election) newSession(ctx context.Context, retryCnt int) (*concurrency.Session, error) {
+	var (
+		err     error
+		session *concurrency.Session
+	)
+	for i := 0; i < retryCnt; i++ {
+		// add more options if needed.
+		// NOTE: I think use the client's context is better than something like `concurrency.WithContext(ctx)`,
+		// so we can close the session when the client is still valid.
+		session, err = concurrency.NewSession(e.cli, concurrency.WithTTL(e.sessionTTL))
+		if err == nil || errors.Cause(err) == ctx.Err() {
+			break
+		} else if i%logNewSessionIntervalCnt == 0 {
+			e.l.Warn("fail to create a new session", zap.Error(err))
+		}
+
+		select {
+		case <-time.After(newSessionRetryInterval):
+		case <-ctx.Done():
+			break
+		}
+	}
+	return session, err
 }
 
 // getLeaderInfo get the current leader's information (if exists).

@@ -38,6 +38,12 @@ func (s *Server) electionNotify(ctx context.Context) {
 					log.L().Error("get leader info", zap.Error(err2))
 				}
 			}
+		case err := <-s.election.ErrorNotify():
+			// handle errors here, we do no meaningful things now.
+			// but maybe:
+			// 1. trigger an alert
+			// 2. shutdown the DM-master process
+			log.L().Error("receive error from election", zap.Error(err))
 		}
 	}
 }

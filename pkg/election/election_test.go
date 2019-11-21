@@ -93,7 +93,8 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	defer cancel1()
-	e1 := NewElection(ctx1, cli, sessionTTL, key, ID1)
+	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1)
+	c.Assert(err, IsNil)
 	defer e1.Close()
 
 	// e1 should become the leader
@@ -111,7 +112,8 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	// start e2
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
-	e2 := NewElection(ctx2, cli, sessionTTL, key, ID2)
+	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2)
+	c.Assert(err, IsNil)
 	defer e2.Close()
 	select {
 	case leader := <-e2.leaderCh:
@@ -151,17 +153,16 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e2.ID())
 
-	// if closing the client when campaigning, we should get an error
+	// if closing the client when campaigning,
+	// we should get no error because new session will retry until context is done,
+	// and we ignore the context done error.
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		select {
 		case err2 := <-e2.ErrorNotify():
-			c.Assert(terror.ErrElectionCampaignFail.Equal(err2), IsTrue)
-			// the old session is done, but we can't create a new one.
-			c.Assert(err2, ErrorMatches, ".*fail to campaign leader: create a new session.*")
+			c.Fatalf("should not recieve error %v", err2)
 		case <-time.After(time.Second):
-			c.Fatal("do not receive error for e2")
 		}
 	}()
 	cli.Close() // close the client
@@ -170,22 +171,9 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	// can not elect with closed client.
 	ctx3, cancel3 := context.WithCancel(context.Background())
 	defer cancel3()
-	e3 := NewElection(ctx3, cli, sessionTTL, key, ID3)
-	defer e3.Close()
-	select {
-	case err3 := <-e3.ErrorNotify():
-		c.Assert(terror.ErrElectionCampaignFail.Equal(err3), IsTrue)
-		c.Assert(err3, ErrorMatches, ".*fail to campaign leader: create the initial session.*")
-	case <-time.After(time.Second):
-		c.Fatal("should fail to create session with closed client")
-	}
-
-	// can not get leader info with closed client.
-	leaderKey, leaderID, err := e3.LeaderInfo(ctx3)
-	c.Assert(terror.ErrElectionGetLeaderIDFail.Equal(err), IsTrue)
-	c.Assert(err, ErrorMatches, ".*fail to get leader ID: rpc error: code = Canceled.*")
-	c.Assert(leaderKey, Equals, "")
-	c.Assert(leaderID, Equals, "")
+	_, err = NewElection(ctx3, cli, sessionTTL, key, ID3)
+	c.Assert(terror.ErrElectionCampaignFail.Equal(err), IsTrue)
+	c.Assert(err, ErrorMatches, ".*fail to campaign leader: create the initial session: context canceled.*")
 }
 
 func (t *testElectionSuite) TestElectionAlways1(c *C) {
@@ -201,7 +189,8 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	defer cancel1()
-	e1 := NewElection(ctx1, cli, sessionTTL, key, ID1)
+	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1)
+	c.Assert(err, IsNil)
 	defer e1.Close()
 
 	// e1 should become the leader
@@ -219,7 +208,8 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 	// start e2
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
-	e2 := NewElection(ctx2, cli, sessionTTL, key, ID2)
+	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2)
+	c.Assert(err, IsNil)
 	defer e2.Close()
 	time.Sleep(100 * time.Millisecond) // wait 100ms to start the campaign
 	// but the leader should still be e1
@@ -262,7 +252,8 @@ func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	e := NewElection(ctx, cli, sessionTTL, key, ID)
+	e, err := NewElection(ctx, cli, sessionTTL, key, ID)
+	c.Assert(err, IsNil)
 	defer e.Close()
 
 	// should become the leader
