@@ -128,7 +128,6 @@ func (e *Election) campaignLoop(ctx context.Context) {
 	}
 
 	defer func() {
-		e.isLeader.Set(false) // stop campaign now, mark it as not the leader.
 		if session != nil {
 			closeSession(session) // close the latest session.
 		}
