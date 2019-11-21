@@ -12,37 +12,39 @@ message Operate {
 }
 
 enum OperateType {
-    MigrateWorkerRelay = 0;
+    Unknown = 0;
 
-    UpdateWorkerRelayConfig = 1;
+    MigrateWorkerRelay = 1;
 
-    StartTask = 2;
+    UpdateWorkerRelayConfig = 2;
 
-    UpdateMasterConfig = 3;
+    StartTask = 3;
 
-    OperateTask = 4;
+    UpdateMasterConfig = 4;
 
-    UpdateTask = 5;
+    OperateTask = 5;
 
-    QueryStatus = 6;
+    UpdateTask = 6;
 
-    QueryError = 7;
+    QueryStatus = 7;
 
-    ShowDDLLocks = 8;
+    QueryError = 8;
 
-    UnlockDDLLock = 9;
+    ShowDDLLocks = 9;
 
-    BreakWorkerDDLLock = 10;
+    UnlockDDLLock = 10;
 
-    SwitchWorkerRelayMaster = 11;
+    BreakWorkerDDLLock = 11;
 
-    OperateWorkerRelay = 12;
+    SwitchWorkerRelayMaster = 12;
 
-    RefreshWorkerTasks = 13;
+    OperateWorkerRelay = 13;
 
-    HandleSQLs = 14;
+    RefreshWorkerTasks = 14;
 
-    PurgeWorkerRelay = 15;
+    HandleSQLs = 15;
 
-    CheckTask = 16;
+    PurgeWorkerRelay = 16;
+
+    CheckTask = 17;
 }
