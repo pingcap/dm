@@ -210,7 +210,7 @@ func isDataExist(d string) bool {
 }
 
 // getEtcdClient returns an etcd client
-func getEtcdClient(addr string) (*etcd.Client, error) {
+func getEtcdClientForOperate(addr string) (*etcd.Client, error) {
 	ectdEndpoints, err := utils.ParseHostPortAddr(addr)
 	if err != nil {
 		return nil, terror.ErrMasterCreateEtcdClient.Delegate(err)

@@ -162,7 +162,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		return
 	}
 
-	s.etcdClient, err = getEtcdClient(s.cfg.MasterAddr)
+	s.etcdClient, err = getEtcdClientForOperate(s.cfg.MasterAddr)
 	if err != nil {
 		return
 	}
