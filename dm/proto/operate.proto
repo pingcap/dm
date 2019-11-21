@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package pb;
 
-import "google/api/annotations.proto";
-
 message Operate {
     OperateType tp = 1;
     bytes request = 2;
