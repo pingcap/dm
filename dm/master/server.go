@@ -187,17 +187,16 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	s.bgFunWg.Add(1)
 	go func() {
 		defer s.bgFunWg.Done()
+		s.electionNotify(ctx)
+	}()
+
+	s.bgFunWg.Add(1)
+	go func() {
+		defer s.bgFunWg.Done()
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(3 * time.Second):
-			// output the leader info.
-			_, leaderID, err2 := s.election.LeaderInfo(ctx)
-			if err2 == nil {
-				log.L().Info("get leader info", zap.String("leader", leaderID), zap.String("current member", s.cfg.Name))
-			} else {
-				log.L().Error("get leader info", zap.Error(err2))
-			}
 			// update task -> workers after started
 			s.updateTaskWorkers(ctx)
 		}
