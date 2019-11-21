@@ -393,6 +393,7 @@ const (
 	codeMasterStartEmbedEtcdFail
 	codeMasterParseURLFail
 	codeMasterJoinEmbedEtcdFail
+
 	codeMasterMarshalOperate
 	codeMasterUnmarshalOperate
 	codeMasterUnmarshalOperateRequest
@@ -400,6 +401,8 @@ const (
 	codeMasterWatchEtcd
 	codeMasterWriteEtcd
 	codeMasterCreateEtcdClient
+	codeMasterMarshalRequest
+	codeMasterUnmarshalResponse
 )
 
 // DM-worker error code
@@ -850,13 +853,16 @@ var (
 	ErrMasterParseURLFail           = New(codeMasterParseURLFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to parse URL %s")
 	ErrMasterJoinEmbedEtcdFail      = New(codeMasterJoinEmbedEtcdFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to join embed etcd: %s")
 
+	ErrMasterMarshalRequest          = New(codeMasterMarshalRequest, ClassDMMaster, ScopeInternal, LevelHigh, "fail to marshal request: %v")
+	ErrMasterMarshalResponse         = New(codeMasterMarshalResponse, ClassDMMaster, ScopeInternal, LevelHigh, "fail to marshal response")
 	ErrMasterMarshalOperate          = New(codeMasterMarshalOperate, ClassDMMaster, ScopeInternal, LevelHigh, "fail to marshal operate: %v")
+	ErrMasterUnmarshalResponse       = New(codeMasterUnmarshalResponse, ClassDMMaster, ScopeInternal, LevelHigh, "fail to unmarshal response")
 	ErrMasterUnmarshalOperate        = New(codeMasterUnmarshalOperate, ClassDMMaster, ScopeInternal, LevelHigh, "fail to unmarshal operate")
 	ErrMasterUnmarshalOperateRequest = New(codeMasterUnmarshalOperateRequest, ClassDMMaster, ScopeInternal, LevelHigh, "fail to unmarshal operate request: %v")
-	ErrMasterMarshalResponse         = New(codeMasterMarshalResponse, ClassDMMaster, ScopeInternal, LevelHigh, "fail to marshal response")
-	ErrMasterWatchEtcd               = New(codeMasterWatchEtcd, ClassDMMaster, ScopeInternal, LevelMedium, "fail to watch etcd's key: %s")
-	ErrMasterWriteEtcd               = New(codeMasterWriteEtcd, ClassDMMaster, ScopeInternal, LevelHigh, "fail to write data to etcd")
-	ErrMasterCreateEtcdClient        = New(codeMasterCreateEtcdClient, ClassDMMaster, ScopeInternal, LevelHigh, "fail to create etcd client")
+
+	ErrMasterWatchEtcd        = New(codeMasterWatchEtcd, ClassDMMaster, ScopeInternal, LevelMedium, "fail to watch etcd's key: %s")
+	ErrMasterWriteEtcd        = New(codeMasterWriteEtcd, ClassDMMaster, ScopeInternal, LevelHigh, "fail to write data to etcd")
+	ErrMasterCreateEtcdClient = New(codeMasterCreateEtcdClient, ClassDMMaster, ScopeInternal, LevelHigh, "fail to create etcd client")
 
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set")
