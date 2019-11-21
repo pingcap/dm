@@ -30,10 +30,10 @@ import (
 )
 
 type eventFilterResult struct {
-	Result     bool   `json:"result"`
-	Msg        string `json:"msg"`
-	Filtered   bool   `json:"will-be-filtered"`
-	FilterName string `json:"filter-name,omitempty"`
+	Result         bool   `json:"result"`
+	Msg            string `json:"msg"`
+	WillBeFiltered bool   `json:"will-be-filtered"`
+	FilterName     string `json:"filter-name,omitempty"`
 }
 
 // NewEventFilterCmd creates a EventFilter command
@@ -98,22 +98,24 @@ func eventFilterFunc(cmd *cobra.Command, _ []string) {
 		taskEventFilter[eventFilterName] = cfg.Filters[eventFilterName]
 	}
 
-	filterName, action, err := filterEvent(sql, taskEventFilter, cfg.CaseSensitive)
+	filterName, action, err := filterSQL(sql, taskEventFilter, cfg.CaseSensitive)
 	if err != nil {
 		common.PrintLines("get filter info failed:\n%v", errors.ErrorStack(err))
 		return
 	}
 	result := eventFilterResult{
-		Result:     true,
-		Msg:        "",
-		Filtered:   action == bf.Ignore,
-		FilterName: filterName,
+		Result:         true,
+		Msg:            "",
+		WillBeFiltered: action == bf.Ignore,
+		FilterName:     filterName,
 	}
 
 	common.PrettyPrintInterface(result)
 }
 
-func filterEvent(sql string, filterMap map[string]*bf.BinlogEventRule, caseSensitive bool) (string, bf.ActionType, error) {
+// filterSQL will parse sql, and check whether this sql will be filtered.
+// It returns (matched filter name, action, error)
+func filterSQL(sql string, filterMap map[string]*bf.BinlogEventRule, caseSensitive bool) (string, bf.ActionType, error) {
 	sql = utils.TrimCtrlChars(sql)
 	sqlParser := parser.New()
 	stmts, _, err := sqlParser.Parse(sql, "", "")
@@ -134,12 +136,12 @@ func filterEvent(sql string, filterMap map[string]*bf.BinlogEventRule, caseSensi
 	for name, filterContent := range filterMap {
 		singleFilter, err := bf.NewBinlogEvent(caseSensitive, []*bf.BinlogEventRule{filterContent})
 		if err != nil {
-			return "", bf.Ignore, errors.Annotate(err, "creating single filter failed")
+			return "", bf.Ignore, errors.Annotatef(err, "creating singleFilter %s failed", name)
 		}
 
 		action, err := singleFilter.Filter(table.Schema, table.Name, et, sql)
 		if err != nil {
-			return "", bf.Ignore, errors.Annotate(err, "singleFilter failed in filtering table")
+			return "", bf.Ignore, errors.Annotatef(err, "singleFilter %s failed in filtering table %s", name, table)
 		}
 		if action == bf.Ignore {
 			return name, bf.Ignore, nil

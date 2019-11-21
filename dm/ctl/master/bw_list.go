@@ -15,7 +15,6 @@ package master
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
@@ -63,11 +62,11 @@ func bwListFunc(cmd *cobra.Command, _ []string) {
 
 	workers, err := common.GetWorkerArgs(cmd)
 	if err != nil {
-		fmt.Println(errors.ErrorStack(err))
+		common.PrintLines(errors.ErrorStack(err))
 		return
 	}
 	if len(workers) > 1 {
-		fmt.Println("we want 0 or 1 worker, but get ", workers)
+		common.PrintLines("we want 0 or 1 worker, but get ", workers)
 		return
 	}
 
@@ -76,14 +75,8 @@ func bwListFunc(cmd *cobra.Command, _ []string) {
 	}
 	// no worker is specified, print all info
 	if len(workers) == 0 {
-		cli := common.MasterClient()
-		ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
-		defer cancel()
-		resp, err := cli.FetchSourceInfo(ctx, &pb.FetchSourceInfoRequest{
-			FetchTable: true,
-			Task:       task,
-		})
-		if err = checkResp(err, resp); err != nil {
+		resp, err := fetchAllTableInfoFromMaster(task)
+		if err != nil {
 			common.PrintLines("can not fetch source info from dm-master:\n%s", err)
 			return
 		}
@@ -93,22 +86,23 @@ func bwListFunc(cmd *cobra.Command, _ []string) {
 			bwListMap[inst.SourceID] = inst.BWListName
 		}
 
-		doTableResult := make(map[string][]string, 0)
-		ignoreTableResult := make(map[string][]string, 0)
+		doTableStringMap := make(map[string][]string, 0)
+		ignoreTableStringMap := make(map[string][]string, 0)
 		for _, sourceInfo := range resp.SourceInfo {
 			bwListName := bwListMap[sourceInfo.SourceID]
-			tableList := getFilterTableList(sourceInfo)
+			filterTableList := getFilterTableList(sourceInfo)
 			bwFilter, err := filter.New(cfg.CaseSensitive, cfg.BWList[bwListName])
 			if err != nil {
 				common.PrintLines("build of black white filter failed:\n%s", errors.ErrorStack(err))
+				return
 			}
-			doTableList := bwFilter.ApplyOn(tableList)
+			doTableList := bwFilter.ApplyOn(filterTableList)
 
 			doTableStringList := make([]string, 0, len(doTableList))
-			ignoreTableStringList := make([]string, 0, len(tableList)-len(doTableList))
+			ignoreTableStringList := make([]string, 0, len(filterTableList)-len(doTableList))
 
 			var i int
-			for _, table := range tableList {
+			for _, table := range filterTableList {
 				if i < len(doTableList) && *doTableList[i] == *table {
 					i++
 					doTableStringList = append(doTableStringList, table.String())
@@ -117,38 +111,28 @@ func bwListFunc(cmd *cobra.Command, _ []string) {
 				}
 			}
 
-			doTableResult[sourceInfo.SourceIP] = doTableStringList
-			ignoreTableResult[sourceInfo.SourceIP] = ignoreTableStringList
+			doTableStringMap[sourceInfo.SourceIP] = doTableStringList
+			ignoreTableStringMap[sourceInfo.SourceIP] = ignoreTableStringList
 		}
 
-		result.DoTables = doTableResult
-		result.IgnoreTables = ignoreTableResult
+		result.DoTables = doTableStringMap
+		result.IgnoreTables = ignoreTableStringMap
 	} else {
 		worker := workers[0]
-		tableName, err := cmd.Flags().GetString("table-name")
+		schema, table, err := getCheckSchemaTableName(cmd)
 		if err != nil {
-			fmt.Println(errors.ErrorStack(err))
-			return
-		}
-		schema, table, err := utils.ExtractTable(tableName)
-		if err != nil {
-			fmt.Println(errors.ErrorStack(err))
+			common.PrintLines("get check table info failed:\n%s", errors.ErrorStack(err))
 			return
 		}
 
 		mysqlInstance, err := getMySQLInstanceThroughWorker(worker, task, cfg)
 		if err != nil {
-			fmt.Println(errors.ErrorStack(err))
+			common.PrintLines("get mysql instance config failed:\n%s", errors.ErrorStack(err))
 			return
 		}
 
-		checkTable := []*filter.Table{{Schema: schema, Name: table}}
-		bwFilter, err := filter.New(cfg.CaseSensitive, cfg.BWList[mysqlInstance.BWListName])
-		if err != nil {
-			common.PrintLines("build of black white filter failed:\n%s", errors.ErrorStack(err))
-		}
-		checkTable = bwFilter.ApplyOn(checkTable)
-		if len(checkTable) == 0 {
+		filtered := checkSingleBlackWhiteFilter(schema, table, cfg, cfg.BWList[mysqlInstance.BWListName])
+		if filtered {
 			result.WillBeFiltered = "yes"
 		} else {
 			result.WillBeFiltered = "no"
@@ -166,6 +150,20 @@ func checkResp(err error, resp *pb.FetchSourceInfoResponse) error {
 	return nil
 }
 
+func fetchAllTableInfoFromMaster(task string) (*pb.FetchSourceInfoResponse, error) {
+	cli := common.MasterClient()
+	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
+	defer cancel()
+	resp, err := cli.FetchSourceInfo(ctx, &pb.FetchSourceInfoRequest{
+		FetchTable: true,
+		Task:       task,
+	})
+	if err = checkResp(err, resp); err != nil {
+		return nil, errors.Trace(err)
+	}
+	return resp, nil
+}
+
 func getFilterTableList(sourceInfo *pb.SourceInfo) []*filter.Table {
 	tableList := make([]*filter.Table, 0, len(sourceInfo.Schemas))
 	for i := range sourceInfo.Schemas {
@@ -177,7 +175,22 @@ func getFilterTableList(sourceInfo *pb.SourceInfo) []*filter.Table {
 	return tableList
 }
 
-func findRelativeMySQLInstance(cfg *config.TaskConfig, sourceID string) *config.MySQLInstance {
+func getCheckSchemaTableName(cmd *cobra.Command) (string, string, error) {
+	tableName, err := cmd.Flags().GetString("table-name")
+	if err != nil {
+		return "", "", errors.Annotate(err, "get table-name arg failed")
+	}
+	if tableName == "" {
+		return "", "", errors.New("argument table-name is not given. pls check it again.")
+	}
+	schema, table, err := utils.ExtractTable(tableName)
+	if err != nil {
+		return "", "", errors.Annotate(err, "extract table info failed")
+	}
+	return schema, table, nil
+}
+
+func getMySQLInstanceConfigThroughSourceID(cfg *config.TaskConfig, sourceID string) *config.MySQLInstance {
 	var mysqlInstance *config.MySQLInstance
 	for _, mysqlInst := range cfg.MySQLInstances {
 		if mysqlInst.SourceID == sourceID {
@@ -199,17 +212,27 @@ func getMySQLInstanceThroughWorker(worker, task string, cfg *config.TaskConfig) 
 		Task:       task,
 	})
 	if err = checkResp(err, resp); err != nil {
-		return nil, errors.Errorf("can not fetch source info from dm-master:\n%s", err)
+		return nil, errors.Annotate(err, "can not fetch source info from dm-master")
 	}
 
 	if len(resp.SourceInfo) == 0 {
-		return nil, errors.Errorf("the source info of worker is not found. pls check the worker address")
+		return nil, errors.New("the source info of specified worker is not found. pls check the worker address")
 	}
 
 	sourceID := resp.SourceInfo[0].SourceID
-	mysqlInstance := findRelativeMySQLInstance(cfg, sourceID)
+	mysqlInstance := getMySQLInstanceConfigThroughSourceID(cfg, sourceID)
 	if mysqlInstance == nil {
-		return nil, errors.New("the mysql instance info is not found. pls check the worker address")
+		return nil, errors.New("the mysql instance config is not found. pls check the worker address")
 	}
 	return mysqlInstance, nil
+}
+
+func checkSingleBlackWhiteFilter(schema, table string, cfg *config.TaskConfig, rules *filter.Rules) bool {
+	checkTable := []*filter.Table{{Schema: schema, Name: table}}
+	bwFilter, err := filter.New(cfg.CaseSensitive, rules)
+	if err != nil {
+		common.PrintLines("build of black-white filter failed:\n%s", errors.ErrorStack(err))
+	}
+	checkTable = bwFilter.ApplyOn(checkTable)
+	return len(checkTable) == 0
 }

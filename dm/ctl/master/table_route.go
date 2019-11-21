@@ -14,14 +14,10 @@
 package master
 
 import (
-	"context"
-	"fmt"
 	"strings"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
-	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -31,12 +27,13 @@ import (
 )
 
 type tableRouteResult struct {
-	Result       bool                           `json:"result"`
-	Msg          string                         `json:"msg"`
-	Routes       map[string]map[string][]string `json:"routes,omitempty"`
-	MatchRoute   string                         `json:"match-route,omitempty"`
-	TargetSchema string                         `json:"target-schema,omitempty"`
-	TargetTable  string                         `json:"target-table,omitempty"`
+	Result         bool                           `json:"result"`
+	Msg            string                         `json:"msg"`
+	Routes         map[string]map[string][]string `json:"routes,omitempty"`
+	WillBeFiltered string                         `json:"will-be-filtered,omitempty"`
+	MatchRoute     string                         `json:"match-route,omitempty"`
+	TargetSchema   string                         `json:"target-schema,omitempty"`
+	TargetTable    string                         `json:"target-table,omitempty"`
 }
 
 // NewTableRouteCmd creates a TableRoute command
@@ -67,11 +64,11 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 
 	workers, err := common.GetWorkerArgs(cmd)
 	if err != nil {
-		fmt.Println(errors.ErrorStack(err))
+		common.PrintLines(errors.ErrorStack(err))
 		return
 	}
 	if len(workers) > 1 {
-		fmt.Println("we want 0 or 1 worker, but get ", workers)
+		common.PrintLines("we want 0 or 1 worker, but get ", workers)
 		return
 	}
 
@@ -80,14 +77,8 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 	}
 	// no worker is specified, print all routes
 	if len(workers) == 0 {
-		cli := common.MasterClient()
-		ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
-		defer cancel()
-		resp, err := cli.FetchSourceInfo(ctx, &pb.FetchSourceInfoRequest{
-			FetchTable: true,
-			Task:       task,
-		})
-		if err = checkResp(err, resp); err != nil {
+		resp, err := fetchAllTableInfoFromMaster(task)
+		if err != nil {
 			common.PrintLines("can not fetch source info from dm-master:\n%s", err)
 			return
 		}
@@ -109,22 +100,22 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 		// key: targetTable, value: {key: sourceIP, value: sourceTable}
 		routesResultMap := make(map[string]map[string][]string)
 		for _, sourceInfo := range resp.SourceInfo {
-			r, err := router.NewTableRouter(cfg.CaseSensitive, routeRulesMap[sourceInfo.SourceID])
-			if err != nil {
-				common.PrintLines("build of router failed:\n%s", errors.ErrorStack(err))
-				return
-			}
-
 			// apply on black-white filter
-			tableList := getFilterTableList(sourceInfo)
+			filterTableList := getFilterTableList(sourceInfo)
 			bwListName := bwListMap[sourceInfo.SourceID]
 			bwFilter, err := filter.New(cfg.CaseSensitive, cfg.BWList[bwListName])
 			if err != nil {
-				common.PrintLines("build of black white filter failed:\n%s", errors.ErrorStack(err))
+				common.PrintLines("build of black white filter for source %s failed:\n%s", sourceInfo.SourceID, errors.ErrorStack(err))
 			}
-			tableList = bwFilter.ApplyOn(tableList)
+			filterTableList = bwFilter.ApplyOn(filterTableList)
 
-			for _, filterTable := range tableList {
+			r, err := router.NewTableRouter(cfg.CaseSensitive, routeRulesMap[sourceInfo.SourceID])
+			if err != nil {
+				common.PrintLines("build of router for source %s failed:\n%s", sourceInfo.SourceID, errors.ErrorStack(err))
+				return
+			}
+
+			for _, filterTable := range filterTableList {
 				schema, table, err := r.Route(filterTable.Schema, filterTable.Name)
 				if err != nil {
 					common.PrintLines("routing table %s from MySQL %s failed:\n%s", dbutil.TableName(schema, table), sourceInfo.SourceIP, errors.ErrorStack(err))
@@ -141,59 +132,61 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 		result.Routes = routesResultMap
 	} else {
 		worker := workers[0]
-		tableName, err := cmd.Flags().GetString("table-name")
+		schema, table, err := getCheckSchemaTableName(cmd)
 		if err != nil {
-			fmt.Println(errors.ErrorStack(err))
-			return
-		}
-		schema, table, err := utils.ExtractTable(tableName)
-		if err != nil {
-			fmt.Println(errors.ErrorStack(err))
+			common.PrintLines("get check table info failed:\n%s", errors.ErrorStack(err))
 			return
 		}
 
 		mysqlInstance, err := getMySQLInstanceThroughWorker(worker, task, cfg)
 		if err != nil {
-			fmt.Println(errors.ErrorStack(err))
+			common.PrintLines("get mysql instance config failed:\n%s", errors.ErrorStack(err))
 			return
 		}
 
-		var routesRules []*router.TableRule
-		routedLevel := 0
-		for _, routeRuleName := range mysqlInstance.RouteRules {
-			routesRules = append(routesRules, cfg.Routes[routeRuleName])
-			r, err := router.NewTableRouter(cfg.CaseSensitive, []*router.TableRule{cfg.Routes[routeRuleName]})
+		filtered := checkSingleBlackWhiteFilter(schema, table, cfg, cfg.BWList[mysqlInstance.BWListName])
+		if filtered {
+			result.WillBeFiltered = "yes"
+		} else {
+			var routesRules []*router.TableRule
+			routeLevel := 0
+			for _, routeRuleName := range mysqlInstance.RouteRules {
+				routesRules = append(routesRules, cfg.Routes[routeRuleName])
+				r, err := router.NewTableRouter(cfg.CaseSensitive, []*router.TableRule{cfg.Routes[routeRuleName]})
+				if err != nil {
+					common.PrintLines("build of table router for source %s failed:\n%s", mysqlInstance.SourceID, errors.ErrorStack(err))
+					return
+				}
+				currentRouteLevel, err := getRouteLevel(r, cfg.CaseSensitive, schema, table)
+				if err != nil {
+					common.PrintLines("get currentRouteLevel of table %s for source %s failed:\n%s", mysqlInstance.SourceID, dbutil.TableName(schema, table), errors.ErrorStack(err))
+					return
+				}
+				// route to table > route to schema > doesn't match any route
+				if currentRouteLevel > routeLevel {
+					routeLevel = currentRouteLevel
+					result.MatchRoute = routeRuleName
+				}
+			}
+
+			r, err := router.NewTableRouter(cfg.CaseSensitive, routesRules)
 			if err != nil {
-				common.PrintLines("build of table router failed:\n%s", errors.ErrorStack(err))
+				common.PrintLines("build of total table router failed:\n%s", errors.ErrorStack(err))
 				return
 			}
-			routed, err := checkRoute(r, cfg.CaseSensitive, schema, table)
+			result.TargetSchema, result.TargetTable, err = r.Route(schema, table)
 			if err != nil {
-				common.PrintLines("check whether table will be routed failed:\n%s", errors.ErrorStack(err))
+				common.PrintLines("route of table %s failed:\n%s", dbutil.TableName(schema, table), errors.ErrorStack(err))
 				return
 			}
-			if routed > routedLevel {
-				routedLevel = routed
-				result.MatchRoute = routeRuleName
-			}
-		}
-		r, err := router.NewTableRouter(cfg.CaseSensitive, routesRules)
-		if err != nil {
-			common.PrintLines("build of table router failed:\n%s", errors.ErrorStack(err))
-			return
-		}
-		result.TargetSchema, result.TargetTable, err = r.Route(schema, table)
-		if err != nil {
-			common.PrintLines("route of table %s failed:\n%s", dbutil.TableName(schema, table), errors.ErrorStack(err))
-			return
 		}
 	}
 	common.PrettyPrintInterface(result)
 }
 
-// checkRoute checks whether schema table can be routed by r
+// getRouteLevel gets route result of whether schema table can be routed by r
 // 0: won't be routed; 1: match schema rule; 2: match table rule
-func checkRoute(r *router.Table, caseSensitive bool, schema, table string) (int, error) {
+func getRouteLevel(r *router.Table, caseSensitive bool, schema, table string) (int, error) {
 	schemaL, tableL := schema, table
 	if !caseSensitive {
 		schemaL, tableL = strings.ToLower(schema), strings.ToLower(table)
