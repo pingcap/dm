@@ -88,7 +88,7 @@ func (t *testEtcdUtilSuite) startEtcd(c *C, cfg *embed.Config) *embed.Etcd {
 	e, err := embed.StartEtcd(cfg)
 	c.Assert(err, IsNil)
 
-	timeout := time.Second
+	timeout := 3 * time.Second
 	select {
 	case <-e.Server.ReadyNotify():
 	case <-time.After(timeout):

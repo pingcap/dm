@@ -23,7 +23,6 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/pd/pkg/tempurl"
-	"go.etcd.io/etcd/clientv3/concurrency"
 	"go.etcd.io/etcd/embed"
 
 	"github.com/pingcap/dm/pkg/etcdutil"
@@ -265,18 +264,11 @@ func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 		wg.Done()
 		select {
 		case err2 := <-e.ErrorNotify():
-			c.Fatalf("cancel the campaign should not get an error, %v", err2)
+			c.Fatalf("delete the leader key should not get an error, %v", err2)
 		case <-e.RetireNotify():
 		}
 	}()
 	_, err = cli.Delete(ctx, leaderKey)
 	c.Assert(err, IsNil)
 	wg.Wait()
-
-	// can not get leader info when no leader exists
-	leaderKey, leaderID, err = e.LeaderInfo(ctx)
-	c.Assert(terror.ErrElectionGetLeaderIDFail.Equal(err), IsTrue)
-	c.Assert(err.(*terror.Error).Cause(), Equals, concurrency.ErrElectionNoLeader)
-	c.Assert(leaderKey, Equals, "")
-	c.Assert(leaderID, Equals, "")
 }
