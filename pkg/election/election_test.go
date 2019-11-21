@@ -28,7 +28,6 @@ import (
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/dm/pkg/utils"
 )
 
 var _ = Suite(&testElectionSuite{})
@@ -98,9 +97,13 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	defer e1.Close()
 
 	// e1 should become the leader
-	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		return e1.IsLeader()
-	}), IsTrue)
+	select {
+	case leader := <-e1.LeaderNotify():
+		c.Assert(leader, IsTrue)
+	case <-time.After(3 * time.Second):
+		c.Fatal("leader campaign timeout")
+	}
+	c.Assert(e1.IsLeader(), IsTrue)
 	_, leaderID, err := e1.LeaderInfo(ctx1)
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e1.ID())
@@ -110,7 +113,11 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	defer cancel2()
 	e2 := NewElection(ctx2, cli, sessionTTL, key, ID2)
 	defer e2.Close()
-	time.Sleep(100 * time.Millisecond) // wait 100ms to start the campaign
+	select {
+	case leader := <-e2.leaderCh:
+		c.Fatalf("should not receive leader notify for e2, but got %v", leader)
+	case <-time.After(100 * time.Millisecond): // wait 100ms to start the campaign
+	}
 	// but the leader should still be e1
 	_, leaderID, err = e2.LeaderInfo(ctx2)
 	c.Assert(err, IsNil)
@@ -122,7 +129,8 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	go func() {
 		defer wg.Done()
 		select {
-		case <-e1.RetireNotify(): // e1 should retire when closing
+		case leader := <-e1.LeaderNotify(): // e1 should retire when closing
+			c.Assert(leader, IsFalse)
 		case <-time.After(time.Second):
 			c.Fatal("leader campaign timeout")
 		}
@@ -132,9 +140,13 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	wg.Wait()
 
 	// e2 should become the leader
-	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		return e2.IsLeader()
-	}), IsTrue)
+	select {
+	case leader := <-e2.LeaderNotify():
+		c.Assert(leader, IsTrue)
+	case <-time.After(3 * time.Second):
+		c.Fatal("leader campaign timeout")
+	}
+	c.Assert(e2.IsLeader(), IsTrue)
 	_, leaderID, err = e2.LeaderInfo(ctx2)
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e2.ID())
@@ -193,9 +205,13 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 	defer e1.Close()
 
 	// e1 should become the leader
-	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		return e1.IsLeader()
-	}), IsTrue)
+	select {
+	case leader := <-e1.LeaderNotify():
+		c.Assert(leader, IsTrue)
+	case <-time.After(3 * time.Second):
+		c.Fatal("leader campaign timeout")
+	}
+	c.Assert(e1.IsLeader(), IsTrue)
 	_, leaderID, err := e1.LeaderInfo(ctx1)
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e1.ID())
@@ -250,9 +266,13 @@ func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 	defer e.Close()
 
 	// should become the leader
-	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		return e.IsLeader()
-	}), IsTrue)
+	select {
+	case leader := <-e.LeaderNotify():
+		c.Assert(leader, IsTrue)
+	case <-time.After(3 * time.Second):
+		c.Fatal("leader campaign timeout")
+	}
+	c.Assert(e.IsLeader(), IsTrue)
 	leaderKey, leaderID, err := e.LeaderInfo(ctx)
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e.ID())
@@ -265,7 +285,8 @@ func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 		select {
 		case err2 := <-e.ErrorNotify():
 			c.Fatalf("delete the leader key should not get an error, %v", err2)
-		case <-e.RetireNotify():
+		case leader := <-e.LeaderNotify():
+			c.Assert(leader, IsFalse)
 		}
 	}()
 	_, err = cli.Delete(ctx, leaderKey)

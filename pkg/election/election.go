@@ -37,7 +37,7 @@ type Election struct {
 	key        string
 	id         string
 	ech        chan error
-	retireCh   chan struct{}
+	leaderCh   chan bool
 	isLeader   sync2.AtomicBool
 
 	closed sync2.AtomicInt32
@@ -55,7 +55,7 @@ func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key,
 		sessionTTL: sessionTTL,
 		key:        key,
 		id:         id,
-		retireCh:   make(chan struct{}, 1),
+		leaderCh:   make(chan bool, 1),
 		ech:        make(chan error, 1), // size 1 is enough
 		cancel:     cancel2,
 		l:          log.With(zap.String("component", "election")),
@@ -91,9 +91,10 @@ func (e *Election) LeaderInfo(ctx context.Context) (string, string, error) {
 	return string(resp.Kvs[0].Key), string(resp.Kvs[0].Value), nil
 }
 
-// RetireNotify returns a channel that can fetch notification when the leader is retired
-func (e *Election) RetireNotify() <-chan struct{} {
-	return e.retireCh
+// LeaderNotify returns a channel that can fetch notification when the member become the leader or retire from the leader.
+// `true` means become the leader; `false` means retire from the leader.
+func (e *Election) LeaderNotify() <-chan bool {
+	return e.leaderCh
 }
 
 // ErrorNotify returns a channel that can fetch errors occurred for campaign.
@@ -182,24 +183,32 @@ func (e *Election) campaignLoop(ctx context.Context) {
 			continue
 		}
 
-		e.isLeader.Set(true) // become the leader now
-		e.l.Info("become the leader", zap.String("member", leaderID))
+		e.toBeLeader() // become the leader now
 		e.watchLeader(ctx, session, leaderKey)
-		e.isLeader.Set(false) // need to re-campaign
-		e.l.Info("retire from the leader", zap.String("member", leaderID))
+		e.retireLeader() // need to re-campaign
 	}
+}
+
+func (e *Election) toBeLeader() {
+	e.isLeader.Set(true)
+	select {
+	case e.leaderCh <- true:
+	default:
+	}
+	e.l.Info("become the leader", zap.String("member", e.id))
+}
+
+func (e *Election) retireLeader() {
+	e.isLeader.Set(false)
+	select {
+	case e.leaderCh <- false:
+	default:
+	}
+	e.l.Info("retire from the leader", zap.String("member", e.id))
 }
 
 func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session, key string) {
 	e.l.Debug("watch leader key", zap.String("key", key))
-
-	defer func() {
-		select {
-		case e.retireCh <- struct{}{}:
-		default:
-		}
-	}()
-
 	wch := e.cli.Watch(ctx, key)
 	for {
 		select {
