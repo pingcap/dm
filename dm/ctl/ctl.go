@@ -19,6 +19,7 @@ import (
 
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/ctl/master"
+	"github.com/pingcap/dm/dm/ctl/simulator"
 	"github.com/pingcap/dm/pkg/log"
 
 	"github.com/pingcap/errors"
@@ -76,9 +77,9 @@ func NewRootCmd() *cobra.Command {
 		master.NewUpdateRelayCmd(),
 		master.NewPurgeRelayCmd(),
 		master.NewMigrateRelayCmd(),
-		master.NewTableRouteCmd(),
-		master.NewEventFilterCmd(),
-		master.NewBWListCmd(),
+		simulator.NewTableRouteCmd(),
+		simulator.NewEventFilterCmd(),
+		simulator.NewBWListCmd(),
 	)
 	return cmd
 }
