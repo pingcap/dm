@@ -37,8 +37,6 @@ const (
 	newSessionRetryUnlimited = math.MaxInt64
 	// newSessionRetryInterval is the interval time when retrying to create a new session.
 	newSessionRetryInterval = 200 * time.Millisecond
-	// logNewSessionIntervalCnt is the interval count when logging errors for creating session
-	logNewSessionIntervalCnt = int(3 * time.Second / newSessionRetryInterval)
 )
 
 // Election implements the leader election based on etcd.
@@ -151,7 +149,6 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 			closeSession(session) // close the latest session.
 		}
 		if err != nil && errors.Cause(err) != ctx.Err() { // only send non-ctx.Err() error
-			e.l.Error("", zap.Error(err))
 			e.ech <- err
 		}
 	}()
@@ -253,19 +250,24 @@ func (e *Election) newSession(ctx context.Context, retryCnt int) (*concurrency.S
 		session *concurrency.Session
 	)
 	for i := 0; i < retryCnt; i++ {
+		if i > 0 {
+			select {
+			case e.ech <- terror.ErrElectionCampaignFail.Delegate(err, "create a new session"):
+			default:
+			}
+
+			select {
+			case <-time.After(newSessionRetryInterval):
+			case <-ctx.Done():
+				break
+			}
+		}
+
 		// add more options if needed.
 		// NOTE: I think use the client's context is better than something like `concurrency.WithContext(ctx)`,
 		// so we can close the session when the client is still valid.
 		session, err = concurrency.NewSession(e.cli, concurrency.WithTTL(e.sessionTTL))
 		if err == nil || errors.Cause(err) == ctx.Err() {
-			break
-		} else if i%logNewSessionIntervalCnt == 0 {
-			e.l.Warn("fail to create a new session", zap.Error(err))
-		}
-
-		select {
-		case <-time.After(newSessionRetryInterval):
-		case <-ctx.Done():
 			break
 		}
 	}

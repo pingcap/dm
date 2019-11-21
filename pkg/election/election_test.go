@@ -153,16 +153,17 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(leaderID, Equals, e2.ID())
 
-	// if closing the client when campaigning,
-	// we should get no error because new session will retry until context is done,
-	// and we ignore the context done error.
+	// if closing the client when campaigning, we should get an error
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		select {
 		case err2 := <-e2.ErrorNotify():
-			c.Fatalf("should not recieve error %v", err2)
+			c.Assert(terror.ErrElectionCampaignFail.Equal(err2), IsTrue)
+			// the old session is done, but we can't create a new one.
+			c.Assert(err2, ErrorMatches, ".*fail to campaign leader: create a new session.*")
 		case <-time.After(time.Second):
+			c.Fatal("do not receive error for e2")
 		}
 	}()
 	cli.Close() // close the client
