@@ -23,8 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/dm/pkg/utils"
-
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/embed"
@@ -40,6 +38,7 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer"
 )
 

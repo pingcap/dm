@@ -28,7 +28,7 @@ import (
 type eventFilterResult struct {
 	Result         bool   `json:"result"`
 	Msg            string `json:"msg"`
-	WillBeFiltered bool   `json:"will-be-filtered"`
+	WillBeFiltered string `json:"will-be-filtered"`
 	FilterName     string `json:"filter-name,omitempty"`
 }
 
@@ -102,11 +102,14 @@ func eventFilterFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 	result := eventFilterResult{
-		Result:         true,
-		Msg:            "",
-		WillBeFiltered: action == bf.Ignore,
-		FilterName:     filterName,
+		Result:     true,
+		Msg:        "",
+		FilterName: filterName,
 	}
-
+	if action == bf.Ignore {
+		result.WillBeFiltered = "yes"
+	} else {
+		result.WillBeFiltered = "no"
+	}
 	common.PrettyPrintInterface(result)
 }
