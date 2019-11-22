@@ -2266,13 +2266,18 @@ func (s *Server) workerArgsExtractor(args ...interface{}) (workerrpc.Client, str
 
 // WatchRequest watches requests in etcd, and handle these request, and write response to etcd.
 func (s *Server) WatchRequest(ctx context.Context) {
-	watchCh := s.etcdClient.Watch(context.Background(), defaultOperatePath, -1)
+	watchCh := s.etcdClient.Watch(ctx, defaultOperatePath, -1)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case wresp := <-watchCh:
+		case wresp, ok := <-watchCh:
+			if !ok {
+				log.L().Info("etcd's watch channel is closed")
+				return
+			}
+
 			if wresp.Err() != nil {
 				log.L().Warn("watch etcd failed", zap.Error(wresp.Err()))
 				continue
