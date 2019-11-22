@@ -8,6 +8,6 @@ relay-binlog-gtid = ""
 
 [from]
 host = "127.0.0.1"
-user = "dm_incremental"
+user = "root"
 password = ""
 port = 3306
