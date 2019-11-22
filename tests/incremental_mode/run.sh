@@ -12,6 +12,10 @@ function run() {
     check_contains 'Query OK, 2 rows affected'
     run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2
     check_contains 'Query OK, 3 rows affected'
+    run_sql_file $cur/data/db1.prepare.user.sql $MYSQL_HOST1 $MYSQL_PORT1
+    check_count 'Query OK, 0 rows affected' 5
+    run_sql_file $cur/data/db2.prepare.user.sql $MYSQL_HOST2 $MYSQL_PORT2
+    check_count 'Query OK, 0 rows affected' 5
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
