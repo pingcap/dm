@@ -12,10 +12,6 @@ function run() {
     check_contains 'Query OK, 2 rows affected'
     run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2
     check_contains 'Query OK, 3 rows affected'
-    run_sql_file $cur/data/db1.prepare.user.sql $MYSQL_HOST1 $MYSQL_PORT1
-    check_count 'Query OK, 0 rows affected' 5
-    run_sql_file $cur/data/db2.prepare.user.sql $MYSQL_HOST2 $MYSQL_PORT2
-    check_count 'Query OK, 0 rows affected' 5
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
@@ -40,8 +36,22 @@ function run() {
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
 
     # start a task in `incremental` mode
+    # using account with limited privileges
+    kill_dm_worker
+    run_sql_file $cur/data/db1.prepare.user.sql $MYSQL_HOST1 $MYSQL_PORT1
+    check_count 'Query OK, 0 rows affected' 5
+    run_sql_file $cur/data/db2.prepare.user.sql $MYSQL_HOST2 $MYSQL_PORT2
+    check_count 'Query OK, 0 rows affected' 5
+    cat $cur/conf/dm-worker1.toml > $WORK_DIR/dm-worker1.toml
+    cat $cur/conf/dm-worker2.toml > $WORK_DIR/dm-worker2.toml
+    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $WORK_DIR/dm-worker1.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $WORK_DIR/dm-worker1.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
     cat $cur/conf/dm-task.yaml > $WORK_DIR/dm-task.yaml
     sed -i "s/task-mode-placeholder/incremental/g" $WORK_DIR/dm-task.yaml
+    sed -i "s/root/dm_incremental/g" $WORK_DIR/dm-task.yaml
     name1=$(grep "Log: " $WORK_DIR/worker1/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2}'|tr -d ' ')
     pos1=$(grep "Pos: " $WORK_DIR/worker1/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2}'|tr -d ' ')
     name2=$(grep "Log: " $WORK_DIR/worker2/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2}'|tr -d ' ')
