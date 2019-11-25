@@ -23,6 +23,7 @@ import (
 
 	"github.com/pingcap/dm/pkg/helper"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 const (
@@ -130,7 +131,7 @@ func SetLevel(level zapcore.Level) zapcore.Level {
 // just repeats known information. You should almost always use `ShortError`
 // instead of `zap.Error`, unless the error is no longer propagated upwards.
 func ShortError(err error) zap.Field {
-	if err == nil {
+	if err == nil || utils.IsContextCanceledError(err) {
 		return zap.Skip()
 	}
 	return zap.String("error", err.Error())
