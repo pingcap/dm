@@ -2561,13 +2561,14 @@ func (s *Server) saveRequestAndWaitResponse(ctx context.Context, tp pb.OperateTy
 	if err != nil {
 		return terror.ErrMasterMarshalOperate.Delegate(err, operate)
 	}
-	revision, err := s.etcdClient.Create(ctx, operateIDStr, string(opBytes), nil)
+
+	keyPath := path.Join(defaultOperatePath, operateIDStr)
+	revision, err := s.etcdClient.Create(ctx, keyPath, string(opBytes), nil)
 	if err != nil {
 		return terror.ErrMasterWriteEtcd.Delegate(err)
 	}
 
-	watchPath := path.Join(defaultOperatePath, operateIDStr)
-	watchCh := s.etcdClient.Watch(ctx, watchPath, revision+1)
+	watchCh := s.etcdClient.Watch(ctx, keyPath, revision+1)
 
 	for {
 		select {
@@ -2575,28 +2576,28 @@ func (s *Server) saveRequestAndWaitResponse(ctx context.Context, tp pb.OperateTy
 			return ctx.Err()
 		case wresp, ok := <-watchCh:
 			if !ok {
-				return terror.ErrMasterWatchEtcd.Generatef("etcd's watch channel is closed, watch key: %s", watchPath)
+				return terror.ErrMasterWatchEtcd.Generatef("etcd's watch channel is closed, watch key: %s", keyPath)
 			}
 
 			if wresp.Err() != nil {
-				return terror.ErrMasterWatchEtcd.Delegate(wresp.Err(), watchPath)
+				return terror.ErrMasterWatchEtcd.Delegate(wresp.Err(), keyPath)
 			}
 
 			// should only have one event
 			if len(wresp.Events) > 1 {
-				log.L().Warn("have more than one event on key in etcd", zap.String("key", operateIDStr))
+				log.L().Warn("have more than one event on key in etcd", zap.String("key", keyPath))
 			}
 
 			for _, ev := range wresp.Events {
 				// only need handle put event
 				if ev.Type != mvccpb.PUT {
-					return terror.ErrMasterWatchEtcd.Generatef("watch etcd meet unexpect event type, watch key: %s, event type", watchPath, ev.Type)
+					return terror.ErrMasterWatchEtcd.Generatef("watch etcd meet unexpect event type, watch key: %s, event type: %v", keyPath, ev.Type)
 				}
 
 				operate := &pb.Operate{}
 				err := operate.Unmarshal(ev.Kv.Value)
 				if err != nil {
-					return terror.ErrMasterUnmarshalOperate.Delegate(err, watchPath)
+					return terror.ErrMasterUnmarshalOperate.Delegate(err, keyPath)
 				}
 
 				if len(operate.Err) != 0 {

@@ -216,7 +216,7 @@ func getEtcdClientForOperate(addr string) (*etcd.Client, error) {
 		return nil, terror.ErrMasterCreateEtcdClient.Delegate(err)
 	}
 
-	etcdClient, err := etcd.NewClientFromCfg(ectdEndpoints, defaultEtcdTimeout, defaultOperatePath, nil)
+	etcdClient, err := etcd.NewClientFromCfg(ectdEndpoints, defaultEtcdTimeout, "", nil)
 	if err != nil {
 		return nil, terror.ErrMasterCreateEtcdClient.Delegate(err)
 	}
