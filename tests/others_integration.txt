@@ -1,4 +1,5 @@
 all_mode
+full_mode
 sequence_sharding
 sequence_safe_mode
 relay_interrupt
