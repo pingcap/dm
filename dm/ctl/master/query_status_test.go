@@ -81,9 +81,10 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 			}},
 		},
 	}
+	extraInfo := ". Please run `query-status test` to get more details."
 	expectedResult := []*taskInfo{{
 		TaskName:   "test",
-		TaskStatus: stageError + " - Some error occurred in subtask",
+		TaskStatus: stageError + " - Some error occurred in subtask" + extraInfo,
 		Workers:    []string{"172.17.0.2:8262", "172.17.0.3:8262", "172.17.0.6:8262"},
 	}}
 	generateAndCheckTaskResult(c, resp, expectedResult)
@@ -96,15 +97,15 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 		Result: &pb.ProcessResult{
 			Errors: []*pb.ProcessError{{Type: pb.ErrorType_CheckFailed}},
 		}}
-	expectedResult[0].TaskStatus = stageError + " - Relay status is " + stageError
+	expectedResult[0].TaskStatus = stageError + " - Relay status is " + stageError + extraInfo
 	generateAndCheckTaskResult(c, resp, expectedResult)
 	// relay status is Paused
 	resp.Workers[0].RelayStatus = &pb.RelayStatus{Stage: pb.Stage_Paused}
-	expectedResult[0].TaskStatus = stageError + " - Relay status is " + pb.Stage_Paused.String()
+	expectedResult[0].TaskStatus = stageError + " - Relay status is " + pb.Stage_Paused.String() + extraInfo
 	generateAndCheckTaskResult(c, resp, expectedResult)
 	// relay status is Stopped
 	resp.Workers[0].RelayStatus = &pb.RelayStatus{Stage: pb.Stage_Stopped}
-	expectedResult[0].TaskStatus = stageError + " - Relay status is " + pb.Stage_Stopped.String()
+	expectedResult[0].TaskStatus = stageError + " - Relay status is " + pb.Stage_Stopped.String() + extraInfo
 	generateAndCheckTaskResult(c, resp, expectedResult)
 
 	// one subtask is paused and no error occurs, should return paused
@@ -147,7 +148,7 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 		Workers:    []string{"172.17.0.2:8262", "172.17.0.3:8262", "172.17.0.6:8262"},
 	}, {
 		TaskName:   "test2",
-		TaskStatus: stageError + " - Some error occurred in subtask",
+		TaskStatus: stageError + " - Some error occurred in subtask. Please run `query-status test2` to get more details.",
 		Workers:    []string{"172.17.0.4:8262"},
 	},
 	}

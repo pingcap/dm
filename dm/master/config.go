@@ -35,10 +35,11 @@ import (
 )
 
 const (
-	defaultRPCTimeout    = "30s"
-	defaultNamePrefix    = "dm-master"
-	defaultDataDirPrefix = "default"
-	defaultPeerUrls      = "http://127.0.0.1:8291"
+	defaultRPCTimeout          = "30s"
+	defaultNamePrefix          = "dm-master"
+	defaultDataDirPrefix       = "default"
+	defaultPeerUrls            = "http://127.0.0.1:8291"
+	defaultInitialClusterState = embed.ClusterStateFlagNew
 )
 
 // SampleConfigFile is sample config file of dm-master
@@ -65,6 +66,7 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.InitialCluster, "initial-cluster", "", fmt.Sprintf("initial cluster configuration for bootstrapping, e,g. dm-master=%s", defaultPeerUrls))
 	fs.StringVar(&cfg.PeerUrls, "peer-urls", defaultPeerUrls, "URLs for peer traffic")
 	fs.StringVar(&cfg.AdvertisePeerUrls, "advertise-peer-urls", "", `advertise URLs for peer traffic (default "${peer-urls}")`)
+	fs.StringVar(&cfg.Join, "join", "", `join to an existing cluster (usage: cluster's "${master-addr}" list, e,g. "127.0.0.1:8261,127.0.0.1:18261"`)
 
 	return cfg
 }
@@ -108,11 +110,13 @@ type Config struct {
 	// etcd relative config items
 	// NOTE: we use `MasterAddr` to generate `ClientUrls` and `AdvertiseClientUrls`
 	// NOTE: more items will be add when adding leader election
-	Name              string `toml:"name" json:"name"`
-	DataDir           string `toml:"data-dir" json:"data-dir"`
-	PeerUrls          string `toml:"peer-urls" json:"peer-urls"`
-	AdvertisePeerUrls string `toml:"advertise-peer-urls" json:"advertise-peer-urls"`
-	InitialCluster    string `toml:"initial-cluster" json:"initial-cluster"`
+	Name                string `toml:"name" json:"name"`
+	DataDir             string `toml:"data-dir" json:"data-dir"`
+	PeerUrls            string `toml:"peer-urls" json:"peer-urls"`
+	AdvertisePeerUrls   string `toml:"advertise-peer-urls" json:"advertise-peer-urls"`
+	InitialCluster      string `toml:"initial-cluster" json:"initial-cluster"`
+	InitialClusterState string `toml:"initial-cluster-state" json:"initial-cluster-state"`
+	Join                string `toml:"join" json:"join"` // cluster's client address (endpoints), not peer address
 
 	printVersion      bool
 	printSampleConfig bool
@@ -250,7 +254,7 @@ func (c *Config) adjust() error {
 	}
 
 	if c.AdvertisePeerUrls == "" {
-		c.AdvertisePeerUrls = defaultPeerUrls
+		c.AdvertisePeerUrls = c.PeerUrls
 	}
 
 	if c.InitialCluster == "" {
@@ -261,7 +265,10 @@ func (c *Config) adjust() error {
 		c.InitialCluster = strings.Join(items, ",")
 	}
 
-	_, err = c.genEmbedEtcdConfig() // verify embed etcd config
+	if c.InitialClusterState == "" {
+		c.InitialClusterState = defaultInitialClusterState
+	}
+
 	return err
 }
 
@@ -290,6 +297,7 @@ func (c *Config) Reload() error {
 }
 
 // genEmbedEtcdConfig generates the configuration needed by embed etcd.
+// This method should be called after logger initialized and before any concurrent gRPC calls.
 func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
 	cfg := embed.NewConfig()
 	cfg.Name = c.Name
@@ -314,6 +322,19 @@ func (c *Config) genEmbedEtcdConfig() (*embed.Config, error) {
 	}
 
 	cfg.InitialCluster = c.InitialCluster
+	cfg.ClusterState = c.InitialClusterState
+
+	// use zap as the logger for embed etcd
+	// NOTE: `genEmbedEtcdConfig` can only be called after logger initialized.
+	// NOTE: if using zap logger for etcd, must build it before any concurrent gRPC calls,
+	// otherwise, DATA RACE occur in builder and gRPC.
+	logger := log.L().WithFields(zap.String("component", "embed etcd"))
+	cfg.ZapLoggerBuilder = embed.NewZapCoreLoggerBuilder(logger.Logger, logger.Core(), log.Props().Syncer) // use global app props.
+	cfg.Logger = "zap"
+	err = cfg.Validate() // verify & trigger the builder
+	if err != nil {
+		return nil, terror.ErrMasterGenEmbedEtcdConfigFail.AnnotateDelegate(err, "fail to validate embed etcd config")
+	}
 
 	return cfg, nil
 }
