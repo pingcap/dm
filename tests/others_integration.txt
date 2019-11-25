@@ -1,1 +1,2 @@
+full_mode
 start_task
