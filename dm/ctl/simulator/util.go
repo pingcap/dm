@@ -68,12 +68,12 @@ func getFilterTableList(sourceInfo *pb.SourceInfo) []*filter.Table {
 }
 
 func getTableNameFromCMD(cmd *cobra.Command) (string, string, error) {
-	tableName, err := cmd.Flags().GetString("table-name")
+	tableName, err := cmd.Flags().GetString("table")
 	if err != nil {
-		return "", "", errors.Annotate(err, "get table-name arg failed")
+		return "", "", errors.Annotate(err, "get table arg failed")
 	}
 	if tableName == "" {
-		return "", "", errors.New("argument table-name is not given. pls check it again")
+		return "", "", errors.New("argument table is not given. pls check it again")
 	}
 	schema, table, err := utils.ExtractTable(tableName)
 	if err != nil {

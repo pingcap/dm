@@ -37,11 +37,11 @@ type tableRouteResult struct {
 // NewTableRouteCmd creates a TableRoute command
 func NewTableRouteCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "table-route [-w worker] [-T table-name] <config-file>",
+		Use:   "table-route [-w worker] [-T table] <config-file>",
 		Short: "check the routes for all tables or single table",
 		Run:   tableRouteFunc,
 	}
-	cmd.Flags().StringP("table-name", "T", "", "the table name we want to check for the table route")
+	cmd.Flags().StringP("table", "T", "", "the table name we want to check for the table route")
 	return cmd
 }
 

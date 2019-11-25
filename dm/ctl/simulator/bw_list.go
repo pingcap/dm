@@ -33,11 +33,11 @@ type bwListResult struct {
 // NewBWListCmd creates a BWList command
 func NewBWListCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "bw-list [-w worker] [-T table-name] <config-file>",
+		Use:   "bw-list [-w worker] [-T table] <config-file>",
 		Short: "check the black-white-list info for tables",
 		Run:   bwListFunc,
 	}
-	cmd.Flags().StringP("table-name", "T", "", "the table name we want to check for the black white list")
+	cmd.Flags().StringP("table", "T", "", "the table name we want to check for the black white list")
 	return cmd
 }
 
