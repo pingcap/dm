@@ -39,9 +39,9 @@ function run() {
     # using account with limited privileges
     kill_dm_worker
     run_sql_file $cur/data/db1.prepare.user.sql $MYSQL_HOST1 $MYSQL_PORT1
-    check_count 'Query OK, 0 rows affected' 5
+    check_count 'Query OK, 0 rows affected' 7
     run_sql_file $cur/data/db2.prepare.user.sql $MYSQL_HOST2 $MYSQL_PORT2
-    check_count 'Query OK, 0 rows affected' 5
+    check_count 'Query OK, 0 rows affected' 7
     cat $cur/conf/dm-worker1.toml > $WORK_DIR/dm-worker1.toml
     sed -i "s/root/dm_incremental/g" $WORK_DIR/dm-worker1.toml
     cat $cur/conf/dm-worker2.toml > $WORK_DIR/dm-worker2.toml
@@ -61,7 +61,8 @@ function run() {
     sed -i "s/binlog-pos-placeholder-1/$pos1/g" $WORK_DIR/dm-task.yaml
     sed -i "s/binlog-name-placeholder-2/$name2/g" $WORK_DIR/dm-task.yaml
     sed -i "s/binlog-pos-placeholder-2/$pos2/g" $WORK_DIR/dm-task.yaml
-    dmctl_start_task $WORK_DIR/dm-task.yaml
+	sleep 2
+	dmctl_start_task $WORK_DIR/dm-task.yaml
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
