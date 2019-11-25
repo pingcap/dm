@@ -268,7 +268,7 @@ forLoop:
 		// NOTE: I think use the client's context is better than something like `concurrency.WithContext(ctx)`,
 		// so we can close the session when the client is still valid.
 		session, err = concurrency.NewSession(e.cli, concurrency.WithTTL(e.sessionTTL))
-		if err == nil || errors.Cause(err) == ctx.Err() {
+		if err == nil || errors.Cause(err) == e.cli.Ctx().Err() {
 			break forLoop
 		}
 	}
