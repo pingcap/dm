@@ -324,7 +324,7 @@ ErrMasterStartEmbedEtcdFail,[code=38038:class=dm-master:scope=internal:level=hig
 ErrMasterParseURLFail,[code=38039:class=dm-master:scope=internal:level=high],"fail to parse URL %s"
 ErrMasterJoinEmbedEtcdFail,[code=38040:class=dm-master:scope=internal:level=high],"fail to join embed etcd: %s"
 ErrMasterMarshalOperate,[code=38041:class=dm-master:scope=internal:level=high],"fail to marshal operate: %v"
-ErrMasterUnmarshalOperate,[code=38042:class=dm-master:scope=internal:level=high],"fail to unmarshal operate"
+ErrMasterUnmarshalOperate,[code=38042:class=dm-master:scope=internal:level=high],"fail to unmarshal operate, operate's key: %s"
 ErrMasterUnmarshalOperateRequest,[code=38043:class=dm-master:scope=internal:level=high],"fail to unmarshal operate request: %v"
 ErrMasterMarshalResponse,[code=38044:class=dm-master:scope=internal:level=high],"fail to marshal response"
 ErrMasterWatchEtcd,[code=38045:class=dm-master:scope=internal:level=medium],"fail to watch etcd's key: %s"

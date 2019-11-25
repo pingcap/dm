@@ -2274,7 +2274,7 @@ func (s *Server) WatchRequest(ctx context.Context) {
 			return
 		case wresp, ok := <-watchCh:
 			if !ok {
-				log.L().Info("etcd's watch channel is closed")
+				log.L().Info("etcd's watch channel is closed", zap.String("watch key", defaultOperatePath))
 				return
 			}
 
@@ -2292,7 +2292,7 @@ func (s *Server) WatchRequest(ctx context.Context) {
 				operate := &pb.Operate{}
 				err := operate.Unmarshal(ev.Kv.Value)
 				if err != nil {
-					log.L().Error("unmarshal operate failed", zap.Error(err))
+					log.L().Error("unmarshal operate failed", zap.String("event key", string(ev.Kv.Key)), zap.Int64("revision", wresp.Header.Revision), zap.Error(err))
 					continue
 				}
 
@@ -2573,7 +2573,11 @@ func (s *Server) saveRequestAndWaitResponse(ctx context.Context, tp pb.OperateTy
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case wresp := <-watchCh:
+		case wresp, ok := <-watchCh:
+			if !ok {
+				return terror.ErrMasterWatchEtcd.Generatef("etcd's watch channel is closed, watch key: %s", watchPath)
+			}
+
 			if wresp.Err() != nil {
 				return terror.ErrMasterWatchEtcd.Delegate(wresp.Err(), watchPath)
 			}
@@ -2584,10 +2588,15 @@ func (s *Server) saveRequestAndWaitResponse(ctx context.Context, tp pb.OperateTy
 			}
 
 			for _, ev := range wresp.Events {
+				// only need handle put event
+				if ev.Type != mvccpb.PUT {
+					return terror.ErrMasterWatchEtcd.Generatef("watch etcd meet unexpect event type, watch key: %s, event type", watchPath, ev.Type)
+				}
+
 				operate := &pb.Operate{}
 				err := operate.Unmarshal(ev.Kv.Value)
 				if err != nil {
-					return terror.ErrMasterUnmarshalOperate.Delegate(err)
+					return terror.ErrMasterUnmarshalOperate.Delegate(err, watchPath)
 				}
 
 				if len(operate.Err) != 0 {

@@ -854,7 +854,7 @@ var (
 	ErrMasterJoinEmbedEtcdFail      = New(codeMasterJoinEmbedEtcdFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to join embed etcd: %s")
 
 	ErrMasterMarshalOperate          = New(codeMasterMarshalOperate, ClassDMMaster, ScopeInternal, LevelHigh, "fail to marshal operate: %v")
-	ErrMasterUnmarshalOperate        = New(codeMasterUnmarshalOperate, ClassDMMaster, ScopeInternal, LevelHigh, "fail to unmarshal operate")
+	ErrMasterUnmarshalOperate        = New(codeMasterUnmarshalOperate, ClassDMMaster, ScopeInternal, LevelHigh, "fail to unmarshal operate, operate's key: %s")
 	ErrMasterUnmarshalOperateRequest = New(codeMasterUnmarshalOperateRequest, ClassDMMaster, ScopeInternal, LevelHigh, "fail to unmarshal operate request: %v")
 	ErrMasterMarshalResponse         = New(codeMasterMarshalResponse, ClassDMMaster, ScopeInternal, LevelHigh, "fail to marshal response")
 	ErrMasterWatchEtcd               = New(codeMasterWatchEtcd, ClassDMMaster, ScopeInternal, LevelMedium, "fail to watch etcd's key: %s")
