@@ -14,13 +14,14 @@
 package simulator
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
+	"github.com/pingcap/dm/dm/pb"
 
 	"github.com/pingcap/errors"
-	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	_ "github.com/pingcap/tidb/types/parser_driver" // for import parser driver
 	"github.com/spf13/cobra"
 )
@@ -84,32 +85,27 @@ func eventFilterFunc(cmd *cobra.Command, _ []string) {
 	}
 	sql := realSQLs[0]
 
-	mysqlInstance, err := getMySQLInstanceThroughWorker(worker, task, cfg.MySQLInstances)
-	if err != nil {
-		common.PrintLines("get mysqlInstance failed %v", errors.ErrorStack(err))
+	cli := common.MasterClient()
+	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
+	defer cancel()
+
+	resp, err := cli.FetchSourceInfo(ctx, &pb.FetchSourceInfoRequest{
+		Op:     pb.SimulateOp_EventFilter,
+		Worker: worker,
+		Task:   task,
+		SQL:    sql,
+	})
+
+	if err = checkResp(err, resp); err != nil {
+		common.PrintLines(errors.ErrorStack(err))
 		return
 	}
 
-	// get sourceID relative binlog event filter
-	relativeEventFilterMap := make(map[string]*bf.BinlogEventRule, 0)
-	for _, eventFilterName := range mysqlInstance.FilterRules {
-		relativeEventFilterMap[eventFilterName] = cfg.Filters[eventFilterName]
-	}
-
-	filterName, action, err := filterSQL(sql, relativeEventFilterMap, cfg.CaseSensitive)
-	if err != nil {
-		common.PrintLines("get filter info failed:\n%v", errors.ErrorStack(err))
-		return
-	}
 	result := eventFilterResult{
-		Result:     true,
-		Msg:        "",
-		FilterName: filterName,
-	}
-	if action == bf.Ignore {
-		result.WillBeFiltered = "yes"
-	} else {
-		result.WillBeFiltered = "no"
+		Result:         true,
+		Msg:            "",
+		FilterName:     resp.Reason,
+		WillBeFiltered: resp.Filtered,
 	}
 	common.PrettyPrintInterface(result)
 }

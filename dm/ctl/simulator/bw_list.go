@@ -14,11 +14,14 @@
 package simulator
 
 import (
+	"context"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
+	"github.com/pingcap/dm/dm/pb"
 
 	"github.com/pingcap/errors"
-	"github.com/pingcap/tidb-tools/pkg/filter"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/spf13/cobra"
 )
 
@@ -69,44 +72,60 @@ func bwListFunc(cmd *cobra.Command, _ []string) {
 	result := &bwListResult{
 		Result: true,
 	}
+	cli := common.MasterClient()
+	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
+	defer cancel()
+
 	// no worker is specified, print all info
 	if len(workers) == 0 {
-		resp, err := fetchAllTableInfoFromMaster(task)
-		if err != nil {
+		resp, err := cli.FetchSourceInfo(ctx, &pb.FetchSourceInfoRequest{
+			Op:   pb.SimulateOp_BlackWhiteList,
+			Task: task,
+		})
+		if err := checkResp(err, resp); err != nil {
 			common.PrintLines("can not fetch source info from dm-master:\n%s", err)
 			return
 		}
 
-		bwListMap := make(map[string]*filter.Rules, len(cfg.MySQLInstances))
-		for _, inst := range cfg.MySQLInstances {
-			bwListMap[inst.SourceID] = cfg.BWList[inst.BWListName]
-		}
+		doTableMap := make(map[string][]string, len(resp.SourceInfo))
+		ignoreTableMap := make(map[string][]string, len(resp.SourceInfo))
+		for _, sourceInfo := range resp.SourceInfo {
+			doTableList := make([]string, 0)
+			ignoreTableList := make([]string, 0)
+			for schema, pbTableList := range sourceInfo.DoTableMap {
+				for _, table := range pbTableList.Tables {
+					doTableList = append(doTableList, dbutil.TableName(schema, table))
+				}
+			}
+			for schema, pbTableList := range sourceInfo.IgnoreTableMap {
+				for _, table := range pbTableList.Tables {
+					ignoreTableList = append(ignoreTableList, dbutil.TableName(schema, table))
+				}
+			}
 
-		result.DoTables, result.IgnoreTables, err = getDoIgnoreTables(cfg.CaseSensitive, bwListMap, resp.SourceInfo)
-		if err != nil {
-			common.PrintLines(errors.ErrorStack(err))
-			return
+			doTableMap[sourceInfo.SourceIP] = doTableList
+			ignoreTableMap[sourceInfo.SourceIP] = ignoreTableList
 		}
+		result.DoTables = doTableMap
+		result.IgnoreTables = ignoreTableMap
 	} else {
-		worker := workers[0]
-		schema, table, err := getTableNameFromCMD(cmd)
+		tableName, err := getTableFromCMD(cmd)
 		if err != nil {
 			common.PrintLines("get check table info failed:\n%s", errors.ErrorStack(err))
 			return
 		}
-
-		mysqlInstance, err := getMySQLInstanceThroughWorker(worker, task, cfg.MySQLInstances)
-		if err != nil {
-			common.PrintLines("get mysql instance config failed:\n%s", errors.ErrorStack(err))
+		resp, err := cli.FetchSourceInfo(ctx, &pb.FetchSourceInfoRequest{
+			Op:         pb.SimulateOp_BlackWhiteList,
+			Worker:     workers[0],
+			Task:       task,
+			TableQuery: tableName,
+		})
+		if err := checkResp(err, resp); err != nil {
+			common.PrintLines("can not fetch source info from dm-master:\n%s", err)
 			return
 		}
 
-		filtered := checkSingleBWFilter(schema, table, cfg.CaseSensitive, cfg.BWList[mysqlInstance.BWListName])
-		if filtered {
-			result.WillBeFiltered = "yes"
-		} else {
-			result.WillBeFiltered = "no"
-		}
+		result.WillBeFiltered = resp.Filtered
 	}
 	common.PrettyPrintInterface(result)
 }

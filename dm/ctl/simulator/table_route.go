@@ -14,13 +14,14 @@
 package simulator
 
 import (
+	"context"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/pingcap/errors"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pingcap/tidb-tools/pkg/filter"
-	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/spf13/cobra"
 )
 
@@ -73,73 +74,60 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 	result := &tableRouteResult{
 		Result: true,
 	}
+	cli := common.MasterClient()
+	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
+	defer cancel()
 	// no worker is specified, print all routes
 	if len(workers) == 0 {
-		resp, err := fetchAllTableInfoFromMaster(task)
-		if err != nil {
+		resp, err := cli.FetchSourceInfo(ctx, &pb.FetchSourceInfoRequest{
+			Op:   pb.SimulateOp_TableRoute,
+			Task: task,
+		})
+		if err = checkResp(err, resp); err != nil {
 			common.PrintLines("can not fetch source info from dm-master:\n%s", err)
 			return
 		}
 
-		bwListMap := make(map[string]*filter.Rules, len(cfg.MySQLInstances))
-		for _, inst := range cfg.MySQLInstances {
-			bwListMap[inst.SourceID] = cfg.BWList[inst.BWListName]
-		}
-
-		routeRulesMap := make(map[string][]*router.TableRule, len(cfg.MySQLInstances))
-		for _, inst := range cfg.MySQLInstances {
-			routeRules := make([]*router.TableRule, 0, len(inst.RouteRules))
-			for _, routeName := range inst.RouteRules {
-				routeRules = append(routeRules, cfg.Routes[routeName])
+		routes := make(map[string]map[string][]string)
+		for _, sourceInfo := range resp.SourceInfo {
+			for targetTable, sourceTableList := range sourceInfo.RouteTableMap {
+				for _, sourceTable := range sourceTableList.Tables {
+					if routes[targetTable][sourceInfo.SourceIP] == nil {
+						routes[targetTable][sourceInfo.SourceIP] = make([]string, 0)
+					}
+					routes[targetTable][sourceInfo.SourceIP] = append(routes[targetTable][sourceInfo.SourceIP], sourceTable)
+				}
 			}
-			routeRulesMap[inst.SourceID] = routeRules
 		}
 
-		result.Routes, err = getRoutePath(cfg.CaseSensitive, bwListMap, routeRulesMap, resp.SourceInfo)
-		if err != nil {
-			common.PrintLines(errors.ErrorStack(err))
-			return
-		}
+		result.Routes = routes
 	} else {
-		worker := workers[0]
-		schema, table, err := getTableNameFromCMD(cmd)
-		if err != nil {
-			common.PrintLines("get check table info failed:\n%s", errors.ErrorStack(err))
+		tableName, err := getTableFromCMD(cmd)
+		resp, err := cli.FetchSourceInfo(ctx, &pb.FetchSourceInfoRequest{
+			Op:         pb.SimulateOp_TableRoute,
+			Worker:     workers[0],
+			Task:       task,
+			TableQuery: tableName,
+		})
+		if err = checkResp(err, resp); err != nil {
+			common.PrintLines("can not fetch source info from dm-master:\n%s", err)
 			return
 		}
-
-		mysqlInstance, err := getMySQLInstanceThroughWorker(worker, task, cfg.MySQLInstances)
-		if err != nil {
-			common.PrintLines("get mysql instance config failed:\n%s", errors.ErrorStack(err))
-			return
-		}
-
-		filtered := checkSingleBWFilter(schema, table, cfg.CaseSensitive, cfg.BWList[mysqlInstance.BWListName])
-		if filtered {
-			result.WillBeFiltered = "yes"
+		if resp.Filtered != "" {
+			result.WillBeFiltered = resp.Filtered
 		} else {
-			routeRuleMap := make(map[string]*router.TableRule, len(mysqlInstance.RouteRules))
-			routeRules := make([]*router.TableRule, 0, len(mysqlInstance.RouteRules))
-			for _, routeRuleName := range mysqlInstance.RouteRules {
-				routeRuleMap[routeRuleName] = cfg.Routes[routeRuleName]
-				routeRules = append(routeRules, cfg.Routes[routeRuleName])
-			}
-
-			result.MatchRoute, err = getRouteName(cfg.CaseSensitive, schema, table, routeRuleMap)
-			if err != nil {
-				common.PrintLines(errors.ErrorStack(err))
+			result.MatchRoute = resp.Reason
+			sourceInfo := resp.SourceInfo[0]
+			if len(sourceInfo.RouteTableMap) != 1 {
+				common.PrintLines("routes map is supposed to has length 1, but is ", len(sourceInfo.RouteTableMap))
 				return
 			}
-
-			r, err := router.NewTableRouter(cfg.CaseSensitive, routeRules)
-			if err != nil {
-				common.PrintLines("build of total table router failed:\n%s", errors.ErrorStack(err))
-				return
-			}
-			result.TargetSchema, result.TargetTable, err = r.Route(schema, table)
-			if err != nil {
-				common.PrintLines("route of table %s failed:\n%s", dbutil.TableName(schema, table), errors.ErrorStack(err))
-				return
+			for targetTable := range sourceInfo.RouteTableMap {
+				result.TargetSchema, result.TargetTable, err = utils.ExtractTable(targetTable)
+				if err != nil {
+					common.PrintLines(errors.ErrorStack(err))
+					return
+				}
 			}
 		}
 	}
