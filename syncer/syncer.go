@@ -882,12 +882,12 @@ func (s *Syncer) syncDDL(ctx *tcontext.Context, queueBucket string, db *DBConn, 
 		}
 
 		if sqlJob.ddlExecItem != nil && sqlJob.ddlExecItem.req != nil && !sqlJob.ddlExecItem.req.Exec {
-			s.tctx.L().Info("ignore sharding DDLs", zap.Strings("ddls", sqlJob.ddls))
+			ctx.L().Info("ignore sharding DDLs", zap.Strings("ddls", sqlJob.ddls))
 		} else {
 			var affected int
-			affected, err = db.executeSQLWithIgnore(s.tctx, ignoreDDLError, sqlJob.ddls)
+			affected, err = db.executeSQLWithIgnore(ctx, ignoreDDLError, sqlJob.ddls)
 			if err != nil {
-				err = s.handleSpecialDDLError(s.tctx, err, sqlJob.ddls, affected, db)
+				err = s.handleSpecialDDLError(ctx, err, sqlJob.ddls, affected, db)
 				err = terror.WithScope(err, terror.ScopeDownstream)
 			}
 
@@ -899,7 +899,7 @@ func (s *Syncer) syncDDL(ctx *tcontext.Context, queueBucket string, db *DBConn, 
 				}
 				_, traceErr := s.tracer.CollectSyncerJobEvent(sqlJob.traceID, sqlJob.traceGID, int32(sqlJob.tp), sqlJob.pos, sqlJob.currentPos, queueBucket, sqlJob.sql, sqlJob.ddls, nil, execDDLReq, syncerJobState)
 				if traceErr != nil {
-					s.tctx.L().Error("fail to collect binlog replication job event", log.ShortError(traceErr))
+					ctx.L().Error("fail to collect binlog replication job event", log.ShortError(traceErr))
 				}
 			}
 		}
@@ -967,7 +967,7 @@ func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *DBConn, job
 			queries = append(queries, j.sql)
 			args = append(args, j.args)
 		}
-		affected, err := db.executeSQL(s.tctx, queries, args...)
+		affected, err := db.executeSQL(ctx, queries, args...)
 		if err != nil {
 			errCtx := &ExecErrorContext{err, jobs[affected].currentPos, fmt.Sprintf("%v", jobs)}
 			s.appendExecErrors(errCtx)
@@ -977,7 +977,7 @@ func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *DBConn, job
 			for _, job := range jobs {
 				_, err2 := s.tracer.CollectSyncerJobEvent(job.traceID, job.traceGID, int32(job.tp), job.pos, job.currentPos, queueBucket, job.sql, job.ddls, nil, nil, syncerJobState)
 				if err2 != nil {
-					s.tctx.L().Error("fail to collect binlog replication job event", log.ShortError(err2))
+					ctx.L().Error("fail to collect binlog replication job event", log.ShortError(err2))
 				}
 			}
 		}
