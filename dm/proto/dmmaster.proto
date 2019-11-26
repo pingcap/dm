@@ -62,8 +62,8 @@ service Master {
     // CheckTask checks legality of task configuration
     rpc CheckTask(CheckTaskRequest) returns (CheckTaskResponse) {}
 
-    // FetchSourceInfo fetches table, ip info from source dbs
-    rpc FetchSourceInfo(FetchSourceInfoRequest) returns (FetchSourceInfoResponse) {}
+    // SimulateTask does simulation on dm-master
+    rpc SimulateTask(SimulationRequest) returns (SimulationResponse) {}
 }
 
 message MigrateWorkerRelayRequest {
@@ -314,7 +314,7 @@ enum SimulateOp {
     EventFilter = 2; // simulate whether sql will be filtered by binlog event filter
 }
 
-message FetchSourceInfoRequest {
+message SimulationRequest {
     SimulateOp op = 1;
     string worker = 2; // whether to fetch info from specified workers
     string task = 3; // task's configuration, yaml format
@@ -326,7 +326,7 @@ message TableList {
     repeated string tables = 1;
 }
 
-message SourceInfo {
+message SimulationResult {
     string sourceID = 1;
     string sourceIP = 2; // source IP of relative MySQL sourceID, format: IP:Port
     // for doTableMap and ignoreTableMap, key is the schema name while value is tables belong to this schema
@@ -337,10 +337,10 @@ message SourceInfo {
     map<string, TableList> routeTableMap = 5;
 }
 
-message FetchSourceInfoResponse {
+message SimulationResponse {
     bool result = 1;
     string msg = 2;
-    string filtered = 3; // only has value in a single query. When the queried table/sql is filtered this value will be set to true
-    string reason = 4; // only has value in a single query. TableRoute: matched route name; BWList: matched bw filter name; EventFilter: matched event filter name
-    repeated SourceInfo sourceInfo = 5;
+    string filtered = 3; // only has value in a single table query. When the queried table/sql is filtered this value will be set to "yes"
+    string reason = 4; // only has value in a single table query. TableRoute: matched route name; BWList: matched bw filter name; EventFilter: matched event filter name
+    repeated SimulationResult simulationResults = 5;
 }

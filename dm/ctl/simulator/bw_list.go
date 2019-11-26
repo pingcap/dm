@@ -78,33 +78,33 @@ func bwListFunc(cmd *cobra.Command, _ []string) {
 
 	// no worker is specified, print all info
 	if len(workers) == 0 {
-		resp, err := cli.FetchSourceInfo(ctx, &pb.FetchSourceInfoRequest{
+		resp, err := cli.SimulateTask(ctx, &pb.SimulationRequest{
 			Op:   pb.SimulateOp_BlackWhiteList,
 			Task: task,
 		})
 		if err := checkResp(err, resp); err != nil {
-			common.PrintLines("can not fetch source info from dm-master:\n%s", err)
+			common.PrintLines("get simulation result from dm-master failed:\n%s", err)
 			return
 		}
 
-		doTableMap := make(map[string][]string, len(resp.SourceInfo))
-		ignoreTableMap := make(map[string][]string, len(resp.SourceInfo))
-		for _, sourceInfo := range resp.SourceInfo {
+		doTableMap := make(map[string][]string, len(resp.SimulationResults))
+		ignoreTableMap := make(map[string][]string, len(resp.SimulationResults))
+		for _, simulationResult := range resp.SimulationResults {
 			doTableList := make([]string, 0)
 			ignoreTableList := make([]string, 0)
-			for schema, pbTableList := range sourceInfo.DoTableMap {
+			for schema, pbTableList := range simulationResult.DoTableMap {
 				for _, table := range pbTableList.Tables {
 					doTableList = append(doTableList, dbutil.TableName(schema, table))
 				}
 			}
-			for schema, pbTableList := range sourceInfo.IgnoreTableMap {
+			for schema, pbTableList := range simulationResult.IgnoreTableMap {
 				for _, table := range pbTableList.Tables {
 					ignoreTableList = append(ignoreTableList, dbutil.TableName(schema, table))
 				}
 			}
 
-			doTableMap[sourceInfo.SourceIP] = doTableList
-			ignoreTableMap[sourceInfo.SourceIP] = ignoreTableList
+			doTableMap[simulationResult.SourceIP] = doTableList
+			ignoreTableMap[simulationResult.SourceIP] = ignoreTableList
 		}
 		result.DoTables = doTableMap
 		result.IgnoreTables = ignoreTableMap
@@ -114,14 +114,14 @@ func bwListFunc(cmd *cobra.Command, _ []string) {
 			common.PrintLines("get check table info failed:\n%s", errors.ErrorStack(err))
 			return
 		}
-		resp, err := cli.FetchSourceInfo(ctx, &pb.FetchSourceInfoRequest{
+		resp, err := cli.SimulateTask(ctx, &pb.SimulationRequest{
 			Op:         pb.SimulateOp_BlackWhiteList,
 			Worker:     workers[0],
 			Task:       task,
 			TableQuery: tableName,
 		})
 		if err := checkResp(err, resp); err != nil {
-			common.PrintLines("can not fetch source info from dm-master:\n%s", err)
+			common.PrintLines("get simulation result from dm-master failed:\n%s", err)
 			return
 		}
 

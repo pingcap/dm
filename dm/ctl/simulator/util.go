@@ -20,7 +20,7 @@ import (
 )
 
 // checkResp checks the result of RPC response
-func checkResp(err error, resp *pb.FetchSourceInfoResponse) error {
+func checkResp(err error, resp *pb.SimulationResponse) error {
 	if err != nil {
 		return errors.Trace(err)
 	} else if !resp.Result {

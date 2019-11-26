@@ -79,23 +79,23 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 	defer cancel()
 	// no worker is specified, print all routes
 	if len(workers) == 0 {
-		resp, err := cli.FetchSourceInfo(ctx, &pb.FetchSourceInfoRequest{
+		resp, err := cli.SimulateTask(ctx, &pb.SimulationRequest{
 			Op:   pb.SimulateOp_TableRoute,
 			Task: task,
 		})
 		if err = checkResp(err, resp); err != nil {
-			common.PrintLines("can not fetch source info from dm-master:\n%s", err)
+			common.PrintLines("get simulation result from dm-master failed:\n%s", err)
 			return
 		}
 
 		routes := make(map[string]map[string][]string)
-		for _, sourceInfo := range resp.SourceInfo {
-			for targetTable, sourceTableList := range sourceInfo.RouteTableMap {
+		for _, simulationResult := range resp.SimulationResults {
+			for targetTable, sourceTableList := range simulationResult.RouteTableMap {
 				for _, sourceTable := range sourceTableList.Tables {
 					if routes[targetTable] == nil {
 						routes[targetTable] = make(map[string][]string)
 					}
-					routes[targetTable][sourceInfo.SourceIP] = append(routes[targetTable][sourceInfo.SourceIP], sourceTable)
+					routes[targetTable][simulationResult.SourceIP] = append(routes[targetTable][simulationResult.SourceIP], sourceTable)
 				}
 			}
 		}
@@ -103,26 +103,26 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 		result.Routes = routes
 	} else {
 		tableName, err := getTableFromCMD(cmd)
-		resp, err := cli.FetchSourceInfo(ctx, &pb.FetchSourceInfoRequest{
+		resp, err := cli.SimulateTask(ctx, &pb.SimulationRequest{
 			Op:         pb.SimulateOp_TableRoute,
 			Worker:     workers[0],
 			Task:       task,
 			TableQuery: tableName,
 		})
 		if err = checkResp(err, resp); err != nil {
-			common.PrintLines("can not fetch source info from dm-master:\n%s", err)
+			common.PrintLines("get simulation result from dm-master failed:\n%s", err)
 			return
 		}
 		if resp.Filtered != "" {
 			result.WillBeFiltered = resp.Filtered
 		} else {
 			result.MatchRoute = resp.Reason
-			sourceInfo := resp.SourceInfo[0]
-			if len(sourceInfo.RouteTableMap) != 1 {
-				common.PrintLines("routes map is supposed to has length 1, but is %v", len(sourceInfo.RouteTableMap))
+			simulationResult := resp.SimulationResults[0]
+			if len(simulationResult.RouteTableMap) != 1 {
+				common.PrintLines("routes map is supposed to has length 1, but is %v", len(simulationResult.RouteTableMap))
 				return
 			}
-			for targetTable := range sourceInfo.RouteTableMap {
+			for targetTable := range simulationResult.RouteTableMap {
 				result.TargetSchema, result.TargetTable, err = utils.ExtractTable(targetTable)
 				if err != nil {
 					common.PrintLines(errors.ErrorStack(err))

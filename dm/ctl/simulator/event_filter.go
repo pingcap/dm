@@ -89,7 +89,7 @@ func eventFilterFunc(cmd *cobra.Command, _ []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
 	defer cancel()
 
-	resp, err := cli.FetchSourceInfo(ctx, &pb.FetchSourceInfoRequest{
+	resp, err := cli.SimulateTask(ctx, &pb.SimulationRequest{
 		Op:     pb.SimulateOp_EventFilter,
 		Worker: worker,
 		Task:   task,
@@ -97,7 +97,7 @@ func eventFilterFunc(cmd *cobra.Command, _ []string) {
 	})
 
 	if err = checkResp(err, resp); err != nil {
-		common.PrintLines(errors.ErrorStack(err))
+		common.PrintLines("get simulation result from dm-master failed:\n%s", err)
 		return
 	}
 

@@ -35,14 +35,14 @@ import (
 	"go.uber.org/zap"
 )
 
-// FetchSourceInfo fetches source info and table names
-func (s *Server) FetchSourceInfo(ctx context.Context, req *pb.FetchSourceInfoRequest) (*pb.FetchSourceInfoResponse, error) {
+// SimulateTask does simulation on dm-master
+func (s *Server) SimulateTask(ctx context.Context, req *pb.SimulationRequest) (*pb.SimulationResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "FetchSourceInfo"))
 
 	cfg := config.NewTaskConfig()
 	err := cfg.Decode(req.Task)
 	if err != nil {
-		return &pb.FetchSourceInfoResponse{
+		return &pb.SimulationResponse{
 			Result: false,
 			Msg:    errors.ErrorStack(err),
 		}, nil
@@ -50,18 +50,18 @@ func (s *Server) FetchSourceInfo(ctx context.Context, req *pb.FetchSourceInfoReq
 
 	_, stCfgs, err := s.generateSubTask(ctx, req.Task)
 	if err != nil {
-		return &pb.FetchSourceInfoResponse{
+		return &pb.SimulationResponse{
 			Result: false,
 			Msg:    errors.ErrorStack(err),
 		}, nil
 	}
 
-	sourceInfoLen := len(s.cfg.DeployMap)
+	simulationResultCap := len(s.cfg.DeployMap)
 	if req.Worker != "" {
-		sourceInfoLen = 1
+		simulationResultCap = 1
 	}
-	sourceInfoList := make([]*pb.SourceInfo, 0, sourceInfoLen)
-	resp := &pb.FetchSourceInfoResponse{
+	simulationResults := make([]*pb.SimulationResult, 0, simulationResultCap)
+	resp := &pb.SimulationResponse{
 		Result: true,
 		Msg:    "",
 	}
@@ -82,7 +82,7 @@ ForLoop:
 
 				filtered, matchRoute, matchTable, err := getSingleRoute(stCfg.CaseSensitive, req.TableQuery, stCfg.BWList, relativeRouteMap)
 				if err != nil {
-					return &pb.FetchSourceInfoResponse{
+					return &pb.SimulationResponse{
 						Result: false,
 						Msg:    errors.ErrorStack(err),
 					}, nil
@@ -93,23 +93,23 @@ ForLoop:
 					resp.Reason = matchRoute
 					routeMap := make(map[string]*pb.TableList, 1)
 					routeMap[matchTable] = &pb.TableList{Tables: []string{req.TableQuery}}
-					sourceInfo := &pb.SourceInfo{
+					simulationResult := &pb.SimulationResult{
 						SourceID:      mysqlInstance.SourceID,
-						SourceIP:      getSourceIP(stCfg.From),
+						SourceIP:      getSourceIPString(stCfg.From),
 						RouteTableMap: routeMap,
 					}
-					sourceInfoList = append(sourceInfoList, sourceInfo)
+					simulationResults = append(simulationResults, simulationResult)
 				}
 				break ForLoop
 			} else {
-				sourceInfo, err := getRoutePath(stCfg)
+				simulationResult, err := getRoutePath(stCfg)
 				if err != nil {
-					return &pb.FetchSourceInfoResponse{
+					return &pb.SimulationResponse{
 						Result: false,
 						Msg:    errors.ErrorStack(err),
 					}, nil
 				}
-				sourceInfoList = append(sourceInfoList, sourceInfo)
+				simulationResults = append(simulationResults, simulationResult)
 				if req.Worker != "" {
 					break ForLoop
 				}
@@ -118,14 +118,14 @@ ForLoop:
 			if req.TableQuery != "" {
 				schema, table, err := utils.ExtractTable(req.TableQuery)
 				if err != nil {
-					return &pb.FetchSourceInfoResponse{
+					return &pb.SimulationResponse{
 						Result: false,
 						Msg:    errors.ErrorStack(err),
 					}, nil
 				}
 				filtered, err := checkSingleBWFilter(schema, table, cfg.CaseSensitive, stCfg.BWList)
 				if err != nil {
-					return &pb.FetchSourceInfoResponse{
+					return &pb.SimulationResponse{
 						Result: false,
 						Msg:    errors.ErrorStack(err),
 					}, nil
@@ -137,14 +137,14 @@ ForLoop:
 				}
 				break ForLoop
 			} else {
-				sourceInfo, err := getDoIgnoreTables(stCfg)
+				simulationResult, err := getDoIgnoreTables(stCfg)
 				if err != nil {
-					return &pb.FetchSourceInfoResponse{
+					return &pb.SimulationResponse{
 						Result: false,
 						Msg:    errors.ErrorStack(err),
 					}, nil
 				}
-				sourceInfoList = append(sourceInfoList, sourceInfo)
+				simulationResults = append(simulationResults, simulationResult)
 				if req.Worker != "" {
 					break ForLoop
 				}
@@ -159,7 +159,7 @@ ForLoop:
 
 			filterName, action, err := filterSQL(req.SQL, relativeEventFilterMap, stCfg.CaseSensitive)
 			if err != nil {
-				return &pb.FetchSourceInfoResponse{
+				return &pb.SimulationResponse{
 					Result: false,
 					Msg:    errors.ErrorStack(err),
 				}, nil
@@ -174,11 +174,11 @@ ForLoop:
 			break ForLoop
 		}
 	}
-	resp.SourceInfo = sourceInfoList
+	resp.SimulationResults = simulationResults
 	return resp, nil
 }
 
-func getSourceIP(dbCfg config.DBConfig) string {
+func getSourceIPString(dbCfg config.DBConfig) string {
 	return fmt.Sprintf("%s:%v", dbCfg.Host, dbCfg.Port)
 }
 
@@ -306,7 +306,7 @@ func getSingleRoute(caseSensitive bool, tableQuery string, bwRules *filter.Rules
 	return false, matchRoute, matchTable, nil
 }
 
-func getRoutePath(stCfg *config.SubTaskConfig) (*pb.SourceInfo, error) {
+func getRoutePath(stCfg *config.SubTaskConfig) (*pb.SimulationResult, error) {
 	// apply on black-white filter
 	bwFilter, err := filter.New(stCfg.CaseSensitive, stCfg.BWList)
 	if err != nil {
@@ -315,7 +315,7 @@ func getRoutePath(stCfg *config.SubTaskConfig) (*pb.SourceInfo, error) {
 
 	r, err := router.NewTableRouter(stCfg.CaseSensitive, stCfg.RouteRules)
 	if err != nil {
-		return nil, errors.Annotatef(err, "build of router for source %s failed", getSourceIP(stCfg.From))
+		return nil, errors.Annotatef(err, "build of router for source %s failed", getSourceIPString(stCfg.From))
 	}
 
 	sourceDB, err := conn.DefaultDBProvider.Apply(stCfg.From)
@@ -326,7 +326,7 @@ func getRoutePath(stCfg *config.SubTaskConfig) (*pb.SourceInfo, error) {
 
 	fetchedRouteTableMap, err := utils.FetchTargetDoTables(sourceDB.DB, bwFilter, r)
 	if err != nil {
-		return nil, errors.Annotatef(err, "routing from source %s failed", getSourceIP(stCfg.From))
+		return nil, errors.Annotatef(err, "routing from source %s failed", getSourceIPString(stCfg.From))
 	}
 
 	routeTableMap := make(map[string]*pb.TableList, len(fetchedRouteTableMap))
@@ -337,16 +337,16 @@ func getRoutePath(stCfg *config.SubTaskConfig) (*pb.SourceInfo, error) {
 		}
 		routeTableMap[targetName] = &pb.TableList{Tables: sourceTableStringList}
 	}
-	sourceInfo := &pb.SourceInfo{
+	simulationResult := &pb.SimulationResult{
 		SourceID:      stCfg.SourceID,
-		SourceIP:      getSourceIP(stCfg.From),
+		SourceIP:      getSourceIPString(stCfg.From),
 		RouteTableMap: routeTableMap,
 	}
 
-	return sourceInfo, nil
+	return simulationResult, nil
 }
 
-func getDoIgnoreTables(stCfg *config.SubTaskConfig) (*pb.SourceInfo, error) {
+func getDoIgnoreTables(stCfg *config.SubTaskConfig) (*pb.SimulationResult, error) {
 	bwFilter, err := filter.New(stCfg.CaseSensitive, stCfg.BWList)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -380,13 +380,13 @@ func getDoIgnoreTables(stCfg *config.SubTaskConfig) (*pb.SourceInfo, error) {
 		ignoreTableMap[schema] = &pb.TableList{Tables: ignoreTables}
 	}
 
-	sourceInfo := &pb.SourceInfo{
+	simulationResult := &pb.SimulationResult{
 		SourceID:       stCfg.SourceID,
-		SourceIP:       fmt.Sprintf("%s:%v", stCfg.From.Host, stCfg.From.Port),
+		SourceIP:       getSourceIPString(stCfg.From),
 		DoTableMap:     doTableMap,
 		IgnoreTableMap: ignoreTableMap,
 	}
-	return sourceInfo, nil
+	return simulationResult, nil
 }
 
 // filterSQL will parse sql, and check whether this sql will be filtered.
