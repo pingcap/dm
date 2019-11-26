@@ -257,7 +257,7 @@ func getRouteName(caseSensitive bool, schema, table string, routeRuleMap map[str
 		routeLevel int
 		matchRoute string
 	)
-	routeRules := make([]*router.TableRule, len(routeRuleMap))
+	routeRules := make([]*router.TableRule, 0, len(routeRuleMap))
 	for routeRuleName, tableRule := range routeRuleMap {
 		routeRules = append(routeRules, tableRule)
 		r, err := router.NewTableRouter(caseSensitive, []*router.TableRule{tableRule})
@@ -310,7 +310,7 @@ func getRoutePath(stCfg *config.SubTaskConfig) (*pb.SourceInfo, error) {
 	// apply on black-white filter
 	bwFilter, err := filter.New(stCfg.CaseSensitive, stCfg.BWList)
 	if err != nil {
-		return nil, errors.Annotatef(err, "build of black white filter for source %s failed", sourceInfo.SourceID)
+		return nil, errors.Annotatef(err, "build of black white filter for source %s failed", stCfg.SourceID)
 	}
 
 	r, err := router.NewTableRouter(stCfg.CaseSensitive, stCfg.RouteRules)
@@ -326,7 +326,7 @@ func getRoutePath(stCfg *config.SubTaskConfig) (*pb.SourceInfo, error) {
 
 	fetchedRouteTableMap, err := utils.FetchTargetDoTables(sourceDB.DB, bwFilter, r)
 	if err != nil {
-		return nil, errors.Annotatef(err, "routing from MySQL %s failed")
+		return nil, errors.Annotatef(err, "routing from source %s failed", getSourceIP(stCfg.From))
 	}
 
 	routeTableMap := make(map[string]*pb.TableList, len(fetchedRouteTableMap))
@@ -373,7 +373,7 @@ func getDoIgnoreTables(stCfg *config.SubTaskConfig) (*pb.SourceInfo, error) {
 			if len(bwFilter.ApplyOn([]*filter.Table{{Schema: schema, Name: table}})) == 0 {
 				ignoreTables = append(ignoreTables, table)
 			} else {
-				doTables = append(doTables)
+				doTables = append(doTables, table)
 			}
 		}
 		doTableMap[schema] = &pb.TableList{Tables: doTables}

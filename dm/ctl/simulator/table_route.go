@@ -92,8 +92,8 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 		for _, sourceInfo := range resp.SourceInfo {
 			for targetTable, sourceTableList := range sourceInfo.RouteTableMap {
 				for _, sourceTable := range sourceTableList.Tables {
-					if routes[targetTable][sourceInfo.SourceIP] == nil {
-						routes[targetTable][sourceInfo.SourceIP] = make([]string, 0)
+					if routes[targetTable] == nil {
+						routes[targetTable] = make(map[string][]string)
 					}
 					routes[targetTable][sourceInfo.SourceIP] = append(routes[targetTable][sourceInfo.SourceIP], sourceTable)
 				}
@@ -119,7 +119,7 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 			result.MatchRoute = resp.Reason
 			sourceInfo := resp.SourceInfo[0]
 			if len(sourceInfo.RouteTableMap) != 1 {
-				common.PrintLines("routes map is supposed to has length 1, but is ", len(sourceInfo.RouteTableMap))
+				common.PrintLines("routes map is supposed to has length 1, but is %v", len(sourceInfo.RouteTableMap))
 				return
 			}
 			for targetTable := range sourceInfo.RouteTableMap {
