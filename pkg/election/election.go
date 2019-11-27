@@ -205,6 +205,12 @@ func (e *Election) toBeLeader() {
 	}
 }
 
+// SetIsLeader sets this election is leader or not
+// Note: this function only used for unit test
+func (e *Election) SetIsLeader(isLeader bool) {
+	e.isLeader.Set(isLeader)
+}
+
 func (e *Election) retireLeader() {
 	e.isLeader.Set(false)
 	select {

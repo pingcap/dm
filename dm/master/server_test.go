@@ -38,6 +38,7 @@ import (
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/pbmock"
+	"github.com/pingcap/dm/pkg/election"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -168,6 +169,9 @@ func testDefaultMasterServer(c *check.C) (*Server, context.CancelFunc) {
 	server := NewServer(cfg)
 	server.etcdClient = etcdClient
 	ctx, cancel := context.WithCancel(context.Background())
+	server.election = &election.Election{}
+	server.election.SetIsLeader(true)
+
 	go server.ap.Start(ctx)
 	go server.WatchRequest(ctx)
 
