@@ -2335,8 +2335,10 @@ func (s *Server) WatchRequest(ctx context.Context) {
 					continue
 				}
 
-				// FIXME: only master leader need handle request
-				go s.handleRequest(string(ev.Kv.Key), operate)
+				// only master leader need handle request
+				if s.election.IsLeader() {
+					go s.handleRequest(string(ev.Kv.Key), operate)
+				}
 			}
 		}
 	}
