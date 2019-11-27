@@ -14,6 +14,7 @@
 package syncer
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
 	"sync"
@@ -23,10 +24,14 @@ import (
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 
+	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/parser/model"
 	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
@@ -54,18 +59,22 @@ var (
 type binlogPoint struct {
 	sync.RWMutex
 	mysql.Position
+	ti *model.TableInfo
 
 	flushedPos mysql.Position // pos which flushed permanently
+	flushedTI  *model.TableInfo
 }
 
-func newBinlogPoint(pos mysql.Position, flushedPos mysql.Position) *binlogPoint {
+func newBinlogPoint(pos mysql.Position, ti *model.TableInfo, flushedPos mysql.Position, flushedTI *model.TableInfo) *binlogPoint {
 	return &binlogPoint{
 		Position:   pos,
+		ti:         ti,
 		flushedPos: flushedPos,
+		flushedTI:  flushedTI,
 	}
 }
 
-func (b *binlogPoint) save(pos mysql.Position) error {
+func (b *binlogPoint) save(pos mysql.Position, ti *model.TableInfo) error {
 	b.Lock()
 	defer b.Unlock()
 	if pos.Compare(b.Position) < 0 {
@@ -73,6 +82,7 @@ func (b *binlogPoint) save(pos mysql.Position) error {
 		return terror.ErrCheckpointSaveInvalidPos.Generate(pos, b.Position)
 	}
 	b.Position = pos
+	b.ti = ti
 	return nil
 }
 
@@ -80,12 +90,17 @@ func (b *binlogPoint) flush() {
 	b.Lock()
 	defer b.Unlock()
 	b.flushedPos = b.Position
+	b.flushedTI = b.ti
 }
 
-func (b *binlogPoint) rollback() {
+func (b *binlogPoint) rollback() (isSchemaChanged bool) {
 	b.Lock()
 	defer b.Unlock()
 	b.Position = b.flushedPos
+	if isSchemaChanged = b.ti != b.flushedTI; isSchemaChanged {
+		b.ti = b.flushedTI
+	}
+	return
 }
 
 func (b *binlogPoint) outOfDate() bool {
@@ -106,6 +121,13 @@ func (b *binlogPoint) FlushedMySQLPos() mysql.Position {
 	b.RLock()
 	defer b.RUnlock()
 	return b.flushedPos
+}
+
+// TableInfo returns the table schema associated at the current binlog position.
+func (b *binlogPoint) TableInfo() *model.TableInfo {
+	b.RLock()
+	defer b.RUnlock()
+	return b.ti
 }
 
 func (b *binlogPoint) String() string {
@@ -135,16 +157,19 @@ type CheckPoint interface {
 	Clear() error
 
 	// Load loads all checkpoints saved by CheckPoint
-	Load() error
+	Load(schemaTracker *schema.Tracker) error
 
 	// LoadMeta loads checkpoints from meta config item or file
 	LoadMeta() error
 
 	// SaveTablePoint saves checkpoint for specified table in memory
-	SaveTablePoint(sourceSchema, sourceTable string, pos mysql.Position)
+	SaveTablePoint(sourceSchema, sourceTable string, pos mysql.Position, ti *model.TableInfo)
 
 	// DeleteTablePoint deletes checkpoint for specified table in memory and storage
 	DeleteTablePoint(sourceSchema, sourceTable string) error
+
+	// DeleteSchemaPoint deletes checkpoint for specified schema
+	DeleteSchemaPoint(sourceSchema string) error
 
 	// IsNewerTablePoint checks whether job's checkpoint is newer than previous saved checkpoint
 	IsNewerTablePoint(sourceSchema, sourceTable string, pos mysql.Position) bool
@@ -173,7 +198,7 @@ type CheckPoint interface {
 	CheckGlobalPoint() bool
 
 	// Rollback rolls global checkpoint and all table checkpoints back to flushed checkpoints
-	Rollback()
+	Rollback(schemaTracker *schema.Tracker)
 
 	// String return text of global position
 	String() string
@@ -188,11 +213,10 @@ type RemoteCheckPoint struct {
 
 	cfg *config.SubTaskConfig
 
-	db     *conn.BaseDB
-	dbConn *DBConn
-	schema string // schema name, set through task config
-	table  string // table name, now it's task name
-	id     string // checkpoint ID, now it is `source-id`
+	db        *conn.BaseDB
+	dbConn    *DBConn
+	tableName string // qualified table name: schema is set through task config, table is task name
+	id        string // checkpoint ID, now it is `source-id`
 
 	// source-schema -> source-table -> checkpoint
 	// used to filter the synced binlog when re-syncing for sharding group
@@ -212,16 +236,14 @@ type RemoteCheckPoint struct {
 
 // NewRemoteCheckPoint creates a new RemoteCheckPoint
 func NewRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id string) CheckPoint {
-
 	newtctx := tctx.WithLogger(tctx.L().WithFields(zap.String("component", "remote checkpoint")))
 
 	cp := &RemoteCheckPoint{
 		cfg:         cfg,
-		schema:      cfg.MetaSchema,
-		table:       fmt.Sprintf("%s_syncer_checkpoint", cfg.Name),
+		tableName:   dbutil.TableName(cfg.MetaSchema, cfg.Name+"_syncer_checkpoint"),
 		id:          id,
 		points:      make(map[string]map[string]*binlogPoint),
-		globalPoint: newBinlogPoint(minCheckpoint, minCheckpoint),
+		globalPoint: newBinlogPoint(minCheckpoint, nil, minCheckpoint, nil),
 		tctx:        newtctx,
 	}
 
@@ -258,14 +280,16 @@ func (cp *RemoteCheckPoint) Clear() error {
 	defer cp.Unlock()
 
 	// delete all checkpoints
-	sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s'", cp.schema, cp.table, cp.id)
-	args := make([]interface{}, 0)
-	_, err := cp.dbConn.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}...)
+	_, err := cp.dbConn.executeSQL(
+		cp.tctx,
+		[]string{`DELETE FROM ` + cp.tableName + ` WHERE id = ?`},
+		[]interface{}{cp.id},
+	)
 	if err != nil {
 		return err
 	}
 
-	cp.globalPoint = newBinlogPoint(minCheckpoint, minCheckpoint)
+	cp.globalPoint = newBinlogPoint(minCheckpoint, nil, minCheckpoint, nil)
 
 	cp.points = make(map[string]map[string]*binlogPoint)
 
@@ -273,14 +297,14 @@ func (cp *RemoteCheckPoint) Clear() error {
 }
 
 // SaveTablePoint implements CheckPoint.SaveTablePoint
-func (cp *RemoteCheckPoint) SaveTablePoint(sourceSchema, sourceTable string, pos mysql.Position) {
+func (cp *RemoteCheckPoint) SaveTablePoint(sourceSchema, sourceTable string, pos mysql.Position, ti *model.TableInfo) {
 	cp.Lock()
 	defer cp.Unlock()
-	cp.saveTablePoint(sourceSchema, sourceTable, pos)
+	cp.saveTablePoint(sourceSchema, sourceTable, pos, ti)
 }
 
 // saveTablePoint saves single table's checkpoint without mutex.Lock
-func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, pos mysql.Position) {
+func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, pos mysql.Position, ti *model.TableInfo) {
 	if cp.globalPoint.Compare(pos) > 0 {
 		panic(fmt.Sprintf("table checkpoint %+v less than global checkpoint %+v", pos, cp.globalPoint))
 	}
@@ -294,11 +318,9 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, pos
 	}
 	point, ok := mSchema[sourceTable]
 	if !ok {
-		mSchema[sourceTable] = newBinlogPoint(pos, minCheckpoint)
-	} else {
-		if err := point.save(pos); err != nil {
-			cp.tctx.L().Error("fail to save table point", zap.String("schema", sourceSchema), zap.String("table", sourceTable), log.ShortError(err))
-		}
+		mSchema[sourceTable] = newBinlogPoint(pos, ti, minCheckpoint, nil)
+	} else if err := point.save(pos, ti); err != nil {
+		cp.tctx.L().Error("fail to save table point", zap.String("schema", sourceSchema), zap.String("table", sourceTable), log.ShortError(err))
 	}
 }
 
@@ -316,14 +338,37 @@ func (cp *RemoteCheckPoint) DeleteTablePoint(sourceSchema, sourceTable string) e
 	}
 
 	cp.tctx.L().Info("delete table checkpoint", zap.String("schema", sourceSchema), zap.String("table", sourceTable))
-	// delete  checkpoint
-	sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s' AND `cp_schema` = '%s' AND `cp_table` = '%s'", cp.schema, cp.table, cp.id, sourceSchema, sourceTable)
-	args := make([]interface{}, 0)
-	_, err := cp.dbConn.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}...)
+	_, err := cp.dbConn.executeSQL(
+		cp.tctx,
+		[]string{`DELETE FROM ` + cp.tableName + ` WHERE id = ? AND cp_schema = ? AND cp_table = ?`},
+		[]interface{}{cp.id, sourceSchema, sourceTable},
+	)
 	if err != nil {
 		return err
 	}
 	delete(mSchema, sourceTable)
+	return nil
+}
+
+// DeleteSchemaPoint implements CheckPoint.DeleteSchemaPoint
+func (cp *RemoteCheckPoint) DeleteSchemaPoint(sourceSchema string) error {
+	cp.Lock()
+	defer cp.Unlock()
+	_, ok := cp.points[sourceSchema]
+	if !ok {
+		return nil
+	}
+
+	cp.tctx.L().Info("delete schema checkpoint", zap.String("schema", sourceSchema))
+	_, err := cp.dbConn.executeSQL(
+		cp.tctx,
+		[]string{`DELETE FROM ` + cp.tableName + ` WHERE id = ? AND cp_schema = ?`},
+		[]interface{}{cp.id, sourceSchema},
+	)
+	if err != nil {
+		return err
+	}
+	delete(cp.points, sourceSchema)
 	return nil
 }
 
@@ -349,7 +394,7 @@ func (cp *RemoteCheckPoint) SaveGlobalPoint(pos mysql.Position) {
 	defer cp.Unlock()
 
 	cp.tctx.L().Debug("save global checkpoint", zap.Stringer("position", pos))
-	if err := cp.globalPoint.save(pos); err != nil {
+	if err := cp.globalPoint.save(pos, nil); err != nil {
 		cp.tctx.L().Error("fail to save global checkpoint", log.ShortError(err))
 	}
 }
@@ -376,7 +421,7 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(exceptTables [][]string, extraSQLs
 
 	if cp.globalPoint.outOfDate() {
 		posG := cp.GlobalPoint()
-		sqlG, argG := cp.genUpdateSQL(globalCpSchema, globalCpTable, posG.Name, posG.Pos, true)
+		sqlG, argG := cp.genUpdateSQL(globalCpSchema, globalCpTable, posG.Name, posG.Pos, nil, true)
 		sqls = append(sqls, sqlG)
 		args = append(args, argG)
 	}
@@ -391,8 +436,13 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(exceptTables [][]string, extraSQLs
 				}
 			}
 			if point.outOfDate() {
+				tiBytes, err := json.Marshal(point.ti)
+				if err != nil {
+					return errors.Annotatef(err, "failed to serialize table info for %s.%s", schema, table)
+				}
+
 				pos := point.MySQLPos()
-				sql2, arg := cp.genUpdateSQL(schema, table, pos.Name, pos.Pos, false)
+				sql2, arg := cp.genUpdateSQL(schema, table, pos.Name, pos.Pos, tiBytes, false)
 				sqls = append(sqls, sql2)
 				args = append(args, arg)
 
@@ -442,14 +492,22 @@ func (cp *RemoteCheckPoint) CheckGlobalPoint() bool {
 }
 
 // Rollback implements CheckPoint.Rollback
-func (cp *RemoteCheckPoint) Rollback() {
+func (cp *RemoteCheckPoint) Rollback(schemaTracker *schema.Tracker) {
 	cp.RLock()
 	defer cp.RUnlock()
 	cp.globalPoint.rollback()
 	for schema, mSchema := range cp.points {
 		for table, point := range mSchema {
 			cp.tctx.L().Info("rollback checkpoint", log.WrapStringerField("checkpoint", point), zap.String("schema", schema), zap.String("table", table))
-			point.rollback()
+			if point.rollback() {
+				// schema changed
+				_ = schemaTracker.DropTable(schema, table)
+				if point.ti != nil {
+					if err := schemaTracker.CreateTableIfNotExists(schema, table, point.ti); err != nil {
+						cp.tctx.L().Warn("failed to rollback schema on schema tracker", zap.String("schema", schema), zap.String("table", table), log.ShortError(err))
+					}
+				}
+			}
 		}
 	}
 }
@@ -466,7 +524,7 @@ func (cp *RemoteCheckPoint) prepare() error {
 }
 
 func (cp *RemoteCheckPoint) createSchema() error {
-	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", cp.schema)
+	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", cp.cfg.MetaSchema)
 	args := make([]interface{}, 0)
 	_, err := cp.dbConn.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}...)
 	cp.tctx.L().Info("create checkpoint schema", zap.String("statement", sql2))
@@ -474,28 +532,29 @@ func (cp *RemoteCheckPoint) createSchema() error {
 }
 
 func (cp *RemoteCheckPoint) createTable() error {
-	tableName := fmt.Sprintf("`%s`.`%s`", cp.schema, cp.table)
-	sql2 := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
+	sqls := []string{
+		`CREATE TABLE IF NOT EXISTS ` + cp.tableName + ` (
 			id VARCHAR(32) NOT NULL,
 			cp_schema VARCHAR(128) NOT NULL,
 			cp_table VARCHAR(128) NOT NULL,
 			binlog_name VARCHAR(128),
 			binlog_pos INT UNSIGNED,
+			table_info JSON NOT NULL,
 			is_global BOOLEAN,
 			create_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			UNIQUE KEY uk_id_schema_table (id, cp_schema, cp_table)
-		)`, tableName)
-	args := make([]interface{}, 0)
-	_, err := cp.dbConn.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}...)
-	cp.tctx.L().Info("create checkpoint table", zap.String("statement", sql2))
+		)`,
+	}
+	_, err := cp.dbConn.executeSQL(cp.tctx, sqls)
+	cp.tctx.L().Info("create checkpoint table", zap.Strings("statements", sqls))
 	return err
 }
 
 // Load implements CheckPoint.Load
-func (cp *RemoteCheckPoint) Load() error {
-	query := fmt.Sprintf("SELECT `cp_schema`, `cp_table`, `binlog_name`, `binlog_pos`, `is_global` FROM `%s`.`%s` WHERE `id`='%s'", cp.schema, cp.table, cp.id)
-	rows, err := cp.dbConn.querySQL(cp.tctx, query)
+func (cp *RemoteCheckPoint) Load(schemaTracker *schema.Tracker) error {
+	query := `SELECT cp_schema, cp_table, binlog_name, binlog_pos, table_info, is_global FROM ` + cp.tableName + ` WHERE id = ?`
+	rows, err := cp.dbConn.querySQL(cp.tctx, query, cp.id)
 	defer func() {
 		if rows != nil {
 			rows.Close()
@@ -518,10 +577,11 @@ func (cp *RemoteCheckPoint) Load() error {
 		cpTable    string
 		binlogName string
 		binlogPos  uint32
+		tiBytes    []byte
 		isGlobal   bool
 	)
 	for rows.Next() {
-		err := rows.Scan(&cpSchema, &cpTable, &binlogName, &binlogPos, &isGlobal)
+		err := rows.Scan(&cpSchema, &cpTable, &binlogName, &binlogPos, &tiBytes, &isGlobal)
 		if err != nil {
 			return terror.WithScope(terror.DBErrorAdapt(err, terror.ErrDBDriverError), terror.ScopeDownstream)
 		}
@@ -531,18 +591,31 @@ func (cp *RemoteCheckPoint) Load() error {
 		}
 		if isGlobal {
 			if pos.Compare(minCheckpoint) > 0 {
-				cp.globalPoint = newBinlogPoint(pos, pos)
+				cp.globalPoint = newBinlogPoint(pos, nil, pos, nil)
 				cp.tctx.L().Info("fetch global checkpoint from DB", log.WrapStringerField("global checkpoint", cp.globalPoint))
 			}
 			continue // skip global checkpoint
 		}
+
+		var ti model.TableInfo
+		if err = json.Unmarshal(tiBytes, &ti); err != nil {
+			return errors.Annotatef(err, "saved schema of %s.%s is not proper JSON", cpSchema, cpTable)
+		}
+		if err = schemaTracker.CreateSchemaIfNotExists(cpSchema); err != nil {
+			return errors.Annotatef(err, "failed to create database for `%s` in schema tracker", cpSchema)
+		}
+		if err = schemaTracker.CreateTableIfNotExists(cpSchema, cpTable, &ti); err != nil {
+			return errors.Annotatef(err, "failed to create table for `%s`.`%s` in schema tracker", cpSchema, cpTable)
+		}
+
 		mSchema, ok := cp.points[cpSchema]
 		if !ok {
 			mSchema = make(map[string]*binlogPoint)
 			cp.points[cpSchema] = mSchema
 		}
-		mSchema[cpTable] = newBinlogPoint(pos, pos)
+		mSchema[cpTable] = newBinlogPoint(pos, &ti, pos, &ti)
 	}
+
 	return terror.WithScope(terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError), terror.ScopeDownstream)
 }
 
@@ -577,7 +650,7 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 
 	// if meta loaded, we will start syncing from meta's pos
 	if pos != nil {
-		cp.globalPoint = newBinlogPoint(*pos, *pos)
+		cp.globalPoint = newBinlogPoint(*pos, nil, *pos, nil)
 		cp.tctx.L().Info("loaded checkpoints from meta", log.WrapStringerField("global checkpoint", cp.globalPoint))
 	}
 
@@ -585,16 +658,28 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 }
 
 // genUpdateSQL generates SQL and arguments for update checkpoint
-func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, binlogName string, binlogPos uint32, isGlobal bool) (string, []interface{}) {
+func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, binlogName string, binlogPos uint32, tiBytes []byte, isGlobal bool) (string, []interface{}) {
 	// use `INSERT INTO ... ON DUPLICATE KEY UPDATE` rather than `REPLACE INTO`
 	// to keep `create_time`, `update_time` correctly
-	sql2 := fmt.Sprintf("INSERT INTO `%s`.`%s` (`id`, `cp_schema`, `cp_table`, `binlog_name`, `binlog_pos`, `is_global`) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE `binlog_name`=?, `binlog_pos`=?",
-		cp.schema, cp.table)
+	sql2 := `INSERT INTO ` + cp.tableName + `
+		(id, cp_schema, cp_table, binlog_name, binlog_pos, table_info, is_global) VALUES
+		(?, ?, ?, ?, ?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+			binlog_name = VALUES(binlog_name),
+			binlog_pos = VALUES(binlog_pos),
+			table_info = VALUES(table_info),
+			is_global = VALUES(is_global);
+	`
+
 	if isGlobal {
 		cpSchema = globalCpSchema
 		cpTable = globalCpTable
 	}
-	args := []interface{}{cp.id, cpSchema, cpTable, binlogName, binlogPos, isGlobal, binlogName, binlogPos}
+
+	if len(tiBytes) == 0 {
+		tiBytes = []byte("null")
+	}
+	args := []interface{}{cp.id, cpSchema, cpTable, binlogName, binlogPos, tiBytes, isGlobal}
 	return sql2, args
 }
 

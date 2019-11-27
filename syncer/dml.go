@@ -14,101 +14,44 @@
 package syncer
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"strconv"
 	"strings"
 
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
-
+	"github.com/pingcap/parser/model"
+	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/parser/types"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
 
-type genColumnCacheStatus uint8
-
-const (
-	genColumnNoCache genColumnCacheStatus = iota
-	hasGenColumn
-	noGenColumn
-)
-
-// GenColCache stores generated column information for all tables
-type GenColCache struct {
-	// `schema`.`table` -> whether this table has generated column
-	hasGenColumn map[string]bool
-
-	// `schema`.`table` -> column list
-	columns map[string][]*column
-
-	// `schema`.`table` -> a bool slice representing whether it is generated for each column
-	isGenColumn map[string][]bool
-}
-
 // genDMLParam stores pruned columns, data as well as the original columns, data, index
 type genDMLParam struct {
-	schema               string
-	table                string
-	safeMode             bool                 // only used in update
-	data                 [][]interface{}      // pruned data
-	originalData         [][]interface{}      // all data
-	columns              []*column            // pruned columns
-	originalColumns      []*column            // all columns
-	originalIndexColumns map[string][]*column // all index information
+	schema            string
+	table             string
+	safeMode          bool                // only used in update
+	data              [][]interface{}     // pruned data
+	originalData      [][]interface{}     // all data
+	columns           []*model.ColumnInfo // pruned columns
+	originalTableInfo *model.TableInfo    // all table info
 }
 
-// NewGenColCache creates a GenColCache.
-func NewGenColCache() *GenColCache {
-	c := &GenColCache{}
-	c.reset()
-	return c
-}
-
-// status returns `NotFound` if a `schema`.`table` has no generated column
-// information cached, otherwise returns `hasGenColumn` if cache found and
-// it has generated column and returns `noGenColumn` if it has no generated column.
-func (c *GenColCache) status(key string) genColumnCacheStatus {
-	val, ok := c.hasGenColumn[key]
-	if !ok {
-		return genColumnNoCache
-	}
-	if val {
-		return hasGenColumn
-	}
-	return noGenColumn
-}
-
-func (c *GenColCache) clearTable(schema, table string) {
-	key := dbutil.TableName(schema, table)
-	delete(c.hasGenColumn, key)
-	delete(c.columns, key)
-	delete(c.isGenColumn, key)
-}
-
-func (c *GenColCache) reset() {
-	c.hasGenColumn = make(map[string]bool)
-	c.columns = make(map[string][]*column)
-	c.isGenColumn = make(map[string][]bool)
-}
-
-func extractValueFromData(data []interface{}, columns []*column) []interface{} {
+func extractValueFromData(data []interface{}, columns []*model.ColumnInfo) []interface{} {
 	value := make([]interface{}, 0, len(data))
 	for i := range data {
-		value = append(value, castUnsigned(data[i], columns[i].unsigned, columns[i].tp))
+		value = append(value, castUnsigned(data[i], &columns[i].FieldType))
 	}
 	return value
 }
 
 func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, error) {
 	var (
-		schema               = param.schema
-		table                = param.table
-		dataSeq              = param.data
-		originalDataSeq      = param.originalData
-		columns              = param.columns
-		originalColumns      = param.originalColumns
-		originalIndexColumns = param.originalIndexColumns
+		qualifiedName   = dbutil.TableName(param.schema, param.table)
+		dataSeq         = param.data
+		originalDataSeq = param.originalData
+		columns         = param.columns
+		ti              = param.originalTableInfo
 	)
 	sqls := make([]string, 0, len(dataSeq))
 	keys := make([][]string, 0, len(dataSeq))
@@ -123,10 +66,10 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		value := extractValueFromData(data, columns)
 		originalData := originalDataSeq[dataIdx]
 		var originalValue []interface{}
-		if len(columns) == len(originalColumns) {
+		if len(columns) == len(ti.Columns) {
 			originalValue = value
 		} else {
-			originalValue = extractValueFromData(originalData, originalColumns)
+			originalValue = extractValueFromData(originalData, ti.Columns)
 		}
 
 		var insertOrReplace string
@@ -136,8 +79,8 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 			insertOrReplace = "INSERT"
 		}
 
-		sql := fmt.Sprintf("%s INTO `%s`.`%s` (%s) VALUES (%s);", insertOrReplace, schema, table, columnList, columnPlaceholders)
-		ks := genMultipleKeys(originalColumns, originalValue, originalIndexColumns)
+		sql := fmt.Sprintf("%s INTO %s (%s) VALUES (%s);", insertOrReplace, qualifiedName, columnList, columnPlaceholders)
+		ks := genMultipleKeys(ti, originalValue)
 		sqls = append(sqls, sql)
 		values = append(values, value)
 		keys = append(keys, ks)
@@ -148,21 +91,19 @@ func genInsertSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 
 func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, error) {
 	var (
-		schema               = param.schema
-		table                = param.table
-		safeMode             = param.safeMode
-		data                 = param.data
-		originalData         = param.originalData
-		columns              = param.columns
-		originalColumns      = param.originalColumns
-		originalIndexColumns = param.originalIndexColumns
+		qualifiedName = dbutil.TableName(param.schema, param.table)
+		safeMode      = param.safeMode
+		data          = param.data
+		originalData  = param.originalData
+		columns       = param.columns
+		ti            = param.originalTableInfo
 	)
 	sqls := make([]string, 0, len(data)/2)
 	keys := make([][]string, 0, len(data)/2)
 	values := make([][]interface{}, 0, len(data)/2)
 	columnList := genColumnList(columns)
 	columnPlaceholders := genColumnPlaceholders(len(columns))
-	defaultIndexColumns := findFitIndex(originalIndexColumns)
+	defaultIndexColumns := findFitIndex(ti)
 
 	for i := 0; i < len(data); i += 2 {
 		oldData := data[i]
@@ -182,37 +123,37 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		changedValues := extractValueFromData(changedData, columns)
 
 		var oriOldValues, oriChangedValues []interface{}
-		if len(columns) == len(originalColumns) {
+		if len(columns) == len(ti.Columns) {
 			oriOldValues = oldValues
 			oriChangedValues = changedValues
 		} else {
-			oriOldValues = extractValueFromData(oriOldData, originalColumns)
-			oriChangedValues = extractValueFromData(oriChangedData, originalColumns)
+			oriOldValues = extractValueFromData(oriOldData, ti.Columns)
+			oriChangedValues = extractValueFromData(oriChangedData, ti.Columns)
 		}
 
-		if len(defaultIndexColumns) == 0 {
-			defaultIndexColumns = getAvailableIndexColumn(originalIndexColumns, oriOldValues)
+		if defaultIndexColumns == nil {
+			defaultIndexColumns = getAvailableIndexColumn(ti, oriOldValues)
 		}
 
-		ks := genMultipleKeys(originalColumns, oriOldValues, originalIndexColumns)
-		ks = append(ks, genMultipleKeys(originalColumns, oriChangedValues, originalIndexColumns)...)
+		ks := genMultipleKeys(ti, oriOldValues)
+		ks = append(ks, genMultipleKeys(ti, oriChangedValues)...)
 
 		if safeMode {
 			// generate delete sql from old data
-			sql, value := genDeleteSQL(schema, table, oriOldValues, originalColumns, defaultIndexColumns)
+			sql, value := genDeleteSQL(qualifiedName, oriOldValues, ti.Columns, defaultIndexColumns)
 			sqls = append(sqls, sql)
 			values = append(values, value)
 			keys = append(keys, ks)
 			// generate replace sql from new data
-			sql = fmt.Sprintf("REPLACE INTO `%s`.`%s` (%s) VALUES (%s);", schema, table, columnList, columnPlaceholders)
+			sql = fmt.Sprintf("REPLACE INTO %s (%s) VALUES (%s);", qualifiedName, columnList, columnPlaceholders)
 			sqls = append(sqls, sql)
 			values = append(values, changedValues)
 			keys = append(keys, ks)
 			continue
 		}
 
-		updateColumns := make([]*column, 0, len(defaultIndexColumns))
-		updateValues := make([]interface{}, 0, len(defaultIndexColumns))
+		updateColumns := make([]*model.ColumnInfo, 0, indexColumnsCount(defaultIndexColumns))
+		updateValues := make([]interface{}, 0, indexColumnsCount(defaultIndexColumns))
 		for j := range oldValues {
 			updateColumns = append(updateColumns, columns[j])
 			updateValues = append(updateValues, changedValues[j])
@@ -227,15 +168,15 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 		kvs := genKVs(updateColumns)
 		value = append(value, updateValues...)
 
-		whereColumns, whereValues := originalColumns, oriOldValues
-		if len(defaultIndexColumns) > 0 {
-			whereColumns, whereValues = getColumnData(originalColumns, defaultIndexColumns, oriOldValues)
+		whereColumns, whereValues := ti.Columns, oriOldValues
+		if defaultIndexColumns != nil {
+			whereColumns, whereValues = getColumnData(ti.Columns, defaultIndexColumns, oriOldValues)
 		}
 
 		where := genWhere(whereColumns, whereValues)
 		value = append(value, whereValues...)
 
-		sql := fmt.Sprintf("UPDATE `%s`.`%s` SET %s WHERE %s LIMIT 1;", schema, table, kvs, where)
+		sql := fmt.Sprintf("UPDATE %s SET %s WHERE %s LIMIT 1;", qualifiedName, kvs, where)
 		sqls = append(sqls, sql)
 		values = append(values, value)
 		keys = append(keys, ks)
@@ -246,30 +187,28 @@ func genUpdateSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 
 func genDeleteSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, error) {
 	var (
-		schema       = param.schema
-		table        = param.table
-		dataSeq      = param.originalData
-		columns      = param.originalColumns
-		indexColumns = param.originalIndexColumns
+		qualifiedName = dbutil.TableName(param.schema, param.table)
+		dataSeq       = param.originalData
+		ti            = param.originalTableInfo
 	)
 	sqls := make([]string, 0, len(dataSeq))
 	keys := make([][]string, 0, len(dataSeq))
 	values := make([][]interface{}, 0, len(dataSeq))
-	defaultIndexColumns := findFitIndex(indexColumns)
+	defaultIndexColumns := findFitIndex(ti)
 
 	for _, data := range dataSeq {
-		if len(data) != len(columns) {
-			return nil, nil, nil, terror.ErrSyncerUnitDMLColumnNotMatch.Generate(len(columns), len(data))
+		if len(data) != len(ti.Columns) {
+			return nil, nil, nil, terror.ErrSyncerUnitDMLColumnNotMatch.Generate(len(ti.Columns), len(data))
 		}
 
-		value := extractValueFromData(data, columns)
+		value := extractValueFromData(data, ti.Columns)
 
-		if len(defaultIndexColumns) == 0 {
-			defaultIndexColumns = getAvailableIndexColumn(indexColumns, value)
+		if defaultIndexColumns == nil {
+			defaultIndexColumns = getAvailableIndexColumn(ti, value)
 		}
-		ks := genMultipleKeys(columns, value, indexColumns)
+		ks := genMultipleKeys(ti, value)
 
-		sql, value := genDeleteSQL(schema, table, value, columns, defaultIndexColumns)
+		sql, value := genDeleteSQL(qualifiedName, value, ti.Columns, defaultIndexColumns)
 		sqls = append(sqls, sql)
 		values = append(values, value)
 		keys = append(keys, ks)
@@ -278,28 +217,35 @@ func genDeleteSQLs(param *genDMLParam) ([]string, [][]string, [][]interface{}, e
 	return sqls, keys, values, nil
 }
 
-func genDeleteSQL(schema string, table string, value []interface{}, columns []*column, indexColumns []*column) (string, []interface{}) {
+func genDeleteSQL(qualifiedName string, value []interface{}, columns []*model.ColumnInfo, indexColumns *model.IndexInfo) (string, []interface{}) {
 	whereColumns, whereValues := columns, value
-	if len(indexColumns) > 0 {
+	if indexColumns != nil {
 		whereColumns, whereValues = getColumnData(columns, indexColumns, value)
 	}
 
 	where := genWhere(whereColumns, whereValues)
-	sql := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE %s LIMIT 1;", schema, table, where)
+	sql := fmt.Sprintf("DELETE FROM %s WHERE %s LIMIT 1;", qualifiedName, where)
 
 	return sql, whereValues
 }
 
-func genColumnList(columns []*column) string {
+func indexColumnsCount(index *model.IndexInfo) int {
+	if index == nil {
+		return 0
+	}
+	return len(index.Columns)
+}
+
+func genColumnList(columns []*model.ColumnInfo) string {
 	var buf strings.Builder
 	for i, column := range columns {
-		if i != len(columns)-1 {
-			buf.WriteString("`" + column.name + "`,")
-		} else {
-			buf.WriteString("`" + column.name + "`")
+		if i != 0 {
+			buf.WriteByte(',')
 		}
+		buf.WriteByte('`')
+		buf.WriteString(strings.ReplaceAll(column.Name.O, "`", "``"))
+		buf.WriteByte('`')
 	}
-
 	return buf.String()
 }
 
@@ -311,8 +257,8 @@ func genColumnPlaceholders(length int) string {
 	return strings.Join(values, ",")
 }
 
-func castUnsigned(data interface{}, unsigned bool, tp string) interface{} {
-	if !unsigned {
+func castUnsigned(data interface{}, ft *types.FieldType) interface{} {
+	if !mysql.HasUnsignedFlag(ft.Flag) {
 		return data
 	}
 
@@ -324,7 +270,7 @@ func castUnsigned(data interface{}, unsigned bool, tp string) interface{} {
 	case int16:
 		return uint16(v)
 	case int32:
-		if strings.Contains(strings.ToLower(tp), "mediumint") {
+		if ft.Tp == mysql.TypeInt24 {
 			// we use int32 to store MEDIUMINT, if the value is signed, it's fine
 			// but if the value is un-signed, simply convert it use `uint32` may out of the range
 			// like -4692783 converted to 4290274513 (2^32 - 4692783), but we expect 12084433 (2^24 - 4692783)
@@ -340,8 +286,8 @@ func castUnsigned(data interface{}, unsigned bool, tp string) interface{} {
 	return data
 }
 
-func columnValue(value interface{}, unsigned bool, tp string) string {
-	castValue := castUnsigned(value, unsigned, tp)
+func columnValue(value interface{}, ft *types.FieldType) string {
+	castValue := castUnsigned(value, ft)
 
 	var data string
 	switch v := castValue.(type) {
@@ -386,86 +332,76 @@ func columnValue(value interface{}, unsigned bool, tp string) string {
 	return data
 }
 
-func findColumn(columns []*column, indexColumn string) *column {
-	for _, column := range columns {
-		if column.name == indexColumn {
-			return column
-		}
-	}
-
-	return nil
-}
-
-func findColumns(columns []*column, indexColumns map[string][]string) map[string][]*column {
-	result := make(map[string][]*column)
-
-	for keyName, indexCols := range indexColumns {
-		cols := make([]*column, 0, len(indexCols))
-		for _, name := range indexCols {
-			column := findColumn(columns, name)
-			if column != nil {
-				cols = append(cols, column)
-			}
-		}
-		result[keyName] = cols
-	}
-
-	return result
-}
-
-func genKeyList(columns []*column, dataSeq []interface{}) string {
+func genKeyList(columns []*model.ColumnInfo, dataSeq []interface{}) string {
 	values := make([]string, 0, len(dataSeq))
 	for i, data := range dataSeq {
-		values = append(values, columnValue(data, columns[i].unsigned, columns[i].tp))
+		values = append(values, columnValue(data, &columns[i].FieldType))
 	}
 
 	return strings.Join(values, ",")
 }
 
-func genMultipleKeys(columns []*column, value []interface{}, indexColumns map[string][]*column) []string {
-	multipleKeys := make([]string, 0, len(indexColumns))
-	for _, indexCols := range indexColumns {
-		cols, vals := getColumnData(columns, indexCols, value)
+func genMultipleKeys(ti *model.TableInfo, value []interface{}) []string {
+	multipleKeys := make([]string, 0, len(ti.Indices)+1)
+	if pk := ti.GetPkColInfo(); pk != nil {
+		cols := []*model.ColumnInfo{pk}
+		vals := []interface{}{value[pk.Offset]}
+		multipleKeys = append(multipleKeys, genKeyList(cols, vals))
+	}
+	for _, indexCols := range ti.Indices {
+		cols, vals := getColumnData(ti.Columns, indexCols, value)
 		multipleKeys = append(multipleKeys, genKeyList(cols, vals))
 	}
 	return multipleKeys
 }
 
-func findFitIndex(indexColumns map[string][]*column) []*column {
-	cols, ok := indexColumns["primary"]
-	if ok {
-		if len(cols) == 0 {
-			log.L().Error("cols is empty")
-		} else {
-			return cols
+func findFitIndex(ti *model.TableInfo) *model.IndexInfo {
+	for _, idx := range ti.Indices {
+		if idx.Primary {
+			return idx
+		}
+	}
+
+	if pk := ti.GetPkColInfo(); pk != nil {
+		return &model.IndexInfo{
+			Table:   ti.Name,
+			Unique:  true,
+			Primary: true,
+			State:   model.StatePublic,
+			Tp:      model.IndexTypeBtree,
+			Columns: []*model.IndexColumn{{
+				Name:   pk.Name,
+				Offset: pk.Offset,
+				Length: types.UnspecifiedLength,
+			}},
 		}
 	}
 
 	// second find not null unique key
-	fn := func(c *column) bool {
-		return !c.NotNull
+	fn := func(i int) bool {
+		return !mysql.HasNotNullFlag(ti.Columns[i].Flag)
 	}
 
-	return getSpecifiedIndexColumn(indexColumns, fn)
+	return getSpecifiedIndexColumn(ti, fn)
 }
 
-func getAvailableIndexColumn(indexColumns map[string][]*column, data []interface{}) []*column {
-	fn := func(c *column) bool {
-		return data[c.idx] == nil
+func getAvailableIndexColumn(ti *model.TableInfo, data []interface{}) *model.IndexInfo {
+	fn := func(i int) bool {
+		return data[i] == nil
 	}
 
-	return getSpecifiedIndexColumn(indexColumns, fn)
+	return getSpecifiedIndexColumn(ti, fn)
 }
 
-func getSpecifiedIndexColumn(indexColumns map[string][]*column, fn func(col *column) bool) []*column {
-	for _, indexCols := range indexColumns {
-		if len(indexCols) == 0 {
+func getSpecifiedIndexColumn(ti *model.TableInfo, fn func(i int) bool) *model.IndexInfo {
+	for _, indexCols := range ti.Indices {
+		if !indexCols.Unique {
 			continue
 		}
 
 		findFitIndex := true
-		for _, col := range indexCols {
-			if fn(col) {
+		for _, col := range indexCols.Columns {
+			if fn(col.Offset) {
 				findFitIndex = false
 				break
 			}
@@ -479,52 +415,59 @@ func getSpecifiedIndexColumn(indexColumns map[string][]*column, fn func(col *col
 	return nil
 }
 
-func getColumnData(columns []*column, indexColumns []*column, data []interface{}) ([]*column, []interface{}) {
-	cols := make([]*column, 0, len(columns))
+func getColumnData(columns []*model.ColumnInfo, indexColumns *model.IndexInfo, data []interface{}) ([]*model.ColumnInfo, []interface{}) {
+	cols := make([]*model.ColumnInfo, 0, len(columns))
 	values := make([]interface{}, 0, len(columns))
-	for _, column := range indexColumns {
-		cols = append(cols, column)
-		values = append(values, data[column.idx])
+	for _, column := range indexColumns.Columns {
+		cols = append(cols, columns[column.Offset])
+		values = append(values, data[column.Offset])
 	}
 
 	return cols, values
 }
 
-func genWhere(columns []*column, data []interface{}) string {
-	var kvs bytes.Buffer
-	for i := range columns {
-		kvSplit := "="
+func genWhere(columns []*model.ColumnInfo, data []interface{}) string {
+	var kvs strings.Builder
+	for i, col := range columns {
+		if i != 0 {
+			kvs.WriteString(" AND ")
+		}
+		kvs.WriteByte('`')
+		kvs.WriteString(strings.ReplaceAll(col.Name.O, "`", "``"))
 		if data[i] == nil {
-			kvSplit = "IS"
-		}
-
-		if i == len(columns)-1 {
-			fmt.Fprintf(&kvs, "`%s` %s ?", columns[i].name, kvSplit)
+			kvs.WriteString("` IS ?")
 		} else {
-			fmt.Fprintf(&kvs, "`%s` %s ? AND ", columns[i].name, kvSplit)
+			kvs.WriteString("` = ?")
 		}
 	}
 
 	return kvs.String()
 }
 
-func genKVs(columns []*column) string {
-	var kvs bytes.Buffer
-	for i := range columns {
-		if i == len(columns)-1 {
-			fmt.Fprintf(&kvs, "`%s` = ?", columns[i].name)
-		} else {
-			fmt.Fprintf(&kvs, "`%s` = ?, ", columns[i].name)
+func genKVs(columns []*model.ColumnInfo) string {
+	var kvs strings.Builder
+	for i, col := range columns {
+		if i != 0 {
+			kvs.WriteString(", ")
 		}
+		kvs.WriteByte('`')
+		kvs.WriteString(strings.ReplaceAll(col.Name.O, "`", "``"))
+		kvs.WriteString("` = ?")
 	}
 
 	return kvs.String()
 }
 
-func (s *Syncer) mappingDML(schema, table string, columns []string, data [][]interface{}) ([][]interface{}, error) {
+func (s *Syncer) mappingDML(schema, table string, ti *model.TableInfo, data [][]interface{}) ([][]interface{}, error) {
 	if s.columnMapping == nil {
 		return data, nil
 	}
+
+	columns := make([]string, 0, len(ti.Columns))
+	for _, col := range ti.Columns {
+		columns = append(columns, col.Name.O)
+	}
+
 	var (
 		err  error
 		rows = make([][]interface{}, len(data))
@@ -542,82 +485,41 @@ func (s *Syncer) mappingDML(schema, table string, columns []string, data [][]int
 // generated column. because generated column is not support setting value
 // directly in DML, we must remove generated column from DML, including column
 // list and data list including generated columns.
-func pruneGeneratedColumnDML(columns []*column, data [][]interface{}, schema, table string, cache *GenColCache) ([]*column, [][]interface{}, error) {
-	var (
-		cacheKey    = dbutil.TableName(schema, table)
-		cacheStatus = cache.status(cacheKey)
-	)
-
-	if cacheStatus == noGenColumn {
-		return columns, data, nil
+func pruneGeneratedColumnDML(ti *model.TableInfo, data [][]interface{}) ([]*model.ColumnInfo, [][]interface{}, error) {
+	// search for generated columns. if none found, return everything as-is.
+	firstGeneratedColumnIndex := -1
+	for i, c := range ti.Columns {
+		if c.IsGenerated() {
+			firstGeneratedColumnIndex = i
+			break
+		}
 	}
-	if cacheStatus == hasGenColumn {
-		rows := make([][]interface{}, 0, len(data))
-		filters, ok1 := cache.isGenColumn[cacheKey]
-		if !ok1 {
-			return nil, nil, terror.ErrSyncerUnitCacheKeyNotFound.Generate(cacheKey, "isGenColumn")
-		}
-		cols, ok2 := cache.columns[cacheKey]
-		if !ok2 {
-			return nil, nil, terror.ErrSyncerUnitCacheKeyNotFound.Generate(cacheKey, "columns")
-		}
-		for _, row := range data {
-			value := make([]interface{}, 0, len(row))
-			for i := range row {
-				if !filters[i] {
-					value = append(value, row[i])
-				}
-			}
-			rows = append(rows, value)
-		}
-		return cols, rows, nil
+	if firstGeneratedColumnIndex < 0 {
+		return ti.Columns, data, nil
 	}
 
-	var (
-		needPrune       bool
-		colIndexfilters = make([]bool, 0, len(columns))
-		genColumnNames  = make(map[string]bool)
-	)
-
-	for _, c := range columns {
-		isGenColumn := c.isGeneratedColumn()
-		colIndexfilters = append(colIndexfilters, isGenColumn)
-		if isGenColumn {
-			needPrune = true
-			genColumnNames[c.name] = true
+	// remove generated columns from the list of columns
+	cols := make([]*model.ColumnInfo, 0, len(ti.Columns))
+	cols = append(cols, ti.Columns[:firstGeneratedColumnIndex]...)
+	for _, c := range ti.Columns[(firstGeneratedColumnIndex + 1):] {
+		if !c.IsGenerated() {
+			cols = append(cols, c)
 		}
 	}
 
-	if !needPrune {
-		cache.hasGenColumn[cacheKey] = false
-		return columns, data, nil
-	}
-
-	var (
-		cols = make([]*column, 0, len(columns))
-		rows = make([][]interface{}, 0, len(data))
-	)
-
-	for i := range columns {
-		if !colIndexfilters[i] {
-			cols = append(cols, columns[i])
-		}
-	}
+	// remove generated columns from the list of data.
+	rows := make([][]interface{}, 0, len(data))
 	for _, row := range data {
-		if len(row) != len(columns) {
-			return nil, nil, terror.ErrSyncerUnitDMLPruneColumnMismatch.Generate(len(columns), len(data))
+		if len(row) != len(ti.Columns) {
+			return nil, nil, terror.ErrSyncerUnitDMLPruneColumnMismatch.Generate(len(ti.Columns), len(data))
 		}
-		value := make([]interface{}, 0, len(row))
+		value := make([]interface{}, 0, len(cols))
 		for i := range row {
-			if !colIndexfilters[i] {
+			if !ti.Columns[i].IsGenerated() {
 				value = append(value, row[i])
 			}
 		}
 		rows = append(rows, value)
 	}
-	cache.hasGenColumn[cacheKey] = true
-	cache.columns[cacheKey] = cols
-	cache.isGenColumn[cacheKey] = colIndexfilters
-
 	return cols, rows, nil
 }

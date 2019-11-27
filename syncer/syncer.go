@@ -23,9 +23,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/parser/format"
+	"github.com/pingcap/parser/model"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -45,6 +48,7 @@ import (
 	fr "github.com/pingcap/dm/pkg/func-rollback"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/schema"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
@@ -143,9 +147,7 @@ type Syncer struct {
 	wg    sync.WaitGroup
 	jobWg sync.WaitGroup
 
-	tables       map[string]*table   // table cache: `target-schema`.`target-table` -> table
-	cacheColumns map[string][]string // table columns cache: `target-schema`.`target-table` -> column names list
-	genColsCache *GenColCache
+	schemaTracker *schema.Tracker
 
 	fromDB *UpStreamConn
 
@@ -226,9 +228,6 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.binlogSizeCount.Set(0)
 	syncer.lastCount.Set(0)
 	syncer.count.Set(0)
-	syncer.tables = make(map[string]*table)
-	syncer.cacheColumns = make(map[string][]string)
-	syncer.genColsCache = NewGenColCache()
 	syncer.c = newCausality()
 	syncer.done = nil
 	syncer.injectEventCh = make(chan *replication.BinlogEvent)
@@ -264,6 +263,12 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 		syncer.sgk = NewShardingGroupKeeper(syncer.tctx, cfg)
 		syncer.ddlInfoCh = make(chan *pb.DDLInfo, 1)
 		syncer.ddlExecInfo = NewDDLExecInfo()
+	}
+
+	var err error
+	syncer.schemaTracker, err = schema.NewTracker()
+	if err != nil {
+		syncer.tctx.L().DPanic("cannot create schema tracker", zap.Error(err))
 	}
 
 	return syncer
@@ -380,7 +385,7 @@ func (s *Syncer) Init() (err error) {
 		s.tctx.L().Info("all previous meta cleared")
 	}
 
-	err = s.checkpoint.Load()
+	err = s.checkpoint.Load(s.schemaTracker)
 	if err != nil {
 		return err
 	}
@@ -497,8 +502,6 @@ func (s *Syncer) reset() {
 	s.resetReplicationSyncer()
 	// create new job chans
 	s.newJobChans(s.cfg.WorkerCount + 1)
-	// clear tables info
-	s.clearAllTables()
 
 	s.execErrorDetected.Set(false)
 	s.resetExecErrors()
@@ -621,7 +624,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 
 	// try to rollback checkpoints, if they already flushed, no effect
 	prePos := s.checkpoint.GlobalPoint()
-	s.checkpoint.Rollback()
+	s.checkpoint.Rollback(s.schemaTracker)
 	currPos := s.checkpoint.GlobalPoint()
 	if prePos.Compare(currPos) != 0 {
 		s.tctx.L().Warn("something wrong with rollback global checkpoint", zap.Stringer("previous position", prePos), zap.Stringer("current position", currPos))
@@ -637,66 +640,60 @@ func (s *Syncer) getMasterStatus() (mysql.Position, gtid.Set, error) {
 	return s.fromDB.getMasterStatus(s.cfg.Flavor)
 }
 
-// clearTables is used for clear table cache of given table. this function must
-// be called when DDL is applied to this table.
-func (s *Syncer) clearTables(schema, table string) {
-	key := dbutil.TableName(schema, table)
-	delete(s.tables, key)
-	delete(s.cacheColumns, key)
-	s.genColsCache.clearTable(schema, table)
-}
+func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable string, p *parser.Parser) (*model.TableInfo, error) {
+	ti, err := s.schemaTracker.GetTable(origSchema, origTable)
+	if err == nil || !schema.IsTableNotExists(err) {
+		return ti, err
+	}
 
-func (s *Syncer) clearAllTables() {
-	s.tables = make(map[string]*table)
-	s.cacheColumns = make(map[string][]string)
-	s.genColsCache.reset()
-}
-
-func (s *Syncer) getTableFromDB(db *DBConn, schema string, name string) (*table, error) {
-	table := &table{}
-	table.schema = schema
-	table.name = name
-	table.indexColumns = make(map[string][]*column)
-
-	err := getTableColumns(s.tctx, db, table)
-	if err != nil {
+	ctx := context.Background()
+	if err := s.schemaTracker.CreateSchemaIfNotExists(origSchema); err != nil {
 		return nil, err
 	}
 
-	err = getTableIndex(s.tctx, db, table)
+	// TODO: Switch to use the HTTP interface to retrieve the TableInfo directly
+	// (and get rid of ddlDBConn).
+	rows, err := s.ddlDBConn.querySQL(s.tctx, "SHOW CREATE TABLE "+dbutil.TableName(renamedSchema, renamedTable))
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 
-	if len(table.columns) == 0 {
-		return nil, terror.ErrSyncerUnitGetTableFromDB.Generate(schema, name)
+	for rows.Next() {
+		var tableName, createSQL string
+		if err := rows.Scan(&tableName, &createSQL); err != nil {
+			return nil, errors.Trace(err)
+		}
+
+		// rename the table back to original.
+		createNode, err := p.ParseOneStmt(createSQL, "", "")
+		if err != nil {
+			return nil, err
+		}
+		createStmt := createNode.(*ast.CreateTableStmt)
+		createStmt.IfNotExists = true
+		createStmt.Table.Schema = model.NewCIStr(origSchema)
+		createStmt.Table.Name = model.NewCIStr(origTable)
+
+		var newCreateSQLBuilder strings.Builder
+		restoreCtx := format.NewRestoreCtx(format.DefaultRestoreFlags, &newCreateSQLBuilder)
+		if err := createStmt.Restore(restoreCtx); err != nil {
+			return nil, err
+		}
+		newCreateSQL := newCreateSQLBuilder.String()
+		s.tctx.L().Debug("reverse-synchronized table schema",
+			zap.String("origSchema", origSchema),
+			zap.String("origTable", origTable),
+			zap.String("renamedSchema", renamedSchema),
+			zap.String("renamedTable", renamedTable),
+			zap.String("sql", newCreateSQL),
+		)
+		if err := s.schemaTracker.Exec(ctx, origSchema, newCreateSQL); err != nil {
+			return nil, err
+		}
 	}
 
-	return table, nil
-}
-
-func (s *Syncer) getTable(schema string, table string) (*table, []string, error) {
-	key := dbutil.TableName(schema, table)
-
-	value, ok := s.tables[key]
-	if ok {
-		return value, s.cacheColumns[key], nil
-	}
-
-	t, err := s.getTableFromDB(s.ddlDBConn, schema, table)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// compute cache column list for column mapping
-	columns := make([]string, 0, len(t.columns))
-	for _, c := range t.columns {
-		columns = append(columns, c.name)
-	}
-
-	s.tables[key] = t
-	s.cacheColumns[key] = columns
-	return t, columns, nil
+	return s.schemaTracker.GetTable(origSchema, origTable)
 }
 
 func (s *Syncer) addCount(isFinished bool, queueBucket string, tp opType, n int64) {
@@ -736,6 +733,18 @@ func (s *Syncer) checkWait(job *job) bool {
 	}
 
 	return false
+}
+
+func (s *Syncer) saveTablePoint(db, table string, pos mysql.Position) {
+	ti, err := s.schemaTracker.GetTable(db, table)
+	if err != nil {
+		s.tctx.L().DPanic("table info missing from schema tracker",
+			zap.String("schema", db),
+			zap.String("table", table),
+			zap.Stringer("pos", pos),
+			zap.Error(err))
+	}
+	s.checkpoint.SaveTablePoint(db, table, pos, ti)
 }
 
 func (s *Syncer) addJob(job *job) error {
@@ -791,14 +800,14 @@ func (s *Syncer) addJob(job *job) error {
 		// only save checkpoint for DDL and XID (see above)
 		s.saveGlobalPoint(job.pos)
 		if len(job.sourceSchema) > 0 {
-			s.checkpoint.SaveTablePoint(job.sourceSchema, job.sourceTable, job.pos)
+			s.saveTablePoint(job.sourceSchema, job.sourceTable, job.pos)
 		}
 		// reset sharding group after checkpoint saved
 		s.resetShardingGroup(job.targetSchema, job.targetTable)
 	case insert, update, del:
 		// save job's current pos for DML events
 		if len(job.sourceSchema) > 0 {
-			s.checkpoint.SaveTablePoint(job.sourceSchema, job.sourceTable, job.currentPos)
+			s.saveTablePoint(job.sourceSchema, job.sourceTable, job.currentPos)
 		}
 	}
 
@@ -1443,15 +1452,15 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		}
 	}
 
-	table, columns, err := s.getTable(schemaName, tableName)
+	ti, err := s.getTable(originSchema, originTable, schemaName, tableName, ec.parser2)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
-	rows, err := s.mappingDML(originSchema, originTable, columns, ev.Rows)
+	rows, err := s.mappingDML(originSchema, originTable, ti, ev.Rows)
 	if err != nil {
 		return err
 	}
-	prunedColumns, prunedRows, err := pruneGeneratedColumnDML(table.columns, rows, schemaName, tableName, s.genColsCache)
+	prunedColumns, prunedRows, err := pruneGeneratedColumnDML(ti, rows)
 	if err != nil {
 		return err
 	}
@@ -1471,13 +1480,12 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		return err
 	}
 	param := &genDMLParam{
-		schema:               table.schema,
-		table:                table.name,
-		data:                 prunedRows,
-		originalData:         rows,
-		columns:              prunedColumns,
-		originalColumns:      table.columns,
-		originalIndexColumns: table.indexColumns,
+		schema:            schemaName,
+		table:             tableName,
+		data:              prunedRows,
+		originalData:      rows,
+		columns:           prunedColumns,
+		originalTableInfo: ti,
 	}
 
 	switch ec.header.EventType {
@@ -1486,7 +1494,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			param.safeMode = ec.safeMode.Enable()
 			sqls, keys, args, err = genInsertSQLs(param)
 			if err != nil {
-				return terror.Annotatef(err, "gen insert sqls failed, schema: %s, table: %s", table.schema, table.name)
+				return terror.Annotatef(err, "gen insert sqls failed, schema: %s, table: %s", schemaName, tableName)
 			}
 		}
 		binlogEvent.WithLabelValues("write_rows", s.cfg.Name).Observe(time.Since(ec.startTime).Seconds())
@@ -1497,7 +1505,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 			param.safeMode = ec.safeMode.Enable()
 			sqls, keys, args, err = genUpdateSQLs(param)
 			if err != nil {
-				return terror.Annotatef(err, "gen update sqls failed, schema: %s, table: %s", table.schema, table.name)
+				return terror.Annotatef(err, "gen update sqls failed, schema: %s, table: %s", schemaName, tableName)
 			}
 		}
 		binlogEvent.WithLabelValues("update_rows", s.cfg.Name).Observe(time.Since(ec.startTime).Seconds())
@@ -1507,7 +1515,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		if !applied {
 			sqls, keys, args, err = genDeleteSQLs(param)
 			if err != nil {
-				return terror.Annotatef(err, "gen delete sqls failed, schema: %s, table: %s", table.schema, table.name)
+				return terror.Annotatef(err, "gen delete sqls failed, schema: %s, table: %s", schemaName, tableName)
 			}
 		}
 		binlogEvent.WithLabelValues("delete_rows", s.cfg.Name).Observe(time.Since(ec.startTime).Seconds())
@@ -1535,7 +1543,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 		if keys != nil {
 			key = keys[i]
 		}
-		err = s.commitJob(*ec.latestOp, originSchema, originTable, table.schema, table.name, sqls[i], arg, key, true, *ec.lastPos, *ec.currentPos, nil, *ec.traceID)
+		err = s.commitJob(*ec.latestOp, originSchema, originTable, schemaName, tableName, sqls[i], arg, key, true, *ec.lastPos, *ec.currentPos, nil, *ec.traceID)
 		if err != nil {
 			return err
 		}
@@ -1621,9 +1629,15 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			* online ddl: we would ignore rename ghost table,  make no difference
 			* other rename: we don't allow user to execute more than one rename operation in one ddl event, then it would make no difference
 	*/
+	type trackedDDL struct {
+		rawSQL     string
+		stmt       ast.StmtNode
+		tableNames [][]*filter.Table
+	}
 	var (
 		ddlInfo        *shardingDDLInfo
 		needHandleDDLs []string
+		needTrackDDLs  []trackedDDL
 		targetTbls     = make(map[string]*filter.Table)
 	)
 	for _, sql := range sqls {
@@ -1683,6 +1697,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 
 		needHandleDDLs = append(needHandleDDLs, sqlDDL)
+		needTrackDDLs = append(needTrackDDLs, trackedDDL{rawSQL: sql, stmt: stmt, tableNames: tableNames})
 		targetTbls[tableNames[1][0].String()] = tableNames[1][0]
 	}
 
@@ -1718,10 +1733,14 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 		s.tctx.L().Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("position", ec.currentPos))
 
+		for _, td := range needTrackDDLs {
+			if err := s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
+				return err
+			}
+		}
 		for _, tbl := range targetTbls {
-			s.clearTables(tbl.Schema, tbl.Name)
 			// save checkpoint of each table
-			s.checkpoint.SaveTablePoint(tbl.Schema, tbl.Name, *ec.currentPos)
+			s.saveTablePoint(tbl.Schema, tbl.Name, *ec.currentPos)
 		}
 
 		for _, table := range onlineDDLTableNames {
@@ -1787,11 +1806,17 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			return err
 		}
 
+		for _, td := range needTrackDDLs {
+			if err := s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
+				return err
+			}
+		}
+
 		// save checkpoint in memory, don't worry, if error occurred, we can rollback it
 		// for non-last sharding DDL's table, this checkpoint will be used to skip binlog event when re-syncing
 		// NOTE: when last sharding DDL executed, all this checkpoints will be flushed in the same txn
 		s.tctx.L().Info("save table checkpoint for source", zap.String("event", "query"), zap.String("source", source), zap.Stringer("start position", startPos), log.WrapStringerField("end position", ec.currentPos))
-		s.checkpoint.SaveTablePoint(ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name, *ec.currentPos)
+		s.saveTablePoint(ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name, *ec.currentPos)
 		if !synced {
 			s.tctx.L().Info("source shard group is not synced", zap.String("event", "query"), zap.String("source", source), zap.Stringer("start position", startPos), log.WrapStringerField("end position", ec.currentPos))
 			return nil
@@ -1906,8 +1931,67 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	}
 
 	s.tctx.L().Info("finish to handle ddls in shard mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start position", startPos), log.WrapStringerField("end position", ec.currentPos))
+	return nil
+}
 
-	s.clearTables(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
+func (s *Syncer) trackDDL(usedSchema string, sql string, tableNames [][]*filter.Table, stmt ast.StmtNode, ec *eventContext) error {
+	srcTable := tableNames[0][0]
+
+	// Make sure the tables are all loaded into the schema tracker.
+	var shouldExecDDLOnSchemaTracker, shouldSchemaExist, shouldTableExist bool
+	switch stmt.(type) {
+	case *ast.CreateDatabaseStmt:
+		shouldExecDDLOnSchemaTracker = true
+	case *ast.AlterDatabaseStmt:
+		shouldExecDDLOnSchemaTracker = true
+		shouldSchemaExist = true
+	case *ast.DropDatabaseStmt:
+		shouldExecDDLOnSchemaTracker = true
+		shouldSchemaExist = true
+		if !s.cfg.IsSharding {
+			if err := s.checkpoint.DeleteSchemaPoint(srcTable.Schema); err != nil {
+				return err
+			}
+		}
+	case *ast.CreateTableStmt, *ast.CreateViewStmt, *ast.RecoverTableStmt:
+		shouldExecDDLOnSchemaTracker = true
+		shouldSchemaExist = true
+	case *ast.DropTableStmt:
+		shouldExecDDLOnSchemaTracker = true
+		shouldSchemaExist = true
+		shouldTableExist = true
+		if err := s.checkpoint.DeleteTablePoint(srcTable.Schema, srcTable.Name); err != nil {
+			return err
+		}
+	case *ast.RenameTableStmt, *ast.CreateIndexStmt, *ast.DropIndexStmt, *ast.RepairTableStmt, *ast.AlterTableStmt:
+		// TODO: RENAME TABLE / ALTER TABLE RENAME should require special treatment.
+		shouldExecDDLOnSchemaTracker = true
+		shouldSchemaExist = true
+		shouldTableExist = true
+	case *ast.LockTablesStmt, *ast.UnlockTablesStmt, *ast.CleanupTableLockStmt, *ast.TruncateTableStmt:
+		break
+	default:
+		s.tctx.L().DPanic("unhandled DDL type cannot be tracked", zap.Stringer("type", reflect.TypeOf(stmt)))
+	}
+
+	if shouldSchemaExist {
+		if err := s.schemaTracker.CreateSchemaIfNotExists(srcTable.Schema); err != nil {
+			return err
+		}
+	}
+	if shouldTableExist {
+		targetTable := tableNames[1][0]
+		if _, err := s.getTable(srcTable.Schema, srcTable.Name, targetTable.Schema, targetTable.Name, ec.parser2); err != nil {
+			return err
+		}
+	}
+	if shouldExecDDLOnSchemaTracker {
+		if err := s.schemaTracker.Exec(s.tctx.Ctx, usedSchema, sql); err != nil {
+			s.tctx.L().Error("cannot track DDL", zap.String("schema", usedSchema), zap.String("statement", sql), log.WrapStringerField("position", ec.currentPos), log.ShortError(err))
+			return errors.Annotatef(err, "cannot track DDL: %s", sql)
+		}
+	}
+
 	return nil
 }
 

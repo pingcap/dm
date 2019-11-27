@@ -13,7 +13,7 @@ fi
 got=`grep "$text" $log | wc -l`
 
 if [ $num -eq 0 ]; then
-    if [[ $got -eq 0 ]]; then
+    if [ $got -eq 0 ]; then
         cat $log
         echo "$log dosen't contain $text"
         exit 1
