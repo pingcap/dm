@@ -61,17 +61,13 @@ func (s *Server) SimulateTask(ctx context.Context, req *pb.SimulationRequest) (*
 		simulationResultCap = 1
 	}
 	simulationResults := make([]*pb.SimulationResult, 0, simulationResultCap)
-	resp := &pb.SimulationResponse{
-		Result: true,
-		Msg:    "",
-	}
-ForLoop:
-	for _, stCfg := range stCfgs {
-		if req.Worker != "" && s.cfg.DeployMap[stCfg.SourceID] != req.Worker {
-			continue
-		}
-		switch req.Op {
-		case pb.SimulateOp_TableRoute:
+	resp := &pb.SimulationResponse{Result: true}
+	switch req.Op {
+	case pb.SimulateOp_TableRoute:
+		for _, stCfg := range stCfgs {
+			if req.Worker != "" && s.cfg.DeployMap[stCfg.SourceID] != req.Worker {
+				continue
+			}
 			if req.TableQuery != "" {
 				mysqlInstance := getMySQLInstanceConfigThroughSourceID(cfg.MySQLInstances, stCfg.SourceID)
 
@@ -80,7 +76,7 @@ ForLoop:
 					relativeRouteMap[routeRuleName] = cfg.Routes[routeRuleName]
 				}
 
-				filtered, matchRoute, matchTable, err := getSingleRoute(stCfg.CaseSensitive, req.TableQuery, stCfg.BWList, relativeRouteMap)
+				filtered, matchRoute, matchTable, err := getSingleTableRouteResult(stCfg.CaseSensitive, req.TableQuery, stCfg.BWList, relativeRouteMap)
 				if err != nil {
 					return &pb.SimulationResponse{
 						Result: false,
@@ -91,16 +87,14 @@ ForLoop:
 					resp.Filtered = "yes"
 				} else {
 					resp.Reason = matchRoute
-					routeMap := make(map[string]*pb.TableList, 1)
-					routeMap[matchTable] = &pb.TableList{Tables: []string{req.TableQuery}}
-					simulationResult := &pb.SimulationResult{
+					routeMap := map[string]*pb.TableList{matchTable: {Tables: []string{req.TableQuery}}}
+					simulationResults = append(simulationResults, &pb.SimulationResult{
 						SourceID:      mysqlInstance.SourceID,
 						SourceIP:      getSourceIPString(stCfg.From),
 						RouteTableMap: routeMap,
-					}
-					simulationResults = append(simulationResults, simulationResult)
+					})
 				}
-				break ForLoop
+				break
 			} else {
 				simulationResult, err := getRoutePath(stCfg)
 				if err != nil {
@@ -111,10 +105,15 @@ ForLoop:
 				}
 				simulationResults = append(simulationResults, simulationResult)
 				if req.Worker != "" {
-					break ForLoop
+					break
 				}
 			}
-		case pb.SimulateOp_BlackWhiteList:
+		}
+	case pb.SimulateOp_BlackWhiteList:
+		for _, stCfg := range stCfgs {
+			if req.Worker != "" && s.cfg.DeployMap[stCfg.SourceID] != req.Worker {
+				continue
+			}
 			if req.TableQuery != "" {
 				schema, table, err := utils.ExtractTable(req.TableQuery)
 				if err != nil {
@@ -135,7 +134,11 @@ ForLoop:
 				} else {
 					resp.Filtered = "no"
 				}
-				break ForLoop
+				simulationResults = append(simulationResults, &pb.SimulationResult{
+					SourceID: stCfg.SourceID,
+					SourceIP: getSourceIPString(stCfg.From),
+				})
+				break
 			} else {
 				simulationResult, err := getDoIgnoreTables(stCfg)
 				if err != nil {
@@ -146,10 +149,15 @@ ForLoop:
 				}
 				simulationResults = append(simulationResults, simulationResult)
 				if req.Worker != "" {
-					break ForLoop
+					break
 				}
 			}
-		case pb.SimulateOp_EventFilter:
+		}
+	case pb.SimulateOp_EventFilter:
+		for _, stCfg := range stCfgs {
+			if req.Worker != "" && s.cfg.DeployMap[stCfg.SourceID] != req.Worker {
+				continue
+			}
 			// get sourceID relative binlog event filter
 			mysqlInstance := getMySQLInstanceConfigThroughSourceID(cfg.MySQLInstances, stCfg.SourceID)
 			relativeEventFilterMap := make(map[string]*bf.BinlogEventRule, len(mysqlInstance.FilterRules))
@@ -171,7 +179,11 @@ ForLoop:
 			} else {
 				resp.Filtered = "no"
 			}
-			break ForLoop
+			simulationResults = append(simulationResults, &pb.SimulationResult{
+				SourceID: stCfg.SourceID,
+				SourceIP: getSourceIPString(stCfg.From),
+			})
+			break
 		}
 	}
 	resp.SimulationResults = simulationResults
@@ -179,7 +191,7 @@ ForLoop:
 }
 
 func getSourceIPString(dbCfg config.DBConfig) string {
-	return fmt.Sprintf("%s:%v", dbCfg.Host, dbCfg.Port)
+	return fmt.Sprintf("%s:%d", dbCfg.Host, dbCfg.Port)
 }
 
 func getMySQLInstanceConfigThroughSourceID(mysqlInstances []*config.MySQLInstance, sourceID string) *config.MySQLInstance {
@@ -251,7 +263,7 @@ func getRouteLevel(r *router.Table, caseSensitive bool, schema, table string) (i
 }
 
 // getRouteName gets route name for specified schema, table
-// input routeRuleMap: {key: routeName, value: relative tableRule}
+// input routeRuleMap: {key: routeName, value: tableRule}
 func getRouteName(caseSensitive bool, schema, table string, routeRuleMap map[string]*router.TableRule) (string, string, error) {
 	var (
 		routeLevel int
@@ -286,7 +298,9 @@ func getRouteName(caseSensitive bool, schema, table string, routeRuleMap map[str
 	return matchRoute, dbutil.TableName(targetSchema, targetTable), nil
 }
 
-func getSingleRoute(caseSensitive bool, tableQuery string, bwRules *filter.Rules, routeMap map[string]*router.TableRule) (bool, string, string, error) {
+// getSingleTableRouteResult gets matched route name and target table from one MySQL instance
+// returns filtered, matchRoute, matchTable, error
+func getSingleTableRouteResult(caseSensitive bool, tableQuery string, bwRules *filter.Rules, routeMap map[string]*router.TableRule) (bool, string, string, error) {
 	schema, table, err := utils.ExtractTable(tableQuery)
 	if err != nil {
 		return false, "", "", errors.Trace(err)
@@ -306,8 +320,8 @@ func getSingleRoute(caseSensitive bool, tableQuery string, bwRules *filter.Rules
 	return false, matchRoute, matchTable, nil
 }
 
+// getRoutePath gets table routes from one MySQL instance
 func getRoutePath(stCfg *config.SubTaskConfig) (*pb.SimulationResult, error) {
-	// apply on black-white filter
 	bwFilter, err := filter.New(stCfg.CaseSensitive, stCfg.BWList)
 	if err != nil {
 		return nil, errors.Annotatef(err, "build of black white filter for source %s failed", stCfg.SourceID)
@@ -315,7 +329,7 @@ func getRoutePath(stCfg *config.SubTaskConfig) (*pb.SimulationResult, error) {
 
 	r, err := router.NewTableRouter(stCfg.CaseSensitive, stCfg.RouteRules)
 	if err != nil {
-		return nil, errors.Annotatef(err, "build of router for source %s failed", getSourceIPString(stCfg.From))
+		return nil, errors.Annotatef(err, "build of router for source %s failed", stCfg.SourceID)
 	}
 
 	sourceDB, err := conn.DefaultDBProvider.Apply(stCfg.From)
@@ -326,10 +340,11 @@ func getRoutePath(stCfg *config.SubTaskConfig) (*pb.SimulationResult, error) {
 
 	fetchedRouteTableMap, err := utils.FetchTargetDoTables(sourceDB.DB, bwFilter, r)
 	if err != nil {
-		return nil, errors.Annotatef(err, "routing from source %s failed", getSourceIPString(stCfg.From))
+		return nil, errors.Annotatef(err, "routing from source %s failed", stCfg.SourceID)
 	}
 
 	routeTableMap := make(map[string]*pb.TableList, len(fetchedRouteTableMap))
+	// transfer filter.table to string
 	for targetName, routeTableList := range fetchedRouteTableMap {
 		sourceTableStringList := make([]string, 0, len(routeTableList))
 		for _, sourceTable := range routeTableList {
@@ -337,15 +352,15 @@ func getRoutePath(stCfg *config.SubTaskConfig) (*pb.SimulationResult, error) {
 		}
 		routeTableMap[targetName] = &pb.TableList{Tables: sourceTableStringList}
 	}
-	simulationResult := &pb.SimulationResult{
+
+	return &pb.SimulationResult{
 		SourceID:      stCfg.SourceID,
 		SourceIP:      getSourceIPString(stCfg.From),
 		RouteTableMap: routeTableMap,
-	}
-
-	return simulationResult, nil
+	}, nil
 }
 
+// getDoIgnoreTables gets do tables and ignore tables from one MySQL instance
 func getDoIgnoreTables(stCfg *config.SubTaskConfig) (*pb.SimulationResult, error) {
 	bwFilter, err := filter.New(stCfg.CaseSensitive, stCfg.BWList)
 	if err != nil {
@@ -380,13 +395,12 @@ func getDoIgnoreTables(stCfg *config.SubTaskConfig) (*pb.SimulationResult, error
 		ignoreTableMap[schema] = &pb.TableList{Tables: ignoreTables}
 	}
 
-	simulationResult := &pb.SimulationResult{
+	return &pb.SimulationResult{
 		SourceID:       stCfg.SourceID,
 		SourceIP:       getSourceIPString(stCfg.From),
 		DoTableMap:     doTableMap,
 		IgnoreTableMap: ignoreTableMap,
-	}
-	return simulationResult, nil
+	}, nil
 }
 
 // filterSQL will parse sql, and check whether this sql will be filtered.
@@ -427,6 +441,7 @@ func filterSQL(sql string, filterMap map[string]*bf.BinlogEventRule, caseSensiti
 	return "", bf.Do, nil
 }
 
+// genSchemaAndTable generates target schema and table based on the StmtNode
 func genSchemaAndTable(table *filter.Table, n ast.StmtNode) {
 	switch v := n.(type) {
 	case *ast.CreateDatabaseStmt:
