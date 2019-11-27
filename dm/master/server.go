@@ -25,6 +25,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
+	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/embed"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -34,10 +35,21 @@ import (
 	operator "github.com/pingcap/dm/dm/master/sql-operator"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/election"
+	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/syncer"
+)
+
+const (
+	// the session's TTL in seconds for leader election.
+	// NOTE: select this value carefully when adding a mechanism relying on leader election.
+	electionTTL = 60
+	// the DM-master leader election key prefix
+	// DM-master cluster : etcd cluster = 1 : 1 now.
+	electionKey = "/dm-master/leader"
 )
 
 var (
@@ -52,6 +64,9 @@ type Server struct {
 
 	// the embed etcd server, and the gRPC/HTTP API server also attached to it.
 	etcd *embed.Etcd
+
+	etcdClient *clientv3.Client
+	election   *election.Election
 
 	// WaitGroup for background functions.
 	bgFunWg sync.WaitGroup
@@ -151,12 +166,31 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		return
 	}
 
+	// create an etcd client used in the whole server instance.
+	// NOTE: we only use the local member's address now, but we can use all endpoints of the cluster if needed.
+	s.etcdClient, err = etcdutil.CreateClient([]string{s.cfg.MasterAddr})
+	if err != nil {
+		return
+	}
+
+	// start leader election
+	s.election, err = election.NewElection(ctx, s.etcdClient, electionTTL, electionKey, s.cfg.Name)
+	if err != nil {
+		return
+	}
+
 	s.closed.Set(false) // the server started now.
 
 	s.bgFunWg.Add(1)
 	go func() {
 		defer s.bgFunWg.Done()
 		s.ap.Start(ctx)
+	}()
+
+	s.bgFunWg.Add(1)
+	go func() {
+		defer s.bgFunWg.Done()
+		s.electionNotify(ctx)
 	}()
 
 	s.bgFunWg.Add(1)
@@ -193,6 +227,14 @@ func (s *Server) Close() {
 
 	// wait for background functions returned
 	s.bgFunWg.Wait()
+
+	if s.election != nil {
+		s.election.Close()
+	}
+
+	if s.etcdClient != nil {
+		s.etcdClient.Close()
+	}
 
 	// close the etcd and other attached servers
 	if s.etcd != nil {
