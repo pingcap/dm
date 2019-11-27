@@ -36,13 +36,13 @@ require (
 	github.com/pingcap/parser v0.0.0-20191112053614-3b43b46331d5
 	github.com/pingcap/pd v1.1.0-beta.0.20191114130008-2488cb978644
 	github.com/pingcap/tidb v1.1.0-beta.0.20191115021711-b274eb2079dc
-	github.com/pingcap/tidb-tools v3.0.6-0.20191118105807-a741d9a4082a+incompatible
+	github.com/pingcap/tidb-tools v3.0.6-0.20191127034323-82cd8d6d5437+incompatible
 	github.com/prometheus/client_golang v1.2.1
 	github.com/prometheus/procfs v0.0.6 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20190728182440-6a916e37a237 // indirect
 	github.com/satori/go.uuid v1.2.0
 	github.com/shirou/gopsutil v2.18.12+incompatible // indirect
-	github.com/shopspring/decimal v0.0.0-20190905144223-a36b5d85f337 // indirect
+	github.com/shopspring/decimal v0.0.0-20191125035519-b054a8dfd10d // indirect
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
 	github.com/siddontang/go-log v0.0.0-20190221022429-1e957dd83bed // indirect
 	github.com/siddontang/go-mysql v0.0.0-20191009015310-f66c8b344478
