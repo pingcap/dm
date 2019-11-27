@@ -23,12 +23,12 @@ function run() {
         "table-route $task_conf" \
         "\"result\": true" 1 \
         "\"routes\"" 1 \
-        "\"\`simulator\`.\`t\`\"": 1 \
-        "127.0.0.1:3306": 1 \
-        "127.0.0.1:3307": 1 \
-        "simulator_1": 3 \
-        "simulator_2": 3 \
-        "t_1": 2 \
+        "\"\`simulator\`.\`t\`\"" 1 \
+        "127.0.0.1:3306" 1 \
+        "127.0.0.1:3307" 1 \
+        "simulator_1" 3 \
+        "simulator_2" 3 \
+        "t_1" 2
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "table-route -w 127.0.0.1:$WORKER1_PORT -T \`A\`.\`B\` $task_conf" \
@@ -43,7 +43,7 @@ function run() {
         "\"target-table\": \"A\"" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "table-route -w 127.0.0.1:$WORKER1_PORT -T \`simulator_5\`.\`A\` $task_conf" \
+        "table-route -w 127.0.0.1:$WORKER1_PORT -T \`simulator_5\`.\`t_4\` $task_conf" \
         "\"result\": true" 1 \
         "\"match-route\": \"user-route-rules\"," 1 \
         "\"target-schema\": \"simulator\"," 1 \
@@ -54,12 +54,12 @@ function run() {
         "bw-list $task_conf" \
         "\"do-tables\":" 1 \
         "\"ignore-tables\":" 1 \
-        "\"`simulator`.`t`\"": 2 \
-        "127.0.0.1:3306": 2 \
-        "127.0.0.1:3307": 2 \
-        "simulator_1": 3 \
-        "simulator_2": 3 \
-        "t_1": 2 \
+        "\"\`simulator\`.\`t\`\"" 2 \
+        "127.0.0.1:3306" 2 \
+        "127.0.0.1:3307" 2 \
+        "simulator_1" 3 \
+        "simulator_2" 3 \
+        "t_1" 2 \
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "bw-list -w 127.0.0.1:$WORKER1_PORT -T \`simulator_5\`.\`A\` $task_conf" \

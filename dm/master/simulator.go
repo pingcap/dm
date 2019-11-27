@@ -57,10 +57,10 @@ func (s *Server) SimulateTask(ctx context.Context, req *pb.SimulationRequest) (*
 	}
 
 	if req.Worker != "" {
-		if _, ok := s.cfg.DeployMap[req.Worker]; !ok {
+		if _, ok := s.workerClients[req.Worker]; !ok {
 			return &pb.SimulationResponse{
 				Result: false,
-				Msg:    "Given worker address is not found in dm-master, pls check it again",
+				Msg:    fmt.Sprintf("%s relevant worker-client not found, pls check worker-address again", req.Worker),
 			}, nil
 		}
 	}
