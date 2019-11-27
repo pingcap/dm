@@ -82,7 +82,7 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 	// relay log file not exists, failed
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
 		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
-	c.Assert(err, ErrorMatches, ".*no such file or directory.*")
+	c.Assert(err, ErrorMatches, ".*(no such file or directory|The system cannot find the path specified).*")
 
 	// empty relay log file, failed, got EOF
 	err = os.MkdirAll(relayDir, 0700)
