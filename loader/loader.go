@@ -174,9 +174,7 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 				if err != nil {
 					// expect pause rather than exit
 					err = terror.WithScope(terror.Annotatef(err, "file %s", job.file), terror.ScopeDownstream)
-					if utils.IsContextCanceledError(err) {
-						runFatalChan <- nil
-					} else {
+					if !utils.IsContextCanceledError(err) {
 						runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, err)
 					}
 					return
@@ -479,9 +477,7 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 		defer wg.Done()
 		for err := range l.runFatalChan {
 			cancel() // cancel l.Restore
-			if err != nil {
-				errs = append(errs, err)
-			}
+			errs = append(errs, err)
 		}
 	}()
 
