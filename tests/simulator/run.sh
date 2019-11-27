@@ -28,7 +28,7 @@ function run() {
         "127.0.0.1:3307" 1 \
         "simulator_1" 3 \
         "simulator_2" 3 \
-        "t_1" 2
+        "simulate_1" 2
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "table-route -w 127.0.0.1:$WORKER1_PORT -T \`A\`.\`B\` $task_conf" \
@@ -43,7 +43,7 @@ function run() {
         "\"target-table\": \"A\"" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "table-route -w 127.0.0.1:$WORKER1_PORT -T \`simulator_5\`.\`t_4\` $task_conf" \
+        "table-route -w 127.0.0.1:$WORKER1_PORT -T \`simulator_5\`.\`simulate_4\` $task_conf" \
         "\"result\": true" 1 \
         "\"match-route\": \"user-route-rules\"," 1 \
         "\"target-schema\": \"simulator\"," 1 \
@@ -59,7 +59,7 @@ function run() {
         "127.0.0.1:3307" 2 \
         "simulator_1" 3 \
         "simulator_2" 3 \
-        "t_1" 2 \
+        "simulate_1" 2 \
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "bw-list -w 127.0.0.1:$WORKER1_PORT -T \`simulator_5\`.\`A\` $task_conf" \
@@ -73,30 +73,30 @@ function run() {
 
     # binlog-event-filter simulator test
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "event-filter -w 127.0.0.1:$WORKER1_PORT $task_conf create table simulate_1_1.t_1(id int);" \
+        "event-filter -w 127.0.0.1:$WORKER1_PORT $task_conf create table eventFilter1_1.simulate_1(id int);" \
         "\"result\": true" 1 \
         "\"will-be-filtered\": \"no\"" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "event-filter -w 127.0.0.1:$WORKER1_PORT $task_conf drop table simulate_1_1.t_1;" \
+        "event-filter -w 127.0.0.1:$WORKER1_PORT $task_conf drop table eventFilter1_1.simulate_1;" \
         "\"result\": true" 1 \
         "\"will-be-filtered\": \"yes\"" 1 \
         "\"filter-name\": \"user-filter-1\"" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "event-filter -w 127.0.0.1:$WORKER1_PORT $task_conf truncate table simulate_1_1.t_1;" \
+        "event-filter -w 127.0.0.1:$WORKER1_PORT $task_conf truncate table eventFilter1_1.simulate_1;" \
         "\"result\": true" 1 \
         "\"will-be-filtered\": \"yes\"" 1 \
         "\"filter-name\": \"user-filter-1\"" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "event-filter -w 127.0.0.1:$WORKER1_PORT $task_conf create table simulate_2_1.t_1;" \
+        "event-filter -w 127.0.0.1:$WORKER1_PORT $task_conf create table eventFilter2_1.simulate_1;" \
         "\"result\": true" 1 \
         "\"will-be-filtered\": \"yes\"" 1 \
         "\"filter-name\": \"user-filter-2\"" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "event-filter -w 127.0.0.1:$WORKER2_PORT $task_conf create table simulate_2_1.t_1;" \
+        "event-filter -w 127.0.0.1:$WORKER2_PORT $task_conf create table simulate_2_1.simulate_1;" \
         "\"result\": true" 1 \
         "\"will-be-filtered\": \"no\"" 1
 }

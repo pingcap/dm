@@ -38,7 +38,7 @@ routes:
     target-schema: "simulator"
   user-route-rules:
     schema-pattern: "simulator_*"
-    table-pattern: "t_*"
+    table-pattern: "simulate_*"
     target-schema: "simulator"
     target-table: "t"
 
@@ -66,12 +66,12 @@ syncers:
 
 filters:
   user-filter-1:
-    schema-pattern: "simulate_1_*"
-    table-pattern: "t_*"
+    schema-pattern: "eventFilter1_*"
+    table-pattern: "simulate_*"
     events: ["truncate table", "drop table"]
     sql-pattern: ["^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"]
     action: Ignore
   user-filter-2:
-    schema-pattern: "simulate_2_*"
+    schema-pattern: "eventFilter2_*"
     events: ["all dml"]
     action: Do
