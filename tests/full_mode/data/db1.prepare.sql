@@ -1,4 +1,8 @@
-use all_mode;
+drop database if exists `full_mode`;
+create database `full_mode`;
+use `full_mode`;
+create table t1 (id int, name varchar(20));
+insert into t1 (id, name) values (1, 'arya'), (2, 'catelyn');
 insert into t1 (id, name) values (3, 'Eddard Stark');
 update t1 set name = 'Arya Stark' where id = 1;
 update t1 set name = 'Catelyn Stark' where name = 'catelyn';
@@ -23,7 +27,3 @@ insert into t1 (id, name, info) values (7, 'gentest', '{"id": 126}');
 update t1 set name = 'gentestxxxxxx' where gen_id = 124;
 -- delete with unique key
 delete from t1 where gen_id > 124;
-
--- test decimal type
-alter table t1 add column lat decimal(9,6) default '0.000000';
-insert into t1 (id, name, info, lat) values (8, 'gentest', '{"id":127}', '123.123')
