@@ -117,9 +117,13 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 			result.WillBeFiltered = resp.Filtered
 		} else {
 			result.MatchRoute = resp.Reason
+			if len(resp.SimulationResults) != 1 {
+				common.PrintLines("the length of returned simulation results should be 1, but is %v", len(resp.SimulationResults))
+				return
+			}
 			simulationResult := resp.SimulationResults[0]
 			if len(simulationResult.RouteTableMap) != 1 {
-				common.PrintLines("routes map is supposed to has length 1, but is %v", len(simulationResult.RouteTableMap))
+				common.PrintLines("the length of RouteTableMap should be 1, but is %v", len(simulationResult.RouteTableMap))
 				return
 			}
 			for targetTable := range simulationResult.RouteTableMap {

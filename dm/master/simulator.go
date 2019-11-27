@@ -56,11 +56,15 @@ func (s *Server) SimulateTask(ctx context.Context, req *pb.SimulationRequest) (*
 		}, nil
 	}
 
-	simulationResultCap := len(s.cfg.DeployMap)
 	if req.Worker != "" {
-		simulationResultCap = 1
+		if _, ok := s.cfg.DeployMap[req.Worker]; !ok {
+			return &pb.SimulationResponse{
+				Result: false,
+				Msg:    "Given worker address is not found in dm-master, pls check it again",
+			}, nil
+		}
 	}
-	simulationResults := make([]*pb.SimulationResult, 0, simulationResultCap)
+
 	var resp *pb.SimulationResponse
 	switch req.Op {
 	case pb.SimulateOp_TableRoute:
@@ -88,7 +92,6 @@ func (s *Server) SimulateTask(ctx context.Context, req *pb.SimulationRequest) (*
 			}, nil
 		}
 	}
-	resp.SimulationResults = simulationResults
 	return resp, nil
 }
 
@@ -183,6 +186,7 @@ func simulateBlackWhiteList(worker, tableQuery string, deployMap map[string]stri
 			}
 		}
 	}
+	resp.SimulationResults = simulationResults
 	return resp, nil
 }
 
@@ -224,6 +228,7 @@ func simulateEventFilter(worker, sql string, deployMap map[string]string, stCfgs
 		})
 		break
 	}
+	resp.SimulationResults = simulationResults
 	return resp, nil
 }
 
