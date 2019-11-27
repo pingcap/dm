@@ -30,7 +30,6 @@ import (
 	"github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/pd/pkg/tempurl"
-	"go.etcd.io/etcd/clientv3"
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
@@ -1548,6 +1547,11 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 	c.Assert(s1.Start(ctx), check.IsNil)
 	defer s1.Close()
 
+	// wait the first one become the leader
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+		return s1.election.IsLeader()
+	}), check.IsTrue)
+
 	// join to an existing cluster
 	cfg2 := NewConfig()
 	c.Assert(cfg2.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
@@ -1562,14 +1566,11 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 	c.Assert(s2.Start(ctx), check.IsNil)
 	defer s2.Close()
 
-	client, err := clientv3.New(clientv3.Config{
-		Endpoints:   strings.Split(cfg1.AdvertisePeerUrls, ","),
-		DialTimeout: etcdutil.DefaultDialTimeout,
-	})
+	client, err := etcdutil.CreateClient(strings.Split(cfg1.AdvertisePeerUrls, ","))
 	c.Assert(err, check.IsNil)
 	defer client.Close()
 
-	// verify membersm
+	// verify members
 	listResp, err := etcdutil.ListMembers(client)
 	c.Assert(err, check.IsNil)
 	c.Assert(listResp.Members, check.HasLen, 2)
@@ -1581,6 +1582,11 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 	c.Assert(ok, check.IsTrue)
 	_, ok = names[cfg2.Name]
 	c.Assert(ok, check.IsTrue)
+
+	// s1 is still the leader
+	_, leaderID, err := s2.election.LeaderInfo(ctx)
+	c.Assert(err, check.IsNil)
+	c.Assert(leaderID, check.Equals, cfg1.Name)
 
 	cancel()
 }

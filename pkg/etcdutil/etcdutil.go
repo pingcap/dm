@@ -31,6 +31,14 @@ const (
 	DefaultRequestTimeout = 10 * time.Second
 )
 
+// CreateClient creates an etcd client with some default config items.
+func CreateClient(endpoints []string) (*clientv3.Client, error) {
+	return clientv3.New(clientv3.Config{
+		Endpoints:   endpoints,
+		DialTimeout: DefaultDialTimeout,
+	})
+}
+
 // ListMembers returns a list of internal etcd members.
 func ListMembers(client *clientv3.Client) (*clientv3.MemberListResponse, error) {
 	ctx, cancel := context.WithTimeout(client.Ctx(), DefaultRequestTimeout)

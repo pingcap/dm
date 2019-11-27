@@ -1,7 +1,2 @@
-all_mode
-sequence_sharding
-sequence_safe_mode
-relay_interrupt
+full_mode
 start_task
-initial_unit
-http_apis
