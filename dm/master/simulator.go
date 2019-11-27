@@ -61,120 +61,108 @@ func (s *Server) SimulateTask(ctx context.Context, req *pb.SimulationRequest) (*
 		simulationResultCap = 1
 	}
 	simulationResults := make([]*pb.SimulationResult, 0, simulationResultCap)
-	resp := &pb.SimulationResponse{Result: true}
+	var resp *pb.SimulationResponse
 	switch req.Op {
 	case pb.SimulateOp_TableRoute:
-		for _, stCfg := range stCfgs {
-			if req.Worker != "" && s.cfg.DeployMap[stCfg.SourceID] != req.Worker {
-				continue
-			}
-			if req.TableQuery != "" {
-				mysqlInstance := getMySQLInstanceConfigThroughSourceID(cfg.MySQLInstances, stCfg.SourceID)
-
-				relativeRouteMap := make(map[string]*router.TableRule, len(mysqlInstance.RouteRules))
-				for _, routeRuleName := range mysqlInstance.RouteRules {
-					relativeRouteMap[routeRuleName] = cfg.Routes[routeRuleName]
-				}
-
-				filtered, matchRoute, matchTable, err := getSingleTableRouteResult(stCfg.CaseSensitive, req.TableQuery, stCfg.BWList, relativeRouteMap)
-				if err != nil {
-					return &pb.SimulationResponse{
-						Result: false,
-						Msg:    errors.ErrorStack(err),
-					}, nil
-				}
-				if filtered {
-					resp.Filtered = "yes"
-				} else {
-					resp.Reason = matchRoute
-					routeMap := map[string]*pb.TableList{matchTable: {Tables: []string{req.TableQuery}}}
-					simulationResults = append(simulationResults, &pb.SimulationResult{
-						SourceID:      mysqlInstance.SourceID,
-						SourceIP:      getSourceIPString(stCfg.From),
-						RouteTableMap: routeMap,
-					})
-				}
-				break
-			} else {
-				simulationResult, err := getRoutePath(stCfg)
-				if err != nil {
-					return &pb.SimulationResponse{
-						Result: false,
-						Msg:    errors.ErrorStack(err),
-					}, nil
-				}
-				simulationResults = append(simulationResults, simulationResult)
-				if req.Worker != "" {
-					break
-				}
-			}
+		resp, err = simulateTableRoute(req.Worker, req.TableQuery, s.cfg.DeployMap, stCfgs, cfg)
+		if err != nil {
+			return &pb.SimulationResponse{
+				Result: false,
+				Msg:    errors.ErrorStack(err),
+			}, nil
 		}
 	case pb.SimulateOp_BlackWhiteList:
-		for _, stCfg := range stCfgs {
-			if req.Worker != "" && s.cfg.DeployMap[stCfg.SourceID] != req.Worker {
-				continue
-			}
-			if req.TableQuery != "" {
-				schema, table, err := utils.ExtractTable(req.TableQuery)
-				if err != nil {
-					return &pb.SimulationResponse{
-						Result: false,
-						Msg:    errors.ErrorStack(err),
-					}, nil
-				}
-				filtered, err := checkSingleBWFilter(schema, table, cfg.CaseSensitive, stCfg.BWList)
-				if err != nil {
-					return &pb.SimulationResponse{
-						Result: false,
-						Msg:    errors.ErrorStack(err),
-					}, nil
-				}
-				if filtered {
-					resp.Filtered = "yes"
-				} else {
-					resp.Filtered = "no"
-				}
-				simulationResults = append(simulationResults, &pb.SimulationResult{
-					SourceID: stCfg.SourceID,
-					SourceIP: getSourceIPString(stCfg.From),
-				})
-				break
-			} else {
-				simulationResult, err := getDoIgnoreTables(stCfg)
-				if err != nil {
-					return &pb.SimulationResponse{
-						Result: false,
-						Msg:    errors.ErrorStack(err),
-					}, nil
-				}
-				simulationResults = append(simulationResults, simulationResult)
-				if req.Worker != "" {
-					break
-				}
-			}
+		resp, err = simulateBlackWhiteList(req.Worker, req.TableQuery, s.cfg.DeployMap, stCfgs, cfg)
+		if err != nil {
+			return &pb.SimulationResponse{
+				Result: false,
+				Msg:    errors.ErrorStack(err),
+			}, nil
 		}
 	case pb.SimulateOp_EventFilter:
-		for _, stCfg := range stCfgs {
-			if req.Worker != "" && s.cfg.DeployMap[stCfg.SourceID] != req.Worker {
-				continue
-			}
-			// get sourceID relative binlog event filter
+		resp, err = simulateEventFilter(req.Worker, req.SQL, s.cfg.DeployMap, stCfgs, cfg)
+		if err != nil {
+			return &pb.SimulationResponse{
+				Result: false,
+				Msg:    errors.ErrorStack(err),
+			}, nil
+		}
+	}
+	resp.SimulationResults = simulationResults
+	return resp, nil
+}
+
+func simulateTableRoute(worker, tableQuery string, deployMap map[string]string, stCfgs []*config.SubTaskConfig, cfg *config.TaskConfig) (*pb.SimulationResponse, error) {
+	simulationResultCap := len(deployMap)
+	if worker != "" {
+		simulationResultCap = 1
+	}
+	simulationResults := make([]*pb.SimulationResult, 0, simulationResultCap)
+	resp := &pb.SimulationResponse{Result: true}
+	for _, stCfg := range stCfgs {
+		if worker != "" && deployMap[stCfg.SourceID] != worker {
+			continue
+		}
+		if tableQuery != "" {
 			mysqlInstance := getMySQLInstanceConfigThroughSourceID(cfg.MySQLInstances, stCfg.SourceID)
-			relativeEventFilterMap := make(map[string]*bf.BinlogEventRule, len(mysqlInstance.FilterRules))
-			for _, eventFilterName := range mysqlInstance.FilterRules {
-				relativeEventFilterMap[eventFilterName] = cfg.Filters[eventFilterName]
+
+			relativeRouteMap := make(map[string]*router.TableRule, len(mysqlInstance.RouteRules))
+			for _, routeRuleName := range mysqlInstance.RouteRules {
+				relativeRouteMap[routeRuleName] = cfg.Routes[routeRuleName]
 			}
 
-			filterName, action, err := filterSQL(req.SQL, relativeEventFilterMap, stCfg.CaseSensitive)
+			filtered, matchRoute, matchTable, err := getSingleTableRouteResult(stCfg.CaseSensitive, tableQuery, stCfg.BWList, relativeRouteMap)
 			if err != nil {
-				return &pb.SimulationResponse{
-					Result: false,
-					Msg:    errors.ErrorStack(err),
-				}, nil
+				return nil, errors.Annotatef(err, "get single table route result from %s failed", stCfg.SourceID)
 			}
+			if filtered {
+				resp.Filtered = "yes"
+			} else {
+				resp.Reason = matchRoute
+				routeMap := map[string]*pb.TableList{matchTable: {Tables: []string{tableQuery}}}
+				simulationResults = append(simulationResults, &pb.SimulationResult{
+					SourceID:      mysqlInstance.SourceID,
+					SourceIP:      getSourceIPString(stCfg.From),
+					RouteTableMap: routeMap,
+				})
+			}
+			break
+		} else {
+			simulationResult, err := getRoutePath(stCfg)
+			if err != nil {
+				return nil, errors.Annotatef(err, "get route path from %s failed", stCfg.SourceID)
+			}
+			simulationResults = append(simulationResults, simulationResult)
+			if worker != "" {
+				break
+			}
+		}
+	}
+	resp.SimulationResults = simulationResults
+	return resp, nil
+}
 
-			resp.Reason = filterName
-			if action == bf.Ignore {
+func simulateBlackWhiteList(worker, tableQuery string, deployMap map[string]string, stCfgs []*config.SubTaskConfig, cfg *config.TaskConfig) (*pb.SimulationResponse, error) {
+	simulationResultCap := len(deployMap)
+	if worker != "" {
+		simulationResultCap = 1
+	}
+	simulationResults := make([]*pb.SimulationResult, 0, simulationResultCap)
+	resp := &pb.SimulationResponse{Result: true}
+	for _, stCfg := range stCfgs {
+		if worker != "" && deployMap[stCfg.SourceID] != worker {
+			continue
+		}
+		if tableQuery != "" {
+			schema, table, err := utils.ExtractTable(tableQuery)
+			if err != nil {
+				return nil, errors.Annotate(err, "extract query table failed")
+			}
+			filtered, err := checkSingleBWFilter(schema, table, cfg.CaseSensitive, stCfg.BWList)
+			if err != nil {
+				return nil, errors.Annotatef(err, "check single black-white filter failed from source %s", stCfg.SourceID)
+			}
+			if filtered {
 				resp.Filtered = "yes"
 			} else {
 				resp.Filtered = "no"
@@ -184,9 +172,58 @@ func (s *Server) SimulateTask(ctx context.Context, req *pb.SimulationRequest) (*
 				SourceIP: getSourceIPString(stCfg.From),
 			})
 			break
+		} else {
+			simulationResult, err := getDoIgnoreTables(stCfg)
+			if err != nil {
+				return nil, errors.Annotatef(err, "get do ignore tables from source %s failed", stCfg.SourceID)
+			}
+			simulationResults = append(simulationResults, simulationResult)
+			if worker != "" {
+				break
+			}
 		}
 	}
-	resp.SimulationResults = simulationResults
+	return resp, nil
+}
+
+func simulateEventFilter(worker, sql string, deployMap map[string]string, stCfgs []*config.SubTaskConfig, cfg *config.TaskConfig) (*pb.SimulationResponse, error) {
+	simulationResultCap := len(deployMap)
+	if worker != "" {
+		simulationResultCap = 1
+	}
+	simulationResults := make([]*pb.SimulationResult, 0, simulationResultCap)
+	resp := &pb.SimulationResponse{Result: true}
+	for _, stCfg := range stCfgs {
+		if worker != "" && deployMap[stCfg.SourceID] != worker {
+			continue
+		}
+		// get sourceID relative binlog event filter
+		mysqlInstance := getMySQLInstanceConfigThroughSourceID(cfg.MySQLInstances, stCfg.SourceID)
+		relativeEventFilterMap := make(map[string]*bf.BinlogEventRule, len(mysqlInstance.FilterRules))
+		for _, eventFilterName := range mysqlInstance.FilterRules {
+			relativeEventFilterMap[eventFilterName] = cfg.Filters[eventFilterName]
+		}
+
+		filterName, action, err := filterSQL(sql, relativeEventFilterMap, stCfg.CaseSensitive)
+		if err != nil {
+			return &pb.SimulationResponse{
+				Result: false,
+				Msg:    errors.ErrorStack(err),
+			}, nil
+		}
+
+		resp.Reason = filterName
+		if action == bf.Ignore {
+			resp.Filtered = "yes"
+		} else {
+			resp.Filtered = "no"
+		}
+		simulationResults = append(simulationResults, &pb.SimulationResult{
+			SourceID: stCfg.SourceID,
+			SourceIP: getSourceIPString(stCfg.From),
+		})
+		break
+	}
 	return resp, nil
 }
 
