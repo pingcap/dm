@@ -132,6 +132,14 @@ func SetLevel(level zapcore.Level) zapcore.Level {
 // just repeats known information. You should almost always use `ShortError`
 // instead of `zap.Error`, unless the error is no longer propagated upwards.
 func ShortError(err error) zap.Field {
+	if err == nil {
+		return zap.Skip()
+	}
+	return zap.String("error", err.Error())
+}
+
+// FilterError is a variant of ShortError which will skip some specified errors. e.g.:context.Canceled
+func FilterError(err error) zap.Field {
 	if err == nil || errors.Cause(err) == context.Canceled {
 		return zap.Skip()
 	}
