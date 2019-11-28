@@ -14,9 +14,10 @@
 package config
 
 import (
-	. "github.com/pingcap/check"
 	"io/ioutil"
 	"path"
+
+	. "github.com/pingcap/check"
 )
 
 func (t *testConfig) TestInvalidTaskConfig(c *C) {
@@ -192,4 +193,25 @@ syncers:
 	c.Assert(taskConfig.MySQLInstances[2].Mydumper.Threads, Equals, 44)
 	c.Assert(taskConfig.MySQLInstances[2].Loader.PoolSize, Equals, 55)
 	c.Assert(taskConfig.MySQLInstances[2].Syncer.WorkerCount, Equals, 66)
+
+	taskConfig.MySQLInstances[0].RouteRules = []string{"route-rule-1", "route-rule-2", "route-rule-1", "route-rule-4"}
+	err = taskConfig.adjust()
+	c.Assert(err, ErrorMatches, ".*mysql-instance(0)'s route-rules config has duplicate item route-rule-1, please remove the duplicate items.*")
+	taskConfig.MySQLInstances[0].RouteRules = nil
+
+	taskConfig.MySQLInstances[1].FilterRules = []string{"filter-rule-1", "filter-rule-2", "filter-rule-3", "filter-rule-2"}
+	err = taskConfig.adjust()
+	c.Assert(err, ErrorMatches, ".*mysql-instance(1)'s filter-rules config has duplicate item filter-rule-2, please remove the duplicate items.*")
+	taskConfig.MySQLInstances[1].FilterRules = nil
+}
+
+func (t *testConfig) TestCheckDuplicateString(c *C) {
+	a := []string{"a", "b", "c", "d"}
+	dupeString, hasDupe := checkDuplicateString(a)
+	c.Assert(hasDupe, IsFalse)
+	c.Assert(dupeString, Equals, "")
+	a[0] = "d"
+	dupeString, hasDupe = checkDuplicateString(a)
+	c.Assert(hasDupe, IsTrue)
+	c.Assert(dupeString, Equals, "d")
 }

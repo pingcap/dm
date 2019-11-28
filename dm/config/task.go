@@ -443,6 +443,13 @@ func (c *TaskConfig) adjust() error {
 		if inst.SyncerThread != 0 {
 			inst.Syncer.WorkerCount = inst.SyncerThread
 		}
+
+		if dupeRule, hasDupe := checkDuplicateString(inst.RouteRules); hasDupe {
+			return terror.ErrConfigDuplicateCfgItem.Generate(i, "route-rules", dupeRule)
+		}
+		if dupeRule, hasDupe := checkDuplicateString(inst.FilterRules); hasDupe {
+			return terror.ErrConfigDuplicateCfgItem.Generate(i, "filter-rules", dupeRule)
+		}
 	}
 
 	if c.Timezone != "" {
@@ -515,4 +522,17 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfgs[i] = cfg
 	}
 	return cfgs, nil
+}
+
+// checkDuplicateString checks whether the given string array has duplicate string item
+// if there is duplicate, it will return duplicate string and true
+func checkDuplicateString(ruleNames []string) (string, bool) {
+	s := make(map[string]struct{}, len(ruleNames))
+	for _, name := range ruleNames {
+		if _, ok := s[name]; ok {
+			return name, true
+		}
+		s[name] = struct{}{}
+	}
+	return "", false
 }
