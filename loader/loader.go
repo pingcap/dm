@@ -39,7 +39,7 @@ import (
 	"github.com/pingcap/failpoint"
 	cm "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	"github.com/pingcap/tidb-tools/pkg/table-router"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 )
@@ -175,7 +175,9 @@ func (w *Worker) run(ctx context.Context, fileJobQueue chan *fileJob, runFatalCh
 				if err != nil {
 					// expect pause rather than exit
 					err = terror.WithScope(terror.Annotatef(err, "file %s", job.file), terror.ScopeDownstream)
-					runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, err)
+					if !utils.IsContextCanceledError(err) {
+						runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, err)
+					}
 					return
 				}
 				w.loader.finishedDataSize.Add(job.offset - job.lastOffset)
