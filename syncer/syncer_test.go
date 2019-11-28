@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/conn"
+	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
@@ -1032,6 +1033,7 @@ func (s *testSyncerSuite) TestExecErrors(c *C) {
 
 func (s *testSyncerSuite) TestCasuality(c *C) {
 	var wg sync.WaitGroup
+	tctx := tcontext.Background()
 	s.cfg.WorkerCount = 1
 	syncer := NewSyncer(s.cfg)
 	syncer.jobs = []chan *job{make(chan *job, 1)}
@@ -1044,16 +1046,16 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 		syncer.jobWg.Done()
 	}()
 
-	key, err := syncer.resolveCasuality([]string{"a"})
+	key, err := syncer.resolveCasuality(tctx, []string{"a"})
 	c.Assert(err, IsNil)
 	c.Assert(key, Equals, "a")
 
-	key, err = syncer.resolveCasuality([]string{"b"})
+	key, err = syncer.resolveCasuality(tctx, []string{"b"})
 	c.Assert(err, IsNil)
 	c.Assert(key, Equals, "b")
 
 	// will detect casuality and add a flush job
-	key, err = syncer.resolveCasuality([]string{"a", "b"})
+	key, err = syncer.resolveCasuality(tctx, []string{"a", "b"})
 	c.Assert(err, IsNil)
 	c.Assert(key, Equals, "a")
 
@@ -1248,7 +1250,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 
 		// mock syncer.checkpoint.Init() function
 		syncer.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(checkPointDBConn, &retry.FiniteRetryStrategy{})}
-		syncer.checkpoint.(*RemoteCheckPoint).prepare()
+		syncer.checkpoint.(*RemoteCheckPoint).prepare(tcontext.Background())
 
 		syncer.reset()
 		events := append(createEvents, s.generateEvents(_case.testEvents, c)...)
@@ -1415,7 +1417,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	// mock syncer.checkpoint.Init() function
 	syncer.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(checkPointDBConn, &retry.FiniteRetryStrategy{})}
-	syncer.checkpoint.(*RemoteCheckPoint).prepare()
+	syncer.checkpoint.(*RemoteCheckPoint).prepare(tcontext.Background())
 
 	syncer.reset()
 	events1 := mockBinlogEvents{

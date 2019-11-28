@@ -20,6 +20,7 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
 
+	tcontext "github.com/pingcap/dm/pkg/context"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -233,7 +234,7 @@ func (s *Syncer) handleOnlineDDL(p *parser.Parser, schema, sql string) ([]string
 	return sqls, tableNames[0], nil
 }
 
-func (s *Syncer) dropSchemaInSharding(sourceSchema string) error {
+func (s *Syncer) dropSchemaInSharding(tctx *tcontext.Context, sourceSchema string) error {
 	sources := make(map[string][][]string)
 	sgs := s.sgk.Groups()
 	for name, sg := range sgs {
@@ -268,7 +269,7 @@ func (s *Syncer) dropSchemaInSharding(sourceSchema string) error {
 		for _, table := range tables {
 			// refine clear them later if failed
 			// now it doesn't have problems
-			if err1 := s.checkpoint.DeleteTablePoint(table[0], table[1]); err1 != nil {
+			if err1 := s.checkpoint.DeleteTablePoint(tctx, table[0], table[1]); err1 != nil {
 				s.tctx.L().Error("fail to delete checkpoint", zap.String("schema", table[0]), zap.String("table", table[1]))
 			}
 		}
