@@ -14,7 +14,9 @@
 package log
 
 import (
+	"context"
 	"fmt"
+	"strings"
 
 	pclog "github.com/pingcap/log"
 	"github.com/pingcap/tidb/util/logutil"
@@ -70,6 +72,16 @@ type Logger struct {
 // WithFields return new Logger with specified fields
 func (l Logger) WithFields(fields ...zap.Field) Logger {
 	return Logger{l.With(fields...)}
+}
+
+// ErrorFilterContextCanceled wraps Logger.Error() and will filter error log when error is context.Canceled
+func (l Logger) ErrorFilterContextCanceled(msg string, fields ...zap.Field) {
+	for _, field := range fields {
+		if field.Key == "error" && strings.Contains(field.String, context.Canceled.Error()) {
+			return
+		}
+	}
+	l.Logger.Error(msg, fields...)
 }
 
 // logger for DM
