@@ -17,7 +17,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/pingcap/errors"
 	pclog "github.com/pingcap/log"
 	"github.com/pingcap/tidb/util/logutil"
 	"go.uber.org/zap"
@@ -72,6 +71,16 @@ type Logger struct {
 // WithFields return new Logger with specified fields
 func (l Logger) WithFields(fields ...zap.Field) Logger {
 	return Logger{l.With(fields...)}
+}
+
+// ErrorFilterContextCanceled wraps Logger.Error() and will filter error log when error is context.Canceled
+func (l Logger) ErrorFilterContextCanceled(msg string, fields ...zap.Field) {
+	for _, field := range fields {
+		if field.Key == "error" && field.String == context.Canceled.Error() {
+			return
+		}
+	}
+	l.Logger.Error(msg, fields...)
 }
 
 // logger for DM
@@ -136,14 +145,6 @@ func ShortError(err error) zap.Field {
 		return zap.Skip()
 	}
 	return zap.String("error", err.Error())
-}
-
-// FilterCancelError will skip context.Canceled error
-func FilterCancelError(err error) error {
-	if errors.Cause(err) == context.Canceled {
-		return nil
-	}
-	return err
 }
 
 // L returns the current logger for DM.
