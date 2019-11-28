@@ -44,8 +44,9 @@ import (
 	"go.uber.org/zap"
 )
 
-var (
-	jobCount = 1000
+const (
+	jobCount         = 1000
+	defaultDBTimeout = 10 * time.Second
 )
 
 // FilePosSet represents a set in mathematics.
@@ -254,7 +255,7 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 	}
 
 	baseFile := filepath.Base(file)
-	err = w.checkPoint.Init(baseFile, finfo.Size())
+	err = w.checkPoint.Init(w.tctx.WithContext(ctx), baseFile, finfo.Size())
 	if err != nil {
 		w.tctx.L().Error("fail to initial checkpoint", zap.String("data file", file), log.ShortError(err))
 		return err
@@ -421,7 +422,9 @@ func (l *Loader) Init() (err error) {
 	}
 
 	if l.cfg.RemoveMeta {
-		err2 := l.checkPoint.Clear()
+		tctx2, cancel := l.tctx.WithTimeout(defaultDBTimeout)
+		err2 := l.checkPoint.Clear(tctx2)
+		cancel()
 		if err2 != nil {
 			return err2
 		}
@@ -444,7 +447,10 @@ func (l *Loader) Init() (err error) {
 	dbCfg.RawDBCfg = config.DefaultRawDBConfig().
 		SetMaxIdleConns(l.cfg.PoolSize)
 
-	l.toDB, l.toDBConns, err = createConns(l.tctx, l.cfg, l.cfg.PoolSize)
+	// simply * l.cfg.PoolSize now, it's better to refine the context passed in `Init` later.
+	tctx2, cancel := l.tctx.WithTimeout(time.Duration(l.cfg.PoolSize) * defaultDBTimeout)
+	l.toDB, l.toDBConns, err = createConns(tctx2, l.cfg, l.cfg.PoolSize)
+	cancel()
 	if err != nil {
 		return err
 	}
@@ -543,7 +549,9 @@ func (l *Loader) isClosed() bool {
 
 // IsFreshTask implements Unit.IsFreshTask
 func (l *Loader) IsFreshTask() (bool, error) {
-	count, err := l.checkPoint.Count()
+	tctx2, cancel := l.tctx.WithTimeout(defaultDBTimeout)
+	defer cancel()
+	count, err := l.checkPoint.Count(tctx2)
 	return count == 0, err
 }
 
@@ -559,7 +567,7 @@ func (l *Loader) Restore(ctx context.Context) error {
 	}
 
 	// not update checkpoint in memory when restoring, so when re-Restore, we need to load checkpoint from DB
-	err := l.checkPoint.Load()
+	err := l.checkPoint.Load(l.tctx.WithContext(ctx))
 	if err != nil {
 		return err
 	}
@@ -569,9 +577,9 @@ func (l *Loader) Restore(ctx context.Context) error {
 	}
 	l.loadFinishedSize()
 
-	if err := l.initAndStartWorkerPool(ctx); err != nil {
+	if err2 := l.initAndStartWorkerPool(ctx); err2 != nil {
 		l.tctx.L().Error("initial and start worker pools failed", log.ShortError(err))
-		return err
+		return err2
 	}
 
 	go l.PrintStatus(ctx)
@@ -653,7 +661,7 @@ func (l *Loader) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 		return
 	}
 
-	err := l.resetDBs()
+	err := l.resetDBs(ctx)
 	if err != nil {
 		pr <- pb.ProcessResult{
 			IsCanceled: false,
@@ -667,17 +675,18 @@ func (l *Loader) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	l.Process(ctx, pr)
 }
 
-func (l *Loader) resetDBs() error {
+func (l *Loader) resetDBs(ctx context.Context) error {
 	var err error
+	tctx := l.tctx.WithContext(ctx)
 
 	for i := 0; i < len(l.toDBConns); i++ {
-		err = l.toDBConns[i].resetConn(l.tctx)
+		err = l.toDBConns[i].resetConn(tctx)
 		if err != nil {
 			return terror.WithScope(err, terror.ScopeDownstream)
 		}
 	}
 
-	err = l.checkPoint.ResetConn()
+	err = l.checkPoint.ResetConn(tctx)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -947,8 +956,8 @@ func (l *Loader) prepare() error {
 }
 
 // restoreSchema creates schema
-func (l *Loader) restoreSchema(conn *DBConn, sqlFile, schema string) error {
-	err := l.restoreStructure(conn, sqlFile, schema, "")
+func (l *Loader) restoreSchema(ctx context.Context, conn *DBConn, sqlFile, schema string) error {
+	err := l.restoreStructure(ctx, conn, sqlFile, schema, "")
 	if err != nil {
 		if isErrDBExists(err) {
 			l.tctx.L().Info("database already exists, skip it", zap.String("db schema file", sqlFile))
@@ -960,8 +969,8 @@ func (l *Loader) restoreSchema(conn *DBConn, sqlFile, schema string) error {
 }
 
 // restoreTable creates table
-func (l *Loader) restoreTable(conn *DBConn, sqlFile, schema, table string) error {
-	err := l.restoreStructure(conn, sqlFile, schema, table)
+func (l *Loader) restoreTable(ctx context.Context, conn *DBConn, sqlFile, schema, table string) error {
+	err := l.restoreStructure(ctx, conn, sqlFile, schema, table)
 	if err != nil {
 		if isErrTableExists(err) {
 			l.tctx.L().Info("table already exists, skip it", zap.String("table schema file", sqlFile))
@@ -973,12 +982,14 @@ func (l *Loader) restoreTable(conn *DBConn, sqlFile, schema, table string) error
 }
 
 // restoreStruture creates schema or table
-func (l *Loader) restoreStructure(conn *DBConn, sqlFile string, schema string, table string) error {
+func (l *Loader) restoreStructure(ctx context.Context, conn *DBConn, sqlFile string, schema string, table string) error {
 	f, err := os.Open(sqlFile)
 	if err != nil {
 		return terror.ErrLoadUnitReadSchemaFile.Delegate(err)
 	}
 	defer f.Close()
+
+	tctx := l.tctx.WithContext(ctx)
 
 	data := make([]byte, 0, 1024*1024)
 	br := bufio.NewReader(f)
@@ -1002,7 +1013,7 @@ func (l *Loader) restoreStructure(conn *DBConn, sqlFile string, schema string, t
 			}
 
 			var sqls []string
-			dstSchema, dstTable := fetchMatchedLiteral(l.tctx, l.tableRouter, schema, table)
+			dstSchema, dstTable := fetchMatchedLiteral(tctx, l.tableRouter, schema, table)
 			// for table
 			if table != "" {
 				sqls = append(sqls, fmt.Sprintf("USE `%s`;", dstSchema))
@@ -1014,7 +1025,7 @@ func (l *Loader) restoreStructure(conn *DBConn, sqlFile string, schema string, t
 			l.tctx.L().Debug("schema create statement", zap.String("sql", query))
 
 			sqls = append(sqls, query)
-			err = conn.executeSQL(l.tctx, sqls)
+			err = conn.executeSQL(tctx, sqls)
 			if err != nil {
 				return terror.WithScope(err, terror.ScopeDownstream)
 			}
@@ -1081,13 +1092,15 @@ func (l *Loader) restoreData(ctx context.Context) error {
 		dbs = append(dbs, db)
 	}
 
+	tctx := l.tctx.WithContext(ctx)
+
 	for _, db := range dbs {
 		tables := l.db2Tables[db]
 
 		// create db
 		dbFile := fmt.Sprintf("%s/%s-schema-create.sql", l.cfg.Dir, db)
 		l.tctx.L().Info("start to create schema", zap.String("schema file", dbFile))
-		err = l.restoreSchema(dbConn, dbFile, db)
+		err = l.restoreSchema(ctx, dbConn, dbFile, db)
 		if err != nil {
 			return err
 		}
@@ -1101,7 +1114,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 			dataFiles := tables[table]
 			tableFile := fmt.Sprintf("%s/%s.%s-schema.sql", l.cfg.Dir, db, table)
 			if _, ok := l.tableInfos[tableName(db, table)]; !ok {
-				l.tableInfos[tableName(db, table)], err = parseTable(l.tctx, l.tableRouter, db, table, tableFile)
+				l.tableInfos[tableName(db, table)], err = parseTable(tctx, l.tableRouter, db, table, tableFile)
 				if err != nil {
 					return terror.Annotatef(err, "parse table %s/%s", db, table)
 				}
@@ -1114,7 +1127,7 @@ func (l *Loader) restoreData(ctx context.Context) error {
 
 			// create table
 			l.tctx.L().Info("start to create table", zap.String("table file", tableFile))
-			err := l.restoreTable(dbConn, tableFile, db, table)
+			err := l.restoreTable(ctx, dbConn, tableFile, db, table)
 			if err != nil {
 				return err
 			}
