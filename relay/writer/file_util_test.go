@@ -42,7 +42,7 @@ func (t *testFileUtilSuite) TestCheckBinlogHeaderExist(c *check.C) {
 	// file not exists
 	filename := filepath.Join(c.MkDir(), "test-mysql-bin.000001")
 	exist, err := checkBinlogHeaderExist(filename)
-	c.Assert(err, check.ErrorMatches, ".*no such file or directory.*")
+	c.Assert(err, check.ErrorMatches, ".*(no such file or directory|The system cannot find the file specified).*")
 	c.Assert(exist, check.IsFalse)
 
 	// empty file
@@ -99,7 +99,7 @@ func (t *testFileUtilSuite) TestCheckFormatDescriptionEventExist(c *check.C) {
 	// file not exists
 	filename := filepath.Join(c.MkDir(), "test-mysql-bin.000001")
 	exist, err := checkFormatDescriptionEventExist(filename)
-	c.Assert(err, check.ErrorMatches, ".*no such file or directory.*")
+	c.Assert(err, check.ErrorMatches, ".*(no such file or directory|The system cannot find the file specified).*")
 	c.Assert(exist, check.IsFalse)
 
 	// empty file
