@@ -21,8 +21,12 @@ function run() {
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 
+    echo "dm-master is alive, will start task"
+
     # start DM task only
     dmctl_start_task
+
+    echo "start task finished"
 
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
