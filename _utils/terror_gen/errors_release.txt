@@ -141,6 +141,7 @@ ErrConfigMydumperPathNotValid,[code=20028:class=config:scope=internal:level=medi
 ErrConfigLoaderCfgNotFound,[code=20029:class=config:scope=internal:level=medium],"mysql-instance(%d)'s loader config %s not exist in loaders"
 ErrConfigSyncerCfgNotFound,[code=20030:class=config:scope=internal:level=medium],"mysql-instance(%d)'s syncer config %s not exist in syncer"
 ErrConfigSourceIDNotFound,[code=20031:class=config:scope=internal:level=medium],"source %s in deployment configuration not found"
+ErrConfigDuplicateCfgItem,[code=20032:class=config:scope=internal:level=medium],"mysql-instance(%d)'s %s config has duplicate item %s, please remove the duplicate items"
 ErrBinlogExtractPosition,[code=22001:class=binlog-op:scope=internal:level=high],""
 ErrBinlogInvalidFilename,[code=22002:class=binlog-op:scope=internal:level=high],"invalid binlog filename"
 ErrBinlogParsePosFromStr,[code=22003:class=binlog-op:scope=internal:level=high],""
