@@ -18,8 +18,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pingcap/dm/pkg/utils"
-
+	"github.com/pingcap/errors"
 	pclog "github.com/pingcap/log"
 	"github.com/pingcap/tidb/util/logutil"
 	"go.uber.org/zap"
@@ -84,7 +83,7 @@ func (l Logger) ErrorFilterContextCanceled(msg string, fields ...zap.Field) {
 		}
 		if field.Type == zapcore.ErrorType {
 			err, ok := field.Interface.(error)
-			if ok && utils.IsContextCanceledError(err) {
+			if ok && errors.Cause(err) == context.Canceled {
 				return
 			}
 		}
