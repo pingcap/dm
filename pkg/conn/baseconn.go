@@ -95,7 +95,7 @@ func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string, args ...int
 	rows, err := conn.DBConn.QueryContext(tctx.Context(), query, args...)
 
 	if err != nil {
-		tctx.L().Error("query statement failed",
+		tctx.L().ErrorFilterContextCanceled("query statement failed",
 			zap.String("query", utils.TruncateString(query, -1)),
 			zap.String("argument", utils.TruncateInterface(args, -1)),
 			log.ShortError(err))
@@ -144,7 +144,7 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, ignoreEr
 				continue
 			}
 
-			tctx.L().Error("execute statement failed",
+			tctx.L().ErrorFilterContextCanceled("execute statement failed",
 				zap.String("query", utils.TruncateString(query, -1)),
 				zap.String("argument", utils.TruncateInterface(arg, -1)), log.ShortError(err))
 
