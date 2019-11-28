@@ -98,7 +98,7 @@ func (conn *DBConn) querySQL(ctx *tcontext.Context, query string, args ...interf
 		ctx.L().Error("query statement failed after retry",
 			zap.String("query", utils.TruncateString(query, -1)),
 			zap.String("argument", utils.TruncateInterface(args, -1)),
-			log.FilterError(err))
+			log.ShortError(log.FilterCancelError(err)))
 		return nil, err
 	}
 	return ret.(*sql.Rows), nil
@@ -172,7 +172,7 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 		ctx.L().Error("execute statements failed after retry",
 			zap.String("queries", utils.TruncateInterface(queries, -1)),
 			zap.String("arguments", utils.TruncateInterface(args, -1)),
-			log.FilterError(err))
+			log.ShortError(log.FilterCancelError(err)))
 	}
 
 	return err

@@ -98,7 +98,7 @@ func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string, args ...int
 		tctx.L().Error("query statement failed",
 			zap.String("query", utils.TruncateString(query, -1)),
 			zap.String("argument", utils.TruncateInterface(args, -1)),
-			log.FilterError(err))
+			log.ShortError(log.FilterCancelError(err)))
 		return nil, terror.ErrDBQueryFailed.Delegate(err, utils.TruncateString(query, -1))
 	}
 	return rows, nil
@@ -146,14 +146,14 @@ func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, ignoreEr
 
 			tctx.L().Error("execute statement failed",
 				zap.String("query", utils.TruncateString(query, -1)),
-				zap.String("argument", utils.TruncateInterface(arg, -1)), log.FilterError(err))
+				zap.String("argument", utils.TruncateInterface(arg, -1)), log.ShortError(log.FilterCancelError(err)))
 
 			rerr := txn.Rollback()
 			if rerr != nil {
 				tctx.L().Error("rollback failed",
 					zap.String("query", utils.TruncateString(query, -1)),
 					zap.String("argument", utils.TruncateInterface(arg, -1)),
-					log.FilterError(rerr))
+					log.ShortError(rerr))
 			}
 			// we should return the exec err, instead of the rollback rerr.
 			return i, terror.ErrDBExecuteFailed.Delegate(err, utils.TruncateString(query, -1))

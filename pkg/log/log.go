@@ -138,12 +138,12 @@ func ShortError(err error) zap.Field {
 	return zap.String("error", err.Error())
 }
 
-// FilterError is a variant of ShortError which will skip some specified errors. e.g.:context.Canceled
-func FilterError(err error) zap.Field {
-	if err == nil || errors.Cause(err) == context.Canceled {
-		return zap.Skip()
+// FilterCancelError will skip context.Canceled error
+func FilterCancelError(err error) error {
+	if errors.Cause(err) == context.Canceled {
+		return nil
 	}
-	return zap.String("error", err.Error())
+	return err
 }
 
 // L returns the current logger for DM.
