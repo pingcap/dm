@@ -296,7 +296,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 			return err
 		}
 
-		r.tctx.L().Info("receive retryable error for binlog reader", log.ShortError(err))
+		r.tctx.L().Warn("receive retryable error for binlog reader", log.ShortError(err))
 		err = reader2.Close() // close the previous reader
 		if err != nil {
 			r.tctx.L().Error("fail to close binlog event reader", zap.Error(err))
@@ -508,9 +508,9 @@ func (r *Relay) reSetupMeta() error {
 
 	var latestPosName, latestGTIDStr string
 	if (r.cfg.EnableGTID && len(r.cfg.BinlogGTID) == 0) || (!r.cfg.EnableGTID && len(r.cfg.BinLogName) == 0) {
-		latestPos, latestGTID, err := utils.GetMasterStatus(r.db, r.cfg.Flavor)
-		if err != nil {
-			return err
+		latestPos, latestGTID, err2 := utils.GetMasterStatus(r.db, r.cfg.Flavor)
+		if err2 != nil {
+			return err2
 		}
 		latestPosName = latestPos.Name
 		latestGTIDStr = latestGTID.String()

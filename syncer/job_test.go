@@ -19,6 +19,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/dm/pb"
+	tcontext "github.com/pingcap/dm/pkg/context"
 )
 
 var _ = Suite(&testJobSuite{})
@@ -67,6 +68,7 @@ func (t *testJobSuite) TestJobTypeString(c *C) {
 }
 
 func (t *testJobSuite) TestJob(c *C) {
+	tctx := tcontext.Background()
 	ddlInfo := &shardingDDLInfo{
 		tableNames: [][]*filter.Table{
 			{
@@ -94,19 +96,19 @@ func (t *testJobSuite) TestJob(c *C) {
 		jobStr string
 	}{
 		{
-			newJob(insert, "test", "t1", "test", "t1", "insert into test.t1 values(?)", []interface{}{1}, "1", mysql.Position{}, mysql.Position{}, nil, ""),
+			newJob(tctx, insert, "test", "t1", "test", "t1", "insert into test.t1 values(?)", []interface{}{1}, "1", mysql.Position{}, mysql.Position{}, nil, ""),
 			"tp: insert, sql: insert into test.t1 values(?), args: [1], key: 1, ddls: [], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
 		}, {
-			newDDLJob(ddlInfo, []string{"create database test"}, mysql.Position{}, mysql.Position{}, nil, ddlExecItem, ""),
+			newDDLJob(tctx, ddlInfo, []string{"create database test"}, mysql.Position{}, mysql.Position{}, nil, ddlExecItem, ""),
 			"tp: ddl, sql: , args: [], key: , ddls: [create database test], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
 		}, {
-			newXIDJob(mysql.Position{}, mysql.Position{}, nil, ""),
+			newXIDJob(tctx, mysql.Position{}, mysql.Position{}, nil, ""),
 			"tp: xid, sql: , args: [], key: , ddls: [], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
 		}, {
-			newFlushJob(),
+			newFlushJob(tctx),
 			"tp: flush, sql: , args: [], key: , ddls: [], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
 		}, {
-			newSkipJob(mysql.Position{}, nil),
+			newSkipJob(tctx, mysql.Position{}, nil),
 			"tp: skip, sql: , args: [], key: , ddls: [], last_pos: (, 0), current_pos: (, 0), gtid:<nil>",
 		},
 	}

@@ -123,19 +123,19 @@ func (b *binlogPoint) String() string {
 // because, when restarting to continue the sync, all sharding DDLs must try-sync again
 type CheckPoint interface {
 	// Init initializes the CheckPoint
-	Init() error
+	Init(tctx *tcontext.Context) error
 
 	// Close closes the CheckPoint
 	Close()
 
 	// ResetConn resets database connections owned by the Checkpoint
-	ResetConn() error
+	ResetConn(tctx *tcontext.Context) error
 
 	// Clear clears all checkpoints
-	Clear() error
+	Clear(tctx *tcontext.Context) error
 
 	// Load loads all checkpoints saved by CheckPoint
-	Load() error
+	Load(tctx *tcontext.Context) error
 
 	// LoadMeta loads checkpoints from meta config item or file
 	LoadMeta() error
@@ -144,7 +144,7 @@ type CheckPoint interface {
 	SaveTablePoint(sourceSchema, sourceTable string, pos mysql.Position)
 
 	// DeleteTablePoint deletes checkpoint for specified table in memory and storage
-	DeleteTablePoint(sourceSchema, sourceTable string) error
+	DeleteTablePoint(tctx *tcontext.Context, sourceSchema, sourceTable string) error
 
 	// IsNewerTablePoint checks whether job's checkpoint is newer than previous saved checkpoint
 	IsNewerTablePoint(sourceSchema, sourceTable string, pos mysql.Position) bool
@@ -158,7 +158,7 @@ type CheckPoint interface {
 	// by extraSQLs and extraArgs. Currently extraSQLs contain shard meta only.
 	// @exceptTables: [[schema, table]... ]
 	// corresponding to Meta.Flush
-	FlushPointsExcept(exceptTables [][]string, extraSQLs []string, extraArgs [][]interface{}) error
+	FlushPointsExcept(tctx *tcontext.Context, exceptTables [][]string, extraSQLs []string, extraArgs [][]interface{}) error
 
 	// GlobalPoint returns the global binlog stream's checkpoint
 	// corresponding to to Meta.Pos
@@ -212,9 +212,6 @@ type RemoteCheckPoint struct {
 
 // NewRemoteCheckPoint creates a new RemoteCheckPoint
 func NewRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id string) CheckPoint {
-
-	newtctx := tctx.WithLogger(tctx.L().WithFields(zap.String("component", "remote checkpoint")))
-
 	cp := &RemoteCheckPoint{
 		cfg:         cfg,
 		schema:      cfg.MetaSchema,
@@ -222,24 +219,24 @@ func NewRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id s
 		id:          id,
 		points:      make(map[string]map[string]*binlogPoint),
 		globalPoint: newBinlogPoint(minCheckpoint, minCheckpoint),
-		tctx:        newtctx,
+		tctx:        tctx.WithLogger(tctx.L().WithFields(zap.String("component", "remote checkpoint"))),
 	}
 
 	return cp
 }
 
 // Init implements CheckPoint.Init
-func (cp *RemoteCheckPoint) Init() error {
+func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context) error {
 	checkPointDB := cp.cfg.To
 	checkPointDB.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxCheckPointTimeout)
-	db, dbConns, err := createConns(cp.tctx, cp.cfg, checkPointDB, 1)
+	db, dbConns, err := createConns(tctx, cp.cfg, checkPointDB, 1)
 	if err != nil {
 		return err
 	}
 	cp.db = db
 	cp.dbConn = dbConns[0]
 
-	return cp.prepare()
+	return cp.prepare(tctx)
 }
 
 // Close implements CheckPoint.Close
@@ -248,19 +245,19 @@ func (cp *RemoteCheckPoint) Close() {
 }
 
 // ResetConn implements CheckPoint.ResetConn
-func (cp *RemoteCheckPoint) ResetConn() error {
-	return cp.dbConn.resetConn(cp.tctx)
+func (cp *RemoteCheckPoint) ResetConn(tctx *tcontext.Context) error {
+	return cp.dbConn.resetConn(tctx)
 }
 
 // Clear implements CheckPoint.Clear
-func (cp *RemoteCheckPoint) Clear() error {
+func (cp *RemoteCheckPoint) Clear(tctx *tcontext.Context) error {
 	cp.Lock()
 	defer cp.Unlock()
 
 	// delete all checkpoints
 	sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s'", cp.schema, cp.table, cp.id)
 	args := make([]interface{}, 0)
-	_, err := cp.dbConn.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}...)
+	_, err := cp.dbConn.executeSQL(tctx, []string{sql2}, [][]interface{}{args}...)
 	if err != nil {
 		return err
 	}
@@ -303,7 +300,7 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, pos
 }
 
 // DeleteTablePoint implements CheckPoint.DeleteTablePoint
-func (cp *RemoteCheckPoint) DeleteTablePoint(sourceSchema, sourceTable string) error {
+func (cp *RemoteCheckPoint) DeleteTablePoint(tctx *tcontext.Context, sourceSchema, sourceTable string) error {
 	cp.Lock()
 	defer cp.Unlock()
 	mSchema, ok := cp.points[sourceSchema]
@@ -319,7 +316,7 @@ func (cp *RemoteCheckPoint) DeleteTablePoint(sourceSchema, sourceTable string) e
 	// delete  checkpoint
 	sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s' AND `cp_schema` = '%s' AND `cp_table` = '%s'", cp.schema, cp.table, cp.id, sourceSchema, sourceTable)
 	args := make([]interface{}, 0)
-	_, err := cp.dbConn.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}...)
+	_, err := cp.dbConn.executeSQL(tctx, []string{sql2}, [][]interface{}{args}...)
 	if err != nil {
 		return err
 	}
@@ -355,7 +352,7 @@ func (cp *RemoteCheckPoint) SaveGlobalPoint(pos mysql.Position) {
 }
 
 // FlushPointsExcept implements CheckPoint.FlushPointsExcept
-func (cp *RemoteCheckPoint) FlushPointsExcept(exceptTables [][]string, extraSQLs []string, extraArgs [][]interface{}) error {
+func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTables [][]string, extraSQLs []string, extraArgs [][]interface{}) error {
 	cp.RLock()
 	defer cp.RUnlock()
 
@@ -405,7 +402,7 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(exceptTables [][]string, extraSQLs
 		args = append(args, extraArgs[i])
 	}
 
-	_, err := cp.dbConn.executeSQL(cp.tctx, sqls, args...)
+	_, err := cp.dbConn.executeSQL(tctx, sqls, args...)
 	if err != nil {
 		return err
 	}
@@ -454,26 +451,26 @@ func (cp *RemoteCheckPoint) Rollback() {
 	}
 }
 
-func (cp *RemoteCheckPoint) prepare() error {
-	if err := cp.createSchema(); err != nil {
+func (cp *RemoteCheckPoint) prepare(tctx *tcontext.Context) error {
+	if err := cp.createSchema(tctx); err != nil {
 		return err
 	}
 
-	if err := cp.createTable(); err != nil {
+	if err := cp.createTable(tctx); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (cp *RemoteCheckPoint) createSchema() error {
+func (cp *RemoteCheckPoint) createSchema(tctx *tcontext.Context) error {
 	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", cp.schema)
 	args := make([]interface{}, 0)
-	_, err := cp.dbConn.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}...)
+	_, err := cp.dbConn.executeSQL(tctx, []string{sql2}, [][]interface{}{args}...)
 	cp.tctx.L().Info("create checkpoint schema", zap.String("statement", sql2))
 	return err
 }
 
-func (cp *RemoteCheckPoint) createTable() error {
+func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
 	tableName := fmt.Sprintf("`%s`.`%s`", cp.schema, cp.table)
 	sql2 := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 			id VARCHAR(32) NOT NULL,
@@ -487,15 +484,15 @@ func (cp *RemoteCheckPoint) createTable() error {
 			UNIQUE KEY uk_id_schema_table (id, cp_schema, cp_table)
 		)`, tableName)
 	args := make([]interface{}, 0)
-	_, err := cp.dbConn.executeSQL(cp.tctx, []string{sql2}, [][]interface{}{args}...)
+	_, err := cp.dbConn.executeSQL(tctx, []string{sql2}, [][]interface{}{args}...)
 	cp.tctx.L().Info("create checkpoint table", zap.String("statement", sql2))
 	return err
 }
 
 // Load implements CheckPoint.Load
-func (cp *RemoteCheckPoint) Load() error {
+func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context) error {
 	query := fmt.Sprintf("SELECT `cp_schema`, `cp_table`, `binlog_name`, `binlog_pos`, `is_global` FROM `%s`.`%s` WHERE `id`='%s'", cp.schema, cp.table, cp.id)
-	rows, err := cp.dbConn.querySQL(cp.tctx, query)
+	rows, err := cp.dbConn.querySQL(tctx, query)
 	defer func() {
 		if rows != nil {
 			rows.Close()
