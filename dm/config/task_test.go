@@ -97,6 +97,8 @@ timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
 `)
 	err = ioutil.WriteFile(filepath, configContent, 0644)
+	c.Assert(err, IsNil)
+	taskConfig = NewTaskConfig()
 	err = taskConfig.DecodeFile(filepath)
 	c.Assert(err, NotNil)
 	c.Assert(err, ErrorMatches, "*line 2: field aaa not found in type config.TaskConfig*")
@@ -114,6 +116,8 @@ timezone: "Asia/Shanghai"
 ignore-checking-items: ["all"]
 `)
 	err = ioutil.WriteFile(filepath, configContent, 0644)
+	c.Assert(err, IsNil)
+	taskConfig = NewTaskConfig()
 	err = taskConfig.DecodeFile(filepath)
 	c.Assert(err, NotNil)
 	c.Assert(err, ErrorMatches, "*line 4: field task-mode already set in type config.TaskConfig*")
@@ -182,6 +186,8 @@ syncers:
 `)
 
 	err = ioutil.WriteFile(filepath, configContent, 0644)
+	c.Assert(err, IsNil)
+	taskConfig = NewTaskConfig()
 	err = taskConfig.DecodeFile(filepath)
 	c.Assert(err, IsNil)
 	c.Assert(taskConfig.MySQLInstances[0].Mydumper.Threads, Equals, 11)
@@ -194,14 +200,58 @@ syncers:
 	c.Assert(taskConfig.MySQLInstances[2].Loader.PoolSize, Equals, 55)
 	c.Assert(taskConfig.MySQLInstances[2].Syncer.WorkerCount, Equals, 66)
 
+	configContent = []byte(`---
+name: test
+task-mode: all
+is-sharding: false
+meta-schema: "dm_meta"
+remove-meta: false
+enable-heartbeat: true
+heartbeat-update-interval: 1
+heartbeat-report-interval: 1
+timezone: "Asia/Shanghai"
+
+target-database:
+  host: "127.0.0.1"
+  port: 4000
+  user: "root"
+  password: ""
+
+mysql-instances:
+  - source-id: "mysql-replica-01"
+  - source-id: "mysql-replica-02"
+  - source-id: "mysql-replica-03"
+
+black-white-list:
+  instance:
+    do-dbs: ["test"]
+
+routes: 
+  route-rule-1:
+  route-rule-2:
+  route-rule-3:
+  route-rule-4:
+
+filters:
+  filter-rule-1:
+  filter-rule-2:
+  filter-rule-3:
+  filter-rule-4:
+`)
+
+	err = ioutil.WriteFile(filepath, configContent, 0644)
+	c.Assert(err, IsNil)
+	taskConfig = NewTaskConfig()
+	err = taskConfig.DecodeFile(filepath)
+	c.Assert(err, IsNil)
 	taskConfig.MySQLInstances[0].RouteRules = []string{"route-rule-1", "route-rule-2", "route-rule-1", "route-rule-4"}
 	err = taskConfig.adjust()
-	c.Assert(err, ErrorMatches, ".*mysql-instance(0)'s route-rules config has duplicate item route-rule-1, please remove the duplicate items.*")
+	c.Assert(err, ErrorMatches, ".*mysql-instance\\(0\\)'s route-rules config has duplicate item route-rule-1, please remove the duplicate items.*")
 	taskConfig.MySQLInstances[0].RouteRules = nil
 
 	taskConfig.MySQLInstances[1].FilterRules = []string{"filter-rule-1", "filter-rule-2", "filter-rule-3", "filter-rule-2"}
 	err = taskConfig.adjust()
-	c.Assert(err, ErrorMatches, ".*mysql-instance(1)'s filter-rules config has duplicate item filter-rule-2, please remove the duplicate items.*")
+	c.Assert(err, ErrorMatches, ".*mysql-instance\\(1\\)'s filter-rules config has duplicate item filter-rule-2, please remove the duplicate items.*")
 	taskConfig.MySQLInstances[1].FilterRules = nil
 }
 
