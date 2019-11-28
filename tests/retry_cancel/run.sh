@@ -12,7 +12,8 @@ function run() {
     run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2
     check_contains 'Query OK, 2 rows affected'
 
-    export GO_FAILPOINTS="github.com/pingcap/dm/pkg/conn/retryableError=return(\"retry_cancel\")"
+    # inject error for loading data
+    export GO_FAILPOINTS='github.com/pingcap/dm/pkg/conn/retryableError=return("retry_cancel")'
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
@@ -40,6 +41,38 @@ function run() {
     duration=$(( $(date +%s)-$start_time ))
     if [[ $duration -gt 3 ]]; then
         echo "stop-task tasks for full import too long duration $duration"
+        exit 1
+    fi
+
+    # stop DM-worker, then update failpoint for checkpoint
+    kill_dm_worker
+    export GO_FAILPOINTS='github.com/pingcap/dm/pkg/conn/retryableError=return("UPDATE `dm_meta`.`test_loader_checkpoint`")'
+
+    # start DM-worker again
+    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+    sleep 2 # wait gRPC from DM-master to DM-worker established again
+
+    dmctl_start_task
+
+    sleep 5 # should sleep > retryTimeout (now 3s)
+
+    # query-task, it should still be running (retrying)
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status test" \
+        "\"stage\": \"Running\"" 4
+
+    # check log, retrying in load unit
+    check_log_contains $WORK_DIR/worker1/log/dm-worker.log 'Error 1213: failpoint inject retryable error for UPDATE `dm_meta`.`test_loader_checkpoint`'
+
+    # stop-task, should not block too much time
+    start_time=$(date +%s)
+    dmctl_stop_task test
+    duration=$(( $(date +%s)-$start_time ))
+    if [[ $duration -gt 3 ]]; then
+        echo "stop-task tasks for updating loader checkpoint too long duration $duration"
         exit 1
     fi
 
