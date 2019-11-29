@@ -251,8 +251,8 @@ filters:
 	taskConfig.MySQLInstances[1].FilterRules = []string{"filter-rule-1", "filter-rule-2", "filter-rule-3", "filter-rule-2"}
 	err = taskConfig.adjust()
 	c.Assert(terror.ErrConfigDuplicateCfgItem.Equal(err), IsTrue)
-	c.Assert(err, ErrorMatches, "[\\s\\S]*mysql-instance\\(0\\)'s route-rules: route-rule-1, route-rule-2[\\s\\S]*")
-	c.Assert(err, ErrorMatches, "[\\s\\S]*mysql-instance\\(1\\)'s filter-rules: filter-rule-2[\\s\\S]*")
+	c.Assert(err, ErrorMatches, `[\s\S]*mysql-instance\(0\)'s route-rules: route-rule-1, route-rule-2[\s\S]*`)
+	c.Assert(err, ErrorMatches, `[\s\S]*mysql-instance\(1\)'s filter-rules: filter-rule-2[\s\S]*`)
 
 }
 
