@@ -264,5 +264,5 @@ func (t *testConfig) TestCheckDuplicateString(c *C) {
 	dupeStrings = checkDuplicateString(a)
 	c.Assert(dupeStrings, HasLen, 3)
 	sort.Strings(dupeStrings)
-	c.Assert(a, DeepEquals, []string{"a", "b", "c"})
+	c.Assert(dupeStrings, DeepEquals, []string{"a", "b", "c"})
 }
