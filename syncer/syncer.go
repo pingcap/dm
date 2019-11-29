@@ -921,7 +921,9 @@ func (s *Syncer) syncDDL(ctx *tcontext.Context, queueBucket string, db *DBConn, 
 		s.jobWg.Done()
 		if err != nil {
 			s.execErrorDetected.Set(true)
-			s.runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, err)
+			if !utils.IsContextCanceledError(err) {
+				s.runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, err)
+			}
 			continue
 		}
 		s.addCount(true, queueBucket, sqlJob.tp, int64(len(sqlJob.ddls)))
