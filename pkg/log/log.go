@@ -16,7 +16,9 @@ package log
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/pingcap/errors"
 	pclog "github.com/pingcap/log"
 	"github.com/pingcap/tidb/util/logutil"
 	"go.uber.org/zap"
@@ -76,8 +78,16 @@ func (l Logger) WithFields(fields ...zap.Field) Logger {
 // ErrorFilterContextCanceled wraps Logger.Error() and will filter error log when error is context.Canceled
 func (l Logger) ErrorFilterContextCanceled(msg string, fields ...zap.Field) {
 	for _, field := range fields {
-		if field.Key == "error" && field.String == context.Canceled.Error() {
-			return
+		switch field.Type {
+		case zapcore.StringType:
+			if field.Key == "error" && strings.Contains(field.String, context.Canceled.Error()) {
+				return
+			}
+		case zapcore.ErrorType:
+			err, ok := field.Interface.(error)
+			if ok && errors.Cause(err) == context.Canceled {
+				return
+			}
 		}
 	}
 	l.Logger.Error(msg, fields...)
