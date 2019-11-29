@@ -49,6 +49,8 @@ func Parse(p *parser.Parser, sql, charset, collation string) (stmt []ast.StmtNod
 func FetchDDLTableNames(schema string, stmt ast.StmtNode) ([]*filter.Table, error) {
 	var res []*filter.Table
 	switch v := stmt.(type) {
+	case *ast.AlterDatabaseStmt:
+		res = append(res, genTableName(v.Name, ""))
 	case *ast.CreateDatabaseStmt:
 		res = append(res, genTableName(v.Name, ""))
 	case *ast.DropDatabaseStmt:
@@ -94,6 +96,9 @@ func FetchDDLTableNames(schema string, stmt ast.StmtNode) ([]*filter.Table, erro
 // argument `targetTableNames` is same with return value of FetchDDLTableNames
 func RenameDDLTable(stmt ast.StmtNode, targetTableNames []*filter.Table) (string, error) {
 	switch v := stmt.(type) {
+	case *ast.AlterDatabaseStmt:
+		v.Name = targetTableNames[0].Schema
+
 	case *ast.CreateDatabaseStmt:
 		v.Name = targetTableNames[0].Schema
 
@@ -180,6 +185,7 @@ func SplitDDL(stmt ast.StmtNode, schema string) (sqls []string, err error) {
 	)
 
 	switch v := stmt.(type) {
+	case *ast.AlterDatabaseStmt:
 	case *ast.CreateDatabaseStmt:
 		v.IfNotExists = true
 	case *ast.DropDatabaseStmt:
