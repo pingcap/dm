@@ -186,7 +186,8 @@ func (conn *DBConn) querySQL(tctx *tcontext.Context, query string, args ...inter
 			if retry.IsRetryableError(err) {
 				tctx.L().Warn("query statement", zap.Int("retry", retryTime),
 					zap.String("query", utils.TruncateString(query, -1)),
-					zap.String("argument", utils.TruncateInterface(args, -1)))
+					zap.String("argument", utils.TruncateInterface(args, -1)),
+					log.ShortError(err))
 				sqlRetriesTotal.WithLabelValues("query", conn.cfg.Name).Add(1)
 				return true
 			}
@@ -241,7 +242,8 @@ func (conn *DBConn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError fun
 			if retry.IsRetryableError(err) {
 				tctx.L().Warn("execute statements", zap.Int("retry", retryTime),
 					zap.String("queries", utils.TruncateInterface(queries, -1)),
-					zap.String("arguments", utils.TruncateInterface(args, -1)))
+					zap.String("arguments", utils.TruncateInterface(args, -1)),
+					log.ShortError(err))
 				sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
 				return true
 			}

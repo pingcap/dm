@@ -80,8 +80,7 @@ type RemoteCheckPoint struct {
 }
 
 func newRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id string) (CheckPoint, error) {
-	// double timeout for create and prepare, it should be enough in normal cases.
-	tctx2, cancel := tctx.WithTimeout(2 * defaultDBTimeout)
+	tctx2, cancel := tctx.WithTimeout(defaultDBContextTimeout)
 	defer cancel()
 
 	db, dbConns, err := createConns(tctx2, cfg, 1)
@@ -351,7 +350,7 @@ func (cp *RemoteCheckPoint) Count(tctx *tcontext.Context) (int, error) {
 }
 
 func (cp *RemoteCheckPoint) String() string {
-	tctx2, cancel := cp.tctx.WithTimeout(defaultDBTimeout)
+	tctx2, cancel := cp.tctx.WithTimeout(defaultDBContextTimeout)
 	defer cancel()
 
 	if err := cp.Load(tctx2); err != nil {
