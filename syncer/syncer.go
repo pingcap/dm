@@ -862,6 +862,15 @@ func (s *Syncer) flushCheckPoints(tctx *tcontext.Context) error {
 		shardMetaSQLs, shardMetaArgs = s.sgk.PrepareFlushSQLs(exceptTableIDs)
 		s.tctx.L().Info("prepare flush sqls", zap.Strings("shard meta sqls", shardMetaSQLs), zap.Reflect("shard meta arguments", shardMetaArgs))
 	}
+
+	if utils.IsContextCanceledError(tctx.Ctx.Err()) {
+		// when canceling (stop-task/pause-task), we still need to flush the checkpoint.
+		var cancel context.CancelFunc
+		tctx, cancel = tcontext.Background().WithTimeout(defaultDBTimeout)
+		defer cancel()
+		s.tctx.L().Info("flushing checkpoint when canceling the task", zap.Stringer("checkpoint", s.checkpoint))
+	}
+
 	err := s.checkpoint.FlushPointsExcept(tctx, exceptTables, shardMetaSQLs, shardMetaArgs)
 	if err != nil {
 		return terror.Annotatef(err, "flush checkpoint %s", s.checkpoint)
