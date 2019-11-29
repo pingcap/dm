@@ -11,17 +11,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package log_test
+package log
 
 import (
 	"context"
 	"testing"
 
-	"github.com/pingcap/dm/pkg/log"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
-	"go.uber.org/zap"
 )
 
 func TestLog(t *testing.T) {
@@ -33,16 +34,34 @@ type testLogSuite struct{}
 var _ = Suite(&testLogSuite{})
 
 func (s *testLogSuite) TestTestLogger(c *C) {
-	logger, buffer := log.MakeTestLogger()
+	logger, buffer := makeTestLogger()
 	logger.Warn("the message", zap.Int("number", 123456), zap.Ints("array", []int{7, 8, 9}))
 	c.Assert(
 		buffer.Stripped(), Equals,
 		`{"$lvl":"WARN","$msg":"the message","number":123456,"array":[7,8,9]}`,
 	)
+	buffer.Reset()
 	logger.ErrorFilterContextCanceled("the message", zap.Int("number", 123456),
 		zap.Ints("array", []int{7, 8, 9}), zap.Error(context.Canceled))
 	c.Assert(buffer.Stripped(), Equals, "")
+	buffer.Reset()
 	logger.ErrorFilterContextCanceled("the message", zap.Int("number", 123456),
-		zap.Ints("array", []int{7, 8, 9}), log.ShortError(errors.Annotate(context.Canceled, "extra info")))
+		zap.Ints("array", []int{7, 8, 9}), ShortError(errors.Annotate(context.Canceled, "extra info")))
 	c.Assert(buffer.Stripped(), Equals, "")
+}
+
+// makeTestLogger creates a Logger instance which produces JSON logs.
+func makeTestLogger() (Logger, *zaptest.Buffer) {
+	buffer := new(zaptest.Buffer)
+	logger := zap.New(zapcore.NewCore(
+		zapcore.NewJSONEncoder(zapcore.EncoderConfig{
+			LevelKey:       "$lvl",
+			MessageKey:     "$msg",
+			EncodeLevel:    zapcore.CapitalLevelEncoder,
+			EncodeDuration: zapcore.StringDurationEncoder,
+		}),
+		buffer,
+		zap.DebugLevel,
+	))
+	return Logger{Logger: logger}, buffer
 }
