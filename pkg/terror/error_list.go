@@ -175,6 +175,7 @@ const (
 	codeConfigLoaderCfgNotFound
 	codeConfigSyncerCfgNotFound
 	codeConfigSourceIDNotFound
+	codeConfigDuplicateCfgItem
 )
 
 // Binlog operation error code list
@@ -636,6 +637,7 @@ var (
 	ErrConfigLoaderCfgNotFound      = New(codeConfigLoaderCfgNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s loader config %s not exist in loaders")
 	ErrConfigSyncerCfgNotFound      = New(codeConfigSyncerCfgNotFound, ClassConfig, ScopeInternal, LevelMedium, "mysql-instance(%d)'s syncer config %s not exist in syncer")
 	ErrConfigSourceIDNotFound       = New(codeConfigSourceIDNotFound, ClassConfig, ScopeInternal, LevelMedium, "source %s in deployment configuration not found")
+	ErrConfigDuplicateCfgItem       = New(codeConfigDuplicateCfgItem, ClassConfig, ScopeInternal, LevelMedium, "the following mysql configs have duplicate items, please remove the duplicates:\n%s")
 
 	// Binlog operation error
 	ErrBinlogExtractPosition = New(codeBinlogExtractPosition, ClassBinlogOp, ScopeInternal, LevelHigh, "")
