@@ -17,6 +17,7 @@ import (
 	"bytes"
 
 	"github.com/pingcap/dm/dm/config"
+	tcontext "github.com/pingcap/dm/pkg/context"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/utils"
 
@@ -114,7 +115,7 @@ func (s *testSyncerSuite) TestCommentQuote(c *C) {
 	c.Assert(err, IsNil)
 
 	syncer := &Syncer{}
-	sqls, _, err := syncer.resolveDDLSQL(parser, stmt, "schemadb")
+	sqls, _, err := syncer.resolveDDLSQL(tcontext.Background(), parser, stmt, "schemadb")
 	c.Assert(err, IsNil)
 	c.Assert(len(sqls), Equals, 1)
 	c.Assert(sqls[0], Equals, expectedSQL)
@@ -225,7 +226,7 @@ func (s *testSyncerSuite) TestresolveDDLSQL(c *C) {
 		c.Assert(result.ignore, IsFalse)
 		c.Assert(result.isDDL, IsTrue)
 
-		statements, _, err := syncer.resolveDDLSQL(p, result.stmt, "test")
+		statements, _, err := syncer.resolveDDLSQL(tcontext.Background(), p, result.stmt, "test")
 		c.Assert(err, IsNil)
 		c.Assert(statements, DeepEquals, expectedSQLs[i])
 
@@ -383,7 +384,7 @@ func (s *testSyncerSuite) TestResolveGeneratedColumnSQL(c *C) {
 		ast1, err := parser.ParseOneStmt(tc.sql, "", "")
 		c.Assert(err, IsNil)
 
-		sqls, _, err := syncer.resolveDDLSQL(parser, ast1, "test")
+		sqls, _, err := syncer.resolveDDLSQL(tcontext.Background(), parser, ast1, "test")
 		c.Assert(err, IsNil)
 
 		c.Assert(len(sqls), Equals, 1)

@@ -62,8 +62,8 @@ var (
 	maxEventTimeout = 1 * time.Hour
 	statusTime      = 30 * time.Second
 
-	// default DB operation timeout
-	defaultDBTimeout = 10 * time.Second
+	// default DB operation timeout, this is often used for non-heavy operation, so 10s should work correctly for most cases.
+	defaultDBContextTimeout = 10 * time.Second
 
 	// MaxDDLConnectionTimeoutMinute also used by SubTask.ExecuteDDL
 	MaxDDLConnectionTimeoutMinute = 5
@@ -363,7 +363,7 @@ func (s *Syncer) Init() (err error) {
 	}
 
 	// simply * 3 now, it's better to refine the context passed in `Init` later.
-	tctx, cancel := s.tctx.WithTimeout(3 * defaultDBTimeout)
+	tctx, cancel := s.tctx.WithTimeout(3 * defaultDBContextTimeout)
 	defer cancel()
 	err = s.checkpoint.Init(tctx)
 	if err != nil {
@@ -378,7 +378,7 @@ func (s *Syncer) Init() (err error) {
 		}
 
 		if s.onlineDDL != nil {
-			err = s.onlineDDL.Clear()
+			err = s.onlineDDL.Clear(tctx)
 			if err != nil {
 				return terror.Annotate(err, "clear online ddl in syncer")
 			}
@@ -527,7 +527,7 @@ func (s *Syncer) resetDBs(tctx *tcontext.Context) error {
 	}
 
 	if s.onlineDDL != nil {
-		err = s.onlineDDL.ResetConn()
+		err = s.onlineDDL.ResetConn(tctx)
 		if err != nil {
 			return terror.WithScope(err, terror.ScopeDownstream)
 		}
@@ -866,7 +866,7 @@ func (s *Syncer) flushCheckPoints(tctx *tcontext.Context) error {
 	if utils.IsContextCanceledError(tctx.Ctx.Err()) {
 		// when canceling (stop-task/pause-task), we still need to flush the checkpoint.
 		var cancel context.CancelFunc
-		tctx, cancel = tcontext.Background().WithTimeout(defaultDBTimeout)
+		tctx, cancel = tcontext.Background().WithTimeout(defaultDBContextTimeout)
 		defer cancel()
 		s.tctx.L().Info("flushing checkpoint when canceling the task", zap.Stringer("checkpoint", s.checkpoint))
 	}
@@ -1613,7 +1613,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 	// for DDL, we don't apply operator until we try to execute it.
 	// so can handle sharding cases
-	sqls, onlineDDLTableNames, err = s.resolveDDLSQL(ec.parser2, parseResult.stmt, usedSchema)
+	sqls, onlineDDLTableNames, err = s.resolveDDLSQL(ec.tctx, ec.parser2, parseResult.stmt, usedSchema)
 	if err != nil {
 		s.tctx.L().Error("fail to resolve statement", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last position", ec.lastPos), log.WrapStringerField("position", ec.currentPos), log.WrapStringerField("gtid set", ev.GSet), log.ShortError(err))
 		return err
@@ -1743,7 +1743,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 		for _, table := range onlineDDLTableNames {
 			s.tctx.L().Info("finish online ddl and clear online ddl metadata in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.String("schema", table.Schema), zap.String("table", table.Name))
-			err = s.onlineDDL.Finish(table.Schema, table.Name)
+			err = s.onlineDDL.Finish(ec.tctx, table.Schema, table.Name)
 			if err != nil {
 				return terror.Annotatef(err, "finish online ddl on %s.%s", table.Schema, table.Name)
 			}
@@ -1916,7 +1916,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	}
 
 	if len(onlineDDLTableNames) > 0 {
-		err = s.clearOnlineDDL(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
+		err = s.clearOnlineDDL(ec.tctx, ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
 		if err != nil {
 			return err
 		}

@@ -44,17 +44,17 @@ type OnlinePlugin interface {
 	// * record changes
 	// * apply online ddl on real table
 	// returns sqls, replaced/self schema, repliaced/slef table, error
-	Apply(tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, string, string, error)
+	Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, string, string, error)
 	// Finish would delete online ddl from memory and storage
-	Finish(schema, table string) error
+	Finish(tctx *tcontext.Context, schema, table string) error
 	// TableType returns ghhost/real table
 	TableType(table string) TableType
 	// RealName returns real table name that removed ghost suffix and handled by table router
 	RealName(schema, table string) (string, string)
 	// ResetConn reset db connection
-	ResetConn() error
+	ResetConn(tctx *tcontext.Context) error
 	// Clear clears all online information
-	Clear() error
+	Clear(tctx *tcontext.Context) error
 	// Close closes online ddl plugin
 	Close()
 }
@@ -109,31 +109,31 @@ func NewOnlineDDLStorage(newtctx *tcontext.Context, cfg *config.SubTaskConfig) *
 }
 
 // Init initials online handler
-func (s *OnlineDDLStorage) Init() error {
+func (s *OnlineDDLStorage) Init(tctx *tcontext.Context) error {
 	onlineDB := s.cfg.To
 	onlineDB.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout(maxCheckPointTimeout)
-	db, dbConns, err := createConns(s.tctx, s.cfg, onlineDB, 1)
+	db, dbConns, err := createConns(tctx, s.cfg, onlineDB, 1)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
 	s.db = db
 	s.dbConn = dbConns[0]
 
-	err = s.prepare()
+	err = s.prepare(tctx)
 	if err != nil {
 		return err
 	}
 
-	return s.Load()
+	return s.Load(tctx)
 }
 
 // Load loads information from storage
-func (s *OnlineDDLStorage) Load() error {
+func (s *OnlineDDLStorage) Load(tctx *tcontext.Context) error {
 	s.Lock()
 	defer s.Unlock()
 
 	query := fmt.Sprintf("SELECT `ghost_schema`, `ghost_table`, `ddls` FROM `%s`.`%s` WHERE `id`='%s'", s.schema, s.table, s.id)
-	rows, err := s.dbConn.querySQL(s.tctx, query)
+	rows, err := s.dbConn.querySQL(tctx, query)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -183,7 +183,7 @@ func (s *OnlineDDLStorage) Get(ghostSchema, ghostTable string) *GhostDDLInfo {
 }
 
 // Save saves online ddl information
-func (s *OnlineDDLStorage) Save(ghostSchema, ghostTable, realSchema, realTable, ddl string) error {
+func (s *OnlineDDLStorage) Save(tctx *tcontext.Context, ghostSchema, ghostTable, realSchema, realTable, ddl string) error {
 	s.Lock()
 	defer s.Unlock()
 
@@ -211,12 +211,12 @@ func (s *OnlineDDLStorage) Save(ghostSchema, ghostTable, realSchema, realTable, 
 	}
 
 	query := fmt.Sprintf("REPLACE INTO `%s`.`%s`(`id`,`ghost_schema`, `ghost_table`, `ddls`) VALUES ('%s', '%s', '%s', '%s')", s.schema, s.table, s.id, ghostSchema, ghostTable, escapeSingleQuote(string(ddlsBytes)))
-	_, err = s.dbConn.executeSQL(s.tctx, []string{query})
+	_, err = s.dbConn.executeSQL(tctx, []string{query})
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
 // Delete deletes online ddl informations
-func (s *OnlineDDLStorage) Delete(ghostSchema, ghostTable string) error {
+func (s *OnlineDDLStorage) Delete(tctx *tcontext.Context, ghostSchema, ghostTable string) error {
 	s.Lock()
 	defer s.Unlock()
 
@@ -227,7 +227,7 @@ func (s *OnlineDDLStorage) Delete(ghostSchema, ghostTable string) error {
 
 	// delete all checkpoints
 	sql := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s' and `ghost_schema` = '%s' and `ghost_table` = '%s'", s.schema, s.table, s.id, ghostSchema, ghostTable)
-	_, err := s.dbConn.executeSQL(s.tctx, []string{sql})
+	_, err := s.dbConn.executeSQL(tctx, []string{sql})
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -237,13 +237,13 @@ func (s *OnlineDDLStorage) Delete(ghostSchema, ghostTable string) error {
 }
 
 // Clear clears online ddl information from storage
-func (s *OnlineDDLStorage) Clear() error {
+func (s *OnlineDDLStorage) Clear(tctx *tcontext.Context) error {
 	s.Lock()
 	defer s.Unlock()
 
 	// delete all checkpoints
 	sql := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s'", s.schema, s.table, s.id)
-	_, err := s.dbConn.executeSQL(s.tctx, []string{sql})
+	_, err := s.dbConn.executeSQL(tctx, []string{sql})
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -253,8 +253,8 @@ func (s *OnlineDDLStorage) Clear() error {
 }
 
 // ResetConn implements OnlinePlugin.ResetConn
-func (s *OnlineDDLStorage) ResetConn() error {
-	return s.dbConn.resetConn(s.tctx)
+func (s *OnlineDDLStorage) ResetConn(tctx *tcontext.Context) error {
+	return s.dbConn.resetConn(tctx)
 }
 
 // Close closes database connection
@@ -265,24 +265,24 @@ func (s *OnlineDDLStorage) Close() {
 	closeBaseDB(s.tctx, s.db)
 }
 
-func (s *OnlineDDLStorage) prepare() error {
-	if err := s.createSchema(); err != nil {
+func (s *OnlineDDLStorage) prepare(tctx *tcontext.Context) error {
+	if err := s.createSchema(tctx); err != nil {
 		return err
 	}
 
-	if err := s.createTable(); err != nil {
+	if err := s.createTable(tctx); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *OnlineDDLStorage) createSchema() error {
+func (s *OnlineDDLStorage) createSchema(tctx *tcontext.Context) error {
 	sql := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", s.schema)
-	_, err := s.dbConn.executeSQL(s.tctx, []string{sql})
+	_, err := s.dbConn.executeSQL(tctx, []string{sql})
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
 
-func (s *OnlineDDLStorage) createTable() error {
+func (s *OnlineDDLStorage) createTable(tctx *tcontext.Context) error {
 	tableName := fmt.Sprintf("`%s`.`%s`", s.schema, s.table)
 	sql := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 			id VARCHAR(32) NOT NULL,
@@ -292,7 +292,7 @@ func (s *OnlineDDLStorage) createTable() error {
 			update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			UNIQUE KEY uk_id_schema_table (id, ghost_schema, ghost_table)
 		)`, tableName)
-	_, err := s.dbConn.executeSQL(s.tctx, []string{sql})
+	_, err := s.dbConn.executeSQL(tctx, []string{sql})
 	return terror.WithScope(err, terror.ScopeDownstream)
 }
 

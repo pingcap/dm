@@ -35,18 +35,18 @@ type PT struct {
 
 // NewPT returns pt online schema changes plugin
 func NewPT(tctx *tcontext.Context, cfg *config.SubTaskConfig) (OnlinePlugin, error) {
-	newtctx := tctx.WithLogger(tctx.L().WithFields(zap.String("online ddl", "pt-ost")))
-
 	g := &PT{
-		storge: NewOnlineDDLStorage(newtctx, cfg),
+		storge: NewOnlineDDLStorage(tctx.WithLogger(tctx.L().WithFields(zap.String("online ddl", "pt-ost"))), cfg),
 	}
 
-	return g, g.storge.Init()
+	tctx2, cancel := tctx.WithTimeout(defaultDBContextTimeout)
+	defer cancel()
+	return g, g.storge.Init(tctx2)
 }
 
 // Apply implements interface.
 // returns ddls, real schema, real table, error
-func (p *PT) Apply(tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, string, string, error) {
+func (p *PT) Apply(tctx *tcontext.Context, tables []*filter.Table, statement string, stmt ast.StmtNode) ([]string, string, string, error) {
 	if len(tables) < 1 {
 		return nil, "", "", terror.ErrSyncerUnitPTApplyEmptyTable.Generate()
 	}
@@ -88,12 +88,12 @@ func (p *PT) Apply(tables []*filter.Table, statement string, stmt ast.StmtNode) 
 		// record ghost table ddl changes
 		switch stmt.(type) {
 		case *ast.CreateTableStmt:
-			err := p.storge.Delete(schema, table)
+			err := p.storge.Delete(tctx, schema, table)
 			if err != nil {
 				return nil, "", "", err
 			}
 		case *ast.DropTableStmt:
-			err := p.storge.Delete(schema, table)
+			err := p.storge.Delete(tctx, schema, table)
 			if err != nil {
 				return nil, "", "", err
 			}
@@ -114,13 +114,13 @@ func (p *PT) Apply(tables []*filter.Table, statement string, stmt ast.StmtNode) 
 			}
 
 			// rename ghost table to trash table
-			err := p.storge.Delete(schema, table)
+			err := p.storge.Delete(tctx, schema, table)
 			if err != nil {
 				return nil, "", "", err
 			}
 
 		default:
-			err := p.storge.Save(schema, table, targetSchema, targetTable, statement)
+			err := p.storge.Save(tctx, schema, table, targetSchema, targetTable, statement)
 			if err != nil {
 				return nil, "", "", err
 			}
@@ -131,12 +131,12 @@ func (p *PT) Apply(tables []*filter.Table, statement string, stmt ast.StmtNode) 
 }
 
 // Finish implements interface
-func (p *PT) Finish(schema, table string) error {
+func (p *PT) Finish(tcxt *tcontext.Context, schema, table string) error {
 	if p == nil {
 		return nil
 	}
 
-	return p.storge.Delete(schema, table)
+	return p.storge.Delete(tcxt, schema, table)
 }
 
 // TableType implements interface
@@ -167,8 +167,8 @@ func (p *PT) RealName(schema, table string) (string, string) {
 }
 
 // Clear clears online ddl information
-func (p *PT) Clear() error {
-	return p.storge.Clear()
+func (p *PT) Clear(tctx *tcontext.Context) error {
+	return p.storge.Clear(tctx)
 }
 
 // Close implements interface
@@ -177,6 +177,6 @@ func (p *PT) Close() {
 }
 
 // ResetConn implements interface
-func (p *PT) ResetConn() error {
-	return p.storge.ResetConn()
+func (p *PT) ResetConn(tctx *tcontext.Context) error {
+	return p.storge.ResetConn(tctx)
 }

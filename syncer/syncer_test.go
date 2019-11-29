@@ -390,7 +390,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 			if !result.isDDL {
 				continue // BEGIN event
 			}
-			querys, _, err := syncer.resolveDDLSQL(p, result.stmt, string(ev.Schema))
+			querys, _, err := syncer.resolveDDLSQL(tcontext.Background(), p, result.stmt, string(ev.Schema))
 			c.Assert(err, IsNil)
 			if len(querys) == 0 {
 				continue
@@ -556,7 +556,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 				continue // BEGIN event
 			}
 
-			querys, _, err := syncer.resolveDDLSQL(p, result.stmt, string(ev.Schema))
+			querys, _, err := syncer.resolveDDLSQL(tcontext.Background(), p, result.stmt, string(ev.Schema))
 			c.Assert(err, IsNil)
 			if len(querys) == 0 {
 				continue
