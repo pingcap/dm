@@ -14,6 +14,7 @@
 package utils
 
 import (
+	"context"
 	"math"
 	"os"
 	"regexp"
@@ -21,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/pkg/terror"
@@ -150,6 +152,11 @@ func WaitSomething(backoff int, waitTime time.Duration, fn func() bool) bool {
 	}
 
 	return false
+}
+
+// IsContextCanceledError checks whether err is context.Canceled
+func IsContextCanceledError(err error) bool {
+	return errors.Cause(err) == context.Canceled
 }
 
 // IsBuildInSkipDDL return true when checked sql that will be skipped for syncer
