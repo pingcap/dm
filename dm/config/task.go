@@ -15,7 +15,9 @@ package config
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
+	"strings"
 	"time"
 
 	"github.com/pingcap/dm/pkg/log"
@@ -348,6 +350,7 @@ func (c *TaskConfig) adjust() error {
 	}
 
 	iids := make(map[string]int) // source-id -> instance-index
+	duplicateErrorStrings := make([]string, 0)
 	for i, inst := range c.MySQLInstances {
 		if err := inst.Verify(); err != nil {
 			return terror.Annotatef(err, "mysql-instance: %s", humanize.Ordinal(i))
@@ -444,12 +447,15 @@ func (c *TaskConfig) adjust() error {
 			inst.Syncer.WorkerCount = inst.SyncerThread
 		}
 
-		if dupeRule, hasDupe := checkDuplicateString(inst.RouteRules); hasDupe {
-			return terror.ErrConfigDuplicateCfgItem.Generate(i, "route-rules", dupeRule)
+		if dupeRules := checkDuplicateString(inst.RouteRules); len(dupeRules) > 0 {
+			duplicateErrorStrings = append(duplicateErrorStrings, fmt.Sprintf("mysql-instance(%d)'s route-rules: %s", i, strings.Join(dupeRules, ", ")))
 		}
-		if dupeRule, hasDupe := checkDuplicateString(inst.FilterRules); hasDupe {
-			return terror.ErrConfigDuplicateCfgItem.Generate(i, "filter-rules", dupeRule)
+		if dupeRules := checkDuplicateString(inst.FilterRules); len(dupeRules) > 0 {
+			duplicateErrorStrings = append(duplicateErrorStrings, fmt.Sprintf("mysql-instance(%d)'s filter-rules: %s", i, strings.Join(dupeRules, ", ")))
 		}
+	}
+	if len(duplicateErrorStrings) > 0 {
+		return terror.ErrConfigDuplicateCfgItem.Generate(strings.Join(duplicateErrorStrings, "\n"))
 	}
 
 	if c.Timezone != "" {
@@ -525,14 +531,19 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 }
 
 // checkDuplicateString checks whether the given string array has duplicate string item
-// if there is duplicate, it will return duplicate string and true
-func checkDuplicateString(ruleNames []string) (string, bool) {
-	s := make(map[string]struct{}, len(ruleNames))
+// if there is duplicate, it will return **all** the duplicate strings
+func checkDuplicateString(ruleNames []string) []string {
+	mp := make(map[string]bool, len(ruleNames))
+	dupeArray := make([]string, 0)
 	for _, name := range ruleNames {
-		if _, ok := s[name]; ok {
-			return name, true
+		if added, ok := mp[name]; ok {
+			if !added {
+				dupeArray = append(dupeArray, name)
+				mp[name] = true
+			}
+		} else {
+			mp[name] = false
 		}
-		s[name] = struct{}{}
 	}
-	return "", false
+	return dupeArray
 }
