@@ -16,6 +16,9 @@ package config
 import (
 	"io/ioutil"
 	"path"
+	"sort"
+
+	"github.com/pingcap/dm/pkg/terror"
 
 	. "github.com/pingcap/check"
 )
@@ -244,24 +247,22 @@ filters:
 	taskConfig = NewTaskConfig()
 	err = taskConfig.DecodeFile(filepath)
 	c.Assert(err, IsNil)
-	taskConfig.MySQLInstances[0].RouteRules = []string{"route-rule-1", "route-rule-2", "route-rule-1", "route-rule-4"}
-	err = taskConfig.adjust()
-	c.Assert(err, ErrorMatches, ".*mysql-instance\\(0\\)'s route-rules config has duplicate item route-rule-1, please remove the duplicate items.*")
-	taskConfig.MySQLInstances[0].RouteRules = nil
-
+	taskConfig.MySQLInstances[0].RouteRules = []string{"route-rule-1", "route-rule-2", "route-rule-1", "route-rule-2"}
 	taskConfig.MySQLInstances[1].FilterRules = []string{"filter-rule-1", "filter-rule-2", "filter-rule-3", "filter-rule-2"}
 	err = taskConfig.adjust()
-	c.Assert(err, ErrorMatches, ".*mysql-instance\\(1\\)'s filter-rules config has duplicate item filter-rule-2, please remove the duplicate items.*")
-	taskConfig.MySQLInstances[1].FilterRules = nil
+	c.Assert(terror.ErrConfigDuplicateCfgItem.Equal(err), IsTrue)
+	c.Assert(err, ErrorMatches, "[\\s\\S]*mysql-instance\\(0\\)'s route-rules: route-rule-1, route-rule-2[\\s\\S]*")
+	c.Assert(err, ErrorMatches, "[\\s\\S]*mysql-instance\\(1\\)'s filter-rules: filter-rule-2[\\s\\S]*")
+
 }
 
 func (t *testConfig) TestCheckDuplicateString(c *C) {
 	a := []string{"a", "b", "c", "d"}
-	dupeString, hasDupe := checkDuplicateString(a)
-	c.Assert(hasDupe, IsFalse)
-	c.Assert(dupeString, Equals, "")
-	a[0] = "d"
-	dupeString, hasDupe = checkDuplicateString(a)
-	c.Assert(hasDupe, IsTrue)
-	c.Assert(dupeString, Equals, "d")
+	dupeStrings := checkDuplicateString(a)
+	c.Assert(dupeStrings, HasLen, 0)
+	a = []string{"a", "a", "b", "b", "c", "c"}
+	dupeStrings = checkDuplicateString(a)
+	c.Assert(dupeStrings, HasLen, 3)
+	sort.Strings(dupeStrings)
+	c.Assert(a, DeepEquals, []string{"a", "b", "c"})
 }
