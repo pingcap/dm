@@ -78,10 +78,12 @@ func (l Logger) WithFields(fields ...zap.Field) Logger {
 // ErrorFilterContextCanceled wraps Logger.Error() and will filter error log when error is context.Canceled
 func (l Logger) ErrorFilterContextCanceled(msg string, fields ...zap.Field) {
 	for _, field := range fields {
-		if field.Key == "error" && strings.Contains(field.String, context.Canceled.Error()) {
-			return
-		}
-		if field.Type == zapcore.ErrorType {
+		switch field.Type {
+		case zapcore.StringType:
+			if field.Key == "error" && strings.Contains(field.String, context.Canceled.Error()) {
+				return
+			}
+		case zapcore.ErrorType:
 			err, ok := field.Interface.(error)
 			if ok && errors.Cause(err) == context.Canceled {
 				return
