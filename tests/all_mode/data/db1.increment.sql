@@ -24,6 +24,9 @@ update t1 set name = 'gentestxxxxxx' where gen_id = 124;
 -- delete with unique key
 delete from t1 where gen_id > 124;
 
+-- test alter database
+alter database all_mode CHARACTER SET = utf8mb4;
+
 -- test decimal type
 alter table t1 add column lat decimal(9,6) default '0.000000';
 insert into t1 (id, name, info, lat) values (8, 'gentest', '{"id":127}', '123.123')

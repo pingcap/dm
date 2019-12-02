@@ -85,9 +85,6 @@ var (
 		"^RENAME\\s+USER",
 		"^DROP\\s+USER",
 		"^SET\\s+PASSWORD",
-
-		// alter database
-		"^ALTER DATABASE",
 	}
 	builtInSkipDDLPatterns *regexp.Regexp
 )
