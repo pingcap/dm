@@ -15,12 +15,7 @@ package retry
 
 import (
 	"database/sql/driver"
-	"strings"
-
-	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
-	tmysql "github.com/pingcap/parser/mysql"
-	gmysql "github.com/siddontang/go-mysql/mysql"
 )
 
 var (
@@ -45,35 +40,7 @@ var (
 		"binlog checksum mismatch, data may be corrupted",
 		"get event err EOF",
 	}
-
-	// Retryable1105Msgs list the error messages of some retryable error with 1105 code.
-	Retryable1105Msgs = []string{
-		"Information schema is out of date",
-		"Information schema is changed",
-	}
 )
-
-// IsRetryableError tells whether this error should retry
-func IsRetryableError(err error) bool {
-	err = errors.Cause(err) // check the original error
-	mysqlErr, ok := err.(*mysql.MySQLError)
-	if ok {
-		switch mysqlErr.Number {
-		// ER_LOCK_DEADLOCK can retry to commit while meet deadlock
-		case gmysql.ER_LOCK_DEADLOCK, tmysql.ErrPDServerTimeout, tmysql.ErrTiKVServerTimeout, tmysql.ErrTiKVServerBusy, tmysql.ErrResolveLockTimeout, tmysql.ErrRegionUnavailable, tmysql.ErrQueryInterrupted, tmysql.ErrWriteConflictInTiDB, tmysql.ErrTableLocked, tmysql.ErrWriteConflict:
-			return true
-		case tmysql.ErrUnknown:
-			for _, msg := range Retryable1105Msgs {
-				if strings.Contains(mysqlErr.Message, msg) {
-					return true
-				}
-			}
-		default:
-			return false
-		}
-	}
-	return false
-}
 
 // IsConnectionError tells whether this error should reconnect to Database
 func IsConnectionError(err error) bool {
