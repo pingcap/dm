@@ -126,38 +126,6 @@ function run() {
         exit 1
     fi
 
-    # stop DM-worker, then update failpoint for checkpoint
-    kill_dm_worker
-    export GO_FAILPOINTS='github.com/pingcap/dm/pkg/conn/retryableError=return("INSERT INTO `dm_meta`.`test_syncer_checkpoint`")'
-
-    # start DM-worker again
-    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
-    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
-    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
-    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-    sleep 2 # wait gRPC from DM-master to DM-worker established again
-
-    dmctl_start_task
-
-    sleep 5 # should sleep > retryTimeout (now 3s)
-
-    # query-task, it should still be running (retrying)
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status test" \
-        "\"stage\": \"Running\"" 4
-
-    # check log, retrying in binlog replication unit
-    check_log_contains $WORK_DIR/worker1/log/dm-worker.log 'Error 1213: failpoint inject retryable error for INSERT INTO `dm_meta`.`test_syncer_checkpoint`'
-
-    # stop-task, should not block too much time
-    start_time=$(date +%s)
-    dmctl_stop_task test
-    duration=$(( $(date +%s)-$start_time ))
-    if [[ $duration -gt 12 ]]; then # flush checkpoint need 10s context timeout now.
-        echo "stop-task tasks for updating syncer checkpoint too long duration $duration"
-        exit 1
-    fi
-
     # stop DM-worker, then disable failponits
     kill_dm_worker
     export GO_FAILPOINTS=''

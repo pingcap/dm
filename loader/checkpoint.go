@@ -80,10 +80,7 @@ type RemoteCheckPoint struct {
 }
 
 func newRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id string) (CheckPoint, error) {
-	tctx2, cancel := tctx.WithTimeout(defaultDBContextTimeout)
-	defer cancel()
-
-	db, dbConns, err := createConns(tctx2, cfg, 1)
+	db, dbConns, err := createConns(tctx, cfg, 1)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +96,7 @@ func newRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id s
 		tctx:           tctx.WithLogger(tctx.L().WithFields(zap.String("component", "remote checkpoint"))),
 	}
 
-	err = cp.prepare(tctx2)
+	err = cp.prepare(tctx)
 	if err != nil {
 		return nil, err
 	}
@@ -350,7 +347,9 @@ func (cp *RemoteCheckPoint) Count(tctx *tcontext.Context) (int, error) {
 }
 
 func (cp *RemoteCheckPoint) String() string {
-	tctx2, cancel := cp.tctx.WithTimeout(defaultDBContextTimeout)
+	// `String` is often used to log something, it's not a big problem even fail,
+	// so 1min should be enough.
+	tctx2, cancel := cp.tctx.WithTimeout(time.Minute)
 	defer cancel()
 
 	if err := cp.Load(tctx2); err != nil {

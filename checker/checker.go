@@ -97,7 +97,7 @@ func NewChecker(cfgs []*config.SubTaskConfig, checkingItems map[string]string) *
 }
 
 // Init implements Unit interface
-func (c *Checker) Init() (err error) {
+func (c *Checker) Init(ctx context.Context) (err error) {
 	rollbackHolder := fr.NewRollbackHolder("checker")
 	defer func() {
 		if err != nil {

@@ -62,9 +62,6 @@ var (
 	maxEventTimeout = 1 * time.Hour
 	statusTime      = 30 * time.Second
 
-	// default DB operation timeout, this is often used for non-heavy operation, so 10s should work correctly for most cases.
-	defaultDBContextTimeout = 10 * time.Second
-
 	// MaxDDLConnectionTimeoutMinute also used by SubTask.ExecuteDDL
 	MaxDDLConnectionTimeoutMinute = 5
 
@@ -301,13 +298,15 @@ func (s *Syncer) Type() pb.UnitType {
 // Init initializes syncer for a sync task, but not start Process.
 // if fail, it should not call s.Close.
 // some check may move to checker later.
-func (s *Syncer) Init() (err error) {
+func (s *Syncer) Init(ctx context.Context) (err error) {
 	rollbackHolder := fr.NewRollbackHolder("syncer")
 	defer func() {
 		if err != nil {
 			rollbackHolder.RollbackReverseOrder()
 		}
 	}()
+
+	tctx := s.tctx.WithContext(ctx)
 
 	err = s.createDBs()
 	if err != nil {
@@ -337,7 +336,7 @@ func (s *Syncer) Init() (err error) {
 		if !ok {
 			return terror.ErrSyncerUnitOnlineDDLSchemeNotSupport.Generate(s.cfg.OnlineDDLScheme)
 		}
-		s.onlineDDL, err = fn(s.tctx, s.cfg)
+		s.onlineDDL, err = fn(tctx, s.cfg)
 		if err != nil {
 			return err
 		}
@@ -362,9 +361,6 @@ func (s *Syncer) Init() (err error) {
 		rollbackHolder.Add(fr.FuncRollback{Name: "close-sharding-group-keeper", Fn: s.sgk.Close})
 	}
 
-	// simply * 3 now, it's better to refine the context passed in `Init` later.
-	tctx, cancel := s.tctx.WithTimeout(3 * defaultDBContextTimeout)
-	defer cancel()
 	err = s.checkpoint.Init(tctx)
 	if err != nil {
 		return err
@@ -470,7 +466,7 @@ func (s *Syncer) initShardingGroups() error {
 }
 
 // IsFreshTask implements Unit.IsFreshTask
-func (s *Syncer) IsFreshTask() (bool, error) {
+func (s *Syncer) IsFreshTask(ctx context.Context) (bool, error) {
 	globalPoint := s.checkpoint.GlobalPoint()
 	return globalPoint.Compare(minCheckpoint) <= 0, nil
 }
@@ -865,10 +861,15 @@ func (s *Syncer) flushCheckPoints(tctx *tcontext.Context) error {
 
 	if utils.IsContextCanceledError(tctx.Ctx.Err()) {
 		// when canceling (stop-task/pause-task), we still need to flush the checkpoint.
-		var cancel context.CancelFunc
-		tctx, cancel = tcontext.Background().WithTimeout(defaultDBContextTimeout)
-		defer cancel()
-		s.tctx.L().Info("flushing checkpoint when canceling the task", zap.Stringer("checkpoint", s.checkpoint))
+		timeout, err2 := time.ParseDuration(maxDMLConnectionTimeout)
+		if err2 != nil {
+			s.tctx.L().Error("parse max DML connection timeout fail", zap.String("timeout", maxDMLConnectionTimeout), log.ShortError(err2))
+		} else {
+			var cancel context.CancelFunc
+			tctx, cancel = s.tctx.WithContext(context.Background()).WithTimeout(timeout)
+			defer cancel()
+			s.tctx.L().Info("flushing checkpoint when canceling the task", zap.Stringer("checkpoint", s.checkpoint))
+		}
 	}
 
 	err := s.checkpoint.FlushPointsExcept(tctx, exceptTables, shardMetaSQLs, shardMetaArgs)
@@ -1061,7 +1062,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		return err
 	}
 
-	fresh, err := s.IsFreshTask()
+	fresh, err := s.IsFreshTask(ctx)
 	if err != nil {
 		return err
 	} else if fresh {

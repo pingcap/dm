@@ -39,9 +39,7 @@ func NewGhost(tctx *tcontext.Context, cfg *config.SubTaskConfig) (OnlinePlugin, 
 		storge: NewOnlineDDLStorage(tctx.WithLogger(tctx.L().WithFields(zap.String("online ddl", "gh-ost"))), cfg),
 	}
 
-	tctx2, cancel := tctx.WithTimeout(defaultDBContextTimeout)
-	defer cancel()
-	return g, g.storge.Init(tctx2)
+	return g, g.storge.Init(tctx)
 }
 
 // Apply implements interface.
