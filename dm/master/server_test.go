@@ -33,6 +33,7 @@ import (
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
+	dmworker "github.com/pingcap/dm/dm/master/worker"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/pbmock"
@@ -159,6 +160,9 @@ func testDefaultMasterServer(c *check.C) *Server {
 	c.Assert(err, check.IsNil)
 	cfg.DataDir = c.MkDir()
 	server := NewServer(cfg)
+	server.wcHub, err = dmworker.NewClientHub(nil, nil)
+	c.Assert(err, check.IsNil)
+
 	go server.ap.Start(context.Background())
 
 	return server
@@ -198,7 +202,7 @@ func testMockWorkerConfig(c *check.C, server *Server, ctrl *gomock.Controller, p
 			SourceID: deploy.Source,
 			Content:  rawConfig,
 		}, nil)
-		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
+		server.wcHub.SetClientForWorker(deploy.Worker, newMockRPCClient(mockWorkerClient))
 	}
 }
 
@@ -266,7 +270,7 @@ func testMockStartTask(c *check.C, server *Server, ctrl *gomock.Controller, work
 			}, nil).MaxTimes(maxRetryNum)
 		}
 
-		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
+		server.wcHub.SetClientForWorker(deploy.Worker, newMockRPCClient(mockWorkerClient))
 	}
 }
 
@@ -283,7 +287,7 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 			gomock.Any(),
 			&pb.QueryStatusRequest{},
 		).Return(&pb.QueryStatusResponse{Result: true}, nil)
-		server.workerClients[workerAddr] = newMockRPCClient(mockWorkerClient)
+		server.wcHub.SetClientForWorker(workerAddr, newMockRPCClient(mockWorkerClient))
 	}
 	resp, err := server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{})
 	c.Assert(err, check.IsNil)
@@ -298,7 +302,7 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 			gomock.Any(),
 			&pb.QueryStatusRequest{},
 		).Return(&pb.QueryStatusResponse{Result: true}, nil)
-		server.workerClients[workerAddr] = newMockRPCClient(mockWorkerClient)
+		server.wcHub.SetClientForWorker(workerAddr, newMockRPCClient(mockWorkerClient))
 	}
 	resp, err = server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{
 		Workers: workers,
@@ -512,7 +516,7 @@ func (t *testMaster) TestQueryError(c *check.C) {
 			gomock.Any(),
 			&pb.QueryErrorRequest{},
 		).Return(&pb.QueryErrorResponse{Result: true}, nil)
-		server.workerClients[workerAddr] = newMockRPCClient(mockWorkerClient)
+		server.wcHub.SetClientForWorker(workerAddr, newMockRPCClient(mockWorkerClient))
 	}
 	resp, err := server.QueryError(context.Background(), &pb.QueryErrorListRequest{})
 	c.Assert(err, check.IsNil)
@@ -527,7 +531,7 @@ func (t *testMaster) TestQueryError(c *check.C) {
 			gomock.Any(),
 			&pb.QueryErrorRequest{},
 		).Return(&pb.QueryErrorResponse{Result: true}, nil)
-		server.workerClients[workerAddr] = newMockRPCClient(mockWorkerClient)
+		server.wcHub.SetClientForWorker(workerAddr, newMockRPCClient(mockWorkerClient))
 	}
 	resp, err = server.QueryError(context.Background(), &pb.QueryErrorListRequest{
 		Workers: workers,
@@ -618,7 +622,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 			Log:  &pb.TaskLog{Id: logID, Ts: time.Now().Unix(), Success: true},
 		}, nil)
 
-		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
+		server.wcHub.SetClientForWorker(deploy.Worker, newMockRPCClient(mockWorkerClient))
 	}
 	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
 		Op:   pauseOp,
@@ -643,7 +647,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 				Name: taskName,
 			},
 		).Return(nil, errors.New(errGRPCFailed))
-		server.workerClients[workerAddr] = newMockRPCClient(mockWorkerClient)
+		server.wcHub.SetClientForWorker(workerAddr, newMockRPCClient(mockWorkerClient))
 	}
 	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
 		Op:      pb.TaskOp_Pause,
@@ -682,7 +686,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 		Meta: &pb.CommonWorkerResponse{Result: true, Worker: workers[0]},
 		Log:  &pb.TaskLog{Id: logID, Ts: time.Now().Unix(), Success: true},
 	}, nil)
-	server.workerClients[workers[0]] = newMockRPCClient(mockWorkerClient)
+	server.wcHub.SetClientForWorker(workers[0], newMockRPCClient(mockWorkerClient))
 	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
 		Op:      pb.TaskOp_Stop,
 		Name:    taskName,
@@ -721,7 +725,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 			Meta: &pb.CommonWorkerResponse{Result: true, Worker: workers[0]},
 			Log:  &pb.TaskLog{Id: logID, Ts: time.Now().Unix(), Success: true},
 		}, nil)
-		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
+		server.wcHub.SetClientForWorker(deploy.Worker, newMockRPCClient(mockWorkerClient))
 	}
 	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
 		Op:   pb.TaskOp_Stop,
@@ -822,7 +826,7 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 				}, nil)
 			}
 
-			server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
+			server.wcHub.SetClientForWorker(deploy.Worker, newMockRPCClient(mockWorkerClient))
 		}
 	}
 
@@ -914,7 +918,7 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 				},
 			).Return(ret...)
 
-			server.workerClients[worker] = newMockRPCClient(mockWorkerClient)
+			server.wcHub.SetClientForWorker(worker, newMockRPCClient(mockWorkerClient))
 		}
 	}
 
@@ -1036,7 +1040,7 @@ func (t *testMaster) TestBreakWorkerDDLLock(c *check.C) {
 					SkipDDL:      true,
 				},
 			).Return(rets...)
-			server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
+			server.wcHub.SetClientForWorker(deploy.Worker, newMockRPCClient(mockWorkerClient))
 		}
 	}
 
@@ -1120,7 +1124,7 @@ func (t *testMaster) TestRefreshWorkerTasks(c *check.C) {
 				},
 			},
 		}, nil)
-		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
+		server.wcHub.SetClientForWorker(deploy.Worker, newMockRPCClient(mockWorkerClient))
 	}
 
 	// test RefreshWorkerTasks, with two running tasks for each workers
@@ -1145,7 +1149,7 @@ func (t *testMaster) TestRefreshWorkerTasks(c *check.C) {
 			Worker: deploy.Worker,
 			Msg:    msgNoSubTask,
 		}, nil)
-		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
+		server.wcHub.SetClientForWorker(deploy.Worker, newMockRPCClient(mockWorkerClient))
 	}
 
 	// test RefreshWorkerTasks, with no started tasks
@@ -1200,7 +1204,7 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 					Filename: filename,
 				},
 			).Return(rets...)
-			server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
+			server.wcHub.SetClientForWorker(deploy.Worker, newMockRPCClient(mockWorkerClient))
 		}
 	}
 
@@ -1282,7 +1286,7 @@ func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
 				gomock.Any(),
 				&pb.SwitchRelayMasterRequest{},
 			).Return(rets...)
-			server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
+			server.wcHub.SetClientForWorker(deploy.Worker, newMockRPCClient(mockWorkerClient))
 		}
 	}
 
@@ -1359,7 +1363,7 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 				gomock.Any(),
 				&pb.OperateRelayRequest{Op: pb.RelayOp_PauseRelay},
 			).Return(rets...)
-			server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
+			server.wcHub.SetClientForWorker(deploy.Worker, newMockRPCClient(mockWorkerClient))
 		}
 	}
 
@@ -1465,7 +1469,7 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 			},
 		).Return(&pb.CommonWorkerResponse{Result: true}, nil).MaxTimes(1)
 
-		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
+		server.wcHub.SetClientForWorker(deploy.Worker, newMockRPCClient(mockWorkerClient))
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
