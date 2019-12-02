@@ -61,6 +61,9 @@ service Master {
 
     // CheckTask checks legality of task configuration
     rpc CheckTask(CheckTaskRequest) returns (CheckTaskResponse) {}
+
+    // ShowMasterLeader shows the DM-master's leader information 
+    rpc ShowMasterLeader(ShowMasterLeaderRequest) returns (ShowMasterLeaderResponse) {}
 }
 
 message MigrateWorkerRelayRequest {
@@ -302,6 +305,16 @@ message CheckTaskRequest {
 }
 
 message CheckTaskResponse {
+    bool result = 1;
+    string msg = 2;
+}
+
+message ShowMasterLeaderRequest {
+}
+
+// If have leader, result is true, and put leader information in msg.
+// Otherwise, result is false.
+message ShowMasterLeaderResponse {
     bool result = 1;
     string msg = 2;
 }

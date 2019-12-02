@@ -18,13 +18,16 @@ import (
 	"os"
 	"time"
 
+	"github.com/pingcap/errors"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/tests/utils"
 )
 
-// use show-ddl-locks request to test DM-master is online
+var maxRetryTime = 5
+
+// use ShowMasterLeader request to test DM-master is online, and ready to handle request
 func main() {
 	addr := os.Args[1]
 	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(2*time.Second))
@@ -32,9 +35,22 @@ func main() {
 		utils.ExitWithError(err)
 	}
 	cli := pb.NewMasterClient(conn)
-	req := &pb.ShowDDLLocksRequest{}
-	_, err = cli.ShowDDLLocks(context.Background(), req)
+	var resp *pb.ShowMasterLeaderResponse
+
+	for i := 0; i < maxRetryTime; i++ {
+		req := &pb.ShowMasterLeaderRequest{}
+		resp, err = cli.ShowMasterLeader(context.Background(), req)
+		if err != nil || !resp.Result {
+			time.Sleep(time.Second)
+			continue
+		}
+
+		return
+	}
+
 	if err != nil {
 		utils.ExitWithError(err)
 	}
+
+	utils.ExitWithError(errors.New(resp.Msg))
 }

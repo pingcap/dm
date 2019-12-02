@@ -1242,6 +1242,25 @@ func (s *Server) refreshWorkerTasks(ctx context.Context, req *pb.RefreshWorkerTa
 	}, nil
 }
 
+// ShowMasterLeader implements MasterServer.ShowMasterLeader
+// Note: this request don't need save to etcd
+func (s *Server) ShowMasterLeader(ctx context.Context, req *pb.ShowMasterLeaderRequest) (*pb.ShowMasterLeaderResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "ShowMasterLeader"))
+
+	_, leaderID, err := s.election.LeaderInfo(ctx)
+	if err != nil {
+		return &pb.ShowMasterLeaderResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}, nil
+	}
+
+	return &pb.ShowMasterLeaderResponse{
+		Result: true,
+		Msg:    fmt.Sprintf("DM-master's leader is %s", leaderID),
+	}, nil
+}
+
 // addTaskWorkers adds a task-workers pair
 // replace indicates whether replace old workers
 func (s *Server) addTaskWorkers(task string, workers []string, replace bool) {
