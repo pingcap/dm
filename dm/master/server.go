@@ -2356,8 +2356,8 @@ func (s *Server) WatchRequest(ctx context.Context) {
 					continue
 				}
 
-				if len(operate.Response) != 0 || len(operate.Err) != 0 {
-					// this request already had response, ignore it
+				if operate.Stage == pb.OperateStage_Doing || operate.Stage == pb.OperateStage_Done {
+					// this request already handled, ignore it
 					continue
 				}
 
