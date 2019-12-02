@@ -69,7 +69,7 @@ var NewRelay = NewRealRelay
 // Process defines mysql-like relay log process unit
 type Process interface {
 	// Init initial relat log unit
-	Init() (err error)
+	Init(ctx context.Context) (err error)
 	// Process run background logic of relay log unit
 	Process(ctx context.Context, pr chan pb.ProcessResult)
 	// SwitchMaster switches relay's master server
@@ -152,7 +152,7 @@ func NewRealRelay(cfg *Config) Process {
 }
 
 // Init implements the dm.Unit interface.
-func (r *Relay) Init() (err error) {
+func (r *Relay) Init(ctx context.Context) (err error) {
 	rollbackHolder := fr.NewRollbackHolder("relay")
 	defer func() {
 		if err != nil {

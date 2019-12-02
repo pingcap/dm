@@ -45,8 +45,7 @@ import (
 )
 
 const (
-	jobCount                = 1000
-	defaultDBContextTimeout = 10 * time.Second
+	jobCount = 1000
 )
 
 // FilePosSet represents a set in mathematics.
@@ -401,7 +400,7 @@ func (l *Loader) Type() pb.UnitType {
 
 // Init initializes loader for a load task, but not start Process.
 // if fail, it should not call l.Close.
-func (l *Loader) Init() (err error) {
+func (l *Loader) Init(ctx context.Context) (err error) {
 	rollbackHolder := fr.NewRollbackHolder("loader")
 	defer func() {
 		if err != nil {
@@ -409,7 +408,9 @@ func (l *Loader) Init() (err error) {
 		}
 	}()
 
-	checkpoint, err := newRemoteCheckPoint(l.tctx, l.cfg, l.checkpointID())
+	tctx := l.tctx.WithContext(ctx)
+
+	checkpoint, err := newRemoteCheckPoint(tctx, l.cfg, l.checkpointID())
 	if err != nil {
 		return err
 	}
@@ -422,9 +423,7 @@ func (l *Loader) Init() (err error) {
 	}
 
 	if l.cfg.RemoveMeta {
-		tctx2, cancel := l.tctx.WithTimeout(defaultDBContextTimeout)
-		err2 := l.checkPoint.Clear(tctx2)
-		cancel()
+		err2 := l.checkPoint.Clear(tctx)
 		if err2 != nil {
 			return err2
 		}
@@ -447,10 +446,7 @@ func (l *Loader) Init() (err error) {
 	dbCfg.RawDBCfg = config.DefaultRawDBConfig().
 		SetMaxIdleConns(l.cfg.PoolSize)
 
-	// simply * 3, it's better to refine the context passed in `Init` later.
-	tctx2, cancel := l.tctx.WithTimeout(3 * defaultDBContextTimeout)
-	l.toDB, l.toDBConns, err = createConns(tctx2, l.cfg, l.cfg.PoolSize)
-	cancel()
+	l.toDB, l.toDBConns, err = createConns(tctx, l.cfg, l.cfg.PoolSize)
 	if err != nil {
 		return err
 	}
@@ -548,10 +544,8 @@ func (l *Loader) isClosed() bool {
 }
 
 // IsFreshTask implements Unit.IsFreshTask
-func (l *Loader) IsFreshTask() (bool, error) {
-	tctx2, cancel := l.tctx.WithTimeout(defaultDBContextTimeout)
-	defer cancel()
-	count, err := l.checkPoint.Count(tctx2)
+func (l *Loader) IsFreshTask(ctx context.Context) (bool, error) {
+	count, err := l.checkPoint.Count(l.tctx.WithContext(ctx))
 	return count == 0, err
 }
 
