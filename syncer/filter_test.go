@@ -102,10 +102,6 @@ END`, true},
 		{"drop user t1", true},
 		{"GRANT ALL PRIVILEGES ON *.* TO 't2'@'%' IDENTIFIED WITH 'mysql_native_password' AS '*12033B78389744F3F39AC4CE4CCFCAD6960D8EA0'", true},
 		{"revoke reload on *.* from 't2'@'%'", true},
-
-		// alter database
-		{"alter database foo character set = utf8", true},
-		{"alter database foo collate=utf8_bin", true},
 	}
 
 	//filter, err := bf.NewBinlogEvent(nil)
