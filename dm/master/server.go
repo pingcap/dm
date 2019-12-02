@@ -2364,12 +2364,23 @@ func (s *Server) WatchRequest(ctx context.Context) {
 }
 
 func (s *Server) handleRequest(path string, operate *pb.Operate) {
-	var err error
-	var responseBytes []byte
+	// update operate's stage to Doing and update etcd
+	operate.Stage = pb.OperateStage_Doing
+	operateBytes, err := operate.Marshal()
+	if err != nil {
+		log.L().Error("marshal operate failed", zap.Error(err))
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	err = s.etcdClient.Update(ctx, path, string(operateBytes), 0)
+	if err != nil {
+		log.L().Error("update operate failed", zap.Error(err))
+		return
+	}
 
+	var responseBytes []byte
 	switch operate.Tp {
 	case pb.OperateType_MigrateWorkerRelay:
 		request := &pb.MigrateWorkerRelayRequest{}
@@ -2586,7 +2597,8 @@ func (s *Server) handleRequest(path string, operate *pb.Operate) {
 		operate.Response = responseBytes
 	}
 
-	operateBytes, err := operate.Marshal()
+	operate.Stage = pb.OperateStage_Done
+	operateBytes, err = operate.Marshal()
 	if err != nil {
 		log.L().Error("marshal operate failed", zap.Error(err))
 		return
@@ -2624,11 +2636,17 @@ func (s *Server) saveRequestAndWaitResponse(ctx context.Context, tp pb.OperateTy
 	}
 
 	watchCh := s.etcdClient.Watch(ctx, keyPath, revision+1)
+	tiker := time.NewTicker(5 * time.Second)
+	operateIsDoing := false
 
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-tiker.C:
+			if !operateIsDoing {
+				return terror.ErrMasterOperateNotHandle.Generatef("operate %v is not handled, maybe no DM-master leader")
+			}
 		case wresp, ok := <-watchCh:
 			if !ok {
 				return terror.ErrMasterWatchEtcd.Generatef("etcd's watch channel is closed, watch key: %s", keyPath)
@@ -2636,11 +2654,6 @@ func (s *Server) saveRequestAndWaitResponse(ctx context.Context, tp pb.OperateTy
 
 			if wresp.Err() != nil {
 				return terror.ErrMasterWatchEtcd.Delegate(wresp.Err(), keyPath)
-			}
-
-			// should only have one event
-			if len(wresp.Events) > 1 {
-				log.L().Warn("have more than one event on key in etcd", zap.String("key", keyPath))
 			}
 
 			for _, ev := range wresp.Events {
@@ -2653,6 +2666,11 @@ func (s *Server) saveRequestAndWaitResponse(ctx context.Context, tp pb.OperateTy
 				err := operate.Unmarshal(ev.Kv.Value)
 				if err != nil {
 					return terror.ErrMasterUnmarshalOperate.Delegate(err, keyPath)
+				}
+
+				if operate.Stage == pb.OperateStage_Doing {
+					operateIsDoing = true
+					continue
 				}
 
 				if len(operate.Err) != 0 {

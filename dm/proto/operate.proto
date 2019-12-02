@@ -7,10 +7,11 @@ message Operate {
     bytes request = 2;
     bytes response = 3;
     string err = 4;
+    OperateStage stage = 5;
 }
 
 enum OperateType {
-    Unknown = 0;
+    UnknownOperate = 0;
 
     MigrateWorkerRelay = 1;
 
@@ -45,4 +46,10 @@ enum OperateType {
     PurgeWorkerRelay = 16;
 
     CheckTask = 17;
+}
+
+enum OperateStage {
+    UnknownStage = 0;
+    Doing = 1;
+    Done = 2;
 }

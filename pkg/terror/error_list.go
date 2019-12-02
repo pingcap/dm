@@ -406,6 +406,7 @@ const (
 	codeMasterCreateEtcdClient
 	codeMasterMarshalRequest
 	codeMasterUnmarshalResponse
+	codeMasterOperateNotHandle
 )
 
 // DM-worker error code
@@ -868,6 +869,7 @@ var (
 	ErrMasterCreateEtcdClient        = New(codeMasterCreateEtcdClient, ClassDMMaster, ScopeInternal, LevelHigh, "fail to create etcd client")
 	ErrMasterMarshalRequest          = New(codeMasterMarshalRequest, ClassDMMaster, ScopeInternal, LevelHigh, "fail to marshal request: %v")
 	ErrMasterUnmarshalResponse       = New(codeMasterUnmarshalResponse, ClassDMMaster, ScopeInternal, LevelHigh, "fail to unmarshal response")
+	ErrMasterOperateNotHandle        = New(codeMasterOperateNotHandle, ClassDMMaster, ScopeInternal, LevelMedium, "operate %v is not handled, maybe no DM-master leader")
 
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set")

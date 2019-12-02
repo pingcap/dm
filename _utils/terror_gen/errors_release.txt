@@ -334,6 +334,7 @@ ErrMasterWriteEtcd,[code=38046:class=dm-master:scope=internal:level=high],"fail 
 ErrMasterCreateEtcdClient,[code=38047:class=dm-master:scope=internal:level=high],"fail to create etcd client"
 ErrMasterMarshalRequest,[code=38048:class=dm-master:scope=internal:level=high],"fail to marshal request: %v"
 ErrMasterUnmarshalResponse,[code=38049:class=dm-master:scope=internal:level=high],"fail to unmarshal response"
+ErrMasterOperateNotHandle,[code=38050:class=dm-master:scope=internal:level=medium],"operate %v is not handled, maybe no DM-master leader"
 ErrWorkerParseFlagSet,[code=40001:class=dm-worker:scope=internal:level=medium],"parse dm-worker config flag set"
 ErrWorkerInvalidFlag,[code=40002:class=dm-worker:scope=internal:level=medium],"'%s' is an invalid flag"
 ErrWorkerDecodeConfigFromFile,[code=40003:class=dm-worker:scope=internal:level=medium],"toml decode file"
