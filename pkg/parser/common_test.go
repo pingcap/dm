@@ -64,6 +64,7 @@ var sqls = []string{
 	"alter table `t1` partition by list columns (a, b) (partition x values in ((10, 20)))",
 	"alter table `t1` partition by list (a) (partition x default)",
 	"alter table `t1` partition by system_time (partition x history, partition y current)",
+	"alter database `test` charset utf8mb4",
 }
 
 func TestSuite(t *testing.T) {
@@ -135,6 +136,7 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 		{"ALTER TABLE `test`.`t1` PARTITION BY LIST COLUMNS (`a`,`b`) (PARTITION `x` VALUES IN ((10, 20)))"},
 		{"ALTER TABLE `test`.`t1` PARTITION BY LIST (`a`) (PARTITION `x` DEFAULT)"},
 		{"ALTER TABLE `test`.`t1` PARTITION BY SYSTEM_TIME (PARTITION `x` HISTORY,PARTITION `y` CURRENT)"},
+		{"ALTER DATABASE `test` CHARACTER SET = utf8mb4"},
 	}
 
 	expectedTableName := [][][]*filter.Table{
@@ -178,6 +180,7 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 		{{genTableName("test", "t1")}},
 		{{genTableName("test", "t1")}},
 		{{genTableName("test", "t1")}},
+		{{genTableName("test", "")}},
 	}
 
 	targetTableNames := [][][]*filter.Table{
@@ -221,6 +224,7 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 		{{genTableName("xtest", "xt1")}},
 		{{genTableName("xtest", "xt1")}},
 		{{genTableName("xtest", "xt1")}},
+		{{genTableName("xtest", "")}},
 	}
 
 	targetSQLs := [][]string{
@@ -264,6 +268,7 @@ func (t *testParserSuite) TestResolveDDL(c *C) {
 		{"ALTER TABLE `xtest`.`xt1` PARTITION BY LIST COLUMNS (`a`,`b`) (PARTITION `x` VALUES IN ((10, 20)))"},
 		{"ALTER TABLE `xtest`.`xt1` PARTITION BY LIST (`a`) (PARTITION `x` DEFAULT)"},
 		{"ALTER TABLE `xtest`.`xt1` PARTITION BY SYSTEM_TIME (PARTITION `x` HISTORY,PARTITION `y` CURRENT)"},
+		{"ALTER DATABASE `xtest` CHARACTER SET = utf8mb4"},
 	}
 
 	for i, sql := range sqls {

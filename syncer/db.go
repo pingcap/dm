@@ -31,6 +31,7 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser"
 	tmysql "github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
@@ -183,7 +184,7 @@ func (conn *DBConn) querySQL(tctx *tcontext.Context, query string, args ...inter
 				sqlRetriesTotal.WithLabelValues("query", conn.cfg.Name).Add(1)
 				return true
 			}
-			if retry.IsRetryableError(err) {
+			if dbutil.IsRetryableError(err) {
 				tctx.L().Warn("query statement", zap.Int("retry", retryTime),
 					zap.String("query", utils.TruncateString(query, -1)),
 					zap.String("argument", utils.TruncateInterface(args, -1)))
@@ -238,7 +239,7 @@ func (conn *DBConn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError fun
 				sqlRetriesTotal.WithLabelValues("stmt_exec", conn.cfg.Name).Add(1)
 				return true
 			}
-			if retry.IsRetryableError(err) {
+			if dbutil.IsRetryableError(err) {
 				tctx.L().Warn("execute statements", zap.Int("retry", retryTime),
 					zap.String("queries", utils.TruncateInterface(queries, -1)),
 					zap.String("arguments", utils.TruncateInterface(args, -1)))

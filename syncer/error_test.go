@@ -14,18 +14,14 @@
 package syncer
 
 import (
-	"database/sql/driver"
-
 	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
-	gmysql "github.com/siddontang/go-mysql/mysql"
 
 	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/context"
 	tcontext "github.com/pingcap/dm/pkg/context"
-	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
@@ -33,33 +29,6 @@ func newMysqlErr(number uint16, message string) *mysql.MySQLError {
 	return &mysql.MySQLError{
 		Number:  number,
 		Message: message,
-	}
-}
-
-func (s *testSyncerSuite) TestIsRetryableError(c *C) {
-	cases := []struct {
-		err         error
-		isRetryable bool
-	}{
-		{newMysqlErr(tmysql.ErrNoDB, "no baseConn error"), false},
-		{errors.New("unknown error"), false},
-		{newMysqlErr(tmysql.ErrDBCreateExists, "baseConn already exists"), false},
-		{driver.ErrBadConn, false},
-		{newMysqlErr(gmysql.ER_LOCK_DEADLOCK, "Deadlock found when trying to get lock; try restarting transaction"), true},
-		{newMysqlErr(tmysql.ErrPDServerTimeout, "pd server timeout"), true},
-		{newMysqlErr(tmysql.ErrTiKVServerTimeout, "tikv server timeout"), true},
-		{newMysqlErr(tmysql.ErrTiKVServerBusy, "tikv server busy"), true},
-		{newMysqlErr(tmysql.ErrResolveLockTimeout, "resolve lock timeout"), true},
-		{newMysqlErr(tmysql.ErrRegionUnavailable, "region unavailable"), true},
-		{newMysqlErr(tmysql.ErrUnknown, "i/o timeout"), false},
-		{newMysqlErr(tmysql.ErrUnknown, "can't drop column with index"), false},
-		{newMysqlErr(tmysql.ErrUnknown, "Information schema is out of date"), true},
-		{newMysqlErr(tmysql.ErrUnknown, "Information schema is changed"), true},
-	}
-
-	for _, t := range cases {
-		c.Logf("err %v, expected %v", t.err, t.isRetryable)
-		c.Assert(retry.IsRetryableError(t.err), Equals, t.isRetryable)
 	}
 }
 
