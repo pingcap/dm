@@ -1247,6 +1247,13 @@ func (s *Server) refreshWorkerTasks(ctx context.Context, req *pb.RefreshWorkerTa
 func (s *Server) ShowMasterLeader(ctx context.Context, req *pb.ShowMasterLeaderRequest) (*pb.ShowMasterLeaderResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "ShowMasterLeader"))
 
+	if s.election == nil {
+		return &pb.ShowMasterLeaderResponse{
+			Result: false,
+			Msg:    "no leader",
+		}, nil
+	}
+
 	_, leaderID, err := s.election.LeaderInfo(ctx)
 	if err != nil {
 		return &pb.ShowMasterLeaderResponse{
@@ -2364,6 +2371,11 @@ func (s *Server) WatchRequest(ctx context.Context) {
 }
 
 func (s *Server) handleRequest(path string, operate *pb.Operate) {
+	beginTime := time.Now()
+	defer func() {
+		log.L().Debug("handleRequest", zap.Reflect("operate", operate), zap.Duration("cost time", time.Since(beginTime)))
+	}()
+
 	// update operate's stage to Doing and update etcd
 	operate.Stage = pb.OperateStage_Doing
 	operateBytes, err := operate.Marshal()
@@ -2372,7 +2384,7 @@ func (s *Server) handleRequest(path string, operate *pb.Operate) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	err = s.etcdClient.Update(ctx, path, string(operateBytes), 0)
 	if err != nil {
@@ -2669,6 +2681,7 @@ func (s *Server) saveRequestAndWaitResponse(ctx context.Context, tp pb.OperateTy
 				}
 
 				if operate.Stage == pb.OperateStage_Doing {
+					log.L().Debug("operate is doing", zap.Reflect("request", request))
 					operateIsDoing = true
 					continue
 				}
