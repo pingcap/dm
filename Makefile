@@ -11,7 +11,6 @@ GOTEST   := CGO_ENABLED=1 $(GO) test
 PACKAGES  := $$(go list ./... | grep -vE 'tests|cmd|vendor|pbmock')
 FILES    := $$(find . -name "*.go" | grep -vE "vendor")
 TOPDIRS  := $$(ls -d */ | grep -vE "vendor")
-SHELL    := /usr/bin/env bash
 TEST_DIR := /tmp/dm_test
 FAILPOINT_DIR := $$(for p in $(PACKAGES); do echo $${p\#"github.com/pingcap/dm/"}; done)
 FAILPOINT := bin/failpoint-ctl
