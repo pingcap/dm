@@ -271,9 +271,9 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 		// specify only start task on partial dm-workers
 		workerCfg := make(map[string]*config.SubTaskConfig)
 		for _, stCfg := range stCfgs {
-			worker, ok := s.cfg.DeployMap[stCfg.SourceID]
-			if ok {
-				workerCfg[worker] = stCfg
+			workers := s.wcHub.GetWorkersBySourceID(stCfg.SourceID)
+			if len(workers) > 0 {
+				workerCfg[workers[0]] = stCfg // only 1 DM-worker for 1 source supported now
 			}
 		}
 		stCfgs = make([]*config.SubTaskConfig, 0, len(req.Workers))
@@ -457,9 +457,9 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 		// if worker not exist, an error message will return
 		workerCfg := make(map[string]*config.SubTaskConfig)
 		for _, stCfg := range stCfgs {
-			worker, ok := s.cfg.DeployMap[stCfg.SourceID]
-			if ok {
-				workerCfg[worker] = stCfg
+			workers := s.wcHub.GetWorkersBySourceID(stCfg.SourceID)
+			if len(workers) > 0 {
+				workerCfg[workers[0]] = stCfg // only 1 DM-worker for 1 source supported now
 			} // only record existed workers
 		}
 		stCfgs = make([]*config.SubTaskConfig, 0, len(req.Workers))
@@ -1780,11 +1780,11 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 	// get workerID from deploy map by sourceID, refactor this when dynamic add/remove worker supported.
 	workerIDs := make([]string, 0, len(cfg.MySQLInstances))
 	for _, inst := range cfg.MySQLInstances {
-		workerID, ok := s.cfg.DeployMap[inst.SourceID]
-		if !ok {
+		workerIDs2 := s.wcHub.GetWorkersBySourceID(inst.SourceID)
+		if len(workerIDs2) == 0 {
 			return nil, nil, terror.ErrMasterTaskConfigExtractor.Generatef("%s relevant worker not found", inst.SourceID)
 		}
-		workerIDs = append(workerIDs, workerID)
+		workerIDs = append(workerIDs, workerIDs2[0]) // only 1 DM-worker for 1 source supported now
 	}
 
 	sourceCfgs, err := s.getWorkerConfigs(ctx, workerIDs)
@@ -1892,9 +1892,13 @@ func (s *Server) taskConfigArgsExtractor(args ...interface{}) (workerrpc.Client,
 		return nil, "", "", "", handleErr(terror.ErrMasterTaskConfigExtractor.Generatef("args[0] is not SubTaskConfig: %v", args[0]))
 	}
 
-	worker, ok1 := s.cfg.DeployMap[cfg.SourceID]
+	workers := s.wcHub.GetWorkersBySourceID(cfg.SourceID)
+	if len(workers) == 0 {
+		return nil, "", "", "", handleErr(terror.ErrMasterTaskConfigExtractor.Generatef("%s relevant worker-client not found", cfg.SourceID))
+	}
+	worker := workers[0] // only 1 DM-worker for 1 source supported now
 	cli := s.wcHub.GetClientByWorker(worker)
-	if !ok1 || cli == nil {
+	if cli == nil {
 		return nil, "", "", "", handleErr(terror.ErrMasterTaskConfigExtractor.Generatef("%s relevant worker-client not found", worker))
 	}
 

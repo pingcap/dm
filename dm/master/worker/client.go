@@ -126,6 +126,28 @@ func (h *ClientHub) GetClientsBySourceID(sourceID string) []workerrpc.Client {
 	return clis
 }
 
+// GetWorkersBySourceID returns a list of worker address associated with the specified source-id.
+func (h *ClientHub) GetWorkersBySourceID(sourceID string) []string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	addrs, ok := h.workersAddr[sourceID]
+	if !ok {
+		return nil
+	}
+	ret := make([]string, len(addrs))
+	copy(ret, addrs)
+	return ret
+}
+
+// SetWorkersForSourceID sets the list of worker address associated with the specified source-id.
+// This method is only used for testing.
+func (h *ClientHub) SetWorkersForSourceID(sourceID string, workers []string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.workersAddr[sourceID] = workers
+}
+
 // AllWorkers returns the address of all DM-worker instances.
 // This method is use to compatible with non-HA version of DM-worker,
 // and may be removed later.

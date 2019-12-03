@@ -202,6 +202,7 @@ func testMockWorkerConfig(c *check.C, server *Server, ctrl *gomock.Controller, p
 			SourceID: deploy.Source,
 			Content:  rawConfig,
 		}, nil)
+		server.wcHub.SetWorkersForSourceID(deploy.Source, []string{deploy.Worker})
 		server.wcHub.SetClientForWorker(deploy.Worker, newMockRPCClient(mockWorkerClient))
 	}
 }
@@ -269,7 +270,7 @@ func testMockStartTask(c *check.C, server *Server, ctrl *gomock.Controller, work
 				Log:  &pb.TaskLog{Id: logID, Ts: time.Now().Unix(), Success: true},
 			}, nil).MaxTimes(maxRetryNum)
 		}
-
+		server.wcHub.SetWorkersForSourceID(deploy.Source, []string{deploy.Worker})
 		server.wcHub.SetClientForWorker(deploy.Worker, newMockRPCClient(mockWorkerClient))
 	}
 }

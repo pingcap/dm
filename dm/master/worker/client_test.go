@@ -33,6 +33,7 @@ func (t *testWorkerClient) TestClientHub(c *C) {
 	var (
 		source1   = "source-1"
 		worker1   = "127.0.0.1:8262"
+		source2   = "not-exists"
 		worker2   = "not-exists"
 		deployMap = map[string]string{
 			source1: worker1,
@@ -46,9 +47,12 @@ func (t *testWorkerClient) TestClientHub(c *C) {
 	// source with 1 dm-worker
 	clis := hub.GetClientsBySourceID(source1)
 	c.Assert(clis, HasLen, 1)
+	workers := hub.GetWorkersBySourceID(source1)
+	c.Assert(workers, HasLen, 1)
+	c.Assert(workers[0], Equals, worker1)
 	cli := hub.GetClientByWorker(worker1)
 	c.Assert(cli, DeepEquals, clis[0])
-	workers := hub.AllWorkers()
+	workers = hub.AllWorkers()
 	c.Assert(workers, HasLen, 1)
 	c.Assert(workers[0], Equals, worker1)
 	allClis := hub.AllClients()
@@ -56,16 +60,24 @@ func (t *testWorkerClient) TestClientHub(c *C) {
 	c.Assert(allClis[worker1], DeepEquals, clis[0])
 
 	// source without dm-worker
-	c.Assert(hub.GetClientsBySourceID("not-exists"), HasLen, 0)
-
+	c.Assert(hub.GetClientsBySourceID(source2), HasLen, 0)
+	c.Assert(hub.GetWorkersBySourceID(source2), HasLen, 0)
+	hub.SetWorkersForSourceID(source2, []string{worker1})
+	workers = hub.GetWorkersBySourceID(source2)
+	c.Assert(workers, HasLen, 1)
+	c.Assert(workers[0], Equals, worker1)
 	// not exists dm-worker
 	c.Assert(hub.GetClientByWorker(worker2), IsNil)
 	hub.SetClientForWorker(worker2, cli)
 	c.Assert(hub.GetClientByWorker(worker2), Equals, cli)
+	// dm-worker and client are set manually
+	clis = hub.GetClientsBySourceID(source2)
+	c.Assert(clis, HasLen, 1)
+	c.Assert(clis[0], Equals, cli)
 
 	hub.Close()
-	workers = hub.AllWorkers()
-	c.Assert(workers, HasLen, 0)
+	c.Assert(hub.AllWorkers(), HasLen, 0)
+	c.Assert(hub.AllClients(), HasLen, 0)
 
 	hub.Close() // try close again
 }
