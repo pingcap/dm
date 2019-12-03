@@ -90,7 +90,7 @@ func (l Logger) ErrorFilterContextCanceled(msg string, fields ...zap.Field) {
 			}
 		}
 	}
-	l.Logger.Error(msg, fields...)
+	l.Logger.WithOptions(zap.AddCallerSkip(1)).Error(msg, fields...)
 }
 
 // logger for DM
