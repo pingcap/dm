@@ -2648,7 +2648,7 @@ func (s *Server) saveRequestAndWaitResponse(ctx context.Context, tp pb.OperateTy
 	}
 
 	watchCh := s.etcdClient.Watch(ctx, keyPath, revision+1)
-	tiker := time.NewTicker(5 * time.Second)
+	tiker := time.NewTicker(10 * time.Second)
 	operateIsDoing := false
 
 	for {
@@ -2656,8 +2656,10 @@ func (s *Server) saveRequestAndWaitResponse(ctx context.Context, tp pb.OperateTy
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-tiker.C:
+			// when leader handle the request, will update the stage to doing firstly. if more than 10 seconds this operate's stage is not changed,
+			// we can assume that the operate is not handled because no leader
 			if !operateIsDoing {
-				return terror.ErrMasterOperateNotHandle.Generatef("operate %v is not handled, maybe no DM-master leader")
+				return terror.ErrMasterOperateNotHandle.Generate("operate is not handled, maybe no DM-master leader, please execute 'show-master-leader' to make sure leader exist, and then execute command again")
 			}
 		case wresp, ok := <-watchCh:
 			if !ok {

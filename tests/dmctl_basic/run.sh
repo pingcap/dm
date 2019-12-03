@@ -105,6 +105,7 @@ function run() {
     run_dm_master $WORK_DIR/master $MASTER_PORT $dm_master_conf
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 
+    show_master_leader_success
     pause_relay_success
     query_status_stopped_relay
     pause_relay_fail
