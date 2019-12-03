@@ -207,7 +207,7 @@ type RemoteCheckPoint struct {
 	globalPoint         *binlogPoint
 	globalPointSaveTime time.Time
 
-	tctx *tcontext.Context
+	logCtx *tcontext.Context
 }
 
 // NewRemoteCheckPoint creates a new RemoteCheckPoint
@@ -219,7 +219,7 @@ func NewRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id s
 		id:          id,
 		points:      make(map[string]map[string]*binlogPoint),
 		globalPoint: newBinlogPoint(minCheckpoint, minCheckpoint),
-		tctx:        tctx.WithLogger(tctx.L().WithFields(zap.String("component", "remote checkpoint"))),
+		logCtx:      tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("component", "remote checkpoint"))),
 	}
 
 	return cp
@@ -241,7 +241,7 @@ func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context) error {
 
 // Close implements CheckPoint.Close
 func (cp *RemoteCheckPoint) Close() {
-	closeBaseDB(cp.tctx, cp.db)
+	closeBaseDB(cp.logCtx, cp.db)
 }
 
 // ResetConn implements CheckPoint.ResetConn
@@ -283,7 +283,7 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, pos
 	}
 
 	// we save table checkpoint while we meet DDL or DML
-	cp.tctx.L().Debug("save table checkpoint", zap.Stringer("position", pos), zap.String("schema", sourceSchema), zap.String("table", sourceTable))
+	cp.logCtx.L().Debug("save table checkpoint", zap.Stringer("position", pos), zap.String("schema", sourceSchema), zap.String("table", sourceTable))
 	mSchema, ok := cp.points[sourceSchema]
 	if !ok {
 		mSchema = make(map[string]*binlogPoint)
@@ -294,7 +294,7 @@ func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, pos
 		mSchema[sourceTable] = newBinlogPoint(pos, minCheckpoint)
 	} else {
 		if err := point.save(pos); err != nil {
-			cp.tctx.L().Error("fail to save table point", zap.String("schema", sourceSchema), zap.String("table", sourceTable), log.ShortError(err))
+			cp.logCtx.L().Error("fail to save table point", zap.String("schema", sourceSchema), zap.String("table", sourceTable), log.ShortError(err))
 		}
 	}
 }
@@ -312,7 +312,7 @@ func (cp *RemoteCheckPoint) DeleteTablePoint(tctx *tcontext.Context, sourceSchem
 		return nil
 	}
 
-	cp.tctx.L().Info("delete table checkpoint", zap.String("schema", sourceSchema), zap.String("table", sourceTable))
+	cp.logCtx.L().Info("delete table checkpoint", zap.String("schema", sourceSchema), zap.String("table", sourceTable))
 	// delete  checkpoint
 	sql2 := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `id` = '%s' AND `cp_schema` = '%s' AND `cp_table` = '%s'", cp.schema, cp.table, cp.id, sourceSchema, sourceTable)
 	args := make([]interface{}, 0)
@@ -345,9 +345,9 @@ func (cp *RemoteCheckPoint) SaveGlobalPoint(pos mysql.Position) {
 	cp.Lock()
 	defer cp.Unlock()
 
-	cp.tctx.L().Debug("save global checkpoint", zap.Stringer("position", pos))
+	cp.logCtx.L().Debug("save global checkpoint", zap.Stringer("position", pos))
 	if err := cp.globalPoint.save(pos); err != nil {
-		cp.tctx.L().Error("fail to save global checkpoint", log.ShortError(err))
+		cp.logCtx.L().Error("fail to save global checkpoint", log.ShortError(err))
 	}
 }
 
@@ -445,7 +445,7 @@ func (cp *RemoteCheckPoint) Rollback() {
 	cp.globalPoint.rollback()
 	for schema, mSchema := range cp.points {
 		for table, point := range mSchema {
-			cp.tctx.L().Info("rollback checkpoint", log.WrapStringerField("checkpoint", point), zap.String("schema", schema), zap.String("table", table))
+			cp.logCtx.L().Info("rollback checkpoint", log.WrapStringerField("checkpoint", point), zap.String("schema", schema), zap.String("table", table))
 			point.rollback()
 		}
 	}
@@ -466,7 +466,7 @@ func (cp *RemoteCheckPoint) createSchema(tctx *tcontext.Context) error {
 	sql2 := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", cp.schema)
 	args := make([]interface{}, 0)
 	_, err := cp.dbConn.executeSQL(tctx, []string{sql2}, [][]interface{}{args}...)
-	cp.tctx.L().Info("create checkpoint schema", zap.String("statement", sql2))
+	cp.logCtx.L().Info("create checkpoint schema", zap.String("statement", sql2))
 	return err
 }
 
@@ -485,7 +485,7 @@ func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
 		)`, tableName)
 	args := make([]interface{}, 0)
 	_, err := cp.dbConn.executeSQL(tctx, []string{sql2}, [][]interface{}{args}...)
-	cp.tctx.L().Info("create checkpoint table", zap.String("statement", sql2))
+	cp.logCtx.L().Info("create checkpoint table", zap.String("statement", sql2))
 	return err
 }
 
@@ -529,7 +529,7 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context) error {
 		if isGlobal {
 			if pos.Compare(minCheckpoint) > 0 {
 				cp.globalPoint = newBinlogPoint(pos, pos)
-				cp.tctx.L().Info("fetch global checkpoint from DB", log.WrapStringerField("global checkpoint", cp.globalPoint))
+				cp.logCtx.L().Info("fetch global checkpoint from DB", log.WrapStringerField("global checkpoint", cp.globalPoint))
 			}
 			continue // skip global checkpoint
 		}
@@ -560,7 +560,7 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 	case config.ModeIncrement:
 		// load meta from task config
 		if cp.cfg.Meta == nil {
-			cp.tctx.L().Warn("don't set meta in increment task-mode")
+			cp.logCtx.L().Warn("don't set meta in increment task-mode")
 			return nil
 		}
 		pos = &mysql.Position{
@@ -575,7 +575,7 @@ func (cp *RemoteCheckPoint) LoadMeta() error {
 	// if meta loaded, we will start syncing from meta's pos
 	if pos != nil {
 		cp.globalPoint = newBinlogPoint(*pos, *pos)
-		cp.tctx.L().Info("loaded checkpoints from meta", log.WrapStringerField("global checkpoint", cp.globalPoint))
+		cp.logCtx.L().Info("loaded checkpoints from meta", log.WrapStringerField("global checkpoint", cp.globalPoint))
 	}
 
 	return nil
@@ -598,6 +598,6 @@ func (cp *RemoteCheckPoint) genUpdateSQL(cpSchema, cpTable string, binlogName st
 func (cp *RemoteCheckPoint) parseMetaData() (*mysql.Position, error) {
 	// `metadata` is mydumper's output meta file name
 	filename := path.Join(cp.cfg.Dir, "metadata")
-	cp.tctx.L().Info("parsing metadata from file", zap.String("file", filename))
+	cp.logCtx.L().Info("parsing metadata from file", zap.String("file", filename))
 	return utils.ParseMetaData(filename)
 }

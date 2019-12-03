@@ -1033,7 +1033,6 @@ func (s *testSyncerSuite) TestExecErrors(c *C) {
 
 func (s *testSyncerSuite) TestCasuality(c *C) {
 	var wg sync.WaitGroup
-	tctx := tcontext.Background()
 	s.cfg.WorkerCount = 1
 	syncer := NewSyncer(s.cfg)
 	syncer.jobs = []chan *job{make(chan *job, 1)}
@@ -1046,16 +1045,16 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 		syncer.jobWg.Done()
 	}()
 
-	key, err := syncer.resolveCasuality(tctx, []string{"a"})
+	key, err := syncer.resolveCasuality([]string{"a"})
 	c.Assert(err, IsNil)
 	c.Assert(key, Equals, "a")
 
-	key, err = syncer.resolveCasuality(tctx, []string{"b"})
+	key, err = syncer.resolveCasuality([]string{"b"})
 	c.Assert(err, IsNil)
 	c.Assert(key, Equals, "b")
 
 	// will detect casuality and add a flush job
-	key, err = syncer.resolveCasuality(tctx, []string{"a", "b"})
+	key, err = syncer.resolveCasuality([]string{"a", "b"})
 	c.Assert(err, IsNil)
 	c.Assert(key, Equals, "a")
 
