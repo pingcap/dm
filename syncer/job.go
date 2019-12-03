@@ -18,7 +18,6 @@ import (
 
 	"github.com/siddontang/go-mysql/mysql"
 
-	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/gtid"
 )
 
@@ -60,7 +59,6 @@ func (t opType) String() string {
 }
 
 type job struct {
-	tctx         *tcontext.Context
 	tp           opType
 	sourceSchema string
 	sourceTable  string
@@ -84,13 +82,12 @@ func (j *job) String() string {
 	return fmt.Sprintf("tp: %s, sql: %s, args: %v, key: %s, ddls: %s, last_pos: %s, current_pos: %s, gtid:%v", j.tp, j.sql, j.args, j.key, j.ddls, j.pos, j.currentPos, j.gtidSet)
 }
 
-func newJob(tctx *tcontext.Context, tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, pos, cmdPos mysql.Position, currentGtidSet gtid.Set, traceID string) *job {
+func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql string, args []interface{}, key string, pos, cmdPos mysql.Position, currentGtidSet gtid.Set, traceID string) *job {
 	var gs gtid.Set
 	if currentGtidSet != nil {
 		gs = currentGtidSet.Clone()
 	}
 	return &job{
-		tctx:         tctx,
 		tp:           tp,
 		sourceSchema: sourceSchema,
 		sourceTable:  sourceTable,
@@ -107,13 +104,12 @@ func newJob(tctx *tcontext.Context, tp opType, sourceSchema, sourceTable, target
 	}
 }
 
-func newDDLJob(tctx *tcontext.Context, ddlInfo *shardingDDLInfo, ddls []string, pos, cmdPos mysql.Position, currentGtidSet gtid.Set, ddlExecItem *DDLExecItem, traceID string) *job {
+func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, pos, cmdPos mysql.Position, currentGtidSet gtid.Set, ddlExecItem *DDLExecItem, traceID string) *job {
 	var gs gtid.Set
 	if currentGtidSet != nil {
 		gs = currentGtidSet.Clone()
 	}
 	j := &job{
-		tctx:        tctx,
 		tp:          ddl,
 		ddls:        ddls,
 		pos:         pos,
@@ -137,13 +133,12 @@ func newDDLJob(tctx *tcontext.Context, ddlInfo *shardingDDLInfo, ddls []string, 
 	return j
 }
 
-func newXIDJob(tctx *tcontext.Context, pos, cmdPos mysql.Position, currentGtidSet gtid.Set, traceID string) *job {
+func newXIDJob(pos, cmdPos mysql.Position, currentGtidSet gtid.Set, traceID string) *job {
 	var gs gtid.Set
 	if currentGtidSet != nil {
 		gs = currentGtidSet.Clone()
 	}
 	return &job{
-		tctx:       tctx,
 		tp:         xid,
 		pos:        pos,
 		currentPos: cmdPos,
@@ -152,16 +147,14 @@ func newXIDJob(tctx *tcontext.Context, pos, cmdPos mysql.Position, currentGtidSe
 	}
 }
 
-func newFlushJob(tctx *tcontext.Context) *job {
+func newFlushJob() *job {
 	return &job{
-		tctx: tctx,
-		tp:   flush,
+		tp: flush,
 	}
 }
 
-func newSkipJob(tctx *tcontext.Context, pos mysql.Position, currentGtidSet gtid.Set) *job {
+func newSkipJob(pos mysql.Position, currentGtidSet gtid.Set) *job {
 	return &job{
-		tctx:    tctx,
 		tp:      skip,
 		pos:     pos,
 		gtidSet: currentGtidSet,

@@ -91,18 +91,18 @@ type OnlineDDLStorage struct {
 	// map ghost schema => [ghost table => ghost ddl info, ...]
 	ddls map[string]map[string]*GhostDDLInfo
 
-	tctx *tcontext.Context
+	logCtx *tcontext.Context
 }
 
 // NewOnlineDDLStorage creates a new online ddl storager
-func NewOnlineDDLStorage(newtctx *tcontext.Context, cfg *config.SubTaskConfig) *OnlineDDLStorage {
+func NewOnlineDDLStorage(logCtx *tcontext.Context, cfg *config.SubTaskConfig) *OnlineDDLStorage {
 	s := &OnlineDDLStorage{
 		cfg:    cfg,
 		schema: cfg.MetaSchema,
 		table:  fmt.Sprintf("%s_onlineddl", cfg.Name),
 		id:     strconv.FormatUint(uint64(cfg.ServerID), 10),
 		ddls:   make(map[string]map[string]*GhostDDLInfo),
-		tctx:   newtctx,
+		logCtx: logCtx,
 	}
 
 	return s
@@ -262,7 +262,7 @@ func (s *OnlineDDLStorage) Close() {
 	s.Lock()
 	defer s.Unlock()
 
-	closeBaseDB(s.tctx, s.db)
+	closeBaseDB(s.logCtx, s.db)
 }
 
 func (s *OnlineDDLStorage) prepare(tctx *tcontext.Context) error {

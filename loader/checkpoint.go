@@ -76,7 +76,7 @@ type RemoteCheckPoint struct {
 	table          string
 	restoringFiles map[string]map[string]FilePosSet
 	finishedTables map[string]struct{}
-	tctx           *tcontext.Context
+	logCtx         *tcontext.Context
 }
 
 func newRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id string) (CheckPoint, error) {
@@ -93,7 +93,7 @@ func newRemoteCheckPoint(tctx *tcontext.Context, cfg *config.SubTaskConfig, id s
 		finishedTables: make(map[string]struct{}),
 		schema:         cfg.MetaSchema,
 		table:          fmt.Sprintf("%s_loader_checkpoint", cfg.Name),
-		tctx:           tctx.WithLogger(tctx.L().WithFields(zap.String("component", "remote checkpoint"))),
+		logCtx:         tcontext.Background().WithLogger(tctx.L().WithFields(zap.String("component", "remote checkpoint"))),
 	}
 
 	err = cp.prepare(tctx)
@@ -145,7 +145,7 @@ func (cp *RemoteCheckPoint) createTable(tctx *tcontext.Context) error {
 func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context) error {
 	begin := time.Now()
 	defer func() {
-		cp.tctx.L().Info("load checkpoint", zap.Duration("cost time", time.Since(begin)))
+		cp.logCtx.L().Info("load checkpoint", zap.Duration("cost time", time.Since(begin)))
 	}()
 
 	query := fmt.Sprintf("SELECT `filename`,`cp_schema`,`cp_table`,`offset`,`end_pos` from `%s`.`%s` where `id`=?", cp.schema, cp.table)
@@ -246,14 +246,14 @@ func (cp *RemoteCheckPoint) CalcProgress(allFiles map[string]Tables2DataFiles) e
 		}
 	}
 
-	cp.tctx.L().Info("calculate checkpoint finished.", zap.Reflect("finished tables", cp.finishedTables))
+	cp.logCtx.L().Info("calculate checkpoint finished.", zap.Reflect("finished tables", cp.finishedTables))
 	return nil
 }
 
 func (cp *RemoteCheckPoint) allFilesFinished(files map[string][]int64) bool {
 	for file, pos := range files {
 		if len(pos) != 2 {
-			cp.tctx.L().Error("unexpected checkpoint record", zap.String("data file", file), zap.Int64s("position", pos))
+			cp.logCtx.L().Error("unexpected checkpoint record", zap.String("data file", file), zap.Int64s("position", pos))
 			return false
 		}
 		if pos[0] != pos[1] {
@@ -277,7 +277,7 @@ func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context, filename string, endPos
 
 	// fields[0] -> db name, fields[1] -> table name
 	sql2 := fmt.Sprintf("INSERT INTO `%s`.`%s` (`id`, `filename`, `cp_schema`, `cp_table`, `offset`, `end_pos`) VALUES(?,?,?,?,?,?)", cp.schema, cp.table)
-	cp.tctx.L().Debug("initial checkpoint record",
+	cp.logCtx.L().Debug("initial checkpoint record",
 		zap.String("sql", sql2),
 		zap.String("id", cp.id),
 		zap.String("filename", filename),
@@ -289,7 +289,7 @@ func (cp *RemoteCheckPoint) Init(tctx *tcontext.Context, filename string, endPos
 	err := cp.conn.executeSQL(tctx, []string{sql2}, args)
 	if err != nil {
 		if isErrDupEntry(err) {
-			cp.tctx.L().Info("checkpoint record already exists, skip it.", zap.String("id", cp.id), zap.String("filename", filename))
+			cp.logCtx.L().Info("checkpoint record already exists, skip it.", zap.String("id", cp.id), zap.String("filename", filename))
 			return nil
 		}
 		return terror.WithScope(terror.Annotate(err, "initialize checkpoint"), terror.ScopeDownstream)
@@ -306,7 +306,7 @@ func (cp *RemoteCheckPoint) ResetConn(tctx *tcontext.Context) error {
 func (cp *RemoteCheckPoint) Close() {
 	err := cp.db.Close()
 	if err != nil {
-		cp.tctx.L().Error("close checkpoint db", log.ShortError(err))
+		cp.logCtx.L().Error("close checkpoint db", log.ShortError(err))
 	}
 }
 
@@ -342,14 +342,14 @@ func (cp *RemoteCheckPoint) Count(tctx *tcontext.Context) (int, error) {
 	if rows.Err() != nil {
 		return 0, terror.WithScope(terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError), terror.ScopeDownstream)
 	}
-	cp.tctx.L().Debug("checkpoint record", zap.Int("count", count))
+	cp.logCtx.L().Debug("checkpoint record", zap.Int("count", count))
 	return count, nil
 }
 
 func (cp *RemoteCheckPoint) String() string {
 	// `String` is often used to log something, it's not a big problem even fail,
 	// so 1min should be enough.
-	tctx2, cancel := cp.tctx.WithTimeout(time.Minute)
+	tctx2, cancel := cp.logCtx.WithTimeout(time.Minute)
 	defer cancel()
 
 	if err := cp.Load(tctx2); err != nil {
