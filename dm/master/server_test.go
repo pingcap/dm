@@ -170,6 +170,7 @@ func testDefaultMasterServer(c *check.C) (*Server, context.CancelFunc) {
 	server.etcdClient = etcdClient
 	ctx, cancel := context.WithCancel(context.Background())
 	server.election = &election.Election{}
+	// only leader handle request, and only one master server in unit test, so we can set this master as leader.
 	server.election.SetIsLeader(true)
 
 	go server.ap.Start(ctx)
