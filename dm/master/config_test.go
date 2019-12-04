@@ -241,13 +241,13 @@ func (t *testConfigSuite) TestGenEmbedEtcdConfig(c *check.C) {
 	c.Assert(cfg1.adjust(), check.IsNil)
 	etcdCfg, err := cfg1.genEmbedEtcdConfig()
 	c.Assert(err, check.IsNil)
-	c.Assert(etcdCfg.Name, check.Equals, fmt.Sprintf("dm-master-%s", hostname))
+	c.Assert(etcdCfg.Name, check.Equals, fmt.Sprintf("dm-master-%s-8261", hostname))
 	c.Assert(etcdCfg.Dir, check.Equals, fmt.Sprintf("default.%s", etcdCfg.Name))
 	c.Assert(etcdCfg.LCUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "0.0.0.0:8261"}})
 	c.Assert(etcdCfg.ACUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "0.0.0.0:8261"}})
 	c.Assert(etcdCfg.LPUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "127.0.0.1:8291"}})
 	c.Assert(etcdCfg.APUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "127.0.0.1:8291"}})
-	c.Assert(etcdCfg.InitialCluster, check.DeepEquals, fmt.Sprintf("dm-master-%s=http://127.0.0.1:8291", hostname))
+	c.Assert(etcdCfg.InitialCluster, check.DeepEquals, fmt.Sprintf("dm-master-%s-8261=http://127.0.0.1:8291", hostname))
 	c.Assert(etcdCfg.ClusterState, check.Equals, embed.ClusterStateFlagExisting)
 
 	cfg2 := *cfg1
