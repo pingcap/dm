@@ -198,7 +198,7 @@ func (c *Config) configFromFile(path string) error {
 // adjust adjusts configs
 func (c *Config) adjust() error {
 	// MasterAddr's format may be "host:port" or ":port"
-	_, _, err := net.SplitHostPort(c.MasterAddr)
+	_, port, err := net.SplitHostPort(c.MasterAddr)
 	if err != nil {
 		return terror.ErrMasterHostPortNotValid.Delegate(err, c.MasterAddr)
 	}
@@ -242,7 +242,7 @@ func (c *Config) adjust() error {
 		if err != nil {
 			return terror.ErrMasterGetHostnameFail.Delegate(err)
 		}
-		c.Name = fmt.Sprintf("%s-%s", defaultNamePrefix, hostname)
+		c.Name = fmt.Sprintf("%s-%s-%s", defaultNamePrefix, hostname, port)
 	}
 
 	if c.DataDir == "" {

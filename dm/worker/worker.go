@@ -29,10 +29,13 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/election"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/relay/purger"
+	"github.com/pingcap/tidb-tools/pkg/etcd"
+	"github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 var (
@@ -41,6 +44,14 @@ var (
 
 	closedFalse int32
 	closedTrue  int32 = 1
+
+	// the session's TTL in seconds for leader election.
+	// NOTE: select this value carefully when adding a mechanism relying on leader election.
+	electionTTL = 60
+	// the DM-worker leader election key prefix, need append source-id as ekection key
+	electionKeyPrefix = "/dm-worker/leader"
+
+	defaultEtcdTimeout = time.Duration(10 * time.Second)
 )
 
 // Worker manages sub tasks and process units for data migration
@@ -68,6 +79,11 @@ type Worker struct {
 	tracer *tracing.Tracer
 
 	taskStatusChecker TaskStatusChecker
+
+	etcdClient *etcd.Client
+	election   *election.Election
+
+	name string
 }
 
 // NewWorker creates a new Worker
@@ -137,6 +153,15 @@ func NewWorker(cfg *Config) (w *Worker, err error) {
 
 	InitConditionHub(w)
 
+	err = w.createEtcdClient()
+	if err != nil {
+		return nil, err
+	}
+
+	if err = w.createElection(); err != nil {
+		return nil, err
+	}
+
 	err = w.restoreSubTask()
 	if err != nil {
 		return nil, err
@@ -170,12 +195,17 @@ func (w *Worker) Start() {
 		w.tracer.Start()
 	}
 
-	w.wg.Add(2)
+	w.wg.Add(3)
 	defer w.wg.Done()
 
 	go func() {
 		defer w.wg.Done()
 		w.handleTask()
+	}()
+
+	go func() {
+		defer w.wg.Done()
+		w.electionNotify()
 	}()
 
 	w.l.Info("start running")
@@ -903,6 +933,64 @@ Loop:
 			if err != nil {
 				w.l.Error("fail to mark subtask operation", zap.Reflect("oplog", opLog))
 			}
+		}
+	}
+}
+
+// createEtcdClient creates an etcd client for dm-worker server
+func (w *Worker) createEtcdClient() error {
+	ectdEndpoints, err := utils.ParseHostPortAddr(w.cfg.MasterAddrs)
+	if err != nil {
+		return terror.ErrWorkerCreateEtcdClient.Delegate(err)
+	}
+
+	w.etcdClient, err = etcd.NewClientFromCfg(ectdEndpoints, defaultEtcdTimeout, "", nil)
+	if err != nil {
+		return terror.ErrWorkerCreateEtcdClient.Delegate(err)
+	}
+
+	return nil
+}
+
+// createElection creates an election for dm-worker server
+// Note: should create etcdClient before
+func (w *Worker) createElection() (err error) {
+	if w.etcdClient == nil {
+		return terror.ErrWorkerEtcdClientIsNil.Generate("etcd client is nil, can't create election")
+	}
+
+	// start leader election
+	w.election, err = election.NewElection(w.ctx, w.etcdClient.GetClient(), electionTTL, path.Join(electionKeyPrefix, w.cfg.SourceID), w.cfg.Name)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (w *Worker) electionNotify() {
+	for {
+		select {
+		case <-w.ctx.Done():
+			return
+		case leader := <-w.election.LeaderNotify():
+			// output the leader info.
+			if leader {
+				log.L().Info("current member become the leader", zap.String("current member", w.cfg.Name))
+			} else {
+				_, leaderID, err2 := w.election.LeaderInfo(w.ctx)
+				if err2 == nil {
+					log.L().Info("current member retire from the leader", zap.String("leader", leaderID), zap.String("current member", w.cfg.Name))
+				} else {
+					log.L().Warn("get leader info", zap.Error(err2))
+				}
+			}
+		case err := <-w.election.ErrorNotify():
+			// handle errors here, we do no meaningful things now.
+			// but maybe:
+			// 1. trigger an alert
+			// 2. shutdown the DM-worker process
+			log.L().Error("receive error from election", zap.Error(err))
 		}
 	}
 }

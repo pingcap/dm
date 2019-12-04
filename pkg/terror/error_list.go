@@ -470,6 +470,9 @@ const (
 	codeWorkerWaitRelayCatchupTimeout
 	codeWorkerRelayIsPurging
 	codeWorkerHostPortNotValid
+	codeWorkerEtcdClientIsNil
+	codeWorkerGetHostnameFail
+	codeWorkerCreateEtcdClient
 )
 
 // DM-tracer error code
@@ -921,6 +924,9 @@ var (
 	ErrWorkerWaitRelayCatchupTimeout = New(codeWorkerWaitRelayCatchupTimeout, ClassDMWorker, ScopeInternal, LevelHigh, "waiting for relay binlog pos to catch up with loader end binlog pos is timeout (exceeding %s), loader end binlog pos: %s, relay binlog pos: %s")
 	ErrWorkerRelayIsPurging          = New(codeWorkerRelayIsPurging, ClassDMWorker, ScopeInternal, LevelHigh, "relay log purger is purging, cannot start sub task %s, please try again later")
 	ErrWorkerHostPortNotValid        = New(codeWorkerHostPortNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "host:port '%s' not valid")
+	ErrWorkerEtcdClientIsNil         = New(codeWorkerEtcdClientIsNil, ClassDMWorker, ScopeInternal, LevelHigh, "etcd client is nil")
+	ErrWorkerGetHostnameFail         = New(codeWorkerGetHostnameFail, ClassDMWorker, ScopeInternal, LevelHigh, "get hostname fail")
+	ErrWorkerCreateEtcdClient        = New(codeWorkerCreateEtcdClient, ClassDMWorker, ScopeInternal, LevelHigh, "fail to create etcd client")
 
 	// DM-tracer error
 	ErrTracerParseFlagSet        = New(codeTracerParseFlagSet, ClassDMTracer, ScopeInternal, LevelMedium, "parse dm-tracer config flag set")
