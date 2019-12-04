@@ -19,6 +19,7 @@ import (
 
 	"github.com/pingcap/check"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	tmysql "github.com/pingcap/parser/mysql"
 
 	"github.com/pingcap/dm/dm/config"
@@ -37,6 +38,11 @@ var (
 )
 
 func (s *testTaskCheckerSuite) TestResumeStrategy(c *check.C) {
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/DisableCreateEtcdClient", `return()`), check.IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/DisableCreateEtcdClient")
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/DisableCreateElection", `return()`), check.IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/DisableCreateElection")
+
 	c.Assert(ResumeSkip.String(), check.Equals, resumeStrategy2Str[ResumeSkip])
 	c.Assert(ResumeStrategy(10000).String(), check.Equals, "unsupported resume strategy: 10000")
 
@@ -76,6 +82,11 @@ func (s *testTaskCheckerSuite) TestResumeStrategy(c *check.C) {
 }
 
 func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/DisableCreateEtcdClient", `return()`), check.IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/DisableCreateEtcdClient")
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/DisableCreateElection", `return()`), check.IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/DisableCreateElection")
+
 	var (
 		latestResumeTime time.Time
 		latestPausedTime time.Time
@@ -200,6 +211,11 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 }
 
 func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/DisableCreateEtcdClient", `return()`), check.IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/DisableCreateEtcdClient")
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/DisableCreateElection", `return()`), check.IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/DisableCreateElection")
+
 	var (
 		task1                 = "task1"
 		task2                 = "tesk2"

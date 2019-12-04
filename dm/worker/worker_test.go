@@ -148,6 +148,10 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/handleTaskInterval")
 	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/mockCreateUnitsDumpOnly", `return(true)`), IsNil)
 	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/mockCreateUnitsDumpOnly")
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/DisableCreateEtcdClient", `return()`), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/DisableCreateEtcdClient")
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/DisableCreateElection", `return()`), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/DisableCreateElection")
 
 	s := NewServer(cfg)
 
@@ -193,4 +197,60 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		}
 		return false
 	}), IsTrue)
+}
+
+func (t *testServer) TestElection(c *C) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	worker1 := &Worker{
+		cfg: &Config{
+			Name:     "dm-worker1",
+			SourceID: "source-1",
+		},
+		ctx: ctx,
+	}
+	worker1.etcdClient = etcdClient
+	err := worker1.createElection()
+	c.Assert(err, IsNil)
+
+	// wait the dm-worker1 become the leader
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+		return worker1.election.IsLeader()
+	}), IsTrue)
+
+	worker2 := &Worker{
+		cfg: &Config{
+			Name:     "dm-worker2",
+			SourceID: "source-1",
+		},
+		ctx: ctx,
+	}
+	worker2.etcdClient = etcdClient
+	err = worker2.createElection()
+	c.Assert(err, IsNil)
+	// the dm-worker1 is still the leader
+	c.Assert(worker1.election.IsLeader(), IsTrue)
+	c.Assert(worker2.election.IsLeader(), IsFalse)
+
+	worker3 := &Worker{
+		cfg: &Config{
+			Name:     "dm-worker3",
+			SourceID: "source-2",
+		},
+		ctx: ctx,
+	}
+	worker3.etcdClient = etcdClient
+	err = worker3.createElection()
+	c.Assert(err, IsNil)
+	// the dm-worker3 has different source ID, so dm-worker3 is leader for source-2, dm-worker1 is still the leader for source-1
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+		return worker3.election.IsLeader()
+	}), IsTrue)
+	c.Assert(worker1.election.IsLeader(), IsTrue)
+
+	_, leaderID, err := worker1.election.LeaderInfo(ctx)
+	c.Assert(leaderID, Equals, worker1.cfg.Name)
+	_, leaderID, err = worker3.election.LeaderInfo(ctx)
+	c.Assert(leaderID, Equals, worker3.cfg.Name)
 }

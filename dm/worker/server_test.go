@@ -21,6 +21,9 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/failpoint"
+	"github.com/pingcap/tidb-tools/pkg/etcd"
+	"go.etcd.io/etcd/integration"
 	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/pb"
@@ -28,7 +31,14 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
+var (
+	etcdClient *etcd.Client
+)
+
 func TestServer(t *testing.T) {
+	etcdMockCluster := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
+	etcdClient = etcd.NewClient(etcdMockCluster.RandClient(), "")
+	defer etcdMockCluster.Terminate(t)
 	TestingT(t)
 }
 
@@ -37,6 +47,11 @@ type testServer struct{}
 var _ = Suite(&testServer{})
 
 func (t *testServer) TestServer(c *C) {
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/DisableCreateEtcdClient", `return()`), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/DisableCreateEtcdClient")
+	c.Assert(failpoint.Enable("github.com/pingcap/dm/dm/worker/DisableCreateElection", `return()`), IsNil)
+	defer failpoint.Disable("github.com/pingcap/dm/dm/worker/DisableCreateElection")
+
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
 

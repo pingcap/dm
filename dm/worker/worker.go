@@ -939,6 +939,10 @@ Loop:
 
 // createEtcdClient creates an etcd client for dm-worker server
 func (w *Worker) createEtcdClient() error {
+	failpoint.Inject("DisableCreateEtcdClient", func(_ failpoint.Value) {
+		failpoint.Return(nil)
+	})
+
 	ectdEndpoints, err := utils.ParseHostPortAddr(w.cfg.MasterAddrs)
 	if err != nil {
 		return terror.ErrWorkerCreateEtcdClient.Delegate(err)
@@ -955,6 +959,10 @@ func (w *Worker) createEtcdClient() error {
 // createElection creates an election for dm-worker server
 // Note: should create etcdClient before
 func (w *Worker) createElection() (err error) {
+	failpoint.Inject("DisableCreateElection", func(_ failpoint.Value) {
+		failpoint.Return(nil)
+	})
+
 	if w.etcdClient == nil {
 		return terror.ErrWorkerEtcdClientIsNil.Generate("etcd client is nil, can't create election")
 	}
@@ -969,6 +977,10 @@ func (w *Worker) createElection() (err error) {
 }
 
 func (w *Worker) electionNotify() {
+	failpoint.Inject("DisableCreateElection", func(_ failpoint.Value) {
+		failpoint.Return()
+	})
+
 	for {
 		select {
 		case <-w.ctx.Done():
