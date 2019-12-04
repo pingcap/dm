@@ -312,9 +312,10 @@ message CheckTaskResponse {
 message ShowMasterLeaderRequest {
 }
 
-// If have leader, result is true, and put leader information in msg.
+// If have leader, result is true, and put leader information in leader_info.
 // Otherwise, result is false.
 message ShowMasterLeaderResponse {
     bool result = 1;
-    string msg = 2;
+    string leader_info = 2;
+    string msg = 3;
 }

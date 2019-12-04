@@ -23,7 +23,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 )
 
-// NewShowLeaderCmd creates a CheckTask command
+// NewShowLeaderCmd creates a ShowMasterLeader command
 func NewShowLeaderCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show-master-leader",

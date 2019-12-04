@@ -1254,7 +1254,7 @@ func (s *Server) ShowMasterLeader(ctx context.Context, req *pb.ShowMasterLeaderR
 		}, nil
 	}
 
-	_, leaderID, err := s.election.LeaderInfo(ctx)
+	leaderID, err := s.getLeaderMasterInfo(ctx)
 	if err != nil {
 		return &pb.ShowMasterLeaderResponse{
 			Result: false,
@@ -1263,8 +1263,8 @@ func (s *Server) ShowMasterLeader(ctx context.Context, req *pb.ShowMasterLeaderR
 	}
 
 	return &pb.ShowMasterLeaderResponse{
-		Result: true,
-		Msg:    fmt.Sprintf("DM-master's leader is %s", leaderID),
+		Result:     true,
+		LeaderInfo: fmt.Sprintf("DM-master's leader is %s", leaderID),
 	}, nil
 }
 
@@ -2356,7 +2356,7 @@ func (s *Server) WatchRequest(ctx context.Context) {
 					continue
 				}
 
-				if operate.Stage == pb.OperateStage_Doing || operate.Stage == pb.OperateStage_Done {
+				if operate.Stage != pb.OperateStage_StageNew {
 					// this request already handled, ignore it
 					continue
 				}
@@ -2377,7 +2377,7 @@ func (s *Server) handleRequest(path string, operate *pb.Operate) {
 	}()
 
 	// update operate's stage to Doing and update etcd
-	operate.Stage = pb.OperateStage_Doing
+	operate.Stage = pb.OperateStage_StageDoing
 	operateBytes, err := operate.Marshal()
 	if err != nil {
 		log.L().Error("marshal operate failed", zap.Error(err))
@@ -2609,7 +2609,7 @@ func (s *Server) handleRequest(path string, operate *pb.Operate) {
 		operate.Response = responseBytes
 	}
 
-	operate.Stage = pb.OperateStage_Done
+	operate.Stage = pb.OperateStage_StageDone
 	operateBytes, err = operate.Marshal()
 	if err != nil {
 		log.L().Error("marshal operate failed", zap.Error(err))
@@ -2635,6 +2635,7 @@ func (s *Server) saveRequestAndWaitResponse(ctx context.Context, tp pb.OperateTy
 	operate := pb.Operate{
 		Tp:      tp,
 		Request: requestBytes,
+		Stage:   pb.OperateStage_StageNew,
 	}
 	opBytes, err := operate.Marshal()
 	if err != nil {
@@ -2682,7 +2683,7 @@ func (s *Server) saveRequestAndWaitResponse(ctx context.Context, tp pb.OperateTy
 					return terror.ErrMasterUnmarshalOperate.Delegate(err, keyPath)
 				}
 
-				if operate.Stage == pb.OperateStage_Doing {
+				if operate.Stage == pb.OperateStage_StageDoing {
 					log.L().Debug("operate is doing", zap.Reflect("request", request))
 					operateIsDoing = true
 					continue

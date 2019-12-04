@@ -11,7 +11,7 @@ message Operate {
 }
 
 enum OperateType {
-    UnknownOperate = 0;
+    OperateUnknown = 0;
 
     MigrateWorkerRelay = 1;
 
@@ -49,7 +49,8 @@ enum OperateType {
 }
 
 enum OperateStage {
-    UnknownStage = 0;
-    Doing = 1;
-    Done = 2;
+    StageUnknown = 0;
+    StageNew = 1;
+    StageDoing = 2;
+    StageDone = 3;
 }

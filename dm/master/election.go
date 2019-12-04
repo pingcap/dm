@@ -47,3 +47,9 @@ func (s *Server) electionNotify(ctx context.Context) {
 		}
 	}
 }
+
+// getLeaderMasterInfo gets the DM-master leader's ID, this ID can set by Config.Name, or use hostname by default.
+func (s *Server) getLeaderMasterInfo(ctx context.Context) (string, error) {
+	_, leaderID, err := s.election.LeaderInfo(ctx)
+	return leaderID, err
+}
