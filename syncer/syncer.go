@@ -68,6 +68,8 @@ var (
 	maxDMLConnectionTimeout = "5m"
 	maxDDLConnectionTimeout = fmt.Sprintf("%dm", MaxDDLConnectionTimeoutMinute)
 
+	maxDMLConnectionDuration, _ = time.ParseDuration(maxDMLConnectionTimeout)
+
 	adminQueueName     = "admin queue"
 	defaultBucketCount = 8
 )
@@ -859,15 +861,9 @@ func (s *Syncer) flushCheckPoints() error {
 		s.tctx.L().Info("prepare flush sqls", zap.Strings("shard meta sqls", shardMetaSQLs), zap.Reflect("shard meta arguments", shardMetaArgs))
 	}
 
-	// when canceling (stop-task/pause-task), we still need to flush the checkpoint.
-	timeout, err := time.ParseDuration(maxDMLConnectionTimeout)
-	if err != nil {
-		timeout = time.Minute // still use a default value
-	}
-	tctx, cancel := s.tctx.WithContext(context.Background()).WithTimeout(timeout)
+	tctx, cancel := s.tctx.WithContext(context.Background()).WithTimeout(maxDMLConnectionDuration)
 	defer cancel()
-
-	err = s.checkpoint.FlushPointsExcept(tctx, exceptTables, shardMetaSQLs, shardMetaArgs)
+	err := s.checkpoint.FlushPointsExcept(tctx, exceptTables, shardMetaSQLs, shardMetaArgs)
 	if err != nil {
 		return terror.Annotatef(err, "flush checkpoint %s", s.checkpoint)
 	}
