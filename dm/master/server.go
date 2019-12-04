@@ -267,7 +267,7 @@ func errorCommonWorkerResponse(msg string, worker string) *pb.CommonWorkerRespon
 
 // StartTask implements MasterServer.StartTask
 func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.StartTaskResponse, error) {
-	log.L().Info("receive request and will save it to etcd", zap.Stringer("payload", req), zap.String("request", "StartTask"))
+	log.L().Info("receive request", zap.Stringer("payload", req), zap.String("request", "StartTask"))
 
 	response := &pb.StartTaskResponse{}
 	err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_StartTask, req, response)
@@ -282,7 +282,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 }
 
 func (s *Server) startTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.StartTaskResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "StartTask"))
+	log.L().Info("handle request", zap.Stringer("payload", req), zap.String("request", "StartTask"))
 
 	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task)
 	if err != nil {
@@ -377,7 +377,7 @@ func (s *Server) startTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 
 // OperateTask implements MasterServer.OperateTask
 func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*pb.OperateTaskResponse, error) {
-	log.L().Info("receive request and will save it to etcd", zap.Stringer("payload", req), zap.String("request", "OperateTask"))
+	log.L().Info("receive request", zap.Stringer("payload", req), zap.String("request", "OperateTask"))
 
 	response := &pb.OperateTaskResponse{}
 	err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_OperateTask, req, response)
@@ -392,7 +392,7 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 }
 
 func (s *Server) operateTask(ctx context.Context, req *pb.OperateTaskRequest) (*pb.OperateTaskResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateTask"))
+	log.L().Info("handle request", zap.Stringer("payload", req), zap.String("request", "OperateTask"))
 
 	resp := &pb.OperateTaskResponse{
 		Op:     req.Op,
@@ -482,7 +482,7 @@ func (s *Server) operateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 
 // UpdateTask implements MasterServer.UpdateTask
 func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb.UpdateTaskResponse, error) {
-	log.L().Info("receive request and will save it to etcd", zap.Stringer("payload", req), zap.String("request", "UpdateTask"))
+	log.L().Info("receive request", zap.Stringer("payload", req), zap.String("request", "UpdateTask"))
 
 	response := &pb.UpdateTaskResponse{}
 	err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_UpdateTask, req, response)
@@ -497,7 +497,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 }
 
 func (s *Server) updateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb.UpdateTaskResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "UpdateTask"))
+	log.L().Info("handle request", zap.Stringer("payload", req), zap.String("request", "UpdateTask"))
 
 	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task)
 	if err != nil {
@@ -582,7 +582,7 @@ func (s *Server) updateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 
 // QueryStatus implements MasterServer.QueryStatus
 func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest) (*pb.QueryStatusListResponse, error) {
-	log.L().Info("receive request and will save it to etcd", zap.Stringer("payload", req), zap.String("request", "QueryStatus"))
+	log.L().Info("receive request", zap.Stringer("payload", req), zap.String("request", "QueryStatus"))
 
 	response := &pb.QueryStatusListResponse{}
 	err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_QueryStatus, req, response)
@@ -597,7 +597,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 }
 
 func (s *Server) queryStatus(ctx context.Context, req *pb.QueryStatusListRequest) (*pb.QueryStatusListResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "QueryStatus"))
+	log.L().Info("handle request", zap.Stringer("payload", req), zap.String("request", "QueryStatus"))
 
 	workers := make([]string, 0, len(s.workerClients))
 	if len(req.Workers) > 0 {
@@ -653,7 +653,7 @@ func (s *Server) queryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 
 // QueryError implements MasterServer.QueryError
 func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorListRequest) (*pb.QueryErrorListResponse, error) {
-	log.L().Info("receive request and save it to etcd", zap.Stringer("payload", req), zap.String("request", "QueryError"))
+	log.L().Info("receive request", zap.Stringer("payload", req), zap.String("request", "QueryError"))
 
 	response := &pb.QueryErrorListResponse{}
 	err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_QueryError, req, response)
@@ -668,7 +668,7 @@ func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorListRequest) 
 }
 
 func (s *Server) queryError(ctx context.Context, req *pb.QueryErrorListRequest) (*pb.QueryErrorListResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "QueryError"))
+	log.L().Info("handle request", zap.Stringer("payload", req), zap.String("request", "QueryError"))
 
 	workers := make([]string, 0, len(s.workerClients))
 	if len(req.Workers) > 0 {
@@ -724,7 +724,7 @@ func (s *Server) queryError(ctx context.Context, req *pb.QueryErrorListRequest) 
 
 // ShowDDLLocks implements MasterServer.ShowDDLLocks
 func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) (*pb.ShowDDLLocksResponse, error) {
-	log.L().Info("receive request and will save it to etcd", zap.Stringer("payload", req), zap.String("request", "ShowDDLLocks"))
+	log.L().Info("receive request", zap.Stringer("payload", req), zap.String("request", "ShowDDLLocks"))
 
 	response := &pb.ShowDDLLocksResponse{}
 	err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_ShowDDLLocks, req, response)
@@ -739,7 +739,7 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 }
 
 func (s *Server) showDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) (*pb.ShowDDLLocksResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "ShowDDLLocks"))
+	log.L().Info("handle request", zap.Stringer("payload", req), zap.String("request", "ShowDDLLocks"))
 
 	resp := &pb.ShowDDLLocksResponse{
 		Result: true,
@@ -787,7 +787,7 @@ func (s *Server) showDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 
 // UnlockDDLLock implements MasterServer.UnlockDDLLock
 func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest) (*pb.UnlockDDLLockResponse, error) {
-	log.L().Info("receive request and will save it to etcd", zap.String("lock ID", req.ID), zap.Stringer("payload", req), zap.String("request", "UnlockDDLLock"))
+	log.L().Info("receive request", zap.String("lock ID", req.ID), zap.Stringer("payload", req), zap.String("request", "UnlockDDLLock"))
 
 	response := &pb.UnlockDDLLockResponse{}
 	err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_UnlockDDLLock, req, response)
@@ -802,7 +802,7 @@ func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest
 }
 
 func (s *Server) unlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest) (*pb.UnlockDDLLockResponse, error) {
-	log.L().Info("", zap.String("lock ID", req.ID), zap.Stringer("payload", req), zap.String("request", "UnlockDDLLock"))
+	log.L().Info("handle request", zap.String("lock ID", req.ID), zap.Stringer("payload", req), zap.String("request", "UnlockDDLLock"))
 
 	workerResps, err := s.resolveDDLLock(ctx, req.ID, req.ReplaceOwner, req.Workers)
 	resp := &pb.UnlockDDLLockResponse{
@@ -827,7 +827,7 @@ func (s *Server) unlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest
 
 // BreakWorkerDDLLock implements MasterServer.BreakWorkerDDLLock
 func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLLockRequest) (*pb.BreakWorkerDDLLockResponse, error) {
-	log.L().Info("receive request and will save it to etcd", zap.String("lock ID", req.RemoveLockID), zap.Stringer("payload", req), zap.String("request", "BreakWorkerDDLLock"))
+	log.L().Info("receive request", zap.String("lock ID", req.RemoveLockID), zap.Stringer("payload", req), zap.String("request", "BreakWorkerDDLLock"))
 
 	response := &pb.BreakWorkerDDLLockResponse{}
 	err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_BreakWorkerDDLLock, req, response)
@@ -842,7 +842,7 @@ func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLL
 }
 
 func (s *Server) breakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLLockRequest) (*pb.BreakWorkerDDLLockResponse, error) {
-	log.L().Info("", zap.String("lock ID", req.RemoveLockID), zap.Stringer("payload", req), zap.String("request", "BreakWorkerDDLLock"))
+	log.L().Info("handle request", zap.String("lock ID", req.RemoveLockID), zap.Stringer("payload", req), zap.String("request", "BreakWorkerDDLLock"))
 
 	request := &workerrpc.Request{
 		Type: workerrpc.CmdBreakDDLLock,
@@ -898,7 +898,7 @@ func (s *Server) breakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLL
 
 // HandleSQLs implements MasterServer.HandleSQLs
 func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb.HandleSQLsResponse, error) {
-	log.L().Info("receive request and will save it to etcd", zap.String("task name", req.Name), zap.Stringer("payload", req), zap.String("request", "HandleSQLs"))
+	log.L().Info("receive request", zap.String("task name", req.Name), zap.Stringer("payload", req), zap.String("request", "HandleSQLs"))
 
 	response := &pb.HandleSQLsResponse{}
 	err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_HandleSQLs, req, response)
@@ -913,7 +913,7 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb
 }
 
 func (s *Server) handleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb.HandleSQLsResponse, error) {
-	log.L().Info("", zap.String("task name", req.Name), zap.Stringer("payload", req), zap.String("request", "HandleSQLs"))
+	log.L().Info("handle request", zap.String("task name", req.Name), zap.Stringer("payload", req), zap.String("request", "HandleSQLs"))
 
 	// save request for --sharding operation
 	if req.Sharding {
@@ -971,7 +971,7 @@ func (s *Server) handleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb
 
 // PurgeWorkerRelay implements MasterServer.PurgeWorkerRelay
 func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayRequest) (*pb.PurgeWorkerRelayResponse, error) {
-	log.L().Info("receive request and save it to etcd", zap.Stringer("payload", req), zap.String("request", "PurgeWorkerRelay"))
+	log.L().Info("receive request", zap.Stringer("payload", req), zap.String("request", "PurgeWorkerRelay"))
 
 	response := &pb.PurgeWorkerRelayResponse{}
 	err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_PurgeWorkerRelay, req, response)
@@ -986,7 +986,7 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 }
 
 func (s *Server) purgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayRequest) (*pb.PurgeWorkerRelayResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "PurgeWorkerRelay"))
+	log.L().Info("handle request", zap.Stringer("payload", req), zap.String("request", "PurgeWorkerRelay"))
 
 	workerReq := &workerrpc.Request{
 		Type: workerrpc.CmdPurgeRelay,
@@ -1042,7 +1042,7 @@ func (s *Server) purgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 
 // SwitchWorkerRelayMaster implements MasterServer.SwitchWorkerRelayMaster
 func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWorkerRelayMasterRequest) (*pb.SwitchWorkerRelayMasterResponse, error) {
-	log.L().Info("receive request and will save it to etcd", zap.Stringer("payload", req), zap.String("request", "SwitchWorkerRelayMaster"))
+	log.L().Info("receive request", zap.Stringer("payload", req), zap.String("request", "SwitchWorkerRelayMaster"))
 
 	response := &pb.SwitchWorkerRelayMasterResponse{}
 	err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_SwitchWorkerRelayMaster, req, response)
@@ -1057,7 +1057,7 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 }
 
 func (s *Server) switchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWorkerRelayMasterRequest) (*pb.SwitchWorkerRelayMasterResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "SwitchWorkerRelayMaster"))
+	log.L().Info("handle request", zap.Stringer("payload", req), zap.String("request", "SwitchWorkerRelayMaster"))
 
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Workers))
 
@@ -1126,7 +1126,7 @@ func (s *Server) switchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 
 // OperateWorkerRelayTask implements MasterServer.OperateWorkerRelayTask
 func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWorkerRelayRequest) (*pb.OperateWorkerRelayResponse, error) {
-	log.L().Info("receive request and will save it to etcd", zap.Stringer("payload", req), zap.String("request", "OperateWorkerRelayTask"))
+	log.L().Info("receive request", zap.Stringer("payload", req), zap.String("request", "OperateWorkerRelayTask"))
 
 	response := &pb.OperateWorkerRelayResponse{}
 	err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_OperateWorkerRelay, req, response)
@@ -1141,7 +1141,7 @@ func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWork
 }
 
 func (s *Server) operateWorkerRelayTask(ctx context.Context, req *pb.OperateWorkerRelayRequest) (*pb.OperateWorkerRelayResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateWorkerRelayTask"))
+	log.L().Info("handle request", zap.Stringer("payload", req), zap.String("request", "OperateWorkerRelayTask"))
 
 	request := &workerrpc.Request{
 		Type:         workerrpc.CmdOperateRelay,
@@ -1201,7 +1201,7 @@ func (s *Server) operateWorkerRelayTask(ctx context.Context, req *pb.OperateWork
 
 // RefreshWorkerTasks implements MasterServer.RefreshWorkerTasks
 func (s *Server) RefreshWorkerTasks(ctx context.Context, req *pb.RefreshWorkerTasksRequest) (*pb.RefreshWorkerTasksResponse, error) {
-	log.L().Info("receive request and will save it to etcd", zap.Stringer("payload", req), zap.String("request", "RefreshWorkerTasks"))
+	log.L().Info("receive request", zap.Stringer("payload", req), zap.String("request", "RefreshWorkerTasks"))
 
 	response := &pb.RefreshWorkerTasksResponse{}
 	err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_RefreshWorkerTasks, req, response)
@@ -1216,7 +1216,7 @@ func (s *Server) RefreshWorkerTasks(ctx context.Context, req *pb.RefreshWorkerTa
 }
 
 func (s *Server) refreshWorkerTasks(ctx context.Context, req *pb.RefreshWorkerTasksRequest) (*pb.RefreshWorkerTasksResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "RefreshWorkerTasks"))
+	log.L().Info("handle request", zap.Stringer("payload", req), zap.String("request", "RefreshWorkerTasks"))
 
 	taskWorkers, workerMsgMap := s.fetchTaskWorkers(ctx)
 	// always update task workers mapping in memory
@@ -1245,7 +1245,7 @@ func (s *Server) refreshWorkerTasks(ctx context.Context, req *pb.RefreshWorkerTa
 // ShowMasterLeader implements MasterServer.ShowMasterLeader
 // Note: this request don't need save to etcd
 func (s *Server) ShowMasterLeader(ctx context.Context, req *pb.ShowMasterLeaderRequest) (*pb.ShowMasterLeaderResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "ShowMasterLeader"))
+	log.L().Info("handle request", zap.Stringer("payload", req), zap.String("request", "ShowMasterLeader"))
 
 	if s.election == nil {
 		return &pb.ShowMasterLeaderResponse{
@@ -1834,7 +1834,7 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 
 // UpdateMasterConfig implements MasterServer.UpdateConfig
 func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterConfigRequest) (*pb.UpdateMasterConfigResponse, error) {
-	log.L().Info("receive request and save it to etcd", zap.Stringer("payload", req), zap.String("request", "UpdateMasterConfig"))
+	log.L().Info("receive request", zap.Stringer("payload", req), zap.String("request", "UpdateMasterConfig"))
 
 	response := &pb.UpdateMasterConfigResponse{}
 	err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_UpdateMasterConfig, req, response)
@@ -1849,7 +1849,7 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 }
 
 func (s *Server) updateMasterConfig(ctx context.Context, req *pb.UpdateMasterConfigRequest) (*pb.UpdateMasterConfigResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "UpdateMasterConfig"))
+	log.L().Info("handle request", zap.Stringer("payload", req), zap.String("request", "UpdateMasterConfig"))
 	s.Lock()
 
 	err := s.cfg.UpdateConfigFile(req.Config)
@@ -1959,7 +1959,7 @@ func (s *Server) updateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 
 // UpdateWorkerRelayConfig updates config for relay and (dm-worker)
 func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWorkerRelayConfigRequest) (*pb.CommonWorkerResponse, error) {
-	log.L().Info("receive request and will save it to etcd", zap.Stringer("payload", req), zap.String("request", "UpdateWorkerRelayConfig"))
+	log.L().Info("receive request", zap.Stringer("payload", req), zap.String("request", "UpdateWorkerRelayConfig"))
 
 	response := &pb.CommonWorkerResponse{}
 	err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_UpdateWorkerRelayConfig, req, response)
@@ -1974,7 +1974,7 @@ func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWork
 }
 
 func (s *Server) updateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWorkerRelayConfigRequest) (*pb.CommonWorkerResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "UpdateWorkerRelayConfig"))
+	log.L().Info("handle request", zap.Stringer("payload", req), zap.String("request", "UpdateWorkerRelayConfig"))
 	worker := req.Worker
 	content := req.Config
 	cli, ok := s.workerClients[worker]
@@ -2102,7 +2102,7 @@ func (s *Server) getWorkerConfigs(ctx context.Context, workerIDs []string) (map[
 
 // MigrateWorkerRelay migrates dm-woker relay unit
 func (s *Server) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRelayRequest) (*pb.CommonWorkerResponse, error) {
-	log.L().Info("receive request and will save it to etcd", zap.Stringer("payload", req), zap.String("request", "MigrateWorkerRelay"))
+	log.L().Info("receive request", zap.Stringer("payload", req), zap.String("request", "MigrateWorkerRelay"))
 
 	response := &pb.CommonWorkerResponse{}
 	err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_MigrateWorkerRelay, req, response)
@@ -2117,7 +2117,7 @@ func (s *Server) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRe
 }
 
 func (s *Server) migrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRelayRequest) (*pb.CommonWorkerResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "MigrateWorkerRelay"))
+	log.L().Info("handle request", zap.Stringer("payload", req), zap.String("request", "MigrateWorkerRelay"))
 	worker := req.Worker
 	binlogPos := req.BinlogPos
 	binlogName := req.BinlogName
@@ -2139,7 +2139,7 @@ func (s *Server) migrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRe
 
 // CheckTask checks legality of task configuration
 func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.CheckTaskResponse, error) {
-	log.L().Info("receive request and will save it to etcd", zap.Stringer("payload", req), zap.String("request", "CheckTask"))
+	log.L().Info("receive request", zap.Stringer("payload", req), zap.String("request", "CheckTask"))
 
 	response := &pb.CheckTaskResponse{}
 	err := s.saveRequestAndWaitResponse(ctx, pb.OperateType_CheckTask, req, response)
@@ -2154,7 +2154,7 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 }
 
 func (s *Server) checkTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.CheckTaskResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "CheckTask"))
+	log.L().Info("handle request", zap.Stringer("payload", req), zap.String("request", "CheckTask"))
 
 	_, _, err := s.generateSubTask(ctx, req.Task)
 	if err != nil {
