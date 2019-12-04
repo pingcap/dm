@@ -1,5 +1,6 @@
 # Worker Configuration.
 
+master-addrs = "http://127.0.0.1:8261"
 source-id = "mysql-replica-02"
 flavor = ""
 enable-gtid = false

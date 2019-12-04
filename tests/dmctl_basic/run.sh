@@ -98,13 +98,16 @@ function run() {
     cp $cur/conf/dm-worker2.toml $dm_worker2_conf
     cp $cur/conf/dm-master.toml $dm_master_conf
 
+    run_dm_master $WORK_DIR/master $MASTER_PORT $dm_master_conf
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $dm_worker1_conf
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $dm_worker2_conf
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-    run_dm_master $WORK_DIR/master $MASTER_PORT $dm_master_conf
-    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
-
+    
+    # wait dm-master connect to dm-worker success, will remove it later
+    sleep 2
+    
     pause_relay_success
     query_status_stopped_relay
     pause_relay_fail

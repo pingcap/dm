@@ -13,13 +13,15 @@ function run() {
     check_contains 'Query OK, 3 rows affected'
 
     echo "use previous dm-master and dm-worker"
+    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml previous
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml previous
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT 
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml previous
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml previous
-    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
 
+    # wait dm-master connect to dm-worker success, will remove it later
+    sleep 2
     echo "start DM task only"
     dmctl_start_task
 
