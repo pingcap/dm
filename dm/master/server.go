@@ -2331,6 +2331,7 @@ func (s *Server) WatchRequest(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			log.L().Info("watch request exit")
 			return
 		case wresp, ok := <-watchCh:
 			if !ok {
