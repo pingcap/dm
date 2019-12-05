@@ -953,7 +953,9 @@ func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *DBConn, job
 
 	fatalF := func(err error, errType pb.ErrorType) {
 		s.execErrorDetected.Set(true)
-		s.runFatalChan <- unit.NewProcessError(errType, err)
+		if !utils.IsContextCanceledError(err) {
+			s.runFatalChan <- unit.NewProcessError(errType, err)
+		}
 		clearF()
 	}
 
