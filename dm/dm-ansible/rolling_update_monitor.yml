@@ -114,6 +114,7 @@
             datasource: "{{ cluster_name }}"
             titles:
               dm_worker: "{{ cluster_name | title }}-DM-worker"
+              dm_worker_instances: "{{ cluster_name | title }}-DM-worker-instances"
 
     - name: import grafana dashboards - run import script
       delegate_to: localhost
