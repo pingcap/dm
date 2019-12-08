@@ -19,20 +19,24 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/spf13/cobra"
 )
 
+var tableList []string
+
+type tableInfo struct {
+	Table  string `json:"table"`
+	Reason string `json:"reason,omitempty"`
+}
+
 type tableRouteResult struct {
-	Result         bool                           `json:"result"`
-	Msg            string                         `json:"msg"`
-	Routes         map[string]map[string][]string `json:"routes,omitempty"`
-	WillBeFiltered string                         `json:"will-be-filtered,omitempty"`
-	MatchRoute     string                         `json:"match-route,omitempty"`
-	TargetSchema   string                         `json:"target-schema,omitempty"`
-	TargetTable    string                         `json:"target-table,omitempty"`
+	Result       bool                               `json:"result"`
+	Msg          string                             `json:"msg"`
+	Routes       map[string]map[string][]*tableInfo `json:"routes,omitempty"`
+	IgnoreTables []string                           `json:"ignore-tables,omitempty"`
 }
 
 // NewTableRouteCmd creates a TableRoute command
@@ -42,7 +46,8 @@ func NewTableRouteCmd() *cobra.Command {
 		Short: "check the routes for all tables or single table",
 		Run:   tableRouteFunc,
 	}
-	cmd.Flags().StringP("table", "T", "", "the table name we want to check for the table route")
+	tableList = tableList[:0]
+	cmd.Flags().StringSliceVarP(&tableList, "table", "T", []string{}, "the table name we want to check for the table route")
 	return cmd
 }
 
@@ -66,8 +71,9 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 		common.PrintLines(errors.ErrorStack(err))
 		return
 	}
-	if len(workers) > 1 {
-		common.PrintLines("we want 0 or 1 worker, but get %v", workers)
+	tables, err := cmd.Flags().GetStringSlice("table")
+	if err != nil {
+		common.PrintLines(errors.ErrorStack(err))
 		return
 	}
 
@@ -77,63 +83,52 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 	cli := common.MasterClient()
 	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
 	defer cancel()
-	// no worker is specified, print all routes
-	if len(workers) == 0 {
-		resp, err := cli.SimulateTask(ctx, &pb.SimulationRequest{
-			Op:   pb.SimulateOp_TableRoute,
-			Task: task,
-		})
-		if err = checkResp(err, resp); err != nil {
-			common.PrintLines("get simulation result from dm-master failed:\n%s", err)
-			return
-		}
+	resp, err := cli.SimulateTask(ctx, &pb.SimulationRequest{
+		Op:        pb.SimulateOp_TableRoute,
+		Task:      task,
+		Workers:   workers,
+		TableList: tables,
+	})
+	if err := checkResp(err, resp); err != nil {
+		common.PrintLines("get simulation result from dm-master failed:\n%s", err)
+		return
+	}
 
-		routes := make(map[string]map[string][]string)
+	// no table is specified, print all routes
+	if len(tables) == 0 {
+		routes := make(map[string]map[string][]*tableInfo)
 		for _, simulationResult := range resp.SimulationResults {
 			for targetTable, sourceTableList := range simulationResult.RouteTableMap {
 				for _, sourceTable := range sourceTableList.Tables {
 					if routes[targetTable] == nil {
-						routes[targetTable] = make(map[string][]string)
+						routes[targetTable] = make(map[string][]*tableInfo)
 					}
-					routes[targetTable][simulationResult.SourceIP] = append(routes[targetTable][simulationResult.SourceIP], sourceTable)
+					routes[targetTable][simulationResult.SourceAddr] = append(routes[targetTable][simulationResult.SourceAddr], &tableInfo{Table: sourceTable})
 				}
 			}
 		}
 
 		result.Routes = routes
 	} else {
-		tableName, err := getTableFromCMD(cmd)
-		resp, err := cli.SimulateTask(ctx, &pb.SimulationRequest{
-			Op:         pb.SimulateOp_TableRoute,
-			Worker:     workers[0],
-			Task:       task,
-			TableQuery: tableName,
-		})
-		if err = checkResp(err, resp); err != nil {
-			common.PrintLines("get simulation result from dm-master failed:\n%s", err)
-			return
-		}
-		if resp.Filtered != "" {
-			result.WillBeFiltered = resp.Filtered
-		} else {
-			result.MatchRoute = resp.Reason
-			if len(resp.SimulationResults) != 1 {
-				common.PrintLines("the length of returned simulation results should be 1, but is %v", len(resp.SimulationResults))
-				return
+		routes := make(map[string]map[string][]*tableInfo)
+		for _, simulationResult := range resp.SimulationResults {
+			result.IgnoreTables = make([]string, 0)
+			for schema, tableList := range simulationResult.IgnoreTableMap {
+				for _, table := range tableList.Tables {
+					result.IgnoreTables = append(result.IgnoreTables, dbutil.TableName(schema, table))
+				}
 			}
-			simulationResult := resp.SimulationResults[0]
-			if len(simulationResult.RouteTableMap) != 1 {
-				common.PrintLines("the length of RouteTableMap should be 1, but is %v", len(simulationResult.RouteTableMap))
-				return
-			}
-			for targetTable := range simulationResult.RouteTableMap {
-				result.TargetSchema, result.TargetTable, err = utils.ExtractTable(targetTable)
-				if err != nil {
-					common.PrintLines(errors.ErrorStack(err))
-					return
+			for targetTable, sourceTableList := range simulationResult.RouteTableMap {
+				for i, sourceTable := range sourceTableList.Tables {
+					if routes[targetTable] == nil {
+						routes[targetTable] = make(map[string][]*tableInfo)
+					}
+					routes[targetTable][simulationResult.SourceAddr] = append(routes[targetTable][simulationResult.SourceAddr], &tableInfo{Table: sourceTable, Reason: sourceTableList.Reasons[i]})
 				}
 			}
 		}
+
+		result.Routes = routes
 	}
 	common.PrettyPrintInterface(result)
 }

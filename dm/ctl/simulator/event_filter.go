@@ -57,7 +57,6 @@ func eventFilterFunc(cmd *cobra.Command, _ []string) {
 		common.PrintLines("we want 1 worker, but get %v", workers)
 		return
 	}
-	worker := workers[0]
 
 	content, err := common.GetFileContent(cmd.Flags().Arg(0))
 	if err != nil {
@@ -83,17 +82,15 @@ func eventFilterFunc(cmd *cobra.Command, _ []string) {
 		common.PrintLines("we want 1 sql, but get %v", realSQLs)
 		return
 	}
-	sql := realSQLs[0]
 
 	cli := common.MasterClient()
 	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
 	defer cancel()
-
 	resp, err := cli.SimulateTask(ctx, &pb.SimulationRequest{
-		Op:     pb.SimulateOp_EventFilter,
-		Worker: worker,
-		Task:   task,
-		SQL:    sql,
+		Op:      pb.SimulateOp_EventFilter,
+		Workers: workers,
+		Task:    task,
+		Sql:     realSQLs[0],
 	})
 
 	if err = checkResp(err, resp); err != nil {
@@ -101,11 +98,22 @@ func eventFilterFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
+	if len(resp.SimulationResults) != 1 {
+		common.PrintLines("simulation result")
+	}
+	var filtered, reason string
+	if len(resp.SimulationResults[0].DoTableMap) > 0 {
+		filtered = "no"
+		reason = resp.SimulationResults[0].DoTableMap[realSQLs[0]].Reasons[0]
+	} else {
+		filtered = "yes"
+		reason = resp.SimulationResults[0].IgnoreTableMap[realSQLs[0]].Reasons[0]
+	}
 	result := eventFilterResult{
 		Result:         true,
 		Msg:            "",
-		FilterName:     resp.Reason,
-		WillBeFiltered: resp.Filtered,
+		FilterName:     reason,
+		WillBeFiltered: filtered,
 	}
 	common.PrettyPrintInterface(result)
 }

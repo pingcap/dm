@@ -309,38 +309,60 @@ message CheckTaskResponse {
 }
 
 enum SimulateOp {
-    TableRoute = 0; // simulate table's route from sources
-    BlackWhiteList = 1; // simulate whether table will be filtered by black white list
-    EventFilter = 2; // simulate whether sql will be filtered by binlog event filter
+    InvalidSimulateOp = 0;  // placeholder
+    TableRoute = 1; // simulate table's route from sources
+    BlackWhiteList = 2; // simulate whether table will be filtered by black white list
+    EventFilter = 3; // simulate whether sql will be filtered by binlog event filter
 }
 
+// SimulationRequest fields required for different SimulateOp:
+// TableRoute
+// required - op, task
+// optional - workers, tableList
+// notice: inputs that do not meet any of the following three conditions are invalid
+// 1. len(workers) = len(tableList) = 0, will return all the task related tables' routes
+// 2. len(workers) = 1, len(tableList) > 0, will return all the queried tables routes based on the config of given worker
+// 3. len(workers) > 0, len(tableList) = 0, will return given workers' table routes
+//
+// BlackWhiteList
+// required - op, task
+// optional - workers, tableList
+// notice: inputs that do not meet any of the following three conditions are invalid
+// 1. len(workers) = len(tableList) = 0, will return all the task related doTables and ignoreTables
+// 2. len(workers) = 1, len(tableList) > 0, will return doTables and ignoreTables (only tables in the given tableList) based on the config of given worker
+// 3. len(workers) > 0, len(tableList) = 0, will return given workers' black routes
+//
+// EventFilter
+// required - op, task, workers, sql
+// notice: the length of workers should be 1. the length of sql should also be 1
 message SimulationRequest {
     SimulateOp op = 1;
-    string worker = 2; // whether to fetch info from specified workers
-    string task = 3; // task's configuration, yaml format
-    string tableQuery = 4; // specified table which we want to query, format: `database`.`table`
-    string SQL = 5; // queried sql in event filter simulation
+    string task = 2; // task's configuration, yaml format
+    repeated string workers = 3; // whether to fetch info from specified workers
+    repeated string tableList = 4; // specified tables that we want to query, format: `database`.`table`
+    string sql = 5; // queried sql in event filter simulation
 }
 
 message TableList {
     repeated string tables = 1;
+    // if this table matches a rule, reason = rule name;
+    repeated string reasons = 2;
 }
 
 message SimulationResult {
     string sourceID = 1;
-    string sourceIP = 2; // source IP of relative MySQL sourceID, format: IP:Port
+    string sourceAddr = 2; // source address of relative MySQL sourceID, format: IP:Port
     // for doTableMap and ignoreTableMap, key is the schema name while value is tables belong to this schema
     // these two maps are only used for black white list simulation
     map<string, TableList> doTableMap = 3;
     map<string, TableList> ignoreTableMap = 4;
     // for routeTableMap, key and value are both table name in format of `schema`.`table`
+    // the key is target table while the value is source table list that will be routed to the target table
     map<string, TableList> routeTableMap = 5;
 }
 
 message SimulationResponse {
     bool result = 1;
     string msg = 2;
-    string filtered = 3; // only has value in a single table query. When the queried table/sql is filtered this value will be set to "yes"
-    string reason = 4; // only has value in a single table query. TableRoute: matched route name; BWList: matched bw filter name; EventFilter: matched event filter name
-    repeated SimulationResult simulationResults = 5;
+    repeated SimulationResult simulationResults = 3;
 }
