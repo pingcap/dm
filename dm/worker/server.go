@@ -249,10 +249,19 @@ func (s *Server) QueryTaskOperation(ctx context.Context, req *pb.QueryTaskOperat
 func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*pb.QueryStatusResponse, error) {
 	log.L().Info("", zap.String("request", "QueryStatus"), zap.Stringer("payload", req))
 
+	relayStatus := &pb.RelayStatus{
+		Result: &pb.ProcessResult{
+			Detail: []byte("relay is not enable"),
+		},
+	}
+	if s.cfg.EnableRelay {
+		relayStatus = s.worker.relayHolder.Status()
+	}
+
 	resp := &pb.QueryStatusResponse{
 		Result:        true,
 		SubTaskStatus: s.worker.QueryStatus(req.Name),
-		RelayStatus:   s.worker.relayHolder.Status(),
+		RelayStatus:   relayStatus,
 		SourceID:      s.worker.cfg.SourceID,
 	}
 

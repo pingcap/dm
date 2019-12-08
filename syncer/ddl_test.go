@@ -207,7 +207,7 @@ func (s *testSyncerSuite) TestresolveDDLSQL(c *C) {
 		},
 	}
 	var err error
-	syncer := NewSyncer(cfg)
+	syncer := NewSyncer(cfg, true)
 	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
 	c.Assert(err, IsNil)
 
@@ -337,7 +337,7 @@ func (s *testSyncerSuite) TestParseDDLSQL(c *C) {
 		},
 	}
 	var err error
-	syncer := NewSyncer(cfg)
+	syncer := NewSyncer(cfg, true)
 	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
 	c.Assert(err, IsNil)
 

@@ -70,7 +70,7 @@ func (s *testSyncerSuite) TestOriginError(c *C) {
 
 func (s *testSyncerSuite) TestHandleSpecialDDLError(c *C) {
 	var (
-		syncer = NewSyncer(s.cfg)
+		syncer = NewSyncer(s.cfg, true)
 		tctx   = tcontext.Background()
 		conn2  = &DBConn{resetBaseConnFn: func(*context.Context, *conn.BaseConn) (*conn.BaseConn, error) {
 			return nil, nil

@@ -74,7 +74,6 @@ type Worker struct {
 func NewWorker(cfg *Config) (w *Worker, err error) {
 	w = &Worker{
 		cfg:           cfg,
-		relayHolder:   NewRelayHolder(cfg),
 		tracer:        tracing.InitTracerHub(cfg.Tracer),
 		subTaskHolder: newSubTaskHolder(),
 		l:             log.With(zap.String("component", "worker controller")),
@@ -95,14 +94,17 @@ func NewWorker(cfg *Config) (w *Worker, err error) {
 		}
 	}(w)
 
-	// initial relay holder
-	purger, err := w.relayHolder.Init([]purger.PurgeInterceptor{
-		w,
-	})
-	if err != nil {
-		return nil, err
+	if cfg.EnableRelay {
+		// initial relay holder
+		w.relayHolder = NewRelayHolder(cfg)
+		purger, err := w.relayHolder.Init([]purger.PurgeInterceptor{
+			w,
+		})
+		if err != nil {
+			return nil, err
+		}
+		w.relayPurger = purger
 	}
-	w.relayPurger = purger
 
 	// initial task status checker
 	if w.cfg.Checker.CheckEnable {
@@ -154,11 +156,13 @@ func (w *Worker) Start() {
 		return
 	}
 
-	// start relay
-	w.relayHolder.Start()
+	if w.cfg.EnableRelay {
+		// start relay
+		w.relayHolder.Start()
 
-	// start purger
-	w.relayPurger.Start()
+		// start purger
+		w.relayPurger.Start()
+	}
 
 	// start task status checker
 	if w.cfg.Checker.CheckEnable {
@@ -210,11 +214,15 @@ func (w *Worker) Close() {
 	// close all sub tasks
 	w.subTaskHolder.closeAllSubTasks()
 
-	// close relay
-	w.relayHolder.Close()
+	if w.relayHolder != nil {
+		// close relay
+		w.relayHolder.Close()
+	}
 
-	// close purger
-	w.relayPurger.Close()
+	if w.relayPurger != nil {
+		// close purger
+		w.relayPurger.Close()
+	}
 
 	// close task status checker
 	if w.cfg.Checker.CheckEnable {
@@ -517,7 +525,12 @@ func (w *Worker) SwitchRelayMaster(ctx context.Context, req *pb.SwitchRelayMaste
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	return w.relayHolder.SwitchMaster(ctx, req)
+	if w.cfg.EnableRelay {
+		return w.relayHolder.SwitchMaster(ctx, req)
+	}
+
+	w.l.Warn("enable-relay is false, ignore switch relay master")
+	return nil
 }
 
 // OperateRelay operates relay unit
@@ -526,7 +539,12 @@ func (w *Worker) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) 
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	return w.relayHolder.Operate(ctx, req)
+	if w.cfg.EnableRelay {
+		return w.relayHolder.Operate(ctx, req)
+	}
+
+	w.l.Warn("enable-relay is false, ignore operate relay")
+	return nil
 }
 
 // PurgeRelay purges relay log files
@@ -535,7 +553,12 @@ func (w *Worker) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) erro
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	return w.relayPurger.Do(ctx, req)
+	if w.cfg.EnableRelay {
+		return w.relayPurger.Do(ctx, req)
+	}
+
+	w.l.Warn("enable-relay is false, ignore purge relay")
+	return nil
 }
 
 // ForbidPurge implements PurgeInterceptor.ForbidPurge
@@ -575,6 +598,11 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 
 	if w.closed.Get() == closedTrue {
 		return terror.ErrWorkerAlreadyClosed.Generate()
+	}
+
+	if !w.cfg.EnableRelay {
+		w.l.Warn("enable-relay is false, ignore update relay config")
+		return nil
 	}
 
 	stage := w.relayHolder.Stage()
@@ -676,6 +704,12 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 func (w *Worker) MigrateRelay(ctx context.Context, binlogName string, binlogPos uint32) error {
 	w.Lock()
 	defer w.Unlock()
+
+	if !w.cfg.EnableRelay {
+		w.l.Warn("enable-relay is false, ignore migrate relay")
+		return nil
+	}
+
 	stage := w.relayHolder.Stage()
 	if stage == pb.Stage_Running {
 		err := w.relayHolder.Operate(ctx, &pb.OperateRelayRequest{Op: pb.RelayOp_PauseRelay})
@@ -743,10 +777,10 @@ func (w *Worker) restoreSubTask() error {
 
 		var st *SubTask
 		if task.GetStage() == pb.Stage_Running || task.GetStage() == pb.Stage_New {
-			st = NewSubTaskWithStage(cfgDecrypted, pb.Stage_New)
+			st = NewSubTaskWithStage(cfgDecrypted, pb.Stage_New, w.cfg.EnableRelay)
 			st.Run()
 		} else {
-			st = NewSubTaskWithStage(cfgDecrypted, task.Stage)
+			st = NewSubTaskWithStage(cfgDecrypted, task.Stage, w.cfg.EnableRelay)
 		}
 
 		w.subTaskHolder.recordSubTask(st)
@@ -800,7 +834,7 @@ Loop:
 					break
 				}
 
-				if w.relayPurger.Purging() {
+				if w.cfg.EnableRelay && w.relayPurger.Purging() {
 					if retryCnt < maxRetryCount {
 						retryCnt++
 						w.l.Warn("relay log purger is purging, cannot start subtask, would try again later", zap.String("task", opLog.Task.Name))
@@ -827,7 +861,7 @@ Loop:
 				}
 
 				w.l.Info("started sub task", zap.Stringer("config", cfgDecrypted))
-				st = NewSubTask(cfgDecrypted)
+				st = NewSubTask(cfgDecrypted, w.cfg.EnableRelay)
 				w.subTaskHolder.recordSubTask(st)
 				st.Run()
 

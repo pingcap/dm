@@ -265,7 +265,7 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
-	syncer := NewSyncer(s.cfg)
+	syncer := NewSyncer(s.cfg, true)
 	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
 	c.Assert(err, IsNil)
 	err = syncer.genRouter()
@@ -374,7 +374,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
-	syncer := NewSyncer(s.cfg)
+	syncer := NewSyncer(s.cfg, true)
 	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
 	c.Assert(err, IsNil)
 	syncer.genRouter()
@@ -446,7 +446,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
-	syncer := NewSyncer(s.cfg)
+	syncer := NewSyncer(s.cfg, true)
 	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
 	c.Assert(err, IsNil)
 	syncer.genRouter()
@@ -539,7 +539,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
-	syncer := NewSyncer(s.cfg)
+	syncer := NewSyncer(s.cfg, true)
 	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
 	c.Assert(err, IsNil)
 	syncer.genRouter()
@@ -669,7 +669,7 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
-	syncer := NewSyncer(s.cfg)
+	syncer := NewSyncer(s.cfg, true)
 	syncer.genRouter()
 
 	syncer.binlogFilter, err = bf.NewBinlogEvent(false, s.cfg.FilterRules)
@@ -941,7 +941,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 		c.Assert(err, IsNil)
 	}
 
-	syncer := NewSyncer(s.cfg)
+	syncer := NewSyncer(s.cfg, true)
 	// use upstream dbConn as mock downstream
 	dbConn, err := db.Conn(context.Background())
 	c.Assert(err, IsNil)
@@ -950,7 +950,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	syncer.toDBConns = []*DBConn{{baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
 	syncer.reset()
 
-	streamer, err := syncer.streamerProducer.generateStreamer(pos)
+	streamer, err := syncer.streamerController.streamerProducer.generateStreamer(pos)
 	c.Assert(err, IsNil)
 
 	for _, testCase := range testCases {
@@ -1016,13 +1016,13 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 }
 
 func (s *testSyncerSuite) TestcheckpointID(c *C) {
-	syncer := NewSyncer(s.cfg)
+	syncer := NewSyncer(s.cfg, true)
 	checkpointID := syncer.checkpointID()
 	c.Assert(checkpointID, Equals, "101")
 }
 
 func (s *testSyncerSuite) TestExecErrors(c *C) {
-	syncer := NewSyncer(s.cfg)
+	syncer := NewSyncer(s.cfg, true)
 	syncer.appendExecErrors(new(ExecErrorContext))
 	c.Assert(syncer.execErrors.errors, HasLen, 1)
 
@@ -1033,7 +1033,7 @@ func (s *testSyncerSuite) TestExecErrors(c *C) {
 func (s *testSyncerSuite) TestCasuality(c *C) {
 	var wg sync.WaitGroup
 	s.cfg.WorkerCount = 1
-	syncer := NewSyncer(s.cfg)
+	syncer := NewSyncer(s.cfg, true)
 	syncer.jobs = []chan *job{make(chan *job, 1)}
 
 	wg.Add(1)
@@ -1224,7 +1224,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		shardGroupMock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"unreachable", "unreachable", "unreachable", "unreachable", "unreachable"}))
 
 		// make syncer write to mock baseConn
-		syncer := NewSyncer(s.cfg)
+		syncer := NewSyncer(s.cfg, true)
 
 		ctx := context.Background()
 		// fromDB mocks upstream dbConn, dbConn mocks downstream dbConn
@@ -1252,7 +1252,9 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 
 		syncer.reset()
 		events := append(createEvents, s.generateEvents(_case.testEvents, c)...)
-		syncer.streamerProducer = &MockStreamProducer{events}
+		syncer.streamerController = &StreamerController{
+			streamerProducer: &MockStreamProducer{events},
+		}
 
 		fromMock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
 			WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
@@ -1395,7 +1397,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	s.cfg.MaxRetry = 1
 	s.cfg.DisableCausality = false
 
-	syncer := NewSyncer(s.cfg)
+	syncer := NewSyncer(s.cfg, true)
 	syncer.fromDB = &UpStreamConn{BaseDB: conn.NewBaseDB(db)}
 	syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
 		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
@@ -1429,7 +1431,10 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		mockBinlogEvent{typ: Delete, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(1), "a"}}}},
 		mockBinlogEvent{typ: Update, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(2), "b"}, {int32(1), "b"}}}},
 	}
-	syncer.streamerProducer = &MockStreamProducer{s.generateEvents(events1, c)}
+	syncer.streamerController = &StreamerController{
+		streamerProducer: &MockStreamProducer{s.generateEvents(events1, c)},
+	}
+
 	syncer.addJobFunc = syncer.addJobToMemory
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1536,7 +1541,9 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		mockBinlogEvent{typ: Write, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(3), "c"}}}},
 		mockBinlogEvent{typ: Delete, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(3), "c"}}}},
 	}
-	syncer.streamerProducer = &MockStreamProducer{s.generateEvents(events2, c)}
+	syncer.streamerController = &StreamerController{
+		streamerProducer: &MockStreamProducer{s.generateEvents(events2, c)},
+	}
 
 	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
 		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
