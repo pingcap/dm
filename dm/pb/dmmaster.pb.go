@@ -4717,7 +4717,7 @@ func (m *SimulationResult) MarshalTo(dAtA []byte) (int, error) {
 		i += copy(dAtA[i:], m.SourceAddr)
 	}
 	if len(m.DoTableMap) > 0 {
-		for k, _ := range m.DoTableMap {
+		for k := range m.DoTableMap {
 			dAtA[i] = 0x1a
 			i++
 			v := m.DoTableMap[k]
@@ -4745,7 +4745,7 @@ func (m *SimulationResult) MarshalTo(dAtA []byte) (int, error) {
 		}
 	}
 	if len(m.IgnoreTableMap) > 0 {
-		for k, _ := range m.IgnoreTableMap {
+		for k := range m.IgnoreTableMap {
 			dAtA[i] = 0x22
 			i++
 			v := m.IgnoreTableMap[k]
@@ -4773,7 +4773,7 @@ func (m *SimulationResult) MarshalTo(dAtA []byte) (int, error) {
 		}
 	}
 	if len(m.RouteTableMap) > 0 {
-		for k, _ := range m.RouteTableMap {
+		for k := range m.RouteTableMap {
 			dAtA[i] = 0x2a
 			i++
 			v := m.RouteTableMap[k]

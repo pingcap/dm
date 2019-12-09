@@ -118,7 +118,7 @@ func simulateTableRoute(workerSet map[string]struct{}, tables []string, deployMa
 
 	if len(tables) > 0 {
 		if len(workerSet) != 1 {
-			return nil, errors.Errorf("length of given workers should be 1, but is ", len(workerSet))
+			return nil, errors.Errorf("length of given workers should be 1, but is %d", len(workerSet))
 		}
 		var worker string
 		for worker = range workerSet {
@@ -148,7 +148,7 @@ func simulateTableRoute(workerSet map[string]struct{}, tables []string, deployMa
 				return nil, errors.Annotatef(err, "get single table route result for table %s failed", tableQuery)
 			}
 			if filtered {
-				schema, table, err := utils.ExtractTable(matchTable)
+				schema, table, err := utils.ExtractTable(tableQuery)
 				if err != nil {
 					return nil, errors.Annotatef(err, "get single table route result for table %s failed", tableQuery)
 				}
@@ -196,7 +196,7 @@ func simulateBlackWhiteList(workerSet map[string]struct{}, tables []string, depl
 
 	if len(tables) > 0 {
 		if len(workerSet) != 1 {
-			return nil, errors.Errorf("length of given workers should be 1, but is ", len(workerSet))
+			return nil, errors.Errorf("length of given workers should be 1, but is %d", len(workerSet))
 		}
 		var worker string
 		for worker = range workerSet {
@@ -262,12 +262,9 @@ func simulateBlackWhiteList(workerSet map[string]struct{}, tables []string, depl
 
 func simulateEventFilter(workerSet map[string]struct{}, sql string, deployMap map[string]string, stCfgs []*config.SubTaskConfig, cfg *config.TaskConfig) (*pb.SimulationResponse, error) {
 	if len(workerSet) != 1 {
-		return nil, errors.Errorf("length of given workers should be 1, but is %s", len(workerSet))
+		return nil, errors.Errorf("length of given workers should be 1, but is %d", len(workerSet))
 	}
 	simulationResults := make([]*pb.SimulationResult, 0, len(workerSet))
-	var worker string
-	for worker = range workerSet {
-	}
 	resp := &pb.SimulationResponse{Result: true}
 	for _, stCfg := range stCfgs {
 		if _, ok := workerSet[deployMap[stCfg.SourceID]]; !ok {
