@@ -72,7 +72,7 @@ debug-tools:
 test: unit_test integration_test
 
 define run_unit_test
-	@echo "runing unit test for packages:" $(1)
+	@echo "running unit test for packages:" $(1)
 	bash -x ./tests/wait_for_mysql.sh
 	mkdir -p $(TEST_DIR)
 	which $(FAILPOINT) >/dev/null 2>&1 || $(GOBUILD) -o $(FAILPOINT) github.com/pingcap/failpoint/failpoint-ctl
