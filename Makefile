@@ -9,6 +9,10 @@ GO       := GO111MODULE=on go
 GOBUILD  := CGO_ENABLED=0 $(GO) build
 GOTEST   := CGO_ENABLED=1 $(GO) test
 PACKAGES  := $$(go list ./... | grep -vE 'tests|cmd|vendor|pbmock')
+PACKAGES_RELAY := $$(go list ./... | grep -vE 'tests|cmd|vendor|pbmock' | grep 'github.com/pingcap/dm/relay')
+PACKAGES_SYNCER := $$(go list ./... | grep -vE 'tests|cmd|vendor|pbmock' | grep 'github.com/pingcap/dm/syncer')
+PACKAGES_PKG_BINLOG := $$(go list ./... | grep -vE 'tests|cmd|vendor|pbmock' | grep 'github.com/pingcap/dm/pkg/binlog')
+PACKAGES_OTHERS  := $$(go list ./... | grep -vE 'tests|cmd|vendor|pbmock|github.com/pingcap/dm/relay|github.com/pingcap/dm/syncer|github.com/pingcap/dm/pkg/binlog')
 FILES    := $$(find . -name "*.go" | grep -vE "vendor")
 TOPDIRS  := $$(ls -d */ | grep -vE "vendor")
 SHELL    := /usr/bin/env bash
@@ -67,15 +71,32 @@ debug-tools:
 
 test: unit_test integration_test
 
-unit_test:
+define run_unit_test
+	@echo "runing unit test for packages:" $(1)
 	bash -x ./tests/wait_for_mysql.sh
 	mkdir -p $(TEST_DIR)
 	which $(FAILPOINT) >/dev/null 2>&1 || $(GOBUILD) -o $(FAILPOINT) github.com/pingcap/failpoint/failpoint-ctl
 	$(FAILPOINT_ENABLE)
 	@export log_level=error; \
-	$(GOTEST) -covermode=atomic -coverprofile="$(TEST_DIR)/cov.unit_test.out" $(TEST_RACE_FLAG) $(PACKAGES) \
+	$(GOTEST) -covermode=atomic -coverprofile="$(TEST_DIR)/cov.$(2).out" $(TEST_RACE_FLAG) $(1) \
 	|| { $(FAILPOINT_DISABLE); exit 1; }
 	$(FAILPOINT_DISABLE)
+endef
+
+unit_test:
+	$(call run_unit_test,$(PACKAGES),unit_test)
+
+unit_test_relay:
+	$(call run_unit_test,$(PACKAGES_RELAY),unit_test_relay)
+
+unit_test_syncer:
+	$(call run_unit_test,$(PACKAGES_SYNCER),unit_test_syncer)
+
+unit_test_pkg_binlog:
+	$(call run_unit_test,$(PACKAGES_PKG_BINLOG),unit_test_pkg_binlog)
+
+unit_test_others:
+	$(call run_unit_test,$(PACKAGES_OTHERS),unit_test_others)
 
 check: fmt lint vet terror_check
 
