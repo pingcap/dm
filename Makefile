@@ -9,9 +9,9 @@ GO       := GO111MODULE=on go
 GOBUILD  := CGO_ENABLED=0 $(GO) build
 GOTEST   := CGO_ENABLED=1 $(GO) test
 PACKAGES  := $$(go list ./... | grep -vE 'tests|cmd|vendor|pbmock')
-PACKAGES_RELAY := $$(go list ./... | grep -vE 'tests|cmd|vendor|pbmock' | grep 'github.com/pingcap/dm/relay')
-PACKAGES_SYNCER := $$(go list ./... | grep -vE 'tests|cmd|vendor|pbmock' | grep 'github.com/pingcap/dm/syncer')
-PACKAGES_PKG_BINLOG := $$(go list ./... | grep -vE 'tests|cmd|vendor|pbmock' | grep 'github.com/pingcap/dm/pkg/binlog')
+PACKAGES_RELAY := $$(go list ./... | grep 'github.com/pingcap/dm/relay')
+PACKAGES_SYNCER := $$(go list ./... | grep 'github.com/pingcap/dm/syncer')
+PACKAGES_PKG_BINLOG := $$(go list ./... | grep 'github.com/pingcap/dm/pkg/binlog')
 PACKAGES_OTHERS  := $$(go list ./... | grep -vE 'tests|cmd|vendor|pbmock|github.com/pingcap/dm/relay|github.com/pingcap/dm/syncer|github.com/pingcap/dm/pkg/binlog')
 FILES    := $$(find . -name "*.go" | grep -vE "vendor")
 TOPDIRS  := $$(ls -d */ | grep -vE "vendor")
