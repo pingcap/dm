@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react'
-import { Button, Icon, Tree, Tooltip, message } from 'antd'
+import { Button, Icon, Tree, Tooltip, message, Checkbox } from 'antd'
 import styled from 'styled-components'
 import {
   IPageAction,
@@ -84,6 +84,10 @@ const Container = styled.div`
     position: absolute;
     top: 10px;
     right: 10px;
+  }
+
+  .auto-sync-option {
+    margin-top: 10px;
   }
 `
 
@@ -171,6 +175,9 @@ function MigrateStep({ onNext, onPrev, sourceConfig, ...remainProps }: Props) {
 
   // 左移，右移，拖拽，重命名需要记录 lastStateRef
   const lastStateRef = useRef<LastStateRef | null>(null)
+
+  // 是否自动同步上游新增库和新增表的选项
+  const [autoSyncUpstream, setAutoSyncUpstream] = useState(false)
 
   /////////////////////////////////
 
@@ -808,7 +815,8 @@ function MigrateStep({ onNext, onPrev, sourceConfig, ...remainProps }: Props) {
       instancesConfig,
       sourceSchemas,
       targetSchemas,
-      allTables
+      allTables,
+      autoSyncUpstream
     )
     let res = await generateConfig(finalConfig)
     setLoading(false)
@@ -858,8 +866,8 @@ function MigrateStep({ onNext, onPrev, sourceConfig, ...remainProps }: Props) {
                       <>
                         {sourceSchemas[schemaKey].schema}{' '}
                         <Icon
-                          className="edit-icon"
-                          type="edit"
+                          className='edit-icon'
+                          type='edit'
                           onClick={onEditIconClick}
                         />
                       </>
@@ -877,8 +885,8 @@ function MigrateStep({ onNext, onPrev, sourceConfig, ...remainProps }: Props) {
                           <>
                             {allTables[tableKey].table}{' '}
                             <Icon
-                              className="edit-icon"
-                              type="edit"
+                              className='edit-icon'
+                              type='edit'
                               onClick={onEditIconClick}
                             />
                           </>
@@ -922,7 +930,7 @@ function MigrateStep({ onNext, onPrev, sourceConfig, ...remainProps }: Props) {
                 title={
                   <Tooltip
                     title={`${schema.sourceId}:${schema.schema}`}
-                    placement="right"
+                    placement='right'
                   >
                     {schema.newName}
                   </Tooltip>
@@ -936,10 +944,8 @@ function MigrateStep({ onNext, onPrev, sourceConfig, ...remainProps }: Props) {
                     <TreeNode
                       title={
                         <Tooltip
-                          placement="right"
-                          title={`${table.sourceId}:${table.schema}:${
-                            table.table
-                          }`}
+                          placement='right'
+                          title={`${table.sourceId}:${table.schema}:${table.table}`}
                         >
                           {table.newName}
                         </Tooltip>
@@ -954,10 +960,8 @@ function MigrateStep({ onNext, onPrev, sourceConfig, ...remainProps }: Props) {
                             <TreeNode
                               title={
                                 <Tooltip
-                                  placement="right"
-                                  title={`${tb.sourceId}:${tb.schema}:${
-                                    tb.table
-                                  }`}
+                                  placement='right'
+                                  title={`${tb.sourceId}:${tb.schema}:${tb.table}`}
                                 >
                                   {tb.newName}
                                 </Tooltip>
@@ -977,40 +981,51 @@ function MigrateStep({ onNext, onPrev, sourceConfig, ...remainProps }: Props) {
 
   return (
     <Container>
-      <div className="dbtable-shuttle-container">
+      <div className='dbtable-shuttle-container'>
         <div>
           <h2>上游实例</h2>
-          <div className="tree-container">{renderSourceTables()}</div>
+          <div className='tree-container'>{renderSourceTables()}</div>
+          <div className='auto-sync-option'>
+            <Checkbox
+              checked={autoSyncUpstream}
+              onChange={e => setAutoSyncUpstream(e.target.checked)}
+            >
+              自动同步上游新增库和新增表
+            </Checkbox>
+            <Tooltip title='当选中此选项时，后续如果上游有新增的库或表，也会同步到下游。否则，后续上游新增的库或表不会同步到下游。'>
+              <Icon type='question-circle' />
+            </Tooltip>
+          </div>
         </div>
-        <div className="shuttle-arrows">
+        <div className='shuttle-arrows'>
           <Button disabled={!enableMoveRight} onClick={moveRight}>
-            <Icon type="arrow-right" />
+            <Icon type='arrow-right' />
           </Button>
           <Button disabled={!enableMoveLeft} onClick={moveLeft}>
-            <Icon type="arrow-left" />
+            <Icon type='arrow-left' />
           </Button>
         </div>
         <div>
           <h2>下游实例</h2>
-          <div className="tree-container">
+          <div className='tree-container'>
             {renderTargetTables()}
-            <div className="action-icons">
+            <div className='action-icons'>
               <Button onClick={undo} disabled={lastStateRef.current === null}>
-                <Icon type="undo" />
+                <Icon type='undo' />
               </Button>
               <Button
                 onClick={cleanTargetInstance}
                 disabled={targetInstance.schemas.length === 0}
               >
-                <Icon type="rollback" />
+                <Icon type='rollback' />
               </Button>
             </div>
           </div>
         </div>
       </div>
-      <div className="action-buttons">
+      <div className='action-buttons'>
         <Button onClick={() => onPrev()}>上一步</Button>
-        <Button type="primary" onClick={handleSubmit} loading={loading}>
+        <Button type='primary' onClick={handleSubmit} loading={loading}>
           完成并下载
         </Button>
         <Button onClick={goHome}>返回首页</Button>
