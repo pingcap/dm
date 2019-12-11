@@ -9,6 +9,10 @@ GO       := GO111MODULE=on go
 GOBUILD  := CGO_ENABLED=0 $(GO) build
 GOTEST   := CGO_ENABLED=1 $(GO) test
 PACKAGES  := $$(go list ./... | grep -vE 'tests|cmd|vendor|pbmock')
+PACKAGES_RELAY := $$(go list ./... | grep 'github.com/pingcap/dm/relay')
+PACKAGES_SYNCER := $$(go list ./... | grep 'github.com/pingcap/dm/syncer')
+PACKAGES_PKG_BINLOG := $$(go list ./... | grep 'github.com/pingcap/dm/pkg/binlog')
+PACKAGES_OTHERS  := $$(go list ./... | grep -vE 'tests|cmd|vendor|pbmock|github.com/pingcap/dm/relay|github.com/pingcap/dm/syncer|github.com/pingcap/dm/pkg/binlog')
 FILES    := $$(find . -name "*.go" | grep -vE "vendor")
 TOPDIRS  := $$(ls -d */ | grep -vE "vendor")
 SHELL    := /usr/bin/env bash
@@ -17,9 +21,14 @@ FAILPOINT_DIR := $$(for p in $(PACKAGES); do echo $${p\#"github.com/pingcap/dm/"
 FAILPOINT := bin/failpoint-ctl
 
 RACE_FLAG =
+TEST_RACE_FLAG = -race
 ifeq ("$(WITH_RACE)", "1")
 	RACE_FLAG = -race
 	GOBUILD   = CGO_ENABLED=1 $(GO) build
+endif
+ifeq ("$(WITH_RACE)", "0")
+	TEST_RACE_FLAG =
+	GOTEST         = CGO_ENABLED=0 $(GO) test
 endif
 
 FAILPOINT_ENABLE  := $$(echo $(FAILPOINT_DIR) | xargs $(FAILPOINT) enable >/dev/null)
@@ -34,7 +43,7 @@ ifeq ($(ARCH), $(LINUX))
 	LDFLAGS += -X "github.com/pingcap/dm/dm/master.SampleConfigFile=$(shell cat dm/master/dm-master.toml | base64 -w 0)"
 else
 	LDFLAGS += -X "github.com/pingcap/dm/dm/worker.SampleConfigFile=$(shell cat dm/worker/dm-worker.toml | base64)"
-	LDFLAGS += -X "github.com/pingcap/dm/dm/master.SampleConfigFile=$(shell cat dm/master/dm-master.toml | base64)" 
+	LDFLAGS += -X "github.com/pingcap/dm/dm/master.SampleConfigFile=$(shell cat dm/master/dm-master.toml | base64)"
 endif
 
 .PHONY: build test unit_test dm_integration_test_build integration_test \
@@ -56,15 +65,32 @@ dmctl:
 
 test: unit_test integration_test
 
-unit_test:
+define run_unit_test
+	@echo "running unit test for packages:" $(1)
 	bash -x ./tests/wait_for_mysql.sh
 	mkdir -p $(TEST_DIR)
 	which $(FAILPOINT) >/dev/null 2>&1 || $(GOBUILD) -o $(FAILPOINT) github.com/pingcap/failpoint/failpoint-ctl
 	$(FAILPOINT_ENABLE)
 	@export log_level=error; \
-	$(GOTEST) -covermode=atomic -coverprofile="$(TEST_DIR)/cov.unit_test.out" -race $(PACKAGES) \
+	$(GOTEST) -covermode=atomic -coverprofile="$(TEST_DIR)/cov.$(2).out" $(TEST_RACE_FLAG) $(1) \
 	|| { $(FAILPOINT_DISABLE); exit 1; }
 	$(FAILPOINT_DISABLE)
+endef
+
+unit_test:
+	$(call run_unit_test,$(PACKAGES),unit_test)
+
+unit_test_relay:
+	$(call run_unit_test,$(PACKAGES_RELAY),unit_test_relay)
+
+unit_test_syncer:
+	$(call run_unit_test,$(PACKAGES_SYNCER),unit_test_syncer)
+
+unit_test_pkg_binlog:
+	$(call run_unit_test,$(PACKAGES_PKG_BINLOG),unit_test_pkg_binlog)
+
+unit_test_others:
+	$(call run_unit_test,$(PACKAGES_OTHERS),unit_test_others)
 
 check: fmt lint vet terror_check
 
@@ -95,11 +121,11 @@ terror_check:
 dm_integration_test_build:
 	which $(FAILPOINT) >/dev/null 2>&1 || $(GOBUILD) -o $(FAILPOINT) github.com/pingcap/failpoint/failpoint-ctl
 	$(FAILPOINT_ENABLE)
-	$(GOTEST) -c -race -cover -covermode=atomic \
+	$(GOTEST) -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-worker.test github.com/pingcap/dm/cmd/dm-worker \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
-	$(GOTEST) -c -race -cover -covermode=atomic \
+	$(GOTEST) -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-master.test github.com/pingcap/dm/cmd/dm-master \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
@@ -107,7 +133,7 @@ dm_integration_test_build:
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dmctl.test github.com/pingcap/dm/cmd/dm-ctl \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
-	$(GOTEST) -c -race -cover -covermode=atomic \
+	$(GOTEST) -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-tracer.test github.com/pingcap/dm/cmd/dm-tracer \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
@@ -140,7 +166,7 @@ coverage_fix_cover_mode:
 coverage: coverage_fix_cover_mode
 	GO111MODULE=off go get github.com/zhouqiang-cl/gocovmerge
 	gocovmerge "$(TEST_DIR)"/cov.* | grep -vE ".*.pb.go|.*.__failpoint_binding__.go" > "$(TEST_DIR)/all_cov.out"
-	grep -vE ".*.pb.go|.*.__failpoint_binding__.go" $(TEST_DIR)/cov.unit_test.out > $(TEST_DIR)/unit_test.out
+	gocovmerge "$(TEST_DIR)"/cov.unit_test*.out | grep -vE ".*.pb.go|.*.__failpoint_binding__.go" > $(TEST_DIR)/unit_test.out
 ifeq ("$(JenkinsCI)", "1")
 	GO111MODULE=off go get github.com/mattn/goveralls
 	@goveralls -coverprofile=$(TEST_DIR)/all_cov.out -service=jenkins-ci -repotoken $(COVERALLS_TOKEN)

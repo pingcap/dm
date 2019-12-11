@@ -357,7 +357,7 @@ func (t *testFileWriterSuite) TestRotateEventWithFormatDescriptionEvent(c *check
 
 	// write again, duplicate, but we already rotated and new binlog file not created
 	_, err = w4.WriteEvent(rotateEv)
-	c.Assert(err, check.ErrorMatches, ".*no such file or directory.*")
+	c.Assert(err, check.ErrorMatches, ".*(no such file or directory|The system cannot find the file specified).*")
 
 	// cfg.Filename should contain both one FormatDescriptionEvent and one RotateEvent, next file should be empty
 	filename1 = filepath.Join(cfg.RelayDir, cfg.Filename)

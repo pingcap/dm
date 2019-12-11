@@ -14,6 +14,8 @@
 package streamer
 
 import (
+	"path/filepath"
+
 	. "github.com/pingcap/check"
 )
 
@@ -49,7 +51,7 @@ func (t *testHubSuite) TestRelayLogInfo(c *C) {
 
 	// string representation
 	rli3.UUID = "c6ae5afe-c7a3-11e8-a19d-0242ac130006.000001"
-	c.Assert(rli3.String(), Equals, rli3.UUID+"/"+rli3.Filename)
+	c.Assert(rli3.String(), Equals, filepath.Join(rli3.UUID, rli3.Filename))
 }
 
 func (t *testHubSuite) TestRelayLogInfoHub(c *C) {
