@@ -15,7 +15,6 @@ package simulator
 
 import (
 	"context"
-
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
@@ -104,8 +103,12 @@ func bwListFunc(cmd *cobra.Command, _ []string) {
 			}
 		}
 
-		doTableMap[simulationResult.SourceAddr] = doTableList
-		ignoreTableMap[simulationResult.SourceAddr] = ignoreTableList
+		if len(doTableList) > 0 {
+			doTableMap[simulationResult.SourceAddr] = doTableList
+		}
+		if len(ignoreTableList) > 0 {
+			ignoreTableMap[simulationResult.SourceAddr] = ignoreTableList
+		}
 	}
 	result.DoTables = doTableMap
 	result.IgnoreTables = ignoreTableMap

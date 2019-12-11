@@ -33,21 +33,17 @@ function run() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "table-route -w 127.0.0.1:$WORKER1_PORT -T \`A\`.\`B\` $task_conf" \
         "\"result\": true" 1 \
-        "\"will-be-filtered\": \"yes\"" 1
+        "ignore-tables" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "table-route -w 127.0.0.1:$WORKER1_PORT -T \`simulator_5\`.\`A\` $task_conf" \
         "\"result\": true" 1 \
-        "\"match-route\": \"user-route-rules-schema\"," 1 \
-        "\"target-schema\": \"simulator\"," 1 \
-        "\"target-table\": \"A\"" 1
+        "\"table\": \"\`simulator_5\`.\`A\`\"" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "table-route -w 127.0.0.1:$WORKER1_PORT -T \`simulator_5\`.\`simulate_4\` $task_conf" \
         "\"result\": true" 1 \
-        "\"match-route\": \"user-route-rules\"," 1 \
-        "\"target-schema\": \"simulator\"," 1 \
-        "\"target-table\": \"t\"" 1
+         "\"table\": \"\`simulator_5\`.\`simulate_4\`\"" 1
 
     # black-white-list simulator test
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -64,12 +60,14 @@ function run() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "bw-list -w 127.0.0.1:$WORKER1_PORT -T \`simulator_5\`.\`A\` $task_conf" \
         "\"result\": true" 1 \
-        "\"will-be-filtered\": \"no\"" 1
+        "do-tables" 1 \
+        "ignore-tables" 0
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "bw-list -w 127.0.0.1:$WORKER1_PORT -T \`simulator\`.\`t\` $task_conf" \
         "\"result\": true" 1 \
-        "\"will-be-filtered\": \"yes\"" 1
+        "do-tables" 0 \
+        "ignore-tables" 1
 
     # binlog-event-filter simulator test
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \

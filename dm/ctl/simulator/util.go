@@ -35,7 +35,7 @@ func getTableFromCMD(cmd *cobra.Command) (string, error) {
 		return "", errors.Annotate(err, "get table arg failed")
 	}
 	if tableName == "" {
-		return "", errors.New("argument table is not given. pls check it again")
+		return "", errors.New("argument table is not given. please check it again")
 	}
 	return tableName, nil
 }
