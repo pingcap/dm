@@ -167,7 +167,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	c.Assert(err, IsNil)
 
 	// check task in paused state
-	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(100, 100*time.Millisecond, func() bool {
 		for _, st := range s.worker.QueryStatus(taskName) {
 			if st.Name == taskName && st.Stage == pb.Stage_Paused {
 				return true
