@@ -82,7 +82,7 @@ func (t *testReaderSuite) TestParseFileBase(c *C) {
 	// relay log file not exists, failed
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
 		ctx, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
-	c.Assert(err, ErrorMatches, ".*no such file or directory.*")
+	c.Assert(err, ErrorMatches, ".*(no such file or directory|The system cannot find the path specified).*")
 
 	// empty relay log file, failed, got EOF
 	err = os.MkdirAll(relayDir, 0700)
@@ -269,7 +269,7 @@ func (t *testReaderSuite) TestParseFileRelaySubDirUpdated(c *C) {
 		_, err2 := f.Write(extraEvents[0].RawData)
 		c.Assert(err2, IsNil)
 	}()
-	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Second)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel2()
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
 		ctx2, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)
@@ -290,7 +290,7 @@ func (t *testReaderSuite) TestParseFileRelaySubDirUpdated(c *C) {
 		err2 := ioutil.WriteFile(nextPath, replication.BinLogFileHeader, 0600)
 		c.Assert(err2, IsNil)
 	}()
-	ctx3, cancel3 := context.WithTimeout(context.Background(), time.Second)
+	ctx3, cancel3 := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel3()
 	needSwitch, needReParse, latestPos, nextUUID, nextBinlogName, err = r.parseFile(
 		ctx3, s, filename, offset, relayDir, firstParse, currentUUID, possibleLast)

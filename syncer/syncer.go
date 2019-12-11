@@ -68,6 +68,8 @@ var (
 	maxDMLConnectionTimeout = "5m"
 	maxDDLConnectionTimeout = fmt.Sprintf("%dm", MaxDDLConnectionTimeoutMinute)
 
+	maxDMLConnectionDuration, _ = time.ParseDuration(maxDMLConnectionTimeout)
+
 	adminQueueName     = "admin queue"
 	defaultBucketCount = 8
 )
@@ -298,13 +300,15 @@ func (s *Syncer) Type() pb.UnitType {
 // Init initializes syncer for a sync task, but not start Process.
 // if fail, it should not call s.Close.
 // some check may move to checker later.
-func (s *Syncer) Init() (err error) {
+func (s *Syncer) Init(ctx context.Context) (err error) {
 	rollbackHolder := fr.NewRollbackHolder("syncer")
 	defer func() {
 		if err != nil {
 			rollbackHolder.RollbackReverseOrder()
 		}
 	}()
+
+	tctx := s.tctx.WithContext(ctx)
 
 	err = s.createDBs()
 	if err != nil {
@@ -334,7 +338,7 @@ func (s *Syncer) Init() (err error) {
 		if !ok {
 			return terror.ErrSyncerUnitOnlineDDLSchemeNotSupport.Generate(s.cfg.OnlineDDLScheme)
 		}
-		s.onlineDDL, err = fn(s.tctx, s.cfg)
+		s.onlineDDL, err = fn(tctx, s.cfg)
 		if err != nil {
 			return err
 		}
@@ -359,20 +363,20 @@ func (s *Syncer) Init() (err error) {
 		rollbackHolder.Add(fr.FuncRollback{Name: "close-sharding-group-keeper", Fn: s.sgk.Close})
 	}
 
-	err = s.checkpoint.Init()
+	err = s.checkpoint.Init(tctx)
 	if err != nil {
 		return err
 	}
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-checkpoint", Fn: s.checkpoint.Close})
 
 	if s.cfg.RemoveMeta {
-		err = s.checkpoint.Clear()
+		err = s.checkpoint.Clear(tctx)
 		if err != nil {
 			return terror.Annotate(err, "clear checkpoint in syncer")
 		}
 
 		if s.onlineDDL != nil {
-			err = s.onlineDDL.Clear()
+			err = s.onlineDDL.Clear(tctx)
 			if err != nil {
 				return terror.Annotate(err, "clear online ddl in syncer")
 			}
@@ -380,7 +384,7 @@ func (s *Syncer) Init() (err error) {
 		s.tctx.L().Info("all previous meta cleared")
 	}
 
-	err = s.checkpoint.Load()
+	err = s.checkpoint.Load(tctx)
 	if err != nil {
 		return err
 	}
@@ -464,7 +468,7 @@ func (s *Syncer) initShardingGroups() error {
 }
 
 // IsFreshTask implements Unit.IsFreshTask
-func (s *Syncer) IsFreshTask() (bool, error) {
+func (s *Syncer) IsFreshTask(ctx context.Context) (bool, error) {
 	globalPoint := s.checkpoint.GlobalPoint()
 	return globalPoint.Compare(minCheckpoint) <= 0, nil
 }
@@ -510,36 +514,36 @@ func (s *Syncer) reset() {
 	}
 }
 
-func (s *Syncer) resetDBs() error {
+func (s *Syncer) resetDBs(tctx *tcontext.Context) error {
 	var err error
 
 	for i := 0; i < len(s.toDBConns); i++ {
-		err = s.toDBConns[i].resetConn(s.tctx)
+		err = s.toDBConns[i].resetConn(tctx)
 		if err != nil {
 			return terror.WithScope(err, terror.ScopeDownstream)
 		}
 	}
 
 	if s.onlineDDL != nil {
-		err = s.onlineDDL.ResetConn()
+		err = s.onlineDDL.ResetConn(tctx)
 		if err != nil {
 			return terror.WithScope(err, terror.ScopeDownstream)
 		}
 	}
 
 	if s.sgk != nil {
-		err = s.sgk.dbConn.resetConn(s.tctx)
+		err = s.sgk.dbConn.resetConn(tctx)
 		if err != nil {
 			return terror.WithScope(err, terror.ScopeDownstream)
 		}
 	}
 
-	err = s.ddlDBConn.resetConn(s.tctx)
+	err = s.ddlDBConn.resetConn(tctx)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
 
-	err = s.checkpoint.ResetConn()
+	err = s.checkpoint.ResetConn(tctx)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -856,7 +860,10 @@ func (s *Syncer) flushCheckPoints() error {
 		shardMetaSQLs, shardMetaArgs = s.sgk.PrepareFlushSQLs(exceptTableIDs)
 		s.tctx.L().Info("prepare flush sqls", zap.Strings("shard meta sqls", shardMetaSQLs), zap.Reflect("shard meta arguments", shardMetaArgs))
 	}
-	err := s.checkpoint.FlushPointsExcept(exceptTables, shardMetaSQLs, shardMetaArgs)
+
+	tctx, cancel := s.tctx.WithContext(context.Background()).WithTimeout(maxDMLConnectionDuration)
+	defer cancel()
+	err := s.checkpoint.FlushPointsExcept(tctx, exceptTables, shardMetaSQLs, shardMetaArgs)
 	if err != nil {
 		return terror.Annotatef(err, "flush checkpoint %s", s.checkpoint)
 	}
@@ -871,7 +878,7 @@ func (s *Syncer) flushCheckPoints() error {
 }
 
 // DDL synced one by one, so we only need to process one DDL at a time
-func (s *Syncer) syncDDL(ctx *tcontext.Context, queueBucket string, db *DBConn, ddlJobChan chan *job) {
+func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn, ddlJobChan chan *job) {
 	defer s.wg.Done()
 
 	var err error
@@ -882,12 +889,12 @@ func (s *Syncer) syncDDL(ctx *tcontext.Context, queueBucket string, db *DBConn, 
 		}
 
 		if sqlJob.ddlExecItem != nil && sqlJob.ddlExecItem.req != nil && !sqlJob.ddlExecItem.req.Exec {
-			s.tctx.L().Info("ignore sharding DDLs", zap.Strings("ddls", sqlJob.ddls))
+			tctx.L().Info("ignore sharding DDLs", zap.Strings("ddls", sqlJob.ddls))
 		} else {
 			var affected int
-			affected, err = db.executeSQLWithIgnore(s.tctx, ignoreDDLError, sqlJob.ddls)
+			affected, err = db.executeSQLWithIgnore(tctx, ignoreDDLError, sqlJob.ddls)
 			if err != nil {
-				err = s.handleSpecialDDLError(s.tctx, err, sqlJob.ddls, affected, db)
+				err = s.handleSpecialDDLError(tctx, err, sqlJob.ddls, affected, db)
 				err = terror.WithScope(err, terror.ScopeDownstream)
 			}
 
@@ -899,7 +906,7 @@ func (s *Syncer) syncDDL(ctx *tcontext.Context, queueBucket string, db *DBConn, 
 				}
 				_, traceErr := s.tracer.CollectSyncerJobEvent(sqlJob.traceID, sqlJob.traceGID, int32(sqlJob.tp), sqlJob.pos, sqlJob.currentPos, queueBucket, sqlJob.sql, sqlJob.ddls, nil, execDDLReq, syncerJobState)
 				if traceErr != nil {
-					s.tctx.L().Error("fail to collect binlog replication job event", log.ShortError(traceErr))
+					tctx.L().Error("fail to collect binlog replication job event", log.ShortError(traceErr))
 				}
 			}
 		}
@@ -921,14 +928,16 @@ func (s *Syncer) syncDDL(ctx *tcontext.Context, queueBucket string, db *DBConn, 
 		s.jobWg.Done()
 		if err != nil {
 			s.execErrorDetected.Set(true)
-			s.runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, err)
+			if !utils.IsContextCanceledError(err) {
+				s.runFatalChan <- unit.NewProcessError(pb.ErrorType_ExecSQL, err)
+			}
 			continue
 		}
 		s.addCount(true, queueBucket, sqlJob.tp, int64(len(sqlJob.ddls)))
 	}
 }
 
-func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *DBConn, jobChan chan *job) {
+func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jobChan chan *job) {
 	defer s.wg.Done()
 
 	idx := 0
@@ -951,7 +960,9 @@ func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *DBConn, job
 
 	fatalF := func(err error, errType pb.ErrorType) {
 		s.execErrorDetected.Set(true)
-		s.runFatalChan <- unit.NewProcessError(errType, err)
+		if !utils.IsContextCanceledError(err) {
+			s.runFatalChan <- unit.NewProcessError(errType, err)
+		}
 		clearF()
 	}
 
@@ -965,7 +976,7 @@ func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *DBConn, job
 			queries = append(queries, j.sql)
 			args = append(args, j.args)
 		}
-		affected, err := db.executeSQL(s.tctx, queries, args...)
+		affected, err := db.executeSQL(tctx, queries, args...)
 		if err != nil {
 			errCtx := &ExecErrorContext{err, jobs[affected].currentPos, fmt.Sprintf("%v", jobs)}
 			s.appendExecErrors(errCtx)
@@ -975,7 +986,7 @@ func (s *Syncer) sync(ctx *tcontext.Context, queueBucket string, db *DBConn, job
 			for _, job := range jobs {
 				_, err2 := s.tracer.CollectSyncerJobEvent(job.traceID, job.traceGID, int32(job.tp), job.pos, job.currentPos, queueBucket, job.sql, job.ddls, nil, nil, syncerJobState)
 				if err2 != nil {
-					s.tctx.L().Error("fail to collect binlog replication job event", log.ShortError(err2))
+					tctx.L().Error("fail to collect binlog replication job event", log.ShortError(err2))
 				}
 			}
 		}
@@ -1031,6 +1042,8 @@ func (s *Syncer) redirectStreamer(pos mysql.Position) error {
 
 // Run starts running for sync, we should guarantee it can rerun when paused.
 func (s *Syncer) Run(ctx context.Context) (err error) {
+	tctx := s.tctx.WithContext(ctx)
+
 	defer func() {
 		if s.done != nil {
 			close(s.done)
@@ -1042,7 +1055,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		return err
 	}
 
-	fresh, err := s.IsFreshTask()
+	fresh, err := s.IsFreshTask(ctx)
 	if err != nil {
 		return err
 	} else if fresh {
@@ -1123,7 +1136,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	// if we start syncer at an early position, database must bear a period of inconsistent state,
 	// it's eventual consistency.
 	safeMode := sm.NewSafeMode()
-	s.enableSafeModeInitializationPhase(s.tctx.WithContext(ctx), safeMode)
+	s.enableSafeModeInitializationPhase(tctx, safeMode)
 
 	// syncing progress with sharding DDL group
 	// 1. use the global streamer to sync regular binlog events
@@ -1266,6 +1279,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 		s.tctx.L().Debug("receive binlog event", zap.Reflect("header", e.Header))
 		ec := eventContext{
+			tctx:                tctx,
 			header:              e.Header,
 			currentPos:          &currentPos,
 			lastPos:             &lastPos,
@@ -1327,6 +1341,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 }
 
 type eventContext struct {
+	tctx                *tcontext.Context
 	header              *replication.EventHeader
 	currentPos          *mysql.Position
 	lastPos             *mysql.Position
@@ -1592,7 +1607,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 	// for DDL, we don't apply operator until we try to execute it.
 	// so can handle sharding cases
-	sqls, onlineDDLTableNames, err = s.resolveDDLSQL(ec.parser2, parseResult.stmt, usedSchema)
+	sqls, onlineDDLTableNames, err = s.resolveDDLSQL(ec.tctx, ec.parser2, parseResult.stmt, usedSchema)
 	if err != nil {
 		s.tctx.L().Error("fail to resolve statement", zap.String("event", "query"), zap.String("statement", sql), zap.String("schema", usedSchema), zap.Stringer("last position", ec.lastPos), log.WrapStringerField("position", ec.currentPos), log.WrapStringerField("gtid set", ev.GSet), log.ShortError(err))
 		return err
@@ -1643,7 +1658,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		if s.cfg.IsSharding {
 			switch stmt.(type) {
 			case *ast.DropDatabaseStmt:
-				err = s.dropSchemaInSharding(tableNames[0][0].Schema)
+				err = s.dropSchemaInSharding(ec.tctx, tableNames[0][0].Schema)
 				if err != nil {
 					return err
 				}
@@ -1654,7 +1669,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 				if err != nil {
 					return err
 				}
-				err = s.checkpoint.DeleteTablePoint(tableNames[0][0].Schema, tableNames[0][0].Name)
+				err = s.checkpoint.DeleteTablePoint(ec.tctx, tableNames[0][0].Schema, tableNames[0][0].Name)
 				if err != nil {
 					return err
 				}
@@ -1722,7 +1737,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 		for _, table := range onlineDDLTableNames {
 			s.tctx.L().Info("finish online ddl and clear online ddl metadata in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.String("schema", table.Schema), zap.String("table", table.Name))
-			err = s.onlineDDL.Finish(table.Schema, table.Name)
+			err = s.onlineDDL.Finish(ec.tctx, table.Schema, table.Name)
 			if err != nil {
 				return terror.Annotatef(err, "finish online ddl on %s.%s", table.Schema, table.Name)
 			}
@@ -1895,7 +1910,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	}
 
 	if len(onlineDDLTableNames) > 0 {
-		err = s.clearOnlineDDL(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
+		err = s.clearOnlineDDL(ec.tctx, ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name)
 		if err != nil {
 			return err
 		}
@@ -2278,7 +2293,7 @@ func (s *Syncer) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	// continue the processing
 	s.reset()
 	// reset database conns
-	err := s.resetDBs()
+	err := s.resetDBs(s.tctx.WithContext(ctx))
 	if err != nil {
 		pr <- pb.ProcessResult{
 			IsCanceled: false,

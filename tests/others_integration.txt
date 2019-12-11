@@ -1,3 +1,4 @@
 full_mode
+retry_cancel
 start_task
 simulator

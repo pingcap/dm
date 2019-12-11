@@ -22,6 +22,7 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
 
 func TestSuite(t *testing.T) {
@@ -69,7 +70,7 @@ func (t *testStrategySuite) TestFiniteRetryStrategy(c *C) {
 
 	// invalid connection will return ErrInvalidConn immediately no matter how many retries left
 	params.IsRetryableFn = func(int, error) bool {
-		return IsRetryableError(err)
+		return dbutil.IsRetryableError(err)
 	}
 	operateFn = func(*tcontext.Context) (interface{}, error) {
 		mysqlErr := driver.ErrBadConn

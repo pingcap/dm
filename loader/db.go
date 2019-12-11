@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	tmysql "github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
@@ -65,7 +66,7 @@ func (conn *DBConn) querySQL(ctx *tcontext.Context, query string, args ...interf
 				}
 				return true
 			}
-			if retry.IsRetryableError(err) {
+			if dbutil.IsRetryableError(err) {
 				ctx.L().Warn("query statement", zap.Int("retry", retryTime),
 					zap.String("query", utils.TruncateString(query, -1)),
 					zap.String("argument", utils.TruncateInterface(args, -1)),
@@ -95,7 +96,7 @@ func (conn *DBConn) querySQL(ctx *tcontext.Context, query string, args ...interf
 			return ret, err
 		})
 	if err != nil {
-		ctx.L().Error("query statement failed after retry",
+		ctx.L().ErrorFilterContextCanceled("query statement failed after retry",
 			zap.String("query", utils.TruncateString(query, -1)),
 			zap.String("argument", utils.TruncateInterface(args, -1)),
 			log.ShortError(err))
@@ -130,7 +131,7 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 				}
 				return true
 			}
-			if retry.IsRetryableError(err) {
+			if dbutil.IsRetryableError(err) {
 				ctx.L().Warn("execute statements", zap.Int("retry", retryTime),
 					zap.String("queries", utils.TruncateInterface(queries, -1)),
 					zap.String("arguments", utils.TruncateInterface(args, -1)),
@@ -169,7 +170,7 @@ func (conn *DBConn) executeSQL(ctx *tcontext.Context, queries []string, args ...
 		})
 
 	if err != nil {
-		ctx.L().Error("execute statements failed after retry",
+		ctx.L().ErrorFilterContextCanceled("execute statements failed after retry",
 			zap.String("queries", utils.TruncateInterface(queries, -1)),
 			zap.String("arguments", utils.TruncateInterface(args, -1)),
 			log.ShortError(err))

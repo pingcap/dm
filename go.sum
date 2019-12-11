@@ -291,8 +291,8 @@ github.com/pingcap/pd v1.1.0-beta.0.20191114130008-2488cb978644/go.mod h1:Z/VMtX
 github.com/pingcap/tidb v1.1.0-beta.0.20191115021711-b274eb2079dc h1:RtwQ6Kb8QWkUcInh2vzSc8HtQ2VHNNBV6datScfyF3c=
 github.com/pingcap/tidb v1.1.0-beta.0.20191115021711-b274eb2079dc/go.mod h1:8DSQhELIQr/UqWaolPciDK1Nj6ARvD0NjBmQLCRJpxY=
 github.com/pingcap/tidb-tools v3.0.6-0.20191106033616-90632dda3863+incompatible/go.mod h1:XGdcy9+yqlDSEMTpOXnwf3hiTeqrV6MN/u1se9N8yIM=
-github.com/pingcap/tidb-tools v3.0.6-0.20191113022349-48d5e90d3271+incompatible h1:/7AeCi01XT4RydwHxtAFrcbZM56aL/sW0o4A1i89Krg=
-github.com/pingcap/tidb-tools v3.0.6-0.20191113022349-48d5e90d3271+incompatible/go.mod h1:XGdcy9+yqlDSEMTpOXnwf3hiTeqrV6MN/u1se9N8yIM=
+github.com/pingcap/tidb-tools v3.0.7-0.20191202034632-451c58d281c7+incompatible h1:3RgiaMx1vc6MGIiFlBvymDU+onQnnnXBLx0UTMZ944w=
+github.com/pingcap/tidb-tools v3.0.7-0.20191202034632-451c58d281c7+incompatible/go.mod h1:XGdcy9+yqlDSEMTpOXnwf3hiTeqrV6MN/u1se9N8yIM=
 github.com/pingcap/tipb v0.0.0-20190428032612-535e1abaa330 h1:rRMLMjIMFulCX9sGKZ1hoov/iROMsKyC8Snc02nSukw=
 github.com/pingcap/tipb v0.0.0-20190428032612-535e1abaa330/go.mod h1:RtkHW8WbcNxj8lsbzjaILci01CtYnYbIkQhjyZWrWVI=
 github.com/pingcap/tipb v0.0.0-20191112054303-0b0ad0d4a92e h1:TWwzCfLrj9GH5uaT0VcvdSnrHuwEntUfoHDTYdOzNNI=
@@ -328,6 +328,8 @@ github.com/prometheus/procfs v0.0.2/go.mod h1:TjEm7ze935MbeOT/UhFTIMYKhuLP4wbCsT
 github.com/prometheus/procfs v0.0.5/go.mod h1:4A/X28fw3Fc593LaREMrKMqOKvUAntwMDaekg4FpcdQ=
 github.com/prometheus/procfs v0.0.6 h1:0qbH+Yqu/cj1ViVLvEWCP6qMQ4efWUj6bQqOEA0V0U4=
 github.com/prometheus/procfs v0.0.6/go.mod h1:7Qr8sr6344vo1JqZ6HhLceV9o3AJ1Ff+GxbHq6oeK9A=
+github.com/rakyll/statik v0.1.6 h1:uICcfUXpgqtw2VopbIncslhAmE5hwc4g20TEyEENBNs=
+github.com/rakyll/statik v0.1.6/go.mod h1:OEi9wJV/fMUAGx1eNjq75DKDsJVuEv1U0oYdX6GX8Zs=
 github.com/remyoudompheng/bigfft v0.0.0-20190512091148-babf20351dd7 h1:FUL3b97ZY2EPqg2NbXKuMHs5pXJB9hjj1fDHnF2vl28=
 github.com/remyoudompheng/bigfft v0.0.0-20190512091148-babf20351dd7/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 github.com/remyoudompheng/bigfft v0.0.0-20190728182440-6a916e37a237 h1:HQagqIiBmr8YXawX/le3+O26N+vPPC1PtjaF3mwnook=

@@ -17,9 +17,14 @@ FAILPOINT_DIR := $$(for p in $(PACKAGES); do echo $${p\#"github.com/pingcap/dm/"
 FAILPOINT := bin/failpoint-ctl
 
 RACE_FLAG =
+TEST_RACE_FLAG = -race
 ifeq ("$(WITH_RACE)", "1")
 	RACE_FLAG = -race
 	GOBUILD   = CGO_ENABLED=1 $(GO) build
+endif
+ifeq ("$(WITH_RACE)", "0")
+	TEST_RACE_FLAG =
+	GOTEST         = CGO_ENABLED=0 $(GO) test
 endif
 
 FAILPOINT_ENABLE  := $$(echo $(FAILPOINT_DIR) | xargs $(FAILPOINT) enable >/dev/null)
@@ -34,13 +39,13 @@ ifeq ($(ARCH), $(LINUX))
 	LDFLAGS += -X "github.com/pingcap/dm/dm/master.SampleConfigFile=$(shell cat dm/master/dm-master.toml | base64 -w 0)"
 else
 	LDFLAGS += -X "github.com/pingcap/dm/dm/worker.SampleConfigFile=$(shell cat dm/worker/dm-worker.toml | base64)"
-	LDFLAGS += -X "github.com/pingcap/dm/dm/master.SampleConfigFile=$(shell cat dm/master/dm-master.toml | base64)" 
+	LDFLAGS += -X "github.com/pingcap/dm/dm/master.SampleConfigFile=$(shell cat dm/master/dm-master.toml | base64)"
 endif
 
 .PHONY: build test unit_test dm_integration_test_build integration_test \
 	coverage check dm-worker dm-master dm-tracer dmctl debug-tools
 
-build: check dm-worker dm-master dm-tracer dmctl
+build: check dm-worker dm-master dm-tracer dmctl dm-portal
 
 dm-worker:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dm-worker ./cmd/dm-worker
@@ -54,6 +59,9 @@ dm-tracer:
 dmctl:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dmctl ./cmd/dm-ctl
 
+dm-portal:
+	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dm-portal ./cmd/dm-portal
+
 debug-tools:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/binlog-event-blackhole ./debug-tools/binlog-event-blackhole
 
@@ -65,7 +73,7 @@ unit_test:
 	which $(FAILPOINT) >/dev/null 2>&1 || $(GOBUILD) -o $(FAILPOINT) github.com/pingcap/failpoint/failpoint-ctl
 	$(FAILPOINT_ENABLE)
 	@export log_level=error; \
-	$(GOTEST) -covermode=atomic -coverprofile="$(TEST_DIR)/cov.unit_test.out" -race $(PACKAGES) \
+	$(GOTEST) -covermode=atomic -coverprofile="$(TEST_DIR)/cov.unit_test.out" $(TEST_RACE_FLAG) $(PACKAGES) \
 	|| { $(FAILPOINT_DISABLE); exit 1; }
 	$(FAILPOINT_DISABLE)
 
@@ -98,11 +106,11 @@ terror_check:
 dm_integration_test_build:
 	which $(FAILPOINT) >/dev/null 2>&1 || $(GOBUILD) -o $(FAILPOINT) github.com/pingcap/failpoint/failpoint-ctl
 	$(FAILPOINT_ENABLE)
-	$(GOTEST) -c -race -cover -covermode=atomic \
+	$(GOTEST) -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-worker.test github.com/pingcap/dm/cmd/dm-worker \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
-	$(GOTEST) -c -race -cover -covermode=atomic \
+	$(GOTEST) -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-master.test github.com/pingcap/dm/cmd/dm-master \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
@@ -110,7 +118,7 @@ dm_integration_test_build:
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dmctl.test github.com/pingcap/dm/cmd/dm-ctl \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
-	$(GOTEST) -c -race -cover -covermode=atomic \
+	$(GOTEST) -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-tracer.test github.com/pingcap/dm/cmd/dm-tracer \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
