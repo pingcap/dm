@@ -6,6 +6,32 @@ cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
+run_dm_ctl_contain() {
+    workdir=$1
+    master_addr=$2
+    cmd=$3
+    content=$4
+
+    shift 3
+
+    PWD=$(pwd)
+    binary=$PWD/bin/dmctl.test
+    ts=$(date +"%s")
+    dmctl_log=$workdir/dmctl.$ts.log
+    pid=$$
+    echo "dmctl test cmd: \"$cmd\""
+    echo "$cmd" | $binary -test.coverprofile="$TEST_DIR/cov.$TEST_NAME.dmctl.$ts.$pid.out" DEVEL -master-addr=$master_addr > $dmctl_log 2>&1
+    dmctl_log_content=`cat $dmctl_log`
+
+    if [[ !($dmctl_log_content =~ $content) ]]; then
+        echo "command: $cmd expected to contain: "
+        echo $content
+        echo "but is: "
+        cat $dmctl_log
+        exit 1
+    fi
+}
+
 function run() {
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2
@@ -31,45 +57,65 @@ function run() {
         "simulate_1" 2
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "table-route -w 127.0.0.1:$WORKER1_PORT -T \`A\`.\`B\` $task_conf" \
+        "table-route $task_conf -w 127.0.0.1:$WORKER1_PORT" \
         "\"result\": true" 1 \
-        "\"will-be-filtered\": \"yes\"" 1
+        "\"routes\"" 1 \
+        "\"\`simulator\`.\`t\`\"" 1 \
+        "127.0.0.1:3306" 1 \
+        "127.0.0.1:3307" 0 \
+        "simulator_1" 3 \
+        "simulator_2" 0 \
+        "simulate_1" 1
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "table-route -w 127.0.0.1:$WORKER1_PORT -T \`A\`.\`B\` -T \`A\`.\`C\` $task_conf" \
+        "\"result\": true" 1 \
+        "\"ignore-tables\"" 1 \
+        "\"routes\"" 0 \
+        "\"\`A\`.\`B\`\"" 1 \
+        "\"\`A\`.\`C\`\"" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "table-route -w 127.0.0.1:$WORKER1_PORT -T \`simulator_5\`.\`A\` $task_conf" \
         "\"result\": true" 1 \
-        "\"match-route\": \"user-route-rules-schema\"," 1 \
-        "\"target-schema\": \"simulator\"," 1 \
-        "\"target-table\": \"A\"" 1
+        "\"routes\"" 1 \
+        "\"reason\": \"user-route-rules-schema\"" 1 \
+        "\"table\": \"\`simulator_5\`.\`A\`\"," 1 \
+        "\"\`simulator\`.\`A\`\": {" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "table-route -w 127.0.0.1:$WORKER1_PORT -T \`simulator_5\`.\`simulate_4\` $task_conf" \
+        "table-route -w 127.0.0.1:$WORKER1_PORT -T \`simulator_5\`.\`simulate_3\` -T \`simulator_5\`.\`simulate_4\` $task_conf" \
         "\"result\": true" 1 \
-        "\"match-route\": \"user-route-rules\"," 1 \
-        "\"target-schema\": \"simulator\"," 1 \
-        "\"target-table\": \"t\"" 1
+        "\"routes\"" 1 \
+        "\"reason\": \"user-route-rules\"" 2 \
+        "\"table\": \"\`simulator_5\`.\`simulate_3\`\"," 1 \
+        "\"table\": \"\`simulator_5\`.\`simulate_4\`\"," 1 \
+        "\"\`simulator\`.\`t\`\": {" 1
 
     # black-white-list simulator test
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "bw-list $task_conf" \
         "\"do-tables\":" 1 \
         "\"ignore-tables\":" 1 \
-        "\"\`simulator\`.\`t\`\"" 2 \
         "127.0.0.1:3306" 2 \
         "127.0.0.1:3307" 2 \
         "simulator_1" 3 \
         "simulator_2" 3 \
-        "simulate_1" 2 \
+        "simulate_1" 2
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "bw-list -w 127.0.0.1:$WORKER1_PORT -T \`simulator_5\`.\`A\` $task_conf" \
-        "\"result\": true" 1 \
-        "\"will-be-filtered\": \"no\"" 1
+        "bw-list $task_conf -w 127.0.0.1:$WORKER1_PORT" \
+        "\"do-tables\":" 1 \
+        "\"ignore-tables\":" 1 \
+        "127.0.0.1:3306" 2 \
+        "127.0.0.1:3307" 0 \
+        "simulator_1" 3 \
+        "simulator_2" 0 \
+        "simulate_1" 1
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "bw-list -w 127.0.0.1:$WORKER1_PORT -T \`simulator\`.\`t\` $task_conf" \
-        "\"result\": true" 1 \
-        "\"will-be-filtered\": \"yes\"" 1
+    run_dm_ctl_contain $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "bw-list -w 127.0.0.1:$WORKER1_PORT -T \`simulator_5\`.\`A\` -T \`simulator\`.\`t\` $task_conf" \
+        .*"\"do-tables\"".*"\"127.0.0.1:3306\"".*"\"\`simulator_5\`.\`A\`\"".*"\"ignore-tables\"".*"\"127.0.0.1:3306\"".*"\"\`simulator\`.\`t\`\"".*
 
     # binlog-event-filter simulator test
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
