@@ -78,8 +78,8 @@ func NewConfig() *Config {
 	fs.Int64Var(&cfg.Purge.Expires, "purge-expires", 0, "try to purge relay log files if their modified time is older than this (hours)")
 	fs.Int64Var(&cfg.Purge.RemainSpace, "purge-remain-space", 15, "try to purge relay log files if remain space is less than this (GB)")
 	fs.BoolVar(&cfg.Checker.CheckEnable, "checker-check-enable", true, "whether enable task status checker")
-	fs.DurationVar(&cfg.Checker.BackoffRollback.Duration, "checker-backoff-rollback", DefaultBackoffRollback, "task status checker backoff rollback interval")
-	fs.DurationVar(&cfg.Checker.BackoffMax.Duration, "checker-backoff-max", DefaultBackoffMax, "task status checker backoff max delay duration")
+	fs.DurationVar(&cfg.Checker.BackoffRollback.Duration, "checker-backoff-rollback", config.DefaultBackoffRollback, "task status checker backoff rollback interval")
+	fs.DurationVar(&cfg.Checker.BackoffMax.Duration, "checker-backoff-max", config.DefaultBackoffMax, "task status checker backoff max delay duration")
 	fs.BoolVar(&cfg.Tracer.Enable, "tracer-enable", false, "whether to enable tracing")
 	fs.StringVar(&cfg.Tracer.TracerAddr, "tracer-server-addr", "", "tracing service rpc address")
 	fs.IntVar(&cfg.Tracer.BatchSize, "tracer-batch-size", 20, "upload to tracing service batch size")
@@ -117,7 +117,7 @@ type Config struct {
 	Purge purger.Config `toml:"purge" json:"purge"`
 
 	// config items for task status checker
-	Checker CheckerConfig `toml:"checker" json:"checker"`
+	Checker config.CheckerConfig `toml:"checker" json:"checker"`
 
 	// config items for tracer
 	Tracer tracing.Config `toml:"tracer" json:"tracer"`
@@ -264,7 +264,7 @@ func (c *Config) configFromFile(path string) error {
 
 func (c *Config) adjust() error {
 	c.From.Adjust()
-	c.Checker.adjust()
+	c.Checker.Adjust()
 
 	if c.Flavor == "" || c.ServerID == 0 {
 		fromDB, err := c.createFromDB()

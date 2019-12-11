@@ -1874,6 +1874,14 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 	}, nil
 }
 
+// AddMysqlWorker create Worker for every mysql-instance
+func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.WorkerConfigRequest) (*pb.WorkerConfigResponse, error) {
+	return &pb.WorkerConfigResponse{
+		Result: true,
+		Msg:    "check pass!!!",
+	}, nil
+}
+
 func (s *Server) generateSubTask(ctx context.Context, task string) (*config.TaskConfig, []*config.SubTaskConfig, error) {
 	cfg := config.NewTaskConfig()
 	err := cfg.Decode(task)

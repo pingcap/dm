@@ -61,6 +61,9 @@ service Master {
 
     // CheckTask checks legality of task configuration
     rpc CheckTask(CheckTaskRequest) returns (CheckTaskResponse) {}
+
+    // Operate mysql-worker for server
+    rpc OperateMysqlWorker(WorkerConfigRequest) returns (WorkerConfigResponse) {}
 }
 
 message MigrateWorkerRelayRequest {
@@ -301,6 +304,22 @@ message CheckTaskRequest {
 }
 
 message CheckTaskResponse {
+    bool result = 1;
+    string msg = 2;
+}
+
+enum WorkerOp {
+    StartWorker = 0;
+    UpdateConfig = 1;
+    StopWorker = 2;
+}
+
+message WorkerConfigRequest {
+    string config = 1;
+    WorkerOp op = 2;
+}
+
+message WorkerConfigResponse {
     bool result = 1;
     string msg = 2;
 }

@@ -58,13 +58,13 @@ func (s *testTaskCheckerSuite) TestResumeStrategy(c *check.C) {
 		{&pb.SubTaskStatus{Name: taskName, Stage: pb.Stage_Paused, Result: &pb.ProcessResult{IsCanceled: false}}, now, -2 * time.Millisecond, 1 * time.Millisecond, ResumeDispatch},
 	}
 
-	tsc := NewRealTaskStatusChecker(CheckerConfig{
+	tsc := NewRealTaskStatusChecker(config.CheckerConfig{
 		CheckEnable:     true,
-		CheckInterval:   duration{Duration: DefaultCheckInterval},
-		BackoffRollback: duration{Duration: DefaultBackoffRollback},
-		BackoffMin:      duration{Duration: DefaultBackoffMin},
-		BackoffMax:      duration{Duration: DefaultBackoffMax},
-		BackoffFactor:   DefaultBackoffFactor,
+		CheckInterval:   config.Duration{Duration: config.DefaultCheckInterval},
+		BackoffRollback: config.Duration{Duration: config.DefaultBackoffRollback},
+		BackoffMin:      config.Duration{Duration: config.DefaultBackoffMin},
+		BackoffMax:      config.Duration{Duration: config.DefaultBackoffMax},
+		BackoffFactor:   config.DefaultBackoffFactor,
 	}, nil)
 	for _, tc := range testCases {
 		rtsc, ok := tsc.(*realTaskStatusChecker)
@@ -92,13 +92,13 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	w, err := NewWorker(cfg)
 	c.Assert(err, check.IsNil)
 
-	tsc := NewRealTaskStatusChecker(CheckerConfig{
+	tsc := NewRealTaskStatusChecker(config.CheckerConfig{
 		CheckEnable:     true,
-		CheckInterval:   duration{Duration: DefaultCheckInterval},
-		BackoffRollback: duration{Duration: 200 * time.Millisecond},
-		BackoffMin:      duration{Duration: 1 * time.Millisecond},
-		BackoffMax:      duration{Duration: 1 * time.Second},
-		BackoffFactor:   DefaultBackoffFactor,
+		CheckInterval:   config.Duration{Duration: config.DefaultCheckInterval},
+		BackoffRollback: config.Duration{Duration: 200 * time.Millisecond},
+		BackoffMin:      config.Duration{Duration: 1 * time.Millisecond},
+		BackoffMax:      config.Duration{Duration: 1 * time.Second},
+		BackoffFactor:   config.DefaultBackoffFactor,
 	}, nil)
 	c.Assert(tsc.Init(), check.IsNil)
 	rtsc, ok := tsc.(*realTaskStatusChecker)
@@ -159,13 +159,13 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	c.Assert(w.meta.logs, check.HasLen, 0)
 
 	// test resume skip strategy
-	tsc = NewRealTaskStatusChecker(CheckerConfig{
+	tsc = NewRealTaskStatusChecker(config.CheckerConfig{
 		CheckEnable:     true,
-		CheckInterval:   duration{Duration: DefaultCheckInterval},
-		BackoffRollback: duration{Duration: 200 * time.Millisecond},
-		BackoffMin:      duration{Duration: 10 * time.Second},
-		BackoffMax:      duration{Duration: 100 * time.Second},
-		BackoffFactor:   DefaultBackoffFactor,
+		CheckInterval:   config.Duration{Duration: config.DefaultCheckInterval},
+		BackoffRollback: config.Duration{Duration: 200 * time.Millisecond},
+		BackoffMin:      config.Duration{Duration: 10 * time.Second},
+		BackoffMax:      config.Duration{Duration: 100 * time.Second},
+		BackoffFactor:   config.DefaultBackoffFactor,
 	}, w)
 	c.Assert(tsc.Init(), check.IsNil)
 	rtsc, ok = tsc.(*realTaskStatusChecker)
@@ -217,12 +217,12 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 	w, err := NewWorker(cfg)
 	c.Assert(err, check.IsNil)
 
-	tsc := NewRealTaskStatusChecker(CheckerConfig{
+	tsc := NewRealTaskStatusChecker(config.CheckerConfig{
 		CheckEnable:     true,
-		CheckInterval:   duration{Duration: DefaultCheckInterval},
-		BackoffRollback: duration{Duration: 200 * time.Millisecond},
-		BackoffMin:      duration{Duration: backoffMin},
-		BackoffMax:      duration{Duration: 10 * time.Second},
+		CheckInterval:   config.Duration{Duration: config.DefaultCheckInterval},
+		BackoffRollback: config.Duration{Duration: 200 * time.Millisecond},
+		BackoffMin:      config.Duration{Duration: backoffMin},
+		BackoffMax:      config.Duration{Duration: 10 * time.Second},
 		BackoffFactor:   1.0,
 	}, nil)
 	c.Assert(tsc.Init(), check.IsNil)
