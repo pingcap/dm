@@ -18,6 +18,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/pingcap/dm/pkg/utils"
@@ -125,10 +126,15 @@ func (c *Config) Validate() error {
 	if c.MasterAddr == "" {
 		return errors.New("--master-addr not provided")
 	}
-	if err := validateAddr(c.MasterAddr); err != nil {
+	if _, err := validateAddr(c.MasterAddr); err != nil {
 		return errors.Annotatef(err, "specify master addr %s", c.MasterAddr)
 	}
 	return nil
+}
+
+// getMasterAddrs return config master addresses
+func (c *Config) getMasterAddrs() []string {
+	return strings.Split(c.MasterAddr, ",")
 }
 
 // configFromFile loads config from file.
@@ -153,8 +159,23 @@ func (c *Config) adjust() error {
 	return nil
 }
 
-// validate host:port format address
-func validateAddr(addr string) error {
-	_, _, err := net.SplitHostPort(addr)
-	return errors.Trace(err)
+// validate host1:port1,host2:port2,... format address
+// return a string that remove spaces and empty segments
+func validateAddr(addrStr string) (string, error) {
+	addrs := strings.Split(addrStr, ",")
+	validAddrs := make([]string, 0, len(addrs))
+	for _, addr := range addrs {
+		addr := strings.TrimSpace(addr)
+		if addr != "" {
+			_, _, err := net.SplitHostPort(addr)
+			if err != nil {
+				return "", errors.Trace(err)
+			}
+			validAddrs = append(validAddrs, addr)
+		}
+	}
+	if len(validAddrs) == 0 {
+		return "", errors.Errorf("invalid address: '%s'", addrStr)
+	}
+	return strings.Join(validAddrs, ","), nil
 }
