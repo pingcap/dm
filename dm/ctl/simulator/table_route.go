@@ -65,7 +65,11 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 				if routes[targetTable] == nil {
 					routes[targetTable] = make(map[string][]*tableInfo)
 				}
-				routes[targetTable][simulationResult.SourceAddr] = append(routes[targetTable][simulationResult.SourceAddr], &tableInfo{Table: sourceTable, Reason: sourceTableList.Reasons[i]})
+				var reason string
+				if i < len(sourceTableList.Reasons) {
+					reason = sourceTableList.Reasons[i]
+				}
+				routes[targetTable][simulationResult.SourceAddr] = append(routes[targetTable][simulationResult.SourceAddr], &tableInfo{Table: sourceTable, Reason: reason})
 			}
 		}
 	}

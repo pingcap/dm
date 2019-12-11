@@ -57,7 +57,6 @@ function run() {
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "table-route $task_conf -w 127.0.0.1:$WORKER1_PORT" \
-        "\"result\": true" 1 \
         "\"routes\"" 1 \
         "\"\`simulator\`.\`t\`\"" 1 \
         "127.0.0.1:3306" 1 \
@@ -68,7 +67,6 @@ function run() {
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "table-route -w 127.0.0.1:$WORKER1_PORT -T \`A\`.\`B\` -T \`A\`.\`C\` $task_conf" \
-        "\"result\": true" 1 \
         "\"ignore-tables\"" 1 \
         "\"routes\"" 0 \
         "\"\`A\`.\`B\`\"" 1 \
@@ -76,7 +74,6 @@ function run() {
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "table-route -w 127.0.0.1:$WORKER1_PORT -T \`simulator_5\`.\`A\` $task_conf" \
-        "\"result\": true" 1 \
         "\"routes\"" 1 \
         "\"reason\": \"user-route-rules-schema\"" 1 \
         "\"table\": \"\`simulator_5\`.\`A\`\"," 1 \
@@ -84,7 +81,6 @@ function run() {
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "table-route -w 127.0.0.1:$WORKER1_PORT -T \`simulator_5\`.\`simulate_3\` -T \`simulator_5\`.\`simulate_4\` $task_conf" \
-        "\"result\": true" 1 \
         "\"routes\"" 1 \
         "\"reason\": \"user-route-rules\"" 2 \
         "\"table\": \"\`simulator_5\`.\`simulate_3\`\"," 1 \
