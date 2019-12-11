@@ -148,7 +148,9 @@ func newXIDJob(pos, cmdPos mysql.Position, currentGtidSet gtid.Set, traceID stri
 }
 
 func newFlushJob() *job {
-	return &job{tp: flush}
+	return &job{
+		tp: flush,
+	}
 }
 
 func newSkipJob(pos mysql.Position, currentGtidSet gtid.Set) *job {
