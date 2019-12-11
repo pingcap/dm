@@ -20,15 +20,13 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-
 	"github.com/pingcap/errors"
 	_ "github.com/pingcap/tidb/types/parser_driver" // for import parser driver
+
 	"github.com/spf13/cobra"
 )
 
 type eventFilterResult struct {
-	Result         bool   `json:"result"`
-	Msg            string `json:"msg"`
 	WillBeFiltered string `json:"will-be-filtered"`
 	FilterName     string `json:"filter-name,omitempty"`
 }
@@ -109,11 +107,8 @@ func eventFilterFunc(cmd *cobra.Command, _ []string) {
 		filtered = "yes"
 		reason = resp.SimulationResults[0].IgnoreTableMap[realSQLs[0]].Reasons[0]
 	}
-	result := eventFilterResult{
-		Result:         true,
-		Msg:            "",
+	common.PrettyPrintInterface(eventFilterResult{
 		FilterName:     reason,
 		WillBeFiltered: filtered,
-	}
-	common.PrettyPrintInterface(result)
+	})
 }

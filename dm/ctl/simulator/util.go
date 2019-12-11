@@ -14,8 +14,13 @@
 package simulator
 
 import (
+	"context"
+
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/errors"
+
 	"github.com/spf13/cobra"
 )
 
@@ -29,13 +34,44 @@ func checkResp(err error, resp *pb.SimulationResponse) error {
 	return nil
 }
 
-func getTableFromCMD(cmd *cobra.Command) (string, error) {
-	tableName, err := cmd.Flags().GetString("table")
+func simulateTask4BWListOrTableRoute(cmd *cobra.Command, op pb.SimulateOp) (resp *pb.SimulationResponse) {
+	content, err := common.GetFileContent(cmd.Flags().Arg(0))
 	if err != nil {
-		return "", errors.Annotate(err, "get table arg failed")
+		common.PrintLines("get file content error:\n%v", errors.ErrorStack(err))
+		return
 	}
-	if tableName == "" {
-		return "", errors.New("argument table is not given. pls check it again")
+	task := string(content)
+
+	cfg := config.NewTaskConfig()
+	err = cfg.Decode(task)
+	if err != nil {
+		common.PrintLines("decode file content to config error:\n%v", errors.ErrorStack(err))
+		return
 	}
-	return tableName, nil
+
+	workers, err := common.GetWorkerArgs(cmd)
+	if err != nil {
+		common.PrintLines(errors.ErrorStack(err))
+		return
+	}
+	tables, err := cmd.Flags().GetStringSlice("table")
+	if err != nil {
+		common.PrintLines(errors.ErrorStack(err))
+		return
+	}
+
+	cli := common.MasterClient()
+	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
+	defer cancel()
+	resp, err = cli.SimulateTask(ctx, &pb.SimulationRequest{
+		Op:        op,
+		Task:      task,
+		Workers:   workers,
+		TableList: tables,
+	})
+	if err := checkResp(err, resp); err != nil {
+		common.PrintLines("get simulation result from dm-master failed:\n%s", err)
+		return
+	}
+	return resp
 }
