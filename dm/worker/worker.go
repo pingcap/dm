@@ -16,6 +16,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"path"
 	"reflect"
 	"sync"
@@ -55,7 +56,7 @@ type Worker struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	cfg *Config
+	cfg *config.WorkerConfig
 	l   log.Logger
 
 	subTaskHolder *subTaskHolder
@@ -68,10 +69,11 @@ type Worker struct {
 	tracer *tracing.Tracer
 
 	taskStatusChecker TaskStatusChecker
+	configFile        string
 }
 
 // NewWorker creates a new Worker
-func NewWorker(cfg *Config) (w *Worker, err error) {
+func NewWorker(cfg *config.WorkerConfig) (w *Worker, err error) {
 	w = &Worker{
 		cfg:           cfg,
 		relayHolder:   NewRelayHolder(cfg),
@@ -557,7 +559,7 @@ func (w *Worker) ForbidPurge() (bool, string) {
 }
 
 // QueryConfig returns worker's config
-func (w *Worker) QueryConfig(ctx context.Context) (*Config, error) {
+func (w *Worker) QueryConfig(ctx context.Context) (*config.WorkerConfig, error) {
 	w.RLock()
 	defer w.RUnlock()
 
@@ -566,6 +568,17 @@ func (w *Worker) QueryConfig(ctx context.Context) (*Config, error) {
 	}
 
 	return w.cfg.Clone(), nil
+}
+
+func (w *Worker) updateConfigFile(content string) error {
+	if w.configFile == "" {
+		w.configFile = "dm-worker-config.bak"
+	}
+	err := ioutil.WriteFile(w.configFile, []byte(content), 0666)
+	if err != nil {
+		return terror.ErrWorkerWriteConfigFile.Delegate(err)
+	}
+	return nil
 }
 
 // UpdateRelayConfig update subTask ans relay unit configure online
@@ -593,13 +606,13 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	}
 
 	// Save configure to local file.
-	newCfg := NewConfig()
-	err := newCfg.UpdateConfigFile(content)
+	newCfg := &config.WorkerConfig{}
+	err := w.updateConfigFile(content)
 	if err != nil {
 		return err
 	}
 
-	err = newCfg.Reload()
+	err = newCfg.Parse(content)
 	if err != nil {
 		return err
 	}
@@ -655,19 +668,18 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	w.cfg.AutoFixGTID = newCfg.AutoFixGTID
 	w.cfg.Charset = newCfg.Charset
 
-	if w.cfg.ConfigFile == "" {
-		w.cfg.ConfigFile = "dm-worker.toml"
+	if w.configFile == "" {
+		w.configFile = "dm-worker.toml"
 	}
 	content, err = w.cfg.Toml()
 	if err != nil {
 		return err
 	}
-	err = w.cfg.UpdateConfigFile(content)
-	if err != nil {
+
+	if err := w.updateConfigFile(content); err != nil {
 		return err
 	}
-
-	w.l.Info("update relay config successfully, save config to local file", zap.String("local file", w.cfg.ConfigFile))
+	w.l.Info("update relay config successfully, save config to local file", zap.String("local file", w.configFile))
 
 	return nil
 }
@@ -705,8 +717,7 @@ func (w *Worker) copyConfigFromWorker(cfg *config.SubTaskConfig) {
 	cfg.AutoFixGTID = w.cfg.AutoFixGTID
 
 	// log config items, mydumper unit use it
-	cfg.LogLevel = w.cfg.LogLevel
-	cfg.LogFile = w.cfg.LogFile
+
 }
 
 // getAllSubTaskStatus returns all subtask status of this worker, note the field

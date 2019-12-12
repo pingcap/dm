@@ -16,6 +16,7 @@ package master
 import (
 	"context"
 	"fmt"
+	"github.com/pingcap/dm/pkg/conn"
 	"io"
 	"net/http"
 	"sort"
@@ -1877,14 +1878,30 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 	}, nil
 }
 
+func makeWorkerConfigResponse(err error) (*pb.WorkerConfigResponse, error) {
+	return &pb.WorkerConfigResponse{
+		Result: false,
+		Msg:    errors.ErrorStack(err),
+	}, nil
+}
+
 // OperateMysqlWorker will create or update a Worker
 func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.WorkerConfigRequest) (*pb.WorkerConfigResponse, error) {
 	cfg := &config.WorkerConfig{}
 	if err := cfg.Parse(req.Config); err != nil {
-		return &pb.WorkerConfigResponse{
-			Result: false,
-			Msg:    errors.ErrorStack(err),
-		}, nil
+		return makeWorkerConfigResponse(err)
+	}
+
+	dbConfig, err := cfg.GenerateDBConfig()
+	if err != nil {
+		return makeWorkerConfigResponse(err)
+	}
+	fromDB, err := conn.DefaultDBProvider.Apply(*dbConfig)
+	if err != nil {
+		return makeWorkerConfigResponse(err)
+	}
+	if err := cfg.Adjust(fromDB.DB); err != nil {
+		return makeWorkerConfigResponse(err)
 	}
 	s.Lock()
 	defer s.Unlock()

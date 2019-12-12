@@ -375,6 +375,26 @@ func (mr *MockMasterClientMockRecorder) CheckTask(ctx, in interface{}, opts ...i
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckTask", reflect.TypeOf((*MockMasterClient)(nil).CheckTask), varargs...)
 }
 
+// OperateMysqlWorker mocks base method
+func (m *MockMasterClient) OperateMysqlWorker(ctx context.Context, in *pb.WorkerConfigRequest, opts ...grpc.CallOption) (*pb.WorkerConfigResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, in}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "OperateMysqlWorker", varargs...)
+	ret0, _ := ret[0].(*pb.WorkerConfigResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OperateMysqlWorker indicates an expected call of OperateMysqlWorker
+func (mr *MockMasterClientMockRecorder) OperateMysqlWorker(ctx, in interface{}, opts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, in}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateMysqlWorker", reflect.TypeOf((*MockMasterClient)(nil).OperateMysqlWorker), varargs...)
+}
+
 // MockMasterServer is a mock of MasterServer interface
 type MockMasterServer struct {
 	ctrl     *gomock.Controller
@@ -651,4 +671,19 @@ func (m *MockMasterServer) CheckTask(arg0 context.Context, arg1 *pb.CheckTaskReq
 func (mr *MockMasterServerMockRecorder) CheckTask(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckTask", reflect.TypeOf((*MockMasterServer)(nil).CheckTask), arg0, arg1)
+}
+
+// OperateMysqlWorker mocks base method
+func (m *MockMasterServer) OperateMysqlWorker(arg0 context.Context, arg1 *pb.WorkerConfigRequest) (*pb.WorkerConfigResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OperateMysqlWorker", arg0, arg1)
+	ret0, _ := ret[0].(*pb.WorkerConfigResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OperateMysqlWorker indicates an expected call of OperateMysqlWorker
+func (mr *MockMasterServerMockRecorder) OperateMysqlWorker(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateMysqlWorker", reflect.TypeOf((*MockMasterServer)(nil).OperateMysqlWorker), arg0, arg1)
 }
