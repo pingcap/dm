@@ -47,9 +47,9 @@ else
 endif
 
 .PHONY: build test unit_test dm_integration_test_build integration_test \
-	coverage check dm-worker dm-master dm-tracer dmctl
+	coverage check dm-worker dm-master dm-tracer dmctl debug-tools dm-portal
 
-build: check dm-worker dm-master dm-tracer dmctl
+build: check dm-worker dm-master dm-tracer dmctl dm-portal
 
 dm-worker:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dm-worker ./cmd/dm-worker
@@ -62,6 +62,12 @@ dm-tracer:
 
 dmctl:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dmctl ./cmd/dm-ctl
+
+dm-portal:
+	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dm-portal ./cmd/dm-portal
+
+debug-tools:
+	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/binlog-event-blackhole ./debug-tools/binlog-event-blackhole
 
 test: unit_test integration_test
 
