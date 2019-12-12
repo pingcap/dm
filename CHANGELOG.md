@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Improvements
 
 - Add the command mode in dmctl
-- Support replicating the `AlTER DATABASE` DDL statement
+- Support replicating the `ALTER DATABASE` DDL statement
 - Optimize the error message output
 
 ### Bug fixes
