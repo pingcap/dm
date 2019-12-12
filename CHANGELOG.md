@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.3] 2019-12-13
+
+### Improvements
+
+- Add the command mode in dmctl
+- Support replicating the `AlTER DATABASE` DDL statement
+- Optimize the error message output
+
+### Bug fixes
+
+- Fix the panic-causing data race issue occurred when the full import unit pauses or exits
+- Fix the issue that `stop-task` and `pause-task` might not take effect when retrying SQL operations to the downstream
+
+### Action required
+
+- When upgrading from a previous version, note that you must upgrade all DM components (dmctl/DM-master/DM-worker) together
+
+### Detailed Bug Fixes and Changes
+
+- Add the command mode in dmctl [#364](https://github.com/pingcap/dm/pull/364)
+- Optimize the error message output [#351](https://github.com/pingcap/dm/pull/351)
+- Optimize the output of the `query-status` command [#357](https://github.com/pingcap/dm/pull/357)
+- Optimize the privilege check for different task modes [#374](https://github.com/pingcap/dm/pull/374)
+- Support checking the duplicate route-rules or filter-rules [#385](https://github.com/pingcap/dm/pull/385)
+- Support replicating the `AlTER DATABASE` DDL statement [#389](https://github.com/pingcap/dm/pull/389)
+- Optimize the retry mechanism for anomalies [#391](https://github.com/pingcap/dm/pull/391)
+- Fix the panic-causing data race issue occurred when the full import unit pauses or exits [#353](https://github.com/pingcap/dm/pull/353)
+- Fix the issue that `stop-task` and `pause-task` might not take effect when retrying SQL operations to the downstream [#377](https://github.com/pingcap/dm/pull/377)
+- Upgrade golang to v1.13 and upgrade the version of other dependencies [#362](https://github.com/pingcap/dm/pull/362)
+- Filter the error that the context is canceled when a SQL statement is being executed [#382](https://github.com/pingcap/dm/pull/382)
+- Fix the issue that the error occurred when performing a rolling upgrade to DM monitor using DM-ansible causes the upgrade to fail [#408](https://github.com/pingcap/dm/pull/408)
+
 ## [1.0.2] 2019-10-30
 
 ### Improvements
