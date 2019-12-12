@@ -26,7 +26,7 @@ All notable changes to this project will be documented in this file.
 - Optimize the output of the `query-status` command [#357](https://github.com/pingcap/dm/pull/357)
 - Optimize the privilege check for different task modes [#374](https://github.com/pingcap/dm/pull/374)
 - Support checking the duplicate route-rules or filter-rules [#385](https://github.com/pingcap/dm/pull/385)
-- Support replicating the `AlTER DATABASE` DDL statement [#389](https://github.com/pingcap/dm/pull/389)
+- Support replicating the `ALTER DATABASE` DDL statement [#389](https://github.com/pingcap/dm/pull/389)
 - Optimize the retry mechanism for anomalies [#391](https://github.com/pingcap/dm/pull/391)
 - Fix the panic-causing data race issue occurred when the full import unit pauses or exits [#353](https://github.com/pingcap/dm/pull/353)
 - Fix the issue that `stop-task` and `pause-task` might not take effect when retrying SQL operations to the downstream [#377](https://github.com/pingcap/dm/pull/377)
