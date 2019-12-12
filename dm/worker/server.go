@@ -444,6 +444,54 @@ func (s *Server) MigrateRelay(ctx context.Context, req *pb.MigrateRelayRequest) 
 	return makeCommonWorkerResponse(err), nil
 }
 
+// CreateMysqlTask create a new mysql task which will be running in this Server
+func (s *Server) CreateMysqlTask(ctx context.Context, req *pb.MysqlTaskRequest) (*pb.MysqlTaskResponse, error) {
+	resp := &pb.MysqlTaskResponse{
+		Result: true,
+		Msg:    "Create mysql task successfully",
+	}
+	s.Lock()
+	defer s.Unlock()
+	if s.worker != nil {
+		resp.Result = false
+		resp.Msg = "Mysql task has been running, please call UpdateMysqlTaskConfig"
+		return resp, nil
+	}
+	return resp, nil
+}
+
+// UpdateMysqlTaskConfig updates config of a mysql task which has been running in this Server
+func (s *Server) UpdateMysqlTaskConfig(ctx context.Context, req *pb.MysqlTaskRequest) (*pb.MysqlTaskResponse, error) {
+	resp := &pb.MysqlTaskResponse{
+		Result: true,
+		Msg:    "Update mysql task config successfully",
+	}
+	s.Lock()
+	defer s.Unlock()
+	if s.worker == nil {
+		resp.Result = false
+		resp.Msg = "Mysql task has not been created, please call CreateMysqlTask"
+		return resp, nil
+	}
+	return resp, nil
+}
+
+// StopMysqlTask stops a mysql task which has been running in this Server
+func (s *Server) StopMysqlTask(ctx context.Context, req *pb.StopMysqlTaskRequest) (*pb.MysqlTaskResponse, error) {
+	resp := &pb.MysqlTaskResponse{
+		Result: true,
+		Msg:    "Stop mysql task successfully",
+	}
+	s.Lock()
+	defer s.Unlock()
+	if s.worker == nil {
+		resp.Result = false
+		resp.Msg = "Mysql task has not been created, please call CreateMysqlTask"
+		return resp, nil
+	}
+	return resp, nil
+}
+
 func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {
 	resp := &pb.CommonWorkerResponse{
 		Result: true,

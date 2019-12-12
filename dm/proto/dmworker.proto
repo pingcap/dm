@@ -40,6 +40,12 @@ service Worker {
     rpc QueryWorkerConfig (QueryWorkerConfigRequest) returns (QueryWorkerConfigResponse) {}
 
     rpc MigrateRelay(MigrateRelayRequest) returns (CommonWorkerResponse) {}
+
+    rpc CreateMysqlTask(MysqlTaskRequest) returns (MysqlTaskResponse) {}
+
+    rpc StopMysqlTask(StopMysqlTaskRequest) returns (MysqlTaskResponse) {}
+
+    rpc UpdateMysqlTaskConfig(MysqlTaskRequest) returns (MysqlTaskResponse) {}
 }
 
 message StartSubTaskRequest {
@@ -473,4 +479,17 @@ message TaskLog {
     // true means this log is applied successfully
     bool success = 4;
     string message = 5;
+}
+
+message MysqlTaskResponse {
+    bool result = 1;
+    string msg = 2;
+}
+
+message MysqlTaskRequest {
+    string config = 1;
+}
+
+message StopMysqlTaskRequest {
+    string sourceID = 1;
 }

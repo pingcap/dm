@@ -90,6 +90,8 @@ type Server struct {
 	ap *AgentPool
 
 	closed sync2.AtomicBool
+
+	mysqlManager *MysqlManager
 }
 
 // NewServer creates a new Server
@@ -102,6 +104,7 @@ func NewServer(cfg *Config) *Server {
 		sqlOperatorHolder: operator.NewHolder(),
 		idGen:             tracing.NewIDGen(),
 		ap:                NewAgentPool(&RateLimitConfig{rate: cfg.RPCRateLimit, burst: cfg.RPCRateBurst}),
+		mysqlManager:      NewMysqlManager(make(chan string)),
 	}
 	server.closed.Set(true)
 
@@ -1874,11 +1877,58 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 	}, nil
 }
 
-// AddMysqlWorker create Worker for every mysql-instance
+// OperateMysqlWorker will create or update a Worker
 func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.WorkerConfigRequest) (*pb.WorkerConfigResponse, error) {
+	cfg := &config.WorkerConfig{}
+	if err := cfg.Parse(req.Config); err != nil {
+		return &pb.WorkerConfigResponse{
+			Result: false,
+			Msg:    errors.ErrorStack(err),
+		}, nil
+	}
+	s.Lock()
+	defer s.Unlock()
+	if req.Op == pb.WorkerOp_StartWorker {
+		w := s.mysqlManager.GetWorker(cfg.SourceID)
+		if w != nil {
+			return &pb.WorkerConfigResponse{
+				Result: false,
+				Msg:    "Create worker failed. worker has been started",
+			}, nil
+		}
+		s.mysqlManager.ScheduleWorker(cfg)
+	} else if req.Op == pb.WorkerOp_UpdateConfig {
+		w := s.mysqlManager.GetWorker(cfg.SourceID)
+		if w == nil {
+			return &pb.WorkerConfigResponse{
+				Result: false,
+				Msg:    "Update worker config failed. worker has not been started",
+			}, nil
+		}
+		if err := w.UpdateMysqlConfig(cfg); err != nil {
+			return &pb.WorkerConfigResponse{
+				Result: false,
+				Msg:    errors.ErrorStack(err),
+			}, nil
+		}
+	} else {
+		w := s.mysqlManager.GetWorker(cfg.SourceID)
+		if w == nil {
+			return &pb.WorkerConfigResponse{
+				Result: false,
+				Msg:    "Stop worker failed. worker has not been started",
+			}, nil
+		}
+		if err := w.StopMysqlTask(cfg.SourceID); err != nil {
+			return &pb.WorkerConfigResponse{
+				Result: false,
+				Msg:    errors.ErrorStack(err),
+			}, nil
+		}
+	}
 	return &pb.WorkerConfigResponse{
 		Result: true,
-		Msg:    "check pass!!!",
+		Msg:    "operate success!!!",
 	}, nil
 }
 

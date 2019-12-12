@@ -315,8 +315,8 @@ enum WorkerOp {
 }
 
 message WorkerConfigRequest {
-    string config = 1;
-    WorkerOp op = 2;
+    WorkerOp op = 1;
+    string config = 2;
 }
 
 message WorkerConfigResponse {
