@@ -19,7 +19,7 @@ for file in ./*pb.go; do
         continue
     fi
     # extract public interface from pb source file
-    ifs=$(grep -E "type [[:upper:]].*interface" $file|awk '{print $2}' 'ORS=,'|head -c -1)
+    ifs=$(grep -E "type [[:upper:]].*interface" $file|awk '{print $2}' 'ORS=,'|rev|cut -c 2-|rev)
     echo "generate mock for file $file"
     mockgen -destination $cur/../dm/pbmock/$prefix.go -package $package github.com/pingcap/dm/dm/pb $ifs
 done
