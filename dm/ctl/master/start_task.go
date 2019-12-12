@@ -21,6 +21,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/pingcap/dm/checker"
+	dmcommon "github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 )
@@ -58,7 +59,7 @@ func startTaskFunc(cmd *cobra.Command, _ []string) {
 	defer cancel()
 
 	// start task
-	cli := common.MasterClient()
+	cli := dmcommon.MasterClient()
 	resp, err := cli.StartTask(ctx, &pb.StartTaskRequest{
 		Task:    string(content),
 		Workers: workers,

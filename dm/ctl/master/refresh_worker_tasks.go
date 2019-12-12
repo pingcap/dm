@@ -17,6 +17,7 @@ import (
 	"context"
 	"os"
 
+	dmcommon "github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 
@@ -44,7 +45,7 @@ func refreshWorkerTasksFunc(cmd *cobra.Command, _ []string) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cli := common.MasterClient()
+	cli := dmcommon.MasterClient()
 	resp, err := cli.RefreshWorkerTasks(ctx, &pb.RefreshWorkerTasksRequest{})
 	if err != nil {
 		common.PrintLines("can not refresh workerTasks:\n%v", errors.ErrorStack(err))

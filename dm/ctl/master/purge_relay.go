@@ -23,6 +23,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/pingcap/dm/dm/command"
+	dmcommon "github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 )
@@ -135,7 +136,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cli := common.MasterClient()
+	cli := dmcommon.MasterClient()
 
 	resp, err := cli.PurgeWorkerRelay(ctx, &pb.PurgeWorkerRelayRequest{
 		Workers: workers,

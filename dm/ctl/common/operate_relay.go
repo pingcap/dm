@@ -15,6 +15,7 @@ package common
 
 import (
 	"context"
+	"github.com/pingcap/dm/dm/common"
 
 	"github.com/pingcap/dm/dm/pb"
 )
@@ -23,7 +24,7 @@ import (
 func OperateRelay(op pb.RelayOp, workers []string) (*pb.OperateWorkerRelayResponse, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cli := MasterClient()
+	cli := common.MasterClient()
 	return cli.OperateWorkerRelayTask(ctx, &pb.OperateWorkerRelayRequest{
 		Op:      op,
 		Workers: workers,

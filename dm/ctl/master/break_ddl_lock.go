@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 
+	dmcommon "github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 
@@ -87,7 +88,7 @@ func breakDDLLockFunc(cmd *cobra.Command, _ []string) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cli := common.MasterClient()
+	cli := dmcommon.MasterClient()
 	resp, err := cli.BreakWorkerDDLLock(ctx, &pb.BreakWorkerDDLLockRequest{
 		Workers:      workers,
 		Task:         taskName,

@@ -15,6 +15,7 @@ package common
 
 import (
 	"context"
+	"github.com/pingcap/dm/dm/common"
 
 	"github.com/pingcap/dm/dm/pb"
 )
@@ -23,7 +24,7 @@ import (
 func OperateTask(op pb.TaskOp, name string, workers []string) (*pb.OperateTaskResponse, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cli := MasterClient()
+	cli := common.MasterClient()
 	return cli.OperateTask(ctx, &pb.OperateTaskRequest{
 		Op:      op,
 		Name:    name,

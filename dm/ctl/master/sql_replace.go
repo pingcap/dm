@@ -18,6 +18,7 @@ import (
 	"os"
 	"strings"
 
+	dmcommon "github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 
@@ -85,7 +86,7 @@ func sqlReplaceFunc(cmd *cobra.Command, _ []string) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cli := common.MasterClient()
+	cli := dmcommon.MasterClient()
 	resp, err := cli.HandleSQLs(ctx, &pb.HandleSQLsRequest{
 		Name:       taskName,
 		Worker:     worker,

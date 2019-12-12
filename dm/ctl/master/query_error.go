@@ -17,6 +17,7 @@ import (
 	"context"
 	"os"
 
+	dmcommon "github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 
@@ -51,7 +52,7 @@ func queryErrorFunc(cmd *cobra.Command, _ []string) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cli := common.MasterClient()
+	cli := dmcommon.MasterClient()
 	resp, err := cli.QueryError(ctx, &pb.QueryErrorListRequest{
 		Name:    taskName,
 		Workers: workers,

@@ -15,6 +15,7 @@ package election
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"sync"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"go.etcd.io/etcd/mvcc/mvccpb"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 )
@@ -46,10 +48,11 @@ type Election struct {
 	cli        *clientv3.Client
 	sessionTTL int
 	key        string
-	id         string
+	meta       NodeMeta
 	ech        chan error
 	leaderCh   chan bool
 	isLeader   sync2.AtomicBool
+	leaderAddr sync2.AtomicString
 
 	closed sync2.AtomicInt32
 	cancel context.CancelFunc
@@ -58,14 +61,20 @@ type Election struct {
 	l log.Logger
 }
 
+// NodeMeta represent node name/address that stored in etcd master key
+type NodeMeta struct {
+	ID      string `json:"id"`
+	Address string `json:"address"`
+}
+
 // NewElection creates a new etcd leader Election instance and starts the campaign loop.
-func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key, id string) (*Election, error) {
+func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key, id, address string) (*Election, error) {
 	ctx2, cancel2 := context.WithCancel(ctx)
 	e := &Election{
 		cli:        cli,
 		sessionTTL: sessionTTL,
 		key:        key,
-		id:         id,
+		meta:       NodeMeta{id, address},
 		leaderCh:   make(chan bool, 1),
 		ech:        make(chan error, 1), // size 1 is enough
 		cancel:     cancel2,
@@ -95,20 +104,25 @@ func (e *Election) IsLeader() bool {
 
 // ID returns the current member's ID.
 func (e *Election) ID() string {
-	return e.id
+	return e.meta.ID
 }
 
 // LeaderInfo returns the current leader's key and ID.
 // it's similar with https://github.com/etcd-io/etcd/blob/v3.4.3/clientv3/concurrency/election.go#L147.
-func (e *Election) LeaderInfo(ctx context.Context) (string, string, error) {
+func (e *Election) LeaderInfo(ctx context.Context) (string, *NodeMeta, error) {
 	resp, err := e.cli.Get(ctx, e.key, clientv3.WithFirstCreate()...)
 	if err != nil {
-		return "", "", terror.ErrElectionGetLeaderIDFail.Delegate(err)
+		return "", nil, terror.ErrElectionGetLeaderIDFail.Delegate(err)
 	} else if len(resp.Kvs) == 0 {
 		// no leader currently elected
-		return "", "", terror.ErrElectionGetLeaderIDFail.Delegate(concurrency.ErrElectionNoLeader)
+		return "", nil, terror.ErrElectionGetLeaderIDFail.Delegate(concurrency.ErrElectionNoLeader)
 	}
-	return string(resp.Kvs[0].Key), string(resp.Kvs[0].Value), nil
+	var meta NodeMeta
+	err = json.Unmarshal(resp.Kvs[0].Value, &meta)
+	if err != nil {
+		return "", nil, terror.ErrElectionGetLeaderIDFail.Delegate(err)
+	}
+	return string(resp.Kvs[0].Key), &meta, nil
 }
 
 // LeaderNotify returns a channel that can fetch notification when the member become the leader or retire from the leader.
@@ -172,7 +186,8 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 		// try to campaign
 		elec := concurrency.NewElection(session, e.key)
-		err = elec.Campaign(ctx, e.id)
+		val, _ := json.Marshal(e.meta)
+		err = elec.Campaign(ctx, string(val))
 		if err != nil {
 			// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
 			e.l.Warn("fail to campaign", zap.Error(err))
@@ -180,37 +195,42 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		}
 
 		// compare with the current leader
-		leaderKey, leaderID, err := getLeaderInfo(ctx, elec)
+		leaderKey, leaderMeta, err := getLeaderInfo(ctx, elec)
 		if err != nil {
 			// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
 			e.l.Warn("fail to get leader ID", zap.Error(err))
 			continue
 		}
-		if leaderID != e.id {
-			e.l.Info("current member is not the leader", zap.String("current member", e.id), zap.String("leader", leaderID))
+		if leaderMeta.ID != e.meta.ID {
+			e.l.Info("current member is not the leader", zap.String("current member", e.meta.ID), zap.String("leader", leaderMeta.ID))
 			continue
 		}
 
 		e.toBeLeader() // become the leader now
 		e.watchLeader(ctx, session, leaderKey)
-		e.retireLeader() // need to re-campaign
+		if err := e.retireLeader(leaderMeta); err != nil {
+			e.ech <- err
+		}
 	}
 }
 
 func (e *Election) toBeLeader() {
 	e.isLeader.Set(true)
+	e.leaderAddr.Set(e.meta.Address)
 	select {
 	case e.leaderCh <- true:
 	default:
 	}
 }
 
-func (e *Election) retireLeader() {
+func (e *Election) retireLeader(leaderMeta *NodeMeta) error {
 	e.isLeader.Set(false)
+	e.leaderAddr.Set(leaderMeta.Address)
 	select {
 	case e.leaderCh <- false:
 	default:
 	}
+	return common.InitClient([]string{leaderMeta.Address})
 }
 
 func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session, key string) {
@@ -276,10 +296,15 @@ forLoop:
 }
 
 // getLeaderInfo get the current leader's information (if exists).
-func getLeaderInfo(ctx context.Context, elec *concurrency.Election) (key, ID string, err error) {
+func getLeaderInfo(ctx context.Context, elec *concurrency.Election) (key string, meta *NodeMeta, err error) {
 	resp, err := elec.Leader(ctx)
 	if err != nil {
 		return
 	}
-	return string(resp.Kvs[0].Key), string(resp.Kvs[0].Value), nil
+	leaderMeta := &NodeMeta{}
+	err = json.Unmarshal(resp.Kvs[0].Value, leaderMeta)
+	if err != nil {
+		return
+	}
+	return string(resp.Kvs[0].Key), leaderMeta, nil
 }

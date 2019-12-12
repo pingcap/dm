@@ -31,9 +31,9 @@ func (s *Server) electionNotify(ctx context.Context) {
 			if leader {
 				log.L().Info("current member become the leader", zap.String("current member", s.cfg.Name))
 			} else {
-				_, leaderID, err2 := s.election.LeaderInfo(ctx)
+				_, leaderMeta, err2 := s.election.LeaderInfo(ctx)
 				if err2 == nil {
-					log.L().Info("current member retire from the leader", zap.String("leader", leaderID), zap.String("current member", s.cfg.Name))
+					log.L().Info("current member retire from the leader", zap.String("leader", leaderMeta.ID), zap.String("current member", s.cfg.Name))
 				} else {
 					log.L().Warn("get leader info", zap.Error(err2))
 				}

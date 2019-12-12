@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"os"
 
+	dmcommon "github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/ctl/master"
 	"github.com/pingcap/dm/pkg/log"
@@ -85,7 +86,8 @@ func Init(cfg *common.Config) error {
 	// set the log level temporarily
 	log.SetLevel(zapcore.InfoLevel)
 
-	return errors.Trace(common.InitUtils(cfg))
+	common.InitUtils(cfg)
+	return errors.Trace(dmcommon.InitClient(cfg.GetMasterAddrs()))
 }
 
 // PrintUsage prints usage

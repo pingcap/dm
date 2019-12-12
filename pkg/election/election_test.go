@@ -93,7 +93,7 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	defer cancel1()
-	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1)
+	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1, "")
 	c.Assert(err, IsNil)
 	defer e1.Close()
 
@@ -105,14 +105,14 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 		c.Fatal("leader campaign timeout")
 	}
 	c.Assert(e1.IsLeader(), IsTrue)
-	_, leaderID, err := e1.LeaderInfo(ctx1)
+	_, leaderMeta, err := e1.LeaderInfo(ctx1)
 	c.Assert(err, IsNil)
-	c.Assert(leaderID, Equals, e1.ID())
+	c.Assert(leaderMeta.ID, Equals, e1.ID())
 
 	// start e2
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
-	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2)
+	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2, "")
 	c.Assert(err, IsNil)
 	defer e2.Close()
 	select {
@@ -121,9 +121,9 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	case <-time.After(100 * time.Millisecond): // wait 100ms to start the campaign
 	}
 	// but the leader should still be e1
-	_, leaderID, err = e2.LeaderInfo(ctx2)
+	_, leaderMeta, err = e2.LeaderInfo(ctx2)
 	c.Assert(err, IsNil)
-	c.Assert(leaderID, Equals, e1.ID())
+	c.Assert(leaderMeta.ID, Equals, e1.ID())
 	c.Assert(e2.IsLeader(), IsFalse)
 
 	var wg sync.WaitGroup
@@ -149,9 +149,9 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 		c.Fatal("leader campaign timeout")
 	}
 	c.Assert(e2.IsLeader(), IsTrue)
-	_, leaderID, err = e2.LeaderInfo(ctx2)
+	_, leaderMeta, err = e2.LeaderInfo(ctx2)
 	c.Assert(err, IsNil)
-	c.Assert(leaderID, Equals, e2.ID())
+	c.Assert(leaderMeta.ID, Equals, e2.ID())
 
 	// if closing the client when campaigning, we should get an error
 	wg.Add(1)
@@ -172,7 +172,7 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	// can not elect with closed client.
 	ctx3, cancel3 := context.WithCancel(context.Background())
 	defer cancel3()
-	_, err = NewElection(ctx3, cli, sessionTTL, key, ID3)
+	_, err = NewElection(ctx3, cli, sessionTTL, key, ID3, "")
 	c.Assert(terror.ErrElectionCampaignFail.Equal(err), IsTrue)
 	c.Assert(err, ErrorMatches, ".*fail to campaign leader: create the initial session: context canceled.*")
 }
@@ -190,7 +190,7 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	defer cancel1()
-	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1)
+	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1, "")
 	c.Assert(err, IsNil)
 	defer e1.Close()
 
@@ -202,21 +202,21 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 		c.Fatal("leader campaign timeout")
 	}
 	c.Assert(e1.IsLeader(), IsTrue)
-	_, leaderID, err := e1.LeaderInfo(ctx1)
+	_, leaderMeta, err := e1.LeaderInfo(ctx1)
 	c.Assert(err, IsNil)
-	c.Assert(leaderID, Equals, e1.ID())
+	c.Assert(leaderMeta.ID, Equals, e1.ID())
 
 	// start e2
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
-	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2)
+	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2, "")
 	c.Assert(err, IsNil)
 	defer e2.Close()
 	time.Sleep(100 * time.Millisecond) // wait 100ms to start the campaign
 	// but the leader should still be e1
-	_, leaderID, err = e2.LeaderInfo(ctx2)
+	_, leaderMeta, err = e2.LeaderInfo(ctx2)
 	c.Assert(err, IsNil)
-	c.Assert(leaderID, Equals, e1.ID())
+	c.Assert(leaderMeta.ID, Equals, e1.ID())
 	c.Assert(e2.IsLeader(), IsFalse)
 
 	// cancel the campaign for e2, should get no errors
@@ -235,9 +235,9 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 
 	// e1 is still the leader
 	c.Assert(e1.IsLeader(), IsTrue)
-	_, leaderID, err = e1.LeaderInfo(ctx1)
+	_, leaderMeta, err = e1.LeaderInfo(ctx1)
 	c.Assert(err, IsNil)
-	c.Assert(leaderID, Equals, e1.ID())
+	c.Assert(leaderMeta.ID, Equals, e1.ID())
 	c.Assert(e2.IsLeader(), IsFalse)
 }
 
@@ -253,7 +253,7 @@ func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	e, err := NewElection(ctx, cli, sessionTTL, key, ID)
+	e, err := NewElection(ctx, cli, sessionTTL, key, ID, "")
 	c.Assert(err, IsNil)
 	defer e.Close()
 
@@ -265,9 +265,9 @@ func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 		c.Fatal("leader campaign timeout")
 	}
 	c.Assert(e.IsLeader(), IsTrue)
-	leaderKey, leaderID, err := e.LeaderInfo(ctx)
+	leaderKey, leaderMeta, err := e.LeaderInfo(ctx)
 	c.Assert(err, IsNil)
-	c.Assert(leaderID, Equals, e.ID())
+	c.Assert(leaderMeta.ID, Equals, e.ID())
 
 	// the leader retired after deleted the key
 	var wg sync.WaitGroup

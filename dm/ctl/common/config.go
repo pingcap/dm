@@ -132,8 +132,8 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// getMasterAddrs return config master addresses
-func (c *Config) getMasterAddrs() []string {
+// GetMasterAddrs return config master addresses
+func (c *Config) GetMasterAddrs() []string {
 	return strings.Split(c.MasterAddr, ",")
 }
 
@@ -165,7 +165,7 @@ func validateAddr(addrStr string) (string, error) {
 	addrs := strings.Split(addrStr, ",")
 	validAddrs := make([]string, 0, len(addrs))
 	for _, addr := range addrs {
-		addr := strings.TrimSpace(addr)
+		addr = strings.TrimSpace(addr)
 		if addr != "" {
 			_, _, err := net.SplitHostPort(addr)
 			if err != nil {
@@ -175,7 +175,7 @@ func validateAddr(addrStr string) (string, error) {
 		}
 	}
 	if len(validAddrs) == 0 {
-		return "", errors.Errorf("invalid address: '%s'", addrStr)
+		return "", errors.Errorf("address: '%s' is empty", addrStr)
 	}
 	return strings.Join(validAddrs, ","), nil
 }

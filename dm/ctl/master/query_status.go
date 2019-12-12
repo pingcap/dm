@@ -18,6 +18,7 @@ import (
 	"os"
 	"strings"
 
+	dmcommon "github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 
@@ -64,7 +65,7 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	cli := common.MasterClient()
+	cli := dmcommon.MasterClient()
 	ctx, cancel := context.WithTimeout(context.Background(), common.GlobalConfig().RPCTimeout)
 	defer cancel()
 	resp, err := cli.QueryStatus(ctx, &pb.QueryStatusListRequest{

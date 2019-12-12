@@ -16,11 +16,8 @@ package common
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/pingcap/dm/pkg/log"
-	"go.uber.org/zap"
 	"io/ioutil"
 	"strings"
-	"time"
 
 	"github.com/pingcap/dm/dm/pb"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
@@ -31,47 +28,20 @@ import (
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
 )
 
 var (
-	masterClient pb.MasterClient
 	globalConfig = &Config{}
 )
 
 // InitUtils inits necessary dmctl utils
-func InitUtils(cfg *Config) error {
+func InitUtils(cfg *Config) {
 	globalConfig = cfg
-	return errors.Trace(InitClient(cfg.getMasterAddrs()))
-}
-
-// InitClient initializes dm-master client
-func InitClient(addrs []string) error {
-	var err error
-	var conn *grpc.ClientConn
-	for _, addr := range addrs {
-		conn, err = grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
-		if err == nil {
-			break
-		}
-		log.L().Warn("try to create gRPC connect failed", zap.String("address", addr), zap.Error(err))
-	}
-
-	if err != nil {
-		return errors.Trace(err)
-	}
-	masterClient = pb.NewMasterClient(conn)
-	return nil
 }
 
 // GlobalConfig returns global dmctl config
 func GlobalConfig() *Config {
 	return globalConfig
-}
-
-// MasterClient returns dm-master client
-func MasterClient() pb.MasterClient {
-	return masterClient
 }
 
 // PrintLines adds a wrap to support `\n` within `chzyer/readline`

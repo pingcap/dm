@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
 
+	dmcommon "github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 )
@@ -58,7 +59,7 @@ func updateRelayFunc(cmd *cobra.Command, _ []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cli := common.MasterClient()
+	cli := dmcommon.MasterClient()
 	resp, err := cli.UpdateWorkerRelayConfig(ctx, &pb.UpdateWorkerRelayConfigRequest{
 		Config: string(content),
 		Worker: workers[0],

@@ -1584,9 +1584,10 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 	c.Assert(ok, check.IsTrue)
 
 	// s1 is still the leader
-	_, leaderID, err := s2.election.LeaderInfo(ctx)
+	_, leaderMeta, err := s2.election.LeaderInfo(ctx)
 	c.Assert(err, check.IsNil)
-	c.Assert(leaderID, check.Equals, cfg1.Name)
+	c.Assert(leaderMeta.ID, check.Equals, cfg1.Name)
+	c.Assert(leaderMeta.Address, check.Equals, cfg1.MasterAddr)
 
 	cancel()
 }
