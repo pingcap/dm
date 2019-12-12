@@ -59,8 +59,12 @@ func bwListFunc(cmd *cobra.Command, _ []string) {
 			}
 		}
 
-		doTableMap[simulationResult.SourceAddr] = doTableList
-		ignoreTableMap[simulationResult.SourceAddr] = ignoreTableList
+		if len(doTableList) > 0 {
+			doTableMap[simulationResult.SourceAddr] = doTableList
+		}
+		if len(ignoreTableList) > 0 {
+			ignoreTableMap[simulationResult.SourceAddr] = ignoreTableList
+		}
 	}
 
 	common.PrettyPrintInterface(bwListResult{

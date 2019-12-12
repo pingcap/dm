@@ -56,6 +56,16 @@ function run() {
         "simulate_1" 2
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "table-route -F dot $task_conf" \
+        "digraph" 1 \
+        "\"\`simulator\`.\`t\`\"" 2 \
+        "127.0.0.1:3306" 12 \
+        "127.0.0.1:3307" 12 \
+        "simulator_1" 9 \
+        "simulator_2" 9 \
+        "simulate_1" 6
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "table-route $task_conf -w 127.0.0.1:$WORKER1_PORT" \
         "\"routes\"" 1 \
         "\"\`simulator\`.\`t\`\"" 1 \

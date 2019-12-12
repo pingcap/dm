@@ -15,6 +15,7 @@ package simulator
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/ctl/common"
@@ -74,4 +75,28 @@ func simulateTask4BWListOrTableRoute(cmd *cobra.Command, op pb.SimulateOp) (resp
 		return
 	}
 	return resp
+}
+
+func dotGraphForRoutes(routes map[string]map[string][]*tableInfo) string {
+	result := "digraph routes {\nrankdir=\"LR\"\n"
+	for targetTable, sourceTables := range routes {
+		result += fmt.Sprintf("subgraph \"cluster_%v\"{\n", targetTable)
+		for sourceAddr, tables := range sourceTables {
+			nodeName := sourceAddr+targetTable
+			result += fmt.Sprintf(`"%s" [label = "%s"]`, nodeName, sourceAddr)
+			result += "\n"
+			result += fmt.Sprintf(`"%s" -> "%s"`, nodeName, targetTable)
+			result += "\n"
+			for _, table := range tables {
+				name := table.Table + sourceAddr
+				result += fmt.Sprintf(`"%s" [label = "%s"]`, name, table.Table)
+				result += "\n"
+				result += fmt.Sprintf(`"%s" -> "%s"`, name, nodeName)
+				result += "\n"
+			}
+		}
+		result += "}\n"
+	}
+	result += "}\n"
+	return result
 }

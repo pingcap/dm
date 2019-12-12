@@ -14,8 +14,11 @@
 package simulator
 
 import (
+	"strings"
+
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 
 	"github.com/spf13/cobra"
@@ -36,16 +39,22 @@ type tableRouteResult struct {
 // NewTableRouteCmd creates a TableRoute command
 func NewTableRouteCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "table-route [-w worker] [-T table] <config-file>",
+		Use:   "table-route [-F format] [-w worker] [-T table] <config-file>",
 		Short: "check the routes for all tables or single table",
 		Run:   tableRouteFunc,
 	}
 	tableList = tableList[:0]
 	cmd.Flags().StringSliceVarP(&tableList, "table", "T", []string{}, "the table name we want to check for the table route")
+	cmd.Flags().StringP("format", "F", "json", "the output format of routes")
 	return cmd
 }
 
 func tableRouteFunc(cmd *cobra.Command, _ []string) {
+	format, err := cmd.Flags().GetString("format")
+	if err != nil {
+		common.PrintLines(errors.ErrorStack(err))
+		return
+	}
 	resp := simulateTask4BWListOrTableRoute(cmd, pb.SimulateOp_TableRoute)
 	if resp == nil {
 		return
@@ -75,5 +84,9 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 	}
 
 	result.Routes = routes
+	if strings.EqualFold(format, "dot") {
+		common.PrintLines(dotGraphForRoutes(routes))
+		return
+	}
 	common.PrettyPrintInterface(result)
 }
