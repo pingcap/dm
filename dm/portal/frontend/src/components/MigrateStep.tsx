@@ -183,7 +183,7 @@ function MigrateStep({ onNext, onPrev, sourceConfig, ...remainProps }: Props) {
 
   function cleanTargetInstance() {
     // confirm
-    if (!window.confirm('你确定要清空下游实例吗？')) {
+    if (!window.confirm('你确定要重置所有操作吗？此操作会清空下游实例。')) {
       return
     }
 
@@ -203,7 +203,7 @@ function MigrateStep({ onNext, onPrev, sourceConfig, ...remainProps }: Props) {
 
   function undo() {
     // confirm
-    if (!window.confirm('你确定要撤消此次操作吗？')) {
+    if (!window.confirm('你确定要撤消此次操作，回到上一步吗？')) {
       return
     }
 
@@ -1010,15 +1010,20 @@ function MigrateStep({ onNext, onPrev, sourceConfig, ...remainProps }: Props) {
           <div className='tree-container'>
             {renderTargetTables()}
             <div className='action-icons'>
-              <Button onClick={undo} disabled={lastStateRef.current === null}>
-                <Icon type='undo' />
-              </Button>
-              <Button
-                onClick={cleanTargetInstance}
-                disabled={targetInstance.schemas.length === 0}
-              >
-                <Icon type='rollback' />
-              </Button>
+              <Tooltip title='回到上一步'>
+                <Button onClick={undo} disabled={lastStateRef.current === null}>
+                  <Icon type='undo' />
+                </Button>
+              </Tooltip>
+              <span>&nbsp;</span>
+              <Tooltip title='重置所有操作'>
+                <Button
+                  onClick={cleanTargetInstance}
+                  disabled={targetInstance.schemas.length === 0}
+                >
+                  <Icon type='delete' />
+                </Button>
+              </Tooltip>
             </div>
           </div>
         </div>
