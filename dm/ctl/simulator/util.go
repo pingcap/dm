@@ -82,7 +82,7 @@ func dotGraphForRoutes(routes map[string]map[string][]*tableInfo) string {
 	for targetTable, sourceTables := range routes {
 		result += fmt.Sprintf("subgraph \"cluster_%v\"{\n", targetTable)
 		for sourceAddr, tables := range sourceTables {
-			nodeName := sourceAddr+targetTable
+			nodeName := sourceAddr + targetTable
 			result += fmt.Sprintf(`"%s" [label = "%s"]`, nodeName, sourceAddr)
 			result += "\n"
 			result += fmt.Sprintf(`"%s" -> "%s"`, nodeName, targetTable)
