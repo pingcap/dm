@@ -61,6 +61,9 @@ service Master {
 
     // CheckTask checks legality of task configuration
     rpc CheckTask(CheckTaskRequest) returns (CheckTaskResponse) {}
+
+    // RegisterWorker register the dm-workers.
+    rpc RegisterWorker(RegisterWorkerRequest) returns(RegisterWorkerResponse) {}
 }
 
 message MigrateWorkerRelayRequest {
@@ -301,6 +304,17 @@ message CheckTaskRequest {
 }
 
 message CheckTaskResponse {
+    bool result = 1;
+    string msg = 2;
+}
+
+
+message RegisterWorkerRequest {
+    string name = 1;
+    string address = 2;
+}
+
+message RegisterWorkerResponse {
     bool result = 1;
     string msg = 2;
 }

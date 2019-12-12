@@ -102,7 +102,8 @@ type Config struct {
 
 	MasterAddr string `toml:"master-addr" json:"master-addr"`
 
-	Deploy    []*DeployMapper   `toml:"deploy" json:"-"`
+	Deploy []*DeployMapper `toml:"deploy" json:"-"`
+	// TODO: remove
 	DeployMap map[string]string `json:"deploy"`
 
 	ConfigFile string `json:"config-file"`
