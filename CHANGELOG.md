@@ -29,10 +29,10 @@ All notable changes to this project will be documented in this file.
 - Support replicating the `ALTER DATABASE` DDL statement [#389](https://github.com/pingcap/dm/pull/389)
 - Optimize the retry mechanism for anomalies [#391](https://github.com/pingcap/dm/pull/391)
 - Fix the panic-causing data race issue occurred when the full import unit pauses or exits [#353](https://github.com/pingcap/dm/pull/353)
-- Fix the issue that `stop-task` and `pause-task` might not take effect when retrying SQL operations to the downstream [#377](https://github.com/pingcap/dm/pull/377)
+- Fix the issue that `stop-task` and `pause-task` might not take effect when retrying SQL operations to the downstream [#400](https://github.com/pingcap/dm/pull/400)
 - Upgrade golang to v1.13 and upgrade the version of other dependencies [#362](https://github.com/pingcap/dm/pull/362)
 - Filter the error that the context is canceled when a SQL statement is being executed [#382](https://github.com/pingcap/dm/pull/382)
-- Fix the issue that the error occurred when performing a rolling upgrade to DM monitor using DM-ansible causes the upgrade to fail [#408](https://github.com/pingcap/dm/pull/408)
+- Fix the issue that the error occurred when performing a rolling update to DM monitor using DM-ansible causes the update to fail [#408](https://github.com/pingcap/dm/pull/408)
 
 ## [1.0.2] 2019-10-30
 
