@@ -15,6 +15,7 @@ package worker
 
 import (
 	"context"
+	"github.com/pingcap/dm/dm/config"
 	"io/ioutil"
 	"net/http"
 	"testing"
@@ -41,8 +42,9 @@ func (t *testServer) TestServer(c *C) {
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
 
 	dir := c.MkDir()
-	cfg.RelayDir = dir
-	cfg.MetaDir = dir
+	workerCfg := &config.WorkerConfig{}
+	workerCfg.RelayDir = dir
+	workerCfg.MetaDir = dir
 
 	NewRelayHolder = NewDummyRelayHolder
 	defer func() {
@@ -66,6 +68,7 @@ func (t *testServer) TestServer(c *C) {
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return !s.closed.Get()
 	}), IsTrue)
+	c.Assert(s.startWorker(workerCfg), IsNil)
 
 	// test condition hub
 	t.testConidtionHub(c, s)

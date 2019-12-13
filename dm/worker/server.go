@@ -280,7 +280,7 @@ func (s *Server) QueryTaskOperation(ctx context.Context, req *pb.QueryTaskOperat
 func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*pb.QueryStatusResponse, error) {
 	log.L().Info("", zap.String("request", "QueryStatus"), zap.Stringer("payload", req))
 	resp := &pb.QueryStatusResponse{
-		Result:        true,
+		Result: true,
 	}
 
 	w := s.checkWorkerStart()
@@ -304,7 +304,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorRequest) (*pb.QueryErrorResponse, error) {
 	log.L().Info("", zap.String("request", "QueryError"), zap.Stringer("payload", req))
 	resp := &pb.QueryErrorResponse{
-		Result:       true,
+		Result: true,
 	}
 
 	w := s.checkWorkerStart()
@@ -507,7 +507,6 @@ func (s *Server) QueryWorkerConfig(ctx context.Context, req *pb.QueryWorkerConfi
 		return resp, nil
 	}
 
-
 	workerCfg, err := w.QueryConfig(ctx)
 	if err != nil {
 		resp.Result = false
@@ -544,29 +543,14 @@ func (s *Server) MigrateRelay(ctx context.Context, req *pb.MigrateRelayRequest) 
 	return makeCommonWorkerResponse(err), nil
 }
 
-// CreateMysqlTask create a new mysql task which will be running in this Server
-func (s *Server) CreateMysqlTask(ctx context.Context, req *pb.MysqlTaskRequest) (*pb.MysqlTaskResponse, error) {
-	resp := &pb.MysqlTaskResponse{
-		Result: true,
-		Msg:    "Create mysql task successfully",
-	}
-	cfg := &config.WorkerConfig{}
-	if err := cfg.Parse(req.Config); err != nil {
-		resp.Result = false
-		resp.Msg = errors.ErrorStack(err)
-		return resp, err
-	}
+func (s *Server) startWorker(cfg *config.WorkerConfig) error {
 	s.Lock()
 	if s.worker != nil {
-		resp.Result = false
-		resp.Msg = "Mysql task has been running, please call UpdateMysqlTaskConfig"
-		return resp, nil
+		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 	w, err := NewWorker(cfg)
 	if err != nil {
-		resp.Result = false
-		resp.Msg = errors.ErrorStack(err)
-		return resp, nil
+		return err
 	}
 	s.worker = w
 	s.Unlock()
@@ -575,6 +559,24 @@ func (s *Server) CreateMysqlTask(ctx context.Context, req *pb.MysqlTaskRequest) 
 		defer s.wg.Done()
 		s.worker.Start()
 	}()
+	return nil
+}
+
+// CreateMysqlTask create a new mysql task which will be running in this Server
+func (s *Server) CreateMysqlTask(ctx context.Context, req *pb.MysqlTaskRequest) (*pb.MysqlTaskResponse, error) {
+	resp := &pb.MysqlTaskResponse{
+		Result: true,
+		Msg:    "Create mysql task successfully",
+	}
+	cfg := &config.WorkerConfig{}
+	err := cfg.Parse(req.Config)
+	if err == nil {
+		err = s.startWorker(cfg)
+	}
+	if err != nil {
+		resp.Result = false
+		resp.Msg = errors.ErrorStack(err)
+	}
 	return resp, nil
 }
 
@@ -596,7 +598,7 @@ func (s *Server) UpdateMysqlTaskConfig(ctx context.Context, req *pb.MysqlTaskReq
 	s.Unlock()
 	w.Close()
 	s.wg.Wait()
-	if res, _ := s.CreateMysqlTask(ctx, req); res !=nil && !res.Result {
+	if res, _ := s.CreateMysqlTask(ctx, req); res != nil && !res.Result {
 		resp.Result = false
 		resp.Msg = "UpdateMysqlTaskConfig fail when create new mysql task, please call CreateMysqlTask again"
 		return resp, nil

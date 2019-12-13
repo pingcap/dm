@@ -56,6 +56,26 @@ func (mr *MockWorkerClientMockRecorder) BreakDDLLock(arg0, arg1 interface{}, arg
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BreakDDLLock", reflect.TypeOf((*MockWorkerClient)(nil).BreakDDLLock), varargs...)
 }
 
+// CreateMysqlTask mocks base method
+func (m *MockWorkerClient) CreateMysqlTask(arg0 context.Context, arg1 *pb.MysqlTaskRequest, arg2 ...grpc.CallOption) (*pb.MysqlTaskResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "CreateMysqlTask", varargs...)
+	ret0, _ := ret[0].(*pb.MysqlTaskResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateMysqlTask indicates an expected call of CreateMysqlTask
+func (mr *MockWorkerClientMockRecorder) CreateMysqlTask(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateMysqlTask", reflect.TypeOf((*MockWorkerClient)(nil).CreateMysqlTask), varargs...)
+}
+
 // ExecuteDDL mocks base method
 func (m *MockWorkerClient) ExecuteDDL(arg0 context.Context, arg1 *pb.ExecDDLRequest, arg2 ...grpc.CallOption) (*pb.CommonWorkerResponse, error) {
 	m.ctrl.T.Helper()
@@ -296,6 +316,26 @@ func (mr *MockWorkerClientMockRecorder) StartSubTask(arg0, arg1 interface{}, arg
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSubTask", reflect.TypeOf((*MockWorkerClient)(nil).StartSubTask), varargs...)
 }
 
+// StopMysqlTask mocks base method
+func (m *MockWorkerClient) StopMysqlTask(arg0 context.Context, arg1 *pb.StopMysqlTaskRequest, arg2 ...grpc.CallOption) (*pb.MysqlTaskResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "StopMysqlTask", varargs...)
+	ret0, _ := ret[0].(*pb.MysqlTaskResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// StopMysqlTask indicates an expected call of StopMysqlTask
+func (mr *MockWorkerClientMockRecorder) StopMysqlTask(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopMysqlTask", reflect.TypeOf((*MockWorkerClient)(nil).StopMysqlTask), varargs...)
+}
+
 // SwitchRelayMaster mocks base method
 func (m *MockWorkerClient) SwitchRelayMaster(arg0 context.Context, arg1 *pb.SwitchRelayMasterRequest, arg2 ...grpc.CallOption) (*pb.CommonWorkerResponse, error) {
 	m.ctrl.T.Helper()
@@ -314,6 +354,26 @@ func (mr *MockWorkerClientMockRecorder) SwitchRelayMaster(arg0, arg1 interface{}
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]interface{}{arg0, arg1}, arg2...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SwitchRelayMaster", reflect.TypeOf((*MockWorkerClient)(nil).SwitchRelayMaster), varargs...)
+}
+
+// UpdateMysqlTaskConfig mocks base method
+func (m *MockWorkerClient) UpdateMysqlTaskConfig(arg0 context.Context, arg1 *pb.MysqlTaskRequest, arg2 ...grpc.CallOption) (*pb.MysqlTaskResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "UpdateMysqlTaskConfig", varargs...)
+	ret0, _ := ret[0].(*pb.MysqlTaskResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateMysqlTaskConfig indicates an expected call of UpdateMysqlTaskConfig
+func (mr *MockWorkerClientMockRecorder) UpdateMysqlTaskConfig(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateMysqlTaskConfig", reflect.TypeOf((*MockWorkerClient)(nil).UpdateMysqlTaskConfig), varargs...)
 }
 
 // UpdateRelayConfig mocks base method
@@ -531,6 +591,21 @@ func (mr *MockWorkerServerMockRecorder) BreakDDLLock(arg0, arg1 interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BreakDDLLock", reflect.TypeOf((*MockWorkerServer)(nil).BreakDDLLock), arg0, arg1)
 }
 
+// CreateMysqlTask mocks base method
+func (m *MockWorkerServer) CreateMysqlTask(arg0 context.Context, arg1 *pb.MysqlTaskRequest) (*pb.MysqlTaskResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateMysqlTask", arg0, arg1)
+	ret0, _ := ret[0].(*pb.MysqlTaskResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateMysqlTask indicates an expected call of CreateMysqlTask
+func (mr *MockWorkerServerMockRecorder) CreateMysqlTask(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateMysqlTask", reflect.TypeOf((*MockWorkerServer)(nil).CreateMysqlTask), arg0, arg1)
+}
+
 // ExecuteDDL mocks base method
 func (m *MockWorkerServer) ExecuteDDL(arg0 context.Context, arg1 *pb.ExecDDLRequest) (*pb.CommonWorkerResponse, error) {
 	m.ctrl.T.Helper()
@@ -710,6 +785,21 @@ func (mr *MockWorkerServerMockRecorder) StartSubTask(arg0, arg1 interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartSubTask", reflect.TypeOf((*MockWorkerServer)(nil).StartSubTask), arg0, arg1)
 }
 
+// StopMysqlTask mocks base method
+func (m *MockWorkerServer) StopMysqlTask(arg0 context.Context, arg1 *pb.StopMysqlTaskRequest) (*pb.MysqlTaskResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StopMysqlTask", arg0, arg1)
+	ret0, _ := ret[0].(*pb.MysqlTaskResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// StopMysqlTask indicates an expected call of StopMysqlTask
+func (mr *MockWorkerServerMockRecorder) StopMysqlTask(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopMysqlTask", reflect.TypeOf((*MockWorkerServer)(nil).StopMysqlTask), arg0, arg1)
+}
+
 // SwitchRelayMaster mocks base method
 func (m *MockWorkerServer) SwitchRelayMaster(arg0 context.Context, arg1 *pb.SwitchRelayMasterRequest) (*pb.CommonWorkerResponse, error) {
 	m.ctrl.T.Helper()
@@ -723,6 +813,21 @@ func (m *MockWorkerServer) SwitchRelayMaster(arg0 context.Context, arg1 *pb.Swit
 func (mr *MockWorkerServerMockRecorder) SwitchRelayMaster(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SwitchRelayMaster", reflect.TypeOf((*MockWorkerServer)(nil).SwitchRelayMaster), arg0, arg1)
+}
+
+// UpdateMysqlTaskConfig mocks base method
+func (m *MockWorkerServer) UpdateMysqlTaskConfig(arg0 context.Context, arg1 *pb.MysqlTaskRequest) (*pb.MysqlTaskResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateMysqlTaskConfig", arg0, arg1)
+	ret0, _ := ret[0].(*pb.MysqlTaskResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateMysqlTaskConfig indicates an expected call of UpdateMysqlTaskConfig
+func (mr *MockWorkerServerMockRecorder) UpdateMysqlTaskConfig(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateMysqlTaskConfig", reflect.TypeOf((*MockWorkerServer)(nil).UpdateMysqlTaskConfig), arg0, arg1)
 }
 
 // UpdateRelayConfig mocks base method

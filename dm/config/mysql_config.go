@@ -29,6 +29,7 @@ const (
 	defaultBaseServerID = math.MaxUint32 / 10
 )
 
+// PurgeConfig is the configuration for Purger
 type PurgeConfig struct {
 	Interval    int64 `toml:"interval" json:"interval"`         // check whether need to purge at this @Interval (seconds)
 	Expires     int64 `toml:"expires" json:"expires"`           // if file's modified time is older than @Expires (hours), then it can be purged
@@ -115,8 +116,8 @@ func (c *WorkerConfig) adjust() {
 	c.Checker.Adjust()
 }
 
-// verify verifies the config
-func (c *WorkerConfig) verify() error {
+// Verify verifies the config
+func (c *WorkerConfig) Verify() error {
 	if len(c.SourceID) == 0 {
 		return terror.ErrWorkerNeedSourceID.Generate()
 	}
@@ -145,7 +146,6 @@ func (c *WorkerConfig) verify() error {
 	return nil
 }
 
-
 // DecryptPassword returns a decrypted config replica in config
 func (c *WorkerConfig) DecryptPassword() (*WorkerConfig, error) {
 	clone := c.Clone()
@@ -163,6 +163,7 @@ func (c *WorkerConfig) DecryptPassword() (*WorkerConfig, error) {
 	return clone, nil
 }
 
+// GenerateDBConfig creates DBConfig for DB
 func (c *WorkerConfig) GenerateDBConfig() (*DBConfig, error) {
 	// decrypt password
 	clone, err := c.DecryptPassword()
@@ -174,8 +175,7 @@ func (c *WorkerConfig) GenerateDBConfig() (*DBConfig, error) {
 	return from, nil
 }
 
-
-// adjustFlavor adjusts flavor through querying from given database
+// Adjust flavor and serverid of WorkerConfig
 func (c *WorkerConfig) Adjust(db *sql.DB) (err error) {
 	c.From.Adjust()
 	c.Checker.Adjust()
@@ -184,12 +184,12 @@ func (c *WorkerConfig) Adjust(db *sql.DB) (err error) {
 		ctx, cancel := context.WithTimeout(context.Background(), dbGetTimeout)
 		defer cancel()
 
-		err = c.adjustFlavor(ctx, db)
+		err = c.AdjustFlavor(ctx, db)
 		if err != nil {
 			return err
 		}
 
-		err = c.adjustServerID(ctx, db)
+		err = c.AdjustServerID(ctx, db)
 		if err != nil {
 			return err
 		}
@@ -198,8 +198,8 @@ func (c *WorkerConfig) Adjust(db *sql.DB) (err error) {
 	return nil
 }
 
-// adjustFlavor adjusts flavor through querying from given database
-func (c *WorkerConfig) adjustFlavor(ctx context.Context, db *sql.DB) (err error) {
+// AdjustFlavor adjust Flavor from DB
+func (c *WorkerConfig) AdjustFlavor(ctx context.Context, db *sql.DB) (err error) {
 	if c.Flavor != "" {
 		switch c.Flavor {
 		case mysql.MariaDBFlavor, mysql.MySQLFlavor:
@@ -216,7 +216,8 @@ func (c *WorkerConfig) adjustFlavor(ctx context.Context, db *sql.DB) (err error)
 	return terror.WithScope(err, terror.ScopeUpstream)
 }
 
-func (c *WorkerConfig) adjustServerID(ctx context.Context, db *sql.DB) error {
+// AdjustServerID adjust server id from DB
+func (c *WorkerConfig) AdjustServerID(ctx context.Context, db *sql.DB) error {
 	if c.ServerID != 0 {
 		return nil
 	}
@@ -241,4 +242,21 @@ func (c *WorkerConfig) adjustServerID(ctx context.Context, db *sql.DB) error {
 	}
 
 	return terror.ErrInvalidServerID.Generatef("can't find a random available server ID")
+}
+
+// LoadFromFile loads config from file.
+func (c *WorkerConfig) LoadFromFile(path string) error {
+	metaData, err := toml.DecodeFile(path, c)
+	if err != nil {
+		return terror.ErrWorkerDecodeConfigFromFile.Delegate(err)
+	}
+	undecoded := metaData.Undecoded()
+	if len(undecoded) > 0 && err == nil {
+		var undecodedItems []string
+		for _, item := range undecoded {
+			undecodedItems = append(undecodedItems, item.String())
+		}
+		return terror.ErrWorkerUndecodedItemFromFile.Generate(strings.Join(undecodedItems, ","))
+	}
+	return nil
 }

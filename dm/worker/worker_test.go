@@ -32,8 +32,8 @@ import (
 var emptyWorkerStatusInfoJSONLength = 25
 
 func (t *testServer) testWorker(c *C) {
-	cfg := NewConfig()
-	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	cfg := &config.WorkerConfig{}
+	c.Assert(cfg.LoadFromFile("./dm-worker.toml"), IsNil)
 
 	dir := c.MkDir()
 	cfg.RelayDir = dir
@@ -83,8 +83,8 @@ func (t *testServer) testWorkerHandleTask(c *C) {
 
 	NewRelayHolder = NewDummyRelayHolder
 	dir := c.MkDir()
-	cfg := NewConfig()
-	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	cfg := &config.WorkerConfig{}
+	c.Assert(cfg.LoadFromFile("./dm-worker.toml"), IsNil)
 	cfg.RelayDir = dir
 	cfg.MetaDir = dir
 	w, err := NewWorker(cfg)
@@ -125,15 +125,16 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		port     = 8263
 	)
 	cfg := NewConfig()
+	workerCfg := &config.WorkerConfig{}
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
-	cfg.Checker.CheckInterval = config.Duration{Duration: 40 * time.Millisecond}
-	cfg.Checker.BackoffMin = config.Duration{Duration: 20 * time.Millisecond}
-	cfg.Checker.BackoffMax = config.Duration{Duration: 1 * time.Second}
+	workerCfg.Checker.CheckInterval = config.Duration{Duration: 40 * time.Millisecond}
+	workerCfg.Checker.BackoffMin = config.Duration{Duration: 20 * time.Millisecond}
+	workerCfg.Checker.BackoffMax = config.Duration{Duration: 1 * time.Second}
 	cfg.WorkerAddr = fmt.Sprintf(":%d", port)
 
 	dir := c.MkDir()
-	cfg.RelayDir = dir
-	cfg.MetaDir = dir
+	workerCfg.RelayDir = dir
+	workerCfg.MetaDir = dir
 
 	NewRelayHolder = NewDummyRelayHolder
 	defer func() {
@@ -155,6 +156,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		defer s.Close()
 		c.Assert(s.Start(), IsNil)
 	}()
+	c.Assert(s.startWorker(workerCfg), IsNil)
 	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
 		return !s.closed.Get()
 	}), IsTrue)

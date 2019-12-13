@@ -567,7 +567,6 @@ func (w *Worker) QueryConfig(ctx context.Context) (*config.WorkerConfig, error) 
 	return w.cfg.Clone(), nil
 }
 
-
 // UpdateRelayConfig update subTask ans relay unit configure online
 func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	w.Lock()

@@ -85,8 +85,8 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 
 	NewRelayHolder = NewDummyRelayHolder
 	dir := c.MkDir()
-	cfg := NewConfig()
-	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), check.IsNil)
+	cfg := &config.WorkerConfig{}
+	c.Assert(cfg.LoadFromFile("./dm-worker.toml"), check.IsNil)
 	cfg.RelayDir = dir
 	cfg.MetaDir = dir
 	w, err := NewWorker(cfg)
@@ -210,8 +210,9 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 
 	NewRelayHolder = NewDummyRelayHolder
 	dir := c.MkDir()
-	cfg := NewConfig()
-	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), check.IsNil)
+	// cfg := NewConfig()
+	cfg := &config.WorkerConfig{}
+	c.Assert(cfg.LoadFromFile("./dm-worker.toml"), check.IsNil)
 	cfg.RelayDir = dir
 	cfg.MetaDir = dir
 	w, err := NewWorker(cfg)
