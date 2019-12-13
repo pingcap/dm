@@ -16,7 +16,6 @@ package worker
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"path"
 	"reflect"
 	"sync"
@@ -82,6 +81,7 @@ func NewWorker(cfg *config.WorkerConfig) (w *Worker, err error) {
 		l:             log.With(zap.String("component", "worker controller")),
 	}
 	w.ctx, w.cancel = context.WithCancel(context.Background())
+	w.closed.Set(closedTrue)
 
 	defer func(w2 *Worker) {
 		if err != nil { // when err != nil, `w` will become nil in this func, so we pass `w` in defer.
@@ -151,10 +151,6 @@ func NewWorker(cfg *config.WorkerConfig) (w *Worker, err error) {
 
 // Start starts working
 func (w *Worker) Start() {
-	if w.closed.Get() == closedTrue {
-		w.l.Warn("already closed")
-		return
-	}
 
 	// start relay
 	w.relayHolder.Start()
@@ -183,6 +179,7 @@ func (w *Worker) Start() {
 	w.l.Info("start running")
 
 	ticker := time.NewTicker(5 * time.Second)
+	w.closed.Set(closedFalse)
 	defer ticker.Stop()
 	for {
 		select {
@@ -570,16 +567,6 @@ func (w *Worker) QueryConfig(ctx context.Context) (*config.WorkerConfig, error) 
 	return w.cfg.Clone(), nil
 }
 
-func (w *Worker) updateConfigFile(content string) error {
-	if w.configFile == "" {
-		w.configFile = "dm-worker-config.bak"
-	}
-	err := ioutil.WriteFile(w.configFile, []byte(content), 0666)
-	if err != nil {
-		return terror.ErrWorkerWriteConfigFile.Delegate(err)
-	}
-	return nil
-}
 
 // UpdateRelayConfig update subTask ans relay unit configure online
 func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
@@ -605,14 +592,10 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		}
 	}
 
-	// Save configure to local file.
+	// No need to store config in local
 	newCfg := &config.WorkerConfig{}
-	err := w.updateConfigFile(content)
-	if err != nil {
-		return err
-	}
 
-	err = newCfg.Parse(content)
+	err := newCfg.Parse(content)
 	if err != nil {
 		return err
 	}
@@ -676,9 +659,6 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		return err
 	}
 
-	if err := w.updateConfigFile(content); err != nil {
-		return err
-	}
 	w.l.Info("update relay config successfully, save config to local file", zap.String("local file", w.configFile))
 
 	return nil
