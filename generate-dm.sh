@@ -3,7 +3,7 @@
 cd dm/proto
 
 echo "generate dm protobuf code..."
-GOGO_ROOT=/Users/imtbkcat/go/src/github.com/gogo/protobuf
+GOGO_ROOT=${GOPATH}/src/github.com/gogo/protobuf
 if [ ! -d $GOGO_ROOT ]; then
 		echo "please use the following command to get gogo."
 		echo "go get -u github.com/gogo/protobuf/protoc-gen-gogofaster"
@@ -17,14 +17,14 @@ if [ $? -ne 0 ]; then
 	exit 1
 fi
 
-GOOGLE_API_ROOT=/Users/imtbkcat/go/src/github.com/googleapis/googleapis
+GOOGLE_API_ROOT=${GOPATH}/src/github.com/googleapis/googleapis
 if [ ! -d $GOOGLE_API_ROOT ]; then
 	echo "please use the following command to get google apis."
 	echo "go get -u github.com/googleapis/googleapis/google/api"
 	exit 1
 fi
 
-cp -r /Users/imtbkcat/go/src/github.com/googleapis/googleapis/google ./
+cp -r ${GOPATH}/src/github.com/googleapis/googleapis/google ./
 
 protoc -I.:${GOGO_ROOT}:${GOGO_ROOT}/protobuf --gogofaster_out=plugins=grpc:../pb/ *.proto
 
