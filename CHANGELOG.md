@@ -28,7 +28,7 @@ All notable changes to this project will be documented in this file.
 - Support checking the duplicate quotaed route-rules or filter-rules in task config[#385](https://github.com/pingcap/dm/pull/385)
 - Support replicating the `ALTER DATABASE` DDL statement [#389](https://github.com/pingcap/dm/pull/389)
 - Optimize the retry mechanism for anomalies [#391](https://github.com/pingcap/dm/pull/391)
-- Fix the panic issue when the import unit pauses or exits because of the data race [#353](https://github.com/pingcap/dm/pull/353)
+- Fix the panic issue caused by the data race when the import unit pauses or exits  [#353](https://github.com/pingcap/dm/pull/353)
 - Fix the issue that `stop-task` and `pause-task` might not take effect when retrying SQL operations to the downstream [#400](https://github.com/pingcap/dm/pull/400)
 - Upgrade golang to v1.13 and upgrade the version of other dependencies [#362](https://github.com/pingcap/dm/pull/362)
 - Filter the error that the context is canceled when a SQL statement is being executed [#382](https://github.com/pingcap/dm/pull/382)
