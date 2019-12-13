@@ -23,11 +23,11 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/log"
+	dmParser "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/utils"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/ast"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
@@ -358,7 +358,7 @@ func getRouteLevel(r *router.Table, caseSensitive bool, schema, table string) (i
 
 	if len(table) == 0 || len(tableRules) == 0 {
 		if len(schemaRules) > 1 {
-			return 0, errors.NotSupportedf("route %s/%s to rule set(%d)", schema, table, len(schemaRules))
+			return 0, errors.NotSupportedf("route %s/%s matches more than one schema rules: %+v", schema, table, schemaRules)
 		}
 
 		if len(schemaRules) == 1 {
@@ -366,7 +366,7 @@ func getRouteLevel(r *router.Table, caseSensitive bool, schema, table string) (i
 		}
 	} else {
 		if len(tableRules) > 1 {
-			return 0, errors.NotSupportedf("route %s/%s to rule set(%d)", schema, table, len(tableRules))
+			return 0, errors.NotSupportedf("route %s/%s matches more than one table rules: %+v", schema, table, tableRules)
 		}
 
 		return 2, nil
@@ -532,9 +532,15 @@ func filterSQL(sql string, filterMap map[string]*bf.BinlogEventRule, caseSensiti
 	}
 
 	n := stmts[0]
+	tables, err := dmParser.FetchDDLTableNames("", n)
+	if err != nil {
+		return "", bf.Ignore, errors.Annotate(err, "fetch ddl table names failed")
+	}
+	table := &filter.Table{}
+	if len(tables) > 0 {
+		table = tables[0]
+	}
 	et := bf.AstToDDLEvent(n)
-	table := filter.Table{}
-	genSchemaAndTable(&table, n)
 
 	for name, filterContent := range filterMap {
 		singleFilter, err := bf.NewBinlogEvent(caseSensitive, []*bf.BinlogEventRule{filterContent})
@@ -552,33 +558,4 @@ func filterSQL(sql string, filterMap map[string]*bf.BinlogEventRule, caseSensiti
 		// TODO: Check whether this table can match any event by this filter. If so, this sql is picked by this filter
 	}
 	return "", bf.Do, nil
-}
-
-// genSchemaAndTable generates target schema and table based on the StmtNode
-func genSchemaAndTable(table *filter.Table, n ast.StmtNode) {
-	switch v := n.(type) {
-	case *ast.CreateDatabaseStmt:
-		setSchemaAndTable(table, v.Name, "")
-	case *ast.DropDatabaseStmt:
-		setSchemaAndTable(table, v.Name, "")
-	case *ast.CreateTableStmt:
-		setSchemaAndTable(table, v.Table.Schema.O, v.Table.Name.O)
-	case *ast.DropTableStmt:
-		setSchemaAndTable(table, v.Tables[0].Schema.O, v.Tables[0].Name.O)
-	case *ast.AlterTableStmt:
-		setSchemaAndTable(table, v.Table.Schema.O, v.Table.Name.O)
-	case *ast.RenameTableStmt:
-		setSchemaAndTable(table, v.OldTable.Schema.O, v.OldTable.Name.O)
-	case *ast.TruncateTableStmt:
-		setSchemaAndTable(table, v.Table.Schema.O, v.Table.Name.O)
-	case *ast.CreateIndexStmt:
-		setSchemaAndTable(table, v.Table.Schema.O, v.Table.Name.O)
-	case *ast.DropIndexStmt:
-		setSchemaAndTable(table, v.Table.Schema.O, v.Table.Name.O)
-	}
-}
-
-func setSchemaAndTable(table *filter.Table, schemaName, tableName string) {
-	table.Schema = schemaName
-	table.Name = tableName
 }
