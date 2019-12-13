@@ -28,10 +28,6 @@ const (
 	WorkerBound
 )
 
-var (
-	workerKeepAlivePath = "/dm-worker/a"
-)
-
 // Worker the proc essor that let upstream and downstream synchronization.
 type Worker struct {
 	name    string

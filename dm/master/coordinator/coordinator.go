@@ -25,11 +25,17 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	workerKeepAlivePath = "/dm-worker/a"
+)
+
 // Coordinator coordinate wrokers and upstream.
 type Coordinator struct {
 	mu sync.RWMutex
-	//address to worker
+	// address ->  worker
 	workers map[string]*Worker
+	// upstream(source-id) -> worker
+	upstreams map[string]*Worker
 }
 
 func NewCoordinator() *Coordinator {
@@ -75,10 +81,6 @@ func (c *Coordinator) GetWorkerBySourceID(source string) *Worker {
 	return nil
 }
 
-func (c *Coordinator) GetAllIdleWorkers() []*Worker {
-	return nil
-}
-
 func (c *Coordinator) GetWorkersByStatus(s WorkerStatus) []*Worker {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -91,9 +93,8 @@ func (c *Coordinator) GetWorkersByStatus(s WorkerStatus) []*Worker {
 	return res
 }
 
-func (c *Coordinator) Maintain(client *clientv3.Client) {
+func (c *Coordinator) Maintain(ctx context.Context, client *clientv3.Client) {
 	watcher := clientv3.NewWatcher(client)
-	ctx := context.Background()
 	ch := watcher.Watch(ctx, workerKeepAlivePath, clientv3.WithPrefix())
 
 	for {
@@ -127,6 +128,14 @@ func (c *Coordinator) Maintain(client *clientv3.Client) {
 					c.mu.Unlock()
 				}
 			}
+		case <-ctx.Done():
+			log.L().Info("coordinate exict due to context canceled")
+			return
 		}
 	}
+}
+
+// TODO: bind the worker the upstreams and set the status to Bound.
+func (c *Coordinator) Schedule() {
+
 }

@@ -202,6 +202,12 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	s.bgFunWg.Add(1)
 	go func() {
 		defer s.bgFunWg.Done()
+		s.coordinator.Maintain(ctx, s.etcdClient)
+	}()
+
+	s.bgFunWg.Add(1)
+	go func() {
+		defer s.bgFunWg.Done()
 		select {
 		case <-ctx.Done():
 			return
