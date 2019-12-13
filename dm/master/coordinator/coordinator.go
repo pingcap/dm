@@ -14,9 +14,15 @@
 package coordinator
 
 import (
+	"context"
+	"strings"
 	"sync"
 
 	"github.com/pingcap/dm/dm/master/workerrpc"
+	"github.com/pingcap/dm/pkg/log"
+	"go.etcd.io/etcd/clientv3"
+	"go.etcd.io/etcd/mvcc/mvccpb"
+	"go.uber.org/zap"
 )
 
 // Coordinator coordinate wrokers and upstream.
@@ -53,7 +59,7 @@ func (c *Coordinator) GetWorkerClientByAddress(address string) workerrpc.Client 
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	w, ok := c.workers[address]
-	if !ok || w.Status() == Disconnect {
+	if !ok || w.Status() == WorkerClosed {
 		return nil
 	}
 	return w.GetClient()
@@ -73,8 +79,54 @@ func (c *Coordinator) GetAllIdleWorkers() []*Worker {
 	return nil
 }
 
-func (c *Coordinator) GetWorkersByStatus(state WorkerStatus) []*Worker {
+func (c *Coordinator) GetWorkersByStatus(s WorkerStatus) []*Worker {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return nil
+	res := make([]*Worker, 0, len(c.workers))
+	for _, w := range c.workers {
+		if w.Status() == s {
+			res = append(res, w)
+		}
+	}
+	return res
+}
+
+func (c *Coordinator) Maintain(client *clientv3.Client) {
+	watcher := clientv3.NewWatcher(client)
+	ctx := context.Background()
+	ch := watcher.Watch(ctx, workerKeepAlivePath, clientv3.WithPrefix())
+
+	for {
+		select {
+		case wresp := <-ch:
+			if wresp.Canceled {
+				log.L().Error("leader watcher is canceled with", zap.Error(wresp.Err()))
+				return
+			}
+
+			for _, ev := range wresp.Events {
+				switch ev.Type {
+				case mvccpb.PUT:
+					key := string(ev.Kv.Key)
+					slice := strings.Split(string(key), ",")
+					addr, name := slice[1], slice[2]
+					c.mu.Lock()
+					if w, ok := c.workers[addr]; ok && name == w.Name() {
+						w.setStatus(WorkerFree)
+					}
+					c.mu.Unlock()
+
+				case mvccpb.DELETE:
+					key := string(ev.Kv.Key)
+					slice := strings.Split(string(key), ",")
+					addr, name := slice[1], slice[2]
+					c.mu.Lock()
+					if w, ok := c.workers[addr]; ok && name == w.Name() {
+						w.setStatus(WorkerClosed)
+					}
+					c.mu.Unlock()
+				}
+			}
+		}
+	}
 }

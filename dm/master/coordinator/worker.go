@@ -14,6 +14,8 @@
 package coordinator
 
 import (
+	"sync/atomic"
+
 	"github.com/pingcap/dm/dm/master/workerrpc"
 )
 
@@ -21,9 +23,13 @@ type WorkerStatus int
 
 // the status of worker
 const (
-	Free WorkerStatus = iota << 1
-	Bound
-	Disconnect
+	WorkerClosed WorkerStatus = iota + 1
+	WorkerFree
+	WorkerBound
+)
+
+var (
+	workerKeepAlivePath = "/dm-worker/a"
 )
 
 // Worker the proc essor that let upstream and downstream synchronization.
@@ -31,7 +37,7 @@ type Worker struct {
 	name    string
 	address string
 	client  workerrpc.Client
-	status  string
+	status  atomic.Value
 }
 
 func NewWorker(name, address string) (*Worker, error) {
@@ -39,12 +45,13 @@ func NewWorker(name, address string) (*Worker, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Worker{
+	w := &Worker{
 		name:    name,
 		address: address,
 		client:  client,
-	}, nil
-
+	}
+	w.status.Store(WorkerClosed)
+	return w, nil
 }
 
 // GetClient returns the client of the worker.
@@ -65,5 +72,9 @@ func (w *Worker) Address() string {
 // Status returns the status of the worker.
 func (w *Worker) Status() WorkerStatus {
 	// TODO: add more jugement.
-	return Free
+	return w.status.Load().(WorkerStatus)
+}
+
+func (w *Worker) setStatus(s WorkerStatus) {
+	w.status.Store(s)
 }

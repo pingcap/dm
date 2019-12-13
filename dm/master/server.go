@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path"
 	"sort"
 	"strings"
 	"sync"
@@ -50,11 +51,13 @@ const (
 	electionTTL = 60
 	// the DM-master leader election key prefix
 	// DM-master cluster : etcd cluster = 1 : 1 now.
-	electionKey = "/dm-master/leader"
+	electionKey        = "/dm-master/leader"
+	workerRegisterPath = "/dm-worker/r/"
 )
 
 var (
 	fetchDDLInfoRetryTimeout = 5 * time.Second
+	etcdTimeouit             = 10 * time.Second
 )
 
 // Server handles RPC requests for dm-master
@@ -255,8 +258,34 @@ func errorCommonWorkerResponse(msg string, worker string) *pb.CommonWorkerRespon
 }
 
 func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerRequest) (*pb.RegisterWorkerResponse, error) {
+	k := path.Join(workerRegisterPath, req.Address)
+	v := req.Name
+	ectx, cancel := context.WithTimeout(ctx, etcdTimeouit)
+	defer cancel()
+	resp, err := s.etcdClient.Txn(ectx).
+		If(clientv3.Compare(clientv3.CreateRevision(k), "=", "0")).
+		Then(clientv3.OpPut(k, v)).
+		Else(clientv3.OpGet(k)).
+		Commit()
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Succeeded {
+		msg := fmt.Sprintf("the address already registered with name: %s", string(resp.Responses[0].GetResponseRange().GetKvs()[0].Value))
+		respWorker := &pb.RegisterWorkerResponse{
+			Result: false,
+			Msg:    msg,
+		}
+		log.L().Error(msg)
+		return respWorker, nil
+
+	}
 	s.coordinator.AddWorker(req.Name, req.Address)
-	return nil, nil
+	log.L().Info("register worker successfully", zap.String("name", req.Name), zap.String("address", req.Address))
+	respWorker := &pb.RegisterWorkerResponse{
+		Result: true,
+	}
+	return respWorker, nil
 }
 
 // StartTask implements MasterServer.StartTask
@@ -541,7 +570,7 @@ func extractWorkers(s *Server, req hasWokers) ([]string, error) {
 		invalidWorkers := make([]string, 0, len(req.GetWorkers()))
 		for _, workerAddress := range req.GetWorkers() {
 			w := s.coordinator.GetWorkerByAddress(workerAddress)
-			if w == nil || w.Status() == coordinator.Disconnect {
+			if w == nil || w.Status() == coordinator.WorkerClosed {
 				invalidWorkers = append(invalidWorkers, workerAddress)
 			}
 		}
@@ -720,7 +749,7 @@ func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLL
 		go func(addr string) {
 			defer wg.Done()
 			worker := s.coordinator.GetWorkerByAddress(addr)
-			if worker == nil || worker.Status() == coordinator.Disconnect {
+			if worker == nil || worker.Status() == coordinator.WorkerClosed {
 				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", worker), worker.Address())
 				return
 			}
@@ -1620,7 +1649,7 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 
 	// TODO: fix me
 	// delete worker
-	invalidWorkers := s.coordinator.GetWorkersByStatus(coordinator.Disconnect)
+	invalidWorkers := s.coordinator.GetWorkersByStatus(coordinator.WorkerClosed)
 	wokerList := make([]string, 0, len(invalidWorkers))
 	for _, worker := range invalidWorkers {
 		wokerList = append(wokerList, worker.Address())

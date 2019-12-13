@@ -170,12 +170,17 @@ func (w *Worker) Start() {
 		w.tracer.Start()
 	}
 
-	w.wg.Add(2)
+	w.wg.Add(3)
 	defer w.wg.Done()
 
 	go func() {
 		defer w.wg.Done()
 		w.handleTask()
+	}()
+
+	go func() {
+		defer w.wg.Done()
+		w.KeepAlive()
 	}()
 
 	w.l.Info("start running")
