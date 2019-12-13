@@ -78,7 +78,8 @@ func simulateTask4BWListOrTableRoute(cmd *cobra.Command, op pb.SimulateOp) (resp
 }
 
 func dotGraphForRoutes(routes map[string]map[string][]*tableInfo) string {
-	result := "digraph routes {\nrankdir=\"LR\"\n"
+	result := "/* Note: You can paste the output to http://www.webgraphviz.com/ to generate graphs. */\n"
+	result += "digraph routes {\nrankdir=\"LR\"\n"
 	for targetTable, sourceTables := range routes {
 		result += fmt.Sprintf("subgraph \"cluster_%v\"{\n", targetTable)
 		for sourceAddr, tables := range sourceTables {
