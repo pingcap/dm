@@ -4,17 +4,16 @@
 package pb
 
 import (
-	"fmt"
+	context "context"
+	fmt "fmt"
+	io "io"
+	math "math"
+	math_bits "math/bits"
 
 	proto "github.com/gogo/protobuf/proto"
-
-	math "math"
-
-	context "golang.org/x/net/context"
-
 	grpc "google.golang.org/grpc"
-
-	io "io"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -26,7 +25,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 
 type TaskOp int32
 
@@ -49,6 +48,7 @@ var TaskOp_name = map[int32]string{
 	5: "Update",
 	6: "AutoResume",
 }
+
 var TaskOp_value = map[string]int32{
 	"InvalidOp":  0,
 	"Stop":       1,
@@ -62,8 +62,9 @@ var TaskOp_value = map[string]int32{
 func (x TaskOp) String() string {
 	return proto.EnumName(TaskOp_name, int32(x))
 }
+
 func (TaskOp) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{0}
+	return fileDescriptor_51a1b9e17fd67b10, []int{0}
 }
 
 type SQLOp int32
@@ -79,6 +80,7 @@ var SQLOp_name = map[int32]string{
 	1: "REPLACE",
 	2: "INJECT",
 }
+
 var SQLOp_value = map[string]int32{
 	"SKIP":    0,
 	"REPLACE": 1,
@@ -88,8 +90,9 @@ var SQLOp_value = map[string]int32{
 func (x SQLOp) String() string {
 	return proto.EnumName(SQLOp_name, int32(x))
 }
+
 func (SQLOp) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{1}
+	return fileDescriptor_51a1b9e17fd67b10, []int{1}
 }
 
 // Stage represents current stage for a (sub) task
@@ -133,6 +136,7 @@ var Stage_name = map[int32]string{
 	4: "Stopped",
 	5: "Finished",
 }
+
 var Stage_value = map[string]int32{
 	"InvalidStage": 0,
 	"New":          1,
@@ -145,8 +149,9 @@ var Stage_value = map[string]int32{
 func (x Stage) String() string {
 	return proto.EnumName(Stage_name, int32(x))
 }
+
 func (Stage) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{2}
+	return fileDescriptor_51a1b9e17fd67b10, []int{2}
 }
 
 // UnitType represents the dm unit's type
@@ -158,6 +163,7 @@ const (
 	UnitType_Dump        UnitType = 2
 	UnitType_Load        UnitType = 3
 	UnitType_Sync        UnitType = 4
+	UnitType_Lightning   UnitType = 5
 	UnitType_Relay       UnitType = 100
 )
 
@@ -167,22 +173,26 @@ var UnitType_name = map[int32]string{
 	2:   "Dump",
 	3:   "Load",
 	4:   "Sync",
+	5:   "Lightning",
 	100: "Relay",
 }
+
 var UnitType_value = map[string]int32{
 	"InvalidUnit": 0,
 	"Check":       1,
 	"Dump":        2,
 	"Load":        3,
 	"Sync":        4,
+	"Lightning":   5,
 	"Relay":       100,
 }
 
 func (x UnitType) String() string {
 	return proto.EnumName(UnitType_name, int32(x))
 }
+
 func (UnitType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{3}
+	return fileDescriptor_51a1b9e17fd67b10, []int{3}
 }
 
 // ErrorType represents type of error produced by a dm unit
@@ -200,6 +210,7 @@ var ErrorType_name = map[int32]string{
 	1: "ExecSQL",
 	2: "CheckFailed",
 }
+
 var ErrorType_value = map[string]int32{
 	"UnknownError": 0,
 	"ExecSQL":      1,
@@ -209,8 +220,9 @@ var ErrorType_value = map[string]int32{
 func (x ErrorType) String() string {
 	return proto.EnumName(ErrorType_name, int32(x))
 }
+
 func (ErrorType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{4}
+	return fileDescriptor_51a1b9e17fd67b10, []int{4}
 }
 
 // RelayOp differs from TaskOp
@@ -229,6 +241,7 @@ var RelayOp_name = map[int32]string{
 	2: "PauseRelay",
 	3: "ResumeRelay",
 }
+
 var RelayOp_value = map[string]int32{
 	"InvalidRelayOp": 0,
 	"StopRelay":      1,
@@ -239,8 +252,9 @@ var RelayOp_value = map[string]int32{
 func (x RelayOp) String() string {
 	return proto.EnumName(RelayOp_name, int32(x))
 }
+
 func (RelayOp) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{5}
+	return fileDescriptor_51a1b9e17fd67b10, []int{5}
 }
 
 type StartSubTaskRequest struct {
@@ -251,7 +265,7 @@ func (m *StartSubTaskRequest) Reset()         { *m = StartSubTaskRequest{} }
 func (m *StartSubTaskRequest) String() string { return proto.CompactTextString(m) }
 func (*StartSubTaskRequest) ProtoMessage()    {}
 func (*StartSubTaskRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{0}
+	return fileDescriptor_51a1b9e17fd67b10, []int{0}
 }
 func (m *StartSubTaskRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -261,15 +275,15 @@ func (m *StartSubTaskRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte,
 		return xxx_messageInfo_StartSubTaskRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *StartSubTaskRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_StartSubTaskRequest.Merge(dst, src)
+func (m *StartSubTaskRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_StartSubTaskRequest.Merge(m, src)
 }
 func (m *StartSubTaskRequest) XXX_Size() int {
 	return m.Size()
@@ -295,7 +309,7 @@ func (m *UpdateRelayRequest) Reset()         { *m = UpdateRelayRequest{} }
 func (m *UpdateRelayRequest) String() string { return proto.CompactTextString(m) }
 func (*UpdateRelayRequest) ProtoMessage()    {}
 func (*UpdateRelayRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{1}
+	return fileDescriptor_51a1b9e17fd67b10, []int{1}
 }
 func (m *UpdateRelayRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -305,15 +319,15 @@ func (m *UpdateRelayRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, 
 		return xxx_messageInfo_UpdateRelayRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *UpdateRelayRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_UpdateRelayRequest.Merge(dst, src)
+func (m *UpdateRelayRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_UpdateRelayRequest.Merge(m, src)
 }
 func (m *UpdateRelayRequest) XXX_Size() int {
 	return m.Size()
@@ -340,7 +354,7 @@ func (m *MigrateRelayRequest) Reset()         { *m = MigrateRelayRequest{} }
 func (m *MigrateRelayRequest) String() string { return proto.CompactTextString(m) }
 func (*MigrateRelayRequest) ProtoMessage()    {}
 func (*MigrateRelayRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{2}
+	return fileDescriptor_51a1b9e17fd67b10, []int{2}
 }
 func (m *MigrateRelayRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -350,15 +364,15 @@ func (m *MigrateRelayRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte,
 		return xxx_messageInfo_MigrateRelayRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *MigrateRelayRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_MigrateRelayRequest.Merge(dst, src)
+func (m *MigrateRelayRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MigrateRelayRequest.Merge(m, src)
 }
 func (m *MigrateRelayRequest) XXX_Size() int {
 	return m.Size()
@@ -392,7 +406,7 @@ func (m *OperateSubTaskRequest) Reset()         { *m = OperateSubTaskRequest{} }
 func (m *OperateSubTaskRequest) String() string { return proto.CompactTextString(m) }
 func (*OperateSubTaskRequest) ProtoMessage()    {}
 func (*OperateSubTaskRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{3}
+	return fileDescriptor_51a1b9e17fd67b10, []int{3}
 }
 func (m *OperateSubTaskRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -402,15 +416,15 @@ func (m *OperateSubTaskRequest) XXX_Marshal(b []byte, deterministic bool) ([]byt
 		return xxx_messageInfo_OperateSubTaskRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *OperateSubTaskRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_OperateSubTaskRequest.Merge(dst, src)
+func (m *OperateSubTaskRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_OperateSubTaskRequest.Merge(m, src)
 }
 func (m *OperateSubTaskRequest) XXX_Size() int {
 	return m.Size()
@@ -436,7 +450,7 @@ func (m *OperateSubTaskRequest) GetName() string {
 }
 
 type OperateSubTaskResponse struct {
-	Meta  *CommonWorkerResponse `protobuf:"bytes,1,opt,name=meta" json:"meta,omitempty"`
+	Meta  *CommonWorkerResponse `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
 	Op    TaskOp                `protobuf:"varint,2,opt,name=op,proto3,enum=pb.TaskOp" json:"op,omitempty"`
 	LogID int64                 `protobuf:"varint,3,opt,name=logID,proto3" json:"logID,omitempty"`
 }
@@ -445,7 +459,7 @@ func (m *OperateSubTaskResponse) Reset()         { *m = OperateSubTaskResponse{}
 func (m *OperateSubTaskResponse) String() string { return proto.CompactTextString(m) }
 func (*OperateSubTaskResponse) ProtoMessage()    {}
 func (*OperateSubTaskResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{4}
+	return fileDescriptor_51a1b9e17fd67b10, []int{4}
 }
 func (m *OperateSubTaskResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -455,15 +469,15 @@ func (m *OperateSubTaskResponse) XXX_Marshal(b []byte, deterministic bool) ([]by
 		return xxx_messageInfo_OperateSubTaskResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *OperateSubTaskResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_OperateSubTaskResponse.Merge(dst, src)
+func (m *OperateSubTaskResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_OperateSubTaskResponse.Merge(m, src)
 }
 func (m *OperateSubTaskResponse) XXX_Size() int {
 	return m.Size()
@@ -504,7 +518,7 @@ func (m *QueryTaskOperationRequest) Reset()         { *m = QueryTaskOperationReq
 func (m *QueryTaskOperationRequest) String() string { return proto.CompactTextString(m) }
 func (*QueryTaskOperationRequest) ProtoMessage()    {}
 func (*QueryTaskOperationRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{5}
+	return fileDescriptor_51a1b9e17fd67b10, []int{5}
 }
 func (m *QueryTaskOperationRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -514,15 +528,15 @@ func (m *QueryTaskOperationRequest) XXX_Marshal(b []byte, deterministic bool) ([
 		return xxx_messageInfo_QueryTaskOperationRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *QueryTaskOperationRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_QueryTaskOperationRequest.Merge(dst, src)
+func (m *QueryTaskOperationRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryTaskOperationRequest.Merge(m, src)
 }
 func (m *QueryTaskOperationRequest) XXX_Size() int {
 	return m.Size()
@@ -548,15 +562,15 @@ func (m *QueryTaskOperationRequest) GetLogID() int64 {
 }
 
 type QueryTaskOperationResponse struct {
-	Meta *CommonWorkerResponse `protobuf:"bytes,1,opt,name=meta" json:"meta,omitempty"`
-	Log  *TaskLog              `protobuf:"bytes,2,opt,name=log" json:"log,omitempty"`
+	Meta *CommonWorkerResponse `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
+	Log  *TaskLog              `protobuf:"bytes,2,opt,name=log,proto3" json:"log,omitempty"`
 }
 
 func (m *QueryTaskOperationResponse) Reset()         { *m = QueryTaskOperationResponse{} }
 func (m *QueryTaskOperationResponse) String() string { return proto.CompactTextString(m) }
 func (*QueryTaskOperationResponse) ProtoMessage()    {}
 func (*QueryTaskOperationResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{6}
+	return fileDescriptor_51a1b9e17fd67b10, []int{6}
 }
 func (m *QueryTaskOperationResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -566,15 +580,15 @@ func (m *QueryTaskOperationResponse) XXX_Marshal(b []byte, deterministic bool) (
 		return xxx_messageInfo_QueryTaskOperationResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *QueryTaskOperationResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_QueryTaskOperationResponse.Merge(dst, src)
+func (m *QueryTaskOperationResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryTaskOperationResponse.Merge(m, src)
 }
 func (m *QueryTaskOperationResponse) XXX_Size() int {
 	return m.Size()
@@ -607,7 +621,7 @@ func (m *UpdateSubTaskRequest) Reset()         { *m = UpdateSubTaskRequest{} }
 func (m *UpdateSubTaskRequest) String() string { return proto.CompactTextString(m) }
 func (*UpdateSubTaskRequest) ProtoMessage()    {}
 func (*UpdateSubTaskRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{7}
+	return fileDescriptor_51a1b9e17fd67b10, []int{7}
 }
 func (m *UpdateSubTaskRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -617,15 +631,15 @@ func (m *UpdateSubTaskRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte
 		return xxx_messageInfo_UpdateSubTaskRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *UpdateSubTaskRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_UpdateSubTaskRequest.Merge(dst, src)
+func (m *UpdateSubTaskRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_UpdateSubTaskRequest.Merge(m, src)
 }
 func (m *UpdateSubTaskRequest) XXX_Size() int {
 	return m.Size()
@@ -651,7 +665,7 @@ func (m *QueryStatusRequest) Reset()         { *m = QueryStatusRequest{} }
 func (m *QueryStatusRequest) String() string { return proto.CompactTextString(m) }
 func (*QueryStatusRequest) ProtoMessage()    {}
 func (*QueryStatusRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{8}
+	return fileDescriptor_51a1b9e17fd67b10, []int{8}
 }
 func (m *QueryStatusRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -661,15 +675,15 @@ func (m *QueryStatusRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, 
 		return xxx_messageInfo_QueryStatusRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *QueryStatusRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_QueryStatusRequest.Merge(dst, src)
+func (m *QueryStatusRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryStatusRequest.Merge(m, src)
 }
 func (m *QueryStatusRequest) XXX_Size() int {
 	return m.Size()
@@ -695,7 +709,7 @@ func (m *QueryErrorRequest) Reset()         { *m = QueryErrorRequest{} }
 func (m *QueryErrorRequest) String() string { return proto.CompactTextString(m) }
 func (*QueryErrorRequest) ProtoMessage()    {}
 func (*QueryErrorRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{9}
+	return fileDescriptor_51a1b9e17fd67b10, []int{9}
 }
 func (m *QueryErrorRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -705,15 +719,15 @@ func (m *QueryErrorRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, e
 		return xxx_messageInfo_QueryErrorRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *QueryErrorRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_QueryErrorRequest.Merge(dst, src)
+func (m *QueryErrorRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryErrorRequest.Merge(m, src)
 }
 func (m *QueryErrorRequest) XXX_Size() int {
 	return m.Size()
@@ -735,7 +749,7 @@ func (m *QueryErrorRequest) GetName() string {
 type HandleSubTaskSQLsRequest struct {
 	Name       string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Op         SQLOp    `protobuf:"varint,2,opt,name=op,proto3,enum=pb.SQLOp" json:"op,omitempty"`
-	Args       []string `protobuf:"bytes,3,rep,name=args" json:"args,omitempty"`
+	Args       []string `protobuf:"bytes,3,rep,name=args,proto3" json:"args,omitempty"`
 	BinlogPos  string   `protobuf:"bytes,4,opt,name=binlogPos,proto3" json:"binlogPos,omitempty"`
 	SqlPattern string   `protobuf:"bytes,5,opt,name=sqlPattern,proto3" json:"sqlPattern,omitempty"`
 }
@@ -744,7 +758,7 @@ func (m *HandleSubTaskSQLsRequest) Reset()         { *m = HandleSubTaskSQLsReque
 func (m *HandleSubTaskSQLsRequest) String() string { return proto.CompactTextString(m) }
 func (*HandleSubTaskSQLsRequest) ProtoMessage()    {}
 func (*HandleSubTaskSQLsRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{10}
+	return fileDescriptor_51a1b9e17fd67b10, []int{10}
 }
 func (m *HandleSubTaskSQLsRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -754,15 +768,15 @@ func (m *HandleSubTaskSQLsRequest) XXX_Marshal(b []byte, deterministic bool) ([]
 		return xxx_messageInfo_HandleSubTaskSQLsRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *HandleSubTaskSQLsRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_HandleSubTaskSQLsRequest.Merge(dst, src)
+func (m *HandleSubTaskSQLsRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_HandleSubTaskSQLsRequest.Merge(m, src)
 }
 func (m *HandleSubTaskSQLsRequest) XXX_Size() int {
 	return m.Size()
@@ -818,7 +832,7 @@ func (m *CommonWorkerResponse) Reset()         { *m = CommonWorkerResponse{} }
 func (m *CommonWorkerResponse) String() string { return proto.CompactTextString(m) }
 func (*CommonWorkerResponse) ProtoMessage()    {}
 func (*CommonWorkerResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{11}
+	return fileDescriptor_51a1b9e17fd67b10, []int{11}
 }
 func (m *CommonWorkerResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -828,15 +842,15 @@ func (m *CommonWorkerResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte
 		return xxx_messageInfo_CommonWorkerResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *CommonWorkerResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CommonWorkerResponse.Merge(dst, src)
+func (m *CommonWorkerResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CommonWorkerResponse.Merge(m, src)
 }
 func (m *CommonWorkerResponse) XXX_Size() int {
 	return m.Size()
@@ -874,8 +888,8 @@ type QueryStatusResponse struct {
 	Result        bool             `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
 	Worker        string           `protobuf:"bytes,2,opt,name=worker,proto3" json:"worker,omitempty"`
 	Msg           string           `protobuf:"bytes,3,opt,name=msg,proto3" json:"msg,omitempty"`
-	SubTaskStatus []*SubTaskStatus `protobuf:"bytes,4,rep,name=subTaskStatus" json:"subTaskStatus,omitempty"`
-	RelayStatus   *RelayStatus     `protobuf:"bytes,5,opt,name=relayStatus" json:"relayStatus,omitempty"`
+	SubTaskStatus []*SubTaskStatus `protobuf:"bytes,4,rep,name=subTaskStatus,proto3" json:"subTaskStatus,omitempty"`
+	RelayStatus   *RelayStatus     `protobuf:"bytes,5,opt,name=relayStatus,proto3" json:"relayStatus,omitempty"`
 	SourceID      string           `protobuf:"bytes,6,opt,name=sourceID,proto3" json:"sourceID,omitempty"`
 }
 
@@ -883,7 +897,7 @@ func (m *QueryStatusResponse) Reset()         { *m = QueryStatusResponse{} }
 func (m *QueryStatusResponse) String() string { return proto.CompactTextString(m) }
 func (*QueryStatusResponse) ProtoMessage()    {}
 func (*QueryStatusResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{12}
+	return fileDescriptor_51a1b9e17fd67b10, []int{12}
 }
 func (m *QueryStatusResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -893,15 +907,15 @@ func (m *QueryStatusResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte,
 		return xxx_messageInfo_QueryStatusResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *QueryStatusResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_QueryStatusResponse.Merge(dst, src)
+func (m *QueryStatusResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryStatusResponse.Merge(m, src)
 }
 func (m *QueryStatusResponse) XXX_Size() int {
 	return m.Size()
@@ -959,15 +973,15 @@ type QueryErrorResponse struct {
 	Result       bool            `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
 	Worker       string          `protobuf:"bytes,2,opt,name=worker,proto3" json:"worker,omitempty"`
 	Msg          string          `protobuf:"bytes,3,opt,name=msg,proto3" json:"msg,omitempty"`
-	SubTaskError []*SubTaskError `protobuf:"bytes,4,rep,name=subTaskError" json:"subTaskError,omitempty"`
-	RelayError   *RelayError     `protobuf:"bytes,5,opt,name=RelayError" json:"RelayError,omitempty"`
+	SubTaskError []*SubTaskError `protobuf:"bytes,4,rep,name=subTaskError,proto3" json:"subTaskError,omitempty"`
+	RelayError   *RelayError     `protobuf:"bytes,5,opt,name=RelayError,proto3" json:"RelayError,omitempty"`
 }
 
 func (m *QueryErrorResponse) Reset()         { *m = QueryErrorResponse{} }
 func (m *QueryErrorResponse) String() string { return proto.CompactTextString(m) }
 func (*QueryErrorResponse) ProtoMessage()    {}
 func (*QueryErrorResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{13}
+	return fileDescriptor_51a1b9e17fd67b10, []int{13}
 }
 func (m *QueryErrorResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -977,15 +991,15 @@ func (m *QueryErrorResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, 
 		return xxx_messageInfo_QueryErrorResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *QueryErrorResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_QueryErrorResponse.Merge(dst, src)
+func (m *QueryErrorResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryErrorResponse.Merge(m, src)
 }
 func (m *QueryErrorResponse) XXX_Size() int {
 	return m.Size()
@@ -1046,7 +1060,7 @@ func (m *CheckStatus) Reset()         { *m = CheckStatus{} }
 func (m *CheckStatus) String() string { return proto.CompactTextString(m) }
 func (*CheckStatus) ProtoMessage()    {}
 func (*CheckStatus) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{14}
+	return fileDescriptor_51a1b9e17fd67b10, []int{14}
 }
 func (m *CheckStatus) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1056,15 +1070,15 @@ func (m *CheckStatus) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) 
 		return xxx_messageInfo_CheckStatus.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *CheckStatus) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CheckStatus.Merge(dst, src)
+func (m *CheckStatus) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CheckStatus.Merge(m, src)
 }
 func (m *CheckStatus) XXX_Size() int {
 	return m.Size()
@@ -1126,7 +1140,7 @@ func (m *DumpStatus) Reset()         { *m = DumpStatus{} }
 func (m *DumpStatus) String() string { return proto.CompactTextString(m) }
 func (*DumpStatus) ProtoMessage()    {}
 func (*DumpStatus) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{15}
+	return fileDescriptor_51a1b9e17fd67b10, []int{15}
 }
 func (m *DumpStatus) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1136,15 +1150,15 @@ func (m *DumpStatus) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_DumpStatus.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *DumpStatus) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DumpStatus.Merge(dst, src)
+func (m *DumpStatus) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DumpStatus.Merge(m, src)
 }
 func (m *DumpStatus) XXX_Size() int {
 	return m.Size()
@@ -1167,7 +1181,7 @@ func (m *LoadStatus) Reset()         { *m = LoadStatus{} }
 func (m *LoadStatus) String() string { return proto.CompactTextString(m) }
 func (*LoadStatus) ProtoMessage()    {}
 func (*LoadStatus) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{16}
+	return fileDescriptor_51a1b9e17fd67b10, []int{16}
 }
 func (m *LoadStatus) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1177,15 +1191,15 @@ func (m *LoadStatus) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_LoadStatus.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *LoadStatus) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_LoadStatus.Merge(dst, src)
+func (m *LoadStatus) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_LoadStatus.Merge(m, src)
 }
 func (m *LoadStatus) XXX_Size() int {
 	return m.Size()
@@ -1232,17 +1246,17 @@ func (m *LoadStatus) GetMetaBinlog() string {
 // unsynced: unsynced source tables
 type ShardingGroup struct {
 	Target   string   `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
-	DDLs     []string `protobuf:"bytes,2,rep,name=DDLs" json:"DDLs,omitempty"`
+	DDLs     []string `protobuf:"bytes,2,rep,name=DDLs,proto3" json:"DDLs,omitempty"`
 	FirstPos string   `protobuf:"bytes,3,opt,name=firstPos,proto3" json:"firstPos,omitempty"`
-	Synced   []string `protobuf:"bytes,4,rep,name=synced" json:"synced,omitempty"`
-	Unsynced []string `protobuf:"bytes,5,rep,name=unsynced" json:"unsynced,omitempty"`
+	Synced   []string `protobuf:"bytes,4,rep,name=synced,proto3" json:"synced,omitempty"`
+	Unsynced []string `protobuf:"bytes,5,rep,name=unsynced,proto3" json:"unsynced,omitempty"`
 }
 
 func (m *ShardingGroup) Reset()         { *m = ShardingGroup{} }
 func (m *ShardingGroup) String() string { return proto.CompactTextString(m) }
 func (*ShardingGroup) ProtoMessage()    {}
 func (*ShardingGroup) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{17}
+	return fileDescriptor_51a1b9e17fd67b10, []int{17}
 }
 func (m *ShardingGroup) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1252,15 +1266,15 @@ func (m *ShardingGroup) XXX_Marshal(b []byte, deterministic bool) ([]byte, error
 		return xxx_messageInfo_ShardingGroup.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *ShardingGroup) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ShardingGroup.Merge(dst, src)
+func (m *ShardingGroup) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ShardingGroup.Merge(m, src)
 }
 func (m *ShardingGroup) XXX_Size() int {
 	return m.Size()
@@ -1315,8 +1329,8 @@ type SyncStatus struct {
 	MasterBinlogGtid string           `protobuf:"bytes,5,opt,name=masterBinlogGtid,proto3" json:"masterBinlogGtid,omitempty"`
 	SyncerBinlog     string           `protobuf:"bytes,6,opt,name=syncerBinlog,proto3" json:"syncerBinlog,omitempty"`
 	SyncerBinlogGtid string           `protobuf:"bytes,7,opt,name=syncerBinlogGtid,proto3" json:"syncerBinlogGtid,omitempty"`
-	BlockingDDLs     []string         `protobuf:"bytes,8,rep,name=blockingDDLs" json:"blockingDDLs,omitempty"`
-	UnresolvedGroups []*ShardingGroup `protobuf:"bytes,9,rep,name=unresolvedGroups" json:"unresolvedGroups,omitempty"`
+	BlockingDDLs     []string         `protobuf:"bytes,8,rep,name=blockingDDLs,proto3" json:"blockingDDLs,omitempty"`
+	UnresolvedGroups []*ShardingGroup `protobuf:"bytes,9,rep,name=unresolvedGroups,proto3" json:"unresolvedGroups,omitempty"`
 	Synced           bool             `protobuf:"varint,10,opt,name=synced,proto3" json:"synced,omitempty"`
 }
 
@@ -1324,7 +1338,7 @@ func (m *SyncStatus) Reset()         { *m = SyncStatus{} }
 func (m *SyncStatus) String() string { return proto.CompactTextString(m) }
 func (*SyncStatus) ProtoMessage()    {}
 func (*SyncStatus) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{18}
+	return fileDescriptor_51a1b9e17fd67b10, []int{18}
 }
 func (m *SyncStatus) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1334,15 +1348,15 @@ func (m *SyncStatus) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_SyncStatus.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *SyncStatus) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SyncStatus.Merge(dst, src)
+func (m *SyncStatus) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SyncStatus.Merge(m, src)
 }
 func (m *SyncStatus) XXX_Size() int {
 	return m.Size()
@@ -1432,14 +1446,14 @@ type RelayStatus struct {
 	RelayBinlogGtid    string         `protobuf:"bytes,5,opt,name=relayBinlogGtid,proto3" json:"relayBinlogGtid,omitempty"`
 	RelayCatchUpMaster bool           `protobuf:"varint,6,opt,name=relayCatchUpMaster,proto3" json:"relayCatchUpMaster,omitempty"`
 	Stage              Stage          `protobuf:"varint,7,opt,name=stage,proto3,enum=pb.Stage" json:"stage,omitempty"`
-	Result             *ProcessResult `protobuf:"bytes,8,opt,name=result" json:"result,omitempty"`
+	Result             *ProcessResult `protobuf:"bytes,8,opt,name=result,proto3" json:"result,omitempty"`
 }
 
 func (m *RelayStatus) Reset()         { *m = RelayStatus{} }
 func (m *RelayStatus) String() string { return proto.CompactTextString(m) }
 func (*RelayStatus) ProtoMessage()    {}
 func (*RelayStatus) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{19}
+	return fileDescriptor_51a1b9e17fd67b10, []int{19}
 }
 func (m *RelayStatus) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1449,15 +1463,15 @@ func (m *RelayStatus) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) 
 		return xxx_messageInfo_RelayStatus.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *RelayStatus) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RelayStatus.Merge(dst, src)
+func (m *RelayStatus) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RelayStatus.Merge(m, src)
 }
 func (m *RelayStatus) XXX_Size() int {
 	return m.Size()
@@ -1538,7 +1552,7 @@ type SubTaskStatus struct {
 	Name                string         `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Stage               Stage          `protobuf:"varint,2,opt,name=stage,proto3,enum=pb.Stage" json:"stage,omitempty"`
 	Unit                UnitType       `protobuf:"varint,3,opt,name=unit,proto3,enum=pb.UnitType" json:"unit,omitempty"`
-	Result              *ProcessResult `protobuf:"bytes,4,opt,name=result" json:"result,omitempty"`
+	Result              *ProcessResult `protobuf:"bytes,4,opt,name=result,proto3" json:"result,omitempty"`
 	UnresolvedDDLLockID string         `protobuf:"bytes,5,opt,name=unresolvedDDLLockID,proto3" json:"unresolvedDDLLockID,omitempty"`
 	// Types that are valid to be assigned to Status:
 	//	*SubTaskStatus_Msg
@@ -1553,7 +1567,7 @@ func (m *SubTaskStatus) Reset()         { *m = SubTaskStatus{} }
 func (m *SubTaskStatus) String() string { return proto.CompactTextString(m) }
 func (*SubTaskStatus) ProtoMessage()    {}
 func (*SubTaskStatus) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{20}
+	return fileDescriptor_51a1b9e17fd67b10, []int{20}
 }
 func (m *SubTaskStatus) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1563,15 +1577,15 @@ func (m *SubTaskStatus) XXX_Marshal(b []byte, deterministic bool) ([]byte, error
 		return xxx_messageInfo_SubTaskStatus.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *SubTaskStatus) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SubTaskStatus.Merge(dst, src)
+func (m *SubTaskStatus) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SubTaskStatus.Merge(m, src)
 }
 func (m *SubTaskStatus) XXX_Size() int {
 	return m.Size()
@@ -1589,19 +1603,19 @@ type isSubTaskStatus_Status interface {
 }
 
 type SubTaskStatus_Msg struct {
-	Msg string `protobuf:"bytes,6,opt,name=msg,proto3,oneof"`
+	Msg string `protobuf:"bytes,6,opt,name=msg,proto3,oneof" json:"msg,omitempty"`
 }
 type SubTaskStatus_Check struct {
-	Check *CheckStatus `protobuf:"bytes,7,opt,name=check,oneof"`
+	Check *CheckStatus `protobuf:"bytes,7,opt,name=check,proto3,oneof" json:"check,omitempty"`
 }
 type SubTaskStatus_Dump struct {
-	Dump *DumpStatus `protobuf:"bytes,8,opt,name=dump,oneof"`
+	Dump *DumpStatus `protobuf:"bytes,8,opt,name=dump,proto3,oneof" json:"dump,omitempty"`
 }
 type SubTaskStatus_Load struct {
-	Load *LoadStatus `protobuf:"bytes,9,opt,name=load,oneof"`
+	Load *LoadStatus `protobuf:"bytes,9,opt,name=load,proto3,oneof" json:"load,omitempty"`
 }
 type SubTaskStatus_Sync struct {
-	Sync *SyncStatus `protobuf:"bytes,10,opt,name=sync,oneof"`
+	Sync *SyncStatus `protobuf:"bytes,10,opt,name=sync,proto3,oneof" json:"sync,omitempty"`
 }
 
 func (*SubTaskStatus_Msg) isSubTaskStatus_Status()   {}
@@ -1687,9 +1701,9 @@ func (m *SubTaskStatus) GetSync() *SyncStatus {
 	return nil
 }
 
-// XXX_OneofFuncs is for the internal use of the proto package.
-func (*SubTaskStatus) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
-	return _SubTaskStatus_OneofMarshaler, _SubTaskStatus_OneofUnmarshaler, _SubTaskStatus_OneofSizer, []interface{}{
+// XXX_OneofWrappers is for the internal use of the proto package.
+func (*SubTaskStatus) XXX_OneofWrappers() []interface{} {
+	return []interface{}{
 		(*SubTaskStatus_Msg)(nil),
 		(*SubTaskStatus_Check)(nil),
 		(*SubTaskStatus_Dump)(nil),
@@ -1698,132 +1712,16 @@ func (*SubTaskStatus) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer)
 	}
 }
 
-func _SubTaskStatus_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
-	m := msg.(*SubTaskStatus)
-	// status
-	switch x := m.Status.(type) {
-	case *SubTaskStatus_Msg:
-		_ = b.EncodeVarint(6<<3 | proto.WireBytes)
-		_ = b.EncodeStringBytes(x.Msg)
-	case *SubTaskStatus_Check:
-		_ = b.EncodeVarint(7<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.Check); err != nil {
-			return err
-		}
-	case *SubTaskStatus_Dump:
-		_ = b.EncodeVarint(8<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.Dump); err != nil {
-			return err
-		}
-	case *SubTaskStatus_Load:
-		_ = b.EncodeVarint(9<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.Load); err != nil {
-			return err
-		}
-	case *SubTaskStatus_Sync:
-		_ = b.EncodeVarint(10<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.Sync); err != nil {
-			return err
-		}
-	case nil:
-	default:
-		return fmt.Errorf("SubTaskStatus.Status has unexpected type %T", x)
-	}
-	return nil
-}
-
-func _SubTaskStatus_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
-	m := msg.(*SubTaskStatus)
-	switch tag {
-	case 6: // status.msg
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		x, err := b.DecodeStringBytes()
-		m.Status = &SubTaskStatus_Msg{x}
-		return true, err
-	case 7: // status.check
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(CheckStatus)
-		err := b.DecodeMessage(msg)
-		m.Status = &SubTaskStatus_Check{msg}
-		return true, err
-	case 8: // status.dump
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(DumpStatus)
-		err := b.DecodeMessage(msg)
-		m.Status = &SubTaskStatus_Dump{msg}
-		return true, err
-	case 9: // status.load
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(LoadStatus)
-		err := b.DecodeMessage(msg)
-		m.Status = &SubTaskStatus_Load{msg}
-		return true, err
-	case 10: // status.sync
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(SyncStatus)
-		err := b.DecodeMessage(msg)
-		m.Status = &SubTaskStatus_Sync{msg}
-		return true, err
-	default:
-		return false, nil
-	}
-}
-
-func _SubTaskStatus_OneofSizer(msg proto.Message) (n int) {
-	m := msg.(*SubTaskStatus)
-	// status
-	switch x := m.Status.(type) {
-	case *SubTaskStatus_Msg:
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(len(x.Msg)))
-		n += len(x.Msg)
-	case *SubTaskStatus_Check:
-		s := proto.Size(x.Check)
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case *SubTaskStatus_Dump:
-		s := proto.Size(x.Dump)
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case *SubTaskStatus_Load:
-		s := proto.Size(x.Load)
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case *SubTaskStatus_Sync:
-		s := proto.Size(x.Sync)
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case nil:
-	default:
-		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
-	}
-	return n
-}
-
 // SubTaskStatusList used for internal jsonpb marshal
 type SubTaskStatusList struct {
-	Status []*SubTaskStatus `protobuf:"bytes,1,rep,name=status" json:"status,omitempty"`
+	Status []*SubTaskStatus `protobuf:"bytes,1,rep,name=status,proto3" json:"status,omitempty"`
 }
 
 func (m *SubTaskStatusList) Reset()         { *m = SubTaskStatusList{} }
 func (m *SubTaskStatusList) String() string { return proto.CompactTextString(m) }
 func (*SubTaskStatusList) ProtoMessage()    {}
 func (*SubTaskStatusList) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{21}
+	return fileDescriptor_51a1b9e17fd67b10, []int{21}
 }
 func (m *SubTaskStatusList) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1833,15 +1731,15 @@ func (m *SubTaskStatusList) XXX_Marshal(b []byte, deterministic bool) ([]byte, e
 		return xxx_messageInfo_SubTaskStatusList.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *SubTaskStatusList) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SubTaskStatusList.Merge(dst, src)
+func (m *SubTaskStatusList) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SubTaskStatusList.Merge(m, src)
 }
 func (m *SubTaskStatusList) XXX_Size() int {
 	return m.Size()
@@ -1869,7 +1767,7 @@ func (m *CheckError) Reset()         { *m = CheckError{} }
 func (m *CheckError) String() string { return proto.CompactTextString(m) }
 func (*CheckError) ProtoMessage()    {}
 func (*CheckError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{22}
+	return fileDescriptor_51a1b9e17fd67b10, []int{22}
 }
 func (m *CheckError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1879,15 +1777,15 @@ func (m *CheckError) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_CheckError.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *CheckError) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_CheckError.Merge(dst, src)
+func (m *CheckError) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CheckError.Merge(m, src)
 }
 func (m *CheckError) XXX_Size() int {
 	return m.Size()
@@ -1915,7 +1813,7 @@ func (m *DumpError) Reset()         { *m = DumpError{} }
 func (m *DumpError) String() string { return proto.CompactTextString(m) }
 func (*DumpError) ProtoMessage()    {}
 func (*DumpError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{23}
+	return fileDescriptor_51a1b9e17fd67b10, []int{23}
 }
 func (m *DumpError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1925,15 +1823,15 @@ func (m *DumpError) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_DumpError.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *DumpError) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DumpError.Merge(dst, src)
+func (m *DumpError) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DumpError.Merge(m, src)
 }
 func (m *DumpError) XXX_Size() int {
 	return m.Size()
@@ -1960,7 +1858,7 @@ func (m *LoadError) Reset()         { *m = LoadError{} }
 func (m *LoadError) String() string { return proto.CompactTextString(m) }
 func (*LoadError) ProtoMessage()    {}
 func (*LoadError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{24}
+	return fileDescriptor_51a1b9e17fd67b10, []int{24}
 }
 func (m *LoadError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1970,15 +1868,15 @@ func (m *LoadError) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_LoadError.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *LoadError) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_LoadError.Merge(dst, src)
+func (m *LoadError) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_LoadError.Merge(m, src)
 }
 func (m *LoadError) XXX_Size() int {
 	return m.Size()
@@ -2007,7 +1905,7 @@ func (m *SyncSQLError) Reset()         { *m = SyncSQLError{} }
 func (m *SyncSQLError) String() string { return proto.CompactTextString(m) }
 func (*SyncSQLError) ProtoMessage()    {}
 func (*SyncSQLError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{25}
+	return fileDescriptor_51a1b9e17fd67b10, []int{25}
 }
 func (m *SyncSQLError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2017,15 +1915,15 @@ func (m *SyncSQLError) XXX_Marshal(b []byte, deterministic bool) ([]byte, error)
 		return xxx_messageInfo_SyncSQLError.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *SyncSQLError) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SyncSQLError.Merge(dst, src)
+func (m *SyncSQLError) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SyncSQLError.Merge(m, src)
 }
 func (m *SyncSQLError) XXX_Size() int {
 	return m.Size()
@@ -2059,14 +1957,14 @@ func (m *SyncSQLError) GetErrorSQL() string {
 
 // SyncError represents error list for sync unit
 type SyncError struct {
-	Errors []*SyncSQLError `protobuf:"bytes,1,rep,name=errors" json:"errors,omitempty"`
+	Errors []*SyncSQLError `protobuf:"bytes,1,rep,name=errors,proto3" json:"errors,omitempty"`
 }
 
 func (m *SyncError) Reset()         { *m = SyncError{} }
 func (m *SyncError) String() string { return proto.CompactTextString(m) }
 func (*SyncError) ProtoMessage()    {}
 func (*SyncError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{26}
+	return fileDescriptor_51a1b9e17fd67b10, []int{26}
 }
 func (m *SyncError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2076,15 +1974,15 @@ func (m *SyncError) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_SyncError.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *SyncError) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SyncError.Merge(dst, src)
+func (m *SyncError) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SyncError.Merge(m, src)
 }
 func (m *SyncError) XXX_Size() int {
 	return m.Size()
@@ -2111,7 +2009,7 @@ func (m *RelayError) Reset()         { *m = RelayError{} }
 func (m *RelayError) String() string { return proto.CompactTextString(m) }
 func (*RelayError) ProtoMessage()    {}
 func (*RelayError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{27}
+	return fileDescriptor_51a1b9e17fd67b10, []int{27}
 }
 func (m *RelayError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2121,15 +2019,15 @@ func (m *RelayError) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_RelayError.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *RelayError) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_RelayError.Merge(dst, src)
+func (m *RelayError) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RelayError.Merge(m, src)
 }
 func (m *RelayError) XXX_Size() int {
 	return m.Size()
@@ -2170,7 +2068,7 @@ func (m *SubTaskError) Reset()         { *m = SubTaskError{} }
 func (m *SubTaskError) String() string { return proto.CompactTextString(m) }
 func (*SubTaskError) ProtoMessage()    {}
 func (*SubTaskError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{28}
+	return fileDescriptor_51a1b9e17fd67b10, []int{28}
 }
 func (m *SubTaskError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2180,15 +2078,15 @@ func (m *SubTaskError) XXX_Marshal(b []byte, deterministic bool) ([]byte, error)
 		return xxx_messageInfo_SubTaskError.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *SubTaskError) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SubTaskError.Merge(dst, src)
+func (m *SubTaskError) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SubTaskError.Merge(m, src)
 }
 func (m *SubTaskError) XXX_Size() int {
 	return m.Size()
@@ -2206,19 +2104,19 @@ type isSubTaskError_Error interface {
 }
 
 type SubTaskError_Msg struct {
-	Msg string `protobuf:"bytes,4,opt,name=msg,proto3,oneof"`
+	Msg string `protobuf:"bytes,4,opt,name=msg,proto3,oneof" json:"msg,omitempty"`
 }
 type SubTaskError_Check struct {
-	Check *CheckError `protobuf:"bytes,5,opt,name=check,oneof"`
+	Check *CheckError `protobuf:"bytes,5,opt,name=check,proto3,oneof" json:"check,omitempty"`
 }
 type SubTaskError_Dump struct {
-	Dump *DumpError `protobuf:"bytes,6,opt,name=dump,oneof"`
+	Dump *DumpError `protobuf:"bytes,6,opt,name=dump,proto3,oneof" json:"dump,omitempty"`
 }
 type SubTaskError_Load struct {
-	Load *LoadError `protobuf:"bytes,7,opt,name=load,oneof"`
+	Load *LoadError `protobuf:"bytes,7,opt,name=load,proto3,oneof" json:"load,omitempty"`
 }
 type SubTaskError_Sync struct {
-	Sync *SyncError `protobuf:"bytes,8,opt,name=sync,oneof"`
+	Sync *SyncError `protobuf:"bytes,8,opt,name=sync,proto3,oneof" json:"sync,omitempty"`
 }
 
 func (*SubTaskError_Msg) isSubTaskError_Error()   {}
@@ -2290,9 +2188,9 @@ func (m *SubTaskError) GetSync() *SyncError {
 	return nil
 }
 
-// XXX_OneofFuncs is for the internal use of the proto package.
-func (*SubTaskError) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) error, func(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error), func(msg proto.Message) (n int), []interface{}) {
-	return _SubTaskError_OneofMarshaler, _SubTaskError_OneofUnmarshaler, _SubTaskError_OneofSizer, []interface{}{
+// XXX_OneofWrappers is for the internal use of the proto package.
+func (*SubTaskError) XXX_OneofWrappers() []interface{} {
+	return []interface{}{
 		(*SubTaskError_Msg)(nil),
 		(*SubTaskError_Check)(nil),
 		(*SubTaskError_Dump)(nil),
@@ -2301,132 +2199,16 @@ func (*SubTaskError) XXX_OneofFuncs() (func(msg proto.Message, b *proto.Buffer) 
 	}
 }
 
-func _SubTaskError_OneofMarshaler(msg proto.Message, b *proto.Buffer) error {
-	m := msg.(*SubTaskError)
-	// error
-	switch x := m.Error.(type) {
-	case *SubTaskError_Msg:
-		_ = b.EncodeVarint(4<<3 | proto.WireBytes)
-		_ = b.EncodeStringBytes(x.Msg)
-	case *SubTaskError_Check:
-		_ = b.EncodeVarint(5<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.Check); err != nil {
-			return err
-		}
-	case *SubTaskError_Dump:
-		_ = b.EncodeVarint(6<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.Dump); err != nil {
-			return err
-		}
-	case *SubTaskError_Load:
-		_ = b.EncodeVarint(7<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.Load); err != nil {
-			return err
-		}
-	case *SubTaskError_Sync:
-		_ = b.EncodeVarint(8<<3 | proto.WireBytes)
-		if err := b.EncodeMessage(x.Sync); err != nil {
-			return err
-		}
-	case nil:
-	default:
-		return fmt.Errorf("SubTaskError.Error has unexpected type %T", x)
-	}
-	return nil
-}
-
-func _SubTaskError_OneofUnmarshaler(msg proto.Message, tag, wire int, b *proto.Buffer) (bool, error) {
-	m := msg.(*SubTaskError)
-	switch tag {
-	case 4: // error.msg
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		x, err := b.DecodeStringBytes()
-		m.Error = &SubTaskError_Msg{x}
-		return true, err
-	case 5: // error.check
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(CheckError)
-		err := b.DecodeMessage(msg)
-		m.Error = &SubTaskError_Check{msg}
-		return true, err
-	case 6: // error.dump
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(DumpError)
-		err := b.DecodeMessage(msg)
-		m.Error = &SubTaskError_Dump{msg}
-		return true, err
-	case 7: // error.load
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(LoadError)
-		err := b.DecodeMessage(msg)
-		m.Error = &SubTaskError_Load{msg}
-		return true, err
-	case 8: // error.sync
-		if wire != proto.WireBytes {
-			return true, proto.ErrInternalBadWireType
-		}
-		msg := new(SyncError)
-		err := b.DecodeMessage(msg)
-		m.Error = &SubTaskError_Sync{msg}
-		return true, err
-	default:
-		return false, nil
-	}
-}
-
-func _SubTaskError_OneofSizer(msg proto.Message) (n int) {
-	m := msg.(*SubTaskError)
-	// error
-	switch x := m.Error.(type) {
-	case *SubTaskError_Msg:
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(len(x.Msg)))
-		n += len(x.Msg)
-	case *SubTaskError_Check:
-		s := proto.Size(x.Check)
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case *SubTaskError_Dump:
-		s := proto.Size(x.Dump)
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case *SubTaskError_Load:
-		s := proto.Size(x.Load)
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case *SubTaskError_Sync:
-		s := proto.Size(x.Sync)
-		n += 1 // tag and wire
-		n += proto.SizeVarint(uint64(s))
-		n += s
-	case nil:
-	default:
-		panic(fmt.Sprintf("proto: unexpected type %T in oneof", x))
-	}
-	return n
-}
-
 // SubTaskErrorList used for internal jsonpb marshal
 type SubTaskErrorList struct {
-	Error []*SubTaskError `protobuf:"bytes,1,rep,name=error" json:"error,omitempty"`
+	Error []*SubTaskError `protobuf:"bytes,1,rep,name=error,proto3" json:"error,omitempty"`
 }
 
 func (m *SubTaskErrorList) Reset()         { *m = SubTaskErrorList{} }
 func (m *SubTaskErrorList) String() string { return proto.CompactTextString(m) }
 func (*SubTaskErrorList) ProtoMessage()    {}
 func (*SubTaskErrorList) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{29}
+	return fileDescriptor_51a1b9e17fd67b10, []int{29}
 }
 func (m *SubTaskErrorList) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2436,15 +2218,15 @@ func (m *SubTaskErrorList) XXX_Marshal(b []byte, deterministic bool) ([]byte, er
 		return xxx_messageInfo_SubTaskErrorList.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *SubTaskErrorList) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SubTaskErrorList.Merge(dst, src)
+func (m *SubTaskErrorList) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SubTaskErrorList.Merge(m, src)
 }
 func (m *SubTaskErrorList) XXX_Size() int {
 	return m.Size()
@@ -2468,7 +2250,7 @@ func (m *SubTaskErrorList) GetError() []*SubTaskError {
 // errors: includes all (potential) errors occured when processing
 type ProcessResult struct {
 	IsCanceled bool            `protobuf:"varint,1,opt,name=isCanceled,proto3" json:"isCanceled,omitempty"`
-	Errors     []*ProcessError `protobuf:"bytes,2,rep,name=errors" json:"errors,omitempty"`
+	Errors     []*ProcessError `protobuf:"bytes,2,rep,name=errors,proto3" json:"errors,omitempty"`
 	Detail     []byte          `protobuf:"bytes,3,opt,name=detail,proto3" json:"detail,omitempty"`
 }
 
@@ -2476,7 +2258,7 @@ func (m *ProcessResult) Reset()         { *m = ProcessResult{} }
 func (m *ProcessResult) String() string { return proto.CompactTextString(m) }
 func (*ProcessResult) ProtoMessage()    {}
 func (*ProcessResult) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{30}
+	return fileDescriptor_51a1b9e17fd67b10, []int{30}
 }
 func (m *ProcessResult) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2486,15 +2268,15 @@ func (m *ProcessResult) XXX_Marshal(b []byte, deterministic bool) ([]byte, error
 		return xxx_messageInfo_ProcessResult.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *ProcessResult) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ProcessResult.Merge(dst, src)
+func (m *ProcessResult) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ProcessResult.Merge(m, src)
 }
 func (m *ProcessResult) XXX_Size() int {
 	return m.Size()
@@ -2542,7 +2324,7 @@ func (m *TError) Reset()         { *m = TError{} }
 func (m *TError) String() string { return proto.CompactTextString(m) }
 func (*TError) ProtoMessage()    {}
 func (*TError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{31}
+	return fileDescriptor_51a1b9e17fd67b10, []int{31}
 }
 func (m *TError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2552,15 +2334,15 @@ func (m *TError) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_TError.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *TError) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TError.Merge(dst, src)
+func (m *TError) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TError.Merge(m, src)
 }
 func (m *TError) XXX_Size() int {
 	return m.Size()
@@ -2618,14 +2400,14 @@ func (m *TError) GetRawCause() string {
 type ProcessError struct {
 	Type  ErrorType `protobuf:"varint,1,opt,name=Type,proto3,enum=pb.ErrorType" json:"Type,omitempty"`
 	Msg   string    `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
-	Error *TError   `protobuf:"bytes,3,opt,name=error" json:"error,omitempty"`
+	Error *TError   `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
 }
 
 func (m *ProcessError) Reset()         { *m = ProcessError{} }
 func (m *ProcessError) String() string { return proto.CompactTextString(m) }
 func (*ProcessError) ProtoMessage()    {}
 func (*ProcessError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{32}
+	return fileDescriptor_51a1b9e17fd67b10, []int{32}
 }
 func (m *ProcessError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2635,15 +2417,15 @@ func (m *ProcessError) XXX_Marshal(b []byte, deterministic bool) ([]byte, error)
 		return xxx_messageInfo_ProcessError.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *ProcessError) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ProcessError.Merge(dst, src)
+func (m *ProcessError) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ProcessError.Merge(m, src)
 }
 func (m *ProcessError) XXX_Size() int {
 	return m.Size()
@@ -2683,14 +2465,14 @@ type DDLInfo struct {
 	Task   string   `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
 	Schema string   `protobuf:"bytes,2,opt,name=schema,proto3" json:"schema,omitempty"`
 	Table  string   `protobuf:"bytes,3,opt,name=table,proto3" json:"table,omitempty"`
-	DDLs   []string `protobuf:"bytes,4,rep,name=DDLs" json:"DDLs,omitempty"`
+	DDLs   []string `protobuf:"bytes,4,rep,name=DDLs,proto3" json:"DDLs,omitempty"`
 }
 
 func (m *DDLInfo) Reset()         { *m = DDLInfo{} }
 func (m *DDLInfo) String() string { return proto.CompactTextString(m) }
 func (*DDLInfo) ProtoMessage()    {}
 func (*DDLInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{33}
+	return fileDescriptor_51a1b9e17fd67b10, []int{33}
 }
 func (m *DDLInfo) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2700,15 +2482,15 @@ func (m *DDLInfo) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_DDLInfo.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *DDLInfo) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DDLInfo.Merge(dst, src)
+func (m *DDLInfo) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DDLInfo.Merge(m, src)
 }
 func (m *DDLInfo) XXX_Size() int {
 	return m.Size()
@@ -2759,7 +2541,7 @@ func (m *DDLLockInfo) Reset()         { *m = DDLLockInfo{} }
 func (m *DDLLockInfo) String() string { return proto.CompactTextString(m) }
 func (*DDLLockInfo) ProtoMessage()    {}
 func (*DDLLockInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{34}
+	return fileDescriptor_51a1b9e17fd67b10, []int{34}
 }
 func (m *DDLLockInfo) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2769,15 +2551,15 @@ func (m *DDLLockInfo) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) 
 		return xxx_messageInfo_DDLLockInfo.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *DDLLockInfo) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_DDLLockInfo.Merge(dst, src)
+func (m *DDLLockInfo) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DDLLockInfo.Merge(m, src)
 }
 func (m *DDLLockInfo) XXX_Size() int {
 	return m.Size()
@@ -2808,14 +2590,14 @@ type ExecDDLRequest struct {
 	LockID   string   `protobuf:"bytes,2,opt,name=lockID,proto3" json:"lockID,omitempty"`
 	Exec     bool     `protobuf:"varint,3,opt,name=exec,proto3" json:"exec,omitempty"`
 	TraceGID string   `protobuf:"bytes,4,opt,name=traceGID,proto3" json:"traceGID,omitempty"`
-	DDLs     []string `protobuf:"bytes,5,rep,name=DDLs" json:"DDLs,omitempty"`
+	DDLs     []string `protobuf:"bytes,5,rep,name=DDLs,proto3" json:"DDLs,omitempty"`
 }
 
 func (m *ExecDDLRequest) Reset()         { *m = ExecDDLRequest{} }
 func (m *ExecDDLRequest) String() string { return proto.CompactTextString(m) }
 func (*ExecDDLRequest) ProtoMessage()    {}
 func (*ExecDDLRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{35}
+	return fileDescriptor_51a1b9e17fd67b10, []int{35}
 }
 func (m *ExecDDLRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2825,15 +2607,15 @@ func (m *ExecDDLRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, erro
 		return xxx_messageInfo_ExecDDLRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *ExecDDLRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ExecDDLRequest.Merge(dst, src)
+func (m *ExecDDLRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ExecDDLRequest.Merge(m, src)
 }
 func (m *ExecDDLRequest) XXX_Size() int {
 	return m.Size()
@@ -2896,7 +2678,7 @@ func (m *BreakDDLLockRequest) Reset()         { *m = BreakDDLLockRequest{} }
 func (m *BreakDDLLockRequest) String() string { return proto.CompactTextString(m) }
 func (*BreakDDLLockRequest) ProtoMessage()    {}
 func (*BreakDDLLockRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{36}
+	return fileDescriptor_51a1b9e17fd67b10, []int{36}
 }
 func (m *BreakDDLLockRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2906,15 +2688,15 @@ func (m *BreakDDLLockRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte,
 		return xxx_messageInfo_BreakDDLLockRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *BreakDDLLockRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_BreakDDLLockRequest.Merge(dst, src)
+func (m *BreakDDLLockRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_BreakDDLLockRequest.Merge(m, src)
 }
 func (m *BreakDDLLockRequest) XXX_Size() int {
 	return m.Size()
@@ -2961,7 +2743,7 @@ func (m *SwitchRelayMasterRequest) Reset()         { *m = SwitchRelayMasterReque
 func (m *SwitchRelayMasterRequest) String() string { return proto.CompactTextString(m) }
 func (*SwitchRelayMasterRequest) ProtoMessage()    {}
 func (*SwitchRelayMasterRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{37}
+	return fileDescriptor_51a1b9e17fd67b10, []int{37}
 }
 func (m *SwitchRelayMasterRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2971,15 +2753,15 @@ func (m *SwitchRelayMasterRequest) XXX_Marshal(b []byte, deterministic bool) ([]
 		return xxx_messageInfo_SwitchRelayMasterRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *SwitchRelayMasterRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SwitchRelayMasterRequest.Merge(dst, src)
+func (m *SwitchRelayMasterRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SwitchRelayMasterRequest.Merge(m, src)
 }
 func (m *SwitchRelayMasterRequest) XXX_Size() int {
 	return m.Size()
@@ -2999,7 +2781,7 @@ func (m *OperateRelayRequest) Reset()         { *m = OperateRelayRequest{} }
 func (m *OperateRelayRequest) String() string { return proto.CompactTextString(m) }
 func (*OperateRelayRequest) ProtoMessage()    {}
 func (*OperateRelayRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{38}
+	return fileDescriptor_51a1b9e17fd67b10, []int{38}
 }
 func (m *OperateRelayRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -3009,15 +2791,15 @@ func (m *OperateRelayRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte,
 		return xxx_messageInfo_OperateRelayRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *OperateRelayRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_OperateRelayRequest.Merge(dst, src)
+func (m *OperateRelayRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_OperateRelayRequest.Merge(m, src)
 }
 func (m *OperateRelayRequest) XXX_Size() int {
 	return m.Size()
@@ -3046,7 +2828,7 @@ func (m *OperateRelayResponse) Reset()         { *m = OperateRelayResponse{} }
 func (m *OperateRelayResponse) String() string { return proto.CompactTextString(m) }
 func (*OperateRelayResponse) ProtoMessage()    {}
 func (*OperateRelayResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{39}
+	return fileDescriptor_51a1b9e17fd67b10, []int{39}
 }
 func (m *OperateRelayResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -3056,15 +2838,15 @@ func (m *OperateRelayResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte
 		return xxx_messageInfo_OperateRelayResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *OperateRelayResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_OperateRelayResponse.Merge(dst, src)
+func (m *OperateRelayResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_OperateRelayResponse.Merge(m, src)
 }
 func (m *OperateRelayResponse) XXX_Size() int {
 	return m.Size()
@@ -3119,7 +2901,7 @@ func (m *PurgeRelayRequest) Reset()         { *m = PurgeRelayRequest{} }
 func (m *PurgeRelayRequest) String() string { return proto.CompactTextString(m) }
 func (*PurgeRelayRequest) ProtoMessage()    {}
 func (*PurgeRelayRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{40}
+	return fileDescriptor_51a1b9e17fd67b10, []int{40}
 }
 func (m *PurgeRelayRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -3129,15 +2911,15 @@ func (m *PurgeRelayRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, e
 		return xxx_messageInfo_PurgeRelayRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *PurgeRelayRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PurgeRelayRequest.Merge(dst, src)
+func (m *PurgeRelayRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PurgeRelayRequest.Merge(m, src)
 }
 func (m *PurgeRelayRequest) XXX_Size() int {
 	return m.Size()
@@ -3183,7 +2965,7 @@ func (m *QueryWorkerConfigRequest) Reset()         { *m = QueryWorkerConfigReque
 func (m *QueryWorkerConfigRequest) String() string { return proto.CompactTextString(m) }
 func (*QueryWorkerConfigRequest) ProtoMessage()    {}
 func (*QueryWorkerConfigRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{41}
+	return fileDescriptor_51a1b9e17fd67b10, []int{41}
 }
 func (m *QueryWorkerConfigRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -3193,15 +2975,15 @@ func (m *QueryWorkerConfigRequest) XXX_Marshal(b []byte, deterministic bool) ([]
 		return xxx_messageInfo_QueryWorkerConfigRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *QueryWorkerConfigRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_QueryWorkerConfigRequest.Merge(dst, src)
+func (m *QueryWorkerConfigRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryWorkerConfigRequest.Merge(m, src)
 }
 func (m *QueryWorkerConfigRequest) XXX_Size() int {
 	return m.Size()
@@ -3224,7 +3006,7 @@ func (m *QueryWorkerConfigResponse) Reset()         { *m = QueryWorkerConfigResp
 func (m *QueryWorkerConfigResponse) String() string { return proto.CompactTextString(m) }
 func (*QueryWorkerConfigResponse) ProtoMessage()    {}
 func (*QueryWorkerConfigResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{42}
+	return fileDescriptor_51a1b9e17fd67b10, []int{42}
 }
 func (m *QueryWorkerConfigResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -3234,15 +3016,15 @@ func (m *QueryWorkerConfigResponse) XXX_Marshal(b []byte, deterministic bool) ([
 		return xxx_messageInfo_QueryWorkerConfigResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *QueryWorkerConfigResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_QueryWorkerConfigResponse.Merge(dst, src)
+func (m *QueryWorkerConfigResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_QueryWorkerConfigResponse.Merge(m, src)
 }
 func (m *QueryWorkerConfigResponse) XXX_Size() int {
 	return m.Size()
@@ -3299,7 +3081,7 @@ func (m *TaskMeta) Reset()         { *m = TaskMeta{} }
 func (m *TaskMeta) String() string { return proto.CompactTextString(m) }
 func (*TaskMeta) ProtoMessage()    {}
 func (*TaskMeta) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{43}
+	return fileDescriptor_51a1b9e17fd67b10, []int{43}
 }
 func (m *TaskMeta) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -3309,15 +3091,15 @@ func (m *TaskMeta) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_TaskMeta.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *TaskMeta) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TaskMeta.Merge(dst, src)
+func (m *TaskMeta) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TaskMeta.Merge(m, src)
 }
 func (m *TaskMeta) XXX_Size() int {
 	return m.Size()
@@ -3358,7 +3140,7 @@ func (m *TaskMeta) GetTask() []byte {
 
 type TaskLog struct {
 	Id   int64     `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Task *TaskMeta `protobuf:"bytes,2,opt,name=task" json:"task,omitempty"`
+	Task *TaskMeta `protobuf:"bytes,2,opt,name=task,proto3" json:"task,omitempty"`
 	Ts   int64     `protobuf:"varint,3,opt,name=ts,proto3" json:"ts,omitempty"`
 	// true means this log is applied successfully
 	Success bool   `protobuf:"varint,4,opt,name=success,proto3" json:"success,omitempty"`
@@ -3369,7 +3151,7 @@ func (m *TaskLog) Reset()         { *m = TaskLog{} }
 func (m *TaskLog) String() string { return proto.CompactTextString(m) }
 func (*TaskLog) ProtoMessage()    {}
 func (*TaskLog) Descriptor() ([]byte, []int) {
-	return fileDescriptor_dmworker_197b0c00ed0d06a5, []int{44}
+	return fileDescriptor_51a1b9e17fd67b10, []int{44}
 }
 func (m *TaskLog) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -3379,15 +3161,15 @@ func (m *TaskLog) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return xxx_messageInfo_TaskLog.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
+		n, err := m.MarshalToSizedBuffer(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (dst *TaskLog) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TaskLog.Merge(dst, src)
+func (m *TaskLog) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TaskLog.Merge(m, src)
 }
 func (m *TaskLog) XXX_Size() int {
 	return m.Size()
@@ -3434,6 +3216,12 @@ func (m *TaskLog) GetMessage() string {
 }
 
 func init() {
+	proto.RegisterEnum("pb.TaskOp", TaskOp_name, TaskOp_value)
+	proto.RegisterEnum("pb.SQLOp", SQLOp_name, SQLOp_value)
+	proto.RegisterEnum("pb.Stage", Stage_name, Stage_value)
+	proto.RegisterEnum("pb.UnitType", UnitType_name, UnitType_value)
+	proto.RegisterEnum("pb.ErrorType", ErrorType_name, ErrorType_value)
+	proto.RegisterEnum("pb.RelayOp", RelayOp_name, RelayOp_value)
 	proto.RegisterType((*StartSubTaskRequest)(nil), "pb.StartSubTaskRequest")
 	proto.RegisterType((*UpdateRelayRequest)(nil), "pb.UpdateRelayRequest")
 	proto.RegisterType((*MigrateRelayRequest)(nil), "pb.MigrateRelayRequest")
@@ -3479,12 +3267,161 @@ func init() {
 	proto.RegisterType((*QueryWorkerConfigResponse)(nil), "pb.QueryWorkerConfigResponse")
 	proto.RegisterType((*TaskMeta)(nil), "pb.TaskMeta")
 	proto.RegisterType((*TaskLog)(nil), "pb.TaskLog")
-	proto.RegisterEnum("pb.TaskOp", TaskOp_name, TaskOp_value)
-	proto.RegisterEnum("pb.SQLOp", SQLOp_name, SQLOp_value)
-	proto.RegisterEnum("pb.Stage", Stage_name, Stage_value)
-	proto.RegisterEnum("pb.UnitType", UnitType_name, UnitType_value)
-	proto.RegisterEnum("pb.ErrorType", ErrorType_name, ErrorType_value)
-	proto.RegisterEnum("pb.RelayOp", RelayOp_name, RelayOp_value)
+}
+
+func init() { proto.RegisterFile("dmworker.proto", fileDescriptor_51a1b9e17fd67b10) }
+
+var fileDescriptor_51a1b9e17fd67b10 = []byte{
+	// 2383 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x39, 0x4f, 0x6f, 0x23, 0x59,
+	0xf1, 0xee, 0x76, 0xdb, 0xb1, 0xcb, 0x4e, 0xa6, 0xf3, 0x32, 0x3b, 0xeb, 0xf1, 0x6f, 0x27, 0xbf,
+	0xd0, 0xb3, 0xda, 0xcd, 0x46, 0x28, 0xda, 0x0d, 0x20, 0x24, 0x60, 0x81, 0x9d, 0x38, 0x93, 0x09,
+	0x38, 0x33, 0x49, 0x7b, 0x02, 0x9c, 0x58, 0x75, 0xda, 0x2f, 0x4e, 0x2b, 0xed, 0xee, 0x9e, 0xfe,
+	0x93, 0x4c, 0x4e, 0x80, 0x38, 0x22, 0x21, 0x24, 0x4e, 0x88, 0x33, 0x37, 0x3e, 0x02, 0x77, 0x38,
+	0xee, 0x91, 0x1b, 0x68, 0xe6, 0x13, 0x70, 0xe7, 0x80, 0xaa, 0xde, 0xeb, 0xee, 0xd7, 0x89, 0xed,
+	0x19, 0xa1, 0xe1, 0x62, 0x75, 0xfd, 0x79, 0xf5, 0xaa, 0xea, 0xd5, 0xab, 0xaa, 0x57, 0x86, 0x95,
+	0xf1, 0xf4, 0x2a, 0x8c, 0x2f, 0x78, 0xbc, 0x1d, 0xc5, 0x61, 0x1a, 0x32, 0x3d, 0x3a, 0xb5, 0x3e,
+	0x81, 0xb5, 0x51, 0xea, 0xc4, 0xe9, 0x28, 0x3b, 0x7d, 0xee, 0x24, 0x17, 0x36, 0x7f, 0x91, 0xf1,
+	0x24, 0x65, 0x0c, 0x8c, 0xd4, 0x49, 0x2e, 0x7a, 0xda, 0x86, 0xb6, 0xd9, 0xb6, 0xe9, 0xdb, 0xda,
+	0x06, 0x76, 0x12, 0x8d, 0x9d, 0x94, 0xdb, 0xdc, 0x77, 0xae, 0x73, 0xce, 0x1e, 0x2c, 0xb9, 0x61,
+	0x90, 0xf2, 0x20, 0x95, 0xcc, 0x39, 0x68, 0x8d, 0x60, 0xed, 0xd0, 0x9b, 0xc4, 0x37, 0x17, 0xac,
+	0x03, 0x3c, 0xf2, 0x02, 0x3f, 0x9c, 0x3c, 0x75, 0xa6, 0x5c, 0xae, 0x51, 0x30, 0xec, 0x03, 0x68,
+	0x0b, 0xe8, 0x28, 0x4c, 0x7a, 0xfa, 0x86, 0xb6, 0xb9, 0x6c, 0x97, 0x08, 0x6b, 0x1f, 0xde, 0x7b,
+	0x16, 0x71, 0x14, 0x7a, 0x43, 0xe3, 0x3e, 0xe8, 0x61, 0x44, 0xe2, 0x56, 0x76, 0x60, 0x3b, 0x3a,
+	0xdd, 0x46, 0xe2, 0xb3, 0xc8, 0xd6, 0xc3, 0x08, 0xad, 0x09, 0x70, 0x33, 0x5d, 0x58, 0x83, 0xdf,
+	0xd6, 0x4b, 0xb8, 0x77, 0x53, 0x50, 0x12, 0x85, 0x41, 0xc2, 0xd9, 0xd7, 0xc1, 0x98, 0xf2, 0xd4,
+	0x21, 0x59, 0x9d, 0x9d, 0x1e, 0xca, 0xda, 0x0d, 0xa7, 0xd3, 0x30, 0xf8, 0x29, 0x39, 0x2f, 0xe7,
+	0xb3, 0x89, 0x4b, 0xee, 0xab, 0xcf, 0xdc, 0xf7, 0x2e, 0x34, 0xfc, 0x70, 0x72, 0x30, 0xe8, 0xd5,
+	0x37, 0xb4, 0xcd, 0xba, 0x2d, 0x00, 0x6b, 0x0f, 0xee, 0x1f, 0x67, 0x3c, 0xbe, 0x16, 0x8c, 0xa8,
+	0x82, 0x17, 0x06, 0x8a, 0xe3, 0x83, 0xd2, 0x2f, 0xf4, 0x5d, 0x8a, 0xd1, 0x55, 0x31, 0x1e, 0xf4,
+	0x67, 0x89, 0xf9, 0xaf, 0x8c, 0x78, 0x00, 0x75, 0x3f, 0x9c, 0x90, 0xfc, 0xce, 0x4e, 0x27, 0xb7,
+	0x62, 0x18, 0x4e, 0x6c, 0xc4, 0x5b, 0x5b, 0x70, 0x57, 0x9c, 0xfc, 0x5b, 0x44, 0xc9, 0x26, 0x30,
+	0x52, 0x6b, 0x94, 0x3a, 0x69, 0x96, 0x2c, 0x30, 0xcb, 0xfa, 0x18, 0x56, 0x89, 0x73, 0x2f, 0x8e,
+	0xc3, 0x78, 0x11, 0xe3, 0x1f, 0x35, 0xe8, 0x3d, 0x71, 0x82, 0xb1, 0x9f, 0xef, 0x3f, 0x3a, 0x1e,
+	0x2e, 0x92, 0xcc, 0xee, 0x2b, 0x67, 0xd2, 0x46, 0x6b, 0x46, 0xc7, 0xc3, 0x32, 0x14, 0x9c, 0x78,
+	0x92, 0xf4, 0xea, 0x1b, 0x75, 0x64, 0xc7, 0x6f, 0x8c, 0xb8, 0xd3, 0x22, 0xe2, 0x0c, 0x92, 0x53,
+	0x22, 0x30, 0x5e, 0x93, 0x17, 0xfe, 0x91, 0x93, 0xa6, 0x3c, 0x0e, 0x7a, 0x0d, 0x11, 0xaf, 0x25,
+	0xc6, 0xfa, 0x19, 0xdc, 0x9d, 0xe5, 0x59, 0x76, 0x0f, 0x9a, 0x31, 0x4f, 0x32, 0x5f, 0xdc, 0x8b,
+	0x96, 0x2d, 0x21, 0xc4, 0x8b, 0x5b, 0x28, 0xc3, 0x51, 0x42, 0xcc, 0x84, 0xfa, 0x34, 0x99, 0x50,
+	0xa8, 0xb4, 0x6d, 0xfc, 0xb4, 0xfe, 0xa1, 0xc1, 0x5a, 0xc5, 0x97, 0xef, 0x4a, 0x32, 0xfb, 0x36,
+	0x2c, 0x27, 0xd2, 0x95, 0x24, 0xba, 0x67, 0x6c, 0xd4, 0x37, 0x3b, 0x3b, 0xab, 0xe4, 0x2b, 0x95,
+	0x60, 0x57, 0xf9, 0xd8, 0x67, 0xd0, 0x89, 0xf1, 0x32, 0xcb, 0x65, 0x0d, 0x0a, 0x98, 0x3b, 0xb8,
+	0xcc, 0x2e, 0xd1, 0xb6, 0xca, 0xc3, 0xfa, 0xd0, 0x4a, 0xc2, 0x2c, 0x76, 0xf9, 0xc1, 0xa0, 0xd7,
+	0x24, 0x15, 0x0a, 0xd8, 0xfa, 0x8b, 0x26, 0xa3, 0x45, 0xc6, 0xc0, 0x3b, 0x33, 0xf0, 0x9b, 0xd0,
+	0x95, 0x8a, 0x93, 0x64, 0x69, 0x9f, 0xa9, 0xd8, 0x27, 0x76, 0xac, 0x70, 0xb1, 0x6d, 0x00, 0x32,
+	0x43, 0xac, 0x11, 0xc6, 0xad, 0x14, 0xc6, 0x89, 0x15, 0x0a, 0x87, 0xf5, 0x27, 0x0d, 0x3a, 0xbb,
+	0xe7, 0xdc, 0xcd, 0xbd, 0x73, 0x0f, 0x9a, 0x91, 0x93, 0x24, 0x7c, 0x9c, 0xeb, 0x2d, 0x20, 0xbc,
+	0xc0, 0x69, 0x98, 0x3a, 0x3e, 0xa9, 0xdd, 0xb0, 0x05, 0x40, 0x81, 0x95, 0xb9, 0x2e, 0x4f, 0x92,
+	0xb3, 0xcc, 0x27, 0xe5, 0x1b, 0xb6, 0x82, 0x41, 0x69, 0x67, 0x8e, 0xe7, 0xf3, 0x31, 0xc5, 0x64,
+	0xc3, 0x96, 0x10, 0x66, 0xdc, 0x2b, 0x27, 0x0e, 0xbc, 0x60, 0x42, 0x2a, 0x36, 0xec, 0x1c, 0xc4,
+	0x15, 0x63, 0x9e, 0x3a, 0x9e, 0x4f, 0x8e, 0xee, 0xda, 0x12, 0xb2, 0xba, 0x00, 0x83, 0x6c, 0x1a,
+	0x09, 0x2d, 0xad, 0xdf, 0x6a, 0x00, 0xc3, 0xd0, 0x19, 0x4b, 0xa5, 0x3f, 0x84, 0xe5, 0x33, 0x2f,
+	0xf0, 0x92, 0x73, 0x3e, 0x7e, 0x74, 0x9d, 0xf2, 0x84, 0x74, 0xaf, 0xdb, 0x55, 0x24, 0x2a, 0x4b,
+	0x5a, 0x0b, 0x16, 0x91, 0x88, 0x14, 0x0c, 0x9e, 0x72, 0x14, 0x87, 0x93, 0x98, 0x27, 0x89, 0x3c,
+	0x87, 0x02, 0xc6, 0xb5, 0x98, 0x65, 0x44, 0x12, 0x97, 0x17, 0x4c, 0xc1, 0x58, 0xbf, 0xd1, 0x60,
+	0x79, 0x74, 0xee, 0xc4, 0x63, 0x2f, 0x98, 0xec, 0xc7, 0x61, 0x16, 0xa1, 0x21, 0xa9, 0x13, 0x4f,
+	0x78, 0x5e, 0x53, 0x24, 0x84, 0xb7, 0x77, 0x30, 0x18, 0xe2, 0xfe, 0x74, 0x7b, 0xf1, 0x1b, 0x77,
+	0x3e, 0xf3, 0xe2, 0x24, 0xc5, 0xcb, 0x2b, 0x77, 0xce, 0x61, 0x94, 0x93, 0x5c, 0x07, 0x2e, 0xb9,
+	0x10, 0x57, 0x48, 0x08, 0xd7, 0x64, 0x81, 0xa4, 0x34, 0x88, 0x52, 0xc0, 0xd6, 0xaf, 0xeb, 0x00,
+	0xa3, 0xeb, 0xc0, 0x95, 0xee, 0xd9, 0x80, 0x0e, 0x99, 0xb9, 0x77, 0xc9, 0x83, 0x34, 0x77, 0x8e,
+	0x8a, 0x42, 0x61, 0x04, 0x3e, 0x8f, 0x72, 0xc7, 0x14, 0x30, 0xa6, 0x96, 0x98, 0xbb, 0x3c, 0x48,
+	0x91, 0x28, 0xaa, 0x40, 0x89, 0x60, 0x16, 0x74, 0xa7, 0x4e, 0x92, 0xf2, 0xb8, 0xe2, 0x9a, 0x0a,
+	0x8e, 0x6d, 0x81, 0xa9, 0xc2, 0xfb, 0xa9, 0x37, 0x96, 0x49, 0xe8, 0x16, 0x1e, 0xe5, 0x91, 0x11,
+	0xb9, 0x3c, 0x71, 0xdd, 0x2a, 0x38, 0x94, 0xa7, 0xc2, 0x24, 0x6f, 0x49, 0xc8, 0xbb, 0x89, 0x47,
+	0x79, 0xa7, 0x7e, 0xe8, 0x5e, 0x78, 0xc1, 0x84, 0xdc, 0xde, 0x22, 0x57, 0x55, 0x70, 0xec, 0x73,
+	0x30, 0xb3, 0x20, 0xe6, 0x49, 0xe8, 0x5f, 0xf2, 0x31, 0x9d, 0x5e, 0xd2, 0x6b, 0x2b, 0xd9, 0x44,
+	0x3d, 0x57, 0xfb, 0x16, 0xab, 0x72, 0x42, 0x20, 0xae, 0x8c, 0x3c, 0x85, 0xbf, 0xea, 0xd0, 0x51,
+	0x52, 0xca, 0x2d, 0x57, 0x69, 0x6f, 0xe9, 0x2a, 0x7d, 0x8e, 0xab, 0x36, 0xf2, 0x44, 0x96, 0x9d,
+	0x0e, 0xbc, 0x58, 0x06, 0x8e, 0x8a, 0x2a, 0x38, 0x2a, 0x67, 0xa3, 0xa2, 0xd8, 0x26, 0xdc, 0x51,
+	0x40, 0xe5, 0x64, 0x6e, 0xa2, 0xd9, 0x36, 0x30, 0x42, 0xed, 0x3a, 0xa9, 0x7b, 0x7e, 0x12, 0x1d,
+	0x92, 0x36, 0x74, 0x3c, 0x2d, 0x7b, 0x06, 0x85, 0xfd, 0x3f, 0x34, 0x92, 0xd4, 0x99, 0x70, 0x3a,
+	0x99, 0xbc, 0x86, 0x21, 0xc2, 0x16, 0x78, 0xf6, 0x49, 0x91, 0x21, 0x5b, 0x94, 0xa5, 0xc8, 0xd7,
+	0x47, 0x71, 0x88, 0xb9, 0xc3, 0x26, 0x42, 0x9e, 0x34, 0xad, 0x7f, 0xeb, 0xb0, 0x5c, 0xc9, 0xe9,
+	0x33, 0x4b, 0x66, 0xb1, 0xa3, 0x3e, 0x67, 0xc7, 0x0d, 0x30, 0xb2, 0xc0, 0x4b, 0xc9, 0x53, 0x2b,
+	0x3b, 0x5d, 0xa4, 0x9f, 0x04, 0x5e, 0xfa, 0xfc, 0x3a, 0xe2, 0x36, 0x51, 0x14, 0x9d, 0x8c, 0x37,
+	0xe8, 0xc4, 0x3e, 0x85, 0xb5, 0x32, 0x12, 0x06, 0x83, 0xe1, 0x30, 0x74, 0x2f, 0x0e, 0x06, 0xd2,
+	0x7b, 0xb3, 0x48, 0x8c, 0x89, 0x14, 0x4f, 0x11, 0xfd, 0xa4, 0x26, 0x92, 0xfc, 0xc7, 0xd0, 0x70,
+	0x31, 0xfb, 0x92, 0x97, 0x64, 0x19, 0x52, 0xd2, 0xf1, 0x93, 0x9a, 0x2d, 0xe8, 0xec, 0x43, 0x30,
+	0xc6, 0xd9, 0x34, 0x92, 0xbe, 0xa2, 0x8c, 0x5e, 0xe6, 0xc3, 0x27, 0x35, 0x9b, 0xa8, 0xc8, 0xe5,
+	0x87, 0xce, 0xb8, 0xd7, 0x2e, 0xb9, 0xca, 0x34, 0x89, 0x5c, 0x48, 0x45, 0x2e, 0x0c, 0x51, 0x0a,
+	0x57, 0xc9, 0x55, 0x66, 0x0b, 0xe4, 0x42, 0xea, 0xa3, 0x16, 0x34, 0x13, 0x91, 0x6d, 0xbf, 0x0f,
+	0xab, 0x15, 0xef, 0x0f, 0xbd, 0x84, 0x5c, 0x25, 0xc8, 0x3d, 0x6d, 0x5e, 0xe1, 0xcd, 0xd7, 0xaf,
+	0x03, 0x90, 0x4d, 0xa2, 0x42, 0xc9, 0x4a, 0xa7, 0x95, 0x4d, 0xc2, 0x03, 0x68, 0xa3, 0x2d, 0x0b,
+	0xc8, 0x68, 0xc4, 0x3c, 0x72, 0x04, 0x5d, 0xd2, 0xfe, 0x78, 0x38, 0x87, 0x83, 0xed, 0xc0, 0x5d,
+	0x51, 0x77, 0x8a, 0x1e, 0xdc, 0xc3, 0x46, 0x53, 0x5e, 0xac, 0x99, 0x34, 0xcc, 0x88, 0x1c, 0xc5,
+	0x8d, 0x8e, 0x87, 0x79, 0x4a, 0xce, 0x61, 0xeb, 0x5b, 0xd0, 0xc6, 0x1d, 0xc5, 0x76, 0x9b, 0xd0,
+	0x24, 0x42, 0xee, 0x07, 0xb3, 0x70, 0xa7, 0x54, 0xc8, 0x96, 0x74, 0x74, 0x43, 0x59, 0x78, 0x67,
+	0x18, 0xf2, 0x07, 0x1d, 0xba, 0x6a, 0x65, 0xff, 0x5f, 0x05, 0xb9, 0x8c, 0x43, 0x43, 0x8d, 0xc3,
+	0x8f, 0xf2, 0x38, 0x54, 0x3a, 0x86, 0xf2, 0xcc, 0xca, 0x30, 0x7c, 0x28, 0xc3, 0xb0, 0x49, 0x6c,
+	0xcb, 0x79, 0x18, 0xe6, 0x5c, 0x22, 0x0a, 0x1f, 0xca, 0x28, 0x5c, 0x2a, 0x99, 0x8a, 0x03, 0x2c,
+	0x82, 0xf0, 0xa1, 0x0c, 0xc2, 0x56, 0xc9, 0x54, 0x38, 0xb5, 0x88, 0xc1, 0x25, 0x68, 0x90, 0xf3,
+	0xac, 0xef, 0x80, 0xa9, 0xba, 0x86, 0x22, 0xf0, 0x23, 0x49, 0xac, 0x38, 0x5e, 0xed, 0x8c, 0xe4,
+	0xda, 0x17, 0xb0, 0x5c, 0xb9, 0xc2, 0x58, 0xcc, 0xbd, 0x64, 0xd7, 0x09, 0x5c, 0xee, 0x17, 0x7d,
+	0x8e, 0x82, 0x51, 0x8e, 0x54, 0x2f, 0x25, 0x4b, 0x11, 0x95, 0x23, 0x55, 0xba, 0x95, 0x7a, 0xa5,
+	0x5b, 0xf9, 0xb3, 0x06, 0xcd, 0xe7, 0xe2, 0x10, 0x7b, 0xb0, 0xb4, 0x17, 0xc7, 0xbb, 0xe1, 0x58,
+	0x9c, 0x63, 0xc3, 0xce, 0x41, 0x0c, 0x31, 0xfc, 0xf4, 0x9d, 0x24, 0x91, 0x5d, 0x55, 0x01, 0x4b,
+	0xda, 0xc8, 0x0d, 0x23, 0x2e, 0xdb, 0xaa, 0x02, 0x96, 0xb4, 0x21, 0xbf, 0xe4, 0xbe, 0x6c, 0xab,
+	0x0a, 0x18, 0x77, 0x3b, 0xe4, 0x49, 0x82, 0x01, 0x22, 0x32, 0x51, 0x0e, 0xe2, 0x2a, 0xdb, 0xb9,
+	0xda, 0x75, 0xb2, 0x84, 0xe7, 0x3d, 0x6c, 0x0e, 0x5b, 0x1c, 0xba, 0xaa, 0x79, 0xec, 0x6b, 0x60,
+	0x60, 0xbc, 0xc8, 0xa7, 0x28, 0x9d, 0x0d, 0x11, 0x44, 0x10, 0xe1, 0x6f, 0x1e, 0xbe, 0x7a, 0x79,
+	0xcb, 0x36, 0xf2, 0xe3, 0xa8, 0xd3, 0x89, 0x8a, 0x87, 0x64, 0xe5, 0x20, 0xbe, 0x84, 0xa5, 0xc1,
+	0x60, 0x78, 0x10, 0x9c, 0x85, 0xb3, 0x9e, 0x5d, 0x54, 0x47, 0xdd, 0x73, 0x3e, 0x75, 0xf2, 0xd6,
+	0x58, 0x40, 0xd4, 0x7a, 0x3a, 0xa7, 0x3e, 0x97, 0xf7, 0x50, 0x00, 0x45, 0x1f, 0x65, 0x94, 0x7d,
+	0x94, 0xf5, 0x19, 0x74, 0xf2, 0x74, 0x3b, 0x6f, 0x93, 0x15, 0xd0, 0xe5, 0x2b, 0xb4, 0x6d, 0xeb,
+	0x07, 0x03, 0xeb, 0x97, 0x1a, 0xac, 0xec, 0xbd, 0xe4, 0xee, 0x60, 0x30, 0x5c, 0xf0, 0x24, 0x44,
+	0xdd, 0x7c, 0x91, 0xe0, 0xa5, 0x6e, 0x7e, 0x9e, 0xd3, 0x0d, 0xfe, 0x92, 0xbb, 0xa4, 0x5a, 0xcb,
+	0xa6, 0x6f, 0x6a, 0xa6, 0x62, 0xc7, 0xe5, 0xfb, 0x07, 0x03, 0x59, 0x72, 0x0b, 0xb8, 0xd0, 0xba,
+	0xa1, 0x68, 0xfd, 0x2b, 0x0d, 0xd6, 0x1e, 0xc5, 0xdc, 0xb9, 0x90, 0xba, 0x2f, 0xd2, 0xc3, 0x82,
+	0x6e, 0xcc, 0xa7, 0xe1, 0x25, 0x1f, 0xaa, 0xda, 0x54, 0x70, 0x18, 0x03, 0x5c, 0x58, 0x24, 0xd5,
+	0xca, 0x41, 0xa4, 0x24, 0x17, 0x5e, 0x84, 0x14, 0x43, 0x50, 0x24, 0x68, 0xf5, 0xa1, 0x37, 0xba,
+	0xf2, 0x52, 0xf7, 0x9c, 0x32, 0x94, 0x28, 0xe1, 0x52, 0x0f, 0x6b, 0x07, 0xd6, 0xe4, 0x98, 0xa1,
+	0x32, 0x04, 0xf9, 0x3f, 0x65, 0x5a, 0xd1, 0x29, 0x5e, 0x18, 0xe2, 0x8d, 0x6a, 0x65, 0x70, 0xb7,
+	0xba, 0x46, 0x3e, 0x8b, 0x16, 0x2d, 0x52, 0xde, 0x4c, 0xfa, 0x9c, 0x37, 0x53, 0x7d, 0xd6, 0x9b,
+	0xc9, 0x28, 0x53, 0xe8, 0x15, 0xac, 0x1e, 0x65, 0xf1, 0xa4, 0xaa, 0x68, 0x1f, 0x5a, 0x5e, 0xe0,
+	0xb8, 0xa9, 0x77, 0xc9, 0xe5, 0x65, 0x2f, 0x60, 0xf2, 0xb1, 0x27, 0xc7, 0x2a, 0x75, 0x9b, 0xbe,
+	0x45, 0x37, 0xee, 0x73, 0x4a, 0xbd, 0x45, 0x37, 0x2e, 0x60, 0x8a, 0x51, 0xd1, 0x6e, 0x19, 0x32,
+	0x46, 0x09, 0x42, 0xff, 0xd1, 0x23, 0x50, 0x3c, 0xa0, 0x77, 0xc3, 0xe0, 0xcc, 0x9b, 0xe4, 0xfe,
+	0xfb, 0xbd, 0x26, 0xa7, 0x25, 0x55, 0xe2, 0x3b, 0x7b, 0x28, 0xaa, 0xaf, 0x53, 0xa3, 0xfa, 0x3a,
+	0x55, 0x47, 0x5b, 0x8d, 0xea, 0x68, 0x2b, 0x84, 0x16, 0x66, 0xca, 0xc3, 0x72, 0x00, 0x34, 0x7b,
+	0xf0, 0xf4, 0xc6, 0x82, 0x93, 0x57, 0xa9, 0xba, 0x52, 0xa5, 0xf2, 0xd0, 0x35, 0x28, 0x2b, 0x8a,
+	0xa9, 0xca, 0x2f, 0x60, 0x49, 0x4e, 0x64, 0xf0, 0x12, 0x7a, 0x63, 0xf9, 0x0e, 0xd1, 0xa9, 0x93,
+	0x15, 0xec, 0x62, 0x78, 0xd3, 0xcd, 0x35, 0x40, 0xdd, 0xca, 0x6b, 0x9b, 0xe6, 0xaf, 0x0f, 0x3d,
+	0x4d, 0x28, 0x92, 0xc5, 0x33, 0xb3, 0x88, 0x64, 0x01, 0x22, 0x65, 0x5a, 0xcd, 0x80, 0x12, 0xdc,
+	0xfa, 0x12, 0x9a, 0xc2, 0x2e, 0xb6, 0x0c, 0xed, 0x83, 0xe0, 0xd2, 0xf1, 0xbd, 0xf1, 0xb3, 0xc8,
+	0xac, 0xb1, 0x16, 0x18, 0xa3, 0x34, 0x8c, 0x4c, 0x8d, 0xb5, 0xa1, 0x71, 0x84, 0x19, 0xd1, 0xd4,
+	0x19, 0x40, 0x13, 0xcb, 0xc5, 0x94, 0x9b, 0x75, 0x44, 0xd3, 0x84, 0xd1, 0x34, 0x10, 0x2d, 0xe6,
+	0x48, 0x66, 0x83, 0xad, 0x00, 0x7c, 0x91, 0xa5, 0xa1, 0x64, 0x6b, 0x6e, 0x6d, 0x41, 0x83, 0xa6,
+	0x34, 0x24, 0xf0, 0xc7, 0x07, 0x47, 0x66, 0x8d, 0x75, 0x60, 0xc9, 0xde, 0x3b, 0x1a, 0x7e, 0xb1,
+	0xbb, 0x67, 0x6a, 0xb8, 0xf6, 0xe0, 0xe9, 0x8f, 0xf6, 0x76, 0x9f, 0x9b, 0xfa, 0xd6, 0x4f, 0x48,
+	0xe4, 0x04, 0x13, 0x69, 0x57, 0xea, 0x42, 0xb0, 0x59, 0x63, 0x4b, 0x50, 0x7f, 0xca, 0xaf, 0x4c,
+	0x8d, 0x16, 0x67, 0x01, 0x3e, 0x8b, 0x85, 0x3e, 0xa4, 0xda, 0xd8, 0xac, 0x23, 0x01, 0x15, 0x8e,
+	0xf8, 0xd8, 0x34, 0x58, 0x17, 0x5a, 0x8f, 0xe5, 0x3b, 0xd7, 0x6c, 0x6c, 0xfd, 0x1c, 0x5a, 0x79,
+	0xb9, 0x67, 0x77, 0xa0, 0x23, 0x45, 0x23, 0xca, 0xac, 0xa1, 0x1d, 0x54, 0xd4, 0x4d, 0x0d, 0x55,
+	0xc4, 0xc2, 0x6d, 0xea, 0xf8, 0x85, 0xd5, 0xd9, 0xac, 0x93, 0xda, 0xd7, 0x81, 0x6b, 0x1a, 0xe8,
+	0xa0, 0xa1, 0x37, 0x39, 0x4f, 0x69, 0xef, 0x06, 0xae, 0xa3, 0x1b, 0x65, 0x8e, 0xb7, 0xbe, 0x0b,
+	0xed, 0xa2, 0x14, 0xa0, 0xee, 0x27, 0xc1, 0x45, 0x10, 0x5e, 0x05, 0x84, 0x13, 0xf6, 0x62, 0x36,
+	0x1d, 0x1d, 0x0f, 0x4d, 0x0d, 0xf7, 0xa7, 0xed, 0x1e, 0x53, 0x83, 0x65, 0xea, 0x5b, 0x87, 0xb0,
+	0x24, 0xef, 0x3b, 0x63, 0xb0, 0x22, 0x75, 0x93, 0x18, 0xb3, 0x86, 0xbb, 0xa2, 0x59, 0x62, 0x2b,
+	0x0d, 0xdd, 0x4b, 0x16, 0x0b, 0x58, 0x47, 0x71, 0xc2, 0xd5, 0x02, 0x51, 0xdf, 0xf9, 0x57, 0x0b,
+	0x9a, 0xe2, 0x4e, 0xb1, 0x3d, 0xe8, 0xaa, 0x33, 0x60, 0xf6, 0xbe, 0x0c, 0xd3, 0x9b, 0x53, 0xe1,
+	0x7e, 0x1f, 0x09, 0xb3, 0xa7, 0xa6, 0x56, 0x8d, 0x1d, 0xc0, 0x4a, 0x95, 0xc6, 0xee, 0xcf, 0xe2,
+	0x7f, 0x1b, 0x51, 0xfb, 0xb0, 0x5c, 0x19, 0x38, 0x32, 0x1a, 0x60, 0xce, 0x9a, 0x41, 0xbe, 0x41,
+	0xd0, 0x0f, 0xa1, 0xa3, 0x4c, 0xd0, 0xd8, 0x3d, 0x64, 0xbe, 0x3d, 0x9e, 0xec, 0xbf, 0x7f, 0x0b,
+	0x5f, 0x48, 0xf8, 0x1c, 0xa0, 0x9c, 0x50, 0xb1, 0xf7, 0x0a, 0x46, 0x75, 0x6a, 0xd9, 0xbf, 0x77,
+	0x13, 0x5d, 0x2c, 0x3f, 0x91, 0x03, 0xae, 0xca, 0x94, 0x96, 0x3d, 0x28, 0xf8, 0x67, 0x0d, 0x81,
+	0xfb, 0xeb, 0xf3, 0xc8, 0x85, 0xd8, 0xc7, 0x00, 0x72, 0x22, 0x7a, 0x3c, 0x4c, 0xd8, 0x07, 0xc8,
+	0x3f, 0x6f, 0x42, 0xda, 0x9f, 0x3b, 0xfc, 0xb5, 0x6a, 0x6c, 0x07, 0xba, 0x8f, 0x79, 0xea, 0x9e,
+	0xe7, 0xad, 0x05, 0xbd, 0xa1, 0x94, 0x36, 0xa0, 0xdf, 0x91, 0x08, 0x04, 0xac, 0xda, 0xa6, 0xf6,
+	0xa9, 0xc6, 0xbe, 0x07, 0x80, 0x61, 0x9a, 0xa5, 0x1c, 0xcb, 0x22, 0xa3, 0x06, 0xa7, 0xd2, 0x04,
+	0x2c, 0xdc, 0x71, 0x17, 0xba, 0x6a, 0xbd, 0x16, 0xc1, 0x36, 0xa3, 0x82, 0x2f, 0x14, 0x72, 0x08,
+	0xab, 0xb7, 0x2a, 0xae, 0xf0, 0xc2, 0xbc, 0x42, 0xfc, 0x26, 0x9d, 0xd4, 0x82, 0x2b, 0x74, 0x9a,
+	0x51, 0xb6, 0x85, 0x90, 0x59, 0xb5, 0xd9, 0xaa, 0xb1, 0x1f, 0x00, 0x94, 0xe5, 0x53, 0x04, 0xca,
+	0xad, 0x72, 0xba, 0x50, 0x8b, 0x7d, 0x58, 0x55, 0xfe, 0x5f, 0x11, 0x95, 0x4e, 0x44, 0xec, 0xed,
+	0xbf, 0x5d, 0x16, 0x0a, 0xb2, 0xe5, 0x60, 0x5d, 0x2d, 0x99, 0xc2, 0x3b, 0xf3, 0xca, 0x6c, 0xff,
+	0xc1, 0x1c, 0xaa, 0xea, 0x22, 0xf5, 0xcf, 0x1c, 0xe1, 0xa2, 0x19, 0x7f, 0xef, 0x2c, 0x52, 0xec,
+	0x51, 0xef, 0x6f, 0xaf, 0xd6, 0xb5, 0xaf, 0x5e, 0xad, 0x6b, 0xff, 0x7c, 0xb5, 0xae, 0xfd, 0xee,
+	0xf5, 0x7a, 0xed, 0xab, 0xd7, 0xeb, 0xb5, 0xbf, 0xbf, 0x5e, 0xaf, 0x9d, 0x36, 0xe9, 0x1f, 0xa9,
+	0x6f, 0xfc, 0x27, 0x00, 0x00, 0xff, 0xff, 0x41, 0xea, 0xc3, 0x7a, 0xa3, 0x1a, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -3729,6 +3666,59 @@ type WorkerServer interface {
 	UpdateRelayConfig(context.Context, *UpdateRelayRequest) (*CommonWorkerResponse, error)
 	QueryWorkerConfig(context.Context, *QueryWorkerConfigRequest) (*QueryWorkerConfigResponse, error)
 	MigrateRelay(context.Context, *MigrateRelayRequest) (*CommonWorkerResponse, error)
+}
+
+// UnimplementedWorkerServer can be embedded to have forward compatible implementations.
+type UnimplementedWorkerServer struct {
+}
+
+func (*UnimplementedWorkerServer) StartSubTask(ctx context.Context, req *StartSubTaskRequest) (*OperateSubTaskResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartSubTask not implemented")
+}
+func (*UnimplementedWorkerServer) OperateSubTask(ctx context.Context, req *OperateSubTaskRequest) (*OperateSubTaskResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OperateSubTask not implemented")
+}
+func (*UnimplementedWorkerServer) UpdateSubTask(ctx context.Context, req *UpdateSubTaskRequest) (*OperateSubTaskResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateSubTask not implemented")
+}
+func (*UnimplementedWorkerServer) QueryStatus(ctx context.Context, req *QueryStatusRequest) (*QueryStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QueryStatus not implemented")
+}
+func (*UnimplementedWorkerServer) QueryError(ctx context.Context, req *QueryErrorRequest) (*QueryErrorResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QueryError not implemented")
+}
+func (*UnimplementedWorkerServer) QueryTaskOperation(ctx context.Context, req *QueryTaskOperationRequest) (*QueryTaskOperationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QueryTaskOperation not implemented")
+}
+func (*UnimplementedWorkerServer) HandleSQLs(ctx context.Context, req *HandleSubTaskSQLsRequest) (*CommonWorkerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method HandleSQLs not implemented")
+}
+func (*UnimplementedWorkerServer) FetchDDLInfo(srv Worker_FetchDDLInfoServer) error {
+	return status.Errorf(codes.Unimplemented, "method FetchDDLInfo not implemented")
+}
+func (*UnimplementedWorkerServer) ExecuteDDL(ctx context.Context, req *ExecDDLRequest) (*CommonWorkerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ExecuteDDL not implemented")
+}
+func (*UnimplementedWorkerServer) BreakDDLLock(ctx context.Context, req *BreakDDLLockRequest) (*CommonWorkerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BreakDDLLock not implemented")
+}
+func (*UnimplementedWorkerServer) SwitchRelayMaster(ctx context.Context, req *SwitchRelayMasterRequest) (*CommonWorkerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SwitchRelayMaster not implemented")
+}
+func (*UnimplementedWorkerServer) OperateRelay(ctx context.Context, req *OperateRelayRequest) (*OperateRelayResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OperateRelay not implemented")
+}
+func (*UnimplementedWorkerServer) PurgeRelay(ctx context.Context, req *PurgeRelayRequest) (*CommonWorkerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PurgeRelay not implemented")
+}
+func (*UnimplementedWorkerServer) UpdateRelayConfig(ctx context.Context, req *UpdateRelayRequest) (*CommonWorkerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateRelayConfig not implemented")
+}
+func (*UnimplementedWorkerServer) QueryWorkerConfig(ctx context.Context, req *QueryWorkerConfigRequest) (*QueryWorkerConfigResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QueryWorkerConfig not implemented")
+}
+func (*UnimplementedWorkerServer) MigrateRelay(ctx context.Context, req *MigrateRelayRequest) (*CommonWorkerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MigrateRelay not implemented")
 }
 
 func RegisterWorkerServer(s *grpc.Server, srv WorkerServer) {
@@ -4110,7 +4100,7 @@ var _Worker_serviceDesc = grpc.ServiceDesc{
 func (m *StartSubTaskRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -4118,23 +4108,29 @@ func (m *StartSubTaskRequest) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *StartSubTaskRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *StartSubTaskRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.Task) > 0 {
-		dAtA[i] = 0xa
-		i++
+		i -= len(m.Task)
+		copy(dAtA[i:], m.Task)
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Task)))
-		i += copy(dAtA[i:], m.Task)
+		i--
+		dAtA[i] = 0xa
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *UpdateRelayRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -4142,23 +4138,29 @@ func (m *UpdateRelayRequest) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *UpdateRelayRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *UpdateRelayRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.Content) > 0 {
-		dAtA[i] = 0xa
-		i++
+		i -= len(m.Content)
+		copy(dAtA[i:], m.Content)
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Content)))
-		i += copy(dAtA[i:], m.Content)
+		i--
+		dAtA[i] = 0xa
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *MigrateRelayRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -4166,28 +4168,34 @@ func (m *MigrateRelayRequest) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *MigrateRelayRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MigrateRelayRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.BinlogName) > 0 {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.BinlogName)))
-		i += copy(dAtA[i:], m.BinlogName)
-	}
 	if m.BinlogPos != 0 {
-		dAtA[i] = 0x10
-		i++
 		i = encodeVarintDmworker(dAtA, i, uint64(m.BinlogPos))
+		i--
+		dAtA[i] = 0x10
 	}
-	return i, nil
+	if len(m.BinlogName) > 0 {
+		i -= len(m.BinlogName)
+		copy(dAtA[i:], m.BinlogName)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.BinlogName)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *OperateSubTaskRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -4195,28 +4203,34 @@ func (m *OperateSubTaskRequest) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *OperateSubTaskRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *OperateSubTaskRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Op != 0 {
-		dAtA[i] = 0x8
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Op))
-	}
 	if len(m.Name) > 0 {
-		dAtA[i] = 0x12
-		i++
+		i -= len(m.Name)
+		copy(dAtA[i:], m.Name)
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Name)))
-		i += copy(dAtA[i:], m.Name)
+		i--
+		dAtA[i] = 0x12
 	}
-	return i, nil
+	if m.Op != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.Op))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *OperateSubTaskResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -4224,37 +4238,44 @@ func (m *OperateSubTaskResponse) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *OperateSubTaskResponse) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *OperateSubTaskResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Meta != nil {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Meta.Size()))
-		n1, err := m.Meta.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n1
+	if m.LogID != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.LogID))
+		i--
+		dAtA[i] = 0x18
 	}
 	if m.Op != 0 {
-		dAtA[i] = 0x10
-		i++
 		i = encodeVarintDmworker(dAtA, i, uint64(m.Op))
+		i--
+		dAtA[i] = 0x10
 	}
-	if m.LogID != 0 {
-		dAtA[i] = 0x18
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.LogID))
+	if m.Meta != nil {
+		{
+			size, err := m.Meta.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintDmworker(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *QueryTaskOperationRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -4262,28 +4283,34 @@ func (m *QueryTaskOperationRequest) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *QueryTaskOperationRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryTaskOperationRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.Name) > 0 {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Name)))
-		i += copy(dAtA[i:], m.Name)
-	}
 	if m.LogID != 0 {
-		dAtA[i] = 0x10
-		i++
 		i = encodeVarintDmworker(dAtA, i, uint64(m.LogID))
+		i--
+		dAtA[i] = 0x10
 	}
-	return i, nil
+	if len(m.Name) > 0 {
+		i -= len(m.Name)
+		copy(dAtA[i:], m.Name)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Name)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *QueryTaskOperationResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -4291,37 +4318,46 @@ func (m *QueryTaskOperationResponse) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *QueryTaskOperationResponse) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryTaskOperationResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Meta != nil {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Meta.Size()))
-		n2, err := m.Meta.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n2
-	}
 	if m.Log != nil {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Log.Size()))
-		n3, err := m.Log.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.Log.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintDmworker(dAtA, i, uint64(size))
 		}
-		i += n3
+		i--
+		dAtA[i] = 0x12
 	}
-	return i, nil
+	if m.Meta != nil {
+		{
+			size, err := m.Meta.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintDmworker(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *UpdateSubTaskRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -4329,23 +4365,29 @@ func (m *UpdateSubTaskRequest) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *UpdateSubTaskRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *UpdateSubTaskRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.Task) > 0 {
-		dAtA[i] = 0xa
-		i++
+		i -= len(m.Task)
+		copy(dAtA[i:], m.Task)
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Task)))
-		i += copy(dAtA[i:], m.Task)
+		i--
+		dAtA[i] = 0xa
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *QueryStatusRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -4353,23 +4395,29 @@ func (m *QueryStatusRequest) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *QueryStatusRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryStatusRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.Name) > 0 {
-		dAtA[i] = 0xa
-		i++
+		i -= len(m.Name)
+		copy(dAtA[i:], m.Name)
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Name)))
-		i += copy(dAtA[i:], m.Name)
+		i--
+		dAtA[i] = 0xa
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *QueryErrorRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -4377,23 +4425,29 @@ func (m *QueryErrorRequest) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *QueryErrorRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryErrorRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.Name) > 0 {
-		dAtA[i] = 0xa
-		i++
+		i -= len(m.Name)
+		copy(dAtA[i:], m.Name)
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Name)))
-		i += copy(dAtA[i:], m.Name)
+		i--
+		dAtA[i] = 0xa
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *HandleSubTaskSQLsRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -4401,55 +4455,57 @@ func (m *HandleSubTaskSQLsRequest) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *HandleSubTaskSQLsRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *HandleSubTaskSQLsRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.Name) > 0 {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Name)))
-		i += copy(dAtA[i:], m.Name)
-	}
-	if m.Op != 0 {
-		dAtA[i] = 0x10
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Op))
-	}
-	if len(m.Args) > 0 {
-		for _, s := range m.Args {
-			dAtA[i] = 0x1a
-			i++
-			l = len(s)
-			for l >= 1<<7 {
-				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
-				l >>= 7
-				i++
-			}
-			dAtA[i] = uint8(l)
-			i++
-			i += copy(dAtA[i:], s)
-		}
+	if len(m.SqlPattern) > 0 {
+		i -= len(m.SqlPattern)
+		copy(dAtA[i:], m.SqlPattern)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.SqlPattern)))
+		i--
+		dAtA[i] = 0x2a
 	}
 	if len(m.BinlogPos) > 0 {
-		dAtA[i] = 0x22
-		i++
+		i -= len(m.BinlogPos)
+		copy(dAtA[i:], m.BinlogPos)
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.BinlogPos)))
-		i += copy(dAtA[i:], m.BinlogPos)
+		i--
+		dAtA[i] = 0x22
 	}
-	if len(m.SqlPattern) > 0 {
-		dAtA[i] = 0x2a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.SqlPattern)))
-		i += copy(dAtA[i:], m.SqlPattern)
+	if len(m.Args) > 0 {
+		for iNdEx := len(m.Args) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Args[iNdEx])
+			copy(dAtA[i:], m.Args[iNdEx])
+			i = encodeVarintDmworker(dAtA, i, uint64(len(m.Args[iNdEx])))
+			i--
+			dAtA[i] = 0x1a
+		}
 	}
-	return i, nil
+	if m.Op != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.Op))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.Name) > 0 {
+		i -= len(m.Name)
+		copy(dAtA[i:], m.Name)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Name)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *CommonWorkerResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -4457,39 +4513,46 @@ func (m *CommonWorkerResponse) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *CommonWorkerResponse) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *CommonWorkerResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
+	if len(m.Msg) > 0 {
+		i -= len(m.Msg)
+		copy(dAtA[i:], m.Msg)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Worker) > 0 {
+		i -= len(m.Worker)
+		copy(dAtA[i:], m.Worker)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Worker)))
+		i--
+		dAtA[i] = 0x12
+	}
 	if m.Result {
-		dAtA[i] = 0x8
-		i++
+		i--
 		if m.Result {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
 		}
-		i++
+		i--
+		dAtA[i] = 0x8
 	}
-	if len(m.Worker) > 0 {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Worker)))
-		i += copy(dAtA[i:], m.Worker)
-	}
-	if len(m.Msg) > 0 {
-		dAtA[i] = 0x1a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
-		i += copy(dAtA[i:], m.Msg)
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *QueryStatusResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -4497,67 +4560,79 @@ func (m *QueryStatusResponse) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *QueryStatusResponse) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryStatusResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
+	if len(m.SourceID) > 0 {
+		i -= len(m.SourceID)
+		copy(dAtA[i:], m.SourceID)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.SourceID)))
+		i--
+		dAtA[i] = 0x32
+	}
+	if m.RelayStatus != nil {
+		{
+			size, err := m.RelayStatus.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintDmworker(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x2a
+	}
+	if len(m.SubTaskStatus) > 0 {
+		for iNdEx := len(m.SubTaskStatus) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.SubTaskStatus[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintDmworker(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x22
+		}
+	}
+	if len(m.Msg) > 0 {
+		i -= len(m.Msg)
+		copy(dAtA[i:], m.Msg)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Worker) > 0 {
+		i -= len(m.Worker)
+		copy(dAtA[i:], m.Worker)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Worker)))
+		i--
+		dAtA[i] = 0x12
+	}
 	if m.Result {
-		dAtA[i] = 0x8
-		i++
+		i--
 		if m.Result {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
 		}
-		i++
+		i--
+		dAtA[i] = 0x8
 	}
-	if len(m.Worker) > 0 {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Worker)))
-		i += copy(dAtA[i:], m.Worker)
-	}
-	if len(m.Msg) > 0 {
-		dAtA[i] = 0x1a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
-		i += copy(dAtA[i:], m.Msg)
-	}
-	if len(m.SubTaskStatus) > 0 {
-		for _, msg := range m.SubTaskStatus {
-			dAtA[i] = 0x22
-			i++
-			i = encodeVarintDmworker(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
-			}
-			i += n
-		}
-	}
-	if m.RelayStatus != nil {
-		dAtA[i] = 0x2a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.RelayStatus.Size()))
-		n4, err := m.RelayStatus.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n4
-	}
-	if len(m.SourceID) > 0 {
-		dAtA[i] = 0x32
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.SourceID)))
-		i += copy(dAtA[i:], m.SourceID)
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *QueryErrorResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -4565,61 +4640,72 @@ func (m *QueryErrorResponse) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *QueryErrorResponse) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryErrorResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
+	if m.RelayError != nil {
+		{
+			size, err := m.RelayError.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintDmworker(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x2a
+	}
+	if len(m.SubTaskError) > 0 {
+		for iNdEx := len(m.SubTaskError) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.SubTaskError[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintDmworker(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x22
+		}
+	}
+	if len(m.Msg) > 0 {
+		i -= len(m.Msg)
+		copy(dAtA[i:], m.Msg)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Worker) > 0 {
+		i -= len(m.Worker)
+		copy(dAtA[i:], m.Worker)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Worker)))
+		i--
+		dAtA[i] = 0x12
+	}
 	if m.Result {
-		dAtA[i] = 0x8
-		i++
+		i--
 		if m.Result {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
 		}
-		i++
+		i--
+		dAtA[i] = 0x8
 	}
-	if len(m.Worker) > 0 {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Worker)))
-		i += copy(dAtA[i:], m.Worker)
-	}
-	if len(m.Msg) > 0 {
-		dAtA[i] = 0x1a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
-		i += copy(dAtA[i:], m.Msg)
-	}
-	if len(m.SubTaskError) > 0 {
-		for _, msg := range m.SubTaskError {
-			dAtA[i] = 0x22
-			i++
-			i = encodeVarintDmworker(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
-			}
-			i += n
-		}
-	}
-	if m.RelayError != nil {
-		dAtA[i] = 0x2a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.RelayError.Size()))
-		n5, err := m.RelayError.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n5
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *CheckStatus) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -4627,53 +4713,59 @@ func (m *CheckStatus) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *CheckStatus) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *CheckStatus) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
+	if len(m.Detail) > 0 {
+		i -= len(m.Detail)
+		copy(dAtA[i:], m.Detail)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Detail)))
+		i--
+		dAtA[i] = 0x32
+	}
+	if m.Warning != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.Warning))
+		i--
+		dAtA[i] = 0x28
+	}
+	if m.Failed != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.Failed))
+		i--
+		dAtA[i] = 0x20
+	}
+	if m.Successful != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.Successful))
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.Total != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.Total))
+		i--
+		dAtA[i] = 0x10
+	}
 	if m.Passed {
-		dAtA[i] = 0x8
-		i++
+		i--
 		if m.Passed {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
 		}
-		i++
+		i--
+		dAtA[i] = 0x8
 	}
-	if m.Total != 0 {
-		dAtA[i] = 0x10
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Total))
-	}
-	if m.Successful != 0 {
-		dAtA[i] = 0x18
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Successful))
-	}
-	if m.Failed != 0 {
-		dAtA[i] = 0x20
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Failed))
-	}
-	if m.Warning != 0 {
-		dAtA[i] = 0x28
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Warning))
-	}
-	if len(m.Detail) > 0 {
-		dAtA[i] = 0x32
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Detail)))
-		i += copy(dAtA[i:], m.Detail)
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *DumpStatus) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -4681,17 +4773,22 @@ func (m *DumpStatus) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *DumpStatus) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *DumpStatus) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *LoadStatus) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -4699,39 +4796,46 @@ func (m *LoadStatus) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *LoadStatus) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *LoadStatus) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.FinishedBytes != 0 {
-		dAtA[i] = 0x8
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.FinishedBytes))
-	}
-	if m.TotalBytes != 0 {
-		dAtA[i] = 0x10
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.TotalBytes))
+	if len(m.MetaBinlog) > 0 {
+		i -= len(m.MetaBinlog)
+		copy(dAtA[i:], m.MetaBinlog)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.MetaBinlog)))
+		i--
+		dAtA[i] = 0x22
 	}
 	if len(m.Progress) > 0 {
-		dAtA[i] = 0x1a
-		i++
+		i -= len(m.Progress)
+		copy(dAtA[i:], m.Progress)
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Progress)))
-		i += copy(dAtA[i:], m.Progress)
+		i--
+		dAtA[i] = 0x1a
 	}
-	if len(m.MetaBinlog) > 0 {
-		dAtA[i] = 0x22
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.MetaBinlog)))
-		i += copy(dAtA[i:], m.MetaBinlog)
+	if m.TotalBytes != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.TotalBytes))
+		i--
+		dAtA[i] = 0x10
 	}
-	return i, nil
+	if m.FinishedBytes != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.FinishedBytes))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *ShardingGroup) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -4739,74 +4843,63 @@ func (m *ShardingGroup) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *ShardingGroup) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ShardingGroup) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.Target) > 0 {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Target)))
-		i += copy(dAtA[i:], m.Target)
+	if len(m.Unsynced) > 0 {
+		for iNdEx := len(m.Unsynced) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Unsynced[iNdEx])
+			copy(dAtA[i:], m.Unsynced[iNdEx])
+			i = encodeVarintDmworker(dAtA, i, uint64(len(m.Unsynced[iNdEx])))
+			i--
+			dAtA[i] = 0x2a
+		}
 	}
-	if len(m.DDLs) > 0 {
-		for _, s := range m.DDLs {
-			dAtA[i] = 0x12
-			i++
-			l = len(s)
-			for l >= 1<<7 {
-				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
-				l >>= 7
-				i++
-			}
-			dAtA[i] = uint8(l)
-			i++
-			i += copy(dAtA[i:], s)
+	if len(m.Synced) > 0 {
+		for iNdEx := len(m.Synced) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Synced[iNdEx])
+			copy(dAtA[i:], m.Synced[iNdEx])
+			i = encodeVarintDmworker(dAtA, i, uint64(len(m.Synced[iNdEx])))
+			i--
+			dAtA[i] = 0x22
 		}
 	}
 	if len(m.FirstPos) > 0 {
-		dAtA[i] = 0x1a
-		i++
+		i -= len(m.FirstPos)
+		copy(dAtA[i:], m.FirstPos)
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.FirstPos)))
-		i += copy(dAtA[i:], m.FirstPos)
+		i--
+		dAtA[i] = 0x1a
 	}
-	if len(m.Synced) > 0 {
-		for _, s := range m.Synced {
-			dAtA[i] = 0x22
-			i++
-			l = len(s)
-			for l >= 1<<7 {
-				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
-				l >>= 7
-				i++
-			}
-			dAtA[i] = uint8(l)
-			i++
-			i += copy(dAtA[i:], s)
+	if len(m.DDLs) > 0 {
+		for iNdEx := len(m.DDLs) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.DDLs[iNdEx])
+			copy(dAtA[i:], m.DDLs[iNdEx])
+			i = encodeVarintDmworker(dAtA, i, uint64(len(m.DDLs[iNdEx])))
+			i--
+			dAtA[i] = 0x12
 		}
 	}
-	if len(m.Unsynced) > 0 {
-		for _, s := range m.Unsynced {
-			dAtA[i] = 0x2a
-			i++
-			l = len(s)
-			for l >= 1<<7 {
-				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
-				l >>= 7
-				i++
-			}
-			dAtA[i] = uint8(l)
-			i++
-			i += copy(dAtA[i:], s)
-		}
+	if len(m.Target) > 0 {
+		i -= len(m.Target)
+		copy(dAtA[i:], m.Target)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Target)))
+		i--
+		dAtA[i] = 0xa
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *SyncStatus) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -4814,93 +4907,98 @@ func (m *SyncStatus) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *SyncStatus) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SyncStatus) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.TotalEvents != 0 {
-		dAtA[i] = 0x8
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.TotalEvents))
-	}
-	if m.TotalTps != 0 {
-		dAtA[i] = 0x10
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.TotalTps))
-	}
-	if m.RecentTps != 0 {
-		dAtA[i] = 0x18
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.RecentTps))
-	}
-	if len(m.MasterBinlog) > 0 {
-		dAtA[i] = 0x22
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.MasterBinlog)))
-		i += copy(dAtA[i:], m.MasterBinlog)
-	}
-	if len(m.MasterBinlogGtid) > 0 {
-		dAtA[i] = 0x2a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.MasterBinlogGtid)))
-		i += copy(dAtA[i:], m.MasterBinlogGtid)
-	}
-	if len(m.SyncerBinlog) > 0 {
-		dAtA[i] = 0x32
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.SyncerBinlog)))
-		i += copy(dAtA[i:], m.SyncerBinlog)
-	}
-	if len(m.SyncerBinlogGtid) > 0 {
-		dAtA[i] = 0x3a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.SyncerBinlogGtid)))
-		i += copy(dAtA[i:], m.SyncerBinlogGtid)
-	}
-	if len(m.BlockingDDLs) > 0 {
-		for _, s := range m.BlockingDDLs {
-			dAtA[i] = 0x42
-			i++
-			l = len(s)
-			for l >= 1<<7 {
-				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
-				l >>= 7
-				i++
-			}
-			dAtA[i] = uint8(l)
-			i++
-			i += copy(dAtA[i:], s)
-		}
-	}
-	if len(m.UnresolvedGroups) > 0 {
-		for _, msg := range m.UnresolvedGroups {
-			dAtA[i] = 0x4a
-			i++
-			i = encodeVarintDmworker(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
-			}
-			i += n
-		}
-	}
 	if m.Synced {
-		dAtA[i] = 0x50
-		i++
+		i--
 		if m.Synced {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
 		}
-		i++
+		i--
+		dAtA[i] = 0x50
 	}
-	return i, nil
+	if len(m.UnresolvedGroups) > 0 {
+		for iNdEx := len(m.UnresolvedGroups) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.UnresolvedGroups[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintDmworker(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x4a
+		}
+	}
+	if len(m.BlockingDDLs) > 0 {
+		for iNdEx := len(m.BlockingDDLs) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.BlockingDDLs[iNdEx])
+			copy(dAtA[i:], m.BlockingDDLs[iNdEx])
+			i = encodeVarintDmworker(dAtA, i, uint64(len(m.BlockingDDLs[iNdEx])))
+			i--
+			dAtA[i] = 0x42
+		}
+	}
+	if len(m.SyncerBinlogGtid) > 0 {
+		i -= len(m.SyncerBinlogGtid)
+		copy(dAtA[i:], m.SyncerBinlogGtid)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.SyncerBinlogGtid)))
+		i--
+		dAtA[i] = 0x3a
+	}
+	if len(m.SyncerBinlog) > 0 {
+		i -= len(m.SyncerBinlog)
+		copy(dAtA[i:], m.SyncerBinlog)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.SyncerBinlog)))
+		i--
+		dAtA[i] = 0x32
+	}
+	if len(m.MasterBinlogGtid) > 0 {
+		i -= len(m.MasterBinlogGtid)
+		copy(dAtA[i:], m.MasterBinlogGtid)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.MasterBinlogGtid)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if len(m.MasterBinlog) > 0 {
+		i -= len(m.MasterBinlog)
+		copy(dAtA[i:], m.MasterBinlog)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.MasterBinlog)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if m.RecentTps != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.RecentTps))
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.TotalTps != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.TotalTps))
+		i--
+		dAtA[i] = 0x10
+	}
+	if m.TotalEvents != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.TotalEvents))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *RelayStatus) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -4908,72 +5006,84 @@ func (m *RelayStatus) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *RelayStatus) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *RelayStatus) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.MasterBinlog) > 0 {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.MasterBinlog)))
-		i += copy(dAtA[i:], m.MasterBinlog)
+	if m.Result != nil {
+		{
+			size, err := m.Result.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintDmworker(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x42
 	}
-	if len(m.MasterBinlogGtid) > 0 {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.MasterBinlogGtid)))
-		i += copy(dAtA[i:], m.MasterBinlogGtid)
-	}
-	if len(m.RelaySubDir) > 0 {
-		dAtA[i] = 0x1a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.RelaySubDir)))
-		i += copy(dAtA[i:], m.RelaySubDir)
-	}
-	if len(m.RelayBinlog) > 0 {
-		dAtA[i] = 0x22
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.RelayBinlog)))
-		i += copy(dAtA[i:], m.RelayBinlog)
-	}
-	if len(m.RelayBinlogGtid) > 0 {
-		dAtA[i] = 0x2a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.RelayBinlogGtid)))
-		i += copy(dAtA[i:], m.RelayBinlogGtid)
+	if m.Stage != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.Stage))
+		i--
+		dAtA[i] = 0x38
 	}
 	if m.RelayCatchUpMaster {
-		dAtA[i] = 0x30
-		i++
+		i--
 		if m.RelayCatchUpMaster {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
 		}
-		i++
+		i--
+		dAtA[i] = 0x30
 	}
-	if m.Stage != 0 {
-		dAtA[i] = 0x38
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Stage))
+	if len(m.RelayBinlogGtid) > 0 {
+		i -= len(m.RelayBinlogGtid)
+		copy(dAtA[i:], m.RelayBinlogGtid)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.RelayBinlogGtid)))
+		i--
+		dAtA[i] = 0x2a
 	}
-	if m.Result != nil {
-		dAtA[i] = 0x42
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Result.Size()))
-		n6, err := m.Result.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n6
+	if len(m.RelayBinlog) > 0 {
+		i -= len(m.RelayBinlog)
+		copy(dAtA[i:], m.RelayBinlog)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.RelayBinlog)))
+		i--
+		dAtA[i] = 0x22
 	}
-	return i, nil
+	if len(m.RelaySubDir) > 0 {
+		i -= len(m.RelaySubDir)
+		copy(dAtA[i:], m.RelaySubDir)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.RelaySubDir)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.MasterBinlogGtid) > 0 {
+		i -= len(m.MasterBinlogGtid)
+		copy(dAtA[i:], m.MasterBinlogGtid)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.MasterBinlogGtid)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.MasterBinlog) > 0 {
+		i -= len(m.MasterBinlog)
+		copy(dAtA[i:], m.MasterBinlog)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.MasterBinlog)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *SubTaskStatus) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -4981,120 +5091,165 @@ func (m *SubTaskStatus) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *SubTaskStatus) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SubTaskStatus) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.Name) > 0 {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Name)))
-		i += copy(dAtA[i:], m.Name)
-	}
-	if m.Stage != 0 {
-		dAtA[i] = 0x10
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Stage))
-	}
-	if m.Unit != 0 {
-		dAtA[i] = 0x18
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Unit))
-	}
-	if m.Result != nil {
-		dAtA[i] = 0x22
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Result.Size()))
-		n7, err := m.Result.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+	if m.Status != nil {
+		{
+			size := m.Status.Size()
+			i -= size
+			if _, err := m.Status.MarshalTo(dAtA[i:]); err != nil {
+				return 0, err
+			}
 		}
-		i += n7
 	}
 	if len(m.UnresolvedDDLLockID) > 0 {
-		dAtA[i] = 0x2a
-		i++
+		i -= len(m.UnresolvedDDLLockID)
+		copy(dAtA[i:], m.UnresolvedDDLLockID)
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.UnresolvedDDLLockID)))
-		i += copy(dAtA[i:], m.UnresolvedDDLLockID)
+		i--
+		dAtA[i] = 0x2a
 	}
-	if m.Status != nil {
-		nn8, err := m.Status.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+	if m.Result != nil {
+		{
+			size, err := m.Result.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintDmworker(dAtA, i, uint64(size))
 		}
-		i += nn8
+		i--
+		dAtA[i] = 0x22
 	}
-	return i, nil
+	if m.Unit != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.Unit))
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.Stage != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.Stage))
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.Name) > 0 {
+		i -= len(m.Name)
+		copy(dAtA[i:], m.Name)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Name)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *SubTaskStatus_Msg) MarshalTo(dAtA []byte) (int, error) {
-	i := 0
-	dAtA[i] = 0x32
-	i++
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SubTaskStatus_Msg) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	i -= len(m.Msg)
+	copy(dAtA[i:], m.Msg)
 	i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
-	i += copy(dAtA[i:], m.Msg)
-	return i, nil
+	i--
+	dAtA[i] = 0x32
+	return len(dAtA) - i, nil
 }
 func (m *SubTaskStatus_Check) MarshalTo(dAtA []byte) (int, error) {
-	i := 0
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SubTaskStatus_Check) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	if m.Check != nil {
-		dAtA[i] = 0x3a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Check.Size()))
-		n9, err := m.Check.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.Check.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintDmworker(dAtA, i, uint64(size))
 		}
-		i += n9
+		i--
+		dAtA[i] = 0x3a
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 func (m *SubTaskStatus_Dump) MarshalTo(dAtA []byte) (int, error) {
-	i := 0
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SubTaskStatus_Dump) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	if m.Dump != nil {
-		dAtA[i] = 0x42
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Dump.Size()))
-		n10, err := m.Dump.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.Dump.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintDmworker(dAtA, i, uint64(size))
 		}
-		i += n10
+		i--
+		dAtA[i] = 0x42
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 func (m *SubTaskStatus_Load) MarshalTo(dAtA []byte) (int, error) {
-	i := 0
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SubTaskStatus_Load) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	if m.Load != nil {
-		dAtA[i] = 0x4a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Load.Size()))
-		n11, err := m.Load.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.Load.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintDmworker(dAtA, i, uint64(size))
 		}
-		i += n11
+		i--
+		dAtA[i] = 0x4a
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 func (m *SubTaskStatus_Sync) MarshalTo(dAtA []byte) (int, error) {
-	i := 0
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SubTaskStatus_Sync) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	if m.Sync != nil {
-		dAtA[i] = 0x52
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Sync.Size()))
-		n12, err := m.Sync.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.Sync.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintDmworker(dAtA, i, uint64(size))
 		}
-		i += n12
+		i--
+		dAtA[i] = 0x52
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 func (m *SubTaskStatusList) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5102,29 +5257,36 @@ func (m *SubTaskStatusList) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *SubTaskStatusList) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SubTaskStatusList) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.Status) > 0 {
-		for _, msg := range m.Status {
-			dAtA[i] = 0xa
-			i++
-			i = encodeVarintDmworker(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
+		for iNdEx := len(m.Status) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Status[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintDmworker(dAtA, i, uint64(size))
 			}
-			i += n
+			i--
+			dAtA[i] = 0xa
 		}
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *CheckError) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5132,23 +5294,29 @@ func (m *CheckError) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *CheckError) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *CheckError) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.Msg) > 0 {
-		dAtA[i] = 0xa
-		i++
+		i -= len(m.Msg)
+		copy(dAtA[i:], m.Msg)
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
-		i += copy(dAtA[i:], m.Msg)
+		i--
+		dAtA[i] = 0xa
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *DumpError) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5156,23 +5324,29 @@ func (m *DumpError) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *DumpError) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *DumpError) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.Msg) > 0 {
-		dAtA[i] = 0xa
-		i++
+		i -= len(m.Msg)
+		copy(dAtA[i:], m.Msg)
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
-		i += copy(dAtA[i:], m.Msg)
+		i--
+		dAtA[i] = 0xa
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *LoadError) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5180,23 +5354,29 @@ func (m *LoadError) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *LoadError) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *LoadError) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.Msg) > 0 {
-		dAtA[i] = 0xa
-		i++
+		i -= len(m.Msg)
+		copy(dAtA[i:], m.Msg)
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
-		i += copy(dAtA[i:], m.Msg)
+		i--
+		dAtA[i] = 0xa
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *SyncSQLError) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5204,35 +5384,43 @@ func (m *SyncSQLError) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *SyncSQLError) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SyncSQLError) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.Msg) > 0 {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
-		i += copy(dAtA[i:], m.Msg)
+	if len(m.ErrorSQL) > 0 {
+		i -= len(m.ErrorSQL)
+		copy(dAtA[i:], m.ErrorSQL)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.ErrorSQL)))
+		i--
+		dAtA[i] = 0x1a
 	}
 	if len(m.FailedBinlogPosition) > 0 {
-		dAtA[i] = 0x12
-		i++
+		i -= len(m.FailedBinlogPosition)
+		copy(dAtA[i:], m.FailedBinlogPosition)
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.FailedBinlogPosition)))
-		i += copy(dAtA[i:], m.FailedBinlogPosition)
+		i--
+		dAtA[i] = 0x12
 	}
-	if len(m.ErrorSQL) > 0 {
-		dAtA[i] = 0x1a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.ErrorSQL)))
-		i += copy(dAtA[i:], m.ErrorSQL)
+	if len(m.Msg) > 0 {
+		i -= len(m.Msg)
+		copy(dAtA[i:], m.Msg)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
+		i--
+		dAtA[i] = 0xa
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *SyncError) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5240,29 +5428,36 @@ func (m *SyncError) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *SyncError) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SyncError) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.Errors) > 0 {
-		for _, msg := range m.Errors {
-			dAtA[i] = 0xa
-			i++
-			i = encodeVarintDmworker(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
+		for iNdEx := len(m.Errors) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Errors[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintDmworker(dAtA, i, uint64(size))
 			}
-			i += n
+			i--
+			dAtA[i] = 0xa
 		}
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *RelayError) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5270,23 +5465,29 @@ func (m *RelayError) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *RelayError) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *RelayError) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.Msg) > 0 {
-		dAtA[i] = 0xa
-		i++
+		i -= len(m.Msg)
+		copy(dAtA[i:], m.Msg)
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
-		i += copy(dAtA[i:], m.Msg)
+		i--
+		dAtA[i] = 0xa
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *SubTaskError) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5294,104 +5495,146 @@ func (m *SubTaskError) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *SubTaskError) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SubTaskError) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.Name) > 0 {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Name)))
-		i += copy(dAtA[i:], m.Name)
-	}
-	if m.Stage != 0 {
-		dAtA[i] = 0x10
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Stage))
+	if m.Error != nil {
+		{
+			size := m.Error.Size()
+			i -= size
+			if _, err := m.Error.MarshalTo(dAtA[i:]); err != nil {
+				return 0, err
+			}
+		}
 	}
 	if m.Unit != 0 {
-		dAtA[i] = 0x18
-		i++
 		i = encodeVarintDmworker(dAtA, i, uint64(m.Unit))
+		i--
+		dAtA[i] = 0x18
 	}
-	if m.Error != nil {
-		nn13, err := m.Error.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += nn13
+	if m.Stage != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.Stage))
+		i--
+		dAtA[i] = 0x10
 	}
-	return i, nil
+	if len(m.Name) > 0 {
+		i -= len(m.Name)
+		copy(dAtA[i:], m.Name)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Name)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *SubTaskError_Msg) MarshalTo(dAtA []byte) (int, error) {
-	i := 0
-	dAtA[i] = 0x22
-	i++
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SubTaskError_Msg) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	i -= len(m.Msg)
+	copy(dAtA[i:], m.Msg)
 	i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
-	i += copy(dAtA[i:], m.Msg)
-	return i, nil
+	i--
+	dAtA[i] = 0x22
+	return len(dAtA) - i, nil
 }
 func (m *SubTaskError_Check) MarshalTo(dAtA []byte) (int, error) {
-	i := 0
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SubTaskError_Check) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	if m.Check != nil {
-		dAtA[i] = 0x2a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Check.Size()))
-		n14, err := m.Check.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.Check.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintDmworker(dAtA, i, uint64(size))
 		}
-		i += n14
+		i--
+		dAtA[i] = 0x2a
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 func (m *SubTaskError_Dump) MarshalTo(dAtA []byte) (int, error) {
-	i := 0
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SubTaskError_Dump) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	if m.Dump != nil {
-		dAtA[i] = 0x32
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Dump.Size()))
-		n15, err := m.Dump.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.Dump.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintDmworker(dAtA, i, uint64(size))
 		}
-		i += n15
+		i--
+		dAtA[i] = 0x32
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 func (m *SubTaskError_Load) MarshalTo(dAtA []byte) (int, error) {
-	i := 0
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SubTaskError_Load) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	if m.Load != nil {
-		dAtA[i] = 0x3a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Load.Size()))
-		n16, err := m.Load.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.Load.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintDmworker(dAtA, i, uint64(size))
 		}
-		i += n16
+		i--
+		dAtA[i] = 0x3a
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 func (m *SubTaskError_Sync) MarshalTo(dAtA []byte) (int, error) {
-	i := 0
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SubTaskError_Sync) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	if m.Sync != nil {
-		dAtA[i] = 0x42
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Sync.Size()))
-		n17, err := m.Sync.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
+		{
+			size, err := m.Sync.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintDmworker(dAtA, i, uint64(size))
 		}
-		i += n17
+		i--
+		dAtA[i] = 0x42
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 func (m *SubTaskErrorList) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5399,29 +5642,36 @@ func (m *SubTaskErrorList) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *SubTaskErrorList) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SubTaskErrorList) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if len(m.Error) > 0 {
-		for _, msg := range m.Error {
-			dAtA[i] = 0xa
-			i++
-			i = encodeVarintDmworker(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
+		for iNdEx := len(m.Error) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Error[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintDmworker(dAtA, i, uint64(size))
 			}
-			i += n
+			i--
+			dAtA[i] = 0xa
 		}
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *ProcessResult) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5429,45 +5679,53 @@ func (m *ProcessResult) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *ProcessResult) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ProcessResult) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
+	if len(m.Detail) > 0 {
+		i -= len(m.Detail)
+		copy(dAtA[i:], m.Detail)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Detail)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Errors) > 0 {
+		for iNdEx := len(m.Errors) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Errors[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintDmworker(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x12
+		}
+	}
 	if m.IsCanceled {
-		dAtA[i] = 0x8
-		i++
+		i--
 		if m.IsCanceled {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
 		}
-		i++
+		i--
+		dAtA[i] = 0x8
 	}
-	if len(m.Errors) > 0 {
-		for _, msg := range m.Errors {
-			dAtA[i] = 0x12
-			i++
-			i = encodeVarintDmworker(dAtA, i, uint64(msg.Size()))
-			n, err := msg.MarshalTo(dAtA[i:])
-			if err != nil {
-				return 0, err
-			}
-			i += n
-		}
-	}
-	if len(m.Detail) > 0 {
-		dAtA[i] = 0x1a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Detail)))
-		i += copy(dAtA[i:], m.Detail)
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *TError) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5475,49 +5733,56 @@ func (m *TError) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *TError) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *TError) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.ErrCode != 0 {
-		dAtA[i] = 0x8
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.ErrCode))
-	}
-	if m.ErrClass != 0 {
-		dAtA[i] = 0x10
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.ErrClass))
-	}
-	if m.ErrScope != 0 {
-		dAtA[i] = 0x18
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.ErrScope))
-	}
-	if m.ErrLevel != 0 {
-		dAtA[i] = 0x20
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.ErrLevel))
+	if len(m.RawCause) > 0 {
+		i -= len(m.RawCause)
+		copy(dAtA[i:], m.RawCause)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.RawCause)))
+		i--
+		dAtA[i] = 0x32
 	}
 	if len(m.Message) > 0 {
-		dAtA[i] = 0x2a
-		i++
+		i -= len(m.Message)
+		copy(dAtA[i:], m.Message)
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Message)))
-		i += copy(dAtA[i:], m.Message)
+		i--
+		dAtA[i] = 0x2a
 	}
-	if len(m.RawCause) > 0 {
-		dAtA[i] = 0x32
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.RawCause)))
-		i += copy(dAtA[i:], m.RawCause)
+	if m.ErrLevel != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.ErrLevel))
+		i--
+		dAtA[i] = 0x20
 	}
-	return i, nil
+	if m.ErrScope != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.ErrScope))
+		i--
+		dAtA[i] = 0x18
+	}
+	if m.ErrClass != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.ErrClass))
+		i--
+		dAtA[i] = 0x10
+	}
+	if m.ErrCode != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.ErrCode))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *ProcessError) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5525,38 +5790,46 @@ func (m *ProcessError) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *ProcessError) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ProcessError) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Type != 0 {
-		dAtA[i] = 0x8
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Type))
+	if m.Error != nil {
+		{
+			size, err := m.Error.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintDmworker(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x1a
 	}
 	if len(m.Msg) > 0 {
-		dAtA[i] = 0x12
-		i++
+		i -= len(m.Msg)
+		copy(dAtA[i:], m.Msg)
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
-		i += copy(dAtA[i:], m.Msg)
+		i--
+		dAtA[i] = 0x12
 	}
-	if m.Error != nil {
-		dAtA[i] = 0x1a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Error.Size()))
-		n18, err := m.Error.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n18
+	if m.Type != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.Type))
+		i--
+		dAtA[i] = 0x8
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *DDLInfo) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5564,50 +5837,52 @@ func (m *DDLInfo) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *DDLInfo) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *DDLInfo) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.Task) > 0 {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Task)))
-		i += copy(dAtA[i:], m.Task)
-	}
-	if len(m.Schema) > 0 {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Schema)))
-		i += copy(dAtA[i:], m.Schema)
-	}
-	if len(m.Table) > 0 {
-		dAtA[i] = 0x1a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Table)))
-		i += copy(dAtA[i:], m.Table)
-	}
 	if len(m.DDLs) > 0 {
-		for _, s := range m.DDLs {
+		for iNdEx := len(m.DDLs) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.DDLs[iNdEx])
+			copy(dAtA[i:], m.DDLs[iNdEx])
+			i = encodeVarintDmworker(dAtA, i, uint64(len(m.DDLs[iNdEx])))
+			i--
 			dAtA[i] = 0x22
-			i++
-			l = len(s)
-			for l >= 1<<7 {
-				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
-				l >>= 7
-				i++
-			}
-			dAtA[i] = uint8(l)
-			i++
-			i += copy(dAtA[i:], s)
 		}
 	}
-	return i, nil
+	if len(m.Table) > 0 {
+		i -= len(m.Table)
+		copy(dAtA[i:], m.Table)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Table)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Schema) > 0 {
+		i -= len(m.Schema)
+		copy(dAtA[i:], m.Schema)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Schema)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Task) > 0 {
+		i -= len(m.Task)
+		copy(dAtA[i:], m.Task)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Task)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *DDLLockInfo) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5615,29 +5890,36 @@ func (m *DDLLockInfo) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *DDLLockInfo) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *DDLLockInfo) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.Task) > 0 {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Task)))
-		i += copy(dAtA[i:], m.Task)
-	}
 	if len(m.ID) > 0 {
-		dAtA[i] = 0x12
-		i++
+		i -= len(m.ID)
+		copy(dAtA[i:], m.ID)
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.ID)))
-		i += copy(dAtA[i:], m.ID)
+		i--
+		dAtA[i] = 0x12
 	}
-	return i, nil
+	if len(m.Task) > 0 {
+		i -= len(m.Task)
+		copy(dAtA[i:], m.Task)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Task)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *ExecDDLRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5645,60 +5927,62 @@ func (m *ExecDDLRequest) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *ExecDDLRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ExecDDLRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.Task) > 0 {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Task)))
-		i += copy(dAtA[i:], m.Task)
+	if len(m.DDLs) > 0 {
+		for iNdEx := len(m.DDLs) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.DDLs[iNdEx])
+			copy(dAtA[i:], m.DDLs[iNdEx])
+			i = encodeVarintDmworker(dAtA, i, uint64(len(m.DDLs[iNdEx])))
+			i--
+			dAtA[i] = 0x2a
+		}
 	}
-	if len(m.LockID) > 0 {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.LockID)))
-		i += copy(dAtA[i:], m.LockID)
+	if len(m.TraceGID) > 0 {
+		i -= len(m.TraceGID)
+		copy(dAtA[i:], m.TraceGID)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.TraceGID)))
+		i--
+		dAtA[i] = 0x22
 	}
 	if m.Exec {
-		dAtA[i] = 0x18
-		i++
+		i--
 		if m.Exec {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
 		}
-		i++
+		i--
+		dAtA[i] = 0x18
 	}
-	if len(m.TraceGID) > 0 {
-		dAtA[i] = 0x22
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.TraceGID)))
-		i += copy(dAtA[i:], m.TraceGID)
+	if len(m.LockID) > 0 {
+		i -= len(m.LockID)
+		copy(dAtA[i:], m.LockID)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.LockID)))
+		i--
+		dAtA[i] = 0x12
 	}
-	if len(m.DDLs) > 0 {
-		for _, s := range m.DDLs {
-			dAtA[i] = 0x2a
-			i++
-			l = len(s)
-			for l >= 1<<7 {
-				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
-				l >>= 7
-				i++
-			}
-			dAtA[i] = uint8(l)
-			i++
-			i += copy(dAtA[i:], s)
-		}
+	if len(m.Task) > 0 {
+		i -= len(m.Task)
+		copy(dAtA[i:], m.Task)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Task)))
+		i--
+		dAtA[i] = 0xa
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *BreakDDLLockRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5706,49 +5990,56 @@ func (m *BreakDDLLockRequest) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *BreakDDLLockRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *BreakDDLLockRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.Task) > 0 {
-		dAtA[i] = 0xa
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Task)))
-		i += copy(dAtA[i:], m.Task)
-	}
-	if len(m.RemoveLockID) > 0 {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.RemoveLockID)))
-		i += copy(dAtA[i:], m.RemoveLockID)
-	}
-	if m.ExecDDL {
-		dAtA[i] = 0x18
-		i++
-		if m.ExecDDL {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i++
-	}
 	if m.SkipDDL {
-		dAtA[i] = 0x20
-		i++
+		i--
 		if m.SkipDDL {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
 		}
-		i++
+		i--
+		dAtA[i] = 0x20
 	}
-	return i, nil
+	if m.ExecDDL {
+		i--
+		if m.ExecDDL {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x18
+	}
+	if len(m.RemoveLockID) > 0 {
+		i -= len(m.RemoveLockID)
+		copy(dAtA[i:], m.RemoveLockID)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.RemoveLockID)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.Task) > 0 {
+		i -= len(m.Task)
+		copy(dAtA[i:], m.Task)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Task)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *SwitchRelayMasterRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5756,17 +6047,22 @@ func (m *SwitchRelayMasterRequest) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *SwitchRelayMasterRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *SwitchRelayMasterRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *OperateRelayRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5774,22 +6070,27 @@ func (m *OperateRelayRequest) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *OperateRelayRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *OperateRelayRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
 	if m.Op != 0 {
-		dAtA[i] = 0x8
-		i++
 		i = encodeVarintDmworker(dAtA, i, uint64(m.Op))
+		i--
+		dAtA[i] = 0x8
 	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *OperateRelayResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5797,44 +6098,51 @@ func (m *OperateRelayResponse) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *OperateRelayResponse) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *OperateRelayResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Op != 0 {
-		dAtA[i] = 0x8
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Op))
+	if len(m.Msg) > 0 {
+		i -= len(m.Msg)
+		copy(dAtA[i:], m.Msg)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if len(m.Worker) > 0 {
+		i -= len(m.Worker)
+		copy(dAtA[i:], m.Worker)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Worker)))
+		i--
+		dAtA[i] = 0x1a
 	}
 	if m.Result {
-		dAtA[i] = 0x10
-		i++
+		i--
 		if m.Result {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
 		}
-		i++
+		i--
+		dAtA[i] = 0x10
 	}
-	if len(m.Worker) > 0 {
-		dAtA[i] = 0x1a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Worker)))
-		i += copy(dAtA[i:], m.Worker)
+	if m.Op != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.Op))
+		i--
+		dAtA[i] = 0x8
 	}
-	if len(m.Msg) > 0 {
-		dAtA[i] = 0x22
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
-		i += copy(dAtA[i:], m.Msg)
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *PurgeRelayRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5842,44 +6150,51 @@ func (m *PurgeRelayRequest) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *PurgeRelayRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *PurgeRelayRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
+	if len(m.SubDir) > 0 {
+		i -= len(m.SubDir)
+		copy(dAtA[i:], m.SubDir)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.SubDir)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if len(m.Filename) > 0 {
+		i -= len(m.Filename)
+		copy(dAtA[i:], m.Filename)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Filename)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if m.Time != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.Time))
+		i--
+		dAtA[i] = 0x10
+	}
 	if m.Inactive {
-		dAtA[i] = 0x8
-		i++
+		i--
 		if m.Inactive {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
 		}
-		i++
+		i--
+		dAtA[i] = 0x8
 	}
-	if m.Time != 0 {
-		dAtA[i] = 0x10
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Time))
-	}
-	if len(m.Filename) > 0 {
-		dAtA[i] = 0x1a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Filename)))
-		i += copy(dAtA[i:], m.Filename)
-	}
-	if len(m.SubDir) > 0 {
-		dAtA[i] = 0x22
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.SubDir)))
-		i += copy(dAtA[i:], m.SubDir)
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *QueryWorkerConfigRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5887,17 +6202,22 @@ func (m *QueryWorkerConfigRequest) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *QueryWorkerConfigRequest) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryWorkerConfigRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *QueryWorkerConfigResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5905,51 +6225,60 @@ func (m *QueryWorkerConfigResponse) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *QueryWorkerConfigResponse) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *QueryWorkerConfigResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
+	if len(m.Content) > 0 {
+		i -= len(m.Content)
+		copy(dAtA[i:], m.Content)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Content)))
+		i--
+		dAtA[i] = 0x2a
+	}
+	if len(m.SourceID) > 0 {
+		i -= len(m.SourceID)
+		copy(dAtA[i:], m.SourceID)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.SourceID)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if len(m.Msg) > 0 {
+		i -= len(m.Msg)
+		copy(dAtA[i:], m.Msg)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Worker) > 0 {
+		i -= len(m.Worker)
+		copy(dAtA[i:], m.Worker)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Worker)))
+		i--
+		dAtA[i] = 0x12
+	}
 	if m.Result {
-		dAtA[i] = 0x8
-		i++
+		i--
 		if m.Result {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
 		}
-		i++
+		i--
+		dAtA[i] = 0x8
 	}
-	if len(m.Worker) > 0 {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Worker)))
-		i += copy(dAtA[i:], m.Worker)
-	}
-	if len(m.Msg) > 0 {
-		dAtA[i] = 0x1a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
-		i += copy(dAtA[i:], m.Msg)
-	}
-	if len(m.SourceID) > 0 {
-		dAtA[i] = 0x22
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.SourceID)))
-		i += copy(dAtA[i:], m.SourceID)
-	}
-	if len(m.Content) > 0 {
-		dAtA[i] = 0x2a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Content)))
-		i += copy(dAtA[i:], m.Content)
-	}
-	return i, nil
+	return len(dAtA) - i, nil
 }
 
 func (m *TaskMeta) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5957,39 +6286,46 @@ func (m *TaskMeta) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *TaskMeta) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *TaskMeta) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Op != 0 {
-		dAtA[i] = 0x8
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Op))
-	}
-	if m.Stage != 0 {
-		dAtA[i] = 0x10
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Stage))
+	if len(m.Task) > 0 {
+		i -= len(m.Task)
+		copy(dAtA[i:], m.Task)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Task)))
+		i--
+		dAtA[i] = 0x22
 	}
 	if len(m.Name) > 0 {
-		dAtA[i] = 0x1a
-		i++
+		i -= len(m.Name)
+		copy(dAtA[i:], m.Name)
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Name)))
-		i += copy(dAtA[i:], m.Name)
+		i--
+		dAtA[i] = 0x1a
 	}
-	if len(m.Task) > 0 {
-		dAtA[i] = 0x22
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Task)))
-		i += copy(dAtA[i:], m.Task)
+	if m.Stage != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.Stage))
+		i--
+		dAtA[i] = 0x10
 	}
-	return i, nil
+	if m.Op != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.Op))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
 }
 
 func (m *TaskLog) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
 	if err != nil {
 		return nil, err
 	}
@@ -5997,57 +6333,67 @@ func (m *TaskLog) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *TaskLog) MarshalTo(dAtA []byte) (int, error) {
-	var i int
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *TaskLog) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if m.Id != 0 {
-		dAtA[i] = 0x8
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Id))
-	}
-	if m.Task != nil {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Task.Size()))
-		n19, err := m.Task.MarshalTo(dAtA[i:])
-		if err != nil {
-			return 0, err
-		}
-		i += n19
-	}
-	if m.Ts != 0 {
-		dAtA[i] = 0x18
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Ts))
+	if len(m.Message) > 0 {
+		i -= len(m.Message)
+		copy(dAtA[i:], m.Message)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Message)))
+		i--
+		dAtA[i] = 0x2a
 	}
 	if m.Success {
-		dAtA[i] = 0x20
-		i++
+		i--
 		if m.Success {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
 		}
-		i++
+		i--
+		dAtA[i] = 0x20
 	}
-	if len(m.Message) > 0 {
-		dAtA[i] = 0x2a
-		i++
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Message)))
-		i += copy(dAtA[i:], m.Message)
+	if m.Ts != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.Ts))
+		i--
+		dAtA[i] = 0x18
 	}
-	return i, nil
+	if m.Task != nil {
+		{
+			size, err := m.Task.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintDmworker(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x12
+	}
+	if m.Id != 0 {
+		i = encodeVarintDmworker(dAtA, i, uint64(m.Id))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
 }
 
 func encodeVarintDmworker(dAtA []byte, offset int, v uint64) int {
+	offset -= sovDmworker(v)
+	base := offset
 	for v >= 1<<7 {
 		dAtA[offset] = uint8(v&0x7f | 0x80)
 		v >>= 7
 		offset++
 	}
 	dAtA[offset] = uint8(v)
-	return offset + 1
+	return base
 }
 func (m *StartSubTaskRequest) Size() (n int) {
 	if m == nil {
@@ -7103,14 +7449,7 @@ func (m *TaskLog) Size() (n int) {
 }
 
 func sovDmworker(x uint64) (n int) {
-	for {
-		n++
-		x >>= 7
-		if x == 0 {
-			break
-		}
-	}
-	return n
+	return (math_bits.Len64(x|1) + 6) / 7
 }
 func sozDmworker(x uint64) (n int) {
 	return sovDmworker(uint64((x << 1) ^ uint64((int64(x) >> 63))))
@@ -7130,7 +7469,7 @@ func (m *StartSubTaskRequest) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -7158,7 +7497,7 @@ func (m *StartSubTaskRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7168,6 +7507,9 @@ func (m *StartSubTaskRequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -7180,6 +7522,9 @@ func (m *StartSubTaskRequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -7209,7 +7554,7 @@ func (m *UpdateRelayRequest) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -7237,7 +7582,7 @@ func (m *UpdateRelayRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7247,6 +7592,9 @@ func (m *UpdateRelayRequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -7259,6 +7607,9 @@ func (m *UpdateRelayRequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -7288,7 +7639,7 @@ func (m *MigrateRelayRequest) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -7316,7 +7667,7 @@ func (m *MigrateRelayRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7326,6 +7677,9 @@ func (m *MigrateRelayRequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -7345,7 +7699,7 @@ func (m *MigrateRelayRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.BinlogPos |= (uint32(b) & 0x7F) << shift
+				m.BinlogPos |= uint32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7357,6 +7711,9 @@ func (m *MigrateRelayRequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -7386,7 +7743,7 @@ func (m *OperateSubTaskRequest) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -7414,7 +7771,7 @@ func (m *OperateSubTaskRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Op |= (TaskOp(b) & 0x7F) << shift
+				m.Op |= TaskOp(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7433,7 +7790,7 @@ func (m *OperateSubTaskRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7443,6 +7800,9 @@ func (m *OperateSubTaskRequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -7455,6 +7815,9 @@ func (m *OperateSubTaskRequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -7484,7 +7847,7 @@ func (m *OperateSubTaskResponse) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -7512,7 +7875,7 @@ func (m *OperateSubTaskResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7521,6 +7884,9 @@ func (m *OperateSubTaskResponse) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -7545,7 +7911,7 @@ func (m *OperateSubTaskResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Op |= (TaskOp(b) & 0x7F) << shift
+				m.Op |= TaskOp(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7564,7 +7930,7 @@ func (m *OperateSubTaskResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.LogID |= (int64(b) & 0x7F) << shift
+				m.LogID |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7576,6 +7942,9 @@ func (m *OperateSubTaskResponse) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -7605,7 +7974,7 @@ func (m *QueryTaskOperationRequest) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -7633,7 +8002,7 @@ func (m *QueryTaskOperationRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7643,6 +8012,9 @@ func (m *QueryTaskOperationRequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -7662,7 +8034,7 @@ func (m *QueryTaskOperationRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.LogID |= (int64(b) & 0x7F) << shift
+				m.LogID |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7674,6 +8046,9 @@ func (m *QueryTaskOperationRequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -7703,7 +8078,7 @@ func (m *QueryTaskOperationResponse) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -7731,7 +8106,7 @@ func (m *QueryTaskOperationResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7740,6 +8115,9 @@ func (m *QueryTaskOperationResponse) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -7764,7 +8142,7 @@ func (m *QueryTaskOperationResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7773,6 +8151,9 @@ func (m *QueryTaskOperationResponse) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -7790,6 +8171,9 @@ func (m *QueryTaskOperationResponse) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -7819,7 +8203,7 @@ func (m *UpdateSubTaskRequest) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -7847,7 +8231,7 @@ func (m *UpdateSubTaskRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7857,6 +8241,9 @@ func (m *UpdateSubTaskRequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -7869,6 +8256,9 @@ func (m *UpdateSubTaskRequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -7898,7 +8288,7 @@ func (m *QueryStatusRequest) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -7926,7 +8316,7 @@ func (m *QueryStatusRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -7936,6 +8326,9 @@ func (m *QueryStatusRequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -7948,6 +8341,9 @@ func (m *QueryStatusRequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -7977,7 +8373,7 @@ func (m *QueryErrorRequest) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -8005,7 +8401,7 @@ func (m *QueryErrorRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8015,6 +8411,9 @@ func (m *QueryErrorRequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -8027,6 +8426,9 @@ func (m *QueryErrorRequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -8056,7 +8458,7 @@ func (m *HandleSubTaskSQLsRequest) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -8084,7 +8486,7 @@ func (m *HandleSubTaskSQLsRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8094,6 +8496,9 @@ func (m *HandleSubTaskSQLsRequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -8113,7 +8518,7 @@ func (m *HandleSubTaskSQLsRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Op |= (SQLOp(b) & 0x7F) << shift
+				m.Op |= SQLOp(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8132,7 +8537,7 @@ func (m *HandleSubTaskSQLsRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8142,6 +8547,9 @@ func (m *HandleSubTaskSQLsRequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -8161,7 +8569,7 @@ func (m *HandleSubTaskSQLsRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8171,6 +8579,9 @@ func (m *HandleSubTaskSQLsRequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -8190,7 +8601,7 @@ func (m *HandleSubTaskSQLsRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8200,6 +8611,9 @@ func (m *HandleSubTaskSQLsRequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -8212,6 +8626,9 @@ func (m *HandleSubTaskSQLsRequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -8241,7 +8658,7 @@ func (m *CommonWorkerResponse) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -8269,7 +8686,7 @@ func (m *CommonWorkerResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8289,7 +8706,7 @@ func (m *CommonWorkerResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8299,6 +8716,9 @@ func (m *CommonWorkerResponse) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -8318,7 +8738,7 @@ func (m *CommonWorkerResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8328,6 +8748,9 @@ func (m *CommonWorkerResponse) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -8340,6 +8763,9 @@ func (m *CommonWorkerResponse) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -8369,7 +8795,7 @@ func (m *QueryStatusResponse) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -8397,7 +8823,7 @@ func (m *QueryStatusResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8417,7 +8843,7 @@ func (m *QueryStatusResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8427,6 +8853,9 @@ func (m *QueryStatusResponse) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -8446,7 +8875,7 @@ func (m *QueryStatusResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8456,6 +8885,9 @@ func (m *QueryStatusResponse) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -8475,7 +8907,7 @@ func (m *QueryStatusResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8484,6 +8916,9 @@ func (m *QueryStatusResponse) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -8506,7 +8941,7 @@ func (m *QueryStatusResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8515,6 +8950,9 @@ func (m *QueryStatusResponse) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -8539,7 +8977,7 @@ func (m *QueryStatusResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8549,6 +8987,9 @@ func (m *QueryStatusResponse) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -8561,6 +9002,9 @@ func (m *QueryStatusResponse) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -8590,7 +9034,7 @@ func (m *QueryErrorResponse) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -8618,7 +9062,7 @@ func (m *QueryErrorResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8638,7 +9082,7 @@ func (m *QueryErrorResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8648,6 +9092,9 @@ func (m *QueryErrorResponse) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -8667,7 +9114,7 @@ func (m *QueryErrorResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8677,6 +9124,9 @@ func (m *QueryErrorResponse) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -8696,7 +9146,7 @@ func (m *QueryErrorResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8705,6 +9155,9 @@ func (m *QueryErrorResponse) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -8727,7 +9180,7 @@ func (m *QueryErrorResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8736,6 +9189,9 @@ func (m *QueryErrorResponse) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -8753,6 +9209,9 @@ func (m *QueryErrorResponse) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -8782,7 +9241,7 @@ func (m *CheckStatus) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -8810,7 +9269,7 @@ func (m *CheckStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8830,7 +9289,7 @@ func (m *CheckStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Total |= (int32(b) & 0x7F) << shift
+				m.Total |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8849,7 +9308,7 @@ func (m *CheckStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Successful |= (int32(b) & 0x7F) << shift
+				m.Successful |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8868,7 +9327,7 @@ func (m *CheckStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Failed |= (int32(b) & 0x7F) << shift
+				m.Failed |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8887,7 +9346,7 @@ func (m *CheckStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Warning |= (int32(b) & 0x7F) << shift
+				m.Warning |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8906,7 +9365,7 @@ func (m *CheckStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				byteLen |= (int(b) & 0x7F) << shift
+				byteLen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -8915,6 +9374,9 @@ func (m *CheckStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -8930,6 +9392,9 @@ func (m *CheckStatus) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -8959,7 +9424,7 @@ func (m *DumpStatus) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -8980,6 +9445,9 @@ func (m *DumpStatus) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -9009,7 +9477,7 @@ func (m *LoadStatus) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -9037,7 +9505,7 @@ func (m *LoadStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.FinishedBytes |= (int64(b) & 0x7F) << shift
+				m.FinishedBytes |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9056,7 +9524,7 @@ func (m *LoadStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.TotalBytes |= (int64(b) & 0x7F) << shift
+				m.TotalBytes |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9075,7 +9543,7 @@ func (m *LoadStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9085,6 +9553,9 @@ func (m *LoadStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -9104,7 +9575,7 @@ func (m *LoadStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9114,6 +9585,9 @@ func (m *LoadStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -9126,6 +9600,9 @@ func (m *LoadStatus) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -9155,7 +9632,7 @@ func (m *ShardingGroup) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -9183,7 +9660,7 @@ func (m *ShardingGroup) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9193,6 +9670,9 @@ func (m *ShardingGroup) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -9212,7 +9692,7 @@ func (m *ShardingGroup) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9222,6 +9702,9 @@ func (m *ShardingGroup) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -9241,7 +9724,7 @@ func (m *ShardingGroup) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9251,6 +9734,9 @@ func (m *ShardingGroup) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -9270,7 +9756,7 @@ func (m *ShardingGroup) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9280,6 +9766,9 @@ func (m *ShardingGroup) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -9299,7 +9788,7 @@ func (m *ShardingGroup) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9309,6 +9798,9 @@ func (m *ShardingGroup) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -9321,6 +9813,9 @@ func (m *ShardingGroup) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -9350,7 +9845,7 @@ func (m *SyncStatus) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -9378,7 +9873,7 @@ func (m *SyncStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.TotalEvents |= (int64(b) & 0x7F) << shift
+				m.TotalEvents |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9397,7 +9892,7 @@ func (m *SyncStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.TotalTps |= (int64(b) & 0x7F) << shift
+				m.TotalTps |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9416,7 +9911,7 @@ func (m *SyncStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.RecentTps |= (int64(b) & 0x7F) << shift
+				m.RecentTps |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9435,7 +9930,7 @@ func (m *SyncStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9445,6 +9940,9 @@ func (m *SyncStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -9464,7 +9962,7 @@ func (m *SyncStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9474,6 +9972,9 @@ func (m *SyncStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -9493,7 +9994,7 @@ func (m *SyncStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9503,6 +10004,9 @@ func (m *SyncStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -9522,7 +10026,7 @@ func (m *SyncStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9532,6 +10036,9 @@ func (m *SyncStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -9551,7 +10058,7 @@ func (m *SyncStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9561,6 +10068,9 @@ func (m *SyncStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -9580,7 +10090,7 @@ func (m *SyncStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9589,6 +10099,9 @@ func (m *SyncStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -9611,7 +10124,7 @@ func (m *SyncStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9624,6 +10137,9 @@ func (m *SyncStatus) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -9653,7 +10169,7 @@ func (m *RelayStatus) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -9681,7 +10197,7 @@ func (m *RelayStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9691,6 +10207,9 @@ func (m *RelayStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -9710,7 +10229,7 @@ func (m *RelayStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9720,6 +10239,9 @@ func (m *RelayStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -9739,7 +10261,7 @@ func (m *RelayStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9749,6 +10271,9 @@ func (m *RelayStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -9768,7 +10293,7 @@ func (m *RelayStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9778,6 +10303,9 @@ func (m *RelayStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -9797,7 +10325,7 @@ func (m *RelayStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9807,6 +10335,9 @@ func (m *RelayStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -9826,7 +10357,7 @@ func (m *RelayStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9846,7 +10377,7 @@ func (m *RelayStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Stage |= (Stage(b) & 0x7F) << shift
+				m.Stage |= Stage(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9865,7 +10396,7 @@ func (m *RelayStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9874,6 +10405,9 @@ func (m *RelayStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -9891,6 +10425,9 @@ func (m *RelayStatus) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -9920,7 +10457,7 @@ func (m *SubTaskStatus) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -9948,7 +10485,7 @@ func (m *SubTaskStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9958,6 +10495,9 @@ func (m *SubTaskStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -9977,7 +10517,7 @@ func (m *SubTaskStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Stage |= (Stage(b) & 0x7F) << shift
+				m.Stage |= Stage(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -9996,7 +10536,7 @@ func (m *SubTaskStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Unit |= (UnitType(b) & 0x7F) << shift
+				m.Unit |= UnitType(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -10015,7 +10555,7 @@ func (m *SubTaskStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -10024,6 +10564,9 @@ func (m *SubTaskStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -10048,7 +10591,7 @@ func (m *SubTaskStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -10058,6 +10601,9 @@ func (m *SubTaskStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -10077,7 +10623,7 @@ func (m *SubTaskStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -10087,6 +10633,9 @@ func (m *SubTaskStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -10106,7 +10655,7 @@ func (m *SubTaskStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -10115,6 +10664,9 @@ func (m *SubTaskStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -10138,7 +10690,7 @@ func (m *SubTaskStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -10147,6 +10699,9 @@ func (m *SubTaskStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -10170,7 +10725,7 @@ func (m *SubTaskStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -10179,6 +10734,9 @@ func (m *SubTaskStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -10202,7 +10760,7 @@ func (m *SubTaskStatus) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -10211,6 +10769,9 @@ func (m *SubTaskStatus) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -10227,6 +10788,9 @@ func (m *SubTaskStatus) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -10256,7 +10820,7 @@ func (m *SubTaskStatusList) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -10284,7 +10848,7 @@ func (m *SubTaskStatusList) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -10293,6 +10857,9 @@ func (m *SubTaskStatusList) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -10308,6 +10875,9 @@ func (m *SubTaskStatusList) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -10337,7 +10907,7 @@ func (m *CheckError) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -10365,7 +10935,7 @@ func (m *CheckError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -10375,6 +10945,9 @@ func (m *CheckError) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -10387,6 +10960,9 @@ func (m *CheckError) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -10416,7 +10992,7 @@ func (m *DumpError) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -10444,7 +11020,7 @@ func (m *DumpError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -10454,6 +11030,9 @@ func (m *DumpError) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -10466,6 +11045,9 @@ func (m *DumpError) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -10495,7 +11077,7 @@ func (m *LoadError) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -10523,7 +11105,7 @@ func (m *LoadError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -10533,6 +11115,9 @@ func (m *LoadError) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -10545,6 +11130,9 @@ func (m *LoadError) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -10574,7 +11162,7 @@ func (m *SyncSQLError) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -10602,7 +11190,7 @@ func (m *SyncSQLError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -10612,6 +11200,9 @@ func (m *SyncSQLError) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -10631,7 +11222,7 @@ func (m *SyncSQLError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -10641,6 +11232,9 @@ func (m *SyncSQLError) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -10660,7 +11254,7 @@ func (m *SyncSQLError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -10670,6 +11264,9 @@ func (m *SyncSQLError) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -10682,6 +11279,9 @@ func (m *SyncSQLError) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -10711,7 +11311,7 @@ func (m *SyncError) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -10739,7 +11339,7 @@ func (m *SyncError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -10748,6 +11348,9 @@ func (m *SyncError) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -10763,6 +11366,9 @@ func (m *SyncError) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -10792,7 +11398,7 @@ func (m *RelayError) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -10820,7 +11426,7 @@ func (m *RelayError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -10830,6 +11436,9 @@ func (m *RelayError) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -10842,6 +11451,9 @@ func (m *RelayError) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -10871,7 +11483,7 @@ func (m *SubTaskError) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -10899,7 +11511,7 @@ func (m *SubTaskError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -10909,6 +11521,9 @@ func (m *SubTaskError) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -10928,7 +11543,7 @@ func (m *SubTaskError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Stage |= (Stage(b) & 0x7F) << shift
+				m.Stage |= Stage(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -10947,7 +11562,7 @@ func (m *SubTaskError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Unit |= (UnitType(b) & 0x7F) << shift
+				m.Unit |= UnitType(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -10966,7 +11581,7 @@ func (m *SubTaskError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -10976,6 +11591,9 @@ func (m *SubTaskError) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -10995,7 +11613,7 @@ func (m *SubTaskError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11004,6 +11622,9 @@ func (m *SubTaskError) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -11027,7 +11648,7 @@ func (m *SubTaskError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11036,6 +11657,9 @@ func (m *SubTaskError) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -11059,7 +11683,7 @@ func (m *SubTaskError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11068,6 +11692,9 @@ func (m *SubTaskError) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -11091,7 +11718,7 @@ func (m *SubTaskError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11100,6 +11727,9 @@ func (m *SubTaskError) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -11116,6 +11746,9 @@ func (m *SubTaskError) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -11145,7 +11778,7 @@ func (m *SubTaskErrorList) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -11173,7 +11806,7 @@ func (m *SubTaskErrorList) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11182,6 +11815,9 @@ func (m *SubTaskErrorList) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -11197,6 +11833,9 @@ func (m *SubTaskErrorList) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -11226,7 +11865,7 @@ func (m *ProcessResult) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -11254,7 +11893,7 @@ func (m *ProcessResult) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11274,7 +11913,7 @@ func (m *ProcessResult) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11283,6 +11922,9 @@ func (m *ProcessResult) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -11305,7 +11947,7 @@ func (m *ProcessResult) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				byteLen |= (int(b) & 0x7F) << shift
+				byteLen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11314,6 +11956,9 @@ func (m *ProcessResult) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -11329,6 +11974,9 @@ func (m *ProcessResult) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -11358,7 +12006,7 @@ func (m *TError) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -11386,7 +12034,7 @@ func (m *TError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.ErrCode |= (int32(b) & 0x7F) << shift
+				m.ErrCode |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11405,7 +12053,7 @@ func (m *TError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.ErrClass |= (int32(b) & 0x7F) << shift
+				m.ErrClass |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11424,7 +12072,7 @@ func (m *TError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.ErrScope |= (int32(b) & 0x7F) << shift
+				m.ErrScope |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11443,7 +12091,7 @@ func (m *TError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.ErrLevel |= (int32(b) & 0x7F) << shift
+				m.ErrLevel |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11462,7 +12110,7 @@ func (m *TError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11472,6 +12120,9 @@ func (m *TError) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -11491,7 +12142,7 @@ func (m *TError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11501,6 +12152,9 @@ func (m *TError) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -11513,6 +12167,9 @@ func (m *TError) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -11542,7 +12199,7 @@ func (m *ProcessError) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -11570,7 +12227,7 @@ func (m *ProcessError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Type |= (ErrorType(b) & 0x7F) << shift
+				m.Type |= ErrorType(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11589,7 +12246,7 @@ func (m *ProcessError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11599,6 +12256,9 @@ func (m *ProcessError) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -11618,7 +12278,7 @@ func (m *ProcessError) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11627,6 +12287,9 @@ func (m *ProcessError) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -11644,6 +12307,9 @@ func (m *ProcessError) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -11673,7 +12339,7 @@ func (m *DDLInfo) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -11701,7 +12367,7 @@ func (m *DDLInfo) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11711,6 +12377,9 @@ func (m *DDLInfo) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -11730,7 +12399,7 @@ func (m *DDLInfo) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11740,6 +12409,9 @@ func (m *DDLInfo) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -11759,7 +12431,7 @@ func (m *DDLInfo) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11769,6 +12441,9 @@ func (m *DDLInfo) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -11788,7 +12463,7 @@ func (m *DDLInfo) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11798,6 +12473,9 @@ func (m *DDLInfo) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -11810,6 +12488,9 @@ func (m *DDLInfo) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -11839,7 +12520,7 @@ func (m *DDLLockInfo) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -11867,7 +12548,7 @@ func (m *DDLLockInfo) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11877,6 +12558,9 @@ func (m *DDLLockInfo) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -11896,7 +12580,7 @@ func (m *DDLLockInfo) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11906,6 +12590,9 @@ func (m *DDLLockInfo) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -11918,6 +12605,9 @@ func (m *DDLLockInfo) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -11947,7 +12637,7 @@ func (m *ExecDDLRequest) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -11975,7 +12665,7 @@ func (m *ExecDDLRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -11985,6 +12675,9 @@ func (m *ExecDDLRequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -12004,7 +12697,7 @@ func (m *ExecDDLRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12014,6 +12707,9 @@ func (m *ExecDDLRequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -12033,7 +12729,7 @@ func (m *ExecDDLRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12053,7 +12749,7 @@ func (m *ExecDDLRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12063,6 +12759,9 @@ func (m *ExecDDLRequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -12082,7 +12781,7 @@ func (m *ExecDDLRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12092,6 +12791,9 @@ func (m *ExecDDLRequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -12104,6 +12806,9 @@ func (m *ExecDDLRequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -12133,7 +12838,7 @@ func (m *BreakDDLLockRequest) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -12161,7 +12866,7 @@ func (m *BreakDDLLockRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12171,6 +12876,9 @@ func (m *BreakDDLLockRequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -12190,7 +12898,7 @@ func (m *BreakDDLLockRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12200,6 +12908,9 @@ func (m *BreakDDLLockRequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -12219,7 +12930,7 @@ func (m *BreakDDLLockRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12239,7 +12950,7 @@ func (m *BreakDDLLockRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12252,6 +12963,9 @@ func (m *BreakDDLLockRequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -12281,7 +12995,7 @@ func (m *SwitchRelayMasterRequest) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -12302,6 +13016,9 @@ func (m *SwitchRelayMasterRequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -12331,7 +13048,7 @@ func (m *OperateRelayRequest) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -12359,7 +13076,7 @@ func (m *OperateRelayRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Op |= (RelayOp(b) & 0x7F) << shift
+				m.Op |= RelayOp(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12371,6 +13088,9 @@ func (m *OperateRelayRequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -12400,7 +13120,7 @@ func (m *OperateRelayResponse) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -12428,7 +13148,7 @@ func (m *OperateRelayResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Op |= (RelayOp(b) & 0x7F) << shift
+				m.Op |= RelayOp(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12447,7 +13167,7 @@ func (m *OperateRelayResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12467,7 +13187,7 @@ func (m *OperateRelayResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12477,6 +13197,9 @@ func (m *OperateRelayResponse) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -12496,7 +13219,7 @@ func (m *OperateRelayResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12506,6 +13229,9 @@ func (m *OperateRelayResponse) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -12518,6 +13244,9 @@ func (m *OperateRelayResponse) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -12547,7 +13276,7 @@ func (m *PurgeRelayRequest) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -12575,7 +13304,7 @@ func (m *PurgeRelayRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12595,7 +13324,7 @@ func (m *PurgeRelayRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Time |= (int64(b) & 0x7F) << shift
+				m.Time |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12614,7 +13343,7 @@ func (m *PurgeRelayRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12624,6 +13353,9 @@ func (m *PurgeRelayRequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -12643,7 +13375,7 @@ func (m *PurgeRelayRequest) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12653,6 +13385,9 @@ func (m *PurgeRelayRequest) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -12665,6 +13400,9 @@ func (m *PurgeRelayRequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -12694,7 +13432,7 @@ func (m *QueryWorkerConfigRequest) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -12715,6 +13453,9 @@ func (m *QueryWorkerConfigRequest) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -12744,7 +13485,7 @@ func (m *QueryWorkerConfigResponse) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -12772,7 +13513,7 @@ func (m *QueryWorkerConfigResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12792,7 +13533,7 @@ func (m *QueryWorkerConfigResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12802,6 +13543,9 @@ func (m *QueryWorkerConfigResponse) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -12821,7 +13565,7 @@ func (m *QueryWorkerConfigResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12831,6 +13575,9 @@ func (m *QueryWorkerConfigResponse) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -12850,7 +13597,7 @@ func (m *QueryWorkerConfigResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12860,6 +13607,9 @@ func (m *QueryWorkerConfigResponse) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -12879,7 +13629,7 @@ func (m *QueryWorkerConfigResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12889,6 +13639,9 @@ func (m *QueryWorkerConfigResponse) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -12901,6 +13654,9 @@ func (m *QueryWorkerConfigResponse) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -12930,7 +13686,7 @@ func (m *TaskMeta) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -12958,7 +13714,7 @@ func (m *TaskMeta) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Op |= (TaskOp(b) & 0x7F) << shift
+				m.Op |= TaskOp(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12977,7 +13733,7 @@ func (m *TaskMeta) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Stage |= (Stage(b) & 0x7F) << shift
+				m.Stage |= Stage(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -12996,7 +13752,7 @@ func (m *TaskMeta) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -13006,6 +13762,9 @@ func (m *TaskMeta) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -13025,7 +13784,7 @@ func (m *TaskMeta) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				byteLen |= (int(b) & 0x7F) << shift
+				byteLen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -13034,6 +13793,9 @@ func (m *TaskMeta) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + byteLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -13049,6 +13811,9 @@ func (m *TaskMeta) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -13078,7 +13843,7 @@ func (m *TaskLog) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
+			wire |= uint64(b&0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -13106,7 +13871,7 @@ func (m *TaskLog) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Id |= (int64(b) & 0x7F) << shift
+				m.Id |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -13125,7 +13890,7 @@ func (m *TaskLog) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -13134,6 +13899,9 @@ func (m *TaskLog) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -13158,7 +13926,7 @@ func (m *TaskLog) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Ts |= (int64(b) & 0x7F) << shift
+				m.Ts |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -13177,7 +13945,7 @@ func (m *TaskLog) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= (int(b) & 0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -13197,7 +13965,7 @@ func (m *TaskLog) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -13207,6 +13975,9 @@ func (m *TaskLog) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthDmworker
 			}
 			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthDmworker
+			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -13219,6 +13990,9 @@ func (m *TaskLog) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
+				return ErrInvalidLengthDmworker
+			}
+			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if (iNdEx + skippy) > l {
@@ -13236,6 +14010,7 @@ func (m *TaskLog) Unmarshal(dAtA []byte) error {
 func skipDmworker(dAtA []byte) (n int, err error) {
 	l := len(dAtA)
 	iNdEx := 0
+	depth := 0
 	for iNdEx < l {
 		var wire uint64
 		for shift := uint(0); ; shift += 7 {
@@ -13267,10 +14042,8 @@ func skipDmworker(dAtA []byte) (n int, err error) {
 					break
 				}
 			}
-			return iNdEx, nil
 		case 1:
 			iNdEx += 8
-			return iNdEx, nil
 		case 2:
 			var length int
 			for shift := uint(0); ; shift += 7 {
@@ -13287,208 +14060,34 @@ func skipDmworker(dAtA []byte) (n int, err error) {
 					break
 				}
 			}
-			iNdEx += length
 			if length < 0 {
 				return 0, ErrInvalidLengthDmworker
 			}
-			return iNdEx, nil
+			iNdEx += length
 		case 3:
-			for {
-				var innerWire uint64
-				var start int = iNdEx
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return 0, ErrIntOverflowDmworker
-					}
-					if iNdEx >= l {
-						return 0, io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					innerWire |= (uint64(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				innerWireType := int(innerWire & 0x7)
-				if innerWireType == 4 {
-					break
-				}
-				next, err := skipDmworker(dAtA[start:])
-				if err != nil {
-					return 0, err
-				}
-				iNdEx = start + next
-			}
-			return iNdEx, nil
+			depth++
 		case 4:
-			return iNdEx, nil
+			if depth == 0 {
+				return 0, ErrUnexpectedEndOfGroupDmworker
+			}
+			depth--
 		case 5:
 			iNdEx += 4
-			return iNdEx, nil
 		default:
 			return 0, fmt.Errorf("proto: illegal wireType %d", wireType)
 		}
+		if iNdEx < 0 {
+			return 0, ErrInvalidLengthDmworker
+		}
+		if depth == 0 {
+			return iNdEx, nil
+		}
 	}
-	panic("unreachable")
+	return 0, io.ErrUnexpectedEOF
 }
 
 var (
-	ErrInvalidLengthDmworker = fmt.Errorf("proto: negative length found during unmarshaling")
-	ErrIntOverflowDmworker   = fmt.Errorf("proto: integer overflow")
+	ErrInvalidLengthDmworker        = fmt.Errorf("proto: negative length found during unmarshaling")
+	ErrIntOverflowDmworker          = fmt.Errorf("proto: integer overflow")
+	ErrUnexpectedEndOfGroupDmworker = fmt.Errorf("proto: unexpected end of group")
 )
-
-func init() { proto.RegisterFile("dmworker.proto", fileDescriptor_dmworker_197b0c00ed0d06a5) }
-
-var fileDescriptor_dmworker_197b0c00ed0d06a5 = []byte{
-	// 2372 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x19, 0x4d, 0x6f, 0x23, 0x59,
-	0xd1, 0xdd, 0x6e, 0x3b, 0x76, 0xd9, 0xc9, 0x74, 0x5e, 0x66, 0x67, 0x3d, 0x66, 0x27, 0x84, 0x9e,
-	0xd5, 0x6e, 0x36, 0x42, 0xd1, 0x6e, 0x00, 0x21, 0x01, 0x0b, 0xec, 0xc4, 0x99, 0x4c, 0xc0, 0x99,
-	0x49, 0xda, 0x13, 0xe0, 0xb6, 0xea, 0xb4, 0x5f, 0x9c, 0x56, 0xda, 0xdd, 0x3d, 0xfd, 0x91, 0x4c,
-	0x4e, 0x80, 0x38, 0x22, 0x21, 0x24, 0x4e, 0x88, 0x33, 0x37, 0x7e, 0x02, 0x77, 0x38, 0xee, 0x91,
-	0x1b, 0x68, 0xe6, 0x17, 0x70, 0xe7, 0x80, 0xaa, 0xde, 0xeb, 0xee, 0xd7, 0x89, 0xed, 0x19, 0xa1,
-	0xe1, 0x62, 0x75, 0x7d, 0xbc, 0x7a, 0x55, 0xf5, 0xea, 0x55, 0xd5, 0x2b, 0xc3, 0xca, 0x78, 0x7a,
-	0x15, 0xc6, 0x17, 0x3c, 0xde, 0x8e, 0xe2, 0x30, 0x0d, 0x99, 0x1e, 0x9d, 0x5a, 0x9f, 0xc0, 0xda,
-	0x28, 0x75, 0xe2, 0x74, 0x94, 0x9d, 0x3e, 0x77, 0x92, 0x0b, 0x9b, 0xbf, 0xc8, 0x78, 0x92, 0x32,
-	0x06, 0x46, 0xea, 0x24, 0x17, 0x3d, 0x6d, 0x43, 0xdb, 0x6c, 0xdb, 0xf4, 0x6d, 0x6d, 0x03, 0x3b,
-	0x89, 0xc6, 0x4e, 0xca, 0x6d, 0xee, 0x3b, 0xd7, 0x39, 0x67, 0x0f, 0x96, 0xdc, 0x30, 0x48, 0x79,
-	0x90, 0x4a, 0xe6, 0x1c, 0xb4, 0x46, 0xb0, 0x76, 0xe8, 0x4d, 0xe2, 0x9b, 0x0b, 0xd6, 0x01, 0x1e,
-	0x79, 0x81, 0x1f, 0x4e, 0x9e, 0x3a, 0x53, 0x2e, 0xd7, 0x28, 0x18, 0xf6, 0x01, 0xb4, 0x05, 0x74,
-	0x14, 0x26, 0x3d, 0x7d, 0x43, 0xdb, 0x5c, 0xb6, 0x4b, 0x84, 0xb5, 0x0f, 0xef, 0x3d, 0x8b, 0x38,
-	0x0a, 0xbd, 0xa1, 0x71, 0x1f, 0xf4, 0x30, 0x22, 0x71, 0x2b, 0x3b, 0xb0, 0x1d, 0x9d, 0x6e, 0x23,
-	0xf1, 0x59, 0x64, 0xeb, 0x61, 0x84, 0xd6, 0x04, 0xb8, 0x99, 0x2e, 0xac, 0xc1, 0x6f, 0xeb, 0x25,
-	0xdc, 0xbb, 0x29, 0x28, 0x89, 0xc2, 0x20, 0xe1, 0xec, 0x9b, 0x60, 0x4c, 0x79, 0xea, 0x90, 0xac,
-	0xce, 0x4e, 0x0f, 0x65, 0xed, 0x86, 0xd3, 0x69, 0x18, 0xfc, 0x9c, 0x9c, 0x97, 0xf3, 0xd9, 0xc4,
-	0x25, 0xf7, 0xd5, 0x67, 0xee, 0x7b, 0x17, 0x1a, 0x7e, 0x38, 0x39, 0x18, 0xf4, 0xea, 0x1b, 0xda,
-	0x66, 0xdd, 0x16, 0x80, 0xb5, 0x07, 0xf7, 0x8f, 0x33, 0x1e, 0x5f, 0x0b, 0x46, 0x54, 0xc1, 0x0b,
-	0x03, 0xc5, 0xf1, 0x41, 0xe9, 0x17, 0xfa, 0x2e, 0xc5, 0xe8, 0xaa, 0x18, 0x0f, 0xfa, 0xb3, 0xc4,
-	0xfc, 0x4f, 0x46, 0x3c, 0x80, 0xba, 0x1f, 0x4e, 0x48, 0x7e, 0x67, 0xa7, 0x93, 0x5b, 0x31, 0x0c,
-	0x27, 0x36, 0xe2, 0xad, 0x2d, 0xb8, 0x2b, 0x4e, 0xfe, 0x2d, 0xa2, 0x64, 0x13, 0x18, 0xa9, 0x35,
-	0x4a, 0x9d, 0x34, 0x4b, 0x16, 0x98, 0x65, 0x7d, 0x0c, 0xab, 0xc4, 0xb9, 0x17, 0xc7, 0x61, 0xbc,
-	0x88, 0xf1, 0x4f, 0x1a, 0xf4, 0x9e, 0x38, 0xc1, 0xd8, 0xcf, 0xf7, 0x1f, 0x1d, 0x0f, 0x17, 0x49,
-	0x66, 0xf7, 0x95, 0x33, 0x69, 0xa3, 0x35, 0xa3, 0xe3, 0x61, 0x19, 0x0a, 0x4e, 0x3c, 0x49, 0x7a,
-	0xf5, 0x8d, 0x3a, 0xb2, 0xe3, 0x37, 0x46, 0xdc, 0x69, 0x11, 0x71, 0x06, 0xc9, 0x29, 0x11, 0x18,
-	0xaf, 0xc9, 0x0b, 0xff, 0xc8, 0x49, 0x53, 0x1e, 0x07, 0xbd, 0x86, 0x88, 0xd7, 0x12, 0x63, 0xfd,
-	0x02, 0xee, 0xce, 0xf2, 0x2c, 0xbb, 0x07, 0xcd, 0x98, 0x27, 0x99, 0x2f, 0xee, 0x45, 0xcb, 0x96,
-	0x10, 0xe2, 0xc5, 0x2d, 0x94, 0xe1, 0x28, 0x21, 0x66, 0x42, 0x7d, 0x9a, 0x4c, 0x28, 0x54, 0xda,
-	0x36, 0x7e, 0x5a, 0xff, 0xd4, 0x60, 0xad, 0xe2, 0xcb, 0x77, 0x25, 0x99, 0x7d, 0x17, 0x96, 0x13,
-	0xe9, 0x4a, 0x12, 0xdd, 0x33, 0x36, 0xea, 0x9b, 0x9d, 0x9d, 0x55, 0xf2, 0x95, 0x4a, 0xb0, 0xab,
-	0x7c, 0xec, 0x33, 0xe8, 0xc4, 0x78, 0x99, 0xe5, 0xb2, 0x06, 0x05, 0xcc, 0x1d, 0x5c, 0x66, 0x97,
-	0x68, 0x5b, 0xe5, 0x61, 0x7d, 0x68, 0x25, 0x61, 0x16, 0xbb, 0xfc, 0x60, 0xd0, 0x6b, 0x92, 0x0a,
-	0x05, 0x6c, 0xfd, 0x55, 0x93, 0xd1, 0x22, 0x63, 0xe0, 0x9d, 0x19, 0xf8, 0x6d, 0xe8, 0x4a, 0xc5,
-	0x49, 0xb2, 0xb4, 0xcf, 0x54, 0xec, 0x13, 0x3b, 0x56, 0xb8, 0xd8, 0x36, 0x00, 0x99, 0x21, 0xd6,
-	0x08, 0xe3, 0x56, 0x0a, 0xe3, 0xc4, 0x0a, 0x85, 0xc3, 0xfa, 0xb3, 0x06, 0x9d, 0xdd, 0x73, 0xee,
-	0xe6, 0xde, 0xb9, 0x07, 0xcd, 0xc8, 0x49, 0x12, 0x3e, 0xce, 0xf5, 0x16, 0x10, 0x5e, 0xe0, 0x34,
-	0x4c, 0x1d, 0x9f, 0xd4, 0x6e, 0xd8, 0x02, 0xa0, 0xc0, 0xca, 0x5c, 0x97, 0x27, 0xc9, 0x59, 0xe6,
-	0x93, 0xf2, 0x0d, 0x5b, 0xc1, 0xa0, 0xb4, 0x33, 0xc7, 0xf3, 0xf9, 0x98, 0x62, 0xb2, 0x61, 0x4b,
-	0x08, 0x33, 0xee, 0x95, 0x13, 0x07, 0x5e, 0x30, 0x21, 0x15, 0x1b, 0x76, 0x0e, 0xe2, 0x8a, 0x31,
-	0x4f, 0x1d, 0xcf, 0x27, 0x47, 0x77, 0x6d, 0x09, 0x59, 0x5d, 0x80, 0x41, 0x36, 0x8d, 0x84, 0x96,
-	0xd6, 0xef, 0x34, 0x80, 0x61, 0xe8, 0x8c, 0xa5, 0xd2, 0x1f, 0xc2, 0xf2, 0x99, 0x17, 0x78, 0xc9,
-	0x39, 0x1f, 0x3f, 0xba, 0x4e, 0x79, 0x42, 0xba, 0xd7, 0xed, 0x2a, 0x12, 0x95, 0x25, 0xad, 0x05,
-	0x8b, 0x48, 0x44, 0x0a, 0x06, 0x4f, 0x39, 0x8a, 0xc3, 0x49, 0xcc, 0x93, 0x44, 0x9e, 0x43, 0x01,
-	0xe3, 0x5a, 0xcc, 0x32, 0x22, 0x89, 0xcb, 0x0b, 0xa6, 0x60, 0xac, 0xdf, 0x6a, 0xb0, 0x3c, 0x3a,
-	0x77, 0xe2, 0xb1, 0x17, 0x4c, 0xf6, 0xe3, 0x30, 0x8b, 0xd0, 0x90, 0xd4, 0x89, 0x27, 0x3c, 0xaf,
-	0x29, 0x12, 0xc2, 0xdb, 0x3b, 0x18, 0x0c, 0x71, 0x7f, 0xba, 0xbd, 0xf8, 0x8d, 0x3b, 0x9f, 0x79,
-	0x71, 0x92, 0xe2, 0xe5, 0x95, 0x3b, 0xe7, 0x30, 0xca, 0x49, 0xae, 0x03, 0x97, 0x5c, 0x88, 0x2b,
-	0x24, 0x84, 0x6b, 0xb2, 0x40, 0x52, 0x1a, 0x44, 0x29, 0x60, 0xeb, 0x37, 0x75, 0x80, 0xd1, 0x75,
-	0xe0, 0x4a, 0xf7, 0x6c, 0x40, 0x87, 0xcc, 0xdc, 0xbb, 0xe4, 0x41, 0x9a, 0x3b, 0x47, 0x45, 0xa1,
-	0x30, 0x02, 0x9f, 0x47, 0xb9, 0x63, 0x0a, 0x18, 0x53, 0x4b, 0xcc, 0x5d, 0x1e, 0xa4, 0x48, 0x14,
-	0x55, 0xa0, 0x44, 0x30, 0x0b, 0xba, 0x53, 0x27, 0x49, 0x79, 0x5c, 0x71, 0x4d, 0x05, 0xc7, 0xb6,
-	0xc0, 0x54, 0xe1, 0xfd, 0xd4, 0x1b, 0xcb, 0x24, 0x74, 0x0b, 0x8f, 0xf2, 0xc8, 0x88, 0x5c, 0x9e,
-	0xb8, 0x6e, 0x15, 0x1c, 0xca, 0x53, 0x61, 0x92, 0xb7, 0x24, 0xe4, 0xdd, 0xc4, 0xa3, 0xbc, 0x53,
-	0x3f, 0x74, 0x2f, 0xbc, 0x60, 0x42, 0x6e, 0x6f, 0x91, 0xab, 0x2a, 0x38, 0xf6, 0x39, 0x98, 0x59,
-	0x10, 0xf3, 0x24, 0xf4, 0x2f, 0xf9, 0x98, 0x4e, 0x2f, 0xe9, 0xb5, 0x95, 0x6c, 0xa2, 0x9e, 0xab,
-	0x7d, 0x8b, 0x55, 0x39, 0x21, 0x10, 0x57, 0x46, 0x9e, 0xc2, 0xdf, 0x74, 0xe8, 0x28, 0x29, 0xe5,
-	0x96, 0xab, 0xb4, 0xb7, 0x74, 0x95, 0x3e, 0xc7, 0x55, 0x1b, 0x79, 0x22, 0xcb, 0x4e, 0x07, 0x5e,
-	0x2c, 0x03, 0x47, 0x45, 0x15, 0x1c, 0x95, 0xb3, 0x51, 0x51, 0x6c, 0x13, 0xee, 0x28, 0xa0, 0x72,
-	0x32, 0x37, 0xd1, 0x6c, 0x1b, 0x18, 0xa1, 0x76, 0x9d, 0xd4, 0x3d, 0x3f, 0x89, 0x0e, 0x49, 0x1b,
-	0x3a, 0x9e, 0x96, 0x3d, 0x83, 0xc2, 0xbe, 0x0e, 0x8d, 0x24, 0x75, 0x26, 0x9c, 0x4e, 0x26, 0xaf,
-	0x61, 0x88, 0xb0, 0x05, 0x9e, 0x7d, 0x52, 0x64, 0xc8, 0x16, 0x65, 0x29, 0xf2, 0xf5, 0x51, 0x1c,
-	0x62, 0xee, 0xb0, 0x89, 0x90, 0x27, 0x4d, 0xeb, 0x3f, 0x3a, 0x2c, 0x57, 0x72, 0xfa, 0xcc, 0x92,
-	0x59, 0xec, 0xa8, 0xcf, 0xd9, 0x71, 0x03, 0x8c, 0x2c, 0xf0, 0x52, 0xf2, 0xd4, 0xca, 0x4e, 0x17,
-	0xe9, 0x27, 0x81, 0x97, 0x3e, 0xbf, 0x8e, 0xb8, 0x4d, 0x14, 0x45, 0x27, 0xe3, 0x0d, 0x3a, 0xb1,
-	0x4f, 0x61, 0xad, 0x8c, 0x84, 0xc1, 0x60, 0x38, 0x0c, 0xdd, 0x8b, 0x83, 0x81, 0xf4, 0xde, 0x2c,
-	0x12, 0x63, 0x22, 0xc5, 0x53, 0x44, 0x3f, 0xa9, 0x89, 0x24, 0xff, 0x31, 0x34, 0x5c, 0xcc, 0xbe,
-	0xe4, 0x25, 0x59, 0x86, 0x94, 0x74, 0xfc, 0xa4, 0x66, 0x0b, 0x3a, 0xfb, 0x10, 0x8c, 0x71, 0x36,
-	0x8d, 0xa4, 0xaf, 0x28, 0xa3, 0x97, 0xf9, 0xf0, 0x49, 0xcd, 0x26, 0x2a, 0x72, 0xf9, 0xa1, 0x33,
-	0xee, 0xb5, 0x4b, 0xae, 0x32, 0x4d, 0x22, 0x17, 0x52, 0x91, 0x0b, 0x43, 0x94, 0xc2, 0x55, 0x72,
-	0x95, 0xd9, 0x02, 0xb9, 0x90, 0xfa, 0xa8, 0x05, 0xcd, 0x44, 0x64, 0xdb, 0x1f, 0xc2, 0x6a, 0xc5,
-	0xfb, 0x43, 0x2f, 0x21, 0x57, 0x09, 0x72, 0x4f, 0x9b, 0x57, 0x78, 0xf3, 0xf5, 0xeb, 0x00, 0x64,
-	0x93, 0xa8, 0x50, 0xb2, 0xd2, 0x69, 0x65, 0x93, 0xf0, 0x00, 0xda, 0x68, 0xcb, 0x02, 0x32, 0x1a,
-	0x31, 0x8f, 0x1c, 0x41, 0x97, 0xb4, 0x3f, 0x1e, 0xce, 0xe1, 0x60, 0x3b, 0x70, 0x57, 0xd4, 0x9d,
-	0xa2, 0x07, 0xf7, 0xb0, 0xd1, 0x94, 0x17, 0x6b, 0x26, 0x0d, 0x33, 0x22, 0x47, 0x71, 0xa3, 0xe3,
-	0x61, 0x9e, 0x92, 0x73, 0xd8, 0xfa, 0x0e, 0xb4, 0x71, 0x47, 0xb1, 0xdd, 0x26, 0x34, 0x89, 0x90,
-	0xfb, 0xc1, 0x2c, 0xdc, 0x29, 0x15, 0xb2, 0x25, 0x1d, 0xdd, 0x50, 0x16, 0xde, 0x19, 0x86, 0xfc,
-	0x51, 0x87, 0xae, 0x5a, 0xd9, 0xff, 0x5f, 0x41, 0x2e, 0xe3, 0xd0, 0x50, 0xe3, 0xf0, 0xa3, 0x3c,
-	0x0e, 0x95, 0x8e, 0xa1, 0x3c, 0xb3, 0x32, 0x0c, 0x1f, 0xca, 0x30, 0x6c, 0x12, 0xdb, 0x72, 0x1e,
-	0x86, 0x39, 0x97, 0x88, 0xc2, 0x87, 0x32, 0x0a, 0x97, 0x4a, 0xa6, 0xe2, 0x00, 0x8b, 0x20, 0x7c,
-	0x28, 0x83, 0xb0, 0x55, 0x32, 0x15, 0x4e, 0x2d, 0x62, 0x70, 0x09, 0x1a, 0xe4, 0x3c, 0xeb, 0x7b,
-	0x60, 0xaa, 0xae, 0xa1, 0x08, 0xfc, 0x48, 0x12, 0x2b, 0x8e, 0x57, 0x3b, 0x23, 0xb9, 0xf6, 0x05,
-	0x2c, 0x57, 0xae, 0x30, 0x16, 0x73, 0x2f, 0xd9, 0x75, 0x02, 0x97, 0xfb, 0x45, 0x9f, 0xa3, 0x60,
-	0x94, 0x23, 0xd5, 0x4b, 0xc9, 0x52, 0x44, 0xe5, 0x48, 0x95, 0x6e, 0xa5, 0x5e, 0xe9, 0x56, 0xfe,
-	0xa2, 0x41, 0xf3, 0xb9, 0x38, 0xc4, 0x1e, 0x2c, 0xed, 0xc5, 0xf1, 0x6e, 0x38, 0x16, 0xe7, 0xd8,
-	0xb0, 0x73, 0x10, 0x43, 0x0c, 0x3f, 0x7d, 0x27, 0x49, 0x64, 0x57, 0x55, 0xc0, 0x92, 0x36, 0x72,
-	0xc3, 0x88, 0xcb, 0xb6, 0xaa, 0x80, 0x25, 0x6d, 0xc8, 0x2f, 0xb9, 0x2f, 0xdb, 0xaa, 0x02, 0xc6,
-	0xdd, 0x0e, 0x79, 0x92, 0x60, 0x80, 0x88, 0x4c, 0x94, 0x83, 0xb8, 0xca, 0x76, 0xae, 0x76, 0x9d,
-	0x2c, 0xe1, 0x79, 0x0f, 0x9b, 0xc3, 0x16, 0x87, 0xae, 0x6a, 0x1e, 0xfb, 0x06, 0x18, 0x18, 0x2f,
-	0xf2, 0x29, 0x4a, 0x67, 0x43, 0x04, 0x11, 0x44, 0xf8, 0x9b, 0x87, 0xaf, 0x5e, 0xde, 0xb2, 0x8d,
-	0xfc, 0x38, 0xea, 0x74, 0xa2, 0xe2, 0x21, 0x59, 0x39, 0x88, 0x2f, 0x61, 0x69, 0x30, 0x18, 0x1e,
-	0x04, 0x67, 0xe1, 0xac, 0x67, 0x17, 0xd5, 0x51, 0xf7, 0x9c, 0x4f, 0x9d, 0xbc, 0x35, 0x16, 0x10,
-	0xb5, 0x9e, 0xce, 0xa9, 0xcf, 0xe5, 0x3d, 0x14, 0x40, 0xd1, 0x47, 0x19, 0x65, 0x1f, 0x65, 0x7d,
-	0x06, 0x9d, 0x3c, 0xdd, 0xce, 0xdb, 0x64, 0x05, 0x74, 0xf9, 0x0a, 0x6d, 0xdb, 0xfa, 0xc1, 0xc0,
-	0xfa, 0x95, 0x06, 0x2b, 0x7b, 0x2f, 0xb9, 0x3b, 0x18, 0x0c, 0x17, 0x3c, 0x09, 0x51, 0x37, 0x5f,
-	0x24, 0x78, 0xa9, 0x9b, 0x9f, 0xe7, 0x74, 0x83, 0xbf, 0xe4, 0x2e, 0xa9, 0xd6, 0xb2, 0xe9, 0x9b,
-	0x9a, 0xa9, 0xd8, 0x71, 0xf9, 0xfe, 0xc1, 0x40, 0x96, 0xdc, 0x02, 0x2e, 0xb4, 0x6e, 0x28, 0x5a,
-	0xff, 0x5a, 0x83, 0xb5, 0x47, 0x31, 0x77, 0x2e, 0xa4, 0xee, 0x8b, 0xf4, 0xb0, 0xa0, 0x1b, 0xf3,
-	0x69, 0x78, 0xc9, 0x87, 0xaa, 0x36, 0x15, 0x1c, 0xc6, 0x00, 0x17, 0x16, 0x49, 0xb5, 0x72, 0x10,
-	0x29, 0xc9, 0x85, 0x17, 0x21, 0xc5, 0x10, 0x14, 0x09, 0x5a, 0x7d, 0xe8, 0x8d, 0xae, 0xbc, 0xd4,
-	0x3d, 0xa7, 0x0c, 0x25, 0x4a, 0xb8, 0xd4, 0xc3, 0xda, 0x81, 0x35, 0x39, 0x66, 0xa8, 0x0c, 0x41,
-	0xbe, 0xa6, 0x4c, 0x2b, 0x3a, 0xc5, 0x0b, 0x43, 0xbc, 0x51, 0xad, 0x0c, 0xee, 0x56, 0xd7, 0xc8,
-	0x67, 0xd1, 0xa2, 0x45, 0xca, 0x9b, 0x49, 0x9f, 0xf3, 0x66, 0xaa, 0xcf, 0x7a, 0x33, 0x19, 0x65,
-	0x0a, 0xbd, 0x82, 0xd5, 0xa3, 0x2c, 0x9e, 0x54, 0x15, 0xed, 0x43, 0xcb, 0x0b, 0x1c, 0x37, 0xf5,
-	0x2e, 0xb9, 0xbc, 0xec, 0x05, 0x4c, 0x3e, 0xf6, 0xe4, 0x58, 0xa5, 0x6e, 0xd3, 0xb7, 0xe8, 0xc6,
-	0x7d, 0x4e, 0xa9, 0xb7, 0xe8, 0xc6, 0x05, 0x4c, 0x31, 0x2a, 0xda, 0x2d, 0x43, 0xc6, 0x28, 0x41,
-	0xe8, 0x3f, 0x7a, 0x04, 0x8a, 0x07, 0xf4, 0x6e, 0x18, 0x9c, 0x79, 0x93, 0xdc, 0x7f, 0x7f, 0xd0,
-	0xe4, 0xb4, 0xa4, 0x4a, 0x7c, 0x67, 0x0f, 0x45, 0xf5, 0x75, 0x6a, 0x54, 0x5f, 0xa7, 0xea, 0x68,
-	0xab, 0x51, 0x1d, 0x6d, 0x85, 0xd0, 0xc2, 0x4c, 0x79, 0x58, 0x0e, 0x80, 0x66, 0x0f, 0x9e, 0xde,
-	0x58, 0x70, 0xf2, 0x2a, 0x55, 0x57, 0xaa, 0x54, 0x1e, 0xba, 0x06, 0x65, 0x45, 0x31, 0x55, 0xf9,
-	0x25, 0x2c, 0xc9, 0x89, 0x0c, 0x5e, 0x42, 0x6f, 0x2c, 0xdf, 0x21, 0x3a, 0x75, 0xb2, 0x82, 0x5d,
-	0x0c, 0x6f, 0xba, 0xb9, 0x06, 0xa8, 0x5b, 0x79, 0x6d, 0xd3, 0xfc, 0xf5, 0xa1, 0xa7, 0x09, 0x45,
-	0xb2, 0x78, 0x66, 0x16, 0x91, 0x2c, 0x40, 0xa4, 0x4c, 0xab, 0x19, 0x50, 0x82, 0x5b, 0x5f, 0x42,
-	0x53, 0xd8, 0xc5, 0x96, 0xa1, 0x7d, 0x10, 0x5c, 0x3a, 0xbe, 0x37, 0x7e, 0x16, 0x99, 0x35, 0xd6,
-	0x02, 0x63, 0x94, 0x86, 0x91, 0xa9, 0xb1, 0x36, 0x34, 0x8e, 0x30, 0x23, 0x9a, 0x3a, 0x03, 0x68,
-	0x62, 0xb9, 0x98, 0x72, 0xb3, 0x8e, 0x68, 0x9a, 0x30, 0x9a, 0x06, 0xa2, 0xc5, 0x1c, 0xc9, 0x6c,
-	0xb0, 0x15, 0x80, 0x2f, 0xb2, 0x34, 0x94, 0x6c, 0xcd, 0xad, 0x2d, 0x68, 0xd0, 0x94, 0x86, 0x04,
-	0xfe, 0xf4, 0xe0, 0xc8, 0xac, 0xb1, 0x0e, 0x2c, 0xd9, 0x7b, 0x47, 0xc3, 0x2f, 0x76, 0xf7, 0x4c,
-	0x0d, 0xd7, 0x1e, 0x3c, 0xfd, 0xc9, 0xde, 0xee, 0x73, 0x53, 0xdf, 0xfa, 0x19, 0x89, 0x9c, 0x60,
-	0x22, 0xed, 0x4a, 0x5d, 0x08, 0x36, 0x6b, 0x6c, 0x09, 0xea, 0x4f, 0xf9, 0x95, 0xa9, 0xd1, 0xe2,
-	0x2c, 0xc0, 0x67, 0xb1, 0xd0, 0x87, 0x54, 0x1b, 0x9b, 0x75, 0x24, 0xa0, 0xc2, 0x11, 0x1f, 0x9b,
-	0x06, 0xeb, 0x42, 0xeb, 0xb1, 0x7c, 0xe7, 0x9a, 0x8d, 0xad, 0x67, 0xd0, 0xca, 0xcb, 0x3d, 0xbb,
-	0x03, 0x1d, 0x29, 0x1a, 0x51, 0x66, 0x0d, 0xed, 0xa0, 0xa2, 0x6e, 0x6a, 0xa8, 0x22, 0x16, 0x6e,
-	0x53, 0xc7, 0x2f, 0xac, 0xce, 0x66, 0x9d, 0xd4, 0xbe, 0x0e, 0x5c, 0xd3, 0x40, 0x46, 0xba, 0x42,
-	0xe6, 0x78, 0xeb, 0xfb, 0xd0, 0x2e, 0x72, 0x3f, 0x2a, 0x7b, 0x12, 0x5c, 0x04, 0xe1, 0x55, 0x40,
-	0x38, 0x61, 0x20, 0xa6, 0xcf, 0xd1, 0xf1, 0xd0, 0xd4, 0x70, 0x43, 0x92, 0xff, 0x98, 0x3a, 0x2a,
-	0x53, 0xdf, 0x3a, 0x84, 0x25, 0x79, 0xc1, 0x19, 0x83, 0x15, 0xa9, 0x8c, 0xc4, 0x98, 0x35, 0x3c,
-	0x07, 0xb4, 0x43, 0x6c, 0xa5, 0xa1, 0x3f, 0xc9, 0x44, 0x01, 0xeb, 0x28, 0x4e, 0xf8, 0x56, 0x20,
-	0xea, 0x3b, 0xff, 0x6e, 0x41, 0x53, 0x5c, 0x22, 0xb6, 0x07, 0x5d, 0x75, 0xe8, 0xcb, 0xde, 0x97,
-	0x71, 0x79, 0x73, 0x0c, 0xdc, 0xef, 0x23, 0x61, 0xf6, 0x98, 0xd4, 0xaa, 0xb1, 0x03, 0x58, 0xa9,
-	0xd2, 0xd8, 0xfd, 0x59, 0xfc, 0x6f, 0x23, 0x6a, 0x1f, 0x96, 0x2b, 0x13, 0x46, 0x46, 0x13, 0xcb,
-	0x59, 0x43, 0xc7, 0x37, 0x08, 0xfa, 0x31, 0x74, 0x94, 0x91, 0x19, 0xbb, 0x87, 0xcc, 0xb7, 0xe7,
-	0x91, 0xfd, 0xf7, 0x6f, 0xe1, 0x0b, 0x09, 0x9f, 0x03, 0x94, 0x23, 0x29, 0xf6, 0x5e, 0xc1, 0xa8,
-	0x8e, 0x29, 0xfb, 0xf7, 0x6e, 0xa2, 0x8b, 0xe5, 0x27, 0x72, 0xa2, 0x55, 0x19, 0xcb, 0xb2, 0x07,
-	0x05, 0xff, 0xac, 0xa9, 0x6f, 0x7f, 0x7d, 0x1e, 0xb9, 0x10, 0xfb, 0x18, 0x40, 0x8e, 0x40, 0x8f,
-	0x87, 0x09, 0xfb, 0x00, 0xf9, 0xe7, 0x8d, 0x44, 0xfb, 0x73, 0xa7, 0xbd, 0x56, 0x8d, 0xed, 0x40,
-	0xf7, 0x31, 0x4f, 0xdd, 0xf3, 0xbc, 0x97, 0xa0, 0x47, 0x93, 0x52, 0xf7, 0xfb, 0x1d, 0x89, 0x40,
-	0xc0, 0xaa, 0x6d, 0x6a, 0x9f, 0x6a, 0xec, 0x07, 0x00, 0x18, 0xa6, 0x59, 0xca, 0xb1, 0x0e, 0x32,
-	0xea, 0x68, 0x2a, 0x55, 0x7f, 0xe1, 0x8e, 0xbb, 0xd0, 0x55, 0x0b, 0xb4, 0x08, 0xb6, 0x19, 0x25,
-	0x7b, 0xa1, 0x90, 0x43, 0x58, 0xbd, 0x55, 0x62, 0x85, 0x17, 0xe6, 0x55, 0xde, 0x37, 0xe9, 0xa4,
-	0x56, 0x58, 0xa1, 0xd3, 0x8c, 0x3a, 0x2d, 0x84, 0xcc, 0x2a, 0xc6, 0x56, 0x8d, 0xfd, 0x08, 0xa0,
-	0xac, 0x97, 0x22, 0x50, 0x6e, 0xd5, 0xcf, 0x85, 0x5a, 0xec, 0xc3, 0xaa, 0xf2, 0x87, 0x8a, 0x28,
-	0x6d, 0x22, 0x62, 0x6f, 0xff, 0xcf, 0xb2, 0x50, 0x90, 0x2d, 0x27, 0xe9, 0x6a, 0x8d, 0x14, 0xde,
-	0x99, 0x57, 0x57, 0xfb, 0x0f, 0xe6, 0x50, 0x55, 0x17, 0xa9, 0xff, 0xde, 0x08, 0x17, 0xcd, 0xf8,
-	0x3f, 0x67, 0x91, 0x62, 0x8f, 0x7a, 0x7f, 0x7f, 0xb5, 0xae, 0x7d, 0xf5, 0x6a, 0x5d, 0xfb, 0xd7,
-	0xab, 0x75, 0xed, 0xf7, 0xaf, 0xd7, 0x6b, 0x5f, 0xbd, 0x5e, 0xaf, 0xfd, 0xe3, 0xf5, 0x7a, 0xed,
-	0xb4, 0x49, 0x7f, 0x41, 0x7d, 0xeb, 0xbf, 0x01, 0x00, 0x00, 0xff, 0xff, 0xde, 0x4f, 0x95, 0x7e,
-	0x94, 0x1a, 0x00, 0x00,
-}

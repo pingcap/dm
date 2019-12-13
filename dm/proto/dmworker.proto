@@ -330,6 +330,7 @@ enum UnitType {
     Dump = 2;
     Load = 3;
     Sync = 4;
+    Lightning = 5;
     Relay = 100; // relay is a special unit
 }
 
