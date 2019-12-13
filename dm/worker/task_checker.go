@@ -355,14 +355,11 @@ func (tsc *realTaskStatusChecker) check() {
 			tsc.bc.latestPausedTime[taskName] = time.Now()
 		case ResumeDispatch:
 			tsc.bc.latestPausedTime[taskName] = time.Now()
-			opLogID, err := tsc.w.operateSubTask(&pb.TaskMeta{
-				Name: taskName,
-				Op:   pb.TaskOp_AutoResume,
-			})
+			err := tsc.w.OperateSubTask(taskName, pb.TaskOp_AutoResume)
 			if err != nil {
 				tsc.l.Error("dispatch auto resume task failed", zap.String("task", taskName), zap.Error(err))
 			} else {
-				tsc.l.Info("dispatch auto resume task", zap.String("task", taskName), zap.Int64("opLogID", opLogID))
+				tsc.l.Info("dispatch auto resume task", zap.String("task", taskName))
 				tsc.bc.latestResumeTime[taskName] = time.Now()
 				bf.BoundaryForward()
 			}

@@ -16,15 +16,12 @@ package worker
 import (
 	"context"
 	"fmt"
-	"path"
 	"reflect"
 	"sync"
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go/sync2"
-	"github.com/syndtr/goleveldb/leveldb"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
@@ -63,8 +60,6 @@ type Worker struct {
 	relayHolder RelayHolder
 	relayPurger purger.Purger
 
-	meta   *Metadata
-	db     *leveldb.DB
 	tracer *tracing.Tracer
 
 	taskStatusChecker TaskStatusChecker
@@ -86,12 +81,6 @@ func NewWorker(cfg *Config) (w *Worker, err error) {
 			// release resources, NOTE: we need to refactor New/Init/Start/Close for components later.
 			w2.cancel()
 			w2.subTaskHolder.closeAllSubTasks()
-			if w2.meta != nil {
-				w2.meta.Close()
-			}
-			if w2.db != nil {
-				w2.db.Close()
-			}
 		}
 	}(w)
 
@@ -114,33 +103,7 @@ func NewWorker(cfg *Config) (w *Worker, err error) {
 		w.taskStatusChecker = tsc
 	}
 
-	// try upgrade from an older version
-	dbDir := path.Join(w.cfg.MetaDir, "kv")
-	err = tryUpgrade(dbDir)
-	if err != nil {
-		return nil, terror.Annotatef(err, "try to upgrade from any older version to %s", currentWorkerVersion)
-	}
-
-	// open kv db
-	metaDB, err := openDB(dbDir, defaultKVConfig)
-	if err != nil {
-		return nil, err
-	}
-	w.db = metaDB
-
-	// initial metadata
-	meta, err := NewMetadata(dbDir, w.db)
-	if err != nil {
-		return nil, err
-	}
-	w.meta = meta
-
 	InitConditionHub(w)
-
-	err = w.restoreSubTask()
-	if err != nil {
-		return nil, err
-	}
 
 	w.l.Info("initialized")
 
@@ -170,13 +133,8 @@ func (w *Worker) Start() {
 		w.tracer.Start()
 	}
 
-	w.wg.Add(2)
+	w.wg.Add(1)
 	defer w.wg.Done()
-
-	go func() {
-		defer w.wg.Done()
-		w.handleTask()
-	}()
 
 	w.l.Info("start running")
 
@@ -221,14 +179,6 @@ func (w *Worker) Close() {
 		w.taskStatusChecker.Close()
 	}
 
-	// close meta
-	w.meta.Close()
-
-	// close kv db
-	if w.db != nil {
-		w.db.Close()
-	}
-
 	// close tracer
 	if w.tracer.Enable() {
 		w.tracer.Stop()
@@ -238,80 +188,88 @@ func (w *Worker) Close() {
 }
 
 // StartSubTask creates a sub task an run it
-func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) (int64, error) {
+func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 	w.Lock()
 	defer w.Unlock()
+
+	if w.closed.Get() == closedTrue {
+		return terror.ErrWorkerAlreadyClosed.Generate()
+	}
+
+	if w.relayPurger.Purging() {
+		return terror.ErrWorkerRelayIsPurging.Generate(cfg.Name)
+	}
+
+	if w.subTaskHolder.findSubTask(cfg.Name) != nil {
+		return terror.ErrWorkerSubTaskExists.Generate(cfg.Name)
+	}
 
 	// copy some config item from dm-worker's config
 	w.copyConfigFromWorker(cfg)
-	cfgStr, err := cfg.Toml()
+	cfgDecrypted, err := cfg.DecryptPassword()
 	if err != nil {
-		return 0, terror.Annotatef(err, "encode subtask %+v into toml format", cfg)
+		return terror.WithClass(err, terror.ClassDMWorker)
 	}
 
-	opLogID, err := w.operateSubTask(&pb.TaskMeta{
-		Op:   pb.TaskOp_Start,
-		Name: cfg.Name,
-		Task: append([]byte{}, cfgStr...),
-	})
-	if err != nil {
-		return 0, err
-	}
-
-	return opLogID, nil
+	w.l.Info("started sub task", zap.Stringer("config", cfgDecrypted))
+	st := NewSubTask(cfgDecrypted)
+	w.subTaskHolder.recordSubTask(st)
+	st.Run()
+	return nil
 }
 
 // UpdateSubTask update config for a sub task
-func (w *Worker) UpdateSubTask(cfg *config.SubTaskConfig) (int64, error) {
+func (w *Worker) UpdateSubTask(cfg *config.SubTaskConfig) error {
 	w.Lock()
 	defer w.Unlock()
 
-	cfgStr, err := cfg.Toml()
-	if err != nil {
-		return 0, terror.Annotatef(err, "encode subtask %+v into toml format", cfg)
+	if w.closed.Get() == closedTrue {
+		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	opLogID, err := w.operateSubTask(&pb.TaskMeta{
-		Op:   pb.TaskOp_Update,
-		Name: cfg.Name,
-		Task: append([]byte{}, cfgStr...),
-	})
-	if err != nil {
-		return 0, err
+	st := w.subTaskHolder.findSubTask(cfg.Name)
+	if st == nil {
+		return terror.ErrWorkerSubTaskNotFound.Generate(cfg.Name)
 	}
 
-	return opLogID, nil
+	w.l.Info("update sub task", zap.String("task", cfg.Name))
+	return st.Update(cfg)
 }
 
 // OperateSubTask stop/resume/pause  sub task
-func (w *Worker) OperateSubTask(name string, op pb.TaskOp) (int64, error) {
+func (w *Worker) OperateSubTask(name string, op pb.TaskOp) error {
 	w.Lock()
 	defer w.Unlock()
 
-	opLogID, err := w.operateSubTask(&pb.TaskMeta{
-		Name: name,
-		Op:   op,
-	})
-	if err != nil {
-		return 0, err
-	}
-
-	return opLogID, nil
-}
-
-// not thread safe
-func (w *Worker) operateSubTask(task *pb.TaskMeta) (int64, error) {
 	if w.closed.Get() == closedTrue {
-		return 0, terror.ErrWorkerAlreadyClosed.Generate()
+		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	opLogID, err := w.meta.AppendOperation(task)
-	if err != nil {
-		return 0, terror.Annotatef(err, "%s task %s, something wrong with saving operation log", task.Op, task.Name)
+	st := w.subTaskHolder.findSubTask(name)
+	if st == nil {
+		return terror.ErrWorkerSubTaskNotFound.Generate(name)
 	}
 
-	w.l.Info("operate subtask", zap.Stringer("operation", task.Op), zap.String("task", task.Name))
-	return opLogID, nil
+	var err error
+	switch op {
+	case pb.TaskOp_Stop:
+		w.l.Info("stop sub task", zap.String("task", name))
+		st.Close()
+		w.subTaskHolder.removeSubTask(name)
+	case pb.TaskOp_Pause:
+		w.l.Info("pause sub task", zap.String("task", name))
+		err = st.Pause()
+	case pb.TaskOp_Resume:
+		w.l.Info("resume sub task", zap.String("task", name))
+		err = st.Resume()
+	case pb.TaskOp_AutoResume:
+		w.l.Info("auto_resume sub task", zap.String("task", name))
+		err = st.Resume()
+	default:
+		err = terror.ErrWorkerUpdateTaskStage.Generatef("invalid operate %s on subtask %v", op, name)
+	}
+
+	return err
 }
 
 // QueryStatus query worker's sub tasks' status
@@ -724,185 +682,4 @@ func (w *Worker) getAllSubTaskStatus() map[string]*pb.SubTaskStatus {
 		st.RUnlock()
 	}
 	return result
-}
-
-func (w *Worker) restoreSubTask() error {
-	tasks := w.meta.LoadTaskMeta()
-	for _, task := range tasks {
-		taskCfg := new(config.SubTaskConfig)
-		if err := taskCfg.Decode(string(task.Task)); err != nil {
-			return terror.Annotatef(err, "decode subtask config %s error in restoreSubTask", task.Task)
-		}
-
-		cfgDecrypted, err := taskCfg.DecryptPassword()
-		if err != nil {
-			return err
-		}
-
-		w.l.Info("prepare to restore sub task", zap.Stringer("config", cfgDecrypted))
-
-		var st *SubTask
-		if task.GetStage() == pb.Stage_Running || task.GetStage() == pb.Stage_New {
-			st = NewSubTaskWithStage(cfgDecrypted, pb.Stage_New)
-			st.Run()
-		} else {
-			st = NewSubTaskWithStage(cfgDecrypted, task.Stage)
-		}
-
-		w.subTaskHolder.recordSubTask(st)
-	}
-
-	return nil
-}
-
-var maxRetryCount = 10
-
-// handleTask handles task operation according to the metadata in levelDB.
-// when the worker is closing, it should wait for this method to return.
-// so we only need the mutex to protect concurrent access of `subTasks`.
-func (w *Worker) handleTask() {
-	var handleTaskInterval = time.Second
-	failpoint.Inject("handleTaskInterval", func(val failpoint.Value) {
-		if milliseconds, ok := val.(int); ok {
-			handleTaskInterval = time.Duration(milliseconds) * time.Millisecond
-			w.l.Info("set handleTaskInterval", zap.String("failpoint", "handleTaskInterval"), zap.Int("value", milliseconds))
-		}
-	})
-	ticker := time.NewTicker(handleTaskInterval)
-	defer ticker.Stop()
-
-	retryCnt := 0
-
-Loop:
-	for {
-		select {
-		case <-w.ctx.Done():
-			w.l.Info("handle task process exits!")
-			return
-		case <-ticker.C:
-			if w.closed.Get() == closedTrue {
-				return
-			}
-
-			opLog := w.meta.PeekLog()
-			if opLog == nil {
-				continue
-			}
-
-			w.l.Info("start to execute operation", zap.Reflect("oplog", opLog))
-
-			st := w.subTaskHolder.findSubTask(opLog.Task.Name)
-			var err error
-			switch opLog.Task.Op {
-			case pb.TaskOp_Start:
-				if st != nil {
-					err = terror.ErrWorkerSubTaskExists.Generate(opLog.Task.Name)
-					break
-				}
-
-				if w.relayPurger.Purging() {
-					if retryCnt < maxRetryCount {
-						retryCnt++
-						w.l.Warn("relay log purger is purging, cannot start subtask, would try again later", zap.String("task", opLog.Task.Name))
-						continue Loop
-					}
-
-					retryCnt = 0
-					err = terror.ErrWorkerRelayIsPurging.Generate(opLog.Task.Name)
-					break
-				}
-
-				retryCnt = 0
-				taskCfg := new(config.SubTaskConfig)
-				if err1 := taskCfg.Decode(string(opLog.Task.Task)); err1 != nil {
-					err = terror.Annotate(err1, "decode subtask config error in handleTask")
-					break
-				}
-
-				var cfgDecrypted *config.SubTaskConfig
-				cfgDecrypted, err = taskCfg.DecryptPassword()
-				if err != nil {
-					err = terror.WithClass(err, terror.ClassDMWorker)
-					break
-				}
-
-				w.l.Info("started sub task", zap.Stringer("config", cfgDecrypted))
-				st = NewSubTask(cfgDecrypted)
-				w.subTaskHolder.recordSubTask(st)
-				st.Run()
-
-			case pb.TaskOp_Update:
-				if st == nil {
-					err = terror.ErrWorkerSubTaskNotFound.Generate(opLog.Task.Name)
-					break
-				}
-
-				taskCfg := new(config.SubTaskConfig)
-				if err1 := taskCfg.Decode(string(opLog.Task.Task)); err1 != nil {
-					err = terror.Annotate(err1, "decode subtask config error in handleTask")
-					break
-				}
-
-				w.l.Info("updated sub task", zap.String("task", opLog.Task.Name), zap.Stringer("new config", taskCfg))
-				err = st.Update(taskCfg)
-			case pb.TaskOp_Stop:
-				if st == nil {
-					err = terror.ErrWorkerSubTaskNotFound.Generate(opLog.Task.Name)
-					break
-				}
-
-				w.l.Info("stop sub task", zap.String("task", opLog.Task.Name))
-				st.Close()
-				w.subTaskHolder.removeSubTask(opLog.Task.Name)
-			case pb.TaskOp_Pause:
-				if st == nil {
-					err = terror.ErrWorkerSubTaskNotFound.Generate(opLog.Task.Name)
-					break
-				}
-
-				w.l.Info("pause sub task", zap.String("task", opLog.Task.Name))
-				err = st.Pause()
-			case pb.TaskOp_Resume:
-				if st == nil {
-					err = terror.ErrWorkerSubTaskNotFound.Generate(opLog.Task.Name)
-					break
-				}
-
-				w.l.Info("resume sub task", zap.String("task", opLog.Task.Name))
-				err = st.Resume()
-			case pb.TaskOp_AutoResume:
-				if st == nil {
-					err = terror.ErrWorkerSubTaskNotFound.Generate(opLog.Task.Name)
-					break
-				}
-
-				w.l.Info("auto_resume sub task", zap.String("task", opLog.Task.Name))
-				err = st.Resume()
-			}
-
-			w.l.Info("end to execute operation", zap.Int64("oplog ID", opLog.Id), log.ShortError(err))
-
-			if err != nil {
-				opLog.Message = err.Error()
-			} else {
-				opLog.Task.Stage = st.Stage()
-				opLog.Success = true
-			}
-
-			// fill current task config
-			if len(opLog.Task.Task) == 0 {
-				tm := w.meta.GetTask(opLog.Task.Name)
-				if tm == nil {
-					w.l.Warn("task meta not found", zap.String("task", opLog.Task.Name))
-				} else {
-					opLog.Task.Task = append([]byte{}, tm.Task...)
-				}
-			}
-
-			err = w.meta.MarkOperation(opLog)
-			if err != nil {
-				w.l.Error("fail to mark subtask operation", zap.Reflect("oplog", opLog))
-			}
-		}
-	}
 }
