@@ -34,6 +34,11 @@ function run() {
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
 
+    sleep 2
+    echo "start task after restart dm-worker"
+    dmctl_start_task
+    sleep 2 # wait for task running
+
     # kill tidb
     pkill -hup tidb-server 2>/dev/null || true
     wait_process_exit tidb-server
