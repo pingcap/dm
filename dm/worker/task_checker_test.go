@@ -227,11 +227,13 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 	st1 := &SubTask{
 		cfg:   &config.SubTaskConfig{Name: task1},
 		stage: pb.Stage_Running,
+		l:     log.With(zap.String("subtask", task1)),
 	}
 	rtsc.w.subTaskHolder.recordSubTask(st1)
 	st2 := &SubTask{
 		cfg:   &config.SubTaskConfig{Name: task2},
 		stage: pb.Stage_Running,
+		l:     log.With(zap.String("subtask", task2)),
 	}
 	rtsc.w.subTaskHolder.recordSubTask(st2)
 	rtsc.check()
@@ -248,6 +250,7 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 			IsCanceled: false,
 			Errors:     []*pb.ProcessError{unsupporteModifyColumnError},
 		},
+		l: log.With(zap.String("subtask", task1)),
 	}
 	rtsc.w.subTaskHolder.recordSubTask(st1)
 	st2 = &SubTask{
@@ -257,6 +260,7 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 			IsCanceled: false,
 			Errors:     []*pb.ProcessError{unknownProcessError},
 		},
+		l: log.With(zap.String("subtask", task2)),
 	}
 	rtsc.w.subTaskHolder.recordSubTask(st2)
 
