@@ -55,10 +55,9 @@ type Request struct {
 	OperateSubTask *pb.OperateSubTaskRequest
 	UpdateSubTask  *pb.UpdateSubTaskRequest
 
-	QueryStatus        *pb.QueryStatusRequest
-	QueryError         *pb.QueryErrorRequest
-	QueryTaskOperation *pb.QueryTaskOperationRequest
-	QueryWorkerConfig  *pb.QueryWorkerConfigRequest
+	QueryStatus       *pb.QueryStatusRequest
+	QueryError        *pb.QueryErrorRequest
+	QueryWorkerConfig *pb.QueryWorkerConfigRequest
 
 	HandleSubTaskSQLs *pb.HandleSubTaskSQLsRequest
 	ExecDDL           *pb.ExecDDLRequest
@@ -75,14 +74,13 @@ type Request struct {
 type Response struct {
 	Type CmdType
 
-	StartSubTask   *pb.OperateSubTaskResponse
+	StartSubTask   *pb.CommonWorkerResponse
 	OperateSubTask *pb.OperateSubTaskResponse
-	UpdateSubTask  *pb.OperateSubTaskResponse
+	UpdateSubTask  *pb.CommonWorkerResponse
 
-	QueryStatus        *pb.QueryStatusResponse
-	QueryError         *pb.QueryErrorResponse
-	QueryTaskOperation *pb.QueryTaskOperationResponse
-	QueryWorkerConfig  *pb.QueryWorkerConfigResponse
+	QueryStatus       *pb.QueryStatusResponse
+	QueryError        *pb.QueryErrorResponse
+	QueryWorkerConfig *pb.QueryWorkerConfigResponse
 
 	HandleSubTaskSQLs *pb.CommonWorkerResponse
 	ExecDDL           *pb.CommonWorkerResponse
