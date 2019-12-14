@@ -15,12 +15,18 @@ package unit
 
 import (
 	"context"
+	"time"
 
 	"github.com/pingcap/errors"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/terror"
+)
+
+const (
+	// DefaultInitTimeout represents the default timeout value when initializing a process unit.
+	DefaultInitTimeout = time.Minute
 )
 
 // Unit defines interface for sub task process units, like syncer, loader, relay, etc.
@@ -30,7 +36,7 @@ type Unit interface {
 	// other setups can be done in `Process`, but this should be treated carefully, let it's compatible with Pause / Resume
 	// if initialing successfully, the outer caller should call `Close` when the unit (or the task) finished, stopped or canceled (because other units Init fail).
 	// if initialing fail, Init itself should release resources it acquired before (rolling itself back).
-	Init() error
+	Init(ctx context.Context) error
 	// Process processes sub task
 	// When ctx.Done, stops the process and returns
 	// When not in processing, call Process to continue or resume the process
@@ -52,7 +58,7 @@ type Unit interface {
 	Type() pb.UnitType
 	// IsFreshTask return whether is a fresh task (not processed before)
 	// it will be used to decide where the task should become restoring
-	IsFreshTask() (bool, error)
+	IsFreshTask(ctx context.Context) (bool, error)
 }
 
 // NewProcessError creates a new ProcessError

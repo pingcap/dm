@@ -20,6 +20,7 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
 
+	tcontext "github.com/pingcap/dm/pkg/context"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -128,7 +129,7 @@ func (s *Syncer) parseDDLSQL(sql string, p *parser.Parser, schema string) (resul
 // * it splits multiple operations in one DDL statement into multiple DDL statements
 // * try to apply online ddl by given online
 // return @spilted sqls, @online ddl table names, @error
-func (s *Syncer) resolveDDLSQL(p *parser.Parser, stmt ast.StmtNode, schema string) (sqls []string, tables map[string]*filter.Table, err error) {
+func (s *Syncer) resolveDDLSQL(tctx *tcontext.Context, p *parser.Parser, stmt ast.StmtNode, schema string) (sqls []string, tables map[string]*filter.Table, err error) {
 	sqls, err = parserpkg.SplitDDL(stmt, schema)
 	if err != nil {
 		return nil, nil, err
@@ -141,7 +142,7 @@ func (s *Syncer) resolveDDLSQL(p *parser.Parser, stmt ast.StmtNode, schema strin
 	tables = make(map[string]*filter.Table)
 	for _, sql := range sqls {
 		// filter and store ghost table ddl, transform online ddl
-		ss, tableName, err := s.handleOnlineDDL(p, schema, sql)
+		ss, tableName, err := s.handleOnlineDDL(tctx, p, schema, sql)
 		if err != nil {
 			return statements, tables, err
 		}
@@ -190,7 +191,7 @@ func (s *Syncer) handleDDL(p *parser.Parser, schema, sql string) (string, [][]*f
 
 // handle online ddls
 // if sql is online ddls, we would find it's ghost table, and ghost ddls, then replay its table name by real table name
-func (s *Syncer) handleOnlineDDL(p *parser.Parser, schema, sql string) ([]string, *filter.Table, error) {
+func (s *Syncer) handleOnlineDDL(tctx *tcontext.Context, p *parser.Parser, schema, sql string) ([]string, *filter.Table, error) {
 	if s.onlineDDL == nil {
 		return []string{sql}, nil, nil
 	}
@@ -205,7 +206,7 @@ func (s *Syncer) handleOnlineDDL(p *parser.Parser, schema, sql string) ([]string
 		return nil, nil, err
 	}
 
-	sqls, realSchema, realTable, err := s.onlineDDL.Apply(tableNames, sql, stmt)
+	sqls, realSchema, realTable, err := s.onlineDDL.Apply(tctx, tableNames, sql, stmt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -233,7 +234,7 @@ func (s *Syncer) handleOnlineDDL(p *parser.Parser, schema, sql string) ([]string
 	return sqls, tableNames[0], nil
 }
 
-func (s *Syncer) dropSchemaInSharding(sourceSchema string) error {
+func (s *Syncer) dropSchemaInSharding(tctx *tcontext.Context, sourceSchema string) error {
 	sources := make(map[string][][]string)
 	sgs := s.sgk.Groups()
 	for name, sg := range sgs {
@@ -268,7 +269,7 @@ func (s *Syncer) dropSchemaInSharding(sourceSchema string) error {
 		for _, table := range tables {
 			// refine clear them later if failed
 			// now it doesn't have problems
-			if err1 := s.checkpoint.DeleteTablePoint(table[0], table[1]); err1 != nil {
+			if err1 := s.checkpoint.DeleteTablePoint(tctx, table[0], table[1]); err1 != nil {
 				s.tctx.L().Error("fail to delete checkpoint", zap.String("schema", table[0]), zap.String("table", table[1]))
 			}
 		}
@@ -276,7 +277,7 @@ func (s *Syncer) dropSchemaInSharding(sourceSchema string) error {
 	return nil
 }
 
-func (s *Syncer) clearOnlineDDL(targetSchema, targetTable string) error {
+func (s *Syncer) clearOnlineDDL(tctx *tcontext.Context, targetSchema, targetTable string) error {
 	group := s.sgk.Group(targetSchema, targetTable)
 	if group == nil {
 		return nil
@@ -287,7 +288,7 @@ func (s *Syncer) clearOnlineDDL(targetSchema, targetTable string) error {
 
 	for _, table := range tables {
 		s.tctx.L().Info("finish online ddl", zap.String("schema", table[0]), zap.String("table", table[1]))
-		err := s.onlineDDL.Finish(table[0], table[1])
+		err := s.onlineDDL.Finish(tctx, table[0], table[1])
 		if err != nil {
 			return terror.Annotatef(err, "finish online ddl on %s.%s", table[0], table[1])
 		}

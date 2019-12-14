@@ -15,6 +15,7 @@ package context
 
 import (
 	"context"
+	"time"
 
 	"github.com/pingcap/dm/pkg/log"
 )
@@ -49,6 +50,15 @@ func (c *Context) WithContext(ctx context.Context) *Context {
 		Ctx:    ctx,
 		Logger: c.Logger,
 	}
+}
+
+// WithTimeout sets a timeout associated context.
+func (c *Context) WithTimeout(timeout time.Duration) (*Context, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(c.Ctx, timeout)
+	return &Context{
+		Ctx:    ctx,
+		Logger: c.Logger,
+	}, cancel
 }
 
 // Context returns real context

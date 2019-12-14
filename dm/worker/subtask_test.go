@@ -83,7 +83,7 @@ func NewMockUnit(typ pb.UnitType) *MockUnit {
 	}
 }
 
-func (m *MockUnit) Init() error {
+func (m *MockUnit) Init(ctx context.Context) error {
 	return m.errInit
 }
 
@@ -121,7 +121,7 @@ func (m *MockUnit) Error() interface{} { return nil }
 
 func (m *MockUnit) Type() pb.UnitType { return m.typ }
 
-func (m *MockUnit) IsFreshTask() (bool, error) { return m.isFresh, m.errFresh }
+func (m *MockUnit) IsFreshTask(ctx context.Context) (bool, error) { return m.isFresh, m.errFresh }
 
 func (m *MockUnit) InjectProcessError(ctx context.Context, err error) error {
 	newCtx, cancel := context.WithTimeout(ctx, time.Second)

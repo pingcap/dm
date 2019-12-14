@@ -81,7 +81,7 @@ func (*FiniteRetryStrategy) Apply(ctx *tcontext.Context, params Params,
 
 				select {
 				case <-ctx.Context().Done():
-					return nil, i, err
+					return ret, i, err // return `ret` rather than `nil`
 				case <-time.After(duration):
 				}
 				continue

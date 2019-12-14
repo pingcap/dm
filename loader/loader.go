@@ -44,7 +44,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var (
+const (
 	jobCount = 1000
 )
 
@@ -89,7 +89,7 @@ type Worker struct {
 
 // NewWorker returns a Worker.
 func NewWorker(loader *Loader, id int) (worker *Worker, err error) {
-	ctctx := loader.tctx.WithLogger(loader.tctx.L().WithFields(zap.Int("worker ID", id)))
+	ctctx := loader.logCtx.WithLogger(loader.logCtx.L().WithFields(zap.Int("worker ID", id)))
 
 	return &Worker{
 		id:         id,
@@ -254,7 +254,7 @@ func (w *Worker) dispatchSQL(ctx context.Context, file string, offset int64, tab
 	}
 
 	baseFile := filepath.Base(file)
-	err = w.checkPoint.Init(baseFile, finfo.Size())
+	err = w.checkPoint.Init(w.tctx.WithContext(ctx), baseFile, finfo.Size())
 	if err != nil {
 		w.tctx.L().Error("fail to initial checkpoint", zap.String("data file", file), log.ShortError(err))
 		return err
@@ -349,7 +349,7 @@ type Loader struct {
 	cfg        *config.SubTaskConfig
 	checkPoint CheckPoint
 
-	tctx *tcontext.Context
+	logCtx *tcontext.Context
 
 	// db -> tables
 	// table -> data files
@@ -387,7 +387,7 @@ func NewLoader(cfg *config.SubTaskConfig) *Loader {
 		db2Tables:  make(map[string]Tables2DataFiles),
 		tableInfos: make(map[string]*tableInfo),
 		workerWg:   new(sync.WaitGroup),
-		tctx:       tcontext.Background().WithLogger(log.With(zap.String("task", cfg.Name), zap.String("unit", "load"))),
+		logCtx:     tcontext.Background().WithLogger(log.With(zap.String("task", cfg.Name), zap.String("unit", "load"))),
 	}
 	loader.fileJobQueueClosed.Set(true) // not open yet
 	return loader
@@ -400,7 +400,7 @@ func (l *Loader) Type() pb.UnitType {
 
 // Init initializes loader for a load task, but not start Process.
 // if fail, it should not call l.Close.
-func (l *Loader) Init() (err error) {
+func (l *Loader) Init(ctx context.Context) (err error) {
 	rollbackHolder := fr.NewRollbackHolder("loader")
 	defer func() {
 		if err != nil {
@@ -408,7 +408,9 @@ func (l *Loader) Init() (err error) {
 		}
 	}()
 
-	checkpoint, err := newRemoteCheckPoint(l.tctx, l.cfg, l.checkpointID())
+	tctx := l.logCtx.WithContext(ctx)
+
+	checkpoint, err := newRemoteCheckPoint(tctx, l.cfg, l.checkpointID())
 	if err != nil {
 		return err
 	}
@@ -421,11 +423,11 @@ func (l *Loader) Init() (err error) {
 	}
 
 	if l.cfg.RemoveMeta {
-		err2 := l.checkPoint.Clear()
+		err2 := l.checkPoint.Clear(tctx)
 		if err2 != nil {
 			return err2
 		}
-		l.tctx.L().Info("all previous checkpoints cleared")
+		l.logCtx.L().Info("all previous checkpoints cleared")
 	}
 
 	err = l.genRouter(l.cfg.RouteRules)
@@ -444,7 +446,7 @@ func (l *Loader) Init() (err error) {
 	dbCfg.RawDBCfg = config.DefaultRawDBConfig().
 		SetMaxIdleConns(l.cfg.PoolSize)
 
-	l.toDB, l.toDBConns, err = createConns(l.tctx, l.cfg, l.cfg.PoolSize)
+	l.toDB, l.toDBConns, err = createConns(tctx, l.cfg, l.cfg.PoolSize)
 	if err != nil {
 		return err
 	}
@@ -485,7 +487,7 @@ func (l *Loader) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	close(l.runFatalChan) // Restore returned, all potential fatal sent to l.runFatalChan
 
 	failpoint.Inject("dontWaitWorkerExit", func(_ failpoint.Value) {
-		l.tctx.L().Info("", zap.String("failpoint", "dontWaitWorkerExit"))
+		l.logCtx.L().Info("", zap.String("failpoint", "dontWaitWorkerExit"))
 		l.workerWg.Wait()
 	})
 
@@ -542,8 +544,8 @@ func (l *Loader) isClosed() bool {
 }
 
 // IsFreshTask implements Unit.IsFreshTask
-func (l *Loader) IsFreshTask() (bool, error) {
-	count, err := l.checkPoint.Count()
+func (l *Loader) IsFreshTask(ctx context.Context) (bool, error) {
+	count, err := l.checkPoint.Count(l.logCtx.WithContext(ctx))
 	return count == 0, err
 }
 
@@ -554,24 +556,24 @@ func (l *Loader) Restore(ctx context.Context) error {
 	l.finishedDataSize.Set(0) // reset before load from checkpoint
 
 	if err := l.prepare(); err != nil {
-		l.tctx.L().Error("scan directory failed", zap.String("directory", l.cfg.Dir), log.ShortError(err))
+		l.logCtx.L().Error("scan directory failed", zap.String("directory", l.cfg.Dir), log.ShortError(err))
 		return err
 	}
 
 	// not update checkpoint in memory when restoring, so when re-Restore, we need to load checkpoint from DB
-	err := l.checkPoint.Load()
+	err := l.checkPoint.Load(l.logCtx.WithContext(ctx))
 	if err != nil {
 		return err
 	}
 	err = l.checkPoint.CalcProgress(l.db2Tables)
 	if err != nil {
-		l.tctx.L().Error("calc load process", log.ShortError(err))
+		l.logCtx.L().Error("calc load process", log.ShortError(err))
 	}
 	l.loadFinishedSize()
 
-	if err := l.initAndStartWorkerPool(ctx); err != nil {
-		l.tctx.L().Error("initial and start worker pools failed", log.ShortError(err))
-		return err
+	if err2 := l.initAndStartWorkerPool(ctx); err2 != nil {
+		l.logCtx.L().Error("initial and start worker pools failed", log.ShortError(err))
+		return err2
 	}
 
 	go l.PrintStatus(ctx)
@@ -580,7 +582,7 @@ func (l *Loader) Restore(ctx context.Context) error {
 	err = l.restoreData(ctx)
 
 	failpoint.Inject("dontWaitWorkerExit", func(_ failpoint.Value) {
-		l.tctx.L().Info("", zap.String("failpoint", "dontWaitWorkerExit"))
+		l.logCtx.L().Info("", zap.String("failpoint", "dontWaitWorkerExit"))
 		failpoint.Return(nil)
 	})
 
@@ -589,7 +591,7 @@ func (l *Loader) Restore(ctx context.Context) error {
 	l.workerWg.Wait()
 
 	if err == nil {
-		l.tctx.L().Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
+		l.logCtx.L().Info("all data files have been finished", zap.Duration("cost time", time.Since(begin)))
 	} else if errors.Cause(err) != context.Canceled {
 		return err
 	}
@@ -616,7 +618,7 @@ func (l *Loader) Close() {
 
 	err := l.toDB.Close()
 	if err != nil {
-		l.tctx.L().Error("close downstream DB error", log.ShortError(err))
+		l.logCtx.L().Error("close downstream DB error", log.ShortError(err))
 	}
 	l.checkPoint.Close()
 	l.closed.Set(true)
@@ -627,19 +629,19 @@ func (l *Loader) Close() {
 func (l *Loader) stopLoad() {
 	// before re-write workflow, simply close all job queue and job workers
 	// when resuming, re-create them
-	l.tctx.L().Info("stop importing data process")
+	l.logCtx.L().Info("stop importing data process")
 
 	l.closeFileJobQueue()
 	l.workerWg.Wait()
 
-	l.tctx.L().Debug("all workers have been closed")
+	l.logCtx.L().Debug("all workers have been closed")
 }
 
 // Pause pauses the process, and it can be resumed later
 // should cancel context from external
 func (l *Loader) Pause() {
 	if l.isClosed() {
-		l.tctx.L().Warn("try to pause, but already closed")
+		l.logCtx.L().Warn("try to pause, but already closed")
 		return
 	}
 
@@ -649,11 +651,11 @@ func (l *Loader) Pause() {
 // Resume resumes the paused process
 func (l *Loader) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	if l.isClosed() {
-		l.tctx.L().Warn("try to resume, but already closed")
+		l.logCtx.L().Warn("try to resume, but already closed")
 		return
 	}
 
-	err := l.resetDBs()
+	err := l.resetDBs(ctx)
 	if err != nil {
 		pr <- pb.ProcessResult{
 			IsCanceled: false,
@@ -667,17 +669,18 @@ func (l *Loader) Resume(ctx context.Context, pr chan pb.ProcessResult) {
 	l.Process(ctx, pr)
 }
 
-func (l *Loader) resetDBs() error {
+func (l *Loader) resetDBs(ctx context.Context) error {
 	var err error
+	tctx := l.logCtx.WithContext(ctx)
 
 	for i := 0; i < len(l.toDBConns); i++ {
-		err = l.toDBConns[i].resetConn(l.tctx)
+		err = l.toDBConns[i].resetConn(tctx)
 		if err != nil {
 			return terror.WithScope(err, terror.ScopeDownstream)
 		}
 	}
 
-	err = l.checkPoint.ResetConn()
+	err = l.checkPoint.ResetConn(tctx)
 	if err != nil {
 		return terror.WithScope(err, terror.ScopeDownstream)
 	}
@@ -749,7 +752,7 @@ func (l *Loader) genRouter(rules []*router.TableRule) error {
 		}
 	}
 	schemaRules, tableRules := l.tableRouter.AllRules()
-	l.tctx.L().Debug("all route rules", zap.Reflect("schema route rules", schemaRules), zap.Reflect("table route rules", tableRules))
+	l.logCtx.L().Debug("all route rules", zap.Reflect("schema route rules", schemaRules), zap.Reflect("table route rules", tableRules))
 	return nil
 }
 
@@ -784,7 +787,7 @@ func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
 			schemaFileCount++
 			db := file[:idx]
 			if l.skipSchemaAndTable(&filter.Table{Schema: db}) {
-				l.tctx.L().Warn("ignore schema file", zap.String("schema file", file))
+				l.logCtx.L().Warn("ignore schema file", zap.String("schema file", file))
 				continue
 			}
 
@@ -794,10 +797,10 @@ func (l *Loader) prepareDbFiles(files map[string]struct{}) error {
 	}
 
 	if schemaFileCount == 0 {
-		l.tctx.L().Warn("invalid mydumper files for there are no `-schema-create.sql` files found, and will generate later")
+		l.logCtx.L().Warn("invalid mydumper files for there are no `-schema-create.sql` files found, and will generate later")
 	}
 	if len(l.db2Tables) == 0 {
-		l.tctx.L().Warn("no available `-schema-create.sql` files, check mydumper parameter matches black-white-list in task config, will generate later")
+		l.logCtx.L().Warn("no available `-schema-create.sql` files, check mydumper parameter matches black-white-list in task config, will generate later")
 	}
 
 	return nil
@@ -813,18 +816,18 @@ func (l *Loader) prepareTableFiles(files map[string]struct{}) error {
 		name := file[:idx]
 		fields := strings.Split(name, ".")
 		if len(fields) != 2 {
-			l.tctx.L().Warn("invalid table schema file", zap.String("file", file))
+			l.logCtx.L().Warn("invalid table schema file", zap.String("file", file))
 			continue
 		}
 
 		db, table := fields[0], fields[1]
 		if l.skipSchemaAndTable(&filter.Table{Schema: db, Name: table}) {
-			l.tctx.L().Warn("ignore table file", zap.String("table file", file))
+			l.logCtx.L().Warn("ignore table file", zap.String("table file", file))
 			continue
 		}
 		tables, ok := l.db2Tables[db]
 		if !ok {
-			l.tctx.L().Warn("can't find schema create file, will generate one", zap.String("schema", db))
+			l.logCtx.L().Warn("can't find schema create file, will generate one", zap.String("schema", db))
 			if err := generateSchemaCreateFile(l.cfg.Dir, db); err != nil {
 				return err
 			}
@@ -854,7 +857,7 @@ func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 		// ignore view / triggers
 		if strings.Contains(file, "-schema-view.sql") || strings.Contains(file, "-schema-triggers.sql") ||
 			strings.Contains(file, "-schema-post.sql") {
-			l.tctx.L().Warn("ignore unsupport view/trigger file", zap.String("file", file))
+			l.logCtx.L().Warn("ignore unsupport view/trigger file", zap.String("file", file))
 			continue
 		}
 
@@ -862,13 +865,13 @@ func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 		name := file[:idx]
 		fields := strings.Split(name, ".")
 		if len(fields) != 2 && len(fields) != 3 {
-			l.tctx.L().Warn("invalid db table sql file", zap.String("file", file))
+			l.logCtx.L().Warn("invalid db table sql file", zap.String("file", file))
 			continue
 		}
 
 		db, table := fields[0], fields[1]
 		if l.skipSchemaAndTable(&filter.Table{Schema: db, Name: table}) {
-			l.tctx.L().Warn("ignore data file", zap.String("data file", file))
+			l.logCtx.L().Warn("ignore data file", zap.String("data file", file))
 			continue
 		}
 		tables, ok := l.db2Tables[db]
@@ -900,7 +903,7 @@ func (l *Loader) prepareDataFiles(files map[string]struct{}) error {
 func (l *Loader) prepare() error {
 	begin := time.Now()
 	defer func() {
-		l.tctx.L().Info("prepare loading", zap.Duration("cost time", time.Since(begin)))
+		l.logCtx.L().Info("prepare loading", zap.Duration("cost time", time.Since(begin)))
 	}()
 
 	// check if mydumper dir data exists.
@@ -911,7 +914,7 @@ func (l *Loader) prepare() error {
 		if strings.HasSuffix(l.cfg.Dir, dirSuffix) {
 			dirPrefix := strings.TrimSuffix(l.cfg.Dir, dirSuffix)
 			if utils.IsDirExists(dirPrefix) {
-				l.tctx.L().Warn("directory doesn't exist, try to load data from old fashion directory", zap.String("directory", l.cfg.Dir), zap.String("old fashion directory", dirPrefix))
+				l.logCtx.L().Warn("directory doesn't exist, try to load data from old fashion directory", zap.String("directory", l.cfg.Dir), zap.String("old fashion directory", dirPrefix))
 				l.cfg.Dir = dirPrefix
 				trimmed = true
 			}
@@ -924,7 +927,7 @@ func (l *Loader) prepare() error {
 	// collect dir files.
 	files := CollectDirFiles(l.cfg.Dir)
 
-	l.tctx.L().Debug("collected files", zap.Reflect("files", files))
+	l.logCtx.L().Debug("collected files", zap.Reflect("files", files))
 
 	/* Mydumper file names format
 	 * db    {db}-schema-create.sql
@@ -947,11 +950,11 @@ func (l *Loader) prepare() error {
 }
 
 // restoreSchema creates schema
-func (l *Loader) restoreSchema(conn *DBConn, sqlFile, schema string) error {
-	err := l.restoreStructure(conn, sqlFile, schema, "")
+func (l *Loader) restoreSchema(ctx context.Context, conn *DBConn, sqlFile, schema string) error {
+	err := l.restoreStructure(ctx, conn, sqlFile, schema, "")
 	if err != nil {
 		if isErrDBExists(err) {
-			l.tctx.L().Info("database already exists, skip it", zap.String("db schema file", sqlFile))
+			l.logCtx.L().Info("database already exists, skip it", zap.String("db schema file", sqlFile))
 		} else {
 			return terror.Annotatef(err, "run db schema failed - dbfile %s", sqlFile)
 		}
@@ -960,11 +963,11 @@ func (l *Loader) restoreSchema(conn *DBConn, sqlFile, schema string) error {
 }
 
 // restoreTable creates table
-func (l *Loader) restoreTable(conn *DBConn, sqlFile, schema, table string) error {
-	err := l.restoreStructure(conn, sqlFile, schema, table)
+func (l *Loader) restoreTable(ctx context.Context, conn *DBConn, sqlFile, schema, table string) error {
+	err := l.restoreStructure(ctx, conn, sqlFile, schema, table)
 	if err != nil {
 		if isErrTableExists(err) {
-			l.tctx.L().Info("table already exists, skip it", zap.String("table schema file", sqlFile))
+			l.logCtx.L().Info("table already exists, skip it", zap.String("table schema file", sqlFile))
 		} else {
 			return terror.Annotatef(err, "run table schema failed - dbfile %s", sqlFile)
 		}
@@ -973,12 +976,14 @@ func (l *Loader) restoreTable(conn *DBConn, sqlFile, schema, table string) error
 }
 
 // restoreStruture creates schema or table
-func (l *Loader) restoreStructure(conn *DBConn, sqlFile string, schema string, table string) error {
+func (l *Loader) restoreStructure(ctx context.Context, conn *DBConn, sqlFile string, schema string, table string) error {
 	f, err := os.Open(sqlFile)
 	if err != nil {
 		return terror.ErrLoadUnitReadSchemaFile.Delegate(err)
 	}
 	defer f.Close()
+
+	tctx := l.logCtx.WithContext(ctx)
 
 	data := make([]byte, 0, 1024*1024)
 	br := bufio.NewReader(f)
@@ -1002,7 +1007,7 @@ func (l *Loader) restoreStructure(conn *DBConn, sqlFile string, schema string, t
 			}
 
 			var sqls []string
-			dstSchema, dstTable := fetchMatchedLiteral(l.tctx, l.tableRouter, schema, table)
+			dstSchema, dstTable := fetchMatchedLiteral(tctx, l.tableRouter, schema, table)
 			// for table
 			if table != "" {
 				sqls = append(sqls, fmt.Sprintf("USE `%s`;", dstSchema))
@@ -1011,10 +1016,10 @@ func (l *Loader) restoreStructure(conn *DBConn, sqlFile string, schema string, t
 				query = renameShardingSchema(query, schema, dstSchema)
 			}
 
-			l.tctx.L().Debug("schema create statement", zap.String("sql", query))
+			l.logCtx.L().Debug("schema create statement", zap.String("sql", query))
 
 			sqls = append(sqls, query)
-			err = conn.executeSQL(l.tctx, sqls)
+			err = conn.executeSQL(tctx, sqls)
 			if err != nil {
 				return terror.WithScope(err, terror.ScopeDownstream)
 			}
@@ -1081,17 +1086,19 @@ func (l *Loader) restoreData(ctx context.Context) error {
 		dbs = append(dbs, db)
 	}
 
+	tctx := l.logCtx.WithContext(ctx)
+
 	for _, db := range dbs {
 		tables := l.db2Tables[db]
 
 		// create db
 		dbFile := fmt.Sprintf("%s/%s-schema-create.sql", l.cfg.Dir, db)
-		l.tctx.L().Info("start to create schema", zap.String("schema file", dbFile))
-		err = l.restoreSchema(dbConn, dbFile, db)
+		l.logCtx.L().Info("start to create schema", zap.String("schema file", dbFile))
+		err = l.restoreSchema(ctx, dbConn, dbFile, db)
 		if err != nil {
 			return err
 		}
-		l.tctx.L().Info("finish to create schema", zap.String("schema file", dbFile))
+		l.logCtx.L().Info("finish to create schema", zap.String("schema file", dbFile))
 
 		tnames := make([]string, 0, len(tables))
 		for t := range tables {
@@ -1101,39 +1108,39 @@ func (l *Loader) restoreData(ctx context.Context) error {
 			dataFiles := tables[table]
 			tableFile := fmt.Sprintf("%s/%s.%s-schema.sql", l.cfg.Dir, db, table)
 			if _, ok := l.tableInfos[tableName(db, table)]; !ok {
-				l.tableInfos[tableName(db, table)], err = parseTable(l.tctx, l.tableRouter, db, table, tableFile)
+				l.tableInfos[tableName(db, table)], err = parseTable(tctx, l.tableRouter, db, table, tableFile)
 				if err != nil {
 					return terror.Annotatef(err, "parse table %s/%s", db, table)
 				}
 			}
 
 			if l.checkPoint.IsTableFinished(db, table) {
-				l.tctx.L().Info("table has finished, skip it.", zap.String("schema", db), zap.String("table", table))
+				l.logCtx.L().Info("table has finished, skip it.", zap.String("schema", db), zap.String("table", table))
 				continue
 			}
 
 			// create table
-			l.tctx.L().Info("start to create table", zap.String("table file", tableFile))
-			err := l.restoreTable(dbConn, tableFile, db, table)
+			l.logCtx.L().Info("start to create table", zap.String("table file", tableFile))
+			err := l.restoreTable(ctx, dbConn, tableFile, db, table)
 			if err != nil {
 				return err
 			}
-			l.tctx.L().Info("finish to create table", zap.String("table file", tableFile))
+			l.logCtx.L().Info("finish to create table", zap.String("table file", tableFile))
 
 			restoringFiles := l.checkPoint.GetRestoringFileInfo(db, table)
-			l.tctx.L().Debug("restoring table data", zap.String("schema", db), zap.String("table", table), zap.Reflect("data files", restoringFiles))
+			l.logCtx.L().Debug("restoring table data", zap.String("schema", db), zap.String("table", table), zap.Reflect("data files", restoringFiles))
 
 			info := l.tableInfos[tableName(db, table)]
 			for _, file := range dataFiles {
 				select {
 				case <-ctx.Done():
-					l.tctx.L().Warn("stop generate data file job", log.ShortError(ctx.Err()))
+					l.logCtx.L().Warn("stop generate data file job", log.ShortError(ctx.Err()))
 					return ctx.Err()
 				default:
 					// do nothing
 				}
 
-				l.tctx.L().Debug("dispatch data file", zap.String("schema", db), zap.String("table", table), zap.String("data file", file))
+				l.logCtx.L().Debug("dispatch data file", zap.String("schema", db), zap.String("table", table), zap.String("data file", file))
 
 				var offset int64
 				posSet, ok := restoringFiles[file]
@@ -1152,19 +1159,19 @@ func (l *Loader) restoreData(ctx context.Context) error {
 			}
 		}
 	}
-	l.tctx.L().Info("finish to create tables", zap.Duration("cost time", time.Since(begin)))
+	l.logCtx.L().Info("finish to create tables", zap.Duration("cost time", time.Since(begin)))
 
 	// a simple and naive approach to dispatch files randomly based on the feature of golang map(range by random)
 	for _, j := range dispatchMap {
 		select {
 		case <-ctx.Done():
-			l.tctx.L().Warn("stop dispatch data file job", log.ShortError(ctx.Err()))
+			l.logCtx.L().Warn("stop dispatch data file job", log.ShortError(ctx.Err()))
 			return ctx.Err()
 		case l.fileJobQueue <- j:
 		}
 	}
 
-	l.tctx.L().Info("all data files have been dispatched, waiting for them finished")
+	l.logCtx.L().Info("all data files have been dispatched, waiting for them finished")
 	return nil
 }
 
@@ -1175,7 +1182,7 @@ func (l *Loader) checkpointID() string {
 	}
 	dir, err := filepath.Abs(l.cfg.Dir)
 	if err != nil {
-		l.tctx.L().Warn("get abs dir", zap.String("directory", l.cfg.Dir), log.ShortError(err))
+		l.logCtx.L().Warn("get abs dir", zap.String("directory", l.cfg.Dir), log.ShortError(err))
 		return l.cfg.Dir
 	}
 	return shortSha1(dir)
@@ -1185,7 +1192,7 @@ func (l *Loader) getMydumpMetadata() error {
 	metafile := filepath.Join(l.cfg.LoaderConfig.Dir, "metadata")
 	pos, err := utils.ParseMetaData(metafile)
 	if err != nil {
-		l.tctx.L().Error("fail to parse dump metadata", log.ShortError(err))
+		l.logCtx.L().Error("fail to parse dump metadata", log.ShortError(err))
 		return err
 	}
 
