@@ -20,10 +20,12 @@ import (
 	"github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 )
 
@@ -108,6 +110,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	st := &SubTask{
 		cfg:   &config.SubTaskConfig{Name: taskName},
 		stage: pb.Stage_Running,
+		l:     log.With(zap.String("subtask", taskName)),
 	}
 	rtsc.w.subTaskHolder.recordSubTask(st)
 	rtsc.check()
@@ -166,6 +169,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 	st = &SubTask{
 		cfg:   &config.SubTaskConfig{Name: taskName},
 		stage: pb.Stage_Running,
+		l:     log.With(zap.String("subtask", taskName)),
 	}
 	rtsc.w.subTaskHolder.recordSubTask(st)
 	rtsc.check()
