@@ -191,10 +191,12 @@ func NewSubTaskConfig() *SubTaskConfig {
 	return cfg
 }
 
+// GetFlagSet provides the pointer of subtask's flag set.
 func (c *SubTaskConfig) GetFlagSet() *flag.FlagSet {
 	return c.flagSet
 }
 
+// SetFlagSet writes back the flag set.
 func (c *SubTaskConfig) SetFlagSet(flagSet *flag.FlagSet) {
 	c.flagSet = flagSet
 }
