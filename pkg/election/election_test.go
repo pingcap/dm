@@ -112,7 +112,7 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	// start e2
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
-	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2, "", true)
+	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2, "", false)
 	c.Assert(err, IsNil)
 	defer e2.Close()
 	select {
