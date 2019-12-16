@@ -303,11 +303,8 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 			resp, err := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
 			if err != nil {
 				resp = &workerrpc.Response{
-					Type: workerrpc.CmdStartSubTask,
-					StartSubTask: &pb.CommonWorkerResponse{
-						Result: false,
-						Msg:    err.Error(),
-					},
+					Type:         workerrpc.CmdStartSubTask,
+					StartSubTask: errorCommonWorkerResponse(err.Error(), worker),
 				}
 			}
 			resp.StartSubTask.Worker = worker
@@ -505,11 +502,8 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 			resp, err := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
 			if err != nil {
 				resp = &workerrpc.Response{
-					Type: workerrpc.CmdUpdateSubTask,
-					UpdateSubTask: &pb.CommonWorkerResponse{
-						Result: false,
-						Msg:    err.Error(),
-					},
+					Type:          workerrpc.CmdUpdateSubTask,
+					UpdateSubTask: errorCommonWorkerResponse(err.Error(), worker),
 				}
 			}
 			resp.UpdateSubTask.Worker = worker
@@ -909,11 +903,7 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 
 	handleErr := func(err error, worker string) {
 		log.L().Error("response error", zap.Error(err))
-		resp := &pb.CommonWorkerResponse{
-			Result: false,
-			Msg:    errors.ErrorStack(err),
-			Worker: worker,
-		}
+		resp := errorCommonWorkerResponse(errors.ErrorStack(err), worker)
 		workerRespCh <- resp
 	}
 
