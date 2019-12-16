@@ -37,7 +37,7 @@ function run() {
     sleep 2
     echo "start task after restart dm-worker"
     dmctl_start_task
-    sleep 2 # wait for task running
+    sleep 2
 
     # kill tidb
     pkill -hup tidb-server 2>/dev/null || true

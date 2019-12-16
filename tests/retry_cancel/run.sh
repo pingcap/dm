@@ -109,7 +109,7 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
     sleep 2
-    echo "start task after incremental stopped"
+    echo "start task for incremental replication"
     dmctl_start_task
 
     sleep 5 # should sleep > retryTimeout (now 3s)

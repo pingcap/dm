@@ -57,7 +57,6 @@ function run() {
     sleep 2
     echo "stat task after set SequenceShardSyncedExecutionExit failpoint"
     dmctl_start_task
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     # DM-worker exit when waiting for sharding group synced
     run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1
