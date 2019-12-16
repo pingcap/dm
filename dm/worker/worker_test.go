@@ -56,7 +56,6 @@ func (t *testServer) testWorker(c *C) {
 	//	w.Start()
 	//}()
 
-
 	// close twice
 	w.Close()
 	c.Assert(w.closed.Get(), Equals, closedTrue)

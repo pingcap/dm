@@ -65,24 +65,25 @@ type WorkerConfig struct {
 	ServerID uint32 `toml:"server-id" json:"server-id"`
 }
 
+// NewWorkerConfig creates a new base config for worker.
 func NewWorkerConfig() *WorkerConfig {
 	c := &WorkerConfig{
 		RelayDir: "relay-dir",
 		Purge: PurgeConfig{
-			Interval: 60 * 60,
-			Expires: 0,
+			Interval:    60 * 60,
+			Expires:     0,
 			RemainSpace: 15,
 		},
 		Checker: CheckerConfig{
-			CheckEnable: true,
-			BackoffRollback: Duration{DefaultBackoffRollback} ,
-			BackoffMax: Duration{ DefaultBackoffMax},
+			CheckEnable:     true,
+			BackoffRollback: Duration{DefaultBackoffRollback},
+			BackoffMax:      Duration{DefaultBackoffMax},
 		},
 		Tracer: tracing.Config{
-			Enable: false,
+			Enable:     false,
 			TracerAddr: "",
-			BatchSize: 20,
-			Checksum: false,
+			BatchSize:  20,
+			Checksum:   false,
 		},
 	}
 	c.adjust()
