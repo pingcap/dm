@@ -45,6 +45,9 @@ const (
 	CmdMigrateRelay
 
 	CmdFetchDDLInfo
+	CmdCreateMysqlWorker
+	CmdUpdateMysqlConfig
+	CmdStopMysqlWorker
 )
 
 // Request wraps all dm-worker rpc requests.
@@ -64,11 +67,13 @@ type Request struct {
 	ExecDDL           *pb.ExecDDLRequest
 	BreakDDLLock      *pb.BreakDDLLockRequest
 
-	SwitchRelayMaster *pb.SwitchRelayMasterRequest
-	OperateRelay      *pb.OperateRelayRequest
-	PurgeRelay        *pb.PurgeRelayRequest
-	UpdateRelay       *pb.UpdateRelayRequest
-	MigrateRelay      *pb.MigrateRelayRequest
+	SwitchRelayMaster  *pb.SwitchRelayMasterRequest
+	OperateRelay       *pb.OperateRelayRequest
+	PurgeRelay         *pb.PurgeRelayRequest
+	UpdateRelay        *pb.UpdateRelayRequest
+	MigrateRelay       *pb.MigrateRelayRequest
+	MysqlWorkerRequest *pb.MysqlTaskRequest
+	StopMysqlWorker    *pb.StopMysqlTaskRequest
 }
 
 // Response wraps all dm-worker rpc responses.
@@ -93,6 +98,7 @@ type Response struct {
 	PurgeRelay        *pb.CommonWorkerResponse
 	UpdateRelay       *pb.CommonWorkerResponse
 	MigrateRelay      *pb.CommonWorkerResponse
+	MysqlWorker       *pb.MysqlTaskResponse
 
 	FetchDDLInfo pb.Worker_FetchDDLInfoClient
 }

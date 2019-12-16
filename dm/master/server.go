@@ -1905,6 +1905,7 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.WorkerConfigReq
 	}
 	s.Lock()
 	defer s.Unlock()
+	var resp *pb.MysqlTaskResponse
 	if req.Op == pb.WorkerOp_StartWorker {
 		w := s.mysqlManager.GetWorker(cfg.SourceID)
 		if w != nil {
@@ -1913,7 +1914,7 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.WorkerConfigReq
 				Msg:    "Create worker failed. worker has been started",
 			}, nil
 		}
-		s.mysqlManager.ScheduleWorker(cfg)
+		resp, err = s.mysqlManager.ScheduleMysqlWorker(ctx, cfg, s.cfg.RPCTimeout)
 	} else if req.Op == pb.WorkerOp_UpdateConfig {
 		w := s.mysqlManager.GetWorker(cfg.SourceID)
 		if w == nil {
@@ -1922,7 +1923,7 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.WorkerConfigReq
 				Msg:    "Update worker config failed. worker has not been started",
 			}, nil
 		}
-		if err := w.UpdateMysqlConfig(cfg); err != nil {
+		if resp, err = w.UpdateMysqlConfig(ctx, cfg, s.cfg.RPCTimeout); err != nil {
 			return &pb.WorkerConfigResponse{
 				Result: false,
 				Msg:    errors.ErrorStack(err),
@@ -1936,16 +1937,17 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.WorkerConfigReq
 				Msg:    "Stop worker failed. worker has not been started",
 			}, nil
 		}
-		if err := w.StopMysqlTask(cfg.SourceID); err != nil {
+		if resp, err = w.StopMysqlTask(ctx, cfg.SourceID, s.cfg.RPCTimeout); err != nil {
 			return &pb.WorkerConfigResponse{
 				Result: false,
 				Msg:    errors.ErrorStack(err),
 			}, nil
 		}
 	}
+
 	return &pb.WorkerConfigResponse{
-		Result: true,
-		Msg:    "operate success!!!",
+		Result: resp.Result,
+		Msg:    resp.Msg,
 	}, nil
 }
 
