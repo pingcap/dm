@@ -172,7 +172,7 @@ func (c *commonConfig) newSubTaskConfig(args []string) (*config.SubTaskConfig, e
 	return cfg, nil
 }
 
-func NewConfig() *commonConfig {
+func newCommonConfig() *commonConfig {
 	cfg := &commonConfig{}
 	cfg.FlagSet = flag.NewFlagSet("common-syncer", flag.ContinueOnError)
 	fs := cfg.FlagSet

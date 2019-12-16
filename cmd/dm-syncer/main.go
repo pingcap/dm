@@ -30,7 +30,7 @@ import (
 )
 
 func main() {
-	commonConfig := NewConfig()
+	commonConfig := newCommonConfig()
 	config, err := commonConfig.parse(os.Args[1:])
 	switch errors.Cause(err) {
 	case nil:
