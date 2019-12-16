@@ -62,7 +62,31 @@ type WorkerConfig struct {
 	Tracer tracing.Config `toml:"tracer" json:"tracer"`
 
 	// id of the worker on which this task run
-	ServerID uint32
+	ServerID uint32 `toml:"server-id" json:"server-id"`
+}
+
+func NewWorkerConfig() *WorkerConfig {
+	c := &WorkerConfig{
+		RelayDir: "relay-dir",
+		Purge: PurgeConfig{
+			Interval: 60 * 60,
+			Expires: 0,
+			RemainSpace: 15,
+		},
+		Checker: CheckerConfig{
+			CheckEnable: true,
+			BackoffRollback: Duration{DefaultBackoffRollback} ,
+			BackoffMax: Duration{ DefaultBackoffMax},
+		},
+		Tracer: tracing.Config{
+			Enable: false,
+			TracerAddr: "",
+			BatchSize: 20,
+			Checksum: false,
+		},
+	}
+	c.adjust()
+	return c
 }
 
 // Clone clones a config
@@ -88,19 +112,7 @@ func (c *WorkerConfig) Toml() (string, error) {
 func (c *WorkerConfig) Parse(content string) error {
 	// Parse first to get config file.
 	metaData, err := toml.Decode(content, c)
-	if err != nil {
-		return terror.ErrWorkerDecodeConfigFromFile.Delegate(err)
-	}
-	undecoded := metaData.Undecoded()
-	if len(undecoded) > 0 {
-		var undecodedItems []string
-		for _, item := range undecoded {
-			undecodedItems = append(undecodedItems, item.String())
-		}
-		return terror.ErrWorkerUndecodedItemFromFile.Generate(strings.Join(undecodedItems, ","))
-	}
-	c.adjust()
-	return nil
+	return c.check(&metaData, err)
 }
 
 func (c *WorkerConfig) String() string {
@@ -247,6 +259,10 @@ func (c *WorkerConfig) AdjustServerID(ctx context.Context, db *sql.DB) error {
 // LoadFromFile loads config from file.
 func (c *WorkerConfig) LoadFromFile(path string) error {
 	metaData, err := toml.DecodeFile(path, c)
+	return c.check(&metaData, err)
+}
+
+func (c *WorkerConfig) check(metaData *toml.MetaData, err error) error {
 	if err != nil {
 		return terror.ErrWorkerDecodeConfigFromFile.Delegate(err)
 	}
@@ -258,5 +274,6 @@ func (c *WorkerConfig) LoadFromFile(path string) error {
 		}
 		return terror.ErrWorkerUndecodedItemFromFile.Generate(strings.Join(undecodedItems, ","))
 	}
+	c.adjust()
 	return nil
 }

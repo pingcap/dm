@@ -31,7 +31,7 @@ import (
 func (t *testServer) TestConfig(c *C) {
 	cfg := &config.WorkerConfig{}
 
-	c.Assert(cfg.LoadFromFile("./dm-worker.toml"), IsNil)
+	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
 	cfg.RelayDir = "./xx"
 	c.Assert(cfg.RelayDir, Equals, "./xx")
 	c.Assert(cfg.ServerID, Equals, uint32(101))
@@ -93,7 +93,7 @@ aaa = "xxx"
 func (t *testServer) TestConfigVerify(c *C) {
 	newConfig := func() *config.WorkerConfig {
 		cfg := &config.WorkerConfig{}
-		c.Assert(cfg.LoadFromFile("./dm-worker.toml"), IsNil)
+		c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
 		cfg.RelayDir = "./xx"
 		return cfg
 	}
@@ -183,7 +183,7 @@ func subtestFlavor(c *C, cfg *config.WorkerConfig, sqlInfo, expectedFlavor, expe
 
 func (t *testServer) TestAdjustFlavor(c *C) {
 	cfg := &config.WorkerConfig{}
-	c.Assert(cfg.LoadFromFile("./dm-worker.toml"), IsNil)
+	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
 	cfg.RelayDir = "./xx"
 
 	cfg.Flavor = "mariadb"
@@ -206,7 +206,7 @@ func (t *testServer) TestAdjustServerID(c *C) {
 	getAllServerIDFunc = getMockServerIDs
 
 	cfg := &config.WorkerConfig{}
-	c.Assert(cfg.LoadFromFile("./dm-worker.toml"), IsNil)
+	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
 	cfg.RelayDir = "./xx"
 
 	cfg.AdjustServerID(context.Background(), nil)

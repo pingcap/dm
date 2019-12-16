@@ -135,7 +135,7 @@ func (t *testRelay) TestRelay(c *C) {
 	}()
 
 	cfg := &config.WorkerConfig{}
-	c.Assert(cfg.LoadFromFile("./dm-worker.toml"), IsNil)
+	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
 
 	dir := c.MkDir()
 	cfg.RelayDir = dir
