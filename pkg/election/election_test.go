@@ -209,7 +209,7 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 	// start e2
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
-	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2, "", true)
+	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2, "", false)
 	c.Assert(err, IsNil)
 	defer e2.Close()
 	time.Sleep(100 * time.Millisecond) // wait 100ms to start the campaign
