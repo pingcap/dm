@@ -80,6 +80,7 @@ func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key,
 		cancel:     cancel2,
 		l:          log.With(zap.String("component", "election")),
 	}
+	e.isLeader.Set(false)
 
 	// try create a session before enter the campaign loop.
 	// so we can detect potential error earlier.

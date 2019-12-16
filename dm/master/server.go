@@ -162,7 +162,8 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	masterServer := &redirectLeaderServer{
 		server: s,
 		checkFunc: func() bool {
-			return !s.election.IsLeader()
+			// Stub func, the election struct is not inited, will init this later.
+			return false
 		},
 	}
 	gRPCSvr := func(gs *grpc.Server) { pb.RegisterMasterServer(gs, masterServer) }
@@ -184,6 +185,9 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	s.election, err = election.NewElection(ctx, s.etcdClient, electionTTL, electionKey, s.cfg.Name, s.cfg.MasterAddr)
 	if err != nil {
 		return
+	}
+	masterServer.checkFunc = func() bool {
+		return s.election.IsLeader()
 	}
 
 	s.closed.Set(false) // the server started now.
