@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"go.etcd.io/etcd/clientv3"
 	"google.golang.org/grpc"
@@ -66,18 +67,17 @@ var (
 	workerKeepAlivePath = "/dm-worker/a"
 )
 
-func (w *Worker) KeepAlive() error {
+func (s *Server) KeepAlive(ctx context.Context) error {
 	// TODO: fetch the actual master endpoints, the master member maybe changed.
-	endpoints := GetJoinURLs(w.cfg.Join)
+	endpoints := GetJoinURLs(s.cfg.Join)
 	client, err := clientv3.NewFromURLs(endpoints)
 	if err != nil {
 		return err
 	}
 
 	// FIXME: use a context from server.
-	ctx := context.Background()
 	lease, err := client.Grant(ctx, defaultKeepAliveTTL)
-	k := strings.Join([]string{workerKeepAlivePath, w.cfg.WorkerAddr, w.cfg.Name}, ",")
+	k := strings.Join([]string{workerKeepAlivePath, s.cfg.WorkerAddr, s.cfg.Name}, ",")
 	_, err = client.Put(ctx, k, time.Now().String(), clientv3.WithLease(lease.ID))
 	if err != nil {
 		return err
@@ -87,11 +87,11 @@ func (w *Worker) KeepAlive() error {
 		select {
 		case _, ok := <-ch:
 			if !ok {
-				w.l.Info("keep alive channel is closed")
+				log.L().Info("keep alive channel is closed")
 				return nil
 			}
-		case <-w.ctx.Done():
-			w.l.Info("server is closing, exits keepalive")
+		case <-ctx.Done():
+			log.L().Info("server is closing, exits keepalive")
 			return nil
 		}
 	}

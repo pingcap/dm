@@ -90,7 +90,8 @@ func (s *Server) Start() error {
 	go func() {
 		defer s.wg.Done()
 		// worker keepalive with master
-		s.worker.KeepAlive()
+		// FIXME: use global context
+		s.KeepAlive(s.worker.ctx)
 	}()
 
 	// create a cmux
