@@ -182,7 +182,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	}
 
 	// start leader election
-	s.election, err = election.NewElection(ctx, s.etcdClient, electionTTL, electionKey, s.cfg.Name, s.cfg.MasterAddr)
+	s.election, err = election.NewElection(ctx, s.etcdClient, electionTTL, electionKey, s.cfg.Name, s.cfg.MasterAddr, s.cfg.IsLeader())
 	if err != nil {
 		return
 	}

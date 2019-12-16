@@ -68,7 +68,13 @@ type NodeMeta struct {
 }
 
 // NewElection creates a new etcd leader Election instance and starts the campaign loop.
-func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key, id, address string) (*Election, error) {
+func NewElection(
+	ctx context.Context,
+	cli *clientv3.Client,
+	sessionTTL int,
+	key, id, address string,
+	isLeader bool,
+) (*Election, error) {
 	ctx2, cancel2 := context.WithCancel(ctx)
 	e := &Election{
 		cli:        cli,
@@ -80,7 +86,18 @@ func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key,
 		cancel:     cancel2,
 		l:          log.With(zap.String("component", "election")),
 	}
-	e.isLeader.Set(false)
+	if !isLeader {
+		_, meta, err := e.LeaderInfo(ctx)
+		if err != nil {
+			return nil, err
+		}
+		err = e.retireLeader(meta)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		e.isLeader.Set(true)
+	}
 
 	// try create a session before enter the campaign loop.
 	// so we can detect potential error earlier.

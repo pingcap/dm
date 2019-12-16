@@ -122,6 +122,12 @@ type Config struct {
 	printSampleConfig bool
 }
 
+// IsLeader return whether this is a config for master leader
+func (c *Config) IsLeader() bool {
+	// FIXME, maybe this check isn't accurate
+	return c.Join == ""
+}
+
 func (c *Config) String() string {
 	cfg, err := json.Marshal(c)
 	if err != nil {

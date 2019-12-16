@@ -93,7 +93,7 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	defer cancel1()
-	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1, "")
+	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1, "", true)
 	c.Assert(err, IsNil)
 	defer e1.Close()
 
@@ -112,7 +112,7 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	// start e2
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
-	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2, "")
+	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2, "", true)
 	c.Assert(err, IsNil)
 	defer e2.Close()
 	select {
@@ -172,7 +172,7 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	// can not elect with closed client.
 	ctx3, cancel3 := context.WithCancel(context.Background())
 	defer cancel3()
-	_, err = NewElection(ctx3, cli, sessionTTL, key, ID3, "")
+	_, err = NewElection(ctx3, cli, sessionTTL, key, ID3, "", true)
 	c.Assert(terror.ErrElectionCampaignFail.Equal(err), IsTrue)
 	c.Assert(err, ErrorMatches, ".*fail to campaign leader: create the initial session: context canceled.*")
 }
@@ -190,7 +190,7 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	defer cancel1()
-	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1, "")
+	e1, err := NewElection(ctx1, cli, sessionTTL, key, ID1, "", true)
 	c.Assert(err, IsNil)
 	defer e1.Close()
 
@@ -209,7 +209,7 @@ func (t *testElectionSuite) TestElectionAlways1(c *C) {
 	// start e2
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
-	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2, "")
+	e2, err := NewElection(ctx2, cli, sessionTTL, key, ID2, "", true)
 	c.Assert(err, IsNil)
 	defer e2.Close()
 	time.Sleep(100 * time.Millisecond) // wait 100ms to start the campaign
@@ -253,7 +253,7 @@ func (t *testElectionSuite) TestElectionDeleteKey(c *C) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	e, err := NewElection(ctx, cli, sessionTTL, key, ID, "")
+	e, err := NewElection(ctx, cli, sessionTTL, key, ID, "", true)
 	c.Assert(err, IsNil)
 	defer e.Close()
 
