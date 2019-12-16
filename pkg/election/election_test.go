@@ -117,7 +117,7 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	defer e2.Close()
 	select {
 	case leader := <-e2.leaderCh:
-		c.Fatalf("should not receive leader notify for e2, but got %v", leader)
+		c.Assert(leader, Equals, false)
 	case <-time.After(100 * time.Millisecond): // wait 100ms to start the campaign
 	}
 	// but the leader should still be e1
