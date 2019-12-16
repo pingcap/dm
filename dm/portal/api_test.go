@@ -329,6 +329,10 @@ func (t *testPortalSuite) TestGenerateMydumperTableCfg(c *C) {
 	}
 	mydumperCfg := generateMydumperCfg(bwList)
 	c.Assert(mydumperCfg.ExtraArgs, Equals, "-T db_1.t_1,db_1.t_2")
+
+	bwList = &filter.Rules{}
+	mydumperCfg = generateMydumperCfg(bwList)
+	c.Assert(mydumperCfg.ExtraArgs, Equals, "")
 }
 
 func (t *testPortalSuite) TestGenerateMydumperCfgName(c *C) {
