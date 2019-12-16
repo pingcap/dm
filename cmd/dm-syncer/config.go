@@ -27,7 +27,8 @@ import (
 	"time"
 )
 
-type CommonConfig struct {
+// commonConfig collects common item for both new config and old config.
+type commonConfig struct {
 	*flag.FlagSet `json:"-"`
 
 	printVersion bool
@@ -53,8 +54,8 @@ type CommonConfig struct {
 	OldConfigFormat bool
 }
 
-func (c *CommonConfig) newConfigFromOldConfig(args []string) (*config.SubTaskConfig, error) {
-	cfg := &OldConfig{
+func (c *commonConfig) newConfigFromOldConfig(args []string) (*config.SubTaskConfig, error) {
+	cfg := &oldConfig{
 		printVersion:     c.printVersion,
 		ConfigFile:       c.ConfigFile,
 		ServerID:         c.ServerID,
@@ -111,7 +112,7 @@ func (c *CommonConfig) newConfigFromOldConfig(args []string) (*config.SubTaskCon
 	return cfg.convertToNewFormat()
 }
 
-func (c *CommonConfig) Parse(args []string) (*config.SubTaskConfig, error) {
+func (c *commonConfig) parse(args []string) (*config.SubTaskConfig, error) {
 	err := c.FlagSet.Parse(args)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -128,7 +129,7 @@ func (c *CommonConfig) Parse(args []string) (*config.SubTaskConfig, error) {
 	return c.newSubTaskConfig(args)
 }
 
-func (c *CommonConfig) newSubTaskConfig(args []string) (*config.SubTaskConfig, error) {
+func (c *commonConfig) newSubTaskConfig(args []string) (*config.SubTaskConfig, error) {
 
 	cfg := &config.SubTaskConfig{}
 	cfg.SetFlagSet(flag.NewFlagSet("common-syncer", flag.ContinueOnError))
@@ -171,8 +172,8 @@ func (c *CommonConfig) newSubTaskConfig(args []string) (*config.SubTaskConfig, e
 	return cfg, nil
 }
 
-func NewConfig() *CommonConfig {
-	cfg := &CommonConfig{}
+func NewConfig() *commonConfig {
+	cfg := &commonConfig{}
 	cfg.FlagSet = flag.NewFlagSet("common-syncer", flag.ContinueOnError)
 	fs := cfg.FlagSet
 
@@ -198,8 +199,8 @@ func NewConfig() *CommonConfig {
 	return cfg
 }
 
-// Config is the old format of syncer tools, eventually it will be converted to new SubTaskConfig format.
-type OldConfig struct {
+// oldConfig is the old format of syncer tools, eventually it will be converted to new SubTaskConfig format.
+type oldConfig struct {
 	*flag.FlagSet `json:"-"`
 
 	LogLevel  string `toml:"log-level" json:"log-level"`
@@ -278,7 +279,7 @@ type SkipDML struct {
 	Type   string `toml:"type" json:"type"`
 }
 
-func (oc *OldConfig) convertToNewFormat() (*config.SubTaskConfig, error) {
+func (oc *oldConfig) convertToNewFormat() (*config.SubTaskConfig, error) {
 
 	newTask := &config.SubTaskConfig{
 		LogLevel:  oc.LogLevel,

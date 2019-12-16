@@ -31,7 +31,7 @@ import (
 
 func main() {
 	commonConfig := NewConfig()
-	config, err := commonConfig.Parse(os.Args[1:])
+	config, err := commonConfig.parse(os.Args[1:])
 	switch errors.Cause(err) {
 	case nil:
 	case flag.ErrHelp:
