@@ -11,7 +11,7 @@ in the repo root folder:
 
 ### Run dm-fe
 
-in the repo `dm-portal/dm-fe` folder:
+in the repo `dm/dm/portal/frontend` folder:
 
 1. `yarn install`
 1. `yarn start`

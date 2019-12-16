@@ -27,7 +27,8 @@ function StartStep(props: Props) {
     <Container>
       <h1>DM 任务配置生成</h1>
       <Button onClick={() => props.onNewRule()}>新建任务配置</Button>
-      <Button onClick={() => props.onEditRule()}>编辑任务配置</Button>
+      {/* 编辑功能目前看没有使用场景，先隐藏，后续再移除 */}
+      {/* <Button onClick={() => props.onEditRule()}>编辑任务配置</Button> */}
     </Container>
   )
 }
