@@ -568,7 +568,7 @@ func (s *Server) CreateMysqlTask(ctx context.Context, req *pb.MysqlTaskRequest) 
 		Result: true,
 		Msg:    "Create mysql task successfully",
 	}
-	cfg := &config.WorkerConfig{}
+	cfg := config.NewWorkerConfig()
 	err := cfg.Parse(req.Config)
 	if err == nil {
 		err = s.startWorker(cfg)

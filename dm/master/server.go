@@ -1896,7 +1896,7 @@ func makeWorkerConfigResponse(err error) (*pb.WorkerConfigResponse, error) {
 
 // OperateMysqlWorker will create or update a Worker
 func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.WorkerConfigRequest) (*pb.WorkerConfigResponse, error) {
-	cfg := &config.WorkerConfig{}
+	cfg := config.NewWorkerConfig()
 	if err := cfg.Parse(req.Config); err != nil {
 		return makeWorkerConfigResponse(err)
 	}
