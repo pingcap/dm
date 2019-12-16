@@ -187,7 +187,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		return
 	}
 	masterServer.checkFunc = func() bool {
-		return s.election.IsLeader()
+		return !s.election.IsLeader()
 	}
 
 	s.closed.Set(false) // the server started now.
