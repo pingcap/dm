@@ -597,7 +597,6 @@ func (s *Server) UpdateMysqlTaskConfig(ctx context.Context, req *pb.MysqlTaskReq
 	s.worker = nil
 	s.Unlock()
 	w.Close()
-	s.wg.Wait()
 	if res, _ := s.CreateMysqlTask(ctx, req); res != nil && !res.Result {
 		resp.Result = false
 		resp.Msg = "UpdateMysqlTaskConfig fail when create new mysql task, please call CreateMysqlTask again"

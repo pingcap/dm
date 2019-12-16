@@ -135,9 +135,18 @@ func (s *Server) Start(ctx context.Context) (err error) {
 
 	// create clients to DM-workers
 	for _, workerAddr := range s.cfg.DeployMap {
-		s.workerClients[workerAddr], err = workerrpc.NewGRPCClient(workerAddr)
+		cli, err := workerrpc.NewGRPCClient(workerAddr)
 		if err != nil {
-			return
+			return err
+		}
+		if s.cfg.Debug {
+			w := &MockWorker{
+				adress: workerAddr,
+				client: cli,
+			}
+			s.mysqlManager.AddWorker(workerAddr, w)
+		} else {
+			s.workerClients[workerAddr] = cli
 		}
 	}
 
@@ -1943,6 +1952,12 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.WorkerConfigReq
 				Msg:    errors.ErrorStack(err),
 			}, nil
 		}
+	}
+	if resp == nil {
+		return &pb.WorkerConfigResponse{
+			Result: false,
+			Msg:    "Operate Worker failed, no idle worker",
+		}, nil
 	}
 
 	return &pb.WorkerConfigResponse{

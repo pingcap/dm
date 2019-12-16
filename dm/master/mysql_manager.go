@@ -14,6 +14,7 @@ type Worker interface {
 	CreateMysqlTask(ctx context.Context, c *config.WorkerConfig, d time.Duration) (*pb.MysqlTaskResponse, error)
 	UpdateMysqlConfig(ctx context.Context, c *config.WorkerConfig, d time.Duration) (*pb.MysqlTaskResponse, error)
 	StopMysqlTask(ctx context.Context, c string, d time.Duration) (*pb.MysqlTaskResponse, error)
+	Address() string
 }
 
 // MysqlManager control mysql tasks running
@@ -21,7 +22,7 @@ type MysqlManager struct {
 	configs    map[string]config.WorkerConfig
 	workers    map[string]Worker
 	scheduleCh chan string
-	mockWorker Worker
+	idleWorker map[string]Worker
 	sync.Mutex
 }
 
@@ -30,6 +31,7 @@ func NewMysqlManager(ch chan string) *MysqlManager {
 	m := MysqlManager{
 		workers:    make(map[string]Worker),
 		configs:    make(map[string]config.WorkerConfig),
+		idleWorker: make(map[string]Worker),
 		scheduleCh: ch,
 	}
 	return &m
@@ -57,12 +59,37 @@ func (m *MysqlManager) GetWorkerConfig(name string) config.WorkerConfig {
 func (m *MysqlManager) ScheduleMysqlWorker(ctx context.Context, c *config.WorkerConfig, d time.Duration) (*pb.MysqlTaskResponse, error) {
 	m.Lock()
 	defer m.Unlock()
-	m.configs[c.SourceID] = *c
-	if m.mockWorker != nil {
-		return m.mockWorker.CreateMysqlTask(ctx, c, d)
+	if len(m.idleWorker) > 0 {
+		for k, mockWorker := range m.idleWorker {
+			resp, err := mockWorker.CreateMysqlTask(ctx, c, d)
+			if err != nil {
+				return nil, err
+			}
+			if resp.Result {
+				delete(m.idleWorker, k)
+				m.workers[c.SourceID] = mockWorker
+				m.configs[c.SourceID] = *c
+			}
+			return resp, nil
+		}
 	}
-	// m.scheduleCh <- c.SourceID
-	// TODO: get idle worker
+	return nil, nil
+}
+
+// StopMysqlWorker is to stop mysql task in a server
+func (m *MysqlManager) StopMysqlWorker(ctx context.Context, c *config.WorkerConfig, d time.Duration) (*pb.MysqlTaskResponse, error) {
+	m.Lock()
+	defer m.Unlock()
+	if w, ok := m.workers[c.SourceID]; ok {
+		resp, err := w.StopMysqlTask(ctx, c.SourceID, d)
+		if err == nil && resp != nil {
+			delete(m.workers, c.SourceID)
+			delete(m.configs, c.SourceID)
+			m.idleWorker[w.Address()] = w
+			return resp, nil
+		}
+		return resp, err
+	}
 	return nil, nil
 }
 
@@ -70,11 +97,12 @@ func (m *MysqlManager) ScheduleMysqlWorker(ctx context.Context, c *config.Worker
 func (m *MysqlManager) AddWorker(name string, w Worker) {
 	m.Lock()
 	defer m.Unlock()
-	m.workers[name] = w
+	m.idleWorker[name] = w
 }
 
 // MockWorker is created for mysql task
 type MockWorker struct {
+	adress string
 	client workerrpc.Client
 }
 
@@ -120,4 +148,9 @@ func (w *MockWorker) StopMysqlTask(ctx context.Context, sourceID string, d time.
 	}
 	resp, err := w.client.SendRequest(ctx, ownerReq, d)
 	return resp.MysqlWorker, err
+}
+
+// Address return address of worker
+func (w *MockWorker) Address() string {
+	return w.adress
 }

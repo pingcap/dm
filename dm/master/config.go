@@ -50,6 +50,7 @@ var SampleConfigFile string
 // NewConfig creates a config for dm-master
 func NewConfig() *Config {
 	cfg := &Config{}
+	cfg.Debug = false
 	cfg.FlagSet = flag.NewFlagSet("dm-master", flag.ContinueOnError)
 	fs := cfg.FlagSet
 
@@ -116,7 +117,8 @@ type Config struct {
 	AdvertisePeerUrls   string `toml:"advertise-peer-urls" json:"advertise-peer-urls"`
 	InitialCluster      string `toml:"initial-cluster" json:"initial-cluster"`
 	InitialClusterState string `toml:"initial-cluster-state" json:"initial-cluster-state"`
-	Join                string `toml:"join" json:"join"` // cluster's client address (endpoints), not peer address
+	Join                string `toml:"join" json:"join"`   // cluster's client address (endpoints), not peer address
+	Debug               bool   `toml:"debug" json:"debug"` // only use for test
 
 	printVersion      bool
 	printSampleConfig bool
