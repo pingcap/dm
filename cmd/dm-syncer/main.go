@@ -79,6 +79,12 @@ func main() {
     pr := make(chan pb.ProcessResult, 1)
     sync.Process(ctx, pr)
 
+    pResult := <- pr
+    if len(pResult.Errors) > 0 {
+        fmt.Printf("run syncer error %v", pResult.Errors)
+        os.Exit(2)
+    }
+
     // 5. close the server
     sync.Close()
     log.L().Info("dm-syncer exit")
