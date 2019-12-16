@@ -35,42 +35,42 @@ type CommonConfig struct {
 	ServerID     int
 	Flavor       string
 	WorkerCount  int
-	Batch		 int
+	Batch        int
 	StatusAddr   string
-	Meta 		 string
+	Meta         string
 
-	LogLevel     string
-	LogFile      string
-	LogRotate    string
+	LogLevel  string
+	LogFile   string
+	LogRotate string
 
-	EnableGTID   bool
-	SafeMode     bool
-	MaxRetry     int
+	EnableGTID bool
+	SafeMode   bool
+	MaxRetry   int
 
 	EnableANSIQuotes bool
 	TimezoneStr      string
 
-	OldConfigFormat     bool
+	OldConfigFormat bool
 }
 
 func (c *CommonConfig) newConfigFromOldConfig(args []string) (*config.SubTaskConfig, error) {
 	cfg := &OldConfig{
-		printVersion: c.printVersion,
-		ConfigFile:   c.ConfigFile,
-		ServerID:     c.ServerID,
-		Flavor:       c.Flavor,
-		WorkerCount:  c.WorkerCount,
-		Batch:        c.Batch,
-		StatusAddr:   c.StatusAddr,
-		Meta:         c.Meta,
-		LogLevel:     c.LogLevel,
-		LogFile:      c.LogFile,
-		LogRotate:    c.LogRotate,
-		EnableGTID:   c.EnableGTID,
-		SafeMode:     c.SafeMode,
-		MaxRetry:     c.MaxRetry,
+		printVersion:     c.printVersion,
+		ConfigFile:       c.ConfigFile,
+		ServerID:         c.ServerID,
+		Flavor:           c.Flavor,
+		WorkerCount:      c.WorkerCount,
+		Batch:            c.Batch,
+		StatusAddr:       c.StatusAddr,
+		Meta:             c.Meta,
+		LogLevel:         c.LogLevel,
+		LogFile:          c.LogFile,
+		LogRotate:        c.LogRotate,
+		EnableGTID:       c.EnableGTID,
+		SafeMode:         c.SafeMode,
+		MaxRetry:         c.MaxRetry,
 		EnableANSIQuotes: c.EnableANSIQuotes,
-		TimezoneStr:  c.TimezoneStr,
+		TimezoneStr:      c.TimezoneStr,
 	}
 
 	cfg.FlagSet = flag.NewFlagSet("common-syncer", flag.ContinueOnError)
@@ -208,8 +208,8 @@ type OldConfig struct {
 
 	StatusAddr string `toml:"status-addr" json:"status-addr"`
 
-	ServerID           int    `toml:"server-id" json:"server-id"`
-	Meta               string `toml:"meta" json:"meta"`
+	ServerID int    `toml:"server-id" json:"server-id"`
+	Meta     string `toml:"meta" json:"meta"`
 	// NOTE: This item is deprecated.
 	PersistentTableDir string `toml:"persistent-dir" json:"persistent-dir"`
 	Flavor             string `toml:"flavor" json:"flavor"`
@@ -232,7 +232,7 @@ type OldConfig struct {
 	// SkipSQLs []string `toml:"skip-sqls" json:"-"` // omit it since it's deprecated
 	// SkipEvents is deprecated, please use SkipDMLs instead.
 	// SkipEvents []string   `toml:"skip-events" json:"-"` // omit it since it's deprecated
-	SkipDMLs   []*SkipDML `toml:"skip-dmls" json:"skip-dmls"`
+	SkipDMLs []*SkipDML `toml:"skip-dmls" json:"skip-dmls"`
 
 	RouteRules []*RouteRule `toml:"route-rules" json:"route-rules"`
 
@@ -267,8 +267,9 @@ type RouteRule struct {
 	PatternSchema string `toml:"pattern-schema" json:"pattern-schema"`
 	PatternTable  string `toml:"pattern-table" json:"pattern-table"`
 	TargetSchema  string `toml:"target-schema" json:"target-schema"`
-	TargetTable  string `toml:"target-table" json:"target-table"`
+	TargetTable   string `toml:"target-table" json:"target-table"`
 }
+
 // SkipDML defines config rule of skipping dml.
 // This config has been replaced by BinLog filter.
 type SkipDML struct {
@@ -280,38 +281,37 @@ type SkipDML struct {
 func (oc *OldConfig) convertToNewFormat() (*config.SubTaskConfig, error) {
 
 	newTask := &config.SubTaskConfig{
-		LogLevel: oc.LogLevel,
-		LogFile:  oc.LogFile,
+		LogLevel:  oc.LogLevel,
+		LogFile:   oc.LogFile,
 		LogRotate: oc.LogRotate,
 
 		StatusAddr: oc.StatusAddr,
 		ServerID:   uint32(oc.ServerID),
 		Flavor:     oc.Flavor,
 
-		SyncerConfig : config.SyncerConfig{
-			MetaFile: oc.Meta,
-			WorkerCount: oc.WorkerCount,
-			Batch: oc.Batch,
-			MaxRetry: oc.MaxRetry,
-			AutoFixGTID: oc.AutoFixGTID,
-			EnableGTID: oc.EnableGTID,
+		SyncerConfig: config.SyncerConfig{
+			MetaFile:         oc.Meta,
+			WorkerCount:      oc.WorkerCount,
+			Batch:            oc.Batch,
+			MaxRetry:         oc.MaxRetry,
+			AutoFixGTID:      oc.AutoFixGTID,
+			EnableGTID:       oc.EnableGTID,
 			EnableANSIQuotes: oc.EnableANSIQuotes,
 			DisableCausality: oc.DisableCausality,
-			SafeMode: oc.SafeMode,
+			SafeMode:         oc.SafeMode,
 		},
-		
+
 		BWList: &filter.Rules{
 			DoTables:     oc.DoTables,
 			DoDBs:        oc.DoDBs,
 			IgnoreTables: oc.IgnoreTables,
 			IgnoreDBs:    oc.IgnoreDBs,
 		},
-		
-		ConfigFile: oc.ConfigFile,
-		Timezone: oc.TimezoneStr,
-		From : oc.From,
-		To: oc.To,
 
+		ConfigFile: oc.ConfigFile,
+		Timezone:   oc.TimezoneStr,
+		From:       oc.From,
+		To:         oc.To,
 	}
 
 	for _, rule := range oc.RouteRules {
@@ -333,7 +333,7 @@ func (oc *OldConfig) convertToNewFormat() (*config.SubTaskConfig, error) {
 }
 
 func generateBinlogEventRule(skipDDLs []string, skipDMLs []*SkipDML) ([]*bf.BinlogEventRule, error) {
-	result := make([]*bf.BinlogEventRule, 0, 1 + len(skipDMLs))
+	result := make([]*bf.BinlogEventRule, 0, 1+len(skipDMLs))
 	ddlEvents := &bf.BinlogEventRule{}
 	for _, skipDDL := range skipDDLs {
 		if tp, _ := bf.ClassifyEvent(bf.EventType(skipDDL)); tp != "ddl" {

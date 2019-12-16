@@ -195,7 +195,7 @@ func (c *SubTaskConfig) GetFlagSet() *flag.FlagSet {
 	return c.flagSet
 }
 
-func (c *SubTaskConfig) SetFlagSet(flagSet *flag.FlagSet)  {
+func (c *SubTaskConfig) SetFlagSet(flagSet *flag.FlagSet) {
 	c.flagSet = flagSet
 }
 
