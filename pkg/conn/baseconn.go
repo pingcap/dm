@@ -15,6 +15,7 @@ package conn
 
 import (
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"strings"
 
@@ -207,5 +208,14 @@ func (conn *BaseConn) close() error {
 	if conn == nil || conn.DBConn == nil {
 		return nil
 	}
-	return terror.ErrDBUnExpect.Delegate(conn.DBConn.Close(), "close")
+
+	err := conn.DBConn.Raw(func(dc interface{}) error {
+		// return an `ErrBadConn` to ensure close the connection, but do not put it back to the pool.
+		// if we choose to use `Close`, it will always put the connection back to the pool.
+		return driver.ErrBadConn
+	})
+	if err != driver.ErrBadConn {
+		return terror.ErrDBUnExpect.Delegate(err, "close")
+	}
+	return nil
 }
