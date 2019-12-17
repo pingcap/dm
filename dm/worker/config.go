@@ -50,17 +50,21 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
 	//fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
+	fs.StringVar(&cfg.Join, "join", "", "join to an existing cluster (usage: cluster's '${advertise-client-urls}'")
+	fs.StringVar(&cfg.Name, "name", "", "human-readable name for DM-worker member")
 	return cfg
 }
 
 // Config is the configuration.
 type Config struct {
 	flagSet *flag.FlagSet
+	Name    string `toml:"name" json:"name"`
 
 	LogLevel  string `toml:"log-level" json:"log-level"`
 	LogFile   string `toml:"log-file" json:"log-file"`
 	LogRotate string `toml:"log-rotate" json:"log-rotate"`
 
+	Join       string `toml:"string" json:"join" `
 	WorkerAddr string `toml:"worker-addr" json:"worker-addr"`
 
 	ConfigFile string `json:"config-file"`

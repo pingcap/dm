@@ -64,6 +64,9 @@ service Master {
 
     // Operate mysql-worker for server
     rpc OperateMysqlWorker(WorkerConfigRequest) returns (WorkerConfigResponse) {}
+
+    // RegisterWorker register the dm-workers.
+    rpc RegisterWorker(RegisterWorkerRequest) returns(RegisterWorkerResponse) {}
 }
 
 message MigrateWorkerRelayRequest {
@@ -320,6 +323,16 @@ message WorkerConfigRequest {
 }
 
 message WorkerConfigResponse {
+    bool result = 1;
+    string msg = 2;
+}
+
+message RegisterWorkerRequest {
+    string name = 1;
+    string address = 2;
+}
+
+message RegisterWorkerResponse {
     bool result = 1;
     string msg = 2;
 }

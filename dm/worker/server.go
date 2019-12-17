@@ -76,6 +76,12 @@ func (s *Server) Start() error {
 	}
 
 	s.worker = nil
+	go func() {
+		defer s.wg.Done()
+		// worker keepalive with master
+		// FIXME: use global context
+		s.KeepAlive(s.worker.ctx)
+	}()
 
 	// create a cmux
 	m := cmux.New(s.rootLis)
@@ -96,7 +102,6 @@ func (s *Server) Start() error {
 	go InitStatus(httpL) // serve status
 
 	s.closed.Set(false)
-
 	log.L().Info("start gRPC API", zap.String("listened address", s.cfg.WorkerAddr))
 	err = m.Serve()
 	if err != nil && common.IsErrNetClosing(err) {
