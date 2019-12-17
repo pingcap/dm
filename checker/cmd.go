@@ -58,7 +58,7 @@ func CheckSyncConfig(ctx context.Context, cfgs []*config.SubTaskConfig) error {
 
 	c := NewChecker(cfgs, checkingItems)
 
-	err := c.Init()
+	err := c.Init(ctx)
 	if err != nil {
 		return terror.Annotate(err, "fail to initial checker")
 	}

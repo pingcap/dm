@@ -125,7 +125,9 @@ func (st *SubTask) Init() error {
 	// other setups can be done in `Process`, like Loader's prepare which depends on Mydumper's output
 	// but setups in `Process` should be treated carefully, let it's compatible with Pause / Resume
 	for i, u := range st.units {
-		err := u.Init()
+		ctx, cancel := context.WithTimeout(context.Background(), unit.DefaultInitTimeout)
+		err := u.Init(ctx)
+		cancel()
 		if err != nil {
 			initializeUnitSuccess = false
 			// when init fail, other units initialized before should be closed
@@ -140,7 +142,9 @@ func (st *SubTask) Init() error {
 	var skipIdx = 0
 	for i := len(st.units) - 1; i > 0; i-- {
 		u := st.units[i]
-		isFresh, err := u.IsFreshTask()
+		ctx, cancel := context.WithTimeout(context.Background(), unit.DefaultInitTimeout)
+		isFresh, err := u.IsFreshTask(ctx)
+		cancel()
 		if err != nil {
 			initializeUnitSuccess = false
 			return terror.Annotatef(err, "fail to get fresh status of subtask %s %s", st.cfg.Name, u.Type())
