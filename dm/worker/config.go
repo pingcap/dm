@@ -84,6 +84,8 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.Tracer.TracerAddr, "tracer-server-addr", "", "tracing service rpc address")
 	fs.IntVar(&cfg.Tracer.BatchSize, "tracer-batch-size", 20, "upload to tracing service batch size")
 	fs.BoolVar(&cfg.Tracer.Checksum, "tracer-checksum", false, "whether to calculate checksum of some data")
+	fs.StringVar(&cfg.Join, "join", "", "join to an existing cluster (usage: cluster's '${advertise-client-urls}'")
+	fs.StringVar(&cfg.Name, "name", "", "human-readable name for DM-worker member")
 
 	return cfg
 }
@@ -91,11 +93,13 @@ func NewConfig() *Config {
 // Config is the configuration.
 type Config struct {
 	flagSet *flag.FlagSet
+	Name    string `toml:"name" json:"name"`
 
 	LogLevel  string `toml:"log-level" json:"log-level"`
 	LogFile   string `toml:"log-file" json:"log-file"`
 	LogRotate string `toml:"log-rotate" json:"log-rotate"`
 
+	Join       string `toml:"string" json:"join" `
 	WorkerAddr string `toml:"worker-addr" json:"worker-addr"`
 
 	EnableGTID  bool   `toml:"enable-gtid" json:"enable-gtid"`
