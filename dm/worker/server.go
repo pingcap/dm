@@ -44,6 +44,8 @@ type Server struct {
 	sync.Mutex
 	wg     sync.WaitGroup
 	closed sync2.AtomicBool
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	cfg *Config
 
@@ -76,11 +78,12 @@ func (s *Server) Start() error {
 	}
 
 	s.worker = nil
+	s.ctx, s.cancel = context.WithCancel(context.Background())
+	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
 		// worker keepalive with master
-		// FIXME: use global context
-		s.KeepAlive(s.worker.ctx)
+		s.KeepAlive(s.ctx)
 	}()
 
 	// create a cmux
@@ -132,10 +135,11 @@ func (s *Server) Close() {
 	}
 
 	// close worker and wait for return
+	s.cancel()
 	if s.worker != nil {
 		s.worker.Close()
-		s.wg.Wait()
 	}
+	s.wg.Wait()
 
 	s.closed.Set(true)
 }
@@ -559,9 +563,7 @@ func (s *Server) startWorker(cfg *config.WorkerConfig) error {
 	}
 	s.worker = w
 	s.Unlock()
-	s.wg.Add(1)
 	go func() {
-		defer s.wg.Done()
 		s.worker.Start()
 	}()
 	return nil
@@ -610,6 +612,13 @@ func (s *Server) UpdateMysqlTaskConfig(ctx context.Context, req *pb.MysqlTaskReq
 	return resp, nil
 }
 
+func (s *Server) stopMysqlTask() {
+	w := s.worker
+	s.worker = nil
+	s.Unlock()
+	w.Close()
+}
+
 // StopMysqlTask stops a mysql task which has been running in this Server
 func (s *Server) StopMysqlTask(ctx context.Context, req *pb.StopMysqlTaskRequest) (*pb.MysqlTaskResponse, error) {
 	resp := &pb.MysqlTaskResponse{
@@ -622,11 +631,15 @@ func (s *Server) StopMysqlTask(ctx context.Context, req *pb.StopMysqlTaskRequest
 		resp.Msg = "Mysql task has not been created, please call CreateMysqlTask"
 		return resp, nil
 	}
+	if req.SourceID != s.worker.cfg.SourceID {
+		resp.Result = false
+		resp.Msg = "Mysql task has not been created, please call CreateMysqlTask"
+		return resp, nil
+	}
 	w := s.worker
 	s.worker = nil
 	s.Unlock()
 	w.Close()
-	s.wg.Wait()
 	return resp, nil
 }
 

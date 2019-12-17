@@ -90,6 +90,11 @@ func (s *Server) KeepAlive(ctx context.Context) error {
 		case _, ok := <-ch:
 			if !ok {
 				log.L().Info("keep alive channel is closed")
+				s.Lock()
+				w := s.worker
+				s.worker = nil
+				w.Close()
+				s.Unlock()
 				return nil
 			}
 		case <-ctx.Done():
@@ -100,4 +105,5 @@ func (s *Server) KeepAlive(ctx context.Context) error {
 			return nil
 		}
 	}
+
 }
