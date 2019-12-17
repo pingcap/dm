@@ -15,6 +15,7 @@ package coordinator
 
 import (
 	"context"
+	"github.com/pingcap/dm/dm/config"
 	"strings"
 	"sync"
 
@@ -36,12 +37,19 @@ type Coordinator struct {
 	workers map[string]*Worker
 	// upstream(source-id) -> worker
 	upstreams map[string]*Worker
+
+	// upstream(address) -> config
+	configs map[string]config.WorkerConfig
+
+	// pending create taks (sourceid) --> address
+	pendingtask map[string]string
 }
 
 // NewCoordinator returns a coordinate.
 func NewCoordinator() *Coordinator {
 	return &Coordinator{
 		workers: make(map[string]*Worker),
+		configs: make(map[string]config.WorkerConfig),
 	}
 }
 
@@ -50,6 +58,47 @@ func (c *Coordinator) AddWorker(name string, address string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.workers[address] = NewWorker(name, address)
+}
+
+// HandleStartedWorker change worker status when mysql task started
+func (c *Coordinator) HandleStartedWorker(w *Worker, cfg *config.WorkerConfig, succ bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if succ {
+		c.upstreams[cfg.SourceID] = w
+		c.configs[w.Address()] = *cfg
+	} else {
+		w.SetStatus(WorkerFree)
+	}
+	delete(c.pendingtask, cfg.SourceID)
+}
+
+// HandleStoppedWorker change worker status when mysql task stopped
+func (c *Coordinator) HandleStoppedWorker(w *Worker, cfg *config.WorkerConfig) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.upstreams, cfg.SourceID)
+	delete(c.configs, w.Address())
+	w.SetStatus(WorkerFree)
+}
+
+// GetFreeWorkerForSource get the free worker to create mysql delay task, and add it to pending task
+// to avoid create a task in two worker
+func (c *Coordinator) GetFreeWorkerForSource(source string) (*Worker, string) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if addr, ok := c.pendingtask[source]; ok {
+		return nil, addr
+	}
+	for _, w := range c.workers {
+		if w.status.Load() == WorkerFree {
+			// we bound worker to avoid another task trying to get it
+			w.status.Store(WorkerBound)
+			c.pendingtask[source] = w.Address()
+			return w, ""
+		}
+	}
+	return nil, ""
 }
 
 // GetWorkerByAddress gets the worker through address.
@@ -85,7 +134,9 @@ func (c *Coordinator) GetAllWorkers() map[string]*Worker {
 
 // GetWorkerBySourceID gets the worker through source id.
 func (c *Coordinator) GetWorkerBySourceID(source string) *Worker {
-	return nil
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.upstreams[source]
 }
 
 // GetWorkersByStatus gets the workers match the specified status.
@@ -124,7 +175,7 @@ func (c *Coordinator) ObserveWorkers(ctx context.Context, client *clientv3.Clien
 					c.mu.Lock()
 					if w, ok := c.workers[addr]; ok && name == w.Name() {
 						log.L().Info("worker became online, state: free", zap.String("name", w.Name()), zap.String("address", w.Address()))
-						w.setStatus(WorkerFree)
+						w.SetStatus(WorkerFree)
 					}
 					c.mu.Unlock()
 
@@ -136,7 +187,10 @@ func (c *Coordinator) ObserveWorkers(ctx context.Context, client *clientv3.Clien
 					c.mu.Lock()
 					if w, ok := c.workers[addr]; ok && name == w.Name() {
 						log.L().Info("worker became offline, state: closed", zap.String("name", w.Name()), zap.String("address", w.Address()))
-						w.setStatus(WorkerClosed)
+						w.SetStatus(WorkerClosed)
+						cfg := c.configs[addr]
+						delete(c.upstreams, cfg.SourceID)
+						delete(c.configs, addr)
 					}
 					c.mu.Unlock()
 				}

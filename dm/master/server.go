@@ -96,8 +96,6 @@ type Server struct {
 	ap *AgentPool
 
 	closed sync2.AtomicBool
-
-	mysqlManager *MysqlManager
 }
 
 // NewServer creates a new Server
@@ -111,7 +109,6 @@ func NewServer(cfg *Config) *Server {
 		sqlOperatorHolder: operator.NewHolder(),
 		idGen:             tracing.NewIDGen(),
 		ap:                NewAgentPool(&RateLimitConfig{rate: cfg.RPCRateLimit, burst: cfg.RPCRateBurst}),
-		mysqlManager:      NewMysqlManager(make(chan string)),
 	}
 	server.closed.Set(true)
 
@@ -139,31 +136,6 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		return
 	}
 
-	// create clients to DM-workers
-	for _, workerAddr := range s.cfg.DeployMap {
-		cli, err := workerrpc.NewGRPCClient(workerAddr)
-		if err != nil {
-			return err
-		}
-		if s.cfg.Debug {
-			w := &MockWorker{
-				adress: workerAddr,
-				client: cli,
-			}
-			s.mysqlManager.AddWorker(workerAddr, w)
-		} else {
-			s.workerClients[workerAddr] = cli
-		}
-	}
-
-	//	for _, workerAddr := range s.cfg.DeployMap {
-	//		s.workerClients[workerAddr], err = workerrpc.NewGRPCClient(workerAddr)
-	//		if err != nil {
-	//			return
-	//		}
-	//	}
-	//
-	// get an HTTP to gRPC API handler.
 	apiHandler, err := getHTTPAPIHandler(ctx, s.cfg.MasterAddr)
 	if err != nil {
 		return
@@ -1970,20 +1942,39 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.WorkerConfigReq
 	if err := cfg.Adjust(fromDB.DB); err != nil {
 		return makeWorkerConfigResponse(err)
 	}
-	s.Lock()
-	defer s.Unlock()
 	var resp *pb.MysqlTaskResponse
 	if req.Op == pb.WorkerOp_StartWorker {
-		w := s.mysqlManager.GetWorker(cfg.SourceID)
+		w := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
 		if w != nil {
 			return &pb.WorkerConfigResponse{
 				Result: false,
 				Msg:    "Create worker failed. worker has been started",
 			}, nil
 		}
-		resp, err = s.mysqlManager.ScheduleMysqlWorker(ctx, cfg, s.cfg.RPCTimeout)
+		w, addr := s.coordinator.GetFreeWorkerForSource(cfg.SourceID)
+		if w == nil {
+			if addr != "" {
+				return &pb.WorkerConfigResponse{
+					Result: false,
+					Msg:    fmt.Sprintf("Create worker failed. the same source has been started in worker: %v", addr),
+				}, nil
+			}
+			return &pb.WorkerConfigResponse{
+				Result: false,
+				Msg:    "Create worker failed. no free worker could start mysql task",
+			}, nil
+		}
+		resp, err = w.CreateMysqlTask(ctx, cfg, s.cfg.RPCTimeout)
+		if err != nil {
+			s.coordinator.HandleStartedWorker(w, cfg, false)
+			return &pb.WorkerConfigResponse{
+				Result: false,
+				Msg:    errors.ErrorStack(err),
+			}, nil
+		}
+		s.coordinator.HandleStartedWorker(w, cfg, true)
 	} else if req.Op == pb.WorkerOp_UpdateConfig {
-		w := s.mysqlManager.GetWorker(cfg.SourceID)
+		w := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
 		if w == nil {
 			return &pb.WorkerConfigResponse{
 				Result: false,
@@ -1997,7 +1988,7 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.WorkerConfigReq
 			}, nil
 		}
 	} else {
-		w := s.mysqlManager.GetWorker(cfg.SourceID)
+		w := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
 		if w == nil {
 			return &pb.WorkerConfigResponse{
 				Result: false,
@@ -2010,14 +2001,8 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.WorkerConfigReq
 				Msg:    errors.ErrorStack(err),
 			}, nil
 		}
+		s.coordinator.HandleStoppedWorker(w, cfg)
 	}
-	if resp == nil {
-		return &pb.WorkerConfigResponse{
-			Result: false,
-			Msg:    "Operate Worker failed, no idle worker",
-		}, nil
-	}
-
 	return &pb.WorkerConfigResponse{
 		Result: resp.Result,
 		Msg:    resp.Msg,

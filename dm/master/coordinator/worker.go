@@ -14,8 +14,12 @@
 package coordinator
 
 import (
+	"context"
 	"fmt"
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
 	"sync/atomic"
+	"time"
 
 	"github.com/pingcap/dm/dm/master/workerrpc"
 )
@@ -81,6 +85,60 @@ func (w *Worker) State() WorkerState {
 	return w.status.Load().(WorkerState)
 }
 
-func (w *Worker) setStatus(s WorkerState) {
+// SetStatus change the status of worker
+func (w *Worker) SetStatus(s WorkerState) {
 	w.status.Store(s)
+}
+
+// CreateMysqlTask in a idle worker
+func (w *Worker) CreateMysqlTask(ctx context.Context, c *config.WorkerConfig, d time.Duration) (*pb.MysqlTaskResponse, error) {
+	content, err := c.Toml()
+	if err != nil {
+		return nil, err
+	}
+	ownerReq := &workerrpc.Request{
+		Type: workerrpc.CmdCreateMysqlWorker,
+		MysqlWorkerRequest: &pb.MysqlTaskRequest{
+			Config: content,
+		},
+	}
+	resp, err := w.client.SendRequest(ctx, ownerReq, d)
+	if err != nil {
+		return nil, err
+	}
+	return resp.MysqlWorker, err
+}
+
+// UpdateMysqlConfig update mysql config in worker
+func (w *Worker) UpdateMysqlConfig(ctx context.Context, c *config.WorkerConfig, d time.Duration) (*pb.MysqlTaskResponse, error) {
+	content, err := c.Toml()
+	if err != nil {
+		return nil, err
+	}
+	ownerReq := &workerrpc.Request{
+		Type: workerrpc.CmdUpdateMysqlConfig,
+		MysqlWorkerRequest: &pb.MysqlTaskRequest{
+			Config: content,
+		},
+	}
+	resp, err := w.client.SendRequest(ctx, ownerReq, d)
+	if err != nil {
+		return nil, err
+	}
+	return resp.MysqlWorker, err
+}
+
+// StopMysqlTask update mysql config in worker
+func (w *Worker) StopMysqlTask(ctx context.Context, sourceID string, d time.Duration) (*pb.MysqlTaskResponse, error) {
+	ownerReq := &workerrpc.Request{
+		Type: workerrpc.CmdStopMysqlWorker,
+		StopMysqlWorker: &pb.StopMysqlTaskRequest{
+			SourceID: sourceID,
+		},
+	}
+	resp, err := w.client.SendRequest(ctx, ownerReq, d)
+	if err != nil {
+		return nil, err
+	}
+	return resp.MysqlWorker, err
 }
