@@ -202,7 +202,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	s.bgFunWg.Add(1)
 	go func() {
 		defer s.bgFunWg.Done()
-		s.coordinator.Maintain(ctx, s.etcdClient)
+		s.coordinator.ObserveWorkers(ctx, s.etcdClient)
 	}()
 
 	s.bgFunWg.Add(1)
@@ -263,13 +263,16 @@ func errorCommonWorkerResponse(msg string, worker string) *pb.CommonWorkerRespon
 	}
 }
 
+// RegisterWorker registers the worker to the master, and all the worker will be store in the path:
+// key:   /dm-worker/address
+// value: name
 func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerRequest) (*pb.RegisterWorkerResponse, error) {
 	k := path.Join(workerRegisterPath, req.Address)
 	v := req.Name
 	ectx, cancel := context.WithTimeout(ctx, etcdTimeouit)
 	defer cancel()
 	resp, err := s.etcdClient.Txn(ectx).
-		If(clientv3.Compare(clientv3.CreateRevision(k), "=", "0")).
+		If(clientv3.Compare(clientv3.CreateRevision(k), "=", 0)).
 		Then(clientv3.OpPut(k, v)).
 		Else(clientv3.OpGet(k)).
 		Commit()
@@ -277,14 +280,20 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 		return nil, err
 	}
 	if !resp.Succeeded {
-		msg := fmt.Sprintf("the address already registered with name: %s", string(resp.Responses[0].GetResponseRange().GetKvs()[0].Value))
-		respWorker := &pb.RegisterWorkerResponse{
-			Result: false,
-			Msg:    msg,
+		if len(resp.Responses) == 0 {
+			return nil, errors.Errorf("the response kv is invalid length, request key: %s", k)
 		}
-		log.L().Error(msg)
-		return respWorker, nil
-
+		kv := resp.Responses[0].GetResponseRange().GetKvs()[0]
+		address, name := strings.TrimPrefix(string(kv.Key), workerRegisterPath), string(kv.Value)
+		if name != req.Name {
+			msg := fmt.Sprintf("the address %s already registered with name %s", address, name)
+			respWorker := &pb.RegisterWorkerResponse{
+				Result: false,
+				Msg:    msg,
+			}
+			log.L().Error(msg)
+			return respWorker, nil
+		}
 	}
 	s.coordinator.AddWorker(req.Name, req.Address)
 	log.L().Info("register worker successfully", zap.String("name", req.Name), zap.String("address", req.Address))
@@ -576,7 +585,7 @@ func extractWorkers(s *Server, req hasWokers) ([]string, error) {
 		invalidWorkers := make([]string, 0, len(req.GetWorkers()))
 		for _, workerAddress := range req.GetWorkers() {
 			w := s.coordinator.GetWorkerByAddress(workerAddress)
-			if w == nil || w.Status() == coordinator.WorkerClosed {
+			if w == nil || w.State() == coordinator.WorkerClosed {
 				invalidWorkers = append(invalidWorkers, workerAddress)
 			}
 		}
@@ -592,8 +601,10 @@ func extractWorkers(s *Server, req hasWokers) ([]string, error) {
 		}
 	} else {
 		// query all workers
+		log.L().Info("get workers")
 		for _, worker := range s.coordinator.GetAllWorkers() {
-			workers = append(workers, worker.Name())
+			log.L().Info("debug", zap.Stringer("worker", worker))
+			workers = append(workers, worker.String())
 		}
 	}
 	return workers, nil
@@ -755,11 +766,14 @@ func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLL
 		go func(addr string) {
 			defer wg.Done()
 			worker := s.coordinator.GetWorkerByAddress(addr)
-			if worker == nil || worker.Status() == coordinator.WorkerClosed {
+			if worker == nil || worker.State() == coordinator.WorkerClosed {
 				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", worker), worker.Address())
 				return
 			}
-			cli := worker.GetClient()
+			cli, err := worker.GetClient()
+			if err != nil {
+				return
+			}
 			resp, err := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
 			workerResp := &pb.CommonWorkerResponse{}
 			if err != nil {
@@ -1342,6 +1356,11 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 
 	request := &workerrpc.Request{Type: workerrpc.CmdFetchDDLInfo}
 	for address, w := range s.coordinator.GetAllWorkers() {
+		client, err := w.GetClient()
+		if err != nil {
+			log.L().Error("cannot get worker client", zap.String("name", w.Name()))
+			continue
+		}
 		wg.Add(1)
 		go func(worker string, cli workerrpc.Client) {
 			defer wg.Done()
@@ -1446,7 +1465,7 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 				}
 			}
 
-		}(address, w.GetClient())
+		}(address, client)
 	}
 
 	wg.Wait()
@@ -2052,6 +2071,7 @@ func (s *Server) workerArgsExtractor(args ...interface{}) (workerrpc.Client, str
 	if !ok {
 		return nil, "", terror.ErrMasterWorkerArgsExtractor.Generatef("invalid argument, args[0] is not valid worker id: %v", args[0])
 	}
+	log.L().Info("Debug get worker", zap.String("worker", worker))
 	cli := s.coordinator.GetWorkerClientByAddress(worker)
 	if cli == nil {
 		return nil, worker, terror.ErrMasterWorkerArgsExtractor.Generatef("%s relevant worker-client not found", worker)

@@ -68,7 +68,7 @@ func main() {
 	s := worker.NewServer(cfg)
 	err = s.JoinMaster(worker.GetJoinURLs(cfg.Join))
 	if err != nil {
-		fmt.Printf("join the cluster meet error %v", errors.ErrorStack(err))
+		log.L().Info("join the cluster meet error %v", zap.Error(err))
 		os.Exit(2)
 	}
 

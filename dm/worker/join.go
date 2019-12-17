@@ -67,6 +67,7 @@ var (
 	workerKeepAlivePath = "/dm-worker/a"
 )
 
+// KeepAlive attempts to keep the lease of the server alive forever.
 func (s *Server) KeepAlive(ctx context.Context) error {
 	// TODO: fetch the actual master endpoints, the master member maybe changed.
 	endpoints := GetJoinURLs(s.cfg.Join)

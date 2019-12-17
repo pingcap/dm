@@ -14,16 +14,18 @@
 package coordinator
 
 import (
+	"fmt"
 	"sync/atomic"
 
 	"github.com/pingcap/dm/dm/master/workerrpc"
 )
 
-type WorkerStatus int
+// WorkerState the status of the worker
+type WorkerState int
 
 // the status of worker
 const (
-	WorkerClosed WorkerStatus = iota + 1
+	WorkerClosed WorkerState = iota + 1
 	WorkerFree
 	WorkerBound
 )
@@ -36,23 +38,31 @@ type Worker struct {
 	status  atomic.Value
 }
 
-func NewWorker(name, address string) (*Worker, error) {
-	client, err := workerrpc.NewGRPCClient(address)
-	if err != nil {
-		return nil, err
-	}
+// NewWorker creates a worker with specified name and address.
+func NewWorker(name, address string) *Worker {
 	w := &Worker{
 		name:    name,
 		address: address,
-		client:  client,
 	}
 	w.status.Store(WorkerClosed)
-	return w, nil
+	return w
+}
+
+// String formats the worker.
+func (w *Worker) String() string {
+	return fmt.Sprintf("%s address:%s", w.name, w.address)
 }
 
 // GetClient returns the client of the worker.
-func (w *Worker) GetClient() workerrpc.Client {
-	return w.client
+func (w *Worker) GetClient() (workerrpc.Client, error) {
+	if w.client == nil {
+		client, err := workerrpc.NewGRPCClient(w.address)
+		if err != nil {
+			return nil, err
+		}
+		w.client = client
+	}
+	return w.client, nil
 }
 
 // Name returns the name of the worker.
@@ -65,12 +75,12 @@ func (w *Worker) Address() string {
 	return w.address
 }
 
-// Status returns the status of the worker.
-func (w *Worker) Status() WorkerStatus {
+// State returns the state of the worker.
+func (w *Worker) State() WorkerState {
 	// TODO: add more jugement.
-	return w.status.Load().(WorkerStatus)
+	return w.status.Load().(WorkerState)
 }
 
-func (w *Worker) setStatus(s WorkerStatus) {
+func (w *Worker) setStatus(s WorkerState) {
 	w.status.Store(s)
 }
