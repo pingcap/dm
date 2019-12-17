@@ -69,12 +69,12 @@ var (
 )
 
 // KeepAlive attempts to keep the lease of the server alive forever.
-func (s *Server) KeepAlive(ctx context.Context) error {
+func (s *Server) KeepAlive(ctx context.Context) (bool, error) {
 	// TODO: fetch the actual master endpoints, the master member maybe changed.
 	endpoints := GetJoinURLs(s.cfg.Join)
 	client, err := clientv3.NewFromURLs(endpoints)
 	if err != nil {
-		return err
+		return true, err
 	}
 
 	// FIXME: use a context from server.
@@ -82,27 +82,25 @@ func (s *Server) KeepAlive(ctx context.Context) error {
 	k := strings.Join([]string{workerKeepAlivePath, s.cfg.WorkerAddr, s.cfg.Name}, ",")
 	_, err = client.Put(ctx, k, time.Now().String(), clientv3.WithLease(lease.ID))
 	if err != nil {
-		return err
+		return true, err
 	}
 	ch, err := client.KeepAlive(ctx, lease.ID)
+	if err != nil {
+		return true, err
+	}
 	for {
 		select {
 		case _, ok := <-ch:
 			if !ok {
 				log.L().Info("keep alive channel is closed")
-				s.Lock()
-				w := s.worker
-				s.worker = nil
-				w.Close()
-				s.Unlock()
-				return nil
+				return false, nil
 			}
 		case <-ctx.Done():
 			log.L().Info("server is closing, exits keepalive")
 			ctx, cancel := context.WithTimeout(client.Ctx(), revokeLeaseTimeout)
 			defer cancel()
 			client.Revoke(ctx, lease.ID)
-			return nil
+			return true, nil
 		}
 	}
 

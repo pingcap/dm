@@ -83,7 +83,28 @@ func (s *Server) Start() error {
 	go func() {
 		defer s.wg.Done()
 		// worker keepalive with master
-		s.KeepAlive(s.ctx)
+		shouldExit := false
+		for err == nil {
+			if shouldExit {
+				s.Lock()
+				if s.worker != nil {
+					s.worker.Close()
+				}
+				s.Unlock()
+				break
+			}
+			shouldExit, err = s.KeepAlive(s.ctx)
+			ch := time.NewTicker(time.Second)
+			if !shouldExit {
+				select {
+				case <-s.ctx.Done():
+					shouldExit = true
+					break
+				case <-ch.C:
+					break
+				}
+			}
+		}
 	}()
 
 	// create a cmux
