@@ -65,6 +65,7 @@ func (s *Server) JoinMaster(endpoints []string) error {
 var (
 	defaultKeepAliveTTL = int64(3)
 	workerKeepAlivePath = "/dm-worker/a"
+	revokeLeaseTimeout  = time.Second
 )
 
 // KeepAlive attempts to keep the lease of the server alive forever.
@@ -93,6 +94,9 @@ func (s *Server) KeepAlive(ctx context.Context) error {
 			}
 		case <-ctx.Done():
 			log.L().Info("server is closing, exits keepalive")
+			ctx, cancel := context.WithTimeout(client.Ctx(), revokeLeaseTimeout)
+			defer cancel()
+			client.Revoke(ctx, lease.ID)
 			return nil
 		}
 	}
