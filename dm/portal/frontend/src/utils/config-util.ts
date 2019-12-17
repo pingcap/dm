@@ -302,7 +302,10 @@ export function genFiltersConfig(
   return filters
 }
 
-export function genBlackWhiteList(allTables: IFullTables): IBWList {
+export function genBlackWhiteList(
+  allTables: IFullTables,
+  autoSycnUpstream: boolean
+): IBWList {
   const bwList: IBWList = {}
   const tables = Object.keys(allTables)
     .map(tableKey => allTables[tableKey])
@@ -314,6 +317,9 @@ export function genBlackWhiteList(allTables: IFullTables): IBWList {
     }
     const bwType: 'do-tables' | 'ignore-tables' =
       table.parentKey !== '' ? 'do-tables' : 'ignore-tables'
+    if (autoSycnUpstream && bwType === 'do-tables') {
+      return
+    }
     bwList[bwListKey][bwType].push({
       'db-name': table.schema,
       'tbl-name': table.table
@@ -327,11 +333,12 @@ export function genFinalConfig(
   instancesConfig: IInstances,
   sourceSchemas: IFullSchemas,
   targetSchemas: IFullSchemas,
-  allTables: IFullTables
+  allTables: IFullTables,
+  autoSycnUpstream: boolean
 ) {
   const routes: IRoutes = genRoutesConfig(targetSchemas, allTables)
   const filters: IFilters = genFiltersConfig(sourceSchemas, allTables)
-  const bwList: IBWList = genBlackWhiteList(allTables)
+  const bwList: IBWList = genBlackWhiteList(allTables, autoSycnUpstream)
 
   const finalConfig = {
     name: taskInfo.taskName,
@@ -603,9 +610,7 @@ export function parseFinalConfig(finalConfig: IFinalConfig) {
       schema.filters = filterRule.events
     } else {
       // 说明此条 filter 属于 table
-      const tableKey = `${sourceId}:${filterRule['schema-pattern']}:${
-        filterRule['table-pattern']
-      }`
+      const tableKey = `${sourceId}:${filterRule['schema-pattern']}:${filterRule['table-pattern']}`
       const table = allTables[tableKey]
       table.filters = filterRule.events
     }
