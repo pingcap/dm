@@ -57,7 +57,7 @@ func NewMydumper(cfg *config.SubTaskConfig) *Mydumper {
 }
 
 // Init implements Unit.Init
-func (m *Mydumper) Init() error {
+func (m *Mydumper) Init(ctx context.Context) error {
 	var err error
 	m.args, err = m.constructArgs()
 	return err
@@ -229,7 +229,7 @@ func (m *Mydumper) Type() pb.UnitType {
 }
 
 // IsFreshTask implements Unit.IsFreshTask
-func (m *Mydumper) IsFreshTask() (bool, error) {
+func (m *Mydumper) IsFreshTask(ctx context.Context) (bool, error) {
 	return true, nil
 }
 

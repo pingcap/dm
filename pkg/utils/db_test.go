@@ -43,8 +43,8 @@ func (t *testUtilsSuite) TestGetAllServerID(c *C) {
 	for _, testCase := range testCases {
 		for _, flavor := range flavors {
 			t.createMockResult(mock, testCase.masterID, testCase.serverIDs, flavor)
-			serverIDs, err := GetAllServerID(context.Background(), db)
-			c.Assert(err, IsNil)
+			serverIDs, err2 := GetAllServerID(context.Background(), db)
+			c.Assert(err2, IsNil)
 
 			for _, serverID := range testCase.serverIDs {
 				_, ok := serverIDs[serverID]
