@@ -103,8 +103,7 @@ func (d *BaseDB) CloseBaseConn(conn *BaseConn) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	delete(d.conns, conn)
-	return nil
-	//return conn.close()
+	return conn.close()
 }
 
 // Close release *BaseDB resource
