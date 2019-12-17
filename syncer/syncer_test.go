@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/binlog/event"
 	"github.com/pingcap/dm/pkg/conn"
+	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	parserpkg "github.com/pingcap/dm/pkg/parser"
@@ -391,7 +392,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 			if !result.isDDL {
 				continue // BEGIN event
 			}
-			querys, _, err := syncer.resolveDDLSQL(p, result.stmt, string(ev.Schema))
+			querys, _, err := syncer.resolveDDLSQL(tcontext.Background(), p, result.stmt, string(ev.Schema))
 			c.Assert(err, IsNil)
 			if len(querys) == 0 {
 				continue
@@ -557,7 +558,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 				continue // BEGIN event
 			}
 
-			querys, _, err := syncer.resolveDDLSQL(p, result.stmt, string(ev.Schema))
+			querys, _, err := syncer.resolveDDLSQL(tcontext.Background(), p, result.stmt, string(ev.Schema))
 			c.Assert(err, IsNil)
 			if len(querys) == 0 {
 				continue
@@ -1253,7 +1254,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 
 		// mock syncer.checkpoint.Init() function
 		syncer.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(checkPointDBConn, &retry.FiniteRetryStrategy{})}
-		syncer.checkpoint.(*RemoteCheckPoint).prepare()
+		syncer.checkpoint.(*RemoteCheckPoint).prepare(tcontext.Background())
 
 		syncer.reset()
 		events := append(createEvents, s.generateEvents(_case.testEvents, c)...)
@@ -1411,7 +1412,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 
 	// mock syncer.checkpoint.Init() function
 	syncer.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(checkPointDBConn, &retry.FiniteRetryStrategy{})}
-	syncer.checkpoint.(*RemoteCheckPoint).prepare()
+	syncer.checkpoint.(*RemoteCheckPoint).prepare(tcontext.Background())
 
 	syncer.reset()
 	events1 := mockBinlogEvents{

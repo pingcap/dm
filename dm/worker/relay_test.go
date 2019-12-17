@@ -50,7 +50,7 @@ func NewDummyRelay(cfg *relay.Config) relay.Process {
 }
 
 // Init implements Process interface
-func (d *DummyRelay) Init() error {
+func (d *DummyRelay) Init(ctx context.Context) error {
 	return d.initErr
 }
 

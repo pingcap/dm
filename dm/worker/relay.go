@@ -22,6 +22,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
@@ -125,7 +126,9 @@ func (h *realRelayHolder) Init(interceptors []purger.PurgeInterceptor) (purger.P
 		streamer.GetReaderHub(),
 	}
 
-	if err := h.relay.Init(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), unit.DefaultInitTimeout)
+	defer cancel()
+	if err := h.relay.Init(ctx); err != nil {
 		return nil, terror.Annotate(err, "initial relay unit")
 	}
 

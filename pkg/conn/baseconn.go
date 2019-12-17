@@ -15,14 +15,20 @@ package conn
 
 import (
 	"database/sql"
+	"database/sql/driver"
+	"fmt"
+	"strings"
+
+	"github.com/go-sql-driver/mysql"
+	"github.com/pingcap/failpoint"
+	gmysql "github.com/siddontang/go-mysql/mysql"
+	"go.uber.org/zap"
 
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/retry"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
-
-	"go.uber.org/zap"
 )
 
 // BaseConn is the basic connection we use in dm
@@ -109,6 +115,24 @@ func (conn *BaseConn) QuerySQL(tctx *tcontext.Context, query string, args ...int
 // 1. failed: (the index of sqls executed error, error)
 // 2. succeed: (len(sqls), nil)
 func (conn *BaseConn) ExecuteSQLWithIgnoreError(tctx *tcontext.Context, ignoreErr func(error) bool, queries []string, args ...[]interface{}) (int, error) {
+	// inject an error to trigger retry, this should be placed before the real execution of the SQL statement.
+	failpoint.Inject("retryableError", func(val failpoint.Value) {
+		if mark, ok := val.(string); ok {
+			enabled := false
+			for _, query := range queries {
+				if strings.Contains(query, mark) {
+					enabled = true // only enable if the `mark` matched.
+				}
+			}
+			if enabled {
+				tctx.L().Info("", zap.String("failpoint", "retryableError"), zap.String("mark", mark))
+				failpoint.Return(0, &mysql.MySQLError{
+					Number:  gmysql.ER_LOCK_DEADLOCK,
+					Message: fmt.Sprintf("failpoint inject retryable error for %s", mark)})
+			}
+		}
+	})
+
 	if len(queries) == 0 {
 		return 0, nil
 	}
@@ -184,5 +208,14 @@ func (conn *BaseConn) close() error {
 	if conn == nil || conn.DBConn == nil {
 		return nil
 	}
-	return terror.ErrDBUnExpect.Delegate(conn.DBConn.Close(), "close")
+
+	err := conn.DBConn.Raw(func(dc interface{}) error {
+		// return an `ErrBadConn` to ensure close the connection, but do not put it back to the pool.
+		// if we choose to use `Close`, it will always put the connection back to the pool.
+		return driver.ErrBadConn
+	})
+	if err != driver.ErrBadConn {
+		return terror.ErrDBUnExpect.Delegate(err, "close")
+	}
+	return nil
 }

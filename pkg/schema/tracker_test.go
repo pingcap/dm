@@ -118,10 +118,10 @@ func clearVolatileInfo(ti *model.TableInfo) {
 	}
 }
 
-// asJson is a convenient wrapper to print a TableInfo in its JSON representation.
-type asJson struct{ *model.TableInfo }
+// asJSON is a convenient wrapper to print a TableInfo in its JSON representation.
+type asJSON struct{ *model.TableInfo }
 
-func (aj asJson) String() string {
+func (aj asJSON) String() string {
 	b, _ := json.Marshal(aj.TableInfo)
 	return string(b)
 }
@@ -175,7 +175,7 @@ func (s *trackerSuite) TestCreateTableIfNotExists(c *C) {
 	ti2, err := tracker.GetTable("testdb", "foo")
 	c.Assert(err, IsNil)
 	clearVolatileInfo(ti2)
-	c.Assert(ti2, DeepEquals, ti1, Commentf("ti2 = %s\nti1 = %s", asJson{ti2}, asJson{ti1}))
+	c.Assert(ti2, DeepEquals, ti1, Commentf("ti2 = %s\nti1 = %s", asJSON{ti2}, asJSON{ti1}))
 
 	// Can use the table info to recover a table using a different name.
 	err = tracker.CreateTableIfNotExists("testdb", "bar", ti1)
@@ -186,5 +186,5 @@ func (s *trackerSuite) TestCreateTableIfNotExists(c *C) {
 	c.Assert(ti3.Name.O, Equals, "bar")
 	clearVolatileInfo(ti3)
 	ti3.Name = ti1.Name
-	c.Assert(ti3, DeepEquals, ti1, Commentf("ti3 = %s\nti1 = %s", asJson{ti3}, asJson{ti1}))
+	c.Assert(ti3, DeepEquals, ti1, Commentf("ti3 = %s\nti1 = %s", asJSON{ti3}, asJSON{ti1}))
 }
