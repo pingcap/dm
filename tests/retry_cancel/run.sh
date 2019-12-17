@@ -102,11 +102,16 @@ function run() {
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
 
-    # start DM-worker again (with auto restart task)
+    # start DM-worker again
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
+    sleep 2
+    echo "start task for incremental replication"
+    dmctl_start_task
+
     sleep 5 # should sleep > retryTimeout (now 3s)
 
     # query-task, it should still be running (retrying)

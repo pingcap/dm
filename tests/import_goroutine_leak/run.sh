@@ -65,6 +65,11 @@ function run() {
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     sleep 2s
+
+    echo "start task after restarted dm-worker"
+    dmctl_start_task
+    sleep 2s
+
     check_port_offline $WORKER1_PORT 20
     check_port_offline $WORKER2_PORT 20
 

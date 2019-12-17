@@ -152,7 +152,7 @@ func (s *Server) Close() {
 }
 
 // StartSubTask implements WorkerServer.StartSubTask
-func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
+func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "StartSubTask"), zap.Stringer("payload", req))
 
 	cfg := config.NewSubTaskConfig()
@@ -160,94 +160,73 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 	if err != nil {
 		err = terror.Annotatef(err, "decode subtask config from request %+v", req.Task)
 		log.L().Error("fail to decode task", zap.String("request", "StartSubTask"), zap.Stringer("payload", req), zap.Error(err))
-		return nil, err
+		return &pb.CommonWorkerResponse{
+			Result: false,
+			Msg:    err.Error(),
+		}, nil
 	}
 
-	opLogID, err := s.worker.StartSubTask(cfg)
+	err = s.worker.StartSubTask(cfg)
 	if err != nil {
 		err = terror.Annotatef(err, "start sub task %s", cfg.Name)
 		log.L().Error("fail to start subtask", zap.String("request", "StartSubTask"), zap.Stringer("payload", req), zap.Error(err))
-		return nil, err
+		return &pb.CommonWorkerResponse{
+			Result: false,
+			Msg:    err.Error(),
+		}, nil
 	}
 
-	return &pb.OperateSubTaskResponse{
-		Meta: &pb.CommonWorkerResponse{
-			Result: true,
-			Msg:    "",
-		},
-		Op:    pb.TaskOp_Start,
-		LogID: opLogID,
+	return &pb.CommonWorkerResponse{
+		Result: true,
 	}, nil
 }
 
 // OperateSubTask implements WorkerServer.OperateSubTask
 func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
 	log.L().Info("", zap.String("request", "OperateSubTask"), zap.Stringer("payload", req))
-	opLogID, err := s.worker.OperateSubTask(req.Name, req.Op)
+	err := s.worker.OperateSubTask(req.Name, req.Op)
 	if err != nil {
 		err = terror.Annotatef(err, "operate(%s) sub task %s", req.Op.String(), req.Name)
 		log.L().Error("fail to operate task", zap.String("request", "OperateSubTask"), zap.Stringer("payload", req), zap.Error(err))
-		return nil, err
+		return &pb.OperateSubTaskResponse{
+			Op:     req.Op,
+			Result: false,
+			Msg:    err.Error(),
+		}, nil
 	}
 
 	return &pb.OperateSubTaskResponse{
-		Meta: &pb.CommonWorkerResponse{
-			Result: true,
-			Msg:    "",
-		},
-		Op:    req.Op,
-		LogID: opLogID,
+		Op:     req.Op,
+		Result: true,
 	}, nil
 }
 
 // UpdateSubTask implements WorkerServer.UpdateSubTask
-func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
+func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "UpdateSubTask"), zap.Stringer("payload", req))
 	cfg := config.NewSubTaskConfig()
 	err := cfg.Decode(req.Task)
 	if err != nil {
 		err = terror.Annotatef(err, "decode config from request %+v", req.Task)
 		log.L().Error("fail to decode subtask", zap.String("request", "UpdateSubTask"), zap.Stringer("payload", req), zap.Error(err))
-		return nil, err
+		return &pb.CommonWorkerResponse{
+			Result: false,
+			Msg:    err.Error(),
+		}, nil
 	}
 
-	opLogID, err := s.worker.UpdateSubTask(cfg)
+	err = s.worker.UpdateSubTask(cfg)
 	if err != nil {
 		err = terror.Annotatef(err, "update sub task %s", cfg.Name)
 		log.L().Error("fail to update task", zap.String("request", "UpdateSubTask"), zap.Stringer("payload", req), zap.Error(err))
-		return nil, err
+		return &pb.CommonWorkerResponse{
+			Result: false,
+			Msg:    err.Error(),
+		}, nil
 	}
 
-	return &pb.OperateSubTaskResponse{
-		Meta: &pb.CommonWorkerResponse{
-			Result: true,
-			Msg:    "",
-		},
-		Op:    pb.TaskOp_Update,
-		LogID: opLogID,
-	}, nil
-}
-
-// QueryTaskOperation implements WorkerServer.QueryTaskOperation
-func (s *Server) QueryTaskOperation(ctx context.Context, req *pb.QueryTaskOperationRequest) (*pb.QueryTaskOperationResponse, error) {
-	log.L().Info("", zap.String("request", "QueryTaskOperation"), zap.Stringer("payload", req))
-
-	taskName := req.Name
-	opLogID := req.LogID
-
-	opLog, err := s.worker.meta.GetTaskLog(opLogID)
-	if err != nil {
-		err = terror.Annotatef(err, "fail to get operation %d of task %s", opLogID, taskName)
-		log.L().Error(err.Error())
-		return nil, err
-	}
-
-	return &pb.QueryTaskOperationResponse{
-		Log: opLog,
-		Meta: &pb.CommonWorkerResponse{
-			Result: true,
-			Msg:    "",
-		},
+	return &pb.CommonWorkerResponse{
+		Result: true,
 	}, nil
 }
 

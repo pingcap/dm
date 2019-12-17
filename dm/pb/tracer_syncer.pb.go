@@ -4,12 +4,13 @@
 package pb
 
 import (
-	fmt "fmt"
-	io "io"
-	math "math"
-	math_bits "math/bits"
+	"fmt"
 
 	proto "github.com/gogo/protobuf/proto"
+
+	math "math"
+
+	io "io"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -21,7 +22,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
+const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 
 type SyncerJobState int32
 
@@ -38,7 +39,6 @@ var SyncerJobState_name = map[int32]string{
 	2: "success",
 	3: "error",
 }
-
 var SyncerJobState_value = map[string]int32{
 	"init":    0,
 	"queued":  1,
@@ -49,9 +49,8 @@ var SyncerJobState_value = map[string]int32{
 func (x SyncerJobState) String() string {
 	return proto.EnumName(SyncerJobState_name, int32(x))
 }
-
 func (SyncerJobState) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_aa4988ddb6d489fb, []int{0}
+	return fileDescriptor_tracer_syncer_1170dba324220d8f, []int{0}
 }
 
 type MySQLPosition struct {
@@ -63,7 +62,7 @@ func (m *MySQLPosition) Reset()         { *m = MySQLPosition{} }
 func (m *MySQLPosition) String() string { return proto.CompactTextString(m) }
 func (*MySQLPosition) ProtoMessage()    {}
 func (*MySQLPosition) Descriptor() ([]byte, []int) {
-	return fileDescriptor_aa4988ddb6d489fb, []int{0}
+	return fileDescriptor_tracer_syncer_1170dba324220d8f, []int{0}
 }
 func (m *MySQLPosition) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -73,15 +72,15 @@ func (m *MySQLPosition) XXX_Marshal(b []byte, deterministic bool) ([]byte, error
 		return xxx_messageInfo_MySQLPosition.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
+		n, err := m.MarshalTo(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (m *MySQLPosition) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_MySQLPosition.Merge(m, src)
+func (dst *MySQLPosition) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MySQLPosition.Merge(dst, src)
 }
 func (m *MySQLPosition) XXX_Size() int {
 	return m.Size()
@@ -109,15 +108,15 @@ func (m *MySQLPosition) GetPos() uint32 {
 type SyncerState struct {
 	SafeMode   bool           `protobuf:"varint,1,opt,name=safeMode,proto3" json:"safeMode,omitempty"`
 	TryReSync  bool           `protobuf:"varint,2,opt,name=tryReSync,proto3" json:"tryReSync,omitempty"`
-	LastPos    *MySQLPosition `protobuf:"bytes,3,opt,name=lastPos,proto3" json:"lastPos,omitempty"`
-	CurrentPos *MySQLPosition `protobuf:"bytes,4,opt,name=currentPos,proto3" json:"currentPos,omitempty"`
+	LastPos    *MySQLPosition `protobuf:"bytes,3,opt,name=lastPos" json:"lastPos,omitempty"`
+	CurrentPos *MySQLPosition `protobuf:"bytes,4,opt,name=currentPos" json:"currentPos,omitempty"`
 }
 
 func (m *SyncerState) Reset()         { *m = SyncerState{} }
 func (m *SyncerState) String() string { return proto.CompactTextString(m) }
 func (*SyncerState) ProtoMessage()    {}
 func (*SyncerState) Descriptor() ([]byte, []int) {
-	return fileDescriptor_aa4988ddb6d489fb, []int{1}
+	return fileDescriptor_tracer_syncer_1170dba324220d8f, []int{1}
 }
 func (m *SyncerState) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -127,15 +126,15 @@ func (m *SyncerState) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) 
 		return xxx_messageInfo_SyncerState.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
+		n, err := m.MarshalTo(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (m *SyncerState) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SyncerState.Merge(m, src)
+func (dst *SyncerState) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SyncerState.Merge(dst, src)
 }
 func (m *SyncerState) XXX_Size() int {
 	return m.Size()
@@ -183,7 +182,7 @@ func (m *ExecDDLInfo) Reset()         { *m = ExecDDLInfo{} }
 func (m *ExecDDLInfo) String() string { return proto.CompactTextString(m) }
 func (*ExecDDLInfo) ProtoMessage()    {}
 func (*ExecDDLInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_aa4988ddb6d489fb, []int{2}
+	return fileDescriptor_tracer_syncer_1170dba324220d8f, []int{2}
 }
 func (m *ExecDDLInfo) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -193,15 +192,15 @@ func (m *ExecDDLInfo) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) 
 		return xxx_messageInfo_ExecDDLInfo.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
+		n, err := m.MarshalTo(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (m *ExecDDLInfo) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ExecDDLInfo.Merge(m, src)
+func (dst *ExecDDLInfo) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ExecDDLInfo.Merge(dst, src)
 }
 func (m *ExecDDLInfo) XXX_Size() int {
 	return m.Size()
@@ -227,8 +226,8 @@ func (m *ExecDDLInfo) GetExec() bool {
 }
 
 type SyncerBinlogEvent struct {
-	Base      *BaseEvent   `protobuf:"bytes,1,opt,name=base,proto3" json:"base,omitempty"`
-	State     *SyncerState `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
+	Base      *BaseEvent   `protobuf:"bytes,1,opt,name=base" json:"base,omitempty"`
+	State     *SyncerState `protobuf:"bytes,2,opt,name=state" json:"state,omitempty"`
 	EventType int32        `protobuf:"varint,3,opt,name=eventType,proto3" json:"eventType,omitempty"`
 	OpType    int32        `protobuf:"varint,4,opt,name=opType,proto3" json:"opType,omitempty"`
 }
@@ -237,7 +236,7 @@ func (m *SyncerBinlogEvent) Reset()         { *m = SyncerBinlogEvent{} }
 func (m *SyncerBinlogEvent) String() string { return proto.CompactTextString(m) }
 func (*SyncerBinlogEvent) ProtoMessage()    {}
 func (*SyncerBinlogEvent) Descriptor() ([]byte, []int) {
-	return fileDescriptor_aa4988ddb6d489fb, []int{3}
+	return fileDescriptor_tracer_syncer_1170dba324220d8f, []int{3}
 }
 func (m *SyncerBinlogEvent) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -247,15 +246,15 @@ func (m *SyncerBinlogEvent) XXX_Marshal(b []byte, deterministic bool) ([]byte, e
 		return xxx_messageInfo_SyncerBinlogEvent.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
+		n, err := m.MarshalTo(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (m *SyncerBinlogEvent) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SyncerBinlogEvent.Merge(m, src)
+func (dst *SyncerBinlogEvent) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SyncerBinlogEvent.Merge(dst, src)
 }
 func (m *SyncerBinlogEvent) XXX_Size() int {
 	return m.Size()
@@ -295,14 +294,14 @@ func (m *SyncerBinlogEvent) GetOpType() int32 {
 }
 
 type SyncerJobEvent struct {
-	Base         *BaseEvent     `protobuf:"bytes,1,opt,name=base,proto3" json:"base,omitempty"`
+	Base         *BaseEvent     `protobuf:"bytes,1,opt,name=base" json:"base,omitempty"`
 	OpType       int32          `protobuf:"varint,2,opt,name=opType,proto3" json:"opType,omitempty"`
-	Pos          *MySQLPosition `protobuf:"bytes,3,opt,name=pos,proto3" json:"pos,omitempty"`
-	CurrentPos   *MySQLPosition `protobuf:"bytes,4,opt,name=currentPos,proto3" json:"currentPos,omitempty"`
+	Pos          *MySQLPosition `protobuf:"bytes,3,opt,name=pos" json:"pos,omitempty"`
+	CurrentPos   *MySQLPosition `protobuf:"bytes,4,opt,name=currentPos" json:"currentPos,omitempty"`
 	Sql          string         `protobuf:"bytes,5,opt,name=sql,proto3" json:"sql,omitempty"`
-	Ddls         []string       `protobuf:"bytes,6,rep,name=ddls,proto3" json:"ddls,omitempty"`
+	Ddls         []string       `protobuf:"bytes,6,rep,name=ddls" json:"ddls,omitempty"`
 	ArgsChecksum uint32         `protobuf:"varint,7,opt,name=argsChecksum,proto3" json:"argsChecksum,omitempty"`
-	DdlInfo      *ExecDDLInfo   `protobuf:"bytes,8,opt,name=ddlInfo,proto3" json:"ddlInfo,omitempty"`
+	DdlInfo      *ExecDDLInfo   `protobuf:"bytes,8,opt,name=ddlInfo" json:"ddlInfo,omitempty"`
 	QueueBucket  string         `protobuf:"bytes,9,opt,name=queueBucket,proto3" json:"queueBucket,omitempty"`
 	State        SyncerJobState `protobuf:"varint,10,opt,name=state,proto3,enum=pb.SyncerJobState" json:"state,omitempty"`
 }
@@ -311,7 +310,7 @@ func (m *SyncerJobEvent) Reset()         { *m = SyncerJobEvent{} }
 func (m *SyncerJobEvent) String() string { return proto.CompactTextString(m) }
 func (*SyncerJobEvent) ProtoMessage()    {}
 func (*SyncerJobEvent) Descriptor() ([]byte, []int) {
-	return fileDescriptor_aa4988ddb6d489fb, []int{4}
+	return fileDescriptor_tracer_syncer_1170dba324220d8f, []int{4}
 }
 func (m *SyncerJobEvent) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -321,15 +320,15 @@ func (m *SyncerJobEvent) XXX_Marshal(b []byte, deterministic bool) ([]byte, erro
 		return xxx_messageInfo_SyncerJobEvent.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
+		n, err := m.MarshalTo(b)
 		if err != nil {
 			return nil, err
 		}
 		return b[:n], nil
 	}
 }
-func (m *SyncerJobEvent) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SyncerJobEvent.Merge(m, src)
+func (dst *SyncerJobEvent) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_SyncerJobEvent.Merge(dst, src)
 }
 func (m *SyncerJobEvent) XXX_Size() int {
 	return m.Size()
@@ -411,56 +410,17 @@ func (m *SyncerJobEvent) GetState() SyncerJobState {
 }
 
 func init() {
-	proto.RegisterEnum("pb.SyncerJobState", SyncerJobState_name, SyncerJobState_value)
 	proto.RegisterType((*MySQLPosition)(nil), "pb.MySQLPosition")
 	proto.RegisterType((*SyncerState)(nil), "pb.SyncerState")
 	proto.RegisterType((*ExecDDLInfo)(nil), "pb.ExecDDLInfo")
 	proto.RegisterType((*SyncerBinlogEvent)(nil), "pb.SyncerBinlogEvent")
 	proto.RegisterType((*SyncerJobEvent)(nil), "pb.SyncerJobEvent")
+	proto.RegisterEnum("pb.SyncerJobState", SyncerJobState_name, SyncerJobState_value)
 }
-
-func init() { proto.RegisterFile("tracer_syncer.proto", fileDescriptor_aa4988ddb6d489fb) }
-
-var fileDescriptor_aa4988ddb6d489fb = []byte{
-	// 510 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x53, 0xcf, 0x6e, 0xd3, 0x4e,
-	0x10, 0xce, 0xe6, 0x7f, 0xc6, 0xbf, 0xf4, 0x97, 0x0c, 0x12, 0xb2, 0x2a, 0x64, 0x19, 0x23, 0xa4,
-	0x00, 0x52, 0x24, 0x82, 0x38, 0x70, 0xe1, 0x10, 0xd2, 0x43, 0xab, 0x56, 0x2a, 0x1b, 0xee, 0xc8,
-	0x7f, 0xa6, 0x25, 0x8a, 0xeb, 0x75, 0x77, 0xd7, 0xa8, 0x79, 0x0b, 0x24, 0x1e, 0x82, 0x57, 0xe1,
-	0xd8, 0x23, 0x47, 0x94, 0xf0, 0x20, 0x68, 0xd7, 0x09, 0x71, 0x0f, 0x95, 0x10, 0xb7, 0xd9, 0xf9,
-	0x66, 0x3e, 0xcf, 0x7c, 0xdf, 0x18, 0x1e, 0x68, 0x19, 0xc6, 0x24, 0x3f, 0xaa, 0x55, 0x16, 0x93,
-	0x1c, 0xe7, 0x52, 0x68, 0x81, 0xf5, 0x3c, 0x3a, 0x1c, 0x6e, 0x81, 0x28, 0x54, 0x54, 0xa6, 0x83,
-	0xd7, 0xd0, 0x3f, 0x5b, 0xcd, 0xdf, 0x9f, 0x9e, 0x0b, 0xb5, 0xd0, 0x0b, 0x91, 0x21, 0x42, 0x33,
-	0x0b, 0xaf, 0xc8, 0x65, 0x3e, 0x1b, 0xf5, 0xb8, 0x8d, 0x71, 0x00, 0x8d, 0x5c, 0x28, 0xb7, 0xee,
-	0xb3, 0x51, 0x9f, 0x9b, 0x30, 0xf8, 0xc6, 0xc0, 0x99, 0x5b, 0xfa, 0xb9, 0x0e, 0x35, 0xe1, 0x21,
-	0x74, 0x55, 0x78, 0x41, 0x67, 0x22, 0x29, 0x3b, 0xbb, 0xfc, 0xcf, 0x1b, 0x1f, 0x41, 0x4f, 0xcb,
-	0x15, 0x27, 0x53, 0x6f, 0x39, 0xba, 0x7c, 0x9f, 0xc0, 0x17, 0xd0, 0x49, 0x43, 0xa5, 0xcf, 0x85,
-	0x72, 0x1b, 0x3e, 0x1b, 0x39, 0x93, 0xe1, 0x38, 0x8f, 0xc6, 0x77, 0x66, 0xe2, 0xbb, 0x0a, 0x7c,
-	0x09, 0x10, 0x17, 0x52, 0x52, 0x66, 0xeb, 0x9b, 0xf7, 0xd5, 0x57, 0x8a, 0x82, 0x37, 0xe0, 0x1c,
-	0xdd, 0x50, 0x3c, 0x9b, 0x9d, 0x1e, 0x67, 0x17, 0x02, 0x1f, 0x42, 0x3b, 0x15, 0xf1, 0xf2, 0x78,
-	0xb6, 0x5d, 0x70, 0xfb, 0x32, 0x6b, 0xd3, 0x0d, 0xed, 0xe6, 0xb3, 0x71, 0xf0, 0x95, 0xc1, 0xb0,
-	0x5c, 0x72, 0xba, 0xc8, 0x52, 0x71, 0x79, 0xf4, 0x99, 0x32, 0x8d, 0x8f, 0xa1, 0x69, 0xf4, 0xb3,
-	0xfd, 0xce, 0xa4, 0x6f, 0xbe, 0x3e, 0x0d, 0x15, 0x59, 0x90, 0x5b, 0x08, 0x9f, 0x42, 0x4b, 0x19,
-	0x59, 0x2c, 0x9b, 0x33, 0xf9, 0xdf, 0xd4, 0x54, 0xd4, 0xe2, 0x25, 0x6a, 0x84, 0x21, 0xd3, 0xf5,
-	0x61, 0x95, 0x93, 0x5d, 0xbe, 0xc5, 0xf7, 0x09, 0x33, 0xa9, 0xc8, 0x2d, 0xd4, 0xb4, 0xd0, 0xf6,
-	0x15, 0xfc, 0xaa, 0xc3, 0x41, 0x49, 0x76, 0x22, 0xa2, 0xbf, 0x1e, 0x69, 0xcf, 0x56, 0xaf, 0xb2,
-	0xe1, 0x93, 0xd2, 0xda, 0x7b, 0xa5, 0x37, 0xe8, 0x3f, 0xc8, 0x6e, 0x4e, 0x46, 0x5d, 0xa7, 0x6e,
-	0xcb, 0x8a, 0x6c, 0x42, 0xa3, 0x70, 0x92, 0xa4, 0xca, 0x6d, 0xfb, 0x0d, 0x73, 0x58, 0x26, 0xc6,
-	0x00, 0xfe, 0x0b, 0xe5, 0xa5, 0x7a, 0xf7, 0x89, 0xe2, 0xa5, 0x2a, 0xae, 0xdc, 0x8e, 0xbd, 0xb0,
-	0x3b, 0x39, 0x7c, 0x06, 0x9d, 0x24, 0x49, 0x8d, 0x79, 0x6e, 0x77, 0x2f, 0x67, 0xc5, 0x53, 0xbe,
-	0xc3, 0xd1, 0x07, 0xe7, 0xba, 0xa0, 0x82, 0xa6, 0x45, 0xbc, 0x24, 0xed, 0xf6, 0xec, 0xc7, 0xab,
-	0x29, 0x1c, 0xed, 0x9c, 0x01, 0x9f, 0x8d, 0x0e, 0x26, 0xb8, 0x77, 0xe6, 0x44, 0x44, 0x55, 0x73,
-	0x9e, 0xbf, 0xad, 0xa8, 0x5c, 0xde, 0x78, 0x17, 0x9a, 0x8b, 0x6c, 0xa1, 0x07, 0x35, 0x04, 0x68,
-	0x5b, 0xd2, 0x64, 0xc0, 0xd0, 0x81, 0x8e, 0x2a, 0xe2, 0x98, 0x94, 0x1a, 0xd4, 0xb1, 0x07, 0x2d,
-	0x92, 0x52, 0xc8, 0x41, 0x63, 0xea, 0x7e, 0x5f, 0x7b, 0xec, 0x76, 0xed, 0xb1, 0x9f, 0x6b, 0x8f,
-	0x7d, 0xd9, 0x78, 0xb5, 0xdb, 0x8d, 0x57, 0xfb, 0xb1, 0xf1, 0x6a, 0x51, 0xdb, 0xfe, 0x79, 0xaf,
-	0x7e, 0x07, 0x00, 0x00, 0xff, 0xff, 0xae, 0x90, 0xfe, 0xb8, 0xa7, 0x03, 0x00, 0x00,
-}
-
 func (m *MySQLPosition) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
@@ -468,34 +428,28 @@ func (m *MySQLPosition) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *MySQLPosition) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *MySQLPosition) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
+	var i int
 	_ = i
 	var l int
 	_ = l
-	if m.Pos != 0 {
-		i = encodeVarintTracerSyncer(dAtA, i, uint64(m.Pos))
-		i--
-		dAtA[i] = 0x10
-	}
 	if len(m.Name) > 0 {
-		i -= len(m.Name)
-		copy(dAtA[i:], m.Name)
-		i = encodeVarintTracerSyncer(dAtA, i, uint64(len(m.Name)))
-		i--
 		dAtA[i] = 0xa
+		i++
+		i = encodeVarintTracerSyncer(dAtA, i, uint64(len(m.Name)))
+		i += copy(dAtA[i:], m.Name)
 	}
-	return len(dAtA) - i, nil
+	if m.Pos != 0 {
+		dAtA[i] = 0x10
+		i++
+		i = encodeVarintTracerSyncer(dAtA, i, uint64(m.Pos))
+	}
+	return i, nil
 }
 
 func (m *SyncerState) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
@@ -503,66 +457,57 @@ func (m *SyncerState) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *SyncerState) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *SyncerState) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
+	var i int
 	_ = i
 	var l int
 	_ = l
-	if m.CurrentPos != nil {
-		{
-			size, err := m.CurrentPos.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintTracerSyncer(dAtA, i, uint64(size))
-		}
-		i--
-		dAtA[i] = 0x22
-	}
-	if m.LastPos != nil {
-		{
-			size, err := m.LastPos.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintTracerSyncer(dAtA, i, uint64(size))
-		}
-		i--
-		dAtA[i] = 0x1a
-	}
-	if m.TryReSync {
-		i--
-		if m.TryReSync {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i--
-		dAtA[i] = 0x10
-	}
 	if m.SafeMode {
-		i--
+		dAtA[i] = 0x8
+		i++
 		if m.SafeMode {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
 		}
-		i--
-		dAtA[i] = 0x8
+		i++
 	}
-	return len(dAtA) - i, nil
+	if m.TryReSync {
+		dAtA[i] = 0x10
+		i++
+		if m.TryReSync {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i++
+	}
+	if m.LastPos != nil {
+		dAtA[i] = 0x1a
+		i++
+		i = encodeVarintTracerSyncer(dAtA, i, uint64(m.LastPos.Size()))
+		n1, err := m.LastPos.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n1
+	}
+	if m.CurrentPos != nil {
+		dAtA[i] = 0x22
+		i++
+		i = encodeVarintTracerSyncer(dAtA, i, uint64(m.CurrentPos.Size()))
+		n2, err := m.CurrentPos.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n2
+	}
+	return i, nil
 }
 
 func (m *ExecDDLInfo) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
@@ -570,39 +515,33 @@ func (m *ExecDDLInfo) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *ExecDDLInfo) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *ExecDDLInfo) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
+	var i int
 	_ = i
 	var l int
 	_ = l
+	if len(m.LockID) > 0 {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintTracerSyncer(dAtA, i, uint64(len(m.LockID)))
+		i += copy(dAtA[i:], m.LockID)
+	}
 	if m.Exec {
-		i--
+		dAtA[i] = 0x10
+		i++
 		if m.Exec {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
 		}
-		i--
-		dAtA[i] = 0x10
+		i++
 	}
-	if len(m.LockID) > 0 {
-		i -= len(m.LockID)
-		copy(dAtA[i:], m.LockID)
-		i = encodeVarintTracerSyncer(dAtA, i, uint64(len(m.LockID)))
-		i--
-		dAtA[i] = 0xa
-	}
-	return len(dAtA) - i, nil
+	return i, nil
 }
 
 func (m *SyncerBinlogEvent) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
@@ -610,56 +549,47 @@ func (m *SyncerBinlogEvent) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *SyncerBinlogEvent) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *SyncerBinlogEvent) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
+	var i int
 	_ = i
 	var l int
 	_ = l
-	if m.OpType != 0 {
-		i = encodeVarintTracerSyncer(dAtA, i, uint64(m.OpType))
-		i--
-		dAtA[i] = 0x20
-	}
-	if m.EventType != 0 {
-		i = encodeVarintTracerSyncer(dAtA, i, uint64(m.EventType))
-		i--
-		dAtA[i] = 0x18
+	if m.Base != nil {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintTracerSyncer(dAtA, i, uint64(m.Base.Size()))
+		n3, err := m.Base.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n3
 	}
 	if m.State != nil {
-		{
-			size, err := m.State.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintTracerSyncer(dAtA, i, uint64(size))
-		}
-		i--
 		dAtA[i] = 0x12
-	}
-	if m.Base != nil {
-		{
-			size, err := m.Base.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintTracerSyncer(dAtA, i, uint64(size))
+		i++
+		i = encodeVarintTracerSyncer(dAtA, i, uint64(m.State.Size()))
+		n4, err := m.State.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0xa
+		i += n4
 	}
-	return len(dAtA) - i, nil
+	if m.EventType != 0 {
+		dAtA[i] = 0x18
+		i++
+		i = encodeVarintTracerSyncer(dAtA, i, uint64(m.EventType))
+	}
+	if m.OpType != 0 {
+		dAtA[i] = 0x20
+		i++
+		i = encodeVarintTracerSyncer(dAtA, i, uint64(m.OpType))
+	}
+	return i, nil
 }
 
 func (m *SyncerJobEvent) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
@@ -667,114 +597,103 @@ func (m *SyncerJobEvent) Marshal() (dAtA []byte, err error) {
 }
 
 func (m *SyncerJobEvent) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *SyncerJobEvent) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
+	var i int
 	_ = i
 	var l int
 	_ = l
-	if m.State != 0 {
-		i = encodeVarintTracerSyncer(dAtA, i, uint64(m.State))
-		i--
-		dAtA[i] = 0x50
-	}
-	if len(m.QueueBucket) > 0 {
-		i -= len(m.QueueBucket)
-		copy(dAtA[i:], m.QueueBucket)
-		i = encodeVarintTracerSyncer(dAtA, i, uint64(len(m.QueueBucket)))
-		i--
-		dAtA[i] = 0x4a
-	}
-	if m.DdlInfo != nil {
-		{
-			size, err := m.DdlInfo.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintTracerSyncer(dAtA, i, uint64(size))
+	if m.Base != nil {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintTracerSyncer(dAtA, i, uint64(m.Base.Size()))
+		n5, err := m.Base.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0x42
-	}
-	if m.ArgsChecksum != 0 {
-		i = encodeVarintTracerSyncer(dAtA, i, uint64(m.ArgsChecksum))
-		i--
-		dAtA[i] = 0x38
-	}
-	if len(m.Ddls) > 0 {
-		for iNdEx := len(m.Ddls) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.Ddls[iNdEx])
-			copy(dAtA[i:], m.Ddls[iNdEx])
-			i = encodeVarintTracerSyncer(dAtA, i, uint64(len(m.Ddls[iNdEx])))
-			i--
-			dAtA[i] = 0x32
-		}
-	}
-	if len(m.Sql) > 0 {
-		i -= len(m.Sql)
-		copy(dAtA[i:], m.Sql)
-		i = encodeVarintTracerSyncer(dAtA, i, uint64(len(m.Sql)))
-		i--
-		dAtA[i] = 0x2a
-	}
-	if m.CurrentPos != nil {
-		{
-			size, err := m.CurrentPos.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintTracerSyncer(dAtA, i, uint64(size))
-		}
-		i--
-		dAtA[i] = 0x22
-	}
-	if m.Pos != nil {
-		{
-			size, err := m.Pos.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintTracerSyncer(dAtA, i, uint64(size))
-		}
-		i--
-		dAtA[i] = 0x1a
+		i += n5
 	}
 	if m.OpType != 0 {
-		i = encodeVarintTracerSyncer(dAtA, i, uint64(m.OpType))
-		i--
 		dAtA[i] = 0x10
+		i++
+		i = encodeVarintTracerSyncer(dAtA, i, uint64(m.OpType))
 	}
-	if m.Base != nil {
-		{
-			size, err := m.Base.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintTracerSyncer(dAtA, i, uint64(size))
+	if m.Pos != nil {
+		dAtA[i] = 0x1a
+		i++
+		i = encodeVarintTracerSyncer(dAtA, i, uint64(m.Pos.Size()))
+		n6, err := m.Pos.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
 		}
-		i--
-		dAtA[i] = 0xa
+		i += n6
 	}
-	return len(dAtA) - i, nil
+	if m.CurrentPos != nil {
+		dAtA[i] = 0x22
+		i++
+		i = encodeVarintTracerSyncer(dAtA, i, uint64(m.CurrentPos.Size()))
+		n7, err := m.CurrentPos.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n7
+	}
+	if len(m.Sql) > 0 {
+		dAtA[i] = 0x2a
+		i++
+		i = encodeVarintTracerSyncer(dAtA, i, uint64(len(m.Sql)))
+		i += copy(dAtA[i:], m.Sql)
+	}
+	if len(m.Ddls) > 0 {
+		for _, s := range m.Ddls {
+			dAtA[i] = 0x32
+			i++
+			l = len(s)
+			for l >= 1<<7 {
+				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
+				l >>= 7
+				i++
+			}
+			dAtA[i] = uint8(l)
+			i++
+			i += copy(dAtA[i:], s)
+		}
+	}
+	if m.ArgsChecksum != 0 {
+		dAtA[i] = 0x38
+		i++
+		i = encodeVarintTracerSyncer(dAtA, i, uint64(m.ArgsChecksum))
+	}
+	if m.DdlInfo != nil {
+		dAtA[i] = 0x42
+		i++
+		i = encodeVarintTracerSyncer(dAtA, i, uint64(m.DdlInfo.Size()))
+		n8, err := m.DdlInfo.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n8
+	}
+	if len(m.QueueBucket) > 0 {
+		dAtA[i] = 0x4a
+		i++
+		i = encodeVarintTracerSyncer(dAtA, i, uint64(len(m.QueueBucket)))
+		i += copy(dAtA[i:], m.QueueBucket)
+	}
+	if m.State != 0 {
+		dAtA[i] = 0x50
+		i++
+		i = encodeVarintTracerSyncer(dAtA, i, uint64(m.State))
+	}
+	return i, nil
 }
 
 func encodeVarintTracerSyncer(dAtA []byte, offset int, v uint64) int {
-	offset -= sovTracerSyncer(v)
-	base := offset
 	for v >= 1<<7 {
 		dAtA[offset] = uint8(v&0x7f | 0x80)
 		v >>= 7
 		offset++
 	}
 	dAtA[offset] = uint8(v)
-	return base
+	return offset + 1
 }
 func (m *MySQLPosition) Size() (n int) {
 	if m == nil {
@@ -903,7 +822,14 @@ func (m *SyncerJobEvent) Size() (n int) {
 }
 
 func sovTracerSyncer(x uint64) (n int) {
-	return (math_bits.Len64(x|1) + 6) / 7
+	for {
+		n++
+		x >>= 7
+		if x == 0 {
+			break
+		}
+	}
+	return n
 }
 func sozTracerSyncer(x uint64) (n int) {
 	return sovTracerSyncer(uint64((x << 1) ^ uint64((int64(x) >> 63))))
@@ -923,7 +849,7 @@ func (m *MySQLPosition) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -951,7 +877,7 @@ func (m *MySQLPosition) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -961,9 +887,6 @@ func (m *MySQLPosition) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTracerSyncer
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -983,7 +906,7 @@ func (m *MySQLPosition) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Pos |= uint32(b&0x7F) << shift
+				m.Pos |= (uint32(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -995,9 +918,6 @@ func (m *MySQLPosition) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
-				return ErrInvalidLengthTracerSyncer
-			}
-			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthTracerSyncer
 			}
 			if (iNdEx + skippy) > l {
@@ -1027,7 +947,7 @@ func (m *SyncerState) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -1055,7 +975,7 @@ func (m *SyncerState) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= int(b&0x7F) << shift
+				v |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1075,7 +995,7 @@ func (m *SyncerState) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= int(b&0x7F) << shift
+				v |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1095,7 +1015,7 @@ func (m *SyncerState) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= int(b&0x7F) << shift
+				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1104,9 +1024,6 @@ func (m *SyncerState) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthTracerSyncer
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1131,7 +1048,7 @@ func (m *SyncerState) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= int(b&0x7F) << shift
+				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1140,9 +1057,6 @@ func (m *SyncerState) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthTracerSyncer
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1160,9 +1074,6 @@ func (m *SyncerState) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
-				return ErrInvalidLengthTracerSyncer
-			}
-			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthTracerSyncer
 			}
 			if (iNdEx + skippy) > l {
@@ -1192,7 +1103,7 @@ func (m *ExecDDLInfo) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -1220,7 +1131,7 @@ func (m *ExecDDLInfo) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1230,9 +1141,6 @@ func (m *ExecDDLInfo) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTracerSyncer
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1252,7 +1160,7 @@ func (m *ExecDDLInfo) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				v |= int(b&0x7F) << shift
+				v |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1265,9 +1173,6 @@ func (m *ExecDDLInfo) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
-				return ErrInvalidLengthTracerSyncer
-			}
-			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthTracerSyncer
 			}
 			if (iNdEx + skippy) > l {
@@ -1297,7 +1202,7 @@ func (m *SyncerBinlogEvent) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -1325,7 +1230,7 @@ func (m *SyncerBinlogEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= int(b&0x7F) << shift
+				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1334,9 +1239,6 @@ func (m *SyncerBinlogEvent) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthTracerSyncer
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1361,7 +1263,7 @@ func (m *SyncerBinlogEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= int(b&0x7F) << shift
+				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1370,9 +1272,6 @@ func (m *SyncerBinlogEvent) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthTracerSyncer
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1397,7 +1296,7 @@ func (m *SyncerBinlogEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.EventType |= int32(b&0x7F) << shift
+				m.EventType |= (int32(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1416,7 +1315,7 @@ func (m *SyncerBinlogEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.OpType |= int32(b&0x7F) << shift
+				m.OpType |= (int32(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1428,9 +1327,6 @@ func (m *SyncerBinlogEvent) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
-				return ErrInvalidLengthTracerSyncer
-			}
-			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthTracerSyncer
 			}
 			if (iNdEx + skippy) > l {
@@ -1460,7 +1356,7 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 			}
 			b := dAtA[iNdEx]
 			iNdEx++
-			wire |= uint64(b&0x7F) << shift
+			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
 				break
 			}
@@ -1488,7 +1384,7 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= int(b&0x7F) << shift
+				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1497,9 +1393,6 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthTracerSyncer
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1524,7 +1417,7 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.OpType |= int32(b&0x7F) << shift
+				m.OpType |= (int32(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1543,7 +1436,7 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= int(b&0x7F) << shift
+				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1552,9 +1445,6 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthTracerSyncer
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1579,7 +1469,7 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= int(b&0x7F) << shift
+				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1588,9 +1478,6 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthTracerSyncer
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1615,7 +1502,7 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1625,9 +1512,6 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTracerSyncer
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1647,7 +1531,7 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1657,9 +1541,6 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTracerSyncer
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1679,7 +1560,7 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.ArgsChecksum |= uint32(b&0x7F) << shift
+				m.ArgsChecksum |= (uint32(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1698,7 +1579,7 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= int(b&0x7F) << shift
+				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1707,9 +1588,6 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthTracerSyncer
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1734,7 +1612,7 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1744,9 +1622,6 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				return ErrInvalidLengthTracerSyncer
 			}
 			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthTracerSyncer
-			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
@@ -1766,7 +1641,7 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.State |= SyncerJobState(b&0x7F) << shift
+				m.State |= (SyncerJobState(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1778,9 +1653,6 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			if skippy < 0 {
-				return ErrInvalidLengthTracerSyncer
-			}
-			if (iNdEx + skippy) < 0 {
 				return ErrInvalidLengthTracerSyncer
 			}
 			if (iNdEx + skippy) > l {
@@ -1798,7 +1670,6 @@ func (m *SyncerJobEvent) Unmarshal(dAtA []byte) error {
 func skipTracerSyncer(dAtA []byte) (n int, err error) {
 	l := len(dAtA)
 	iNdEx := 0
-	depth := 0
 	for iNdEx < l {
 		var wire uint64
 		for shift := uint(0); ; shift += 7 {
@@ -1830,8 +1701,10 @@ func skipTracerSyncer(dAtA []byte) (n int, err error) {
 					break
 				}
 			}
+			return iNdEx, nil
 		case 1:
 			iNdEx += 8
+			return iNdEx, nil
 		case 2:
 			var length int
 			for shift := uint(0); ; shift += 7 {
@@ -1848,34 +1721,91 @@ func skipTracerSyncer(dAtA []byte) (n int, err error) {
 					break
 				}
 			}
+			iNdEx += length
 			if length < 0 {
 				return 0, ErrInvalidLengthTracerSyncer
 			}
-			iNdEx += length
+			return iNdEx, nil
 		case 3:
-			depth++
-		case 4:
-			if depth == 0 {
-				return 0, ErrUnexpectedEndOfGroupTracerSyncer
+			for {
+				var innerWire uint64
+				var start int = iNdEx
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return 0, ErrIntOverflowTracerSyncer
+					}
+					if iNdEx >= l {
+						return 0, io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					innerWire |= (uint64(b) & 0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				innerWireType := int(innerWire & 0x7)
+				if innerWireType == 4 {
+					break
+				}
+				next, err := skipTracerSyncer(dAtA[start:])
+				if err != nil {
+					return 0, err
+				}
+				iNdEx = start + next
 			}
-			depth--
+			return iNdEx, nil
+		case 4:
+			return iNdEx, nil
 		case 5:
 			iNdEx += 4
+			return iNdEx, nil
 		default:
 			return 0, fmt.Errorf("proto: illegal wireType %d", wireType)
 		}
-		if iNdEx < 0 {
-			return 0, ErrInvalidLengthTracerSyncer
-		}
-		if depth == 0 {
-			return iNdEx, nil
-		}
 	}
-	return 0, io.ErrUnexpectedEOF
+	panic("unreachable")
 }
 
 var (
-	ErrInvalidLengthTracerSyncer        = fmt.Errorf("proto: negative length found during unmarshaling")
-	ErrIntOverflowTracerSyncer          = fmt.Errorf("proto: integer overflow")
-	ErrUnexpectedEndOfGroupTracerSyncer = fmt.Errorf("proto: unexpected end of group")
+	ErrInvalidLengthTracerSyncer = fmt.Errorf("proto: negative length found during unmarshaling")
+	ErrIntOverflowTracerSyncer   = fmt.Errorf("proto: integer overflow")
 )
+
+func init() { proto.RegisterFile("tracer_syncer.proto", fileDescriptor_tracer_syncer_1170dba324220d8f) }
+
+var fileDescriptor_tracer_syncer_1170dba324220d8f = []byte{
+	// 510 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x53, 0xcf, 0x6e, 0xd3, 0x4e,
+	0x10, 0xce, 0xe6, 0x7f, 0xc6, 0xbf, 0xf4, 0x97, 0x0c, 0x12, 0xb2, 0x2a, 0x64, 0x19, 0x23, 0xa4,
+	0x00, 0x52, 0x24, 0x82, 0x38, 0x70, 0xe1, 0x10, 0xd2, 0x43, 0xab, 0x56, 0x2a, 0x1b, 0xee, 0xc8,
+	0x7f, 0xa6, 0x25, 0x8a, 0xeb, 0x75, 0x77, 0xd7, 0xa8, 0x79, 0x0b, 0x24, 0x1e, 0x82, 0x57, 0xe1,
+	0xd8, 0x23, 0x47, 0x94, 0xf0, 0x20, 0x68, 0xd7, 0x09, 0x71, 0x0f, 0x95, 0x10, 0xb7, 0xd9, 0xf9,
+	0x66, 0x3e, 0xcf, 0x7c, 0xdf, 0x18, 0x1e, 0x68, 0x19, 0xc6, 0x24, 0x3f, 0xaa, 0x55, 0x16, 0x93,
+	0x1c, 0xe7, 0x52, 0x68, 0x81, 0xf5, 0x3c, 0x3a, 0x1c, 0x6e, 0x81, 0x28, 0x54, 0x54, 0xa6, 0x83,
+	0xd7, 0xd0, 0x3f, 0x5b, 0xcd, 0xdf, 0x9f, 0x9e, 0x0b, 0xb5, 0xd0, 0x0b, 0x91, 0x21, 0x42, 0x33,
+	0x0b, 0xaf, 0xc8, 0x65, 0x3e, 0x1b, 0xf5, 0xb8, 0x8d, 0x71, 0x00, 0x8d, 0x5c, 0x28, 0xb7, 0xee,
+	0xb3, 0x51, 0x9f, 0x9b, 0x30, 0xf8, 0xc6, 0xc0, 0x99, 0x5b, 0xfa, 0xb9, 0x0e, 0x35, 0xe1, 0x21,
+	0x74, 0x55, 0x78, 0x41, 0x67, 0x22, 0x29, 0x3b, 0xbb, 0xfc, 0xcf, 0x1b, 0x1f, 0x41, 0x4f, 0xcb,
+	0x15, 0x27, 0x53, 0x6f, 0x39, 0xba, 0x7c, 0x9f, 0xc0, 0x17, 0xd0, 0x49, 0x43, 0xa5, 0xcf, 0x85,
+	0x72, 0x1b, 0x3e, 0x1b, 0x39, 0x93, 0xe1, 0x38, 0x8f, 0xc6, 0x77, 0x66, 0xe2, 0xbb, 0x0a, 0x7c,
+	0x09, 0x10, 0x17, 0x52, 0x52, 0x66, 0xeb, 0x9b, 0xf7, 0xd5, 0x57, 0x8a, 0x82, 0x37, 0xe0, 0x1c,
+	0xdd, 0x50, 0x3c, 0x9b, 0x9d, 0x1e, 0x67, 0x17, 0x02, 0x1f, 0x42, 0x3b, 0x15, 0xf1, 0xf2, 0x78,
+	0xb6, 0x5d, 0x70, 0xfb, 0x32, 0x6b, 0xd3, 0x0d, 0xed, 0xe6, 0xb3, 0x71, 0xf0, 0x95, 0xc1, 0xb0,
+	0x5c, 0x72, 0xba, 0xc8, 0x52, 0x71, 0x79, 0xf4, 0x99, 0x32, 0x8d, 0x8f, 0xa1, 0x69, 0xf4, 0xb3,
+	0xfd, 0xce, 0xa4, 0x6f, 0xbe, 0x3e, 0x0d, 0x15, 0x59, 0x90, 0x5b, 0x08, 0x9f, 0x42, 0x4b, 0x19,
+	0x59, 0x2c, 0x9b, 0x33, 0xf9, 0xdf, 0xd4, 0x54, 0xd4, 0xe2, 0x25, 0x6a, 0x84, 0x21, 0xd3, 0xf5,
+	0x61, 0x95, 0x93, 0x5d, 0xbe, 0xc5, 0xf7, 0x09, 0x33, 0xa9, 0xc8, 0x2d, 0xd4, 0xb4, 0xd0, 0xf6,
+	0x15, 0xfc, 0xaa, 0xc3, 0x41, 0x49, 0x76, 0x22, 0xa2, 0xbf, 0x1e, 0x69, 0xcf, 0x56, 0xaf, 0xb2,
+	0xe1, 0x93, 0xd2, 0xda, 0x7b, 0xa5, 0x37, 0xe8, 0x3f, 0xc8, 0x6e, 0x4e, 0x46, 0x5d, 0xa7, 0x6e,
+	0xcb, 0x8a, 0x6c, 0x42, 0xa3, 0x70, 0x92, 0xa4, 0xca, 0x6d, 0xfb, 0x0d, 0x73, 0x58, 0x26, 0xc6,
+	0x00, 0xfe, 0x0b, 0xe5, 0xa5, 0x7a, 0xf7, 0x89, 0xe2, 0xa5, 0x2a, 0xae, 0xdc, 0x8e, 0xbd, 0xb0,
+	0x3b, 0x39, 0x7c, 0x06, 0x9d, 0x24, 0x49, 0x8d, 0x79, 0x6e, 0x77, 0x2f, 0x67, 0xc5, 0x53, 0xbe,
+	0xc3, 0xd1, 0x07, 0xe7, 0xba, 0xa0, 0x82, 0xa6, 0x45, 0xbc, 0x24, 0xed, 0xf6, 0xec, 0xc7, 0xab,
+	0x29, 0x1c, 0xed, 0x9c, 0x01, 0x9f, 0x8d, 0x0e, 0x26, 0xb8, 0x77, 0xe6, 0x44, 0x44, 0x55, 0x73,
+	0x9e, 0xbf, 0xad, 0xa8, 0x5c, 0xde, 0x78, 0x17, 0x9a, 0x8b, 0x6c, 0xa1, 0x07, 0x35, 0x04, 0x68,
+	0x5b, 0xd2, 0x64, 0xc0, 0xd0, 0x81, 0x8e, 0x2a, 0xe2, 0x98, 0x94, 0x1a, 0xd4, 0xb1, 0x07, 0x2d,
+	0x92, 0x52, 0xc8, 0x41, 0x63, 0xea, 0x7e, 0x5f, 0x7b, 0xec, 0x76, 0xed, 0xb1, 0x9f, 0x6b, 0x8f,
+	0x7d, 0xd9, 0x78, 0xb5, 0xdb, 0x8d, 0x57, 0xfb, 0xb1, 0xf1, 0x6a, 0x51, 0xdb, 0xfe, 0x79, 0xaf,
+	0x7e, 0x07, 0x00, 0x00, 0xff, 0xff, 0xae, 0x90, 0xfe, 0xb8, 0xa7, 0x03, 0x00, 0x00,
+}
