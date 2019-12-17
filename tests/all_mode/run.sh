@@ -55,12 +55,6 @@ function run() {
     run_tidb_server 4000
     sleep 2
 
-    sleep 10
-    echo "dm-worker-1 log -----------"
-    cat $WORK_DIR/worker1/log/dm-worker.log
-    echo "dm-worker-2 log ============"
-    cat $WORK_DIR/worker2/log/dm-worker.log
-
     # use sync_diff_inspector to check data now!
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
