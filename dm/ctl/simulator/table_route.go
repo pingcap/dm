@@ -45,7 +45,7 @@ func NewTableRouteCmd() *cobra.Command {
 	}
 	tableList = tableList[:0]
 	cmd.Flags().StringSliceVarP(&tableList, "table", "T", []string{}, "the table name we want to check for the table route")
-	cmd.Flags().StringP("format", "F", "json", "the output format of routes")
+	cmd.Flags().StringP("format", "F", "json", "the output format of routes. Supported format: json, dot")
 	return cmd
 }
 

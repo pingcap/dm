@@ -131,7 +131,7 @@ func simulateTableRoute(workerSet map[string]struct{}, tables []string, deployMa
 			}
 		}
 		if stCfg == nil {
-			return nil, errors.Errorf("worker %s matches no stCfg", worker)
+			return nil, errors.Errorf("worker %s matches no worker in dm-master", worker)
 		}
 
 		mysqlInstance := getMySQLInstanceConfigThroughSourceID(cfg.MySQLInstances, stCfg.SourceID)

@@ -97,7 +97,8 @@ func eventFilterFunc(cmd *cobra.Command, _ []string) {
 	}
 
 	if len(resp.SimulationResults) != 1 {
-		common.PrintLines("simulation result")
+		common.PrintLines("simulation result's length should be 1, but is %+v", resp.SimulationResults)
+		return
 	}
 	var filtered, reason string
 	if len(resp.SimulationResults[0].DoTableMap) > 0 {
