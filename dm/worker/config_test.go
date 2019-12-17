@@ -80,7 +80,7 @@ func (t *testServer) TestConfig(c *C) {
 	dir2 := c.MkDir()
 	configFile := path.Join(dir2, "dm-worker-invalid.toml")
 	configContent := []byte(`
-worker-addr = ":8262"
+source-id = "haha"
 aaa = "xxx"
 `)
 	err = ioutil.WriteFile(configFile, configContent, 0644)

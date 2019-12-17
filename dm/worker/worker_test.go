@@ -162,9 +162,12 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		defer s.Close()
 		c.Assert(s.Start(), IsNil)
 	}()
-	c.Assert(s.startWorker(workerCfg), IsNil)
 	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
-		return !s.closed.Get()
+		if s.closed.Get() {
+			return false
+		}
+		c.Assert(s.startWorker(workerCfg), IsNil)
+		return true
 	}), IsTrue)
 
 	// start task
