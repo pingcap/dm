@@ -16,6 +16,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"time"
+
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/utils"
@@ -24,7 +26,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go-mysql/mysql"
-	"time"
 )
 
 // commonConfig collects common item for both new config and old config.
