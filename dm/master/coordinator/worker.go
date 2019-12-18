@@ -146,3 +146,8 @@ func (w *Worker) StopMysqlTask(ctx context.Context, sourceID string, d time.Dura
 	}
 	return resp.MysqlWorker, err
 }
+
+// SendRequest by client
+func (w *Worker) SendRequest(ctx context.Context, req *workerrpc.Request, d time.Duration) (*workerrpc.Response, error) {
+	return w.client.SendRequest(ctx, req, d)
+}

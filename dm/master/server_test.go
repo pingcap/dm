@@ -563,7 +563,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	c.Assert(resp.Msg, check.Equals, fmt.Sprintf("task %s has no workers or not exist, can try `refresh-worker-tasks` cmd first", taskName))
 
 	// test operate-task while worker clients not found
-	server.taskWorkers[taskName] = workers
+	server.taskSources[taskName] = workers
 	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
 		Op:   pauseOp,
 		Name: taskName,
@@ -653,11 +653,11 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	c.Assert(resp.Result, check.IsTrue)
 	c.Assert(resp.Workers, check.HasLen, 1)
 	c.Assert(resp.Workers[0].Result, check.IsTrue)
-	c.Assert(server.taskWorkers, check.HasKey, taskName)
-	c.Assert(server.taskWorkers[taskName], check.DeepEquals, []string{workers[1]})
+	c.Assert(server.taskSources, check.HasKey, taskName)
+	c.Assert(server.taskSources[taskName], check.DeepEquals, []string{workers[1]})
 
 	// test stop task successfully, remove all workers
-	server.taskWorkers[taskName] = workers
+	server.taskSources[taskName] = workers
 	for _, deploy := range server.cfg.Deploy {
 		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 		mockWorkerClient.EXPECT().OperateSubTask(
@@ -684,7 +684,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 		c.Assert(subtaskResp.Op, check.Equals, pb.TaskOp_Stop)
 		c.Assert(subtaskResp.Result, check.IsTrue)
 	}
-	c.Assert(len(server.taskWorkers), check.Equals, 0)
+	c.Assert(len(server.taskSources), check.Equals, 0)
 }
 
 func (t *testMaster) TestUpdateTask(c *check.C) {
@@ -1062,10 +1062,10 @@ func (t *testMaster) TestRefreshWorkerTasks(c *check.C) {
 	resp, err := server.RefreshWorkerTasks(context.Background(), &pb.RefreshWorkerTasksRequest{})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(len(server.taskWorkers), check.Equals, 2)
+	c.Assert(len(server.taskSources), check.Equals, 2)
 	for _, taskName := range []string{"test", "test2"} {
-		c.Assert(server.taskWorkers, check.HasKey, taskName)
-		c.Assert(server.taskWorkers[taskName], check.DeepEquals, workers)
+		c.Assert(server.taskSources, check.HasKey, taskName)
+		c.Assert(server.taskSources[taskName], check.DeepEquals, workers)
 	}
 
 	// mock query status, each worker has no task
@@ -1087,7 +1087,7 @@ func (t *testMaster) TestRefreshWorkerTasks(c *check.C) {
 	resp, err = server.RefreshWorkerTasks(context.Background(), &pb.RefreshWorkerTasksRequest{})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(len(server.taskWorkers), check.Equals, 0)
+	c.Assert(len(server.taskSources), check.Equals, 0)
 	c.Assert(resp.Workers, check.HasLen, 2)
 	for _, w := range resp.Workers {
 		c.Assert(w.Msg, check.Matches, msgNoSubTaskReg)
@@ -1349,7 +1349,7 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 	for _, deploy := range server.cfg.Deploy {
 		workers = append(workers, deploy.Worker)
 	}
-	server.taskWorkers = map[string][]string{"test": workers}
+	server.taskSources = map[string][]string{"test": workers}
 	var (
 		task     = "test"
 		schema   = "test_db"

@@ -81,7 +81,7 @@ type Server struct {
 	workerClients map[string]workerrpc.Client
 
 	// task-name -> worker-list
-	taskWorkers map[string][]string
+	taskSources map[string][]string
 
 	// DDL lock keeper
 	lockKeeper *LockKeeper
@@ -104,7 +104,7 @@ func NewServer(cfg *Config) *Server {
 		cfg:               cfg,
 		coordinator:       coordinator.NewCoordinator(),
 		workerClients:     make(map[string]workerrpc.Client),
-		taskWorkers:       make(map[string][]string),
+		taskSources:       make(map[string][]string),
 		lockKeeper:        NewLockKeeper(),
 		sqlOperatorHolder: operator.NewHolder(),
 		idGen:             tracing.NewIDGen(),
@@ -310,59 +310,42 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 	}
 	log.L().Info("", zap.String("task name", cfg.Name), zap.Stringer("task", cfg), zap.String("request", "StartTask"))
 
-	workerRespCh := make(chan *pb.CommonWorkerResponse, len(stCfgs)+len(req.Workers))
-	if len(req.Workers) > 0 {
-		// specify only start task on partial dm-workers
-		workerCfg := make(map[string]*config.SubTaskConfig)
-		for _, stCfg := range stCfgs {
-			worker, ok := s.cfg.DeployMap[stCfg.SourceID]
-			if ok {
-				workerCfg[worker] = stCfg
-			}
-		}
-		stCfgs = make([]*config.SubTaskConfig, 0, len(req.Workers))
-		for _, worker := range req.Workers {
-			if stCfg, ok := workerCfg[worker]; ok {
-				stCfgs = append(stCfgs, stCfg)
-			} else {
-				workerRespCh <- errorCommonWorkerResponse("worker not found in task's config or deployment config", worker)
-			}
-		}
-	}
-
-	validWorkerCh := make(chan string, len(stCfgs))
+	workerRespCh := make(chan *pb.CommonWorkerResponse, len(stCfgs))
 	var wg sync.WaitGroup
+	subSourceIDs := make([]string, 0, len(stCfgs))
 	for _, stCfg := range stCfgs {
+		subSourceIDs = append(subSourceIDs, stCfg.SourceID)
 		wg.Add(1)
 		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
-			cli, worker, stCfgToml, _, err := s.taskConfigArgsExtractor(args...)
+			cfg, _ := args[0].(*config.SubTaskConfig)
+			worker, stCfgToml, _, err := s.taskConfigArgsExtractor(cfg)
 			if err != nil {
-				workerRespCh <- errorCommonWorkerResponse(err.Error(), worker)
+				workerRespCh <- errorCommonWorkerResponse(err.Error(), cfg.SourceID)
 				return
 			}
-			validWorkerCh <- worker
 			request := &workerrpc.Request{
 				Type:         workerrpc.CmdStartSubTask,
 				StartSubTask: &pb.StartSubTaskRequest{Task: stCfgToml},
 			}
-			resp, err := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
+			resp, err := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
 			if err != nil {
 				resp = &workerrpc.Response{
 					Type:         workerrpc.CmdStartSubTask,
-					StartSubTask: errorCommonWorkerResponse(err.Error(), worker),
+					StartSubTask: errorCommonWorkerResponse(err.Error(), cfg.SourceID),
 				}
 			}
-			resp.StartSubTask.Worker = worker
+			resp.StartSubTask.Worker = cfg.SourceID
 			workerRespCh <- resp.StartSubTask
 		}, func(args ...interface{}) {
 			defer wg.Done()
-			_, worker, _, _, err := s.taskConfigArgsExtractor(args...)
+			cfg, _ := args[0].(*config.SubTaskConfig)
+			worker, _, _, err := s.taskConfigArgsExtractor(cfg)
 			if err != nil {
-				workerRespCh <- errorCommonWorkerResponse(err.Error(), worker)
+				workerRespCh <- errorCommonWorkerResponse(err.Error(), cfg.SourceID)
 				return
 			}
-			workerRespCh <- errorCommonWorkerResponse(terror.ErrMasterNoEmitToken.Generate(worker).Error(), worker)
+			workerRespCh <- errorCommonWorkerResponse(terror.ErrMasterNoEmitToken.Generate(worker).Error(), cfg.SourceID)
 		}, stCfg)
 	}
 	wg.Wait()
@@ -383,13 +366,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 	}
 
 	// record task -> workers map
-	validWorkers := make([]string, 0, len(validWorkerCh))
-	for len(validWorkerCh) > 0 {
-		worker := <-validWorkerCh
-		validWorkers = append(validWorkers, worker)
-	}
-	replace := len(req.Workers) == 0 // a fresh start
-	s.addTaskWorkers(cfg.Name, validWorkers, replace)
+	s.taskSources[cfg.Name] = subSourceIDs
 
 	return &pb.StartTaskResponse{
 		Result:  true,
@@ -406,15 +383,8 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 		Result: false,
 	}
 
-	workers := s.getTaskWorkers(req.Name)
-	if len(workers) == 0 {
-		resp.Msg = fmt.Sprintf("task %s has no workers or not exist, can try `refresh-worker-tasks` cmd first", req.Name)
-		return resp, nil
-	}
-	if len(req.Workers) > 0 {
-		workers = req.Workers // specify only do operation on partial dm-workers
-	}
-	workerRespCh := make(chan *pb.OperateSubTaskResponse, len(workers))
+	sources := s.getTaskResources(req.Name)
+	workerRespCh := make(chan *pb.OperateSubTaskResponse, len(sources))
 
 	handleErr := func(err error, worker string) {
 		log.L().Error("response error", zap.Error(err))
@@ -436,16 +406,18 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 	}
 
 	var wg sync.WaitGroup
-	for _, worker := range workers {
+	for _, source := range sources {
 		wg.Add(1)
 		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
-			cli, worker1, err := s.workerArgsExtractor(args...)
-			if err != nil {
-				handleErr(err, worker1)
+			sourceID, _ := args[0].(string)
+			worker1 := s.coordinator.GetWorkerBySourceID(sourceID)
+			if worker1 == nil {
+				err := terror.ErrMasterWorkerArgsExtractor.Generatef("%s relevant worker-client not found", sourceID)
+				handleErr(err, sourceID)
 				return
 			}
-			resp, err := cli.SendRequest(ctx, subReq, s.cfg.RPCTimeout)
+			resp, err := worker1.SendRequest(ctx, subReq, s.cfg.RPCTimeout)
 			if err != nil {
 				resp = &workerrpc.Response{
 					Type: workerrpc.CmdOperateSubTask,
@@ -456,38 +428,30 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 					},
 				}
 			}
-			resp.OperateSubTask.Worker = worker1
+			resp.OperateSubTask.Worker = sourceID
 			workerRespCh <- resp.OperateSubTask
 		}, func(args ...interface{}) {
 			defer wg.Done()
-			_, worker1, err := s.workerArgsExtractor(args...)
-			if err != nil {
-				handleErr(err, worker1)
-				return
-			}
-			handleErr(terror.ErrMasterNoEmitToken.Generate(worker1), worker1)
-		}, worker)
+			sourceID, _ := args[0].(string)
+			handleErr(terror.ErrMasterNoEmitToken.Generate(sourceID), sourceID)
+		}, source)
 	}
 	wg.Wait()
 
-	validWorkers := make([]string, 0, len(workers))
-	workerRespMap := make(map[string]*pb.OperateSubTaskResponse, len(workers))
+	workerRespMap := make(map[string]*pb.OperateSubTaskResponse, len(sources))
 	for len(workerRespCh) > 0 {
 		workerResp := <-workerRespCh
 		workerRespMap[workerResp.Worker] = workerResp
-		if len(workerResp.Msg) == 0 { // no error occurred
-			validWorkers = append(validWorkers, workerResp.Worker)
-		}
 	}
 
-	workerResps := make([]*pb.OperateSubTaskResponse, 0, len(workers))
-	for _, worker := range workers {
+	workerResps := make([]*pb.OperateSubTaskResponse, 0, len(sources))
+	for _, worker := range sources {
 		workerResps = append(workerResps, workerRespMap[worker])
 	}
 
 	if req.Op == pb.TaskOp_Stop {
 		// remove (partial / all) workers for a task
-		s.removeTaskWorkers(req.Name, validWorkers)
+		s.removeTaskWorkers(req.Name, sources)
 	}
 
 	resp.Result = true
@@ -536,32 +500,34 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 		wg.Add(1)
 		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
-			cli, worker, stCfgToml, _, err := s.taskConfigArgsExtractor(args...)
+			cfg, _ := args[0].(*config.SubTaskConfig)
+			worker, stCfgToml, _, err := s.taskConfigArgsExtractor(cfg)
 			if err != nil {
-				workerRespCh <- errorCommonWorkerResponse(err.Error(), worker)
+				workerRespCh <- errorCommonWorkerResponse(err.Error(), cfg.SourceID)
 				return
 			}
 			request := &workerrpc.Request{
 				Type:          workerrpc.CmdUpdateSubTask,
 				UpdateSubTask: &pb.UpdateSubTaskRequest{Task: stCfgToml},
 			}
-			resp, err := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
+			resp, err := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
 			if err != nil {
 				resp = &workerrpc.Response{
 					Type:          workerrpc.CmdUpdateSubTask,
-					UpdateSubTask: errorCommonWorkerResponse(err.Error(), worker),
+					UpdateSubTask: errorCommonWorkerResponse(err.Error(), cfg.SourceID),
 				}
 			}
-			resp.UpdateSubTask.Worker = worker
+			resp.UpdateSubTask.Worker = cfg.SourceID
 			workerRespCh <- resp.UpdateSubTask
 		}, func(args ...interface{}) {
 			defer wg.Done()
-			_, worker, _, _, err := s.taskConfigArgsExtractor(args...)
+			cfg, _ := args[0].(*config.SubTaskConfig)
+			worker, _, _, err := s.taskConfigArgsExtractor(cfg)
 			if err != nil {
-				workerRespCh <- errorCommonWorkerResponse(err.Error(), worker)
+				workerRespCh <- errorCommonWorkerResponse(err.Error(), cfg.SourceID)
 				return
 			}
-			workerRespCh <- errorCommonWorkerResponse(terror.ErrMasterNoEmitToken.Generate(worker).Error(), worker)
+			workerRespCh <- errorCommonWorkerResponse(terror.ErrMasterNoEmitToken.Generate(worker).Error(), worker.Address())
 		}, stCfg)
 	}
 	wg.Wait()
@@ -597,10 +563,10 @@ func extractWorkers(s *Server, req hasWokers) ([]string, error) {
 	if len(req.GetWorkers()) > 0 {
 		// query specified dm-workers
 		invalidWorkers := make([]string, 0, len(req.GetWorkers()))
-		for _, workerAddress := range req.GetWorkers() {
-			w := s.coordinator.GetWorkerByAddress(workerAddress)
+		for _, source := range req.GetWorkers() {
+			w := s.coordinator.GetWorkerBySourceID(source)
 			if w == nil || w.State() == coordinator.WorkerClosed {
-				invalidWorkers = append(invalidWorkers, workerAddress)
+				invalidWorkers = append(invalidWorkers, source)
 			}
 		}
 		if len(invalidWorkers) > 0 {
@@ -609,7 +575,7 @@ func extractWorkers(s *Server, req hasWokers) ([]string, error) {
 		workers = req.GetWorkers()
 	} else if len(req.GetName()) > 0 {
 		// query specified task's workers
-		workers = s.getTaskWorkers(req.GetName())
+		workers = s.getTaskResources(req.GetName())
 		if len(workers) == 0 {
 			return nil, errors.Errorf("task %s has no workers or not exist, can try `refresh-worker-tasks` cmd first", req.GetName())
 		}
@@ -618,7 +584,9 @@ func extractWorkers(s *Server, req hasWokers) ([]string, error) {
 		log.L().Info("get workers")
 		for _, worker := range s.coordinator.GetAllWorkers() {
 			log.L().Info("debug", zap.Stringer("worker", worker))
-			workers = append(workers, worker.String())
+			if worker.State() == coordinator.WorkerBound {
+				workers = append(workers, worker.String())
+			}
 		}
 	}
 	return workers, nil
@@ -795,7 +763,7 @@ func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLL
 			} else {
 				workerResp = resp.BreakDDLLock
 			}
-			workerResp.Worker = worker.Address()
+			workerResp.Worker = addr
 			workerRespCh <- workerResp
 		}(address)
 	}
@@ -946,13 +914,15 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 	}
 
 	var wg sync.WaitGroup
-	for _, worker := range req.Workers {
+	for _, source := range req.Workers {
 		wg.Add(1)
 		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
-			cli, worker1, err := s.workerArgsExtractor(args...)
-			if err != nil {
-				handleErr(err, worker1)
+			sourceID, _ := args[0].(string)
+			cli := s.coordinator.GetWorkerBySourceID(sourceID)
+			if cli == nil {
+				err := terror.ErrMasterWorkerArgsExtractor.Generatef("%s relevant worker-client not found", sourceID)
+				handleErr(err, sourceID)
 				return
 			}
 			request := &workerrpc.Request{
@@ -966,17 +936,13 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 			} else {
 				workerResp = resp.SwitchRelayMaster
 			}
-			workerResp.Worker = worker1
+			workerResp.Worker = sourceID
 			workerRespCh <- workerResp
 		}, func(args ...interface{}) {
 			defer wg.Done()
-			_, worker1, err := s.workerArgsExtractor(args...)
-			if err != nil {
-				handleErr(err, worker1)
-				return
-			}
-			workerRespCh <- errorCommonWorkerResponse(terror.ErrMasterNoEmitToken.Generate(worker1).Error(), worker1)
-		}, worker)
+			sourceID, _ := args[0].(string)
+			workerRespCh <- errorCommonWorkerResponse(terror.ErrMasterNoEmitToken.Generate(sourceID).Error(), sourceID)
+		}, source)
 	}
 	wg.Wait()
 
@@ -1104,7 +1070,7 @@ func (s *Server) addTaskWorkers(task string, workers []string, replace bool) {
 	defer s.Unlock()
 	if !replace {
 		// merge with old workers
-		old, ok := s.taskWorkers[task]
+		old, ok := s.taskSources[task]
 		if ok {
 			exist := make(map[string]struct{})
 			for _, worker := range valid {
@@ -1119,7 +1085,7 @@ func (s *Server) addTaskWorkers(task string, workers []string, replace bool) {
 	}
 
 	sort.Strings(valid)
-	s.taskWorkers[task] = valid
+	s.taskSources[task] = valid
 	log.L().Info("update workers of task", zap.String("task", task), zap.Strings("workers", valid))
 }
 
@@ -1130,7 +1096,7 @@ func (s *Server) replaceTaskWorkers(taskWorkers map[string][]string) {
 	}
 	s.Lock()
 	defer s.Unlock()
-	s.taskWorkers = taskWorkers
+	s.taskSources = taskWorkers
 }
 
 // removeTaskWorkers remove (partial / all) workers for a task
@@ -1142,30 +1108,30 @@ func (s *Server) removeTaskWorkers(task string, workers []string) {
 
 	s.Lock()
 	defer s.Unlock()
-	if _, ok := s.taskWorkers[task]; !ok {
+	if _, ok := s.taskSources[task]; !ok {
 		log.L().Warn("not found workers", zap.String("task", task))
 		return
 	}
-	remain := make([]string, 0, len(s.taskWorkers[task]))
-	for _, worker := range s.taskWorkers[task] {
+	remain := make([]string, 0, len(s.taskSources[task]))
+	for _, worker := range s.taskSources[task] {
 		if _, ok := toRemove[worker]; !ok {
 			remain = append(remain, worker)
 		}
 	}
 	if len(remain) == 0 {
-		delete(s.taskWorkers, task)
+		delete(s.taskSources, task)
 		log.L().Info("remove task from taskWorker", zap.String("task", task))
 	} else {
-		s.taskWorkers[task] = remain
+		s.taskSources[task] = remain
 		log.L().Info("update workers of task", zap.String("task", task), zap.Strings("reamin workers", remain))
 	}
 }
 
-// getTaskWorkers gets workers relevant to specified task
-func (s *Server) getTaskWorkers(task string) []string {
+// getTaskResources gets workers relevant to specified task
+func (s *Server) getTaskResources(task string) []string {
 	s.Lock()
 	defer s.Unlock()
-	workers, ok := s.taskWorkers[task]
+	workers, ok := s.taskSources[task]
 	if !ok {
 		return []string{}
 	}
@@ -1209,9 +1175,11 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, workers []string, tas
 		wg.Add(1)
 		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
-			cli, worker1, err := s.workerArgsExtractor(args...)
-			if err != nil {
-				handleErr(err, worker1)
+			sourceID, _ := args[0].(string)
+			cli := s.coordinator.GetWorkerBySourceID(sourceID)
+			if cli == nil {
+				err := terror.ErrMasterWorkerArgsExtractor.Generatef("%s relevant worker-client not found", sourceID)
+				handleErr(err, sourceID)
 				return
 			}
 			resp, err := cli.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
@@ -1224,16 +1192,12 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, workers []string, tas
 			} else {
 				workerStatus = resp.QueryStatus
 			}
-			workerStatus.Worker = worker1
+			workerStatus.Worker = sourceID
 			workerRespCh <- workerStatus
 		}, func(args ...interface{}) {
 			defer wg.Done()
-			_, worker1, err := s.workerArgsExtractor(args...)
-			if err != nil {
-				handleErr(err, worker1)
-				return
-			}
-			handleErr(terror.ErrMasterNoEmitToken.Generate(worker1), worker1)
+			sourceID, _ := args[0].(string)
+			handleErr(terror.ErrMasterNoEmitToken.Generate(sourceID), sourceID)
 		}, worker)
 	}
 	wg.Wait()
@@ -1264,11 +1228,14 @@ func (s *Server) getErrorFromWorkers(ctx context.Context, workers []string, task
 		wg.Add(1)
 		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
-			cli, worker1, err := s.workerArgsExtractor(args...)
-			if err != nil {
-				handleErr(err, worker1)
+			sourceID, _ := args[0].(string)
+			cli := s.coordinator.GetWorkerBySourceID(sourceID)
+			if cli == nil {
+				err := terror.ErrMasterWorkerArgsExtractor.Generatef("%s relevant worker-client not found", sourceID)
+				handleErr(err, sourceID)
 				return
 			}
+
 			resp, err := cli.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
 			workerError := &pb.QueryErrorResponse{}
 			if err != nil {
@@ -1279,23 +1246,19 @@ func (s *Server) getErrorFromWorkers(ctx context.Context, workers []string, task
 			} else {
 				workerError = resp.QueryError
 			}
-			workerError.Worker = worker1
+			workerError.Worker = sourceID
 			workerRespCh <- workerError
 		}, func(args ...interface{}) {
 			defer wg.Done()
-			_, worker1, err := s.workerArgsExtractor(args...)
-			if err != nil {
-				handleErr(err, worker1)
-				return
-			}
-			handleErr(terror.ErrMasterNoEmitToken.Generate(worker1), worker1)
+			sourceID, _ := args[0].(string)
+			handleErr(terror.ErrMasterNoEmitToken.Generate(sourceID), sourceID)
 		}, worker)
 	}
 	wg.Wait()
 	return workerRespCh
 }
 
-// updateTaskWorkers fetches task-workers mapper from dm-workers and update s.taskWorkers
+// updateTaskWorkers fetches task-workers mapper from dm-workers and update s.taskSources
 func (s *Server) updateTaskWorkers(ctx context.Context) {
 	taskWorkers, _ := s.fetchTaskWorkers(ctx)
 	if len(taskWorkers) == 0 {
@@ -1347,7 +1310,7 @@ func (s *Server) fetchTaskWorkers(ctx context.Context) (map[string][]string, map
 // return true means match, false means mismatch.
 func (s *Server) checkTaskAndWorkerMatch(taskname string, targetWorker string) bool {
 	// find worker
-	workers := s.getTaskWorkers(taskname)
+	workers := s.getTaskResources(taskname)
 	if len(workers) == 0 {
 		return false
 	}
@@ -1415,7 +1378,7 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 						}
 						log.L().Info("receive ddl info", zap.Stringer("ddl info", in), zap.String("worker", worker))
 
-						workers := s.getTaskWorkers(in.Task)
+						workers := s.getTaskResources(in.Task)
 						if len(workers) == 0 {
 							// should happen only when starting and before updateTaskWorkers return
 							log.L().Error("try to sync shard DDL, but with no workers", zap.String("task", in.Task))
@@ -1790,109 +1753,14 @@ func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWork
 }
 
 // TODO: refine the call stack of this API, query worker configs that we needed only
-func (s *Server) getWorkerConfigs(ctx context.Context, workerIDs []string) (map[string]config.DBConfig, error) {
-	var (
-		wg          sync.WaitGroup
-		workerMutex sync.Mutex
-		workerCfgs  = make(map[string]config.DBConfig)
-		errCh       = make(chan error, len(s.coordinator.GetAllWorkers()))
-		err         error
-	)
-	handleErr := func(err2 error) bool {
-		if err2 != nil {
-			log.L().Error("response error", zap.Error(err2))
+func (s *Server) getWorkerConfigs(ctx context.Context, workers []*config.MySQLInstance) map[string]config.DBConfig {
+	cfgs := make(map[string]config.DBConfig)
+	for _, w := range workers {
+		if cfg := s.coordinator.GetConfigBySourceID(w.SourceID); cfg != nil {
+			cfgs[w.SourceID] = *cfg
 		}
-		errCh <- err2
-		return false
 	}
-
-	argsExtractor := func(args ...interface{}) (string, workerrpc.Client, bool) {
-		if len(args) != 2 {
-			return "", nil, handleErr(terror.ErrMasterGetWorkerCfgExtractor.Generatef("fail to call emit to fetch worker config, miss some arguments %v", args))
-		}
-
-		worker, ok := args[0].(string)
-		if !ok {
-			return "", nil, handleErr(terror.ErrMasterGetWorkerCfgExtractor.Generatef("fail to call emit to fetch worker config, can't get id from args[0], arguments %v", args))
-		}
-
-		client, ok := args[1].(*workerrpc.GRPCClient)
-		if !ok {
-			return "", nil, handleErr(terror.ErrMasterGetWorkerCfgExtractor.Generatef("fail to call emit to fetch config of worker %s, can't get worker client from args[1], arguments %v", worker, args))
-		}
-
-		return worker, client, true
-	}
-
-	request := &workerrpc.Request{
-		Type:              workerrpc.CmdQueryWorkerConfig,
-		QueryWorkerConfig: &pb.QueryWorkerConfigRequest{},
-	}
-	for _, worker := range workerIDs {
-		client := s.coordinator.GetWorkerClientByAddress(worker)
-		if client == nil {
-			continue // outer caller can handle the lack of the config
-		}
-		wg.Add(1)
-		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
-			defer wg.Done()
-
-			worker1, client1, ok := argsExtractor(args...)
-			if !ok {
-				return
-			}
-
-			response, err1 := client1.SendRequest(ctx, request, s.cfg.RPCTimeout)
-			if err1 != nil {
-				handleErr(terror.Annotatef(err1, "fetch config of worker %s", worker1))
-				return
-			}
-
-			resp := response.QueryWorkerConfig
-			if !resp.Result {
-				handleErr(terror.ErrMasterQueryWorkerConfig.Generatef("fail to query config from worker %s, message %s", worker1, resp.Msg))
-				return
-			}
-
-			if len(resp.Content) == 0 {
-				handleErr(terror.ErrMasterQueryWorkerConfig.Generatef("fail to query config from worker %s, config is empty", worker1))
-				return
-			}
-
-			if len(resp.SourceID) == 0 {
-				handleErr(terror.ErrMasterQueryWorkerConfig.Generatef("fail to query config from worker %s, source ID is empty, it should be set in worker config", worker1))
-				return
-			}
-
-			dbCfg := &config.DBConfig{}
-			err2 := dbCfg.Decode(resp.Content)
-			if err2 != nil {
-				handleErr(terror.WithClass(terror.Annotatef(err2, "unmarshal worker %s config, resp: %s", worker1, resp.Content), terror.ClassDMMaster))
-				return
-			}
-
-			workerMutex.Lock()
-			workerCfgs[resp.SourceID] = *dbCfg
-			workerMutex.Unlock()
-
-		}, func(args ...interface{}) {
-			defer wg.Done()
-
-			worker1, _, ok := argsExtractor(args...)
-			if !ok {
-				return
-			}
-			handleErr(terror.ErrMasterNoEmitToken.Generate(worker1))
-		}, worker, client)
-	}
-
-	wg.Wait()
-
-	if len(errCh) > 0 {
-		err = <-errCh
-	}
-
-	return workerCfgs, err
+	return cfgs
 }
 
 // MigrateWorkerRelay migrates dm-woker relay unit
@@ -2034,17 +1902,7 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
 
-	// get workerID from deploy map by sourceID, refactor this when dynamic add/remove worker supported.
-	workerIDs := make([]string, 0, len(cfg.MySQLInstances))
-	for _, inst := range cfg.MySQLInstances {
-		workerID, ok := s.cfg.DeployMap[inst.SourceID]
-		if !ok {
-			return nil, nil, terror.ErrMasterTaskConfigExtractor.Generatef("%s relevant worker not found", inst.SourceID)
-		}
-		workerIDs = append(workerIDs, workerID)
-	}
-
-	sourceCfgs, err := s.getWorkerConfigs(ctx, workerIDs)
+	sourceCfgs := s.getWorkerConfigs(ctx, cfg.MySQLInstances)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -2068,50 +1926,32 @@ var (
 
 // taskConfigArgsExtractor extracts SubTaskConfig from args and returns its relevant
 // grpc client, worker id (host:port), subtask config in toml, task name and error
-func (s *Server) taskConfigArgsExtractor(args ...interface{}) (workerrpc.Client, string, string, string, error) {
+func (s *Server) taskConfigArgsExtractor(cfg *config.SubTaskConfig) (*coordinator.Worker, string, string, error) {
 	handleErr := func(err error) error {
 		log.L().Error("response", zap.Error(err))
 		return err
 	}
 
-	if len(args) != 1 {
-		return nil, "", "", "", handleErr(terror.ErrMasterTaskConfigExtractor.Generatef("miss task config %v", args))
-	}
-
-	cfg, ok := args[0].(*config.SubTaskConfig)
-	if !ok {
-		return nil, "", "", "", handleErr(terror.ErrMasterTaskConfigExtractor.Generatef("args[0] is not SubTaskConfig: %v", args[0]))
-	}
-
-	worker, ok1 := s.cfg.DeployMap[cfg.SourceID]
-	cli := s.coordinator.GetWorkerClientByAddress(worker)
-	if !ok1 || cli == nil {
-		return nil, "", "", "", handleErr(terror.ErrMasterTaskConfigExtractor.Generatef("%s relevant worker-client not found", worker))
+	worker := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
+	if worker == nil {
+		return nil, "", "", handleErr(terror.ErrMasterTaskConfigExtractor.Generatef("%s relevant worker-client not found", worker))
 	}
 
 	cfgToml, err := cfg.Toml()
 	if err != nil {
-		return nil, "", "", "", handleErr(err)
+		return nil, "", "", handleErr(err)
 	}
 
-	return cli, worker, cfgToml, cfg.Name, nil
+	return worker, cfgToml, cfg.Name, nil
 }
 
 // workerArgsExtractor extracts worker from args and returns its relevant
 // grpc client, worker id (host:port) and error
-func (s *Server) workerArgsExtractor(args ...interface{}) (workerrpc.Client, string, error) {
-	if len(args) != 1 {
-		return nil, "", terror.ErrMasterWorkerArgsExtractor.Generatef("miss worker id %v", args)
-	}
-	worker, ok := args[0].(string)
-	if !ok {
-		return nil, "", terror.ErrMasterWorkerArgsExtractor.Generatef("invalid argument, args[0] is not valid worker id: %v", args[0])
-	}
-	log.L().Info("Debug get worker", zap.String("worker", worker))
-	cli := s.coordinator.GetWorkerClientByAddress(worker)
+func (s *Server) workerArgsExtractor(source string) (*coordinator.Worker, error) {
+	log.L().Info("Debug get worker", zap.String("source-id", source))
+	cli := s.coordinator.GetWorkerBySourceID(source)
 	if cli == nil {
-		return nil, worker, terror.ErrMasterWorkerArgsExtractor.Generatef("%s relevant worker-client not found", worker)
+		return nil, terror.ErrMasterWorkerArgsExtractor.Generatef("%s relevant worker-client not found", source)
 	}
-
-	return cli, worker, nil
+	return cli, nil
 }

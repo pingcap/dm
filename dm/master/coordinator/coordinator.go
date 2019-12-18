@@ -146,6 +146,16 @@ func (c *Coordinator) GetWorkerBySourceID(source string) *Worker {
 	return c.upstreams[source]
 }
 
+// GetConfigBySourceID gets db config through source id.
+func (c *Coordinator) GetConfigBySourceID(source string) *config.DBConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if cfg, ok := c.configs[source]; ok {
+		return &cfg.From
+	}
+	return nil
+}
+
 // GetWorkersByStatus gets the workers match the specified status.
 func (c *Coordinator) GetWorkersByStatus(s WorkerState) []*Worker {
 	c.mu.RLock()
