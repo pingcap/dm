@@ -14,7 +14,6 @@
 package syncer
 
 import (
-	//"math"
 	"context"
 	"time"
 
@@ -160,21 +159,23 @@ func (c *StreamerController) GetEvent(tctx tcontext.Context, syncedPosition mysq
 
 	for i := 0; i < maxRetryCount; i++ {
 		event, err = c.streamer.GetEvent(ctx)
-		if err == context.Canceled {
+		if err == nil {
+			return event, nil
+		} else if err == context.Canceled {
 			tctx.L().Info("binlog replication main routine quit(context canceled)!", zap.Stringer("last position", syncedPosition))
 			return nil, nil
 		} else if err == context.DeadlineExceeded {
 			tctx.L().Info("deadline exceeded when fetching binlog event")
+		} else {
+			tctx.L().Error("get event meet error", zap.Error(err))
 		}
 
-		//c.eventTimeoutCounter = 0
 		if c.haveUnfetchedBinlog(tctx, syncedPosition) {
 			tctx.L().Info("timeout when fetching binlog event, there must be some problems with replica connection, try to re-connect")
 			err = c.reopenWithRetry(tctx, syncedPosition)
 			if err != nil {
 				return nil, err
 			}
-			//continue
 		}
 	}
 
@@ -199,6 +200,7 @@ func (c *StreamerController) reopenWithRetry(tctx tcontext.Context, pos mysql.Po
 }
 
 func (c *StreamerController) reopen(tctx tcontext.Context, pos mysql.Position) (streamer.Streamer, error) {
+	tctx.L().Info("reopen", zap.Reflect("position", pos))
 	if c.streamerProducer != nil {
 		switch r := c.streamerProducer.(type) {
 		case *remoteBinlogReader:
