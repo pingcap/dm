@@ -1,0 +1,17 @@
+#!/bin/sh
+
+set -eu
+
+workdir=$1
+conf=$2
+
+binary=$PWD/bin/dm-syncer
+
+PWD=$(pwd)
+
+mkdir -o $workdir/log
+
+cd $workdir
+$binary --log-file="$workdir/log/dm-syncer.log" --config="$config" >> $workdir/log/stdout.log 2>&1 &
+cd $PWD
+

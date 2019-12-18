@@ -146,6 +146,10 @@ dm_integration_test_build:
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-tracer.test github.com/pingcap/dm/cmd/dm-tracer \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
+	$(GOTEST) -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
+		-coverpkg=github.com/pingcap/dm/... \
+		-o bin/dm-tracer.test github.com/pingcap/dm/cmd/dm-syncer \
+		|| { $(FAILPOINT_DISABLE); exit 1; }
 	$(FAILPOINT_DISABLE)
 	tests/prepare_tools.sh
 
