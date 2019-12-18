@@ -42,8 +42,6 @@ func main() {
 		os.Exit(2)
 	}
 
-	config.RelayDir = "./relay-dir"
-
 	// 2. init logger
 	err = log.InitLogger(&log.Config{
 		File:  config.LogFile,

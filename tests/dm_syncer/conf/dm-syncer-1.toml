@@ -3,8 +3,8 @@
 # sub task name as identifier, should be unique
 name = "hanfei"
 
-# sub task mode, can be `all`, `full`, `increment`
-mode = "increment"
+# sub task mode, can be `all`, `full`, `incremental`
+mode = "incremental"
 
 # used for binlog replication 
 server-id = 101
@@ -48,8 +48,8 @@ pool-size = 16
 # different sub task should have different meta
 # meta-file = "./syncer.subTaskA.meta"
 [meta]
-name = binlog-name-placeholder-1
-pos = binlog-pos-placeholder-1
+binlog-name = binlog-name-placeholder-1
+binlog-pos = binlog-pos-placeholder-1
 
 worker-count = 16
 batch = 1000
