@@ -202,7 +202,7 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 	if w == nil {
 		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
 		resp.Result = false
-		resp.Msg = "mysql worker has not been started"
+		resp.Msg = terror.ErrWorkerNoStart.Error()
 		return resp, nil
 	}
 
@@ -230,7 +230,7 @@ func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskReque
 	if w == nil {
 		log.L().Error("fail to call OperateSubTask, because mysql worker has not been started")
 		resp.Result = false
-		resp.Msg = "mysql worker has not been started"
+		resp.Msg = terror.ErrWorkerNoStart.Error()
 		return resp, nil
 	}
 
@@ -266,7 +266,7 @@ func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest
 	if w == nil {
 		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
 		resp.Result = false
-		resp.Msg = "mysql worker has not been started"
+		resp.Msg = terror.ErrWorkerNoStart.Error()
 		return resp, nil
 	}
 	err = w.UpdateSubTask(cfg)
@@ -290,7 +290,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 	if w == nil {
 		log.L().Error("fail to call QueryStatus, because mysql worker has not been started")
 		resp.Result = false
-		resp.Msg = "mysql worker has not been started"
+		resp.Msg = terror.ErrWorkerNoStart.Error()
 		return resp, nil
 	}
 
@@ -314,7 +314,7 @@ func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorRequest) (*pb
 	if w == nil {
 		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
 		resp.Result = false
-		resp.Msg = "mysql worker has not been started"
+		resp.Msg = terror.ErrWorkerNoStart.Error()
 		return resp, nil
 	}
 
@@ -446,7 +446,7 @@ func (s *Server) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) 
 	w := s.checkWorkerStart()
 	if w == nil {
 		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
-		resp.Msg = "mysql worker has not been started"
+		resp.Msg = terror.ErrWorkerNoStart.Error()
 		return resp, nil
 	}
 
@@ -506,7 +506,7 @@ func (s *Server) QueryWorkerConfig(ctx context.Context, req *pb.QueryWorkerConfi
 	if w == nil {
 		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
 		resp.Result = false
-		resp.Msg = "mysql worker has not been started"
+		resp.Msg = terror.ErrWorkerNoStart.Error()
 		return resp, nil
 	}
 
