@@ -95,8 +95,6 @@ func callRPC(ctx context.Context, client pb.WorkerClient, req *Request) (*Respon
 		resp.QueryStatus, err = client.QueryStatus(ctx, req.QueryStatus)
 	case CmdQueryError:
 		resp.QueryError, err = client.QueryError(ctx, req.QueryError)
-	case CmdQueryTaskOperation:
-		resp.QueryTaskOperation, err = client.QueryTaskOperation(ctx, req.QueryTaskOperation)
 	case CmdQueryWorkerConfig:
 		resp.QueryWorkerConfig, err = client.QueryWorkerConfig(ctx, req.QueryWorkerConfig)
 	case CmdHandleSubTaskSQLs:

@@ -65,6 +65,11 @@ function run() {
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
+    sleep 2
+    echo "start task after restarted dm-worker"
+    dmctl_start_task
+
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     # LoadExecCreateTableFailed error return twice

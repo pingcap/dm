@@ -182,137 +182,100 @@ func (s *Server) checkWorkerStart() *Worker {
 }
 
 // StartSubTask implements WorkerServer.StartSubTask
-func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
+func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "StartSubTask"), zap.Stringer("payload", req))
 	cfg := config.NewSubTaskConfig()
 	err := cfg.Decode(req.Task)
 	if err != nil {
 		err = terror.Annotatef(err, "decode subtask config from request %+v", req.Task)
 		log.L().Error("fail to decode task", zap.String("request", "StartSubTask"), zap.Stringer("payload", req), zap.Error(err))
-		return nil, err
+		return &pb.CommonWorkerResponse{
+			Result: false,
+			Msg:    err.Error(),
+		}, nil
 	}
-	resp := &pb.OperateSubTaskResponse{
-		Meta: &pb.CommonWorkerResponse{
-			Result: true,
-			Msg:    "",
-		},
-		Op:    pb.TaskOp_Start,
-		LogID: 0,
+	resp := &pb.CommonWorkerResponse{
+		Result: true,
+		Msg:    "",
 	}
 	w := s.checkWorkerStart()
 	if w == nil {
 		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
-		resp.Meta.Result = false
-		resp.Meta.Msg = "mysql worker has not been started"
+		resp.Result = false
+		resp.Msg = "mysql worker has not been started"
 		return resp, nil
 	}
 
 	cfg.LogLevel = s.cfg.LogLevel
 	cfg.LogFile = s.cfg.LogFile
-	opLogID, err := w.StartSubTask(cfg)
+	err = w.StartSubTask(cfg)
+
 	if err != nil {
 		err = terror.Annotatef(err, "start sub task %s", cfg.Name)
 		log.L().Error("fail to start subtask", zap.String("request", "StartSubTask"), zap.Stringer("payload", req), zap.Error(err))
-		return nil, err
+		resp.Result = false
+		resp.Msg = err.Error()
 	}
-	resp.LogID = opLogID
 	return resp, nil
 }
 
 // OperateSubTask implements WorkerServer.OperateSubTask
 func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
 	resp := &pb.OperateSubTaskResponse{
-		Meta: &pb.CommonWorkerResponse{
-			Result: true,
-			Msg:    "",
-		},
-		Op:    req.Op,
-		LogID: 0,
+		Result: true,
+		Op:     req.Op,
+		Msg:    "",
 	}
 	w := s.checkWorkerStart()
 	if w == nil {
 		log.L().Error("fail to call OperateSubTask, because mysql worker has not been started")
-		resp.Meta.Result = false
-		resp.Meta.Msg = "mysql worker has not been started"
+		resp.Result = false
+		resp.Msg = "mysql worker has not been started"
 		return resp, nil
 	}
 
 	log.L().Info("", zap.String("request", "OperateSubTask"), zap.Stringer("payload", req))
-	opLogID, err := w.OperateSubTask(req.Name, req.Op)
+	err := w.OperateSubTask(req.Name, req.Op)
 	if err != nil {
 		err = terror.Annotatef(err, "operate(%s) sub task %s", req.Op.String(), req.Name)
 		log.L().Error("fail to operate task", zap.String("request", "OperateSubTask"), zap.Stringer("payload", req), zap.Error(err))
-		return nil, err
+		resp.Result = false
+		resp.Msg = err.Error()
 	}
-
-	resp.LogID = opLogID
 	return resp, nil
 }
 
 // UpdateSubTask implements WorkerServer.UpdateSubTask
-func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
+func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "UpdateSubTask"), zap.Stringer("payload", req))
 	cfg := config.NewSubTaskConfig()
 	err := cfg.Decode(req.Task)
 	if err != nil {
 		err = terror.Annotatef(err, "decode config from request %+v", req.Task)
 		log.L().Error("fail to decode subtask", zap.String("request", "UpdateSubTask"), zap.Stringer("payload", req), zap.Error(err))
-		return nil, err
+		return &pb.CommonWorkerResponse{
+			Result: false,
+			Msg:    err.Error(),
+		}, nil
 	}
-	resp := &pb.OperateSubTaskResponse{
-		Meta: &pb.CommonWorkerResponse{
-			Result: true,
-			Msg:    "",
-		},
-		Op:    pb.TaskOp_Update,
-		LogID: 0,
+	resp := &pb.CommonWorkerResponse{
+		Result: true,
+		Msg:    "",
 	}
 	w := s.checkWorkerStart()
 	if w == nil {
 		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
-		resp.Meta.Result = false
-		resp.Meta.Msg = "mysql worker has not been started"
+		resp.Result = false
+		resp.Msg = "mysql worker has not been started"
 		return resp, nil
 	}
-
-	opLogID, err := w.UpdateSubTask(cfg)
+	err = w.UpdateSubTask(cfg)
 	if err != nil {
 		err = terror.Annotatef(err, "update sub task %s", cfg.Name)
 		log.L().Error("fail to update task", zap.String("request", "UpdateSubTask"), zap.Stringer("payload", req), zap.Error(err))
-		return nil, err
+		resp.Result = false
+		resp.Msg = err.Error()
 	}
-	resp.LogID = opLogID
-	return resp, nil
-}
-
-// QueryTaskOperation implements WorkerServer.QueryTaskOperation
-func (s *Server) QueryTaskOperation(ctx context.Context, req *pb.QueryTaskOperationRequest) (*pb.QueryTaskOperationResponse, error) {
-	log.L().Info("", zap.String("request", "QueryTaskOperation"), zap.Stringer("payload", req))
-	resp := &pb.QueryTaskOperationResponse{
-		Log: &pb.TaskLog{},
-		Meta: &pb.CommonWorkerResponse{
-			Result: true,
-			Msg:    "",
-		},
-	}
-	w := s.checkWorkerStart()
-	if w == nil {
-		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
-		resp.Meta.Result = false
-		resp.Meta.Msg = "mysql worker has not been started"
-		return resp, nil
-	}
-
-	taskName := req.Name
-	opLogID := req.LogID
-
-	opLog, err := w.meta.GetTaskLog(opLogID)
-	if err != nil {
-		err = terror.Annotatef(err, "fail to get operation %d of task %s", opLogID, taskName)
-		log.L().Error(err.Error())
-		return nil, err
-	}
-	resp.Log = opLog
 	return resp, nil
 }
 

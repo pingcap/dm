@@ -4,13 +4,12 @@ package pb;
 
 
 service Worker {
-    rpc StartSubTask (StartSubTaskRequest) returns (OperateSubTaskResponse) {}
+    rpc StartSubTask (StartSubTaskRequest) returns (CommonWorkerResponse) {}
     rpc OperateSubTask (OperateSubTaskRequest) returns (OperateSubTaskResponse) {}
-    rpc UpdateSubTask (UpdateSubTaskRequest) returns (OperateSubTaskResponse) {}
+    rpc UpdateSubTask (UpdateSubTaskRequest) returns (CommonWorkerResponse) {}
 
     rpc QueryStatus (QueryStatusRequest) returns (QueryStatusResponse) {}
     rpc QueryError (QueryErrorRequest) returns (QueryErrorResponse) {}
-    rpc QueryTaskOperation(QueryTaskOperationRequest) returns (QueryTaskOperationResponse) {}
 
     rpc HandleSQLs (HandleSubTaskSQLsRequest) returns (CommonWorkerResponse) {}
     // FetchDDLInfo fetches DDL info from dm-worker by dm-master
@@ -77,19 +76,10 @@ message OperateSubTaskRequest {
 }
 
 message OperateSubTaskResponse {
-    CommonWorkerResponse meta = 1;
-    TaskOp op = 2;
-    int64 logID = 3;
-}
-
-message QueryTaskOperationRequest {
-    string name = 1; // sub task's name
-	int64 logID = 2; // operation log ID
-}
-
-message QueryTaskOperationResponse {
-    CommonWorkerResponse meta = 1;
-    TaskLog log = 2; // sub task's operation log
+    TaskOp op = 1;
+    bool result = 2;
+    string worker = 3; // worker name, set by dm-master
+    string msg = 4;
 }
 
 message UpdateSubTaskRequest {

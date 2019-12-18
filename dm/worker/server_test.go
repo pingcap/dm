@@ -79,9 +79,6 @@ func (t *testServer) TestServer(c *C) {
 	// create client
 	cli := t.createClient(c, "127.0.0.1:8262")
 
-	c.Assert(s.worker.meta.LoadTaskMeta(), HasLen, 0)
-	c.Assert(s.worker.meta.PeekLog(), IsNil)
-
 	// start task
 	subtaskCfgBytes, err := ioutil.ReadFile("./subtask.toml")
 	c.Assert(err, IsNil)
@@ -90,32 +87,19 @@ func (t *testServer) TestServer(c *C) {
 		Task: string(subtaskCfgBytes),
 	})
 	c.Assert(err, IsNil)
-	c.Assert(s.worker.meta.PeekLog(), NotNil)
-	c.Assert(s.worker.meta.PeekLog().Id, Equals, resp1.LogID)
-	c.Assert(resp1.LogID, Equals, int64(1))
+	c.Assert(resp1.Result, IsTrue)
 
-	opsp, err := cli.QueryTaskOperation(context.Background(), &pb.QueryTaskOperationRequest{
-		Name:  "sub-task-name",
-		LogID: resp1.LogID,
-	})
+	status, err := cli.QueryStatus(context.Background(), &pb.QueryStatusRequest{Name: "sub-task-name"})
 	c.Assert(err, IsNil)
-	c.Assert(opsp.Log.Success, IsFalse)
+	c.Assert(status.Result, IsTrue)
+	c.Assert(status.SubTaskStatus[0].Stage, Equals, pb.Stage_Paused) //  because of `Access denied`
 
 	// update task
 	resp2, err := cli.UpdateSubTask(context.Background(), &pb.UpdateSubTaskRequest{
 		Task: string(subtaskCfgBytes),
 	})
 	c.Assert(err, IsNil)
-	c.Assert(resp2.LogID, Equals, int64(2))
-	c.Assert(s.worker.meta.PeekLog(), NotNil)
-	c.Assert(s.worker.meta.PeekLog().Id, Equals, resp1.LogID)
-
-	opsp, err = cli.QueryTaskOperation(context.Background(), &pb.QueryTaskOperationRequest{
-		Name:  "sub-task-name",
-		LogID: resp2.LogID,
-	})
-	c.Assert(err, IsNil)
-	c.Assert(opsp.Log.Success, IsFalse)
+	c.Assert(resp2.Result, IsTrue)
 
 	// operate task
 	resp3, err := cli.OperateSubTask(context.Background(), &pb.OperateSubTaskRequest{
@@ -123,16 +107,8 @@ func (t *testServer) TestServer(c *C) {
 		Op:   pb.TaskOp_Pause,
 	})
 	c.Assert(err, IsNil)
-	c.Assert(resp3.LogID, Equals, int64(3))
-	c.Assert(s.worker.meta.PeekLog(), NotNil)
-	c.Assert(s.worker.meta.PeekLog().Id, Equals, resp1.LogID)
-
-	opsp, err = cli.QueryTaskOperation(context.Background(), &pb.QueryTaskOperationRequest{
-		Name:  "test",
-		LogID: resp3.LogID,
-	})
-	c.Assert(err, IsNil)
-	c.Assert(opsp.Log.Success, IsFalse)
+	c.Assert(resp3.Result, IsFalse)
+	c.Assert(resp3.Msg, Matches, ".*current stage is not running.*")
 
 	dupServer := NewServer(cfg)
 	err = dupServer.Start()
@@ -148,7 +124,6 @@ func (t *testServer) TestServer(c *C) {
 
 	// test worker, just make sure testing sort
 	t.testWorker(c)
-	t.testWorkerHandleTask(c)
 }
 
 func (t *testServer) testHTTPInterface(c *C, uri string) {
