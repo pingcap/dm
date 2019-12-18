@@ -57,7 +57,7 @@ func switchRelayMasterFunc(cmd *cobra.Command, _ []string) {
 	defer cancel()
 	cli := common.MasterClient()
 	resp, err := cli.SwitchWorkerRelayMaster(ctx, &pb.SwitchWorkerRelayMasterRequest{
-		Workers: workers,
+		Sources: workers,
 	})
 	if err != nil {
 		common.PrintLines("can not switch relay's master server (in workers %v):\n%s", workers, errors.ErrorStack(err))

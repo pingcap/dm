@@ -70,7 +70,7 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) {
 	resp, err := cli.UnlockDDLLock(ctx, &pb.UnlockDDLLockRequest{
 		ID:           lockID,
 		ReplaceOwner: owner,
-		Workers:      workers,
+		Sources:      workers,
 		ForceRemove:  forceRemove,
 	})
 	if err != nil {

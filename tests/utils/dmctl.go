@@ -41,7 +41,7 @@ func StartTask(ctx context.Context, cli pb.MasterClient, configFile string, work
 
 	resp, err := cli.StartTask(ctx, &pb.StartTaskRequest{
 		Task:    string(content),
-		Workers: workers,
+		Sources: workers,
 	})
 	if err != nil {
 		return errors.Trace(err)
@@ -64,7 +64,7 @@ func OperateTask(ctx context.Context, cli pb.MasterClient, op pb.TaskOp, name st
 	resp, err := cli.OperateTask(ctx, &pb.OperateTaskRequest{
 		Op:      op,
 		Name:    name,
-		Workers: workers,
+		Sources: workers,
 	})
 	if err != nil {
 		return errors.Trace(err)

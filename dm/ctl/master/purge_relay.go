@@ -138,7 +138,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 	cli := common.MasterClient()
 
 	resp, err := cli.PurgeWorkerRelay(ctx, &pb.PurgeWorkerRelayRequest{
-		Workers: workers,
+		Sources: workers,
 		//Inactive: inactive,
 		//Time:     time2.Unix(),
 		Filename: filename,

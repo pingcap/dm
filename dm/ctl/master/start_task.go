@@ -61,7 +61,7 @@ func startTaskFunc(cmd *cobra.Command, _ []string) {
 	cli := common.MasterClient()
 	resp, err := cli.StartTask(ctx, &pb.StartTaskRequest{
 		Task:    string(content),
-		Workers: workers,
+		Sources: workers,
 	})
 	if err != nil {
 		common.PrintLines("can not start task:\n%v", errors.ErrorStack(err))

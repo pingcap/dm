@@ -82,7 +82,7 @@ message UpdateWorkerRelayConfigRequest {
 
 message StartTaskRequest {
     string task = 1; // task's configuration, yaml format
-    repeated string workers = 2; // workers need to do start task, empty for all matched workers in deployment
+    repeated string sources = 2; // mysql source need to do start task, empty for all matched workers in deployment
 }
 
 message StartTaskResponse {
@@ -104,7 +104,7 @@ message UpdateMasterConfigResponse {
 message OperateTaskRequest {
     TaskOp op = 1; // Stop / Pause / Resume
     string name = 2; // task's name
-    repeated string workers = 3; // workers need to do operation, empty for matched workers in processing the task
+    repeated string sources = 3; // workers need to do operation, empty for matched workers in processing the task
 }
 
 message OperateTaskResponse {
@@ -122,7 +122,7 @@ message OperateTaskResponse {
 // workers need to do update, empty for all workers in processing the task
 message UpdateTaskRequest {
     string task = 1;
-    repeated string workers = 2;
+    repeated string sources = 2;
 }
 
 message UpdateTaskResponse {
@@ -134,7 +134,7 @@ message UpdateTaskResponse {
 
 message QueryStatusListRequest {
     string name = 1; // task's name, empty for all tasks
-    repeated string workers = 2; // workers need to query, empty for all workers
+    repeated string sources = 2; // workers need to query, empty for all workers
 }
 
 message QueryStatusListResponse {
@@ -145,7 +145,7 @@ message QueryStatusListResponse {
 
 message QueryErrorListRequest {
     string name = 1;             // task's name, empty for all tasks
-    repeated string workers = 2; // workers need to query, empty for all workers
+    repeated string sources = 2; // workers need to query, empty for all workers
 }
 
 message QueryErrorListResponse {
@@ -161,7 +161,7 @@ message QueryErrorListResponse {
 // if specify task and workers both, and workers not doing the task , it will return empty DDL locks
 message ShowDDLLocksRequest {
     string task = 1;
-    repeated string workers = 2; // workers need to query, empty for all workers
+    repeated string sources = 2; // workers need to query, empty for all workers
 }
 
 // DDLLock represents a DDL lock info (I known the name confused with DDLLockInfo, any suggestion?)
@@ -196,7 +196,7 @@ message ShowDDLLocksResponse {
 message UnlockDDLLockRequest {
     string ID = 1;
     string replaceOwner = 2;
-    repeated string workers = 3;
+    repeated string sources = 3;
     bool forceRemove = 4;
 }
 
@@ -214,7 +214,7 @@ message UnlockDDLLockResponse {
 // skipDDL: skip DDL which is blocking
 //   execDDL and skipDDL can not specify both at the same time, but can specify neither
 message BreakWorkerDDLLockRequest {
-    repeated string workers = 1;
+    repeated string sources = 1;
     string task = 2;
     string removeLockID = 3;
     bool execDDL = 4;
@@ -230,7 +230,7 @@ message BreakWorkerDDLLockResponse {
 // SwitchWorkerRelayMasterRequest represents a request for some dm-workers to switch relay unit's master server
 // workers: relay unit in these dm-workers need to switch master server
 message SwitchWorkerRelayMasterRequest {
-    repeated string workers = 1;
+    repeated string sources = 1;
 }
 
 message SwitchWorkerRelayMasterResponse {
@@ -242,7 +242,7 @@ message SwitchWorkerRelayMasterResponse {
 // OperateWorkerRelayRequest represents a request for some dm-workers to operate relay unit
 message OperateWorkerRelayRequest {
     RelayOp op = 1; // Stop / Pause / Resume
-    repeated string workers = 2;
+    repeated string sources = 2;
 }
 
 message OperateWorkerRelayResponse {
@@ -289,7 +289,7 @@ message HandleSQLsResponse {
 // filename: whether purge relay log files before this filename
 // subDir: specify relay sub directory for @filename
 message PurgeWorkerRelayRequest {
-    repeated string workers = 1;
+    repeated string sources = 1;
     bool inactive = 2;
     int64 time = 3;
     string filename = 4;

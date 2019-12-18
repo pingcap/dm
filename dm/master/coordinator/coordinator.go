@@ -139,6 +139,19 @@ func (c *Coordinator) GetAllWorkers() map[string]*Worker {
 	return c.workers
 }
 
+// GetRunningMysqlSource gets all souce which is running.
+func (c *Coordinator) GetRunningMysqlSource() map[string]string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	res := make(map[string]string)
+	for source, w := range c.upstreams {
+		if w.State() == WorkerBound {
+			res[source] = w.address
+		}
+	}
+	return res
+}
+
 // GetWorkerBySourceID gets the worker through source id.
 func (c *Coordinator) GetWorkerBySourceID(source string) *Worker {
 	c.mu.RLock()

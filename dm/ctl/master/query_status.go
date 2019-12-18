@@ -69,7 +69,7 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) {
 	defer cancel()
 	resp, err := cli.QueryStatus(ctx, &pb.QueryStatusListRequest{
 		Name:    taskName,
-		Workers: workers,
+		Sources: workers,
 	})
 	if err != nil {
 		common.PrintLines("can not query %s task's status(in workers %v):\n%s", taskName, workers, errors.ErrorStack(err))

@@ -345,7 +345,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 				workerRespCh <- errorCommonWorkerResponse(err.Error(), cfg.SourceID)
 				return
 			}
-			workerRespCh <- errorCommonWorkerResponse(terror.ErrMasterNoEmitToken.Generate(worker).Error(), cfg.SourceID)
+			workerRespCh <- errorCommonWorkerResponse(terror.ErrMasterNoEmitToken.Generate(worker.Address()).Error(), cfg.SourceID)
 		}, stCfg)
 	}
 	wg.Wait()
@@ -473,8 +473,8 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 	}
 	log.L().Info("update task", zap.String("task name", cfg.Name), zap.Stringer("task", cfg))
 
-	workerRespCh := make(chan *pb.CommonWorkerResponse, len(stCfgs)+len(req.Workers))
-	if len(req.Workers) > 0 {
+	workerRespCh := make(chan *pb.CommonWorkerResponse, len(stCfgs)+len(req.Sources))
+	if len(req.Sources) > 0 {
 		// specify only update task on partial dm-workers
 		// filter sub-task-configs through user specified workers
 		// if worker not exist, an error message will return
@@ -485,8 +485,8 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 				workerCfg[worker] = stCfg
 			} // only record existed workers
 		}
-		stCfgs = make([]*config.SubTaskConfig, 0, len(req.Workers))
-		for _, worker := range req.Workers {
+		stCfgs = make([]*config.SubTaskConfig, 0, len(req.Sources))
+		for _, worker := range req.Sources {
 			if stCfg, ok := workerCfg[worker]; ok {
 				stCfgs = append(stCfgs, stCfg)
 			} else {
@@ -527,7 +527,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 				workerRespCh <- errorCommonWorkerResponse(err.Error(), cfg.SourceID)
 				return
 			}
-			workerRespCh <- errorCommonWorkerResponse(terror.ErrMasterNoEmitToken.Generate(worker).Error(), worker.Address())
+			workerRespCh <- errorCommonWorkerResponse(terror.ErrMasterNoEmitToken.Generate(worker.Address()).Error(), cfg.SourceID)
 		}, stCfg)
 	}
 	wg.Wait()
@@ -553,17 +553,17 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 }
 
 type hasWokers interface {
-	GetWorkers() []string
+	GetSources() []string
 	GetName() string
 }
 
 func extractWorkers(s *Server, req hasWokers) ([]string, error) {
 	workers := make([]string, 0, len(s.coordinator.GetAllWorkers()))
 
-	if len(req.GetWorkers()) > 0 {
+	if len(req.GetSources()) > 0 {
 		// query specified dm-workers
-		invalidWorkers := make([]string, 0, len(req.GetWorkers()))
-		for _, source := range req.GetWorkers() {
+		invalidWorkers := make([]string, 0, len(req.GetSources()))
+		for _, source := range req.GetSources() {
 			w := s.coordinator.GetWorkerBySourceID(source)
 			if w == nil || w.State() == coordinator.WorkerClosed {
 				invalidWorkers = append(invalidWorkers, source)
@@ -572,7 +572,7 @@ func extractWorkers(s *Server, req hasWokers) ([]string, error) {
 		if len(invalidWorkers) > 0 {
 			return nil, errors.Errorf("%s relevant worker-client not found", strings.Join(invalidWorkers, ", "))
 		}
-		workers = req.GetWorkers()
+		workers = req.GetSources()
 	} else if len(req.GetName()) > 0 {
 		// query specified task's workers
 		workers = s.getTaskResources(req.GetName())
@@ -582,11 +582,8 @@ func extractWorkers(s *Server, req hasWokers) ([]string, error) {
 	} else {
 		// query all workers
 		log.L().Info("get workers")
-		for _, worker := range s.coordinator.GetAllWorkers() {
-			log.L().Info("debug", zap.Stringer("worker", worker))
-			if worker.State() == coordinator.WorkerBound {
-				workers = append(workers, worker.String())
-			}
+		for source := range s.coordinator.GetRunningMysqlSource() {
+			workers = append(workers, source)
 		}
 	}
 	return workers, nil
@@ -595,24 +592,24 @@ func extractWorkers(s *Server, req hasWokers) ([]string, error) {
 // QueryStatus implements MasterServer.QueryStatus
 func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest) (*pb.QueryStatusListResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "QueryStatus"))
-	workers, err := extractWorkers(s, req)
+	sources, err := extractWorkers(s, req)
 	if err != nil {
 		return &pb.QueryStatusListResponse{
 			Result: false,
 			Msg:    err.Error(),
 		}, nil
 	}
-	workerRespCh := s.getStatusFromWorkers(ctx, workers, req.Name)
+	workerRespCh := s.getStatusFromWorkers(ctx, sources, req.Name)
 
-	workerRespMap := make(map[string]*pb.QueryStatusResponse, len(workers))
+	workerRespMap := make(map[string]*pb.QueryStatusResponse, len(sources))
 	for len(workerRespCh) > 0 {
 		workerResp := <-workerRespCh
 		workerRespMap[workerResp.Worker] = workerResp
 	}
 
-	sort.Strings(workers)
-	workerResps := make([]*pb.QueryStatusResponse, 0, len(workers))
-	for _, worker := range workers {
+	sort.Strings(sources)
+	workerResps := make([]*pb.QueryStatusResponse, 0, len(sources))
+	for _, worker := range sources {
 		workerResps = append(workerResps, workerRespMap[worker])
 	}
 	resp := &pb.QueryStatusListResponse{
@@ -626,7 +623,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorListRequest) (*pb.QueryErrorListResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "QueryError"))
 
-	workers, err := extractWorkers(s, req)
+	sources, err := extractWorkers(s, req)
 	if err != nil {
 		return &pb.QueryErrorListResponse{
 			Result: false,
@@ -634,17 +631,17 @@ func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorListRequest) 
 		}, nil
 	}
 
-	workerRespCh := s.getErrorFromWorkers(ctx, workers, req.Name)
+	workerRespCh := s.getErrorFromWorkers(ctx, sources, req.Name)
 
-	workerRespMap := make(map[string]*pb.QueryErrorResponse, len(workers))
+	workerRespMap := make(map[string]*pb.QueryErrorResponse, len(sources))
 	for len(workerRespCh) > 0 {
 		workerResp := <-workerRespCh
 		workerRespMap[workerResp.Worker] = workerResp
 	}
 
-	sort.Strings(workers)
-	workerResps := make([]*pb.QueryErrorResponse, 0, len(workers))
-	for _, worker := range workers {
+	sort.Strings(sources)
+	workerResps := make([]*pb.QueryErrorResponse, 0, len(sources))
+	for _, worker := range sources {
 		workerResps = append(workerResps, workerRespMap[worker])
 	}
 	resp := &pb.QueryErrorListResponse{
@@ -669,8 +666,8 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 			continue // specify task and mismatch
 		}
 		ready := lock.Ready()
-		if len(req.Workers) > 0 {
-			for _, worker := range req.Workers {
+		if len(req.Sources) > 0 {
+			for _, worker := range req.Sources {
 				if _, ok := ready[worker]; ok {
 					goto FOUND
 				}
@@ -706,7 +703,7 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest) (*pb.UnlockDDLLockResponse, error) {
 	log.L().Info("", zap.String("lock ID", req.ID), zap.Stringer("payload", req), zap.String("request", "UnlockDDLLock"))
 
-	workerResps, err := s.resolveDDLLock(ctx, req.ID, req.ReplaceOwner, req.Workers)
+	workerResps, err := s.resolveDDLLock(ctx, req.ID, req.ReplaceOwner, req.Sources)
 	resp := &pb.UnlockDDLLockResponse{
 		Result:  true,
 		Workers: workerResps,
@@ -741,13 +738,13 @@ func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLL
 		},
 	}
 
-	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Workers))
+	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Sources))
 	var wg sync.WaitGroup
-	for _, address := range req.Workers {
+	for _, source := range req.Sources {
 		wg.Add(1)
-		go func(addr string) {
+		go func(sourceID string) {
 			defer wg.Done()
-			worker := s.coordinator.GetWorkerByAddress(addr)
+			worker := s.coordinator.GetWorkerByAddress(sourceID)
 			if worker == nil || worker.State() == coordinator.WorkerClosed {
 				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", worker), worker.Address())
 				return
@@ -763,21 +760,21 @@ func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLL
 			} else {
 				workerResp = resp.BreakDDLLock
 			}
-			workerResp.Worker = addr
+			workerResp.Worker = sourceID
 			workerRespCh <- workerResp
-		}(address)
+		}(source)
 	}
 	wg.Wait()
 
-	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(req.Workers))
+	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(req.Sources))
 	for len(workerRespCh) > 0 {
 		workerResp := <-workerRespCh
 		workerRespMap[workerResp.Worker] = workerResp
 	}
 
-	sort.Strings(req.Workers)
-	workerResps := make([]*pb.CommonWorkerResponse, 0, len(req.Workers))
-	for _, worker := range req.Workers {
+	sort.Strings(req.Sources)
+	workerResps := make([]*pb.CommonWorkerResponse, 0, len(req.Sources))
+	for _, worker := range req.Sources {
 		workerResps = append(workerResps, workerRespMap[worker])
 	}
 
@@ -859,9 +856,9 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 		},
 	}
 
-	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Workers))
+	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Sources))
 	var wg sync.WaitGroup
-	for _, worker := range req.Workers {
+	for _, worker := range req.Sources {
 		wg.Add(1)
 		go func(worker string) {
 			defer wg.Done()
@@ -883,15 +880,15 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 	}
 	wg.Wait()
 
-	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(req.Workers))
+	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(req.Sources))
 	for len(workerRespCh) > 0 {
 		workerResp := <-workerRespCh
 		workerRespMap[workerResp.Worker] = workerResp
 	}
 
-	sort.Strings(req.Workers)
-	workerResps := make([]*pb.CommonWorkerResponse, 0, len(req.Workers))
-	for _, worker := range req.Workers {
+	sort.Strings(req.Sources)
+	workerResps := make([]*pb.CommonWorkerResponse, 0, len(req.Sources))
+	for _, worker := range req.Sources {
 		workerResps = append(workerResps, workerRespMap[worker])
 	}
 
@@ -905,7 +902,7 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWorkerRelayMasterRequest) (*pb.SwitchWorkerRelayMasterResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "SwitchWorkerRelayMaster"))
 
-	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Workers))
+	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Sources))
 
 	handleErr := func(err error, worker string) {
 		log.L().Error("response error", zap.Error(err))
@@ -914,7 +911,7 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 	}
 
 	var wg sync.WaitGroup
-	for _, source := range req.Workers {
+	for _, source := range req.Sources {
 		wg.Add(1)
 		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
@@ -946,15 +943,15 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 	}
 	wg.Wait()
 
-	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(req.Workers))
+	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(req.Sources))
 	for len(workerRespCh) > 0 {
 		workerResp := <-workerRespCh
 		workerRespMap[workerResp.Worker] = workerResp
 	}
 
-	sort.Strings(req.Workers)
-	workerResps := make([]*pb.CommonWorkerResponse, 0, len(req.Workers))
-	for _, worker := range req.Workers {
+	sort.Strings(req.Sources)
+	workerResps := make([]*pb.CommonWorkerResponse, 0, len(req.Sources))
+	for _, worker := range req.Sources {
 		workerResps = append(workerResps, workerRespMap[worker])
 	}
 
@@ -972,9 +969,9 @@ func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWork
 		Type:         workerrpc.CmdOperateRelay,
 		OperateRelay: &pb.OperateRelayRequest{Op: req.Op},
 	}
-	workerRespCh := make(chan *pb.OperateRelayResponse, len(req.Workers))
+	workerRespCh := make(chan *pb.OperateRelayResponse, len(req.Sources))
 	var wg sync.WaitGroup
-	for _, worker := range req.Workers {
+	for _, worker := range req.Sources {
 		wg.Add(1)
 		go func(worker string) {
 			defer wg.Done()
@@ -1006,15 +1003,15 @@ func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWork
 	}
 	wg.Wait()
 
-	workerRespMap := make(map[string]*pb.OperateRelayResponse, len(req.Workers))
+	workerRespMap := make(map[string]*pb.OperateRelayResponse, len(req.Sources))
 	for len(workerRespCh) > 0 {
 		workerResp := <-workerRespCh
 		workerRespMap[workerResp.Worker] = workerResp
 	}
 
-	sort.Strings(req.Workers)
-	workerResps := make([]*pb.OperateRelayResponse, 0, len(req.Workers))
-	for _, worker := range req.Workers {
+	sort.Strings(req.Sources)
+	workerResps := make([]*pb.OperateRelayResponse, 0, len(req.Sources))
+	for _, worker := range req.Sources {
 		workerResps = append(workerResps, workerRespMap[worker])
 	}
 
@@ -1644,89 +1641,12 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 		}, nil
 	}
 	log.L().Info("update dm-master config", zap.Stringer("config", cfg), zap.String("request", "UpdateMasterConfig"))
-
-	// TODO: fix me
-	// delete worker
-	invalidWorkers := s.coordinator.GetWorkersByStatus(coordinator.WorkerClosed)
-	wokerList := make([]string, 0, len(invalidWorkers))
-	for _, worker := range invalidWorkers {
-		wokerList = append(wokerList, worker.Address())
-		DDLreq := &pb.ShowDDLLocksRequest{
-			Task:    "",
-			Workers: wokerList,
-		}
-		resp, err2 := s.ShowDDLLocks(ctx, DDLreq)
-		if err2 != nil {
-			s.Unlock()
-			return &pb.UpdateMasterConfigResponse{
-				Result: false,
-				Msg:    fmt.Sprintf("Failed to get DDL lock Info from %s, detail: ", worker.Address()) + errors.ErrorStack(err2),
-			}, nil
-		}
-		if len(resp.Locks) != 0 {
-			err = terror.ErrMasterWorkerExistDDLLock.Generate(worker.Address())
-			s.Unlock()
-			return &pb.UpdateMasterConfigResponse{
-				Result: false,
-				Msg:    errors.ErrorStack(err),
-			}, nil
-		}
-	}
-
-	for i := 0; i < len(wokerList); i++ {
-		delete(s.workerClients, wokerList[i])
-	}
-
-	// TODO: fix me
-	//	// add new worker
-	//	for _, workerAddr := range cfg.DeployMap {
-	//		if _, ok := s.workerClients[workerAddr]; !ok {
-	//			cli, err2 := workerrpc.NewGRPCClient(workerAddr)
-	//			if err2 != nil {
-	//				s.Unlock()
-	//				return &pb.UpdateMasterConfigResponse{
-	//					Result: false,
-	//					Msg:    fmt.Sprintf("Failed to add woker %s, detail: ", workerAddr) + errors.ErrorStack(err2),
-	//				}, nil
-	//			}
-	//			s.workerClients[workerAddr] = cli
-	//		}
-	//	}
-
-	// update log configure. not supported now
-	/*log.SetLevelByString(strings.ToLower(cfg.LogLevel))
-	if len(cfg.LogFile) > 0 {
-		log.SetOutputByName(cfg.LogFile)
-	}*/
-
 	s.cfg = cfg
 	log.L().Info("update dm-master config file success", zap.String("request", "UpdateMasterConfig"))
 	s.Unlock()
-
-	workers := make([]string, 0, len(s.workerClients))
-	for worker := range s.workerClients {
-		workers = append(workers, worker)
-	}
-
-	workerRespCh := s.getStatusFromWorkers(ctx, workers, "")
-	log.L().Info("checking every dm-worker status...", zap.String("request", "UpdateMasterConfig"))
-
-	workerRespMap := make(map[string]*pb.QueryStatusResponse, len(workers))
-	for len(workerRespCh) > 0 {
-		workerResp := <-workerRespCh
-		workerRespMap[workerResp.Worker] = workerResp
-	}
-
-	sort.Strings(workers)
-	workerResps := make([]*pb.QueryStatusResponse, 0, len(workers))
-	for _, worker := range workers {
-		workerResps = append(workerResps, workerRespMap[worker])
-	}
-
 	return &pb.UpdateMasterConfigResponse{
-		Result:  true,
-		Msg:     "",
-		Workers: workerResps,
+		Result: true,
+		Msg:    "",
 	}, nil
 }
 
@@ -1735,7 +1655,7 @@ func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWork
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "UpdateWorkerRelayConfig"))
 	worker := req.Worker
 	content := req.Config
-	cli := s.coordinator.GetWorkerClientByAddress(worker)
+	cli := s.coordinator.GetWorkerBySourceID(worker)
 	if cli == nil {
 		return errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", worker), worker), nil
 	}
@@ -1769,7 +1689,7 @@ func (s *Server) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRe
 	worker := req.Worker
 	binlogPos := req.BinlogPos
 	binlogName := req.BinlogName
-	cli := s.coordinator.GetWorkerClientByAddress(worker)
+	cli := s.coordinator.GetWorkerBySourceID(worker)
 	if cli == nil {
 		return errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", worker), worker), nil
 	}

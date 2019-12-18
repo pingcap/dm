@@ -54,7 +54,7 @@ func queryErrorFunc(cmd *cobra.Command, _ []string) {
 	cli := common.MasterClient()
 	resp, err := cli.QueryError(ctx, &pb.QueryErrorListRequest{
 		Name:    taskName,
-		Workers: workers,
+		Sources: workers,
 	})
 	if err != nil {
 		common.PrintLines("dmctl query error failed")

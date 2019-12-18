@@ -54,7 +54,7 @@ func showDDLLocksFunc(cmd *cobra.Command, _ []string) {
 	cli := common.MasterClient()
 	resp, err := cli.ShowDDLLocks(ctx, &pb.ShowDDLLocksRequest{
 		Task:    taskName,
-		Workers: workers,
+		Sources: workers,
 	})
 	if err != nil {
 		common.PrintLines("can not show DDL locks for task %s and workers %v:\n%s", taskName, workers, errors.ErrorStack(err))
