@@ -137,8 +137,8 @@ func (s *Server) Start() error {
 // Close close the RPC server, this function can be called multiple times
 func (s *Server) Close() {
 	s.Lock()
-	defer s.Unlock()
 	if s.closed.Get() {
+		s.Unlock()
 		return
 	}
 
@@ -160,9 +160,9 @@ func (s *Server) Close() {
 	if s.worker != nil {
 		s.worker.Close()
 	}
-	s.wg.Wait()
-
 	s.closed.Set(true)
+	s.Unlock()
+	s.wg.Wait()
 }
 
 func (s *Server) checkWorkerStart() *Worker {

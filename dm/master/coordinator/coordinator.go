@@ -48,8 +48,10 @@ type Coordinator struct {
 // NewCoordinator returns a coordinate.
 func NewCoordinator() *Coordinator {
 	return &Coordinator{
-		workers: make(map[string]*Worker),
-		configs: make(map[string]config.WorkerConfig),
+		workers:     make(map[string]*Worker),
+		configs:     make(map[string]config.WorkerConfig),
+		pendingtask: make(map[string]string),
+		upstreams:   make(map[string]*Worker),
 	}
 }
 

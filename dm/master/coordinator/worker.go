@@ -102,7 +102,11 @@ func (w *Worker) CreateMysqlTask(ctx context.Context, c *config.WorkerConfig, d 
 			Config: content,
 		},
 	}
-	resp, err := w.client.SendRequest(ctx, ownerReq, d)
+	cli, err := w.GetClient()
+	if err != nil {
+		return nil, err
+	}
+	resp, err := cli.SendRequest(ctx, ownerReq, d)
 	if err != nil {
 		return nil, err
 	}

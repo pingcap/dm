@@ -287,6 +287,7 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 			return respWorker, nil
 		}
 	}
+	fmt.Println("=======Register a worker")
 	s.coordinator.AddWorker(req.Name, req.Address)
 	log.L().Info("register worker successfully", zap.String("name", req.Name), zap.String("address", req.Address))
 	respWorker := &pb.RegisterWorkerResponse{
