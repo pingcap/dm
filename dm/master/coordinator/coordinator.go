@@ -55,6 +55,11 @@ func NewCoordinator() *Coordinator {
 	}
 }
 
+// Init would recover infomation from etcd
+func (c *Coordinator) Init(etcdClient *clientv3.Client) {
+	// TODO: recover upstreams and configs and workers
+}
+
 // AddWorker add the dm-worker to the coordinate.
 func (c *Coordinator) AddWorker(name string, address string) {
 	c.mu.Lock()
@@ -178,6 +183,8 @@ func (c *Coordinator) ObserveWorkers(ctx context.Context, client *clientv3.Clien
 					if w, ok := c.workers[addr]; ok && name == w.Name() {
 						log.L().Info("worker became online, state: free", zap.String("name", w.Name()), zap.String("address", w.Address()))
 						w.SetStatus(WorkerFree)
+					} else {
+						// TODO: how to deal with unregister worker
 					}
 					c.mu.Unlock()
 

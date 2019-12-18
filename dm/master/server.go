@@ -192,6 +192,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	}()
 
 	s.bgFunWg.Add(1)
+	s.coordinator.Init(s.etcdClient)
 	go func() {
 		defer s.bgFunWg.Done()
 		s.coordinator.ObserveWorkers(ctx, s.etcdClient)

@@ -15,6 +15,7 @@ package worker
 
 import (
 	"context"
+	"go.uber.org/zap"
 	"strings"
 	"time"
 
@@ -74,20 +75,25 @@ func (s *Server) KeepAlive(ctx context.Context) (bool, error) {
 	endpoints := GetJoinURLs(s.cfg.Join)
 	client, err := clientv3.NewFromURLs(endpoints)
 	if err != nil {
-		return true, err
+		return false, err
 	}
 
-	// FIXME: use a context from server.
-	lease, err := client.Grant(ctx, defaultKeepAliveTTL)
-	k := strings.Join([]string{workerKeepAlivePath, s.cfg.WorkerAddr, s.cfg.Name}, ",")
-	_, err = client.Put(ctx, k, time.Now().String(), clientv3.WithLease(lease.ID))
+	cliCtx, canc := context.WithTimeout(ctx, revokeLeaseTimeout)
+	defer canc()
+	lease, err := client.Grant(cliCtx, defaultKeepAliveTTL)
 	if err != nil {
-		return true, err
+		return false, err
+	}
+	k := strings.Join([]string{workerKeepAlivePath, s.cfg.WorkerAddr, s.cfg.Name}, ",")
+	_, err = client.Put(cliCtx, k, time.Now().String(), clientv3.WithLease(lease.ID))
+	if err != nil {
+		return false, err
 	}
 	ch, err := client.KeepAlive(ctx, lease.ID)
 	if err != nil {
-		return true, err
+		return false, err
 	}
+	log.L().Info("keep alive to ", zap.String("master", s.cfg.Join))
 	for {
 		select {
 		case _, ok := <-ch:

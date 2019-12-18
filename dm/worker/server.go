@@ -83,24 +83,31 @@ func (s *Server) Start() error {
 	go func() {
 		defer s.wg.Done()
 		// worker keepalive with master
+		// If worker loses connect from master, it would stop all task and try to connect master again.
 		shouldExit := false
-		for err == nil {
-			if shouldExit {
-				s.Lock()
-				if s.worker != nil {
-					s.worker.Close()
-				}
-				s.Unlock()
-				break
-			}
+		shouldStop := false
+		for !shouldExit {
 			shouldExit, err = s.KeepAlive(s.ctx)
-			ch := time.NewTicker(time.Second)
-			if !shouldExit {
+			if err != nil || !shouldExit {
+				if shouldStop {
+					s.Lock()
+					if s.worker != nil {
+						s.worker.Close()
+						s.worker = nil
+					}
+					s.Unlock()
+					shouldStop = false
+				} else {
+					// Try to connect master again before stop worker
+					shouldStop = true
+				}
+				ch := time.NewTicker(5 * time.Second)
 				select {
 				case <-s.ctx.Done():
 					shouldExit = true
 					break
 				case <-ch.C:
+					// Try to connect master again
 					break
 				}
 			}
@@ -134,11 +141,10 @@ func (s *Server) Start() error {
 	return terror.ErrWorkerStartService.Delegate(err)
 }
 
-// Close close the RPC server, this function can be called multiple times
-func (s *Server) Close() {
+func (s *Server) doClose() {
 	s.Lock()
+	defer s.Unlock()
 	if s.closed.Get() {
-		s.Unlock()
 		return
 	}
 
@@ -161,7 +167,11 @@ func (s *Server) Close() {
 		s.worker.Close()
 	}
 	s.closed.Set(true)
-	s.Unlock()
+}
+
+// Close close the RPC server, this function can be called multiple times
+func (s *Server) Close() {
+	s.doClose()
 	s.wg.Wait()
 }
 

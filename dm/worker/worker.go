@@ -234,6 +234,7 @@ func (w *Worker) Close() {
 	}
 
 	w.closed.Set(closedTrue)
+	w.l.Info("Stop worker")
 }
 
 // StartSubTask creates a sub task an run it
