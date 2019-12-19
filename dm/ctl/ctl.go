@@ -62,7 +62,6 @@ func NewRootCmd() *cobra.Command {
 		master.NewUpdateTaskCmd(),
 		master.NewQueryStatusCmd(),
 		master.NewQueryErrorCmd(),
-		master.NewRefreshWorkerTasks(),
 		master.NewSQLReplaceCmd(),
 		master.NewSQLSkipCmd(),
 		master.NewSQLInjectCmd(),

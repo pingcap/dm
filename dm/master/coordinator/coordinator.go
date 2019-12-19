@@ -160,11 +160,11 @@ func (c *Coordinator) GetWorkerBySourceID(source string) *Worker {
 }
 
 // GetConfigBySourceID gets db config through source id.
-func (c *Coordinator) GetConfigBySourceID(source string) *config.DBConfig {
+func (c *Coordinator) GetConfigBySourceID(source string) *config.WorkerConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if cfg, ok := c.configs[source]; ok {
-		return &cfg.From
+		return &cfg
 	}
 	return nil
 }

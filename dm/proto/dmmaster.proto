@@ -52,10 +52,6 @@ service Master {
     // PurgeWorkerRelay purges relay log files for some dm-workers
     rpc PurgeWorkerRelay(PurgeWorkerRelayRequest) returns (PurgeWorkerRelayResponse) {}
 
-    // used by dmctl, to force refresh the task -> workers mapper
-    // it should be used rarely only when task -> workers mapper corrupted
-    rpc RefreshWorkerTasks (RefreshWorkerTasksRequest) returns (RefreshWorkerTasksResponse) {}
-
     // MigrateRelay request migrate old dm-woker to a new one. 
     rpc MigrateWorkerRelay(MigrateWorkerRelayRequest) returns (CommonWorkerResponse) {}
 
@@ -250,20 +246,6 @@ message OperateWorkerRelayResponse {
     bool result = 2;
     string msg = 3;
     repeated OperateRelayResponse workers = 4;
-}
-
-
-message RefreshWorkerTasksRequest {
-}
-
-message RefreshWorkerTasksMsg {
-    string worker = 1;
-    string msg = 2;
-}
-
-message RefreshWorkerTasksResponse {
-    bool result = 1;
-    repeated RefreshWorkerTasksMsg workers = 2;
 }
 
 message HandleSQLsRequest {

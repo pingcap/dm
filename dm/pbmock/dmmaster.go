@@ -235,24 +235,24 @@ func (mr *MockMasterClientMockRecorder) QueryStatus(arg0, arg1 interface{}, arg2
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryStatus", reflect.TypeOf((*MockMasterClient)(nil).QueryStatus), varargs...)
 }
 
-// RefreshWorkerTasks mocks base method
-func (m *MockMasterClient) RefreshWorkerTasks(arg0 context.Context, arg1 *pb.RefreshWorkerTasksRequest, arg2 ...grpc.CallOption) (*pb.RefreshWorkerTasksResponse, error) {
+// RegisterWorker mocks base method
+func (m *MockMasterClient) RegisterWorker(arg0 context.Context, arg1 *pb.RegisterWorkerRequest, arg2 ...grpc.CallOption) (*pb.RegisterWorkerResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{arg0, arg1}
 	for _, a := range arg2 {
 		varargs = append(varargs, a)
 	}
-	ret := m.ctrl.Call(m, "RefreshWorkerTasks", varargs...)
-	ret0, _ := ret[0].(*pb.RefreshWorkerTasksResponse)
+	ret := m.ctrl.Call(m, "RegisterWorker", varargs...)
+	ret0, _ := ret[0].(*pb.RegisterWorkerResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// RefreshWorkerTasks indicates an expected call of RefreshWorkerTasks
-func (mr *MockMasterClientMockRecorder) RefreshWorkerTasks(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+// RegisterWorker indicates an expected call of RegisterWorker
+func (mr *MockMasterClientMockRecorder) RegisterWorker(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RefreshWorkerTasks", reflect.TypeOf((*MockMasterClient)(nil).RefreshWorkerTasks), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterWorker", reflect.TypeOf((*MockMasterClient)(nil).RegisterWorker), varargs...)
 }
 
 // ShowDDLLocks mocks base method
@@ -568,19 +568,19 @@ func (mr *MockMasterServerMockRecorder) QueryStatus(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryStatus", reflect.TypeOf((*MockMasterServer)(nil).QueryStatus), arg0, arg1)
 }
 
-// RefreshWorkerTasks mocks base method
-func (m *MockMasterServer) RefreshWorkerTasks(arg0 context.Context, arg1 *pb.RefreshWorkerTasksRequest) (*pb.RefreshWorkerTasksResponse, error) {
+// RegisterWorker mocks base method
+func (m *MockMasterServer) RegisterWorker(arg0 context.Context, arg1 *pb.RegisterWorkerRequest) (*pb.RegisterWorkerResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RefreshWorkerTasks", arg0, arg1)
-	ret0, _ := ret[0].(*pb.RefreshWorkerTasksResponse)
+	ret := m.ctrl.Call(m, "RegisterWorker", arg0, arg1)
+	ret0, _ := ret[0].(*pb.RegisterWorkerResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// RefreshWorkerTasks indicates an expected call of RefreshWorkerTasks
-func (mr *MockMasterServerMockRecorder) RefreshWorkerTasks(arg0, arg1 interface{}) *gomock.Call {
+// RegisterWorker indicates an expected call of RegisterWorker
+func (mr *MockMasterServerMockRecorder) RegisterWorker(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RefreshWorkerTasks", reflect.TypeOf((*MockMasterServer)(nil).RefreshWorkerTasks), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterWorker", reflect.TypeOf((*MockMasterServer)(nil).RegisterWorker), arg0, arg1)
 }
 
 // ShowDDLLocks mocks base method

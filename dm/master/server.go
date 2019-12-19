@@ -480,17 +480,14 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 		// if worker not exist, an error message will return
 		workerCfg := make(map[string]*config.SubTaskConfig)
 		for _, stCfg := range stCfgs {
-			worker, ok := s.cfg.DeployMap[stCfg.SourceID]
-			if ok {
-				workerCfg[worker] = stCfg
-			} // only record existed workers
+			workerCfg[stCfg.SourceID] = stCfg
 		}
 		stCfgs = make([]*config.SubTaskConfig, 0, len(req.Sources))
-		for _, worker := range req.Sources {
-			if stCfg, ok := workerCfg[worker]; ok {
-				stCfgs = append(stCfgs, stCfg)
+		for _, source := range req.Sources {
+			if sourceCfg, ok := workerCfg[source]; ok {
+				stCfgs = append(stCfgs, sourceCfg)
 			} else {
-				workerRespCh <- errorCommonWorkerResponse("worker not found in task's config or deployment config", worker)
+				workerRespCh <- errorCommonWorkerResponse("worker not found in task's config or deployment config", source)
 			}
 		}
 	}
@@ -744,9 +741,9 @@ func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLL
 		wg.Add(1)
 		go func(sourceID string) {
 			defer wg.Done()
-			worker := s.coordinator.GetWorkerByAddress(sourceID)
+			worker := s.coordinator.GetWorkerBySourceID(sourceID)
 			if worker == nil || worker.State() == coordinator.WorkerClosed {
-				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", worker), worker.Address())
+				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", sourceID), sourceID)
 				return
 			}
 			cli, err := worker.GetClient()
@@ -756,7 +753,7 @@ func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLL
 			resp, err := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
 			workerResp := &pb.CommonWorkerResponse{}
 			if err != nil {
-				workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), "")
+				workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), sourceID)
 			} else {
 				workerResp = resp.BreakDDLLock
 			}
@@ -825,7 +822,7 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb
 			SqlPattern: req.SqlPattern,
 		},
 	}
-	cli := s.coordinator.GetWorkerClientByAddress(req.Worker)
+	cli := s.coordinator.GetWorkerBySourceID(req.Worker)
 	if cli == nil {
 		resp.Msg = fmt.Sprintf("worker %s client not found in %v", req.Worker, s.coordinator.GetAllWorkers())
 		return resp, nil
@@ -833,7 +830,7 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb
 	response, err := cli.SendRequest(ctx, subReq, s.cfg.RPCTimeout)
 	workerResp := &pb.CommonWorkerResponse{}
 	if err != nil {
-		workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), "")
+		workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), req.Worker)
 	} else {
 		workerResp = response.HandleSubTaskSQLs
 	}
@@ -858,25 +855,25 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Sources))
 	var wg sync.WaitGroup
-	for _, worker := range req.Sources {
+	for _, source := range req.Sources {
 		wg.Add(1)
-		go func(worker string) {
+		go func(source string) {
 			defer wg.Done()
-			cli := s.coordinator.GetWorkerClientByAddress(worker)
+			cli := s.coordinator.GetWorkerBySourceID(source)
 			if cli == nil {
-				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", worker), worker)
+				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", source), source)
 				return
 			}
 			resp, err := cli.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
 			workerResp := &pb.CommonWorkerResponse{}
 			if err != nil {
-				workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), "")
+				workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), source)
 			} else {
 				workerResp = resp.PurgeRelay
 			}
-			workerResp.Worker = worker
+			workerResp.Worker = source
 			workerRespCh <- workerResp
-		}(worker)
+		}(source)
 	}
 	wg.Wait()
 
@@ -929,7 +926,7 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 			resp, err := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
 			workerResp := &pb.CommonWorkerResponse{}
 			if err != nil {
-				workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), "")
+				workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), sourceID)
 			} else {
 				workerResp = resp.SwitchRelayMaster
 			}
@@ -971,17 +968,17 @@ func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWork
 	}
 	workerRespCh := make(chan *pb.OperateRelayResponse, len(req.Sources))
 	var wg sync.WaitGroup
-	for _, worker := range req.Sources {
+	for _, source := range req.Sources {
 		wg.Add(1)
-		go func(worker string) {
+		go func(source string) {
 			defer wg.Done()
-			cli := s.coordinator.GetWorkerClientByAddress(worker)
+			cli := s.coordinator.GetWorkerBySourceID(source)
 			if cli == nil {
 				workerResp := &pb.OperateRelayResponse{
 					Op:     req.Op,
 					Result: false,
-					Worker: worker,
-					Msg:    fmt.Sprintf("%s relevant worker-client not found", worker),
+					Worker: source,
+					Msg:    fmt.Sprintf("%s relevant worker-client not found", source),
 				}
 				workerRespCh <- workerResp
 				return
@@ -997,9 +994,9 @@ func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWork
 				workerResp = resp.OperateRelay
 			}
 			workerResp.Op = req.Op
-			workerResp.Worker = worker
+			workerResp.Worker = source
 			workerRespCh <- workerResp
-		}(worker)
+		}(source)
 	}
 	wg.Wait()
 
@@ -1019,71 +1016,6 @@ func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWork
 		Result:  true,
 		Workers: workerResps,
 	}, nil
-}
-
-// RefreshWorkerTasks implements MasterServer.RefreshWorkerTasks
-func (s *Server) RefreshWorkerTasks(ctx context.Context, req *pb.RefreshWorkerTasksRequest) (*pb.RefreshWorkerTasksResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "RefreshWorkerTasks"))
-
-	taskWorkers, workerMsgMap := s.fetchTaskWorkers(ctx)
-	// always update task workers mapping in memory
-	s.replaceTaskWorkers(taskWorkers)
-	log.L().Info("refresh workers of task", zap.Reflect("workers of task", taskWorkers), zap.String("request", "RefreshWorkerTasks"))
-
-	workers := make([]string, 0, len(workerMsgMap))
-	for worker := range workerMsgMap {
-		workers = append(workers, worker)
-	}
-	sort.Strings(workers)
-
-	workerMsgs := make([]*pb.RefreshWorkerTasksMsg, 0, len(workers))
-	for _, worker := range workers {
-		workerMsgs = append(workerMsgs, &pb.RefreshWorkerTasksMsg{
-			Worker: worker,
-			Msg:    workerMsgMap[worker],
-		})
-	}
-	return &pb.RefreshWorkerTasksResponse{
-		Result:  true,
-		Workers: workerMsgs,
-	}, nil
-}
-
-// addTaskWorkers adds a task-workers pair
-// replace indicates whether replace old workers
-func (s *Server) addTaskWorkers(task string, workers []string, replace bool) {
-	if len(workers) == 0 {
-		return
-	}
-
-	valid := make([]string, 0, len(workers))
-	for _, worker := range workers {
-		if w := s.coordinator.GetWorkerByAddress(worker); w != nil {
-			valid = append(valid, worker)
-		}
-	}
-
-	s.Lock()
-	defer s.Unlock()
-	if !replace {
-		// merge with old workers
-		old, ok := s.taskSources[task]
-		if ok {
-			exist := make(map[string]struct{})
-			for _, worker := range valid {
-				exist[worker] = struct{}{}
-			}
-			for _, worker := range old {
-				if _, ok := exist[worker]; !ok {
-					valid = append(valid, worker)
-				}
-			}
-		}
-	}
-
-	sort.Strings(valid)
-	s.taskSources[task] = valid
-	log.L().Info("update workers of task", zap.String("task", task), zap.Strings("workers", valid))
 }
 
 // replaceTaskWorkers replaces the whole task-workers mapper
@@ -1325,7 +1257,7 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 	var wg sync.WaitGroup
 
 	request := &workerrpc.Request{Type: workerrpc.CmdFetchDDLInfo}
-	for address, w := range s.coordinator.GetAllWorkers() {
+	for _, w := range s.coordinator.GetWorkersByStatus(coordinator.WorkerBound) {
 		client, err := w.GetClient()
 		if err != nil {
 			log.L().Error("cannot get worker client", zap.String("name", w.Name()))
@@ -1435,7 +1367,7 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 				}
 			}
 
-		}(address, client)
+		}(w.Address(), client)
 	}
 
 	wg.Wait()
@@ -1519,7 +1451,7 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 	resp, err := cli.SendRequest(ctx, ownerReq, ownerTimeout)
 	ownerResp := &pb.CommonWorkerResponse{}
 	if err != nil {
-		ownerResp = errorCommonWorkerResponse(errors.ErrorStack(err), "")
+		ownerResp = errorCommonWorkerResponse(errors.ErrorStack(err), owner)
 	} else {
 		ownerResp = resp.ExecDDL
 	}
@@ -1677,7 +1609,7 @@ func (s *Server) getWorkerConfigs(ctx context.Context, workers []*config.MySQLIn
 	cfgs := make(map[string]config.DBConfig)
 	for _, w := range workers {
 		if cfg := s.coordinator.GetConfigBySourceID(w.SourceID); cfg != nil {
-			cfgs[w.SourceID] = *cfg
+			cfgs[w.SourceID] = cfg.From
 		}
 	}
 	return cfgs
