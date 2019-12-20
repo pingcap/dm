@@ -60,6 +60,11 @@ func NewTracker() (*Tracker, error) {
 		return nil, err
 	}
 
+	err = dom.DDL().DropSchema(se, model.NewCIStr("test"))
+	if err != nil {
+		return nil, err
+	}
+
 	return &Tracker{
 		store: store,
 		dom:   dom,

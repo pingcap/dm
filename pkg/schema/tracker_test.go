@@ -161,7 +161,7 @@ func (s *trackerSuite) TestCreateTableIfNotExists(c *C) {
 	clearVolatileInfo(ti1)
 
 	// Remove the table. Should not be found anymore.
-	err = tracker.Exec(ctx, "testdb", "drop table foo")
+	err = tracker.DropTable("testdb", "foo")
 	c.Assert(err, IsNil)
 
 	_, err = tracker.GetTable("testdb", "foo")
@@ -187,4 +187,73 @@ func (s *trackerSuite) TestCreateTableIfNotExists(c *C) {
 	clearVolatileInfo(ti3)
 	ti3.Name = ti1.Name
 	c.Assert(ti3, DeepEquals, ti1, Commentf("ti3 = %s\nti1 = %s", asJSON{ti3}, asJSON{ti1}))
+}
+
+func (s *trackerSuite) TestAllSchemas(c *C) {
+	log.SetLevel(zapcore.ErrorLevel)
+	ctx := context.Background()
+
+	tracker, err := schema.NewTracker()
+	c.Assert(err, IsNil)
+
+	// nothing should exist...
+	c.Assert(tracker.AllSchemas(), HasLen, 0)
+
+	// Create several schemas and tables.
+	err = tracker.CreateSchemaIfNotExists("testdb1")
+	c.Assert(err, IsNil)
+	err = tracker.CreateSchemaIfNotExists("testdb2")
+	c.Assert(err, IsNil)
+	err = tracker.CreateSchemaIfNotExists("testdb3")
+	c.Assert(err, IsNil)
+	err = tracker.Exec(ctx, "testdb2", "create table a(a int)")
+	c.Assert(err, IsNil)
+	err = tracker.Exec(ctx, "testdb1", "create table b(a int)")
+	c.Assert(err, IsNil)
+	err = tracker.Exec(ctx, "testdb1", "create table c(a int)")
+	c.Assert(err, IsNil)
+
+	// check that all schemas and tables are present.
+	allSchemas := tracker.AllSchemas()
+	c.Assert(allSchemas, HasLen, 3)
+	existingNames := 0
+	for _, schema := range allSchemas {
+		switch schema.Name.O {
+		case "testdb1":
+			existingNames |= 1
+			c.Assert(schema.Tables, HasLen, 2)
+			for _, table := range schema.Tables {
+				switch table.Name.O {
+				case "b":
+					existingNames |= 8
+				case "c":
+					existingNames |= 16
+				default:
+					c.Errorf("unexpected table testdb1.%s", table.Name)
+				}
+			}
+		case "testdb2":
+			existingNames |= 2
+			c.Assert(schema.Tables, HasLen, 1)
+			table := schema.Tables[0]
+			c.Assert(table.Name.O, Equals, "a")
+			c.Assert(table.Columns, HasLen, 1)
+			// the table should be equivalent to the result of GetTable.
+			table2, err := tracker.GetTable("testdb2", "a")
+			c.Assert(err, IsNil)
+			c.Assert(table2, DeepEquals, table)
+		case "testdb3":
+			existingNames |= 4
+		default:
+			c.Errorf("unexpected schema %s", schema.Name)
+		}
+	}
+	c.Assert(existingNames, Equals, 31)
+
+	// reset the tracker. all schemas should be gone.
+	err = tracker.Reset()
+	c.Assert(err, IsNil)
+	c.Assert(tracker.AllSchemas(), HasLen, 0)
+	_, err = tracker.GetTable("testdb2", "a")
+	c.Assert(err, ErrorMatches, `.*Table 'testdb2\.a' doesn't exist`)
 }
