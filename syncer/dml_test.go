@@ -145,3 +145,94 @@ func (s *testSyncerSuite) TestFindFitIndex(c *C) {
 	c.Assert(columns.Columns, HasLen, 1)
 	c.Assert(columns.Columns[0].Name.L, Equals, "g")
 }
+
+func (s *testSyncerSuite) TestGenMultipleKeys(c *C) {
+	p := parser.New()
+	se := mock.NewContext()
+
+	testCases := []struct {
+		schema string
+		values []interface{}
+		keys   []string
+	}{
+		{
+			// test no keys
+			schema: `create table t1(a int)`,
+			values: []interface{}{10},
+			keys:   []string{},
+		},
+		{
+			// one primary key
+			schema: `create table t2(a int primary key, b double)`,
+			values: []interface{}{60, 70.5},
+			keys:   []string{"60"},
+		},
+		{
+			// one unique key
+			schema: `create table t3(a int unique, b double)`,
+			values: []interface{}{60, 70.5},
+			keys:   []string{"60"},
+		},
+		{
+			// one ordinary key
+			schema: `create table t4(a int, b double, key(b))`,
+			values: []interface{}{60, 70.5},
+			keys:   []string{"70.5"},
+		},
+		{
+			// multiple keys
+			schema: `create table t5(a int, b text, c int, key(a), key(b(3)))`,
+			values: []interface{}{13, "abcdef", 15},
+			keys:   []string{"13", "abcdef"},
+		},
+		{
+			// multiple keys with primary key
+			schema: `create table t6(a int primary key, b varchar(16) unique)`,
+			values: []interface{}{16, "xyz"},
+			keys:   []string{"16", "xyz"},
+		},
+		{
+			// non-integer primary key
+			schema: `create table t65(a int unique, b varchar(16) primary key)`,
+			values: []interface{}{16, "xyz"},
+			keys:   []string{"16", "xyz"},
+		},
+		{
+			// primary key of multiple columns
+			schema: `create table t7(a int, b int, primary key(a, b))`,
+			values: []interface{}{59, 69},
+			keys:   []string{"59,69"},
+		},
+		{
+			// ordinary key of multiple columns
+			schema: `create table t75(a int, b int, c int, key(a, b), key(c, b))`,
+			values: []interface{}{48, 58, 68},
+			keys:   []string{"48,58", "68,58"},
+		},
+		{
+			// so many keys
+			schema: `
+				create table t8(
+					a int, b int, c int,
+					primary key(a, b),
+					unique key(b, c),
+					key(a, b, c),
+					unique key(c, a)
+				)
+			`,
+			values: []interface{}{27, 37, 47},
+			keys:   []string{"27,37", "37,47", "27,37,47", "47,27"},
+		},
+	}
+
+	for i, tc := range testCases {
+		assert := func(obtained interface{}, checker Checker, args ...interface{}) {
+			c.Assert(obtained, checker, append(args, Commentf("test case schema: %s", tc.schema))...)
+		}
+
+		ti, err := createTableInfo(p, se, int64(i+1), tc.schema)
+		assert(err, IsNil)
+		keys := genMultipleKeys(ti, tc.values)
+		assert(keys, DeepEquals, tc.keys)
+	}
+}
