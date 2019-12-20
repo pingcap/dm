@@ -59,7 +59,7 @@ service Master {
     rpc CheckTask(CheckTaskRequest) returns (CheckTaskResponse) {}
 
     // Operate mysql-worker for server
-    rpc OperateMysqlWorker(WorkerConfigRequest) returns (WorkerConfigResponse) {}
+    rpc OperateMysqlWorker(MysqlTaskRequest) returns (MysqlTaskResponse) {}
 
     // RegisterWorker register the dm-workers.
     rpc RegisterWorker(RegisterWorkerRequest) returns(RegisterWorkerResponse) {}
@@ -289,22 +289,6 @@ message CheckTaskRequest {
 }
 
 message CheckTaskResponse {
-    bool result = 1;
-    string msg = 2;
-}
-
-enum WorkerOp {
-    StartWorker = 0;
-    UpdateConfig = 1;
-    StopWorker = 2;
-}
-
-message WorkerConfigRequest {
-    WorkerOp op = 1;
-    string config = 2;
-}
-
-message WorkerConfigResponse {
     bool result = 1;
     string msg = 2;
 }

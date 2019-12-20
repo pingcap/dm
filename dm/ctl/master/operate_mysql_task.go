@@ -62,7 +62,7 @@ func operateMysqlWorkerFunc(cmd *cobra.Command, _ []string) {
 	defer cancel()
 
 	cli := common.MasterClient()
-	resp, err := cli.OperateMysqlWorker(ctx, &pb.WorkerConfigRequest{
+	resp, err := cli.OperateMysqlWorker(ctx, &pb.MysqlTaskRequest{
 		Config: string(content),
 		Op:     convertCmdType(cmdType),
 	})

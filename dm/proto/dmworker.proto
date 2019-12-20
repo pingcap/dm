@@ -40,11 +40,7 @@ service Worker {
 
     rpc MigrateRelay(MigrateRelayRequest) returns (CommonWorkerResponse) {}
 
-    rpc CreateMysqlTask(MysqlTaskRequest) returns (MysqlTaskResponse) {}
-
-    rpc StopMysqlTask(StopMysqlTaskRequest) returns (MysqlTaskResponse) {}
-
-    rpc UpdateMysqlTaskConfig(MysqlTaskRequest) returns (MysqlTaskResponse) {}
+    rpc OperateMysqlTask(MysqlTaskRequest) returns (MysqlTaskResponse) {}
 }
 
 message StartSubTaskRequest {
@@ -455,31 +451,18 @@ message QueryWorkerConfigResponse {
     string content = 5; // marshaled config content
 }
 
-message TaskMeta {
-    TaskOp op = 1;
-    Stage stage = 2; // the stage of sub-task after we apply some operations
-    string name = 3; // sub task's name
-    bytes task = 4; // (sub) task's configuration
+enum WorkerOp {
+    StartWorker = 0;
+    UpdateConfig = 1;
+    StopWorker = 2;
 }
 
-message TaskLog {
-    int64 id = 1;
-    TaskMeta task = 2;
-    int64 ts = 3;
-    // true means this log is applied successfully
-    bool success = 4;
-    string message = 5;
+message MysqlTaskRequest {
+    WorkerOp op = 1;
+    string config = 2;
 }
 
 message MysqlTaskResponse {
     bool result = 1;
     string msg = 2;
-}
-
-message MysqlTaskRequest {
-    string config = 1;
-}
-
-message StopMysqlTaskRequest {
-    string sourceID = 1;
 }

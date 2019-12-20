@@ -16,7 +16,6 @@ package coordinator
 import (
 	"context"
 	"fmt"
-	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"sync/atomic"
 	"time"
@@ -90,17 +89,11 @@ func (w *Worker) SetStatus(s WorkerState) {
 	w.status.Store(s)
 }
 
-// CreateMysqlTask in a idle worker
-func (w *Worker) CreateMysqlTask(ctx context.Context, c *config.WorkerConfig, d time.Duration) (*pb.MysqlTaskResponse, error) {
-	content, err := c.Toml()
-	if err != nil {
-		return nil, err
-	}
+// OperateMysqlTask in a idle worker
+func (w *Worker) OperateMysqlTask(ctx context.Context, req *pb.MysqlTaskRequest, d time.Duration) (*pb.MysqlTaskResponse, error) {
 	ownerReq := &workerrpc.Request{
-		Type: workerrpc.CmdCreateMysqlWorker,
-		MysqlWorkerRequest: &pb.MysqlTaskRequest{
-			Config: content,
-		},
+		Type:      workerrpc.CmdOperateMysqlTask,
+		MysqlTask: req,
 	}
 	cli, err := w.GetClient()
 	if err != nil {
@@ -110,41 +103,7 @@ func (w *Worker) CreateMysqlTask(ctx context.Context, c *config.WorkerConfig, d 
 	if err != nil {
 		return nil, err
 	}
-	return resp.MysqlWorker, err
-}
-
-// UpdateMysqlConfig update mysql config in worker
-func (w *Worker) UpdateMysqlConfig(ctx context.Context, c *config.WorkerConfig, d time.Duration) (*pb.MysqlTaskResponse, error) {
-	content, err := c.Toml()
-	if err != nil {
-		return nil, err
-	}
-	ownerReq := &workerrpc.Request{
-		Type: workerrpc.CmdUpdateMysqlConfig,
-		MysqlWorkerRequest: &pb.MysqlTaskRequest{
-			Config: content,
-		},
-	}
-	resp, err := w.client.SendRequest(ctx, ownerReq, d)
-	if err != nil {
-		return nil, err
-	}
-	return resp.MysqlWorker, err
-}
-
-// StopMysqlTask update mysql config in worker
-func (w *Worker) StopMysqlTask(ctx context.Context, sourceID string, d time.Duration) (*pb.MysqlTaskResponse, error) {
-	ownerReq := &workerrpc.Request{
-		Type: workerrpc.CmdStopMysqlWorker,
-		StopMysqlWorker: &pb.StopMysqlTaskRequest{
-			SourceID: sourceID,
-		},
-	}
-	resp, err := w.client.SendRequest(ctx, ownerReq, d)
-	if err != nil {
-		return nil, err
-	}
-	return resp.MysqlWorker, err
+	return resp.MysqlTask, err
 }
 
 // SendRequest by client

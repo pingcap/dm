@@ -563,77 +563,43 @@ func (s *Server) startWorker(cfg *config.WorkerConfig) error {
 	return nil
 }
 
-// CreateMysqlTask create a new mysql task which will be running in this Server
-func (s *Server) CreateMysqlTask(ctx context.Context, req *pb.MysqlTaskRequest) (*pb.MysqlTaskResponse, error) {
+// OperateMysqlTask create a new mysql task which will be running in this Server
+func (s *Server) OperateMysqlTask(ctx context.Context, req *pb.MysqlTaskRequest) (*pb.MysqlTaskResponse, error) {
 	resp := &pb.MysqlTaskResponse{
 		Result: true,
-		Msg:    "Create mysql task successfully",
+		Msg:    "Operate mysql task successfully",
 	}
 	cfg := config.NewWorkerConfig()
 	err := cfg.Parse(req.Config)
-	if err == nil {
+	if err != nil {
+		resp.Result = false
+		resp.Msg = errors.ErrorStack(err)
+		return resp, nil
+	}
+	if req.Op == pb.WorkerOp_UpdateConfig || req.Op == pb.WorkerOp_StopWorker {
+		s.Lock()
+		if s.worker == nil {
+			resp.Result = false
+			resp.Msg = "Mysql task has not been created, please call CreateMysqlTask"
+			return resp, nil
+		}
+		if cfg.SourceID != s.worker.cfg.SourceID {
+			resp.Result = false
+			resp.Msg = "stop config has not match the source id of worker, it may be a wrong request"
+			return resp, nil
+		}
+		w := s.worker
+		s.worker = nil
+		s.Unlock()
+		w.Close()
+	}
+	if req.Op == pb.WorkerOp_UpdateConfig || req.Op == pb.WorkerOp_StartWorker {
 		err = s.startWorker(cfg)
 	}
 	if err != nil {
 		resp.Result = false
 		resp.Msg = errors.ErrorStack(err)
 	}
-	return resp, nil
-}
-
-// UpdateMysqlTaskConfig updates config of a mysql task which has been running in this Server
-func (s *Server) UpdateMysqlTaskConfig(ctx context.Context, req *pb.MysqlTaskRequest) (*pb.MysqlTaskResponse, error) {
-	resp := &pb.MysqlTaskResponse{
-		Result: true,
-		Msg:    "Update mysql task config successfully",
-	}
-	s.Lock()
-	if s.worker == nil {
-		log.L().Error("fail to call UpdateMysqlTaskConfig, because mysql worker has not been started")
-		resp.Result = false
-		resp.Msg = "Mysql task has not been created, please call CreateMysqlTask"
-		return resp, nil
-	}
-	w := s.worker
-	s.worker = nil
-	s.Unlock()
-	w.Close()
-	if res, _ := s.CreateMysqlTask(ctx, req); res != nil && !res.Result {
-		resp.Result = false
-		resp.Msg = "UpdateMysqlTaskConfig fail when create new mysql task, please call CreateMysqlTask again"
-		return resp, nil
-	}
-	return resp, nil
-}
-
-func (s *Server) stopMysqlTask() {
-	w := s.worker
-	s.worker = nil
-	s.Unlock()
-	w.Close()
-}
-
-// StopMysqlTask stops a mysql task which has been running in this Server
-func (s *Server) StopMysqlTask(ctx context.Context, req *pb.StopMysqlTaskRequest) (*pb.MysqlTaskResponse, error) {
-	resp := &pb.MysqlTaskResponse{
-		Result: true,
-		Msg:    "Stop mysql task successfully",
-	}
-	s.Lock()
-	if s.worker == nil {
-		resp.Result = false
-		resp.Msg = "Mysql task has not been created, please call CreateMysqlTask"
-		return resp, nil
-	}
-	if req.SourceID != s.worker.cfg.SourceID {
-		resp.Result = false
-		resp.Msg = "Mysql task has not been created, please call CreateMysqlTask"
-		return resp, nil
-	}
-	w := s.worker
-	s.worker = nil
-	s.Unlock()
-	w.Close()
 	return resp, nil
 }
 

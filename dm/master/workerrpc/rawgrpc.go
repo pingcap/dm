@@ -115,12 +115,8 @@ func callRPC(ctx context.Context, client pb.WorkerClient, req *Request) (*Respon
 		resp.MigrateRelay, err = client.MigrateRelay(ctx, req.MigrateRelay)
 	case CmdFetchDDLInfo:
 		resp.FetchDDLInfo, err = client.FetchDDLInfo(ctx)
-	case CmdCreateMysqlWorker:
-		resp.MysqlWorker, err = client.CreateMysqlTask(ctx, req.MysqlWorkerRequest)
-	case CmdUpdateMysqlConfig:
-		resp.MysqlWorker, err = client.UpdateMysqlTaskConfig(ctx, req.MysqlWorkerRequest)
-	case CmdStopMysqlWorker:
-		resp.MysqlWorker, err = client.StopMysqlTask(ctx, req.StopMysqlWorker)
+	case CmdOperateMysqlTask:
+		resp.MysqlTask, err = client.OperateMysqlTask(ctx, req.MysqlTask)
 	default:
 		return nil, terror.ErrMasterGRPCInvalidReqType.Generate(req.Type)
 	}
