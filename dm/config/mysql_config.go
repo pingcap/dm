@@ -36,8 +36,8 @@ type PurgeConfig struct {
 	RemainSpace int64 `toml:"remain-space" json:"remain-space"` // if remain space in @RelayBaseDir less than @RemainSpace (GB), then it can be purged
 }
 
-// WorkerConfig is the configuration for Worker
-type WorkerConfig struct {
+// MysqlConfig is the configuration for Worker
+type MysqlConfig struct {
 	EnableGTID  bool   `toml:"enable-gtid" json:"enable-gtid"`
 	AutoFixGTID bool   `toml:"auto-fix-gtid" json:"auto-fix-gtid"`
 	RelayDir    string `toml:"relay-dir" json:"relay-dir"`
@@ -66,8 +66,8 @@ type WorkerConfig struct {
 }
 
 // NewWorkerConfig creates a new base config for worker.
-func NewWorkerConfig() *WorkerConfig {
-	c := &WorkerConfig{
+func NewWorkerConfig() *MysqlConfig {
+	c := &MysqlConfig{
 		RelayDir: "relay-dir",
 		Purge: PurgeConfig{
 			Interval:    60 * 60,
@@ -91,14 +91,14 @@ func NewWorkerConfig() *WorkerConfig {
 }
 
 // Clone clones a config
-func (c *WorkerConfig) Clone() *WorkerConfig {
-	clone := &WorkerConfig{}
+func (c *MysqlConfig) Clone() *MysqlConfig {
+	clone := &MysqlConfig{}
 	*clone = *c
 	return clone
 }
 
 // Toml returns TOML format representation of config
-func (c *WorkerConfig) Toml() (string, error) {
+func (c *MysqlConfig) Toml() (string, error) {
 	var b bytes.Buffer
 
 	err := toml.NewEncoder(&b).Encode(c)
@@ -110,13 +110,13 @@ func (c *WorkerConfig) Toml() (string, error) {
 }
 
 // Parse parses flag definitions from the argument list.
-func (c *WorkerConfig) Parse(content string) error {
+func (c *MysqlConfig) Parse(content string) error {
 	// Parse first to get config file.
 	metaData, err := toml.Decode(content, c)
 	return c.check(&metaData, err)
 }
 
-func (c *WorkerConfig) String() string {
+func (c *MysqlConfig) String() string {
 	cfg, err := json.Marshal(c)
 	if err != nil {
 		log.L().Error("fail to marshal config to json", log.ShortError(err))
@@ -124,13 +124,13 @@ func (c *WorkerConfig) String() string {
 	return string(cfg)
 }
 
-func (c *WorkerConfig) adjust() {
+func (c *MysqlConfig) adjust() {
 	c.From.Adjust()
 	c.Checker.Adjust()
 }
 
 // Verify verifies the config
-func (c *WorkerConfig) Verify() error {
+func (c *MysqlConfig) Verify() error {
 	if len(c.SourceID) == 0 {
 		return terror.ErrWorkerNeedSourceID.Generate()
 	}
@@ -160,7 +160,7 @@ func (c *WorkerConfig) Verify() error {
 }
 
 // DecryptPassword returns a decrypted config replica in config
-func (c *WorkerConfig) DecryptPassword() (*WorkerConfig, error) {
+func (c *MysqlConfig) DecryptPassword() (*MysqlConfig, error) {
 	clone := c.Clone()
 	var (
 		pswdFrom string
@@ -177,7 +177,7 @@ func (c *WorkerConfig) DecryptPassword() (*WorkerConfig, error) {
 }
 
 // GenerateDBConfig creates DBConfig for DB
-func (c *WorkerConfig) GenerateDBConfig() (*DBConfig, error) {
+func (c *MysqlConfig) GenerateDBConfig() (*DBConfig, error) {
 	// decrypt password
 	clone, err := c.DecryptPassword()
 	if err != nil {
@@ -188,8 +188,8 @@ func (c *WorkerConfig) GenerateDBConfig() (*DBConfig, error) {
 	return from, nil
 }
 
-// Adjust flavor and serverid of WorkerConfig
-func (c *WorkerConfig) Adjust(db *sql.DB) (err error) {
+// Adjust flavor and serverid of MysqlConfig
+func (c *MysqlConfig) Adjust(db *sql.DB) (err error) {
 	c.From.Adjust()
 	c.Checker.Adjust()
 
@@ -212,7 +212,7 @@ func (c *WorkerConfig) Adjust(db *sql.DB) (err error) {
 }
 
 // AdjustFlavor adjust Flavor from DB
-func (c *WorkerConfig) AdjustFlavor(ctx context.Context, db *sql.DB) (err error) {
+func (c *MysqlConfig) AdjustFlavor(ctx context.Context, db *sql.DB) (err error) {
 	if c.Flavor != "" {
 		switch c.Flavor {
 		case mysql.MariaDBFlavor, mysql.MySQLFlavor:
@@ -230,7 +230,7 @@ func (c *WorkerConfig) AdjustFlavor(ctx context.Context, db *sql.DB) (err error)
 }
 
 // AdjustServerID adjust server id from DB
-func (c *WorkerConfig) AdjustServerID(ctx context.Context, db *sql.DB) error {
+func (c *MysqlConfig) AdjustServerID(ctx context.Context, db *sql.DB) error {
 	if c.ServerID != 0 {
 		return nil
 	}
@@ -258,12 +258,12 @@ func (c *WorkerConfig) AdjustServerID(ctx context.Context, db *sql.DB) error {
 }
 
 // LoadFromFile loads config from file.
-func (c *WorkerConfig) LoadFromFile(path string) error {
+func (c *MysqlConfig) LoadFromFile(path string) error {
 	metaData, err := toml.DecodeFile(path, c)
 	return c.check(&metaData, err)
 }
 
-func (c *WorkerConfig) check(metaData *toml.MetaData, err error) error {
+func (c *MysqlConfig) check(metaData *toml.MetaData, err error) error {
 	if err != nil {
 		return terror.ErrWorkerDecodeConfigFromFile.Delegate(err)
 	}

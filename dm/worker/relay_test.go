@@ -134,7 +134,7 @@ func (t *testRelay) TestRelay(c *C) {
 		purger.NewPurger = originNewPurger
 	}()
 
-	cfg := &config.WorkerConfig{}
+	cfg := &config.MysqlConfig{}
 	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
 
 	dir := c.MkDir()
@@ -271,7 +271,7 @@ func (t *testRelay) testPauseAndResume(c *C, holder *realRelayHolder) {
 }
 
 func (t *testRelay) testUpdate(c *C, holder *realRelayHolder) {
-	cfg := &config.WorkerConfig{
+	cfg := &config.MysqlConfig{
 		From: config.DBConfig{
 			Host:     "127.0.0.1",
 			Port:     3306,

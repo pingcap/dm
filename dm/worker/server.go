@@ -546,7 +546,7 @@ func (s *Server) MigrateRelay(ctx context.Context, req *pb.MigrateRelayRequest) 
 	return makeCommonWorkerResponse(err), nil
 }
 
-func (s *Server) startWorker(cfg *config.WorkerConfig) error {
+func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 	s.Lock()
 	if s.worker != nil {
 		return terror.ErrWorkerAlreadyClosed.Generate()

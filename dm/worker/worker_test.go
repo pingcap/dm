@@ -31,7 +31,7 @@ import (
 var emptyWorkerStatusInfoJSONLength = 25
 
 func (t *testServer) testWorker(c *C) {
-	cfg := &config.WorkerConfig{}
+	cfg := &config.MysqlConfig{}
 	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
 
 	dir := c.MkDir()

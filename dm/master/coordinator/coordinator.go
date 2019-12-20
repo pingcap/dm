@@ -39,7 +39,7 @@ type Coordinator struct {
 	upstreams map[string]*Worker
 
 	// upstream(address) -> config
-	configs map[string]config.WorkerConfig
+	configs map[string]config.MysqlConfig
 
 	// pending create taks (sourceid) --> address
 	pendingtask map[string]string
@@ -49,7 +49,7 @@ type Coordinator struct {
 func NewCoordinator() *Coordinator {
 	return &Coordinator{
 		workers:     make(map[string]*Worker),
-		configs:     make(map[string]config.WorkerConfig),
+		configs:     make(map[string]config.MysqlConfig),
 		pendingtask: make(map[string]string),
 		upstreams:   make(map[string]*Worker),
 	}
@@ -68,7 +68,7 @@ func (c *Coordinator) AddWorker(name string, address string) {
 }
 
 // HandleStartedWorker change worker status when mysql task started
-func (c *Coordinator) HandleStartedWorker(w *Worker, cfg *config.WorkerConfig, succ bool) {
+func (c *Coordinator) HandleStartedWorker(w *Worker, cfg *config.MysqlConfig, succ bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if succ {
@@ -81,7 +81,7 @@ func (c *Coordinator) HandleStartedWorker(w *Worker, cfg *config.WorkerConfig, s
 }
 
 // HandleStoppedWorker change worker status when mysql task stopped
-func (c *Coordinator) HandleStoppedWorker(w *Worker, cfg *config.WorkerConfig) {
+func (c *Coordinator) HandleStoppedWorker(w *Worker, cfg *config.MysqlConfig) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.upstreams, cfg.SourceID)
@@ -160,7 +160,7 @@ func (c *Coordinator) GetWorkerBySourceID(source string) *Worker {
 }
 
 // GetConfigBySourceID gets db config through source id.
-func (c *Coordinator) GetConfigBySourceID(source string) *config.WorkerConfig {
+func (c *Coordinator) GetConfigBySourceID(source string) *config.MysqlConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if cfg, ok := c.configs[source]; ok {

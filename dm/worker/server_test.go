@@ -42,7 +42,7 @@ func (t *testServer) TestServer(c *C) {
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
 
 	dir := c.MkDir()
-	workerCfg := &config.WorkerConfig{}
+	workerCfg := &config.MysqlConfig{}
 	workerCfg.RelayDir = dir
 	workerCfg.MetaDir = dir
 

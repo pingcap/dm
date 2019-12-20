@@ -87,7 +87,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 
 	NewRelayHolder = NewDummyRelayHolder
 	dir := c.MkDir()
-	cfg := &config.WorkerConfig{}
+	cfg := &config.MysqlConfig{}
 	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), check.IsNil)
 	cfg.RelayDir = dir
 	cfg.MetaDir = dir
@@ -205,7 +205,7 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 	NewRelayHolder = NewDummyRelayHolder
 	dir := c.MkDir()
 	// cfg := NewConfig()
-	cfg := &config.WorkerConfig{}
+	cfg := &config.MysqlConfig{}
 	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), check.IsNil)
 	cfg.RelayDir = dir
 	cfg.MetaDir = dir
