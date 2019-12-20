@@ -496,13 +496,20 @@ func (cp *RemoteCheckPoint) Rollback(schemaTracker *schema.Tracker) {
 	cp.globalPoint.rollback()
 	for schema, mSchema := range cp.points {
 		for table, point := range mSchema {
-			cp.logCtx.L().Info("rollback checkpoint", log.WrapStringerField("checkpoint", point), zap.String("schema", schema), zap.String("table", table))
+			logger := cp.logCtx.L().WithFields(zap.String("schema", schema), zap.String("table", table))
+			logger.Info("rollback checkpoint", log.WrapStringerField("checkpoint", point))
 			if point.rollback() {
 				// schema changed
-				_ = schemaTracker.DropTable(schema, table)
+				if err := schemaTracker.DropTable(schema, table); err != nil {
+					logger.Debug("failed to drop table from schema tracker", log.ShortError(err))
+				}
 				if point.ti != nil {
+					// TODO: Figure out how to recover from errors.
+					if err := schemaTracker.CreateSchemaIfNotExists(schema); err != nil {
+						logger.Error("failed to rollback schema on schema tracker: cannot create schema", log.ShortError(err))
+					}
 					if err := schemaTracker.CreateTableIfNotExists(schema, table, point.ti); err != nil {
-						cp.logCtx.L().Warn("failed to rollback schema on schema tracker", zap.String("schema", schema), zap.String("table", table), log.ShortError(err))
+						logger.Error("failed to rollback schema on schema tracker: cannot create table", log.ShortError(err))
 					}
 				}
 			}
@@ -597,13 +604,13 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 
 		var ti model.TableInfo
 		if err = json.Unmarshal(tiBytes, &ti); err != nil {
-			return errors.Annotatef(err, "saved schema of %s.%s is not proper JSON", cpSchema, cpTable)
+			return terror.ErrSchemaTrackerInvalidJSON.Delegate(err, cpSchema, cpTable)
 		}
 		if err = schemaTracker.CreateSchemaIfNotExists(cpSchema); err != nil {
-			return errors.Annotatef(err, "failed to create database for `%s` in schema tracker", cpSchema)
+			return terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, cpSchema)
 		}
 		if err = schemaTracker.CreateTableIfNotExists(cpSchema, cpTable, &ti); err != nil {
-			return errors.Annotatef(err, "failed to create table for `%s`.`%s` in schema tracker", cpSchema, cpTable)
+			return terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, cpSchema, cpTable)
 		}
 
 		mSchema, ok := cp.points[cpSchema]

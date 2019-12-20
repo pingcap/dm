@@ -486,6 +486,13 @@ const (
 	codeTracerStartService
 )
 
+// Schema-tracker error code
+const (
+	codeSchemaTrackerInvalidJSON ErrCode = iota + 44001
+	codeSchemaTrackerCannotCreateSchema
+	codeSchemaTrackerCannotCreateTable
+)
+
 // Error instances
 var (
 	// Database operation related error
@@ -933,4 +940,9 @@ var (
 	ErrTracerEventAssertionFail  = New(codeTracerEventAssertionFail, ClassDMTracer, ScopeInternal, LevelHigh, "type %s event: %v not valid")
 	ErrTracerEventTypeNotValid   = New(codeTracerEventTypeNotValid, ClassDMTracer, ScopeInternal, LevelHigh, "trace event type %d not valid")
 	ErrTracerStartService        = New(codeTracerStartService, ClassDMTracer, ScopeInternal, LevelHigh, "start server")
+
+	// Schema-tracker error
+	ErrSchemaTrackerInvalidJSON        = New(codeSchemaTrackerInvalidJSON, ClassSchemaTracker, ScopeDownstream, LevelHigh, "saved schema of `%s`.`%s` is not proper JSON")
+	ErrSchemaTrackerCannotCreateSchema = New(codeSchemaTrackerCannotCreateSchema, ClassSchemaTracker, ScopeInternal, LevelHigh, "failed to create database for `%s` in schema tracker")
+	ErrSchemaTrackerCannotCreateTable  = New(codeSchemaTrackerCannotCreateTable, ClassSchemaTracker, ScopeInternal, LevelHigh, "failed to create table for `%s`.`%s` in schema tracker")
 )
