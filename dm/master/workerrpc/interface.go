@@ -45,6 +45,7 @@ const (
 	CmdMigrateRelay
 
 	CmdFetchDDLInfo
+	CmdOperateMysqlTask
 )
 
 // Request wraps all dm-worker rpc requests.
@@ -68,6 +69,7 @@ type Request struct {
 	PurgeRelay        *pb.PurgeRelayRequest
 	UpdateRelay       *pb.UpdateRelayRequest
 	MigrateRelay      *pb.MigrateRelayRequest
+	MysqlTask         *pb.MysqlTaskRequest
 }
 
 // Response wraps all dm-worker rpc responses.
@@ -91,6 +93,7 @@ type Response struct {
 	PurgeRelay        *pb.CommonWorkerResponse
 	UpdateRelay       *pb.CommonWorkerResponse
 	MigrateRelay      *pb.CommonWorkerResponse
+	MysqlTask         *pb.MysqlTaskResponse
 
 	FetchDDLInfo pb.Worker_FetchDDLInfoClient
 }

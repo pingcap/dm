@@ -89,7 +89,7 @@ func breakDDLLockFunc(cmd *cobra.Command, _ []string) {
 	defer cancel()
 	cli := common.MasterClient()
 	resp, err := cli.BreakWorkerDDLLock(ctx, &pb.BreakWorkerDDLLockRequest{
-		Workers:      workers,
+		Sources:      workers,
 		Task:         taskName,
 		RemoveLockID: removeLockID,
 		ExecDDL:      exec,

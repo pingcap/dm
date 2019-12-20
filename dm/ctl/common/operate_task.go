@@ -27,6 +27,6 @@ func OperateTask(op pb.TaskOp, name string, workers []string) (*pb.OperateTaskRe
 	return cli.OperateTask(ctx, &pb.OperateTaskRequest{
 		Op:      op,
 		Name:    name,
-		Workers: workers,
+		Sources: workers,
 	})
 }

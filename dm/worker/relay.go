@@ -15,6 +15,7 @@ package worker
 
 import (
 	"context"
+	"github.com/pingcap/dm/dm/config"
 	"sync"
 
 	"github.com/pingcap/errors"
@@ -52,7 +53,7 @@ type RelayHolder interface {
 	// Result returns the result of the relay
 	Result() *pb.ProcessResult
 	// Update updates relay config online
-	Update(ctx context.Context, cfg *Config) error
+	Update(ctx context.Context, cfg *config.MysqlConfig) error
 	// Migrate resets binlog name and binlog position for relay unit
 	Migrate(ctx context.Context, binlogName string, binlogPos uint32) error
 }
@@ -67,7 +68,7 @@ type realRelayHolder struct {
 	wg sync.WaitGroup
 
 	relay relay.Process
-	cfg   *Config
+	cfg   *config.MysqlConfig
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -80,7 +81,7 @@ type realRelayHolder struct {
 }
 
 // NewRealRelayHolder creates a new RelayHolder
-func NewRealRelayHolder(cfg *Config) RelayHolder {
+func NewRealRelayHolder(cfg *config.MysqlConfig) RelayHolder {
 	clone, _ := cfg.DecryptPassword()
 	relayCfg := &relay.Config{
 		EnableGTID:  clone.EnableGTID,
@@ -320,7 +321,7 @@ func (h *realRelayHolder) Result() *pb.ProcessResult {
 }
 
 // Update update relay config online
-func (h *realRelayHolder) Update(ctx context.Context, cfg *Config) error {
+func (h *realRelayHolder) Update(ctx context.Context, cfg *config.MysqlConfig) error {
 	relayCfg := &relay.Config{
 		AutoFixGTID: cfg.AutoFixGTID,
 		Charset:     cfg.Charset,
@@ -383,18 +384,18 @@ func (h *realRelayHolder) Migrate(ctx context.Context, binlogName string, binlog
 type dummyRelayHolder struct {
 	initError error
 
-	cfg *Config
+	cfg *config.MysqlConfig
 }
 
 // NewDummyRelayHolder creates a new RelayHolder
-func NewDummyRelayHolder(cfg *Config) RelayHolder {
+func NewDummyRelayHolder(cfg *config.MysqlConfig) RelayHolder {
 	return &dummyRelayHolder{
 		cfg: cfg,
 	}
 }
 
 // NewDummyRelayHolderWithInitError creates a new RelayHolder with init error
-func NewDummyRelayHolderWithInitError(cfg *Config) RelayHolder {
+func NewDummyRelayHolderWithInitError(cfg *config.MysqlConfig) RelayHolder {
 	return &dummyRelayHolder{
 		initError: errors.New("init error"),
 		cfg:       cfg,
@@ -443,7 +444,7 @@ func (d *dummyRelayHolder) Result() *pb.ProcessResult {
 }
 
 // Update implements interface of RelayHolder
-func (d *dummyRelayHolder) Update(ctx context.Context, cfg *Config) error {
+func (d *dummyRelayHolder) Update(ctx context.Context, cfg *config.MysqlConfig) error {
 	return nil
 }
 

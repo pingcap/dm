@@ -14,8 +14,11 @@
 package coordinator
 
 import (
+	"context"
 	"fmt"
+	"github.com/pingcap/dm/dm/pb"
 	"sync/atomic"
+	"time"
 
 	"github.com/pingcap/dm/dm/master/workerrpc"
 )
@@ -81,6 +84,33 @@ func (w *Worker) State() WorkerState {
 	return w.status.Load().(WorkerState)
 }
 
-func (w *Worker) setStatus(s WorkerState) {
+// SetStatus change the status of worker
+func (w *Worker) SetStatus(s WorkerState) {
 	w.status.Store(s)
+}
+
+// OperateMysqlTask in a idle worker
+func (w *Worker) OperateMysqlTask(ctx context.Context, req *pb.MysqlTaskRequest, d time.Duration) (*pb.MysqlTaskResponse, error) {
+	ownerReq := &workerrpc.Request{
+		Type:      workerrpc.CmdOperateMysqlTask,
+		MysqlTask: req,
+	}
+	cli, err := w.GetClient()
+	if err != nil {
+		return nil, err
+	}
+	resp, err := cli.SendRequest(ctx, ownerReq, d)
+	if err != nil {
+		return nil, err
+	}
+	return resp.MysqlTask, err
+}
+
+// SendRequest by client
+func (w *Worker) SendRequest(ctx context.Context, req *workerrpc.Request, d time.Duration) (*workerrpc.Response, error) {
+	cli, err := w.GetClient()
+	if err != nil {
+		return nil, err
+	}
+	return cli.SendRequest(ctx, req, d)
 }

@@ -62,7 +62,6 @@ func NewRootCmd() *cobra.Command {
 		master.NewUpdateTaskCmd(),
 		master.NewQueryStatusCmd(),
 		master.NewQueryErrorCmd(),
-		master.NewRefreshWorkerTasks(),
 		master.NewSQLReplaceCmd(),
 		master.NewSQLSkipCmd(),
 		master.NewSQLInjectCmd(),
@@ -76,6 +75,7 @@ func NewRootCmd() *cobra.Command {
 		master.NewUpdateRelayCmd(),
 		master.NewPurgeRelayCmd(),
 		master.NewMigrateRelayCmd(),
+		master.NewOperateMysqlWorkerCmd(),
 	)
 	return cmd
 }

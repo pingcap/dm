@@ -52,7 +52,7 @@ type Worker struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	cfg *Config
+	cfg *config.MysqlConfig
 	l   log.Logger
 
 	subTaskHolder *subTaskHolder
@@ -63,10 +63,11 @@ type Worker struct {
 	tracer *tracing.Tracer
 
 	taskStatusChecker TaskStatusChecker
+	configFile        string
 }
 
 // NewWorker creates a new Worker
-func NewWorker(cfg *Config) (w *Worker, err error) {
+func NewWorker(cfg *config.MysqlConfig) (w *Worker, err error) {
 	w = &Worker{
 		cfg:           cfg,
 		relayHolder:   NewRelayHolder(cfg),
@@ -75,6 +76,7 @@ func NewWorker(cfg *Config) (w *Worker, err error) {
 		l:             log.With(zap.String("component", "worker controller")),
 	}
 	w.ctx, w.cancel = context.WithCancel(context.Background())
+	w.closed.Set(closedTrue)
 
 	defer func(w2 *Worker) {
 		if err != nil { // when err != nil, `w` will become nil in this func, so we pass `w` in defer.
@@ -112,10 +114,6 @@ func NewWorker(cfg *Config) (w *Worker, err error) {
 
 // Start starts working
 func (w *Worker) Start() {
-	if w.closed.Get() == closedTrue {
-		w.l.Warn("already closed")
-		return
-	}
 
 	// start relay
 	w.relayHolder.Start()
@@ -139,6 +137,7 @@ func (w *Worker) Start() {
 	w.l.Info("start running")
 
 	ticker := time.NewTicker(5 * time.Second)
+	w.closed.Set(closedFalse)
 	defer ticker.Stop()
 	for {
 		select {
@@ -185,6 +184,7 @@ func (w *Worker) Close() {
 	}
 
 	w.closed.Set(closedTrue)
+	w.l.Info("Stop worker")
 }
 
 // StartSubTask creates a sub task an run it
@@ -515,7 +515,7 @@ func (w *Worker) ForbidPurge() (bool, string) {
 }
 
 // QueryConfig returns worker's config
-func (w *Worker) QueryConfig(ctx context.Context) (*Config, error) {
+func (w *Worker) QueryConfig(ctx context.Context) (*config.MysqlConfig, error) {
 	w.RLock()
 	defer w.RUnlock()
 
@@ -550,14 +550,10 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		}
 	}
 
-	// Save configure to local file.
-	newCfg := NewConfig()
-	err := newCfg.UpdateConfigFile(content)
-	if err != nil {
-		return err
-	}
+	// No need to store config in local
+	newCfg := &config.MysqlConfig{}
 
-	err = newCfg.Reload()
+	err := newCfg.Parse(content)
 	if err != nil {
 		return err
 	}
@@ -613,19 +609,15 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	w.cfg.AutoFixGTID = newCfg.AutoFixGTID
 	w.cfg.Charset = newCfg.Charset
 
-	if w.cfg.ConfigFile == "" {
-		w.cfg.ConfigFile = "dm-worker.toml"
+	if w.configFile == "" {
+		w.configFile = "dm-worker.toml"
 	}
 	content, err = w.cfg.Toml()
 	if err != nil {
 		return err
 	}
-	err = w.cfg.UpdateConfigFile(content)
-	if err != nil {
-		return err
-	}
 
-	w.l.Info("update relay config successfully, save config to local file", zap.String("local file", w.cfg.ConfigFile))
+	w.l.Info("update relay config successfully, save config to local file", zap.String("local file", w.configFile))
 
 	return nil
 }
@@ -663,8 +655,7 @@ func (w *Worker) copyConfigFromWorker(cfg *config.SubTaskConfig) {
 	cfg.AutoFixGTID = w.cfg.AutoFixGTID
 
 	// log config items, mydumper unit use it
-	cfg.LogLevel = w.cfg.LogLevel
-	cfg.LogFile = w.cfg.LogFile
+
 }
 
 // getAllSubTaskStatus returns all subtask status of this worker, note the field

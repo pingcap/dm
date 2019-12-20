@@ -15,60 +15,63 @@ package master
 
 import (
 	"context"
-	"os"
-
-	"github.com/pingcap/errors"
-	"github.com/spf13/cobra"
-
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/errors"
+	"github.com/spf13/cobra"
+	"os"
 )
 
-// NewUpdateTaskCmd creates a UpdateTask command
-func NewUpdateTaskCmd() *cobra.Command {
+// NewOperateMysqlWorkerCmd creates a OperateMysqlTask command
+func NewOperateMysqlWorkerCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "update-task [-w worker ...] <config-file>",
-		Short: "update a task's config for routes, filters, or black-white-list",
-		Run:   updateTaskFunc,
+		Use:   "operate-worker <operate-type> <config-file>",
+		Short: "create/update/stop mysql task",
+		Run:   operateMysqlWorkerFunc,
 	}
 	return cmd
 }
 
-// updateTaskFunc does update task request
-func updateTaskFunc(cmd *cobra.Command, _ []string) {
-	if len(cmd.Flags().Args()) != 1 {
+func convertCmdType(t string) pb.WorkerOp {
+	if t == "create" {
+		return pb.WorkerOp_StartWorker
+	} else if t == "update" {
+		return pb.WorkerOp_UpdateConfig
+	} else {
+		return pb.WorkerOp_StopWorker
+	}
+}
+
+// operateMysqlFunc does migrate relay request
+func operateMysqlWorkerFunc(cmd *cobra.Command, _ []string) {
+	if len(cmd.Flags().Args()) != 2 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
 		return
 	}
-	content, err := common.GetFileContent(cmd.Flags().Arg(0))
+
+	cmdType := cmd.Flags().Arg(0)
+	configFile := cmd.Flags().Arg(1)
+	content, err := common.GetFileContent(configFile)
 	if err != nil {
 		common.PrintLines("get file content error:\n%v", errors.ErrorStack(err))
 		return
 	}
-
-	workers, err := common.GetWorkerArgs(cmd)
-	if err != nil {
-		common.PrintLines("%s", errors.ErrorStack(err))
-		return
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// update task
 	cli := common.MasterClient()
-	resp, err := cli.UpdateTask(ctx, &pb.UpdateTaskRequest{
-		Task:    string(content),
-		Sources: workers,
+	resp, err := cli.OperateMysqlWorker(ctx, &pb.MysqlTaskRequest{
+		Config: string(content),
+		Op:     convertCmdType(cmdType),
 	})
 	if err != nil {
 		common.PrintLines("can not update task:\n%v", errors.ErrorStack(err))
 		return
 	}
-
 	if !common.PrettyPrintResponseWithCheckTask(resp, checker.ErrorMsgHeader) {
 		common.PrettyPrintResponse(resp)
 	}
+
 }

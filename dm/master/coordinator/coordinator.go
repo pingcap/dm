@@ -15,6 +15,7 @@ package coordinator
 
 import (
 	"context"
+	"github.com/pingcap/dm/dm/config"
 	"strings"
 	"sync"
 
@@ -36,13 +37,27 @@ type Coordinator struct {
 	workers map[string]*Worker
 	// upstream(source-id) -> worker
 	upstreams map[string]*Worker
+
+	// upstream(address) -> config
+	configs map[string]config.MysqlConfig
+
+	// pending create taks (sourceid) --> address
+	pendingtask map[string]string
 }
 
 // NewCoordinator returns a coordinate.
 func NewCoordinator() *Coordinator {
 	return &Coordinator{
-		workers: make(map[string]*Worker),
+		workers:     make(map[string]*Worker),
+		configs:     make(map[string]config.MysqlConfig),
+		pendingtask: make(map[string]string),
+		upstreams:   make(map[string]*Worker),
 	}
+}
+
+// Init would recover infomation from etcd
+func (c *Coordinator) Init(etcdClient *clientv3.Client) {
+	// TODO: recover upstreams and configs and workers
 }
 
 // AddWorker add the dm-worker to the coordinate.
@@ -50,6 +65,47 @@ func (c *Coordinator) AddWorker(name string, address string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.workers[address] = NewWorker(name, address)
+}
+
+// HandleStartedWorker change worker status when mysql task started
+func (c *Coordinator) HandleStartedWorker(w *Worker, cfg *config.MysqlConfig, succ bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if succ {
+		c.upstreams[cfg.SourceID] = w
+		c.configs[w.Address()] = *cfg
+	} else {
+		w.SetStatus(WorkerFree)
+	}
+	delete(c.pendingtask, cfg.SourceID)
+}
+
+// HandleStoppedWorker change worker status when mysql task stopped
+func (c *Coordinator) HandleStoppedWorker(w *Worker, cfg *config.MysqlConfig) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.upstreams, cfg.SourceID)
+	delete(c.configs, w.Address())
+	w.SetStatus(WorkerFree)
+}
+
+// GetFreeWorkerForSource get the free worker to create mysql delay task, and add it to pending task
+// to avoid create a task in two worker
+func (c *Coordinator) GetFreeWorkerForSource(source string) (*Worker, string) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if addr, ok := c.pendingtask[source]; ok {
+		return nil, addr
+	}
+	for _, w := range c.workers {
+		if w.status.Load() == WorkerFree {
+			// we bound worker to avoid another task trying to get it
+			w.status.Store(WorkerBound)
+			c.pendingtask[source] = w.Address()
+			return w, ""
+		}
+	}
+	return nil, ""
 }
 
 // GetWorkerByAddress gets the worker through address.
@@ -83,8 +139,33 @@ func (c *Coordinator) GetAllWorkers() map[string]*Worker {
 	return c.workers
 }
 
+// GetRunningMysqlSource gets all souce which is running.
+func (c *Coordinator) GetRunningMysqlSource() map[string]string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	res := make(map[string]string)
+	for source, w := range c.upstreams {
+		if w.State() == WorkerBound {
+			res[source] = w.address
+		}
+	}
+	return res
+}
+
 // GetWorkerBySourceID gets the worker through source id.
 func (c *Coordinator) GetWorkerBySourceID(source string) *Worker {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.upstreams[source]
+}
+
+// GetConfigBySourceID gets db config through source id.
+func (c *Coordinator) GetConfigBySourceID(source string) *config.MysqlConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if cfg, ok := c.configs[source]; ok {
+		return &cfg
+	}
 	return nil
 }
 
@@ -124,7 +205,9 @@ func (c *Coordinator) ObserveWorkers(ctx context.Context, client *clientv3.Clien
 					c.mu.Lock()
 					if w, ok := c.workers[addr]; ok && name == w.Name() {
 						log.L().Info("worker became online, state: free", zap.String("name", w.Name()), zap.String("address", w.Address()))
-						w.setStatus(WorkerFree)
+						w.SetStatus(WorkerFree)
+					} else {
+						// TODO: how to deal with unregister worker
 					}
 					c.mu.Unlock()
 
@@ -136,7 +219,10 @@ func (c *Coordinator) ObserveWorkers(ctx context.Context, client *clientv3.Clien
 					c.mu.Lock()
 					if w, ok := c.workers[addr]; ok && name == w.Name() {
 						log.L().Info("worker became offline, state: closed", zap.String("name", w.Name()), zap.String("address", w.Address()))
-						w.setStatus(WorkerClosed)
+						w.SetStatus(WorkerClosed)
+						cfg := c.configs[addr]
+						delete(c.upstreams, cfg.SourceID)
+						delete(c.configs, addr)
 					}
 					c.mu.Unlock()
 				}

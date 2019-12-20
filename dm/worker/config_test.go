@@ -29,14 +29,15 @@ import (
 )
 
 func (t *testServer) TestConfig(c *C) {
-	cfg := NewConfig()
+	cfg := &config.MysqlConfig{}
 
-	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml", "-relay-dir=./xx"}), IsNil)
+	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
+	cfg.RelayDir = "./xx"
 	c.Assert(cfg.RelayDir, Equals, "./xx")
 	c.Assert(cfg.ServerID, Equals, uint32(101))
 
-	dir := c.MkDir()
-	cfg.ConfigFile = path.Join(dir, "dm-worker.toml")
+	// dir := c.MkDir()
+	// cfg.ConfigFile = path.Join(dir, "dm-worker.toml")
 
 	// test clone
 	clone1 := cfg.Clone()
@@ -54,11 +55,9 @@ func (t *testServer) TestConfig(c *C) {
 	c.Assert(originCfgStr, Matches, `(.|\n)*server-id = 101(.|\n)*`)
 
 	// test update config file and reload
-	c.Assert(cfg.UpdateConfigFile(tomlStr), IsNil)
-	c.Assert(cfg.Reload(), IsNil)
+	c.Assert(cfg.Parse(tomlStr), IsNil)
 	c.Assert(cfg.ServerID, Equals, uint32(100))
-	c.Assert(cfg.UpdateConfigFile(originCfgStr), IsNil)
-	c.Assert(cfg.Reload(), IsNil)
+	c.Assert(cfg.Parse(originCfgStr), IsNil)
 	c.Assert(cfg.ServerID, Equals, uint32(101))
 
 	// test decrypt password
@@ -81,34 +80,35 @@ func (t *testServer) TestConfig(c *C) {
 	dir2 := c.MkDir()
 	configFile := path.Join(dir2, "dm-worker-invalid.toml")
 	configContent := []byte(`
-worker-addr = ":8262"
+source-id = "haha"
 aaa = "xxx"
 `)
 	err = ioutil.WriteFile(configFile, configContent, 0644)
 	c.Assert(err, IsNil)
-	err = cfg.configFromFile(configFile)
+	err = cfg.LoadFromFile(configFile)
 	c.Assert(err, NotNil)
 	c.Assert(err, ErrorMatches, ".*worker config contains unknown configuration options: aaa")
 }
 
 func (t *testServer) TestConfigVerify(c *C) {
-	newConfig := func() *Config {
-		cfg := NewConfig()
-		c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml", "-relay-dir=./xx"}), IsNil)
+	newConfig := func() *config.MysqlConfig {
+		cfg := &config.MysqlConfig{}
+		c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
+		cfg.RelayDir = "./xx"
 		return cfg
 	}
 	testCases := []struct {
-		genFunc     func() *Config
+		genFunc     func() *config.MysqlConfig
 		errorFormat string
 	}{
 		{
-			func() *Config {
+			func() *config.MysqlConfig {
 				return newConfig()
 			},
 			"",
 		},
 		{
-			func() *Config {
+			func() *config.MysqlConfig {
 				cfg := newConfig()
 				cfg.SourceID = ""
 				return cfg
@@ -116,7 +116,7 @@ func (t *testServer) TestConfigVerify(c *C) {
 			".*dm-worker should bind a non-empty source ID which represents a MySQL/MariaDB instance or a replica group.*",
 		},
 		{
-			func() *Config {
+			func() *config.MysqlConfig {
 				cfg := newConfig()
 				cfg.SourceID = "source-id-length-more-than-thirty-two"
 				return cfg
@@ -124,7 +124,7 @@ func (t *testServer) TestConfigVerify(c *C) {
 			fmt.Sprintf(".*the length of source ID .* is more than max allowed value %d", config.MaxSourceIDLength),
 		},
 		{
-			func() *Config {
+			func() *config.MysqlConfig {
 				cfg := newConfig()
 				cfg.RelayBinLogName = "mysql-binlog"
 				return cfg
@@ -132,7 +132,7 @@ func (t *testServer) TestConfigVerify(c *C) {
 			".*not valid.*",
 		},
 		{
-			func() *Config {
+			func() *config.MysqlConfig {
 				cfg := newConfig()
 				cfg.RelayBinlogGTID = "9afe121c-40c2-11e9-9ec7-0242ac110002:1-rtc"
 				return cfg
@@ -140,7 +140,7 @@ func (t *testServer) TestConfigVerify(c *C) {
 			".*relay-binlog-gtid 9afe121c-40c2-11e9-9ec7-0242ac110002:1-rtc:.*",
 		},
 		{
-			func() *Config {
+			func() *config.MysqlConfig {
 				cfg := newConfig()
 				cfg.From.Password = "not-encrypt"
 				return cfg
@@ -151,7 +151,7 @@ func (t *testServer) TestConfigVerify(c *C) {
 
 	for _, tc := range testCases {
 		cfg := tc.genFunc()
-		err := cfg.verify()
+		err := cfg.Verify()
 		if tc.errorFormat != "" {
 			c.Assert(err, NotNil)
 			lines := strings.Split(err.Error(), "\n")
@@ -163,7 +163,7 @@ func (t *testServer) TestConfigVerify(c *C) {
 
 }
 
-func subtestFlavor(c *C, cfg *Config, sqlInfo, expectedFlavor, expectedError string) {
+func subtestFlavor(c *C, cfg *config.MysqlConfig, sqlInfo, expectedFlavor, expectedError string) {
 	cfg.Flavor = ""
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
@@ -172,7 +172,7 @@ func subtestFlavor(c *C, cfg *Config, sqlInfo, expectedFlavor, expectedError str
 			AddRow("version", sqlInfo))
 	mock.ExpectClose()
 
-	err = cfg.adjustFlavor(context.Background(), db)
+	err = cfg.AdjustFlavor(context.Background(), db)
 	if expectedError == "" {
 		c.Assert(err, IsNil)
 		c.Assert(cfg.Flavor, Equals, expectedFlavor)
@@ -182,15 +182,16 @@ func subtestFlavor(c *C, cfg *Config, sqlInfo, expectedFlavor, expectedError str
 }
 
 func (t *testServer) TestAdjustFlavor(c *C) {
-	cfg := NewConfig()
-	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml", "-relay-dir=./xx"}), IsNil)
+	cfg := &config.MysqlConfig{}
+	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
+	cfg.RelayDir = "./xx"
 
 	cfg.Flavor = "mariadb"
-	err := cfg.adjustFlavor(context.Background(), nil)
+	err := cfg.AdjustFlavor(context.Background(), nil)
 	c.Assert(err, IsNil)
 	c.Assert(cfg.Flavor, Equals, mysql.MariaDBFlavor)
 	cfg.Flavor = "MongoDB"
-	err = cfg.adjustFlavor(context.Background(), nil)
+	err = cfg.AdjustFlavor(context.Background(), nil)
 	c.Assert(err, ErrorMatches, ".*flavor MongoDB not supported")
 
 	subtestFlavor(c, cfg, "10.4.8-MariaDB-1:10.4.8+maria~bionic", mysql.MariaDBFlavor, "")
@@ -204,14 +205,15 @@ func (t *testServer) TestAdjustServerID(c *C) {
 	}()
 	getAllServerIDFunc = getMockServerIDs
 
-	cfg := NewConfig()
-	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml", "-relay-dir=./xx"}), IsNil)
+	cfg := &config.MysqlConfig{}
+	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
+	cfg.RelayDir = "./xx"
 
-	cfg.adjustServerID(context.Background(), nil)
+	cfg.AdjustServerID(context.Background(), nil)
 	c.Assert(cfg.ServerID, Equals, uint32(101))
 
 	cfg.ServerID = 0
-	cfg.adjustServerID(context.Background(), nil)
+	cfg.AdjustServerID(context.Background(), nil)
 	c.Assert(cfg.ServerID, Not(Equals), 0)
 }
 

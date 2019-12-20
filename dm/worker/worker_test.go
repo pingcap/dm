@@ -31,8 +31,8 @@ import (
 var emptyWorkerStatusInfoJSONLength = 25
 
 func (t *testServer) testWorker(c *C) {
-	cfg := NewConfig()
-	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	cfg := &config.MysqlConfig{}
+	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
 
 	dir := c.MkDir()
 	cfg.RelayDir = dir
@@ -50,7 +50,10 @@ func (t *testServer) testWorker(c *C) {
 	w, err := NewWorker(cfg)
 	c.Assert(err, IsNil)
 	c.Assert(w.StatusJSON(""), HasLen, emptyWorkerStatusInfoJSONLength)
-	c.Assert(w.closed.Get(), Equals, closedFalse)
+	//c.Assert(w.closed.Get(), Equals, closedFalse)
+	//go func() {
+	//	w.Start()
+	//}()
 
 	// close twice
 	w.Close()
@@ -59,10 +62,12 @@ func (t *testServer) testWorker(c *C) {
 	w.Close()
 	c.Assert(w.closed.Get(), Equals, closedTrue)
 	c.Assert(w.subTaskHolder.getAllSubTasks(), HasLen, 0)
+	c.Assert(w.closed.Get(), Equals, closedTrue)
 
 	err = w.StartSubTask(&config.SubTaskConfig{
 		Name: "testStartTask",
 	})
+	c.Assert(err, NotNil)
 	c.Assert(err, ErrorMatches, ".*worker already closed.*")
 
 	err = w.UpdateSubTask(&config.SubTaskConfig{
@@ -80,16 +85,19 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		port     = 8263
 	)
 	cfg := NewConfig()
+	workerCfg := config.NewWorkerConfig()
+	workerCfg.LoadFromFile("./dm-mysql.toml")
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
-	cfg.From.Password = "" // no password set
-	cfg.Checker.CheckInterval = duration{Duration: 40 * time.Millisecond}
-	cfg.Checker.BackoffMin = duration{Duration: 20 * time.Millisecond}
-	cfg.Checker.BackoffMax = duration{Duration: 1 * time.Second}
+	workerCfg.Checker.CheckInterval = config.Duration{Duration: 40 * time.Millisecond}
+	workerCfg.Checker.BackoffMin = config.Duration{Duration: 20 * time.Millisecond}
+	workerCfg.Checker.BackoffMax = config.Duration{Duration: 1 * time.Second}
+	workerCfg.From.Password = "" // no password set
+
 	cfg.WorkerAddr = fmt.Sprintf(":%d", port)
 
 	dir := c.MkDir()
-	cfg.RelayDir = dir
-	cfg.MetaDir = dir
+	workerCfg.RelayDir = dir
+	workerCfg.MetaDir = dir
 
 	NewRelayHolder = NewDummyRelayHolder
 	defer func() {
@@ -110,7 +118,11 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		c.Assert(s.Start(), IsNil)
 	}()
 	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
-		return !s.closed.Get()
+		if s.closed.Get() {
+			return false
+		}
+		c.Assert(s.startWorker(workerCfg), IsNil)
+		return true
 	}), IsTrue)
 
 	// start task
