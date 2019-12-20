@@ -102,6 +102,10 @@ type StreamerController struct {
 
 	eventTimeoutCounter time.Duration
 
+	// meetError means meeting error when get binlog event
+	// if binlogType is local and meetError is true, then need to create remote binlog stream
+	meetError bool
+
 	fromDB *UpStreamConn
 }
 
@@ -135,12 +139,29 @@ func (c *StreamerController) ResetReplicationSyncer(tctx tcontext.Context) {
 			return
 		}
 	}
+
 	// re-create new streamerProducer
-	if c.binlogType == LocalBinlog {
-		c.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(&tctx, &streamer.BinlogReaderConfig{RelayDir: c.localBinlogDir, Timezone: c.timezone})}
+	// meetError is true means meets error when get binlog event, in this case use remote binlog as default
+	if c.meetError || c.binlogType == RemoteBinlog {
+		syncCfg := c.syncCfg
+
+		// if binlog type is local, means relay already use the server id, so need change to a new server id
+		if c.binlogType == LocalBinlog {
+			randomServerID, err := utils.GetRandomServerID(tctx.Context(), c.fromDB.BaseDB.DB)
+			if err != nil {
+				// should never happened unless the master has too many slave
+				tctx.L().Warn("fail to get random server id, will use the origin server id", zap.Error(err))
+			} else {
+				syncCfg.ServerID = randomServerID
+			}
+		}
+
+		c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(syncCfg), &tctx, false}
 	} else {
-		c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(c.syncCfg), &tctx, false}
+		c.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(&tctx, &streamer.BinlogReaderConfig{RelayDir: c.localBinlogDir, Timezone: c.timezone})}
 	}
+
+	return
 }
 
 // RedirectStreamer redirects the streamer's begin position or gtid
@@ -161,7 +182,10 @@ func (c *StreamerController) GetEvent(tctx tcontext.Context, syncedPosition mysq
 		event, err = c.streamer.GetEvent(ctx)
 		if err == nil {
 			return event, nil
-		} else if err == context.Canceled {
+		}
+
+		c.meetError = true
+		if err == context.Canceled {
 			tctx.L().Info("binlog replication main routine quit(context canceled)!", zap.Stringer("last position", syncedPosition))
 			return nil, nil
 		} else if err == context.DeadlineExceeded {
