@@ -108,5 +108,9 @@ func (w *Worker) OperateMysqlTask(ctx context.Context, req *pb.MysqlTaskRequest,
 
 // SendRequest by client
 func (w *Worker) SendRequest(ctx context.Context, req *workerrpc.Request, d time.Duration) (*workerrpc.Response, error) {
-	return w.client.SendRequest(ctx, req, d)
+	cli, err := w.GetClient()
+	if err != nil {
+		return nil, err
+	}
+	return cli.SendRequest(ctx, req, d)
 }
