@@ -202,7 +202,7 @@ func NewSyncer(cfg *config.SubTaskConfig, enableRelay bool) *Syncer {
 		TimestampStringLocation: syncer.timezone,
 	}
 
-	syncer.binlogType = toBinlogType(cfg.BinlogType)
+	syncer.binlogType = toBinlogType(enableRelay)
 	syncer.sqlOperatorHolder = operator.NewHolder()
 	syncer.readerHub = streamer.GetReaderHub()
 
