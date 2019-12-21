@@ -239,8 +239,8 @@ func (s *trackerSuite) TestAllSchemas(c *C) {
 			c.Assert(table.Name.O, Equals, "a")
 			c.Assert(table.Columns, HasLen, 1)
 			// the table should be equivalent to the result of GetTable.
-			table2, err := tracker.GetTable("testdb2", "a")
-			c.Assert(err, IsNil)
+			table2, err2 := tracker.GetTable("testdb2", "a")
+			c.Assert(err2, IsNil)
 			c.Assert(table2, DeepEquals, table)
 		case "testdb3":
 			existingNames |= 4

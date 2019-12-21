@@ -651,7 +651,7 @@ func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable str
 	}
 
 	ctx := context.Background()
-	if err := s.schemaTracker.CreateSchemaIfNotExists(origSchema); err != nil {
+	if err = s.schemaTracker.CreateSchemaIfNotExists(origSchema); err != nil {
 		return nil, err
 	}
 
@@ -1745,7 +1745,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		s.tctx.L().Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("position", ec.currentPos))
 
 		for _, td := range needTrackDDLs {
-			if err := s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
+			if err = s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
 				return err
 			}
 		}
@@ -1818,7 +1818,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		}
 
 		for _, td := range needTrackDDLs {
-			if err := s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
+			if err = s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
 				return err
 			}
 		}

@@ -326,7 +326,7 @@ func (p *Handler) AnalyzeConfig(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := cfg.Verify(); err != nil {
+	if err = cfg.Verify(); err != nil {
 		log.L().Error("verify config failed", zap.Reflect("config", cfg), zap.Error(err))
 		p.genJSONResp(w, http.StatusBadRequest, GenerateConfigResult{
 			CommonResult: CommonResult{
