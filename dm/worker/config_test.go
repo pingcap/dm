@@ -127,6 +127,7 @@ func (t *testServer) TestConfigVerify(c *C) {
 			func() *Config {
 				cfg := newConfig()
 				cfg.RelayBinLogName = "mysql-binlog"
+				cfg.EnableRelay = true
 				return cfg
 			},
 			".*not valid.*",
@@ -134,6 +135,7 @@ func (t *testServer) TestConfigVerify(c *C) {
 		{
 			func() *Config {
 				cfg := newConfig()
+				cfg.EnableRelay = true
 				cfg.RelayBinlogGTID = "9afe121c-40c2-11e9-9ec7-0242ac110002:1-rtc"
 				return cfg
 			},

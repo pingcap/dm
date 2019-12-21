@@ -36,6 +36,7 @@ func (t *testServer) testWorker(c *C) {
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
 
 	dir := c.MkDir()
+	cfg.EnableRelay = true
 	cfg.RelayDir = dir
 	cfg.MetaDir = dir
 
@@ -87,6 +88,7 @@ func (t *testServer) testWorkerHandleTask(c *C) {
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
 	cfg.RelayDir = dir
 	cfg.MetaDir = dir
+	cfg.EnableRelay = true
 	w, err := NewWorker(cfg)
 	c.Assert(err, IsNil)
 
@@ -134,6 +136,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	dir := c.MkDir()
 	cfg.RelayDir = dir
 	cfg.MetaDir = dir
+	cfg.EnableRelay = true
 
 	NewRelayHolder = NewDummyRelayHolder
 	defer func() {

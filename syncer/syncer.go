@@ -995,9 +995,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	)
 	s.tctx.L().Info("replicate binlog from checkpoint", zap.Stringer("checkpoint", lastPos))
 
-	s.streamerController, err = NewStreamerController(*s.tctx, s.syncCfg, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone, currentPos)
-	if err != nil {
-		return err
+	if s.streamerController == nil {
+		s.streamerController, err = NewStreamerController(*s.tctx, s.syncCfg, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone, currentPos)
+		if err != nil {
+			return err
+		}
 	}
 
 	s.queueBucketMapping = make([]string, 0, s.cfg.WorkerCount+1)

@@ -1252,8 +1252,13 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 
 		syncer.reset()
 		events := append(createEvents, s.generateEvents(_case.testEvents, c)...)
+
+		mockStreamerProducer := &MockStreamProducer{events}
+		mockStreamer, err := mockStreamerProducer.generateStreamer(mysql.Position{})
+		c.Assert(err, IsNil)
 		syncer.streamerController = &StreamerController{
-			streamerProducer: &MockStreamProducer{events},
+			streamerProducer: mockStreamerProducer,
+			streamer:         mockStreamer,
 		}
 
 		fromMock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
@@ -1431,8 +1436,13 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		mockBinlogEvent{typ: Delete, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(1), "a"}}}},
 		mockBinlogEvent{typ: Update, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(2), "b"}, {int32(1), "b"}}}},
 	}
+
+	mockStreamerProducer := &MockStreamProducer{s.generateEvents(events1, c)}
+	mockStreamer, err := mockStreamerProducer.generateStreamer(mysql.Position{})
+	c.Assert(err, IsNil)
 	syncer.streamerController = &StreamerController{
-		streamerProducer: &MockStreamProducer{s.generateEvents(events1, c)},
+		streamerProducer: mockStreamerProducer,
+		streamer:         mockStreamer,
 	}
 
 	syncer.addJobFunc = syncer.addJobToMemory
@@ -1541,9 +1551,6 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		mockBinlogEvent{typ: Write, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(3), "c"}}}},
 		mockBinlogEvent{typ: Delete, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(3), "c"}}}},
 	}
-	syncer.streamerController = &StreamerController{
-		streamerProducer: &MockStreamProducer{s.generateEvents(events2, c)},
-	}
 
 	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
 		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
@@ -1561,6 +1568,14 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	resultCh = make(chan pb.ProcessResult)
 	// simulate `syncer.Resume` here, but doesn't reset database conns
 	syncer.reset()
+	mockStreamerProducer = &MockStreamProducer{s.generateEvents(events2, c)}
+	mockStreamer, err = mockStreamerProducer.generateStreamer(mysql.Position{})
+	c.Assert(err, IsNil)
+	syncer.streamerController = &StreamerController{
+		streamerProducer: mockStreamerProducer,
+		streamer:         mockStreamer,
+	}
+
 	go syncer.Process(ctx, resultCh)
 
 	expectJobs2 := []*expectJob{
