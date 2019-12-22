@@ -16,8 +16,10 @@ package election
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -52,7 +54,7 @@ type Election struct {
 	ech        chan error
 	leaderCh   chan bool
 	isLeader   sync2.AtomicBool
-	leaderAddr sync2.AtomicString
+	leaderMeta atomic.Value
 
 	closed sync2.AtomicInt32
 	cancel context.CancelFunc
@@ -65,6 +67,10 @@ type Election struct {
 type NodeMeta struct {
 	ID      string `json:"id"`
 	Address string `json:"address"`
+}
+
+func (m *NodeMeta) String() string {
+	return fmt.Sprintf("NodeMeat[id: %s, address: %s]", m.ID, m.Address)
 }
 
 // NewElection creates a new etcd leader Election instance and starts the campaign loop.
@@ -221,6 +227,17 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		}
 		if leaderMeta.ID != e.meta.ID {
 			e.l.Info("current member is not the leader", zap.String("current member", e.meta.ID), zap.String("leader", leaderMeta.ID))
+			// leader change, must update lead info and gRPC client to leader
+			if *leaderMeta != e.leaderMeta.Load() {
+				for i := 0; i < 3; i++ {
+					err = e.updateLeader(leaderMeta)
+					if err == nil {
+						break
+					}
+					log.L().Error("update leader failed", zap.Stringer("leader", leaderMeta))
+				}
+			}
+
 			continue
 		}
 
@@ -234,7 +251,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 func (e *Election) toBeLeader() {
 	e.isLeader.Set(true)
-	e.leaderAddr.Set(e.meta.Address)
+	e.leaderMeta.Store(e.meta)
 	select {
 	case e.leaderCh <- true:
 	default:
@@ -243,11 +260,15 @@ func (e *Election) toBeLeader() {
 
 func (e *Election) retireLeader(leaderMeta *NodeMeta) error {
 	e.isLeader.Set(false)
-	e.leaderAddr.Set(leaderMeta.Address)
 	select {
 	case e.leaderCh <- false:
 	default:
 	}
+	return e.updateLeader(leaderMeta)
+}
+
+func (e *Election) updateLeader(leaderMeta *NodeMeta) error {
+	e.leaderMeta.Store(*leaderMeta)
 	return common.InitClient([]string{leaderMeta.Address})
 }
 

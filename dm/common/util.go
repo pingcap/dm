@@ -26,6 +26,7 @@ func InitClient(addrs []string) error {
 	}
 
 	if err != nil {
+		masterClient = nil
 		return errors.Trace(err)
 	}
 	masterClient = pb.NewMasterClient(conn)
