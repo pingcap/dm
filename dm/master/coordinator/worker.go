@@ -56,8 +56,7 @@ func (w *Worker) String() string {
 	return fmt.Sprintf("%s address:%s", w.name, w.address)
 }
 
-// GetClient returns the client of the worker.
-func (w *Worker) GetClient() (workerrpc.Client, error) {
+func (w *Worker) getClient() (workerrpc.Client, error) {
 	if w.client == nil {
 		client, err := workerrpc.NewGRPCClient(w.address)
 		if err != nil {
@@ -95,7 +94,7 @@ func (w *Worker) OperateMysqlTask(ctx context.Context, req *pb.MysqlTaskRequest,
 		Type:      workerrpc.CmdOperateMysqlTask,
 		MysqlTask: req,
 	}
-	cli, err := w.GetClient()
+	cli, err := w.getClient()
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +107,7 @@ func (w *Worker) OperateMysqlTask(ctx context.Context, req *pb.MysqlTaskRequest,
 
 // SendRequest by client
 func (w *Worker) SendRequest(ctx context.Context, req *workerrpc.Request, d time.Duration) (*workerrpc.Response, error) {
-	cli, err := w.GetClient()
+	cli, err := w.getClient()
 	if err != nil {
 		return nil, err
 	}

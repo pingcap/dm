@@ -19,7 +19,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/pkg/log"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/mvcc/mvccpb"
@@ -108,30 +107,6 @@ func (c *Coordinator) GetFreeWorkerForSource(source string) (*Worker, string) {
 	return nil, ""
 }
 
-// GetWorkerByAddress gets the worker through address.
-func (c *Coordinator) GetWorkerByAddress(address string) *Worker {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.workers[address]
-}
-
-// GetWorkerClientByAddress gets the client of the worker through address.
-func (c *Coordinator) GetWorkerClientByAddress(address string) workerrpc.Client {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	w, ok := c.workers[address]
-	if !ok || w.State() == WorkerClosed {
-		log.L().Error("worker is not health", zap.Stringer("worker", w))
-		return nil
-	}
-	client, err := w.GetClient()
-	if err != nil {
-		log.L().Error("cannot get client", zap.String("worker-name", w.Name()))
-		return nil
-	}
-	return client
-}
-
 // GetAllWorkers gets all workers.
 func (c *Coordinator) GetAllWorkers() map[string]*Worker {
 	c.mu.RLock()
@@ -140,13 +115,13 @@ func (c *Coordinator) GetAllWorkers() map[string]*Worker {
 }
 
 // GetRunningMysqlSource gets all souce which is running.
-func (c *Coordinator) GetRunningMysqlSource() map[string]string {
+func (c *Coordinator) GetRunningMysqlSource() map[string]*Worker {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	res := make(map[string]string)
+	res := make(map[string]*Worker)
 	for source, w := range c.upstreams {
 		if w.State() == WorkerBound {
-			res[source] = w.address
+			res[source] = w
 		}
 	}
 	return res

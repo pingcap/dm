@@ -746,11 +746,7 @@ func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLL
 				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", sourceID), sourceID)
 				return
 			}
-			cli, err := worker.GetClient()
-			if err != nil {
-				return
-			}
-			resp, err := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
+			resp, err := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
 			workerResp := &pb.CommonWorkerResponse{}
 			if err != nil {
 				workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), sourceID)
@@ -1257,14 +1253,9 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 	var wg sync.WaitGroup
 
 	request := &workerrpc.Request{Type: workerrpc.CmdFetchDDLInfo}
-	for _, w := range s.coordinator.GetWorkersByStatus(coordinator.WorkerBound) {
-		client, err := w.GetClient()
-		if err != nil {
-			log.L().Error("cannot get worker client", zap.String("name", w.Name()))
-			continue
-		}
+	for source, w := range s.coordinator.GetRunningMysqlSource() {
 		wg.Add(1)
-		go func(worker string, cli workerrpc.Client) {
+		go func(source string, cli *coordinator.Worker) {
 			defer wg.Done()
 			var doRetry bool
 
@@ -1284,7 +1275,7 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 				default:
 					resp, err := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
 					if err != nil {
-						log.L().Error("create FetchDDLInfo stream", zap.String("worker", worker), log.ShortError(err))
+						log.L().Error("create FetchDDLInfo stream", zap.String("worker", source), log.ShortError(err))
 						doRetry = true
 						continue
 					}
@@ -1301,11 +1292,11 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 						default:
 						}
 						if err != nil {
-							log.L().Error("receive ddl info", zap.String("worker", worker), log.ShortError(err))
+							log.L().Error("receive ddl info", zap.String("worker", source), log.ShortError(err))
 							doRetry = true
 							break
 						}
-						log.L().Info("receive ddl info", zap.Stringer("ddl info", in), zap.String("worker", worker))
+						log.L().Info("receive ddl info", zap.Stringer("ddl info", in), zap.String("worker", source))
 
 						workers := s.getTaskResources(in.Task)
 						if len(workers) == 0 {
@@ -1314,16 +1305,16 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 							doRetry = true
 							break
 						}
-						if !s.containWorker(workers, worker) {
+						if !s.containWorker(workers, source) {
 							// should not happen
-							log.L().Error("try to sync shard DDL, but worker is not in workers", zap.String("task", in.Task), zap.String("worker", worker), zap.Strings("workers", workers))
+							log.L().Error("try to sync shard DDL, but worker is not in workers", zap.String("task", in.Task), zap.String("worker", source), zap.Strings("workers", workers))
 							doRetry = true
 							break
 						}
 
-						lockID, synced, remain, err := s.lockKeeper.TrySync(in.Task, in.Schema, in.Table, worker, in.DDLs, workers)
+						lockID, synced, remain, err := s.lockKeeper.TrySync(in.Task, in.Schema, in.Table, source, in.DDLs, workers)
 						if err != nil {
-							log.L().Error("fail to sync lock", zap.String("worker", worker), log.ShortError(err))
+							log.L().Error("fail to sync lock", zap.String("worker", source), log.ShortError(err))
 							doRetry = true
 							break
 						}
@@ -1334,7 +1325,7 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 						}
 						err = stream.Send(out)
 						if err != nil {
-							log.L().Error("fail to send ddl lock info", zap.Stringer("ddl lock info", out), zap.String("worker", worker), log.ShortError(err))
+							log.L().Error("fail to send ddl lock info", zap.Stringer("ddl lock info", out), zap.String("worker", source), log.ShortError(err))
 							doRetry = true
 							break
 						}
@@ -1367,7 +1358,7 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 				}
 			}
 
-		}(w.Address(), client)
+		}(source, w)
 	}
 
 	wg.Wait()
@@ -1396,7 +1387,7 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 	if len(replaceOwner) > 0 {
 		owner = replaceOwner
 	}
-	cli := s.coordinator.GetWorkerClientByAddress(owner)
+	cli := s.coordinator.GetWorkerBySourceID(owner)
 	if cli == nil {
 		return nil, terror.ErrMasterWorkerCliNotFound.Generate(owner)
 	}
@@ -1493,7 +1484,7 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 		wg.Add(1)
 		go func(worker string) {
 			defer wg.Done()
-			cli := s.coordinator.GetWorkerClientByAddress(worker)
+			cli := s.coordinator.GetWorkerBySourceID(worker)
 			if cli == nil {
 				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", worker), worker)
 				return
