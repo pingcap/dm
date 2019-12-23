@@ -90,6 +90,8 @@ func (r *remoteBinlogReader) generateStreamer(pos mysql.Position) (streamer.Stre
 // 2. redirect binlog position or gtid
 // 3. transfor from local streamer to remote streamer
 type StreamerController struct {
+	sync.RWMutex
+
 	// the initital binlog type
 	binlogType BinlogType
 
@@ -127,6 +129,9 @@ func NewStreamerController(tctx tcontext.Context, syncCfg replication.BinlogSync
 
 // ResetReplicationSyncer reset the replication
 func (c *StreamerController) ResetReplicationSyncer(tctx tcontext.Context) {
+	c.Lock()
+	defer c.Unlock()
+
 	// close old streamerProducer
 	if c.streamerProducer != nil {
 		switch t := c.streamerProducer.(type) {
@@ -169,7 +174,11 @@ func (c *StreamerController) RedirectStreamer(tctx tcontext.Context, pos mysql.P
 	var err error
 	tctx.L().Info("reset global streamer", zap.Stringer("position", pos))
 	c.ResetReplicationSyncer(tctx)
+
+	c.Lock()
 	c.streamer, err = c.streamerProducer.generateStreamer(pos)
+	c.Unlock()
+
 	return err
 }
 
@@ -288,6 +297,9 @@ func (c *StreamerController) getMasterStatus() (mysql.Position, gtid.Set, error)
 
 // Close closes streamer
 func (c *StreamerController) Close(tctx tcontext.Context) {
+	c.Lock()
+	defer c.Unlock()
+
 	if c.streamerProducer != nil {
 		switch r := c.streamerProducer.(type) {
 		case *remoteBinlogReader:
