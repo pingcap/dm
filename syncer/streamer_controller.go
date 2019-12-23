@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/pkg/streamer"
+	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
@@ -185,11 +186,17 @@ func (c *StreamerController) RedirectStreamer(tctx tcontext.Context, pos mysql.P
 
 // GetEvent returns binlog event
 func (c *StreamerController) GetEvent(tctx tcontext.Context, syncedPosition mysql.Position) (event *replication.BinlogEvent, err error) {
-	ctx, cancel := context.WithTimeout(tctx.Context(), eventTimeout)
-	defer cancel()
+	failpoint.Inject("SyncerEventTimeout", func(val failpoint.Value) {
+		if seconds, ok := val.(int); ok {
+			eventTimeout = time.Duration(seconds) * time.Second
+			tctx.L().Info("set fetch binlog event timeout", zap.String("failpoint", "SyncerEventTimeout"), zap.Int("value", seconds))
+		}
+	})
 
 	for i := 0; i < maxRetryCount; i++ {
+		ctx, cancel := context.WithTimeout(tctx.Context(), eventTimeout)
 		event, err = c.streamer.GetEvent(ctx)
+		cancel()
 		if err == nil {
 			return event, nil
 		}
@@ -210,6 +217,8 @@ func (c *StreamerController) GetEvent(tctx tcontext.Context, syncedPosition mysq
 			if err != nil {
 				return nil, err
 			}
+		} else {
+			return nil, nil
 		}
 	}
 
@@ -249,7 +258,16 @@ func (c *StreamerController) reopen(tctx tcontext.Context, pos mysql.Position) (
 		}
 	}
 
-	c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(c.syncCfg), &tctx, false}
+	syncCfg := c.syncCfg
+	randomServerID, err := utils.GetRandomServerID(tctx.Context(), c.fromDB.BaseDB.DB)
+	if err != nil {
+		// should never happened unless the master has too many slave
+		tctx.L().Warn("fail to get random server id, will use the origin server id", zap.Error(err))
+	} else {
+		syncCfg.ServerID = randomServerID
+	}
+
+	c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(syncCfg), &tctx, false}
 	return c.streamerProducer.generateStreamer(pos)
 }
 

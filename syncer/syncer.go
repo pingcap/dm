@@ -1130,20 +1130,16 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			latestOp = null
 		}
 		if e == nil {
-			failpoint.Inject("SyncerEventTimeout", func(val failpoint.Value) {
-				if seconds, ok := val.(int); ok {
-					eventTimeout = time.Duration(seconds) * time.Second
-					s.tctx.L().Info("set fetch binlog event timeout", zap.String("failpoint", "SyncerEventTimeout"), zap.Int("value", seconds))
-				}
-			})
-			ctx2, cancel := context.WithTimeout(ctx, eventTimeout)
-			e, err = s.streamerController.GetEvent(*s.tctx.WithContext(ctx2), s.checkpoint.GlobalPoint())
-			cancel()
+			e, err = s.streamerController.GetEvent(*tctx, s.checkpoint.GlobalPoint())
 			if err != nil {
 				if err == context.Canceled {
 					return nil
 				}
 				return err
+			}
+
+			if e == nil {
+				continue
 			}
 		}
 
