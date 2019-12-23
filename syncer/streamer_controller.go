@@ -15,6 +15,7 @@ package syncer
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/pingcap/dm/pkg/streamer"
@@ -196,7 +197,7 @@ func (c *StreamerController) GetEvent(tctx tcontext.Context, syncedPosition mysq
 		c.meetError = true
 		if err == context.Canceled {
 			tctx.L().Info("binlog replication main routine quit(context canceled)!", zap.Stringer("last position", syncedPosition))
-			return nil, nil
+			return nil, err
 		} else if err == context.DeadlineExceeded {
 			tctx.L().Info("deadline exceeded when fetching binlog event")
 		} else {

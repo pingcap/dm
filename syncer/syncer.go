@@ -1140,6 +1140,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			e, err = s.streamerController.GetEvent(*s.tctx.WithContext(ctx2), s.checkpoint.GlobalPoint())
 			cancel()
 			if err != nil {
+				if err == context.Canceled {
+					return nil
+				}
 				return err
 			}
 		}
