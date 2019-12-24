@@ -20,6 +20,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb/domain"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/kv"
@@ -60,6 +61,9 @@ func NewTracker() (*Tracker, error) {
 		return nil, err
 	}
 
+	// TiDB will unconditionally create an empty "test" schema.
+	// This interferes with MySQL/MariaDB upstream which such schema does not
+	// exist by default. So we need to drop it first.
 	err = dom.DDL().DropSchema(se, model.NewCIStr("test"))
 	if err != nil {
 		return nil, err
@@ -93,9 +97,7 @@ func (tr *Tracker) AllSchemas() []*model.DBInfo {
 	allSchemas := tr.dom.InfoSchema().AllSchemas()
 	filteredSchemas := make([]*model.DBInfo, 0, len(allSchemas)-3)
 	for _, db := range allSchemas {
-		switch db.Name.L {
-		case "mysql", "performance_schema", "information_schema":
-		default:
+		if !filter.IsSystemSchema(db.Name.L) {
 			filteredSchemas = append(filteredSchemas, db)
 		}
 	}
@@ -104,7 +106,7 @@ func (tr *Tracker) AllSchemas() []*model.DBInfo {
 
 // IsTableNotExists checks if err means the database or table does not exist.
 func IsTableNotExists(err error) bool {
-	return infoschema.ErrTableNotExists.Equal(err) || infoschema.ErrDatabaseDropExists.Equal(err)
+	return infoschema.ErrTableNotExists.Equal(err) || infoschema.ErrDatabaseNotExists.Equal(err)
 }
 
 // Reset drops all tables inserted into this tracker.

@@ -647,10 +647,13 @@ func (s *Syncer) getMasterStatus() (mysql.Position, gtid.Set, error) {
 func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable string, p *parser.Parser) (*model.TableInfo, error) {
 	ti, err := s.schemaTracker.GetTable(origSchema, origTable)
 	if err == nil || !schema.IsTableNotExists(err) {
+		// we return early if either:
+		//  - we obtained a cached `ti` successfully from the tracker (err == nil), or
+		//  - the tracker failed by reason other than the table does not exist.
+		// if the table does not exist (IsTableNotExists(err)), continue to fetch the table from downstream and create it.
 		return ti, err
 	}
 
-	ctx := context.Background()
 	if err = s.schemaTracker.CreateSchemaIfNotExists(origSchema); err != nil {
 		return nil, err
 	}
@@ -663,6 +666,7 @@ func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable str
 	}
 	defer rows.Close()
 
+	ctx := context.Background()
 	for rows.Next() {
 		var tableName, createSQL string
 		if err := rows.Scan(&tableName, &createSQL); err != nil {

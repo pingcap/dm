@@ -1282,6 +1282,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		mock.ExpectCommit()
 
 		// mock fetching table schema from downstream
+		// called twice for each upstream schema: once for `db`.`table1`, once for `db`.`table2`.
 		mock.ExpectQuery("SHOW CREATE TABLE `stest`.`st`").
 			WillReturnRows(sqlmock.NewRows([]string{"Table", "Create Table"}).AddRow("-", "create table st(id int, age int)"))
 		mock.ExpectQuery("SHOW CREATE TABLE `stest`.`st`").

@@ -44,11 +44,15 @@ func (s *trackerSuite) TestDDL(c *C) {
 	c.Assert(err, ErrorMatches, `.*Table 'testdb\.foo' doesn't exist`)
 	c.Assert(schema.IsTableNotExists(err), IsTrue)
 
-	// Now create the table with 3 columns.
 	ctx := context.Background()
 	err = tracker.Exec(ctx, "", "create database testdb;")
 	c.Assert(err, IsNil)
 
+	_, err = tracker.GetTable("testdb", "foo")
+	c.Assert(err, ErrorMatches, `.*Table 'testdb\.foo' doesn't exist`)
+	c.Assert(schema.IsTableNotExists(err), IsTrue)
+
+	// Now create the table with 3 columns.
 	err = tracker.Exec(ctx, "testdb", "create table foo (a varchar(255) primary key, b varchar(255) as (concat(a, a)), c int)")
 	c.Assert(err, IsNil)
 

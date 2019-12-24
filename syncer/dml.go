@@ -342,24 +342,20 @@ func genKeyList(columns []*model.ColumnInfo, dataSeq []interface{}) string {
 }
 
 func genMultipleKeys(ti *model.TableInfo, value []interface{}) []string {
-	multipleKeys := make([]string, 1, len(ti.Indices)+1)
-	hasPKIndex := false
-	for _, indexCols := range ti.Indices {
-		cols, vals := getColumnData(ti.Columns, indexCols, value)
-		multipleKeys = append(multipleKeys, genKeyList(cols, vals))
-		if indexCols.Primary {
-			hasPKIndex = true
-		}
-	}
-	if !hasPKIndex {
+	multipleKeys := make([]string, 0, len(ti.Indices)+1)
+	if ti.PKIsHandle {
 		if pk := ti.GetPkColInfo(); pk != nil {
 			cols := []*model.ColumnInfo{pk}
 			vals := []interface{}{value[pk.Offset]}
-			multipleKeys[0] = genKeyList(cols, vals)
-			return multipleKeys
+			multipleKeys = append(multipleKeys, genKeyList(cols, vals))
 		}
 	}
-	return multipleKeys[1:]
+
+	for _, indexCols := range ti.Indices {
+		cols, vals := getColumnData(ti.Columns, indexCols, value)
+		multipleKeys = append(multipleKeys, genKeyList(cols, vals))
+	}
+	return multipleKeys
 }
 
 func findFitIndex(ti *model.TableInfo) *model.IndexInfo {
