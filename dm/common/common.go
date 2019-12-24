@@ -26,3 +26,14 @@ func IsErrNetClosing(err error) bool {
 	}
 	return strings.Contains(err.Error(), useOfClosedErrMsg)
 }
+
+const (
+	// WorkerKeepAlivePath
+	WorkerKeepAlivePath = "/dm-worker/a"
+	// WorkerRegisterPath
+	WorkerRegisterPath = "/dm-worker/r/"
+	// UpstreamConfigPath
+	UpstreamConfigPath = "/dm-master/upstream/config/"
+	// UpstreamBoundWorkerPath
+	UpstreamBoundWorkerPath = "/dm-master/bound-worker/"
+)

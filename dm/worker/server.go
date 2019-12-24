@@ -17,24 +17,28 @@ import (
 	"context"
 	"io"
 	"net"
+	"path"
 	"sync"
 	"time"
-
-	"github.com/pingcap/errors"
-	"github.com/siddontang/go/sync2"
-	"github.com/soheilhy/cmux"
-	"go.uber.org/zap"
-	"google.golang.org/grpc"
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/errors"
+	"github.com/siddontang/go/sync2"
+	"github.com/soheilhy/cmux"
+	"go.etcd.io/etcd/clientv3"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
 )
 
 var (
-	cmuxReadTimeout = 10 * time.Second
+	cmuxReadTimeout  = 10 * time.Second
+	dialTimeout      = 3 * time.Second
+	keepaliveTimeout = 3 * time.Second
+	keepaliveTime    = 10 * time.Second
 )
 
 // Server accepts RPC requests
@@ -49,9 +53,10 @@ type Server struct {
 
 	cfg *Config
 
-	rootLis net.Listener
-	svr     *grpc.Server
-	worker  *Worker
+	rootLis    net.Listener
+	svr        *grpc.Server
+	worker     *Worker
+	etcdClient *clientv3.Client
 }
 
 // NewServer creates a new Server
@@ -79,6 +84,15 @@ func (s *Server) Start() error {
 
 	s.worker = nil
 	s.ctx, s.cancel = context.WithCancel(context.Background())
+	s.etcdClient, err = clientv3.New(clientv3.Config{
+		Endpoints:            GetJoinURLs(s.cfg.Join),
+		DialTimeout:          dialTimeout,
+		DialKeepAliveTime:    keepaliveTime,
+		DialKeepAliveTimeout: keepaliveTimeout,
+	})
+	if err != nil {
+		return err
+	}
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -87,7 +101,7 @@ func (s *Server) Start() error {
 		shouldExit := false
 		shouldStop := false
 		for !shouldExit {
-			shouldExit, err = s.KeepAlive(s.ctx)
+			shouldExit, err = s.KeepAlive()
 			if err != nil || !shouldExit {
 				if shouldStop {
 					s.Lock()
@@ -551,9 +565,26 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 	if s.worker != nil {
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
+	ctx, cancel := context.WithTimeout(s.etcdClient.Ctx(), 3*time.Second)
+	defer cancel()
+	cfgStr, err := cfg.EncodeToml()
+	if err != nil {
+	}
+
 	w, err := NewWorker(cfg)
 	if err != nil {
 		return err
+	}
+
+	resp, err := s.etcdClient.Txn(ctx).Then(
+		clientv3.OpPut(path.Join(common.UpstreamConfigPath, cfg.SourceID), cfgStr),
+		clientv3.OpPut(path.Join(common.UpstreamBoundWorkerPath, s.cfg.WorkerAddr), cfg.SourceID),
+	).Commit()
+	if err != nil {
+		return err
+	}
+	if !resp.Succeeded {
+		return errors.New("failed to bound worker")
 	}
 	s.worker = w
 	s.Unlock()

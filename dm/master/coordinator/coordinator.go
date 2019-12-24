@@ -1,5 +1,3 @@
-// Copyright 2019 PingCAP, Inc.
-//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -15,19 +13,25 @@ package coordinator
 
 import (
 	"context"
-	"github.com/pingcap/dm/dm/config"
+	"path"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/pingcap/dm/dm/common"
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/errors"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/mvcc/mvccpb"
 	"go.uber.org/zap"
 )
 
 var (
-	workerKeepAlivePath = "/dm-worker/a"
+	etcdTimeouit = 3 * time.Second
+
+	ErrNotStarted = errors.New("coordinator does not start")
 )
 
 // Coordinator coordinate wrokers and upstream.
@@ -41,8 +45,14 @@ type Coordinator struct {
 	// upstream(address) -> config
 	configs map[string]config.MysqlConfig
 
-	// pending create taks (sourceid) --> address
+	// pending create task (sourceid) --> address
 	pendingtask map[string]string
+
+	etcdCli *clientv3.Client
+	ctx     context.Context
+	cancel  context.CancelFunc
+	started bool
+	wg      sync.WaitGroup
 }
 
 // NewCoordinator returns a coordinate.
@@ -56,8 +66,71 @@ func NewCoordinator() *Coordinator {
 }
 
 // Init would recover infomation from etcd
-func (c *Coordinator) Init(etcdClient *clientv3.Client) {
+func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) error {
 	// TODO: recover upstreams and configs and workers
+	// workers
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.etcdCli = etcdClient
+	ctx, cancel := context.WithTimeout(etcdClient.Ctx(), etcdTimeouit)
+	defer cancel()
+	resp, err := etcdClient.Get(ctx, common.WorkerRegisterPath, clientv3.WithPrefix())
+	if err != nil {
+		return err
+	}
+
+	for _, kv := range resp.Kvs {
+		addr := strings.TrimPrefix(common.WorkerRegisterPath, string(kv.Key))
+		name := string(kv.Value)
+		c.workers[addr] = NewWorker(name, addr)
+	}
+
+	// configs
+	resp, err = etcdClient.Get(ctx, common.UpstreamBoundWorkerPath, clientv3.WithPrefix())
+	if err != nil {
+		return nil
+	}
+
+	for _, kv := range resp.Kvs {
+		addr := strings.TrimPrefix(common.UpstreamBoundWorkerPath, string(kv.Key))
+		sourceID := string(kv.Value)
+		w, ok := c.workers[addr]
+		if !ok {
+			log.L().Error("worker not exist but binding relationship exist", zap.String("addr", addr), zap.String("source", sourceID))
+			continue
+		}
+		resp, err = etcdClient.Get(ctx, path.Join(common.UpstreamConfigPath, sourceID))
+		if err != nil || len(resp.Kvs) == 0 {
+			log.L().Error("cannot load config", zap.String("addr", addr), zap.String("source", sourceID), zap.Error(err))
+			continue
+		}
+		cfgStr := string(resp.Kvs[0].Value)
+		cfg := config.NewWorkerConfig()
+		err := cfg.Parse(cfgStr)
+		if err != nil {
+			log.L().Error("cannot parse config", zap.String("addr", addr), zap.String("source", sourceID), zap.Error(err))
+		}
+		c.upstreams[sourceID] = w
+	}
+
+	c.started = true
+	c.ctx, c.cancel = context.WithCancel(ctx)
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		c.ObserveWorkers()
+	}()
+	log.L().Info("coordinator is started")
+	return nil
+}
+
+func (c *Coordinator) Stop() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cancel()
+	c.started = false
+	c.wg.Wait()
+	log.L().Info("coordinator is stoped")
 }
 
 // AddWorker add the dm-worker to the coordinate.
@@ -76,8 +149,8 @@ func (c *Coordinator) HandleStartedWorker(w *Worker, cfg *config.MysqlConfig, su
 		c.configs[w.Address()] = *cfg
 	} else {
 		w.SetStatus(WorkerFree)
+		delete(c.pendingtask, cfg.SourceID)
 	}
-	delete(c.pendingtask, cfg.SourceID)
 }
 
 // HandleStoppedWorker change worker status when mysql task stopped
@@ -89,23 +162,26 @@ func (c *Coordinator) HandleStoppedWorker(w *Worker, cfg *config.MysqlConfig) {
 	w.SetStatus(WorkerFree)
 }
 
-// GetFreeWorkerForSource get the free worker to create mysql delay task, and add it to pending task
+// AcquireWorkerForSource get the free worker to create mysql delay task, and add it to pending task
 // to avoid create a task in two worker
-func (c *Coordinator) GetFreeWorkerForSource(source string) (*Worker, string) {
+func (c *Coordinator) AcquireWorkerForSource(cfg *config.MysqlConfig) (*Worker, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if addr, ok := c.pendingtask[source]; ok {
-		return nil, addr
+	if c.started == false {
+		return nil, ErrNotStarted
+	}
+	if addr, ok := c.pendingtask[cfg.SourceID]; ok {
+		return nil, errors.Errorf("Acquire worker failed. the same source has been started in worker: %s", addr)
 	}
 	for _, w := range c.workers {
 		if w.status.Load() == WorkerFree {
 			// we bound worker to avoid another task trying to get it
 			w.status.Store(WorkerBound)
-			c.pendingtask[source] = w.Address()
-			return w, ""
+			c.pendingtask[cfg.SourceID] = w.Address()
+			return w, nil
 		}
 	}
-	return nil, ""
+	return nil, errors.New("Acquire worker failed. no  free worker could start mysql task")
 }
 
 // GetWorkerByAddress gets the worker through address.
@@ -183,9 +259,9 @@ func (c *Coordinator) GetWorkersByStatus(s WorkerState) []*Worker {
 }
 
 // ObserveWorkers observe the keepalive path and maintain the status of the worker.
-func (c *Coordinator) ObserveWorkers(ctx context.Context, client *clientv3.Client) {
-	watcher := clientv3.NewWatcher(client)
-	ch := watcher.Watch(ctx, workerKeepAlivePath, clientv3.WithPrefix())
+func (c *Coordinator) ObserveWorkers() {
+	watcher := clientv3.NewWatcher(c.etcdCli)
+	ch := watcher.Watch(c.ctx, common.WorkerKeepAlivePath, clientv3.WithPrefix())
 
 	for {
 		select {
@@ -227,7 +303,7 @@ func (c *Coordinator) ObserveWorkers(ctx context.Context, client *clientv3.Clien
 					c.mu.Unlock()
 				}
 			}
-		case <-ctx.Done():
+		case <-c.ctx.Done():
 			log.L().Info("coordinate exict due to context canceled")
 			return
 		}
@@ -239,3 +315,5 @@ func (c *Coordinator) ObserveWorkers(ctx context.Context, client *clientv3.Clien
 func (c *Coordinator) Schedule() {
 
 }
+
+func makeKV(path, v string) {}

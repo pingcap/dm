@@ -5,6 +5,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"math"
+	"math/rand"
+	"strings"
+	"time"
+
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/gtid"
@@ -13,10 +18,6 @@ import (
 	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/siddontang/go-mysql/mysql"
-	"math"
-	"math/rand"
-	"strings"
-	"time"
 )
 
 const (
@@ -114,6 +115,14 @@ func (c *MysqlConfig) Parse(content string) error {
 	// Parse first to get config file.
 	metaData, err := toml.Decode(content, c)
 	return c.check(&metaData, err)
+}
+
+func (c *MysqlConfig) EncodeToml() (string, error) {
+	buf := new(bytes.Buffer)
+	if err := toml.NewEncoder(buf).Encode(c); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
 }
 
 func (c *MysqlConfig) String() string {
