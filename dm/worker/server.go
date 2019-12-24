@@ -569,7 +569,7 @@ func (s *Server) OperateMysqlTask(ctx context.Context, req *pb.MysqlTaskRequest)
 		Result: true,
 		Msg:    "Operate mysql task successfully",
 	}
-	cfg := config.NewWorkerConfig()
+	cfg := config.NewMysqlConfig()
 	err := cfg.Parse(req.Config)
 	if err != nil {
 		resp.Result = false

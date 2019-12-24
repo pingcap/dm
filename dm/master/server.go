@@ -289,7 +289,7 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 		}
 	}
 	fmt.Println("=======Register a worker")
-	s.coordinator.AddWorker(req.Name, req.Address)
+	s.coordinator.AddWorker(req.Name, req.Address, nil)
 	log.L().Info("register worker successfully", zap.String("name", req.Name), zap.String("address", req.Address))
 	respWorker := &pb.RegisterWorkerResponse{
 		Result: true,
@@ -1655,7 +1655,7 @@ func makeMysqlTaskResponse(err error) (*pb.MysqlTaskResponse, error) {
 
 // OperateMysqlWorker will create or update a Worker
 func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlTaskRequest) (*pb.MysqlTaskResponse, error) {
-	cfg := config.NewWorkerConfig()
+	cfg := config.NewMysqlConfig()
 	if err := cfg.Parse(req.Config); err != nil {
 		return makeMysqlTaskResponse(err)
 	}

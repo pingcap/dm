@@ -65,8 +65,8 @@ type MysqlConfig struct {
 	ServerID uint32 `toml:"server-id" json:"server-id"`
 }
 
-// NewWorkerConfig creates a new base config for worker.
-func NewWorkerConfig() *MysqlConfig {
+// NewMysqlConfig creates a new base config for worker.
+func NewMysqlConfig() *MysqlConfig {
 	c := &MysqlConfig{
 		RelayDir: "relay-dir",
 		Purge: PurgeConfig{

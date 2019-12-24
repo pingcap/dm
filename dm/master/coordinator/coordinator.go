@@ -16,6 +16,7 @@ package coordinator
 import (
 	"context"
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/master/workerrpc"
 	"strings"
 	"sync"
 
@@ -60,10 +61,12 @@ func (c *Coordinator) Init(etcdClient *clientv3.Client) {
 }
 
 // AddWorker add the dm-worker to the coordinate.
-func (c *Coordinator) AddWorker(name string, address string) {
+func (c *Coordinator) AddWorker(name string, address string, cli workerrpc.Client) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.workers[address] = NewWorker(name, address)
+	w := NewWorker(name, address, cli)
+	w.SetStatus(WorkerFree)
+	c.workers[address] = w
 }
 
 // HandleStartedWorker change worker status when mysql task started

@@ -37,6 +37,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/pbmock"
 	"github.com/pingcap/dm/pkg/etcdutil"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -147,6 +148,11 @@ type testMaster struct {
 }
 
 var _ = check.Suite(&testMaster{})
+
+func (t *testMaster) SetUpSuite(c *check.C) {
+	err := log.InitLogger(&log.Config{})
+	c.Assert(err, check.IsNil)
+}
 
 func newMockRPCClient(client pb.WorkerClient) workerrpc.Client {
 	c, _ := workerrpc.NewGRPCClientWrap(nil, client)
@@ -1451,5 +1457,85 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(leaderID, check.Equals, cfg1.Name)
 
+	cancel()
+}
+
+func (t *testMaster) TestOperateMysqlTask(c *check.C) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctrl := gomock.NewController(c)
+	defer ctrl.Finish()
+
+	// create a new cluster
+	cfg1 := NewConfig()
+	c.Assert(cfg1.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
+	cfg1.Name = "dm-master-1"
+	cfg1.DataDir = c.MkDir()
+	cfg1.MasterAddr = tempurl.Alloc()[len("http://"):]
+	cfg1.PeerUrls = tempurl.Alloc()
+	cfg1.AdvertisePeerUrls = cfg1.PeerUrls
+	cfg1.InitialCluster = fmt.Sprintf("%s=%s", cfg1.Name, cfg1.AdvertisePeerUrls)
+
+	s1 := NewServer(cfg1)
+	c.Assert(s1.Start(ctx), check.IsNil)
+	defer s1.Close()
+	mysqlCfg := config.NewMysqlConfig()
+	mysqlCfg.LoadFromFile("./dm-mysql.toml")
+	task, err := mysqlCfg.Toml()
+	c.Assert(err, check.IsNil)
+	req := &pb.MysqlTaskRequest{Op: pb.WorkerOp_StartWorker, Config: task}
+	resp, err := s1.OperateMysqlWorker(ctx, req)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.Equals, false)
+	c.Assert(resp.Msg, check.Equals, "Create worker failed. no free worker could start mysql task")
+	mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
+	req.Op = pb.WorkerOp_UpdateConfig
+	mockWorkerClient.EXPECT().OperateMysqlTask(
+		gomock.Any(),
+		req,
+	).Return(&pb.MysqlTaskResponse{
+		Result: true,
+		Msg:    "",
+	}, nil)
+	req.Op = pb.WorkerOp_StopWorker
+	mockWorkerClient.EXPECT().OperateMysqlTask(
+		gomock.Any(),
+		req,
+	).Return(&pb.MysqlTaskResponse{
+		Result: true,
+		Msg:    "",
+	}, nil)
+	req.Op = pb.WorkerOp_StartWorker
+	mockWorkerClient.EXPECT().OperateMysqlTask(
+		gomock.Any(),
+		req,
+	).Return(&pb.MysqlTaskResponse{
+		Result: true,
+		Msg:    "",
+	}, nil)
+	s1.coordinator.AddWorker("", "localhost:10099", newMockRPCClient(mockWorkerClient))
+	resp, err = s1.OperateMysqlWorker(ctx, req)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.Equals, true)
+	resp, err = s1.OperateMysqlWorker(ctx, req)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.Equals, false)
+	c.Assert(resp.Msg, check.Matches, ".*Create worker failed. worker has been started")
+	mysqlCfg.SourceID = "no-exist-source"
+	task2, err := mysqlCfg.Toml()
+	c.Assert(err, check.IsNil)
+	req.Config = task2
+	req.Op = pb.WorkerOp_UpdateConfig
+	resp, err = s1.OperateMysqlWorker(ctx, req)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.Equals, false)
+	c.Assert(resp.Msg, check.Matches, ".*Update worker config failed. worker has not been started")
+	req.Config = task
+	resp, err = s1.OperateMysqlWorker(ctx, req)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.Equals, true)
+	req.Op = pb.WorkerOp_StopWorker
+	resp, err = s1.OperateMysqlWorker(ctx, req)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.Equals, true)
 	cancel()
 }

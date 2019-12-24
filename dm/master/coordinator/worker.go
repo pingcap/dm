@@ -42,10 +42,11 @@ type Worker struct {
 }
 
 // NewWorker creates a worker with specified name and address.
-func NewWorker(name, address string) *Worker {
+func NewWorker(name, address string, cli workerrpc.Client) *Worker {
 	w := &Worker{
 		name:    name,
 		address: address,
+		client:  cli,
 	}
 	w.status.Store(WorkerClosed)
 	return w
