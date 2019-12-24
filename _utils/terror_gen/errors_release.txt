@@ -408,3 +408,8 @@ ErrTracerStartService,[code=42010:class=dm-tracer:scope=internal:level=high],"st
 ErrSchemaTrackerInvalidJSON,[code=44001:class=schema-tracker:scope=downstream:level=high],"saved schema of `%s`.`%s` is not proper JSON"
 ErrSchemaTrackerCannotCreateSchema,[code=44002:class=schema-tracker:scope=internal:level=high],"failed to create database for `%s` in schema tracker"
 ErrSchemaTrackerCannotCreateTable,[code=44003:class=schema-tracker:scope=internal:level=high],"failed to create table for `%s`.`%s` in schema tracker"
+ErrSchemaTrackerCannotSerialize,[code=44004:class=schema-tracker:scope=internal:level=high],"failed to serialize table info for `%s`.`%s`"
+ErrSchemaTrackerCannotGetTable,[code=44005:class=schema-tracker:scope=internal:level=high],"cannot get table info for `%s`.`%s` from schema tracker"
+ErrSchemaTrackerCannotExecDDL,[code=44006:class=schema-tracker:scope=internal:level=high],"cannot track DDL: %s"
+ErrSchemaTrackerCannotGetDownstreamTable,[code=44007:class=schema-tracker:scope=downstream:level=medium],"cannot fetch downstream table schema of `%s`.`%s` to initialize upstream schema `%s`.`%s` in schema tracker"
+ErrSchemaTrackerCannotParseDownstreamTable,[code=44008:class=schema-tracker:scope=internal:level=high],"cannot parse downstream table schema of `%s`.`%s` to initialize upstream schema `%s`.`%s` in schema tracker"

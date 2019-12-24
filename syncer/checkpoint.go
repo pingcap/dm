@@ -29,7 +29,6 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 
-	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/parser/model"
 	tmysql "github.com/pingcap/parser/mysql"
@@ -436,7 +435,7 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 			if point.outOfDate() {
 				tiBytes, err := json.Marshal(point.ti)
 				if err != nil {
-					return errors.Annotatef(err, "failed to serialize table info for %s.%s", schema, table)
+					return terror.ErrSchemaTrackerCannotSerialize.Delegate(err, schema, table)
 				}
 
 				pos := point.MySQLPos()

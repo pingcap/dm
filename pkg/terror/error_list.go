@@ -491,6 +491,11 @@ const (
 	codeSchemaTrackerInvalidJSON ErrCode = iota + 44001
 	codeSchemaTrackerCannotCreateSchema
 	codeSchemaTrackerCannotCreateTable
+	codeSchemaTrackerCannotSerialize
+	codeSchemaTrackerCannotGetTable
+	codeSchemaTrackerCannotExecDDL
+	codeSchemaTrackerCannotFetchDownstreamTable
+	codeSchemaTrackerCannotParseDownstreamTable
 )
 
 // Error instances
@@ -945,4 +950,14 @@ var (
 	ErrSchemaTrackerInvalidJSON        = New(codeSchemaTrackerInvalidJSON, ClassSchemaTracker, ScopeDownstream, LevelHigh, "saved schema of `%s`.`%s` is not proper JSON")
 	ErrSchemaTrackerCannotCreateSchema = New(codeSchemaTrackerCannotCreateSchema, ClassSchemaTracker, ScopeInternal, LevelHigh, "failed to create database for `%s` in schema tracker")
 	ErrSchemaTrackerCannotCreateTable  = New(codeSchemaTrackerCannotCreateTable, ClassSchemaTracker, ScopeInternal, LevelHigh, "failed to create table for `%s`.`%s` in schema tracker")
+	ErrSchemaTrackerCannotSerialize    = New(codeSchemaTrackerCannotSerialize, ClassSchemaTracker, ScopeInternal, LevelHigh, "failed to serialize table info for `%s`.`%s`")
+	ErrSchemaTrackerCannotGetTable     = New(codeSchemaTrackerCannotGetTable, ClassSchemaTracker, ScopeInternal, LevelHigh, "cannot get table info for `%s`.`%s` from schema tracker")
+	ErrSchemaTrackerCannotExecDDL      = New(codeSchemaTrackerCannotExecDDL, ClassSchemaTracker, ScopeInternal, LevelHigh, "cannot track DDL: %s")
+
+	ErrSchemaTrackerCannotGetDownstreamTable = New(
+		codeSchemaTrackerCannotFetchDownstreamTable, ClassSchemaTracker, ScopeDownstream, LevelMedium,
+		"cannot fetch downstream table schema of `%s`.`%s` to initialize upstream schema `%s`.`%s` in schema tracker")
+	ErrSchemaTrackerCannotParseDownstreamTable = New(
+		codeSchemaTrackerCannotParseDownstreamTable, ClassSchemaTracker, ScopeInternal, LevelHigh,
+		"cannot parse downstream table schema of `%s`.`%s` to initialize upstream schema `%s`.`%s` in schema tracker")
 )
