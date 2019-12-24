@@ -1,55 +1,13 @@
-# Base Configuration.
-
-# sub task name as identifier, should be unique
-name = "hanfei"
-
-# sub task mode, can be `all`, `full`, `incremental`
-mode = "incremental"
+# Old Configuration.
 
 # used for binlog replication 
 server-id = 101
-source-id = "127.0.0.1:3307"
 
 # which flavor mysql/mariadb
 flavor = "mysql"
 
 # meta schema in downstreaming database to store meta informaton of dm
-meta-schema = "dm_meta"
-# remove meta from downstreaming database, now we delete checkpoint and online ddl information
-remove-meta = false
-# whether to disable heartbeat for calculating lag between master and syncer
-disable-heartbeat = true 
-
-# replicate from relay log or remote binlog
-binlog-type = "remote"
-
-# Mydumper configuration
-
-# -t, --threads
-#threads = 16
-
-# -F, --chunk-filesize
-#chunk-filesize = 64
-
-# --skip-tz-utc
-#skip-tz-utc = true
-
-# other extra args
-#extra-args = "-B test -T t1,t2 --no-locks"
-
-
-# Loader configuration
-
-# Number of threads restoring concurrently for loader worker pool. Each worker restore one file at a time, increase this as TiKV nodes increase
-pool-size = 16
-
-# Syncer configuration
-
-# different sub task should have different meta
-# meta-file = "./syncer.subTaskA.meta"
-[meta]
-binlog-name = binlog-name-placeholder-2
-binlog-pos = binlog-pos-placeholder-2
+meta = "/tmp/dm_test/dm_syncer/old_meta_file"
 
 worker-count = 16
 batch = 1000

@@ -22,17 +22,20 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer"
+
 	"github.com/pingcap/errors"
 	"go.uber.org/zap"
 )
 
 func main() {
+	// 1. init conf
 	commonConfig := newCommonConfig()
-	config, err := commonConfig.parse(os.Args[1:])
+	conf, err := commonConfig.parse(os.Args[1:])
 	switch errors.Cause(err) {
 	case nil:
 	case flag.ErrHelp:
@@ -42,10 +45,13 @@ func main() {
 		os.Exit(2)
 	}
 
+	conf.Mode = config.ModeIncrement
+	conf.BinlogType = "remote"
+
 	// 2. init logger
 	err = log.InitLogger(&log.Config{
-		File:  config.LogFile,
-		Level: strings.ToLower(config.LogLevel),
+		File:  conf.LogFile,
+		Level: strings.ToLower(conf.LogLevel),
 	})
 	if err != nil {
 		fmt.Printf("init logger error %v", errors.ErrorStack(err))
@@ -54,10 +60,10 @@ func main() {
 
 	// 3. print process version information
 	utils.PrintInfo("dm-syncer", func() {
-		log.L().Info("", zap.Stringer("dm-syncer config", config))
+		log.L().Info("", zap.Stringer("dm-syncer conf", conf))
 	})
 
-	sync := syncer.NewSyncer(config)
+	sync := syncer.NewSyncer(conf)
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 

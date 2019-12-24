@@ -45,17 +45,18 @@ function run() {
 
     cat $cur/conf/dm-syncer-1.toml > $WORK_DIR/dm-syncer-1.toml
     cat $cur/conf/dm-syncer-2.toml > $WORK_DIR/dm-syncer-2.toml
+    cat $cur/conf/old_meta_file > $WORK_DIR/old_meta_file
     name1=$(grep "Log: " $WORK_DIR/worker1/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2}'|tr -d ' ')
     pos1=$(grep "Pos: " $WORK_DIR/worker1/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2}'|tr -d ' ')
     name2=$(grep "Log: " $WORK_DIR/worker2/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2}'|tr -d ' ')
     pos2=$(grep "Pos: " $WORK_DIR/worker2/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2}'|tr -d ' ')
     sed -i "s/binlog-name-placeholder-1/\"$name1\"/g" $WORK_DIR/dm-syncer-1.toml
     sed -i "s/binlog-pos-placeholder-1/$pos1/g" $WORK_DIR/dm-syncer-1.toml
-    sed -i "s/binlog-name-placeholder-2/\"$name2\"/g" $WORK_DIR/dm-syncer-2.toml
-    sed -i "s/binlog-pos-placeholder-2/$pos2/g" $WORK_DIR/dm-syncer-2.toml
+    sed -i "s/binlog-name-placeholder-2/\"$name2\"/g" $WORK_DIR/old_meta_file
+    sed -i "s/binlog-pos-placeholder-2/$pos2/g" $WORK_DIR/old_meta_file
     sleep 2
     run_dm_syncer $WORK_DIR/syncer1 $WORK_DIR/dm-syncer-1.toml
-    run_dm_syncer $WORK_DIR/syncer2 $WORK_DIR/dm-syncer-2.toml
+    run_dm_syncer $WORK_DIR/syncer2 $WORK_DIR/dm-syncer-2.toml --old-config-format
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }

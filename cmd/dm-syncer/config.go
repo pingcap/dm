@@ -16,16 +16,18 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/errors"
 	bf "github.com/pingcap/tidb-tools/pkg/binlog-filter"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/siddontang/go-mysql/mysql"
+
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 // commonConfig collects common item for both new config and old config.
@@ -280,9 +282,35 @@ type SkipDML struct {
 	Type   string `toml:"type" json:"type"`
 }
 
-func (oc *oldConfig) convertToNewFormat() (*config.SubTaskConfig, error) {
+func loadMetaFile(metaFile string) (*config.Meta, error) {
+	file, err := os.Open(metaFile)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 
+	defer file.Close()
+
+	meta := &config.Meta{}
+	_, err = toml.DecodeReader(file, meta)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return meta, nil
+}
+
+func (oc *oldConfig) convertToNewFormat() (*config.SubTaskConfig, error) {
+	meta, err := loadMetaFile(oc.Meta)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 	newTask := &config.SubTaskConfig{
+		Name: "dm-syncer",
+		SourceID : "dm-syncer-from-old-config",
+		DisableHeartbeat: true,
+		Mode: config.ModeIncrement,
+		BinlogType: "remote",
+		Meta: meta,
+
 		LogLevel:  oc.LogLevel,
 		LogFile:   oc.LogFile,
 		LogRotate: oc.LogRotate,
@@ -292,7 +320,6 @@ func (oc *oldConfig) convertToNewFormat() (*config.SubTaskConfig, error) {
 		Flavor:     oc.Flavor,
 
 		SyncerConfig: config.SyncerConfig{
-			MetaFile:         oc.Meta,
 			WorkerCount:      oc.WorkerCount,
 			Batch:            oc.Batch,
 			MaxRetry:         oc.MaxRetry,
@@ -325,7 +352,6 @@ func (oc *oldConfig) convertToNewFormat() (*config.SubTaskConfig, error) {
 		})
 	}
 
-	var err error
 	newTask.FilterRules, err = generateBinlogEventRule(oc.SkipDDLs, oc.SkipDMLs)
 	if err != nil {
 		return nil, errors.Trace(err)

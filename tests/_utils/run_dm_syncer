@@ -11,8 +11,14 @@ PWD=$(pwd)
 
 mkdir -p $workdir/log
 
+format=""
+
+if [ "$#" -ge 3 ]; then
+    format=$3
+fi
+
 cd $workdir
-echo "$binary --log-file="$workdir/log/dm-syncer.log" --config="$config" >> $workdir/log/stdout.log 2>&1 &"
-$binary -L=Debug --log-file="$workdir/log/dm-syncer.log" --config="$config" >> $workdir/log/stdout.log 2>&1 &
+echo "$binary --log-file="$workdir/log/dm-syncer.log" --config="$config" $format >> $workdir/log/stdout.log 2>&1 &"
+$binary -L=Debug --log-file="$workdir/log/dm-syncer.log" --config="$config" $format >> $workdir/log/stdout.log 2>&1 &
 cd $PWD
 
