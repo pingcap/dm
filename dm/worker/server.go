@@ -548,6 +548,7 @@ func (s *Server) MigrateRelay(ctx context.Context, req *pb.MigrateRelayRequest) 
 
 func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 	s.Lock()
+	defer s.Unlock()
 	if s.worker != nil {
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
@@ -556,7 +557,6 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		return err
 	}
 	s.worker = w
-	s.Unlock()
 	go func() {
 		s.worker.Start()
 	}()
@@ -577,20 +577,25 @@ func (s *Server) OperateMysqlTask(ctx context.Context, req *pb.MysqlTaskRequest)
 		return resp, nil
 	}
 	if req.Op == pb.WorkerOp_UpdateConfig || req.Op == pb.WorkerOp_StopWorker {
-		s.Lock()
-		if s.worker == nil {
-			resp.Result = false
-			resp.Msg = "Mysql task has not been created, please call CreateMysqlTask"
-			return resp, nil
+		var w *Worker
+		{
+			s.Lock()
+			if s.worker == nil {
+				s.Unlock()
+				resp.Result = false
+				resp.Msg = "Mysql task has not been created, please call CreateMysqlTask"
+				return resp, nil
+			}
+			if cfg.SourceID != s.worker.cfg.SourceID {
+				s.Unlock()
+				resp.Result = false
+				resp.Msg = "stop config has not match the source id of worker, it may be a wrong request"
+				return resp, nil
+			}
+			w = s.worker
+			s.worker = nil
+			s.Unlock()
 		}
-		if cfg.SourceID != s.worker.cfg.SourceID {
-			resp.Result = false
-			resp.Msg = "stop config has not match the source id of worker, it may be a wrong request"
-			return resp, nil
-		}
-		w := s.worker
-		s.worker = nil
-		s.Unlock()
 		w.Close()
 	}
 	if req.Op == pb.WorkerOp_UpdateConfig || req.Op == pb.WorkerOp_StartWorker {
