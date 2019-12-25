@@ -187,9 +187,10 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		return
 	}
 	masterServer.checkFunc = func() (bool, error) {
+		isLeader := s.election.IsLeader()
 		// this would happen when user manually delete the leader key, thus before next campaign success,
 		// there would be no leader available, so we just refuse to service
-		if common.MasterClient() == nil {
+		if !isLeader && common.MasterClient() == nil {
 			return false, errors.New("no leader available, please retry later")
 		}
 		return !s.election.IsLeader(), nil
