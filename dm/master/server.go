@@ -161,9 +161,9 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	// gRPC API server
 	masterServer := &redirectLeaderServer{
 		server: s,
-		checkFunc: func() bool {
+		checkFunc: func() (bool, error) {
 			// Stub func, the election struct is not inited, will init this later.
-			return false
+			return false, nil
 		},
 	}
 	gRPCSvr := func(gs *grpc.Server) { pb.RegisterMasterServer(gs, masterServer) }
@@ -186,8 +186,13 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	if err != nil {
 		return
 	}
-	masterServer.checkFunc = func() bool {
-		return !s.election.IsLeader()
+	masterServer.checkFunc = func() (bool, error) {
+		// this would happen when user manually delete the leader key, thus before next campaign success,
+		// there would be no leader available, so we just refuse to service
+		if common.MasterClient() == nil {
+			return false, errors.New("no leader available, please retry later")
+		}
+		return !s.election.IsLeader(), nil
 	}
 
 	s.closed.Set(false) // the server started now.
@@ -2042,122 +2047,190 @@ func (s *Server) workerArgsExtractor(args ...interface{}) (workerrpc.Client, str
 type redirectLeaderServer struct {
 	server pb.MasterServer
 	// return true if we should redirect to master leader
-	checkFunc func() bool
+	checkFunc func() (bool, error)
 }
 
 func (r *redirectLeaderServer) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.StartTaskResponse, error) {
-	if r.checkFunc() {
+	redirect, err := r.checkFunc()
+	if err != nil {
+		return nil, err
+	}
+	if redirect {
 		return common.MasterClient().StartTask(ctx, req)
 	}
 	return r.server.StartTask(ctx, req)
 }
 func (r *redirectLeaderServer) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*pb.OperateTaskResponse, error) {
-	if r.checkFunc() {
+	redirect, err := r.checkFunc()
+	if err != nil {
+		return nil, err
+	}
+	if redirect {
 		return common.MasterClient().OperateTask(ctx, req)
 	}
 	return r.server.OperateTask(ctx, req)
 }
 
 func (r *redirectLeaderServer) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb.UpdateTaskResponse, error) {
-	if r.checkFunc() {
+	redirect, err := r.checkFunc()
+	if err != nil {
+		return nil, err
+	}
+	if redirect {
 		return common.MasterClient().UpdateTask(ctx, req)
 	}
 	return r.server.UpdateTask(ctx, req)
 }
 
 func (r *redirectLeaderServer) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest) (*pb.QueryStatusListResponse, error) {
-	if r.checkFunc() {
+	redirect, err := r.checkFunc()
+	if err != nil {
+		return nil, err
+	}
+	if redirect {
 		return common.MasterClient().QueryStatus(ctx, req)
 	}
 	return r.server.QueryStatus(ctx, req)
 }
 
 func (r *redirectLeaderServer) QueryError(ctx context.Context, req *pb.QueryErrorListRequest) (*pb.QueryErrorListResponse, error) {
-	if r.checkFunc() {
+	redirect, err := r.checkFunc()
+	if err != nil {
+		return nil, err
+	}
+	if redirect {
 		return common.MasterClient().QueryError(ctx, req)
 	}
 	return r.server.QueryError(ctx, req)
 }
 
 func (r *redirectLeaderServer) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) (*pb.ShowDDLLocksResponse, error) {
-	if r.checkFunc() {
+	redirect, err := r.checkFunc()
+	if err != nil {
+		return nil, err
+	}
+	if redirect {
 		return common.MasterClient().ShowDDLLocks(ctx, req)
 	}
 	return r.server.ShowDDLLocks(ctx, req)
 }
 
 func (r *redirectLeaderServer) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest) (*pb.UnlockDDLLockResponse, error) {
-	if r.checkFunc() {
+	redirect, err := r.checkFunc()
+	if err != nil {
+		return nil, err
+	}
+	if redirect {
 		return common.MasterClient().UnlockDDLLock(ctx, req)
 	}
 	return r.server.UnlockDDLLock(ctx, req)
 }
 
 func (r *redirectLeaderServer) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterConfigRequest) (*pb.UpdateMasterConfigResponse, error) {
-	if r.checkFunc() {
+	redirect, err := r.checkFunc()
+	if err != nil {
+		return nil, err
+	}
+	if redirect {
 		return common.MasterClient().UpdateMasterConfig(ctx, req)
 	}
 	return r.server.UpdateMasterConfig(ctx, req)
 }
 
 func (r *redirectLeaderServer) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWorkerRelayConfigRequest) (*pb.CommonWorkerResponse, error) {
-	if r.checkFunc() {
+	redirect, err := r.checkFunc()
+	if err != nil {
+		return nil, err
+	}
+	if redirect {
 		return common.MasterClient().UpdateWorkerRelayConfig(ctx, req)
 	}
 	return r.server.UpdateWorkerRelayConfig(ctx, req)
 }
 
 func (r *redirectLeaderServer) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLLockRequest) (*pb.BreakWorkerDDLLockResponse, error) {
-	if r.checkFunc() {
+	redirect, err := r.checkFunc()
+	if err != nil {
+		return nil, err
+	}
+	if redirect {
 		return common.MasterClient().BreakWorkerDDLLock(ctx, req)
 	}
 	return r.server.BreakWorkerDDLLock(ctx, req)
 }
 
 func (r *redirectLeaderServer) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb.HandleSQLsResponse, error) {
-	if r.checkFunc() {
+	redirect, err := r.checkFunc()
+	if err != nil {
+		return nil, err
+	}
+	if redirect {
 		return common.MasterClient().HandleSQLs(ctx, req)
 	}
 	return r.server.HandleSQLs(ctx, req)
 }
 
 func (r *redirectLeaderServer) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWorkerRelayMasterRequest) (*pb.SwitchWorkerRelayMasterResponse, error) {
-	if r.checkFunc() {
+	redirect, err := r.checkFunc()
+	if err != nil {
+		return nil, err
+	}
+	if redirect {
 		return common.MasterClient().SwitchWorkerRelayMaster(ctx, req)
 	}
 	return r.server.SwitchWorkerRelayMaster(ctx, req)
 }
 
 func (r *redirectLeaderServer) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWorkerRelayRequest) (*pb.OperateWorkerRelayResponse, error) {
-	if r.checkFunc() {
+	redirect, err := r.checkFunc()
+	if err != nil {
+		return nil, err
+	}
+	if redirect {
 		return common.MasterClient().OperateWorkerRelayTask(ctx, req)
 	}
 	return r.server.OperateWorkerRelayTask(ctx, req)
 }
 
 func (r *redirectLeaderServer) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayRequest) (*pb.PurgeWorkerRelayResponse, error) {
-	if r.checkFunc() {
+	redirect, err := r.checkFunc()
+	if err != nil {
+		return nil, err
+	}
+	if redirect {
 		return common.MasterClient().PurgeWorkerRelay(ctx, req)
 	}
 	return r.server.PurgeWorkerRelay(ctx, req)
 }
 
 func (r *redirectLeaderServer) RefreshWorkerTasks(ctx context.Context, req *pb.RefreshWorkerTasksRequest) (*pb.RefreshWorkerTasksResponse, error) {
-	if r.checkFunc() {
+	redirect, err := r.checkFunc()
+	if err != nil {
+		return nil, err
+	}
+	if redirect {
 		return common.MasterClient().RefreshWorkerTasks(ctx, req)
 	}
 	return r.server.RefreshWorkerTasks(ctx, req)
 }
 
 func (r *redirectLeaderServer) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRelayRequest) (*pb.CommonWorkerResponse, error) {
-	if r.checkFunc() {
+	redirect, err := r.checkFunc()
+	if err != nil {
+		return nil, err
+	}
+	if redirect {
 		return common.MasterClient().MigrateWorkerRelay(ctx, req)
 	}
 	return r.server.MigrateWorkerRelay(ctx, req)
 }
 
 func (r *redirectLeaderServer) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.CheckTaskResponse, error) {
-	if r.checkFunc() {
+	redirect, err := r.checkFunc()
+	if err != nil {
+		return nil, err
+	}
+	if redirect {
 		return common.MasterClient().CheckTask(ctx, req)
 	}
 	return r.server.CheckTask(ctx, req)

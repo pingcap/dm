@@ -104,6 +104,9 @@ func NewElection(
 	for {
 		_, meta, err := e.LeaderInfo(ctx)
 		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+		if meta == nil {
 			// fake set leader here
 			log.L().Warn("seems there is no leader now, try campaign leader.")
 			err := e.tryCampaignLeader(ctx, session.Lease())
@@ -112,7 +115,7 @@ func NewElection(
 			}
 		} else {
 			if meta.ID == e.meta.ID {
-				e.isLeader.Set(true)
+				e.toBeLeader()
 			} else {
 				e.isLeader.Set(false)
 				err = e.updateLeader(meta)
@@ -150,7 +153,7 @@ func (e *Election) LeaderInfo(ctx context.Context) (string, *NodeMeta, error) {
 		return "", nil, terror.ErrElectionGetLeaderIDFail.Delegate(err)
 	} else if len(resp.Kvs) == 0 {
 		// no leader currently elected
-		return "", nil, terror.ErrElectionGetLeaderIDFail.Delegate(concurrency.ErrElectionNoLeader)
+		return "", nil, nil
 	}
 	var meta NodeMeta
 	err = json.Unmarshal(resp.Kvs[0].Value, &meta)
@@ -237,6 +240,11 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 				e.l.Warn("fail to get leader ID", zap.Error(err))
 				continue
 			}
+			// no leader available, leader key maybe delete, continue campaign
+			if leaderMeta == nil {
+				continue
+			}
+
 			if leaderMeta.ID != e.meta.ID {
 				e.l.Info("current member is not the leader", zap.String("current member", e.meta.ID), zap.String("leader", leaderMeta.ID))
 				// leader change, must update lead info and gRPC client to leader
@@ -247,6 +255,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 							break
 						}
 						log.L().Error("update leader failed", zap.Stringer("leader", leaderMeta))
+						time.Sleep(200 * time.Millisecond)
 					}
 				}
 
@@ -259,7 +268,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		e.watchLeader(ctx, session, e.key)
 		_, leaderMeta, err := e.LeaderInfo(ctx)
 		if err != nil {
-			e.ech <- err
+			log.L().Warn("seems no leader is available, ")
 		} else {
 			if err := e.retireLeader(leaderMeta); err != nil {
 				e.ech <- err
@@ -296,8 +305,12 @@ func (e *Election) retireLeader(leaderMeta *NodeMeta) error {
 }
 
 func (e *Election) updateLeader(leaderMeta *NodeMeta) error {
-	e.leaderMeta.Store(*leaderMeta)
-	return common.InitClient([]string{leaderMeta.Address})
+	e.leaderMeta.Store(leaderMeta)
+	if leaderMeta != nil {
+		return common.InitClient([]string{leaderMeta.Address})
+	}
+	common.ResetMasterClient()
+	return nil
 }
 
 func (e *Election) watchLeader(ctx context.Context, session *concurrency.Session, key string) {

@@ -33,7 +33,11 @@ func (s *Server) electionNotify(ctx context.Context) {
 			} else {
 				_, leaderMeta, err2 := s.election.LeaderInfo(ctx)
 				if err2 == nil {
-					log.L().Info("current member retire from the leader", zap.String("leader", leaderMeta.ID), zap.String("current member", s.cfg.Name))
+					if leaderMeta != nil {
+						log.L().Info("current member retire from the leader", zap.String("leader", leaderMeta.ID), zap.String("current member", s.cfg.Name))
+					} else {
+						log.L().Warn("current member retire from leader, but not new leader elected", zap.String("current member", s.cfg.Name))
+					}
 				} else {
 					log.L().Warn("get leader info", zap.Error(err2))
 				}

@@ -33,6 +33,11 @@ func InitClient(addrs []string) error {
 	return nil
 }
 
+// ResetMasterClient reset masterClient when no master is available
+func ResetMasterClient() {
+	masterClient = nil
+}
+
 // MasterClient returns dm-master client
 func MasterClient() pb.MasterClient {
 	return masterClient
