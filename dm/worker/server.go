@@ -17,6 +17,7 @@ import (
 	"context"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -322,6 +323,11 @@ func (s *Server) FetchDDLInfo(stream pb.Worker_FetchDDLInfoServer) error {
 			// if error occurred when recording DDLLockInfo, log an error
 			// user can handle this case using dmctl
 			log.L().Error("fail to record DDLLockInfo", zap.String("request", "FetchDDLInfo"), zap.Stringer("ddl lock info", in), zap.Error(err))
+			if strings.Contains(err.Error(), "already exists") {
+				log.L().Info("error contains already exists", zap.String("error", err.Error()))
+				return nil
+			}
+			log.L().Info("error dosen't contains already exists", zap.String("error", err.Error()))
 		}
 	}
 }

@@ -19,6 +19,8 @@ import (
 	"strings"
 
 	"github.com/pingcap/dm/pkg/terror"
+
+	"github.com/siddontang/go-mysql/mysql"
 )
 
 const (
@@ -95,4 +97,35 @@ func ConstructFilename(baseName, seq string) string {
 // ConstructFilenameWithUUIDSuffix constructs a binlog filename with UUID suffix.
 func ConstructFilenameWithUUIDSuffix(originalName Filename, uuidSuffix string) string {
 	return fmt.Sprintf("%s%s%s%s%s", originalName.BaseName, posUUIDSuffixSeparator, uuidSuffix, binlogFilenameSep, originalName.Seq)
+}
+
+// AnalyzeFilenameWithUUIDSuffix analyzes a binlog filename with UUID suffix.
+func AnalyzeFilenameWithUUIDSuffix(filename string) (baseName, uuidSuffix, seq string, err error) {
+	items1 := strings.Split(filename, posUUIDSuffixSeparator)
+	if len(items1) != 2 {
+		return "", "", "", terror.ErrBinlogInvalidFilenameWithUUIDSuffix.Generate(filename)
+	}
+
+	baseName = items1[0]
+	items2 := strings.Split(items1[1], binlogFilenameSep)
+
+	if len(items2) != 2 {
+		return "", "", "", terror.ErrBinlogInvalidFilenameWithUUIDSuffix.Generate(filename)
+	}
+	uuidSuffix = items2[0]
+	seq = items2[1]
+	return baseName, uuidSuffix, seq, nil
+}
+
+// AdjustFilenameWithUUIDSuffixInPos adjusts the filename with uuid suffix in mysql position
+// for example: mysql-bin|000001.000002 -> mysql-bin.000002
+func AdjustFilenameWithUUIDSuffixInPos(pos mysql.Position) mysql.Position {
+	baseName, _, seq, err := AnalyzeFilenameWithUUIDSuffix(pos.Name)
+	if err != nil {
+		// this filename without uuid suffix
+		return pos
+	}
+
+	pos.Name = fmt.Sprintf("%s%s%s", baseName, binlogFilenameSep, seq)
+	return pos
 }

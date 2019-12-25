@@ -24,6 +24,7 @@ import (
 	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/pkg/binlog"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
@@ -83,7 +84,9 @@ func (r *remoteBinlogReader) generateStreamer(pos mysql.Position) (streamer.Stre
 		return nil, terror.ErrSyncerUnitRemoteSteamerWithGTID.Generate()
 	}
 
-	streamer, err := r.reader.StartSync(pos)
+	adjustedPos := binlog.AdjustFilenameWithUUIDSuffixInPos(pos)
+
+	streamer, err := r.reader.StartSync(adjustedPos)
 	return streamer, terror.ErrSyncerUnitRemoteSteamerStartSync.Delegate(err)
 }
 
@@ -149,11 +152,13 @@ func (c *StreamerController) ResetReplicationSyncer(tctx tcontext.Context) {
 
 	// re-create new streamerProducer
 	// meetError is true means meets error when get binlog event, in this case use remote binlog as default
-	if c.meetError || c.binlogType == RemoteBinlog {
+	//if c.meetError || c.binlogType == RemoteBinlog {
+	if c.binlogType == RemoteBinlog {
 		syncCfg := c.syncCfg
 
 		// if binlog type is local, means relay already use the server id, so need change to a new server id
 		if c.binlogType == LocalBinlog {
+			tctx.L().Info("", zap.Reflect("fromDB", c.fromDB))
 			randomServerID, err := utils.GetRandomServerID(tctx.Context(), c.fromDB.BaseDB.DB)
 			if err != nil {
 				// should never happened unless the master has too many slave
@@ -194,6 +199,7 @@ func (c *StreamerController) GetEvent(tctx tcontext.Context, syncedPosition mysq
 	})
 
 	for i := 0; i < maxRetryCount; i++ {
+		beginT := time.Now()
 		ctx, cancel := context.WithTimeout(tctx.Context(), eventTimeout)
 		event, err = c.streamer.GetEvent(ctx)
 		cancel()
@@ -201,14 +207,14 @@ func (c *StreamerController) GetEvent(tctx tcontext.Context, syncedPosition mysq
 			return event, nil
 		}
 
-		c.meetError = true
 		if err == context.Canceled {
 			tctx.L().Info("binlog replication main routine quit(context canceled)!", zap.Stringer("last position", syncedPosition))
 			return nil, err
 		} else if err == context.DeadlineExceeded {
-			tctx.L().Info("deadline exceeded when fetching binlog event")
+			tctx.L().Info("deadline exceeded when fetching binlog event", zap.Duration("duration", time.Since(beginT)), zap.Reflect("syncedPosition", syncedPosition))
 		} else {
 			tctx.L().Error("get event meet error", zap.Error(err))
+			c.meetError = true
 		}
 
 		if c.haveUnfetchedBinlog(tctx, syncedPosition) {
@@ -288,7 +294,9 @@ func (c *StreamerController) haveUnfetchedBinlog(logtctx tcontext.Context, synce
 	// Currently, syncer doesn't handle Format_desc and Previous_gtids events. When binlog rotate to new file with only two events like above,
 	// syncer won't save pos to 194. Actually it save pos 4 to meta file. So We got a experience value of 194 - 4 = 190.
 	// If (mpos.Pos - spos.Pos) > 190, we could say that syncer is not up-to-date.
-	return utils.CompareBinlogPos(masterPos, syncedPosition, 190) == 1
+	logtctx.L().Info("", zap.Reflect("master pos", masterPos), zap.Reflect("synced Position", syncedPosition))
+	//return utils.CompareBinlogPos(masterPos, syncedPosition, 190) == 1
+	return false
 }
 
 func (c *StreamerController) closeBinlogSyncer(logtctx tcontext.Context, binlogSyncer *replication.BinlogSyncer) error {

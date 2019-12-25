@@ -1130,7 +1130,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			latestOp = null
 		}
 		if e == nil {
-			e, err = s.streamerController.GetEvent(*tctx, s.checkpoint.GlobalPoint())
+			e, err = s.streamerController.GetEvent(*tctx, lastPos)
 			if err != nil {
 				if err == context.Canceled {
 					return nil
@@ -2066,6 +2066,7 @@ func (s *Syncer) stopSync() {
 
 	if s.streamerController != nil {
 		s.streamerController.Close(*s.tctx)
+		s.streamerController = nil
 	}
 }
 
