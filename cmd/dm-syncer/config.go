@@ -308,12 +308,12 @@ func (oc *oldConfig) convertToNewFormat() (*config.SubTaskConfig, error) {
 		return nil, errors.Trace(err)
 	}
 	newTask := &config.SubTaskConfig{
-		Name: "dm-syncer",
-		SourceID : "dm-syncer-from-old-config",
+		Name:             "dm-syncer",
+		SourceID:         "dm-syncer-from-old-config",
 		DisableHeartbeat: true,
-		Mode: config.ModeIncrement,
-		BinlogType: "remote",
-		Meta: meta,
+		Mode:             config.ModeIncrement,
+		BinlogType:       "remote",
+		Meta:             meta,
 
 		LogLevel:  oc.LogLevel,
 		LogFile:   oc.LogFile,
