@@ -954,7 +954,7 @@ var (
 	ErrSchemaTrackerCannotGetTable     = New(codeSchemaTrackerCannotGetTable, ClassSchemaTracker, ScopeInternal, LevelHigh, "cannot get table info for `%s`.`%s` from schema tracker")
 	ErrSchemaTrackerCannotExecDDL      = New(codeSchemaTrackerCannotExecDDL, ClassSchemaTracker, ScopeInternal, LevelHigh, "cannot track DDL: %s")
 
-	ErrSchemaTrackerCannotGetDownstreamTable = New(
+	ErrSchemaTrackerCannotFetchDownstreamTable = New(
 		codeSchemaTrackerCannotFetchDownstreamTable, ClassSchemaTracker, ScopeDownstream, LevelMedium,
 		"cannot fetch downstream table schema of `%s`.`%s` to initialize upstream schema `%s`.`%s` in schema tracker")
 	ErrSchemaTrackerCannotParseDownstreamTable = New(

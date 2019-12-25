@@ -411,5 +411,5 @@ ErrSchemaTrackerCannotCreateTable,[code=44003:class=schema-tracker:scope=interna
 ErrSchemaTrackerCannotSerialize,[code=44004:class=schema-tracker:scope=internal:level=high],"failed to serialize table info for `%s`.`%s`"
 ErrSchemaTrackerCannotGetTable,[code=44005:class=schema-tracker:scope=internal:level=high],"cannot get table info for `%s`.`%s` from schema tracker"
 ErrSchemaTrackerCannotExecDDL,[code=44006:class=schema-tracker:scope=internal:level=high],"cannot track DDL: %s"
-ErrSchemaTrackerCannotGetDownstreamTable,[code=44007:class=schema-tracker:scope=downstream:level=medium],"cannot fetch downstream table schema of `%s`.`%s` to initialize upstream schema `%s`.`%s` in schema tracker"
+ErrSchemaTrackerCannotFetchDownstreamTable,[code=44007:class=schema-tracker:scope=downstream:level=medium],"cannot fetch downstream table schema of `%s`.`%s` to initialize upstream schema `%s`.`%s` in schema tracker"
 ErrSchemaTrackerCannotParseDownstreamTable,[code=44008:class=schema-tracker:scope=internal:level=high],"cannot parse downstream table schema of `%s`.`%s` to initialize upstream schema `%s`.`%s` in schema tracker"

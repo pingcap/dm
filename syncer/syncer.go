@@ -662,7 +662,7 @@ func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable str
 	// (and get rid of ddlDBConn).
 	rows, err := s.ddlDBConn.querySQL(s.tctx, "SHOW CREATE TABLE "+dbutil.TableName(renamedSchema, renamedTable))
 	if err != nil {
-		return nil, terror.ErrSchemaTrackerCannotGetDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
+		return nil, terror.ErrSchemaTrackerCannotFetchDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
 	}
 	defer rows.Close()
 
@@ -674,7 +674,8 @@ func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable str
 		}
 
 		// rename the table back to original.
-		createNode, err := p.ParseOneStmt(createSQL, "", "")
+		var createNode ast.StmtNode
+		createNode, err = p.ParseOneStmt(createSQL, "", "")
 		if err != nil {
 			return nil, terror.ErrSchemaTrackerCannotParseDownstreamTable.Delegate(err, renamedSchema, renamedTable, origSchema, origTable)
 		}
@@ -696,7 +697,7 @@ func (s *Syncer) getTable(origSchema, origTable, renamedSchema, renamedTable str
 			zap.String("renamedTable", renamedTable),
 			zap.String("sql", newCreateSQL),
 		)
-		if err := s.schemaTracker.Exec(ctx, origSchema, newCreateSQL); err != nil {
+		if err = s.schemaTracker.Exec(ctx, origSchema, newCreateSQL); err != nil {
 			return nil, terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, origSchema, origTable)
 		}
 	}
