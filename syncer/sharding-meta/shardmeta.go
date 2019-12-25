@@ -20,6 +20,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -135,7 +136,7 @@ func (meta *ShardingMeta) checkItemExists(item *DDLItem) (int, bool) {
 		return 0, false
 	}
 	for idx, ddlItem := range source.Items {
-		if item.FirstPos.Compare(ddlItem.FirstPos) == 0 {
+		if binlog.ComparePosition(item.FirstPos, ddlItem.FirstPos) == 0 {
 			return idx, true
 		}
 	}

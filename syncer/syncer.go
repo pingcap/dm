@@ -420,7 +420,7 @@ func (s *Syncer) initShardingGroups() error {
 // IsFreshTask implements Unit.IsFreshTask
 func (s *Syncer) IsFreshTask(ctx context.Context) (bool, error) {
 	globalPoint := s.checkpoint.GlobalPoint()
-	return globalPoint.Compare(minCheckpoint) <= 0, nil
+	return binlog.ComparePosition(globalPoint, minCheckpoint) <= 0, nil
 }
 
 func (s *Syncer) reset() {
@@ -555,7 +555,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	prePos := s.checkpoint.GlobalPoint()
 	s.checkpoint.Rollback()
 	currPos := s.checkpoint.GlobalPoint()
-	if prePos.Compare(currPos) != 0 {
+	if binlog.ComparePosition(prePos, currPos) != 0 {
 		s.tctx.L().Warn("something wrong with rollback global checkpoint", zap.Stringer("previous position", prePos), zap.Stringer("current position", currPos))
 	}
 
@@ -1047,6 +1047,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	s.lastTime.t = s.start
 	s.lastTime.Unlock()
 
+	tryReSync := true
+
 	// safeMode makes syncer reentrant.
 	// we make each operator reentrant to make syncer reentrant.
 	// `replace` and `delete` are naturally reentrant.
@@ -1068,12 +1070,13 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	//    * compare last pos with current binlog's pos to determine whether re-sync completed
 	// 6. use the global streamer to continue the syncing
 	var (
-		shardingReSyncCh   = make(chan *ShardingReSync, 10)
-		shardingReSync     *ShardingReSync
-		savedGlobalLastPos mysql.Position
-		latestOp           opType // latest job operation tp
-		traceSource        = fmt.Sprintf("%s.syncer.%s", s.cfg.SourceID, s.cfg.Name)
-		traceID            string
+		shardingReSyncCh    = make(chan *ShardingReSync, 10)
+		shardingReSync      *ShardingReSync
+		savedGlobalLastPos  mysql.Position
+		latestOp            opType // latest job operation tp
+		eventTimeoutCounter time.Duration
+		traceSource         = fmt.Sprintf("%s.syncer.%s", s.cfg.SourceID, s.cfg.Name)
+		traceID             string
 	)
 
 	closeShardingResync := func() error {
@@ -1130,23 +1133,53 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			latestOp = null
 		}
 		if e == nil {
-			e, err = s.streamerController.GetEvent(*tctx, lastPos)
-			if err != nil {
-				if err == context.Canceled {
-					return nil
-				}
-				return err
-			}
-
-			if e == nil {
-				continue
-			}
+			e, err = s.streamerController.GetEvent(*tctx)
 		}
 
 		startTime := time.Now()
+		if err == context.Canceled {
+			s.tctx.L().Info("binlog replication main routine quit(context canceled)!", zap.Stringer("last position", lastPos))
+			return nil
+		} else if err == context.DeadlineExceeded {
+			s.tctx.L().Info("deadline exceeded when fetching binlog event")
+			eventTimeoutCounter += eventTimeout
+			if eventTimeoutCounter < maxEventTimeout {
+				err = s.flushJobs()
+				if err != nil {
+					return err
+				}
+				continue
+			}
+
+			eventTimeoutCounter = 0
+			if s.needResync() {
+				s.tctx.L().Info("timeout when fetching binlog event, there must be some problems with replica connection, try to re-connect")
+				err = s.streamerController.ReopenWithRetry(*tctx, lastPos)
+				if err != nil {
+					return err
+				}
+			}
+			continue
+		}
+
+		if err != nil {
+			s.tctx.L().Error("fail to fetch binlog", log.ShortError(err))
+			// try to re-sync in gtid mode
+			if tryReSync && s.cfg.EnableGTID && isBinlogPurgedError(err) && s.cfg.AutoFixGTID {
+				time.Sleep(retryTimeout)
+				err = s.reSyncBinlog(*tctx, lastPos)
+				if err != nil {
+					return err
+				}
+				tryReSync = false
+				continue
+			}
+
+			return err
+		}
 
 		// get binlog event, reset tryReSync, so we can re-sync binlog while syncer meets errors next time
-		tryReSync := true
+		tryReSync = true
 		binlogPosGauge.WithLabelValues("syncer", s.cfg.Name).Set(float64(e.Header.LogPos))
 		index, err := binlog.GetFilenameIndex(lastPos.Name)
 		if err != nil {
@@ -1159,7 +1192,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		failpoint.Inject("ProcessBinlogSlowDown", nil)
 
 		s.tctx.L().Debug("receive binlog event", zap.Reflect("header", e.Header))
-		ec := eventContext{
+		ec := &eventContext{
 			tctx:                tctx,
 			header:              e.Header,
 			currentPos:          &currentPos,
@@ -1175,29 +1208,32 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			parser2:             parser2,
 			shardingReSyncCh:    &shardingReSyncCh,
 		}
+		s.tctx.L().Info("before handle Event", zap.Reflect("current pos", currentPos), zap.Reflect("ec.currentpos", ec.currentPos))
 		switch ev := e.Event.(type) {
 		case *replication.RotateEvent:
 			err = s.handleRotateEvent(ev, ec)
 			if err != nil {
 				return terror.Annotatef(err, "current pos %s", currentPos)
 			}
+			s.tctx.L().Info("after handleRotateEvent", zap.Reflect("current pos", currentPos), zap.Reflect("ec.currentpos", ec.currentPos))
 		case *replication.RowsEvent:
-			err = s.handleRowsEvent(ev, ec)
+			err = s.handleRowsEvent(ev, *ec)
 			if err != nil {
 				return terror.Annotatef(err, "current pos %s", currentPos)
 			}
 
+			s.tctx.L().Info("after handleRowsEvent", zap.Reflect("current pos", currentPos), zap.Reflect("ec.currentpos", ec.currentPos))
 		case *replication.QueryEvent:
-			err = s.handleQueryEvent(ev, ec)
+			err = s.handleQueryEvent(ev, *ec)
 			if err != nil {
 				return terror.Annotatef(err, "current pos %s", currentPos)
 			}
-
+			s.tctx.L().Info("after handleQueryEvent", zap.Reflect("current pos", currentPos), zap.Reflect("ec.currentpos", ec.currentPos))
 		case *replication.XIDEvent:
 			if shardingReSync != nil {
 				shardingReSync.currPos.Pos = e.Header.LogPos
 				lastPos = shardingReSync.currPos
-				if shardingReSync.currPos.Compare(shardingReSync.latestPos) >= 0 {
+				if binlog.ComparePosition(shardingReSync.currPos, shardingReSync.latestPos) >= 0 {
 					s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "XID"), zap.Reflect("re-shard", shardingReSync))
 					err = closeShardingResync()
 					if err != nil {
@@ -1217,6 +1253,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			if err != nil {
 				return terror.Annotatef(err, "current pos %s", currentPos)
 			}
+			s.tctx.L().Info("after handleXIDEvent", zap.Reflect("current pos", currentPos), zap.Reflect("ec.currentpos", ec.currentPos))
 		}
 	}
 }
@@ -1241,21 +1278,22 @@ type eventContext struct {
 // TODO: Further split into smaller functions and group common arguments into
 // a context struct.
 
-func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext) error {
+func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec *eventContext) error {
+	s.tctx.L().Info("handleRotateEvent", zap.String("nextLogName", string(ev.NextLogName)))
 	*ec.currentPos = mysql.Position{
 		Name: string(ev.NextLogName),
 		Pos:  uint32(ev.Position),
 	}
-	if ec.currentPos.Name > ec.lastPos.Name {
+	if binlog.ComparePosition(*ec.currentPos, *ec.lastPos) > 0 {
 		*ec.lastPos = *ec.currentPos
 	}
 
 	if ec.shardingReSync != nil {
-		if ec.currentPos.Compare(ec.shardingReSync.currPos) == 1 {
+		if binlog.ComparePosition(*ec.currentPos, ec.shardingReSync.currPos) == 1 {
 			ec.shardingReSync.currPos = *ec.currentPos
 		}
 
-		if ec.shardingReSync.currPos.Compare(ec.shardingReSync.latestPos) >= 0 {
+		if binlog.ComparePosition(ec.shardingReSync.currPos, ec.shardingReSync.latestPos) >= 0 {
 			s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "rotate"), zap.Reflect("re-shard", ec.shardingReSync))
 			err := ec.closeShardingResync()
 			if err != nil {
@@ -1292,7 +1330,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 	if ec.shardingReSync != nil {
 		ec.shardingReSync.currPos.Pos = ec.header.LogPos
-		if ec.shardingReSync.currPos.Compare(ec.shardingReSync.latestPos) >= 0 {
+		if binlog.ComparePosition(ec.shardingReSync.currPos, ec.shardingReSync.latestPos) >= 0 {
 			s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "row"), zap.Reflect("re-shard", ec.shardingReSync))
 			return ec.closeShardingResync()
 		}
@@ -1305,7 +1343,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 	// DML position before table checkpoint, ignore it
 	if !s.checkpoint.IsNewerTablePoint(originSchema, originTable, *ec.currentPos) {
-		s.tctx.L().Debug("ignore obsolete event that is old than table checkpoint", zap.String("event", "row"), log.WrapStringerField("position", ec.currentPos), zap.String("origin schema", originSchema), zap.String("origin table", originTable))
+		s.tctx.L().Info("ignore obsolete event that is old than table checkpoint", zap.String("event", "row"), log.WrapStringerField("position", ec.currentPos), zap.String("origin schema", originSchema), zap.String("origin table", originTable))
 		return nil
 	}
 
@@ -1461,7 +1499,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 	if ec.shardingReSync != nil {
 		ec.shardingReSync.currPos.Pos = ec.header.LogPos
-		if ec.shardingReSync.currPos.Compare(ec.shardingReSync.latestPos) >= 0 {
+		if binlog.ComparePosition(ec.shardingReSync.currPos, ec.shardingReSync.latestPos) >= 0 {
 			s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "query"), zap.String("statement", sql), zap.Reflect("re-shard", ec.shardingReSync))
 			err2 := ec.closeShardingResync()
 			if err2 != nil {
@@ -1998,6 +2036,15 @@ func (s *Syncer) flushJobs() error {
 	s.tctx.L().Info("flush all jobs", zap.Stringer("global checkpoint", s.checkpoint))
 	job := newFlushJob()
 	return s.addJobFunc(job)
+}
+
+func (s *Syncer) reSyncBinlog(tctx tcontext.Context, pos mysql.Position) error {
+	err := s.retrySyncGTIDs()
+	if err != nil {
+		return err
+	}
+	// close still running sync
+	return s.streamerController.ReopenWithRetry(tctx, pos)
 }
 
 func (s *Syncer) renameShardingSchema(schema, table string) (string, string) {

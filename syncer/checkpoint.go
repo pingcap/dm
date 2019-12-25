@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
@@ -68,7 +69,7 @@ func newBinlogPoint(pos mysql.Position, flushedPos mysql.Position) *binlogPoint 
 func (b *binlogPoint) save(pos mysql.Position) error {
 	b.Lock()
 	defer b.Unlock()
-	if pos.Compare(b.Position) < 0 {
+	if binlog.ComparePosition(pos, b.Position) < 0 {
 		// support to save equal pos, but not older pos
 		return terror.ErrCheckpointSaveInvalidPos.Generate(pos, b.Position)
 	}
@@ -91,7 +92,7 @@ func (b *binlogPoint) rollback() {
 func (b *binlogPoint) outOfDate() bool {
 	b.RLock()
 	defer b.RUnlock()
-	return b.Position.Compare(b.flushedPos) > 0
+	return binlog.ComparePosition(b.Position, b.flushedPos) > 0
 }
 
 // MySQLPos returns point as mysql.Position
@@ -278,7 +279,7 @@ func (cp *RemoteCheckPoint) SaveTablePoint(sourceSchema, sourceTable string, pos
 
 // saveTablePoint saves single table's checkpoint without mutex.Lock
 func (cp *RemoteCheckPoint) saveTablePoint(sourceSchema, sourceTable string, pos mysql.Position) {
-	if cp.globalPoint.Compare(pos) > 0 {
+	if binlog.ComparePosition(cp.globalPoint.Position, pos) > 0 {
 		panic(fmt.Sprintf("table checkpoint %+v less than global checkpoint %+v", pos, cp.globalPoint))
 	}
 
@@ -337,7 +338,9 @@ func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, 
 		return true
 	}
 	oldPos := point.MySQLPos()
-	return pos.Compare(oldPos) > 0
+
+	cp.logCtx.L().Info("IsNewerTablePoint", zap.Reflect("old pos", oldPos), zap.Reflect("pos", pos))
+	return binlog.ComparePosition(pos, oldPos) > 0
 }
 
 // SaveGlobalPoint implements CheckPoint.SaveGlobalPoint
@@ -527,7 +530,7 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context) error {
 			Pos:  binlogPos,
 		}
 		if isGlobal {
-			if pos.Compare(minCheckpoint) > 0 {
+			if binlog.ComparePosition(pos, minCheckpoint) > 0 {
 				cp.globalPoint = newBinlogPoint(pos, pos)
 				cp.logCtx.L().Info("fetch global checkpoint from DB", log.WrapStringerField("global checkpoint", cp.globalPoint))
 			}

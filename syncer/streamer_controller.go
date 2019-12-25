@@ -84,8 +84,9 @@ func (r *remoteBinlogReader) generateStreamer(pos mysql.Position) (streamer.Stre
 		return nil, terror.ErrSyncerUnitRemoteSteamerWithGTID.Generate()
 	}
 
-	adjustedPos := binlog.AdjustFilenameWithUUIDSuffixInPos(pos)
+	adjustedPos := binlog.AdjustPosition(pos)
 
+	r.tctx.L().Info("generateStreamer", zap.Reflect("old pos", pos), zap.Reflect("new pos", adjustedPos))
 	streamer, err := r.reader.StartSync(adjustedPos)
 	return streamer, terror.ErrSyncerUnitRemoteSteamerStartSync.Delegate(err)
 }
@@ -114,6 +115,8 @@ type StreamerController struct {
 	meetError bool
 
 	fromDB *UpStreamConn
+
+	changed bool
 }
 
 // NewStreamerController creates a new streamer controller
@@ -152,8 +155,8 @@ func (c *StreamerController) ResetReplicationSyncer(tctx tcontext.Context) {
 
 	// re-create new streamerProducer
 	// meetError is true means meets error when get binlog event, in this case use remote binlog as default
-	//if c.meetError || c.binlogType == RemoteBinlog {
-	if c.binlogType == RemoteBinlog {
+	if c.meetError || c.binlogType == RemoteBinlog {
+		//if c.binlogType == RemoteBinlog {
 		syncCfg := c.syncCfg
 
 		// if binlog type is local, means relay already use the server id, so need change to a new server id
@@ -167,6 +170,10 @@ func (c *StreamerController) ResetReplicationSyncer(tctx tcontext.Context) {
 				syncCfg.ServerID = randomServerID
 			}
 		}
+
+		tctx.L().Info("ResetReplicationSyncer use remote binlog reader")
+
+		c.changed = true
 
 		c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(syncCfg), &tctx, false}
 	} else {
@@ -190,48 +197,30 @@ func (c *StreamerController) RedirectStreamer(tctx tcontext.Context, pos mysql.P
 }
 
 // GetEvent returns binlog event
-func (c *StreamerController) GetEvent(tctx tcontext.Context, syncedPosition mysql.Position) (event *replication.BinlogEvent, err error) {
+func (c *StreamerController) GetEvent(tctx tcontext.Context) (event *replication.BinlogEvent, err error) {
 	failpoint.Inject("SyncerEventTimeout", func(val failpoint.Value) {
 		if seconds, ok := val.(int); ok {
 			eventTimeout = time.Duration(seconds) * time.Second
 			tctx.L().Info("set fetch binlog event timeout", zap.String("failpoint", "SyncerEventTimeout"), zap.Int("value", seconds))
 		}
 	})
-
-	for i := 0; i < maxRetryCount; i++ {
-		beginT := time.Now()
-		ctx, cancel := context.WithTimeout(tctx.Context(), eventTimeout)
-		event, err = c.streamer.GetEvent(ctx)
-		cancel()
-		if err == nil {
-			return event, nil
+	ctx, cancel := context.WithTimeout(tctx.Context(), eventTimeout)
+	event, err = c.streamer.GetEvent(ctx)
+	cancel()
+	if err == nil {
+		if c.changed {
+			tctx.L().Info("get event", zap.Reflect("event", event))
 		}
-
-		if err == context.Canceled {
-			tctx.L().Info("binlog replication main routine quit(context canceled)!", zap.Stringer("last position", syncedPosition))
-			return nil, err
-		} else if err == context.DeadlineExceeded {
-			tctx.L().Info("deadline exceeded when fetching binlog event", zap.Duration("duration", time.Since(beginT)), zap.Reflect("syncedPosition", syncedPosition))
-		} else {
-			tctx.L().Error("get event meet error", zap.Error(err))
-			c.meetError = true
-		}
-
-		if c.haveUnfetchedBinlog(tctx, syncedPosition) {
-			tctx.L().Info("timeout when fetching binlog event, there must be some problems with replica connection, try to re-connect")
-			err = c.reopenWithRetry(tctx, syncedPosition)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, nil
-		}
+		return event, nil
 	}
 
-	return event, err
+	c.meetError = true
+
+	return nil, err
 }
 
-func (c *StreamerController) reopenWithRetry(tctx tcontext.Context, pos mysql.Position) error {
+// ReopenWithRetry reopens streamer with retry
+func (c *StreamerController) ReopenWithRetry(tctx tcontext.Context, pos mysql.Position) error {
 	var err error
 	for i := 0; i < maxRetryCount; i++ {
 		c.streamer, err = c.reopen(tctx, pos)

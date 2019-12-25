@@ -77,6 +77,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/conn"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/terror"
@@ -229,7 +230,7 @@ func (sg *ShardingGroup) CheckSyncing(source string, pos mysql.Position) (before
 	if activeDDLItem == nil {
 		return true
 	}
-	return activeDDLItem.FirstPos.Compare(pos) > 0
+	return binlog.ComparePosition(activeDDLItem.FirstPos, pos) > 0
 }
 
 // UnresolvedGroupInfo returns pb.ShardingGroup if is unresolved, else returns nil
@@ -581,7 +582,7 @@ func (k *ShardingGroupKeeper) lowestFirstPosInGroups() *mysql.Position {
 		}
 		if lowest == nil {
 			lowest = pos
-		} else if lowest.Compare(*pos) > 0 {
+		} else if binlog.ComparePosition(*lowest, *pos) > 0 {
 			lowest = pos
 		}
 	}
@@ -591,7 +592,7 @@ func (k *ShardingGroupKeeper) lowestFirstPosInGroups() *mysql.Position {
 // AdjustGlobalPoint adjusts globalPoint with sharding groups' lowest first point
 func (k *ShardingGroupKeeper) AdjustGlobalPoint(globalPoint mysql.Position) mysql.Position {
 	lowestFirstPos := k.lowestFirstPosInGroups()
-	if lowestFirstPos != nil && lowestFirstPos.Compare(globalPoint) < 0 {
+	if lowestFirstPos != nil && binlog.ComparePosition(*lowestFirstPos, globalPoint) < 0 {
 		return *lowestFirstPos
 	}
 	return globalPoint

@@ -963,7 +963,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 			if idx >= len(testCase.sqls) {
 				break
 			}
-			e, err := syncer.streamerController.GetEvent(*tcontext.Background(), pos)
+			e, err := syncer.streamerController.GetEvent(*tcontext.Background())
 			c.Assert(err, IsNil)
 			switch ev := e.Event.(type) {
 			case *replication.RowsEvent:
