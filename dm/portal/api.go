@@ -563,12 +563,17 @@ func generateMydumperCfg(bwList *filter.Rules) *config.MydumperConfig {
 		tables = append(tables, fmt.Sprintf("%s.%s", table.Schema, table.Name))
 	}
 
+	extraArgs := ""
+	if len(tables) != 0 {
+		extraArgs = fmt.Sprintf("-T %s", strings.Join(tables, ","))
+	}
+
 	return &config.MydumperConfig{
 		MydumperPath:  "bin/mydumper",
 		Threads:       4,
 		ChunkFilesize: 64,
 		SkipTzUTC:     true,
-		ExtraArgs:     fmt.Sprintf("-T %s", strings.Join(tables, ",")),
+		ExtraArgs:     extraArgs,
 	}
 }
 
