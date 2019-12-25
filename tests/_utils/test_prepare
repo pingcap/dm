@@ -2,7 +2,7 @@ MYSQL_HOST1=${MYSQL_HOST1:-127.0.0.1}
 MYSQL_HOST2=${MYSQL_HOST2:-127.0.0.1}
 MYSQL_PORT1=${MYSQL_PORT1:-3306}
 MYSQL_PORT2=${MYSQL_PORT2:-3307}
-TIDB_PORT=4000
+TIDB_PORT=4001
 MASTER_PORT=8261
 MASTER2_PORT=18261
 WORKER1_PORT=8262
@@ -69,7 +69,8 @@ function dmctl_start_task() {
 # shortcut for stop task on two DM-workers
 function dmctl_stop_task() {
     task_name=$1
-    dmctl_operate_task $task_name stop-task
+    shift
+    dmctl_operate_task $task_name stop-task $@
 }
 
 # shortcut for pause task on two DM-workers
@@ -87,8 +88,13 @@ function dmctl_resume_task() {
 function dmctl_operate_task() {
     task_name=$1
     operate=$2
+    if [ $# -ge 3 ]; then
+		address=$3
+	else
+		address=127.0.0.1:$MASTER_PORT
+	fi
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT,127.0.0.1:$MASTER2_PORT" \
+    run_dm_ctl $WORK_DIR $address \
         "$operate $task_name" \
         "\"result\": true" 3 \
         "\"worker\": \"127.0.0.1:$WORKER1_PORT\"" 1 \

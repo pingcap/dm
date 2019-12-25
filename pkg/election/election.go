@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/pingcap/pd/server/kv"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -79,7 +80,6 @@ func NewElection(
 	cli *clientv3.Client,
 	sessionTTL int,
 	key, id, address string,
-	isLeader bool,
 ) (*Election, error) {
 	ctx2, cancel2 := context.WithCancel(ctx)
 	e := &Election{
@@ -92,18 +92,6 @@ func NewElection(
 		cancel:     cancel2,
 		l:          log.With(zap.String("component", "election")),
 	}
-	if !isLeader {
-		_, meta, err := e.LeaderInfo(ctx)
-		if err != nil {
-			return nil, err
-		}
-		err = e.retireLeader(meta)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		e.isLeader.Set(true)
-	}
 
 	// try create a session before enter the campaign loop.
 	// so we can detect potential error earlier.
@@ -111,6 +99,29 @@ func NewElection(
 	if err != nil {
 		cancel2()
 		return nil, terror.ErrElectionCampaignFail.Delegate(err, "create the initial session")
+	}
+
+	for {
+		_, meta, err := e.LeaderInfo(ctx)
+		if err != nil {
+			// fake set leader here
+			log.L().Warn("seems there is no leader now, try campaign leader.")
+			err := e.tryCampaignLeader(ctx, session.Lease())
+			if err != nil {
+				return nil, errors.WithStack(err)
+			}
+		} else {
+			if meta.ID == e.meta.ID {
+				e.isLeader.Set(true)
+			} else {
+				e.isLeader.Set(false)
+				err = e.updateLeader(meta)
+				if err != nil {
+					return nil, err
+				}
+			}
+			break
+		}
 	}
 
 	e.bgWg.Add(1)
@@ -209,44 +220,61 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		}
 
 		// try to campaign
-		elec := concurrency.NewElection(session, e.key)
-		val, _ := json.Marshal(e.meta)
-		err = elec.Campaign(ctx, string(val))
-		if err != nil {
-			// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
-			e.l.Warn("fail to campaign", zap.Error(err))
-			continue
-		}
-
-		// compare with the current leader
-		leaderKey, leaderMeta, err := getLeaderInfo(ctx, elec)
-		if err != nil {
-			// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
-			e.l.Warn("fail to get leader ID", zap.Error(err))
-			continue
-		}
-		if leaderMeta.ID != e.meta.ID {
-			e.l.Info("current member is not the leader", zap.String("current member", e.meta.ID), zap.String("leader", leaderMeta.ID))
-			// leader change, must update lead info and gRPC client to leader
-			if *leaderMeta != e.leaderMeta.Load() {
-				for i := 0; i < 3; i++ {
-					err = e.updateLeader(leaderMeta)
-					if err == nil {
-						break
-					}
-					log.L().Error("update leader failed", zap.Stringer("leader", leaderMeta))
-				}
+		if !e.isLeader.Get() {
+			elec := concurrency.NewElection(session, e.key)
+			val, _ := json.Marshal(e.meta)
+			err = elec.Campaign(ctx, string(val))
+			if err != nil {
+				// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
+				e.l.Warn("fail to campaign", zap.Error(err))
+				continue
 			}
 
-			continue
+			// compare with the current leader
+			_, leaderMeta, err := getLeaderInfo(ctx, elec)
+			if err != nil {
+				// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
+				e.l.Warn("fail to get leader ID", zap.Error(err))
+				continue
+			}
+			if leaderMeta.ID != e.meta.ID {
+				e.l.Info("current member is not the leader", zap.String("current member", e.meta.ID), zap.String("leader", leaderMeta.ID))
+				// leader change, must update lead info and gRPC client to leader
+				if *leaderMeta != e.leaderMeta.Load() {
+					for i := 0; i < 3; i++ {
+						err = e.updateLeader(leaderMeta)
+						if err == nil {
+							break
+						}
+						log.L().Error("update leader failed", zap.Stringer("leader", leaderMeta))
+					}
+				}
+
+				continue
+			}
+
+			e.toBeLeader() // become the leader now
 		}
 
-		e.toBeLeader() // become the leader now
-		e.watchLeader(ctx, session, leaderKey)
-		if err := e.retireLeader(leaderMeta); err != nil {
+		e.watchLeader(ctx, session, e.key)
+		_, leaderMeta, err := e.LeaderInfo(ctx)
+		if err != nil {
 			e.ech <- err
+		} else {
+			if err := e.retireLeader(leaderMeta); err != nil {
+				e.ech <- err
+			}
 		}
 	}
+}
+
+func (e *Election) tryCampaignLeader(ctx context.Context, leaseID clientv3.LeaseID) error {
+	value, _ := json.Marshal(&e.meta)
+	_, err := kv.NewSlowLogTxn(e.cli).
+		If(clientv3.Compare(clientv3.CreateRevision(e.key), "=", 0)).
+		Then(clientv3.OpPut(e.key, string(value), clientv3.WithLease(leaseID))).
+		Commit()
+	return errors.WithStack(err)
 }
 
 func (e *Election) toBeLeader() {

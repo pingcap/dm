@@ -47,7 +47,7 @@ import (
 const (
 	// the session's TTL in seconds for leader election.
 	// NOTE: select this value carefully when adding a mechanism relying on leader election.
-	electionTTL = 60
+	electionTTL = 5
 	// the DM-master leader election key prefix
 	// DM-master cluster : etcd cluster = 1 : 1 now.
 	electionKey = "/dm-master/leader"
@@ -182,7 +182,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	}
 
 	// start leader election
-	s.election, err = election.NewElection(ctx, s.etcdClient, electionTTL, electionKey, s.cfg.Name, s.cfg.MasterAddr, s.cfg.IsLeader())
+	s.election, err = election.NewElection(ctx, s.etcdClient, electionTTL, electionKey, s.cfg.Name, s.cfg.MasterAddr)
 	if err != nil {
 		return
 	}

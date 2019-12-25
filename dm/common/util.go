@@ -18,7 +18,7 @@ func InitClient(addrs []string) error {
 	var err error
 	var conn *grpc.ClientConn
 	for _, addr := range addrs {
-		conn, err = grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
+		conn, err = grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(1*time.Second))
 		if err == nil {
 			break
 		}
