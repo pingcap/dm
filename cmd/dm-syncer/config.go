@@ -154,7 +154,6 @@ func (c *commonConfig) newSubTaskConfig(args []string) (*config.SubTaskConfig, e
 	fs.IntVar(&cfg.Batch, "b", 100, "batch commit count")
 	fs.StringVar(&cfg.StatusAddr, "status-addr", ":8271", "status addr")
 	//fs.StringVar(&cfg.PersistentTableDir, "persistent-dir", "", "syncer history table structures persistent dir; set to non-empty string will choosing history table structure according to column length when constructing DML")
-	fs.StringVar(&cfg.MetaFile, "meta", "syncer.meta", "syncer meta info")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
 	fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
@@ -163,6 +162,7 @@ func (c *commonConfig) newSubTaskConfig(args []string) (*config.SubTaskConfig, e
 	fs.IntVar(&cfg.MaxRetry, "max-retry", 100, "maxinum retry when network interruption")
 	fs.BoolVar(&cfg.EnableANSIQuotes, "enable-ansi-quotes", false, "enable ANSI_QUOTES sql_mode")
 	fs.StringVar(&cfg.Timezone, "timezone", "", "target database timezone location string")
+	fs.StringVar(&cfg.Name, "cp-table-prefix", "dm-syncer", "the prefix of the checkpoint table name")
 	fs.BoolVar(&oldConfigFormat, "old-config-format", false, "read old config format")
 
 	cfg.ServerID = uint32(serverID)

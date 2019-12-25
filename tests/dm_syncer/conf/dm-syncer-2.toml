@@ -6,8 +6,8 @@ server-id = 101
 # which flavor mysql/mariadb
 flavor = "mysql"
 
-# meta schema in downstreaming database to store meta informaton of dm
-meta = "/tmp/dm_test/dm_syncer/old_meta_file"
+# meta file position
+# meta = "/tmp/dm_test/dm_syncer/old_meta_file"
 
 worker-count = 16
 batch = 1000

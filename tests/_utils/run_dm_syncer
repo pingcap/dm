@@ -12,14 +12,16 @@ PWD=$(pwd)
 mkdir -p $workdir/log
 
 format=""
+meta=""
 
-if [ "$#" -ge 3 ]; then
-    format=$3
+if [ "$#" -ge 4 ]; then
+    meta="--meta=$3"
+    format=$4
 fi
 
 cd $workdir
-echo "$binary --log-file="$workdir/log/dm-syncer.log" --config="$config" $format >> $workdir/log/stdout.log 2>&1 &"
+echo "$binary --log-file="$workdir/log/dm-syncer.log" --config="$config" $meta $format >> $workdir/log/stdout.log 2>&1 &"
 $binary -test.coverprofile="$TEST_DIR/cov.$TEST_NAME.syncer.out" DEVEL \
--L=Debug --log-file="$workdir/log/dm-syncer.log" --config="$config" $format >> $workdir/log/stdout.log 2>&1 &
+-L=Debug --log-file="$workdir/log/dm-syncer.log" --config="$config" $meta $format >> $workdir/log/stdout.log 2>&1 &
 cd $PWD
 
