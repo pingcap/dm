@@ -162,7 +162,7 @@ integration_test: check_third_party_binary
 	@which bin/dm-master.test
 	@which bin/dm-worker.test
 	@which bin/dm-tracer.test
-	@which bin/dm-sycner.test
+	@which bin/dm-syncer.test
 	tests/run.sh $(CASE)
 
 compatibility_test: check_third_party_binary
