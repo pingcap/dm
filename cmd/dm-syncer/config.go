@@ -77,7 +77,7 @@ func (c *commonConfig) newConfigFromOldConfig(args []string) (*config.SubTaskCon
 		TimezoneStr:      c.TimezoneStr,
 	}
 
-	cfg.FlagSet = flag.NewFlagSet("common-syncer", flag.ContinueOnError)
+	cfg.FlagSet = flag.NewFlagSet("dm-syncer", flag.ContinueOnError)
 	fs := cfg.FlagSet
 
 	var OldConfigFormat bool
@@ -101,7 +101,9 @@ func (c *commonConfig) newConfigFromOldConfig(args []string) (*config.SubTaskCon
 	fs.StringVar(&cfg.TimezoneStr, "timezone", "", "target database timezone location string")
 	fs.BoolVar(&OldConfigFormat, "old-config-format", false, "read old config format")
 
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		return nil, errors.Trace(err)
+	}
 
 	if cfg.ConfigFile != "" {
 		_, err := toml.DecodeFile(cfg.ConfigFile, cfg)
@@ -110,7 +112,9 @@ func (c *commonConfig) newConfigFromOldConfig(args []string) (*config.SubTaskCon
 		}
 	}
 
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		return nil, errors.Trace(err)
+	}
 
 	return cfg.convertToNewFormat()
 }
@@ -135,7 +139,7 @@ func (c *commonConfig) parse(args []string) (*config.SubTaskConfig, error) {
 func (c *commonConfig) newSubTaskConfig(args []string) (*config.SubTaskConfig, error) {
 
 	cfg := &config.SubTaskConfig{}
-	cfg.SetFlagSet(flag.NewFlagSet("common-syncer", flag.ContinueOnError))
+	cfg.SetFlagSet(flag.NewFlagSet("dm-syncer", flag.ContinueOnError))
 	fs := cfg.GetFlagSet()
 
 	var oldConfigFormat bool
@@ -177,7 +181,7 @@ func (c *commonConfig) newSubTaskConfig(args []string) (*config.SubTaskConfig, e
 
 func newCommonConfig() *commonConfig {
 	cfg := &commonConfig{}
-	cfg.FlagSet = flag.NewFlagSet("common-syncer", flag.ContinueOnError)
+	cfg.FlagSet = flag.NewFlagSet("dm-syncer", flag.ContinueOnError)
 	fs := cfg.FlagSet
 
 	fs.BoolVar(&cfg.printVersion, "V", false, "prints version and exit")
@@ -252,7 +256,7 @@ type oldConfig struct {
 
 	// NOTE: These four configs are all deprecated.
 	// We leave this items as comments to remind others there WERE old config items.
-	//topOnDDL               bool   `toml:"stop-on-ddl" json:"stop-on-ddl"`
+	//stopOnDDL               bool   `toml:"stop-on-ddl" json:"stop-on-ddl"`
 	//MaxDDLConnectionTimeout string `toml:"execute-ddl-timeout" json:"execute-ddl-timeout"`
 	//MaxDMLConnectionTimeout string `toml:"execute-dml-timeout" json:"execute-dml-timeout"`
 	//ExecutionQueueLength    int    `toml:"execute-queue-length" json:"execute-queue-length"`
@@ -371,7 +375,7 @@ func generateBinlogEventRule(skipDDLs []string, skipDMLs []*SkipDML) ([]*bf.Binl
 	}
 	for _, skipDML := range skipDMLs {
 		if tp, _ := bf.ClassifyEvent(bf.EventType(skipDML.Type)); tp != "dml" {
-			return nil, errors.NotValidf("event type %s", skipDML)
+			return nil, errors.NotValidf("event type %s", skipDML.Type)
 		}
 		result = append(result, &bf.BinlogEventRule{
 			SchemaPattern: skipDML.Schema,

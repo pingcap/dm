@@ -148,7 +148,7 @@ dm_integration_test_build:
 		|| { $(FAILPOINT_DISABLE); exit 1; }
 	$(GOTEST) -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
-		-o bin/dm-tracer.test github.com/pingcap/dm/cmd/dm-syncer \
+		-o bin/dm-syncer.test github.com/pingcap/dm/cmd/dm-syncer \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
 	$(FAILPOINT_DISABLE)
 	tests/prepare_tools.sh
@@ -162,6 +162,7 @@ integration_test: check_third_party_binary
 	@which bin/dm-master.test
 	@which bin/dm-worker.test
 	@which bin/dm-tracer.test
+	@which bin/dm-sycner.test
 	tests/run.sh $(CASE)
 
 compatibility_test: check_third_party_binary

@@ -5,7 +5,7 @@ set -eu
 workdir=$1
 config=$2
 
-binary=$PWD/bin/dm-syncer
+binary=$PWD/bin/dm-syncer.test
 
 PWD=$(pwd)
 
@@ -19,6 +19,7 @@ fi
 
 cd $workdir
 echo "$binary --log-file="$workdir/log/dm-syncer.log" --config="$config" $format >> $workdir/log/stdout.log 2>&1 &"
-$binary -L=Debug --log-file="$workdir/log/dm-syncer.log" --config="$config" $format >> $workdir/log/stdout.log 2>&1 &
+$binary -test.coverprofile="$TEST_DIR/cov.$TEST_NAME.syncer.out" DEVEL \
+-L=Debug --log-file="$workdir/log/dm-syncer.log" --config="$config" $format >> $workdir/log/stdout.log 2>&1 &
 cd $PWD
 

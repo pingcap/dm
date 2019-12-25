@@ -22,10 +22,6 @@ function run() {
 
     # start a task in `full` mode
     cat $cur/conf/dm-task.yaml > $WORK_DIR/dm-task.yaml
-    sed -i "s/task-mode-placeholder/full/g" $WORK_DIR/dm-task.yaml
-    # avoid cannot unmarshal !!str `binlog-...` into uint32 error
-    sed -i "s/binlog-pos-placeholder-1/4/g" $WORK_DIR/dm-task.yaml
-    sed -i "s/binlog-pos-placeholder-2/4/g" $WORK_DIR/dm-task.yaml
     dmctl_start_task $WORK_DIR/dm-task.yaml
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml

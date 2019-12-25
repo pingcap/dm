@@ -75,7 +75,7 @@ func main() {
 		cancel()
 	}()
 
-	// 4. start the server
+	// 4. start the syncer
 	err = sync.Init(ctx)
 	if err != nil {
 		fmt.Printf("init syncer error %v", errors.ErrorStack(err))
@@ -90,7 +90,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	// 5. close the server
+	// 5. close the syncer
 	sync.Close()
 	log.L().Info("dm-syncer exit")
 
