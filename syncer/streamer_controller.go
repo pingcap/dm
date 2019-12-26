@@ -18,31 +18,22 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/binlog"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
 
 var (
-	eventTimeout    = 1 * time.Minute
-	maxEventTimeout = 1 * time.Hour
-)
-
-// BinlogType represents binlog sync type
-type BinlogType uint8
-
-// binlog sync type
-const (
-	RemoteBinlog BinlogType = iota + 1
-	LocalBinlog
+	eventTimeout = 1 * time.Minute
 )
 
 // StreamerProducer provides the ability to generate binlog streamer by StartSync()
@@ -97,7 +88,7 @@ type StreamerController struct {
 	sync.RWMutex
 
 	// the initital binlog type
-	binlogType BinlogType
+	binlogType string
 
 	syncCfg        replication.BinlogSyncerConfig
 	localBinlogDir string
@@ -119,7 +110,7 @@ type StreamerController struct {
 }
 
 // NewStreamerController creates a new streamer controller
-func NewStreamerController(tctx tcontext.Context, syncCfg replication.BinlogSyncerConfig, fromDB *UpStreamConn, binlogType BinlogType, localBinlogDir string, timezone *time.Location, beginPos mysql.Position) (*StreamerController, error) {
+func NewStreamerController(tctx tcontext.Context, syncCfg replication.BinlogSyncerConfig, fromDB *UpStreamConn, binlogType string, localBinlogDir string, timezone *time.Location, beginPos mysql.Position) (*StreamerController, error) {
 	var err error
 	streamerController := &StreamerController{
 		binlogType:     binlogType,
@@ -153,7 +144,7 @@ func (c *StreamerController) ResetReplicationSyncer(tctx tcontext.Context) {
 	}
 
 	// re-create new streamerProducer
-	if c.binlogType == RemoteBinlog {
+	if c.binlogType == config.RemoteBinlog {
 		c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(c.syncCfg), &tctx, false}
 	} else {
 		if c.meetError {

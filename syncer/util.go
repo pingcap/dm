@@ -23,12 +23,12 @@ import (
 	"github.com/pingcap/parser/ast"
 )
 
-func toBinlogType(enableRelay bool) BinlogType {
+func toBinlogType(enableRelay bool) string {
 	if enableRelay {
-		return LocalBinlog
+		return config.LocalBinlog
 	}
 
-	return RemoteBinlog
+	return config.RemoteBinlog
 }
 
 // tableNameForDML gets table name from INSERT/UPDATE/DELETE statement

@@ -56,6 +56,8 @@ import (
 var (
 	maxRetryCount = 100
 
+	maxEventTimeout = 1 * time.Hour
+
 	retryTimeout = 3 * time.Second
 	waitTime     = 10 * time.Millisecond
 	statusTime   = 30 * time.Second
@@ -87,7 +89,7 @@ type Syncer struct {
 	ddlExecInfo     *DDLExecInfo                   // DDL execute (ignore) info
 	injectEventCh   chan *replication.BinlogEvent  // extra binlog event chan, used to inject binlog event into the main for loop
 
-	binlogType         BinlogType
+	binlogType         string
 	streamerController *StreamerController
 	enableRelay        bool
 

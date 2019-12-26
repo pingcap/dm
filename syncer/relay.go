@@ -27,7 +27,7 @@ import (
 )
 
 func (s *Syncer) setInitActiveRelayLog() error {
-	if s.binlogType != LocalBinlog {
+	if s.binlogType != config.LocalBinlog {
 		return nil
 	}
 
@@ -91,7 +91,7 @@ func (s *Syncer) setInitActiveRelayLog() error {
 }
 
 func (s *Syncer) updateActiveRelayLog(pos mysql.Position) error {
-	if s.binlogType != LocalBinlog {
+	if s.binlogType != config.LocalBinlog {
 		return nil
 	}
 
@@ -115,7 +115,7 @@ func (s *Syncer) updateActiveRelayLog(pos mysql.Position) error {
 }
 
 func (s *Syncer) removeActiveRelayLog() {
-	if s.binlogType != LocalBinlog {
+	if s.binlogType != config.LocalBinlog {
 		return
 	}
 
