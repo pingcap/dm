@@ -252,7 +252,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 
 	relayStatus := &pb.RelayStatus{
 		Result: &pb.ProcessResult{
-			Detail: []byte("relay is not enable"),
+			Detail: []byte("relay is not enabled"),
 		},
 	}
 	if s.cfg.EnableRelay {
