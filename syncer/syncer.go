@@ -1210,27 +1210,23 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			parser2:             parser2,
 			shardingReSyncCh:    &shardingReSyncCh,
 		}
-		s.tctx.L().Info("before handle Event", zap.Reflect("current pos", currentPos), zap.Reflect("ec.currentpos", ec.currentPos))
+
 		switch ev := e.Event.(type) {
 		case *replication.RotateEvent:
 			err = s.handleRotateEvent(ev, ec)
 			if err != nil {
 				return terror.Annotatef(err, "current pos %s", currentPos)
 			}
-			s.tctx.L().Info("after handleRotateEvent", zap.Reflect("current pos", currentPos), zap.Reflect("ec.currentpos", ec.currentPos))
 		case *replication.RowsEvent:
 			err = s.handleRowsEvent(ev, ec)
 			if err != nil {
 				return terror.Annotatef(err, "current pos %s", currentPos)
 			}
-
-			s.tctx.L().Info("after handleRowsEvent", zap.Reflect("current pos", currentPos), zap.Reflect("ec.currentpos", ec.currentPos))
 		case *replication.QueryEvent:
 			err = s.handleQueryEvent(ev, ec)
 			if err != nil {
 				return terror.Annotatef(err, "current pos %s", currentPos)
 			}
-			s.tctx.L().Info("after handleQueryEvent", zap.Reflect("current pos", currentPos), zap.Reflect("ec.currentpos", ec.currentPos))
 		case *replication.XIDEvent:
 			if shardingReSync != nil {
 				shardingReSync.currPos.Pos = e.Header.LogPos
@@ -1255,7 +1251,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			if err != nil {
 				return terror.Annotatef(err, "current pos %s", currentPos)
 			}
-			s.tctx.L().Info("after handleXIDEvent", zap.Reflect("current pos", currentPos), zap.Reflect("ec.currentpos", ec.currentPos))
 		}
 	}
 }
@@ -1280,7 +1275,6 @@ type eventContext struct {
 // TODO: Further split into smaller functions and group common arguments into
 // a context struct.
 func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext) error {
-	s.tctx.L().Info("handleRotateEvent", zap.String("nextLogName", string(ev.NextLogName)))
 	*ec.currentPos = mysql.Position{
 		Name: string(ev.NextLogName),
 		Pos:  uint32(ev.Position),
@@ -1332,7 +1326,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	if ec.shardingReSync != nil {
 		ec.shardingReSync.currPos.Pos = ec.header.LogPos
 		if binlog.ComparePosition(ec.shardingReSync.currPos, ec.shardingReSync.latestPos) >= 0 {
-			s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "row"), zap.Reflect("re-shard", ec.shardingReSync))
+			s.tctx.L().Debug("re-replicate shard group was completed", zap.String("event", "row"), zap.Reflect("re-shard", ec.shardingReSync))
 			return ec.closeShardingResync()
 		}
 		if ec.shardingReSync.targetSchema != schemaName || ec.shardingReSync.targetTable != tableName {

@@ -19,6 +19,8 @@ import (
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
 	_ "github.com/pingcap/tidb/types/parser_driver"
+
+	"github.com/pingcap/dm/dm/config"
 )
 
 var _ = Suite(&testUtilSuite{})
@@ -91,14 +93,14 @@ func (t *testUtilSuite) TestTableNameForDML(c *C) {
 func (t *testUtilSuite) TestToBinlogType(c *C) {
 	testCases := []struct {
 		enableRelay bool
-		tp          BinlogType
+		tp          string
 	}{
 		{
 			true,
-			LocalBinlog,
+			config.LocalBinlog,
 		}, {
 			false,
-			RemoteBinlog,
+			config.RemoteBinlog,
 		},
 	}
 
