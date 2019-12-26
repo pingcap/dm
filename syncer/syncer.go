@@ -996,9 +996,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	s.tctx.L().Info("replicate binlog from checkpoint", zap.Stringer("checkpoint", lastPos))
 
 	if s.streamerController == nil {
-		s.streamerController, err = NewStreamerController(*s.tctx, s.syncCfg, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone, currentPos)
+		s.streamerController, err = NewStreamerController(*tctx, s.syncCfg, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone, currentPos)
 		if err != nil {
-			return err
+			return terror.Annotate(err, "fail to generate streamer controller")
 		}
 	}
 
@@ -1192,7 +1192,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		failpoint.Inject("ProcessBinlogSlowDown", nil)
 
 		s.tctx.L().Debug("receive binlog event", zap.Reflect("header", e.Header))
-		ec := &eventContext{
+		ec := eventContext{
 			tctx:                tctx,
 			header:              e.Header,
 			currentPos:          &currentPos,
@@ -1217,14 +1217,14 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			}
 			s.tctx.L().Info("after handleRotateEvent", zap.Reflect("current pos", currentPos), zap.Reflect("ec.currentpos", ec.currentPos))
 		case *replication.RowsEvent:
-			err = s.handleRowsEvent(ev, *ec)
+			err = s.handleRowsEvent(ev, ec)
 			if err != nil {
 				return terror.Annotatef(err, "current pos %s", currentPos)
 			}
 
 			s.tctx.L().Info("after handleRowsEvent", zap.Reflect("current pos", currentPos), zap.Reflect("ec.currentpos", ec.currentPos))
 		case *replication.QueryEvent:
-			err = s.handleQueryEvent(ev, *ec)
+			err = s.handleQueryEvent(ev, ec)
 			if err != nil {
 				return terror.Annotatef(err, "current pos %s", currentPos)
 			}
@@ -1277,8 +1277,7 @@ type eventContext struct {
 
 // TODO: Further split into smaller functions and group common arguments into
 // a context struct.
-
-func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec *eventContext) error {
+func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext) error {
 	s.tctx.L().Info("handleRotateEvent", zap.String("nextLogName", string(ev.NextLogName)))
 	*ec.currentPos = mysql.Position{
 		Name: string(ev.NextLogName),
@@ -2326,6 +2325,9 @@ func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 	if err != nil {
 		s.tctx.L().Error("fail to create baseConn connection", log.ShortError(err))
 		return err
+	}
+	if s.streamerController != nil {
+		s.streamerController.UpdateFromDB(s.fromDB)
 	}
 	return nil
 }

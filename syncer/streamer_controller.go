@@ -26,7 +26,6 @@ import (
 
 	"github.com/pingcap/dm/pkg/binlog"
 	tcontext "github.com/pingcap/dm/pkg/context"
-	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -84,9 +83,8 @@ func (r *remoteBinlogReader) generateStreamer(pos mysql.Position) (streamer.Stre
 		return nil, terror.ErrSyncerUnitRemoteSteamerWithGTID.Generate()
 	}
 
+	// position's name may contain uuid, so need remove it
 	adjustedPos := binlog.AdjustPosition(pos)
-
-	r.tctx.L().Info("generateStreamer", zap.Reflect("old pos", pos), zap.Reflect("new pos", adjustedPos))
 	streamer, err := r.reader.StartSync(adjustedPos)
 	return streamer, terror.ErrSyncerUnitRemoteSteamerStartSync.Delegate(err)
 }
@@ -106,9 +104,7 @@ type StreamerController struct {
 	timezone       *time.Location
 
 	streamer         streamer.Streamer
-	streamerProducer StreamerProducer // removed
-
-	eventTimeoutCounter time.Duration
+	streamerProducer StreamerProducer
 
 	// meetError means meeting error when get binlog event
 	// if binlogType is local and meetError is true, then need to create remote binlog stream
@@ -116,7 +112,10 @@ type StreamerController struct {
 
 	fromDB *UpStreamConn
 
+	// changed is true when change from local to remote
 	changed bool
+
+	uuidSuffix string
 }
 
 // NewStreamerController creates a new streamer controller
@@ -154,30 +153,24 @@ func (c *StreamerController) ResetReplicationSyncer(tctx tcontext.Context) {
 	}
 
 	// re-create new streamerProducer
-	// meetError is true means meets error when get binlog event, in this case use remote binlog as default
-	if c.meetError || c.binlogType == RemoteBinlog {
-		//if c.binlogType == RemoteBinlog {
-		syncCfg := c.syncCfg
-
-		// if binlog type is local, means relay already use the server id, so need change to a new server id
-		if c.binlogType == LocalBinlog {
-			tctx.L().Info("", zap.Reflect("fromDB", c.fromDB))
+	if c.binlogType == RemoteBinlog {
+		c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(c.syncCfg), &tctx, false}
+	} else {
+		if c.meetError {
+			// meetError is true means meets error when get binlog event, in this case use remote binlog as default
+			// binlog type is local, means relay already use the server id, so need change to a new server id
 			randomServerID, err := utils.GetRandomServerID(tctx.Context(), c.fromDB.BaseDB.DB)
 			if err != nil {
 				// should never happened unless the master has too many slave
 				tctx.L().Warn("fail to get random server id, will use the origin server id", zap.Error(err))
 			} else {
-				syncCfg.ServerID = randomServerID
+				c.syncCfg.ServerID = randomServerID
 			}
+			c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(c.syncCfg), &tctx, false}
+			c.changed = true
+		} else {
+			c.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(&tctx, &streamer.BinlogReaderConfig{RelayDir: c.localBinlogDir, Timezone: c.timezone})}
 		}
-
-		tctx.L().Info("ResetReplicationSyncer use remote binlog reader")
-
-		c.changed = true
-
-		c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(syncCfg), &tctx, false}
-	} else {
-		c.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(&tctx, &streamer.BinlogReaderConfig{RelayDir: c.localBinlogDir, Timezone: c.timezone})}
 	}
 
 	return
@@ -185,11 +178,11 @@ func (c *StreamerController) ResetReplicationSyncer(tctx tcontext.Context) {
 
 // RedirectStreamer redirects the streamer's begin position or gtid
 func (c *StreamerController) RedirectStreamer(tctx tcontext.Context, pos mysql.Position) error {
-	var err error
 	tctx.L().Info("reset global streamer", zap.Stringer("position", pos))
 	c.ResetReplicationSyncer(tctx)
 
 	c.Lock()
+	var err error
 	c.streamer, err = c.streamerProducer.generateStreamer(pos)
 	c.Unlock()
 
@@ -208,8 +201,21 @@ func (c *StreamerController) GetEvent(tctx tcontext.Context) (event *replication
 	event, err = c.streamer.GetEvent(ctx)
 	cancel()
 	if err == nil {
-		if c.changed {
-			tctx.L().Info("get event", zap.Reflect("event", event))
+		switch ev := event.Event.(type) {
+		case *replication.RotateEvent:
+			// if is local binlog, binlog's name contain uuid information, need save it
+			// if is remote binlog, need add uuid information in binlog's name
+			if !c.setUUIDIfExists(tctx, string(ev.NextLogName)) {
+				if len(c.uuidSuffix) != 0 {
+					filename, err := binlog.ParseFilename(string(ev.NextLogName))
+					if err != nil {
+						return nil, terror.Annotate(err, "fail to parse binlog file name from rotate event")
+					}
+					ev.NextLogName = []byte(binlog.ConstructFilenameWithUUIDSuffix(filename, c.uuidSuffix))
+					event.Event = ev
+				}
+			}
+		default:
 		}
 		return event, nil
 	}
@@ -238,54 +244,8 @@ func (c *StreamerController) ReopenWithRetry(tctx tcontext.Context, pos mysql.Po
 }
 
 func (c *StreamerController) reopen(tctx tcontext.Context, pos mysql.Position) (streamer.Streamer, error) {
-	tctx.L().Info("reopen", zap.Reflect("position", pos))
-	if c.streamerProducer != nil {
-		switch r := c.streamerProducer.(type) {
-		case *remoteBinlogReader:
-			err := c.closeBinlogSyncer(tctx, r.reader)
-			if err != nil {
-				return nil, err
-			}
-		case *localBinlogReader:
-			// do nothing
-		default:
-			return nil, terror.ErrSyncerUnitReopenStreamNotSupport.Generate(r)
-		}
-	}
-
-	syncCfg := c.syncCfg
-	randomServerID, err := utils.GetRandomServerID(tctx.Context(), c.fromDB.BaseDB.DB)
-	if err != nil {
-		// should never happened unless the master has too many slave
-		tctx.L().Warn("fail to get random server id, will use the origin server id", zap.Error(err))
-	} else {
-		syncCfg.ServerID = randomServerID
-	}
-
-	c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(syncCfg), &tctx, false}
+	c.ResetReplicationSyncer(tctx)
 	return c.streamerProducer.generateStreamer(pos)
-}
-
-func (c *StreamerController) haveUnfetchedBinlog(logtctx tcontext.Context, syncedPosition mysql.Position) bool {
-	masterPos, _, err := c.getMasterStatus()
-	if err != nil {
-		logtctx.L().Error("fail to get master status", log.ShortError(err))
-		return false
-	}
-
-	// Why 190 ?
-	// +------------------+-----+----------------+-----------+-------------+-------------------------------------------------------------------+
-	// | Log_name         | Pos | Event_type     | Server_id | End_log_pos | Info                                                              |
-	// +------------------+-----+----------------+-----------+-------------+-------------------------------------------------------------------+
-	// | mysql-bin.000002 |   4 | Format_desc    |         1 |         123 | Server ver: 5.7.18-log, Binlog ver: 4                             |
-	// | mysql-bin.000002 | 123 | Previous_gtids |         1 |         194 | 00020393-1111-1111-1111-111111111111:1-7
-	//
-	// Currently, syncer doesn't handle Format_desc and Previous_gtids events. When binlog rotate to new file with only two events like above,
-	// syncer won't save pos to 194. Actually it save pos 4 to meta file. So We got a experience value of 194 - 4 = 190.
-	// If (mpos.Pos - spos.Pos) > 190, we could say that syncer is not up-to-date.
-	logtctx.L().Info("", zap.Reflect("master pos", masterPos), zap.Reflect("synced Position", syncedPosition))
-	//return utils.CompareBinlogPos(masterPos, syncedPosition, 190) == 1
-	return false
 }
 
 func (c *StreamerController) closeBinlogSyncer(logtctx tcontext.Context, binlogSyncer *replication.BinlogSyncer) error {
@@ -307,10 +267,6 @@ func (c *StreamerController) closeBinlogSyncer(logtctx tcontext.Context, binlogS
 	return nil
 }
 
-func (c *StreamerController) getMasterStatus() (mysql.Position, gtid.Set, error) {
-	return c.fromDB.getMasterStatus(c.syncCfg.Flavor)
-}
-
 // Close closes streamer
 func (c *StreamerController) Close(tctx tcontext.Context) {
 	c.Lock()
@@ -327,4 +283,22 @@ func (c *StreamerController) Close(tctx tcontext.Context) {
 			r.reader.Close()
 		}
 	}
+}
+
+func (c *StreamerController) setUUIDIfExists(tctx tcontext.Context, filename string) bool {
+	_, uuidSuffix, _, err := binlog.AnalyzeFilenameWithUUIDSuffix(filename)
+	if err != nil {
+		// don't contain uuid in position's name
+		return false
+	}
+
+	c.uuidSuffix = uuidSuffix
+	return true
+}
+
+// UpdateFromDB updates fromDB
+func (c *StreamerController) UpdateFromDB(fromDB *UpStreamConn) {
+	c.Lock()
+	c.fromDB = fromDB
+	c.Unlock()
 }
