@@ -17,7 +17,6 @@ import (
 	"context"
 	"io"
 	"net"
-	"path"
 	"sync"
 	"time"
 
@@ -577,8 +576,8 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 	}
 
 	resp, err := s.etcdClient.Txn(ctx).Then(
-		clientv3.OpPut(path.Join(common.UpstreamConfigPath, cfg.SourceID), cfgStr),
-		clientv3.OpPut(path.Join(common.UpstreamBoundWorkerPath, s.cfg.WorkerAddr), cfg.SourceID),
+		clientv3.OpPut(common.UpstreamConfigKeyAdapter.Encode(cfg.SourceID), cfgStr),
+		clientv3.OpPut(common.UpstreamBoundWorkerKeyAdapter.Encode(s.cfg.WorkerAddr), cfg.SourceID),
 	).Commit()
 	if err != nil {
 		return err

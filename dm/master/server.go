@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"path"
 	"sort"
 	"strings"
 	"sync"
@@ -191,16 +190,6 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	}()
 
 	s.bgFunWg.Add(1)
-	err = s.coordinator.Start(ctx, s.etcdClient)
-	if err != nil {
-		return
-	}
-	go func() {
-		defer s.bgFunWg.Done()
-		s.coordinator.ObserveWorkers(ctx, s.etcdClient)
-	}()
-
-	s.bgFunWg.Add(1)
 	go func() {
 		defer s.bgFunWg.Done()
 		select {
@@ -262,7 +251,14 @@ func errorCommonWorkerResponse(msg string, worker string) *pb.CommonWorkerRespon
 // key:   /dm-worker/r/address
 // value: name
 func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerRequest) (*pb.RegisterWorkerResponse, error) {
-	k := path.Join(common.WorkerRegisterPath, req.Address)
+	if !s.coordinator.IsStarted() {
+		respWorker := &pb.RegisterWorkerResponse{
+			Result: false,
+			Msg:    "coordinator not started, may not leader",
+		}
+		return respWorker, nil
+	}
+	k := common.WorkerRegisterKeyAdapter.Encode(req.Address)
 	v := req.Name
 	ectx, cancel := context.WithTimeout(ctx, etcdTimeouit)
 	defer cancel()
@@ -279,7 +275,7 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 			return nil, errors.Errorf("the response kv is invalid length, request key: %s", k)
 		}
 		kv := resp.Responses[0].GetResponseRange().GetKvs()[0]
-		address, name := strings.TrimPrefix(string(kv.Key), common.WorkerRegisterPath), string(kv.Value)
+		address, name := common.WorkerRegisterKeyAdapter.Decode(string(kv.Key))[0], string(kv.Value)
 		if name != req.Name {
 			msg := fmt.Sprintf("the address %s already registered with name %s", address, name)
 			respWorker := &pb.RegisterWorkerResponse{

@@ -13,8 +13,6 @@ package coordinator
 
 import (
 	"context"
-	"path"
-	"strings"
 	"sync"
 	"time"
 
@@ -65,41 +63,45 @@ func NewCoordinator() *Coordinator {
 	}
 }
 
-// Init would recover infomation from etcd
+// Start starts the coordinator and would recover infomation from etcd.
 func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) error {
 	// TODO: recover upstreams and configs and workers
 	// workers
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.etcdCli = etcdClient
-	ctx, cancel := context.WithTimeout(etcdClient.Ctx(), etcdTimeouit)
+
+	// recovering.
+	ectx, cancel := context.WithTimeout(etcdClient.Ctx(), etcdTimeouit)
 	defer cancel()
-	resp, err := etcdClient.Get(ctx, common.WorkerRegisterPath, clientv3.WithPrefix())
+	resp, err := etcdClient.Get(ectx, common.WorkerRegisterKeyAdapter.Path(), clientv3.WithPrefix())
 	if err != nil {
 		return err
 	}
 
 	for _, kv := range resp.Kvs {
-		addr := strings.TrimPrefix(common.WorkerRegisterPath, string(kv.Key))
+		//addr := strings.TrimPrefix(common.WorkerRegisterKeyAdapter.Path(), string(kv.Key))
+		addr := common.WorkerRegisterKeyAdapter.Decode(string(kv.Key))[0]
 		name := string(kv.Value)
 		c.workers[addr] = NewWorker(name, addr)
+		log.L().Info("load worker successful", zap.String("addr", addr), zap.String("name", name))
 	}
 
 	// configs
-	resp, err = etcdClient.Get(ctx, common.UpstreamBoundWorkerPath, clientv3.WithPrefix())
+	resp, err = etcdClient.Get(ectx, common.UpstreamBoundWorkerKeyAdapter.Path(), clientv3.WithPrefix())
 	if err != nil {
 		return nil
 	}
 
 	for _, kv := range resp.Kvs {
-		addr := strings.TrimPrefix(common.UpstreamBoundWorkerPath, string(kv.Key))
+		addr := common.UpstreamBoundWorkerKeyAdapter.Decode(string(kv.Key))[0]
 		sourceID := string(kv.Value)
 		w, ok := c.workers[addr]
 		if !ok {
 			log.L().Error("worker not exist but binding relationship exist", zap.String("addr", addr), zap.String("source", sourceID))
 			continue
 		}
-		resp, err = etcdClient.Get(ctx, path.Join(common.UpstreamConfigPath, sourceID))
+		resp, err = etcdClient.Get(ctx, common.UpstreamConfigKeyAdapter.Encode(sourceID))
 		if err != nil || len(resp.Kvs) == 0 {
 			log.L().Error("cannot load config", zap.String("addr", addr), zap.String("source", sourceID), zap.Error(err))
 			continue
@@ -111,6 +113,7 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 			log.L().Error("cannot parse config", zap.String("addr", addr), zap.String("source", sourceID), zap.Error(err))
 		}
 		c.upstreams[sourceID] = w
+		log.L().Info("load config successful", zap.String("source", sourceID), zap.String("config", cfgStr))
 	}
 
 	c.started = true
@@ -124,6 +127,14 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 	return nil
 }
 
+// IsStarted checks if the coordinator is started.
+func (c *Coordinator) IsStarted() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.started
+}
+
+// Stop stops the coordinator.
 func (c *Coordinator) Stop() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -261,7 +272,7 @@ func (c *Coordinator) GetWorkersByStatus(s WorkerState) []*Worker {
 // ObserveWorkers observe the keepalive path and maintain the status of the worker.
 func (c *Coordinator) ObserveWorkers() {
 	watcher := clientv3.NewWatcher(c.etcdCli)
-	ch := watcher.Watch(c.ctx, common.WorkerKeepAlivePath, clientv3.WithPrefix())
+	ch := watcher.Watch(c.ctx, common.WorkerKeepAliveKeyAdapter.Path(), clientv3.WithPrefix())
 
 	for {
 		select {
@@ -275,9 +286,8 @@ func (c *Coordinator) ObserveWorkers() {
 				switch ev.Type {
 				case mvccpb.PUT:
 					log.L().Info("putkv", zap.String("kv", string(ev.Kv.Key)))
-					key := string(ev.Kv.Key)
-					slice := strings.Split(string(key), ",")
-					addr, name := slice[1], slice[2]
+					kvs := common.WorkerKeepAliveKeyAdapter.Decode(string(ev.Kv.Key))
+					addr, name := kvs[0], kvs[1]
 					c.mu.Lock()
 					if w, ok := c.workers[addr]; ok && name == w.Name() {
 						log.L().Info("worker became online, state: free", zap.String("name", w.Name()), zap.String("address", w.Address()))
@@ -289,9 +299,8 @@ func (c *Coordinator) ObserveWorkers() {
 
 				case mvccpb.DELETE:
 					log.L().Info("deletekv", zap.String("kv", string(ev.Kv.Key)))
-					key := string(ev.Kv.Key)
-					slice := strings.Split(string(key), ",")
-					addr, name := slice[1], slice[2]
+					kvs := common.WorkerKeepAliveKeyAdapter.Decode(string(ev.Kv.Key))
+					addr, name := kvs[0], kvs[1]
 					c.mu.Lock()
 					if w, ok := c.workers[addr]; ok && name == w.Name() {
 						log.L().Info("worker became offline, state: closed", zap.String("name", w.Name()), zap.String("address", w.Address()))
@@ -315,5 +324,3 @@ func (c *Coordinator) ObserveWorkers() {
 func (c *Coordinator) Schedule() {
 
 }
-
-func makeKV(path, v string) {}
