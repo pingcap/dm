@@ -377,11 +377,21 @@ func generateBinlogEventRule(skipDDLs []string, skipDMLs []*SkipDML) ([]*bf.Binl
 		if tp, _ := bf.ClassifyEvent(bf.EventType(skipDML.Type)); tp != "dml" {
 			return nil, errors.NotValidf("event type %s", skipDML.Type)
 		}
-		result = append(result, &bf.BinlogEventRule{
-			SchemaPattern: skipDML.Schema,
-			TablePattern:  skipDML.Table,
-			Events:        []bf.EventType{bf.EventType(skipDML.Type)},
-		})
+		found := false
+		for _, evt := range result {
+			if evt.SchemaPattern == skipDML.Schema && evt.TablePattern == skipDML.Table {
+				found = true
+				evt.Events = append(evt.Events, bf.EventType(skipDML.Type))
+				break
+			}
+		}
+		if !found {
+			result = append(result, &bf.BinlogEventRule{
+				SchemaPattern: skipDML.Schema,
+				TablePattern:  skipDML.Table,
+				Events:        []bf.EventType{bf.EventType(skipDML.Type)},
+			})
+		}
 	}
 	return result, nil
 }
