@@ -117,6 +117,7 @@ func (c *MysqlConfig) Parse(content string) error {
 	return c.check(&metaData, err)
 }
 
+// EncodeToml encodes config.
 func (c *MysqlConfig) EncodeToml() (string, error) {
 	buf := new(bytes.Buffer)
 	if err := toml.NewEncoder(buf).Encode(c); err != nil {

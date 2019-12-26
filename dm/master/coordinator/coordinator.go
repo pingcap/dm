@@ -29,6 +29,7 @@ import (
 var (
 	etcdTimeouit = 3 * time.Second
 
+	// ErrNotStarted coordinator does not start.
 	ErrNotStarted = errors.New("coordinator does not start")
 )
 
@@ -80,7 +81,6 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 	}
 
 	for _, kv := range resp.Kvs {
-		//addr := strings.TrimPrefix(common.WorkerRegisterKeyAdapter.Path(), string(kv.Key))
 		addr := common.WorkerRegisterKeyAdapter.Decode(string(kv.Key))[0]
 		name := string(kv.Value)
 		c.workers[addr] = NewWorker(name, addr)
@@ -101,14 +101,14 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 			log.L().Error("worker not exist but binding relationship exist", zap.String("addr", addr), zap.String("source", sourceID))
 			continue
 		}
-		resp, err = etcdClient.Get(ctx, common.UpstreamConfigKeyAdapter.Encode(sourceID))
-		if err != nil || len(resp.Kvs) == 0 {
+		gresp, err := etcdClient.Get(ctx, common.UpstreamConfigKeyAdapter.Encode(sourceID))
+		if err != nil || len(gresp.Kvs) == 0 {
 			log.L().Error("cannot load config", zap.String("addr", addr), zap.String("source", sourceID), zap.Error(err))
 			continue
 		}
-		cfgStr := string(resp.Kvs[0].Value)
+		cfgStr := string(gresp.Kvs[0].Value)
 		cfg := config.NewWorkerConfig()
-		err := cfg.Parse(cfgStr)
+		err = cfg.Parse(cfgStr)
 		if err != nil {
 			log.L().Error("cannot parse config", zap.String("addr", addr), zap.String("source", sourceID), zap.Error(err))
 			continue
