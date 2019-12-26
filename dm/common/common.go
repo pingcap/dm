@@ -82,4 +82,6 @@ var (
 	UpstreamConfigKeyAdapter keyEncoderDecoder = "/dm-master/upstream/config/"
 	// UpstreamBoundWorkerKeyAdapter the path of worker relationship.
 	UpstreamBoundWorkerKeyAdapter keyHexEncoderDecoder = "/dm-master/bound-worker/"
+	// UpstreamSubTaskKeyAdapter the path of the subtask.
+	UpstreamSubTaskKeyAdapter keyHexEncoderDecoder = "/dm-master/upstream/subtask/"
 )

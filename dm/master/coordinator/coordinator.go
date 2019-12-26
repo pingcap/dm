@@ -111,10 +111,12 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 		err := cfg.Parse(cfgStr)
 		if err != nil {
 			log.L().Error("cannot parse config", zap.String("addr", addr), zap.String("source", sourceID), zap.Error(err))
+			continue
 		}
 		c.upstreams[sourceID] = w
 		log.L().Info("load config successful", zap.String("source", sourceID), zap.String("config", cfgStr))
 	}
+	// TODO: recover subtask
 
 	c.started = true
 	c.ctx, c.cancel = context.WithCancel(ctx)

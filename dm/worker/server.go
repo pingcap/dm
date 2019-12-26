@@ -228,7 +228,17 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 		log.L().Error("fail to start subtask", zap.String("request", "StartSubTask"), zap.Stringer("payload", req), zap.Error(err))
 		resp.Result = false
 		resp.Msg = err.Error()
+	} else {
+		ctx, cancel := context.WithTimeout(s.etcdClient.Ctx(), 3*time.Second)
+		defer cancel()
+		_, err = s.etcdClient.Put(ctx, common.UpstreamSubTaskKeyAdapter.Encode(s.cfg.WorkerAddr), cfg.String())
+		if err != nil {
+			resp.Result = false
+			resp.Msg = err.Error()
+		}
 	}
+	// FIXME: handle error
+	_ = w.OperateSubTask(cfg.Name, pb.TaskOp_Stop)
 	return resp, nil
 }
 
