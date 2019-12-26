@@ -371,7 +371,7 @@ func generateBinlogEventRule(skipDDLs []string, skipDMLs []*SkipDML) ([]*bf.Binl
 		if tp, _ := bf.ClassifyEvent(bf.EventType(skipDDL)); tp != "ddl" {
 			return nil, errors.NotValidf("event type %s", skipDDL)
 		}
-		ddlEvents.Events = append(ddlEvents.Events, bf.EventType(skipDDL))
+		ddlEvents.SQLPattern = append(ddlEvents.SQLPattern, skipDDL)
 	}
 	for _, skipDML := range skipDMLs {
 		if tp, _ := bf.ClassifyEvent(bf.EventType(skipDML.Type)); tp != "dml" {
