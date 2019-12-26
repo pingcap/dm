@@ -21,6 +21,21 @@ import (
 
 var (
 	useOfClosedErrMsg = "use of closed network connection"
+	// WorkerRegisterKeyAdapter used to encode and decode register key.
+	// k/v: Encode(addr) -> name
+	WorkerRegisterKeyAdapter keyHexEncoderDecoder = "/dm-worker/r/"
+	// WorkerKeepAliveKeyAdapter used to encode and decode keepalive key.
+	// k/v: Encode(addr,name) -> time
+	WorkerKeepAliveKeyAdapter keyHexEncoderDecoder = "/dm-worker/a/"
+	// UpstreamConfigKeyAdapter the config path of upstream.
+	// k/v: Encode(source-id) -> config
+	UpstreamConfigKeyAdapter keyEncoderDecoder = "/dm-master/upstream/config/"
+	// UpstreamBoundWorkerKeyAdapter the path of worker relationship.
+	// k/v: Encode(addr) -> source-id
+	UpstreamBoundWorkerKeyAdapter keyHexEncoderDecoder = "/dm-master/bound-worker/"
+	// UpstreamSubTaskKeyAdapter the path of the subtask.
+	// k/v: Encode(addr) -> config
+	UpstreamSubTaskKeyAdapter keyHexEncoderDecoder = "/dm-master/upstream/subtask/"
 )
 
 // IsErrNetClosing checks whether is an ErrNetClosing error
@@ -72,16 +87,3 @@ func (s keyHexEncoderDecoder) Decode(key string) []string {
 func (s keyHexEncoderDecoder) Path() string {
 	return string(s)
 }
-
-var (
-	// WorkerRegisterKeyAdapter used to encode and decode register key.
-	WorkerRegisterKeyAdapter keyHexEncoderDecoder = "/dm/worker/r/"
-	// WorkerKeepAliveKeyAdapter used to encode and decode keepalive key.
-	WorkerKeepAliveKeyAdapter keyHexEncoderDecoder = "/dm-worker/a/"
-	// UpstreamConfigKeyAdapter the config path of upstream.
-	UpstreamConfigKeyAdapter keyEncoderDecoder = "/dm-master/upstream/config/"
-	// UpstreamBoundWorkerKeyAdapter the path of worker relationship.
-	UpstreamBoundWorkerKeyAdapter keyHexEncoderDecoder = "/dm-master/bound-worker/"
-	// UpstreamSubTaskKeyAdapter the path of the subtask.
-	UpstreamSubTaskKeyAdapter keyHexEncoderDecoder = "/dm-master/upstream/subtask/"
-)

@@ -235,10 +235,11 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 		if err != nil {
 			resp.Result = false
 			resp.Msg = err.Error()
+			// FIXME: handle error
+			_ = w.OperateSubTask(cfg.Name, pb.TaskOp_Stop)
 		}
 	}
-	// FIXME: handle error
-	_ = w.OperateSubTask(cfg.Name, pb.TaskOp_Stop)
+
 	return resp, nil
 }
 
