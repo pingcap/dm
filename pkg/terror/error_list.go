@@ -124,7 +124,7 @@ const (
 	codeBinlogNeedMariaDBGTIDSet
 	codeBinlogParseMariaDBGTIDSet
 	codeBinlogMariaDBAddGTIDSet
-	codeBinlogInvalidFilenameWithUUIDSuffix
+
 	// pkg/tracing
 	codeTracingEventDataNotValid
 	codeTracingUploadData
@@ -144,6 +144,9 @@ const (
 	// pkg/election
 	codeElectionCampaignFail
 	codeElectionGetLeaderIDFail
+
+	// pkg/binlog
+	codeBinlogInvalidFilenameWithUUIDSuffix
 )
 
 // Config related error code list

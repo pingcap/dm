@@ -100,6 +100,7 @@ ErrBinlogDecodeMySQLGTIDSet,[code=11093:class=functional:scope=internal:level=hi
 ErrBinlogNeedMariaDBGTIDSet,[code=11094:class=functional:scope=internal:level=high],"the event should be a MariadbGTIDListEvent, but got %T"
 ErrBinlogParseMariaDBGTIDSet,[code=11095:class=functional:scope=internal:level=high],"parse MariaDB GTID set"
 ErrBinlogMariaDBAddGTIDSet,[code=11096:class=functional:scope=internal:level=high],"add set %v to GTID set"
+ErrBinlogInvalidFilenameWithUUIDSuffix,[code=11109:class=functional:scope=internal:level=high],"invalid binlog filename with uuid suffix %s"
 ErrTracingEventDataNotValid,[code=11097:class=functional:scope=internal:level=high],"invalid event data for type: %s"
 ErrTracingUploadData,[code=11098:class=functional:scope=internal:level=high],"upload event"
 ErrTracingEventTypeNotValid,[code=11099:class=functional:scope=internal:level=high],"invalid event type %s, will not process"

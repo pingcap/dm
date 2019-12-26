@@ -339,7 +339,6 @@ func (cp *RemoteCheckPoint) IsNewerTablePoint(sourceSchema, sourceTable string, 
 	}
 	oldPos := point.MySQLPos()
 
-	cp.logCtx.L().Info("IsNewerTablePoint", zap.Reflect("old pos", oldPos), zap.Reflect("pos", pos))
 	return binlog.ComparePosition(pos, oldPos) > 0
 }
 
