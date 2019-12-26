@@ -211,7 +211,9 @@ func (c *StreamerController) GetEvent(tctx tcontext.Context) (event *replication
 		return event, nil
 	}
 
-	c.meetError = true
+	if err != context.Canceled {
+		c.meetError = true
+	}
 
 	return nil, err
 }

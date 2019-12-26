@@ -525,7 +525,7 @@ func (w *Worker) SwitchRelayMaster(ctx context.Context, req *pb.SwitchRelayMaste
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	if w.cfg.EnableRelay {
+	if w.relayHolder != nil {
 		return w.relayHolder.SwitchMaster(ctx, req)
 	}
 
@@ -539,7 +539,7 @@ func (w *Worker) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) 
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	if w.cfg.EnableRelay {
+	if w.relayHolder != nil {
 		return w.relayHolder.Operate(ctx, req)
 	}
 
@@ -553,7 +553,7 @@ func (w *Worker) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) erro
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	if w.cfg.EnableRelay {
+	if w.relayHolder != nil {
 		return w.relayPurger.Do(ctx, req)
 	}
 
@@ -600,8 +600,8 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	if !w.cfg.EnableRelay {
-		w.l.Warn("enable-relay is false, ignore update relay config")
+	if w.relayHolder == nil {
+		w.l.Warn("relay holder is nil, ignore update relay config")
 		return nil
 	}
 
@@ -705,8 +705,8 @@ func (w *Worker) MigrateRelay(ctx context.Context, binlogName string, binlogPos 
 	w.Lock()
 	defer w.Unlock()
 
-	if !w.cfg.EnableRelay {
-		w.l.Warn("enable-relay is false, ignore migrate relay")
+	if w.relayHolder == nil {
+		w.l.Warn("relay holder is nil, ignore migrate relay")
 		return nil
 	}
 
@@ -834,7 +834,7 @@ Loop:
 					break
 				}
 
-				if w.cfg.EnableRelay && w.relayPurger.Purging() {
+				if w.relayPurger != nil && w.relayPurger.Purging() {
 					if retryCnt < maxRetryCount {
 						retryCnt++
 						w.l.Warn("relay log purger is purging, cannot start subtask, would try again later", zap.String("task", opLog.Task.Name))
