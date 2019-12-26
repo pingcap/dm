@@ -66,7 +66,6 @@ func (s *Server) JoinMaster(endpoints []string) error {
 
 var (
 	defaultKeepAliveTTL = int64(3)
-	workerKeepAlivePath = "/dm-worker/a"
 	revokeLeaseTimeout  = time.Second
 )
 
@@ -88,7 +87,7 @@ func (s *Server) KeepAlive() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	log.L().Info("keep alive to ", zap.String("master", s.cfg.Join))
+	log.L().Info("keepalive", zap.String("to-master", s.cfg.Join))
 	for {
 		select {
 		case _, ok := <-ch:
