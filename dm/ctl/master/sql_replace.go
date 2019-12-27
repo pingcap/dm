@@ -88,7 +88,7 @@ func sqlReplaceFunc(cmd *cobra.Command, _ []string) {
 	cli := common.MasterClient()
 	resp, err := cli.HandleSQLs(ctx, &pb.HandleSQLsRequest{
 		Name:       taskName,
-		Worker:     worker,
+		Source:     worker,
 		Op:         pb.SQLOp_REPLACE,
 		Args:       realSQLs,
 		BinlogPos:  binlogPos,

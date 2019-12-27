@@ -15,6 +15,7 @@ package worker
 
 import (
 	"context"
+	"github.com/pingcap/dm/dm/common"
 	"go.uber.org/zap"
 	"strings"
 	"time"
@@ -72,24 +73,18 @@ var (
 // KeepAlive attempts to keep the lease of the server alive forever.
 func (s *Server) KeepAlive(ctx context.Context) (bool, error) {
 	// TODO: fetch the actual master endpoints, the master member maybe changed.
-	endpoints := GetJoinURLs(s.cfg.Join)
-	client, err := clientv3.NewFromURLs(endpoints)
-	if err != nil {
-		return false, err
-	}
-
 	cliCtx, canc := context.WithTimeout(ctx, revokeLeaseTimeout)
 	defer canc()
-	lease, err := client.Grant(cliCtx, defaultKeepAliveTTL)
+	lease, err := s.etcdClient.Grant(cliCtx, defaultKeepAliveTTL)
 	if err != nil {
 		return false, err
 	}
-	k := strings.Join([]string{workerKeepAlivePath, s.cfg.WorkerAddr, s.cfg.Name}, ",")
-	_, err = client.Put(cliCtx, k, time.Now().String(), clientv3.WithLease(lease.ID))
+	k := common.WorkerKeepAliveKeyAdapter.Encode(s.cfg.WorkerAddr, s.cfg.Name)
+	_, err = s.etcdClient.Put(cliCtx, k, time.Now().String(), clientv3.WithLease(lease.ID))
 	if err != nil {
 		return false, err
 	}
-	ch, err := client.KeepAlive(ctx, lease.ID)
+	ch, err := s.etcdClient.KeepAlive(ctx, lease.ID)
 	if err != nil {
 		return false, err
 	}
@@ -103,9 +98,9 @@ func (s *Server) KeepAlive(ctx context.Context) (bool, error) {
 			}
 		case <-ctx.Done():
 			log.L().Info("server is closing, exits keepalive")
-			ctx, cancel := context.WithTimeout(client.Ctx(), revokeLeaseTimeout)
+			ctx, cancel := context.WithTimeout(s.etcdClient.Ctx(), revokeLeaseTimeout)
 			defer cancel()
-			client.Revoke(ctx, lease.ID)
+			s.etcdClient.Revoke(ctx, lease.ID)
 			return true, nil
 		}
 	}

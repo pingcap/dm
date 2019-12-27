@@ -82,7 +82,7 @@ func sqlSkipFunc(cmd *cobra.Command, _ []string) {
 
 	resp, err := cli.HandleSQLs(ctx, &pb.HandleSQLsRequest{
 		Name:       taskName,
-		Worker:     worker,
+		Source:     worker,
 		Op:         pb.SQLOp_SKIP,
 		BinlogPos:  binlogPos,
 		SqlPattern: sqlPattern,

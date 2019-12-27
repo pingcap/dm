@@ -15,6 +15,7 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"github.com/pingcap/dm/dm/config"
 	"io/ioutil"
 	"net/http"
@@ -40,7 +41,6 @@ var _ = Suite(&testServer{})
 func (t *testServer) TestServer(c *C) {
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
-
 
 	NewRelayHolder = NewDummyRelayHolder
 	defer func() {
@@ -141,30 +141,34 @@ func (t *testServer) createClient(c *C, addr string) pb.WorkerClient {
 func (t *testServer) testOperateWorker(c *C, s *Server, start bool) {
 	dir := c.MkDir()
 	workerCfg := &config.MysqlConfig{}
-	workerCfg.LoadFromFile("./dm-mysql.toml")
+	err := workerCfg.LoadFromFile("./dm-mysql.toml")
+	c.Assert(err, IsNil)
 	workerCfg.RelayDir = dir
 	workerCfg.MetaDir = dir
 	cli := t.createClient(c, "127.0.0.1:8262")
 	task, err := workerCfg.Toml()
 	c.Assert(err, IsNil)
 	req := &pb.MysqlTaskRequest{
-		Op: pb.WorkerOp_UpdateConfig,
+		Op:     pb.WorkerOp_UpdateConfig,
 		Config: task,
 	}
 	if start {
 		resp, err := cli.OperateMysqlTask(context.Background(), req)
 		c.Assert(err, IsNil)
 		c.Assert(resp.Result, Equals, false)
-		c.Assert(resp.Msg, Matches, ".*Mysql task has not been created, please call CreateMysqlTask")
+		c.Assert(resp.Msg, Matches, ".*Mysql task has not been created, please call CreateMysqlTask.*")
 		req.Op = pb.WorkerOp_StartWorker
 		resp, err = cli.OperateMysqlTask(context.Background(), req)
 		c.Assert(err, IsNil)
+		fmt.Println("=======msg=====")
+		fmt.Println(resp.Msg)
 		c.Assert(resp.Result, Equals, true)
 
 		req.Op = pb.WorkerOp_UpdateConfig
 		resp, err = cli.OperateMysqlTask(context.Background(), req)
 		c.Assert(err, IsNil)
 		c.Assert(resp.Result, Equals, true)
+		c.Assert(s.worker, NotNil)
 	} else {
 		req.Op = pb.WorkerOp_StopWorker
 		resp, err := cli.OperateMysqlTask(context.Background(), req)
@@ -172,4 +176,3 @@ func (t *testServer) testOperateWorker(c *C, s *Server, start bool) {
 		c.Assert(resp.Result, Equals, true)
 	}
 }
-

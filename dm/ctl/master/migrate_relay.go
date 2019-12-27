@@ -59,7 +59,7 @@ func migrateRelayFunc(cmd *cobra.Command, _ []string) {
 	resp, err := cli.MigrateWorkerRelay(ctx, &pb.MigrateWorkerRelayRequest{
 		BinlogName: binlogName,
 		BinlogPos:  uint32(binlogPos),
-		Worker:     worker,
+		Source:     worker,
 	})
 	if err != nil {
 		log.L().Error("can not migrate relay", zap.Error(err))
