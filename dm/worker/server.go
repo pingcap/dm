@@ -16,24 +16,23 @@ package worker
 import (
 	"context"
 	"fmt"
-	"go.etcd.io/etcd/clientv3"
 	"io"
 	"net"
 	"path"
 	"sync"
 	"time"
 
-	"github.com/pingcap/errors"
-	"github.com/siddontang/go/sync2"
-	"github.com/soheilhy/cmux"
-	"go.uber.org/zap"
-	"google.golang.org/grpc"
-
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/errors"
+	"github.com/siddontang/go/sync2"
+	"github.com/soheilhy/cmux"
+	"go.etcd.io/etcd/clientv3"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
 )
 
 var (
@@ -103,7 +102,7 @@ func (s *Server) Start() error {
 		shouldExit := false
 		shouldStop := false
 		for !shouldExit {
-			shouldExit, err = s.KeepAlive(s.ctx)
+			shouldExit, err = s.KeepAlive()
 			if err != nil || !shouldExit {
 				if shouldStop {
 					s.Lock()
@@ -211,12 +210,12 @@ func (s *Server) stopWorker(sourceID string) *Worker {
 	return w
 }
 
-func retryWriteEctd(ctx context.Context, cli *clientv3.Client, ops ...clientv3.Op) string {
+func (s *Server) retryWriteEctd(ops ...clientv3.Op) string {
 	retryTimes := 3
-	cliCtx, canc := context.WithTimeout(ctx, time.Second)
+	cliCtx, canc := context.WithTimeout(s.etcdClient.Ctx(), time.Second)
 	defer canc()
 	for {
-		res, err := cli.Txn(cliCtx).Then(ops...).Commit()
+		res, err := s.etcdClient.Txn(cliCtx).Then(ops...).Commit()
 		retryTimes--
 		if err == nil {
 			if res.Succeeded {
@@ -267,9 +266,10 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 		resp.Result = false
 		resp.Msg = err.Error()
 	}
+
 	if resp.Result {
-		op1 := clientv3.OpPut(common.WorkerTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name), req.Task)
-		resp.Msg = retryWriteEctd(ctx, s.etcdClient, op1)
+		op1 := clientv3.OpPut(common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name), req.Task)
+		resp.Msg = s.retryWriteEctd(op1)
 		// We do not need to stop worker. Because if we lose connect from etcd, Worker would be stopped in keepalive-thread.
 	}
 	return resp, nil
@@ -299,8 +299,8 @@ func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskReque
 		resp.Msg = err.Error()
 	} else {
 		// TODO: change task state.
-		op1 := clientv3.OpDelete(path.Join(common.WorkerTaskKeyAdapter.Encode(w.cfg.SourceID, req.Name)))
-		resp.Msg = retryWriteEctd(ctx, s.etcdClient, op1)
+		op1 := clientv3.OpDelete(path.Join(common.UpstreamSubTaskKeyAdapter.Encode(w.cfg.SourceID, req.Name)))
+		resp.Msg = s.retryWriteEctd(op1)
 	}
 	return resp, nil
 }
@@ -336,8 +336,8 @@ func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest
 		resp.Result = false
 		resp.Msg = err.Error()
 	} else {
-		op1 := clientv3.OpPut(common.WorkerTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name), req.Task)
-		resp.Msg = retryWriteEctd(ctx, s.etcdClient, op1)
+		op1 := clientv3.OpPut(common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name), req.Task)
+		resp.Msg = s.retryWriteEctd(op1)
 	}
 	return resp, nil
 }
@@ -639,10 +639,10 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 
 	ectx, cancel := context.WithTimeout(s.etcdClient.Ctx(), time.Second*3)
 	defer cancel()
-	resp, err := s.etcdClient.Get(ectx, common.WorkerTaskKeyAdapter.Encode(cfg.SourceID))
+	resp, err := s.etcdClient.Get(ectx, common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID))
 	if err == nil {
 		for _, kv := range resp.Kvs {
-			infos := common.WorkerTaskKeyAdapter.Decode(string(kv.Key))
+			infos := common.UpstreamSubTaskKeyAdapter.Decode(string(kv.Key))
 			taskName := infos[1]
 			task := string(kv.Value)
 			cfg := config.NewSubTaskConfig()
@@ -695,7 +695,7 @@ func (s *Server) OperateMysqlTask(ctx context.Context, req *pb.MysqlTaskRequest)
 			op1 = clientv3.OpDelete(common.UpstreamConfigKeyAdapter.Encode(cfg.SourceID))
 			op2 = clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Encode(s.cfg.WorkerAddr))
 		}
-		resp.Msg = retryWriteEctd(ctx, s.etcdClient, op1, op2)
+		resp.Msg = s.retryWriteEctd(op1, op2)
 		// Because etcd was deployed with master in a single process, if we can not write data into etcd, most probably
 		// the have lost connect from master.
 	}

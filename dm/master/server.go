@@ -16,34 +16,33 @@ package master
 import (
 	"context"
 	"fmt"
-	"github.com/pingcap/dm/pkg/conn"
 	"io"
 	"net/http"
-	"path"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/pingcap/errors"
-	"github.com/siddontang/go/sync2"
-	"go.etcd.io/etcd/clientv3"
-	"go.etcd.io/etcd/embed"
-	"go.uber.org/zap"
-	"google.golang.org/grpc"
-
 	"github.com/pingcap/dm/checker"
+	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/master/coordinator"
 	operator "github.com/pingcap/dm/dm/master/sql-operator"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/election"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/syncer"
+	"github.com/pingcap/errors"
+	"github.com/siddontang/go/sync2"
+	"go.etcd.io/etcd/clientv3"
+	"go.etcd.io/etcd/embed"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -52,8 +51,7 @@ const (
 	electionTTL = 60
 	// the DM-master leader election key prefix
 	// DM-master cluster : etcd cluster = 1 : 1 now.
-	electionKey        = "/dm-master/leader"
-	workerRegisterPath = "/dm-worker/r/"
+	electionKey = "/dm-master/leader"
 )
 
 var (
@@ -192,13 +190,6 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	}()
 
 	s.bgFunWg.Add(1)
-	s.coordinator.Init(s.etcdClient)
-	go func() {
-		defer s.bgFunWg.Done()
-		s.coordinator.ObserveWorkers(ctx, s.etcdClient)
-	}()
-
-	s.bgFunWg.Add(1)
 	go func() {
 		defer s.bgFunWg.Done()
 		select {
@@ -257,10 +248,17 @@ func errorCommonWorkerResponse(msg string, worker string) *pb.CommonWorkerRespon
 }
 
 // RegisterWorker registers the worker to the master, and all the worker will be store in the path:
-// key:   /dm-worker/address
+// key:   /dm-worker/r/address
 // value: name
 func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerRequest) (*pb.RegisterWorkerResponse, error) {
-	k := path.Join(workerRegisterPath, req.Address)
+	if !s.coordinator.IsStarted() {
+		respWorker := &pb.RegisterWorkerResponse{
+			Result: false,
+			Msg:    "coordinator not started, may not leader",
+		}
+		return respWorker, nil
+	}
+	k := common.WorkerRegisterKeyAdapter.Encode(req.Address)
 	v := req.Name
 	ectx, cancel := context.WithTimeout(ctx, etcdTimeouit)
 	defer cancel()
@@ -277,7 +275,7 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 			return nil, errors.Errorf("the response kv is invalid length, request key: %s", k)
 		}
 		kv := resp.Responses[0].GetResponseRange().GetKvs()[0]
-		address, name := strings.TrimPrefix(string(kv.Key), workerRegisterPath), string(kv.Value)
+		address, name := common.WorkerRegisterKeyAdapter.Decode(string(kv.Key))[0], string(kv.Value)
 		if name != req.Name {
 			msg := fmt.Sprintf("the address %s already registered with name %s", address, name)
 			respWorker := &pb.RegisterWorkerResponse{
@@ -1668,7 +1666,7 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlTaskReques
 	if err != nil {
 		return makeMysqlTaskResponse(err)
 	}
-	if err := cfg.Adjust(fromDB.DB); err != nil {
+	if err = cfg.Adjust(fromDB.DB); err != nil {
 		return makeMysqlTaskResponse(err)
 	}
 	if req.Config, err = cfg.Toml(); err != nil {
@@ -1683,28 +1681,24 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlTaskReques
 				Msg:    "Create worker failed. worker has been started",
 			}, nil
 		}
-		w, addr := s.coordinator.AcquireWorkerForSource(cfg.SourceID)
-		if w == nil {
-			if addr != "" {
-				return &pb.MysqlTaskResponse{
-					Result: false,
-					Msg:    fmt.Sprintf("Create worker failed. the same source has been started in worker: %v", addr),
-				}, nil
-			}
+		w, err := s.coordinator.AcquireWorkerForSource(cfg.SourceID)
+		if err != nil {
 			return &pb.MysqlTaskResponse{
 				Result: false,
-				Msg:    "Create worker failed. no free worker could start mysql task",
+				Msg:    err.Error(),
 			}, nil
 		}
 
 		resp, err = w.OperateMysqlTask(ctx, req, s.cfg.RPCTimeout)
 		if err != nil {
+			// TODO: handle error or backoff
 			s.coordinator.HandleStartedWorker(w, cfg, false)
 			return &pb.MysqlTaskResponse{
 				Result: false,
 				Msg:    errors.ErrorStack(err),
 			}, nil
 		}
+		// TODO: handle error or backoff
 		s.coordinator.HandleStartedWorker(w, cfg, true)
 	} else if req.Op == pb.WorkerOp_UpdateConfig {
 		w := s.coordinator.GetWorkerBySourceID(cfg.SourceID)

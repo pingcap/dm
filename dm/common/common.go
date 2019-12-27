@@ -21,6 +21,21 @@ import (
 
 var (
 	useOfClosedErrMsg = "use of closed network connection"
+	// WorkerRegisterKeyAdapter used to encode and decode register key.
+	// k/v: Encode(addr) -> name
+	WorkerRegisterKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-worker/r/")
+	// WorkerKeepAliveKeyAdapter used to encode and decode keepalive key.
+	// k/v: Encode(addr,name) -> time
+	WorkerKeepAliveKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-worker/a/")
+	// UpstreamConfigKeyAdapter the config path of upstream.
+	// k/v: Encode(source-id) -> config
+	UpstreamConfigKeyAdapter KeyAdapter = keyEncoderDecoder("/dm-master/upstream/config/")
+	// UpstreamBoundWorkerKeyAdapter the path of worker relationship.
+	// k/v: Encode(addr) -> source-id
+	UpstreamBoundWorkerKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/bound-worker/")
+	// UpstreamSubTaskKeyAdapter the path of the subtask.
+	// k/v: Encode(addr) -> config
+	UpstreamSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/upstream/subtask/")
 )
 
 // IsErrNetClosing checks whether is an ErrNetClosing error
@@ -29,6 +44,13 @@ func IsErrNetClosing(err error) bool {
 		return false
 	}
 	return strings.Contains(err.Error(), useOfClosedErrMsg)
+}
+
+//KeyAdapter used to counstruct etcd key.
+type KeyAdapter interface {
+	Encode(keys ...string) string
+	Decode(key string) []string
+	Path() string
 }
 
 type keyEncoderDecoder string
@@ -72,16 +94,3 @@ func (s keyHexEncoderDecoder) Decode(key string) []string {
 func (s keyHexEncoderDecoder) Path() string {
 	return string(s)
 }
-
-var (
-	// WorkerRegisterKeyAdapter used to encode and decode register key.
-	WorkerRegisterKeyAdapter keyHexEncoderDecoder = "/dm/worker/r/"
-	// WorkerKeepAliveKeyAdapter used to encode and decode keepalive key.
-	WorkerKeepAliveKeyAdapter keyHexEncoderDecoder = "/dm-worker/a/"
-	// UpstreamConfigKeyAdapter the config path of upstream.
-	UpstreamConfigKeyAdapter keyEncoderDecoder = "/dm-master/upstream/config/"
-	// UpstreamBoundWorkerKeyAdapter the path of worker relationship.
-	UpstreamBoundWorkerKeyAdapter keyHexEncoderDecoder = "/dm-master/bound-worker/"
-	// WorkerTaskKeyAdapter the subtask of source id
-	WorkerTaskKeyAdapter keyEncoderDecoder = "/dm-worker/upstream/"
-)
