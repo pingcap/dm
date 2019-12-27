@@ -15,19 +15,24 @@ package coordinator
 
 import (
 	"context"
-	"github.com/pingcap/dm/dm/config"
-	"strings"
 	"sync"
+	"time"
 
+	"github.com/pingcap/dm/dm/common"
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/errors"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/mvcc/mvccpb"
 	"go.uber.org/zap"
 )
 
 var (
-	workerKeepAlivePath = "/dm-worker/a"
+	etcdTimeouit = 3 * time.Second
+
+	// ErrNotStarted coordinator does not start.
+	ErrNotStarted = errors.New("coordinator does not start")
 )
 
 // Coordinator coordinate wrokers and upstream.
@@ -41,8 +46,14 @@ type Coordinator struct {
 	// upstream(address) -> config
 	configs map[string]config.MysqlConfig
 
-	// pending create taks (sourceid) --> address
+	// pending create task (sourceid) --> address
 	pendingtask map[string]string
+
+	etcdCli *clientv3.Client
+	ctx     context.Context
+	cancel  context.CancelFunc
+	started bool
+	wg      sync.WaitGroup
 }
 
 // NewCoordinator returns a coordinate.
@@ -55,9 +66,86 @@ func NewCoordinator() *Coordinator {
 	}
 }
 
-// Init would recover infomation from etcd
-func (c *Coordinator) Init(etcdClient *clientv3.Client) {
+// Start starts the coordinator and would recover infomation from etcd.
+func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) error {
 	// TODO: recover upstreams and configs and workers
+	// workers
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.etcdCli = etcdClient
+
+	// recovering.
+	ectx, cancel := context.WithTimeout(etcdClient.Ctx(), etcdTimeouit)
+	defer cancel()
+	resp, err := etcdClient.Get(ectx, common.WorkerRegisterKeyAdapter.Path(), clientv3.WithPrefix())
+	if err != nil {
+		return err
+	}
+
+	for _, kv := range resp.Kvs {
+		addr := common.WorkerRegisterKeyAdapter.Decode(string(kv.Key))[0]
+		name := string(kv.Value)
+		c.workers[addr] = NewWorker(name, addr)
+		log.L().Info("load worker successful", zap.String("addr", addr), zap.String("name", name))
+	}
+
+	// configs
+	resp, err = etcdClient.Get(ectx, common.UpstreamBoundWorkerKeyAdapter.Path(), clientv3.WithPrefix())
+	if err != nil {
+		return nil
+	}
+
+	for _, kv := range resp.Kvs {
+		addr := common.UpstreamBoundWorkerKeyAdapter.Decode(string(kv.Key))[0]
+		sourceID := string(kv.Value)
+		w, ok := c.workers[addr]
+		if !ok {
+			log.L().Error("worker not exist but binding relationship exist", zap.String("addr", addr), zap.String("source", sourceID))
+			continue
+		}
+		gresp, err := etcdClient.Get(ctx, common.UpstreamConfigKeyAdapter.Encode(sourceID))
+		if err != nil || len(gresp.Kvs) == 0 {
+			log.L().Error("cannot load config", zap.String("addr", addr), zap.String("source", sourceID), zap.Error(err))
+			continue
+		}
+		cfgStr := string(gresp.Kvs[0].Value)
+		cfg := config.NewWorkerConfig()
+		err = cfg.Parse(cfgStr)
+		if err != nil {
+			log.L().Error("cannot parse config", zap.String("addr", addr), zap.String("source", sourceID), zap.Error(err))
+			continue
+		}
+		c.upstreams[sourceID] = w
+		log.L().Info("load config successful", zap.String("source", sourceID), zap.String("config", cfgStr))
+	}
+	// TODO: recover subtask
+
+	c.started = true
+	c.ctx, c.cancel = context.WithCancel(ctx)
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		c.ObserveWorkers()
+	}()
+	log.L().Info("coordinator is started")
+	return nil
+}
+
+// IsStarted checks if the coordinator is started.
+func (c *Coordinator) IsStarted() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.started
+}
+
+// Stop stops the coordinator.
+func (c *Coordinator) Stop() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cancel()
+	c.started = false
+	c.wg.Wait()
+	log.L().Info("coordinator is stoped")
 }
 
 // AddWorker add the dm-worker to the coordinate.
@@ -76,8 +164,8 @@ func (c *Coordinator) HandleStartedWorker(w *Worker, cfg *config.MysqlConfig, su
 		c.configs[w.Address()] = *cfg
 	} else {
 		w.SetStatus(WorkerFree)
+		delete(c.pendingtask, cfg.SourceID)
 	}
-	delete(c.pendingtask, cfg.SourceID)
 }
 
 // HandleStoppedWorker change worker status when mysql task stopped
@@ -89,23 +177,26 @@ func (c *Coordinator) HandleStoppedWorker(w *Worker, cfg *config.MysqlConfig) {
 	w.SetStatus(WorkerFree)
 }
 
-// GetFreeWorkerForSource get the free worker to create mysql delay task, and add it to pending task
+// AcquireWorkerForSource get the free worker to create mysql delay task, and add it to pending task
 // to avoid create a task in two worker
-func (c *Coordinator) GetFreeWorkerForSource(source string) (*Worker, string) {
+func (c *Coordinator) AcquireWorkerForSource(cfg *config.MysqlConfig) (*Worker, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if addr, ok := c.pendingtask[source]; ok {
-		return nil, addr
+	if c.started == false {
+		return nil, ErrNotStarted
+	}
+	if addr, ok := c.pendingtask[cfg.SourceID]; ok {
+		return nil, errors.Errorf("Acquire worker failed. the same source has been started in worker: %s", addr)
 	}
 	for _, w := range c.workers {
 		if w.status.Load() == WorkerFree {
 			// we bound worker to avoid another task trying to get it
 			w.status.Store(WorkerBound)
-			c.pendingtask[source] = w.Address()
-			return w, ""
+			c.pendingtask[cfg.SourceID] = w.Address()
+			return w, nil
 		}
 	}
-	return nil, ""
+	return nil, errors.New("Acquire worker failed. no  free worker could start mysql task")
 }
 
 // GetWorkerByAddress gets the worker through address.
@@ -183,9 +274,9 @@ func (c *Coordinator) GetWorkersByStatus(s WorkerState) []*Worker {
 }
 
 // ObserveWorkers observe the keepalive path and maintain the status of the worker.
-func (c *Coordinator) ObserveWorkers(ctx context.Context, client *clientv3.Client) {
-	watcher := clientv3.NewWatcher(client)
-	ch := watcher.Watch(ctx, workerKeepAlivePath, clientv3.WithPrefix())
+func (c *Coordinator) ObserveWorkers() {
+	watcher := clientv3.NewWatcher(c.etcdCli)
+	ch := watcher.Watch(c.ctx, common.WorkerKeepAliveKeyAdapter.Path(), clientv3.WithPrefix())
 
 	for {
 		select {
@@ -199,9 +290,8 @@ func (c *Coordinator) ObserveWorkers(ctx context.Context, client *clientv3.Clien
 				switch ev.Type {
 				case mvccpb.PUT:
 					log.L().Info("putkv", zap.String("kv", string(ev.Kv.Key)))
-					key := string(ev.Kv.Key)
-					slice := strings.Split(string(key), ",")
-					addr, name := slice[1], slice[2]
+					kvs := common.WorkerKeepAliveKeyAdapter.Decode(string(ev.Kv.Key))
+					addr, name := kvs[0], kvs[1]
 					c.mu.Lock()
 					if w, ok := c.workers[addr]; ok && name == w.Name() {
 						log.L().Info("worker became online, state: free", zap.String("name", w.Name()), zap.String("address", w.Address()))
@@ -213,9 +303,8 @@ func (c *Coordinator) ObserveWorkers(ctx context.Context, client *clientv3.Clien
 
 				case mvccpb.DELETE:
 					log.L().Info("deletekv", zap.String("kv", string(ev.Kv.Key)))
-					key := string(ev.Kv.Key)
-					slice := strings.Split(string(key), ",")
-					addr, name := slice[1], slice[2]
+					kvs := common.WorkerKeepAliveKeyAdapter.Decode(string(ev.Kv.Key))
+					addr, name := kvs[0], kvs[1]
 					c.mu.Lock()
 					if w, ok := c.workers[addr]; ok && name == w.Name() {
 						log.L().Info("worker became offline, state: closed", zap.String("name", w.Name()), zap.String("address", w.Address()))
@@ -227,7 +316,7 @@ func (c *Coordinator) ObserveWorkers(ctx context.Context, client *clientv3.Clien
 					c.mu.Unlock()
 				}
 			}
-		case <-ctx.Done():
+		case <-c.ctx.Done():
 			log.L().Info("coordinate exict due to context canceled")
 			return
 		}

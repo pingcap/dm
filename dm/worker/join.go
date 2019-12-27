@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
@@ -65,35 +66,28 @@ func (s *Server) JoinMaster(endpoints []string) error {
 
 var (
 	defaultKeepAliveTTL = int64(3)
-	workerKeepAlivePath = "/dm-worker/a"
 	revokeLeaseTimeout  = time.Second
 )
 
 // KeepAlive attempts to keep the lease of the server alive forever.
-func (s *Server) KeepAlive(ctx context.Context) (bool, error) {
+func (s *Server) KeepAlive() (bool, error) {
 	// TODO: fetch the actual master endpoints, the master member maybe changed.
-	endpoints := GetJoinURLs(s.cfg.Join)
-	client, err := clientv3.NewFromURLs(endpoints)
-	if err != nil {
-		return false, err
-	}
-
-	cliCtx, canc := context.WithTimeout(ctx, revokeLeaseTimeout)
+	cliCtx, canc := context.WithTimeout(s.ctx, revokeLeaseTimeout)
 	defer canc()
-	lease, err := client.Grant(cliCtx, defaultKeepAliveTTL)
+	lease, err := s.etcdClient.Grant(cliCtx, defaultKeepAliveTTL)
 	if err != nil {
 		return false, err
 	}
-	k := strings.Join([]string{workerKeepAlivePath, s.cfg.WorkerAddr, s.cfg.Name}, ",")
-	_, err = client.Put(cliCtx, k, time.Now().String(), clientv3.WithLease(lease.ID))
+	k := common.WorkerKeepAliveKeyAdapter.Encode(s.cfg.WorkerAddr, s.cfg.Name)
+	_, err = s.etcdClient.Put(cliCtx, k, time.Now().String(), clientv3.WithLease(lease.ID))
 	if err != nil {
 		return false, err
 	}
-	ch, err := client.KeepAlive(ctx, lease.ID)
+	ch, err := s.etcdClient.KeepAlive(s.ctx, lease.ID)
 	if err != nil {
 		return false, err
 	}
-	log.L().Info("keep alive to ", zap.String("master", s.cfg.Join))
+	log.L().Info("keepalive", zap.String("to-master", s.cfg.Join))
 	for {
 		select {
 		case _, ok := <-ch:
@@ -101,11 +95,11 @@ func (s *Server) KeepAlive(ctx context.Context) (bool, error) {
 				log.L().Info("keep alive channel is closed")
 				return false, nil
 			}
-		case <-ctx.Done():
+		case <-s.ctx.Done():
 			log.L().Info("server is closing, exits keepalive")
-			ctx, cancel := context.WithTimeout(client.Ctx(), revokeLeaseTimeout)
+			ctx, cancel := context.WithTimeout(s.etcdClient.Ctx(), revokeLeaseTimeout)
 			defer cancel()
-			client.Revoke(ctx, lease.ID)
+			s.etcdClient.Revoke(ctx, lease.ID)
 			return true, nil
 		}
 	}

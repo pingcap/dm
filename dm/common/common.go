@@ -13,10 +13,29 @@
 
 package common
 
-import "strings"
+import (
+	"encoding/hex"
+	"path"
+	"strings"
+)
 
 var (
 	useOfClosedErrMsg = "use of closed network connection"
+	// WorkerRegisterKeyAdapter used to encode and decode register key.
+	// k/v: Encode(addr) -> name
+	WorkerRegisterKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-worker/r/")
+	// WorkerKeepAliveKeyAdapter used to encode and decode keepalive key.
+	// k/v: Encode(addr,name) -> time
+	WorkerKeepAliveKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-worker/a/")
+	// UpstreamConfigKeyAdapter the config path of upstream.
+	// k/v: Encode(source-id) -> config
+	UpstreamConfigKeyAdapter KeyAdapter = keyEncoderDecoder("/dm-master/upstream/config/")
+	// UpstreamBoundWorkerKeyAdapter the path of worker relationship.
+	// k/v: Encode(addr) -> source-id
+	UpstreamBoundWorkerKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/bound-worker/")
+	// UpstreamSubTaskKeyAdapter the path of the subtask.
+	// k/v: Encode(addr) -> config
+	UpstreamSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/upstream/subtask/")
 )
 
 // IsErrNetClosing checks whether is an ErrNetClosing error
@@ -25,4 +44,53 @@ func IsErrNetClosing(err error) bool {
 		return false
 	}
 	return strings.Contains(err.Error(), useOfClosedErrMsg)
+}
+
+//KeyAdapter used to counstruct etcd key.
+type KeyAdapter interface {
+	Encode(keys ...string) string
+	Decode(key string) []string
+	Path() string
+}
+
+type keyEncoderDecoder string
+type keyHexEncoderDecoder string
+
+func (s keyEncoderDecoder) Encode(keys ...string) string {
+	t := []string{string(s)}
+	t = append(t, keys...)
+	return path.Join(t...)
+}
+
+func (s keyEncoderDecoder) Decode(key string) []string {
+	v := strings.TrimPrefix(key, string(s))
+	return strings.Split(v, "/")
+}
+
+func (s keyEncoderDecoder) Path() string {
+	return string(s)
+}
+
+func (s keyHexEncoderDecoder) Encode(keys ...string) string {
+	t := []string{string(s)}
+	for _, key := range keys {
+		t = append(t, hex.EncodeToString([]byte(key)))
+	}
+	return path.Join(t...)
+}
+
+func (s keyHexEncoderDecoder) Decode(key string) []string {
+	v := strings.Split(strings.TrimPrefix(key, string(s)), "/")
+	for i, k := range v {
+		dec, err := hex.DecodeString(k)
+		if err != nil {
+			panic(err)
+		}
+		v[i] = string(dec)
+	}
+	return v
+}
+
+func (s keyHexEncoderDecoder) Path() string {
+	return string(s)
 }
