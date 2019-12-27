@@ -6,19 +6,26 @@ import (
 	"github.com/pingcap/errors"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"sync/atomic"
 	"time"
 )
 
 var (
-	masterClient pb.MasterClient
+	masterClient atomic.Value
 )
 
 // InitClient initializes dm-master client
-func InitClient(addrs []string) error {
+func InitClient(addrs []string, block bool) error {
 	var err error
 	var conn *grpc.ClientConn
+	ops := []grpc.DialOption{grpc.WithInsecure()}
+	if block {
+		ops = append(ops, grpc.WithBlock(), grpc.WithTimeout(1*time.Second))
+	} else {
+		ops = append(ops, grpc.WithBackoffMaxDelay(3*time.Second))
+	}
 	for _, addr := range addrs {
-		conn, err = grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(1*time.Second))
+		conn, err = grpc.Dial(addr, ops...)
 		if err == nil {
 			break
 		}
@@ -26,19 +33,19 @@ func InitClient(addrs []string) error {
 	}
 
 	if err != nil {
-		masterClient = nil
+		masterClient.Store(nil)
 		return errors.Trace(err)
 	}
-	masterClient = pb.NewMasterClient(conn)
+	masterClient.Store(pb.NewMasterClient(conn))
 	return nil
 }
 
 // ResetMasterClient reset masterClient when no master is available
 func ResetMasterClient() {
-	masterClient = nil
+	masterClient.Store(nil)
 }
 
 // MasterClient returns dm-master client
 func MasterClient() pb.MasterClient {
-	return masterClient
+	return masterClient.Load().(pb.MasterClient)
 }

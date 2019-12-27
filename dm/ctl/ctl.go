@@ -87,7 +87,7 @@ func Init(cfg *common.Config) error {
 	log.SetLevel(zapcore.InfoLevel)
 
 	common.InitUtils(cfg)
-	return errors.Trace(dmcommon.InitClient(cfg.GetMasterAddrs()))
+	return errors.Trace(dmcommon.InitClient(cfg.GetMasterAddrs(), true))
 }
 
 // PrintUsage prints usage

@@ -17,7 +17,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/pingcap/pd/server/kv"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -107,17 +106,15 @@ func NewElection(
 			return nil, errors.WithStack(err)
 		}
 		if meta == nil {
-			// fake set leader here
 			log.L().Warn("seems there is no leader now, try campaign leader.")
-			err := e.tryCampaignLeader(ctx, session.Lease())
-			if err != nil {
-				return nil, errors.WithStack(err)
+			err1 := e.tryCampaignLeader(ctx, session.Lease())
+			if err1 != nil {
+				return nil, errors.Trace(err1)
 			}
 		} else {
 			if meta.ID == e.meta.ID {
 				e.toBeLeader()
 			} else {
-				e.isLeader.Set(false)
 				err = e.updateLeader(meta)
 				if err != nil {
 					return nil, err
@@ -137,7 +134,8 @@ func NewElection(
 
 // IsLeader returns whether this member is the leader.
 func (e *Election) IsLeader() bool {
-	return e.isLeader.Get()
+	meta := e.leaderMeta.Load().(*NodeMeta)
+	return meta != nil && meta.ID == e.meta.ID
 }
 
 // ID returns the current member's ID.
@@ -223,7 +221,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		}
 
 		// try to campaign
-		if !e.isLeader.Get() {
+		if !e.IsLeader() {
 			elec := concurrency.NewElection(session, e.key)
 			val, _ := json.Marshal(e.meta)
 			err = elec.Campaign(ctx, string(val))
@@ -279,7 +277,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 func (e *Election) tryCampaignLeader(ctx context.Context, leaseID clientv3.LeaseID) error {
 	value, _ := json.Marshal(&e.meta)
-	_, err := kv.NewSlowLogTxn(e.cli).
+	_, err := e.cli.Txn(ctx).
 		If(clientv3.Compare(clientv3.CreateRevision(e.key), "=", 0)).
 		Then(clientv3.OpPut(e.key, string(value), clientv3.WithLease(leaseID))).
 		Commit()
@@ -287,7 +285,6 @@ func (e *Election) tryCampaignLeader(ctx context.Context, leaseID clientv3.Lease
 }
 
 func (e *Election) toBeLeader() {
-	e.isLeader.Set(true)
 	e.leaderMeta.Store(e.meta)
 	select {
 	case e.leaderCh <- true:
@@ -296,18 +293,18 @@ func (e *Election) toBeLeader() {
 }
 
 func (e *Election) retireLeader(leaderMeta *NodeMeta) error {
-	e.isLeader.Set(false)
+	err := e.updateLeader(leaderMeta)
 	select {
 	case e.leaderCh <- false:
 	default:
 	}
-	return e.updateLeader(leaderMeta)
+	return err
 }
 
 func (e *Election) updateLeader(leaderMeta *NodeMeta) error {
 	e.leaderMeta.Store(leaderMeta)
 	if leaderMeta != nil {
-		return common.InitClient([]string{leaderMeta.Address})
+		return common.InitClient([]string{leaderMeta.Address}, false)
 	}
 	common.ResetMasterClient()
 	return nil
