@@ -23,19 +23,19 @@ var (
 	useOfClosedErrMsg = "use of closed network connection"
 	// WorkerRegisterKeyAdapter used to encode and decode register key.
 	// k/v: Encode(addr) -> name
-	WorkerRegisterKeyAdapter keyHexEncoderDecoder = "/dm-worker/r/"
+	WorkerRegisterKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-worker/r/")
 	// WorkerKeepAliveKeyAdapter used to encode and decode keepalive key.
 	// k/v: Encode(addr,name) -> time
-	WorkerKeepAliveKeyAdapter keyHexEncoderDecoder = "/dm-worker/a/"
+	WorkerKeepAliveKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-worker/a/")
 	// UpstreamConfigKeyAdapter the config path of upstream.
 	// k/v: Encode(source-id) -> config
-	UpstreamConfigKeyAdapter keyEncoderDecoder = "/dm-master/upstream/config/"
+	UpstreamConfigKeyAdapter KeyAdapter = keyEncoderDecoder("/dm-master/upstream/config/")
 	// UpstreamBoundWorkerKeyAdapter the path of worker relationship.
 	// k/v: Encode(addr) -> source-id
-	UpstreamBoundWorkerKeyAdapter keyHexEncoderDecoder = "/dm-master/bound-worker/"
+	UpstreamBoundWorkerKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/bound-worker/")
 	// UpstreamSubTaskKeyAdapter the path of the subtask.
 	// k/v: Encode(addr) -> config
-	UpstreamSubTaskKeyAdapter keyHexEncoderDecoder = "/dm-master/upstream/subtask/"
+	UpstreamSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/upstream/subtask/")
 )
 
 // IsErrNetClosing checks whether is an ErrNetClosing error
@@ -44,6 +44,13 @@ func IsErrNetClosing(err error) bool {
 		return false
 	}
 	return strings.Contains(err.Error(), useOfClosedErrMsg)
+}
+
+//KeyAdapter used to counstruct etcd key.
+type KeyAdapter interface {
+	Encode(keys ...string) string
+	Decode(key string) []string
+	Path() string
 }
 
 type keyEncoderDecoder string
