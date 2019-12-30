@@ -658,9 +658,9 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 	return nil
 }
 
-// OperateMysqlTask create a new mysql task which will be running in this Server
-func (s *Server) OperateMysqlTask(ctx context.Context, req *pb.MysqlTaskRequest) (*pb.MysqlTaskResponse, error) {
-	resp := &pb.MysqlTaskResponse{
+// OperateMysqlWorker create a new mysql task which will be running in this Server
+func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequest) (*pb.MysqlWorkerResponse, error) {
+	resp := &pb.MysqlWorkerResponse{
 		Result: true,
 		Msg:    "Operate mysql task successfully",
 	}

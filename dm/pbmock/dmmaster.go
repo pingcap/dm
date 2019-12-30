@@ -116,14 +116,14 @@ func (mr *MockMasterClientMockRecorder) MigrateWorkerRelay(arg0, arg1 interface{
 }
 
 // OperateMysqlWorker mocks base method
-func (m *MockMasterClient) OperateMysqlWorker(arg0 context.Context, arg1 *pb.MysqlTaskRequest, arg2 ...grpc.CallOption) (*pb.MysqlTaskResponse, error) {
+func (m *MockMasterClient) OperateMysqlWorker(arg0 context.Context, arg1 *pb.MysqlWorkerRequest, arg2 ...grpc.CallOption) (*pb.MysqlWorkerResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{arg0, arg1}
 	for _, a := range arg2 {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "OperateMysqlWorker", varargs...)
-	ret0, _ := ret[0].(*pb.MysqlTaskResponse)
+	ret0, _ := ret[0].(*pb.MysqlWorkerResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -479,10 +479,10 @@ func (mr *MockMasterServerMockRecorder) MigrateWorkerRelay(arg0, arg1 interface{
 }
 
 // OperateMysqlWorker mocks base method
-func (m *MockMasterServer) OperateMysqlWorker(arg0 context.Context, arg1 *pb.MysqlTaskRequest) (*pb.MysqlTaskResponse, error) {
+func (m *MockMasterServer) OperateMysqlWorker(arg0 context.Context, arg1 *pb.MysqlWorkerRequest) (*pb.MysqlWorkerResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "OperateMysqlWorker", arg0, arg1)
-	ret0, _ := ret[0].(*pb.MysqlTaskResponse)
+	ret0, _ := ret[0].(*pb.MysqlWorkerResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

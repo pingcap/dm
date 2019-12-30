@@ -89,8 +89,8 @@ func (w *Worker) SetStatus(s WorkerState) {
 	w.status.Store(s)
 }
 
-// OperateMysqlTask in a idle worker
-func (w *Worker) OperateMysqlTask(ctx context.Context, req *pb.MysqlTaskRequest, d time.Duration) (*pb.MysqlTaskResponse, error) {
+// OperateMysqlWorker in a idle worker
+func (w *Worker) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequest, d time.Duration) (*pb.MysqlWorkerResponse, error) {
 	ownerReq := &workerrpc.Request{
 		Type:      workerrpc.CmdOperateMysqlTask,
 		MysqlTask: req,

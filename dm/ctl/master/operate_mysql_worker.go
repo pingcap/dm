@@ -23,7 +23,7 @@ import (
 	"os"
 )
 
-// NewOperateMysqlWorkerCmd creates a OperateMysqlTask command
+// NewOperateMysqlWorkerCmd creates a OperateMysqlWorker command
 func NewOperateMysqlWorkerCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "operate-worker <operate-type> <config-file>",
@@ -62,7 +62,7 @@ func operateMysqlWorkerFunc(cmd *cobra.Command, _ []string) {
 	defer cancel()
 
 	cli := common.MasterClient()
-	resp, err := cli.OperateMysqlWorker(ctx, &pb.MysqlTaskRequest{
+	resp, err := cli.OperateMysqlWorker(ctx, &pb.MysqlWorkerRequest{
 		Config: string(content),
 		Op:     convertCmdType(cmdType),
 	})

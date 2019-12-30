@@ -1644,79 +1644,79 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 	}, nil
 }
 
-func makeMysqlTaskResponse(err error) (*pb.MysqlTaskResponse, error) {
-	return &pb.MysqlTaskResponse{
+func makeMysqlWorkerResponse(err error) (*pb.MysqlWorkerResponse, error) {
+	return &pb.MysqlWorkerResponse{
 		Result: false,
 		Msg:    errors.ErrorStack(err),
 	}, nil
 }
 
 // OperateMysqlWorker will create or update a Worker
-func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlTaskRequest) (*pb.MysqlTaskResponse, error) {
+func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequest) (*pb.MysqlWorkerResponse, error) {
 	cfg := config.NewMysqlConfig()
 	if err := cfg.Parse(req.Config); err != nil {
-		return makeMysqlTaskResponse(err)
+		return makeMysqlWorkerResponse(err)
 	}
 
 	dbConfig, err := cfg.GenerateDBConfig()
 	if err != nil {
-		return makeMysqlTaskResponse(err)
+		return makeMysqlWorkerResponse(err)
 	}
 	fromDB, err := conn.DefaultDBProvider.Apply(*dbConfig)
 	if err != nil {
-		return makeMysqlTaskResponse(err)
+		return makeMysqlWorkerResponse(err)
 	}
 	if err = cfg.Adjust(fromDB.DB); err != nil {
-		return makeMysqlTaskResponse(err)
+		return makeMysqlWorkerResponse(err)
 	}
 	if req.Config, err = cfg.Toml(); err != nil {
-		return makeMysqlTaskResponse(err)
+		return makeMysqlWorkerResponse(err)
 	}
-	var resp *pb.MysqlTaskResponse
+	var resp *pb.MysqlWorkerResponse
 	if req.Op == pb.WorkerOp_StartWorker {
 		w := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
 		if w != nil {
-			return &pb.MysqlTaskResponse{
+			return &pb.MysqlWorkerResponse{
 				Result: false,
 				Msg:    "Create worker failed. worker has been started",
 			}, nil
 		}
 		w, err := s.coordinator.AcquireWorkerForSource(cfg.SourceID)
 		if err != nil {
-			return makeMysqlTaskResponse(err)
+			return makeMysqlWorkerResponse(err)
 		}
 
-		resp, err = w.OperateMysqlTask(ctx, req, s.cfg.RPCTimeout)
+		resp, err = w.OperateMysqlWorker(ctx, req, s.cfg.RPCTimeout)
 		if err != nil {
 			// TODO: handle error or backoff
 			s.coordinator.HandleStartedWorker(w, cfg, false)
-			return makeMysqlTaskResponse(err)
+			return makeMysqlWorkerResponse(err)
 		}
 		// TODO: handle error or backoff
 		s.coordinator.HandleStartedWorker(w, cfg, true)
 	} else if req.Op == pb.WorkerOp_UpdateConfig {
 		w := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
 		if w == nil {
-			return &pb.MysqlTaskResponse{
+			return &pb.MysqlWorkerResponse{
 				Result: false,
 				Msg:    "Update worker config failed. worker has not been started",
 			}, nil
 		}
-		if resp, err = w.OperateMysqlTask(ctx, req, s.cfg.RPCTimeout); err != nil {
-			return makeMysqlTaskResponse(err)
+		if resp, err = w.OperateMysqlWorker(ctx, req, s.cfg.RPCTimeout); err != nil {
+			return makeMysqlWorkerResponse(err)
 		}
 	} else {
 		w := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
 		if w == nil {
 			if !s.coordinator.HandleStoppedWorker(nil, cfg) {
-				return &pb.MysqlTaskResponse{
+				return &pb.MysqlWorkerResponse{
 					Result: false,
 					Msg:    "Stop worker failed. worker has not been started",
 				}, nil
 			}
 		} else {
-			if resp, err = w.OperateMysqlTask(ctx, req, s.cfg.RPCTimeout); err != nil {
-				return &pb.MysqlTaskResponse{
+			if resp, err = w.OperateMysqlWorker(ctx, req, s.cfg.RPCTimeout); err != nil {
+				return &pb.MysqlWorkerResponse{
 					Result: false,
 					Msg:    errors.ErrorStack(err),
 				}, nil
@@ -1724,7 +1724,7 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlTaskReques
 			s.coordinator.HandleStoppedWorker(w, cfg)
 		}
 	}
-	return &pb.MysqlTaskResponse{
+	return &pb.MysqlWorkerResponse{
 		Result: resp.Result,
 		Msg:    resp.Msg,
 	}, nil

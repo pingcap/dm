@@ -26,10 +26,10 @@ import (
 	. "github.com/pingcap/check"
 	"google.golang.org/grpc"
 
-	"go.etcd.io/etcd/embed"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	"go.etcd.io/etcd/embed"
 )
 
 func TestServer(t *testing.T) {
@@ -175,29 +175,29 @@ func (t *testServer) testOperateWorker(c *C, s *Server, start bool) {
 	cli := t.createClient(c, "127.0.0.1:8262")
 	task, err := workerCfg.Toml()
 	c.Assert(err, IsNil)
-	req := &pb.MysqlTaskRequest{
+	req := &pb.MysqlWorkerRequest{
 		Op:     pb.WorkerOp_UpdateConfig,
 		Config: task,
 	}
 	if start {
-		resp, err := cli.OperateMysqlTask(context.Background(), req)
+		resp, err := cli.OperateMysqlWorker(context.Background(), req)
 		c.Assert(err, IsNil)
 		c.Assert(resp.Result, Equals, false)
 		c.Assert(resp.Msg, Matches, ".*Mysql task has not been created, please call CreateMysqlTask.*")
 		req.Op = pb.WorkerOp_StartWorker
-		resp, err = cli.OperateMysqlTask(context.Background(), req)
+		resp, err = cli.OperateMysqlWorker(context.Background(), req)
 		c.Assert(err, IsNil)
 		fmt.Println(resp.Msg)
 		c.Assert(resp.Result, Equals, true)
 
 		req.Op = pb.WorkerOp_UpdateConfig
-		resp, err = cli.OperateMysqlTask(context.Background(), req)
+		resp, err = cli.OperateMysqlWorker(context.Background(), req)
 		c.Assert(err, IsNil)
 		c.Assert(resp.Result, Equals, true)
 		c.Assert(s.worker, NotNil)
 	} else {
 		req.Op = pb.WorkerOp_StopWorker
-		resp, err := cli.OperateMysqlTask(context.Background(), req)
+		resp, err := cli.OperateMysqlWorker(context.Background(), req)
 		c.Assert(err, IsNil)
 		c.Assert(resp.Result, Equals, true)
 	}

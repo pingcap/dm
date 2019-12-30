@@ -116,7 +116,7 @@ func callRPC(ctx context.Context, client pb.WorkerClient, req *Request) (*Respon
 	case CmdFetchDDLInfo:
 		resp.FetchDDLInfo, err = client.FetchDDLInfo(ctx)
 	case CmdOperateMysqlTask:
-		resp.MysqlTask, err = client.OperateMysqlTask(ctx, req.MysqlTask)
+		resp.MysqlTask, err = client.OperateMysqlWorker(ctx, req.MysqlTask)
 	default:
 		return nil, terror.ErrMasterGRPCInvalidReqType.Generate(req.Type)
 	}

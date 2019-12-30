@@ -59,7 +59,7 @@ service Master {
     rpc CheckTask(CheckTaskRequest) returns (CheckTaskResponse) {}
 
     // Operate mysql-worker for server
-    rpc OperateMysqlWorker(MysqlTaskRequest) returns (MysqlTaskResponse) {}
+    rpc OperateMysqlWorker(MysqlWorkerRequest) returns (MysqlWorkerResponse) {}
 
     // RegisterWorker register the dm-workers.
     rpc RegisterWorker(RegisterWorkerRequest) returns(RegisterWorkerResponse) {}

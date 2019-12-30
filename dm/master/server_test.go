@@ -1460,7 +1460,7 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 	cancel()
 }
 
-func (t *testMaster) TestOperateMysqlTask(c *check.C) {
+func (t *testMaster) TestOperateMysqlWorker(c *check.C) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
@@ -1482,33 +1482,33 @@ func (t *testMaster) TestOperateMysqlTask(c *check.C) {
 	mysqlCfg.LoadFromFile("./dm-mysql.toml")
 	task, err := mysqlCfg.Toml()
 	c.Assert(err, check.IsNil)
-	req := &pb.MysqlTaskRequest{Op: pb.WorkerOp_StartWorker, Config: task}
+	req := &pb.MysqlWorkerRequest{Op: pb.WorkerOp_StartWorker, Config: task}
 	resp, err := s1.OperateMysqlWorker(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.Equals, false)
 	c.Assert(resp.Msg, check.Equals, "Create worker failed. no free worker could start mysql task")
 	mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 	req.Op = pb.WorkerOp_UpdateConfig
-	mockWorkerClient.EXPECT().OperateMysqlTask(
+	mockWorkerClient.EXPECT().OperateMysqlWorker(
 		gomock.Any(),
 		req,
-	).Return(&pb.MysqlTaskResponse{
+	).Return(&pb.MysqlWorkerResponse{
 		Result: true,
 		Msg:    "",
 	}, nil)
 	req.Op = pb.WorkerOp_StopWorker
-	mockWorkerClient.EXPECT().OperateMysqlTask(
+	mockWorkerClient.EXPECT().OperateMysqlWorker(
 		gomock.Any(),
 		req,
-	).Return(&pb.MysqlTaskResponse{
+	).Return(&pb.MysqlWorkerResponse{
 		Result: true,
 		Msg:    "",
 	}, nil)
 	req.Op = pb.WorkerOp_StartWorker
-	mockWorkerClient.EXPECT().OperateMysqlTask(
+	mockWorkerClient.EXPECT().OperateMysqlWorker(
 		gomock.Any(),
 		req,
-	).Return(&pb.MysqlTaskResponse{
+	).Return(&pb.MysqlWorkerResponse{
 		Result: true,
 		Msg:    "",
 	}, nil)

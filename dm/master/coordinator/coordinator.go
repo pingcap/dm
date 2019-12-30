@@ -357,11 +357,11 @@ func (c *Coordinator) tryRestartMysqlTask() {
 
 func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) {
 	task, err := cfg.Toml()
-	req := &pb.MysqlTaskRequest{
+	req := &pb.MysqlWorkerRequest{
 		Op:     pb.WorkerOp_StartWorker,
 		Config: task,
 	}
-	resp, err := w.OperateMysqlTask(context.Background(), req, time.Second*10)
+	resp, err := w.OperateMysqlWorker(context.Background(), req, time.Second*10)
 	c.mu.Lock()
 	if err == nil {
 		if resp.Result {
