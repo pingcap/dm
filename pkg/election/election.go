@@ -70,7 +70,7 @@ type NodeMeta struct {
 }
 
 func (m *NodeMeta) String() string {
-	return fmt.Sprintf("NodeMeat[id: %s, address: %s]", m.ID, m.Address)
+	return fmt.Sprintf("NodeMeta[id: %s, address: %s]", m.ID, m.Address)
 }
 
 // NewElection creates a new etcd leader Election instance and starts the campaign loop.
@@ -103,7 +103,7 @@ func NewElection(
 	for {
 		_, meta, err := e.LeaderInfo(ctx)
 		if err != nil {
-			return nil, errors.WithStack(err)
+			return nil, errors.Trace(err)
 		}
 		if meta == nil {
 			log.L().Warn("seems there is no leader now, try campaign leader.")
