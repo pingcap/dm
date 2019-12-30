@@ -1683,20 +1683,14 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlTaskReques
 		}
 		w, err := s.coordinator.AcquireWorkerForSource(cfg.SourceID)
 		if err != nil {
-			return &pb.MysqlTaskResponse{
-				Result: false,
-				Msg:    err.Error(),
-			}, nil
+			return makeMysqlTaskResponse(err)
 		}
 
 		resp, err = w.OperateMysqlTask(ctx, req, s.cfg.RPCTimeout)
 		if err != nil {
 			// TODO: handle error or backoff
 			s.coordinator.HandleStartedWorker(w, cfg, false)
-			return &pb.MysqlTaskResponse{
-				Result: false,
-				Msg:    errors.ErrorStack(err),
-			}, nil
+			return makeMysqlTaskResponse(err)
 		}
 		// TODO: handle error or backoff
 		s.coordinator.HandleStartedWorker(w, cfg, true)
@@ -1709,10 +1703,7 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlTaskReques
 			}, nil
 		}
 		if resp, err = w.OperateMysqlTask(ctx, req, s.cfg.RPCTimeout); err != nil {
-			return &pb.MysqlTaskResponse{
-				Result: false,
-				Msg:    errors.ErrorStack(err),
-			}, nil
+			return makeMysqlTaskResponse(err)
 		}
 	} else {
 		w := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
