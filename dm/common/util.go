@@ -11,12 +11,12 @@ import (
 )
 
 var (
-	masterClient atomic.Value
-	invalidClient = InvalidClient{}
+	masterClient  atomic.Value
+	invalidClient = dummyClient{}
 )
 
 // Stub struct used when no valid masterClient is available
-type InvalidClient struct {}
+type dummyClient struct{}
 
 // InitClient initializes dm-master client
 func InitClient(addrs []string, block bool) error {
