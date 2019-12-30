@@ -16,8 +16,8 @@ package simulator
 import (
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/spf13/cobra"
 )
 
@@ -34,7 +34,7 @@ func NewBWListCmd() *cobra.Command {
 		Run:   bwListFunc,
 	}
 	tableList = tableList[:0]
-	cmd.Flags().StringSliceVarP(&tableList, "table", "T", []string{}, "the table name we want to check for the table route")
+	cmd.Flags().StringSliceVarP(&tableList, "table", "T", []string{}, "the table name we want to check for the black white list")
 	return cmd
 }
 

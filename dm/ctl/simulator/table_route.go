@@ -61,7 +61,6 @@ func tableRouteFunc(cmd *cobra.Command, _ []string) {
 	}
 
 	result := &tableRouteResult{}
-	// no table is specified, print all routes
 	routes := make(map[string]map[string][]*tableInfo)
 	for _, simulationResult := range resp.SimulationResults {
 		for schema, tableList := range simulationResult.IgnoreTableMap {

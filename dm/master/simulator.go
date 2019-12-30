@@ -19,7 +19,6 @@ import (
 	"strings"
 
 	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/log"
@@ -37,7 +36,7 @@ import (
 
 // SimulateTask does simulation on dm-master
 func (s *Server) SimulateTask(ctx context.Context, req *pb.SimulationRequest) (*pb.SimulationResponse, error) {
-	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "FetchSourceInfo"))
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "SimulateTask"))
 
 	cfg := config.NewTaskConfig()
 	err := cfg.Decode(req.Task)
@@ -135,6 +134,9 @@ func simulateTableRoute(workerSet map[string]struct{}, tables []string, deployMa
 		}
 
 		mysqlInstance := getMySQLInstanceConfigThroughSourceID(cfg.MySQLInstances, stCfg.SourceID)
+		if mysqlInstance == nil {
+			return nil, errors.Errorf("sourceID %s matches no mysql instance in dm-master", stCfg.SourceID)
+		}
 
 		relativeRouteMap := make(map[string]*router.TableRule, len(mysqlInstance.RouteRules))
 		for _, routeRuleName := range mysqlInstance.RouteRules {
@@ -272,6 +274,9 @@ func simulateEventFilter(workerSet map[string]struct{}, sql string, deployMap ma
 		}
 		// get sourceID relative binlog event filter
 		mysqlInstance := getMySQLInstanceConfigThroughSourceID(cfg.MySQLInstances, stCfg.SourceID)
+		if mysqlInstance == nil {
+			return nil, errors.Errorf("sourceID %s matches no mysql instance in dm-master", stCfg.SourceID)
+		}
 		relativeEventFilterMap := make(map[string]*bf.BinlogEventRule, len(mysqlInstance.FilterRules))
 		for _, eventFilterName := range mysqlInstance.FilterRules {
 			relativeEventFilterMap[eventFilterName] = cfg.Filters[eventFilterName]
@@ -306,14 +311,12 @@ func getSourceAddr(dbCfg config.DBConfig) string {
 }
 
 func getMySQLInstanceConfigThroughSourceID(mysqlInstances []*config.MySQLInstance, sourceID string) *config.MySQLInstance {
-	var mysqlInstance *config.MySQLInstance
 	for _, mysqlInst := range mysqlInstances {
 		if mysqlInst.SourceID == sourceID {
-			mysqlInstance = mysqlInst
-			break
+			return mysqlInst
 		}
 	}
-	return mysqlInstance
+	return nil
 }
 
 func checkSingleBWFilter(schema, table string, bw *filter.Filter) bool {
@@ -328,76 +331,21 @@ func checkSingleBWRules(schema, table string, caseSensitive bool, rules *filter.
 	return checkSingleBWFilter(schema, table, bwFilter), nil
 }
 
-// getRouteLevel gets route result of whether schema table can be routed by r
-// 0: won't be routed; 1: match schema rule; 2: match table rule
-func getRouteLevel(r *router.Table, caseSensitive bool, schema, table string) (int, error) {
-	schemaL, tableL := schema, table
-	if !caseSensitive {
-		schemaL, tableL = strings.ToLower(schema), strings.ToLower(table)
-	}
-
-	rules := r.Match(schemaL, tableL)
-	var (
-		schemaRules = make([]*router.TableRule, 0, len(rules))
-		tableRules  = make([]*router.TableRule, 0, len(rules))
-	)
-	// classify rules into schema level rules and table level
-	// table level rules have highest priority
-	for i := range rules {
-		rule, ok := rules[i].(*router.TableRule)
-		if !ok {
-			return 0, errors.NotValidf("table route rule %+v", rules[i])
-		}
-
-		if len(rule.TablePattern) == 0 {
-			schemaRules = append(schemaRules, rule)
-		} else {
-			tableRules = append(tableRules, rule)
-		}
-	}
-
-	if len(table) == 0 || len(tableRules) == 0 {
-		if len(schemaRules) > 1 {
-			return 0, errors.NotSupportedf("route %s/%s matches more than one schema rules: %+v", schema, table, schemaRules)
-		}
-
-		if len(schemaRules) == 1 {
-			return 1, nil
-		}
-	} else {
-		if len(tableRules) > 1 {
-			return 0, errors.NotSupportedf("route %s/%s matches more than one table rules: %+v", schema, table, tableRules)
-		}
-
-		return 2, nil
-	}
-
-	return 0, nil
-}
+//TODO: add a function to check routeSchemaRules, then routeTableRules to get matched rules
 
 // getRouteName gets route name for specified schema, table
 // input routeRuleMap: {key: routeName, value: tableRule}
 func getRouteName(caseSensitive bool, schema, table string, routeRuleMap map[string]*router.TableRule) (string, string, error) {
-	var (
-		routeLevel int
-		matchRoute string
-	)
+	var matchRoute string
 	routeRules := make([]*router.TableRule, 0, len(routeRuleMap))
+	routeTableRules := make(map[string]*router.TableRule)
+	routeSchemaRules := make(map[string]*router.TableRule)
 	for routeRuleName, tableRule := range routeRuleMap {
 		routeRules = append(routeRules, tableRule)
-		r, err := router.NewTableRouter(caseSensitive, []*router.TableRule{tableRule})
-		if err != nil {
-			return "", "", errors.Annotatef(err, "build of table router for rule %s failed", routeRuleName)
-		}
-		currentRouteLevel, err := getRouteLevel(r, caseSensitive, schema, table)
-		if err != nil {
-			common.PrintLines("get currentRouteLevel of table %s for rule %s failed:\n%s", dbutil.TableName(schema, table), routeRuleName, errors.ErrorStack(err))
-			return "", "", nil
-		}
-		// route to table > route to schema > doesn't match any route
-		if currentRouteLevel > routeLevel {
-			routeLevel = currentRouteLevel
-			matchRoute = routeRuleName
+		if len(tableRule.TablePattern) > 0 {
+			routeTableRules[routeRuleName] = tableRule
+		} else {
+			routeSchemaRules[routeRuleName] = tableRule
 		}
 	}
 	r, err := router.NewTableRouter(caseSensitive, routeRules)
