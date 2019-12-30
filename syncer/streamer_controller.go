@@ -172,9 +172,11 @@ func (c *StreamerController) ResetReplicationSyncer(tctx tcontext.Context, pos m
 			// meetError is true means meets error when get binlog event, in this case use remote binlog as default
 			if !uuidSameWithUpstream {
 				// if the binlog position's uuid is different from the upstream, can not switch to remote binlog
+				tctx.L().Info("may switch master in upstream, so can not switch local to remote")
 			} else {
 				useRemote = true
 				c.changed = true
+				tctx.L().Info("meet error when read from local binlog, will switch wo remote binlog")
 			}
 		}
 	}
