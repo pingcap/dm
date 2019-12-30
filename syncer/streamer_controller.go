@@ -128,7 +128,7 @@ func NewStreamerController(tctx tcontext.Context, syncCfg replication.BinlogSync
 }
 
 // ResetReplicationSyncer reset the replication
-func (c *StreamerController) ResetReplicationSyncer(tctx tcontext.Context, pos mysql.Position) error {
+func (c *StreamerController) ResetReplicationSyncer(tctx tcontext.Context, pos mysql.Position) (err error) {
 	c.Lock()
 	defer c.Unlock()
 
@@ -141,7 +141,8 @@ func (c *StreamerController) ResetReplicationSyncer(tctx tcontext.Context, pos m
 			// TODO: close old local reader before creating a new one
 		default:
 			// some other producers such as mockStreamerProducer, should not re-create
-			return nil
+			c.streamer, err = c.streamerProducer.generateStreamer(pos)
+			return err
 		}
 	}
 
@@ -166,13 +167,8 @@ func (c *StreamerController) ResetReplicationSyncer(tctx tcontext.Context, pos m
 		}
 	}
 
-	streamer, err := c.streamerProducer.generateStreamer(pos)
-	if err != nil {
-		return err
-	}
-
-	c.streamer = streamer
-	return nil
+	c.streamer, err = c.streamerProducer.generateStreamer(pos)
+	return err
 }
 
 // RedirectStreamer redirects the streamer's begin position or gtid
