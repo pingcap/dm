@@ -63,8 +63,8 @@ var (
 // NOTE: refine to put these config structs into pkgs
 // NOTE: now, syncer does not support GTID mode and which is supported by relay
 type Meta struct {
-	BinLogName string `yaml:"binlog-name"`
-	BinLogPos  uint32 `yaml:"binlog-pos"`
+	BinLogName string `toml:"binlog-name" yaml:"binlog-name"`
+	BinLogPos  uint32 `toml:"binlog-pos" yaml:"binlog-pos"`
 }
 
 // Verify does verification on configs
