@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"github.com/pingcap/failpoint"
 	"os"
 
 	"github.com/pingcap/errors"
@@ -63,6 +64,9 @@ func updateTaskFunc(cmd *cobra.Command, _ []string) {
 	resp, err := cli.UpdateTask(ctx, &pb.UpdateTaskRequest{
 		Task:    string(content),
 		Workers: workers,
+	})
+	failpoint.Inject("UpdateTaskFailed", func(_ failpoint.Value) {
+		err = errors.New("call UpdateTask failed")
 	})
 	if err != nil {
 		common.PrintLines("can not update task:\n%v", errors.ErrorStack(err))

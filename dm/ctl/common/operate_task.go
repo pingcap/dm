@@ -15,7 +15,9 @@ package common
 
 import (
 	"context"
+	"errors"
 	"github.com/pingcap/dm/dm/common"
+	"github.com/pingcap/failpoint"
 
 	"github.com/pingcap/dm/dm/pb"
 )
@@ -25,9 +27,14 @@ func OperateTask(op pb.TaskOp, name string, workers []string) (*pb.OperateTaskRe
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cli := common.MasterClient()
-	return cli.OperateTask(ctx, &pb.OperateTaskRequest{
+	res, err := cli.OperateTask(ctx, &pb.OperateTaskRequest{
 		Op:      op,
 		Name:    name,
 		Workers: workers,
 	})
+	failpoint.Inject("OperateTaskFailed", func(_ failpoint.Value) {
+		err = errors.New("call OperateTask failed")
+		res = nil
+	})
+	return res, err
 }

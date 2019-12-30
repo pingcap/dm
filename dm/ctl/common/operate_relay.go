@@ -16,6 +16,8 @@ package common
 import (
 	"context"
 	"github.com/pingcap/dm/dm/common"
+	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 
 	"github.com/pingcap/dm/dm/pb"
 )
@@ -25,8 +27,13 @@ func OperateRelay(op pb.RelayOp, workers []string) (*pb.OperateWorkerRelayRespon
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cli := common.MasterClient()
-	return cli.OperateWorkerRelayTask(ctx, &pb.OperateWorkerRelayRequest{
+	res, err := cli.OperateWorkerRelayTask(ctx, &pb.OperateWorkerRelayRequest{
 		Op:      op,
 		Workers: workers,
 	})
+	failpoint.Inject("OperateWorkerRelayTaskFailed", func(_ failpoint.Value) {
+		err = errors.New("call OperateWorkerRelayTask failed")
+		res = nil
+	})
+	return res, err
 }

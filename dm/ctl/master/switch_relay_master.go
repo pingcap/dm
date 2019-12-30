@@ -16,6 +16,7 @@ package master
 import (
 	"context"
 	"fmt"
+	"github.com/pingcap/failpoint"
 	"os"
 
 	"github.com/pingcap/errors"
@@ -59,6 +60,9 @@ func switchRelayMasterFunc(cmd *cobra.Command, _ []string) {
 	cli := dmcommon.MasterClient()
 	resp, err := cli.SwitchWorkerRelayMaster(ctx, &pb.SwitchWorkerRelayMasterRequest{
 		Workers: workers,
+	})
+	failpoint.Inject("SwitchWorkerRelayMasterFailed", func(_ failpoint.Value) {
+		err = errors.New("call SwitchWorkerRelayMaster failed")
 	})
 	if err != nil {
 		common.PrintLines("can not switch relay's master server (in workers %v):\n%s", workers, errors.ErrorStack(err))

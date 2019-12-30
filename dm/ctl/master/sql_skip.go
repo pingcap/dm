@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"github.com/pingcap/failpoint"
 	"os"
 	"strings"
 
@@ -88,6 +89,9 @@ func sqlSkipFunc(cmd *cobra.Command, _ []string) {
 		BinlogPos:  binlogPos,
 		SqlPattern: sqlPattern,
 		Sharding:   sharding,
+	})
+	failpoint.Inject("SQLOpSkipFailed", func(_ failpoint.Value) {
+		err = errors.New("call HandleSQLs(SQLOpSkipFailed) failed")
 	})
 	if err != nil {
 		common.PrintLines("can not skip SQL:\n%v", errors.ErrorStack(err))

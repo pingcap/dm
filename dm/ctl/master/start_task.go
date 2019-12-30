@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"github.com/pingcap/failpoint"
 	"os"
 
 	"github.com/pingcap/errors"
@@ -63,6 +64,9 @@ func startTaskFunc(cmd *cobra.Command, _ []string) {
 	resp, err := cli.StartTask(ctx, &pb.StartTaskRequest{
 		Task:    string(content),
 		Workers: workers,
+	})
+	failpoint.Inject("StartTaskFailed", func(_ failpoint.Value) {
+		err = errors.New("call StartTask failed")
 	})
 	if err != nil {
 		common.PrintLines("can not start task:\n%v", errors.ErrorStack(err))

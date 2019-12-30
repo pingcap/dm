@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"github.com/pingcap/failpoint"
 	"os"
 
 	"github.com/pingcap/errors"
@@ -56,6 +57,9 @@ func checkTaskFunc(cmd *cobra.Command, _ []string) {
 	cli := dmcommon.MasterClient()
 	resp, err := cli.CheckTask(ctx, &pb.CheckTaskRequest{
 		Task: string(content),
+	})
+	failpoint.Inject("CheckTaskFailed", func(_ failpoint.Value) {
+		err = errors.New("call CheckTask failed")
 	})
 	if err != nil {
 		common.PrintLines("fail to check task:\n%v", errors.ErrorStack(err))

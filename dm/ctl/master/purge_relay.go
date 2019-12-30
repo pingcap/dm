@@ -16,6 +16,7 @@ package master
 import (
 	"context"
 	"fmt"
+	"github.com/pingcap/failpoint"
 	"os"
 	"strings"
 
@@ -144,6 +145,9 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 		//Time:     time2.Unix(),
 		Filename: filename,
 		SubDir:   subDir,
+	})
+	failpoint.Inject("PurgeWorkerRelayFailed", func(_ failpoint.Value) {
+		err = errors.New("call PurgeWorkerRelay failed")
 	})
 	if err != nil {
 		common.PrintLines("can not purge relay log files: \n%s", errors.ErrorStack(err))

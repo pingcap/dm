@@ -16,6 +16,7 @@ package master
 import (
 	"context"
 	"fmt"
+	"github.com/pingcap/failpoint"
 	"os"
 
 	dmcommon "github.com/pingcap/dm/dm/common"
@@ -73,6 +74,9 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) {
 		ReplaceOwner: owner,
 		Workers:      workers,
 		ForceRemove:  forceRemove,
+	})
+	failpoint.Inject("UnlockDDLLockFailed", func(_ failpoint.Value) {
+		err = errors.New("call UnlockDDLLock failed")
 	})
 	if err != nil {
 		common.PrintLines("can not unlock DDL lock %s (in workers %v):\n%s", lockID, workers, errors.ErrorStack(err))

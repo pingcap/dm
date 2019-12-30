@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"github.com/pingcap/failpoint"
 	"os"
 
 	dmcommon "github.com/pingcap/dm/dm/common"
@@ -56,6 +57,9 @@ func showDDLLocksFunc(cmd *cobra.Command, _ []string) {
 	resp, err := cli.ShowDDLLocks(ctx, &pb.ShowDDLLocksRequest{
 		Task:    taskName,
 		Workers: workers,
+	})
+	failpoint.Inject("ShowDDLLocksFailed", func(_ failpoint.Value) {
+		err = errors.New("call ShowDDLLocks failed")
 	})
 	if err != nil {
 		common.PrintLines("can not show DDL locks for task %s and workers %v:\n%s", taskName, workers, errors.ErrorStack(err))

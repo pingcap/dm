@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"github.com/pingcap/failpoint"
 	"os"
 
 	dmcommon "github.com/pingcap/dm/dm/common"
@@ -56,6 +57,9 @@ func queryErrorFunc(cmd *cobra.Command, _ []string) {
 	resp, err := cli.QueryError(ctx, &pb.QueryErrorListRequest{
 		Name:    taskName,
 		Workers: workers,
+	})
+	failpoint.Inject("QueryErrorFailed", func(_ failpoint.Value) {
+		err = errors.New("call QueryError failed")
 	})
 	if err != nil {
 		common.PrintLines("dmctl query error failed")

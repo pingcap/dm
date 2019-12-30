@@ -12,54 +12,80 @@ SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
 
 # used to coverage wrong usage of dmctl command
 function usage_and_arg_test() {
+    # create a dummy dm-master for test
+    touch $WORK_DIR/dummy-master.toml
+    run_dm_master $WORK_DIR/master $MASTER_PORT $WORK_DIR/dummy-master.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+
     check_task_wrong_arg
     check_task_wrong_config_file
+    export GO_FAILPOINTS='github.com/pingcap/dm/dm/ctl/master/CheckTaskFailed=return("failed")'
     check_task_while_master_down $TASK_CONF
 
     pause_relay_wrong_arg
     pause_relay_wihout_worker
+    export GO_FAILPOINTS='github.com/pingcap/dm/dm/ctl/common/OperateWorkerRelayTaskFailed=return("failed")'
     pause_relay_while_master_down
+    export GO_FAILPOINTS=''
 
     resume_relay_wrong_arg
     resume_relay_wihout_worker
+    export GO_FAILPOINTS='github.com/pingcap/dm/dm/ctl/common/OperateWorkerRelayTaskFailed=return("failed")'
     resume_relay_while_master_down
+    export GO_FAILPOINTS=''
 
     pause_task_wrong_arg
+    export GO_FAILPOINTS='github.com/pingcap/dm/dm/ctl/common/OperateTaskFailed=return("failed")'
     pause_task_while_master_down
+    export GO_FAILPOINTS=''
 
     resume_task_wrong_arg
+    export GO_FAILPOINTS='github.com/pingcap/dm/dm/ctl/common/OperateTaskFailed=return("failed")'
     resume_task_while_master_down
+    export GO_FAILPOINTS=''
 
     query_status_wrong_arg
+    export GO_FAILPOINTS='github.com/pingcap/dm/dm/ctl/master/QueryStatusFailed=return("failed")'
     query_status_wrong_params
 
     start_task_wrong_arg
     start_task_wrong_config_file
+    export GO_FAILPOINTS='github.com/pingcap/dm/dm/ctl/master/StartTaskFailed=return("failed")'
     start_task_while_master_down $TASK_CONF
+    export GO_FAILPOINTS=''
 
     stop_task_wrong_arg
+    export GO_FAILPOINTS='github.com/pingcap/dm/dm/ctl/common/OperateTaskFailed=return("failed")'
     stop_task_while_master_down
 
     show_ddl_locks_wrong_arg
+    export GO_FAILPOINTS='github.com/pingcap/dm/dm/ctl/master/ShowDDLLocksFailed=return("failed")'
     show_ddl_locks_while_master_down
 
     update_relay_wrong_arg
     update_relay_wrong_config_file
     update_relay_should_specify_one_dm_worker $WORKER1_CONF
+    export GO_FAILPOINTS='github.com/pingcap/dm/dm/ctl/master/UpdateWorkerRelayConfigFailed=return("failed")'
     update_relay_while_master_down $WORKER1_CONF
 
     update_task_wrong_arg
     update_task_wrong_config_file
+    export GO_FAILPOINTS='github.com/pingcap/dm/dm/ctl/master/UpdateTaskFailed=return("failed")'
     update_task_while_master_down $TASK_CONF
 
     update_master_config_wrong_arg
     update_master_config_wrong_config_file
+    export GO_FAILPOINTS='github.com/pingcap/dm/dm/ctl/master/UpdateMasterConfigFailed=return("failed")'
     update_master_config_while_master_down $cur/conf/dm-master.toml
 
     purge_relay_wrong_arg
     purge_relay_wihout_worker
     purge_relay_filename_with_multi_workers
+    export GO_FAILPOINTS='github.com/pingcap/dm/dm/ctl/master/PurgeWorkerRelayFailed=return("failed")'
     purge_relay_while_master_down
+
+    pkill -hup dm-master.test 2>/dev/null || true
+    wait_process_exit dm-master.test
 }
 
 function recover_max_binlog_size() {

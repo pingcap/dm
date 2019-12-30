@@ -16,6 +16,7 @@ package master
 import (
 	"context"
 	"fmt"
+	"github.com/pingcap/failpoint"
 	"os"
 
 	"github.com/pingcap/errors"
@@ -63,6 +64,9 @@ func updateRelayFunc(cmd *cobra.Command, _ []string) {
 	resp, err := cli.UpdateWorkerRelayConfig(ctx, &pb.UpdateWorkerRelayConfigRequest{
 		Config: string(content),
 		Worker: workers[0],
+	})
+	failpoint.Inject("UpdateWorkerRelayConfigFailed", func(_ failpoint.Value) {
+		err = errors.New("call UpdateWorkerRelayConfig failed")
 	})
 
 	if err != nil {

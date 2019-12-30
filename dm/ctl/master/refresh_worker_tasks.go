@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"github.com/pingcap/failpoint"
 	"os"
 
 	dmcommon "github.com/pingcap/dm/dm/common"
@@ -47,6 +48,9 @@ func refreshWorkerTasksFunc(cmd *cobra.Command, _ []string) {
 	defer cancel()
 	cli := dmcommon.MasterClient()
 	resp, err := cli.RefreshWorkerTasks(ctx, &pb.RefreshWorkerTasksRequest{})
+	failpoint.Inject("RefreshWorkerTasksFailed", func(_ failpoint.Value) {
+		err = errors.New("call RefreshWorkerTasks failed")
+	})
 	if err != nil {
 		common.PrintLines("can not refresh workerTasks:\n%v", errors.ErrorStack(err))
 		return

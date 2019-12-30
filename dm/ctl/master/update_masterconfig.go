@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"github.com/pingcap/failpoint"
 	"os"
 
 	dmcommon "github.com/pingcap/dm/dm/common"
@@ -53,6 +54,9 @@ func updateMasterConfigFunc(cmd *cobra.Command, _ []string) {
 	cli := dmcommon.MasterClient()
 	resp, err := cli.UpdateMasterConfig(ctx, &pb.UpdateMasterConfigRequest{
 		Config: string(content),
+	})
+	failpoint.Inject("UpdateMasterConfigFailed", func(_ failpoint.Value) {
+		err = errors.New("call UpdateMasterConfig failed")
 	})
 	if err != nil {
 		common.PrintLines("can not update master config:\n%v", errors.ErrorStack(err))

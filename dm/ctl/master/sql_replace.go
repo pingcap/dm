@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"github.com/pingcap/failpoint"
 	"os"
 	"strings"
 
@@ -95,6 +96,9 @@ func sqlReplaceFunc(cmd *cobra.Command, _ []string) {
 		BinlogPos:  binlogPos,
 		SqlPattern: sqlPattern,
 		Sharding:   sharding,
+	})
+	failpoint.Inject("SQLOpReplaceFailed", func(_ failpoint.Value) {
+		err = errors.New("call HandleSQLs(SQLOpReplaceFailed) failed")
 	})
 	if err != nil {
 		common.PrintLines("can not replace SQL:\n%v", errors.ErrorStack(err))

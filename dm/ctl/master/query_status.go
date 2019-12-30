@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+	"github.com/pingcap/failpoint"
 	"os"
 	"strings"
 
@@ -71,6 +72,9 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) {
 	resp, err := cli.QueryStatus(ctx, &pb.QueryStatusListRequest{
 		Name:    taskName,
 		Workers: workers,
+	})
+	failpoint.Inject("QueryStatusFailed", func(_ failpoint.Value) {
+		err = errors.New("call QueryStatus failed")
 	})
 	if err != nil {
 		common.PrintLines("can not query %s task's status(in workers %v):\n%s", taskName, workers, errors.ErrorStack(err))

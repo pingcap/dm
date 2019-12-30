@@ -12,10 +12,16 @@ SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
 
 # used to coverage wrong usage of dmctl command
 function usage_and_arg_test() {
+    # create a dummy dm-master for test
+    touch $WORK_DIR/dummy-master.toml
+    run_dm_master $WORK_DIR/master $MASTER_PORT $WORK_DIR/dummy-master.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+
     break_ddl_lock_wrong_arg
     break_ddl_lock_without_worker
     break_ddl_lock_shoud_specify_at_least_one
     break_ddl_lock_exec_skip_conflict
+    export GO_FAILPOINTS='github.com/pingcap/dm/dm/ctl/master/BreakWorkerDDLLockFailed=return("failed")'
     break_ddl_lock_while_master_down
 
     migrate_relay_wrong_arg
@@ -24,17 +30,21 @@ function usage_and_arg_test() {
     #migrate_relay_while_master_down
 
     refresh_worker_tasks_wrong_arg
+    export GO_FAILPOINTS='github.com/pingcap/dm/dm/ctl/master/RefreshWorkerTasksFailed=return("failed")'
     refresh_worker_tasks_while_master_down
 
     switch_relay_master_wrong_arg
     switch_relay_master_without_worker
+    export GO_FAILPOINTS='github.com/pingcap/dm/dm/ctl/master/SwitchWorkerRelayMasterFailed=return("failed")'
     switch_relay_master_while_master_down
 
     unlock_ddl_lock_wrong_arg
     unlock_ddl_lock_invalid_force_remove
+    export GO_FAILPOINTS='github.com/pingcap/dm/dm/ctl/master/UnlockDDLLockFailed=return("failed")'
     unlock_ddl_lock_while_master_down
 
     query_error_wrong_arg
+    export GO_FAILPOINTS='github.com/pingcap/dm/dm/ctl/master/QueryErrorFailed=return("failed")'
     query_error_while_master_down
 
     sql_skip_wrong_arg
@@ -43,13 +53,16 @@ function usage_and_arg_test() {
     sql_skip_invalid_regex
     sql_skip_sharding_with_binlogpos
     sql_skip_non_sharding_without_one_worker
+    export GO_FAILPOINTS='github.com/pingcap/dm/dm/ctl/master/SQLOpSkipFailed=return("failed")'
     sql_skip_while_master_down
 
     sql_replace_wrong_arg
     sql_replace_invalid_binlog_pos
     sql_replace_non_sharding_without_one_worker
     # TODO: check SQLs error test
+    export GO_FAILPOINTS='github.com/pingcap/dm/dm/ctl/master/SQLOpReplaceFailed=return("failed")'
     sql_replace_while_master_down
+    export GO_FAILPOINTS=''
 }
 
 function run() {
