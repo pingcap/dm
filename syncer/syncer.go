@@ -436,7 +436,8 @@ func (s *Syncer) IsFreshTask(ctx context.Context) (bool, error) {
 
 func (s *Syncer) reset() {
 	if s.streamerController != nil {
-		s.streamerController.ResetReplicationSyncer(*s.tctx)
+		s.streamerController.Close(*s.tctx)
+		s.streamerController = nil
 	}
 	// create new job chans
 	s.newJobChans(s.cfg.WorkerCount + 1)
