@@ -12,7 +12,11 @@ import (
 
 var (
 	masterClient atomic.Value
+	invalidClient = InvalidClient{}
 )
+
+// Stub struct used when no valid masterClient is available
+type InvalidClient struct {}
 
 // InitClient initializes dm-master client
 func InitClient(addrs []string, block bool) error {
@@ -33,7 +37,7 @@ func InitClient(addrs []string, block bool) error {
 	}
 
 	if err != nil {
-		masterClient.Store(nil)
+		masterClient.Store(&invalidClient)
 		return errors.Trace(err)
 	}
 	masterClient.Store(pb.NewMasterClient(conn))
@@ -42,10 +46,13 @@ func InitClient(addrs []string, block bool) error {
 
 // ResetMasterClient reset masterClient when no master is available
 func ResetMasterClient() {
-	masterClient.Store(nil)
+	masterClient.Store(&invalidClient)
 }
 
 // MasterClient returns dm-master client
 func MasterClient() pb.MasterClient {
-	return masterClient.Load().(pb.MasterClient)
+	if client, ok := masterClient.Load().(pb.MasterClient); ok {
+		return client
+	}
+	return nil
 }
