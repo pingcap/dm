@@ -201,17 +201,7 @@ func NewSyncer(cfg *config.SubTaskConfig, enableRelay bool) *Syncer {
 
 	syncer.checkpoint = NewRemoteCheckPoint(syncer.tctx, cfg, syncer.checkpointID())
 
-	syncer.syncCfg = replication.BinlogSyncerConfig{
-		ServerID:                uint32(syncer.cfg.ServerID),
-		Flavor:                  syncer.cfg.Flavor,
-		Host:                    syncer.cfg.From.Host,
-		Port:                    uint16(syncer.cfg.From.Port),
-		User:                    syncer.cfg.From.User,
-		Password:                syncer.cfg.From.Password,
-		UseDecimal:              true,
-		VerifyChecksum:          true,
-		TimestampStringLocation: syncer.timezone,
-	}
+	syncer.setSyncCfg()
 
 	syncer.binlogType = toBinlogType(enableRelay)
 	syncer.sqlOperatorHolder = operator.NewHolder()
@@ -2332,8 +2322,10 @@ func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 		s.tctx.L().Error("fail to create baseConn connection", log.ShortError(err))
 		return err
 	}
+
+	s.setSyncCfg()
 	if s.streamerController != nil {
-		s.streamerController.UpdateFromDB(s.fromDB)
+		s.streamerController.UpdateSyncCfg(s.syncCfg, s.fromDB)
 	}
 	return nil
 }
@@ -2364,4 +2356,18 @@ func (s *Syncer) setTimezone() {
 	}
 	s.tctx.L().Info("use timezone", log.WrapStringerField("location", loc))
 	s.timezone = loc
+}
+
+func (s *Syncer) setSyncCfg() {
+	s.syncCfg = replication.BinlogSyncerConfig{
+		ServerID:                uint32(s.cfg.ServerID),
+		Flavor:                  s.cfg.Flavor,
+		Host:                    s.cfg.From.Host,
+		Port:                    uint16(s.cfg.From.Port),
+		User:                    s.cfg.From.User,
+		Password:                s.cfg.From.Password,
+		UseDecimal:              true,
+		VerifyChecksum:          true,
+		TimestampStringLocation: s.timezone,
+	}
 }

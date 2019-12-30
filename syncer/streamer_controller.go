@@ -146,20 +146,21 @@ func (c *StreamerController) ResetReplicationSyncer(tctx tcontext.Context, pos m
 		}
 	}
 
+	// binlog type is local: means relay already use the server id, so need change to a new server id
+	// binlog type is remote: dm-worker has more than one sub task, so need generate random server id
+	randomServerID, err := utils.GetRandomServerID(tctx.Context(), c.fromDB.BaseDB.DB)
+	if err != nil {
+		// should never happened unless the master has too many slave
+		return terror.Annotate(err, "fail to get random server id for streamer controller")
+	}
+	c.syncCfg.ServerID = randomServerID
+
 	// re-create new streamerProducer
 	if c.binlogType == RemoteBinlog {
 		c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(c.syncCfg), &tctx, false}
 	} else {
 		if c.meetError {
 			// meetError is true means meets error when get binlog event, in this case use remote binlog as default
-			// binlog type is local, means relay already use the server id, so need change to a new server id
-			randomServerID, err := utils.GetRandomServerID(tctx.Context(), c.fromDB.BaseDB.DB)
-			if err != nil {
-				// should never happened unless the master has too many slave
-				return terror.Annotate(err, "fail to get random server id for streamer controller")
-			}
-
-			c.syncCfg.ServerID = randomServerID
 			c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(c.syncCfg), &tctx, false}
 			c.changed = true
 		} else {
@@ -281,9 +282,10 @@ func (c *StreamerController) setUUIDIfExists(tctx tcontext.Context, filename str
 	return true
 }
 
-// UpdateFromDB updates fromDB
-func (c *StreamerController) UpdateFromDB(fromDB *UpStreamConn) {
+// UpdateSyncCfg updates sync config and fromDB
+func (c *StreamerController) UpdateSyncCfg(syncCfg replication.BinlogSyncerConfig, fromDB *UpStreamConn) {
 	c.Lock()
 	c.fromDB = fromDB
+	c.syncCfg = syncCfg
 	c.Unlock()
 }
