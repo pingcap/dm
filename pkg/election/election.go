@@ -53,7 +53,6 @@ type Election struct {
 	meta       NodeMeta
 	ech        chan error
 	leaderCh   chan bool
-	isLeader   sync2.AtomicBool
 	leaderMeta atomic.Value
 
 	closed sync2.AtomicInt32
@@ -246,7 +245,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 			if leaderMeta.ID != e.meta.ID {
 				e.l.Info("current member is not the leader", zap.String("current member", e.meta.ID), zap.String("leader", leaderMeta.ID))
 				// leader change, must update lead info and gRPC client to leader
-				if *leaderMeta != e.leaderMeta.Load() {
+				if *leaderMeta != *e.leaderMeta.Load().(*NodeMeta) {
 					for i := 0; i < 3; i++ {
 						err = e.updateLeader(leaderMeta)
 						if err == nil {
@@ -285,7 +284,7 @@ func (e *Election) tryCampaignLeader(ctx context.Context, leaseID clientv3.Lease
 }
 
 func (e *Election) toBeLeader() {
-	e.leaderMeta.Store(e.meta)
+	e.leaderMeta.Store(&e.meta)
 	select {
 	case e.leaderCh <- true:
 	default:
