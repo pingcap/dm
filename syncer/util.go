@@ -31,6 +31,17 @@ func toBinlogType(enableRelay bool) BinlogType {
 	return RemoteBinlog
 }
 
+func binlogTypeToString(binlogType BinlogType) string {
+	switch binlogType {
+	case RemoteBinlog:
+		return "remote"
+	case LocalBinlog:
+		return "local"
+	default:
+		return "unknown"
+	}
+}
+
 // tableNameForDML gets table name from INSERT/UPDATE/DELETE statement
 func tableNameForDML(dml ast.DMLNode) (schema, table string, err error) {
 	switch stmt := dml.(type) {

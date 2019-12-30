@@ -412,3 +412,8 @@ func (r *BinlogReader) Close() {
 	r.wg.Wait()
 	r.tctx.L().Info("binlog reader closed")
 }
+
+// GetUUIDs returns binlog reader's uuids
+func (r *BinlogReader) GetUUIDs() []string {
+	return r.uuids
+}

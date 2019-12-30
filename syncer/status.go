@@ -54,6 +54,10 @@ func (s *Syncer) Status() interface{} {
 		st.MasterBinlogGtid = masterGTIDSet.String()
 	}
 
+	if s.streamerController != nil {
+		st.BinlogType = binlogTypeToString(s.streamerController.GetBinlogType())
+	}
+
 	// If a syncer unit is waiting for relay log catch up, it has not executed
 	// LoadMeta and will return a parsed binlog name error. As we can find mysql
 	// position in syncer status, we record this error only in debug level.
