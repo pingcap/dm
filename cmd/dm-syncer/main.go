@@ -46,7 +46,6 @@ func main() {
 	}
 
 	conf.Mode = config.ModeIncrement
-	conf.BinlogType = "remote"
 
 	// 2. init logger
 	err = log.InitLogger(&log.Config{
@@ -63,7 +62,7 @@ func main() {
 		log.L().Info("", zap.Stringer("dm-syncer conf", conf))
 	})
 
-	sync := syncer.NewSyncer(conf)
+	sync := syncer.NewSyncer(conf, false)
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
