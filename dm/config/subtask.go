@@ -156,7 +156,6 @@ type SubTaskConfig struct {
 	Meta                    *Meta  `toml:"meta" json:"meta"`
 	Timezone                string `toml:"timezone" josn:"timezone"`
 
-	BinlogType string `toml:"binlog-type" json:"binlog-type"`
 	// RelayDir get value from dm-worker config
 	RelayDir string   `toml:"relay-dir" json:"relay-dir"`
 	From     DBConfig `toml:"from" json:"from"`

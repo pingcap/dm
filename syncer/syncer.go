@@ -74,6 +74,15 @@ var (
 	defaultBucketCount = 8
 )
 
+// BinlogType represents binlog sync type
+type BinlogType uint8
+
+// binlog sync type
+const (
+	RemoteBinlog BinlogType = iota + 1
+	LocalBinlog
+)
+
 // Syncer can sync your MySQL data to another MySQL database.
 type Syncer struct {
 	sync.RWMutex
@@ -89,7 +98,7 @@ type Syncer struct {
 	ddlExecInfo     *DDLExecInfo                   // DDL execute (ignore) info
 	injectEventCh   chan *replication.BinlogEvent  // extra binlog event chan, used to inject binlog event into the main for loop
 
-	binlogType         string
+	binlogType         BinlogType
 	streamerController *StreamerController
 	enableRelay        bool
 
