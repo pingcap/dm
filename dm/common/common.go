@@ -27,6 +27,9 @@ var (
 	// WorkerKeepAliveKeyAdapter used to encode and decode keepalive key.
 	// k/v: Encode(addr,name) -> time
 	WorkerKeepAliveKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-worker/a/")
+	// WorkerConfigKeyAdapter the config path of upstream.
+	// k/v: Encode(source-id) -> addr
+	WorkerConfigKeyAdapter KeyAdapter = keyEncoderDecoder("/dm-worker/config/")
 	// UpstreamConfigKeyAdapter the config path of upstream.
 	// k/v: Encode(source-id) -> config
 	UpstreamConfigKeyAdapter KeyAdapter = keyEncoderDecoder("/dm-master/upstream/config/")

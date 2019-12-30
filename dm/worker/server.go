@@ -83,6 +83,7 @@ func (s *Server) Start() error {
 		return terror.ErrWorkerStartService.Delegate(err)
 	}
 
+	fmt.Println("Start server")
 	s.worker = nil
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.etcdClient, err = clientv3.New(clientv3.Config{
@@ -95,6 +96,7 @@ func (s *Server) Start() error {
 		return err
 	}
 	s.wg.Add(1)
+	fmt.Println("Start keepalive")
 	go func() {
 		defer s.wg.Done()
 		// worker keepalive with master
@@ -139,6 +141,7 @@ func (s *Server) Start() error {
 
 	s.svr = grpc.NewServer()
 	pb.RegisterWorkerServer(s.svr, s)
+	fmt.Println("register worker")
 	go func() {
 		err2 := s.svr.Serve(grpcL)
 		if err2 != nil && !common.IsErrNetClosing(err2) && err2 != cmux.ErrListenerClosed {
@@ -150,6 +153,7 @@ func (s *Server) Start() error {
 	s.closed.Set(false)
 	log.L().Info("start gRPC API", zap.String("listened address", s.cfg.WorkerAddr))
 	err = m.Serve()
+	fmt.Println("start gRPC API")
 	if err != nil && common.IsErrNetClosing(err) {
 		err = nil
 	}
@@ -691,11 +695,13 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 	if resp.Result {
 		op1 := clientv3.OpPut(common.UpstreamConfigKeyAdapter.Encode(cfg.SourceID), req.Config)
 		op2 := clientv3.OpPut(common.UpstreamBoundWorkerKeyAdapter.Encode(s.cfg.WorkerAddr), cfg.SourceID)
+		op3 := clientv3.OpPut(common.WorkerConfigKeyAdapter.Encode(s.cfg.WorkerAddr), cfg.SourceID)
 		if req.Op == pb.WorkerOp_StopWorker {
 			op1 = clientv3.OpDelete(common.UpstreamConfigKeyAdapter.Encode(cfg.SourceID))
 			op2 = clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Encode(s.cfg.WorkerAddr))
+			op3 = clientv3.OpDelete(common.WorkerConfigKeyAdapter.Encode(s.cfg.WorkerAddr))
 		}
-		resp.Msg = s.retryWriteEctd(op1, op2)
+		resp.Msg = s.retryWriteEctd(op1, op2, op3)
 		// Because etcd was deployed with master in a single process, if we can not write data into etcd, most probably
 		// the have lost connect from master.
 	}
