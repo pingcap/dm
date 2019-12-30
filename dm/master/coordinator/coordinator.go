@@ -15,7 +15,6 @@ package coordinator
 
 import (
 	"context"
-	"fmt"
 	"github.com/pingcap/dm/dm/pb"
 	"sync"
 	"time"
@@ -91,7 +90,6 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 	}
 
 	for _, kv := range resp.Kvs {
-		fmt.Println(string(kv.Key))
 		addr := common.WorkerRegisterKeyAdapter.Decode(string(kv.Key))[0]
 		name := string(kv.Value)
 		c.workers[addr] = NewWorker(name, addr, nil)
@@ -171,9 +169,7 @@ func (c *Coordinator) Stop() {
 
 // AddWorker add the dm-worker to the coordinate.
 func (c *Coordinator) AddWorker(name string, address string, cli workerrpc.Client) {
-	fmt.Println("wait lock")
 	c.mu.Lock()
-	fmt.Println("get lock")
 	defer c.mu.Unlock()
 	if w, ok := c.workers[address]; ok {
 		w.SetStatus(WorkerFree)
@@ -220,7 +216,6 @@ func (c *Coordinator) HandleStoppedWorker(w *Worker, cfg *config.MysqlConfig) bo
 func (c *Coordinator) AcquireWorkerForSource(source string) (*Worker, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	fmt.Printf("AcquireWorkerForSouce")
 	if c.started == false {
 		return nil, ErrNotStarted
 	}
@@ -292,7 +287,7 @@ func (c *Coordinator) GetWorkersByStatus(s WorkerState) []*Worker {
 func (c *Coordinator) ObserveWorkers() {
 	watcher := clientv3.NewWatcher(c.etcdCli)
 	ch := watcher.Watch(c.ctx, common.WorkerKeepAliveKeyAdapter.Path(), clientv3.WithPrefix())
-	// t1 := time.NewTicker(time.Second * 6)
+	t1 := time.NewTicker(time.Second * 6)
 	for {
 		select {
 		case wresp := <-ch:
@@ -309,17 +304,24 @@ func (c *Coordinator) ObserveWorkers() {
 					addr, name := kvs[0], kvs[1]
 					c.mu.Lock()
 					if w, ok := c.workers[addr]; ok && name == w.Name() {
-						log.L().Info("worker became online, state: free", zap.String("name", w.Name()), zap.String("address", w.Address()))
+						state := "Free"
 						if source, ok := c.workerToConfigs[addr]; ok {
 							// The worker connect to master before we transfer mysqltask into another worker,
 							// try schedule mysqltask.
-							c.schedule(source)
-							w.SetStatus(WorkerBound)
+							if nowWorker, ok := c.upstreams[source]; ok && nowWorker.Address() == addr {
+								// If this mysqltask has not been assigned to others, It could try to schedule on self.
+								c.schedule(source)
+								w.SetStatus(WorkerBound)
+								state = "bound"
+							} else {
+								w.SetStatus(WorkerFree)
+							}
 						} else {
 							// If this worker has not been in 'workerToConfigs', it means that this worker must have lose connect from master more than 6s,
 							// so the mysql task in worker had stop
 							w.SetStatus(WorkerFree)
 						}
+						log.L().Info("worker became online ", zap.String("name", w.Name()), zap.String("address", w.Address()), zap.String("state", state))
 					} else {
 						// TODO: how to deal with unregister worker
 					}
@@ -331,6 +333,8 @@ func (c *Coordinator) ObserveWorkers() {
 					c.mu.Lock()
 					if w, ok := c.workers[addr]; ok && name == w.Name() {
 						log.L().Info("worker became offline, state: closed", zap.String("name", w.Name()), zap.String("address", w.Address()))
+						// Set client nil, and send request use new request
+						w.client = nil
 						if source, ok := c.workerToConfigs[addr]; ok {
 							c.schedule(source)
 						}
@@ -341,27 +345,20 @@ func (c *Coordinator) ObserveWorkers() {
 		case <-c.ctx.Done():
 			log.L().Info("coordinate exict due to context canceled")
 			return
-			//case <-t1.C:
-			//	c.tryRestartMysqlTask()
+		case <-t1.C:
+			c.tryRestartMysqlTask()
 		}
 	}
 }
 
 func (c *Coordinator) schedule(source string) {
-	fmt.Printf("schedule source : %v\n", source)
-	// c.waitingTask <- source
-}
-
-func (c *Coordinator) unschedule(cli *clientv3.Client, cfg config.MysqlConfig) {
-	delete(c.taskConfigs, cfg.SourceID)
-	// TODO: store taskConfigs in ETCD
+	c.waitingTask <- source
 }
 
 func (c *Coordinator) tryRestartMysqlTask() {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	scheduleNextLoop := make([]string, 1000)
-	fmt.Printf("tryRestartMysqlTask")
 	hasTaskToSchedule := true
 	for hasTaskToSchedule {
 		select {
@@ -383,7 +380,6 @@ func (c *Coordinator) tryRestartMysqlTask() {
 				}
 				if !ret {
 					scheduleNextLoop = append(scheduleNextLoop, source)
-					fmt.Printf("to schedule: %v\n", source)
 				}
 			}
 		default:
@@ -392,14 +388,13 @@ func (c *Coordinator) tryRestartMysqlTask() {
 		}
 	}
 
-	fmt.Printf("to schedule: %v\n", len(scheduleNextLoop))
 	for _, source := range scheduleNextLoop {
 		c.waitingTask <- source
 	}
-	fmt.Printf("wait next loop\n")
 }
 
 func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool {
+	log.L().Info("try to schedule ", zap.String("source", cfg.SourceID), zap.String("address", w.Address()))
 	task, err := cfg.Toml()
 	req := &pb.MysqlWorkerRequest{
 		Op:     pb.WorkerOp_StartWorker,

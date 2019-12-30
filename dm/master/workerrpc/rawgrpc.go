@@ -15,6 +15,7 @@ package workerrpc
 
 import (
 	"context"
+	"google.golang.org/grpc/backoff"
 	"sync/atomic"
 	"time"
 
@@ -42,7 +43,16 @@ func NewGRPCClientWrap(conn *grpc.ClientConn, client pb.WorkerClient) (*GRPCClie
 
 // NewGRPCClient initializes a new grpc client from worker address
 func NewGRPCClient(addr string) (*GRPCClient, error) {
-	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
+	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second),
+		grpc.WithConnectParams(grpc.ConnectParams{
+			Backoff: backoff.Config{
+				BaseDelay:  100 * time.Millisecond,
+				Multiplier: 1.6, // Default
+				Jitter:     0.2, // Default
+				MaxDelay:   3 * time.Second,
+			},
+			MinConnectTimeout: 3 * time.Second,
+		}))
 	if err != nil {
 		return nil, terror.ErrMasterGRPCCreateConn.Delegate(err)
 	}

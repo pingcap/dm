@@ -29,7 +29,7 @@ var (
 	WorkerKeepAliveKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-worker/a/")
 	// WorkerConfigKeyAdapter the config path of upstream.
 	// k/v: Encode(source-id) -> addr
-	WorkerConfigKeyAdapter KeyAdapter = keyEncoderDecoder("/dm-worker/config/")
+	WorkerConfigKeyAdapter KeyAdapter = keyEncoderDecoder("/dm-master/config/")
 	// UpstreamConfigKeyAdapter the config path of upstream.
 	// k/v: Encode(source-id) -> config
 	UpstreamConfigKeyAdapter KeyAdapter = keyEncoderDecoder("/dm-master/upstream/config/")

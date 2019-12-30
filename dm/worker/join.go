@@ -83,7 +83,7 @@ func (s *Server) KeepAlive() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	ch, err := s.etcdClient.KeepAlive(cliCtx, lease.ID)
+	ch, err := s.etcdClient.KeepAlive(s.ctx, lease.ID)
 	if err != nil {
 		return false, err
 	}
