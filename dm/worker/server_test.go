@@ -19,12 +19,14 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"testing"
 	"time"
 
 	. "github.com/pingcap/check"
 	"google.golang.org/grpc"
 
+	"go.etcd.io/etcd/embed"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -38,7 +40,32 @@ type testServer struct{}
 
 var _ = Suite(&testServer{})
 
+func createMockClient(dir string, host string) (*embed.Etcd, error) {
+	cfg := embed.NewConfig()
+	cfg.Dir = dir
+	// lpurl, _ := url.Parse(host)
+	lcurl, _ := url.Parse(host)
+	// cfg.LPUrls = []url.URL{*lpurl}
+	cfg.LCUrls = []url.URL{*lcurl}
+	cfg.ACUrls = []url.URL{*lcurl}
+	ETCD, err := embed.StartEtcd(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	select {
+	case <-ETCD.Server.ReadyNotify():
+	case <-time.After(5 * time.Second):
+		ETCD.Server.Stop() // trigger a shutdown
+	}
+	// embd.client = v3client.New(embd.ETCD.Server)
+	return ETCD, nil
+}
+
 func (t *testServer) TestServer(c *C) {
+	ETCD, err := createMockClient("./", "host://127.0.0.1:8291")
+	c.Assert(err, IsNil)
+	defer ETCD.Server.Stop()
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
 
@@ -51,7 +78,7 @@ func (t *testServer) TestServer(c *C) {
 
 	workerAddr := cfg.WorkerAddr
 	s.cfg.WorkerAddr = ""
-	err := s.Start()
+	err = s.Start()
 	c.Assert(terror.ErrWorkerHostPortNotValid.Equal(err), IsTrue)
 	s.Close()
 	s.cfg.WorkerAddr = workerAddr
@@ -160,7 +187,6 @@ func (t *testServer) testOperateWorker(c *C, s *Server, start bool) {
 		req.Op = pb.WorkerOp_StartWorker
 		resp, err = cli.OperateMysqlTask(context.Background(), req)
 		c.Assert(err, IsNil)
-		fmt.Println("=======msg=====")
 		fmt.Println(resp.Msg)
 		c.Assert(resp.Result, Equals, true)
 
