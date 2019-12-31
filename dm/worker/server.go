@@ -692,13 +692,11 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 	if resp.Result {
 		op1 := clientv3.OpPut(common.UpstreamConfigKeyAdapter.Encode(cfg.SourceID), req.Config)
 		op2 := clientv3.OpPut(common.UpstreamBoundWorkerKeyAdapter.Encode(s.cfg.WorkerAddr), cfg.SourceID)
-		op3 := clientv3.OpPut(common.WorkerConfigKeyAdapter.Encode(cfg.SourceID), s.cfg.WorkerAddr)
 		if req.Op == pb.WorkerOp_StopWorker {
 			op1 = clientv3.OpDelete(common.UpstreamConfigKeyAdapter.Encode(cfg.SourceID))
 			op2 = clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Encode(s.cfg.WorkerAddr))
-			op3 = clientv3.OpDelete(common.WorkerConfigKeyAdapter.Encode(cfg.SourceID))
 		}
-		resp.Msg = s.retryWriteEctd(op1, op2, op3)
+		resp.Msg = s.retryWriteEctd(op1, op2)
 		// Because etcd was deployed with master in a single process, if we can not write data into etcd, most probably
 		// the have lost connect from master.
 	}
