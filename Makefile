@@ -49,7 +49,7 @@ endif
 .PHONY: build test unit_test dm_integration_test_build integration_test \
 	coverage check dm-worker dm-master dm-tracer dmctl debug-tools
 
-build: check dm-worker dm-master dm-tracer dmctl dm-portal
+build: check dm-worker dm-master dm-tracer dmctl dm-portal dm-syncer
 
 dm-worker:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dm-worker ./cmd/dm-worker
@@ -65,6 +65,9 @@ dmctl:
 
 dm-portal:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dm-portal ./cmd/dm-portal
+
+dm-syncer:
+	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/dm-syncer ./cmd/dm-syncer
 
 debug-tools:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/binlog-event-blackhole ./debug-tools/binlog-event-blackhole
@@ -143,6 +146,10 @@ dm_integration_test_build:
 		-coverpkg=github.com/pingcap/dm/... \
 		-o bin/dm-tracer.test github.com/pingcap/dm/cmd/dm-tracer \
 		|| { $(FAILPOINT_DISABLE); exit 1; }
+	$(GOTEST) -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
+		-coverpkg=github.com/pingcap/dm/... \
+		-o bin/dm-syncer.test github.com/pingcap/dm/cmd/dm-syncer \
+		|| { $(FAILPOINT_DISABLE); exit 1; }
 	$(FAILPOINT_DISABLE)
 	tests/prepare_tools.sh
 
@@ -155,6 +162,7 @@ integration_test: check_third_party_binary
 	@which bin/dm-master.test
 	@which bin/dm-worker.test
 	@which bin/dm-tracer.test
+	@which bin/dm-syncer.test
 	tests/run.sh $(CASE)
 
 compatibility_test: check_third_party_binary

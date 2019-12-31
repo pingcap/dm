@@ -191,6 +191,16 @@ func NewSubTaskConfig() *SubTaskConfig {
 	return cfg
 }
 
+// GetFlagSet provides the pointer of subtask's flag set.
+func (c *SubTaskConfig) GetFlagSet() *flag.FlagSet {
+	return c.flagSet
+}
+
+// SetFlagSet writes back the flag set.
+func (c *SubTaskConfig) SetFlagSet(flagSet *flag.FlagSet) {
+	c.flagSet = flagSet
+}
+
 // String returns the config's json string
 func (c *SubTaskConfig) String() string {
 	cfg, err := json.Marshal(c)
