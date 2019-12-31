@@ -212,6 +212,28 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	return
 }
 
+func (s *Server) recoverSubTask() error {
+	ectx, cancel := context.WithTimeout(s.etcdClient.Ctx(), etcdTimeouit)
+	defer cancel()
+	resp, err := s.etcdClient.Get(ectx, common.UpstreamSubTaskKeyAdapter.Path(), clientv3.WithPrefix())
+	if err != nil {
+		return err
+	}
+	for _, kv := range resp.Kvs {
+		infos := common.UpstreamSubTaskKeyAdapter.Decode(string(kv.Key))
+		sourceID := infos[0]
+		taskName := infos[1]
+		if sources, ok := s.taskSources[taskName]; ok {
+			sources = append(sources, sourceID)
+		} else {
+			srcs := make([]string, 1)
+			srcs = append(srcs, taskName)
+			s.taskSources[taskName] = srcs
+		}
+	}
+	return nil
+}
+
 // Close close the RPC server, this function can be called multiple times
 func (s *Server) Close() {
 	s.Lock()
@@ -1707,7 +1729,7 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 	} else {
 		w := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
 		if w == nil {
-			if !s.coordinator.HandleStoppedWorker(nil, cfg) {
+			if !s.coordinator.HandleStoppedWorker(nil, cfg, false) {
 				return &pb.MysqlWorkerResponse{
 					Result: false,
 					Msg:    "Stop worker failed. worker has not been started",
@@ -1720,7 +1742,7 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 					Msg:    errors.ErrorStack(err),
 				}, nil
 			}
-			s.coordinator.HandleStoppedWorker(w, cfg)
+			s.coordinator.HandleStoppedWorker(w, cfg, resp.Result)
 		}
 	}
 	return &pb.MysqlWorkerResponse{

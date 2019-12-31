@@ -128,7 +128,7 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 			log.L().Error("worker not exist but binding relationship exist", zap.String("addr", addr), zap.String("source", sourceID))
 			continue
 		}
-		gresp, err := etcdClient.Get(ctx, common.UpstreamConfigKeyAdapter.Encode(sourceID))
+		gresp, err := etcdClient.Get(ectx, common.UpstreamConfigKeyAdapter.Encode(sourceID))
 		if err != nil || len(gresp.Kvs) == 0 {
 			log.L().Error("cannot load config", zap.String("addr", addr), zap.String("source", sourceID), zap.Error(err))
 			continue
@@ -194,7 +194,7 @@ func (c *Coordinator) HandleStartedWorker(w *Worker, cfg *config.MysqlConfig, su
 }
 
 // HandleStoppedWorker change worker status when mysql task stopped
-func (c *Coordinator) HandleStoppedWorker(w *Worker, cfg *config.MysqlConfig) bool {
+func (c *Coordinator) HandleStoppedWorker(w *Worker, cfg *config.MysqlConfig, ret bool) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if w == nil {
@@ -204,9 +204,11 @@ func (c *Coordinator) HandleStoppedWorker(w *Worker, cfg *config.MysqlConfig) bo
 		// This mysqltask is waiting to be scheduled. So we just remove it from wait queue.
 		delete(c.taskConfigs, cfg.SourceID)
 	} else {
-		delete(c.upstreams, cfg.SourceID)
-		delete(c.workerToConfigs, w.Address())
-		w.SetStatus(WorkerFree)
+		if ret {
+			delete(c.upstreams, cfg.SourceID)
+			delete(c.workerToConfigs, w.Address())
+			w.SetStatus(WorkerFree)
+		}
 	}
 	return true
 }
