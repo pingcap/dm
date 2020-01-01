@@ -176,7 +176,7 @@ func (c *StreamerController) ResetReplicationSyncer(tctx tcontext.Context, pos m
 			} else {
 				useRemote = true
 				c.changed = true
-				tctx.L().Info("meet error when read from local binlog, will switch wo remote binlog")
+				tctx.L().Info("meet error when read from local binlog, will switch to remote binlog")
 			}
 		}
 	}

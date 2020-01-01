@@ -254,7 +254,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 			Detail: []byte("relay is not enabled"),
 		},
 	}
-	if s.cfg.EnableRelay {
+	if s.worker.relayHolder != nil {
 		relayStatus = s.worker.relayHolder.Status()
 	}
 
@@ -275,10 +275,14 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorRequest) (*pb.QueryErrorResponse, error) {
 	log.L().Info("", zap.String("request", "QueryError"), zap.Stringer("payload", req))
 
+	relayError := &pb.RelayError{}
+	if s.worker.relayHolder != nil {
+		relayError = s.worker.relayHolder.Error()
+	}
 	resp := &pb.QueryErrorResponse{
 		Result:       true,
 		SubTaskError: s.worker.QueryError(req.Name),
-		RelayError:   s.worker.relayHolder.Error(),
+		RelayError:   relayError,
 	}
 
 	return resp, nil

@@ -952,6 +952,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	syncer.reset()
 
 	syncer.streamerController, err = NewStreamerController(*tcontext.Background(), syncer.syncCfg, syncer.fromDB, syncer.binlogType, syncer.cfg.RelayDir, syncer.timezone, pos)
+	c.Assert(err, IsNil)
 
 	for _, testCase := range testCases {
 		for _, sql := range testCase.sqls {
