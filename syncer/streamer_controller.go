@@ -87,7 +87,10 @@ type StreamerController struct {
 	sync.RWMutex
 
 	// the initital binlog type
-	binlogType BinlogType
+	initBinlogType BinlogType
+
+	// the current binlog type
+	currentBinlogType BinlogType
 
 	syncCfg        replication.BinlogSyncerConfig
 	localBinlogDir string
@@ -102,20 +105,18 @@ type StreamerController struct {
 
 	fromDB *UpStreamConn
 
-	// changed is true when change from local to remote
-	changed bool
-
 	uuidSuffix string
 }
 
 // NewStreamerController creates a new streamer controller
 func NewStreamerController(tctx tcontext.Context, syncCfg replication.BinlogSyncerConfig, fromDB *UpStreamConn, binlogType BinlogType, localBinlogDir string, timezone *time.Location, beginPos mysql.Position) (*StreamerController, error) {
 	streamerController := &StreamerController{
-		binlogType:     binlogType,
-		syncCfg:        syncCfg,
-		localBinlogDir: localBinlogDir,
-		timezone:       timezone,
-		fromDB:         fromDB,
+		initBinlogType:    binlogType,
+		currentBinlogType: binlogType,
+		syncCfg:           syncCfg,
+		localBinlogDir:    localBinlogDir,
+		timezone:          timezone,
+		fromDB:            fromDB,
 	}
 
 	err := streamerController.ResetReplicationSyncer(tctx, beginPos)
@@ -132,10 +133,7 @@ func (c *StreamerController) ResetReplicationSyncer(tctx tcontext.Context, pos m
 	c.Lock()
 	defer c.Unlock()
 
-	var (
-		useRemote            = false
-		uuidSameWithUpstream = true
-	)
+	uuidSameWithUpstream := true
 
 	// close old streamerProducer
 	if c.streamerProducer != nil {
@@ -143,6 +141,7 @@ func (c *StreamerController) ResetReplicationSyncer(tctx tcontext.Context, pos m
 		case *remoteBinlogReader:
 			c.closeBinlogSyncer(tctx, t.reader)
 		case *localBinlogReader:
+			// check the uuid before close
 			uuidSameWithUpstream, err = c.checkUUIDSameWithUpstream(pos, t.reader.GetUUIDs())
 			if err != nil {
 				return err
@@ -165,23 +164,20 @@ func (c *StreamerController) ResetReplicationSyncer(tctx tcontext.Context, pos m
 	c.syncCfg.ServerID = randomServerID
 
 	// re-create new streamerProducer
-	if c.binlogType == RemoteBinlog {
-		useRemote = true
-	} else {
+	if c.initBinlogType == LocalBinlog {
 		if c.meetError {
 			// meetError is true means meets error when get binlog event, in this case use remote binlog as default
 			if !uuidSameWithUpstream {
 				// if the binlog position's uuid is different from the upstream, can not switch to remote binlog
 				tctx.L().Info("may switch master in upstream, so can not switch local to remote")
 			} else {
-				useRemote = true
-				c.changed = true
+				c.currentBinlogType = RemoteBinlog
 				tctx.L().Info("meet error when read from local binlog, will switch to remote binlog")
 			}
 		}
 	}
 
-	if useRemote {
+	if c.currentBinlogType == RemoteBinlog {
 		c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(c.syncCfg), &tctx, false}
 	} else {
 		c.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(&tctx, &streamer.BinlogReaderConfig{RelayDir: c.localBinlogDir, Timezone: c.timezone})}
@@ -328,16 +324,5 @@ func (c *StreamerController) checkUUIDSameWithUpstream(pos mysql.Position, uuids
 
 // GetBinlogType returns the binlog type used now
 func (c *StreamerController) GetBinlogType() BinlogType {
-	if c.streamerProducer == nil {
-		return c.binlogType
-	}
-
-	switch c.streamerProducer.(type) {
-	case *remoteBinlogReader:
-		return RemoteBinlog
-	case *localBinlogReader:
-		return LocalBinlog
-	default:
-		return c.binlogType
-	}
+	return c.currentBinlogType
 }
