@@ -1166,6 +1166,15 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 		if err != nil {
 			s.tctx.L().Error("fail to fetch binlog", log.ShortError(err))
+			
+			if s.streamerController.CanRetry() {
+				err = s.streamerController.ResetReplicationSyncer(*s.tctx, lastPos)
+				if err != nil {
+					return err
+				}
+				continue
+			}
+
 			// try to re-sync in gtid mode
 			if tryReSync && s.cfg.EnableGTID && isBinlogPurgedError(err) && s.cfg.AutoFixGTID {
 				time.Sleep(retryTimeout)

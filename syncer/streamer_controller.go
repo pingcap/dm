@@ -207,8 +207,8 @@ func (c *StreamerController) GetEvent(tctx tcontext.Context) (event *replication
 	if err == nil {
 		switch ev := event.Event.(type) {
 		case *replication.RotateEvent:
-			// if is local binlog, binlog's name contain uuid information, need save it
-			// if is remote binlog, need add uuid information in binlog's name
+			// if is local binlog, binlog's name contain uuid information, need to save it
+			// if is remote binlog, need to add uuid information in binlog's name
 			if !c.setUUIDIfExists(tctx, string(ev.NextLogName)) {
 				if len(c.uuidSuffix) != 0 {
 					filename, err := binlog.ParseFilename(string(ev.NextLogName))
@@ -325,4 +325,13 @@ func (c *StreamerController) checkUUIDSameWithUpstream(pos mysql.Position, uuids
 // GetBinlogType returns the binlog type used now
 func (c *StreamerController) GetBinlogType() BinlogType {
 	return c.currentBinlogType
+}
+
+// CanRetry returns true if can switch from local to remote and retry again
+func (c *StreamerController) CanRetry() bool {
+	if c.initBinlogType == LocalBinlog && c.currentBinlogType == LocalBinlog {
+		return true
+	}
+
+	return false
 }
