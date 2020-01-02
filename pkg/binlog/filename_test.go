@@ -215,7 +215,7 @@ func (t *testFilenameSuite) TestConstructFilenameWithUUIDSuffix(c *C) {
 
 	for _, cs := range cases {
 		c.Assert(ConstructFilenameWithUUIDSuffix(cs.originalName, cs.suffix), Equals, cs.withSuffixName)
-		baseName, uuidSuffix, seq, err := AnalyzeFilenameWithUUIDSuffix(cs.withSuffixName)
+		baseName, uuidSuffix, seq, err := SplitFilenameWithUUIDSuffix(cs.withSuffixName)
 		c.Assert(err, IsNil)
 		c.Assert(baseName, Equals, cs.originalName.BaseName)
 		c.Assert(uuidSuffix, Equals, cs.suffix)
@@ -231,7 +231,7 @@ func (t *testFilenameSuite) TestConstructFilenameWithUUIDSuffix(c *C) {
 	}
 
 	for _, fileName := range invalidFileName {
-		_, _, _, err := AnalyzeFilenameWithUUIDSuffix(fileName)
+		_, _, _, err := SplitFilenameWithUUIDSuffix(fileName)
 		c.Assert(err, ErrorMatches, ".*invalid binlog filename with uuid suffix.*")
 	}
 }

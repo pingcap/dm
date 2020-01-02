@@ -303,7 +303,7 @@ func (c *StreamerController) IsClosed() bool {
 }
 
 func (c *StreamerController) setUUIDIfExists(filename string) bool {
-	_, uuidSuffix, _, err := binlog.AnalyzeFilenameWithUUIDSuffix(filename)
+	_, uuidSuffix, _, err := binlog.SplitFilenameWithUUIDSuffix(filename)
 	if err != nil {
 		// don't contain uuid in position's name
 		return false
@@ -323,7 +323,7 @@ func (c *StreamerController) UpdateSyncCfg(syncCfg replication.BinlogSyncerConfi
 
 // check whether the uuid in binlog position's name is same with upstream
 func (c *StreamerController) checkUUIDSameWithUpstream(pos mysql.Position, uuids []string) (bool, error) {
-	_, uuidSuffix, _, err := binlog.AnalyzeFilenameWithUUIDSuffix(pos.Name)
+	_, uuidSuffix, _, err := binlog.SplitFilenameWithUUIDSuffix(pos.Name)
 	if err != nil {
 		// don't contain uuid in position's name
 		return true, nil
