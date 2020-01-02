@@ -323,11 +323,16 @@ func (c *StreamerController) checkUUIDSameWithUpstream(pos mysql.Position, uuids
 
 // GetBinlogType returns the binlog type used now
 func (c *StreamerController) GetBinlogType() BinlogType {
+	c.RLock()
+	c.RUnlock()
 	return c.currentBinlogType
 }
 
 // CanRetry returns true if can switch from local to remote and retry again
 func (c *StreamerController) CanRetry() bool {
+	c.RLock()
+	c.RUnlock()
+
 	if c.initBinlogType == LocalBinlog && c.currentBinlogType == LocalBinlog {
 		return true
 	}

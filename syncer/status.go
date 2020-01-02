@@ -54,6 +54,7 @@ func (s *Syncer) Status() interface{} {
 		st.MasterBinlogGtid = masterGTIDSet.String()
 	}
 
+	st.BinlogType = "unknown"
 	if s.streamerController != nil {
 		st.BinlogType = binlogTypeToString(s.streamerController.GetBinlogType())
 	}
