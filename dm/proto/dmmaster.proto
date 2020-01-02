@@ -59,7 +59,7 @@ service Master {
     rpc CheckTask(CheckTaskRequest) returns (CheckTaskResponse) {}
 
     // Operate mysql-worker for server
-    rpc OperateMysqlWorker(MysqlTaskRequest) returns (MysqlTaskResponse) {}
+    rpc OperateMysqlWorker(MysqlWorkerRequest) returns (MysqlWorkerResponse) {}
 
     // RegisterWorker register the dm-workers.
     rpc RegisterWorker(RegisterWorkerRequest) returns(RegisterWorkerResponse) {}
@@ -68,12 +68,12 @@ service Master {
 message MigrateWorkerRelayRequest {
     string BinlogName = 1;
     uint32 BinlogPos = 2;
-    string worker = 3;
+    string source = 3;
 }
 
 message UpdateWorkerRelayConfigRequest {
     string config = 1;
-    string worker = 2;
+    string source = 2;
 }
 
 message StartTaskRequest {
@@ -253,7 +253,7 @@ message HandleSQLsRequest {
     SQLOp op = 2; // operation type
     repeated string args = 3; // args for operation
     string binlogPos = 4; // binlog-pos (that's file:pos format)
-    string worker = 5; // worker
+    string source = 5; // worker
     string sqlPattern = 6; // sql-pattern (for regexp, starts with ~)
     bool sharding = 7; // whether are handing sharding DDL, which will only take effect on DDL lock's owner
 }

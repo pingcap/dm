@@ -27,14 +27,14 @@ var (
 	// WorkerKeepAliveKeyAdapter used to encode and decode keepalive key.
 	// k/v: Encode(addr,name) -> time
 	WorkerKeepAliveKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-worker/a/")
-	// UpstreamConfigKeyAdapter the config path of upstream.
+	// UpstreamConfigKeyAdapter store all config of which MySQL-task has not stopped.
 	// k/v: Encode(source-id) -> config
 	UpstreamConfigKeyAdapter KeyAdapter = keyEncoderDecoder("/dm-master/upstream/config/")
-	// UpstreamBoundWorkerKeyAdapter the path of worker relationship.
+	// UpstreamBoundWorkerKeyAdapter used to store address of worker in which MySQL-tasks which are running.
 	// k/v: Encode(addr) -> source-id
 	UpstreamBoundWorkerKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/bound-worker/")
-	// UpstreamSubTaskKeyAdapter the path of the subtask.
-	// k/v: Encode(addr) -> config
+	// UpstreamSubTaskKeyAdapter used to store SubTask which are subscribing data from MySQL source.
+	// k/v: Encode(source-id, task-name) -> SubTaskConfig
 	UpstreamSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/upstream/subtask/")
 )
 

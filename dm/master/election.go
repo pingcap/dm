@@ -34,6 +34,9 @@ func (s *Server) electionNotify(ctx context.Context) {
 				if err != nil {
 					log.L().Error("coordinator do not started", zap.Error(err))
 				}
+				if err = s.recoverSubTask(); err != nil {
+					log.L().Error("recover subtask infos from coordinator fail", zap.Error(err))
+				}
 
 			} else {
 				_, leaderID, err2 := s.election.LeaderInfo(ctx)

@@ -85,7 +85,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		port     = 8263
 	)
 	cfg := NewConfig()
-	workerCfg := config.NewWorkerConfig()
+	workerCfg := config.NewMysqlConfig()
 	workerCfg.LoadFromFile("./dm-mysql.toml")
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
 	workerCfg.Checker.CheckInterval = config.Duration{Duration: 40 * time.Millisecond}

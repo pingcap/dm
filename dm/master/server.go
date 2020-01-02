@@ -212,6 +212,28 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	return
 }
 
+func (s *Server) recoverSubTask() error {
+	ectx, cancel := context.WithTimeout(s.etcdClient.Ctx(), etcdTimeouit)
+	defer cancel()
+	resp, err := s.etcdClient.Get(ectx, common.UpstreamSubTaskKeyAdapter.Path(), clientv3.WithPrefix())
+	if err != nil {
+		return err
+	}
+	for _, kv := range resp.Kvs {
+		infos := common.UpstreamSubTaskKeyAdapter.Decode(string(kv.Key))
+		sourceID := infos[0]
+		taskName := infos[1]
+		if sources, ok := s.taskSources[taskName]; ok {
+			s.taskSources[taskName] = append(sources, sourceID)
+		} else {
+			srcs := make([]string, 1)
+			srcs = append(srcs, sourceID)
+			s.taskSources[taskName] = srcs
+		}
+	}
+	return nil
+}
+
 // Close close the RPC server, this function can be called multiple times
 func (s *Server) Close() {
 	s.Lock()
@@ -286,7 +308,7 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 			return respWorker, nil
 		}
 	}
-	s.coordinator.AddWorker(req.Name, req.Address)
+	s.coordinator.AddWorker(req.Name, req.Address, nil)
 	log.L().Info("register worker successfully", zap.String("name", req.Name), zap.String("address", req.Address))
 	respWorker := &pb.RegisterWorkerResponse{
 		Result: true,
@@ -743,11 +765,7 @@ func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLL
 				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", sourceID), sourceID)
 				return
 			}
-			cli, err := worker.GetClient()
-			if err != nil {
-				return
-			}
-			resp, err := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
+			resp, err := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
 			workerResp := &pb.CommonWorkerResponse{}
 			if err != nil {
 				workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), sourceID)
@@ -803,8 +821,8 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb
 		Msg:    "",
 	}
 
-	if !s.checkTaskAndWorkerMatch(req.Name, req.Worker) {
-		resp.Msg = fmt.Sprintf("task %s and worker %s not match, can try `refresh-worker-tasks` cmd first", req.Name, req.Worker)
+	if !s.checkTaskAndWorkerMatch(req.Name, req.Source) {
+		resp.Msg = fmt.Sprintf("task %s and worker %s not match, can try `refresh-worker-tasks` cmd first", req.Name, req.Source)
 		return resp, nil
 	}
 
@@ -819,15 +837,15 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb
 			SqlPattern: req.SqlPattern,
 		},
 	}
-	cli := s.coordinator.GetWorkerBySourceID(req.Worker)
-	if cli == nil {
-		resp.Msg = fmt.Sprintf("worker %s client not found in %v", req.Worker, s.coordinator.GetAllWorkers())
+	worker := s.coordinator.GetWorkerBySourceID(req.Source)
+	if worker == nil {
+		resp.Msg = fmt.Sprintf("worker %s client not found in %v", req.Source, s.coordinator.GetAllWorkers())
 		return resp, nil
 	}
-	response, err := cli.SendRequest(ctx, subReq, s.cfg.RPCTimeout)
+	response, err := worker.SendRequest(ctx, subReq, s.cfg.RPCTimeout)
 	workerResp := &pb.CommonWorkerResponse{}
 	if err != nil {
-		workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), req.Worker)
+		workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), req.Source)
 	} else {
 		workerResp = response.HandleSubTaskSQLs
 	}
@@ -856,12 +874,12 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 		wg.Add(1)
 		go func(source string) {
 			defer wg.Done()
-			cli := s.coordinator.GetWorkerBySourceID(source)
-			if cli == nil {
+			worker := s.coordinator.GetWorkerBySourceID(source)
+			if worker == nil {
 				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", source), source)
 				return
 			}
-			resp, err := cli.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
+			resp, err := worker.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
 			workerResp := &pb.CommonWorkerResponse{}
 			if err != nil {
 				workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), source)
@@ -910,8 +928,8 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
 			sourceID, _ := args[0].(string)
-			cli := s.coordinator.GetWorkerBySourceID(sourceID)
-			if cli == nil {
+			worker := s.coordinator.GetWorkerBySourceID(sourceID)
+			if worker == nil {
 				err := terror.ErrMasterWorkerArgsExtractor.Generatef("%s relevant worker-client not found", sourceID)
 				handleErr(err, sourceID)
 				return
@@ -920,7 +938,7 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 				Type:              workerrpc.CmdSwitchRelayMaster,
 				SwitchRelayMaster: &pb.SwitchRelayMasterRequest{},
 			}
-			resp, err := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
+			resp, err := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
 			workerResp := &pb.CommonWorkerResponse{}
 			if err != nil {
 				workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), sourceID)
@@ -969,8 +987,8 @@ func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWork
 		wg.Add(1)
 		go func(source string) {
 			defer wg.Done()
-			cli := s.coordinator.GetWorkerBySourceID(source)
-			if cli == nil {
+			worker := s.coordinator.GetWorkerBySourceID(source)
+			if worker == nil {
 				workerResp := &pb.OperateRelayResponse{
 					Op:     req.Op,
 					Result: false,
@@ -980,7 +998,7 @@ func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWork
 				workerRespCh <- workerResp
 				return
 			}
-			resp, err := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
+			resp, err := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
 			workerResp := &pb.OperateRelayResponse{}
 			if err != nil {
 				workerResp = &pb.OperateRelayResponse{
@@ -1078,12 +1096,12 @@ func (s *Server) containWorker(workers []string, worker string) bool {
 }
 
 // getStatusFromWorkers does RPC request to get status from dm-workers
-func (s *Server) getStatusFromWorkers(ctx context.Context, workers []string, taskName string) chan *pb.QueryStatusResponse {
+func (s *Server) getStatusFromWorkers(ctx context.Context, sources []string, taskName string) chan *pb.QueryStatusResponse {
 	workerReq := &workerrpc.Request{
 		Type:        workerrpc.CmdQueryStatus,
 		QueryStatus: &pb.QueryStatusRequest{Name: taskName},
 	}
-	workerRespCh := make(chan *pb.QueryStatusResponse, len(workers))
+	workerRespCh := make(chan *pb.QueryStatusResponse, len(sources))
 
 	handleErr := func(err error, worker string) bool {
 		log.L().Error("response error", zap.Error(err))
@@ -1097,18 +1115,18 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, workers []string, tas
 	}
 
 	var wg sync.WaitGroup
-	for _, worker := range workers {
+	for _, source := range sources {
 		wg.Add(1)
 		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
 			sourceID, _ := args[0].(string)
-			cli := s.coordinator.GetWorkerBySourceID(sourceID)
-			if cli == nil {
+			worker := s.coordinator.GetWorkerBySourceID(sourceID)
+			if worker == nil {
 				err := terror.ErrMasterWorkerArgsExtractor.Generatef("%s relevant worker-client not found", sourceID)
 				handleErr(err, sourceID)
 				return
 			}
-			resp, err := cli.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
+			resp, err := worker.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
 			workerStatus := &pb.QueryStatusResponse{}
 			if err != nil {
 				workerStatus = &pb.QueryStatusResponse{
@@ -1124,19 +1142,19 @@ func (s *Server) getStatusFromWorkers(ctx context.Context, workers []string, tas
 			defer wg.Done()
 			sourceID, _ := args[0].(string)
 			handleErr(terror.ErrMasterNoEmitToken.Generate(sourceID), sourceID)
-		}, worker)
+		}, source)
 	}
 	wg.Wait()
 	return workerRespCh
 }
 
 // getErrorFromWorkers does RPC request to get error information from dm-workers
-func (s *Server) getErrorFromWorkers(ctx context.Context, workers []string, taskName string) chan *pb.QueryErrorResponse {
+func (s *Server) getErrorFromWorkers(ctx context.Context, sources []string, taskName string) chan *pb.QueryErrorResponse {
 	workerReq := &workerrpc.Request{
 		Type:       workerrpc.CmdQueryError,
 		QueryError: &pb.QueryErrorRequest{Name: taskName},
 	}
-	workerRespCh := make(chan *pb.QueryErrorResponse, len(workers))
+	workerRespCh := make(chan *pb.QueryErrorResponse, len(sources))
 
 	handleErr := func(err error, worker string) bool {
 		log.L().Error("response error", zap.Error(err))
@@ -1150,19 +1168,19 @@ func (s *Server) getErrorFromWorkers(ctx context.Context, workers []string, task
 	}
 
 	var wg sync.WaitGroup
-	for _, worker := range workers {
+	for _, source := range sources {
 		wg.Add(1)
 		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
 			sourceID, _ := args[0].(string)
-			cli := s.coordinator.GetWorkerBySourceID(sourceID)
-			if cli == nil {
+			worker := s.coordinator.GetWorkerBySourceID(sourceID)
+			if worker == nil {
 				err := terror.ErrMasterWorkerArgsExtractor.Generatef("%s relevant worker-client not found", sourceID)
 				handleErr(err, sourceID)
 				return
 			}
 
-			resp, err := cli.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
+			resp, err := worker.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
 			workerError := &pb.QueryErrorResponse{}
 			if err != nil {
 				workerError = &pb.QueryErrorResponse{
@@ -1178,7 +1196,7 @@ func (s *Server) getErrorFromWorkers(ctx context.Context, workers []string, task
 			defer wg.Done()
 			sourceID, _ := args[0].(string)
 			handleErr(terror.ErrMasterNoEmitToken.Generate(sourceID), sourceID)
-		}, worker)
+		}, source)
 	}
 	wg.Wait()
 	return workerRespCh
@@ -1254,14 +1272,9 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 	var wg sync.WaitGroup
 
 	request := &workerrpc.Request{Type: workerrpc.CmdFetchDDLInfo}
-	for _, w := range s.coordinator.GetWorkersByStatus(coordinator.WorkerBound) {
-		client, err := w.GetClient()
-		if err != nil {
-			log.L().Error("cannot get worker client", zap.String("name", w.Name()))
-			continue
-		}
+	for source, w := range s.coordinator.GetRunningMysqlSource() {
 		wg.Add(1)
-		go func(worker string, cli workerrpc.Client) {
+		go func(source string, worker *coordinator.Worker) {
 			defer wg.Done()
 			var doRetry bool
 
@@ -1279,9 +1292,9 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 				case <-ctx.Done():
 					return
 				default:
-					resp, err := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
+					resp, err := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
 					if err != nil {
-						log.L().Error("create FetchDDLInfo stream", zap.String("worker", worker), log.ShortError(err))
+						log.L().Error("create FetchDDLInfo stream", zap.String("source", source), log.ShortError(err))
 						doRetry = true
 						continue
 					}
@@ -1298,11 +1311,11 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 						default:
 						}
 						if err != nil {
-							log.L().Error("receive ddl info", zap.String("worker", worker), log.ShortError(err))
+							log.L().Error("receive ddl info", zap.String("source", source), log.ShortError(err))
 							doRetry = true
 							break
 						}
-						log.L().Info("receive ddl info", zap.Stringer("ddl info", in), zap.String("worker", worker))
+						log.L().Info("receive ddl info", zap.Stringer("ddl info", in), zap.String("source", source))
 
 						workers := s.getTaskResources(in.Task)
 						if len(workers) == 0 {
@@ -1311,16 +1324,16 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 							doRetry = true
 							break
 						}
-						if !s.containWorker(workers, worker) {
+						if !s.containWorker(workers, source) {
 							// should not happen
-							log.L().Error("try to sync shard DDL, but worker is not in workers", zap.String("task", in.Task), zap.String("worker", worker), zap.Strings("workers", workers))
+							log.L().Error("try to sync shard DDL, but worker is not in workers", zap.String("task", in.Task), zap.String("source", source), zap.Strings("workers", workers))
 							doRetry = true
 							break
 						}
 
-						lockID, synced, remain, err := s.lockKeeper.TrySync(in.Task, in.Schema, in.Table, worker, in.DDLs, workers)
+						lockID, synced, remain, err := s.lockKeeper.TrySync(in.Task, in.Schema, in.Table, source, in.DDLs, workers)
 						if err != nil {
-							log.L().Error("fail to sync lock", zap.String("worker", worker), log.ShortError(err))
+							log.L().Error("fail to sync lock", zap.String("source", source), log.ShortError(err))
 							doRetry = true
 							break
 						}
@@ -1331,7 +1344,7 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 						}
 						err = stream.Send(out)
 						if err != nil {
-							log.L().Error("fail to send ddl lock info", zap.Stringer("ddl lock info", out), zap.String("worker", worker), log.ShortError(err))
+							log.L().Error("fail to send ddl lock info", zap.Stringer("ddl lock info", out), zap.String("source", source), log.ShortError(err))
 							doRetry = true
 							break
 						}
@@ -1364,7 +1377,7 @@ func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
 				}
 			}
 
-		}(w.Address(), client)
+		}(source, w)
 	}
 
 	wg.Wait()
@@ -1386,15 +1399,15 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 	lock.Resolving.Set(true)
 	defer lock.Resolving.Set(false) //reset
 
-	ready := lock.Ready() // Ready contain all dm-workers and whether they were synced
+	ready := lock.Ready() // Ready contain all dm-sources and whether they were synced
 
 	// request the owner to execute DDL
 	owner := lock.Owner
 	if len(replaceOwner) > 0 {
 		owner = replaceOwner
 	}
-	cli := s.coordinator.GetWorkerClientByAddress(owner)
-	if cli == nil {
+	worker := s.coordinator.GetWorkerBySourceID(owner)
+	if worker == nil {
 		return nil, terror.ErrMasterWorkerCliNotFound.Generate(owner)
 	}
 	if _, ok := ready[owner]; !ok {
@@ -1414,7 +1427,7 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 				SqlPattern: oper.Req.SqlPattern,
 			},
 		}
-		resp, err := cli.SendRequest(ctx, ownerReq, s.cfg.RPCTimeout)
+		resp, err := worker.SendRequest(ctx, ownerReq, s.cfg.RPCTimeout)
 		if err != nil {
 			return nil, terror.Annotatef(err, "send handle SQLs request %s to DDL lock %s owner %s fail", ownerReq.HandleSubTaskSQLs, lockID, owner)
 		}
@@ -1442,10 +1455,10 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 			DDLs:     lock.ddls,
 		},
 	}
-	// use a longer timeout for executing DDL in DM-worker.
+	// use a longer timeout for executing DDL in DM-source.
 	// now, we ignore `invalid connection` for `ADD INDEX`, use a longer timout to ensure the DDL lock removed.
 	ownerTimeout := time.Duration(syncer.MaxDDLConnectionTimeoutMinute)*time.Minute + 30*time.Second
-	resp, err := cli.SendRequest(ctx, ownerReq, ownerTimeout)
+	resp, err := worker.SendRequest(ctx, ownerReq, ownerTimeout)
 	ownerResp := &pb.CommonWorkerResponse{}
 	if err != nil {
 		ownerResp = errorCommonWorkerResponse(errors.ErrorStack(err), owner)
@@ -1460,13 +1473,13 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 		}, terror.ErrMasterOwnerExecDDL.Generate(owner)
 	}
 
-	// request other dm-workers to ignore DDL
-	workers := make([]string, 0, len(ready))
+	// request other dm-sources to ignore DDL
+	sources := make([]string, 0, len(ready))
 	if len(prefWorkers) > 0 {
-		workers = prefWorkers
+		sources = prefWorkers
 	} else {
 		for worker := range ready {
-			workers = append(workers, worker)
+			sources = append(sources, worker)
 		}
 	}
 
@@ -1480,41 +1493,41 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 			DDLs:     lock.ddls,
 		},
 	}
-	workerRespCh := make(chan *pb.CommonWorkerResponse, len(workers))
+	workerRespCh := make(chan *pb.CommonWorkerResponse, len(sources))
 	var wg sync.WaitGroup
-	for _, worker := range workers {
-		if worker == owner {
+	for _, source := range sources {
+		if source == owner {
 			continue // owner has executed DDL
 		}
 
 		wg.Add(1)
-		go func(worker string) {
+		go func(source string) {
 			defer wg.Done()
-			cli := s.coordinator.GetWorkerClientByAddress(worker)
-			if cli == nil {
-				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", worker), worker)
+			worker := s.coordinator.GetWorkerBySourceID(source)
+			if worker == nil {
+				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("source %s relevant source-client not found", source), source)
 				return
 			}
-			if _, ok := ready[worker]; !ok {
-				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s not waiting for DDL lock %s", owner, lockID), worker)
+			if _, ok := ready[source]; !ok {
+				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("source %s not waiting for DDL lock %s", owner, lockID), source)
 				return
 			}
 
-			log.L().Info("request to skip DDL", zap.String("not owner worker", worker), zap.String("lock ID", lockID))
-			resp, err2 := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
+			log.L().Info("request to skip DDL", zap.String("not owner source", source), zap.String("lock ID", lockID))
+			resp, err2 := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
 			var workerResp *pb.CommonWorkerResponse
 			if err2 != nil {
 				workerResp = errorCommonWorkerResponse(errors.ErrorStack(err2), "")
 			} else {
 				workerResp = resp.ExecDDL
 			}
-			workerResp.Worker = worker
+			workerResp.Worker = source
 			workerRespCh <- workerResp
-		}(worker)
+		}(source)
 	}
 	wg.Wait()
 
-	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(workers))
+	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(sources))
 	var success = true
 	for len(workerRespCh) > 0 {
 		workerResp := <-workerRespCh
@@ -1524,18 +1537,18 @@ func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner
 		}
 	}
 
-	sort.Strings(workers)
-	workerResps := make([]*pb.CommonWorkerResponse, 0, len(workers)+1)
+	sort.Strings(sources)
+	workerResps := make([]*pb.CommonWorkerResponse, 0, len(sources)+1)
 	workerResps = append(workerResps, ownerResp)
-	for _, worker := range workers {
-		workerResp, ok := workerRespMap[worker]
+	for _, source := range sources {
+		workerResp, ok := workerRespMap[source]
 		if ok {
 			workerResps = append(workerResps, workerResp)
 		}
 	}
 
 	// owner has ExecuteDDL successfully, we remove the Lock
-	// if some dm-workers ExecuteDDL occurred error, we should use dmctl to handle dm-worker directly
+	// if some dm-sources ExecuteDDL occurred error, we should use dmctl to handle dm-source directly
 	s.lockKeeper.RemoveLock(lockID)
 
 	if !success {
@@ -1582,21 +1595,21 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 // UpdateWorkerRelayConfig updates config for relay and (dm-worker)
 func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWorkerRelayConfigRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "UpdateWorkerRelayConfig"))
-	worker := req.Worker
+	source := req.Source
 	content := req.Config
-	cli := s.coordinator.GetWorkerBySourceID(worker)
-	if cli == nil {
-		return errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", worker), worker), nil
+	worker := s.coordinator.GetWorkerBySourceID(source)
+	if worker == nil {
+		return errorCommonWorkerResponse(fmt.Sprintf("source %s relevant source-client not found", source), source), nil
 	}
 
-	log.L().Info("update relay config", zap.String("worker", worker), zap.String("request", "UpdateWorkerRelayConfig"))
+	log.L().Info("update relay config", zap.String("source", source), zap.String("request", "UpdateWorkerRelayConfig"))
 	request := &workerrpc.Request{
 		Type:        workerrpc.CmdUpdateRelay,
 		UpdateRelay: &pb.UpdateRelayRequest{Content: content},
 	}
-	resp, err := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
+	resp, err := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
 	if err != nil {
-		return errorCommonWorkerResponse(errors.ErrorStack(err), worker), nil
+		return errorCommonWorkerResponse(errors.ErrorStack(err), source), nil
 	}
 	return resp.UpdateRelay, nil
 }
@@ -1615,21 +1628,21 @@ func (s *Server) getWorkerConfigs(ctx context.Context, workers []*config.MySQLIn
 // MigrateWorkerRelay migrates dm-woker relay unit
 func (s *Server) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRelayRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "MigrateWorkerRelay"))
-	worker := req.Worker
+	source := req.Source
 	binlogPos := req.BinlogPos
 	binlogName := req.BinlogName
-	cli := s.coordinator.GetWorkerBySourceID(worker)
-	if cli == nil {
-		return errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", worker), worker), nil
+	worker := s.coordinator.GetWorkerBySourceID(source)
+	if worker == nil {
+		return errorCommonWorkerResponse(fmt.Sprintf("source %s relevant source-client not found", source), source), nil
 	}
-	log.L().Info("try to migrate relay", zap.String("worker", worker), zap.String("request", "MigrateWorkerRelay"))
+	log.L().Info("try to migrate relay", zap.String("source", source), zap.String("request", "MigrateWorkerRelay"))
 	request := &workerrpc.Request{
 		Type:         workerrpc.CmdMigrateRelay,
 		MigrateRelay: &pb.MigrateRelayRequest{BinlogName: binlogName, BinlogPos: binlogPos},
 	}
-	resp, err := cli.SendRequest(ctx, request, s.cfg.RPCTimeout)
+	resp, err := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
 	if err != nil {
-		return errorCommonWorkerResponse(errors.ErrorStack(err), worker), nil
+		return errorCommonWorkerResponse(errors.ErrorStack(err), source), nil
 	}
 	return resp.MigrateRelay, nil
 }
@@ -1652,89 +1665,87 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 	}, nil
 }
 
-func makeMysqlTaskResponse(err error) (*pb.MysqlTaskResponse, error) {
-	return &pb.MysqlTaskResponse{
+func makeMysqlWorkerResponse(err error) (*pb.MysqlWorkerResponse, error) {
+	return &pb.MysqlWorkerResponse{
 		Result: false,
 		Msg:    errors.ErrorStack(err),
 	}, nil
 }
 
 // OperateMysqlWorker will create or update a Worker
-func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlTaskRequest) (*pb.MysqlTaskResponse, error) {
-	cfg := config.NewWorkerConfig()
+func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequest) (*pb.MysqlWorkerResponse, error) {
+	cfg := config.NewMysqlConfig()
 	if err := cfg.Parse(req.Config); err != nil {
-		return makeMysqlTaskResponse(err)
+		return makeMysqlWorkerResponse(err)
 	}
 
 	dbConfig, err := cfg.GenerateDBConfig()
 	if err != nil {
-		return makeMysqlTaskResponse(err)
+		return makeMysqlWorkerResponse(err)
 	}
 	fromDB, err := conn.DefaultDBProvider.Apply(*dbConfig)
 	if err != nil {
-		return makeMysqlTaskResponse(err)
+		return makeMysqlWorkerResponse(err)
 	}
-	if err := cfg.Adjust(fromDB.DB); err != nil {
-		return makeMysqlTaskResponse(err)
+	if err = cfg.Adjust(fromDB.DB); err != nil {
+		return makeMysqlWorkerResponse(err)
 	}
-	var resp *pb.MysqlTaskResponse
+	if req.Config, err = cfg.Toml(); err != nil {
+		return makeMysqlWorkerResponse(err)
+	}
+	var resp *pb.MysqlWorkerResponse
 	if req.Op == pb.WorkerOp_StartWorker {
 		w := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
 		if w != nil {
-			return &pb.MysqlTaskResponse{
+			return &pb.MysqlWorkerResponse{
 				Result: false,
 				Msg:    "Create worker failed. worker has been started",
 			}, nil
 		}
-		w, err := s.coordinator.AcquireWorkerForSource(cfg)
+		w, err := s.coordinator.AcquireWorkerForSource(cfg.SourceID)
 		if err != nil {
-			return &pb.MysqlTaskResponse{
-				Result: false,
-				Msg:    err.Error(),
-			}, nil
+			return makeMysqlWorkerResponse(err)
 		}
-		resp, err = w.OperateMysqlTask(ctx, req, s.cfg.RPCTimeout)
+
+		resp, err = w.OperateMysqlWorker(ctx, req, s.cfg.RPCTimeout)
 		if err != nil {
 			// TODO: handle error or backoff
 			s.coordinator.HandleStartedWorker(w, cfg, false)
-			return &pb.MysqlTaskResponse{
-				Result: false,
-				Msg:    errors.ErrorStack(err),
-			}, nil
+			return makeMysqlWorkerResponse(err)
 		}
 		// TODO: handle error or backoff
 		s.coordinator.HandleStartedWorker(w, cfg, true)
 	} else if req.Op == pb.WorkerOp_UpdateConfig {
 		w := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
 		if w == nil {
-			return &pb.MysqlTaskResponse{
+			return &pb.MysqlWorkerResponse{
 				Result: false,
 				Msg:    "Update worker config failed. worker has not been started",
 			}, nil
 		}
-		if resp, err = w.OperateMysqlTask(ctx, req, s.cfg.RPCTimeout); err != nil {
-			return &pb.MysqlTaskResponse{
-				Result: false,
-				Msg:    errors.ErrorStack(err),
-			}, nil
+		if resp, err = w.OperateMysqlWorker(ctx, req, s.cfg.RPCTimeout); err != nil {
+			return makeMysqlWorkerResponse(err)
 		}
 	} else {
 		w := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
 		if w == nil {
-			return &pb.MysqlTaskResponse{
-				Result: false,
-				Msg:    "Stop worker failed. worker has not been started",
-			}, nil
+			if !s.coordinator.HandleStoppedWorker(nil, cfg, false) {
+				return &pb.MysqlWorkerResponse{
+					Result: false,
+					Msg:    "Stop worker failed. worker has not been started",
+				}, nil
+			}
+		} else {
+			if resp, err = w.OperateMysqlWorker(ctx, req, s.cfg.RPCTimeout); err != nil {
+				return &pb.MysqlWorkerResponse{
+					Result: false,
+					Msg:    errors.ErrorStack(err),
+				}, nil
+			}
+			s.coordinator.HandleStoppedWorker(w, cfg, resp.Result)
 		}
-		if resp, err = w.OperateMysqlTask(ctx, req, s.cfg.RPCTimeout); err != nil {
-			return &pb.MysqlTaskResponse{
-				Result: false,
-				Msg:    errors.ErrorStack(err),
-			}, nil
-		}
-		s.coordinator.HandleStoppedWorker(w, cfg)
 	}
-	return &pb.MysqlTaskResponse{
+	return &pb.MysqlWorkerResponse{
 		Result: resp.Result,
 		Msg:    resp.Msg,
 	}, nil

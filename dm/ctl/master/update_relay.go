@@ -61,7 +61,7 @@ func updateRelayFunc(cmd *cobra.Command, _ []string) {
 	cli := common.MasterClient()
 	resp, err := cli.UpdateWorkerRelayConfig(ctx, &pb.UpdateWorkerRelayConfigRequest{
 		Config: string(content),
-		Worker: workers[0],
+		Source: workers[0],
 	})
 
 	if err != nil {

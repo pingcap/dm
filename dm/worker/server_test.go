@@ -15,9 +15,11 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"github.com/pingcap/dm/dm/config"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"testing"
 	"time"
 
@@ -27,6 +29,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	"go.etcd.io/etcd/embed"
 )
 
 func TestServer(t *testing.T) {
@@ -37,14 +40,34 @@ type testServer struct{}
 
 var _ = Suite(&testServer{})
 
+func createMockClient(dir string, host string) (*embed.Etcd, error) {
+	cfg := embed.NewConfig()
+	cfg.Dir = dir
+	// lpurl, _ := url.Parse(host)
+	lcurl, _ := url.Parse(host)
+	// cfg.LPUrls = []url.URL{*lpurl}
+	cfg.LCUrls = []url.URL{*lcurl}
+	cfg.ACUrls = []url.URL{*lcurl}
+	ETCD, err := embed.StartEtcd(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	select {
+	case <-ETCD.Server.ReadyNotify():
+	case <-time.After(5 * time.Second):
+		ETCD.Server.Stop() // trigger a shutdown
+	}
+	// embd.client = v3client.New(embd.ETCD.Server)
+	return ETCD, nil
+}
+
 func (t *testServer) TestServer(c *C) {
+	ETCD, err := createMockClient("./", "host://127.0.0.1:8291")
+	c.Assert(err, IsNil)
+	defer ETCD.Server.Stop()
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
-
-	dir := c.MkDir()
-	workerCfg := &config.MysqlConfig{}
-	workerCfg.RelayDir = dir
-	workerCfg.MetaDir = dir
 
 	NewRelayHolder = NewDummyRelayHolder
 	defer func() {
@@ -55,7 +78,7 @@ func (t *testServer) TestServer(c *C) {
 
 	workerAddr := cfg.WorkerAddr
 	s.cfg.WorkerAddr = ""
-	err := s.Start()
+	err = s.Start()
 	c.Assert(terror.ErrWorkerHostPortNotValid.Equal(err), IsTrue)
 	s.Close()
 	s.cfg.WorkerAddr = workerAddr
@@ -68,7 +91,7 @@ func (t *testServer) TestServer(c *C) {
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return !s.closed.Get()
 	}), IsTrue)
-	c.Assert(s.startWorker(workerCfg), IsNil)
+	t.testOperateWorker(c, s, true)
 
 	// test condition hub
 	t.testConidtionHub(c, s)
@@ -115,6 +138,7 @@ func (t *testServer) TestServer(c *C) {
 	c.Assert(terror.ErrWorkerStartService.Equal(err), IsTrue)
 	c.Assert(err.Error(), Matches, ".*bind: address already in use")
 
+	t.testOperateWorker(c, s, false)
 	// close
 	s.Close()
 
@@ -139,4 +163,42 @@ func (t *testServer) createClient(c *C, addr string) pb.WorkerClient {
 	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	c.Assert(err, IsNil)
 	return pb.NewWorkerClient(conn)
+}
+
+func (t *testServer) testOperateWorker(c *C, s *Server, start bool) {
+	dir := c.MkDir()
+	workerCfg := &config.MysqlConfig{}
+	err := workerCfg.LoadFromFile("./dm-mysql.toml")
+	c.Assert(err, IsNil)
+	workerCfg.RelayDir = dir
+	workerCfg.MetaDir = dir
+	cli := t.createClient(c, "127.0.0.1:8262")
+	task, err := workerCfg.Toml()
+	c.Assert(err, IsNil)
+	req := &pb.MysqlWorkerRequest{
+		Op:     pb.WorkerOp_UpdateConfig,
+		Config: task,
+	}
+	if start {
+		resp, err := cli.OperateMysqlWorker(context.Background(), req)
+		c.Assert(err, IsNil)
+		c.Assert(resp.Result, Equals, false)
+		c.Assert(resp.Msg, Matches, ".*Mysql task has not been created, please call CreateMysqlTask.*")
+		req.Op = pb.WorkerOp_StartWorker
+		resp, err = cli.OperateMysqlWorker(context.Background(), req)
+		c.Assert(err, IsNil)
+		fmt.Println(resp.Msg)
+		c.Assert(resp.Result, Equals, true)
+
+		req.Op = pb.WorkerOp_UpdateConfig
+		resp, err = cli.OperateMysqlWorker(context.Background(), req)
+		c.Assert(err, IsNil)
+		c.Assert(resp.Result, Equals, true)
+		c.Assert(s.worker, NotNil)
+	} else {
+		req.Op = pb.WorkerOp_StopWorker
+		resp, err := cli.OperateMysqlWorker(context.Background(), req)
+		c.Assert(err, IsNil)
+		c.Assert(resp.Result, Equals, true)
+	}
 }

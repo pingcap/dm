@@ -64,7 +64,7 @@ type Config struct {
 	LogFile   string `toml:"log-file" json:"log-file"`
 	LogRotate string `toml:"log-rotate" json:"log-rotate"`
 
-	Join       string `toml:"string" json:"join" `
+	Join       string `toml:"join" json:"join" `
 	WorkerAddr string `toml:"worker-addr" json:"worker-addr"`
 
 	ConfigFile string `json:"config-file"`

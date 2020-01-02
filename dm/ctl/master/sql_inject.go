@@ -84,7 +84,7 @@ func sqlInjectFunc(cmd *cobra.Command, _ []string) {
 		Name:   taskName,
 		Op:     pb.SQLOp_INJECT,
 		Args:   realSQLs,
-		Worker: workers[0],
+		Source: workers[0],
 	})
 	if err != nil {
 		common.PrintLines("can not inject sql:\n%v", errors.ErrorStack(err))

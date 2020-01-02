@@ -69,7 +69,7 @@ type Request struct {
 	PurgeRelay        *pb.PurgeRelayRequest
 	UpdateRelay       *pb.UpdateRelayRequest
 	MigrateRelay      *pb.MigrateRelayRequest
-	MysqlTask         *pb.MysqlTaskRequest
+	MysqlTask         *pb.MysqlWorkerRequest
 }
 
 // Response wraps all dm-worker rpc responses.
@@ -93,7 +93,7 @@ type Response struct {
 	PurgeRelay        *pb.CommonWorkerResponse
 	UpdateRelay       *pb.CommonWorkerResponse
 	MigrateRelay      *pb.CommonWorkerResponse
-	MysqlTask         *pb.MysqlTaskResponse
+	MysqlTask         *pb.MysqlWorkerResponse
 
 	FetchDDLInfo pb.Worker_FetchDDLInfoClient
 }

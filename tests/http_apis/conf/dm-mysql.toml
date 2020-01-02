@@ -1,7 +1,8 @@
 # Worker Configuration.
 
 source-id = "mysql-replica-01"
-flavor = ""
+server-id = 1
+flavor = "mysql"
 enable-gtid = false
 relay-binlog-name = ""
 relay-binlog-gtid = ""

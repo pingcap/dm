@@ -23,7 +23,6 @@ host = "127.0.0.1"
 user = "root"
 password = "Up8156jArvIPymkVC+5LxkAT6rek"
 port = 3306
-max-allowed-packet = 0
 
 #relay log purge strategy
 #[purge]

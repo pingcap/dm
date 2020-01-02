@@ -40,7 +40,7 @@ service Worker {
 
     rpc MigrateRelay(MigrateRelayRequest) returns (CommonWorkerResponse) {}
 
-    rpc OperateMysqlTask(MysqlTaskRequest) returns (MysqlTaskResponse) {}
+    rpc OperateMysqlWorker(MysqlWorkerRequest) returns (MysqlWorkerResponse) {}
 }
 
 message StartSubTaskRequest {
@@ -457,12 +457,12 @@ enum WorkerOp {
     StopWorker = 2;
 }
 
-message MysqlTaskRequest {
+message MysqlWorkerRequest {
     WorkerOp op = 1;
     string config = 2;
 }
 
-message MysqlTaskResponse {
+message MysqlWorkerResponse {
     bool result = 1;
     string msg = 2;
 }

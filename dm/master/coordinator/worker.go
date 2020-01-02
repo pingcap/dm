@@ -42,10 +42,11 @@ type Worker struct {
 }
 
 // NewWorker creates a worker with specified name and address.
-func NewWorker(name, address string) *Worker {
+func NewWorker(name, address string, cli workerrpc.Client) *Worker {
 	w := &Worker{
 		name:    name,
 		address: address,
+		client:  cli,
 	}
 	w.status.Store(WorkerClosed)
 	return w
@@ -56,8 +57,7 @@ func (w *Worker) String() string {
 	return fmt.Sprintf("%s address:%s", w.name, w.address)
 }
 
-// GetClient returns the client of the worker.
-func (w *Worker) GetClient() (workerrpc.Client, error) {
+func (w *Worker) getClient() (workerrpc.Client, error) {
 	if w.client == nil {
 		client, err := workerrpc.NewGRPCClient(w.address)
 		if err != nil {
@@ -89,13 +89,13 @@ func (w *Worker) SetStatus(s WorkerState) {
 	w.status.Store(s)
 }
 
-// OperateMysqlTask in a idle worker
-func (w *Worker) OperateMysqlTask(ctx context.Context, req *pb.MysqlTaskRequest, d time.Duration) (*pb.MysqlTaskResponse, error) {
+// OperateMysqlWorker in a idle worker
+func (w *Worker) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequest, d time.Duration) (*pb.MysqlWorkerResponse, error) {
 	ownerReq := &workerrpc.Request{
 		Type:      workerrpc.CmdOperateMysqlTask,
 		MysqlTask: req,
 	}
-	cli, err := w.GetClient()
+	cli, err := w.getClient()
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,7 @@ func (w *Worker) OperateMysqlTask(ctx context.Context, req *pb.MysqlTaskRequest,
 
 // SendRequest by client
 func (w *Worker) SendRequest(ctx context.Context, req *workerrpc.Request, d time.Duration) (*workerrpc.Response, error) {
-	cli, err := w.GetClient()
+	cli, err := w.getClient()
 	if err != nil {
 		return nil, err
 	}

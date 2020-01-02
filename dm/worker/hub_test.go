@@ -21,8 +21,4 @@ func (t *testServer) testConidtionHub(c *C, s *Server) {
 	// test condition hub
 	c.Assert(GetConditionHub(), NotNil)
 	c.Assert(GetConditionHub().w, DeepEquals, s.worker)
-
-	InitConditionHub(&Worker{})
-	c.Assert(GetConditionHub(), NotNil)
-	c.Assert(GetConditionHub().w, DeepEquals, s.worker)
 }
