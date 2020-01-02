@@ -199,7 +199,7 @@ func (c *StreamerController) GetEvent(tctx tcontext.Context) (event *replication
 	failpoint.Inject("SyncerEventTimeout", func(val failpoint.Value) {
 		if seconds, ok := val.(int); ok {
 			cancel()
-			ctx, cancel = context.WithTimeout(tctx.Context(), time.Duration(seconds) * time.Second)
+			ctx, cancel = context.WithTimeout(tctx.Context(), time.Duration(seconds)*time.Second)
 			tctx.L().Info("set fetch binlog event timeout", zap.String("failpoint", "SyncerEventTimeout"), zap.Int("value", seconds))
 		}
 	})
