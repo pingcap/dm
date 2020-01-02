@@ -31,7 +31,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-var (
+const (
 	eventTimeout = 1 * time.Minute
 )
 
@@ -195,13 +195,15 @@ func (c *StreamerController) RedirectStreamer(tctx tcontext.Context, pos mysql.P
 
 // GetEvent returns binlog event
 func (c *StreamerController) GetEvent(tctx tcontext.Context) (event *replication.BinlogEvent, err error) {
+	ctx, cancel := context.WithTimeout(tctx.Context(), eventTimeout)
 	failpoint.Inject("SyncerEventTimeout", func(val failpoint.Value) {
 		if seconds, ok := val.(int); ok {
-			eventTimeout = time.Duration(seconds) * time.Second
+			cancel()
+			ctx, cancel = context.WithTimeout(tctx.Context(), time.Duration(seconds) * time.Second)
 			tctx.L().Info("set fetch binlog event timeout", zap.String("failpoint", "SyncerEventTimeout"), zap.Int("value", seconds))
 		}
 	})
-	ctx, cancel := context.WithTimeout(tctx.Context(), eventTimeout)
+
 	event, err = c.streamer.GetEvent(ctx)
 	cancel()
 	if err == nil {
