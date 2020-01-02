@@ -203,31 +203,32 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 
 	event, err = c.streamer.GetEvent(ctx)
 	cancel()
-	if err == nil {
-		switch ev := event.Event.(type) {
-		case *replication.RotateEvent:
-			// if is local binlog, binlog's name contain uuid information, need to save it
-			// if is remote binlog, need to add uuid information in binlog's name
-			if !c.setUUIDIfExists(string(ev.NextLogName)) {
-				if len(c.uuidSuffix) != 0 {
-					filename, err := binlog.ParseFilename(string(ev.NextLogName))
-					if err != nil {
-						return nil, terror.Annotate(err, "fail to parse binlog file name from rotate event")
-					}
-					ev.NextLogName = []byte(binlog.ConstructFilenameWithUUIDSuffix(filename, c.uuidSuffix))
-					event.Event = ev
-				}
-			}
-		default:
+	if err != nil {
+		if err != context.Canceled {
+			c.meetError = true
 		}
-		return event, nil
+
+		return nil, err
 	}
 
-	if err != context.Canceled {
-		c.meetError = true
+	switch ev := event.Event.(type) {
+	case *replication.RotateEvent:
+		// if is local binlog, binlog's name contain uuid information, need to save it
+		// if is remote binlog, need to add uuid information in binlog's name
+		if !c.setUUIDIfExists(string(ev.NextLogName)) {
+			if len(c.uuidSuffix) != 0 {
+				filename, err := binlog.ParseFilename(string(ev.NextLogName))
+				if err != nil {
+					return nil, terror.Annotate(err, "fail to parse binlog file name from rotate event")
+				}
+				ev.NextLogName = []byte(binlog.ConstructFilenameWithUUIDSuffix(filename, c.uuidSuffix))
+				event.Event = ev
+			}
+		}
+	default:
 	}
 
-	return nil, err
+	return event, nil
 }
 
 // ReopenWithRetry reopens streamer with retry
