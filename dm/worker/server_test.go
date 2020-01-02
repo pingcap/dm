@@ -69,7 +69,6 @@ func (t *testServer) TestServer(c *C) {
 	etcdDir := c.MkDir()
 	ETCD, err := createMockETCD(etcdDir, "host://"+hostName)
 	c.Assert(err, IsNil)
-	defer ETCD.Server.Stop()
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
 
@@ -151,6 +150,7 @@ func (t *testServer) TestServer(c *C) {
 	c.Assert(terror.ErrWorkerStartService.Equal(err), IsTrue)
 	c.Assert(err.Error(), Matches, ".*bind: address already in use")
 
+	t.testStopWorkerWhenLostConnect(c, s, ETCD)
 	// close
 	s.Close()
 
@@ -309,4 +309,12 @@ func (t *testServer) testSubTaskRecover(c *C, s *Server, dir string, hostName st
 	c.Assert(err, IsNil)
 	c.Assert(status.Result, IsTrue)
 	c.Assert(status.SubTaskStatus[0].Stage, Equals, pb.Stage_Paused) //  because of `Access denied`
+}
+
+func (t *testServer) testStopWorkerWhenLostConnect(c *C, s *Server, ETCD *embed.Etcd) {
+	c.Assert(s.retryConnectMaster.Get(), IsTrue)
+	ETCD.Close()
+	time.Sleep(retryConnectSleepTime + time.Duration(defaultKeepAliveTTL+3)*time.Second)
+	c.Assert(s.checkWorkerStart(), IsNil)
+	c.Assert(s.retryConnectMaster.Get(), IsFalse)
 }

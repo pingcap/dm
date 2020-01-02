@@ -35,10 +35,11 @@ import (
 )
 
 var (
-	cmuxReadTimeout  = 10 * time.Second
-	dialTimeout      = 3 * time.Second
-	keepaliveTimeout = 3 * time.Second
-	keepaliveTime    = 3 * time.Second
+	cmuxReadTimeout       = 10 * time.Second
+	dialTimeout           = 3 * time.Second
+	keepaliveTimeout      = 3 * time.Second
+	keepaliveTime         = 3 * time.Second
+	retryConnectSleepTime = 2 * time.Second
 )
 
 // Server accepts RPC requests
@@ -122,7 +123,7 @@ func (s *Server) Start() error {
 						w.Close()
 					}
 				}
-				ch := time.NewTicker(3 * time.Second)
+				ch := time.NewTicker(retryConnectSleepTime)
 				select {
 				case <-s.ctx.Done():
 					shouldExit = true
