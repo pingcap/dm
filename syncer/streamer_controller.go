@@ -106,6 +106,8 @@ type StreamerController struct {
 	fromDB *UpStreamConn
 
 	uuidSuffix string
+
+	closed bool
 }
 
 // NewStreamerController creates a new streamer controller
@@ -117,6 +119,7 @@ func NewStreamerController(tctx *tcontext.Context, syncCfg replication.BinlogSyn
 		localBinlogDir:    localBinlogDir,
 		timezone:          timezone,
 		fromDB:            fromDB,
+		closed:            false,
 	}
 
 	err := streamerController.ResetReplicationSyncer(tctx, beginPos)
@@ -273,6 +276,10 @@ func (c *StreamerController) Close(tctx *tcontext.Context) {
 	c.Lock()
 	defer c.Unlock()
 
+	if c.closed {
+		return
+	}
+
 	if c.streamerProducer != nil {
 		switch r := c.streamerProducer.(type) {
 		case *remoteBinlogReader:
@@ -284,6 +291,16 @@ func (c *StreamerController) Close(tctx *tcontext.Context) {
 		}
 		c.streamerProducer = nil
 	}
+
+	c.closed = true
+}
+
+// IsClosed returns whether streamer controller is closed
+func (c *StreamerController) IsClosed() bool {
+	c.RLock()
+	defer c.RUnlock()
+
+	return c.closed
 }
 
 func (c *StreamerController) setUUIDIfExists(filename string) bool {

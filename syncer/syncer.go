@@ -431,7 +431,6 @@ func (s *Syncer) IsFreshTask(ctx context.Context) (bool, error) {
 func (s *Syncer) reset() {
 	if s.streamerController != nil {
 		s.streamerController.Close(s.tctx)
-		s.streamerController = nil
 	}
 	// create new job chans
 	s.newJobChans(s.cfg.WorkerCount + 1)
@@ -1019,7 +1018,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	)
 	s.tctx.L().Info("replicate binlog from checkpoint", zap.Stringer("checkpoint", lastPos))
 
-	if s.streamerController == nil {
+	if s.streamerController == nil || s.streamerController.IsClosed() {
 		s.streamerController, err = NewStreamerController(tctx, s.syncCfg, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone, currentPos)
 		if err != nil {
 			return terror.Annotate(err, "fail to generate streamer controller")
@@ -2214,7 +2213,6 @@ func (s *Syncer) stopSync() {
 
 	if s.streamerController != nil {
 		s.streamerController.Close(s.tctx)
-		s.streamerController = nil
 	}
 }
 
