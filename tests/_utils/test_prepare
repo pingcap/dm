@@ -61,8 +61,7 @@ function dmctl_start_task() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $task_conf" \
         "\"result\": true" 3 \
-        "\"worker\": \"127.0.0.1:$WORKER1_PORT\"" 1 \
-        "\"worker\": \"127.0.0.1:$WORKER2_PORT\"" 1
+        "\"worker\"": 2
 }
 
 # shortcut for stop task on two DM-workers
