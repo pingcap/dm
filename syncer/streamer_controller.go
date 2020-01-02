@@ -278,11 +278,11 @@ func (c *StreamerController) Close(tctx *tcontext.Context) {
 		case *remoteBinlogReader:
 			// process remote binlog reader
 			c.closeBinlogSyncer(tctx, r.reader)
-			c.streamerProducer = nil
 		case *localBinlogReader:
 			// process local binlog reader
 			r.reader.Close()
 		}
+		c.streamerProducer = nil
 	}
 }
 
