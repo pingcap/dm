@@ -149,7 +149,7 @@ func (c *StreamerController) ResetReplicationSyncer(tctx *tcontext.Context, pos 
 			if err != nil {
 				return err
 			}
-			// TODO: close old local reader before creating a new one
+			t.reader.Close()
 		default:
 			// some other producers such as mockStreamerProducer, should not re-create
 			c.streamer, err = c.streamerProducer.generateStreamer(pos)
@@ -207,7 +207,7 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 	event, err = c.streamer.GetEvent(ctx)
 	cancel()
 	if err != nil {
-		if err != context.Canceled {
+		if err != context.Canceled && err != context.DeadlineExceeded {
 			c.meetError = true
 		}
 
