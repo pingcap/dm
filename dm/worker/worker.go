@@ -553,7 +553,7 @@ func (w *Worker) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) erro
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	if w.relayHolder != nil {
+	if w.relayPurger != nil {
 		return w.relayPurger.Do(ctx, req)
 	}
 
