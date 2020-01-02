@@ -15,8 +15,6 @@ package syncer
 
 import (
 	"database/sql"
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/pingcap/dm/dm/config"
@@ -36,27 +34,6 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 )
-
-type column struct {
-	idx      int
-	name     string
-	NotNull  bool
-	unsigned bool
-	tp       string
-	extra    string
-}
-
-func (c *column) isGeneratedColumn() bool {
-	return strings.Contains(c.extra, "VIRTUAL GENERATED") || strings.Contains(c.extra, "STORED GENERATED")
-}
-
-type table struct {
-	schema string
-	name   string
-
-	columns      []*column
-	indexColumns map[string][]*column
-}
 
 // in MySQL, we can set `max_binlog_size` to control the max size of a binlog file.
 // but this is not absolute:
@@ -304,134 +281,6 @@ func createConns(tctx *tcontext.Context, cfg *config.SubTaskConfig, dbCfg config
 		conns = append(conns, &DBConn{baseConn: baseConn, cfg: cfg, resetBaseConnFn: resetBaseConnFn})
 	}
 	return baseDB, conns, nil
-}
-
-func getTableIndex(tctx *tcontext.Context, conn *DBConn, table *table) error {
-	if table.schema == "" || table.name == "" {
-		return terror.ErrDBUnExpect.Generate("schema/table is empty")
-	}
-
-	query := fmt.Sprintf("SHOW INDEX FROM `%s`.`%s`", table.schema, table.name)
-	rows, err := conn.querySQL(tctx, query)
-	if err != nil {
-		return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-	}
-	defer rows.Close()
-
-	rowColumns, err := rows.Columns()
-	if err != nil {
-		return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-	}
-
-	// Show an example.
-	/*
-		mysql> show index from test.t;
-		+-------+------------+----------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
-		| Table | Non_unique | Key_name | Seq_in_index | Column_name | Collation | Cardinality | Sub_part | Packed | Null | Index_type | Comment | Index_comment |
-		+-------+------------+----------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
-		| t     |          0 | PRIMARY  |            1 | a           | A         |           0 |     NULL | NULL   |      | BTREE      |         |               |
-		| t     |          0 | PRIMARY  |            2 | b           | A         |           0 |     NULL | NULL   |      | BTREE      |         |               |
-		| t     |          0 | ucd      |            1 | c           | A         |           0 |     NULL | NULL   | YES  | BTREE      |         |               |
-		| t     |          0 | ucd      |            2 | d           | A         |           0 |     NULL | NULL   | YES  | BTREE      |         |               |
-		+-------+------------+----------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
-	*/
-	var columns = make(map[string][]string)
-	for rows.Next() {
-		data := make([]sql.RawBytes, len(rowColumns))
-		values := make([]interface{}, len(rowColumns))
-
-		for i := range values {
-			values[i] = &data[i]
-		}
-
-		err = rows.Scan(values...)
-		if err != nil {
-			return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-		}
-
-		nonUnique := string(data[1])
-		if nonUnique == "0" {
-			keyName := strings.ToLower(string(data[2]))
-			columns[keyName] = append(columns[keyName], string(data[4]))
-		}
-	}
-	if rows.Err() != nil {
-		return terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
-	}
-
-	table.indexColumns = findColumns(table.columns, columns)
-	return nil
-}
-
-func getTableColumns(tctx *tcontext.Context, conn *DBConn, table *table) error {
-	if table.schema == "" || table.name == "" {
-		return terror.ErrDBUnExpect.Generate("schema/table is empty")
-	}
-
-	query := fmt.Sprintf("SHOW COLUMNS FROM `%s`.`%s`", table.schema, table.name)
-	rows, err := conn.querySQL(tctx, query)
-	if err != nil {
-		return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-	}
-	defer rows.Close()
-
-	rowColumns, err := rows.Columns()
-	if err != nil {
-		return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-	}
-
-	// Show an example.
-	/*
-	   mysql> show columns from test.t;
-	   +-------+---------+------+-----+---------+-------------------+
-	   | Field | Type    | Null | Key | Default | Extra             |
-	   +-------+---------+------+-----+---------+-------------------+
-	   | a     | int(11) | NO   | PRI | NULL    |                   |
-	   | b     | int(11) | NO   | PRI | NULL    |                   |
-	   | c     | int(11) | YES  | MUL | NULL    |                   |
-	   | d     | int(11) | YES  |     | NULL    |                   |
-	   | d     | json    | YES  |     | NULL    | VIRTUAL GENERATED |
-	   +-------+---------+------+-----+---------+-------------------+
-	*/
-
-	idx := 0
-	for rows.Next() {
-		data := make([]sql.RawBytes, len(rowColumns))
-		values := make([]interface{}, len(rowColumns))
-
-		for i := range values {
-			values[i] = &data[i]
-		}
-
-		err = rows.Scan(values...)
-		if err != nil {
-			return terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-		}
-
-		column := &column{}
-		column.idx = idx
-		column.name = string(data[0])
-		column.tp = string(data[1])
-		column.extra = string(data[5])
-
-		if strings.ToLower(string(data[2])) == "no" {
-			column.NotNull = true
-		}
-
-		// Check whether column has unsigned flag.
-		if strings.Contains(strings.ToLower(string(data[1])), "unsigned") {
-			column.unsigned = true
-		}
-
-		table.columns = append(table.columns, column)
-		idx++
-	}
-
-	if rows.Err() != nil {
-		return terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
-	}
-
-	return nil
 }
 
 func countBinaryLogsSize(fromFile mysql.Position, db *sql.DB) (int64, error) {
