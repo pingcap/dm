@@ -16,7 +16,6 @@ package syncer
 import (
 	"context"
 	"fmt"
-	"math"
 	"reflect"
 	"strconv"
 	"strings"
@@ -95,11 +94,10 @@ type Syncer struct {
 	cfg     *config.SubTaskConfig
 	syncCfg replication.BinlogSyncerConfig
 
-	shardingSyncCfg replication.BinlogSyncerConfig // used by sharding group to re-consume DMLs
-	sgk             *ShardingGroupKeeper           // keeper to keep all sharding (sub) group in this syncer
-	ddlInfoCh       chan *pb.DDLInfo               // DDL info pending to sync, only support sync one DDL lock one time, refine if needed
-	ddlExecInfo     *DDLExecInfo                   // DDL execute (ignore) info
-	injectEventCh   chan *replication.BinlogEvent  // extra binlog event chan, used to inject binlog event into the main for loop
+	sgk           *ShardingGroupKeeper          // keeper to keep all sharding (sub) group in this syncer
+	ddlInfoCh     chan *pb.DDLInfo              // DDL info pending to sync, only support sync one DDL lock one time, refine if needed
+	ddlExecInfo   *DDLExecInfo                  // DDL execute (ignore) info
+	injectEventCh chan *replication.BinlogEvent // extra binlog event chan, used to inject binlog event into the main for loop
 
 	binlogType         BinlogType
 	streamerController *StreamerController
@@ -207,11 +205,6 @@ func NewSyncer(cfg *config.SubTaskConfig, enableRelay bool) *Syncer {
 
 	if cfg.IsSharding {
 		// only need to sync DDL in sharding mode
-		// for sharding group's config, we should use a different ServerID
-		// now, use 2**32 -1 - config's ServerID simply
-		// maybe we can refactor to remove RemoteBinlog support in DM
-		syncer.shardingSyncCfg = syncer.syncCfg
-		syncer.shardingSyncCfg.ServerID = math.MaxUint32 - syncer.syncCfg.ServerID
 		syncer.sgk = NewShardingGroupKeeper(syncer.tctx, cfg)
 		syncer.ddlInfoCh = make(chan *pb.DDLInfo, 1)
 		syncer.ddlExecInfo = NewDDLExecInfo()
