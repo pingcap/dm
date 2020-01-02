@@ -224,10 +224,10 @@ func (s *Server) recoverSubTask() error {
 		sourceID := infos[0]
 		taskName := infos[1]
 		if sources, ok := s.taskSources[taskName]; ok {
-			sources = append(sources, sourceID)
+			s.taskSources[taskName] = append(sources, sourceID)
 		} else {
 			srcs := make([]string, 1)
-			srcs = append(srcs, taskName)
+			srcs = append(srcs, sourceID)
 			s.taskSources[taskName] = srcs
 		}
 	}
