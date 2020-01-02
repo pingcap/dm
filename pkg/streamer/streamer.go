@@ -48,7 +48,7 @@ func (s *LocalStreamer) GetEvent(ctx context.Context) (*replication.BinlogEvent,
 
 	failpoint.Inject("GetEventFromLocalFailed", func(_ failpoint.Value) {
 		log.L().Info("get event from local failed", zap.String("failpoint", "GetEventFromLocalFailed"))
-		return nil, terror.ErrSyncClosed.Generate()
+		failpoint.Return(nil, terror.ErrSyncClosed.Generate())
 	})
 
 	select {
