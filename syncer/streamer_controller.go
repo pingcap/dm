@@ -31,7 +31,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-const (
+var (
 	eventTimeout = 1 * time.Minute
 )
 
