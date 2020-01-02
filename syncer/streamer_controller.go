@@ -109,7 +109,7 @@ type StreamerController struct {
 }
 
 // NewStreamerController creates a new streamer controller
-func NewStreamerController(tctx tcontext.Context, syncCfg replication.BinlogSyncerConfig, fromDB *UpStreamConn, binlogType BinlogType, localBinlogDir string, timezone *time.Location, beginPos mysql.Position) (*StreamerController, error) {
+func NewStreamerController(tctx *tcontext.Context, syncCfg replication.BinlogSyncerConfig, fromDB *UpStreamConn, binlogType BinlogType, localBinlogDir string, timezone *time.Location, beginPos mysql.Position) (*StreamerController, error) {
 	streamerController := &StreamerController{
 		initBinlogType:    binlogType,
 		currentBinlogType: binlogType,
@@ -129,7 +129,7 @@ func NewStreamerController(tctx tcontext.Context, syncCfg replication.BinlogSync
 }
 
 // ResetReplicationSyncer reset the replication
-func (c *StreamerController) ResetReplicationSyncer(tctx tcontext.Context, pos mysql.Position) (err error) {
+func (c *StreamerController) ResetReplicationSyncer(tctx *tcontext.Context, pos mysql.Position) (err error) {
 	c.Lock()
 	defer c.Unlock()
 
@@ -163,24 +163,21 @@ func (c *StreamerController) ResetReplicationSyncer(tctx tcontext.Context, pos m
 	}
 	c.syncCfg.ServerID = randomServerID
 
-	// re-create new streamerProducer
-	if c.initBinlogType == LocalBinlog {
-		if c.meetError {
-			// meetError is true means meets error when get binlog event, in this case use remote binlog as default
-			if !uuidSameWithUpstream {
-				// if the binlog position's uuid is different from the upstream, can not switch to remote binlog
-				tctx.L().Info("may switch master in upstream, so can not switch local to remote")
-			} else {
-				c.currentBinlogType = RemoteBinlog
-				tctx.L().Info("meet error when read from local binlog, will switch to remote binlog")
-			}
+	if c.initBinlogType == LocalBinlog && c.meetError {
+		// meetError is true means meets error when get binlog event, in this case use remote binlog as default
+		if !uuidSameWithUpstream {
+			// if the binlog position's uuid is different from the upstream, can not switch to remote binlog
+			tctx.L().Warn("may switch master in upstream, so can not switch local to remote")
+		} else {
+			c.currentBinlogType = RemoteBinlog
+			tctx.L().Warn("meet error when read from local binlog, will switch to remote binlog")
 		}
 	}
 
 	if c.currentBinlogType == RemoteBinlog {
-		c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(c.syncCfg), &tctx, false}
+		c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(c.syncCfg), tctx, false}
 	} else {
-		c.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(&tctx, &streamer.BinlogReaderConfig{RelayDir: c.localBinlogDir, Timezone: c.timezone})}
+		c.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(tctx, &streamer.BinlogReaderConfig{RelayDir: c.localBinlogDir, Timezone: c.timezone})}
 	}
 
 	c.streamer, err = c.streamerProducer.generateStreamer(pos)
@@ -188,13 +185,13 @@ func (c *StreamerController) ResetReplicationSyncer(tctx tcontext.Context, pos m
 }
 
 // RedirectStreamer redirects the streamer's begin position or gtid
-func (c *StreamerController) RedirectStreamer(tctx tcontext.Context, pos mysql.Position) error {
+func (c *StreamerController) RedirectStreamer(tctx *tcontext.Context, pos mysql.Position) error {
 	tctx.L().Info("reset global streamer", zap.Stringer("position", pos))
 	return c.ResetReplicationSyncer(tctx, pos)
 }
 
 // GetEvent returns binlog event
-func (c *StreamerController) GetEvent(tctx tcontext.Context) (event *replication.BinlogEvent, err error) {
+func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replication.BinlogEvent, err error) {
 	ctx, cancel := context.WithTimeout(tctx.Context(), eventTimeout)
 	failpoint.Inject("SyncerEventTimeout", func(val failpoint.Value) {
 		if seconds, ok := val.(int); ok {
@@ -211,7 +208,7 @@ func (c *StreamerController) GetEvent(tctx tcontext.Context) (event *replication
 		case *replication.RotateEvent:
 			// if is local binlog, binlog's name contain uuid information, need to save it
 			// if is remote binlog, need to add uuid information in binlog's name
-			if !c.setUUIDIfExists(tctx, string(ev.NextLogName)) {
+			if !c.setUUIDIfExists(string(ev.NextLogName)) {
 				if len(c.uuidSuffix) != 0 {
 					filename, err := binlog.ParseFilename(string(ev.NextLogName))
 					if err != nil {
@@ -234,7 +231,7 @@ func (c *StreamerController) GetEvent(tctx tcontext.Context) (event *replication
 }
 
 // ReopenWithRetry reopens streamer with retry
-func (c *StreamerController) ReopenWithRetry(tctx tcontext.Context, pos mysql.Position) error {
+func (c *StreamerController) ReopenWithRetry(tctx *tcontext.Context, pos mysql.Position) error {
 	var err error
 	for i := 0; i < maxRetryCount; i++ {
 		err = c.ResetReplicationSyncer(tctx, pos)
@@ -251,7 +248,7 @@ func (c *StreamerController) ReopenWithRetry(tctx tcontext.Context, pos mysql.Po
 	return err
 }
 
-func (c *StreamerController) closeBinlogSyncer(logtctx tcontext.Context, binlogSyncer *replication.BinlogSyncer) error {
+func (c *StreamerController) closeBinlogSyncer(logtctx *tcontext.Context, binlogSyncer *replication.BinlogSyncer) error {
 	if binlogSyncer == nil {
 		return nil
 	}
@@ -271,7 +268,7 @@ func (c *StreamerController) closeBinlogSyncer(logtctx tcontext.Context, binlogS
 }
 
 // Close closes streamer
-func (c *StreamerController) Close(tctx tcontext.Context) {
+func (c *StreamerController) Close(tctx *tcontext.Context) {
 	c.Lock()
 	defer c.Unlock()
 
@@ -288,7 +285,7 @@ func (c *StreamerController) Close(tctx tcontext.Context) {
 	}
 }
 
-func (c *StreamerController) setUUIDIfExists(tctx tcontext.Context, filename string) bool {
+func (c *StreamerController) setUUIDIfExists(filename string) bool {
 	_, uuidSuffix, _, err := binlog.AnalyzeFilenameWithUUIDSuffix(filename)
 	if err != nil {
 		// don't contain uuid in position's name

@@ -426,7 +426,7 @@ func (s *Syncer) IsFreshTask(ctx context.Context) (bool, error) {
 
 func (s *Syncer) reset() {
 	if s.streamerController != nil {
-		s.streamerController.Close(*s.tctx)
+		s.streamerController.Close(s.tctx)
 		s.streamerController = nil
 	}
 	// create new job chans
@@ -998,7 +998,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	s.tctx.L().Info("replicate binlog from checkpoint", zap.Stringer("checkpoint", lastPos))
 
 	if s.streamerController == nil {
-		s.streamerController, err = NewStreamerController(*tctx, s.syncCfg, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone, currentPos)
+		s.streamerController, err = NewStreamerController(tctx, s.syncCfg, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone, currentPos)
 		if err != nil {
 			return terror.Annotate(err, "fail to generate streamer controller")
 		}
@@ -1093,7 +1093,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				return err2
 			}
 
-			err2 = s.streamerController.RedirectStreamer(*s.tctx, nextPos)
+			err2 = s.streamerController.RedirectStreamer(s.tctx, nextPos)
 			if err2 != nil {
 				return err2
 			}
@@ -1116,7 +1116,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			savedGlobalLastPos = lastPos // save global last pos
 			lastPos = shardingReSync.currPos
 
-			err = s.streamerController.RedirectStreamer(*s.tctx, shardingReSync.currPos)
+			err = s.streamerController.RedirectStreamer(s.tctx, shardingReSync.currPos)
 			if err != nil {
 				return err
 			}
@@ -1135,7 +1135,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			latestOp = null
 		}
 		if e == nil {
-			e, err = s.streamerController.GetEvent(*tctx)
+			e, err = s.streamerController.GetEvent(tctx)
 		}
 
 		startTime := time.Now()
@@ -1156,7 +1156,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			eventTimeoutCounter = 0
 			if s.needResync() {
 				s.tctx.L().Info("timeout when fetching binlog event, there must be some problems with replica connection, try to re-connect")
-				err = s.streamerController.ReopenWithRetry(*tctx, lastPos)
+				err = s.streamerController.ReopenWithRetry(tctx, lastPos)
 				if err != nil {
 					return err
 				}
@@ -1168,7 +1168,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			s.tctx.L().Error("fail to fetch binlog", log.ShortError(err))
 
 			if s.streamerController.CanRetry() {
-				err = s.streamerController.ResetReplicationSyncer(*s.tctx, lastPos)
+				err = s.streamerController.ResetReplicationSyncer(s.tctx, lastPos)
 				if err != nil {
 					return err
 				}
@@ -2048,7 +2048,7 @@ func (s *Syncer) reSyncBinlog(tctx tcontext.Context, pos mysql.Position) error {
 		return err
 	}
 	// close still running sync
-	return s.streamerController.ReopenWithRetry(tctx, pos)
+	return s.streamerController.ReopenWithRetry(&tctx, pos)
 }
 
 func (s *Syncer) renameShardingSchema(schema, table string) (string, string) {
@@ -2116,7 +2116,7 @@ func (s *Syncer) stopSync() {
 	// when resuming, re-create s.syncer
 
 	if s.streamerController != nil {
-		s.streamerController.Close(*s.tctx)
+		s.streamerController.Close(s.tctx)
 		s.streamerController = nil
 	}
 }
