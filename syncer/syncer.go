@@ -264,6 +264,12 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	}
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-DBs", Fn: s.closeDBs})
 
+	// generate a server id for binlog streamer
+	err = s.setSyncServerID()
+	if err != nil {
+		return err
+	}
+
 	s.bwList, err = filter.New(s.cfg.CaseSensitive, s.cfg.BWList)
 	if err != nil {
 		return terror.ErrSyncerUnitGenBWList.Delegate(err)
@@ -2467,4 +2473,15 @@ func (s *Syncer) setSyncCfg() {
 		VerifyChecksum:          true,
 		TimestampStringLocation: s.timezone,
 	}
+}
+
+// may use remote binlog, so need generate a random server id for binlog replication
+func (s *Syncer) setSyncServerID() error {
+	randomServerID, err := utils.GetRandomServerID(s.tctx.Context(), s.fromDB.BaseDB.DB)
+	if err != nil {
+		// should never happened unless the master has too many slave
+		return terror.Annotate(err, "fail to get random server id for streamer controller")
+	}
+	s.syncCfg.ServerID = randomServerID
+	return nil
 }
