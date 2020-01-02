@@ -951,7 +951,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	syncer.toDBConns = []*DBConn{{baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
 	syncer.reset()
 
-	syncer.streamerController, err = NewStreamerController(*tcontext.Background(), syncer.syncCfg, syncer.fromDB, syncer.binlogType, syncer.cfg.RelayDir, syncer.timezone, pos)
+	syncer.streamerController, err = NewStreamerController(tcontext.Background(), syncer.syncCfg, syncer.fromDB, syncer.binlogType, syncer.cfg.RelayDir, syncer.timezone, pos)
 	c.Assert(err, IsNil)
 
 	for _, testCase := range testCases {
@@ -964,7 +964,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 			if idx >= len(testCase.sqls) {
 				break
 			}
-			e, err := syncer.streamerController.GetEvent(*tcontext.Background())
+			e, err := syncer.streamerController.GetEvent(tcontext.Background())
 			c.Assert(err, IsNil)
 			switch ev := e.Event.(type) {
 			case *replication.RowsEvent:
