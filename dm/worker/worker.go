@@ -592,6 +592,7 @@ func (w *Worker) QueryConfig(ctx context.Context) (*Config, error) {
 }
 
 // UpdateRelayConfig update subTask ans relay unit configure online
+// TODO: update the function name like `UpdateConfig`, and update the cmd in dmctl from `update-relay` to `update-worker-config`
 func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	w.Lock()
 	defer w.Unlock()
@@ -600,14 +601,11 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	if w.relayHolder == nil {
-		w.l.Warn("relay holder is nil, ignore update relay config")
-		return nil
-	}
-
-	stage := w.relayHolder.Stage()
-	if stage == pb.Stage_Finished || stage == pb.Stage_Stopped {
-		return terror.ErrWorkerRelayUnitStage.Generate(stage.String())
+	if w.relayHolder != nil {
+		stage := w.relayHolder.Stage()
+		if stage == pb.Stage_Finished || stage == pb.Stage_Stopped {
+			return terror.ErrWorkerRelayUnitStage.Generate(stage.String())
+		}
 	}
 
 	sts := w.subTaskHolder.getAllSubTasks()
@@ -636,7 +634,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		return terror.ErrWorkerCannotUpdateSourceID.Generate()
 	}
 
-	w.l.Info("update relay config", zap.Stringer("new config", newCfg))
+	w.l.Info("update config", zap.Stringer("new config", newCfg))
 	cloneCfg, _ := newCfg.DecryptPassword()
 
 	// Update SubTask configure
@@ -671,12 +669,14 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		}
 	}
 
-	w.l.Info("update relay config of subtasks successfully.")
+	w.l.Info("update config of subtasks successfully.")
 
 	// Update relay unit configure
-	err = w.relayHolder.Update(ctx, cloneCfg)
-	if err != nil {
-		return err
+	if w.relayHolder != nil {
+		err = w.relayHolder.Update(ctx, cloneCfg)
+		if err != nil {
+			return err
+		}
 	}
 
 	w.cfg.From = newCfg.From
@@ -695,7 +695,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		return err
 	}
 
-	w.l.Info("update relay config successfully, save config to local file", zap.String("local file", w.cfg.ConfigFile))
+	w.l.Info("update config successfully, save config to local file", zap.String("local file", w.cfg.ConfigFile))
 
 	return nil
 }
