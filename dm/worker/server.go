@@ -38,7 +38,7 @@ var (
 	cmuxReadTimeout  = 10 * time.Second
 	dialTimeout      = 3 * time.Second
 	keepaliveTimeout = 3 * time.Second
-	keepaliveTime    = 10 * time.Second
+	keepaliveTime    = 3 * time.Second
 )
 
 // Server accepts RPC requests
@@ -57,6 +57,9 @@ type Server struct {
 	svr        *grpc.Server
 	worker     *Worker
 	etcdClient *clientv3.Client
+
+	// false: has retried connecting to master again.
+	retryConnectMaster sync2.AtomicBool
 }
 
 // NewServer creates a new Server
@@ -64,6 +67,7 @@ func NewServer(cfg *Config) *Server {
 	s := Server{
 		cfg: cfg,
 	}
+	s.retryConnectMaster.Set(true)
 	s.closed.Set(true) // not start yet
 	return &s
 }
@@ -95,29 +99,30 @@ func (s *Server) Start() error {
 		return err
 	}
 	s.wg.Add(1)
-	fmt.Println("Start keepalive")
 	go func() {
 		defer s.wg.Done()
 		// worker keepalive with master
 		// If worker loses connect from master, it would stop all task and try to connect master again.
 		shouldExit := false
-		shouldStop := false
 		for !shouldExit {
 			shouldExit, err = s.KeepAlive()
 			if err != nil || !shouldExit {
-				if shouldStop {
+				if s.retryConnectMaster.Get() {
+					// Try to connect master again before stop worker
+					s.retryConnectMaster.Set(false)
+				} else {
+					var w *Worker
 					s.Lock()
 					if s.worker != nil {
-						s.worker.Close()
+						w = s.worker
 						s.worker = nil
 					}
 					s.Unlock()
-					shouldStop = false
-				} else {
-					// Try to connect master again before stop worker
-					shouldStop = true
+					if w != nil {
+						w.Close()
+					}
 				}
-				ch := time.NewTicker(5 * time.Second)
+				ch := time.NewTicker(3 * time.Second)
 				select {
 				case <-s.ctx.Done():
 					shouldExit = true
@@ -140,7 +145,6 @@ func (s *Server) Start() error {
 
 	s.svr = grpc.NewServer()
 	pb.RegisterWorkerServer(s.svr, s)
-	fmt.Println("register worker")
 	go func() {
 		err2 := s.svr.Serve(grpcL)
 		if err2 != nil && !common.IsErrNetClosing(err2) && err2 != cmux.ErrListenerClosed {
@@ -152,7 +156,6 @@ func (s *Server) Start() error {
 	s.closed.Set(false)
 	log.L().Info("start gRPC API", zap.String("listened address", s.cfg.WorkerAddr))
 	err = m.Serve()
-	fmt.Println("start gRPC API")
 	if err != nil && common.IsErrNetClosing(err) {
 		err = nil
 	}
@@ -273,7 +276,6 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 	if resp.Result {
 		op1 := clientv3.OpPut(common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name), req.Task)
 		resp.Msg = s.retryWriteEctd(op1)
-		// We do not need to stop worker. Because if we lose connect from etcd, Worker would be stopped in keepalive-thread.
 	}
 	return resp, nil
 }
@@ -640,7 +642,7 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 
 	ectx, cancel := context.WithTimeout(s.etcdClient.Ctx(), time.Second*3)
 	defer cancel()
-	resp, err := s.etcdClient.Get(ectx, common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID))
+	resp, err := s.etcdClient.Get(ectx, common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID), clientv3.WithPrefix())
 	if err == nil {
 		for _, kv := range resp.Kvs {
 			infos := common.UpstreamSubTaskKeyAdapter.Decode(string(kv.Key))
@@ -650,6 +652,9 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 			if err := cfg.Decode(task); err != nil {
 				return nil
 			}
+			cfg.LogLevel = s.cfg.LogLevel
+			cfg.LogFile = s.cfg.LogFile
+
 			if err := w.StartSubTask(cfg); err != nil {
 				return nil
 			}

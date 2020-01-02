@@ -16,6 +16,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"io/ioutil"
 	"net/http"
@@ -29,6 +30,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/embed"
 )
 
@@ -40,7 +42,7 @@ type testServer struct{}
 
 var _ = Suite(&testServer{})
 
-func createMockClient(dir string, host string) (*embed.Etcd, error) {
+func createMockETCD(dir string, host string) (*embed.Etcd, error) {
 	cfg := embed.NewConfig()
 	cfg.Dir = dir
 	// lpurl, _ := url.Parse(host)
@@ -63,7 +65,9 @@ func createMockClient(dir string, host string) (*embed.Etcd, error) {
 }
 
 func (t *testServer) TestServer(c *C) {
-	ETCD, err := createMockClient("./", "host://127.0.0.1:8291")
+	hostName := "127.0.0.1:8291"
+	etcdDir := c.MkDir()
+	ETCD, err := createMockETCD(etcdDir, "host://"+hostName)
 	c.Assert(err, IsNil)
 	defer ETCD.Server.Stop()
 	cfg := NewConfig()
@@ -91,7 +95,14 @@ func (t *testServer) TestServer(c *C) {
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		return !s.closed.Get()
 	}), IsTrue)
-	t.testOperateWorker(c, s, true)
+	dir := c.MkDir()
+	t.testOperateWorker(c, s, dir, true)
+
+	// check infos have be written into ETCD success.
+	t.testInfosInEtcd(c, hostName, workerAddr, dir)
+
+	// check worker would retry connecting master rather than stop worker directly.
+	ETCD = t.testRetryConnectMaster(c, s, ETCD, etcdDir, hostName)
 
 	// test condition hub
 	t.testConidtionHub(c, s)
@@ -117,6 +128,8 @@ func (t *testServer) TestServer(c *C) {
 	c.Assert(status.Result, IsTrue)
 	c.Assert(status.SubTaskStatus[0].Stage, Equals, pb.Stage_Paused) //  because of `Access denied`
 
+	t.testSubTaskRecover(c, s, dir, hostName, string(subtaskCfgBytes))
+
 	// update task
 	resp2, err := cli.UpdateSubTask(context.Background(), &pb.UpdateSubTaskRequest{
 		Task: string(subtaskCfgBytes),
@@ -138,7 +151,6 @@ func (t *testServer) TestServer(c *C) {
 	c.Assert(terror.ErrWorkerStartService.Equal(err), IsTrue)
 	c.Assert(err.Error(), Matches, ".*bind: address already in use")
 
-	t.testOperateWorker(c, s, false)
 	// close
 	s.Close()
 
@@ -165,8 +177,7 @@ func (t *testServer) createClient(c *C, addr string) pb.WorkerClient {
 	return pb.NewWorkerClient(conn)
 }
 
-func (t *testServer) testOperateWorker(c *C, s *Server, start bool) {
-	dir := c.MkDir()
+func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) {
 	workerCfg := &config.MysqlConfig{}
 	err := workerCfg.LoadFromFile("./dm-mysql.toml")
 	c.Assert(err, IsNil)
@@ -201,4 +212,101 @@ func (t *testServer) testOperateWorker(c *C, s *Server, start bool) {
 		c.Assert(err, IsNil)
 		c.Assert(resp.Result, Equals, true)
 	}
+}
+
+func (t *testServer) testInfosInEtcd(c *C, hostName string, workerAddr string, dir string) {
+	cli, err := clientv3.New(clientv3.Config{
+		Endpoints:            GetJoinURLs(hostName),
+		DialTimeout:          dialTimeout,
+		DialKeepAliveTime:    keepaliveTime,
+		DialKeepAliveTimeout: keepaliveTimeout,
+	})
+	c.Assert(err, IsNil)
+	cfg := &config.MysqlConfig{}
+	err = cfg.LoadFromFile("./dm-mysql.toml")
+	cfg.RelayDir = dir
+	cfg.MetaDir = dir
+
+	c.Assert(err, IsNil)
+	task, err := cfg.Toml()
+	c.Assert(err, IsNil)
+
+	resp, err := cli.Get(context.Background(), common.UpstreamConfigKeyAdapter.Encode(cfg.SourceID))
+	c.Assert(err, IsNil)
+	c.Assert(len(resp.Kvs), Equals, 1)
+	c.Assert(string(resp.Kvs[0].Value), Equals, task)
+
+	resp, err = cli.Get(context.Background(), common.UpstreamBoundWorkerKeyAdapter.Encode(workerAddr))
+	c.Assert(err, IsNil)
+	c.Assert(len(resp.Kvs), Equals, 1)
+	c.Assert(string(resp.Kvs[0].Value), Equals, cfg.SourceID)
+}
+
+func (t *testServer) testRetryConnectMaster(c *C, s *Server, ETCD *embed.Etcd, dir string, hostName string) *embed.Etcd {
+	ETCD.Close()
+	time.Sleep(3 * time.Second)
+	c.Assert(s.checkWorkerStart(), NotNil)
+	// retryConnectMaster is false means that this worker has been tried to connect to master again.
+	c.Assert(s.retryConnectMaster.Get(), IsFalse)
+	ETCD, err := createMockETCD(dir, "host://"+hostName)
+	c.Assert(err, IsNil)
+	time.Sleep(3 * time.Second)
+	return ETCD
+}
+
+func (t *testServer) testSubTaskRecover(c *C, s *Server, dir string, hostName string, subCfgStr string) {
+	cfg := &config.MysqlConfig{}
+	err := cfg.LoadFromFile("./dm-mysql.toml")
+	c.Assert(err, IsNil)
+	cfg.RelayDir = dir
+	cfg.MetaDir = dir
+	cli, err := clientv3.New(clientv3.Config{
+		Endpoints:            GetJoinURLs(hostName),
+		DialTimeout:          dialTimeout,
+		DialKeepAliveTime:    keepaliveTime,
+		DialKeepAliveTimeout: keepaliveTimeout,
+	})
+	c.Assert(err, IsNil)
+
+	subCfg := config.NewSubTaskConfig()
+	err = subCfg.Decode(subCfgStr)
+	c.Assert(err, IsNil)
+	c.Assert(cfg.SourceID, Equals, subCfg.SourceID)
+
+	{
+		resp, err := cli.Get(context.Background(), common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID), clientv3.WithPrefix())
+		c.Assert(err, IsNil)
+		c.Assert(len(resp.Kvs), Equals, 1)
+		infos := common.UpstreamSubTaskKeyAdapter.Decode(string(resp.Kvs[0].Key))
+		c.Assert(infos[1], Equals, subCfg.Name)
+		task := string(resp.Kvs[0].Value)
+		c.Assert(task, Equals, subCfgStr)
+	}
+
+	workerCli := t.createClient(c, "127.0.0.1:8262")
+	mysqlTask, err := cfg.Toml()
+	c.Assert(err, IsNil)
+	req := &pb.MysqlWorkerRequest{
+		Op:     pb.WorkerOp_StopWorker,
+		Config: mysqlTask,
+	}
+
+	resp, err := workerCli.OperateMysqlWorker(context.Background(), req)
+	c.Assert(err, IsNil)
+	c.Assert(resp.Result, Equals, true)
+
+	status, err := workerCli.QueryStatus(context.Background(), &pb.QueryStatusRequest{Name: "sub-task-name"})
+	c.Assert(err, IsNil)
+	c.Assert(status.Result, IsFalse)
+	c.Assert(status.Msg, Equals, terror.ErrWorkerNoStart.Error())
+
+	req.Op = pb.WorkerOp_StartWorker
+	resp, err = workerCli.OperateMysqlWorker(context.Background(), req)
+	c.Assert(err, IsNil)
+	c.Assert(resp.Result, Equals, true)
+
+	status, err = workerCli.QueryStatus(context.Background(), &pb.QueryStatusRequest{Name: "sub-task-name"})
+	c.Assert(err, IsNil)
+	c.Assert(status.Result, IsTrue)
+	c.Assert(status.SubTaskStatus[0].Stage, Equals, pb.Stage_Paused) //  because of `Access denied`
 }

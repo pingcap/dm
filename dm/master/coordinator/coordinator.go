@@ -205,6 +205,7 @@ func (c *Coordinator) HandleStoppedWorker(w *Worker, cfg *config.MysqlConfig, re
 		delete(c.taskConfigs, cfg.SourceID)
 	} else {
 		if ret {
+			delete(c.taskConfigs, cfg.SourceID)
 			delete(c.upstreams, cfg.SourceID)
 			delete(c.workerToConfigs, w.Address())
 			w.SetStatus(WorkerFree)
@@ -309,13 +310,24 @@ func (c *Coordinator) ObserveWorkers() {
 						state := "Free"
 						if source, ok := c.workerToConfigs[addr]; ok {
 							// The worker connect to master before we transfer mysqltask into another worker,
-							// try schedule mysqltask.
+							// try schedule MySQL-task.
 							if nowWorker, ok := c.upstreams[source]; ok && nowWorker.Address() == addr {
-								// If this mysqltask has not been assigned to others, It could try to schedule on self.
+								// If the MySQL-task is still running in this worker.
 								c.schedule(source)
 								w.SetStatus(WorkerBound)
 								state = "bound"
+							} else if _, ok := c.upstreams[source]; !ok {
+								if newAddr, ok := c.pendingtask[source]; ok && newAddr != addr {
+									delete(c.workerToConfigs, addr)
+									w.SetStatus(WorkerFree)
+								} else {
+									// If the MySQL-task has not been assigned to others, It could try to schedule on self.
+									c.upstreams[source] = w
+									w.SetStatus(WorkerBound)
+									c.schedule(source)
+								}
 							} else {
+								delete(c.workerToConfigs, addr)
 								w.SetStatus(WorkerFree)
 							}
 						} else {
@@ -369,6 +381,7 @@ func (c *Coordinator) tryRestartMysqlTask() {
 				ret := false
 				if w, ok := c.upstreams[source]; ok {
 					// Try start mysql task at the same worker.
+					c.pendingtask[source] = w.Address()
 					c.mu.RUnlock()
 					ret = c.restartMysqlTask(w, &cfg)
 					c.mu.RLock()
@@ -418,7 +431,7 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 		}
 	} else {
 		// Error means there is something wrong about network, set worker to close.
-		delete(c.workerToConfigs, w.Address())
+		// remove sourceID from upstreams. So the source would be schedule in other worker.
 		delete(c.upstreams, cfg.SourceID)
 		w.SetStatus(WorkerClosed)
 	}

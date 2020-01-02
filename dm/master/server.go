@@ -1702,7 +1702,7 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 				Msg:    "Create worker failed. worker has been started",
 			}, nil
 		}
-		w, err := s.coordinator.AcquireWorkerForSource(cfg.SourceID)
+		w, err = s.coordinator.AcquireWorkerForSource(cfg.SourceID)
 		if err != nil {
 			return makeMysqlWorkerResponse(err)
 		}
