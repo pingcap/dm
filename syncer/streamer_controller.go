@@ -266,10 +266,9 @@ func (c *StreamerController) closeBinlogSyncer(logtctx *tcontext.Context, binlog
 // Restart restarts streamer controller
 func (c *StreamerController) Restart(tctx *tcontext.Context, pos mysql.Position) error {
 	c.Lock()
-	defer c.Unlock()
-
 	c.meetError = false
 	c.closed = false
+	c.Unlock()
 
 	return c.ResetReplicationSyncer(tctx, pos)
 }
@@ -367,15 +366,15 @@ func (c *StreamerController) updateServerID(tctx *tcontext.Context) error {
 		// should never happened unless the master has too many slave
 		return terror.Annotate(err, "fail to get random server id for streamer controller")
 	}
+
+	c.RLock()
 	c.syncCfg.ServerID = randomServerID
+	c.RUnlock()
 	return nil
 }
 
 // UpdateServerIDAndResetReplication updates the server id and reset replication
 func (c *StreamerController) UpdateServerIDAndResetReplication(tctx *tcontext.Context, pos mysql.Position) error {
-	c.Lock()
-	defer c.Unlock()
-
 	err := c.updateServerID(tctx)
 	if err != nil {
 		return err
@@ -390,5 +389,9 @@ func (c *StreamerController) UpdateServerIDAndResetReplication(tctx *tcontext.Co
 }
 
 func isDuplicateServerIDError(err error) bool {
+	if err == nil {
+		return false
+	}
+
 	return strings.Contains(err.Error(), "A slave with the same server_uuid/server_id as this slave has connected to the master")
 }
