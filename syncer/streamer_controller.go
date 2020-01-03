@@ -122,7 +122,16 @@ func NewStreamerController(tctx *tcontext.Context, syncCfg replication.BinlogSyn
 		closed:            false,
 	}
 
-	err := streamerController.ResetReplicationSyncer(tctx, beginPos)
+	// initial binlog type is local: means relay already use the server id, and may need to switch to remote, so need to use a new server id
+	// initial binlog type is remote: dm-worker has more than one sub task, so need to generate random server id
+	randomServerID, err := utils.GetRandomServerID(tctx.Context(), fromDB.BaseDB.DB)
+	if err != nil {
+		// should never happened unless the master has too many slave
+		return nil, terror.Annotate(err, "fail to get random server id for streamer controller")
+	}
+	streamerController.syncCfg.ServerID = randomServerID
+
+	err = streamerController.ResetReplicationSyncer(tctx, beginPos)
 	if err != nil {
 		streamerController.Close(tctx)
 		return nil, err
@@ -169,14 +178,6 @@ func (c *StreamerController) ResetReplicationSyncer(tctx *tcontext.Context, pos 
 	}
 
 	if c.currentBinlogType == RemoteBinlog {
-		// initial binlog type is local: means relay already use the server id, and now need to switch to remote, so need change to a new server id
-		// initial binlog type is remote: dm-worker has more than one sub task, so need generate random server id
-		randomServerID, err := utils.GetRandomServerID(tctx.Context(), c.fromDB.BaseDB.DB)
-		if err != nil {
-			// should never happened unless the master has too many slave
-			return terror.Annotate(err, "fail to get random server id for streamer controller")
-		}
-		c.syncCfg.ServerID = randomServerID
 		c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(c.syncCfg), tctx, false}
 	} else {
 		c.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(tctx, &streamer.BinlogReaderConfig{RelayDir: c.localBinlogDir, Timezone: c.timezone})}
