@@ -97,11 +97,11 @@ func NewWorker(cfg *Config) (w *Worker, err error) {
 	if cfg.EnableRelay {
 		// initial relay holder
 		w.relayHolder = NewRelayHolder(cfg)
-		purger, err := w.relayHolder.Init([]purger.PurgeInterceptor{
+		purger, err1 := w.relayHolder.Init([]purger.PurgeInterceptor{
 			w,
 		})
-		if err != nil {
-			return nil, err
+		if err1 != nil {
+			return nil, err1
 		}
 		w.relayPurger = purger
 	}
