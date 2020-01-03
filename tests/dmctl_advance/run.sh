@@ -9,8 +9,6 @@ TASK_CONF=$cur/conf/dm-task.yaml
 TASK_NAME="test"
 WORKER1_CONF=$cur/conf/dm-worker1.toml
 SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
-MYSQL1_NAME="mysql-replica-01"
-MYSQL2_NAME="mysql-replica-02"
 
 # used to coverage wrong usage of dmctl command
 function usage_and_arg_test() {
