@@ -1011,10 +1011,15 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	)
 	s.tctx.L().Info("replicate binlog from checkpoint", zap.Stringer("checkpoint", lastPos))
 
-	if s.streamerController == nil || s.streamerController.IsClosed() {
+	if s.streamerController == nil {
 		s.streamerController, err = NewStreamerController(tctx, s.syncCfg, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone, lastPos)
 		if err != nil {
 			return terror.Annotate(err, "fail to generate streamer controller")
+		}
+	} else if s.streamerController.IsClosed() {
+		err = s.streamerController.Restart(tctx, lastPos)
+		if err != nil {
+			return terror.Annotate(err, "fail to restart streamer controller")
 		}
 	}
 
@@ -1174,6 +1179,14 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				if err != nil {
 					return err
 				}
+			}
+			continue
+		} else if isDuplicateServerIDError(err) {
+			// if the server id is already used, need to use a new server id
+			tctx.L().Info("server id is already used by another slave, will change to a new server id and get event again")
+			err1 := s.streamerController.UpdateServerIDAndResetReplication(tctx, lastPos)
+			if err1 != nil {
+				return err1
 			}
 			continue
 		}

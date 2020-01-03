@@ -15,6 +15,7 @@ package syncer
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -122,16 +123,7 @@ func NewStreamerController(tctx *tcontext.Context, syncCfg replication.BinlogSyn
 		closed:            false,
 	}
 
-	// initial binlog type is local: means relay already use the server id, and may need to switch to remote, so need to use a new server id
-	// initial binlog type is remote: dm-worker has more than one sub task, so need to generate random server id
-	randomServerID, err := utils.GetRandomServerID(tctx.Context(), fromDB.BaseDB.DB)
-	if err != nil {
-		// should never happened unless the master has too many slave
-		return nil, terror.Annotate(err, "fail to get random server id for streamer controller")
-	}
-	streamerController.syncCfg.ServerID = randomServerID
-
-	err = streamerController.ResetReplicationSyncer(tctx, beginPos)
+	err := streamerController.UpdateServerIDAndResetReplication(tctx, beginPos)
 	if err != nil {
 		streamerController.Close(tctx)
 		return nil, err
@@ -178,6 +170,11 @@ func (c *StreamerController) ResetReplicationSyncer(tctx *tcontext.Context, pos 
 	}
 
 	if c.currentBinlogType == RemoteBinlog {
+		// initial binlog type is local: means relay already use the server id, and now need to switch to remote, so need change to a new server id
+		// initial binlog type is remote: dm-worker has more than one sub task, so need generate random server id
+
+		c.syncCfg.ServerID = 101
+		tctx.L().Info("generate remote binlog streamer", zap.Reflect("config", c.syncCfg))
 		c.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(c.syncCfg), tctx, false}
 	} else {
 		c.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(tctx, &streamer.BinlogReaderConfig{RelayDir: c.localBinlogDir, Timezone: c.timezone})}
@@ -271,6 +268,17 @@ func (c *StreamerController) closeBinlogSyncer(logtctx *tcontext.Context, binlog
 	return nil
 }
 
+// Restart restarts streamer controller
+func (c *StreamerController) Restart(tctx *tcontext.Context, pos mysql.Position) error {
+	c.Lock()
+	defer c.Unlock()
+
+	c.meetError = false
+	c.closed = false
+
+	return c.ResetReplicationSyncer(tctx, pos)
+}
+
 // Close closes streamer
 func (c *StreamerController) Close(tctx *tcontext.Context) {
 	c.Lock()
@@ -342,18 +350,50 @@ func (c *StreamerController) checkUUIDSameWithUpstream(pos mysql.Position, uuids
 // GetBinlogType returns the binlog type used now
 func (c *StreamerController) GetBinlogType() BinlogType {
 	c.RLock()
-	c.RUnlock()
+	defer c.RUnlock()
 	return c.currentBinlogType
 }
 
 // CanRetry returns true if can switch from local to remote and retry again
 func (c *StreamerController) CanRetry() bool {
 	c.RLock()
-	c.RUnlock()
+	defer c.RUnlock()
 
 	if c.initBinlogType == LocalBinlog && c.currentBinlogType == LocalBinlog {
 		return true
 	}
 
 	return false
+}
+
+func (c *StreamerController) updateServerID(tctx *tcontext.Context) error {
+	randomServerID, err := utils.GetRandomServerID(tctx.Context(), c.fromDB.BaseDB.DB)
+	if err != nil {
+		// should never happened unless the master has too many slave
+		return terror.Annotate(err, "fail to get random server id for streamer controller")
+	}
+	c.syncCfg.ServerID = randomServerID
+	return nil
+}
+
+// UpdateServerIDAndResetReplication updates the server id and reset replication
+func (c *StreamerController) UpdateServerIDAndResetReplication(tctx *tcontext.Context, pos mysql.Position) error {
+	c.Lock()
+	defer c.Unlock()
+
+	err := c.updateServerID(tctx)
+	if err != nil {
+		return err
+	}
+
+	err = c.ResetReplicationSyncer(tctx, pos)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func isDuplicateServerIDError(err error) bool {
+	return strings.Contains(err.Error(), "A slave with the same server_uuid/server_id as this slave has connected to the master")
 }
