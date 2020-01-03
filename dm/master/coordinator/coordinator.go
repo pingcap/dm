@@ -413,7 +413,7 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 		Op:     pb.WorkerOp_StartWorker,
 		Config: task,
 	}
-	resp, err := w.OperateMysqlWorker(context.Background(), req, time.Second*10)
+	resp, err := w.OperateMysqlWorker(context.Background(), req, time.Second * 3)
 	ret := false
 	c.mu.Lock()
 	if err == nil {
@@ -431,8 +431,14 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 		// Error means there is something wrong about network, set worker to close.
 		// remove sourceID from upstreams. So the source would be schedule in other worker.
 		delete(c.upstreams, cfg.SourceID)
+		delete(c.workerToConfigs, w.Address())
 		w.SetStatus(WorkerClosed)
 	}
 	c.mu.Unlock()
+	if w.State() == WorkerClosed {
+		ectx, cancel := context.WithTimeout(c.etcdCli.Ctx(), etcdTimeouit)
+		defer cancel()
+		c.etcdCli.Delete(ectx, common.UpstreamBoundWorkerKeyAdapter.Encode(w.Address()))
+	}
 	return ret
 }
