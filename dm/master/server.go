@@ -195,9 +195,6 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(3 * time.Second):
-			// update task -> workers after started
-			s.updateTaskWorkers(ctx)
 		}
 	}()
 
@@ -1200,55 +1197,6 @@ func (s *Server) getErrorFromWorkers(ctx context.Context, sources []string, task
 	}
 	wg.Wait()
 	return workerRespCh
-}
-
-// updateTaskWorkers fetches task-workers mapper from dm-workers and update s.taskSources
-func (s *Server) updateTaskWorkers(ctx context.Context) {
-	taskWorkers, _ := s.fetchTaskWorkers(ctx)
-	if len(taskWorkers) == 0 {
-		return // keep the old
-	}
-	// simple replace, maybe we can do more accurate update later
-	s.replaceTaskWorkers(taskWorkers)
-	log.L().Info("update workers of task", zap.Reflect("workers", taskWorkers))
-}
-
-// fetchTaskWorkers fetches task-workers mapper from workers based on deployment
-func (s *Server) fetchTaskWorkers(ctx context.Context) (map[string][]string, map[string]string) {
-	workers := make([]string, 0, len(s.coordinator.GetAllWorkers()))
-	for worker := range s.coordinator.GetAllWorkers() {
-		workers = append(workers, worker)
-	}
-
-	workerRespCh := s.getStatusFromWorkers(ctx, workers, "")
-
-	taskWorkerMap := make(map[string][]string)
-	workerMsgMap := make(map[string]string)
-	for len(workerRespCh) > 0 {
-		workerResp := <-workerRespCh
-		worker := workerResp.Worker
-		if len(workerResp.Msg) > 0 {
-			workerMsgMap[worker] = workerResp.Msg
-		} else if !workerResp.Result {
-			workerMsgMap[worker] = "got response but with failed result"
-		}
-		if workerResp.SubTaskStatus == nil {
-			continue
-		}
-		for _, status := range workerResp.SubTaskStatus {
-			if status.Stage == pb.Stage_InvalidStage {
-				continue // invalid status
-			}
-			task := status.Name
-			_, ok := taskWorkerMap[task]
-			if !ok {
-				taskWorkerMap[task] = make([]string, 0, 10)
-			}
-			taskWorkerMap[task] = append(taskWorkerMap[task], worker)
-		}
-	}
-
-	return taskWorkerMap, workerMsgMap
 }
 
 // return true means match, false means mismatch.

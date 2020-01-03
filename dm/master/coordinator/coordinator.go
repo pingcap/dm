@@ -189,8 +189,8 @@ func (c *Coordinator) HandleStartedWorker(w *Worker, cfg *config.MysqlConfig, su
 		c.taskConfigs[cfg.SourceID] = *cfg
 	} else {
 		w.SetStatus(WorkerFree)
-		delete(c.pendingtask, cfg.SourceID)
 	}
+	delete(c.pendingtask, cfg.SourceID)
 }
 
 // HandleStoppedWorker change worker status when mysql task stopped
@@ -224,6 +224,9 @@ func (c *Coordinator) AcquireWorkerForSource(source string) (*Worker, error) {
 	}
 	if addr, ok := c.pendingtask[source]; ok {
 		return nil, errors.Errorf("Acquire worker failed. the same source has been started in worker: %s", addr)
+	}
+	if _, ok := c.taskConfigs[source]; ok {
+		return nil, errors.Errorf("Acquire worker failed. the source has been scheduled, please add free worker for cluster")
 	}
 	for _, w := range c.workers {
 		if w.status.Load() == WorkerFree {
@@ -317,18 +320,14 @@ func (c *Coordinator) ObserveWorkers() {
 								w.SetStatus(WorkerBound)
 								state = "bound"
 							} else if _, ok := c.upstreams[source]; !ok {
-								if newAddr, ok := c.pendingtask[source]; ok && newAddr != addr {
-									delete(c.workerToConfigs, addr)
-									w.SetStatus(WorkerFree)
-								} else {
-									// If the MySQL-task has not been assigned to others, It could try to schedule on self.
-									c.upstreams[source] = w
-									w.SetStatus(WorkerBound)
-									c.schedule(source)
-								}
+								// If the MySQL-task has not been assigned to others, It could try to schedule on self.
+								c.upstreams[source] = w
+								w.SetStatus(WorkerBound)
+								c.schedule(source)
 							} else {
 								delete(c.workerToConfigs, addr)
 								w.SetStatus(WorkerFree)
+								state = "free"
 							}
 						} else {
 							// If this worker has not been in 'workerToConfigs', it means that this worker must have lose connect from master more than 6s,
@@ -381,7 +380,6 @@ func (c *Coordinator) tryRestartMysqlTask() {
 				ret := false
 				if w, ok := c.upstreams[source]; ok {
 					// Try start mysql task at the same worker.
-					c.pendingtask[source] = w.Address()
 					c.mu.RUnlock()
 					ret = c.restartMysqlTask(w, &cfg)
 					c.mu.RLock()
@@ -435,7 +433,6 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 		delete(c.upstreams, cfg.SourceID)
 		w.SetStatus(WorkerClosed)
 	}
-	delete(c.pendingtask, cfg.SourceID)
 	c.mu.Unlock()
 	return ret
 }
