@@ -14,13 +14,13 @@ function purge_relay_wihout_worker() {
 
 function purge_relay_filename_with_multi_workers() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "purge-relay --filename bin-000001 -w 127.0.0.1:$WORKER1_PORT -w 127.0.0.1:$WORKER2_PORT" \
+        "purge-relay --filename bin-000001 -w $MYSQL1_NAME -w $MYSQL2_NAME" \
         "for --filename, can only specify one DM-worker per time" 1
 }
 
 function purge_relay_while_master_down() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "purge-relay --filename bin-000001 -w 127.0.0.1:$WORKER1_PORT" \
+        "purge-relay --filename bin-000001 -w $MYSQL1_NAME" \
         "can not purge relay log files:" 1
 }
 
