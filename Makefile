@@ -75,7 +75,7 @@ debug-tools:
 retool_setup:
 	@echo "setup retool"
 	GO111MODULE=off go get github.com/twitchtv/retool
-	@retool sync
+	GO111MODULE=off retool sync
 
 test: unit_test integration_test
 
