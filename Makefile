@@ -80,6 +80,9 @@ retool_setup:
 generate_proto: retool_setup
 	./generate-dm.sh
 
+generate_mock: retool_setup
+	./tests/generate-mock.sh
+
 test: unit_test integration_test
 
 define run_unit_test
