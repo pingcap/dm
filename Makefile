@@ -75,7 +75,7 @@ debug-tools:
 retool_setup:
 	@echo "setup retool"
 	go get github.com/twitchtv/retool
-	GO111MODULE=off retool --tool-dir=_tools sync
+	GO111MODULE=off retool sync
 
 generate_proto: retool_setup
 	./generate-dm.sh
