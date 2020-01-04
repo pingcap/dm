@@ -77,6 +77,9 @@ retool_setup:
 	go get github.com/twitchtv/retool
 	GO111MODULE=off retool --tool-dir=_tools sync
 
+generate_proto: retool_setup
+	./generate-dm.sh
+
 test: unit_test integration_test
 
 define run_unit_test

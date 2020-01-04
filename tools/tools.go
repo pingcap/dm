@@ -19,5 +19,6 @@
 package tools
 
 import (
+	// make go module happy
 	_ "github.com/twitchtv/retool"
 )
