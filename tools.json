@@ -27,6 +27,10 @@
     {
       "Repository": "github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway",
       "Commit": "f7120437bb4f6c71f7f5076ad65a45310de2c009"
+    },
+    {
+      "Repository": "github.com/golang/mock/mockgen",
+      "Commit": "d74b93584564161b2de771089ee697f07d8bd5b5"
     }
   ],
   "RetoolVersion": "1.3.7"
