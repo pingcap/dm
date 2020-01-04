@@ -111,15 +111,13 @@ fmt:
 	@echo "gofmt (simplify)"
 	@ gofmt -s -l -w $(FILES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
 
-errcheck:
-	GO111MODULE=off go get github.com/kisielk/errcheck
+errcheck: retool_setup
 	@echo "errcheck"
-	@ errcheck -blank $(PACKAGES) | grep -v "_test\.go" | awk '{print} END{if(NR>0) {exit 1}}'
+	@retool do errcheck -blank $(PACKAGES) | grep -v "_test\.go" | awk '{print} END{if(NR>0) {exit 1}}'
 
-lint:
-	GO111MODULE=off go get golang.org/x/lint/golint
+lint: retool_setup
 	@echo "golint"
-	@ golint -set_exit_status $(PACKAGES)
+	@retool do golint -set_exit_status $(PACKAGES)
 
 vet:
 	$(GO) build -o bin/shadow golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow
