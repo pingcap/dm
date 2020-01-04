@@ -8,17 +8,17 @@ CURDIR   := $(shell pwd)
 GO       := GO111MODULE=on go
 GOBUILD  := CGO_ENABLED=0 $(GO) build
 GOTEST   := CGO_ENABLED=1 $(GO) test
-PACKAGES  := $$(go list ./... | grep -vE 'tests|cmd|vendor|pbmock')
+PACKAGES  := $$(go list ./... | grep -vE 'tests|cmd|vendor|pbmock|_tools')
 PACKAGES_RELAY := $$(go list ./... | grep 'github.com/pingcap/dm/relay')
 PACKAGES_SYNCER := $$(go list ./... | grep 'github.com/pingcap/dm/syncer')
 PACKAGES_PKG_BINLOG := $$(go list ./... | grep 'github.com/pingcap/dm/pkg/binlog')
-PACKAGES_OTHERS  := $$(go list ./... | grep -vE 'tests|cmd|vendor|pbmock|github.com/pingcap/dm/relay|github.com/pingcap/dm/syncer|github.com/pingcap/dm/pkg/binlog')
-FILES    := $$(find . -name "*.go" | grep -vE "vendor")
-TOPDIRS  := $$(ls -d */ | grep -vE "vendor")
+PACKAGES_OTHERS  := $$(go list ./... | grep -vE 'tests|cmd|vendor|pbmock|_tools|github.com/pingcap/dm/relay|github.com/pingcap/dm/syncer|github.com/pingcap/dm/pkg/binlog')
+FILES    := $$(find . -name "*.go" | grep -vE "vendor|_tools")
+TOPDIRS  := $$(ls -d */ | grep -vE "vendor|_tools")
 SHELL    := /usr/bin/env bash
 TEST_DIR := /tmp/dm_test
 FAILPOINT_DIR := $$(for p in $(PACKAGES); do echo $${p\#"github.com/pingcap/dm/"}; done)
-FAILPOINT := bin/failpoint-ctl
+FAILPOINT := retool do failpoint-ctl
 
 RACE_FLAG =
 TEST_RACE_FLAG = -race
@@ -46,7 +46,7 @@ else
 	LDFLAGS += -X "github.com/pingcap/dm/dm/master.SampleConfigFile=$(shell cat dm/master/dm-master.toml | base64)"
 endif
 
-.PHONY: build test unit_test dm_integration_test_build integration_test \
+.PHONY: build retool_setup test unit_test dm_integration_test_build integration_test \
 	coverage check dm-worker dm-master dm-tracer dmctl debug-tools
 
 build: check dm-worker dm-master dm-tracer dmctl dm-portal dm-syncer
@@ -72,13 +72,17 @@ dm-syncer:
 debug-tools:
 	$(GOBUILD) -ldflags '$(LDFLAGS)' -o bin/binlog-event-blackhole ./debug-tools/binlog-event-blackhole
 
+retool_setup:
+	@echo "setup retool"
+	GO111MODULE=off go get github.com/twitchtv/retool
+	@retool sync
+
 test: unit_test integration_test
 
 define run_unit_test
 	@echo "running unit test for packages:" $(1)
 	bash -x ./tests/wait_for_mysql.sh
 	mkdir -p $(TEST_DIR)
-	which $(FAILPOINT) >/dev/null 2>&1 || $(GOBUILD) -o $(FAILPOINT) github.com/pingcap/failpoint/failpoint-ctl
 	$(FAILPOINT_ENABLE)
 	@export log_level=error; \
 	$(GOTEST) -covermode=atomic -coverprofile="$(TEST_DIR)/cov.$(2).out" $(TEST_RACE_FLAG) $(1) \
@@ -86,22 +90,22 @@ define run_unit_test
 	$(FAILPOINT_DISABLE)
 endef
 
-unit_test:
+unit_test: retool_setup
 	$(call run_unit_test,$(PACKAGES),unit_test)
 
-unit_test_relay:
+unit_test_relay: retool_setup
 	$(call run_unit_test,$(PACKAGES_RELAY),unit_test_relay)
 
-unit_test_syncer:
+unit_test_syncer: retool_setup
 	$(call run_unit_test,$(PACKAGES_SYNCER),unit_test_syncer)
 
-unit_test_pkg_binlog:
+unit_test_pkg_binlog: retool_setup
 	$(call run_unit_test,$(PACKAGES_PKG_BINLOG),unit_test_pkg_binlog)
 
-unit_test_others:
+unit_test_others: retool_setup
 	$(call run_unit_test,$(PACKAGES_OTHERS),unit_test_others)
 
-check: fmt lint vet terror_check
+check: retool_setup fmt lint vet terror_check
 
 fmt:
 	@echo "gofmt (simplify)"
@@ -127,8 +131,7 @@ terror_check:
 	@echo "check terror conflict"
 	_utils/terror_gen/check.sh
 
-dm_integration_test_build:
-	which $(FAILPOINT) >/dev/null 2>&1 || $(GOBUILD) -o $(FAILPOINT) github.com/pingcap/failpoint/failpoint-ctl
+dm_integration_test_build: retool_setup
 	$(FAILPOINT_ENABLE)
 	$(GOTEST) -c $(TEST_RACE_FLAG) -cover -covermode=atomic \
 		-coverpkg=github.com/pingcap/dm/... \
@@ -198,8 +201,8 @@ check-static:
 	  --enable ineffassign \
 	  ./...
 
-failpoint-enable:
+failpoint-enable: retool_setup
 	$(FAILPOINT_ENABLE)
 
-failpoint-disable:
+failpoint-disable: retool_setup
 	$(FAILPOINT_DISABLE)

@@ -1,0 +1,9 @@
+{
+  "Tools": [
+    {
+      "Repository": "github.com/pingcap/failpoint/failpoint-ctl",
+      "Commit": "e7b1061e6e81d44326c449cf518992e0e2d47e98"
+    }
+  ],
+  "RetoolVersion": "1.3.7"
+}
