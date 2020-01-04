@@ -19,6 +19,14 @@
     {
       "Repository": "github.com/zhouqiang-cl/gocovmerge",
       "Commit": "5256314471af44fe8bccbf0a1db1dd1f85637c1a"
+    },
+    {
+      "Repository": "github.com/gogo/protobuf/protoc-gen-gogofaster",
+      "Commit": "5628607bb4c51c3157aacc3a50f0ab707582b805"
+    },
+    {
+      "Repository": "github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway",
+      "Commit": "f7120437bb4f6c71f7f5076ad65a45310de2c009"
     }
   ],
   "RetoolVersion": "1.3.7"
