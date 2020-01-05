@@ -44,7 +44,7 @@ function run() {
 
         echo "query status, relay log failed"
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "query-status -w 127.0.0.1:$WORKER1_PORT" \
+            "query-status -w $MYSQL1_NAME" \
             "no sub task started" 1 \
             "ERROR" 1
 
@@ -55,7 +55,7 @@ function run() {
             "\"result\": true" 2
 
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "query-status -w 127.0.0.1:$WORKER1_PORT" \
+            "query-status -w $MYSQL1_NAME" \
             "no valid relay sub directory exists" 1 \
             "ERROR" 1
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
