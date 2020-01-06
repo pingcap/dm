@@ -151,7 +151,7 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-    sleep 2 # wait gRPC from DM-master to DM-worker established again
+    sleep 5 # wait gRPC from DM-master to DM-worker established again
 
     # start-task with retry_cancel disabled
     dmctl_start_task
