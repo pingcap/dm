@@ -55,9 +55,11 @@ func (s *Syncer) Status() interface{} {
 	}
 
 	st.BinlogType = "unknown"
+	s.RLock()
 	if s.streamerController != nil {
 		st.BinlogType = binlogTypeToString(s.streamerController.GetBinlogType())
 	}
+	s.RUnlock()
 
 	// If a syncer unit is waiting for relay log catch up, it has not executed
 	// LoadMeta and will return a parsed binlog name error. As we can find mysql

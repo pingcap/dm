@@ -778,10 +778,10 @@ func (w *Worker) restoreSubTask() error {
 
 		var st *SubTask
 		if task.GetStage() == pb.Stage_Running || task.GetStage() == pb.Stage_New {
-			st = NewSubTaskWithStage(cfgDecrypted, pb.Stage_New, w.cfg.EnableRelay)
+			st = NewSubTaskWithStage(cfgDecrypted, pb.Stage_New)
 			st.Run()
 		} else {
-			st = NewSubTaskWithStage(cfgDecrypted, task.Stage, w.cfg.EnableRelay)
+			st = NewSubTaskWithStage(cfgDecrypted, task.Stage)
 		}
 
 		w.subTaskHolder.recordSubTask(st)
@@ -862,7 +862,7 @@ Loop:
 				}
 
 				w.l.Info("started sub task", zap.Stringer("config", cfgDecrypted))
-				st = NewSubTask(cfgDecrypted, w.cfg.EnableRelay)
+				st = NewSubTask(cfgDecrypted)
 				w.subTaskHolder.recordSubTask(st)
 				st.Run()
 

@@ -86,12 +86,12 @@ type SubTask struct {
 }
 
 // NewSubTask creates a new SubTask
-func NewSubTask(cfg *config.SubTaskConfig, enableRelay bool) *SubTask {
-	return NewSubTaskWithStage(cfg, pb.Stage_New, enableRelay)
+func NewSubTask(cfg *config.SubTaskConfig) *SubTask {
+	return NewSubTaskWithStage(cfg, pb.Stage_New)
 }
 
 // NewSubTaskWithStage creates a new SubTask with stage
-func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, enableRelay bool) *SubTask {
+func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage) *SubTask {
 	st := SubTask{
 		cfg:     cfg,
 		units:   createUnits(cfg),

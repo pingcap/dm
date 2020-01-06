@@ -1012,7 +1012,9 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	s.tctx.L().Info("replicate binlog from checkpoint", zap.Stringer("checkpoint", lastPos))
 
 	if s.streamerController == nil {
+		s.Lock()
 		s.streamerController, err = NewStreamerController(tctx, s.syncCfg, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone, lastPos)
+		s.Unlock()
 		if err != nil {
 			return terror.Annotate(err, "fail to generate streamer controller")
 		}

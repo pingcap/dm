@@ -148,7 +148,7 @@ func (t *testSubTask) TestSubTaskNormalUsage(c *C) {
 		Mode: config.ModeFull,
 	}
 
-	st := NewSubTask(cfg, true)
+	st := NewSubTask(cfg)
 	c.Assert(st.Stage(), DeepEquals, pb.Stage_New)
 
 	// test empty and fail
@@ -261,7 +261,7 @@ func (t *testSubTask) TestPauseAndResumeSubtask(c *C) {
 		Mode: config.ModeFull,
 	}
 
-	st := NewSubTask(cfg, true)
+	st := NewSubTask(cfg)
 	c.Assert(st.Stage(), DeepEquals, pb.Stage_New)
 
 	mockDumper := NewMockUnit(pb.UnitType_Dump)
@@ -398,7 +398,7 @@ func (t *testSubTask) TestSubtaskWithStage(c *C) {
 		Mode: config.ModeFull,
 	}
 
-	st := NewSubTaskWithStage(cfg, pb.Stage_Paused, true)
+	st := NewSubTaskWithStage(cfg, pb.Stage_Paused)
 	c.Assert(st.Stage(), DeepEquals, pb.Stage_Paused)
 
 	mockDumper := NewMockUnit(pb.UnitType_Dump)
@@ -425,7 +425,7 @@ func (t *testSubTask) TestSubtaskWithStage(c *C) {
 		c.Fatalf("result %+v is not right after closing", st.Result())
 	}
 
-	st = NewSubTaskWithStage(cfg, pb.Stage_Finished, true)
+	st = NewSubTaskWithStage(cfg, pb.Stage_Finished)
 	c.Assert(st.Stage(), DeepEquals, pb.Stage_Finished)
 	st.units = []unit.Unit{mockDumper, mockLoader}
 
@@ -453,7 +453,7 @@ func (t *testSubTask) TestDDLLockInfo(c *C) {
 		Mode: config.ModeFull,
 	}
 
-	st := NewSubTaskWithStage(cfg, pb.Stage_Paused, true)
+	st := NewSubTaskWithStage(cfg, pb.Stage_Paused)
 	c.Assert(st.Stage(), DeepEquals, pb.Stage_Paused)
 	c.Assert(st.DDLLockInfo(), IsNil)
 
@@ -478,7 +478,7 @@ func (t *testSubTask) TestDDLInfo(c *C) {
 		Mode: config.ModeFull,
 	}
 
-	st := NewSubTaskWithStage(cfg, pb.Stage_Paused, true)
+	st := NewSubTaskWithStage(cfg, pb.Stage_Paused)
 	c.Assert(st.Stage(), DeepEquals, pb.Stage_Paused)
 	c.Assert(st.GetDDLInfo(), IsNil)
 
