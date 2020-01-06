@@ -137,6 +137,10 @@ func (c *StreamerController) ResetReplicationSyncer(tctx *tcontext.Context, pos 
 	c.Lock()
 	defer c.Unlock()
 
+	return c.resetReplicationSyncer(tctx, pos)
+}
+
+func (c *StreamerController) resetReplicationSyncer(tctx *tcontext.Context, pos mysql.Position) (err error) {
 	uuidSameWithUpstream := true
 
 	// close old streamerProducer
@@ -181,12 +185,18 @@ func (c *StreamerController) ResetReplicationSyncer(tctx *tcontext.Context, pos 
 
 // RedirectStreamer redirects the streamer's begin position or gtid
 func (c *StreamerController) RedirectStreamer(tctx *tcontext.Context, pos mysql.Position) error {
+	c.Lock()
+	defer c.Unlock()
+	
 	tctx.L().Info("reset global streamer", zap.Stringer("position", pos))
-	return c.ResetReplicationSyncer(tctx, pos)
+	return c.resetReplicationSyncer(tctx, pos)
 }
 
-// GetEvent returns binlog event
+// GetEvent returns binlog event, should only have one thread call this function.
 func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replication.BinlogEvent, err error) {
+	c.RLock()
+	defer c.RUnlock()
+
 	ctx, cancel := context.WithTimeout(tctx.Context(), eventTimeout)
 	failpoint.Inject("SyncerEventTimeout", func(val failpoint.Value) {
 		if seconds, ok := val.(int); ok {
@@ -228,9 +238,12 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 
 // ReopenWithRetry reopens streamer with retry
 func (c *StreamerController) ReopenWithRetry(tctx *tcontext.Context, pos mysql.Position) error {
+	c.Lock()
+	defer c.Unlock()
+	
 	var err error
 	for i := 0; i < maxRetryCount; i++ {
-		err = c.ResetReplicationSyncer(tctx, pos)
+		err = c.resetReplicationSyncer(tctx, pos)
 		if err == nil {
 			return nil
 		}
@@ -266,11 +279,12 @@ func (c *StreamerController) closeBinlogSyncer(logtctx *tcontext.Context, binlog
 // Restart restarts streamer controller
 func (c *StreamerController) Restart(tctx *tcontext.Context, pos mysql.Position) error {
 	c.Lock()
+	defer c.Unlock()
+
 	c.meetError = false
 	c.closed = false
-	c.Unlock()
 
-	return c.ResetReplicationSyncer(tctx, pos)
+	return c.resetReplicationSyncer(tctx, pos)
 }
 
 // Close closes streamer
@@ -367,20 +381,21 @@ func (c *StreamerController) updateServerID(tctx *tcontext.Context) error {
 		return terror.Annotate(err, "fail to get random server id for streamer controller")
 	}
 
-	c.RLock()
 	c.syncCfg.ServerID = randomServerID
-	c.RUnlock()
 	return nil
 }
 
 // UpdateServerIDAndResetReplication updates the server id and reset replication
 func (c *StreamerController) UpdateServerIDAndResetReplication(tctx *tcontext.Context, pos mysql.Position) error {
+	c.Lock()
+	defer c.Unlock()
+	
 	err := c.updateServerID(tctx)
 	if err != nil {
 		return err
 	}
 
-	err = c.ResetReplicationSyncer(tctx, pos)
+	err = c.resetReplicationSyncer(tctx, pos)
 	if err != nil {
 		return err
 	}
