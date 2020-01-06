@@ -15,7 +15,6 @@ package worker
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -87,7 +86,7 @@ func (s *Server) Start() error {
 		return terror.ErrWorkerStartService.Delegate(err)
 	}
 
-	fmt.Println("Start server")
+	log.L().Info("Start Server")
 	s.worker = nil
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.etcdClient, err = clientv3.New(clientv3.Config{
@@ -233,7 +232,6 @@ func (s *Server) retryWriteEctd(ops ...clientv3.Op) string {
 		} else if retryTimes <= 0 {
 			return errors.ErrorStack(err)
 		}
-		fmt.Printf("rest try times: %d\n", retryTimes)
 		time.Sleep(time.Millisecond * 50)
 	}
 }

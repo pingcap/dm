@@ -51,7 +51,7 @@ type Coordinator struct {
 	taskConfigs map[string]config.MysqlConfig
 
 	// pending create task (sourceid) --> address
-	pendingtask map[string]string
+	pendingReqSources map[string]string
 
 	waitingTask chan string
 	etcdCli     *clientv3.Client
@@ -64,12 +64,12 @@ type Coordinator struct {
 // NewCoordinator returns a coordinate.
 func NewCoordinator() *Coordinator {
 	return &Coordinator{
-		workers:         make(map[string]*Worker),
-		workerToConfigs: make(map[string]string),
-		pendingtask:     make(map[string]string),
-		upstreams:       make(map[string]*Worker),
-		taskConfigs:     make(map[string]config.MysqlConfig),
-		waitingTask:     make(chan string, 100000),
+		workers:           make(map[string]*Worker),
+		workerToConfigs:   make(map[string]string),
+		pendingReqSources: make(map[string]string),
+		upstreams:         make(map[string]*Worker),
+		taskConfigs:       make(map[string]config.MysqlConfig),
+		waitingTask:       make(chan string, 100000),
 	}
 }
 
@@ -190,7 +190,7 @@ func (c *Coordinator) HandleStartedWorker(w *Worker, cfg *config.MysqlConfig, su
 	} else {
 		w.SetStatus(WorkerFree)
 	}
-	delete(c.pendingtask, cfg.SourceID)
+	delete(c.pendingReqSources, cfg.SourceID)
 }
 
 // HandleStoppedWorker change worker status when mysql task stopped
@@ -222,7 +222,7 @@ func (c *Coordinator) AcquireWorkerForSource(source string) (*Worker, error) {
 	if c.started == false {
 		return nil, ErrNotStarted
 	}
-	if addr, ok := c.pendingtask[source]; ok {
+	if addr, ok := c.pendingReqSources[source]; ok {
 		return nil, errors.Errorf("Acquire worker failed. the same source has been started in worker: %s", addr)
 	}
 	if _, ok := c.taskConfigs[source]; ok {
@@ -232,7 +232,7 @@ func (c *Coordinator) AcquireWorkerForSource(source string) (*Worker, error) {
 		if w.status.Load() == WorkerFree {
 			// we bound worker to avoid another task trying to get it
 			w.status.Store(WorkerBound)
-			c.pendingtask[source] = w.Address()
+			c.pendingReqSources[source] = w.Address()
 			return w, nil
 		}
 	}
@@ -324,6 +324,7 @@ func (c *Coordinator) ObserveWorkers() {
 								c.upstreams[source] = w
 								w.SetStatus(WorkerBound)
 								c.schedule(source)
+								state = "bound"
 							} else {
 								delete(c.workerToConfigs, addr)
 								w.SetStatus(WorkerFree)
@@ -413,7 +414,7 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 		Op:     pb.WorkerOp_StartWorker,
 		Config: task,
 	}
-	resp, err := w.OperateMysqlWorker(context.Background(), req, time.Second * 3)
+	resp, err := w.OperateMysqlWorker(context.Background(), req, time.Second*3)
 	ret := false
 	c.mu.Lock()
 	if err == nil {
@@ -424,8 +425,18 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 			w.SetStatus(WorkerBound)
 		} else {
 			delete(c.upstreams, cfg.SourceID)
-			delete(c.workerToConfigs, w.Address())
-			w.SetStatus(WorkerFree)
+			if source, ok := c.workerToConfigs[w.Address()]; ok {
+				if source == cfg.SourceID {
+					delete(c.workerToConfigs, w.Address())
+					w.SetStatus(WorkerFree)
+				} else {
+					// There may be another MySQL-task having been assigned to this worker.
+					log.L().Warn("schedule start-task to a running-worker", zap.String("address", w.Address()),
+						zap.String("running-source", source), zap.String("schedule-source", cfg.SourceID))
+				}
+			} else {
+				w.SetStatus(WorkerFree)
+			}
 		}
 	} else {
 		// Error means there is something wrong about network, set worker to close.
@@ -434,11 +445,14 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 		delete(c.workerToConfigs, w.Address())
 		w.SetStatus(WorkerClosed)
 	}
+	delete(c.pendingReqSources, cfg.SourceID)
 	c.mu.Unlock()
 	if w.State() == WorkerClosed {
 		ectx, cancel := context.WithTimeout(c.etcdCli.Ctx(), etcdTimeouit)
 		defer cancel()
-		c.etcdCli.Delete(ectx, common.UpstreamBoundWorkerKeyAdapter.Encode(w.Address()))
+		if _, err := c.etcdCli.Delete(ectx, common.UpstreamBoundWorkerKeyAdapter.Encode(w.Address())); err != nil {
+			log.L().Error("fail to remove worker from etcd", zap.String("address", w.Address()))
+		}
 	}
 	return ret
 }
