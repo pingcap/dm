@@ -3,9 +3,9 @@
 cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 package="pbmock"
 
-which mockgen >/dev/null
+which retool >/dev/null
 if [ "$?" != 0 ]; then
-    echo "please install mockgen first, simplify run \`go get github.com/golang/mock/mockgen\`"
+    echo "'retool' does not exist, please run 'make retool_setup' first"
     exit 1
 fi
 
@@ -21,7 +21,7 @@ for file in ./*pb.go; do
     # extract public interface from pb source file
     ifs=$(grep -E "type [[:upper:]].*interface" $file|awk '{print $2}' 'ORS=,'|rev|cut -c 2-|rev)
     echo "generate mock for file $file"
-    mockgen -destination $cur/../dm/pbmock/$prefix.go -package $package github.com/pingcap/dm/dm/pb $ifs
+    retool do mockgen -destination $cur/../dm/pbmock/$prefix.go -package $package github.com/pingcap/dm/dm/pb $ifs
 done
 
 echo "generate grpc mock code successfully"
