@@ -7,8 +7,8 @@ MASTER_PORT=8261
 WORKER1_PORT=8262
 WORKER2_PORT=8263
 TRACER_PORT=8264
-MYSQL1_NAME="mysql-replica-01"
-MYSQL2_NAME="mysql-replica-02"
+SOURCE_ID1="mysql-replica-01"
+SOURCE_ID2="mysql-replica-02"
 RESET_MASTER=${RESET_MASTER:-true}
 
 # we do clean staff at beginning of each run, so we can keep logs of the latset run
@@ -50,7 +50,7 @@ function dmctl_start_task_standalone() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $task_conf" \
         "\"result\": true" 2 \
-        "\"worker\": \"$MYSQL1_NAME\"" 1
+        "\"worker\": \"$SOURCE_ID1\"" 1
 }
 
 # shortcut for start task on two DM-workers
@@ -91,6 +91,6 @@ function dmctl_operate_task() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "$operate $task_name" \
         "\"result\": true" 3 \
-        "\"worker\": \"$MYSQL1_NAME\"" 1 \
-        "\"worker\": \"$MYSQL2_NAME\"" 1
+        "\"worker\": \"$SOURCE_ID1\"" 1 \
+        "\"worker\": \"$SOURCE_ID2\"" 1
 }

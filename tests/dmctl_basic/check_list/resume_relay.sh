@@ -38,12 +38,12 @@ function resume_relay_wihout_worker() {
 
 function resume_relay_while_master_down() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "resume-relay -w $MYSQL1_NAME -w $MYSQL2_NAME" \
+        "resume-relay -w $SOURCE_ID1 -w $SOURCE_ID2" \
         "can not resume relay unit:" 1
 }
 
 function resume_relay_success() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "resume-relay -w $MYSQL1_NAME -w $MYSQL2_NAME" \
+        "resume-relay -w $SOURCE_ID1 -w $SOURCE_ID2" \
         "\"result\": true" 3
 }

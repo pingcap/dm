@@ -15,8 +15,8 @@ function sql_replace_invalid_binlog_pos() {
 
 function sql_replace_non_sharding_without_one_worker() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "sql-replace test-task --worker $MYSQL1_NAME,$MYSQL2_NAME --binlog-pos mysql-bin:13426 sql1" \
-        "should only specify one worker, but got \[$MYSQL1_NAME $MYSQL2_NAME\]" 1
+        "sql-replace test-task --worker $SOURCE_ID1,$SOURCE_ID2 --binlog-pos mysql-bin:13426 sql1" \
+        "should only specify one worker, but got \[$SOURCE_ID1 $SOURCE_ID2\]" 1
 }
 
 function sql_replace_while_master_down() {

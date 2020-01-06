@@ -141,7 +141,7 @@ function run() {
     pause_task_success $TASK_NAME
 
     update_task_worker_not_found $TASK_CONF 127.0.0.1:9999
-    update_task_success_single_worker $TASK_CONF $MYSQL1_NAME
+    update_task_success_single_worker $TASK_CONF $SOURCE_ID1
     update_task_success $TASK_CONF
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
@@ -149,8 +149,8 @@ function run() {
     resume_task_success $TASK_NAME
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 20
 
-    update_relay_success $cur/conf/mysql1.toml $MYSQL1_NAME
-    update_relay_success $cur/conf/mysql2.toml $MYSQL2_NAME
+    update_relay_success $cur/conf/mysql1.toml $SOURCE_ID1
+    update_relay_success $cur/conf/mysql2.toml $SOURCE_ID2
     # check worker config backup file is correct
     [ -f $WORK_DIR/worker1/dm-worker-config.bak ] && cmp $WORK_DIR/worker1/dm-worker-config.bak $cur/conf/dm-worker1.toml
     [ -f $WORK_DIR/worker2/dm-worker-config.bak ] && cmp $WORK_DIR/worker2/dm-worker-config.bak $cur/conf/dm-worker2.toml
@@ -198,7 +198,7 @@ function run() {
     binlog_count=$(grep Log_name "$SQL_RESULT_FILE" | wc -l)
     relay_log_count=$(($(ls $WORK_DIR/worker1/relay_log/$server_uuid | wc -l) - 1))
     [ "$binlog_count" -eq "$relay_log_count" ]
-    purge_relay_success $max_binlog_name $MYSQL1_NAME
+    purge_relay_success $max_binlog_name $SOURCE_ID1
     new_relay_log_count=$(($(ls $WORK_DIR/worker1/relay_log/$server_uuid | wc -l) - 1))
     [ "$new_relay_log_count" -eq 1 ]
 }

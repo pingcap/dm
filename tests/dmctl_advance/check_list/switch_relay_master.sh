@@ -14,6 +14,6 @@ function switch_relay_master_without_worker() {
 
 function switch_relay_master_while_master_down() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "switch-relay-master -w $MYSQL1_NAME" \
-        "can not switch relay's master server (in workers \[$MYSQL1_NAME\]):" 1
+        "switch-relay-master -w $SOURCE_ID1" \
+        "can not switch relay's master server (in workers \[$SOURCE_ID1\]):" 1
 }

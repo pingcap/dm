@@ -22,14 +22,14 @@ function update_relay_should_specify_one_dm_worker() {
 function update_relay_while_master_down() {
     task_conf=$1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "update-relay $task_conf -w $MYSQL1_NAME" \
+        "update-relay $task_conf -w $SOURCE_ID1" \
         "can not update relay config:" 1
 }
 
 function update_relay_success() {
     task_conf=$1
-    worker_addr=$2
+    source_id=$2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "update-relay $task_conf -w $worker_addr" \
+        "update-relay $task_conf -w $source_id" \
         "\"result\": true" 1
 }
