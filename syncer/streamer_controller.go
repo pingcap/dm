@@ -187,7 +187,7 @@ func (c *StreamerController) resetReplicationSyncer(tctx *tcontext.Context, pos 
 func (c *StreamerController) RedirectStreamer(tctx *tcontext.Context, pos mysql.Position) error {
 	c.Lock()
 	defer c.Unlock()
-	
+
 	tctx.L().Info("reset global streamer", zap.Stringer("position", pos))
 	return c.resetReplicationSyncer(tctx, pos)
 }
@@ -240,7 +240,7 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 func (c *StreamerController) ReopenWithRetry(tctx *tcontext.Context, pos mysql.Position) error {
 	c.Lock()
 	defer c.Unlock()
-	
+
 	var err error
 	for i := 0; i < maxRetryCount; i++ {
 		err = c.resetReplicationSyncer(tctx, pos)
@@ -389,7 +389,7 @@ func (c *StreamerController) updateServerID(tctx *tcontext.Context) error {
 func (c *StreamerController) UpdateServerIDAndResetReplication(tctx *tcontext.Context, pos mysql.Position) error {
 	c.Lock()
 	defer c.Unlock()
-	
+
 	err := c.updateServerID(tctx)
 	if err != nil {
 		return err
