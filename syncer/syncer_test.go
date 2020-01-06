@@ -128,8 +128,7 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 	s.cfg.From.Adjust()
 	s.cfg.To.Adjust()
 
-	dir := c.MkDir()
-	s.cfg.RelayDir = dir
+	s.cfg.UseRelay = false
 
 	s.resetEventsGenerator(c)
 }
@@ -268,7 +267,7 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
-	syncer := NewSyncer(s.cfg, false)
+	syncer := NewSyncer(s.cfg)
 	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
 	c.Assert(err, IsNil)
 	err = syncer.genRouter()
@@ -377,7 +376,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
-	syncer := NewSyncer(s.cfg, false)
+	syncer := NewSyncer(s.cfg)
 	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
 	c.Assert(err, IsNil)
 	syncer.genRouter()
@@ -449,7 +448,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
-	syncer := NewSyncer(s.cfg, false)
+	syncer := NewSyncer(s.cfg)
 	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
 	c.Assert(err, IsNil)
 	syncer.genRouter()
@@ -542,7 +541,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
-	syncer := NewSyncer(s.cfg, false)
+	syncer := NewSyncer(s.cfg)
 	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
 	c.Assert(err, IsNil)
 	syncer.genRouter()
@@ -672,7 +671,7 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
-	syncer := NewSyncer(s.cfg, false)
+	syncer := NewSyncer(s.cfg)
 	syncer.genRouter()
 
 	syncer.binlogFilter, err = bf.NewBinlogEvent(false, s.cfg.FilterRules)
@@ -946,7 +945,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 		c.Assert(err, IsNil)
 	}
 
-	syncer := NewSyncer(s.cfg, false)
+	syncer := NewSyncer(s.cfg)
 	// use upstream dbConn as mock downstream
 	dbConn, err := db.Conn(context.Background())
 	c.Assert(err, IsNil)
@@ -1022,13 +1021,13 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 }
 
 func (s *testSyncerSuite) TestcheckpointID(c *C) {
-	syncer := NewSyncer(s.cfg, false)
+	syncer := NewSyncer(s.cfg)
 	checkpointID := syncer.checkpointID()
 	c.Assert(checkpointID, Equals, "101")
 }
 
 func (s *testSyncerSuite) TestExecErrors(c *C) {
-	syncer := NewSyncer(s.cfg, false)
+	syncer := NewSyncer(s.cfg)
 	syncer.appendExecErrors(new(ExecErrorContext))
 	c.Assert(syncer.execErrors.errors, HasLen, 1)
 
@@ -1039,7 +1038,7 @@ func (s *testSyncerSuite) TestExecErrors(c *C) {
 func (s *testSyncerSuite) TestCasuality(c *C) {
 	var wg sync.WaitGroup
 	s.cfg.WorkerCount = 1
-	syncer := NewSyncer(s.cfg, false)
+	syncer := NewSyncer(s.cfg)
 	syncer.jobs = []chan *job{make(chan *job, 1)}
 
 	wg.Add(1)
@@ -1230,7 +1229,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		shardGroupMock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"unreachable", "unreachable", "unreachable", "unreachable", "unreachable"}))
 
 		// make syncer write to mock baseConn
-		syncer := NewSyncer(s.cfg, false)
+		syncer := NewSyncer(s.cfg)
 
 		ctx := context.Background()
 		// fromDB mocks upstream dbConn, dbConn mocks downstream dbConn
@@ -1400,7 +1399,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	s.cfg.MaxRetry = 1
 	s.cfg.DisableCausality = false
 
-	syncer := NewSyncer(s.cfg, false)
+	syncer := NewSyncer(s.cfg)
 	syncer.fromDB = &UpStreamConn{BaseDB: conn.NewBaseDB(db)}
 	syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
 		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}

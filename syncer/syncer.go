@@ -177,7 +177,7 @@ type Syncer struct {
 }
 
 // NewSyncer creates a new Syncer.
-func NewSyncer(cfg *config.SubTaskConfig, enableRelay bool) *Syncer {
+func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer := new(Syncer)
 	syncer.cfg = cfg
 	syncer.tctx = tcontext.Background().WithLogger(log.With(zap.String("task", cfg.Name), zap.String("unit", "binlog replication")))
@@ -193,13 +193,13 @@ func NewSyncer(cfg *config.SubTaskConfig, enableRelay bool) *Syncer {
 	syncer.tracer = tracing.GetTracer()
 	syncer.setTimezone()
 	syncer.addJobFunc = syncer.addJob
-	syncer.enableRelay = enableRelay
+	syncer.enableRelay = cfg.UseRelay
 
 	syncer.checkpoint = NewRemoteCheckPoint(syncer.tctx, cfg, syncer.checkpointID())
 
 	syncer.setSyncCfg()
 
-	syncer.binlogType = toBinlogType(enableRelay)
+	syncer.binlogType = toBinlogType(cfg.UseRelay)
 	syncer.sqlOperatorHolder = operator.NewHolder()
 	syncer.readerHub = streamer.GetReaderHub()
 

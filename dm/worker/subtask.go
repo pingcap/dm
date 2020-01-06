@@ -35,7 +35,7 @@ import (
 )
 
 // createUnits creates process units base on task mode
-func createUnits(cfg *config.SubTaskConfig, enableRelay bool) []unit.Unit {
+func createUnits(cfg *config.SubTaskConfig) []unit.Unit {
 	failpoint.Inject("mockCreateUnitsDumpOnly", func(_ failpoint.Value) {
 		log.L().Info("create mock worker units with dump unit only", zap.String("failpoint", "mockCreateUnitsDumpOnly"))
 		failpoint.Return([]unit.Unit{mydumper.NewMydumper(cfg)})
@@ -46,13 +46,13 @@ func createUnits(cfg *config.SubTaskConfig, enableRelay bool) []unit.Unit {
 	case config.ModeAll:
 		us = append(us, mydumper.NewMydumper(cfg))
 		us = append(us, loader.NewLoader(cfg))
-		us = append(us, syncer.NewSyncer(cfg, enableRelay))
+		us = append(us, syncer.NewSyncer(cfg))
 	case config.ModeFull:
 		// NOTE: maybe need another checker in the future?
 		us = append(us, mydumper.NewMydumper(cfg))
 		us = append(us, loader.NewLoader(cfg))
 	case config.ModeIncrement:
-		us = append(us, syncer.NewSyncer(cfg, enableRelay))
+		us = append(us, syncer.NewSyncer(cfg))
 	default:
 		log.L().Error("unsupported task mode", zap.String("subtask", cfg.Name), zap.String("task mode", cfg.Mode))
 	}
@@ -94,7 +94,7 @@ func NewSubTask(cfg *config.SubTaskConfig, enableRelay bool) *SubTask {
 func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, enableRelay bool) *SubTask {
 	st := SubTask{
 		cfg:     cfg,
-		units:   createUnits(cfg, enableRelay),
+		units:   createUnits(cfg),
 		stage:   stage,
 		l:       log.With(zap.String("subtask", cfg.Name)),
 		DDLInfo: make(chan *pb.DDLInfo, 1),

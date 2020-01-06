@@ -157,7 +157,10 @@ type SubTaskConfig struct {
 	Timezone                string `toml:"timezone" josn:"timezone"`
 
 	// RelayDir get value from dm-worker config
-	RelayDir string   `toml:"relay-dir" json:"relay-dir"`
+	RelayDir string `toml:"relay-dir" json:"relay-dir"`
+
+	// UseRelay get value from dm-worker config
+	UseRelay bool     `toml:"use-relay" json:"use-relay"`
 	From     DBConfig `toml:"from" json:"from"`
 	To       DBConfig `toml:"to" json:"to"`
 

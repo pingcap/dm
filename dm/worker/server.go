@@ -275,7 +275,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorRequest) (*pb.QueryErrorResponse, error) {
 	log.L().Info("", zap.String("request", "QueryError"), zap.Stringer("payload", req))
 
-	relayError := &pb.RelayError{}
+	var relayError *pb.RelayError
 	if s.worker.relayHolder != nil {
 		relayError = s.worker.relayHolder.Error()
 	}

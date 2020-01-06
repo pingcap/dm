@@ -734,6 +734,7 @@ func (w *Worker) copyConfigFromWorker(cfg *config.SubTaskConfig) {
 	cfg.ServerID = w.cfg.ServerID
 	cfg.RelayDir = w.cfg.RelayDir
 	cfg.EnableGTID = w.cfg.EnableGTID
+	cfg.UseRelay = w.cfg.EnableRelay
 
 	// we can remove this from SubTaskConfig later, because syncer will always read from relay
 	cfg.AutoFixGTID = w.cfg.AutoFixGTID
