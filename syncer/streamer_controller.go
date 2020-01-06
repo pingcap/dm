@@ -188,14 +188,14 @@ func (c *StreamerController) RedirectStreamer(tctx *tcontext.Context, pos mysql.
 	c.Lock()
 	defer c.Unlock()
 
-	tctx.L().Info("reset global streamer", zap.Stringer("position", pos))
+	tctx.L().Info("redirect streamer", zap.Stringer("position", pos))
 	return c.resetReplicationSyncer(tctx, pos)
 }
 
 // GetEvent returns binlog event, should only have one thread call this function.
 func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replication.BinlogEvent, err error) {
-	c.RLock()
-	defer c.RUnlock()
+	c.Lock()
+	defer c.Unlock()
 
 	ctx, cancel := context.WithTimeout(tctx.Context(), eventTimeout)
 	failpoint.Inject("SyncerEventTimeout", func(val failpoint.Value) {
@@ -283,6 +283,7 @@ func (c *StreamerController) Restart(tctx *tcontext.Context, pos mysql.Position)
 
 	c.meetError = false
 	c.closed = false
+	c.currentBinlogType = c.initBinlogType
 
 	return c.resetReplicationSyncer(tctx, pos)
 }
