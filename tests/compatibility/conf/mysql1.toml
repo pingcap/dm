@@ -1,6 +1,5 @@
-# Worker Configuration.
+# MySQL Configuration.
 
-server-id = 101 # we don't give dm_full account REPLICATION SLAVE privilege here, so we must specify server-id here
 source-id = "mysql-replica-01"
 flavor = ""
 enable-gtid = false
@@ -9,6 +8,6 @@ relay-binlog-gtid = ""
 
 [from]
 host = "127.0.0.1"
-user = "dm_full"
+user = "root"
 password = ""
 port = 3306

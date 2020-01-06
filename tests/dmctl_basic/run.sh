@@ -60,6 +60,10 @@ function usage_and_arg_test() {
     purge_relay_wihout_worker
     purge_relay_filename_with_multi_workers
     purge_relay_while_master_down
+
+    operate_mysql_worker_empty_arg
+    operate_mysql_worker_wrong_config_file
+    operate_mysql_worker_while_master_down $MYSQL1_CONF
 }
 
 function recover_max_binlog_size() {
@@ -104,6 +108,9 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $dm_worker2_conf
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
+    operate_mysql_worker_stop__not_created_config $MYSQL1_CONF
+
     # operate mysql config to worker
     cp $cur/conf/mysql1.toml $WORK_DIR/mysql1.toml
     cp $cur/conf/mysql2.toml $WORK_DIR/mysql2.toml
