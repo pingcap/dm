@@ -37,10 +37,10 @@ func (t *testSubTask) TestCreateUnits(c *C) {
 	cfg := &config.SubTaskConfig{
 		Mode: "xxx",
 	}
-	c.Assert(createUnits(cfg, true), HasLen, 0)
+	c.Assert(createUnits(cfg), HasLen, 0)
 
 	cfg.Mode = config.ModeFull
-	unitsFull := createUnits(cfg, true)
+	unitsFull := createUnits(cfg)
 	c.Assert(unitsFull, HasLen, 2)
 	_, ok := unitsFull[0].(*mydumper.Mydumper)
 	c.Assert(ok, IsTrue)
@@ -48,13 +48,13 @@ func (t *testSubTask) TestCreateUnits(c *C) {
 	c.Assert(ok, IsTrue)
 
 	cfg.Mode = config.ModeIncrement
-	unitsIncr := createUnits(cfg, true)
+	unitsIncr := createUnits(cfg)
 	c.Assert(unitsIncr, HasLen, 1)
 	_, ok = unitsIncr[0].(*syncer.Syncer)
 	c.Assert(ok, IsTrue)
 
 	cfg.Mode = config.ModeAll
-	unitsAll := createUnits(cfg, true)
+	unitsAll := createUnits(cfg)
 	c.Assert(unitsAll, HasLen, 3)
 	_, ok = unitsAll[0].(*mydumper.Mydumper)
 	c.Assert(ok, IsTrue)
