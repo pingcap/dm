@@ -864,8 +864,8 @@ func (s *Syncer) resetShardingGroup(schema, table string) {
 // we may need to refactor the concurrency model to make the work-flow more clearer later
 func (s *Syncer) flushCheckPoints() error {
 	if s.execErrorDetected.Get() {
-		s.tctx.L().Warn("error detected when executing SQL job, skip flush checkpoint", zap.Stringer("checkpoint", s.checkpoint))
-		return nil
+		s.tctx.L().Error("error detected when executing SQL job, skip flush checkpoint", zap.Stringer("checkpoint", s.checkpoint))
+		return terror.ErrCodeSkipFlushCheckpointBecauseOfErr.Generate(s.checkpoint)
 	}
 
 	var (
@@ -1750,6 +1750,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			s.tctx.L().Info("replace ddls to preset ddls by sql operator in normal mode", zap.String("event", "query"), zap.Strings("preset ddls", appliedSQLs), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("position", ec.currentPos))
 			needHandleDDLs = appliedSQLs // maybe nil
 		}
+
+		// when add ddl job, will execute ddl and then flush checkpoint.
+		// if execute ddl failed, will flush checkpoint failed, and get error from `addJobFunc`
 		job := newDDLJob(nil, needHandleDDLs, *ec.lastPos, *ec.currentPos, nil, nil, *ec.traceID)
 		err = s.addJobFunc(job)
 		if err != nil {
