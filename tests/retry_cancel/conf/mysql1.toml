@@ -1,0 +1,9 @@
+# MySQL Configuration.
+
+source-id = "mysql-replica-01"
+
+[from]
+host = "127.0.0.1"
+user = "root"
+password = ""
+port = 3306

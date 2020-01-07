@@ -23,9 +23,6 @@ function usage_and_arg_test() {
     # todo: no sense to fix
     #migrate_relay_while_master_down
 
-    refresh_worker_tasks_wrong_arg
-    refresh_worker_tasks_while_master_down
-
     switch_relay_master_wrong_arg
     switch_relay_master_without_worker
     switch_relay_master_while_master_down

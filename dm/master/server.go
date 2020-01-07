@@ -1790,7 +1790,7 @@ func (s *Server) taskConfigArgsExtractor(cfg *config.SubTaskConfig) (*coordinato
 
 	worker := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
 	if worker == nil {
-		return nil, "", "", handleErr(terror.ErrMasterTaskConfigExtractor.Generatef("%s relevant worker-client not found", worker))
+		return nil, "", "", handleErr(terror.ErrMasterTaskConfigExtractor.Generatef("%s relevant worker-client not found", cfg.SourceID))
 	}
 
 	cfgToml, err := cfg.Toml()
