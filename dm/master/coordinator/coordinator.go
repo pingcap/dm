@@ -450,8 +450,11 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 	if w.State() == WorkerClosed {
 		ectx, cancel := context.WithTimeout(c.etcdCli.Ctx(), etcdTimeouit)
 		defer cancel()
-		if _, err := c.etcdCli.Delete(ectx, common.UpstreamBoundWorkerKeyAdapter.Encode(w.Address())); err != nil {
-			log.L().Error("fail to remove worker from etcd", zap.String("address", w.Address()))
+		resp, err := c.etcdCli.Get(ectx, common.WorkerRegisterKeyAdapter.Encode(w.Address(), w.Name()))
+		if err != nil {
+			if resp.Count > 0 {
+				w.SetStatus(WorkerFree)
+			}
 		}
 	}
 	return ret
