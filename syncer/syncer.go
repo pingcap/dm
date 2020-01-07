@@ -16,7 +16,6 @@ package syncer
 import (
 	"context"
 	"fmt"
-	"math"
 	"reflect"
 	"strconv"
 	"strings"
@@ -59,11 +58,11 @@ import (
 var (
 	maxRetryCount = 100
 
-	retryTimeout    = 3 * time.Second
-	waitTime        = 10 * time.Millisecond
-	eventTimeout    = 1 * time.Minute
 	maxEventTimeout = 1 * time.Hour
-	statusTime      = 30 * time.Second
+
+	retryTimeout = 3 * time.Second
+	waitTime     = 10 * time.Millisecond
+	statusTime   = 30 * time.Second
 
 	// MaxDDLConnectionTimeoutMinute also used by SubTask.ExecuteDDL
 	MaxDDLConnectionTimeoutMinute = 5
@@ -86,46 +85,6 @@ const (
 	LocalBinlog
 )
 
-// StreamerProducer provides the ability to generate binlog streamer by StartSync()
-// but go-mysql StartSync() returns (struct, err) rather than (interface, err)
-// And we can't simplely use StartSync() method in SteamerProducer
-// so use generateStreamer to wrap StartSync() method to make *BinlogSyncer and *BinlogReader in same interface
-// For other implementations who implement StreamerProducer and Streamer can easily take place of Syncer.streamProducer
-// For test is easy to mock
-type StreamerProducer interface {
-	generateStreamer(pos mysql.Position) (streamer.Streamer, error)
-}
-
-// Read local relay log
-type localBinlogReader struct {
-	reader *streamer.BinlogReader
-}
-
-func (l *localBinlogReader) generateStreamer(pos mysql.Position) (streamer.Streamer, error) {
-	return l.reader.StartSync(pos)
-}
-
-// Read remote binlog
-type remoteBinlogReader struct {
-	reader     *replication.BinlogSyncer
-	tctx       *tcontext.Context
-	EnableGTID bool
-}
-
-func (r *remoteBinlogReader) generateStreamer(pos mysql.Position) (streamer.Streamer, error) {
-	defer func() {
-		lastSlaveConnectionID := r.reader.LastConnectionID()
-		r.tctx.L().Info("last slave connection", zap.Uint32("connection ID", lastSlaveConnectionID))
-	}()
-	if r.EnableGTID {
-		// NOTE: our (per-table based) checkpoint does not support GTID yet
-		return nil, terror.ErrSyncerUnitRemoteSteamerWithGTID.Generate()
-	}
-
-	streamer, err := r.reader.StartSync(pos)
-	return streamer, terror.ErrSyncerUnitRemoteSteamerStartSync.Delegate(err)
-}
-
 // Syncer can sync your MySQL data to another MySQL database.
 type Syncer struct {
 	sync.RWMutex
@@ -135,15 +94,14 @@ type Syncer struct {
 	cfg     *config.SubTaskConfig
 	syncCfg replication.BinlogSyncerConfig
 
-	shardingSyncCfg replication.BinlogSyncerConfig // used by sharding group to re-consume DMLs
-	sgk             *ShardingGroupKeeper           // keeper to keep all sharding (sub) group in this syncer
-	ddlInfoCh       chan *pb.DDLInfo               // DDL info pending to sync, only support sync one DDL lock one time, refine if needed
-	ddlExecInfo     *DDLExecInfo                   // DDL execute (ignore) info
-	injectEventCh   chan *replication.BinlogEvent  // extra binlog event chan, used to inject binlog event into the main for loop
+	sgk           *ShardingGroupKeeper          // keeper to keep all sharding (sub) group in this syncer
+	ddlInfoCh     chan *pb.DDLInfo              // DDL info pending to sync, only support sync one DDL lock one time, refine if needed
+	ddlExecInfo   *DDLExecInfo                  // DDL execute (ignore) info
+	injectEventCh chan *replication.BinlogEvent // extra binlog event chan, used to inject binlog event into the main for loop
 
-	streamerProducer StreamerProducer
-	binlogType       BinlogType
-	streamer         streamer.Streamer
+	binlogType         BinlogType
+	streamerController *StreamerController
+	enableRelay        bool
 
 	wg    sync.WaitGroup
 	jobWg sync.WaitGroup
@@ -235,32 +193,18 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	syncer.tracer = tracing.GetTracer()
 	syncer.setTimezone()
 	syncer.addJobFunc = syncer.addJob
+	syncer.enableRelay = cfg.UseRelay
 
 	syncer.checkpoint = NewRemoteCheckPoint(syncer.tctx, cfg, syncer.checkpointID())
 
-	syncer.syncCfg = replication.BinlogSyncerConfig{
-		ServerID:                uint32(syncer.cfg.ServerID),
-		Flavor:                  syncer.cfg.Flavor,
-		Host:                    syncer.cfg.From.Host,
-		Port:                    uint16(syncer.cfg.From.Port),
-		User:                    syncer.cfg.From.User,
-		Password:                syncer.cfg.From.Password,
-		UseDecimal:              true,
-		VerifyChecksum:          true,
-		TimestampStringLocation: syncer.timezone,
-	}
+	syncer.setSyncCfg()
 
-	syncer.binlogType = toBinlogType(cfg.BinlogType)
+	syncer.binlogType = toBinlogType(cfg.UseRelay)
 	syncer.sqlOperatorHolder = operator.NewHolder()
 	syncer.readerHub = streamer.GetReaderHub()
 
 	if cfg.IsSharding {
 		// only need to sync DDL in sharding mode
-		// for sharding group's config, we should use a different ServerID
-		// now, use 2**32 -1 - config's ServerID simply
-		// maybe we can refactor to remove RemoteBinlog support in DM
-		syncer.shardingSyncCfg = syncer.syncCfg
-		syncer.shardingSyncCfg.ServerID = math.MaxUint32 - syncer.syncCfg.ServerID
 		syncer.sgk = NewShardingGroupKeeper(syncer.tctx, cfg)
 		syncer.ddlInfoCh = make(chan *pb.DDLInfo, 1)
 		syncer.ddlExecInfo = NewDDLExecInfo()
@@ -319,6 +263,8 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 		return err
 	}
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-DBs", Fn: s.closeDBs})
+
+	s.streamerController = NewStreamerController(tctx, s.syncCfg, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone)
 
 	s.bwList, err = filter.New(s.cfg.CaseSensitive, s.cfg.BWList)
 	if err != nil {
@@ -474,35 +420,13 @@ func (s *Syncer) initShardingGroups() error {
 // IsFreshTask implements Unit.IsFreshTask
 func (s *Syncer) IsFreshTask(ctx context.Context) (bool, error) {
 	globalPoint := s.checkpoint.GlobalPoint()
-	return globalPoint.Compare(minCheckpoint) <= 0, nil
-}
-
-func (s *Syncer) resetReplicationSyncer() {
-	// close old streamerProducer
-	if s.streamerProducer != nil {
-		switch t := s.streamerProducer.(type) {
-		case *remoteBinlogReader:
-			s.closeBinlogSyncer(t.reader)
-		case *localBinlogReader:
-			// TODO: close old local reader before creating a new one
-		default:
-			// some other producers such as mockStreamerProducer, should not re-create
-			return
-		}
-	}
-	// re-create new streamerProducer
-	switch s.binlogType {
-	case RemoteBinlog:
-		s.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(s.syncCfg), s.tctx, s.cfg.EnableGTID}
-	case LocalBinlog:
-		s.streamerProducer = &localBinlogReader{streamer.NewBinlogReader(s.tctx, &streamer.BinlogReaderConfig{RelayDir: s.cfg.RelayDir, Timezone: s.timezone})}
-	default:
-		s.tctx.L().Error("init streamerProducer with un-recognized binlogType")
-	}
+	return binlog.ComparePosition(globalPoint, minCheckpoint) <= 0, nil
 }
 
 func (s *Syncer) reset() {
-	s.resetReplicationSyncer()
+	if s.streamerController != nil {
+		s.streamerController.Close(s.tctx)
+	}
 	// create new job chans
 	s.newJobChans(s.cfg.WorkerCount + 1)
 
@@ -629,7 +553,7 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	prePos := s.checkpoint.GlobalPoint()
 	s.checkpoint.Rollback(s.schemaTracker)
 	currPos := s.checkpoint.GlobalPoint()
-	if prePos.Compare(currPos) != 0 {
+	if binlog.ComparePosition(prePos, currPos) != 0 {
 		s.tctx.L().Warn("something wrong with rollback global checkpoint", zap.Stringer("previous position", prePos), zap.Stringer("current position", currPos))
 	}
 
@@ -1053,15 +977,6 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 	}
 }
 
-// redirectStreamer redirects binlog stream to given position
-func (s *Syncer) redirectStreamer(pos mysql.Position) error {
-	var err error
-	s.tctx.L().Info("reset global streamer", zap.Stringer("position", pos))
-	s.resetReplicationSyncer()
-	s.streamer, err = s.streamerProducer.generateStreamer(pos)
-	return err
-}
-
 // Run starts running for sync, we should guarantee it can rerun when paused.
 func (s *Syncer) Run(ctx context.Context) (err error) {
 	tctx := s.tctx.WithContext(ctx)
@@ -1098,9 +1013,11 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	)
 	s.tctx.L().Info("replicate binlog from checkpoint", zap.Stringer("checkpoint", lastPos))
 
-	s.streamer, err = s.streamerProducer.generateStreamer(lastPos)
-	if err != nil {
-		return err
+	if s.streamerController.IsClosed() {
+		err = s.streamerController.Start(tctx, lastPos)
+		if err != nil {
+			return terror.Annotate(err, "fail to restart streamer controller")
+		}
 	}
 
 	s.queueBucketMapping = make([]string, 0, s.cfg.WorkerCount+1)
@@ -1192,7 +1109,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 				return err2
 			}
 
-			err2 = s.redirectStreamer(nextPos)
+			err2 = s.streamerController.RedirectStreamer(s.tctx, nextPos)
 			if err2 != nil {
 				return err2
 			}
@@ -1215,7 +1132,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			savedGlobalLastPos = lastPos // save global last pos
 			lastPos = shardingReSync.currPos
 
-			err = s.redirectStreamer(shardingReSync.currPos)
+			err = s.streamerController.RedirectStreamer(s.tctx, shardingReSync.currPos)
 			if err != nil {
 				return err
 			}
@@ -1234,15 +1151,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			latestOp = null
 		}
 		if e == nil {
-			failpoint.Inject("SyncerEventTimeout", func(val failpoint.Value) {
-				if seconds, ok := val.(int); ok {
-					eventTimeout = time.Duration(seconds) * time.Second
-					s.tctx.L().Info("set fetch binlog event timeout", zap.String("failpoint", "SyncerEventTimeout"), zap.Int("value", seconds))
-				}
-			})
-			ctx2, cancel := context.WithTimeout(ctx, eventTimeout)
-			e, err = s.streamer.GetEvent(ctx2)
-			cancel()
+			e, err = s.streamerController.GetEvent(tctx)
 		}
 
 		startTime := time.Now()
@@ -1263,20 +1172,37 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			eventTimeoutCounter = 0
 			if s.needResync() {
 				s.tctx.L().Info("timeout when fetching binlog event, there must be some problems with replica connection, try to re-connect")
-				err = s.reopenWithRetry(s.syncCfg)
+				err = s.streamerController.ReopenWithRetry(tctx, lastPos)
 				if err != nil {
 					return err
 				}
+			}
+			continue
+		} else if isDuplicateServerIDError(err) {
+			// if the server id is already used, need to use a new server id
+			tctx.L().Info("server id is already used by another slave, will change to a new server id and get event again")
+			err1 := s.streamerController.UpdateServerIDAndResetReplication(tctx, lastPos)
+			if err1 != nil {
+				return err1
 			}
 			continue
 		}
 
 		if err != nil {
 			s.tctx.L().Error("fail to fetch binlog", log.ShortError(err))
+
+			if s.streamerController.CanRetry() {
+				err = s.streamerController.ResetReplicationSyncer(s.tctx, lastPos)
+				if err != nil {
+					return err
+				}
+				continue
+			}
+
 			// try to re-sync in gtid mode
 			if tryReSync && s.cfg.EnableGTID && isBinlogPurgedError(err) && s.cfg.AutoFixGTID {
 				time.Sleep(retryTimeout)
-				err = s.reSyncBinlog(s.syncCfg)
+				err = s.reSyncBinlog(*tctx, lastPos)
 				if err != nil {
 					return err
 				}
@@ -1286,6 +1212,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 
 			return err
 		}
+
 		// get binlog event, reset tryReSync, so we can re-sync binlog while syncer meets errors next time
 		tryReSync = true
 		binlogPosGauge.WithLabelValues("syncer", s.cfg.Name).Set(float64(e.Header.LogPos))
@@ -1316,6 +1243,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			parser2:             parser2,
 			shardingReSyncCh:    &shardingReSyncCh,
 		}
+
 		switch ev := e.Event.(type) {
 		case *replication.RotateEvent:
 			err = s.handleRotateEvent(ev, ec)
@@ -1327,18 +1255,16 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			if err != nil {
 				return terror.Annotatef(err, "current pos %s", currentPos)
 			}
-
 		case *replication.QueryEvent:
 			err = s.handleQueryEvent(ev, ec)
 			if err != nil {
 				return terror.Annotatef(err, "current pos %s", currentPos)
 			}
-
 		case *replication.XIDEvent:
 			if shardingReSync != nil {
 				shardingReSync.currPos.Pos = e.Header.LogPos
 				lastPos = shardingReSync.currPos
-				if shardingReSync.currPos.Compare(shardingReSync.latestPos) >= 0 {
+				if binlog.ComparePosition(shardingReSync.currPos, shardingReSync.latestPos) >= 0 {
 					s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "XID"), zap.Reflect("re-shard", shardingReSync))
 					err = closeShardingResync()
 					if err != nil {
@@ -1381,22 +1307,21 @@ type eventContext struct {
 
 // TODO: Further split into smaller functions and group common arguments into
 // a context struct.
-
 func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext) error {
 	*ec.currentPos = mysql.Position{
 		Name: string(ev.NextLogName),
 		Pos:  uint32(ev.Position),
 	}
-	if ec.currentPos.Name > ec.lastPos.Name {
+	if binlog.ComparePosition(*ec.currentPos, *ec.lastPos) > 0 {
 		*ec.lastPos = *ec.currentPos
 	}
 
 	if ec.shardingReSync != nil {
-		if ec.currentPos.Compare(ec.shardingReSync.currPos) == 1 {
+		if binlog.ComparePosition(*ec.currentPos, ec.shardingReSync.currPos) > 0 {
 			ec.shardingReSync.currPos = *ec.currentPos
 		}
 
-		if ec.shardingReSync.currPos.Compare(ec.shardingReSync.latestPos) >= 0 {
+		if binlog.ComparePosition(ec.shardingReSync.currPos, ec.shardingReSync.latestPos) >= 0 {
 			s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "rotate"), zap.Reflect("re-shard", ec.shardingReSync))
 			err := ec.closeShardingResync()
 			if err != nil {
@@ -1433,7 +1358,7 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 
 	if ec.shardingReSync != nil {
 		ec.shardingReSync.currPos.Pos = ec.header.LogPos
-		if ec.shardingReSync.currPos.Compare(ec.shardingReSync.latestPos) >= 0 {
+		if binlog.ComparePosition(ec.shardingReSync.currPos, ec.shardingReSync.latestPos) >= 0 {
 			s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "row"), zap.Reflect("re-shard", ec.shardingReSync))
 			return ec.closeShardingResync()
 		}
@@ -1601,7 +1526,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 
 	if ec.shardingReSync != nil {
 		ec.shardingReSync.currPos.Pos = ec.header.LogPos
-		if ec.shardingReSync.currPos.Compare(ec.shardingReSync.latestPos) >= 0 {
+		if binlog.ComparePosition(ec.shardingReSync.currPos, ec.shardingReSync.latestPos) >= 0 {
 			s.tctx.L().Info("re-replicate shard group was completed", zap.String("event", "query"), zap.String("statement", sql), zap.Reflect("re-shard", ec.shardingReSync))
 			err2 := ec.closeShardingResync()
 			if err2 != nil {
@@ -2216,47 +2141,13 @@ func (s *Syncer) flushJobs() error {
 	return s.addJobFunc(job)
 }
 
-func (s *Syncer) reSyncBinlog(cfg replication.BinlogSyncerConfig) error {
+func (s *Syncer) reSyncBinlog(tctx tcontext.Context, pos mysql.Position) error {
 	err := s.retrySyncGTIDs()
 	if err != nil {
 		return err
 	}
 	// close still running sync
-	return s.reopenWithRetry(cfg)
-}
-
-func (s *Syncer) reopenWithRetry(cfg replication.BinlogSyncerConfig) error {
-	var err error
-	for i := 0; i < maxRetryCount; i++ {
-		s.streamer, err = s.reopen(cfg)
-		if err == nil {
-			return nil
-		}
-		if needRetryReplicate(err) {
-			s.tctx.L().Info("fail to retry open binlog streamer", log.ShortError(err))
-			time.Sleep(retryTimeout)
-			continue
-		}
-		break
-	}
-	return err
-}
-
-func (s *Syncer) reopen(cfg replication.BinlogSyncerConfig) (streamer.Streamer, error) {
-	if s.streamerProducer != nil {
-		switch r := s.streamerProducer.(type) {
-		case *remoteBinlogReader:
-			err := s.closeBinlogSyncer(r.reader)
-			if err != nil {
-				return nil, err
-			}
-		default:
-			return nil, terror.ErrSyncerUnitReopenStreamNotSupport.Generate(r)
-		}
-	}
-	// TODO: refactor to support relay
-	s.streamerProducer = &remoteBinlogReader{replication.NewBinlogSyncer(cfg), s.tctx, s.cfg.EnableGTID}
-	return s.streamerProducer.generateStreamer(s.checkpoint.GlobalPoint())
+	return s.streamerController.ReopenWithRetry(&tctx, pos)
 }
 
 func (s *Syncer) renameShardingSchema(schema, table string) (string, string) {
@@ -2323,16 +2214,8 @@ func (s *Syncer) stopSync() {
 	// before re-write workflow for s.syncer, simply close it
 	// when resuming, re-create s.syncer
 
-	if s.streamerProducer != nil {
-		switch r := s.streamerProducer.(type) {
-		case *remoteBinlogReader:
-			// process remote binlog reader
-			s.closeBinlogSyncer(r.reader)
-			s.streamerProducer = nil
-		case *localBinlogReader:
-			// process local binlog reader
-			r.reader.Close()
-		}
+	if s.streamerController != nil {
+		s.streamerController.Close(s.tctx)
 	}
 }
 
@@ -2347,25 +2230,6 @@ func (s *Syncer) removeHeartbeat() {
 	if s.cfg.EnableHeartbeat {
 		s.heartbeat.RemoveTask(s.cfg.Name)
 	}
-}
-
-func (s *Syncer) closeBinlogSyncer(syncer *replication.BinlogSyncer) error {
-	if syncer == nil {
-		return nil
-	}
-
-	lastSlaveConnectionID := syncer.LastConnectionID()
-	defer syncer.Close()
-	if lastSlaveConnectionID > 0 {
-		err := s.fromDB.killConn(lastSlaveConnectionID)
-		if err != nil {
-			s.tctx.L().Error("fail to kill last connection", zap.Uint32("connection ID", lastSlaveConnectionID), log.ShortError(err))
-			if !utils.IsNoSuchThreadError(err) {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 // Pause pauses the process, and it can be resumed later
@@ -2565,6 +2429,11 @@ func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 		s.tctx.L().Error("fail to create baseConn connection", log.ShortError(err))
 		return err
 	}
+
+	s.setSyncCfg()
+	if s.streamerController != nil {
+		s.streamerController.UpdateSyncCfg(s.syncCfg, s.fromDB)
+	}
 	return nil
 }
 
@@ -2594,4 +2463,18 @@ func (s *Syncer) setTimezone() {
 	}
 	s.tctx.L().Info("use timezone", log.WrapStringerField("location", loc))
 	s.timezone = loc
+}
+
+func (s *Syncer) setSyncCfg() {
+	s.syncCfg = replication.BinlogSyncerConfig{
+		ServerID:                uint32(s.cfg.ServerID),
+		Flavor:                  s.cfg.Flavor,
+		Host:                    s.cfg.From.Host,
+		Port:                    uint16(s.cfg.From.Port),
+		User:                    s.cfg.From.User,
+		Password:                s.cfg.From.Password,
+		UseDecimal:              true,
+		VerifyChecksum:          true,
+		TimestampStringLocation: s.timezone,
+	}
 }

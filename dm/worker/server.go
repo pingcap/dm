@@ -249,10 +249,19 @@ func (s *Server) QueryTaskOperation(ctx context.Context, req *pb.QueryTaskOperat
 func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*pb.QueryStatusResponse, error) {
 	log.L().Info("", zap.String("request", "QueryStatus"), zap.Stringer("payload", req))
 
+	relayStatus := &pb.RelayStatus{
+		Result: &pb.ProcessResult{
+			Detail: []byte("relay is not enabled"),
+		},
+	}
+	if s.worker.relayHolder != nil {
+		relayStatus = s.worker.relayHolder.Status()
+	}
+
 	resp := &pb.QueryStatusResponse{
 		Result:        true,
 		SubTaskStatus: s.worker.QueryStatus(req.Name),
-		RelayStatus:   s.worker.relayHolder.Status(),
+		RelayStatus:   relayStatus,
 		SourceID:      s.worker.cfg.SourceID,
 	}
 
@@ -266,10 +275,14 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorRequest) (*pb.QueryErrorResponse, error) {
 	log.L().Info("", zap.String("request", "QueryError"), zap.Stringer("payload", req))
 
+	var relayError *pb.RelayError
+	if s.worker.relayHolder != nil {
+		relayError = s.worker.relayHolder.Error()
+	}
 	resp := &pb.QueryErrorResponse{
 		Result:       true,
 		SubTaskError: s.worker.QueryError(req.Name),
-		RelayError:   s.worker.relayHolder.Error(),
+		RelayError:   relayError,
 	}
 
 	return resp, nil

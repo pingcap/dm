@@ -124,6 +124,7 @@ const (
 	codeBinlogNeedMariaDBGTIDSet
 	codeBinlogParseMariaDBGTIDSet
 	codeBinlogMariaDBAddGTIDSet
+
 	// pkg/tracing
 	codeTracingEventDataNotValid
 	codeTracingUploadData
@@ -143,6 +144,9 @@ const (
 	// pkg/election
 	codeElectionCampaignFail
 	codeElectionGetLeaderIDFail
+
+	// pkg/binlog
+	codeBinlogInvalidFilenameWithUUIDSuffix
 )
 
 // Config related error code list
@@ -609,6 +613,7 @@ var (
 	ErrBinlogNeedMariaDBGTIDSet      = New(codeBinlogNeedMariaDBGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "the event should be a MariadbGTIDListEvent, but got %T")
 	ErrBinlogParseMariaDBGTIDSet     = New(codeBinlogParseMariaDBGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "parse MariaDB GTID set")
 	ErrBinlogMariaDBAddGTIDSet       = New(codeBinlogMariaDBAddGTIDSet, ClassFunctional, ScopeInternal, LevelHigh, "add set %v to GTID set")
+
 	// pkg/tracing
 	ErrTracingEventDataNotValid = New(codeTracingEventDataNotValid, ClassFunctional, ScopeInternal, LevelHigh, "invalid event data for type: %s")
 	ErrTracingUploadData        = New(codeTracingUploadData, ClassFunctional, ScopeInternal, LevelHigh, "upload event")
@@ -627,6 +632,9 @@ var (
 	// pkg/election
 	ErrElectionCampaignFail    = New(codeElectionCampaignFail, ClassFunctional, ScopeInternal, LevelHigh, "fail to campaign leader: %s")
 	ErrElectionGetLeaderIDFail = New(codeElectionGetLeaderIDFail, ClassFunctional, ScopeInternal, LevelMedium, "fail to get leader ID")
+
+	// pkg/binlog
+	ErrBinlogInvalidFilenameWithUUIDSuffix = New(codeBinlogInvalidFilenameWithUUIDSuffix, ClassFunctional, ScopeInternal, LevelHigh, "invalid binlog filename with uuid suffix %s")
 
 	// Config related error
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s")

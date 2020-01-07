@@ -19,7 +19,9 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 
+	"github.com/pingcap/failpoint"
 	"github.com/siddontang/go-mysql/replication"
+	"go.uber.org/zap"
 )
 
 // TODO: maybe one day we can make a pull request to go-mysql to support LocalStreamer.
@@ -43,6 +45,11 @@ func (s *LocalStreamer) GetEvent(ctx context.Context) (*replication.BinlogEvent,
 	if s.err != nil {
 		return nil, terror.ErrNeedSyncAgain.Generate()
 	}
+
+	failpoint.Inject("GetEventFromLocalFailed", func(_ failpoint.Value) {
+		log.L().Info("get event from local failed", zap.String("failpoint", "GetEventFromLocalFailed"))
+		failpoint.Return(nil, terror.ErrSyncClosed.Generate())
+	})
 
 	select {
 	case c := <-s.ch:

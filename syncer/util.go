@@ -17,23 +17,28 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
-
-	"github.com/pingcap/parser/ast"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/parser/ast"
 )
 
-func toBinlogType(bt string) BinlogType {
-	bt = strings.ToLower(bt)
-	switch bt {
-	case "local":
+func toBinlogType(enableRelay bool) BinlogType {
+	if enableRelay {
 		return LocalBinlog
-	case "remote":
-		return RemoteBinlog
+	}
+
+	return RemoteBinlog
+}
+
+func binlogTypeToString(binlogType BinlogType) string {
+	switch binlogType {
+	case RemoteBinlog:
+		return "remote"
+	case LocalBinlog:
+		return "local"
 	default:
-		return RemoteBinlog
+		return "unknown"
 	}
 }
 
