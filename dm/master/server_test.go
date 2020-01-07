@@ -938,6 +938,24 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 	// TODO: add SQL operator test
 }
 
+func createCoordinatorForTest(c *check.C, sources, workers []string, workerClients map[string]workerrpc.Client) *coordinator.Coordinator {
+	coordinator2 := coordinator.NewCoordinator()
+	err := coordinator2.Start(context.Background(), testEtcdCluster.RandClient())
+	c.Assert(err, check.IsNil)
+	for i := range workers {
+		// add worker to coordinator's workers map
+		coordinator2.AddWorker("worker"+string(i), workers[i], workerClients[workers[i]])
+		// set this worker's status to workerFree
+		coordinator2.AddWorker("worker"+string(i), workers[i], nil)
+		// operate mysql config on this worker
+		cfg := &config.MysqlConfig{SourceID: sources[i]}
+		w, err := coordinator2.AcquireWorkerForSource(cfg.SourceID)
+		c.Assert(err, check.IsNil)
+		coordinator2.HandleStartedWorker(w, cfg, true)
+	}
+	return coordinator2
+}
+
 func (t *testMaster) TestBreakWorkerDDLLock(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
@@ -1005,21 +1023,7 @@ func (t *testMaster) TestBreakWorkerDDLLock(c *check.C) {
 
 	// test BreakWorkerDDLLock successfully
 	mockBreakDDLLock(true)
-
-	server.coordinator = coordinator.NewCoordinator()
-	err = server.coordinator.Start(context.Background(), testEtcdCluster.RandClient())
-	c.Assert(err, check.IsNil)
-	for i := range workers {
-		// add worker to coordinator's workers map
-		server.coordinator.AddWorker("worker"+string(i), workers[i], server.workerClients[workers[i]])
-		// set this worker's status to workerFree
-		server.coordinator.AddWorker("worker"+string(i), workers[i], nil)
-		// operate mysql config on this worker
-		cfg := &config.MysqlConfig{SourceID: sources[i]}
-		w, err := server.coordinator.AcquireWorkerForSource(cfg.SourceID)
-		c.Assert(err, check.IsNil)
-		server.coordinator.HandleStartedWorker(w, cfg, true)
-	}
+	server.coordinator = createCoordinatorForTest(c, sources, workers, server.workerClients)
 
 	resp, err = server.BreakWorkerDDLLock(context.Background(), &pb.BreakWorkerDDLLockRequest{
 		Task:         task,
@@ -1036,21 +1040,7 @@ func (t *testMaster) TestBreakWorkerDDLLock(c *check.C) {
 
 	// test BreakWorkerDDLLock with error response
 	mockBreakDDLLock(false)
-
-	server.coordinator = coordinator.NewCoordinator()
-	err = server.coordinator.Start(context.Background(), testEtcdCluster.RandClient())
-	c.Assert(err, check.IsNil)
-	for i := range workers {
-		// add worker to coordinator's workers map
-		server.coordinator.AddWorker("worker"+string(i), workers[i], server.workerClients[workers[i]])
-		// set this worker's status to workerFree
-		server.coordinator.AddWorker("worker"+string(i), workers[i], nil)
-		// operate mysql config on this worker
-		cfg := &config.MysqlConfig{SourceID: sources[i]}
-		w, err := server.coordinator.AcquireWorkerForSource(cfg.SourceID)
-		c.Assert(err, check.IsNil)
-		server.coordinator.HandleStartedWorker(w, cfg, true)
-	}
+	server.coordinator = createCoordinatorForTest(c, sources, workers, server.workerClients)
 
 	resp, err = server.BreakWorkerDDLLock(context.Background(), &pb.BreakWorkerDDLLockRequest{
 		Task:         task,
