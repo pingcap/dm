@@ -112,7 +112,7 @@ type StreamerController struct {
 }
 
 // NewStreamerController creates a new streamer controller
-func NewStreamerController(tctx *tcontext.Context, syncCfg replication.BinlogSyncerConfig, fromDB *UpStreamConn, binlogType BinlogType, localBinlogDir string, timezone *time.Location, beginPos mysql.Position) (*StreamerController, error) {
+func NewStreamerController(tctx *tcontext.Context, syncCfg replication.BinlogSyncerConfig, fromDB *UpStreamConn, binlogType BinlogType, localBinlogDir string, timezone *time.Location) *StreamerController {
 	streamerController := &StreamerController{
 		initBinlogType:    binlogType,
 		currentBinlogType: binlogType,
@@ -120,16 +120,28 @@ func NewStreamerController(tctx *tcontext.Context, syncCfg replication.BinlogSyn
 		localBinlogDir:    localBinlogDir,
 		timezone:          timezone,
 		fromDB:            fromDB,
-		closed:            false,
+		closed:            true,
 	}
 
-	err := streamerController.UpdateServerIDAndResetReplication(tctx, beginPos)
+	return streamerController
+}
+
+// Start starts streamer controller
+func (c *StreamerController) Start(tctx *tcontext.Context, pos mysql.Position) error {
+	c.Lock()
+	defer c.Unlock()
+
+	c.meetError = false
+	c.closed = false
+	c.currentBinlogType = c.initBinlogType
+
+	err := c.resetReplicationSyncer(tctx, pos)
 	if err != nil {
-		streamerController.Close(tctx)
-		return nil, err
+		c.Close(tctx)
+		return err
 	}
 
-	return streamerController, nil
+	return nil
 }
 
 // ResetReplicationSyncer reset the replication
@@ -274,18 +286,6 @@ func (c *StreamerController) closeBinlogSyncer(logtctx *tcontext.Context, binlog
 		}
 	}
 	return nil
-}
-
-// Restart restarts streamer controller
-func (c *StreamerController) Restart(tctx *tcontext.Context, pos mysql.Position) error {
-	c.Lock()
-	defer c.Unlock()
-
-	c.meetError = false
-	c.closed = false
-	c.currentBinlogType = c.initBinlogType
-
-	return c.resetReplicationSyncer(tctx, pos)
 }
 
 // Close closes streamer

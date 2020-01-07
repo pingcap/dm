@@ -264,6 +264,8 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 	}
 	rollbackHolder.Add(fr.FuncRollback{Name: "close-DBs", Fn: s.closeDBs})
 
+	s.streamerController = NewStreamerController(tctx, s.syncCfg, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone)
+
 	s.bwList, err = filter.New(s.cfg.CaseSensitive, s.cfg.BWList)
 	if err != nil {
 		return terror.ErrSyncerUnitGenBWList.Delegate(err)
@@ -1011,15 +1013,8 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 	)
 	s.tctx.L().Info("replicate binlog from checkpoint", zap.Stringer("checkpoint", lastPos))
 
-	if s.streamerController == nil {
-		s.Lock()
-		s.streamerController, err = NewStreamerController(tctx, s.syncCfg, s.fromDB, s.binlogType, s.cfg.RelayDir, s.timezone, lastPos)
-		s.Unlock()
-		if err != nil {
-			return terror.Annotate(err, "fail to generate streamer controller")
-		}
-	} else if s.streamerController.IsClosed() {
-		err = s.streamerController.Restart(tctx, lastPos)
+	if s.streamerController.IsClosed() {
+		err = s.streamerController.Start(tctx, lastPos)
 		if err != nil {
 			return terror.Annotate(err, "fail to restart streamer controller")
 		}
