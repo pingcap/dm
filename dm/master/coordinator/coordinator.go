@@ -15,18 +15,19 @@ package coordinator
 
 import (
 	"context"
-	"github.com/pingcap/dm/dm/pb"
 	"sync"
 	"time"
 
-	"github.com/pingcap/dm/dm/common"
-	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/dm/master/workerrpc"
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/mvcc/mvccpb"
 	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/dm/common"
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/master/workerrpc"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 var (
@@ -236,7 +237,7 @@ func (c *Coordinator) AcquireWorkerForSource(source string) (*Worker, error) {
 			return w, nil
 		}
 	}
-	return nil, errors.New("Acquire worker failed. no  free worker could start mysql task")
+	return nil, errors.New("Acquire worker failed. no free worker could start mysql task")
 }
 
 // GetAllWorkers gets all workers.

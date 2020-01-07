@@ -16,12 +16,11 @@ package master
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"strings"
-
-	"fmt"
-	"io"
 	"sync"
 	"testing"
 	"time"
@@ -30,9 +29,11 @@ import (
 	"github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/pd/pkg/tempurl"
+	"go.etcd.io/etcd/integration"
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/master/coordinator"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/pbmock"
@@ -138,9 +139,13 @@ var (
 	msgNoSubTaskReg       = fmt.Sprintf(".*%s", msgNoSubTask)
 	errCheckSyncConfig    = "(?m).*check sync config with error.*"
 	errCheckSyncConfigReg = fmt.Sprintf("(?m).*%s.*", errCheckSyncConfig)
+	testEtcdCluster       *integration.ClusterV3
 )
 
 func TestMaster(t *testing.T) {
+	testEtcdCluster = integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
+	defer testEtcdCluster.Terminate(t)
+
 	check.TestingT(t)
 }
 
@@ -943,10 +948,12 @@ func (t *testMaster) TestBreakWorkerDDLLock(c *check.C) {
 		schema  = "test_db"
 		table   = "test_table"
 		lockID  = genDDLLockID(task, schema, table)
+		sources = make([]string, 0, len(server.cfg.Deploy))
 		workers = make([]string, 0, len(server.cfg.Deploy))
 	)
 
 	for _, deploy := range server.cfg.Deploy {
+		sources = append(sources, deploy.Source)
 		workers = append(workers, deploy.Worker)
 	}
 
@@ -998,9 +1005,25 @@ func (t *testMaster) TestBreakWorkerDDLLock(c *check.C) {
 
 	// test BreakWorkerDDLLock successfully
 	mockBreakDDLLock(true)
+
+	server.coordinator = coordinator.NewCoordinator()
+	err = server.coordinator.Start(context.Background(), testEtcdCluster.RandClient())
+	c.Assert(err, check.IsNil)
+	for i := range workers {
+		// add worker to coordinator's workers map
+		server.coordinator.AddWorker("worker"+string(i), workers[i], server.workerClients[workers[i]])
+		// set this worker's status to workerFree
+		server.coordinator.AddWorker("worker"+string(i), workers[i], nil)
+		// operate mysql config on this worker
+		cfg := &config.MysqlConfig{SourceID: sources[i]}
+		w, err := server.coordinator.AcquireWorkerForSource(cfg.SourceID)
+		c.Assert(err, check.IsNil)
+		server.coordinator.HandleStartedWorker(w, cfg, true)
+	}
+
 	resp, err = server.BreakWorkerDDLLock(context.Background(), &pb.BreakWorkerDDLLockRequest{
 		Task:         task,
-		Sources:      workers,
+		Sources:      sources,
 		RemoveLockID: lockID,
 		SkipDDL:      true,
 	})
@@ -1013,9 +1036,25 @@ func (t *testMaster) TestBreakWorkerDDLLock(c *check.C) {
 
 	// test BreakWorkerDDLLock with error response
 	mockBreakDDLLock(false)
+
+	server.coordinator = coordinator.NewCoordinator()
+	err = server.coordinator.Start(context.Background(), testEtcdCluster.RandClient())
+	c.Assert(err, check.IsNil)
+	for i := range workers {
+		// add worker to coordinator's workers map
+		server.coordinator.AddWorker("worker"+string(i), workers[i], server.workerClients[workers[i]])
+		// set this worker's status to workerFree
+		server.coordinator.AddWorker("worker"+string(i), workers[i], nil)
+		// operate mysql config on this worker
+		cfg := &config.MysqlConfig{SourceID: sources[i]}
+		w, err := server.coordinator.AcquireWorkerForSource(cfg.SourceID)
+		c.Assert(err, check.IsNil)
+		server.coordinator.HandleStartedWorker(w, cfg, true)
+	}
+
 	resp, err = server.BreakWorkerDDLLock(context.Background(), &pb.BreakWorkerDDLLockRequest{
 		Task:         task,
-		Sources:      workers,
+		Sources:      sources,
 		RemoveLockID: lockID,
 		SkipDDL:      true,
 	})
