@@ -192,6 +192,15 @@ func (conn *DBConn) querySQL(tctx *tcontext.Context, query string, args ...inter
 }
 
 func (conn *DBConn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError func(error) bool, queries []string, args ...[]interface{}) (int, error) {
+
+	failpoint.Inject("ExecuteSQLWithIgnoreFailed", func(val failpoint.Value) {
+		queryPattern := val.(string)
+		if len(queries) == 1 && strings.Contains(queries, queryPattern) {
+			tctx.L().Warn("executeSQLWithIgnore failed", zap.String("failpoint", "ExecuteSQLWithIgnoreFailed"))
+			return 0, terror.ErrDBUnExpect.Generate("invalid connection")
+		}
+	})
+
 	if len(queries) == 0 {
 		return 0, nil
 	}
