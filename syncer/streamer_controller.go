@@ -109,6 +109,9 @@ type StreamerController struct {
 	uuidSuffix string
 
 	closed bool
+
+	// whether the server id is updated
+	serverIDUpdated bool
 }
 
 // NewStreamerController creates a new streamer controller
@@ -135,7 +138,12 @@ func (c *StreamerController) Start(tctx *tcontext.Context, pos mysql.Position) e
 	c.closed = false
 	c.currentBinlogType = c.initBinlogType
 
-	err := c.resetReplicationSyncer(tctx, pos)
+	var err error
+	if c.serverIDUpdated {
+		err = c.resetReplicationSyncer(tctx, pos)
+	} else {
+		err = c.updateServerIDAndResetReplication(tctx, pos)
+	}
 	if err != nil {
 		c.Close(tctx)
 		return err
@@ -383,6 +391,7 @@ func (c *StreamerController) updateServerID(tctx *tcontext.Context) error {
 	}
 
 	c.syncCfg.ServerID = randomServerID
+	c.serverIDUpdated = true
 	return nil
 }
 
@@ -391,6 +400,10 @@ func (c *StreamerController) UpdateServerIDAndResetReplication(tctx *tcontext.Co
 	c.Lock()
 	defer c.Unlock()
 
+	return c.updateServerIDAndResetReplication(tctx, pos)
+}
+
+func (c *StreamerController) updateServerIDAndResetReplication(tctx *tcontext.Context, pos mysql.Position) error {
 	err := c.updateServerID(tctx)
 	if err != nil {
 		return err
