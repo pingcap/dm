@@ -46,7 +46,7 @@ func main() {
 	}
 
 	conf.Mode = config.ModeIncrement
-	conf.BinlogType = "remote"
+	conf.UseRelay = false
 
 	// 2. init logger
 	err = log.InitLogger(&log.Config{

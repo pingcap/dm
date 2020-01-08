@@ -484,7 +484,6 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.Name = c.Name
 		cfg.Mode = c.TaskMode
 		cfg.CaseSensitive = c.CaseSensitive
-		cfg.BinlogType = "local" // let's force syncer to replay local binlog.
 		cfg.MetaSchema = c.MetaSchema
 		cfg.RemoveMeta = c.RemoveMeta
 		cfg.DisableHeartbeat = c.DisableHeartbeat

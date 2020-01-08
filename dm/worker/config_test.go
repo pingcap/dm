@@ -127,6 +127,7 @@ func (t *testServer) TestConfigVerify(c *C) {
 			func() *Config {
 				cfg := newConfig()
 				cfg.RelayBinLogName = "mysql-binlog"
+				cfg.EnableRelay = true
 				return cfg
 			},
 			".*not valid.*",
@@ -134,6 +135,7 @@ func (t *testServer) TestConfigVerify(c *C) {
 		{
 			func() *Config {
 				cfg := newConfig()
+				cfg.EnableRelay = true
 				cfg.RelayBinlogGTID = "9afe121c-40c2-11e9-9ec7-0242ac110002:1-rtc"
 				return cfg
 			},
@@ -198,11 +200,11 @@ func (t *testServer) TestAdjustFlavor(c *C) {
 }
 
 func (t *testServer) TestAdjustServerID(c *C) {
-	var originGetAllServerIDFunc = getAllServerIDFunc
+	var originGetRandomServerIDFunc = getRandomServerIDFunc
 	defer func() {
-		getAllServerIDFunc = originGetAllServerIDFunc
+		getRandomServerIDFunc = originGetRandomServerIDFunc
 	}()
-	getAllServerIDFunc = getMockServerIDs
+	getRandomServerIDFunc = getMockRandomServerID
 
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml", "-relay-dir=./xx"}), IsNil)
@@ -215,9 +217,6 @@ func (t *testServer) TestAdjustServerID(c *C) {
 	c.Assert(cfg.ServerID, Not(Equals), 0)
 }
 
-func getMockServerIDs(ctx context.Context, db *sql.DB) (map[uint32]struct{}, error) {
-	return map[uint32]struct{}{
-		1: {},
-		2: {},
-	}, nil
+func getMockRandomServerID(ctx context.Context, db *sql.DB) (uint32, error) {
+	return 3, nil
 }

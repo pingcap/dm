@@ -74,7 +74,6 @@ type Worker struct {
 func NewWorker(cfg *Config) (w *Worker, err error) {
 	w = &Worker{
 		cfg:           cfg,
-		relayHolder:   NewRelayHolder(cfg),
 		tracer:        tracing.InitTracerHub(cfg.Tracer),
 		subTaskHolder: newSubTaskHolder(),
 		l:             log.With(zap.String("component", "worker controller")),
@@ -95,14 +94,17 @@ func NewWorker(cfg *Config) (w *Worker, err error) {
 		}
 	}(w)
 
-	// initial relay holder
-	purger, err := w.relayHolder.Init([]purger.PurgeInterceptor{
-		w,
-	})
-	if err != nil {
-		return nil, err
+	if cfg.EnableRelay {
+		// initial relay holder
+		w.relayHolder = NewRelayHolder(cfg)
+		purger, err1 := w.relayHolder.Init([]purger.PurgeInterceptor{
+			w,
+		})
+		if err1 != nil {
+			return nil, err1
+		}
+		w.relayPurger = purger
 	}
-	w.relayPurger = purger
 
 	// initial task status checker
 	if w.cfg.Checker.CheckEnable {
@@ -154,11 +156,13 @@ func (w *Worker) Start() {
 		return
 	}
 
-	// start relay
-	w.relayHolder.Start()
+	if w.cfg.EnableRelay {
+		// start relay
+		w.relayHolder.Start()
 
-	// start purger
-	w.relayPurger.Start()
+		// start purger
+		w.relayPurger.Start()
+	}
 
 	// start task status checker
 	if w.cfg.Checker.CheckEnable {
@@ -210,11 +214,15 @@ func (w *Worker) Close() {
 	// close all sub tasks
 	w.subTaskHolder.closeAllSubTasks()
 
-	// close relay
-	w.relayHolder.Close()
+	if w.relayHolder != nil {
+		// close relay
+		w.relayHolder.Close()
+	}
 
-	// close purger
-	w.relayPurger.Close()
+	if w.relayPurger != nil {
+		// close purger
+		w.relayPurger.Close()
+	}
 
 	// close task status checker
 	if w.cfg.Checker.CheckEnable {
@@ -517,7 +525,12 @@ func (w *Worker) SwitchRelayMaster(ctx context.Context, req *pb.SwitchRelayMaste
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	return w.relayHolder.SwitchMaster(ctx, req)
+	if w.relayHolder != nil {
+		return w.relayHolder.SwitchMaster(ctx, req)
+	}
+
+	w.l.Warn("enable-relay is false, ignore switch relay master")
+	return nil
 }
 
 // OperateRelay operates relay unit
@@ -526,7 +539,12 @@ func (w *Worker) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) 
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	return w.relayHolder.Operate(ctx, req)
+	if w.relayHolder != nil {
+		return w.relayHolder.Operate(ctx, req)
+	}
+
+	w.l.Warn("enable-relay is false, ignore operate relay")
+	return nil
 }
 
 // PurgeRelay purges relay log files
@@ -535,7 +553,12 @@ func (w *Worker) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) erro
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	return w.relayPurger.Do(ctx, req)
+	if w.relayPurger != nil {
+		return w.relayPurger.Do(ctx, req)
+	}
+
+	w.l.Warn("enable-relay is false, ignore purge relay")
+	return nil
 }
 
 // ForbidPurge implements PurgeInterceptor.ForbidPurge
@@ -569,6 +592,7 @@ func (w *Worker) QueryConfig(ctx context.Context) (*Config, error) {
 }
 
 // UpdateRelayConfig update subTask ans relay unit configure online
+// TODO: update the function name like `UpdateConfig`, and update the cmd in dmctl from `update-relay` to `update-worker-config`
 func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	w.Lock()
 	defer w.Unlock()
@@ -577,9 +601,11 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	stage := w.relayHolder.Stage()
-	if stage == pb.Stage_Finished || stage == pb.Stage_Stopped {
-		return terror.ErrWorkerRelayUnitStage.Generate(stage.String())
+	if w.relayHolder != nil {
+		stage := w.relayHolder.Stage()
+		if stage == pb.Stage_Finished || stage == pb.Stage_Stopped {
+			return terror.ErrWorkerRelayUnitStage.Generate(stage.String())
+		}
 	}
 
 	sts := w.subTaskHolder.getAllSubTasks()
@@ -608,7 +634,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		return terror.ErrWorkerCannotUpdateSourceID.Generate()
 	}
 
-	w.l.Info("update relay config", zap.Stringer("new config", newCfg))
+	w.l.Info("update config", zap.Stringer("new config", newCfg))
 	cloneCfg, _ := newCfg.DecryptPassword()
 
 	// Update SubTask configure
@@ -643,12 +669,14 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		}
 	}
 
-	w.l.Info("update relay config of subtasks successfully.")
+	w.l.Info("update config of subtasks successfully.")
 
 	// Update relay unit configure
-	err = w.relayHolder.Update(ctx, cloneCfg)
-	if err != nil {
-		return err
+	if w.relayHolder != nil {
+		err = w.relayHolder.Update(ctx, cloneCfg)
+		if err != nil {
+			return err
+		}
 	}
 
 	w.cfg.From = newCfg.From
@@ -667,7 +695,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 		return err
 	}
 
-	w.l.Info("update relay config successfully, save config to local file", zap.String("local file", w.cfg.ConfigFile))
+	w.l.Info("update config successfully, save config to local file", zap.String("local file", w.cfg.ConfigFile))
 
 	return nil
 }
@@ -676,6 +704,12 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 func (w *Worker) MigrateRelay(ctx context.Context, binlogName string, binlogPos uint32) error {
 	w.Lock()
 	defer w.Unlock()
+
+	if w.relayHolder == nil {
+		w.l.Warn("relay holder is nil, ignore migrate relay")
+		return nil
+	}
+
 	stage := w.relayHolder.Stage()
 	if stage == pb.Stage_Running {
 		err := w.relayHolder.Operate(ctx, &pb.OperateRelayRequest{Op: pb.RelayOp_PauseRelay})
@@ -700,6 +734,7 @@ func (w *Worker) copyConfigFromWorker(cfg *config.SubTaskConfig) {
 	cfg.ServerID = w.cfg.ServerID
 	cfg.RelayDir = w.cfg.RelayDir
 	cfg.EnableGTID = w.cfg.EnableGTID
+	cfg.UseRelay = w.cfg.EnableRelay
 
 	// we can remove this from SubTaskConfig later, because syncer will always read from relay
 	cfg.AutoFixGTID = w.cfg.AutoFixGTID
@@ -800,7 +835,7 @@ Loop:
 					break
 				}
 
-				if w.relayPurger.Purging() {
+				if w.relayPurger != nil && w.relayPurger.Purging() {
 					if retryCnt < maxRetryCount {
 						retryCnt++
 						w.l.Warn("relay log purger is purging, cannot start subtask, would try again later", zap.String("task", opLog.Task.Name))
