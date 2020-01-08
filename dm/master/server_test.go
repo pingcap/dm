@@ -1308,11 +1308,13 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
+	sources := make([]string, 0, len(server.cfg.Deploy))
 	workers := make([]string, 0, len(server.cfg.Deploy))
 	for _, deploy := range server.cfg.Deploy {
+		sources = append(sources, deploy.Source)
 		workers = append(workers, deploy.Worker)
 	}
-	server.taskSources = map[string][]string{"test": workers}
+	server.taskSources = map[string][]string{"test": sources}
 	var (
 		task     = "test"
 		schema   = "test_db"
@@ -1366,6 +1368,7 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
 	}
 
+	server.coordinator = createCoordinatorForTest(c, sources, workers, server.workerClients)
 	ctx, cancel := context.WithCancel(context.Background())
 	wg.Add(1)
 	go func() {
@@ -1511,11 +1514,19 @@ func (t *testMaster) TestOperateMysqlWorker(c *check.C) {
 	mysqlCfg.LoadFromFile("./dm-mysql.toml")
 	task, err := mysqlCfg.Toml()
 	c.Assert(err, check.IsNil)
+	// wait for coordinator to start
+	waitT := 0
+	for !s1.coordinator.IsStarted() && waitT < 6 {
+		time.Sleep(500 * time.Millisecond)
+		waitT++
+	}
+	c.Assert(s1.coordinator.IsStarted(), check.IsTrue)
+
 	req := &pb.MysqlWorkerRequest{Op: pb.WorkerOp_StartWorker, Config: task}
 	resp, err := s1.OperateMysqlWorker(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.Equals, false)
-	c.Assert(resp.Msg, check.Equals, "Create worker failed. no free worker could start mysql task")
+	c.Assert(resp.Msg, check.Matches, "[\\s\\S]*Acquire worker failed. no free worker could start mysql task[\\s\\S]*")
 	mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 	req.Op = pb.WorkerOp_UpdateConfig
 	mockWorkerClient.EXPECT().OperateMysqlWorker(
@@ -1542,6 +1553,7 @@ func (t *testMaster) TestOperateMysqlWorker(c *check.C) {
 		Msg:    "",
 	}, nil)
 	s1.coordinator.AddWorker("", "localhost:10099", newMockRPCClient(mockWorkerClient))
+	s1.coordinator.AddWorker("", "localhost:10099", nil)
 	resp, err = s1.OperateMysqlWorker(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.Equals, true)

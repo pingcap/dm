@@ -78,7 +78,7 @@ type Server struct {
 	coordinator   *coordinator.Coordinator
 	workerClients map[string]workerrpc.Client
 
-	// task-name -> worker-list
+	// task-name -> source-list
 	taskSources map[string][]string
 
 	// DDL lock keeper
