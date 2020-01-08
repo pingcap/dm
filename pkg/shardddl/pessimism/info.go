@@ -27,7 +27,7 @@ import (
 )
 
 // Info represents the shard DDL information.
-// This information should be persistent in etcd so can be retrieved after the DM-master leader changed.
+// This information should be persistent in etcd so can be retrieved after the DM-master leader restarted or changed.
 // NOTE: `Task` and `Source` are redundant in the etcd key path for convenient.
 type Info struct {
 	Task   string   `json:"task"`   // data migration task name
