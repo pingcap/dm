@@ -1563,14 +1563,19 @@ func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWork
 }
 
 // TODO: refine the call stack of this API, query worker configs that we needed only
-func (s *Server) getWorkerConfigs(ctx context.Context, workers []*config.MySQLInstance) map[string]config.DBConfig {
+func (s *Server) getWorkerConfigs(ctx context.Context, workers []*config.MySQLInstance) (map[string]config.DBConfig, error) {
 	cfgs := make(map[string]config.DBConfig)
 	for _, w := range workers {
 		if cfg := s.coordinator.GetConfigBySourceID(w.SourceID); cfg != nil {
+			// check the password
+			_, err := cfg.DecryptPassword()
+			if err != nil {
+				return nil, err
+			}
 			cfgs[w.SourceID] = cfg.From
 		}
 	}
-	return cfgs
+	return cfgs, nil
 }
 
 // MigrateWorkerRelay migrates dm-woker relay unit
@@ -1706,7 +1711,7 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 		return nil, nil, terror.WithClass(err, terror.ClassDMMaster)
 	}
 
-	sourceCfgs := s.getWorkerConfigs(ctx, cfg.MySQLInstances)
+	sourceCfgs, err := s.getWorkerConfigs(ctx, cfg.MySQLInstances)
 	if err != nil {
 		return nil, nil, err
 	}

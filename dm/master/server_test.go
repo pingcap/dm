@@ -169,7 +169,7 @@ func extractWorkerSource(deployMapper []*DeployMapper) ([]string, []string) {
 	workers := make([]string, 0, len(deployMapper))
 	for _, deploy := range deployMapper {
 		sources = append(sources, deploy.Source)
-		workers = append(sources, deploy.Worker)
+		workers = append(workers, deploy.Worker)
 	}
 	return sources, workers
 }
@@ -186,8 +186,6 @@ func testDefaultMasterServer(c *check.C) *Server {
 }
 
 func testGenSubTaskConfig(c *check.C, server *Server, ctrl *gomock.Controller) map[string]*config.SubTaskConfig {
-	// generate subtask configs, need to mock query worker configs RPC
-	testMockWorkerConfig(c, server, ctrl, "", true)
 	workerCfg := make(map[string]*config.SubTaskConfig)
 	_, stCfgs, err := server.generateSubTask(context.Background(), taskConfig)
 	c.Assert(err, check.IsNil)
@@ -199,7 +197,7 @@ func testGenSubTaskConfig(c *check.C, server *Server, ctrl *gomock.Controller) m
 	return workerCfg
 }
 
-func testMockCoordinator(c *check.C, sources, workers []string, workerClients map[string]workerrpc.Client) *coordinator.Coordinator {
+func testMockCoordinator(c *check.C, sources, workers []string, password string, workerClients map[string]workerrpc.Client) *coordinator.Coordinator {
 	coordinator2 := coordinator.NewCoordinator()
 	err := coordinator2.Start(context.Background(), testEtcdCluster.RandClient())
 	c.Assert(err, check.IsNil)
@@ -209,7 +207,7 @@ func testMockCoordinator(c *check.C, sources, workers []string, workerClients ma
 		// set this worker's status to workerFree
 		coordinator2.AddWorker("worker"+string(i), workers[i], nil)
 		// operate mysql config on this worker
-		cfg := &config.MysqlConfig{SourceID: sources[i]}
+		cfg := &config.MysqlConfig{SourceID: sources[i], From: config.DBConfig{Password: password}}
 		w, err := coordinator2.AcquireWorkerForSource(cfg.SourceID)
 		c.Assert(err, check.IsNil)
 		coordinator2.HandleStartedWorker(w, cfg, true)
@@ -217,52 +215,9 @@ func testMockCoordinator(c *check.C, sources, workers []string, workerClients ma
 	return coordinator2
 }
 
-func testMockWorkerConfig(c *check.C, server *Server, ctrl *gomock.Controller, password string, result bool) {
-	// mock QueryWorkerConfig API to be used in s.getWorkerConfigs
-	for idx, deploy := range server.cfg.Deploy {
-		dbCfg := &config.DBConfig{
-			Host:     "127.0.0.1",
-			Port:     3306 + idx,
-			User:     "root",
-			Password: password,
-		}
-		rawConfig, err := dbCfg.Toml()
-		c.Assert(err, check.IsNil)
-		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
-		mockWorkerClient.EXPECT().QueryWorkerConfig(
-			gomock.Any(),
-			&pb.QueryWorkerConfigRequest{},
-		).Return(&pb.QueryWorkerConfigResponse{
-			Result:   result,
-			SourceID: deploy.Source,
-			Content:  rawConfig,
-		}, nil)
-		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
-	}
-}
-
 func testMockStartTask(c *check.C, server *Server, ctrl *gomock.Controller, workerCfg map[string]*config.SubTaskConfig, rpcSuccess bool) {
-	for idx, deploy := range server.cfg.Deploy {
+	for _, deploy := range server.cfg.Deploy {
 		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
-
-		dbCfg := &config.DBConfig{
-			Host:     "127.0.0.1",
-			Port:     3306 + idx,
-			User:     "root",
-			Password: "",
-		}
-		rawConfig, err := dbCfg.Toml()
-		c.Assert(err, check.IsNil)
-
-		// mock query worker config
-		mockWorkerClient.EXPECT().QueryWorkerConfig(
-			gomock.Any(),
-			&pb.QueryWorkerConfigRequest{},
-		).Return(&pb.QueryWorkerConfigResponse{
-			Result:   true,
-			SourceID: deploy.Source,
-			Content:  rawConfig,
-		}, nil)
 
 		stCfg, ok := workerCfg[deploy.Worker]
 		c.Assert(ok, check.IsTrue)
@@ -310,7 +265,7 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 		).Return(&pb.QueryStatusResponse{Result: true}, nil)
 		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
 	}
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err := server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
@@ -323,7 +278,7 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 		).Return(&pb.QueryStatusResponse{Result: true}, nil)
 		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
 	}
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{
 		Sources: workers,
 	})
@@ -420,9 +375,7 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 	server := testDefaultMasterServer(c)
 	sources, workers := extractWorkerSource(server.cfg.Deploy)
 
-	// check task successfully
-	testMockWorkerConfig(c, server, ctrl, "", true)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err := server.CheckTask(context.Background(), &pb.CheckTaskRequest{
 		Task: taskConfig,
 	})
@@ -436,18 +389,8 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
 
-	// simulate invalid password returned from dm-workers, so cfg.SubTaskConfigs will fail
-	testMockWorkerConfig(c, server, ctrl, "invalid-encrypt-password", true)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
-	resp, err = server.CheckTask(context.Background(), &pb.CheckTaskRequest{
-		Task: taskConfig,
-	})
-	c.Assert(err, check.IsNil)
-	c.Assert(resp.Result, check.IsFalse)
-
-	// test query worker config failed
-	testMockWorkerConfig(c, server, ctrl, "", false)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	// simulate invalid password returned from coordinator, so cfg.SubTaskConfigs will fail
+	server.coordinator = testMockCoordinator(c, sources, workers, "invalid-encrypt-password", server.workerClients)
 	resp, err = server.CheckTask(context.Background(), &pb.CheckTaskRequest{
 		Task: taskConfig,
 	})
@@ -473,7 +416,7 @@ func (t *testMaster) TestStartTask(c *check.C) {
 
 	// test start task successfully
 	testMockStartTask(c, server, ctrl, workerCfg, true)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
 		Task:    taskConfig,
 		Sources: sources,
@@ -481,10 +424,9 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 
-	// check start-task with an invalid worker
+	// check start-task with an invalid source
 	invalidSource := "invalid-source"
-	testMockWorkerConfig(c, server, ctrl, "", true)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
 		Task:    taskConfig,
 		Sources: []string{invalidSource},
@@ -497,7 +439,7 @@ func (t *testMaster) TestStartTask(c *check.C) {
 
 	// test start sub task request to worker returns error
 	testMockStartTask(c, server, ctrl, workerCfg, false)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
 		Task: taskConfig,
 	})
@@ -517,8 +459,7 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	defer func() {
 		checker.CheckSyncConfigFunc = bakCheckSyncConfigFunc
 	}()
-	testMockWorkerConfig(c, server, ctrl, "", true)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
 		Task:    taskConfig,
 		Sources: workers,
@@ -543,7 +484,7 @@ func (t *testMaster) TestQueryError(c *check.C) {
 		).Return(&pb.QueryErrorResponse{Result: true}, nil)
 		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
 	}
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err := server.QueryError(context.Background(), &pb.QueryErrorListRequest{})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
@@ -557,7 +498,7 @@ func (t *testMaster) TestQueryError(c *check.C) {
 		).Return(&pb.QueryErrorResponse{Result: true}, nil)
 		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
 	}
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.QueryError(context.Background(), &pb.QueryErrorListRequest{
 		Sources: sources,
 	})
@@ -633,7 +574,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 
 		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
 	}
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
 		Op:   pauseOp,
 		Name: taskName,
@@ -659,7 +600,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 		).Return(nil, errors.New(errGRPCFailed))
 		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
 	}
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
 		Op:      pb.TaskOp_Pause,
 		Name:    taskName,
@@ -687,7 +628,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	}, nil)
 
 	server.workerClients[workers[0]] = newMockRPCClient(mockWorkerClient)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
 		Op:      pb.TaskOp_Stop,
 		Name:    taskName,
@@ -717,7 +658,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 
 		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
 	}
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
 		Op:   pb.TaskOp_Stop,
 		Name: taskName,
@@ -749,27 +690,8 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 	workerCfg := testGenSubTaskConfig(c, server, ctrl)
 
 	mockUpdateTask := func(rpcSuccess bool) {
-		for idx, deploy := range server.cfg.Deploy {
+		for _, deploy := range server.cfg.Deploy {
 			mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
-
-			dbCfg := &config.DBConfig{
-				Host:     "127.0.0.1",
-				Port:     3306 + idx,
-				User:     "root",
-				Password: "",
-			}
-			rawConfig, err2 := dbCfg.Toml()
-			c.Assert(err2, check.IsNil)
-
-			// mock query worker config
-			mockWorkerClient.EXPECT().QueryWorkerConfig(
-				gomock.Any(),
-				&pb.QueryWorkerConfigRequest{},
-			).Return(&pb.QueryWorkerConfigResponse{
-				Result:   true,
-				SourceID: deploy.Source,
-				Content:  rawConfig,
-			}, nil)
 
 			stCfg, ok := workerCfg[deploy.Worker]
 			c.Assert(ok, check.IsTrue)
@@ -803,7 +725,7 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 
 	// test update task successfully
 	mockUpdateTask(true)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.UpdateTask(context.Background(), &pb.UpdateTaskRequest{
 		Task:    taskConfig,
 		Sources: workers,
@@ -811,23 +733,22 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 
-	// check update-task with an invalid worker
-	invalidWorker := "invalid-worker"
-	testMockWorkerConfig(c, server, ctrl, "", true)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	// check update-task with an invalid source
+	invalidSource := "invalid-source"
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.UpdateTask(context.Background(), &pb.UpdateTaskRequest{
 		Task:    taskConfig,
-		Sources: []string{invalidWorker},
+		Sources: []string{invalidSource},
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 	c.Assert(resp.Workers, check.HasLen, 1)
 	c.Assert(resp.Workers[0].Result, check.IsFalse)
-	c.Assert(resp.Workers[0].Worker, check.Equals, invalidWorker)
+	c.Assert(resp.Workers[0].Worker, check.Equals, invalidSource)
 
 	// test update sub task request to worker returns error
 	mockUpdateTask(false)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.UpdateTask(context.Background(), &pb.UpdateTaskRequest{
 		Task: taskConfig,
 	})
@@ -915,7 +836,7 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 	traceGID := fmt.Sprintf("resolveDDLLock.%d", traceGIDIdx)
 	traceGIDIdx++
 	mockResolveDDLLock(task, lockID, workers[0], traceGID, false, false)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err := server.UnlockDDLLock(context.Background(), &pb.UnlockDDLLockRequest{
 		ID:           lockID,
 		ReplaceOwner: workers[0],
@@ -929,7 +850,7 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 	traceGID = fmt.Sprintf("resolveDDLLock.%d", traceGIDIdx)
 	traceGIDIdx++
 	mockResolveDDLLock(task, lockID, workers[0], traceGID, true, false)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.UnlockDDLLock(context.Background(), &pb.UnlockDDLLockRequest{
 		ID:           lockID,
 		ReplaceOwner: workers[0],
@@ -942,7 +863,7 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 	traceGID = fmt.Sprintf("resolveDDLLock.%d", traceGIDIdx)
 	traceGIDIdx++
 	mockResolveDDLLock(task, lockID, workers[0], traceGID, true, false)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.UnlockDDLLock(context.Background(), &pb.UnlockDDLLockRequest{
 		ID:           lockID,
 		ReplaceOwner: workers[0],
@@ -958,7 +879,7 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 	traceGID = fmt.Sprintf("resolveDDLLock.%d", traceGIDIdx)
 	traceGIDIdx++
 	mockResolveDDLLock(task, lockID, workers[0], traceGID, false, true)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.UnlockDDLLock(context.Background(), &pb.UnlockDDLLockRequest{
 		ID:           lockID,
 		ReplaceOwner: workers[0],
@@ -1031,7 +952,8 @@ func (t *testMaster) TestBreakWorkerDDLLock(c *check.C) {
 
 	// test BreakWorkerDDLLock successfully
 	mockBreakDDLLock(true)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	c.Assert(len(sources), check.Equals, len(workers))
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 
 	resp, err = server.BreakWorkerDDLLock(context.Background(), &pb.BreakWorkerDDLLockRequest{
 		Task:         task,
@@ -1048,7 +970,7 @@ func (t *testMaster) TestBreakWorkerDDLLock(c *check.C) {
 
 	// test BreakWorkerDDLLock with error response
 	mockBreakDDLLock(false)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 
 	resp, err = server.BreakWorkerDDLLock(context.Background(), &pb.BreakWorkerDDLLockRequest{
 		Task:         task,
@@ -1122,7 +1044,7 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 
 	// test PurgeWorkerRelay successfully
 	mockPurgeRelay(true)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.PurgeWorkerRelay(context.Background(), &pb.PurgeWorkerRelayRequest{
 		Sources:  workers,
 		Time:     now,
@@ -1137,7 +1059,7 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 
 	// test PurgeWorkerRelay with error response
 	mockPurgeRelay(false)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.PurgeWorkerRelay(context.Background(), &pb.PurgeWorkerRelayRequest{
 		Sources:  workers,
 		Time:     now,
@@ -1200,7 +1122,7 @@ func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
 
 	// test SwitchWorkerRelayMaster successfully
 	mockSwitchRelayMaster(true)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.SwitchWorkerRelayMaster(context.Background(), &pb.SwitchWorkerRelayMasterRequest{
 		Sources: workers,
 	})
@@ -1213,7 +1135,7 @@ func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
 
 	// test SwitchWorkerRelayMaster with error response
 	mockSwitchRelayMaster(false)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.SwitchWorkerRelayMaster(context.Background(), &pb.SwitchWorkerRelayMasterRequest{
 		Sources: workers,
 	})
@@ -1276,7 +1198,7 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 
 	// test OperateWorkerRelayTask successfully
 	mockOperateRelay(true)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.OperateWorkerRelayTask(context.Background(), &pb.OperateWorkerRelayRequest{
 		Sources: workers,
 		Op:      pb.RelayOp_PauseRelay,
@@ -1291,7 +1213,7 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 
 	// test OperateWorkerRelayTask with error response
 	mockOperateRelay(false)
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.OperateWorkerRelayTask(context.Background(), &pb.OperateWorkerRelayRequest{
 		Sources: workers,
 		Op:      pb.RelayOp_PauseRelay,
@@ -1365,7 +1287,7 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
 	}
 
-	server.coordinator = testMockCoordinator(c, sources, workers, server.workerClients)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	ctx, cancel := context.WithCancel(context.Background())
 	wg.Add(1)
 	go func() {
