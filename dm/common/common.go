@@ -36,6 +36,10 @@ var (
 	// UpstreamSubTaskKeyAdapter used to store SubTask which are subscribing data from MySQL source.
 	// k/v: Encode(source-id, task-name) -> SubTaskConfig
 	UpstreamSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/upstream/subtask/")
+
+	// ShardDDLPessimismInfoKeyAdapter used to store shard DDL info in pessimistic model.
+	// k/v: Encode(task-name, source-id) -> shard DDL info
+	ShardDDLPessimismInfoKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-pessimism/info/")
 )
 
 // IsErrNetClosing checks whether is an ErrNetClosing error
