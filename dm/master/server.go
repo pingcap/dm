@@ -1677,20 +1677,19 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 	} else {
 		w := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
 		if w == nil {
-			if !s.coordinator.HandleStoppedWorker(nil, cfg, false) {
-				return &pb.MysqlWorkerResponse{
-					Result: false,
-					Msg:    "Stop worker failed. worker has not been started",
-				}, nil
-			}
-		} else {
-			if resp, err = w.OperateMysqlWorker(ctx, req, s.cfg.RPCTimeout); err != nil {
-				return &pb.MysqlWorkerResponse{
-					Result: false,
-					Msg:    errors.ErrorStack(err),
-				}, nil
-			}
-			s.coordinator.HandleStoppedWorker(w, cfg, resp.Result)
+			return &pb.MysqlWorkerResponse{
+				Result: false,
+				Msg:    "Stop Mysql-worker failed. worker has not been started",
+			}, nil
+		}
+		if resp, err = w.OperateMysqlWorker(ctx, req, s.cfg.RPCTimeout); err != nil {
+			return &pb.MysqlWorkerResponse{
+				Result: false,
+				Msg:    errors.ErrorStack(err),
+			}, nil
+		}
+		if resp.Result {
+			s.coordinator.HandleStoppedWorker(w, cfg)
 		}
 	}
 	return &pb.MysqlWorkerResponse{

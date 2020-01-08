@@ -194,23 +194,13 @@ func (c *Coordinator) HandleStartedWorker(w *Worker, cfg *config.MysqlConfig, su
 }
 
 // HandleStoppedWorker change worker status when mysql task stopped
-func (c *Coordinator) HandleStoppedWorker(w *Worker, cfg *config.MysqlConfig, ret bool) bool {
+func (c *Coordinator) HandleStoppedWorker(w *Worker, cfg *config.MysqlConfig) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if w == nil {
-		if _, ok := c.taskConfigs[cfg.SourceID]; !ok {
-			return false
-		}
-		// This mysqltask is waiting to be scheduled. So we just remove it from wait queue.
-		delete(c.taskConfigs, cfg.SourceID)
-	} else {
-		if ret {
-			delete(c.taskConfigs, cfg.SourceID)
-			delete(c.upstreams, cfg.SourceID)
-			delete(c.workerToConfigs, w.Address())
-			w.SetStatus(WorkerFree)
-		}
-	}
+	delete(c.taskConfigs, cfg.SourceID)
+	delete(c.upstreams, cfg.SourceID)
+	delete(c.workerToConfigs, w.Address())
+	w.SetStatus(WorkerFree)
 	return true
 }
 
