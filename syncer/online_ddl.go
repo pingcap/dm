@@ -176,6 +176,10 @@ func (s *OnlineDDLStorage) Get(ghostSchema, ghostTable string) *GhostDDLInfo {
 		return nil
 	}
 
+	if mSchema == nil || mSchema[ghostTable] == nil {
+		return nil
+	}
+
 	clone := new(GhostDDLInfo)
 	*clone = *mSchema[ghostTable]
 

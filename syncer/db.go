@@ -15,6 +15,7 @@ package syncer
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 
 	"github.com/pingcap/dm/dm/config"
@@ -195,9 +196,9 @@ func (conn *DBConn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError fun
 
 	failpoint.Inject("ExecuteSQLWithIgnoreFailed", func(val failpoint.Value) {
 		queryPattern := val.(string)
-		if len(queries) == 1 && strings.Contains(queries, queryPattern) {
+		if len(queries) == 1 && strings.Contains(queries[0], queryPattern) {
 			tctx.L().Warn("executeSQLWithIgnore failed", zap.String("failpoint", "ExecuteSQLWithIgnoreFailed"))
-			return 0, terror.ErrDBUnExpect.Generate("invalid connection")
+			failpoint.Return(0, terror.ErrDBUnExpect.Generate("invalid connection"))
 		}
 	})
 

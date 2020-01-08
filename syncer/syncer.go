@@ -788,8 +788,8 @@ func (s *Syncer) resetShardingGroup(schema, table string) {
 // we may need to refactor the concurrency model to make the work-flow more clearer later
 func (s *Syncer) flushCheckPoints() error {
 	if s.execErrorDetected.Get() {
-		s.tctx.L().Error("error detected when executing SQL job, skip flush checkpoint", zap.Stringer("checkpoint", s.checkpoint))
-		return terror.ErrCodeSkipFlushCheckpointBecauseOfErr.Generate(s.checkpoint)
+		s.tctx.L().Warn("error detected when executing SQL job, skip flush checkpoint", zap.Stringer("checkpoint", s.checkpoint))
+		return nil
 	}
 
 	var (
@@ -1053,10 +1053,6 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		if err1 := recover(); err1 != nil {
 			s.tctx.L().Error("panic log", zap.Reflect("error message", err1), zap.Stack("statck"))
 			err = terror.ErrSyncerUnitPanic.Generate(err1)
-		}
-		// flush the jobs channels, but if error occurred, we should not flush the checkpoints
-		if err1 := s.flushJobs(); err1 != nil {
-			s.tctx.L().Error("fail to finish all jobs when binlog replication exits", log.ShortError(err1))
 		}
 	}()
 
@@ -1683,6 +1679,13 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		if err != nil {
 			return err
 		}
+
+		/*
+			if s.execErrorDetected.Get() {
+				return
+			}
+		*/
+
 		s.tctx.L().Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("position", ec.currentPos))
 
 		for _, td := range needTrackDDLs {
