@@ -30,6 +30,8 @@ const (
 	defaultBaseServerID = math.MaxUint32 / 10
 )
 
+var getAllServerIDFunc = utils.GetAllServerID
+
 // PurgeConfig is the configuration for Purger
 type PurgeConfig struct {
 	Interval    int64 `toml:"interval" json:"interval"`         // check whether need to purge at this @Interval (seconds)
@@ -245,7 +247,7 @@ func (c *MysqlConfig) AdjustServerID(ctx context.Context, db *sql.DB) error {
 		return nil
 	}
 
-	serverIDs, err := utils.GetAllServerID(ctx, db)
+	serverIDs, err := getAllServerIDFunc(ctx, db)
 	if ctx.Err() != nil {
 		err = terror.Annotatef(err, "time cost to get server-id info exceeds %s", dbGetTimeout)
 	}
