@@ -26,10 +26,12 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 )
 
+const mysqlTomlPath = "../worker/dm-mysql.toml"
+
 func (t *testConfig) TestConfig(c *C) {
 	cfg := &MysqlConfig{}
 
-	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
+	c.Assert(cfg.LoadFromFile(mysqlTomlPath), IsNil)
 	cfg.RelayDir = "./xx"
 	c.Assert(cfg.RelayDir, Equals, "./xx")
 	c.Assert(cfg.ServerID, Equals, uint32(101))
@@ -91,7 +93,7 @@ aaa = "xxx"
 func (t *testConfig) TestConfigVerify(c *C) {
 	newConfig := func() *MysqlConfig {
 		cfg := &MysqlConfig{}
-		c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
+		c.Assert(cfg.LoadFromFile(mysqlTomlPath), IsNil)
 		cfg.RelayDir = "./xx"
 		return cfg
 	}
@@ -181,7 +183,7 @@ func subtestFlavor(c *C, cfg *MysqlConfig, sqlInfo, expectedFlavor, expectedErro
 
 func (t *testConfig) TestAdjustFlavor(c *C) {
 	cfg := &MysqlConfig{}
-	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
+	c.Assert(cfg.LoadFromFile(mysqlTomlPath), IsNil)
 	cfg.RelayDir = "./xx"
 
 	cfg.Flavor = "mariadb"
@@ -204,7 +206,7 @@ func (t *testConfig) TestAdjustServerID(c *C) {
 	getAllServerIDFunc = getMockServerIDs
 
 	cfg := &MysqlConfig{}
-	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
+	c.Assert(cfg.LoadFromFile(mysqlTomlPath), IsNil)
 	cfg.RelayDir = "./xx"
 
 	cfg.AdjustServerID(context.Background(), nil)
