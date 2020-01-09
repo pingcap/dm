@@ -167,6 +167,13 @@ func (c *Coordinator) Stop() {
 	log.L().Info("coordinator is stoped")
 }
 
+// RemoveWorker removes the dm-worker to the coordinate.
+func (c *Coordinator) RemoveWorker(address string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.workers, address)
+}
+
 // AddWorker add the dm-worker to the coordinate.
 func (c *Coordinator) AddWorker(name string, address string, cli workerrpc.Client) {
 	c.mu.Lock()
@@ -254,6 +261,13 @@ func (c *Coordinator) GetWorkerBySourceID(source string) *Worker {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.upstreams[source]
+}
+
+// GetWorkerByAddress gets the worker through addr.
+func (c *Coordinator) GetWorkerByAddress(addr string) *Worker {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.workers[addr]
 }
 
 // GetConfigBySourceID gets db config through source id.
