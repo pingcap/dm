@@ -1677,14 +1677,14 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			needHandleDDLs = appliedSQLs // maybe nil
 		}
 
-		// when add ddl job, will execute ddl and then flush checkpoint.
-		// if execute ddl failed, will flush checkpoint failed, and get error from `addJobFunc`
 		job := newDDLJob(nil, needHandleDDLs, *ec.lastPos, *ec.currentPos, nil, nil, *ec.traceID)
 		err = s.addJobFunc(job)
 		if err != nil {
 			return err
 		}
 
+		// when add ddl job, will execute ddl and then flush checkpoint.
+		// if execute ddl failed, the execErrorDetected will be true.
 		if s.execErrorDetected.Get() {
 			return terror.ErrSyncerUnitHandleDDLFailed.Generate()
 		}
