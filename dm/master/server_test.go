@@ -638,7 +638,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	c.Assert(resp.Workers, check.HasLen, 1)
 	c.Assert(resp.Workers[0].Result, check.IsTrue)
 	c.Assert(server.taskSources, check.HasKey, taskName)
-	c.Assert(server.taskSources[taskName], check.DeepEquals, []string{workers[1]})
+	c.Assert(server.taskSources[taskName], check.DeepEquals, []string{sources[1]})
 
 	// test stop task successfully, remove all workers
 	server.taskSources[taskName] = sources
