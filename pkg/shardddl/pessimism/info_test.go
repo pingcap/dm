@@ -120,15 +120,19 @@ func (t *testInfo) TestEtcd(c *C) {
 	c.Assert(len(wch), Equals, 1)
 	c.Assert(<-wch, DeepEquals, i21)
 
+	// delete i12.
+	deleteOp := deleteInfoOp(i12)
+	_, err = etcdTestCli.Txn(context.Background()).Then(deleteOp).Commit()
+	c.Assert(err, IsNil)
+
 	// get again.
 	ifm, err = GetAllInfo(etcdTestCli)
 	c.Assert(err, IsNil)
 	c.Assert(ifm, HasLen, 2)
 	c.Assert(ifm, HasKey, task1)
 	c.Assert(ifm, HasKey, task2)
-	c.Assert(ifm[task1], HasLen, 2)
+	c.Assert(ifm[task1], HasLen, 1)
 	c.Assert(ifm[task1][source1], DeepEquals, i11)
-	c.Assert(ifm[task1][source2], DeepEquals, i12)
 	c.Assert(ifm[task2], HasLen, 1)
 	c.Assert(ifm[task2][source1], DeepEquals, i21)
 }

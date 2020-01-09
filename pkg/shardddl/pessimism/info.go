@@ -72,6 +72,7 @@ func infoFromJSON(s string) (i Info, err error) {
 //   Then we need to ensure re-PUT is safe:
 //     1. DM-master can construct the lock and do the coordination correctly.
 //     2. DM-worker can re-PUT and comply with the coordination correctly.
+// This function should often be called by DM-worker.
 func PutInfo(cli *clientv3.Client, info Info) (int64, error) {
 	value, err := info.toJSON()
 	if err != nil {
@@ -91,6 +92,7 @@ func PutInfo(cli *clientv3.Client, info Info) (int64, error) {
 
 // GetAllInfo gets all shard DDL info in etcd currently.
 // k/k/v: task-name -> source-ID -> DDL info.
+// This function should often be called by DM-master.
 func GetAllInfo(cli *clientv3.Client) (map[string]map[string]Info, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
@@ -117,6 +119,7 @@ func GetAllInfo(cli *clientv3.Client) (map[string]map[string]Info, error) {
 }
 
 // WatchInfoPut watches PUT operations for info.
+// This function should often be called by DM-master.
 func WatchInfoPut(ctx context.Context, cli *clientv3.Client, revision int64, outCh chan<- Info) {
 	ch := cli.Watch(ctx, common.ShardDDLPessimismInfoKeyAdapter.Path(),
 		clientv3.WithPrefix(), clientv3.WithRev(revision))
@@ -145,4 +148,10 @@ func WatchInfoPut(ctx context.Context, cli *clientv3.Client, revision int64, out
 			}
 		}
 	}
+}
+
+// deleteInfoOp returns a DELETE etcd operation for info.
+// This operation should often be sent by DM-worker.
+func deleteInfoOp(info Info) clientv3.Op {
+	return clientv3.OpDelete(common.ShardDDLPessimismInfoKeyAdapter.Encode(info.Task, info.Source))
 }
