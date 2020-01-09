@@ -399,7 +399,14 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 		Result: false,
 	}
 
-	sources := s.getTaskResources(req.Name)
+	sources := req.Sources
+	if len(req.Sources) == 0 {
+		sources = s.getTaskResources(req.Name)
+	}
+	if len(sources) == 0 {
+		resp.Msg = fmt.Sprintf("task %s has no source or not exist, please check the task name and status", req.Name)
+		return resp, nil
+	}
 	workerRespCh := make(chan *pb.OperateSubTaskResponse, len(sources))
 
 	handleErr := func(err error, worker string) {

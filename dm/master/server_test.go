@@ -280,7 +280,7 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 	}
 	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{
-		Sources: workers,
+		Sources: sources,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
@@ -312,10 +312,7 @@ func (t *testMaster) TestShowDDLLocks(c *check.C) {
 	c.Assert(resp.Result, check.IsTrue)
 	c.Assert(resp.Locks, check.HasLen, 0)
 
-	workers := make([]string, 0, len(server.cfg.DeployMap))
-	for _, workerAddr := range server.cfg.DeployMap {
-		workers = append(workers, workerAddr)
-	}
+	sources, workers := extractWorkerSource(server.cfg.Deploy)
 
 	// prepare ddl lock keeper, mainly use code from ddl_lock_test.go
 	sqls := []string{"stmt"}
@@ -346,7 +343,7 @@ func (t *testMaster) TestShowDDLLocks(c *check.C) {
 	// test query with task name
 	resp, err = server.ShowDDLLocks(context.Background(), &pb.ShowDDLLocksRequest{
 		Task:    "testA",
-		Sources: workers,
+		Sources: sources,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
@@ -355,7 +352,7 @@ func (t *testMaster) TestShowDDLLocks(c *check.C) {
 
 	// test specify a mismatch worker
 	resp, err = server.ShowDDLLocks(context.Background(), &pb.ShowDDLLocksRequest{
-		Sources: []string{"invalid-worker"},
+		Sources: []string{"invalid-source"},
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
@@ -462,7 +459,7 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
 		Task:    taskConfig,
-		Sources: workers,
+		Sources: sources,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
@@ -542,10 +539,10 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
-	c.Assert(resp.Msg, check.Equals, fmt.Sprintf("task %s has no workers or not exist, can try `refresh-worker-tasks` cmd first", taskName))
+	c.Assert(resp.Msg, check.Equals, fmt.Sprintf("task %s has no source or not exist, please check the task name and status", taskName))
 
 	// test operate-task while worker clients not found
-	server.taskSources[taskName] = workers
+	server.taskSources[taskName] = sources
 	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
 		Op:   pauseOp,
 		Name: taskName,
@@ -589,6 +586,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	}
 
 	// test operate sub task to worker returns error
+	server.taskSources[taskName] = sources
 	for _, deploy := range server.cfg.Deploy {
 		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 		mockWorkerClient.EXPECT().OperateSubTask(
@@ -604,7 +602,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
 		Op:      pb.TaskOp_Pause,
 		Name:    taskName,
-		Sources: workers,
+		Sources: sources,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
@@ -615,6 +613,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	}
 
 	// test stop task successfully, remove partial workers
+	server.taskSources[taskName] = sources
 	mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 	mockWorkerClient.EXPECT().OperateSubTask(
 		gomock.Any(),
@@ -632,7 +631,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
 		Op:      pb.TaskOp_Stop,
 		Name:    taskName,
-		Sources: []string{workers[0]},
+		Sources: []string{sources[0]},
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
@@ -642,7 +641,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	c.Assert(server.taskSources[taskName], check.DeepEquals, []string{workers[1]})
 
 	// test stop task successfully, remove all workers
-	server.taskSources[taskName] = workers
+	server.taskSources[taskName] = sources
 	for _, deploy := range server.cfg.Deploy {
 		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 		mockWorkerClient.EXPECT().OperateSubTask(
@@ -728,7 +727,7 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.UpdateTask(context.Background(), &pb.UpdateTaskRequest{
 		Task:    taskConfig,
-		Sources: workers,
+		Sources: sources,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
@@ -839,7 +838,7 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err := server.UnlockDDLLock(context.Background(), &pb.UnlockDDLLockRequest{
 		ID:           lockID,
-		ReplaceOwner: workers[0],
+		ReplaceOwner: sources[0],
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
@@ -853,7 +852,7 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.UnlockDDLLock(context.Background(), &pb.UnlockDDLLockRequest{
 		ID:           lockID,
-		ReplaceOwner: workers[0],
+		ReplaceOwner: sources[0],
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
@@ -866,7 +865,7 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.UnlockDDLLock(context.Background(), &pb.UnlockDDLLockRequest{
 		ID:           lockID,
-		ReplaceOwner: workers[0],
+		ReplaceOwner: sources[0],
 		ForceRemove:  true,
 	})
 	c.Assert(err, check.IsNil)
@@ -882,7 +881,7 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.UnlockDDLLock(context.Background(), &pb.UnlockDDLLockRequest{
 		ID:           lockID,
-		ReplaceOwner: workers[0],
+		ReplaceOwner: sources[0],
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
@@ -938,7 +937,7 @@ func (t *testMaster) TestBreakWorkerDDLLock(c *check.C) {
 	// test BreakWorkerDDLLock with invalid dm-worker[s]
 	resp, err := server.BreakWorkerDDLLock(context.Background(), &pb.BreakWorkerDDLLockRequest{
 		Task:         task,
-		Sources:      []string{"invalid-worker1", "invalid-worker2"},
+		Sources:      []string{"invalid-source1", "invalid-source2"},
 		RemoveLockID: lockID,
 		SkipDDL:      true,
 	})
@@ -1030,7 +1029,7 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 
 	// test PurgeWorkerRelay with invalid dm-worker[s]
 	resp, err := server.PurgeWorkerRelay(context.Background(), &pb.PurgeWorkerRelayRequest{
-		Sources:  []string{"invalid-worker1", "invalid-worker2"},
+		Sources:  []string{"invalid-source1", "invalid-source2"},
 		Time:     now,
 		Filename: filename,
 	})
@@ -1046,7 +1045,7 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 	mockPurgeRelay(true)
 	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.PurgeWorkerRelay(context.Background(), &pb.PurgeWorkerRelayRequest{
-		Sources:  workers,
+		Sources:  sources,
 		Time:     now,
 		Filename: filename,
 	})
@@ -1061,7 +1060,7 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 	mockPurgeRelay(false)
 	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.PurgeWorkerRelay(context.Background(), &pb.PurgeWorkerRelayRequest{
-		Sources:  workers,
+		Sources:  sources,
 		Time:     now,
 		Filename: filename,
 	})
@@ -1110,7 +1109,7 @@ func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
 
 	// test SwitchWorkerRelayMaster with invalid dm-worker[s]
 	resp, err := server.SwitchWorkerRelayMaster(context.Background(), &pb.SwitchWorkerRelayMasterRequest{
-		Sources: []string{"invalid-worker1", "invalid-worker2"},
+		Sources: []string{"invalid-source1", "invalid-source2"},
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
@@ -1124,7 +1123,7 @@ func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
 	mockSwitchRelayMaster(true)
 	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.SwitchWorkerRelayMaster(context.Background(), &pb.SwitchWorkerRelayMasterRequest{
-		Sources: workers,
+		Sources: sources,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
@@ -1137,7 +1136,7 @@ func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
 	mockSwitchRelayMaster(false)
 	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.SwitchWorkerRelayMaster(context.Background(), &pb.SwitchWorkerRelayMasterRequest{
-		Sources: workers,
+		Sources: sources,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
@@ -1185,7 +1184,7 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 
 	// test OperateWorkerRelayTask with invalid dm-worker[s]
 	resp, err := server.OperateWorkerRelayTask(context.Background(), &pb.OperateWorkerRelayRequest{
-		Sources: []string{"invalid-worker1", "invalid-worker2"},
+		Sources: []string{"invalid-source1", "invalid-source2"},
 		Op:      pb.RelayOp_PauseRelay,
 	})
 	c.Assert(err, check.IsNil)
@@ -1200,7 +1199,7 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 	mockOperateRelay(true)
 	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.OperateWorkerRelayTask(context.Background(), &pb.OperateWorkerRelayRequest{
-		Sources: workers,
+		Sources: sources,
 		Op:      pb.RelayOp_PauseRelay,
 	})
 	c.Assert(err, check.IsNil)
@@ -1215,7 +1214,7 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 	mockOperateRelay(false)
 	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.OperateWorkerRelayTask(context.Background(), &pb.OperateWorkerRelayRequest{
-		Sources: workers,
+		Sources: sources,
 		Op:      pb.RelayOp_PauseRelay,
 	})
 	c.Assert(err, check.IsNil)
