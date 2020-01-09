@@ -46,16 +46,18 @@ func (t *testOperation) TestEtcd(c *C) {
 		ID2     = "test2-`foo`.`bar`"
 		source1 = "mysql-replica-1"
 		source2 = "mysql-replica-2"
+		source3 = "mysql-replica-3"
 		DDLs    = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
 		op11    = NewOperation(ID1, task1, source1, DDLs, true, false)
 		op12    = NewOperation(ID1, task1, source2, DDLs, true, false)
+		op13    = NewOperation(ID1, task1, source3, DDLs, true, false)
 		op21    = NewOperation(ID2, task2, source1, DDLs, false, true)
 	)
 
 	// put the same keys twice.
-	rev1, err := PutOperations(etcdTestCli, op11, op12)
+	rev1, err := PutOperations(etcdTestCli, false, op11, op12)
 	c.Assert(err, IsNil)
-	rev2, err := PutOperations(etcdTestCli, op11, op12)
+	rev2, err := PutOperations(etcdTestCli, false, op11, op12)
 	c.Assert(err, IsNil)
 	c.Assert(rev2, Greater, rev1)
 
@@ -71,7 +73,7 @@ func (t *testOperation) TestEtcd(c *C) {
 	c.Assert(<-wch, DeepEquals, op11)
 
 	// put for another task.
-	_, err = PutOperations(etcdTestCli, op21)
+	_, err = PutOperations(etcdTestCli, false, op21)
 	c.Assert(err, IsNil)
 
 	// start the watch with an older revision for all tasks and sources.
@@ -86,4 +88,39 @@ func (t *testOperation) TestEtcd(c *C) {
 	c.Assert(<-wch, DeepEquals, op11)
 	c.Assert(<-wch, DeepEquals, op12)
 	c.Assert(<-wch, DeepEquals, op21)
+
+	// get all operations.
+	opm, err := GetAllOperations(etcdTestCli)
+	c.Assert(err, IsNil)
+	c.Assert(opm, HasLen, 2)
+	c.Assert(opm, HasKey, task1)
+	c.Assert(opm, HasKey, task2)
+	c.Assert(opm[task1], HasLen, 2)
+	c.Assert(opm[task1][source1], DeepEquals, op11)
+	c.Assert(opm[task1][source2], DeepEquals, op12)
+	c.Assert(opm[task2], HasLen, 1)
+	c.Assert(opm[task2][source1], DeepEquals, op21)
+
+	// delete op11.
+	_, err = DeleteOperations(etcdTestCli, op11)
+	c.Assert(err, IsNil)
+
+	// update op12 to `done`.
+	op12c := op12
+	op12c.Done = true
+	putOp, err := putOperationOp(op12c)
+	c.Assert(err, IsNil)
+	txnResp, err := etcdTestCli.Txn(context.Background()).Then(putOp).Commit()
+	c.Assert(err, IsNil)
+
+	// put for `skipDone` with `done` in etcd, the operations should be skipped.
+	rev3, err := PutOperations(etcdTestCli, true, op12, op13)
+	c.Assert(err, IsNil)
+	c.Assert(rev3, Equals, txnResp.Header.Revision) // same revision with the previous etcd operation.
+
+	// get again, op11 deleted, op13 not putted.
+	opm, err = GetAllOperations(etcdTestCli)
+	c.Assert(err, IsNil)
+	c.Assert(opm[task1], HasLen, 1)
+	c.Assert(opm[task1][source2], DeepEquals, op12c)
 }

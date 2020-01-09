@@ -66,29 +66,92 @@ func operationFromJSON(s string) (o Operation, err error) {
 }
 
 // PutOperations puts the shard DDL operations into etcd.
-func PutOperations(cli *clientv3.Client, ops ...Operation) (int64, error) {
+// if `skipDone` is `true`, and the `done` filed in any of these operations in etcd is also `true`,
+// then this `PutOperations` skip to overwrite the k/v in etcd.
+// This function should often be called by DM-master.
+func PutOperations(cli *clientv3.Client, skipDone bool, ops ...Operation) (int64, error) {
+	cmps := make([]clientv3.Cmp, 0, len(ops))
 	opsPut := make([]clientv3.Op, 0, len(ops))
 	for _, op := range ops {
 		value, err := op.toJSON()
 		if err != nil {
 			return 0, err
 		}
+
 		key := common.ShardDDLPessimismOperationKeyAdapter.Encode(op.Task, op.Source)
 		opsPut = append(opsPut, clientv3.OpPut(key, value))
+
+		if skipDone {
+			opDone := op
+			opDone.Done = true // set `done` to `true`.
+			valueDone, err2 := opDone.toJSON()
+			if err2 != nil {
+				return 0, err2
+			}
+			cmps = append(cmps, clientv3.Compare(clientv3.Value(key), "!=", valueDone))
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
 
-	resp, err := cli.Txn(ctx).Then(opsPut...).Commit()
+	resp, err := cli.Txn(ctx).If(cmps...).Then(opsPut...).Commit()
 	if err != nil {
 		return 0, err
 	}
 	return resp.Header.Revision, nil
 }
 
+// DeleteOperations deletes the shard DDL operations in etcd.
+// This function should often be called by DM-master.
+func DeleteOperations(cli *clientv3.Client, ops ...Operation) (int64, error) {
+	opsDel := make([]clientv3.Op, 0, len(ops))
+	for _, op := range ops {
+		key := common.ShardDDLPessimismOperationKeyAdapter.Encode(op.Task, op.Source)
+		opsDel = append(opsDel, clientv3.OpDelete(key))
+	}
+
+	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
+	defer cancel()
+
+	resp, err := cli.Txn(ctx).Then(opsDel...).Commit()
+	if err != nil {
+		return 0, err
+	}
+	return resp.Header.Revision, nil
+}
+
+// GetAllOperations gets all DDL lock operation in etcd currently.
+// k/k/v: task-name -> source-ID -> lock operation.
+// This function is often used for debugging or testing.
+func GetAllOperations(cli *clientv3.Client) (map[string]map[string]Operation, error) {
+	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
+	defer cancel()
+
+	resp, err := cli.Get(ctx, common.ShardDDLPessimismOperationKeyAdapter.Path(), clientv3.WithPrefix())
+	if err != nil {
+		return nil, err
+	}
+
+	opm := make(map[string]map[string]Operation)
+	for _, kv := range resp.Kvs {
+		op, err2 := operationFromJSON(string(kv.Value))
+		if err2 != nil {
+			return nil, err2
+		}
+
+		if _, ok := opm[op.Task]; !ok {
+			opm[op.Task] = make(map[string]Operation)
+		}
+		opm[op.Task][op.Source] = op
+	}
+
+	return opm, nil
+}
+
 // WatchOperationPut watches PUT operations for DDL lock operation.
 // If want to watch all operations, pass empty string for `task` and `source`.
+// This function can be called by DM-worker and DM-master.
 func WatchOperationPut(ctx context.Context, cli *clientv3.Client, task, source string, revision int64, outCh chan<- Operation) {
 	ch := cli.Watch(ctx, common.ShardDDLPessimismOperationKeyAdapter.Encode(task, source),
 		clientv3.WithPrefix(), clientv3.WithRev(revision))
@@ -117,4 +180,16 @@ func WatchOperationPut(ctx context.Context, cli *clientv3.Client, task, source s
 			}
 		}
 	}
+}
+
+// putOperationOp returns a PUT etcd operation for Operation.
+// This operation should often be sent by DM-worker.
+func putOperationOp(o Operation) (clientv3.Op, error) {
+	value, err := o.toJSON()
+	if err != nil {
+		return clientv3.Op{}, err
+	}
+	key := common.ShardDDLPessimismOperationKeyAdapter.Encode(o.Task, o.Source)
+
+	return clientv3.OpPut(key, value), nil
 }
