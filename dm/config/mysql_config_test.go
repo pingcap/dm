@@ -26,11 +26,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 )
 
-type testServer struct{}
-
-var _ = Suite(&testServer{})
-
-func (t *testServer) TestConfig(c *C) {
+func (t *testConfig) TestConfig(c *C) {
 	cfg := &MysqlConfig{}
 
 	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
@@ -92,7 +88,7 @@ aaa = "xxx"
 	c.Assert(err, ErrorMatches, ".*worker config contains unknown configuration options: aaa")
 }
 
-func (t *testServer) TestConfigVerify(c *C) {
+func (t *testConfig) TestConfigVerify(c *C) {
 	newConfig := func() *MysqlConfig {
 		cfg := &MysqlConfig{}
 		c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
@@ -123,7 +119,7 @@ func (t *testServer) TestConfigVerify(c *C) {
 				cfg.SourceID = "source-id-length-more-than-thirty-two"
 				return cfg
 			},
-			fmt.Sprintf(".*the length of source ID .* is more than max allowed value %d", config.MaxSourceIDLength),
+			fmt.Sprintf(".*the length of source ID .* is more than max allowed value %d", MaxSourceIDLength),
 		},
 		{
 			func() *MysqlConfig {
@@ -183,7 +179,7 @@ func subtestFlavor(c *C, cfg *MysqlConfig, sqlInfo, expectedFlavor, expectedErro
 	}
 }
 
-func (t *testServer) TestAdjustFlavor(c *C) {
+func (t *testConfig) TestAdjustFlavor(c *C) {
 	cfg := &MysqlConfig{}
 	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
 	cfg.RelayDir = "./xx"
@@ -200,7 +196,7 @@ func (t *testServer) TestAdjustFlavor(c *C) {
 	subtestFlavor(c, cfg, "5.7.26-log", mysql.MySQLFlavor, "")
 }
 
-func (t *testServer) TestAdjustServerID(c *C) {
+func (t *testConfig) TestAdjustServerID(c *C) {
 	var originGetAllServerIDFunc = getAllServerIDFunc
 	defer func() {
 		getAllServerIDFunc = originGetAllServerIDFunc
