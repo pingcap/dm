@@ -329,6 +329,22 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(stCfgs))
 	var wg sync.WaitGroup
 	subSourceIDs := make([]string, 0, len(stCfgs))
+	if len(req.Sources) > 0 {
+		// specify only start task on partial sources
+		sourceCfg := make(map[string]*config.SubTaskConfig)
+		for _, stCfg := range stCfgs {
+			sourceCfg[stCfg.SourceID] = stCfg
+		}
+		stCfgs = make([]*config.SubTaskConfig, 0, len(req.Sources))
+		for _, source := range req.Sources {
+			if stCfg, ok := sourceCfg[source]; ok {
+				stCfgs = append(stCfgs, stCfg)
+			} else {
+				workerRespCh <- errorCommonWorkerResponse("source not found in task's config", source)
+			}
+		}
+	}
+
 	for _, stCfg := range stCfgs {
 		subSourceIDs = append(subSourceIDs, stCfg.SourceID)
 		wg.Add(1)

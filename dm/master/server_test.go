@@ -186,6 +186,13 @@ func testDefaultMasterServer(c *check.C) *Server {
 }
 
 func testGenSubTaskConfig(c *check.C, server *Server, ctrl *gomock.Controller) map[string]*config.SubTaskConfig {
+	sources, workers := extractWorkerSource(server.cfg.Deploy)
+	nilWorkerClients := make(map[string]workerrpc.Client)
+	for _, worker := range workers {
+		nilWorkerClients[worker] = nil
+	}
+	server.coordinator = testMockCoordinator(c, sources, workers, "", nilWorkerClients)
+
 	workerCfg := make(map[string]*config.SubTaskConfig)
 	_, stCfgs, err := server.generateSubTask(context.Background(), taskConfig)
 	c.Assert(err, check.IsNil)
@@ -312,7 +319,7 @@ func (t *testMaster) TestShowDDLLocks(c *check.C) {
 	c.Assert(resp.Result, check.IsTrue)
 	c.Assert(resp.Locks, check.HasLen, 0)
 
-	sources, workers := extractWorkerSource(server.cfg.Deploy)
+	sources, _ := extractWorkerSource(server.cfg.Deploy)
 
 	// prepare ddl lock keeper, mainly use code from ddl_lock_test.go
 	sqls := []string{"stmt"}
@@ -330,7 +337,7 @@ func (t *testMaster) TestShowDDLLocks(c *check.C) {
 		wg.Add(1)
 		go func(task, schema, table string) {
 			defer wg.Done()
-			id, synced, remain, err2 := lk.TrySync(task, schema, table, workers[0], sqls, workers)
+			id, synced, remain, err2 := lk.TrySync(task, schema, table, sources[0], sqls, sources)
 			c.Assert(err2, check.IsNil)
 			c.Assert(synced, check.IsFalse)
 			c.Assert(remain, check.Greater, 0) // multi-goroutines TrySync concurrently, can only confirm remain > 0
@@ -408,7 +415,6 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
-
 	workerCfg := testGenSubTaskConfig(c, server, ctrl)
 
 	// test start task successfully
@@ -423,7 +429,6 @@ func (t *testMaster) TestStartTask(c *check.C) {
 
 	// check start-task with an invalid source
 	invalidSource := "invalid-source"
-	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
 		Task:    taskConfig,
 		Sources: []string{invalidSource},
@@ -456,7 +461,6 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	defer func() {
 		checker.CheckSyncConfigFunc = bakCheckSyncConfigFunc
 	}()
-	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
 		Task:    taskConfig,
 		Sources: sources,
@@ -685,7 +689,6 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
-
 	workerCfg := testGenSubTaskConfig(c, server, ctrl)
 
 	mockUpdateTask := func(rpcSuccess bool) {
@@ -816,14 +819,14 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 		// prepare ddl lock keeper, mainly use code from ddl_lock_test.go
 		lk := NewLockKeeper()
 		var wg sync.WaitGroup
-		for _, w := range workers {
+		for _, s := range sources {
 			wg.Add(1)
-			go func(worker string) {
+			go func(source string) {
 				defer wg.Done()
-				id, _, _, err := lk.TrySync(task, schema, table, worker, sqls, workers)
+				id, _, _, err := lk.TrySync(task, schema, table, source, sqls, sources)
 				c.Assert(err, check.IsNil)
 				c.Assert(lk.FindLock(id), check.NotNil)
-			}(w)
+			}(s)
 		}
 		wg.Wait()
 		server.lockKeeper = lk
@@ -1310,6 +1313,7 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 func (t *testMaster) TestServer(c *check.C) {
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
+	cfg.PeerUrls = "http://127.0.0.1:8294"
 	cfg.DataDir = c.MkDir()
 	cfg.MasterAddr = tempurl.Alloc()[len("http://"):]
 
