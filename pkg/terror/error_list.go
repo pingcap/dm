@@ -200,7 +200,6 @@ const (
 	codeCheckpointDBNotExistInFile
 	codeCheckpointTableNotExistInFile
 	codeCheckpointRestoreCountGreater
-	codeSkipFlushCheckpointBecauseOfErr
 )
 
 // Task check error code
@@ -678,13 +677,12 @@ var (
 	ErrBinlogParsePosFromStr = New(codeBinlogParsePosFromStr, ClassBinlogOp, ScopeInternal, LevelHigh, "")
 
 	// Checkpoint error
-	ErrCheckpointInvalidTaskMode           = New(codeCheckpointInvalidTaskMode, ClassCheckpoint, ScopeInternal, LevelMedium, "invalid task mode: %s")
-	ErrCheckpointSaveInvalidPos            = New(codeCheckpointSaveInvalidPos, ClassCheckpoint, ScopeInternal, LevelHigh, "save point %v is older than current pos %v")
-	ErrCheckpointInvalidTableFile          = New(codeCheckpointInvalidTableFile, ClassCheckpoint, ScopeInternal, LevelMedium, "invalid db table sql file - %s")
-	ErrCheckpointDBNotExistInFile          = New(codeCheckpointDBNotExistInFile, ClassCheckpoint, ScopeInternal, LevelMedium, "db (%s) not exist in data files, but in checkpoint")
-	ErrCheckpointTableNotExistInFile       = New(codeCheckpointTableNotExistInFile, ClassCheckpoint, ScopeInternal, LevelMedium, "table (%s) not exist in db (%s) data files, but in checkpoint")
-	ErrCheckpointRestoreCountGreater       = New(codeCheckpointRestoreCountGreater, ClassCheckpoint, ScopeInternal, LevelMedium, "restoring count greater than total count for table[%v]")
-	ErrCodeSkipFlushCheckpointBecauseOfErr = New(codeSkipFlushCheckpointBecauseOfErr, ClassCheckpoint, ScopeInternal, LevelMedium, "error detected when executing SQL job, skip flush checkpoint %v")
+	ErrCheckpointInvalidTaskMode     = New(codeCheckpointInvalidTaskMode, ClassCheckpoint, ScopeInternal, LevelMedium, "invalid task mode: %s")
+	ErrCheckpointSaveInvalidPos      = New(codeCheckpointSaveInvalidPos, ClassCheckpoint, ScopeInternal, LevelHigh, "save point %v is older than current pos %v")
+	ErrCheckpointInvalidTableFile    = New(codeCheckpointInvalidTableFile, ClassCheckpoint, ScopeInternal, LevelMedium, "invalid db table sql file - %s")
+	ErrCheckpointDBNotExistInFile    = New(codeCheckpointDBNotExistInFile, ClassCheckpoint, ScopeInternal, LevelMedium, "db (%s) not exist in data files, but in checkpoint")
+	ErrCheckpointTableNotExistInFile = New(codeCheckpointTableNotExistInFile, ClassCheckpoint, ScopeInternal, LevelMedium, "table (%s) not exist in db (%s) data files, but in checkpoint")
+	ErrCheckpointRestoreCountGreater = New(codeCheckpointRestoreCountGreater, ClassCheckpoint, ScopeInternal, LevelMedium, "restoring count greater than total count for table[%v]")
 
 	// Task check error
 	ErrTaskCheckSameTableName    = New(codeTaskCheckSameTableName, ClassTaskCheck, ScopeInternal, LevelMedium, "same table name in case-sensitive %v")
