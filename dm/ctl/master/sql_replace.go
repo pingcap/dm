@@ -53,21 +53,21 @@ func sqlReplaceFunc(cmd *cobra.Command, _ []string) {
 	}
 
 	var worker string
-	workers, err := common.GetWorkerArgs(cmd)
+	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
 		common.PrintLines("%s", errors.ErrorStack(err))
 		return
 	}
 	if sharding {
-		if len(workers) != 0 {
-			common.PrintLines("--sharding operator always takes effect on DDL lock's owner, specified workers %v arguments will be ignored", workers)
+		if len(sources) != 0 {
+			common.PrintLines("--sharding operator always takes effect on DDL lock's owner, specified sources %v arguments will be ignored", sources)
 		}
 	} else {
-		if len(workers) != 1 {
-			common.PrintLines("should only specify one worker, but got %v", workers)
+		if len(sources) != 1 {
+			common.PrintLines("should only specify one worker, but got %v", sources)
 			return
 		}
-		worker = workers[0]
+		worker = sources[0]
 	}
 
 	taskName := cmd.Flags().Arg(0)

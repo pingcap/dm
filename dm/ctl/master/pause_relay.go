@@ -42,17 +42,17 @@ func pauseRelayFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	workers, err := common.GetWorkerArgs(cmd)
+	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
 		common.PrintLines("%s", errors.ErrorStack(err))
 		return
 	}
-	if len(workers) == 0 {
+	if len(sources) == 0 {
 		fmt.Println("must specify at least one DM-worker (`-w` / `--worker`)")
 		return
 	}
 
-	resp, err := common.OperateRelay(pb.RelayOp_PauseRelay, workers)
+	resp, err := common.OperateRelay(pb.RelayOp_PauseRelay, sources)
 	if err != nil {
 		common.PrintLines("can not pause relay unit:\n%v", errors.ErrorStack(err))
 		return

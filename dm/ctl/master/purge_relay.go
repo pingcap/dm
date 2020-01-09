@@ -61,12 +61,12 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	workers, err := common.GetWorkerArgs(cmd)
+	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
 		fmt.Println(errors.ErrorStack(err))
 		return
 	}
-	if len(workers) == 0 {
+	if len(sources) == 0 {
 		fmt.Println("must specify at least one DM-worker (`-w` / `--worker`)")
 		return
 	}
@@ -122,7 +122,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 	//	}
 	//}
 
-	if len(filename) > 0 && len(workers) > 1 {
+	if len(filename) > 0 && len(sources) > 1 {
 		fmt.Println("for --filename, can only specify one DM-worker per time")
 		return
 	}
@@ -138,7 +138,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 	cli := common.MasterClient()
 
 	resp, err := cli.PurgeWorkerRelay(ctx, &pb.PurgeWorkerRelayRequest{
-		Sources: workers,
+		Sources: sources,
 		//Inactive: inactive,
 		//Time:     time2.Unix(),
 		Filename: filename,

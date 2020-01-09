@@ -49,8 +49,8 @@ func updateRelayFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	workers, _ := common.GetWorkerArgs(cmd)
-	if len(workers) != 1 {
+	sources, _ := common.GetSourceArgs(cmd)
+	if len(sources) != 1 {
 		fmt.Println("must specify one DM-worker (`-w` / `--worker`)")
 		return
 	}
@@ -61,7 +61,7 @@ func updateRelayFunc(cmd *cobra.Command, _ []string) {
 	cli := common.MasterClient()
 	resp, err := cli.UpdateWorkerRelayConfig(ctx, &pb.UpdateWorkerRelayConfigRequest{
 		Config: string(content),
-		Source: workers[0],
+		Source: sources[0],
 	})
 
 	if err != nil {

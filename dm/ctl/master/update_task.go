@@ -48,7 +48,7 @@ func updateTaskFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	workers, err := common.GetWorkerArgs(cmd)
+	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
 		common.PrintLines("%s", errors.ErrorStack(err))
 		return
@@ -61,7 +61,7 @@ func updateTaskFunc(cmd *cobra.Command, _ []string) {
 	cli := common.MasterClient()
 	resp, err := cli.UpdateTask(ctx, &pb.UpdateTaskRequest{
 		Task:    string(content),
-		Sources: workers,
+		Sources: sources,
 	})
 	if err != nil {
 		common.PrintLines("can not update task:\n%v", errors.ErrorStack(err))

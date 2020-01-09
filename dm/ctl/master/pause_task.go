@@ -42,13 +42,13 @@ func pauseTaskFunc(cmd *cobra.Command, _ []string) {
 	}
 	name := cmd.Flags().Arg(0)
 
-	workers, err := common.GetWorkerArgs(cmd)
+	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
 		common.PrintLines("%s", errors.ErrorStack(err))
 		return
 	}
 
-	resp, err := common.OperateTask(pb.TaskOp_Pause, name, workers)
+	resp, err := common.OperateTask(pb.TaskOp_Pause, name, sources)
 	if err != nil {
 		common.PrintLines("can not pause task %s:\n%v", name, errors.ErrorStack(err))
 		return

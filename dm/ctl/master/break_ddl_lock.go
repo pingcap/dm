@@ -47,12 +47,12 @@ func breakDDLLockFunc(cmd *cobra.Command, _ []string) {
 	}
 	taskName := cmd.Flags().Arg(0)
 
-	workers, err := common.GetWorkerArgs(cmd)
+	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
 		fmt.Println(errors.ErrorStack(err))
 		return
 	}
-	if len(workers) == 0 {
+	if len(sources) == 0 {
 		fmt.Println("must specify at least one DM-worker (`-w` / `--worker`)")
 		return
 	}
@@ -89,14 +89,14 @@ func breakDDLLockFunc(cmd *cobra.Command, _ []string) {
 	defer cancel()
 	cli := common.MasterClient()
 	resp, err := cli.BreakWorkerDDLLock(ctx, &pb.BreakWorkerDDLLockRequest{
-		Sources:      workers,
+		Sources:      sources,
 		Task:         taskName,
 		RemoveLockID: removeLockID,
 		ExecDDL:      exec,
 		SkipDDL:      skip,
 	})
 	if err != nil {
-		common.PrintLines("can not break DDL lock (in workers %v):\n%s", workers, errors.ErrorStack(err))
+		common.PrintLines("can not break DDL lock (in sources %v):\n%s", sources, errors.ErrorStack(err))
 		return
 	}
 

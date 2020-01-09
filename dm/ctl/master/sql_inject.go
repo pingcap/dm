@@ -43,13 +43,13 @@ func sqlInjectFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	workers, err := common.GetWorkerArgs(cmd)
+	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
 		common.PrintLines("%s", errors.ErrorStack(err))
 		return
 	}
-	if len(workers) != 1 {
-		common.PrintLines("want only one worker, but got %v", workers)
+	if len(sources) != 1 {
+		common.PrintLines("want only one worker, but got %v", sources)
 		return
 	}
 
@@ -84,7 +84,7 @@ func sqlInjectFunc(cmd *cobra.Command, _ []string) {
 		Name:   taskName,
 		Op:     pb.SQLOp_INJECT,
 		Args:   realSQLs,
-		Source: workers[0],
+		Source: sources[0],
 	})
 	if err != nil {
 		common.PrintLines("can not inject sql:\n%v", errors.ErrorStack(err))

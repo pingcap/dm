@@ -43,12 +43,12 @@ func switchRelayMasterFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	workers, err := common.GetWorkerArgs(cmd)
+	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
 		fmt.Println(errors.ErrorStack(err))
 		return
 	}
-	if len(workers) == 0 {
+	if len(sources) == 0 {
 		fmt.Println("must specify at least one DM-worker (`-w` / `--worker`)")
 		return
 	}
@@ -57,10 +57,10 @@ func switchRelayMasterFunc(cmd *cobra.Command, _ []string) {
 	defer cancel()
 	cli := common.MasterClient()
 	resp, err := cli.SwitchWorkerRelayMaster(ctx, &pb.SwitchWorkerRelayMasterRequest{
-		Sources: workers,
+		Sources: sources,
 	})
 	if err != nil {
-		common.PrintLines("can not switch relay's master server (in workers %v):\n%s", workers, errors.ErrorStack(err))
+		common.PrintLines("can not switch relay's master server (in sources %v):\n%s", sources, errors.ErrorStack(err))
 		return
 	}
 
