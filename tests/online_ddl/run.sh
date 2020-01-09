@@ -8,7 +8,7 @@ ONLINE_DDL_ENABLE=${ONLINE_DDL_ENABLE:-true}
 BASE_TEST_NAME=$TEST_NAME
 
 function real_run() {
-    export GO_FAILPOINTS="github.com/pingcap/dm/syncer/ExecuteSQLWithIgnoreFailed=return(\"ALTER TABLE \`online_ddl\`.\`t1\` ADD COLUMN \`age\` INT\")"
+    export GO_FAILPOINTS="github.com/pingcap/dm/syncer/ExecuteSQLWithIgnoreFailed=return(\"ALTER TABLE \`online_ddl\`.\`t_target\` ADD COLUMN \`age\` INT\")"
     online_ddl_scheme=$1
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
     check_contains 'Query OK, 2 rows affected'
@@ -33,10 +33,31 @@ function real_run() {
     run_sql_file_online_ddl $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 online_ddl $online_ddl_scheme
     run_sql_file_online_ddl $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 online_ddl $online_ddl_scheme
 
+    # only one dm-worker execute ddl failed, so only one paused
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "\"stage\": \"Paused\"" 1 \
+            "invalid connection" 1
+
+    kill_dm_worker
+
+    echo "sleep"
+    sleep 30
+
+    export GO_FAILPOINTS=""
+    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "\"stage\": \"Running\"" 2
+
     # use sync_diff_inspector to check data now!
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    export GO_FAILPOINTS=""
+    
 }
 
 function run() {
