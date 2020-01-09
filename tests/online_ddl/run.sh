@@ -8,7 +8,6 @@ ONLINE_DDL_ENABLE=${ONLINE_DDL_ENABLE:-true}
 BASE_TEST_NAME=$TEST_NAME
 
 function real_run() {
-    export GO_FAILPOINTS="github.com/pingcap/dm/syncer/ExecuteSQLWithIgnoreFailed=return(\"ALTER TABLE \`online_ddl\`.\`t1\` ADD COLUMN \`age\` INT\")"
     online_ddl_scheme=$1
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
     check_contains 'Query OK, 2 rows affected'
@@ -35,8 +34,6 @@ function real_run() {
 
     # use sync_diff_inspector to check data now!
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-
-    export GO_FAILPOINTS=""
 }
 
 function run() {
@@ -55,7 +52,7 @@ function run() {
 
 if [ "$ONLINE_DDL_ENABLE" == true ]; then
     run gh-ost
-    #run pt
+    run pt
 else
     echo "[$(date)] <<<<<< skip online ddl test! >>>>>>"
 fi
