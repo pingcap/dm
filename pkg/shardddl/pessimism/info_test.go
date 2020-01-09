@@ -22,6 +22,8 @@ import (
 	. "github.com/pingcap/check"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/integration"
+
+	"github.com/pingcap/dm/dm/common"
 )
 
 var (
@@ -37,11 +39,19 @@ func TestInfo(t *testing.T) {
 	TestingT(t)
 }
 
-type testInfo struct{}
+// clear keys in etcd test cluster.
+func clearTestInfoOperation(c *C) {
+	clearInfo := clientv3.OpDelete(common.ShardDDLPessimismInfoKeyAdapter.Path(), clientv3.WithPrefix())
+	clearOp := clientv3.OpDelete(common.ShardDDLPessimismOperationKeyAdapter.Path(), clientv3.WithPrefix())
+	_, err := etcdTestCli.Txn(context.Background()).Then(clearInfo, clearOp).Commit()
+	c.Assert(err, IsNil)
+}
 
-var _ = Suite(&testInfo{})
+type testForEtcd struct{}
 
-func (t *testInfo) TestJSON(c *C) {
+var _ = Suite(&testForEtcd{})
+
+func (t *testForEtcd) TestInfoJSON(c *C) {
 	i1 := NewInfo("test", "mysql-replica-1", "foo", "bar", []string{
 		"ALTER TABLE bar ADD COLUMN c1 INT",
 		"ALTER TABLE bar ADD COLUMN c2 INT",
@@ -56,7 +66,9 @@ func (t *testInfo) TestJSON(c *C) {
 	c.Assert(i2, DeepEquals, i1)
 }
 
-func (t *testInfo) TestEtcd(c *C) {
+func (t *testForEtcd) TestInfoEtcd(c *C) {
+	defer clearTestInfoOperation(c)
+
 	var (
 		source1 = "mysql-replica-1"
 		source2 = "mysql-replica-2"

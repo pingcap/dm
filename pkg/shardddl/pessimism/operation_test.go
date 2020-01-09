@@ -20,11 +20,7 @@ import (
 	. "github.com/pingcap/check"
 )
 
-type testOperation struct{}
-
-var _ = Suite(&testOperation{})
-
-func (t *testOperation) TestJSON(c *C) {
+func (t *testForEtcd) TestOperationJSON(c *C) {
 	o1 := NewOperation("test-ID", "test", "mysql-replica-1", []string{
 		"ALTER TABLE bar ADD COLUMN c1 INT",
 	}, true, false)
@@ -38,7 +34,9 @@ func (t *testOperation) TestJSON(c *C) {
 	c.Assert(o2, DeepEquals, o1)
 }
 
-func (t *testOperation) TestEtcd(c *C) {
+func (t *testForEtcd) TestOperationEtcd(c *C) {
+	defer clearTestInfoOperation(c)
+
 	var (
 		task1   = "test1"
 		task2   = "test2"
