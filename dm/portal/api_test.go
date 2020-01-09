@@ -133,7 +133,7 @@ func (t *testPortalSuite) TestCheck(c *C) {
 	err := readJSON(resp.Body, checkResult)
 	c.Assert(err, IsNil)
 	c.Assert(checkResult.Result, Equals, failed)
-	c.Assert(checkResult.Error, Equals, "Error 1045: Access denied for user 'root'@'127.0.0.1' (using password: YES)")
+	c.Assert(checkResult.Error, Matches, "Error 1045: Access denied for user 'root'.*")
 
 	getDBConnFunc = t.getMockDB
 	defer func() {
@@ -162,7 +162,7 @@ func (t *testPortalSuite) TestGetSchemaInfo(c *C) {
 	err := readJSON(resp.Body, schemaInfoResult)
 	c.Assert(err, IsNil)
 	c.Assert(schemaInfoResult.Result, Equals, failed)
-	c.Assert(schemaInfoResult.Error, Equals, "Error 1045: Access denied for user 'root'@'127.0.0.1' (using password: YES)")
+	c.Assert(schemaInfoResult.Error, Matches, "Error 1045: Access denied for user 'root'@.*")
 	c.Assert(schemaInfoResult.Tables, IsNil)
 
 	getDBConnFunc = t.getMockDB
