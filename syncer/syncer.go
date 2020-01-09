@@ -420,7 +420,8 @@ func (s *Syncer) initShardingGroups() error {
 // IsFreshTask implements Unit.IsFreshTask
 func (s *Syncer) IsFreshTask(ctx context.Context) (bool, error) {
 	globalPoint := s.checkpoint.GlobalPoint()
-	return binlog.ComparePosition(globalPoint, minCheckpoint) <= 0, nil
+	shardTablePoints := s.checkpoint.ShardTablePoint()
+	return binlog.ComparePosition(globalPoint, minCheckpoint) <= 0 && len(shardTablePoints) == 0, nil
 }
 
 func (s *Syncer) reset() {
@@ -1054,6 +1055,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			s.tctx.L().Error("panic log", zap.Reflect("error message", err1), zap.Stack("statck"))
 			err = terror.ErrSyncerUnitPanic.Generate(err1)
 		}
+
+		if err2 := s.flushCheckPoints(); err2 != nil {
+			s.tctx.L().Warn("fail to flush check points when exit task", zap.Error(err2))
+		}
 	}()
 
 	s.start = time.Now()
@@ -1680,11 +1685,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			return err
 		}
 
-		/*
-			if s.execErrorDetected.Get() {
-				return
-			}
-		*/
+		if s.execErrorDetected.Get() {
+			return terror.ErrSyncerUnitHandleDDLFailed.Generate()
+		}
 
 		s.tctx.L().Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("position", ec.currentPos))
 
@@ -1876,6 +1879,10 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	err = s.addJobFunc(job)
 	if err != nil {
 		return err
+	}
+
+	if s.execErrorDetected.Get() {
+		return terror.ErrSyncerUnitHandleDDLFailed.Generate()
 	}
 
 	if len(onlineDDLTableNames) > 0 {

@@ -189,6 +189,9 @@ type CheckPoint interface {
 	// corresponding to to Meta.Pos
 	GlobalPoint() mysql.Position
 
+	// ShardTablePoint returns the shard table's stream checkpoint
+	ShardTablePoint() map[string]map[string]mysql.Position
+
 	// FlushedGlobalPoint returns the flushed global binlog stream's checkpoint
 	// corresponding to to Meta.Pos
 	FlushedGlobalPoint() mysql.Position
@@ -471,6 +474,18 @@ func (cp *RemoteCheckPoint) FlushPointsExcept(tctx *tcontext.Context, exceptTabl
 // GlobalPoint implements CheckPoint.GlobalPoint
 func (cp *RemoteCheckPoint) GlobalPoint() mysql.Position {
 	return cp.globalPoint.MySQLPos()
+}
+
+// ShardTablePoint implements CheckPoint.ShardTablePoint
+func (cp *RemoteCheckPoint) ShardTablePoint() map[string]map[string]mysql.Position {
+	tablePoints := make(map[string]map[string]mysql.Position)
+	for schema, tables := range cp.points {
+		tablePoints[schema] = make(map[string]mysql.Position)
+		for table, point := range tables {
+			tablePoints[schema][table] = point.MySQLPos()
+		}
+	}
+	return tablePoints
 }
 
 // FlushedGlobalPoint implements CheckPoint.FlushedGlobalPoint
