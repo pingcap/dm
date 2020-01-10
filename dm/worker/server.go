@@ -133,6 +133,7 @@ func (s *Server) Start() error {
 				}
 			}
 		}
+		log.L().Info("keepalive with master goroutine exited!")
 	}()
 
 	// create a cmux
@@ -636,7 +637,7 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 	}
 	s.worker = w
 	go func() {
-		s.worker.Start()
+		w.Start()
 	}()
 
 	ectx, cancel := context.WithTimeout(s.etcdClient.Ctx(), time.Second*3)
