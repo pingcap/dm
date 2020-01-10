@@ -134,7 +134,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 
 	// check task in paused state
 	c.Assert(utils.WaitSomething(100, 100*time.Millisecond, func() bool {
-		for _, st := range s.worker.QueryStatus(taskName) {
+		for _, st := range s.getWorker().QueryStatus(taskName) {
 			if st.Name == taskName && st.Stage == pb.Stage_Paused {
 				return true
 			}
@@ -142,7 +142,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		return false
 	}), IsTrue)
 
-	rtsc, ok := s.worker.taskStatusChecker.(*realTaskStatusChecker)
+	rtsc, ok := s.getWorker().taskStatusChecker.(*realTaskStatusChecker)
 	c.Assert(ok, IsTrue)
 	defer func() {
 		// close multiple time
@@ -152,7 +152,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 
 	// check task will be auto resumed
 	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
-		for _, st := range s.worker.QueryStatus(taskName) {
+		for _, st := range s.getWorker().QueryStatus(taskName) {
 			if st.Name == taskName && st.Stage == pb.Stage_Running {
 				return true
 			}
