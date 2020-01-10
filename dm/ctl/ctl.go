@@ -76,6 +76,7 @@ func NewRootCmd() *cobra.Command {
 		master.NewPurgeRelayCmd(),
 		master.NewMigrateRelayCmd(),
 		master.NewOperateMysqlWorkerCmd(),
+		master.NewOfflineWorkerCmd(),
 	)
 	return cmd
 }
