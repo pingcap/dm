@@ -84,6 +84,12 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		taskName = "sub-task-name"
 		port     = 8263
 	)
+	hostName := "127.0.0.1:8291"
+	etcdDir := c.MkDir()
+	ETCD, err := createMockETCD(etcdDir, "host://"+hostName)
+	c.Assert(err, IsNil)
+	defer ETCD.Close()
+
 	cfg := NewConfig()
 	workerCfg := config.NewMysqlConfig()
 	workerCfg.LoadFromFile("./dm-mysql.toml")
@@ -124,7 +130,6 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		c.Assert(s.startWorker(workerCfg), IsNil)
 		return true
 	}), IsTrue)
-
 	// start task
 	cli := t.createClient(c, fmt.Sprintf("127.0.0.1:%d", port))
 	subtaskCfgBytes, err := ioutil.ReadFile("./subtask.toml")

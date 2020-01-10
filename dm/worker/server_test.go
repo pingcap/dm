@@ -56,6 +56,9 @@ func createMockETCD(dir string, host string) (*embed.Etcd, error) {
 	// cfg.LPUrls = []url.URL{*lpurl}
 	cfg.LCUrls = []url.URL{*lcurl}
 	cfg.ACUrls = []url.URL{*lcurl}
+	cfg.Logger = "zap"
+	metricsUrl, _ := url.Parse("host://127.0.0.1:5060")
+	cfg.ListenMetricsUrls = []url.URL{*metricsUrl}
 	ETCD, err := embed.StartEtcd(cfg)
 	if err != nil {
 		return nil, err
@@ -107,7 +110,7 @@ func (t *testServer) TestServer(c *C) {
 
 	// comment this now because of data race problem
 	// check worker would retry connecting master rather than stop worker directly.
-	// t.testRetryConnectMaster(c, s, ETCD, etcdDir, hostName)
+	ETCD = t.testRetryConnectMaster(c, s, ETCD, etcdDir, hostName)
 
 	// test condition hub
 	t.testConidtionHub(c, s)
@@ -250,7 +253,7 @@ func (t *testServer) testInfosInEtcd(c *C, hostName string, workerAddr string, d
 
 func (t *testServer) testRetryConnectMaster(c *C, s *Server, ETCD *embed.Etcd, dir string, hostName string) *embed.Etcd {
 	ETCD.Close()
-	time.Sleep(3 * time.Second)
+	time.Sleep(4 * time.Second)
 	c.Assert(s.getWorker(true), NotNil)
 	// retryConnectMaster is false means that this worker has been tried to connect to master again.
 	c.Assert(s.retryConnectMaster.Get(), IsFalse)

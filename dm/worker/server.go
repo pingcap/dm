@@ -104,15 +104,17 @@ func (s *Server) Start() error {
 		// worker keepalive with master
 		// If worker loses connect from master, it would stop all task and try to connect master again.
 		shouldExit := false
+		var err1 error
 		for !shouldExit {
-			shouldExit, err = s.KeepAlive()
-			if err != nil || !shouldExit {
+			shouldExit, err1 = s.KeepAlive()
+			if err1 != nil || !shouldExit {
 				if s.retryConnectMaster.Get() {
 					// Try to connect master again before stop worker
 					s.retryConnectMaster.Set(false)
 				} else {
 					w := s.getWorker(true)
 					if w != nil {
+						s.setWorker(nil, true)
 						w.Close()
 					}
 				}
