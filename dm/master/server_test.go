@@ -1570,7 +1570,7 @@ func (t *testMaster) TestOfflineWorker(c *check.C) {
 	c.Assert(resp.Result, check.IsTrue)
 
 	req2 := &pb.OfflineWorkerRequest{
-		Name: "haha",
+		Name:    "haha",
 		Address: "127.0.0.1:1000",
 	}
 	{

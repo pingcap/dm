@@ -28,7 +28,7 @@ import (
 // NewSQLSkipCmd creates a SQLSkip command
 func NewSQLSkipCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "sql-skip <-w worker> [-b binlog-pos] [-s sql-pattern] [--sharding] <task-name>",
+		Use:   "sql-skip <-s source> [-b binlog-pos] [-s sql-pattern] [--sharding] <task-name>",
 		Short: "skip the binlog event matched by a specific binlog position (binlog-pos) or a SQL pattern (sql-pattern)",
 		Run:   sqlSkipFunc,
 	}
@@ -52,7 +52,7 @@ func sqlSkipFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	var worker string
+	var source string
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
 		common.PrintLines("%s", errors.ErrorStack(err))
@@ -64,10 +64,10 @@ func sqlSkipFunc(cmd *cobra.Command, _ []string) {
 		}
 	} else {
 		if len(sources) != 1 {
-			common.PrintLines("should only specify one worker, but got %v", sources)
+			common.PrintLines("should only specify one source, but got %v", sources)
 			return
 		}
-		worker = sources[0]
+		source = sources[0]
 	}
 
 	taskName := cmd.Flags().Arg(0)
@@ -82,7 +82,7 @@ func sqlSkipFunc(cmd *cobra.Command, _ []string) {
 
 	resp, err := cli.HandleSQLs(ctx, &pb.HandleSQLsRequest{
 		Name:       taskName,
-		Source:     worker,
+		Source:     source,
 		Op:         pb.SQLOp_SKIP,
 		BinlogPos:  binlogPos,
 		SqlPattern: sqlPattern,

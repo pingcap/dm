@@ -27,7 +27,7 @@ import (
 // NewPauseRelayCmd creates a PauseRelay command
 func NewPauseRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "pause-relay <-w worker ...>",
+		Use:   "pause-relay <-s source ...>",
 		Short: "pause DM-worker's relay unit",
 		Run:   pauseRelayFunc,
 	}
@@ -48,7 +48,7 @@ func pauseRelayFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 	if len(sources) == 0 {
-		fmt.Println("must specify at least one DM-worker (`-w` / `--worker`)")
+		fmt.Println("must specify at least one DM-worker (`-s` / `--source`)")
 		return
 	}
 

@@ -27,7 +27,7 @@ import (
 // NewResumeRelayCmd creates a ResumeRelay command
 func NewResumeRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "resume-relay <-w worker ...>",
+		Use:   "resume-relay <-s source ...>",
 		Short: "resume DM-worker's relay unit",
 		Run:   resumeRelayFunc,
 	}
@@ -48,7 +48,7 @@ func resumeRelayFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 	if len(sources) == 0 {
-		fmt.Println("must specify at least one DM-worker (`-w` / `--worker`)")
+		fmt.Println("must specify at least one DM-worker (`-s` / `--source`)")
 		return
 	}
 

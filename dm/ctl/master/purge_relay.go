@@ -41,7 +41,7 @@ func NewPurgeRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		//Use:   "purge-relay <-w worker> [--inactive] [--time] [--filename] [--sub-dir]",
 		//Short: "purge dm-worker's relay log files, choose 1 of 2 methods",
-		Use:   "purge-relay <-w worker> [--filename] [--sub-dir]",
+		Use:   "purge-relay <-s source> [--filename] [--sub-dir]",
 		Short: "purge relay log files of the DM-worker according to the specified filename",
 		Run:   purgeRelayFunc,
 	}
@@ -67,7 +67,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 	if len(sources) == 0 {
-		fmt.Println("must specify at least one DM-worker (`-w` / `--worker`)")
+		fmt.Println("must specify at least one DM-worker (`-s` / `--source`)")
 		return
 	}
 

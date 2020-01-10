@@ -28,7 +28,7 @@ import (
 // NewBreakDDLLockCmd creates a BreakDDLLock command
 func NewBreakDDLLockCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "break-ddl-lock <-w worker ...> <task-name> [--remove-id] [--exec] [--skip]",
+		Use:   "break-ddl-lock <-s source ...> <task-name> [--remove-id] [--exec] [--skip]",
 		Short: "forcefully break DM-worker's DDL lock",
 		Run:   breakDDLLockFunc,
 	}
@@ -53,7 +53,7 @@ func breakDDLLockFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 	if len(sources) == 0 {
-		fmt.Println("must specify at least one DM-worker (`-w` / `--worker`)")
+		fmt.Println("must specify at least one DM-worker (`-s` / `--source`)")
 		return
 	}
 

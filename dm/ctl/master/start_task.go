@@ -28,7 +28,7 @@ import (
 // NewStartTaskCmd creates a StartTask command
 func NewStartTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "start-task [-w worker ...] <config-file>",
+		Use:   "start-task [-s source ...] <config-file>",
 		Short: "start a task as defined in the config file",
 		Run:   startTaskFunc,
 	}

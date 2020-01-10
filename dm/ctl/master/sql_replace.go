@@ -28,7 +28,7 @@ import (
 // NewSQLReplaceCmd creates a SQLReplace command
 func NewSQLReplaceCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "sql-replace <-w worker> [-b binlog-pos] [-s sql-pattern] [--sharding] <task-name> <sql1;sql2;>",
+		Use:   "sql-replace <-s source> [-b binlog-pos] [-s sql-pattern] [--sharding] <task-name> <sql1;sql2;>",
 		Short: "replace SQLs matched by a specific binlog position (binlog-pos) or a SQL pattern (sql-pattern); each SQL must end with a semicolon",
 		Run:   sqlReplaceFunc,
 	}
@@ -52,7 +52,7 @@ func sqlReplaceFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	var worker string
+	var source string
 	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
 		common.PrintLines("%s", errors.ErrorStack(err))
@@ -64,10 +64,10 @@ func sqlReplaceFunc(cmd *cobra.Command, _ []string) {
 		}
 	} else {
 		if len(sources) != 1 {
-			common.PrintLines("should only specify one worker, but got %v", sources)
+			common.PrintLines("should only specify one source, but got %v", sources)
 			return
 		}
-		worker = sources[0]
+		source = sources[0]
 	}
 
 	taskName := cmd.Flags().Arg(0)
@@ -88,7 +88,7 @@ func sqlReplaceFunc(cmd *cobra.Command, _ []string) {
 	cli := common.MasterClient()
 	resp, err := cli.HandleSQLs(ctx, &pb.HandleSQLsRequest{
 		Name:       taskName,
-		Source:     worker,
+		Source:     source,
 		Op:         pb.SQLOp_REPLACE,
 		Args:       realSQLs,
 		BinlogPos:  binlogPos,

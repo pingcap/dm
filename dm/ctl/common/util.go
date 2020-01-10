@@ -165,7 +165,7 @@ func GetFileContent(fpath string) ([]byte, error) {
 	return content, nil
 }
 
-// GetSourceArgs extracts workers from cmd
+// GetSourceArgs extracts sources from cmd
 func GetSourceArgs(cmd *cobra.Command) ([]string, error) {
 	return cmd.Flags().GetStringSlice("source")
 }

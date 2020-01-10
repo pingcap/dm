@@ -28,7 +28,7 @@ import (
 // NewUnlockDDLLockCmd creates a UnlockDDLLock command
 func NewUnlockDDLLockCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "unlock-ddl-lock [-w worker ...] <lock-ID>",
+		Use:   "unlock-ddl-lock [-s source ...] <lock-ID>",
 		Short: "forcefully unlock DDL lock",
 		Run:   unlockDDLLockFunc,
 	}

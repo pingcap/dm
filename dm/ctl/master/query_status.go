@@ -42,7 +42,7 @@ type taskInfo struct {
 // NewQueryStatusCmd creates a QueryStatus command
 func NewQueryStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "query-status [-w worker ...] [task-name]",
+		Use:   "query-status [-s source ...] [task-name]",
 		Short: "query task status",
 		Run:   queryStatusFunc,
 	}

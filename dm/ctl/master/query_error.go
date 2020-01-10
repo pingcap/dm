@@ -27,7 +27,7 @@ import (
 // NewQueryErrorCmd creates a QueryError command
 func NewQueryErrorCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "query-error [-w worker ...] [task-name]",
+		Use:   "query-error [-s source ...] [task-name]",
 		Short: "query task error",
 		Run:   queryErrorFunc,
 	}
