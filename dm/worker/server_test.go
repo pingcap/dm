@@ -211,7 +211,7 @@ func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) 
 		resp, err = cli.OperateMysqlWorker(context.Background(), req)
 		c.Assert(err, IsNil)
 		c.Assert(resp.Result, Equals, true)
-		c.Assert(s.getWorker(), NotNil)
+		c.Assert(s.getWorker(true), NotNil)
 	} else {
 		req.Op = pb.WorkerOp_StopWorker
 		resp, err := cli.OperateMysqlWorker(context.Background(), req)
@@ -251,7 +251,7 @@ func (t *testServer) testInfosInEtcd(c *C, hostName string, workerAddr string, d
 func (t *testServer) testRetryConnectMaster(c *C, s *Server, ETCD *embed.Etcd, dir string, hostName string) *embed.Etcd {
 	ETCD.Close()
 	time.Sleep(3 * time.Second)
-	c.Assert(s.getWorker(), NotNil)
+	c.Assert(s.getWorker(true), NotNil)
 	// retryConnectMaster is false means that this worker has been tried to connect to master again.
 	c.Assert(s.retryConnectMaster.Get(), IsFalse)
 	ETCD, err := createMockETCD(dir, "host://"+hostName)
@@ -321,6 +321,6 @@ func (t *testServer) testStopWorkerWhenLostConnect(c *C, s *Server, ETCD *embed.
 	c.Assert(s.retryConnectMaster.Get(), IsTrue)
 	ETCD.Close()
 	time.Sleep(retryConnectSleepTime + time.Duration(defaultKeepAliveTTL+3)*time.Second)
-	c.Assert(s.getWorker(), IsNil)
+	c.Assert(s.getWorker(true), IsNil)
 	c.Assert(s.retryConnectMaster.Get(), IsFalse)
 }
