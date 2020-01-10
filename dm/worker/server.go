@@ -202,18 +202,21 @@ func (s *Server) checkWorkerStart() *Worker {
 	return s.worker
 }
 
-func (s *Server) stopWorker(sourceID string) (*Worker, error) {
+func (s *Server) stopWorker(sourceID string) error {
 	s.Lock()
-	defer s.Unlock()
 	if s.worker == nil {
-		return nil, terror.ErrWorkerNoStart
+		s.Unlock()
+		return terror.ErrWorkerNoStart
 	}
 	if s.worker.cfg.SourceID != sourceID {
-		return nil, terror.ErrWorkerSourceNotMatch
+		s.Unlock()
+		return terror.ErrWorkerSourceNotMatch
 	}
 	w := s.worker
 	s.worker = nil
-	return w, nil
+	s.Unlock()
+	w.Close()
+	return nil
 }
 
 func (s *Server) retryWriteEctd(ops ...clientv3.Op) string {
@@ -677,23 +680,18 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 		return resp, nil
 	}
 	if req.Op == pb.WorkerOp_UpdateConfig {
-		w, err := s.stopWorker(cfg.SourceID)
-		if err != nil {
+		if err = s.stopWorker(cfg.SourceID); err != nil {
 			resp.Result = false
 			resp.Msg = errors.ErrorStack(err)
 			return resp, nil
 		}
-		w.Close()
 	} else if req.Op == pb.WorkerOp_StopWorker {
-		w, err := s.stopWorker(cfg.SourceID)
-		if err == terror.ErrWorkerSourceNotMatch {
+		if err = s.stopWorker(cfg.SourceID); err == terror.ErrWorkerSourceNotMatch {
 			resp.Result = false
-		}
-		if w != nil {
-			w.Close()
+			resp.Msg = errors.ErrorStack(err)
 		}
 	}
-	if req.Op == pb.WorkerOp_UpdateConfig || req.Op == pb.WorkerOp_StartWorker {
+	if resp.Result && (req.Op == pb.WorkerOp_UpdateConfig || req.Op == pb.WorkerOp_StartWorker) {
 		err = s.startWorker(cfg)
 	}
 	if err != nil {
