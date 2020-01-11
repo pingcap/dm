@@ -52,7 +52,7 @@ func (s *Server) JoinMaster(endpoints []string) error {
 	defer cancel()
 	req := &pb.RegisterWorkerRequest{
 		Name:    s.cfg.Name,
-		Address: s.cfg.WorkerAddr,
+		Address: s.cfg.AdvertiseAddr,
 	}
 	resp, err := client.RegisterWorker(ctx, req)
 	if err != nil {
@@ -78,7 +78,7 @@ func (s *Server) KeepAlive() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	k := common.WorkerKeepAliveKeyAdapter.Encode(s.cfg.WorkerAddr, s.cfg.Name)
+	k := common.WorkerKeepAliveKeyAdapter.Encode(s.cfg.AdvertiseAddr, s.cfg.Name)
 	_, err = s.etcdClient.Put(cliCtx, k, time.Now().String(), clientv3.WithLease(lease.ID))
 	if err != nil {
 		return false, err
