@@ -642,11 +642,9 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 	defer cancel()
 	key := common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID)
 	resp, err := s.etcdClient.KV.Get(ectx, key, clientv3.WithPrefix())
-	//resp, err := s.etcdClient.Get(ectx, key)
 	if err != nil {
 		return err
 	}
-	log.L().Info("get subtask", zap.Reflect("resp", resp), zap.String("key", key))
 	for _, kv := range resp.Kvs {
 		infos := common.UpstreamSubTaskKeyAdapter.Decode(string(kv.Key))
 		taskName := infos[1]
