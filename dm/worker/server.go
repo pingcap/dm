@@ -651,10 +651,10 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		task := string(kv.Value)
 		cfg := config.NewSubTaskConfig()
 		if err = cfg.Decode(task); err != nil {
-			return nil
+			return err
 		}
-		if err := w.StartSubTask(cfg); err != nil {
-			return nil
+		if err = w.StartSubTask(cfg); err != nil {
+			return err
 		}
 		log.L().Info("load subtask successful", zap.String("sourceID", cfg.SourceID), zap.String("task", taskName))
 	}
