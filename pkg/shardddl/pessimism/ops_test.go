@@ -33,14 +33,14 @@ func (t *testForEtcd) TestPutOperationDeleteInfo(c *C) {
 	c.Assert(err, IsNil)
 
 	// verify the info exists.
-	ifm, err := GetAllInfo(etcdTestCli)
+	ifm, _, err := GetAllInfo(etcdTestCli)
 	c.Assert(err, IsNil)
 	c.Assert(ifm, HasLen, 1)
 	c.Assert(ifm, HasKey, task)
 	c.Assert(ifm[task][source], DeepEquals, info)
 
 	// verify no operations exist.
-	opm, err := GetAllOperations(etcdTestCli)
+	opm, _, err := GetAllOperations(etcdTestCli)
 	c.Assert(err, IsNil)
 	c.Assert(opm, HasLen, 0)
 
@@ -49,12 +49,12 @@ func (t *testForEtcd) TestPutOperationDeleteInfo(c *C) {
 	c.Assert(err, IsNil)
 
 	// verify no info exit.
-	ifm, err = GetAllInfo(etcdTestCli)
+	ifm, _, err = GetAllInfo(etcdTestCli)
 	c.Assert(err, IsNil)
 	c.Assert(ifm, HasLen, 0)
 
 	// verify the operation exists.
-	opm, err = GetAllOperations(etcdTestCli)
+	opm, _, err = GetAllOperations(etcdTestCli)
 	c.Assert(err, IsNil)
 	c.Assert(opm, HasLen, 1)
 	c.Assert(opm, HasKey, task)

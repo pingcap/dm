@@ -93,20 +93,20 @@ func PutInfo(cli *clientv3.Client, info Info) (int64, error) {
 // GetAllInfo gets all shard DDL info in etcd currently.
 // k/k/v: task-name -> source-ID -> DDL info.
 // This function should often be called by DM-master.
-func GetAllInfo(cli *clientv3.Client) (map[string]map[string]Info, error) {
+func GetAllInfo(cli *clientv3.Client) (map[string]map[string]Info, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
 
 	resp, err := cli.Get(ctx, common.ShardDDLPessimismInfoKeyAdapter.Path(), clientv3.WithPrefix())
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	ifm := make(map[string]map[string]Info)
 	for _, kv := range resp.Kvs {
 		info, err2 := infoFromJSON(string(kv.Value))
 		if err2 != nil {
-			return nil, err2
+			return nil, 0, err2
 		}
 
 		if _, ok := ifm[info.Task]; !ok {
@@ -115,7 +115,7 @@ func GetAllInfo(cli *clientv3.Client) (map[string]map[string]Info, error) {
 		ifm[info.Task][info.Source] = info
 	}
 
-	return ifm, nil
+	return ifm, resp.Header.Revision, nil
 }
 
 // WatchInfoPut watches PUT operations for info.

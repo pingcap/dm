@@ -93,17 +93,18 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(rev2, Greater, rev1)
 
 	// get with only 1 info.
-	ifm, err := GetAllInfo(etcdTestCli)
+	ifm, rev3, err := GetAllInfo(etcdTestCli)
 	c.Assert(err, IsNil)
+	c.Assert(rev3, Equals, rev2)
 	c.Assert(ifm, HasLen, 1)
 	c.Assert(ifm, HasKey, task1)
 	c.Assert(ifm[task1], HasLen, 1)
 	c.Assert(ifm[task1][source1], DeepEquals, i11)
 
 	// put another key and get again with 2 info.
-	rev3, err := PutInfo(etcdTestCli, i12)
+	rev4, err := PutInfo(etcdTestCli, i12)
 	c.Assert(err, IsNil)
-	ifm, err = GetAllInfo(etcdTestCli)
+	ifm, _, err = GetAllInfo(etcdTestCli)
 	c.Assert(err, IsNil)
 	c.Assert(ifm, HasLen, 1)
 	c.Assert(ifm, HasKey, task1)
@@ -119,7 +120,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 		defer wg.Done()
 		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer cancel()
-		WatchInfoPut(ctx, etcdTestCli, rev3+1, wch) // revision+1
+		WatchInfoPut(ctx, etcdTestCli, rev4+1, wch) // revision+1
 		close(wch)                                  // close the chan
 	}()
 
@@ -138,7 +139,7 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 	c.Assert(err, IsNil)
 
 	// get again.
-	ifm, err = GetAllInfo(etcdTestCli)
+	ifm, _, err = GetAllInfo(etcdTestCli)
 	c.Assert(err, IsNil)
 	c.Assert(ifm, HasLen, 2)
 	c.Assert(ifm, HasKey, task1)

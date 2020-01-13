@@ -71,7 +71,7 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	c.Assert(<-wch, DeepEquals, op11)
 
 	// put for another task.
-	_, err = PutOperations(etcdTestCli, false, op21)
+	rev3, err := PutOperations(etcdTestCli, false, op21)
 	c.Assert(err, IsNil)
 
 	// start the watch with an older revision for all tasks and sources.
@@ -88,8 +88,9 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	c.Assert(<-wch, DeepEquals, op21)
 
 	// get all operations.
-	opm, err := GetAllOperations(etcdTestCli)
+	opm, rev4, err := GetAllOperations(etcdTestCli)
 	c.Assert(err, IsNil)
+	c.Assert(rev4, Equals, rev3)
 	c.Assert(opm, HasLen, 2)
 	c.Assert(opm, HasKey, task1)
 	c.Assert(opm, HasKey, task2)
@@ -112,12 +113,12 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	c.Assert(err, IsNil)
 
 	// put for `skipDone` with `done` in etcd, the operations should be skipped.
-	rev3, err := PutOperations(etcdTestCli, true, op12, op13)
+	rev5, err := PutOperations(etcdTestCli, true, op12, op13)
 	c.Assert(err, IsNil)
-	c.Assert(rev3, Equals, txnResp.Header.Revision) // same revision with the previous etcd operation.
+	c.Assert(rev5, Equals, txnResp.Header.Revision) // same revision with the previous etcd operation.
 
 	// get again, op11 deleted, op13 not putted.
-	opm, err = GetAllOperations(etcdTestCli)
+	opm, _, err = GetAllOperations(etcdTestCli)
 	c.Assert(err, IsNil)
 	c.Assert(opm[task1], HasLen, 1)
 	c.Assert(opm[task1][source2], DeepEquals, op12c)

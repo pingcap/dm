@@ -124,20 +124,20 @@ func DeleteOperations(cli *clientv3.Client, ops ...Operation) (int64, error) {
 // GetAllOperations gets all DDL lock operation in etcd currently.
 // k/k/v: task-name -> source-ID -> lock operation.
 // This function is often used for debugging or testing.
-func GetAllOperations(cli *clientv3.Client) (map[string]map[string]Operation, error) {
+func GetAllOperations(cli *clientv3.Client) (map[string]map[string]Operation, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
 
 	resp, err := cli.Get(ctx, common.ShardDDLPessimismOperationKeyAdapter.Path(), clientv3.WithPrefix())
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	opm := make(map[string]map[string]Operation)
 	for _, kv := range resp.Kvs {
 		op, err2 := operationFromJSON(string(kv.Value))
 		if err2 != nil {
-			return nil, err2
+			return nil, 0, err2
 		}
 
 		if _, ok := opm[op.Task]; !ok {
@@ -146,7 +146,7 @@ func GetAllOperations(cli *clientv3.Client) (map[string]map[string]Operation, er
 		opm[op.Task][op.Source] = op
 	}
 
-	return opm, nil
+	return opm, resp.Header.Revision, nil
 }
 
 // WatchOperationPut watches PUT operations for DDL lock operation.
