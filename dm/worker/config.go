@@ -160,14 +160,14 @@ func (c *Config) adjust() error {
 	}
 
 	if c.AdvertiseAddr == "" {
-		if host == "" {
-			return terror.ErrWorkerHostPortNotValid.Generatef("worker-addr (%s) must include the 'host' part when advertise-addr is not set", c.WorkerAddr)
+		if host == "" || host == "0.0.0.0" {
+			return terror.ErrWorkerHostPortNotValid.Generatef("worker-addr (%s) must include the 'host' part (should not be '0.0.0.0') when advertise-addr is not set", c.WorkerAddr)
 		}
 		c.AdvertiseAddr = c.WorkerAddr
 	} else {
 		host, _, err = net.SplitHostPort(c.AdvertiseAddr)
-		if err != nil || host == "" {
-			return terror.ErrWorkerHostPortNotValid.Delegate(err, c.AdvertiseAddr)
+		if err != nil || host == "" || host == "0.0.0.0" {
+			return terror.ErrWorkerHostPortNotValid.AnnotateDelegate(err, "advertise-addr (%s) must include the 'host' part and should not be '0.0.0.0'", c.AdvertiseAddr)
 		}
 	}
 
