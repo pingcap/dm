@@ -45,6 +45,8 @@ func (t *testLock) TestLock(c *C) {
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, 1)
 	c.Assert(l1.Ready(), DeepEquals, map[string]bool{source1: false})
+	synced, _ = l1.IsSynced()
+	c.Assert(synced, IsFalse)
 
 	// synced
 	synced, remain, err = l1.TrySync(source1, DDLs, []string{source1})
@@ -52,6 +54,8 @@ func (t *testLock) TestLock(c *C) {
 	c.Assert(synced, IsTrue)
 	c.Assert(remain, Equals, 0)
 	c.Assert(l1.Ready(), DeepEquals, map[string]bool{source1: true})
+	synced, _ = l1.IsSynced()
+	c.Assert(synced, IsTrue)
 
 	// create the lock with 2 sources.
 	l2 := NewLock(ID, task, source1, DDLs, []string{source1, source2})

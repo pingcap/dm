@@ -79,6 +79,13 @@ func (l *Lock) TrySync(caller string, DDLs, sources []string) (bool, int, error)
 	return l.remain <= 0, l.remain, nil
 }
 
+// IsSynced returns whether the lock has synced.
+func (l *Lock) IsSynced() (bool, int) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.remain <= 0, l.remain
+}
+
 // Ready returns the sources sync status or whether they are ready.
 func (l *Lock) Ready() map[string]bool {
 	l.mu.RLock()
