@@ -1539,3 +1539,50 @@ func (t *testMaster) TestOperateMysqlWorker(c *check.C) {
 	c.Assert(resp.Result, check.Equals, true)
 	cancel()
 }
+
+func (t *testMaster) TestOfflineWorker(c *check.C) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	// create a new cluster
+	cfg1 := NewConfig()
+	c.Assert(cfg1.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
+	cfg1.Name = "dm-master-1"
+	cfg1.DataDir = c.MkDir()
+	cfg1.MasterAddr = tempurl.Alloc()[len("http://"):]
+	cfg1.PeerUrls = tempurl.Alloc()
+	cfg1.AdvertisePeerUrls = cfg1.PeerUrls
+	cfg1.InitialCluster = fmt.Sprintf("%s=%s", cfg1.Name, cfg1.AdvertisePeerUrls)
+
+	s1 := NewServer(cfg1)
+	c.Assert(s1.Start(ctx), check.IsNil)
+	defer s1.Close()
+
+	time.Sleep(time.Second * 2)
+
+	ectx, canc := context.WithTimeout(ctx, time.Second)
+	defer canc()
+	req1 := &pb.RegisterWorkerRequest{
+		Name:    "xixi",
+		Address: "127.0.0.1:1000",
+	}
+	resp, err := s1.RegisterWorker(ectx, req1)
+	c.Assert(err, check.IsNil)
+	c.Assert(resp.Result, check.IsTrue)
+
+	req2 := &pb.OfflineWorkerRequest{
+		Name:    "haha",
+		Address: "127.0.0.1:1000",
+	}
+	{
+		res, err := s1.OfflineWorker(ectx, req2)
+		c.Assert(err, check.IsNil)
+		c.Assert(res.Result, check.IsFalse)
+		c.Assert(res.Msg, check.Matches, ".*delete from etcd failed, please check whether the name and address of worker match.*")
+	}
+	{
+		req2.Name = "xixi"
+		res, err := s1.OfflineWorker(ectx, req2)
+		c.Assert(err, check.IsNil)
+		c.Assert(res.Result, check.IsTrue)
+	}
+}

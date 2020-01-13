@@ -472,6 +472,7 @@ const (
 	codeWorkerHostPortNotValid
 	codeWorkerNoStart
 	codeWorkerAlreadyStarted
+	codeWorkerSourceNotMatch
 )
 
 // DM-tracer error code
@@ -925,6 +926,7 @@ var (
 	ErrWorkerWaitRelayCatchupTimeout = New(codeWorkerWaitRelayCatchupTimeout, ClassDMWorker, ScopeInternal, LevelHigh, "waiting for relay binlog pos to catch up with loader end binlog pos is timeout (exceeding %s), loader end binlog pos: %s, relay binlog pos: %s")
 	ErrWorkerRelayIsPurging          = New(codeWorkerRelayIsPurging, ClassDMWorker, ScopeInternal, LevelHigh, "relay log purger is purging, cannot start sub task %s, please try again later")
 	ErrWorkerHostPortNotValid        = New(codeWorkerHostPortNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "host:port '%s' not valid")
+	ErrWorkerSourceNotMatch          = New(codeWorkerSourceNotMatch, ClassDMWorker, ScopeInternal, LevelHigh, "source of request does not match with source in worker")
 
 	// DM-tracer error
 	ErrTracerParseFlagSet        = New(codeTracerParseFlagSet, ClassDMTracer, ScopeInternal, LevelMedium, "parse dm-tracer config flag set")
