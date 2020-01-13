@@ -43,6 +43,7 @@ function run() {
     run_dm_worker $WORK_DIR/worker3 $WORKER3_PORT $cur/conf/dm-worker3.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER3_PORT
     ps aux | grep dm-worker2 |awk '{print $2}'|xargs kill || true
+    check_port_offline $WORKER2_PORT 20
 
     echo "wait and check task running"
     check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
