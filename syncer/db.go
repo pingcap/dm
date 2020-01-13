@@ -193,7 +193,6 @@ func (conn *DBConn) querySQL(tctx *tcontext.Context, query string, args ...inter
 }
 
 func (conn *DBConn) executeSQLWithIgnore(tctx *tcontext.Context, ignoreError func(error) bool, queries []string, args ...[]interface{}) (int, error) {
-
 	failpoint.Inject("ExecuteSQLWithIgnoreFailed", func(val failpoint.Value) {
 		queryPattern := val.(string)
 		if len(queries) == 1 && strings.Contains(queries[0], queryPattern) {

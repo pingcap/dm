@@ -208,6 +208,10 @@ func (s *OnlineDDLStorage) Save(tctx *tcontext.Context, ghostSchema, ghostTable,
 
 	// maybe we meed more checks for it
 
+	if len(info.DDLs) != 0 && info.DDLs[len(info.DDLs-1)] == ddl {
+		tctx.L().Warn("online ddl may be saved before, just ignore it", zap.String("ddl", ddl))
+		return nil
+	}
 	info.DDLs = append(info.DDLs, ddl)
 	ddlsBytes, err := json.Marshal(mSchema[ghostTable])
 	if err != nil {
