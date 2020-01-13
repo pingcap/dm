@@ -195,9 +195,6 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(3 * time.Second):
-			// update task -> workers after started
-			s.updateTaskWorkers(ctx)
 		}
 	}()
 
@@ -311,6 +308,51 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 	s.coordinator.AddWorker(req.Name, req.Address, nil)
 	log.L().Info("register worker successfully", zap.String("name", req.Name), zap.String("address", req.Address))
 	respWorker := &pb.RegisterWorkerResponse{
+		Result: true,
+	}
+	return respWorker, nil
+}
+
+// OfflineWorker removes info of the worker which has been Closed, and all the worker are store in the path:
+// key:   /dm-worker/r/address
+// value: name
+func (s *Server) OfflineWorker(ctx context.Context, req *pb.OfflineWorkerRequest) (*pb.OfflineWorkerResponse, error) {
+	if !s.coordinator.IsStarted() {
+		respWorker := &pb.OfflineWorkerResponse{
+			Result: false,
+			Msg:    "coordinator not started, may not leader",
+		}
+		return respWorker, nil
+	}
+	w := s.coordinator.GetWorkerByAddress(req.Address)
+	if w == nil || w.State() != coordinator.WorkerClosed {
+		respWorker := &pb.OfflineWorkerResponse{
+			Result: false,
+			Msg:    "worker which has not been closed is not allowed to offline",
+		}
+		return respWorker, nil
+	}
+	k := common.WorkerRegisterKeyAdapter.Encode(req.Address)
+	v := req.Name
+	ectx, cancel := context.WithTimeout(ctx, etcdTimeouit)
+	defer cancel()
+	resp, err := s.etcdClient.Txn(ectx).
+		If(clientv3.Compare(clientv3.Value(k), "=", v)).
+		Then(clientv3.OpDelete(k)).
+		Commit()
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Succeeded {
+		respWorker := &pb.OfflineWorkerResponse{
+			Result: false,
+			Msg:    "delete from etcd failed, please check whether the name and address of worker match.",
+		}
+		return respWorker, nil
+	}
+	s.coordinator.RemoveWorker(req.Name)
+	log.L().Info("offline worker successfully", zap.String("name", req.Name), zap.String("address", req.Address))
+	respWorker := &pb.OfflineWorkerResponse{
 		Result: true,
 	}
 	return respWorker, nil
@@ -1202,55 +1244,6 @@ func (s *Server) getErrorFromWorkers(ctx context.Context, sources []string, task
 	return workerRespCh
 }
 
-// updateTaskWorkers fetches task-workers mapper from dm-workers and update s.taskSources
-func (s *Server) updateTaskWorkers(ctx context.Context) {
-	taskWorkers, _ := s.fetchTaskWorkers(ctx)
-	if len(taskWorkers) == 0 {
-		return // keep the old
-	}
-	// simple replace, maybe we can do more accurate update later
-	s.replaceTaskWorkers(taskWorkers)
-	log.L().Info("update workers of task", zap.Reflect("workers", taskWorkers))
-}
-
-// fetchTaskWorkers fetches task-workers mapper from workers based on deployment
-func (s *Server) fetchTaskWorkers(ctx context.Context) (map[string][]string, map[string]string) {
-	workers := make([]string, 0, len(s.coordinator.GetAllWorkers()))
-	for worker := range s.coordinator.GetAllWorkers() {
-		workers = append(workers, worker)
-	}
-
-	workerRespCh := s.getStatusFromWorkers(ctx, workers, "")
-
-	taskWorkerMap := make(map[string][]string)
-	workerMsgMap := make(map[string]string)
-	for len(workerRespCh) > 0 {
-		workerResp := <-workerRespCh
-		worker := workerResp.Worker
-		if len(workerResp.Msg) > 0 {
-			workerMsgMap[worker] = workerResp.Msg
-		} else if !workerResp.Result {
-			workerMsgMap[worker] = "got response but with failed result"
-		}
-		if workerResp.SubTaskStatus == nil {
-			continue
-		}
-		for _, status := range workerResp.SubTaskStatus {
-			if status.Stage == pb.Stage_InvalidStage {
-				continue // invalid status
-			}
-			task := status.Name
-			_, ok := taskWorkerMap[task]
-			if !ok {
-				taskWorkerMap[task] = make([]string, 0, 10)
-			}
-			taskWorkerMap[task] = append(taskWorkerMap[task], worker)
-		}
-	}
-
-	return taskWorkerMap, workerMsgMap
-}
-
 // return true means match, false means mismatch.
 func (s *Server) checkTaskAndWorkerMatch(taskname string, targetWorker string) bool {
 	// find worker
@@ -1702,7 +1695,7 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 				Msg:    "Create worker failed. worker has been started",
 			}, nil
 		}
-		w, err := s.coordinator.AcquireWorkerForSource(cfg.SourceID)
+		w, err = s.coordinator.AcquireWorkerForSource(cfg.SourceID)
 		if err != nil {
 			return makeMysqlWorkerResponse(err)
 		}
@@ -1729,20 +1722,19 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 	} else {
 		w := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
 		if w == nil {
-			if !s.coordinator.HandleStoppedWorker(nil, cfg, false) {
-				return &pb.MysqlWorkerResponse{
-					Result: false,
-					Msg:    "Stop worker failed. worker has not been started",
-				}, nil
-			}
-		} else {
-			if resp, err = w.OperateMysqlWorker(ctx, req, s.cfg.RPCTimeout); err != nil {
-				return &pb.MysqlWorkerResponse{
-					Result: false,
-					Msg:    errors.ErrorStack(err),
-				}, nil
-			}
-			s.coordinator.HandleStoppedWorker(w, cfg, resp.Result)
+			return &pb.MysqlWorkerResponse{
+				Result: false,
+				Msg:    "Stop Mysql-worker failed. worker has not been started",
+			}, nil
+		}
+		if resp, err = w.OperateMysqlWorker(ctx, req, s.cfg.RPCTimeout); err != nil {
+			return &pb.MysqlWorkerResponse{
+				Result: false,
+				Msg:    errors.ErrorStack(err),
+			}, nil
+		}
+		if resp.Result {
+			s.coordinator.HandleStoppedWorker(w, cfg)
 		}
 	}
 	return &pb.MysqlWorkerResponse{

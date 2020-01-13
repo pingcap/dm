@@ -88,6 +88,8 @@ func (s *Server) KeepAlive() (bool, error) {
 		return false, err
 	}
 	log.L().Info("keepalive", zap.String("to-master", s.cfg.Join))
+	// set retryConnectMaster as long as it connects success, for next retry
+	s.retryConnectMaster.Set(true)
 	for {
 		select {
 		case _, ok := <-ch:

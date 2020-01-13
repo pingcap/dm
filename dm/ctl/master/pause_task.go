@@ -26,7 +26,7 @@ import (
 // NewPauseTaskCmd creates a PauseTask command
 func NewPauseTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "pause-task [-w worker ...] <task-name>",
+		Use:   "pause-task [-s source ...] <task-name>",
 		Short: "pause a specified running task",
 		Run:   pauseTaskFunc,
 	}
@@ -42,13 +42,13 @@ func pauseTaskFunc(cmd *cobra.Command, _ []string) {
 	}
 	name := cmd.Flags().Arg(0)
 
-	workers, err := common.GetWorkerArgs(cmd)
+	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
 		common.PrintLines("%s", errors.ErrorStack(err))
 		return
 	}
 
-	resp, err := common.OperateTask(pb.TaskOp_Pause, name, workers)
+	resp, err := common.OperateTask(pb.TaskOp_Pause, name, sources)
 	if err != nil {
 		common.PrintLines("can not pause task %s:\n%v", name, errors.ErrorStack(err))
 		return

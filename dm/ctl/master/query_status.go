@@ -42,7 +42,7 @@ type taskInfo struct {
 // NewQueryStatusCmd creates a QueryStatus command
 func NewQueryStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "query-status [-w worker ...] [task-name]",
+		Use:   "query-status [-s source ...] [task-name]",
 		Short: "query task status",
 		Run:   queryStatusFunc,
 	}
@@ -58,7 +58,7 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) {
 	}
 	taskName := cmd.Flags().Arg(0) // maybe empty
 
-	workers, err := common.GetWorkerArgs(cmd)
+	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
 		common.PrintLines("%s", errors.ErrorStack(err))
 		return
@@ -69,14 +69,14 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) {
 	defer cancel()
 	resp, err := cli.QueryStatus(ctx, &pb.QueryStatusListRequest{
 		Name:    taskName,
-		Sources: workers,
+		Sources: sources,
 	})
 	if err != nil {
-		common.PrintLines("can not query %s task's status(in workers %v):\n%s", taskName, workers, errors.ErrorStack(err))
+		common.PrintLines("can not query %s task's status(in sources %v):\n%s", taskName, sources, errors.ErrorStack(err))
 		return
 	}
 
-	if resp.Result && taskName == "" && len(workers) == 0 {
+	if resp.Result && taskName == "" && len(sources) == 0 {
 		result := wrapTaskResult(resp)
 		common.PrettyPrintInterface(result)
 	} else {

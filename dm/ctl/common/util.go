@@ -165,9 +165,9 @@ func GetFileContent(fpath string) ([]byte, error) {
 	return content, nil
 }
 
-// GetWorkerArgs extracts workers from cmd
-func GetWorkerArgs(cmd *cobra.Command) ([]string, error) {
-	return cmd.Flags().GetStringSlice("worker")
+// GetSourceArgs extracts sources from cmd
+func GetSourceArgs(cmd *cobra.Command) ([]string, error) {
+	return cmd.Flags().GetStringSlice("source")
 }
 
 // ExtractSQLsFromArgs extract multiple sql from args.
