@@ -91,7 +91,7 @@ func (t *testServer) TestServer(c *C) {
 	t.testOperateWorker(c, s, dir, true)
 
 	// check infos have be written into ETCD success.
-	t.testInfosInEtcd(c, hostName, workerAddr, dir)
+	t.testInfosInEtcd(c, hostName, cfg.AdvertiseAddr, dir)
 
 	// check worker would retry connecting master rather than stop worker directly.
 	ETCD = t.testRetryConnectMaster(c, s, ETCD, etcdDir, hostName)
