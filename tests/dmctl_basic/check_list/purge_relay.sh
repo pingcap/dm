@@ -14,20 +14,20 @@ function purge_relay_wihout_worker() {
 
 function purge_relay_filename_with_multi_workers() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "purge-relay --filename bin-000001 -w 127.0.0.1:$WORKER1_PORT -w 127.0.0.1:$WORKER2_PORT" \
+        "purge-relay --filename bin-000001 -w $SOURCE_ID1 -w $SOURCE_ID2" \
         "for --filename, can only specify one DM-worker per time" 1
 }
 
 function purge_relay_while_master_down() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "purge-relay --filename bin-000001 -w 127.0.0.1:$WORKER1_PORT" \
+        "purge-relay --filename bin-000001 -w $SOURCE_ID1" \
         "can not purge relay log files:" 1
 }
 
 function purge_relay_success() {
     binlog_file=$1
-    worker_addr=$2
+    source_id=$2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "purge-relay --filename $binlog_file -w $worker_addr" \
+        "purge-relay --filename $binlog_file -w $source_id" \
         "\"result\": true" 2
 }

@@ -27,7 +27,7 @@ import (
 // NewQueryErrorCmd creates a QueryError command
 func NewQueryErrorCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "query-error [-w worker ...] [task-name]",
+		Use:   "query-error [-s source ...] [task-name]",
 		Short: "query task error",
 		Run:   queryErrorFunc,
 	}
@@ -43,7 +43,7 @@ func queryErrorFunc(cmd *cobra.Command, _ []string) {
 	}
 	taskName := cmd.Flags().Arg(0) // maybe empty
 
-	workers, err := common.GetWorkerArgs(cmd)
+	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
 		common.PrintLines("%s", errors.ErrorStack(err))
 		return
@@ -54,15 +54,15 @@ func queryErrorFunc(cmd *cobra.Command, _ []string) {
 	cli := common.MasterClient()
 	resp, err := cli.QueryError(ctx, &pb.QueryErrorListRequest{
 		Name:    taskName,
-		Sources: workers,
+		Sources: sources,
 	})
 	if err != nil {
 		common.PrintLines("dmctl query error failed")
 		if taskName != "" {
 			common.PrintLines("taskname: %s", taskName)
 		}
-		if len(workers) > 0 {
-			common.PrintLines("workers: %v", workers)
+		if len(sources) > 0 {
+			common.PrintLines("sources: %v", sources)
 		}
 		common.PrintLines("error: %s", errors.ErrorStack(err))
 		return

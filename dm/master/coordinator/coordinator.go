@@ -168,6 +168,13 @@ func (c *Coordinator) Stop() {
 	log.L().Info("coordinator is stoped")
 }
 
+// RemoveWorker removes the dm-worker to the coordinate.
+func (c *Coordinator) RemoveWorker(address string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.workers, address)
+}
+
 // AddWorker add the dm-worker to the coordinate.
 func (c *Coordinator) AddWorker(name string, address string, cli workerrpc.Client) {
 	c.mu.Lock()
@@ -195,23 +202,13 @@ func (c *Coordinator) HandleStartedWorker(w *Worker, cfg *config.MysqlConfig, su
 }
 
 // HandleStoppedWorker change worker status when mysql task stopped
-func (c *Coordinator) HandleStoppedWorker(w *Worker, cfg *config.MysqlConfig, ret bool) bool {
+func (c *Coordinator) HandleStoppedWorker(w *Worker, cfg *config.MysqlConfig) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if w == nil {
-		if _, ok := c.taskConfigs[cfg.SourceID]; !ok {
-			return false
-		}
-		// This mysqltask is waiting to be scheduled. So we just remove it from wait queue.
-		delete(c.taskConfigs, cfg.SourceID)
-	} else {
-		if ret {
-			delete(c.taskConfigs, cfg.SourceID)
-			delete(c.upstreams, cfg.SourceID)
-			delete(c.workerToConfigs, w.Address())
-			w.SetStatus(WorkerFree)
-		}
-	}
+	delete(c.taskConfigs, cfg.SourceID)
+	delete(c.upstreams, cfg.SourceID)
+	delete(c.workerToConfigs, w.Address())
+	w.SetStatus(WorkerFree)
 	return true
 }
 
@@ -265,6 +262,13 @@ func (c *Coordinator) GetWorkerBySourceID(source string) *Worker {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.upstreams[source]
+}
+
+// GetWorkerByAddress gets the worker through addr.
+func (c *Coordinator) GetWorkerByAddress(addr string) *Worker {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.workers[addr]
 }
 
 // GetConfigBySourceID gets db config through source id.

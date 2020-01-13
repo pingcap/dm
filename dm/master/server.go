@@ -313,6 +313,51 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 	return respWorker, nil
 }
 
+// OfflineWorker removes info of the worker which has been Closed, and all the worker are store in the path:
+// key:   /dm-worker/r/address
+// value: name
+func (s *Server) OfflineWorker(ctx context.Context, req *pb.OfflineWorkerRequest) (*pb.OfflineWorkerResponse, error) {
+	if !s.coordinator.IsStarted() {
+		respWorker := &pb.OfflineWorkerResponse{
+			Result: false,
+			Msg:    "coordinator not started, may not leader",
+		}
+		return respWorker, nil
+	}
+	w := s.coordinator.GetWorkerByAddress(req.Address)
+	if w == nil || w.State() != coordinator.WorkerClosed {
+		respWorker := &pb.OfflineWorkerResponse{
+			Result: false,
+			Msg:    "worker which has not been closed is not allowed to offline",
+		}
+		return respWorker, nil
+	}
+	k := common.WorkerRegisterKeyAdapter.Encode(req.Address)
+	v := req.Name
+	ectx, cancel := context.WithTimeout(ctx, etcdTimeouit)
+	defer cancel()
+	resp, err := s.etcdClient.Txn(ectx).
+		If(clientv3.Compare(clientv3.Value(k), "=", v)).
+		Then(clientv3.OpDelete(k)).
+		Commit()
+	if err != nil {
+		return nil, err
+	}
+	if !resp.Succeeded {
+		respWorker := &pb.OfflineWorkerResponse{
+			Result: false,
+			Msg:    "delete from etcd failed, please check whether the name and address of worker match.",
+		}
+		return respWorker, nil
+	}
+	s.coordinator.RemoveWorker(req.Name)
+	log.L().Info("offline worker successfully", zap.String("name", req.Name), zap.String("address", req.Address))
+	respWorker := &pb.OfflineWorkerResponse{
+		Result: true,
+	}
+	return respWorker, nil
+}
+
 // StartTask implements MasterServer.StartTask
 func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.StartTaskResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "StartTask"))
@@ -1705,20 +1750,19 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 	} else {
 		w := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
 		if w == nil {
-			if !s.coordinator.HandleStoppedWorker(nil, cfg, false) {
-				return &pb.MysqlWorkerResponse{
-					Result: false,
-					Msg:    "Stop worker failed. worker has not been started",
-				}, nil
-			}
-		} else {
-			if resp, err = w.OperateMysqlWorker(ctx, req, s.cfg.RPCTimeout); err != nil {
-				return &pb.MysqlWorkerResponse{
-					Result: false,
-					Msg:    errors.ErrorStack(err),
-				}, nil
-			}
-			s.coordinator.HandleStoppedWorker(w, cfg, resp.Result)
+			return &pb.MysqlWorkerResponse{
+				Result: false,
+				Msg:    "Stop Mysql-worker failed. worker has not been started",
+			}, nil
+		}
+		if resp, err = w.OperateMysqlWorker(ctx, req, s.cfg.RPCTimeout); err != nil {
+			return &pb.MysqlWorkerResponse{
+				Result: false,
+				Msg:    errors.ErrorStack(err),
+			}, nil
+		}
+		if resp.Result {
+			s.coordinator.HandleStoppedWorker(w, cfg)
 		}
 	}
 	return &pb.MysqlWorkerResponse{
@@ -1766,7 +1810,7 @@ func (s *Server) taskConfigArgsExtractor(cfg *config.SubTaskConfig) (*coordinato
 
 	worker := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
 	if worker == nil {
-		return nil, "", "", handleErr(terror.ErrMasterTaskConfigExtractor.Generatef("%s relevant worker-client not found", worker))
+		return nil, "", "", handleErr(terror.ErrMasterTaskConfigExtractor.Generatef("%s relevant worker-client not found", cfg.SourceID))
 	}
 
 	cfgToml, err := cfg.Toml()

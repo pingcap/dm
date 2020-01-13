@@ -108,7 +108,6 @@ func (t *testServer) TestServer(c *C) {
 	// check infos have be written into ETCD success.
 	t.testInfosInEtcd(c, hostName, workerAddr, dir)
 
-	// comment this now because of data race problem
 	// check worker would retry connecting master rather than stop worker directly.
 	ETCD = t.testRetryConnectMaster(c, s, ETCD, etcdDir, hostName)
 

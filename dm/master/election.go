@@ -15,7 +15,6 @@ package master
 
 import (
 	"context"
-
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"

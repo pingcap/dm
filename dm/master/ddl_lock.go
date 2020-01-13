@@ -142,7 +142,7 @@ func (lk *LockKeeper) FindLock(lockID string) *Lock {
 func (lk *LockKeeper) Locks() map[string]*Lock {
 	lk.RLock()
 	defer lk.RUnlock()
-	locks := make(map[string]*Lock)
+	locks := make(map[string]*Lock, len(lk.locks))
 	for k, v := range lk.locks {
 		locks[k] = v
 	}

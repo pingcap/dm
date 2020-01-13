@@ -209,18 +209,21 @@ func (s *Server) setWorker(worker *Worker, locked bool) {
 	s.worker = worker
 }
 
-func (s *Server) stopWorker(sourceID string) *Worker {
+func (s *Server) stopWorker(sourceID string) error {
 	s.Lock()
-	defer s.Unlock()
 	w := s.getWorker(false)
 	if w == nil {
-		return nil
+		s.Unlock()
+		return terror.ErrWorkerNoStart
 	}
 	if w.cfg.SourceID != sourceID {
-		return nil
+		s.Unlock()
+		return terror.ErrWorkerSourceNotMatch
 	}
 	s.setWorker(nil, false)
-	return w
+	s.Unlock()
+	w.Close()
+	return nil
 }
 
 func (s *Server) retryWriteEctd(ops ...clientv3.Op) string {
@@ -683,17 +686,19 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 		resp.Msg = errors.ErrorStack(err)
 		return resp, nil
 	}
-	if req.Op == pb.WorkerOp_UpdateConfig || req.Op == pb.WorkerOp_StopWorker {
-		w := s.stopWorker(cfg.SourceID)
-		if w == nil {
+	if req.Op == pb.WorkerOp_UpdateConfig {
+		if err = s.stopWorker(cfg.SourceID); err != nil {
 			resp.Result = false
-			resp.Msg = "Mysql task has not been created, please call CreateMysqlTask. Or there has been a worker started" +
-				" which has different config"
+			resp.Msg = errors.ErrorStack(err)
 			return resp, nil
 		}
-		w.Close()
+	} else if req.Op == pb.WorkerOp_StopWorker {
+		if err = s.stopWorker(cfg.SourceID); err == terror.ErrWorkerSourceNotMatch {
+			resp.Result = false
+			resp.Msg = errors.ErrorStack(err)
+		}
 	}
-	if req.Op == pb.WorkerOp_UpdateConfig || req.Op == pb.WorkerOp_StartWorker {
+	if resp.Result && (req.Op == pb.WorkerOp_UpdateConfig || req.Op == pb.WorkerOp_StartWorker) {
 		err = s.startWorker(cfg)
 	}
 	if err != nil {
