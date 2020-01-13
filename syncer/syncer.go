@@ -1686,7 +1686,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		// when add ddl job, will execute ddl and then flush checkpoint.
 		// if execute ddl failed, the execErrorDetected will be true.
 		if s.execErrorDetected.Get() {
-			return terror.ErrSyncerUnitHandleDDLFailed.Generate()
+			return terror.ErrSyncerUnitHandleDDLFailed.Generate(ev.Query)
 		}
 
 		s.tctx.L().Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("position", ec.currentPos))
@@ -1882,7 +1882,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	}
 
 	if s.execErrorDetected.Get() {
-		return terror.ErrSyncerUnitHandleDDLFailed.Generate()
+		return terror.ErrSyncerUnitHandleDDLFailed.Generate(ev.Query)
 	}
 
 	if len(onlineDDLTableNames) > 0 {
