@@ -63,6 +63,9 @@ service Master {
 
     // RegisterWorker register the dm-workers.
     rpc RegisterWorker(RegisterWorkerRequest) returns(RegisterWorkerResponse) {}
+
+    // OfflineWorker offline the dm-workers.
+    rpc OfflineWorker(OfflineWorkerRequest) returns(OfflineWorkerResponse) {}
 }
 
 message MigrateWorkerRelayRequest {
@@ -299,6 +302,16 @@ message RegisterWorkerRequest {
 }
 
 message RegisterWorkerResponse {
+    bool result = 1;
+    string msg = 2;
+}
+
+message OfflineWorkerRequest {
+    string name = 1;
+    string address = 2;
+}
+
+message OfflineWorkerResponse {
     bool result = 1;
     string msg = 2;
 }

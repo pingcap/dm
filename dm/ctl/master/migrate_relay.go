@@ -30,7 +30,7 @@ import (
 // NewMigrateRelayCmd creates a MigrateRelay command
 func NewMigrateRelayCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "migrate-relay <worker> <binlogName> <binlogPos>",
+		Use:   "migrate-relay <source> <binlogName> <binlogPos>",
 		Short: "migrate DM-worker's relay unit",
 		Run:   migrateRelayFunc,
 	}
@@ -45,7 +45,7 @@ func migrateRelayFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	worker := cmd.Flags().Arg(0)
+	source := cmd.Flags().Arg(0)
 	binlogName := cmd.Flags().Arg(1)
 	binlogPos, err := strconv.Atoi(cmd.Flags().Arg(2))
 	if err != nil {
@@ -59,7 +59,7 @@ func migrateRelayFunc(cmd *cobra.Command, _ []string) {
 	resp, err := cli.MigrateWorkerRelay(ctx, &pb.MigrateWorkerRelayRequest{
 		BinlogName: binlogName,
 		BinlogPos:  uint32(binlogPos),
-		Source:     worker,
+		Source:     source,
 	})
 	if err != nil {
 		log.L().Error("can not migrate relay", zap.Error(err))

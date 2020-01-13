@@ -15,58 +15,46 @@ package master
 
 import (
 	"context"
-	"os"
-
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
+	"os"
 )
 
-// NewQueryErrorCmd creates a QueryError command
-func NewQueryErrorCmd() *cobra.Command {
+// NewOfflineWorkerCmd creates an OfflineWorker command
+func NewOfflineWorkerCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "query-error [-s source ...] [task-name]",
-		Short: "query task error",
-		Run:   queryErrorFunc,
+		Use:   "offline-worker <name> <address>",
+		Short: "offline worker which has been closed",
+		Run:   offlineWorkerFunc,
 	}
 	return cmd
 }
 
-// queryErrorFunc does query task's error
-func queryErrorFunc(cmd *cobra.Command, _ []string) {
-	if len(cmd.Flags().Args()) > 1 {
+// offlineWorkerFunc does migrate relay request
+func offlineWorkerFunc(cmd *cobra.Command, _ []string) {
+	if len(cmd.Flags().Args()) != 2 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
 		return
 	}
-	taskName := cmd.Flags().Arg(0) // maybe empty
 
-	sources, err := common.GetSourceArgs(cmd)
-	if err != nil {
-		common.PrintLines("%s", errors.ErrorStack(err))
-		return
-	}
-
+	name := cmd.Flags().Arg(0)
+	addr := cmd.Flags().Arg(1)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
 	cli := common.MasterClient()
-	resp, err := cli.QueryError(ctx, &pb.QueryErrorListRequest{
-		Name:    taskName,
-		Sources: sources,
+	resp, err := cli.OfflineWorker(ctx, &pb.OfflineWorkerRequest{
+		Name:    name,
+		Address: addr,
 	})
 	if err != nil {
-		common.PrintLines("dmctl query error failed")
-		if taskName != "" {
-			common.PrintLines("taskname: %s", taskName)
-		}
-		if len(sources) > 0 {
-			common.PrintLines("sources: %v", sources)
-		}
-		common.PrintLines("error: %s", errors.ErrorStack(err))
+		common.PrintLines("offline worker failed, error:\n%v", errors.ErrorStack(err))
 		return
 	}
-
-	common.PrettyPrintResponse(resp)
+	if !resp.Result {
+		common.PrintLines("offline worker failed:\n%v", resp.Msg)
+	}
 }

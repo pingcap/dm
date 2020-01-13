@@ -15,7 +15,6 @@ package master
 
 import (
 	"context"
-	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/errors"
@@ -70,8 +69,8 @@ func operateMysqlWorkerFunc(cmd *cobra.Command, _ []string) {
 		common.PrintLines("can not update task:\n%v", errors.ErrorStack(err))
 		return
 	}
-	if !common.PrettyPrintResponseWithCheckTask(resp, checker.ErrorMsgHeader) {
-		common.PrettyPrintResponse(resp)
-	}
 
+	if !resp.Result {
+		common.PrintLines("operate worker failed:\n%v", resp.Msg)
+	}
 }
