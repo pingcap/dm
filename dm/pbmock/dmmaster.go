@@ -115,6 +115,26 @@ func (mr *MockMasterClientMockRecorder) MigrateWorkerRelay(arg0, arg1 interface{
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MigrateWorkerRelay", reflect.TypeOf((*MockMasterClient)(nil).MigrateWorkerRelay), varargs...)
 }
 
+// OfflineWorker mocks base method
+func (m *MockMasterClient) OfflineWorker(arg0 context.Context, arg1 *pb.OfflineWorkerRequest, arg2 ...grpc.CallOption) (*pb.OfflineWorkerResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "OfflineWorker", varargs...)
+	ret0, _ := ret[0].(*pb.OfflineWorkerResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OfflineWorker indicates an expected call of OfflineWorker
+func (mr *MockMasterClientMockRecorder) OfflineWorker(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OfflineWorker", reflect.TypeOf((*MockMasterClient)(nil).OfflineWorker), varargs...)
+}
+
 // OperateMysqlWorker mocks base method
 func (m *MockMasterClient) OperateMysqlWorker(arg0 context.Context, arg1 *pb.MysqlWorkerRequest, arg2 ...grpc.CallOption) (*pb.MysqlWorkerResponse, error) {
 	m.ctrl.T.Helper()
@@ -476,6 +496,21 @@ func (m *MockMasterServer) MigrateWorkerRelay(arg0 context.Context, arg1 *pb.Mig
 func (mr *MockMasterServerMockRecorder) MigrateWorkerRelay(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MigrateWorkerRelay", reflect.TypeOf((*MockMasterServer)(nil).MigrateWorkerRelay), arg0, arg1)
+}
+
+// OfflineWorker mocks base method
+func (m *MockMasterServer) OfflineWorker(arg0 context.Context, arg1 *pb.OfflineWorkerRequest) (*pb.OfflineWorkerResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OfflineWorker", arg0, arg1)
+	ret0, _ := ret[0].(*pb.OfflineWorkerResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OfflineWorker indicates an expected call of OfflineWorker
+func (mr *MockMasterServerMockRecorder) OfflineWorker(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OfflineWorker", reflect.TypeOf((*MockMasterServer)(nil).OfflineWorker), arg0, arg1)
 }
 
 // OperateMysqlWorker mocks base method
