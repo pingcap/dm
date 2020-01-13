@@ -420,8 +420,8 @@ func (s *Syncer) initShardingGroups() error {
 // IsFreshTask implements Unit.IsFreshTask
 func (s *Syncer) IsFreshTask(ctx context.Context) (bool, error) {
 	globalPoint := s.checkpoint.GlobalPoint()
-	shardTablePoints := s.checkpoint.ShardTablePoint()
-	return binlog.ComparePosition(globalPoint, minCheckpoint) <= 0 && len(shardTablePoints) == 0, nil
+	tablePoint := s.checkpoint.TablePoint()
+	return binlog.ComparePosition(globalPoint, minCheckpoint) <= 0 && len(tablePoint) == 0, nil
 }
 
 func (s *Syncer) reset() {
