@@ -675,6 +675,7 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 
 // OperateMysqlWorker create a new mysql task which will be running in this Server
 func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequest) (*pb.MysqlWorkerResponse, error) {
+	log.L().Info("", zap.String("request", "OperateMysqlWorker"), zap.Stringer("payload", req))
 	resp := &pb.MysqlWorkerResponse{
 		Result: true,
 		Msg:    "Operate mysql task successfully",

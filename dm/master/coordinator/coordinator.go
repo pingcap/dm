@@ -224,7 +224,9 @@ func (c *Coordinator) AcquireWorkerForSource(source string) (*Worker, error) {
 		return nil, errors.Errorf("Acquire worker failed. the same source has been started in worker: %s", addr)
 	}
 	if _, ok := c.taskConfigs[source]; ok {
-		return nil, errors.Errorf("Acquire worker failed. the source has been scheduled, please add free worker for cluster")
+		if w, ok := c.upstreams[source]; ok {
+			return w, nil
+		}
 	}
 	for _, w := range c.workers {
 		if w.status.Load() == WorkerFree {
@@ -377,7 +379,7 @@ func (c *Coordinator) schedule(source string) {
 func (c *Coordinator) tryRestartMysqlTask() {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	scheduleNextLoop := make([]string, 1000)
+	scheduleNextLoop := make([]string, 0)
 	hasTaskToSchedule := true
 	for hasTaskToSchedule {
 		select {
