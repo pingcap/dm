@@ -3,7 +3,7 @@
 function unlock_ddl_lock_wrong_arg() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "unlock-ddl-lock" \
-        "unlock-ddl-lock \[-w worker ...\] <lock-ID> \[flags\]" 1
+        "unlock-ddl-lock \[-s source ...\] <lock-ID> \[flags\]" 1
 }
 
 function unlock_ddl_lock_invalid_force_remove() {

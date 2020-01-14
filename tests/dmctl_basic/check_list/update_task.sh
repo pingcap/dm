@@ -3,7 +3,7 @@
 function update_task_wrong_arg() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "update-task" \
-        "update-task \[-w worker ...\] <config-file> \[flags\]" 1
+        "update-task \[-s source ...\] <config-file> \[flags\]" 1
 }
 
 function update_task_wrong_config_file() {
@@ -23,7 +23,7 @@ function update_task_worker_not_found() {
     task_conf=$1
     not_found_source_id=$2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "update-task $task_conf -w $not_found_source_id " \
+        "update-task $task_conf -s $not_found_source_id " \
         "\"result\": true" 1 \
         "\"result\": false" 1 \
         "\"worker\": \"$not_found_source_id\"" 1 \
@@ -43,7 +43,7 @@ function update_task_success_single_worker() {
     task_conf=$1
     source_id=$2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "update-task $task_conf -w $source_id" \
+        "update-task $task_conf -s $source_id" \
         "\"result\": true" 2 \
         "\"worker\": \"$source_id\"" 1
 }

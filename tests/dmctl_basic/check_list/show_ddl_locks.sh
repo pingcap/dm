@@ -3,12 +3,12 @@
 function show_ddl_locks_wrong_arg() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "show-ddl-locks a b" \
-        "show-ddl-locks \[-w worker ...\] \[task-name\] \[flags\]" 1
+        "show-ddl-locks \[-s source ...\] \[task-name\] \[flags\]" 1
 }
 
 function show_ddl_locks_while_master_down() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "show-ddl-locks task-name -w $SOURCE_ID1" \
+        "show-ddl-locks task-name -s $SOURCE_ID1" \
         "can not show DDL locks for task task-name and workers \[$SOURCE_ID1\]" 1
 }
 
