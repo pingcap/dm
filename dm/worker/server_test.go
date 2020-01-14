@@ -77,6 +77,7 @@ func (t *testServer) TestServer(c *C) {
 	hostName := "127.0.0.1:8291"
 	etcdDir := c.MkDir()
 	ETCD, err := createMockETCD(etcdDir, "host://"+hostName)
+	defer ETCD.Close()
 	c.Assert(err, IsNil)
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
@@ -202,7 +203,7 @@ func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) 
 		resp, err := cli.OperateMysqlWorker(context.Background(), req)
 		c.Assert(err, IsNil)
 		c.Assert(resp.Result, Equals, false)
-		c.Assert(resp.Msg, Matches, ".*Mysql task has not been created, please call CreateMysqlTask.*")
+		c.Assert(resp.Msg, Matches, ".*worker has not started.*")
 		req.Op = pb.WorkerOp_StartWorker
 		resp, err = cli.OperateMysqlWorker(context.Background(), req)
 		c.Assert(err, IsNil)
