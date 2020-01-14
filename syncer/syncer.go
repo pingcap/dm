@@ -1056,6 +1056,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			err = terror.ErrSyncerUnitPanic.Generate(err1)
 		}
 
+		s.jobWg.Wait()
 		if err2 := s.flushCheckPoints(); err2 != nil {
 			s.tctx.L().Warn("fail to flush check points when exit task", zap.Error(err2))
 		}
