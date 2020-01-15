@@ -12,8 +12,17 @@ echo "using GOPATH=$GOPATH"
 # ensure it matches `-tool-dir` of `retool`.
 TOOLS_BIN_DIR=$(pwd)/_tools/bin
 
+case "$(uname)" in
+    MINGW*)
+        EXE=.exe
+        ;;
+    *)
+        EXE=
+        ;;
+esac
+
 # use `protoc-gen-gogofaster` rather than `protoc-gen-go`.
-GOGO_FASTER=$TOOLS_BIN_DIR/protoc-gen-gogofaster
+GOGO_FASTER=$TOOLS_BIN_DIR/protoc-gen-gogofaster$EXE
 if [ ! -f ${GOGO_FASTER} ]; then
     echo "${GOGO_FASTER} does not exist, please run 'make retool_setup' first"
     exit 1
@@ -29,7 +38,7 @@ if [ ! -d ${GOGO_PATH} ]; then
 fi
 
 # we need `grpc-gateway` to generate HTTP API from gRPC API.
-GRPC_GATEWAY=$TOOLS_BIN_DIR/protoc-gen-grpc-gateway
+GRPC_GATEWAY=$TOOLS_BIN_DIR/protoc-gen-grpc-gateway$EXE
 if [ ! -f ${GRPC_GATEWAY} ]; then
     echo "${GRPC_GATEWAY} does not exist, please run 'make retool_setup' first"
     exit 1
@@ -53,9 +62,9 @@ echo "generate dm protobuf code..."
 
 cp -r ${GAPI_PATH}/google ./
 
-protoc -I.:${GOGO_PATH}:${GOGO_PATH}/protobuf --plugin=${GOGO_FASTER} --gogofaster_out=plugins=grpc:../pb/ *.proto
+protoc -I. -I"${GOGO_PATH}" -I"${GOGO_PATH}/protobuf" --plugin=protoc-gen-gogofaster=${GOGO_FASTER} --gogofaster_out=plugins=grpc:../pb/ *.proto
 
-protoc -I.:${GOGO_PATH}:${GOGO_PATH}/protobuf --plugin=${GRPC_GATEWAY} --grpc-gateway_out=logtostderr=true:../pb/ dmmaster.proto
+protoc -I. -I"${GOGO_PATH}" -I"${GOGO_PATH}/protobuf" --plugin=protoc-gen-grpc-gateway=${GRPC_GATEWAY} --grpc-gateway_out=logtostderr=true:../pb/ dmmaster.proto
 
 chmod -R +w ./google  # permission is `-r--r--r--`
 rm -r ./google
