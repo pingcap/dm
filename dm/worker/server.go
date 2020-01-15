@@ -81,12 +81,6 @@ func NewServer(cfg *Config) *Server {
 // Start starts to serving
 func (s *Server) Start() error {
 	var err error
-
-	_, _, err = s.splitHostPort()
-	if err != nil {
-		return err
-	}
-
 	s.rootLis, err = net.Listen("tcp", s.cfg.WorkerAddr)
 	if err != nil {
 		return terror.ErrWorkerStartService.Delegate(err)
@@ -733,10 +727,10 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 	}
 	if resp.Result {
 		op1 := clientv3.OpPut(common.UpstreamConfigKeyAdapter.Encode(cfg.SourceID), req.Config)
-		op2 := clientv3.OpPut(common.UpstreamBoundWorkerKeyAdapter.Encode(s.cfg.WorkerAddr), cfg.SourceID)
+		op2 := clientv3.OpPut(common.UpstreamBoundWorkerKeyAdapter.Encode(s.cfg.AdvertiseAddr), cfg.SourceID)
 		if req.Op == pb.WorkerOp_StopWorker {
 			op1 = clientv3.OpDelete(common.UpstreamConfigKeyAdapter.Encode(cfg.SourceID))
-			op2 = clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Encode(s.cfg.WorkerAddr))
+			op2 = clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Encode(s.cfg.AdvertiseAddr))
 		}
 		resp.Msg = s.retryWriteEctd(op1, op2)
 		// Because etcd was deployed with master in a single process, if we can not write data into etcd, most probably
@@ -754,15 +748,6 @@ func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {
 		resp.Msg = errors.ErrorStack(reqErr)
 	}
 	return resp
-}
-
-func (s *Server) splitHostPort() (host, port string, err error) {
-	// WorkerAddr's format may be "host:port" or ":port"
-	host, port, err = net.SplitHostPort(s.cfg.WorkerAddr)
-	if err != nil {
-		err = terror.ErrWorkerHostPortNotValid.Delegate(err, s.cfg.WorkerAddr)
-	}
-	return
 }
 
 // all subTask in subTaskCfgs should have same source
