@@ -36,7 +36,7 @@ type taskResult struct {
 type taskInfo struct {
 	TaskName   string   `json:"taskName,omitempty"`
 	TaskStatus string   `json:"taskStatus,omitempty"`
-	Workers    []string `json:"workers,omitempty"`
+	Sources    []string `json:"sources,omitempty"`
 }
 
 // NewQueryStatusCmd creates a QueryStatus command
@@ -101,13 +101,13 @@ func getRelayStage(relayStatus *pb.RelayStatus) string {
 func wrapTaskResult(resp *pb.QueryStatusListResponse) *taskResult {
 	taskStatusMap := make(map[string]string)
 	taskCorrespondingWorkers := make(map[string][]string)
-	for _, worker := range resp.Workers {
-		relayStatus := worker.RelayStatus
-		for _, subTask := range worker.SubTaskStatus {
+	for _, source := range resp.Sources {
+		relayStatus := source.RelayStatus
+		for _, subTask := range source.SubTaskStatus {
 			subTaskName := subTask.Name
 			subTaskStage := subTask.Stage
 
-			taskCorrespondingWorkers[subTaskName] = append(taskCorrespondingWorkers[subTaskName], worker.Worker)
+			taskCorrespondingWorkers[subTaskName] = append(taskCorrespondingWorkers[subTaskName], source.Source)
 			taskStage := taskStatusMap[subTaskName]
 			// the status of a task is decided by its subtasks, the rule is listed as follows:
 			// |                     Subtasks' status                       |                Task's status                 |
@@ -142,7 +142,7 @@ func wrapTaskResult(resp *pb.QueryStatusListResponse) *taskResult {
 			&taskInfo{
 				TaskName:   curTaskName,
 				TaskStatus: taskStatus,
-				Workers:    taskCorrespondingWorkers[curTaskName],
+				Sources:    taskCorrespondingWorkers[curTaskName],
 			})
 	}
 	return &taskResult{

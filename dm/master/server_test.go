@@ -237,7 +237,7 @@ func testMockStartTask(c *check.C, server *Server, ctrl *gomock.Controller, work
 			rets = []interface{}{
 				&pb.CommonWorkerResponse{
 					Result: true,
-					Worker: deploy.Worker,
+					Source: deploy.Source,
 				},
 				nil,
 			}
@@ -435,9 +435,9 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 1)
-	c.Assert(resp.Workers[0].Result, check.IsFalse)
-	c.Assert(resp.Workers[0].Worker, check.Equals, invalidSource)
+	c.Assert(resp.Sources, check.HasLen, 1)
+	c.Assert(resp.Sources[0].Result, check.IsFalse)
+	c.Assert(resp.Sources[0].Source, check.Equals, invalidSource)
 
 	// test start sub task request to worker returns error
 	testMockStartTask(c, server, ctrl, workerCfg, false)
@@ -447,8 +447,8 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, workerResp := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, workerResp := range resp.Sources {
 		c.Assert(workerResp.Result, check.IsFalse)
 		c.Assert(workerResp.Msg, check.Matches, errGRPCFailedReg)
 	}
@@ -553,8 +553,8 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, subtaskResp := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, subtaskResp := range resp.Sources {
 		c.Assert(subtaskResp.Op, check.Equals, pauseOp)
 		c.Assert(subtaskResp.Msg, check.Matches, ".* relevant worker-client not found")
 	}
@@ -583,8 +583,8 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 	c.Assert(resp.Op, check.Equals, pauseOp)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, subtaskResp := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, subtaskResp := range resp.Sources {
 		c.Assert(subtaskResp.Op, check.Equals, pauseOp)
 		c.Assert(subtaskResp.Result, check.IsTrue)
 	}
@@ -610,8 +610,8 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, subtaskResp := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, subtaskResp := range resp.Sources {
 		c.Assert(subtaskResp.Op, check.Equals, pauseOp)
 		c.Assert(subtaskResp.Msg, check.Matches, errGRPCFailedReg)
 	}
@@ -639,8 +639,8 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 1)
-	c.Assert(resp.Workers[0].Result, check.IsTrue)
+	c.Assert(resp.Sources, check.HasLen, 1)
+	c.Assert(resp.Sources[0].Result, check.IsTrue)
 	c.Assert(server.taskSources, check.HasKey, taskName)
 	c.Assert(server.taskSources[taskName], check.DeepEquals, []string{sources[1]})
 
@@ -668,8 +668,8 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, subtaskResp := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, subtaskResp := range resp.Sources {
 		c.Assert(subtaskResp.Op, check.Equals, pb.TaskOp_Stop)
 		c.Assert(subtaskResp.Result, check.IsTrue)
 	}
@@ -706,7 +706,7 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 				rets = []interface{}{
 					&pb.CommonWorkerResponse{
 						Result: true,
-						Worker: deploy.Worker,
+						Source: deploy.Source,
 					},
 					nil,
 				}
@@ -744,9 +744,9 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 1)
-	c.Assert(resp.Workers[0].Result, check.IsFalse)
-	c.Assert(resp.Workers[0].Worker, check.Equals, invalidSource)
+	c.Assert(resp.Sources, check.HasLen, 1)
+	c.Assert(resp.Sources[0].Result, check.IsFalse)
+	c.Assert(resp.Sources[0].Source, check.Equals, invalidSource)
 
 	// test update sub task request to worker returns error
 	mockUpdateTask(false)
@@ -756,8 +756,8 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, workerResp := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, workerResp := range resp.Sources {
 		c.Assert(workerResp.Result, check.IsFalse)
 		c.Assert(workerResp.Msg, check.Matches, errGRPCFailedReg)
 	}
@@ -914,7 +914,7 @@ func (t *testMaster) TestBreakWorkerDDLLock(c *check.C) {
 				rets = []interface{}{
 					&pb.CommonWorkerResponse{
 						Result: true,
-						Worker: deploy.Worker,
+						Source: deploy.Source,
 					},
 					nil,
 				}
@@ -946,8 +946,8 @@ func (t *testMaster) TestBreakWorkerDDLLock(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsFalse)
 		c.Assert(w.Msg, check.Matches, ".*relevant worker-client not found")
 	}
@@ -965,8 +965,8 @@ func (t *testMaster) TestBreakWorkerDDLLock(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsTrue)
 	}
 
@@ -982,8 +982,8 @@ func (t *testMaster) TestBreakWorkerDDLLock(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsFalse)
 		c.Assert(w.Msg, check.Matches, errGRPCFailedReg)
 	}
@@ -1008,7 +1008,7 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 				rets = []interface{}{
 					&pb.CommonWorkerResponse{
 						Result: true,
-						Worker: deploy.Worker,
+						Source: deploy.Source,
 					},
 					nil,
 				}
@@ -1038,8 +1038,8 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsFalse)
 		c.Assert(w.Msg, check.Matches, ".*relevant worker-client not found")
 	}
@@ -1054,8 +1054,8 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsTrue)
 	}
 
@@ -1069,8 +1069,8 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsFalse)
 		c.Assert(w.Msg, check.Matches, errGRPCFailedReg)
 	}
@@ -1091,7 +1091,7 @@ func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
 				rets = []interface{}{
 					&pb.CommonWorkerResponse{
 						Result: true,
-						Worker: deploy.Worker,
+						Source: deploy.Source,
 					},
 					nil,
 				}
@@ -1116,8 +1116,8 @@ func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsFalse)
 		c.Assert(w.Msg, check.Matches, "(?m).*relevant worker-client not found.*")
 	}
@@ -1130,8 +1130,8 @@ func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsTrue)
 	}
 
@@ -1143,8 +1143,8 @@ func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsFalse)
 		c.Assert(w.Msg, check.Matches, errGRPCFailedReg)
 	}
@@ -1165,7 +1165,7 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 				rets = []interface{}{
 					&pb.OperateRelayResponse{
 						Result: true,
-						Worker: deploy.Worker,
+						Source: deploy.Source,
 						Op:     pb.RelayOp_PauseRelay,
 					},
 					nil,
@@ -1192,8 +1192,8 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsFalse)
 		c.Assert(w.Msg, check.Matches, ".*relevant worker-client not found")
 	}
@@ -1207,8 +1207,8 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsTrue)
 		c.Assert(w.Op, check.Equals, pb.RelayOp_PauseRelay)
 	}
@@ -1222,8 +1222,8 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsFalse)
 		c.Assert(w.Msg, check.Matches, errGRPCFailedReg)
 	}
