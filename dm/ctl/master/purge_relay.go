@@ -67,7 +67,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 	if len(sources) == 0 {
-		fmt.Println("must specify at least one DM-worker (`-s` / `--source`)")
+		fmt.Println("must specify at least one source (`-s` / `--source`)")
 		return
 	}
 
@@ -123,7 +123,7 @@ func purgeRelayFunc(cmd *cobra.Command, _ []string) {
 	//}
 
 	if len(filename) > 0 && len(sources) > 1 {
-		fmt.Println("for --filename, can only specify one DM-worker per time")
+		fmt.Println("for --filename, can only specify one source per time")
 		return
 	}
 	if len(subDir) > 0 {

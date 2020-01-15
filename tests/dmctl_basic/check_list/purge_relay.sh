@@ -9,13 +9,13 @@ function purge_relay_wrong_arg() {
 function purge_relay_wihout_worker() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "purge-relay" \
-        "must specify at least one DM-worker (\`-s\` \/ \`--source\`)" 1
+        "must specify at least one source (\`-s\` \/ \`--source\`)" 1
 }
 
 function purge_relay_filename_with_multi_workers() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "purge-relay --filename bin-000001 -s $SOURCE_ID1 -s $SOURCE_ID2" \
-        "for --filename, can only specify one DM-worker per time" 1
+        "for --filename, can only specify one source per time" 1
 }
 
 function purge_relay_while_master_down() {

@@ -9,7 +9,7 @@ function pause_relay_wrong_arg() {
 function pause_relay_wihout_worker() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "pause-relay" \
-        "must specify at least one DM-worker" 1
+        "must specify at least one source" 1
 }
 
 function pause_relay_while_master_down() {

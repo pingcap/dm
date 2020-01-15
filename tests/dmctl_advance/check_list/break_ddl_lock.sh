@@ -27,5 +27,5 @@ function break_ddl_lock_exec_skip_conflict() {
 function break_ddl_lock_while_master_down() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "break-ddl-lock test -s $SOURCE_ID1 --exec" \
-        "can not break DDL lock (in workers \[$SOURCE_ID1\]):" 1
+        "can not break DDL lock (in sources \[$SOURCE_ID1\]):" 1
 }

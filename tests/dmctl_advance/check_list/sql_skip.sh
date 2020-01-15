@@ -35,7 +35,7 @@ function sql_skip_sharding_with_binlogpos() {
 function sql_skip_non_sharding_without_one_worker() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "sql-skip test-task --source $SOURCE_ID1,$SOURCE_ID2 --binlog-pos mysql-bin:13426" \
-        "should only specify one worker, but got \[$SOURCE_ID1 $SOURCE_ID2\]" 1
+        "should only specify one source, but got \[$SOURCE_ID1 $SOURCE_ID2\]" 1
 }
 
 function sql_skip_while_master_down() {

@@ -9,7 +9,7 @@ function query_status_wrong_arg() {
 function query_status_wrong_params() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status -s source-x task-y" \
-        "can not query task-y task's status(in workers \[worker-x\]):" 1
+        "can not query task-y task's status(in sources \[source-x\]):" 1
 }
 
 function query_status_with_no_tasks() {
@@ -30,7 +30,7 @@ function query_status_with_tasks() {
         "\"result\": true" 1 \
         "\"taskName\": \"test\"" 1 \
         "\"taskStatus\": \"Running\"" 1 \
-        "\"workers\":" 1 \
+        "\"sources\":" 1 \
         "\"$SOURCE_ID1\"" 1 \
         "\"$SOURCE_ID2\"" 1
 }

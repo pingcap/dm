@@ -26,8 +26,8 @@ function update_task_worker_not_found() {
         "update-task $task_conf -s $not_found_source_id " \
         "\"result\": true" 1 \
         "\"result\": false" 1 \
-        "\"worker\": \"$not_found_source_id\"" 1 \
-        "\"msg\": \"worker not found in task's config or deployment config\"" 1
+        "\"source\": \"$not_found_source_id\"" 1 \
+        "\"msg\": \"source not found in task's config or deployment config\"" 1
 }
 
 function update_task_not_paused() {
@@ -45,7 +45,7 @@ function update_task_success_single_worker() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "update-task $task_conf -s $source_id" \
         "\"result\": true" 2 \
-        "\"worker\": \"$source_id\"" 1
+        "\"source\": \"$source_id\"" 1
 }
 
 function update_task_success() {

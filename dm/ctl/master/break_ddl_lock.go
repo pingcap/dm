@@ -34,7 +34,7 @@ func NewBreakDDLLockCmd() *cobra.Command {
 	}
 	cmd.Flags().StringP("remove-id", "i", "", "DDLLockInfo's ID which need to remove")
 	cmd.Flags().BoolP("exec", "e", false, "whether execute DDL which is blocking")
-	cmd.Flags().BoolP("skip", "s", false, "whether skip DDL which in blocking")
+	cmd.Flags().BoolP("skip", "", false, "whether skip DDL which in blocking")
 	return cmd
 }
 
