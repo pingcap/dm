@@ -650,14 +650,24 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 	}
 	for _, kv := range resp.Kvs {
 		task := string(kv.Value)
-		cfg := config.NewSubTaskConfig()
-		if err = cfg.Decode(task); err != nil {
+		subTaskcfg := config.NewSubTaskConfig()
+		if err = subTaskcfg.Decode(task); err != nil {
 			return err
 		}
-		cfg.LogLevel = s.cfg.LogLevel
-		cfg.LogFile = s.cfg.LogFile
+		subTaskcfg.LogLevel = s.cfg.LogLevel
+		subTaskcfg.LogFile = s.cfg.LogFile
 
-		subTaskCfgs = append(subTaskCfgs, cfg)
+		subTaskCfgs = append(subTaskCfgs, subTaskcfg)
+	}
+
+	if len(cfg.RelayBinLogName) == 0 && len(cfg.RelayBinlogGTID) == 0 {
+		minPos, err := getMinPosInAllSubTasks(subTaskCfgs)
+		if err != nil {
+			return err
+		}
+		if minPos != nil {
+			cfg.RelayBinLogName = minPos.Name
+		}
 	}
 
 	w, err := NewWorker(cfg)
@@ -747,14 +757,14 @@ func (s *Server) splitHostPort() (host, port string, err error) {
 
 // all subTask in subTaskCfgs should have same source
 // this function return the min position in all subtasks, used for relay's position
-func getMinPosInAllSubTasks(subTaskCfgs []*config.SubTaskConfig) (exist bool, minPos *mysql.Position, err error) {
+func getMinPosInAllSubTasks(subTaskCfgs []*config.SubTaskConfig) (minPos *mysql.Position, err error) {
 	for _, subTaskCfg := range subTaskCfgs {
-		exist, pos, err := getMinPosForSubTask(subTaskCfg)
+		pos, err := getMinPosForSubTask(subTaskCfg)
 		if err != nil {
-			return false, nil, err
+			return nil, err
 		}
 
-		if !exist {
+		if pos == nil {
 			continue
 		}
 
@@ -767,35 +777,31 @@ func getMinPosInAllSubTasks(subTaskCfgs []*config.SubTaskConfig) (exist bool, mi
 		}
 	}
 
-	if minPos == nil {
-		return false, nil, nil
-	}
-
-	return true, minPos, nil
+	return minPos, nil
 }
 
-func getMinPosForSubTask(subTaskCfg *config.SubTaskConfig) (exist bool, minPos *mysql.Position, err error) {
+func getMinPosForSubTask(subTaskCfg *config.SubTaskConfig) (minPos *mysql.Position, err error) {
 	dbCfg := subTaskCfg.To
 	dbCfg.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout("10s")
 	db, err := conn.DefaultDBProvider.Apply(dbCfg)
 	if err != nil {
-		return false, nil, terror.WithScope(err, terror.ScopeDownstream)
+		return nil, terror.WithScope(err, terror.ScopeDownstream)
 	}
 
 	// only read the sync unit's checkpoint information
 	syncCheckpointTable := fmt.Sprintf("%s_syncer_checkpoint", subTaskCfg.Name)
-	exist, err = utils.TableExists(db.DB, subTaskCfg.MetaSchema, syncCheckpointTable)
+	exist, err := utils.TableExists(db.DB, subTaskCfg.MetaSchema, syncCheckpointTable)
 	if err != nil {
-		return false, nil, err
+		return nil, err
 	}
 	if !exist {
-		return false, nil, nil
+		return nil, nil
 	}
 
 	query := fmt.Sprintf("SELECT `binlog_name`, `binlog_pos` FROM %s.%s where id = ?", subTaskCfg.MetaSchema, syncCheckpointTable)
 	rows, err := db.DB.Query(query, subTaskCfg.SourceID)
 	if err != nil {
-		return false, nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 	}
 	defer rows.Close()
 
@@ -806,7 +812,7 @@ func getMinPosForSubTask(subTaskCfg *config.SubTaskConfig) (exist bool, minPos *
 		)
 		err = rows.Scan(&binlogName, &binlogPos)
 		if err != nil {
-			return false, nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+			return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
 		}
 
 		if len(binlogName) == 0 {
@@ -827,9 +833,5 @@ func getMinPosForSubTask(subTaskCfg *config.SubTaskConfig) (exist bool, minPos *
 		}
 	}
 
-	if minPos == nil {
-		return false, nil, nil
-	}
-
-	return true, minPos, nil
+	return minPos, nil
 }
