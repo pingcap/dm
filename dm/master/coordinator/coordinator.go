@@ -222,9 +222,11 @@ func (c *Coordinator) AcquireWorkerForSource(source string) (*Worker, error) {
 	if addr, ok := c.pendingReqSources[source]; ok {
 		return nil, errors.Errorf("Acquire worker failed. the same source has been started in worker: %s", addr)
 	}
-	if _, ok := c.taskConfigs[source]; ok {
-		return nil, errors.Errorf("Acquire worker failed. the source has been scheduled, please add free worker for cluster")
-	}
+	/*
+		if _, ok := c.taskConfigs[source]; ok {
+			return nil, errors.Errorf("Acquire worker failed. the source has been scheduled, please add free worker for cluster")
+		}
+	*/
 	for _, w := range c.workers {
 		if w.status.Load() == WorkerFree {
 			// we bound worker to avoid another task trying to get it
@@ -233,7 +235,7 @@ func (c *Coordinator) AcquireWorkerForSource(source string) (*Worker, error) {
 			return w, nil
 		}
 	}
-	return nil, errors.New("Acquire worker failed. no  free worker could start mysql task")
+	return nil, errors.New("Acquire worker failed. no free worker could start mysql task")
 }
 
 // GetAllWorkers gets all workers.
@@ -301,6 +303,7 @@ func (c *Coordinator) ObserveWorkers() {
 	for {
 		select {
 		case wresp := <-ch:
+			log.L().Info("get watch from etcd")
 			if wresp.Canceled {
 				log.L().Error("leader watcher is canceled with", zap.Error(wresp.Err()))
 				return
@@ -364,6 +367,7 @@ func (c *Coordinator) ObserveWorkers() {
 			log.L().Info("coordinate exict due to context canceled")
 			return
 		case <-t1.C:
+			log.L().Info("tryRestartMysqlTask")
 			c.tryRestartMysqlTask()
 		}
 	}
@@ -374,25 +378,40 @@ func (c *Coordinator) schedule(source string) {
 }
 
 func (c *Coordinator) tryRestartMysqlTask() {
+	defer func() {
+		log.L().Info("end tryRestartMysqlTask")
+	}()
+
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	scheduleNextLoop := make([]string, 1000)
+
+	log.L().Info("begin tryRestartMysqlTask")
+	scheduleNextLoop := make([]string, 0, 1000)
 	hasTaskToSchedule := true
 	for hasTaskToSchedule {
 		select {
 		case source := <-c.waitingTask:
+			log.L().Info("tryRestartMysqlTask", zap.String("source", source))
 			if cfg, ok := c.taskConfigs[source]; ok {
 				ret := false
 				if w, ok := c.upstreams[source]; ok {
 					// Try start mysql task at the same worker.
 					c.mu.RUnlock()
+					log.L().Info("Try start mysql task at the same worker", zap.String("worker", w.Address()))
 					ret = c.restartMysqlTask(w, &cfg)
 					c.mu.RLock()
 				} else {
 					c.mu.RUnlock()
-					w, _ := c.AcquireWorkerForSource(source)
-					if w != nil {
-						ret = c.restartMysqlTask(w, &cfg)
+					w, err := c.AcquireWorkerForSource(source)
+					if err != nil {
+						log.L().Info("AcquireWorkerForSource", zap.Error(err))
+					} else {
+						if w != nil {
+							log.L().Info("AcquireWorkerForSource", zap.String("worker", w.Address()))
+							ret = c.restartMysqlTask(w, &cfg)
+						} else {
+							log.L().Info("AcquireWorkerForSource get nil worker")
+						}
 					}
 					c.mu.RLock()
 				}
@@ -418,7 +437,8 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 		Op:     pb.WorkerOp_StartWorker,
 		Config: task,
 	}
-	resp, err := w.OperateMysqlWorker(context.Background(), req, time.Second*3)
+	resp, err := w.OperateMysqlWorker(context.Background(), req, time.Second*5)
+	log.L().Info("OperateMysqlWorker", zap.Reflect("resp", resp), zap.Error(err))
 	ret := false
 	c.mu.Lock()
 	if err == nil {
