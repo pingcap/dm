@@ -313,6 +313,12 @@ func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskReque
 		resp.Msg = err.Error()
 	} else {
 		// TODO: change task state.
+		// clean subtask config when we stop the subtask
+		if req.Op == pb.TaskOp_Stop {
+			op1 := clientv3.OpDelete(common.UpstreamSubTaskKeyAdapter.Encode(w.cfg.SourceID, req.Name))
+			resp.Msg = s.retryWriteEctd(op1)
+			resp.Result = len(resp.Msg) == 0
+		}
 	}
 	return resp, nil
 }

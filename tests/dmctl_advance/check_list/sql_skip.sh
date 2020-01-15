@@ -3,7 +3,7 @@
 function sql_skip_wrong_arg() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "sql-skip" \
-        "sql-skip <-s source> \[-b binlog-pos\] \[-s sql-pattern\] \[--sharding\] <task-name> \[flags\]" 1
+        "sql-skip <-s source> \[-b binlog-pos\] \[-p sql-pattern\] \[--sharding\] <task-name> \[flags\]" 1
 }
 
 function sql_skip_binlogpos_sqlpattern_conflict() {

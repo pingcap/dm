@@ -446,6 +446,7 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 			}
 		}
 	} else {
+		log.L().Warn("restartMysqlTask failed", zap.Error(err))
 		// Error means there is something wrong about network, set worker to close.
 		// remove sourceID from upstreams. So the source would be schedule in other worker.
 		delete(c.upstreams, cfg.SourceID)

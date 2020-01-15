@@ -78,7 +78,10 @@ function run() {
     sleep 2s
 
     echo "start task after restarted dm-worker"
-    dmctl_start_task
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-task $cur/conf/dm-task.yaml" \
+        "\"result\": true" 1 \
+        "start sub task test: sub task test already exists" 2
     sleep 2s
 
     check_port_offline $WORKER1_PORT 20

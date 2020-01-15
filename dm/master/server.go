@@ -571,7 +571,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 			if sourceCfg, ok := workerCfg[source]; ok {
 				stCfgs = append(stCfgs, sourceCfg)
 			} else {
-				workerRespCh <- errorCommonWorkerResponse("worker not found in task's config or deployment config", source)
+				workerRespCh <- errorCommonWorkerResponse("source not found in task's config or deployment config", source)
 			}
 		}
 	}
