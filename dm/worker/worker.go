@@ -192,14 +192,18 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 	w.Lock()
 	defer w.Unlock()
 
+	w.l.Info("StartSubTask", zap.Reflect("cfg", cfg))
 	if w.closed.Get() == closedTrue {
+		w.l.Info("StartSubTask closed is true")
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
+	w.l.Info("StartSubTask will do purging")
 	if w.relayPurger.Purging() {
 		return terror.ErrWorkerRelayIsPurging.Generate(cfg.Name)
 	}
 
+	w.l.Info("StartSubTask will do findSubTask")
 	if w.subTaskHolder.findSubTask(cfg.Name) != nil {
 		return terror.ErrWorkerSubTaskExists.Generate(cfg.Name)
 	}

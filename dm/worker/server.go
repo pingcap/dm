@@ -632,7 +632,6 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 	s.Lock()
 	defer s.Unlock()
 
-	log.L().Info("start worker")
 	if s.worker != nil {
 		if s.worker.cfg.SourceID == cfg.SourceID {
 			// This mysql task has started. It may be a repeated request. Just return true
@@ -674,7 +673,6 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 			cfg.RelayBinLogName = minPos.Name
 		}
 	}
-	log.L().Info("end getMinPosInAllSubTasks")
 
 	w, err := NewWorker(cfg)
 	if err != nil {
@@ -691,7 +689,6 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 	time.Sleep(1 * time.Second)
 
 	for _, subTaskCfg := range subTaskCfgs {
-		log.L().Info("StartSubTask", zap.Reflect("subTaskCfg", subTaskCfg))
 		if err = w.StartSubTask(subTaskCfg); err != nil {
 			return err
 		}
@@ -722,7 +719,6 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 		}
 	} else if req.Op == pb.WorkerOp_StopWorker {
 		if err = s.stopWorker(cfg.SourceID); err == terror.ErrWorkerSourceNotMatch {
-			log.L().Info("stop worker", zap.Error(err))
 			resp.Result = false
 			resp.Msg = errors.ErrorStack(err)
 		}
