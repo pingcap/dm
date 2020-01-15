@@ -63,8 +63,8 @@ var (
 // NOTE: refine to put these config structs into pkgs
 // NOTE: now, syncer does not support GTID mode and which is supported by relay
 type Meta struct {
-	BinLogName string `yaml:"binlog-name"`
-	BinLogPos  uint32 `yaml:"binlog-pos"`
+	BinLogName string `toml:"binlog-name" yaml:"binlog-name"`
+	BinLogPos  uint32 `toml:"binlog-pos" yaml:"binlog-pos"`
 }
 
 // Verify does verification on configs
@@ -484,7 +484,6 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.Name = c.Name
 		cfg.Mode = c.TaskMode
 		cfg.CaseSensitive = c.CaseSensitive
-		cfg.BinlogType = "local" // let's force syncer to replay local binlog.
 		cfg.MetaSchema = c.MetaSchema
 		cfg.RemoveMeta = c.RemoveMeta
 		cfg.DisableHeartbeat = c.DisableHeartbeat

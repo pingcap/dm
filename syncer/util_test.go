@@ -90,23 +90,20 @@ func (t *testUtilSuite) TestTableNameForDML(c *C) {
 
 func (t *testUtilSuite) TestToBinlogType(c *C) {
 	testCases := []struct {
-		tpStr string
-		tp    BinlogType
+		enableRelay bool
+		tp          BinlogType
 	}{
 		{
-			"local",
+			true,
 			LocalBinlog,
 		}, {
-			"remote",
-			RemoteBinlog,
-		}, {
-			"default",
+			false,
 			RemoteBinlog,
 		},
 	}
 
 	for _, testCase := range testCases {
-		tp := toBinlogType(testCase.tpStr)
+		tp := toBinlogType(testCase.enableRelay)
 		c.Assert(tp, Equals, testCase.tp)
 	}
 }

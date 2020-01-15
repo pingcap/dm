@@ -35,7 +35,7 @@ import (
 var SampleConfigFile string
 
 var (
-	getAllServerIDFunc = utils.GetAllServerID
+	getRandomServerIDFunc = utils.GetRandomServerID
 )
 
 // NewConfig creates a new base config for worker.
