@@ -70,7 +70,5 @@ func operateMysqlWorkerFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	if !common.PrettyPrintResponseWithCheckTask(resp, checker.ErrorMsgHeader) {
-		common.PrettyPrintResponse(resp)
-	}
+	common.PrettyPrintResponse(resp)
 }
