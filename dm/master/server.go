@@ -470,12 +470,12 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 	}
 	workerRespCh := make(chan *pb.OperateSubTaskResponse, len(sources))
 
-	handleErr := func(err error, worker string) {
+	handleErr := func(err error, source string) {
 		log.L().Error("response error", zap.Error(err))
 		workerResp := &pb.OperateSubTaskResponse{
 			Op:     req.Op,
 			Result: false,
-			Worker: worker,
+			Worker: source,
 			Msg:    err.Error(),
 		}
 		workerRespCh <- workerResp
