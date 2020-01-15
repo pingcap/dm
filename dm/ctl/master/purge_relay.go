@@ -48,7 +48,7 @@ func NewPurgeRelayCmd() *cobra.Command {
 	//cmd.Flags().BoolP("inactive", "i", false, "whether try to purge all inactive relay log files")
 	//cmd.Flags().StringP("time", "t", "", fmt.Sprintf("whether try to purge relay log files before this time, the format is \"%s\"(_ between date and time)", timeFormat))
 	cmd.Flags().StringP("filename", "f", "", "name of the terminal file before which to purge relay log files. Sample format: \"mysql-bin.000006\"")
-	cmd.Flags().StringP("sub-dir", "s", "", "specify relay sub directory for --filename. If not specified, the latest one will be used. Sample format: \"2ae76434-f79f-11e8-bde2-0242ac130008.000001\"")
+	cmd.Flags().StringP("sub-dir", "", "", "specify relay sub directory for --filename. If not specified, the latest one will be used. Sample format: \"2ae76434-f79f-11e8-bde2-0242ac130008.000001\"")
 
 	return cmd
 }
