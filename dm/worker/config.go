@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -46,11 +47,13 @@ func NewConfig() *Config {
 	fs.BoolVar(&cfg.printVersion, "V", false, "prints version and exit")
 	fs.BoolVar(&cfg.printSampleConfig, "print-sample-config", false, "print sample config file of dm-worker")
 	fs.StringVar(&cfg.ConfigFile, "config", "", "path to config file")
-	fs.StringVar(&cfg.WorkerAddr, "worker-addr", "", "worker API server and status addr")
+	fs.StringVar(&cfg.WorkerAddr, "worker-addr", "", "listen address for client traffic")
+	fs.StringVar(&cfg.AdvertiseAddr, "advertise-addr", "", `advertise address for client traffic (default "${worker-addr}")`)
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
 	//fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
-	fs.StringVar(&cfg.Join, "join", "", "join to an existing cluster (usage: cluster's '${advertise-client-urls}'")
+	// NOTE: add `advertise-addr` for dm-master if needed.
+	fs.StringVar(&cfg.Join, "join", "", `join to an existing cluster (usage: dm-master cluster's "${master-addr}")`)
 	fs.StringVar(&cfg.Name, "name", "", "human-readable name for DM-worker member")
 	return cfg
 }
@@ -64,8 +67,9 @@ type Config struct {
 	LogFile   string `toml:"log-file" json:"log-file"`
 	LogRotate string `toml:"log-rotate" json:"log-rotate"`
 
-	Join       string `toml:"join" json:"join" `
-	WorkerAddr string `toml:"worker-addr" json:"worker-addr"`
+	Join          string `toml:"join" json:"join" `
+	WorkerAddr    string `toml:"worker-addr" json:"worker-addr"`
+	AdvertiseAddr string `toml:"advertise-addr" json:"advertise-addr"`
 
 	ConfigFile string `json:"config-file"`
 
@@ -143,6 +147,28 @@ func (c *Config) Parse(arguments []string) error {
 
 	if len(c.flagSet.Args()) != 0 {
 		return terror.ErrWorkerInvalidFlag.Generate(c.flagSet.Arg(0))
+	}
+
+	return c.adjust()
+}
+
+// adjust adjusts the config.
+func (c *Config) adjust() error {
+	host, _, err := net.SplitHostPort(c.WorkerAddr)
+	if err != nil {
+		return terror.ErrWorkerHostPortNotValid.Delegate(err, c.WorkerAddr)
+	}
+
+	if c.AdvertiseAddr == "" {
+		if host == "" || host == "0.0.0.0" {
+			return terror.ErrWorkerHostPortNotValid.Generatef("worker-addr (%s) must include the 'host' part (should not be '0.0.0.0') when advertise-addr is not set", c.WorkerAddr)
+		}
+		c.AdvertiseAddr = c.WorkerAddr
+	} else {
+		host, _, err = net.SplitHostPort(c.AdvertiseAddr)
+		if err != nil || host == "" || host == "0.0.0.0" {
+			return terror.ErrWorkerHostPortNotValid.AnnotateDelegate(err, "advertise-addr (%s) must include the 'host' part and should not be '0.0.0.0'", c.AdvertiseAddr)
+		}
 	}
 
 	return nil
