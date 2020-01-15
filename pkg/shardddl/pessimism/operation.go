@@ -50,6 +50,12 @@ func NewOperation(ID, task, source string, DDLs []string, exec, done bool) Opera
 	}
 }
 
+// String implements Stringer interface.
+func (o Operation) String() string {
+	s, _ := o.toJSON()
+	return s
+}
+
 // toJSON returns the string of JSON represent.
 func (o Operation) toJSON() (string, error) {
 	data, err := json.Marshal(o)

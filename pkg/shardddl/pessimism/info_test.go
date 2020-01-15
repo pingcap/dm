@@ -60,6 +60,7 @@ func (t *testForEtcd) TestInfoJSON(c *C) {
 	j, err := i1.toJSON()
 	c.Assert(err, IsNil)
 	c.Assert(j, Equals, `{"task":"test","source":"mysql-replica-1","schema":"foo","table":"bar","ddls":["ALTER TABLE bar ADD COLUMN c1 INT","ALTER TABLE bar ADD COLUMN c2 INT"]}`)
+	c.Assert(j, Equals, i1.String())
 
 	i2, err := infoFromJSON(j)
 	c.Assert(err, IsNil)

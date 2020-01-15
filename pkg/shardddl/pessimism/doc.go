@@ -13,6 +13,7 @@
 
 // The sequence of coordinate a shard DDL lock:
 //   1. DM-master GET all history `Info` & construct/sync shard DDL locks (revision-M1).
+//      - also PUT the `Operation` of synced locks as step-4.
 //   2. DM-worker construct `Info` based on received shard DDL & PUT the `Info` into etcd (revision-W1).
 //   3. DM-master get `Info` through WATCH (after revision-M1) & try to construct/sync the `Lock`.
 //   4. DM-master PUT the `Operation` into etcd (revision-M2).
@@ -20,7 +21,7 @@
 //   6. DM-worker exec the `Operation` (execute/skip the shard DDL statements).
 //   7. DM-worker flush the checkpoint.
 //   8. DM-worker PUT `done=true` of `Operation` & DELETE the `Info` (in one txn, revision-W2).
-//   9. DM-master get `done=true` of `Operation` through WATCH (after revision-M2).
+//   9. DM-master get `done=true` of `Operation` through WATCH (after revision-M1).
 //   10. DM-master DELETE the `Operation` after all DM-worker finished the operation (revision-M3).
 //
 // for step-4:
@@ -39,7 +40,7 @@
 //   * PUT & DELETE by DM-master (in revision-M2 & revision-M3).
 //   * PUT (update) by DM-worker (in revision-W2).
 //   * GET by DM-worker (after revision-W1).
-//   * WATCH by DM-master (after revision-M2).
+//   * WATCH by DM-master (after revision-M1).
 //
 // re-entrant of DM-worker:
 //   * before step-6:

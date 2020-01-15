@@ -48,6 +48,12 @@ func NewInfo(task, source, schema, table string, DDLs []string) Info {
 	}
 }
 
+// String implements Stringer interface.
+func (i Info) String() string {
+	s, _ := i.toJSON()
+	return s
+}
+
 // toJSON returns the string of JSON represent.
 func (i Info) toJSON() (string, error) {
 	data, err := json.Marshal(i)

@@ -28,6 +28,7 @@ func (t *testForEtcd) TestOperationJSON(c *C) {
 	j, err := o1.toJSON()
 	c.Assert(err, IsNil)
 	c.Assert(j, Equals, `{"id":"test-ID","task":"test","source":"mysql-replica-1","ddls":["ALTER TABLE bar ADD COLUMN c1 INT"],"exec":true,"done":false}`)
+	c.Assert(j, Equals, o1.String())
 
 	o2, err := operationFromJSON(j)
 	c.Assert(err, IsNil)
