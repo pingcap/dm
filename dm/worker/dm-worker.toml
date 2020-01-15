@@ -6,6 +6,7 @@ log-file = "dm-worker.log"
 
 #dm-worker listen address
 worker-addr = ":8262"
+advertise-addr = "127.0.0.1:8262"
 join = "127.0.0.1:8291"
 
 
