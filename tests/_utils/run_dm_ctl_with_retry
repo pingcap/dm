@@ -20,7 +20,7 @@ pid=$$
 echo "dmctl test cmd: \"$cmd\""
 
 
-all_matched=True
+all_matched=true
 for ((k=0; k<10; k++)); do
     echo "$cmd" | $binary -test.coverprofile="$TEST_DIR/cov.$TEST_NAME.dmctl.$ts.$pid.out" DEVEL -master-addr=$master_addr > $dmctl_log 2>&1
     all_matched=True
@@ -31,7 +31,7 @@ for ((k=0; k<10; k++)); do
         got=$(sed "s/$value/$value\n/g" $dmctl_log | grep -c "$value")
         if [ "$got" != "$expected" ]; then
             echo "command: $cmd $value count: $got != expected: $expected, failed the $k-th time, will retry again"
-            all_matched=False
+            all_matched=false
             break
         fi
     done
