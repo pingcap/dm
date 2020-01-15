@@ -132,3 +132,15 @@ func verifyUUIDSuffix(suffix string) bool {
 	}
 	return true
 }
+
+// AdjustPosition adjusts the filename with uuid suffix in mysql position
+// for example: mysql-bin|000001.000002 -> mysql-bin.000002
+func AdjustPosition(pos gmysql.Position) gmysql.Position {
+	realPos, err := RealMySQLPos(pos)
+	if err != nil {
+		// just return the origin pos
+		return pos
+	}
+
+	return realPos
+}

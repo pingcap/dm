@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -662,17 +663,17 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		subTaskCfgs = append(subTaskCfgs, subTaskcfg)
 	}
 
-	log.L().Info("start workers", zap.Reflect("subTasks", subTaskCfgs))
-
 	if len(cfg.RelayBinLogName) == 0 && len(cfg.RelayBinlogGTID) == 0 {
 		minPos, err := getMinPosInAllSubTasks(subTaskCfgs)
 		if err != nil {
 			return err
 		}
 		if minPos != nil {
-			cfg.RelayBinLogName = minPos.Name
+			cfg.RelayBinLogName = binlog.AdjustPosition(*minPos).Name
 		}
 	}
+
+	log.L().Info("start workers", zap.Reflect("subTasks", subTaskCfgs))
 
 	w, err := NewWorker(cfg)
 	if err != nil {

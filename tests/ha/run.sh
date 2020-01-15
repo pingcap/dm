@@ -44,10 +44,12 @@ function run() {
     run_sql "flush logs;" $MYSQL_PORT2
 
     echo "start dm-worker3 and kill dm-worker2"
-    run_dm_worker $WORK_DIR/worker3 $WORKER3_PORT $cur/conf/dm-worker3.toml
-    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER3_PORT
     ps aux | grep dm-worker2 |awk '{print $2}'|xargs kill || true
     check_port_offline $WORKER2_PORT 20
+    rm -rf $WORK_DIR/worker2/relay_log
+
+    run_dm_worker $WORK_DIR/worker3 $WORKER3_PORT $cur/conf/dm-worker3.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER3_PORT
 
     echo "wait and check task running"
     check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10

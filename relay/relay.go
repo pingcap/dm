@@ -389,7 +389,7 @@ func (r *Relay) handleEvents(ctx context.Context, reader2 reader.Reader, transfo
 					// TODO: try auto fix GTID, and can support auto switching between upstream server later.
 					cfg := r.cfg.From
 					r.tctx.L().Error("the requested binlog files have purged in the master server or the master server have switched, currently DM do no support to handle this error",
-						zap.String("db host", cfg.Host), zap.Int("db port", cfg.Port), log.ShortError(err))
+						zap.String("db host", cfg.Host), zap.Int("db port", cfg.Port), zap.Reflect("last pos", lastPos), log.ShortError(err))
 					// log the status for debug
 					pos, gs, err2 := utils.GetMasterStatus(r.db, r.cfg.Flavor)
 					if err2 == nil {
