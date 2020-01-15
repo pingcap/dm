@@ -15,6 +15,7 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -23,9 +24,13 @@ import (
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
+
 	"github.com/pingcap/errors"
+	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
 	"go.etcd.io/etcd/clientv3"
@@ -633,14 +638,8 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		}
 		return terror.ErrWorkerAlreadyStart.Generate()
 	}
-	w, err := NewWorker(cfg)
-	if err != nil {
-		return err
-	}
-	s.worker = w
-	go func() {
-		s.worker.Start()
-	}()
+
+	subTaskCfgs := make([]*config.SubTaskConfig, 0, 3)
 
 	ectx, cancel := context.WithTimeout(s.etcdClient.Ctx(), time.Second*3)
 	defer cancel()
@@ -650,8 +649,6 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		return err
 	}
 	for _, kv := range resp.Kvs {
-		infos := common.UpstreamSubTaskKeyAdapter.Decode(string(kv.Key))
-		taskName := infos[1]
 		task := string(kv.Value)
 		cfg := config.NewSubTaskConfig()
 		if err = cfg.Decode(task); err != nil {
@@ -660,11 +657,25 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		cfg.LogLevel = s.cfg.LogLevel
 		cfg.LogFile = s.cfg.LogFile
 
-		if err = w.StartSubTask(cfg); err != nil {
+		subTaskCfgs = append(subTaskCfgs, cfg)
+	}
+
+	w, err := NewWorker(cfg)
+	if err != nil {
+		return err
+	}
+	s.worker = w
+	go func() {
+		s.worker.Start()
+	}()
+
+	for _, subTaskCfg := range subTaskCfgs {
+		if err = w.StartSubTask(subTaskCfg); err != nil {
 			return err
 		}
-		log.L().Info("load subtask successful", zap.String("sourceID", cfg.SourceID), zap.String("task", taskName))
+		log.L().Info("load subtask successful", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
 	}
+
 	return nil
 }
 
@@ -732,4 +743,93 @@ func (s *Server) splitHostPort() (host, port string, err error) {
 		err = terror.ErrWorkerHostPortNotValid.Delegate(err, s.cfg.WorkerAddr)
 	}
 	return
+}
+
+// all subTask in subTaskCfgs should have same source
+// this function return the min position in all subtasks, used for relay's position
+func getMinPosInAllSubTasks(subTaskCfgs []*config.SubTaskConfig) (exist bool, minPos *mysql.Position, err error) {
+	for _, subTaskCfg := range subTaskCfgs {
+		exist, pos, err := getMinPosForSubTask(subTaskCfg)
+		if err != nil {
+			return false, nil, err
+		}
+
+		if !exist {
+			continue
+		}
+
+		if minPos == nil {
+			minPos = pos
+		} else {
+			if minPos.Compare(*pos) >= 1 {
+				minPos = pos
+			}
+		}
+	}
+
+	if minPos == nil {
+		return false, nil, nil
+	}
+
+	return true, minPos, nil
+}
+
+func getMinPosForSubTask(subTaskCfg *config.SubTaskConfig) (exist bool, minPos *mysql.Position, err error) {
+	dbCfg := subTaskCfg.To
+	dbCfg.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout("10s")
+	db, err := conn.DefaultDBProvider.Apply(dbCfg)
+	if err != nil {
+		return false, nil, terror.WithScope(err, terror.ScopeDownstream)
+	}
+
+	// only read the sync unit's checkpoint information
+	syncCheckpointTable := fmt.Sprintf("%s_syncer_checkpoint", subTaskCfg.Name)
+	exist, err = utils.TableExists(db.DB, subTaskCfg.MetaSchema, syncCheckpointTable)
+	if err != nil {
+		return false, nil, err
+	}
+	if !exist {
+		return false, nil, nil
+	}
+
+	query := fmt.Sprintf("SELECT `binlog_name`, `binlog_pos` FROM %s.%s where id = ?", subTaskCfg.MetaSchema, syncCheckpointTable)
+	rows, err := db.DB.Query(query, subTaskCfg.SourceID)
+	if err != nil {
+		return false, nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			binlogName string
+			binlogPos  uint32
+		)
+		err = rows.Scan(&binlogName, &binlogPos)
+		if err != nil {
+			return false, nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+		}
+
+		if len(binlogName) == 0 {
+			continue
+		}
+
+		pos := &mysql.Position{
+			Name: binlogName,
+			Pos:  binlogPos,
+		}
+
+		if minPos == nil {
+			minPos = pos
+		} else {
+			if minPos.Compare(*pos) >= 1 {
+				minPos = pos
+			}
+		}
+	}
+
+	if minPos == nil {
+		return false, nil, nil
+	}
+
+	return true, minPos, nil
 }
