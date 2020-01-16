@@ -126,6 +126,7 @@ func (t *testConfig) TestConfigVerify(c *C) {
 		{
 			func() *MysqlConfig {
 				cfg := newConfig()
+				cfg.EnableRelay = true
 				cfg.RelayBinLogName = "mysql-binlog"
 				return cfg
 			},
@@ -134,6 +135,15 @@ func (t *testConfig) TestConfigVerify(c *C) {
 		{
 			func() *MysqlConfig {
 				cfg := newConfig()
+				cfg.RelayBinLogName = "mysql-binlog"
+				return cfg
+			},
+			"",
+		},
+		{
+			func() *MysqlConfig {
+				cfg := newConfig()
+				cfg.EnableRelay = true
 				cfg.RelayBinlogGTID = "9afe121c-40c2-11e9-9ec7-0242ac110002:1-rtc"
 				return cfg
 			},
