@@ -106,10 +106,14 @@ func (s *Server) Start() error {
 					// Try to connect master again before stop worker
 					s.retryConnectMaster.Set(false)
 				} else {
-					w := s.getWorker(true)
+					s.Lock()
+					w := s.getWorker(false)
 					if w != nil {
-						s.setWorker(nil, true)
+						s.setWorker(nil, false)
+						s.Unlock()
 						w.Close()
+					} else {
+						s.Unlock()
 					}
 				}
 				ch := time.NewTicker(retryConnectSleepTime)

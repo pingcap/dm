@@ -74,7 +74,7 @@ message OperateSubTaskRequest {
 message OperateSubTaskResponse {
     TaskOp op = 1;
     bool result = 2;
-    string source = 3; // source name, set by dm-master
+    string source = 3; // source ID, set by dm-master
     string msg = 4;
 }
 
@@ -107,7 +107,7 @@ message HandleSubTaskSQLsRequest {
 
 message CommonWorkerResponse {
     bool result = 1;
-    string source = 2; // source name, set by dm-master
+    string source = 2; // source ID, set by dm-master
     string msg = 3; // when result is true, msg is empty
 }
 
@@ -115,17 +115,16 @@ message CommonWorkerResponse {
 // status: dm-worker's current sub tasks' status
 message QueryStatusResponse {
     bool result = 1;
-    string source = 2; // source name, set by dm-master
+    string source = 2; // source ID, set by dm-master
     string msg = 3;
     repeated SubTaskStatus subTaskStatus = 4;
     RelayStatus relayStatus = 5;
-    string sourceID = 6;
 }
 
 // QueryErrorResponse represents response for query on a dm-worker
 message QueryErrorResponse {
     bool result = 1;
-    string source = 2; // source name, set by dm-master
+    string source = 2; // source ID, set by dm-master
     string msg = 3;
     repeated SubTaskError subTaskError = 4;
     RelayError RelayError = 5;
@@ -425,7 +424,7 @@ message OperateRelayRequest {
 message OperateRelayResponse {
     RelayOp op = 1;
     bool result = 2;
-    string source = 3; // source name, set by dm-master
+    string source = 3; // source ID, set by dm-master
     string msg = 4;
 }
 
@@ -446,10 +445,9 @@ message QueryWorkerConfigRequest {
 
 message QueryWorkerConfigResponse {
     bool result = 1;
-    string source = 2; // source name, set by dm-master
+    string source = 2; // source ID, set by dm-master
     string msg = 3; // when result is true, msg is empty
-    string sourceID = 4; // source ID
-    string content = 5; // marshaled config content
+    string content = 4; // marshaled config content
 }
 
 enum WorkerOp {

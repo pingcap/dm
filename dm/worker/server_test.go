@@ -23,6 +23,7 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/pd/pkg/tempurl"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/embed"
 	"google.golang.org/grpc"
@@ -57,7 +58,7 @@ func createMockETCD(dir string, host string) (*embed.Etcd, error) {
 	cfg.LCUrls = []url.URL{*lcurl}
 	cfg.ACUrls = []url.URL{*lcurl}
 	cfg.Logger = "zap"
-	metricsURL, _ := url.Parse("host://127.0.0.1:5060")
+	metricsURL, _ := url.Parse(tempurl.Alloc())
 	cfg.ListenMetricsUrls = []url.URL{*metricsURL}
 	ETCD, err := embed.StartEtcd(cfg)
 	if err != nil {

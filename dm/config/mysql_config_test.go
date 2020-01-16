@@ -36,9 +36,6 @@ func (t *testConfig) TestConfig(c *C) {
 	c.Assert(cfg.RelayDir, Equals, "./xx")
 	c.Assert(cfg.ServerID, Equals, uint32(101))
 
-	// dir := c.MkDir()
-	// cfg.ConfigFile = path.Join(dir, "dm-worker.toml")
-
 	// test clone
 	clone1 := cfg.Clone()
 	c.Assert(cfg, DeepEquals, clone1)
@@ -219,11 +216,11 @@ func (t *testConfig) TestAdjustServerID(c *C) {
 	c.Assert(cfg.LoadFromFile(mysqlTomlPath), IsNil)
 	cfg.RelayDir = "./xx"
 
-	cfg.AdjustServerID(context.Background(), nil)
+	c.Assert(cfg.AdjustServerID(context.Background(), nil), IsNil)
 	c.Assert(cfg.ServerID, Equals, uint32(101))
 
 	cfg.ServerID = 0
-	cfg.AdjustServerID(context.Background(), nil)
+	c.Assert(cfg.AdjustServerID(context.Background(), nil), IsNil)
 	c.Assert(cfg.ServerID, Not(Equals), 0)
 }
 

@@ -22,6 +22,7 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/pd/pkg/tempurl"
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
@@ -85,7 +86,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		taskName = "sub-task-name"
 		port     = 8263
 	)
-	hostName := "127.0.0.1:8291"
+	hostName := tempurl.Alloc()
 	etcdDir := c.MkDir()
 	ETCD, err := createMockETCD(etcdDir, "host://"+hostName)
 	c.Assert(err, IsNil)
