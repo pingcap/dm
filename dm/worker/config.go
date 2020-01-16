@@ -34,6 +34,10 @@ import (
 // and assign it to SampleConfigFile while we build dm-worker
 var SampleConfigFile string
 
+var (
+	getRandomServerIDFunc = utils.GetRandomServerID
+)
+
 // NewConfig creates a new base config for worker.
 func NewConfig() *Config {
 	cfg := &Config{}

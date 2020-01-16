@@ -156,9 +156,11 @@ type SubTaskConfig struct {
 	Meta                    *Meta  `toml:"meta" json:"meta"`
 	Timezone                string `toml:"timezone" josn:"timezone"`
 
-	BinlogType string `toml:"binlog-type" json:"binlog-type"`
 	// RelayDir get value from dm-worker config
-	RelayDir string   `toml:"relay-dir" json:"relay-dir"`
+	RelayDir string `toml:"relay-dir" json:"relay-dir"`
+
+	// UseRelay get value from dm-worker config
+	UseRelay bool     `toml:"use-relay" json:"use-relay"`
 	From     DBConfig `toml:"from" json:"from"`
 	To       DBConfig `toml:"to" json:"to"`
 
@@ -189,6 +191,16 @@ type SubTaskConfig struct {
 func NewSubTaskConfig() *SubTaskConfig {
 	cfg := &SubTaskConfig{}
 	return cfg
+}
+
+// GetFlagSet provides the pointer of subtask's flag set.
+func (c *SubTaskConfig) GetFlagSet() *flag.FlagSet {
+	return c.flagSet
+}
+
+// SetFlagSet writes back the flag set.
+func (c *SubTaskConfig) SetFlagSet(flagSet *flag.FlagSet) {
+	c.flagSet = flagSet
 }
 
 // String returns the config's json string

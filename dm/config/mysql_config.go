@@ -48,6 +48,7 @@ type MysqlConfig struct {
 	Flavor      string `toml:"flavor" json:"flavor"`
 	Charset     string `toml:"charset" json:"charset"`
 
+	EnableRelay bool `toml:"enable-relay" json:"enable-relay"`
 	// relay synchronous starting point (if specified)
 	RelayBinLogName string `toml:"relay-binlog-name" json:"relay-binlog-name"`
 	RelayBinlogGTID string `toml:"relay-binlog-gtid" json:"relay-binlog-gtid"`
@@ -151,15 +152,17 @@ func (c *MysqlConfig) Verify() error {
 	}
 
 	var err error
-	if len(c.RelayBinLogName) > 0 {
-		if !binlog.VerifyFilename(c.RelayBinLogName) {
-			return terror.ErrWorkerRelayBinlogName.Generate(c.RelayBinLogName)
+	if c.EnableRelay {
+		if len(c.RelayBinLogName) > 0 {
+			if !binlog.VerifyFilename(c.RelayBinLogName) {
+				return terror.ErrWorkerRelayBinlogName.Generate(c.RelayBinLogName)
+			}
 		}
-	}
-	if len(c.RelayBinlogGTID) > 0 {
-		_, err = gtid.ParserGTID(c.Flavor, c.RelayBinlogGTID)
-		if err != nil {
-			return terror.WithClass(terror.Annotatef(err, "relay-binlog-gtid %s", c.RelayBinlogGTID), terror.ClassDMWorker)
+		if len(c.RelayBinlogGTID) > 0 {
+			_, err = gtid.ParserGTID(c.Flavor, c.RelayBinlogGTID)
+			if err != nil {
+				return terror.WithClass(terror.Annotatef(err, "relay-binlog-gtid %s", c.RelayBinlogGTID), terror.ClassDMWorker)
+			}
 		}
 	}
 

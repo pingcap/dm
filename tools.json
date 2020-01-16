@@ -1,0 +1,37 @@
+{
+  "Tools": [
+    {
+      "Repository": "github.com/pingcap/failpoint/failpoint-ctl",
+      "Commit": "e7b1061e6e81d44326c449cf518992e0e2d47e98"
+    },
+    {
+      "Repository": "github.com/kisielk/errcheck",
+      "Commit": "e14f8d59a22d460d56c5ee92507cd94c78fbf274"
+    },
+    {
+      "Repository": "golang.org/x/lint/golint",
+      "Commit": "fdd1cda4f05fd1fd86124f0ef9ce31a0b72c8448"
+    },
+    {
+      "Repository": "github.com/mattn/goveralls",
+      "Commit": "59534e121a04e409da2c9356fd6501e837d88007"
+    },
+    {
+      "Repository": "github.com/zhouqiang-cl/gocovmerge",
+      "Commit": "5256314471af44fe8bccbf0a1db1dd1f85637c1a"
+    },
+    {
+      "Repository": "github.com/gogo/protobuf/protoc-gen-gogofaster",
+      "Commit": "5628607bb4c51c3157aacc3a50f0ab707582b805"
+    },
+    {
+      "Repository": "github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway",
+      "Commit": "f7120437bb4f6c71f7f5076ad65a45310de2c009"
+    },
+    {
+      "Repository": "github.com/golang/mock/mockgen",
+      "Commit": "d74b93584564161b2de771089ee697f07d8bd5b5"
+    }
+  ],
+  "RetoolVersion": "1.3.7"
+}

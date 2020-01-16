@@ -35,6 +35,7 @@ func (t *testServer) testWorker(c *C) {
 	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
 
 	dir := c.MkDir()
+	cfg.EnableRelay = true
 	cfg.RelayDir = dir
 	cfg.MetaDir = dir
 
@@ -104,6 +105,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	dir := c.MkDir()
 	workerCfg.RelayDir = dir
 	workerCfg.MetaDir = dir
+	workerCfg.EnableRelay = true
 
 	NewRelayHolder = NewDummyRelayHolder
 	defer func() {

@@ -96,3 +96,21 @@ func ConstructFilename(baseName, seq string) string {
 func ConstructFilenameWithUUIDSuffix(originalName Filename, uuidSuffix string) string {
 	return fmt.Sprintf("%s%s%s%s%s", originalName.BaseName, posUUIDSuffixSeparator, uuidSuffix, binlogFilenameSep, originalName.Seq)
 }
+
+// SplitFilenameWithUUIDSuffix analyzes a binlog filename with UUID suffix.
+func SplitFilenameWithUUIDSuffix(filename string) (baseName, uuidSuffix, seq string, err error) {
+	items1 := strings.Split(filename, posUUIDSuffixSeparator)
+	if len(items1) != 2 {
+		return "", "", "", terror.ErrBinlogInvalidFilenameWithUUIDSuffix.Generate(filename)
+	}
+
+	baseName = items1[0]
+	items2 := strings.Split(items1[1], binlogFilenameSep)
+
+	if len(items2) != 2 {
+		return "", "", "", terror.ErrBinlogInvalidFilenameWithUUIDSuffix.Generate(filename)
+	}
+	uuidSuffix = items2[0]
+	seq = items2[1]
+	return baseName, uuidSuffix, seq, nil
+}

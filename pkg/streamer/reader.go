@@ -412,3 +412,12 @@ func (r *BinlogReader) Close() {
 	r.wg.Wait()
 	r.tctx.L().Info("binlog reader closed")
 }
+
+// GetUUIDs returns binlog reader's uuids
+func (r *BinlogReader) GetUUIDs() []string {
+	uuids := make([]string, 0, len(r.uuids))
+	for _, uuid := range r.uuids {
+		uuids = append(uuids, uuid)
+	}
+	return uuids
+}
