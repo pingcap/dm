@@ -36,42 +36,74 @@ type Props = IPageAction<ITaskInfo> & {
   taskInfo: ITaskInfo
 }
 
+type TaskName = {
+  status: 'success' | 'error'
+  errMsg: string
+  value: string
+}
+
 function NamingStep({ onNext, onPrev, onData, taskInfo }: Props) {
   const edit = useContext(EditContext)
-  const [taskName, setTaskName] = useState(taskInfo.taskName)
   const [taskMode, setTaskMode] = useState(taskInfo.taskMode)
+  const [taskName, setTaskName] = useState<TaskName>(() =>
+    handleTaskNameChange(taskInfo.taskName)
+  )
+
+  function handleTaskNameChange(name: string): TaskName {
+    if (name.length === 0 || /^[a-zA-Z0-9$_]+$/.test(name)) {
+      return {
+        status: 'success',
+        errMsg: '',
+        value: name
+      }
+    } else {
+      return {
+        status: 'error',
+        errMsg: '任务名称不合法',
+        value: name
+      }
+    }
+  }
 
   return (
     <Container>
       <Form {...formItemLayout}>
-        <Form.Item label="任务名称">
+        <Form.Item
+          label='任务名称'
+          validateStatus={taskName.status}
+          help={taskName.errMsg}
+        >
           <Input
-            placeholder="test-task"
-            value={taskName}
-            onChange={(e: any) => setTaskName(e.target.value)}
+            placeholder='test-task'
+            value={taskName.value}
+            onChange={(e: any) =>
+              setTaskName(handleTaskNameChange(e.target.value))
+            }
           />
         </Form.Item>
-        <Form.Item label="同步模式">
+        <Form.Item label='同步模式'>
           <Radio.Group
             disabled={edit}
             onChange={(e: any) => setTaskMode(e.target.value)}
             value={taskMode}
           >
-            <Radio value="full">全量</Radio>
-            <Radio value="incremental">增量</Radio>
-            <Radio value="all">All</Radio>
+            <Radio value='full'>全量</Radio>
+            <Radio value='incremental'>增量</Radio>
+            <Radio value='all'>All</Radio>
           </Radio.Group>
         </Form.Item>
         <Form.Item {...tailItemLayout}>
           <Button onClick={() => onPrev()}>取消</Button>
           <Button
-            type="primary"
-            htmlType="submit"
+            type='primary'
+            htmlType='submit'
             onClick={() => {
               onNext()
-              onData && onData({ taskName, taskMode })
+              onData && onData({ taskName: taskName.value, taskMode })
             }}
-            disabled={taskName.length === 0}
+            disabled={
+              taskName.value.length === 0 || taskName.status === 'error'
+            }
           >
             下一步
           </Button>

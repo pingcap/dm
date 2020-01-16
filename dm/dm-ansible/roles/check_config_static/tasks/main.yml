@@ -9,7 +9,7 @@
   when: groups['dm_worker_servers'] | length < 1
 
 - name: Ensure prometheus host exists
-  fail: msg="One dm-master host should be specified in inventory.ini file."
+  fail: msg="One prometheus host should be specified in inventory.ini file."
   when: groups['prometheus_servers'] | length != 1
 
 - name: Ensure grafana host exists
