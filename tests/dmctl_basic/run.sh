@@ -12,50 +12,63 @@ SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
 
 # used to coverage wrong usage of dmctl command
 function usage_and_arg_test() {
+    echo "check_task_wrong_arg"
     check_task_wrong_arg
     check_task_wrong_config_file
     check_task_while_master_down $TASK_CONF
 
+    echo "pause_relay_wrong_arg"
     pause_relay_wrong_arg
     pause_relay_wihout_worker
     pause_relay_while_master_down
 
+    echo "resume_relay_wrong_arg"
     resume_relay_wrong_arg
     resume_relay_wihout_worker
     resume_relay_while_master_down
 
+    echo "pause_task_wrong_arg"
     pause_task_wrong_arg
     pause_task_while_master_down
 
+    echo "resume_task_wrong_arg"
     resume_task_wrong_arg
     resume_task_while_master_down
 
+    echo "query_status_wrong_arg"
     query_status_wrong_arg
     query_status_wrong_params
 
+    echo "start_task_wrong_arg"
     start_task_wrong_arg
     start_task_wrong_config_file
     start_task_while_master_down $TASK_CONF
 
+    echo "stop_task_wrong_arg"
     stop_task_wrong_arg
     stop_task_while_master_down
 
+    echo "show_ddl_locks_wrong_arg"
     show_ddl_locks_wrong_arg
     show_ddl_locks_while_master_down
 
+    echo "update_relay_wrong_arg"
     update_relay_wrong_arg
     update_relay_wrong_config_file
     update_relay_should_specify_one_dm_worker $MYSQL1_CONF
     update_relay_while_master_down $MYSQL1_CONF
 
+    echo "update_task_wrong_arg"
     update_task_wrong_arg
     update_task_wrong_config_file
     update_task_while_master_down $TASK_CONF
 
+    echo "update_master_config_wrong_arg"
     update_master_config_wrong_arg
     update_master_config_wrong_config_file
     update_master_config_while_master_down $cur/conf/dm-master.toml
 
+    echo "purge_relay_wrong_arg"
     purge_relay_wrong_arg
     purge_relay_wihout_worker
     purge_relay_filename_with_multi_workers
@@ -123,23 +136,30 @@ function run() {
         "operate-worker create $WORK_DIR/mysql2.toml" \
         "true" 1
 
+    echo "pause_relay_success"
     pause_relay_success
     query_status_stopped_relay
     pause_relay_fail
     resume_relay_success
     query_status_with_no_tasks
 
+    echo "dmctl_start_task"
     check_task_pass $TASK_CONF
     check_task_not_pass $cur/conf/dm-task2.yaml
 
+    echo "dmctl_start_task"
     dmctl_start_task
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "query-status -w 127.0.0.1:$WORKER1_PORT,127.0.0.1:$WORKER2_PORT"
     update_task_not_paused $TASK_CONF
 
+    echo "show_ddl_locks_no_locks"
     show_ddl_locks_no_locks $TASK_NAME
     query_status_with_tasks
     pause_task_success $TASK_NAME
 
+    echo "update_task_worker_not_found"
     update_task_worker_not_found $TASK_CONF 127.0.0.1:9999
     update_task_success_single_worker $TASK_CONF $SOURCE_ID1
     update_task_success $TASK_CONF

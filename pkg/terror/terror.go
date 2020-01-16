@@ -47,6 +47,7 @@ const (
 	ClassDMMaster
 	ClassDMWorker
 	ClassDMTracer
+	ClassSchemaTracker
 )
 
 var errClass2Str = map[ErrClass]string{
@@ -64,6 +65,7 @@ var errClass2Str = map[ErrClass]string{
 	ClassDMMaster:      "dm-master",
 	ClassDMWorker:      "dm-worker",
 	ClassDMTracer:      "dm-tracer",
+	ClassSchemaTracker: "schema-tracker",
 }
 
 // String implements fmt.Stringer interface

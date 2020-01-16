@@ -5,6 +5,7 @@ flavor = ""
 enable-gtid = false
 relay-binlog-name = ""
 relay-binlog-gtid = ""
+enable-relay = true
 
 [from]
 host = "127.0.0.1"

@@ -144,3 +144,19 @@ func AdjustPosition(pos gmysql.Position) gmysql.Position {
 
 	return realPos
 }
+
+// ComparePosition returns:
+//   1 if pos1 is bigger than pos2
+//   0 if pos1 is equal to pos2
+//   -1 if pos1 is less than pos2
+func ComparePosition(pos1, pos2 gmysql.Position) int {
+	adjustedPos1 := AdjustPosition(pos1)
+	adjustedPos2 := AdjustPosition(pos2)
+
+	// means both pos1 and pos2 have uuid in name, so need also compare the uuid
+	if adjustedPos1.Name != pos1.Name && adjustedPos2.Name != pos2.Name {
+		return pos1.Compare(pos2)
+	}
+
+	return adjustedPos1.Compare(adjustedPos2)
+}

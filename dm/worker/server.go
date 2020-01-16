@@ -350,6 +350,7 @@ func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest
 // QueryStatus implements WorkerServer.QueryStatus
 func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*pb.QueryStatusResponse, error) {
 	log.L().Info("", zap.String("request", "QueryStatus"), zap.Stringer("payload", req))
+
 	resp := &pb.QueryStatusResponse{
 		Result: true,
 	}
@@ -362,8 +363,17 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 		return resp, nil
 	}
 
+	relayStatus := &pb.RelayStatus{
+		Result: &pb.ProcessResult{
+			Detail: []byte("relay is not enabled"),
+		},
+	}
+	if s.worker.relayHolder != nil {
+		relayStatus = s.worker.relayHolder.Status()
+	}
+
 	resp.SubTaskStatus = w.QueryStatus(req.Name)
-	resp.RelayStatus = w.relayHolder.Status()
+	resp.RelayStatus = relayStatus
 	resp.SourceID = w.cfg.SourceID
 	if len(resp.SubTaskStatus) == 0 {
 		resp.Msg = "no sub task started"
@@ -387,7 +397,9 @@ func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorRequest) (*pb
 	}
 
 	resp.SubTaskError = w.QueryError(req.Name)
-	resp.RelayError = w.relayHolder.Error()
+	if w.relayHolder != nil {
+		resp.RelayError = w.relayHolder.Error()
+	}
 	return resp, nil
 }
 

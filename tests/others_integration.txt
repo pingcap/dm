@@ -2,3 +2,4 @@ ha
 full_mode
 retry_cancel
 start_task
+dm_syncer
