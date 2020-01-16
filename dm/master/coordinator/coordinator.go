@@ -421,7 +421,7 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 		Op:     pb.WorkerOp_StartWorker,
 		Config: task,
 	}
-	resp, err := w.OperateMysqlWorker(context.Background(), req, time.Second*3)
+	resp, err := w.OperateMysqlWorker(context.Background(), req, time.Second*5)
 	ret := false
 	c.mu.Lock()
 	if err == nil {
@@ -431,6 +431,7 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 			c.upstreams[cfg.SourceID] = w
 			w.SetStatus(WorkerBound)
 		} else {
+			log.L().Warn("restartMysqlTask failed", zap.String("errorMsg", resp.Msg))
 			delete(c.upstreams, cfg.SourceID)
 			if source, ok := c.workerToConfigs[w.Address()]; ok {
 				if source == cfg.SourceID {

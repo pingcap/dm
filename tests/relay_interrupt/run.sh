@@ -75,7 +75,7 @@ function run() {
         run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
         check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 
-        sleep 5
+        sleep 8
         echo "start task after restarted dm-worker"
         task_conf="$cur/conf/dm-task.yaml"
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -96,6 +96,7 @@ function run() {
         export GO_FAILPOINTS="github.com/pingcap/dm/pkg/streamer/GetEventFromLocalFailed=return()"
         run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
         check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+        sleep 8
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "\"binlogType\": \"remote\"" 1

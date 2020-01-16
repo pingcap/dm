@@ -75,7 +75,7 @@ function run() {
     export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
-    sleep 2s
+    sleep 1s
 
     echo "start task after restarted dm-worker"
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
