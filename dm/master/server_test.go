@@ -1437,12 +1437,9 @@ func (t *testMaster) TestOperateMysqlWorker(c *check.C) {
 	task, err := mysqlCfg.Toml()
 	c.Assert(err, check.IsNil)
 	// wait for coordinator to start
-	waitT := 0
-	for !s1.coordinator.IsStarted() && waitT < 6 {
-		time.Sleep(500 * time.Millisecond)
-		waitT++
-	}
-	c.Assert(s1.coordinator.IsStarted(), check.IsTrue)
+	c.Assert(utils.WaitSomething(6, 500*time.Millisecond, func() bool {
+		return s1.coordinator.IsStarted()
+	}), check.IsTrue)
 
 	req := &pb.MysqlWorkerRequest{Op: pb.WorkerOp_StartWorker, Config: task}
 	resp, err := s1.OperateMysqlWorker(ctx, req)

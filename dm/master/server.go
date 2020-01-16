@@ -371,7 +371,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 	}
 	log.L().Info("", zap.String("task name", cfg.Name), zap.Stringer("task", cfg), zap.String("request", "StartTask"))
 
-	workerRespCh := make(chan *pb.CommonWorkerResponse, len(stCfgs))
+	sourceRespCh := make(chan *pb.CommonWorkerResponse, len(stCfgs))
 	var wg sync.WaitGroup
 	subSourceIDs := make([]string, 0, len(stCfgs))
 	if len(req.Sources) > 0 {
@@ -385,7 +385,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 			if stCfg, ok := sourceCfg[source]; ok {
 				stCfgs = append(stCfgs, stCfg)
 			} else {
-				workerRespCh <- errorCommonWorkerResponse("source not found in task's config", source)
+				sourceRespCh <- errorCommonWorkerResponse("source not found in task's config", source)
 			}
 		}
 	}
@@ -398,7 +398,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 			cfg, _ := args[0].(*config.SubTaskConfig)
 			worker, stCfgToml, _, err := s.taskConfigArgsExtractor(cfg)
 			if err != nil {
-				workerRespCh <- errorCommonWorkerResponse(err.Error(), cfg.SourceID)
+				sourceRespCh <- errorCommonWorkerResponse(err.Error(), cfg.SourceID)
 				return
 			}
 			request := &workerrpc.Request{
@@ -413,41 +413,41 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 				}
 			}
 			resp.StartSubTask.Source = cfg.SourceID
-			workerRespCh <- resp.StartSubTask
+			sourceRespCh <- resp.StartSubTask
 		}, func(args ...interface{}) {
 			defer wg.Done()
 			cfg, _ := args[0].(*config.SubTaskConfig)
 			worker, _, _, err := s.taskConfigArgsExtractor(cfg)
 			if err != nil {
-				workerRespCh <- errorCommonWorkerResponse(err.Error(), cfg.SourceID)
+				sourceRespCh <- errorCommonWorkerResponse(err.Error(), cfg.SourceID)
 				return
 			}
-			workerRespCh <- errorCommonWorkerResponse(terror.ErrMasterNoEmitToken.Generate(worker.Address()).Error(), cfg.SourceID)
+			sourceRespCh <- errorCommonWorkerResponse(terror.ErrMasterNoEmitToken.Generate(worker.Address()).Error(), cfg.SourceID)
 		}, stCfg)
 	}
 	wg.Wait()
 
-	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(stCfgs))
-	workers := make([]string, 0, len(stCfgs))
-	for len(workerRespCh) > 0 {
-		workerResp := <-workerRespCh
-		workerRespMap[workerResp.Source] = workerResp
-		workers = append(workers, workerResp.Source)
+	sourceRespMap := make(map[string]*pb.CommonWorkerResponse, len(stCfgs))
+	sources := make([]string, 0, len(stCfgs))
+	for len(sourceRespCh) > 0 {
+		sourceResp := <-sourceRespCh
+		sourceRespMap[sourceResp.Source] = sourceResp
+		sources = append(sources, sourceResp.Source)
 	}
 
 	// TODO: simplify logic of response sort
-	sort.Strings(workers)
-	workerResps := make([]*pb.CommonWorkerResponse, 0, len(workers))
-	for _, worker := range workers {
-		workerResps = append(workerResps, workerRespMap[worker])
+	sort.Strings(sources)
+	sourceResps := make([]*pb.CommonWorkerResponse, 0, len(sources))
+	for _, worker := range sources {
+		sourceResps = append(sourceResps, sourceRespMap[worker])
 	}
 
-	// record task -> workers map
+	// record task -> sources map
 	s.taskSources[cfg.Name] = subSourceIDs
 
 	return &pb.StartTaskResponse{
 		Result:  true,
-		Sources: workerResps,
+		Sources: sourceResps,
 	}, nil
 }
 

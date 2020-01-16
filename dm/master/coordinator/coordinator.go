@@ -31,7 +31,8 @@ import (
 )
 
 var (
-	etcdTimeouit = 3 * time.Second
+	etcdTimeout        = 3 * time.Second
+	restartEtcdTimeout = 5 * time.Second
 
 	// ErrNotStarted coordinator does not start.
 	ErrNotStarted = errors.New("coordinator does not start")
@@ -83,7 +84,7 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 	c.etcdCli = etcdClient
 
 	// recovering.
-	ectx, cancel := context.WithTimeout(etcdClient.Ctx(), etcdTimeouit)
+	ectx, cancel := context.WithTimeout(etcdClient.Ctx(), etcdTimeout)
 	defer cancel()
 	resp, err := etcdClient.Get(ectx, common.WorkerRegisterKeyAdapter.Path(), clientv3.WithPrefix())
 	if err != nil {
@@ -224,6 +225,13 @@ func (c *Coordinator) AcquireWorkerForSource(source string) (*Worker, error) {
 		return nil, errors.Errorf("Acquire worker failed. the same source has been started in worker: %s", addr)
 	}
 	if _, ok := c.taskConfigs[source]; ok {
+		// this check is used to avoid a situation: one task is started twice by mistake but requires two workers
+		// If ok is true, there are two situations:
+		// 1. this task is mistakenly started twice, when coordinator tried to operate on the bound worker it will report an error
+		// 2. this task is paused because the bound worker was out of service before, we can give this task this worker to start it again
+		// If ok is false, that means the try on the bound worker has failed, we can arrange this task another worker
+		// ATTENTION!!! This mechanism can't prevent this case, which should be discussed later:
+		// the task is being operating to a worker(taskConfigs and upstreams haven't been updated), but it is started again to acquire worker
 		if w, ok := c.upstreams[source]; ok {
 			return w, nil
 		}
@@ -421,7 +429,7 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 		Op:     pb.WorkerOp_StartWorker,
 		Config: task,
 	}
-	resp, err := w.OperateMysqlWorker(context.Background(), req, time.Second*5)
+	resp, err := w.OperateMysqlWorker(context.Background(), req, restartEtcdTimeout)
 	ret := false
 	c.mu.Lock()
 	if err == nil {
@@ -431,7 +439,7 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 			c.upstreams[cfg.SourceID] = w
 			w.SetStatus(WorkerBound)
 		} else {
-			log.L().Warn("restartMysqlTask failed", zap.String("errorMsg", resp.Msg))
+			log.L().Warn("restartMysqlTask failed", zap.String("error", resp.Msg))
 			delete(c.upstreams, cfg.SourceID)
 			if source, ok := c.workerToConfigs[w.Address()]; ok {
 				if source == cfg.SourceID {
@@ -457,7 +465,7 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 	delete(c.pendingReqSources, cfg.SourceID)
 	c.mu.Unlock()
 	if w.State() == WorkerClosed {
-		ectx, cancel := context.WithTimeout(c.etcdCli.Ctx(), etcdTimeouit)
+		ectx, cancel := context.WithTimeout(c.etcdCli.Ctx(), etcdTimeout)
 		defer cancel()
 		resp, err := c.etcdCli.Get(ectx, common.WorkerRegisterKeyAdapter.Encode(w.Address(), w.Name()))
 		if err != nil {
