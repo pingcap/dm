@@ -101,6 +101,7 @@ func (s *Server) Start() error {
 		var err1 error
 		for !shouldExit {
 			shouldExit, err1 = s.KeepAlive()
+			log.L().Warn("keepalive with master goroutine paused", zap.Error(err1))
 			if err1 != nil || !shouldExit {
 				if s.retryConnectMaster.Get() {
 					// Try to connect master again before stop worker
@@ -191,16 +192,16 @@ func (s *Server) Close() {
 	s.wg.Wait()
 }
 
-func (s *Server) getWorker(locked bool) *Worker {
-	if locked {
+func (s *Server) getWorker(needLock bool) *Worker {
+	if needLock {
 		s.Lock()
 		defer s.Unlock()
 	}
 	return s.worker
 }
 
-func (s *Server) setWorker(worker *Worker, locked bool) {
-	if locked {
+func (s *Server) setWorker(worker *Worker, needLock bool) {
+	if needLock {
 		s.Lock()
 		defer s.Unlock()
 	}
