@@ -650,24 +650,26 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 
 	ectx, cancel := context.WithTimeout(s.etcdClient.Ctx(), time.Second*3)
 	defer cancel()
-	resp, err := s.etcdClient.Get(ectx, common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID), clientv3.WithPrefix())
-	if err == nil {
-		for _, kv := range resp.Kvs {
-			infos := common.UpstreamSubTaskKeyAdapter.Decode(string(kv.Key))
-			taskName := infos[1]
-			task := string(kv.Value)
-			cfg := config.NewSubTaskConfig()
-			if err := cfg.Decode(task); err != nil {
-				return nil
-			}
-			cfg.LogLevel = s.cfg.LogLevel
-			cfg.LogFile = s.cfg.LogFile
-
-			if err := w.StartSubTask(cfg); err != nil {
-				return nil
-			}
-			log.L().Info("load subtask successful", zap.String("sourceID", cfg.SourceID), zap.String("name", taskName))
+	key := common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID)
+	resp, err := s.etcdClient.KV.Get(ectx, key, clientv3.WithPrefix())
+	if err != nil {
+		return err
+	}
+	for _, kv := range resp.Kvs {
+		infos := common.UpstreamSubTaskKeyAdapter.Decode(string(kv.Key))
+		taskName := infos[1]
+		task := string(kv.Value)
+		cfg := config.NewSubTaskConfig()
+		if err = cfg.Decode(task); err != nil {
+			return err
 		}
+		cfg.LogLevel = s.cfg.LogLevel
+		cfg.LogFile = s.cfg.LogFile
+
+		if err = w.StartSubTask(cfg); err != nil {
+			return err
+		}
+		log.L().Info("load subtask successful", zap.String("sourceID", cfg.SourceID), zap.String("task", taskName))
 	}
 	return nil
 }
