@@ -385,7 +385,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 
 	resp.SubTaskStatus = w.QueryStatus(req.Name)
 	resp.RelayStatus = relayStatus
-	resp.SourceID = w.cfg.SourceID
+	resp.Source = w.cfg.SourceID
 	if len(resp.SubTaskStatus) == 0 {
 		resp.Msg = "no sub task started"
 	}
@@ -625,7 +625,7 @@ func (s *Server) QueryWorkerConfig(ctx context.Context, req *pb.QueryWorkerConfi
 	}
 
 	resp.Content = rawConfig
-	resp.SourceID = workerCfg.SourceID
+	resp.Source = workerCfg.SourceID
 	return resp, nil
 }
 

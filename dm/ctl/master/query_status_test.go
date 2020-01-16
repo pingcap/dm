@@ -55,7 +55,7 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 	resp.Sources = []*pb.QueryStatusResponse{
 		{
 			Result: true,
-			Source: "172.17.0.2:8262",
+			Source: "mysql-replica-01",
 			SubTaskStatus: []*pb.SubTaskStatus{{
 				Name:  "test",
 				Stage: pb.Stage_Running,
@@ -63,7 +63,7 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 		},
 		{
 			Result: true,
-			Source: "172.17.0.3:8262",
+			Source: "mysql-replica-02",
 			SubTaskStatus: []*pb.SubTaskStatus{{
 				Name:  "test",
 				Stage: pb.Stage_Running,
@@ -71,7 +71,7 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 		},
 		{
 			Result: true,
-			Source: "172.17.0.6:8262",
+			Source: "mysql-replica-03",
 			SubTaskStatus: []*pb.SubTaskStatus{{
 				Name:  "test",
 				Stage: pb.Stage_Paused,
@@ -85,7 +85,7 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 	expectedResult := []*taskInfo{{
 		TaskName:   "test",
 		TaskStatus: stageError + " - Some error occurred in subtask" + extraInfo,
-		Sources:    []string{"172.17.0.2:8262", "172.17.0.3:8262", "172.17.0.6:8262"},
+		Sources:    []string{"mysql-replica-01", "mysql-replica-02", "mysql-replica-03"},
 	}}
 	generateAndCheckTaskResult(c, resp, expectedResult)
 	// Should return error when subtask unit is "Sync" while relay status is not running
@@ -127,7 +127,7 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 	// test situation with two tasks
 	resp.Sources = append(resp.Sources, &pb.QueryStatusResponse{
 		Result: true,
-		Source: "172.17.0.4:8262",
+		Source: "mysql-replica-04",
 		SubTaskStatus: []*pb.SubTaskStatus{{
 			Name:  "test2",
 			Stage: pb.Stage_Paused,
@@ -145,11 +145,11 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 	expectedResult = []*taskInfo{{
 		TaskName:   "test",
 		TaskStatus: pb.Stage_Running.String(),
-		Sources:    []string{"172.17.0.2:8262", "172.17.0.3:8262", "172.17.0.6:8262"},
+		Sources:    []string{"mysql-replica-01", "mysql-replica-02", "mysql-replica-03"},
 	}, {
 		TaskName:   "test2",
 		TaskStatus: stageError + " - Some error occurred in subtask. Please run `query-status test2` to get more details.",
-		Sources:    []string{"172.17.0.4:8262"},
+		Sources:    []string{"mysql-replica-04"},
 	},
 	}
 	c.Assert(result.Tasks, check.DeepEquals, expectedResult)
