@@ -31,6 +31,10 @@ type Lock struct {
 	DDLs   []string        // DDL statements
 	remain int             // remain count of sources needed to receive DDL info
 	ready  map[string]bool // whether the DDL info received from the source
+
+	// whether the operations have done (exec/skip the shard DDL).
+	// if all of them have done, then we call the lock `resolved`.
+	done map[string]bool
 }
 
 // NewLock creates a new Lock instance.
@@ -42,9 +46,11 @@ func NewLock(ID, task, owner string, DDLs, sources []string) *Lock {
 		DDLs:   DDLs,
 		remain: len(sources),
 		ready:  make(map[string]bool),
+		done:   make(map[string]bool),
 	}
 	for _, s := range sources {
 		l.ready[s] = false
+		l.done[s] = false
 	}
 
 	return l
@@ -62,11 +68,12 @@ func (l *Lock) TrySync(caller string, DDLs, sources []string) (bool, int, error)
 		return l.remain <= 0, l.remain, terror.ErrMasterShardingDDLDiff.Generate(l.DDLs, DDLs)
 	}
 
-	// try to merge any newly jointed sources.
+	// try to merge any newly joined sources.
 	for _, s := range sources {
 		if _, ok := l.ready[s]; !ok {
 			l.remain++
 			l.ready[s] = false
+			l.done[s] = false // mark as not-done for newly joined sources.
 		}
 	}
 
@@ -96,4 +103,37 @@ func (l *Lock) Ready() map[string]bool {
 		ret[k] = v
 	}
 	return ret
+}
+
+// MarkDone marks the operation of the source as done.
+// NOTE: we do not support revert the `done` after marked now.
+func (l *Lock) MarkDone(source string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if _, ok := l.done[source]; !ok {
+		return // do not add it if not exists.
+	}
+	l.done[source] = true
+}
+
+// IsDone returns whether the operation has done.
+func (l *Lock) IsDone(source string) bool {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	return l.done[source]
+}
+
+// IsResolved returns whether the lock has resolved (all operations have done).
+func (l *Lock) IsResolved() bool {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	for _, done := range l.done {
+		if !done {
+			return false
+		}
+	}
+	return true
 }

@@ -75,13 +75,13 @@ func operationFromJSON(s string) (o Operation, err error) {
 // if `skipDone` is `true`, and the `done` filed in any of these operations in etcd is also `true`,
 // then this `PutOperations` skip to overwrite the k/v in etcd.
 // This function should often be called by DM-master.
-func PutOperations(cli *clientv3.Client, skipDone bool, ops ...Operation) (int64, error) {
+func PutOperations(cli *clientv3.Client, skipDone bool, ops ...Operation) (int64, bool, error) {
 	cmps := make([]clientv3.Cmp, 0, len(ops))
 	opsPut := make([]clientv3.Op, 0, len(ops))
 	for _, op := range ops {
 		value, err := op.toJSON()
 		if err != nil {
-			return 0, err
+			return 0, false, err
 		}
 
 		key := common.ShardDDLPessimismOperationKeyAdapter.Encode(op.Task, op.Source)
@@ -92,7 +92,7 @@ func PutOperations(cli *clientv3.Client, skipDone bool, ops ...Operation) (int64
 			opDone.Done = true // set `done` to `true`.
 			valueDone, err2 := opDone.toJSON()
 			if err2 != nil {
-				return 0, err2
+				return 0, false, err2
 			}
 			cmps = append(cmps, clientv3.Compare(clientv3.Value(key), "!=", valueDone))
 		}
@@ -103,9 +103,9 @@ func PutOperations(cli *clientv3.Client, skipDone bool, ops ...Operation) (int64
 
 	resp, err := cli.Txn(ctx).If(cmps...).Then(opsPut...).Commit()
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
-	return resp.Header.Revision, nil
+	return resp.Header.Revision, resp.Succeeded, nil
 }
 
 // DeleteOperations deletes the shard DDL operations in etcd.
