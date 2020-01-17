@@ -51,7 +51,7 @@ func updateRelayFunc(cmd *cobra.Command, _ []string) {
 
 	sources, _ := common.GetSourceArgs(cmd)
 	if len(sources) != 1 {
-		fmt.Println("must specify one DM-worker (`-s` / `--source`)")
+		fmt.Println("must specify one source (`-s` / `--source`)")
 		return
 	}
 

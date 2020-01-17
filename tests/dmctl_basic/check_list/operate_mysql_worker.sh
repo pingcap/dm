@@ -19,10 +19,10 @@ function operate_mysql_worker_while_master_down() {
         "can not update task" 1
 }
 
-function operate_mysql_worker_stop__not_created_config() {
+function operate_mysql_worker_stop_not_created_config() {
     task_conf=$1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-worker stop $task_conf" \
-        "Stop worker failed. worker has not been started" 1
+        "Stop Mysql-worker failed. worker has not been started" 1
 }
 

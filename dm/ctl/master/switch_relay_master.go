@@ -49,7 +49,7 @@ func switchRelayMasterFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 	if len(sources) == 0 {
-		fmt.Println("must specify at least one DM-worker (`-s` / `--source`)")
+		fmt.Println("must specify at least one source (`-s` / `--source`)")
 		return
 	}
 

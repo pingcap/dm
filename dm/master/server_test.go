@@ -16,12 +16,11 @@ package master
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"strings"
-
-	"fmt"
-	"io"
 	"sync"
 	"testing"
 	"time"
@@ -30,9 +29,11 @@ import (
 	"github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/pd/pkg/tempurl"
+	"go.etcd.io/etcd/integration"
 
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/master/coordinator"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/pbmock"
@@ -138,9 +139,13 @@ var (
 	msgNoSubTaskReg       = fmt.Sprintf(".*%s", msgNoSubTask)
 	errCheckSyncConfig    = "(?m).*check sync config with error.*"
 	errCheckSyncConfigReg = fmt.Sprintf("(?m).*%s.*", errCheckSyncConfig)
+	testEtcdCluster       *integration.ClusterV3
 )
 
 func TestMaster(t *testing.T) {
+	testEtcdCluster = integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
+	defer testEtcdCluster.Terminate(t)
+
 	check.TestingT(t)
 }
 
@@ -159,6 +164,16 @@ func newMockRPCClient(client pb.WorkerClient) workerrpc.Client {
 	return c
 }
 
+func extractWorkerSource(deployMapper []*DeployMapper) ([]string, []string) {
+	sources := make([]string, 0, len(deployMapper))
+	workers := make([]string, 0, len(deployMapper))
+	for _, deploy := range deployMapper {
+		sources = append(sources, deploy.Source)
+		workers = append(workers, deploy.Worker)
+	}
+	return sources, workers
+}
+
 func testDefaultMasterServer(c *check.C) *Server {
 	cfg := NewConfig()
 	err := cfg.Parse([]string{"-config=./dm-master.toml"})
@@ -171,8 +186,13 @@ func testDefaultMasterServer(c *check.C) *Server {
 }
 
 func testGenSubTaskConfig(c *check.C, server *Server, ctrl *gomock.Controller) map[string]*config.SubTaskConfig {
-	// generate subtask configs, need to mock query worker configs RPC
-	testMockWorkerConfig(c, server, ctrl, "", true)
+	sources, workers := extractWorkerSource(server.cfg.Deploy)
+	nilWorkerClients := make(map[string]workerrpc.Client)
+	for _, worker := range workers {
+		nilWorkerClients[worker] = nil
+	}
+	server.coordinator = testMockCoordinator(c, sources, workers, "", nilWorkerClients)
+
 	workerCfg := make(map[string]*config.SubTaskConfig)
 	_, stCfgs, err := server.generateSubTask(context.Background(), taskConfig)
 	c.Assert(err, check.IsNil)
@@ -184,52 +204,27 @@ func testGenSubTaskConfig(c *check.C, server *Server, ctrl *gomock.Controller) m
 	return workerCfg
 }
 
-func testMockWorkerConfig(c *check.C, server *Server, ctrl *gomock.Controller, password string, result bool) {
-	// mock QueryWorkerConfig API to be used in s.getWorkerConfigs
-	for idx, deploy := range server.cfg.Deploy {
-		dbCfg := &config.DBConfig{
-			Host:     "127.0.0.1",
-			Port:     3306 + idx,
-			User:     "root",
-			Password: password,
-		}
-		rawConfig, err := dbCfg.Toml()
+func testMockCoordinator(c *check.C, sources, workers []string, password string, workerClients map[string]workerrpc.Client) *coordinator.Coordinator {
+	coordinator2 := coordinator.NewCoordinator()
+	err := coordinator2.Start(context.Background(), testEtcdCluster.RandClient())
+	c.Assert(err, check.IsNil)
+	for i := range workers {
+		// add worker to coordinator's workers map
+		coordinator2.AddWorker("worker"+string(i), workers[i], workerClients[workers[i]])
+		// set this worker's status to workerFree
+		coordinator2.AddWorker("worker"+string(i), workers[i], nil)
+		// operate mysql config on this worker
+		cfg := &config.MysqlConfig{SourceID: sources[i], From: config.DBConfig{Password: password}}
+		w, err := coordinator2.AcquireWorkerForSource(cfg.SourceID)
 		c.Assert(err, check.IsNil)
-		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
-		mockWorkerClient.EXPECT().QueryWorkerConfig(
-			gomock.Any(),
-			&pb.QueryWorkerConfigRequest{},
-		).Return(&pb.QueryWorkerConfigResponse{
-			Result:   result,
-			SourceID: deploy.Source,
-			Content:  rawConfig,
-		}, nil)
-		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
+		coordinator2.HandleStartedWorker(w, cfg, true)
 	}
+	return coordinator2
 }
 
 func testMockStartTask(c *check.C, server *Server, ctrl *gomock.Controller, workerCfg map[string]*config.SubTaskConfig, rpcSuccess bool) {
-	for idx, deploy := range server.cfg.Deploy {
+	for _, deploy := range server.cfg.Deploy {
 		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
-
-		dbCfg := &config.DBConfig{
-			Host:     "127.0.0.1",
-			Port:     3306 + idx,
-			User:     "root",
-			Password: "",
-		}
-		rawConfig, err := dbCfg.Toml()
-		c.Assert(err, check.IsNil)
-
-		// mock query worker config
-		mockWorkerClient.EXPECT().QueryWorkerConfig(
-			gomock.Any(),
-			&pb.QueryWorkerConfigRequest{},
-		).Return(&pb.QueryWorkerConfigResponse{
-			Result:   true,
-			SourceID: deploy.Source,
-			Content:  rawConfig,
-		}, nil)
 
 		stCfg, ok := workerCfg[deploy.Worker]
 		c.Assert(ok, check.IsTrue)
@@ -242,7 +237,7 @@ func testMockStartTask(c *check.C, server *Server, ctrl *gomock.Controller, work
 			rets = []interface{}{
 				&pb.CommonWorkerResponse{
 					Result: true,
-					Worker: deploy.Worker,
+					Source: deploy.Source,
 				},
 				nil,
 			}
@@ -266,40 +261,40 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
+	sources, workers := extractWorkerSource(server.cfg.Deploy)
 
 	// test query all workers
-	for _, workerAddr := range server.cfg.DeployMap {
+	for _, deploy := range server.cfg.Deploy {
 		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 		mockWorkerClient.EXPECT().QueryStatus(
 			gomock.Any(),
 			&pb.QueryStatusRequest{},
 		).Return(&pb.QueryStatusResponse{Result: true}, nil)
-		server.workerClients[workerAddr] = newMockRPCClient(mockWorkerClient)
+		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
 	}
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err := server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 
-	// query specified dm-worker[s]
-	workers := make([]string, 0, len(server.cfg.DeployMap))
-	for _, workerAddr := range server.cfg.DeployMap {
-		workers = append(workers, workerAddr)
+	for _, deploy := range server.cfg.Deploy {
 		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 		mockWorkerClient.EXPECT().QueryStatus(
 			gomock.Any(),
 			&pb.QueryStatusRequest{},
 		).Return(&pb.QueryStatusResponse{Result: true}, nil)
-		server.workerClients[workerAddr] = newMockRPCClient(mockWorkerClient)
+		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
 	}
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{
-		Sources: workers,
+		Sources: sources,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 
 	// query with invalid dm-worker[s]
 	resp, err = server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{
-		Sources: []string{"invalid-worker1", "invalid-worker2"},
+		Sources: []string{"invalid-source1", "invalid-source2"},
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
@@ -324,10 +319,7 @@ func (t *testMaster) TestShowDDLLocks(c *check.C) {
 	c.Assert(resp.Result, check.IsTrue)
 	c.Assert(resp.Locks, check.HasLen, 0)
 
-	workers := make([]string, 0, len(server.cfg.DeployMap))
-	for _, workerAddr := range server.cfg.DeployMap {
-		workers = append(workers, workerAddr)
-	}
+	sources, _ := extractWorkerSource(server.cfg.Deploy)
 
 	// prepare ddl lock keeper, mainly use code from ddl_lock_test.go
 	sqls := []string{"stmt"}
@@ -345,7 +337,7 @@ func (t *testMaster) TestShowDDLLocks(c *check.C) {
 		wg.Add(1)
 		go func(task, schema, table string) {
 			defer wg.Done()
-			id, synced, remain, err2 := lk.TrySync(task, schema, table, workers[0], sqls, workers)
+			id, synced, remain, err2 := lk.TrySync(task, schema, table, sources[0], sqls, sources)
 			c.Assert(err2, check.IsNil)
 			c.Assert(synced, check.IsFalse)
 			c.Assert(remain, check.Greater, 0) // multi-goroutines TrySync concurrently, can only confirm remain > 0
@@ -358,7 +350,7 @@ func (t *testMaster) TestShowDDLLocks(c *check.C) {
 	// test query with task name
 	resp, err = server.ShowDDLLocks(context.Background(), &pb.ShowDDLLocksRequest{
 		Task:    "testA",
-		Sources: workers,
+		Sources: sources,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
@@ -367,7 +359,7 @@ func (t *testMaster) TestShowDDLLocks(c *check.C) {
 
 	// test specify a mismatch worker
 	resp, err = server.ShowDDLLocks(context.Background(), &pb.ShowDDLLocksRequest{
-		Sources: []string{"invalid-worker"},
+		Sources: []string{"invalid-source"},
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
@@ -385,9 +377,9 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
+	sources, workers := extractWorkerSource(server.cfg.Deploy)
 
-	// check task successfully
-	testMockWorkerConfig(c, server, ctrl, "", true)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err := server.CheckTask(context.Background(), &pb.CheckTaskRequest{
 		Task: taskConfig,
 	})
@@ -401,16 +393,8 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
 
-	// simulate invalid password returned from dm-workers, so cfg.SubTaskConfigs will fail
-	testMockWorkerConfig(c, server, ctrl, "invalid-encrypt-password", true)
-	resp, err = server.CheckTask(context.Background(), &pb.CheckTaskRequest{
-		Task: taskConfig,
-	})
-	c.Assert(err, check.IsNil)
-	c.Assert(resp.Result, check.IsFalse)
-
-	// test query worker config failed
-	testMockWorkerConfig(c, server, ctrl, "", false)
+	// simulate invalid password returned from coordinator, so cfg.SubTaskConfigs will fail
+	server.coordinator = testMockCoordinator(c, sources, workers, "invalid-encrypt-password", server.workerClients)
 	resp, err = server.CheckTask(context.Background(), &pb.CheckTaskRequest{
 		Task: taskConfig,
 	})
@@ -423,6 +407,7 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
+	sources, workers := extractWorkerSource(server.cfg.Deploy)
 
 	// s.generateSubTask with error
 	resp, err := server.StartTask(context.Background(), &pb.StartTaskRequest{
@@ -430,45 +415,40 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
-
-	workers := make([]string, 0, len(server.cfg.DeployMap))
-	for _, deploy := range server.cfg.Deploy {
-		workers = append(workers, deploy.Worker)
-	}
-
 	workerCfg := testGenSubTaskConfig(c, server, ctrl)
 
 	// test start task successfully
 	testMockStartTask(c, server, ctrl, workerCfg, true)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
 		Task:    taskConfig,
-		Sources: workers,
+		Sources: sources,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 
-	// check start-task with an invalid worker
-	invalidWorker := "invalid-worker"
-	testMockWorkerConfig(c, server, ctrl, "", true)
+	// check start-task with an invalid source
+	invalidSource := "invalid-source"
 	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
 		Task:    taskConfig,
-		Sources: []string{invalidWorker},
+		Sources: []string{invalidSource},
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 1)
-	c.Assert(resp.Workers[0].Result, check.IsFalse)
-	c.Assert(resp.Workers[0].Worker, check.Equals, invalidWorker)
+	c.Assert(resp.Sources, check.HasLen, 1)
+	c.Assert(resp.Sources[0].Result, check.IsFalse)
+	c.Assert(resp.Sources[0].Source, check.Equals, invalidSource)
 
 	// test start sub task request to worker returns error
 	testMockStartTask(c, server, ctrl, workerCfg, false)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
 		Task: taskConfig,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, workerResp := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, workerResp := range resp.Sources {
 		c.Assert(workerResp.Result, check.IsFalse)
 		c.Assert(workerResp.Msg, check.Matches, errGRPCFailedReg)
 	}
@@ -481,10 +461,9 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	defer func() {
 		checker.CheckSyncConfigFunc = bakCheckSyncConfigFunc
 	}()
-	testMockWorkerConfig(c, server, ctrl, "", true)
 	resp, err = server.StartTask(context.Background(), &pb.StartTaskRequest{
 		Task:    taskConfig,
-		Sources: workers,
+		Sources: sources,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
@@ -495,40 +474,41 @@ func (t *testMaster) TestQueryError(c *check.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 	server := testDefaultMasterServer(c)
+	sources, workers := extractWorkerSource(server.cfg.Deploy)
 
 	// test query all workers
-	for _, workerAddr := range server.cfg.DeployMap {
+	for _, deploy := range server.cfg.Deploy {
 		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 		mockWorkerClient.EXPECT().QueryError(
 			gomock.Any(),
 			&pb.QueryErrorRequest{},
 		).Return(&pb.QueryErrorResponse{Result: true}, nil)
-		server.workerClients[workerAddr] = newMockRPCClient(mockWorkerClient)
+		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
 	}
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err := server.QueryError(context.Background(), &pb.QueryErrorListRequest{})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 
 	// query specified dm-worker[s]
-	workers := make([]string, 0, len(server.cfg.DeployMap))
-	for _, workerAddr := range server.cfg.DeployMap {
-		workers = append(workers, workerAddr)
+	for _, deploy := range server.cfg.Deploy {
 		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 		mockWorkerClient.EXPECT().QueryError(
 			gomock.Any(),
 			&pb.QueryErrorRequest{},
 		).Return(&pb.QueryErrorResponse{Result: true}, nil)
-		server.workerClients[workerAddr] = newMockRPCClient(mockWorkerClient)
+		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
 	}
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.QueryError(context.Background(), &pb.QueryErrorListRequest{
-		Sources: workers,
+		Sources: sources,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 
 	// query with invalid dm-worker[s]
 	resp, err = server.QueryError(context.Background(), &pb.QueryErrorListRequest{
-		Sources: []string{"invalid-worker1", "invalid-worker2"},
+		Sources: []string{"invalid-source1", "invalid-source2"},
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
@@ -548,16 +528,13 @@ func (t *testMaster) TestQueryError(c *check.C) {
 func (t *testMaster) TestOperateTask(c *check.C) {
 	var (
 		taskName = "unit-test-task"
-		workers  = make([]string, 0, 2)
 		pauseOp  = pb.TaskOp_Pause
 	)
 
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 	server := testDefaultMasterServer(c)
-	for _, workerAddr := range server.cfg.DeployMap {
-		workers = append(workers, workerAddr)
-	}
+	sources, workers := extractWorkerSource(server.cfg.Deploy)
 
 	// test operate-task with invalid task name
 	resp, err := server.OperateTask(context.Background(), &pb.OperateTaskRequest{
@@ -566,18 +543,18 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
-	c.Assert(resp.Msg, check.Equals, fmt.Sprintf("task %s has no workers or not exist, can try `refresh-worker-tasks` cmd first", taskName))
+	c.Assert(resp.Msg, check.Equals, fmt.Sprintf("task %s has no source or not exist, please check the task name and status", taskName))
 
 	// test operate-task while worker clients not found
-	server.taskSources[taskName] = workers
+	server.taskSources[taskName] = sources
 	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
 		Op:   pauseOp,
 		Name: taskName,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, subtaskResp := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, subtaskResp := range resp.Sources {
 		c.Assert(subtaskResp.Op, check.Equals, pauseOp)
 		c.Assert(subtaskResp.Msg, check.Matches, ".* relevant worker-client not found")
 	}
@@ -598,6 +575,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 
 		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
 	}
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
 		Op:   pauseOp,
 		Name: taskName,
@@ -605,14 +583,15 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 	c.Assert(resp.Op, check.Equals, pauseOp)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, subtaskResp := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, subtaskResp := range resp.Sources {
 		c.Assert(subtaskResp.Op, check.Equals, pauseOp)
 		c.Assert(subtaskResp.Result, check.IsTrue)
 	}
 
 	// test operate sub task to worker returns error
-	for _, workerAddr := range server.cfg.DeployMap {
+	server.taskSources[taskName] = sources
+	for _, deploy := range server.cfg.Deploy {
 		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 		mockWorkerClient.EXPECT().OperateSubTask(
 			gomock.Any(),
@@ -621,22 +600,24 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 				Name: taskName,
 			},
 		).Return(nil, errors.New(errGRPCFailed))
-		server.workerClients[workerAddr] = newMockRPCClient(mockWorkerClient)
+		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
 	}
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
 		Op:      pb.TaskOp_Pause,
 		Name:    taskName,
-		Sources: workers,
+		Sources: sources,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, subtaskResp := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, subtaskResp := range resp.Sources {
 		c.Assert(subtaskResp.Op, check.Equals, pauseOp)
 		c.Assert(subtaskResp.Msg, check.Matches, errGRPCFailedReg)
 	}
 
 	// test stop task successfully, remove partial workers
+	server.taskSources[taskName] = sources
 	mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 	mockWorkerClient.EXPECT().OperateSubTask(
 		gomock.Any(),
@@ -650,20 +631,21 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	}, nil)
 
 	server.workerClients[workers[0]] = newMockRPCClient(mockWorkerClient)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
 		Op:      pb.TaskOp_Stop,
 		Name:    taskName,
-		Sources: []string{workers[0]},
+		Sources: []string{sources[0]},
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 1)
-	c.Assert(resp.Workers[0].Result, check.IsTrue)
+	c.Assert(resp.Sources, check.HasLen, 1)
+	c.Assert(resp.Sources[0].Result, check.IsTrue)
 	c.Assert(server.taskSources, check.HasKey, taskName)
-	c.Assert(server.taskSources[taskName], check.DeepEquals, []string{workers[1]})
+	c.Assert(server.taskSources[taskName], check.DeepEquals, []string{sources[1]})
 
 	// test stop task successfully, remove all workers
-	server.taskSources[taskName] = workers
+	server.taskSources[taskName] = sources
 	for _, deploy := range server.cfg.Deploy {
 		mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 		mockWorkerClient.EXPECT().OperateSubTask(
@@ -679,14 +661,15 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 
 		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
 	}
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.OperateTask(context.Background(), &pb.OperateTaskRequest{
 		Op:   pb.TaskOp_Stop,
 		Name: taskName,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, subtaskResp := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, subtaskResp := range resp.Sources {
 		c.Assert(subtaskResp.Op, check.Equals, pb.TaskOp_Stop)
 		c.Assert(subtaskResp.Result, check.IsTrue)
 	}
@@ -698,6 +681,7 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
+	sources, workers := extractWorkerSource(server.cfg.Deploy)
 
 	// s.generateSubTask with error
 	resp, err := server.UpdateTask(context.Background(), &pb.UpdateTaskRequest{
@@ -705,37 +689,11 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
-
-	// prepare workers
-	workers := make([]string, 0, len(server.cfg.DeployMap))
-	for _, deploy := range server.cfg.Deploy {
-		workers = append(workers, deploy.Worker)
-	}
-
 	workerCfg := testGenSubTaskConfig(c, server, ctrl)
 
 	mockUpdateTask := func(rpcSuccess bool) {
-		for idx, deploy := range server.cfg.Deploy {
+		for _, deploy := range server.cfg.Deploy {
 			mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
-
-			dbCfg := &config.DBConfig{
-				Host:     "127.0.0.1",
-				Port:     3306 + idx,
-				User:     "root",
-				Password: "",
-			}
-			rawConfig, err2 := dbCfg.Toml()
-			c.Assert(err2, check.IsNil)
-
-			// mock query worker config
-			mockWorkerClient.EXPECT().QueryWorkerConfig(
-				gomock.Any(),
-				&pb.QueryWorkerConfigRequest{},
-			).Return(&pb.QueryWorkerConfigResponse{
-				Result:   true,
-				SourceID: deploy.Source,
-				Content:  rawConfig,
-			}, nil)
 
 			stCfg, ok := workerCfg[deploy.Worker]
 			c.Assert(ok, check.IsTrue)
@@ -748,7 +706,7 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 				rets = []interface{}{
 					&pb.CommonWorkerResponse{
 						Result: true,
-						Worker: deploy.Worker,
+						Source: deploy.Source,
 					},
 					nil,
 				}
@@ -769,35 +727,37 @@ func (t *testMaster) TestUpdateTask(c *check.C) {
 
 	// test update task successfully
 	mockUpdateTask(true)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.UpdateTask(context.Background(), &pb.UpdateTaskRequest{
 		Task:    taskConfig,
-		Sources: workers,
+		Sources: sources,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 
-	// check update-task with an invalid worker
-	invalidWorker := "invalid-worker"
-	testMockWorkerConfig(c, server, ctrl, "", true)
+	// check update-task with an invalid source
+	invalidSource := "invalid-source"
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.UpdateTask(context.Background(), &pb.UpdateTaskRequest{
 		Task:    taskConfig,
-		Sources: []string{invalidWorker},
+		Sources: []string{invalidSource},
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 1)
-	c.Assert(resp.Workers[0].Result, check.IsFalse)
-	c.Assert(resp.Workers[0].Worker, check.Equals, invalidWorker)
+	c.Assert(resp.Sources, check.HasLen, 1)
+	c.Assert(resp.Sources[0].Result, check.IsFalse)
+	c.Assert(resp.Sources[0].Source, check.Equals, invalidSource)
 
 	// test update sub task request to worker returns error
 	mockUpdateTask(false)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.UpdateTask(context.Background(), &pb.UpdateTaskRequest{
 		Task: taskConfig,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, workerResp := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, workerResp := range resp.Sources {
 		c.Assert(workerResp.Result, check.IsFalse)
 		c.Assert(workerResp.Msg, check.Matches, errGRPCFailedReg)
 	}
@@ -816,11 +776,7 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 	)
 
 	server := testDefaultMasterServer(c)
-
-	workers := make([]string, 0, len(server.cfg.DeployMap))
-	for _, workerAddr := range server.cfg.DeployMap {
-		workers = append(workers, workerAddr)
-	}
+	sources, workers := extractWorkerSource(server.cfg.Deploy)
 
 	mockResolveDDLLock := func(task, lockID, owner, traceGID string, ownerFail, nonOwnerFail bool) {
 		for _, worker := range workers {
@@ -863,14 +819,14 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 		// prepare ddl lock keeper, mainly use code from ddl_lock_test.go
 		lk := NewLockKeeper()
 		var wg sync.WaitGroup
-		for _, w := range workers {
+		for _, s := range sources {
 			wg.Add(1)
-			go func(worker string) {
+			go func(source string) {
 				defer wg.Done()
-				id, _, _, err := lk.TrySync(task, schema, table, worker, sqls, workers)
+				id, _, _, err := lk.TrySync(task, schema, table, source, sqls, sources)
 				c.Assert(err, check.IsNil)
 				c.Assert(lk.FindLock(id), check.NotNil)
-			}(w)
+			}(s)
 		}
 		wg.Wait()
 		server.lockKeeper = lk
@@ -882,9 +838,10 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 	traceGID := fmt.Sprintf("resolveDDLLock.%d", traceGIDIdx)
 	traceGIDIdx++
 	mockResolveDDLLock(task, lockID, workers[0], traceGID, false, false)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err := server.UnlockDDLLock(context.Background(), &pb.UnlockDDLLockRequest{
 		ID:           lockID,
-		ReplaceOwner: workers[0],
+		ReplaceOwner: sources[0],
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
@@ -895,9 +852,10 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 	traceGID = fmt.Sprintf("resolveDDLLock.%d", traceGIDIdx)
 	traceGIDIdx++
 	mockResolveDDLLock(task, lockID, workers[0], traceGID, true, false)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.UnlockDDLLock(context.Background(), &pb.UnlockDDLLockRequest{
 		ID:           lockID,
-		ReplaceOwner: workers[0],
+		ReplaceOwner: sources[0],
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
@@ -907,9 +865,10 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 	traceGID = fmt.Sprintf("resolveDDLLock.%d", traceGIDIdx)
 	traceGIDIdx++
 	mockResolveDDLLock(task, lockID, workers[0], traceGID, true, false)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.UnlockDDLLock(context.Background(), &pb.UnlockDDLLockRequest{
 		ID:           lockID,
-		ReplaceOwner: workers[0],
+		ReplaceOwner: sources[0],
 		ForceRemove:  true,
 	})
 	c.Assert(err, check.IsNil)
@@ -922,9 +881,10 @@ func (t *testMaster) TestUnlockDDLLock(c *check.C) {
 	traceGID = fmt.Sprintf("resolveDDLLock.%d", traceGIDIdx)
 	traceGIDIdx++
 	mockResolveDDLLock(task, lockID, workers[0], traceGID, false, true)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.UnlockDDLLock(context.Background(), &pb.UnlockDDLLockRequest{
 		ID:           lockID,
-		ReplaceOwner: workers[0],
+		ReplaceOwner: sources[0],
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
@@ -939,16 +899,12 @@ func (t *testMaster) TestBreakWorkerDDLLock(c *check.C) {
 
 	server := testDefaultMasterServer(c)
 	var (
-		task    = "test"
-		schema  = "test_db"
-		table   = "test_table"
-		lockID  = genDDLLockID(task, schema, table)
-		workers = make([]string, 0, len(server.cfg.Deploy))
+		task   = "test"
+		schema = "test_db"
+		table  = "test_table"
+		lockID = genDDLLockID(task, schema, table)
 	)
-
-	for _, deploy := range server.cfg.Deploy {
-		workers = append(workers, deploy.Worker)
-	}
+	sources, workers := extractWorkerSource(server.cfg.Deploy)
 
 	// mock BreakDDLLock request
 	mockBreakDDLLock := func(rpcSuccess bool) {
@@ -958,7 +914,7 @@ func (t *testMaster) TestBreakWorkerDDLLock(c *check.C) {
 				rets = []interface{}{
 					&pb.CommonWorkerResponse{
 						Result: true,
-						Worker: deploy.Worker,
+						Source: deploy.Source,
 					},
 					nil,
 				}
@@ -984,45 +940,50 @@ func (t *testMaster) TestBreakWorkerDDLLock(c *check.C) {
 	// test BreakWorkerDDLLock with invalid dm-worker[s]
 	resp, err := server.BreakWorkerDDLLock(context.Background(), &pb.BreakWorkerDDLLockRequest{
 		Task:         task,
-		Sources:      []string{"invalid-worker1", "invalid-worker2"},
+		Sources:      []string{"invalid-source1", "invalid-source2"},
 		RemoveLockID: lockID,
 		SkipDDL:      true,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsFalse)
 		c.Assert(w.Msg, check.Matches, ".*relevant worker-client not found")
 	}
 
 	// test BreakWorkerDDLLock successfully
 	mockBreakDDLLock(true)
+	c.Assert(len(sources), check.Equals, len(workers))
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
+
 	resp, err = server.BreakWorkerDDLLock(context.Background(), &pb.BreakWorkerDDLLockRequest{
 		Task:         task,
-		Sources:      workers,
+		Sources:      sources,
 		RemoveLockID: lockID,
 		SkipDDL:      true,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsTrue)
 	}
 
 	// test BreakWorkerDDLLock with error response
 	mockBreakDDLLock(false)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
+
 	resp, err = server.BreakWorkerDDLLock(context.Background(), &pb.BreakWorkerDDLLockRequest{
 		Task:         task,
-		Sources:      workers,
+		Sources:      sources,
 		RemoveLockID: lockID,
 		SkipDDL:      true,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsFalse)
 		c.Assert(w.Msg, check.Matches, errGRPCFailedReg)
 	}
@@ -1033,15 +994,11 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
+	sources, workers := extractWorkerSource(server.cfg.Deploy)
 	var (
 		now      = time.Now().Unix()
 		filename = "mysql-bin.000005"
-		workers  = make([]string, 0, len(server.cfg.Deploy))
 	)
-
-	for _, deploy := range server.cfg.Deploy {
-		workers = append(workers, deploy.Worker)
-	}
 
 	// mock PurgeRelay request
 	mockPurgeRelay := func(rpcSuccess bool) {
@@ -1051,7 +1008,7 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 				rets = []interface{}{
 					&pb.CommonWorkerResponse{
 						Result: true,
-						Worker: deploy.Worker,
+						Source: deploy.Source,
 					},
 					nil,
 				}
@@ -1075,43 +1032,45 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 
 	// test PurgeWorkerRelay with invalid dm-worker[s]
 	resp, err := server.PurgeWorkerRelay(context.Background(), &pb.PurgeWorkerRelayRequest{
-		Sources:  []string{"invalid-worker1", "invalid-worker2"},
+		Sources:  []string{"invalid-source1", "invalid-source2"},
 		Time:     now,
 		Filename: filename,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsFalse)
 		c.Assert(w.Msg, check.Matches, ".*relevant worker-client not found")
 	}
 
 	// test PurgeWorkerRelay successfully
 	mockPurgeRelay(true)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.PurgeWorkerRelay(context.Background(), &pb.PurgeWorkerRelayRequest{
-		Sources:  workers,
+		Sources:  sources,
 		Time:     now,
 		Filename: filename,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsTrue)
 	}
 
 	// test PurgeWorkerRelay with error response
 	mockPurgeRelay(false)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.PurgeWorkerRelay(context.Background(), &pb.PurgeWorkerRelayRequest{
-		Sources:  workers,
+		Sources:  sources,
 		Time:     now,
 		Filename: filename,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsFalse)
 		c.Assert(w.Msg, check.Matches, errGRPCFailedReg)
 	}
@@ -1122,11 +1081,7 @@ func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
-	workers := make([]string, 0, len(server.cfg.Deploy))
-
-	for _, deploy := range server.cfg.Deploy {
-		workers = append(workers, deploy.Worker)
-	}
+	sources, workers := extractWorkerSource(server.cfg.Deploy)
 
 	// mock SwitchRelayMaster request
 	mockSwitchRelayMaster := func(rpcSuccess bool) {
@@ -1136,7 +1091,7 @@ func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
 				rets = []interface{}{
 					&pb.CommonWorkerResponse{
 						Result: true,
-						Worker: deploy.Worker,
+						Source: deploy.Source,
 					},
 					nil,
 				}
@@ -1157,37 +1112,39 @@ func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
 
 	// test SwitchWorkerRelayMaster with invalid dm-worker[s]
 	resp, err := server.SwitchWorkerRelayMaster(context.Background(), &pb.SwitchWorkerRelayMasterRequest{
-		Sources: []string{"invalid-worker1", "invalid-worker2"},
+		Sources: []string{"invalid-source1", "invalid-source2"},
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsFalse)
 		c.Assert(w.Msg, check.Matches, "(?m).*relevant worker-client not found.*")
 	}
 
 	// test SwitchWorkerRelayMaster successfully
 	mockSwitchRelayMaster(true)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.SwitchWorkerRelayMaster(context.Background(), &pb.SwitchWorkerRelayMasterRequest{
-		Sources: workers,
+		Sources: sources,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsTrue)
 	}
 
 	// test SwitchWorkerRelayMaster with error response
 	mockSwitchRelayMaster(false)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.SwitchWorkerRelayMaster(context.Background(), &pb.SwitchWorkerRelayMasterRequest{
-		Sources: workers,
+		Sources: sources,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsFalse)
 		c.Assert(w.Msg, check.Matches, errGRPCFailedReg)
 	}
@@ -1198,11 +1155,7 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
-	workers := make([]string, 0, len(server.cfg.Deploy))
-
-	for _, deploy := range server.cfg.Deploy {
-		workers = append(workers, deploy.Worker)
-	}
+	sources, workers := extractWorkerSource(server.cfg.Deploy)
 
 	// mock OperateRelay request
 	mockOperateRelay := func(rpcSuccess bool) {
@@ -1212,7 +1165,7 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 				rets = []interface{}{
 					&pb.OperateRelayResponse{
 						Result: true,
-						Worker: deploy.Worker,
+						Source: deploy.Source,
 						Op:     pb.RelayOp_PauseRelay,
 					},
 					nil,
@@ -1234,41 +1187,43 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 
 	// test OperateWorkerRelayTask with invalid dm-worker[s]
 	resp, err := server.OperateWorkerRelayTask(context.Background(), &pb.OperateWorkerRelayRequest{
-		Sources: []string{"invalid-worker1", "invalid-worker2"},
+		Sources: []string{"invalid-source1", "invalid-source2"},
 		Op:      pb.RelayOp_PauseRelay,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsFalse)
 		c.Assert(w.Msg, check.Matches, ".*relevant worker-client not found")
 	}
 
 	// test OperateWorkerRelayTask successfully
 	mockOperateRelay(true)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.OperateWorkerRelayTask(context.Background(), &pb.OperateWorkerRelayRequest{
-		Sources: workers,
+		Sources: sources,
 		Op:      pb.RelayOp_PauseRelay,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsTrue)
 		c.Assert(w.Op, check.Equals, pb.RelayOp_PauseRelay)
 	}
 
 	// test OperateWorkerRelayTask with error response
 	mockOperateRelay(false)
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	resp, err = server.OperateWorkerRelayTask(context.Background(), &pb.OperateWorkerRelayRequest{
-		Sources: workers,
+		Sources: sources,
 		Op:      pb.RelayOp_PauseRelay,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Workers, check.HasLen, 2)
-	for _, w := range resp.Workers {
+	c.Assert(resp.Sources, check.HasLen, 2)
+	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsFalse)
 		c.Assert(w.Msg, check.Matches, errGRPCFailedReg)
 	}
@@ -1279,11 +1234,8 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 	defer ctrl.Finish()
 
 	server := testDefaultMasterServer(c)
-	workers := make([]string, 0, len(server.cfg.Deploy))
-	for _, deploy := range server.cfg.Deploy {
-		workers = append(workers, deploy.Worker)
-	}
-	server.taskSources = map[string][]string{"test": workers}
+	sources, workers := extractWorkerSource(server.cfg.Deploy)
+	server.taskSources = map[string][]string{"test": sources}
 	var (
 		task     = "test"
 		schema   = "test_db"
@@ -1337,6 +1289,7 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 		server.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
 	}
 
+	server.coordinator = testMockCoordinator(c, sources, workers, "", server.workerClients)
 	ctx, cancel := context.WithCancel(context.Background())
 	wg.Add(1)
 	go func() {
@@ -1360,6 +1313,7 @@ func (t *testMaster) TestFetchWorkerDDLInfo(c *check.C) {
 func (t *testMaster) TestServer(c *check.C) {
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-master.toml"}), check.IsNil)
+	cfg.PeerUrls = "http://127.0.0.1:8294"
 	cfg.DataDir = c.MkDir()
 	cfg.MasterAddr = tempurl.Alloc()[len("http://"):]
 
@@ -1482,11 +1436,16 @@ func (t *testMaster) TestOperateMysqlWorker(c *check.C) {
 	mysqlCfg.LoadFromFile("./dm-mysql.toml")
 	task, err := mysqlCfg.Toml()
 	c.Assert(err, check.IsNil)
+	// wait for coordinator to start
+	c.Assert(utils.WaitSomething(6, 500*time.Millisecond, func() bool {
+		return s1.coordinator.IsStarted()
+	}), check.IsTrue)
+
 	req := &pb.MysqlWorkerRequest{Op: pb.WorkerOp_StartWorker, Config: task}
 	resp, err := s1.OperateMysqlWorker(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.Equals, false)
-	c.Assert(resp.Msg, check.Equals, "Create worker failed. no free worker could start mysql task")
+	c.Assert(resp.Msg, check.Matches, "[\\s\\S]*Acquire worker failed. no free worker could start mysql task[\\s\\S]*")
 	mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 	req.Op = pb.WorkerOp_UpdateConfig
 	mockWorkerClient.EXPECT().OperateMysqlWorker(
@@ -1513,6 +1472,7 @@ func (t *testMaster) TestOperateMysqlWorker(c *check.C) {
 		Msg:    "",
 	}, nil)
 	s1.coordinator.AddWorker("", "localhost:10099", newMockRPCClient(mockWorkerClient))
+	s1.coordinator.AddWorker("", "localhost:10099", nil)
 	resp, err = s1.OperateMysqlWorker(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.Equals, true)

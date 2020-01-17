@@ -3,7 +3,7 @@
 function stop_task_wrong_arg() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "stop-task" \
-        "stop-task \[-w worker ...\] <task-name> \[flags\]" 1
+        "stop-task \[-s source ...\] <task-name> \[flags\]" 1
 }
 
 function stop_task_while_master_down() {

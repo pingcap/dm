@@ -33,8 +33,8 @@ func NewBreakDDLLockCmd() *cobra.Command {
 		Run:   breakDDLLockFunc,
 	}
 	cmd.Flags().StringP("remove-id", "i", "", "DDLLockInfo's ID which need to remove")
-	cmd.Flags().BoolP("exec", "e", false, "whether execute DDL which is blocking")
-	cmd.Flags().BoolP("skip", "s", false, "whether skip DDL which in blocking")
+	cmd.Flags().BoolP("exec", "", false, "whether execute DDL which is blocking")
+	cmd.Flags().BoolP("skip", "", false, "whether skip DDL which in blocking")
 	return cmd
 }
 
@@ -53,7 +53,7 @@ func breakDDLLockFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 	if len(sources) == 0 {
-		fmt.Println("must specify at least one DM-worker (`-s` / `--source`)")
+		fmt.Println("must specify at least one source (`-s` / `--source`)")
 		return
 	}
 

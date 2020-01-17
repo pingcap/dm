@@ -23,6 +23,7 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/pd/pkg/tempurl"
 	"github.com/siddontang/go-mysql/mysql"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/embed"
@@ -31,6 +32,7 @@ import (
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
@@ -43,6 +45,11 @@ type testServer struct{}
 
 var _ = Suite(&testServer{})
 
+func (t *testServer) SetUpSuite(c *C) {
+	err := log.InitLogger(&log.Config{})
+	c.Assert(err, IsNil)
+}
+
 func createMockETCD(dir string, host string) (*embed.Etcd, error) {
 	cfg := embed.NewConfig()
 	cfg.Dir = dir
@@ -51,6 +58,9 @@ func createMockETCD(dir string, host string) (*embed.Etcd, error) {
 	// cfg.LPUrls = []url.URL{*lpurl}
 	cfg.LCUrls = []url.URL{*lcurl}
 	cfg.ACUrls = []url.URL{*lcurl}
+	cfg.Logger = "zap"
+	metricsURL, _ := url.Parse(tempurl.Alloc())
+	cfg.ListenMetricsUrls = []url.URL{*metricsURL}
 	ETCD, err := embed.StartEtcd(cfg)
 	if err != nil {
 		return nil, err
@@ -69,6 +79,7 @@ func (t *testServer) TestServer(c *C) {
 	hostName := "127.0.0.1:8291"
 	etcdDir := c.MkDir()
 	ETCD, err := createMockETCD(etcdDir, "host://"+hostName)
+	defer ETCD.Close()
 	c.Assert(err, IsNil)
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
@@ -188,7 +199,7 @@ func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) 
 		resp, err := cli.OperateMysqlWorker(context.Background(), req)
 		c.Assert(err, IsNil)
 		c.Assert(resp.Result, Equals, false)
-		c.Assert(resp.Msg, Matches, ".*Mysql task has not been created, please call CreateMysqlTask.*")
+		c.Assert(resp.Msg, Matches, ".*worker has not started.*")
 		req.Op = pb.WorkerOp_StartWorker
 		resp, err = cli.OperateMysqlWorker(context.Background(), req)
 		c.Assert(err, IsNil)
@@ -199,7 +210,7 @@ func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) 
 		resp, err = cli.OperateMysqlWorker(context.Background(), req)
 		c.Assert(err, IsNil)
 		c.Assert(resp.Result, Equals, true)
-		c.Assert(s.worker, NotNil)
+		c.Assert(s.getWorker(true), NotNil)
 	} else {
 		req.Op = pb.WorkerOp_StopWorker
 		resp, err := cli.OperateMysqlWorker(context.Background(), req)
@@ -238,8 +249,8 @@ func (t *testServer) testInfosInEtcd(c *C, hostName string, workerAddr string, d
 
 func (t *testServer) testRetryConnectMaster(c *C, s *Server, ETCD *embed.Etcd, dir string, hostName string) *embed.Etcd {
 	ETCD.Close()
-	time.Sleep(3 * time.Second)
-	c.Assert(s.checkWorkerStart(), NotNil)
+	time.Sleep(4 * time.Second)
+	c.Assert(s.getWorker(true), NotNil)
 	// retryConnectMaster is false means that this worker has been tried to connect to master again.
 	c.Assert(s.retryConnectMaster.Get(), IsFalse)
 	ETCD, err := createMockETCD(dir, "host://"+hostName)
@@ -309,7 +320,7 @@ func (t *testServer) testStopWorkerWhenLostConnect(c *C, s *Server, ETCD *embed.
 	c.Assert(s.retryConnectMaster.Get(), IsTrue)
 	ETCD.Close()
 	time.Sleep(retryConnectSleepTime + time.Duration(defaultKeepAliveTTL+3)*time.Second)
-	c.Assert(s.checkWorkerStart(), IsNil)
+	c.Assert(s.getWorker(true), IsNil)
 	c.Assert(s.retryConnectMaster.Get(), IsFalse)
 }
 
