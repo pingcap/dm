@@ -34,6 +34,7 @@ function run() {
         "true" 1
 
     # start-task with retry_cancel enabled
+    echo "1st time to start task"
     dmctl_start_task
 
     sleep 5 # should sleep > retryTimeout (now 3s)
@@ -66,6 +67,7 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
     sleep 5 # wait gRPC from DM-master to DM-worker established again
 
+    echo "2nd time to start task"
     dmctl_start_task
 
     sleep 5 # should sleep > retryTimeout (now 3s)
@@ -99,6 +101,7 @@ function run() {
     sleep 5 # wait gRPC from DM-master to DM-worker established again
 
     # start-task with retry_cancel disabled
+    echo "3st time to start task"
     dmctl_start_task
 
     # use sync_diff_inspector to check full dump loader
@@ -121,7 +124,10 @@ function run() {
 
     sleep 5
     echo "start task for incremental replication"
-    dmctl_start_task
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-task $cur/conf/dm-task.yaml" \
+        "\"result\": true" 1 \
+        "start sub task test: sub task test already exists" 2
 
     sleep 5 # should sleep > retryTimeout (now 3s)
 
@@ -154,6 +160,7 @@ function run() {
     sleep 5 # wait gRPC from DM-master to DM-worker established again
 
     # start-task with retry_cancel disabled
+    echo "5th time to start task"
     dmctl_start_task
 
     # use sync_diff_inspector to check data now!

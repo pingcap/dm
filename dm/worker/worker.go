@@ -204,7 +204,7 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 		return terror.ErrWorkerAlreadyClosed.Generate()
 	}
 
-	if w.relayPurger.Purging() {
+	if w.relayPurger != nil && w.relayPurger.Purging() {
 		return terror.ErrWorkerRelayIsPurging.Generate(cfg.Name)
 	}
 

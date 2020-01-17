@@ -122,7 +122,7 @@ function run() {
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $dm_worker2_conf
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
-    operate_mysql_worker_stop__not_created_config $MYSQL1_CONF
+    operate_mysql_worker_stop_not_created_config $MYSQL1_CONF
 
     # operate mysql config to worker
     cp $cur/conf/mysql1.toml $WORK_DIR/mysql1.toml

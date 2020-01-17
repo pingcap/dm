@@ -85,6 +85,12 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		taskName = "sub-task-name"
 		port     = 8263
 	)
+	hostName := "127.0.0.1:8291"
+	etcdDir := c.MkDir()
+	ETCD, err := createMockETCD(etcdDir, "host://"+hostName)
+	c.Assert(err, IsNil)
+	defer ETCD.Close()
+
 	cfg := NewConfig()
 	workerCfg := config.NewMysqlConfig()
 	workerCfg.LoadFromFile("./dm-mysql.toml")
@@ -126,7 +132,6 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		c.Assert(s.startWorker(workerCfg), IsNil)
 		return true
 	}), IsTrue)
-
 	// start task
 	cli := t.createClient(c, fmt.Sprintf("127.0.0.1:%d", port))
 	subtaskCfgBytes, err := ioutil.ReadFile("./subtask.toml")
@@ -136,7 +141,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 
 	// check task in paused state
 	c.Assert(utils.WaitSomething(100, 100*time.Millisecond, func() bool {
-		for _, st := range s.worker.QueryStatus(taskName) {
+		for _, st := range s.getWorker(true).QueryStatus(taskName) {
 			if st.Name == taskName && st.Stage == pb.Stage_Paused {
 				return true
 			}
@@ -144,7 +149,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		return false
 	}), IsTrue)
 
-	rtsc, ok := s.worker.taskStatusChecker.(*realTaskStatusChecker)
+	rtsc, ok := s.getWorker(true).taskStatusChecker.(*realTaskStatusChecker)
 	c.Assert(ok, IsTrue)
 	defer func() {
 		// close multiple time
@@ -154,7 +159,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 
 	// check task will be auto resumed
 	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
-		for _, st := range s.worker.QueryStatus(taskName) {
+		for _, st := range s.getWorker(true).QueryStatus(taskName) {
 			if st.Name == taskName && st.Stage == pb.Stage_Running {
 				return true
 			}
