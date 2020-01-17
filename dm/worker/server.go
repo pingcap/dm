@@ -794,6 +794,7 @@ func getMinPosForSubTask(subTaskCfg *config.SubTaskConfig) (minPos *mysql.Positi
 	if err != nil {
 		return nil, terror.WithScope(err, terror.ScopeDownstream)
 	}
+	defer db.Close()
 
 	// only read the sync unit's checkpoint information
 	syncCheckpointTable := fmt.Sprintf("%s_syncer_checkpoint", subTaskCfg.Name)
