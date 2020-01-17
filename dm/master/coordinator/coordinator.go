@@ -15,15 +15,16 @@ package coordinator
 
 import (
 	"context"
-	"github.com/pingcap/dm/dm/pb"
 	"sync"
 	"time"
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/master/workerrpc"
+	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
-	"github.com/pingcap/errors"
+	"github.com/pingcap/dm/pkg/terror"
+
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/mvcc/mvccpb"
 	"go.uber.org/zap"
@@ -31,9 +32,6 @@ import (
 
 var (
 	etcdTimeouit = 3 * time.Second
-
-	// ErrNotStarted coordinator does not start.
-	ErrNotStarted = errors.New("coordinator does not start")
 )
 
 // Coordinator coordinate wrokers and upstream.
@@ -90,7 +88,12 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 	}
 
 	for _, kv := range resp.Kvs {
-		addr := common.WorkerRegisterKeyAdapter.Decode(string(kv.Key))[0]
+		kvs, err := common.WorkerRegisterKeyAdapter.Decode(string(kv.Key))
+		if err != nil {
+			log.L().Warn("decode worker register key from etcd failed", zap.Error(err))
+			continue
+		}
+		addr := kvs[0]
 		name := string(kv.Value)
 		c.workers[addr] = NewWorker(name, addr, nil)
 		log.L().Info("load worker successful", zap.String("addr", addr), zap.String("name", name))
@@ -102,7 +105,12 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 	}
 
 	for _, kv := range resp.Kvs {
-		sourceID := common.UpstreamConfigKeyAdapter.Decode(string(kv.Key))[0]
+		kvs, err := common.UpstreamConfigKeyAdapter.Decode(string(kv.Key))
+		if err != nil {
+			log.L().Warn("decode upstream config key from etcd failed", zap.Error(err))
+			continue
+		}
+		sourceID := kvs[0]
 		cfgStr := string(kv.Value)
 		cfg := config.NewMysqlConfig()
 		err = cfg.Parse(cfgStr)
@@ -121,7 +129,12 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 	}
 
 	for _, kv := range resp.Kvs {
-		addr := common.UpstreamBoundWorkerKeyAdapter.Decode(string(kv.Key))[0]
+		kvs, err := common.UpstreamBoundWorkerKeyAdapter.Decode(string(kv.Key))
+		if err != nil {
+			log.L().Warn("decode upstream bound worker key from etcd failed", zap.Error(err))
+			continue
+		}
+		addr := kvs[0]
 		sourceID := string(kv.Value)
 		w, ok := c.workers[addr]
 		if !ok {
@@ -217,13 +230,13 @@ func (c *Coordinator) AcquireWorkerForSource(source string) (*Worker, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.started == false {
-		return nil, ErrNotStarted
+		return nil, terror.ErrMasterCoordinatorNotStart
 	}
 	if addr, ok := c.pendingReqSources[source]; ok {
-		return nil, errors.Errorf("Acquire worker failed. the same source has been started in worker: %s", addr)
+		return nil, terror.ErrMasterAcquireWorkerFailed.Generatef("the same source has been started in worker: %s", addr)
 	}
 	if _, ok := c.taskConfigs[source]; ok {
-		return nil, errors.Errorf("Acquire worker failed. the source has been scheduled, please add free worker for cluster")
+		return nil, terror.ErrMasterAcquireWorkerFailed.Generate("the source has been scheduled, please add free worker for cluster")
 	}
 	for _, w := range c.workers {
 		if w.status.Load() == WorkerFree {
@@ -233,7 +246,7 @@ func (c *Coordinator) AcquireWorkerForSource(source string) (*Worker, error) {
 			return w, nil
 		}
 	}
-	return nil, errors.New("Acquire worker failed. no  free worker could start mysql task")
+	return nil, terror.ErrMasterAcquireWorkerFailed.Generate("no free worker could start mysql task")
 }
 
 // GetAllWorkers gets all workers.
@@ -310,7 +323,11 @@ func (c *Coordinator) ObserveWorkers() {
 				switch ev.Type {
 				case mvccpb.PUT:
 					log.L().Info("putkv", zap.String("kv", string(ev.Kv.Key)))
-					kvs := common.WorkerKeepAliveKeyAdapter.Decode(string(ev.Kv.Key))
+					kvs, err := common.WorkerKeepAliveKeyAdapter.Decode(string(ev.Kv.Key))
+					if err != nil {
+						log.L().Warn("coordinator decode worker keep alive key from etcd failed", zap.String("kv", string(ev.Kv.Key)), zap.Error(err))
+						continue
+					}
 					addr, name := kvs[0], kvs[1]
 					c.mu.Lock()
 					if w, ok := c.workers[addr]; ok && name == w.Name() {
@@ -346,7 +363,11 @@ func (c *Coordinator) ObserveWorkers() {
 					c.mu.Unlock()
 				case mvccpb.DELETE:
 					log.L().Info("deletekv", zap.String("kv", string(ev.Kv.Key)))
-					kvs := common.WorkerKeepAliveKeyAdapter.Decode(string(ev.Kv.Key))
+					kvs, err := common.WorkerKeepAliveKeyAdapter.Decode(string(ev.Kv.Key))
+					if err != nil {
+						log.L().Warn("coordinator decode worker keep alive key from etcd failed", zap.String("kv", string(ev.Kv.Key)), zap.Error(err))
+						continue
+					}
 					addr, name := kvs[0], kvs[1]
 					c.mu.Lock()
 					if w, ok := c.workers[addr]; ok && name == w.Name() {

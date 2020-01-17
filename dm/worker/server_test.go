@@ -16,22 +16,22 @@ package worker
 import (
 	"context"
 	"fmt"
-	"github.com/pingcap/dm/dm/common"
-	"github.com/pingcap/dm/dm/config"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"testing"
 	"time"
 
-	. "github.com/pingcap/check"
-	"google.golang.org/grpc"
-
+	"github.com/pingcap/dm/dm/common"
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+
+	. "github.com/pingcap/check"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/embed"
+	"google.golang.org/grpc"
 )
 
 func TestServer(t *testing.T) {
@@ -270,7 +270,8 @@ func (t *testServer) testSubTaskRecover(c *C, s *Server, dir string, hostName st
 		resp, err := cli.Get(context.Background(), common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID), clientv3.WithPrefix())
 		c.Assert(err, IsNil)
 		c.Assert(len(resp.Kvs), Equals, 1)
-		infos := common.UpstreamSubTaskKeyAdapter.Decode(string(resp.Kvs[0].Key))
+		infos, err := common.UpstreamSubTaskKeyAdapter.Decode(string(resp.Kvs[0].Key))
+		c.Assert(err, IsNil)
 		c.Assert(infos[1], Equals, subCfg.Name)
 		task := string(resp.Kvs[0].Value)
 		c.Assert(task, Equals, subCfgStr)

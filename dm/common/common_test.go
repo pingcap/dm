@@ -63,7 +63,8 @@ func (t *testCommon) TestKeyAdapter(c *C) {
 	for _, ca := range testCases {
 		encKey := ca.adapter.Encode(ca.keys...)
 		c.Assert(encKey, Equals, ca.want)
-		decKey := ca.adapter.Decode(encKey)
+		decKey, err := ca.adapter.Decode(encKey)
+		c.Assert(err, IsNil)
 		c.Assert(decKey, DeepEquals, ca.keys)
 	}
 }
