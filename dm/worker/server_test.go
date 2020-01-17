@@ -58,7 +58,7 @@ func createMockETCD(dir string, host string) (*embed.Etcd, error) {
 	cfg.LCUrls = []url.URL{*lcurl}
 	cfg.ACUrls = []url.URL{*lcurl}
 	cfg.Logger = "zap"
-	metricsURL, _ := url.Parse("host://" + tempurl.Alloc()[len("http://"):])
+	metricsURL, _ := url.Parse(tempurl.Alloc())
 	cfg.ListenMetricsUrls = []url.URL{*metricsURL}
 	ETCD, err := embed.StartEtcd(cfg)
 	if err != nil {

@@ -31,8 +31,8 @@ import (
 )
 
 var (
-	etcdTimeout        = 3 * time.Second
-	restartEtcdTimeout = 5 * time.Second
+	etcdTimeout               = 3 * time.Second
+	restartMysqlWorkerTimeout = 5 * time.Second
 
 	// ErrNotStarted coordinator does not start.
 	ErrNotStarted = errors.New("coordinator does not start")
@@ -429,7 +429,7 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 		Op:     pb.WorkerOp_StartWorker,
 		Config: task,
 	}
-	resp, err := w.OperateMysqlWorker(context.Background(), req, restartEtcdTimeout)
+	resp, err := w.OperateMysqlWorker(context.Background(), req, restartMysqlWorkerTimeout)
 	ret := false
 	c.mu.Lock()
 	if err == nil {
