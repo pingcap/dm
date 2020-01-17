@@ -16,8 +16,6 @@ package worker
 import (
 	"context"
 	"fmt"
-	"github.com/pingcap/dm/dm/common"
-	"github.com/pingcap/dm/dm/config"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -25,13 +23,16 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
+	"github.com/siddontang/go-mysql/mysql"
+	"go.etcd.io/etcd/clientv3"
+	"go.etcd.io/etcd/embed"
 	"google.golang.org/grpc"
 
+	"github.com/pingcap/dm/dm/common"
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
-	"go.etcd.io/etcd/clientv3"
-	"go.etcd.io/etcd/embed"
 )
 
 func TestServer(t *testing.T) {
@@ -310,4 +311,47 @@ func (t *testServer) testStopWorkerWhenLostConnect(c *C, s *Server, ETCD *embed.
 	time.Sleep(retryConnectSleepTime + time.Duration(defaultKeepAliveTTL+3)*time.Second)
 	c.Assert(s.checkWorkerStart(), IsNil)
 	c.Assert(s.retryConnectMaster.Get(), IsFalse)
+}
+
+func (t *testServer) TestGetMinPosInAllSubTasks(c *C) {
+	originFunc := getMinPosForSubTaskFunc
+	getMinPosForSubTaskFunc = getFakePosForSubTask
+	defer func() {
+		getMinPosForSubTaskFunc = originFunc
+	}()
+
+	subTaskCfg := []*config.SubTaskConfig{
+		{
+			Name: "test2",
+		}, {
+			Name: "test3",
+		}, {
+			Name: "test1",
+		},
+	}
+	minPos, err := getMinPosInAllSubTasks(subTaskCfg)
+	c.Assert(err, IsNil)
+	c.Assert(minPos.Name, Equals, "mysql-binlog.00001")
+	c.Assert(minPos.Pos, Equals, uint32(12))
+}
+
+func getFakePosForSubTask(subTaskCfg *config.SubTaskConfig) (minPos *mysql.Position, err error) {
+	switch subTaskCfg.Name {
+	case "test1":
+		return &mysql.Position{
+			Name: "mysql-binlog.00001",
+			Pos:  123,
+		}, nil
+	case "test2":
+		return &mysql.Position{
+			Name: "mysql-binlog.00001",
+			Pos:  12,
+		}, nil
+	case "test3":
+		return &mysql.Position{
+			Name: "mysql-binlog.00003",
+		}, nil
+	default:
+		return nil, nil
+	}
 }

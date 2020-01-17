@@ -40,11 +40,12 @@ import (
 )
 
 var (
-	cmuxReadTimeout       = 10 * time.Second
-	dialTimeout           = 3 * time.Second
-	keepaliveTimeout      = 3 * time.Second
-	keepaliveTime         = 3 * time.Second
-	retryConnectSleepTime = 2 * time.Second
+	cmuxReadTimeout         = 10 * time.Second
+	dialTimeout             = 3 * time.Second
+	keepaliveTimeout        = 3 * time.Second
+	keepaliveTime           = 3 * time.Second
+	retryConnectSleepTime   = 2 * time.Second
+	getMinPosForSubTaskFunc = getMinPosForSubTask
 )
 
 // Server accepts RPC requests
@@ -766,7 +767,7 @@ func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {
 // this function return the min position in all subtasks, used for relay's position
 func getMinPosInAllSubTasks(subTaskCfgs []*config.SubTaskConfig) (minPos *mysql.Position, err error) {
 	for _, subTaskCfg := range subTaskCfgs {
-		pos, err := getMinPosForSubTask(subTaskCfg)
+		pos, err := getMinPosForSubTaskFunc(subTaskCfg)
 		if err != nil {
 			return nil, err
 		}
