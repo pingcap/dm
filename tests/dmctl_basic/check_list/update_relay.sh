@@ -3,7 +3,7 @@
 function update_relay_wrong_arg() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "update-relay" \
-        "update-relay \[-w worker ...\] <config-file> \[flags\]" 1
+        "update-relay \[-s source ...\] <config-file> \[flags\]" 1
 }
 
 function update_relay_wrong_config_file() {
@@ -16,13 +16,13 @@ function update_relay_should_specify_one_dm_worker() {
     task_conf=$1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "update-relay $task_conf" \
-        "must specify one DM-worker (\`-w\` \/ \`--worker\`)" 1
+        "must specify one source (\`-s\` \/ \`--source\`)" 1
 }
 
 function update_relay_while_master_down() {
     task_conf=$1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "update-relay $task_conf -w $SOURCE_ID1" \
+        "update-relay $task_conf -s $SOURCE_ID1" \
         "can not update relay config:" 1
 }
 
@@ -30,6 +30,6 @@ function update_relay_success() {
     task_conf=$1
     source_id=$2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "update-relay $task_conf -w $source_id" \
+        "update-relay $task_conf -s $source_id" \
         "\"result\": true" 1
 }

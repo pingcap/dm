@@ -70,7 +70,5 @@ func operateMysqlWorkerFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	if !resp.Result {
-		common.PrintLines("operate worker failed:\n%v", resp.Msg)
-	}
+	common.PrettyPrintResponse(resp)
 }

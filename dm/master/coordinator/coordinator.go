@@ -15,22 +15,24 @@ package coordinator
 
 import (
 	"context"
-	"github.com/pingcap/dm/dm/pb"
 	"sync"
 	"time"
 
-	"github.com/pingcap/dm/dm/common"
-	"github.com/pingcap/dm/dm/config"
-	"github.com/pingcap/dm/dm/master/workerrpc"
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/mvcc/mvccpb"
 	"go.uber.org/zap"
+
+	"github.com/pingcap/dm/dm/common"
+	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/master/workerrpc"
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 var (
-	etcdTimeouit = 3 * time.Second
+	etcdTimeout               = 3 * time.Second
+	restartMysqlWorkerTimeout = 5 * time.Second
 
 	// ErrNotStarted coordinator does not start.
 	ErrNotStarted = errors.New("coordinator does not start")
@@ -82,7 +84,7 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 	c.etcdCli = etcdClient
 
 	// recovering.
-	ectx, cancel := context.WithTimeout(etcdClient.Ctx(), etcdTimeouit)
+	ectx, cancel := context.WithTimeout(etcdClient.Ctx(), etcdTimeout)
 	defer cancel()
 	resp, err := etcdClient.Get(ectx, common.WorkerRegisterKeyAdapter.Path(), clientv3.WithPrefix())
 	if err != nil {
@@ -223,7 +225,16 @@ func (c *Coordinator) AcquireWorkerForSource(source string) (*Worker, error) {
 		return nil, errors.Errorf("Acquire worker failed. the same source has been started in worker: %s", addr)
 	}
 	if _, ok := c.taskConfigs[source]; ok {
-		return nil, errors.Errorf("Acquire worker failed. the source has been scheduled, please add free worker for cluster")
+		// this check is used to avoid a situation: one task is started twice by mistake but requires two workers
+		// If ok is true, there are two situations:
+		// 1. this task is mistakenly started twice, when coordinator tried to operate on the bound worker it will report an error
+		// 2. this task is paused because the bound worker was out of service before, we can give this task this worker to start it again
+		// If ok is false, that means the try on the bound worker has failed, we can arrange this task another worker
+		// ATTENTION!!! This mechanism can't prevent this case, which should be discussed later:
+		// the task is being operating to a worker(taskConfigs and upstreams haven't been updated), but it is started again to acquire worker
+		if w, ok := c.upstreams[source]; ok {
+			return w, nil
+		}
 	}
 	for _, w := range c.workers {
 		if w.status.Load() == WorkerFree {
@@ -233,7 +244,7 @@ func (c *Coordinator) AcquireWorkerForSource(source string) (*Worker, error) {
 			return w, nil
 		}
 	}
-	return nil, errors.New("Acquire worker failed. no  free worker could start mysql task")
+	return nil, errors.New("Acquire worker failed. no free worker could start mysql task")
 }
 
 // GetAllWorkers gets all workers.
@@ -376,7 +387,7 @@ func (c *Coordinator) schedule(source string) {
 func (c *Coordinator) tryRestartMysqlTask() {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	scheduleNextLoop := make([]string, 1000)
+	scheduleNextLoop := make([]string, 0)
 	hasTaskToSchedule := true
 	for hasTaskToSchedule {
 		select {
@@ -418,7 +429,7 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 		Op:     pb.WorkerOp_StartWorker,
 		Config: task,
 	}
-	resp, err := w.OperateMysqlWorker(context.Background(), req, time.Second*3)
+	resp, err := w.OperateMysqlWorker(context.Background(), req, restartMysqlWorkerTimeout)
 	ret := false
 	c.mu.Lock()
 	if err == nil {
@@ -428,6 +439,7 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 			c.upstreams[cfg.SourceID] = w
 			w.SetStatus(WorkerBound)
 		} else {
+			log.L().Warn("restartMysqlTask failed", zap.String("error", resp.Msg))
 			delete(c.upstreams, cfg.SourceID)
 			if source, ok := c.workerToConfigs[w.Address()]; ok {
 				if source == cfg.SourceID {
@@ -443,6 +455,7 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 			}
 		}
 	} else {
+		log.L().Warn("restartMysqlTask failed", zap.Error(err))
 		// Error means there is something wrong about network, set worker to close.
 		// remove sourceID from upstreams. So the source would be schedule in other worker.
 		delete(c.upstreams, cfg.SourceID)
@@ -452,7 +465,7 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 	delete(c.pendingReqSources, cfg.SourceID)
 	c.mu.Unlock()
 	if w.State() == WorkerClosed {
-		ectx, cancel := context.WithTimeout(c.etcdCli.Ctx(), etcdTimeouit)
+		ectx, cancel := context.WithTimeout(c.etcdCli.Ctx(), etcdTimeout)
 		defer cancel()
 		resp, err := c.etcdCli.Get(ectx, common.WorkerRegisterKeyAdapter.Encode(w.Address(), w.Name()))
 		if err != nil {

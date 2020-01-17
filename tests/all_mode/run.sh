@@ -51,8 +51,11 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
     sleep 5
-    echo "start task after restart dm-worker"
-    dmctl_start_task
+    echo "after restart dm-worker, task should resume automatically"
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-task $cur/conf/dm-task.yaml" \
+        "\"result\": true" 1 \
+        "start sub task test: sub task test already exists" 2
     sleep 2
 
     # wait for task running

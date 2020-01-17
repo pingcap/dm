@@ -28,12 +28,12 @@ import (
 // NewSQLReplaceCmd creates a SQLReplace command
 func NewSQLReplaceCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "sql-replace <-s source> [-b binlog-pos] [-s sql-pattern] [--sharding] <task-name> <sql1;sql2;>",
+		Use:   "sql-replace <-s source> [-b binlog-pos] [-p sql-pattern] [--sharding] <task-name> <sql1;sql2;>",
 		Short: "replace SQLs matched by a specific binlog position (binlog-pos) or a SQL pattern (sql-pattern); each SQL must end with a semicolon",
 		Run:   sqlReplaceFunc,
 	}
 	cmd.Flags().StringP("binlog-pos", "b", "", "position used to match binlog event if matched the sql-replace operation will be applied. The format like \"mysql-bin|000001.000003:3270\"")
-	cmd.Flags().StringP("sql-pattern", "s", "", "SQL pattern used to match the DDL converted by optional router-rules if matched the sql-replace operation will be applied. The format like \"~(?i)ALTER\\s+TABLE\\s+`db1`.`tbl1`\\s+ADD\\s+COLUMN\\s+col1\\s+INT\". Whitespace is not supported, and must be replaced by \"\\s\". Staring with ~ as regular expression. This can only be used for DDL (converted by optional router-rules), and if multi DDLs in one binlog event, one of them matched is enough, but all of them will be replaced")
+	cmd.Flags().StringP("sql-pattern", "p", "", "SQL pattern used to match the DDL converted by optional router-rules if matched the sql-replace operation will be applied. The format like \"~(?i)ALTER\\s+TABLE\\s+`db1`.`tbl1`\\s+ADD\\s+COLUMN\\s+col1\\s+INT\". Whitespace is not supported, and must be replaced by \"\\s\". Staring with ~ as regular expression. This can only be used for DDL (converted by optional router-rules), and if multi DDLs in one binlog event, one of them matched is enough, but all of them will be replaced")
 	cmd.Flags().BoolP("sharding", "", false, "whether are handing sharding DDL, which will only take effect on DDL lock's owner")
 	return cmd
 }

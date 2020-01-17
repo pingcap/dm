@@ -3,7 +3,7 @@
 function start_task_wrong_arg() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task" \
-        "start-task \[-w worker ...\] <config-file> \[flags\]" 1
+        "start-task \[-s source ...\] <config-file> \[flags\]" 1
 }
 
 function start_task_wrong_config_file() {
