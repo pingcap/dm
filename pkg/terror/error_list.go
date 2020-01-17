@@ -147,6 +147,8 @@ const (
 
 	// pkg/binlog
 	codeBinlogInvalidFilenameWithUUIDSuffix
+	// dm/common
+	codeDecodeEtcdKeyFail
 )
 
 // Config related error code list
@@ -401,6 +403,8 @@ const (
 	codeMasterStartEmbedEtcdFail
 	codeMasterParseURLFail
 	codeMasterJoinEmbedEtcdFail
+	codeMasterCoordinatorNotStart
+	codeMasterAcquireWorkerFailed
 )
 
 // DM-worker error code
@@ -639,6 +643,8 @@ var (
 	// pkg/binlog
 	ErrBinlogInvalidFilenameWithUUIDSuffix = New(codeBinlogInvalidFilenameWithUUIDSuffix, ClassFunctional, ScopeInternal, LevelHigh, "invalid binlog filename with uuid suffix %s")
 
+	// dm/common
+	ErrDecodeEtcdKeyFail = New(codeDecodeEtcdKeyFail, ClassFunctional, ScopeInternal, LevelMedium, "fail to to decode etcd key: %s")
 	// Config related error
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s")
 	ErrConfigTomlTransform          = New(codeConfigTomlTransform, ClassConfig, ScopeInternal, LevelMedium, "%s")
@@ -873,6 +879,8 @@ var (
 	ErrMasterStartEmbedEtcdFail     = New(codeMasterStartEmbedEtcdFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to start embed etcd")
 	ErrMasterParseURLFail           = New(codeMasterParseURLFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to parse URL %s")
 	ErrMasterJoinEmbedEtcdFail      = New(codeMasterJoinEmbedEtcdFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to join embed etcd: %s")
+	ErrMasterCoordinatorNotStart    = New(codeMasterCoordinatorNotStart, ClassDMMaster, ScopeInternal, LevelHigh, "coordinator does not start")
+	ErrMasterAcquireWorkerFailed    = New(codeMasterAcquireWorkerFailed, ClassDMMaster, ScopeInternal, LevelMedium, "Acquire worker failed: %s")
 
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set")

@@ -217,7 +217,10 @@ func (s *Server) recoverSubTask() error {
 		return err
 	}
 	for _, kv := range resp.Kvs {
-		infos := common.UpstreamSubTaskKeyAdapter.Decode(string(kv.Key))
+		infos, err := common.UpstreamSubTaskKeyAdapter.Decode(string(kv.Key))
+		if err != nil {
+			return err
+		}
 		sourceID := infos[0]
 		taskName := infos[1]
 		if sources, ok := s.taskSources[taskName]; ok {
@@ -294,15 +297,24 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 			return nil, errors.Errorf("the response kv is invalid length, request key: %s", k)
 		}
 		kv := resp.Responses[0].GetResponseRange().GetKvs()[0]
-		address, name := common.WorkerRegisterKeyAdapter.Decode(string(kv.Key))[0], string(kv.Value)
+		kvs, err := common.WorkerRegisterKeyAdapter.Decode(string(kv.Key))
+		if err != nil {
+			log.L().Error("decode worker register key from etcd failed", zap.Error(err))
+			return &pb.RegisterWorkerResponse{
+				Result: false,
+				Msg:    errors.ErrorStack(err),
+			}, nil
+		}
+		address := kvs[0]
+		name := string(kv.Value)
 		if name != req.Name {
 			msg := fmt.Sprintf("the address %s already registered with name %s", address, name)
-			respWorker := &pb.RegisterWorkerResponse{
+			respSource := &pb.RegisterWorkerResponse{
 				Result: false,
 				Msg:    msg,
 			}
 			log.L().Error(msg)
-			return respWorker, nil
+			return respSource, nil
 		}
 	}
 	s.coordinator.AddWorker(req.Name, req.Address, nil)

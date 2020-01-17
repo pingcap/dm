@@ -171,6 +171,10 @@ func (c *Config) adjust() error {
 		}
 	}
 
+	if c.Name == "" {
+		c.Name = c.AdvertiseAddr
+	}
+
 	return nil
 }
 
