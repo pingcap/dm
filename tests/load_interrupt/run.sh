@@ -77,7 +77,7 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
-    sleep 8
+    sleep 10
     echo "start task after restarted dm-worker"
     # TODO: skip this now. problem has been added to document
     # run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
