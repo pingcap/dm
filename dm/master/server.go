@@ -175,6 +175,8 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		return
 	}
 
+	// TODO: read sql-replace
+
 	s.closed.Set(false) // the server started now.
 
 	s.bgFunWg.Add(1)

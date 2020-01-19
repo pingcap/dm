@@ -36,6 +36,11 @@ var (
 	// UpstreamSubTaskKeyAdapter used to store SubTask which are subscribing data from MySQL source.
 	// k/v: Encode(source-id, task-name) -> SubTaskConfig
 	UpstreamSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/upstream/subtask/")
+
+	// SQLsRequestKeyAdapter used to store sql-skip and sql-replace request.
+	// sharding is false: k/v: Encode(source-id, hash(req bytes)) -> HandleSQLsRequest
+	// sharding is true, k/v: Encode("sharding", hash(req bytes)) -> HandleSQLsRequest
+	SQLsRequestKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/sqls/")
 )
 
 // IsErrNetClosing checks whether is an ErrNetClosing error
