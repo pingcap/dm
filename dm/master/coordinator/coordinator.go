@@ -43,11 +43,11 @@ type Coordinator struct {
 	// upstream(source-id) -> worker
 	upstreams map[string]*Worker
 
-	// upstream(address) -> config
+	// upstream(address) -> source-id
 	workerToConfigs map[string]string
 
-	// taskConfigs (source) -> config
-	taskConfigs map[string]config.MysqlConfig
+	// sourceConfigs (source) -> config
+	sourceConfigs map[string]config.MysqlConfig
 
 	// pending create task (sourceid) --> address
 	pendingReqSources map[string]string
@@ -67,7 +67,7 @@ func NewCoordinator() *Coordinator {
 		workerToConfigs:   make(map[string]string),
 		pendingReqSources: make(map[string]string),
 		upstreams:         make(map[string]*Worker),
-		taskConfigs:       make(map[string]config.MysqlConfig),
+		sourceConfigs:     make(map[string]config.MysqlConfig),
 		waitingTask:       make(chan string, 100000),
 	}
 }
@@ -119,7 +119,7 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 			log.L().Error("cannot parse config", zap.String("source", sourceID), zap.Error(err))
 			continue
 		}
-		c.taskConfigs[sourceID] = *cfg
+		c.sourceConfigs[sourceID] = *cfg
 		c.schedule(sourceID)
 		log.L().Info("load config successful", zap.String("source", sourceID), zap.String("config", cfgStr))
 	}
@@ -207,7 +207,7 @@ func (c *Coordinator) HandleStartedWorker(w *Worker, cfg *config.MysqlConfig, su
 	if succ {
 		c.upstreams[cfg.SourceID] = w
 		c.workerToConfigs[w.Address()] = cfg.SourceID
-		c.taskConfigs[cfg.SourceID] = *cfg
+		c.sourceConfigs[cfg.SourceID] = *cfg
 	} else {
 		w.SetStatus(WorkerFree)
 	}
@@ -218,7 +218,7 @@ func (c *Coordinator) HandleStartedWorker(w *Worker, cfg *config.MysqlConfig, su
 func (c *Coordinator) HandleStoppedWorker(w *Worker, cfg *config.MysqlConfig) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.taskConfigs, cfg.SourceID)
+	delete(c.sourceConfigs, cfg.SourceID)
 	delete(c.upstreams, cfg.SourceID)
 	delete(c.workerToConfigs, w.Address())
 	w.SetStatus(WorkerFree)
@@ -236,14 +236,14 @@ func (c *Coordinator) AcquireWorkerForSource(source string) (*Worker, error) {
 	if addr, ok := c.pendingReqSources[source]; ok {
 		return nil, terror.ErrMasterAcquireWorkerFailed.Generatef("the same source has been started in worker: %s", addr)
 	}
-	if _, ok := c.taskConfigs[source]; ok {
+	if _, ok := c.sourceConfigs[source]; ok {
 		// this check is used to avoid a situation: one task is started twice by mistake but requires two workers
 		// If ok is true, there are two situations:
 		// 1. this task is mistakenly started twice, when coordinator tried to operate on the bound worker it will report an error
 		// 2. this task is paused because the bound worker was out of service before, we can give this task this worker to start it again
 		// If ok is false, that means the try on the bound worker has failed, we can arrange this task another worker
 		// ATTENTION!!! This mechanism can't prevent this case, which should be discussed later:
-		// the task is being operating to a worker(taskConfigs and upstreams haven't been updated), but it is started again to acquire worker
+		// the task is being operating to a worker(sourceConfigs and upstreams haven't been updated), but it is started again to acquire worker
 		if w, ok := c.upstreams[source]; ok {
 			return w, nil
 		}
@@ -297,7 +297,7 @@ func (c *Coordinator) GetWorkerByAddress(addr string) *Worker {
 func (c *Coordinator) GetConfigBySourceID(source string) *config.MysqlConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if cfg, ok := c.taskConfigs[source]; ok {
+	if cfg, ok := c.sourceConfigs[source]; ok {
 		return &cfg
 	}
 	return nil
@@ -412,7 +412,7 @@ func (c *Coordinator) tryRestartMysqlTask() {
 	for hasTaskToSchedule {
 		select {
 		case source := <-c.waitingTask:
-			if cfg, ok := c.taskConfigs[source]; ok {
+			if cfg, ok := c.sourceConfigs[source]; ok {
 				ret := false
 				if w, ok := c.upstreams[source]; ok {
 					// Try start mysql task at the same worker.

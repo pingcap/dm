@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -172,6 +173,7 @@ func (c *Config) adjust() error {
 	}
 
 	if c.Name == "" {
+		log.L().Info("worker name is not given, we will set AdvertiseAddr as the worker name", zap.String("AdvertiseAddr", c.AdvertiseAddr))
 		c.Name = c.AdvertiseAddr
 	}
 

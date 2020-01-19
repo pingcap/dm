@@ -219,7 +219,8 @@ func (s *Server) recoverSubTask() error {
 	for _, kv := range resp.Kvs {
 		infos, err := common.UpstreamSubTaskKeyAdapter.Decode(string(kv.Key))
 		if err != nil {
-			return err
+			log.L().Warn("decode upstream subtask key from etcd failed", zap.Error(err))
+			continue
 		}
 		sourceID := infos[0]
 		taskName := infos[1]
