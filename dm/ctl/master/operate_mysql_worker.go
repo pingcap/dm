@@ -33,12 +33,15 @@ func NewOperateMysqlWorkerCmd() *cobra.Command {
 }
 
 func convertCmdType(t string) pb.WorkerOp {
-	if t == "create" {
+	switch t {
+	case "create":
 		return pb.WorkerOp_StartWorker
-	} else if t == "update" {
+	case "update":
 		return pb.WorkerOp_UpdateConfig
-	} else {
+	case "stop":
 		return pb.WorkerOp_StopWorker
+	default:
+		return pb.WorkerOp_InvalidWorkerOp
 	}
 }
 
@@ -60,10 +63,16 @@ func operateMysqlWorkerFunc(cmd *cobra.Command, _ []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	op := convertCmdType(cmdType)
+	if op == pb.WorkerOp_InvalidWorkerOp {
+		common.PrintLines("invalid operate %s on worker", cmdType)
+		return
+	}
+
 	cli := common.MasterClient()
 	resp, err := cli.OperateMysqlWorker(ctx, &pb.MysqlWorkerRequest{
 		Config: string(content),
-		Op:     convertCmdType(cmdType),
+		Op:     op,
 	})
 	if err != nil {
 		common.PrintLines("can not update task:\n%v", errors.ErrorStack(err))

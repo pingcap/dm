@@ -1747,7 +1747,7 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 		if resp, err = w.OperateMysqlWorker(ctx, req, s.cfg.RPCTimeout); err != nil {
 			return makeMysqlWorkerResponse(err)
 		}
-	} else {
+	} else if req.Op == pb.WorkerOp_StopWorker {
 		w := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
 		if w == nil {
 			return &pb.MysqlWorkerResponse{
@@ -1764,7 +1764,13 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 		if resp.Result {
 			s.coordinator.HandleStoppedWorker(w, cfg)
 		}
+	} else {
+		return &pb.MysqlWorkerResponse{
+			Result: false,
+			Msg:    "invalid operate on worker",
+		}, nil
 	}
+
 	return &pb.MysqlWorkerResponse{
 		Result: resp.Result,
 		Msg:    resp.Msg,
