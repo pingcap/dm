@@ -65,7 +65,7 @@ func operateMysqlWorkerFunc(cmd *cobra.Command, _ []string) {
 
 	op := convertCmdType(cmdType)
 	if op == pb.WorkerOp_InvalidWorkerOp {
-		common.PrintLines("invalid operate %s on worker", cmdType)
+		common.PrintLines("invalid operate '%s' on worker", cmdType)
 		return
 	}
 

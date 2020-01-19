@@ -129,6 +129,12 @@ function run() {
     cp $cur/conf/mysql2.toml $WORK_DIR/mysql2.toml
     sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/mysql1.toml
     sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker2/relay_log\"" $WORK_DIR/mysql2.toml
+    
+    # operate with invalid op type
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "operate-worker invalid $WORK_DIR/mysql1.toml" \
+        "invalid operate" 1
+
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-worker create $WORK_DIR/mysql1.toml" \
         "true" 1
