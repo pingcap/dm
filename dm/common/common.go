@@ -15,6 +15,7 @@ package common
 
 import (
 	"encoding/hex"
+	"fmt"
 	"path"
 	"strings"
 
@@ -40,6 +41,16 @@ var (
 	UpstreamSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/upstream/subtask/")
 )
 
+func keyAdapterValueLen(s KeyAdapter) int {
+	switch s {
+	case WorkerRegisterKeyAdapter, UpstreamConfigKeyAdapter, UpstreamBoundWorkerKeyAdapter:
+		return 1
+	case WorkerKeepAliveKeyAdapter, UpstreamSubTaskKeyAdapter:
+		return 2
+	}
+	return -1
+}
+
 // IsErrNetClosing checks whether is an ErrNetClosing error
 func IsErrNetClosing(err error) bool {
 	if err == nil {
@@ -55,16 +66,6 @@ type KeyAdapter interface {
 	Path() string
 }
 
-func keyAdapterValueLen(s KeyAdapter) int {
-	switch s {
-	case WorkerRegisterKeyAdapter, UpstreamConfigKeyAdapter, UpstreamBoundWorkerKeyAdapter:
-		return 1
-	case WorkerKeepAliveKeyAdapter, UpstreamSubTaskKeyAdapter:
-		return 2
-	}
-	return -1
-}
-
 type keyEncoderDecoder string
 type keyHexEncoderDecoder string
 
@@ -78,7 +79,7 @@ func (s keyEncoderDecoder) Decode(key string) ([]string, error) {
 	v := strings.TrimPrefix(key, string(s))
 	vals := strings.Split(v, "/")
 	if l := keyAdapterValueLen(s); l != len(vals) {
-		return nil, terror.ErrDecodeEtcdKeyFail.Generate("decoder is %s. The key is %s", string(s), key)
+		return nil, terror.ErrDecodeEtcdKeyFail.Generate(fmt.Sprintf("decoder is %s, the key is %s", string(s), key))
 	}
 	return vals, nil
 }
@@ -98,12 +99,12 @@ func (s keyHexEncoderDecoder) Encode(keys ...string) string {
 func (s keyHexEncoderDecoder) Decode(key string) ([]string, error) {
 	v := strings.Split(strings.TrimPrefix(key, string(s)), "/")
 	if l := keyAdapterValueLen(s); l != len(v) {
-		return nil, terror.ErrDecodeEtcdKeyFail.Generate("decoder is %s. The key is %s", string(s), key)
+		return nil, terror.ErrDecodeEtcdKeyFail.Generate(fmt.Sprintf("decoder is %s, the key is %s", string(s), key))
 	}
 	for i, k := range v {
 		dec, err := hex.DecodeString(k)
 		if err != nil {
-			return nil, terror.ErrDecodeEtcdKeyFail.Delegate(err)
+			return nil, terror.ErrDecodeEtcdKeyFail.Generate(err.Error())
 		}
 		v[i] = string(dec)
 	}

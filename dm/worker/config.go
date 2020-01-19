@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/pingcap/errors"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
@@ -148,6 +149,15 @@ func (c *Config) Parse(arguments []string) error {
 
 	if len(c.flagSet.Args()) != 0 {
 		return terror.ErrWorkerInvalidFlag.Generate(c.flagSet.Arg(0))
+	}
+
+	err = log.InitLogger(&log.Config{
+		File:  c.LogFile,
+		Level: strings.ToLower(c.LogLevel),
+	})
+	if err != nil {
+		fmt.Printf("init logger error %v", errors.ErrorStack(err))
+		return err
 	}
 
 	return c.adjust()

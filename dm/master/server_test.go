@@ -1445,7 +1445,7 @@ func (t *testMaster) TestOperateMysqlWorker(c *check.C) {
 	resp, err := s1.OperateMysqlWorker(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.Equals, false)
-	c.Assert(resp.Msg, check.Matches, "[\\s\\S]*Acquire worker failed. no free worker could start mysql task[\\s\\S]*")
+	c.Assert(resp.Msg, check.Matches, "[\\s\\S]*acquire worker failed. no free worker could start mysql task[\\s\\S]*")
 	mockWorkerClient := pbmock.NewMockWorkerClient(ctrl)
 	req.Op = pb.WorkerOp_UpdateConfig
 	mockWorkerClient.EXPECT().OperateMysqlWorker(

@@ -644,7 +644,7 @@ var (
 	ErrBinlogInvalidFilenameWithUUIDSuffix = New(codeBinlogInvalidFilenameWithUUIDSuffix, ClassFunctional, ScopeInternal, LevelHigh, "invalid binlog filename with uuid suffix %s")
 
 	// dm/common
-	ErrDecodeEtcdKeyFail = New(codeDecodeEtcdKeyFail, ClassFunctional, ScopeInternal, LevelMedium, "fail to to decode etcd key: %s")
+	ErrDecodeEtcdKeyFail = New(codeDecodeEtcdKeyFail, ClassFunctional, ScopeInternal, LevelMedium, "fail to decode etcd key: %s")
 	// Config related error
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s")
 	ErrConfigTomlTransform          = New(codeConfigTomlTransform, ClassConfig, ScopeInternal, LevelMedium, "%s")

@@ -676,8 +676,8 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 	for _, kv := range resp.Kvs {
 		infos, err := common.UpstreamSubTaskKeyAdapter.Decode(string(kv.Key))
 		if err != nil {
-			log.L().Warn("decode upstream subtask key from etcd failed", zap.Error(err))
-			continue
+			log.L().Error("decode upstream subtask key from etcd failed", zap.Error(err))
+			return err
 		}
 		taskName := infos[1]
 		task := string(kv.Value)
