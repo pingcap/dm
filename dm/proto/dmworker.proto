@@ -451,9 +451,10 @@ message QueryWorkerConfigResponse {
 }
 
 enum WorkerOp {
-    StartWorker = 0;
-    UpdateConfig = 1;
-    StopWorker = 2;
+    InvalidWorkerOp = 0;
+    StartWorker = 1;
+    UpdateConfig = 2;
+    StopWorker = 3;
 }
 
 message MysqlWorkerRequest {
