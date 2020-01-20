@@ -25,12 +25,15 @@ import (
 type Lock struct {
 	mu sync.RWMutex
 
-	ID     string          // lock's ID
-	Task   string          // lock's corresponding task name
-	Owner  string          // Owner's source ID (not DM-worker's name)
-	DDLs   []string        // DDL statements
-	remain int             // remain count of sources needed to receive DDL info
-	ready  map[string]bool // whether the DDL info received from the source
+	ID     string   // lock's ID
+	Task   string   // lock's corresponding task name
+	Owner  string   // Owner's source ID (not DM-worker's name)
+	DDLs   []string // DDL statements
+	remain int      // remain count of sources needed to receive DDL info
+
+	// whether the DDL info received from the source.
+	// if all of them have been ready, then we call the lock `synced`.
+	ready map[string]bool
 
 	// whether the operations have done (exec/skip the shard DDL).
 	// if all of them have done, then we call the lock `resolved`.

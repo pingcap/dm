@@ -129,7 +129,6 @@ func DeleteOperations(cli *clientv3.Client, ops ...Operation) (int64, error) {
 
 // GetAllOperations gets all DDL lock operation in etcd currently.
 // k/k/v: task-name -> source-ID -> lock operation.
-// This function is often used for debugging or testing.
 func GetAllOperations(cli *clientv3.Client) (map[string]map[string]Operation, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()

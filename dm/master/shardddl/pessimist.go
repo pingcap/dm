@@ -58,6 +58,15 @@ func (p *Pessimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 		return err
 	}
 
+	// get the history shard DDL lock operation.
+	// the newly operations after this GET will be received through the WATCH with `rev`,
+	// and call `Lock.MarkDone` multiple times is fine.
+	opm, _, err := pessimism.GetAllOperations(etcdCli)
+	if err != nil {
+		return err
+	}
+
+	// recover the shard DDL lock based on history shard DDL info & lock operation.
 	for _, ifs := range ifm {
 		for source, info := range ifs {
 			lockID, synced, _, err2 := p.lk.TrySync(info, []string{source})
@@ -65,6 +74,13 @@ func (p *Pessimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 				return err2
 			} else if !synced {
 				continue
+			}
+
+			if ops, ok1 := opm[info.Task]; ok1 {
+				if op, ok2 := ops[source]; ok2 && op.Done {
+					// FindLock should always return non-nil, because we called `TrySync` above.
+					p.lk.FindLock(lockID).MarkDone(source)
+				}
 			}
 
 			err2 = p.handleLock(lockID)
@@ -88,7 +104,7 @@ func (p *Pessimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 	}()
 	go func() {
 		defer p.wg.Done()
-		p.handleInfo(ctx, infoCh)
+		p.handleInfoPut(ctx, infoCh)
 	}()
 
 	// watch for the shard DDL lock operation and handle them.
@@ -103,7 +119,7 @@ func (p *Pessimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 	}()
 	go func() {
 		defer p.wg.Done()
-		p.handleOperation(ctx, opCh)
+		p.handleOperationPut(ctx, opCh)
 	}()
 
 	p.closed = false // started now.
@@ -130,8 +146,8 @@ func (p *Pessimist) Close() {
 	p.closed = true // closed now.
 }
 
-// handleInfo handles the shard DDL lock info.
-func (p *Pessimist) handleInfo(ctx context.Context, infoCh <-chan pessimism.Info) {
+// handleInfoPut handles the shard DDL lock info PUTed.
+func (p *Pessimist) handleInfoPut(ctx context.Context, infoCh <-chan pessimism.Info) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -140,32 +156,102 @@ func (p *Pessimist) handleInfo(ctx context.Context, infoCh <-chan pessimism.Info
 			if !ok {
 				return
 			}
-			p.logger.Info("receive shard DDL info", zap.Stringer("info", info))
+			p.logger.Info("receive a shard DDL info", zap.Stringer("info", info))
 			lockID, synced, remain, err := p.lk.TrySync(info, []string{info.Source})
 			if err != nil {
+				// TODO: add & update metrics.
 				p.logger.Error("fail to try sync shard DDL lock", zap.Stringer("info", info), log.ShortError(err))
 				continue
 			} else if !synced {
-				p.logger.Info("shard DDL lock has not synced", zap.String("lock", lockID), zap.Int("remain", remain))
+				p.logger.Info("the shard DDL lock has not synced", zap.String("lock", lockID), zap.Int("remain", remain))
 				continue
 			}
 			err = p.handleLock(lockID)
 			if err != nil {
-				p.logger.Error("fail to handle shard DDL lock", zap.String("lock ID", lockID), log.ShortError(err))
+				// TODO: add & update metrics.
+				p.logger.Error("fail to handle the shard DDL lock", zap.String("lock", lockID), log.ShortError(err))
 				continue
 			}
 		}
 	}
 }
 
-// handleOperation handles the shard DDL lock operations.
-func (p *Pessimist) handleOperation(ctx context.Context, opCh <-chan pessimism.Operation) {
-	// TODO(csuzhangxc)
+// handleOperationPut handles the shard DDL lock operations PUTed.
+func (p *Pessimist) handleOperationPut(ctx context.Context, opCh <-chan pessimism.Operation) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case op, ok := <-opCh:
+			if !ok {
+				return
+			}
+			p.logger.Info("receive a shard DDL lock operation", zap.Stringer("operation", op))
+			if !op.Done {
+				p.logger.Info("the shard DDL lock operation has not done", zap.Stringer("operation", op))
+				continue
+			}
+
+			lock := p.lk.FindLock(op.ID)
+			if lock == nil {
+				p.logger.Warn("no lock for the shard DDL lock operation exist", zap.Stringer("operation", op))
+				continue
+			} else if synced, _ := lock.IsSynced(); !synced {
+				// this should not happen in normal case.
+				p.logger.Warn("the lock for the shard DDL lock operation has not synced", zap.Stringer("operation", op))
+				continue
+			}
+
+			// get all sources relative to this lock for convenience.
+			// NOTE: we do not support to add any new sources after the shard DDL lock has synced.
+			ready := lock.Ready()
+
+			// update the `done` status of the lock and check whether is resolved.
+			lock.MarkDone(op.Source)
+			if lock.IsResolved() {
+				// remove all operations for this shard DDL lock.
+				ops := make([]pessimism.Operation, 0, len(ready))
+				for source := range ready {
+					// When deleting operations, we do not verify the value of the operation now,
+					// so simply set `exec=false` and `done=true`.
+					ops = append(ops, pessimism.NewOperation(lock.ID, lock.Task, source, lock.DDLs, false, true))
+				}
+				_, err := pessimism.DeleteOperations(p.cli, ops...)
+				if err != nil {
+					// TODO: add & update metrics.
+					p.logger.Error("fail to delete the shard DDL lock operations", zap.String("lock", lock.ID), log.ShortError(err))
+				}
+				p.lk.RemoveLock(lock.ID)
+				continue
+			}
+
+			// one of the non-owner dm-worker instance has done the operation,
+			// still need to wait for more `done` from other non-owner dm-worker instances.
+			if op.Source != lock.Owner {
+				p.logger.Info("the shard DDL lock operation of a non-owner has done", zap.Stringer("operation", op), zap.String("owner", lock.Owner))
+				continue
+			}
+
+			// the owner has done the operation, put `skip` operation for non-owner dm-worker instances.
+			ops := make([]pessimism.Operation, 0, len(ready)-1)
+			for source := range ready {
+				if source != lock.Owner {
+					// always set `exec=false` for non-owner, and `done=false` just after the owner has done.
+					ops = append(ops, pessimism.NewOperation(lock.ID, lock.Task, source, lock.DDLs, false, false))
+				}
+			}
+			// no need to `skipDone`, all of them should be not done just after the owner has done.
+			_, _, err := pessimism.PutOperations(p.cli, false, ops...)
+			if err != nil {
+				// TODO: add & update metrics.
+				p.logger.Error("fail to put skip shard DDL lock operations for non-owner", zap.String("lock", lock.ID), log.ShortError(err))
+			}
+		}
+	}
 }
 
 // handleLock handles a single shard DDL lock.
 func (p *Pessimist) handleLock(lockID string) error {
-	// handle for the synced lock
 	lock := p.lk.FindLock(lockID)
 	if lock == nil {
 		return nil
@@ -175,10 +261,32 @@ func (p *Pessimist) handleLock(lockID string) error {
 	}
 
 	// check whether the owner has done.
+	if lock.IsDone(lock.Owner) {
+		// try to put the skip operation for non-owner dm-worker instances,
+		// this is to handle the case where dm-master exist before putting operations for them.
+		ready := lock.Ready()
+		ops := make([]pessimism.Operation, 0, len(ready)-1)
+		for source := range ready {
+			if source != lock.Owner {
+				ops = append(ops, pessimism.NewOperation(lock.ID, lock.Task, source, lock.DDLs, false, false))
+			}
+		}
+		// use `skipDone` to avoid overwriting any existing operations.
+		_, succ, err := pessimism.PutOperations(p.cli, true, ops...)
+		if err != nil {
+			return err
+		}
+		p.logger.Info("put skip shard DDL lock operations for non-owner", zap.String("lock", lockID), zap.Bool("already exist", !succ))
+		return nil
+	}
 
-	// put `exec=true` for the owner & wait for the owner has done.
+	// put `exec=true` for the owner.
+	op := pessimism.NewOperation(lockID, lock.Task, lock.Owner, lock.DDLs, true, false)
+	_, succ, err := pessimism.PutOperations(p.cli, true, op)
+	if err != nil {
+		return err
+	}
 
-	// put `exec=false` for non-owner workers & wait for them have done.
-
+	p.logger.Info("put exec shard DDL lock operation for the owner", zap.String("lock", lockID), zap.Bool("already exist", !succ))
 	return nil
 }
