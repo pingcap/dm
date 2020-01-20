@@ -392,7 +392,7 @@ func (c *Coordinator) tryRestartMysqlTask() {
 	for hasTaskToSchedule {
 		select {
 		case source := <-c.waitingTask:
-			log.L().Info("try restart mysql task", zap.String("source", source))
+			log.L().Info("will schedule source", zap.String("source", source))
 			if cfg, ok := c.taskConfigs[source]; ok {
 				ret := false
 				if w, ok := c.upstreams[source]; ok {
