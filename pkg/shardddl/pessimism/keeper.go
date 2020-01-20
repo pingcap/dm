@@ -84,6 +84,14 @@ func (lk *LockKeeper) Locks() map[string]*Lock {
 	return locks
 }
 
+// Clear clears all Locks.
+func (lk *LockKeeper) Clear() {
+	lk.mu.Lock()
+	defer lk.mu.Unlock()
+
+	lk.locks = make(map[string]*Lock)
+}
+
 // genDDLLockID generates DDL lock ID from its info.
 func genDDLLockID(info Info) string {
 	return fmt.Sprintf("%s-%s", info.Task, dbutil.TableName(info.Schema, info.Table))

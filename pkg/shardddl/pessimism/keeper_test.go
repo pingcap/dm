@@ -73,8 +73,11 @@ func (t *testLockKeeper) TestLockKeeper(c *C) {
 
 	// remove lock.
 	c.Assert(lk.RemoveLock(lockID1), IsTrue)
-	c.Assert(lk.RemoveLock(lockID2), IsTrue)
 	c.Assert(lk.RemoveLock(lockIDNotExists), IsFalse)
+	c.Assert(lk.Locks(), HasLen, 1)
+
+	// clear locks.
+	lk.Clear()
 
 	// no locks exist.
 	c.Assert(lk.Locks(), HasLen, 0)

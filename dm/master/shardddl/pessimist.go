@@ -36,14 +36,18 @@ type Pessimist struct {
 
 	cli *clientv3.Client
 	lk  *pessimism.LockKeeper
+
+	// sources used to get all sources relative to the give task.
+	sources func(task string) []string
 }
 
 // NewPessimist creates a new Pessimist instance.
-func NewPessimist(pLogger *log.Logger) *Pessimist {
+func NewPessimist(pLogger *log.Logger, sources func(task string) []string) *Pessimist {
 	return &Pessimist{
-		logger: pLogger.WithFields(zap.String("component", "shard DDL pessimist")),
-		closed: true, // mark as closed before started.
-		lk:     pessimism.NewLockKeeper(),
+		logger:  pLogger.WithFields(zap.String("component", "shard DDL pessimist")),
+		closed:  true, // mark as closed before started.
+		lk:      pessimism.NewLockKeeper(),
+		sources: sources,
 	}
 }
 
@@ -51,6 +55,8 @@ func NewPessimist(pLogger *log.Logger) *Pessimist {
 func (p *Pessimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	p.lk.Clear() // clear all previous locks to support re-Start.
 
 	// get the history shard DDL info.
 	ifm, rev, err := pessimism.GetAllInfo(etcdCli)
@@ -69,7 +75,7 @@ func (p *Pessimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 	// recover the shard DDL lock based on history shard DDL info & lock operation.
 	for _, ifs := range ifm {
 		for source, info := range ifs {
-			lockID, synced, _, err2 := p.lk.TrySync(info, []string{source})
+			lockID, synced, _, err2 := p.lk.TrySync(info, p.sources(info.Task))
 			if err2 != nil {
 				return err2
 			} else if !synced {
@@ -146,6 +152,11 @@ func (p *Pessimist) Close() {
 	p.closed = true // closed now.
 }
 
+// Locks return all shard DDL locks current exist.
+func (p *Pessimist) Locks() map[string]*pessimism.Lock {
+	return p.lk.Locks()
+}
+
 // handleInfoPut handles the shard DDL lock info PUTed.
 func (p *Pessimist) handleInfoPut(ctx context.Context, infoCh <-chan pessimism.Info) {
 	for {
@@ -157,7 +168,7 @@ func (p *Pessimist) handleInfoPut(ctx context.Context, infoCh <-chan pessimism.I
 				return
 			}
 			p.logger.Info("receive a shard DDL info", zap.Stringer("info", info))
-			lockID, synced, remain, err := p.lk.TrySync(info, []string{info.Source})
+			lockID, synced, remain, err := p.lk.TrySync(info, p.sources(info.Task))
 			if err != nil {
 				// TODO: add & update metrics.
 				p.logger.Error("fail to try sync shard DDL lock", zap.Stringer("info", info), log.ShortError(err))
