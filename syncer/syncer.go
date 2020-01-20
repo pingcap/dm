@@ -318,7 +318,7 @@ func (s *Syncer) Init(ctx context.Context) (err error) {
 
 	s.bwList, err = filter.New(s.cfg.CaseSensitive, s.cfg.BWList)
 	if err != nil {
-		return terror.ErrSyncerUnitNewBWList.Delegate(err)
+		return terror.ErrSyncerUnitGenBWList.Delegate(err)
 	}
 
 	s.binlogFilter, err = bf.NewBinlogEvent(s.cfg.CaseSensitive, s.cfg.FilterRules)
@@ -470,7 +470,8 @@ func (s *Syncer) initShardingGroups() error {
 // IsFreshTask implements Unit.IsFreshTask
 func (s *Syncer) IsFreshTask(ctx context.Context) (bool, error) {
 	globalPoint := s.checkpoint.GlobalPoint()
-	return globalPoint.Compare(minCheckpoint) <= 0, nil
+	tablePoint := s.checkpoint.TablePoint()
+	return binlog.ComparePosition(globalPoint, minCheckpoint) <= 0 && len(tablePoint) == 0, nil
 }
 
 func (s *Syncer) resetReplicationSyncer() {
@@ -1115,9 +1116,10 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 			s.tctx.L().Error("panic log", zap.Reflect("error message", err1), zap.Stack("statck"))
 			err = terror.ErrSyncerUnitPanic.Generate(err1)
 		}
-		// flush the jobs channels, but if error occurred, we should not flush the checkpoints
-		if err1 := s.flushJobs(); err1 != nil {
-			s.tctx.L().Error("fail to finish all jobs when binlog replication exits", log.ShortError(err1))
+
+		s.jobWg.Wait()
+		if err2 := s.flushCheckPoints(); err2 != nil {
+			s.tctx.L().Warn("fail to flush check points when exit task", zap.Error(err2))
 		}
 	}()
 
@@ -1722,11 +1724,19 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			s.tctx.L().Info("replace ddls to preset ddls by sql operator in normal mode", zap.String("event", "query"), zap.Strings("preset ddls", appliedSQLs), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("position", ec.currentPos))
 			needHandleDDLs = appliedSQLs // maybe nil
 		}
+
 		job := newDDLJob(nil, needHandleDDLs, *ec.lastPos, *ec.currentPos, nil, nil, *ec.traceID)
 		err = s.addJobFunc(job)
 		if err != nil {
 			return err
 		}
+
+		// when add ddl job, will execute ddl and then flush checkpoint.
+		// if execute ddl failed, the execErrorDetected will be true.
+		if s.execErrorDetected.Get() {
+			return terror.ErrSyncerUnitHandleDDLFailed.Generate(ev.Query)
+		}
+
 		s.tctx.L().Info("finish to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("position", ec.currentPos))
 
 		for _, tbl := range targetTbls {
@@ -1907,6 +1917,10 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	err = s.addJobFunc(job)
 	if err != nil {
 		return err
+	}
+
+	if s.execErrorDetected.Get() {
+		return terror.ErrSyncerUnitHandleDDLFailed.Generate(ev.Query)
 	}
 
 	if len(onlineDDLTableNames) > 0 {
@@ -2347,7 +2361,7 @@ func (s *Syncer) Update(cfg *config.SubTaskConfig) error {
 	oldBwList = s.bwList
 	s.bwList, err = filter.New(cfg.CaseSensitive, cfg.BWList)
 	if err != nil {
-		return terror.ErrSyncerUnitNewBWList.Delegate(err)
+		return terror.ErrSyncerUnitGenBWList.Delegate(err)
 	}
 
 	// update route

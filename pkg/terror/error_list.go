@@ -349,7 +349,8 @@ const (
 	codeSyncerUnitReopenStreamNotSupport
 	codeSyncerUnitUpdateConfigInSharding
 	codeSyncerUnitExecWithNoBlockingDDL
-	codeSyncerUnitNewBWList
+	codeSyncerUnitGenBWList
+	codeSyncerUnitHandleDDLFailed
 )
 
 // DM-master error code
@@ -796,7 +797,8 @@ var (
 	ErrSyncerUnitReopenStreamNotSupport     = New(codeSyncerUnitReopenStreamNotSupport, ClassSyncUnit, ScopeInternal, LevelHigh, "reopen %T not supported")
 	ErrSyncerUnitUpdateConfigInSharding     = New(codeSyncerUnitUpdateConfigInSharding, ClassSyncUnit, ScopeInternal, LevelHigh, "try update config when some tables' (%v) sharding DDL not synced not supported")
 	ErrSyncerUnitExecWithNoBlockingDDL      = New(codeSyncerUnitExecWithNoBlockingDDL, ClassSyncUnit, ScopeInternal, LevelHigh, "process unit not waiting for sharding DDL to sync")
-	ErrSyncerUnitNewBWList                  = New(codeSyncerUnitNewBWList, ClassSyncUnit, ScopeInternal, LevelHigh, "new black white list")
+	ErrSyncerUnitGenBWList                  = New(codeSyncerUnitGenBWList, ClassSyncUnit, ScopeInternal, LevelHigh, "generate black white list")
+	ErrSyncerUnitHandleDDLFailed            = New(codeSyncerUnitHandleDDLFailed, ClassSyncUnit, ScopeInternal, LevelHigh, "fail to handle ddl job for %s")
 
 	// DM-master error
 	ErrMasterSQLOpNilRequest       = New(codeMasterSQLOpNilRequest, ClassDMMaster, ScopeInternal, LevelMedium, "nil request not valid")

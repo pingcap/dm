@@ -230,3 +230,120 @@ func (t *testPositionSuite) TestVerifyUUIDSuffix(c *C) {
 		c.Assert(verifyUUIDSuffix(cs.suffix), Equals, cs.valid)
 	}
 }
+
+func (t *testPositionSuite) TestAdjustPosition(c *C) {
+	cases := []struct {
+		pos         gmysql.Position
+		adjustedPos gmysql.Position
+	}{
+		{
+			gmysql.Position{
+				"mysql-bin.00001",
+				123,
+			},
+			gmysql.Position{
+				"mysql-bin.00001",
+				123,
+			},
+		}, {
+			gmysql.Position{
+				"mysql-bin|00001.00002",
+				123,
+			},
+			gmysql.Position{
+				"mysql-bin.00002",
+				123,
+			},
+		}, {
+			gmysql.Position{
+				"mysql-bin|00001.00002.00003",
+				123,
+			},
+			gmysql.Position{
+				"mysql-bin|00001.00002.00003",
+				123,
+			},
+		},
+	}
+
+	for _, cs := range cases {
+		adjustedPos := AdjustPosition(cs.pos)
+		c.Assert(adjustedPos.Name, Equals, cs.adjustedPos.Name)
+		c.Assert(adjustedPos.Pos, Equals, cs.adjustedPos.Pos)
+	}
+}
+
+func (t *testPositionSuite) TestComparePosition(c *C) {
+	cases := []struct {
+		pos1 gmysql.Position
+		pos2 gmysql.Position
+		cmp  int
+	}{
+		{
+			gmysql.Position{
+				Name: "mysql-bin.00001",
+				Pos:  123,
+			},
+			gmysql.Position{
+				Name: "mysql-bin.00002",
+				Pos:  123,
+			},
+			-1,
+		}, {
+			gmysql.Position{
+				Name: "mysql-bin.00001",
+				Pos:  123,
+			},
+			gmysql.Position{
+				Name: "mysql-bin.00001",
+				Pos:  123,
+			},
+			0,
+		}, {
+			gmysql.Position{
+				Name: "mysql-bin.00002",
+				Pos:  123,
+			},
+			gmysql.Position{
+				Name: "mysql-bin.00001",
+				Pos:  123,
+			},
+			1,
+		}, {
+			gmysql.Position{
+				Name: "mysql-bin|00001.00002",
+				Pos:  123,
+			},
+			gmysql.Position{
+				Name: "mysql-bin|00002.00001",
+				Pos:  123,
+			},
+			-1,
+		}, {
+			gmysql.Position{
+				Name: "mysql-bin|00001.00002",
+				Pos:  123,
+			},
+			gmysql.Position{
+				Name: "mysql-bin|00001.00002",
+				Pos:  123,
+			},
+			0,
+		}, {
+			gmysql.Position{
+				Name: "mysql-bin|00002.00001",
+				Pos:  123,
+			},
+			gmysql.Position{
+				Name: "mysql-bin|00001.00002",
+				Pos:  123,
+			},
+			1,
+		},
+	}
+
+	for _, cs := range cases {
+		cmp := ComparePosition(cs.pos1, cs.pos2)
+		c.Assert(cmp, Equals, cs.cmp)
+	}
+}
