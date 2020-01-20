@@ -23,9 +23,6 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/pingcap/errors"
-	"go.uber.org/zap"
-
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -151,15 +148,6 @@ func (c *Config) Parse(arguments []string) error {
 		return terror.ErrWorkerInvalidFlag.Generate(c.flagSet.Arg(0))
 	}
 
-	err = log.InitLogger(&log.Config{
-		File:  c.LogFile,
-		Level: strings.ToLower(c.LogLevel),
-	})
-	if err != nil {
-		fmt.Printf("init logger error %v", errors.ErrorStack(err))
-		return err
-	}
-
 	return c.adjust()
 }
 
@@ -183,7 +171,7 @@ func (c *Config) adjust() error {
 	}
 
 	if c.Name == "" {
-		log.L().Info("worker name is not given, we will set AdvertiseAddr as the worker name", zap.String("AdvertiseAddr", c.AdvertiseAddr))
+		fmt.Printf("worker name is not given, we will set AdvertiseAddr %s as the worker name\n", c.AdvertiseAddr)
 		c.Name = c.AdvertiseAddr
 	}
 

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/pingcap/dm/dm/worker"
@@ -37,6 +38,15 @@ func main() {
 		os.Exit(0)
 	default:
 		fmt.Printf("parse cmd flags err: %s", errors.ErrorStack(err))
+		os.Exit(2)
+	}
+
+	err = log.InitLogger(&log.Config{
+		File:  cfg.LogFile,
+		Level: strings.ToLower(cfg.LogLevel),
+	})
+	if err != nil {
+		fmt.Printf("init logger error %v", errors.ErrorStack(err))
 		os.Exit(2)
 	}
 
