@@ -687,16 +687,16 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		subTaskCfgs = append(subTaskCfgs, subTaskcfg)
 	}
 
-	if len(cfg.RelayBinLogName) == 0 && len(cfg.RelayBinlogGTID) == 0 {
-		minPos, err := getMinPosInAllSubTasks(subTaskCfgs)
-		if err != nil {
-			return err
-		}
+	minPos, err := getMinPosInAllSubTasks(subTaskCfgs)
+	if err != nil {
+		return err
+	}
 
-		// TODO: support GTID
-		if minPos != nil {
-			cfg.RelayBinLogName = binlog.AdjustPosition(*minPos).Name
-		}
+	// TODO: support GTID
+	// don't contain GTID information in checkpoint table, just set it to empty
+	if minPos != nil {
+		cfg.RelayBinLogName = binlog.AdjustPosition(*minPos).Name
+		cfg.RelayBinlogGTID = ""
 	}
 
 	log.L().Info("start workers", zap.Reflect("subTasks", subTaskCfgs))
