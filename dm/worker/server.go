@@ -15,7 +15,6 @@ package worker
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -25,10 +24,10 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/binlog"
-	"github.com/pingcap/dm/pkg/conn"
+	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
-	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/dm/syncer"
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go-mysql/mysql"
@@ -668,7 +667,7 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 
 	subTaskCfgs := make([]*config.SubTaskConfig, 0, 3)
 
-	ectx, cancel := context.WithTimeout(s.etcdClient.Ctx(), time.Second*3)
+	ectx, cancel := context.WithTimeout(s.etcdClient.Ctx(), time.Second*5)
 	defer cancel()
 	key := common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID)
 	resp, err := s.etcdClient.KV.Get(ectx, key, clientv3.WithPrefix())
@@ -687,7 +686,7 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		subTaskCfgs = append(subTaskCfgs, subTaskcfg)
 	}
 
-	minPos, err := getMinPosInAllSubTasks(subTaskCfgs)
+	minPos, err := getMinPosInAllSubTasks(ectx, subTaskCfgs)
 	if err != nil {
 		return err
 	}
@@ -785,9 +784,9 @@ func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {
 
 // all subTask in subTaskCfgs should have same source
 // this function return the min position in all subtasks, used for relay's position
-func getMinPosInAllSubTasks(subTaskCfgs []*config.SubTaskConfig) (minPos *mysql.Position, err error) {
+func getMinPosInAllSubTasks(ctx context.Context, subTaskCfgs []*config.SubTaskConfig) (minPos *mysql.Position, err error) {
 	for _, subTaskCfg := range subTaskCfgs {
-		pos, err := getMinPosForSubTaskFunc(subTaskCfg)
+		pos, err := getMinPosForSubTaskFunc(ctx, subTaskCfg)
 		if err != nil {
 			return nil, err
 		}
@@ -808,59 +807,24 @@ func getMinPosInAllSubTasks(subTaskCfgs []*config.SubTaskConfig) (minPos *mysql.
 	return minPos, nil
 }
 
-func getMinPosForSubTask(subTaskCfg *config.SubTaskConfig) (minPos *mysql.Position, err error) {
-	dbCfg := subTaskCfg.To
-	dbCfg.RawDBCfg = config.DefaultRawDBConfig().SetReadTimeout("10s")
-	db, err := conn.DefaultDBProvider.Apply(dbCfg)
-	if err != nil {
-		return nil, terror.WithScope(err, terror.ScopeDownstream)
-	}
-	defer db.Close()
-
-	// only read the sync unit's checkpoint information
-	syncCheckpointTable := fmt.Sprintf("%s_syncer_checkpoint", subTaskCfg.Name)
-	exist, err := utils.TableExists(db.DB, subTaskCfg.MetaSchema, syncCheckpointTable)
-	if err != nil {
-		return nil, err
-	}
-	if !exist {
+func getMinPosForSubTask(ctx context.Context, subTaskCfg *config.SubTaskConfig) (minPos *mysql.Position, err error) {
+	if subTaskCfg.Mode == config.ModeFull {
 		return nil, nil
 	}
 
-	query := fmt.Sprintf("SELECT `binlog_name`, `binlog_pos` FROM %s.%s where id = ?", subTaskCfg.MetaSchema, syncCheckpointTable)
-	rows, err := db.DB.Query(query, subTaskCfg.SourceID)
+	tctx := tcontext.Background().WithLogger(log.With())
+	checkpoint := syncer.NewRemoteCheckPoint(tctx, subTaskCfg, subTaskCfg.SourceID)
+	err = checkpoint.Init(tctx)
 	if err != nil {
-		return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
+		return nil, err
 	}
-	defer rows.Close()
+	defer checkpoint.Close()
 
-	for rows.Next() {
-		var (
-			binlogName string
-			binlogPos  uint32
-		)
-		err = rows.Scan(&binlogName, &binlogPos)
-		if err != nil {
-			return nil, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-		}
-
-		if len(binlogName) == 0 {
-			continue
-		}
-
-		pos := &mysql.Position{
-			Name: binlogName,
-			Pos:  binlogPos,
-		}
-
-		if minPos == nil {
-			minPos = pos
-		} else {
-			if minPos.Compare(*pos) >= 1 {
-				minPos = pos
-			}
-		}
+	err = checkpoint.Load(tctx, nil)
+	if err != nil {
+		return nil, err
 	}
 
-	return minPos, nil
+	pos := checkpoint.GlobalPoint()
+	return &pos, nil
 }

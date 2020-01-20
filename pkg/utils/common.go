@@ -16,7 +16,6 @@ package utils
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"strings"
 	"time"
 
@@ -232,28 +231,4 @@ func CompareShardingDDLs(s, t []string) bool {
 	}
 
 	return true
-}
-
-// TableExists returns whether the table exists
-func TableExists(db *sql.DB, schema, table string) (bool, error) {
-	query := fmt.Sprintf("SELECT count(*) FROM information_schema.tables WHERE table_schema = ? AND table_name = ? LIMIT 1;")
-	rows, err := db.Query(query, schema, table)
-	if err != nil {
-		return false, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-	}
-	defer rows.Close()
-
-	var count int
-	for rows.Next() {
-		err = rows.Scan(&count)
-		if err != nil {
-			return false, terror.DBErrorAdapt(err, terror.ErrDBDriverError)
-		}
-	}
-
-	if rows.Err() != nil {
-		return false, terror.DBErrorAdapt(rows.Err(), terror.ErrDBDriverError)
-	}
-
-	return count == 1, nil
 }

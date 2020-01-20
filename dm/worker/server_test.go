@@ -340,13 +340,13 @@ func (t *testServer) TestGetMinPosInAllSubTasks(c *C) {
 			Name: "test1",
 		},
 	}
-	minPos, err := getMinPosInAllSubTasks(subTaskCfg)
+	minPos, err := getMinPosInAllSubTasks(context.Background(), subTaskCfg)
 	c.Assert(err, IsNil)
 	c.Assert(minPos.Name, Equals, "mysql-binlog.00001")
 	c.Assert(minPos.Pos, Equals, uint32(12))
 }
 
-func getFakePosForSubTask(subTaskCfg *config.SubTaskConfig) (minPos *mysql.Position, err error) {
+func getFakePosForSubTask(ctx context.Context, subTaskCfg *config.SubTaskConfig) (minPos *mysql.Position, err error) {
 	switch subTaskCfg.Name {
 	case "test1":
 		return &mysql.Position{
