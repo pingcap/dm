@@ -1715,7 +1715,8 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 		return makeMysqlWorkerResponse(err)
 	}
 	var resp *pb.MysqlWorkerResponse
-	if req.Op == pb.WorkerOp_StartWorker {
+	switch req.Op {
+	case pb.WorkerOp_StartWorker:
 		w := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
 		if w != nil {
 			return &pb.MysqlWorkerResponse{
@@ -1736,7 +1737,7 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 		}
 		// TODO: handle error or backoff
 		s.coordinator.HandleStartedWorker(w, cfg, true)
-	} else if req.Op == pb.WorkerOp_UpdateConfig {
+	case pb.WorkerOp_UpdateConfig:
 		w := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
 		if w == nil {
 			return &pb.MysqlWorkerResponse{
@@ -1747,7 +1748,7 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 		if resp, err = w.OperateMysqlWorker(ctx, req, s.cfg.RPCTimeout); err != nil {
 			return makeMysqlWorkerResponse(err)
 		}
-	} else if req.Op == pb.WorkerOp_StopWorker {
+	case pb.WorkerOp_StopWorker:
 		w := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
 		if w == nil {
 			return &pb.MysqlWorkerResponse{
@@ -1764,17 +1765,14 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 		if resp.Result {
 			s.coordinator.HandleStoppedWorker(w, cfg)
 		}
-	} else {
+	default:
 		return &pb.MysqlWorkerResponse{
 			Result: false,
 			Msg:    "invalid operate on worker",
 		}, nil
 	}
 
-	return &pb.MysqlWorkerResponse{
-		Result: resp.Result,
-		Msg:    resp.Msg,
-	}, nil
+	return resp, nil
 }
 
 func (s *Server) generateSubTask(ctx context.Context, task string) (*config.TaskConfig, []*config.SubTaskConfig, error) {
