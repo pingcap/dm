@@ -667,8 +667,8 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 
 	subTaskCfgs := make([]*config.SubTaskConfig, 0, 3)
 
-	ectx, cancel := context.WithTimeout(s.etcdClient.Ctx(), time.Second*5)
-	defer cancel()
+	ectx, ecancel := context.WithTimeout(s.etcdClient.Ctx(), time.Second*3)
+	defer ecancel()
 	key := common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID)
 	resp, err := s.etcdClient.KV.Get(ectx, key, clientv3.WithPrefix())
 	if err != nil {
@@ -686,7 +686,9 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		subTaskCfgs = append(subTaskCfgs, subTaskcfg)
 	}
 
-	minPos, err := getMinPosInAllSubTasks(ectx, subTaskCfgs)
+	dctx, dcancel := context.WithTimeout(s.etcdClient.Ctx(), time.Duration(len(subTaskCfgs))*3*time.Second)
+	defer dcancel()
+	minPos, err := getMinPosInAllSubTasks(dctx, subTaskCfgs)
 	if err != nil {
 		return err
 	}
@@ -812,7 +814,7 @@ func getMinPosForSubTask(ctx context.Context, subTaskCfg *config.SubTaskConfig) 
 		return nil, nil
 	}
 
-	tctx := tcontext.Background().WithLogger(log.With())
+	tctx := tcontext.NewContext(ctx, log.L())
 	checkpoint := syncer.NewRemoteCheckPoint(tctx, subTaskCfg, subTaskCfg.SourceID)
 	err = checkpoint.Init(tctx)
 	if err != nil {
