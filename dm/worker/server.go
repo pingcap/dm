@@ -692,6 +692,8 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		if err != nil {
 			return err
 		}
+
+		// TODO: support GTID
 		if minPos != nil {
 			cfg.RelayBinLogName = binlog.AdjustPosition(*minPos).Name
 		}
