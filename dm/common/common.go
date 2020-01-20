@@ -41,7 +41,7 @@ var (
 	UpstreamSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/upstream/subtask/")
 )
 
-func keyAdapterValueLen(s KeyAdapter) int {
+func keyAdapterKeysLen(s KeyAdapter) int {
 	switch s {
 	case WorkerRegisterKeyAdapter, UpstreamConfigKeyAdapter, UpstreamBoundWorkerKeyAdapter:
 		return 1
@@ -78,7 +78,7 @@ func (s keyEncoderDecoder) Encode(keys ...string) string {
 func (s keyEncoderDecoder) Decode(key string) ([]string, error) {
 	v := strings.TrimPrefix(key, string(s))
 	vals := strings.Split(v, "/")
-	if l := keyAdapterValueLen(s); l != len(vals) {
+	if l := keyAdapterKeysLen(s); l != len(vals) {
 		return nil, terror.ErrDecodeEtcdKeyFail.Generate(fmt.Sprintf("decoder is %s, the key is %s", string(s), key))
 	}
 	return vals, nil
@@ -98,7 +98,7 @@ func (s keyHexEncoderDecoder) Encode(keys ...string) string {
 
 func (s keyHexEncoderDecoder) Decode(key string) ([]string, error) {
 	v := strings.Split(strings.TrimPrefix(key, string(s)), "/")
-	if l := keyAdapterValueLen(s); l != len(v) {
+	if l := keyAdapterKeysLen(s); l != len(v) {
 		return nil, terror.ErrDecodeEtcdKeyFail.Generate(fmt.Sprintf("decoder is %s, the key is %s", string(s), key))
 	}
 	for i, k := range v {
