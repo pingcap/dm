@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 
 	"go.etcd.io/etcd/clientv3"
+	"go.etcd.io/etcd/clientv3/clientv3util"
 	"go.etcd.io/etcd/mvcc/mvccpb"
 	"go.uber.org/zap"
 
@@ -72,16 +73,25 @@ func operationFromJSON(s string) (o Operation, err error) {
 }
 
 // PutOperations puts the shard DDL operations into etcd.
-// if `skipDone` is `true`, and the `done` filed in any of these operations in etcd is also `true`,
-// then this `PutOperations` skip to overwrite the k/v in etcd.
+// if `skipDone` is `true`:
+//   - PUT: all of kvs ("not exist" or "the `done` field is not `true`")
+//   - skip PUT: any of kvs ("exist" and "the `done` field is `true`")
+// NOTE:
+//   `clientv3.Value` has a strange behavior for *not-exist* kv,
+//   see https://github.com/etcd-io/etcd/issues/10566.
+//   In addition, etcd compare has no `OR` operator now,
+//   see https://github.com/etcd-io/etcd/issues/10571.
+//   So, it's hard to do our `skipDone` logic in one txn.
+//   We break the logic into two txn, but this may lead to problem when PUT operations concurrently.
 // This function should often be called by DM-master.
-func PutOperations(cli *clientv3.Client, skipDone bool, ops ...Operation) (int64, bool, error) {
-	cmps := make([]clientv3.Cmp, 0, len(ops))
+func PutOperations(cli *clientv3.Client, skipDone bool, ops ...Operation) (rev int64, putted bool, err error) {
+	cmpsNotExist := make([]clientv3.Cmp, 0, len(ops))
+	cmpsNotDone := make([]clientv3.Cmp, 0, len(ops))
 	opsPut := make([]clientv3.Op, 0, len(ops))
 	for _, op := range ops {
-		value, err := op.toJSON()
-		if err != nil {
-			return 0, false, err
+		value, err2 := op.toJSON()
+		if err2 != nil {
+			return 0, false, err2
 		}
 
 		key := common.ShardDDLPessimismOperationKeyAdapter.Encode(op.Task, op.Source)
@@ -90,18 +100,29 @@ func PutOperations(cli *clientv3.Client, skipDone bool, ops ...Operation) (int64
 		if skipDone {
 			opDone := op
 			opDone.Done = true // set `done` to `true`.
-			valueDone, err2 := opDone.toJSON()
-			if err2 != nil {
-				return 0, false, err2
+			valueDone, err3 := opDone.toJSON()
+			if err3 != nil {
+				return 0, false, err3
 			}
-			cmps = append(cmps, clientv3.Compare(clientv3.Value(key), "!=", valueDone))
+			cmpsNotExist = append(cmpsNotExist, clientv3util.KeyMissing(key))
+			cmpsNotDone = append(cmpsNotDone, clientv3.Compare(clientv3.Value(key), "!=", valueDone))
 		}
 	}
 
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
 
-	resp, err := cli.Txn(ctx).If(cmps...).Then(opsPut...).Commit()
+	// txn 1: try to PUT if all of kvs "not exist".
+	resp, err := cli.Txn(ctx).If(cmpsNotExist...).Then(opsPut...).Commit()
+	if err != nil {
+		return 0, false, err
+	} else if resp.Succeeded {
+		return resp.Header.Revision, resp.Succeeded, nil
+	}
+
+	// txn 2: try to PUT if all of kvs "the `done` field is not `true`.
+	// FIXME: if any "not `done`" kv putted after txn 1, this txn 2 will fail, but this is not what we want.
+	resp, err = cli.Txn(ctx).If(cmpsNotDone...).Then(opsPut...).Commit()
 	if err != nil {
 		return 0, false, err
 	}

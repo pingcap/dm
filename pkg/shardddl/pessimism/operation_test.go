@@ -104,9 +104,38 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	c.Assert(opm[task2], HasLen, 1)
 	c.Assert(opm[task2][source1], DeepEquals, op21)
 
-	// delete op11.
-	_, err = DeleteOperations(etcdTestCli, op11)
+	// put for `skipDone` with `done` in etcd, the operations should not be skipped.
+	// case: all of kvs "the `done` field is not `true`".
+	rev5, succ, err := PutOperations(etcdTestCli, true, op11, op12)
 	c.Assert(err, IsNil)
+	c.Assert(succ, IsTrue)
+	c.Assert(rev5, Greater, rev4)
+
+	// delete op11.
+	rev6, err := DeleteOperations(etcdTestCli, op11)
+	c.Assert(err, IsNil)
+	c.Assert(rev6, Greater, rev5)
+
+	// get again, op11 should be deleted.
+	opm, _, err = GetAllOperations(etcdTestCli)
+	c.Assert(err, IsNil)
+	c.Assert(opm[task1], HasLen, 1)
+	c.Assert(opm[task1][source2], DeepEquals, op12)
+
+	// put for `skipDone` with `done` in etcd, the operations should not be skipped.
+	// case: all of kvs "not exist".
+	rev7, succ, err := PutOperations(etcdTestCli, true, op11, op13)
+	c.Assert(err, IsNil)
+	c.Assert(succ, IsTrue)
+	c.Assert(rev7, Greater, rev6)
+
+	// get again, op11 and op13 should be putted.
+	opm, _, err = GetAllOperations(etcdTestCli)
+	c.Assert(err, IsNil)
+	c.Assert(opm[task1], HasLen, 3)
+	c.Assert(opm[task1][source1], DeepEquals, op11)
+	c.Assert(opm[task1][source2], DeepEquals, op12)
+	c.Assert(opm[task1][source3], DeepEquals, op13)
 
 	// update op12 to `done`.
 	op12c := op12
@@ -116,15 +145,33 @@ func (t *testForEtcd) TestOperationEtcd(c *C) {
 	txnResp, err := etcdTestCli.Txn(context.Background()).Then(putOp).Commit()
 	c.Assert(err, IsNil)
 
-	// put for `skipDone` with `done` in etcd, the operations should be skipped.
-	rev5, succ, err := PutOperations(etcdTestCli, true, op12, op13)
+	// delete op13.
+	rev8, err := DeleteOperations(etcdTestCli, op13)
 	c.Assert(err, IsNil)
-	c.Assert(succ, IsFalse)                         // `if` not evaluated to `true`
-	c.Assert(rev5, Equals, txnResp.Header.Revision) // same revision with the previous etcd operation.
+	c.Assert(rev8, Greater, txnResp.Header.Revision)
 
-	// get again, op11 deleted, op13 not putted.
+	// put for `skipDone` with `done` in etcd, the operations should be skipped.
+	// case: any of kvs ("exist" and "the `done` field is `true`").
+	rev9, succ, err := PutOperations(etcdTestCli, true, op12, op13)
+	c.Assert(err, IsNil)
+	c.Assert(succ, IsFalse)
+	c.Assert(rev9, Equals, rev8)
+
+	// get again, op13 not putted.
 	opm, _, err = GetAllOperations(etcdTestCli)
 	c.Assert(err, IsNil)
-	c.Assert(opm[task1], HasLen, 1)
+	c.Assert(opm[task1], HasLen, 2)
+	c.Assert(opm[task1][source1], DeepEquals, op11)
 	c.Assert(opm[task1][source2], DeepEquals, op12c)
+
+	// FIXME: the right result:
+	//   the operations should *NOT* be skipped.
+	// case:
+	//   - some of kvs "exist" and "the `done` field is not `true`"
+	//   - some of kvs "not exist"
+	// after FIXED, this test case will fail and need to be updated.
+	rev10, succ, err := PutOperations(etcdTestCli, true, op11, op13)
+	c.Assert(err, IsNil)
+	c.Assert(succ, IsFalse)
+	c.Assert(rev10, Equals, rev9)
 }
