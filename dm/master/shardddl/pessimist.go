@@ -177,6 +177,8 @@ func (p *Pessimist) handleInfoPut(ctx context.Context, infoCh <-chan pessimism.I
 				p.logger.Info("the shard DDL lock has not synced", zap.String("lock", lockID), zap.Int("remain", remain))
 				continue
 			}
+			p.logger.Info("the shard DDL lock has synced", zap.String("lock", lockID))
+
 			err = p.handleLock(lockID)
 			if err != nil {
 				// TODO: add & update metrics.
