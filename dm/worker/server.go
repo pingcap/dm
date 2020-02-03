@@ -123,12 +123,11 @@ func (s *Server) Start() error {
 						s.Unlock()
 					}
 				}
-				ch := time.NewTicker(retryConnectSleepTime)
 				select {
 				case <-s.ctx.Done():
 					shouldExit = true
 					break
-				case <-ch.C:
+				case <-time.After(retryConnectSleepTime):
 					// Try to connect master again
 					break
 				}
