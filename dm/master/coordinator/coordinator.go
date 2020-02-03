@@ -101,7 +101,7 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 
 	resp, err = etcdClient.Get(ectx, common.UpstreamConfigKeyAdapter.Path(), clientv3.WithPrefix())
 	if err != nil {
-		return nil
+		return err
 	}
 
 	for _, kv := range resp.Kvs {
@@ -124,7 +124,7 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 
 	resp, err = etcdClient.Get(ectx, common.UpstreamBoundWorkerKeyAdapter.Path(), clientv3.WithPrefix())
 	if err != nil {
-		return nil
+		return err
 	}
 
 	for _, kv := range resp.Kvs {
@@ -150,13 +150,15 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 		log.L().Info("load config successful", zap.String("source", sourceID), zap.String("config", cfgStr))
 	}
 
-	c.started = true
-	c.ctx, c.cancel = context.WithCancel(ctx)
 	c.wg.Add(1)
 	go func() {
 		defer c.wg.Done()
 		c.ObserveWorkers()
 	}()
+	// wait for ObserveWorkers to start
+	time.Sleep(50 * time.Millisecond)
+	c.started = true
+	c.ctx, c.cancel = context.WithCancel(ctx)
 	log.L().Info("coordinator is started")
 	return nil
 }
@@ -484,9 +486,9 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 	if w.State() == WorkerClosed {
 		ectx, cancel := context.WithTimeout(c.etcdCli.Ctx(), etcdTimeout)
 		defer cancel()
-		resp, err := c.etcdCli.Get(ectx, common.WorkerRegisterKeyAdapter.Encode(w.Address(), w.Name()))
+		resp, err := c.etcdCli.Get(ectx, common.WorkerKeepAliveKeyAdapter.Encode(w.Address(), w.Name()))
 		if err != nil {
-			if resp.Count > 0 {
+			if resp != nil && resp.Count > 0 {
 				w.SetStatus(WorkerFree)
 			}
 		}

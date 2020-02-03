@@ -284,6 +284,7 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 	if resp.Result {
 		op1 := clientv3.OpPut(common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name), req.Task)
 		resp.Msg = s.retryWriteEctd(op1)
+		resp.Result = len(resp.Msg) == 0
 	}
 	return resp, nil
 }
@@ -355,6 +356,7 @@ func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest
 	} else {
 		op1 := clientv3.OpPut(common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name), req.Task)
 		resp.Msg = s.retryWriteEctd(op1)
+		resp.Result = len(resp.Msg) == 0
 	}
 	return resp, nil
 }
@@ -647,7 +649,7 @@ func (s *Server) MigrateRelay(ctx context.Context, req *pb.MigrateRelayRequest) 
 	return makeCommonWorkerResponse(err), nil
 }
 
-func (s *Server) startWorker(cfg *config.MysqlConfig) error {
+func (s *Server) startWorker(cfg *config.MysqlConfig) (err1 error) {
 	s.Lock()
 	defer s.Unlock()
 	if w := s.getWorker(false); w != nil {
@@ -662,6 +664,12 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		return err
 	}
 	s.setWorker(w, false)
+	defer func() {
+		// close w when some error occurs
+		if err1 != nil {
+			w.Close()
+		}
+	}()
 	go func() {
 		w.Start()
 	}()
@@ -737,6 +745,7 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 			op2 = clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Encode(s.cfg.AdvertiseAddr))
 		}
 		resp.Msg = s.retryWriteEctd(op1, op2)
+		resp.Result = len(resp.Msg) == 0
 		// Because etcd was deployed with master in a single process, if we can not write data into etcd, most probably
 		// the have lost connect from master.
 	}
