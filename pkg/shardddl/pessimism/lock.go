@@ -89,6 +89,17 @@ func (l *Lock) TrySync(caller string, DDLs, sources []string) (bool, int, error)
 	return l.remain <= 0, l.remain, nil
 }
 
+// ForceSynced forces to mark the lock as synced.
+func (l *Lock) ForceSynced() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	for source := range l.ready {
+		l.ready[source] = true
+	}
+	l.remain = 0
+}
+
 // IsSynced returns whether the lock has synced.
 func (l *Lock) IsSynced() (bool, int) {
 	l.mu.RLock()

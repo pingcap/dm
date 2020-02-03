@@ -122,4 +122,11 @@ func (t *testLock) TestLock(c *C) {
 	// mark on not existing source has no effect.
 	l2.MarkDone("not-exist-source")
 	c.Assert(l2.IsResolved(), IsTrue)
+
+	// create the lock with 2 sources.
+	l3 := NewLock(ID, task, source1, DDLs, []string{source1, source2})
+	l3.ForceSynced()
+	synced, remain = l3.IsSynced()
+	c.Assert(synced, IsTrue)
+	c.Assert(remain, Equals, 0)
 }
