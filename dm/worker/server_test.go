@@ -114,6 +114,11 @@ func (t *testServer) TestServer(c *C) {
 	// check worker would retry connecting master rather than stop worker directly.
 	ETCD = t.testRetryConnectMaster(c, s, ETCD, etcdDir, hostName)
 
+	mysqlCfg := &config.MysqlConfig{}
+	c.Assert(mysqlCfg.LoadFromFile("./dm-mysql.toml"), IsNil)
+	err = s.startWorker(mysqlCfg)
+	c.Assert(err, IsNil)
+
 	// test condition hub
 	t.testConidtionHub(c, s)
 
