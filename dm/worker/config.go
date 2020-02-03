@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
@@ -169,6 +168,11 @@ func (c *Config) adjust() error {
 		if err != nil || host == "" || host == "0.0.0.0" {
 			return terror.ErrWorkerHostPortNotValid.AnnotateDelegate(err, "advertise-addr (%s) must include the 'host' part and should not be '0.0.0.0'", c.AdvertiseAddr)
 		}
+	}
+
+	if c.Name == "" {
+		fmt.Printf("worker name is not given, we will set AdvertiseAddr %s as the worker name\n", c.AdvertiseAddr)
+		c.Name = c.AdvertiseAddr
 	}
 
 	return nil

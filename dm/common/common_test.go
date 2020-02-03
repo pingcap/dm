@@ -54,16 +54,17 @@ func (t *testCommon) TestKeyAdapter(c *C) {
 			want:    "/dm-master/bound-worker/3132372e302e302e313a32333832",
 		},
 		{
-			keys:    []string{"127.0.0.1:2382"},
+			keys:    []string{"mysql1", "test"},
 			adapter: UpstreamSubTaskKeyAdapter,
-			want:    "/dm-master/upstream/subtask/3132372e302e302e313a32333832",
+			want:    "/dm-master/upstream/subtask/6d7973716c31/74657374",
 		},
 	}
 
 	for _, ca := range testCases {
 		encKey := ca.adapter.Encode(ca.keys...)
 		c.Assert(encKey, Equals, ca.want)
-		decKey := ca.adapter.Decode(encKey)
+		decKey, err := ca.adapter.Decode(encKey)
+		c.Assert(err, IsNil)
 		c.Assert(decKey, DeepEquals, ca.keys)
 	}
 }

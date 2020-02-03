@@ -18,7 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/errors"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/mvcc/mvccpb"
 	"go.uber.org/zap"
@@ -28,14 +27,12 @@ import (
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var (
 	etcdTimeout               = 3 * time.Second
 	restartMysqlWorkerTimeout = 5 * time.Second
-
-	// ErrNotStarted coordinator does not start.
-	ErrNotStarted = errors.New("coordinator does not start")
 )
 
 // Coordinator coordinate wrokers and upstream.
@@ -46,11 +43,11 @@ type Coordinator struct {
 	// upstream(source-id) -> worker
 	upstreams map[string]*Worker
 
-	// upstream(address) -> config
-	workerToConfigs map[string]string
+	// upstream(address) -> source-id
+	workerToSource map[string]string
 
-	// taskConfigs (source) -> config
-	taskConfigs map[string]config.MysqlConfig
+	// sourceConfigs (source) -> config
+	sourceConfigs map[string]config.MysqlConfig
 
 	// pending create task (sourceid) --> address
 	pendingReqSources map[string]string
@@ -67,17 +64,17 @@ type Coordinator struct {
 func NewCoordinator() *Coordinator {
 	return &Coordinator{
 		workers:           make(map[string]*Worker),
-		workerToConfigs:   make(map[string]string),
+		workerToSource:    make(map[string]string),
 		pendingReqSources: make(map[string]string),
 		upstreams:         make(map[string]*Worker),
-		taskConfigs:       make(map[string]config.MysqlConfig),
+		sourceConfigs:     make(map[string]config.MysqlConfig),
 		waitingTask:       make(chan string, 100000),
 	}
 }
 
 // Start starts the coordinator and would recover infomation from etcd.
 func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) error {
-	// TODO: recover upstreams and workerToConfigs and workers
+	// TODO: recover upstreams and workerToSource and workers
 	// workers
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -92,7 +89,11 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 	}
 
 	for _, kv := range resp.Kvs {
-		addr := common.WorkerRegisterKeyAdapter.Decode(string(kv.Key))[0]
+		kvs, err := common.WorkerRegisterKeyAdapter.Decode(string(kv.Key))
+		if err != nil {
+			return terror.Annotate(err, "decode worker register key from etcd failed")
+		}
+		addr := kvs[0]
 		name := string(kv.Value)
 		c.workers[addr] = NewWorker(name, addr, nil)
 		log.L().Info("load worker successful", zap.String("addr", addr), zap.String("name", name))
@@ -104,7 +105,11 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 	}
 
 	for _, kv := range resp.Kvs {
-		sourceID := common.UpstreamConfigKeyAdapter.Decode(string(kv.Key))[0]
+		kvs, err := common.UpstreamConfigKeyAdapter.Decode(string(kv.Key))
+		if err != nil {
+			return terror.Annotate(err, "decode upstream config key from etcd failed")
+		}
+		sourceID := kvs[0]
 		cfgStr := string(kv.Value)
 		cfg := config.NewMysqlConfig()
 		err = cfg.Parse(cfgStr)
@@ -112,7 +117,7 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 			log.L().Error("cannot parse config", zap.String("source", sourceID), zap.Error(err))
 			continue
 		}
-		c.taskConfigs[sourceID] = *cfg
+		c.sourceConfigs[sourceID] = *cfg
 		c.schedule(sourceID)
 		log.L().Info("load config successful", zap.String("source", sourceID), zap.String("config", cfgStr))
 	}
@@ -123,7 +128,11 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 	}
 
 	for _, kv := range resp.Kvs {
-		addr := common.UpstreamBoundWorkerKeyAdapter.Decode(string(kv.Key))[0]
+		kvs, err := common.UpstreamBoundWorkerKeyAdapter.Decode(string(kv.Key))
+		if err != nil {
+			return terror.Annotate(err, "decode upstream bound worker key from etcd failed")
+		}
+		addr := kvs[0]
 		sourceID := string(kv.Value)
 		w, ok := c.workers[addr]
 		if !ok {
@@ -137,7 +146,7 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 		}
 		cfgStr := string(gresp.Kvs[0].Value)
 		c.upstreams[sourceID] = w
-		c.workerToConfigs[addr] = sourceID
+		c.workerToSource[addr] = sourceID
 		log.L().Info("load config successful", zap.String("source", sourceID), zap.String("config", cfgStr))
 	}
 
@@ -194,8 +203,8 @@ func (c *Coordinator) HandleStartedWorker(w *Worker, cfg *config.MysqlConfig, su
 	defer c.mu.Unlock()
 	if succ {
 		c.upstreams[cfg.SourceID] = w
-		c.workerToConfigs[w.Address()] = cfg.SourceID
-		c.taskConfigs[cfg.SourceID] = *cfg
+		c.workerToSource[w.Address()] = cfg.SourceID
+		c.sourceConfigs[cfg.SourceID] = *cfg
 	} else {
 		w.SetStatus(WorkerFree)
 	}
@@ -206,9 +215,9 @@ func (c *Coordinator) HandleStartedWorker(w *Worker, cfg *config.MysqlConfig, su
 func (c *Coordinator) HandleStoppedWorker(w *Worker, cfg *config.MysqlConfig) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.taskConfigs, cfg.SourceID)
+	delete(c.sourceConfigs, cfg.SourceID)
 	delete(c.upstreams, cfg.SourceID)
-	delete(c.workerToConfigs, w.Address())
+	delete(c.workerToSource, w.Address())
 	w.SetStatus(WorkerFree)
 	return true
 }
@@ -219,19 +228,19 @@ func (c *Coordinator) AcquireWorkerForSource(source string) (*Worker, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.started == false {
-		return nil, ErrNotStarted
+		return nil, terror.ErrMasterCoordinatorNotStart
 	}
 	if addr, ok := c.pendingReqSources[source]; ok {
-		return nil, errors.Errorf("Acquire worker failed. the same source has been started in worker: %s", addr)
+		return nil, terror.ErrMasterAcquireWorkerFailed.Generatef("the same source has been started in worker: %s", addr)
 	}
-	if _, ok := c.taskConfigs[source]; ok {
+	if _, ok := c.sourceConfigs[source]; ok {
 		// this check is used to avoid a situation: one task is started twice by mistake but requires two workers
 		// If ok is true, there are two situations:
 		// 1. this task is mistakenly started twice, when coordinator tried to operate on the bound worker it will report an error
 		// 2. this task is paused because the bound worker was out of service before, we can give this task this worker to start it again
 		// If ok is false, that means the try on the bound worker has failed, we can arrange this task another worker
 		// ATTENTION!!! This mechanism can't prevent this case, which should be discussed later:
-		// the task is being operating to a worker(taskConfigs and upstreams haven't been updated), but it is started again to acquire worker
+		// the task is being operating to a worker(sourceConfigs and upstreams haven't been updated), but it is started again to acquire worker
 		if w, ok := c.upstreams[source]; ok {
 			return w, nil
 		}
@@ -244,7 +253,7 @@ func (c *Coordinator) AcquireWorkerForSource(source string) (*Worker, error) {
 			return w, nil
 		}
 	}
-	return nil, errors.New("Acquire worker failed. no free worker could start mysql task")
+	return nil, terror.ErrMasterAcquireWorkerFailed.Generate("no free worker could start mysql task")
 }
 
 // GetAllWorkers gets all workers.
@@ -285,7 +294,7 @@ func (c *Coordinator) GetWorkerByAddress(addr string) *Worker {
 func (c *Coordinator) GetConfigBySourceID(source string) *config.MysqlConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if cfg, ok := c.taskConfigs[source]; ok {
+	if cfg, ok := c.sourceConfigs[source]; ok {
 		return &cfg
 	}
 	return nil
@@ -321,12 +330,16 @@ func (c *Coordinator) ObserveWorkers() {
 				switch ev.Type {
 				case mvccpb.PUT:
 					log.L().Info("putkv", zap.String("kv", string(ev.Kv.Key)))
-					kvs := common.WorkerKeepAliveKeyAdapter.Decode(string(ev.Kv.Key))
+					kvs, err := common.WorkerKeepAliveKeyAdapter.Decode(string(ev.Kv.Key))
+					if err != nil {
+						log.L().Warn("coordinator decode worker keep alive key from etcd failed", zap.String("key", string(ev.Kv.Key)), zap.Error(err))
+						continue
+					}
 					addr, name := kvs[0], kvs[1]
 					c.mu.Lock()
 					if w, ok := c.workers[addr]; ok && name == w.Name() {
 						state := "Free"
-						if source, ok := c.workerToConfigs[addr]; ok {
+						if source, ok := c.workerToSource[addr]; ok {
 							// The worker connect to master before we transfer mysqltask into another worker,
 							// try schedule MySQL-task.
 							if nowWorker, ok := c.upstreams[source]; ok && nowWorker.Address() == addr {
@@ -341,12 +354,12 @@ func (c *Coordinator) ObserveWorkers() {
 								c.schedule(source)
 								state = "bound"
 							} else {
-								delete(c.workerToConfigs, addr)
+								delete(c.workerToSource, addr)
 								w.SetStatus(WorkerFree)
 								state = "free"
 							}
 						} else {
-							// If this worker has not been in 'workerToConfigs', it means that this worker must have lose connect from master more than 6s,
+							// If this worker has not been in 'workerToSource', it means that this worker must have lose connect from master more than 6s,
 							// so the mysql task in worker had stop
 							w.SetStatus(WorkerFree)
 						}
@@ -357,14 +370,18 @@ func (c *Coordinator) ObserveWorkers() {
 					c.mu.Unlock()
 				case mvccpb.DELETE:
 					log.L().Info("deletekv", zap.String("kv", string(ev.Kv.Key)))
-					kvs := common.WorkerKeepAliveKeyAdapter.Decode(string(ev.Kv.Key))
+					kvs, err := common.WorkerKeepAliveKeyAdapter.Decode(string(ev.Kv.Key))
+					if err != nil {
+						log.L().Warn("coordinator decode worker keep alive key from etcd failed", zap.String("key", string(ev.Kv.Key)), zap.Error(err))
+						continue
+					}
 					addr, name := kvs[0], kvs[1]
 					c.mu.Lock()
 					if w, ok := c.workers[addr]; ok && name == w.Name() {
 						log.L().Info("worker became offline, state: closed", zap.String("name", w.Name()), zap.String("address", w.Address()))
 						// Set client nil, and send request use new request
 						w.client = nil
-						if source, ok := c.workerToConfigs[addr]; ok {
+						if source, ok := c.workerToSource[addr]; ok {
 							c.schedule(source)
 						}
 					}
@@ -392,7 +409,7 @@ func (c *Coordinator) tryRestartMysqlTask() {
 	for hasTaskToSchedule {
 		select {
 		case source := <-c.waitingTask:
-			if cfg, ok := c.taskConfigs[source]; ok {
+			if cfg, ok := c.sourceConfigs[source]; ok {
 				ret := false
 				if w, ok := c.upstreams[source]; ok {
 					// Try start mysql task at the same worker.
@@ -435,15 +452,15 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 	if err == nil {
 		ret = resp.Result
 		if resp.Result {
-			c.workerToConfigs[w.Address()] = cfg.SourceID
+			c.workerToSource[w.Address()] = cfg.SourceID
 			c.upstreams[cfg.SourceID] = w
 			w.SetStatus(WorkerBound)
 		} else {
 			log.L().Warn("restartMysqlTask failed", zap.String("error", resp.Msg))
 			delete(c.upstreams, cfg.SourceID)
-			if source, ok := c.workerToConfigs[w.Address()]; ok {
+			if source, ok := c.workerToSource[w.Address()]; ok {
 				if source == cfg.SourceID {
-					delete(c.workerToConfigs, w.Address())
+					delete(c.workerToSource, w.Address())
 					w.SetStatus(WorkerFree)
 				} else {
 					// There may be another MySQL-task having been assigned to this worker.
@@ -459,7 +476,7 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 		// Error means there is something wrong about network, set worker to close.
 		// remove sourceID from upstreams. So the source would be schedule in other worker.
 		delete(c.upstreams, cfg.SourceID)
-		delete(c.workerToConfigs, w.Address())
+		delete(c.workerToSource, w.Address())
 		w.SetStatus(WorkerClosed)
 	}
 	delete(c.pendingReqSources, cfg.SourceID)

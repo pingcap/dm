@@ -25,6 +25,7 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
@@ -117,12 +118,11 @@ func (s *Server) Start() error {
 						s.Unlock()
 					}
 				}
-				ch := time.NewTicker(retryConnectSleepTime)
 				select {
 				case <-s.ctx.Done():
 					shouldExit = true
 					break
-				case <-ch.C:
+				case <-time.After(retryConnectSleepTime):
 					// Try to connect master again
 					break
 				}
@@ -674,7 +674,11 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		return err
 	}
 	for _, kv := range resp.Kvs {
-		infos := common.UpstreamSubTaskKeyAdapter.Decode(string(kv.Key))
+		infos, err := common.UpstreamSubTaskKeyAdapter.Decode(string(kv.Key))
+		if err != nil {
+			log.L().Error("decode upstream subtask key from etcd failed", zap.Error(err))
+			return err
+		}
 		taskName := infos[1]
 		task := string(kv.Value)
 		cfg := config.NewSubTaskConfig()
