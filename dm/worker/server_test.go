@@ -48,6 +48,12 @@ var _ = Suite(&testServer{})
 func (t *testServer) SetUpSuite(c *C) {
 	err := log.InitLogger(&log.Config{})
 	c.Assert(err, IsNil)
+
+	getMinPosForSubTaskFunc = getFakePosForSubTask
+}
+
+func (t *testServer) TearDownSuite(c *C) {
+	getMinPosForSubTaskFunc = getMinPosForSubTask
 }
 
 func createMockETCD(dir string, host string) (*embed.Etcd, error) {
@@ -325,12 +331,6 @@ func (t *testServer) testStopWorkerWhenLostConnect(c *C, s *Server, ETCD *embed.
 }
 
 func (t *testServer) TestGetMinPosInAllSubTasks(c *C) {
-	originFunc := getMinPosForSubTaskFunc
-	getMinPosForSubTaskFunc = getFakePosForSubTask
-	defer func() {
-		getMinPosForSubTaskFunc = originFunc
-	}()
-
 	subTaskCfg := []*config.SubTaskConfig{
 		{
 			Name: "test2",
