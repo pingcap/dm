@@ -411,18 +411,26 @@ func (c *Coordinator) tryRestartMysqlTask() {
 	for hasTaskToSchedule {
 		select {
 		case source := <-c.waitingTask:
+			log.L().Info("will schedule source", zap.String("source", source))
 			if cfg, ok := c.sourceConfigs[source]; ok {
 				ret := false
 				if w, ok := c.upstreams[source]; ok {
 					// Try start mysql task at the same worker.
 					c.mu.RUnlock()
+					log.L().Info("try start mysql task at the same worker", zap.String("worker", w.Address()))
 					ret = c.restartMysqlTask(w, &cfg)
 					c.mu.RLock()
 				} else {
 					c.mu.RUnlock()
-					w, _ := c.AcquireWorkerForSource(source)
-					if w != nil {
-						ret = c.restartMysqlTask(w, &cfg)
+					w, err := c.AcquireWorkerForSource(source)
+					if err != nil {
+						log.L().Error("acquire worker for source", zap.String("source", source), zap.Error(err))
+					} else {
+						if w != nil {
+							ret = c.restartMysqlTask(w, &cfg)
+						} else {
+							log.L().Info("acquire worker for source get nil worker")
+						}
 					}
 					c.mu.RLock()
 				}
@@ -474,9 +482,9 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 			}
 		}
 	} else {
-		log.L().Warn("restartMysqlTask failed", zap.Error(err))
 		// Error means there is something wrong about network, set worker to close.
 		// remove sourceID from upstreams. So the source would be schedule in other worker.
+		log.L().Warn("operate mysql worker", zap.Error(err), zap.Stringer("request", req))
 		delete(c.upstreams, cfg.SourceID)
 		delete(c.workerToSource, w.Address())
 		w.SetStatus(WorkerClosed)

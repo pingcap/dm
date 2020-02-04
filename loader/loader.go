@@ -411,6 +411,10 @@ func (l *Loader) Init(ctx context.Context) (err error) {
 	tctx := l.logCtx.WithContext(ctx)
 
 	checkpoint, err := newRemoteCheckPoint(tctx, l.cfg, l.checkpointID())
+	failpoint.Inject("ignoreLoadCheckpointErr", func(_ failpoint.Value) {
+		l.logCtx.L().Info("", zap.String("failpoint", "ignoreLoadCheckpointErr"))
+		err = nil
+	})
 	if err != nil {
 		return err
 	}
