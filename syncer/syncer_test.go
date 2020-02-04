@@ -128,8 +128,7 @@ func (s *testSyncerSuite) SetUpSuite(c *C) {
 	s.cfg.From.Adjust()
 	s.cfg.To.Adjust()
 
-	dir := c.MkDir()
-	s.cfg.RelayDir = dir
+	s.cfg.UseRelay = false
 
 	s.resetEventsGenerator(c)
 }
@@ -218,22 +217,24 @@ func (s *testSyncerSuite) mockParser(db *sql.DB, mock sqlmock.Sqlmock) (*parser.
 	return utils.GetParser(db, false)
 }
 
-func (s *testSyncerSuite) mockCheckPointCreate(checkPointMock sqlmock.Sqlmock) {
+func (s *testSyncerSuite) mockCheckPointCreate(checkPointMock sqlmock.Sqlmock, tag string) {
 	checkPointMock.ExpectBegin()
-	checkPointMock.ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
-	checkPointMock.ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+	// we encode the line number to make it easier to figure out which expectation has failed.
+	checkPointMock.ExpectExec(fmt.Sprintf("(223:"+tag+")?INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+	checkPointMock.ExpectExec(fmt.Sprintf("(224:"+tag+")?INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
 	// TODO because shardGroup DB is same as checkpoint DB, next time split them is better
-	checkPointMock.ExpectExec(fmt.Sprintf("DELETE FROM `%s`.`%s_syncer_sharding_meta", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+	checkPointMock.ExpectExec(fmt.Sprintf("(226:"+tag+")?DELETE FROM `%s`.`%s_syncer_sharding_meta(228)?", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
 	checkPointMock.ExpectCommit()
 }
 
-func (s *testSyncerSuite) mockCheckPointFlush(checkPointMock sqlmock.Sqlmock) {
+func (s *testSyncerSuite) mockCheckPointFlush(checkPointMock sqlmock.Sqlmock, tagInt int) {
+	tag := fmt.Sprintf("%d", tagInt)
 	checkPointMock.ExpectBegin()
-	checkPointMock.ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
-	checkPointMock.ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
-	checkPointMock.ExpectExec(fmt.Sprintf("INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+	checkPointMock.ExpectExec(fmt.Sprintf("(242:"+tag+")?INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+	checkPointMock.ExpectExec(fmt.Sprintf("(243:"+tag+")?INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+	checkPointMock.ExpectExec(fmt.Sprintf("(244:"+tag+")?INSERT INTO `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
 	// TODO because shardGroup DB is same as checkpoint DB, next time split them is better
-	checkPointMock.ExpectExec(fmt.Sprintf("DELETE FROM `%s`.`%s_syncer_sharding_meta", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
+	checkPointMock.ExpectExec(fmt.Sprintf("(246:"+tag+")?DELETE FROM `%s`.`%s_syncer_sharding_meta(239)?", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
 	checkPointMock.ExpectCommit()
 }
 
@@ -795,11 +796,13 @@ func (s *testSyncerSuite) TestColumnMapping(c *C) {
 
 func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	// TODO Currently mock eventGenerator don't support generate json,varchar field event, so use real mysql binlog event here
-	dbAddr := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8", s.cfg.From.User, s.cfg.From.Password, s.cfg.From.Host, s.cfg.From.Port)
+	dbAddr := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4", s.cfg.From.User, s.cfg.From.Password, s.cfg.From.Host, s.cfg.From.Port)
 	db, err := sql.Open("mysql", dbAddr)
 	if err != nil {
 		c.Fatal(err)
 	}
+	p, err := utils.GetParser(db, false)
+	c.Assert(err, IsNil)
 
 	_, err = db.Exec("SET GLOBAL binlog_format = 'ROW';")
 	c.Assert(err, IsNil)
@@ -951,7 +954,8 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 	syncer.toDBConns = []*DBConn{{baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
 	syncer.reset()
 
-	streamer, err := syncer.streamerProducer.generateStreamer(pos)
+	syncer.streamerController = NewStreamerController(tcontext.Background(), syncer.syncCfg, syncer.fromDB, syncer.binlogType, syncer.cfg.RelayDir, syncer.timezone)
+	err = syncer.streamerController.Start(tcontext.Background(), pos)
 	c.Assert(err, IsNil)
 
 	for _, testCase := range testCases {
@@ -964,27 +968,28 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 			if idx >= len(testCase.sqls) {
 				break
 			}
-			e, err := streamer.GetEvent(context.Background())
+			e, err := syncer.streamerController.GetEvent(tcontext.Background())
 			c.Assert(err, IsNil)
 			switch ev := e.Event.(type) {
 			case *replication.RowsEvent:
-				table, _, err := syncer.getTable(string(ev.Table.Schema), string(ev.Table.Table))
+				schemaName := string(ev.Table.Schema)
+				tableName := string(ev.Table.Table)
+				ti, err := syncer.getTable(schemaName, tableName, schemaName, tableName, p)
 				c.Assert(err, IsNil)
 				var (
 					sqls []string
 					args [][]interface{}
 				)
 
-				prunedColumns, prunedRows, err := pruneGeneratedColumnDML(table.columns, ev.Rows, table.schema, table.name, syncer.genColsCache)
+				prunedColumns, prunedRows, err := pruneGeneratedColumnDML(ti, ev.Rows)
 				c.Assert(err, IsNil)
 				param := &genDMLParam{
-					schema:               table.schema,
-					table:                table.name,
-					data:                 prunedRows,
-					originalData:         ev.Rows,
-					columns:              prunedColumns,
-					originalColumns:      table.columns,
-					originalIndexColumns: table.indexColumns,
+					schema:            schemaName,
+					table:             tableName,
+					data:              prunedRows,
+					originalData:      ev.Rows,
+					columns:           prunedColumns,
+					originalTableInfo: ti,
 				}
 				switch e.Header.EventType {
 				case replication.WRITE_ROWS_EVENTv0, replication.WRITE_ROWS_EVENTv1, replication.WRITE_ROWS_EVENTv2:
@@ -1253,16 +1258,23 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 
 		syncer.reset()
 		events := append(createEvents, s.generateEvents(_case.testEvents, c)...)
-		syncer.streamerProducer = &MockStreamProducer{events}
+
+		mockStreamerProducer := &MockStreamProducer{events}
+		mockStreamer, err := mockStreamerProducer.generateStreamer(mysql.Position{})
+		c.Assert(err, IsNil)
+		syncer.streamerController = &StreamerController{
+			streamerProducer: mockStreamerProducer,
+			streamer:         mockStreamer,
+		}
 
 		fromMock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
 			WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
 				AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
 
 		// mock checkpoint db after create db table1 table2
-		s.mockCheckPointCreate(checkPointMock)
-		s.mockCheckPointCreate(checkPointMock)
-		s.mockCheckPointCreate(checkPointMock)
+		s.mockCheckPointCreate(checkPointMock, "db")
+		s.mockCheckPointCreate(checkPointMock, "table1")
+		s.mockCheckPointCreate(checkPointMock, "table2")
 
 		// mock downstream db result
 		mock.ExpectBegin()
@@ -1276,13 +1288,12 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		mock.ExpectExec("CREATE TABLE").WillReturnError(e)
 		mock.ExpectCommit()
 
-		// mock get table in first handle RowEvent
-		mock.ExpectQuery("SHOW COLUMNS").WillReturnRows(
-			sqlmock.NewRows([]string{"Field", "Type", "Null", "Key", "Default", "Extra"}).AddRow("id", "int", "NO", "PRI", null, "").AddRow("age", "int", "NO", "", null, ""))
-		mock.ExpectQuery("SHOW INDEX").WillReturnRows(
-			sqlmock.NewRows([]string{"Table", "Non_unique", "Key_name", "Seq_in_index", "Column_name",
-				"Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Comment", "Index_comment"},
-			).AddRow("st", 0, "PRIMARY", 1, "id", "A", 0, null, null, null, "BTREE", "", ""))
+		// mock fetching table schema from downstream
+		// called twice for each upstream schema: once for `db`.`table1`, once for `db`.`table2`.
+		mock.ExpectQuery("SHOW CREATE TABLE `stest`.`st`").
+			WillReturnRows(sqlmock.NewRows([]string{"Table", "Create Table"}).AddRow("-", "create table st(id int, age int)"))
+		mock.ExpectQuery("SHOW CREATE TABLE `stest`.`st`").
+			WillReturnRows(sqlmock.NewRows([]string{"Table", "Create Table"}).AddRow("-", "create table st(id int, age int)"))
 
 		// mock expect sql
 		for i, expectSQL := range _case.expectSQLS {
@@ -1290,14 +1301,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 			if strings.HasPrefix(expectSQL.sql, "ALTER") {
 				mock.ExpectExec(expectSQL.sql).WillReturnResult(sqlmock.NewResult(1, int64(i)+1))
 				mock.ExpectCommit()
-				// mock get table after ddl sql exec
-				mock.ExpectQuery("SHOW COLUMNS").WillReturnRows(
-					sqlmock.NewRows([]string{"Field", "Type", "Null", "Key", "Default", "Extra"}).AddRow("id", "int", "NO", "PRI", null, "").AddRow("age", "int", "NO", "", null, "").AddRow("name", "varchar", "NO", "", null, ""))
-				mock.ExpectQuery("SHOW INDEX").WillReturnRows(
-					sqlmock.NewRows([]string{"Table", "Non_unique", "Key_name", "Seq_in_index", "Column_name",
-						"Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Comment", "Index_comment"},
-					).AddRow("st", 0, "PRIMARY", 1, "id", "A", 0, null, null, null, "BTREE", "", ""))
-				s.mockCheckPointFlush(checkPointMock)
+				s.mockCheckPointFlush(checkPointMock, i)
 			} else {
 				// change insert to replace because of safe mode
 				mock.ExpectExec(expectSQL.sql).WithArgs(expectSQL.args...).WillReturnResult(sqlmock.NewResult(1, 1))
@@ -1307,7 +1311,7 @@ func (s *testSyncerSuite) TestSharding(c *C) {
 		ctx, cancel := context.WithCancel(context.Background())
 		resultCh := make(chan pb.ProcessResult)
 
-		s.mockCheckPointFlush(checkPointMock)
+		s.mockCheckPointFlush(checkPointMock, -1)
 
 		go syncer.Process(ctx, resultCh)
 
@@ -1430,7 +1434,15 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		mockBinlogEvent{typ: Delete, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(1), "a"}}}},
 		mockBinlogEvent{typ: Update, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(2), "b"}, {int32(1), "b"}}}},
 	}
-	syncer.streamerProducer = &MockStreamProducer{s.generateEvents(events1, c)}
+
+	mockStreamerProducer := &MockStreamProducer{s.generateEvents(events1, c)}
+	mockStreamer, err := mockStreamerProducer.generateStreamer(mysql.Position{})
+	c.Assert(err, IsNil)
+	syncer.streamerController = &StreamerController{
+		streamerProducer: mockStreamerProducer,
+		streamer:         mockStreamer,
+	}
+
 	syncer.addJobFunc = syncer.addJobToMemory
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1440,22 +1452,6 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
 		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
 			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
-
-	// mock get table schema at handling first row event
-	mock.ExpectQuery("SHOW COLUMNS").WillReturnRows(
-		sqlmock.NewRows([]string{"Field", "Type", "Null", "Key", "Default", "Extra"}).AddRow("id", "int", "NO", "PRI", null, "").AddRow("name", "varchar", "NO", "", null, ""))
-	mock.ExpectQuery("SHOW INDEX").WillReturnRows(
-		sqlmock.NewRows([]string{"Table", "Non_unique", "Key_name", "Seq_in_index", "Column_name",
-			"Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Comment", "Index_comment"},
-		).AddRow("t_1", 0, "PRIMARY", 1, "id", "A", 0, null, null, null, "BTREE", "", ""))
-
-	// mock get table schema after handle first query event
-	mock.ExpectQuery("SHOW COLUMNS").WillReturnRows(
-		sqlmock.NewRows([]string{"Field", "Type", "Null", "Key", "Default", "Extra"}).AddRow("id", "int", "NO", "PRI", null, "").AddRow("name", "varchar", "NO", "", null, ""))
-	mock.ExpectQuery("SHOW INDEX").WillReturnRows(
-		sqlmock.NewRows([]string{"Table", "Non_unique", "Key_name", "Seq_in_index", "Column_name",
-			"Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Comment", "Index_comment"},
-		).AddRow("t_1", 0, "PRIMARY", 1, "id", "A", 0, null, null, null, "BTREE", "", "").AddRow("t_1", 1, "index1", 1, "name", "A", 0, null, null, "YES", "BTREE", "", ""))
 
 	go syncer.Process(ctx, resultCh)
 
@@ -1502,10 +1498,6 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			update,
 			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?);",
 			[]interface{}{int64(580981944116838401), "b"},
-		}, {
-			flush,
-			"",
-			nil,
 		},
 	}
 
@@ -1537,24 +1529,23 @@ func (s *testSyncerSuite) TestRun(c *C) {
 		mockBinlogEvent{typ: Write, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(3), "c"}}}},
 		mockBinlogEvent{typ: Delete, args: []interface{}{uint64(8), "test_1", "t_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(3), "c"}}}},
 	}
-	syncer.streamerProducer = &MockStreamProducer{s.generateEvents(events2, c)}
 
 	mock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
 		WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
 			AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
 
-	mock.ExpectQuery("SHOW COLUMNS").WillReturnRows(
-		sqlmock.NewRows([]string{"Field", "Type", "Null", "Key", "Default", "Extra"}).AddRow("id", "int", "NO", "PRI", null, "").AddRow("name", "varchar", "NO", "", null, ""))
-
-	mock.ExpectQuery("SHOW INDEX").WillReturnRows(
-		sqlmock.NewRows([]string{"Table", "Non_unique", "Key_name", "Seq_in_index", "Column_name",
-			"Collation", "Cardinality", "Sub_part", "Packed", "Null", "Index_type", "Comment", "Index_comment"},
-		).AddRow("t_2", 0, "PRIMARY", 1, "id", "A", 0, null, null, null, "BTREE", "", "").AddRow("t_2", 1, "index1", 1, "name", "A", 0, null, null, "YES", "BTREE", "", ""))
-
 	ctx, cancel = context.WithCancel(context.Background())
 	resultCh = make(chan pb.ProcessResult)
 	// simulate `syncer.Resume` here, but doesn't reset database conns
 	syncer.reset()
+	mockStreamerProducer = &MockStreamProducer{s.generateEvents(events2, c)}
+	mockStreamer, err = mockStreamerProducer.generateStreamer(mysql.Position{})
+	c.Assert(err, IsNil)
+	syncer.streamerController = &StreamerController{
+		streamerProducer: mockStreamerProducer,
+		streamer:         mockStreamer,
+	}
+
 	go syncer.Process(ctx, resultCh)
 
 	expectJobs2 := []*expectJob{
@@ -1566,10 +1557,6 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			del,
 			"DELETE FROM `test_1`.`t_2` WHERE `id` = ? LIMIT 1;",
 			[]interface{}{int32(3)},
-		}, {
-			flush,
-			"",
-			nil,
 		},
 	}
 
@@ -1616,7 +1603,7 @@ type expectJob struct {
 }
 
 func checkJobs(c *C, jobs []*job, expectJobs []*expectJob) {
-	c.Assert(jobs, HasLen, len(expectJobs))
+	c.Assert(len(jobs), Equals, len(expectJobs), Commentf("jobs = %q", jobs))
 	for i, job := range jobs {
 		c.Log(i, job.tp, job.ddls, job.sql, job.args)
 

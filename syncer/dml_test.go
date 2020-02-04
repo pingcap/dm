@@ -18,6 +18,14 @@ import (
 	"strconv"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/parser/model"
+	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/parser/types"
+	tiddl "github.com/pingcap/tidb/ddl"
+	"github.com/pingcap/tidb/sessionctx"
+	"github.com/pingcap/tidb/util/mock"
 )
 
 func (s *testSyncerSuite) TestCastUnsigned(c *C) {
@@ -25,22 +33,26 @@ func (s *testSyncerSuite) TestCastUnsigned(c *C) {
 	cases := []struct {
 		data     interface{}
 		unsigned bool
-		Type     string
+		Type     byte
 		expected interface{}
 	}{
-		{int8(-math.Exp2(7)), false, "tinyint(4)", int8(-math.Exp2(7))}, // TINYINT
-		{int8(-math.Exp2(7)), true, "tinyint(3) unsigned", uint8(math.Exp2(7))},
-		{int16(-math.Exp2(15)), false, "smallint(6)", int16(-math.Exp2(15))}, //SMALLINT
-		{int16(-math.Exp2(15)), true, "smallint(5) unsigned", uint16(math.Exp2(15))},
-		{int32(-math.Exp2(23)), false, "mediumint(9)", int32(-math.Exp2(23))}, //MEDIUMINT
-		{int32(-math.Exp2(23)), true, "mediumint(8) unsigned", uint32(math.Exp2(23))},
-		{int32(-math.Exp2(31)), false, "int(11)", int32(-math.Exp2(31))}, // INT
-		{int32(-math.Exp2(31)), true, "int(10) unsigned", uint32(math.Exp2(31))},
-		{int64(-math.Exp2(63)), false, "bigint(20)", int64(-math.Exp2(63))},                                 // BIGINT
-		{int64(-math.Exp2(63)), true, "bigint(20) unsigned", strconv.FormatUint(uint64(math.Exp2(63)), 10)}, // special case use string to represent uint64
+		{int8(-math.Exp2(7)), false, mysql.TypeTiny, int8(-math.Exp2(7))}, // TINYINT
+		{int8(-math.Exp2(7)), true, mysql.TypeTiny, uint8(math.Exp2(7))},
+		{int16(-math.Exp2(15)), false, mysql.TypeShort, int16(-math.Exp2(15))}, //SMALLINT
+		{int16(-math.Exp2(15)), true, mysql.TypeShort, uint16(math.Exp2(15))},
+		{int32(-math.Exp2(23)), false, mysql.TypeInt24, int32(-math.Exp2(23))}, //MEDIUMINT
+		{int32(-math.Exp2(23)), true, mysql.TypeInt24, uint32(math.Exp2(23))},
+		{int32(-math.Exp2(31)), false, mysql.TypeLong, int32(-math.Exp2(31))}, // INT
+		{int32(-math.Exp2(31)), true, mysql.TypeLong, uint32(math.Exp2(31))},
+		{int64(-math.Exp2(63)), false, mysql.TypeLonglong, int64(-math.Exp2(63))},                        // BIGINT
+		{int64(-math.Exp2(63)), true, mysql.TypeLonglong, strconv.FormatUint(uint64(math.Exp2(63)), 10)}, // special case use string to represent uint64
 	}
 	for _, cs := range cases {
-		obtained := castUnsigned(cs.data, cs.unsigned, cs.Type)
+		ft := types.NewFieldType(cs.Type)
+		if cs.unsigned {
+			ft.Flag |= mysql.UnsignedFlag
+		}
+		obtained := castUnsigned(cs.data, ft)
 		c.Assert(obtained, Equals, cs.expected)
 	}
 }
@@ -53,14 +65,22 @@ func (s *testSyncerSuite) TestGenColumnPlaceholders(c *C) {
 	c.Assert(placeholderStr, Equals, "?,?,?")
 }
 
+func createTableInfo(p *parser.Parser, se sessionctx.Context, tableID int64, sql string) (*model.TableInfo, error) {
+	node, err := p.ParseOneStmt(sql, "utf8mb4", "utf8mb4_bin")
+	if err != nil {
+		return nil, err
+	}
+	return tiddl.MockTableInfo(se, node.(*ast.CreateTableStmt), tableID)
+}
+
 func (s *testSyncerSuite) TestGenColumnList(c *C) {
-	columns := []*column{
+	columns := []*model.ColumnInfo{
 		{
-			name: "a",
+			Name: model.NewCIStr("a"),
 		}, {
-			name: "b",
+			Name: model.NewCIStr("b"),
 		}, {
-			name: "c",
+			Name: model.NewCIStr("c`d"),
 		},
 	}
 
@@ -68,45 +88,151 @@ func (s *testSyncerSuite) TestGenColumnList(c *C) {
 	c.Assert(columnList, Equals, "`a`")
 
 	columnList = genColumnList(columns)
-	c.Assert(columnList, Equals, "`a`,`b`,`c`")
+	c.Assert(columnList, Equals, "`a`,`b`,`c``d`")
 }
 
 func (s *testSyncerSuite) TestFindFitIndex(c *C) {
-	pkColumns := []*column{
+	p := parser.New()
+	se := mock.NewContext()
+
+	ti, err := createTableInfo(p, se, 1, `
+		create table t1(
+			a int,
+			b int,
+			c int,
+			d int not null,
+			primary key(a, b),
+			unique key(c),
+			unique key(d)
+		);
+	`)
+	c.Assert(err, IsNil)
+
+	columns := findFitIndex(ti)
+	c.Assert(columns, NotNil)
+	c.Assert(columns.Columns, HasLen, 2)
+	c.Assert(columns.Columns[0].Name.L, Equals, "a")
+	c.Assert(columns.Columns[1].Name.L, Equals, "b")
+
+	ti, err = createTableInfo(p, se, 2, `create table t2(c int unique);`)
+	c.Assert(err, IsNil)
+	columns = findFitIndex(ti)
+	c.Assert(columns, IsNil)
+
+	ti, err = createTableInfo(p, se, 3, `create table t3(d int not null unique);`)
+	c.Assert(err, IsNil)
+	columns = findFitIndex(ti)
+	c.Assert(columns, NotNil)
+	c.Assert(columns.Columns, HasLen, 1)
+	c.Assert(columns.Columns[0].Name.L, Equals, "d")
+
+	ti, err = createTableInfo(p, se, 4, `create table t4(e int not null, key(e));`)
+	c.Assert(err, IsNil)
+	columns = findFitIndex(ti)
+	c.Assert(columns, IsNil)
+
+	ti, err = createTableInfo(p, se, 5, `create table t5(f datetime primary key);`)
+	c.Assert(err, IsNil)
+	columns = findFitIndex(ti)
+	c.Assert(columns, NotNil)
+	c.Assert(columns.Columns, HasLen, 1)
+	c.Assert(columns.Columns[0].Name.L, Equals, "f")
+
+	ti, err = createTableInfo(p, se, 6, `create table t6(g int primary key);`)
+	c.Assert(err, IsNil)
+	columns = findFitIndex(ti)
+	c.Assert(columns, NotNil)
+	c.Assert(columns.Columns, HasLen, 1)
+	c.Assert(columns.Columns[0].Name.L, Equals, "g")
+}
+
+func (s *testSyncerSuite) TestGenMultipleKeys(c *C) {
+	p := parser.New()
+	se := mock.NewContext()
+
+	testCases := []struct {
+		schema string
+		values []interface{}
+		keys   []string
+	}{
 		{
-			name: "a",
-		}, {
-			name: "b",
+			// test no keys
+			schema: `create table t1(a int)`,
+			values: []interface{}{10},
+			keys:   []string{},
 		},
-	}
-	indexColumns := []*column{
 		{
-			name: "c",
+			// one primary key
+			schema: `create table t2(a int primary key, b double)`,
+			values: []interface{}{60, 70.5},
+			keys:   []string{"60"},
 		},
-	}
-	indexColumnsNotNull := []*column{
 		{
-			name:    "d",
-			NotNull: true,
+			// one unique key
+			schema: `create table t3(a int unique, b double)`,
+			values: []interface{}{60, 70.5},
+			keys:   []string{"60"},
+		},
+		{
+			// one ordinary key
+			schema: `create table t4(a int, b double, key(b))`,
+			values: []interface{}{60, 70.5},
+			keys:   []string{"70.5"},
+		},
+		{
+			// multiple keys
+			schema: `create table t5(a int, b text, c int, key(a), key(b(3)))`,
+			values: []interface{}{13, "abcdef", 15},
+			keys:   []string{"13", "abcdef"},
+		},
+		{
+			// multiple keys with primary key
+			schema: `create table t6(a int primary key, b varchar(16) unique)`,
+			values: []interface{}{16, "xyz"},
+			keys:   []string{"16", "xyz"},
+		},
+		{
+			// non-integer primary key
+			schema: `create table t65(a int unique, b varchar(16) primary key)`,
+			values: []interface{}{16, "xyz"},
+			keys:   []string{"16", "xyz"},
+		},
+		{
+			// primary key of multiple columns
+			schema: `create table t7(a int, b int, primary key(a, b))`,
+			values: []interface{}{59, 69},
+			keys:   []string{"59,69"},
+		},
+		{
+			// ordinary key of multiple columns
+			schema: `create table t75(a int, b int, c int, key(a, b), key(c, b))`,
+			values: []interface{}{48, 58, 68},
+			keys:   []string{"48,58", "68,58"},
+		},
+		{
+			// so many keys
+			schema: `
+				create table t8(
+					a int, b int, c int,
+					primary key(a, b),
+					unique key(b, c),
+					key(a, b, c),
+					unique key(c, a)
+				)
+			`,
+			values: []interface{}{27, 37, 47},
+			keys:   []string{"27,37", "37,47", "27,37,47", "47,27"},
 		},
 	}
 
-	columns := findFitIndex(map[string][]*column{
-		"primary": pkColumns,
-		"index":   indexColumns,
-	})
-	c.Assert(columns, HasLen, 2)
-	c.Assert(columns[0].name, Equals, "a")
-	c.Assert(columns[1].name, Equals, "b")
+	for i, tc := range testCases {
+		assert := func(obtained interface{}, checker Checker, args ...interface{}) {
+			c.Assert(obtained, checker, append(args, Commentf("test case schema: %s", tc.schema))...)
+		}
 
-	columns = findFitIndex(map[string][]*column{
-		"index": indexColumns,
-	})
-	c.Assert(columns, HasLen, 0)
-
-	columns = findFitIndex(map[string][]*column{
-		"index": indexColumnsNotNull,
-	})
-	c.Assert(columns, HasLen, 1)
-	c.Assert(columns[0].name, Equals, "d")
+		ti, err := createTableInfo(p, se, int64(i+1), tc.schema)
+		assert(err, IsNil)
+		keys := genMultipleKeys(ti, tc.values)
+		assert(keys, DeepEquals, tc.keys)
+	}
 }
