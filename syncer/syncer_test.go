@@ -1502,10 +1502,6 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			update,
 			"REPLACE INTO `test_1`.`t_1` (`id`,`name`) VALUES (?,?);",
 			[]interface{}{int64(580981944116838401), "b"},
-		}, {
-			flush,
-			"",
-			nil,
 		},
 	}
 
@@ -1566,10 +1562,6 @@ func (s *testSyncerSuite) TestRun(c *C) {
 			del,
 			"DELETE FROM `test_1`.`t_2` WHERE `id` = ? LIMIT 1;",
 			[]interface{}{int32(3)},
-		}, {
-			flush,
-			"",
-			nil,
 		},
 	}
 

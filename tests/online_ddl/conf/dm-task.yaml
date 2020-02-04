@@ -3,7 +3,7 @@ name: test
 task-mode: all
 is-sharding: true
 meta-schema: "dm_meta"
-remove-meta: true
+remove-meta: false
 disable-heartbeat: true
 timezone: "Asia/Shanghai"
 online-ddl-scheme: online-ddl-scheme-placeholder

@@ -23,7 +23,7 @@ tables = ["t_target"]
 schema = "online_ddl"
 table = "t_target"
 ignore-columns = ["id"]
-is-online_ddl = true
+is-sharding = true
 index-field = "uid"
 
 [[table-config.source-tables]]
