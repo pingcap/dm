@@ -152,12 +152,16 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 
 	c.ctx, c.cancel = context.WithCancel(ctx)
 	c.wg.Add(1)
+
+	resp, err = c.etcdCli.Get(ectx, common.WorkerKeepAliveKeyAdapter.Path())
+	if err != nil {
+		return err
+	}
+	rev := resp.Header.Revision
 	go func() {
 		defer c.wg.Done()
-		c.ObserveWorkers()
+		c.ObserveWorkers(rev)
 	}()
-	// wait for ObserveWorkers to start
-	time.Sleep(50 * time.Millisecond)
 	c.started = true
 	log.L().Info("coordinator is started")
 	return nil
@@ -316,9 +320,9 @@ func (c *Coordinator) GetWorkersByStatus(s WorkerState) []*Worker {
 }
 
 // ObserveWorkers observe the keepalive path and maintain the status of the worker.
-func (c *Coordinator) ObserveWorkers() {
+func (c *Coordinator) ObserveWorkers(rev int64) {
 	watcher := clientv3.NewWatcher(c.etcdCli)
-	ch := watcher.Watch(c.ctx, common.WorkerKeepAliveKeyAdapter.Path(), clientv3.WithPrefix())
+	ch := watcher.Watch(c.ctx, common.WorkerKeepAliveKeyAdapter.Path(), clientv3.WithPrefix(), clientv3.WithRev(rev))
 	t1 := time.NewTicker(time.Second * 6)
 	for {
 		select {

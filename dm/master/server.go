@@ -299,7 +299,7 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 		if len(resp.Responses) == 0 {
 			return &pb.RegisterWorkerResponse{
 				Result: false,
-				Msg:    fmt.Sprintf("the response kv is invalid length, request key: %s\n", k),
+				Msg:    fmt.Sprintf("the response kv is invalid length, request key: %s", k),
 			}, nil
 		}
 		kv := resp.Responses[0].GetResponseRange().GetKvs()[0]
@@ -359,7 +359,7 @@ func (s *Server) OfflineWorker(ctx context.Context, req *pb.OfflineWorkerRequest
 		Then(clientv3.OpDelete(k)).
 		Commit()
 	if err != nil {
-		err = errors.Annotatef(err, "Delete key %s from etcd failed", req.Address)
+		err = errors.Annotatef(err, "delete key %s from etcd failed", req.Address)
 		return &pb.OfflineWorkerResponse{
 			Result: false,
 			Msg:    errors.ErrorStack(err),

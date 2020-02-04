@@ -654,7 +654,7 @@ func (s *Server) MigrateRelay(ctx context.Context, req *pb.MigrateRelayRequest) 
 	return makeCommonWorkerResponse(err), nil
 }
 
-func (s *Server) startWorker(cfg *config.MysqlConfig) (err1 error) {
+func (s *Server) startWorker(cfg *config.MysqlConfig) (err error) {
 	s.Lock()
 	defer s.Unlock()
 	if w := s.getWorker(false); w != nil {
@@ -708,12 +708,6 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) (err1 error) {
 		return err
 	}
 	s.setWorker(w, false)
-	defer func() {
-		// close w when some error occurs
-		if err1 != nil {
-			w.Close()
-		}
-	}()
 	go func() {
 		w.Start()
 	}()
