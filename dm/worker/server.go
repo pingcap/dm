@@ -23,10 +23,14 @@ import (
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/binlog"
+	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/syncer"
 
 	"github.com/pingcap/errors"
+	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go/sync2"
 	"github.com/soheilhy/cmux"
 	"go.etcd.io/etcd/clientv3"
@@ -35,11 +39,12 @@ import (
 )
 
 var (
-	cmuxReadTimeout       = 10 * time.Second
-	dialTimeout           = 3 * time.Second
-	keepaliveTimeout      = 3 * time.Second
-	keepaliveTime         = 3 * time.Second
-	retryConnectSleepTime = 2 * time.Second
+	cmuxReadTimeout         = 10 * time.Second
+	dialTimeout             = 3 * time.Second
+	keepaliveTimeout        = 3 * time.Second
+	keepaliveTime           = 3 * time.Second
+	retryConnectSleepTime   = 2 * time.Second
+	getMinPosForSubTaskFunc = getMinPosForSubTask
 )
 
 // Server accepts RPC requests
@@ -653,10 +658,49 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 	if w := s.getWorker(false); w != nil {
 		if w.cfg.SourceID == cfg.SourceID {
 			// This mysql task has started. It may be a repeated request. Just return true
+			log.L().Info("This mysql task has started. It may be a repeated request. Just return true", zap.String("sourceID", s.worker.cfg.SourceID))
 			return nil
 		}
 		return terror.ErrWorkerAlreadyStart.Generate()
 	}
+
+	subTaskCfgs := make([]*config.SubTaskConfig, 0, 3)
+
+	ectx, ecancel := context.WithTimeout(s.etcdClient.Ctx(), time.Second*3)
+	defer ecancel()
+	key := common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID)
+	resp, err := s.etcdClient.KV.Get(ectx, key, clientv3.WithPrefix())
+	if err != nil {
+		return err
+	}
+	for _, kv := range resp.Kvs {
+		task := string(kv.Value)
+		subTaskcfg := config.NewSubTaskConfig()
+		if err = subTaskcfg.Decode(task); err != nil {
+			return err
+		}
+		subTaskcfg.LogLevel = s.cfg.LogLevel
+		subTaskcfg.LogFile = s.cfg.LogFile
+
+		subTaskCfgs = append(subTaskCfgs, subTaskcfg)
+	}
+
+	dctx, dcancel := context.WithTimeout(s.etcdClient.Ctx(), time.Duration(len(subTaskCfgs))*3*time.Second)
+	defer dcancel()
+	minPos, err := getMinPosInAllSubTasks(dctx, subTaskCfgs)
+	if err != nil {
+		return err
+	}
+
+	// TODO: support GTID
+	// don't contain GTID information in checkpoint table, just set it to empty
+	if minPos != nil {
+		cfg.RelayBinLogName = binlog.AdjustPosition(*minPos).Name
+		cfg.RelayBinlogGTID = ""
+	}
+
+	log.L().Info("start workers", zap.Reflect("subTasks", subTaskCfgs))
+
 	w, err := NewWorker(cfg)
 	if err != nil {
 		return err
@@ -666,33 +710,18 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		w.Start()
 	}()
 
-	ectx, cancel := context.WithTimeout(s.etcdClient.Ctx(), time.Second*3)
-	defer cancel()
-	key := common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID)
-	resp, err := s.etcdClient.KV.Get(ectx, key, clientv3.WithPrefix())
-	if err != nil {
-		return err
-	}
-	for _, kv := range resp.Kvs {
-		infos, err := common.UpstreamSubTaskKeyAdapter.Decode(string(kv.Key))
-		if err != nil {
-			log.L().Error("decode upstream subtask key from etcd failed", zap.Error(err))
-			return err
-		}
-		taskName := infos[1]
-		task := string(kv.Value)
-		cfg := config.NewSubTaskConfig()
-		if err = cfg.Decode(task); err != nil {
-			return err
-		}
-		cfg.LogLevel = s.cfg.LogLevel
-		cfg.LogFile = s.cfg.LogFile
+	// FIXME: worker's closed will be set to false in Start.
+	// when start sub task, will check the `closed`, if closed is true, will ignore start subTask
+	// just sleep and make test success, will refine this later
+	time.Sleep(1 * time.Second)
 
-		if err = w.StartSubTask(cfg); err != nil {
+	for _, subTaskCfg := range subTaskCfgs {
+		if err = w.StartSubTask(subTaskCfg); err != nil {
 			return err
 		}
-		log.L().Info("load subtask successful", zap.String("sourceID", cfg.SourceID), zap.String("task", taskName))
+		log.L().Info("load subtask successful", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
 	}
+
 	return nil
 }
 
@@ -752,4 +781,51 @@ func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {
 		resp.Msg = errors.ErrorStack(reqErr)
 	}
 	return resp
+}
+
+// all subTask in subTaskCfgs should have same source
+// this function return the min position in all subtasks, used for relay's position
+func getMinPosInAllSubTasks(ctx context.Context, subTaskCfgs []*config.SubTaskConfig) (minPos *mysql.Position, err error) {
+	for _, subTaskCfg := range subTaskCfgs {
+		pos, err := getMinPosForSubTaskFunc(ctx, subTaskCfg)
+		if err != nil {
+			return nil, err
+		}
+
+		if pos == nil {
+			continue
+		}
+
+		if minPos == nil {
+			minPos = pos
+		} else {
+			if minPos.Compare(*pos) >= 1 {
+				minPos = pos
+			}
+		}
+	}
+
+	return minPos, nil
+}
+
+func getMinPosForSubTask(ctx context.Context, subTaskCfg *config.SubTaskConfig) (minPos *mysql.Position, err error) {
+	if subTaskCfg.Mode == config.ModeFull {
+		return nil, nil
+	}
+
+	tctx := tcontext.NewContext(ctx, log.L())
+	checkpoint := syncer.NewRemoteCheckPoint(tctx, subTaskCfg, subTaskCfg.SourceID)
+	err = checkpoint.Init(tctx)
+	if err != nil {
+		return nil, errors.Annotate(err, "get min position from checkpoint")
+	}
+	defer checkpoint.Close()
+
+	err = checkpoint.Load(tctx, nil)
+	if err != nil {
+		return nil, errors.Annotate(err, "get min position from checkpoint")
+	}
+
+	pos := checkpoint.GlobalPoint()
+	return &pos, nil
 }

@@ -24,6 +24,7 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/pd/pkg/tempurl"
+	"github.com/siddontang/go-mysql/mysql"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/embed"
 	"google.golang.org/grpc"
@@ -47,6 +48,12 @@ var _ = Suite(&testServer{})
 func (t *testServer) SetUpSuite(c *C) {
 	err := log.InitLogger(&log.Config{})
 	c.Assert(err, IsNil)
+
+	getMinPosForSubTaskFunc = getFakePosForSubTask
+}
+
+func (t *testServer) TearDownSuite(c *C) {
+	getMinPosForSubTaskFunc = getMinPosForSubTask
 }
 
 func createMockETCD(dir string, host string) (*embed.Etcd, error) {
@@ -106,6 +113,11 @@ func (t *testServer) TestServer(c *C) {
 
 	// check worker would retry connecting master rather than stop worker directly.
 	ETCD = t.testRetryConnectMaster(c, s, ETCD, etcdDir, hostName)
+
+	mysqlCfg := &config.MysqlConfig{}
+	c.Assert(mysqlCfg.LoadFromFile("./dm-mysql.toml"), IsNil)
+	err = s.startWorker(mysqlCfg)
+	c.Assert(err, IsNil)
 
 	// test condition hub
 	t.testConidtionHub(c, s)
@@ -322,4 +334,41 @@ func (t *testServer) testStopWorkerWhenLostConnect(c *C, s *Server, ETCD *embed.
 	time.Sleep(retryConnectSleepTime + time.Duration(defaultKeepAliveTTL+3)*time.Second)
 	c.Assert(s.getWorker(true), IsNil)
 	c.Assert(s.retryConnectMaster.Get(), IsFalse)
+}
+
+func (t *testServer) TestGetMinPosInAllSubTasks(c *C) {
+	subTaskCfg := []*config.SubTaskConfig{
+		{
+			Name: "test2",
+		}, {
+			Name: "test3",
+		}, {
+			Name: "test1",
+		},
+	}
+	minPos, err := getMinPosInAllSubTasks(context.Background(), subTaskCfg)
+	c.Assert(err, IsNil)
+	c.Assert(minPos.Name, Equals, "mysql-binlog.00001")
+	c.Assert(minPos.Pos, Equals, uint32(12))
+}
+
+func getFakePosForSubTask(ctx context.Context, subTaskCfg *config.SubTaskConfig) (minPos *mysql.Position, err error) {
+	switch subTaskCfg.Name {
+	case "test1":
+		return &mysql.Position{
+			Name: "mysql-binlog.00001",
+			Pos:  123,
+		}, nil
+	case "test2":
+		return &mysql.Position{
+			Name: "mysql-binlog.00001",
+			Pos:  12,
+		}, nil
+	case "test3":
+		return &mysql.Position{
+			Name: "mysql-binlog.00003",
+		}, nil
+	default:
+		return nil, nil
+	}
 }
