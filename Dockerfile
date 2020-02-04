@@ -21,7 +21,7 @@ COPY . .
 
 RUN make dm-worker dm-master dm-tracer dmctl
 
-FROM alpine:3.5
+FROM alpine:3.10
 
 COPY --from=builder /go/src/github.com/pingcap/dm/bin/dm-worker /dm-worker
 COPY --from=builder /go/src/github.com/pingcap/dm/bin/dm-master /dm-master
