@@ -15,6 +15,7 @@ PACKAGES_PKG_BINLOG := $$(go list ./... | grep 'github.com/pingcap/dm/pkg/binlog
 PACKAGES_OTHERS  := $$(go list ./... | grep -vE 'tests|cmd|vendor|pbmock|github.com/pingcap/dm/relay|github.com/pingcap/dm/syncer|github.com/pingcap/dm/pkg/binlog')
 FILES    := $$(find . -name "*.go" | grep -vE "vendor")
 TOPDIRS  := $$(ls -d */ | grep -vE "vendor")
+SHELL    := /usr/bin/env bash
 TEST_DIR := /tmp/dm_test
 FAILPOINT_DIR := $$(for p in $(PACKAGES); do echo $${p\#"github.com/pingcap/dm/"}; done)
 FAILPOINT := bin/failpoint-ctl
