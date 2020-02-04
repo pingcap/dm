@@ -109,7 +109,7 @@ func NewWorker(cfg *config.MysqlConfig) (w *Worker, err error) {
 
 	InitConditionHub(w)
 
-	w.l.Info("initialized")
+	w.l.Info("initialized", zap.Stringer("cfg", cfg))
 
 	return w, nil
 }
