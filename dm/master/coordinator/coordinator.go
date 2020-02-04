@@ -150,6 +150,7 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 		log.L().Info("load config successful", zap.String("source", sourceID), zap.String("config", cfgStr))
 	}
 
+	c.ctx, c.cancel = context.WithCancel(ctx)
 	c.wg.Add(1)
 	go func() {
 		defer c.wg.Done()
@@ -158,7 +159,6 @@ func (c *Coordinator) Start(ctx context.Context, etcdClient *clientv3.Client) er
 	// wait for ObserveWorkers to start
 	time.Sleep(50 * time.Millisecond)
 	c.started = true
-	c.ctx, c.cancel = context.WithCancel(ctx)
 	log.L().Info("coordinator is started")
 	return nil
 }
