@@ -230,7 +230,7 @@ func (s *Server) stopWorker(sourceID string) error {
 	return nil
 }
 
-func (s *Server) retryWriteEctd(ops ...clientv3.Op) string {
+func (s *Server) retryWriteEctd(ops ...clientv3.Op) error {
 	retryTimes := 3
 	cliCtx, canc := context.WithTimeout(s.etcdClient.Ctx(), time.Second)
 	defer canc()
@@ -239,12 +239,12 @@ func (s *Server) retryWriteEctd(ops ...clientv3.Op) string {
 		retryTimes--
 		if err == nil {
 			if res.Succeeded {
-				return ""
+				return nil
 			} else if retryTimes <= 0 {
-				return "failed to write data in etcd"
+				return terror.ErrWorkerRetryWriteEtcdFail
 			}
 		} else if retryTimes <= 0 {
-			return errors.ErrorStack(err)
+			return err
 		}
 		time.Sleep(time.Millisecond * 50)
 	}
@@ -288,8 +288,10 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 
 	if resp.Result {
 		op1 := clientv3.OpPut(common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name), req.Task)
-		resp.Msg = s.retryWriteEctd(op1)
-		resp.Result = len(resp.Msg) == 0
+		err = s.retryWriteEctd(op1)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return resp, nil
 }
@@ -321,8 +323,10 @@ func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskReque
 		// clean subtask config when we stop the subtask
 		if req.Op == pb.TaskOp_Stop {
 			op1 := clientv3.OpDelete(common.UpstreamSubTaskKeyAdapter.Encode(w.cfg.SourceID, req.Name))
-			resp.Msg = s.retryWriteEctd(op1)
-			resp.Result = len(resp.Msg) == 0
+			err = s.retryWriteEctd(op1)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	return resp, nil
@@ -360,8 +364,10 @@ func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest
 		resp.Msg = err.Error()
 	} else {
 		op1 := clientv3.OpPut(common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name), req.Task)
-		resp.Msg = s.retryWriteEctd(op1)
-		resp.Result = len(resp.Msg) == 0
+		err = s.retryWriteEctd(op1)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return resp, nil
 }
@@ -767,8 +773,10 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 			op1 = clientv3.OpDelete(common.UpstreamConfigKeyAdapter.Encode(cfg.SourceID))
 			op2 = clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Encode(s.cfg.AdvertiseAddr))
 		}
-		resp.Msg = s.retryWriteEctd(op1, op2)
-		resp.Result = len(resp.Msg) == 0
+		err = s.retryWriteEctd(op1, op2)
+		if err != nil {
+			return nil, err
+		}
 		// Because etcd was deployed with master in a single process, if we can not write data into etcd, most probably
 		// the have lost connect from master.
 	}
