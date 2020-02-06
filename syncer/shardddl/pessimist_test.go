@@ -72,10 +72,18 @@ func (t *testPessimist) TestPessimist(c *C) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// no info in pending
+	c.Assert(p.pendingInfo, IsNil)
+
 	// put shard DDL info.
 	rev1, err := p.PutInfo(info)
 	c.Assert(err, IsNil)
 	c.Assert(rev1, Greater, int64(0))
+
+	// have info in pending
+	info2 := p.PendingInfo()
+	c.Assert(info2, NotNil)
+	c.Assert(*info2, DeepEquals, info)
 
 	// put the lock operation.
 	rev2, putted, err := pessimism.PutOperations(etcdTestCli, false, op)
@@ -102,4 +110,16 @@ func (t *testPessimist) TestPessimist(c *C) {
 	ifm, _, err := pessimism.GetAllInfo(etcdTestCli)
 	c.Assert(err, IsNil)
 	c.Assert(ifm, HasLen, 0)
+
+	// no info in pending now.
+	c.Assert(p.PendingInfo(), IsNil)
+
+	// try put info again, but do not complete the flow.
+	_, err = p.PutInfo(info)
+	c.Assert(err, IsNil)
+	c.Assert(p.PendingInfo(), NotNil)
+
+	// reset the pessimist.
+	p.Reset()
+	c.Assert(p.PendingInfo(), IsNil)
 }

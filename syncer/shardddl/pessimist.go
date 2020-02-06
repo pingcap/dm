@@ -15,6 +15,7 @@ package shardddl
 
 import (
 	"context"
+	"sync"
 
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
@@ -25,10 +26,15 @@ import (
 
 // Pessimist used to coordinate the shard DDL migration in pessimism mode.
 type Pessimist struct {
+	mu sync.RWMutex
+
 	logger log.Logger
 	cli    *clientv3.Client
 	task   string
 	source string
+
+	// the shard DDL info which is pending to handle.
+	pendingInfo *pessimism.Info
 }
 
 // NewPessimist creates a new Pessimist instance.
@@ -41,6 +47,14 @@ func NewPessimist(pLogger *log.Logger, cli *clientv3.Client, task, source string
 	}
 }
 
+// Reset resets the internal state of the pessimist.
+func (p *Pessimist) Reset() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.pendingInfo = nil
+}
+
 // ConstructInfo constructs a shard DDL info.
 func (p *Pessimist) ConstructInfo(schema, table string, DDLs []string) pessimism.Info {
 	return pessimism.NewInfo(p.task, p.source, schema, table, DDLs)
@@ -48,7 +62,16 @@ func (p *Pessimist) ConstructInfo(schema, table string, DDLs []string) pessimism
 
 // PutInfo puts the shard DDL info into etcd and returns the revision.
 func (p *Pessimist) PutInfo(info pessimism.Info) (int64, error) {
-	return pessimism.PutInfo(p.cli, info)
+	rev, err := pessimism.PutInfo(p.cli, info)
+	if err != nil {
+		return 0, err
+	}
+
+	p.mu.Lock()
+	p.pendingInfo = &info
+	p.mu.Unlock()
+
+	return rev, nil
 }
 
 // GetOperation gets the shard DDL lock operation relative to the shard DDL info.
@@ -71,5 +94,25 @@ func (p *Pessimist) GetOperation(ctx context.Context, info pessimism.Info, rev i
 func (p *Pessimist) DoneOperationDeleteInfo(op pessimism.Operation, info pessimism.Info) error {
 	op.Done = true // mark the operation as `done`.
 	_, err := pessimism.PutOperationDeleteInfo(p.cli, op, info)
+	if err != nil {
+		return err
+	}
+
+	p.mu.Lock()
+	p.pendingInfo = nil
+	p.mu.Unlock()
+
 	return err
+}
+
+// PendingInfo returns the shard DDL info which is pending to handle.
+func (p *Pessimist) PendingInfo() *pessimism.Info {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	if p.pendingInfo == nil {
+		return nil
+	}
+	info := *p.pendingInfo
+	return &info
 }
