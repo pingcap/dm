@@ -72,8 +72,9 @@ func (t *testPessimist) TestPessimist(c *C) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// no info in pending
-	c.Assert(p.pendingInfo, IsNil)
+	// no info and operation in pending
+	c.Assert(p.PendingInfo(), IsNil)
+	c.Assert(p.PendingOperation(), IsNil)
 
 	// put shard DDL info.
 	rev1, err := p.PutInfo(info)
@@ -92,9 +93,14 @@ func (t *testPessimist) TestPessimist(c *C) {
 	c.Assert(putted, IsTrue)
 
 	// wait for the lock operation.
-	op2, err2 := p.GetOperation(ctx, info, rev1)
-	c.Assert(err2, IsNil)
+	op2, err := p.GetOperation(ctx, info, rev1)
+	c.Assert(err, IsNil)
 	c.Assert(op2, DeepEquals, op)
+
+	// have operation in pending.
+	op3 := p.PendingOperation()
+	c.Assert(op3, NotNil)
+	c.Assert(*op3, DeepEquals, op)
 
 	// mark the operation as done and delete the info.
 	c.Assert(p.DoneOperationDeleteInfo(op, info), IsNil)
@@ -111,15 +117,25 @@ func (t *testPessimist) TestPessimist(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(ifm, HasLen, 0)
 
-	// no info in pending now.
+	// no info and operation in pending now.
 	c.Assert(p.PendingInfo(), IsNil)
+	c.Assert(p.PendingOperation(), IsNil)
 
-	// try put info again, but do not complete the flow.
+	// put info again, but do not complete the flow.
 	_, err = p.PutInfo(info)
 	c.Assert(err, IsNil)
 	c.Assert(p.PendingInfo(), NotNil)
 
+	// put the lock operation again.
+	rev3, _, err := pessimism.PutOperations(etcdTestCli, false, op)
+	c.Assert(err, IsNil)
+	// wait for the lock operation.
+	_, err = p.GetOperation(ctx, info, rev3)
+	c.Assert(err, IsNil)
+	c.Assert(p.PendingOperation(), NotNil)
+
 	// reset the pessimist.
 	p.Reset()
 	c.Assert(p.PendingInfo(), IsNil)
+	c.Assert(p.PendingOperation(), IsNil)
 }

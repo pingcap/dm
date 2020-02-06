@@ -35,6 +35,8 @@ type Pessimist struct {
 
 	// the shard DDL info which is pending to handle.
 	pendingInfo *pessimism.Info
+	// the shard DDL lock operation which is pending to handle.
+	pendingOp *pessimism.Operation
 }
 
 // NewPessimist creates a new Pessimist instance.
@@ -53,6 +55,7 @@ func (p *Pessimist) Reset() {
 	defer p.mu.Unlock()
 
 	p.pendingInfo = nil
+	p.pendingOp = nil
 }
 
 // ConstructInfo constructs a shard DDL info.
@@ -84,6 +87,9 @@ func (p *Pessimist) GetOperation(ctx context.Context, info pessimism.Info, rev i
 
 	select {
 	case op := <-ch:
+		p.mu.Lock()
+		p.pendingOp = &op
+		p.mu.Unlock()
 		return op, nil
 	case <-ctx.Done():
 		return pessimism.Operation{}, ctx.Err()
@@ -100,6 +106,7 @@ func (p *Pessimist) DoneOperationDeleteInfo(op pessimism.Operation, info pessimi
 
 	p.mu.Lock()
 	p.pendingInfo = nil
+	p.pendingOp = nil
 	p.mu.Unlock()
 
 	return err
@@ -115,4 +122,16 @@ func (p *Pessimist) PendingInfo() *pessimism.Info {
 	}
 	info := *p.pendingInfo
 	return &info
+}
+
+// PendingOperation returns the shard DDL lock operation which is pending to handle.
+func (p *Pessimist) PendingOperation() *pessimism.Operation {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	if p.pendingOp == nil {
+		return nil
+	}
+	op := *p.pendingOp
+	return &op
 }
