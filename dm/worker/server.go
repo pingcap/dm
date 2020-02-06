@@ -290,7 +290,10 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 		op1 := clientv3.OpPut(common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name), req.Task)
 		err = s.retryWriteEctd(op1)
 		if err != nil {
-			return nil, err
+			return &pb.CommonWorkerResponse{
+				Result: false,
+				Msg:    err.Error(),
+			}, nil
 		}
 	}
 	return resp, nil
@@ -325,7 +328,10 @@ func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskReque
 			op1 := clientv3.OpDelete(common.UpstreamSubTaskKeyAdapter.Encode(w.cfg.SourceID, req.Name))
 			err = s.retryWriteEctd(op1)
 			if err != nil {
-				return nil, err
+				return &pb.OperateSubTaskResponse{
+					Result: false,
+					Msg:    err.Error(),
+				}, nil
 			}
 		}
 	}
@@ -366,7 +372,10 @@ func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest
 		op1 := clientv3.OpPut(common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name), req.Task)
 		err = s.retryWriteEctd(op1)
 		if err != nil {
-			return nil, err
+			return &pb.CommonWorkerResponse{
+				Result: false,
+				Msg:    err.Error(),
+			}, nil
 		}
 	}
 	return resp, nil
@@ -775,7 +784,10 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 		}
 		err = s.retryWriteEctd(op1, op2)
 		if err != nil {
-			return nil, err
+			return &pb.MysqlWorkerResponse{
+				Result: false,
+				Msg:    err.Error(),
+			}, nil
 		}
 		// Because etcd was deployed with master in a single process, if we can not write data into etcd, most probably
 		// the have lost connect from master.

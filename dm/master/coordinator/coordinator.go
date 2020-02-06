@@ -499,7 +499,7 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 		ectx, cancel := context.WithTimeout(c.etcdCli.Ctx(), etcdTimeout)
 		defer cancel()
 		resp, err := c.etcdCli.Get(ectx, common.WorkerKeepAliveKeyAdapter.Encode(w.Address(), w.Name()))
-		if err != nil {
+		if err == nil {
 			if resp != nil && resp.Count > 0 {
 				w.SetStatus(WorkerFree)
 			}
