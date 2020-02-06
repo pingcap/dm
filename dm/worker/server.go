@@ -15,7 +15,9 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"sync"
 	"time"
@@ -510,8 +512,22 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSubTaskSQLsReques
 	err := w.HandleSQLs(ctx, req)
 	if err != nil {
 		log.L().Error("fail to handle sqls", zap.String("request", "HandleSQLs"), zap.Stringer("payload", req), zap.Error(err))
+		return makeCommonWorkerResponse(err), nil
 	}
-	// TODO: check whether this interface need to store message in ETCD
+
+	// save to etcd
+	key := common.SQLsRequestKeyAdapter.Encode(req.Source, fmt.Sprintf("%d-%d", time.Now().UnixNano(), rand.Intn(1000)))
+	value, err := req.Marshal()
+	if err != nil {
+		log.L().Error("fail to marshal HandleSQLs request", zap.Stringer("payload", req), zap.Error(err))
+		return makeCommonWorkerResponse(err), nil
+	}
+	_, err = s.etcdClient.Put(ctx, key, string(value))
+	if err != nil {
+		log.L().Error("fail to save HandleSQLs request to etcd", zap.Stringer("payload", req), zap.Error(err))
+		return makeCommonWorkerResponse(err), nil
+	}
+
 	return makeCommonWorkerResponse(err), nil
 }
 

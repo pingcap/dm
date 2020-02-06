@@ -897,6 +897,7 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb
 	subReq := &workerrpc.Request{
 		Type: workerrpc.CmdHandleSubTaskSQLs,
 		HandleSubTaskSQLs: &pb.HandleSubTaskSQLsRequest{
+			Source:     req.Source,
 			Name:       req.Name,
 			Op:         req.Op,
 			Args:       req.Args,
