@@ -26,7 +26,7 @@ import (
 
 // Pessimist used to coordinate the shard DDL migration in pessimism mode.
 type Pessimist struct {
-	mu sync.RWMutex
+	mu sync.Mutex
 
 	logger log.Logger
 

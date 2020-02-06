@@ -178,6 +178,7 @@ func GetAllOperations(cli *clientv3.Client) (map[string]map[string]Operation, in
 // WatchOperationPut watches PUT operations for DDL lock operation.
 // If want to watch all operations, pass empty string for `task` and `source`.
 // This function can be called by DM-worker and DM-master.
+// TODO(csuzhangxc): report error and do some retry.
 func WatchOperationPut(ctx context.Context, cli *clientv3.Client, task, source string, revision int64, outCh chan<- Operation) {
 	ch := cli.Watch(ctx, common.ShardDDLPessimismOperationKeyAdapter.Encode(task, source),
 		clientv3.WithPrefix(), clientv3.WithRev(revision))
