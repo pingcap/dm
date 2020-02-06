@@ -503,6 +503,8 @@ func (c *Coordinator) restartMysqlTask(w *Worker, cfg *config.MysqlConfig) bool 
 			if resp != nil && resp.Count > 0 {
 				w.SetStatus(WorkerFree)
 			}
+		} else {
+			log.L().Error("check etcd WorkerKeepAliveKey failed. worker is set to closed", zap.Error(err), zap.String("worker", w.name))
 		}
 	}
 	return ret
