@@ -38,8 +38,8 @@ var (
 	UpstreamSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/upstream/subtask/")
 
 	// SQLsRequestKeyAdapter used to store sql-skip and sql-replace request.
-	// sharding is false: k/v: Encode(source-id, random key) -> HandleSQLsRequest
-	// sharding is true, k/v: Encode("sharding", random key) -> HandleSQLsRequest
+	// sharding is false: k/v: Encode(task-name, source-id, random key) -> HandleSQLsRequest
+	// sharding is true, k/v: Encode(task-name, "sharding", random key) -> HandleSQLsRequest
 	SQLsRequestKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/handle-sqls/")
 )
 

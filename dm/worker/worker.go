@@ -196,7 +196,7 @@ func (w *Worker) Close() {
 }
 
 // StartSubTask creates a sub task an run it
-func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
+func (w *Worker) StartSubTask(cfg *config.SubTaskConfig, doBeforeRun func() error) error {
 	w.Lock()
 	defer w.Unlock()
 
@@ -222,7 +222,7 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
 	w.l.Info("started sub task", zap.Stringer("config", cfgDecrypted))
 	st := NewSubTask(cfgDecrypted)
 	w.subTaskHolder.recordSubTask(st)
-	st.Run()
+	st.Run(doBeforeRun)
 	return nil
 }
 

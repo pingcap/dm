@@ -163,7 +163,7 @@ func (st *SubTask) Init() error {
 }
 
 // Run runs the sub task
-func (st *SubTask) Run() {
+func (st *SubTask) Run(doBeforeRun func() error) {
 	if st.Stage() == pb.Stage_Finished || st.Stage() == pb.Stage_Running {
 		st.l.Warn("prepare to run", zap.Stringer("stage", st.Stage()))
 		return
@@ -172,6 +172,13 @@ func (st *SubTask) Run() {
 	err := st.Init()
 	if err != nil {
 		st.l.Error("fail to initial subtask", log.ShortError(err))
+		st.fail(err)
+		return
+	}
+
+	err = doBeforeRun()
+	if err != nil {
+		st.l.Error("fail to do before run", log.ShortError(err))
 		st.fail(err)
 		return
 	}
@@ -191,6 +198,7 @@ func (st *SubTask) run() {
 	st.setStage(pb.Stage_Running)
 	st.setResult(nil) // clear previous result
 	cu := st.CurrUnit()
+
 	st.l.Info("start to run", zap.Stringer("unit", cu.Type()))
 	st.ctx, st.cancel = context.WithCancel(context.Background())
 	pr := make(chan pb.ProcessResult, 1)
@@ -412,7 +420,9 @@ func (st *SubTask) Pause() error {
 // similar to Run
 func (st *SubTask) Resume() error {
 	if !st.initialized.Get() {
-		st.Run()
+		st.Run(func() error {
+			return nil
+		})
 		return nil
 	}
 

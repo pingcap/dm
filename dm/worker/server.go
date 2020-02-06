@@ -274,7 +274,9 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 
 	cfg.LogLevel = s.cfg.LogLevel
 	cfg.LogFile = s.cfg.LogFile
-	err = w.StartSubTask(cfg)
+	err = w.StartSubTask(cfg, func() error {
+		return s.setHandleSQLsRequest(w, cfg.Name, cfg.SourceID)
+	})
 
 	if err != nil {
 		err = terror.Annotatef(err, "start sub task %s", cfg.Name)
@@ -516,7 +518,7 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSubTaskSQLsReques
 	}
 
 	// save to etcd
-	key := common.SQLsRequestKeyAdapter.Encode(req.Source, fmt.Sprintf("%d-%d", time.Now().UnixNano(), rand.Intn(1000)))
+	key := common.SQLsRequestKeyAdapter.Encode(req.Name, req.Source, fmt.Sprintf("%d-%d", time.Now().UnixNano(), rand.Intn(1000)))
 	value, err := req.Marshal()
 	if err != nil {
 		log.L().Error("fail to marshal HandleSQLs request", zap.Stringer("payload", req), zap.Error(err))
@@ -700,11 +702,43 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		cfg.LogLevel = s.cfg.LogLevel
 		cfg.LogFile = s.cfg.LogFile
 
-		if err = w.StartSubTask(cfg); err != nil {
+		err = w.StartSubTask(cfg, func() error {
+			return s.setHandleSQLsRequest(w, cfg.Name, cfg.SourceID)
+		})
+		if err != nil {
 			return err
 		}
+
 		log.L().Info("load subtask successful", zap.String("sourceID", cfg.SourceID), zap.String("task", taskName))
 	}
+	return nil
+}
+
+func (s *Server) setHandleSQLsRequest(w *Worker, taskName, source string) error {
+	ectx, cancel := context.WithTimeout(s.etcdClient.Ctx(), time.Second*3)
+	defer cancel()
+
+	key := common.SQLsRequestKeyAdapter.Encode(taskName, source)
+
+	resp, err := s.etcdClient.KV.Get(ectx, key, clientv3.WithPrefix())
+	if err != nil {
+		return err
+	}
+	for _, kv := range resp.Kvs {
+		req := &pb.HandleSubTaskSQLsRequest{}
+		err := req.Unmarshal(kv.Value)
+		if err != nil {
+			log.L().Error("load HandleSQLs request from etcd failed", zap.Binary("key", kv.Key), zap.Error(err))
+			return err
+		}
+
+		err = w.HandleSQLs(ectx, req)
+		if err != nil {
+			log.L().Error("execute HandleSQLs request from etcd failed", zap.Binary("key", kv.Key), zap.Error(err))
+			return err
+		}
+	}
+
 	return nil
 }
 
