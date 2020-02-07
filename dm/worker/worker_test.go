@@ -67,6 +67,8 @@ func (t *testServer) testWorker(c *C) {
 
 	err = w.StartSubTask(&config.SubTaskConfig{
 		Name: "testStartTask",
+	}, func() error {
+		return nil
 	})
 	c.Assert(err, NotNil)
 	c.Assert(err, ErrorMatches, ".*worker already closed.*")

@@ -153,7 +153,9 @@ func (t *testSubTask) TestSubTaskNormalUsage(c *C) {
 
 	// test empty and fail
 	st.units = nil
-	st.Run()
+	st.Run(func() error {
+		return nil
+	})
 	c.Assert(st.Stage(), Equals, pb.Stage_Paused)
 	c.Assert(strings.Contains(st.Result().Errors[0].Msg, "has no dm units for mode"), IsTrue)
 
@@ -161,7 +163,9 @@ func (t *testSubTask) TestSubTaskNormalUsage(c *C) {
 	mockLoader := NewMockUnit(pb.UnitType_Load)
 	st.units = []unit.Unit{mockDumper, mockLoader}
 
-	st.Run()
+	st.Run(func() error {
+		return nil
+	})
 	c.Assert(st.Stage(), Equals, pb.Stage_Running)
 	c.Assert(st.CurrUnit(), Equals, mockDumper)
 	c.Assert(st.Error(), IsNil)
@@ -268,7 +272,9 @@ func (t *testSubTask) TestPauseAndResumeSubtask(c *C) {
 	mockLoader := NewMockUnit(pb.UnitType_Load)
 	st.units = []unit.Unit{mockDumper, mockLoader}
 
-	st.Run()
+	st.Run(func() error {
+		return nil
+	})
 	c.Assert(st.Stage(), Equals, pb.Stage_Running)
 	c.Assert(st.CurrUnit(), Equals, mockDumper)
 	c.Assert(st.Error(), IsNil)
@@ -386,7 +392,9 @@ func (t *testSubTask) TestPauseAndResumeSubtask(c *C) {
 	c.Assert(st.Stage(), Equals, pb.Stage_Finished)
 	c.Assert(st.Result().Errors, HasLen, 0)
 
-	st.Run()
+	st.Run(func() error {
+		return nil
+	})
 	c.Assert(st.CurrUnit(), Equals, mockLoader)
 	c.Assert(st.Stage(), Equals, pb.Stage_Finished)
 	c.Assert(st.Result().Errors, HasLen, 0)
@@ -435,7 +443,9 @@ func (t *testSubTask) TestSubtaskWithStage(c *C) {
 	c.Assert(st.CurrUnit(), Equals, nil)
 	c.Assert(st.Result(), IsNil)
 
-	st.Run()
+	st.Run(func() error {
+		return nil
+	})
 	c.Assert(st.Stage(), Equals, pb.Stage_Finished)
 	c.Assert(st.CurrUnit(), Equals, nil)
 	c.Assert(st.Result(), IsNil)
