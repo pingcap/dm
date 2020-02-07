@@ -37,10 +37,10 @@ func (t *testSubTask) TestCreateUnits(c *C) {
 	cfg := &config.SubTaskConfig{
 		Mode: "xxx",
 	}
-	c.Assert(createUnits(cfg), HasLen, 0)
+	c.Assert(createUnits(cfg, nil), HasLen, 0)
 
 	cfg.Mode = config.ModeFull
-	unitsFull := createUnits(cfg)
+	unitsFull := createUnits(cfg, nil)
 	c.Assert(unitsFull, HasLen, 2)
 	_, ok := unitsFull[0].(*mydumper.Mydumper)
 	c.Assert(ok, IsTrue)
@@ -48,13 +48,13 @@ func (t *testSubTask) TestCreateUnits(c *C) {
 	c.Assert(ok, IsTrue)
 
 	cfg.Mode = config.ModeIncrement
-	unitsIncr := createUnits(cfg)
+	unitsIncr := createUnits(cfg, nil)
 	c.Assert(unitsIncr, HasLen, 1)
 	_, ok = unitsIncr[0].(*syncer.Syncer)
 	c.Assert(ok, IsTrue)
 
 	cfg.Mode = config.ModeAll
-	unitsAll := createUnits(cfg)
+	unitsAll := createUnits(cfg, nil)
 	c.Assert(unitsAll, HasLen, 3)
 	_, ok = unitsAll[0].(*mydumper.Mydumper)
 	c.Assert(ok, IsTrue)
@@ -148,7 +148,7 @@ func (t *testSubTask) TestSubTaskNormalUsage(c *C) {
 		Mode: config.ModeFull,
 	}
 
-	st := NewSubTask(cfg)
+	st := NewSubTask(cfg, nil)
 	c.Assert(st.Stage(), DeepEquals, pb.Stage_New)
 
 	// test empty and fail
@@ -261,7 +261,7 @@ func (t *testSubTask) TestPauseAndResumeSubtask(c *C) {
 		Mode: config.ModeFull,
 	}
 
-	st := NewSubTask(cfg)
+	st := NewSubTask(cfg, nil)
 	c.Assert(st.Stage(), DeepEquals, pb.Stage_New)
 
 	mockDumper := NewMockUnit(pb.UnitType_Dump)
@@ -398,7 +398,7 @@ func (t *testSubTask) TestSubtaskWithStage(c *C) {
 		Mode: config.ModeFull,
 	}
 
-	st := NewSubTaskWithStage(cfg, pb.Stage_Paused)
+	st := NewSubTaskWithStage(cfg, pb.Stage_Paused, nil)
 	c.Assert(st.Stage(), DeepEquals, pb.Stage_Paused)
 
 	mockDumper := NewMockUnit(pb.UnitType_Dump)
@@ -425,7 +425,7 @@ func (t *testSubTask) TestSubtaskWithStage(c *C) {
 		c.Fatalf("result %+v is not right after closing", st.Result())
 	}
 
-	st = NewSubTaskWithStage(cfg, pb.Stage_Finished)
+	st = NewSubTaskWithStage(cfg, pb.Stage_Finished, nil)
 	c.Assert(st.Stage(), DeepEquals, pb.Stage_Finished)
 	st.units = []unit.Unit{mockDumper, mockLoader}
 
@@ -445,54 +445,4 @@ func (t *testSubTask) TestSubtaskWithStage(c *C) {
 	c.Assert(st.Stage(), Equals, pb.Stage_Finished)
 	c.Assert(st.CurrUnit(), Equals, nil)
 	c.Assert(st.Result(), IsNil)
-}
-
-func (t *testSubTask) TestDDLLockInfo(c *C) {
-	cfg := &config.SubTaskConfig{
-		Name: "testSubtaskScene",
-		Mode: config.ModeFull,
-	}
-
-	st := NewSubTaskWithStage(cfg, pb.Stage_Paused)
-	c.Assert(st.Stage(), DeepEquals, pb.Stage_Paused)
-	c.Assert(st.DDLLockInfo(), IsNil)
-
-	ddlLock := &pb.DDLLockInfo{
-		ID: "xxx",
-	}
-
-	c.Assert(st.SaveDDLLockInfo(ddlLock), IsNil)
-	c.Assert(st.DDLLockInfo(), DeepEquals, ddlLock)
-	c.Assert(st.SaveDDLLockInfo(&pb.DDLLockInfo{}), ErrorMatches, ".*already exists.*")
-
-	st.ClearDDLLockInfo()
-	c.Assert(st.DDLLockInfo(), IsNil)
-
-	c.Assert(st.SaveDDLLockInfo(ddlLock), IsNil)
-	c.Assert(st.DDLLockInfo(), DeepEquals, ddlLock)
-}
-
-func (t *testSubTask) TestDDLInfo(c *C) {
-	cfg := &config.SubTaskConfig{
-		Name: "testSubtaskScene",
-		Mode: config.ModeFull,
-	}
-
-	st := NewSubTaskWithStage(cfg, pb.Stage_Paused)
-	c.Assert(st.Stage(), DeepEquals, pb.Stage_Paused)
-	c.Assert(st.GetDDLInfo(), IsNil)
-
-	ddlInfo := &pb.DDLInfo{
-		Task: "xxx",
-	}
-
-	c.Assert(st.SaveDDLInfo(ddlInfo), IsNil)
-	c.Assert(st.GetDDLInfo(), DeepEquals, ddlInfo)
-	c.Assert(st.SaveDDLInfo(&pb.DDLInfo{}), ErrorMatches, ".*already exists.*")
-
-	st.ClearDDLInfo()
-	c.Assert(st.GetDDLInfo(), IsNil)
-
-	c.Assert(st.SaveDDLInfo(ddlInfo), IsNil)
-	c.Assert(st.GetDDLInfo(), DeepEquals, ddlInfo)
 }

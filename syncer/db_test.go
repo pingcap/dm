@@ -236,7 +236,7 @@ func (s *testDBSuite) TestTimezone(c *C) {
 
 	for _, testCase := range testCases {
 		s.cfg.Timezone = testCase.timezone
-		syncer := NewSyncer(s.cfg)
+		syncer := NewSyncer(s.cfg, nil)
 		syncer.genRouter()
 		s.resetBinlogSyncer(c)
 
