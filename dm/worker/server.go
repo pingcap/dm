@@ -419,23 +419,6 @@ func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorRequest) (*pb
 	return resp, nil
 }
 
-// FetchDDLInfo implements WorkerServer.FetchDDLInfo
-// we do ping-pong send-receive on stream for DDL (lock) info
-// if error occurred in Send / Recv, just retry in client
-func (s *Server) FetchDDLInfo(stream pb.Worker_FetchDDLInfoServer) error {
-	return nil // TODO(csuzhangxc): remove this API.
-}
-
-// ExecuteDDL implements WorkerServer.ExecuteDDL
-func (s *Server) ExecuteDDL(ctx context.Context, req *pb.ExecDDLRequest) (*pb.CommonWorkerResponse, error) {
-	return nil, nil // TODO(csuzhangxc): remove this API.
-}
-
-// BreakDDLLock implements WorkerServer.BreakDDLLock
-func (s *Server) BreakDDLLock(ctx context.Context, req *pb.BreakDDLLockRequest) (*pb.CommonWorkerResponse, error) {
-	return nil, nil // TODO(csuzhangxc): remove this API.
-}
-
 // HandleSQLs implements WorkerServer.HandleSQLs
 func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSubTaskSQLsRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "HandleSQLs"), zap.Stringer("payload", req))

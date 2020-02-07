@@ -805,58 +805,12 @@ func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest
 }
 
 // BreakWorkerDDLLock implements MasterServer.BreakWorkerDDLLock
+// TODO(csuzhangxc): implement this later.
 func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLLockRequest) (*pb.BreakWorkerDDLLockResponse, error) {
 	log.L().Info("", zap.String("lock ID", req.RemoveLockID), zap.Stringer("payload", req), zap.String("request", "BreakWorkerDDLLock"))
-
-	request := &workerrpc.Request{
-		Type: workerrpc.CmdBreakDDLLock,
-		BreakDDLLock: &pb.BreakDDLLockRequest{
-			Task:         req.Task,
-			RemoveLockID: req.RemoveLockID,
-			ExecDDL:      req.ExecDDL,
-			SkipDDL:      req.SkipDDL,
-		},
-	}
-
-	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Sources))
-	var wg sync.WaitGroup
-	for _, source := range req.Sources {
-		wg.Add(1)
-		go func(sourceID string) {
-			defer wg.Done()
-			worker := s.coordinator.GetWorkerBySourceID(sourceID)
-			if worker == nil || worker.State() == coordinator.WorkerClosed {
-				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", sourceID), sourceID)
-				return
-			}
-			resp, err := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
-			workerResp := &pb.CommonWorkerResponse{}
-			if err != nil {
-				workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), sourceID)
-			} else {
-				workerResp = resp.BreakDDLLock
-			}
-			workerResp.Source = sourceID
-			workerRespCh <- workerResp
-		}(source)
-	}
-	wg.Wait()
-
-	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(req.Sources))
-	for len(workerRespCh) > 0 {
-		workerResp := <-workerRespCh
-		workerRespMap[workerResp.Source] = workerResp
-	}
-
-	sort.Strings(req.Sources)
-	workerResps := make([]*pb.CommonWorkerResponse, 0, len(req.Sources))
-	for _, worker := range req.Sources {
-		workerResps = append(workerResps, workerRespMap[worker])
-	}
-
 	return &pb.BreakWorkerDDLLockResponse{
-		Result:  true,
-		Sources: workerResps,
+		Result: false,
+		Msg:    "not implement",
 	}, nil
 }
 

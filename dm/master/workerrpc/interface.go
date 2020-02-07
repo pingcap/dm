@@ -61,8 +61,6 @@ type Request struct {
 	QueryWorkerConfig *pb.QueryWorkerConfigRequest
 
 	HandleSubTaskSQLs *pb.HandleSubTaskSQLsRequest
-	ExecDDL           *pb.ExecDDLRequest
-	BreakDDLLock      *pb.BreakDDLLockRequest
 
 	SwitchRelayMaster *pb.SwitchRelayMasterRequest
 	OperateRelay      *pb.OperateRelayRequest
@@ -94,8 +92,6 @@ type Response struct {
 	UpdateRelay       *pb.CommonWorkerResponse
 	MigrateRelay      *pb.CommonWorkerResponse
 	MysqlTask         *pb.MysqlWorkerResponse
-
-	FetchDDLInfo pb.Worker_FetchDDLInfoClient
 }
 
 // Client is a client that sends RPC.

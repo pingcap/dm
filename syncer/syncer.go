@@ -911,15 +911,6 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 			errCtx := &ExecErrorContext{err, jobs[affected].currentPos, fmt.Sprintf("%v", jobs)}
 			s.appendExecErrors(errCtx)
 		}
-		if s.tracer.Enable() {
-			syncerJobState := s.tracer.FinishedSyncerJobState(err)
-			for _, job := range jobs {
-				_, err2 := s.tracer.CollectSyncerJobEvent(job.traceID, job.traceGID, int32(job.tp), job.pos, job.currentPos, queueBucket, job.sql, job.ddls, nil, nil, syncerJobState)
-				if err2 != nil {
-					tctx.L().Error("fail to collect binlog replication job event", log.ShortError(err2))
-				}
-			}
-		}
 		return err
 	}
 
