@@ -169,6 +169,7 @@ type Syncer struct {
 
 	readerHub *streamer.ReaderHub
 
+	// TODO: re-implement tracer flow for binlog event later.
 	tracer *tracing.Tracer
 
 	currentPosMu struct {
@@ -719,8 +720,6 @@ func (s *Syncer) addJob(job *job) error {
 		s.addCount(false, s.queueBucketMapping[queueBucket], job.tp, 1)
 		s.jobs[queueBucket] <- job
 	}
-
-	// TODO: re-implement tracer for shard DDL later.
 
 	wait := s.checkWait(job)
 	if wait {
@@ -1309,16 +1308,6 @@ func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext)
 	}
 	*ec.latestOp = rotate
 
-	if s.tracer.Enable() {
-		// Cannot convert this into a common method like `ec.CollectSyncerBinlogEvent()`
-		// since CollectSyncerBinlogEvent relies on a fixed stack trace level
-		// (must track 3 callers up).
-		_, err := s.tracer.CollectSyncerBinlogEvent(ec.traceSource, ec.safeMode.Enable(), ec.tryReSync, *ec.lastPos, *ec.currentPos, int32(ec.header.EventType), int32(*ec.latestOp))
-		if err != nil {
-			s.tctx.L().Error("fail to collect binlog replication job event", zap.String("event", "rotate"), log.ShortError(err))
-		}
-	}
-
 	s.tctx.L().Info("", zap.String("event", "rotate"), log.WrapStringerField("position", ec.currentPos))
 	return nil
 }
@@ -1448,14 +1437,6 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	default:
 		s.tctx.L().Debug("ignoring unrecognized event", zap.String("event", "row"), zap.Stringer("type", ec.header.EventType))
 		return nil
-	}
-
-	if s.tracer.Enable() {
-		traceEvent, traceErr := s.tracer.CollectSyncerBinlogEvent(ec.traceSource, ec.safeMode.Enable(), ec.tryReSync, *ec.lastPos, *ec.currentPos, int32(ec.header.EventType), int32(*ec.latestOp))
-		if traceErr != nil {
-			s.tctx.L().Error("fail to collect binlog replication job event", zap.String("event", "row"), log.ShortError(traceErr))
-		}
-		*ec.traceID = traceEvent.Base.TraceID
 	}
 
 	for i := range sqls {
@@ -1629,14 +1610,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 	if len(needHandleDDLs) == 0 {
 		s.tctx.L().Info("skip event, need handled ddls is empty", zap.String("event", "query"), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("position", ec.currentPos))
 		return s.recordSkipSQLsPos(*ec.lastPos, nil)
-	}
-
-	if s.tracer.Enable() {
-		traceEvent, traceErr := s.tracer.CollectSyncerBinlogEvent(ec.traceSource, ec.safeMode.Enable(), ec.tryReSync, *ec.lastPos, *ec.currentPos, int32(ec.header.EventType), int32(*ec.latestOp))
-		if traceErr != nil {
-			s.tctx.L().Error("fail to collect binlog replication job event", zap.String("event", "query"), log.ShortError(traceErr))
-		}
-		*ec.traceID = traceEvent.Base.TraceID
 	}
 
 	if !s.cfg.IsSharding {
