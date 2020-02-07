@@ -39,6 +39,15 @@ function run() {
     echo "use sync_diff_inspector to check full dump loader"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
+    echo "send sql-skip request for two sources"
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "sql-skip --source \"mysql-replica-01\" --sql-pattern \"~(?i)DROP\\s+TABLE\\s+\" test" \
+        "\"result\": true" 2
+
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "sql-skip --source \"mysql-replica-02\" --sql-pattern \"~(?i)TRUNCATE\\s+TABLE\\s+\" test" \
+        "\"result\": true" 2
+
     echo "start dm-worker3 and kill dm-worker2"
     run_dm_worker $WORK_DIR/worker3 $WORKER3_PORT $cur/conf/dm-worker3.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER3_PORT
@@ -49,7 +58,7 @@ function run() {
     check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status test" \
-        "\"stage\": \"Running\"" 4
+        "\"stage\": \"Running\"" 2
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
@@ -57,6 +66,17 @@ function run() {
 
     echo "use sync_diff_inspector to check data now!"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+
+    echo "run DDL on MySQL, and these DDL will be skipped by DM"
+    run_sql "DROP TABLE ha_test.t1"  $MYSQL_PORT1
+    run_sql "TRUNCATE TABLE ha_test.t2" $MYSQL_PORT2
+
+    echo "check data in TiDB"
+    run_sql "select count(*) from ha_test.t1" $TIDB_PORT
+    check_contains "count(*): 6"
+    run_sql "select count(*) from ha_test.t2" $TIDB_PORT
+    check_contains "count(*): 2"
+
 }
 
 cleanup_data ha_test
