@@ -59,7 +59,7 @@ func (t *testPessimist) TestPessimist(c *C) {
 	defer clearTestInfoOperation(c)
 
 	var (
-		watchTimeout  = 200 * time.Millisecond
+		watchTimeout  = 500 * time.Millisecond
 		task1         = "task-1"
 		task2         = "task-2"
 		source1       = "mysql-replica-1"
