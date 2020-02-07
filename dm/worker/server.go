@@ -737,6 +737,7 @@ func (s *Server) setHandleSQLsRequest(w *Worker, taskName, source string) error 
 			log.L().Error("execute HandleSQLs request from etcd failed", zap.Binary("key", kv.Key), zap.Error(err))
 			return err
 		}
+		log.L().Info("load HandleSQLs request from etcd", zap.Stringer("req", req))
 	}
 
 	return nil
