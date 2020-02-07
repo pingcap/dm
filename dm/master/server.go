@@ -217,7 +217,10 @@ func (s *Server) recoverSubTask() error {
 		return err
 	}
 	for _, kv := range resp.Kvs {
-		infos := common.UpstreamSubTaskKeyAdapter.Decode(string(kv.Key))
+		infos, err := common.UpstreamSubTaskKeyAdapter.Decode(string(kv.Key))
+		if err != nil {
+			return terror.Annotate(err, "decode upstream subtask key from etcd failed")
+		}
 		sourceID := infos[0]
 		taskName := infos[1]
 		if sources, ok := s.taskSources[taskName]; ok {
@@ -294,15 +297,24 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 			return nil, errors.Errorf("the response kv is invalid length, request key: %s", k)
 		}
 		kv := resp.Responses[0].GetResponseRange().GetKvs()[0]
-		address, name := common.WorkerRegisterKeyAdapter.Decode(string(kv.Key))[0], string(kv.Value)
+		kvs, err := common.WorkerRegisterKeyAdapter.Decode(string(kv.Key))
+		if err != nil {
+			log.L().Error("decode worker register key from etcd failed", zap.Error(err))
+			return &pb.RegisterWorkerResponse{
+				Result: false,
+				Msg:    errors.ErrorStack(err),
+			}, nil
+		}
+		address := kvs[0]
+		name := string(kv.Value)
 		if name != req.Name {
 			msg := fmt.Sprintf("the address %s already registered with name %s", address, name)
-			respWorker := &pb.RegisterWorkerResponse{
+			respSource := &pb.RegisterWorkerResponse{
 				Result: false,
 				Msg:    msg,
 			}
 			log.L().Error(msg)
-			return respWorker, nil
+			return respSource, nil
 		}
 	}
 	s.coordinator.AddWorker(req.Name, req.Address, nil)
@@ -1716,7 +1728,8 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 		return makeMysqlWorkerResponse(err)
 	}
 	var resp *pb.MysqlWorkerResponse
-	if req.Op == pb.WorkerOp_StartWorker {
+	switch req.Op {
+	case pb.WorkerOp_StartWorker:
 		w := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
 		if w != nil {
 			return &pb.MysqlWorkerResponse{
@@ -1737,7 +1750,7 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 		}
 		// TODO: handle error or backoff
 		s.coordinator.HandleStartedWorker(w, cfg, true)
-	} else if req.Op == pb.WorkerOp_UpdateConfig {
+	case pb.WorkerOp_UpdateConfig:
 		w := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
 		if w == nil {
 			return &pb.MysqlWorkerResponse{
@@ -1748,7 +1761,7 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 		if resp, err = w.OperateMysqlWorker(ctx, req, s.cfg.RPCTimeout); err != nil {
 			return makeMysqlWorkerResponse(err)
 		}
-	} else {
+	case pb.WorkerOp_StopWorker:
 		w := s.coordinator.GetWorkerBySourceID(cfg.SourceID)
 		if w == nil {
 			return &pb.MysqlWorkerResponse{
@@ -1765,11 +1778,14 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 		if resp.Result {
 			s.coordinator.HandleStoppedWorker(w, cfg)
 		}
+	default:
+		return &pb.MysqlWorkerResponse{
+			Result: false,
+			Msg:    "invalid operate on worker",
+		}, nil
 	}
-	return &pb.MysqlWorkerResponse{
-		Result: resp.Result,
-		Msg:    resp.Msg,
-	}, nil
+
+	return resp, nil
 }
 
 func (s *Server) generateSubTask(ctx context.Context, task string) (*config.TaskConfig, []*config.SubTaskConfig, error) {

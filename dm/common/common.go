@@ -15,8 +15,11 @@ package common
 
 import (
 	"encoding/hex"
+	"fmt"
 	"path"
 	"strings"
+
+	"github.com/pingcap/dm/pkg/terror"
 )
 
 var (
@@ -43,6 +46,16 @@ var (
 	SQLsRequestKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/handle-sqls/")
 )
 
+func keyAdapterKeysLen(s KeyAdapter) int {
+	switch s {
+	case WorkerRegisterKeyAdapter, UpstreamConfigKeyAdapter, UpstreamBoundWorkerKeyAdapter:
+		return 1
+	case WorkerKeepAliveKeyAdapter, UpstreamSubTaskKeyAdapter:
+		return 2
+	}
+	return -1
+}
+
 // IsErrNetClosing checks whether is an ErrNetClosing error
 func IsErrNetClosing(err error) bool {
 	if err == nil {
@@ -54,7 +67,7 @@ func IsErrNetClosing(err error) bool {
 //KeyAdapter used to counstruct etcd key.
 type KeyAdapter interface {
 	Encode(keys ...string) string
-	Decode(key string) []string
+	Decode(key string) ([]string, error)
 	Path() string
 }
 
@@ -67,9 +80,13 @@ func (s keyEncoderDecoder) Encode(keys ...string) string {
 	return path.Join(t...)
 }
 
-func (s keyEncoderDecoder) Decode(key string) []string {
+func (s keyEncoderDecoder) Decode(key string) ([]string, error) {
 	v := strings.TrimPrefix(key, string(s))
-	return strings.Split(v, "/")
+	vals := strings.Split(v, "/")
+	if l := keyAdapterKeysLen(s); l != len(vals) {
+		return nil, terror.ErrDecodeEtcdKeyFail.Generate(fmt.Sprintf("decoder is %s, the key is %s", string(s), key))
+	}
+	return vals, nil
 }
 
 func (s keyEncoderDecoder) Path() string {
@@ -84,16 +101,19 @@ func (s keyHexEncoderDecoder) Encode(keys ...string) string {
 	return path.Join(t...)
 }
 
-func (s keyHexEncoderDecoder) Decode(key string) []string {
+func (s keyHexEncoderDecoder) Decode(key string) ([]string, error) {
 	v := strings.Split(strings.TrimPrefix(key, string(s)), "/")
+	if l := keyAdapterKeysLen(s); l != len(v) {
+		return nil, terror.ErrDecodeEtcdKeyFail.Generate(fmt.Sprintf("decoder is %s, the key is %s", string(s), key))
+	}
 	for i, k := range v {
 		dec, err := hex.DecodeString(k)
 		if err != nil {
-			panic(err)
+			return nil, terror.ErrDecodeEtcdKeyFail.Generate(err.Error())
 		}
 		v[i] = string(dec)
 	}
-	return v
+	return v, nil
 }
 
 func (s keyHexEncoderDecoder) Path() string {
