@@ -39,7 +39,7 @@ var (
 
 	// SQLsRequestKeyAdapter used to store sql-skip and sql-replace request.
 	// sharding is false: k/v: Encode(task-name, source-id, random key) -> HandleSQLsRequest
-	// sharding is true, k/v: Encode(task-name, "sharding", random key) -> HandleSQLsRequest
+	// sharding is true, k/v: Encode(task-name, "sharding", random key) -> HandleSQLsRequest, is not used now
 	SQLsRequestKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/handle-sqls/")
 )
 

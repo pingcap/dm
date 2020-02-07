@@ -198,7 +198,6 @@ func (st *SubTask) run() {
 	st.setStage(pb.Stage_Running)
 	st.setResult(nil) // clear previous result
 	cu := st.CurrUnit()
-
 	st.l.Info("start to run", zap.Stringer("unit", cu.Type()))
 	st.ctx, st.cancel = context.WithCancel(context.Background())
 	pr := make(chan pb.ProcessResult, 1)

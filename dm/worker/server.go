@@ -521,13 +521,15 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSubTaskSQLsReques
 	key := common.SQLsRequestKeyAdapter.Encode(req.Name, req.Source, fmt.Sprintf("%d-%d", time.Now().UnixNano(), rand.Intn(1000)))
 	value, err := req.Marshal()
 	if err != nil {
-		log.L().Error("fail to marshal HandleSQLs request", zap.Stringer("payload", req), zap.Error(err))
-		return makeCommonWorkerResponse(err), nil
+		errMsg := "request is handled by this dm-worker, but fail to marshal HandleSQLs request and is not saved to etcd, will be inoperative if task is scheduled to other dm-worker"
+		log.L().Error(errMsg, zap.Stringer("payload", req), zap.Error(err))
+		return makeCommonWorkerResponse(errors.Annotatef(err, errMsg)), nil
 	}
 	_, err = s.etcdClient.Put(ctx, key, string(value))
 	if err != nil {
-		log.L().Error("fail to save HandleSQLs request to etcd", zap.Stringer("payload", req), zap.Error(err))
-		return makeCommonWorkerResponse(err), nil
+		errMsg := "request is handled by this dm-worker, but is not saved to etcd, will be inoperative if task is scheduled to other dm-worker"
+		log.L().Error(errMsg, zap.Stringer("payload", req), zap.Error(err))
+		return makeCommonWorkerResponse(errors.Annotatef(err, errMsg)), nil
 	}
 
 	return makeCommonWorkerResponse(err), nil
