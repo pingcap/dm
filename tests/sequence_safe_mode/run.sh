@@ -48,8 +48,7 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
     sleep 2
-    echo "stat task after reset failpoint"
-    dmctl_start_task
+    echo "check sync diff after reset failpoint"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     pkill -hup dm-worker.test 2>/dev/null || true
@@ -64,8 +63,6 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
     sleep 2
-    echo "stat task after set SequenceShardSyncedExecutionExit failpoint"
-    dmctl_start_task
 
     # DM-worker exit when waiting for sharding group synced
     run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1
@@ -104,16 +101,9 @@ function run() {
         exit 1
     fi
 
-    sleep 2
-    echo "start task after restart DDL owner"
-    task_conf="$cur/conf/dm-task.yaml"
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "start-task $task_conf" \
-        "\"result\": true" 2 \
-        "\"worker\": \"127.0.0.1:$OWNER_PORT\"" 1
+    sleep 5
+    echo "check sync diff after restart DDL owner"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-
-    $cur/../bin/check_safe_mode $check_instance_id
 }
 
 cleanup_data sequence_safe_mode_target
