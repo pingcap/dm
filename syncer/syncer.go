@@ -15,7 +15,6 @@ package syncer
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -847,9 +846,12 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 		if s.cfg.IsSharding {
 			// for sharding DDL syncing, send result back
 			shardInfo := s.pessimist.PendingInfo()
-			if shardInfo == nil || shardOp == nil {
+			if shardInfo == nil {
+				// no need to do the shard DDL handle for `CREATE DATABASE/TABLE` now.
+				s.tctx.L().Warn("skip shard DDL handle in sharding mode", zap.Strings("ddl", sqlJob.ddls))
+			} else if shardOp == nil {
 				// TODO(csuzhangxc): add terror.
-				err = errors.New("missing shard DDL info or lock operation")
+				err = fmt.Errorf("missing shard DDL lock operation for shard DDL info (%s)", shardInfo)
 			} else {
 				err = s.pessimist.DoneOperationDeleteInfo(*shardOp, *shardInfo)
 			}
@@ -1757,6 +1759,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			return err2
 		}
 		shardLockResolving.WithLabelValues(s.cfg.Name).Set(1) // block and wait DDL lock to be synced
+		s.tctx.L().Info("putted shard DDL info", zap.Stringer("info", shardInfo))
 
 		shardOp, err2 := s.pessimist.GetOperation(ec.tctx.Ctx, shardInfo, rev)
 		shardLockResolving.WithLabelValues(s.cfg.Name).Set(0)
