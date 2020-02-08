@@ -145,7 +145,7 @@ func (c *StreamerController) Start(tctx *tcontext.Context, pos mysql.Position) e
 		err = c.updateServerIDAndResetReplication(tctx, pos)
 	}
 	if err != nil {
-		c.Close(tctx)
+		c.close(tctx)
 		return err
 	}
 
@@ -302,8 +302,11 @@ func (c *StreamerController) closeBinlogSyncer(logtctx *tcontext.Context, binlog
 // Close closes streamer
 func (c *StreamerController) Close(tctx *tcontext.Context) {
 	c.Lock()
-	defer c.Unlock()
+	c.close(tctx)
+	c.Unlock()
+}
 
+func (c *StreamerController) close(tctx *tcontext.Context) {
 	if c.closed {
 		return
 	}
