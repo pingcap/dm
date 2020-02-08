@@ -82,7 +82,7 @@ function run() {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     # LoadExecCreateTableFailed error return twice
-    sleep 2
+    sleep 8
     err_cnt=`grep LoadExecCreateTableFailed $WORK_DIR/worker1/log/dm-worker.log | wc -l`
     if [ $err_cnt -ne 2 ]; then
         echo "error LoadExecCreateTableFailed's count is not 2"
