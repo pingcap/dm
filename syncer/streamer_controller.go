@@ -243,7 +243,11 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 	case *replication.RotateEvent:
 		// if is local binlog, binlog's name contain uuid information, need to save it
 		// if is remote binlog, need to add uuid information in binlog's name
-		if !c.setUUIDIfExists(string(ev.NextLogName)) {
+		c.Lock()
+		containUUID := c.setUUIDIfExists(string(ev.NextLogName))
+		c.Unlock()
+
+		if !containUUID {
 			if len(c.uuidSuffix) != 0 {
 				filename, err := binlog.ParseFilename(string(ev.NextLogName))
 				if err != nil {
