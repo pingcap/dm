@@ -214,9 +214,6 @@ func (c *StreamerController) RedirectStreamer(tctx *tcontext.Context, pos mysql.
 
 // GetEvent returns binlog event, should only have one thread call this function.
 func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replication.BinlogEvent, err error) {
-	c.Lock()
-	defer c.Unlock()
-
 	ctx, cancel := context.WithTimeout(tctx.Context(), eventTimeout)
 	failpoint.Inject("SyncerEventTimeout", func(val failpoint.Value) {
 		if seconds, ok := val.(int); ok {
@@ -226,11 +223,17 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 		}
 	})
 
-	event, err = c.streamer.GetEvent(ctx)
+	c.RLock()
+	streamer := c.streamer
+	c.RUnlock()
+
+	event, err = streamer.GetEvent(ctx)
 	cancel()
 	if err != nil {
 		if err != context.Canceled && err != context.DeadlineExceeded {
+			c.Lock()
 			c.meetError = true
+			c.Unlock()
 		}
 
 		return nil, err
