@@ -245,6 +245,7 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 		// if is remote binlog, need to add uuid information in binlog's name
 		c.Lock()
 		containUUID := c.setUUIDIfExists(string(ev.NextLogName))
+		uuidSuffix := c.uuidSuffix
 		c.Unlock()
 
 		if !containUUID {
@@ -253,7 +254,7 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 				if err != nil {
 					return nil, terror.Annotate(err, "fail to parse binlog file name from rotate event")
 				}
-				ev.NextLogName = []byte(binlog.ConstructFilenameWithUUIDSuffix(filename, c.uuidSuffix))
+				ev.NextLogName = []byte(binlog.ConstructFilenameWithUUIDSuffix(filename, uuidSuffix))
 				event.Event = ev
 			}
 		}
