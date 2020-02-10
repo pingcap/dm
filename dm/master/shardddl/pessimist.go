@@ -61,14 +61,15 @@ func (p *Pessimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 	p.lk.Clear() // clear all previous locks to support re-Start.
 
 	// get the history shard DDL info.
-	ifm, rev, err := pessimism.GetAllInfo(etcdCli)
+	// for the sequence of coordinate a shard DDL lock, see `/pkg/shardddl/pessimism/doc.go`.
+	ifm, rev1, err := pessimism.GetAllInfo(etcdCli)
 	if err != nil {
 		return err
 	}
-	p.logger.Info("get history shard DDL info", zap.Reflect("info", ifm), zap.Int64("revision", rev))
+	p.logger.Info("get history shard DDL info", zap.Reflect("info", ifm), zap.Int64("revision", rev1))
 
 	// get the history shard DDL lock operation.
-	// the newly operations after this GET will be received through the WATCH with `rev`,
+	// the newly operations after this GET will be received through the WATCH with `rev2`,
 	// and call `Lock.MarkDone` multiple times is fine.
 	opm, rev2, err := pessimism.GetAllOperations(etcdCli)
 	if err != nil {
@@ -92,7 +93,7 @@ func (p *Pessimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 			p.wg.Done()
 			close(infoCh)
 		}()
-		pessimism.WatchInfoPut(ctx, etcdCli, rev, infoCh)
+		pessimism.WatchInfoPut(ctx, etcdCli, rev1, infoCh)
 	}()
 	go func() {
 		defer p.wg.Done()
@@ -107,7 +108,7 @@ func (p *Pessimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 			p.wg.Done()
 			close(opCh)
 		}()
-		pessimism.WatchOperationPut(ctx, etcdCli, "", "", rev, opCh)
+		pessimism.WatchOperationPut(ctx, etcdCli, "", "", rev2, opCh)
 	}()
 	go func() {
 		defer p.wg.Done()

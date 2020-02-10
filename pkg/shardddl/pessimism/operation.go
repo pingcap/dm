@@ -203,7 +203,11 @@ func WatchOperationPut(ctx context.Context, cli *clientv3.Client, task, source s
 					log.L().Error("fail to construct shard DDL operation from json", zap.ByteString("json", ev.Kv.Value))
 					continue
 				}
-				outCh <- op
+				select {
+				case outCh <- op:
+				case <-ctx.Done():
+					return
+				}
 			}
 		}
 	}

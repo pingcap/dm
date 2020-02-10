@@ -150,7 +150,11 @@ func WatchInfoPut(ctx context.Context, cli *clientv3.Client, revision int64, out
 					log.L().Error("fail to construct shard DDL info from json", zap.ByteString("json", ev.Kv.Value))
 					continue
 				}
-				outCh <- info
+				select {
+				case outCh <- info:
+				case <-ctx.Done():
+					return
+				}
 			}
 		}
 	}
