@@ -28,7 +28,7 @@ import (
 // NewUnlockDDLLockCmd creates a UnlockDDLLock command
 func NewUnlockDDLLockCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "unlock-ddl-lock [-w worker ...] <lock-ID>",
+		Use:   "unlock-ddl-lock [-s source ...] <lock-ID>",
 		Short: "forcefully unlock DDL lock",
 		Run:   unlockDDLLockFunc,
 	}
@@ -52,7 +52,7 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) {
 
 	lockID := cmd.Flags().Arg(0)
 
-	workers, err := common.GetWorkerArgs(cmd)
+	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
 		fmt.Println(errors.ErrorStack(err))
 		return
@@ -70,11 +70,11 @@ func unlockDDLLockFunc(cmd *cobra.Command, _ []string) {
 	resp, err := cli.UnlockDDLLock(ctx, &pb.UnlockDDLLockRequest{
 		ID:           lockID,
 		ReplaceOwner: owner,
-		Workers:      workers,
+		Sources:      sources,
 		ForceRemove:  forceRemove,
 	})
 	if err != nil {
-		common.PrintLines("can not unlock DDL lock %s (in workers %v):\n%s", lockID, workers, errors.ErrorStack(err))
+		common.PrintLines("can not unlock DDL lock %s (in sources %v):\n%s", lockID, sources, errors.ErrorStack(err))
 		return
 	}
 

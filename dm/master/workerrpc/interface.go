@@ -45,6 +45,7 @@ const (
 	CmdMigrateRelay
 
 	CmdFetchDDLInfo
+	CmdOperateMysqlTask
 )
 
 // Request wraps all dm-worker rpc requests.
@@ -55,10 +56,9 @@ type Request struct {
 	OperateSubTask *pb.OperateSubTaskRequest
 	UpdateSubTask  *pb.UpdateSubTaskRequest
 
-	QueryStatus        *pb.QueryStatusRequest
-	QueryError         *pb.QueryErrorRequest
-	QueryTaskOperation *pb.QueryTaskOperationRequest
-	QueryWorkerConfig  *pb.QueryWorkerConfigRequest
+	QueryStatus       *pb.QueryStatusRequest
+	QueryError        *pb.QueryErrorRequest
+	QueryWorkerConfig *pb.QueryWorkerConfigRequest
 
 	HandleSubTaskSQLs *pb.HandleSubTaskSQLsRequest
 	ExecDDL           *pb.ExecDDLRequest
@@ -69,20 +69,20 @@ type Request struct {
 	PurgeRelay        *pb.PurgeRelayRequest
 	UpdateRelay       *pb.UpdateRelayRequest
 	MigrateRelay      *pb.MigrateRelayRequest
+	MysqlTask         *pb.MysqlWorkerRequest
 }
 
 // Response wraps all dm-worker rpc responses.
 type Response struct {
 	Type CmdType
 
-	StartSubTask   *pb.OperateSubTaskResponse
+	StartSubTask   *pb.CommonWorkerResponse
 	OperateSubTask *pb.OperateSubTaskResponse
-	UpdateSubTask  *pb.OperateSubTaskResponse
+	UpdateSubTask  *pb.CommonWorkerResponse
 
-	QueryStatus        *pb.QueryStatusResponse
-	QueryError         *pb.QueryErrorResponse
-	QueryTaskOperation *pb.QueryTaskOperationResponse
-	QueryWorkerConfig  *pb.QueryWorkerConfigResponse
+	QueryStatus       *pb.QueryStatusResponse
+	QueryError        *pb.QueryErrorResponse
+	QueryWorkerConfig *pb.QueryWorkerConfigResponse
 
 	HandleSubTaskSQLs *pb.CommonWorkerResponse
 	ExecDDL           *pb.CommonWorkerResponse
@@ -93,6 +93,7 @@ type Response struct {
 	PurgeRelay        *pb.CommonWorkerResponse
 	UpdateRelay       *pb.CommonWorkerResponse
 	MigrateRelay      *pb.CommonWorkerResponse
+	MysqlTask         *pb.MysqlWorkerResponse
 
 	FetchDDLInfo pb.Worker_FetchDDLInfoClient
 }

@@ -52,7 +52,7 @@ func NewRootCmd() *cobra.Command {
 		Short: "DM control",
 	}
 	// --worker worker1 -w worker2 --worker=worker3,worker4 -w=worker5,worker6
-	cmd.PersistentFlags().StringSliceVarP(&commandMasterFlags.workers, "worker", "w", []string{}, "DM-worker ID")
+	cmd.PersistentFlags().StringSliceVarP(&commandMasterFlags.workers, "source", "s", []string{}, "MySQL Source ID")
 	cmd.AddCommand(
 		master.NewStartTaskCmd(),
 		master.NewStopTaskCmd(),
@@ -62,7 +62,6 @@ func NewRootCmd() *cobra.Command {
 		master.NewUpdateTaskCmd(),
 		master.NewQueryStatusCmd(),
 		master.NewQueryErrorCmd(),
-		master.NewRefreshWorkerTasks(),
 		master.NewSQLReplaceCmd(),
 		master.NewSQLSkipCmd(),
 		master.NewSQLInjectCmd(),
@@ -76,6 +75,8 @@ func NewRootCmd() *cobra.Command {
 		master.NewUpdateRelayCmd(),
 		master.NewPurgeRelayCmd(),
 		master.NewMigrateRelayCmd(),
+		master.NewOperateMysqlWorkerCmd(),
+		master.NewOfflineWorkerCmd(),
 	)
 	return cmd
 }

@@ -15,12 +15,25 @@ function run() {
     run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2
     check_contains 'Query OK, 3 rows affected'
 
+    # start DM worker and master
+    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
-    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+    # operate mysql config to worker
+    cp $cur/conf/mysql1.toml $WORK_DIR/mysql1.toml
+    cp $cur/conf/mysql2.toml $WORK_DIR/mysql2.toml
+    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/mysql1.toml
+    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker2/relay_log\"" $WORK_DIR/mysql2.toml
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "operate-worker create $WORK_DIR/mysql1.toml" \
+        "true" 1
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "operate-worker create $WORK_DIR/mysql2.toml" \
+        "true" 1
+
 
     # start DM task only
     dmctl_start_task
@@ -33,7 +46,21 @@ function run() {
 
     # restart dm-worker
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
+    check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
+    sleep 5
+    echo "after restart dm-worker, task should resume automatically"
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-task $cur/conf/dm-task.yaml" \
+        "\"result\": true" 1 \
+        "start sub task test: sub task test already exists" 2
+    sleep 2
+
+    # wait for task running
+    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
+    sleep 2 # still wait for subtask running on other dm-workers
 
     # wait for task running
     check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10

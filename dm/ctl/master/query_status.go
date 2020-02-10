@@ -36,13 +36,13 @@ type taskResult struct {
 type taskInfo struct {
 	TaskName   string   `json:"taskName,omitempty"`
 	TaskStatus string   `json:"taskStatus,omitempty"`
-	Workers    []string `json:"workers,omitempty"`
+	Sources    []string `json:"sources,omitempty"`
 }
 
 // NewQueryStatusCmd creates a QueryStatus command
 func NewQueryStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "query-status [-w worker ...] [task-name]",
+		Use:   "query-status [-s source ...] [task-name]",
 		Short: "query task status",
 		Run:   queryStatusFunc,
 	}
@@ -58,7 +58,7 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) {
 	}
 	taskName := cmd.Flags().Arg(0) // maybe empty
 
-	workers, err := common.GetWorkerArgs(cmd)
+	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
 		common.PrintLines("%s", errors.ErrorStack(err))
 		return
@@ -69,14 +69,14 @@ func queryStatusFunc(cmd *cobra.Command, _ []string) {
 	defer cancel()
 	resp, err := cli.QueryStatus(ctx, &pb.QueryStatusListRequest{
 		Name:    taskName,
-		Workers: workers,
+		Sources: sources,
 	})
 	if err != nil {
-		common.PrintLines("can not query %s task's status(in workers %v):\n%s", taskName, workers, errors.ErrorStack(err))
+		common.PrintLines("can not query %s task's status(in sources %v):\n%s", taskName, sources, errors.ErrorStack(err))
 		return
 	}
 
-	if resp.Result && taskName == "" && len(workers) == 0 {
+	if resp.Result && taskName == "" && len(sources) == 0 {
 		result := wrapTaskResult(resp)
 		common.PrettyPrintInterface(result)
 	} else {
@@ -100,14 +100,14 @@ func getRelayStage(relayStatus *pb.RelayStatus) string {
 // wrapTaskResult picks task info and generate tasks' status and relative workers
 func wrapTaskResult(resp *pb.QueryStatusListResponse) *taskResult {
 	taskStatusMap := make(map[string]string)
-	taskCorrespondingWorkers := make(map[string][]string)
-	for _, worker := range resp.Workers {
-		relayStatus := worker.RelayStatus
-		for _, subTask := range worker.SubTaskStatus {
+	taskCorrespondingSources := make(map[string][]string)
+	for _, source := range resp.Sources {
+		relayStatus := source.RelayStatus
+		for _, subTask := range source.SubTaskStatus {
 			subTaskName := subTask.Name
 			subTaskStage := subTask.Stage
 
-			taskCorrespondingWorkers[subTaskName] = append(taskCorrespondingWorkers[subTaskName], worker.Worker)
+			taskCorrespondingSources[subTaskName] = append(taskCorrespondingSources[subTaskName], source.Source)
 			taskStage := taskStatusMap[subTaskName]
 			// the status of a task is decided by its subtasks, the rule is listed as follows:
 			// |                     Subtasks' status                       |                Task's status                 |
@@ -142,7 +142,7 @@ func wrapTaskResult(resp *pb.QueryStatusListResponse) *taskResult {
 			&taskInfo{
 				TaskName:   curTaskName,
 				TaskStatus: taskStatus,
-				Workers:    taskCorrespondingWorkers[curTaskName],
+				Sources:    taskCorrespondingSources[curTaskName],
 			})
 	}
 	return &taskResult{

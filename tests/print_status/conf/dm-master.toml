@@ -1,5 +1,1 @@
 # Master Configuration.
-
-[[deploy]]
-source-id = "mysql-replica-01"
-dm-worker = "127.0.0.1:8262"

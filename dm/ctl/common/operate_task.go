@@ -20,13 +20,13 @@ import (
 )
 
 // OperateTask does operation on task
-func OperateTask(op pb.TaskOp, name string, workers []string) (*pb.OperateTaskResponse, error) {
+func OperateTask(op pb.TaskOp, name string, sources []string) (*pb.OperateTaskResponse, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cli := MasterClient()
 	return cli.OperateTask(ctx, &pb.OperateTaskRequest{
 		Op:      op,
 		Name:    name,
-		Workers: workers,
+		Sources: sources,
 	})
 }

@@ -625,11 +625,14 @@ func (cp *RemoteCheckPoint) Load(tctx *tcontext.Context, schemaTracker *schema.T
 		if err = json.Unmarshal(tiBytes, &ti); err != nil {
 			return terror.ErrSchemaTrackerInvalidJSON.Delegate(err, cpSchema, cpTable)
 		}
-		if err = schemaTracker.CreateSchemaIfNotExists(cpSchema); err != nil {
-			return terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, cpSchema)
-		}
-		if err = schemaTracker.CreateTableIfNotExists(cpSchema, cpTable, &ti); err != nil {
-			return terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, cpSchema, cpTable)
+
+		if schemaTracker != nil {
+			if err = schemaTracker.CreateSchemaIfNotExists(cpSchema); err != nil {
+				return terror.ErrSchemaTrackerCannotCreateSchema.Delegate(err, cpSchema)
+			}
+			if err = schemaTracker.CreateTableIfNotExists(cpSchema, cpTable, &ti); err != nil {
+				return terror.ErrSchemaTrackerCannotCreateTable.Delegate(err, cpSchema, cpTable)
+			}
 		}
 
 		mSchema, ok := cp.points[cpSchema]

@@ -20,21 +20,31 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/errors"
-	"github.com/siddontang/go/sync2"
-	"github.com/soheilhy/cmux"
-	"go.uber.org/zap"
-	"google.golang.org/grpc"
-
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/binlog"
+	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/syncer"
+
+	"github.com/pingcap/errors"
+	"github.com/siddontang/go-mysql/mysql"
+	"github.com/siddontang/go/sync2"
+	"github.com/soheilhy/cmux"
+	"go.etcd.io/etcd/clientv3"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
 )
 
 var (
-	cmuxReadTimeout = 10 * time.Second
+	cmuxReadTimeout         = 10 * time.Second
+	dialTimeout             = 3 * time.Second
+	keepaliveTimeout        = 3 * time.Second
+	keepaliveTime           = 3 * time.Second
+	retryConnectSleepTime   = 2 * time.Second
+	getMinPosForSubTaskFunc = getMinPosForSubTask
 )
 
 // Server accepts RPC requests
@@ -44,12 +54,18 @@ type Server struct {
 	sync.Mutex
 	wg     sync.WaitGroup
 	closed sync2.AtomicBool
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	cfg *Config
 
-	rootLis net.Listener
-	svr     *grpc.Server
-	worker  *Worker
+	rootLis    net.Listener
+	svr        *grpc.Server
+	worker     *Worker
+	etcdClient *clientv3.Client
+
+	// false: has retried connecting to master again.
+	retryConnectMaster sync2.AtomicBool
 }
 
 // NewServer creates a new Server
@@ -57,6 +73,7 @@ func NewServer(cfg *Config) *Server {
 	s := Server{
 		cfg: cfg,
 	}
+	s.retryConnectMaster.Set(true)
 	s.closed.Set(true) // not start yet
 	return &s
 }
@@ -64,27 +81,59 @@ func NewServer(cfg *Config) *Server {
 // Start starts to serving
 func (s *Server) Start() error {
 	var err error
-
-	_, _, err = s.splitHostPort()
-	if err != nil {
-		return err
-	}
-
 	s.rootLis, err = net.Listen("tcp", s.cfg.WorkerAddr)
 	if err != nil {
 		return terror.ErrWorkerStartService.Delegate(err)
 	}
 
-	s.worker, err = NewWorker(s.cfg)
+	log.L().Info("Start Server")
+	s.setWorker(nil, true)
+	s.ctx, s.cancel = context.WithCancel(context.Background())
+	s.etcdClient, err = clientv3.New(clientv3.Config{
+		Endpoints:            GetJoinURLs(s.cfg.Join),
+		DialTimeout:          dialTimeout,
+		DialKeepAliveTime:    keepaliveTime,
+		DialKeepAliveTimeout: keepaliveTimeout,
+	})
 	if err != nil {
 		return err
 	}
-
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		// start running worker to handle requests
-		s.worker.Start()
+		// worker keepalive with master
+		// If worker loses connect from master, it would stop all task and try to connect master again.
+		shouldExit := false
+		var err1 error
+		for !shouldExit {
+			shouldExit, err1 = s.KeepAlive()
+			log.L().Warn("keepalive with master goroutine paused", zap.Error(err1))
+			if err1 != nil || !shouldExit {
+				if s.retryConnectMaster.Get() {
+					// Try to connect master again before stop worker
+					s.retryConnectMaster.Set(false)
+				} else {
+					s.Lock()
+					w := s.getWorker(false)
+					if w != nil {
+						s.setWorker(nil, false)
+						s.Unlock()
+						w.Close()
+					} else {
+						s.Unlock()
+					}
+				}
+				select {
+				case <-s.ctx.Done():
+					shouldExit = true
+					break
+				case <-time.After(retryConnectSleepTime):
+					// Try to connect master again
+					break
+				}
+			}
+		}
+		log.L().Info("keepalive with master goroutine exited!")
 	}()
 
 	// create a cmux
@@ -106,7 +155,6 @@ func (s *Server) Start() error {
 	go InitStatus(httpL) // serve status
 
 	s.closed.Set(false)
-
 	log.L().Info("start gRPC API", zap.String("listened address", s.cfg.WorkerAddr))
 	err = m.Serve()
 	if err != nil && common.IsErrNetClosing(err) {
@@ -115,8 +163,7 @@ func (s *Server) Start() error {
 	return terror.ErrWorkerStartService.Delegate(err)
 }
 
-// Close close the RPC server, this function can be called multiple times
-func (s *Server) Close() {
+func (s *Server) doClose() {
 	s.Lock()
 	defer s.Unlock()
 	if s.closed.Get() {
@@ -137,117 +184,201 @@ func (s *Server) Close() {
 	}
 
 	// close worker and wait for return
-	if s.worker != nil {
-		s.worker.Close()
-		s.wg.Wait()
+	s.cancel()
+	if w := s.getWorker(false); w != nil {
+		w.Close()
 	}
-
 	s.closed.Set(true)
 }
 
-// StartSubTask implements WorkerServer.StartSubTask
-func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
-	log.L().Info("", zap.String("request", "StartSubTask"), zap.Stringer("payload", req))
+// Close close the RPC server, this function can be called multiple times
+func (s *Server) Close() {
+	s.doClose()
+	s.wg.Wait()
+}
 
+func (s *Server) getWorker(needLock bool) *Worker {
+	if needLock {
+		s.Lock()
+		defer s.Unlock()
+	}
+	return s.worker
+}
+
+func (s *Server) setWorker(worker *Worker, needLock bool) {
+	if needLock {
+		s.Lock()
+		defer s.Unlock()
+	}
+	s.worker = worker
+}
+
+func (s *Server) stopWorker(sourceID string) error {
+	s.Lock()
+	w := s.getWorker(false)
+	if w == nil {
+		s.Unlock()
+		return terror.ErrWorkerNoStart
+	}
+	if w.cfg.SourceID != sourceID {
+		s.Unlock()
+		return terror.ErrWorkerSourceNotMatch
+	}
+	s.setWorker(nil, false)
+	s.Unlock()
+	w.Close()
+	return nil
+}
+
+func (s *Server) retryWriteEctd(ops ...clientv3.Op) string {
+	retryTimes := 3
+	cliCtx, canc := context.WithTimeout(s.etcdClient.Ctx(), time.Second)
+	defer canc()
+	for {
+		res, err := s.etcdClient.Txn(cliCtx).Then(ops...).Commit()
+		retryTimes--
+		if err == nil {
+			if res.Succeeded {
+				return ""
+			} else if retryTimes <= 0 {
+				return "failed to write data in etcd"
+			}
+		} else if retryTimes <= 0 {
+			return errors.ErrorStack(err)
+		}
+		time.Sleep(time.Millisecond * 50)
+	}
+}
+
+// StartSubTask implements WorkerServer.StartSubTask
+func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) (*pb.CommonWorkerResponse, error) {
+	log.L().Info("", zap.String("request", "StartSubTask"), zap.Stringer("payload", req))
 	cfg := config.NewSubTaskConfig()
 	err := cfg.Decode(req.Task)
 	if err != nil {
 		err = terror.Annotatef(err, "decode subtask config from request %+v", req.Task)
 		log.L().Error("fail to decode task", zap.String("request", "StartSubTask"), zap.Stringer("payload", req), zap.Error(err))
-		return nil, err
+		return &pb.CommonWorkerResponse{
+			Result: false,
+			Msg:    err.Error(),
+		}, nil
+	}
+	resp := &pb.CommonWorkerResponse{
+		Result: true,
+		Msg:    "",
+	}
+	w := s.getWorker(true)
+	if w == nil || w.cfg.SourceID != cfg.SourceID {
+		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
+		resp.Result = false
+		resp.Msg = terror.ErrWorkerNoStart.Error()
+		return resp, nil
 	}
 
-	opLogID, err := s.worker.StartSubTask(cfg)
+	cfg.LogLevel = s.cfg.LogLevel
+	cfg.LogFile = s.cfg.LogFile
+	err = w.StartSubTask(cfg)
+
 	if err != nil {
 		err = terror.Annotatef(err, "start sub task %s", cfg.Name)
 		log.L().Error("fail to start subtask", zap.String("request", "StartSubTask"), zap.Stringer("payload", req), zap.Error(err))
-		return nil, err
+		resp.Result = false
+		resp.Msg = err.Error()
 	}
 
-	return &pb.OperateSubTaskResponse{
-		Meta: &pb.CommonWorkerResponse{
-			Result: true,
-			Msg:    "",
-		},
-		Op:    pb.TaskOp_Start,
-		LogID: opLogID,
-	}, nil
+	if resp.Result {
+		op1 := clientv3.OpPut(common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name), req.Task)
+		resp.Msg = s.retryWriteEctd(op1)
+	}
+	return resp, nil
 }
 
 // OperateSubTask implements WorkerServer.OperateSubTask
 func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
+	resp := &pb.OperateSubTaskResponse{
+		Result: true,
+		Op:     req.Op,
+		Msg:    "",
+	}
+	w := s.getWorker(true)
+	if w == nil {
+		log.L().Error("fail to call OperateSubTask, because mysql worker has not been started")
+		resp.Result = false
+		resp.Msg = terror.ErrWorkerNoStart.Error()
+		return resp, nil
+	}
+
 	log.L().Info("", zap.String("request", "OperateSubTask"), zap.Stringer("payload", req))
-	opLogID, err := s.worker.OperateSubTask(req.Name, req.Op)
+	err := w.OperateSubTask(req.Name, req.Op)
 	if err != nil {
 		err = terror.Annotatef(err, "operate(%s) sub task %s", req.Op.String(), req.Name)
 		log.L().Error("fail to operate task", zap.String("request", "OperateSubTask"), zap.Stringer("payload", req), zap.Error(err))
-		return nil, err
+		resp.Result = false
+		resp.Msg = err.Error()
+	} else {
+		// TODO: change task state.
+		// clean subtask config when we stop the subtask
+		if req.Op == pb.TaskOp_Stop {
+			op1 := clientv3.OpDelete(common.UpstreamSubTaskKeyAdapter.Encode(w.cfg.SourceID, req.Name))
+			resp.Msg = s.retryWriteEctd(op1)
+			resp.Result = len(resp.Msg) == 0
+		}
 	}
-
-	return &pb.OperateSubTaskResponse{
-		Meta: &pb.CommonWorkerResponse{
-			Result: true,
-			Msg:    "",
-		},
-		Op:    req.Op,
-		LogID: opLogID,
-	}, nil
+	return resp, nil
 }
 
 // UpdateSubTask implements WorkerServer.UpdateSubTask
-func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest) (*pb.OperateSubTaskResponse, error) {
+func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "UpdateSubTask"), zap.Stringer("payload", req))
 	cfg := config.NewSubTaskConfig()
 	err := cfg.Decode(req.Task)
 	if err != nil {
 		err = terror.Annotatef(err, "decode config from request %+v", req.Task)
 		log.L().Error("fail to decode subtask", zap.String("request", "UpdateSubTask"), zap.Stringer("payload", req), zap.Error(err))
-		return nil, err
+		return &pb.CommonWorkerResponse{
+			Result: false,
+			Msg:    err.Error(),
+		}, nil
 	}
-
-	opLogID, err := s.worker.UpdateSubTask(cfg)
+	resp := &pb.CommonWorkerResponse{
+		Result: true,
+		Msg:    "",
+	}
+	w := s.getWorker(true)
+	if w == nil {
+		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
+		resp.Result = false
+		resp.Msg = terror.ErrWorkerNoStart.Error()
+		return resp, nil
+	}
+	err = w.UpdateSubTask(cfg)
 	if err != nil {
 		err = terror.Annotatef(err, "update sub task %s", cfg.Name)
 		log.L().Error("fail to update task", zap.String("request", "UpdateSubTask"), zap.Stringer("payload", req), zap.Error(err))
-		return nil, err
+		resp.Result = false
+		resp.Msg = err.Error()
+	} else {
+		op1 := clientv3.OpPut(common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name), req.Task)
+		resp.Msg = s.retryWriteEctd(op1)
 	}
-
-	return &pb.OperateSubTaskResponse{
-		Meta: &pb.CommonWorkerResponse{
-			Result: true,
-			Msg:    "",
-		},
-		Op:    pb.TaskOp_Update,
-		LogID: opLogID,
-	}, nil
-}
-
-// QueryTaskOperation implements WorkerServer.QueryTaskOperation
-func (s *Server) QueryTaskOperation(ctx context.Context, req *pb.QueryTaskOperationRequest) (*pb.QueryTaskOperationResponse, error) {
-	log.L().Info("", zap.String("request", "QueryTaskOperation"), zap.Stringer("payload", req))
-
-	taskName := req.Name
-	opLogID := req.LogID
-
-	opLog, err := s.worker.meta.GetTaskLog(opLogID)
-	if err != nil {
-		err = terror.Annotatef(err, "fail to get operation %d of task %s", opLogID, taskName)
-		log.L().Error(err.Error())
-		return nil, err
-	}
-
-	return &pb.QueryTaskOperationResponse{
-		Log: opLog,
-		Meta: &pb.CommonWorkerResponse{
-			Result: true,
-			Msg:    "",
-		},
-	}, nil
+	return resp, nil
 }
 
 // QueryStatus implements WorkerServer.QueryStatus
 func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*pb.QueryStatusResponse, error) {
 	log.L().Info("", zap.String("request", "QueryStatus"), zap.Stringer("payload", req))
+
+	resp := &pb.QueryStatusResponse{
+		Result: true,
+	}
+
+	w := s.getWorker(true)
+	if w == nil {
+		log.L().Error("fail to call QueryStatus, because mysql worker has not been started")
+		resp.Result = false
+		resp.Msg = terror.ErrWorkerNoStart.Error()
+		return resp, nil
+	}
 
 	relayStatus := &pb.RelayStatus{
 		Result: &pb.ProcessResult{
@@ -258,13 +389,9 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 		relayStatus = s.worker.relayHolder.Status()
 	}
 
-	resp := &pb.QueryStatusResponse{
-		Result:        true,
-		SubTaskStatus: s.worker.QueryStatus(req.Name),
-		RelayStatus:   relayStatus,
-		SourceID:      s.worker.cfg.SourceID,
-	}
-
+	resp.SubTaskStatus = w.QueryStatus(req.Name)
+	resp.RelayStatus = relayStatus
+	resp.Source = w.cfg.SourceID
 	if len(resp.SubTaskStatus) == 0 {
 		resp.Msg = "no sub task started"
 	}
@@ -274,17 +401,22 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 // QueryError implements WorkerServer.QueryError
 func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorRequest) (*pb.QueryErrorResponse, error) {
 	log.L().Info("", zap.String("request", "QueryError"), zap.Stringer("payload", req))
-
-	var relayError *pb.RelayError
-	if s.worker.relayHolder != nil {
-		relayError = s.worker.relayHolder.Error()
-	}
 	resp := &pb.QueryErrorResponse{
-		Result:       true,
-		SubTaskError: s.worker.QueryError(req.Name),
-		RelayError:   relayError,
+		Result: true,
 	}
 
+	w := s.getWorker(true)
+	if w == nil {
+		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
+		resp.Result = false
+		resp.Msg = terror.ErrWorkerNoStart.Error()
+		return resp, nil
+	}
+
+	resp.SubTaskError = w.QueryError(req.Name)
+	if w.relayHolder != nil {
+		resp.RelayError = w.relayHolder.Error()
+	}
 	return resp, nil
 }
 
@@ -293,10 +425,16 @@ func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorRequest) (*pb
 // if error occurred in Send / Recv, just retry in client
 func (s *Server) FetchDDLInfo(stream pb.Worker_FetchDDLInfoServer) error {
 	log.L().Info("", zap.String("request", "FetchDDLInfo"))
+	w := s.getWorker(true)
+	if w == nil {
+		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
+		return terror.ErrWorkerNoStart.Generate()
+	}
+
 	var ddlInfo *pb.DDLInfo
 	for {
 		// try fetch pending to sync DDL info from worker
-		ddlInfo = s.worker.FetchDDLInfo(stream.Context())
+		ddlInfo = w.FetchDDLInfo(stream.Context())
 		if ddlInfo == nil {
 			return nil // worker closed or context canceled
 		}
@@ -321,75 +459,107 @@ func (s *Server) FetchDDLInfo(stream pb.Worker_FetchDDLInfoServer) error {
 
 		//ddlInfo = nil // clear and protect to put it back
 
-		err = s.worker.RecordDDLLockInfo(in)
+		err = w.RecordDDLLockInfo(in)
 		if err != nil {
 			// if error occurred when recording DDLLockInfo, log an error
 			// user can handle this case using dmctl
 			log.L().Error("fail to record DDLLockInfo", zap.String("request", "FetchDDLInfo"), zap.Stringer("ddl lock info", in), zap.Error(err))
 		}
 	}
+	// TODO: check whether this interface need to store message in ETCD
 }
 
 // ExecuteDDL implements WorkerServer.ExecuteDDL
 func (s *Server) ExecuteDDL(ctx context.Context, req *pb.ExecDDLRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "ExecuteDDL"), zap.Stringer("payload", req))
+	w := s.getWorker(true)
+	if w == nil {
+		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
+		return makeCommonWorkerResponse(terror.ErrWorkerNoStart.Generate()), nil
+	}
 
-	err := s.worker.ExecuteDDL(ctx, req)
+	err := w.ExecuteDDL(ctx, req)
 	if err != nil {
 		log.L().Error("fail to execute ddl", zap.String("request", "ExecuteDDL"), zap.Stringer("payload", req), zap.Error(err))
 	}
+	// TODO: check whether this interface need to store message in ETCD
 	return makeCommonWorkerResponse(err), nil
 }
 
 // BreakDDLLock implements WorkerServer.BreakDDLLock
 func (s *Server) BreakDDLLock(ctx context.Context, req *pb.BreakDDLLockRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "BreakDDLLock"), zap.Stringer("payload", req))
+	w := s.getWorker(true)
+	if w == nil {
+		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
+		return makeCommonWorkerResponse(terror.ErrWorkerNoStart.Generate()), nil
+	}
 
-	err := s.worker.BreakDDLLock(ctx, req)
+	err := w.BreakDDLLock(ctx, req)
 	if err != nil {
 		log.L().Error("fail to break ddl lock", zap.String("request", "BreakDDLLock"), zap.Stringer("payload", req), zap.Error(err))
 	}
+	// TODO: check whether this interface need to store message in ETCD
 	return makeCommonWorkerResponse(err), nil
 }
 
 // HandleSQLs implements WorkerServer.HandleSQLs
 func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSubTaskSQLsRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "HandleSQLs"), zap.Stringer("payload", req))
+	w := s.getWorker(true)
+	if w == nil {
+		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
+		return makeCommonWorkerResponse(terror.ErrWorkerNoStart.Generate()), nil
+	}
 
-	err := s.worker.HandleSQLs(ctx, req)
+	err := w.HandleSQLs(ctx, req)
 	if err != nil {
 		log.L().Error("fail to handle sqls", zap.String("request", "HandleSQLs"), zap.Stringer("payload", req), zap.Error(err))
 	}
+	// TODO: check whether this interface need to store message in ETCD
 	return makeCommonWorkerResponse(err), nil
 }
 
 // SwitchRelayMaster implements WorkerServer.SwitchRelayMaster
 func (s *Server) SwitchRelayMaster(ctx context.Context, req *pb.SwitchRelayMasterRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "SwitchRelayMaster"), zap.Stringer("payload", req))
+	w := s.getWorker(true)
+	if w == nil {
+		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
+		return makeCommonWorkerResponse(terror.ErrWorkerNoStart.Generate()), nil
+	}
 
-	err := s.worker.SwitchRelayMaster(ctx, req)
+	err := w.SwitchRelayMaster(ctx, req)
 	if err != nil {
 		log.L().Error("fail to switch relay master", zap.String("request", "SwitchRelayMaster"), zap.Stringer("payload", req), zap.Error(err))
 	}
+	// TODO: check whether this interface need to store message in ETCD
 	return makeCommonWorkerResponse(err), nil
 }
 
 // OperateRelay implements WorkerServer.OperateRelay
 func (s *Server) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) (*pb.OperateRelayResponse, error) {
 	log.L().Info("", zap.String("request", "OperateRelay"), zap.Stringer("payload", req))
-
 	resp := &pb.OperateRelayResponse{
 		Op:     req.Op,
 		Result: false,
 	}
 
-	err := s.worker.OperateRelay(ctx, req)
+	w := s.getWorker(true)
+	if w == nil {
+		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
+		resp.Msg = terror.ErrWorkerNoStart.Error()
+		return resp, nil
+	}
+
+	err := w.OperateRelay(ctx, req)
 	if err != nil {
 		log.L().Error("fail to operate relay", zap.String("request", "OperateRelay"), zap.Stringer("payload", req), zap.Error(err))
 		resp.Msg = errors.ErrorStack(err)
 		return resp, nil
 	}
 
+	// TODO: check whether this interface need to store message in ETCD
 	resp.Result = true
 	return resp, nil
 }
@@ -397,22 +567,34 @@ func (s *Server) OperateRelay(ctx context.Context, req *pb.OperateRelayRequest) 
 // PurgeRelay implements WorkerServer.PurgeRelay
 func (s *Server) PurgeRelay(ctx context.Context, req *pb.PurgeRelayRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "PurgeRelay"), zap.Stringer("payload", req))
+	w := s.getWorker(true)
+	if w == nil {
+		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
+		return makeCommonWorkerResponse(terror.ErrWorkerNoStart.Generate()), nil
+	}
 
-	err := s.worker.PurgeRelay(ctx, req)
+	err := w.PurgeRelay(ctx, req)
 	if err != nil {
 		log.L().Error("fail to purge relay", zap.String("request", "PurgeRelay"), zap.Stringer("payload", req), zap.Error(err))
 	}
+	// TODO: check whether this interface need to store message in ETCD
 	return makeCommonWorkerResponse(err), nil
 }
 
 // UpdateRelayConfig updates config for relay and (dm-worker)
 func (s *Server) UpdateRelayConfig(ctx context.Context, req *pb.UpdateRelayRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "UpdateRelayConfig"), zap.Stringer("payload", req))
+	w := s.getWorker(true)
+	if w == nil {
+		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
+		return makeCommonWorkerResponse(terror.ErrWorkerNoStart.Generate()), nil
+	}
 
-	err := s.worker.UpdateRelayConfig(ctx, req.Content)
+	err := w.UpdateRelayConfig(ctx, req.Content)
 	if err != nil {
 		log.L().Error("fail to update relay config", zap.String("request", "UpdateRelayConfig"), zap.Stringer("payload", req), zap.Error(err))
 	}
+	// TODO: check whether this interface need to store message in ETCD
 	return makeCommonWorkerResponse(err), nil
 }
 
@@ -421,12 +603,19 @@ func (s *Server) UpdateRelayConfig(ctx context.Context, req *pb.UpdateRelayReque
 // to avoid circular import, we only return db config
 func (s *Server) QueryWorkerConfig(ctx context.Context, req *pb.QueryWorkerConfigRequest) (*pb.QueryWorkerConfigResponse, error) {
 	log.L().Info("", zap.String("request", "QueryWorkerConfig"), zap.Stringer("payload", req))
-
 	resp := &pb.QueryWorkerConfigResponse{
 		Result: true,
 	}
 
-	workerCfg, err := s.worker.QueryConfig(ctx)
+	w := s.getWorker(true)
+	if w == nil {
+		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
+		resp.Result = false
+		resp.Msg = terror.ErrWorkerNoStart.Error()
+		return resp, nil
+	}
+
+	workerCfg, err := w.QueryConfig(ctx)
 	if err != nil {
 		resp.Result = false
 		resp.Msg = errors.ErrorStack(err)
@@ -442,19 +631,145 @@ func (s *Server) QueryWorkerConfig(ctx context.Context, req *pb.QueryWorkerConfi
 	}
 
 	resp.Content = rawConfig
-	resp.SourceID = workerCfg.SourceID
+	resp.Source = workerCfg.SourceID
 	return resp, nil
 }
 
 // MigrateRelay migrate relay to original binlog pos
 func (s *Server) MigrateRelay(ctx context.Context, req *pb.MigrateRelayRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "MigrateRelay"), zap.Stringer("payload", req))
+	w := s.getWorker(true)
+	if w == nil {
+		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
+		return makeCommonWorkerResponse(terror.ErrWorkerNoStart.Generate()), nil
+	}
 
-	err := s.worker.MigrateRelay(ctx, req.BinlogName, req.BinlogPos)
+	err := w.MigrateRelay(ctx, req.BinlogName, req.BinlogPos)
 	if err != nil {
 		log.L().Error("fail to migrate relay", zap.String("request", "MigrateRelay"), zap.Stringer("payload", req), zap.Error(err))
 	}
+	// TODO: check whether this interface need to store message in ETCD
 	return makeCommonWorkerResponse(err), nil
+}
+
+func (s *Server) startWorker(cfg *config.MysqlConfig) error {
+	s.Lock()
+	defer s.Unlock()
+	if w := s.getWorker(false); w != nil {
+		if w.cfg.SourceID == cfg.SourceID {
+			// This mysql task has started. It may be a repeated request. Just return true
+			log.L().Info("This mysql task has started. It may be a repeated request. Just return true", zap.String("sourceID", s.worker.cfg.SourceID))
+			return nil
+		}
+		return terror.ErrWorkerAlreadyStart.Generate()
+	}
+
+	subTaskCfgs := make([]*config.SubTaskConfig, 0, 3)
+
+	ectx, ecancel := context.WithTimeout(s.etcdClient.Ctx(), time.Second*3)
+	defer ecancel()
+	key := common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID)
+	resp, err := s.etcdClient.KV.Get(ectx, key, clientv3.WithPrefix())
+	if err != nil {
+		return err
+	}
+	for _, kv := range resp.Kvs {
+		task := string(kv.Value)
+		subTaskcfg := config.NewSubTaskConfig()
+		if err = subTaskcfg.Decode(task); err != nil {
+			return err
+		}
+		subTaskcfg.LogLevel = s.cfg.LogLevel
+		subTaskcfg.LogFile = s.cfg.LogFile
+
+		subTaskCfgs = append(subTaskCfgs, subTaskcfg)
+	}
+
+	dctx, dcancel := context.WithTimeout(s.etcdClient.Ctx(), time.Duration(len(subTaskCfgs))*3*time.Second)
+	defer dcancel()
+	minPos, err := getMinPosInAllSubTasks(dctx, subTaskCfgs)
+	if err != nil {
+		return err
+	}
+
+	// TODO: support GTID
+	// don't contain GTID information in checkpoint table, just set it to empty
+	if minPos != nil {
+		cfg.RelayBinLogName = binlog.AdjustPosition(*minPos).Name
+		cfg.RelayBinlogGTID = ""
+	}
+
+	log.L().Info("start workers", zap.Reflect("subTasks", subTaskCfgs))
+
+	w, err := NewWorker(cfg)
+	if err != nil {
+		return err
+	}
+	s.setWorker(w, false)
+	go func() {
+		w.Start()
+	}()
+
+	// FIXME: worker's closed will be set to false in Start.
+	// when start sub task, will check the `closed`, if closed is true, will ignore start subTask
+	// just sleep and make test success, will refine this later
+	time.Sleep(1 * time.Second)
+
+	for _, subTaskCfg := range subTaskCfgs {
+		if err = w.StartSubTask(subTaskCfg); err != nil {
+			return err
+		}
+		log.L().Info("load subtask successful", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
+	}
+
+	return nil
+}
+
+// OperateMysqlWorker create a new mysql task which will be running in this Server
+func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequest) (*pb.MysqlWorkerResponse, error) {
+	log.L().Info("", zap.String("request", "OperateMysqlWorker"), zap.Stringer("payload", req))
+	resp := &pb.MysqlWorkerResponse{
+		Result: true,
+		Msg:    "Operate mysql task successfully",
+	}
+	cfg := config.NewMysqlConfig()
+	err := cfg.Parse(req.Config)
+	if err != nil {
+		resp.Result = false
+		resp.Msg = errors.ErrorStack(err)
+		return resp, nil
+	}
+	if req.Op == pb.WorkerOp_UpdateConfig {
+		if err = s.stopWorker(cfg.SourceID); err != nil {
+			resp.Result = false
+			resp.Msg = errors.ErrorStack(err)
+			return resp, nil
+		}
+	} else if req.Op == pb.WorkerOp_StopWorker {
+		if err = s.stopWorker(cfg.SourceID); err == terror.ErrWorkerSourceNotMatch {
+			resp.Result = false
+			resp.Msg = errors.ErrorStack(err)
+		}
+	}
+	if resp.Result && (req.Op == pb.WorkerOp_UpdateConfig || req.Op == pb.WorkerOp_StartWorker) {
+		err = s.startWorker(cfg)
+	}
+	if err != nil {
+		resp.Result = false
+		resp.Msg = errors.ErrorStack(err)
+	}
+	if resp.Result {
+		op1 := clientv3.OpPut(common.UpstreamConfigKeyAdapter.Encode(cfg.SourceID), req.Config)
+		op2 := clientv3.OpPut(common.UpstreamBoundWorkerKeyAdapter.Encode(s.cfg.AdvertiseAddr), cfg.SourceID)
+		if req.Op == pb.WorkerOp_StopWorker {
+			op1 = clientv3.OpDelete(common.UpstreamConfigKeyAdapter.Encode(cfg.SourceID))
+			op2 = clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Encode(s.cfg.AdvertiseAddr))
+		}
+		resp.Msg = s.retryWriteEctd(op1, op2)
+		// Because etcd was deployed with master in a single process, if we can not write data into etcd, most probably
+		// the have lost connect from master.
+	}
+	return resp, nil
 }
 
 func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {
@@ -468,11 +783,49 @@ func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {
 	return resp
 }
 
-func (s *Server) splitHostPort() (host, port string, err error) {
-	// WorkerAddr's format may be "host:port" or ":port"
-	host, port, err = net.SplitHostPort(s.cfg.WorkerAddr)
-	if err != nil {
-		err = terror.ErrWorkerHostPortNotValid.Delegate(err, s.cfg.WorkerAddr)
+// all subTask in subTaskCfgs should have same source
+// this function return the min position in all subtasks, used for relay's position
+func getMinPosInAllSubTasks(ctx context.Context, subTaskCfgs []*config.SubTaskConfig) (minPos *mysql.Position, err error) {
+	for _, subTaskCfg := range subTaskCfgs {
+		pos, err := getMinPosForSubTaskFunc(ctx, subTaskCfg)
+		if err != nil {
+			return nil, err
+		}
+
+		if pos == nil {
+			continue
+		}
+
+		if minPos == nil {
+			minPos = pos
+		} else {
+			if minPos.Compare(*pos) >= 1 {
+				minPos = pos
+			}
+		}
 	}
-	return
+
+	return minPos, nil
+}
+
+func getMinPosForSubTask(ctx context.Context, subTaskCfg *config.SubTaskConfig) (minPos *mysql.Position, err error) {
+	if subTaskCfg.Mode == config.ModeFull {
+		return nil, nil
+	}
+
+	tctx := tcontext.NewContext(ctx, log.L())
+	checkpoint := syncer.NewRemoteCheckPoint(tctx, subTaskCfg, subTaskCfg.SourceID)
+	err = checkpoint.Init(tctx)
+	if err != nil {
+		return nil, errors.Annotate(err, "get min position from checkpoint")
+	}
+	defer checkpoint.Close()
+
+	err = checkpoint.Load(tctx, nil)
+	if err != nil {
+		return nil, errors.Annotate(err, "get min position from checkpoint")
+	}
+
+	pos := checkpoint.GlobalPoint()
+	return &pos, nil
 }

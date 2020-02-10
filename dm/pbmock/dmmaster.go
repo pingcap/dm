@@ -115,6 +115,46 @@ func (mr *MockMasterClientMockRecorder) MigrateWorkerRelay(arg0, arg1 interface{
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MigrateWorkerRelay", reflect.TypeOf((*MockMasterClient)(nil).MigrateWorkerRelay), varargs...)
 }
 
+// OfflineWorker mocks base method
+func (m *MockMasterClient) OfflineWorker(arg0 context.Context, arg1 *pb.OfflineWorkerRequest, arg2 ...grpc.CallOption) (*pb.OfflineWorkerResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "OfflineWorker", varargs...)
+	ret0, _ := ret[0].(*pb.OfflineWorkerResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OfflineWorker indicates an expected call of OfflineWorker
+func (mr *MockMasterClientMockRecorder) OfflineWorker(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OfflineWorker", reflect.TypeOf((*MockMasterClient)(nil).OfflineWorker), varargs...)
+}
+
+// OperateMysqlWorker mocks base method
+func (m *MockMasterClient) OperateMysqlWorker(arg0 context.Context, arg1 *pb.MysqlWorkerRequest, arg2 ...grpc.CallOption) (*pb.MysqlWorkerResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "OperateMysqlWorker", varargs...)
+	ret0, _ := ret[0].(*pb.MysqlWorkerResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OperateMysqlWorker indicates an expected call of OperateMysqlWorker
+func (mr *MockMasterClientMockRecorder) OperateMysqlWorker(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateMysqlWorker", reflect.TypeOf((*MockMasterClient)(nil).OperateMysqlWorker), varargs...)
+}
+
 // OperateTask mocks base method
 func (m *MockMasterClient) OperateTask(arg0 context.Context, arg1 *pb.OperateTaskRequest, arg2 ...grpc.CallOption) (*pb.OperateTaskResponse, error) {
 	m.ctrl.T.Helper()
@@ -215,24 +255,24 @@ func (mr *MockMasterClientMockRecorder) QueryStatus(arg0, arg1 interface{}, arg2
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryStatus", reflect.TypeOf((*MockMasterClient)(nil).QueryStatus), varargs...)
 }
 
-// RefreshWorkerTasks mocks base method
-func (m *MockMasterClient) RefreshWorkerTasks(arg0 context.Context, arg1 *pb.RefreshWorkerTasksRequest, arg2 ...grpc.CallOption) (*pb.RefreshWorkerTasksResponse, error) {
+// RegisterWorker mocks base method
+func (m *MockMasterClient) RegisterWorker(arg0 context.Context, arg1 *pb.RegisterWorkerRequest, arg2 ...grpc.CallOption) (*pb.RegisterWorkerResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{arg0, arg1}
 	for _, a := range arg2 {
 		varargs = append(varargs, a)
 	}
-	ret := m.ctrl.Call(m, "RefreshWorkerTasks", varargs...)
-	ret0, _ := ret[0].(*pb.RefreshWorkerTasksResponse)
+	ret := m.ctrl.Call(m, "RegisterWorker", varargs...)
+	ret0, _ := ret[0].(*pb.RegisterWorkerResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// RefreshWorkerTasks indicates an expected call of RefreshWorkerTasks
-func (mr *MockMasterClientMockRecorder) RefreshWorkerTasks(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+// RegisterWorker indicates an expected call of RegisterWorker
+func (mr *MockMasterClientMockRecorder) RegisterWorker(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RefreshWorkerTasks", reflect.TypeOf((*MockMasterClient)(nil).RefreshWorkerTasks), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterWorker", reflect.TypeOf((*MockMasterClient)(nil).RegisterWorker), varargs...)
 }
 
 // ShowDDLLocks mocks base method
@@ -458,6 +498,36 @@ func (mr *MockMasterServerMockRecorder) MigrateWorkerRelay(arg0, arg1 interface{
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MigrateWorkerRelay", reflect.TypeOf((*MockMasterServer)(nil).MigrateWorkerRelay), arg0, arg1)
 }
 
+// OfflineWorker mocks base method
+func (m *MockMasterServer) OfflineWorker(arg0 context.Context, arg1 *pb.OfflineWorkerRequest) (*pb.OfflineWorkerResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OfflineWorker", arg0, arg1)
+	ret0, _ := ret[0].(*pb.OfflineWorkerResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OfflineWorker indicates an expected call of OfflineWorker
+func (mr *MockMasterServerMockRecorder) OfflineWorker(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OfflineWorker", reflect.TypeOf((*MockMasterServer)(nil).OfflineWorker), arg0, arg1)
+}
+
+// OperateMysqlWorker mocks base method
+func (m *MockMasterServer) OperateMysqlWorker(arg0 context.Context, arg1 *pb.MysqlWorkerRequest) (*pb.MysqlWorkerResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OperateMysqlWorker", arg0, arg1)
+	ret0, _ := ret[0].(*pb.MysqlWorkerResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OperateMysqlWorker indicates an expected call of OperateMysqlWorker
+func (mr *MockMasterServerMockRecorder) OperateMysqlWorker(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateMysqlWorker", reflect.TypeOf((*MockMasterServer)(nil).OperateMysqlWorker), arg0, arg1)
+}
+
 // OperateTask mocks base method
 func (m *MockMasterServer) OperateTask(arg0 context.Context, arg1 *pb.OperateTaskRequest) (*pb.OperateTaskResponse, error) {
 	m.ctrl.T.Helper()
@@ -533,19 +603,19 @@ func (mr *MockMasterServerMockRecorder) QueryStatus(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryStatus", reflect.TypeOf((*MockMasterServer)(nil).QueryStatus), arg0, arg1)
 }
 
-// RefreshWorkerTasks mocks base method
-func (m *MockMasterServer) RefreshWorkerTasks(arg0 context.Context, arg1 *pb.RefreshWorkerTasksRequest) (*pb.RefreshWorkerTasksResponse, error) {
+// RegisterWorker mocks base method
+func (m *MockMasterServer) RegisterWorker(arg0 context.Context, arg1 *pb.RegisterWorkerRequest) (*pb.RegisterWorkerResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RefreshWorkerTasks", arg0, arg1)
-	ret0, _ := ret[0].(*pb.RefreshWorkerTasksResponse)
+	ret := m.ctrl.Call(m, "RegisterWorker", arg0, arg1)
+	ret0, _ := ret[0].(*pb.RegisterWorkerResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// RefreshWorkerTasks indicates an expected call of RefreshWorkerTasks
-func (mr *MockMasterServerMockRecorder) RefreshWorkerTasks(arg0, arg1 interface{}) *gomock.Call {
+// RegisterWorker indicates an expected call of RegisterWorker
+func (mr *MockMasterServerMockRecorder) RegisterWorker(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RefreshWorkerTasks", reflect.TypeOf((*MockMasterServer)(nil).RefreshWorkerTasks), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterWorker", reflect.TypeOf((*MockMasterServer)(nil).RegisterWorker), arg0, arg1)
 }
 
 // ShowDDLLocks mocks base method

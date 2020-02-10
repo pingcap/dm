@@ -35,14 +35,20 @@ function run() {
 
         prepare_data1
 
-        run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
-        check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
         run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
         check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+        run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
+        check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+        # operate mysql config to worker
+        cp $cur/conf/mysql1.toml $WORK_DIR/mysql1.toml
+        sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/mysql1.toml
+        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "operate-worker create $WORK_DIR/mysql1.toml" \
+            "true" 1
 
         echo "query status, relay log failed"
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "query-status -w 127.0.0.1:$WORKER1_PORT" \
+            "query-status -s $SOURCE_ID1" \
             "no sub task started" 1 \
             "ERROR" 1
 
@@ -53,7 +59,7 @@ function run() {
             "\"result\": true" 2
 
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "query-status -w 127.0.0.1:$WORKER1_PORT" \
+            "query-status -s $SOURCE_ID1" \
             "no valid relay sub directory exists" 1 \
             "ERROR" 1
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -69,11 +75,14 @@ function run() {
         run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
         check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
 
-        sleep 2
-
+        sleep 8
+        echo "start task after restarted dm-worker"
+        task_conf="$cur/conf/dm-task.yaml"
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "resume-task test" \
-            "\"result\": true" 2
+            "start-task $task_conf" \
+            "\"result\": true" 1 \
+            "\"result\": false" 1 \
+            "start sub task test: sub task test already exists" 1
 
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
@@ -87,6 +96,7 @@ function run() {
         export GO_FAILPOINTS="github.com/pingcap/dm/pkg/streamer/GetEventFromLocalFailed=return()"
         run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
         check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
+        sleep 8
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "\"binlogType\": \"remote\"" 1
@@ -99,6 +109,7 @@ function run() {
 }
 
 cleanup_data relay_interrupt
+cleanup_process
 
 run $*
 

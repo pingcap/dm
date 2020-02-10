@@ -15,6 +15,7 @@ package purger
 
 import (
 	"context"
+	"github.com/pingcap/dm/dm/config"
 	"path/filepath"
 	"sync"
 	"time"
@@ -71,7 +72,7 @@ type RelayPurger struct {
 	running         sync2.AtomicInt32
 	purgingStrategy sync2.AtomicUint32
 
-	cfg          Config
+	cfg          config.PurgeConfig
 	baseRelayDir string
 	indexPath    string // server-uuid.index file path
 	operators    []RelayOperator
@@ -82,7 +83,7 @@ type RelayPurger struct {
 }
 
 // NewRelayPurger creates a new purger
-func NewRelayPurger(cfg Config, baseRelayDir string, operators []RelayOperator, interceptors []PurgeInterceptor) Purger {
+func NewRelayPurger(cfg config.PurgeConfig, baseRelayDir string, operators []RelayOperator, interceptors []PurgeInterceptor) Purger {
 	p := &RelayPurger{
 		cfg:          cfg,
 		baseRelayDir: baseRelayDir,
@@ -307,7 +308,7 @@ func (p *RelayPurger) earliestActiveRelayLog() *streamer.RelayLogInfo {
 type dummyPurger struct{}
 
 // NewDummyPurger returns a dummy purger
-func NewDummyPurger(cfg Config, baseRelayDir string, operators []RelayOperator, interceptors []PurgeInterceptor) Purger {
+func NewDummyPurger(cfg config.PurgeConfig, baseRelayDir string, operators []RelayOperator, interceptors []PurgeInterceptor) Purger {
 	return &dummyPurger{}
 }
 

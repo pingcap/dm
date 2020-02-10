@@ -147,6 +147,8 @@ const (
 
 	// pkg/binlog
 	codeBinlogInvalidFilenameWithUUIDSuffix
+	// dm/common
+	codeDecodeEtcdKeyFail
 )
 
 // Config related error code list
@@ -402,6 +404,8 @@ const (
 	codeMasterStartEmbedEtcdFail
 	codeMasterParseURLFail
 	codeMasterJoinEmbedEtcdFail
+	codeMasterCoordinatorNotStart
+	codeMasterAcquireWorkerFailed
 )
 
 // DM-worker error code
@@ -475,6 +479,9 @@ const (
 	codeWorkerWaitRelayCatchupTimeout
 	codeWorkerRelayIsPurging
 	codeWorkerHostPortNotValid
+	codeWorkerNoStart
+	codeWorkerAlreadyStarted
+	codeWorkerSourceNotMatch
 )
 
 // DM-tracer error code
@@ -637,6 +644,8 @@ var (
 	// pkg/binlog
 	ErrBinlogInvalidFilenameWithUUIDSuffix = New(codeBinlogInvalidFilenameWithUUIDSuffix, ClassFunctional, ScopeInternal, LevelHigh, "invalid binlog filename with uuid suffix %s")
 
+	// dm/common
+	ErrDecodeEtcdKeyFail = New(codeDecodeEtcdKeyFail, ClassFunctional, ScopeInternal, LevelMedium, "fail to decode etcd key: %s")
 	// Config related error
 	ErrConfigCheckItemNotSupport    = New(codeConfigCheckItemNotSupport, ClassConfig, ScopeInternal, LevelMedium, "checking item %s is not supported\n%s")
 	ErrConfigTomlTransform          = New(codeConfigTomlTransform, ClassConfig, ScopeInternal, LevelMedium, "%s")
@@ -872,6 +881,8 @@ var (
 	ErrMasterStartEmbedEtcdFail     = New(codeMasterStartEmbedEtcdFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to start embed etcd")
 	ErrMasterParseURLFail           = New(codeMasterParseURLFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to parse URL %s")
 	ErrMasterJoinEmbedEtcdFail      = New(codeMasterJoinEmbedEtcdFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to join embed etcd: %s")
+	ErrMasterCoordinatorNotStart    = New(codeMasterCoordinatorNotStart, ClassDMMaster, ScopeInternal, LevelHigh, "coordinator does not start")
+	ErrMasterAcquireWorkerFailed    = New(codeMasterAcquireWorkerFailed, ClassDMMaster, ScopeInternal, LevelMedium, "acquire worker failed: %s")
 
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set")
@@ -922,7 +933,9 @@ var (
 	ErrWorkerSaveVersionToKV         = New(codeWorkerSaveVersionToKV, ClassDMWorker, ScopeInternal, LevelHigh, "save version %v into levelDB with key %v")
 	ErrWorkerVerAutoDowngrade        = New(codeWorkerVerAutoDowngrade, ClassDMWorker, ScopeInternal, LevelHigh, "the previous version %s is newer than current %s, automatic downgrade is not supported now, please handle it manually")
 	ErrWorkerStartService            = New(codeWorkerStartService, ClassDMWorker, ScopeInternal, LevelHigh, "start server")
+	ErrWorkerNoStart                 = New(codeWorkerNoStart, ClassDMWorker, ScopeInternal, LevelHigh, "worker has not started")
 	ErrWorkerAlreadyClosed           = New(codeWorkerAlreadyClosed, ClassDMWorker, ScopeInternal, LevelHigh, "worker already closed")
+	ErrWorkerAlreadyStart            = New(codeWorkerAlreadyStarted, ClassDMWorker, ScopeInternal, LevelHigh, "worker already started")
 	ErrWorkerNotRunningStage         = New(codeWorkerNotRunningStage, ClassDMWorker, ScopeInternal, LevelHigh, "current stage is not running not valid")
 	ErrWorkerNotPausedStage          = New(codeWorkerNotPausedStage, ClassDMWorker, ScopeInternal, LevelHigh, "current stage is not paused not valid")
 	ErrWorkerUpdateTaskStage         = New(codeWorkerUpdateTaskStage, ClassDMWorker, ScopeInternal, LevelHigh, "can only update task on Paused stage, but current stage is %s")
@@ -943,6 +956,7 @@ var (
 	ErrWorkerWaitRelayCatchupTimeout = New(codeWorkerWaitRelayCatchupTimeout, ClassDMWorker, ScopeInternal, LevelHigh, "waiting for relay binlog pos to catch up with loader end binlog pos is timeout (exceeding %s), loader end binlog pos: %s, relay binlog pos: %s")
 	ErrWorkerRelayIsPurging          = New(codeWorkerRelayIsPurging, ClassDMWorker, ScopeInternal, LevelHigh, "relay log purger is purging, cannot start sub task %s, please try again later")
 	ErrWorkerHostPortNotValid        = New(codeWorkerHostPortNotValid, ClassDMWorker, ScopeInternal, LevelHigh, "host:port '%s' not valid")
+	ErrWorkerSourceNotMatch          = New(codeWorkerSourceNotMatch, ClassDMWorker, ScopeInternal, LevelHigh, "source of request does not match with source in worker")
 
 	// DM-tracer error
 	ErrTracerParseFlagSet        = New(codeTracerParseFlagSet, ClassDMTracer, ScopeInternal, LevelMedium, "parse dm-tracer config flag set")

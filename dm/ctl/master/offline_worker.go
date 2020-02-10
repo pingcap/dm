@@ -15,41 +15,46 @@ package master
 
 import (
 	"context"
-	"os"
-
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
-
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
+	"os"
 )
 
-// NewRefreshWorkerTasks creates a RefreshWorkerTasks command
-func NewRefreshWorkerTasks() *cobra.Command {
+// NewOfflineWorkerCmd creates an OfflineWorker command
+func NewOfflineWorkerCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "refresh-worker-tasks",
-		Short: "refresh worker -> tasks mapper",
-		Run:   refreshWorkerTasksFunc,
+		Use:   "offline-worker <name> <address>",
+		Short: "offline worker which has been closed",
+		Run:   offlineWorkerFunc,
 	}
 	return cmd
 }
 
-// refreshWorkerTasksFunc does refresh workerTasks request
-func refreshWorkerTasksFunc(cmd *cobra.Command, _ []string) {
-	if len(cmd.Flags().Args()) > 0 {
+// offlineWorkerFunc does migrate relay request
+func offlineWorkerFunc(cmd *cobra.Command, _ []string) {
+	if len(cmd.Flags().Args()) != 2 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
 		return
 	}
 
+	name := cmd.Flags().Arg(0)
+	addr := cmd.Flags().Arg(1)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
 	cli := common.MasterClient()
-	resp, err := cli.RefreshWorkerTasks(ctx, &pb.RefreshWorkerTasksRequest{})
+	resp, err := cli.OfflineWorker(ctx, &pb.OfflineWorkerRequest{
+		Name:    name,
+		Address: addr,
+	})
 	if err != nil {
-		common.PrintLines("can not refresh workerTasks:\n%v", errors.ErrorStack(err))
+		common.PrintLines("offline worker failed, error:\n%v", errors.ErrorStack(err))
 		return
 	}
-
-	common.PrettyPrintResponse(resp)
+	if !resp.Result {
+		common.PrintLines("offline worker failed:\n%v", resp.Msg)
+	}
 }

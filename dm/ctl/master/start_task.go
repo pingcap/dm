@@ -28,7 +28,7 @@ import (
 // NewStartTaskCmd creates a StartTask command
 func NewStartTaskCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "start-task [-w worker ...] <config-file>",
+		Use:   "start-task [-s source ...] <config-file>",
 		Short: "start a task as defined in the config file",
 		Run:   startTaskFunc,
 	}
@@ -48,7 +48,7 @@ func startTaskFunc(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	workers, err := common.GetWorkerArgs(cmd)
+	sources, err := common.GetSourceArgs(cmd)
 	if err != nil {
 		common.PrintLines("%s", errors.ErrorStack(err))
 		return
@@ -61,7 +61,7 @@ func startTaskFunc(cmd *cobra.Command, _ []string) {
 	cli := common.MasterClient()
 	resp, err := cli.StartTask(ctx, &pb.StartTaskRequest{
 		Task:    string(content),
-		Workers: workers,
+		Sources: sources,
 	})
 	if err != nil {
 		common.PrintLines("can not start task:\n%v", errors.ErrorStack(err))

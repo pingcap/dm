@@ -254,6 +254,37 @@ func (RelayOp) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_51a1b9e17fd67b10, []int{5}
 }
 
+type WorkerOp int32
+
+const (
+	WorkerOp_InvalidWorkerOp WorkerOp = 0
+	WorkerOp_StartWorker     WorkerOp = 1
+	WorkerOp_UpdateConfig    WorkerOp = 2
+	WorkerOp_StopWorker      WorkerOp = 3
+)
+
+var WorkerOp_name = map[int32]string{
+	0: "InvalidWorkerOp",
+	1: "StartWorker",
+	2: "UpdateConfig",
+	3: "StopWorker",
+}
+
+var WorkerOp_value = map[string]int32{
+	"InvalidWorkerOp": 0,
+	"StartWorker":     1,
+	"UpdateConfig":    2,
+	"StopWorker":      3,
+}
+
+func (x WorkerOp) String() string {
+	return proto.EnumName(WorkerOp_name, int32(x))
+}
+
+func (WorkerOp) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_51a1b9e17fd67b10, []int{6}
+}
+
 type StartSubTaskRequest struct {
 	Task string `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
 }
@@ -447,9 +478,10 @@ func (m *OperateSubTaskRequest) GetName() string {
 }
 
 type OperateSubTaskResponse struct {
-	Meta  *CommonWorkerResponse `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
-	Op    TaskOp                `protobuf:"varint,2,opt,name=op,proto3,enum=pb.TaskOp" json:"op,omitempty"`
-	LogID int64                 `protobuf:"varint,3,opt,name=logID,proto3" json:"logID,omitempty"`
+	Op     TaskOp `protobuf:"varint,1,opt,name=op,proto3,enum=pb.TaskOp" json:"op,omitempty"`
+	Result bool   `protobuf:"varint,2,opt,name=result,proto3" json:"result,omitempty"`
+	Source string `protobuf:"bytes,3,opt,name=source,proto3" json:"source,omitempty"`
+	Msg    string `protobuf:"bytes,4,opt,name=msg,proto3" json:"msg,omitempty"`
 }
 
 func (m *OperateSubTaskResponse) Reset()         { *m = OperateSubTaskResponse{} }
@@ -485,13 +517,6 @@ func (m *OperateSubTaskResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_OperateSubTaskResponse proto.InternalMessageInfo
 
-func (m *OperateSubTaskResponse) GetMeta() *CommonWorkerResponse {
-	if m != nil {
-		return m.Meta
-	}
-	return nil
-}
-
 func (m *OperateSubTaskResponse) GetOp() TaskOp {
 	if m != nil {
 		return m.Op
@@ -499,115 +524,25 @@ func (m *OperateSubTaskResponse) GetOp() TaskOp {
 	return TaskOp_InvalidOp
 }
 
-func (m *OperateSubTaskResponse) GetLogID() int64 {
+func (m *OperateSubTaskResponse) GetResult() bool {
 	if m != nil {
-		return m.LogID
+		return m.Result
 	}
-	return 0
+	return false
 }
 
-type QueryTaskOperationRequest struct {
-	Name  string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	LogID int64  `protobuf:"varint,2,opt,name=logID,proto3" json:"logID,omitempty"`
-}
-
-func (m *QueryTaskOperationRequest) Reset()         { *m = QueryTaskOperationRequest{} }
-func (m *QueryTaskOperationRequest) String() string { return proto.CompactTextString(m) }
-func (*QueryTaskOperationRequest) ProtoMessage()    {}
-func (*QueryTaskOperationRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{5}
-}
-func (m *QueryTaskOperationRequest) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *QueryTaskOperationRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_QueryTaskOperationRequest.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *QueryTaskOperationRequest) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_QueryTaskOperationRequest.Merge(m, src)
-}
-func (m *QueryTaskOperationRequest) XXX_Size() int {
-	return m.Size()
-}
-func (m *QueryTaskOperationRequest) XXX_DiscardUnknown() {
-	xxx_messageInfo_QueryTaskOperationRequest.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_QueryTaskOperationRequest proto.InternalMessageInfo
-
-func (m *QueryTaskOperationRequest) GetName() string {
+func (m *OperateSubTaskResponse) GetSource() string {
 	if m != nil {
-		return m.Name
+		return m.Source
 	}
 	return ""
 }
 
-func (m *QueryTaskOperationRequest) GetLogID() int64 {
+func (m *OperateSubTaskResponse) GetMsg() string {
 	if m != nil {
-		return m.LogID
+		return m.Msg
 	}
-	return 0
-}
-
-type QueryTaskOperationResponse struct {
-	Meta *CommonWorkerResponse `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
-	Log  *TaskLog              `protobuf:"bytes,2,opt,name=log,proto3" json:"log,omitempty"`
-}
-
-func (m *QueryTaskOperationResponse) Reset()         { *m = QueryTaskOperationResponse{} }
-func (m *QueryTaskOperationResponse) String() string { return proto.CompactTextString(m) }
-func (*QueryTaskOperationResponse) ProtoMessage()    {}
-func (*QueryTaskOperationResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{6}
-}
-func (m *QueryTaskOperationResponse) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *QueryTaskOperationResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_QueryTaskOperationResponse.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalToSizedBuffer(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (m *QueryTaskOperationResponse) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_QueryTaskOperationResponse.Merge(m, src)
-}
-func (m *QueryTaskOperationResponse) XXX_Size() int {
-	return m.Size()
-}
-func (m *QueryTaskOperationResponse) XXX_DiscardUnknown() {
-	xxx_messageInfo_QueryTaskOperationResponse.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_QueryTaskOperationResponse proto.InternalMessageInfo
-
-func (m *QueryTaskOperationResponse) GetMeta() *CommonWorkerResponse {
-	if m != nil {
-		return m.Meta
-	}
-	return nil
-}
-
-func (m *QueryTaskOperationResponse) GetLog() *TaskLog {
-	if m != nil {
-		return m.Log
-	}
-	return nil
+	return ""
 }
 
 type UpdateSubTaskRequest struct {
@@ -618,7 +553,7 @@ func (m *UpdateSubTaskRequest) Reset()         { *m = UpdateSubTaskRequest{} }
 func (m *UpdateSubTaskRequest) String() string { return proto.CompactTextString(m) }
 func (*UpdateSubTaskRequest) ProtoMessage()    {}
 func (*UpdateSubTaskRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{7}
+	return fileDescriptor_51a1b9e17fd67b10, []int{5}
 }
 func (m *UpdateSubTaskRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -662,7 +597,7 @@ func (m *QueryStatusRequest) Reset()         { *m = QueryStatusRequest{} }
 func (m *QueryStatusRequest) String() string { return proto.CompactTextString(m) }
 func (*QueryStatusRequest) ProtoMessage()    {}
 func (*QueryStatusRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{8}
+	return fileDescriptor_51a1b9e17fd67b10, []int{6}
 }
 func (m *QueryStatusRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -706,7 +641,7 @@ func (m *QueryErrorRequest) Reset()         { *m = QueryErrorRequest{} }
 func (m *QueryErrorRequest) String() string { return proto.CompactTextString(m) }
 func (*QueryErrorRequest) ProtoMessage()    {}
 func (*QueryErrorRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{9}
+	return fileDescriptor_51a1b9e17fd67b10, []int{7}
 }
 func (m *QueryErrorRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -755,7 +690,7 @@ func (m *HandleSubTaskSQLsRequest) Reset()         { *m = HandleSubTaskSQLsReque
 func (m *HandleSubTaskSQLsRequest) String() string { return proto.CompactTextString(m) }
 func (*HandleSubTaskSQLsRequest) ProtoMessage()    {}
 func (*HandleSubTaskSQLsRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{10}
+	return fileDescriptor_51a1b9e17fd67b10, []int{8}
 }
 func (m *HandleSubTaskSQLsRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -821,7 +756,7 @@ func (m *HandleSubTaskSQLsRequest) GetSqlPattern() string {
 
 type CommonWorkerResponse struct {
 	Result bool   `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
-	Worker string `protobuf:"bytes,2,opt,name=worker,proto3" json:"worker,omitempty"`
+	Source string `protobuf:"bytes,2,opt,name=source,proto3" json:"source,omitempty"`
 	Msg    string `protobuf:"bytes,3,opt,name=msg,proto3" json:"msg,omitempty"`
 }
 
@@ -829,7 +764,7 @@ func (m *CommonWorkerResponse) Reset()         { *m = CommonWorkerResponse{} }
 func (m *CommonWorkerResponse) String() string { return proto.CompactTextString(m) }
 func (*CommonWorkerResponse) ProtoMessage()    {}
 func (*CommonWorkerResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{11}
+	return fileDescriptor_51a1b9e17fd67b10, []int{9}
 }
 func (m *CommonWorkerResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -865,9 +800,9 @@ func (m *CommonWorkerResponse) GetResult() bool {
 	return false
 }
 
-func (m *CommonWorkerResponse) GetWorker() string {
+func (m *CommonWorkerResponse) GetSource() string {
 	if m != nil {
-		return m.Worker
+		return m.Source
 	}
 	return ""
 }
@@ -883,18 +818,17 @@ func (m *CommonWorkerResponse) GetMsg() string {
 // status: dm-worker's current sub tasks' status
 type QueryStatusResponse struct {
 	Result        bool             `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
-	Worker        string           `protobuf:"bytes,2,opt,name=worker,proto3" json:"worker,omitempty"`
+	Source        string           `protobuf:"bytes,2,opt,name=source,proto3" json:"source,omitempty"`
 	Msg           string           `protobuf:"bytes,3,opt,name=msg,proto3" json:"msg,omitempty"`
 	SubTaskStatus []*SubTaskStatus `protobuf:"bytes,4,rep,name=subTaskStatus,proto3" json:"subTaskStatus,omitempty"`
 	RelayStatus   *RelayStatus     `protobuf:"bytes,5,opt,name=relayStatus,proto3" json:"relayStatus,omitempty"`
-	SourceID      string           `protobuf:"bytes,6,opt,name=sourceID,proto3" json:"sourceID,omitempty"`
 }
 
 func (m *QueryStatusResponse) Reset()         { *m = QueryStatusResponse{} }
 func (m *QueryStatusResponse) String() string { return proto.CompactTextString(m) }
 func (*QueryStatusResponse) ProtoMessage()    {}
 func (*QueryStatusResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{12}
+	return fileDescriptor_51a1b9e17fd67b10, []int{10}
 }
 func (m *QueryStatusResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -930,9 +864,9 @@ func (m *QueryStatusResponse) GetResult() bool {
 	return false
 }
 
-func (m *QueryStatusResponse) GetWorker() string {
+func (m *QueryStatusResponse) GetSource() string {
 	if m != nil {
-		return m.Worker
+		return m.Source
 	}
 	return ""
 }
@@ -958,17 +892,10 @@ func (m *QueryStatusResponse) GetRelayStatus() *RelayStatus {
 	return nil
 }
 
-func (m *QueryStatusResponse) GetSourceID() string {
-	if m != nil {
-		return m.SourceID
-	}
-	return ""
-}
-
 // QueryErrorResponse represents response for query on a dm-worker
 type QueryErrorResponse struct {
 	Result       bool            `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
-	Worker       string          `protobuf:"bytes,2,opt,name=worker,proto3" json:"worker,omitempty"`
+	Source       string          `protobuf:"bytes,2,opt,name=source,proto3" json:"source,omitempty"`
 	Msg          string          `protobuf:"bytes,3,opt,name=msg,proto3" json:"msg,omitempty"`
 	SubTaskError []*SubTaskError `protobuf:"bytes,4,rep,name=subTaskError,proto3" json:"subTaskError,omitempty"`
 	RelayError   *RelayError     `protobuf:"bytes,5,opt,name=RelayError,proto3" json:"RelayError,omitempty"`
@@ -978,7 +905,7 @@ func (m *QueryErrorResponse) Reset()         { *m = QueryErrorResponse{} }
 func (m *QueryErrorResponse) String() string { return proto.CompactTextString(m) }
 func (*QueryErrorResponse) ProtoMessage()    {}
 func (*QueryErrorResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{13}
+	return fileDescriptor_51a1b9e17fd67b10, []int{11}
 }
 func (m *QueryErrorResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1014,9 +941,9 @@ func (m *QueryErrorResponse) GetResult() bool {
 	return false
 }
 
-func (m *QueryErrorResponse) GetWorker() string {
+func (m *QueryErrorResponse) GetSource() string {
 	if m != nil {
-		return m.Worker
+		return m.Source
 	}
 	return ""
 }
@@ -1057,7 +984,7 @@ func (m *CheckStatus) Reset()         { *m = CheckStatus{} }
 func (m *CheckStatus) String() string { return proto.CompactTextString(m) }
 func (*CheckStatus) ProtoMessage()    {}
 func (*CheckStatus) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{14}
+	return fileDescriptor_51a1b9e17fd67b10, []int{12}
 }
 func (m *CheckStatus) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1137,7 +1064,7 @@ func (m *DumpStatus) Reset()         { *m = DumpStatus{} }
 func (m *DumpStatus) String() string { return proto.CompactTextString(m) }
 func (*DumpStatus) ProtoMessage()    {}
 func (*DumpStatus) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{15}
+	return fileDescriptor_51a1b9e17fd67b10, []int{13}
 }
 func (m *DumpStatus) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1178,7 +1105,7 @@ func (m *LoadStatus) Reset()         { *m = LoadStatus{} }
 func (m *LoadStatus) String() string { return proto.CompactTextString(m) }
 func (*LoadStatus) ProtoMessage()    {}
 func (*LoadStatus) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{16}
+	return fileDescriptor_51a1b9e17fd67b10, []int{14}
 }
 func (m *LoadStatus) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1253,7 +1180,7 @@ func (m *ShardingGroup) Reset()         { *m = ShardingGroup{} }
 func (m *ShardingGroup) String() string { return proto.CompactTextString(m) }
 func (*ShardingGroup) ProtoMessage()    {}
 func (*ShardingGroup) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{17}
+	return fileDescriptor_51a1b9e17fd67b10, []int{15}
 }
 func (m *ShardingGroup) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1336,7 +1263,7 @@ func (m *SyncStatus) Reset()         { *m = SyncStatus{} }
 func (m *SyncStatus) String() string { return proto.CompactTextString(m) }
 func (*SyncStatus) ProtoMessage()    {}
 func (*SyncStatus) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{18}
+	return fileDescriptor_51a1b9e17fd67b10, []int{16}
 }
 func (m *SyncStatus) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1458,7 +1385,7 @@ func (m *RelayStatus) Reset()         { *m = RelayStatus{} }
 func (m *RelayStatus) String() string { return proto.CompactTextString(m) }
 func (*RelayStatus) ProtoMessage()    {}
 func (*RelayStatus) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{19}
+	return fileDescriptor_51a1b9e17fd67b10, []int{17}
 }
 func (m *RelayStatus) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1572,7 +1499,7 @@ func (m *SubTaskStatus) Reset()         { *m = SubTaskStatus{} }
 func (m *SubTaskStatus) String() string { return proto.CompactTextString(m) }
 func (*SubTaskStatus) ProtoMessage()    {}
 func (*SubTaskStatus) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{20}
+	return fileDescriptor_51a1b9e17fd67b10, []int{18}
 }
 func (m *SubTaskStatus) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1726,7 +1653,7 @@ func (m *SubTaskStatusList) Reset()         { *m = SubTaskStatusList{} }
 func (m *SubTaskStatusList) String() string { return proto.CompactTextString(m) }
 func (*SubTaskStatusList) ProtoMessage()    {}
 func (*SubTaskStatusList) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{21}
+	return fileDescriptor_51a1b9e17fd67b10, []int{19}
 }
 func (m *SubTaskStatusList) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1772,7 +1699,7 @@ func (m *CheckError) Reset()         { *m = CheckError{} }
 func (m *CheckError) String() string { return proto.CompactTextString(m) }
 func (*CheckError) ProtoMessage()    {}
 func (*CheckError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{22}
+	return fileDescriptor_51a1b9e17fd67b10, []int{20}
 }
 func (m *CheckError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1818,7 +1745,7 @@ func (m *DumpError) Reset()         { *m = DumpError{} }
 func (m *DumpError) String() string { return proto.CompactTextString(m) }
 func (*DumpError) ProtoMessage()    {}
 func (*DumpError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{23}
+	return fileDescriptor_51a1b9e17fd67b10, []int{21}
 }
 func (m *DumpError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1863,7 +1790,7 @@ func (m *LoadError) Reset()         { *m = LoadError{} }
 func (m *LoadError) String() string { return proto.CompactTextString(m) }
 func (*LoadError) ProtoMessage()    {}
 func (*LoadError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{24}
+	return fileDescriptor_51a1b9e17fd67b10, []int{22}
 }
 func (m *LoadError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1910,7 +1837,7 @@ func (m *SyncSQLError) Reset()         { *m = SyncSQLError{} }
 func (m *SyncSQLError) String() string { return proto.CompactTextString(m) }
 func (*SyncSQLError) ProtoMessage()    {}
 func (*SyncSQLError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{25}
+	return fileDescriptor_51a1b9e17fd67b10, []int{23}
 }
 func (m *SyncSQLError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1969,7 +1896,7 @@ func (m *SyncError) Reset()         { *m = SyncError{} }
 func (m *SyncError) String() string { return proto.CompactTextString(m) }
 func (*SyncError) ProtoMessage()    {}
 func (*SyncError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{26}
+	return fileDescriptor_51a1b9e17fd67b10, []int{24}
 }
 func (m *SyncError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2014,7 +1941,7 @@ func (m *RelayError) Reset()         { *m = RelayError{} }
 func (m *RelayError) String() string { return proto.CompactTextString(m) }
 func (*RelayError) ProtoMessage()    {}
 func (*RelayError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{27}
+	return fileDescriptor_51a1b9e17fd67b10, []int{25}
 }
 func (m *RelayError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2073,7 +2000,7 @@ func (m *SubTaskError) Reset()         { *m = SubTaskError{} }
 func (m *SubTaskError) String() string { return proto.CompactTextString(m) }
 func (*SubTaskError) ProtoMessage()    {}
 func (*SubTaskError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{28}
+	return fileDescriptor_51a1b9e17fd67b10, []int{26}
 }
 func (m *SubTaskError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2213,7 +2140,7 @@ func (m *SubTaskErrorList) Reset()         { *m = SubTaskErrorList{} }
 func (m *SubTaskErrorList) String() string { return proto.CompactTextString(m) }
 func (*SubTaskErrorList) ProtoMessage()    {}
 func (*SubTaskErrorList) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{29}
+	return fileDescriptor_51a1b9e17fd67b10, []int{27}
 }
 func (m *SubTaskErrorList) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2263,7 +2190,7 @@ func (m *ProcessResult) Reset()         { *m = ProcessResult{} }
 func (m *ProcessResult) String() string { return proto.CompactTextString(m) }
 func (*ProcessResult) ProtoMessage()    {}
 func (*ProcessResult) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{30}
+	return fileDescriptor_51a1b9e17fd67b10, []int{28}
 }
 func (m *ProcessResult) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2329,7 +2256,7 @@ func (m *TError) Reset()         { *m = TError{} }
 func (m *TError) String() string { return proto.CompactTextString(m) }
 func (*TError) ProtoMessage()    {}
 func (*TError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{31}
+	return fileDescriptor_51a1b9e17fd67b10, []int{29}
 }
 func (m *TError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2412,7 +2339,7 @@ func (m *ProcessError) Reset()         { *m = ProcessError{} }
 func (m *ProcessError) String() string { return proto.CompactTextString(m) }
 func (*ProcessError) ProtoMessage()    {}
 func (*ProcessError) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{32}
+	return fileDescriptor_51a1b9e17fd67b10, []int{30}
 }
 func (m *ProcessError) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2477,7 +2404,7 @@ func (m *DDLInfo) Reset()         { *m = DDLInfo{} }
 func (m *DDLInfo) String() string { return proto.CompactTextString(m) }
 func (*DDLInfo) ProtoMessage()    {}
 func (*DDLInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{33}
+	return fileDescriptor_51a1b9e17fd67b10, []int{31}
 }
 func (m *DDLInfo) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2546,7 +2473,7 @@ func (m *DDLLockInfo) Reset()         { *m = DDLLockInfo{} }
 func (m *DDLLockInfo) String() string { return proto.CompactTextString(m) }
 func (*DDLLockInfo) ProtoMessage()    {}
 func (*DDLLockInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{34}
+	return fileDescriptor_51a1b9e17fd67b10, []int{32}
 }
 func (m *DDLLockInfo) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2602,7 +2529,7 @@ func (m *ExecDDLRequest) Reset()         { *m = ExecDDLRequest{} }
 func (m *ExecDDLRequest) String() string { return proto.CompactTextString(m) }
 func (*ExecDDLRequest) ProtoMessage()    {}
 func (*ExecDDLRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{35}
+	return fileDescriptor_51a1b9e17fd67b10, []int{33}
 }
 func (m *ExecDDLRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2683,7 +2610,7 @@ func (m *BreakDDLLockRequest) Reset()         { *m = BreakDDLLockRequest{} }
 func (m *BreakDDLLockRequest) String() string { return proto.CompactTextString(m) }
 func (*BreakDDLLockRequest) ProtoMessage()    {}
 func (*BreakDDLLockRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{36}
+	return fileDescriptor_51a1b9e17fd67b10, []int{34}
 }
 func (m *BreakDDLLockRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2748,7 +2675,7 @@ func (m *SwitchRelayMasterRequest) Reset()         { *m = SwitchRelayMasterReque
 func (m *SwitchRelayMasterRequest) String() string { return proto.CompactTextString(m) }
 func (*SwitchRelayMasterRequest) ProtoMessage()    {}
 func (*SwitchRelayMasterRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{37}
+	return fileDescriptor_51a1b9e17fd67b10, []int{35}
 }
 func (m *SwitchRelayMasterRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2786,7 +2713,7 @@ func (m *OperateRelayRequest) Reset()         { *m = OperateRelayRequest{} }
 func (m *OperateRelayRequest) String() string { return proto.CompactTextString(m) }
 func (*OperateRelayRequest) ProtoMessage()    {}
 func (*OperateRelayRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{38}
+	return fileDescriptor_51a1b9e17fd67b10, []int{36}
 }
 func (m *OperateRelayRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2825,7 +2752,7 @@ func (m *OperateRelayRequest) GetOp() RelayOp {
 type OperateRelayResponse struct {
 	Op     RelayOp `protobuf:"varint,1,opt,name=op,proto3,enum=pb.RelayOp" json:"op,omitempty"`
 	Result bool    `protobuf:"varint,2,opt,name=result,proto3" json:"result,omitempty"`
-	Worker string  `protobuf:"bytes,3,opt,name=worker,proto3" json:"worker,omitempty"`
+	Source string  `protobuf:"bytes,3,opt,name=source,proto3" json:"source,omitempty"`
 	Msg    string  `protobuf:"bytes,4,opt,name=msg,proto3" json:"msg,omitempty"`
 }
 
@@ -2833,7 +2760,7 @@ func (m *OperateRelayResponse) Reset()         { *m = OperateRelayResponse{} }
 func (m *OperateRelayResponse) String() string { return proto.CompactTextString(m) }
 func (*OperateRelayResponse) ProtoMessage()    {}
 func (*OperateRelayResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{39}
+	return fileDescriptor_51a1b9e17fd67b10, []int{37}
 }
 func (m *OperateRelayResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2876,9 +2803,9 @@ func (m *OperateRelayResponse) GetResult() bool {
 	return false
 }
 
-func (m *OperateRelayResponse) GetWorker() string {
+func (m *OperateRelayResponse) GetSource() string {
 	if m != nil {
-		return m.Worker
+		return m.Source
 	}
 	return ""
 }
@@ -2906,7 +2833,7 @@ func (m *PurgeRelayRequest) Reset()         { *m = PurgeRelayRequest{} }
 func (m *PurgeRelayRequest) String() string { return proto.CompactTextString(m) }
 func (*PurgeRelayRequest) ProtoMessage()    {}
 func (*PurgeRelayRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{40}
+	return fileDescriptor_51a1b9e17fd67b10, []int{38}
 }
 func (m *PurgeRelayRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -2970,7 +2897,7 @@ func (m *QueryWorkerConfigRequest) Reset()         { *m = QueryWorkerConfigReque
 func (m *QueryWorkerConfigRequest) String() string { return proto.CompactTextString(m) }
 func (*QueryWorkerConfigRequest) ProtoMessage()    {}
 func (*QueryWorkerConfigRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{41}
+	return fileDescriptor_51a1b9e17fd67b10, []int{39}
 }
 func (m *QueryWorkerConfigRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -3000,18 +2927,17 @@ func (m *QueryWorkerConfigRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_QueryWorkerConfigRequest proto.InternalMessageInfo
 
 type QueryWorkerConfigResponse struct {
-	Result   bool   `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
-	Worker   string `protobuf:"bytes,2,opt,name=worker,proto3" json:"worker,omitempty"`
-	Msg      string `protobuf:"bytes,3,opt,name=msg,proto3" json:"msg,omitempty"`
-	SourceID string `protobuf:"bytes,4,opt,name=sourceID,proto3" json:"sourceID,omitempty"`
-	Content  string `protobuf:"bytes,5,opt,name=content,proto3" json:"content,omitempty"`
+	Result  bool   `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
+	Source  string `protobuf:"bytes,2,opt,name=source,proto3" json:"source,omitempty"`
+	Msg     string `protobuf:"bytes,3,opt,name=msg,proto3" json:"msg,omitempty"`
+	Content string `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"`
 }
 
 func (m *QueryWorkerConfigResponse) Reset()         { *m = QueryWorkerConfigResponse{} }
 func (m *QueryWorkerConfigResponse) String() string { return proto.CompactTextString(m) }
 func (*QueryWorkerConfigResponse) ProtoMessage()    {}
 func (*QueryWorkerConfigResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{42}
+	return fileDescriptor_51a1b9e17fd67b10, []int{40}
 }
 func (m *QueryWorkerConfigResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -3047,9 +2973,9 @@ func (m *QueryWorkerConfigResponse) GetResult() bool {
 	return false
 }
 
-func (m *QueryWorkerConfigResponse) GetWorker() string {
+func (m *QueryWorkerConfigResponse) GetSource() string {
 	if m != nil {
-		return m.Worker
+		return m.Source
 	}
 	return ""
 }
@@ -3061,13 +2987,6 @@ func (m *QueryWorkerConfigResponse) GetMsg() string {
 	return ""
 }
 
-func (m *QueryWorkerConfigResponse) GetSourceID() string {
-	if m != nil {
-		return m.SourceID
-	}
-	return ""
-}
-
 func (m *QueryWorkerConfigResponse) GetContent() string {
 	if m != nil {
 		return m.Content
@@ -3075,25 +2994,23 @@ func (m *QueryWorkerConfigResponse) GetContent() string {
 	return ""
 }
 
-type TaskMeta struct {
-	Op    TaskOp `protobuf:"varint,1,opt,name=op,proto3,enum=pb.TaskOp" json:"op,omitempty"`
-	Stage Stage  `protobuf:"varint,2,opt,name=stage,proto3,enum=pb.Stage" json:"stage,omitempty"`
-	Name  string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	Task  []byte `protobuf:"bytes,4,opt,name=task,proto3" json:"task,omitempty"`
+type MysqlWorkerRequest struct {
+	Op     WorkerOp `protobuf:"varint,1,opt,name=op,proto3,enum=pb.WorkerOp" json:"op,omitempty"`
+	Config string   `protobuf:"bytes,2,opt,name=config,proto3" json:"config,omitempty"`
 }
 
-func (m *TaskMeta) Reset()         { *m = TaskMeta{} }
-func (m *TaskMeta) String() string { return proto.CompactTextString(m) }
-func (*TaskMeta) ProtoMessage()    {}
-func (*TaskMeta) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{43}
+func (m *MysqlWorkerRequest) Reset()         { *m = MysqlWorkerRequest{} }
+func (m *MysqlWorkerRequest) String() string { return proto.CompactTextString(m) }
+func (*MysqlWorkerRequest) ProtoMessage()    {}
+func (*MysqlWorkerRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_51a1b9e17fd67b10, []int{41}
 }
-func (m *TaskMeta) XXX_Unmarshal(b []byte) error {
+func (m *MysqlWorkerRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *TaskMeta) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *MysqlWorkerRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_TaskMeta.Marshal(b, m, deterministic)
+		return xxx_messageInfo_MysqlWorkerRequest.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -3103,67 +3020,49 @@ func (m *TaskMeta) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return b[:n], nil
 	}
 }
-func (m *TaskMeta) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TaskMeta.Merge(m, src)
+func (m *MysqlWorkerRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MysqlWorkerRequest.Merge(m, src)
 }
-func (m *TaskMeta) XXX_Size() int {
+func (m *MysqlWorkerRequest) XXX_Size() int {
 	return m.Size()
 }
-func (m *TaskMeta) XXX_DiscardUnknown() {
-	xxx_messageInfo_TaskMeta.DiscardUnknown(m)
+func (m *MysqlWorkerRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_MysqlWorkerRequest.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_TaskMeta proto.InternalMessageInfo
+var xxx_messageInfo_MysqlWorkerRequest proto.InternalMessageInfo
 
-func (m *TaskMeta) GetOp() TaskOp {
+func (m *MysqlWorkerRequest) GetOp() WorkerOp {
 	if m != nil {
 		return m.Op
 	}
-	return TaskOp_InvalidOp
+	return WorkerOp_InvalidWorkerOp
 }
 
-func (m *TaskMeta) GetStage() Stage {
+func (m *MysqlWorkerRequest) GetConfig() string {
 	if m != nil {
-		return m.Stage
-	}
-	return Stage_InvalidStage
-}
-
-func (m *TaskMeta) GetName() string {
-	if m != nil {
-		return m.Name
+		return m.Config
 	}
 	return ""
 }
 
-func (m *TaskMeta) GetTask() []byte {
-	if m != nil {
-		return m.Task
-	}
-	return nil
+type MysqlWorkerResponse struct {
+	Result bool   `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
+	Msg    string `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
 }
 
-type TaskLog struct {
-	Id   int64     `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Task *TaskMeta `protobuf:"bytes,2,opt,name=task,proto3" json:"task,omitempty"`
-	Ts   int64     `protobuf:"varint,3,opt,name=ts,proto3" json:"ts,omitempty"`
-	// true means this log is applied successfully
-	Success bool   `protobuf:"varint,4,opt,name=success,proto3" json:"success,omitempty"`
-	Message string `protobuf:"bytes,5,opt,name=message,proto3" json:"message,omitempty"`
+func (m *MysqlWorkerResponse) Reset()         { *m = MysqlWorkerResponse{} }
+func (m *MysqlWorkerResponse) String() string { return proto.CompactTextString(m) }
+func (*MysqlWorkerResponse) ProtoMessage()    {}
+func (*MysqlWorkerResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_51a1b9e17fd67b10, []int{42}
 }
-
-func (m *TaskLog) Reset()         { *m = TaskLog{} }
-func (m *TaskLog) String() string { return proto.CompactTextString(m) }
-func (*TaskLog) ProtoMessage()    {}
-func (*TaskLog) Descriptor() ([]byte, []int) {
-	return fileDescriptor_51a1b9e17fd67b10, []int{44}
-}
-func (m *TaskLog) XXX_Unmarshal(b []byte) error {
+func (m *MysqlWorkerResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *TaskLog) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *MysqlWorkerResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_TaskLog.Marshal(b, m, deterministic)
+		return xxx_messageInfo_MysqlWorkerResponse.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -3173,49 +3072,28 @@ func (m *TaskLog) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return b[:n], nil
 	}
 }
-func (m *TaskLog) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_TaskLog.Merge(m, src)
+func (m *MysqlWorkerResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MysqlWorkerResponse.Merge(m, src)
 }
-func (m *TaskLog) XXX_Size() int {
+func (m *MysqlWorkerResponse) XXX_Size() int {
 	return m.Size()
 }
-func (m *TaskLog) XXX_DiscardUnknown() {
-	xxx_messageInfo_TaskLog.DiscardUnknown(m)
+func (m *MysqlWorkerResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_MysqlWorkerResponse.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_TaskLog proto.InternalMessageInfo
+var xxx_messageInfo_MysqlWorkerResponse proto.InternalMessageInfo
 
-func (m *TaskLog) GetId() int64 {
+func (m *MysqlWorkerResponse) GetResult() bool {
 	if m != nil {
-		return m.Id
-	}
-	return 0
-}
-
-func (m *TaskLog) GetTask() *TaskMeta {
-	if m != nil {
-		return m.Task
-	}
-	return nil
-}
-
-func (m *TaskLog) GetTs() int64 {
-	if m != nil {
-		return m.Ts
-	}
-	return 0
-}
-
-func (m *TaskLog) GetSuccess() bool {
-	if m != nil {
-		return m.Success
+		return m.Result
 	}
 	return false
 }
 
-func (m *TaskLog) GetMessage() string {
+func (m *MysqlWorkerResponse) GetMsg() string {
 	if m != nil {
-		return m.Message
+		return m.Msg
 	}
 	return ""
 }
@@ -3227,13 +3105,12 @@ func init() {
 	proto.RegisterEnum("pb.UnitType", UnitType_name, UnitType_value)
 	proto.RegisterEnum("pb.ErrorType", ErrorType_name, ErrorType_value)
 	proto.RegisterEnum("pb.RelayOp", RelayOp_name, RelayOp_value)
+	proto.RegisterEnum("pb.WorkerOp", WorkerOp_name, WorkerOp_value)
 	proto.RegisterType((*StartSubTaskRequest)(nil), "pb.StartSubTaskRequest")
 	proto.RegisterType((*UpdateRelayRequest)(nil), "pb.UpdateRelayRequest")
 	proto.RegisterType((*MigrateRelayRequest)(nil), "pb.MigrateRelayRequest")
 	proto.RegisterType((*OperateSubTaskRequest)(nil), "pb.OperateSubTaskRequest")
 	proto.RegisterType((*OperateSubTaskResponse)(nil), "pb.OperateSubTaskResponse")
-	proto.RegisterType((*QueryTaskOperationRequest)(nil), "pb.QueryTaskOperationRequest")
-	proto.RegisterType((*QueryTaskOperationResponse)(nil), "pb.QueryTaskOperationResponse")
 	proto.RegisterType((*UpdateSubTaskRequest)(nil), "pb.UpdateSubTaskRequest")
 	proto.RegisterType((*QueryStatusRequest)(nil), "pb.QueryStatusRequest")
 	proto.RegisterType((*QueryErrorRequest)(nil), "pb.QueryErrorRequest")
@@ -3270,163 +3147,158 @@ func init() {
 	proto.RegisterType((*PurgeRelayRequest)(nil), "pb.PurgeRelayRequest")
 	proto.RegisterType((*QueryWorkerConfigRequest)(nil), "pb.QueryWorkerConfigRequest")
 	proto.RegisterType((*QueryWorkerConfigResponse)(nil), "pb.QueryWorkerConfigResponse")
-	proto.RegisterType((*TaskMeta)(nil), "pb.TaskMeta")
-	proto.RegisterType((*TaskLog)(nil), "pb.TaskLog")
+	proto.RegisterType((*MysqlWorkerRequest)(nil), "pb.MysqlWorkerRequest")
+	proto.RegisterType((*MysqlWorkerResponse)(nil), "pb.MysqlWorkerResponse")
 }
 
 func init() { proto.RegisterFile("dmworker.proto", fileDescriptor_51a1b9e17fd67b10) }
 
 var fileDescriptor_51a1b9e17fd67b10 = []byte{
-	// 2383 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x19, 0x4d, 0x6f, 0x23, 0x49,
-	0xd5, 0xdd, 0x6e, 0x3b, 0xf6, 0xb3, 0x93, 0xe9, 0x54, 0x66, 0x67, 0x3d, 0x66, 0x27, 0x84, 0x9e,
-	0xd5, 0x6e, 0x36, 0x42, 0xd1, 0x6e, 0x00, 0x21, 0x01, 0x0b, 0xec, 0xc4, 0x99, 0x4c, 0xc0, 0x99,
-	0x49, 0xda, 0x13, 0xe0, 0xb6, 0xea, 0xb4, 0x2b, 0x4e, 0x2b, 0xed, 0xee, 0x9e, 0xfe, 0x48, 0x26,
-	0x27, 0xe0, 0x8c, 0x84, 0x90, 0x38, 0x21, 0x8e, 0x88, 0x1b, 0x3f, 0x81, 0x3b, 0x1c, 0xf7, 0xc8,
-	0x0d, 0x34, 0xf3, 0x0b, 0xb8, 0x73, 0x40, 0xef, 0x55, 0x75, 0x77, 0x75, 0x62, 0x7b, 0x46, 0x68,
-	0xb8, 0x58, 0xfd, 0x3e, 0xea, 0xd5, 0xfb, 0xaa, 0xf7, 0xaa, 0x9e, 0x61, 0x65, 0x3c, 0xbd, 0x0a,
-	0xe3, 0x0b, 0x1e, 0x6f, 0x47, 0x71, 0x98, 0x86, 0x4c, 0x8f, 0x4e, 0xad, 0x4f, 0x60, 0x6d, 0x94,
-	0x3a, 0x71, 0x3a, 0xca, 0x4e, 0x9f, 0x3b, 0xc9, 0x85, 0xcd, 0x5f, 0x64, 0x3c, 0x49, 0x19, 0x03,
-	0x23, 0x75, 0x92, 0x8b, 0x9e, 0xb6, 0xa1, 0x6d, 0xb6, 0x6d, 0xfa, 0xb6, 0xb6, 0x81, 0x9d, 0x44,
-	0x63, 0x27, 0xe5, 0x36, 0xf7, 0x9d, 0xeb, 0x9c, 0xb3, 0x07, 0x4b, 0x6e, 0x18, 0xa4, 0x3c, 0x48,
-	0x25, 0x73, 0x0e, 0x5a, 0x23, 0x58, 0x3b, 0xf4, 0x26, 0xf1, 0xcd, 0x05, 0xeb, 0x00, 0x8f, 0xbc,
-	0xc0, 0x0f, 0x27, 0x4f, 0x9d, 0x29, 0x97, 0x6b, 0x14, 0x0c, 0xfb, 0x00, 0xda, 0x02, 0x3a, 0x0a,
-	0x93, 0x9e, 0xbe, 0xa1, 0x6d, 0x2e, 0xdb, 0x25, 0xc2, 0xda, 0x87, 0xf7, 0x9e, 0x45, 0x1c, 0x85,
-	0xde, 0xd0, 0xb8, 0x0f, 0x7a, 0x18, 0x91, 0xb8, 0x95, 0x1d, 0xd8, 0x8e, 0x4e, 0xb7, 0x91, 0xf8,
-	0x2c, 0xb2, 0xf5, 0x30, 0x42, 0x6b, 0x02, 0xdc, 0x4c, 0x17, 0xd6, 0xe0, 0xb7, 0xf5, 0x12, 0xee,
-	0xdd, 0x14, 0x94, 0x44, 0x61, 0x90, 0x70, 0xf6, 0x4d, 0x30, 0xa6, 0x3c, 0x75, 0x48, 0x56, 0x67,
-	0xa7, 0x87, 0xb2, 0x76, 0xc3, 0xe9, 0x34, 0x0c, 0x7e, 0x4e, 0xce, 0xcb, 0xf9, 0x6c, 0xe2, 0x92,
-	0xfb, 0xea, 0x33, 0xf7, 0xbd, 0x0b, 0x0d, 0x3f, 0x9c, 0x1c, 0x0c, 0x7a, 0xf5, 0x0d, 0x6d, 0xb3,
-	0x6e, 0x0b, 0xc0, 0xda, 0x83, 0xfb, 0xc7, 0x19, 0x8f, 0xaf, 0x05, 0x23, 0xaa, 0xe0, 0x85, 0x81,
-	0xe2, 0xf8, 0xa0, 0xf4, 0x0b, 0x7d, 0x97, 0x62, 0x74, 0x55, 0x8c, 0x07, 0xfd, 0x59, 0x62, 0xfe,
-	0x27, 0x23, 0x1e, 0x40, 0xdd, 0x0f, 0x27, 0x24, 0xbf, 0xb3, 0xd3, 0xc9, 0xad, 0x18, 0x86, 0x13,
-	0x1b, 0xf1, 0xd6, 0x16, 0xdc, 0x15, 0x91, 0x7f, 0x8b, 0x2c, 0xd9, 0x04, 0x46, 0x6a, 0x8d, 0x52,
-	0x27, 0xcd, 0x92, 0x05, 0x66, 0x59, 0x1f, 0xc3, 0x2a, 0x71, 0xee, 0xc5, 0x71, 0x18, 0x2f, 0x62,
-	0xfc, 0xa3, 0x06, 0xbd, 0x27, 0x4e, 0x30, 0xf6, 0xf3, 0xfd, 0x47, 0xc7, 0xc3, 0x45, 0x92, 0xd9,
-	0x7d, 0x25, 0x26, 0x6d, 0xb4, 0x66, 0x74, 0x3c, 0x2c, 0x53, 0xc1, 0x89, 0x27, 0x49, 0xaf, 0xbe,
-	0x51, 0x47, 0x76, 0xfc, 0xc6, 0x8c, 0x3b, 0x2d, 0x32, 0xce, 0x20, 0x39, 0x25, 0x02, 0xf3, 0x35,
-	0x79, 0xe1, 0x1f, 0x39, 0x69, 0xca, 0xe3, 0xa0, 0xd7, 0x10, 0xf9, 0x5a, 0x62, 0xac, 0x5f, 0xc0,
-	0xdd, 0x59, 0x9e, 0x65, 0xf7, 0xa0, 0x19, 0xf3, 0x24, 0xf3, 0xc5, 0xb9, 0x68, 0xd9, 0x12, 0x42,
-	0xbc, 0x38, 0x85, 0x32, 0x1d, 0x25, 0xc4, 0x4c, 0xa8, 0x4f, 0x93, 0x09, 0xa5, 0x4a, 0xdb, 0xc6,
-	0x4f, 0xeb, 0x9f, 0x1a, 0xac, 0x55, 0x7c, 0xf9, 0xae, 0x24, 0xb3, 0xef, 0xc2, 0x72, 0x22, 0x5d,
-	0x49, 0xa2, 0x7b, 0xc6, 0x46, 0x7d, 0xb3, 0xb3, 0xb3, 0x4a, 0xbe, 0x52, 0x09, 0x76, 0x95, 0x8f,
-	0x7d, 0x06, 0x9d, 0x18, 0x0f, 0xb3, 0x5c, 0xd6, 0xa0, 0x84, 0xb9, 0x83, 0xcb, 0xec, 0x12, 0x6d,
-	0xab, 0x3c, 0xac, 0x0f, 0xad, 0x24, 0xcc, 0x62, 0x97, 0x1f, 0x0c, 0x7a, 0x4d, 0x52, 0xa1, 0x80,
-	0xad, 0xbf, 0x6a, 0x32, 0x5b, 0x64, 0x0e, 0xbc, 0x33, 0x03, 0xbf, 0x0d, 0x5d, 0xa9, 0x38, 0x49,
-	0x96, 0xf6, 0x99, 0x8a, 0x7d, 0x62, 0xc7, 0x0a, 0x17, 0xdb, 0x06, 0x20, 0x33, 0xc4, 0x1a, 0x61,
-	0xdc, 0x4a, 0x61, 0x9c, 0x58, 0xa1, 0x70, 0x58, 0x7f, 0xd6, 0xa0, 0xb3, 0x7b, 0xce, 0xdd, 0xdc,
-	0x3b, 0xf7, 0xa0, 0x19, 0x39, 0x49, 0xc2, 0xc7, 0xb9, 0xde, 0x02, 0xc2, 0x03, 0x9c, 0x86, 0xa9,
-	0xe3, 0x93, 0xda, 0x0d, 0x5b, 0x00, 0x94, 0x58, 0x99, 0xeb, 0xf2, 0x24, 0x39, 0xcb, 0x7c, 0x52,
-	0xbe, 0x61, 0x2b, 0x18, 0x94, 0x76, 0xe6, 0x78, 0x3e, 0x1f, 0x53, 0x4e, 0x36, 0x6c, 0x09, 0x61,
-	0xc5, 0xbd, 0x72, 0xe2, 0xc0, 0x0b, 0x26, 0xa4, 0x62, 0xc3, 0xce, 0x41, 0x5c, 0x31, 0xe6, 0xa9,
-	0xe3, 0xf9, 0xe4, 0xe8, 0xae, 0x2d, 0x21, 0xab, 0x0b, 0x30, 0xc8, 0xa6, 0x91, 0xd0, 0xd2, 0xfa,
-	0xad, 0x06, 0x30, 0x0c, 0x9d, 0xb1, 0x54, 0xfa, 0x43, 0x58, 0x3e, 0xf3, 0x02, 0x2f, 0x39, 0xe7,
-	0xe3, 0x47, 0xd7, 0x29, 0x4f, 0x48, 0xf7, 0xba, 0x5d, 0x45, 0xa2, 0xb2, 0xa4, 0xb5, 0x60, 0x11,
-	0x85, 0x48, 0xc1, 0x60, 0x94, 0xa3, 0x38, 0x9c, 0xc4, 0x3c, 0x49, 0x64, 0x1c, 0x0a, 0x18, 0xd7,
-	0x62, 0x95, 0x11, 0x45, 0x5c, 0x1e, 0x30, 0x05, 0x63, 0xfd, 0x46, 0x83, 0xe5, 0xd1, 0xb9, 0x13,
-	0x8f, 0xbd, 0x60, 0xb2, 0x1f, 0x87, 0x59, 0x84, 0x86, 0xa4, 0x4e, 0x3c, 0xe1, 0x79, 0x4f, 0x91,
-	0x10, 0x9e, 0xde, 0xc1, 0x60, 0x88, 0xfb, 0xd3, 0xe9, 0xc5, 0x6f, 0xdc, 0xf9, 0xcc, 0x8b, 0x93,
-	0x14, 0x0f, 0xaf, 0xdc, 0x39, 0x87, 0x51, 0x4e, 0x72, 0x1d, 0xb8, 0xe4, 0x42, 0x5c, 0x21, 0x21,
-	0x5c, 0x93, 0x05, 0x92, 0xd2, 0x20, 0x4a, 0x01, 0x5b, 0x7f, 0xaa, 0x03, 0x8c, 0xae, 0x03, 0x57,
-	0xba, 0x67, 0x03, 0x3a, 0x64, 0xe6, 0xde, 0x25, 0x0f, 0xd2, 0xdc, 0x39, 0x2a, 0x0a, 0x85, 0x11,
-	0xf8, 0x3c, 0xca, 0x1d, 0x53, 0xc0, 0x58, 0x5a, 0x62, 0xee, 0xf2, 0x20, 0x45, 0xa2, 0xe8, 0x02,
-	0x25, 0x82, 0x59, 0xd0, 0x9d, 0x3a, 0x49, 0xca, 0xe3, 0x8a, 0x6b, 0x2a, 0x38, 0xb6, 0x05, 0xa6,
-	0x0a, 0xef, 0xa7, 0xde, 0x58, 0x16, 0xa1, 0x5b, 0x78, 0x94, 0x47, 0x46, 0xe4, 0xf2, 0xc4, 0x71,
-	0xab, 0xe0, 0x50, 0x9e, 0x0a, 0x93, 0xbc, 0x25, 0x21, 0xef, 0x26, 0x1e, 0xe5, 0x9d, 0xfa, 0xa1,
-	0x7b, 0xe1, 0x05, 0x13, 0x72, 0x7b, 0x8b, 0x5c, 0x55, 0xc1, 0xb1, 0xcf, 0xc1, 0xcc, 0x82, 0x98,
-	0x27, 0xa1, 0x7f, 0xc9, 0xc7, 0x14, 0xbd, 0xa4, 0xd7, 0x56, 0xaa, 0x89, 0x1a, 0x57, 0xfb, 0x16,
-	0xab, 0x12, 0x21, 0x10, 0x47, 0x46, 0x46, 0x68, 0x1d, 0x40, 0x94, 0xe0, 0xe7, 0xd7, 0x11, 0xef,
-	0x75, 0x44, 0xce, 0x94, 0x18, 0xeb, 0x6f, 0x3a, 0x74, 0x94, 0x92, 0x73, 0xcb, 0x95, 0xda, 0x5b,
-	0xba, 0x52, 0x9f, 0xe3, 0xca, 0x8d, 0xbc, 0xd0, 0x65, 0xa7, 0x03, 0x2f, 0x96, 0x89, 0xa5, 0xa2,
-	0x0a, 0x8e, 0x4a, 0xec, 0x54, 0x14, 0xdb, 0x84, 0x3b, 0x0a, 0xa8, 0x44, 0xee, 0x26, 0x9a, 0x6d,
-	0x03, 0x23, 0xd4, 0xae, 0x93, 0xba, 0xe7, 0x27, 0xd1, 0x21, 0x69, 0x43, 0xe1, 0x6b, 0xd9, 0x33,
-	0x28, 0xec, 0xeb, 0xd0, 0x48, 0x52, 0x67, 0xc2, 0x29, 0x72, 0x79, 0x8f, 0x43, 0x84, 0x2d, 0xf0,
-	0xec, 0x93, 0xa2, 0x82, 0xb6, 0xa8, 0x8a, 0x51, 0x2c, 0x8e, 0xe2, 0x10, 0x6b, 0x8b, 0x4d, 0x84,
-	0xbc, 0xa8, 0x5a, 0xff, 0xd1, 0x61, 0xb9, 0x52, 0xf3, 0x67, 0xb6, 0xd4, 0x62, 0x47, 0x7d, 0xce,
-	0x8e, 0x1b, 0x60, 0x64, 0x81, 0x97, 0x92, 0xa7, 0x56, 0x76, 0xba, 0x48, 0x3f, 0x09, 0xbc, 0x14,
-	0x83, 0x65, 0x13, 0x45, 0xd1, 0xc9, 0x78, 0x83, 0x4e, 0xec, 0x53, 0x58, 0x2b, 0x33, 0x65, 0x30,
-	0x18, 0x0e, 0x43, 0xf7, 0xe2, 0x60, 0x20, 0xbd, 0x37, 0x8b, 0xc4, 0x98, 0x68, 0x01, 0x94, 0xf1,
-	0x4f, 0x6a, 0xa2, 0x09, 0x7c, 0x0c, 0x0d, 0x17, 0xab, 0x33, 0x79, 0x49, 0xb6, 0x29, 0xa5, 0x5c,
-	0x3f, 0xa9, 0xd9, 0x82, 0xce, 0x3e, 0x04, 0x63, 0x9c, 0x4d, 0x23, 0xe9, 0x2b, 0xaa, 0xf8, 0x65,
-	0xbd, 0x7c, 0x52, 0xb3, 0x89, 0x8a, 0x5c, 0x7e, 0xe8, 0x8c, 0x7b, 0xed, 0x92, 0xab, 0x2c, 0xa3,
-	0xc8, 0x85, 0x54, 0xe4, 0xc2, 0x14, 0xa6, 0x74, 0x96, 0x5c, 0x65, 0x35, 0x41, 0x2e, 0xa4, 0x3e,
-	0x6a, 0x41, 0x33, 0x11, 0xd5, 0xf8, 0x87, 0xb0, 0x5a, 0xf1, 0xfe, 0xd0, 0x4b, 0xc8, 0x55, 0x82,
-	0xdc, 0xd3, 0xe6, 0x35, 0xe6, 0x7c, 0xfd, 0x3a, 0x00, 0xd9, 0x24, 0x3a, 0x98, 0xec, 0x84, 0x5a,
-	0x79, 0x89, 0x78, 0x00, 0x6d, 0xb4, 0x65, 0x01, 0x19, 0x8d, 0x98, 0x47, 0x8e, 0xa0, 0x4b, 0xda,
-	0x1f, 0x0f, 0xe7, 0x70, 0xb0, 0x1d, 0xb8, 0x2b, 0xfa, 0x52, 0x71, 0x47, 0xf7, 0xf0, 0x22, 0x2a,
-	0x0f, 0xd6, 0x4c, 0x1a, 0x56, 0x4c, 0x8e, 0xe2, 0x46, 0xc7, 0xc3, 0xbc, 0x64, 0xe7, 0xb0, 0xf5,
-	0x1d, 0x68, 0xe3, 0x8e, 0x62, 0xbb, 0x4d, 0x68, 0x12, 0x21, 0xf7, 0x83, 0x59, 0xb8, 0x53, 0x2a,
-	0x64, 0x4b, 0x3a, 0xba, 0xa1, 0x6c, 0xcc, 0x33, 0x0c, 0xf9, 0x83, 0x0e, 0x5d, 0xb5, 0xf3, 0xff,
-	0xbf, 0x92, 0x5c, 0xe6, 0xa1, 0xa1, 0xe6, 0xe1, 0x47, 0x79, 0x1e, 0x2a, 0x37, 0x8a, 0x32, 0x66,
-	0x65, 0x1a, 0x3e, 0x94, 0x69, 0xd8, 0x24, 0xb6, 0xe5, 0x3c, 0x0d, 0x73, 0x2e, 0x91, 0x85, 0x0f,
-	0x65, 0x16, 0x2e, 0x95, 0x4c, 0x45, 0x00, 0x8b, 0x24, 0x7c, 0x28, 0x93, 0xb0, 0x55, 0x32, 0x15,
-	0x4e, 0x2d, 0x72, 0x70, 0x09, 0x1a, 0xe4, 0x3c, 0xeb, 0x7b, 0x60, 0xaa, 0xae, 0xa1, 0x0c, 0xfc,
-	0x48, 0x12, 0x2b, 0x8e, 0x57, 0x6f, 0x4e, 0x72, 0xed, 0x0b, 0x58, 0xae, 0x1c, 0x61, 0x2c, 0xdc,
-	0x5e, 0xb2, 0xeb, 0x04, 0x2e, 0xf7, 0x8b, 0x7b, 0x90, 0x82, 0x51, 0x42, 0xaa, 0x97, 0x92, 0xa5,
-	0x88, 0x4a, 0x48, 0x95, 0xdb, 0x4c, 0xbd, 0x72, 0x9b, 0xf9, 0x8b, 0x06, 0xcd, 0xe7, 0x22, 0x88,
-	0x3d, 0x58, 0xda, 0x8b, 0xe3, 0xdd, 0x70, 0x2c, 0xe2, 0xd8, 0xb0, 0x73, 0x10, 0x53, 0x0c, 0x3f,
-	0x7d, 0x27, 0x49, 0xe4, 0xad, 0xab, 0x80, 0x25, 0x6d, 0xe4, 0x86, 0x11, 0x97, 0xd7, 0xae, 0x02,
-	0x96, 0xb4, 0x21, 0xbf, 0xe4, 0xbe, 0xbc, 0x76, 0x15, 0x30, 0xee, 0x76, 0xc8, 0x93, 0x04, 0x13,
-	0x44, 0x54, 0xa2, 0x1c, 0xc4, 0x55, 0xb6, 0x73, 0xb5, 0xeb, 0x64, 0x09, 0xcf, 0xef, 0xb8, 0x39,
-	0x6c, 0x71, 0xe8, 0xaa, 0xe6, 0xb1, 0x6f, 0x80, 0x41, 0x3d, 0x4d, 0x3c, 0x55, 0x29, 0x36, 0x44,
-	0x10, 0x49, 0x84, 0xbf, 0x79, 0xfa, 0xea, 0xe5, 0x29, 0xdb, 0xc8, 0xc3, 0x51, 0xa7, 0x88, 0x8a,
-	0x87, 0x66, 0x25, 0x10, 0x5f, 0xc2, 0xd2, 0x60, 0x30, 0x3c, 0x08, 0xce, 0xc2, 0x59, 0xcf, 0x32,
-	0xea, 0xb3, 0xee, 0x39, 0x9f, 0x3a, 0xf9, 0xd5, 0x59, 0x40, 0x74, 0x35, 0x75, 0x4e, 0x7d, 0x2e,
-	0xcf, 0xa1, 0x00, 0x8a, 0x7b, 0x96, 0x51, 0xde, 0xb3, 0xac, 0xcf, 0xa0, 0x93, 0x97, 0xdb, 0x79,
-	0x9b, 0xac, 0x80, 0x2e, 0x5f, 0xa9, 0x6d, 0x5b, 0x3f, 0x18, 0x58, 0xbf, 0xd2, 0x60, 0x65, 0xef,
-	0x25, 0x77, 0x07, 0x83, 0xe1, 0x82, 0x27, 0x23, 0xea, 0xe6, 0x8b, 0x02, 0x2f, 0x75, 0xf3, 0xf3,
-	0x9a, 0x6e, 0xf0, 0x97, 0xdc, 0x25, 0xd5, 0x5a, 0x36, 0x7d, 0xd3, 0x65, 0x2b, 0x76, 0x5c, 0xbe,
-	0x7f, 0x30, 0x90, 0x2d, 0xb7, 0x80, 0x0b, 0xad, 0x1b, 0x8a, 0xd6, 0xbf, 0xd6, 0x60, 0xed, 0x51,
-	0xcc, 0x9d, 0x0b, 0xa9, 0xfb, 0x22, 0x3d, 0x2c, 0xe8, 0xc6, 0x7c, 0x1a, 0x5e, 0xf2, 0xa1, 0xaa,
-	0x4d, 0x05, 0x87, 0x39, 0xc0, 0x85, 0x45, 0x52, 0xad, 0x1c, 0x44, 0x4a, 0x72, 0xe1, 0x45, 0x48,
-	0x31, 0x04, 0x45, 0x82, 0x56, 0x1f, 0x7a, 0xa3, 0x2b, 0x2f, 0x75, 0xcf, 0xa9, 0x42, 0x89, 0x16,
-	0x2e, 0xf5, 0xb0, 0x76, 0x60, 0x4d, 0x8e, 0x21, 0x2a, 0x43, 0x92, 0xaf, 0x29, 0xd3, 0x8c, 0x4e,
-	0xf1, 0x02, 0x11, 0x6f, 0x58, 0x2b, 0x83, 0xbb, 0xd5, 0x35, 0xf2, 0xd9, 0xb4, 0x68, 0x91, 0xf2,
-	0xa6, 0xd2, 0xe7, 0xbc, 0xa9, 0xea, 0xb3, 0xde, 0x54, 0x46, 0x59, 0x42, 0xaf, 0x60, 0xf5, 0x28,
-	0x8b, 0x27, 0x55, 0x45, 0xfb, 0xd0, 0xf2, 0x02, 0xc7, 0x4d, 0xbd, 0x4b, 0x2e, 0x0f, 0x7b, 0x01,
-	0x93, 0x8f, 0x3d, 0x39, 0x76, 0xa9, 0xdb, 0xf4, 0x2d, 0x6e, 0xeb, 0x3e, 0xa7, 0xd2, 0x5b, 0xdc,
-	0xd6, 0x05, 0x4c, 0x39, 0x2a, 0xae, 0x5b, 0x86, 0xcc, 0x51, 0x82, 0xd0, 0x7f, 0xf4, 0x48, 0x14,
-	0x0f, 0xec, 0xdd, 0x30, 0x38, 0xf3, 0x26, 0xb9, 0xff, 0x7e, 0xaf, 0xc9, 0x69, 0x4a, 0x95, 0xf8,
-	0xce, 0x1e, 0x92, 0xea, 0xeb, 0xd5, 0xa8, 0xbe, 0x5e, 0xd5, 0xd1, 0x57, 0xa3, 0x3a, 0xfa, 0x0a,
-	0xa1, 0x85, 0x95, 0xf2, 0xb0, 0x1c, 0x10, 0xcd, 0x1e, 0x4c, 0xbd, 0xb1, 0xe1, 0xe4, 0x5d, 0xaa,
-	0xae, 0x74, 0xa9, 0x3c, 0x75, 0x0d, 0xaa, 0x8a, 0x62, 0xea, 0xf2, 0x4b, 0x58, 0x92, 0x13, 0x1b,
-	0x3c, 0x84, 0xde, 0x58, 0xbe, 0x53, 0x74, 0xba, 0xc9, 0x0a, 0x76, 0x31, 0xdc, 0xe9, 0xe6, 0x1a,
-	0xa0, 0x6e, 0xe5, 0xb1, 0x4d, 0xf3, 0xd7, 0x89, 0x9e, 0x26, 0x94, 0xc9, 0xe2, 0x19, 0x5a, 0x64,
-	0xb2, 0x00, 0x91, 0x32, 0xad, 0x56, 0x40, 0x09, 0x6e, 0x7d, 0x09, 0x4d, 0x61, 0x17, 0x5b, 0x86,
-	0xf6, 0x41, 0x70, 0xe9, 0xf8, 0xde, 0xf8, 0x59, 0x64, 0xd6, 0x58, 0x0b, 0x8c, 0x51, 0x1a, 0x46,
-	0xa6, 0xc6, 0xda, 0xd0, 0x38, 0xc2, 0x8a, 0x68, 0xea, 0x0c, 0xa0, 0x89, 0xed, 0x62, 0xca, 0xcd,
-	0x3a, 0xa2, 0x69, 0x02, 0x69, 0x1a, 0x88, 0x16, 0x73, 0x26, 0xb3, 0xc1, 0x56, 0x00, 0xbe, 0xc8,
-	0xd2, 0x50, 0xb2, 0x35, 0xb7, 0xb6, 0xa0, 0x41, 0x53, 0x1c, 0x12, 0xf8, 0xd3, 0x83, 0x23, 0xb3,
-	0xc6, 0x3a, 0xb0, 0x64, 0xef, 0x1d, 0x0d, 0xbf, 0xd8, 0xdd, 0x33, 0x35, 0x5c, 0x7b, 0xf0, 0xf4,
-	0x27, 0x7b, 0xbb, 0xcf, 0x4d, 0x7d, 0xeb, 0x67, 0x24, 0x72, 0x82, 0x85, 0xb4, 0x2b, 0x75, 0x21,
-	0xd8, 0xac, 0xb1, 0x25, 0xa8, 0x3f, 0xe5, 0x57, 0xa6, 0x46, 0x8b, 0xb3, 0x00, 0x9f, 0xcd, 0x42,
-	0x1f, 0x52, 0x6d, 0x6c, 0xd6, 0x91, 0x80, 0x0a, 0x47, 0x7c, 0x6c, 0x1a, 0xac, 0x0b, 0xad, 0xc7,
-	0xf2, 0x1d, 0x6c, 0x36, 0xb6, 0x9e, 0x41, 0x2b, 0x6f, 0xf7, 0xec, 0x0e, 0x74, 0xa4, 0x68, 0x44,
-	0x99, 0x35, 0xb4, 0x83, 0x9a, 0xba, 0xa9, 0xa1, 0x8a, 0xd8, 0xb8, 0x4d, 0x1d, 0xbf, 0xb0, 0x3b,
-	0x9b, 0x75, 0x52, 0xfb, 0x3a, 0x70, 0x4d, 0x03, 0x19, 0xe9, 0x08, 0x99, 0xe3, 0xad, 0xef, 0x43,
-	0xbb, 0xa8, 0xfd, 0xa8, 0xec, 0x49, 0x70, 0x11, 0x84, 0x57, 0x01, 0xe1, 0x84, 0x81, 0x58, 0x3e,
-	0x47, 0xc7, 0x43, 0x53, 0xc3, 0x0d, 0x49, 0xfe, 0x63, 0xba, 0x51, 0x99, 0xfa, 0xd6, 0x21, 0x2c,
-	0xc9, 0x03, 0xce, 0x18, 0xac, 0x48, 0x65, 0x24, 0xc6, 0xac, 0x61, 0x1c, 0xd0, 0x0e, 0xb1, 0x95,
-	0x86, 0xfe, 0x24, 0x13, 0x05, 0xac, 0xa3, 0x38, 0xe1, 0x5b, 0x81, 0xa8, 0xef, 0xfc, 0xbb, 0x05,
-	0x4d, 0x71, 0x88, 0xd8, 0x1e, 0x74, 0xd5, 0xa1, 0x30, 0x7b, 0x5f, 0xe6, 0xe5, 0xcd, 0x31, 0x71,
-	0xbf, 0x8f, 0x84, 0xd9, 0x63, 0x54, 0xab, 0xc6, 0x0e, 0x60, 0xa5, 0x4a, 0x63, 0xf7, 0x67, 0xf1,
-	0xbf, 0x8d, 0xa8, 0x7d, 0x58, 0xae, 0x4c, 0x20, 0x19, 0x4d, 0x34, 0x67, 0x0d, 0x25, 0xdf, 0x20,
-	0xe8, 0xc7, 0xd0, 0x51, 0x46, 0x6a, 0xec, 0x1e, 0x32, 0xdf, 0x9e, 0x57, 0xf6, 0xdf, 0xbf, 0x85,
-	0x2f, 0x24, 0x7c, 0x0e, 0x50, 0x8e, 0xac, 0xd8, 0x7b, 0x05, 0xa3, 0x3a, 0xc6, 0xec, 0xdf, 0xbb,
-	0x89, 0x2e, 0x96, 0x9f, 0xc8, 0x89, 0x57, 0x65, 0x6c, 0xcb, 0x1e, 0x14, 0xfc, 0xb3, 0xa6, 0xc2,
-	0xfd, 0xf5, 0x79, 0xe4, 0x42, 0xec, 0x63, 0x00, 0x39, 0x22, 0x3d, 0x1e, 0x26, 0xec, 0x03, 0xe4,
-	0x9f, 0x37, 0x32, 0xed, 0xcf, 0x9d, 0x06, 0x5b, 0x35, 0xb6, 0x03, 0xdd, 0xc7, 0x3c, 0x75, 0xcf,
-	0xf3, 0xbb, 0x04, 0x3d, 0x9a, 0x94, 0xbe, 0xdf, 0xef, 0x48, 0x04, 0x02, 0x56, 0x6d, 0x53, 0xfb,
-	0x54, 0x63, 0x3f, 0x00, 0xc0, 0x34, 0xcd, 0x52, 0x8e, 0x7d, 0x90, 0xd1, 0x8d, 0xa6, 0xd2, 0xf5,
-	0x17, 0xee, 0xb8, 0x0b, 0x5d, 0xb5, 0x41, 0x8b, 0x64, 0x9b, 0xd1, 0xb2, 0x17, 0x0a, 0x39, 0x84,
-	0xd5, 0x5b, 0x2d, 0x56, 0x78, 0x61, 0x5e, 0xe7, 0x7d, 0x93, 0x4e, 0x6a, 0x87, 0x15, 0x3a, 0xcd,
-	0xe8, 0xd3, 0x42, 0xc8, 0xac, 0x66, 0x6c, 0xd5, 0xd8, 0x8f, 0x00, 0xca, 0x7e, 0x29, 0x12, 0xe5,
-	0x56, 0xff, 0x5c, 0xa8, 0xc5, 0x3e, 0xac, 0x2a, 0x7f, 0xb8, 0x88, 0xd6, 0x26, 0x32, 0xf6, 0xf6,
-	0xff, 0x30, 0x0b, 0x05, 0xd9, 0x72, 0xd2, 0xae, 0xf6, 0x48, 0xe1, 0x9d, 0x79, 0x7d, 0xb5, 0xff,
-	0x60, 0x0e, 0x55, 0x75, 0x91, 0xfa, 0xef, 0x8e, 0x70, 0xd1, 0x8c, 0xff, 0x7b, 0x16, 0x29, 0xf6,
-	0xa8, 0xf7, 0xf7, 0x57, 0xeb, 0xda, 0x57, 0xaf, 0xd6, 0xb5, 0x7f, 0xbd, 0x5a, 0xd7, 0x7e, 0xf7,
-	0x7a, 0xbd, 0xf6, 0xd5, 0xeb, 0xf5, 0xda, 0x3f, 0x5e, 0xaf, 0xd7, 0x4e, 0x9b, 0xf4, 0x17, 0xd5,
-	0xb7, 0xfe, 0x1b, 0x00, 0x00, 0xff, 0xff, 0x12, 0xc1, 0x01, 0x7f, 0xb4, 0x1a, 0x00, 0x00,
+	// 2293 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x59, 0xcd, 0x73, 0x23, 0x47,
+	0x15, 0xd7, 0x8c, 0x3e, 0x2c, 0x3d, 0xc9, 0xde, 0x71, 0x7b, 0xb3, 0x51, 0xc4, 0xc6, 0x98, 0xd9,
+	0x54, 0xe2, 0xe8, 0xe0, 0x4a, 0x0c, 0x14, 0x55, 0x40, 0x08, 0x59, 0xc9, 0xeb, 0x75, 0x90, 0x77,
+	0xed, 0x91, 0x17, 0xb8, 0xa5, 0xc6, 0xa3, 0xb6, 0x3c, 0xe5, 0xd1, 0xcc, 0xec, 0x7c, 0xd8, 0xf1,
+	0x0d, 0xce, 0x54, 0x51, 0x5c, 0x29, 0x8e, 0x14, 0x37, 0xfe, 0x04, 0x6e, 0x1c, 0xe0, 0x98, 0x23,
+	0x37, 0xa8, 0xdd, 0x7f, 0x83, 0x03, 0xf5, 0x5e, 0xf7, 0xcc, 0xf4, 0x58, 0x1f, 0x9b, 0xc3, 0x72,
+	0x51, 0xcd, 0xfb, 0xe8, 0xd7, 0xaf, 0x7f, 0xef, 0xf5, 0x7b, 0xdd, 0x2d, 0xd8, 0x98, 0xcc, 0x6e,
+	0x82, 0xe8, 0x8a, 0x47, 0x7b, 0x61, 0x14, 0x24, 0x01, 0xd3, 0xc3, 0x73, 0xf3, 0x63, 0xd8, 0x1a,
+	0x27, 0x76, 0x94, 0x8c, 0xd3, 0xf3, 0x33, 0x3b, 0xbe, 0xb2, 0xf8, 0xcb, 0x94, 0xc7, 0x09, 0x63,
+	0x50, 0x4b, 0xec, 0xf8, 0xaa, 0xab, 0xed, 0x68, 0xbb, 0x2d, 0x8b, 0xbe, 0xcd, 0x3d, 0x60, 0x2f,
+	0xc2, 0x89, 0x9d, 0x70, 0x8b, 0x7b, 0xf6, 0x6d, 0xa6, 0xd9, 0x85, 0x35, 0x27, 0xf0, 0x13, 0xee,
+	0x27, 0x52, 0x39, 0x23, 0xcd, 0x31, 0x6c, 0x1d, 0xbb, 0xd3, 0xe8, 0xee, 0x80, 0x6d, 0x80, 0xc7,
+	0xae, 0xef, 0x05, 0xd3, 0x67, 0xf6, 0x8c, 0xcb, 0x31, 0x0a, 0x87, 0x3d, 0x84, 0x96, 0xa0, 0x4e,
+	0x82, 0xb8, 0xab, 0xef, 0x68, 0xbb, 0xeb, 0x56, 0xc1, 0x30, 0x0f, 0xe1, 0x9d, 0xe7, 0x21, 0x47,
+	0xa3, 0x77, 0x3c, 0xee, 0x81, 0x1e, 0x84, 0x64, 0x6e, 0x63, 0x1f, 0xf6, 0xc2, 0xf3, 0x3d, 0x14,
+	0x3e, 0x0f, 0x2d, 0x3d, 0x08, 0x71, 0x35, 0x3e, 0x4e, 0xa6, 0x8b, 0xd5, 0xe0, 0xb7, 0x79, 0x0d,
+	0x0f, 0xee, 0x1a, 0x8a, 0xc3, 0xc0, 0x8f, 0xf9, 0x4a, 0x4b, 0x0f, 0xa0, 0x11, 0xf1, 0x38, 0xf5,
+	0x12, 0xb2, 0xd5, 0xb4, 0x24, 0x85, 0xfc, 0x38, 0x48, 0x23, 0x87, 0x77, 0xab, 0x34, 0x87, 0xa4,
+	0x98, 0x01, 0xd5, 0x59, 0x3c, 0xed, 0xd6, 0x88, 0x89, 0x9f, 0x66, 0x1f, 0xee, 0x0b, 0x14, 0xbf,
+	0x05, 0xe2, 0xbb, 0xc0, 0x4e, 0x53, 0x1e, 0xdd, 0x8e, 0x13, 0x3b, 0x49, 0x63, 0x45, 0xd3, 0x2f,
+	0xa0, 0x13, 0xab, 0xf9, 0x08, 0x36, 0x49, 0xf3, 0x20, 0x8a, 0x82, 0x68, 0x95, 0xe2, 0x9f, 0x34,
+	0xe8, 0x3e, 0xb5, 0xfd, 0x89, 0x97, 0xcd, 0x3f, 0x3e, 0x1d, 0xad, 0xb2, 0xcc, 0xde, 0x23, 0x34,
+	0x74, 0x42, 0xa3, 0x85, 0x68, 0x8c, 0x4f, 0x47, 0x05, 0xac, 0x76, 0x34, 0x8d, 0xbb, 0xd5, 0x9d,
+	0x2a, 0xaa, 0xe3, 0x37, 0x46, 0xef, 0x3c, 0x8f, 0x9e, 0x58, 0x76, 0xc1, 0xc0, 0xd8, 0xc7, 0x2f,
+	0xbd, 0x13, 0x3b, 0x49, 0x78, 0xe4, 0x77, 0xeb, 0x22, 0xf6, 0x05, 0xc7, 0xfc, 0x35, 0xdc, 0x1f,
+	0x04, 0xb3, 0x59, 0xe0, 0xff, 0x8a, 0xf2, 0x34, 0x0f, 0x49, 0x01, 0xbb, 0xb6, 0x04, 0x76, 0x7d,
+	0x11, 0xec, 0xd5, 0x02, 0xf6, 0xbf, 0x6b, 0xb0, 0x55, 0xc2, 0xf2, 0x6d, 0x59, 0x66, 0x3f, 0x82,
+	0xf5, 0x58, 0x42, 0x49, 0xa6, 0xbb, 0xb5, 0x9d, 0xea, 0x6e, 0x7b, 0x7f, 0x93, 0xb0, 0x52, 0x05,
+	0x56, 0x59, 0x8f, 0x7d, 0x0a, 0xed, 0x08, 0x37, 0x86, 0x1c, 0x86, 0x68, 0xb4, 0xf7, 0xef, 0xe1,
+	0x30, 0xab, 0x60, 0x5b, 0xaa, 0x8e, 0xf9, 0x37, 0x4d, 0x66, 0x84, 0x8c, 0xf3, 0x5b, 0x5b, 0xc4,
+	0x0f, 0xa0, 0x23, 0x9d, 0x23, 0xcb, 0x72, 0x0d, 0x86, 0xb2, 0x06, 0x31, 0x63, 0x49, 0x8b, 0xed,
+	0x01, 0x90, 0xab, 0x62, 0x8c, 0x58, 0xc0, 0x46, 0xbe, 0x00, 0x31, 0x42, 0xd1, 0x30, 0xff, 0xa2,
+	0x41, 0x7b, 0x70, 0xc9, 0x9d, 0x0c, 0x81, 0x07, 0xd0, 0x08, 0xed, 0x38, 0xe6, 0x93, 0xcc, 0x6f,
+	0x41, 0xb1, 0xfb, 0x50, 0x4f, 0x82, 0xc4, 0xf6, 0xc8, 0xed, 0xba, 0x25, 0x08, 0x4a, 0x9e, 0xd4,
+	0x71, 0x78, 0x1c, 0x5f, 0xa4, 0x1e, 0x39, 0x5f, 0xb7, 0x14, 0x0e, 0x5a, 0xbb, 0xb0, 0x5d, 0x8f,
+	0x4f, 0x28, 0xef, 0xea, 0x96, 0xa4, 0xb0, 0x42, 0xdd, 0xd8, 0x91, 0xef, 0xfa, 0x53, 0x72, 0xb1,
+	0x6e, 0x65, 0x24, 0x8e, 0x98, 0xf0, 0xc4, 0x76, 0xbd, 0x6e, 0x63, 0x47, 0xdb, 0xed, 0x58, 0x92,
+	0x32, 0x3b, 0x00, 0xc3, 0x74, 0x16, 0x4a, 0xd0, 0x7f, 0xaf, 0x01, 0x8c, 0x02, 0x7b, 0x22, 0x9d,
+	0xfe, 0x00, 0xd6, 0x2f, 0x5c, 0xdf, 0x8d, 0x2f, 0xf9, 0xe4, 0xf1, 0x6d, 0xc2, 0x63, 0xf2, 0xbd,
+	0x6a, 0x95, 0x99, 0xe8, 0x2c, 0x79, 0x2d, 0x54, 0x74, 0x52, 0x51, 0x38, 0xac, 0x07, 0xcd, 0x30,
+	0x0a, 0xa6, 0x11, 0x8f, 0x63, 0x19, 0x87, 0x9c, 0xc6, 0xb1, 0x33, 0x9e, 0xd8, 0xa2, 0xe8, 0xc9,
+	0x4d, 0xa4, 0x70, 0xcc, 0xdf, 0x69, 0xb0, 0x3e, 0xbe, 0xb4, 0xa3, 0x89, 0xeb, 0x4f, 0x0f, 0xa3,
+	0x20, 0xa5, 0xb2, 0x94, 0xd8, 0xd1, 0x94, 0x67, 0x35, 0x58, 0x52, 0xb8, 0x43, 0x87, 0xc3, 0x11,
+	0xce, 0x4f, 0x3b, 0x14, 0xbf, 0x71, 0xe6, 0x0b, 0x37, 0x8a, 0x13, 0xdc, 0xa0, 0x72, 0xe6, 0x8c,
+	0xa6, 0x84, 0xb9, 0xf5, 0x1d, 0x82, 0xb0, 0x4a, 0x09, 0x43, 0x14, 0x8e, 0x49, 0x7d, 0x29, 0xa9,
+	0x93, 0x24, 0xa7, 0xcd, 0x3f, 0x57, 0x01, 0xc6, 0xb7, 0xbe, 0x23, 0xe1, 0xd9, 0x81, 0x36, 0x2d,
+	0xf3, 0xe0, 0x9a, 0xfb, 0x49, 0x06, 0x8e, 0xca, 0x42, 0x63, 0x44, 0x9e, 0x85, 0x19, 0x30, 0x39,
+	0x8d, 0xe5, 0x23, 0xe2, 0x0e, 0xf7, 0x13, 0x14, 0x56, 0x49, 0x58, 0x30, 0x98, 0x09, 0x9d, 0x99,
+	0x1d, 0x27, 0x3c, 0x2a, 0x41, 0x53, 0xe2, 0xb1, 0x3e, 0x18, 0x2a, 0x7d, 0x98, 0xb8, 0x13, 0x59,
+	0x68, 0xe6, 0xf8, 0x68, 0x8f, 0x16, 0x91, 0xd9, 0x6b, 0x08, 0x7b, 0x2a, 0x0f, 0xed, 0xa9, 0x34,
+	0xd9, 0x5b, 0x13, 0xf6, 0xee, 0xf2, 0xd1, 0xde, 0xb9, 0x17, 0x38, 0x57, 0xae, 0x3f, 0x25, 0xd8,
+	0x9b, 0x04, 0x55, 0x89, 0xc7, 0x3e, 0x03, 0x23, 0xf5, 0x23, 0x1e, 0x07, 0xde, 0x35, 0x9f, 0x50,
+	0xf4, 0xe2, 0x6e, 0x4b, 0xa9, 0x18, 0x6a, 0x5c, 0xad, 0x39, 0x55, 0x25, 0x42, 0x20, 0xb6, 0x8c,
+	0x8c, 0xd0, 0x36, 0x80, 0x28, 0xb3, 0x67, 0xb7, 0x21, 0xef, 0xb6, 0x45, 0xce, 0x14, 0x1c, 0xf3,
+	0x1f, 0x3a, 0xb4, 0x95, 0xb2, 0x32, 0x07, 0xa5, 0xf6, 0x2d, 0xa1, 0xd4, 0x97, 0x40, 0xb9, 0x93,
+	0x15, 0xb3, 0xf4, 0x7c, 0xe8, 0x46, 0x32, 0xb1, 0x54, 0x56, 0xae, 0x51, 0x8a, 0x9d, 0xca, 0x62,
+	0xbb, 0x70, 0x4f, 0x21, 0x95, 0xc8, 0xdd, 0x65, 0xb3, 0x3d, 0x60, 0xc4, 0x1a, 0xd8, 0x89, 0x73,
+	0xf9, 0x22, 0x3c, 0x26, 0x6f, 0x28, 0x7c, 0x4d, 0x6b, 0x81, 0x84, 0x7d, 0x17, 0xea, 0x71, 0x62,
+	0x4f, 0x39, 0x45, 0x2e, 0xeb, 0x63, 0xc8, 0xb0, 0x04, 0x9f, 0x7d, 0x9c, 0x57, 0xd0, 0x26, 0x55,
+	0x31, 0x8a, 0xc5, 0x49, 0x14, 0x60, 0x6d, 0xb1, 0x48, 0x90, 0x15, 0x55, 0xf3, 0xbf, 0x3a, 0xac,
+	0x97, 0xea, 0xfa, 0xc2, 0xb6, 0x99, 0xcf, 0xa8, 0x2f, 0x99, 0x71, 0x07, 0x6a, 0xa9, 0xef, 0x26,
+	0x84, 0xd4, 0xc6, 0x7e, 0x07, 0xe5, 0x2f, 0x7c, 0x37, 0xc1, 0x60, 0x59, 0x24, 0x51, 0x7c, 0xaa,
+	0xbd, 0xc1, 0x27, 0xf6, 0x09, 0x6c, 0x15, 0x99, 0x32, 0x1c, 0x8e, 0x46, 0x81, 0x73, 0x75, 0x34,
+	0x94, 0xe8, 0x2d, 0x12, 0x31, 0x26, 0x5a, 0x00, 0x65, 0xfc, 0xd3, 0x8a, 0x68, 0x02, 0x1f, 0x41,
+	0xdd, 0xc1, 0xea, 0x4c, 0x28, 0xc9, 0x56, 0xa4, 0x94, 0xeb, 0xa7, 0x15, 0x4b, 0xc8, 0xd9, 0x07,
+	0x50, 0x9b, 0xa4, 0xb3, 0x50, 0x62, 0x45, 0x15, 0xbf, 0xa8, 0x97, 0x4f, 0x2b, 0x16, 0x49, 0x51,
+	0xcb, 0x0b, 0xec, 0x49, 0xb7, 0x55, 0x68, 0x15, 0x65, 0x14, 0xb5, 0x50, 0x8a, 0x5a, 0x98, 0xc2,
+	0x94, 0xce, 0x52, 0xab, 0xa8, 0x26, 0xa8, 0x85, 0xd2, 0xc7, 0x4d, 0x68, 0xc4, 0xa2, 0x1a, 0xff,
+	0x0c, 0x36, 0x4b, 0xe8, 0x8f, 0xdc, 0x98, 0xa0, 0x12, 0xe2, 0xae, 0xb6, 0xac, 0xf9, 0x66, 0xe3,
+	0xb7, 0x01, 0x68, 0x4d, 0xa2, 0x83, 0xc9, 0x4e, 0xa8, 0x15, 0x07, 0x85, 0xf7, 0xa1, 0x85, 0x6b,
+	0x59, 0x21, 0xc6, 0x45, 0x2c, 0x13, 0x87, 0xd0, 0x21, 0xef, 0x4f, 0x47, 0x4b, 0x34, 0xd8, 0x3e,
+	0xdc, 0x17, 0x7d, 0x29, 0x3f, 0xd3, 0xba, 0x89, 0x1b, 0xf8, 0x72, 0x63, 0x2d, 0x94, 0x61, 0xc5,
+	0xe4, 0x68, 0x6e, 0x7c, 0x3a, 0xca, 0x4a, 0x76, 0x46, 0x9b, 0x3f, 0x84, 0x16, 0xce, 0x28, 0xa6,
+	0xdb, 0x85, 0x06, 0x09, 0x32, 0x1c, 0x8c, 0x1c, 0x4e, 0xe9, 0x90, 0x25, 0xe5, 0x08, 0x43, 0xd1,
+	0x98, 0x17, 0x2c, 0xe4, 0x8f, 0x3a, 0x74, 0xd4, 0xce, 0xff, 0xff, 0x4a, 0x72, 0xa6, 0x1c, 0x90,
+	0xb3, 0x3c, 0xfc, 0x30, 0xcb, 0x43, 0xe5, 0x44, 0x51, 0xc4, 0xac, 0x48, 0xc3, 0x47, 0x32, 0x0d,
+	0x1b, 0xa4, 0xb6, 0x9e, 0xa5, 0x61, 0xa6, 0x25, 0xb2, 0xf0, 0x91, 0xcc, 0xc2, 0xb5, 0x42, 0x29,
+	0x0f, 0x60, 0x9e, 0x84, 0x8f, 0x64, 0x12, 0x36, 0x0b, 0xa5, 0x1c, 0xd4, 0x3c, 0x07, 0xd7, 0xa0,
+	0x4e, 0xe0, 0x99, 0x3f, 0x06, 0x43, 0x85, 0x86, 0x32, 0xf0, 0x43, 0x29, 0x2c, 0x01, 0xaf, 0x9e,
+	0x9c, 0xe4, 0xd8, 0x97, 0xb0, 0x5e, 0xda, 0xc2, 0x58, 0xb8, 0xdd, 0x78, 0x60, 0xfb, 0x0e, 0xf7,
+	0xf2, 0x73, 0x90, 0xc2, 0x51, 0x42, 0xaa, 0x17, 0x96, 0xa5, 0x89, 0x52, 0x48, 0x95, 0xd3, 0x4c,
+	0xb5, 0x74, 0x9a, 0xf9, 0xab, 0x06, 0x8d, 0x33, 0x11, 0xc4, 0x2e, 0xac, 0x1d, 0x44, 0xd1, 0x20,
+	0x98, 0x88, 0x38, 0xd6, 0xad, 0x8c, 0xc4, 0x14, 0xc3, 0x4f, 0xcf, 0x8e, 0x63, 0x79, 0xea, 0xca,
+	0x69, 0x29, 0x1b, 0x3b, 0x41, 0xc8, 0xe5, 0xb1, 0x2b, 0xa7, 0xa5, 0x6c, 0xc4, 0xaf, 0xb9, 0x27,
+	0x8f, 0x5d, 0x39, 0x8d, 0xb3, 0x1d, 0xf3, 0x38, 0xc6, 0x04, 0x11, 0x95, 0x28, 0x23, 0x71, 0x94,
+	0x65, 0xdf, 0x0c, 0xec, 0x34, 0xe6, 0xb2, 0xe9, 0xe6, 0xb4, 0xc9, 0xa1, 0xa3, 0x2e, 0x8f, 0x7d,
+	0x0f, 0x6a, 0xd4, 0xd3, 0xc4, 0x85, 0x8c, 0x62, 0x43, 0x02, 0x91, 0x44, 0xf8, 0x9b, 0xa5, 0xaf,
+	0x5e, 0xec, 0xb2, 0x9d, 0x2c, 0x1c, 0x55, 0x8a, 0xa8, 0xb8, 0xc6, 0x95, 0x02, 0xf1, 0x15, 0xac,
+	0x0d, 0x87, 0xa3, 0x23, 0xff, 0x22, 0x58, 0x74, 0xf5, 0xa2, 0x3e, 0xeb, 0x5c, 0xf2, 0x99, 0x9d,
+	0x1f, 0x9d, 0x89, 0xa2, 0xa3, 0xa9, 0x7d, 0xee, 0x65, 0xf7, 0x3c, 0x41, 0xe4, 0xe7, 0xac, 0x5a,
+	0x71, 0xce, 0x32, 0x3f, 0x85, 0x76, 0x56, 0x6e, 0x97, 0x4d, 0xb2, 0x01, 0xfa, 0xd1, 0x50, 0x4e,
+	0xa0, 0x1f, 0x0d, 0xcd, 0xdf, 0x68, 0xb0, 0x71, 0xf0, 0x35, 0x77, 0x86, 0xc3, 0xd1, 0x8a, 0x6b,
+	0x21, 0xfa, 0xe6, 0x89, 0x02, 0x2f, 0x7d, 0xf3, 0xb2, 0x9a, 0x5e, 0xe3, 0x5f, 0x73, 0x87, 0x5c,
+	0x6b, 0x5a, 0xf4, 0x4d, 0x87, 0xad, 0xc8, 0x76, 0xf8, 0xe1, 0xd1, 0x50, 0xb6, 0xdc, 0x9c, 0xce,
+	0xbd, 0xae, 0x2b, 0x5e, 0xff, 0x56, 0x83, 0xad, 0xc7, 0x11, 0xb7, 0xaf, 0xa4, 0xef, 0xab, 0xfc,
+	0x30, 0xa1, 0x13, 0xf1, 0x59, 0x70, 0xcd, 0x47, 0xaa, 0x37, 0x25, 0x1e, 0xe6, 0x00, 0x17, 0x2b,
+	0x92, 0x6e, 0x65, 0x24, 0x4a, 0xe2, 0x2b, 0x37, 0x44, 0x49, 0x4d, 0x48, 0x24, 0x69, 0xf6, 0xa0,
+	0x3b, 0xbe, 0x71, 0x13, 0xe7, 0x92, 0x2a, 0x94, 0x68, 0xe1, 0xd2, 0x0f, 0x73, 0x1f, 0xb6, 0xe4,
+	0xb5, 0xbd, 0xf4, 0xa8, 0xf0, 0x1d, 0xe5, 0xce, 0xde, 0xce, 0x6f, 0x20, 0xe2, 0x9e, 0x6a, 0xa6,
+	0x70, 0xbf, 0x3c, 0x46, 0x5e, 0x9b, 0x56, 0x0d, 0x7a, 0x0b, 0x37, 0xfd, 0x1b, 0xd8, 0x3c, 0x49,
+	0xa3, 0x69, 0xd9, 0xd1, 0x1e, 0x34, 0x5d, 0xdf, 0x76, 0x12, 0xf7, 0x9a, 0xcb, 0xcd, 0x9e, 0xd3,
+	0x84, 0xb1, 0x2b, 0x9f, 0x29, 0xaa, 0x16, 0x7d, 0x8b, 0xd3, 0xba, 0xc7, 0xa9, 0xf4, 0xe6, 0xa7,
+	0x75, 0x41, 0x93, 0x2b, 0xe2, 0xb8, 0x55, 0x93, 0xae, 0x10, 0x85, 0xf8, 0xd1, 0x25, 0x51, 0x5c,
+	0xa2, 0x07, 0x81, 0x7f, 0xe1, 0x4e, 0x33, 0xfc, 0x6e, 0xe0, 0xbd, 0x05, 0xb2, 0xb7, 0x76, 0x8f,
+	0x54, 0x5e, 0x83, 0x6a, 0xe5, 0xd7, 0xa0, 0x2f, 0x81, 0x1d, 0xdf, 0xc6, 0x2f, 0xbd, 0xec, 0x66,
+	0x2f, 0xe0, 0x78, 0xa8, 0x84, 0x80, 0xda, 0x83, 0x10, 0x17, 0x31, 0x70, 0xc8, 0xc3, 0x6c, 0x5e,
+	0x41, 0x99, 0x9f, 0xc3, 0x56, 0xc9, 0xd6, 0x1b, 0xdc, 0x9f, 0x2b, 0x0f, 0xfd, 0xaf, 0xa0, 0x21,
+	0x1e, 0x75, 0xd8, 0x3a, 0xb4, 0x8e, 0xfc, 0x6b, 0xdb, 0x73, 0x27, 0xcf, 0x43, 0xa3, 0xc2, 0x9a,
+	0x50, 0x1b, 0x27, 0x41, 0x68, 0x68, 0xac, 0x05, 0xf5, 0x13, 0xac, 0x47, 0x86, 0xce, 0x00, 0x1a,
+	0x58, 0xac, 0x67, 0xdc, 0xa8, 0x22, 0x9b, 0xde, 0xcb, 0x8c, 0x1a, 0xb2, 0xc5, 0x4b, 0x8e, 0x51,
+	0x67, 0x1b, 0x00, 0x5f, 0xa4, 0x49, 0x20, 0xd5, 0x1a, 0xfd, 0x3e, 0xd4, 0xe9, 0x9d, 0x84, 0x0c,
+	0xfe, 0xe2, 0xe8, 0xc4, 0xa8, 0xb0, 0x36, 0xac, 0x59, 0x07, 0x27, 0xa3, 0x2f, 0x06, 0x07, 0x86,
+	0x86, 0x63, 0x8f, 0x9e, 0x7d, 0x79, 0x30, 0x38, 0x33, 0xf4, 0xfe, 0x2f, 0xc9, 0xe4, 0x14, 0xe1,
+	0xec, 0x48, 0x5f, 0x88, 0x36, 0x2a, 0x6c, 0x0d, 0xaa, 0xcf, 0xf8, 0x8d, 0xa1, 0xd1, 0xe0, 0xd4,
+	0xc7, 0x4b, 0xab, 0xf0, 0x87, 0x5c, 0x9b, 0x18, 0x55, 0x14, 0xa0, 0xc3, 0x21, 0x9f, 0x18, 0x35,
+	0xd6, 0x81, 0xe6, 0x13, 0x79, 0x0b, 0x35, 0xea, 0xfd, 0xe7, 0xd0, 0xcc, 0x9a, 0x2d, 0xbb, 0x07,
+	0x6d, 0x69, 0x1a, 0x59, 0x46, 0x05, 0xd7, 0x41, 0x2d, 0xd5, 0xd0, 0xd0, 0x45, 0x6c, 0x9b, 0x86,
+	0x8e, 0x5f, 0xd8, 0x1b, 0x8d, 0x2a, 0xb9, 0x7d, 0xeb, 0x3b, 0x46, 0x0d, 0x15, 0x29, 0x81, 0x8d,
+	0x49, 0xff, 0x27, 0xd0, 0xca, 0x2b, 0x2f, 0x3a, 0xfb, 0xc2, 0xbf, 0xf2, 0x83, 0x1b, 0x9f, 0x78,
+	0x62, 0x81, 0x58, 0xbc, 0xc6, 0xa7, 0x23, 0x43, 0xc3, 0x09, 0xc9, 0xfe, 0x13, 0x3a, 0xcf, 0x18,
+	0x7a, 0xff, 0x18, 0xd6, 0xe4, 0xf6, 0x62, 0x0c, 0x36, 0xa4, 0x33, 0x92, 0x63, 0x54, 0x30, 0x0e,
+	0xb8, 0x0e, 0x31, 0x95, 0x86, 0x78, 0xd2, 0x12, 0x05, 0xad, 0xa3, 0x39, 0x81, 0xad, 0x60, 0x54,
+	0xfb, 0x16, 0x34, 0xb3, 0x54, 0x61, 0x5b, 0x70, 0x4f, 0xda, 0xcb, 0x58, 0x46, 0x05, 0x47, 0x50,
+	0xa0, 0x04, 0xcb, 0xd0, 0xc8, 0x61, 0x0a, 0x97, 0x48, 0x7a, 0x43, 0xc7, 0x49, 0x70, 0x4e, 0xa9,
+	0x51, 0xdd, 0xff, 0x77, 0x13, 0x1a, 0x82, 0x60, 0x03, 0xe8, 0xa8, 0xcf, 0xa2, 0xec, 0x5d, 0x79,
+	0xb4, 0xb9, 0xfb, 0x50, 0xda, 0xeb, 0xd2, 0xe1, 0x64, 0xc1, 0x9b, 0x95, 0x59, 0x61, 0x47, 0xb0,
+	0x51, 0x7e, 0x62, 0x64, 0xef, 0xa1, 0xf6, 0xc2, 0xf7, 0xcb, 0x5e, 0x6f, 0x91, 0x28, 0x37, 0x75,
+	0x00, 0xeb, 0xa5, 0x57, 0x43, 0x46, 0xf3, 0x2e, 0x7a, 0x48, 0x5c, 0xe9, 0xd1, 0xcf, 0xa1, 0xad,
+	0x3c, 0x82, 0xb1, 0x07, 0xa8, 0x3a, 0xff, 0xc2, 0xd8, 0x7b, 0x77, 0x8e, 0x9f, 0x5b, 0xf8, 0x0c,
+	0xa0, 0x78, 0x80, 0x62, 0xef, 0xe4, 0x8a, 0xea, 0xc3, 0x63, 0xef, 0xc1, 0x5d, 0x76, 0x3e, 0xfc,
+	0x09, 0x80, 0x7c, 0x7d, 0x3c, 0x1d, 0xc5, 0xec, 0x21, 0xea, 0x2d, 0x7b, 0x8d, 0x5c, 0xb9, 0x90,
+	0x7d, 0xe8, 0x3c, 0xe1, 0x89, 0x73, 0x99, 0xb5, 0x70, 0xba, 0xab, 0x28, 0xed, 0xb6, 0xd7, 0x96,
+	0x0c, 0x24, 0xcc, 0xca, 0xae, 0xf6, 0x89, 0xc6, 0x7e, 0x0a, 0x80, 0xf9, 0x99, 0x26, 0x1c, 0xdb,
+	0x0f, 0xa3, 0x83, 0x44, 0xa9, 0xd9, 0xae, 0x9c, 0x71, 0x00, 0x1d, 0xb5, 0x2f, 0x8a, 0x8c, 0x58,
+	0xd0, 0x29, 0x57, 0x1a, 0x39, 0x86, 0xcd, 0xb9, 0xce, 0x26, 0x50, 0x58, 0xd6, 0xf0, 0xde, 0xe4,
+	0x93, 0xda, 0xd8, 0x84, 0x4f, 0x0b, 0xda, 0xa3, 0x30, 0xb2, 0xa8, 0x07, 0x9a, 0x15, 0xf6, 0x39,
+	0x40, 0xd1, 0xa6, 0x44, 0x44, 0xe7, 0xda, 0xd6, 0x4a, 0x2f, 0x0e, 0x61, 0x53, 0xf9, 0x5f, 0x40,
+	0xec, 0x2e, 0x91, 0x5a, 0xf3, 0x7f, 0x17, 0xac, 0x34, 0x64, 0xc9, 0x47, 0x6c, 0xb5, 0x37, 0x09,
+	0x74, 0x96, 0xb5, 0xb3, 0xde, 0xfb, 0x4b, 0xa4, 0x2a, 0x44, 0xea, 0x9f, 0x10, 0x02, 0xa2, 0x05,
+	0x7f, 0x4b, 0xbc, 0x61, 0x85, 0x4c, 0x82, 0xa7, 0xb4, 0x1d, 0xb1, 0xc4, 0xf9, 0x9e, 0x26, 0x76,
+	0xcf, 0x82, 0xfe, 0x64, 0x56, 0x1e, 0x77, 0xff, 0xf9, 0x6a, 0x5b, 0xfb, 0xe6, 0xd5, 0xb6, 0xf6,
+	0x9f, 0x57, 0xdb, 0xda, 0x1f, 0x5e, 0x6f, 0x57, 0xbe, 0x79, 0xbd, 0x5d, 0xf9, 0xd7, 0xeb, 0xed,
+	0xca, 0x79, 0x83, 0xfe, 0x92, 0xf9, 0xfe, 0xff, 0x02, 0x00, 0x00, 0xff, 0xff, 0xbc, 0x82, 0x0a,
+	0xfd, 0xa4, 0x19, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -3441,12 +3313,11 @@ const _ = grpc.SupportPackageIsVersion4
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type WorkerClient interface {
-	StartSubTask(ctx context.Context, in *StartSubTaskRequest, opts ...grpc.CallOption) (*OperateSubTaskResponse, error)
+	StartSubTask(ctx context.Context, in *StartSubTaskRequest, opts ...grpc.CallOption) (*CommonWorkerResponse, error)
 	OperateSubTask(ctx context.Context, in *OperateSubTaskRequest, opts ...grpc.CallOption) (*OperateSubTaskResponse, error)
-	UpdateSubTask(ctx context.Context, in *UpdateSubTaskRequest, opts ...grpc.CallOption) (*OperateSubTaskResponse, error)
+	UpdateSubTask(ctx context.Context, in *UpdateSubTaskRequest, opts ...grpc.CallOption) (*CommonWorkerResponse, error)
 	QueryStatus(ctx context.Context, in *QueryStatusRequest, opts ...grpc.CallOption) (*QueryStatusResponse, error)
 	QueryError(ctx context.Context, in *QueryErrorRequest, opts ...grpc.CallOption) (*QueryErrorResponse, error)
-	QueryTaskOperation(ctx context.Context, in *QueryTaskOperationRequest, opts ...grpc.CallOption) (*QueryTaskOperationResponse, error)
 	HandleSQLs(ctx context.Context, in *HandleSubTaskSQLsRequest, opts ...grpc.CallOption) (*CommonWorkerResponse, error)
 	// FetchDDLInfo fetches DDL info from dm-worker by dm-master
 	// and sends the relevant DDL lock info back to dm-worker
@@ -3467,6 +3338,7 @@ type WorkerClient interface {
 	UpdateRelayConfig(ctx context.Context, in *UpdateRelayRequest, opts ...grpc.CallOption) (*CommonWorkerResponse, error)
 	QueryWorkerConfig(ctx context.Context, in *QueryWorkerConfigRequest, opts ...grpc.CallOption) (*QueryWorkerConfigResponse, error)
 	MigrateRelay(ctx context.Context, in *MigrateRelayRequest, opts ...grpc.CallOption) (*CommonWorkerResponse, error)
+	OperateMysqlWorker(ctx context.Context, in *MysqlWorkerRequest, opts ...grpc.CallOption) (*MysqlWorkerResponse, error)
 }
 
 type workerClient struct {
@@ -3477,8 +3349,8 @@ func NewWorkerClient(cc *grpc.ClientConn) WorkerClient {
 	return &workerClient{cc}
 }
 
-func (c *workerClient) StartSubTask(ctx context.Context, in *StartSubTaskRequest, opts ...grpc.CallOption) (*OperateSubTaskResponse, error) {
-	out := new(OperateSubTaskResponse)
+func (c *workerClient) StartSubTask(ctx context.Context, in *StartSubTaskRequest, opts ...grpc.CallOption) (*CommonWorkerResponse, error) {
+	out := new(CommonWorkerResponse)
 	err := c.cc.Invoke(ctx, "/pb.Worker/StartSubTask", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -3495,8 +3367,8 @@ func (c *workerClient) OperateSubTask(ctx context.Context, in *OperateSubTaskReq
 	return out, nil
 }
 
-func (c *workerClient) UpdateSubTask(ctx context.Context, in *UpdateSubTaskRequest, opts ...grpc.CallOption) (*OperateSubTaskResponse, error) {
-	out := new(OperateSubTaskResponse)
+func (c *workerClient) UpdateSubTask(ctx context.Context, in *UpdateSubTaskRequest, opts ...grpc.CallOption) (*CommonWorkerResponse, error) {
+	out := new(CommonWorkerResponse)
 	err := c.cc.Invoke(ctx, "/pb.Worker/UpdateSubTask", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -3516,15 +3388,6 @@ func (c *workerClient) QueryStatus(ctx context.Context, in *QueryStatusRequest, 
 func (c *workerClient) QueryError(ctx context.Context, in *QueryErrorRequest, opts ...grpc.CallOption) (*QueryErrorResponse, error) {
 	out := new(QueryErrorResponse)
 	err := c.cc.Invoke(ctx, "/pb.Worker/QueryError", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *workerClient) QueryTaskOperation(ctx context.Context, in *QueryTaskOperationRequest, opts ...grpc.CallOption) (*QueryTaskOperationResponse, error) {
-	out := new(QueryTaskOperationResponse)
-	err := c.cc.Invoke(ctx, "/pb.Worker/QueryTaskOperation", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -3643,14 +3506,22 @@ func (c *workerClient) MigrateRelay(ctx context.Context, in *MigrateRelayRequest
 	return out, nil
 }
 
+func (c *workerClient) OperateMysqlWorker(ctx context.Context, in *MysqlWorkerRequest, opts ...grpc.CallOption) (*MysqlWorkerResponse, error) {
+	out := new(MysqlWorkerResponse)
+	err := c.cc.Invoke(ctx, "/pb.Worker/OperateMysqlWorker", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // WorkerServer is the server API for Worker service.
 type WorkerServer interface {
-	StartSubTask(context.Context, *StartSubTaskRequest) (*OperateSubTaskResponse, error)
+	StartSubTask(context.Context, *StartSubTaskRequest) (*CommonWorkerResponse, error)
 	OperateSubTask(context.Context, *OperateSubTaskRequest) (*OperateSubTaskResponse, error)
-	UpdateSubTask(context.Context, *UpdateSubTaskRequest) (*OperateSubTaskResponse, error)
+	UpdateSubTask(context.Context, *UpdateSubTaskRequest) (*CommonWorkerResponse, error)
 	QueryStatus(context.Context, *QueryStatusRequest) (*QueryStatusResponse, error)
 	QueryError(context.Context, *QueryErrorRequest) (*QueryErrorResponse, error)
-	QueryTaskOperation(context.Context, *QueryTaskOperationRequest) (*QueryTaskOperationResponse, error)
 	HandleSQLs(context.Context, *HandleSubTaskSQLsRequest) (*CommonWorkerResponse, error)
 	// FetchDDLInfo fetches DDL info from dm-worker by dm-master
 	// and sends the relevant DDL lock info back to dm-worker
@@ -3671,19 +3542,20 @@ type WorkerServer interface {
 	UpdateRelayConfig(context.Context, *UpdateRelayRequest) (*CommonWorkerResponse, error)
 	QueryWorkerConfig(context.Context, *QueryWorkerConfigRequest) (*QueryWorkerConfigResponse, error)
 	MigrateRelay(context.Context, *MigrateRelayRequest) (*CommonWorkerResponse, error)
+	OperateMysqlWorker(context.Context, *MysqlWorkerRequest) (*MysqlWorkerResponse, error)
 }
 
 // UnimplementedWorkerServer can be embedded to have forward compatible implementations.
 type UnimplementedWorkerServer struct {
 }
 
-func (*UnimplementedWorkerServer) StartSubTask(ctx context.Context, req *StartSubTaskRequest) (*OperateSubTaskResponse, error) {
+func (*UnimplementedWorkerServer) StartSubTask(ctx context.Context, req *StartSubTaskRequest) (*CommonWorkerResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartSubTask not implemented")
 }
 func (*UnimplementedWorkerServer) OperateSubTask(ctx context.Context, req *OperateSubTaskRequest) (*OperateSubTaskResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OperateSubTask not implemented")
 }
-func (*UnimplementedWorkerServer) UpdateSubTask(ctx context.Context, req *UpdateSubTaskRequest) (*OperateSubTaskResponse, error) {
+func (*UnimplementedWorkerServer) UpdateSubTask(ctx context.Context, req *UpdateSubTaskRequest) (*CommonWorkerResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateSubTask not implemented")
 }
 func (*UnimplementedWorkerServer) QueryStatus(ctx context.Context, req *QueryStatusRequest) (*QueryStatusResponse, error) {
@@ -3691,9 +3563,6 @@ func (*UnimplementedWorkerServer) QueryStatus(ctx context.Context, req *QuerySta
 }
 func (*UnimplementedWorkerServer) QueryError(ctx context.Context, req *QueryErrorRequest) (*QueryErrorResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QueryError not implemented")
-}
-func (*UnimplementedWorkerServer) QueryTaskOperation(ctx context.Context, req *QueryTaskOperationRequest) (*QueryTaskOperationResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method QueryTaskOperation not implemented")
 }
 func (*UnimplementedWorkerServer) HandleSQLs(ctx context.Context, req *HandleSubTaskSQLsRequest) (*CommonWorkerResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method HandleSQLs not implemented")
@@ -3724,6 +3593,9 @@ func (*UnimplementedWorkerServer) QueryWorkerConfig(ctx context.Context, req *Qu
 }
 func (*UnimplementedWorkerServer) MigrateRelay(ctx context.Context, req *MigrateRelayRequest) (*CommonWorkerResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MigrateRelay not implemented")
+}
+func (*UnimplementedWorkerServer) OperateMysqlWorker(ctx context.Context, req *MysqlWorkerRequest) (*MysqlWorkerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OperateMysqlWorker not implemented")
 }
 
 func RegisterWorkerServer(s *grpc.Server, srv WorkerServer) {
@@ -3816,24 +3688,6 @@ func _Worker_QueryError_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(WorkerServer).QueryError(ctx, req.(*QueryErrorRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Worker_QueryTaskOperation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryTaskOperationRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(WorkerServer).QueryTaskOperation(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/pb.Worker/QueryTaskOperation",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkerServer).QueryTaskOperation(ctx, req.(*QueryTaskOperationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4026,6 +3880,24 @@ func _Worker_MigrateRelay_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Worker_OperateMysqlWorker_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MysqlWorkerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServer).OperateMysqlWorker(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.Worker/OperateMysqlWorker",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServer).OperateMysqlWorker(ctx, req.(*MysqlWorkerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _Worker_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "pb.Worker",
 	HandlerType: (*WorkerServer)(nil),
@@ -4049,10 +3921,6 @@ var _Worker_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "QueryError",
 			Handler:    _Worker_QueryError_Handler,
-		},
-		{
-			MethodName: "QueryTaskOperation",
-			Handler:    _Worker_QueryTaskOperation_Handler,
 		},
 		{
 			MethodName: "HandleSQLs",
@@ -4089,6 +3957,10 @@ var _Worker_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MigrateRelay",
 			Handler:    _Worker_MigrateRelay_Handler,
+		},
+		{
+			MethodName: "OperateMysqlWorker",
+			Handler:    _Worker_OperateMysqlWorker_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
@@ -4252,109 +4124,34 @@ func (m *OperateSubTaskResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) 
 	_ = i
 	var l int
 	_ = l
-	if m.LogID != 0 {
-		i = encodeVarintDmworker(dAtA, i, uint64(m.LogID))
+	if len(m.Msg) > 0 {
+		i -= len(m.Msg)
+		copy(dAtA[i:], m.Msg)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
 		i--
-		dAtA[i] = 0x18
+		dAtA[i] = 0x22
+	}
+	if len(m.Source) > 0 {
+		i -= len(m.Source)
+		copy(dAtA[i:], m.Source)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Source)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if m.Result {
+		i--
+		if m.Result {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x10
 	}
 	if m.Op != 0 {
 		i = encodeVarintDmworker(dAtA, i, uint64(m.Op))
 		i--
-		dAtA[i] = 0x10
-	}
-	if m.Meta != nil {
-		{
-			size, err := m.Meta.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintDmworker(dAtA, i, uint64(size))
-		}
-		i--
-		dAtA[i] = 0xa
-	}
-	return len(dAtA) - i, nil
-}
-
-func (m *QueryTaskOperationRequest) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *QueryTaskOperationRequest) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *QueryTaskOperationRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
-	_ = i
-	var l int
-	_ = l
-	if m.LogID != 0 {
-		i = encodeVarintDmworker(dAtA, i, uint64(m.LogID))
-		i--
-		dAtA[i] = 0x10
-	}
-	if len(m.Name) > 0 {
-		i -= len(m.Name)
-		copy(dAtA[i:], m.Name)
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Name)))
-		i--
-		dAtA[i] = 0xa
-	}
-	return len(dAtA) - i, nil
-}
-
-func (m *QueryTaskOperationResponse) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalToSizedBuffer(dAtA[:size])
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *QueryTaskOperationResponse) MarshalTo(dAtA []byte) (int, error) {
-	size := m.Size()
-	return m.MarshalToSizedBuffer(dAtA[:size])
-}
-
-func (m *QueryTaskOperationResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
-	i := len(dAtA)
-	_ = i
-	var l int
-	_ = l
-	if m.Log != nil {
-		{
-			size, err := m.Log.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintDmworker(dAtA, i, uint64(size))
-		}
-		i--
-		dAtA[i] = 0x12
-	}
-	if m.Meta != nil {
-		{
-			size, err := m.Meta.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintDmworker(dAtA, i, uint64(size))
-		}
-		i--
-		dAtA[i] = 0xa
+		dAtA[i] = 0x8
 	}
 	return len(dAtA) - i, nil
 }
@@ -4534,10 +4331,10 @@ func (m *CommonWorkerResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x1a
 	}
-	if len(m.Worker) > 0 {
-		i -= len(m.Worker)
-		copy(dAtA[i:], m.Worker)
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Worker)))
+	if len(m.Source) > 0 {
+		i -= len(m.Source)
+		copy(dAtA[i:], m.Source)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Source)))
 		i--
 		dAtA[i] = 0x12
 	}
@@ -4574,13 +4371,6 @@ func (m *QueryStatusResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if len(m.SourceID) > 0 {
-		i -= len(m.SourceID)
-		copy(dAtA[i:], m.SourceID)
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.SourceID)))
-		i--
-		dAtA[i] = 0x32
-	}
 	if m.RelayStatus != nil {
 		{
 			size, err := m.RelayStatus.MarshalToSizedBuffer(dAtA[:i])
@@ -4614,10 +4404,10 @@ func (m *QueryStatusResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x1a
 	}
-	if len(m.Worker) > 0 {
-		i -= len(m.Worker)
-		copy(dAtA[i:], m.Worker)
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Worker)))
+	if len(m.Source) > 0 {
+		i -= len(m.Source)
+		copy(dAtA[i:], m.Source)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Source)))
 		i--
 		dAtA[i] = 0x12
 	}
@@ -4687,10 +4477,10 @@ func (m *QueryErrorResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x1a
 	}
-	if len(m.Worker) > 0 {
-		i -= len(m.Worker)
-		copy(dAtA[i:], m.Worker)
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Worker)))
+	if len(m.Source) > 0 {
+		i -= len(m.Source)
+		copy(dAtA[i:], m.Source)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Source)))
 		i--
 		dAtA[i] = 0x12
 	}
@@ -6126,10 +5916,10 @@ func (m *OperateRelayResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x22
 	}
-	if len(m.Worker) > 0 {
-		i -= len(m.Worker)
-		copy(dAtA[i:], m.Worker)
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Worker)))
+	if len(m.Source) > 0 {
+		i -= len(m.Source)
+		copy(dAtA[i:], m.Source)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Source)))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -6251,13 +6041,6 @@ func (m *QueryWorkerConfigResponse) MarshalToSizedBuffer(dAtA []byte) (int, erro
 		copy(dAtA[i:], m.Content)
 		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Content)))
 		i--
-		dAtA[i] = 0x2a
-	}
-	if len(m.SourceID) > 0 {
-		i -= len(m.SourceID)
-		copy(dAtA[i:], m.SourceID)
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.SourceID)))
-		i--
 		dAtA[i] = 0x22
 	}
 	if len(m.Msg) > 0 {
@@ -6267,10 +6050,10 @@ func (m *QueryWorkerConfigResponse) MarshalToSizedBuffer(dAtA []byte) (int, erro
 		i--
 		dAtA[i] = 0x1a
 	}
-	if len(m.Worker) > 0 {
-		i -= len(m.Worker)
-		copy(dAtA[i:], m.Worker)
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Worker)))
+	if len(m.Source) > 0 {
+		i -= len(m.Source)
+		copy(dAtA[i:], m.Source)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Source)))
 		i--
 		dAtA[i] = 0x12
 	}
@@ -6287,7 +6070,7 @@ func (m *QueryWorkerConfigResponse) MarshalToSizedBuffer(dAtA []byte) (int, erro
 	return len(dAtA) - i, nil
 }
 
-func (m *TaskMeta) Marshal() (dAtA []byte, err error) {
+func (m *MysqlWorkerRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -6297,34 +6080,22 @@ func (m *TaskMeta) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *TaskMeta) MarshalTo(dAtA []byte) (int, error) {
+func (m *MysqlWorkerRequest) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *TaskMeta) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *MysqlWorkerRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.Task) > 0 {
-		i -= len(m.Task)
-		copy(dAtA[i:], m.Task)
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Task)))
+	if len(m.Config) > 0 {
+		i -= len(m.Config)
+		copy(dAtA[i:], m.Config)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Config)))
 		i--
-		dAtA[i] = 0x22
-	}
-	if len(m.Name) > 0 {
-		i -= len(m.Name)
-		copy(dAtA[i:], m.Name)
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Name)))
-		i--
-		dAtA[i] = 0x1a
-	}
-	if m.Stage != 0 {
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Stage))
-		i--
-		dAtA[i] = 0x10
+		dAtA[i] = 0x12
 	}
 	if m.Op != 0 {
 		i = encodeVarintDmworker(dAtA, i, uint64(m.Op))
@@ -6334,7 +6105,7 @@ func (m *TaskMeta) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *TaskLog) Marshal() (dAtA []byte, err error) {
+func (m *MysqlWorkerResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -6344,52 +6115,30 @@ func (m *TaskLog) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *TaskLog) MarshalTo(dAtA []byte) (int, error) {
+func (m *MysqlWorkerResponse) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *TaskLog) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *MysqlWorkerResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
 	_ = l
-	if len(m.Message) > 0 {
-		i -= len(m.Message)
-		copy(dAtA[i:], m.Message)
-		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Message)))
+	if len(m.Msg) > 0 {
+		i -= len(m.Msg)
+		copy(dAtA[i:], m.Msg)
+		i = encodeVarintDmworker(dAtA, i, uint64(len(m.Msg)))
 		i--
-		dAtA[i] = 0x2a
+		dAtA[i] = 0x12
 	}
-	if m.Success {
+	if m.Result {
 		i--
-		if m.Success {
+		if m.Result {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
 		}
-		i--
-		dAtA[i] = 0x20
-	}
-	if m.Ts != 0 {
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Ts))
-		i--
-		dAtA[i] = 0x18
-	}
-	if m.Task != nil {
-		{
-			size, err := m.Task.MarshalToSizedBuffer(dAtA[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= size
-			i = encodeVarintDmworker(dAtA, i, uint64(size))
-		}
-		i--
-		dAtA[i] = 0x12
-	}
-	if m.Id != 0 {
-		i = encodeVarintDmworker(dAtA, i, uint64(m.Id))
 		i--
 		dAtA[i] = 0x8
 	}
@@ -6471,47 +6220,18 @@ func (m *OperateSubTaskResponse) Size() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Meta != nil {
-		l = m.Meta.Size()
-		n += 1 + l + sovDmworker(uint64(l))
-	}
 	if m.Op != 0 {
 		n += 1 + sovDmworker(uint64(m.Op))
 	}
-	if m.LogID != 0 {
-		n += 1 + sovDmworker(uint64(m.LogID))
+	if m.Result {
+		n += 2
 	}
-	return n
-}
-
-func (m *QueryTaskOperationRequest) Size() (n int) {
-	if m == nil {
-		return 0
-	}
-	var l int
-	_ = l
-	l = len(m.Name)
+	l = len(m.Source)
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
-	if m.LogID != 0 {
-		n += 1 + sovDmworker(uint64(m.LogID))
-	}
-	return n
-}
-
-func (m *QueryTaskOperationResponse) Size() (n int) {
-	if m == nil {
-		return 0
-	}
-	var l int
-	_ = l
-	if m.Meta != nil {
-		l = m.Meta.Size()
-		n += 1 + l + sovDmworker(uint64(l))
-	}
-	if m.Log != nil {
-		l = m.Log.Size()
+	l = len(m.Msg)
+	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
 	return n
@@ -6595,7 +6315,7 @@ func (m *CommonWorkerResponse) Size() (n int) {
 	if m.Result {
 		n += 2
 	}
-	l = len(m.Worker)
+	l = len(m.Source)
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
@@ -6615,7 +6335,7 @@ func (m *QueryStatusResponse) Size() (n int) {
 	if m.Result {
 		n += 2
 	}
-	l = len(m.Worker)
+	l = len(m.Source)
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
@@ -6633,10 +6353,6 @@ func (m *QueryStatusResponse) Size() (n int) {
 		l = m.RelayStatus.Size()
 		n += 1 + l + sovDmworker(uint64(l))
 	}
-	l = len(m.SourceID)
-	if l > 0 {
-		n += 1 + l + sovDmworker(uint64(l))
-	}
 	return n
 }
 
@@ -6649,7 +6365,7 @@ func (m *QueryErrorResponse) Size() (n int) {
 	if m.Result {
 		n += 2
 	}
-	l = len(m.Worker)
+	l = len(m.Source)
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
@@ -7344,7 +7060,7 @@ func (m *OperateRelayResponse) Size() (n int) {
 	if m.Result {
 		n += 2
 	}
-	l = len(m.Worker)
+	l = len(m.Source)
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
@@ -7396,15 +7112,11 @@ func (m *QueryWorkerConfigResponse) Size() (n int) {
 	if m.Result {
 		n += 2
 	}
-	l = len(m.Worker)
+	l = len(m.Source)
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
 	l = len(m.Msg)
-	if l > 0 {
-		n += 1 + l + sovDmworker(uint64(l))
-	}
-	l = len(m.SourceID)
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
@@ -7415,7 +7127,7 @@ func (m *QueryWorkerConfigResponse) Size() (n int) {
 	return n
 }
 
-func (m *TaskMeta) Size() (n int) {
+func (m *MysqlWorkerRequest) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -7424,40 +7136,23 @@ func (m *TaskMeta) Size() (n int) {
 	if m.Op != 0 {
 		n += 1 + sovDmworker(uint64(m.Op))
 	}
-	if m.Stage != 0 {
-		n += 1 + sovDmworker(uint64(m.Stage))
-	}
-	l = len(m.Name)
-	if l > 0 {
-		n += 1 + l + sovDmworker(uint64(l))
-	}
-	l = len(m.Task)
+	l = len(m.Config)
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
 	return n
 }
 
-func (m *TaskLog) Size() (n int) {
+func (m *MysqlWorkerResponse) Size() (n int) {
 	if m == nil {
 		return 0
 	}
 	var l int
 	_ = l
-	if m.Id != 0 {
-		n += 1 + sovDmworker(uint64(m.Id))
-	}
-	if m.Task != nil {
-		l = m.Task.Size()
-		n += 1 + l + sovDmworker(uint64(l))
-	}
-	if m.Ts != 0 {
-		n += 1 + sovDmworker(uint64(m.Ts))
-	}
-	if m.Success {
+	if m.Result {
 		n += 2
 	}
-	l = len(m.Message)
+	l = len(m.Msg)
 	if l > 0 {
 		n += 1 + l + sovDmworker(uint64(l))
 	}
@@ -7878,42 +7573,6 @@ func (m *OperateSubTaskResponse) Unmarshal(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Meta", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowDmworker
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthDmworker
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthDmworker
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.Meta == nil {
-				m.Meta = &CommonWorkerResponse{}
-			}
-			if err := m.Meta.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
-		case 2:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Op", wireType)
 			}
@@ -7932,11 +7591,11 @@ func (m *OperateSubTaskResponse) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
-		case 3:
+		case 2:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field LogID", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Result", wireType)
 			}
-			m.LogID = 0
+			var v int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowDmworker
@@ -7946,67 +7605,15 @@ func (m *OperateSubTaskResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.LogID |= int64(b&0x7F) << shift
+				v |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-		default:
-			iNdEx = preIndex
-			skippy, err := skipDmworker(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthDmworker
-			}
-			if (iNdEx + skippy) < 0 {
-				return ErrInvalidLengthDmworker
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *QueryTaskOperationRequest) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowDmworker
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= uint64(b&0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: QueryTaskOperationRequest: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: QueryTaskOperationRequest: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
+			m.Result = bool(v != 0)
+		case 3:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Source", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -8034,85 +7641,13 @@ func (m *QueryTaskOperationRequest) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Name = string(dAtA[iNdEx:postIndex])
+			m.Source = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 2:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field LogID", wireType)
-			}
-			m.LogID = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowDmworker
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.LogID |= int64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		default:
-			iNdEx = preIndex
-			skippy, err := skipDmworker(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthDmworker
-			}
-			if (iNdEx + skippy) < 0 {
-				return ErrInvalidLengthDmworker
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
-func (m *QueryTaskOperationResponse) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowDmworker
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= uint64(b&0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: QueryTaskOperationResponse: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: QueryTaskOperationResponse: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
+		case 4:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Meta", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Msg", wireType)
 			}
-			var msglen int
+			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflowDmworker
@@ -8122,63 +7657,23 @@ func (m *QueryTaskOperationResponse) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				msglen |= int(b&0x7F) << shift
+				stringLen |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			if msglen < 0 {
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
 				return ErrInvalidLengthDmworker
 			}
-			postIndex := iNdEx + msglen
+			postIndex := iNdEx + intStringLen
 			if postIndex < 0 {
 				return ErrInvalidLengthDmworker
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Meta == nil {
-				m.Meta = &CommonWorkerResponse{}
-			}
-			if err := m.Meta.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
-		case 2:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Log", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowDmworker
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthDmworker
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthDmworker
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.Log == nil {
-				m.Log = &TaskLog{}
-			}
-			if err := m.Log.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
+			m.Msg = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -8710,7 +8205,7 @@ func (m *CommonWorkerResponse) Unmarshal(dAtA []byte) error {
 			m.Result = bool(v != 0)
 		case 2:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Worker", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Source", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -8738,7 +8233,7 @@ func (m *CommonWorkerResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Worker = string(dAtA[iNdEx:postIndex])
+			m.Source = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {
@@ -8847,7 +8342,7 @@ func (m *QueryStatusResponse) Unmarshal(dAtA []byte) error {
 			m.Result = bool(v != 0)
 		case 2:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Worker", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Source", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -8875,7 +8370,7 @@ func (m *QueryStatusResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Worker = string(dAtA[iNdEx:postIndex])
+			m.Source = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {
@@ -8979,38 +8474,6 @@ func (m *QueryStatusResponse) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 6:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field SourceID", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowDmworker
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthDmworker
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthDmworker
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.SourceID = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipDmworker(dAtA[iNdEx:])
@@ -9086,7 +8549,7 @@ func (m *QueryErrorResponse) Unmarshal(dAtA []byte) error {
 			m.Result = bool(v != 0)
 		case 2:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Worker", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Source", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -9114,7 +8577,7 @@ func (m *QueryErrorResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Worker = string(dAtA[iNdEx:postIndex])
+			m.Source = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {
@@ -13223,7 +12686,7 @@ func (m *OperateRelayResponse) Unmarshal(dAtA []byte) error {
 			m.Result = bool(v != 0)
 		case 3:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Worker", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Source", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -13251,7 +12714,7 @@ func (m *OperateRelayResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Worker = string(dAtA[iNdEx:postIndex])
+			m.Source = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 4:
 			if wireType != 2 {
@@ -13569,7 +13032,7 @@ func (m *QueryWorkerConfigResponse) Unmarshal(dAtA []byte) error {
 			m.Result = bool(v != 0)
 		case 2:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Worker", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Source", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -13597,7 +13060,7 @@ func (m *QueryWorkerConfigResponse) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Worker = string(dAtA[iNdEx:postIndex])
+			m.Source = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {
@@ -13632,38 +13095,6 @@ func (m *QueryWorkerConfigResponse) Unmarshal(dAtA []byte) error {
 			m.Msg = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 4:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field SourceID", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowDmworker
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthDmworker
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLengthDmworker
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.SourceID = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 5:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Content", wireType)
 			}
@@ -13719,7 +13150,7 @@ func (m *QueryWorkerConfigResponse) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *TaskMeta) Unmarshal(dAtA []byte) error {
+func (m *MysqlWorkerRequest) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -13742,10 +13173,10 @@ func (m *TaskMeta) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: TaskMeta: wiretype end group for non-group")
+			return fmt.Errorf("proto: MysqlWorkerRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: TaskMeta: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: MysqlWorkerRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -13762,33 +13193,14 @@ func (m *TaskMeta) Unmarshal(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Op |= TaskOp(b&0x7F) << shift
+				m.Op |= WorkerOp(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
 		case 2:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Stage", wireType)
-			}
-			m.Stage = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowDmworker
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.Stage |= Stage(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 3:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Config", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -13816,41 +13228,7 @@ func (m *TaskMeta) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Name = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 4:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Task", wireType)
-			}
-			var byteLen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowDmworker
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				byteLen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if byteLen < 0 {
-				return ErrInvalidLengthDmworker
-			}
-			postIndex := iNdEx + byteLen
-			if postIndex < 0 {
-				return ErrInvalidLengthDmworker
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Task = append(m.Task[:0], dAtA[iNdEx:postIndex]...)
-			if m.Task == nil {
-				m.Task = []byte{}
-			}
+			m.Config = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -13876,7 +13254,7 @@ func (m *TaskMeta) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *TaskLog) Unmarshal(dAtA []byte) error {
+func (m *MysqlWorkerResponse) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -13899,89 +13277,15 @@ func (m *TaskLog) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: TaskLog: wiretype end group for non-group")
+			return fmt.Errorf("proto: MysqlWorkerResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: TaskLog: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: MysqlWorkerResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Id", wireType)
-			}
-			m.Id = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowDmworker
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.Id |= int64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 2:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Task", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowDmworker
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthDmworker
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLengthDmworker
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.Task == nil {
-				m.Task = &TaskMeta{}
-			}
-			if err := m.Task.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
-		case 3:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Ts", wireType)
-			}
-			m.Ts = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowDmworker
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.Ts |= int64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 4:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Success", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Result", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -13998,10 +13302,10 @@ func (m *TaskLog) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
-			m.Success = bool(v != 0)
-		case 5:
+			m.Result = bool(v != 0)
+		case 2:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Message", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Msg", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -14029,7 +13333,7 @@ func (m *TaskLog) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Message = string(dAtA[iNdEx:postIndex])
+			m.Msg = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

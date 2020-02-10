@@ -26,6 +26,6 @@ func OperateRelay(op pb.RelayOp, workers []string) (*pb.OperateWorkerRelayRespon
 	cli := MasterClient()
 	return cli.OperateWorkerRelayTask(ctx, &pb.OperateWorkerRelayRequest{
 		Op:      op,
-		Workers: workers,
+		Sources: workers,
 	})
 }

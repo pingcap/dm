@@ -1,0 +1,14 @@
+# Worker Configuration.
+
+source-id = "mysql-replica-01"
+server-id = 1
+flavor = "mysql"
+enable-gtid = false
+relay-binlog-name = ""
+relay-binlog-gtid = ""
+
+[from]
+host = "172.16.5.40"
+user = "root"
+password = ""
+port = 10097

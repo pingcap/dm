@@ -3,7 +3,7 @@
 function update_task_wrong_arg() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "update-task" \
-        "update-task \[-w worker ...\] <config-file> \[flags\]" 1
+        "update-task \[-s source ...\] <config-file> \[flags\]" 1
 }
 
 function update_task_wrong_config_file() {
@@ -21,13 +21,13 @@ function update_task_while_master_down() {
 
 function update_task_worker_not_found() {
     task_conf=$1
-    not_found_worker_addr=$2
+    not_found_source_id=$2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "update-task $task_conf -w $not_found_worker_addr " \
+        "update-task $task_conf -s $not_found_source_id " \
         "\"result\": true" 1 \
         "\"result\": false" 1 \
-        "\"worker\": \"$not_found_worker_addr\"" 1 \
-        "\"msg\": \"worker not found in task's config or deployment config\"" 1
+        "\"source\": \"$not_found_source_id\"" 1 \
+        "\"msg\": \"source not found in task's config or deployment config\"" 1
 }
 
 function update_task_not_paused() {
@@ -41,11 +41,11 @@ function update_task_not_paused() {
 
 function update_task_success_single_worker() {
     task_conf=$1
-    worker_addr=$2
+    source_id=$2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "update-task $task_conf -w $worker_addr" \
+        "update-task $task_conf -s $source_id" \
         "\"result\": true" 2 \
-        "\"worker\": \"$worker_addr\"" 1
+        "\"source\": \"$source_id\"" 1
 }
 
 function update_task_success() {

@@ -4,13 +4,12 @@ package pb;
 
 
 service Worker {
-    rpc StartSubTask (StartSubTaskRequest) returns (OperateSubTaskResponse) {}
+    rpc StartSubTask (StartSubTaskRequest) returns (CommonWorkerResponse) {}
     rpc OperateSubTask (OperateSubTaskRequest) returns (OperateSubTaskResponse) {}
-    rpc UpdateSubTask (UpdateSubTaskRequest) returns (OperateSubTaskResponse) {}
+    rpc UpdateSubTask (UpdateSubTaskRequest) returns (CommonWorkerResponse) {}
 
     rpc QueryStatus (QueryStatusRequest) returns (QueryStatusResponse) {}
     rpc QueryError (QueryErrorRequest) returns (QueryErrorResponse) {}
-    rpc QueryTaskOperation(QueryTaskOperationRequest) returns (QueryTaskOperationResponse) {}
 
     rpc HandleSQLs (HandleSubTaskSQLsRequest) returns (CommonWorkerResponse) {}
     // FetchDDLInfo fetches DDL info from dm-worker by dm-master
@@ -40,6 +39,8 @@ service Worker {
     rpc QueryWorkerConfig (QueryWorkerConfigRequest) returns (QueryWorkerConfigResponse) {}
 
     rpc MigrateRelay(MigrateRelayRequest) returns (CommonWorkerResponse) {}
+
+    rpc OperateMysqlWorker(MysqlWorkerRequest) returns (MysqlWorkerResponse) {}
 }
 
 message StartSubTaskRequest {
@@ -71,19 +72,10 @@ message OperateSubTaskRequest {
 }
 
 message OperateSubTaskResponse {
-    CommonWorkerResponse meta = 1;
-    TaskOp op = 2;
-    int64 logID = 3;
-}
-
-message QueryTaskOperationRequest {
-    string name = 1; // sub task's name
-	int64 logID = 2; // operation log ID
-}
-
-message QueryTaskOperationResponse {
-    CommonWorkerResponse meta = 1;
-    TaskLog log = 2; // sub task's operation log
+    TaskOp op = 1;
+    bool result = 2;
+    string source = 3; // source ID, set by dm-master
+    string msg = 4;
 }
 
 message UpdateSubTaskRequest {
@@ -115,7 +107,7 @@ message HandleSubTaskSQLsRequest {
 
 message CommonWorkerResponse {
     bool result = 1;
-    string worker = 2; // worker name, set by dm-master
+    string source = 2; // source ID, set by dm-master
     string msg = 3; // when result is true, msg is empty
 }
 
@@ -123,17 +115,16 @@ message CommonWorkerResponse {
 // status: dm-worker's current sub tasks' status
 message QueryStatusResponse {
     bool result = 1;
-    string worker = 2; // worker name, set by dm-master
+    string source = 2; // source ID, set by dm-master
     string msg = 3;
     repeated SubTaskStatus subTaskStatus = 4;
     RelayStatus relayStatus = 5;
-    string sourceID = 6;
 }
 
 // QueryErrorResponse represents response for query on a dm-worker
 message QueryErrorResponse {
     bool result = 1;
-    string worker = 2; // worker name, set by dm-master
+    string source = 2; // source ID, set by dm-master
     string msg = 3;
     repeated SubTaskError subTaskError = 4;
     RelayError RelayError = 5;
@@ -433,7 +424,7 @@ message OperateRelayRequest {
 message OperateRelayResponse {
     RelayOp op = 1;
     bool result = 2;
-    string worker = 3; // worker name, set by dm-master
+    string source = 3; // source ID, set by dm-master
     string msg = 4;
 }
 
@@ -454,24 +445,24 @@ message QueryWorkerConfigRequest {
 
 message QueryWorkerConfigResponse {
     bool result = 1;
-    string worker = 2; // worker name, set by dm-master
+    string source = 2; // source ID, set by dm-master
     string msg = 3; // when result is true, msg is empty
-    string sourceID = 4; // source ID
-    string content = 5; // marshaled config content
+    string content = 4; // marshaled config content
 }
 
-message TaskMeta {
-    TaskOp op = 1;
-    Stage stage = 2; // the stage of sub-task after we apply some operations
-    string name = 3; // sub task's name
-    bytes task = 4; // (sub) task's configuration
+enum WorkerOp {
+    InvalidWorkerOp = 0;
+    StartWorker = 1;
+    UpdateConfig = 2;
+    StopWorker = 3;
 }
 
-message TaskLog {
-    int64 id = 1;
-    TaskMeta task = 2;
-    int64 ts = 3;
-    // true means this log is applied successfully
-    bool success = 4;
-    string message = 5;
+message MysqlWorkerRequest {
+    WorkerOp op = 1;
+    string config = 2;
+}
+
+message MysqlWorkerResponse {
+    bool result = 1;
+    string msg = 2;
 }

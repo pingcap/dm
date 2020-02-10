@@ -15,14 +15,26 @@ function run() {
     # inject error for loading data
     export GO_FAILPOINTS='github.com/pingcap/dm/pkg/conn/retryableError=return("retry_cancel")'
 
+    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
-    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+    # operate mysql config to worker
+    cp $cur/conf/mysql1.toml $WORK_DIR/mysql1.toml
+    cp $cur/conf/mysql2.toml $WORK_DIR/mysql2.toml
+    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/mysql1.toml
+    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker2/relay_log\"" $WORK_DIR/mysql2.toml
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "operate-worker create $WORK_DIR/mysql1.toml" \
+        "true" 1
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "operate-worker create $WORK_DIR/mysql2.toml" \
+        "true" 1
 
     # start-task with retry_cancel enabled
+    echo "1st time to start task"
     dmctl_start_task
 
     sleep 5 # should sleep > retryTimeout (now 3s)
@@ -53,8 +65,9 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-    sleep 2 # wait gRPC from DM-master to DM-worker established again
+    sleep 5 # wait gRPC from DM-master to DM-worker established again
 
+    echo "2nd time to start task"
     dmctl_start_task
 
     sleep 5 # should sleep > retryTimeout (now 3s)
@@ -85,9 +98,10 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-    sleep 2 # wait gRPC from DM-master to DM-worker established again
+    sleep 5 # wait gRPC from DM-master to DM-worker established again
 
     # start-task with retry_cancel disabled
+    echo "3st time to start task"
     dmctl_start_task
 
     # use sync_diff_inspector to check full dump loader
@@ -102,11 +116,19 @@ function run() {
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
 
-    # start DM-worker again (with auto restart task)
+    # start DM-worker again
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
+
+    sleep 5
+    echo "start task for incremental replication"
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-task $cur/conf/dm-task.yaml" \
+        "\"result\": true" 1 \
+        "start sub task test: sub task test already exists" 2
+
     sleep 5 # should sleep > retryTimeout (now 3s)
 
     # query-task, it should still be running (retrying)
@@ -135,9 +157,10 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
-    sleep 2 # wait gRPC from DM-master to DM-worker established again
+    sleep 5 # wait gRPC from DM-master to DM-worker established again
 
     # start-task with retry_cancel disabled
+    echo "5th time to start task"
     dmctl_start_task
 
     # use sync_diff_inspector to check data now!

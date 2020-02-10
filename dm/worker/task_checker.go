@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/pingcap/dm/dm/config"
 	"strings"
 	"sync"
 	"time"
@@ -32,15 +33,15 @@ import (
 	"github.com/pingcap/dm/pkg/terror"
 )
 
-// Backoff related constants
-var (
-	DefaultCheckInterval           = 5 * time.Second
-	DefaultBackoffRollback         = 5 * time.Minute
-	DefaultBackoffMin              = 1 * time.Second
-	DefaultBackoffMax              = 5 * time.Minute
-	DefaultBackoffJitter           = true
-	DefaultBackoffFactor   float64 = 2
-)
+//// Backoff related constants
+//var (
+//	DefaultCheckInterval           = 5 * time.Second
+//	DefaultBackoffRollback         = 5 * time.Minute
+//	DefaultBackoffMin              = 1 * time.Second
+//	DefaultBackoffMax              = 5 * time.Minute
+//	DefaultBackoffJitter           = true
+//	DefaultBackoffFactor   float64 = 2
+//)
 
 // ResumeStrategy represents what we can do when we meet a paused task in task status checker
 type ResumeStrategy int
@@ -117,25 +118,6 @@ func (d *duration) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// CheckerConfig is configuration used for TaskStatusChecker
-type CheckerConfig struct {
-	CheckEnable     bool     `toml:"check-enable" json:"check-enable"`
-	BackoffRollback duration `toml:"backoff-rollback" json:"backoff-rollback"`
-	BackoffMax      duration `toml:"backoff-max" json:"backoff-max"`
-	// unexpose config
-	CheckInterval duration `json:"-"`
-	BackoffMin    duration `json:"-"`
-	BackoffJitter bool     `json:"-"`
-	BackoffFactor float64  `json:"-"`
-}
-
-func (cc *CheckerConfig) adjust() {
-	cc.CheckInterval = duration{Duration: DefaultCheckInterval}
-	cc.BackoffMin = duration{Duration: DefaultBackoffMin}
-	cc.BackoffJitter = DefaultBackoffJitter
-	cc.BackoffFactor = DefaultBackoffFactor
-}
-
 // TaskStatusChecker is an interface that defines how we manage task status
 type TaskStatusChecker interface {
 	// Init initializes the checker
@@ -182,14 +164,14 @@ type realTaskStatusChecker struct {
 	wg     sync.WaitGroup
 	closed sync2.AtomicInt32
 
-	cfg CheckerConfig
+	cfg config.CheckerConfig
 	l   log.Logger
 	w   *Worker
 	bc  *backoffController
 }
 
 // NewRealTaskStatusChecker creates a new realTaskStatusChecker instance
-func NewRealTaskStatusChecker(cfg CheckerConfig, w *Worker) TaskStatusChecker {
+func NewRealTaskStatusChecker(cfg config.CheckerConfig, w *Worker) TaskStatusChecker {
 	tsc := &realTaskStatusChecker{
 		cfg: cfg,
 		l:   log.With(zap.String("component", "task checker")),
@@ -238,7 +220,7 @@ func (tsc *realTaskStatusChecker) run() {
 		if err != nil {
 			tsc.l.Warn("inject failpoint TaskCheckInterval failed", zap.Reflect("value", val), zap.Error(err))
 		} else {
-			tsc.cfg.CheckInterval = duration{Duration: interval}
+			tsc.cfg.CheckInterval = config.Duration{Duration: interval}
 			tsc.l.Info("set TaskCheckInterval", zap.String("failpoint", "TaskCheckInterval"), zap.Duration("value", interval))
 		}
 	})
@@ -355,14 +337,11 @@ func (tsc *realTaskStatusChecker) check() {
 			tsc.bc.latestPausedTime[taskName] = time.Now()
 		case ResumeDispatch:
 			tsc.bc.latestPausedTime[taskName] = time.Now()
-			opLogID, err := tsc.w.operateSubTask(&pb.TaskMeta{
-				Name: taskName,
-				Op:   pb.TaskOp_AutoResume,
-			})
+			err := tsc.w.OperateSubTask(taskName, pb.TaskOp_AutoResume)
 			if err != nil {
 				tsc.l.Error("dispatch auto resume task failed", zap.String("task", taskName), zap.Error(err))
 			} else {
-				tsc.l.Info("dispatch auto resume task", zap.String("task", taskName), zap.Int64("opLogID", opLogID))
+				tsc.l.Info("dispatch auto resume task", zap.String("task", taskName))
 				tsc.bc.latestResumeTime[taskName] = time.Now()
 				bf.BoundaryForward()
 			}
