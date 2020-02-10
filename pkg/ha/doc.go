@@ -42,7 +42,7 @@ package ha
 // - the health status (or keep-alive) of component instances:
 //   - the DM-worker instance:
 //     - PUT (keep-alive) by DM-worker (when the node is healthy).
-//     - GET (through WATCH) by DM-master to know is another schedule needed.
+//     - GET (through WATCH) by DM-master to know if another schedule needed.
 //     - DELETE (when the lease is timeout) by etcd (when the node is un-healthy).
 //     - no need to UPDATE it manually.
 //
