@@ -249,7 +249,7 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 		c.Unlock()
 
 		if !containUUID {
-			if len(c.uuidSuffix) != 0 {
+			if len(uuidSuffix) != 0 {
 				filename, err := binlog.ParseFilename(string(ev.NextLogName))
 				if err != nil {
 					return nil, terror.Annotate(err, "fail to parse binlog file name from rotate event")
