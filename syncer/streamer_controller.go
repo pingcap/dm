@@ -145,7 +145,7 @@ func (c *StreamerController) Start(tctx *tcontext.Context, pos mysql.Position) e
 		err = c.updateServerIDAndResetReplication(tctx, pos)
 	}
 	if err != nil {
-		c.Close(tctx)
+		c.close(tctx)
 		return err
 	}
 
@@ -214,9 +214,6 @@ func (c *StreamerController) RedirectStreamer(tctx *tcontext.Context, pos mysql.
 
 // GetEvent returns binlog event, should only have one thread call this function.
 func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replication.BinlogEvent, err error) {
-	c.Lock()
-	defer c.Unlock()
-
 	ctx, cancel := context.WithTimeout(tctx.Context(), eventTimeout)
 	failpoint.Inject("SyncerEventTimeout", func(val failpoint.Value) {
 		if seconds, ok := val.(int); ok {
@@ -226,11 +223,17 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 		}
 	})
 
-	event, err = c.streamer.GetEvent(ctx)
+	c.RLock()
+	streamer := c.streamer
+	c.RUnlock()
+
+	event, err = streamer.GetEvent(ctx)
 	cancel()
 	if err != nil {
 		if err != context.Canceled && err != context.DeadlineExceeded {
+			c.Lock()
 			c.meetError = true
+			c.Unlock()
 		}
 
 		return nil, err
@@ -240,13 +243,18 @@ func (c *StreamerController) GetEvent(tctx *tcontext.Context) (event *replicatio
 	case *replication.RotateEvent:
 		// if is local binlog, binlog's name contain uuid information, need to save it
 		// if is remote binlog, need to add uuid information in binlog's name
-		if !c.setUUIDIfExists(string(ev.NextLogName)) {
-			if len(c.uuidSuffix) != 0 {
+		c.Lock()
+		containUUID := c.setUUIDIfExists(string(ev.NextLogName))
+		uuidSuffix := c.uuidSuffix
+		c.Unlock()
+
+		if !containUUID {
+			if len(uuidSuffix) != 0 {
 				filename, err := binlog.ParseFilename(string(ev.NextLogName))
 				if err != nil {
 					return nil, terror.Annotate(err, "fail to parse binlog file name from rotate event")
 				}
-				ev.NextLogName = []byte(binlog.ConstructFilenameWithUUIDSuffix(filename, c.uuidSuffix))
+				ev.NextLogName = []byte(binlog.ConstructFilenameWithUUIDSuffix(filename, uuidSuffix))
 				event.Event = ev
 			}
 		}
@@ -299,8 +307,11 @@ func (c *StreamerController) closeBinlogSyncer(logtctx *tcontext.Context, binlog
 // Close closes streamer
 func (c *StreamerController) Close(tctx *tcontext.Context) {
 	c.Lock()
-	defer c.Unlock()
+	c.close(tctx)
+	c.Unlock()
+}
 
+func (c *StreamerController) close(tctx *tcontext.Context) {
 	if c.closed {
 		return
 	}

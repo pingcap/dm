@@ -189,11 +189,13 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 
 	// check task will be auto resumed
 	c.Assert(utils.WaitSomething(10, 100*time.Millisecond, func() bool {
-		for _, st := range s.worker.QueryStatus(taskName) {
+		sts := s.worker.QueryStatus(taskName)
+		for _, st := range sts {
 			if st.Name == taskName && st.Stage == pb.Stage_Running {
 				return true
 			}
 		}
+		c.Log(sts)
 		return false
 	}), IsTrue)
 }
