@@ -117,6 +117,8 @@ package ha
 // when the DM-worker (with relay and subtasks) is down:
 // 0. the status of the old DM-worker is un-health (keep-alive failed).
 // 1. DM-master choose another DM-worker instance for failover.
+//   - DM-master can only schedule the source to another new DM-worker only after the old DM-worker shutdown,
+//     this may be achieved with some timeout/lease.
 // 2. DM-master UPDATE the bound relationship to the new DM-worker.
 // 3. the new DM-worker GET upstream config, the expectant stage of the relay and the expectant stage of the subtasks.
 // 4. the new DM-worker obey the expectant stage.
