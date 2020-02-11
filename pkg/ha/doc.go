@@ -50,7 +50,7 @@ package ha
 //   - NOTE: persist the current stage of the relay and subtask if needed later.
 //   - the bound relationship between the DM-worker instance and the upstream MySQL source (including relevant relay and subtasks):
 //     - PUT when scheduling the source to a DM-worker instance by DM-master.
-//       - PUT with `the expectant stage of the relay` in one txn.
+//       - PUT with `the expectant stage of the relay` in one txn for the first time.
 //     - GET (through WATCH) by DM-worker to know relevant relay/subtasks have to do.
 //     - DELETE when removing an upstream by DM-master.
 //       - DELETE with `the upstream MySQL config` in one txn.

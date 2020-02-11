@@ -34,7 +34,7 @@ var (
 	// k/v: Encode(source-id) -> config
 	UpstreamConfigKeyAdapter KeyAdapter = keyEncoderDecoder("/dm-master/upstream/config/")
 	// UpstreamBoundWorkerKeyAdapter used to store address of worker in which MySQL-tasks which are running.
-	// k/v: Encode(addr) -> source-id
+	// k/v: Encode(name) -> the bound relationship.
 	UpstreamBoundWorkerKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/bound-worker/")
 	// UpstreamSubTaskKeyAdapter used to store SubTask which are subscribing data from MySQL source.
 	// k/v: Encode(source-id, task-name) -> SubTaskConfig

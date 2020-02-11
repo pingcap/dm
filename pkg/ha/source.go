@@ -56,7 +56,7 @@ func GetSourceCfg(cli *clientv3.Client, source string) (config.MysqlConfig, int6
 	}
 
 	if resp.Count == 0 {
-		return cfg, 0, err
+		return cfg, 0, nil
 	} else if resp.Count > 1 {
 		// TODO(csuzhangxc): add terror.
 		// this should not happen.

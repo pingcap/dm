@@ -34,7 +34,7 @@ var (
 	etcdTestCli *clientv3.Client
 )
 
-func TestInfo(t *testing.T) {
+func TestHA(t *testing.T) {
 	mockCluster := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
 	defer mockCluster.Terminate(t)
 
@@ -48,7 +48,8 @@ func clearTestInfoOperation(c *C) {
 	clearSource := clientv3.OpDelete(common.UpstreamConfigKeyAdapter.Path(), clientv3.WithPrefix())
 	clearSubTask := clientv3.OpDelete(common.UpstreamSubTaskKeyAdapter.Path(), clientv3.WithPrefix())
 	clearWorkerInfo := clientv3.OpDelete(common.WorkerRegisterKeyAdapter.Path(), clientv3.WithPrefix())
-	_, err := etcdTestCli.Txn(context.Background()).Then(clearSource, clearSubTask, clearWorkerInfo).Commit()
+	clearBound := clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Path(), clientv3.WithPrefix())
+	_, err := etcdTestCli.Txn(context.Background()).Then(clearSource, clearSubTask, clearWorkerInfo, clearBound).Commit()
 	c.Assert(err, IsNil)
 }
 
