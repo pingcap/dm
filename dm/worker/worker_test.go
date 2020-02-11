@@ -44,11 +44,11 @@ func (t *testServer) testWorker(c *C) {
 		NewRelayHolder = NewRealRelayHolder
 	}()
 
-	_, err := NewWorker(cfg)
+	_, err := NewWorker(cfg, nil)
 	c.Assert(err, ErrorMatches, "init error")
 
 	NewRelayHolder = NewDummyRelayHolder
-	w, err := NewWorker(cfg)
+	w, err := NewWorker(cfg, nil)
 	c.Assert(err, IsNil)
 	c.Assert(w.StatusJSON(""), HasLen, emptyWorkerStatusInfoJSONLength)
 	//c.Assert(w.closed.Get(), Equals, closedFalse)

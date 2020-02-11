@@ -32,6 +32,7 @@ function run() {
         "true" 1
 
     # start a task in `full` mode
+    echo "start task in full mode"
     cat $cur/conf/dm-task.yaml > $WORK_DIR/dm-task.yaml
     sed -i "s/task-mode-placeholder/full/g" $WORK_DIR/dm-task.yaml
     # avoid cannot unmarshal !!str `binlog-...` into uint32 error
@@ -68,6 +69,7 @@ function run() {
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $WORK_DIR/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
+    echo "start task in incremental mode"
     cat $cur/conf/dm-task.yaml > $WORK_DIR/dm-task.yaml
     sed -i "s/task-mode-placeholder/incremental/g" $WORK_DIR/dm-task.yaml
     name1=$(grep "Log: " $WORK_DIR/worker1/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2}'|tr -d ' ')
@@ -78,7 +80,7 @@ function run() {
     sed -i "s/binlog-pos-placeholder-1/$pos1/g" $WORK_DIR/dm-task.yaml
     sed -i "s/binlog-name-placeholder-2/$name2/g" $WORK_DIR/dm-task.yaml
     sed -i "s/binlog-pos-placeholder-2/$pos2/g" $WORK_DIR/dm-task.yaml
-    sleep 5
+    sleep 8
     dmctl_start_task $WORK_DIR/dm-task.yaml
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml

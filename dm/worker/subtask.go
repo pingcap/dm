@@ -18,24 +18,25 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pingcap/failpoint"
+	"github.com/siddontang/go/sync2"
+	"go.etcd.io/etcd/clientv3"
+	"go.uber.org/zap"
+
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/loader"
 	"github.com/pingcap/dm/mydumper"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/shardddl/pessimism"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer"
-
-	"github.com/golang/protobuf/proto"
-	"github.com/pingcap/failpoint"
-	"github.com/siddontang/go/sync2"
-	"go.uber.org/zap"
 )
 
 // createUnits creates process units base on task mode
-func createUnits(cfg *config.SubTaskConfig) []unit.Unit {
+func createUnits(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
 	failpoint.Inject("mockCreateUnitsDumpOnly", func(_ failpoint.Value) {
 		log.L().Info("create mock worker units with dump unit only", zap.String("failpoint", "mockCreateUnitsDumpOnly"))
 		failpoint.Return([]unit.Unit{mydumper.NewMydumper(cfg)})
@@ -46,13 +47,13 @@ func createUnits(cfg *config.SubTaskConfig) []unit.Unit {
 	case config.ModeAll:
 		us = append(us, mydumper.NewMydumper(cfg))
 		us = append(us, loader.NewLoader(cfg))
-		us = append(us, syncer.NewSyncer(cfg))
+		us = append(us, syncer.NewSyncer(cfg, etcdClient))
 	case config.ModeFull:
 		// NOTE: maybe need another checker in the future?
 		us = append(us, mydumper.NewMydumper(cfg))
 		us = append(us, loader.NewLoader(cfg))
 	case config.ModeIncrement:
-		us = append(us, syncer.NewSyncer(cfg))
+		us = append(us, syncer.NewSyncer(cfg, etcdClient))
 	default:
 		log.L().Error("unsupported task mode", zap.String("subtask", cfg.Name), zap.String("task mode", cfg.Mode))
 	}
@@ -79,25 +80,22 @@ type SubTask struct {
 	stage  pb.Stage          // stage of current sub task
 	result *pb.ProcessResult // the process result, nil when is processing
 
-	// only support sync one DDL lock one time, refine if needed
-	DDLInfo      chan *pb.DDLInfo // DDL info pending to sync
-	ddlLockInfo  *pb.DDLLockInfo  // DDL lock info which waiting other dm-workers to sync
-	cacheDDLInfo *pb.DDLInfo
+	etcdClient *clientv3.Client
 }
 
 // NewSubTask creates a new SubTask
-func NewSubTask(cfg *config.SubTaskConfig) *SubTask {
-	return NewSubTaskWithStage(cfg, pb.Stage_New)
+func NewSubTask(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *SubTask {
+	return NewSubTaskWithStage(cfg, pb.Stage_New, etcdClient)
 }
 
 // NewSubTaskWithStage creates a new SubTask with stage
-func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage) *SubTask {
+func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, etcdClient *clientv3.Client) *SubTask {
 	st := SubTask{
-		cfg:     cfg,
-		units:   createUnits(cfg),
-		stage:   stage,
-		l:       log.With(zap.String("subtask", cfg.Name)),
-		DDLInfo: make(chan *pb.DDLInfo, 1),
+		cfg:        cfg,
+		units:      createUnits(cfg, etcdClient),
+		stage:      stage,
+		l:          log.With(zap.String("subtask", cfg.Name)),
+		etcdClient: etcdClient,
 	}
 	taskState.WithLabelValues(st.cfg.Name).Set(float64(st.stage))
 	return &st
@@ -197,9 +195,6 @@ func (st *SubTask) run() {
 	st.wg.Add(1)
 	go st.fetchResult(pr)
 	go cu.Process(st.ctx, pr)
-
-	st.wg.Add(1)
-	go st.fetchUnitDDLInfo(st.ctx)
 }
 
 // fetchResult fetches units process result
@@ -437,9 +432,6 @@ func (st *SubTask) Resume() error {
 	st.wg.Add(1)
 	go st.fetchResult(pr)
 	go cu.Resume(st.ctx, pr)
-
-	st.wg.Add(1)
-	go st.fetchUnitDDLInfo(st.ctx)
 	return nil
 }
 
@@ -460,78 +452,6 @@ func (st *SubTask) Update(cfg *config.SubTaskConfig) error {
 	return nil
 }
 
-// fetchUnitDDLInfo fetches DDL info from current processing unit
-// when unit switched, returns and starts fetching again for new unit
-func (st *SubTask) fetchUnitDDLInfo(ctx context.Context) {
-	defer st.wg.Done()
-
-	cu := st.CurrUnit()
-	syncer2, ok := cu.(*syncer.Syncer)
-	if !ok {
-		return
-	}
-
-	// discard previous saved DDLInfo
-	// when process unit resuming, un-resolved DDL will send again
-	for len(st.DDLInfo) > 0 {
-		<-st.DDLInfo
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case info, ok := <-syncer2.DDLInfo():
-			if !ok {
-				return
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case st.DDLInfo <- info:
-			}
-		}
-	}
-}
-
-// ExecuteDDL requests current unit to execute a DDL
-func (st *SubTask) ExecuteDDL(ctx context.Context, req *pb.ExecDDLRequest) error {
-	// NOTE: check current stage?
-	cu := st.CurrUnit()
-	syncer2, ok := cu.(*syncer.Syncer)
-	if !ok {
-		return terror.ErrWorkerExecDDLSyncerOnly.Generate(cu.Type().String())
-	}
-	chResp, err := syncer2.ExecuteDDL(ctx, req)
-	if err != nil {
-		return err
-	}
-
-	// also any timeout
-	timeout := time.Duration(syncer.MaxDDLConnectionTimeoutMinute)*time.Minute + 30*time.Second
-	ctxTimeout, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	select {
-	case err = <-chResp: // block until complete ddl execution
-		return err
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-ctxTimeout.Done():
-		return terror.ErrWorkerExecDDLTimeout.Generate(timeout)
-	}
-}
-
-// SaveDDLLockInfo saves a DDLLockInfo
-func (st *SubTask) SaveDDLLockInfo(info *pb.DDLLockInfo) error {
-	st.Lock()
-	defer st.Unlock()
-	if st.ddlLockInfo != nil {
-		return terror.ErrWorkerDDLLockInfoExists.Generate(info.Task)
-	}
-	st.ddlLockInfo = info
-	return nil
-}
-
 // SetSyncerSQLOperator sets an operator to syncer.
 func (st *SubTask) SetSyncerSQLOperator(ctx context.Context, req *pb.HandleSubTaskSQLsRequest) error {
 	syncUnit, ok := st.currUnit.(*syncer.Syncer)
@@ -545,20 +465,6 @@ func (st *SubTask) SetSyncerSQLOperator(ctx context.Context, req *pb.HandleSubTa
 	}
 
 	return syncUnit.SetSQLOperator(req)
-}
-
-// ClearDDLLockInfo clears current DDLLockInfo
-func (st *SubTask) ClearDDLLockInfo() {
-	st.Lock()
-	defer st.Unlock()
-	st.ddlLockInfo = nil
-}
-
-// DDLLockInfo returns current DDLLockInfo, maybe nil
-func (st *SubTask) DDLLockInfo() *pb.DDLLockInfo {
-	st.RLock()
-	defer st.RUnlock()
-	return proto.Clone(st.ddlLockInfo).(*pb.DDLLockInfo)
 }
 
 // UpdateFromConfig updates config for `From`
@@ -592,29 +498,32 @@ func (st *SubTask) CheckUnit() bool {
 	return flag
 }
 
-// SaveDDLInfo saves a CacheDDLInfo.
-func (st *SubTask) SaveDDLInfo(info *pb.DDLInfo) error {
-	st.Lock()
-	defer st.Unlock()
-	if st.cacheDDLInfo != nil {
-		return terror.ErrWorkerCacheDDLInfoExists.Generate(info.Task)
-	}
-	st.cacheDDLInfo = info
-	return nil
-}
-
-// GetDDLInfo returns current CacheDDLInfo.
-func (st *SubTask) GetDDLInfo() *pb.DDLInfo {
+// ShardDDLInfo returns the current shard DDL info.
+func (st *SubTask) ShardDDLInfo() *pessimism.Info {
 	st.RLock()
 	defer st.RUnlock()
-	return proto.Clone(st.cacheDDLInfo).(*pb.DDLInfo)
+
+	cu := st.CurrUnit()
+	syncer2, ok := cu.(*syncer.Syncer)
+	if !ok {
+		return nil
+	}
+
+	return syncer2.ShardDDLInfo()
 }
 
-// ClearDDLInfo clears current CacheDDLInfo.
-func (st *SubTask) ClearDDLInfo() {
-	st.Lock()
-	defer st.Unlock()
-	st.cacheDDLInfo = nil
+// ShardDDLOperation returns the current shard DDL lock operation.
+func (st *SubTask) ShardDDLOperation() *pessimism.Operation {
+	st.RLock()
+	defer st.RUnlock()
+
+	cu := st.CurrUnit()
+	syncer2, ok := cu.(*syncer.Syncer)
+	if !ok {
+		return nil
+	}
+
+	return syncer2.ShardDDLOperation()
 }
 
 // unitTransWaitCondition waits when transferring from current unit to next unit.

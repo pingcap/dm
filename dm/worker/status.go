@@ -78,9 +78,9 @@ func (w *Worker) Status(stName string) []*pb.SubTaskStatus {
 			}
 		} else {
 			var lockID = ""
-			lockInfo := st.DDLLockInfo()
-			if lockInfo != nil {
-				lockID = lockInfo.ID
+			op := st.ShardDDLOperation()
+			if op != nil {
+				lockID = op.ID
 			}
 			cu := st.CurrUnit()
 

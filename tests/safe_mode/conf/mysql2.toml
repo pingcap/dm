@@ -12,8 +12,8 @@ user = "root"
 password = ""
 port = 3307
 
-[tracer]
-enable = true
-tracer-addr = "127.0.0.1:8264"
-batch-size = 1
-checksum = true
+#[tracer]
+#enable = true
+#tracer-addr = "127.0.0.1:8264"
+#batch-size = 1
+#checksum = true

@@ -45,6 +45,7 @@ function run() {
 
     # TODO: check sharding partition id
     # use sync_diff_inspector to check full dump loader
+    echo "check sync diff for full dump and load"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
@@ -52,6 +53,7 @@ function run() {
 
     # TODO: check sharding partition id
     # use sync_diff_inspector to check data now!
+    echo "check sync diff for the first increment replication"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     # test create database, create table in sharding mode
@@ -60,6 +62,7 @@ function run() {
     cp $cur/conf/diff_config.toml $WORK_DIR/diff_config.toml
     printf "\n[[table-config.source-tables]]\ninstance-id = \"source-1\"\nschema = \"sharding2\"\ntable  = \"~t.*\"" >> $WORK_DIR/diff_config.toml
     printf "\n[[table-config.source-tables]]\ninstance-id = \"source-2\"\nschema = \"sharding2\"\ntable  = \"~t.*\"" >> $WORK_DIR/diff_config.toml
+    echo "check sync diff for the second increment replication"
     check_sync_diff $WORK_DIR $WORK_DIR/diff_config.toml
 
     old_checksum=$(checksum)
@@ -70,6 +73,7 @@ function run() {
     cp $cur/conf/diff_config.toml $WORK_DIR/diff_config.toml
     printf "\n[[table-config.source-tables]]\ninstance-id = \"source-1\"\nschema = \"sharding2\"\ntable  = \"~t.*\"" >> $WORK_DIR/diff_config.toml
     sed -i "s/^# range-placeholder/range = \"uid < 70000\"/g" $WORK_DIR/diff_config.toml
+    echo "check sync diff for the third increment replication"
     check_sync_diff $WORK_DIR $WORK_DIR/diff_config.toml
 
     new_checksum=$(checksum)
