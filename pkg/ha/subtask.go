@@ -24,7 +24,7 @@ import (
 	"github.com/pingcap/dm/pkg/etcdutil"
 )
 
-// PutSubTaskConfig puts the subtask config of the specified source and task name into etcd.
+// PutSubTaskCfg puts the subtask config of the specified source and task name into etcd.
 // k/k/v: sourceID, taskName -> subtask config.
 func PutSubTaskCfg(cli *clientv3.Client, cfg config.SubTaskConfig) (int64, error) {
 	value, err := cfg.Toml()
@@ -43,7 +43,7 @@ func PutSubTaskCfg(cli *clientv3.Client, cfg config.SubTaskConfig) (int64, error
 	return resp.Header.Revision, nil
 }
 
-// GetSubTaskConfig gets the subtask config of the specified source and task name.
+// GetSubTaskCfg gets the subtask config of the specified source and task name.
 // if the config for the source not exist, return with `err == nil` and `revision=0`.
 func GetSubTaskCfg(cli *clientv3.Client, source, taskName string) (config.SubTaskConfig, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
