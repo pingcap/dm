@@ -36,15 +36,13 @@ func main() {
 	// 1. init conf
 	commonConfig := newCommonConfig()
 	conf, err := commonConfig.parse(os.Args[1:])
-	if err != nil {
-		switch errors.Cause(err) {
-		case nil:
-		case flag.ErrHelp:
-			os.Exit(0)
-		default:
-			fmt.Printf("parse cmd flags err %s", err.Error())
-			os.Exit(2)
-		}
+	switch errors.Cause(err) {
+	case nil:
+	case flag.ErrHelp:
+		os.Exit(0)
+	default:
+		fmt.Printf("parse cmd flags err %s", err.Error())
+		os.Exit(2)
 	}
 
 	conf.Mode = config.ModeIncrement
