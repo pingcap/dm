@@ -48,8 +48,9 @@ func clearTestInfoOperation(c *C) {
 	clearSource := clientv3.OpDelete(common.UpstreamConfigKeyAdapter.Path(), clientv3.WithPrefix())
 	clearSubTask := clientv3.OpDelete(common.UpstreamSubTaskKeyAdapter.Path(), clientv3.WithPrefix())
 	clearWorkerInfo := clientv3.OpDelete(common.WorkerRegisterKeyAdapter.Path(), clientv3.WithPrefix())
+	clearWorkerKeepAlive := clientv3.OpDelete(common.WorkerKeepAliveKeyAdapter.Path(), clientv3.WithPrefix())
 	clearBound := clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Path(), clientv3.WithPrefix())
-	_, err := etcdTestCli.Txn(context.Background()).Then(clearSource, clearSubTask, clearWorkerInfo, clearBound).Commit()
+	_, err := etcdTestCli.Txn(context.Background()).Then(clearSource, clearSubTask, clearWorkerInfo, clearWorkerKeepAlive, clearBound).Commit()
 	c.Assert(err, IsNil)
 }
 
