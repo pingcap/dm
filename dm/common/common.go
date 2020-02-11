@@ -25,7 +25,7 @@ import (
 var (
 	useOfClosedErrMsg = "use of closed network connection"
 	// WorkerRegisterKeyAdapter used to encode and decode register key.
-	// k/v: Encode(addr) -> name
+	// k/v: Encode(name) -> the information of the DM-worker node.
 	WorkerRegisterKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-worker/r/")
 	// WorkerKeepAliveKeyAdapter used to encode and decode keepalive key.
 	// k/v: Encode(addr,name) -> time

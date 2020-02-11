@@ -46,7 +46,8 @@ func TestInfo(t *testing.T) {
 // clear keys in etcd test cluster.
 func clearTestInfoOperation(c *C) {
 	clearSource := clientv3.OpDelete(common.UpstreamConfigKeyAdapter.Path(), clientv3.WithPrefix())
-	_, err := etcdTestCli.Txn(context.Background()).Then(clearSource).Commit()
+	clearWorkerInfo := clientv3.OpDelete(common.WorkerRegisterKeyAdapter.Path(), clientv3.WithPrefix())
+	_, err := etcdTestCli.Txn(context.Background()).Then(clearSource, clearWorkerInfo).Commit()
 	c.Assert(err, IsNil)
 }
 
