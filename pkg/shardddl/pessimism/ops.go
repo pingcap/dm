@@ -37,7 +37,7 @@ func PutOperationDeleteInfo(cli *clientv3.Client, op Operation, info Info) (int6
 
 	resp, err := cli.Txn(ctx).Then(putOp, delOp).Commit()
 	if err != nil {
-		return 0, nil
+		return 0, err
 	}
 	return resp.Header.Revision, nil
 }

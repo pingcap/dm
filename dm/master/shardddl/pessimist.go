@@ -37,17 +37,17 @@ type Pessimist struct {
 	cli *clientv3.Client
 	lk  *pessimism.LockKeeper
 
-	// sources used to get all sources relative to the given task.
-	sources func(task string) []string
+	// taskSources used to get all sources relative to the given task.
+	taskSources func(task string) []string
 }
 
 // NewPessimist creates a new Pessimist instance.
-func NewPessimist(pLogger *log.Logger, sources func(task string) []string) *Pessimist {
+func NewPessimist(pLogger *log.Logger, taskSources func(task string) []string) *Pessimist {
 	return &Pessimist{
-		logger:  pLogger.WithFields(zap.String("component", "shard DDL pessimist")),
-		closed:  true, // mark as closed before started.
-		lk:      pessimism.NewLockKeeper(),
-		sources: sources,
+		logger:      pLogger.WithFields(zap.String("component", "shard DDL pessimist")),
+		closed:      true, // mark as closed before started.
+		lk:          pessimism.NewLockKeeper(),
+		taskSources: taskSources,
 	}
 }
 
@@ -150,7 +150,7 @@ func (p *Pessimist) Locks() map[string]*pessimism.Lock {
 func (p *Pessimist) recoverLocks(ifm map[string]map[string]pessimism.Info, opm map[string]map[string]pessimism.Operation) error {
 	// construct locks based on the shard DDL info.
 	for task, ifs := range ifm {
-		sources := p.sources(task)
+		sources := p.taskSources(task)
 		for _, info := range ifs {
 			_, _, _, err := p.lk.TrySync(info, sources)
 			if err != nil {
@@ -210,7 +210,7 @@ func (p *Pessimist) handleInfoPut(ctx context.Context, infoCh <-chan pessimism.I
 				return
 			}
 			p.logger.Info("receive a shard DDL info", zap.Stringer("info", info))
-			lockID, synced, remain, err := p.lk.TrySync(info, p.sources(info.Task))
+			lockID, synced, remain, err := p.lk.TrySync(info, p.taskSources(info.Task))
 			if err != nil {
 				// TODO: add & update metrics.
 				p.logger.Error("fail to try sync shard DDL lock", zap.Stringer("info", info), log.ShortError(err))
