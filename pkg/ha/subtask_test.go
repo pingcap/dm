@@ -17,9 +17,7 @@ import (
 	"context"
 
 	. "github.com/pingcap/check"
-	"go.etcd.io/etcd/clientv3"
 
-	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 )
 
@@ -28,49 +26,62 @@ const (
 	subTaskSampleFile = "../../dm/worker/subtask.toml"
 )
 
-// clear keys in etcd test cluster.
-func clearSubTaskTestInfoOperation(c *C) {
-	clearSubTask := clientv3.OpDelete(common.UpstreamSubTaskKeyAdapter.Path(), clientv3.WithPrefix())
-	_, err := etcdTestCli.Txn(context.Background()).Then(clearSubTask).Commit()
-	c.Assert(err, IsNil)
-}
-
 func (t *testForEtcd) TestSubTaskEtcd(c *C) {
-	defer clearSubTaskTestInfoOperation(c)
+	defer clearTestInfoOperation(c)
 
-	var (
-		emptyCfg = config.SubTaskConfig{}
-		cfg      = config.SubTaskConfig{}
-	)
-	c.Assert(cfg.DecodeFile(subTaskSampleFile), IsNil)
-	source := cfg.SourceID
-	taskName := cfg.Name
+	cfg1 := config.SubTaskConfig{}
+	c.Assert(cfg1.DecodeFile(subTaskSampleFile), IsNil)
+	source := cfg1.SourceID
+	taskName1 := cfg1.Name
+
+	taskName2 := taskName1 + "2"
+	cfg2 := cfg1
+	cfg2.Name = taskName2
 
 	// no subtask config exist.
-	cfg1, rev1, err := GetSubTaskCfg(etcdTestCli, source, taskName)
+	tsm1, rev1, err := GetSubTaskCfg(etcdTestCli, source, taskName1)
 	c.Assert(err, IsNil)
 	c.Assert(rev1, Equals, int64(0))
-	c.Assert(cfg1, DeepEquals, emptyCfg)
+	c.Assert(tsm1, HasLen, 0)
 
 	// put a subtask config.
-	rev2, err := PutSubTaskCfg(etcdTestCli, cfg)
+	rev2, err := PutSubTaskCfg(etcdTestCli, cfg1)
 	c.Assert(err, IsNil)
 	c.Assert(rev2, Greater, rev1)
 
-	// get the config back.
-	cfg2, rev3, err := GetSubTaskCfg(etcdTestCli, source, taskName)
+	// put another subtask config.
+	rev3, err := PutSubTaskCfg(etcdTestCli, cfg2)
 	c.Assert(err, IsNil)
-	c.Assert(rev3, Equals, rev2)
-	c.Assert(cfg2, DeepEquals, cfg)
+	c.Assert(rev3, Greater, rev2)
+
+	// get single config back.
+	tsm2, rev4, err := GetSubTaskCfg(etcdTestCli, source, taskName1)
+	c.Assert(err, IsNil)
+	c.Assert(rev4, Equals, rev3)
+	c.Assert(tsm2, HasLen, 1)
+	c.Assert(tsm2, HasKey, taskName1)
+	c.Assert(tsm2[taskName1], DeepEquals, cfg1)
+
+	tsm3, rev5, err := GetSubTaskCfg(etcdTestCli, source, "")
+	c.Assert(err, IsNil)
+	c.Assert(rev5, Equals, rev4)
+	c.Assert(tsm3, HasLen, 2)
+	c.Assert(tsm3, HasKey, taskName1)
+	c.Assert(tsm3, HasKey, taskName2)
+	c.Assert(tsm3[taskName1], DeepEquals, cfg1)
+	c.Assert(tsm3[taskName2], DeepEquals, cfg2)
 
 	// delete the config.
-	deleteOp := deleteSubTaskCfgOp(source, taskName)
+	deleteOp := deleteSubTaskCfgOp(source, taskName1)
+	_, err = etcdTestCli.Txn(context.Background()).Then(deleteOp).Commit()
+	c.Assert(err, IsNil)
+	deleteOp = deleteSubTaskCfgOp(source, taskName2)
 	_, err = etcdTestCli.Txn(context.Background()).Then(deleteOp).Commit()
 	c.Assert(err, IsNil)
 
 	// get again, not exists now.
-	cfg3, rev4, err := GetSubTaskCfg(etcdTestCli, source, taskName)
+	tsm4, rev6, err := GetSubTaskCfg(etcdTestCli, source, taskName1)
 	c.Assert(err, IsNil)
-	c.Assert(rev4, Equals, int64(0))
-	c.Assert(cfg3, DeepEquals, emptyCfg)
+	c.Assert(rev6, Equals, int64(0))
+	c.Assert(tsm4, HasLen, 0)
 }

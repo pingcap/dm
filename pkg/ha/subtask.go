@@ -45,30 +45,52 @@ func PutSubTaskCfg(cli *clientv3.Client, cfg config.SubTaskConfig) (int64, error
 
 // GetSubTaskCfg gets the subtask config of the specified source and task name.
 // if the config for the source not exist, return with `err == nil` and `revision=0`.
-func GetSubTaskCfg(cli *clientv3.Client, source, taskName string) (config.SubTaskConfig, int64, error) {
+// if taskName is "", will return all the subtaskConfigs as a map{taskName: subtaskConfig} of the source
+// if taskName if given, will return a map{taskName: subtaskConfig} whose length is 1
+func GetSubTaskCfg(cli *clientv3.Client, source, taskName string) (map[string]config.SubTaskConfig, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
 
-	cfg := config.SubTaskConfig{}
-	resp, err := cli.Get(ctx, common.UpstreamSubTaskKeyAdapter.Encode(source, taskName))
+	tsm := make(map[string]config.SubTaskConfig)
+	var (
+		resp *clientv3.GetResponse
+		err  error
+	)
+	if taskName != "" {
+		resp, err = cli.Get(ctx, common.UpstreamSubTaskKeyAdapter.Encode(source, taskName))
+	} else {
+		resp, err = cli.Get(ctx, common.UpstreamSubTaskKeyAdapter.Encode(source), clientv3.WithPrefix())
+	}
+
 	if err != nil {
-		return cfg, 0, err
+		return tsm, 0, err
 	}
 
 	if resp.Count == 0 {
-		return cfg, 0, err
-	} else if resp.Count > 1 {
+		return tsm, 0, err
+	} else if taskName != "" && resp.Count > 1 {
 		// TODO(lichunzhu): add terror.
 		// this should not happen.
-		return cfg, 0, fmt.Errorf("too many config (%d) exist for the subtask {sourceID: %s, task name: %s}", resp.Count, source, taskName)
+		return tsm, 0, fmt.Errorf("too many config (%d) exist for the subtask {sourceID: %s, task name: %s}", resp.Count, source, taskName)
 	}
 
-	err = cfg.Decode(string(resp.Kvs[0].Value))
-	if err != nil {
-		return cfg, 0, err
+	for _, kvs := range resp.Kvs {
+		keys, err := common.UpstreamSubTaskKeyAdapter.Decode(string(kvs.Key))
+		if err != nil {
+			return tsm, 0, err
+		}
+		taskName := keys[1]
+
+		cfg := config.SubTaskConfig{}
+		err = cfg.Decode(string(kvs.Value))
+		if err != nil {
+			return tsm, 0, err
+		}
+
+		tsm[taskName] = cfg
 	}
 
-	return cfg, resp.Header.Revision, nil
+	return tsm, resp.Header.Revision, nil
 }
 
 // deleteSubTaskCfgOp returns a DELETE etcd operation for the source config.
