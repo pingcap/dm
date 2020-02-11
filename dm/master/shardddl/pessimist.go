@@ -37,7 +37,7 @@ type Pessimist struct {
 	cli *clientv3.Client
 	lk  *pessimism.LockKeeper
 
-	// sources used to get all sources relative to the give task.
+	// sources used to get all sources relative to the given task.
 	sources func(task string) []string
 }
 
