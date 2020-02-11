@@ -37,6 +37,8 @@ func (t *testForEtcd) TestSubTaskEtcd(c *C) {
 	taskName2 := taskName1 + "2"
 	cfg2 := cfg1
 	cfg2.Name = taskName2
+	// to support loader config adjust
+	cfg2.LoaderConfig.Dir += "." + cfg2.Name
 
 	// no subtask config exist.
 	tsm1, rev1, err := GetSubTaskCfg(etcdTestCli, source, taskName1)
