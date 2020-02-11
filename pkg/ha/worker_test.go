@@ -25,7 +25,7 @@ func (t *testForEtcd) TestWorkerInfoJSON(c *C) {
 	c.Assert(j, Equals, `{"name":"dm-worker-1","addr":"192.168.0.100:8262"}`)
 	c.Assert(j, Equals, i1.String())
 
-	i2, err := infoFromJSON(j)
+	i2, err := workerInfoFromJSON(j)
 	c.Assert(err, IsNil)
 	c.Assert(i2, DeepEquals, i1)
 }
