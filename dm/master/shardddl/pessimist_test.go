@@ -166,7 +166,7 @@ func (t *testPessimist) TestPessimist(c *C) {
 	c.Assert(p.Locks(), HasLen, 0)
 
 	// PUT i21, i22, this will create a lock.
-	rev3, err := pessimism.PutInfo(etcdTestCli, i21)
+	_, err = pessimism.PutInfo(etcdTestCli, i21)
 	c.Assert(err, IsNil)
 	_, err = pessimism.PutInfo(etcdTestCli, i22)
 	c.Assert(err, IsNil)
@@ -190,7 +190,7 @@ func (t *testPessimist) TestPessimist(c *C) {
 	c.Assert(remain, Equals, 1)
 
 	// PUT i23, then the lock will become synced.
-	_, err = pessimism.PutInfo(etcdTestCli, i23)
+	rev3, err := pessimism.PutInfo(etcdTestCli, i23)
 	c.Assert(err, IsNil)
 	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
 		synced, _ = p.Locks()[ID2].IsSynced()
@@ -203,6 +203,7 @@ func (t *testPessimist) TestPessimist(c *C) {
 	pessimism.WatchOperationPut(ctx2, etcdTestCli, task2, source1, rev3, opCh)
 	cancel2()
 	close(opCh)
+	c.Logf("watch operation PUT with revision %d", rev3)
 	c.Assert(len(opCh), Equals, 1)
 	op21 := <-opCh
 	c.Assert(op21.Exec, IsTrue)
