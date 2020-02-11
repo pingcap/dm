@@ -25,6 +25,11 @@ import (
 	"github.com/pingcap/dm/dm/config"
 )
 
+const (
+	// do not forget to update this path if the file removed/renamed.
+	sourceSampleFile = "../../dm/worker/dm-mysql.toml"
+)
+
 var (
 	etcdTestCli *clientv3.Client
 )
@@ -53,12 +58,37 @@ func (t *testForEtcd) TestSourceEtcd(c *C) {
 	defer clearTestInfoOperation(c)
 
 	var (
-		source   = "replica-mysql-1"
 		emptyCfg = config.MysqlConfig{}
+		cfg      = config.MysqlConfig{}
 	)
+	c.Assert(cfg.LoadFromFile(sourceSampleFile), IsNil)
+	source := cfg.SourceID
 
-	cfg, rev, err := GetSourceCfg(etcdTestCli, source)
+	// no source config exist.
+	cfg1, rev1, err := GetSourceCfg(etcdTestCli, source)
 	c.Assert(err, IsNil)
-	c.Assert(rev, Equals, int64(0))
-	c.Assert(cfg, DeepEquals, emptyCfg)
+	c.Assert(rev1, Equals, int64(0))
+	c.Assert(cfg1, DeepEquals, emptyCfg)
+
+	// put a source config.
+	rev2, err := PutSourceCfg(etcdTestCli, cfg)
+	c.Assert(err, IsNil)
+	c.Assert(rev2, Greater, rev1)
+
+	// get the config back.
+	cfg2, rev3, err := GetSourceCfg(etcdTestCli, source)
+	c.Assert(err, IsNil)
+	c.Assert(rev3, Equals, rev2)
+	c.Assert(cfg2, DeepEquals, cfg)
+
+	// delete the config.
+	deleteOp := deleteSourceCfgOp(source)
+	_, err = etcdTestCli.Txn(context.Background()).Then(deleteOp).Commit()
+	c.Assert(err, IsNil)
+
+	// get again, not exists now.
+	cfg3, rev4, err := GetSourceCfg(etcdTestCli, source)
+	c.Assert(err, IsNil)
+	c.Assert(rev4, Equals, int64(0))
+	c.Assert(cfg3, DeepEquals, emptyCfg)
 }

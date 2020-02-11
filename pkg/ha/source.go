@@ -44,6 +44,7 @@ func PutSourceCfg(cli *clientv3.Client, cfg config.MysqlConfig) (int64, error) {
 }
 
 // GetSourceCfg gets the config of the specified source.
+// if the config for the source not exist, return with `err == nil` and `revision=0`.
 func GetSourceCfg(cli *clientv3.Client, source string) (config.MysqlConfig, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
@@ -68,4 +69,9 @@ func GetSourceCfg(cli *clientv3.Client, source string) (config.MysqlConfig, int6
 	}
 
 	return cfg, resp.Header.Revision, nil
+}
+
+// deleteSourceCfgOp returns a DELETE etcd operation for the source config.
+func deleteSourceCfgOp(source string) clientv3.Op {
+	return clientv3.OpDelete(common.UpstreamConfigKeyAdapter.Encode(source))
 }
