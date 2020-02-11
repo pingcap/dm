@@ -71,7 +71,6 @@ type job struct {
 	pos          mysql.Position
 	currentPos   mysql.Position // exactly binlog position of current SQL
 	gtidSet      gtid.Set
-	ddlExecItem  *DDLExecItem
 	ddls         []string
 	traceID      string
 	traceGID     string
@@ -104,19 +103,18 @@ func newJob(tp opType, sourceSchema, sourceTable, targetSchema, targetTable, sql
 	}
 }
 
-func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, pos, cmdPos mysql.Position, currentGtidSet gtid.Set, ddlExecItem *DDLExecItem, traceID string) *job {
+func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, pos, cmdPos mysql.Position, currentGtidSet gtid.Set, traceID string) *job {
 	var gs gtid.Set
 	if currentGtidSet != nil {
 		gs = currentGtidSet.Clone()
 	}
 	j := &job{
-		tp:          ddl,
-		ddls:        ddls,
-		pos:         pos,
-		currentPos:  cmdPos,
-		gtidSet:     gs,
-		ddlExecItem: ddlExecItem,
-		traceID:     traceID,
+		tp:         ddl,
+		ddls:       ddls,
+		pos:        pos,
+		currentPos: cmdPos,
+		gtidSet:    gs,
+		traceID:    traceID,
 	}
 
 	if ddlInfo != nil {
@@ -124,10 +122,6 @@ func newDDLJob(ddlInfo *shardingDDLInfo, ddls []string, pos, cmdPos mysql.Positi
 		j.sourceTable = ddlInfo.tableNames[0][0].Name
 		j.targetSchema = ddlInfo.tableNames[1][0].Schema
 		j.targetTable = ddlInfo.tableNames[1][0].Name
-	}
-
-	if ddlExecItem != nil && ddlExecItem.req != nil {
-		j.traceGID = ddlExecItem.req.TraceGID
 	}
 
 	return j

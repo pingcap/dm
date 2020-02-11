@@ -77,23 +77,21 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
-    sleep 10
-    echo "start task after restarted dm-worker"
-    # TODO: skip this now. problem has been added to document
-    # run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-    #    "query-status -s $SOURCE_ID1,$SOURCE_ID2" \
-    #    "\"taskName\": \"test\"" 1 \
-    #    "\"taskStatus\": \"Running\"" 1
-
+    sleep 8
+    echo "check sync diff after restarted dm-worker"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     # LoadExecCreateTableFailed error return twice
+    sleep 8
     err_cnt=`grep LoadExecCreateTableFailed $WORK_DIR/worker1/log/dm-worker.log | wc -l`
     if [ $err_cnt -ne 2 ]; then
         echo "error LoadExecCreateTableFailed's count is not 2"
         exit 2
     fi
 
+    # strange, TiDB (at least with mockTiKV) needs a long time to see the update of `test_loader_checkpoint`,
+    # and even later txn may see the older state than the earlier txn.
+    sleep 8
     run_sql "SELECT count(*) from dm_meta.test_loader_checkpoint where cp_schema = '$TEST_NAME' and offset = end_pos" $TIDB_PORT
     check_contains "count(*): 2"
 

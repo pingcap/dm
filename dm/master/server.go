@@ -16,17 +16,24 @@ package master
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/pingcap/errors"
+	"github.com/siddontang/go/sync2"
+	"go.etcd.io/etcd/clientv3"
+	"go.etcd.io/etcd/embed"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
+
 	"github.com/pingcap/dm/checker"
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/master/coordinator"
+	"github.com/pingcap/dm/dm/master/shardddl"
 	operator "github.com/pingcap/dm/dm/master/sql-operator"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
@@ -36,13 +43,6 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
-	"github.com/pingcap/dm/syncer"
-	"github.com/pingcap/errors"
-	"github.com/siddontang/go/sync2"
-	"go.etcd.io/etcd/clientv3"
-	"go.etcd.io/etcd/embed"
-	"go.uber.org/zap"
-	"google.golang.org/grpc"
 )
 
 const (
@@ -81,8 +81,8 @@ type Server struct {
 	// task-name -> source-list
 	taskSources map[string][]string
 
-	// DDL lock keeper
-	lockKeeper *LockKeeper
+	// shard DDL pessimist
+	pessimist *shardddl.Pessimist
 
 	// SQL operator holder
 	sqlOperatorHolder *operator.Holder
@@ -103,11 +103,12 @@ func NewServer(cfg *Config) *Server {
 		coordinator:       coordinator.NewCoordinator(),
 		workerClients:     make(map[string]workerrpc.Client),
 		taskSources:       make(map[string][]string),
-		lockKeeper:        NewLockKeeper(),
 		sqlOperatorHolder: operator.NewHolder(),
 		idGen:             tracing.NewIDGen(),
 		ap:                NewAgentPool(&RateLimitConfig{rate: cfg.RPCRateLimit, burst: cfg.RPCRateBurst}),
 	}
+	logger := log.L()
+	server.pessimist = shardddl.NewPessimist(&logger, server.getTaskResources)
 	server.closed.Set(true)
 
 	return &server
@@ -175,6 +176,12 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		return
 	}
 
+	// start the shard DDL pessimist.
+	err = s.pessimist.Start(ctx, s.etcdClient)
+	if err != nil {
+		return
+	}
+
 	s.closed.Set(false) // the server started now.
 
 	s.bgFunWg.Add(1)
@@ -196,13 +203,6 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		case <-ctx.Done():
 			return
 		}
-	}()
-
-	s.bgFunWg.Add(1)
-	go func() {
-		defer s.bgFunWg.Done()
-		// fetch DDL info from dm-workers to sync sharding DDL
-		s.fetchWorkerDDLInfo(ctx)
 	}()
 
 	log.L().Info("listening gRPC API and status request", zap.String("address", s.cfg.MasterAddr))
@@ -245,6 +245,8 @@ func (s *Server) Close() {
 
 	// wait for background functions returned
 	s.bgFunWg.Wait()
+
+	s.pessimist.Close()
 
 	if s.election != nil {
 		s.election.Close()
@@ -752,7 +754,7 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 		Result: true,
 	}
 
-	locks := s.lockKeeper.Locks()
+	locks := s.pessimist.Locks()
 	resp.Locks = make([]*pb.DDLLock, 0, len(locks))
 	for _, lock := range locks {
 		if len(req.Task) > 0 && req.Task != lock.Task {
@@ -772,7 +774,7 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 			ID:       lock.ID,
 			Task:     lock.Task,
 			Owner:    lock.Owner,
-			DDLs:     lock.Stmts,
+			DDLs:     lock.DDLs,
 			Synced:   make([]string, 0, len(ready)),
 			Unsynced: make([]string, 0, len(ready)),
 		}
@@ -793,83 +795,22 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 }
 
 // UnlockDDLLock implements MasterServer.UnlockDDLLock
+// TODO(csuzhangxc): implement this later.
 func (s *Server) UnlockDDLLock(ctx context.Context, req *pb.UnlockDDLLockRequest) (*pb.UnlockDDLLockResponse, error) {
 	log.L().Info("", zap.String("lock ID", req.ID), zap.Stringer("payload", req), zap.String("request", "UnlockDDLLock"))
-
-	workerResps, err := s.resolveDDLLock(ctx, req.ID, req.ReplaceOwner, req.Sources)
-	resp := &pb.UnlockDDLLockResponse{
-		Result:  true,
-		Workers: workerResps,
-	}
-	if err != nil {
-		resp.Result = false
-		resp.Msg = errors.ErrorStack(err)
-		log.L().Error("fail to unlock ddl", zap.String("ID", req.ID), zap.String("request", "UnlockDDLLock"), zap.Error(err))
-
-		if req.ForceRemove {
-			s.lockKeeper.RemoveLock(req.ID)
-			log.L().Warn("force to remove DDL lock", zap.String("request", "UnlockDDLLock"), zap.String("ID", req.ID))
-		}
-	} else {
-		log.L().Info("unlock ddl successfully", zap.String("ID", req.ID), zap.String("request", "UnlockDDLLock"))
-	}
-
-	return resp, nil
+	return &pb.UnlockDDLLockResponse{
+		Result: false,
+		Msg:    "not implement",
+	}, nil
 }
 
 // BreakWorkerDDLLock implements MasterServer.BreakWorkerDDLLock
+// TODO(csuzhangxc): implement this later.
 func (s *Server) BreakWorkerDDLLock(ctx context.Context, req *pb.BreakWorkerDDLLockRequest) (*pb.BreakWorkerDDLLockResponse, error) {
 	log.L().Info("", zap.String("lock ID", req.RemoveLockID), zap.Stringer("payload", req), zap.String("request", "BreakWorkerDDLLock"))
-
-	request := &workerrpc.Request{
-		Type: workerrpc.CmdBreakDDLLock,
-		BreakDDLLock: &pb.BreakDDLLockRequest{
-			Task:         req.Task,
-			RemoveLockID: req.RemoveLockID,
-			ExecDDL:      req.ExecDDL,
-			SkipDDL:      req.SkipDDL,
-		},
-	}
-
-	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Sources))
-	var wg sync.WaitGroup
-	for _, source := range req.Sources {
-		wg.Add(1)
-		go func(sourceID string) {
-			defer wg.Done()
-			worker := s.coordinator.GetWorkerBySourceID(sourceID)
-			if worker == nil || worker.State() == coordinator.WorkerClosed {
-				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("worker %s relevant worker-client not found", sourceID), sourceID)
-				return
-			}
-			resp, err := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
-			workerResp := &pb.CommonWorkerResponse{}
-			if err != nil {
-				workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), sourceID)
-			} else {
-				workerResp = resp.BreakDDLLock
-			}
-			workerResp.Source = sourceID
-			workerRespCh <- workerResp
-		}(source)
-	}
-	wg.Wait()
-
-	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(req.Sources))
-	for len(workerRespCh) > 0 {
-		workerResp := <-workerRespCh
-		workerRespMap[workerResp.Source] = workerResp
-	}
-
-	sort.Strings(req.Sources)
-	workerResps := make([]*pb.CommonWorkerResponse, 0, len(req.Sources))
-	for _, worker := range req.Sources {
-		workerResps = append(workerResps, workerRespMap[worker])
-	}
-
 	return &pb.BreakWorkerDDLLockResponse{
-		Result:  true,
-		Sources: workerResps,
+		Result: false,
+		Msg:    "not implement",
 	}, nil
 }
 
@@ -1292,297 +1233,6 @@ func (s *Server) checkTaskAndWorkerMatch(taskname string, targetWorker string) b
 		}
 	}
 	return false
-}
-
-// fetchWorkerDDLInfo fetches DDL info from all dm-workers
-// and sends DDL lock info back to dm-workers
-func (s *Server) fetchWorkerDDLInfo(ctx context.Context) {
-	var wg sync.WaitGroup
-
-	request := &workerrpc.Request{Type: workerrpc.CmdFetchDDLInfo}
-	for source, w := range s.coordinator.GetRunningMysqlSource() {
-		wg.Add(1)
-		go func(source string, worker *coordinator.Worker) {
-			defer wg.Done()
-			var doRetry bool
-
-			for {
-				if doRetry {
-					select {
-					case <-ctx.Done():
-						return
-					case <-time.After(fetchDDLInfoRetryTimeout):
-					}
-				}
-				doRetry = false // reset
-
-				select {
-				case <-ctx.Done():
-					return
-				default:
-					resp, err := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
-					if err != nil {
-						log.L().Error("create FetchDDLInfo stream", zap.String("source", source), log.ShortError(err))
-						doRetry = true
-						continue
-					}
-					stream := resp.FetchDDLInfo
-					for {
-						in, err := stream.Recv()
-						if err == io.EOF {
-							doRetry = true
-							break
-						}
-						select {
-						case <-ctx.Done(): // check whether canceled again
-							return
-						default:
-						}
-						if err != nil {
-							log.L().Error("receive ddl info", zap.String("source", source), log.ShortError(err))
-							doRetry = true
-							break
-						}
-						log.L().Info("receive ddl info", zap.Stringer("ddl info", in), zap.String("source", source))
-
-						workers := s.getTaskResources(in.Task)
-						if len(workers) == 0 {
-							// should happen only when starting and before updateTaskWorkers return
-							log.L().Error("try to sync shard DDL, but with no workers", zap.String("task", in.Task))
-							doRetry = true
-							break
-						}
-						if !s.containWorker(workers, source) {
-							// should not happen
-							log.L().Error("try to sync shard DDL, but worker is not in workers", zap.String("task", in.Task), zap.String("source", source), zap.Strings("workers", workers))
-							doRetry = true
-							break
-						}
-
-						lockID, synced, remain, err := s.lockKeeper.TrySync(in.Task, in.Schema, in.Table, source, in.DDLs, workers)
-						if err != nil {
-							log.L().Error("fail to sync lock", zap.String("source", source), log.ShortError(err))
-							doRetry = true
-							break
-						}
-
-						out := &pb.DDLLockInfo{
-							Task: in.Task,
-							ID:   lockID,
-						}
-						err = stream.Send(out)
-						if err != nil {
-							log.L().Error("fail to send ddl lock info", zap.Stringer("ddl lock info", out), zap.String("source", source), log.ShortError(err))
-							doRetry = true
-							break
-						}
-
-						if !synced {
-							// still need wait other workers to sync
-							log.L().Info("shard DDL is in syncing", zap.String("lock ID", lockID), zap.Int("remain worker count", remain))
-							continue
-						}
-
-						log.L().Info("shard DDL was synced", zap.String("lock ID", lockID))
-
-						// resolve DDL lock
-						wg.Add(1)
-						go func(lockID string) {
-							defer wg.Done()
-							resps, err := s.resolveDDLLock(ctx, lockID, "", nil)
-							if err == nil {
-								log.L().Info("resolve DDL lock successfully", zap.String("lock ID", lockID))
-							} else {
-								log.L().Error("fail to resolve DDL lock", zap.String("lock ID", lockID), zap.Reflect("responses", resps), zap.Error(err))
-								lock := s.lockKeeper.FindLock(lockID)
-								if lock != nil {
-									lock.AutoRetry.Set(true) // need auto-retry resolve at intervals
-								}
-							}
-						}(lockID)
-					}
-					stream.CloseSend()
-				}
-			}
-
-		}(source, w)
-	}
-
-	wg.Wait()
-}
-
-// resolveDDLLock resolves DDL lock
-// requests DDL lock's owner to execute the DDL
-// requests DDL lock's non-owner dm-workers to ignore (skip) the DDL
-func (s *Server) resolveDDLLock(ctx context.Context, lockID string, replaceOwner string, prefWorkers []string) ([]*pb.CommonWorkerResponse, error) {
-	lock := s.lockKeeper.FindLock(lockID)
-	if lock == nil {
-		// should not happen even when dm-master restarted
-		return nil, terror.ErrMasterLockNotFound.Generate(lockID)
-	}
-
-	if lock.Resolving.Get() {
-		return nil, terror.ErrMasterLockIsResolving.Generate(lockID)
-	}
-	lock.Resolving.Set(true)
-	defer lock.Resolving.Set(false) //reset
-
-	ready := lock.Ready() // Ready contain all dm-sources and whether they were synced
-
-	// request the owner to execute DDL
-	owner := lock.Owner
-	if len(replaceOwner) > 0 {
-		owner = replaceOwner
-	}
-	worker := s.coordinator.GetWorkerBySourceID(owner)
-	if worker == nil {
-		return nil, terror.ErrMasterWorkerCliNotFound.Generate(owner)
-	}
-	if _, ok := ready[owner]; !ok {
-		return nil, terror.ErrMasterWorkerNotWaitLock.Generate(owner, lockID)
-	}
-
-	// try send handle SQLs request to owner if exists
-	key, oper := s.sqlOperatorHolder.Get(lock.Task, lock.DDLs())
-	if oper != nil {
-		ownerReq := &workerrpc.Request{
-			Type: workerrpc.CmdHandleSubTaskSQLs,
-			HandleSubTaskSQLs: &pb.HandleSubTaskSQLsRequest{
-				Name:       oper.Req.Name,
-				Op:         oper.Req.Op,
-				Args:       oper.Req.Args,
-				BinlogPos:  oper.Req.BinlogPos,
-				SqlPattern: oper.Req.SqlPattern,
-			},
-		}
-		resp, err := worker.SendRequest(ctx, ownerReq, s.cfg.RPCTimeout)
-		if err != nil {
-			return nil, terror.Annotatef(err, "send handle SQLs request %s to DDL lock %s owner %s fail", ownerReq.HandleSubTaskSQLs, lockID, owner)
-		}
-		ownerResp := resp.HandleSubTaskSQLs
-		if !ownerResp.Result {
-			return nil, terror.ErrMasterHandleSQLReqFail.Generate(lockID, owner, ownerReq.HandleSubTaskSQLs, ownerResp.Msg)
-		}
-		log.L().Info("sent handle --sharding DDL request", zap.Stringer("payload", ownerReq.HandleSubTaskSQLs), zap.String("owner", owner), zap.String("lock ID", lockID))
-		s.sqlOperatorHolder.Remove(lock.Task, key) // remove SQL operator after sent to owner
-	}
-
-	// If send ExecuteDDL request failed, we will generate more tracer group id,
-	// this is acceptable if each ExecuteDDL request successes at last.
-	// TODO: we need a better way to combine brain split tracing events into one
-	// single group.
-	traceGID := s.idGen.NextID("resolveDDLLock", 0)
-	log.L().Info("requesting to execute DDL", zap.String("owner", owner), zap.String("lock ID", lockID))
-	ownerReq := &workerrpc.Request{
-		Type: workerrpc.CmdExecDDL,
-		ExecDDL: &pb.ExecDDLRequest{
-			Task:     lock.Task,
-			LockID:   lockID,
-			Exec:     true,
-			TraceGID: traceGID,
-			DDLs:     lock.ddls,
-		},
-	}
-	// use a longer timeout for executing DDL in DM-source.
-	// now, we ignore `invalid connection` for `ADD INDEX`, use a longer timout to ensure the DDL lock removed.
-	ownerTimeout := time.Duration(syncer.MaxDDLConnectionTimeoutMinute)*time.Minute + 30*time.Second
-	resp, err := worker.SendRequest(ctx, ownerReq, ownerTimeout)
-	ownerResp := &pb.CommonWorkerResponse{}
-	if err != nil {
-		ownerResp = errorCommonWorkerResponse(errors.ErrorStack(err), owner)
-	} else {
-		ownerResp = resp.ExecDDL
-	}
-	ownerResp.Source = owner
-	if !ownerResp.Result {
-		// owner execute DDL fail, do not continue
-		return []*pb.CommonWorkerResponse{
-			ownerResp,
-		}, terror.ErrMasterOwnerExecDDL.Generate(owner)
-	}
-
-	// request other dm-sources to ignore DDL
-	sources := make([]string, 0, len(ready))
-	if len(prefWorkers) > 0 {
-		sources = prefWorkers
-	} else {
-		for worker := range ready {
-			sources = append(sources, worker)
-		}
-	}
-
-	request := &workerrpc.Request{
-		Type: workerrpc.CmdExecDDL,
-		ExecDDL: &pb.ExecDDLRequest{
-			Task:     lock.Task,
-			LockID:   lockID,
-			Exec:     false, // ignore and skip DDL
-			TraceGID: traceGID,
-			DDLs:     lock.ddls,
-		},
-	}
-	workerRespCh := make(chan *pb.CommonWorkerResponse, len(sources))
-	var wg sync.WaitGroup
-	for _, source := range sources {
-		if source == owner {
-			continue // owner has executed DDL
-		}
-
-		wg.Add(1)
-		go func(source string) {
-			defer wg.Done()
-			worker := s.coordinator.GetWorkerBySourceID(source)
-			if worker == nil {
-				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("source %s relevant source-client not found", source), source)
-				return
-			}
-			if _, ok := ready[source]; !ok {
-				workerRespCh <- errorCommonWorkerResponse(fmt.Sprintf("source %s not waiting for DDL lock %s", owner, lockID), source)
-				return
-			}
-
-			log.L().Info("request to skip DDL", zap.String("not owner source", source), zap.String("lock ID", lockID))
-			resp, err2 := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
-			var workerResp *pb.CommonWorkerResponse
-			if err2 != nil {
-				workerResp = errorCommonWorkerResponse(errors.ErrorStack(err2), "")
-			} else {
-				workerResp = resp.ExecDDL
-			}
-			workerResp.Source = source
-			workerRespCh <- workerResp
-		}(source)
-	}
-	wg.Wait()
-
-	workerRespMap := make(map[string]*pb.CommonWorkerResponse, len(sources))
-	var success = true
-	for len(workerRespCh) > 0 {
-		workerResp := <-workerRespCh
-		workerRespMap[workerResp.Source] = workerResp
-		if !workerResp.Result {
-			success = false
-		}
-	}
-
-	sort.Strings(sources)
-	workerResps := make([]*pb.CommonWorkerResponse, 0, len(sources)+1)
-	workerResps = append(workerResps, ownerResp)
-	for _, source := range sources {
-		workerResp, ok := workerRespMap[source]
-		if ok {
-			workerResps = append(workerResps, workerResp)
-		}
-	}
-
-	// owner has ExecuteDDL successfully, we remove the Lock
-	// if some dm-sources ExecuteDDL occurred error, we should use dmctl to handle dm-source directly
-	s.lockKeeper.RemoveLock(lockID)
-
-	if !success {
-		err = terror.ErrMasterPartWorkerExecDDLFail.Generate(lockID)
-	}
-	return workerResps, err
 }
 
 // UpdateMasterConfig implements MasterServer.UpdateConfig

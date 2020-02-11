@@ -15,7 +15,6 @@ package worker
 
 import (
 	"context"
-	"io"
 	"net"
 	"sync"
 	"time"
@@ -420,89 +419,6 @@ func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorRequest) (*pb
 	return resp, nil
 }
 
-// FetchDDLInfo implements WorkerServer.FetchDDLInfo
-// we do ping-pong send-receive on stream for DDL (lock) info
-// if error occurred in Send / Recv, just retry in client
-func (s *Server) FetchDDLInfo(stream pb.Worker_FetchDDLInfoServer) error {
-	log.L().Info("", zap.String("request", "FetchDDLInfo"))
-	w := s.getWorker(true)
-	if w == nil {
-		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
-		return terror.ErrWorkerNoStart.Generate()
-	}
-
-	var ddlInfo *pb.DDLInfo
-	for {
-		// try fetch pending to sync DDL info from worker
-		ddlInfo = w.FetchDDLInfo(stream.Context())
-		if ddlInfo == nil {
-			return nil // worker closed or context canceled
-		}
-		log.L().Info("", zap.String("request", "FetchDDLInfo"), zap.Stringer("ddl info", ddlInfo))
-		// send DDLInfo to dm-master
-		err := stream.Send(ddlInfo)
-		if err != nil {
-			log.L().Error("fail to send DDLInfo to RPC stream", zap.String("request", "FetchDDLInfo"), zap.Stringer("ddl info", ddlInfo), log.ShortError(err))
-			return err
-		}
-
-		// receive DDLLockInfo from dm-master
-		in, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			log.L().Error("fail to receive DDLLockInfo from RPC stream", zap.String("request", "FetchDDLInfo"), zap.Stringer("ddl info", ddlInfo), log.ShortError(err))
-			return err
-		}
-		log.L().Info("receive DDLLockInfo", zap.String("request", "FetchDDLInfo"), zap.Stringer("ddl lock info", in))
-
-		//ddlInfo = nil // clear and protect to put it back
-
-		err = w.RecordDDLLockInfo(in)
-		if err != nil {
-			// if error occurred when recording DDLLockInfo, log an error
-			// user can handle this case using dmctl
-			log.L().Error("fail to record DDLLockInfo", zap.String("request", "FetchDDLInfo"), zap.Stringer("ddl lock info", in), zap.Error(err))
-		}
-	}
-	// TODO: check whether this interface need to store message in ETCD
-}
-
-// ExecuteDDL implements WorkerServer.ExecuteDDL
-func (s *Server) ExecuteDDL(ctx context.Context, req *pb.ExecDDLRequest) (*pb.CommonWorkerResponse, error) {
-	log.L().Info("", zap.String("request", "ExecuteDDL"), zap.Stringer("payload", req))
-	w := s.getWorker(true)
-	if w == nil {
-		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
-		return makeCommonWorkerResponse(terror.ErrWorkerNoStart.Generate()), nil
-	}
-
-	err := w.ExecuteDDL(ctx, req)
-	if err != nil {
-		log.L().Error("fail to execute ddl", zap.String("request", "ExecuteDDL"), zap.Stringer("payload", req), zap.Error(err))
-	}
-	// TODO: check whether this interface need to store message in ETCD
-	return makeCommonWorkerResponse(err), nil
-}
-
-// BreakDDLLock implements WorkerServer.BreakDDLLock
-func (s *Server) BreakDDLLock(ctx context.Context, req *pb.BreakDDLLockRequest) (*pb.CommonWorkerResponse, error) {
-	log.L().Info("", zap.String("request", "BreakDDLLock"), zap.Stringer("payload", req))
-	w := s.getWorker(true)
-	if w == nil {
-		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
-		return makeCommonWorkerResponse(terror.ErrWorkerNoStart.Generate()), nil
-	}
-
-	err := w.BreakDDLLock(ctx, req)
-	if err != nil {
-		log.L().Error("fail to break ddl lock", zap.String("request", "BreakDDLLock"), zap.Stringer("payload", req), zap.Error(err))
-	}
-	// TODO: check whether this interface need to store message in ETCD
-	return makeCommonWorkerResponse(err), nil
-}
-
 // HandleSQLs implements WorkerServer.HandleSQLs
 func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSubTaskSQLsRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "HandleSQLs"), zap.Stringer("payload", req))
@@ -701,7 +617,7 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 
 	log.L().Info("start workers", zap.Reflect("subTasks", subTaskCfgs))
 
-	w, err := NewWorker(cfg)
+	w, err := NewWorker(cfg, s.etcdClient)
 	if err != nil {
 		return err
 	}

@@ -35,6 +35,7 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 	"github.com/siddontang/go-mysql/replication"
 	"github.com/siddontang/go/sync2"
+	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
@@ -47,11 +48,13 @@ import (
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/schema"
+	"github.com/pingcap/dm/pkg/shardddl/pessimism"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/pkg/utils"
 	sm "github.com/pingcap/dm/syncer/safe-mode"
+	"github.com/pingcap/dm/syncer/shardddl"
 	operator "github.com/pingcap/dm/syncer/sql-operator"
 )
 
@@ -95,8 +98,7 @@ type Syncer struct {
 	syncCfg replication.BinlogSyncerConfig
 
 	sgk           *ShardingGroupKeeper          // keeper to keep all sharding (sub) group in this syncer
-	ddlInfoCh     chan *pb.DDLInfo              // DDL info pending to sync, only support sync one DDL lock one time, refine if needed
-	ddlExecInfo   *DDLExecInfo                  // DDL execute (ignore) info
+	pessimist     *shardddl.Pessimist           // shard DDL pessimist
 	injectEventCh chan *replication.BinlogEvent // extra binlog event chan, used to inject binlog event into the main for loop
 
 	binlogType         BinlogType
@@ -166,6 +168,7 @@ type Syncer struct {
 
 	readerHub *streamer.ReaderHub
 
+	// TODO: re-implement tracer flow for binlog event later.
 	tracer *tracing.Tracer
 
 	currentPosMu struct {
@@ -177,10 +180,13 @@ type Syncer struct {
 }
 
 // NewSyncer creates a new Syncer.
-func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
-	syncer := new(Syncer)
+func NewSyncer(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Syncer {
+	logger := log.With(zap.String("task", cfg.Name), zap.String("unit", "binlog replication"))
+	syncer := &Syncer{
+		pessimist: shardddl.NewPessimist(&logger, etcdClient, cfg.Name, cfg.SourceID),
+	}
 	syncer.cfg = cfg
-	syncer.tctx = tcontext.Background().WithLogger(log.With(zap.String("task", cfg.Name), zap.String("unit", "binlog replication")))
+	syncer.tctx = tcontext.Background().WithLogger(logger)
 	syncer.jobsClosed.Set(true) // not open yet
 	syncer.closed.Set(false)
 	syncer.lastBinlogSizeCount.Set(0)
@@ -206,8 +212,6 @@ func NewSyncer(cfg *config.SubTaskConfig) *Syncer {
 	if cfg.IsSharding {
 		// only need to sync DDL in sharding mode
 		syncer.sgk = NewShardingGroupKeeper(syncer.tctx, cfg)
-		syncer.ddlInfoCh = make(chan *pb.DDLInfo, 1)
-		syncer.ddlExecInfo = NewDDLExecInfo()
 	}
 
 	var err error
@@ -436,7 +440,7 @@ func (s *Syncer) reset() {
 	if s.cfg.IsSharding {
 		// every time start to re-sync from resume, we reset status to make it like a fresh syncing
 		s.sgk.ResetGroups()
-		s.ddlExecInfo.Renew()
+		s.pessimist.Reset()
 	}
 }
 
@@ -510,9 +514,6 @@ func (s *Syncer) Process(ctx context.Context, pr chan pb.ProcessResult) {
 	go func() {
 		defer wg.Done()
 		<-newCtx.Done() // ctx or newCtx
-		if s.ddlExecInfo != nil {
-			s.ddlExecInfo.Close() // let Run can return
-		}
 	}()
 
 	wg.Add(1)
@@ -691,7 +692,6 @@ func (s *Syncer) saveTablePoint(db, table string, pos mysql.Position) {
 func (s *Syncer) addJob(job *job) error {
 	var (
 		queueBucket int
-		execDDLReq  *pb.ExecDDLRequest
 	)
 	switch job.tp {
 	case xid:
@@ -713,21 +713,11 @@ func (s *Syncer) addJob(job *job) error {
 		s.jobWg.Add(1)
 		queueBucket = s.cfg.WorkerCount
 		s.jobs[queueBucket] <- job
-		if job.ddlExecItem != nil {
-			execDDLReq = job.ddlExecItem.req
-		}
 	case insert, update, del:
 		s.jobWg.Add(1)
 		queueBucket = int(utils.GenHashKey(job.key)) % s.cfg.WorkerCount
 		s.addCount(false, s.queueBucketMapping[queueBucket], job.tp, 1)
 		s.jobs[queueBucket] <- job
-	}
-
-	if s.tracer.Enable() {
-		_, err := s.tracer.CollectSyncerJobEvent(job.traceID, job.traceGID, int32(job.tp), job.pos, job.currentPos, s.queueBucketMapping[queueBucket], job.sql, job.ddls, job.args, execDDLReq, pb.SyncerJobState_queued)
-		if err != nil {
-			s.tctx.L().Error("fail to collect binlog replication job event", log.ShortError(err))
-		}
 	}
 
 	wait := s.checkWait(job)
@@ -834,7 +824,8 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			return
 		}
 
-		if sqlJob.ddlExecItem != nil && sqlJob.ddlExecItem.req != nil && !sqlJob.ddlExecItem.req.Exec {
+		shardOp := s.pessimist.PendingOperation()
+		if shardOp != nil && !shardOp.Exec {
 			tctx.L().Info("ignore sharding DDLs", zap.Strings("ddls", sqlJob.ddls))
 		} else {
 			var affected int
@@ -842,18 +833,6 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 			if err != nil {
 				err = s.handleSpecialDDLError(tctx, err, sqlJob.ddls, affected, db)
 				err = terror.WithScope(err, terror.ScopeDownstream)
-			}
-
-			if s.tracer.Enable() {
-				syncerJobState := s.tracer.FinishedSyncerJobState(err)
-				var execDDLReq *pb.ExecDDLRequest
-				if sqlJob.ddlExecItem != nil {
-					execDDLReq = sqlJob.ddlExecItem.req
-				}
-				_, traceErr := s.tracer.CollectSyncerJobEvent(sqlJob.traceID, sqlJob.traceGID, int32(sqlJob.tp), sqlJob.pos, sqlJob.currentPos, queueBucket, sqlJob.sql, sqlJob.ddls, nil, execDDLReq, syncerJobState)
-				if traceErr != nil {
-					tctx.L().Error("fail to collect binlog replication job event", log.ShortError(traceErr))
-				}
 			}
 		}
 		if err != nil {
@@ -866,10 +845,16 @@ func (s *Syncer) syncDDL(tctx *tcontext.Context, queueBucket string, db *DBConn,
 
 		if s.cfg.IsSharding {
 			// for sharding DDL syncing, send result back
-			if sqlJob.ddlExecItem != nil {
-				sqlJob.ddlExecItem.resp <- err
+			shardInfo := s.pessimist.PendingInfo()
+			if shardInfo == nil {
+				// no need to do the shard DDL handle for `CREATE DATABASE/TABLE` now.
+				s.tctx.L().Warn("skip shard DDL handle in sharding mode", zap.Strings("ddl", sqlJob.ddls))
+			} else if shardOp == nil {
+				// TODO(csuzhangxc): add terror.
+				err = fmt.Errorf("missing shard DDL lock operation for shard DDL info (%s)", shardInfo)
+			} else {
+				err = s.pessimist.DoneOperationDeleteInfo(*shardOp, *shardInfo)
 			}
-			s.ddlExecInfo.ClearBlockingDDL()
 		}
 		s.jobWg.Done()
 		if err != nil {
@@ -926,15 +911,6 @@ func (s *Syncer) sync(tctx *tcontext.Context, queueBucket string, db *DBConn, jo
 		if err != nil {
 			errCtx := &ExecErrorContext{err, jobs[affected].currentPos, fmt.Sprintf("%v", jobs)}
 			s.appendExecErrors(errCtx)
-		}
-		if s.tracer.Enable() {
-			syncerJobState := s.tracer.FinishedSyncerJobState(err)
-			for _, job := range jobs {
-				_, err2 := s.tracer.CollectSyncerJobEvent(job.traceID, job.traceGID, int32(job.tp), job.pos, job.currentPos, queueBucket, job.sql, job.ddls, nil, nil, syncerJobState)
-				if err2 != nil {
-					tctx.L().Error("fail to collect binlog replication job event", log.ShortError(err2))
-				}
-			}
 		}
 		return err
 	}
@@ -1334,16 +1310,6 @@ func (s *Syncer) handleRotateEvent(ev *replication.RotateEvent, ec eventContext)
 	}
 	*ec.latestOp = rotate
 
-	if s.tracer.Enable() {
-		// Cannot convert this into a common method like `ec.CollectSyncerBinlogEvent()`
-		// since CollectSyncerBinlogEvent relies on a fixed stack trace level
-		// (must track 3 callers up).
-		_, err := s.tracer.CollectSyncerBinlogEvent(ec.traceSource, ec.safeMode.Enable(), ec.tryReSync, *ec.lastPos, *ec.currentPos, int32(ec.header.EventType), int32(*ec.latestOp))
-		if err != nil {
-			s.tctx.L().Error("fail to collect binlog replication job event", zap.String("event", "rotate"), log.ShortError(err))
-		}
-	}
-
 	s.tctx.L().Info("", zap.String("event", "rotate"), log.WrapStringerField("position", ec.currentPos))
 	return nil
 }
@@ -1473,14 +1439,6 @@ func (s *Syncer) handleRowsEvent(ev *replication.RowsEvent, ec eventContext) err
 	default:
 		s.tctx.L().Debug("ignoring unrecognized event", zap.String("event", "row"), zap.Stringer("type", ec.header.EventType))
 		return nil
-	}
-
-	if s.tracer.Enable() {
-		traceEvent, traceErr := s.tracer.CollectSyncerBinlogEvent(ec.traceSource, ec.safeMode.Enable(), ec.tryReSync, *ec.lastPos, *ec.currentPos, int32(ec.header.EventType), int32(*ec.latestOp))
-		if traceErr != nil {
-			s.tctx.L().Error("fail to collect binlog replication job event", zap.String("event", "row"), log.ShortError(traceErr))
-		}
-		*ec.traceID = traceEvent.Base.TraceID
 	}
 
 	for i := range sqls {
@@ -1656,14 +1614,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		return s.recordSkipSQLsPos(*ec.lastPos, nil)
 	}
 
-	if s.tracer.Enable() {
-		traceEvent, traceErr := s.tracer.CollectSyncerBinlogEvent(ec.traceSource, ec.safeMode.Enable(), ec.tryReSync, *ec.lastPos, *ec.currentPos, int32(ec.header.EventType), int32(*ec.latestOp))
-		if traceErr != nil {
-			s.tctx.L().Error("fail to collect binlog replication job event", zap.String("event", "query"), log.ShortError(traceErr))
-		}
-		*ec.traceID = traceEvent.Base.TraceID
-	}
-
 	if !s.cfg.IsSharding {
 		s.tctx.L().Info("start to handle ddls in normal mode", zap.String("event", "query"), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("position", ec.currentPos))
 		// try apply SQL operator before addJob. now, one query event only has one DDL job, if updating to multi DDL jobs, refine this.
@@ -1675,7 +1625,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			s.tctx.L().Info("replace ddls to preset ddls by sql operator in normal mode", zap.String("event", "query"), zap.Strings("preset ddls", appliedSQLs), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), log.WrapStringerField("position", ec.currentPos))
 			needHandleDDLs = appliedSQLs // maybe nil
 		}
-		job := newDDLJob(nil, needHandleDDLs, *ec.lastPos, *ec.currentPos, nil, nil, *ec.traceID)
+		job := newDDLJob(nil, needHandleDDLs, *ec.lastPos, *ec.currentPos, nil, *ec.traceID)
 		err = s.addJobFunc(job)
 		if err != nil {
 			return err
@@ -1711,7 +1661,6 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		active             bool
 		remain             int
 		source             string
-		ddlExecItem        *DDLExecItem
 	)
 	// for sharding DDL, the firstPos should be the `Pos` of the binlog, not the `End_log_pos`
 	// so when restarting before sharding DDLs synced, this binlog can be re-sync again to trigger the TrySync
@@ -1803,35 +1752,22 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		// NOTE: if we need singleton Syncer (without dm-master) to support sharding DDL sync
 		// we should add another config item to differ, and do not save DDLInfo, and not wait for ddlExecInfo
 
-		ddlInfo1 := &pb.DDLInfo{
-			Task:   s.cfg.Name,
-			Schema: ddlInfo.tableNames[1][0].Schema, // use target schema / table name
-			Table:  ddlInfo.tableNames[1][0].Name,
-			DDLs:   needHandleDDLs,
+		// construct & send shard DDL info into etcd, DM-master will handle it.
+		shardInfo := s.pessimist.ConstructInfo(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, needHandleDDLs)
+		rev, err2 := s.pessimist.PutInfo(shardInfo)
+		if err2 != nil {
+			return err2
 		}
-		s.ddlInfoCh <- ddlInfo1 // save DDLInfo, and dm-worker will fetch it
+		shardLockResolving.WithLabelValues(s.cfg.Name).Set(1) // block and wait DDL lock to be synced
+		s.tctx.L().Info("putted shard DDL info", zap.Stringer("info", shardInfo))
 
-		// block and wait DDL lock to be synced
-		shardLockResolving.WithLabelValues(s.cfg.Name).Set(1)
-		for {
-			var ok bool
-			ddlExecItem, ok = <-s.ddlExecInfo.Chan(needHandleDDLs)
-			if !ok {
-				// chan closed
-				shardLockResolving.WithLabelValues(s.cfg.Name).Set(0)
-				s.tctx.L().Warn("canceled from external", zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start position", startPos), log.WrapStringerField("end position", ec.currentPos))
-				return nil
-			} else if len(ddlExecItem.req.DDLs) != 0 && !reflect.DeepEqual(ddlExecItem.req.DDLs, needHandleDDLs) {
-				// ignore un-cleared cached/duplicate DDL execute request
-				// check `len(ddlExecItem.req.DDLs) != 0` to support old DM-master and `break-ddl-lock`
-				s.tctx.L().Warn("ignore mismatched DDL execute request", zap.String("source", source), zap.Strings("expect", needHandleDDLs), zap.Strings("request", ddlExecItem.req.DDLs))
-				continue
-			}
-			shardLockResolving.WithLabelValues(s.cfg.Name).Set(0)
-			break
+		shardOp, err2 := s.pessimist.GetOperation(ec.tctx.Ctx, shardInfo, rev)
+		shardLockResolving.WithLabelValues(s.cfg.Name).Set(0)
+		if err2 != nil {
+			return err2
 		}
 
-		if ddlExecItem.req.Exec {
+		if shardOp.Exec {
 			failpoint.Inject("ShardSyncedExecutionExit", func() {
 				s.tctx.L().Warn("exit triggered", zap.String("failpoint", "ShardSyncedExecutionExit"))
 				s.flushCheckPoints()
@@ -1849,9 +1785,9 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 				}
 			})
 
-			s.tctx.L().Info("execute DDL job", zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", ddlInfo1.DDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start position", startPos), log.WrapStringerField("end position", ec.currentPos), zap.Reflect("request", ddlExecItem.req))
+			s.tctx.L().Info("execute DDL job", zap.String("event", "query"), zap.String("source", source), zap.ByteString("raw statement", ev.Query), zap.Stringer("start position", startPos), log.WrapStringerField("end position", ec.currentPos), zap.Stringer("operation", shardOp))
 		} else {
-			s.tctx.L().Info("ignore DDL job", zap.String("event", "query"), zap.String("source", source), zap.Strings("ddls", ddlInfo1.DDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start position", startPos), log.WrapStringerField("end position", ec.currentPos), zap.Reflect("request", ddlExecItem.req))
+			s.tctx.L().Info("ignore DDL job", zap.String("event", "query"), zap.String("source", source), zap.ByteString("raw statement", ev.Query), zap.Stringer("start position", startPos), log.WrapStringerField("end position", ec.currentPos), zap.Stringer("operation", shardOp))
 		}
 	}
 
@@ -1866,7 +1802,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		s.tctx.L().Info("replace ddls to preset ddls by sql operator in shard mode", zap.String("event", "query"), zap.Strings("preset ddls", appliedSQLs), zap.Strings("ddls", needHandleDDLs), zap.ByteString("raw statement", ev.Query), zap.Stringer("start position", startPos), log.WrapStringerField("end position", ec.currentPos))
 		needHandleDDLs = appliedSQLs // maybe nil
 	}
-	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastPos, *ec.currentPos, nil, ddlExecItem, *ec.traceID)
+	job := newDDLJob(ddlInfo, needHandleDDLs, *ec.lastPos, *ec.currentPos, nil, *ec.traceID)
 	err = s.addJobFunc(job)
 	if err != nil {
 		return err
@@ -2185,11 +2121,6 @@ func (s *Syncer) Close() {
 
 	s.stopSync()
 
-	if s.ddlInfoCh != nil {
-		close(s.ddlInfoCh)
-		s.ddlInfoCh = nil
-	}
-
 	s.closeDBs()
 
 	s.checkpoint.Close()
@@ -2394,26 +2325,6 @@ func (s *Syncer) checkpointID() string {
 	return strconv.FormatUint(uint64(s.cfg.ServerID), 10)
 }
 
-// DDLInfo returns a chan from which can receive DDLInfo
-func (s *Syncer) DDLInfo() <-chan *pb.DDLInfo {
-	s.RLock()
-	defer s.RUnlock()
-	return s.ddlInfoCh
-}
-
-// ExecuteDDL executes or skips a hanging-up DDL when in sharding
-func (s *Syncer) ExecuteDDL(ctx context.Context, execReq *pb.ExecDDLRequest) (<-chan error, error) {
-	if len(s.ddlExecInfo.BlockingDDLs()) == 0 {
-		return nil, terror.ErrSyncerUnitExecWithNoBlockingDDL.Generate()
-	}
-	item := newDDLExecItem(execReq)
-	err := s.ddlExecInfo.Send(ctx, item)
-	if err != nil {
-		return nil, err
-	}
-	return item.resp, nil
-}
-
 // UpdateFromConfig updates config for `From`
 func (s *Syncer) UpdateFromConfig(cfg *config.SubTaskConfig) error {
 	s.Lock()
@@ -2477,4 +2388,14 @@ func (s *Syncer) setSyncCfg() {
 		VerifyChecksum:          true,
 		TimestampStringLocation: s.timezone,
 	}
+}
+
+// ShardDDLInfo returns the current pending to handle shard DDL info.
+func (s *Syncer) ShardDDLInfo() *pessimism.Info {
+	return s.pessimist.PendingInfo()
+}
+
+// ShardDDLOperation returns the current pending to handle shard DDL lock operation.
+func (s *Syncer) ShardDDLOperation() *pessimism.Operation {
+	return s.pessimist.PendingOperation()
 }

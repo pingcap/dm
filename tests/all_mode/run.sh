@@ -50,7 +50,7 @@ function run() {
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
-    sleep 5
+    sleep 10
     echo "after restart dm-worker, task should resume automatically"
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $cur/conf/dm-task.yaml" \

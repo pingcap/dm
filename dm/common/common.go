@@ -39,6 +39,13 @@ var (
 	// UpstreamSubTaskKeyAdapter used to store SubTask which are subscribing data from MySQL source.
 	// k/v: Encode(source-id, task-name) -> SubTaskConfig
 	UpstreamSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/upstream/subtask/")
+
+	// ShardDDLPessimismInfoKeyAdapter used to store shard DDL info in pessimistic model.
+	// k/v: Encode(task-name, source-id) -> shard DDL info
+	ShardDDLPessimismInfoKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-pessimism/info/")
+	// ShardDDLPessimismOperationKeyAdapter used to store shard DDL lock in pessimistic model.
+	// k/v: Encode(task-name, source-id) -> shard DDL operation
+	ShardDDLPessimismOperationKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/shardddl-pessimism/operation/")
 )
 
 func keyAdapterKeysLen(s KeyAdapter) int {
