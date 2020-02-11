@@ -1,4 +1,4 @@
-// Copyright 2019 PingCAP, Inc.
+// Copyright 2020 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,8 +52,8 @@ func (i WorkerInfo) toJSON() (string, error) {
 	return string(data), nil
 }
 
-// infoFromJSON constructs Info from its JSON represent.
-func infoFromJSON(s string) (i WorkerInfo, err error) {
+// workerInfoFromJSON constructs WorkerInfo from its JSON represent.
+func workerInfoFromJSON(s string) (i WorkerInfo, err error) {
 	err = json.Unmarshal([]byte(s), &i)
 	return
 }
@@ -90,7 +90,7 @@ func GetAllWorkerInfo(cli *clientv3.Client) (map[string]WorkerInfo, int64, error
 
 	ifm := make(map[string]WorkerInfo)
 	for _, kv := range resp.Kvs {
-		info, err2 := infoFromJSON(string(kv.Value))
+		info, err2 := workerInfoFromJSON(string(kv.Value))
 		if err2 != nil {
 			return nil, 0, err2
 		}
