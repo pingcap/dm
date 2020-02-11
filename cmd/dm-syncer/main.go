@@ -36,13 +36,15 @@ func main() {
 	// 1. init conf
 	commonConfig := newCommonConfig()
 	conf, err := commonConfig.parse(os.Args[1:])
-	switch errors.Cause(err) {
-	case nil:
-	case flag.ErrHelp:
-		os.Exit(0)
-	default:
-		log.L().Error("parse cmd flags err " + err.Error())
-		os.Exit(2)
+	if err != nil {
+		switch errors.Cause(err) {
+		case nil:
+		case flag.ErrHelp:
+			os.Exit(0)
+		default:
+			fmt.Printf("parse cmd flags err %s", err.Error())
+			os.Exit(2)
+		}
 	}
 
 	conf.Mode = config.ModeIncrement
@@ -63,7 +65,13 @@ func main() {
 		log.L().Info("", zap.Stringer("dm-syncer conf", conf))
 	})
 
-	sync := syncer.NewSyncer(conf)
+	conf2, err := conf.DecryptPassword()
+	if err != nil {
+		log.L().Error("decrypt password failed", zap.Error(err))
+		os.Exit(2)
+	}
+
+	sync := syncer.NewSyncer(conf2)
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
