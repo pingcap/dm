@@ -28,7 +28,7 @@ import (
 var (
 	defaultKeepAliveTTL = int64(3)
 	revokeLeaseTimeout  = time.Second
-	timeLayout          = "2006-01-02 15:04:05.999999999 -0700 MST"
+	timeLayout          = "2006-01-02 15:04:05.999999999"
 )
 
 type workerEvent struct {
@@ -40,37 +40,36 @@ type workerEvent struct {
 // KeepAlive puts the join time of the workerName into etcd.
 // this key will be kept in etcd until the worker is blocked or failed
 // k/v: workerName -> join time.
-// returns shouldExit, error. When keepalive quited because the outside context is canceled, will return true
 // TODO: fetch the actual master endpoints, the master member maybe changed.
-func KeepAlive(cli *clientv3.Client, ctx context.Context, workerName string) (bool, error) {
+func KeepAlive(cli *clientv3.Client, ctx context.Context, workerName string) error {
 	cliCtx, cancel := context.WithTimeout(ctx, revokeLeaseTimeout)
 	defer cancel()
 	lease, err := cli.Grant(cliCtx, defaultKeepAliveTTL)
 	if err != nil {
-		return false, err
+		return err
 	}
 	k := common.WorkerKeepAliveKeyAdapter.Encode(workerName)
-	_, err = cli.Put(cliCtx, k, time.Now().String(), clientv3.WithLease(lease.ID))
+	_, err = cli.Put(cliCtx, k, time.Now().Format(timeLayout), clientv3.WithLease(lease.ID))
 	if err != nil {
-		return false, err
+		return err
 	}
 	ch, err := cli.KeepAlive(ctx, lease.ID)
 	if err != nil {
-		return false, err
+		return err
 	}
 	for {
 		select {
 		case _, ok := <-ch:
 			if !ok {
 				log.L().Info("keep alive channel is closed")
-				return false, nil
+				return nil
 			}
 		case <-ctx.Done():
 			log.L().Info("server is closing, exits keepalive")
-			ctx, cancel := context.WithTimeout(ctx, revokeLeaseTimeout)
+			ctx, cancel := context.WithTimeout(cli.Ctx(), revokeLeaseTimeout)
 			defer cancel()
-			cli.Revoke(ctx, lease.ID)
-			return true, nil
+			_, err := cli.Revoke(ctx, lease.ID)
+			return err
 		}
 	}
 }
@@ -81,7 +80,6 @@ func WatchWorkerEvent(cli *clientv3.Client, ctx context.Context, rev int64, evCh
 	watcher := clientv3.NewWatcher(cli)
 	ch := watcher.Watch(ctx, common.WorkerKeepAliveKeyAdapter.Path(), clientv3.WithPrefix(), clientv3.WithRev(rev))
 
-	log.L().Info("startWatching")
 	for {
 		select {
 		case wresp := <-ch:
