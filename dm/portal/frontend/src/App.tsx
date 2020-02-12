@@ -1,4 +1,5 @@
 import React, { useState, createContext } from 'react'
+
 import StartStep from './components/StartStep'
 import NamingStep from './components/NamingStep'
 import InstancesStep from './components/InstancesStep'
@@ -114,4 +115,4 @@ function App() {
   )
 }
 
-export default (process.env.NODE_ENV === 'development' ? hot(App) : App)
+export default process.env.NODE_ENV === 'development' ? hot(App) : App

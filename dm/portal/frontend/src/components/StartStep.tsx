@@ -1,6 +1,7 @@
 import React from 'react'
 import { Button } from 'antd'
 import styled from 'styled-components'
+import { FormattedMessage } from 'react-intl'
 
 const Container = styled.div`
   display: flex;
@@ -25,8 +26,12 @@ type Props = {
 function StartStep(props: Props) {
   return (
     <Container>
-      <h1>DM 任务配置生成</h1>
-      <Button onClick={() => props.onNewRule()}>新建任务配置</Button>
+      <h1>
+        <FormattedMessage id="dm_task_config_generator" />
+      </h1>
+      <Button onClick={() => props.onNewRule()}>
+        <FormattedMessage id="new_task_config" />
+      </Button>
       {/* 编辑功能目前看没有使用场景，先隐藏，后续再移除 */}
       {/* <Button onClick={() => props.onEditRule()}>编辑任务配置</Button> */}
     </Container>
