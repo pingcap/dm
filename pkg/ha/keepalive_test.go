@@ -29,8 +29,9 @@ var keepAliveTTL = int64(0)
 
 func (t *testForEtcd) TestWorkerKeepAlive(c *C) {
 	defer clearTestInfoOperation(c)
-	rev, err := GetKeepAliveRev(etcdTestCli)
+	wwm, rev, err := GetKeepAliveWorkers(etcdTestCli)
 	c.Assert(err, IsNil)
+	c.Assert(wwm, HasLen, 0)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

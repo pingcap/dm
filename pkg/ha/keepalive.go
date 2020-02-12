@@ -125,14 +125,33 @@ func WatchWorkerEvent(ctx context.Context, cli *clientv3.Client, rev int64, evCh
 	}
 }
 
-// GetKeepAliveRev gets current revision of keepalive
-func GetKeepAliveRev(cli *clientv3.Client) (int64, error) {
+// GetKeepAliveWorkers gets current alive workers,
+// and returns a map{workerName: WorkerEvent}, revision and error
+func GetKeepAliveWorkers(cli *clientv3.Client) (map[string]WorkerEvent, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
 
-	resp, err := cli.Get(ctx, common.WorkerKeepAliveKeyAdapter.Path())
+	var wwm map[string]WorkerEvent
+	resp, err := cli.Get(ctx, common.WorkerKeepAliveKeyAdapter.Path(), clientv3.WithPrefix())
 	if err != nil {
-		return 0, err
+		return wwm, 0, err
 	}
-	return resp.Header.Revision, nil
+
+	wwm = make(map[string]WorkerEvent, len(resp.Kvs))
+	for _, kv := range resp.Kvs {
+		keys, err := common.WorkerKeepAliveKeyAdapter.Decode(string(kv.Key))
+		if err != nil {
+			return wwm, 0, err
+		}
+		workerName := keys[0]
+		joinTime, err := time.Parse(timeLayout, string(kv.Value))
+		if err != nil {
+			return wwm, 0, err
+		}
+		wwm[workerName] = WorkerEvent{
+			WorkerName: workerName,
+			JoinTime:   joinTime,
+		}
+	}
+	return wwm, resp.Header.Revision, nil
 }
