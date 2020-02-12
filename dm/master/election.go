@@ -16,8 +16,16 @@ package master
 import (
 	"context"
 	"go.uber.org/zap"
+	"time"
 
+	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/log"
+
+	"google.golang.org/grpc"
+)
+
+const (
+	oneselfLeader = "oneself"
 )
 
 func (s *Server) electionNotify(ctx context.Context) {
@@ -37,14 +45,21 @@ func (s *Server) electionNotify(ctx context.Context) {
 					log.L().Error("recover subtask infos from coordinator fail", zap.Error(err))
 				}
 
+				s.Lock()
+				s.leader = oneselfLeader
+				s.Unlock()
 			} else {
-				_, leaderID, err2 := s.election.LeaderInfo(ctx)
+				leader, leaderID, err2 := s.election.LeaderInfo(ctx)
 				if err2 == nil {
 					log.L().Info("current member retire from the leader", zap.String("leader", leaderID), zap.String("current member", s.cfg.Name))
 				} else {
 					log.L().Warn("get leader info", zap.Error(err2))
 				}
 				s.coordinator.Stop()
+				s.Lock()
+				s.leader = leader
+				s.createLeaderClient(leader)
+				s.Unlock()
 			}
 		case err := <-s.election.ErrorNotify():
 			// handle errors here, we do no meaningful things now.
@@ -54,4 +69,34 @@ func (s *Server) electionNotify(ctx context.Context) {
 			log.L().Error("receive error from election", zap.Error(err))
 		}
 	}
+}
+
+func (s *Server) createLeaderClient(leaderAddr string) {
+	s.Lock()
+	if s.leaderGrpcConn != nil {
+		s.leaderGrpcConn.Close()
+		s.leaderGrpcConn = nil
+	}
+	s.Unlock()
+
+	conn, err := grpc.Dial(leaderAddr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
+	if err != nil {
+		log.L().Error("can't create grpc connection with leader, can't forward request to leader", zap.String("leader", leaderAddr))
+		return
+	}
+	s.Lock()
+	s.leaderGrpcConn = conn
+	s.leaderClient = pb.NewMasterClient(conn)
+	s.Unlock()
+}
+
+func (s *Server) isLeaderAndNeedForward() (isLeader bool, needForward bool) {
+	s.RLock()
+	defer s.RUnlock()
+	isLeader = (s.leader == oneselfLeader)
+	needForward = (s.leaderGrpcConn != nil)
+	if !isLeader && !needForward {
+		log.L().Error("this master is not leader, but can't forward request to leader")
+	}
+	return
 }
