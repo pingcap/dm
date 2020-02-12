@@ -39,6 +39,12 @@ var (
 	// UpstreamSubTaskKeyAdapter used to store SubTask which are subscribing data from MySQL source.
 	// k/v: Encode(source-id, task-name) -> SubTaskConfig
 	UpstreamSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/upstream/subtask/")
+	// StageRelayKeyAdapter used to store the running stage of the relay.
+	// k/v: Encode(source-id) -> the running stage of the relay.
+	StageRelayKeyAdapter KeyAdapter = keyEncoderDecoder("/dm-master/stage/relay/")
+	// StageSubTaskKeyAdapter used to store the running stage of the subtask.
+	// k/v: Encode(source-id, task-name) -> the running stage of the subtask.
+	StageSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/stage/subtask/")
 
 	// ShardDDLPessimismInfoKeyAdapter used to store shard DDL info in pessimistic model.
 	// k/v: Encode(task-name, source-id) -> shard DDL info
@@ -50,9 +56,10 @@ var (
 
 func keyAdapterKeysLen(s KeyAdapter) int {
 	switch s {
-	case WorkerRegisterKeyAdapter, UpstreamConfigKeyAdapter, UpstreamBoundWorkerKeyAdapter, WorkerKeepAliveKeyAdapter:
+	case WorkerRegisterKeyAdapter, UpstreamConfigKeyAdapter, UpstreamBoundWorkerKeyAdapter,
+		WorkerKeepAliveKeyAdapter, StageRelayKeyAdapter:
 		return 1
-	case UpstreamSubTaskKeyAdapter:
+	case UpstreamSubTaskKeyAdapter, StageSubTaskKeyAdapter:
 		return 2
 	}
 	return -1

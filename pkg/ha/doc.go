@@ -23,7 +23,7 @@ package ha
 //       - DELETE with `the expectant stage of the relay` in one txn.
 //       - DELETE with `the bound relationship between the DM-worker instance and the upstream MySQL source` in one txn.
 //     - TODO: UPDATE support with `the expectant stage of the relay`.
-//   - the data migration task config (content of `TaskConfig`):
+//   - the data migration subtask config (content of `SubTaskConfig`):
 //     - PUT when starting a task (`start-task`) by DM-master.
 //       - verify the validation before PUT it into etcd.
 //       - PUT with `the expectant stage of the subtask` in one txn.
@@ -51,14 +51,14 @@ package ha
 //   - the bound relationship between the DM-worker instance and the upstream MySQL source (including relevant relay and subtasks):
 //     - PUT when scheduling the source to a DM-worker instance by DM-master.
 //       - PUT with `the expectant stage of the relay` in one txn for the first time.
-//     - GET (through WATCH) by DM-worker to know relevant relay/subtasks have to do.
+//     - GET (through GET/WATCH) by DM-worker to know relevant relay/subtasks have to do.
 //     - DELETE when removing an upstream by DM-master.
 //       - DELETE with `the upstream MySQL config` in one txn.
 //       - DELETE with `the expectant stage of the relay` in one txn.
 //     - UPDATE when scheduling the source to another DM-worker instance by DM-master.
 //   - the expectant stage of the relay:
 //     - PUT when scheduling the source to a DM-worker instance by DM-master.
-//       - PUT with `the bound relationship between the DM-worker instance and the upstream MySQL source` in one txn.
+//       - PUT with `the bound relationship between the DM-worker instance and the upstream MySQL source` in one txn for the first time.
 //     - GET (through GET/WATCH) by DM-worker to know how to update the current stage.
 //     - UPDATE when handling the user request (pause-relay/resume-relay) by DM-master.
 //     - DELETE when removing an upstream by DM-master.
