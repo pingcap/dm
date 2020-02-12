@@ -28,7 +28,7 @@ var (
 	// k/v: Encode(name) -> the information of the DM-worker node.
 	WorkerRegisterKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-worker/r/")
 	// WorkerKeepAliveKeyAdapter used to encode and decode keepalive key.
-	// k/v: Encode(addr,name) -> time
+	// k/v: Encode(name) -> time
 	WorkerKeepAliveKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-worker/a/")
 	// UpstreamConfigKeyAdapter store all config of which MySQL-task has not stopped.
 	// k/v: Encode(source-id) -> config
@@ -57,10 +57,9 @@ var (
 func keyAdapterKeysLen(s KeyAdapter) int {
 	switch s {
 	case WorkerRegisterKeyAdapter, UpstreamConfigKeyAdapter, UpstreamBoundWorkerKeyAdapter,
-		StageRelayKeyAdapter:
+		WorkerKeepAliveKeyAdapter, StageRelayKeyAdapter:
 		return 1
-	case WorkerKeepAliveKeyAdapter, UpstreamSubTaskKeyAdapter,
-		StageSubTaskKeyAdapter:
+	case UpstreamSubTaskKeyAdapter, StageSubTaskKeyAdapter:
 		return 2
 	}
 	return -1
