@@ -37,7 +37,7 @@ func (t *testForEtcd) TestSubTaskEtcd(c *C) {
 	taskName2 := taskName1 + "2"
 	cfg2 := cfg1
 	cfg2.Name = taskName2
-	err := cfg2.Adjust()
+	err := cfg2.Adjust(true)
 	c.Assert(err, IsNil)
 
 	// no subtask config exist.

@@ -44,10 +44,10 @@ func (t *testForEtcd) TestOpsEtcd(c *C) {
 	c.Assert(subtaskCfg1.DecodeFile(subTaskSampleFile), IsNil)
 	subtaskCfg1.SourceID = source
 	subtaskCfg1.Name = task1
-	c.Assert(subtaskCfg1.Adjust(), IsNil)
+	c.Assert(subtaskCfg1.Adjust(true), IsNil)
 	subtaskCfg2 := subtaskCfg1
 	subtaskCfg2.Name = task2
-	c.Assert(subtaskCfg2.Adjust(), IsNil)
+	c.Assert(subtaskCfg2.Adjust(true), IsNil)
 
 	// put relay stage and source bound.
 	rev1, err := PutRelayStageSourceBound(etcdTestCli, relayStage, bound)
