@@ -63,13 +63,7 @@ func main() {
 		log.L().Info("", zap.Stringer("dm-syncer conf", conf))
 	})
 
-	conf2, err := conf.DecryptPassword()
-	if err != nil {
-		log.L().Error("decrypt password failed", zap.Error(err))
-		os.Exit(2)
-	}
-
-	sync := syncer.NewSyncer(conf2)
+	sync := syncer.NewSyncer(conf)
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
