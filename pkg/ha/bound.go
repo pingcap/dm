@@ -74,14 +74,7 @@ func PutSourceBound(cli *clientv3.Client, bound SourceBound) (int64, error) {
 		return 0, err
 	}
 
-	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
-	defer cancel()
-
-	resp, err := cli.Txn(ctx).Then(op).Commit()
-	if err != nil {
-		return 0, err
-	}
-	return resp.Header.Revision, nil
+	return etcdutil.DoOpsInOneTxn(cli, op)
 }
 
 // GetSourceBound gets the source bound relationship for the specified DM-worker.

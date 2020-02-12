@@ -86,7 +86,7 @@ func PutRelayStage(cli *clientv3.Client, stages ...Stage) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return putStage(cli, ops...)
+	return etcdutil.DoOpsInOneTxn(cli, ops...)
 }
 
 // PutSubTaskStage puts the stage of the subtask into etcd.
@@ -96,7 +96,7 @@ func PutSubTaskStage(cli *clientv3.Client, stages ...Stage) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return putStage(cli, ops...)
+	return etcdutil.DoOpsInOneTxn(cli, ops...)
 }
 
 // GetRelayStage gets the relay stage for the specified upstream source.
@@ -185,15 +185,8 @@ func WatchSubTaskStage(ctx context.Context, cli *clientv3.Client,
 
 // DeleteSubTaskStage deletes the subtask stage.
 func DeleteSubTaskStage(cli *clientv3.Client, stages ...Stage) (int64, error) {
-	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
-	defer cancel()
-
 	ops := deleteSubTaskStageOp(stages...)
-	resp, err := cli.Txn(ctx).Then(ops...).Commit()
-	if err != nil {
-		return 0, err
-	}
-	return resp.Header.Revision, nil
+	return etcdutil.DoOpsInOneTxn(cli, ops...)
 }
 
 // relayStageFromKey constructs an incomplete relay stage from an etcd key.
@@ -271,18 +264,6 @@ func watchStage(ctx context.Context, watchCh clientv3.WatchChan,
 			}
 		}
 	}
-}
-
-// putStage puts stages into etcd.
-func putStage(cli *clientv3.Client, ops ...clientv3.Op) (int64, error) {
-	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
-	defer cancel()
-
-	resp, err := cli.Txn(ctx).Then(ops...).Commit()
-	if err != nil {
-		return 0, err
-	}
-	return resp.Header.Revision, nil
 }
 
 // putRelayStageOp returns a list of PUT etcd operation for the relay stage.
