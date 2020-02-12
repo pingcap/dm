@@ -73,19 +73,13 @@ func GetSubTaskCfg(cli *clientv3.Client, source, taskName string) (map[string]co
 	}
 
 	for _, kvs := range resp.Kvs {
-		keys, err := common.UpstreamSubTaskKeyAdapter.Decode(string(kvs.Key))
-		if err != nil {
-			return tsm, 0, err
-		}
-		taskName := keys[1]
-
 		cfg := config.SubTaskConfig{}
 		err = cfg.Decode(string(kvs.Value))
 		if err != nil {
 			return tsm, 0, err
 		}
 
-		tsm[taskName] = cfg
+		tsm[cfg.Name] = cfg
 	}
 
 	return tsm, resp.Header.Revision, nil

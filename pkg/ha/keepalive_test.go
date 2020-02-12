@@ -25,6 +25,8 @@ import (
 	"go.etcd.io/etcd/mvcc/mvccpb"
 )
 
+var keepAliveTTL = int64(0)
+
 func (t *testForEtcd) TestWorkerKeepAlive(c *C) {
 	defer clearTestInfoOperation(c)
 	rev, err := GetKeepAliveRev(etcdTestCli)
@@ -34,7 +36,7 @@ func (t *testForEtcd) TestWorkerKeepAlive(c *C) {
 	defer cancel()
 
 	timeout := 200 * time.Millisecond
-	evCh := make(chan workerEvent, 10)
+	evCh := make(chan WorkerEvent, 10)
 	errCh := make(chan error, 10)
 	closed := make(chan struct{})
 	finished := int32(0)
@@ -42,13 +44,6 @@ func (t *testForEtcd) TestWorkerKeepAlive(c *C) {
 	go func() {
 		WatchWorkerEvent(ctx, etcdTestCli, rev, evCh, errCh)
 		close(closed)
-	}()
-	go func() {
-		select {
-		case <-ctx.Done():
-		case err1 := <-errCh:
-			c.Fatal(err1)
-		}
 	}()
 
 	cancels := make([]context.CancelFunc, 0, 5)
@@ -58,16 +53,16 @@ func (t *testForEtcd) TestWorkerKeepAlive(c *C) {
 		ctx1, cancel1 := context.WithCancel(ctx)
 		cancels = append(cancels, cancel1)
 		go func(ctx context.Context) {
-			err1 := KeepAlive(ctx, etcdTestCli, worker)
+			err1 := KeepAlive(ctx, etcdTestCli, worker, keepAliveTTL)
 			c.Assert(err1, IsNil)
 			atomic.AddInt32(&finished, 1)
 		}(ctx1)
 
 		select {
 		case ev := <-evCh:
-			c.Assert(ev.eventType, Equals, mvccpb.PUT)
-			c.Assert(ev.workerName, Equals, worker)
-			c.Assert(ev.joinTime.After(curTime), IsTrue)
+			c.Assert(ev.EventType, Equals, mvccpb.PUT)
+			c.Assert(ev.WorkerName, Equals, worker)
+			c.Assert(ev.JoinTime.Before(curTime), IsFalse)
 		case <-time.After(timeout):
 			c.Fatal("fail to receive put ev " + strconv.Itoa(i) + " before timeout")
 		}
@@ -78,9 +73,9 @@ func (t *testForEtcd) TestWorkerKeepAlive(c *C) {
 		cancel1()
 		select {
 		case ev := <-evCh:
-			c.Assert(ev.eventType, Equals, mvccpb.DELETE)
-			c.Assert(ev.workerName, Equals, worker)
-		case <-time.After(5 * time.Second):
+			c.Assert(ev.EventType, Equals, mvccpb.DELETE)
+			c.Assert(ev.WorkerName, Equals, worker)
+		case <-time.After(time.Second):
 			c.Fatal("fail to receive delete ev " + strconv.Itoa(i+1) + " before timeout")
 		}
 	}
@@ -96,4 +91,5 @@ func (t *testForEtcd) TestWorkerKeepAlive(c *C) {
 	case <-time.After(timeout):
 		c.Fatal("fail to quit WatchWorkerEvent before timeout")
 	}
+	c.Assert(errCh, HasLen, 0)
 }
