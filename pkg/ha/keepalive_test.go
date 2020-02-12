@@ -22,7 +22,6 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 
 	. "github.com/pingcap/check"
-	"go.etcd.io/etcd/mvcc/mvccpb"
 )
 
 var keepAliveTTL = int64(0)
@@ -61,7 +60,7 @@ func (t *testForEtcd) TestWorkerKeepAlive(c *C) {
 
 		select {
 		case ev := <-evCh:
-			c.Assert(ev.EventType, Equals, mvccpb.PUT)
+			c.Assert(ev.IsDeleted, IsFalse)
 			c.Assert(ev.WorkerName, Equals, worker)
 			c.Assert(ev.JoinTime.Before(curTime), IsFalse)
 		case <-time.After(timeout):
@@ -74,7 +73,7 @@ func (t *testForEtcd) TestWorkerKeepAlive(c *C) {
 		cancel1()
 		select {
 		case ev := <-evCh:
-			c.Assert(ev.EventType, Equals, mvccpb.DELETE)
+			c.Assert(ev.IsDeleted, IsTrue)
 			c.Assert(ev.WorkerName, Equals, worker)
 		case <-time.After(time.Second):
 			c.Fatal("fail to receive delete ev " + strconv.Itoa(i+1) + " before timeout")

@@ -15,6 +15,7 @@ package ha
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"go.etcd.io/etcd/clientv3"
@@ -26,15 +27,45 @@ import (
 	"github.com/pingcap/dm/pkg/log"
 )
 
-var (
-	timeLayout = "2006-01-02 15:04:05.999999999"
-)
-
 // WorkerEvent represents the PUT/DELETE keepalive event of DM-worker.
 type WorkerEvent struct {
-	EventType  mvccpb.Event_EventType
-	WorkerName string
-	JoinTime   time.Time
+	WorkerName string    `json:"workerName"` // the worker name of the worker.
+	JoinTime   time.Time `json:"joinTime"`   // the time when worker start to keepalive with etcd
+
+	// only used to report to the caller of the watcher, do not marsh it.
+	// if it's true, it means the worker has been deleted in etcd.
+	IsDeleted bool `json:"-"`
+}
+
+// String implements Stringer interface.
+func (w WorkerEvent) String() string {
+	str, _ := w.toJSON()
+	return str
+}
+
+// toJSON returns the string of JSON represent.
+func (w WorkerEvent) toJSON() (string, error) {
+	data, err := json.Marshal(w)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+// workerEventFromJSON constructs WorkerEvent from its JSON represent.
+func workerEventFromJSON(s string) (w WorkerEvent, err error) {
+	err = json.Unmarshal([]byte(s), &w)
+	return
+}
+
+func workerEventFromKey(key string) (WorkerEvent, error) {
+	var w WorkerEvent
+	ks, err := common.WorkerKeepAliveKeyAdapter.Decode(key)
+	if err != nil {
+		return w, err
+	}
+	w.WorkerName = ks[0]
+	return w, nil
 }
 
 // KeepAlive puts the join time of the workerName into etcd.
@@ -49,7 +80,14 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 		return err
 	}
 	k := common.WorkerKeepAliveKeyAdapter.Encode(workerName)
-	_, err = cli.Put(cliCtx, k, time.Now().Format(timeLayout), clientv3.WithLease(lease.ID))
+	workerEventJSON, err := WorkerEvent{
+		WorkerName: workerName,
+		JoinTime:   time.Now(),
+	}.toJSON()
+	if err != nil {
+		return err
+	}
+	_, err = cli.Put(cliCtx, k, workerEventJSON, clientv3.WithLease(lease.ID))
 	if err != nil {
 		return err
 	}
@@ -76,51 +114,55 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 
 // WatchWorkerEvent watches the online and offline of workers from etcd.
 // this function will output the worker event to evCh, output the error to errCh
-func WatchWorkerEvent(ctx context.Context, cli *clientv3.Client, rev int64, evCh chan<- WorkerEvent, errCh chan<- error) {
+func WatchWorkerEvent(ctx context.Context, cli *clientv3.Client, rev int64, outCh chan<- WorkerEvent, errCh chan<- error) {
 	watcher := clientv3.NewWatcher(cli)
 	ch := watcher.Watch(ctx, common.WorkerKeepAliveKeyAdapter.Path(), clientv3.WithPrefix(), clientv3.WithRev(rev))
 
 	for {
 		select {
-		case wresp := <-ch:
-			if wresp.Canceled {
+		case <-ctx.Done():
+			log.L().Info("watch keepalive worker quit due to context canceled")
+			return
+		case resp := <-ch:
+			if resp.Canceled {
 				select {
-				case errCh <- wresp.Err():
+				case errCh <- resp.Err():
 				case <-ctx.Done():
 				}
 				return
 			}
 
-			for _, ev := range wresp.Events {
+			for _, ev := range resp.Events {
 				log.L().Info("receive dm-worker keep alive event", zap.String("operation", ev.Type.String()), zap.String("kv", string(ev.Kv.Key)))
-				kvs, err := common.WorkerKeepAliveKeyAdapter.Decode(string(ev.Kv.Key))
-				if err != nil {
-					log.L().Warn("fail to decode dm-worker keep alive event key", zap.String("key", string(ev.Kv.Key)), zap.Error(err))
+				var (
+					event WorkerEvent
+					err   error
+				)
+				switch ev.Type {
+				case mvccpb.PUT:
+					event, err = workerEventFromJSON(string(ev.Kv.Value))
+				case mvccpb.DELETE:
+					event, err = workerEventFromKey(string(ev.Kv.Key))
+					event.IsDeleted = true
+				default:
+					// this should not happen.
+					log.L().Error("unsupported etcd event type", zap.Reflect("kv", ev.Kv), zap.Reflect("type", ev.Type))
 					continue
 				}
-				name := kvs[0]
-				workerEv := WorkerEvent{
-					EventType:  ev.Type,
-					WorkerName: name,
-				}
-				if ev.Type == mvccpb.PUT {
-					joinTime := string(ev.Kv.Value)
-					workerEv.JoinTime, err = time.Parse(timeLayout, joinTime)
-					if err != nil {
-						log.L().Warn("invalid joinTime format. This etcd key might have been used by other process", zap.String("joinTime", joinTime))
-						continue
+				if err != nil {
+					select {
+					case errCh <- err:
+					case <-ctx.Done():
+						return
+					}
+				} else {
+					select {
+					case outCh <- event:
+					case <-ctx.Done():
+						return
 					}
 				}
-				select {
-				case evCh <- workerEv:
-				case <-ctx.Done():
-					log.L().Info("watch keepalive worker quit due to context canceled")
-					return
-				}
 			}
-		case <-ctx.Done():
-			log.L().Info("watch keepalive worker quit due to context canceled")
-			return
 		}
 	}
 }
@@ -139,19 +181,11 @@ func GetKeepAliveWorkers(cli *clientv3.Client) (map[string]WorkerEvent, int64, e
 
 	wwm = make(map[string]WorkerEvent, len(resp.Kvs))
 	for _, kv := range resp.Kvs {
-		keys, err := common.WorkerKeepAliveKeyAdapter.Decode(string(kv.Key))
+		w, err := workerEventFromJSON(string(kv.Value))
 		if err != nil {
 			return wwm, 0, err
 		}
-		workerName := keys[0]
-		joinTime, err := time.Parse(timeLayout, string(kv.Value))
-		if err != nil {
-			return wwm, 0, err
-		}
-		wwm[workerName] = WorkerEvent{
-			WorkerName: workerName,
-			JoinTime:   joinTime,
-		}
+		wwm[w.WorkerName] = w
 	}
 	return wwm, resp.Header.Revision, nil
 }
