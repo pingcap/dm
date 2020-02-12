@@ -41,7 +41,7 @@ type workerEvent struct {
 // this key will be kept in etcd until the worker is blocked or failed
 // k/v: workerName -> join time.
 // TODO: fetch the actual master endpoints, the master member maybe changed.
-func KeepAlive(cli *clientv3.Client, ctx context.Context, workerName string) error {
+func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string) error {
 	cliCtx, cancel := context.WithTimeout(ctx, revokeLeaseTimeout)
 	defer cancel()
 	lease, err := cli.Grant(cliCtx, defaultKeepAliveTTL)

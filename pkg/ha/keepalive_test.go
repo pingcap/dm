@@ -51,7 +51,7 @@ func (t *testForEtcd) TestWorkerKeepAlive(c *C) {
 		ctx1, cancel1 := context.WithCancel(ctx)
 		cancels = append(cancels, cancel1)
 		go func(ctx context.Context) {
-			err1 := KeepAlive(etcdTestCli, ctx, worker)
+			err1 := KeepAlive(ctx, etcdTestCli, worker)
 			c.Assert(err1, IsNil)
 			atomic.AddInt32(&finished, 1)
 		}(ctx1)
