@@ -39,7 +39,7 @@ func (t *testForEtcd) TestWorkerKeepAlive(c *C) {
 	finished := int32(0)
 
 	go func() {
-		err1 := WatchWorkerEvent(etcdTestCli, ctx, rev, evCh)
+		err1 := WatchWorkerEvent(ctx, etcdTestCli, rev, evCh)
 		c.Assert(err1, IsNil)
 		close(closed)
 	}()

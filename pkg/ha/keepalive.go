@@ -76,7 +76,7 @@ func KeepAlive(cli *clientv3.Client, ctx context.Context, workerName string) err
 
 // WatchWorkerEvent watches the online and offline of workers from etcd.
 // this function will output the worker event to evCh
-func WatchWorkerEvent(cli *clientv3.Client, ctx context.Context, rev int64, evCh chan<- workerEvent) error {
+func WatchWorkerEvent(ctx context.Context, cli *clientv3.Client, rev int64, evCh chan<- workerEvent) error {
 	watcher := clientv3.NewWatcher(cli)
 	ch := watcher.Watch(ctx, common.WorkerKeepAliveKeyAdapter.Path(), clientv3.WithPrefix(), clientv3.WithRev(rev))
 
