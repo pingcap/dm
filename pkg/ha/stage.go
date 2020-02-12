@@ -34,7 +34,7 @@ type Stage struct {
 	Source string   `json:"source"`         // the source ID of the upstream.
 	Task   string   `json:"task,omitempty"` // the task name for subtask; empty for relay.
 
-	// only used to report the caller of the watcher, do not marsh it.
+	// only used to report to the caller of the watcher, do not marsh it.
 	// if it's true, it means the stage has been deleted in etcd.
 	IsDeleted bool `json:"-"`
 }
@@ -170,36 +170,17 @@ func GetSubTaskStage(cli *clientv3.Client, source, task string) (map[string]Stag
 // WatchRelayStage watches PUT & DELETE operations for the relay stage.
 // for the DELETE stage, it returns an empty stage.
 func WatchRelayStage(ctx context.Context, cli *clientv3.Client,
-	source string, revision int64, outCh chan<- Stage) {
-	stageFromKey := func(key string) (Stage, error) {
-		var stage Stage
-		ks, err := common.StageRelayKeyAdapter.Decode(key)
-		if err != nil {
-			return stage, err
-		}
-		stage.Source = ks[0]
-		return stage, nil
-	}
+	source string, revision int64, outCh chan<- Stage, errCh chan<- error) {
 	ch := cli.Watch(ctx, common.StageRelayKeyAdapter.Encode(source), clientv3.WithRev(revision))
-	watchStage(ctx, ch, stageFromKey, outCh)
+	watchStage(ctx, ch, relayStageFromKey, outCh, errCh)
 }
 
 // WatchSubTaskStage watches PUT & DELETE operations for the subtask stage.
 // for the DELETE stage, it returns an empty stage.
 func WatchSubTaskStage(ctx context.Context, cli *clientv3.Client,
-	source string, revision int64, outCh chan<- Stage) {
-	stageFromKey := func(key string) (Stage, error) {
-		var stage Stage
-		ks, err := common.StageSubTaskKeyAdapter.Decode(key)
-		if err != nil {
-			return stage, err
-		}
-		stage.Source = ks[0]
-		stage.Task = ks[1]
-		return stage, nil
-	}
+	source string, revision int64, outCh chan<- Stage, errCh chan<- error) {
 	ch := cli.Watch(ctx, common.StageSubTaskKeyAdapter.Encode(source), clientv3.WithPrefix(), clientv3.WithRev(revision))
-	watchStage(ctx, ch, stageFromKey, outCh)
+	watchStage(ctx, ch, subTaskStageFromKey, outCh, errCh)
 }
 
 // DeleteSubTaskStage deletes the subtask stage.
@@ -215,15 +196,45 @@ func DeleteSubTaskStage(cli *clientv3.Client, stages ...Stage) (int64, error) {
 	return resp.Header.Revision, nil
 }
 
+// relayStageFromKey constructs an incomplete relay stage from an etcd key.
+func relayStageFromKey(key string) (Stage, error) {
+	var stage Stage
+	ks, err := common.StageRelayKeyAdapter.Decode(key)
+	if err != nil {
+		return stage, err
+	}
+	stage.Source = ks[0]
+	return stage, nil
+}
+
+// subTaskStageFromKey constructs an incomplete subtask stage from an etcd key.
+func subTaskStageFromKey(key string) (Stage, error) {
+	var stage Stage
+	ks, err := common.StageSubTaskKeyAdapter.Decode(key)
+	if err != nil {
+		return stage, err
+	}
+	stage.Source = ks[0]
+	stage.Task = ks[1]
+	return stage, nil
+}
+
 // watchStage watches PUT & DELETE operations for the stage.
 func watchStage(ctx context.Context, watchCh clientv3.WatchChan,
-	stageFromKey func(key string) (Stage, error), outCh chan<- Stage) {
+	stageFromKey func(key string) (Stage, error), outCh chan<- Stage, errCh chan<- error) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case resp := <-watchCh:
 			if resp.Canceled {
+				// TODO(csuzhangxc): do retry here.
+				if resp.Err() != nil {
+					select {
+					case errCh <- resp.Err():
+					case <-ctx.Done():
+					}
+				}
 				return
 			}
 
@@ -235,18 +246,8 @@ func watchStage(ctx context.Context, watchCh clientv3.WatchChan,
 				switch ev.Type {
 				case mvccpb.PUT:
 					stage, err = stageFromJSON(string(ev.Kv.Value))
-					if err != nil {
-						// this should not happen.
-						log.L().Error("fail to construct stage", zap.ByteString("json", ev.Kv.Value), zap.Error(err))
-						continue
-					}
 				case mvccpb.DELETE:
 					stage, err = stageFromKey(string(ev.Kv.Key))
-					if err != nil {
-						// this should not happen.
-						log.L().Error("fail to decode key", zap.ByteString("key", ev.Kv.Key), zap.Error(err))
-						continue
-					}
 					stage.IsDeleted = true
 				default:
 					// this should not happen.
@@ -254,10 +255,18 @@ func watchStage(ctx context.Context, watchCh clientv3.WatchChan,
 					continue
 				}
 
-				select {
-				case outCh <- stage:
-				case <-ctx.Done():
-					return
+				if err != nil {
+					select {
+					case errCh <- err:
+					case <-ctx.Done():
+						return
+					}
+				} else {
+					select {
+					case outCh <- stage:
+					case <-ctx.Done():
+						return
+					}
 				}
 			}
 		}
