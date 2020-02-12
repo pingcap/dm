@@ -42,7 +42,7 @@ func (t *testForEtcd) TestSourceBoundEtcd(c *C) {
 		emptyBound   = SourceBound{}
 		bound        = NewSourceBound("mysql-replica-1", worker)
 	)
-	c.Assert(bound.NotBound(), IsFalse)
+	c.Assert(bound.IsDeleted, IsFalse)
 
 	// no bound exists.
 	bo1, rev1, err := GetSourceBound(etcdTestCli, worker)
@@ -57,12 +57,15 @@ func (t *testForEtcd) TestSourceBoundEtcd(c *C) {
 
 	// watch the PUT operation for the bound.
 	boundCh := make(chan SourceBound, 10)
+	errCh := make(chan error, 10)
 	ctx, cancel := context.WithTimeout(context.Background(), watchTimeout)
-	WatchSourceBound(ctx, etcdTestCli, worker, rev2, boundCh)
+	WatchSourceBound(ctx, etcdTestCli, worker, rev2, boundCh, errCh)
 	cancel()
 	close(boundCh)
+	close(errCh)
 	c.Assert(len(boundCh), Equals, 1)
 	c.Assert(<-boundCh, DeepEquals, bound)
+	c.Assert(len(errCh), Equals, 0)
 
 	// get the bound back.
 	bo2, rev3, err := GetSourceBound(etcdTestCli, worker)
@@ -79,13 +82,16 @@ func (t *testForEtcd) TestSourceBoundEtcd(c *C) {
 
 	// watch the DELETE operation for the bound.
 	boundCh = make(chan SourceBound, 10)
+	errCh = make(chan error, 10)
 	ctx, cancel = context.WithTimeout(context.Background(), watchTimeout)
-	WatchSourceBound(ctx, etcdTestCli, worker, rev4, boundCh)
+	WatchSourceBound(ctx, etcdTestCli, worker, rev4, boundCh, errCh)
 	cancel()
 	close(boundCh)
+	close(errCh)
 	c.Assert(len(boundCh), Equals, 1)
 	bo3 := <-boundCh
-	c.Assert(bo3.NotBound(), IsTrue)
+	c.Assert(bo3.IsDeleted, IsTrue)
+	c.Assert(len(errCh), Equals, 0)
 
 	// get again, not exists now.
 	bo4, rev5, err := GetSourceBound(etcdTestCli, worker)

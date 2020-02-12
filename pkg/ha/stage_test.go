@@ -72,12 +72,15 @@ func (t *testForEtcd) TestRelayStageEtcd(c *C) {
 
 	// watch the PUT operation for stage1.
 	stageCh := make(chan Stage, 10)
+	errCh := make(chan error, 10)
 	ctx, cancel := context.WithTimeout(context.Background(), watchTimeout)
-	WatchRelayStage(ctx, etcdTestCli, source1, rev2, stageCh)
+	WatchRelayStage(ctx, etcdTestCli, source1, rev2, stageCh, errCh)
 	cancel()
 	close(stageCh)
+	close(errCh)
 	c.Assert(len(stageCh), Equals, 1)
 	c.Assert(<-stageCh, DeepEquals, stage1)
+	c.Assert(len(errCh), Equals, 0)
 
 	// get stage1 back.
 	st2, rev3, err := GetRelayStage(etcdTestCli, source1)
@@ -94,13 +97,16 @@ func (t *testForEtcd) TestRelayStageEtcd(c *C) {
 
 	// watch the DELETE operation for stage1.
 	stageCh = make(chan Stage, 10)
+	errCh = make(chan error, 10)
 	ctx, cancel = context.WithTimeout(context.Background(), watchTimeout)
-	WatchRelayStage(ctx, etcdTestCli, source1, rev4, stageCh)
+	WatchRelayStage(ctx, etcdTestCli, source1, rev4, stageCh, errCh)
 	cancel()
 	close(stageCh)
+	close(errCh)
 	c.Assert(len(stageCh), Equals, 1)
 	st3 := <-stageCh
 	c.Assert(st3.IsDeleted, IsTrue)
+	c.Assert(len(errCh), Equals, 0)
 
 	// get again, not exists now.
 	st4, rev5, err := GetRelayStage(etcdTestCli, source1)
@@ -134,13 +140,16 @@ func (t *testForEtcd) TestSubTaskStageEtcd(c *C) {
 
 	// watch the PUT operation for stages.
 	stageCh := make(chan Stage, 10)
+	errCh := make(chan error, 10)
 	ctx, cancel := context.WithTimeout(context.Background(), watchTimeout)
-	WatchSubTaskStage(ctx, etcdTestCli, source, rev2, stageCh)
+	WatchSubTaskStage(ctx, etcdTestCli, source, rev2, stageCh, errCh)
 	cancel()
 	close(stageCh)
+	close(errCh)
 	c.Assert(len(stageCh), Equals, 2)
 	c.Assert(<-stageCh, DeepEquals, stage1)
 	c.Assert(<-stageCh, DeepEquals, stage2)
+	c.Assert(len(errCh), Equals, 0)
 
 	// get stages back without specified task.
 	stm, rev3, err := GetSubTaskStage(etcdTestCli, source, "")
@@ -164,14 +173,17 @@ func (t *testForEtcd) TestSubTaskStageEtcd(c *C) {
 
 	// watch the DELETE operation for stages.
 	stageCh = make(chan Stage, 10)
+	errCh = make(chan error, 10)
 	ctx, cancel = context.WithTimeout(context.Background(), watchTimeout)
-	WatchSubTaskStage(ctx, etcdTestCli, source, rev4, stageCh)
+	WatchSubTaskStage(ctx, etcdTestCli, source, rev4, stageCh, errCh)
 	cancel()
 	close(stageCh)
+	close(errCh)
 	c.Assert(len(stageCh), Equals, 2)
 	for st2 := range stageCh {
 		c.Assert(st2.IsDeleted, IsTrue)
 	}
+	c.Assert(len(errCh), Equals, 0)
 
 	// get again, not exists now.
 	stm, rev5, err := GetSubTaskStage(etcdTestCli, source, task1)

@@ -31,6 +31,10 @@ import (
 type SourceBound struct {
 	Source string `json:"source"` // the source ID of the upstream.
 	Worker string `json:"worker"` // the name of the bounded DM-worker for the source.
+
+	// only used to report to the caller of the watcher, do not marsh it.
+	// if it's true, it means the bound has been deleted in etcd.
+	IsDeleted bool `json:"-"`
 }
 
 // NewSourceBound creates a new SourceBound instance.
@@ -39,12 +43,6 @@ func NewSourceBound(source, worker string) SourceBound {
 		Source: source,
 		Worker: worker,
 	}
-}
-
-// NotBound returns whether the relationship has not bound.
-// An empty bound means the relationship has not bound.
-func (b SourceBound) NotBound() bool {
-	return b.Source == "" && b.Worker == ""
 }
 
 // String implements Stringer interface.
@@ -76,14 +74,7 @@ func PutSourceBound(cli *clientv3.Client, bound SourceBound) (int64, error) {
 		return 0, err
 	}
 
-	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
-	defer cancel()
-
-	resp, err := cli.Txn(ctx).Then(op).Commit()
-	if err != nil {
-		return 0, err
-	}
-	return resp.Header.Revision, nil
+	return etcdutil.DoOpsInOneTxn(cli, op)
 }
 
 // GetSourceBound gets the source bound relationship for the specified DM-worker.
@@ -116,7 +107,7 @@ func GetSourceBound(cli *clientv3.Client, worker string) (SourceBound, int64, er
 // WatchSourceBound watches PUT & DELETE operations for the bound relationship of the specified DM-worker.
 // For the DELETE operations, it returns an empty bound relationship.
 func WatchSourceBound(ctx context.Context, cli *clientv3.Client,
-	worker string, revision int64, outCh chan<- SourceBound) {
+	worker string, revision int64, outCh chan<- SourceBound, errCh chan<- error) {
 	ch := cli.Watch(ctx, common.UpstreamBoundWorkerKeyAdapter.Encode(worker), clientv3.WithRev(revision))
 
 	for {
@@ -125,6 +116,13 @@ func WatchSourceBound(ctx context.Context, cli *clientv3.Client,
 			return
 		case resp := <-ch:
 			if resp.Canceled {
+				// TODO(csuzhangxc): do retry here.
+				if resp.Err() != nil {
+					select {
+					case errCh <- resp.Err():
+					case <-ctx.Done():
+					}
+				}
 				return
 			}
 
@@ -136,26 +134,42 @@ func WatchSourceBound(ctx context.Context, cli *clientv3.Client,
 				switch ev.Type {
 				case mvccpb.PUT:
 					bound, err = sourceBoundFromJSON(string(ev.Kv.Value))
-					if err != nil {
-						// this should not happen.
-						log.L().Error("fail to construct source bound relationship", zap.ByteString("json", ev.Kv.Value))
-						continue
-					}
 				case mvccpb.DELETE:
+					bound, err = sourceBoundFromKey(string(ev.Kv.Key))
+					bound.IsDeleted = true
 				default:
 					// this should not happen.
 					log.L().Error("unsupported etcd event type", zap.Reflect("kv", ev.Kv), zap.Reflect("type", ev.Type))
 					continue
 				}
 
-				select {
-				case outCh <- bound:
-				case <-ctx.Done():
-					return
+				if err != nil {
+					select {
+					case errCh <- err:
+					case <-ctx.Done():
+						return
+					}
+				} else {
+					select {
+					case outCh <- bound:
+					case <-ctx.Done():
+						return
+					}
 				}
 			}
 		}
 	}
+}
+
+// sourceBoundFromKey constructs an incomplete bound relationship from an etcd key.
+func sourceBoundFromKey(key string) (SourceBound, error) {
+	var bound SourceBound
+	ks, err := common.UpstreamBoundWorkerKeyAdapter.Decode(key)
+	if err != nil {
+		return bound, err
+	}
+	bound.Worker = ks[0]
+	return bound, nil
 }
 
 // deleteSourceBoundOp returns a DELETE ectd operation for the bound relationship of the specified DM-worker.

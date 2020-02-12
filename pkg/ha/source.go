@@ -33,14 +33,7 @@ func PutSourceCfg(cli *clientv3.Client, cfg config.MysqlConfig) (int64, error) {
 	}
 	key := common.UpstreamConfigKeyAdapter.Encode(cfg.SourceID)
 
-	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
-	defer cancel()
-
-	resp, err := cli.Put(ctx, key, value)
-	if err != nil {
-		return 0, err
-	}
-	return resp.Header.Revision, nil
+	return etcdutil.DoOpsInOneTxn(cli, clientv3.OpPut(key, value))
 }
 
 // GetSourceCfg gets the config of the specified source.

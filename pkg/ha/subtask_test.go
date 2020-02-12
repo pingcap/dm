@@ -69,11 +69,11 @@ func (t *testForEtcd) TestSubTaskEtcd(c *C) {
 	c.Assert(tsm3[taskName2], DeepEquals, cfg2)
 
 	// delete the config.
-	deleteOp := deleteSubTaskCfgOp(source, taskName1)
-	_, err = etcdTestCli.Txn(context.Background()).Then(deleteOp).Commit()
+	deleteOps := deleteSubTaskCfgOp(cfg1)
+	_, err = etcdTestCli.Txn(context.Background()).Then(deleteOps...).Commit()
 	c.Assert(err, IsNil)
-	deleteOp = deleteSubTaskCfgOp(source, taskName2)
-	_, err = etcdTestCli.Txn(context.Background()).Then(deleteOp).Commit()
+	deleteOps = deleteSubTaskCfgOp(cfg2)
+	_, err = etcdTestCli.Txn(context.Background()).Then(deleteOps...).Commit()
 	c.Assert(err, IsNil)
 
 	// get again, not exists now.
