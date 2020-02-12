@@ -24,19 +24,17 @@ import (
 	"github.com/pingcap/dm/pkg/etcdutil"
 )
 
-// PutSubTaskCfg puts the subtask config of the specified source and task name into etcd.
+// PutSubTaskCfg puts the subtask configs of the specified source and task name into etcd.
 // k/k/v: sourceID, taskName -> subtask config.
-func PutSubTaskCfg(cli *clientv3.Client, cfg config.SubTaskConfig) (int64, error) {
-	value, err := cfg.Toml()
+func PutSubTaskCfg(cli *clientv3.Client, cfgs ...config.SubTaskConfig) (int64, error) {
+	ops, err := putSubTaskCfgOp(cfgs...)
 	if err != nil {
 		return 0, err
 	}
-	key := common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name)
-
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
 
-	resp, err := cli.Put(ctx, key, value)
+	resp, err := cli.Txn(ctx).Then(ops...).Commit()
 	if err != nil {
 		return 0, err
 	}
@@ -91,6 +89,19 @@ func GetSubTaskCfg(cli *clientv3.Client, source, taskName string) (map[string]co
 	}
 
 	return tsm, resp.Header.Revision, nil
+}
+
+func putSubTaskCfgOp(cfgs ...config.SubTaskConfig) ([]clientv3.Op, error) {
+	ops := make([]clientv3.Op, 0, len(cfgs))
+	for _, cfg := range cfgs {
+		value, err := cfg.Toml()
+		if err != nil {
+			return ops, err
+		}
+		key := common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name)
+		ops = append(ops, clientv3.OpPut(key, value))
+	}
+	return ops, nil
 }
 
 // deleteSubTaskCfgOp returns a DELETE etcd operation for the source config.
