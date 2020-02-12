@@ -24,10 +24,10 @@ import (
 	"github.com/pingcap/dm/pkg/etcdutil"
 )
 
-// PutSubTaskCfg puts the subtask config of the specified source and task name into etcd.
+// PutSubTaskCfg puts the subtask configs of the specified source and task name into etcd.
 // k/k/v: sourceID, taskName -> subtask config.
-func PutSubTaskCfg(cli *clientv3.Client, cfg config.SubTaskConfig) (int64, error) {
-	ops, err := putSubTaskCfgOp(cfg)
+func PutSubTaskCfg(cli *clientv3.Client, cfgs ...config.SubTaskConfig) (int64, error) {
+	ops, err := putSubTaskCfgOp(cfgs...)
 	if err != nil {
 		return 0, err
 	}

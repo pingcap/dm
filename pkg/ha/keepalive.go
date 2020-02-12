@@ -75,8 +75,8 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string) err
 }
 
 // WatchWorkerEvent watches the online and offline of workers from etcd.
-// this function will output the worker event to evCh
-func WatchWorkerEvent(ctx context.Context, cli *clientv3.Client, rev int64, evCh chan<- workerEvent) error {
+// this function will output the worker event to evCh, output the error to errCh
+func WatchWorkerEvent(ctx context.Context, cli *clientv3.Client, rev int64, evCh chan<- workerEvent, errCh chan<- error) {
 	watcher := clientv3.NewWatcher(cli)
 	ch := watcher.Watch(ctx, common.WorkerKeepAliveKeyAdapter.Path(), clientv3.WithPrefix(), clientv3.WithRev(rev))
 
@@ -84,7 +84,8 @@ func WatchWorkerEvent(ctx context.Context, cli *clientv3.Client, rev int64, evCh
 		select {
 		case wresp := <-ch:
 			if wresp.Canceled {
-				return wresp.Err()
+				errCh <- wresp.Err()
+				return
 			}
 
 			for _, ev := range wresp.Events {
@@ -111,12 +112,12 @@ func WatchWorkerEvent(ctx context.Context, cli *clientv3.Client, rev int64, evCh
 				case evCh <- workerEv:
 				case <-ctx.Done():
 					log.L().Info("watch keepalive worker quit due to context canceled")
-					return nil
+					return
 				}
 			}
 		case <-ctx.Done():
 			log.L().Info("watch keepalive worker quit due to context canceled")
-			return nil
+			return
 		}
 	}
 }

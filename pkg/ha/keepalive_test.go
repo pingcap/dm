@@ -35,13 +35,20 @@ func (t *testForEtcd) TestWorkerKeepAlive(c *C) {
 
 	timeout := 200 * time.Millisecond
 	evCh := make(chan workerEvent, 10)
+	errCh := make(chan error, 10)
 	closed := make(chan struct{})
 	finished := int32(0)
 
 	go func() {
-		err1 := WatchWorkerEvent(ctx, etcdTestCli, rev, evCh)
-		c.Assert(err1, IsNil)
+		WatchWorkerEvent(ctx, etcdTestCli, rev, evCh, errCh)
 		close(closed)
+	}()
+	go func() {
+		select {
+		case <-ctx.Done():
+		case err1 := <-errCh:
+			c.Fatal(err1)
+		}
 	}()
 
 	cancels := make([]context.CancelFunc, 0, 5)
