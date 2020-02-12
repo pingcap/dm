@@ -27,20 +27,12 @@ import (
 // PutSubTaskCfg puts the subtask config of the specified source and task name into etcd.
 // k/k/v: sourceID, taskName -> subtask config.
 func PutSubTaskCfg(cli *clientv3.Client, cfg config.SubTaskConfig) (int64, error) {
-	value, err := cfg.Toml()
+	ops, err := putSubTaskCfgOp(cfg)
 	if err != nil {
 		return 0, err
 	}
-	key := common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name)
 
-	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
-	defer cancel()
-
-	resp, err := cli.Put(ctx, key, value)
-	if err != nil {
-		return 0, err
-	}
-	return resp.Header.Revision, nil
+	return etcdutil.DoOpsInOneTxn(cli, ops...)
 }
 
 // GetSubTaskCfg gets the subtask config of the specified source and task name.
@@ -93,7 +85,25 @@ func GetSubTaskCfg(cli *clientv3.Client, source, taskName string) (map[string]co
 	return tsm, resp.Header.Revision, nil
 }
 
-// deleteSubTaskCfgOp returns a DELETE etcd operation for the source config.
-func deleteSubTaskCfgOp(source, taskName string) clientv3.Op {
-	return clientv3.OpDelete(common.UpstreamSubTaskKeyAdapter.Encode(source, taskName))
+// putSubTaskCfgOp returns a PUT etcd operation for the subtask config.
+func putSubTaskCfgOp(cfgs ...config.SubTaskConfig) ([]clientv3.Op, error) {
+	ops := make([]clientv3.Op, 0, len(cfgs))
+	for _, cfg := range cfgs {
+		value, err := cfg.Toml()
+		if err != nil {
+			return ops, err
+		}
+		key := common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name)
+		ops = append(ops, clientv3.OpPut(key, value))
+	}
+	return ops, nil
+}
+
+// deleteSubTaskCfgOp returns a DELETE etcd operation for the subtask config.
+func deleteSubTaskCfgOp(cfgs ...config.SubTaskConfig) []clientv3.Op {
+	ops := make([]clientv3.Op, 0, len(cfgs))
+	for _, cfg := range cfgs {
+		ops = append(ops, clientv3.OpDelete(common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name)))
+	}
+	return ops
 }

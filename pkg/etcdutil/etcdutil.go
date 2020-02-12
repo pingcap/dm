@@ -52,3 +52,15 @@ func AddMember(client *clientv3.Client, peerAddrs []string) (*clientv3.MemberAdd
 	defer cancel()
 	return client.MemberAdd(ctx, peerAddrs)
 }
+
+// DoOpsInOneTxn do multiple etcd operations in one txn.
+func DoOpsInOneTxn(cli *clientv3.Client, ops ...clientv3.Op) (int64, error) {
+	ctx, cancel := context.WithTimeout(cli.Ctx(), DefaultRequestTimeout)
+	defer cancel()
+
+	resp, err := cli.Txn(ctx).Then(ops...).Commit()
+	if err != nil {
+		return 0, err
+	}
+	return resp.Header.Revision, nil
+}
