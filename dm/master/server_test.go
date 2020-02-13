@@ -1056,11 +1056,13 @@ func (t *testMaster) TestOperateMysqlWorker(c *check.C) {
 	cfg1.Name = "dm-master-1"
 	cfg1.DataDir = c.MkDir()
 	cfg1.MasterAddr = tempurl.Alloc()[len("http://"):]
+	cfg1.AdvertiseAddr = tempurl.Alloc()[len("http://"):]
 	cfg1.PeerUrls = tempurl.Alloc()
 	cfg1.AdvertisePeerUrls = cfg1.PeerUrls
 	cfg1.InitialCluster = fmt.Sprintf("%s=%s", cfg1.Name, cfg1.AdvertisePeerUrls)
 
 	s1 := NewServer(cfg1)
+	s1.leader = oneselfLeader
 	c.Assert(s1.Start(ctx), check.IsNil)
 	defer s1.Close()
 	mysqlCfg := config.NewMysqlConfig()
