@@ -79,6 +79,7 @@ func (t *testForEtcd) TestRelayStageEtcd(c *C) {
 	close(stageCh)
 	close(errCh)
 	c.Assert(len(stageCh), Equals, 1)
+	stage1.Revision = rev2
 	c.Assert(<-stageCh, DeepEquals, stage1)
 	c.Assert(len(errCh), Equals, 0)
 
@@ -147,6 +148,8 @@ func (t *testForEtcd) TestSubTaskStageEtcd(c *C) {
 	close(stageCh)
 	close(errCh)
 	c.Assert(len(stageCh), Equals, 2)
+	stage1.Revision = rev2
+	stage2.Revision = rev2
 	c.Assert(<-stageCh, DeepEquals, stage1)
 	c.Assert(<-stageCh, DeepEquals, stage2)
 	c.Assert(len(errCh), Equals, 0)

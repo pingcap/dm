@@ -37,6 +37,8 @@ type Stage struct {
 	// only used to report to the caller of the watcher, do not marsh it.
 	// if it's true, it means the stage has been deleted in etcd.
 	IsDeleted bool `json:"-"`
+	// record the etcd revision when getting this Stage
+	Revision int64 `json:"-"`
 }
 
 // NewRelayStage creates a new Stage instance for relay.
@@ -236,6 +238,7 @@ func watchStage(ctx context.Context, watchCh clientv3.WatchChan,
 					stage Stage
 					err   error
 				)
+				stage.Revision = resp.Header.Revision
 				switch ev.Type {
 				case mvccpb.PUT:
 					stage, err = stageFromJSON(string(ev.Kv.Value))
