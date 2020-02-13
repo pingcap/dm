@@ -176,7 +176,7 @@ func (s *Server) Start(ctx context.Context) (err error) {
 
 	// start leader election
 	// TODO: s.cfg.Name -> address
-	s.election, err = election.NewElection(ctx, s.etcdClient, electionTTL, electionKey, s.cfg.Name)
+	s.election, err = election.NewElection(ctx, s.etcdClient, electionTTL, electionKey, s.cfg.Name, s.cfg.AdvertiseAddr)
 	if err != nil {
 		return
 	}

@@ -49,7 +49,7 @@ func (s *Server) electionNotify(ctx context.Context) {
 				s.leader = oneselfLeader
 				s.Unlock()
 			} else {
-				leader, leaderID, err2 := s.election.LeaderInfo(ctx)
+				leader, leaderID, leaderAddr, err2 := s.election.LeaderInfo(ctx)
 				if err2 == nil {
 					log.L().Info("current member retire from the leader", zap.String("leader", leaderID), zap.String("current member", s.cfg.Name))
 				} else {
@@ -58,7 +58,7 @@ func (s *Server) electionNotify(ctx context.Context) {
 				s.coordinator.Stop()
 				s.Lock()
 				s.leader = leader
-				s.createLeaderClient(leader)
+				s.createLeaderClient(leaderAddr)
 				s.Unlock()
 			}
 		case err := <-s.election.ErrorNotify():
