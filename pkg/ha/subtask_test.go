@@ -41,7 +41,7 @@ func (t *testForEtcd) TestSubTaskEtcd(c *C) {
 	c.Assert(err, IsNil)
 
 	// no subtask config exist.
-	tsm1, rev1, err := GetSubTaskCfg(etcdTestCli, source, taskName1)
+	tsm1, rev1, err := GetSubTaskCfg(etcdTestCli, source, taskName1, 0)
 	c.Assert(err, IsNil)
 	c.Assert(rev1, Equals, int64(0))
 	c.Assert(tsm1, HasLen, 0)
@@ -52,14 +52,14 @@ func (t *testForEtcd) TestSubTaskEtcd(c *C) {
 	c.Assert(rev2, Greater, rev1)
 
 	// get single config back.
-	tsm2, rev3, err := GetSubTaskCfg(etcdTestCli, source, taskName1)
+	tsm2, rev3, err := GetSubTaskCfg(etcdTestCli, source, taskName1, 0)
 	c.Assert(err, IsNil)
 	c.Assert(rev3, Equals, rev2)
 	c.Assert(tsm2, HasLen, 1)
 	c.Assert(tsm2, HasKey, taskName1)
 	c.Assert(tsm2[taskName1], DeepEquals, cfg1)
 
-	tsm3, rev4, err := GetSubTaskCfg(etcdTestCli, source, "")
+	tsm3, rev4, err := GetSubTaskCfg(etcdTestCli, source, "", 0)
 	c.Assert(err, IsNil)
 	c.Assert(rev4, Equals, rev3)
 	c.Assert(tsm3, HasLen, 2)
@@ -77,7 +77,7 @@ func (t *testForEtcd) TestSubTaskEtcd(c *C) {
 	c.Assert(err, IsNil)
 
 	// get again, not exists now.
-	tsm4, rev5, err := GetSubTaskCfg(etcdTestCli, source, taskName1)
+	tsm4, rev5, err := GetSubTaskCfg(etcdTestCli, source, taskName1, 0)
 	c.Assert(err, IsNil)
 	c.Assert(rev5, Equals, int64(0))
 	c.Assert(tsm4, HasLen, 0)

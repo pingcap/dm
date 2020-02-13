@@ -96,7 +96,7 @@ func (t *testForEtcd) TestOpsEtcd(c *C) {
 	c.Assert(rev6, Greater, rev5)
 
 	// get them back.
-	stcm, rev7, err := GetSubTaskCfg(etcdTestCli, source, "")
+	stcm, rev7, err := GetSubTaskCfg(etcdTestCli, source, "", 0)
 	c.Assert(err, IsNil)
 	c.Assert(rev7, Equals, rev6)
 	c.Assert(stcm, HasLen, 2)
@@ -115,7 +115,7 @@ func (t *testForEtcd) TestOpsEtcd(c *C) {
 	c.Assert(rev8, Greater, rev7)
 
 	// try to get them back again.
-	stcm, rev9, err := GetSubTaskCfg(etcdTestCli, source, "")
+	stcm, rev9, err := GetSubTaskCfg(etcdTestCli, source, "", 0)
 	c.Assert(err, IsNil)
 	c.Assert(rev9, Equals, int64(0))
 	c.Assert(stcm, HasLen, 0)

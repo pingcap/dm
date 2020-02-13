@@ -39,7 +39,7 @@ func PutSubTaskCfg(cli *clientv3.Client, cfgs ...config.SubTaskConfig) (int64, e
 // if the config for the source not exist, return with `err == nil` and `revision=0`.
 // if taskName is "", will return all the subtaskConfigs as a map{taskName: subtaskConfig} of the source
 // if taskName if given, will return a map{taskName: subtaskConfig} whose length is 1
-func GetSubTaskCfg(cli *clientv3.Client, source, taskName string) (map[string]config.SubTaskConfig, int64, error) {
+func GetSubTaskCfg(cli *clientv3.Client, source, taskName string, rev int64) (map[string]config.SubTaskConfig, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
 
@@ -49,9 +49,9 @@ func GetSubTaskCfg(cli *clientv3.Client, source, taskName string) (map[string]co
 		err  error
 	)
 	if taskName != "" {
-		resp, err = cli.Get(ctx, common.UpstreamSubTaskKeyAdapter.Encode(source, taskName))
+		resp, err = cli.Get(ctx, common.UpstreamSubTaskKeyAdapter.Encode(source, taskName), clientv3.WithRev(rev))
 	} else {
-		resp, err = cli.Get(ctx, common.UpstreamSubTaskKeyAdapter.Encode(source), clientv3.WithPrefix())
+		resp, err = cli.Get(ctx, common.UpstreamSubTaskKeyAdapter.Encode(source), clientv3.WithPrefix(), clientv3.WithRev(rev))
 	}
 
 	if err != nil {
