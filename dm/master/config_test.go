@@ -85,6 +85,7 @@ func (t *testConfigSuite) TestConfig(c *check.C) {
 		err               error
 		cfg               = &Config{}
 		masterAddr        = ":8261"
+		advertiseAddr     = "127.0.0.1:8261"
 		name              = "dm-master"
 		dataDir           = "default.dm-master"
 		peerURLs          = "http://127.0.0.1:8291"
@@ -135,6 +136,7 @@ func (t *testConfigSuite) TestConfig(c *check.C) {
 			c.Assert(err, check.ErrorMatches, tc.errorReg)
 		} else {
 			c.Assert(cfg.MasterAddr, check.Equals, masterAddr)
+			c.Assert(cfg.AdvertiseAddr, check.Equals, advertiseAddr)
 			c.Assert(cfg.Name, check.Equals, name)
 			c.Assert(cfg.DataDir, check.Equals, dataDir)
 			c.Assert(cfg.PeerUrls, check.Equals, peerURLs)
