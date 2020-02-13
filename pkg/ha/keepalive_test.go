@@ -24,6 +24,8 @@ import (
 	. "github.com/pingcap/check"
 )
 
+// keepAliveTTL is set to 0 but the actual ttl is set to minTTL of etcd
+// see https://github.com/etcd-io/etcd/pull/6085/files
 var keepAliveTTL = int64(0)
 
 func (t *testForEtcd) TestWorkerKeepAlive(c *C) {

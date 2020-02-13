@@ -29,8 +29,8 @@ import (
 
 // WorkerEvent represents the PUT/DELETE keepalive event of DM-worker.
 type WorkerEvent struct {
-	WorkerName string    `json:"workerName"` // the worker name of the worker.
-	JoinTime   time.Time `json:"joinTime"`   // the time when worker start to keepalive with etcd
+	WorkerName string    `json:"worker-name"` // the worker name of the worker.
+	JoinTime   time.Time `json:"join-time"`   // the time when worker start to keepalive with etcd
 
 	// only used to report to the caller of the watcher, do not marsh it.
 	// if it's true, it means the worker has been deleted in etcd.
@@ -105,7 +105,7 @@ func KeepAlive(ctx context.Context, cli *clientv3.Client, workerName string, kee
 		case <-ctx.Done():
 			log.L().Info("ctx is canceled, keepalive will exit now")
 			ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
-			_, _ = cli.Revoke(ctx, lease.ID)
+			cli.Revoke(ctx, lease.ID)
 			cancel()
 			return nil
 		}
