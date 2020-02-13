@@ -519,7 +519,7 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.LoaderConfig = *inst.Loader
 		cfg.SyncerConfig = *inst.Syncer
 
-		err := cfg.Adjust()
+		err := cfg.Adjust(true)
 		if err != nil {
 			return nil, terror.Annotatef(err, "source %s", inst.SourceID)
 		}

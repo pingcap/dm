@@ -230,7 +230,7 @@ func (c *SubTaskConfig) DecodeFile(fpath string) error {
 		return terror.ErrConfigTomlTransform.Delegate(err, "decode subtask config from file")
 	}
 
-	return c.Adjust()
+	return c.Adjust(true)
 }
 
 // Decode loads config from file data
@@ -240,11 +240,11 @@ func (c *SubTaskConfig) Decode(data string) error {
 		return terror.ErrConfigTomlTransform.Delegate(err, "decode subtask config from data")
 	}
 
-	return c.Adjust()
+	return c.Adjust(true)
 }
 
 // Adjust adjusts configs
-func (c *SubTaskConfig) Adjust() error {
+func (c *SubTaskConfig) Adjust(decryptPassword bool) error {
 	if c.Name == "" {
 		return terror.ErrConfigTaskNameEmpty.Generate()
 	}
@@ -288,12 +288,18 @@ func (c *SubTaskConfig) Adjust() error {
 	c.From.Adjust()
 	c.To.Adjust()
 
-	_, err := c.DecryptPassword()
-	return err
+	if decryptPassword {
+		_, err1 := c.DecryptPassword()
+		if err1 != nil {
+			return err1
+		}
+	}
+
+	return nil
 }
 
 // Parse parses flag definitions from the argument list.
-func (c *SubTaskConfig) Parse(arguments []string) error {
+func (c *SubTaskConfig) Parse(arguments []string, decryptPassword bool) error {
 	// Parse first to get config file.
 	err := c.flagSet.Parse(arguments)
 	if err != nil {
@@ -323,7 +329,7 @@ func (c *SubTaskConfig) Parse(arguments []string) error {
 		return terror.ErrConfigParseFlagSet.Generatef("'%s' is an invalid flag", c.flagSet.Arg(0))
 	}
 
-	return c.Adjust()
+	return c.Adjust(decryptPassword)
 }
 
 // DecryptPassword tries to decrypt db password in config
