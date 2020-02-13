@@ -178,6 +178,7 @@ func testDefaultMasterServer(c *check.C) *Server {
 	c.Assert(err, check.IsNil)
 	cfg.DataDir = c.MkDir()
 	server := NewServer(cfg)
+	server.leader = oneselfLeader
 	go server.ap.Start(context.Background())
 
 	return server

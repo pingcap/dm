@@ -241,8 +241,6 @@ func (s *Server) recoverSubTask() error {
 
 // Close close the RPC server, this function can be called multiple times
 func (s *Server) Close() {
-	s.Lock()
-	defer s.Unlock()
 	if s.closed.Get() {
 		return
 	}
@@ -250,6 +248,9 @@ func (s *Server) Close() {
 
 	// wait for background functions returned
 	s.bgFunWg.Wait()
+
+	s.Lock()
+	defer s.Unlock()
 
 	s.pessimist.Close()
 
@@ -266,6 +267,7 @@ func (s *Server) Close() {
 		s.etcd.Close()
 	}
 	s.closed.Set(true)
+
 }
 
 func errorCommonWorkerResponse(msg string, source string) *pb.CommonWorkerResponse {
@@ -1340,7 +1342,6 @@ func (s *Server) checkTaskAndWorkerMatch(taskname string, targetWorker string) b
 // UpdateMasterConfig implements MasterServer.UpdateConfig
 func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterConfigRequest) (*pb.UpdateMasterConfigResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "UpdateMasterConfig"))
-	s.Lock()
 
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
@@ -1350,6 +1351,7 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
+	s.Lock()
 	err := s.cfg.UpdateConfigFile(req.Config)
 	if err != nil {
 		s.Unlock()

@@ -191,6 +191,7 @@ func (t *testConfigSuite) TestInvalidConfig(c *check.C) {
 	// test config Verify failed
 	configContent := []byte(`
 master-addr = ":8261"
+advertise-addr = "127.0.0.1:8261"
 
 [[deploy]]
 dm-worker = "172.16.10.72:8262"`)
@@ -215,6 +216,7 @@ dm-worker = "172.16.10.72:8262"`)
 	// field still remain undecoded in config will cause verify failed
 	configContent2 := []byte(`
 master-addr = ":8261"
+advertise-addr = "127.0.0.1:8261"
 aaa = "xxx"
 
 [[deploy]]
@@ -239,6 +241,7 @@ func (t *testConfigSuite) TestGenEmbedEtcdConfig(c *check.C) {
 
 	cfg1 := NewConfig()
 	cfg1.MasterAddr = ":8261"
+	cfg1.AdvertiseAddr = "127.0.0.1:8261"
 	cfg1.InitialClusterState = embed.ClusterStateFlagExisting
 	c.Assert(cfg1.adjust(), check.IsNil)
 	etcdCfg, err := cfg1.genEmbedEtcdConfig()
@@ -254,10 +257,12 @@ func (t *testConfigSuite) TestGenEmbedEtcdConfig(c *check.C) {
 
 	cfg2 := *cfg1
 	cfg2.MasterAddr = "127.0.0.1\n:8261"
+	cfg2.AdvertiseAddr = "127.0.0.1:8261"
 	_, err = cfg2.genEmbedEtcdConfig()
 	c.Assert(terror.ErrMasterGenEmbedEtcdConfigFail.Equal(err), check.IsTrue)
 	c.Assert(err, check.ErrorMatches, "(?m).*invalid master-addr.*")
 	cfg2.MasterAddr = "172.100.8.8:8261"
+	cfg2.AdvertiseAddr = "172.100.8.8:8261"
 	etcdCfg, err = cfg2.genEmbedEtcdConfig()
 	c.Assert(err, check.IsNil)
 	c.Assert(etcdCfg.LCUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "172.100.8.8:8261"}})
