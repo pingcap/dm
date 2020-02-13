@@ -81,4 +81,24 @@ func (t *testForEtcd) TestSubTaskEtcd(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(rev5, Equals, int64(0))
 	c.Assert(tsm4, HasLen, 0)
+
+	// put subtask config.
+	rev6, err := PutSubTaskCfg(etcdTestCli, cfg1)
+	c.Assert(err, IsNil)
+	c.Assert(rev6, Greater, int64(0))
+
+	// update subtask config.
+	cfg3 := cfg1
+	cfg3.SourceID = "testForRevision"
+	rev7, err := PutSubTaskCfg(etcdTestCli, cfg3)
+	c.Assert(err, IsNil)
+	c.Assert(rev7, Greater, rev6)
+
+	// get subtask from rev6. shoule be equal to cfg1
+	tsm5, rev8, err := GetSubTaskCfg(etcdTestCli, source, taskName1, rev6)
+	c.Assert(err, IsNil)
+	c.Assert(rev8, Equals, rev7)
+	c.Assert(tsm5, HasLen, 1)
+	c.Assert(tsm5, HasKey, taskName1)
+	c.Assert(tsm5[taskName1], DeepEquals, cfg1)
 }
