@@ -39,6 +39,13 @@ const (
 	newSessionRetryUnlimited = math.MaxInt64
 	// newSessionRetryInterval is the interval time when retrying to create a new session.
 	newSessionRetryInterval = 200 * time.Millisecond
+
+	// IsLeader means current compaigner become leader
+	IsLeader = "isLeader"
+	// RetireFromLeader means current compaigner is old leader, and retired
+	RetireFromLeader = "retireFromLeader"
+	// IsNotLeader means current compaigner is not old leader and current leader
+	IsNotLeader = "isNotLeader"
 )
 
 // CampaignerInfo is the campaigner's information
@@ -79,12 +86,14 @@ type Election struct {
 	infoStr string
 
 	ech      chan error
-	leaderCh chan bool
+	leaderCh chan string
 	isLeader sync2.AtomicBool
 
 	closed sync2.AtomicInt32
 	cancel context.CancelFunc
 	bgWg   sync.WaitGroup
+
+	haveLeader bool
 
 	l log.Logger
 }
@@ -100,7 +109,7 @@ func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key,
 			ID:   id,
 			Addr: addr,
 		},
-		leaderCh: make(chan bool, 1),
+		leaderCh: make(chan string, 1),
 		ech:      make(chan error, 1), // size 1 is enough
 		cancel:   cancel2,
 		l:        log.With(zap.String("component", "election")),
@@ -152,9 +161,9 @@ func (e *Election) LeaderInfo(ctx context.Context) (string, string, string, erro
 	return string(resp.Kvs[0].Key), leaderInfo.ID, leaderInfo.Addr, nil
 }
 
-// LeaderNotify returns a channel that can fetch notification when the member become the leader or retire from the leader.
-// `true` means become the leader; `false` means retire from the leader.
-func (e *Election) LeaderNotify() <-chan bool {
+// LeaderNotify returns a channel that can fetch notification when the member become the leader or retire from the leader, or get a new leader.
+// `true` means become the leader; `false` means retire from the leader or get a new leader.
+func (e *Election) LeaderNotify() <-chan string {
 	return e.leaderCh
 }
 
@@ -213,11 +222,17 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 		// try to campaign
 		elec := concurrency.NewElection(session, e.key)
-		err = elec.Campaign(ctx, e.infoStr)
+		if !e.haveLeader {
+			// Campaign will blocks until it is elected, so just compaign 3 seconds, and then get leader info
+			ctx2, cancel2 := context.WithTimeout(ctx, 3*time.Second)
+			err = elec.Campaign(ctx2, e.infoStr)
+			cancel2()
+		} else {
+			err = elec.Campaign(ctx, e.infoStr)
+		}
 		if err != nil {
 			// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
 			e.l.Warn("fail to campaign", zap.Error(err))
-			continue
 		}
 
 		// compare with the current leader
@@ -227,8 +242,13 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 			e.l.Warn("fail to get leader ID", zap.Error(err))
 			continue
 		}
+
+		if len(leaderID) != 0 {
+			e.haveLeader = true
+		}
 		if leaderID != e.info.ID {
 			e.l.Info("current member is not the leader", zap.String("current member", e.info.ID), zap.String("leader", leaderID))
+			e.isNotLeader()
 			continue
 		}
 
@@ -241,7 +261,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 func (e *Election) toBeLeader() {
 	e.isLeader.Set(true)
 	select {
-	case e.leaderCh <- true:
+	case e.leaderCh <- IsLeader:
 	default:
 	}
 }
@@ -249,7 +269,15 @@ func (e *Election) toBeLeader() {
 func (e *Election) retireLeader() {
 	e.isLeader.Set(false)
 	select {
-	case e.leaderCh <- false:
+	case e.leaderCh <- RetireFromLeader:
+	default:
+	}
+}
+
+func (e *Election) isNotLeader() {
+	e.isLeader.Set(false)
+	select {
+	case e.leaderCh <- IsNotLeader:
 	default:
 	}
 }

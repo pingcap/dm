@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/election"
 	"github.com/pingcap/dm/pkg/log"
 
 	"google.golang.org/grpc"
@@ -33,9 +34,9 @@ func (s *Server) electionNotify(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case leader := <-s.election.LeaderNotify():
-			// output the leader info.
-			if leader {
+		case notify := <-s.election.LeaderNotify():
+			switch notify {
+			case election.IsLeader:
 				log.L().Info("current member become the leader", zap.String("current member", s.cfg.Name))
 				err := s.coordinator.Start(ctx, s.etcdClient)
 				if err != nil {
@@ -48,19 +49,31 @@ func (s *Server) electionNotify(ctx context.Context) {
 				s.Lock()
 				s.leader = oneselfLeader
 				s.Unlock()
-			} else {
+			case election.RetireFromLeader, election.IsNotLeader:
+				if notify == election.RetireFromLeader {
+					s.coordinator.Stop()
+				}
+
 				leader, leaderID, leaderAddr, err2 := s.election.LeaderInfo(ctx)
-				if err2 == nil {
+				if err2 != nil {
+					log.L().Warn("get leader info", zap.Error(err2))
+					continue
+				}
+
+				if notify == election.RetireFromLeader {
 					log.L().Info("current member retire from the leader", zap.String("leader", leaderID), zap.String("current member", s.cfg.Name))
 				} else {
-					log.L().Warn("get leader info", zap.Error(err2))
+					log.L().Info("get new leader", zap.String("leader", leaderID), zap.String("current member", s.cfg.Name))
 				}
-				s.coordinator.Stop()
+
 				s.Lock()
 				s.leader = leader
 				s.createLeaderClient(leaderAddr)
 				s.Unlock()
+			default:
+				log.L().Error("unknown notify type", zap.String("notify", notify))
 			}
+
 		case err := <-s.election.ErrorNotify():
 			// handle errors here, we do no meaningful things now.
 			// but maybe:
@@ -72,22 +85,22 @@ func (s *Server) electionNotify(ctx context.Context) {
 }
 
 func (s *Server) createLeaderClient(leaderAddr string) {
-	s.Lock()
+	log.L().Info("createLeaderClient")
+	defer func() {
+		log.L().Info("end createLeaderClient")
+	}()
 	if s.leaderGrpcConn != nil {
 		s.leaderGrpcConn.Close()
 		s.leaderGrpcConn = nil
 	}
-	s.Unlock()
 
 	conn, err := grpc.Dial(leaderAddr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	if err != nil {
 		log.L().Error("can't create grpc connection with leader, can't forward request to leader", zap.String("leader", leaderAddr))
 		return
 	}
-	s.Lock()
 	s.leaderGrpcConn = conn
 	s.leaderClient = pb.NewMasterClient(conn)
-	s.Unlock()
 }
 
 func (s *Server) isLeaderAndNeedForward() (isLeader bool, needForward bool) {
