@@ -331,6 +331,7 @@ ErrMasterJoinEmbedEtcdFail,[code=38040:class=dm-master:scope=internal:level=high
 ErrMasterCoordinatorNotStart,[code=38041:class=dm-master:scope=internal:level=high],"coordinator does not start"
 ErrMasterAcquireWorkerFailed,[code=38042:class=dm-master:scope=internal:level=medium],"acquire worker failed: %s"
 ErrMasterAdvertiseAddrNotValid,[code=38043:class=dm-master:scope=internal:level=high],"advertise address %s not valid"
+ErrMasterRequestIsNotForwardToLeader,[code=38044:class=dm-master:scope=internal:level=high],"master is not leader, and can't forward request to leader"
 ErrWorkerParseFlagSet,[code=40001:class=dm-worker:scope=internal:level=medium],"parse dm-worker config flag set"
 ErrWorkerInvalidFlag,[code=40002:class=dm-worker:scope=internal:level=medium],"'%s' is an invalid flag"
 ErrWorkerDecodeConfigFromFile,[code=40003:class=dm-worker:scope=internal:level=medium],"toml decode file"

@@ -406,6 +406,7 @@ const (
 	codeMasterCoordinatorNotStart
 	codeMasterAcquireWorkerFailed
 	codeMasterAdvertiseAddrNotValid
+	codeMasterRequestIsNotForwardToLeader
 )
 
 // DM-worker error code
@@ -883,6 +884,8 @@ var (
 	ErrMasterCoordinatorNotStart    = New(codeMasterCoordinatorNotStart, ClassDMMaster, ScopeInternal, LevelHigh, "coordinator does not start")
 	ErrMasterAcquireWorkerFailed    = New(codeMasterAcquireWorkerFailed, ClassDMMaster, ScopeInternal, LevelMedium, "acquire worker failed: %s")
 	ErrMasterAdvertiseAddrNotValid  = New(codeMasterAdvertiseAddrNotValid, ClassDMMaster, ScopeInternal, LevelHigh, "advertise address %s not valid")
+
+	ErrMasterRequestIsNotForwardToLeader = New(codeMasterRequestIsNotForwardToLeader, ClassDMMaster, ScopeInternal, LevelHigh, "master is not leader, and can't forward request to leader")
 
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set")

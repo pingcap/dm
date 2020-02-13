@@ -285,7 +285,7 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 		if needForward {
 			return s.leaderClient.RegisterWorker(ctx, req)
 		}
-		return nil, errors.Errorf("master is not leader, and can't send request to leader")
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
 	if !s.coordinator.IsStarted() {
@@ -349,7 +349,7 @@ func (s *Server) OfflineWorker(ctx context.Context, req *pb.OfflineWorkerRequest
 		if needForward {
 			return s.leaderClient.OfflineWorker(ctx, req)
 		}
-		return nil, errors.Errorf("master is not leader, and can't send request to leader")
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
 	if !s.coordinator.IsStarted() {
@@ -402,7 +402,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 		if needForward {
 			return s.leaderClient.StartTask(ctx, req)
 		}
-		return nil, errors.Errorf("master is not leader, and can't send request to leader")
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
 	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task)
@@ -503,7 +503,7 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 		if needForward {
 			return s.leaderClient.OperateTask(ctx, req)
 		}
-		return nil, errors.Errorf("master is not leader, and can't send request to leader")
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
 	resp := &pb.OperateTaskResponse{
@@ -604,7 +604,7 @@ func (s *Server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 		if needForward {
 			return s.leaderClient.UpdateTask(ctx, req)
 		}
-		return nil, errors.Errorf("master is not leader, and can't send request to leader")
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
 	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task)
@@ -738,7 +738,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusListRequest
 		if needForward {
 			return s.leaderClient.QueryStatus(ctx, req)
 		}
-		return nil, errors.Errorf("master is not leader, and can't send request to leader")
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
 	sources, err := extractWorkers(s, req)
@@ -777,7 +777,7 @@ func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorListRequest) 
 		if needForward {
 			return s.leaderClient.QueryError(ctx, req)
 		}
-		return nil, errors.Errorf("master is not leader, and can't send request to leader")
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
 	sources, err := extractWorkers(s, req)
@@ -817,7 +817,7 @@ func (s *Server) ShowDDLLocks(ctx context.Context, req *pb.ShowDDLLocksRequest) 
 		if needForward {
 			return s.leaderClient.ShowDDLLocks(ctx, req)
 		}
-		return nil, errors.Errorf("master is not leader, and can't send request to leader")
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
 	resp := &pb.ShowDDLLocksResponse{
@@ -893,7 +893,7 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb
 		if needForward {
 			return s.leaderClient.HandleSQLs(ctx, req)
 		}
-		return nil, errors.Errorf("master is not leader, and can't send request to leader")
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
 	// save request for --sharding operation
@@ -959,7 +959,7 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 		if needForward {
 			return s.leaderClient.PurgeWorkerRelay(ctx, req)
 		}
-		return nil, errors.Errorf("master is not leader, and can't send request to leader")
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
 	workerReq := &workerrpc.Request{
@@ -1023,7 +1023,7 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 		if needForward {
 			return s.leaderClient.SwitchWorkerRelayMaster(ctx, req)
 		}
-		return nil, errors.Errorf("master is not leader, and can't send request to leader")
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
 	workerRespCh := make(chan *pb.CommonWorkerResponse, len(req.Sources))
@@ -1094,7 +1094,7 @@ func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWork
 		if needForward {
 			return s.leaderClient.OperateWorkerRelayTask(ctx, req)
 		}
-		return nil, errors.Errorf("master is not leader, and can't send request to leader")
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
 	request := &workerrpc.Request{
@@ -1347,7 +1347,7 @@ func (s *Server) UpdateMasterConfig(ctx context.Context, req *pb.UpdateMasterCon
 		if needForward {
 			return s.leaderClient.UpdateMasterConfig(ctx, req)
 		}
-		return nil, errors.Errorf("master is not leader, and can't send request to leader")
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
 	err := s.cfg.UpdateConfigFile(req.Config)
@@ -1389,7 +1389,7 @@ func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWork
 		if needForward {
 			return s.leaderClient.UpdateWorkerRelayConfig(ctx, req)
 		}
-		return nil, errors.Errorf("master is not leader, and can't send request to leader")
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
 	source := req.Source
@@ -1436,7 +1436,7 @@ func (s *Server) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRe
 		if needForward {
 			return s.leaderClient.MigrateWorkerRelay(ctx, req)
 		}
-		return nil, errors.Errorf("master is not leader, and can't send request to leader")
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
 	source := req.Source
@@ -1467,7 +1467,7 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 		if needForward {
 			return s.leaderClient.CheckTask(ctx, req)
 		}
-		return nil, errors.Errorf("master is not leader, and can't send request to leader")
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
 	_, _, err := s.generateSubTask(ctx, req.Task)
@@ -1498,7 +1498,7 @@ func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequ
 		if needForward {
 			return s.leaderClient.OperateMysqlWorker(ctx, req)
 		}
-		return nil, errors.Errorf("master is not leader, and can't send request to leader")
+		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
 	cfg := config.NewMysqlConfig()

@@ -85,10 +85,6 @@ func (s *Server) electionNotify(ctx context.Context) {
 }
 
 func (s *Server) createLeaderClient(leaderAddr string) {
-	log.L().Info("createLeaderClient")
-	defer func() {
-		log.L().Info("end createLeaderClient")
-	}()
 	if s.leaderGrpcConn != nil {
 		s.leaderGrpcConn.Close()
 		s.leaderGrpcConn = nil
@@ -96,7 +92,7 @@ func (s *Server) createLeaderClient(leaderAddr string) {
 
 	conn, err := grpc.Dial(leaderAddr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
 	if err != nil {
-		log.L().Error("can't create grpc connection with leader, can't forward request to leader", zap.String("leader", leaderAddr))
+		log.L().Error("can't create grpc connection with leader, can't forward request to leader", zap.String("leader", leaderAddr), zap.Error(err))
 		return
 	}
 	s.leaderGrpcConn = conn
@@ -108,8 +104,5 @@ func (s *Server) isLeaderAndNeedForward() (isLeader bool, needForward bool) {
 	defer s.RUnlock()
 	isLeader = (s.leader == oneselfLeader)
 	needForward = (s.leaderGrpcConn != nil)
-	if !isLeader && !needForward {
-		log.L().Error("this master is not leader, but can't forward request to leader")
-	}
 	return
 }
