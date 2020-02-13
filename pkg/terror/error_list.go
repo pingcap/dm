@@ -405,6 +405,7 @@ const (
 	codeMasterJoinEmbedEtcdFail
 	codeMasterCoordinatorNotStart
 	codeMasterAcquireWorkerFailed
+	codeMasterAdvertiseAddrNotValid
 )
 
 // DM-worker error code
@@ -881,6 +882,7 @@ var (
 	ErrMasterJoinEmbedEtcdFail      = New(codeMasterJoinEmbedEtcdFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to join embed etcd: %s")
 	ErrMasterCoordinatorNotStart    = New(codeMasterCoordinatorNotStart, ClassDMMaster, ScopeInternal, LevelHigh, "coordinator does not start")
 	ErrMasterAcquireWorkerFailed    = New(codeMasterAcquireWorkerFailed, ClassDMMaster, ScopeInternal, LevelMedium, "acquire worker failed: %s")
+	ErrMasterAdvertiseAddrNotValid  = New(codeMasterAdvertiseAddrNotValid, ClassDMMaster, ScopeInternal, LevelHigh, "advertise address %s not valid")
 
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set")
