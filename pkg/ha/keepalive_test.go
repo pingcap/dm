@@ -24,8 +24,8 @@ import (
 	. "github.com/pingcap/check"
 )
 
-// keepAliveTTL is set to 0 but the actual ttl is set to minTTL of etcd
-// see https://github.com/etcd-io/etcd/pull/6085/files
+// keepAliveTTL is set to 0 because the actual ttl is set to minLeaseTTL of etcd
+// minLeaseTTL is 1 in etcd cluster
 var keepAliveTTL = int64(0)
 
 func (t *testForEtcd) TestWorkerKeepAlive(c *C) {
@@ -37,7 +37,7 @@ func (t *testForEtcd) TestWorkerKeepAlive(c *C) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	timeout := 200 * time.Millisecond
+	timeout := 2 * time.Second
 	evCh := make(chan WorkerEvent, 10)
 	errCh := make(chan error, 10)
 	closed := make(chan struct{})
@@ -77,7 +77,7 @@ func (t *testForEtcd) TestWorkerKeepAlive(c *C) {
 		case ev := <-evCh:
 			c.Assert(ev.IsDeleted, IsTrue)
 			c.Assert(ev.WorkerName, Equals, worker)
-		case <-time.After(time.Second):
+		case <-time.After(timeout):
 			c.Fatal("fail to receive delete ev " + strconv.Itoa(i+1) + " before timeout")
 		}
 	}
