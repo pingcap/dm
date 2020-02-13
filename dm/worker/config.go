@@ -32,6 +32,7 @@ import (
 // later we can read it from dm/worker/dm-worker.toml
 // and assign it to SampleConfigFile while we build dm-worker
 var SampleConfigFile string
+var defaultKeepAliveTTL = int64(3)
 
 var (
 	getRandomServerIDFunc = utils.GetRandomServerID
@@ -54,6 +55,7 @@ func NewConfig() *Config {
 	// NOTE: add `advertise-addr` for dm-master if needed.
 	fs.StringVar(&cfg.Join, "join", "", `join to an existing cluster (usage: dm-master cluster's "${master-addr}")`)
 	fs.StringVar(&cfg.Name, "name", "", "human-readable name for DM-worker member")
+	fs.Int64Var(&cfg.KeepAliveTTL, "keepalive-ttl", defaultKeepAliveTTL, "worker's ttl for keepalive with etcd")
 	return cfg
 }
 
@@ -70,7 +72,8 @@ type Config struct {
 	WorkerAddr    string `toml:"worker-addr" json:"worker-addr"`
 	AdvertiseAddr string `toml:"advertise-addr" json:"advertise-addr"`
 
-	ConfigFile string `json:"config-file"`
+	ConfigFile   string `json:"config-file"`
+	KeepAliveTTL int64  `toml:"keepalive-ttl" json:"keepalive-ttl"`
 
 	printVersion      bool
 	printSampleConfig bool

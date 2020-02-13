@@ -26,6 +26,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
@@ -115,9 +116,9 @@ func NewWorker(cfg *config.MysqlConfig, etcdClient *clientv3.Client) (w *Worker,
 }
 
 // Start starts working
-func (w *Worker) Start() {
+func (w *Worker) Start(startRelay bool) {
 
-	if w.cfg.EnableRelay {
+	if w.cfg.EnableRelay && startRelay {
 		// start relay
 		w.relayHolder.Start()
 
@@ -304,6 +305,87 @@ func (w *Worker) QueryError(name string) []*pb.SubTaskError {
 	}
 
 	return w.Error(name)
+}
+
+func (w *Worker) HandleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, errCh chan error) {
+	for {
+		select {
+		case <-ctx.Done():
+			log.L().Info("worker is closed, HandleSubTaskStage will quit now")
+			return
+		case stage := <-stageCh:
+			var op pb.TaskOp
+			switch {
+			case stage.Expect == pb.Stage_Running:
+				if st := w.subTaskHolder.findSubTask(stage.Task); st == nil {
+					tsm, _, err := ha.GetSubTaskCfg(w.etcdClient, stage.Source, stage.Task, stage.Revision)
+					if err != nil {
+						// TODO: add better metrics
+						log.L().Error("fail to get subtask config from etcd", zap.String("task", stage.Task),
+							zap.String("source", stage.Source), zap.Error(err))
+						continue
+					}
+					subTaskCfg := tsm[stage.Task]
+					err = w.StartSubTask(&subTaskCfg)
+					if err != nil {
+						// TODO: add better metrics
+						log.L().Error("fail to start subtask", zap.String("task", stage.Task),
+							zap.String("source", stage.Source), zap.Error(err))
+						continue
+					}
+					continue
+				} else {
+					op = pb.TaskOp_Resume
+				}
+			case stage.Expect == pb.Stage_Paused:
+				op = pb.TaskOp_Pause
+			case stage.IsDeleted:
+				op = pb.TaskOp_Stop
+			}
+			err := w.OperateSubTask(stage.Task, op)
+			if err != nil {
+				// TODO: add better metrics
+				log.L().Error("fail to operate subtask", zap.String("task", stage.Task),
+					zap.String("source", stage.Source), zap.String("op", op.String()), zap.Error(err))
+			}
+		case err := <-errCh:
+			log.L().Error("WatchSubTaskStage received an error", zap.Error(err))
+		}
+	}
+}
+
+func (w *Worker) HandleRelayStage(ctx context.Context, relayStageCh chan ha.Stage, relayErrCh chan error) {
+	for {
+		select {
+		case <-ctx.Done():
+			log.L().Info("worker is closed, HandleRelayStage will quit now")
+			return
+		case stage := <-relayStageCh:
+			var op pb.RelayOp
+			switch {
+			case stage.Expect == pb.Stage_Running:
+				if w.relayHolder.Stage() == pb.Stage_New {
+					w.relayHolder.Start()
+					w.relayPurger.Start()
+					continue
+				} else {
+					op = pb.RelayOp_ResumeRelay
+				}
+			case stage.Expect == pb.Stage_Paused:
+				op = pb.RelayOp_PauseRelay
+			case stage.IsDeleted:
+				op = pb.RelayOp_StopRelay
+			}
+			err := w.OperateRelay(ctx, &pb.OperateRelayRequest{Op: op})
+			if err != nil {
+				// TODO: add better metrics
+				log.L().Error("fail to operate relay", zap.String("source", stage.Source),
+					zap.String("op", op.String()), zap.Error(err))
+			}
+		case err := <-relayErrCh:
+			log.L().Error("WatchRelayStage received an error", zap.Error(err))
+		}
+	}
 }
 
 // HandleSQLs implements Handler.HandleSQLs.

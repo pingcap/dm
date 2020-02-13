@@ -24,8 +24,10 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/binlog"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer"
 
 	"github.com/pingcap/errors"
@@ -42,7 +44,7 @@ var (
 	dialTimeout             = 3 * time.Second
 	keepaliveTimeout        = 3 * time.Second
 	keepaliveTime           = 3 * time.Second
-	retryConnectSleepTime   = 2 * time.Second
+	retryConnectSleepTime   = time.Second
 	getMinPosForSubTaskFunc = getMinPosForSubTask
 )
 
@@ -102,37 +104,7 @@ func (s *Server) Start() error {
 		defer s.wg.Done()
 		// worker keepalive with master
 		// If worker loses connect from master, it would stop all task and try to connect master again.
-		shouldExit := false
-		var err1 error
-		for !shouldExit {
-			shouldExit, err1 = s.KeepAlive()
-			log.L().Warn("keepalive with master goroutine paused", zap.Error(err1))
-			if err1 != nil || !shouldExit {
-				if s.retryConnectMaster.Get() {
-					// Try to connect master again before stop worker
-					s.retryConnectMaster.Set(false)
-				} else {
-					s.Lock()
-					w := s.getWorker(false)
-					if w != nil {
-						s.setWorker(nil, false)
-						s.Unlock()
-						w.Close()
-					} else {
-						s.Unlock()
-					}
-				}
-				select {
-				case <-s.ctx.Done():
-					shouldExit = true
-					break
-				case <-time.After(retryConnectSleepTime):
-					// Try to connect master again
-					break
-				}
-			}
-		}
-		log.L().Info("keepalive with master goroutine exited!")
+		s.KeepAlive()
 	}()
 
 	// create a cmux
@@ -580,25 +552,21 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		return terror.ErrWorkerAlreadyStart.Generate()
 	}
 
-	subTaskCfgs := make([]*config.SubTaskConfig, 0, 3)
-
-	ectx, ecancel := context.WithTimeout(s.etcdClient.Ctx(), time.Second*3)
-	defer ecancel()
-	key := common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID)
-	resp, err := s.etcdClient.KV.Get(ectx, key, clientv3.WithPrefix())
+	subTaskStages, revSubTask, err := ha.GetSubTaskStage(s.etcdClient, cfg.SourceID, "")
 	if err != nil {
 		return err
 	}
-	for _, kv := range resp.Kvs {
-		task := string(kv.Value)
-		subTaskcfg := config.NewSubTaskConfig()
-		if err = subTaskcfg.Decode(task); err != nil {
-			return err
-		}
-		subTaskcfg.LogLevel = s.cfg.LogLevel
-		subTaskcfg.LogFile = s.cfg.LogFile
+	subTaskCfgm, _, err := ha.GetSubTaskCfg(s.etcdClient, cfg.SourceID, "", revSubTask)
+	if err != nil {
+		return err
+	}
 
-		subTaskCfgs = append(subTaskCfgs, subTaskcfg)
+	subTaskCfgs := make([]*config.SubTaskConfig, 0, len(subTaskCfgm))
+	for _, subTaskCfg := range subTaskCfgm {
+		subTaskCfg.LogLevel = s.cfg.LogLevel
+		subTaskCfg.LogFile = s.cfg.LogFile
+
+		subTaskCfgs = append(subTaskCfgs, &subTaskCfg)
 	}
 
 	dctx, dcancel := context.WithTimeout(s.etcdClient.Ctx(), time.Duration(len(subTaskCfgs))*3*time.Second)
@@ -622,20 +590,63 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		return err
 	}
 	s.setWorker(w, false)
+
+	startRelay := false
+	var revRelay int64
+	if w.cfg.EnableRelay {
+		var relayStage ha.Stage
+		relayStage, revRelay, err = ha.GetRelayStage(s.etcdClient, cfg.SourceID)
+		if err != nil {
+			return err
+		}
+		startRelay = !relayStage.IsDeleted && relayStage.Expect == pb.Stage_Running
+	}
 	go func() {
-		w.Start()
+		w.Start(startRelay)
 	}()
 
-	// FIXME: worker's closed will be set to false in Start.
-	// when start sub task, will check the `closed`, if closed is true, will ignore start subTask
-	// just sleep and make test success, will refine this later
-	time.Sleep(1 * time.Second)
+	isStarted := utils.WaitSomething(50, 100*time.Millisecond, func() bool {
+		return w.closed.Get() == closedFalse
+	})
+	if !isStarted {
+		return nil
+	}
 
 	for _, subTaskCfg := range subTaskCfgs {
+		expectStage := subTaskStages[subTaskCfg.Name]
+		if expectStage.IsDeleted || expectStage.Expect != pb.Stage_Running {
+			continue
+		}
 		if err = w.StartSubTask(subTaskCfg); err != nil {
 			return err
 		}
 		log.L().Info("load subtask successful", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
+	}
+
+	subTaskStageCh := make(chan ha.Stage, 10)
+	subTaskErrCh := make(chan error, 10)
+	w.wg.Add(2)
+	go func() {
+		defer w.wg.Done()
+		ha.WatchSubTaskStage(w.ctx, s.etcdClient, cfg.SourceID, revSubTask+1, subTaskStageCh, subTaskErrCh)
+	}()
+	go func() {
+		defer w.wg.Done()
+		w.HandleSubTaskStage(w.ctx, subTaskStageCh, subTaskErrCh)
+	}()
+
+	if w.cfg.EnableRelay {
+		relayStageCh := make(chan ha.Stage, 10)
+		relayErrCh := make(chan error, 10)
+		w.wg.Add(2)
+		go func() {
+			defer w.wg.Done()
+			ha.WatchRelayStage(w.ctx, s.etcdClient, cfg.SourceID, revRelay+1, relayStageCh, relayErrCh)
+		}()
+		go func() {
+			defer w.wg.Done()
+			w.HandleRelayStage(w.ctx, relayStageCh, relayErrCh)
+		}()
 	}
 
 	return nil
