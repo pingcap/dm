@@ -509,6 +509,16 @@ const (
 	codeSchemaTrackerCannotParseDownstreamTable
 )
 
+// HA scheduler.
+const (
+	codeSchedulerNotStarted ErrCode = iota + 46001
+	codeSchedulerStarted
+	codeSchedulerWorkerExist
+	codeSchedulerWorkerNotExist
+	codeSchedulerWorkerOnline
+	codeSchedulerWorkerInvalidTrans
+)
+
 // Error instances
 var (
 	// Database operation related error
@@ -982,4 +992,12 @@ var (
 	ErrSchemaTrackerCannotParseDownstreamTable = New(
 		codeSchemaTrackerCannotParseDownstreamTable, ClassSchemaTracker, ScopeInternal, LevelHigh,
 		"cannot parse downstream table schema of `%s`.`%s` to initialize upstream schema `%s`.`%s` in schema tracker")
+
+	// HA scheduler
+	ErrSchedulerNotStarted         = New(codeSchedulerNotStarted, ClassScheduler, ScopeInternal, LevelHigh, "the scheduler has not started")
+	ErrSchedulerStarted            = New(codeSchedulerStarted, ClassScheduler, ScopeInternal, LevelMedium, "the scheduler has already started")
+	ErrSchedulerWorkerExist        = New(codeSchedulerWorkerExist, ClassScheduler, ScopeInternal, LevelMedium, "dm-worker %s already exists")
+	ErrSchedulerWorkerNotExist     = New(codeSchedulerWorkerNotExist, ClassScheduler, ScopeInternal, LevelMedium, "dm-worker with name %s not exists")
+	ErrSchedulerWorkerOnline       = New(codeSchedulerWorkerOnline, ClassScheduler, ScopeInternal, LevelMedium, "dm-worker with name %s is still online, must shut it down first")
+	ErrSchedulerWorkerInvalidTrans = New(codeSchedulerWorkerInvalidTrans, ClassScheduler, ScopeInternal, LevelMedium, "invalid worker stage transformation, from %s to %s")
 )
