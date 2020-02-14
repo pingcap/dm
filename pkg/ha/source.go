@@ -38,12 +38,12 @@ func PutSourceCfg(cli *clientv3.Client, cfg config.MysqlConfig) (int64, error) {
 
 // GetSourceCfg gets the config of the specified source.
 // if the config for the source not exist, return with `err == nil` and `revision=0`.
-func GetSourceCfg(cli *clientv3.Client, source string) (config.MysqlConfig, int64, error) {
+func GetSourceCfg(cli *clientv3.Client, source string, rev int64) (config.MysqlConfig, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
 
 	cfg := config.MysqlConfig{}
-	resp, err := cli.Get(ctx, common.UpstreamConfigKeyAdapter.Encode(source))
+	resp, err := cli.Get(ctx, common.UpstreamConfigKeyAdapter.Encode(source), clientv3.WithRev(rev))
 	if err != nil {
 		return cfg, 0, err
 	}

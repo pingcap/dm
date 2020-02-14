@@ -35,6 +35,9 @@ type SourceBound struct {
 	// only used to report to the caller of the watcher, do not marsh it.
 	// if it's true, it means the bound has been deleted in etcd.
 	IsDeleted bool `json:"-"`
+	// only has value in watcher, will get 0 in GetSourceBound
+	// record the etcd revision when getting this SourceBound
+	Revision int64 `json:"-"`
 }
 
 // NewSourceBound creates a new SourceBound instance.
@@ -142,6 +145,7 @@ func WatchSourceBound(ctx context.Context, cli *clientv3.Client,
 					log.L().Error("unsupported etcd event type", zap.Reflect("kv", ev.Kv), zap.Reflect("type", ev.Type))
 					continue
 				}
+				bound.Revision = resp.Header.Revision
 
 				if err != nil {
 					select {
