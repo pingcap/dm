@@ -314,78 +314,77 @@ func (w *Worker) HandleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, 
 			log.L().Info("worker is closed, HandleSubTaskStage will quit now")
 			return
 		case stage := <-stageCh:
-			var op pb.TaskOp
-			switch {
-			case stage.Expect == pb.Stage_Running:
-				if st := w.subTaskHolder.findSubTask(stage.Task); st == nil {
-					tsm, _, err := ha.GetSubTaskCfg(w.etcdClient, stage.Source, stage.Task, stage.Revision)
-					if err != nil {
-						// TODO: add better metrics
-						log.L().Error("fail to get subtask config from etcd", zap.String("task", stage.Task),
-							zap.String("source", stage.Source), zap.Error(err))
-						continue
-					}
-					subTaskCfg := tsm[stage.Task]
-					err = w.StartSubTask(&subTaskCfg)
-					if err != nil {
-						// TODO: add better metrics
-						log.L().Error("fail to start subtask", zap.String("task", stage.Task),
-							zap.String("source", stage.Source), zap.Error(err))
-						continue
-					}
-					continue
-				} else {
-					op = pb.TaskOp_Resume
-				}
-			case stage.Expect == pb.Stage_Paused:
-				op = pb.TaskOp_Pause
-			case stage.IsDeleted:
-				op = pb.TaskOp_Stop
-			}
-			err := w.OperateSubTask(stage.Task, op)
+			err := w.operateSubTaskStage(stage)
 			if err != nil {
 				// TODO: add better metrics
-				log.L().Error("fail to operate subtask", zap.String("task", stage.Task),
-					zap.String("source", stage.Source), zap.String("op", op.String()), zap.Error(err))
+				log.L().Error("fail to operate subtask stage", zap.String("task", stage.Task),
+					zap.String("source", stage.Source), zap.Error(err))
 			}
 		case err := <-errCh:
+			// TODO: deal with err
 			log.L().Error("WatchSubTaskStage received an error", zap.Error(err))
 		}
 	}
 }
 
-func (w *Worker) HandleRelayStage(ctx context.Context, relayStageCh chan ha.Stage, relayErrCh chan error) {
+func (w *Worker) operateSubTaskStage(stage ha.Stage) error {
+	var op pb.TaskOp
+	switch {
+	case stage.Expect == pb.Stage_Running:
+		if st := w.subTaskHolder.findSubTask(stage.Task); st == nil {
+			tsm, _, err := ha.GetSubTaskCfg(w.etcdClient, stage.Source, stage.Task, stage.Revision)
+			if err != nil {
+				// TODO: need retry
+				return terror.Annotate(err, "fail to get subtask config from etcd")
+			}
+			subTaskCfg := tsm[stage.Task]
+			return w.StartSubTask(&subTaskCfg)
+		} else {
+			op = pb.TaskOp_Resume
+		}
+	case stage.Expect == pb.Stage_Paused:
+		op = pb.TaskOp_Pause
+	case stage.IsDeleted:
+		op = pb.TaskOp_Stop
+	}
+	return w.OperateSubTask(stage.Task, op)
+}
+
+func (w *Worker) HandleRelayStage(ctx context.Context, stageCh chan ha.Stage, errCh chan error) {
 	for {
 		select {
 		case <-ctx.Done():
 			log.L().Info("worker is closed, HandleRelayStage will quit now")
 			return
-		case stage := <-relayStageCh:
-			var op pb.RelayOp
-			switch {
-			case stage.Expect == pb.Stage_Running:
-				if w.relayHolder.Stage() == pb.Stage_New {
-					w.relayHolder.Start()
-					w.relayPurger.Start()
-					continue
-				} else {
-					op = pb.RelayOp_ResumeRelay
-				}
-			case stage.Expect == pb.Stage_Paused:
-				op = pb.RelayOp_PauseRelay
-			case stage.IsDeleted:
-				op = pb.RelayOp_StopRelay
-			}
-			err := w.OperateRelay(ctx, &pb.OperateRelayRequest{Op: op})
+		case stage := <-stageCh:
+			err := w.operateRelayStage(ctx, stage)
 			if err != nil {
 				// TODO: add better metrics
-				log.L().Error("fail to operate relay", zap.String("source", stage.Source),
-					zap.String("op", op.String()), zap.Error(err))
+				log.L().Error("fail to operate relay", zap.String("source", stage.Source), zap.Error(err))
 			}
-		case err := <-relayErrCh:
+		case err := <-errCh:
 			log.L().Error("WatchRelayStage received an error", zap.Error(err))
 		}
 	}
+}
+
+func (w *Worker) operateRelayStage(ctx context.Context, stage ha.Stage) error {
+	var op pb.RelayOp
+	switch {
+	case stage.Expect == pb.Stage_Running:
+		if w.relayHolder.Stage() == pb.Stage_New {
+			w.relayHolder.Start()
+			w.relayPurger.Start()
+			return nil
+		} else {
+			op = pb.RelayOp_ResumeRelay
+		}
+	case stage.Expect == pb.Stage_Paused:
+		op = pb.RelayOp_PauseRelay
+	case stage.IsDeleted:
+		op = pb.RelayOp_StopRelay
+	}
+	return w.OperateRelay(ctx, &pb.OperateRelayRequest{Op: op})
 }
 
 // HandleSQLs implements Handler.HandleSQLs.

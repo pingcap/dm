@@ -99,6 +99,27 @@ func (s *Server) Start() error {
 	if err != nil {
 		return err
 	}
+
+	bsm, revBound, err := ha.GetSourceBound(s.etcdClient, s.cfg.Name)
+	if err != nil {
+		// TODO: need retry
+		return err
+	}
+	if len(bsm) > 0 {
+		log.L().Error("worker has been assigned source before keepalive!")
+	}
+	sourceBoundCh := make(chan ha.SourceBound, 10)
+	sourceBoundErrCh := make(chan error, 10)
+	s.wg.Add(2)
+	go func() {
+		defer s.wg.Done()
+		ha.WatchSourceBound(s.ctx, s.etcdClient, s.cfg.Name, revBound+1, sourceBoundCh, sourceBoundErrCh)
+	}()
+	go func() {
+		defer s.wg.Done()
+		s.HandleSourceBound(s.ctx, sourceBoundCh, sourceBoundErrCh)
+	}()
+
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -184,6 +205,8 @@ func (s *Server) setWorker(worker *Worker, needLock bool) {
 	s.worker = worker
 }
 
+// if sourceID is set to "", worker will be closed directly
+// if sourceID is not "", we will check sourceID with w.cfg.SourceID
 func (s *Server) stopWorker(sourceID string) error {
 	s.Lock()
 	w := s.getWorker(false)
@@ -191,7 +214,7 @@ func (s *Server) stopWorker(sourceID string) error {
 		s.Unlock()
 		return terror.ErrWorkerNoStart
 	}
-	if w.cfg.SourceID != sourceID {
+	if sourceID != "" && w.cfg.SourceID != sourceID {
 		s.Unlock()
 		return terror.ErrWorkerSourceNotMatch
 	}
@@ -219,6 +242,37 @@ func (s *Server) retryWriteEctd(ops ...clientv3.Op) string {
 		}
 		time.Sleep(time.Millisecond * 50)
 	}
+}
+
+func (s *Server) HandleSourceBound(ctx context.Context, boundCh chan ha.SourceBound, errCh chan error) {
+	for {
+		select {
+		case <-ctx.Done():
+			log.L().Info("worker server is closed, HandleSourceBound will quit now")
+			return
+		case bound := <-boundCh:
+			err := s.operateSourceBound(bound)
+			if err != nil {
+				log.L().Error("fail to operate sourceBound on worker", zap.String("worker", s.cfg.Name),
+					zap.String("source", bound.Source))
+			}
+		case err := <-errCh:
+			// TODO: Deal with err
+			log.L().Error("WatchSourceBound received an error", zap.Error(err))
+		}
+	}
+}
+
+func (s *Server) operateSourceBound(bound ha.SourceBound) error {
+	if bound.IsDeleted {
+		return s.stopWorker(bound.Source)
+	}
+	sourceCfg, _, err := ha.GetSourceCfg(s.etcdClient, bound.Source, bound.Revision)
+	if err != nil {
+		// TODO: need retry
+		return err
+	}
+	return s.startWorker(&sourceCfg)
 }
 
 // StartSubTask implements WorkerServer.StartSubTask
@@ -554,10 +608,12 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 
 	subTaskStages, revSubTask, err := ha.GetSubTaskStage(s.etcdClient, cfg.SourceID, "")
 	if err != nil {
+		// TODO: need retry
 		return err
 	}
 	subTaskCfgm, _, err := ha.GetSubTaskCfg(s.etcdClient, cfg.SourceID, "", revSubTask)
 	if err != nil {
+		// TODO: need retry
 		return err
 	}
 
@@ -583,7 +639,7 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		cfg.RelayBinlogGTID = ""
 	}
 
-	log.L().Info("start workers", zap.Reflect("subTasks", subTaskCfgs))
+	log.L().Info("start worker", zap.Reflect("subTasks", subTaskCfgs))
 
 	w, err := NewWorker(cfg, s.etcdClient)
 	if err != nil {
@@ -597,6 +653,7 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		var relayStage ha.Stage
 		relayStage, revRelay, err = ha.GetRelayStage(s.etcdClient, cfg.SourceID)
 		if err != nil {
+			// TODO: need retry
 			return err
 		}
 		startRelay = !relayStage.IsDeleted && relayStage.Expect == pb.Stage_Running
@@ -609,7 +666,8 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		return w.closed.Get() == closedFalse
 	})
 	if !isStarted {
-		return nil
+		// TODO: add more mechanism to wait
+		return terror.ErrWorkerNoStart
 	}
 
 	for _, subTaskCfg := range subTaskCfgs {

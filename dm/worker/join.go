@@ -69,15 +69,7 @@ func (s *Server) KeepAlive() {
 	for {
 		err1 := ha.KeepAlive(s.ctx, s.etcdClient, s.cfg.Name, s.cfg.KeepAliveTTL)
 		log.L().Warn("keepalive with master goroutine paused", zap.Error(err1))
-		s.Lock()
-		w := s.getWorker(false)
-		if w != nil {
-			s.setWorker(nil, false)
-			s.Unlock()
-			w.Close()
-		} else {
-			s.Unlock()
-		}
+		s.stopWorker("")
 		select {
 		case <-s.ctx.Done():
 			log.L().Info("keepalive with master goroutine exited!")
