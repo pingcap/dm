@@ -117,7 +117,7 @@ func (s *Server) Start() error {
 	}()
 	go func() {
 		defer s.wg.Done()
-		s.HandleSourceBound(s.ctx, sourceBoundCh, sourceBoundErrCh)
+		s.handleSourceBound(s.ctx, sourceBoundCh, sourceBoundErrCh)
 	}()
 
 	s.wg.Add(1)
@@ -244,11 +244,11 @@ func (s *Server) retryWriteEctd(ops ...clientv3.Op) string {
 	}
 }
 
-func (s *Server) HandleSourceBound(ctx context.Context, boundCh chan ha.SourceBound, errCh chan error) {
+func (s *Server) handleSourceBound(ctx context.Context, boundCh chan ha.SourceBound, errCh chan error) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.L().Info("worker server is closed, HandleSourceBound will quit now")
+			log.L().Info("worker server is closed, handleSourceBound will quit now")
 			return
 		case bound := <-boundCh:
 			err := s.operateSourceBound(bound)
@@ -690,7 +690,7 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 	}()
 	go func() {
 		defer w.wg.Done()
-		w.HandleSubTaskStage(w.ctx, subTaskStageCh, subTaskErrCh)
+		w.handleSubTaskStage(w.ctx, subTaskStageCh, subTaskErrCh)
 	}()
 
 	if w.cfg.EnableRelay {
@@ -703,7 +703,7 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		}()
 		go func() {
 			defer w.wg.Done()
-			w.HandleRelayStage(w.ctx, relayStageCh, relayErrCh)
+			w.handleRelayStage(w.ctx, relayStageCh, relayErrCh)
 		}()
 	}
 

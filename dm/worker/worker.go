@@ -307,11 +307,11 @@ func (w *Worker) QueryError(name string) []*pb.SubTaskError {
 	return w.Error(name)
 }
 
-func (w *Worker) HandleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, errCh chan error) {
+func (w *Worker) handleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, errCh chan error) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.L().Info("worker is closed, HandleSubTaskStage will quit now")
+			log.L().Info("worker is closed, handleSubTaskStage will quit now")
 			return
 		case stage := <-stageCh:
 			err := w.operateSubTaskStage(stage)
@@ -339,9 +339,8 @@ func (w *Worker) operateSubTaskStage(stage ha.Stage) error {
 			}
 			subTaskCfg := tsm[stage.Task]
 			return w.StartSubTask(&subTaskCfg)
-		} else {
-			op = pb.TaskOp_Resume
 		}
+		op = pb.TaskOp_Resume
 	case stage.Expect == pb.Stage_Paused:
 		op = pb.TaskOp_Pause
 	case stage.IsDeleted:
@@ -350,11 +349,11 @@ func (w *Worker) operateSubTaskStage(stage ha.Stage) error {
 	return w.OperateSubTask(stage.Task, op)
 }
 
-func (w *Worker) HandleRelayStage(ctx context.Context, stageCh chan ha.Stage, errCh chan error) {
+func (w *Worker) handleRelayStage(ctx context.Context, stageCh chan ha.Stage, errCh chan error) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.L().Info("worker is closed, HandleRelayStage will quit now")
+			log.L().Info("worker is closed, handleRelayStage will quit now")
 			return
 		case stage := <-stageCh:
 			err := w.operateRelayStage(ctx, stage)
@@ -376,9 +375,8 @@ func (w *Worker) operateRelayStage(ctx context.Context, stage ha.Stage) error {
 			w.relayHolder.Start()
 			w.relayPurger.Start()
 			return nil
-		} else {
-			op = pb.RelayOp_ResumeRelay
 		}
+		op = pb.RelayOp_ResumeRelay
 	case stage.Expect == pb.Stage_Paused:
 		op = pb.RelayOp_PauseRelay
 	case stage.IsDeleted:
