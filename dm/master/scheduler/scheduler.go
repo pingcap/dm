@@ -45,23 +45,28 @@ type Scheduler struct {
 
 	etcdCli *clientv3.Client
 
+	// all source configs, source ID -> source config.
+	sourceCfgs map[string]config.MysqlConfig
+
 	// all DM-workers, worker name -> worker.
 	workers map[string]*Worker
 
 	// all bound relationship, source ID -> worker.
 	bounds map[string]*Worker
 
-	// source ID -> source config.
-	sourceCfgs map[string]config.MysqlConfig
+	// unbound (pending to bound) sources, source ID -> struct{}{}
+	// NOTE: refactor to support scheduling by priority.
+	unbounds map[string]struct{}
 }
 
 // NewScheduler creates a new scheduler instance.
 func NewScheduler(pLogger *log.Logger) *Scheduler {
 	return &Scheduler{
 		logger:     pLogger.WithFields(zap.String("component", "scheduler")),
+		sourceCfgs: make(map[string]config.MysqlConfig),
 		workers:    make(map[string]*Worker),
 		bounds:     make(map[string]*Worker),
-		sourceCfgs: make(map[string]config.MysqlConfig),
+		unbounds:   make(map[string]struct{}),
 	}
 }
 
@@ -140,6 +145,7 @@ func (s *Scheduler) AddSourceCfg(cfg config.MysqlConfig) error {
 	}
 
 	s.sourceCfgs[cfg.SourceID] = cfg
+	s.pushToUnbound(cfg.SourceID)
 	return nil
 }
 
@@ -175,8 +181,43 @@ func (s *Scheduler) RemoveSourceCfg(source string) error {
 		return err
 	}
 
+	delete(s.sourceCfgs, source)
 	s.unboundWorker(source)
 	return nil
+}
+
+// GetSourceCfgByID gets source config by source ID.
+func (s *Scheduler) GetSourceCfgByID(source string) *config.MysqlConfig {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	cfg, ok := s.sourceCfgs[source]
+	if !ok {
+		return nil
+	}
+	clone := cfg
+	return &clone
+}
+
+// BoundSources returns all bound source IDs.
+func (s *Scheduler) BoundSources() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	IDs := make([]string, 0, len(s.bounds))
+	for ID := range s.bounds {
+		IDs = append(IDs, ID)
+	}
+	return IDs
+}
+
+// UnboundSources returns all unbound source IDs.
+func (s *Scheduler) UnboundSources() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	IDs := make([]string, 0, len(s.unbounds))
+	for ID := range s.unbounds {
+		IDs = append(IDs, ID)
+	}
+	return IDs
 }
 
 // AddWorker adds the information of the DM-worker when registering a new instance.
@@ -237,6 +278,13 @@ func (s *Scheduler) RemoveWorker(name string) error {
 	return nil
 }
 
+// GetWorkerByName gets worker agent by worker name.
+func (s *Scheduler) GetWorkerByName(name string) *Worker {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.workers[name]
+}
+
 // observerWorkers observe the online/offline status of DM-worker instances.
 func (s *Scheduler) observerWorkers(ctx context.Context, startRev int64) {
 
@@ -288,8 +336,14 @@ func (s *Scheduler) recoverWorkers(cli *clientv3.Client) (int64, error) {
 	return rev, nil
 }
 
+// pushToUnbound pushes the source to unbound (pending for bound).
+func (s *Scheduler) pushToUnbound(source string) {
+	s.unbounds[source] = struct{}{}
+}
+
 // recordWorker creates the worker agent (with Offline stage) and records in the scheduler.
 // this func is used when adding a new worker.
+// NOTE: trigger scheduler when the worker become online, not when added.
 func (s *Scheduler) recordWorker(info ha.WorkerInfo) (*Worker, error) {
 	w, err := NewWorker(info)
 	if err != nil {
@@ -301,6 +355,7 @@ func (s *Scheduler) recordWorker(info ha.WorkerInfo) (*Worker, error) {
 
 // deleteWorker deletes the recorded worker and bound.
 // this func is used when removing the worker.
+// NOTE: delete work should unbound the source.
 func (s *Scheduler) deleteWorker(name string) {
 	w, ok := s.workers[name]
 	if !ok {
@@ -313,6 +368,7 @@ func (s *Scheduler) deleteWorker(name string) {
 
 // boundWorker bounds the worker with the source.
 // this func is used when received keep-alive from the worker.
+// TODO(csuzhangxc): scheduler for pending sources.
 func (s *Scheduler) boundWorker(w *Worker, b ha.SourceBound) error {
 	err := w.ToBound(b)
 	if err != nil {
@@ -335,7 +391,8 @@ func (s *Scheduler) unboundWorker(source string) {
 
 // reset resets the internal status.
 func (s *Scheduler) reset() {
+	s.sourceCfgs = make(map[string]config.MysqlConfig)
 	s.workers = make(map[string]*Worker)
 	s.bounds = make(map[string]*Worker)
-	s.sourceCfgs = make(map[string]config.MysqlConfig)
+	s.unbounds = make(map[string]struct{})
 }
