@@ -160,7 +160,7 @@ func WatchSourceBound(ctx context.Context, cli *clientv3.Client,
 					log.L().Error("unsupported etcd event type", zap.Reflect("kv", ev.Kv), zap.Reflect("type", ev.Type))
 					continue
 				}
-				bound.Revision = resp.Header.Revision
+				bound.Revision = ev.Kv.ModRevision
 
 				if err != nil {
 					select {

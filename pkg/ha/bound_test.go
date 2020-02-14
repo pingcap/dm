@@ -68,7 +68,7 @@ func (t *testForEtcd) TestSourceBoundEtcd(c *C) {
 	close(boundCh)
 	close(errCh)
 	c.Assert(len(boundCh), Equals, 1)
-	bound1.Revision = rev3 // expect this == rev2?
+	bound1.Revision = rev2 // expect this == rev2?
 	c.Assert(<-boundCh, DeepEquals, bound1)
 	c.Assert(len(errCh), Equals, 0)
 
@@ -96,6 +96,13 @@ func (t *testForEtcd) TestSourceBoundEtcd(c *C) {
 	rev5 := resp.Header.Revision
 	c.Assert(rev5, Greater, rev4)
 
+	// delete bound2.
+	deleteOp = deleteSourceBoundOp(worker2)
+	resp, err = etcdTestCli.Txn(context.Background()).Then(deleteOp).Commit()
+	c.Assert(err, IsNil)
+	rev6 := resp.Header.Revision
+	c.Assert(rev6, Greater, rev5)
+
 	// watch the DELETE operation for bound1.
 	boundCh = make(chan SourceBound, 10)
 	errCh = make(chan error, 10)
@@ -107,6 +114,7 @@ func (t *testForEtcd) TestSourceBoundEtcd(c *C) {
 	c.Assert(len(boundCh), Equals, 1)
 	bo := <-boundCh
 	c.Assert(bo.IsDeleted, IsTrue)
+	c.Assert(bo.Revision, Equals, rev5)
 	c.Assert(len(errCh), Equals, 0)
 
 	// get again, bound1 not exists now.
