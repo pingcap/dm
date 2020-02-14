@@ -81,30 +81,45 @@ func PutSourceBound(cli *clientv3.Client, bound SourceBound) (int64, error) {
 }
 
 // GetSourceBound gets the source bound relationship for the specified DM-worker.
-func GetSourceBound(cli *clientv3.Client, worker string) (SourceBound, int64, error) {
+// if the bound relationship for the worker name not exist, return with `err == nil` and `revision == 0`.
+// if the worker name is "", it will return all bound relationships as a map{worker-name: bound}.
+// if the worker name is given, it will return a map{worker-name: bound} whose length is 1.
+func GetSourceBound(cli *clientv3.Client, worker string) (map[string]SourceBound, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
 
-	bound := SourceBound{}
-	resp, err := cli.Get(ctx, common.UpstreamBoundWorkerKeyAdapter.Encode(worker))
+	var (
+		sbm  = make(map[string]SourceBound)
+		resp *clientv3.GetResponse
+		err  error
+	)
+	if worker != "" {
+		resp, err = cli.Get(ctx, common.UpstreamBoundWorkerKeyAdapter.Encode(worker))
+	} else {
+		resp, err = cli.Get(ctx, common.UpstreamBoundWorkerKeyAdapter.Path(), clientv3.WithPrefix())
+	}
+
 	if err != nil {
-		return bound, 0, err
+		return sbm, 0, err
 	}
 
 	if resp.Count == 0 {
-		return bound, 0, nil
-	} else if resp.Count > 1 {
+		return sbm, 0, nil
+	} else if worker != "" && resp.Count > 1 {
 		// TODO(csuzhangxc): add terror.
 		// this should not happen.
-		return bound, 0, fmt.Errorf("too many bound relationship (%d) exist for the DM-worker %s", resp.Count, worker)
+		return sbm, 0, fmt.Errorf("too many bound relationship (%d) exist for the DM-worker %s", resp.Count, worker)
 	}
 
-	bound, err = sourceBoundFromJSON(string(resp.Kvs[0].Value))
-	if err != nil {
-		return bound, 0, err
+	for _, kvs := range resp.Kvs {
+		bound, err2 := sourceBoundFromJSON(string(kvs.Value))
+		if err2 != nil {
+			return sbm, 0, err2
+		}
+		sbm[bound.Worker] = bound
 	}
 
-	return bound, resp.Header.Revision, nil
+	return sbm, resp.Header.Revision, nil
 }
 
 // WatchSourceBound watches PUT & DELETE operations for the bound relationship of the specified DM-worker.

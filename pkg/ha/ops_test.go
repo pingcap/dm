@@ -33,7 +33,6 @@ func (t *testForEtcd) TestOpsEtcd(c *C) {
 		subtaskStage2  = NewSubTaskStage(pb.Stage_Running, source, task2)
 		emptyStage     = Stage{}
 		bound          = NewSourceBound(source, worker)
-		emptyBound     = SourceBound{}
 		sourceCfg      = config.MysqlConfig{}
 		emptySourceCfg = config.MysqlConfig{}
 		subtaskCfg1    = config.SubTaskConfig{}
@@ -62,10 +61,11 @@ func (t *testForEtcd) TestOpsEtcd(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(rev3, Equals, rev2)
 	c.Assert(st1, DeepEquals, relayStage)
-	bo1, rev3, err := GetSourceBound(etcdTestCli, worker)
+	sbm1, rev3, err := GetSourceBound(etcdTestCli, worker)
 	c.Assert(err, IsNil)
 	c.Assert(rev3, Equals, rev2)
-	c.Assert(bo1, DeepEquals, bound)
+	c.Assert(sbm1, HasLen, 1)
+	c.Assert(sbm1[worker], DeepEquals, bound)
 	soCfg1, rev3, err := GetSourceCfg(etcdTestCli, source, 0)
 	c.Assert(err, IsNil)
 	c.Assert(rev3, Equals, rev2)
@@ -81,10 +81,10 @@ func (t *testForEtcd) TestOpsEtcd(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(rev5, Equals, int64(0))
 	c.Assert(st2, Equals, emptyStage)
-	bo2, rev5, err := GetSourceBound(etcdTestCli, worker)
+	sbm2, rev5, err := GetSourceBound(etcdTestCli, worker)
 	c.Assert(err, IsNil)
 	c.Assert(rev5, Equals, int64(0))
-	c.Assert(bo2, DeepEquals, emptyBound)
+	c.Assert(sbm2, HasLen, 0)
 	soCfg2, rev5, err := GetSourceCfg(etcdTestCli, source, 0)
 	c.Assert(err, IsNil)
 	c.Assert(rev5, Equals, int64(0))
