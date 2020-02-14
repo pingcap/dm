@@ -36,7 +36,7 @@ type SourceBound struct {
 	// if it's true, it means the bound has been deleted in etcd.
 	IsDeleted bool `json:"-"`
 	// only has value in watcher, will get 0 in GetSourceBound
-	// record the etcd revision when getting this SourceBound
+	// record the etcd revision right after putting this SourceBound
 	Revision int64 `json:"-"`
 }
 
