@@ -68,7 +68,7 @@ func (t *testForEtcd) TestSourceBoundEtcd(c *C) {
 	close(boundCh)
 	close(errCh)
 	c.Assert(len(boundCh), Equals, 1)
-	bound1.Revision = rev2 // expect this == rev2?
+	bound1.Revision = rev2
 	c.Assert(<-boundCh, DeepEquals, bound1)
 	c.Assert(len(errCh), Equals, 0)
 
