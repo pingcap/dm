@@ -38,66 +38,88 @@ func (t *testForEtcd) TestSourceBoundEtcd(c *C) {
 
 	var (
 		watchTimeout = 500 * time.Millisecond
-		worker       = "dm-worker-1"
-		emptyBound   = SourceBound{}
-		bound        = NewSourceBound("mysql-replica-1", worker)
+		worker1      = "dm-worker-1"
+		worker2      = "dm-worker-2"
+		bound1       = NewSourceBound("mysql-replica-1", worker1)
+		bound2       = NewSourceBound("mysql-replica-2", worker2)
 	)
-	c.Assert(bound.IsDeleted, IsFalse)
+	c.Assert(bound1.IsDeleted, IsFalse)
 
 	// no bound exists.
-	bo1, rev1, err := GetSourceBound(etcdTestCli, worker)
+	sbm1, rev1, err := GetSourceBound(etcdTestCli, "")
 	c.Assert(err, IsNil)
 	c.Assert(rev1, Equals, int64(0))
-	c.Assert(bo1, DeepEquals, emptyBound)
+	c.Assert(sbm1, HasLen, 0)
 
-	// put a bound.
-	rev2, err := PutSourceBound(etcdTestCli, bound)
+	// put two bounds.
+	rev2, err := PutSourceBound(etcdTestCli, bound1)
 	c.Assert(err, IsNil)
 	c.Assert(rev2, Greater, rev1)
+	rev3, err := PutSourceBound(etcdTestCli, bound2)
+	c.Assert(err, IsNil)
+	c.Assert(rev3, Greater, rev2)
 
-	// watch the PUT operation for the bound.
+	// watch the PUT operation for the bound1.
 	boundCh := make(chan SourceBound, 10)
 	errCh := make(chan error, 10)
 	ctx, cancel := context.WithTimeout(context.Background(), watchTimeout)
-	WatchSourceBound(ctx, etcdTestCli, worker, rev2, boundCh, errCh)
+	WatchSourceBound(ctx, etcdTestCli, worker1, rev2, boundCh, errCh)
 	cancel()
 	close(boundCh)
 	close(errCh)
 	c.Assert(len(boundCh), Equals, 1)
-	bound.Revision = rev2
-	c.Assert(<-boundCh, DeepEquals, bound)
+	bound1.Revision = rev2 // expect this == rev2?
+	c.Assert(<-boundCh, DeepEquals, bound1)
 	c.Assert(len(errCh), Equals, 0)
 
-	// get the bound back.
-	bo2, rev3, err := GetSourceBound(etcdTestCli, worker)
+	// get bound1 back.
+	bound1.Revision = 0
+	sbm2, rev4, err := GetSourceBound(etcdTestCli, worker1)
 	c.Assert(err, IsNil)
-	c.Assert(rev3, Equals, rev2)
-	bound.Revision = 0
-	c.Assert(bo2, DeepEquals, bound)
+	c.Assert(rev4, Equals, rev3)
+	c.Assert(sbm2, HasLen, 1)
+	c.Assert(sbm2[worker1], DeepEquals, bound1)
 
-	// delete the bound.
-	deleteOp := deleteSourceBoundOp(worker)
+	// get bound1 and bound2 back.
+	bound2.Revision = 0
+	sbm2, rev4, err = GetSourceBound(etcdTestCli, "")
+	c.Assert(err, IsNil)
+	c.Assert(rev4, Equals, rev3)
+	c.Assert(sbm2, HasLen, 2)
+	c.Assert(sbm2[worker1], DeepEquals, bound1)
+	c.Assert(sbm2[worker2], DeepEquals, bound2)
+
+	// delete bound1.
+	deleteOp := deleteSourceBoundOp(worker1)
 	resp, err := etcdTestCli.Txn(context.Background()).Then(deleteOp).Commit()
 	c.Assert(err, IsNil)
-	rev4 := resp.Header.Revision
-	c.Assert(rev4, Greater, rev3)
+	rev5 := resp.Header.Revision
+	c.Assert(rev5, Greater, rev4)
 
-	// watch the DELETE operation for the bound.
+	// delete bound2.
+	deleteOp = deleteSourceBoundOp(worker2)
+	resp, err = etcdTestCli.Txn(context.Background()).Then(deleteOp).Commit()
+	c.Assert(err, IsNil)
+	rev6 := resp.Header.Revision
+	c.Assert(rev6, Greater, rev5)
+
+	// watch the DELETE operation for bound1.
 	boundCh = make(chan SourceBound, 10)
 	errCh = make(chan error, 10)
 	ctx, cancel = context.WithTimeout(context.Background(), watchTimeout)
-	WatchSourceBound(ctx, etcdTestCli, worker, rev4, boundCh, errCh)
+	WatchSourceBound(ctx, etcdTestCli, worker1, rev5, boundCh, errCh)
 	cancel()
 	close(boundCh)
 	close(errCh)
 	c.Assert(len(boundCh), Equals, 1)
-	bo3 := <-boundCh
-	c.Assert(bo3.IsDeleted, IsTrue)
+	bo := <-boundCh
+	c.Assert(bo.IsDeleted, IsTrue)
+	c.Assert(bo.Revision, Equals, rev5)
 	c.Assert(len(errCh), Equals, 0)
 
-	// get again, not exists now.
-	bo4, rev5, err := GetSourceBound(etcdTestCli, worker)
+	// get again, bound1 not exists now.
+	sbm3, rev6, err := GetSourceBound(etcdTestCli, worker1)
 	c.Assert(err, IsNil)
-	c.Assert(rev5, Equals, int64(0))
-	c.Assert(bo4, DeepEquals, emptyBound)
+	c.Assert(rev6, Equals, int64(0))
+	c.Assert(sbm3, HasLen, 0)
 }

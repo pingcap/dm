@@ -250,7 +250,7 @@ func watchStage(ctx context.Context, watchCh clientv3.WatchChan,
 					log.L().Error("unsupported etcd event type", zap.Reflect("kv", ev.Kv), zap.Reflect("type", ev.Type))
 					continue
 				}
-				stage.Revision = resp.Header.Revision
+				stage.Revision = ev.Kv.ModRevision
 
 				if err != nil {
 					select {
