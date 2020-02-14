@@ -1,6 +1,9 @@
 import React, { useState, useMemo, useRef } from 'react'
-import { Button, Icon, Tree, Tooltip, message } from 'antd'
+import { Button, Icon, Tree, Tooltip, message, Checkbox } from 'antd'
+import { AntTreeNodeSelectedEvent } from 'antd/lib/tree'
+import { AntTreeNodeDropEvent, AntTreeNodeMouseEvent } from 'antd/lib/tree/Tree'
 import styled from 'styled-components'
+import { FormattedMessage, useIntl } from 'react-intl'
 import {
   IPageAction,
   IFullInstance,
@@ -14,8 +17,6 @@ import {
   ITaskInfo,
   IInstances
 } from '../types'
-import { AntTreeNodeSelectedEvent } from 'antd/lib/tree'
-import { AntTreeNodeDropEvent, AntTreeNodeMouseEvent } from 'antd/lib/tree/Tree'
 import BinlogFilterModal from './BinlogFilterModal'
 import { genFinalConfig } from '../utils/config-util'
 import { generateConfig, downloadConfig } from '../services/api'
@@ -85,6 +86,11 @@ const Container = styled.div`
     top: 10px;
     right: 10px;
   }
+
+  .auto-sync-option {
+    margin-top: 10px;
+    width: 300px;
+  }
 `
 
 type LastStateRef = {
@@ -118,6 +124,8 @@ type Props = IPageAction<any> & {
 }
 
 function MigrateStep({ onNext, onPrev, sourceConfig, ...remainProps }: Props) {
+  const intl = useIntl()
+
   const sourceInstances: IFullInstances = sourceConfig.sourceInstances
   const [sourceSchemas, setSourceSchemas] = useState<IFullSchemas>(
     sourceConfig.sourceSchemas
@@ -172,11 +180,14 @@ function MigrateStep({ onNext, onPrev, sourceConfig, ...remainProps }: Props) {
   // 左移，右移，拖拽，重命名需要记录 lastStateRef
   const lastStateRef = useRef<LastStateRef | null>(null)
 
+  // 是否自动同步上游新增库和新增表的选项
+  const [autoSyncUpstream, setAutoSyncUpstream] = useState(false)
+
   /////////////////////////////////
 
   function cleanTargetInstance() {
     // confirm
-    if (!window.confirm('你确定要清空下游实例吗？')) {
+    if (!window.confirm(intl.formatMessage({ id: 'reset_confirm' }))) {
       return
     }
 
@@ -196,7 +207,7 @@ function MigrateStep({ onNext, onPrev, sourceConfig, ...remainProps }: Props) {
 
   function undo() {
     // confirm
-    if (!window.confirm('你确定要撤消此次操作吗？')) {
+    if (!window.confirm(intl.formatMessage({ id: 'undo_confirm' }))) {
       return
     }
 
@@ -332,6 +343,9 @@ function MigrateStep({ onNext, onPrev, sourceConfig, ...remainProps }: Props) {
     // console.log(JSON.stringify(selectedTargetItem))
     // console.log(selectedTargetItem.toString())
     // console.log('target', targetSchemas)
+    // 现在知道原因了，是因为打印了这个对象后马上对它进行了修改
+    // 在 chrome 的 inspect 窗口观察 console.log(obj) 的输出时，
+    // 看到的并不是对象在打印时刻的值，而是当前最新的值，因为它是一个引用
     recordLastState()
     // console.log('current:', lastStateRef.current)
 
@@ -700,13 +714,16 @@ function MigrateStep({ onNext, onPrev, sourceConfig, ...remainProps }: Props) {
     if ((targetItem as IFullInstance).type === 'instance') {
       return
     }
-    const newName = prompt('请输入新名字：', targetItem.newName)
+    const newName = prompt(
+      intl.formatMessage({ id: 'new_name' }),
+      targetItem.newName
+    )
     if (newName === null || newName === targetItem.newName) {
       // click cancel or change nothing
       return
     }
     if (newName === '') {
-      alert('名字不能为空')
+      alert(intl.formatMessage({ id: 'name_can_not_empty' }))
       return
     }
     let existNames: string[] = []
@@ -737,7 +754,7 @@ function MigrateStep({ onNext, onPrev, sourceConfig, ...remainProps }: Props) {
     }
     const nameExisted = existNames.includes(newName)
     if (nameExisted) {
-      alert('名字已被占用')
+      alert(intl.formatMessage({ id: 'name_taken' }))
       return
     }
 
@@ -808,22 +825,28 @@ function MigrateStep({ onNext, onPrev, sourceConfig, ...remainProps }: Props) {
       instancesConfig,
       sourceSchemas,
       targetSchemas,
-      allTables
+      allTables,
+      autoSyncUpstream
     )
     let res = await generateConfig(finalConfig)
     setLoading(false)
     if (res.err) {
-      message.error('同步规则创建失败！')
+      message.error(intl.formatMessage({ id: 'config_create_fail' }))
       return
     }
-    message.info(`同步规则创建成功，文件在服务器上位于 ${res.data.filepath}`)
+    message.info(
+      intl.formatMessage(
+        { id: 'config_create_ok' },
+        { filepath: res.data.filepath }
+      )
+    )
     downloadConfig(res.data.filepath)
   }
 
   /////////////////////////////////
 
   function goHome() {
-    if (window.confirm('你确定要返回首页吗？返回将丢失所有操作！')) {
+    if (window.confirm(intl.formatMessage({ id: 'back_home_confirm' }))) {
       onNext()
     }
   }
@@ -937,9 +960,7 @@ function MigrateStep({ onNext, onPrev, sourceConfig, ...remainProps }: Props) {
                       title={
                         <Tooltip
                           placement="right"
-                          title={`${table.sourceId}:${table.schema}:${
-                            table.table
-                          }`}
+                          title={`${table.sourceId}:${table.schema}:${table.table}`}
                         >
                           {table.newName}
                         </Tooltip>
@@ -955,9 +976,7 @@ function MigrateStep({ onNext, onPrev, sourceConfig, ...remainProps }: Props) {
                               title={
                                 <Tooltip
                                   placement="right"
-                                  title={`${tb.sourceId}:${tb.schema}:${
-                                    tb.table
-                                  }`}
+                                  title={`${tb.sourceId}:${tb.schema}:${tb.table}`}
                                 >
                                   {tb.newName}
                                 </Tooltip>
@@ -979,8 +998,22 @@ function MigrateStep({ onNext, onPrev, sourceConfig, ...remainProps }: Props) {
     <Container>
       <div className="dbtable-shuttle-container">
         <div>
-          <h2>上游实例</h2>
+          <h2>
+            <FormattedMessage id="upstream" />
+          </h2>
           <div className="tree-container">{renderSourceTables()}</div>
+          <div className="auto-sync-option">
+            <Checkbox
+              checked={autoSyncUpstream}
+              onChange={e => setAutoSyncUpstream(e.target.checked)}
+            >
+              <FormattedMessage id="auto_sync" />
+              &nbsp;
+              <Tooltip title={intl.formatMessage({ id: 'auto_sync_explain' })}>
+                <Icon type="question-circle" />
+              </Tooltip>
+            </Checkbox>
+          </div>
         </div>
         <div className="shuttle-arrows">
           <Button disabled={!enableMoveRight} onClick={moveRight}>
@@ -991,29 +1024,40 @@ function MigrateStep({ onNext, onPrev, sourceConfig, ...remainProps }: Props) {
           </Button>
         </div>
         <div>
-          <h2>下游实例</h2>
+          <h2>
+            <FormattedMessage id="downstream" />
+          </h2>
           <div className="tree-container">
             {renderTargetTables()}
             <div className="action-icons">
-              <Button onClick={undo} disabled={lastStateRef.current === null}>
-                <Icon type="undo" />
-              </Button>
-              <Button
-                onClick={cleanTargetInstance}
-                disabled={targetInstance.schemas.length === 0}
-              >
-                <Icon type="rollback" />
-              </Button>
+              <Tooltip title={intl.formatMessage({ id: 'go_back_tooltip' })}>
+                <Button onClick={undo} disabled={lastStateRef.current === null}>
+                  <Icon type="undo" />
+                </Button>
+              </Tooltip>
+              <span>&nbsp;</span>
+              <Tooltip title={intl.formatMessage({ id: 'reset_tooltip' })}>
+                <Button
+                  onClick={cleanTargetInstance}
+                  disabled={targetInstance.schemas.length === 0}
+                >
+                  <Icon type="delete" />
+                </Button>
+              </Tooltip>
             </div>
           </div>
         </div>
       </div>
       <div className="action-buttons">
-        <Button onClick={() => onPrev()}>上一步</Button>
-        <Button type="primary" onClick={handleSubmit} loading={loading}>
-          完成并下载
+        <Button onClick={() => onPrev()}>
+          <FormattedMessage id="pre" />
         </Button>
-        <Button onClick={goHome}>返回首页</Button>
+        <Button type="primary" onClick={handleSubmit} loading={loading}>
+          <FormattedMessage id="finish_and_download" />
+        </Button>
+        <Button onClick={goHome}>
+          <FormattedMessage id="go_home" />
+        </Button>
       </div>
       <BinlogFilterModal
         key={selectedSourceItem.key + `${Date.now()}`}

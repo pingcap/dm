@@ -1,6 +1,7 @@
 import React, { useState, useContext } from 'react'
 import styled from 'styled-components'
 import { Form, Input, Icon, Button, Divider, message } from 'antd'
+import { FormattedMessage, useIntl } from 'react-intl'
 import {
   IPageAction,
   ITargetInstance,
@@ -70,6 +71,7 @@ type DatabaseConfigProps = {
 }
 
 function DatabaseConfig({ dbConfig, onData }: DatabaseConfigProps) {
+  const intl = useIntl()
   const edit = useContext(EditContext)
 
   const [config, setConfig] = useState<IDatabase>(dbConfig)
@@ -100,7 +102,7 @@ function DatabaseConfig({ dbConfig, onData }: DatabaseConfigProps) {
           onChange={changeHandler}
         />
       </Form.Item>
-      <Form.Item label="端口:">
+      <Form.Item label={intl.formatMessage({ id: 'port' })}>
         <Input
           disabled={edit}
           placeholder="3306"
@@ -109,7 +111,7 @@ function DatabaseConfig({ dbConfig, onData }: DatabaseConfigProps) {
           onChange={changeHandler}
         />
       </Form.Item>
-      <Form.Item label="用户名:">
+      <Form.Item label={intl.formatMessage({ id: 'user' })}>
         <Input
           disabled={edit}
           placeholder="root"
@@ -118,7 +120,7 @@ function DatabaseConfig({ dbConfig, onData }: DatabaseConfigProps) {
           onChange={changeHandler}
         />
       </Form.Item>
-      <Form.Item label="密码:">
+      <Form.Item label={intl.formatMessage({ id: 'pwd' })}>
         <Input
           disabled={edit}
           placeholder="pwd"
@@ -268,6 +270,7 @@ function InstancesStep({
   showBinlog,
   onFetchSourceConfig
 }: InstancesStepProps) {
+  const intl = useIntl()
   const edit = useContext(EditContext)
 
   const [targetInstance, setTargetInstance] = useState<ITargetInstance>(
@@ -336,7 +339,12 @@ function InstancesStep({
     setLoading(true)
     const res = await checkTargetInstance(targetInstance)
     if (res.err) {
-      message.error(`验证下游实例失败！${res.err.message}`)
+      message.error(
+        intl.formatMessage(
+          { id: 'downstream_fail' },
+          { errMsg: res.err.message }
+        )
+      )
       setLoading(false)
       return
     }
@@ -348,7 +356,10 @@ function InstancesStep({
       const res = await checkSourceInstance(instance)
       if (res.err) {
         message.error(
-          `验证上游实例 ${instance.sourceId} 失败！${res.err.message}`
+          intl.formatMessage(
+            { id: 'upstream_fail' },
+            { sourceId: instance.sourceId, errMsg: res.err.message }
+          )
         )
         setLoading(false)
         return
@@ -368,7 +379,9 @@ function InstancesStep({
   return (
     <Container>
       <Form className="config-instances-form">
-        <h2>上游实例</h2>
+        <h2>
+          <FormattedMessage id="upstream" />
+        </h2>
         {sourceInstances.map(item => (
           <SourceInstanceItem
             key={item.uuid}
@@ -382,14 +395,17 @@ function InstancesStep({
         {!edit && (
           <div className="add-button">
             <Button type="dashed" onClick={addSourceInstance}>
-              <Icon type="plus" /> 添加
+              <Icon type="plus" />
+              <FormattedMessage id="add" />
             </Button>
           </div>
         )}
 
         <Divider />
 
-        <h2>下游实例</h2>
+        <h2>
+          <FormattedMessage id="downstream" />
+        </h2>
         <div className="instance-item">
           <DatabaseConfig
             dbConfig={targetInstance}
@@ -398,14 +414,16 @@ function InstancesStep({
         </div>
 
         <div className="action-buttons">
-          <Button onClick={() => onPrev()}>上一步</Button>
+          <Button onClick={() => onPrev()}>
+            <FormattedMessage id="pre" />
+          </Button>
           <Button
             type="primary"
             htmlType="submit"
             onClick={handleSubmit}
             loading={loading}
           >
-            下一步
+            <FormattedMessage id="next" />
           </Button>
         </div>
       </Form>
