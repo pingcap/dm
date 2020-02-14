@@ -64,6 +64,7 @@ func (t *testForEtcd) TestSourceBoundEtcd(c *C) {
 	close(boundCh)
 	close(errCh)
 	c.Assert(len(boundCh), Equals, 1)
+	bound.Revision = rev2
 	c.Assert(<-boundCh, DeepEquals, bound)
 	c.Assert(len(errCh), Equals, 0)
 
@@ -71,6 +72,7 @@ func (t *testForEtcd) TestSourceBoundEtcd(c *C) {
 	bo2, rev3, err := GetSourceBound(etcdTestCli, worker)
 	c.Assert(err, IsNil)
 	c.Assert(rev3, Equals, rev2)
+	bound.Revision = 0
 	c.Assert(bo2, DeepEquals, bound)
 
 	// delete the bound.

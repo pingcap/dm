@@ -73,7 +73,7 @@ func (t *testForEtcd) TestSourceEtcd(c *C) {
 	source := cfg.SourceID
 
 	// no source config exist.
-	cfg1, rev1, err := GetSourceCfg(etcdTestCli, source)
+	cfg1, rev1, err := GetSourceCfg(etcdTestCli, source, 0)
 	c.Assert(err, IsNil)
 	c.Assert(rev1, Equals, int64(0))
 	c.Assert(cfg1, DeepEquals, emptyCfg)
@@ -84,7 +84,7 @@ func (t *testForEtcd) TestSourceEtcd(c *C) {
 	c.Assert(rev2, Greater, rev1)
 
 	// get the config back.
-	cfg2, rev3, err := GetSourceCfg(etcdTestCli, source)
+	cfg2, rev3, err := GetSourceCfg(etcdTestCli, source, 0)
 	c.Assert(err, IsNil)
 	c.Assert(rev3, Equals, rev2)
 	c.Assert(cfg2, DeepEquals, cfg)
@@ -95,7 +95,7 @@ func (t *testForEtcd) TestSourceEtcd(c *C) {
 	c.Assert(err, IsNil)
 
 	// get again, not exists now.
-	cfg3, rev4, err := GetSourceCfg(etcdTestCli, source)
+	cfg3, rev4, err := GetSourceCfg(etcdTestCli, source, 0)
 	c.Assert(err, IsNil)
 	c.Assert(rev4, Equals, int64(0))
 	c.Assert(cfg3, DeepEquals, emptyCfg)
