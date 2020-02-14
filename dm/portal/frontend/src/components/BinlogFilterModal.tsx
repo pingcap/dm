@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import { Modal, Tree } from 'antd'
-import { IFullSchema, IFullTable } from '../types'
 import styled from 'styled-components'
+import { FormattedMessage, useIntl } from 'react-intl'
+import { IFullSchema, IFullTable } from '../types'
 import { ALL_DML, DDL_FOR_SCHEMA, DDL_FOR_TABLE } from '../utils/config-util'
 const { TreeNode } = Tree
 
@@ -23,6 +24,7 @@ function BinlogFilterModal({
   targetItem,
   onUpdateItem
 }: Props) {
+  const intl = useIntl()
   const forTable = (targetItem as IFullTable).type === 'table'
   const [checkedKeys, setCheckedKeys] = useState<string[]>(targetItem.filters)
   const [filtersChanged, setFiltersChanged] = useState(false)
@@ -46,7 +48,10 @@ function BinlogFilterModal({
 
   return (
     <Modal
-      title={`Binlog 过滤 (${targetItem.key})`}
+      title={intl.formatMessage(
+        { id: 'binlog_filter' },
+        { target: targetItem.key }
+      )}
       visible={modalVisible}
       onCancel={onCancel}
       onOk={onOk}
@@ -54,7 +59,7 @@ function BinlogFilterModal({
     >
       {!forTable && (
         <WaringText>
-          注意：修改库的过滤规则会重置所有此库的上游表的过滤规则
+          <FormattedMessage id="binlog_modify_warning" />
         </WaringText>
       )}
       <Tree
