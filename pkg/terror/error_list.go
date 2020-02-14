@@ -517,6 +517,8 @@ const (
 	codeSchedulerWorkerNotExist
 	codeSchedulerWorkerOnline
 	codeSchedulerWorkerInvalidTrans
+	codeSchedulerSourceCfgExist
+	codeSchedulerSourceCfgNotExist
 )
 
 // Error instances
@@ -996,8 +998,10 @@ var (
 	// HA scheduler
 	ErrSchedulerNotStarted         = New(codeSchedulerNotStarted, ClassScheduler, ScopeInternal, LevelHigh, "the scheduler has not started")
 	ErrSchedulerStarted            = New(codeSchedulerStarted, ClassScheduler, ScopeInternal, LevelMedium, "the scheduler has already started")
-	ErrSchedulerWorkerExist        = New(codeSchedulerWorkerExist, ClassScheduler, ScopeInternal, LevelMedium, "dm-worker %s already exists")
+	ErrSchedulerWorkerExist        = New(codeSchedulerWorkerExist, ClassScheduler, ScopeInternal, LevelMedium, "dm-worker with name %s already exists")
 	ErrSchedulerWorkerNotExist     = New(codeSchedulerWorkerNotExist, ClassScheduler, ScopeInternal, LevelMedium, "dm-worker with name %s not exists")
 	ErrSchedulerWorkerOnline       = New(codeSchedulerWorkerOnline, ClassScheduler, ScopeInternal, LevelMedium, "dm-worker with name %s is still online, must shut it down first")
 	ErrSchedulerWorkerInvalidTrans = New(codeSchedulerWorkerInvalidTrans, ClassScheduler, ScopeInternal, LevelMedium, "invalid worker stage transformation, from %s to %s")
+	ErrSchedulerSourceCfgExist     = New(codeSchedulerSourceCfgExist, ClassScheduler, ScopeInternal, LevelMedium, "source config with ID %s already exists")
+	ErrSchedulerSourceCfgNotExist  = New(codeSchedulerSourceCfgNotExist, ClassScheduler, ScopeInternal, LevelMedium, "source config with ID %s not exists")
 )

@@ -20,6 +20,7 @@ import (
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -44,15 +45,23 @@ type Scheduler struct {
 
 	etcdCli *clientv3.Client
 
-	// worker name -> worker.
+	// all DM-workers, worker name -> worker.
 	workers map[string]*Worker
+
+	// all bound relationship, source ID -> worker.
+	bounds map[string]*Worker
+
+	// source ID -> source config.
+	sourceCfgs map[string]config.MysqlConfig
 }
 
 // NewScheduler creates a new scheduler instance.
 func NewScheduler(pLogger *log.Logger) *Scheduler {
 	return &Scheduler{
-		logger:  pLogger.WithFields(zap.String("component", "scheduler")),
-		workers: make(map[string]*Worker),
+		logger:     pLogger.WithFields(zap.String("component", "scheduler")),
+		workers:    make(map[string]*Worker),
+		bounds:     make(map[string]*Worker),
+		sourceCfgs: make(map[string]config.MysqlConfig),
 	}
 }
 
@@ -109,6 +118,67 @@ func (s *Scheduler) Close() {
 	s.logger.Info("the scheduler has closed")
 }
 
+// AddSourceCfg adds the upstream source config to the cluster.
+// NOTE: please verify the config before call this.
+func (s *Scheduler) AddSourceCfg(cfg config.MysqlConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.started {
+		return terror.ErrSchedulerNotStarted.Generate()
+	}
+
+	// check whether exists.
+	if cfg, ok := s.sourceCfgs[cfg.SourceID]; ok {
+		return terror.ErrSchedulerSourceCfgExist.Generate(cfg.SourceID)
+	}
+
+	// put the config into etcd.
+	_, err := ha.PutSourceCfg(s.etcdCli, cfg)
+	if err != nil {
+		return err
+	}
+
+	s.sourceCfgs[cfg.SourceID] = cfg
+	return nil
+}
+
+// RemoveSourceCfg removes the upstream source config in the cluster.
+// when removing the upstream source config, it should also remove:
+// - any existing relay stage.
+// - any source-worker bound relationship.
+func (s *Scheduler) RemoveSourceCfg(source string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.started {
+		return terror.ErrSchedulerNotStarted.Generate()
+	}
+
+	// check whether the config exists.
+	_, ok := s.sourceCfgs[source]
+	if !ok {
+		return terror.ErrSchedulerSourceCfgNotExist.Generate(source)
+	}
+
+	// TODO(csuzhangxc): check whether subtask exists.
+
+	// find worker name by source ID.
+	var worker string // empty should be find below.
+	if w, ok := s.bounds[source]; ok {
+		worker = w.BaseInfo().Name
+	}
+
+	// delete the info in etcd.
+	_, err := ha.DeleteSourceCfgRelayStageSourceBound(s.etcdCli, source, worker)
+	if err != nil {
+		return err
+	}
+
+	s.unboundWorker(source)
+	return nil
+}
+
 // AddWorker adds the information of the DM-worker when registering a new instance.
 // This only adds the information of the DM-worker,
 // in order to know whether it's online (ready to handle works),
@@ -137,12 +207,8 @@ func (s *Scheduler) AddWorker(name, addr string) error {
 	}
 
 	// generate an agent of DM-worker (with Offline stage) and keep it in the scheduler.
-	w, err := NewWorker(info)
-	if err != nil {
-		return err
-	}
-	s.workers[name] = w
-	return nil
+	_, err = s.recordWorker(info)
+	return err
 }
 
 // RemoveWorker removes the information of the DM-worker when removing the instance manually.
@@ -167,7 +233,7 @@ func (s *Scheduler) RemoveWorker(name string) error {
 	if err != nil {
 		return err
 	}
-	delete(s.workers, name)
+	s.deleteWorker(name)
 	return nil
 }
 
@@ -202,8 +268,8 @@ func (s *Scheduler) recoverWorkers(cli *clientv3.Client) (int64, error) {
 	}
 
 	for name, info := range wim {
-		// create the agent of worker with offline stage.
-		w, err2 := NewWorker(info)
+		// create and record the worker agent.
+		w, err2 := s.recordWorker(info)
 		if err2 != nil {
 			return 0, err2
 		}
@@ -213,17 +279,63 @@ func (s *Scheduler) recoverWorkers(cli *clientv3.Client) (int64, error) {
 		}
 		// set the stage as Bound and record the bound relationship if exists.
 		if bound, ok := sbm[name]; ok {
-			err2 = w.ToBound(bound)
+			err2 = s.boundWorker(w, bound)
 			if err2 != nil {
 				return 0, err2
 			}
 		}
-		s.workers[name] = w
 	}
 	return rev, nil
+}
+
+// recordWorker creates the worker agent (with Offline stage) and records in the scheduler.
+// this func is used when adding a new worker.
+func (s *Scheduler) recordWorker(info ha.WorkerInfo) (*Worker, error) {
+	w, err := NewWorker(info)
+	if err != nil {
+		return nil, err
+	}
+	s.workers[info.Name] = w
+	return w, nil
+}
+
+// deleteWorker deletes the recorded worker and bound.
+// this func is used when removing the worker.
+func (s *Scheduler) deleteWorker(name string) {
+	w, ok := s.workers[name]
+	if !ok {
+		return
+	}
+	w.Close()
+	delete(s.workers, name)
+	delete(s.bounds, w.Bound().Source)
+}
+
+// boundWorker bounds the worker with the source.
+// this func is used when received keep-alive from the worker.
+func (s *Scheduler) boundWorker(w *Worker, b ha.SourceBound) error {
+	err := w.ToBound(b)
+	if err != nil {
+		return err
+	}
+	s.bounds[b.Source] = w
+	return nil
+}
+
+// unboundWorker unbounds the worker with the source.
+// this func is used when removing the upstream source.
+func (s *Scheduler) unboundWorker(source string) {
+	w, ok := s.bounds[source]
+	if !ok {
+		return
+	}
+	w.ToFree()
+	delete(s.bounds, source)
 }
 
 // reset resets the internal status.
 func (s *Scheduler) reset() {
 	s.workers = make(map[string]*Worker)
+	s.bounds = make(map[string]*Worker)
+	s.sourceCfgs = make(map[string]config.MysqlConfig)
 }

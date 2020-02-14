@@ -35,6 +35,8 @@ func (t *testWorker) TestWorker(c *C) {
 	// create a worker with Offline stage and not bound.
 	w, err := NewWorker(info)
 	c.Assert(err, IsNil)
+	defer w.Close()
+	c.Assert(w.BaseInfo(), DeepEquals, info)
 	c.Assert(w.Stage(), Equals, WorkerOffline)
 	c.Assert(w.Bound(), DeepEquals, nullBound)
 
