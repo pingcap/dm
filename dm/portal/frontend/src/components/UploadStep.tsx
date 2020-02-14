@@ -1,8 +1,8 @@
 import React from 'react'
 import { Upload, Button, Icon, message } from 'antd'
+import { UploadProps, UploadChangeParam } from 'antd/lib/upload'
 import styled from 'styled-components'
 import { IPageAction, IFinalConfig } from '../types'
-import { UploadProps, UploadChangeParam } from 'antd/lib/upload'
 import { parseFinalConfig } from '../utils/config-util'
 
 const { Dragger } = Upload
@@ -47,9 +47,7 @@ function UploadStep({ onPrev, onNext, onData }: Props) {
         )
       } else if (status === 'error') {
         message.error(
-          `${info.file.name} file upload failed. error: ${
-            info.file.response.error
-          }`
+          `${info.file.name} file upload failed. error: ${info.file.response.error}`
         )
       }
     }
