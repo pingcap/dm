@@ -80,6 +80,12 @@ func PutSourceBound(cli *clientv3.Client, bound SourceBound) (int64, error) {
 	return etcdutil.DoOpsInOneTxn(cli, op)
 }
 
+// DeleteSourceBound deletes the bound relationship in etcd for the specified worker.
+func DeleteSourceBound(cli *clientv3.Client, worker string) (int64, error) {
+	op := deleteSourceBoundOp(worker)
+	return etcdutil.DoOpsInOneTxn(cli, op)
+}
+
 // GetSourceBound gets the source bound relationship for the specified DM-worker.
 // if the bound relationship for the worker name not exist, return with `err == nil` and `revision == 0`.
 // if the worker name is "", it will return all bound relationships as a map{worker-name: bound}.
