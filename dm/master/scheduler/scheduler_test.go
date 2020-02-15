@@ -70,19 +70,22 @@ type testScheduler struct{}
 
 var _ = Suite(&testScheduler{})
 
+var (
+	sourceCfgEmpty config.MysqlConfig
+)
+
 func (t *testScheduler) TestScheduler(c *C) {
 	defer clearTestInfoOperation(c)
 
 	var (
-		logger         = log.L()
-		s              = NewScheduler(&logger)
-		sourceID1      = "mysql-replica-1"
-		workerName1    = "dm-worker-1"
-		workerAddr1    = "127.0.0.1:8262"
-		workerInfo1    = ha.NewWorkerInfo(workerName1, workerAddr1)
-		sourceCfg1     config.MysqlConfig
-		sourceCfgEmpty config.MysqlConfig
-		keepAliveTTL   = int64(1) // NOTE: this should be >= minLeaseTTL, in second.
+		logger       = log.L()
+		s            = NewScheduler(&logger)
+		sourceID1    = "mysql-replica-1"
+		workerName1  = "dm-worker-1"
+		workerAddr1  = "127.0.0.1:8262"
+		workerInfo1  = ha.NewWorkerInfo(workerName1, workerAddr1)
+		sourceCfg1   config.MysqlConfig
+		keepAliveTTL = int64(1) // NOTE: this should be >= minLeaseTTL, in second.
 	)
 	c.Assert(sourceCfg1.LoadFromFile(sourceSampleFile), IsNil)
 	sourceCfg1.SourceID = sourceID1
@@ -107,54 +110,25 @@ func (t *testScheduler) TestScheduler(c *C) {
 
 	// CASE 2.1: add the first source config.
 	// no source config exist before added.
-	c.Assert(s.GetSourceCfgByID(sourceID1), IsNil)
-	sourceCfgV, _, err := ha.GetSourceCfg(etcdTestCli, sourceID1, 0)
-	c.Assert(err, IsNil)
-	c.Assert(sourceCfgV, DeepEquals, sourceCfgEmpty)
+	t.sourceCfgNotExist(c, s, sourceID1)
 	// add source config1.
 	c.Assert(s.AddSourceCfg(sourceCfg1), IsNil)
 	c.Assert(terror.ErrSchedulerSourceCfgExist.Equal(s.AddSourceCfg(sourceCfg1)), IsTrue) // can't add multiple times.
 	// the source config added.
-	sourceCfgP := s.GetSourceCfgByID(sourceID1)
-	c.Assert(sourceCfgP, DeepEquals, &sourceCfg1)
-	sourceCfgV, _, err = ha.GetSourceCfg(etcdTestCli, sourceID1, 0)
-	c.Assert(err, IsNil)
-	c.Assert(sourceCfgV, DeepEquals, sourceCfg1)
+	t.sourceCfgExist(c, s, sourceCfg1)
 	// one unbound source exist (because no free worker).
-	c.Assert(s.BoundSources(), HasLen, 0)
-	unbounds := s.UnboundSources()
-	c.Assert(unbounds, HasLen, 1)
-	c.Assert(unbounds[0], Equals, sourceID1)
-	c.Assert(s.GetWorkerBySource(sourceID1), IsNil)
-	sourceBoundM, _, err := ha.GetSourceBound(etcdTestCli, "")
-	c.Assert(err, IsNil)
-	c.Assert(sourceBoundM, HasLen, 0)
+	t.sourceBounds(c, s, []string{}, []string{sourceID1})
 
 	// CASE 2.2: add the first worker.
 	// no worker exist before added.
-	c.Assert(s.GetWorkerByName(workerName1), IsNil)
-	workerM, _, err := ha.GetAllWorkerInfo(etcdTestCli)
-	c.Assert(err, IsNil)
-	c.Assert(workerM, HasLen, 0)
+	t.workerNotExist(c, s, workerName1)
 	// add worker1.
 	c.Assert(s.AddWorker(workerName1, workerAddr1), IsNil)
 	c.Assert(terror.ErrSchedulerWorkerExist.Equal(s.AddWorker(workerName1, workerAddr1)), IsTrue) // can't add multiple times.
 	// the worker added.
-	c.Assert(s.GetWorkerByName(workerName1), NotNil)
-	c.Assert(s.GetWorkerByName(workerName1).BaseInfo(), DeepEquals, workerInfo1)
-	workerM, _, err = ha.GetAllWorkerInfo(etcdTestCli)
-	c.Assert(err, IsNil)
-	c.Assert(workerM, HasLen, 1)
-	c.Assert(workerM[workerName1], DeepEquals, workerInfo1)
+	t.workerExist(c, s, workerInfo1)
 	// still no bounds (because the worker is offline).
-	c.Assert(s.BoundSources(), HasLen, 0)
-	unbounds = s.UnboundSources()
-	c.Assert(unbounds, HasLen, 1)
-	c.Assert(unbounds[0], Equals, sourceID1)
-	c.Assert(s.GetWorkerBySource(sourceID1), IsNil)
-	sourceBoundM, _, err = ha.GetSourceBound(etcdTestCli, "")
-	c.Assert(err, IsNil)
-	c.Assert(sourceBoundM, HasLen, 0)
+	t.sourceBounds(c, s, []string{}, []string{sourceID1})
 
 	// CASE 2.3: the worker become online.
 	// do keep-alive for worker1.
@@ -170,16 +144,8 @@ func (t *testScheduler) TestScheduler(c *C) {
 		bounds := s.BoundSources()
 		return len(bounds) == 1 && bounds[0] == sourceID1
 	})
-	c.Assert(s.UnboundSources(), HasLen, 0)
-	worker1 := s.GetWorkerBySource(sourceID1)
-	c.Assert(worker1, NotNil)
-	c.Assert(worker1.BaseInfo(), DeepEquals, workerInfo1)
-	sourceBoundM, _, err = ha.GetSourceBound(etcdTestCli, "")
-	c.Assert(err, IsNil)
-	c.Assert(sourceBoundM, HasLen, 1)
-	c.Assert(sourceBoundM[workerName1].Source, Equals, sourceID1)
-	c.Assert(s.GetWorkerByName(workerName1).Bound().Source, Equals, sourceID1)
-	c.Assert(s.GetWorkerByName(workerName1).Stage(), Equals, WorkerBound)
+	t.sourceBounds(c, s, []string{sourceID1}, []string{})
+	t.workerBound(c, s, ha.NewSourceBound(sourceID1, workerName1))
 
 	// start a task with only one source.
 
@@ -211,14 +177,9 @@ func (t *testScheduler) TestScheduler(c *C) {
 		unbounds := s.UnboundSources()
 		return len(unbounds) == 1 && unbounds[0] == sourceID1
 	})
-	c.Assert(s.BoundSources(), HasLen, 0)
-	c.Assert(s.GetWorkerBySource(sourceID1), IsNil)
-	sourceBoundM, _, err = ha.GetSourceBound(etcdTestCli, "")
-	c.Assert(err, IsNil)
-	c.Assert(sourceBoundM, HasLen, 0)
-	c.Assert(s.GetWorkerByName(workerName1), NotNil)
-	c.Assert(s.GetWorkerByName(workerName1).Bound(), DeepEquals, nullBound)
-	c.Assert(s.GetWorkerByName(workerName1).Stage(), Equals, WorkerOffline)
+	t.sourceBounds(c, s, []string{}, []string{sourceID1})
+	// worker1 still exists, but it's offline.
+	t.workerOffline(c, s, workerName1)
 
 	// shutdown and offline worker1.
 
@@ -231,4 +192,81 @@ func (t *testScheduler) TestScheduler(c *C) {
 	//c.Assert(terror.ErrSchedulerWorkerNotExist.Equal(s.RemoveWorker(workerName1)), IsTrue) // not exists.
 
 	// bound source1 from worker1 to worker2.
+}
+
+func (t *testScheduler) sourceCfgNotExist(c *C, s *Scheduler, source string) {
+	c.Assert(s.GetSourceCfgByID(source), IsNil)
+	cfg, _, err := ha.GetSourceCfg(etcdTestCli, source, 0)
+	c.Assert(err, IsNil)
+	c.Assert(cfg, DeepEquals, sourceCfgEmpty)
+}
+
+func (t *testScheduler) sourceCfgExist(c *C, s *Scheduler, expectCfg config.MysqlConfig) {
+	cfgP := s.GetSourceCfgByID(expectCfg.SourceID)
+	c.Assert(cfgP, NotNil)
+	c.Assert(cfgP, DeepEquals, &expectCfg)
+	cfgV, _, err := ha.GetSourceCfg(etcdTestCli, expectCfg.SourceID, 0)
+	c.Assert(err, IsNil)
+	c.Assert(cfgV, DeepEquals, expectCfg)
+}
+
+func (t *testScheduler) workerNotExist(c *C, s *Scheduler, worker string) {
+	c.Assert(s.GetWorkerByName(worker), IsNil)
+	wm, _, err := ha.GetAllWorkerInfo(etcdTestCli)
+	c.Assert(err, IsNil)
+	_, ok := wm[worker]
+	c.Assert(ok, IsFalse)
+}
+
+func (t *testScheduler) workerExist(c *C, s *Scheduler, info ha.WorkerInfo) {
+	c.Assert(s.GetWorkerByName(info.Name), NotNil)
+	c.Assert(s.GetWorkerByName(info.Name).BaseInfo(), DeepEquals, info)
+	wm, _, err := ha.GetAllWorkerInfo(etcdTestCli)
+	c.Assert(err, IsNil)
+	c.Assert(wm[info.Name], DeepEquals, info)
+}
+
+func (t *testScheduler) workerOffline(c *C, s *Scheduler, worker string) {
+	w := s.GetWorkerByName(worker)
+	c.Assert(w, NotNil)
+	c.Assert(w.Bound(), DeepEquals, nullBound)
+	c.Assert(w.Stage(), Equals, WorkerOffline)
+	wm, _, err := ha.GetAllWorkerInfo(etcdTestCli)
+	c.Assert(err, IsNil)
+	_, ok := wm[worker]
+	c.Assert(ok, IsTrue)
+}
+
+func (t *testScheduler) workerBound(c *C, s *Scheduler, bound ha.SourceBound) {
+	w := s.GetWorkerByName(bound.Worker)
+	c.Assert(w, NotNil)
+	c.Assert(w.Bound(), DeepEquals, bound)
+	c.Assert(w.Stage(), Equals, WorkerBound)
+	sbm, _, err := ha.GetSourceBound(etcdTestCli, bound.Worker)
+	c.Assert(err, IsNil)
+	c.Assert(sbm[bound.Worker], DeepEquals, bound)
+}
+
+func (t *testScheduler) sourceBounds(c *C, s *Scheduler, expectBounds, expectUnbounds []string) {
+	c.Assert(s.BoundSources(), DeepEquals, expectBounds)
+	c.Assert(s.UnboundSources(), DeepEquals, expectUnbounds)
+
+	wToB, _, err := ha.GetSourceBound(etcdTestCli, "")
+	c.Assert(err, IsNil)
+	c.Assert(wToB, HasLen, len(expectBounds))
+
+	sToB := make(map[string]ha.SourceBound, len(wToB))
+	for _, b := range wToB {
+		sToB[b.Source] = b
+	}
+	for _, source := range expectBounds {
+		c.Assert(sToB[source], NotNil)
+		c.Assert(s.GetWorkerBySource(source), NotNil)
+		c.Assert(s.GetWorkerBySource(source).Stage(), Equals, WorkerBound)
+		c.Assert(sToB[source], DeepEquals, s.GetWorkerBySource(source).Bound())
+	}
+
+	for _, source := range expectUnbounds {
+		c.Assert(s.GetWorkerBySource(source), IsNil)
+	}
 }
