@@ -115,6 +115,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.AddWorker(workerName1, workerAddr1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.RemoveWorker(workerName1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.UpdateExpectRelayStage(pb.Stage_Running, sourceID1)), IsTrue)
+	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.UpdateExpectSubTaskStage(pb.Stage_Running, taskName1, sourceID1)), IsTrue)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -197,9 +198,48 @@ func (t *testScheduler) TestScheduler(c *C) {
 	t.subTaskCfgNotExist(c, s, taskName2, sourceID2)
 	t.subTaskStageMatch(c, s, taskName2, sourceID2, pb.Stage_InvalidStage)
 
-	// pause/resume task1.
+	// CASE 2.7: pause/resume task1.
+	c.Assert(s.UpdateExpectSubTaskStage(pb.Stage_Paused, taskName1, sourceID1), IsNil)
+	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_Paused)
+	c.Assert(s.UpdateExpectSubTaskStage(pb.Stage_Running, taskName1, sourceID1), IsNil)
+	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_Running)
 
-	// shutdown worker1.
+	// CASE 2.8: worker1 become offline.
+	// cancel keep-alive.
+	cancel1()
+	wg.Wait()
+	// wait for source1 unbound from worker1.
+	utils.WaitSomething(int(3*keepAliveTTL), time.Second, func() bool {
+		unbounds := s.UnboundSources()
+		return len(unbounds) == 1 && unbounds[0] == sourceID1
+	})
+	t.sourceBounds(c, s, []string{}, []string{sourceID1})
+	// static information are still there.
+	t.sourceCfgExist(c, s, sourceCfg1)
+	t.subTaskCfgExist(c, s, subtaskCfg1)
+	t.workerExist(c, s, workerInfo1)
+	// worker1 still exists, but it's offline.
+	t.workerOffline(c, s, workerName1)
+	// expect relay stage keep Running.
+	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
+	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_Running)
+
+	// shutdown the scheduler.
+	s.Close()
+
+	// CASE 3: start again with previous worker, relay stage, subtask stage.
+	c.Assert(s.Start(ctx, etcdTestCli), IsNil)
+
+	// CASE 3.1: previous information should recover.
+	// static information are still there.
+	t.sourceCfgExist(c, s, sourceCfg1)
+	t.subTaskCfgExist(c, s, subtaskCfg1)
+	t.workerExist(c, s, workerInfo1)
+	// worker1 still exists, but it's offline.
+	t.workerOffline(c, s, workerName1)
+	// expect relay stage keep Running.
+	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
+	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_Running)
 
 	// start worker1 again.
 
@@ -212,22 +252,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 	// stop task1.
 
 	// CASE 2.x: remove worker not supported when the worker is online.
-	c.Assert(terror.ErrSchedulerWorkerOnline.Equal(s.RemoveWorker(workerName1)), IsTrue)
-
-	// CASE 2.x: the worker become offline.
-	// cancel keep-alive.
-	cancel1()
-	wg.Wait()
-	// wait for source1 unbound from worker1.
-	utils.WaitSomething(int(3*keepAliveTTL), time.Second, func() bool {
-		unbounds := s.UnboundSources()
-		return len(unbounds) == 1 && unbounds[0] == sourceID1
-	})
-	t.sourceBounds(c, s, []string{}, []string{sourceID1})
-	// worker1 still exists, but it's offline.
-	t.workerOffline(c, s, workerName1)
-	// expect relay stage keep Running.
-	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
+	//c.Assert(terror.ErrSchedulerWorkerOnline.Equal(s.RemoveWorker(workerName1)), IsTrue)
 
 	// shutdown and offline worker1.
 

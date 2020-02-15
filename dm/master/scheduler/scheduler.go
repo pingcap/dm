@@ -96,6 +96,15 @@ func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 
 	s.reset() // reset previous status.
 
+	// recover previous status from etcd.
+	err := s.recoverSources(etcdCli)
+	if err != nil {
+		return err
+	}
+	err = s.recoverSubTasks(etcdCli)
+	if err != nil {
+		return err
+	}
 	rev, err := s.recoverWorkers(etcdCli)
 	if err != nil {
 		return err
@@ -461,9 +470,9 @@ func (s *Scheduler) UpdateExpectRelayStage(newStage pb.Stage, sources ...string)
 	currStages := strMapToSlice(currStagesM)
 	if len(notExistSources) > 0 {
 		// some sources not exist, reject the request.
-		return terror.ErrSchedulerRelayStageNotExist.Generate(notExistSources)
+		return terror.ErrSchedulerRelayStageSourceNotExist.Generate(notExistSources)
 	} else if len(currStages) > 1 {
-		// more than one current relay stage exist, but need to update the same one, log a warn.
+		// more than one current relay stage exist, but need to update to the same one, log a warn.
 		s.logger.Warn("update more than one current expectant relay stage to the same one",
 			zap.Strings("from", currStages), zap.Stringer("to", newStage))
 	}
@@ -494,6 +503,76 @@ func (s *Scheduler) GetExpectRelayStage(source string) ha.Stage {
 	return ha.NewRelayStage(pb.Stage_InvalidStage, source)
 }
 
+// UpdateExpectSubTaskStage updates the current expect subtask stage.
+// now, only support updates:
+// - from `Running` to `Paused`.
+// - from `Paused` to `Running`.
+// NOTE: from `Running` to `Running` and `Paused` to `Paused` still update the data in etcd,
+// because some user may want to update `{Running, Paused, ...}` to `{Running, Running, ...}`.
+// so, this should be supported in DM-worker.
+func (s *Scheduler) UpdateExpectSubTaskStage(newStage pb.Stage, task string, sources ...string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.started {
+		return terror.ErrSchedulerNotStarted.Generate()
+	}
+
+	if task == "" || len(sources) == 0 {
+		return nil // no subtask need to update, this should not happen.
+	}
+
+	// check the new expectant stage.
+	switch newStage {
+	case pb.Stage_Running, pb.Stage_Paused:
+	default:
+		return terror.ErrSchedulerSubTaskStageInvalidUpdate.Generate(newStage)
+	}
+
+	// check the task exists.
+	stagesM, ok := s.expectSubTaskStages[task]
+	if !ok {
+		return terror.ErrSchedulerSubTaskStageTaskNotExist.Generate(task)
+	}
+
+	var (
+		notExistSourcesM = make(map[string]struct{})
+		currStagesM      = make(map[string]struct{})
+		stages           = make([]ha.Stage, 0, len(sources))
+	)
+	for _, source := range sources {
+		if currStage, ok := stagesM[source]; !ok {
+			notExistSourcesM[source] = struct{}{}
+		} else {
+			currStagesM[currStage.Expect.String()] = struct{}{}
+		}
+		stages = append(stages, ha.NewSubTaskStage(newStage, source, task))
+	}
+	notExistSources := strMapToSlice(notExistSourcesM)
+	currStages := strMapToSlice(currStagesM)
+	if len(notExistSources) > 0 {
+		// some sources not exist, reject the request.
+		return terror.ErrSchedulerSubTaskStageSourceNotExist.Generate(notExistSources)
+	} else if len(currStages) > 1 {
+		// more than one current subtask stage exist, but need to update to the same one, log a warn.
+		s.logger.Warn("update more than one current expectant subtask stage to the same one",
+			zap.Strings("from", currStages), zap.Stringer("to", newStage))
+	}
+
+	// put the stages into etcd.
+	_, err := ha.PutSubTaskStage(s.etcdCli, stages...)
+	if err != nil {
+		return err
+	}
+
+	// update the stages in the scheduler.
+	for _, stage := range stages {
+		s.expectSubTaskStages[task][stage.Source] = stage
+	}
+
+	return nil
+}
+
 // GetExpectSubTaskStage returns the current expect subtask stage.
 // If the stage not exists, an invalid stage is returned.
 // This func is used for testing.
@@ -510,6 +589,64 @@ func (s *Scheduler) GetExpectSubTaskStage(task, source string) ha.Stage {
 		return invalidStage
 	}
 	return stage
+}
+
+// recoverSourceCfgs recovers history source configs and expectant stages from etcd.
+func (s *Scheduler) recoverSources(cli *clientv3.Client) error {
+	// get all source configs.
+	cfgM, _, err := ha.GetAllSourceCfg(cli)
+	if err != nil {
+		return err
+	}
+	// get all relay stages.
+	stageM, _, err := ha.GetAllRelayStage(cli)
+	if err != nil {
+		return err
+	}
+
+	// recover in-memory data.
+	for source, cfg := range cfgM {
+		s.sourceCfgs[source] = cfg
+	}
+	for source, stage := range stageM {
+		s.expectRelayStages[source] = stage
+	}
+
+	return nil
+}
+
+// recoverSubTasks recovers history subtask configs and expectant stages from etcd.
+func (s *Scheduler) recoverSubTasks(cli *clientv3.Client) error {
+	// get all subtask configs.
+	cfgMM, _, err := ha.GetAllSubTaskCfg(cli)
+	if err != nil {
+		return err
+	}
+	// get all subtask stages.
+	stageMM, _, err := ha.GetAllSubTaskStage(cli)
+	if err != nil {
+		return nil
+	}
+
+	// recover in-memory data.
+	for source, cfgM := range cfgMM {
+		for task, cfg := range cfgM {
+			if _, ok := s.subTaskCfgs[task]; !ok {
+				s.subTaskCfgs[task] = make(map[string]config.SubTaskConfig)
+			}
+			s.subTaskCfgs[task][source] = cfg
+		}
+	}
+	for source, stageM := range stageMM {
+		for task, stage := range stageM {
+			if _, ok := s.expectSubTaskStages[task]; !ok {
+				s.expectSubTaskStages[task] = make(map[string]ha.Stage)
+			}
+			s.expectSubTaskStages[task][source] = stage
+		}
+	}
+
+	return nil
 }
 
 // recoverWorkers recovers history DM-worker info and status from etcd.
