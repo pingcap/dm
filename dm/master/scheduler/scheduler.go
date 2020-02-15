@@ -21,6 +21,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -48,6 +49,9 @@ type Scheduler struct {
 	// all source configs, source ID -> source config.
 	sourceCfgs map[string]config.MysqlConfig
 
+	// all subtask configs, task name -> source ID -> subtask config.
+	subTaskCfgs map[string]map[string]config.SubTaskConfig
+
 	// all DM-workers, worker name -> worker.
 	workers map[string]*Worker
 
@@ -57,16 +61,25 @@ type Scheduler struct {
 	// unbound (pending to bound) sources.
 	// NOTE: refactor to support scheduling by priority.
 	unbounds []string
+
+	// expectant relay stages for sources, source ID -> stage.
+	expectRelayStages map[string]ha.Stage
+
+	// expectant subtask stages for tasks & sources, task name -> source ID -> stage.
+	expectSubTaskStages map[string]map[string]ha.Stage
 }
 
 // NewScheduler creates a new scheduler instance.
 func NewScheduler(pLogger *log.Logger) *Scheduler {
 	return &Scheduler{
-		logger:     pLogger.WithFields(zap.String("component", "scheduler")),
-		sourceCfgs: make(map[string]config.MysqlConfig),
-		workers:    make(map[string]*Worker),
-		bounds:     make(map[string]*Worker),
-		unbounds:   make([]string, 0, 10),
+		logger:              pLogger.WithFields(zap.String("component", "scheduler")),
+		sourceCfgs:          make(map[string]config.MysqlConfig),
+		subTaskCfgs:         make(map[string]map[string]config.SubTaskConfig),
+		workers:             make(map[string]*Worker),
+		bounds:              make(map[string]*Worker),
+		unbounds:            make([]string, 0, 10),
+		expectRelayStages:   make(map[string]ha.Stage),
+		expectSubTaskStages: make(map[string]map[string]ha.Stage),
 	}
 }
 
@@ -208,26 +221,61 @@ func (s *Scheduler) GetSourceCfgByID(source string) *config.MysqlConfig {
 	return &clone
 }
 
-// BoundSources returns all bound source IDs.
-func (s *Scheduler) BoundSources() []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	IDs := make([]string, 0, len(s.bounds))
-	for ID := range s.bounds {
-		IDs = append(IDs, ID)
-	}
-	return IDs
-}
+// AddSubTasks adds the information of one or more subtasks for one task.
+func (s *Scheduler) AddSubTasks(cfgs ...config.SubTaskConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-// UnboundSources returns all unbound source IDs.
-func (s *Scheduler) UnboundSources() []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	IDs := make([]string, 0, len(s.unbounds))
-	for _, ID := range s.unbounds {
-		IDs = append(IDs, ID)
+	if !s.started {
+		return terror.ErrSchedulerNotStarted.Generate()
 	}
-	return IDs
+
+	if len(cfgs) == 0 {
+		return nil // no subtasks need to add, this should not happen.
+	}
+
+	// check whether exists.
+	var (
+		taskNamesM    = make(map[string]struct{}, 1)
+		existSourcesM = make(map[string]struct{}, len(cfgs))
+	)
+	for _, cfg := range cfgs {
+		taskNamesM[cfg.Name] = struct{}{}
+		cfgM, ok := s.subTaskCfgs[cfg.Name]
+		if !ok {
+			continue
+		}
+		_, ok = cfgM[cfg.SourceID]
+		if !ok {
+			continue
+		}
+		existSourcesM[cfg.SourceID] = struct{}{}
+	}
+	taskNames := strMapToSlice(taskNamesM)
+	existSources := strMapToSlice(existSourcesM)
+	if len(taskNames) > 1 {
+		// only subtasks from one task supported now.
+		return terror.ErrSchedulerMultiTask.Generate(taskNames)
+	} else if len(existSources) == len(cfgs) {
+		// all subtasks already exist, return an error.
+		return terror.ErrSchedulerSubTaskExist.Generate(taskNames[0], existSources)
+	} else if len(existSources) > 0 {
+		// some subtasks already exists, log a warn.
+		s.logger.Warn("some subtasks already exist", zap.String("task", taskNames[0]), zap.Strings("sources", existSources))
+	}
+
+	// construct `Running` stages when adding.
+	putStages := make([]ha.Stage, 0, len(cfgs)-len(existSources))
+	for _, cfg := range cfgs {
+		if _, ok := existSourcesM[cfg.SourceID]; ok {
+			continue
+		}
+		putStages = append(putStages, ha.NewSubTaskStage(pb.Stage_Running, cfg.SourceID, cfg.Name))
+	}
+
+	// put the configs and stages into etcd.
+	ha.PutSubTaskCfgStage(s.etcdCli, cfgs, putStages)
+	return nil
 }
 
 // AddWorker adds the information of the DM-worker when registering a new instance.
@@ -301,6 +349,40 @@ func (s *Scheduler) GetWorkerBySource(source string) *Worker {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.bounds[source]
+}
+
+// BoundSources returns all bound source IDs.
+func (s *Scheduler) BoundSources() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	IDs := make([]string, 0, len(s.bounds))
+	for ID := range s.bounds {
+		IDs = append(IDs, ID)
+	}
+	return IDs
+}
+
+// UnboundSources returns all unbound source IDs.
+func (s *Scheduler) UnboundSources() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	IDs := make([]string, 0, len(s.unbounds))
+	for _, ID := range s.unbounds {
+		IDs = append(IDs, ID)
+	}
+	return IDs
+}
+
+// GetExpectRelayStage returns the current expect relay stage.
+// If the stage not exists, an invalid stage is returned.
+// This func is used for testing.
+func (s *Scheduler) GetExpectRelayStage(source string) ha.Stage {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if stage, ok := s.expectRelayStages[source]; ok {
+		return stage
+	}
+	return ha.NewRelayStage(pb.Stage_InvalidStage, source)
 }
 
 // recoverWorkers recovers history DM-worker info and status from etcd.
@@ -422,7 +504,20 @@ func (s *Scheduler) handleWorkerOnline(ev ha.WorkerEvent) error {
 
 	// 6. put the bound relationship into etcd.
 	bound := ha.NewSourceBound(source, ev.WorkerName)
-	_, err = ha.PutSourceBound(s.etcdCli, bound)
+	if _, ok := s.expectRelayStages[source]; ok {
+		// the relay stage exists before, only put the bound relationship.
+		_, err = ha.PutSourceBound(s.etcdCli, bound)
+	} else {
+		// no relay stage exists before, create a `Runnng` stage and put it with the bound relationship.
+		stage := ha.NewRelayStage(pb.Stage_Running, source)
+		_, err = ha.PutRelayStageSourceBound(s.etcdCli, stage, bound)
+		defer func() {
+			if err == nil {
+				// 6.1 if not error exist when returning, record the stage.
+				s.expectRelayStages[source] = stage
+			}
+		}()
+	}
 	if err != nil {
 		return err
 	}
@@ -540,7 +635,19 @@ func (s *Scheduler) unboundWorker(source string) {
 // reset resets the internal status.
 func (s *Scheduler) reset() {
 	s.sourceCfgs = make(map[string]config.MysqlConfig)
+	s.subTaskCfgs = make(map[string]map[string]config.SubTaskConfig)
 	s.workers = make(map[string]*Worker)
 	s.bounds = make(map[string]*Worker)
 	s.unbounds = make([]string, 0, 10)
+	s.expectRelayStages = make(map[string]ha.Stage)
+	s.expectSubTaskStages = make(map[string]map[string]ha.Stage)
+}
+
+// strMapToSlice converts a `map[string]struct{}` to `[]string`.
+func strMapToSlice(m map[string]struct{}) []string {
+	ret := make([]string, 0, len(m))
+	for s := range m {
+		ret = append(ret, s)
+	}
+	return ret
 }

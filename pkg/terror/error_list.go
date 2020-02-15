@@ -519,6 +519,8 @@ const (
 	codeSchedulerWorkerInvalidTrans
 	codeSchedulerSourceCfgExist
 	codeSchedulerSourceCfgNotExist
+	codeSchedulerMultiTask
+	codeSchedulerSubTaskExist
 )
 
 // Error instances
@@ -1004,4 +1006,6 @@ var (
 	ErrSchedulerWorkerInvalidTrans = New(codeSchedulerWorkerInvalidTrans, ClassScheduler, ScopeInternal, LevelMedium, "invalid worker stage transformation, from %s to %s")
 	ErrSchedulerSourceCfgExist     = New(codeSchedulerSourceCfgExist, ClassScheduler, ScopeInternal, LevelMedium, "source config with ID %s already exists")
 	ErrSchedulerSourceCfgNotExist  = New(codeSchedulerSourceCfgNotExist, ClassScheduler, ScopeInternal, LevelMedium, "source config with ID %s not exists")
+	ErrSchedulerMultiTask          = New(codeSchedulerMultiTask, ClassScheduler, ScopeInternal, LevelMedium, "the scheduler cannot perform multiple different tasks %v in one operation")
+	ErrSchedulerSubTaskExist       = New(codeSchedulerSubTaskExist, ClassScheduler, ScopeInternal, LevelMedium, "subtasks with name %s for sources %v already exist")
 )

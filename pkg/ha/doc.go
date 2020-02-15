@@ -146,4 +146,4 @@ package ha
 //   - do nothing if the relay/subtask instance not exists.
 //   - stop if the relay/subtask instance exists.
 // - Finished:
-//   - never exists for expectant stage in etcd but DELETE the relevant information.
+//   - never exists for expectant stage in etcd.

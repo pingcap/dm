@@ -25,6 +25,7 @@ import (
 
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -72,6 +73,7 @@ var _ = Suite(&testScheduler{})
 
 var (
 	sourceCfgEmpty config.MysqlConfig
+	stageEmpty     ha.Stage
 )
 
 func (t *testScheduler) TestScheduler(c *C) {
@@ -129,6 +131,8 @@ func (t *testScheduler) TestScheduler(c *C) {
 	t.workerExist(c, s, workerInfo1)
 	// still no bounds (because the worker is offline).
 	t.sourceBounds(c, s, []string{}, []string{sourceID1})
+	// no expect relay stage exist (because the source has never been bounded).
+	t.relayStageMatch(c, s, sourceID1, pb.Stage_InvalidStage)
 
 	// CASE 2.3: the worker become online.
 	// do keep-alive for worker1.
@@ -146,6 +150,8 @@ func (t *testScheduler) TestScheduler(c *C) {
 	})
 	t.sourceBounds(c, s, []string{sourceID1}, []string{})
 	t.workerBound(c, s, ha.NewSourceBound(sourceID1, workerName1))
+	// expect relay stage become Running after the first bound.
+	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
 
 	// start a task with only one source.
 
@@ -180,6 +186,8 @@ func (t *testScheduler) TestScheduler(c *C) {
 	t.sourceBounds(c, s, []string{}, []string{sourceID1})
 	// worker1 still exists, but it's offline.
 	t.workerOffline(c, s, workerName1)
+	// expect relay stage keep Running.
+	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
 
 	// shutdown and offline worker1.
 
@@ -268,5 +276,19 @@ func (t *testScheduler) sourceBounds(c *C, s *Scheduler, expectBounds, expectUnb
 
 	for _, source := range expectUnbounds {
 		c.Assert(s.GetWorkerBySource(source), IsNil)
+	}
+}
+
+func (t *testScheduler) relayStageMatch(c *C, s *Scheduler, source string, expectStage pb.Stage) {
+	stage := ha.NewRelayStage(expectStage, source)
+	c.Assert(s.GetExpectRelayStage(source), DeepEquals, stage)
+
+	eStage, _, err := ha.GetRelayStage(etcdTestCli, source)
+	c.Assert(err, IsNil)
+	switch expectStage {
+	case pb.Stage_Running, pb.Stage_Paused:
+		c.Assert(eStage, DeepEquals, stage)
+	default:
+		c.Assert(eStage, DeepEquals, stageEmpty)
 	}
 }
