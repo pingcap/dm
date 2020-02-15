@@ -15,7 +15,9 @@ package scheduler
 
 import (
 	"context"
+	"sync"
 	"testing"
+	"time"
 
 	. "github.com/pingcap/check"
 	"go.etcd.io/etcd/clientv3"
@@ -26,6 +28,7 @@ import (
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 const (
@@ -79,6 +82,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 		workerInfo1    = ha.NewWorkerInfo(workerName1, workerAddr1)
 		sourceCfg1     config.MysqlConfig
 		sourceCfgEmpty config.MysqlConfig
+		keepAliveTTL   = int64(1) // NOTE: this should be >= minLeaseTTL, in second.
 	)
 	c.Assert(sourceCfg1.LoadFromFile(sourceSampleFile), IsNil)
 	sourceCfg1.SourceID = sourceID1
@@ -121,6 +125,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 	unbounds := s.UnboundSources()
 	c.Assert(unbounds, HasLen, 1)
 	c.Assert(unbounds[0], Equals, sourceID1)
+	c.Assert(s.GetWorkerBySource(sourceID1), IsNil)
 	sourceBoundM, _, err := ha.GetSourceBound(etcdTestCli, "")
 	c.Assert(err, IsNil)
 	c.Assert(sourceBoundM, HasLen, 0)
@@ -146,6 +151,35 @@ func (t *testScheduler) TestScheduler(c *C) {
 	unbounds = s.UnboundSources()
 	c.Assert(unbounds, HasLen, 1)
 	c.Assert(unbounds[0], Equals, sourceID1)
+	c.Assert(s.GetWorkerBySource(sourceID1), IsNil)
+	sourceBoundM, _, err = ha.GetSourceBound(etcdTestCli, "")
+	c.Assert(err, IsNil)
+	c.Assert(sourceBoundM, HasLen, 0)
+
+	// CASE 2.3: the worker become online.
+	// do keep-alive for worker1.
+	ctx1, cancel1 := context.WithCancel(ctx)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.Assert(ha.KeepAlive(ctx1, etcdTestCli, workerName1, keepAliveTTL), IsNil)
+	}()
+	// wait for source1 bound to worker1.
+	utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+		bounds := s.BoundSources()
+		return len(bounds) == 1 && bounds[0] == sourceID1
+	})
+	c.Assert(s.UnboundSources(), HasLen, 0)
+	worker1 := s.GetWorkerBySource(sourceID1)
+	c.Assert(worker1, NotNil)
+	c.Assert(worker1.BaseInfo(), DeepEquals, workerInfo1)
+	sourceBoundM, _, err = ha.GetSourceBound(etcdTestCli, "")
+	c.Assert(err, IsNil)
+	c.Assert(sourceBoundM, HasLen, 1)
+	c.Assert(sourceBoundM[workerName1].Source, Equals, sourceID1)
+	c.Assert(s.GetWorkerByName(workerName1).Bound().Source, Equals, sourceID1)
+	c.Assert(s.GetWorkerByName(workerName1).Stage(), Equals, WorkerBound)
 
 	// start a task with only one source.
 
@@ -165,6 +199,27 @@ func (t *testScheduler) TestScheduler(c *C) {
 
 	// stop task1.
 
+	// CASE 2.x: remove worker not supported when the worker is online.
+	c.Assert(terror.ErrSchedulerWorkerOnline.Equal(s.RemoveWorker(workerName1)), IsTrue)
+
+	// CASE 2.x: the worker become offline.
+	// cancel keep-alive.
+	cancel1()
+	wg.Wait()
+	// wait for source1 unbound from worker1.
+	utils.WaitSomething(int(3*keepAliveTTL), time.Second, func() bool {
+		unbounds := s.UnboundSources()
+		return len(unbounds) == 1 && unbounds[0] == sourceID1
+	})
+	c.Assert(s.BoundSources(), HasLen, 0)
+	c.Assert(s.GetWorkerBySource(sourceID1), IsNil)
+	sourceBoundM, _, err = ha.GetSourceBound(etcdTestCli, "")
+	c.Assert(err, IsNil)
+	c.Assert(sourceBoundM, HasLen, 0)
+	c.Assert(s.GetWorkerByName(workerName1), NotNil)
+	c.Assert(s.GetWorkerByName(workerName1).Bound(), DeepEquals, nullBound)
+	c.Assert(s.GetWorkerByName(workerName1).Stage(), Equals, WorkerOffline)
+
 	// shutdown and offline worker1.
 
 	// stop task2.
@@ -172,6 +227,8 @@ func (t *testScheduler) TestScheduler(c *C) {
 	// shutdown and offline worker2.
 
 	// remove/unregister the worker.
-	c.Assert(s.RemoveWorker(workerName1), IsNil)
-	c.Assert(terror.ErrSchedulerWorkerNotExist.Equal(s.RemoveWorker(workerName1)), IsTrue) // not exists.
+	//c.Assert(s.RemoveWorker(workerName1), IsNil)
+	//c.Assert(terror.ErrSchedulerWorkerNotExist.Equal(s.RemoveWorker(workerName1)), IsTrue) // not exists.
+
+	// bound source1 from worker1 to worker2.
 }

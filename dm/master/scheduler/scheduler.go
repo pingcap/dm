@@ -54,9 +54,9 @@ type Scheduler struct {
 	// all bound relationship, source ID -> worker.
 	bounds map[string]*Worker
 
-	// unbound (pending to bound) sources, source ID -> struct{}{}
+	// unbound (pending to bound) sources.
 	// NOTE: refactor to support scheduling by priority.
-	unbounds map[string]struct{}
+	unbounds []string
 }
 
 // NewScheduler creates a new scheduler instance.
@@ -66,7 +66,7 @@ func NewScheduler(pLogger *log.Logger) *Scheduler {
 		sourceCfgs: make(map[string]config.MysqlConfig),
 		workers:    make(map[string]*Worker),
 		bounds:     make(map[string]*Worker),
-		unbounds:   make(map[string]struct{}),
+		unbounds:   make([]string, 0, 10),
 	}
 }
 
@@ -91,10 +91,20 @@ func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 	ctx, cancel := context.WithCancel(pCtx)
 
 	// starting to observe status of DM-worker instances.
-	s.wg.Add(1)
+	workerEvCh := make(chan ha.WorkerEvent, 10)
+	workerErrCh := make(chan error, 10)
+	s.wg.Add(2)
+	go func() {
+		defer func() {
+			s.wg.Done()
+			close(workerEvCh)
+			close(workerErrCh)
+		}()
+		ha.WatchWorkerEvent(ctx, etcdCli, rev+1, workerEvCh, workerErrCh)
+	}()
 	go func() {
 		defer s.wg.Done()
-		s.observerWorkers(ctx, rev+1)
+		s.handleWorkerEv(ctx, workerEvCh, workerErrCh)
 	}()
 
 	s.started = true // started now
@@ -214,7 +224,7 @@ func (s *Scheduler) UnboundSources() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	IDs := make([]string, 0, len(s.unbounds))
-	for ID := range s.unbounds {
+	for _, ID := range s.unbounds {
 		IDs = append(IDs, ID)
 	}
 	return IDs
@@ -285,9 +295,12 @@ func (s *Scheduler) GetWorkerByName(name string) *Worker {
 	return s.workers[name]
 }
 
-// observerWorkers observe the online/offline status of DM-worker instances.
-func (s *Scheduler) observerWorkers(ctx context.Context, startRev int64) {
-
+// GetWorkerBySource gets the current bound worker agent by source ID,
+// returns nil if the source not bound.
+func (s *Scheduler) GetWorkerBySource(source string) *Worker {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.bounds[source]
 }
 
 // recoverWorkers recovers history DM-worker info and status from etcd.
@@ -336,9 +349,143 @@ func (s *Scheduler) recoverWorkers(cli *clientv3.Client) (int64, error) {
 	return rev, nil
 }
 
+// handleWorkerEv handles the online/offline status change event of DM-worker instances.
+func (s *Scheduler) handleWorkerEv(ctx context.Context, evCh <-chan ha.WorkerEvent, errCh <-chan error) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case ev, ok := <-evCh:
+			if !ok {
+				return
+			}
+			s.logger.Info("receive worker status change event", zap.Bool("delete", ev.IsDeleted), zap.Stringer("event", ev))
+			var err error
+			if ev.IsDeleted {
+				err = s.handleWorkerOffline(ev)
+			} else {
+				err = s.handleWorkerOnline(ev)
+			}
+			if err != nil {
+				s.logger.Error("fail to handle worker status change event", zap.Stringer("event", ev), zap.Error(err))
+			}
+		case err, ok := <-errCh:
+			if !ok {
+				return
+			}
+			// NOTE: we only log the `err` here, but we should update metrics and do more works for it later.
+			s.logger.Error("receive error when watching worker status change event", zap.Error(err))
+		}
+	}
+}
+
+// handleWorkerOnline handles the scheduler when a DM-worker become online.
+// This should try to bound an unbounded source to it.
+// NOTE: this func need to hold the mutex.
+func (s *Scheduler) handleWorkerOnline(ev ha.WorkerEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// 1. find the worker.
+	w, ok := s.workers[ev.WorkerName]
+	if !ok {
+		s.logger.Warn("worker for the event not exists", zap.Stringer("event", ev))
+		return nil
+	}
+
+	// 2. check whether is bound.
+	if w.Stage() == WorkerBound {
+		s.logger.Warn("worker already bound", zap.Stringer("bound", w.Bound()))
+	}
+
+	// 3. change the stage (from Offline) to Free.
+	w.ToFree()
+
+	// 4. check whether any unbound source exists.
+	if len(s.unbounds) == 0 {
+		s.logger.Info("no unbound sources exist", zap.Stringer("event", ev))
+		return nil
+	}
+
+	// 5. pop a source to bound, priority supported if needed later.
+	// DO NOT forget to push it back if fail to bound.
+	source := s.unbounds[0]
+	s.unbounds = s.unbounds[1:]
+
+	var err error
+	defer func() {
+		if err != nil {
+			// push the source back.
+			s.unbounds = append(s.unbounds, source)
+		}
+	}()
+
+	// 6. put the bound relationship into etcd.
+	bound := ha.NewSourceBound(source, ev.WorkerName)
+	_, err = ha.PutSourceBound(s.etcdCli, bound)
+	if err != nil {
+		return err
+	}
+
+	// 7. update the bound relationship in the scheduler.
+	// this should be done without error because `w.ToFree` called before.
+	err = s.boundWorker(w, bound)
+	if err != nil {
+		return err
+	}
+
+	s.logger.Info("bound the worker to source", zap.Stringer("bound", bound), zap.Stringer("event", ev))
+	return nil
+}
+
+// handleWorkerOffline handles the scheduler when a DM-worker become offline.
+// This should unbound any previous bounded source.
+// NOTE: this func need to hold the mutex.
+func (s *Scheduler) handleWorkerOffline(ev ha.WorkerEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// 1. find the worker.
+	w, ok := s.workers[ev.WorkerName]
+	if !ok {
+		s.logger.Warn("worker for the event not exists", zap.Stringer("event", ev))
+		return nil
+	}
+
+	// 2. find the bound relationship.
+	bound := w.Bound()
+
+	// 3. check whether bound before.
+	if bound.Source == "" {
+		// 3.1. change the stage (from Free) to Offline.
+		w.ToOffline()
+		s.logger.Info("worker not bound, no need to unbound", zap.Stringer("event", ev))
+		return nil
+	}
+
+	// 4. delete the bound relationship in etcd.
+	_, err := ha.DeleteSourceBound(s.etcdCli, bound.Worker)
+	if err != nil {
+		return err
+	}
+
+	// 5. unbound for the source.
+	s.unboundWorker(bound.Source)
+
+	// 6. change the stage (from Free) to Offline.
+	w.ToOffline()
+
+	// 7. push the source to unbound.
+	s.pushToUnbound(bound.Source)
+
+	s.logger.Info("unbound the worker for source", zap.Stringer("bound", bound), zap.Stringer("event", ev))
+	return nil
+}
+
 // pushToUnbound pushes the source to unbound (pending for bound).
+// TODO(csuzhangxc): try to bound.
 func (s *Scheduler) pushToUnbound(source string) {
-	s.unbounds[source] = struct{}{}
+	s.unbounds = append(s.unbounds, source)
 }
 
 // recordWorker creates the worker agent (with Offline stage) and records in the scheduler.
@@ -368,7 +515,6 @@ func (s *Scheduler) deleteWorker(name string) {
 
 // boundWorker bounds the worker with the source.
 // this func is used when received keep-alive from the worker.
-// TODO(csuzhangxc): scheduler for pending sources.
 func (s *Scheduler) boundWorker(w *Worker, b ha.SourceBound) error {
 	err := w.ToBound(b)
 	if err != nil {
@@ -379,7 +525,9 @@ func (s *Scheduler) boundWorker(w *Worker, b ha.SourceBound) error {
 }
 
 // unboundWorker unbounds the worker with the source.
-// this func is used when removing the upstream source.
+// this func is used:
+// - when removing the upstream source.
+// - when lost keep-alive from a worker.
 func (s *Scheduler) unboundWorker(source string) {
 	w, ok := s.bounds[source]
 	if !ok {
@@ -394,5 +542,5 @@ func (s *Scheduler) reset() {
 	s.sourceCfgs = make(map[string]config.MysqlConfig)
 	s.workers = make(map[string]*Worker)
 	s.bounds = make(map[string]*Worker)
-	s.unbounds = make(map[string]struct{})
+	s.unbounds = make([]string, 0, 10)
 }
