@@ -64,6 +64,30 @@ func GetSourceCfg(cli *clientv3.Client, source string, rev int64) (config.MysqlC
 	return cfg, resp.Header.Revision, nil
 }
 
+// GetAllSourceCfg gets all upstream source configs.
+// k/v: source ID -> source config.
+func GetAllSourceCfg(cli *clientv3.Client) (map[string]config.MysqlConfig, int64, error) {
+	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
+	defer cancel()
+
+	resp, err := cli.Get(ctx, common.UpstreamConfigKeyAdapter.Path(), clientv3.WithPrefix())
+	if err != nil {
+		return nil, 0, err
+	}
+
+	scm := make(map[string]config.MysqlConfig)
+	for _, kv := range resp.Kvs {
+		var cfg config.MysqlConfig
+		err = cfg.Parse(string(kv.Value))
+		if err != nil {
+			return nil, 0, err
+		}
+		scm[cfg.SourceID] = cfg
+	}
+
+	return scm, resp.Header.Revision, nil
+}
+
 // deleteSourceCfgOp returns a DELETE etcd operation for the source config.
 func deleteSourceCfgOp(source string) clientv3.Op {
 	return clientv3.OpDelete(common.UpstreamConfigKeyAdapter.Encode(source))
