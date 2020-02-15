@@ -373,6 +373,70 @@ func (s *Scheduler) UnboundSources() []string {
 	return IDs
 }
 
+// UpdateExpectRelayStage updates the current expect relay stage.
+// now, only support updates:
+// - from `Running` to `Paused`.
+// - from `Paused` to `Running`.
+// NOTE: from `Running` to `Running` and `Paused` to `Paused` still update the data in etcd,
+// because some user may want to update `{Running, Paused, ...}` to `{Running, Running, ...}`.
+// so, this should be supported in DM-worker.
+func (s *Scheduler) UpdateExpectRelayStage(newStage pb.Stage, sources ...string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.started {
+		return terror.ErrSchedulerNotStarted.Generate()
+	}
+
+	if len(sources) == 0 {
+		return nil // no sources need to update the stage, this should not happen.
+	}
+
+	// check the new expectant stage.
+	switch newStage {
+	case pb.Stage_Running, pb.Stage_Paused:
+	default:
+		return terror.ErrSchedulerRelayStageInvalidUpdate.Generate(newStage)
+	}
+
+	var (
+		notExistSourcesM = make(map[string]struct{})
+		currStagesM      = make(map[string]struct{})
+		stages           = make([]ha.Stage, 0, len(sources))
+	)
+	for _, source := range sources {
+		if currStage, ok := s.expectRelayStages[source]; !ok {
+			notExistSourcesM[source] = struct{}{}
+		} else {
+			currStagesM[currStage.Expect.String()] = struct{}{}
+		}
+		stages = append(stages, ha.NewRelayStage(newStage, source))
+	}
+	notExistSources := strMapToSlice(notExistSourcesM)
+	currStages := strMapToSlice(currStagesM)
+	if len(notExistSources) > 0 {
+		// some sources not exist, reject the request.
+		return terror.ErrSchedulerRelayStageNotExist.Generate(notExistSources)
+	} else if len(currStages) > 1 {
+		// more than one current relay stage exist, but need to update the same one, log a warn.
+		s.logger.Warn("update more than one current expectant relay stage to the same one",
+			zap.Strings("from", currStages), zap.Stringer("to", newStage))
+	}
+
+	// put the stages into etcd.
+	_, err := ha.PutRelayStage(s.etcdCli, stages...)
+	if err != nil {
+		return err
+	}
+
+	// update the stages in the scheduler.
+	for _, stage := range stages {
+		s.expectRelayStages[stage.Source] = stage
+	}
+
+	return nil
+}
+
 // GetExpectRelayStage returns the current expect relay stage.
 // If the stage not exists, an invalid stage is returned.
 // This func is used for testing.

@@ -97,6 +97,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.RemoveSourceCfg(sourceID1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.AddWorker(workerName1, workerAddr1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.RemoveWorker(workerName1)), IsTrue)
+	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.UpdateExpectRelayStage(pb.Stage_Running, sourceID1)), IsTrue)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -151,6 +152,14 @@ func (t *testScheduler) TestScheduler(c *C) {
 	t.sourceBounds(c, s, []string{sourceID1}, []string{})
 	t.workerBound(c, s, ha.NewSourceBound(sourceID1, workerName1))
 	// expect relay stage become Running after the first bound.
+	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
+
+	// CASE 2.4 pause the relay.
+	c.Assert(s.UpdateExpectRelayStage(pb.Stage_Paused, sourceID1), IsNil)
+	t.relayStageMatch(c, s, sourceID1, pb.Stage_Paused)
+
+	// CASE 2.5 resume the relay.
+	c.Assert(s.UpdateExpectRelayStage(pb.Stage_Running, sourceID1), IsNil)
 	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
 
 	// start a task with only one source.

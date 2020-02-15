@@ -430,3 +430,5 @@ ErrSchedulerSourceCfgExist,[code=46007:class=scheduler:scope=internal:level=medi
 ErrSchedulerSourceCfgNotExist,[code=46008:class=scheduler:scope=internal:level=medium],"source config with ID %s not exists"
 ErrSchedulerMultiTask,[code=46009:class=scheduler:scope=internal:level=medium],"the scheduler cannot perform multiple different tasks %v in one operation"
 ErrSchedulerSubTaskExist,[code=46010:class=scheduler:scope=internal:level=medium],"subtasks with name %s for sources %v already exist"
+ErrSchedulerRelayStageInvalidUpdate,[code=46011:class=scheduler:scope=internal:level=medium],"invalid new expectant relay stage %s"
+ErrSchedulerRelayStageNotExist,[code=46012:class=scheduler:scope=internal:level=medium],"sources %v need to update expectant relay stage not exist"
