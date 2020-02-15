@@ -523,6 +523,7 @@ const (
 	codeSchedulerSubTaskExist
 	codeSchedulerRelayStageInvalidUpdate
 	codeSchedulerRelayStageNotExist
+	codeSchedulerSourcesUnbound
 )
 
 // Error instances
@@ -1012,4 +1013,5 @@ var (
 	ErrSchedulerSubTaskExist            = New(codeSchedulerSubTaskExist, ClassScheduler, ScopeInternal, LevelMedium, "subtasks with name %s for sources %v already exist")
 	ErrSchedulerRelayStageInvalidUpdate = New(codeSchedulerRelayStageInvalidUpdate, ClassScheduler, ScopeInternal, LevelMedium, "invalid new expectant relay stage %s")
 	ErrSchedulerRelayStageNotExist      = New(codeSchedulerRelayStageNotExist, ClassScheduler, ScopeInternal, LevelMedium, "sources %v need to update expectant relay stage not exist")
+	ErrSchedulerSourcesUnbound          = New(codeSchedulerSourcesUnbound, ClassDMMaster, ScopeInternal, LevelMedium, "sources %v have not bound")
 )

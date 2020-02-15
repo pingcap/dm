@@ -35,6 +35,8 @@ import (
 const (
 	// do not forget to update this path if the file removed/renamed.
 	sourceSampleFile = "../../worker/dm-mysql.toml"
+	// do not forget to update this path if the file removed/renamed.
+	subTaskSampleFile = "../../worker/subtask.toml"
 )
 
 var (
@@ -83,18 +85,33 @@ func (t *testScheduler) TestScheduler(c *C) {
 		logger       = log.L()
 		s            = NewScheduler(&logger)
 		sourceID1    = "mysql-replica-1"
+		sourceID2    = "mysql-replica-2"
 		workerName1  = "dm-worker-1"
 		workerAddr1  = "127.0.0.1:8262"
+		taskName1    = "task-1"
+		taskName2    = "task-2"
 		workerInfo1  = ha.NewWorkerInfo(workerName1, workerAddr1)
 		sourceCfg1   config.MysqlConfig
+		subtaskCfg1  config.SubTaskConfig
 		keepAliveTTL = int64(1) // NOTE: this should be >= minLeaseTTL, in second.
 	)
 	c.Assert(sourceCfg1.LoadFromFile(sourceSampleFile), IsNil)
 	sourceCfg1.SourceID = sourceID1
+	c.Assert(subtaskCfg1.DecodeFile(subTaskSampleFile), IsNil)
+	subtaskCfg1.SourceID = sourceID1
+	subtaskCfg1.Name = taskName1
+	c.Assert(subtaskCfg1.Adjust(), IsNil)
+	subtaskCfg21 := subtaskCfg1
+	subtaskCfg21.Name = taskName2
+	c.Assert(subtaskCfg21.Adjust(), IsNil)
+	subtaskCfg22 := subtaskCfg21
+	subtaskCfg22.SourceID = sourceID2
+	c.Assert(subtaskCfg22.Adjust(), IsNil)
 
 	// not started scheduler can't do anything.
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.AddSourceCfg(sourceCfg1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.RemoveSourceCfg(sourceID1)), IsTrue)
+	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.AddSubTasks(subtaskCfg1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.AddWorker(workerName1, workerAddr1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.RemoveWorker(workerName1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.UpdateExpectRelayStage(pb.Stage_Running, sourceID1)), IsTrue)
@@ -154,17 +171,31 @@ func (t *testScheduler) TestScheduler(c *C) {
 	// expect relay stage become Running after the first bound.
 	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
 
-	// CASE 2.4 pause the relay.
+	// CASE 2.4: pause the relay.
 	c.Assert(s.UpdateExpectRelayStage(pb.Stage_Paused, sourceID1), IsNil)
 	t.relayStageMatch(c, s, sourceID1, pb.Stage_Paused)
 
-	// CASE 2.5 resume the relay.
+	// CASE 2.5: resume the relay.
 	c.Assert(s.UpdateExpectRelayStage(pb.Stage_Running, sourceID1), IsNil)
 	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
 
-	// start a task with only one source.
+	// CASE 2.6: start a task with only one source.
+	// no subtask config exists before start.
+	t.subTaskCfgNotExist(c, s, taskName1, sourceID1)
+	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_InvalidStage)
+	// start the task.
+	c.Assert(s.AddSubTasks(subtaskCfg1), IsNil)
+	c.Assert(terror.ErrSchedulerSubTaskExist.Equal(s.AddSubTasks(subtaskCfg1)), IsTrue) // add again.
+	// subtask config and stage exist.
+	t.subTaskCfgExist(c, s, subtaskCfg1)
+	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_Running)
 
-	// try start a task with two sources.
+	// try start a task with two sources, some sources not bound.
+	c.Assert(terror.ErrSchedulerSourcesUnbound.Equal(s.AddSubTasks(subtaskCfg21, subtaskCfg22)), IsTrue)
+	t.subTaskCfgNotExist(c, s, taskName2, sourceID1)
+	t.subTaskStageMatch(c, s, taskName2, sourceID1, pb.Stage_InvalidStage)
+	t.subTaskCfgNotExist(c, s, taskName2, sourceID2)
+	t.subTaskStageMatch(c, s, taskName2, sourceID2, pb.Stage_InvalidStage)
 
 	// pause/resume task1.
 
@@ -220,11 +251,26 @@ func (t *testScheduler) sourceCfgNotExist(c *C, s *Scheduler, source string) {
 
 func (t *testScheduler) sourceCfgExist(c *C, s *Scheduler, expectCfg config.MysqlConfig) {
 	cfgP := s.GetSourceCfgByID(expectCfg.SourceID)
-	c.Assert(cfgP, NotNil)
 	c.Assert(cfgP, DeepEquals, &expectCfg)
 	cfgV, _, err := ha.GetSourceCfg(etcdTestCli, expectCfg.SourceID, 0)
 	c.Assert(err, IsNil)
 	c.Assert(cfgV, DeepEquals, expectCfg)
+}
+
+func (t *testScheduler) subTaskCfgNotExist(c *C, s *Scheduler, task, source string) {
+	c.Assert(s.GetSubTaskCfgByTaskSource(task, source), IsNil)
+	cfgM, _, err := ha.GetSubTaskCfg(etcdTestCli, source, task, 0)
+	c.Assert(err, IsNil)
+	c.Assert(cfgM, HasLen, 0)
+}
+
+func (t *testScheduler) subTaskCfgExist(c *C, s *Scheduler, expectCfg config.SubTaskConfig) {
+	cfgP := s.GetSubTaskCfgByTaskSource(expectCfg.Name, expectCfg.SourceID)
+	c.Assert(cfgP, DeepEquals, &expectCfg)
+	cfgM, _, err := ha.GetSubTaskCfg(etcdTestCli, expectCfg.SourceID, expectCfg.Name, 0)
+	c.Assert(err, IsNil)
+	c.Assert(cfgM, HasLen, 1)
+	c.Assert(cfgM[expectCfg.Name], DeepEquals, expectCfg)
 }
 
 func (t *testScheduler) workerNotExist(c *C, s *Scheduler, worker string) {
@@ -299,5 +345,20 @@ func (t *testScheduler) relayStageMatch(c *C, s *Scheduler, source string, expec
 		c.Assert(eStage, DeepEquals, stage)
 	default:
 		c.Assert(eStage, DeepEquals, stageEmpty)
+	}
+}
+
+func (t *testScheduler) subTaskStageMatch(c *C, s *Scheduler, task, source string, expectStage pb.Stage) {
+	stage := ha.NewSubTaskStage(expectStage, source, task)
+	c.Assert(s.GetExpectSubTaskStage(task, source), DeepEquals, stage)
+
+	eStageM, _, err := ha.GetSubTaskStage(etcdTestCli, source, task)
+	c.Assert(err, IsNil)
+	switch expectStage {
+	case pb.Stage_Running, pb.Stage_Paused:
+		c.Assert(eStageM, HasLen, 1)
+		c.Assert(eStageM[task], DeepEquals, stage)
+	default:
+		c.Assert(eStageM, HasLen, 0)
 	}
 }

@@ -157,7 +157,7 @@ func (s *Scheduler) AddSourceCfg(cfg config.MysqlConfig) error {
 	}
 
 	// check whether exists.
-	if cfg, ok := s.sourceCfgs[cfg.SourceID]; ok {
+	if _, ok := s.sourceCfgs[cfg.SourceID]; ok {
 		return terror.ErrSchedulerSourceCfgExist.Generate(cfg.SourceID)
 	}
 
@@ -265,17 +265,62 @@ func (s *Scheduler) AddSubTasks(cfgs ...config.SubTaskConfig) error {
 	}
 
 	// construct `Running` stages when adding.
-	putStages := make([]ha.Stage, 0, len(cfgs)-len(existSources))
+	newCfgs := make([]config.SubTaskConfig, 0, len(cfgs)-len(existSources))
+	newStages := make([]ha.Stage, 0, cap(newCfgs))
+	unbounds := make([]string, 0)
 	for _, cfg := range cfgs {
 		if _, ok := existSourcesM[cfg.SourceID]; ok {
 			continue
 		}
-		putStages = append(putStages, ha.NewSubTaskStage(pb.Stage_Running, cfg.SourceID, cfg.Name))
+		newCfgs = append(newCfgs, cfg)
+		newStages = append(newStages, ha.NewSubTaskStage(pb.Stage_Running, cfg.SourceID, cfg.Name))
+		if _, ok := s.bounds[cfg.SourceID]; !ok {
+			unbounds = append(unbounds, cfg.SourceID)
+		}
+	}
+
+	// check whether any sources unbound.
+	if len(unbounds) > 0 {
+		return terror.ErrSchedulerSourcesUnbound.Generate(unbounds)
 	}
 
 	// put the configs and stages into etcd.
-	ha.PutSubTaskCfgStage(s.etcdCli, cfgs, putStages)
+	_, err := ha.PutSubTaskCfgStage(s.etcdCli, newCfgs, newStages)
+	if err != nil {
+		return err
+	}
+
+	// record the config and the expectant stage.
+	for _, cfg := range newCfgs {
+		if _, ok := s.subTaskCfgs[cfg.Name]; !ok {
+			s.subTaskCfgs[cfg.Name] = make(map[string]config.SubTaskConfig)
+		}
+		s.subTaskCfgs[cfg.Name][cfg.SourceID] = cfg
+	}
+	for _, stage := range newStages {
+		if _, ok := s.expectSubTaskStages[stage.Task]; !ok {
+			s.expectSubTaskStages[stage.Task] = make(map[string]ha.Stage)
+		}
+		s.expectSubTaskStages[stage.Task][stage.Source] = stage
+	}
+
 	return nil
+}
+
+// GetSubTaskCfgByTaskSource gets subtask config by task name and source ID.
+func (s *Scheduler) GetSubTaskCfgByTaskSource(task, source string) *config.SubTaskConfig {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	cfgM, ok := s.subTaskCfgs[task]
+	if !ok {
+		return nil
+	}
+	cfg, ok := cfgM[source]
+	if !ok {
+		return nil
+	}
+	clone := cfg
+	return &clone
 }
 
 // AddWorker adds the information of the DM-worker when registering a new instance.
@@ -447,6 +492,24 @@ func (s *Scheduler) GetExpectRelayStage(source string) ha.Stage {
 		return stage
 	}
 	return ha.NewRelayStage(pb.Stage_InvalidStage, source)
+}
+
+// GetExpectSubTaskStage returns the current expect subtask stage.
+// If the stage not exists, an invalid stage is returned.
+// This func is used for testing.
+func (s *Scheduler) GetExpectSubTaskStage(task, source string) ha.Stage {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	invalidStage := ha.NewSubTaskStage(pb.Stage_InvalidStage, source, task)
+	stageM, ok := s.expectSubTaskStages[task]
+	if !ok {
+		return invalidStage
+	}
+	stage, ok := stageM[source]
+	if !ok {
+		return invalidStage
+	}
+	return stage
 }
 
 // recoverWorkers recovers history DM-worker info and status from etcd.
