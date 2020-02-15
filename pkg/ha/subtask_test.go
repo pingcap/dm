@@ -68,6 +68,15 @@ func (t *testForEtcd) TestSubTaskEtcd(c *C) {
 	c.Assert(tsm3[taskName1], DeepEquals, cfg1)
 	c.Assert(tsm3[taskName2], DeepEquals, cfg2)
 
+	// get all subtask configs.
+	stmm, rev4, err := GetAllSubTaskCfg(etcdTestCli)
+	c.Assert(err, IsNil)
+	c.Assert(rev4, Equals, rev3)
+	c.Assert(stmm, HasLen, 1)
+	c.Assert(stmm[source], HasLen, 2)
+	c.Assert(stmm[source][taskName1], DeepEquals, cfg1)
+	c.Assert(stmm[source][taskName2], DeepEquals, cfg2)
+
 	// delete the config.
 	deleteOps := deleteSubTaskCfgOp(cfg1)
 	_, err = etcdTestCli.Txn(context.Background()).Then(deleteOps...).Commit()
