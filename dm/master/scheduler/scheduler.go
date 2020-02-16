@@ -217,29 +217,56 @@ func (s *Scheduler) RemoveSourceCfg(source string) error {
 		return terror.ErrSchedulerNotStarted.Generate()
 	}
 
-	// check whether the config exists.
+	// 1. check whether the config exists.
 	_, ok := s.sourceCfgs[source]
 	if !ok {
 		return terror.ErrSchedulerSourceCfgNotExist.Generate(source)
 	}
 
-	// TODO(csuzhangxc): check whether subtask exists.
-
-	// find worker name by source ID.
-	var worker string // empty should be find below.
-	if w, ok := s.bounds[source]; ok {
-		worker = w.BaseInfo().Name
+	// 2. check whether any subtask exists for the source.
+	existingSubtasksM := make(map[string]struct{})
+	for task, cfg := range s.subTaskCfgs {
+		for source2 := range cfg {
+			if source2 == source {
+				existingSubtasksM[task] = struct{}{}
+			}
+		}
+	}
+	existingSubtasks := strMapToSlice(existingSubtasksM)
+	if len(existingSubtasks) > 0 {
+		return terror.ErrSchedulerSourceOpTaskExist.Generate(source, existingSubtasks)
 	}
 
-	// delete the info in etcd.
-	_, err := ha.DeleteSourceCfgRelayStageSourceBound(s.etcdCli, source, worker)
+	// 3. find worker name by source ID.
+	var (
+		workerName string // empty should be fine below.
+		worker     *Worker
+	)
+	if w, ok := s.bounds[source]; ok {
+		worker = w
+		workerName = w.BaseInfo().Name
+	}
+
+	// 4. delete the info in etcd.
+	_, err := ha.DeleteSourceCfgRelayStageSourceBound(s.etcdCli, source, workerName)
 	if err != nil {
 		return err
 	}
 
+	// 5. delete the config and expectant stage in the scheduler
 	delete(s.sourceCfgs, source)
+	delete(s.expectRelayStages, source)
+
+	// 6. unbound for the source.
 	s.updateStatusForUnbound(source)
-	// TODO(csuzhanxc): try to bound for another source.
+
+	// 7. try to bound the worker for another source.
+	if worker != nil {
+		_, err = s.tryBoundForWorker(worker)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -336,6 +363,70 @@ func (s *Scheduler) AddSubTasks(cfgs ...config.SubTaskConfig) error {
 			s.expectSubTaskStages[stage.Task] = make(map[string]ha.Stage)
 		}
 		s.expectSubTaskStages[stage.Task][stage.Source] = stage
+	}
+
+	return nil
+}
+
+// RemoveSubTasks removes the information of one or more subtaks for one task.
+func (s *Scheduler) RemoveSubTasks(task string, sources ...string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.started {
+		return terror.ErrSchedulerNotStarted.Generate()
+	}
+
+	if task == "" || len(sources) == 0 {
+		return nil // no subtask need to stop, this should not happen.
+	}
+
+	// check the task exists.
+	stagesM, ok1 := s.expectSubTaskStages[task]
+	cfgsM, ok2 := s.subTaskCfgs[task]
+	if !ok1 || !ok2 {
+		return terror.ErrSchedulerSubTaskOpTaskNotExist.Generate(task)
+	}
+
+	var (
+		notExistSourcesM = make(map[string]struct{})
+		stages           = make([]ha.Stage, 0, len(sources))
+		cfgs             = make([]config.SubTaskConfig, 0, len(sources))
+	)
+	for _, source := range sources {
+		if stage, ok := stagesM[source]; !ok {
+			notExistSourcesM[source] = struct{}{}
+		} else {
+			stages = append(stages, stage)
+		}
+		if cfg, ok := cfgsM[source]; ok {
+			cfgs = append(cfgs, cfg)
+		}
+	}
+	notExistSources := strMapToSlice(notExistSourcesM)
+	if len(notExistSources) > 0 {
+		// some sources not exist, reject the request.
+		return terror.ErrSchedulerSubTaskOpSourceNotExist.Generate(notExistSources)
+	}
+
+	// delete the configs and the stages.
+	_, err := ha.DeleteSubTaskCfgStage(s.etcdCli, cfgs, stages)
+	if err != nil {
+		return err
+	}
+
+	// clear the config and the expectant stage.
+	for _, cfg := range cfgs {
+		delete(s.subTaskCfgs[task], cfg.SourceID)
+	}
+	if len(s.subTaskCfgs[task]) == 0 {
+		delete(s.subTaskCfgs, task)
+	}
+	for _, stage := range stages {
+		delete(s.expectSubTaskStages[task], stage.Source)
+	}
+	if len(s.expectSubTaskStages[task]) == 0 {
+		delete(s.expectSubTaskStages, task)
 	}
 
 	return nil
@@ -559,7 +650,7 @@ func (s *Scheduler) UpdateExpectSubTaskStage(newStage pb.Stage, task string, sou
 	// check the task exists.
 	stagesM, ok := s.expectSubTaskStages[task]
 	if !ok {
-		return terror.ErrSchedulerSubTaskStageTaskNotExist.Generate(task)
+		return terror.ErrSchedulerSubTaskOpTaskNotExist.Generate(task)
 	}
 
 	var (
@@ -579,7 +670,7 @@ func (s *Scheduler) UpdateExpectSubTaskStage(newStage pb.Stage, task string, sou
 	currStages := strMapToSlice(currStagesM)
 	if len(notExistSources) > 0 {
 		// some sources not exist, reject the request.
-		return terror.ErrSchedulerSubTaskStageSourceNotExist.Generate(notExistSources)
+		return terror.ErrSchedulerSubTaskOpSourceNotExist.Generate(notExistSources)
 	} else if len(currStages) > 1 {
 		// more than one current subtask stage exist, but need to update to the same one, log a warn.
 		s.logger.Warn("update more than one current expectant subtask stage to the same one",
@@ -725,7 +816,7 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 	// 5. recover bounds/unbounds, all sources which not in bounds should be in unbounds.
 	for source := range s.sourceCfgs {
 		if _, ok := s.bounds[source]; !ok {
-			s.pushToUnbound(source)
+			s.unbounds = append(s.unbounds, source)
 		}
 	}
 
@@ -826,10 +917,17 @@ func (s *Scheduler) handleWorkerOffline(ev ha.WorkerEvent) error {
 	// 6. change the stage (from Free) to Offline.
 	w.ToOffline()
 
-	// 7. push the source to unbound.
-	s.pushToUnbound(bound.Source)
-
 	s.logger.Info("unbound the worker for source", zap.Stringer("bound", bound), zap.Stringer("event", ev))
+
+	// 7. try to bound it to a Free worker.
+	bounded, err := s.tryBoundForSource(bound.Source)
+	if err != nil {
+		return err
+	} else if !bounded {
+		// 8. record the source as unbounded.
+		s.unbounds = append(s.unbounds, bound.Source)
+	}
+
 	return nil
 }
 
@@ -919,12 +1017,6 @@ func (s *Scheduler) boundSourceToWorker(source string, w *Worker) error {
 	return nil
 }
 
-// pushToUnbound pushes the source to unbound (pending for bound).
-// TODO(csuzhangxc): try to bound.
-func (s *Scheduler) pushToUnbound(source string) {
-	s.unbounds = append(s.unbounds, source)
-}
-
 // recordWorker creates the worker agent (with Offline stage) and records in the scheduler.
 // this func is used when adding a new worker.
 // NOTE: trigger scheduler when the worker become online, not when added.
@@ -987,11 +1079,12 @@ func (s *Scheduler) reset() {
 	s.expectSubTaskStages = make(map[string]map[string]ha.Stage)
 }
 
-// strMapToSlice converts a `map[string]struct{}` to `[]string`.
+// strMapToSlice converts a `map[string]struct{}` to `[]string` in increasing order.
 func strMapToSlice(m map[string]struct{}) []string {
 	ret := make([]string, 0, len(m))
 	for s := range m {
 		ret = append(ret, s)
 	}
+	sort.Strings(ret)
 	return ret
 }

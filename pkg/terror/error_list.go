@@ -519,14 +519,15 @@ const (
 	codeSchedulerWorkerInvalidTrans
 	codeSchedulerSourceCfgExist
 	codeSchedulerSourceCfgNotExist
-	codeSchedulerMultiTask
-	codeSchedulerSubTaskExist
+	codeSchedulerSourcesUnbound
+	codeSchedulerSourceOpTaskExist
 	codeSchedulerRelayStageInvalidUpdate
 	codeSchedulerRelayStageSourceNotExist
-	codeSchedulerSourcesUnbound
+	codeSchedulerMultiTask
+	codeSchedulerSubTaskExist
 	codeSchedulerSubTaskStageInvalidUpdate
-	codeSchedulerSubTaskStageTaskNotExist
-	codeSchedulerSubTaskStageSourceNotExist
+	codeSchedulerSubTaskOpTaskNotExist
+	codeSchedulerSubTaskOpSourceNotExist
 )
 
 // Error instances
@@ -1004,20 +1005,21 @@ var (
 		"cannot parse downstream table schema of `%s`.`%s` to initialize upstream schema `%s`.`%s` in schema tracker")
 
 	// HA scheduler
-	ErrSchedulerNotStarted                 = New(codeSchedulerNotStarted, ClassScheduler, ScopeInternal, LevelHigh, "the scheduler has not started")
-	ErrSchedulerStarted                    = New(codeSchedulerStarted, ClassScheduler, ScopeInternal, LevelMedium, "the scheduler has already started")
-	ErrSchedulerWorkerExist                = New(codeSchedulerWorkerExist, ClassScheduler, ScopeInternal, LevelMedium, "dm-worker with name %s already exists")
-	ErrSchedulerWorkerNotExist             = New(codeSchedulerWorkerNotExist, ClassScheduler, ScopeInternal, LevelMedium, "dm-worker with name %s not exists")
-	ErrSchedulerWorkerOnline               = New(codeSchedulerWorkerOnline, ClassScheduler, ScopeInternal, LevelMedium, "dm-worker with name %s is still online, must shut it down first")
-	ErrSchedulerWorkerInvalidTrans         = New(codeSchedulerWorkerInvalidTrans, ClassScheduler, ScopeInternal, LevelMedium, "invalid stage transformation for dm-worker %s, from %s to %s")
-	ErrSchedulerSourceCfgExist             = New(codeSchedulerSourceCfgExist, ClassScheduler, ScopeInternal, LevelMedium, "source config with ID %s already exists")
-	ErrSchedulerSourceCfgNotExist          = New(codeSchedulerSourceCfgNotExist, ClassScheduler, ScopeInternal, LevelMedium, "source config with ID %s not exists")
-	ErrSchedulerMultiTask                  = New(codeSchedulerMultiTask, ClassScheduler, ScopeInternal, LevelMedium, "the scheduler cannot perform multiple different tasks %v in one operation")
-	ErrSchedulerSubTaskExist               = New(codeSchedulerSubTaskExist, ClassScheduler, ScopeInternal, LevelMedium, "subtasks with name %s for sources %v already exist")
-	ErrSchedulerRelayStageInvalidUpdate    = New(codeSchedulerRelayStageInvalidUpdate, ClassScheduler, ScopeInternal, LevelMedium, "invalid new expectant relay stage %s")
-	ErrSchedulerRelayStageSourceNotExist   = New(codeSchedulerRelayStageSourceNotExist, ClassScheduler, ScopeInternal, LevelMedium, "sources %v need to update expectant relay stage not exist")
-	ErrSchedulerSourcesUnbound             = New(codeSchedulerSourcesUnbound, ClassDMMaster, ScopeInternal, LevelMedium, "sources %v have not bound")
-	ErrSchedulerSubTaskStageInvalidUpdate  = New(codeSchedulerSubTaskStageInvalidUpdate, ClassDMMaster, ScopeInternal, LevelMedium, "invalid new expectant subtask stage %s")
-	ErrSchedulerSubTaskStageTaskNotExist   = New(codeSchedulerSubTaskStageTaskNotExist, ClassDMMaster, ScopeInternal, LevelMedium, "subtasks with name %s not exist")
-	ErrSchedulerSubTaskStageSourceNotExist = New(codeSchedulerSubTaskStageSourceNotExist, ClassDMMaster, ScopeInternal, LevelMedium, "sources %v need to update expectant relay stage not exist")
+	ErrSchedulerNotStarted                = New(codeSchedulerNotStarted, ClassScheduler, ScopeInternal, LevelHigh, "the scheduler has not started")
+	ErrSchedulerStarted                   = New(codeSchedulerStarted, ClassScheduler, ScopeInternal, LevelMedium, "the scheduler has already started")
+	ErrSchedulerWorkerExist               = New(codeSchedulerWorkerExist, ClassScheduler, ScopeInternal, LevelMedium, "dm-worker with name %s already exists")
+	ErrSchedulerWorkerNotExist            = New(codeSchedulerWorkerNotExist, ClassScheduler, ScopeInternal, LevelMedium, "dm-worker with name %s not exists")
+	ErrSchedulerWorkerOnline              = New(codeSchedulerWorkerOnline, ClassScheduler, ScopeInternal, LevelMedium, "dm-worker with name %s is still online, must shut it down first")
+	ErrSchedulerWorkerInvalidTrans        = New(codeSchedulerWorkerInvalidTrans, ClassScheduler, ScopeInternal, LevelMedium, "invalid stage transformation for dm-worker %s, from %s to %s")
+	ErrSchedulerSourceCfgExist            = New(codeSchedulerSourceCfgExist, ClassScheduler, ScopeInternal, LevelMedium, "source config with ID %s already exists")
+	ErrSchedulerSourceCfgNotExist         = New(codeSchedulerSourceCfgNotExist, ClassScheduler, ScopeInternal, LevelMedium, "source config with ID %s not exists")
+	ErrSchedulerSourcesUnbound            = New(codeSchedulerSourcesUnbound, ClassDMMaster, ScopeInternal, LevelMedium, "sources %v have not bound")
+	ErrSchedulerSourceOpTaskExist         = New(codeSchedulerSourceOpTaskExist, ClassDMMaster, ScopeInternal, LevelMedium, "source with name % need to operate with tasks %v exist")
+	ErrSchedulerRelayStageInvalidUpdate   = New(codeSchedulerRelayStageInvalidUpdate, ClassScheduler, ScopeInternal, LevelMedium, "invalid new expectant relay stage %s")
+	ErrSchedulerRelayStageSourceNotExist  = New(codeSchedulerRelayStageSourceNotExist, ClassScheduler, ScopeInternal, LevelMedium, "sources %v need to update expectant relay stage not exist")
+	ErrSchedulerMultiTask                 = New(codeSchedulerMultiTask, ClassScheduler, ScopeInternal, LevelMedium, "the scheduler cannot perform multiple different tasks %v in one operation")
+	ErrSchedulerSubTaskExist              = New(codeSchedulerSubTaskExist, ClassScheduler, ScopeInternal, LevelMedium, "subtasks with name %s for sources %v already exist")
+	ErrSchedulerSubTaskStageInvalidUpdate = New(codeSchedulerSubTaskStageInvalidUpdate, ClassDMMaster, ScopeInternal, LevelMedium, "invalid new expectant subtask stage %s")
+	ErrSchedulerSubTaskOpTaskNotExist     = New(codeSchedulerSubTaskOpTaskNotExist, ClassDMMaster, ScopeInternal, LevelMedium, "subtasks with name %s need to be operate not exist")
+	ErrSchedulerSubTaskOpSourceNotExist   = New(codeSchedulerSubTaskOpSourceNotExist, ClassDMMaster, ScopeInternal, LevelMedium, "sources %v need to be operate not exist")
 )

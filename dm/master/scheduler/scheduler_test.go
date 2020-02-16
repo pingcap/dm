@@ -118,6 +118,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.AddSourceCfg(sourceCfg1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.RemoveSourceCfg(sourceID1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.AddSubTasks(subtaskCfg1)), IsTrue)
+	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.RemoveSubTasks(taskName1, sourceID1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.AddWorker(workerName1, workerAddr1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.RemoveWorker(workerName1)), IsTrue)
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.UpdateExpectRelayStage(pb.Stage_Running, sourceID1)), IsTrue)
@@ -266,7 +267,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 	// source1 bound to worker1.
 	t.sourceBounds(c, s, []string{sourceID1}, []string{})
 	t.workerBound(c, s, ha.NewSourceBound(sourceID1, workerName1))
-	// expect relay stage keep Running.
+	// expect stages keep Running.
 	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
 	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_Running)
 
@@ -325,16 +326,87 @@ func (t *testScheduler) TestScheduler(c *C) {
 	t.sourceBounds(c, s, []string{sourceID1, sourceID2}, []string{})
 	t.relayStageMatch(c, s, sourceID2, pb.Stage_Running)
 
-	// start a task with two sources.
+	// CASE 4.4: start a task with two sources.
+	// task2' config and stage not exists before.
+	t.subTaskCfgNotExist(c, s, taskName2, sourceID1)
+	t.subTaskCfgNotExist(c, s, taskName2, sourceID2)
+	t.subTaskStageMatch(c, s, taskName2, sourceID1, pb.Stage_InvalidStage)
+	t.subTaskStageMatch(c, s, taskName2, sourceID2, pb.Stage_InvalidStage)
+	// start task2.
+	c.Assert(s.AddSubTasks(subtaskCfg21, subtaskCfg22), IsNil)
+	// config added, stage become Running.
+	t.subTaskCfgExist(c, s, subtaskCfg21)
+	t.subTaskCfgExist(c, s, subtaskCfg22)
+	t.subTaskStageMatch(c, s, taskName2, sourceID1, pb.Stage_Running)
+	t.subTaskStageMatch(c, s, taskName2, sourceID2, pb.Stage_Running)
 
-	// stop task1.
+	// CASE 4.5: update subtasks stage from different current stage.
+	// pause <task2, source1>.
+	c.Assert(s.UpdateExpectSubTaskStage(pb.Stage_Paused, taskName2, sourceID1), IsNil)
+	t.subTaskStageMatch(c, s, taskName2, sourceID1, pb.Stage_Paused)
+	t.subTaskStageMatch(c, s, taskName2, sourceID2, pb.Stage_Running)
+	// resume <task2, source1 and source2>.
+	c.Assert(s.UpdateExpectSubTaskStage(pb.Stage_Running, taskName2, sourceID1, sourceID2), IsNil)
+	t.subTaskStageMatch(c, s, taskName2, sourceID1, pb.Stage_Running)
+	t.subTaskStageMatch(c, s, taskName2, sourceID2, pb.Stage_Running)
+
+	// CASE 4.6: try remove source when subtasks exist.
+	c.Assert(terror.ErrSchedulerSourceOpTaskExist.Equal(s.RemoveSourceCfg(sourceID2)), IsTrue)
+	// source2 keep there.
+	t.sourceCfgExist(c, s, sourceCfg2)
+	// source2 still bound to worker2.
+	t.workerBound(c, s, ha.NewSourceBound(sourceID2, workerName2))
+	t.sourceBounds(c, s, []string{sourceID1, sourceID2}, []string{})
+	t.relayStageMatch(c, s, sourceID2, pb.Stage_Running)
+
+	// CASE 4.7: stop task2.
+	c.Assert(s.RemoveSubTasks(taskName2, sourceID1, sourceID2), IsNil)
+	t.subTaskCfgNotExist(c, s, taskName2, sourceID1)
+	t.subTaskCfgNotExist(c, s, taskName2, sourceID2)
+	t.subTaskStageMatch(c, s, taskName2, sourceID1, pb.Stage_InvalidStage)
+	t.subTaskStageMatch(c, s, taskName2, sourceID2, pb.Stage_InvalidStage)
+
+	// CASE 4.7: remove source2.
+	c.Assert(s.RemoveSourceCfg(sourceID2), IsNil)
+	// source2 removed.
+	t.sourceCfgNotExist(c, s, sourceID2)
+	// worker2 become Free now.
+	t.workerFree(c, s, workerName2)
+	t.sourceBounds(c, s, []string{sourceID1}, []string{})
+	t.relayStageMatch(c, s, sourceID2, pb.Stage_InvalidStage)
+
+	// CASE 4.8: worker1 become offline.
+	// before shutdown, worker1 bound source
+	t.workerBound(c, s, ha.NewSourceBound(sourceID1, workerName1))
+	// cancel keep-alive.
+	cancel1()
+	// wait for worker1 become offline.
+	utils.WaitSomething(int(3*keepAliveTTL), time.Second, func() bool {
+		w := s.GetWorkerByName(workerName1)
+		c.Assert(w, NotNil)
+		return w.Stage() == WorkerOffline
+	})
+	t.workerOffline(c, s, workerName1)
+	// source1 should bound to worker2.
+	t.sourceBounds(c, s, []string{sourceID1}, []string{})
+	t.workerBound(c, s, ha.NewSourceBound(sourceID1, workerName2))
+	// expect stages keep Running.
+	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
+	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_Running)
+
+	// CASE 4.9: remove worker1.
+	c.Assert(s.RemoveWorker(workerName1), IsNil)
+	c.Assert(terror.ErrSchedulerWorkerNotExist.Equal(s.RemoveWorker(workerName1)), IsTrue) // can't remove multiple times.
+	// worker1 not exists now.
+	t.workerNotExist(c, s, workerName1)
+
+	// CASE 4.10: stop task1.
 
 	// CASE 2.x: remove worker not supported when the worker is online.
 	//c.Assert(terror.ErrSchedulerWorkerOnline.Equal(s.RemoveWorker(workerName1)), IsTrue)
 
 	// shutdown and offline worker1.
 	cancel2()
-	cancel1()
 	wg.Wait()
 
 	// stop task2.
