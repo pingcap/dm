@@ -100,7 +100,7 @@ func (w *Worker) ToBound(bound ha.SourceBound) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.stage == WorkerOffline {
-		return terror.ErrSchedulerWorkerInvalidTrans.Generate(WorkerOffline, WorkerBound)
+		return terror.ErrSchedulerWorkerInvalidTrans.Generate(w.BaseInfo(), WorkerOffline, WorkerBound)
 	}
 	w.stage = WorkerBound
 	w.bound = bound

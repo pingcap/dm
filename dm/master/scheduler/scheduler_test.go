@@ -87,16 +87,22 @@ func (t *testScheduler) TestScheduler(c *C) {
 		sourceID1    = "mysql-replica-1"
 		sourceID2    = "mysql-replica-2"
 		workerName1  = "dm-worker-1"
+		workerName2  = "dm-worker-2"
 		workerAddr1  = "127.0.0.1:8262"
+		workerAddr2  = "127.0.0.1:18262"
 		taskName1    = "task-1"
 		taskName2    = "task-2"
 		workerInfo1  = ha.NewWorkerInfo(workerName1, workerAddr1)
+		workerInfo2  = ha.NewWorkerInfo(workerName2, workerAddr2)
 		sourceCfg1   config.MysqlConfig
 		subtaskCfg1  config.SubTaskConfig
 		keepAliveTTL = int64(1) // NOTE: this should be >= minLeaseTTL, in second.
 	)
 	c.Assert(sourceCfg1.LoadFromFile(sourceSampleFile), IsNil)
 	sourceCfg1.SourceID = sourceID1
+	sourceCfg2 := sourceCfg1
+	sourceCfg2.SourceID = sourceID2
+
 	c.Assert(subtaskCfg1.DecodeFile(subTaskSampleFile), IsNil)
 	subtaskCfg1.SourceID = sourceID1
 	subtaskCfg1.Name = taskName1
@@ -148,6 +154,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 	c.Assert(terror.ErrSchedulerWorkerExist.Equal(s.AddWorker(workerName1, workerAddr1)), IsTrue) // can't add multiple times.
 	// the worker added.
 	t.workerExist(c, s, workerInfo1)
+	t.workerOffline(c, s, workerName1)
 	// still no bounds (because the worker is offline).
 	t.sourceBounds(c, s, []string{}, []string{sourceID1})
 	// no expect relay stage exist (because the source has never been bounded).
@@ -227,25 +234,96 @@ func (t *testScheduler) TestScheduler(c *C) {
 	// shutdown the scheduler.
 	s.Close()
 
-	// CASE 3: start again with previous worker, relay stage, subtask stage.
+	// CASE 3: start again with previous `Offline` worker, relay stage, subtask stage.
 	c.Assert(s.Start(ctx, etcdTestCli), IsNil)
 
 	// CASE 3.1: previous information should recover.
+	// source1 is still unbound.
+	t.sourceBounds(c, s, []string{}, []string{sourceID1})
+	// worker1 still exists, but it's offline.
+	t.workerOffline(c, s, workerName1)
 	// static information are still there.
 	t.sourceCfgExist(c, s, sourceCfg1)
 	t.subTaskCfgExist(c, s, subtaskCfg1)
 	t.workerExist(c, s, workerInfo1)
-	// worker1 still exists, but it's offline.
-	t.workerOffline(c, s, workerName1)
 	// expect relay stage keep Running.
 	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
 	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_Running)
 
-	// start worker1 again.
+	// CASE 3.2: start worker1 again.
+	// do keep-alive for worker1 again.
+	ctx1, cancel1 = context.WithCancel(ctx)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.Assert(ha.KeepAlive(ctx1, etcdTestCli, workerName1, keepAliveTTL), IsNil)
+	}()
+	// wait for source1 bound to worker1.
+	utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+		bounds := s.BoundSources()
+		return len(bounds) == 1 && bounds[0] == sourceID1
+	})
+	// source1 bound to worker1.
+	t.sourceBounds(c, s, []string{sourceID1}, []string{})
+	t.workerBound(c, s, ha.NewSourceBound(sourceID1, workerName1))
+	// expect relay stage keep Running.
+	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
+	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_Running)
 
+	// shutdown the scheduler.
+	s.Close()
+
+	// CASE 4: start again with previous `Bound` worker, relay stage, subtask stage.
+	c.Assert(s.Start(ctx, etcdTestCli), IsNil)
+
+	// CASE 4.1: previous information should recover.
+	// source1 is still bound.
+	t.sourceBounds(c, s, []string{sourceID1}, []string{})
+	// worker1 still exists, and it's bound.
+	t.workerBound(c, s, ha.NewSourceBound(sourceID1, workerName1))
+	// static information are still there.
+	t.sourceCfgExist(c, s, sourceCfg1)
+	t.subTaskCfgExist(c, s, subtaskCfg1)
+	t.workerExist(c, s, workerInfo1)
+	// expect stages keep Running.
+	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
+	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_Running)
+
+	// CASE 4.2: add another worker into the cluster.
+	// worker2 not exists before added.
+	t.workerNotExist(c, s, workerName2)
 	// add worker2.
+	c.Assert(s.AddWorker(workerName2, workerAddr2), IsNil)
+	// the worker added, but is offline.
+	t.workerExist(c, s, workerInfo2)
+	t.workerOffline(c, s, workerName2)
 
-	// add source config2.
+	// CASE 4.3: the worker2 become online.
+	// do keep-alive for worker2.
+	ctx2, cancel2 := context.WithCancel(ctx)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.Assert(ha.KeepAlive(ctx2, etcdTestCli, workerName2, keepAliveTTL), IsNil)
+	}()
+	// wait for worker2 become Free.
+	utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+		w := s.GetWorkerByName(workerName2)
+		return w.Stage() == WorkerFree
+	})
+	t.workerFree(c, s, workerName2)
+
+	// CASE 4.4: add source config2.
+	// source2 not exists before.
+	t.sourceCfgNotExist(c, s, sourceID2)
+	// add source2.
+	c.Assert(s.AddSourceCfg(sourceCfg2), IsNil)
+	// source2 added.
+	t.sourceCfgExist(c, s, sourceCfg2)
+	// source2 should bound to worker2.
+	t.workerBound(c, s, ha.NewSourceBound(sourceID2, workerName2))
+	t.sourceBounds(c, s, []string{sourceID1, sourceID2}, []string{})
+	t.relayStageMatch(c, s, sourceID2, pb.Stage_Running)
 
 	// start a task with two sources.
 
@@ -255,6 +333,9 @@ func (t *testScheduler) TestScheduler(c *C) {
 	//c.Assert(terror.ErrSchedulerWorkerOnline.Equal(s.RemoveWorker(workerName1)), IsTrue)
 
 	// shutdown and offline worker1.
+	cancel2()
+	cancel1()
+	wg.Wait()
 
 	// stop task2.
 
@@ -323,6 +404,25 @@ func (t *testScheduler) workerOffline(c *C, s *Scheduler, worker string) {
 	c.Assert(err, IsNil)
 	_, ok := wm[worker]
 	c.Assert(ok, IsTrue)
+	sbm, _, err := ha.GetSourceBound(etcdTestCli, worker)
+	c.Assert(err, IsNil)
+	_, ok = sbm[worker]
+	c.Assert(ok, IsFalse)
+}
+
+func (t *testScheduler) workerFree(c *C, s *Scheduler, worker string) {
+	w := s.GetWorkerByName(worker)
+	c.Assert(w, NotNil)
+	c.Assert(w.Bound(), DeepEquals, nullBound)
+	c.Assert(w.Stage(), Equals, WorkerFree)
+	wm, _, err := ha.GetAllWorkerInfo(etcdTestCli)
+	c.Assert(err, IsNil)
+	_, ok := wm[worker]
+	c.Assert(ok, IsTrue)
+	sbm, _, err := ha.GetSourceBound(etcdTestCli, worker)
+	c.Assert(err, IsNil)
+	_, ok = sbm[worker]
+	c.Assert(ok, IsFalse)
 }
 
 func (t *testScheduler) workerBound(c *C, s *Scheduler, bound ha.SourceBound) {
@@ -330,6 +430,10 @@ func (t *testScheduler) workerBound(c *C, s *Scheduler, bound ha.SourceBound) {
 	c.Assert(w, NotNil)
 	c.Assert(w.Bound(), DeepEquals, bound)
 	c.Assert(w.Stage(), Equals, WorkerBound)
+	wm, _, err := ha.GetAllWorkerInfo(etcdTestCli)
+	c.Assert(err, IsNil)
+	_, ok := wm[bound.Worker]
+	c.Assert(ok, IsTrue)
 	sbm, _, err := ha.GetSourceBound(etcdTestCli, bound.Worker)
 	c.Assert(err, IsNil)
 	c.Assert(sbm[bound.Worker], DeepEquals, bound)

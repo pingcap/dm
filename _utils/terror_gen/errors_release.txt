@@ -425,7 +425,7 @@ ErrSchedulerStarted,[code=46002:class=scheduler:scope=internal:level=medium],"th
 ErrSchedulerWorkerExist,[code=46003:class=scheduler:scope=internal:level=medium],"dm-worker with name %s already exists"
 ErrSchedulerWorkerNotExist,[code=46004:class=scheduler:scope=internal:level=medium],"dm-worker with name %s not exists"
 ErrSchedulerWorkerOnline,[code=46005:class=scheduler:scope=internal:level=medium],"dm-worker with name %s is still online, must shut it down first"
-ErrSchedulerWorkerInvalidTrans,[code=46006:class=scheduler:scope=internal:level=medium],"invalid worker stage transformation, from %s to %s"
+ErrSchedulerWorkerInvalidTrans,[code=46006:class=scheduler:scope=internal:level=medium],"invalid stage transformation for dm-worker %s, from %s to %s"
 ErrSchedulerSourceCfgExist,[code=46007:class=scheduler:scope=internal:level=medium],"source config with ID %s already exists"
 ErrSchedulerSourceCfgNotExist,[code=46008:class=scheduler:scope=internal:level=medium],"source config with ID %s not exists"
 ErrSchedulerMultiTask,[code=46009:class=scheduler:scope=internal:level=medium],"the scheduler cannot perform multiple different tasks %v in one operation"

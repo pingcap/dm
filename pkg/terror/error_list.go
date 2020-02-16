@@ -1009,7 +1009,7 @@ var (
 	ErrSchedulerWorkerExist                = New(codeSchedulerWorkerExist, ClassScheduler, ScopeInternal, LevelMedium, "dm-worker with name %s already exists")
 	ErrSchedulerWorkerNotExist             = New(codeSchedulerWorkerNotExist, ClassScheduler, ScopeInternal, LevelMedium, "dm-worker with name %s not exists")
 	ErrSchedulerWorkerOnline               = New(codeSchedulerWorkerOnline, ClassScheduler, ScopeInternal, LevelMedium, "dm-worker with name %s is still online, must shut it down first")
-	ErrSchedulerWorkerInvalidTrans         = New(codeSchedulerWorkerInvalidTrans, ClassScheduler, ScopeInternal, LevelMedium, "invalid worker stage transformation, from %s to %s")
+	ErrSchedulerWorkerInvalidTrans         = New(codeSchedulerWorkerInvalidTrans, ClassScheduler, ScopeInternal, LevelMedium, "invalid stage transformation for dm-worker %s, from %s to %s")
 	ErrSchedulerSourceCfgExist             = New(codeSchedulerSourceCfgExist, ClassScheduler, ScopeInternal, LevelMedium, "source config with ID %s already exists")
 	ErrSchedulerSourceCfgNotExist          = New(codeSchedulerSourceCfgNotExist, ClassScheduler, ScopeInternal, LevelMedium, "source config with ID %s not exists")
 	ErrSchedulerMultiTask                  = New(codeSchedulerMultiTask, ClassScheduler, ScopeInternal, LevelMedium, "the scheduler cannot perform multiple different tasks %v in one operation")
