@@ -35,8 +35,12 @@ import (
 	"github.com/pingcap/dm/syncer"
 )
 
-// createUnits creates process units base on task mode
-func createUnits(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
+// createRealUnits is subtask units initializer
+// it can be used for testing
+var createUnits = createRealUnits
+
+// createRealUnits creates process units base on task mode
+func createRealUnits(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
 	failpoint.Inject("mockCreateUnitsDumpOnly", func(_ failpoint.Value) {
 		log.L().Info("create mock worker units with dump unit only", zap.String("failpoint", "mockCreateUnitsDumpOnly"))
 		failpoint.Return([]unit.Unit{mydumper.NewMydumper(cfg)})
@@ -96,7 +100,6 @@ func NewRealSubTask(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *Sub
 func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, etcdClient *clientv3.Client) *SubTask {
 	st := SubTask{
 		cfg:        cfg,
-		units:      createUnits(cfg, etcdClient),
 		stage:      stage,
 		l:          log.With(zap.String("subtask", cfg.Name)),
 		etcdClient: etcdClient,
@@ -107,6 +110,12 @@ func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, etcdClient *
 
 // Init initializes the sub task processing units
 func (st *SubTask) Init() error {
+	cfgDecrypted, err := st.cfg.DecryptPassword()
+	if err != nil {
+		return err
+	}
+	st.cfg = cfgDecrypted
+	st.units = createUnits(st.cfg, st.etcdClient)
 	if len(st.units) < 1 {
 		return terror.ErrWorkerNoAvailUnits.Generate(st.cfg.Name, st.cfg.Mode)
 	}

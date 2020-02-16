@@ -202,19 +202,12 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) {
 	w.Lock()
 	defer w.Unlock()
 
+	// copy some config item from dm-worker's config
+	w.copyConfigFromWorker(cfg)
 	// directly put cfg into subTaskHolder
 	// the unique of subtask should be assured by etcd
 	st := NewSubTask(cfg, w.etcdClient)
 	w.subTaskHolder.recordSubTask(st)
-	// copy some config item from dm-worker's config
-	w.copyConfigFromWorker(cfg)
-	cfgDecrypted, err := cfg.DecryptPassword()
-	if err != nil {
-		st.fail(terror.WithClass(err, terror.ClassDMWorker))
-		return
-	}
-	// update config to decrypted config
-	*st = *(NewSubTask(cfgDecrypted, w.etcdClient))
 	if w.closed.Get() == closedTrue {
 		st.fail(terror.ErrWorkerAlreadyClosed.Generate())
 		return
@@ -225,7 +218,7 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) {
 		return
 	}
 
-	w.l.Info("started sub task", zap.Stringer("config", cfgDecrypted))
+	w.l.Info("started sub task", zap.Stringer("config", cfg))
 	st.Run()
 }
 
