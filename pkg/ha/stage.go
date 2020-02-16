@@ -199,7 +199,6 @@ func GetAllSubTaskStage(cli *clientv3.Client) (map[string]map[string]Stage, int6
 	defer cancel()
 
 	resp, err := cli.Get(ctx, common.StageSubTaskKeyAdapter.Path(), clientv3.WithPrefix())
-
 	if err != nil {
 		return nil, 0, err
 	}
