@@ -14,7 +14,9 @@
 package scheduler
 
 import (
+	"context"
 	"sync"
+	"time"
 
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/pkg/ha"
@@ -126,4 +128,9 @@ func (w *Worker) Bound() ha.SourceBound {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 	return w.bound
+}
+
+// SendRequest sends request to the DM-worker instance.
+func (w *Worker) SendRequest(ctx context.Context, req *workerrpc.Request, d time.Duration) (*workerrpc.Response, error) {
+	return w.cli.SendRequest(ctx, req, d)
 }

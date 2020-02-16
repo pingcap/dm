@@ -14,8 +14,13 @@
 package scheduler
 
 import (
+	"context"
+	"time"
+
 	. "github.com/pingcap/check"
 
+	"github.com/pingcap/dm/dm/master/workerrpc"
+	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/terror"
 )
@@ -75,4 +80,16 @@ func (t *testWorker) TestWorker(c *C) {
 	w.ToOffline()
 	c.Assert(w.Stage(), Equals, WorkerOffline)
 	c.Assert(w.Bound(), DeepEquals, nullBound)
+
+	// SendRequest.
+	req := &workerrpc.Request{
+		Type: workerrpc.CmdOperateSubTask,
+		OperateSubTask: &pb.OperateSubTaskRequest{
+			Op:   pb.TaskOp_Pause,
+			Name: "task1",
+		},
+	}
+	resp, err := w.SendRequest(context.Background(), req, time.Second)
+	c.Assert(err, ErrorMatches, ".*connection refused.*")
+	c.Assert(resp, IsNil)
 }
