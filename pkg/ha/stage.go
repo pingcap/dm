@@ -130,6 +130,28 @@ func GetRelayStage(cli *clientv3.Client, source string) (Stage, int64, error) {
 	return stage, resp.Header.Revision, nil
 }
 
+// GetAllRelayStage gets all relay stages.
+// k/v: source ID -> relay stage.
+func GetAllRelayStage(cli *clientv3.Client) (map[string]Stage, int64, error) {
+	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
+	defer cancel()
+
+	resp, err := cli.Get(ctx, common.StageRelayKeyAdapter.Path(), clientv3.WithPrefix())
+	if err != nil {
+		return nil, 0, err
+	}
+
+	stages := make(map[string]Stage)
+	for _, kv := range resp.Kvs {
+		stage, err2 := stageFromJSON(string(kv.Value))
+		if err2 != nil {
+			return nil, 0, err2
+		}
+		stages[stage.Source] = stage
+	}
+	return stages, resp.Header.Revision, nil
+}
+
 // GetSubTaskStage gets the subtask stage for the specified upstream source and task name.
 // if the stage for the source and task name not exist, return with `err == nil` and `revision=0`.
 // if task name is "", it will return all subtasks' stage as a map{task-name: stage} for the source.
@@ -168,6 +190,33 @@ func GetSubTaskStage(cli *clientv3.Client, source, task string) (map[string]Stag
 	}
 
 	return stm, resp.Header.Revision, nil
+}
+
+// GetAllSubTaskStage gets all subtask stages.
+// k/v: source ID -> task name -> subtask stage.
+func GetAllSubTaskStage(cli *clientv3.Client) (map[string]map[string]Stage, int64, error) {
+	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
+	defer cancel()
+
+	resp, err := cli.Get(ctx, common.StageSubTaskKeyAdapter.Path(), clientv3.WithPrefix())
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	stages := make(map[string]map[string]Stage)
+	for _, kvs := range resp.Kvs {
+		stage, err2 := stageFromJSON(string(kvs.Value))
+		if err2 != nil {
+			return nil, 0, err2
+		}
+		if _, ok := stages[stage.Source]; !ok {
+			stages[stage.Source] = make(map[string]Stage)
+		}
+		stages[stage.Source][stage.Task] = stage
+	}
+
+	return stages, resp.Header.Revision, nil
 }
 
 // WatchRelayStage watches PUT & DELETE operations for the relay stage.

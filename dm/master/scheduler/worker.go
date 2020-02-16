@@ -69,6 +69,13 @@ func NewWorker(baseInfo ha.WorkerInfo) (*Worker, error) {
 	return w, nil
 }
 
+// Close closes the worker and release resources.
+func (w *Worker) Close() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.cli.Close()
+}
+
 // ToOffline transforms to Offline.
 // both Free and Bound can transform to Offline.
 func (w *Worker) ToOffline() {
@@ -98,6 +105,12 @@ func (w *Worker) ToBound(bound ha.SourceBound) error {
 	w.stage = WorkerBound
 	w.bound = bound
 	return nil
+}
+
+// BaseInfo returns the base info of the worker.
+// No lock needed because baseInfo should not be modified after the instance created.
+func (w *Worker) BaseInfo() ha.WorkerInfo {
+	return w.baseInfo
 }
 
 // Stage returns the current stage.

@@ -52,6 +52,7 @@ package ha
 //     - PUT when scheduling the source to a DM-worker instance by DM-master.
 //       - PUT with `the expectant stage of the relay` in one txn for the first time.
 //     - GET (through GET/WATCH) by DM-worker to know relevant relay/subtasks have to do.
+//     - DELETE when the bounded DM-worker become offline.
 //     - DELETE when removing an upstream by DM-master.
 //       - DELETE with `the upstream MySQL config` in one txn.
 //       - DELETE with `the expectant stage of the relay` in one txn.
@@ -145,4 +146,4 @@ package ha
 //   - do nothing if the relay/subtask instance not exists.
 //   - stop if the relay/subtask instance exists.
 // - Finished:
-//   - never exists for expectant stage in etcd but DELETE the relevant information.
+//   - never exists for expectant stage in etcd.

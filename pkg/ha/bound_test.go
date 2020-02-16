@@ -90,17 +90,13 @@ func (t *testForEtcd) TestSourceBoundEtcd(c *C) {
 	c.Assert(sbm2[worker2], DeepEquals, bound2)
 
 	// delete bound1.
-	deleteOp := deleteSourceBoundOp(worker1)
-	resp, err := etcdTestCli.Txn(context.Background()).Then(deleteOp).Commit()
+	rev5, err := DeleteSourceBound(etcdTestCli, worker1)
 	c.Assert(err, IsNil)
-	rev5 := resp.Header.Revision
 	c.Assert(rev5, Greater, rev4)
 
 	// delete bound2.
-	deleteOp = deleteSourceBoundOp(worker2)
-	resp, err = etcdTestCli.Txn(context.Background()).Then(deleteOp).Commit()
+	rev6, err := DeleteSourceBound(etcdTestCli, worker2)
 	c.Assert(err, IsNil)
-	rev6 := resp.Header.Revision
 	c.Assert(rev6, Greater, rev5)
 
 	// watch the DELETE operation for bound1.

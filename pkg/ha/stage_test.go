@@ -90,6 +90,14 @@ func (t *testForEtcd) TestRelayStageEtcd(c *C) {
 	stage1.Revision = 0
 	c.Assert(st2, DeepEquals, stage1)
 
+	// get two stages.
+	stm, rev3, err := GetAllRelayStage(etcdTestCli)
+	c.Assert(err, IsNil)
+	c.Assert(rev3, Equals, rev2)
+	c.Assert(stm, HasLen, 2)
+	c.Assert(stm[source1], DeepEquals, stage1)
+	c.Assert(stm[source2], DeepEquals, stage2)
+
 	// delete stage1.
 	deleteOp := deleteRelayStageOp(source1)
 	resp, err := etcdTestCli.Txn(context.Background()).Then(deleteOp).Commit()
@@ -171,6 +179,15 @@ func (t *testForEtcd) TestSubTaskStageEtcd(c *C) {
 	c.Assert(rev3, Equals, rev2)
 	c.Assert(stm, HasLen, 1)
 	c.Assert(stm[task1], DeepEquals, stage1)
+
+	// get all stages.
+	stmm, rev3, err := GetAllSubTaskStage(etcdTestCli)
+	c.Assert(err, IsNil)
+	c.Assert(rev3, Equals, rev2)
+	c.Assert(stmm, HasLen, 1)
+	c.Assert(stmm[source], HasLen, 2)
+	c.Assert(stmm[source][task1], DeepEquals, stage1)
+	c.Assert(stmm[source][task2], DeepEquals, stage2)
 
 	// delete two stages.
 	rev4, err := DeleteSubTaskStage(etcdTestCli, stage1, stage2)

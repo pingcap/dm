@@ -79,6 +79,34 @@ func GetSubTaskCfg(cli *clientv3.Client, source, taskName string, rev int64) (ma
 	return tsm, resp.Header.Revision, nil
 }
 
+// GetAllSubTaskCfg gets all subtask configs.
+// k/v: source ID -> task name -> subtask config
+func GetAllSubTaskCfg(cli *clientv3.Client) (map[string]map[string]config.SubTaskConfig, int64, error) {
+	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
+	defer cancel()
+
+	resp, err := cli.Get(ctx, common.UpstreamSubTaskKeyAdapter.Path(), clientv3.WithPrefix())
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	cfgs := make(map[string]map[string]config.SubTaskConfig)
+	for _, kvs := range resp.Kvs {
+		cfg := config.SubTaskConfig{}
+		err = cfg.Decode(string(kvs.Value))
+		if err != nil {
+			return nil, 0, err
+		}
+		if _, ok := cfgs[cfg.SourceID]; !ok {
+			cfgs[cfg.SourceID] = make(map[string]config.SubTaskConfig)
+		}
+		cfgs[cfg.SourceID][cfg.Name] = cfg
+	}
+
+	return cfgs, resp.Header.Revision, nil
+}
+
 // putSubTaskCfgOp returns a PUT etcd operation for the subtask config.
 func putSubTaskCfgOp(cfgs ...config.SubTaskConfig) ([]clientv3.Op, error) {
 	ops := make([]clientv3.Op, 0, len(cfgs))
