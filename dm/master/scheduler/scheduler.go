@@ -75,7 +75,7 @@ type Scheduler struct {
 
 	// unbound (pending to bound) sources.
 	// NOTE: refactor to support scheduling by priority.
-	unbounds []string
+	unbounds map[string]struct{}
 
 	// expectant relay stages for sources, source ID -> stage.
 	expectRelayStages map[string]ha.Stage
@@ -92,7 +92,7 @@ func NewScheduler(pLogger *log.Logger) *Scheduler {
 		subTaskCfgs:         make(map[string]map[string]config.SubTaskConfig),
 		workers:             make(map[string]*Worker),
 		bounds:              make(map[string]*Worker),
-		unbounds:            make([]string, 0, 10),
+		unbounds:            make(map[string]struct{}),
 		expectRelayStages:   make(map[string]ha.Stage),
 		expectSubTaskStages: make(map[string]map[string]ha.Stage),
 	}
@@ -200,7 +200,7 @@ func (s *Scheduler) AddSourceCfg(cfg config.MysqlConfig) error {
 		return err
 	} else if !bounded {
 		// 5. record the source as unbounded.
-		s.unbounds = append(s.unbounds, cfg.SourceID)
+		s.unbounds[cfg.SourceID] = struct{}{}
 	}
 	return nil
 }
@@ -260,7 +260,10 @@ func (s *Scheduler) RemoveSourceCfg(source string) error {
 	// 6. unbound for the source.
 	s.updateStatusForUnbound(source)
 
-	// 7. try to bound the worker for another source.
+	// 7. remove it from unbounds.
+	delete(s.unbounds, source)
+
+	// 8. try to bound the worker for another source.
 	if worker != nil {
 		_, err = s.tryBoundForWorker(worker)
 		if err != nil {
@@ -538,7 +541,7 @@ func (s *Scheduler) UnboundSources() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	IDs := make([]string, 0, len(s.unbounds))
-	for _, ID := range s.unbounds {
+	for ID := range s.unbounds {
 		IDs = append(IDs, ID)
 	}
 	sort.Strings(IDs)
@@ -816,7 +819,7 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 	// 5. recover bounds/unbounds, all sources which not in bounds should be in unbounds.
 	for source := range s.sourceCfgs {
 		if _, ok := s.bounds[source]; !ok {
-			s.unbounds = append(s.unbounds, source)
+			s.unbounds[source] = struct{}{}
 		}
 	}
 
@@ -925,7 +928,7 @@ func (s *Scheduler) handleWorkerOffline(ev ha.WorkerEvent) error {
 		return err
 	} else if !bounded {
 		// 8. record the source as unbounded.
-		s.unbounds = append(s.unbounds, bound.Source)
+		s.unbounds[bound.Source] = struct{}{}
 	}
 
 	return nil
@@ -935,19 +938,22 @@ func (s *Scheduler) handleWorkerOffline(ev ha.WorkerEvent) error {
 // returns (true, nil) after bounded.
 func (s *Scheduler) tryBoundForWorker(w *Worker) (bounded bool, err error) {
 	// 1. check whether any unbound source exists.
-	if len(s.unbounds) == 0 {
+	var source string
+	for source = range s.unbounds {
+		break // got a source.
+	}
+	if source == "" {
 		s.logger.Info("no unbound sources need to bound", zap.Stringer("worker", w.BaseInfo()))
 		return false, nil
 	}
 
 	// 2. pop a source to bound, priority supported if needed later.
 	// DO NOT forget to push it back if fail to bound.
-	source := s.unbounds[0]
-	s.unbounds = s.unbounds[1:]
+	delete(s.unbounds, source)
 	defer func() {
 		if err != nil {
 			// push the source back.
-			s.unbounds = append(s.unbounds, source)
+			s.unbounds[source] = struct{}{}
 		}
 	}()
 
@@ -1074,7 +1080,7 @@ func (s *Scheduler) reset() {
 	s.subTaskCfgs = make(map[string]map[string]config.SubTaskConfig)
 	s.workers = make(map[string]*Worker)
 	s.bounds = make(map[string]*Worker)
-	s.unbounds = make([]string, 0, 10)
+	s.unbounds = make(map[string]struct{})
 	s.expectRelayStages = make(map[string]ha.Stage)
 	s.expectSubTaskStages = make(map[string]map[string]ha.Stage)
 }

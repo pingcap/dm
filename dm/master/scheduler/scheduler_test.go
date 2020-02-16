@@ -401,23 +401,43 @@ func (t *testScheduler) TestScheduler(c *C) {
 	t.workerNotExist(c, s, workerName1)
 
 	// CASE 4.10: stop task1.
+	c.Assert(s.RemoveSubTasks(taskName1, sourceID1), IsNil)
+	t.subTaskCfgNotExist(c, s, taskName1, sourceID1)
+	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_InvalidStage)
 
-	// CASE 2.x: remove worker not supported when the worker is online.
-	//c.Assert(terror.ErrSchedulerWorkerOnline.Equal(s.RemoveWorker(workerName1)), IsTrue)
+	// CASE 4.11: remove worker not supported when the worker is online.
+	c.Assert(terror.ErrSchedulerWorkerOnline.Equal(s.RemoveWorker(workerName2)), IsTrue)
+	t.sourceBounds(c, s, []string{sourceID1}, []string{})
+	t.workerBound(c, s, ha.NewSourceBound(sourceID1, workerName2))
+	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
 
-	// shutdown and offline worker1.
+	// CASE 4.12: worker2 become offline.
 	cancel2()
 	wg.Wait()
+	// wait for worker2 become offline.
+	utils.WaitSomething(int(3*keepAliveTTL), time.Second, func() bool {
+		w := s.GetWorkerByName(workerName2)
+		c.Assert(w, NotNil)
+		return w.Stage() == WorkerOffline
+	})
+	t.workerOffline(c, s, workerName2)
+	// source1 should unbound
+	t.sourceBounds(c, s, []string{}, []string{sourceID1})
+	// expect stages keep Running.
+	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
 
-	// stop task2.
+	// CASE 4.13: remove worker2.
+	c.Assert(s.RemoveWorker(workerName2), IsNil)
+	t.workerNotExist(c, s, workerName2)
+	// relay stage still there.
+	t.sourceBounds(c, s, []string{}, []string{sourceID1})
+	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
 
-	// shutdown and offline worker2.
-
-	// remove/unregister the worker.
-	//c.Assert(s.RemoveWorker(workerName1), IsNil)
-	//c.Assert(terror.ErrSchedulerWorkerNotExist.Equal(s.RemoveWorker(workerName1)), IsTrue) // not exists.
-
-	// bound source1 from worker1 to worker2.
+	// CASE 4.14: remove source1.
+	c.Assert(s.RemoveSourceCfg(sourceID1), IsNil)
+	t.sourceCfgNotExist(c, s, sourceID1)
+	t.sourceBounds(c, s, []string{}, []string{})
+	t.relayStageMatch(c, s, sourceID1, pb.Stage_InvalidStage)
 }
 
 func (t *testScheduler) sourceCfgNotExist(c *C, s *Scheduler, source string) {
