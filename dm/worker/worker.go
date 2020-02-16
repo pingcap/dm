@@ -119,6 +119,7 @@ func NewWorker(cfg *config.MysqlConfig, etcdClient *clientv3.Client) (w *Worker,
 func (w *Worker) Start(startRelay bool) {
 
 	if w.cfg.EnableRelay && startRelay {
+		log.L().Info("relay is started")
 		// start relay
 		w.relayHolder.Start()
 
@@ -197,34 +198,35 @@ func (w *Worker) Close() {
 }
 
 // StartSubTask creates a sub task an run it
-func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
+func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) {
 	w.Lock()
 	defer w.Unlock()
 
-	if w.closed.Get() == closedTrue {
-		return terror.ErrWorkerAlreadyClosed.Generate()
-	}
-
-	if w.relayPurger != nil && w.relayPurger.Purging() {
-		return terror.ErrWorkerRelayIsPurging.Generate(cfg.Name)
-	}
-
-	if w.subTaskHolder.findSubTask(cfg.Name) != nil {
-		return terror.ErrWorkerSubTaskExists.Generate(cfg.Name)
-	}
-
+	// directly put cfg into subTaskHolder
+	// the unique of subtask should be assured by etcd
+	st := NewSubTask(cfg, w.etcdClient)
+	w.subTaskHolder.recordSubTask(st)
 	// copy some config item from dm-worker's config
 	w.copyConfigFromWorker(cfg)
 	cfgDecrypted, err := cfg.DecryptPassword()
 	if err != nil {
-		return terror.WithClass(err, terror.ClassDMWorker)
+		st.fail(terror.WithClass(err, terror.ClassDMWorker))
+		return
+	}
+	// update config to decrypted config
+	*st = *(NewSubTask(cfgDecrypted, w.etcdClient))
+	if w.closed.Get() == closedTrue {
+		st.fail(terror.ErrWorkerAlreadyClosed.Generate())
+		return
+	}
+
+	if w.relayPurger != nil && w.relayPurger.Purging() {
+		st.fail(terror.ErrWorkerRelayIsPurging.Generate(cfg.Name))
+		return
 	}
 
 	w.l.Info("started sub task", zap.Stringer("config", cfgDecrypted))
-	st := NewSubTask(cfgDecrypted, w.etcdClient)
-	w.subTaskHolder.recordSubTask(st)
 	st.Run()
-	return nil
 }
 
 // UpdateSubTask update config for a sub task
@@ -338,7 +340,8 @@ func (w *Worker) operateSubTaskStage(stage ha.Stage) error {
 				return terror.Annotate(err, "fail to get subtask config from etcd")
 			}
 			subTaskCfg := tsm[stage.Task]
-			return w.StartSubTask(&subTaskCfg)
+			w.StartSubTask(&subTaskCfg)
+			return nil
 		}
 		op = pb.TaskOp_Resume
 	case stage.Expect == pb.Stage_Paused:

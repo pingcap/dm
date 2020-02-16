@@ -63,10 +63,8 @@ type Server struct {
 	rootLis    net.Listener
 	svr        *grpc.Server
 	worker     *Worker
+	workerErr  error
 	etcdClient *clientv3.Client
-
-	// false: has retried connecting to master again.
-	retryConnectMaster sync2.AtomicBool
 }
 
 // NewServer creates a new Server
@@ -74,7 +72,6 @@ func NewServer(cfg *Config) *Server {
 	s := Server{
 		cfg: cfg,
 	}
-	s.retryConnectMaster.Set(true)
 	s.closed.Set(true) // not start yet
 	return &s
 }
@@ -205,6 +202,22 @@ func (s *Server) setWorker(worker *Worker, needLock bool) {
 	s.worker = worker
 }
 
+func (s *Server) getWorkerErr(needLock bool) error {
+	if needLock {
+		s.Lock()
+		defer s.Unlock()
+	}
+	return s.workerErr
+}
+
+func (s *Server) setWorkerErr(workerErr error, needLock bool) {
+	if needLock {
+		s.Lock()
+		defer s.Unlock()
+	}
+	s.workerErr = workerErr
+}
+
 // if sourceID is set to "", worker will be closed directly
 // if sourceID is not "", we will check sourceID with w.cfg.SourceID
 func (s *Server) stopWorker(sourceID string) error {
@@ -252,7 +265,10 @@ func (s *Server) handleSourceBound(ctx context.Context, boundCh chan ha.SourceBo
 			return
 		case bound := <-boundCh:
 			err := s.operateSourceBound(bound)
+			s.setWorkerErr(err, true)
 			if err != nil {
+				// record the reason for operating source bound
+				// TODO: add better metrics
 				log.L().Error("fail to operate sourceBound on worker", zap.String("worker", s.cfg.Name),
 					zap.String("source", bound.Source))
 			}
@@ -302,14 +318,7 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 
 	cfg.LogLevel = s.cfg.LogLevel
 	cfg.LogFile = s.cfg.LogFile
-	err = w.StartSubTask(cfg)
-
-	if err != nil {
-		err = terror.Annotatef(err, "start sub task %s", cfg.Name)
-		log.L().Error("fail to start subtask", zap.String("request", "StartSubTask"), zap.Stringer("payload", req), zap.Error(err))
-		resp.Result = false
-		resp.Msg = err.Error()
-	}
+	w.StartSubTask(cfg)
 
 	if resp.Result {
 		op1 := clientv3.OpPut(common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name), req.Task)
@@ -402,6 +411,9 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 		log.L().Error("fail to call QueryStatus, because mysql worker has not been started")
 		resp.Result = false
 		resp.Msg = terror.ErrWorkerNoStart.Error()
+		if err := s.getWorkerErr(true); err != nil {
+			resp.Msg += "\nlast operate source worker error is: " + err.Error()
+		}
 		return resp, nil
 	}
 
@@ -410,8 +422,8 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 			Detail: []byte("relay is not enabled"),
 		},
 	}
-	if s.worker.relayHolder != nil {
-		relayStatus = s.worker.relayHolder.Status()
+	if w.relayHolder != nil {
+		relayStatus = w.relayHolder.Status()
 	}
 
 	resp.SubTaskStatus = w.QueryStatus(req.Name)
@@ -435,6 +447,9 @@ func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorRequest) (*pb
 		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
 		resp.Result = false
 		resp.Msg = terror.ErrWorkerNoStart.Error()
+		if err := s.getWorkerErr(true); err != nil {
+			resp.Msg += "\nlast operate source worker error is: " + err.Error()
+		}
 		return resp, nil
 	}
 
@@ -606,6 +621,8 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		return terror.ErrWorkerAlreadyStart.Generate()
 	}
 
+	// we get the newest subtask stages directly which will omit the subtask stage PUT/DELETE event
+	// because triggering these events is useless now
 	subTaskStages, revSubTask, err := ha.GetSubTaskStage(s.etcdClient, cfg.SourceID, "")
 	if err != nil {
 		// TODO: need retry
@@ -639,7 +656,7 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		cfg.RelayBinlogGTID = ""
 	}
 
-	log.L().Info("start worker", zap.Reflect("subTasks", subTaskCfgs))
+	log.L().Info("start worker", zap.String("sourceCfg", cfg.String()), zap.Reflect("subTasks", subTaskCfgs))
 
 	w, err := NewWorker(cfg, s.etcdClient)
 	if err != nil {
@@ -649,8 +666,10 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 
 	startRelay := false
 	var revRelay int64
-	if w.cfg.EnableRelay {
+	if cfg.EnableRelay {
 		var relayStage ha.Stage
+		// we get the newest relay stages directly which will omit the relay stage PUT/DELETE event
+		// because triggering these events is useless now
 		relayStage, revRelay, err = ha.GetRelayStage(s.etcdClient, cfg.SourceID)
 		if err != nil {
 			// TODO: need retry
@@ -675,9 +694,7 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		if expectStage.IsDeleted || expectStage.Expect != pb.Stage_Running {
 			continue
 		}
-		if err = w.StartSubTask(subTaskCfg); err != nil {
-			return err
-		}
+		w.StartSubTask(subTaskCfg)
 		log.L().Info("load subtask successful", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
 	}
 
@@ -693,7 +710,7 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		w.handleSubTaskStage(w.ctx, subTaskStageCh, subTaskErrCh)
 	}()
 
-	if w.cfg.EnableRelay {
+	if cfg.EnableRelay {
 		relayStageCh := make(chan ha.Stage, 10)
 		relayErrCh := make(chan error, 10)
 		w.wg.Add(2)

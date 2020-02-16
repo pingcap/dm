@@ -65,11 +65,12 @@ func (t *testServer) testWorker(c *C) {
 	c.Assert(w.subTaskHolder.getAllSubTasks(), HasLen, 0)
 	c.Assert(w.closed.Get(), Equals, closedTrue)
 
-	err = w.StartSubTask(&config.SubTaskConfig{
+	w.StartSubTask(&config.SubTaskConfig{
 		Name: "testStartTask",
 	})
-	c.Assert(err, NotNil)
-	c.Assert(err, ErrorMatches, ".*worker already closed.*")
+	task := w.subTaskHolder.findSubTask("testStartTask")
+	c.Assert(task, NotNil)
+	c.Assert(task.Result().String(), Matches, ".*worker already closed.*")
 
 	err = w.UpdateSubTask(&config.SubTaskConfig{
 		Name: "testStartTask",

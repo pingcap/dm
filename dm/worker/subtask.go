@@ -83,8 +83,12 @@ type SubTask struct {
 	etcdClient *clientv3.Client
 }
 
-// NewSubTask creates a new SubTask
-func NewSubTask(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *SubTask {
+// NewSubTask is subtask initializer
+// it can be used for testing
+var NewSubTask = NewRealSubTask
+
+// NewRealSubTask creates a new SubTask
+func NewRealSubTask(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *SubTask {
 	return NewSubTaskWithStage(cfg, pb.Stage_New, etcdClient)
 }
 

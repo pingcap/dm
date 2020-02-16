@@ -268,8 +268,8 @@ func (c *SubTaskConfig) Adjust() error {
 		c.MetaSchema = defaultMetaSchema
 	}
 
-	if !c.DisableHeartbeat {
-		c.EnableHeartbeat = true
+	if c.DisableHeartbeat {
+		c.EnableHeartbeat = false
 	}
 
 	if c.Timezone != "" {
