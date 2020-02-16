@@ -80,6 +80,7 @@ func GetAllSourceCfg(cli *clientv3.Client) (map[string]config.MysqlConfig, int64
 		var cfg config.MysqlConfig
 		err = cfg.Parse(string(kv.Value))
 		if err != nil {
+			// TODO(csuzhangxc): add terror and including `key`.
 			return nil, 0, err
 		}
 		scm[cfg.SourceID] = cfg
