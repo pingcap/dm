@@ -75,26 +75,6 @@ func (mr *MockWorkerClientMockRecorder) MigrateRelay(arg0, arg1 interface{}, arg
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MigrateRelay", reflect.TypeOf((*MockWorkerClient)(nil).MigrateRelay), varargs...)
 }
 
-// OperateMysqlWorker mocks base method
-func (m *MockWorkerClient) OperateMysqlWorker(arg0 context.Context, arg1 *pb.MysqlWorkerRequest, arg2 ...grpc.CallOption) (*pb.MysqlWorkerResponse, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "OperateMysqlWorker", varargs...)
-	ret0, _ := ret[0].(*pb.MysqlWorkerResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// OperateMysqlWorker indicates an expected call of OperateMysqlWorker
-func (mr *MockWorkerClientMockRecorder) OperateMysqlWorker(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateMysqlWorker", reflect.TypeOf((*MockWorkerClient)(nil).OperateMysqlWorker), varargs...)
-}
-
 // OperateRelay mocks base method
 func (m *MockWorkerClient) OperateRelay(arg0 context.Context, arg1 *pb.OperateRelayRequest, arg2 ...grpc.CallOption) (*pb.OperateRelayResponse, error) {
 	m.ctrl.T.Helper()
@@ -346,21 +326,6 @@ func (m *MockWorkerServer) MigrateRelay(arg0 context.Context, arg1 *pb.MigrateRe
 func (mr *MockWorkerServerMockRecorder) MigrateRelay(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MigrateRelay", reflect.TypeOf((*MockWorkerServer)(nil).MigrateRelay), arg0, arg1)
-}
-
-// OperateMysqlWorker mocks base method
-func (m *MockWorkerServer) OperateMysqlWorker(arg0 context.Context, arg1 *pb.MysqlWorkerRequest) (*pb.MysqlWorkerResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "OperateMysqlWorker", arg0, arg1)
-	ret0, _ := ret[0].(*pb.MysqlWorkerResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// OperateMysqlWorker indicates an expected call of OperateMysqlWorker
-func (mr *MockWorkerServerMockRecorder) OperateMysqlWorker(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateMysqlWorker", reflect.TypeOf((*MockWorkerServer)(nil).OperateMysqlWorker), arg0, arg1)
 }
 
 // OperateRelay mocks base method

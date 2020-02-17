@@ -71,7 +71,7 @@ type Scheduler struct {
 	// - recover from etcd (calling `recoverSources`).
 	// delete:
 	// - remove source by user request (calling `RemoveSourceCfg`).
-	sourceCfgs map[string]config.MysqlConfig
+	sourceCfgs map[string]config.SourceConfig
 
 	// all subtask configs, task name -> source ID -> subtask config.
 	// add:
@@ -133,7 +133,7 @@ type Scheduler struct {
 func NewScheduler(pLogger *log.Logger) *Scheduler {
 	return &Scheduler{
 		logger:              pLogger.WithFields(zap.String("component", "scheduler")),
-		sourceCfgs:          make(map[string]config.MysqlConfig),
+		sourceCfgs:          make(map[string]config.SourceConfig),
 		subTaskCfgs:         make(map[string]map[string]config.SubTaskConfig),
 		workers:             make(map[string]*Worker),
 		bounds:              make(map[string]*Worker),
@@ -223,7 +223,7 @@ func (s *Scheduler) Close() {
 
 // AddSourceCfg adds the upstream source config to the cluster.
 // NOTE: please verify the config before call this.
-func (s *Scheduler) AddSourceCfg(cfg config.MysqlConfig) error {
+func (s *Scheduler) AddSourceCfg(cfg config.SourceConfig) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -325,7 +325,7 @@ func (s *Scheduler) RemoveSourceCfg(source string) error {
 }
 
 // GetSourceCfgByID gets source config by source ID.
-func (s *Scheduler) GetSourceCfgByID(source string) *config.MysqlConfig {
+func (s *Scheduler) GetSourceCfgByID(source string) *config.SourceConfig {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	cfg, ok := s.sourceCfgs[source]
@@ -1141,7 +1141,7 @@ func (s *Scheduler) updateStatusForUnbound(source string) {
 
 // reset resets the internal status.
 func (s *Scheduler) reset() {
-	s.sourceCfgs = make(map[string]config.MysqlConfig)
+	s.sourceCfgs = make(map[string]config.SourceConfig)
 	s.subTaskCfgs = make(map[string]map[string]config.SubTaskConfig)
 	s.workers = make(map[string]*Worker)
 	s.bounds = make(map[string]*Worker)

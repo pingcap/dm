@@ -135,24 +135,24 @@ func (mr *MockMasterClientMockRecorder) OfflineWorker(arg0, arg1 interface{}, ar
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OfflineWorker", reflect.TypeOf((*MockMasterClient)(nil).OfflineWorker), varargs...)
 }
 
-// OperateMysqlWorker mocks base method
-func (m *MockMasterClient) OperateMysqlWorker(arg0 context.Context, arg1 *pb.MysqlWorkerRequest, arg2 ...grpc.CallOption) (*pb.MysqlWorkerResponse, error) {
+// OperateSource mocks base method
+func (m *MockMasterClient) OperateSource(arg0 context.Context, arg1 *pb.OperateSourceRequest, arg2 ...grpc.CallOption) (*pb.OperateSourceResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{arg0, arg1}
 	for _, a := range arg2 {
 		varargs = append(varargs, a)
 	}
-	ret := m.ctrl.Call(m, "OperateMysqlWorker", varargs...)
-	ret0, _ := ret[0].(*pb.MysqlWorkerResponse)
+	ret := m.ctrl.Call(m, "OperateSource", varargs...)
+	ret0, _ := ret[0].(*pb.OperateSourceResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// OperateMysqlWorker indicates an expected call of OperateMysqlWorker
-func (mr *MockMasterClientMockRecorder) OperateMysqlWorker(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+// OperateSource indicates an expected call of OperateSource
+func (mr *MockMasterClientMockRecorder) OperateSource(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateMysqlWorker", reflect.TypeOf((*MockMasterClient)(nil).OperateMysqlWorker), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateSource", reflect.TypeOf((*MockMasterClient)(nil).OperateSource), varargs...)
 }
 
 // OperateTask mocks base method
@@ -513,19 +513,19 @@ func (mr *MockMasterServerMockRecorder) OfflineWorker(arg0, arg1 interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OfflineWorker", reflect.TypeOf((*MockMasterServer)(nil).OfflineWorker), arg0, arg1)
 }
 
-// OperateMysqlWorker mocks base method
-func (m *MockMasterServer) OperateMysqlWorker(arg0 context.Context, arg1 *pb.MysqlWorkerRequest) (*pb.MysqlWorkerResponse, error) {
+// OperateSource mocks base method
+func (m *MockMasterServer) OperateSource(arg0 context.Context, arg1 *pb.OperateSourceRequest) (*pb.OperateSourceResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "OperateMysqlWorker", arg0, arg1)
-	ret0, _ := ret[0].(*pb.MysqlWorkerResponse)
+	ret := m.ctrl.Call(m, "OperateSource", arg0, arg1)
+	ret0, _ := ret[0].(*pb.OperateSourceResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// OperateMysqlWorker indicates an expected call of OperateMysqlWorker
-func (mr *MockMasterServerMockRecorder) OperateMysqlWorker(arg0, arg1 interface{}) *gomock.Call {
+// OperateSource indicates an expected call of OperateSource
+func (mr *MockMasterServerMockRecorder) OperateSource(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateMysqlWorker", reflect.TypeOf((*MockMasterServer)(nil).OperateMysqlWorker), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OperateSource", reflect.TypeOf((*MockMasterServer)(nil).OperateSource), arg0, arg1)
 }
 
 // OperateTask mocks base method

@@ -134,7 +134,7 @@ func (t *testRelay) TestRelay(c *C) {
 		purger.NewPurger = originNewPurger
 	}()
 
-	cfg := loadMysqlConfigWithoutPassword(c)
+	cfg := loadSourceConfigWithoutPassword(c)
 
 	dir := c.MkDir()
 	cfg.RelayDir = dir
@@ -270,7 +270,7 @@ func (t *testRelay) testPauseAndResume(c *C, holder *realRelayHolder) {
 }
 
 func (t *testRelay) testUpdate(c *C, holder *realRelayHolder) {
-	cfg := &config.MysqlConfig{
+	cfg := &config.SourceConfig{
 		From: config.DBConfig{
 			Host:     "127.0.0.1",
 			Port:     3306,

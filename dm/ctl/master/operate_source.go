@@ -22,31 +22,31 @@ import (
 	"os"
 )
 
-// NewOperateMysqlWorkerCmd creates a OperateMysqlWorker command
-func NewOperateMysqlWorkerCmd() *cobra.Command {
+// NewOperateSourceCmd creates a OperateSource command
+func NewOperateSourceCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "operate-worker <operate-type> <config-file>",
-		Short: "create/update/stop mysql task",
-		Run:   operateMysqlWorkerFunc,
+		Use:   "operate-source <operate-type> <config-file>",
+		Short: "create/update/stop upstream MySQL/MariaDB source",
+		Run:   operateSourceFunc,
 	}
 	return cmd
 }
 
-func convertCmdType(t string) pb.WorkerOp {
+func convertCmdType(t string) pb.SourceOp {
 	switch t {
 	case "create":
-		return pb.WorkerOp_StartWorker
+		return pb.SourceOp_StartSource
 	case "update":
-		return pb.WorkerOp_UpdateConfig
+		return pb.SourceOp_UpdateSource
 	case "stop":
-		return pb.WorkerOp_StopWorker
+		return pb.SourceOp_StopSource
 	default:
-		return pb.WorkerOp_InvalidWorkerOp
+		return pb.SourceOp_UpdateSource
 	}
 }
 
 // operateMysqlFunc does migrate relay request
-func operateMysqlWorkerFunc(cmd *cobra.Command, _ []string) {
+func operateSourceFunc(cmd *cobra.Command, _ []string) {
 	if len(cmd.Flags().Args()) != 2 {
 		cmd.SetOut(os.Stdout)
 		cmd.Usage()
@@ -64,13 +64,13 @@ func operateMysqlWorkerFunc(cmd *cobra.Command, _ []string) {
 	defer cancel()
 
 	op := convertCmdType(cmdType)
-	if op == pb.WorkerOp_InvalidWorkerOp {
+	if op == pb.SourceOp_InvalidSourceOp {
 		common.PrintLines("invalid operate '%s' on worker", cmdType)
 		return
 	}
 
 	cli := common.MasterClient()
-	resp, err := cli.OperateMysqlWorker(ctx, &pb.MysqlWorkerRequest{
+	resp, err := cli.OperateSource(ctx, &pb.OperateSourceRequest{
 		Config: string(content),
 		Op:     op,
 	})

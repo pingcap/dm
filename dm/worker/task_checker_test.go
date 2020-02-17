@@ -87,7 +87,7 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 
 	NewRelayHolder = NewDummyRelayHolder
 	dir := c.MkDir()
-	cfg := loadMysqlConfigWithoutPassword(c)
+	cfg := loadSourceConfigWithoutPassword(c)
 	cfg.RelayDir = dir
 	cfg.MetaDir = dir
 	w, err := NewWorker(&cfg, nil)
@@ -204,7 +204,7 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 
 	NewRelayHolder = NewDummyRelayHolder
 	dir := c.MkDir()
-	cfg := loadMysqlConfigWithoutPassword(c)
+	cfg := loadSourceConfigWithoutPassword(c)
 	cfg.RelayDir = dir
 	cfg.MetaDir = dir
 	w, err := NewWorker(&cfg, nil)

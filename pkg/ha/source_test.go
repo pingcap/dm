@@ -26,7 +26,7 @@ import (
 
 const (
 	// do not forget to update this path if the file removed/renamed.
-	sourceSampleFile = "../../dm/worker/dm-mysql.toml"
+	sourceSampleFile = "../../dm/worker/source.toml"
 )
 
 var (
@@ -55,8 +55,8 @@ func (t *testForEtcd) TestSourceEtcd(c *C) {
 	defer clearTestInfoOperation(c)
 
 	var (
-		emptyCfg = config.MysqlConfig{}
-		cfg      = config.MysqlConfig{}
+		emptyCfg = config.SourceConfig{}
+		cfg      = config.SourceConfig{}
 	)
 	c.Assert(cfg.LoadFromFile(sourceSampleFile), IsNil)
 	source := cfg.SourceID

@@ -26,7 +26,7 @@ import (
 
 // PutSourceCfg puts the config of the upstream source into etcd.
 // k/v: sourceID -> source config.
-func PutSourceCfg(cli *clientv3.Client, cfg config.MysqlConfig) (int64, error) {
+func PutSourceCfg(cli *clientv3.Client, cfg config.SourceConfig) (int64, error) {
 	value, err := cfg.Toml()
 	if err != nil {
 		return 0, err
@@ -38,11 +38,11 @@ func PutSourceCfg(cli *clientv3.Client, cfg config.MysqlConfig) (int64, error) {
 
 // GetSourceCfg gets the config of the specified source.
 // if the config for the source not exist, return with `err == nil` and `revision=0`.
-func GetSourceCfg(cli *clientv3.Client, source string, rev int64) (config.MysqlConfig, int64, error) {
+func GetSourceCfg(cli *clientv3.Client, source string, rev int64) (config.SourceConfig, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
 
-	cfg := config.MysqlConfig{}
+	cfg := config.SourceConfig{}
 	resp, err := cli.Get(ctx, common.UpstreamConfigKeyAdapter.Encode(source), clientv3.WithRev(rev))
 	if err != nil {
 		return cfg, 0, err
@@ -66,7 +66,7 @@ func GetSourceCfg(cli *clientv3.Client, source string, rev int64) (config.MysqlC
 
 // GetAllSourceCfg gets all upstream source configs.
 // k/v: source ID -> source config.
-func GetAllSourceCfg(cli *clientv3.Client) (map[string]config.MysqlConfig, int64, error) {
+func GetAllSourceCfg(cli *clientv3.Client) (map[string]config.SourceConfig, int64, error) {
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
 
@@ -75,9 +75,9 @@ func GetAllSourceCfg(cli *clientv3.Client) (map[string]config.MysqlConfig, int64
 		return nil, 0, err
 	}
 
-	scm := make(map[string]config.MysqlConfig)
+	scm := make(map[string]config.SourceConfig)
 	for _, kv := range resp.Kvs {
-		var cfg config.MysqlConfig
+		var cfg config.SourceConfig
 		err = cfg.Parse(string(kv.Value))
 		if err != nil {
 			// TODO(csuzhangxc): add terror and including `key`.

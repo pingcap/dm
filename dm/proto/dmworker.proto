@@ -28,8 +28,6 @@ service Worker {
     rpc QueryWorkerConfig (QueryWorkerConfigRequest) returns (QueryWorkerConfigResponse) {}
 
     rpc MigrateRelay(MigrateRelayRequest) returns (CommonWorkerResponse) {}
-
-    rpc OperateMysqlWorker(MysqlWorkerRequest) returns (MysqlWorkerResponse) {}
 }
 
 message StartSubTaskRequest {
@@ -396,21 +394,4 @@ message QueryWorkerConfigResponse {
     string source = 2; // source ID, set by dm-master
     string msg = 3; // when result is true, msg is empty
     string content = 4; // marshaled config content
-}
-
-enum WorkerOp {
-    InvalidWorkerOp = 0;
-    StartWorker = 1;
-    UpdateConfig = 2;
-    StopWorker = 3;
-}
-
-message MysqlWorkerRequest {
-    WorkerOp op = 1;
-    string config = 2;
-}
-
-message MysqlWorkerResponse {
-    bool result = 1;
-    string msg = 2;
 }

@@ -15,7 +15,7 @@ package ha
 
 // Data need to be persisted for the HA scheduler.
 // - configuration:
-//   - the upstream MySQL config (content of `MysqlConfig`):
+//   - the upstream MySQL config (content of `SourceConfig`):
 //     - PUT when adding an upstream (`operate-worker create`) by DM-master.
 //       - verify the validation before PUT it into etcd.
 //     - GET when scheduling the source to a DM-worker instance by DM-worker.

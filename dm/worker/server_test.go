@@ -36,7 +36,7 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-var mysqlCfgDir = "./dm-mysql.toml"
+var mysqlCfgDir = "./source.toml"
 
 func TestServer(t *testing.T) {
 	TestingT(t)
@@ -137,7 +137,7 @@ func (t *testServer) TestServer(c *C) {
 	err = subtaskCfg.DecodeFile("./subtask.toml")
 	c.Assert(err, IsNil)
 
-	sourceCfg := loadMysqlConfigWithoutPassword(c)
+	sourceCfg := loadSourceConfigWithoutPassword(c)
 	subtaskCfg.MydumperPath = "../../bin/mydumper"
 	_, err = ha.PutSubTaskCfg(s.etcdClient, subtaskCfg)
 	c.Assert(err, IsNil)
@@ -216,7 +216,7 @@ func (t *testServer) createClient(c *C, addr string) pb.WorkerClient {
 
 func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) {
 	// load sourceCfg
-	sourceCfg := loadMysqlConfigWithoutPassword(c)
+	sourceCfg := loadSourceConfigWithoutPassword(c)
 	sourceCfg.EnableRelay = true
 	sourceCfg.RelayDir = dir
 	sourceCfg.MetaDir = c.MkDir()
@@ -343,8 +343,8 @@ func checkRelayStatus(cli pb.WorkerClient, expect pb.Stage) bool {
 	return status.RelayStatus.Stage == expect
 }
 
-func loadMysqlConfigWithoutPassword(c *C) config.MysqlConfig {
-	sourceCfg := config.MysqlConfig{}
+func loadSourceConfigWithoutPassword(c *C) config.SourceConfig {
+	sourceCfg := config.SourceConfig{}
 	err := sourceCfg.LoadFromFile(mysqlCfgDir)
 	c.Assert(err, IsNil)
 	sourceCfg.From.Password = "" // no password set

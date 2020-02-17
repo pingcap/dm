@@ -33,8 +33,8 @@ func (t *testForEtcd) TestOpsEtcd(c *C) {
 		subtaskStage2  = NewSubTaskStage(pb.Stage_Running, source, task2)
 		emptyStage     = Stage{}
 		bound          = NewSourceBound(source, worker)
-		sourceCfg      = config.MysqlConfig{}
-		emptySourceCfg = config.MysqlConfig{}
+		sourceCfg      = config.SourceConfig{}
+		emptySourceCfg = config.SourceConfig{}
 		subtaskCfg1    = config.SubTaskConfig{}
 	)
 	c.Assert(sourceCfg.LoadFromFile(sourceSampleFile), IsNil)

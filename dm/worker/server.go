@@ -609,7 +609,7 @@ func (s *Server) MigrateRelay(ctx context.Context, req *pb.MigrateRelayRequest) 
 	return makeCommonWorkerResponse(err), nil
 }
 
-func (s *Server) startWorker(cfg *config.MysqlConfig) error {
+func (s *Server) startWorker(cfg *config.SourceConfig) error {
 	s.Lock()
 	defer s.Unlock()
 	if w := s.getWorker(false); w != nil {
@@ -725,53 +725,6 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 	}
 
 	return nil
-}
-
-// OperateMysqlWorker create a new mysql task which will be running in this Server
-func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequest) (*pb.MysqlWorkerResponse, error) {
-	log.L().Info("", zap.String("request", "OperateMysqlWorker"), zap.Stringer("payload", req))
-	resp := &pb.MysqlWorkerResponse{
-		Result: true,
-		Msg:    "Operate mysql task successfully",
-	}
-	cfg := config.NewMysqlConfig()
-	err := cfg.Parse(req.Config)
-	if err != nil {
-		resp.Result = false
-		resp.Msg = errors.ErrorStack(err)
-		return resp, nil
-	}
-	if req.Op == pb.WorkerOp_UpdateConfig {
-		if err = s.stopWorker(cfg.SourceID); err != nil {
-			resp.Result = false
-			resp.Msg = errors.ErrorStack(err)
-			return resp, nil
-		}
-	} else if req.Op == pb.WorkerOp_StopWorker {
-		if err = s.stopWorker(cfg.SourceID); err == terror.ErrWorkerSourceNotMatch {
-			resp.Result = false
-			resp.Msg = errors.ErrorStack(err)
-		}
-	}
-	if resp.Result && (req.Op == pb.WorkerOp_UpdateConfig || req.Op == pb.WorkerOp_StartWorker) {
-		err = s.startWorker(cfg)
-	}
-	if err != nil {
-		resp.Result = false
-		resp.Msg = errors.ErrorStack(err)
-	}
-	if resp.Result {
-		op1 := clientv3.OpPut(common.UpstreamConfigKeyAdapter.Encode(cfg.SourceID), req.Config)
-		op2 := clientv3.OpPut(common.UpstreamBoundWorkerKeyAdapter.Encode(s.cfg.AdvertiseAddr), cfg.SourceID)
-		if req.Op == pb.WorkerOp_StopWorker {
-			op1 = clientv3.OpDelete(common.UpstreamConfigKeyAdapter.Encode(cfg.SourceID))
-			op2 = clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Encode(s.cfg.AdvertiseAddr))
-		}
-		resp.Msg = s.retryWriteEctd(op1, op2)
-		// Because etcd was deployed with master in a single process, if we can not write data into etcd, most probably
-		// the have lost connect from master.
-	}
-	return resp, nil
 }
 
 func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {

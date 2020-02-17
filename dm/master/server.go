@@ -238,6 +238,7 @@ func errorCommonWorkerResponse(msg string, source string) *pb.CommonWorkerRespon
 // key:   /dm-worker/r/address
 // value: name
 func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerRequest) (*pb.RegisterWorkerResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "RegisterWorker"))
 	err := s.scheduler.AddWorker(req.Name, req.Address)
 	if err != nil {
 		return &pb.RegisterWorkerResponse{
@@ -255,6 +256,7 @@ func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerReque
 // key:   /dm-worker/r/address
 // value: name
 func (s *Server) OfflineWorker(ctx context.Context, req *pb.OfflineWorkerRequest) (*pb.OfflineWorkerResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OfflineWorker"))
 	err := s.scheduler.RemoveWorker(req.Name)
 	if err != nil {
 		return &pb.OfflineWorkerResponse{
@@ -1103,14 +1105,14 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 	}, nil
 }
 
-func makeMysqlWorkerResponse(err error) (*pb.MysqlWorkerResponse, error) {
-	return &pb.MysqlWorkerResponse{
+func makeMysqlWorkerResponse(err error) (*pb.OperateSourceResponse, error) {
+	return &pb.OperateSourceResponse{
 		Result: false,
 		Msg:    errors.ErrorStack(err),
 	}, nil
 }
 
-func parseAndAdjust(c *config.MysqlConfig, content string) error {
+func parseAndAdjust(c *config.SourceConfig, content string) error {
 	if err := c.Parse(content); err != nil {
 		return err
 	}
@@ -1131,38 +1133,39 @@ func parseAndAdjust(c *config.MysqlConfig, content string) error {
 	return nil
 }
 
-// OperateMysqlWorker will create or update a Worker
-func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequest) (*pb.MysqlWorkerResponse, error) {
-	cfg := config.NewMysqlConfig()
+// OperateSource will create or update an upstream source.
+func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest) (*pb.OperateSourceResponse, error) {
+	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateSource"))
+	cfg := config.NewSourceConfig()
 	err := parseAndAdjust(cfg, req.Config)
 	if err != nil {
 		return makeMysqlWorkerResponse(err)
 	}
 	switch req.Op {
-	case pb.WorkerOp_StartWorker:
+	case pb.SourceOp_StartSource:
 		err := s.scheduler.AddSourceCfg(*cfg)
 		if err != nil {
 			return makeMysqlWorkerResponse(err)
 		}
-	case pb.WorkerOp_UpdateConfig:
+	case pb.SourceOp_UpdateSource:
 		// TODO: support WorkerOp_UpdateConfig later
-		return &pb.MysqlWorkerResponse{
+		return &pb.OperateSourceResponse{
 			Result: false,
 			Msg:    "Update worker config is not supported by dm-ha now",
 		}, nil
-	case pb.WorkerOp_StopWorker:
+	case pb.SourceOp_StopSource:
 		err := s.scheduler.RemoveSourceCfg(cfg.SourceID)
 		if err != nil {
 			return makeMysqlWorkerResponse(err)
 		}
 	default:
-		return &pb.MysqlWorkerResponse{
+		return &pb.OperateSourceResponse{
 			Result: false,
 			Msg:    "invalid operate on worker",
 		}, nil
 	}
 
-	return &pb.MysqlWorkerResponse{
+	return &pb.OperateSourceResponse{
 		Result: true,
 	}, nil
 }

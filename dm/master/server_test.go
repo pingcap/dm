@@ -221,7 +221,7 @@ func testMockScheduler(ctx context.Context, wg *sync.WaitGroup, c *check.C, sour
 		c.Assert(scheduler2.AddWorker(name, workers[i]), check.IsNil)
 		scheduler2.SetWorkerClientForTest(name, workerClients[workers[i]])
 		// operate mysql config on this worker
-		cfg := &config.MysqlConfig{SourceID: sources[i], From: config.DBConfig{Password: password}}
+		cfg := &config.SourceConfig{SourceID: sources[i], From: config.DBConfig{Password: password}}
 		c.Assert(scheduler2.AddSourceCfg(*cfg), check.IsNil)
 		wg.Add(1)
 		ctx1, cancel1 := context.WithCancel(ctx)
@@ -851,7 +851,7 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 	cancel()
 }
 
-func (t *testMaster) TestOperateMysqlWorker(c *check.C) {
+func (t *testMaster) TestOperateSource(c *check.C) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	ctrl := gomock.NewController(c)
@@ -870,8 +870,8 @@ func (t *testMaster) TestOperateMysqlWorker(c *check.C) {
 	s1 := NewServer(cfg1)
 	c.Assert(s1.Start(ctx), check.IsNil)
 	defer s1.Close()
-	mysqlCfg := config.NewMysqlConfig()
-	mysqlCfg.LoadFromFile("./dm-mysql.toml")
+	mysqlCfg := config.NewSourceConfig()
+	mysqlCfg.LoadFromFile("./source.toml")
 	task, err := mysqlCfg.Toml()
 	c.Assert(err, check.IsNil)
 	sourceID := mysqlCfg.SourceID
@@ -879,21 +879,22 @@ func (t *testMaster) TestOperateMysqlWorker(c *check.C) {
 	time.Sleep(3 * time.Second)
 
 	// 2. try to add a new mysql source
-	req := &pb.MysqlWorkerRequest{Op: pb.WorkerOp_StartWorker, Config: task}
-	resp, err := s1.OperateMysqlWorker(ctx, req)
+	req := &pb.OperateSourceRequest{Op: pb.SourceOp_StartSource, Config: task}
+	resp, err := s1.OperateSource(ctx, req)
 	c.Assert(err, check.IsNil)
+	c.Log("aaa", resp)
 	c.Assert(resp.Result, check.Equals, true)
 	unBoundSources := s1.scheduler.UnboundSources()
 	c.Assert(unBoundSources, check.HasLen, 1)
 	c.Assert(unBoundSources[0], check.Equals, sourceID)
 
 	// 3. try to stop a non-exist-source
-	req.Op = pb.WorkerOp_StopWorker
+	req.Op = pb.SourceOp_StopSource
 	mysqlCfg.SourceID = "not-exist-source"
 	task2, err := mysqlCfg.Toml()
 	c.Assert(err, check.IsNil)
 	req.Config = task2
-	resp, err = s1.OperateMysqlWorker(ctx, req)
+	resp, err = s1.OperateSource(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.Equals, false)
 	c.Assert(resp.Msg, check.Matches, `[\s\S]*source config with ID `+mysqlCfg.SourceID+` not exists[\s\S]*`)
@@ -918,13 +919,13 @@ func (t *testMaster) TestOperateMysqlWorker(c *check.C) {
 
 	// 5. stop this source
 	req.Config = task
-	req.Op = pb.WorkerOp_StopWorker
-	resp, err = s1.OperateMysqlWorker(ctx, req)
+	req.Op = pb.SourceOp_StopSource
+	resp, err = s1.OperateSource(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.Equals, true)
 	emptyCfg, _, err := ha.GetSourceCfg(etcdTestCli, sourceID, 0)
 	c.Assert(err, check.IsNil)
-	c.Assert(emptyCfg, check.DeepEquals, config.MysqlConfig{})
+	c.Assert(emptyCfg, check.DeepEquals, config.SourceConfig{})
 	cancel()
 }
 

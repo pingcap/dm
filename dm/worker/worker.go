@@ -50,7 +50,7 @@ type Worker struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	cfg *config.MysqlConfig
+	cfg *config.SourceConfig
 	l   log.Logger
 
 	subTaskHolder *subTaskHolder
@@ -67,7 +67,7 @@ type Worker struct {
 }
 
 // NewWorker creates a new Worker
-func NewWorker(cfg *config.MysqlConfig, etcdClient *clientv3.Client) (w *Worker, err error) {
+func NewWorker(cfg *config.SourceConfig, etcdClient *clientv3.Client) (w *Worker, err error) {
 	w = &Worker{
 		cfg:           cfg,
 		tracer:        tracing.InitTracerHub(cfg.Tracer),
@@ -456,7 +456,7 @@ func (w *Worker) ForbidPurge() (bool, string) {
 }
 
 // QueryConfig returns worker's config
-func (w *Worker) QueryConfig(ctx context.Context) (*config.MysqlConfig, error) {
+func (w *Worker) QueryConfig(ctx context.Context) (*config.SourceConfig, error) {
 	w.RLock()
 	defer w.RUnlock()
 
@@ -495,7 +495,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	}
 
 	// No need to store config in local
-	newCfg := &config.MysqlConfig{}
+	newCfg := &config.SourceConfig{}
 
 	err := newCfg.Parse(content)
 	if err != nil {

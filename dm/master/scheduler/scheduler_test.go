@@ -33,7 +33,7 @@ import (
 
 const (
 	// do not forget to update this path if the file removed/renamed.
-	sourceSampleFile = "../../worker/dm-mysql.toml"
+	sourceSampleFile = "../../worker/source.toml"
 	// do not forget to update this path if the file removed/renamed.
 	subTaskSampleFile = "../../worker/subtask.toml"
 )
@@ -63,7 +63,7 @@ type testScheduler struct{}
 var _ = Suite(&testScheduler{})
 
 var (
-	sourceCfgEmpty config.MysqlConfig
+	sourceCfgEmpty config.SourceConfig
 	stageEmpty     ha.Stage
 )
 
@@ -83,7 +83,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 		taskName2    = "task-2"
 		workerInfo1  = ha.NewWorkerInfo(workerName1, workerAddr1)
 		workerInfo2  = ha.NewWorkerInfo(workerName2, workerAddr2)
-		sourceCfg1   config.MysqlConfig
+		sourceCfg1   config.SourceConfig
 		subtaskCfg1  config.SubTaskConfig
 		keepAliveTTL = int64(1) // NOTE: this should be >= minLeaseTTL, in second.
 	)
@@ -475,7 +475,7 @@ func (t *testScheduler) sourceCfgNotExist(c *C, s *Scheduler, source string) {
 	c.Assert(cfg, DeepEquals, sourceCfgEmpty)
 }
 
-func (t *testScheduler) sourceCfgExist(c *C, s *Scheduler, expectCfg config.MysqlConfig) {
+func (t *testScheduler) sourceCfgExist(c *C, s *Scheduler, expectCfg config.SourceConfig) {
 	cfgP := s.GetSourceCfgByID(expectCfg.SourceID)
 	c.Assert(cfgP, DeepEquals, &expectCfg)
 	cfgV, _, err := ha.GetSourceCfg(etcdTestCli, expectCfg.SourceID, 0)
