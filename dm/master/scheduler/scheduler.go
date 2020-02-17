@@ -198,9 +198,9 @@ func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 // Close closes the scheduler.
 func (s *Scheduler) Close() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	if !s.started {
+		s.mu.Unlock()
 		return
 	}
 
@@ -209,8 +209,13 @@ func (s *Scheduler) Close() {
 		s.cancel()
 		s.cancel = nil
 	}
+	s.mu.Unlock()
 
+	// need to wait for goroutines to return which may hold the mutex.
 	s.wg.Wait()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.started = false // closed now.
 	s.logger.Info("the scheduler has closed")
 }
