@@ -276,7 +276,7 @@ func (s *Server) handleSourceBound(ctx context.Context, boundCh chan ha.SourceBo
 				// record the reason for operating source bound
 				// TODO: add better metrics
 				log.L().Error("fail to operate sourceBound on worker", zap.String("worker", s.cfg.Name),
-					zap.String("source", bound.Source))
+					zap.String("source", bound.Source), zap.Error(err))
 			}
 		case err := <-errCh:
 			// TODO: Deal with err
