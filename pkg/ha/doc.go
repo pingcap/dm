@@ -16,10 +16,10 @@ package ha
 // Data need to be persisted for the HA scheduler.
 // - configuration:
 //   - the upstream MySQL config (content of `SourceConfig`):
-//     - PUT when adding an upstream (`operate-worker create`) by DM-master.
+//     - PUT when adding an upstream (`operate-mysql create`) by DM-master.
 //       - verify the validation before PUT it into etcd.
 //     - GET when scheduling the source to a DM-worker instance by DM-worker.
-//     - DELETE when removing an upstream (`operate-worker stop`) by DM-master.
+//     - DELETE when removing an upstream (`operate-mysql stop`) by DM-master.
 //       - DELETE with `the expectant stage of the relay` in one txn.
 //       - DELETE with `the bound relationship between the DM-worker instance and the upstream MySQL source` in one txn.
 //     - TODO: UPDATE support with `the expectant stage of the relay`.

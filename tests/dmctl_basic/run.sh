@@ -7,7 +7,7 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 TASK_CONF=$cur/conf/dm-task.yaml
 TASK_NAME="test"
-MYSQL1_CONF=$cur/conf/mysql1.toml
+MYSQL1_CONF=$cur/conf/source1.toml
 SQL_RESULT_FILE="$TEST_DIR/sql_res.$TEST_NAME.txt"
 
 # used to coverage wrong usage of dmctl command
@@ -74,9 +74,9 @@ function usage_and_arg_test() {
     purge_relay_filename_with_multi_workers
     purge_relay_while_master_down
 
-    operate_mysql_worker_empty_arg
-    operate_mysql_worker_wrong_config_file
-    operate_mysql_worker_while_master_down $MYSQL1_CONF
+    operate_source_empty_arg
+    operate_source_wrong_config_file
+    operate_source_while_master_down $MYSQL1_CONF
 }
 
 function recover_max_binlog_size() {
@@ -125,21 +125,21 @@ function run() {
     operate_mysql_worker_stop_not_created_config $MYSQL1_CONF
 
     # operate mysql config to worker
-    cp $cur/conf/mysql1.toml $WORK_DIR/mysql1.toml
-    cp $cur/conf/mysql2.toml $WORK_DIR/mysql2.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/mysql1.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker2/relay_log\"" $WORK_DIR/mysql2.toml
+    cp $cur/conf/source1.toml $WORK_DIR/source1.toml
+    cp $cur/conf/source2.toml $WORK_DIR/source2.toml
+    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
+    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker2/relay_log\"" $WORK_DIR/source2.toml
     
     # operate with invalid op type
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-worker invalid $WORK_DIR/mysql1.toml" \
+        "operate-source invalid $WORK_DIR/source1.toml" \
         "invalid operate" 1
 
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-worker create $WORK_DIR/mysql1.toml" \
+        "operate-source create $WORK_DIR/source1.toml" \
         "true" 1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-worker create $WORK_DIR/mysql2.toml" \
+        "operate-source create $WORK_DIR/source2.toml" \
         "true" 1
 
     echo "pause_relay_success"
@@ -175,8 +175,8 @@ function run() {
     resume_task_success $TASK_NAME
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 20
 
-    update_relay_success $cur/conf/mysql1.toml $SOURCE_ID1
-    update_relay_success $cur/conf/mysql2.toml $SOURCE_ID2
+    update_relay_success $cur/conf/source1.toml $SOURCE_ID1
+    update_relay_success $cur/conf/source2.toml $SOURCE_ID2
     # check worker config backup file is correct
     [ -f $WORK_DIR/worker1/dm-worker-config.bak ] && cmp $WORK_DIR/worker1/dm-worker-config.bak $cur/conf/dm-worker1.toml
     [ -f $WORK_DIR/worker2/dm-worker-config.bak ] && cmp $WORK_DIR/worker2/dm-worker-config.bak $cur/conf/dm-worker2.toml
