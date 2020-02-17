@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -179,6 +180,14 @@ func extractWorkerSource(deployMapper []*DeployMapper) ([]string, []string) {
 	return sources, workers
 }
 
+func clearSchedulerEnv(c *check.C, cancel context.CancelFunc, wg *sync.WaitGroup, workers []string, scheduler2 *scheduler.Scheduler) {
+	cancel()
+	wg.Wait()
+	for _, worker := range workers {
+		c.Assert(scheduler2.RemoveWorker(worker), check.IsNil)
+	}
+}
+
 func makeNilWorkerClients(workers []string) map[string]workerrpc.Client {
 	nilWorkerClients := make(map[string]workerrpc.Client, len(workers))
 	for _, worker := range workers {
@@ -206,7 +215,7 @@ func testMockScheduler(ctx context.Context, wg *sync.WaitGroup, c *check.C, sour
 	cancels := make([]context.CancelFunc, 0, 2)
 	for i := range workers {
 		// add worker to coordinator's workers map
-		name := "worker" + string(i)
+		name := "worker" + strconv.Itoa(i)
 		c.Assert(scheduler2.AddWorker(name, workers[i]), check.IsNil)
 		scheduler2.SetWorkerClientForTest(name, workerClients[workers[i]])
 		// operate mysql config on this worker
@@ -249,8 +258,7 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 	resp, err := server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	cancel()
-	wg.Wait()
+	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
 
 	// query specified sources
 	for _, deploy := range server.cfg.Deploy {
@@ -284,9 +292,7 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
 	c.Assert(resp.Msg, check.Matches, "task .* has no workers or not exist, can try `refresh-worker-tasks` cmd first")
-
-	cancel()
-	wg.Wait()
+	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
 	// TODO: test query with correct task name, this needs to add task first
 }
 
@@ -313,8 +319,7 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
-	cancel()
-	wg.Wait()
+	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
 
 	// simulate invalid password returned from coordinator, so cfg.SubTaskConfigs will fail
 	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "invalid-encrypt-password", t.workerClients)
@@ -323,8 +328,7 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
-	cancel()
-	wg.Wait()
+	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
 }
 
 func (t *testMaster) TestStartTask(c *check.C) {
@@ -389,9 +393,7 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
 	c.Assert(resp.Msg, check.Matches, errCheckSyncConfigReg)
-
-	cancel()
-	wg.Wait()
+	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
 }
 
 func (t *testMaster) TestQueryError(c *check.C) {
@@ -415,8 +417,7 @@ func (t *testMaster) TestQueryError(c *check.C) {
 	resp, err := server.QueryError(context.Background(), &pb.QueryErrorListRequest{})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	cancel()
-	wg.Wait()
+	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
 
 	// query specified dm-worker[s]
 	for _, deploy := range server.cfg.Deploy {
@@ -451,8 +452,7 @@ func (t *testMaster) TestQueryError(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
 	c.Assert(resp.Msg, check.Matches, "task .* has no workers or not exist, can try `refresh-worker-tasks` cmd first")
-	cancel()
-	wg.Wait()
+	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
 	// TODO: test query with correct task name, this needs to add task first
 }
 
@@ -528,8 +528,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 	c.Assert(len(server.getTaskResources(taskName)), check.Equals, 0)
-	cancel()
-	wg.Wait()
+	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
 }
 
 func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
@@ -603,8 +602,7 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsTrue)
 	}
-	cancel()
-	wg.Wait()
+	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
 
 	ctx, cancel = context.WithCancel(context.Background())
 	// test PurgeWorkerRelay with error response
@@ -622,8 +620,7 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 		c.Assert(w.Result, check.IsFalse)
 		c.Assert(w.Msg, check.Matches, errGRPCFailedReg)
 	}
-	cancel()
-	wg.Wait()
+	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
 }
 
 func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
@@ -686,8 +683,7 @@ func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
 	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsTrue)
 	}
-	cancel()
-	wg.Wait()
+	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
 
 	ctx, cancel = context.WithCancel(context.Background())
 	// test SwitchWorkerRelayMaster with error response
@@ -703,8 +699,7 @@ func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
 		c.Assert(w.Result, check.IsFalse)
 		c.Assert(w.Msg, check.Matches, errGRPCFailedReg)
 	}
-	cancel()
-	wg.Wait()
+	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
 }
 
 func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
@@ -746,9 +741,7 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 	for _, source := range sources {
 		t.relayStageMatch(c, server.scheduler, source, pb.Stage_Running)
 	}
-
-	cancel()
-	wg.Wait()
+	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
 }
 
 func (t *testMaster) TestServer(c *check.C) {
@@ -903,11 +896,10 @@ func (t *testMaster) TestOperateMysqlWorker(c *check.C) {
 	// 4. start a new worker, the unbounded source should be bounded
 	var wg sync.WaitGroup
 	ctx1, cancel1 := context.WithCancel(ctx)
-	defer func() {
-		cancel1()
-		wg.Wait()
-	}()
 	workerName := "worker1"
+	defer func() {
+		clearSchedulerEnv(c, cancel1, &wg, []string{workerName}, s1.scheduler)
+	}()
 	c.Assert(s1.scheduler.AddWorker(workerName, "172.16.10.72:8262"), check.IsNil)
 	wg.Add(1)
 	go func(ctx context.Context, workerName string) {
