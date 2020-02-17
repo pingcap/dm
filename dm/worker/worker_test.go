@@ -17,6 +17,8 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -94,6 +96,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	cfg := NewConfig()
 	sourceConfig := loadMysqlConfigWithoutPassword(c)
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	sourceConfig.Checker.CheckEnable = true
 	sourceConfig.Checker.CheckInterval = config.Duration{Duration: 40 * time.Millisecond}
 	sourceConfig.Checker.BackoffMin = config.Duration{Duration: 20 * time.Millisecond}
 	sourceConfig.Checker.BackoffMax = config.Duration{Duration: 1 * time.Second}
@@ -168,4 +171,29 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		c.Log(sts)
 		return false
 	}), IsTrue)
+}
+
+func (t *testServer) TestPurgeRelayDir(c *C) {
+	cfg := loadMysqlConfigWithoutPassword(c)
+	cfg.EnableRelay = true
+	dir := c.MkDir()
+	cfg.RelayDir = dir
+
+	dirs := filepath.Join(dir, `f889521f-e994-11e9-94e9-0242ac110002.000001`)
+	c.Assert(os.MkdirAll(dirs, 0777), IsNil)
+	file := filepath.Join(dir, `server-uuid.index`)
+	f, err := os.Create(file)
+	c.Assert(err, IsNil)
+	c.Assert(f.Close(), IsNil)
+	file = filepath.Join(dirs, `relay.meta`)
+	f, err = os.Create(file)
+	c.Assert(err, IsNil)
+	c.Assert(f.Close(), IsNil)
+
+	w, err := NewWorker(&cfg, nil)
+	c.Assert(err, IsNil)
+	c.Assert(w.purgeRelayDir(), IsNil)
+	files, err := ioutil.ReadDir(cfg.RelayDir)
+	c.Assert(err, IsNil)
+	c.Assert(files, HasLen, 0)
 }
