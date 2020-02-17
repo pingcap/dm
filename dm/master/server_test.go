@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -224,12 +223,12 @@ func testDefaultMasterServer(c *check.C) *Server {
 func testMockScheduler(ctx context.Context, wg *sync.WaitGroup, c *check.C, sources, workers []string, password string, workerClients map[string]workerrpc.Client) (*scheduler.Scheduler, []context.CancelFunc) {
 	logger := log.L()
 	scheduler2 := scheduler.NewScheduler(&logger)
-	err := scheduler2.Start(context.Background(), etcdTestCli)
+	err := scheduler2.Start(ctx, etcdTestCli)
 	c.Assert(err, check.IsNil)
 	cancels := make([]context.CancelFunc, 0, 2)
 	for i := range workers {
 		// add worker to coordinator's workers map
-		name := "worker" + strconv.Itoa(i)
+		name := workers[i]
 		c.Assert(scheduler2.AddWorker(name, workers[i]), check.IsNil)
 		scheduler2.SetWorkerClientForTest(name, workerClients[workers[i]])
 		// operate mysql config on this worker
@@ -305,7 +304,7 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
-	c.Assert(resp.Msg, check.Matches, "task .* has no workers or not exist, can try `refresh-worker-tasks` cmd first")
+	c.Assert(resp.Msg, check.Matches, "task .* has no source or not exist, can try `refresh-worker-tasks` cmd first")
 	clearSchedulerEnv(c, cancel, &wg)
 	// TODO: test query with correct task name, this needs to add task first
 }
@@ -388,7 +387,7 @@ func (t *testMaster) TestStartTask(c *check.C) {
 		Sources: []string{invalidSource},
 	})
 	c.Assert(err, check.IsNil)
-	c.Assert(resp.Result, check.IsTrue)
+	c.Assert(resp.Result, check.IsFalse)
 	c.Assert(resp.Sources, check.HasLen, 1)
 	c.Assert(resp.Sources[0].Result, check.IsFalse)
 	c.Assert(resp.Sources[0].Source, check.Equals, invalidSource)
@@ -466,7 +465,7 @@ func (t *testMaster) TestQueryError(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
-	c.Assert(resp.Msg, check.Matches, "task .* has no workers or not exist, can try `refresh-worker-tasks` cmd first")
+	c.Assert(resp.Msg, check.Matches, "task .* has no source or not exist, can try `refresh-worker-tasks` cmd first")
 	clearSchedulerEnv(c, cancel, &wg)
 	// TODO: test query with correct task name, this needs to add task first
 }
@@ -749,7 +748,7 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 	// 2. test resume-relay successfully
 	resp, err = server.OperateWorkerRelayTask(context.Background(), &pb.OperateWorkerRelayRequest{
 		Sources: sources,
-		Op:      pb.RelayOp_PauseRelay,
+		Op:      pb.RelayOp_ResumeRelay,
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
@@ -865,6 +864,7 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 
 func (t *testMaster) TestOperateMysqlWorker(c *check.C) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
@@ -885,6 +885,7 @@ func (t *testMaster) TestOperateMysqlWorker(c *check.C) {
 	mysqlCfg.LoadFromFile("./dm-mysql.toml")
 	task, err := mysqlCfg.Toml()
 	c.Assert(err, check.IsNil)
+	sourceID := mysqlCfg.SourceID
 	// 1. wait for scheduler to start
 	time.Sleep(3 * time.Second)
 
@@ -895,7 +896,7 @@ func (t *testMaster) TestOperateMysqlWorker(c *check.C) {
 	c.Assert(resp.Result, check.Equals, true)
 	unBoundSources := s1.scheduler.UnboundSources()
 	c.Assert(unBoundSources, check.HasLen, 1)
-	c.Assert(unBoundSources[0], check.Equals, mysqlCfg.SourceID)
+	c.Assert(unBoundSources[0], check.Equals, sourceID)
 
 	// 3. try to stop a non-exist-source
 	req.Op = pb.WorkerOp_StopWorker
@@ -919,10 +920,10 @@ func (t *testMaster) TestOperateMysqlWorker(c *check.C) {
 	wg.Add(1)
 	go func(ctx context.Context, workerName string) {
 		defer wg.Done()
-		c.Assert(ha.KeepAlive(ctx, etcdTestCli, workerName, keepAliveTTL), check.IsNil)
+		c.Assert(ha.KeepAlive(ctx, s1.etcdClient, workerName, keepAliveTTL), check.IsNil)
 	}(ctx1, workerName)
 	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
-		w := s1.scheduler.GetWorkerBySource(mysqlCfg.SourceID)
+		w := s1.scheduler.GetWorkerBySource(sourceID)
 		return w != nil && w.BaseInfo().Name == workerName
 	}), check.IsTrue)
 
@@ -932,7 +933,7 @@ func (t *testMaster) TestOperateMysqlWorker(c *check.C) {
 	resp, err = s1.OperateMysqlWorker(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.Equals, true)
-	emptyCfg, _, err := ha.GetSourceCfg(etcdTestCli, mysqlCfg.SourceID, 0)
+	emptyCfg, _, err := ha.GetSourceCfg(etcdTestCli, sourceID, 0)
 	c.Assert(err, check.IsNil)
 	c.Assert(emptyCfg, check.DeepEquals, config.MysqlConfig{})
 	cancel()
