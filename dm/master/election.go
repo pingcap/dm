@@ -32,7 +32,7 @@ func (s *Server) electionNotify(ctx context.Context) {
 				log.L().Info("current member become the leader", zap.String("current member", s.cfg.Name))
 				err := s.scheduler.Start(ctx, s.etcdClient)
 				if err != nil {
-					log.L().Error("coordinator do not started", zap.Error(err))
+					log.L().Error("scheduler do not started", zap.Error(err))
 				}
 			} else {
 				_, leaderID, err2 := s.election.LeaderInfo(ctx)

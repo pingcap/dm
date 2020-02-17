@@ -216,7 +216,7 @@ func testMockScheduler(ctx context.Context, wg *sync.WaitGroup, c *check.C, sour
 	c.Assert(err, check.IsNil)
 	cancels := make([]context.CancelFunc, 0, 2)
 	for i := range workers {
-		// add worker to coordinator's workers map
+		// add worker to scheduler's workers map
 		name := workers[i]
 		c.Assert(scheduler2.AddWorker(name, workers[i]), check.IsNil)
 		scheduler2.SetWorkerClientForTest(name, workerClients[workers[i]])
@@ -323,7 +323,7 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 	c.Assert(resp.Result, check.IsFalse)
 	clearSchedulerEnv(c, cancel, &wg)
 
-	// simulate invalid password returned from coordinator, so cfg.SubTaskConfigs will fail
+	// simulate invalid password returned from scheduler, so cfg.SubTaskConfigs will fail
 	ctx, cancel = context.WithCancel(context.Background())
 	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "invalid-encrypt-password", t.workerClients)
 	resp, err = server.CheckTask(context.Background(), &pb.CheckTaskRequest{
@@ -362,8 +362,8 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	taskName := "test"
 	for _, source := range sources {
 		t.subTaskStageMatch(c, server.scheduler, taskName, source, pb.Stage_Running)
-		tcm, _, err := ha.GetSubTaskCfg(etcdTestCli, source, taskName, 0)
-		c.Assert(err, check.IsNil)
+		tcm, _, err2 := ha.GetSubTaskCfg(etcdTestCli, source, taskName, 0)
+		c.Assert(err2, check.IsNil)
 		c.Assert(tcm, check.HasKey, taskName)
 		c.Assert(tcm[taskName].Name, check.Equals, taskName)
 		c.Assert(tcm[taskName].SourceID, check.Equals, source)

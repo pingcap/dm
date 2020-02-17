@@ -403,8 +403,6 @@ const (
 	codeMasterStartEmbedEtcdFail
 	codeMasterParseURLFail
 	codeMasterJoinEmbedEtcdFail
-	codeMasterCoordinatorNotStart
-	codeMasterAcquireWorkerFailed
 	codeMasterInvalidOperateTaskOp
 )
 
@@ -901,8 +899,6 @@ var (
 	ErrMasterStartEmbedEtcdFail     = New(codeMasterStartEmbedEtcdFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to start embed etcd")
 	ErrMasterParseURLFail           = New(codeMasterParseURLFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to parse URL %s")
 	ErrMasterJoinEmbedEtcdFail      = New(codeMasterJoinEmbedEtcdFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to join embed etcd: %s")
-	ErrMasterCoordinatorNotStart    = New(codeMasterCoordinatorNotStart, ClassDMMaster, ScopeInternal, LevelHigh, "coordinator does not start")
-	ErrMasterAcquireWorkerFailed    = New(codeMasterAcquireWorkerFailed, ClassDMMaster, ScopeInternal, LevelMedium, "acquire worker failed: %s")
 	ErrMasterInvalidOperateTaskOp   = New(codeMasterInvalidOperateTaskOp, ClassDMMaster, ScopeInternal, LevelMedium, "invalid op %s on task")
 
 	// DM-worker error
