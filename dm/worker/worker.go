@@ -311,8 +311,9 @@ func (w *Worker) purgeRelayDir() error {
 	}
 	dir := w.cfg.RelayDir
 	d, err := os.Open(dir)
+	// fail to open dir, return directly
 	if err != nil {
-		return err
+		return nil
 	}
 	defer d.Close()
 	names, err := d.Readdirnames(-1)
@@ -325,6 +326,7 @@ func (w *Worker) purgeRelayDir() error {
 			return err
 		}
 	}
+	log.L().Info("relay dir is purged to be ready for new relay log", zap.String("relayDir", dir))
 	return nil
 }
 
