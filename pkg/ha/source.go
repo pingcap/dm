@@ -93,3 +93,19 @@ func GetAllSourceCfg(cli *clientv3.Client) (map[string]config.MysqlConfig, int64
 func deleteSourceCfgOp(source string) clientv3.Op {
 	return clientv3.OpDelete(common.UpstreamConfigKeyAdapter.Encode(source))
 }
+
+// ClearTestInfoOperation is used to clear all DM-HA relative etcd keys' information
+// this function shouldn't be used in development environment
+func ClearTestInfoOperation(cli *clientv3.Client) error {
+	clearSource := clientv3.OpDelete(common.UpstreamConfigKeyAdapter.Path(), clientv3.WithPrefix())
+	clearSubTask := clientv3.OpDelete(common.UpstreamSubTaskKeyAdapter.Path(), clientv3.WithPrefix())
+	clearWorkerInfo := clientv3.OpDelete(common.WorkerRegisterKeyAdapter.Path(), clientv3.WithPrefix())
+	clearWorkerKeepAlive := clientv3.OpDelete(common.WorkerKeepAliveKeyAdapter.Path(), clientv3.WithPrefix())
+	clearBound := clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Path(), clientv3.WithPrefix())
+	clearRelayStage := clientv3.OpDelete(common.StageRelayKeyAdapter.Path(), clientv3.WithPrefix())
+	clearSubTaskStage := clientv3.OpDelete(common.StageSubTaskKeyAdapter.Path(), clientv3.WithPrefix())
+	_, err := cli.Txn(context.Background()).Then(
+		clearSource, clearSubTask, clearWorkerInfo, clearBound, clearWorkerKeepAlive, clearRelayStage, clearSubTaskStage,
+	).Commit()
+	return err
+}
