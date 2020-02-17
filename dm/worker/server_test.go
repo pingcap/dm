@@ -30,6 +30,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
@@ -101,6 +102,16 @@ func (t *testServer) TestServer(c *C) {
 	}
 	defer func() {
 		NewSubTask = NewRealSubTask
+	}()
+
+	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
+		mockDumper := NewMockUnit(pb.UnitType_Dump)
+		mockLoader := NewMockUnit(pb.UnitType_Load)
+		mockSync := NewMockUnit(pb.UnitType_Sync)
+		return []unit.Unit{mockDumper, mockLoader, mockSync}
+	}
+	defer func() {
+		createUnits = createRealUnits
 	}()
 
 	s := NewServer(cfg)
