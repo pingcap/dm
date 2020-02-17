@@ -157,7 +157,7 @@ func (t *testServer) TestServer(c *C) {
 	c.Assert(err, IsNil)
 
 	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
-		return checkSubTaskStatus(cli, pb.Stage_Paused)
+		return checkSubTaskStatus(cli, pb.Stage_Running)
 	}), IsTrue)
 
 	t.testSubTaskRecover(c, s, dir)

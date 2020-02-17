@@ -116,7 +116,20 @@ func (m *MockUnit) Update(cfg *config.SubTaskConfig) error {
 	return m.errUpdate
 }
 
-func (m *MockUnit) Status() interface{} { return nil }
+func (m *MockUnit) Status() interface{} {
+	switch m.typ {
+	case pb.UnitType_Check:
+		return &pb.CheckStatus{}
+	case pb.UnitType_Dump:
+		return &pb.DumpStatus{}
+	case pb.UnitType_Load:
+		return &pb.LoadStatus{}
+	case pb.UnitType_Sync:
+		return &pb.SyncStatus{}
+	default:
+		return struct{}{}
+	}
+}
 
 func (m *MockUnit) Error() interface{} { return nil }
 
