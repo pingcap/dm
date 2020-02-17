@@ -94,6 +94,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	cfg := NewConfig()
 	sourceConfig := loadMysqlConfigWithoutPassword(c)
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	sourceConfig.Checker.CheckEnable = true
 	sourceConfig.Checker.CheckInterval = config.Duration{Duration: 40 * time.Millisecond}
 	sourceConfig.Checker.BackoffMin = config.Duration{Duration: 20 * time.Millisecond}
 	sourceConfig.Checker.BackoffMax = config.Duration{Duration: 1 * time.Second}
