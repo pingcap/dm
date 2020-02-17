@@ -134,14 +134,13 @@ func (t *testRelay) TestRelay(c *C) {
 		purger.NewPurger = originNewPurger
 	}()
 
-	cfg := &config.MysqlConfig{}
-	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
+	cfg := loadMysqlConfigWithoutPassword(c)
 
 	dir := c.MkDir()
 	cfg.RelayDir = dir
 	cfg.MetaDir = dir
 
-	relayHolder := NewRealRelayHolder(cfg)
+	relayHolder := NewRealRelayHolder(&cfg)
 	c.Assert(relayHolder, NotNil)
 
 	holder, ok := relayHolder.(*realRelayHolder)

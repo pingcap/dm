@@ -31,8 +31,7 @@ import (
 var emptyWorkerStatusInfoJSONLength = 25
 
 func (t *testServer) testWorker(c *C) {
-	cfg := &config.MysqlConfig{}
-	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
+	cfg := loadMysqlConfigWithoutPassword(c)
 
 	dir := c.MkDir()
 	cfg.EnableRelay = true
@@ -44,11 +43,11 @@ func (t *testServer) testWorker(c *C) {
 		NewRelayHolder = NewRealRelayHolder
 	}()
 
-	_, err := NewWorker(cfg, nil)
+	_, err := NewWorker(&cfg, nil)
 	c.Assert(err, ErrorMatches, "init error")
 
 	NewRelayHolder = NewDummyRelayHolder
-	w, err := NewWorker(cfg, nil)
+	w, err := NewWorker(&cfg, nil)
 	c.Assert(err, IsNil)
 	c.Assert(w.StatusJSON(""), HasLen, emptyWorkerStatusInfoJSONLength)
 	//c.Assert(w.closed.Get(), Equals, closedFalse)
@@ -93,20 +92,18 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	defer ETCD.Close()
 
 	cfg := NewConfig()
-	workerCfg := config.NewMysqlConfig()
-	workerCfg.LoadFromFile("./dm-mysql.toml")
+	sourceConfig := loadMysqlConfigWithoutPassword(c)
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
-	workerCfg.Checker.CheckInterval = config.Duration{Duration: 40 * time.Millisecond}
-	workerCfg.Checker.BackoffMin = config.Duration{Duration: 20 * time.Millisecond}
-	workerCfg.Checker.BackoffMax = config.Duration{Duration: 1 * time.Second}
-	workerCfg.From.Password = "" // no password set
+	sourceConfig.Checker.CheckInterval = config.Duration{Duration: 40 * time.Millisecond}
+	sourceConfig.Checker.BackoffMin = config.Duration{Duration: 20 * time.Millisecond}
+	sourceConfig.Checker.BackoffMax = config.Duration{Duration: 1 * time.Second}
 
 	cfg.WorkerAddr = fmt.Sprintf(":%d", port)
 
 	dir := c.MkDir()
-	workerCfg.RelayDir = dir
-	workerCfg.MetaDir = dir
-	workerCfg.EnableRelay = true
+	sourceConfig.RelayDir = dir
+	sourceConfig.MetaDir = dir
+	sourceConfig.EnableRelay = true
 
 	NewRelayHolder = NewDummyRelayHolder
 	defer func() {
@@ -132,7 +129,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		if s.closed.Get() {
 			return false
 		}
-		c.Assert(s.startWorker(workerCfg), IsNil)
+		c.Assert(s.startWorker(&sourceConfig), IsNil)
 		return true
 	}), IsTrue)
 	// start task

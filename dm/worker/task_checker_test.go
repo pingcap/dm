@@ -87,11 +87,10 @@ func (s *testTaskCheckerSuite) TestCheck(c *check.C) {
 
 	NewRelayHolder = NewDummyRelayHolder
 	dir := c.MkDir()
-	cfg := &config.MysqlConfig{}
-	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), check.IsNil)
+	cfg := loadMysqlConfigWithoutPassword(c)
 	cfg.RelayDir = dir
 	cfg.MetaDir = dir
-	w, err := NewWorker(cfg, nil)
+	w, err := NewWorker(&cfg, nil)
 	c.Assert(err, check.IsNil)
 	w.closed.Set(closedFalse)
 
@@ -205,12 +204,10 @@ func (s *testTaskCheckerSuite) TestCheckTaskIndependent(c *check.C) {
 
 	NewRelayHolder = NewDummyRelayHolder
 	dir := c.MkDir()
-	// cfg := NewConfig()
-	cfg := &config.MysqlConfig{}
-	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), check.IsNil)
+	cfg := loadMysqlConfigWithoutPassword(c)
 	cfg.RelayDir = dir
 	cfg.MetaDir = dir
-	w, err := NewWorker(cfg, nil)
+	w, err := NewWorker(&cfg, nil)
 	c.Assert(err, check.IsNil)
 	w.closed.Set(closedFalse)
 
