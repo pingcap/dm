@@ -22,6 +22,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/dm/config"
+	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
@@ -449,6 +450,22 @@ func (s *Scheduler) GetSubTaskCfgByTaskSource(task, source string) *config.SubTa
 	}
 	clone := cfg
 	return &clone
+}
+
+// GetSubTaskCfgsByTask gets subtask configs' map by task name.
+func (s *Scheduler) GetSubTaskCfgsByTask(task string) map[string]*config.SubTaskConfig {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	cfgM, ok := s.subTaskCfgs[task]
+	if !ok {
+		return nil
+	}
+	cloneM := make(map[string]*config.SubTaskConfig, len(cfgM))
+	for source, cfg := range cfgM {
+		clone := cfg
+		cloneM[source] = &clone
+	}
+	return cloneM
 }
 
 // AddWorker adds the information of the DM-worker when registering a new instance.
@@ -1093,4 +1110,11 @@ func strMapToSlice(m map[string]struct{}) []string {
 	}
 	sort.Strings(ret)
 	return ret
+}
+
+// SetWorkerClientForTest sets mockWorkerClient for specified worker, only used for test
+func (s *Scheduler) SetWorkerClientForTest(name string, mockCli workerrpc.Client) {
+	if _, ok := s.workers[name]; ok {
+		s.workers[name].cli = mockCli
+	}
 }

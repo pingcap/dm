@@ -11,13 +11,14 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/siddontang/go-mysql/mysql"
+
 	"github.com/pingcap/dm/pkg/binlog"
 	"github.com/pingcap/dm/pkg/gtid"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/pkg/utils"
-	"github.com/siddontang/go-mysql/mysql"
 )
 
 const (

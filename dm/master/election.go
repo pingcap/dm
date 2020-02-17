@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+
 	"go.uber.org/zap"
 
 	"github.com/pingcap/dm/pkg/log"
@@ -29,14 +30,10 @@ func (s *Server) electionNotify(ctx context.Context) {
 			// output the leader info.
 			if leader {
 				log.L().Info("current member become the leader", zap.String("current member", s.cfg.Name))
-				err := s.coordinator.Start(ctx, s.etcdClient)
+				err := s.scheduler.Start(ctx, s.etcdClient)
 				if err != nil {
 					log.L().Error("coordinator do not started", zap.Error(err))
 				}
-				if err = s.recoverSubTask(); err != nil {
-					log.L().Error("recover subtask infos from coordinator fail", zap.Error(err))
-				}
-
 			} else {
 				_, leaderID, err2 := s.election.LeaderInfo(ctx)
 				if err2 == nil {
@@ -44,7 +41,7 @@ func (s *Server) electionNotify(ctx context.Context) {
 				} else {
 					log.L().Warn("get leader info", zap.Error(err2))
 				}
-				s.coordinator.Stop()
+				s.scheduler.Close()
 			}
 		case err := <-s.election.ErrorNotify():
 			// handle errors here, we do no meaningful things now.
