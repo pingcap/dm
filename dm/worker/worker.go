@@ -16,6 +16,8 @@ package worker
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -302,6 +304,30 @@ func (w *Worker) QueryError(name string) []*pb.SubTaskError {
 	return w.Error(name)
 }
 
+// purgeRelayDir will clear all contents under w.cfg.RelayDir
+func (w *Worker) purgeRelayDir() error {
+	if !w.cfg.EnableRelay {
+		return nil
+	}
+	dir := w.cfg.RelayDir
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	names, err := d.Readdirnames(-1)
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		err = os.RemoveAll(filepath.Join(dir, name))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (w *Worker) handleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, errCh chan error) {
 	for {
 		select {
@@ -312,8 +338,7 @@ func (w *Worker) handleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, 
 			err := w.operateSubTaskStage(stage)
 			if err != nil {
 				// TODO: add better metrics
-				log.L().Error("fail to operate subtask stage", zap.String("task", stage.Task),
-					zap.String("source", stage.Source), zap.Error(err))
+				log.L().Error("fail to operate subtask stage", zap.Stringer("stage", stage), zap.Error(err))
 			}
 		case err := <-errCh:
 			// TODO: deal with err
@@ -355,7 +380,7 @@ func (w *Worker) handleRelayStage(ctx context.Context, stageCh chan ha.Stage, er
 			err := w.operateRelayStage(ctx, stage)
 			if err != nil {
 				// TODO: add better metrics
-				log.L().Error("fail to operate relay", zap.String("source", stage.Source), zap.Error(err))
+				log.L().Error("fail to operate relay", zap.Stringer("stage", stage), zap.Error(err))
 			}
 		case err := <-errCh:
 			log.L().Error("WatchRelayStage received an error", zap.Error(err))

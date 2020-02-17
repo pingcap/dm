@@ -102,8 +102,14 @@ func (s *Server) Start() error {
 		// TODO: need retry
 		return err
 	}
-	if len(bsm) > 0 {
-		log.L().Error("worker has been assigned source before keepalive!")
+	if bound, ok := bsm[s.cfg.Name]; ok {
+		log.L().Warn("worker has been assigned source before keepalive")
+		err := s.operateSourceBound(bound)
+		if err != nil {
+			s.setWorkerErr(err, true)
+			log.L().Error("fail to operate sourceBound on worker", zap.String("worker", s.cfg.Name),
+				zap.String("source", bound.Source))
+		}
 	}
 	sourceBoundCh := make(chan ha.SourceBound, 10)
 	sourceBoundErrCh := make(chan error, 10)
@@ -667,6 +673,11 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 	startRelay := false
 	var revRelay int64
 	if cfg.EnableRelay {
+		// TODO: if the sourceID is not changed and relay log is not too old, don't purge relay dir
+		err = w.purgeRelayDir()
+		if err != nil {
+			return err
+		}
 		var relayStage ha.Stage
 		// we get the newest relay stages directly which will omit the relay stage PUT/DELETE event
 		// because triggering these events is useless now
