@@ -104,7 +104,7 @@ func (s *Server) Start() error {
 	}
 	if bound, ok := bsm[s.cfg.Name]; ok {
 		log.L().Warn("worker has been assigned source before keepalive")
-		err := s.operateSourceBound(bound)
+		err = s.operateSourceBound(bound)
 		if err != nil {
 			s.setWorkerErr(err, true)
 			log.L().Error("fail to operate sourceBound on worker", zap.String("worker", s.cfg.Name),

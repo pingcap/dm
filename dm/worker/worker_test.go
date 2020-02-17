@@ -174,7 +174,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 }
 
 func (t *testServer) TestPurgeRelayDir(c *C) {
-	cfg := loadMysqlConfigWithoutPassword(c)
+	cfg := loadSourceConfigWithoutPassword(c)
 	cfg.EnableRelay = true
 	dir := c.MkDir()
 	cfg.RelayDir = dir
