@@ -183,6 +183,17 @@ func (t *testScheduler) TestScheduler(c *C) {
 	// CASE 2.4: pause the relay.
 	c.Assert(s.UpdateExpectRelayStage(pb.Stage_Paused, sourceID1), IsNil)
 	t.relayStageMatch(c, s, sourceID1, pb.Stage_Paused)
+	// update relay stage without source take no effect now (and return without error).
+	c.Assert(s.UpdateExpectRelayStage(pb.Stage_Running), IsNil)
+	t.relayStageMatch(c, s, sourceID1, pb.Stage_Paused)
+	// update to non-(Running, Paused) stage is invalid.
+	c.Assert(terror.ErrSchedulerRelayStageInvalidUpdate.Equal(s.UpdateExpectRelayStage(pb.Stage_InvalidStage, sourceID1)), IsTrue)
+	c.Assert(terror.ErrSchedulerRelayStageInvalidUpdate.Equal(s.UpdateExpectRelayStage(pb.Stage_New, sourceID1)), IsTrue)
+	c.Assert(terror.ErrSchedulerRelayStageInvalidUpdate.Equal(s.UpdateExpectRelayStage(pb.Stage_Stopped, sourceID1)), IsTrue)
+	c.Assert(terror.ErrSchedulerRelayStageInvalidUpdate.Equal(s.UpdateExpectRelayStage(pb.Stage_Finished, sourceID1)), IsTrue)
+	// can't update stage with not existing sources now.
+	c.Assert(terror.ErrSchedulerRelayStageSourceNotExist.Equal(s.UpdateExpectRelayStage(pb.Stage_Running, sourceID1, sourceID2)), IsTrue)
+	t.relayStageMatch(c, s, sourceID1, pb.Stage_Paused)
 
 	// CASE 2.5: resume the relay.
 	c.Assert(s.UpdateExpectRelayStage(pb.Stage_Running, sourceID1), IsNil)
@@ -190,6 +201,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 
 	// CASE 2.6: start a task with only one source.
 	// no subtask config exists before start.
+	c.Assert(s.AddSubTasks(), IsNil) // can call without configs, return without error, but take no effect.
 	t.subTaskCfgNotExist(c, s, taskName1, sourceID1)
 	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_InvalidStage)
 	// start the task.
@@ -211,6 +223,18 @@ func (t *testScheduler) TestScheduler(c *C) {
 	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_Paused)
 	c.Assert(s.UpdateExpectSubTaskStage(pb.Stage_Running, taskName1, sourceID1), IsNil)
 	t.subTaskStageMatch(c, s, taskName1, sourceID1, pb.Stage_Running)
+	// update subtask stage without source or task take no effect now (and return without error).
+	c.Assert(s.UpdateExpectSubTaskStage(pb.Stage_Paused, "", sourceID1), IsNil)
+	c.Assert(s.UpdateExpectSubTaskStage(pb.Stage_Paused, taskName1), IsNil)
+	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
+	// update to non-(Running, Paused) stage is invalid.
+	c.Assert(terror.ErrSchedulerSubTaskStageInvalidUpdate.Equal(s.UpdateExpectSubTaskStage(pb.Stage_InvalidStage, taskName1, sourceID1)), IsTrue)
+	c.Assert(terror.ErrSchedulerSubTaskStageInvalidUpdate.Equal(s.UpdateExpectSubTaskStage(pb.Stage_New, taskName1, sourceID1)), IsTrue)
+	c.Assert(terror.ErrSchedulerSubTaskStageInvalidUpdate.Equal(s.UpdateExpectSubTaskStage(pb.Stage_Stopped, taskName1, sourceID1)), IsTrue)
+	c.Assert(terror.ErrSchedulerSubTaskStageInvalidUpdate.Equal(s.UpdateExpectSubTaskStage(pb.Stage_Finished, taskName1, sourceID1)), IsTrue)
+	// can't update stage with not existing sources now.
+	c.Assert(terror.ErrSchedulerSubTaskOpSourceNotExist.Equal(s.UpdateExpectSubTaskStage(pb.Stage_Paused, taskName1, sourceID1, sourceID2)), IsTrue)
+	t.relayStageMatch(c, s, sourceID1, pb.Stage_Running)
 
 	// CASE 2.8: worker1 become offline.
 	// cancel keep-alive.
@@ -327,6 +351,8 @@ func (t *testScheduler) TestScheduler(c *C) {
 	t.relayStageMatch(c, s, sourceID2, pb.Stage_Running)
 
 	// CASE 4.4: start a task with two sources.
+	// can't add more than one tasks at a time now.
+	c.Assert(terror.ErrSchedulerMultiTask.Equal(s.AddSubTasks(subtaskCfg1, subtaskCfg21)), IsTrue)
 	// task2' config and stage not exists before.
 	t.subTaskCfgNotExist(c, s, taskName2, sourceID1)
 	t.subTaskCfgNotExist(c, s, taskName2, sourceID2)
@@ -335,6 +361,18 @@ func (t *testScheduler) TestScheduler(c *C) {
 	// start task2.
 	c.Assert(s.AddSubTasks(subtaskCfg21, subtaskCfg22), IsNil)
 	// config added, stage become Running.
+	t.subTaskCfgExist(c, s, subtaskCfg21)
+	t.subTaskCfgExist(c, s, subtaskCfg22)
+	t.subTaskStageMatch(c, s, taskName2, sourceID1, pb.Stage_Running)
+	t.subTaskStageMatch(c, s, taskName2, sourceID2, pb.Stage_Running)
+
+	// CASE 4.4.1 fail to stop any task.
+	// can call without tasks or sources, return without error, but take no effect.
+	c.Assert(s.RemoveSubTasks("", sourceID1), IsNil)
+	c.Assert(s.RemoveSubTasks(taskName1), IsNil)
+	// stop not exist task.
+	c.Assert(terror.ErrSchedulerSubTaskOpTaskNotExist.Equal(s.RemoveSubTasks("not-exist", sourceID1)), IsTrue)
+	// config and stage not changed.
 	t.subTaskCfgExist(c, s, subtaskCfg21)
 	t.subTaskCfgExist(c, s, subtaskCfg22)
 	t.subTaskStageMatch(c, s, taskName2, sourceID1, pb.Stage_Running)
@@ -368,6 +406,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 
 	// CASE 4.7: remove source2.
 	c.Assert(s.RemoveSourceCfg(sourceID2), IsNil)
+	c.Assert(terror.ErrSchedulerSourceCfgNotExist.Equal(s.RemoveSourceCfg(sourceID2)), IsTrue) // already removed.
 	// source2 removed.
 	t.sourceCfgNotExist(c, s, sourceID2)
 	// worker2 become Free now.

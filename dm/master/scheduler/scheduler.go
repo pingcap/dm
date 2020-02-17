@@ -41,16 +41,19 @@ import (
 // - a worker from Offline to Free:
 //   - receive keep-alive.
 // - a worker from Bound to Free:
-//   - trigger by unbound `a source removed`.
+//   - trigger by unbound: `a source removed`.
 // - a new source added:
 //   - add source request from user.
 // - a source unbound from another worker:
-//   - trigger by unbound `a worker from Bound to Offline`.
+//   - trigger by unbound: `a worker from Bound to Offline`.
+//   - TODO(csuzhangxc): design a strategy to ensure the old worker already shutdown its work.
 // Cases trigger a source-to-worker unbound try.
 // - a worker from Bound to Offline:
 //   - lost keep-alive.
 // - a source removed:
 //   - remove source request from user.
+// TODO: try to handle the return `err` of etcd operations,
+//   because may put into etcd, but the response to the etcd client interrupted.
 type Scheduler struct {
 	mu sync.RWMutex
 
@@ -63,25 +66,66 @@ type Scheduler struct {
 	etcdCli *clientv3.Client
 
 	// all source configs, source ID -> source config.
+	// add:
+	// - add source by user request (calling `AddSourceCfg`).
+	// - recover from etcd (calling `recoverSources`).
+	// delete:
+	// - remove source by user request (calling `RemoveSourceCfg`).
 	sourceCfgs map[string]config.MysqlConfig
 
 	// all subtask configs, task name -> source ID -> subtask config.
+	// add:
+	// - add/start subtask by user request (calling `AddSubTasks`).
+	// - recover from etcd (calling `recoverSubTasks`).
+	// delete:
+	// - remove/stop subtask by user request (calling `RemoveSubTasks`).
 	subTaskCfgs map[string]map[string]config.SubTaskConfig
 
 	// all DM-workers, worker name -> worker.
+	// add:
+	// - add worker by user request (calling `AddWorker`).
+	// - recover from etcd (calling `recoverWorkersBounds`).
+	// delete:
+	// - remove worker by user request (calling `RemoveWorker`).
 	workers map[string]*Worker
 
 	// all bound relationship, source ID -> worker.
+	// add:
+	// - when bounding a source to a worker.
+	// delete:
+	// - when unbounding a source from a worker.
+	// see `Cases trigger a source-to-worker bound try` above.
 	bounds map[string]*Worker
 
 	// unbound (pending to bound) sources.
 	// NOTE: refactor to support scheduling by priority.
+	// add:
+	// - add source by user request (calling `AddSourceCfg`).
+	// - recover from etcd (calling `recoverWorkersBounds`).
+	// - when the bounding worker become offline.
+	// delete:
+	// - remove source by user request (calling `RemoveSourceCfg`).
+	// - when bounded the source to a worker.
 	unbounds map[string]struct{}
 
 	// expectant relay stages for sources, source ID -> stage.
+	// add:
+	// - bound the source to a worker (at first time).
+	// - recover from etcd (calling `recoverSources`).
+	// update:
+	// - update stage by user request (calling `UpdateExpectRelayStage`).
+	// delete:
+	// - remove source by user request (calling `RemoveSourceCfg`).
 	expectRelayStages map[string]ha.Stage
 
 	// expectant subtask stages for tasks & sources, task name -> source ID -> stage.
+	// add:
+	// - add/start subtask by user request (calling `AddSubTasks`).
+	// - recover from etcd (calling `recoverSubTasks`).
+	// update:
+	// - update stage by user request (calling `UpdateExpectSubTaskStage`).
+	// delete:
+	// - remove/stop subtask by user request (calling `RemoveSubTasks`).
 	expectSubTaskStages map[string]map[string]ha.Stage
 }
 
@@ -155,18 +199,24 @@ func (s *Scheduler) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 // Close closes the scheduler.
 func (s *Scheduler) Close() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	if !s.started {
+		s.mu.Unlock()
 		return
 	}
 
+	s.logger.Info("the scheduler is closing")
 	if s.cancel != nil {
 		s.cancel()
 		s.cancel = nil
 	}
+	s.mu.Unlock()
 
+	// need to wait for goroutines to return which may hold the mutex.
 	s.wg.Wait()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.started = false // closed now.
 	s.logger.Info("the scheduler has closed")
 }
@@ -299,7 +349,7 @@ func (s *Scheduler) AddSubTasks(cfgs ...config.SubTaskConfig) error {
 		return nil // no subtasks need to add, this should not happen.
 	}
 
-	// check whether exists.
+	// 1. check whether exists.
 	var (
 		taskNamesM    = make(map[string]struct{}, 1)
 		existSourcesM = make(map[string]struct{}, len(cfgs))
@@ -329,7 +379,7 @@ func (s *Scheduler) AddSubTasks(cfgs ...config.SubTaskConfig) error {
 		s.logger.Warn("some subtasks already exist", zap.String("task", taskNames[0]), zap.Strings("sources", existSources))
 	}
 
-	// construct `Running` stages when adding.
+	// 2. construct `Running` stages when adding.
 	newCfgs := make([]config.SubTaskConfig, 0, len(cfgs)-len(existSources))
 	newStages := make([]ha.Stage, 0, cap(newCfgs))
 	unbounds := make([]string, 0)
@@ -344,18 +394,18 @@ func (s *Scheduler) AddSubTasks(cfgs ...config.SubTaskConfig) error {
 		}
 	}
 
-	// check whether any sources unbound.
+	// 3. check whether any sources unbound.
 	if len(unbounds) > 0 {
 		return terror.ErrSchedulerSourcesUnbound.Generate(unbounds)
 	}
 
-	// put the configs and stages into etcd.
+	// 4. put the configs and stages into etcd.
 	_, err := ha.PutSubTaskCfgStage(s.etcdCli, newCfgs, newStages)
 	if err != nil {
 		return err
 	}
 
-	// record the config and the expectant stage.
+	// 5. record the config and the expectant stage.
 	for _, cfg := range newCfgs {
 		if _, ok := s.subTaskCfgs[cfg.Name]; !ok {
 			s.subTaskCfgs[cfg.Name] = make(map[string]config.SubTaskConfig)
@@ -385,7 +435,7 @@ func (s *Scheduler) RemoveSubTasks(task string, sources ...string) error {
 		return nil // no subtask need to stop, this should not happen.
 	}
 
-	// check the task exists.
+	// 1. check the task exists.
 	stagesM, ok1 := s.expectSubTaskStages[task]
 	cfgsM, ok2 := s.subTaskCfgs[task]
 	if !ok1 || !ok2 {
@@ -413,13 +463,13 @@ func (s *Scheduler) RemoveSubTasks(task string, sources ...string) error {
 		return terror.ErrSchedulerSubTaskOpSourceNotExist.Generate(notExistSources)
 	}
 
-	// delete the configs and the stages.
+	// 2. delete the configs and the stages.
 	_, err := ha.DeleteSubTaskCfgStage(s.etcdCli, cfgs, stages)
 	if err != nil {
 		return err
 	}
 
-	// clear the config and the expectant stage.
+	// 3. clear the config and the expectant stage.
 	for _, cfg := range cfgs {
 		delete(s.subTaskCfgs[task], cfg.SourceID)
 	}
@@ -480,15 +530,12 @@ func (s *Scheduler) AddWorker(name, addr string) error {
 		return terror.ErrSchedulerNotStarted.Generate()
 	}
 
-	// check whether exists.
+	// 1. check whether exists.
 	if w, ok := s.workers[name]; ok {
 		return terror.ErrSchedulerWorkerExist.Generate(w.baseInfo)
 	}
 
-	// put the base info into etcd.
-	// TODO: try to handle the return `err` of `PutWorkerInfo` for the case:
-	//   puted in etcd, but the response to the etcd client interrupted.
-	//   and handle that for other etcd operations too.
+	// 2. put the base info into etcd.
 	info := ha.NewWorkerInfo(name, addr)
 	_, err := ha.PutWorkerInfo(s.etcdCli, info)
 	if err != nil {
@@ -571,7 +618,7 @@ func (s *Scheduler) UnboundSources() []string {
 // - from `Paused` to `Running`.
 // NOTE: from `Running` to `Running` and `Paused` to `Paused` still update the data in etcd,
 // because some user may want to update `{Running, Paused, ...}` to `{Running, Running, ...}`.
-// so, this should be supported in DM-worker.
+// so, this should be also supported in DM-worker.
 func (s *Scheduler) UpdateExpectRelayStage(newStage pb.Stage, sources ...string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -584,7 +631,7 @@ func (s *Scheduler) UpdateExpectRelayStage(newStage pb.Stage, sources ...string)
 		return nil // no sources need to update the stage, this should not happen.
 	}
 
-	// check the new expectant stage.
+	// 1. check the new expectant stage.
 	switch newStage {
 	case pb.Stage_Running, pb.Stage_Paused:
 	default:
@@ -615,13 +662,13 @@ func (s *Scheduler) UpdateExpectRelayStage(newStage pb.Stage, sources ...string)
 			zap.Strings("from", currStages), zap.Stringer("to", newStage))
 	}
 
-	// put the stages into etcd.
+	// 2. put the stages into etcd.
 	_, err := ha.PutRelayStage(s.etcdCli, stages...)
 	if err != nil {
 		return err
 	}
 
-	// update the stages in the scheduler.
+	// 3. update the stages in the scheduler.
 	for _, stage := range stages {
 		s.expectRelayStages[stage.Source] = stage
 	}
@@ -647,7 +694,7 @@ func (s *Scheduler) GetExpectRelayStage(source string) ha.Stage {
 // - from `Paused` to `Running`.
 // NOTE: from `Running` to `Running` and `Paused` to `Paused` still update the data in etcd,
 // because some user may want to update `{Running, Paused, ...}` to `{Running, Running, ...}`.
-// so, this should be supported in DM-worker.
+// so, this should be also supported in DM-worker.
 func (s *Scheduler) UpdateExpectSubTaskStage(newStage pb.Stage, task string, sources ...string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -660,14 +707,14 @@ func (s *Scheduler) UpdateExpectSubTaskStage(newStage pb.Stage, task string, sou
 		return nil // no subtask need to update, this should not happen.
 	}
 
-	// check the new expectant stage.
+	// 1. check the new expectant stage.
 	switch newStage {
 	case pb.Stage_Running, pb.Stage_Paused:
 	default:
 		return terror.ErrSchedulerSubTaskStageInvalidUpdate.Generate(newStage)
 	}
 
-	// check the task exists.
+	// 2. check the task exists.
 	stagesM, ok := s.expectSubTaskStages[task]
 	if !ok {
 		return terror.ErrSchedulerSubTaskOpTaskNotExist.Generate(task)
@@ -697,13 +744,13 @@ func (s *Scheduler) UpdateExpectSubTaskStage(newStage pb.Stage, task string, sou
 			zap.Strings("from", currStages), zap.Stringer("to", newStage))
 	}
 
-	// put the stages into etcd.
+	// 3. put the stages into etcd.
 	_, err := ha.PutSubTaskStage(s.etcdCli, stages...)
 	if err != nil {
 		return err
 	}
 
-	// update the stages in the scheduler.
+	// 4. update the stages in the scheduler.
 	for _, stage := range stages {
 		s.expectSubTaskStages[task][stage.Source] = stage
 	}
@@ -729,7 +776,7 @@ func (s *Scheduler) GetExpectSubTaskStage(task, source string) ha.Stage {
 	return stage
 }
 
-// recoverSourceCfgs recovers history source configs and expectant stages from etcd.
+// recoverSourceCfgs recovers history source configs and expectant relay stages from etcd.
 func (s *Scheduler) recoverSources(cli *clientv3.Client) error {
 	// get all source configs.
 	cfgM, _, err := ha.GetAllSourceCfg(cli)
@@ -753,7 +800,7 @@ func (s *Scheduler) recoverSources(cli *clientv3.Client) error {
 	return nil
 }
 
-// recoverSubTasks recovers history subtask configs and expectant stages from etcd.
+// recoverSubTasks recovers history subtask configs and expectant subtask stages from etcd.
 func (s *Scheduler) recoverSubTasks(cli *clientv3.Client) error {
 	// get all subtask configs.
 	cfgMM, _, err := ha.GetAllSubTaskCfg(cli)
@@ -861,13 +908,14 @@ func (s *Scheduler) handleWorkerEv(ctx context.Context, evCh <-chan ha.WorkerEve
 				err = s.handleWorkerOnline(ev)
 			}
 			if err != nil {
-				s.logger.Error("fail to handle worker status change event", zap.Stringer("event", ev), zap.Error(err))
+				// TODO(csuzhangxc): report the error through metrics or other methods.
+				s.logger.Error("fail to handle worker status change event", zap.Bool("delete", ev.IsDeleted), zap.Stringer("event", ev), zap.Error(err))
 			}
 		case err, ok := <-errCh:
 			if !ok {
 				return
 			}
-			// NOTE: we only log the `err` here, but we should update metrics and do more works for it later.
+			// TODO(csuzhangxc): we only log the `err` here, but we should update metrics and do more works for it later.
 			s.logger.Error("receive error when watching worker status change event", zap.Error(err))
 		}
 	}
@@ -890,6 +938,7 @@ func (s *Scheduler) handleWorkerOnline(ev ha.WorkerEvent) error {
 	// 2. check whether is bound.
 	if w.Stage() == WorkerBound {
 		s.logger.Warn("worker already bound", zap.Stringer("bound", w.Bound()))
+		return nil
 	}
 
 	// 3. change the stage (from Offline) to Free.
@@ -939,7 +988,7 @@ func (s *Scheduler) handleWorkerOffline(ev ha.WorkerEvent) error {
 
 	s.logger.Info("unbound the worker for source", zap.Stringer("bound", bound), zap.Stringer("event", ev))
 
-	// 7. try to bound it to a Free worker.
+	// 7. try to bound the source to a Free worker again.
 	bounded, err := s.tryBoundForSource(bound.Source)
 	if err != nil {
 		return err
@@ -1054,7 +1103,7 @@ func (s *Scheduler) recordWorker(info ha.WorkerInfo) (*Worker, error) {
 
 // deleteWorker deletes the recorded worker and bound.
 // this func is used when removing the worker.
-// NOTE: delete work should unbound the source.
+// NOTE: trigger scheduler when the worker become offline, not when deleted.
 func (s *Scheduler) deleteWorker(name string) {
 	w, ok := s.workers[name]
 	if !ok {
@@ -1062,12 +1111,11 @@ func (s *Scheduler) deleteWorker(name string) {
 	}
 	w.Close()
 	delete(s.workers, name)
-	delete(s.bounds, w.Bound().Source)
 }
 
 // updateStatusForBound updates the in-memory status for bound, including:
 // - update the stage of worker to `Bound`.
-// - record the bound relationship in the schedluer.
+// - record the bound relationship in the scheduler.
 // this func is called after the bound relationship existed in etcd.
 func (s *Scheduler) updateStatusForBound(w *Worker, b ha.SourceBound) error {
 	err := w.ToBound(b)
