@@ -55,7 +55,7 @@ func NewConfig() *Config {
 	// NOTE: add `advertise-addr` for dm-master if needed.
 	fs.StringVar(&cfg.Join, "join", "", `join to an existing cluster (usage: dm-master cluster's "${master-addr}")`)
 	fs.StringVar(&cfg.Name, "name", "", "human-readable name for DM-worker member")
-	fs.Int64Var(&cfg.KeepAliveTTL, "keepalive-ttl", defaultKeepAliveTTL, "worker's ttl for keepalive with etcd")
+	fs.Int64Var(&cfg.KeepAliveTTL, "keepalive-ttl", defaultKeepAliveTTL, "dm-worker's TTL for keepalive with etcd (in seconds)")
 	return cfg
 }
 

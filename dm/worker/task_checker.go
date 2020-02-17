@@ -17,7 +17,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/pingcap/dm/dm/config"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +25,7 @@ import (
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/backoff"
 	"github.com/pingcap/dm/pkg/log"
@@ -220,7 +220,7 @@ func (tsc *realTaskStatusChecker) run() {
 		if err != nil {
 			tsc.l.Warn("inject failpoint TaskCheckInterval failed", zap.Reflect("value", val), zap.Error(err))
 		} else {
-			tsc.cfg.CheckInterval = config.Duration{Duration: interval}
+			tsc.cfg.CheckInterval = &config.Duration{Duration: interval}
 			tsc.l.Info("set TaskCheckInterval", zap.String("failpoint", "TaskCheckInterval"), zap.Duration("value", interval))
 		}
 	})

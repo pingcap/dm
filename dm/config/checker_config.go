@@ -21,12 +21,12 @@ type Duration struct {
 }
 
 // MarshalText hacks to satisfy the encoding.TextMarshaler interface
-func (d Duration) MarshalText() ([]byte, error) {
+func (d *Duration) MarshalText() ([]byte, error) {
 	return []byte(d.Duration.String()), nil
 }
 
 // UnmarshalText hacks to satisfy the encoding.TextUnmarshaler interface
-func (d Duration) UnmarshalText(text []byte) error {
+func (d *Duration) UnmarshalText(text []byte) error {
 	var err error
 	d.Duration, err = time.ParseDuration(string(text))
 	return err
@@ -43,20 +43,20 @@ func (d *Duration) MarshalJSON() ([]byte, error) {
 
 // CheckerConfig is configuration used for TaskStatusChecker
 type CheckerConfig struct {
-	CheckEnable     bool     `toml:"check-enable" json:"check-enable"`
-	BackoffRollback Duration `toml:"backoff-rollback" json:"backoff-rollback"`
-	BackoffMax      Duration `toml:"backoff-max" json:"backoff-max"`
+	CheckEnable     bool      `toml:"check-enable" json:"check-enable"`
+	BackoffRollback *Duration `toml:"backoff-rollback" json:"backoff-rollback"`
+	BackoffMax      *Duration `toml:"backoff-max" json:"backoff-max"`
 	// unexpose config
-	CheckInterval Duration `toml:"check-interval" json:"-"`
-	BackoffMin    Duration `toml:"backoff-min" json:"-"`
-	BackoffJitter bool     `toml:"backoff-jitter" json:"-"`
-	BackoffFactor float64  `toml:"backoff-factor" json:"-"`
+	CheckInterval *Duration `toml:"check-interval" json:"-"`
+	BackoffMin    *Duration `toml:"backoff-min" json:"-"`
+	BackoffJitter bool      `toml:"backoff-jitter" json:"-"`
+	BackoffFactor float64   `toml:"backoff-factor" json:"-"`
 }
 
 // Adjust sets default value for field: CheckInterval/BackoffMin/BackoffJitter/BackoffFactor
 func (cc *CheckerConfig) Adjust() {
-	cc.CheckInterval = Duration{Duration: DefaultCheckInterval}
-	cc.BackoffMin = Duration{Duration: DefaultBackoffMin}
+	cc.CheckInterval = &Duration{Duration: DefaultCheckInterval}
+	cc.BackoffMin = &Duration{Duration: DefaultBackoffMin}
 	cc.BackoffJitter = DefaultBackoffJitter
 	cc.BackoffFactor = DefaultBackoffFactor
 }
