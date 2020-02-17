@@ -33,6 +33,7 @@ import (
 	"go.etcd.io/etcd/integration"
 
 	"github.com/pingcap/dm/checker"
+	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/master/scheduler"
 	"github.com/pingcap/dm/dm/master/workerrpc"
@@ -180,12 +181,20 @@ func extractWorkerSource(deployMapper []*DeployMapper) ([]string, []string) {
 	return sources, workers
 }
 
-func clearSchedulerEnv(c *check.C, cancel context.CancelFunc, wg *sync.WaitGroup, workers []string, scheduler2 *scheduler.Scheduler) {
+func clearSchedulerEnv(c *check.C, cancel context.CancelFunc, wg *sync.WaitGroup) {
 	cancel()
 	wg.Wait()
-	for _, worker := range workers {
-		c.Assert(scheduler2.RemoveWorker(worker), check.IsNil)
-	}
+	clearSource := clientv3.OpDelete(common.UpstreamConfigKeyAdapter.Path(), clientv3.WithPrefix())
+	clearSubTask := clientv3.OpDelete(common.UpstreamSubTaskKeyAdapter.Path(), clientv3.WithPrefix())
+	clearWorkerInfo := clientv3.OpDelete(common.WorkerRegisterKeyAdapter.Path(), clientv3.WithPrefix())
+	clearWorkerKeepAlive := clientv3.OpDelete(common.WorkerKeepAliveKeyAdapter.Path(), clientv3.WithPrefix())
+	clearBound := clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Path(), clientv3.WithPrefix())
+	clearRelayStage := clientv3.OpDelete(common.StageRelayKeyAdapter.Path(), clientv3.WithPrefix())
+	clearSubTaskStage := clientv3.OpDelete(common.StageSubTaskKeyAdapter.Path(), clientv3.WithPrefix())
+	_, err := etcdTestCli.Txn(context.Background()).Then(
+		clearSource, clearSubTask, clearWorkerInfo, clearBound, clearWorkerKeepAlive, clearRelayStage, clearSubTaskStage,
+	).Commit()
+	c.Assert(err, check.IsNil)
 }
 
 func makeNilWorkerClients(workers []string) map[string]workerrpc.Client {
@@ -258,7 +267,7 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 	resp, err := server.QueryStatus(context.Background(), &pb.QueryStatusListRequest{})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
+	clearSchedulerEnv(c, cancel, &wg)
 
 	// query specified sources
 	for _, deploy := range server.cfg.Deploy {
@@ -292,7 +301,7 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
 	c.Assert(resp.Msg, check.Matches, "task .* has no workers or not exist, can try `refresh-worker-tasks` cmd first")
-	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
+	clearSchedulerEnv(c, cancel, &wg)
 	// TODO: test query with correct task name, this needs to add task first
 }
 
@@ -319,7 +328,7 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
-	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
+	clearSchedulerEnv(c, cancel, &wg)
 
 	// simulate invalid password returned from coordinator, so cfg.SubTaskConfigs will fail
 	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "invalid-encrypt-password", t.workerClients)
@@ -328,7 +337,7 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 	})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
-	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
+	clearSchedulerEnv(c, cancel, &wg)
 }
 
 func (t *testMaster) TestStartTask(c *check.C) {
@@ -393,7 +402,7 @@ func (t *testMaster) TestStartTask(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
 	c.Assert(resp.Msg, check.Matches, errCheckSyncConfigReg)
-	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
+	clearSchedulerEnv(c, cancel, &wg)
 }
 
 func (t *testMaster) TestQueryError(c *check.C) {
@@ -417,7 +426,7 @@ func (t *testMaster) TestQueryError(c *check.C) {
 	resp, err := server.QueryError(context.Background(), &pb.QueryErrorListRequest{})
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
-	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
+	clearSchedulerEnv(c, cancel, &wg)
 
 	// query specified dm-worker[s]
 	for _, deploy := range server.cfg.Deploy {
@@ -452,7 +461,7 @@ func (t *testMaster) TestQueryError(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsFalse)
 	c.Assert(resp.Msg, check.Matches, "task .* has no workers or not exist, can try `refresh-worker-tasks` cmd first")
-	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
+	clearSchedulerEnv(c, cancel, &wg)
 	// TODO: test query with correct task name, this needs to add task first
 }
 
@@ -528,7 +537,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 	c.Assert(len(server.getTaskResources(taskName)), check.Equals, 0)
-	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
+	clearSchedulerEnv(c, cancel, &wg)
 }
 
 func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
@@ -602,7 +611,7 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsTrue)
 	}
-	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
+	clearSchedulerEnv(c, cancel, &wg)
 
 	ctx, cancel = context.WithCancel(context.Background())
 	// test PurgeWorkerRelay with error response
@@ -620,7 +629,7 @@ func (t *testMaster) TestPurgeWorkerRelay(c *check.C) {
 		c.Assert(w.Result, check.IsFalse)
 		c.Assert(w.Msg, check.Matches, errGRPCFailedReg)
 	}
-	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
+	clearSchedulerEnv(c, cancel, &wg)
 }
 
 func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
@@ -683,7 +692,7 @@ func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
 	for _, w := range resp.Sources {
 		c.Assert(w.Result, check.IsTrue)
 	}
-	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
+	clearSchedulerEnv(c, cancel, &wg)
 
 	ctx, cancel = context.WithCancel(context.Background())
 	// test SwitchWorkerRelayMaster with error response
@@ -699,7 +708,7 @@ func (t *testMaster) TestSwitchWorkerRelayMaster(c *check.C) {
 		c.Assert(w.Result, check.IsFalse)
 		c.Assert(w.Msg, check.Matches, errGRPCFailedReg)
 	}
-	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
+	clearSchedulerEnv(c, cancel, &wg)
 }
 
 func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
@@ -741,7 +750,7 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 	for _, source := range sources {
 		t.relayStageMatch(c, server.scheduler, source, pb.Stage_Running)
 	}
-	clearSchedulerEnv(c, cancel, &wg, workers, server.scheduler)
+	clearSchedulerEnv(c, cancel, &wg)
 }
 
 func (t *testMaster) TestServer(c *check.C) {
@@ -898,7 +907,7 @@ func (t *testMaster) TestOperateMysqlWorker(c *check.C) {
 	ctx1, cancel1 := context.WithCancel(ctx)
 	workerName := "worker1"
 	defer func() {
-		clearSchedulerEnv(c, cancel1, &wg, []string{workerName}, s1.scheduler)
+		clearSchedulerEnv(c, cancel1, &wg)
 	}()
 	c.Assert(s1.scheduler.AddWorker(workerName, "172.16.10.72:8262"), check.IsNil)
 	wg.Add(1)
