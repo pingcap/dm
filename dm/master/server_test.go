@@ -164,6 +164,7 @@ func (t *testMaster) SetUpSuite(c *check.C) {
 	err := log.InitLogger(&log.Config{})
 	c.Assert(err, check.IsNil)
 	t.workerClients = make(map[string]workerrpc.Client)
+	clearEtcdEnv(c)
 }
 
 func newMockRPCClient(client pb.WorkerClient) workerrpc.Client {
@@ -181,9 +182,7 @@ func extractWorkerSource(deployMapper []*DeployMapper) ([]string, []string) {
 	return sources, workers
 }
 
-func clearSchedulerEnv(c *check.C, cancel context.CancelFunc, wg *sync.WaitGroup) {
-	cancel()
-	wg.Wait()
+func clearEtcdEnv(c *check.C) {
 	clearSource := clientv3.OpDelete(common.UpstreamConfigKeyAdapter.Path(), clientv3.WithPrefix())
 	clearSubTask := clientv3.OpDelete(common.UpstreamSubTaskKeyAdapter.Path(), clientv3.WithPrefix())
 	clearWorkerInfo := clientv3.OpDelete(common.WorkerRegisterKeyAdapter.Path(), clientv3.WithPrefix())
@@ -195,6 +194,12 @@ func clearSchedulerEnv(c *check.C, cancel context.CancelFunc, wg *sync.WaitGroup
 		clearSource, clearSubTask, clearWorkerInfo, clearBound, clearWorkerKeepAlive, clearRelayStage, clearSubTaskStage,
 	).Commit()
 	c.Assert(err, check.IsNil)
+}
+
+func clearSchedulerEnv(c *check.C, cancel context.CancelFunc, wg *sync.WaitGroup) {
+	cancel()
+	wg.Wait()
+	clearEtcdEnv(c)
 }
 
 func makeNilWorkerClients(workers []string) map[string]workerrpc.Client {
@@ -331,6 +336,7 @@ func (t *testMaster) TestCheckTask(c *check.C) {
 	clearSchedulerEnv(c, cancel, &wg)
 
 	// simulate invalid password returned from coordinator, so cfg.SubTaskConfigs will fail
+	ctx, cancel = context.WithCancel(context.Background())
 	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "invalid-encrypt-password", t.workerClients)
 	resp, err = server.CheckTask(context.Background(), &pb.CheckTaskRequest{
 		Task: taskConfig,
@@ -727,8 +733,8 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 		Op:      pb.RelayOp_PauseRelay,
 	})
 	c.Assert(err, check.IsNil)
-	c.Assert(resp.Result, check.IsTrue)
-	c.Assert(resp.Msg, check.Matches, ".*need to update expectant relay stage not exist.*")
+	c.Assert(resp.Result, check.IsFalse)
+	c.Assert(resp.Msg, check.Matches, `[\s\S]*need to update expectant relay stage not exist[\s\S]*`)
 
 	// 1. test pause-relay successfully
 	resp, err = server.OperateWorkerRelayTask(context.Background(), &pb.OperateWorkerRelayRequest{
@@ -900,7 +906,7 @@ func (t *testMaster) TestOperateMysqlWorker(c *check.C) {
 	resp, err = s1.OperateMysqlWorker(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.Equals, false)
-	c.Assert(resp.Msg, check.Matches, ".*source config with ID "+mysqlCfg.SourceID+" not exists.*")
+	c.Assert(resp.Msg, check.Matches, `[\s\S]*source config with ID `+mysqlCfg.SourceID+` not exists[\s\S]*`)
 
 	// 4. start a new worker, the unbounded source should be bounded
 	var wg sync.WaitGroup
@@ -969,7 +975,7 @@ func (t *testMaster) TestOfflineWorker(c *check.C) {
 		res, err := s1.OfflineWorker(ectx, req2)
 		c.Assert(err, check.IsNil)
 		c.Assert(res.Result, check.IsFalse)
-		c.Assert(res.Msg, check.Matches, ".*dm-worker with name "+req2.Name+" not exists.*")
+		c.Assert(res.Msg, check.Matches, `[\s\S]*dm-worker with name `+req2.Name+` not exists[\s\S]*`)
 	}
 	{
 		req2.Name = "xixi"
