@@ -823,6 +823,10 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWorkerRelayRequest) (*pb.OperateWorkerRelayResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateWorkerRelayTask"))
 
+	resp := &pb.OperateWorkerRelayResponse{
+		Op:     req.Op,
+		Result: false,
+	}
 	var expect pb.Stage
 	switch req.Op {
 	case pb.RelayOp_ResumeRelay:
@@ -830,21 +834,16 @@ func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWork
 	case pb.RelayOp_PauseRelay:
 		expect = pb.Stage_Paused
 	default:
-		return &pb.OperateWorkerRelayResponse{
-			Result: true,
-			Msg:    fmt.Sprintf("relayOp %s is not supported by OperateWorkerRelay, please check it again", req.Op.String()),
-		}, nil
+		resp.Msg = "request relay Op is not supported by OperateWorkerRelay, please check it again"
+		return resp, nil
 	}
 	err := s.scheduler.UpdateExpectRelayStage(expect, req.Sources...)
 	if err != nil {
-		return &pb.OperateWorkerRelayResponse{
-			Result: false,
-			Msg:    errors.ErrorStack(err),
-		}, nil
+		resp.Msg = errors.ErrorStack(err)
+		return resp, nil
 	}
-	return &pb.OperateWorkerRelayResponse{
-		Result: true,
-	}, nil
+	resp.Result = true
+	return resp, nil
 }
 
 // getTaskResources gets workers relevant to specified task
@@ -1105,14 +1104,7 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 	}, nil
 }
 
-func makeMysqlWorkerResponse(err error) (*pb.OperateSourceResponse, error) {
-	return &pb.OperateSourceResponse{
-		Result: false,
-		Msg:    errors.ErrorStack(err),
-	}, nil
-}
-
-func parseAndAdjust(c *config.SourceConfig, content string) error {
+func parseAndAdjustSourceConfig(c *config.SourceConfig, content string) error {
 	if err := c.Parse(content); err != nil {
 		return err
 	}
@@ -1137,37 +1129,38 @@ func parseAndAdjust(c *config.SourceConfig, content string) error {
 func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest) (*pb.OperateSourceResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "OperateSource"))
 	cfg := config.NewSourceConfig()
-	err := parseAndAdjust(cfg, req.Config)
+	err := parseAndAdjustSourceConfig(cfg, req.Config)
+	resp := &pb.OperateSourceResponse{
+		Result: false,
+	}
 	if err != nil {
-		return makeMysqlWorkerResponse(err)
+		resp.Msg = errors.ErrorStack(err)
+		return resp, nil
 	}
 	switch req.Op {
 	case pb.SourceOp_StartSource:
 		err := s.scheduler.AddSourceCfg(*cfg)
 		if err != nil {
-			return makeMysqlWorkerResponse(err)
+			resp.Msg = errors.ErrorStack(err)
+			return resp, nil
 		}
 	case pb.SourceOp_UpdateSource:
-		// TODO: support WorkerOp_UpdateConfig later
-		return &pb.OperateSourceResponse{
-			Result: false,
-			Msg:    "Update worker config is not supported by dm-ha now",
-		}, nil
+		// TODO: support SourceOp_UpdateSource later
+		resp.Msg = "Update worker config is not supported by dm-ha now"
+		return resp, nil
 	case pb.SourceOp_StopSource:
 		err := s.scheduler.RemoveSourceCfg(cfg.SourceID)
 		if err != nil {
-			return makeMysqlWorkerResponse(err)
+			resp.Msg = errors.ErrorStack(err)
+			return resp, nil
 		}
 	default:
-		return &pb.OperateSourceResponse{
-			Result: false,
-			Msg:    "invalid operate on worker",
-		}, nil
+		resp.Msg = "invalid operate on worker"
+		return resp, nil
 	}
 
-	return &pb.OperateSourceResponse{
-		Result: true,
-	}, nil
+	resp.Result = true
+	return resp, nil
 }
 
 func (s *Server) generateSubTask(ctx context.Context, task string) (*config.TaskConfig, []*config.SubTaskConfig, error) {
