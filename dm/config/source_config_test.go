@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
@@ -72,6 +73,19 @@ func (t *testConfig) TestConfig(c *C) {
 	clone3, err := cfg.DecryptPassword()
 	c.Assert(err, IsNil)
 	c.Assert(clone3, DeepEquals, cfg)
+
+	// test toml and parse again
+	clone4 := cfg.Clone()
+	clone4.Checker.CheckEnable = true
+	clone4.Checker.BackoffRollback = Duration{time.Minute * 5}
+	clone4.Checker.BackoffMax = Duration{time.Minute * 5}
+	clone4toml, err := clone4.Toml()
+	c.Assert(err, IsNil)
+	c.Assert(clone4toml, Matches, ".*backoff-rollback = \"5m.*")
+	c.Assert(clone4toml, Matches, ".*backoff-max = \"5m.*")
+	clone5 := SourceConfig{}
+	c.Assert(clone5.Parse(clone4toml), IsNil)
+	c.Assert(clone5, DeepEquals, clone4)
 
 	// test invalid config
 	dir2 := c.MkDir()

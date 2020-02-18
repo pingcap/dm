@@ -21,11 +21,13 @@ type Duration struct {
 }
 
 // MarshalText hacks to satisfy the encoding.TextMarshaler interface
+// For MarshalText, we should use (d Duration) which can be used by both pointer and instance
 func (d Duration) MarshalText() ([]byte, error) {
 	return []byte(d.Duration.String()), nil
 }
 
 // UnmarshalText hacks to satisfy the encoding.TextUnmarshaler interface
+// For UnmarshalText, we should use (d *Duration) to change the value of this instance instead of the copy
 func (d *Duration) UnmarshalText(text []byte) error {
 	var err error
 	d.Duration, err = time.ParseDuration(string(text))
