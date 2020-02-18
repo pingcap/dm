@@ -224,10 +224,10 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		ctx2, cancel2 := context.WithCancel(ctx)
 		go func() {
 			e.l.Debug("begin to compaign", zap.String("key", e.key))
-			err = elec.Campaign(ctx2, e.infoStr)
-			if err != nil {
+			err2 = elec.Campaign(ctx2, e.infoStr)
+			if err2 != nil {
 				// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
-				e.l.Info("fail to campaign", zap.Error(err))
+				e.l.Info("fail to campaign", zap.Error(err2))
 			}
 		}()
 
