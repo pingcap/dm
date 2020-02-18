@@ -141,7 +141,8 @@ func (t *testScheduler) TestScheduler(c *C) {
 	t.workerNotExist(c, s, workerName1)
 	// add worker1.
 	c.Assert(s.AddWorker(workerName1, workerAddr1), IsNil)
-	c.Assert(terror.ErrSchedulerWorkerExist.Equal(s.AddWorker(workerName1, workerAddr1)), IsTrue) // can't add multiple times.
+	c.Assert(terror.ErrSchedulerWorkerExist.Equal(s.AddWorker(workerName1, workerAddr2)), IsTrue) // can't add with different address now.
+	c.Assert(s.AddWorker(workerName1, workerAddr1), IsNil)                                        // but can add the worker multiple times (like restart the worker).
 	// the worker added.
 	t.workerExist(c, s, workerInfo1)
 	t.workerOffline(c, s, workerName1)

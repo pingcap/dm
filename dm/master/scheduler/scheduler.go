@@ -532,7 +532,14 @@ func (s *Scheduler) AddWorker(name, addr string) error {
 
 	// 1. check whether exists.
 	if w, ok := s.workers[name]; ok {
-		return terror.ErrSchedulerWorkerExist.Generate(w.baseInfo)
+		// NOTE: we do not support add the worker with different address now, support if needed later.
+		// but we support add the worker with all the same information multiple times, and only the first one take effect,
+		// because this is needed when restarting the worker.
+		if addr == w.BaseInfo().Addr {
+			s.logger.Warn("add the same worker again", zap.Stringer("worker info", w.BaseInfo()))
+			return nil
+		}
+		return terror.ErrSchedulerWorkerExist.Generate(w.BaseInfo())
 	}
 
 	// 2. put the base info into etcd.
