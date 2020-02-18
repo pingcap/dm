@@ -93,8 +93,6 @@ type Election struct {
 	cancel context.CancelFunc
 	bgWg   sync.WaitGroup
 
-	haveLeader bool
-
 	l log.Logger
 }
 
@@ -203,6 +201,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		}
 	}()
 
+	haveLeader := false
 	for {
 		// check context canceled/timeout
 		select {
@@ -222,7 +221,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 		// try to campaign
 		elec := concurrency.NewElection(session, e.key)
-		if !e.haveLeader {
+		if !haveLeader {
 			// Campaign will blocks until it is elected, so just compaign 3 seconds, and then get leader info
 			ctx2, cancel2 := context.WithTimeout(ctx, 3*time.Second)
 			err = elec.Campaign(ctx2, e.infoStr)
@@ -238,13 +237,16 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		// compare with the current leader
 		leaderKey, leaderID, _, err := getLeaderInfo(ctx, elec)
 		if err != nil {
+			if errors.Cause(err) == concurrency.ErrElectionNoLeader {
+				haveLeader = false
+			}
 			// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
 			e.l.Warn("fail to get leader ID", zap.Error(err))
 			continue
 		}
 
 		if len(leaderID) != 0 {
-			e.haveLeader = true
+			haveLeader = true
 		}
 		if leaderID != e.info.ID {
 			e.l.Info("current member is not the leader", zap.String("current member", e.info.ID), zap.String("leader", leaderID))
