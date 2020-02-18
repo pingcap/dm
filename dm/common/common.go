@@ -25,20 +25,26 @@ import (
 var (
 	useOfClosedErrMsg = "use of closed network connection"
 	// WorkerRegisterKeyAdapter used to encode and decode register key.
-	// k/v: Encode(addr) -> name
+	// k/v: Encode(name) -> the information of the DM-worker node.
 	WorkerRegisterKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-worker/r/")
 	// WorkerKeepAliveKeyAdapter used to encode and decode keepalive key.
-	// k/v: Encode(addr,name) -> time
+	// k/v: Encode(name) -> time
 	WorkerKeepAliveKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-worker/a/")
 	// UpstreamConfigKeyAdapter store all config of which MySQL-task has not stopped.
 	// k/v: Encode(source-id) -> config
 	UpstreamConfigKeyAdapter KeyAdapter = keyEncoderDecoder("/dm-master/upstream/config/")
 	// UpstreamBoundWorkerKeyAdapter used to store address of worker in which MySQL-tasks which are running.
-	// k/v: Encode(addr) -> source-id
+	// k/v: Encode(name) -> the bound relationship.
 	UpstreamBoundWorkerKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/bound-worker/")
 	// UpstreamSubTaskKeyAdapter used to store SubTask which are subscribing data from MySQL source.
 	// k/v: Encode(source-id, task-name) -> SubTaskConfig
 	UpstreamSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/upstream/subtask/")
+	// StageRelayKeyAdapter used to store the running stage of the relay.
+	// k/v: Encode(source-id) -> the running stage of the relay.
+	StageRelayKeyAdapter KeyAdapter = keyEncoderDecoder("/dm-master/stage/relay/")
+	// StageSubTaskKeyAdapter used to store the running stage of the subtask.
+	// k/v: Encode(source-id, task-name) -> the running stage of the subtask.
+	StageSubTaskKeyAdapter KeyAdapter = keyHexEncoderDecoder("/dm-master/stage/subtask/")
 
 	// ShardDDLPessimismInfoKeyAdapter used to store shard DDL info in pessimistic model.
 	// k/v: Encode(task-name, source-id) -> shard DDL info
@@ -50,9 +56,10 @@ var (
 
 func keyAdapterKeysLen(s KeyAdapter) int {
 	switch s {
-	case WorkerRegisterKeyAdapter, UpstreamConfigKeyAdapter, UpstreamBoundWorkerKeyAdapter:
+	case WorkerRegisterKeyAdapter, UpstreamConfigKeyAdapter, UpstreamBoundWorkerKeyAdapter,
+		WorkerKeepAliveKeyAdapter, StageRelayKeyAdapter:
 		return 1
-	case WorkerKeepAliveKeyAdapter, UpstreamSubTaskKeyAdapter:
+	case UpstreamSubTaskKeyAdapter, StageSubTaskKeyAdapter:
 		return 2
 	}
 	return -1

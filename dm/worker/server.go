@@ -24,8 +24,10 @@ import (
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/binlog"
 	tcontext "github.com/pingcap/dm/pkg/context"
+	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/dm/syncer"
 
 	"github.com/pingcap/errors"
@@ -42,7 +44,7 @@ var (
 	dialTimeout             = 3 * time.Second
 	keepaliveTimeout        = 3 * time.Second
 	keepaliveTime           = 3 * time.Second
-	retryConnectSleepTime   = 2 * time.Second
+	retryConnectSleepTime   = time.Second
 	getMinPosForSubTaskFunc = getMinPosForSubTask
 )
 
@@ -61,10 +63,8 @@ type Server struct {
 	rootLis    net.Listener
 	svr        *grpc.Server
 	worker     *Worker
+	workerErr  error
 	etcdClient *clientv3.Client
-
-	// false: has retried connecting to master again.
-	retryConnectMaster sync2.AtomicBool
 }
 
 // NewServer creates a new Server
@@ -72,7 +72,6 @@ func NewServer(cfg *Config) *Server {
 	s := Server{
 		cfg: cfg,
 	}
-	s.retryConnectMaster.Set(true)
 	s.closed.Set(true) // not start yet
 	return &s
 }
@@ -97,42 +96,39 @@ func (s *Server) Start() error {
 	if err != nil {
 		return err
 	}
+
+	bsm, revBound, err := ha.GetSourceBound(s.etcdClient, s.cfg.Name)
+	if err != nil {
+		// TODO: need retry
+		return err
+	}
+	if bound, ok := bsm[s.cfg.Name]; ok {
+		log.L().Warn("worker has been assigned source before keepalive")
+		err = s.operateSourceBound(bound)
+		if err != nil {
+			s.setWorkerErr(err, true)
+			log.L().Error("fail to operate sourceBound on worker", zap.String("worker", s.cfg.Name),
+				zap.String("source", bound.Source))
+		}
+	}
+	sourceBoundCh := make(chan ha.SourceBound, 10)
+	sourceBoundErrCh := make(chan error, 10)
+	s.wg.Add(2)
+	go func() {
+		defer s.wg.Done()
+		ha.WatchSourceBound(s.ctx, s.etcdClient, s.cfg.Name, revBound+1, sourceBoundCh, sourceBoundErrCh)
+	}()
+	go func() {
+		defer s.wg.Done()
+		s.handleSourceBound(s.ctx, sourceBoundCh, sourceBoundErrCh)
+	}()
+
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
 		// worker keepalive with master
 		// If worker loses connect from master, it would stop all task and try to connect master again.
-		shouldExit := false
-		var err1 error
-		for !shouldExit {
-			shouldExit, err1 = s.KeepAlive()
-			log.L().Warn("keepalive with master goroutine paused", zap.Error(err1))
-			if err1 != nil || !shouldExit {
-				if s.retryConnectMaster.Get() {
-					// Try to connect master again before stop worker
-					s.retryConnectMaster.Set(false)
-				} else {
-					s.Lock()
-					w := s.getWorker(false)
-					if w != nil {
-						s.setWorker(nil, false)
-						s.Unlock()
-						w.Close()
-					} else {
-						s.Unlock()
-					}
-				}
-				select {
-				case <-s.ctx.Done():
-					shouldExit = true
-					break
-				case <-time.After(retryConnectSleepTime):
-					// Try to connect master again
-					break
-				}
-			}
-		}
-		log.L().Info("keepalive with master goroutine exited!")
+		s.KeepAlive()
 	}()
 
 	// create a cmux
@@ -212,6 +208,24 @@ func (s *Server) setWorker(worker *Worker, needLock bool) {
 	s.worker = worker
 }
 
+func (s *Server) getWorkerErr(needLock bool) error {
+	if needLock {
+		s.Lock()
+		defer s.Unlock()
+	}
+	return s.workerErr
+}
+
+func (s *Server) setWorkerErr(workerErr error, needLock bool) {
+	if needLock {
+		s.Lock()
+		defer s.Unlock()
+	}
+	s.workerErr = workerErr
+}
+
+// if sourceID is set to "", worker will be closed directly
+// if sourceID is not "", we will check sourceID with w.cfg.SourceID
 func (s *Server) stopWorker(sourceID string) error {
 	s.Lock()
 	w := s.getWorker(false)
@@ -219,7 +233,7 @@ func (s *Server) stopWorker(sourceID string) error {
 		s.Unlock()
 		return terror.ErrWorkerNoStart
 	}
-	if w.cfg.SourceID != sourceID {
+	if sourceID != "" && w.cfg.SourceID != sourceID {
 		s.Unlock()
 		return terror.ErrWorkerSourceNotMatch
 	}
@@ -249,6 +263,40 @@ func (s *Server) retryWriteEctd(ops ...clientv3.Op) string {
 	}
 }
 
+func (s *Server) handleSourceBound(ctx context.Context, boundCh chan ha.SourceBound, errCh chan error) {
+	for {
+		select {
+		case <-ctx.Done():
+			log.L().Info("worker server is closed, handleSourceBound will quit now")
+			return
+		case bound := <-boundCh:
+			err := s.operateSourceBound(bound)
+			s.setWorkerErr(err, true)
+			if err != nil {
+				// record the reason for operating source bound
+				// TODO: add better metrics
+				log.L().Error("fail to operate sourceBound on worker", zap.String("worker", s.cfg.Name),
+					zap.String("source", bound.Source), zap.Error(err))
+			}
+		case err := <-errCh:
+			// TODO: Deal with err
+			log.L().Error("WatchSourceBound received an error", zap.Error(err))
+		}
+	}
+}
+
+func (s *Server) operateSourceBound(bound ha.SourceBound) error {
+	if bound.IsDeleted {
+		return s.stopWorker(bound.Source)
+	}
+	sourceCfg, _, err := ha.GetSourceCfg(s.etcdClient, bound.Source, bound.Revision)
+	if err != nil {
+		// TODO: need retry
+		return err
+	}
+	return s.startWorker(&sourceCfg)
+}
+
 // StartSubTask implements WorkerServer.StartSubTask
 func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "StartSubTask"), zap.Stringer("payload", req))
@@ -276,14 +324,7 @@ func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) 
 
 	cfg.LogLevel = s.cfg.LogLevel
 	cfg.LogFile = s.cfg.LogFile
-	err = w.StartSubTask(cfg)
-
-	if err != nil {
-		err = terror.Annotatef(err, "start sub task %s", cfg.Name)
-		log.L().Error("fail to start subtask", zap.String("request", "StartSubTask"), zap.Stringer("payload", req), zap.Error(err))
-		resp.Result = false
-		resp.Msg = err.Error()
-	}
+	w.StartSubTask(cfg)
 
 	if resp.Result {
 		op1 := clientv3.OpPut(common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID, cfg.Name), req.Task)
@@ -376,6 +417,9 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 		log.L().Error("fail to call QueryStatus, because mysql worker has not been started")
 		resp.Result = false
 		resp.Msg = terror.ErrWorkerNoStart.Error()
+		if err := s.getWorkerErr(true); err != nil {
+			resp.Msg += "\nlast operate source worker error is: " + err.Error()
+		}
 		return resp, nil
 	}
 
@@ -384,8 +428,8 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 			Detail: []byte("relay is not enabled"),
 		},
 	}
-	if s.worker.relayHolder != nil {
-		relayStatus = s.worker.relayHolder.Status()
+	if w.relayHolder != nil {
+		relayStatus = w.relayHolder.Status()
 	}
 
 	resp.SubTaskStatus = w.QueryStatus(req.Name)
@@ -409,6 +453,9 @@ func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorRequest) (*pb
 		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
 		resp.Result = false
 		resp.Msg = terror.ErrWorkerNoStart.Error()
+		if err := s.getWorkerErr(true); err != nil {
+			resp.Msg += "\nlast operate source worker error is: " + err.Error()
+		}
 		return resp, nil
 	}
 
@@ -568,7 +615,7 @@ func (s *Server) MigrateRelay(ctx context.Context, req *pb.MigrateRelayRequest) 
 	return makeCommonWorkerResponse(err), nil
 }
 
-func (s *Server) startWorker(cfg *config.MysqlConfig) error {
+func (s *Server) startWorker(cfg *config.SourceConfig) error {
 	s.Lock()
 	defer s.Unlock()
 	if w := s.getWorker(false); w != nil {
@@ -580,25 +627,25 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		return terror.ErrWorkerAlreadyStart.Generate()
 	}
 
-	subTaskCfgs := make([]*config.SubTaskConfig, 0, 3)
-
-	ectx, ecancel := context.WithTimeout(s.etcdClient.Ctx(), time.Second*3)
-	defer ecancel()
-	key := common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID)
-	resp, err := s.etcdClient.KV.Get(ectx, key, clientv3.WithPrefix())
+	// we get the newest subtask stages directly which will omit the subtask stage PUT/DELETE event
+	// because triggering these events is useless now
+	subTaskStages, revSubTask, err := ha.GetSubTaskStage(s.etcdClient, cfg.SourceID, "")
 	if err != nil {
+		// TODO: need retry
 		return err
 	}
-	for _, kv := range resp.Kvs {
-		task := string(kv.Value)
-		subTaskcfg := config.NewSubTaskConfig()
-		if err = subTaskcfg.Decode(task); err != nil {
-			return err
-		}
-		subTaskcfg.LogLevel = s.cfg.LogLevel
-		subTaskcfg.LogFile = s.cfg.LogFile
+	subTaskCfgm, _, err := ha.GetSubTaskCfg(s.etcdClient, cfg.SourceID, "", revSubTask)
+	if err != nil {
+		// TODO: need retry
+		return err
+	}
 
-		subTaskCfgs = append(subTaskCfgs, subTaskcfg)
+	subTaskCfgs := make([]*config.SubTaskConfig, 0, len(subTaskCfgm))
+	for _, subTaskCfg := range subTaskCfgm {
+		subTaskCfg.LogLevel = s.cfg.LogLevel
+		subTaskCfg.LogFile = s.cfg.LogFile
+
+		subTaskCfgs = append(subTaskCfgs, &subTaskCfg)
 	}
 
 	dctx, dcancel := context.WithTimeout(s.etcdClient.Ctx(), time.Duration(len(subTaskCfgs))*3*time.Second)
@@ -615,77 +662,80 @@ func (s *Server) startWorker(cfg *config.MysqlConfig) error {
 		cfg.RelayBinlogGTID = ""
 	}
 
-	log.L().Info("start workers", zap.Reflect("subTasks", subTaskCfgs))
+	log.L().Info("start worker", zap.String("sourceCfg", cfg.String()), zap.Reflect("subTasks", subTaskCfgs))
 
 	w, err := NewWorker(cfg, s.etcdClient)
 	if err != nil {
 		return err
 	}
 	s.setWorker(w, false)
-	go func() {
-		w.Start()
-	}()
 
-	// FIXME: worker's closed will be set to false in Start.
-	// when start sub task, will check the `closed`, if closed is true, will ignore start subTask
-	// just sleep and make test success, will refine this later
-	time.Sleep(1 * time.Second)
-
-	for _, subTaskCfg := range subTaskCfgs {
-		if err = w.StartSubTask(subTaskCfg); err != nil {
+	startRelay := false
+	var revRelay int64
+	if cfg.EnableRelay {
+		// TODO: if the sourceID is not changed and relay log is not too old, don't purge relay dir
+		err = w.purgeRelayDir()
+		if err != nil {
 			return err
 		}
+		var relayStage ha.Stage
+		// we get the newest relay stages directly which will omit the relay stage PUT/DELETE event
+		// because triggering these events is useless now
+		relayStage, revRelay, err = ha.GetRelayStage(s.etcdClient, cfg.SourceID)
+		if err != nil {
+			// TODO: need retry
+			return err
+		}
+		startRelay = !relayStage.IsDeleted && relayStage.Expect == pb.Stage_Running
+	}
+	go func() {
+		w.Start(startRelay)
+	}()
+
+	isStarted := utils.WaitSomething(50, 100*time.Millisecond, func() bool {
+		return w.closed.Get() == closedFalse
+	})
+	if !isStarted {
+		// TODO: add more mechanism to wait
+		return terror.ErrWorkerNoStart
+	}
+
+	for _, subTaskCfg := range subTaskCfgs {
+		expectStage := subTaskStages[subTaskCfg.Name]
+		if expectStage.IsDeleted || expectStage.Expect != pb.Stage_Running {
+			continue
+		}
+		w.StartSubTask(subTaskCfg)
 		log.L().Info("load subtask successful", zap.String("sourceID", subTaskCfg.SourceID), zap.String("task", subTaskCfg.Name))
 	}
 
-	return nil
-}
+	subTaskStageCh := make(chan ha.Stage, 10)
+	subTaskErrCh := make(chan error, 10)
+	w.wg.Add(2)
+	go func() {
+		defer w.wg.Done()
+		ha.WatchSubTaskStage(w.ctx, s.etcdClient, cfg.SourceID, revSubTask+1, subTaskStageCh, subTaskErrCh)
+	}()
+	go func() {
+		defer w.wg.Done()
+		w.handleSubTaskStage(w.ctx, subTaskStageCh, subTaskErrCh)
+	}()
 
-// OperateMysqlWorker create a new mysql task which will be running in this Server
-func (s *Server) OperateMysqlWorker(ctx context.Context, req *pb.MysqlWorkerRequest) (*pb.MysqlWorkerResponse, error) {
-	log.L().Info("", zap.String("request", "OperateMysqlWorker"), zap.Stringer("payload", req))
-	resp := &pb.MysqlWorkerResponse{
-		Result: true,
-		Msg:    "Operate mysql task successfully",
+	if cfg.EnableRelay {
+		relayStageCh := make(chan ha.Stage, 10)
+		relayErrCh := make(chan error, 10)
+		w.wg.Add(2)
+		go func() {
+			defer w.wg.Done()
+			ha.WatchRelayStage(w.ctx, s.etcdClient, cfg.SourceID, revRelay+1, relayStageCh, relayErrCh)
+		}()
+		go func() {
+			defer w.wg.Done()
+			w.handleRelayStage(w.ctx, relayStageCh, relayErrCh)
+		}()
 	}
-	cfg := config.NewMysqlConfig()
-	err := cfg.Parse(req.Config)
-	if err != nil {
-		resp.Result = false
-		resp.Msg = errors.ErrorStack(err)
-		return resp, nil
-	}
-	if req.Op == pb.WorkerOp_UpdateConfig {
-		if err = s.stopWorker(cfg.SourceID); err != nil {
-			resp.Result = false
-			resp.Msg = errors.ErrorStack(err)
-			return resp, nil
-		}
-	} else if req.Op == pb.WorkerOp_StopWorker {
-		if err = s.stopWorker(cfg.SourceID); err == terror.ErrWorkerSourceNotMatch {
-			resp.Result = false
-			resp.Msg = errors.ErrorStack(err)
-		}
-	}
-	if resp.Result && (req.Op == pb.WorkerOp_UpdateConfig || req.Op == pb.WorkerOp_StartWorker) {
-		err = s.startWorker(cfg)
-	}
-	if err != nil {
-		resp.Result = false
-		resp.Msg = errors.ErrorStack(err)
-	}
-	if resp.Result {
-		op1 := clientv3.OpPut(common.UpstreamConfigKeyAdapter.Encode(cfg.SourceID), req.Config)
-		op2 := clientv3.OpPut(common.UpstreamBoundWorkerKeyAdapter.Encode(s.cfg.AdvertiseAddr), cfg.SourceID)
-		if req.Op == pb.WorkerOp_StopWorker {
-			op1 = clientv3.OpDelete(common.UpstreamConfigKeyAdapter.Encode(cfg.SourceID))
-			op2 = clientv3.OpDelete(common.UpstreamBoundWorkerKeyAdapter.Encode(s.cfg.AdvertiseAddr))
-		}
-		resp.Msg = s.retryWriteEctd(op1, op2)
-		// Because etcd was deployed with master in a single process, if we can not write data into etcd, most probably
-		// the have lost connect from master.
-	}
-	return resp, nil
+
+	return nil
 }
 
 func makeCommonWorkerResponse(reqErr error) *pb.CommonWorkerResponse {

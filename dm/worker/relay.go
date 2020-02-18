@@ -15,13 +15,13 @@ package worker
 
 import (
 	"context"
-	"github.com/pingcap/dm/dm/config"
 	"sync"
 
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/log"
@@ -53,7 +53,7 @@ type RelayHolder interface {
 	// Result returns the result of the relay
 	Result() *pb.ProcessResult
 	// Update updates relay config online
-	Update(ctx context.Context, cfg *config.MysqlConfig) error
+	Update(ctx context.Context, cfg *config.SourceConfig) error
 	// Migrate resets binlog name and binlog position for relay unit
 	Migrate(ctx context.Context, binlogName string, binlogPos uint32) error
 }
@@ -68,7 +68,7 @@ type realRelayHolder struct {
 	wg sync.WaitGroup
 
 	relay relay.Process
-	cfg   *config.MysqlConfig
+	cfg   *config.SourceConfig
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -81,7 +81,7 @@ type realRelayHolder struct {
 }
 
 // NewRealRelayHolder creates a new RelayHolder
-func NewRealRelayHolder(cfg *config.MysqlConfig) RelayHolder {
+func NewRealRelayHolder(cfg *config.SourceConfig) RelayHolder {
 	clone, _ := cfg.DecryptPassword()
 	relayCfg := &relay.Config{
 		EnableGTID:  clone.EnableGTID,
@@ -321,7 +321,7 @@ func (h *realRelayHolder) Result() *pb.ProcessResult {
 }
 
 // Update update relay config online
-func (h *realRelayHolder) Update(ctx context.Context, cfg *config.MysqlConfig) error {
+func (h *realRelayHolder) Update(ctx context.Context, cfg *config.SourceConfig) error {
 	relayCfg := &relay.Config{
 		AutoFixGTID: cfg.AutoFixGTID,
 		Charset:     cfg.Charset,
@@ -382,20 +382,23 @@ func (h *realRelayHolder) Migrate(ctx context.Context, binlogName string, binlog
 /******************** dummy relay holder ********************/
 
 type dummyRelayHolder struct {
+	sync.RWMutex
 	initError error
+	stage     pb.Stage
 
-	cfg *config.MysqlConfig
+	cfg *config.SourceConfig
 }
 
 // NewDummyRelayHolder creates a new RelayHolder
-func NewDummyRelayHolder(cfg *config.MysqlConfig) RelayHolder {
+func NewDummyRelayHolder(cfg *config.SourceConfig) RelayHolder {
 	return &dummyRelayHolder{
-		cfg: cfg,
+		cfg:   cfg,
+		stage: pb.Stage_New,
 	}
 }
 
 // NewDummyRelayHolderWithInitError creates a new RelayHolder with init error
-func NewDummyRelayHolderWithInitError(cfg *config.MysqlConfig) RelayHolder {
+func NewDummyRelayHolderWithInitError(cfg *config.SourceConfig) RelayHolder {
 	return &dummyRelayHolder{
 		initError: errors.New("init error"),
 		cfg:       cfg,
@@ -413,14 +416,24 @@ func (d *dummyRelayHolder) Init(interceptors []purger.PurgeInterceptor) (purger.
 }
 
 // Start implements interface of RelayHolder
-func (d *dummyRelayHolder) Start() {}
+func (d *dummyRelayHolder) Start() {
+	d.Lock()
+	defer d.Unlock()
+	d.stage = pb.Stage_Running
+}
 
 // Close implements interface of RelayHolder
-func (d *dummyRelayHolder) Close() {}
+func (d *dummyRelayHolder) Close() {
+	d.Lock()
+	defer d.Unlock()
+	d.stage = pb.Stage_Stopped
+}
 
 // Status implements interface of RelayHolder
 func (d *dummyRelayHolder) Status() *pb.RelayStatus {
-	return nil
+	d.Lock()
+	defer d.Unlock()
+	return &pb.RelayStatus{Stage: d.stage}
 }
 
 // Error implements interface of RelayHolder
@@ -435,6 +448,25 @@ func (d *dummyRelayHolder) SwitchMaster(ctx context.Context, req *pb.SwitchRelay
 
 // Operate implements interface of RelayHolder
 func (d *dummyRelayHolder) Operate(ctx context.Context, req *pb.OperateRelayRequest) error {
+	d.Lock()
+	defer d.Unlock()
+	switch req.Op {
+	case pb.RelayOp_PauseRelay:
+		if d.stage != pb.Stage_Running {
+			return terror.ErrWorkerRelayStageNotValid.Generate(d.stage, pb.Stage_Running, req.Op)
+		}
+		d.stage = pb.Stage_Paused
+	case pb.RelayOp_ResumeRelay:
+		if d.stage != pb.Stage_Paused {
+			return terror.ErrWorkerRelayStageNotValid.Generate(d.stage, pb.Stage_Paused, req.Op)
+		}
+		d.stage = pb.Stage_Running
+	case pb.RelayOp_StopRelay:
+		if d.stage == pb.Stage_Stopped {
+			return terror.ErrWorkerRelayStageNotValid.Generatef("current stage is already stopped not valid, relayop %s", req.Op)
+		}
+		d.stage = pb.Stage_Stopped
+	}
 	return nil
 }
 
@@ -444,7 +476,7 @@ func (d *dummyRelayHolder) Result() *pb.ProcessResult {
 }
 
 // Update implements interface of RelayHolder
-func (d *dummyRelayHolder) Update(ctx context.Context, cfg *config.MysqlConfig) error {
+func (d *dummyRelayHolder) Update(ctx context.Context, cfg *config.SourceConfig) error {
 	return nil
 }
 
@@ -458,5 +490,7 @@ func (d *dummyRelayHolder) EarliestActiveRelayLog() *streamer.RelayLogInfo {
 }
 
 func (d *dummyRelayHolder) Stage() pb.Stage {
-	return pb.Stage_Running
+	d.Lock()
+	defer d.Unlock()
+	return d.stage
 }

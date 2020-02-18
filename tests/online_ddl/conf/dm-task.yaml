@@ -4,7 +4,7 @@ task-mode: all
 is-sharding: true
 meta-schema: "dm_meta"
 remove-meta: true
-disable-heartbeat: true
+enable-heartbeat: false
 timezone: "Asia/Shanghai"
 online-ddl-scheme: online-ddl-scheme-placeholder
 

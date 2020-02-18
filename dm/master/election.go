@@ -15,6 +15,7 @@ package master
 
 import (
 	"context"
+
 	"go.uber.org/zap"
 	"time"
 
@@ -38,12 +39,9 @@ func (s *Server) electionNotify(ctx context.Context) {
 			switch notify {
 			case election.IsLeader:
 				log.L().Info("current member become the leader", zap.String("current member", s.cfg.Name))
-				err := s.coordinator.Start(ctx, s.etcdClient)
+				err := s.scheduler.Start(ctx, s.etcdClient)
 				if err != nil {
-					log.L().Error("coordinator do not started", zap.Error(err))
-				}
-				if err = s.recoverSubTask(); err != nil {
-					log.L().Error("recover subtask infos from coordinator fail", zap.Error(err))
+					log.L().Error("scheduler do not started", zap.Error(err))
 				}
 
 				s.Lock()
@@ -52,7 +50,7 @@ func (s *Server) electionNotify(ctx context.Context) {
 				s.Unlock()
 			case election.RetireFromLeader, election.IsNotLeader:
 				if notify == election.RetireFromLeader {
-					s.coordinator.Stop()
+					s.scheduler.Close()
 				}
 
 				leader, leaderID, leaderAddr, err2 := s.election.LeaderInfo(ctx)

@@ -17,7 +17,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/pingcap/dm/dm/config"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +25,7 @@ import (
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/backoff"
 	"github.com/pingcap/dm/pkg/log"

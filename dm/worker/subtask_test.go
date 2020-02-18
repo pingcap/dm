@@ -27,6 +27,7 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
+	"go.etcd.io/etcd/clientv3"
 )
 
 type testSubTask struct{}
@@ -115,7 +116,20 @@ func (m *MockUnit) Update(cfg *config.SubTaskConfig) error {
 	return m.errUpdate
 }
 
-func (m *MockUnit) Status() interface{} { return nil }
+func (m *MockUnit) Status() interface{} {
+	switch m.typ {
+	case pb.UnitType_Check:
+		return &pb.CheckStatus{}
+	case pb.UnitType_Dump:
+		return &pb.DumpStatus{}
+	case pb.UnitType_Load:
+		return &pb.LoadStatus{}
+	case pb.UnitType_Sync:
+		return &pb.SyncStatus{}
+	default:
+		return struct{}{}
+	}
+}
 
 func (m *MockUnit) Error() interface{} { return nil }
 
@@ -152,14 +166,21 @@ func (t *testSubTask) TestSubTaskNormalUsage(c *C) {
 	c.Assert(st.Stage(), DeepEquals, pb.Stage_New)
 
 	// test empty and fail
-	st.units = nil
+	defer func() {
+		createUnits = createRealUnits
+	}()
+	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
+		return nil
+	}
 	st.Run()
 	c.Assert(st.Stage(), Equals, pb.Stage_Paused)
 	c.Assert(strings.Contains(st.Result().Errors[0].Msg, "has no dm units for mode"), IsTrue)
 
 	mockDumper := NewMockUnit(pb.UnitType_Dump)
 	mockLoader := NewMockUnit(pb.UnitType_Load)
-	st.units = []unit.Unit{mockDumper, mockLoader}
+	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
+		return []unit.Unit{mockDumper, mockLoader}
+	}
 
 	st.Run()
 	c.Assert(st.Stage(), Equals, pb.Stage_Running)
@@ -266,7 +287,12 @@ func (t *testSubTask) TestPauseAndResumeSubtask(c *C) {
 
 	mockDumper := NewMockUnit(pb.UnitType_Dump)
 	mockLoader := NewMockUnit(pb.UnitType_Load)
-	st.units = []unit.Unit{mockDumper, mockLoader}
+	defer func() {
+		createUnits = createRealUnits
+	}()
+	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
+		return []unit.Unit{mockDumper, mockLoader}
+	}
 
 	st.Run()
 	c.Assert(st.Stage(), Equals, pb.Stage_Running)
@@ -403,7 +429,12 @@ func (t *testSubTask) TestSubtaskWithStage(c *C) {
 
 	mockDumper := NewMockUnit(pb.UnitType_Dump)
 	mockLoader := NewMockUnit(pb.UnitType_Load)
-	st.units = []unit.Unit{mockDumper, mockLoader}
+	defer func() {
+		createUnits = createRealUnits
+	}()
+	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
+		return []unit.Unit{mockDumper, mockLoader}
+	}
 
 	// pause
 	c.Assert(st.Pause(), NotNil)
@@ -427,7 +458,9 @@ func (t *testSubTask) TestSubtaskWithStage(c *C) {
 
 	st = NewSubTaskWithStage(cfg, pb.Stage_Finished, nil)
 	c.Assert(st.Stage(), DeepEquals, pb.Stage_Finished)
-	st.units = []unit.Unit{mockDumper, mockLoader}
+	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
+		return []unit.Unit{mockDumper, mockLoader}
+	}
 
 	// close again
 	st.Close()

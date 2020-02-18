@@ -39,9 +39,9 @@ func (t *testCommon) TestKeyAdapter(c *C) {
 			want:    "/dm-worker/r/3132372e302e302e313a32333832",
 		},
 		{
-			keys:    []string{"127.0.0.1:2382", "worker1"},
+			keys:    []string{"worker1"},
 			adapter: WorkerKeepAliveKeyAdapter,
-			want:    "/dm-worker/a/3132372e302e302e313a32333832/776f726b657231",
+			want:    "/dm-worker/a/776f726b657231",
 		},
 		{
 			keys:    []string{"mysql1"},

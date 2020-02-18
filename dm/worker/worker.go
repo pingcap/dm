@@ -16,6 +16,8 @@ package worker
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -26,6 +28,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
@@ -49,7 +52,7 @@ type Worker struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	cfg *config.MysqlConfig
+	cfg *config.SourceConfig
 	l   log.Logger
 
 	subTaskHolder *subTaskHolder
@@ -66,7 +69,7 @@ type Worker struct {
 }
 
 // NewWorker creates a new Worker
-func NewWorker(cfg *config.MysqlConfig, etcdClient *clientv3.Client) (w *Worker, err error) {
+func NewWorker(cfg *config.SourceConfig, etcdClient *clientv3.Client) (w *Worker, err error) {
 	w = &Worker{
 		cfg:           cfg,
 		tracer:        tracing.InitTracerHub(cfg.Tracer),
@@ -115,9 +118,10 @@ func NewWorker(cfg *config.MysqlConfig, etcdClient *clientv3.Client) (w *Worker,
 }
 
 // Start starts working
-func (w *Worker) Start() {
+func (w *Worker) Start(startRelay bool) {
 
-	if w.cfg.EnableRelay {
+	if w.cfg.EnableRelay && startRelay {
+		log.L().Info("relay is started")
 		// start relay
 		w.relayHolder.Start()
 
@@ -196,34 +200,28 @@ func (w *Worker) Close() {
 }
 
 // StartSubTask creates a sub task an run it
-func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) error {
+func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) {
 	w.Lock()
 	defer w.Unlock()
 
+	// copy some config item from dm-worker's config
+	w.copyConfigFromWorker(cfg)
+	// directly put cfg into subTaskHolder
+	// the unique of subtask should be assured by etcd
+	st := NewSubTask(cfg, w.etcdClient)
+	w.subTaskHolder.recordSubTask(st)
 	if w.closed.Get() == closedTrue {
-		return terror.ErrWorkerAlreadyClosed.Generate()
+		st.fail(terror.ErrWorkerAlreadyClosed.Generate())
+		return
 	}
 
 	if w.relayPurger != nil && w.relayPurger.Purging() {
-		return terror.ErrWorkerRelayIsPurging.Generate(cfg.Name)
+		st.fail(terror.ErrWorkerRelayIsPurging.Generate(cfg.Name))
+		return
 	}
 
-	if w.subTaskHolder.findSubTask(cfg.Name) != nil {
-		return terror.ErrWorkerSubTaskExists.Generate(cfg.Name)
-	}
-
-	// copy some config item from dm-worker's config
-	w.copyConfigFromWorker(cfg)
-	cfgDecrypted, err := cfg.DecryptPassword()
-	if err != nil {
-		return terror.WithClass(err, terror.ClassDMWorker)
-	}
-
-	w.l.Info("started sub task", zap.Stringer("config", cfgDecrypted))
-	st := NewSubTask(cfgDecrypted, w.etcdClient)
-	w.subTaskHolder.recordSubTask(st)
+	w.l.Info("started sub task", zap.Stringer("config", cfg))
 	st.Run()
-	return nil
 }
 
 // UpdateSubTask update config for a sub task
@@ -306,6 +304,113 @@ func (w *Worker) QueryError(name string) []*pb.SubTaskError {
 	return w.Error(name)
 }
 
+// purgeRelayDir will clear all contents under w.cfg.RelayDir
+func (w *Worker) purgeRelayDir() error {
+	if !w.cfg.EnableRelay {
+		return nil
+	}
+	dir := w.cfg.RelayDir
+	d, err := os.Open(dir)
+	// fail to open dir, return directly
+	if err != nil {
+		if err == os.ErrNotExist {
+			return nil
+		}
+		return err
+	}
+	defer d.Close()
+	names, err := d.Readdirnames(-1)
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		err = os.RemoveAll(filepath.Join(dir, name))
+		if err != nil {
+			return err
+		}
+	}
+	log.L().Info("relay dir is purged to be ready for new relay log", zap.String("relayDir", dir))
+	return nil
+}
+
+func (w *Worker) handleSubTaskStage(ctx context.Context, stageCh chan ha.Stage, errCh chan error) {
+	for {
+		select {
+		case <-ctx.Done():
+			log.L().Info("worker is closed, handleSubTaskStage will quit now")
+			return
+		case stage := <-stageCh:
+			err := w.operateSubTaskStage(stage)
+			if err != nil {
+				// TODO: add better metrics
+				log.L().Error("fail to operate subtask stage", zap.Stringer("stage", stage), zap.Error(err))
+			}
+		case err := <-errCh:
+			// TODO: deal with err
+			log.L().Error("WatchSubTaskStage received an error", zap.Error(err))
+		}
+	}
+}
+
+func (w *Worker) operateSubTaskStage(stage ha.Stage) error {
+	var op pb.TaskOp
+	switch {
+	case stage.Expect == pb.Stage_Running:
+		if st := w.subTaskHolder.findSubTask(stage.Task); st == nil {
+			tsm, _, err := ha.GetSubTaskCfg(w.etcdClient, stage.Source, stage.Task, stage.Revision)
+			if err != nil {
+				// TODO: need retry
+				return terror.Annotate(err, "fail to get subtask config from etcd")
+			}
+			subTaskCfg := tsm[stage.Task]
+			w.StartSubTask(&subTaskCfg)
+			return nil
+		}
+		op = pb.TaskOp_Resume
+	case stage.Expect == pb.Stage_Paused:
+		op = pb.TaskOp_Pause
+	case stage.IsDeleted:
+		op = pb.TaskOp_Stop
+	}
+	return w.OperateSubTask(stage.Task, op)
+}
+
+func (w *Worker) handleRelayStage(ctx context.Context, stageCh chan ha.Stage, errCh chan error) {
+	for {
+		select {
+		case <-ctx.Done():
+			log.L().Info("worker is closed, handleRelayStage will quit now")
+			return
+		case stage := <-stageCh:
+			err := w.operateRelayStage(ctx, stage)
+			if err != nil {
+				// TODO: add better metrics
+				log.L().Error("fail to operate relay", zap.Stringer("stage", stage), zap.Error(err))
+			}
+		case err := <-errCh:
+			log.L().Error("WatchRelayStage received an error", zap.Error(err))
+		}
+	}
+}
+
+func (w *Worker) operateRelayStage(ctx context.Context, stage ha.Stage) error {
+	var op pb.RelayOp
+	switch {
+	case stage.Expect == pb.Stage_Running:
+		if w.relayHolder.Stage() == pb.Stage_New {
+			w.relayHolder.Start()
+			w.relayPurger.Start()
+			return nil
+		}
+		op = pb.RelayOp_ResumeRelay
+	case stage.Expect == pb.Stage_Paused:
+		op = pb.RelayOp_PauseRelay
+	case stage.IsDeleted:
+		op = pb.RelayOp_StopRelay
+	}
+	return w.OperateRelay(ctx, &pb.OperateRelayRequest{Op: op})
+}
+
 // HandleSQLs implements Handler.HandleSQLs.
 func (w *Worker) HandleSQLs(ctx context.Context, req *pb.HandleSubTaskSQLsRequest) error {
 	if w.closed.Get() == closedTrue {
@@ -381,7 +486,7 @@ func (w *Worker) ForbidPurge() (bool, string) {
 }
 
 // QueryConfig returns worker's config
-func (w *Worker) QueryConfig(ctx context.Context) (*config.MysqlConfig, error) {
+func (w *Worker) QueryConfig(ctx context.Context) (*config.SourceConfig, error) {
 	w.RLock()
 	defer w.RUnlock()
 
@@ -420,7 +525,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	}
 
 	// No need to store config in local
-	newCfg := &config.MysqlConfig{}
+	newCfg := &config.SourceConfig{}
 
 	err := newCfg.Parse(content)
 	if err != nil {

@@ -58,8 +58,8 @@ service Master {
     // CheckTask checks legality of task configuration
     rpc CheckTask(CheckTaskRequest) returns (CheckTaskResponse) {}
 
-    // Operate mysql-worker for server
-    rpc OperateMysqlWorker(MysqlWorkerRequest) returns (MysqlWorkerResponse) {}
+    // Operate an upstream MySQL source.
+    rpc OperateSource(OperateSourceRequest) returns (OperateSourceResponse) {}
 
     // RegisterWorker register the dm-workers.
     rpc RegisterWorker(RegisterWorkerRequest) returns(RegisterWorkerResponse) {}
@@ -292,6 +292,23 @@ message CheckTaskRequest {
 }
 
 message CheckTaskResponse {
+    bool result = 1;
+    string msg = 2;
+}
+
+enum SourceOp {
+    InvalidSourceOp = 0;
+    StartSource = 1;
+    UpdateSource = 2;
+    StopSource = 3;
+}
+
+message OperateSourceRequest {
+    SourceOp op = 1;
+    string config = 2;
+}
+
+message OperateSourceResponse {
     bool result = 1;
     string msg = 2;
 }

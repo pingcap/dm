@@ -20,16 +20,17 @@ import (
 	"io/ioutil"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go-mysql/mysql"
 )
 
-const mysqlTomlPath = "../worker/dm-mysql.toml"
+const mysqlTomlPath = "../worker/source.toml"
 
 func (t *testConfig) TestConfig(c *C) {
-	cfg := &MysqlConfig{}
+	cfg := &SourceConfig{}
 
 	c.Assert(cfg.LoadFromFile(mysqlTomlPath), IsNil)
 	cfg.RelayDir = "./xx"
@@ -73,6 +74,19 @@ func (t *testConfig) TestConfig(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(clone3, DeepEquals, cfg)
 
+	// test toml and parse again
+	clone4 := cfg.Clone()
+	clone4.Checker.CheckEnable = true
+	clone4.Checker.BackoffRollback = Duration{time.Minute * 5}
+	clone4.Checker.BackoffMax = Duration{time.Minute * 5}
+	clone4toml, err := clone4.Toml()
+	c.Assert(err, IsNil)
+	c.Assert(clone4toml, Matches, "(.|\n)*backoff-rollback = \"5m(.|\n)*")
+	c.Assert(clone4toml, Matches, "(.|\n)*backoff-max = \"5m(.|\n)*")
+	clone5 := SourceConfig{}
+	c.Assert(clone5.Parse(clone4toml), IsNil)
+	c.Assert(clone5, DeepEquals, *clone4)
+
 	// test invalid config
 	dir2 := c.MkDir()
 	configFile := path.Join(dir2, "dm-worker-invalid.toml")
@@ -88,24 +102,24 @@ aaa = "xxx"
 }
 
 func (t *testConfig) TestConfigVerify(c *C) {
-	newConfig := func() *MysqlConfig {
-		cfg := &MysqlConfig{}
+	newConfig := func() *SourceConfig {
+		cfg := &SourceConfig{}
 		c.Assert(cfg.LoadFromFile(mysqlTomlPath), IsNil)
 		cfg.RelayDir = "./xx"
 		return cfg
 	}
 	testCases := []struct {
-		genFunc     func() *MysqlConfig
+		genFunc     func() *SourceConfig
 		errorFormat string
 	}{
 		{
-			func() *MysqlConfig {
+			func() *SourceConfig {
 				return newConfig()
 			},
 			"",
 		},
 		{
-			func() *MysqlConfig {
+			func() *SourceConfig {
 				cfg := newConfig()
 				cfg.SourceID = ""
 				return cfg
@@ -113,7 +127,7 @@ func (t *testConfig) TestConfigVerify(c *C) {
 			".*dm-worker should bind a non-empty source ID which represents a MySQL/MariaDB instance or a replica group.*",
 		},
 		{
-			func() *MysqlConfig {
+			func() *SourceConfig {
 				cfg := newConfig()
 				cfg.SourceID = "source-id-length-more-than-thirty-two"
 				return cfg
@@ -121,7 +135,7 @@ func (t *testConfig) TestConfigVerify(c *C) {
 			fmt.Sprintf(".*the length of source ID .* is more than max allowed value %d", MaxSourceIDLength),
 		},
 		{
-			func() *MysqlConfig {
+			func() *SourceConfig {
 				cfg := newConfig()
 				cfg.EnableRelay = true
 				cfg.RelayBinLogName = "mysql-binlog"
@@ -130,7 +144,7 @@ func (t *testConfig) TestConfigVerify(c *C) {
 			".*not valid.*",
 		},
 		{
-			func() *MysqlConfig {
+			func() *SourceConfig {
 				cfg := newConfig()
 				cfg.RelayBinLogName = "mysql-binlog"
 				return cfg
@@ -138,7 +152,7 @@ func (t *testConfig) TestConfigVerify(c *C) {
 			"",
 		},
 		{
-			func() *MysqlConfig {
+			func() *SourceConfig {
 				cfg := newConfig()
 				cfg.EnableRelay = true
 				cfg.RelayBinlogGTID = "9afe121c-40c2-11e9-9ec7-0242ac110002:1-rtc"
@@ -147,7 +161,7 @@ func (t *testConfig) TestConfigVerify(c *C) {
 			".*relay-binlog-gtid 9afe121c-40c2-11e9-9ec7-0242ac110002:1-rtc:.*",
 		},
 		{
-			func() *MysqlConfig {
+			func() *SourceConfig {
 				cfg := newConfig()
 				cfg.From.Password = "not-encrypt"
 				return cfg
@@ -170,7 +184,7 @@ func (t *testConfig) TestConfigVerify(c *C) {
 
 }
 
-func subtestFlavor(c *C, cfg *MysqlConfig, sqlInfo, expectedFlavor, expectedError string) {
+func subtestFlavor(c *C, cfg *SourceConfig, sqlInfo, expectedFlavor, expectedError string) {
 	cfg.Flavor = ""
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
@@ -189,7 +203,7 @@ func subtestFlavor(c *C, cfg *MysqlConfig, sqlInfo, expectedFlavor, expectedErro
 }
 
 func (t *testConfig) TestAdjustFlavor(c *C) {
-	cfg := &MysqlConfig{}
+	cfg := &SourceConfig{}
 	c.Assert(cfg.LoadFromFile(mysqlTomlPath), IsNil)
 	cfg.RelayDir = "./xx"
 
@@ -212,7 +226,7 @@ func (t *testConfig) TestAdjustServerID(c *C) {
 	}()
 	getAllServerIDFunc = getMockServerIDs
 
-	cfg := &MysqlConfig{}
+	cfg := &SourceConfig{}
 	c.Assert(cfg.LoadFromFile(mysqlTomlPath), IsNil)
 	cfg.RelayDir = "./xx"
 

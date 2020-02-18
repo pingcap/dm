@@ -26,10 +26,10 @@ function run() {
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     # operate mysql config to worker
-    cp $cur/conf/mysql1.toml $WORK_DIR/mysql1.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/mysql1.toml
+    cp $cur/conf/source1.toml $WORK_DIR/source1.toml
+    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-worker create $WORK_DIR/mysql1.toml" \
+        "operate-source create $WORK_DIR/source1.toml" \
         "true" 1
 
     echo "start task and check stage"
@@ -38,11 +38,12 @@ function run() {
     rm $WORK_DIR/task.yaml.bak
     echo $task_data
 
-    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test-task "task test-task has no workers or not exist" 3
+    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test-task "task test-task has no source or not exist" 3
 
     curl -X POST 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/tasks -d '{"task": "'"$task_data"'"}' > $WORK_DIR/start-task.log
     check_log_contains $WORK_DIR/start-task.log "\"result\":true" 1
 
+	sleep 1
     curl -X GET 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test > $WORK_DIR/status.log
     check_log_contains $WORK_DIR/status.log "\"stage\":\"Running\"" 1
     check_log_contains $WORK_DIR/status.log "\"name\":\"test\"" 1
@@ -51,6 +52,7 @@ function run() {
     curl -X PUT 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/tasks/test -d '{ "op": 2 }' > $WORK_DIR/pause.log
     check_log_contains $WORK_DIR/pause.log "\"op\":\"Pause\"" 1
 
+	sleep 1
     curl -X GET 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test > $WORK_DIR/status.log
     check_log_contains $WORK_DIR/status.log "\"stage\":\"Paused\"" 1
     check_log_contains $WORK_DIR/status.log "\"name\":\"test\"" 1
@@ -59,6 +61,7 @@ function run() {
     curl -X PUT 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/tasks/test -d '{ "op": 3 }' > $WORK_DIR/resume.log
     check_log_contains $WORK_DIR/resume.log "\"op\":\"Resume\"" 1
 
+	sleep 1
     curl -X GET 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test > $WORK_DIR/status.log
     check_log_contains $WORK_DIR/status.log "\"stage\":\"Running\"" 1
     check_log_contains $WORK_DIR/status.log "\"name\":\"test\"" 1

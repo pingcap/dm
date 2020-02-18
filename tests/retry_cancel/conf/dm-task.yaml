@@ -1,7 +1,7 @@
 ---
 name: test
 task-mode: all
-enable-heartbeat: true
+# enable-heartbeat: true
 timezone: "Asia/Shanghai"
 
 target-database:

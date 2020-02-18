@@ -15,7 +15,6 @@ package worker
 
 import (
 	"context"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -29,13 +28,16 @@ import (
 	"go.etcd.io/etcd/embed"
 	"google.golang.org/grpc"
 
-	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/dm/unit"
+	"github.com/pingcap/dm/pkg/ha"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
 )
+
+var mysqlCfgDir = "./source.toml"
 
 func TestServer(t *testing.T) {
 	TestingT(t)
@@ -94,6 +96,23 @@ func (t *testServer) TestServer(c *C) {
 	defer func() {
 		NewRelayHolder = NewRealRelayHolder
 	}()
+	NewSubTask = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) *SubTask {
+		cfg.UseRelay = false
+		return NewRealSubTask(cfg, etcdClient)
+	}
+	defer func() {
+		NewSubTask = NewRealSubTask
+	}()
+
+	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
+		mockDumper := NewMockUnit(pb.UnitType_Dump)
+		mockLoader := NewMockUnit(pb.UnitType_Load)
+		mockSync := NewMockUnit(pb.UnitType_Sync)
+		return []unit.Unit{mockDumper, mockLoader, mockSync}
+	}
+	defer func() {
+		createUnits = createRealUnits
+	}()
 
 	s := NewServer(cfg)
 	go func() {
@@ -106,18 +125,14 @@ func (t *testServer) TestServer(c *C) {
 		return !s.closed.Get()
 	}), IsTrue)
 	dir := c.MkDir()
-	t.testOperateWorker(c, s, dir, true)
 
-	// check infos have be written into ETCD success.
-	t.testInfosInEtcd(c, hostName, cfg.AdvertiseAddr, dir)
+	t.testOperateWorker(c, s, dir, true)
 
 	// check worker would retry connecting master rather than stop worker directly.
 	ETCD = t.testRetryConnectMaster(c, s, ETCD, etcdDir, hostName)
 
-	mysqlCfg := &config.MysqlConfig{}
-	c.Assert(mysqlCfg.LoadFromFile("./dm-mysql.toml"), IsNil)
-	err = s.startWorker(mysqlCfg)
-	c.Assert(err, IsNil)
+	// resume contact with ETCD and start worker again
+	t.testOperateWorker(c, s, dir, true)
 
 	// test condition hub
 	t.testConidtionHub(c, s)
@@ -129,37 +144,54 @@ func (t *testServer) TestServer(c *C) {
 	cli := t.createClient(c, "127.0.0.1:8262")
 
 	// start task
-	subtaskCfgBytes, err := ioutil.ReadFile("./subtask.toml")
+	subtaskCfg := config.SubTaskConfig{}
+	err = subtaskCfg.DecodeFile("./subtask.toml")
 	c.Assert(err, IsNil)
 
-	resp1, err := cli.StartSubTask(context.Background(), &pb.StartSubTaskRequest{
-		Task: string(subtaskCfgBytes),
-	})
+	sourceCfg := loadSourceConfigWithoutPassword(c)
+	subtaskCfg.MydumperPath = "../../bin/mydumper"
+	_, err = ha.PutSubTaskCfg(s.etcdClient, subtaskCfg)
 	c.Assert(err, IsNil)
-	c.Assert(resp1.Result, IsTrue)
-
-	status, err := cli.QueryStatus(context.Background(), &pb.QueryStatusRequest{Name: "sub-task-name"})
+	_, err = ha.PutSubTaskCfgStage(s.etcdClient, []config.SubTaskConfig{subtaskCfg},
+		[]ha.Stage{ha.NewSubTaskStage(pb.Stage_Running, sourceCfg.SourceID, subtaskCfg.Name)})
 	c.Assert(err, IsNil)
-	c.Assert(status.Result, IsTrue)
-	c.Assert(status.SubTaskStatus[0].Stage, Equals, pb.Stage_Paused) //  because of `Access denied`
 
-	t.testSubTaskRecover(c, s, dir, hostName, string(subtaskCfgBytes))
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		return checkSubTaskStatus(cli, pb.Stage_Running)
+	}), IsTrue)
 
-	// update task
-	resp2, err := cli.UpdateSubTask(context.Background(), &pb.UpdateSubTaskRequest{
-		Task: string(subtaskCfgBytes),
-	})
+	t.testSubTaskRecover(c, s, dir)
+
+	// pause relay
+	_, err = ha.PutRelayStage(s.etcdClient, ha.NewRelayStage(pb.Stage_Paused, sourceCfg.SourceID))
 	c.Assert(err, IsNil)
-	c.Assert(resp2.Result, IsTrue)
-
-	// operate task
-	resp3, err := cli.OperateSubTask(context.Background(), &pb.OperateSubTaskRequest{
-		Name: "sub-task-name",
-		Op:   pb.TaskOp_Pause,
-	})
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		return checkRelayStatus(cli, pb.Stage_Paused)
+	}), IsTrue)
+	// resume relay
+	_, err = ha.PutRelayStage(s.etcdClient, ha.NewRelayStage(pb.Stage_Running, sourceCfg.SourceID))
 	c.Assert(err, IsNil)
-	c.Assert(resp3.Result, IsFalse)
-	c.Assert(resp3.Msg, Matches, ".*current stage is not running.*")
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		return checkRelayStatus(cli, pb.Stage_Running)
+	}), IsTrue)
+	// pause task
+	_, err = ha.PutSubTaskStage(s.etcdClient, ha.NewSubTaskStage(pb.Stage_Paused, sourceCfg.SourceID, subtaskCfg.Name))
+	c.Assert(err, IsNil)
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		return checkSubTaskStatus(cli, pb.Stage_Paused)
+	}), IsTrue)
+	// resume task
+	_, err = ha.PutSubTaskStage(s.etcdClient, ha.NewSubTaskStage(pb.Stage_Running, sourceCfg.SourceID, subtaskCfg.Name))
+	c.Assert(err, IsNil)
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		return checkSubTaskStatus(cli, pb.Stage_Running)
+	}), IsTrue)
+	// stop task
+	_, err = ha.DeleteSubTaskStage(s.etcdClient, ha.NewSubTaskStage(pb.Stage_Stopped, sourceCfg.SourceID, subtaskCfg.Name))
+	c.Assert(err, IsNil)
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+		return s.getWorker(true).subTaskHolder.findSubTask(subtaskCfg.Name) == nil
+	}), IsTrue)
 
 	dupServer := NewServer(cfg)
 	err = dupServer.Start()
@@ -194,146 +226,73 @@ func (t *testServer) createClient(c *C, addr string) pb.WorkerClient {
 }
 
 func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) {
-	workerCfg := &config.MysqlConfig{}
-	err := workerCfg.LoadFromFile("./dm-mysql.toml")
-	c.Assert(err, IsNil)
-	workerCfg.RelayDir = dir
-	workerCfg.MetaDir = dir
-	cli := t.createClient(c, "127.0.0.1:8262")
-	task, err := workerCfg.Toml()
-	c.Assert(err, IsNil)
-	req := &pb.MysqlWorkerRequest{
-		Op:     pb.WorkerOp_UpdateConfig,
-		Config: task,
-	}
+	// load sourceCfg
+	sourceCfg := loadSourceConfigWithoutPassword(c)
+	sourceCfg.EnableRelay = true
+	sourceCfg.RelayDir = dir
+	sourceCfg.MetaDir = c.MkDir()
+
 	if start {
-		resp, err := cli.OperateMysqlWorker(context.Background(), req)
+		// put mysql config into relative etcd key adapter to trigger operation event
+		_, err := ha.PutSourceCfg(s.etcdClient, sourceCfg)
 		c.Assert(err, IsNil)
-		c.Assert(resp.Result, Equals, false)
-		c.Assert(resp.Msg, Matches, ".*worker has not started.*")
-		req.Op = pb.WorkerOp_StartWorker
-		resp, err = cli.OperateMysqlWorker(context.Background(), req)
+		_, err = ha.PutRelayStageSourceBound(s.etcdClient, ha.NewRelayStage(pb.Stage_Running, sourceCfg.SourceID),
+			ha.NewSourceBound(sourceCfg.SourceID, s.cfg.Name))
 		c.Assert(err, IsNil)
-		fmt.Println(resp.Msg)
-		c.Assert(resp.Result, Equals, true)
-
-		req.Op = pb.WorkerOp_UpdateConfig
-		resp, err = cli.OperateMysqlWorker(context.Background(), req)
-		c.Assert(err, IsNil)
-		c.Assert(resp.Result, Equals, true)
-		c.Assert(s.getWorker(true), NotNil)
+		// worker should be started and without error
+		c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+			w := s.getWorker(true)
+			return w != nil && w.closed.Get() == closedFalse
+		}), IsTrue)
+		c.Assert(s.getWorkerErr(true), IsNil)
 	} else {
-		req.Op = pb.WorkerOp_StopWorker
-		resp, err := cli.OperateMysqlWorker(context.Background(), req)
+		// worker should be started before stopped
+		w := s.getWorker(true)
+		c.Assert(w, NotNil)
+		c.Assert(w.closed.Get() == closedFalse, IsTrue)
+		_, err := ha.DeleteSourceCfgRelayStageSourceBound(s.etcdClient, sourceCfg.SourceID, s.cfg.Name)
 		c.Assert(err, IsNil)
-		c.Assert(resp.Result, Equals, true)
+		// worker should be started and without error
+		c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
+			currentWorker := s.getWorker(true)
+			return currentWorker == nil && w.closed.Get() == closedTrue
+		}), IsTrue)
+		c.Assert(s.getWorkerErr(true), IsNil)
 	}
-}
-
-func (t *testServer) testInfosInEtcd(c *C, hostName string, workerAddr string, dir string) {
-	cli, err := clientv3.New(clientv3.Config{
-		Endpoints:            GetJoinURLs(hostName),
-		DialTimeout:          dialTimeout,
-		DialKeepAliveTime:    keepaliveTime,
-		DialKeepAliveTimeout: keepaliveTimeout,
-	})
-	c.Assert(err, IsNil)
-	cfg := &config.MysqlConfig{}
-	err = cfg.LoadFromFile("./dm-mysql.toml")
-	cfg.RelayDir = dir
-	cfg.MetaDir = dir
-
-	c.Assert(err, IsNil)
-	task, err := cfg.Toml()
-	c.Assert(err, IsNil)
-
-	resp, err := cli.Get(context.Background(), common.UpstreamConfigKeyAdapter.Encode(cfg.SourceID))
-	c.Assert(err, IsNil)
-	c.Assert(len(resp.Kvs), Equals, 1)
-	c.Assert(string(resp.Kvs[0].Value), Equals, task)
-
-	resp, err = cli.Get(context.Background(), common.UpstreamBoundWorkerKeyAdapter.Encode(workerAddr))
-	c.Assert(err, IsNil)
-	c.Assert(len(resp.Kvs), Equals, 1)
-	c.Assert(string(resp.Kvs[0].Value), Equals, cfg.SourceID)
 }
 
 func (t *testServer) testRetryConnectMaster(c *C, s *Server, ETCD *embed.Etcd, dir string, hostName string) *embed.Etcd {
 	ETCD.Close()
 	time.Sleep(4 * time.Second)
-	c.Assert(s.getWorker(true), NotNil)
-	// retryConnectMaster is false means that this worker has been tried to connect to master again.
-	c.Assert(s.retryConnectMaster.Get(), IsFalse)
+	// When worker server fail to keepalive with etcd, sever should close its worker
+	c.Assert(s.getWorker(true), IsNil)
+	c.Assert(s.getWorkerErr(true), IsNil)
 	ETCD, err := createMockETCD(dir, "host://"+hostName)
 	c.Assert(err, IsNil)
 	time.Sleep(3 * time.Second)
 	return ETCD
 }
 
-func (t *testServer) testSubTaskRecover(c *C, s *Server, dir string, hostName string, subCfgStr string) {
-	cfg := &config.MysqlConfig{}
-	err := cfg.LoadFromFile("./dm-mysql.toml")
-	c.Assert(err, IsNil)
-	cfg.RelayDir = dir
-	cfg.MetaDir = dir
-	cli, err := clientv3.New(clientv3.Config{
-		Endpoints:            GetJoinURLs(hostName),
-		DialTimeout:          dialTimeout,
-		DialKeepAliveTime:    keepaliveTime,
-		DialKeepAliveTimeout: keepaliveTimeout,
-	})
-	c.Assert(err, IsNil)
-
-	subCfg := config.NewSubTaskConfig()
-	err = subCfg.Decode(subCfgStr)
-	c.Assert(err, IsNil)
-	c.Assert(cfg.SourceID, Equals, subCfg.SourceID)
-
-	{
-		resp, err := cli.Get(context.Background(), common.UpstreamSubTaskKeyAdapter.Encode(cfg.SourceID), clientv3.WithPrefix())
-		c.Assert(err, IsNil)
-		c.Assert(len(resp.Kvs), Equals, 1)
-		infos, err := common.UpstreamSubTaskKeyAdapter.Decode(string(resp.Kvs[0].Key))
-		c.Assert(err, IsNil)
-		c.Assert(infos[1], Equals, subCfg.Name)
-		task := string(resp.Kvs[0].Value)
-		c.Assert(task, Equals, subCfgStr)
-	}
-
+func (t *testServer) testSubTaskRecover(c *C, s *Server, dir string) {
 	workerCli := t.createClient(c, "127.0.0.1:8262")
-	mysqlTask, err := cfg.Toml()
-	c.Assert(err, IsNil)
-	req := &pb.MysqlWorkerRequest{
-		Op:     pb.WorkerOp_StopWorker,
-		Config: mysqlTask,
-	}
-
-	resp, err := workerCli.OperateMysqlWorker(context.Background(), req)
-	c.Assert(err, IsNil)
-	c.Assert(resp.Result, Equals, true)
+	t.testOperateWorker(c, s, dir, false)
 
 	status, err := workerCli.QueryStatus(context.Background(), &pb.QueryStatusRequest{Name: "sub-task-name"})
 	c.Assert(err, IsNil)
 	c.Assert(status.Result, IsFalse)
 	c.Assert(status.Msg, Equals, terror.ErrWorkerNoStart.Error())
 
-	req.Op = pb.WorkerOp_StartWorker
-	resp, err = workerCli.OperateMysqlWorker(context.Background(), req)
-	c.Assert(err, IsNil)
-	c.Assert(resp.Result, Equals, true)
-
+	t.testOperateWorker(c, s, dir, true)
 	status, err = workerCli.QueryStatus(context.Background(), &pb.QueryStatusRequest{Name: "sub-task-name"})
 	c.Assert(err, IsNil)
 	c.Assert(status.Result, IsTrue)
-	c.Assert(status.SubTaskStatus[0].Stage, Equals, pb.Stage_Paused) //  because of `Access denied`
+	c.Assert(status.SubTaskStatus[0].Stage, Equals, pb.Stage_Running)
 }
 
 func (t *testServer) testStopWorkerWhenLostConnect(c *C, s *Server, ETCD *embed.Etcd) {
-	c.Assert(s.retryConnectMaster.Get(), IsTrue)
 	ETCD.Close()
 	time.Sleep(retryConnectSleepTime + time.Duration(defaultKeepAliveTTL+3)*time.Second)
 	c.Assert(s.getWorker(true), IsNil)
-	c.Assert(s.retryConnectMaster.Get(), IsFalse)
 }
 
 func (t *testServer) TestGetMinPosInAllSubTasks(c *C) {
@@ -371,4 +330,34 @@ func getFakePosForSubTask(ctx context.Context, subTaskCfg *config.SubTaskConfig)
 	default:
 		return nil, nil
 	}
+}
+
+func checkSubTaskStatus(cli pb.WorkerClient, expect pb.Stage) bool {
+	status, err := cli.QueryStatus(context.Background(), &pb.QueryStatusRequest{Name: "sub-task-name"})
+	if err != nil {
+		return false
+	}
+	if status.Result == false {
+		return false
+	}
+	return len(status.SubTaskStatus) > 0 && status.SubTaskStatus[0].Stage == expect
+}
+
+func checkRelayStatus(cli pb.WorkerClient, expect pb.Stage) bool {
+	status, err := cli.QueryStatus(context.Background(), &pb.QueryStatusRequest{Name: "sub-task-name"})
+	if err != nil {
+		return false
+	}
+	if status.Result == false {
+		return false
+	}
+	return status.RelayStatus.Stage == expect
+}
+
+func loadSourceConfigWithoutPassword(c *C) config.SourceConfig {
+	sourceCfg := config.SourceConfig{}
+	err := sourceCfg.LoadFromFile(mysqlCfgDir)
+	c.Assert(err, IsNil)
+	sourceCfg.From.Password = "" // no password set
+	return sourceCfg
 }

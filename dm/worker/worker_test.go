@@ -17,6 +17,8 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -31,8 +33,7 @@ import (
 var emptyWorkerStatusInfoJSONLength = 25
 
 func (t *testServer) testWorker(c *C) {
-	cfg := &config.MysqlConfig{}
-	c.Assert(cfg.LoadFromFile("./dm-mysql.toml"), IsNil)
+	cfg := loadSourceConfigWithoutPassword(c)
 
 	dir := c.MkDir()
 	cfg.EnableRelay = true
@@ -44,11 +45,11 @@ func (t *testServer) testWorker(c *C) {
 		NewRelayHolder = NewRealRelayHolder
 	}()
 
-	_, err := NewWorker(cfg, nil)
+	_, err := NewWorker(&cfg, nil)
 	c.Assert(err, ErrorMatches, "init error")
 
 	NewRelayHolder = NewDummyRelayHolder
-	w, err := NewWorker(cfg, nil)
+	w, err := NewWorker(&cfg, nil)
 	c.Assert(err, IsNil)
 	c.Assert(w.StatusJSON(""), HasLen, emptyWorkerStatusInfoJSONLength)
 	//c.Assert(w.closed.Get(), Equals, closedFalse)
@@ -65,11 +66,12 @@ func (t *testServer) testWorker(c *C) {
 	c.Assert(w.subTaskHolder.getAllSubTasks(), HasLen, 0)
 	c.Assert(w.closed.Get(), Equals, closedTrue)
 
-	err = w.StartSubTask(&config.SubTaskConfig{
+	w.StartSubTask(&config.SubTaskConfig{
 		Name: "testStartTask",
 	})
-	c.Assert(err, NotNil)
-	c.Assert(err, ErrorMatches, ".*worker already closed.*")
+	task := w.subTaskHolder.findSubTask("testStartTask")
+	c.Assert(task, NotNil)
+	c.Assert(task.Result().String(), Matches, ".*worker already closed.*")
 
 	err = w.UpdateSubTask(&config.SubTaskConfig{
 		Name: "testStartTask",
@@ -92,20 +94,19 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 	defer ETCD.Close()
 
 	cfg := NewConfig()
-	workerCfg := config.NewMysqlConfig()
-	workerCfg.LoadFromFile("./dm-mysql.toml")
+	sourceConfig := loadSourceConfigWithoutPassword(c)
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
-	workerCfg.Checker.CheckInterval = config.Duration{Duration: 40 * time.Millisecond}
-	workerCfg.Checker.BackoffMin = config.Duration{Duration: 20 * time.Millisecond}
-	workerCfg.Checker.BackoffMax = config.Duration{Duration: 1 * time.Second}
-	workerCfg.From.Password = "" // no password set
+	sourceConfig.Checker.CheckEnable = true
+	sourceConfig.Checker.CheckInterval = config.Duration{Duration: 40 * time.Millisecond}
+	sourceConfig.Checker.BackoffMin = config.Duration{Duration: 20 * time.Millisecond}
+	sourceConfig.Checker.BackoffMax = config.Duration{Duration: 1 * time.Second}
 
 	cfg.WorkerAddr = fmt.Sprintf(":%d", port)
 
 	dir := c.MkDir()
-	workerCfg.RelayDir = dir
-	workerCfg.MetaDir = dir
-	workerCfg.EnableRelay = true
+	sourceConfig.RelayDir = dir
+	sourceConfig.MetaDir = dir
+	sourceConfig.EnableRelay = true
 
 	NewRelayHolder = NewDummyRelayHolder
 	defer func() {
@@ -131,7 +132,7 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		if s.closed.Get() {
 			return false
 		}
-		c.Assert(s.startWorker(workerCfg), IsNil)
+		c.Assert(s.startWorker(&sourceConfig), IsNil)
 		return true
 	}), IsTrue)
 	// start task
@@ -170,4 +171,29 @@ func (t *testServer) TestTaskAutoResume(c *C) {
 		c.Log(sts)
 		return false
 	}), IsTrue)
+}
+
+func (t *testServer) TestPurgeRelayDir(c *C) {
+	cfg := loadSourceConfigWithoutPassword(c)
+	cfg.EnableRelay = true
+	dir := c.MkDir()
+	cfg.RelayDir = dir
+
+	dirs := filepath.Join(dir, `f889521f-e994-11e9-94e9-0242ac110002.000001`)
+	c.Assert(os.MkdirAll(dirs, 0777), IsNil)
+	file := filepath.Join(dir, `server-uuid.index`)
+	f, err := os.Create(file)
+	c.Assert(err, IsNil)
+	c.Assert(f.Close(), IsNil)
+	file = filepath.Join(dirs, `relay.meta`)
+	f, err = os.Create(file)
+	c.Assert(err, IsNil)
+	c.Assert(f.Close(), IsNil)
+
+	w, err := NewWorker(&cfg, nil)
+	c.Assert(err, IsNil)
+	c.Assert(w.purgeRelayDir(), IsNil)
+	files, err := ioutil.ReadDir(cfg.RelayDir)
+	c.Assert(err, IsNil)
+	c.Assert(files, HasLen, 0)
 }
