@@ -50,8 +50,9 @@ function query_status_paused_tasks() {
 }
 
 function query_status_running_tasks() {
+    # Running is 4 (including relay)
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status -s $SOURCE_ID1,$SOURCE_ID2" \
         "\"result\": true" 3 \
-        "\"stage\": \"Running\"" 2
+        "\"stage\": \"Running\"" 4
 }
