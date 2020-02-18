@@ -81,8 +81,8 @@ func NewSourceConfig() *SourceConfig {
 		},
 		Checker: CheckerConfig{
 			CheckEnable:     true,
-			BackoffRollback: &Duration{DefaultBackoffRollback},
-			BackoffMax:      &Duration{DefaultBackoffMax},
+			BackoffRollback: Duration{DefaultBackoffRollback},
+			BackoffMax:      Duration{DefaultBackoffMax},
 		},
 		Tracer: tracing.Config{
 			Enable:     false,

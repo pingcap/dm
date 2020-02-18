@@ -220,7 +220,7 @@ func (tsc *realTaskStatusChecker) run() {
 		if err != nil {
 			tsc.l.Warn("inject failpoint TaskCheckInterval failed", zap.Reflect("value", val), zap.Error(err))
 		} else {
-			tsc.cfg.CheckInterval = &config.Duration{Duration: interval}
+			tsc.cfg.CheckInterval = config.Duration{Duration: interval}
 			tsc.l.Info("set TaskCheckInterval", zap.String("failpoint", "TaskCheckInterval"), zap.Duration("value", interval))
 		}
 	})
