@@ -71,11 +71,11 @@ function run() {
     echo "query-status from all dm-master"
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
         "query-status test" \
-        "\"stage\": \"Running\"" 4
+        "\"stage\": \"Running\"" 2
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT2" \
         "query-status test" \
-        "\"stage\": \"Running\"" 4
+        "\"stage\": \"Running\"" 2
 
     run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
         "query-status test" \
