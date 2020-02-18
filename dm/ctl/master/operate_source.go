@@ -15,11 +15,12 @@ package master
 
 import (
 	"context"
+	"os"
+
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
-	"os"
 )
 
 // NewOperateSourceCmd creates a OperateSource command
@@ -41,7 +42,7 @@ func convertCmdType(t string) pb.SourceOp {
 	case "stop":
 		return pb.SourceOp_StopSource
 	default:
-		return pb.SourceOp_UpdateSource
+		return pb.SourceOp_InvalidSourceOp
 	}
 }
 

@@ -58,10 +58,10 @@ function usage_and_arg_test() {
     update_relay_should_specify_one_dm_worker $MYSQL1_CONF
     update_relay_while_master_down $MYSQL1_CONF
 
-    echo "update_task_wrong_arg"
-    update_task_wrong_arg
-    update_task_wrong_config_file
-    update_task_while_master_down $TASK_CONF
+    # echo "update_task_wrong_arg"
+    # update_task_wrong_arg
+    # update_task_wrong_config_file
+    # update_task_while_master_down $TASK_CONF
 
     echo "update_master_config_wrong_arg"
     update_master_config_wrong_arg
@@ -122,7 +122,7 @@ function run() {
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $dm_worker2_conf
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
-    operate_mysql_worker_stop_not_created_config $MYSQL1_CONF
+    operate_source_stop_not_created_config $MYSQL1_CONF
 
     # operate mysql config to worker
     cp $cur/conf/source1.toml $WORK_DIR/source1.toml
@@ -158,17 +158,17 @@ function run() {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "query-status -w 127.0.0.1:$WORKER1_PORT,127.0.0.1:$WORKER2_PORT"
-    update_task_not_paused $TASK_CONF
+    # update_task_not_paused $TASK_CONF
 
     echo "show_ddl_locks_no_locks"
     show_ddl_locks_no_locks $TASK_NAME
     query_status_with_tasks
     pause_task_success $TASK_NAME
 
-    echo "update_task_worker_not_found"
-    update_task_worker_not_found $TASK_CONF 127.0.0.1:9999
-    update_task_success_single_worker $TASK_CONF $SOURCE_ID1
-    update_task_success $TASK_CONF
+    # echo "update_task_worker_not_found"
+    # update_task_worker_not_found $TASK_CONF 127.0.0.1:9999
+    # update_task_success_single_worker $TASK_CONF $SOURCE_ID1
+    # update_task_success $TASK_CONF
 
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
