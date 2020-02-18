@@ -171,9 +171,10 @@ func (c *Coordinator) IsStarted() bool {
 // Stop stops the coordinator.
 func (c *Coordinator) Stop() {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	c.cancel()
 	c.started = false
+	c.mu.Unlock()
+
 	c.wg.Wait()
 	log.L().Info("coordinator is stoped")
 }

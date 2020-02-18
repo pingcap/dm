@@ -16,8 +16,17 @@ package master
 import (
 	"context"
 	"go.uber.org/zap"
+	"time"
 
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/election"
 	"github.com/pingcap/dm/pkg/log"
+
+	"google.golang.org/grpc"
+)
+
+const (
+	oneselfLeader = "oneself"
 )
 
 func (s *Server) electionNotify(ctx context.Context) {
@@ -25,9 +34,9 @@ func (s *Server) electionNotify(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case leader := <-s.election.LeaderNotify():
-			// output the leader info.
-			if leader {
+		case notify := <-s.election.LeaderNotify():
+			switch notify {
+			case election.IsLeader:
 				log.L().Info("current member become the leader", zap.String("current member", s.cfg.Name))
 				err := s.coordinator.Start(ctx, s.etcdClient)
 				if err != nil {
@@ -37,15 +46,35 @@ func (s *Server) electionNotify(ctx context.Context) {
 					log.L().Error("recover subtask infos from coordinator fail", zap.Error(err))
 				}
 
-			} else {
-				_, leaderID, err2 := s.election.LeaderInfo(ctx)
-				if err2 == nil {
+				s.Lock()
+				s.leader = oneselfLeader
+				s.closeLeaderClient()
+				s.Unlock()
+			case election.RetireFromLeader, election.IsNotLeader:
+				if notify == election.RetireFromLeader {
+					s.coordinator.Stop()
+				}
+
+				leader, leaderID, leaderAddr, err2 := s.election.LeaderInfo(ctx)
+				if err2 != nil {
+					log.L().Warn("get leader info", zap.Error(err2))
+					continue
+				}
+
+				if notify == election.RetireFromLeader {
 					log.L().Info("current member retire from the leader", zap.String("leader", leaderID), zap.String("current member", s.cfg.Name))
 				} else {
-					log.L().Warn("get leader info", zap.Error(err2))
+					log.L().Info("get new leader", zap.String("leader", leaderID), zap.String("current member", s.cfg.Name))
 				}
-				s.coordinator.Stop()
+
+				s.Lock()
+				s.leader = leader
+				s.createLeaderClient(leaderAddr)
+				s.Unlock()
+			default:
+				log.L().Error("unknown notify type", zap.String("notify", notify))
 			}
+
 		case err := <-s.election.ErrorNotify():
 			// handle errors here, we do no meaningful things now.
 			// but maybe:
@@ -54,4 +83,34 @@ func (s *Server) electionNotify(ctx context.Context) {
 			log.L().Error("receive error from election", zap.Error(err))
 		}
 	}
+}
+
+func (s *Server) createLeaderClient(leaderAddr string) {
+	if s.leaderGrpcConn != nil {
+		s.leaderGrpcConn.Close()
+		s.leaderGrpcConn = nil
+	}
+
+	conn, err := grpc.Dial(leaderAddr, grpc.WithInsecure(), grpc.WithBackoffMaxDelay(3*time.Second))
+	if err != nil {
+		log.L().Error("can't create grpc connection with leader, can't forward request to leader", zap.String("leader", leaderAddr), zap.Error(err))
+		return
+	}
+	s.leaderGrpcConn = conn
+	s.leaderClient = pb.NewMasterClient(conn)
+}
+
+func (s *Server) closeLeaderClient() {
+	if s.leaderGrpcConn != nil {
+		s.leaderGrpcConn.Close()
+		s.leaderGrpcConn = nil
+	}
+}
+
+func (s *Server) isLeaderAndNeedForward() (isLeader bool, needForward bool) {
+	s.RLock()
+	defer s.RUnlock()
+	isLeader = (s.leader == oneselfLeader)
+	needForward = (s.leaderGrpcConn != nil)
+	return
 }

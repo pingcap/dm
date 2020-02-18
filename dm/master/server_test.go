@@ -178,6 +178,7 @@ func testDefaultMasterServer(c *check.C) *Server {
 	c.Assert(err, check.IsNil)
 	cfg.DataDir = c.MkDir()
 	server := NewServer(cfg)
+	server.leader = oneselfLeader
 	go server.ap.Start(context.Background())
 
 	return server
@@ -1037,7 +1038,7 @@ func (t *testMaster) TestJoinMember(c *check.C) {
 	c.Assert(ok, check.IsTrue)
 
 	// s1 is still the leader
-	_, leaderID, err := s2.election.LeaderInfo(ctx)
+	_, leaderID, _, err := s2.election.LeaderInfo(ctx)
 	c.Assert(err, check.IsNil)
 	c.Assert(leaderID, check.Equals, cfg1.Name)
 
@@ -1055,11 +1056,13 @@ func (t *testMaster) TestOperateMysqlWorker(c *check.C) {
 	cfg1.Name = "dm-master-1"
 	cfg1.DataDir = c.MkDir()
 	cfg1.MasterAddr = tempurl.Alloc()[len("http://"):]
+	cfg1.AdvertiseAddr = tempurl.Alloc()[len("http://"):]
 	cfg1.PeerUrls = tempurl.Alloc()
 	cfg1.AdvertisePeerUrls = cfg1.PeerUrls
 	cfg1.InitialCluster = fmt.Sprintf("%s=%s", cfg1.Name, cfg1.AdvertisePeerUrls)
 
 	s1 := NewServer(cfg1)
+	s1.leader = oneselfLeader
 	c.Assert(s1.Start(ctx), check.IsNil)
 	defer s1.Close()
 	mysqlCfg := config.NewMysqlConfig()
