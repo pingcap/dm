@@ -246,6 +246,7 @@ func errorCommonWorkerResponse(msg string, source string) *pb.CommonWorkerRespon
 // value: name
 func (s *Server) RegisterWorker(ctx context.Context, req *pb.RegisterWorkerRequest) (*pb.RegisterWorkerResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "RegisterWorker"))
+	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
 		if needForward {
 			return s.leaderClient.RegisterWorker(ctx, req)
