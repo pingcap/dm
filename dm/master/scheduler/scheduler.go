@@ -944,8 +944,13 @@ func (s *Scheduler) handleWorkerOnline(ev ha.WorkerEvent) error {
 
 	// 2. check whether is bound.
 	if w.Stage() == WorkerBound {
+		// TODO: When dm-worker keepalive is broken, it will turn off its own running source
+		// After keepalive is restored, this dm-worker should continue to run the previously bound source
+		// So we PutSourceBound here to trigger dm-worker to get this event and start source again.
+		// If this worker still start a source, it doesn't matter. dm-worker will omit same source and reject source with different name
 		s.logger.Warn("worker already bound", zap.Stringer("bound", w.Bound()))
-		return nil
+		_, err := ha.PutSourceBound(s.etcdCli, w.Bound())
+		return err
 	}
 
 	// 3. change the stage (from Offline) to Free.

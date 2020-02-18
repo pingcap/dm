@@ -67,6 +67,7 @@ func (s *Server) JoinMaster(endpoints []string) error {
 // KeepAlive attempts to keep the lease of the server alive forever.
 func (s *Server) KeepAlive() {
 	for {
+		log.L().Info("start to keepalive with master")
 		err1 := ha.KeepAlive(s.ctx, s.etcdClient, s.cfg.Name, s.cfg.KeepAliveTTL)
 		log.L().Warn("keepalive with master goroutine paused", zap.Error(err1))
 		s.stopWorker("")
