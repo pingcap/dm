@@ -43,6 +43,14 @@ function run() {
     run_sql "flush logs;" $MYSQL_PORT1
     run_sql "flush logs;" $MYSQL_PORT2
 
+    echo "apply increment data before restart dm-worker to ensure entering increment phase"
+    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
+    run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
+
+    echo "use sync_diff_inspector to check increment data"
+    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    sleep 2
+
     echo "start dm-worker3 and kill dm-worker2"
     ps aux | grep dm-worker2 |awk '{print $2}'|xargs kill || true
     check_port_offline $WORKER2_PORT 20
@@ -58,11 +66,11 @@ function run() {
         "query-status test" \
         "\"stage\": \"Running\"" 4
 
-    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
-    run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
+    run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1
+    run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2
     sleep 2
 
-    echo "use sync_diff_inspector to check data now!"
+    echo "use sync_diff_inspector to check increment2 data now!"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
