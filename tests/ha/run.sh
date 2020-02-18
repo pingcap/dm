@@ -14,8 +14,13 @@ function run() {
     check_contains 'Query OK, 3 rows affected'
 
     echo "start DM worker and master"
-    run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
-    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
+    run_dm_master $WORK_DIR/master1 $MASTER_PORT1 $cur/conf/dm-master1.toml
+    run_dm_master $WORK_DIR/master2 $MASTER_PORT2 $cur/conf/dm-master2.toml
+    run_dm_master $WORK_DIR/master3 $MASTER_PORT3 $cur/conf/dm-master3.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT1
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT2
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT3
+
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
@@ -25,10 +30,10 @@ function run() {
     cp $cur/conf/source2.toml $WORK_DIR/source2.toml
     sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
     sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker2/relay_log\"" $WORK_DIR/source2.toml
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
         "operate-source create $WORK_DIR/source1.toml" \
         "true" 1
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
         "operate-source create $WORK_DIR/source2.toml" \
         "true" 1
 
@@ -62,7 +67,17 @@ function run() {
     sleep 8
     echo "wait and check task running"
     check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+
+    echo "query-status from all dm-master"
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT1" \
+        "query-status test" \
+        "\"stage\": \"Running\"" 4
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT2" \
+        "query-status test" \
+        "\"stage\": \"Running\"" 4
+
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
         "query-status test" \
         "\"stage\": \"Running\"" 2
 

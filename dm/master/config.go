@@ -101,7 +101,8 @@ type Config struct {
 	RPCRateLimit  float64       `toml:"rpc-rate-limit" json:"rpc-rate-limit"`
 	RPCRateBurst  int           `toml:"rpc-rate-burst" json:"rpc-rate-burst"`
 
-	MasterAddr string `toml:"master-addr" json:"master-addr"`
+	MasterAddr    string `toml:"master-addr" json:"master-addr"`
+	AdvertiseAddr string `toml:"advertise-addr" json:"advertise-addr"`
 
 	Deploy []*DeployMapper `toml:"deploy" json:"-"`
 	// TODO: remove
@@ -204,6 +205,15 @@ func (c *Config) adjust() error {
 	_, _, err := net.SplitHostPort(c.MasterAddr)
 	if err != nil {
 		return terror.ErrMasterHostPortNotValid.Delegate(err, c.MasterAddr)
+	}
+
+	// AdvertiseAddr's format must be "host:port"
+	host, port, err := net.SplitHostPort(c.AdvertiseAddr)
+	if err != nil {
+		return terror.ErrMasterAdvertiseAddrNotValid.Delegate(err, c.AdvertiseAddr)
+	}
+	if len(host) == 0 || len(port) == 0 {
+		return terror.ErrMasterAdvertiseAddrNotValid.Generate(c.AdvertiseAddr)
 	}
 
 	c.DeployMap = make(map[string]string)

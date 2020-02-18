@@ -404,6 +404,8 @@ const (
 	codeMasterParseURLFail
 	codeMasterJoinEmbedEtcdFail
 	codeMasterInvalidOperateTaskOp
+	codeMasterAdvertiseAddrNotValid
+	codeMasterRequestIsNotForwardToLeader
 )
 
 // DM-worker error code
@@ -900,6 +902,9 @@ var (
 	ErrMasterParseURLFail           = New(codeMasterParseURLFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to parse URL %s")
 	ErrMasterJoinEmbedEtcdFail      = New(codeMasterJoinEmbedEtcdFail, ClassDMMaster, ScopeInternal, LevelHigh, "fail to join embed etcd: %s")
 	ErrMasterInvalidOperateTaskOp   = New(codeMasterInvalidOperateTaskOp, ClassDMMaster, ScopeInternal, LevelMedium, "invalid op %s on task")
+	ErrMasterAdvertiseAddrNotValid  = New(codeMasterAdvertiseAddrNotValid, ClassDMMaster, ScopeInternal, LevelHigh, "advertise address %s not valid")
+
+	ErrMasterRequestIsNotForwardToLeader = New(codeMasterRequestIsNotForwardToLeader, ClassDMMaster, ScopeInternal, LevelHigh, "master is not leader, and can't forward request to leader")
 
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set")
