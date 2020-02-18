@@ -245,8 +245,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		for {
 			select {
 			case <-ctx.Done():
-				e.l.Info("break campaign loop, context is done", zap.String("key", e.info.ID), zap.Error(ctx.Err()))
-				return
+				break observeElection
 			case <-session.Done():
 				break observeElection
 			case resp, ok := <-eleObserveCh:
