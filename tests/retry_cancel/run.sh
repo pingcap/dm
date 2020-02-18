@@ -1,4 +1,5 @@
 #!/bin/bash
+# TODO: this case can't run under new HA model, already remove from `other_integratin.txt`, add it back when supported.
 
 set -eu
 
