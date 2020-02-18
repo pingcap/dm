@@ -81,11 +81,11 @@ func (t *testConfig) TestConfig(c *C) {
 	clone4.Checker.BackoffMax = Duration{time.Minute * 5}
 	clone4toml, err := clone4.Toml()
 	c.Assert(err, IsNil)
-	c.Assert(clone4toml, Matches, ".*backoff-rollback = \"5m.*")
-	c.Assert(clone4toml, Matches, ".*backoff-max = \"5m.*")
+	c.Assert(clone4toml, Matches, "(.|\n)*backoff-rollback = \"5m(.|\n)*")
+	c.Assert(clone4toml, Matches, "(.|\n)*backoff-max = \"5m(.|\n)*")
 	clone5 := SourceConfig{}
 	c.Assert(clone5.Parse(clone4toml), IsNil)
-	c.Assert(clone5, DeepEquals, clone4)
+	c.Assert(clone5, DeepEquals, *clone4)
 
 	// test invalid config
 	dir2 := c.MkDir()
