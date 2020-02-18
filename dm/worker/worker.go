@@ -313,7 +313,10 @@ func (w *Worker) purgeRelayDir() error {
 	d, err := os.Open(dir)
 	// fail to open dir, return directly
 	if err != nil {
-		return nil
+		if err == os.ErrNotExist {
+			return nil
+		}
+		return err
 	}
 	defer d.Close()
 	names, err := d.Readdirnames(-1)
