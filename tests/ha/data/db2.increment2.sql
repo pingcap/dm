@@ -1,2 +1,2 @@
 use ha_test;
-insert into t1 (id, name) values (11, 'arya11'), (22, 'catelyn22');
+insert into t2 (name) values ('Arya22'), ('Bran22'), ('Sansa22z');
