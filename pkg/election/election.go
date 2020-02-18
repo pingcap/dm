@@ -201,7 +201,10 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		}
 	}()
 
-	var oldLeaderID string
+	var (
+		oldLeaderID string
+		compaignWg  sync.WaitGroup
+	)
 	for {
 		// check context canceled/timeout
 		select {
@@ -214,7 +217,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 				return
 			}
 		case <-ctx.Done():
-			e.l.Info("break campaign loop, context is done", zap.Error(ctx.Err()))
+			e.l.Info("break campaign loop, context is done", zap.String("id", e.info.ID), zap.Error(ctx.Err()))
 			return
 		default:
 		}
@@ -222,12 +225,16 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		// try to campaign
 		elec := concurrency.NewElection(session, e.key)
 		ctx2, cancel2 := context.WithCancel(ctx)
+
+		compaignWg.Add(1)
 		go func() {
-			e.l.Debug("begin to compaign", zap.String("key", e.key))
+			defer compaignWg.Done()
+
+			e.l.Debug("begin to compaign", zap.String("ID", e.info.ID))
 			err2 := elec.Campaign(ctx2, e.infoStr)
 			if err2 != nil {
 				// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
-				e.l.Info("fail to campaign", zap.Error(err2))
+				e.l.Info("fail to campaign", zap.String("ID", e.info.ID), zap.Error(err2))
 			}
 		}()
 
@@ -238,7 +245,8 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		for {
 			select {
 			case <-ctx.Done():
-				break observeElection
+				e.l.Info("break campaign loop, context is done", zap.String("key", e.info.ID), zap.Error(ctx.Err()))
+				return
 			case <-session.Done():
 				break observeElection
 			case resp, ok := <-eleObserveCh:
@@ -267,6 +275,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 		if len(leaderID) == 0 {
 			cancel2()
+			compaignWg.Wait()
 			continue
 		}
 
@@ -274,6 +283,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 			e.l.Info("current member is not the leader", zap.String("current member", e.info.ID), zap.String("leader", leaderID))
 			e.isNotLeader()
 			cancel2()
+			compaignWg.Wait()
 			continue
 		}
 
@@ -282,6 +292,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		e.retireLeader() // need to re-campaign
 
 		cancel2()
+		compaignWg.Wait()
 	}
 }
 
