@@ -59,10 +59,10 @@ function run() {
     sed -i "s/root/dm_incremental/g" $WORK_DIR/source2.toml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-source update $WORK_DIR/source1.toml" \
-        "true" 1
+        "Update worker config is not supported by dm-ha now" 1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-source update $WORK_DIR/source2.toml" \
-        "true" 1
+        "Update worker config is not supported by dm-ha now" 1
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $WORK_DIR/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
