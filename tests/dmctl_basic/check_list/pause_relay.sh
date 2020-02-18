@@ -21,7 +21,7 @@ function pause_relay_while_master_down() {
 function pause_relay_success() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "pause-relay -s $SOURCE_ID1 -s $SOURCE_ID2" \
-        "\"result\": true" 3
+        "\"result\": true" 1
 }
 
 function pause_relay_fail() {

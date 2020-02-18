@@ -13,16 +13,16 @@ function operate_source_wrong_config_file() {
 }
 
 function operate_source_while_master_down() {
-    task_conf=$1
+    source_conf=$1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-source create $task_conf" \
+        "operate-source create $source_conf" \
         "can not update task" 1
 }
 
 function operate_source_stop_not_created_config() {
-    task_conf=$1
+    source_conf=$1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-source stop $task_conf" \
-        "Stop Mysql-worker failed. worker has not been started" 1
+        "operate-source stop $source_conf" \
+        "source config with ID mysql-replica-01 not exists" 1
 }
 

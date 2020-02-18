@@ -74,6 +74,7 @@ function usage_and_arg_test() {
     purge_relay_filename_with_multi_workers
     purge_relay_while_master_down
 
+    echo "operate_source_empty_arg"
     operate_source_empty_arg
     operate_source_wrong_config_file
     operate_source_while_master_down $MYSQL1_CONF
@@ -145,11 +146,12 @@ function run() {
     echo "pause_relay_success"
     pause_relay_success
     query_status_stopped_relay
-    pause_relay_fail
+    # pause twice won't receive an error now
+    # pause_relay_fail
     resume_relay_success
     query_status_with_no_tasks
 
-    echo "dmctl_start_task"
+    echo "dmctl_check_task"
     check_task_pass $TASK_CONF
     check_task_not_pass $cur/conf/dm-task2.yaml
 
