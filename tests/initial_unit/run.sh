@@ -46,8 +46,9 @@ function run() {
         task_conf="$cur/conf/dm-task.yaml"
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "start-task $task_conf" \
-            "\"result\": true" 2
+            "\"result\": true" 1
 
+        sleep 2
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "\"stage\": \"Paused\"" 1 \
@@ -57,8 +58,9 @@ function run() {
         echo "resume task will also initial failed"
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "resume-task test" \
-            "\"result\": true" 2
+            "\"result\": true" 1
 
+        sleep 2
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
             "\"stage\": \"Paused\"" 1 \
@@ -79,16 +81,18 @@ function run() {
         task_conf="$cur/conf/dm-task.yaml"
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "start-task $task_conf" \
-            "\"result\": true" 1 \
             "\"result\": false" 1 \
-            "start sub task test: sub task test already exists" 1
+            "subtasks with name test for sources \[mysql-replica-01\] already exist" 1
         check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
+        # resume-task takes no effect
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "resume-task test" \
-            "\"result\": true" 1 \
-            "\"result\": false" 1 \
-            "current stage is not paused not valid" 1
+            "\"result\": true" 1
+
+        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "query-status test" \
+            "\"stage\": \"Running\"" 2
 
         cleanup_process
         run_sql "drop database if exists initial_unit" $TIDB_PORT
