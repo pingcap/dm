@@ -149,7 +149,6 @@ type SubTaskConfig struct {
 	Flavor                  string `toml:"flavor" json:"flavor"`
 	MetaSchema              string `toml:"meta-schema" json:"meta-schema"`
 	RemoveMeta              bool   `toml:"remove-meta" json:"remove-meta"`
-	DisableHeartbeat        bool   `toml:"disable-heartbeat" json:"disable-heartbeat"` //  deprecated, use !enable-heartbeat instead
 	HeartbeatUpdateInterval int    `toml:"heartbeat-update-interval" json:"heartbeat-update-interval"`
 	HeartbeatReportInterval int    `toml:"heartbeat-report-interval" json:"heartbeat-report-interval"`
 	EnableHeartbeat         bool   `toml:"enable-heartbeat" json:"enable-heartbeat"`
@@ -266,10 +265,6 @@ func (c *SubTaskConfig) Adjust() error {
 
 	if c.MetaSchema == "" {
 		c.MetaSchema = defaultMetaSchema
-	}
-
-	if c.DisableHeartbeat {
-		c.EnableHeartbeat = false
 	}
 
 	if c.Timezone != "" {

@@ -54,8 +54,8 @@ function run() {
     echo "after restart dm-worker, task should resume automatically"
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $cur/conf/dm-task.yaml" \
-        "\"result\": true" 1 \
-        "start sub task test: sub task test already exists" 2
+        "\"result\": false" 1 \
+        "subtasks with name test for sources \[mysql-replica-01 mysql-replica-02\] already exist" 1
     sleep 2
 
     # wait for task running
