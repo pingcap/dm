@@ -48,6 +48,7 @@ func (s *Server) electionNotify(ctx context.Context) {
 
 				s.Lock()
 				s.leader = oneselfLeader
+				s.closeLeaderClient()
 				s.Unlock()
 			case election.RetireFromLeader, election.IsNotLeader:
 				if notify == election.RetireFromLeader {
@@ -97,6 +98,13 @@ func (s *Server) createLeaderClient(leaderAddr string) {
 	}
 	s.leaderGrpcConn = conn
 	s.leaderClient = pb.NewMasterClient(conn)
+}
+
+func (s *Server) closeLeaderClient() {
+	if s.leaderGrpcConn != nil {
+		s.leaderGrpcConn.Close()
+		s.leaderGrpcConn = nil
+	}
 }
 
 func (s *Server) isLeaderAndNeedForward() (isLeader bool, needForward bool) {

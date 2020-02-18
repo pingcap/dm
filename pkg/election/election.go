@@ -201,7 +201,7 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		}
 	}()
 
-	haveLeader := false
+	var oldLeaderID string
 	for {
 		// check context canceled/timeout
 		select {
@@ -221,33 +221,54 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 
 		// try to campaign
 		elec := concurrency.NewElection(session, e.key)
-		if !haveLeader {
-			// Campaign will blocks until it is elected, so just compaign 3 seconds, and then get leader info
-			ctx2, cancel2 := context.WithTimeout(ctx, 3*time.Second)
+		ctx2, cancel2 := context.WithCancel(ctx)
+		go func() {
+			e.l.Debug("begin to compaign", zap.String("key", e.key))
 			err = elec.Campaign(ctx2, e.infoStr)
-			cancel2()
-		} else {
-			err = elec.Campaign(ctx, e.infoStr)
-		}
-		if err != nil {
-			// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
-			e.l.Warn("fail to campaign", zap.Error(err))
+			if err != nil {
+				// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
+				e.l.Info("fail to campaign", zap.Error(err))
+			}
+		}()
+
+		var leaderKey, leaderID string
+		eleObserveCh := elec.Observe(ctx2)
+
+	observeElection:
+		for {
+			select {
+			case <-ctx.Done():
+				break observeElection
+			case <-session.Done():
+				break observeElection
+			case resp, ok := <-eleObserveCh:
+				if !ok {
+					break observeElection
+				}
+
+				e.l.Info("get response from election observe", zap.String("key", string(resp.Kvs[0].Key)), zap.String("value", string(resp.Kvs[0].Value)))
+				leaderKey = string(resp.Kvs[0].Key)
+				leaderInfo, err := getCompaingerInfo(resp.Kvs[0].Value)
+				if err != nil {
+					// this should never happened
+					e.l.Error("fail to get leader information", zap.String("value", string(resp.Kvs[0].Value)), zap.Error(err))
+					continue
+				}
+				leaderID = leaderInfo.ID
+
+				if oldLeaderID == leaderID {
+					continue
+				} else {
+					oldLeaderID = leaderID
+					break observeElection
+				}
+			}
 		}
 
-		// compare with the current leader
-		leaderKey, leaderID, _, err := getLeaderInfo(ctx, elec)
-		if err != nil {
-			if errors.Cause(err) == concurrency.ErrElectionNoLeader {
-				haveLeader = false
-			}
-			// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
-			e.l.Warn("fail to get leader ID", zap.Error(err))
+		if len(leaderID) == 0 {
 			continue
 		}
 
-		if len(leaderID) != 0 {
-			haveLeader = true
-		}
 		if leaderID != e.info.ID {
 			e.l.Info("current member is not the leader", zap.String("current member", e.info.ID), zap.String("leader", leaderID))
 			e.isNotLeader()
@@ -257,6 +278,8 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		e.toBeLeader() // become the leader now
 		e.watchLeader(ctx, session, leaderKey)
 		e.retireLeader() // need to re-campaign
+
+		cancel2()
 	}
 }
 
