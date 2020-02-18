@@ -50,8 +50,11 @@ function dmctl_start_task_standalone() {
     fi
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $task_conf" \
-        "\"result\": true" 2 \
-        "\"source\": \"$SOURCE_ID1\"" 1
+        "\"result\": true" 1
+#    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+#        "start-task $task_conf" \
+#        "\"result\": true" 2 \
+#        "\"source\": \"$SOURCE_ID1\"" 1
 }
 
 # shortcut for start task on two DM-workers
