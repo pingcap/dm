@@ -266,12 +266,14 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		}
 
 		if len(leaderID) == 0 {
+			cancel2()
 			continue
 		}
 
 		if leaderID != e.info.ID {
 			e.l.Info("current member is not the leader", zap.String("current member", e.info.ID), zap.String("leader", leaderID))
 			e.isNotLeader()
+			cancel2()
 			continue
 		}
 
