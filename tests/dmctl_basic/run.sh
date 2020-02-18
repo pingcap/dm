@@ -166,6 +166,7 @@ function run() {
     show_ddl_locks_no_locks $TASK_NAME
     query_status_with_tasks
     pause_task_success $TASK_NAME
+    query_status_paused_tasks
 
     # echo "update_task_worker_not_found"
     # update_task_worker_not_found $TASK_CONF 127.0.0.1:9999
@@ -175,6 +176,7 @@ function run() {
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
     resume_task_success $TASK_NAME
+    query_status_running_tasks
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 20
 
     update_relay_success $cur/conf/source1.toml $SOURCE_ID1
