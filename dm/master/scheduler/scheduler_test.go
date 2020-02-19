@@ -614,6 +614,8 @@ func (t *testScheduler) subTaskStageMatch(c *C, s *Scheduler, task, source strin
 }
 
 func (t *testScheduler) TestRestartScheduler(c *C) {
+	defer clearTestInfoOperation(c)
+
 	var (
 		logger       = log.L()
 		sourceID1    = "mysql-replica-1"
@@ -623,7 +625,7 @@ func (t *testScheduler) TestRestartScheduler(c *C) {
 		sourceBound1 = ha.NewSourceBound(sourceID1, workerName1)
 		sourceCfg1   config.SourceConfig
 		wg           sync.WaitGroup
-		keepAliveTTL = int64(5) // NOTE: this should be >= minLeaseTTL, in second.
+		keepAliveTTL = int64(1) // NOTE: this should be >= minLeaseTTL, in second.
 	)
 	c.Assert(sourceCfg1.LoadFromFile(sourceSampleFile), IsNil)
 	sourceCfg1.SourceID = sourceID1
@@ -662,6 +664,7 @@ func (t *testScheduler) TestRestartScheduler(c *C) {
 		return len(bounds) == 1 && bounds[0] == sourceID1
 	})
 	checkSourceBoundCh := func() {
+		time.Sleep(300 * time.Millisecond)
 		c.Assert(sourceBoundCh, HasLen, 1)
 		sourceBound := <-sourceBoundCh
 		sourceBound.Revision = 0
@@ -684,11 +687,9 @@ func (t *testScheduler) TestRestartScheduler(c *C) {
 	// case 2: worker is restarted, and worker keepalive broke but scheduler didn't catch the delete event
 	// step 4: restart worker keepalive, which can simulator one situation:
 	//			a. worker keepalive breaks but re-setup again before keepaliveTTL is timeout
-	cancel1()
-	wg.Wait()
 	c.Assert(sourceBoundCh, HasLen, 0)
 	ctx2, cancel2 := context.WithCancel(ctx)
-	keepAliveTTL = 1
+	// trigger same keepalive event again, just for test
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -698,10 +699,12 @@ func (t *testScheduler) TestRestartScheduler(c *C) {
 	// case 3: scheduler is restarted, but worker also broke after scheduler is down
 	// step 5: stop scheduler -> stop worker keepalive -> restart scheduler
 	//		   scheduler should unbound the source and update the bound info in etcd
-	s.Close()                                             // stop scheduler
-	cancel2()                                             // stop worker keepalive
-	time.Sleep(time.Duration(keepAliveTTL) * time.Second) // wait keepAliveTTL timeout
+	s.Close() // stop scheduler
+	cancel1()
+	cancel2() // stop worker keepalive
+	wg.Wait()
 	// check whether keepalive lease is out of date
+	time.Sleep(time.Duration(keepAliveTTL) * time.Second)
 	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
 		kam, _, err := ha.GetKeepAliveWorkers(etcdTestCli)
 		return err == nil && len(kam) == 0
@@ -712,6 +715,7 @@ func (t *testScheduler) TestRestartScheduler(c *C) {
 	unbounds := s.UnboundSources()
 	c.Assert(unbounds, HasLen, 1)
 	c.Assert(unbounds[0], Equals, sourceID1)
+	sourceBound1.Source = ""
 	sourceBound1.IsDeleted = true
 	checkSourceBoundCh()
 }
