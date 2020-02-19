@@ -168,9 +168,12 @@ func (c *Config) adjust() error {
 		}
 		c.AdvertiseAddr = c.WorkerAddr
 	} else {
-		host, _, err = net.SplitHostPort(c.AdvertiseAddr)
-		if err != nil || host == "" || host == "0.0.0.0" {
-			return terror.ErrWorkerHostPortNotValid.AnnotateDelegate(err, "advertise-addr (%s) must include the 'host' part and should not be '0.0.0.0'", c.AdvertiseAddr)
+		host, port, err2 := net.SplitHostPort(c.AdvertiseAddr)
+		if err2 != nil {
+			return terror.ErrWorkerHostPortNotValid.Delegate(err2, c.AdvertiseAddr)
+		}
+		if host == "" || host == "0.0.0.0" || len(port) == 0 {
+			return terror.ErrWorkerHostPortNotValid.Generate("advertise-addr (%s) must include the 'host' part and should not be '0.0.0.0'", c.AdvertiseAddr)
 		}
 	}
 
