@@ -44,6 +44,16 @@ function run() {
 
     dmctl_stop_task $TASK_NAME
 
+    name1=$(grep "Log: " $WORK_DIR/worker1/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2}'|tr -d ' ')
+    pos1=$(grep "Pos: " $WORK_DIR/worker1/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2}'|tr -d ' ')
+    name2=$(grep "Log: " $WORK_DIR/worker2/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2}'|tr -d ' ')
+    pos2=$(grep "Pos: " $WORK_DIR/worker2/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2}'|tr -d ' ')
+
+    # kill worker1 and worker2
+    kill_dm_worker
+    check_port_offline $WORKER1_PORT 20
+    check_port_offline $WORKER2_PORT 20
+
     run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
     run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
 
@@ -63,24 +73,33 @@ function run() {
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-source update $WORK_DIR/source2.toml" \
         "Update worker config is not supported by dm-ha now" 1
+    # update mysql config is not supported by dm-ha now, so we stop and start source again to update source config
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "operate-source stop $WORK_DIR/source1.toml" \
+        "true" 1
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "operate-source stop $WORK_DIR/source2.toml" \
+        "true" 1
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "operate-source create $WORK_DIR/source1.toml" \
+        "true" 1
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "operate-source create $WORK_DIR/source2.toml" \
+        "true" 1
 
-    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $WORK_DIR/dm-worker1.toml
+    run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
-    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $WORK_DIR/dm-worker2.toml
+    run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
     echo "start task in incremental mode"
     cat $cur/conf/dm-task.yaml > $WORK_DIR/dm-task.yaml
     sed -i "s/task-mode-placeholder/incremental/g" $WORK_DIR/dm-task.yaml
-    name1=$(grep "Log: " $WORK_DIR/worker1/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2}'|tr -d ' ')
-    pos1=$(grep "Pos: " $WORK_DIR/worker1/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2}'|tr -d ' ')
-    name2=$(grep "Log: " $WORK_DIR/worker2/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2}'|tr -d ' ')
-    pos2=$(grep "Pos: " $WORK_DIR/worker2/dumped_data.$TASK_NAME/metadata|awk -F: '{print $2}'|tr -d ' ')
     sed -i "s/binlog-name-placeholder-1/$name1/g" $WORK_DIR/dm-task.yaml
     sed -i "s/binlog-pos-placeholder-1/$pos1/g" $WORK_DIR/dm-task.yaml
     sed -i "s/binlog-name-placeholder-2/$name2/g" $WORK_DIR/dm-task.yaml
     sed -i "s/binlog-pos-placeholder-2/$pos2/g" $WORK_DIR/dm-task.yaml
-    sleep 8
+    sleep 3
     dmctl_start_task $WORK_DIR/dm-task.yaml
 
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml

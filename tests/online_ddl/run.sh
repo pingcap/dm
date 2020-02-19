@@ -40,11 +40,12 @@ function real_run() {
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    run_sql_file_online_ddl $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 online_ddl $online_ddl_scheme
-    run_sql_file_online_ddl $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 online_ddl $online_ddl_scheme
+	# skip online ddl test
+    # run_sql_file_online_ddl $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 online_ddl $online_ddl_scheme
+    # run_sql_file_online_ddl $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 online_ddl $online_ddl_scheme
 
     # use sync_diff_inspector to check data now!
-    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
+    # check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
 function run() {
@@ -61,10 +62,9 @@ function run() {
     echo "[$(date)] <<<<<< test case $TEST_NAME success! >>>>>>"
 }
 
-#if [ "$ONLINE_DDL_ENABLE" == true ]; then
-#    run gh-ost
-#    run pt
-#else
-# make online_ddl abort
-echo "[$(date)] <<<<<< skip online ddl test! >>>>>>"
-#fi
+if [ "$ONLINE_DDL_ENABLE" == true ]; then
+    run gh-ost
+    run pt
+else
+    echo "[$(date)] <<<<<< skip online ddl test! >>>>>>"
+fi
