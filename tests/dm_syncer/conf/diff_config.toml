@@ -16,25 +16,25 @@ fix-sql-file = "fix.sql"
 
 # tables need to check.
 [[check-tables]]
-schema = "incremental_mode"
+schema = "dm_syncer"
 tables = ["~t.*"]
 
 [[table-config]]
-schema = "incremental_mode"
+schema = "dm_syncer"
 table = "t1"
 
 [[table-config.source-tables]]
 instance-id = "source-1"
-schema = "incremental_mode"
+schema = "dm_syncer"
 table  = "t1"
 
 [[table-config]]
-schema = "incremental_mode"
+schema = "dm_syncer"
 table = "t2"
 
 [[table-config.source-tables]]
 instance-id = "source-2"
-schema = "incremental_mode"
+schema = "dm_syncer"
 table  = "t2"
 
 [[source-db]]
