@@ -91,6 +91,7 @@ func (t *testServer) TestServer(c *C) {
 	c.Assert(err, IsNil)
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	cfg.KeepAliveTTL = 1
 
 	NewRelayHolder = NewDummyRelayHolder
 	defer func() {

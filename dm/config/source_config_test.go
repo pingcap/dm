@@ -84,7 +84,7 @@ func (t *testConfig) TestConfig(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(clone4toml, Matches, "(.|\n)*backoff-rollback = \"5m(.|\n)*")
 	c.Assert(clone4toml, Matches, "(.|\n)*backoff-max = \"5m(.|\n)*")
-	clone5 := NewSourceConfig()
+	var clone5 SourceConfig
 	c.Assert(clone5.Parse(clone4toml), IsNil)
 	c.Assert(clone5, DeepEquals, *clone4)
 
