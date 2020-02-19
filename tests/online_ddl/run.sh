@@ -40,7 +40,7 @@ function real_run() {
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-	# skip online ddl test
+    # skip online ddl test
     # run_sql_file_online_ddl $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 online_ddl $online_ddl_scheme
     # run_sql_file_online_ddl $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 online_ddl $online_ddl_scheme
 
