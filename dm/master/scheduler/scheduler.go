@@ -855,7 +855,6 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 	// 2. get all history bound relationships.
 	// it should no new bound relationship added between this call and the below `GetKeepAliveWorkers`,
 	// because no DM-master leader are doing the scheduler.
-	// TODO(csuzhangxc): handle the case where the bound relationship exists, but the base info not exists.
 	sbm, _, err := ha.GetSourceBound(cli, "")
 	if err != nil {
 		return 0, err
@@ -893,13 +892,15 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 	}
 
 	// 5. delete invalid source bound info in etcd
-	invalidSourceBounds := make([]string, 0, len(sbm))
-	for name := range sbm {
-		invalidSourceBounds = append(invalidSourceBounds, name)
-	}
-	_, err = ha.DeleteSourceBound(cli, invalidSourceBounds...)
-	if err != nil {
-		return 0, err
+	if len(sbm) > 0 {
+		invalidSourceBounds := make([]string, 0, len(sbm))
+		for name := range sbm {
+			invalidSourceBounds = append(invalidSourceBounds, name)
+		}
+		_, err = ha.DeleteSourceBound(cli, invalidSourceBounds...)
+		if err != nil {
+			return 0, err
+		}
 	}
 
 	// 6. recover bounds/unbounds, all sources which not in bounds should be in unbounds.
