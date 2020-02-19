@@ -32,7 +32,7 @@ import (
 // later we can read it from dm/worker/dm-worker.toml
 // and assign it to SampleConfigFile while we build dm-worker
 var SampleConfigFile string
-var defaultKeepAliveTTL = int64(3)
+var defaultKeepAliveTTL = int64(10)
 
 var (
 	getRandomServerIDFunc = utils.GetRandomServerID
