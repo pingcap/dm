@@ -24,19 +24,21 @@ func (t *testForEtcd) TestOpsEtcd(c *C) {
 	defer clearTestInfoOperation(c)
 
 	var (
-		source         = "mysql-replica-1"
-		worker         = "dm-worker-1"
-		task1          = "task-1"
-		task2          = "task-2"
-		relayStage     = NewRelayStage(pb.Stage_Running, source)
-		subtaskStage1  = NewSubTaskStage(pb.Stage_Running, source, task1)
-		subtaskStage2  = NewSubTaskStage(pb.Stage_Running, source, task2)
-		emptyStage     = Stage{}
-		bound          = NewSourceBound(source, worker)
-		sourceCfg      = config.SourceConfig{}
-		emptySourceCfg = config.SourceConfig{}
-		subtaskCfg1    = config.SubTaskConfig{}
+		source        = "mysql-replica-1"
+		worker        = "dm-worker-1"
+		task1         = "task-1"
+		task2         = "task-2"
+		relayStage    = NewRelayStage(pb.Stage_Running, source)
+		subtaskStage1 = NewSubTaskStage(pb.Stage_Running, source, task1)
+		subtaskStage2 = NewSubTaskStage(pb.Stage_Running, source, task2)
+		bound         = NewSourceBound(source, worker)
+
+		emptyStage     Stage
+		sourceCfg      config.SourceConfig
+		emptySourceCfg config.SourceConfig
+		subtaskCfg1    config.SubTaskConfig
 	)
+
 	c.Assert(sourceCfg.LoadFromFile(sourceSampleFile), IsNil)
 	sourceCfg.SourceID = source
 	c.Assert(subtaskCfg1.DecodeFile(subTaskSampleFile), IsNil)

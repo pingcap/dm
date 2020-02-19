@@ -55,8 +55,8 @@ func (t *testForEtcd) TestSourceEtcd(c *C) {
 	defer clearTestInfoOperation(c)
 
 	var (
-		emptyCfg = config.SourceConfig{}
-		cfg      = config.SourceConfig{}
+		emptyCfg config.SourceConfig
+		cfg      config.SourceConfig
 	)
 	c.Assert(cfg.LoadFromFile(sourceSampleFile), IsNil)
 	source := cfg.SourceID

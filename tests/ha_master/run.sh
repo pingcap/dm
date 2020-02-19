@@ -6,11 +6,11 @@ cur=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 API_VERSION="v1alpha1"
-MASTER_PORT1=18261
-MASTER_PORT2=18262
-MASTER_PORT3=18263
-MASTER_PORT4=18264
-MASTER_PORT5=18265
+MASTER_PORT1=8261
+MASTER_PORT2=8361
+MASTER_PORT3=8461
+MASTER_PORT4=8561
+MASTER_PORT5=8661
 
 function run() {
     run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
@@ -21,14 +21,14 @@ function run() {
     echo "start DM worker and master"
     # start 5 dm-master
     run_dm_master $WORK_DIR/master1 $MASTER_PORT1 $cur/conf/dm-master1.toml
-    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT1
     run_dm_master $WORK_DIR/master2 $MASTER_PORT2 $cur/conf/dm-master2.toml
-    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT2
     run_dm_master $WORK_DIR/master3 $MASTER_PORT3 $cur/conf/dm-master3.toml
-    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT3
     run_dm_master $WORK_DIR/master4 $MASTER_PORT4 $cur/conf/dm-master4.toml
-    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT4
     run_dm_master $WORK_DIR/master5 $MASTER_PORT5 $cur/conf/dm-master5.toml
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT1
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT2
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT3
+    check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT4
     check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT5
 
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml

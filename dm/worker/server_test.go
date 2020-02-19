@@ -355,7 +355,7 @@ func checkRelayStatus(cli pb.WorkerClient, expect pb.Stage) bool {
 }
 
 func loadSourceConfigWithoutPassword(c *C) config.SourceConfig {
-	sourceCfg := config.SourceConfig{}
+	var sourceCfg config.SourceConfig
 	err := sourceCfg.LoadFromFile(mysqlCfgDir)
 	c.Assert(err, IsNil)
 	sourceCfg.From.Password = "" // no password set
