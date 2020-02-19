@@ -203,21 +203,21 @@ func (c *Config) configFromFile(path string) error {
 // adjust adjusts configs
 func (c *Config) adjust() error {
 	// MasterAddr's format may be "host:port" or ":port"
-	host, _, err := net.SplitHostPort(c.MasterAddr)
+	host, port, err := net.SplitHostPort(c.MasterAddr)
 	if err != nil {
 		return terror.ErrMasterHostPortNotValid.Delegate(err, c.MasterAddr)
 	}
 
 	if c.AdvertiseAddr == "" {
-		if host == "" || host == "0.0.0.0" {
+		if host == "" || host == "0.0.0.0" || len(port) == 0 {
 			return terror.ErrMasterHostPortNotValid.Generatef("master-addr (%s) must include the 'host' part (should not be '0.0.0.0') when advertise-addr is not set", c.MasterAddr)
 		}
 		c.AdvertiseAddr = c.MasterAddr
 	} else {
 		// AdvertiseAddr's format must be "host:port"
-		host, port, err2 := net.SplitHostPort(c.AdvertiseAddr)
-		if err2 != nil {
-			return terror.ErrMasterAdvertiseAddrNotValid.Delegate(err2, c.AdvertiseAddr)
+		host, port, err = net.SplitHostPort(c.AdvertiseAddr)
+		if err != nil {
+			return terror.ErrMasterAdvertiseAddrNotValid.Delegate(err, c.AdvertiseAddr)
 		}
 		if len(host) == 0 || host == "0.0.0.0" || len(port) == 0 {
 			return terror.ErrMasterAdvertiseAddrNotValid.Generate(c.AdvertiseAddr)

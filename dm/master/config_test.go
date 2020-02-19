@@ -347,3 +347,23 @@ func (t *testConfigSuite) TestParseURLs(c *check.C) {
 		}
 	}
 }
+
+func (t *testConfigSuite) TestAdjustAddr(c *check.C) {
+	cfg := NewConfig()
+	c.Assert(cfg.configFromFile(defaultConfigFile), check.IsNil)
+	c.Assert(cfg.adjust(), check.IsNil)
+
+	// invalid `advertise-addr`
+	cfg.AdvertiseAddr = "127.0.0.1"
+	c.Assert(terror.ErrMasterAdvertiseAddrNotValid.Equal(cfg.adjust()), check.IsTrue)
+	cfg.AdvertiseAddr = "0.0.0.0:8261"
+	c.Assert(terror.ErrMasterAdvertiseAddrNotValid.Equal(cfg.adjust()), check.IsTrue)
+
+	// clear `advertise-addr`, still invalid because no `host` in `master-addr`.
+	cfg.AdvertiseAddr = ""
+	c.Assert(terror.ErrMasterHostPortNotValid.Equal(cfg.adjust()), check.IsTrue)
+
+	cfg.MasterAddr = "127.0.0.1:8261"
+	c.Assert(cfg.adjust(), check.IsNil)
+	c.Assert(cfg.AdvertiseAddr, check.Equals, cfg.MasterAddr)
+}
