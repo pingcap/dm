@@ -30,7 +30,7 @@ mysql-instances:
 
 black-white-list:
   instance:
-    do-dbs: ["ha_test"]
+    do-dbs: ["ha_master_test"]
 
 mydumpers:
   global:

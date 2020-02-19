@@ -16,25 +16,25 @@ fix-sql-file = "fix.sql"
 
 # tables need to check.
 [[check-tables]]
-schema = "ha_test"
+schema = "ha_master_test"
 tables = ["~t.*"]
 
 [[table-config]]
-schema = "ha_test"
+schema = "ha_master_test"
 table = "t1"
 
 [[table-config.source-tables]]
 instance-id = "source-1"
-schema = "ha_test"
+schema = "ha_master_test"
 table  = "t1"
 
 [[table-config]]
-schema = "ha_test"
+schema = "ha_master_test"
 table = "t2"
 
 [[table-config.source-tables]]
 instance-id = "source-2"
-schema = "ha_test"
+schema = "ha_master_test"
 table  = "t2"
 
 [[source-db]]

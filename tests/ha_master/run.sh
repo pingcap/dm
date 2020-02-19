@@ -65,8 +65,8 @@ function run() {
     check_port_offline $MASTER_PORT2 20
 
     echo "wait and check task running"
-    check_http_alive 127.0.0.1:$MASTER_PORT/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
-    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+    check_http_alive 127.0.0.1:$MASTER_PORT3/apis/${API_VERSION}/status/test '"name":"test","stage":"Running"' 10
+    run_dm_ctl_with_retry $WORK_DIR "127.0.0.1:$MASTER_PORT3" \
         "query-status test" \
         "\"stage\": \"Running\"" 4
 
