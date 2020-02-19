@@ -866,6 +866,7 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 		return 0, err
 	}
 
+	boundsToTrigger := make([]ha.SourceBound, 0)
 	// 4. recover DM-worker info and status.
 	for name, info := range wim {
 		// create and record the worker agent.
@@ -878,10 +879,7 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 			w.ToFree()
 			// set the stage as Bound and record the bound relationship if exists.
 			if bound, ok := sbm[name]; ok {
-				_, err2 := ha.PutSourceBound(cli, bound)
-				if err2 != nil {
-					return 0, err2
-				}
+				boundsToTrigger = append(boundsToTrigger, bound)
 				err2 = s.updateStatusForBound(w, bound)
 				if err2 != nil {
 					return 0, err2
@@ -903,7 +901,15 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 		}
 	}
 
-	// 6. recover bounds/unbounds, all sources which not in bounds should be in unbounds.
+	// 6. put trigger source bounds info to etcd to order dm-workers to start source
+	if len(boundsToTrigger) > 0 {
+		_, err = ha.PutSourceBound(cli, boundsToTrigger...)
+		if err != nil {
+			return 0, nil
+		}
+	}
+
+	// 7. recover bounds/unbounds, all sources which not in bounds should be in unbounds.
 	for source := range s.sourceCfgs {
 		if _, ok := s.bounds[source]; !ok {
 			s.unbounds[source] = struct{}{}

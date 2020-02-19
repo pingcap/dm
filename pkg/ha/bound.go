@@ -71,13 +71,17 @@ func sourceBoundFromJSON(s string) (b SourceBound, err error) {
 
 // PutSourceBound puts the bound relationship into etcd.
 // k/v: worker-name -> bound relationship.
-func PutSourceBound(cli *clientv3.Client, bound SourceBound) (int64, error) {
-	op, err := putSourceBoundOp(bound)
-	if err != nil {
-		return 0, err
+func PutSourceBound(cli *clientv3.Client, bounds ...SourceBound) (int64, error) {
+	ops := make([]clientv3.Op, 0, len(bounds))
+	for _, bound := range bounds {
+		op, err := putSourceBoundOp(bound)
+		if err != nil {
+			return 0, err
+		}
+		ops = append(ops, op)
 	}
 
-	return etcdutil.DoOpsInOneTxn(cli, op)
+	return etcdutil.DoOpsInOneTxn(cli, ops...)
 }
 
 // DeleteSourceBound deletes the bound relationship in etcd for the specified worker.
