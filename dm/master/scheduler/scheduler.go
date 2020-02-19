@@ -877,17 +877,32 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 		// set the stage as Free if it's keep alive.
 		if _, ok := kam[name]; ok {
 			w.ToFree()
-		}
-		// set the stage as Bound and record the bound relationship if exists.
-		if bound, ok := sbm[name]; ok {
-			err2 = s.updateStatusForBound(w, bound)
-			if err2 != nil {
-				return 0, err2
+			// set the stage as Bound and record the bound relationship if exists.
+			if bound, ok := sbm[name]; ok {
+				_, err2 := ha.PutSourceBound(cli, bound)
+				if err2 != nil {
+					return 0, err2
+				}
+				err2 = s.updateStatusForBound(w, bound)
+				if err2 != nil {
+					return 0, err2
+				}
+				delete(sbm, name)
 			}
 		}
 	}
 
-	// 5. recover bounds/unbounds, all sources which not in bounds should be in unbounds.
+	// 5. delete invalid source bound info in etcd
+	invalidSourceBounds := make([]string, 0, len(sbm))
+	for name := range sbm {
+		invalidSourceBounds = append(invalidSourceBounds, name)
+	}
+	_, err = ha.DeleteSourceBound(cli, invalidSourceBounds...)
+	if err != nil {
+		return 0, err
+	}
+
+	// 6. recover bounds/unbounds, all sources which not in bounds should be in unbounds.
 	for source := range s.sourceCfgs {
 		if _, ok := s.bounds[source]; !ok {
 			s.unbounds[source] = struct{}{}

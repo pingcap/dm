@@ -612,3 +612,106 @@ func (t *testScheduler) subTaskStageMatch(c *C, s *Scheduler, task, source strin
 		c.Assert(eStageM, HasLen, 0)
 	}
 }
+
+func (t *testScheduler) TestRestartScheduler(c *C) {
+	var (
+		logger       = log.L()
+		sourceID1    = "mysql-replica-1"
+		workerName1  = "dm-worker-1"
+		workerAddr1  = "127.0.0.1:8262"
+		workerInfo1  = ha.NewWorkerInfo(workerName1, workerAddr1)
+		sourceBound1 = ha.NewSourceBound(sourceID1, workerName1)
+		sourceCfg1   config.SourceConfig
+		wg           sync.WaitGroup
+		keepAliveTTL = int64(5) // NOTE: this should be >= minLeaseTTL, in second.
+	)
+	c.Assert(sourceCfg1.LoadFromFile(sourceSampleFile), IsNil)
+	sourceCfg1.SourceID = sourceID1
+
+	s := NewScheduler(&logger)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// step 1: start scheduler
+	c.Assert(s.Start(ctx, etcdTestCli), IsNil)
+	// step 1.1: add sourceCfg and worker
+	c.Assert(s.AddSourceCfg(sourceCfg1), IsNil)
+	t.sourceCfgExist(c, s, sourceCfg1)
+	c.Assert(s.AddWorker(workerName1, workerAddr1), IsNil)
+	t.workerExist(c, s, workerInfo1)
+	// step 2: start a worker
+	// step 2.1: worker start watching source bound
+	bsm, revBound, err := ha.GetSourceBound(etcdTestCli, workerName1)
+	c.Assert(err, IsNil)
+	c.Assert(bsm, HasLen, 0)
+	sourceBoundCh := make(chan ha.SourceBound, 10)
+	sourceBoundErrCh := make(chan error, 10)
+	go func() {
+		ha.WatchSourceBound(ctx, etcdTestCli, workerName1, revBound+1, sourceBoundCh, sourceBoundErrCh)
+	}()
+	// step 2.2: worker start keepAlive
+	ctx1, cancel1 := context.WithCancel(ctx)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.Assert(ha.KeepAlive(ctx1, etcdTestCli, workerName1, keepAliveTTL), IsNil)
+	}()
+	// step 2.3: scheduler should bound source to worker
+	// wait for source1 bound to worker1.
+	utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+		bounds := s.BoundSources()
+		return len(bounds) == 1 && bounds[0] == sourceID1
+	})
+	checkSourceBoundCh := func() {
+		c.Assert(sourceBoundCh, HasLen, 1)
+		sourceBound := <-sourceBoundCh
+		sourceBound.Revision = 0
+		c.Assert(sourceBound, DeepEquals, sourceBound1)
+		c.Assert(sourceBoundErrCh, HasLen, 0)
+	}
+	// worker should receive a put sourceBound event
+	checkSourceBoundCh()
+	// case 1: scheduler restarted, and worker keepalive brock but re-setup before scheduler is started
+	// step 3: restart scheduler, but don't stop worker keepalive, which can simulate two situations:
+	//			a. worker keepalive breaks but re-setup again before scheduler is started
+	//			b. worker is restarted but re-setup keepalive before scheduler is started
+	// dm-worker will close its source when keepalive is broken, so scheduler will send an event
+	// to trigger it to restart the source again
+	s.Close()
+	c.Assert(sourceBoundCh, HasLen, 0)
+	c.Assert(s.Start(ctx, etcdTestCli), IsNil)
+	// worker should receive the trigger event again
+	checkSourceBoundCh()
+	// case 2: worker is restarted, and worker keepalive broke but scheduler didn't catch the delete event
+	// step 4: restart worker keepalive, which can simulator one situation:
+	//			a. worker keepalive breaks but re-setup again before keepaliveTTL is timeout
+	cancel1()
+	wg.Wait()
+	c.Assert(sourceBoundCh, HasLen, 0)
+	ctx2, cancel2 := context.WithCancel(ctx)
+	keepAliveTTL = 1
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.Assert(ha.KeepAlive(ctx2, etcdTestCli, workerName1, keepAliveTTL), IsNil)
+	}()
+	checkSourceBoundCh()
+	// case 3: scheduler is restarted, but worker also broke after scheduler is down
+	// step 5: stop scheduler -> stop worker keepalive -> restart scheduler
+	//		   scheduler should unbound the source and update the bound info in etcd
+	s.Close()                                             // stop scheduler
+	cancel2()                                             // stop worker keepalive
+	time.Sleep(time.Duration(keepAliveTTL) * time.Second) // wait keepAliveTTL timeout
+	// check whether keepalive lease is out of date
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+		kam, _, err := ha.GetKeepAliveWorkers(etcdTestCli)
+		return err == nil && len(kam) == 0
+	}), IsTrue)
+	c.Assert(sourceBoundCh, HasLen, 0)
+	c.Assert(s.Start(ctx, etcdTestCli), IsNil) // restart scheduler
+	c.Assert(s.BoundSources(), HasLen, 0)
+	unbounds := s.UnboundSources()
+	c.Assert(unbounds, HasLen, 1)
+	c.Assert(unbounds[0], Equals, sourceID1)
+	sourceBound1.IsDeleted = true
+	checkSourceBoundCh()
+}
