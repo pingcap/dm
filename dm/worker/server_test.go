@@ -39,7 +39,7 @@ import (
 
 // do not forget to update this path if the file removed/renamed.
 const (
-	sourceSampleFile  = "../worker/source.toml"
+	sourceSampleFile  = "./source.toml"
 	subtaskSampleFile = "./subtask.toml"
 	mydumperPath      = "../../bin/mydumper"
 )
@@ -91,7 +91,7 @@ func createMockETCD(dir string, host string) (*embed.Etcd, error) {
 func (t *testServer) TestServer(c *C) {
 	var (
 		masterAddr   = "127.0.0.1:8291"
-		workerAddr1  = "127.0.0.1:8292"
+		workerAddr1  = "127.0.0.1:8262"
 		keepAliveTTL = int64(1)
 	)
 	etcdDir := c.MkDir()
@@ -157,6 +157,7 @@ func (t *testServer) TestServer(c *C) {
 	subtaskCfg := config.SubTaskConfig{}
 	err = subtaskCfg.DecodeFile(subtaskSampleFile)
 	c.Assert(err, IsNil)
+	subtaskCfg.MydumperPath = mydumperPath
 
 	sourceCfg := loadSourceConfigWithoutPassword(c)
 	_, err = ha.PutSubTaskCfg(s.etcdClient, subtaskCfg)
