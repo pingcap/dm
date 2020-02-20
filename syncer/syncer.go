@@ -1165,7 +1165,7 @@ func (s *Syncer) Run(ctx context.Context) (err error) {
 		}
 
 		if err != nil {
-			s.tctx.L().Error("fail to fetch binlog", log.ShortError(err))
+			s.tctx.L().Error("fail to fetch binlog", Zap.Error(err))
 
 			if s.streamerController.CanRetry() {
 				err = s.streamerController.ResetReplicationSyncer(s.tctx, lastPos)
