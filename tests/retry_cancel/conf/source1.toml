@@ -6,5 +6,5 @@ enable-relay = true
 [from]
 host = "127.0.0.1"
 user = "root"
-password = ""
+password = "/Q7B9DizNLLTTfiZHv9WoEAKamfpIUs="
 port = 3306

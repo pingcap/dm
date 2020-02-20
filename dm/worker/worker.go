@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
@@ -89,7 +90,7 @@ func NewWorker(cfg *config.SourceConfig, etcdClient *clientv3.Client) (w *Worker
 	}(w)
 
 	if cfg.EnableRelay {
-		// initial relay holder
+		// initial relay holder, the cfg's password need decrypt
 		w.relayHolder = NewRelayHolder(cfg)
 		purger, err1 := w.relayHolder.Init([]purger.PurgeInterceptor{
 			w,
@@ -209,6 +210,12 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) {
 	// directly put cfg into subTaskHolder
 	// the unique of subtask should be assured by etcd
 	st := NewSubTask(cfg, w.etcdClient)
+	cfg2, err := cfg.DecryptPassword()
+	if err != nil {
+		st.fail(errors.Annotate(err, "start sub task"))
+	}
+	st.cfg = cfg2
+
 	w.subTaskHolder.recordSubTask(st)
 	if w.closed.Get() == closedTrue {
 		st.fail(terror.ErrWorkerAlreadyClosed.Generate())
@@ -220,7 +227,7 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) {
 		return
 	}
 
-	w.l.Info("started sub task", zap.Stringer("config", cfg))
+	w.l.Info("started sub task", zap.Stringer("config", cfg2))
 	st.Run()
 }
 

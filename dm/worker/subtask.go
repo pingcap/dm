@@ -110,11 +110,6 @@ func NewSubTaskWithStage(cfg *config.SubTaskConfig, stage pb.Stage, etcdClient *
 
 // Init initializes the sub task processing units
 func (st *SubTask) Init() error {
-	cfgDecrypted, err := st.cfg.DecryptPassword()
-	if err != nil {
-		return err
-	}
-	st.cfg = cfgDecrypted
 	st.units = createUnits(st.cfg, st.etcdClient)
 	if len(st.units) < 1 {
 		return terror.ErrWorkerNoAvailUnits.Generate(st.cfg.Name, st.cfg.Mode)
