@@ -37,7 +37,12 @@ import (
 	"github.com/pingcap/dm/pkg/utils"
 )
 
-var mysqlCfgDir = "./source.toml"
+// do not forget to update this path if the file removed/renamed.
+const (
+	sourceSampleFile  = "./source.toml"
+	subtaskSampleFile = "./subtask.toml"
+	mydumperPath      = "../../bin/mydumper"
+)
 
 func TestServer(t *testing.T) {
 	TestingT(t)
@@ -84,13 +89,18 @@ func createMockETCD(dir string, host string) (*embed.Etcd, error) {
 }
 
 func (t *testServer) TestServer(c *C) {
-	hostName := "127.0.0.1:8291"
+	var (
+		masterAddr   = "127.0.0.1:8291"
+		workerAddr1  = "127.0.0.1:8262"
+		keepAliveTTL = int64(1)
+	)
 	etcdDir := c.MkDir()
-	ETCD, err := createMockETCD(etcdDir, "host://"+hostName)
+	ETCD, err := createMockETCD(etcdDir, "host://"+masterAddr)
 	defer ETCD.Close()
 	c.Assert(err, IsNil)
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-config=./dm-worker.toml"}), IsNil)
+	cfg.KeepAliveTTL = keepAliveTTL
 
 	NewRelayHolder = NewDummyRelayHolder
 	defer func() {
@@ -129,7 +139,7 @@ func (t *testServer) TestServer(c *C) {
 	t.testOperateWorker(c, s, dir, true)
 
 	// check worker would retry connecting master rather than stop worker directly.
-	ETCD = t.testRetryConnectMaster(c, s, ETCD, etcdDir, hostName)
+	ETCD = t.testRetryConnectMaster(c, s, ETCD, etcdDir, masterAddr)
 
 	// resume contact with ETCD and start worker again
 	t.testOperateWorker(c, s, dir, true)
@@ -141,15 +151,15 @@ func (t *testServer) TestServer(c *C) {
 	t.testHTTPInterface(c, "metrics")
 
 	// create client
-	cli := t.createClient(c, "127.0.0.1:8262")
+	cli := t.createClient(c, workerAddr1)
 
 	// start task
 	subtaskCfg := config.SubTaskConfig{}
-	err = subtaskCfg.DecodeFile("./subtask.toml")
+	err = subtaskCfg.DecodeFile(subtaskSampleFile)
 	c.Assert(err, IsNil)
+	subtaskCfg.MydumperPath = mydumperPath
 
 	sourceCfg := loadSourceConfigWithoutPassword(c)
-	subtaskCfg.MydumperPath = "../../bin/mydumper"
 	_, err = ha.PutSubTaskCfg(s.etcdClient, subtaskCfg)
 	c.Assert(err, IsNil)
 	_, err = ha.PutSubTaskCfgStage(s.etcdClient, []config.SubTaskConfig{subtaskCfg},
@@ -355,8 +365,8 @@ func checkRelayStatus(cli pb.WorkerClient, expect pb.Stage) bool {
 }
 
 func loadSourceConfigWithoutPassword(c *C) config.SourceConfig {
-	sourceCfg := config.SourceConfig{}
-	err := sourceCfg.LoadFromFile(mysqlCfgDir)
+	var sourceCfg config.SourceConfig
+	err := sourceCfg.LoadFromFile(sourceSampleFile)
 	c.Assert(err, IsNil)
 	sourceCfg.From.Password = "" // no password set
 	return sourceCfg

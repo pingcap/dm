@@ -42,7 +42,7 @@ func GetSourceCfg(cli *clientv3.Client, source string, rev int64) (config.Source
 	ctx, cancel := context.WithTimeout(cli.Ctx(), etcdutil.DefaultRequestTimeout)
 	defer cancel()
 
-	cfg := config.SourceConfig{}
+	var cfg config.SourceConfig
 	resp, err := cli.Get(ctx, common.UpstreamConfigKeyAdapter.Encode(source), clientv3.WithRev(rev))
 	if err != nil {
 		return cfg, 0, err

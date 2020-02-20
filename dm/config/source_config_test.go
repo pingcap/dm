@@ -27,12 +27,13 @@ import (
 	"github.com/siddontang/go-mysql/mysql"
 )
 
-const mysqlTomlPath = "../worker/source.toml"
+// do not forget to update this path if the file removed/renamed.
+const sourceSampleFile = "../worker/source.toml"
 
 func (t *testConfig) TestConfig(c *C) {
-	cfg := &SourceConfig{}
+	cfg := NewSourceConfig()
 
-	c.Assert(cfg.LoadFromFile(mysqlTomlPath), IsNil)
+	c.Assert(cfg.LoadFromFile(sourceSampleFile), IsNil)
 	cfg.RelayDir = "./xx"
 	c.Assert(cfg.RelayDir, Equals, "./xx")
 	c.Assert(cfg.ServerID, Equals, uint32(101))
@@ -83,7 +84,7 @@ func (t *testConfig) TestConfig(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(clone4toml, Matches, "(.|\n)*backoff-rollback = \"5m(.|\n)*")
 	c.Assert(clone4toml, Matches, "(.|\n)*backoff-max = \"5m(.|\n)*")
-	clone5 := SourceConfig{}
+	var clone5 SourceConfig
 	c.Assert(clone5.Parse(clone4toml), IsNil)
 	c.Assert(clone5, DeepEquals, *clone4)
 
@@ -103,8 +104,8 @@ aaa = "xxx"
 
 func (t *testConfig) TestConfigVerify(c *C) {
 	newConfig := func() *SourceConfig {
-		cfg := &SourceConfig{}
-		c.Assert(cfg.LoadFromFile(mysqlTomlPath), IsNil)
+		cfg := NewSourceConfig()
+		c.Assert(cfg.LoadFromFile(sourceSampleFile), IsNil)
 		cfg.RelayDir = "./xx"
 		return cfg
 	}
@@ -203,8 +204,8 @@ func subtestFlavor(c *C, cfg *SourceConfig, sqlInfo, expectedFlavor, expectedErr
 }
 
 func (t *testConfig) TestAdjustFlavor(c *C) {
-	cfg := &SourceConfig{}
-	c.Assert(cfg.LoadFromFile(mysqlTomlPath), IsNil)
+	cfg := NewSourceConfig()
+	c.Assert(cfg.LoadFromFile(sourceSampleFile), IsNil)
 	cfg.RelayDir = "./xx"
 
 	cfg.Flavor = "mariadb"
@@ -226,8 +227,8 @@ func (t *testConfig) TestAdjustServerID(c *C) {
 	}()
 	getAllServerIDFunc = getMockServerIDs
 
-	cfg := &SourceConfig{}
-	c.Assert(cfg.LoadFromFile(mysqlTomlPath), IsNil)
+	cfg := NewSourceConfig()
+	c.Assert(cfg.LoadFromFile(sourceSampleFile), IsNil)
 	cfg.RelayDir = "./xx"
 
 	c.Assert(cfg.AdjustServerID(context.Background(), nil), IsNil)
