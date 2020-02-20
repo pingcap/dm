@@ -58,6 +58,7 @@ func NewConfig() *Config {
 	fs.BoolVar(&cfg.printSampleConfig, "print-sample-config", false, "print sample config file of dm-worker")
 	fs.StringVar(&cfg.ConfigFile, "config", "", "path to config file")
 	fs.StringVar(&cfg.MasterAddr, "master-addr", "", "master API server and status addr")
+	fs.StringVar(&cfg.AdvertiseAddr, "advertise-addr", "", `advertise address for client traffic (default "${master-addr}")`)
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file path")
 	//fs.StringVar(&cfg.LogRotate, "log-rotate", "day", "log file rotate type, hour/day")
@@ -202,18 +203,25 @@ func (c *Config) configFromFile(path string) error {
 // adjust adjusts configs
 func (c *Config) adjust() error {
 	// MasterAddr's format may be "host:port" or ":port"
-	_, _, err := net.SplitHostPort(c.MasterAddr)
+	host, port, err := net.SplitHostPort(c.MasterAddr)
 	if err != nil {
 		return terror.ErrMasterHostPortNotValid.Delegate(err, c.MasterAddr)
 	}
 
-	// AdvertiseAddr's format must be "host:port"
-	host, port, err := net.SplitHostPort(c.AdvertiseAddr)
-	if err != nil {
-		return terror.ErrMasterAdvertiseAddrNotValid.Delegate(err, c.AdvertiseAddr)
-	}
-	if len(host) == 0 || len(port) == 0 {
-		return terror.ErrMasterAdvertiseAddrNotValid.Generate(c.AdvertiseAddr)
+	if c.AdvertiseAddr == "" {
+		if host == "" || host == "0.0.0.0" || len(port) == 0 {
+			return terror.ErrMasterHostPortNotValid.Generatef("master-addr (%s) must include the 'host' part (should not be '0.0.0.0') when advertise-addr is not set", c.MasterAddr)
+		}
+		c.AdvertiseAddr = c.MasterAddr
+	} else {
+		// AdvertiseAddr's format must be "host:port"
+		host, port, err = net.SplitHostPort(c.AdvertiseAddr)
+		if err != nil {
+			return terror.ErrMasterAdvertiseAddrNotValid.Delegate(err, c.AdvertiseAddr)
+		}
+		if len(host) == 0 || host == "0.0.0.0" || len(port) == 0 {
+			return terror.ErrMasterAdvertiseAddrNotValid.Generate(c.AdvertiseAddr)
+		}
 	}
 
 	c.DeployMap = make(map[string]string)
