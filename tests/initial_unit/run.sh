@@ -8,11 +8,11 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
 function prepare_data() {
-    run_sql 'DROP DATABASE if exists initial_unit;' $MYSQL_PORT1
-    run_sql 'CREATE DATABASE initial_unit;' $MYSQL_PORT1
-    run_sql "CREATE TABLE initial_unit.t(i TINYINT, j INT UNIQUE KEY);" $MYSQL_PORT1
+    run_sql 'DROP DATABASE if exists initial_unit;' $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql 'CREATE DATABASE initial_unit;' $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "CREATE TABLE initial_unit.t(i TINYINT, j INT UNIQUE KEY);" $MYSQL_PORT1 $MYSQL_PASSWORD1
     for j in $(seq 100); do
-        run_sql "INSERT INTO initial_unit.t VALUES ($j,${j}000$j),($j,${j}001$j);" $MYSQL_PORT1
+        run_sql "INSERT INTO initial_unit.t VALUES ($j,${j}000$j),($j,${j}001$j);" $MYSQL_PORT1 $MYSQL_PASSWORD1
     done
 }
 
@@ -95,8 +95,8 @@ function run() {
             "\"stage\": \"Running\"" 2
 
         cleanup_process
-        run_sql "drop database if exists initial_unit" $TIDB_PORT
-        run_sql "drop database if exists dm_meta" $TIDB_PORT
+        run_sql "drop database if exists initial_unit" $TIDB_PORT $TIDB_PASSWORD
+        run_sql "drop database if exists dm_meta" $TIDB_PORT $TIDB_PASSWORD
     done
 }
 

@@ -2,6 +2,10 @@ MYSQL_HOST1=${MYSQL_HOST1:-127.0.0.1}
 MYSQL_HOST2=${MYSQL_HOST2:-127.0.0.1}
 MYSQL_PORT1=${MYSQL_PORT1:-3306}
 MYSQL_PORT2=${MYSQL_PORT2:-3307}
+MYSQL_PASSWORD1=${MYSQL_PASSWORD1:-123456}
+MYSQL_PASSWORD2=${MYSQL_PASSWORD2:-123456}
+TIDB_PASSWORD=${TIDB_PASSWORD:-123456}
+
 TIDB_PORT=4000
 MASTER_PORT=8261
 MASTER_PORT1=8261
@@ -20,9 +24,9 @@ function cleanup_data() {
     rm -rf $WORK_DIR
     mkdir $WORK_DIR
     for target_db in "$@"; do
-        run_sql "drop database if exists ${target_db}" $TIDB_PORT
+        run_sql "drop database if exists ${target_db}" $TIDB_PORT $TIDB_PASSWORD
     done
-    run_sql "drop database if exists dm_meta" $TIDB_PORT
+    run_sql "drop database if exists dm_meta" $TIDB_PORT $TIDB_PASSWORD
 }
 
 function cleanup_process() {
@@ -36,8 +40,8 @@ function cleanup_process() {
 }
 
 if [ "$RESET_MASTER" = true ]; then
-    run_sql "RESET MASTER" $MYSQL_PORT1
-    run_sql "RESET MASTER" $MYSQL_PORT2
+    run_sql "RESET MASTER" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "RESET MASTER" $MYSQL_PORT2 $MYSQL_PASSWORD2
 fi
 
 function join_string() {

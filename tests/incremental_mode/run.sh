@@ -8,9 +8,9 @@ WORK_DIR=$TEST_DIR/$TEST_NAME
 TASK_NAME="test"
 
 function run() {
-    run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
+    run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_contains 'Query OK, 2 rows affected'
-    run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2
+    run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
     check_contains 'Query OK, 3 rows affected'
 
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
@@ -54,14 +54,14 @@ function run() {
     check_port_offline $WORKER1_PORT 20
     check_port_offline $WORKER2_PORT 20
 
-    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
-    run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
+    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
     # start a task in `incremental` mode
     # using account with limited privileges
-    run_sql_file $cur/data/db1.prepare.user.sql $MYSQL_HOST1 $MYSQL_PORT1
+    run_sql_file $cur/data/db1.prepare.user.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_count 'Query OK, 0 rows affected' 7
-    run_sql_file $cur/data/db2.prepare.user.sql $MYSQL_HOST2 $MYSQL_PORT2
+    run_sql_file $cur/data/db2.prepare.user.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
     check_count 'Query OK, 0 rows affected' 7
 
     # update mysql config

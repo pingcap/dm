@@ -76,9 +76,9 @@ function run() {
     fi
 
     # run normal task with command
-    run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
+    run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_contains 'Query OK, 2 rows affected'
-    run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2
+    run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
     check_contains 'Query OK, 3 rows affected'
 
     run_dm_master $WORK_DIR/master $MASTER_PORT $cur/conf/dm-master.toml
