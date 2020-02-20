@@ -222,7 +222,9 @@ func testMockScheduler(ctx context.Context, wg *sync.WaitGroup, c *check.C, sour
 		c.Assert(scheduler2.AddWorker(name, workers[i]), check.IsNil)
 		scheduler2.SetWorkerClientForTest(name, workerClients[workers[i]])
 		// operate mysql config on this worker
-		cfg := &config.SourceConfig{SourceID: sources[i], From: config.DBConfig{Password: password}}
+		cfg := config.NewSourceConfig()
+		cfg.SourceID = sources[i]
+		cfg.From.Password = password
 		c.Assert(scheduler2.AddSourceCfg(*cfg), check.IsNil)
 		wg.Add(1)
 		ctx1, cancel1 := context.WithCancel(ctx)
@@ -926,9 +928,10 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	resp, err = s1.OperateSource(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.Equals, true)
-	emptyCfg, _, err := ha.GetSourceCfg(etcdTestCli, sourceID, 0)
+	cfg, _, err := ha.GetSourceCfg(etcdTestCli, sourceID, 0)
 	c.Assert(err, check.IsNil)
-	c.Assert(emptyCfg, check.DeepEquals, config.SourceConfig{})
+	var emptySourceCfg config.SourceConfig
+	c.Assert(cfg, check.DeepEquals, emptySourceCfg)
 	cancel()
 }
 

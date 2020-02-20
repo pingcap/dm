@@ -525,7 +525,7 @@ func (w *Worker) UpdateRelayConfig(ctx context.Context, content string) error {
 	}
 
 	// No need to store config in local
-	newCfg := &config.SourceConfig{}
+	newCfg := config.NewSourceConfig()
 
 	err := newCfg.Parse(content)
 	if err != nil {
