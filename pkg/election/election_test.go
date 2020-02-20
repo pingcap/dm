@@ -122,7 +122,8 @@ func (t *testElectionSuite) TestElection2After1(c *C) {
 	select {
 	case leader := <-e2.leaderCh:
 		c.Assert(leader, Equals, IsNotLeader)
-	case <-time.After(100 * time.Millisecond): // wait 100ms to start the campaign
+	case <-time.After(time.Second): // wait 100ms to start the campaign
+		c.Fatal("leader campaign timeout")
 	}
 	// but the leader should still be e1
 	_, leaderID, leaderAddr, err = e2.LeaderInfo(ctx2)
