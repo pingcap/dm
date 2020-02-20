@@ -648,18 +648,20 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 		subTaskCfgs = append(subTaskCfgs, &subTaskCfg)
 	}
 
-	dctx, dcancel := context.WithTimeout(s.etcdClient.Ctx(), time.Duration(len(subTaskCfgs))*3*time.Second)
-	defer dcancel()
-	minPos, err := getMinPosInAllSubTasks(dctx, subTaskCfgs)
-	if err != nil {
-		return err
-	}
+	if cfg.EnableRelay {
+		dctx, dcancel := context.WithTimeout(s.etcdClient.Ctx(), time.Duration(len(subTaskCfgs))*3*time.Second)
+		defer dcancel()
+		minPos, err := getMinPosInAllSubTasks(dctx, subTaskCfgs)
+		if err != nil {
+			return err
+		}
 
-	// TODO: support GTID
-	// don't contain GTID information in checkpoint table, just set it to empty
-	if minPos != nil {
-		cfg.RelayBinLogName = binlog.AdjustPosition(*minPos).Name
-		cfg.RelayBinlogGTID = ""
+		// TODO: support GTID
+		// don't contain GTID information in checkpoint table, just set it to empty
+		if minPos != nil {
+			cfg.RelayBinLogName = binlog.AdjustPosition(*minPos).Name
+			cfg.RelayBinlogGTID = ""
+		}
 	}
 
 	log.L().Info("start worker", zap.String("sourceCfg", cfg.String()), zap.Reflect("subTasks", subTaskCfgs))
@@ -778,9 +780,13 @@ func getMinPosForSubTask(ctx context.Context, subTaskCfg *config.SubTaskConfig) 
 	if subTaskCfg.Mode == config.ModeFull {
 		return nil, nil
 	}
+	subTaskCfg2, err := subTaskCfg.DecryptPassword()
+	if err != nil {
+		return nil, errors.Annotate(err, "get min position from checkpoint")
+	}
 
 	tctx := tcontext.NewContext(ctx, log.L())
-	checkpoint := syncer.NewRemoteCheckPoint(tctx, subTaskCfg, subTaskCfg.SourceID)
+	checkpoint := syncer.NewRemoteCheckPoint(tctx, subTaskCfg2, subTaskCfg2.SourceID)
 	err = checkpoint.Init(tctx)
 	if err != nil {
 		return nil, errors.Annotate(err, "get min position from checkpoint")
