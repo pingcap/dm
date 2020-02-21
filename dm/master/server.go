@@ -353,7 +353,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 				Msg:    errors.ErrorStack(err),
 			}, nil
 		}
-		sourceResps = s.getSourceRespsAfterOperation(ctx, req.Sources, req)
+		sourceResps = s.getSourceRespsAfterOperation(ctx, cfg.Name, req.Sources, req)
 	}
 
 	return &pb.StartTaskResponse{
@@ -411,7 +411,7 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 	}
 
 	resp.Result = true
-	resp.Sources = s.getSourceRespsAfterOperation(ctx, req.Sources, req)
+	resp.Sources = s.getSourceRespsAfterOperation(ctx, req.Name, req.Sources, req)
 	return resp, nil
 }
 
@@ -933,7 +933,7 @@ func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWork
 		return resp, nil
 	}
 	resp.Result = true
-	resp.Sources = s.getSourceRespsAfterOperation(ctx, req.Sources, req)
+	resp.Sources = s.getSourceRespsAfterOperation(ctx, "", req.Sources, req)
 	return resp, nil
 }
 
@@ -1289,7 +1289,16 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 	}
 
 	resp.Result = true
-	resp.Sources = s.getSourceRespsAfterOperation(ctx, []string{cfg.SourceID}, req)
+	// source is added but not bounded
+	if w := s.scheduler.GetWorkerBySource(cfg.SourceID); w == nil {
+		resp.Sources = []*pb.CommonWorkerResponse{{
+			Result: true,
+			Msg:    "source is added but there is no free worker to bound",
+			Source: cfg.SourceID,
+		}}
+	} else {
+		resp.Sources = s.getSourceRespsAfterOperation(ctx, "", []string{cfg.SourceID}, req)
+	}
 	return resp, nil
 }
 
@@ -1350,11 +1359,8 @@ Relay:
 		* resume: related relay status is running
 In the above situations, once we find an error in response we should return the error
 */
-func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, sourceID string, masterReq interface{}) (*pb.QueryStatusResponse, error) {
-	var (
-		taskName string
-		expect   pb.Stage
-	)
+func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, taskName, sourceID string, masterReq interface{}) (*pb.QueryStatusResponse, error) {
+	var expect pb.Stage
 	switch masterReq.(type) {
 	case *pb.OperateSourceRequest:
 		req := masterReq.(*pb.OperateSourceRequest)
@@ -1365,16 +1371,11 @@ func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, sou
 			expect = pb.Stage_Stopped
 		}
 	case *pb.StartTaskRequest:
-		req := masterReq.(*pb.StartTaskRequest)
-		taskName = req.Task
 		expect = pb.Stage_Running
 	case *pb.UpdateTaskRequest:
-		req := masterReq.(*pb.UpdateTaskRequest)
-		taskName = req.Task
 		expect = pb.Stage_Running
 	case *pb.OperateTaskRequest:
 		req := masterReq.(*pb.OperateTaskRequest)
-		taskName = req.Name
 		switch req.Op {
 		case pb.TaskOp_Resume:
 			expect = pb.Stage_Running
@@ -1469,12 +1470,12 @@ func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, sou
 	return nil, errors.New("fail to get expected result")
 }
 
-func (s *Server) handleOperationResult(ctx context.Context, cli *scheduler.Worker, sourceID string, req interface{}) *pb.CommonWorkerResponse {
+func (s *Server) handleOperationResult(ctx context.Context, cli *scheduler.Worker, taskName, sourceID string, req interface{}) *pb.CommonWorkerResponse {
 	if cli == nil {
 		return errorCommonWorkerResponse(sourceID+" relevant worker-client not found", sourceID, "")
 	}
 	var response *pb.CommonWorkerResponse
-	queryResp, err := s.waitOperationOk(ctx, cli, sourceID, req)
+	queryResp, err := s.waitOperationOk(ctx, cli, taskName, sourceID, req)
 	if err != nil {
 		response = errorCommonWorkerResponse(errors.ErrorStack(err), sourceID, "")
 	} else {
@@ -1504,7 +1505,7 @@ func sortCommonWorkerResults(sourceRespCh chan *pb.CommonWorkerResponse) []*pb.C
 	return sourceResps
 }
 
-func (s *Server) getSourceRespsAfterOperation(ctx context.Context, sources []string, req interface{}) []*pb.CommonWorkerResponse {
+func (s *Server) getSourceRespsAfterOperation(ctx context.Context, taskName string, sources []string, req interface{}) []*pb.CommonWorkerResponse {
 	sourceRespCh := make(chan *pb.CommonWorkerResponse, len(sources))
 	var wg sync.WaitGroup
 	for _, source := range sources {
@@ -1513,7 +1514,7 @@ func (s *Server) getSourceRespsAfterOperation(ctx context.Context, sources []str
 			defer wg.Done()
 			source, _ := args[0].(string)
 			worker := s.scheduler.GetWorkerBySource(source)
-			sourceRespCh <- s.handleOperationResult(ctx, worker, source, req)
+			sourceRespCh <- s.handleOperationResult(ctx, worker, taskName, source, req)
 		}, func(args ...interface{}) {
 			defer wg.Done()
 			source, _ := args[0].(string)
