@@ -22,6 +22,7 @@ import (
 	"github.com/pingcap/dm/dm/common"
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/dm/unit"
 	"github.com/pingcap/dm/pkg/binlog"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/ha"
@@ -63,8 +64,9 @@ type Server struct {
 	rootLis    net.Listener
 	svr        *grpc.Server
 	worker     *Worker
-	workerErr  error
 	etcdClient *clientv3.Client
+
+	sourceStatus pb.SourceStatus
 }
 
 // NewServer creates a new Server
@@ -105,8 +107,8 @@ func (s *Server) Start() error {
 	if bound, ok := bsm[s.cfg.Name]; ok {
 		log.L().Warn("worker has been assigned source before keepalive")
 		err = s.operateSourceBound(bound)
+		s.setSourceStatus(bound.Source, err, true)
 		if err != nil {
-			s.setWorkerErr(err, true)
 			log.L().Error("fail to operate sourceBound on worker", zap.String("worker", s.cfg.Name),
 				zap.String("source", bound.Source))
 		}
@@ -208,20 +210,30 @@ func (s *Server) setWorker(worker *Worker, needLock bool) {
 	s.worker = worker
 }
 
-func (s *Server) getWorkerErr(needLock bool) error {
+func (s *Server) getSourceStatus(needLock bool) pb.SourceStatus {
 	if needLock {
 		s.Lock()
 		defer s.Unlock()
 	}
-	return s.workerErr
+	return s.sourceStatus
 }
 
-func (s *Server) setWorkerErr(workerErr error, needLock bool) {
+func (s *Server) setSourceStatus(source string, err error, needLock bool) {
 	if needLock {
 		s.Lock()
 		defer s.Unlock()
 	}
-	s.workerErr = workerErr
+	s.sourceStatus = pb.SourceStatus{
+		Source: source,
+		Worker: s.cfg.Name,
+	}
+	if err != nil {
+		s.sourceStatus.Result = &pb.ProcessResult{
+			Errors: []*pb.ProcessError{
+				unit.NewProcessError(pb.ErrorType_UnknownError, err),
+			},
+		}
+	}
 }
 
 // if sourceID is set to "", worker will be closed directly
@@ -271,7 +283,7 @@ func (s *Server) handleSourceBound(ctx context.Context, boundCh chan ha.SourceBo
 			return
 		case bound := <-boundCh:
 			err := s.operateSourceBound(bound)
-			s.setWorkerErr(err, true)
+			s.setSourceStatus(bound.Source, err, true)
 			if err != nil {
 				// record the reason for operating source bound
 				// TODO: add better metrics
@@ -408,8 +420,11 @@ func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest
 func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*pb.QueryStatusResponse, error) {
 	log.L().Info("", zap.String("request", "QueryStatus"), zap.Stringer("payload", req))
 
+	sourceStatus := s.getSourceStatus(true)
+	sourceStatus.Worker = s.cfg.Name
 	resp := &pb.QueryStatusResponse{
-		Result: true,
+		Result:       true,
+		SourceStatus: &sourceStatus,
 	}
 
 	w := s.getWorker(true)
@@ -417,9 +432,6 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 		log.L().Error("fail to call QueryStatus, because mysql worker has not been started")
 		resp.Result = false
 		resp.Msg = terror.ErrWorkerNoStart.Error()
-		if err := s.getWorkerErr(true); err != nil {
-			resp.Msg += "\nlast operate source worker error is: " + err.Error()
-		}
 		return resp, nil
 	}
 
@@ -433,8 +445,7 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 	}
 
 	resp.SubTaskStatus = w.QueryStatus(req.Name)
-	resp.RelayStatus = relayStatus
-	resp.Source = w.cfg.SourceID
+	sourceStatus.RelayStatus = relayStatus
 	if len(resp.SubTaskStatus) == 0 {
 		resp.Msg = "no sub task started"
 	}
@@ -444,8 +455,17 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 // QueryError implements WorkerServer.QueryError
 func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorRequest) (*pb.QueryErrorResponse, error) {
 	log.L().Info("", zap.String("request", "QueryError"), zap.Stringer("payload", req))
+	sourceStatus := s.getSourceStatus(true)
+	sourceError := pb.SourceError{
+		Source: sourceStatus.Source,
+		Worker: s.cfg.Name,
+	}
+	if sourceStatus.Result != nil && len(sourceStatus.Result.Errors) > 0 {
+		sourceError.SourceError = sourceStatus.Result.Errors[0].String()
+	}
 	resp := &pb.QueryErrorResponse{
-		Result: true,
+		Result:      true,
+		SourceError: &sourceError,
 	}
 
 	w := s.getWorker(true)
@@ -453,15 +473,12 @@ func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorRequest) (*pb
 		log.L().Error("fail to call StartSubTask, because mysql worker has not been started")
 		resp.Result = false
 		resp.Msg = terror.ErrWorkerNoStart.Error()
-		if err := s.getWorkerErr(true); err != nil {
-			resp.Msg += "\nlast operate source worker error is: " + err.Error()
-		}
 		return resp, nil
 	}
 
 	resp.SubTaskError = w.QueryError(req.Name)
 	if w.relayHolder != nil {
-		resp.RelayError = w.relayHolder.Error()
+		resp.SourceError.RelayError = w.relayHolder.Error()
 	}
 	return resp, nil
 }
