@@ -127,6 +127,7 @@ func (t *testPortalSuite) TestCheck(c *C) {
 	resp := httptest.NewRecorder()
 
 	t.portalHandler.Check(resp, req)
+	c.Log("resp", resp)
 	c.Assert(resp.Code, Equals, http.StatusBadRequest)
 
 	checkResult := &CheckResult{}
@@ -156,6 +157,7 @@ func (t *testPortalSuite) TestGetSchemaInfo(c *C) {
 	resp := httptest.NewRecorder()
 
 	t.portalHandler.GetSchemaInfo(resp, req)
+	c.Log("resp", resp)
 	c.Assert(resp.Code, Equals, http.StatusBadRequest)
 
 	schemaInfoResult := new(SchemaInfoResult)
@@ -367,7 +369,7 @@ func getTestDBCfgBytes(c *C) []byte {
 		Host:     "127.0.0.1",
 		Port:     3306,
 		User:     "root",
-		Password: "123456",
+		Password: "1234567",
 	}
 	dbCfgBytes, err := json.Marshal(dbCfg)
 	c.Assert(err, IsNil)
