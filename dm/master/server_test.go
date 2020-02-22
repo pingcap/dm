@@ -266,7 +266,10 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 		mockWorkerClient.EXPECT().QueryStatus(
 			gomock.Any(),
 			&pb.QueryStatusRequest{},
-		).Return(&pb.QueryStatusResponse{Result: true}, nil)
+		).Return(&pb.QueryStatusResponse{
+			Result:       true,
+			SourceStatus: &pb.SourceStatus{},
+		}, nil)
 		t.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
 	}
 	var wg sync.WaitGroup
@@ -283,7 +286,10 @@ func (t *testMaster) TestQueryStatus(c *check.C) {
 		mockWorkerClient.EXPECT().QueryStatus(
 			gomock.Any(),
 			&pb.QueryStatusRequest{},
-		).Return(&pb.QueryStatusResponse{Result: true}, nil)
+		).Return(&pb.QueryStatusResponse{
+			Result:       true,
+			SourceStatus: &pb.SourceStatus{},
+		}, nil)
 		t.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
 	}
 	ctx, cancel = context.WithCancel(context.Background())
@@ -428,7 +434,10 @@ func (t *testMaster) TestQueryError(c *check.C) {
 		mockWorkerClient.EXPECT().QueryError(
 			gomock.Any(),
 			&pb.QueryErrorRequest{},
-		).Return(&pb.QueryErrorResponse{Result: true}, nil)
+		).Return(&pb.QueryErrorResponse{
+			Result:      true,
+			SourceError: &pb.SourceError{},
+		}, nil)
 		t.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
 	}
 	var wg sync.WaitGroup
@@ -445,7 +454,10 @@ func (t *testMaster) TestQueryError(c *check.C) {
 		mockWorkerClient.EXPECT().QueryError(
 			gomock.Any(),
 			&pb.QueryErrorRequest{},
-		).Return(&pb.QueryErrorResponse{Result: true}, nil)
+		).Return(&pb.QueryErrorResponse{
+			Result:      true,
+			SourceError: &pb.SourceError{},
+		}, nil)
 		t.workerClients[deploy.Worker] = newMockRPCClient(mockWorkerClient)
 	}
 
@@ -744,7 +756,7 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 		Op:      pb.RelayOp_ResumeRelay,
 	}
 	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "",
-		makeWorkerClientsForHandle(ctrl, "", sources, workers, pauseReq))
+		makeWorkerClientsForHandle(ctrl, "", sources, workers, pauseReq, resumeReq))
 
 	// test OperateWorkerRelayTask with invalid dm-worker[s]
 	resp, err := server.OperateWorkerRelayTask(context.Background(), &pb.OperateWorkerRelayRequest{
@@ -1078,7 +1090,8 @@ func mockRevelantWorkerClient(mockWorkerClient *pbmock.MockWorkerClient, taskNam
 		}
 	}
 	queryResp := &pb.QueryStatusResponse{
-		Result: true,
+		Result:       true,
+		SourceStatus: &pb.SourceStatus{},
 	}
 
 	switch masterReq.(type) {

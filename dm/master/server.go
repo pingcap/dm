@@ -307,6 +307,7 @@ func subtaskCfgPointersToInstances(stCfgPointers ...*config.SubTaskConfig) []con
 func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.StartTaskResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "StartTask"))
 
+	resp := &pb.StartTaskResponse{}
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
 		if needForward {
@@ -317,10 +318,8 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 
 	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task)
 	if err != nil {
-		return &pb.StartTaskResponse{
-			Result: false,
-			Msg:    errors.ErrorStack(err),
-		}, nil
+		resp.Msg = errors.ErrorStack(err)
+		return resp, nil
 	}
 	log.L().Info("", zap.String("task name", cfg.Name), zap.Stringer("task", cfg), zap.String("request", "StartTask"))
 
@@ -348,18 +347,15 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 	} else {
 		err = s.scheduler.AddSubTasks(subtaskCfgPointersToInstances(stCfgs...)...)
 		if err != nil {
-			return &pb.StartTaskResponse{
-				Result: false,
-				Msg:    errors.ErrorStack(err),
-			}, nil
+			resp.Msg = errors.ErrorStack(err)
+			return resp, nil
 		}
+		resp.Result = true
 		sourceResps = s.getSourceRespsAfterOperation(ctx, cfg.Name, req.Sources, req)
 	}
 
-	return &pb.StartTaskResponse{
-		Result:  true,
-		Sources: sourceResps,
-	}, nil
+	resp.Sources = sourceResps
+	return resp, nil
 }
 
 // OperateTask implements MasterServer.OperateTask
