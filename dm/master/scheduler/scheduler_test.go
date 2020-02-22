@@ -92,7 +92,7 @@ func (t *testScheduler) TestScheduler(c *C) {
 	sourceCfg2 := sourceCfg1
 	sourceCfg2.SourceID = sourceID2
 
-	c.Assert(subtaskCfg1.DecodeFile(subTaskSampleFile), IsNil)
+	c.Assert(subtaskCfg1.DecodeFile(subTaskSampleFile, true), IsNil)
 	subtaskCfg1.SourceID = sourceID1
 	subtaskCfg1.Name = taskName1
 	c.Assert(subtaskCfg1.Adjust(true), IsNil)

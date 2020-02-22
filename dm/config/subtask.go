@@ -223,23 +223,23 @@ func (c *SubTaskConfig) Toml() (string, error) {
 }
 
 // DecodeFile loads and decodes config from file
-func (c *SubTaskConfig) DecodeFile(fpath string) error {
+func (c *SubTaskConfig) DecodeFile(fpath string, decryptPassword bool) error {
 	_, err := toml.DecodeFile(fpath, c)
 	if err != nil {
 		return terror.ErrConfigTomlTransform.Delegate(err, "decode subtask config from file")
 	}
 
-	return c.Adjust(true)
+	return c.Adjust(decryptPassword)
 }
 
 // Decode loads config from file data
-func (c *SubTaskConfig) Decode(data string) error {
+func (c *SubTaskConfig) Decode(data string, decryptPassword bool) error {
 	_, err := toml.Decode(data, c)
 	if err != nil {
 		return terror.ErrConfigTomlTransform.Delegate(err, "decode subtask config from data")
 	}
 
-	return c.Adjust(true)
+	return c.Adjust(decryptPassword)
 }
 
 // Adjust adjusts configs
@@ -308,7 +308,7 @@ func (c *SubTaskConfig) Parse(arguments []string, decryptPassword bool) error {
 
 	// Load config file if specified.
 	if c.ConfigFile != "" {
-		err = c.DecodeFile(c.ConfigFile)
+		err = c.DecodeFile(c.ConfigFile, decryptPassword)
 		if err != nil {
 			return err
 		}

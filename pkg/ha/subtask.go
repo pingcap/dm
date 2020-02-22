@@ -68,7 +68,7 @@ func GetSubTaskCfg(cli *clientv3.Client, source, taskName string, rev int64) (ma
 
 	for _, kvs := range resp.Kvs {
 		cfg := config.SubTaskConfig{}
-		err = cfg.Decode(string(kvs.Value))
+		err = cfg.Decode(string(kvs.Value), true)
 		if err != nil {
 			return tsm, 0, err
 		}
@@ -94,7 +94,7 @@ func GetAllSubTaskCfg(cli *clientv3.Client) (map[string]map[string]config.SubTas
 	cfgs := make(map[string]map[string]config.SubTaskConfig)
 	for _, kvs := range resp.Kvs {
 		cfg := config.SubTaskConfig{}
-		err = cfg.Decode(string(kvs.Value))
+		err = cfg.Decode(string(kvs.Value), true)
 		if err != nil {
 			return nil, 0, err
 		}

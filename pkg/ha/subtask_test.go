@@ -30,7 +30,7 @@ func (t *testForEtcd) TestSubTaskEtcd(c *C) {
 	defer clearTestInfoOperation(c)
 
 	cfg1 := config.SubTaskConfig{}
-	c.Assert(cfg1.DecodeFile(subTaskSampleFile), IsNil)
+	c.Assert(cfg1.DecodeFile(subTaskSampleFile, true), IsNil)
 	source := cfg1.SourceID
 	taskName1 := cfg1.Name
 

@@ -301,7 +301,7 @@ func (s *Server) operateSourceBound(bound ha.SourceBound) error {
 func (s *Server) StartSubTask(ctx context.Context, req *pb.StartSubTaskRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "StartSubTask"), zap.Stringer("payload", req))
 	cfg := config.NewSubTaskConfig()
-	err := cfg.Decode(req.Task)
+	err := cfg.Decode(req.Task, true)
 	if err != nil {
 		err = terror.Annotatef(err, "decode subtask config from request %+v", req.Task)
 		log.L().Error("fail to decode task", zap.String("request", "StartSubTask"), zap.Stringer("payload", req), zap.Error(err))
@@ -371,7 +371,7 @@ func (s *Server) OperateSubTask(ctx context.Context, req *pb.OperateSubTaskReque
 func (s *Server) UpdateSubTask(ctx context.Context, req *pb.UpdateSubTaskRequest) (*pb.CommonWorkerResponse, error) {
 	log.L().Info("", zap.String("request", "UpdateSubTask"), zap.Stringer("payload", req))
 	cfg := config.NewSubTaskConfig()
-	err := cfg.Decode(req.Task)
+	err := cfg.Decode(req.Task, true)
 	if err != nil {
 		err = terror.Annotatef(err, "decode config from request %+v", req.Task)
 		log.L().Error("fail to decode subtask", zap.String("request", "UpdateSubTask"), zap.Stringer("payload", req), zap.Error(err))

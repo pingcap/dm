@@ -155,7 +155,7 @@ func (t *testServer) TestServer(c *C) {
 
 	// start task
 	subtaskCfg := config.SubTaskConfig{}
-	err = subtaskCfg.DecodeFile(subtaskSampleFile)
+	err = subtaskCfg.DecodeFile(subtaskSampleFile, true)
 	c.Assert(err, IsNil)
 	subtaskCfg.MydumperPath = mydumperPath
 
