@@ -65,10 +65,8 @@ function run() {
     check_count 'Query OK, 0 rows affected' 7
 
     # update mysql config
-    # will try to connection tp database when adjust config, 
-    # and user dm_incremental can't connection to # database. just comemnt now
-    # sed -i "s/root/dm_incremental/g" $WORK_DIR/source1.toml
-    # sed -i "s/root/dm_incremental/g" $WORK_DIR/source2.toml
+    sed -i "s/root/dm_incremental/g" $WORK_DIR/source1.toml
+    sed -i "s/root/dm_incremental/g" $WORK_DIR/source2.toml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "operate-source update $WORK_DIR/source1.toml" \
         "Update worker config is not supported by dm-ha now" 1
