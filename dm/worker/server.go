@@ -46,8 +46,6 @@ var (
 	keepaliveTime           = 3 * time.Second
 	retryConnectSleepTime   = time.Second
 	getMinPosForSubTaskFunc = getMinPosForSubTask
-
-	initStatusOnce sync.Once
 )
 
 // Server accepts RPC requests
@@ -150,9 +148,8 @@ func (s *Server) Start() error {
 		}
 	}()
 
-	go initStatusOnce.Do(func() {
-		InitStatus(httpL)
-	}) // serve status
+	RegistryMetrics()
+	go InitStatus(httpL) // serve status
 
 	s.closed.Set(false)
 	log.L().Info("start gRPC API", zap.String("listened address", s.cfg.WorkerAddr))
