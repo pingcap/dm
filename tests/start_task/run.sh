@@ -38,9 +38,7 @@ function run() {
         # operate mysql config to worker
         cp $cur/conf/source1.toml $WORK_DIR/source1.toml
         sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
-        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "operate-source create $WORK_DIR/source1.toml" \
-            "true" 1
+        dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
 
         echo "check un-accessible DM-worker exists"
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -63,9 +61,7 @@ function run() {
         check_rpc_alive $cur/../bin/check_master_online 127.0.0.1:$MASTER_PORT
         sleep 5
 
-        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "start-task $task_conf" \
-            "\"result\": true" 1
+        dmctl_start_task_standalone $task_conf
 
         check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 

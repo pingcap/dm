@@ -53,12 +53,8 @@ function run() {
     cp $cur/conf/source2.toml $WORK_DIR/source2.toml
     sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
     sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker2/relay_log\"" $WORK_DIR/source2.toml
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-source create $WORK_DIR/source1.toml" \
-        "true" 1
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-source create $WORK_DIR/source2.toml" \
-        "true" 1
+    dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
+    dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
 
     dmctl_start_task
 

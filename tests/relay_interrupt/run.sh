@@ -42,9 +42,7 @@ function run() {
         # operate mysql config to worker
         cp $cur/conf/source1.toml $WORK_DIR/source1.toml
         sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
-        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "operate-source create $WORK_DIR/source1.toml" \
-            "true" 1
+        dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
 
         echo "query status, relay log failed"
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -54,9 +52,7 @@ function run() {
 
         echo "start task and query status, task and relay have error message"
         task_conf="$cur/conf/dm-task.yaml"
-        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "start-task $task_conf" \
-            "\"result\": true" 1
+        dmctl_start_task_standalone task_conf
 
         echo "waiting for asynchronous relay and subtask to be started"
         sleep 2
