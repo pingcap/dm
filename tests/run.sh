@@ -4,6 +4,7 @@ set -eu
 
 TEST_DIR=/tmp/dm_test
 CUR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+source $CUR/_utils/env_variables
 
 stop_services() {
     # killall -9 tidb-server || true
@@ -30,15 +31,9 @@ start_services() {
     mkdir -p "$TEST_DIR"
     rm -rf "$TEST_DIR/*.log"
 
-    $CUR/_utils/run_tidb_server 4000 123456
+    $CUR/_utils/run_tidb_server $TIDB_PORT $TIDB_PASSWORD
 
     i=0
-    MYSQL_HOST1=${MYSQL_HOST1:-127.0.0.1}
-    MYSQL_PORT1=${MYSQL_PORT1:-3306}
-    MYSQL_HOST2=${MYSQL_HOST2:-127.0.0.1}
-    MYSQL_PORT2=${MYSQL_PORT2:-3307}
-    MYSQL_PASSWORD1=${MYSQL_PASSWORD1:-123456}
-    MYSQL_PASSWORD2=${MYSQL_PASSWORD2:-123456}
 
     check_mysql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_mysql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
