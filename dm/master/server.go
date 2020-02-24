@@ -1414,10 +1414,25 @@ func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, tas
 	}
 
 	for num := 0; num < maxRetryNum; num++ {
+		// check whether source relative worker has been removed by scheduler
+		switch masterReq.(type) {
+		case *pb.OperateSourceRequest:
+			if expect == pb.Stage_Stopped {
+				resp := &pb.QueryStatusResponse{
+					Result:       true,
+					SourceStatus: &pb.SourceStatus{Source: sourceID, Worker: cli.BaseInfo().Name},
+				}
+				if w := s.scheduler.GetWorkerByName(cli.BaseInfo().Name); w == nil {
+					return resp, nil
+				} else if cli.Stage() == scheduler.WorkerOffline {
+					return resp, nil
+				}
+			}
+		}
 		resp, err := cli.SendRequest(ctx, req, s.cfg.RPCTimeout)
 		var queryResp *pb.QueryStatusResponse
 		if err != nil {
-			log.L().Error("fail to query task operation", zap.String("task", taskName),
+			log.L().Error("fail to query operation", zap.String("task", taskName),
 				zap.String("source", sourceID), zap.Stringer("expect", expect), log.ShortError(err))
 		} else {
 			queryResp = resp.QueryStatus
@@ -1442,16 +1457,23 @@ func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, tas
 					}
 				}
 			case *pb.StartTaskRequest, *pb.UpdateTaskRequest, *pb.OperateTaskRequest:
-				if len(queryResp.SubTaskStatus) == 1 {
+				if expect == pb.Stage_Stopped && len(queryResp.SubTaskStatus) == 0 {
+					return queryResp, nil
+				} else if len(queryResp.SubTaskStatus) == 1 {
 					if subtaskStatus := queryResp.SubTaskStatus[0]; subtaskStatus != nil {
 						if err := extractWorkerError(subtaskStatus.Result); err != nil {
 							return queryResp, err
+						}
+						// If expect stage is running, finished should also be okay
+						var finished pb.Stage = -1
+						if expect == pb.Stage_Running {
+							finished = pb.Stage_Finished
 						}
 						if expect == pb.Stage_Stopped {
 							if st, ok := subtaskStatus.Status.(*pb.SubTaskStatus_Msg); ok && st.Msg == fmt.Sprintf("no sub task with name %s has started", taskName) {
 								return queryResp, nil
 							}
-						} else if subtaskStatus.Name == taskName && subtaskStatus.Stage == expect {
+						} else if subtaskStatus.Name == taskName && (subtaskStatus.Stage == expect || subtaskStatus.Stage == finished) {
 							return queryResp, nil
 						}
 					}
@@ -1468,6 +1490,8 @@ func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, tas
 					}
 				}
 			}
+			log.L().Info("fail to get expect operation result", zap.String("task", taskName),
+				zap.String("source", sourceID), zap.Stringer("expect", expect), zap.Stringer("resp", queryResp))
 		}
 
 		select {
