@@ -15,11 +15,11 @@ package workerrpc
 
 import (
 	"context"
-	"google.golang.org/grpc/backoff"
 	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/terror"

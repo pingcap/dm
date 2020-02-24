@@ -15,11 +15,13 @@ package master
 
 import (
 	"context"
+	"os"
+
 	"github.com/pingcap/dm/dm/ctl/common"
 	"github.com/pingcap/dm/dm/pb"
+
 	"github.com/pingcap/errors"
 	"github.com/spf13/cobra"
-	"os"
 )
 
 // NewOfflineWorkerCmd creates an OfflineWorker command

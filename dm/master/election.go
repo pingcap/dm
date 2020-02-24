@@ -15,14 +15,13 @@ package master
 
 import (
 	"context"
-
-	"go.uber.org/zap"
 	"time"
 
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/election"
 	"github.com/pingcap/dm/pkg/log"
 
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 

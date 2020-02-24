@@ -16,7 +16,6 @@ package purger
 import (
 	"bytes"
 	"context"
-	"github.com/pingcap/dm/dm/config"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -27,6 +26,7 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/siddontang/go/ioutil2"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/streamer"
 	"github.com/pingcap/dm/pkg/utils"

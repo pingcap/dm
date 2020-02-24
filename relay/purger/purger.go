@@ -15,7 +15,6 @@ package purger
 
 import (
 	"context"
-	"github.com/pingcap/dm/dm/config"
 	"path/filepath"
 	"sync"
 	"time"
@@ -23,6 +22,7 @@ import (
 	"github.com/siddontang/go/sync2"
 	"go.uber.org/zap"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	tcontext "github.com/pingcap/dm/pkg/context"
 	"github.com/pingcap/dm/pkg/log"
