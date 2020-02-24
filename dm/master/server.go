@@ -351,7 +351,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 			return resp, nil
 		}
 		resp.Result = true
-		sourceResps = s.getSourceRespsAfterOperation(ctx, cfg.Name, req.Sources, req)
+		sourceResps = s.getSourceRespsAfterOperation(ctx, cfg.Name, req.Sources, []string{}, req)
 	}
 
 	resp.Sources = sourceResps
@@ -407,7 +407,7 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 	}
 
 	resp.Result = true
-	resp.Sources = s.getSourceRespsAfterOperation(ctx, req.Name, req.Sources, req)
+	resp.Sources = s.getSourceRespsAfterOperation(ctx, req.Name, req.Sources, []string{}, req)
 	return resp, nil
 }
 
@@ -929,7 +929,7 @@ func (s *Server) OperateWorkerRelayTask(ctx context.Context, req *pb.OperateWork
 		return resp, nil
 	}
 	resp.Result = true
-	resp.Sources = s.getSourceRespsAfterOperation(ctx, "", req.Sources, req)
+	resp.Sources = s.getSourceRespsAfterOperation(ctx, "", req.Sources, []string{}, req)
 	return resp, nil
 }
 
@@ -1262,6 +1262,7 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 		resp.Msg = errors.ErrorStack(err)
 		return resp, nil
 	}
+	var w *scheduler.Worker
 	switch req.Op {
 	case pb.SourceOp_StartSource:
 		err := s.scheduler.AddSourceCfg(*cfg)
@@ -1269,11 +1270,14 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 			resp.Msg = errors.ErrorStack(err)
 			return resp, nil
 		}
+		// for start source, we should get worker after start source
+		w = s.scheduler.GetWorkerBySource(cfg.SourceID)
 	case pb.SourceOp_UpdateSource:
 		// TODO: support SourceOp_UpdateSource later
 		resp.Msg = "Update worker config is not supported by dm-ha now"
 		return resp, nil
 	case pb.SourceOp_StopSource:
+		w = s.scheduler.GetWorkerBySource(cfg.SourceID)
 		err := s.scheduler.RemoveSourceCfg(cfg.SourceID)
 		if err != nil {
 			resp.Msg = errors.ErrorStack(err)
@@ -1286,14 +1290,21 @@ func (s *Server) OperateSource(ctx context.Context, req *pb.OperateSourceRequest
 
 	resp.Result = true
 	// source is added but not bounded
-	if w := s.scheduler.GetWorkerBySource(cfg.SourceID); w == nil {
+	if w == nil {
+		var msg string
+		switch req.Op {
+		case pb.SourceOp_StartSource:
+			msg = "source is added but there is no free worker to bound"
+		case pb.SourceOp_StopSource:
+			msg = "source is stopped and hasn't bound to worker before being stopped"
+		}
 		resp.Sources = []*pb.CommonWorkerResponse{{
 			Result: true,
-			Msg:    "source is added but there is no free worker to bound",
+			Msg:    msg,
 			Source: cfg.SourceID,
 		}}
 	} else {
-		resp.Sources = s.getSourceRespsAfterOperation(ctx, "", []string{cfg.SourceID}, req)
+		resp.Sources = s.getSourceRespsAfterOperation(ctx, "", []string{cfg.SourceID}, []string{w.BaseInfo().Name}, req)
 	}
 	return resp, nil
 }
@@ -1418,7 +1429,8 @@ func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, tas
 						return queryResp, nil
 					}
 				case pb.Stage_Stopped:
-					if queryResp.SourceStatus.Source == "" {
+					// we don't use queryResp.SourceStatus.Source == "" because worker might be re-arranged after being stopped
+					if queryResp.SourceStatus.Source != sourceID {
 						if err := extractWorkerError(queryResp.SourceStatus.Result); err != nil {
 							return queryResp, err
 						}
@@ -1499,16 +1511,24 @@ func sortCommonWorkerResults(sourceRespCh chan *pb.CommonWorkerResponse) []*pb.C
 	return sourceResps
 }
 
-func (s *Server) getSourceRespsAfterOperation(ctx context.Context, taskName string, sources []string, req interface{}) []*pb.CommonWorkerResponse {
+func (s *Server) getSourceRespsAfterOperation(ctx context.Context, taskName string, sources, workers []string, req interface{}) []*pb.CommonWorkerResponse {
 	sourceRespCh := make(chan *pb.CommonWorkerResponse, len(sources))
 	var wg sync.WaitGroup
-	for _, source := range sources {
+	for i, source := range sources {
 		wg.Add(1)
+		var worker string
+		if i < len(workers) {
+			worker = workers[i]
+		}
 		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
 			source, _ := args[0].(string)
-			worker := s.scheduler.GetWorkerBySource(source)
-			sourceResp := s.handleOperationResult(ctx, worker, taskName, source, req)
+			worker, _ := args[1].(string)
+			workerCli := s.scheduler.GetWorkerBySource(source)
+			if workerCli == nil && worker != "" {
+				workerCli = s.scheduler.GetWorkerByName(worker)
+			}
+			sourceResp := s.handleOperationResult(ctx, workerCli, taskName, source, req)
 			if sourceResp.Source == "" {
 				sourceResp.Source = source
 			}
@@ -1517,7 +1537,7 @@ func (s *Server) getSourceRespsAfterOperation(ctx context.Context, taskName stri
 			defer wg.Done()
 			source, _ := args[0].(string)
 			sourceRespCh <- errorCommonWorkerResponse(terror.ErrMasterNoEmitToken.Generate(source).Error(), source, "")
-		}, source)
+		}, source, worker)
 	}
 	wg.Wait()
 	return sortCommonWorkerResults(sourceRespCh)
