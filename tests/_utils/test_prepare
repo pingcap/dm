@@ -69,13 +69,9 @@ function dmctl_start_task() {
     fi
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $task_conf" \
-        "\"result\": true" 1
-
-#    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-#        "start-task $task_conf" \
-#        "\"result\": true" 3 \
-#        "\"source\"": 2 \
-#        "\"sources\"": 1
+        "\"result\": true" 3 \
+        ""\"source\": \"$SOURCE_ID1\"" 1
+        ""\"source\": \"$SOURCE_ID2\"" 1
 }
 
 # shortcut for stop task on two DM-workers
@@ -101,11 +97,17 @@ function dmctl_operate_task() {
     operate=$2
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "$operate $task_name" \
-        "\"result\": true" 1
+        "\"result\": true" 3 \
+        "\"source\": \"$SOURCE_ID1\"" 1 \
+        "\"source\": \"$SOURCE_ID2\"" 1
+}
 
-#    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-#        "$operate $task_name" \
-#        "\"result\": true" 3 \
-#        "\"source\": \"$SOURCE_ID1\"" 1 \
-#        "\"source\": \"$SOURCE_ID2\"" 1
+function dmctl_operate_source() {
+    operate=$1
+    source_toml=$2
+    source_id=$3
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "operate-source $operate $source_toml" \
+        "\"result\": true" 2 \
+        "\"source\": \"$source_id\"" 1
 }
