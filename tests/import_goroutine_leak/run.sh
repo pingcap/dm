@@ -50,7 +50,10 @@ function run() {
     dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
     dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
 
-    dmctl_start_task
+    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+        "start-task $cur/conf/dm-task.yaml" \
+		"\"source\": \"$SOURCE_ID1\"" 1 \
+		"\"source\": \"$SOURCE_ID2\"" 1 \
 
     check_port_offline $WORKER1_PORT 20
     check_port_offline $WORKER2_PORT 20

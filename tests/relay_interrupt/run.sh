@@ -52,7 +52,10 @@ function run() {
 
         echo "start task and query status, task and relay have error message"
         task_conf="$cur/conf/dm-task.yaml"
-        dmctl_start_task_standalone task_conf
+        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+            "start-task $task_conf" \
+            "\"result\": false" 1 \
+            "\"source\": \"$SOURCE_ID1\"" 1
 
         echo "waiting for asynchronous relay and subtask to be started"
         sleep 2
