@@ -350,8 +350,12 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 			resp.Msg = errors.ErrorStack(err)
 			return resp, nil
 		}
+		sources := make([]string, 0, len(stCfgs))
+		for _, stCfg := range stCfgs {
+			sources = append(sources, stCfg.SourceID)
+		}
 		resp.Result = true
-		sourceResps = s.getSourceRespsAfterOperation(ctx, cfg.Name, req.Sources, []string{}, req)
+		sourceResps = s.getSourceRespsAfterOperation(ctx, cfg.Name, sources, []string{}, req)
 	}
 
 	resp.Sources = sourceResps
