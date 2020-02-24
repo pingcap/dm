@@ -41,7 +41,7 @@ func main() {
 	case flag.ErrHelp:
 		os.Exit(0)
 	default:
-		log.L().Error("parse cmd flags err " + err.Error())
+		fmt.Printf("parse cmd flags err %s", err.Error())
 		os.Exit(2)
 	}
 
@@ -63,7 +63,7 @@ func main() {
 		log.L().Info("", zap.Stringer("dm-syncer conf", conf))
 	})
 
-	sync := syncer.NewSyncer(conf)
+	sync := syncer.NewSyncer(conf, nil) // do not support shard DDL for singleton syncer.
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 

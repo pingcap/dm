@@ -7,9 +7,9 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
 function run() {
-    run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
+    run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_contains 'Query OK, 2 rows affected'
-    run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2
+    run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
     check_contains 'Query OK, 3 rows affected'
 
     export GO_FAILPOINTS='github.com/pingcap/dm/syncer/ReSyncExit=return(true)'
@@ -20,26 +20,23 @@ function run() {
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
     # operate mysql config to worker
-    cp $cur/conf/mysql1.toml $WORK_DIR/mysql1.toml
-    cp $cur/conf/mysql2.toml $WORK_DIR/mysql2.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/mysql1.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker2/relay_log\"" $WORK_DIR/mysql2.toml
+    cp $cur/conf/source1.toml $WORK_DIR/source1.toml
+    cp $cur/conf/source2.toml $WORK_DIR/source2.toml
+    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
+    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker2/relay_log\"" $WORK_DIR/source2.toml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-worker create $WORK_DIR/mysql1.toml" \
+        "operate-source create $WORK_DIR/source1.toml" \
         "true" 1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-worker create $WORK_DIR/mysql2.toml" \
+        "operate-source create $WORK_DIR/source2.toml" \
         "true" 1
-
-    run_dm_tracer $WORK_DIR/tracer $TRACER_PORT $cur/conf/dm-tracer.toml
-    check_port_alive $TRACER_PORT
 
     dmctl_start_task
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     # DM-worker exit during re-sync after sharding group synced
-    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
-    run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
+    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
     check_port_offline $WORKER1_PORT 20
     check_port_offline $WORKER2_PORT 20
@@ -51,14 +48,13 @@ function run() {
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
 
-    sleep 2
-    echo "stat task after set SafeModeInitPhaseSeconds failpoint"
-    dmctl_start_task
+    sleep 5
+    echo "check sync diff after set SafeModeInitPhaseSeconds failpoint"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     # DM-worker exit when waiting for sharding group synced
-    run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1
-    run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2
+    run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
     OWNER_PORT=""
     i=0
@@ -67,7 +63,6 @@ function run() {
         # DM-worker1 is sharding lock owner and exits
         if [ "$(check_port_return $WORKER1_PORT)" == "0" ]; then
             echo "DM-worker1 is sharding lock owner and detects it offline"
-            truncate_trace_events $TRACER_PORT
             export GO_FAILPOINTS='github.com/pingcap/dm/syncer/SafeModeInitPhaseSeconds=return(0)'
             run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
             check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
@@ -78,7 +73,6 @@ function run() {
         # DM-worker2 is sharding lock owner and exits
         if [ "$(check_port_return $WORKER2_PORT)" == "0" ]; then
             echo "DM-worker2 is sharding lock owner and detects it offline"
-            truncate_trace_events $TRACER_PORT
             export GO_FAILPOINTS='github.com/pingcap/dm/syncer/SafeModeInitPhaseSeconds=return(0)'
             run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
             check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
@@ -95,16 +89,9 @@ function run() {
         exit 1
     fi
 
-    sleep 2
-    echo "start task after restart DDL owner"
-    task_conf="$cur/conf/dm-task.yaml"
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "start-task $task_conf" \
-        "\"result\": true" 2 \
-        "\"worker\": \"127.0.0.1:$OWNER_PORT\"" 1
+    sleep 5
+    echo "check sync diff after restart DDL owner"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
-
-    $cur/../bin/check_safe_mode $check_instance_id
 }
 
 cleanup_data safe_mode_target

@@ -23,8 +23,8 @@ function prepare_datafile() {
 function run() {
     prepare_datafile
 
-    run_sql_file $WORK_DIR/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
-    run_sql_file $WORK_DIR/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2
+    run_sql_file $WORK_DIR/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql_file $WORK_DIR/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
 
     echo "dm-worker paninc, doJob of import unit workers don't exit"
@@ -43,15 +43,15 @@ function run() {
     run_dm_worker $WORK_DIR/worker2 $WORKER2_PORT $cur/conf/dm-worker2.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER2_PORT
     # operate mysql config to worker
-    cp $cur/conf/mysql1.toml $WORK_DIR/mysql1.toml
-    cp $cur/conf/mysql2.toml $WORK_DIR/mysql2.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/mysql1.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker2/relay_log\"" $WORK_DIR/mysql2.toml
+    cp $cur/conf/source1.toml $WORK_DIR/source1.toml
+    cp $cur/conf/source2.toml $WORK_DIR/source2.toml
+    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
+    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker2/relay_log\"" $WORK_DIR/source2.toml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-worker create $WORK_DIR/mysql1.toml" \
+        "operate-source create $WORK_DIR/source1.toml" \
         "true" 1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-worker create $WORK_DIR/mysql2.toml" \
+        "operate-source create $WORK_DIR/source2.toml" \
         "true" 1
 
     dmctl_start_task

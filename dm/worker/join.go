@@ -15,16 +15,16 @@ package worker
 
 import (
 	"context"
-	"go.uber.org/zap"
 	"strings"
 	"time"
 
-	"github.com/pingcap/dm/dm/common"
-	"github.com/pingcap/dm/dm/pb"
-	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/errors"
-	"go.etcd.io/etcd/clientv3"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
+
+	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/ha"
+	"github.com/pingcap/dm/pkg/log"
 )
 
 // GetJoinURLs gets the endpoints from the join address.
@@ -64,46 +64,19 @@ func (s *Server) JoinMaster(endpoints []string) error {
 	return nil
 }
 
-var (
-	defaultKeepAliveTTL = int64(3)
-	revokeLeaseTimeout  = time.Second
-)
-
 // KeepAlive attempts to keep the lease of the server alive forever.
-func (s *Server) KeepAlive() (bool, error) {
-	// TODO: fetch the actual master endpoints, the master member maybe changed.
-	cliCtx, canc := context.WithTimeout(s.ctx, revokeLeaseTimeout)
-	defer canc()
-	lease, err := s.etcdClient.Grant(cliCtx, defaultKeepAliveTTL)
-	if err != nil {
-		return false, err
-	}
-	k := common.WorkerKeepAliveKeyAdapter.Encode(s.cfg.AdvertiseAddr, s.cfg.Name)
-	_, err = s.etcdClient.Put(cliCtx, k, time.Now().String(), clientv3.WithLease(lease.ID))
-	if err != nil {
-		return false, err
-	}
-	ch, err := s.etcdClient.KeepAlive(s.ctx, lease.ID)
-	if err != nil {
-		return false, err
-	}
-	log.L().Info("keepalive", zap.String("to-master", s.cfg.Join))
-	// set retryConnectMaster as long as it connects success, for next retry
-	s.retryConnectMaster.Set(true)
+func (s *Server) KeepAlive() {
 	for {
+		log.L().Info("start to keepalive with master")
+		err1 := ha.KeepAlive(s.ctx, s.etcdClient, s.cfg.Name, s.cfg.KeepAliveTTL)
+		log.L().Warn("keepalive with master goroutine paused", zap.Error(err1))
+		s.stopWorker("")
 		select {
-		case _, ok := <-ch:
-			if !ok {
-				log.L().Info("keep alive channel is closed")
-				return false, nil
-			}
 		case <-s.ctx.Done():
-			log.L().Info("server is closing, exits keepalive")
-			ctx, cancel := context.WithTimeout(s.etcdClient.Ctx(), revokeLeaseTimeout)
-			defer cancel()
-			s.etcdClient.Revoke(ctx, lease.ID)
-			return true, nil
+			log.L().Info("keepalive with master goroutine exited!")
+			return
+		case <-time.After(retryConnectSleepTime):
+			// Try to connect master again
 		}
 	}
-
 }

@@ -21,12 +21,14 @@ type Duration struct {
 }
 
 // MarshalText hacks to satisfy the encoding.TextMarshaler interface
+// For MarshalText, we should use (d Duration) which can be used by both pointer and instance
 func (d Duration) MarshalText() ([]byte, error) {
 	return []byte(d.Duration.String()), nil
 }
 
 // UnmarshalText hacks to satisfy the encoding.TextUnmarshaler interface
-func (d Duration) UnmarshalText(text []byte) error {
+// For UnmarshalText, we should use (d *Duration) to change the value of this instance instead of the copy
+func (d *Duration) UnmarshalText(text []byte) error {
 	var err error
 	d.Duration, err = time.ParseDuration(string(text))
 	return err
@@ -47,10 +49,10 @@ type CheckerConfig struct {
 	BackoffRollback Duration `toml:"backoff-rollback" json:"backoff-rollback"`
 	BackoffMax      Duration `toml:"backoff-max" json:"backoff-max"`
 	// unexpose config
-	CheckInterval Duration `json:"-"`
-	BackoffMin    Duration `json:"-"`
-	BackoffJitter bool     `json:"-"`
-	BackoffFactor float64  `json:"-"`
+	CheckInterval Duration `toml:"check-interval" json:"-"`
+	BackoffMin    Duration `toml:"backoff-min" json:"-"`
+	BackoffJitter bool     `toml:"backoff-jitter" json:"-"`
+	BackoffFactor float64  `toml:"backoff-factor" json:"-"`
 }
 
 // Adjust sets default value for field: CheckInterval/BackoffMin/BackoffJitter/BackoffFactor

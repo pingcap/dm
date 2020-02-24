@@ -109,10 +109,6 @@ func callRPC(ctx context.Context, client pb.WorkerClient, req *Request) (*Respon
 		resp.QueryWorkerConfig, err = client.QueryWorkerConfig(ctx, req.QueryWorkerConfig)
 	case CmdHandleSubTaskSQLs:
 		resp.HandleSubTaskSQLs, err = client.HandleSQLs(ctx, req.HandleSubTaskSQLs)
-	case CmdExecDDL:
-		resp.ExecDDL, err = client.ExecuteDDL(ctx, req.ExecDDL)
-	case CmdBreakDDLLock:
-		resp.BreakDDLLock, err = client.BreakDDLLock(ctx, req.BreakDDLLock)
 	case CmdSwitchRelayMaster:
 		resp.SwitchRelayMaster, err = client.SwitchRelayMaster(ctx, req.SwitchRelayMaster)
 	case CmdOperateRelay:
@@ -123,10 +119,6 @@ func callRPC(ctx context.Context, client pb.WorkerClient, req *Request) (*Respon
 		resp.UpdateRelay, err = client.UpdateRelayConfig(ctx, req.UpdateRelay)
 	case CmdMigrateRelay:
 		resp.MigrateRelay, err = client.MigrateRelay(ctx, req.MigrateRelay)
-	case CmdFetchDDLInfo:
-		resp.FetchDDLInfo, err = client.FetchDDLInfo(ctx)
-	case CmdOperateMysqlTask:
-		resp.MysqlTask, err = client.OperateMysqlWorker(ctx, req.MysqlTask)
 	default:
 		return nil, terror.ErrMasterGRPCInvalidReqType.Generate(req.Type)
 	}

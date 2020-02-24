@@ -239,7 +239,6 @@ type TaskConfig struct {
 	// remove meta from downstreaming database
 	// now we delete checkpoint and online ddl information
 	RemoveMeta              bool   `yaml:"remove-meta"`
-	DisableHeartbeat        bool   `yaml:"disable-heartbeat"` //  deprecated, use !enable-heartbeat instead
 	EnableHeartbeat         bool   `yaml:"enable-heartbeat"`
 	HeartbeatUpdateInterval int    `yaml:"heartbeat-update-interval"`
 	HeartbeatReportInterval int    `yaml:"heartbeat-report-interval"`
@@ -270,7 +269,6 @@ func NewTaskConfig() *TaskConfig {
 	cfg := &TaskConfig{
 		// explicitly set default value
 		MetaSchema:              defaultMetaSchema,
-		DisableHeartbeat:        !defaultEnableHeartbeat,
 		EnableHeartbeat:         defaultEnableHeartbeat,
 		HeartbeatUpdateInterval: defaultUpdateInterval,
 		HeartbeatReportInterval: defaultReportInterval,
@@ -486,8 +484,7 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.CaseSensitive = c.CaseSensitive
 		cfg.MetaSchema = c.MetaSchema
 		cfg.RemoveMeta = c.RemoveMeta
-		cfg.DisableHeartbeat = c.DisableHeartbeat
-		cfg.EnableHeartbeat = c.EnableHeartbeat || !c.DisableHeartbeat
+		cfg.EnableHeartbeat = c.EnableHeartbeat
 		cfg.HeartbeatUpdateInterval = c.HeartbeatUpdateInterval
 		cfg.HeartbeatReportInterval = c.HeartbeatReportInterval
 		cfg.Timezone = c.Timezone
@@ -519,7 +516,7 @@ func (c *TaskConfig) SubTaskConfigs(sources map[string]DBConfig) ([]*SubTaskConf
 		cfg.LoaderConfig = *inst.Loader
 		cfg.SyncerConfig = *inst.Syncer
 
-		err := cfg.Adjust()
+		err := cfg.Adjust(true)
 		if err != nil {
 			return nil, terror.Annotatef(err, "source %s", inst.SourceID)
 		}

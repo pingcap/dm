@@ -68,9 +68,9 @@ Several convenient commands are provided:
 * `run_dm_master <WORKDIR> <PORT> <CONFIG>` — Starts `dm-master` using config provided, on given port, running in workdir.
 * `run_dm_worker <WORKDIR> <PORT> <CONFIG>` — Starts `dm-worker` using config provided, on given port, running in workdir.
 * `run_dm_ctl <WORKDIR> <MASTER_ADDR> <DMCTL_COMMAND>` - Runs `dmctl` with given command in non-interactive mode.
-* `run_sql <SQL> <PORT>` — Executes an SQL query in database based on port provided
-* `run_sql_file <path_to_SQL_file> <HOST> <PORT>` — Executes all SQLs in given file to the database on port provided
-* `run_sql_file_online_ddl <path_to_SQL_file> <HOST> <PORT> <DB> <ONLINE DDL TOOL>` — Executes all SQLs in given file, will auto switch DDL to online DDL command.
+* `run_sql <SQL> <PORT> <PASSWORD>` — Executes an SQL query in database based on port provided
+* `run_sql_file <path_to_SQL_file> <HOST> <PORT> <PASSWORD>` — Executes all SQLs in given file to the database on port provided
+* `run_sql_file_online_ddl <path_to_SQL_file> <HOST> <PORT> <PASSWORD> <DB> <ONLINE DDL TOOL>` — Executes all SQLs in given file, will auto switch DDL to online DDL command.
 * `check_contains <TEXT>` — Checks if the previous `run_sql`/`run_sql_file` result contains the given text (in `-E` format)
 * `check_sync_diff <WORKDIR> <CONFIG>` - Runs `sync_diff_inspector` to check diff between databases, using config file provided
 * `check_rpc_alive <CHECK_TOOL> <ADDR>` - Wrapper to check a rpc address is available, at most 10 times.

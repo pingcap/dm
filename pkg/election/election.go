@@ -15,6 +15,8 @@ package election
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -37,7 +39,40 @@ const (
 	newSessionRetryUnlimited = math.MaxInt64
 	// newSessionRetryInterval is the interval time when retrying to create a new session.
 	newSessionRetryInterval = 200 * time.Millisecond
+
+	// IsLeader means current compaigner become leader
+	IsLeader = "isLeader"
+	// RetireFromLeader means current compaigner is old leader, and retired
+	RetireFromLeader = "retireFromLeader"
+	// IsNotLeader means current compaigner is not old leader and current leader
+	IsNotLeader = "isNotLeader"
 )
+
+// CampaignerInfo is the campaigner's information
+type CampaignerInfo struct {
+	ID string `json:"id"`
+	// addr is the campaigner's advertise address
+	Addr string `json:"addr"`
+}
+
+func (c *CampaignerInfo) String() string {
+	infoBytes, err := json.Marshal(c)
+	if err != nil {
+		// this should never happened
+		return fmt.Sprintf("id: %s, addr: %s", c.ID, c.Addr)
+	}
+
+	return string(infoBytes)
+}
+
+func getCompaingerInfo(infoBytes []byte) (*CampaignerInfo, error) {
+	info := &CampaignerInfo{}
+	err := json.Unmarshal(infoBytes, info)
+	if err != nil {
+		return nil, err
+	}
+	return info, nil
+}
 
 // Election implements the leader election based on etcd.
 type Election struct {
@@ -46,10 +81,13 @@ type Election struct {
 	cli        *clientv3.Client
 	sessionTTL int
 	key        string
-	id         string
-	ech        chan error
-	leaderCh   chan bool
-	isLeader   sync2.AtomicBool
+
+	info    *CampaignerInfo
+	infoStr string
+
+	ech      chan error
+	leaderCh chan string
+	isLeader sync2.AtomicBool
 
 	closed sync2.AtomicInt32
 	cancel context.CancelFunc
@@ -59,18 +97,22 @@ type Election struct {
 }
 
 // NewElection creates a new etcd leader Election instance and starts the campaign loop.
-func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key, id string) (*Election, error) {
+func NewElection(ctx context.Context, cli *clientv3.Client, sessionTTL int, key, id, addr string) (*Election, error) {
 	ctx2, cancel2 := context.WithCancel(ctx)
 	e := &Election{
 		cli:        cli,
 		sessionTTL: sessionTTL,
 		key:        key,
-		id:         id,
-		leaderCh:   make(chan bool, 1),
-		ech:        make(chan error, 1), // size 1 is enough
-		cancel:     cancel2,
-		l:          log.With(zap.String("component", "election")),
+		info: &CampaignerInfo{
+			ID:   id,
+			Addr: addr,
+		},
+		leaderCh: make(chan string, 1),
+		ech:      make(chan error, 1), // size 1 is enough
+		cancel:   cancel2,
+		l:        log.With(zap.String("component", "election")),
 	}
+	e.infoStr = e.info.String()
 
 	// try create a session before enter the campaign loop.
 	// so we can detect potential error earlier.
@@ -95,25 +137,31 @@ func (e *Election) IsLeader() bool {
 
 // ID returns the current member's ID.
 func (e *Election) ID() string {
-	return e.id
+	return e.info.ID
 }
 
-// LeaderInfo returns the current leader's key and ID.
+// LeaderInfo returns the current leader's key, ID and address.
 // it's similar with https://github.com/etcd-io/etcd/blob/v3.4.3/clientv3/concurrency/election.go#L147.
-func (e *Election) LeaderInfo(ctx context.Context) (string, string, error) {
+func (e *Election) LeaderInfo(ctx context.Context) (string, string, string, error) {
 	resp, err := e.cli.Get(ctx, e.key, clientv3.WithFirstCreate()...)
 	if err != nil {
-		return "", "", terror.ErrElectionGetLeaderIDFail.Delegate(err)
+		return "", "", "", terror.ErrElectionGetLeaderIDFail.Delegate(err)
 	} else if len(resp.Kvs) == 0 {
 		// no leader currently elected
-		return "", "", terror.ErrElectionGetLeaderIDFail.Delegate(concurrency.ErrElectionNoLeader)
+		return "", "", "", terror.ErrElectionGetLeaderIDFail.Delegate(concurrency.ErrElectionNoLeader)
 	}
-	return string(resp.Kvs[0].Key), string(resp.Kvs[0].Value), nil
+
+	leaderInfo, err := getCompaingerInfo(resp.Kvs[0].Value)
+	if err != nil {
+		return "", "", "", terror.ErrElectionGetLeaderIDFail.Delegate(err)
+	}
+
+	return string(resp.Kvs[0].Key), leaderInfo.ID, leaderInfo.Addr, nil
 }
 
-// LeaderNotify returns a channel that can fetch notification when the member become the leader or retire from the leader.
-// `true` means become the leader; `false` means retire from the leader.
-func (e *Election) LeaderNotify() <-chan bool {
+// LeaderNotify returns a channel that can fetch notification when the member become the leader or retire from the leader, or get a new leader.
+// `true` means become the leader; `false` means retire from the leader or get a new leader.
+func (e *Election) LeaderNotify() <-chan string {
 	return e.leaderCh
 }
 
@@ -153,6 +201,10 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 		}
 	}()
 
+	var (
+		oldLeaderID string
+		compaignWg  sync.WaitGroup
+	)
 	for {
 		// check context canceled/timeout
 		select {
@@ -165,42 +217,88 @@ func (e *Election) campaignLoop(ctx context.Context, session *concurrency.Sessio
 				return
 			}
 		case <-ctx.Done():
-			e.l.Info("break campaign loop, context is done", zap.Error(ctx.Err()))
+			e.l.Info("break campaign loop, context is done", zap.String("id", e.info.ID), zap.Error(ctx.Err()))
 			return
 		default:
 		}
 
 		// try to campaign
 		elec := concurrency.NewElection(session, e.key)
-		err = elec.Campaign(ctx, e.id)
-		if err != nil {
-			// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
-			e.l.Warn("fail to campaign", zap.Error(err))
+		ctx2, cancel2 := context.WithCancel(ctx)
+
+		compaignWg.Add(1)
+		go func() {
+			defer compaignWg.Done()
+
+			e.l.Debug("begin to compaign", zap.String("ID", e.info.ID))
+			err2 := elec.Campaign(ctx2, e.infoStr)
+			if err2 != nil {
+				// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
+				e.l.Info("fail to campaign", zap.String("ID", e.info.ID), zap.Error(err2))
+			}
+		}()
+
+		var leaderKey, leaderID string
+		eleObserveCh := elec.Observe(ctx2)
+
+	observeElection:
+		for {
+			select {
+			case <-ctx.Done():
+				break observeElection
+			case <-session.Done():
+				break observeElection
+			case resp, ok := <-eleObserveCh:
+				if !ok {
+					break observeElection
+				}
+
+				e.l.Info("get response from election observe", zap.String("key", string(resp.Kvs[0].Key)), zap.String("value", string(resp.Kvs[0].Value)))
+				leaderKey = string(resp.Kvs[0].Key)
+				leaderInfo, err := getCompaingerInfo(resp.Kvs[0].Value)
+				if err != nil {
+					// this should never happened
+					e.l.Error("fail to get leader information", zap.String("value", string(resp.Kvs[0].Value)), zap.Error(err))
+					continue
+				}
+				leaderID = leaderInfo.ID
+
+				if oldLeaderID == leaderID {
+					continue
+				} else {
+					oldLeaderID = leaderID
+					break observeElection
+				}
+			}
+		}
+
+		if len(leaderID) == 0 {
+			cancel2()
+			compaignWg.Wait()
 			continue
 		}
 
-		// compare with the current leader
-		leaderKey, leaderID, err := getLeaderInfo(ctx, elec)
-		if err != nil {
-			// err may be ctx.Err(), but this can be handled in `case <-ctx.Done()`
-			e.l.Warn("fail to get leader ID", zap.Error(err))
-			continue
-		}
-		if leaderID != e.id {
-			e.l.Info("current member is not the leader", zap.String("current member", e.id), zap.String("leader", leaderID))
+		if leaderID != e.info.ID {
+			e.l.Info("current member is not the leader", zap.String("current member", e.info.ID), zap.String("leader", leaderID))
+			e.isNotLeader()
+			cancel2()
+			compaignWg.Wait()
 			continue
 		}
 
 		e.toBeLeader() // become the leader now
 		e.watchLeader(ctx, session, leaderKey)
 		e.retireLeader() // need to re-campaign
+
+		cancel2()
+		compaignWg.Wait()
 	}
 }
 
 func (e *Election) toBeLeader() {
 	e.isLeader.Set(true)
 	select {
-	case e.leaderCh <- true:
+	case e.leaderCh <- IsLeader:
 	default:
 	}
 }
@@ -208,7 +306,15 @@ func (e *Election) toBeLeader() {
 func (e *Election) retireLeader() {
 	e.isLeader.Set(false)
 	select {
-	case e.leaderCh <- false:
+	case e.leaderCh <- RetireFromLeader:
+	default:
+	}
+}
+
+func (e *Election) isNotLeader() {
+	e.isLeader.Set(false)
+	select {
+	case e.leaderCh <- IsNotLeader:
 	default:
 	}
 }
@@ -276,10 +382,15 @@ forLoop:
 }
 
 // getLeaderInfo get the current leader's information (if exists).
-func getLeaderInfo(ctx context.Context, elec *concurrency.Election) (key, ID string, err error) {
+func getLeaderInfo(ctx context.Context, elec *concurrency.Election) (key, ID, addr string, err error) {
 	resp, err := elec.Leader(ctx)
 	if err != nil {
-		return
+		return "", "", "", err
 	}
-	return string(resp.Kvs[0].Key), string(resp.Kvs[0].Value), nil
+	leaderInfo, err := getCompaingerInfo(resp.Kvs[0].Value)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	return string(resp.Kvs[0].Key), leaderInfo.ID, leaderInfo.Addr, nil
 }

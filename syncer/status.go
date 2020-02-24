@@ -70,7 +70,12 @@ func (s *Syncer) Status() interface{} {
 
 	if s.cfg.IsSharding {
 		st.UnresolvedGroups = s.sgk.UnresolvedGroups()
-		st.BlockingDDLs = s.ddlExecInfo.BlockingDDLs()
 	}
+
+	pendingShardInfo := s.pessimist.PendingInfo()
+	if pendingShardInfo != nil {
+		st.BlockingDDLs = pendingShardInfo.DDLs
+	}
+
 	return st
 }

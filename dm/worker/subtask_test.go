@@ -27,6 +27,7 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
+	"go.etcd.io/etcd/clientv3"
 )
 
 type testSubTask struct{}
@@ -37,10 +38,10 @@ func (t *testSubTask) TestCreateUnits(c *C) {
 	cfg := &config.SubTaskConfig{
 		Mode: "xxx",
 	}
-	c.Assert(createUnits(cfg), HasLen, 0)
+	c.Assert(createUnits(cfg, nil), HasLen, 0)
 
 	cfg.Mode = config.ModeFull
-	unitsFull := createUnits(cfg)
+	unitsFull := createUnits(cfg, nil)
 	c.Assert(unitsFull, HasLen, 2)
 	_, ok := unitsFull[0].(*mydumper.Mydumper)
 	c.Assert(ok, IsTrue)
@@ -48,13 +49,13 @@ func (t *testSubTask) TestCreateUnits(c *C) {
 	c.Assert(ok, IsTrue)
 
 	cfg.Mode = config.ModeIncrement
-	unitsIncr := createUnits(cfg)
+	unitsIncr := createUnits(cfg, nil)
 	c.Assert(unitsIncr, HasLen, 1)
 	_, ok = unitsIncr[0].(*syncer.Syncer)
 	c.Assert(ok, IsTrue)
 
 	cfg.Mode = config.ModeAll
-	unitsAll := createUnits(cfg)
+	unitsAll := createUnits(cfg, nil)
 	c.Assert(unitsAll, HasLen, 3)
 	_, ok = unitsAll[0].(*mydumper.Mydumper)
 	c.Assert(ok, IsTrue)
@@ -115,7 +116,20 @@ func (m *MockUnit) Update(cfg *config.SubTaskConfig) error {
 	return m.errUpdate
 }
 
-func (m *MockUnit) Status() interface{} { return nil }
+func (m *MockUnit) Status() interface{} {
+	switch m.typ {
+	case pb.UnitType_Check:
+		return &pb.CheckStatus{}
+	case pb.UnitType_Dump:
+		return &pb.DumpStatus{}
+	case pb.UnitType_Load:
+		return &pb.LoadStatus{}
+	case pb.UnitType_Sync:
+		return &pb.SyncStatus{}
+	default:
+		return struct{}{}
+	}
+}
 
 func (m *MockUnit) Error() interface{} { return nil }
 
@@ -148,18 +162,25 @@ func (t *testSubTask) TestSubTaskNormalUsage(c *C) {
 		Mode: config.ModeFull,
 	}
 
-	st := NewSubTask(cfg)
+	st := NewSubTask(cfg, nil)
 	c.Assert(st.Stage(), DeepEquals, pb.Stage_New)
 
 	// test empty and fail
-	st.units = nil
+	defer func() {
+		createUnits = createRealUnits
+	}()
+	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
+		return nil
+	}
 	st.Run()
 	c.Assert(st.Stage(), Equals, pb.Stage_Paused)
 	c.Assert(strings.Contains(st.Result().Errors[0].Msg, "has no dm units for mode"), IsTrue)
 
 	mockDumper := NewMockUnit(pb.UnitType_Dump)
 	mockLoader := NewMockUnit(pb.UnitType_Load)
-	st.units = []unit.Unit{mockDumper, mockLoader}
+	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
+		return []unit.Unit{mockDumper, mockLoader}
+	}
 
 	st.Run()
 	c.Assert(st.Stage(), Equals, pb.Stage_Running)
@@ -261,12 +282,17 @@ func (t *testSubTask) TestPauseAndResumeSubtask(c *C) {
 		Mode: config.ModeFull,
 	}
 
-	st := NewSubTask(cfg)
+	st := NewSubTask(cfg, nil)
 	c.Assert(st.Stage(), DeepEquals, pb.Stage_New)
 
 	mockDumper := NewMockUnit(pb.UnitType_Dump)
 	mockLoader := NewMockUnit(pb.UnitType_Load)
-	st.units = []unit.Unit{mockDumper, mockLoader}
+	defer func() {
+		createUnits = createRealUnits
+	}()
+	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
+		return []unit.Unit{mockDumper, mockLoader}
+	}
 
 	st.Run()
 	c.Assert(st.Stage(), Equals, pb.Stage_Running)
@@ -398,12 +424,17 @@ func (t *testSubTask) TestSubtaskWithStage(c *C) {
 		Mode: config.ModeFull,
 	}
 
-	st := NewSubTaskWithStage(cfg, pb.Stage_Paused)
+	st := NewSubTaskWithStage(cfg, pb.Stage_Paused, nil)
 	c.Assert(st.Stage(), DeepEquals, pb.Stage_Paused)
 
 	mockDumper := NewMockUnit(pb.UnitType_Dump)
 	mockLoader := NewMockUnit(pb.UnitType_Load)
-	st.units = []unit.Unit{mockDumper, mockLoader}
+	defer func() {
+		createUnits = createRealUnits
+	}()
+	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
+		return []unit.Unit{mockDumper, mockLoader}
+	}
 
 	// pause
 	c.Assert(st.Pause(), NotNil)
@@ -425,9 +456,11 @@ func (t *testSubTask) TestSubtaskWithStage(c *C) {
 		c.Fatalf("result %+v is not right after closing", st.Result())
 	}
 
-	st = NewSubTaskWithStage(cfg, pb.Stage_Finished)
+	st = NewSubTaskWithStage(cfg, pb.Stage_Finished, nil)
 	c.Assert(st.Stage(), DeepEquals, pb.Stage_Finished)
-	st.units = []unit.Unit{mockDumper, mockLoader}
+	createUnits = func(cfg *config.SubTaskConfig, etcdClient *clientv3.Client) []unit.Unit {
+		return []unit.Unit{mockDumper, mockLoader}
+	}
 
 	// close again
 	st.Close()
@@ -445,54 +478,4 @@ func (t *testSubTask) TestSubtaskWithStage(c *C) {
 	c.Assert(st.Stage(), Equals, pb.Stage_Finished)
 	c.Assert(st.CurrUnit(), Equals, nil)
 	c.Assert(st.Result(), IsNil)
-}
-
-func (t *testSubTask) TestDDLLockInfo(c *C) {
-	cfg := &config.SubTaskConfig{
-		Name: "testSubtaskScene",
-		Mode: config.ModeFull,
-	}
-
-	st := NewSubTaskWithStage(cfg, pb.Stage_Paused)
-	c.Assert(st.Stage(), DeepEquals, pb.Stage_Paused)
-	c.Assert(st.DDLLockInfo(), IsNil)
-
-	ddlLock := &pb.DDLLockInfo{
-		ID: "xxx",
-	}
-
-	c.Assert(st.SaveDDLLockInfo(ddlLock), IsNil)
-	c.Assert(st.DDLLockInfo(), DeepEquals, ddlLock)
-	c.Assert(st.SaveDDLLockInfo(&pb.DDLLockInfo{}), ErrorMatches, ".*already exists.*")
-
-	st.ClearDDLLockInfo()
-	c.Assert(st.DDLLockInfo(), IsNil)
-
-	c.Assert(st.SaveDDLLockInfo(ddlLock), IsNil)
-	c.Assert(st.DDLLockInfo(), DeepEquals, ddlLock)
-}
-
-func (t *testSubTask) TestDDLInfo(c *C) {
-	cfg := &config.SubTaskConfig{
-		Name: "testSubtaskScene",
-		Mode: config.ModeFull,
-	}
-
-	st := NewSubTaskWithStage(cfg, pb.Stage_Paused)
-	c.Assert(st.Stage(), DeepEquals, pb.Stage_Paused)
-	c.Assert(st.GetDDLInfo(), IsNil)
-
-	ddlInfo := &pb.DDLInfo{
-		Task: "xxx",
-	}
-
-	c.Assert(st.SaveDDLInfo(ddlInfo), IsNil)
-	c.Assert(st.GetDDLInfo(), DeepEquals, ddlInfo)
-	c.Assert(st.SaveDDLInfo(&pb.DDLInfo{}), ErrorMatches, ".*already exists.*")
-
-	st.ClearDDLInfo()
-	c.Assert(st.GetDDLInfo(), IsNil)
-
-	c.Assert(st.SaveDDLInfo(ddlInfo), IsNil)
-	c.Assert(st.GetDDLInfo(), DeepEquals, ddlInfo)
 }

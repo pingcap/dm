@@ -167,7 +167,7 @@ func (c *commonConfig) newSubTaskConfig(args []string) (*config.SubTaskConfig, e
 
 	cfg.ServerID = uint32(serverID)
 
-	err := cfg.Parse(args)
+	err := cfg.Parse(args, false)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -308,11 +308,10 @@ func (oc *oldConfig) convertToNewFormat() (*config.SubTaskConfig, error) {
 		return nil, errors.Trace(err)
 	}
 	newTask := &config.SubTaskConfig{
-		Name:             "dm-syncer",
-		SourceID:         "dm-syncer-from-old-config",
-		DisableHeartbeat: true,
-		Mode:             config.ModeIncrement,
-		Meta:             meta,
+		Name:     "dm-syncer",
+		SourceID: "dm-syncer-from-old-config",
+		Mode:     config.ModeIncrement,
+		Meta:     meta,
 
 		LogLevel:  oc.LogLevel,
 		LogFile:   oc.LogFile,
@@ -359,7 +358,7 @@ func (oc *oldConfig) convertToNewFormat() (*config.SubTaskConfig, error) {
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	err = newTask.Adjust()
+	err = newTask.Adjust(false)
 	return newTask, err
 }
 

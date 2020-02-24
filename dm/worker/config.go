@@ -32,6 +32,7 @@ import (
 // later we can read it from dm/worker/dm-worker.toml
 // and assign it to SampleConfigFile while we build dm-worker
 var SampleConfigFile string
+var defaultKeepAliveTTL = int64(10)
 
 var (
 	getRandomServerIDFunc = utils.GetRandomServerID
@@ -54,6 +55,7 @@ func NewConfig() *Config {
 	// NOTE: add `advertise-addr` for dm-master if needed.
 	fs.StringVar(&cfg.Join, "join", "", `join to an existing cluster (usage: dm-master cluster's "${master-addr}")`)
 	fs.StringVar(&cfg.Name, "name", "", "human-readable name for DM-worker member")
+	fs.Int64Var(&cfg.KeepAliveTTL, "keepalive-ttl", defaultKeepAliveTTL, "dm-worker's TTL for keepalive with etcd (in seconds)")
 	return cfg
 }
 
@@ -71,6 +73,8 @@ type Config struct {
 	AdvertiseAddr string `toml:"advertise-addr" json:"advertise-addr"`
 
 	ConfigFile string `json:"config-file"`
+	// TODO: in the future dm-workers should share a same ttl from dm-master
+	KeepAliveTTL int64 `toml:"keepalive-ttl" json:"keepalive-ttl"`
 
 	printVersion      bool
 	printSampleConfig bool
@@ -153,7 +157,7 @@ func (c *Config) Parse(arguments []string) error {
 
 // adjust adjusts the config.
 func (c *Config) adjust() error {
-	host, _, err := net.SplitHostPort(c.WorkerAddr)
+	host, port, err := net.SplitHostPort(c.WorkerAddr)
 	if err != nil {
 		return terror.ErrWorkerHostPortNotValid.Delegate(err, c.WorkerAddr)
 	}
@@ -164,9 +168,12 @@ func (c *Config) adjust() error {
 		}
 		c.AdvertiseAddr = c.WorkerAddr
 	} else {
-		host, _, err = net.SplitHostPort(c.AdvertiseAddr)
-		if err != nil || host == "" || host == "0.0.0.0" {
-			return terror.ErrWorkerHostPortNotValid.AnnotateDelegate(err, "advertise-addr (%s) must include the 'host' part and should not be '0.0.0.0'", c.AdvertiseAddr)
+		host, port, err = net.SplitHostPort(c.AdvertiseAddr)
+		if err != nil {
+			return terror.ErrWorkerHostPortNotValid.Delegate(err, c.AdvertiseAddr)
+		}
+		if host == "" || host == "0.0.0.0" || len(port) == 0 {
+			return terror.ErrWorkerHostPortNotValid.Generate("advertise-addr (%s) must include the 'host' part and should not be '0.0.0.0'", c.AdvertiseAddr)
 		}
 	}
 

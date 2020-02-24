@@ -17,6 +17,6 @@ function resume_task_success() {
     task_name=$1
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "resume-task $task_name" \
-        "\"result\": true" 3 \
-        "\"op\": \"Resume\"" 3
+        "\"result\": true" 1 \
+        "\"op\": \"Resume\"" 1
 }

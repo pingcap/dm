@@ -85,6 +85,7 @@ func (t *testConfigSuite) TestConfig(c *check.C) {
 		err               error
 		cfg               = &Config{}
 		masterAddr        = ":8261"
+		advertiseAddr     = "127.0.0.1:8261"
 		name              = "dm-master"
 		dataDir           = "default.dm-master"
 		peerURLs          = "http://127.0.0.1:8291"
@@ -135,6 +136,7 @@ func (t *testConfigSuite) TestConfig(c *check.C) {
 			c.Assert(err, check.ErrorMatches, tc.errorReg)
 		} else {
 			c.Assert(cfg.MasterAddr, check.Equals, masterAddr)
+			c.Assert(cfg.AdvertiseAddr, check.Equals, advertiseAddr)
 			c.Assert(cfg.Name, check.Equals, name)
 			c.Assert(cfg.DataDir, check.Equals, dataDir)
 			c.Assert(cfg.PeerUrls, check.Equals, peerURLs)
@@ -189,6 +191,7 @@ func (t *testConfigSuite) TestInvalidConfig(c *check.C) {
 	// test config Verify failed
 	configContent := []byte(`
 master-addr = ":8261"
+advertise-addr = "127.0.0.1:8261"
 
 [[deploy]]
 dm-worker = "172.16.10.72:8262"`)
@@ -213,6 +216,7 @@ dm-worker = "172.16.10.72:8262"`)
 	// field still remain undecoded in config will cause verify failed
 	configContent2 := []byte(`
 master-addr = ":8261"
+advertise-addr = "127.0.0.1:8261"
 aaa = "xxx"
 
 [[deploy]]
@@ -237,6 +241,7 @@ func (t *testConfigSuite) TestGenEmbedEtcdConfig(c *check.C) {
 
 	cfg1 := NewConfig()
 	cfg1.MasterAddr = ":8261"
+	cfg1.AdvertiseAddr = "127.0.0.1:8261"
 	cfg1.InitialClusterState = embed.ClusterStateFlagExisting
 	c.Assert(cfg1.adjust(), check.IsNil)
 	etcdCfg, err := cfg1.genEmbedEtcdConfig()
@@ -252,10 +257,12 @@ func (t *testConfigSuite) TestGenEmbedEtcdConfig(c *check.C) {
 
 	cfg2 := *cfg1
 	cfg2.MasterAddr = "127.0.0.1\n:8261"
+	cfg2.AdvertiseAddr = "127.0.0.1:8261"
 	_, err = cfg2.genEmbedEtcdConfig()
 	c.Assert(terror.ErrMasterGenEmbedEtcdConfigFail.Equal(err), check.IsTrue)
 	c.Assert(err, check.ErrorMatches, "(?m).*invalid master-addr.*")
 	cfg2.MasterAddr = "172.100.8.8:8261"
+	cfg2.AdvertiseAddr = "172.100.8.8:8261"
 	etcdCfg, err = cfg2.genEmbedEtcdConfig()
 	c.Assert(err, check.IsNil)
 	c.Assert(etcdCfg.LCUrls, check.DeepEquals, []url.URL{{Scheme: "http", Host: "172.100.8.8:8261"}})
@@ -339,4 +346,24 @@ func (t *testConfigSuite) TestParseURLs(c *check.C) {
 			c.Assert(urls, check.DeepEquals, cs.urls)
 		}
 	}
+}
+
+func (t *testConfigSuite) TestAdjustAddr(c *check.C) {
+	cfg := NewConfig()
+	c.Assert(cfg.configFromFile(defaultConfigFile), check.IsNil)
+	c.Assert(cfg.adjust(), check.IsNil)
+
+	// invalid `advertise-addr`
+	cfg.AdvertiseAddr = "127.0.0.1"
+	c.Assert(terror.ErrMasterAdvertiseAddrNotValid.Equal(cfg.adjust()), check.IsTrue)
+	cfg.AdvertiseAddr = "0.0.0.0:8261"
+	c.Assert(terror.ErrMasterAdvertiseAddrNotValid.Equal(cfg.adjust()), check.IsTrue)
+
+	// clear `advertise-addr`, still invalid because no `host` in `master-addr`.
+	cfg.AdvertiseAddr = ""
+	c.Assert(terror.ErrMasterHostPortNotValid.Equal(cfg.adjust()), check.IsTrue)
+
+	cfg.MasterAddr = "127.0.0.1:8261"
+	c.Assert(cfg.adjust(), check.IsNil)
+	c.Assert(cfg.AdvertiseAddr, check.Equals, cfg.MasterAddr)
 }

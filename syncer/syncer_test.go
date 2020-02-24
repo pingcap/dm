@@ -16,7 +16,6 @@ package syncer
 import (
 	"context"
 	"database/sql"
-	"database/sql/driver"
 	"fmt"
 	"strings"
 	"sync"
@@ -267,7 +266,7 @@ func (s *testSyncerSuite) TestSelectDB(c *C) {
 	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
-	syncer := NewSyncer(s.cfg)
+	syncer := NewSyncer(s.cfg, nil)
 	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
 	c.Assert(err, IsNil)
 	err = syncer.genRouter()
@@ -376,7 +375,7 @@ func (s *testSyncerSuite) TestSelectTable(c *C) {
 	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
-	syncer := NewSyncer(s.cfg)
+	syncer := NewSyncer(s.cfg, nil)
 	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
 	c.Assert(err, IsNil)
 	syncer.genRouter()
@@ -448,7 +447,7 @@ func (s *testSyncerSuite) TestIgnoreDB(c *C) {
 	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
-	syncer := NewSyncer(s.cfg)
+	syncer := NewSyncer(s.cfg, nil)
 	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
 	c.Assert(err, IsNil)
 	syncer.genRouter()
@@ -541,7 +540,7 @@ func (s *testSyncerSuite) TestIgnoreTable(c *C) {
 	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
-	syncer := NewSyncer(s.cfg)
+	syncer := NewSyncer(s.cfg, nil)
 	syncer.bwList, err = filter.New(syncer.cfg.CaseSensitive, syncer.cfg.BWList)
 	c.Assert(err, IsNil)
 	syncer.genRouter()
@@ -671,7 +670,7 @@ func (s *testSyncerSuite) TestSkipDML(c *C) {
 	p, err := s.mockParser(db, mock)
 	c.Assert(err, IsNil)
 
-	syncer := NewSyncer(s.cfg)
+	syncer := NewSyncer(s.cfg, nil)
 	syncer.genRouter()
 
 	syncer.binlogFilter, err = bf.NewBinlogEvent(false, s.cfg.FilterRules)
@@ -945,7 +944,7 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 		c.Assert(err, IsNil)
 	}
 
-	syncer := NewSyncer(s.cfg)
+	syncer := NewSyncer(s.cfg, nil)
 	// use upstream dbConn as mock downstream
 	dbConn, err := db.Conn(context.Background())
 	c.Assert(err, IsNil)
@@ -1022,13 +1021,13 @@ func (s *testSyncerSuite) TestGeneratedColumn(c *C) {
 }
 
 func (s *testSyncerSuite) TestcheckpointID(c *C) {
-	syncer := NewSyncer(s.cfg)
+	syncer := NewSyncer(s.cfg, nil)
 	checkpointID := syncer.checkpointID()
 	c.Assert(checkpointID, Equals, "101")
 }
 
 func (s *testSyncerSuite) TestExecErrors(c *C) {
-	syncer := NewSyncer(s.cfg)
+	syncer := NewSyncer(s.cfg, nil)
 	syncer.appendExecErrors(new(ExecErrorContext))
 	c.Assert(syncer.execErrors.errors, HasLen, 1)
 
@@ -1039,7 +1038,7 @@ func (s *testSyncerSuite) TestExecErrors(c *C) {
 func (s *testSyncerSuite) TestCasuality(c *C) {
 	var wg sync.WaitGroup
 	s.cfg.WorkerCount = 1
-	syncer := NewSyncer(s.cfg)
+	syncer := NewSyncer(s.cfg, nil)
 	syncer.jobs = []chan *job{make(chan *job, 1)}
 
 	wg.Add(1)
@@ -1066,298 +1065,7 @@ func (s *testSyncerSuite) TestCasuality(c *C) {
 	wg.Wait()
 }
 
-func (s *testSyncerSuite) TestSharding(c *C) {
-
-	events := mockBinlogEvents{
-		mockBinlogEvent{typ: DBCreate, args: []interface{}{"stest_1"}},
-		mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest_1", "create table stest_1.st_1(id int, age int)"}},
-		mockBinlogEvent{typ: TableCreate, args: []interface{}{"stest_1", "create table stest_1.st_2(id int, age int)"}},
-	}
-
-	testCases := []struct {
-		testEvents mockBinlogEvents
-		expectSQLS []struct {
-			sql  string
-			args []driver.Value
-		}
-	}{
-		// case 1:
-		// upstream binlog events:
-		// insert t1 -> insert t2 -> alter t1 -> insert t2 -> alter t2 -> insert t1(new schema) -> insert t2(new schema)
-		// downstream expected events:
-		// insert t(from t1) -> insert t(from t2) -> insert t(from t2) -> alter t(from t2 same as t1) -> insert t1(new schema) -> insert t2(new schema)
-		{
-			mockBinlogEvents{
-				mockBinlogEvent{typ: Write, args: []interface{}{uint64(8), "stest_1", "st_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(1), int32(1)}}}},
-				mockBinlogEvent{typ: Write, args: []interface{}{uint64(9), "stest_1", "st_2", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2), int32(2)}}}},
-				mockBinlogEvent{typ: DDL, args: []interface{}{"stest_1", "ALTER TABLE `stest_1`.`st_1` ADD COLUMN NAME VARCHAR(30)"}},
-				mockBinlogEvent{typ: Write, args: []interface{}{uint64(9), "stest_1", "st_2", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(4), int32(4)}}}},
-				mockBinlogEvent{typ: DDL, args: []interface{}{"stest_1", "ALTER TABLE `stest_1`.`st_2` ADD COLUMN NAME VARCHAR(30)"}},
-				mockBinlogEvent{typ: Write, args: []interface{}{uint64(8), "stest_1", "st_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(3), int32(3), "test"}}}},
-				mockBinlogEvent{typ: Write, args: []interface{}{uint64(9), "stest_1", "st_2", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(6), int32(6), "test"}}}},
-			},
-			[]struct {
-				sql  string
-				args []driver.Value
-			}{
-				{
-					"REPLACE INTO",
-					[]driver.Value{1, 1},
-				},
-				{
-					"REPLACE INTO",
-					[]driver.Value{2, 2},
-				},
-				{
-					"REPLACE INTO",
-					[]driver.Value{4, 4},
-				},
-				{
-					"ALTER TABLE",
-					[]driver.Value{},
-				},
-				{
-					"REPLACE INTO",
-					[]driver.Value{3, 3, "test"},
-				},
-				{
-					"REPLACE INTO",
-					[]driver.Value{6, 6, "test"},
-				},
-			},
-		},
-		// case 2:
-		// upstream binlog events:
-		// insert t1 -> insert t2 -> alter t1 -> insert t1(new schema) -> insert t2 -> alter t2 -> insert t1(new schema) -> insert t2(new schema)
-		// downstream expected events:
-		// insert t(from t1) -> insert t(from t2) -> insert t(from t2) -> alter t(from t2 same as t1) -> insert t1(new schema) -> insert t1(new schema) -> insert t2(new schema)
-		{
-			mockBinlogEvents{
-				mockBinlogEvent{typ: Write, args: []interface{}{uint64(8), "stest_1", "st_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(1), int32(1)}}}},
-				mockBinlogEvent{typ: Write, args: []interface{}{uint64(9), "stest_1", "st_2", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(2), int32(2)}}}},
-				mockBinlogEvent{typ: DDL, args: []interface{}{"stest_1", "ALTER TABLE `stest_1`.`st_1` ADD COLUMN NAME VARCHAR(30)"}},
-				mockBinlogEvent{typ: Write, args: []interface{}{uint64(8), "stest_1", "st_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(3), int32(3), "test"}}}},
-				mockBinlogEvent{typ: Write, args: []interface{}{uint64(9), "stest_1", "st_2", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_LONG}, [][]interface{}{{int32(4), int32(4)}}}},
-				mockBinlogEvent{typ: DDL, args: []interface{}{"stest_1", "ALTER TABLE `stest_1`.`st_2` ADD COLUMN NAME VARCHAR(30)"}},
-				mockBinlogEvent{typ: Write, args: []interface{}{uint64(8), "stest_1", "st_1", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(5), int32(5), "test"}}}},
-				mockBinlogEvent{typ: Write, args: []interface{}{uint64(9), "stest_1", "st_2", []byte{mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_LONG, mysql.MYSQL_TYPE_STRING}, [][]interface{}{{int32(6), int32(6), "test"}}}},
-			},
-			[]struct {
-				sql  string
-				args []driver.Value
-			}{
-				{
-					"REPLACE INTO",
-					[]driver.Value{1, 1},
-				},
-				{
-					"REPLACE INTO",
-					[]driver.Value{2, 2},
-				},
-				{
-					"REPLACE INTO",
-					[]driver.Value{4, 4},
-				},
-				{
-					"ALTER TABLE",
-					[]driver.Value{},
-				},
-				{
-					"REPLACE INTO",
-					[]driver.Value{3, 3, "test"},
-				},
-				{
-					"REPLACE INTO",
-					[]driver.Value{5, 5, "test"},
-				},
-				{
-					"REPLACE INTO",
-					[]driver.Value{6, 6, "test"},
-				},
-			},
-		},
-	}
-
-	s.cfg.Flavor = "mysql"
-	s.cfg.BWList = &filter.Rules{
-		DoDBs: []string{"stest_1"},
-	}
-	s.cfg.IsSharding = true
-	s.cfg.RouteRules = []*router.TableRule{
-		{
-			SchemaPattern: "stest_1",
-			TablePattern:  "st_*",
-			TargetSchema:  "stest",
-			TargetTable:   "st",
-		},
-	}
-	// set batch to 1 is easy to mock
-	s.cfg.Batch = 1
-	s.cfg.WorkerCount = 1
-
-	for i, _case := range testCases {
-		s.resetEventsGenerator(c)
-		createEvents := s.generateEvents(events, c)
-
-		db, mock, err := sqlmock.New()
-		c.Assert(err, IsNil)
-
-		fromDB, fromMock, err := sqlmock.New()
-		c.Assert(err, IsNil)
-		// mock initShardingGroups
-		fromMock.ExpectQuery("SHOW DATABASES").WillReturnRows(sqlmock.NewRows([]string{"Database"}).AddRow("information_schema").AddRow("mysql").AddRow("sys").AddRow("stest_1"))
-		fromMock.ExpectQuery("SHOW FULL TABLES").WillReturnRows(sqlmock.NewRows([]string{"Table_in_stest_1", "Table_type"}).AddRow("st_1", "BASE TABLE").AddRow("st_2", "BASE TABLE"))
-
-		checkPointDB, checkPointMock, err := sqlmock.New()
-		c.Assert(err, IsNil)
-		// mock checkpoint init
-		checkPointMock.ExpectBegin()
-		checkPointMock.ExpectExec(fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", s.cfg.MetaSchema)).WillReturnResult(sqlmock.NewResult(1, 1))
-		checkPointMock.ExpectCommit()
-		checkPointMock.ExpectBegin()
-		checkPointMock.ExpectExec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_syncer_checkpoint`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
-		checkPointMock.ExpectCommit()
-
-		shardGroupDB, shardGroupMock, err := sqlmock.New()
-		c.Assert(err, IsNil)
-		// mock initShardingGroups
-		shardGroupMock.ExpectBegin()
-		shardGroupMock.ExpectExec(fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS `%s`", s.cfg.MetaSchema)).WillReturnResult(sqlmock.NewResult(1, 1))
-		shardGroupMock.ExpectCommit()
-		shardGroupMock.ExpectBegin()
-		shardGroupMock.ExpectExec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s_syncer_sharding_meta`", s.cfg.MetaSchema, s.cfg.Name)).WillReturnResult(sqlmock.NewResult(1, 1))
-		shardGroupMock.ExpectCommit()
-		shardGroupMock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"unreachable", "unreachable", "unreachable", "unreachable", "unreachable"}))
-
-		// make syncer write to mock baseConn
-		syncer := NewSyncer(s.cfg)
-
-		ctx := context.Background()
-		// fromDB mocks upstream dbConn, dbConn mocks downstream dbConn
-		syncer.fromDB = &UpStreamConn{BaseDB: conn.NewBaseDB(fromDB)}
-		dbConn, err := db.Conn(ctx)
-		c.Assert(err, IsNil)
-		syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}
-		syncer.ddlDBConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}
-
-		// mock syncer.Init() function, because we need to pass mock dbs to different members' init
-		syncer.genRouter()
-		shardGroupDBConn, err := shardGroupDB.Conn(ctx)
-		c.Assert(err, IsNil)
-		checkPointDBConn, err := checkPointDB.Conn(ctx)
-		c.Assert(err, IsNil)
-
-		// mock syncer.shardGroupkeeper.Init() function
-		syncer.sgk.dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(shardGroupDBConn, &retry.FiniteRetryStrategy{})}
-		syncer.sgk.prepare()
-		syncer.initShardingGroups()
-
-		// mock syncer.checkpoint.Init() function
-		syncer.checkpoint.(*RemoteCheckPoint).dbConn = &DBConn{cfg: s.cfg, baseConn: conn.NewBaseConn(checkPointDBConn, &retry.FiniteRetryStrategy{})}
-		syncer.checkpoint.(*RemoteCheckPoint).prepare(tcontext.Background())
-
-		syncer.reset()
-		events := append(createEvents, s.generateEvents(_case.testEvents, c)...)
-
-		mockStreamerProducer := &MockStreamProducer{events}
-		mockStreamer, err := mockStreamerProducer.generateStreamer(mysql.Position{})
-		c.Assert(err, IsNil)
-		syncer.streamerController = &StreamerController{
-			streamerProducer: mockStreamerProducer,
-			streamer:         mockStreamer,
-		}
-
-		fromMock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE").
-			WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).
-				AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
-
-		// mock checkpoint db after create db table1 table2
-		s.mockCheckPointCreate(checkPointMock, "db")
-		s.mockCheckPointCreate(checkPointMock, "table1")
-		s.mockCheckPointCreate(checkPointMock, "table2")
-
-		// mock downstream db result
-		mock.ExpectBegin()
-		mock.ExpectExec("CREATE DATABASE").WillReturnResult(sqlmock.NewResult(1, 1))
-		mock.ExpectCommit()
-		mock.ExpectBegin()
-		mock.ExpectExec("CREATE TABLE").WillReturnResult(sqlmock.NewResult(1, 1))
-		mock.ExpectCommit()
-		mock.ExpectBegin()
-		e := newMysqlErr(1050, "Table exist")
-		mock.ExpectExec("CREATE TABLE").WillReturnError(e)
-		mock.ExpectCommit()
-
-		// mock fetching table schema from downstream
-		// called twice for each upstream schema: once for `db`.`table1`, once for `db`.`table2`.
-		mock.ExpectQuery("SHOW CREATE TABLE `stest`.`st`").
-			WillReturnRows(sqlmock.NewRows([]string{"Table", "Create Table"}).AddRow("-", "create table st(id int, age int)"))
-		mock.ExpectQuery("SHOW CREATE TABLE `stest`.`st`").
-			WillReturnRows(sqlmock.NewRows([]string{"Table", "Create Table"}).AddRow("-", "create table st(id int, age int)"))
-
-		// mock expect sql
-		for i, expectSQL := range _case.expectSQLS {
-			mock.ExpectBegin()
-			if strings.HasPrefix(expectSQL.sql, "ALTER") {
-				mock.ExpectExec(expectSQL.sql).WillReturnResult(sqlmock.NewResult(1, int64(i)+1))
-				mock.ExpectCommit()
-				s.mockCheckPointFlush(checkPointMock, i)
-			} else {
-				// change insert to replace because of safe mode
-				mock.ExpectExec(expectSQL.sql).WithArgs(expectSQL.args...).WillReturnResult(sqlmock.NewResult(1, 1))
-				mock.ExpectCommit()
-			}
-		}
-		ctx, cancel := context.WithCancel(context.Background())
-		resultCh := make(chan pb.ProcessResult)
-
-		s.mockCheckPointFlush(checkPointMock, -1)
-
-		go syncer.Process(ctx, resultCh)
-
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			reqMismatch := &DDLExecItem{&pb.ExecDDLRequest{Exec: true, DDLs: []string{"stmt"}}, make(chan error, 1)}
-			c.Assert(syncer.ddlExecInfo.Send(ctx, reqMismatch), IsNil)
-			reqMatch := &DDLExecItem{&pb.ExecDDLRequest{Exec: true}, make(chan error, 1)}
-			c.Assert(syncer.ddlExecInfo.Send(ctx, reqMatch), IsNil)
-		}()
-
-		select {
-		case r := <-resultCh:
-			for _, err := range r.Errors {
-				c.Errorf("Case %d: Process Err:%s", i, err)
-			}
-			c.Assert(len(r.Errors), Equals, 0)
-		case <-time.After(2 * time.Second):
-		}
-		cancel()
-		wg.Wait()
-
-		syncer.Close()
-		c.Assert(syncer.isClosed(), IsTrue)
-
-		flushedGP := syncer.checkpoint.FlushedGlobalPoint().Pos
-		GP := syncer.checkpoint.GlobalPoint().Pos
-		c.Assert(GP, Equals, flushedGP)
-
-		// check expectations for mock baseConn
-		if err := mock.ExpectationsWereMet(); err != nil {
-			c.Errorf("db unfulfilled expectations: %s", err)
-		}
-		if err := fromMock.ExpectationsWereMet(); err != nil {
-			c.Errorf("fromDB unfulfilled expectations: %s", err)
-		}
-		if err := checkPointMock.ExpectationsWereMet(); err != nil {
-			c.Errorf("checkpointDB unfulfilled expectations: %s", err)
-		}
-		if err := shardGroupMock.ExpectationsWereMet(); err != nil {
-			c.Errorf("shardGroupDB unfulfilled expectations: %s", err)
-		}
-	}
-}
+// TODO: add `TestSharding` later.
 
 func (s *testSyncerSuite) TestRun(c *C) {
 	// 1. run syncer with column mapping
@@ -1400,7 +1108,7 @@ func (s *testSyncerSuite) TestRun(c *C) {
 	s.cfg.MaxRetry = 1
 	s.cfg.DisableCausality = false
 
-	syncer := NewSyncer(s.cfg)
+	syncer := NewSyncer(s.cfg, nil)
 	syncer.fromDB = &UpStreamConn{BaseDB: conn.NewBaseDB(db)}
 	syncer.toDBConns = []*DBConn{{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})},
 		{cfg: s.cfg, baseConn: conn.NewBaseConn(dbConn, &retry.FiniteRetryStrategy{})}}

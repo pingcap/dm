@@ -1,25 +1,13 @@
-MYSQL_HOST1=${MYSQL_HOST1:-127.0.0.1}
-MYSQL_HOST2=${MYSQL_HOST2:-127.0.0.1}
-MYSQL_PORT1=${MYSQL_PORT1:-3306}
-MYSQL_PORT2=${MYSQL_PORT2:-3307}
-TIDB_PORT=4000
-MASTER_PORT=8261
-WORKER1_PORT=8262
-WORKER2_PORT=8263
-WORKER3_PORT=8264
-TRACER_PORT=8265
-SOURCE_ID1="mysql-replica-01"
-SOURCE_ID2="mysql-replica-02"
-RESET_MASTER=${RESET_MASTER:-true}
+source env_variables
 
 # we do clean staff at beginning of each run, so we can keep logs of the latset run
 function cleanup_data() {
     rm -rf $WORK_DIR
     mkdir $WORK_DIR
     for target_db in "$@"; do
-        run_sql "drop database if exists ${target_db}" $TIDB_PORT
+        run_sql "drop database if exists ${target_db}" $TIDB_PORT $TIDB_PASSWORD
     done
-    run_sql "drop database if exists dm_meta" $TIDB_PORT
+    run_sql "drop database if exists dm_meta" $TIDB_PORT $TIDB_PASSWORD
 }
 
 function cleanup_process() {
@@ -33,8 +21,8 @@ function cleanup_process() {
 }
 
 if [ "$RESET_MASTER" = true ]; then
-    run_sql "RESET MASTER" $MYSQL_PORT1
-    run_sql "RESET MASTER" $MYSQL_PORT2
+    run_sql "RESET MASTER" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "RESET MASTER" $MYSQL_PORT2 $MYSQL_PASSWORD2
 fi
 
 function join_string() {
@@ -50,8 +38,11 @@ function dmctl_start_task_standalone() {
     fi
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $task_conf" \
-        "\"result\": true" 2 \
-        "\"source\": \"$SOURCE_ID1\"" 1
+        "\"result\": true" 1
+#    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+#        "start-task $task_conf" \
+#        "\"result\": true" 2 \
+#        "\"source\": \"$SOURCE_ID1\"" 1
 }
 
 # shortcut for start task on two DM-workers
@@ -63,9 +54,13 @@ function dmctl_start_task() {
     fi
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "start-task $task_conf" \
-        "\"result\": true" 3 \
-        "\"source\"": 2 \
-        "\"sources\"": 1
+        "\"result\": true" 1
+
+#    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+#        "start-task $task_conf" \
+#        "\"result\": true" 3 \
+#        "\"source\"": 2 \
+#        "\"sources\"": 1
 }
 
 # shortcut for stop task on two DM-workers
@@ -89,10 +84,13 @@ function dmctl_resume_task() {
 function dmctl_operate_task() {
     task_name=$1
     operate=$2
-
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
         "$operate $task_name" \
-        "\"result\": true" 3 \
-        "\"source\": \"$SOURCE_ID1\"" 1 \
-        "\"source\": \"$SOURCE_ID2\"" 1
+        "\"result\": true" 1
+
+#    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
+#        "$operate $task_name" \
+#        "\"result\": true" 3 \
+#        "\"source\": \"$SOURCE_ID1\"" 1 \
+#        "\"source\": \"$SOURCE_ID2\"" 1
 }

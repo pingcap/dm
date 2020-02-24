@@ -7,7 +7,7 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
 function run() {
-    run_sql_file $cur/data/db.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
+    run_sql_file $cur/data/db.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 
     # in load stage, the dumped file split into 14 insert segments, we slow down 14 * 100 ms
     # in sync stage, there are 92 group of binlog events, including an XIDEvent,
@@ -25,10 +25,10 @@ function run() {
     run_dm_worker $WORK_DIR/worker1 $WORKER1_PORT $cur/conf/dm-worker1.toml
     check_rpc_alive $cur/../bin/check_worker_online 127.0.0.1:$WORKER1_PORT
     # operate mysql config to worker
-    cp $cur/conf/mysql1.toml $WORK_DIR/mysql1.toml
-    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/mysql1.toml
+    cp $cur/conf/source1.toml $WORK_DIR/source1.toml
+    sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-worker create $WORK_DIR/mysql1.toml" \
+        "operate-source create $WORK_DIR/source1.toml" \
         "true" 1
 
     # start DM task only
@@ -37,7 +37,7 @@ function run() {
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    run_sql_file $cur/data/db.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
+    run_sql_file $cur/data/db.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 

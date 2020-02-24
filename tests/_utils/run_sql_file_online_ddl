@@ -2,15 +2,17 @@
 # parameter 1: sql file
 # parameter 2: host
 # parameter 3: port
-# parameter 4: db
-# parameter 5: online ddl tool, pt or gh-ost
+# parameter 4: password
+# parameter 5: db
+# parameter 6: online ddl tool, pt or gh-ost
 
 set -eu
 
 sql_file=$1
 host=$2
 port=$3
-schema=$4
+password=$4
+schema=$5
 ghost_bin=${GHOST_BINARY:-gh-ost}
 ptosc_bin=${PTOSC_BINARY:-pt-online-schema-change}
 
@@ -28,22 +30,22 @@ do
         # if we have test MySQL in container and port mapping, these two ports
         # may different. So we cheat gh-ost that we are running on aliyun rds,
         # on which will disable the port check.
-        if [ "$5" == "gh-ost" ]; then
-            $ghost_bin --user=root --host=$host --port=$port \
+        if [ "$6" == "gh-ost" ]; then
+            $ghost_bin --user=root --host=$host --port=$port --password=$password \
                 --database=$schema --table=$table --alter="$alter" \
                 --serve-socket-file="$TEST_DIR/gh-ost.$schema.$table.$port.sock" \
                 --allow-on-master --allow-master-master --initially-drop-ghost-table \
                 --initially-drop-old-table -ok-to-drop-table -aliyun-rds -execute \
                 >> $TEST_DIR/gh-ost.log
-        elif [ "$5" == "pt" ]; then
-            $ptosc_bin --user=root --host=$host --port=$port \
+        elif [ "$6" == "pt" ]; then
+            $ptosc_bin --user=root --host=$host --port=$port --password=$password \
                 --alter="$alter" D=$schema,t=$table \
                  --recursion-method=none --print --execute \
                  >> $TEST_DIR/pt-osc.log
         else
-            mysql -uroot -h$host -P$port --default-character-set utf8 -E -e "use $schema; $line" >> "$TEST_DIR/sql_res.$TEST_NAME.txt"
+            mysql -uroot -h$host -P$port -p$password --default-character-set utf8 -E -e "use $schema; $line" >> "$TEST_DIR/sql_res.$TEST_NAME.txt"
         fi
     else
-        mysql -uroot -h$host -P$port --default-character-set utf8 -E -e "use $schema; $line" >> "$TEST_DIR/sql_res.$TEST_NAME.txt"
+        mysql -uroot -h$host -P$port -p$password --default-character-set utf8 -E -e "use $schema; $line" >> "$TEST_DIR/sql_res.$TEST_NAME.txt"
     fi
 done <"$sql_file"
