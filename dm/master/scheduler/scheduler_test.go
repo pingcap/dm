@@ -92,16 +92,16 @@ func (t *testScheduler) TestScheduler(c *C) {
 	sourceCfg2 := sourceCfg1
 	sourceCfg2.SourceID = sourceID2
 
-	c.Assert(subtaskCfg1.DecodeFile(subTaskSampleFile), IsNil)
+	c.Assert(subtaskCfg1.DecodeFile(subTaskSampleFile, true), IsNil)
 	subtaskCfg1.SourceID = sourceID1
 	subtaskCfg1.Name = taskName1
-	c.Assert(subtaskCfg1.Adjust(), IsNil)
+	c.Assert(subtaskCfg1.Adjust(true), IsNil)
 	subtaskCfg21 := subtaskCfg1
 	subtaskCfg21.Name = taskName2
-	c.Assert(subtaskCfg21.Adjust(), IsNil)
+	c.Assert(subtaskCfg21.Adjust(true), IsNil)
 	subtaskCfg22 := subtaskCfg21
 	subtaskCfg22.SourceID = sourceID2
-	c.Assert(subtaskCfg22.Adjust(), IsNil)
+	c.Assert(subtaskCfg22.Adjust(true), IsNil)
 
 	// not started scheduler can't do anything.
 	c.Assert(terror.ErrSchedulerNotStarted.Equal(s.AddSourceCfg(sourceCfg1)), IsTrue)

@@ -1239,22 +1239,24 @@ func (s *Server) CheckTask(ctx context.Context, req *pb.CheckTaskRequest) (*pb.C
 	}, nil
 }
 
-func parseAndAdjustSourceConfig(c *config.SourceConfig, content string) error {
-	if err := c.Parse(content); err != nil {
+func parseAndAdjustSourceConfig(cfg *config.SourceConfig, content string) error {
+	if err := cfg.Parse(content); err != nil {
 		return err
 	}
-	dbConfig, err := c.GenerateDBConfig()
+
+	dbConfig, err := cfg.GenerateDBConfig()
 	if err != nil {
 		return err
 	}
+
 	fromDB, err := conn.DefaultDBProvider.Apply(*dbConfig)
 	if err != nil {
 		return err
 	}
-	if err = c.Adjust(fromDB.DB); err != nil {
+	if err = cfg.Adjust(fromDB.DB); err != nil {
 		return err
 	}
-	if _, err = c.Toml(); err != nil {
+	if _, err = cfg.Toml(); err != nil {
 		return err
 	}
 	return nil

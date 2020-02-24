@@ -40,18 +40,18 @@ table  = "~t.*"
 host = "127.0.0.1"
 port = 3306
 user = "root"
-password = ""
+password = "123456"
 instance-id = "source-1"
 
 [[source-db]]
 host = "127.0.0.1"
 port = 3307
 user = "root"
-password = ""
+password = "123456"
 instance-id = "source-2"
 
 [target-db]
 host = "127.0.0.1"
 port = 4000
-user = "root"
-password = ""
+user = "test"
+password = "123456"
