@@ -159,7 +159,7 @@ function run() {
         "\"result\": true" 3 \
         "\"source\": \"$SOURCE_ID1\"" 1 \
         "\"source\": \"$SOURCE_ID2\"" 1 \
-        "\"running\"" 4
+        "\"stage\": \"Running\"" 4
     # update_task_not_paused $TASK_CONF
 
     echo "show_ddl_locks_no_locks"
