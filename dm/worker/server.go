@@ -653,9 +653,9 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 	if cfg.EnableRelay {
 		dctx, dcancel := context.WithTimeout(s.etcdClient.Ctx(), time.Duration(len(subTaskCfgs))*3*time.Second)
 		defer dcancel()
-		minPos, err := getMinPosInAllSubTasks(dctx, subTaskCfgs)
-		if err != nil {
-			return err
+		minPos, err1 := getMinPosInAllSubTasks(dctx, subTaskCfgs)
+		if err1 != nil {
+			return err1
 		}
 
 		// TODO: support GTID
