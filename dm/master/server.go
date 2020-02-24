@@ -1366,9 +1366,7 @@ func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, tas
 		case pb.SourceOp_StopSource:
 			expect = pb.Stage_Stopped
 		}
-	case *pb.StartTaskRequest:
-		expect = pb.Stage_Running
-	case *pb.UpdateTaskRequest:
+	case *pb.StartTaskRequest, *pb.UpdateTaskRequest:
 		expect = pb.Stage_Running
 	case *pb.OperateTaskRequest:
 		req := masterReq.(*pb.OperateTaskRequest)
@@ -1422,7 +1420,7 @@ func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, tas
 				case pb.Stage_Stopped:
 					if queryResp.SourceStatus.Source == "" {
 						if err := extractWorkerError(queryResp.SourceStatus.Result); err != nil {
-							return nil, err
+							return queryResp, err
 						}
 						return queryResp, nil
 					}
@@ -1510,7 +1508,11 @@ func (s *Server) getSourceRespsAfterOperation(ctx context.Context, taskName stri
 			defer wg.Done()
 			source, _ := args[0].(string)
 			worker := s.scheduler.GetWorkerBySource(source)
-			sourceRespCh <- s.handleOperationResult(ctx, worker, taskName, source, req)
+			sourceResp := s.handleOperationResult(ctx, worker, taskName, source, req)
+			if sourceResp.Source == "" {
+				sourceResp.Source = source
+			}
+			sourceRespCh <- sourceResp
 		}, func(args ...interface{}) {
 			defer wg.Done()
 			source, _ := args[0].(string)

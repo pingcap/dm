@@ -153,7 +153,8 @@ func TestMaster(t *testing.T) {
 }
 
 type testMaster struct {
-	workerClients map[string]workerrpc.Client
+	workerClients   map[string]workerrpc.Client
+	saveMaxRetryNum int
 }
 
 var _ = check.Suite(&testMaster{})
@@ -163,6 +164,12 @@ func (t *testMaster) SetUpSuite(c *check.C) {
 	c.Assert(err, check.IsNil)
 	t.workerClients = make(map[string]workerrpc.Client)
 	clearEtcdEnv(c)
+	t.saveMaxRetryNum = maxRetryNum
+	maxRetryNum = 2
+}
+
+func (t *testMaster) TearDownSuite(c *check.C) {
+	maxRetryNum = t.saveMaxRetryNum
 }
 
 func newMockRPCClient(client pb.WorkerClient) workerrpc.Client {
@@ -533,6 +540,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 		Op:   pb.TaskOp_Stop,
 		Name: taskName,
 	}
+	sourceResps := []*pb.CommonWorkerResponse{{Result: true}, {Result: true}}
 	server.scheduler, _ = testMockScheduler(ctx, &wg, c, sources, workers, "",
 		makeWorkerClientsForHandle(ctrl, taskName, sources, workers, startReq, pauseReq, resumeReq, stopReq1, stopReq2))
 	stResp, err := server.StartTask(context.Background(), startReq)
@@ -541,6 +549,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	for _, source := range sources {
 		t.subTaskStageMatch(c, server.scheduler, taskName, source, pb.Stage_Running)
 	}
+	c.Assert(stResp.Sources, check.DeepEquals, sourceResps)
 	// 2. pause task
 	resp, err = server.OperateTask(context.Background(), pauseReq)
 	c.Assert(err, check.IsNil)
@@ -548,6 +557,7 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	for _, source := range sources {
 		t.subTaskStageMatch(c, server.scheduler, taskName, source, pb.Stage_Paused)
 	}
+	c.Assert(stResp.Sources, check.DeepEquals, sourceResps)
 	// 3. resume task
 	resp, err = server.OperateTask(context.Background(), resumeReq)
 	c.Assert(err, check.IsNil)
@@ -555,16 +565,19 @@ func (t *testMaster) TestOperateTask(c *check.C) {
 	for _, source := range sources {
 		t.subTaskStageMatch(c, server.scheduler, taskName, source, pb.Stage_Running)
 	}
+	c.Assert(stResp.Sources, check.DeepEquals, sourceResps)
 	// 4. test stop task successfully, remove partial sources
 	resp, err = server.OperateTask(context.Background(), stopReq1)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 	c.Assert(server.getTaskResources(taskName), check.DeepEquals, []string{sources[1]})
+	c.Assert(stResp.Sources, check.DeepEquals, []*pb.CommonWorkerResponse{{Result: true}})
 	// 5. test stop task successfully, remove all workers
 	resp, err = server.OperateTask(context.Background(), stopReq2)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.IsTrue)
 	c.Assert(len(server.getTaskResources(taskName)), check.Equals, 0)
+	c.Assert(stResp.Sources, check.DeepEquals, sourceResps)
 	clearSchedulerEnv(c, cancel, &wg)
 }
 
@@ -767,6 +780,7 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 	c.Assert(resp.Result, check.IsFalse)
 	c.Assert(resp.Msg, check.Matches, `[\s\S]*need to update expectant relay stage not exist[\s\S]*`)
 
+	sourceResps := []*pb.CommonWorkerResponse{{Result: true}, {Result: true}}
 	// 1. test pause-relay successfully
 	resp, err = server.OperateWorkerRelayTask(context.Background(), pauseReq)
 	c.Assert(err, check.IsNil)
@@ -774,6 +788,7 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 	for _, source := range sources {
 		t.relayStageMatch(c, server.scheduler, source, pb.Stage_Paused)
 	}
+	c.Assert(resp.Sources, check.DeepEquals, sourceResps)
 	// 2. test resume-relay successfully
 	resp, err = server.OperateWorkerRelayTask(context.Background(), resumeReq)
 	c.Assert(err, check.IsNil)
@@ -781,6 +796,7 @@ func (t *testMaster) TestOperateWorkerRelayTask(c *check.C) {
 	for _, source := range sources {
 		t.relayStageMatch(c, server.scheduler, source, pb.Stage_Running)
 	}
+	c.Assert(resp.Sources, check.DeepEquals, sourceResps)
 	clearSchedulerEnv(c, cancel, &wg)
 }
 
@@ -970,6 +986,9 @@ func (t *testMaster) TestOperateSource(c *check.C) {
 	resp, err = s1.OperateSource(ctx, req)
 	c.Assert(err, check.IsNil)
 	c.Assert(resp.Result, check.Equals, true)
+	c.Assert(resp.Sources, check.DeepEquals, []*pb.CommonWorkerResponse{{
+		Result: true,
+	}})
 	cfg, _, err := ha.GetSourceCfg(etcdTestCli, sourceID, 0)
 	c.Assert(err, check.IsNil)
 	var emptySourceCfg config.SourceConfig
@@ -1052,9 +1071,7 @@ func (t *testMaster) subTaskStageMatch(c *check.C, s *scheduler.Scheduler, task,
 }
 
 func mockRevelantWorkerClient(mockWorkerClient *pbmock.MockWorkerClient, taskName, sourceID string, masterReq interface{}) {
-	var (
-		expect pb.Stage
-	)
+	var expect pb.Stage
 	switch masterReq.(type) {
 	case *pb.OperateSourceRequest:
 		req := masterReq.(*pb.OperateSourceRequest)
@@ -1064,9 +1081,7 @@ func mockRevelantWorkerClient(mockWorkerClient *pbmock.MockWorkerClient, taskNam
 		case pb.SourceOp_StopSource:
 			expect = pb.Stage_Stopped
 		}
-	case *pb.StartTaskRequest:
-		expect = pb.Stage_Running
-	case *pb.UpdateTaskRequest:
+	case *pb.StartTaskRequest, *pb.UpdateTaskRequest:
 		expect = pb.Stage_Running
 	case *pb.OperateTaskRequest:
 		req := masterReq.(*pb.OperateTaskRequest)
