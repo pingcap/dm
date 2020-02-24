@@ -1,6 +1,7 @@
 import React, { useState, useContext } from 'react'
 import styled from 'styled-components'
 import { Form, Input, Radio, Button } from 'antd'
+import { FormattedMessage, useIntl } from 'react-intl'
 import { IPageAction, ITaskInfo } from '../types'
 import { EditContext } from '../App'
 
@@ -43,6 +44,7 @@ type TaskName = {
 }
 
 function NamingStep({ onNext, onPrev, onData, taskInfo }: Props) {
+  const intl = useIntl()
   const edit = useContext(EditContext)
   const [taskMode, setTaskMode] = useState(taskInfo.taskMode)
   const [taskName, setTaskName] = useState<TaskName>(() =>
@@ -59,7 +61,7 @@ function NamingStep({ onNext, onPrev, onData, taskInfo }: Props) {
     } else {
       return {
         status: 'error',
-        errMsg: '任务名称不合法',
+        errMsg: intl.formatMessage({ id: 'invalid_task_name' }),
         value: name
       }
     }
@@ -69,34 +71,40 @@ function NamingStep({ onNext, onPrev, onData, taskInfo }: Props) {
     <Container>
       <Form {...formItemLayout}>
         <Form.Item
-          label='任务名称'
+          label={intl.formatMessage({ id: 'task_name' })}
           validateStatus={taskName.status}
           help={taskName.errMsg}
         >
           <Input
-            placeholder='test-task'
+            placeholder="test-task"
             value={taskName.value}
             onChange={(e: any) =>
               setTaskName(handleTaskNameChange(e.target.value))
             }
           />
         </Form.Item>
-        <Form.Item label='同步模式'>
+        <Form.Item label={intl.formatMessage({ id: 'sync_mode' })}>
           <Radio.Group
             disabled={edit}
             onChange={(e: any) => setTaskMode(e.target.value)}
             value={taskMode}
           >
-            <Radio value='full'>全量</Radio>
-            <Radio value='incremental'>增量</Radio>
-            <Radio value='all'>All</Radio>
+            <Radio value="full">
+              <FormattedMessage id="full_mode" />
+            </Radio>
+            <Radio value="incremental">
+              <FormattedMessage id="inc_mode" />
+            </Radio>
+            <Radio value="all">All</Radio>
           </Radio.Group>
         </Form.Item>
         <Form.Item {...tailItemLayout}>
-          <Button onClick={() => onPrev()}>取消</Button>
+          <Button onClick={() => onPrev()}>
+            <FormattedMessage id="cancel" />
+          </Button>
           <Button
-            type='primary'
-            htmlType='submit'
+            type="primary"
+            htmlType="submit"
             onClick={() => {
               onNext()
               onData && onData({ taskName: taskName.value, taskMode })
@@ -105,7 +113,7 @@ function NamingStep({ onNext, onPrev, onData, taskInfo }: Props) {
               taskName.value.length === 0 || taskName.status === 'error'
             }
           >
-            下一步
+            <FormattedMessage id="next" />
           </Button>
         </Form.Item>
       </Form>
