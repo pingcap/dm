@@ -25,9 +25,9 @@ function check_row_count() {
     lines=$(($(wc -l $WORK_DIR/db$index.prepare.sql|awk '{print $1}') - 4))
     # each line has two insert values
     lines=$((lines * 2))
-    run_sql "SELECT FLOOR(offset / end_pos * $lines) as cnt from dm_meta.test_loader_checkpoint where cp_table = 't$index'" $TIDB_PORT
+    run_sql "SELECT FLOOR(offset / end_pos * $lines) as cnt from dm_meta.test_loader_checkpoint where cp_table = 't$index'" $TIDB_PORT $TIDB_PASSWORD
     estimate=$(tail -n 1 "$TEST_DIR/sql_res.$TEST_NAME.txt")
-    run_sql "SELECT count(1) as cnt from $TEST_NAME.t$index" $TIDB_PORT
+    run_sql "SELECT count(1) as cnt from $TEST_NAME.t$index" $TIDB_PORT $TIDB_PASSWORD
     row_count=$(tail -n 1 "$TEST_DIR/sql_res.$TEST_NAME.txt")
     echo "estimate row count: $estimate, real row count: $row_count"
     [ "$estimate" == "$row_count" ]
@@ -37,8 +37,8 @@ function run() {
     THRESHOLD=1024
     prepare_datafile
 
-    run_sql_file $WORK_DIR/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
-    run_sql_file $WORK_DIR/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2
+    run_sql_file $WORK_DIR/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql_file $WORK_DIR/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
     export GO_FAILPOINTS="github.com/pingcap/dm/loader/LoadExceedOffsetExit=return($THRESHOLD)"
 
@@ -61,7 +61,7 @@ function run() {
     check_port_offline $WORKER1_PORT 20
     check_port_offline $WORKER2_PORT 20
 
-    run_sql "SELECT count(*) from dm_meta.test_loader_checkpoint where cp_schema = '$TEST_NAME' and offset < $THRESHOLD" $TIDB_PORT
+    run_sql "SELECT count(*) from dm_meta.test_loader_checkpoint where cp_schema = '$TEST_NAME' and offset < $THRESHOLD" $TIDB_PORT $TIDB_PASSWORD
     check_contains "count(*): 2"
     check_row_count 1
     check_row_count 2
@@ -88,7 +88,7 @@ function run() {
     # strange, TiDB (at least with mockTiKV) needs a long time to see the update of `test_loader_checkpoint`,
     # and even later txn may see the older state than the earlier txn.
     sleep 8
-    run_sql "SELECT count(*) from dm_meta.test_loader_checkpoint where cp_schema = '$TEST_NAME' and offset = end_pos" $TIDB_PORT
+    run_sql "SELECT count(*) from dm_meta.test_loader_checkpoint where cp_schema = '$TEST_NAME' and offset = end_pos" $TIDB_PORT $TIDB_PASSWORD
     check_contains "count(*): 2"
 
     export GO_FAILPOINTS=''

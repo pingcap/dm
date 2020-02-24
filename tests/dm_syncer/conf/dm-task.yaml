@@ -12,8 +12,8 @@ timezone: "Asia/Shanghai"
 target-database:
   host: "127.0.0.1"
   port: 4000
-  user: "root"
-  password: ""
+  user: "test"
+  password: "/Q7B9DizNLLTTfiZHv9WoEAKamfpIUs="
 
 mysql-instances:
   - source-id: "mysql-replica-01"

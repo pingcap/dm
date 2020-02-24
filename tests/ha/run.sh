@@ -8,9 +8,10 @@ WORK_DIR=$TEST_DIR/$TEST_NAME
 API_VERSION="v1alpha1"
 
 function run() {
-    run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
+    echo "import prepare data"
+    run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_contains 'Query OK, 2 rows affected'
-    run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2
+    run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
     check_contains 'Query OK, 3 rows affected'
 
     echo "start DM worker and master"
@@ -41,12 +42,12 @@ function run() {
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
     echo "flush logs to force rotate binlog file"
-    run_sql "flush logs;" $MYSQL_PORT1
-    run_sql "flush logs;" $MYSQL_PORT2
+    run_sql "flush logs;" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "flush logs;" $MYSQL_PORT2 $MYSQL_PASSWORD2
 
     echo "apply increment data before restart dm-worker to ensure entering increment phase"
-    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
-    run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
+    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
     echo "use sync_diff_inspector to check increment data"
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
@@ -77,8 +78,8 @@ function run() {
         "query-status test" \
         "\"stage\": \"Running\"" 2
 
-    run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1
-    run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2
+    run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
     sleep 2
 
     echo "use sync_diff_inspector to check increment2 data now!"

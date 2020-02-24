@@ -10,11 +10,11 @@ WORK_DIR=$TEST_DIR/$TEST_NAME
 API_VERSION="v1alpha1"
 
 function prepare_data() {
-    run_sql 'DROP DATABASE if exists http_apis;' $MYSQL_PORT1
-    run_sql 'CREATE DATABASE http_apis;' $MYSQL_PORT1
-    run_sql "CREATE TABLE http_apis.t(i TINYINT, j INT UNIQUE KEY);" $MYSQL_PORT1
+    run_sql 'DROP DATABASE if exists http_apis;' $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql 'CREATE DATABASE http_apis;' $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "CREATE TABLE http_apis.t(i TINYINT, j INT UNIQUE KEY);" $MYSQL_PORT1 $MYSQL_PASSWORD1
     for j in $(seq 100); do
-        run_sql "INSERT INTO http_apis.t VALUES ($j,${j}000$j),($j,${j}001$j);" $MYSQL_PORT1
+        run_sql "INSERT INTO http_apis.t VALUES ($j,${j}000$j),($j,${j}001$j);" $MYSQL_PORT1 $MYSQL_PASSWORD1
     done
 }
 

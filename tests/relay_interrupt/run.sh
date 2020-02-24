@@ -8,16 +8,16 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
 function prepare_data1() {
-    run_sql 'DROP DATABASE if exists relay_interrupt;' $MYSQL_PORT1
-    run_sql 'CREATE DATABASE relay_interrupt;' $MYSQL_PORT1
-    run_sql "CREATE TABLE relay_interrupt.t(i TINYINT, j INT UNIQUE KEY);" $MYSQL_PORT1
+    run_sql 'DROP DATABASE if exists relay_interrupt;' $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql 'CREATE DATABASE relay_interrupt;' $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "CREATE TABLE relay_interrupt.t(i TINYINT, j INT UNIQUE KEY);" $MYSQL_PORT1 $MYSQL_PASSWORD1
     for j in $(seq 100); do
-        run_sql "INSERT INTO relay_interrupt.t VALUES ($j,${j}000$j),($j,${j}001$j);" $MYSQL_PORT1
+        run_sql "INSERT INTO relay_interrupt.t VALUES ($j,${j}000$j),($j,${j}001$j);" $MYSQL_PORT1 $MYSQL_PASSWORD1
     done
 }
 
 function prepare_data2() {
-    run_sql "DELETE FROM relay_interrupt.t limit 1;" $MYSQL_PORT1
+    run_sql "DELETE FROM relay_interrupt.t limit 1;" $MYSQL_PORT1 $MYSQL_PASSWORD1
 }
 
 function run() {

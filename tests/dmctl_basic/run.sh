@@ -81,24 +81,24 @@ function usage_and_arg_test() {
 }
 
 function recover_max_binlog_size() {
-    run_sql "set @@global.max_binlog_size = $1" $MYSQL_PORT1
-    run_sql "set @@global.max_binlog_size = $2" $MYSQL_PORT2
+    run_sql "set @@global.max_binlog_size = $1" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "set @@global.max_binlog_size = $2" $MYSQL_PORT2 $MYSQL_PASSWORD2
 }
 
 function run() {
     inject_points=("github.com/pingcap/dm/syncer/SyncerEventTimeout=return(1)")
     export GO_FAILPOINTS="$(join_string \; ${inject_points[@]})"
 
-    run_sql "show variables like 'max_binlog_size'\G" $MYSQL_PORT1
+    run_sql "show variables like 'max_binlog_size'\G" $MYSQL_PORT1 $MYSQL_PASSWORD1
     max_binlog_size1=$(tail -n 1 "$TEST_DIR/sql_res.$TEST_NAME.txt" | awk '{print $NF}')
-    run_sql "show variables like 'max_binlog_size'\G" $MYSQL_PORT2
+    run_sql "show variables like 'max_binlog_size'\G" $MYSQL_PORT2 $MYSQL_PASSWORD2
     max_binlog_size2=$(tail -n 1 "$TEST_DIR/sql_res.$TEST_NAME.txt" | awk '{print $NF}')
-    run_sql "set @@global.max_binlog_size = 12288" $MYSQL_PORT1
-    run_sql "set @@global.max_binlog_size = 12288" $MYSQL_PORT2
+    run_sql "set @@global.max_binlog_size = 12288" $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql "set @@global.max_binlog_size = 12288" $MYSQL_PORT2 $MYSQL_PASSWORD2
     trap "recover_max_binlog_size $max_binlog_size1 $max_binlog_size2" EXIT
 
-    run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
-    run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2
+    run_sql_file $cur/data/db1.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql_file $cur/data/db2.prepare.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 
     cd $cur
     for file in "check_list"/*; do
@@ -173,8 +173,8 @@ function run() {
     # update_task_success_single_worker $TASK_CONF $SOURCE_ID1
     # update_task_success $TASK_CONF
 
-    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
-    run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2
+    run_sql_file $cur/data/db1.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
+    run_sql_file $cur/data/db2.increment.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
     resume_task_success $TASK_NAME
     query_status_running_tasks
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 20
@@ -196,7 +196,7 @@ function run() {
     cmp $dm_master_conf $cur/conf/dm-master.toml
 
 #   TODO: The ddl sharding part for DM-HA still has some problem. This should be uncommented when it's fixed.
-#    run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1
+#    run_sql_file $cur/data/db1.increment2.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 #    set +e
 #    i=0
 #    while [ $i -lt 10 ]
@@ -215,7 +215,7 @@ function run() {
 #        echo "show_ddl_locks_with_locks check timeout"
 #        exit 1
 #    fi
-#    run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2
+#    run_sql_file $cur/data/db2.increment2.sql $MYSQL_HOST2 $MYSQL_PORT2 $MYSQL_PASSWORD2
 #    check_sync_diff $WORK_DIR $cur/conf/diff_config.toml 10
 #    show_ddl_locks_no_locks $TASK_NAME
 
@@ -223,7 +223,7 @@ function run() {
     # updated ActiveRelayLog
     sleep 1
     server_uuid=$(tail -n 1 $WORK_DIR/worker1/relay_log/server-uuid.index)
-    run_sql "show binary logs\G" $MYSQL_PORT1
+    run_sql "show binary logs\G" $MYSQL_PORT1 $MYSQL_PASSWORD1
     max_binlog_name=$(grep Log_name "$SQL_RESULT_FILE"| tail -n 1 | awk -F":" '{print $NF}')
     binlog_count=$(grep Log_name "$SQL_RESULT_FILE" | wc -l)
     relay_log_count=$(($(ls $WORK_DIR/worker1/relay_log/$server_uuid | wc -l) - 1))

@@ -7,7 +7,7 @@ source $cur/../_utils/test_prepare
 WORK_DIR=$TEST_DIR/$TEST_NAME
 
 function run() {
-    run_sql_file $cur/data/db.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1
+    run_sql_file $cur/data/db.prepare.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
 
     # in load stage, the dumped file split into 14 insert segments, we slow down 14 * 100 ms
     # in sync stage, there are 92 group of binlog events, including an XIDEvent,
@@ -35,7 +35,7 @@ function run() {
     # use sync_diff_inspector to check full dump loader
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 
-    run_sql_file $cur/data/db.increment.sql $MYSQL_HOST1 $MYSQL_PORT1
+    run_sql_file $cur/data/db.increment.sql $MYSQL_HOST1 $MYSQL_PORT1 $MYSQL_PASSWORD1
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
 }
 
