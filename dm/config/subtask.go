@@ -223,27 +223,27 @@ func (c *SubTaskConfig) Toml() (string, error) {
 }
 
 // DecodeFile loads and decodes config from file
-func (c *SubTaskConfig) DecodeFile(fpath string, decryptPassword bool) error {
+func (c *SubTaskConfig) DecodeFile(fpath string, verifyDecryptPassword bool) error {
 	_, err := toml.DecodeFile(fpath, c)
 	if err != nil {
 		return terror.ErrConfigTomlTransform.Delegate(err, "decode subtask config from file")
 	}
 
-	return c.Adjust(decryptPassword)
+	return c.Adjust(verifyDecryptPassword)
 }
 
 // Decode loads config from file data
-func (c *SubTaskConfig) Decode(data string, decryptPassword bool) error {
+func (c *SubTaskConfig) Decode(data string, verifyDecryptPassword bool) error {
 	_, err := toml.Decode(data, c)
 	if err != nil {
 		return terror.ErrConfigTomlTransform.Delegate(err, "decode subtask config from data")
 	}
 
-	return c.Adjust(decryptPassword)
+	return c.Adjust(verifyDecryptPassword)
 }
 
 // Adjust adjusts configs
-func (c *SubTaskConfig) Adjust(decryptPassword bool) error {
+func (c *SubTaskConfig) Adjust(verifyDecryptPassword bool) error {
 	if c.Name == "" {
 		return terror.ErrConfigTaskNameEmpty.Generate()
 	}
@@ -283,7 +283,7 @@ func (c *SubTaskConfig) Adjust(decryptPassword bool) error {
 	c.From.Adjust()
 	c.To.Adjust()
 
-	if decryptPassword {
+	if verifyDecryptPassword {
 		_, err1 := c.DecryptPassword()
 		if err1 != nil {
 			return err1
@@ -294,7 +294,7 @@ func (c *SubTaskConfig) Adjust(decryptPassword bool) error {
 }
 
 // Parse parses flag definitions from the argument list.
-func (c *SubTaskConfig) Parse(arguments []string, decryptPassword bool) error {
+func (c *SubTaskConfig) Parse(arguments []string, verifyDecryptPassword bool) error {
 	// Parse first to get config file.
 	err := c.flagSet.Parse(arguments)
 	if err != nil {
@@ -308,7 +308,7 @@ func (c *SubTaskConfig) Parse(arguments []string, decryptPassword bool) error {
 
 	// Load config file if specified.
 	if c.ConfigFile != "" {
-		err = c.DecodeFile(c.ConfigFile, decryptPassword)
+		err = c.DecodeFile(c.ConfigFile, verifyDecryptPassword)
 		if err != nil {
 			return err
 		}
@@ -324,7 +324,7 @@ func (c *SubTaskConfig) Parse(arguments []string, decryptPassword bool) error {
 		return terror.ErrConfigParseFlagSet.Generatef("'%s' is an invalid flag", c.flagSet.Arg(0))
 	}
 
-	return c.Adjust(decryptPassword)
+	return c.Adjust(verifyDecryptPassword)
 }
 
 // DecryptPassword tries to decrypt db password in config

@@ -210,17 +210,18 @@ func (w *Worker) StartSubTask(cfg *config.SubTaskConfig) {
 	// directly put cfg into subTaskHolder
 	// the unique of subtask should be assured by etcd
 	st := NewSubTask(cfg, w.etcdClient)
-	cfg2, err := cfg.DecryptPassword()
-	if err != nil {
-		st.fail(errors.Annotate(err, "start sub task"))
-	}
-	st.cfg = cfg2
-
 	w.subTaskHolder.recordSubTask(st)
 	if w.closed.Get() == closedTrue {
 		st.fail(terror.ErrWorkerAlreadyClosed.Generate())
 		return
 	}
+
+	cfg2, err := cfg.DecryptPassword()
+	if err != nil {
+		st.fail(errors.Annotate(err, "start sub task"))
+		return
+	}
+	st.cfg = cfg2
 
 	if w.relayPurger != nil && w.relayPurger.Purging() {
 		st.fail(terror.ErrWorkerRelayIsPurging.Generate(cfg.Name))
