@@ -1533,9 +1533,7 @@ func (s *Server) getSourceRespsAfterOperation(ctx context.Context, taskName stri
 				workerCli = s.scheduler.GetWorkerByName(worker)
 			}
 			sourceResp := s.handleOperationResult(ctx, workerCli, taskName, source, req)
-			if sourceResp.Source == "" {
-				sourceResp.Source = source
-			}
+			sourceResp.Source = source // may return other source's ID during stop worker
 			sourceRespCh <- sourceResp
 		}, func(args ...interface{}) {
 			defer wg.Done()

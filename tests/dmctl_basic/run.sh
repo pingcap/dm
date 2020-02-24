@@ -136,12 +136,8 @@ function run() {
         "operate-source invalid $WORK_DIR/source1.toml" \
         "invalid operate" 1
 
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-source create $WORK_DIR/source1.toml" \
-        "true" 1
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-source create $WORK_DIR/source2.toml" \
-        "true" 1
+    dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
+    dmctl_operate_source create $WORK_DIR/source2.toml $SOURCE_ID2
 
     echo "pause_relay_success"
     pause_relay_success
@@ -159,7 +155,11 @@ function run() {
     dmctl_start_task
     check_sync_diff $WORK_DIR $cur/conf/diff_config.toml
     run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "query-status -w 127.0.0.1:$WORKER1_PORT,127.0.0.1:$WORKER2_PORT"
+        "query-status -s $SOURCE_ID1,$SOURCE_ID2" \
+        "\"result\": true" 3 \
+        "\"source\": \"$SOURCE_ID1\"" 1 \
+        "\"source\": \"$SOURCE_ID2\"" 1 \
+        "\"running\"" 4
     # update_task_not_paused $TASK_CONF
 
     echo "show_ddl_locks_no_locks"
