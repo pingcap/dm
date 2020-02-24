@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/pingcap/parser/model"
 	"go.etcd.io/etcd/clientv3"
 	"go.etcd.io/etcd/mvcc/mvccpb"
 	"go.uber.org/zap"
@@ -35,16 +36,21 @@ type Info struct {
 	Schema string   `json:"schema"` // schema name of the DDL
 	Table  string   `json:"table"`  // table name of the DDL
 	DDLs   []string `json:"ddls"`   // DDL statements
+
+	TableInfoBefore *model.TableInfo `json:"table-info-before"` // the tracked table schema before applying the DDLs
+	TableInfoAfter  *model.TableInfo `json:"table-info-after"`  // the tracked table schema after applying the DDLs
 }
 
 // NewInfo creates a new Info instance.
-func NewInfo(task, source, schema, table string, DDLs []string) Info {
+func NewInfo(task, source, schema, table string, DDLs []string, tableInfoBefore, tableInfoAfter *model.TableInfo) Info {
 	return Info{
-		Task:   task,
-		Source: source,
-		Schema: schema,
-		Table:  table,
-		DDLs:   DDLs,
+		Task:            task,
+		Source:          source,
+		Schema:          schema,
+		Table:           table,
+		DDLs:            DDLs,
+		TableInfoBefore: tableInfoBefore,
+		TableInfoAfter:  tableInfoAfter,
 	}
 }
 

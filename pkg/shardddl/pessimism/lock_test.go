@@ -40,7 +40,7 @@ func (t *testLock) TestLock(c *C) {
 	l1 := NewLock(ID, task, source1, DDLs, []string{source1})
 
 	// DDLs mismatch.
-	synced, remain, err := l1.TrySync(source1, DDLs[1:], []string{source1})
+	synced, remain, err := l1.TrySync(source1, DDLs[1:], nil, []string{source1})
 	c.Assert(terror.ErrMasterShardingDDLDiff.Equal(err), IsTrue)
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, 1)
@@ -51,7 +51,7 @@ func (t *testLock) TestLock(c *C) {
 	c.Assert(l1.IsResolved(), IsFalse)
 
 	// synced.
-	synced, remain, err = l1.TrySync(source1, DDLs, []string{source1})
+	synced, remain, err = l1.TrySync(source1, DDLs, nil, []string{source1})
 	c.Assert(err, IsNil)
 	c.Assert(synced, IsTrue)
 	c.Assert(remain, Equals, 0)
@@ -70,7 +70,7 @@ func (t *testLock) TestLock(c *C) {
 	l2 := NewLock(ID, task, source1, DDLs, []string{source1, source2})
 
 	// join a new source.
-	synced, remain, err = l2.TrySync(source1, DDLs, []string{source2, source3})
+	synced, remain, err = l2.TrySync(source1, DDLs, nil, []string{source2, source3})
 	c.Assert(err, IsNil)
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, 2)
@@ -81,7 +81,7 @@ func (t *testLock) TestLock(c *C) {
 	})
 
 	// sync other sources.
-	synced, remain, err = l2.TrySync(source2, DDLs, []string{})
+	synced, remain, err = l2.TrySync(source2, DDLs, nil, []string{})
 	c.Assert(err, IsNil)
 	c.Assert(synced, IsFalse)
 	c.Assert(remain, Equals, 1)
@@ -90,7 +90,7 @@ func (t *testLock) TestLock(c *C) {
 		source2: true,
 		source3: false,
 	})
-	synced, remain, err = l2.TrySync(source3, DDLs, nil)
+	synced, remain, err = l2.TrySync(source3, DDLs, nil, nil)
 	c.Assert(err, IsNil)
 	c.Assert(synced, IsTrue)
 	c.Assert(remain, Equals, 0)

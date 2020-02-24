@@ -31,6 +31,7 @@ var (
 )
 
 func TestInfo(t *testing.T) {
+	// FIXME: test involving etcd can only be run on Unix https://github.com/etcd-io/etcd/issues/10854
 	mockCluster := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
 	defer mockCluster.Terminate(t)
 
@@ -55,11 +56,11 @@ func (t *testForEtcd) TestInfoJSON(c *C) {
 	i1 := NewInfo("test", "mysql-replica-1", "foo", "bar", []string{
 		"ALTER TABLE bar ADD COLUMN c1 INT",
 		"ALTER TABLE bar ADD COLUMN c2 INT",
-	})
+	}, nil, nil)
 
 	j, err := i1.toJSON()
 	c.Assert(err, IsNil)
-	c.Assert(j, Equals, `{"task":"test","source":"mysql-replica-1","schema":"foo","table":"bar","ddls":["ALTER TABLE bar ADD COLUMN c1 INT","ALTER TABLE bar ADD COLUMN c2 INT"]}`)
+	c.Assert(j, Equals, `{"task":"test","source":"mysql-replica-1","schema":"foo","table":"bar","ddls":["ALTER TABLE bar ADD COLUMN c1 INT","ALTER TABLE bar ADD COLUMN c2 INT"],"table-info-before":null,"table-info-after":null}`)
 	c.Assert(j, Equals, i1.String())
 
 	i2, err := infoFromJSON(j)
@@ -77,13 +78,13 @@ func (t *testForEtcd) TestInfoEtcd(c *C) {
 		task2   = "task-2"
 		i11     = NewInfo(task1, source1, "foo", "bar", []string{
 			"ALTER TABLE bar ADD COLUMN c1 INT",
-		})
+		}, nil, nil)
 		i12 = NewInfo(task1, source2, "foo", "bar", []string{
 			"ALTER TABLE bar ADD COLUMN c2 INT",
-		})
+		}, nil, nil)
 		i21 = NewInfo(task2, source1, "foo", "bar", []string{
 			"ALTER TABLE bar ADD COLUMN c3 INT",
-		})
+		}, nil, nil)
 	)
 
 	// put the same key twice.

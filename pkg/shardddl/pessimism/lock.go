@@ -14,70 +14,49 @@
 package pessimism
 
 import (
-	"sync"
-
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/parser/model"
+
+	"github.com/pingcap/dm/pkg/shardddl"
 )
 
-// Lock represents the shard DDL lock in memory.
-// This information does not need to be persistent, and can be re-constructed from the shard DDL info.
-type Lock struct {
-	mu sync.RWMutex
+type Lock = shardddl.Lock
 
-	ID     string   // lock's ID
-	Task   string   // lock's corresponding task name
-	Owner  string   // Owner's source ID (not DM-worker's name)
+type pessimisticLockImpl struct {
 	DDLs   []string // DDL statements
 	remain int      // remain count of sources needed to receive DDL info
 
 	// whether the DDL info received from the source.
 	// if all of them have been ready, then we call the lock `synced`.
 	ready map[string]bool
-
-	// whether the operations have done (exec/skip the shard DDL).
-	// if all of them have done, then we call the lock `resolved`.
-	done map[string]bool
 }
 
-// NewLock creates a new Lock instance.
-func NewLock(ID, task, owner string, DDLs, sources []string) *Lock {
-	l := &Lock{
-		ID:     ID,
-		Task:   task,
-		Owner:  owner,
-		DDLs:   DDLs,
-		remain: len(sources),
-		ready:  make(map[string]bool),
-		done:   make(map[string]bool),
-	}
-	for _, s := range sources {
-		l.ready[s] = false
-		l.done[s] = false
-	}
+// NewLock creates a new pessimistic Lock instance.
+func NewLock(ID, task, owner string, DDLs, sources []string) *shardddl.Lock {
+	lock := shardddl.NewLock(ID, task, owner, sources, &pessimisticLockImpl{
+		DDLs:  DDLs,
+		ready: make(map[string]bool, len(sources)),
+	})
+	return lock
+}
 
-	return l
+func (l *pessimisticLockImpl) AddSources(sources []string) {
+	for _, source := range sources {
+		if _, ok := l.ready[source]; !ok {
+			l.remain++
+			l.ready[source] = false
+		}
+	}
 }
 
 // TrySync tries to sync the lock, does decrease on remain, re-entrant.
 // new upstream sources may join when the DDL lock is in syncing,
 // so we need to merge these new sources.
-func (l *Lock) TrySync(caller string, DDLs, sources []string) (bool, int, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
+func (l *pessimisticLockImpl) TrySync(caller string, DDLs []string, _ *model.TableInfo) ([]string, error) {
 	// check DDL statement first.
 	if !utils.CompareShardingDDLs(DDLs, l.DDLs) {
-		return l.remain <= 0, l.remain, terror.ErrMasterShardingDDLDiff.Generate(l.DDLs, DDLs)
-	}
-
-	// try to merge any newly joined sources.
-	for _, s := range sources {
-		if _, ok := l.ready[s]; !ok {
-			l.remain++
-			l.ready[s] = false
-			l.done[s] = false // mark as not-done for newly joined sources.
-		}
+		return nil, terror.ErrMasterShardingDDLDiff.Generate(l.DDLs, DDLs)
 	}
 
 	// only `sync` once.
@@ -86,68 +65,25 @@ func (l *Lock) TrySync(caller string, DDLs, sources []string) (bool, int, error)
 		l.ready[caller] = true
 	}
 
-	return l.remain <= 0, l.remain, nil
+	return l.DDLs, nil
 }
 
-// ForceSynced forces to mark the lock as synced.
-func (l *Lock) ForceSynced() {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
+func (l *pessimisticLockImpl) ForceSynced() {
 	for source := range l.ready {
 		l.ready[source] = true
 	}
 	l.remain = 0
 }
 
-// IsSynced returns whether the lock has synced.
-func (l *Lock) IsSynced() (bool, int) {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	return l.remain <= 0, l.remain
+func (l *pessimisticLockImpl) UnsyncCount() int {
+	return l.remain
 }
 
 // Ready returns the sources sync status or whether they are ready.
-func (l *Lock) Ready() map[string]bool {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-
+func (l *pessimisticLockImpl) Ready() map[string]bool {
 	ret := make(map[string]bool, len(l.ready))
 	for k, v := range l.ready {
 		ret[k] = v
 	}
 	return ret
-}
-
-// MarkDone marks the operation of the source as done.
-// NOTE: we do not support revert the `done` after marked now.
-func (l *Lock) MarkDone(source string) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	if _, ok := l.done[source]; !ok {
-		return // do not add it if not exists.
-	}
-	l.done[source] = true
-}
-
-// IsDone returns whether the operation has done.
-func (l *Lock) IsDone(source string) bool {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-
-	return l.done[source]
-}
-
-// IsResolved returns whether the lock has resolved (all operations have done).
-func (l *Lock) IsResolved() bool {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-
-	for _, done := range l.done {
-		if !done {
-			return false
-		}
-	}
-	return true
 }

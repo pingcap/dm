@@ -31,9 +31,9 @@ func (t *testLockKeeper) TestLockKeeper(c *C) {
 		task2   = "task2"
 		source1 = "mysql-replica-1"
 		source2 = "mysql-replica-2"
-		info11  = NewInfo(task1, source1, schema, table, DDLs)
-		info12  = NewInfo(task1, source2, schema, table, DDLs)
-		info21  = NewInfo(task2, source1, schema, table, DDLs)
+		info11  = NewInfo(task1, source1, schema, table, DDLs, nil, nil)
+		info12  = NewInfo(task1, source2, schema, table, DDLs, nil, nil)
+		info21  = NewInfo(task2, source1, schema, table, DDLs, nil, nil)
 	)
 
 	// lock with 2 sources.

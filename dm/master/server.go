@@ -40,6 +40,7 @@ import (
 	"github.com/pingcap/dm/pkg/election"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
+	"github.com/pingcap/dm/pkg/shardddl/pessimism"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
 	"github.com/pingcap/dm/pkg/utils"
@@ -1573,4 +1574,9 @@ func (s *Server) getSourceRespsAfterOperation(ctx context.Context, taskName stri
 	}
 	wg.Wait()
 	return sortCommonWorkerResults(sourceRespCh)
+}
+
+func (s *Server) SetDDLLockMode(ctx context.Context, req *pb.SetDDLLockModeRequest) (*pb.CommonWorkerResponse, error) {
+	s.pessimist.SetLockMode(pessimism.LockMode(req.LockMode))
+	return &pb.CommonWorkerResponse{Result: true}, nil
 }

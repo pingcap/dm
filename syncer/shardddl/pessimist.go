@@ -17,6 +17,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/pingcap/parser/model"
 	"go.etcd.io/etcd/clientv3"
 	"go.uber.org/zap"
 
@@ -59,8 +60,8 @@ func (p *Pessimist) Reset() {
 }
 
 // ConstructInfo constructs a shard DDL info.
-func (p *Pessimist) ConstructInfo(schema, table string, DDLs []string) pessimism.Info {
-	return pessimism.NewInfo(p.task, p.source, schema, table, DDLs)
+func (p *Pessimist) ConstructInfo(schema, table string, DDLs []string, before, after *model.TableInfo) pessimism.Info {
+	return pessimism.NewInfo(p.task, p.source, schema, table, DDLs, before, after)
 }
 
 // PutInfo puts the shard DDL info into etcd and returns the revision.

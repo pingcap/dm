@@ -51,6 +51,12 @@ func NewPessimist(pLogger *log.Logger, taskSources func(task string) []string) *
 	}
 }
 
+func (p *Pessimist) SetLockMode(mode pessimism.LockMode) {
+	p.mu.Lock()
+	p.lk.SetLockMode(mode)
+	p.mu.Unlock()
+}
+
 // Start starts the shard DDL coordination in pessimism mode.
 func (p *Pessimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error {
 	p.logger.Info("the shard DDL pessimist is starting")

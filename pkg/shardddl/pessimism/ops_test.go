@@ -24,7 +24,7 @@ func (t *testForEtcd) TestPutOperationDeleteInfo(c *C) {
 		task   = "test"
 		source = "mysql-replica-1"
 		DDLs   = []string{"ALTER TABLE bar ADD COLUMN c1 INT"}
-		info   = NewInfo(task, source, "foo", "bar", DDLs)
+		info   = NewInfo(task, source, "foo", "bar", DDLs, nil, nil)
 		op     = NewOperation("test-ID", task, source, DDLs, true, false)
 	)
 

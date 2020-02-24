@@ -18,6 +18,15 @@ import (
 	"sync"
 
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+
+	"github.com/pingcap/dm/pkg/shardddl/optimism"
+)
+
+type LockMode uint32
+
+const (
+	LockModePessimistic LockMode = iota
+	LockModeOptimistic
 )
 
 // LockKeeper used to keep and handle DDL lock conveniently.
@@ -25,13 +34,28 @@ import (
 type LockKeeper struct {
 	mu    sync.RWMutex
 	locks map[string]*Lock // lockID -> Lock
+	mode  LockMode
 }
 
 // NewLockKeeper creates a new LockKeeper instance.
 func NewLockKeeper() *LockKeeper {
 	return &LockKeeper{
 		locks: make(map[string]*Lock),
+		mode:  LockModePessimistic,
 	}
+}
+
+func (lk *LockKeeper) SetLockMode(mode LockMode) {
+	lk.mu.Lock()
+	lk.mode = mode
+	lk.mu.Unlock()
+}
+
+func (lk *LockKeeper) LockMode() LockMode {
+	lk.mu.RLock()
+	mode := lk.mode
+	lk.mu.RUnlock()
+	return mode
 }
 
 // TrySync tries to sync the lock.
@@ -46,11 +70,17 @@ func (lk *LockKeeper) TrySync(info Info, sources []string) (string, bool, int, e
 	defer lk.mu.Unlock()
 
 	if l, ok = lk.locks[lockID]; !ok {
-		lk.locks[lockID] = NewLock(lockID, info.Task, info.Source, info.DDLs, sources)
-		l = lk.locks[lockID]
+		switch lk.mode {
+		case LockModePessimistic:
+			l = NewLock(lockID, info.Task, info.Source, info.DDLs, sources)
+		case LockModeOptimistic:
+			l = optimism.NewLock(lockID, info.Task, info.Source, info.TableInfoBefore, sources)
+		}
+
+		lk.locks[lockID] = l
 	}
 
-	synced, remain, err := l.TrySync(info.Source, info.DDLs, sources)
+	synced, remain, err := l.TrySync(info.Source, info.DDLs, info.TableInfoAfter, sources)
 	return lockID, synced, remain, err
 }
 

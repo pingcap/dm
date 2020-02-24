@@ -1713,10 +1713,24 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 			return err
 		}
 
+		tiBefore, err := s.getTable(
+			ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name,
+			ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, ec.parser2)
+		if err != nil {
+			return err
+		}
+
 		for _, td := range needTrackDDLs {
 			if err = s.trackDDL(usedSchema, td.rawSQL, td.tableNames, td.stmt, &ec); err != nil {
 				return err
 			}
+		}
+
+		tiAfter, err := s.getTable(
+			ddlInfo.tableNames[0][0].Schema, ddlInfo.tableNames[0][0].Name,
+			ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, ec.parser2)
+		if err != nil {
+			return err
 		}
 
 		// save checkpoint in memory, don't worry, if error occurred, we can rollback it
@@ -1762,7 +1776,7 @@ func (s *Syncer) handleQueryEvent(ev *replication.QueryEvent, ec eventContext) e
 		// we should add another config item to differ, and do not save DDLInfo, and not wait for ddlExecInfo
 
 		// construct & send shard DDL info into etcd, DM-master will handle it.
-		shardInfo := s.pessimist.ConstructInfo(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, needHandleDDLs)
+		shardInfo := s.pessimist.ConstructInfo(ddlInfo.tableNames[1][0].Schema, ddlInfo.tableNames[1][0].Name, needHandleDDLs, tiBefore, tiAfter)
 		rev, err2 := s.pessimist.PutInfo(shardInfo)
 		if err2 != nil {
 			return err2
