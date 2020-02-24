@@ -407,7 +407,7 @@ func (s *Server) OperateTask(ctx context.Context, req *pb.OperateTaskRequest) (*
 	}
 
 	resp.Result = true
-	resp.Sources = s.getSourceRespsAfterOperation(ctx, req.Name, req.Sources, []string{}, req)
+	resp.Sources = s.getSourceRespsAfterOperation(ctx, req.Name, sources, []string{}, req)
 	return resp, nil
 }
 
