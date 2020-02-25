@@ -66,6 +66,7 @@ type Server struct {
 	worker     *Worker
 	etcdClient *clientv3.Client
 
+	// relay status will never be put in server.sourceStatus
 	sourceStatus pb.SourceStatus
 }
 

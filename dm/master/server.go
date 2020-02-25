@@ -1347,7 +1347,11 @@ var (
 
 func extractWorkerError(result *pb.ProcessResult) error {
 	if result != nil && len(result.Errors) > 0 {
-		return terror.ErrMasterOperRespNotSuccess.Generate(result.Errors)
+		errs := make([]string, 0, len(result.Errors))
+		for _, err := range result.Errors {
+			errs = append(errs, err.String())
+		}
+		return terror.ErrMasterOperRespNotSuccess.Generate(strings.Join(errs, ", "))
 	}
 	return nil
 }
