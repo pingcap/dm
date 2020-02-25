@@ -307,7 +307,6 @@ func subtaskCfgPointersToInstances(stCfgPointers ...*config.SubTaskConfig) []con
 func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.StartTaskResponse, error) {
 	log.L().Info("", zap.Stringer("payload", req), zap.String("request", "StartTask"))
 
-	resp := &pb.StartTaskResponse{}
 	isLeader, needForward := s.isLeaderAndNeedForward()
 	if !isLeader {
 		if needForward {
@@ -316,6 +315,7 @@ func (s *Server) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.S
 		return nil, terror.ErrMasterRequestIsNotForwardToLeader
 	}
 
+	resp := &pb.StartTaskResponse{}
 	cfg, stCfgs, err := s.generateSubTask(ctx, req.Task)
 	if err != nil {
 		resp.Msg = errors.ErrorStack(err)
