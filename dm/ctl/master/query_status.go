@@ -123,7 +123,7 @@ func wrapTaskResult(resp *pb.QueryStatusListResponse) *taskResult {
 			case strings.HasPrefix(taskStage, stageError):
 			case subTaskStage == pb.Stage_Paused && errorOccurred(subTask.Result):
 				taskStatusMap[subTaskName] = stageError + " - Some error occurred in subtask"
-			case subTask.Unit == pb.UnitType_Sync && subTask.Stage == pb.Stage_Running && (relayStatus.Stage == pb.Stage_Paused || relayStatus.Stage == pb.Stage_Stopped):
+			case subTask.Unit == pb.UnitType_Sync && subTask.Stage == pb.Stage_Running && relayStatus != nil && (relayStatus.Stage == pb.Stage_Paused || relayStatus.Stage == pb.Stage_Stopped):
 				taskStatusMap[subTaskName] = stageError + " - Relay status is " + getRelayStage(relayStatus)
 			case taskStage == pb.Stage_Paused.String():
 			case taskStage == "", subTaskStage == pb.Stage_Paused:
