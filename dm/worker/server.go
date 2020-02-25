@@ -438,17 +438,10 @@ func (s *Server) QueryStatus(ctx context.Context, req *pb.QueryStatusRequest) (*
 		return resp, nil
 	}
 
-	relayStatus := &pb.RelayStatus{
-		Result: &pb.ProcessResult{
-			Detail: []byte("relay is not enabled"),
-		},
-	}
-	if w.relayHolder != nil {
-		relayStatus = w.relayHolder.Status()
-	}
-
 	resp.SubTaskStatus = w.QueryStatus(req.Name)
-	sourceStatus.RelayStatus = relayStatus
+	if w.relayHolder != nil {
+		sourceStatus.RelayStatus = w.relayHolder.Status()
+	}
 	if len(resp.SubTaskStatus) == 0 {
 		resp.Msg = "no sub task started"
 	}
@@ -464,7 +457,7 @@ func (s *Server) QueryError(ctx context.Context, req *pb.QueryErrorRequest) (*pb
 		Worker: s.cfg.Name,
 	}
 	if sourceStatus.Result != nil && len(sourceStatus.Result.Errors) > 0 {
-		sourceError.SourceError = sourceStatus.Result.Errors[0].String()
+		sourceError.SourceError = utils.JoinProcessErrors(sourceStatus.Result.Errors)
 	}
 	resp := &pb.QueryErrorResponse{
 		Result:      true,

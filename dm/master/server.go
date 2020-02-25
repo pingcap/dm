@@ -22,8 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pingcap/dm/pkg/conn"
-
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"go.etcd.io/etcd/clientv3"
@@ -38,11 +36,13 @@ import (
 	operator "github.com/pingcap/dm/dm/master/sql-operator"
 	"github.com/pingcap/dm/dm/master/workerrpc"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/conn"
 	"github.com/pingcap/dm/pkg/election"
 	"github.com/pingcap/dm/pkg/etcdutil"
 	"github.com/pingcap/dm/pkg/log"
 	"github.com/pingcap/dm/pkg/terror"
 	"github.com/pingcap/dm/pkg/tracing"
+	"github.com/pingcap/dm/pkg/utils"
 )
 
 const (
@@ -1347,11 +1347,7 @@ var (
 
 func extractWorkerError(result *pb.ProcessResult) error {
 	if result != nil && len(result.Errors) > 0 {
-		errs := make([]string, 0, len(result.Errors))
-		for _, err := range result.Errors {
-			errs = append(errs, err.String())
-		}
-		return terror.ErrMasterOperRespNotSuccess.Generate(strings.Join(errs, ", "))
+		return terror.ErrMasterOperRespNotSuccess.Generate(utils.JoinProcessErrors(result.Errors))
 	}
 	return nil
 }
@@ -1492,6 +1488,8 @@ func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, tas
 						if relayStatus.Stage == expect {
 							return queryResp, nil
 						}
+					} else {
+						return queryResp, terror.ErrMasterOperRespNotSuccess.Generate("relay is disabled for this source")
 					}
 				}
 			}
