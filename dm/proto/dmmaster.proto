@@ -110,7 +110,7 @@ message OperateTaskResponse {
     TaskOp op = 1;
     bool result = 2;
     string msg = 3;
-    repeated OperateSubTaskResponse sources = 4;
+    repeated CommonWorkerResponse sources = 4;
 }
 
 
@@ -248,7 +248,7 @@ message OperateWorkerRelayResponse {
     RelayOp op = 1;
     bool result = 2;
     string msg = 3;
-    repeated OperateRelayResponse sources = 4;
+    repeated CommonWorkerResponse sources = 4;
 }
 
 message HandleSQLsRequest {
@@ -311,6 +311,7 @@ message OperateSourceRequest {
 message OperateSourceResponse {
     bool result = 1;
     string msg = 2;
+    repeated CommonWorkerResponse sources = 3;
 }
 
 message RegisterWorkerRequest {

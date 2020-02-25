@@ -254,7 +254,7 @@ func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) 
 			w := s.getWorker(true)
 			return w != nil && w.closed.Get() == closedFalse
 		}), IsTrue)
-		c.Assert(s.getWorkerErr(true), IsNil)
+		c.Assert(s.getSourceStatus(true).Result, IsNil)
 	} else {
 		// worker should be started before stopped
 		w := s.getWorker(true)
@@ -267,7 +267,7 @@ func (t *testServer) testOperateWorker(c *C, s *Server, dir string, start bool) 
 			currentWorker := s.getWorker(true)
 			return currentWorker == nil && w.closed.Get() == closedTrue
 		}), IsTrue)
-		c.Assert(s.getWorkerErr(true), IsNil)
+		c.Assert(s.getSourceStatus(true).Result, IsNil)
 	}
 }
 
@@ -276,7 +276,7 @@ func (t *testServer) testRetryConnectMaster(c *C, s *Server, ETCD *embed.Etcd, d
 	time.Sleep(4 * time.Second)
 	// When worker server fail to keepalive with etcd, sever should close its worker
 	c.Assert(s.getWorker(true), IsNil)
-	c.Assert(s.getWorkerErr(true), IsNil)
+	c.Assert(s.getSourceStatus(true).Result, IsNil)
 	ETCD, err := createMockETCD(dir, "host://"+hostName)
 	c.Assert(err, IsNil)
 	time.Sleep(3 * time.Second)
@@ -361,7 +361,7 @@ func checkRelayStatus(cli pb.WorkerClient, expect pb.Stage) bool {
 	if status.Result == false {
 		return false
 	}
-	return status.RelayStatus.Stage == expect
+	return status.SourceStatus.RelayStatus.Stage == expect
 }
 
 func loadSourceConfigWithoutPassword(c *C) config.SourceConfig {

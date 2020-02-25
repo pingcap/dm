@@ -54,24 +54,24 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 	// Should return error when some error occurs in subtask
 	resp.Sources = []*pb.QueryStatusResponse{
 		{
-			Result: true,
-			Source: "mysql-replica-01",
+			Result:       true,
+			SourceStatus: &pb.SourceStatus{Source: "mysql-replica-01"},
 			SubTaskStatus: []*pb.SubTaskStatus{{
 				Name:  "test",
 				Stage: pb.Stage_Running,
 			}},
 		},
 		{
-			Result: true,
-			Source: "mysql-replica-02",
+			Result:       true,
+			SourceStatus: &pb.SourceStatus{Source: "mysql-replica-02"},
 			SubTaskStatus: []*pb.SubTaskStatus{{
 				Name:  "test",
 				Stage: pb.Stage_Running,
 			}},
 		},
 		{
-			Result: true,
-			Source: "mysql-replica-03",
+			Result:       true,
+			SourceStatus: &pb.SourceStatus{Source: "mysql-replica-03"},
 			SubTaskStatus: []*pb.SubTaskStatus{{
 				Name:  "test",
 				Stage: pb.Stage_Paused,
@@ -92,7 +92,7 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 	resp.Sources[2].SubTaskStatus[0].Result = nil
 	resp.Sources[0].SubTaskStatus[0].Unit = pb.UnitType_Sync
 	// relay status is Error
-	resp.Sources[0].RelayStatus = &pb.RelayStatus{
+	resp.Sources[0].SourceStatus.RelayStatus = &pb.RelayStatus{
 		Stage: pb.Stage_Paused,
 		Result: &pb.ProcessResult{
 			Errors: []*pb.ProcessError{{Type: pb.ErrorType_CheckFailed}},
@@ -100,18 +100,18 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 	expectedResult[0].TaskStatus = stageError + " - Relay status is " + stageError + extraInfo
 	generateAndCheckTaskResult(c, resp, expectedResult)
 	// relay status is Paused
-	resp.Sources[0].RelayStatus = &pb.RelayStatus{Stage: pb.Stage_Paused}
+	resp.Sources[0].SourceStatus.RelayStatus = &pb.RelayStatus{Stage: pb.Stage_Paused}
 	expectedResult[0].TaskStatus = stageError + " - Relay status is " + pb.Stage_Paused.String() + extraInfo
 	generateAndCheckTaskResult(c, resp, expectedResult)
 	// relay status is Stopped
-	resp.Sources[0].RelayStatus = &pb.RelayStatus{Stage: pb.Stage_Stopped}
+	resp.Sources[0].SourceStatus.RelayStatus = &pb.RelayStatus{Stage: pb.Stage_Stopped}
 	expectedResult[0].TaskStatus = stageError + " - Relay status is " + pb.Stage_Stopped.String() + extraInfo
 	generateAndCheckTaskResult(c, resp, expectedResult)
 
 	// one subtask is paused and no error occurs, should return paused
 	resp.Sources[2].SubTaskStatus[0].Result = nil
 	resp.Sources[0].SubTaskStatus[0].Unit = 0
-	resp.Sources[0].RelayStatus = nil
+	resp.Sources[0].SourceStatus.RelayStatus = nil
 	expectedResult[0].TaskStatus = pb.Stage_Paused.String()
 	generateAndCheckTaskResult(c, resp, expectedResult)
 	// All subtasks are Finished/Stopped/.../New
@@ -126,8 +126,8 @@ func (t *testCtlMaster) TestWrapTaskResult(c *check.C) {
 
 	// test situation with two tasks
 	resp.Sources = append(resp.Sources, &pb.QueryStatusResponse{
-		Result: true,
-		Source: "mysql-replica-04",
+		Result:       true,
+		SourceStatus: &pb.SourceStatus{Source: "mysql-replica-04"},
 		SubTaskStatus: []*pb.SubTaskStatus{{
 			Name:  "test2",
 			Stage: pb.Stage_Paused,

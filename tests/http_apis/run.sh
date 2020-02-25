@@ -28,9 +28,7 @@ function run() {
     # operate mysql config to worker
     cp $cur/conf/source1.toml $WORK_DIR/source1.toml
     sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
-    run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-        "operate-source create $WORK_DIR/source1.toml" \
-        "true" 1
+    dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
 
     echo "start task and check stage"
     cat $cur/conf/dm-task.yaml | sed 's/$/\\n/' | sed 's/"/\\"/g' | tr -d '\n' > $WORK_DIR/task.yaml.bak

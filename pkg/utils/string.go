@@ -13,7 +13,12 @@
 
 package utils
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/pingcap/dm/dm/pb"
+)
 
 const (
 	defaultStringLenLimit = 1024
@@ -37,4 +42,13 @@ func TruncateString(s string, n int) string {
 // It is not effective for large structure now.
 func TruncateInterface(v interface{}, n int) string {
 	return TruncateString(fmt.Sprintf("%+v", v), n)
+}
+
+// JoinProcessErrors return the string of pb.ProcessErrors joined by ", "
+func JoinProcessErrors(errors []*pb.ProcessError) string {
+	serrs := make([]string, 0, len(errors))
+	for _, serr := range errors {
+		serrs = append(serrs, serr.String())
+	}
+	return strings.Join(serrs, ", ")
 }

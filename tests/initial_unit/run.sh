@@ -38,15 +38,15 @@ function run() {
         # operate mysql config to worker
         cp $cur/conf/source1.toml $WORK_DIR/source1.toml
         sed -i "/relay-binlog-name/i\relay-dir = \"$WORK_DIR/worker1/relay_log\"" $WORK_DIR/source1.toml
-        run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
-            "operate-source create $WORK_DIR/source1.toml" \
-            "true" 1
+        dmctl_operate_source create $WORK_DIR/source1.toml $SOURCE_ID1
 
         echo "start task and query status, the sync unit will initial failed"
         task_conf="$cur/conf/dm-task.yaml"
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "start-task $task_conf" \
-            "\"result\": true" 1
+            "\"result\": true" 1 \
+            "\"source\": \"$SOURCE_ID1\"" 1 \
+            "fail to initial unit Sync of subtask test" 1
 
         sleep 2
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -58,7 +58,9 @@ function run() {
         echo "resume task will also initial failed"
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "resume-task test" \
-            "\"result\": true" 1
+            "\"result\": true" 1 \
+            "\"source\": \"$SOURCE_ID1\"" 1 \
+            "fail to initial unit Sync of subtask test" 1
 
         sleep 2
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
@@ -88,7 +90,8 @@ function run() {
         # resume-task takes no effect
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "resume-task test" \
-            "\"result\": true" 1
+            "\"result\": true" 2 \
+            "\"source\": \"$SOURCE_ID1\"" 1
 
         run_dm_ctl $WORK_DIR "127.0.0.1:$MASTER_PORT" \
             "query-status test" \
