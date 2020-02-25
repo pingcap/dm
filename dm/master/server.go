@@ -1347,7 +1347,7 @@ var (
 
 func extractWorkerError(result *pb.ProcessResult) error {
 	if result != nil && len(result.Errors) > 0 {
-		return terror.ErrMasterOperRespNotSuccess.Generate(result.Errors[0].String())
+		return terror.ErrMasterOperRespNotSuccess.Generate(result.Errors)
 	}
 	return nil
 }
@@ -1417,8 +1417,7 @@ func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, tas
 
 	for num := 0; num < maxRetryNum; num++ {
 		// check whether source relative worker has been removed by scheduler
-		switch masterReq.(type) {
-		case *pb.OperateSourceRequest:
+		if _, ok := masterReq.(*pb.OperateSourceRequest); ok {
 			if expect == pb.Stage_Stopped {
 				resp := &pb.QueryStatusResponse{
 					Result:       true,
