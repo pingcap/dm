@@ -332,6 +332,7 @@ ErrMasterInvalidOperateOp,[code=38041:class=dm-master:scope=internal:level=mediu
 ErrMasterAdvertiseAddrNotValid,[code=38042:class=dm-master:scope=internal:level=high],"advertise address %s not valid"
 ErrMasterRequestIsNotForwardToLeader,[code=38043:class=dm-master:scope=internal:level=high],"master is not leader, and can't forward request to leader"
 ErrMasterIsNotAsyncRequest,[code=38044:class=dm-master:scope=internal:level=medium],"request %s is not an async one, needn't wait for ok"
+ErrMasterFailToGetExpectResult,[code=38045:class=dm-master:scope=internal:level=medium],"fail to get expected result"
 ErrWorkerParseFlagSet,[code=40001:class=dm-worker:scope=internal:level=medium],"parse dm-worker config flag set"
 ErrWorkerInvalidFlag,[code=40002:class=dm-worker:scope=internal:level=medium],"'%s' is an invalid flag"
 ErrWorkerDecodeConfigFromFile,[code=40003:class=dm-worker:scope=internal:level=medium],"toml decode file"

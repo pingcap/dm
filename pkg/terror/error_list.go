@@ -407,6 +407,7 @@ const (
 	codeMasterAdvertiseAddrNotValid
 	codeMasterRequestIsNotForwardToLeader
 	codeMasterIsNotAsyncRequest
+	codeMasterFailToGetExpectResult
 )
 
 // DM-worker error code
@@ -907,6 +908,7 @@ var (
 
 	ErrMasterRequestIsNotForwardToLeader = New(codeMasterRequestIsNotForwardToLeader, ClassDMMaster, ScopeInternal, LevelHigh, "master is not leader, and can't forward request to leader")
 	ErrMasterIsNotAsyncRequest           = New(codeMasterIsNotAsyncRequest, ClassDMMaster, ScopeInternal, LevelMedium, "request %s is not an async one, needn't wait for ok")
+	ErrMasterFailToGetExpectResult       = New(codeMasterFailToGetExpectResult, ClassDMMaster, ScopeInternal, LevelMedium, "fail to get expected result")
 
 	// DM-worker error
 	ErrWorkerParseFlagSet            = New(codeWorkerParseFlagSet, ClassDMWorker, ScopeInternal, LevelMedium, "parse dm-worker config flag set")

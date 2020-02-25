@@ -54,6 +54,13 @@ const (
 	electionKey = "/dm-master/leader"
 )
 
+var (
+	// the retry times for dm-master to confirm the dm-workers status is expected
+	maxRetryNum = 30
+	// the retry interval for dm-master to confirm the dm-workers status is expected
+	retryInterval = time.Second
+)
+
 // Server handles RPC requests for dm-master
 type Server struct {
 	sync.RWMutex
@@ -758,7 +765,7 @@ func (s *Server) HandleSQLs(ctx context.Context, req *pb.HandleSQLsRequest) (*pb
 	response, err := worker.SendRequest(ctx, subReq, s.cfg.RPCTimeout)
 	workerResp := &pb.CommonWorkerResponse{}
 	if err != nil {
-		workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), req.Source, "")
+		workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), req.Source, worker.BaseInfo().Name)
 	} else {
 		workerResp = response.HandleSubTaskSQLs
 	}
@@ -803,7 +810,7 @@ func (s *Server) PurgeWorkerRelay(ctx context.Context, req *pb.PurgeWorkerRelayR
 			resp, err := worker.SendRequest(ctx, workerReq, s.cfg.RPCTimeout)
 			workerResp := &pb.CommonWorkerResponse{}
 			if err != nil {
-				workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), source, "")
+				workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), source, worker.BaseInfo().Name)
 			} else {
 				workerResp = resp.PurgeRelay
 			}
@@ -870,7 +877,7 @@ func (s *Server) SwitchWorkerRelayMaster(ctx context.Context, req *pb.SwitchWork
 			resp, err := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
 			workerResp := &pb.CommonWorkerResponse{}
 			if err != nil {
-				workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), sourceID, "")
+				workerResp = errorCommonWorkerResponse(errors.ErrorStack(err), sourceID, worker.BaseInfo().Name)
 			} else {
 				workerResp = resp.SwitchRelayMaster
 			}
@@ -1147,7 +1154,7 @@ func (s *Server) UpdateWorkerRelayConfig(ctx context.Context, req *pb.UpdateWork
 	}
 	resp, err := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
 	if err != nil {
-		return errorCommonWorkerResponse(errors.ErrorStack(err), source, ""), nil
+		return errorCommonWorkerResponse(errors.ErrorStack(err), source, worker.BaseInfo().Name), nil
 	}
 	return resp.UpdateRelay, nil
 }
@@ -1194,7 +1201,7 @@ func (s *Server) MigrateWorkerRelay(ctx context.Context, req *pb.MigrateWorkerRe
 	}
 	resp, err := worker.SendRequest(ctx, request, s.cfg.RPCTimeout)
 	if err != nil {
-		return errorCommonWorkerResponse(errors.ErrorStack(err), source, ""), nil
+		return errorCommonWorkerResponse(errors.ErrorStack(err), source, worker.BaseInfo().Name), nil
 	}
 	return resp.MigrateRelay, nil
 }
@@ -1340,11 +1347,6 @@ func (s *Server) generateSubTask(ctx context.Context, task string) (*config.Task
 	return cfg, stCfgs, nil
 }
 
-var (
-	maxRetryNum   = 30
-	retryInterval = time.Second
-)
-
 func extractWorkerError(result *pb.ProcessResult) error {
 	if result != nil && len(result.Errors) > 0 {
 		return terror.ErrMasterOperRespNotSuccess.Generate(utils.JoinProcessErrors(result.Errors))
@@ -1433,7 +1435,7 @@ func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, tas
 		resp, err := cli.SendRequest(ctx, req, s.cfg.RPCTimeout)
 		var queryResp *pb.QueryStatusResponse
 		if err != nil {
-			log.L().Error("fail to query operation", zap.String("task", taskName),
+			log.L().Error("fail to query operation", zap.Int("retryNum", num), zap.String("task", taskName),
 				zap.String("source", sourceID), zap.Stringer("expect", expect), log.ShortError(err))
 		} else {
 			queryResp = resp.QueryStatus
@@ -1493,7 +1495,7 @@ func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, tas
 					}
 				}
 			}
-			log.L().Info("fail to get expect operation result", zap.String("task", taskName),
+			log.L().Info("fail to get expect operation result", zap.Int("retryNum", num), zap.String("task", taskName),
 				zap.String("source", sourceID), zap.Stringer("expect", expect), zap.Stringer("resp", queryResp))
 		}
 
@@ -1504,7 +1506,7 @@ func (s *Server) waitOperationOk(ctx context.Context, cli *scheduler.Worker, tas
 		}
 	}
 
-	return nil, errors.New("fail to get expected result")
+	return nil, terror.ErrMasterFailToGetExpectResult
 }
 
 func (s *Server) handleOperationResult(ctx context.Context, cli *scheduler.Worker, taskName, sourceID string, req interface{}) *pb.CommonWorkerResponse {
@@ -1514,7 +1516,7 @@ func (s *Server) handleOperationResult(ctx context.Context, cli *scheduler.Worke
 	var response *pb.CommonWorkerResponse
 	queryResp, err := s.waitOperationOk(ctx, cli, taskName, sourceID, req)
 	if err != nil {
-		response = errorCommonWorkerResponse(errors.ErrorStack(err), sourceID, "")
+		response = errorCommonWorkerResponse(errors.ErrorStack(err), sourceID, cli.BaseInfo().Name)
 	} else {
 		response = &pb.CommonWorkerResponse{
 			Result: true,
@@ -1553,19 +1555,20 @@ func (s *Server) getSourceRespsAfterOperation(ctx context.Context, taskName stri
 		}
 		go s.ap.Emit(ctx, 0, func(args ...interface{}) {
 			defer wg.Done()
-			source, _ := args[0].(string)
-			worker, _ := args[1].(string)
-			workerCli := s.scheduler.GetWorkerBySource(source)
-			if workerCli == nil && worker != "" {
-				workerCli = s.scheduler.GetWorkerByName(worker)
+			source1, _ := args[0].(string)
+			worker1, _ := args[1].(string)
+			workerCli := s.scheduler.GetWorkerBySource(source1)
+			if workerCli == nil && worker1 != "" {
+				workerCli = s.scheduler.GetWorkerByName(worker1)
 			}
-			sourceResp := s.handleOperationResult(ctx, workerCli, taskName, source, req)
-			sourceResp.Source = source // may return other source's ID during stop worker
+			sourceResp := s.handleOperationResult(ctx, workerCli, taskName, source1, req)
+			sourceResp.Source = source1 // may return other source's ID during stop worker
 			sourceRespCh <- sourceResp
 		}, func(args ...interface{}) {
 			defer wg.Done()
-			source, _ := args[0].(string)
-			sourceRespCh <- errorCommonWorkerResponse(terror.ErrMasterNoEmitToken.Generate(source).Error(), source, "")
+			source1, _ := args[0].(string)
+			worker1, _ := args[1].(string)
+			sourceRespCh <- errorCommonWorkerResponse(terror.ErrMasterNoEmitToken.Generate(source1).Error(), source1, worker1)
 		}, source, worker)
 	}
 	wg.Wait()
