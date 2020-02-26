@@ -93,7 +93,7 @@ func (p *Pessimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 			p.wg.Done()
 			close(infoCh)
 		}()
-		pessimism.WatchInfoPut(ctx, etcdCli, rev1, infoCh)
+		pessimism.WatchInfoPut(ctx, etcdCli, rev1+1, infoCh)
 	}()
 	go func() {
 		defer p.wg.Done()
@@ -108,7 +108,7 @@ func (p *Pessimist) Start(pCtx context.Context, etcdCli *clientv3.Client) error 
 			p.wg.Done()
 			close(opCh)
 		}()
-		pessimism.WatchOperationPut(ctx, etcdCli, "", "", rev2, opCh)
+		pessimism.WatchOperationPut(ctx, etcdCli, "", "", rev2+1, opCh)
 	}()
 	go func() {
 		defer p.wg.Done()
@@ -151,7 +151,9 @@ func (p *Pessimist) recoverLocks(ifm map[string]map[string]pessimism.Info, opm m
 	// construct locks based on the shard DDL info.
 	for task, ifs := range ifm {
 		sources := p.taskSources(task)
-		for _, info := range ifs {
+		// if no operation exists for the lock, we let the smallest (lexicographical order) source as the owner of the lock.
+		// if any operation exists for the lock, we let the source with `exec=true` as the owner of the lock (the logic is below).
+		for _, info := range pessimismInfoMapToSlice(ifs) {
 			_, _, _, err := p.lk.TrySync(info, sources)
 			if err != nil {
 				return err
