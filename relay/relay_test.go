@@ -153,6 +153,14 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 		}
 		r = NewRelay(relayCfg).(*Relay)
 	)
+	// purge old relay dir
+	_, err := os.Create(filepath.Join(r.cfg.RelayDir, "old_relay_log"))
+	c.Assert(err, IsNil)
+	c.Assert(r.purgeRelayDir(), IsNil)
+	files, err := ioutil.ReadDir(r.cfg.RelayDir)
+	c.Assert(err, IsNil)
+	c.Assert(files, HasLen, 0)
+
 	c.Assert(r.meta.Load(), IsNil)
 
 	// no file specified, no need to recover

@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -238,7 +239,14 @@ func (r *Relay) process(parentCtx context.Context) error {
 	if err != nil {
 		return err
 	}
+
 	if isNew {
+		// purge
+		err = r.purgeRelayDir()
+		if err != nil {
+			return err
+		}
+
 		// re-setup meta for new server
 		err = r.reSetupMeta()
 		if err != nil {
@@ -307,6 +315,32 @@ func (r *Relay) process(parentCtx context.Context) error {
 		}
 		r.tctx.L().Info("retrying to read binlog")
 	}
+}
+
+// purgeRelayDir will clear all contents under w.cfg.RelayDir
+func (r *Relay) purgeRelayDir() error {
+	dir := r.cfg.RelayDir
+	d, err := os.Open(dir)
+	// fail to open dir, return directly
+	if err != nil {
+		if err == os.ErrNotExist {
+			return nil
+		}
+		return err
+	}
+	defer d.Close()
+	names, err := d.Readdirnames(-1)
+	if err != nil {
+		return err
+	}
+	for _, name := range names {
+		err = os.RemoveAll(filepath.Join(dir, name))
+		if err != nil {
+			return err
+		}
+	}
+	r.tctx.L().Info("relay dir is purged to be ready for new relay log", zap.String("relayDir", dir))
+	return nil
 }
 
 // tryRecoverLatestFile tries to recover latest relay log file with corrupt/incomplete binlog events/transactions.
