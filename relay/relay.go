@@ -241,7 +241,7 @@ func (r *Relay) process(parentCtx context.Context) error {
 	}
 
 	if isNew {
-		// purge
+		// purge old relay log
 		err = r.purgeRelayDir()
 		if err != nil {
 			return err
