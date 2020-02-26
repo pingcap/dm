@@ -688,11 +688,6 @@ func (s *Server) startWorker(cfg *config.SourceConfig) error {
 	startRelay := false
 	var revRelay int64
 	if cfg.EnableRelay {
-		// TODO: if the sourceID is not changed and relay log is not too old, don't purge relay dir
-		err = w.purgeRelayDir()
-		if err != nil {
-			return err
-		}
 		var relayStage ha.Stage
 		// we get the newest relay stages directly which will omit the relay stage PUT/DELETE event
 		// because triggering these events is useless now

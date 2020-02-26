@@ -200,6 +200,8 @@ func (t *testPessimist) TestPessimist(c *C) {
 	// wait exec operation for the owner become available.
 	opCh = make(chan pessimism.Operation, 10)
 	ctx2, cancel2 = context.WithTimeout(ctx, watchTimeout)
+	// both source1 and source2 have shard DDL info exist, and neither of them have operation exist.
+	// we must ensure source1 always become the owner of the lock.
 	pessimism.WatchOperationPut(ctx2, etcdTestCli, task2, source1, rev3, opCh)
 	cancel2()
 	close(opCh)

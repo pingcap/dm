@@ -153,6 +153,15 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 		}
 		r = NewRelay(relayCfg).(*Relay)
 	)
+	// purge old relay dir
+	f, err := os.Create(filepath.Join(r.cfg.RelayDir, "old_relay_log"))
+	c.Assert(err, IsNil)
+	f.Close()
+	c.Assert(r.purgeRelayDir(), IsNil)
+	files, err := ioutil.ReadDir(r.cfg.RelayDir)
+	c.Assert(err, IsNil)
+	c.Assert(files, HasLen, 0)
+
 	c.Assert(r.meta.Load(), IsNil)
 
 	// no file specified, no need to recover
@@ -183,7 +192,7 @@ func (t *testRelaySuite) TestTryRecoverLatestFile(c *C) {
 	t.verifyMetadata(c, r, uuidWithSuffix, startPos, "", []string{uuidWithSuffix})
 
 	// write some invalid data into the relay log file
-	f, err := os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0600)
+	f, err = os.OpenFile(filepath.Join(r.meta.Dir(), filename), os.O_WRONLY|os.O_APPEND, 0600)
 	c.Assert(err, IsNil)
 	_, err = f.Write([]byte("invalid event data"))
 	c.Assert(err, IsNil)
