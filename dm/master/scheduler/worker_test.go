@@ -33,7 +33,7 @@ var _ = Suite(&testWorker{})
 func (t *testWorker) TestWorker(c *C) {
 	var (
 		name  = "dm-worker-1"
-		info  = ha.NewWorkerInfo(name, "127.0.0.1:8262")
+		info  = ha.NewWorkerInfo(name, "127.0.0.1:51803") // must ensure no worker listening one this address.
 		bound = ha.NewSourceBound("mysql-replica-1", name)
 	)
 
