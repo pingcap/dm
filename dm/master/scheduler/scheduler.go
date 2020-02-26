@@ -915,7 +915,7 @@ func (s *Scheduler) recoverWorkersBounds(cli *clientv3.Client) (int64, error) {
 }
 
 func (s *Scheduler) resetWorkerEv(cli *clientv3.Client) (int64, error) {
-	s.mu.Unlock()
+	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	rwm := s.workers
@@ -948,7 +948,7 @@ func (s *Scheduler) handleWorkerEv(ctx context.Context, evCh <-chan ha.WorkerEve
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil
 		case ev, ok := <-evCh:
 			if !ok {
 				return nil
@@ -1010,6 +1010,7 @@ func (s *Scheduler) observeWorkerEvent(ctx context.Context, etcdCli *clientv3.Cl
 				retryNum++
 			}
 		} else {
+			log.L().Error("observeWorkerEvent is failed and will quit now", zap.Error(err))
 			return err
 		}
 	}

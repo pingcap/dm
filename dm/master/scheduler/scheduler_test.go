@@ -781,6 +781,10 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 		defer wg.Done()
 		c.Assert(ha.KeepAlive(ctx1, etcdTestCli, workerName2, keepAliveTTL), IsNil)
 	}()
+	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+		kam, _, err := ha.GetKeepAliveWorkers(etcdTestCli)
+		return err == nil && len(kam) == 2
+	}), IsTrue)
 	cancel1()
 	wg.Wait()
 	// check whether keepalive lease is out of date
@@ -827,7 +831,7 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 		defer wg.Done()
 		c.Assert(ha.KeepAlive(ctx2, etcdTestCli, workerName4, keepAliveTTL), IsNil)
 	}()
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		unbounds := s.UnboundSources()
 		return len(unbounds) == 0
 	}), IsTrue)
@@ -842,7 +846,7 @@ func (t *testScheduler) TestWatchWorkerEventEtcdCompact(c *C) {
 		defer wg.Done()
 		c.Assert(s.observeWorkerEvent(ctx3, etcdTestCli, startRev), IsNil)
 	}()
-	c.Assert(utils.WaitSomething(30, 10*time.Millisecond, func() bool {
+	c.Assert(utils.WaitSomething(30, 100*time.Millisecond, func() bool {
 		bounds := s.BoundSources()
 		return len(bounds) == 0
 	}), IsTrue)
