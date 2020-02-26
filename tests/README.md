@@ -24,6 +24,54 @@
 
 ## Running
 
+### Prepare MySQL servers
+
+You can run multiple MySQL servers by:
+
+1. Initialize two data directories.
+
+    ```sh
+    mysqld --initialize-insecure --datadir=mysqld1
+    mysqld --initialize-insecure --datadir=mysqld2
+    ```
+
+2. Create a configuration file
+
+    ```ini
+    [mysqld_multi]
+    user = root
+    password =
+    tcp-ip
+    verbose
+
+    [mysqld1]
+    port = 3306
+    datadir = /absolute/path/to/c/mysqld1
+    socket = /absolute/path/to/c/mysqld1/mysql.sock
+    pid-file = /absolute/path/to/c/mysqld1/mysql.pid
+    secure-file-priv = NULL
+
+    [mysqld2]
+    port = 3306
+    datadir = /absolute/path/to/c/mysqld2
+    socket = /absolute/path/to/c/mysqld2/mysql.sock
+    pid-file = /absolute/path/to/c/mysqld2/mysql.pid
+    secure-file-priv = NULL
+    ```
+
+    then start the servers using [`mysqld_multi`](https://dev.mysql.com/doc/refman/8.0/en/mysqld-multi.html)
+
+    ```sh
+    mysqld_multi --defaults-file=my.cnf start 1,2
+    ```
+
+3. Verify the connections work
+
+    ```sh
+    mysql -u root -h 127.0.0.1 -P 3306 -e 'select version();'
+    mysql -u root -h 127.0.0.1 -P 3307 -e 'select version();'
+    ```
+
 ### Unit Test
 
 1. Setup a MySQL server with binlog enabled first, export proper environment variable `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PSWD`, default is `127.0.0.1`, `3306`, `root` and empty password.
